@@ -614,3 +614,115 @@ drop table tl1;
 drop table tl2;
 drop table tl3;
 drop table tl4;
+
+-- Check support <dxl:TestExpr> node. TestExpr present with IN queries (equivalent =ANY).
+-- start_ignore
+drop table if exists t1, t2, t3;
+-- end_ignore
+create table t1 as select 0 as i1;
+create table t2 as select 0 as i2;
+create table t3 as select i3 from (values (0), (1)) as s(i3);
+
+-- The first query generates a DXL with <dxl:TestExpr>, the left node (inside Comparison)
+-- of which contains a deep tree and only params (see DXL in output).
+-- The simplified  DXL is printed here because the Explain command does not display TestExpr,
+-- but we need to check what TestExpr contains and how it is processed in the DXL to Plan
+-- Statement stage. With the Postgres optimizer, this check does not matter.
+-- This testcase aims to verify that <dxl:TestExpr> with a deep tree and params in the
+-- left node is handled correctly during the DXL to Plan Statement stage.
+-- Рay attention to the Ident nodes with ColId 26 and 28. They appear from an internal
+-- subplan node.
+
+\! rm -rf $MASTER_DATA_DIRECTORY/minidumps
+
+set optimizer_trace_fallback=on;
+set optimizer_minidump=always;
+select * from t1 where
+  (i1 in (select i2 from t2)) in (select i3 = 1 from t3) order by i1;
+reset optimizer_minidump;
+reset optimizer_trace_fallback;
+
+-- start_matchsubs
+-- m/[ ]*\+$/
+-- s/[ ]*\+$/ \+/
+-- end_matchsubs
+
+-- Output DXL plan without unimportant properties.
+-- start_ignore
+\! mv $MASTER_DATA_DIRECTORY/minidumps/*.mdp $MASTER_DATA_DIRECTORY/minidumps/dump.mdp
+\! echo "import xml.dom.minidom" > $MASTER_DATA_DIRECTORY/minidumps/script.py
+\! echo "dom = xml.dom.minidom.parse('$MASTER_DATA_DIRECTORY/minidumps/dump.mdp')" >> $MASTER_DATA_DIRECTORY/minidumps/script.py
+\! echo "pretty_xml = dom.toprettyxml(indent='   ')" >> $MASTER_DATA_DIRECTORY/minidumps/script.py
+\! echo "with open('$MASTER_DATA_DIRECTORY/minidumps/pretty.xml', 'w') as file:" >> $MASTER_DATA_DIRECTORY/minidumps/script.py
+\! echo "\tfile.write(pretty_xml)" >> $MASTER_DATA_DIRECTORY/minidumps/script.py
+\! python $MASTER_DATA_DIRECTORY/minidumps/script.py
+\! sed -i '/Cost\|Properties\|ValuesList/d' $MASTER_DATA_DIRECTORY/minidumps/pretty.xml
+\! sed -i 's/TypeMdid=".*"//' $MASTER_DATA_DIRECTORY/minidumps/pretty.xml
+\! sed -i 's/AggMdid=".*"//' $MASTER_DATA_DIRECTORY/minidumps/pretty.xml
+\! sed -i 's/SortOperatorMdid=".*"//' $MASTER_DATA_DIRECTORY/minidumps/pretty.xml
+\! sed -i 's/OperatorMdid=".*"//' $MASTER_DATA_DIRECTORY/minidumps/pretty.xml
+\! sed -i 's/Mdid=".*"//' $MASTER_DATA_DIRECTORY/minidumps/pretty.xml
+\! sed -i 's/dxl://' $MASTER_DATA_DIRECTORY/minidumps/pretty.xml
+-- end_ignore
+
+select replace ((xpath ('.//Plan', xmlparse(document pg_read_file('minidumps/pretty.xml'))))::text, '        <', '<');
+
+insert into t1 values (1);
+analyze t1;
+-- After adding data, the ORCA physical plan changes and DXL changes too.
+-- The outer <dxl:TestExpr> is empty. The second <dxl:TestExpr> (nested) does not contain a
+-- deep tree. The left node contains an attribute (Ident ColId="0") that is not present
+-- in the inner <dxl:SubPlan> node. Such attributes in <dxl:TestExpr> are treated as Vars.
+-- The previous case contained only params (attributes contained in the
+-- inner <dxl:SubPlan> node). This test aims to verify that <dxl:TestExpr> with params and
+-- Vars simultaneously is handled correctly during the DXL to Plan Statement stage.
+
+\! rm -rf $MASTER_DATA_DIRECTORY/minidumps
+
+set optimizer_trace_fallback=on;
+set optimizer_minidump=always;
+select * from t1 where
+  (i1 in (select i2 from t2)) in (select i3 = 1 from t3) order by i1;
+reset optimizer_minidump;
+reset optimizer_trace_fallback;
+
+-- start_ignore
+\! mv $MASTER_DATA_DIRECTORY/minidumps/*.mdp $MASTER_DATA_DIRECTORY/minidumps/dump.mdp
+\! echo "import xml.dom.minidom" > $MASTER_DATA_DIRECTORY/minidumps/script.py
+\! echo "dom = xml.dom.minidom.parse('$MASTER_DATA_DIRECTORY/minidumps/dump.mdp')" >> $MASTER_DATA_DIRECTORY/minidumps/script.py
+\! echo "pretty_xml = dom.toprettyxml(indent='    ')" >> $MASTER_DATA_DIRECTORY/minidumps/script.py
+\! echo "with open('$MASTER_DATA_DIRECTORY/minidumps/pretty.xml', 'w') as file:" >> $MASTER_DATA_DIRECTORY/minidumps/script.py
+\! echo "\tfile.write(pretty_xml)" >> $MASTER_DATA_DIRECTORY/minidumps/script.py
+\! python $MASTER_DATA_DIRECTORY/minidumps/script.py
+\! sed -i '/Cost\|Properties\|ValuesList/d' $MASTER_DATA_DIRECTORY/minidumps/pretty.xml
+\! sed -i 's/TypeMdid=".*"//' $MASTER_DATA_DIRECTORY/minidumps/pretty.xml
+\! sed -i 's/AggMdid=".*"//' $MASTER_DATA_DIRECTORY/minidumps/pretty.xml
+\! sed -i 's/SortOperatorMdid=".*"//' $MASTER_DATA_DIRECTORY/minidumps/pretty.xml
+\! sed -i 's/OperatorMdid=".*"//' $MASTER_DATA_DIRECTORY/minidumps/pretty.xml
+\! sed -i 's/Mdid=".*"//' $MASTER_DATA_DIRECTORY/minidumps/pretty.xml
+\! sed -i 's/dxl://' $MASTER_DATA_DIRECTORY/minidumps/pretty.xml
+-- end_ignore
+
+select replace ((xpath ('.//Plan', xmlparse(document pg_read_file('minidumps/pretty.xml'))))::text, '          <', '<');
+\! rm -rf $MASTER_DATA_DIRECTORY/minidumps
+drop table t1,t2,t3;
+
+-- Test case for subquery, which returns more than one rows
+-- start_ignore
+drop table if exists table1, table2;
+-- end_ignore
+
+create table table1 as
+    select * from (values (1, 0), (1, 0)) v(a, b) distributed by (a);
+
+create table table2 as
+    select * from (values (0, 10), (0, 10)) v(a, b) distributed by (a);
+
+explain (costs off)
+select * from table1 where 10 in
+    (select b from table2 where table2.a = 0 or table1.b = table2.b);
+
+select * from table1 where 10 in
+    (select b from table2 where table2.a = 0 or table1.b = table2.b);
+
+drop table table1, table2;

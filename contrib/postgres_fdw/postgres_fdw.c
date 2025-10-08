@@ -286,7 +286,7 @@ static void postgresExplainForeignModify(ModifyTableState *mtstate,
 static bool postgresAnalyzeForeignTable(Relation relation,
 							AcquireSampleRowsFunc *func,
 							BlockNumber *totalpages);
-static int greengageCheckIsGreengage(ForeignServer *server, UserMapping *user);
+static bool gpCheckIsGP(ForeignServer *server, UserMapping *user);
 
 /*
  * Helper functions
@@ -1679,7 +1679,7 @@ postgresIsForeignRelUpdatable(Relation rel)
 	 * distributed and entry-only tables" issue.
 	 */
 	UserMapping *user = GetUserMapping(rel->rd_rel->relowner, table->serverid);
-	if (greengageCheckIsGreengage(server, user))
+	if (gpCheckIsGP(server, user))
 		return (1 << CMD_INSERT);
 	else
 		return (1 << CMD_INSERT) | (1 << CMD_UPDATE) | (1 << CMD_DELETE);
@@ -2778,25 +2778,21 @@ conversion_error_callback(void *arg)
 				   RelationGetRelationName(errpos->rel));
 }
 
-static int
-greengageCheckIsGreengage(ForeignServer *server, UserMapping *user)
+static bool
+gpCheckIsGP(ForeignServer *server, UserMapping *user)
 {
 	PGconn     *conn;
 	PGresult   *res;
-	int                     ret;
 
-	char *query =  "SELECT version()";
-
+	const char *query =
+		"SELECT FROM pg_catalog.pg_settings WHERE name = 'gp_server_version'";
 	conn = GetConnection(server, user, false);
 
 	res = pgfdw_exec_query(conn, query);
 	if (PQresultStatus(res) != PGRES_TUPLES_OK)
 		pgfdw_report_error(ERROR, res, conn, true, query);
 
-	if (PQntuples(res) == 0)
-		pgfdw_report_error(ERROR, res, conn, true, query);
-
-	ret = strstr(PQgetvalue(res, 0, 0), "Greengage Database") ? 1 : 0;
+	bool ret = (PQntuples(res) == 1);
 
 	PQclear(res);
 	ReleaseConnection(conn);

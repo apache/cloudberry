@@ -1,0 +1,9 @@
+# 3rd-party Package
+dir-or-file-in-opt
+
+# TODO
+unusual-interpreter python
+script-uses-unversioned-python-in-shebang
+
+# Not applicable for plugins
+shared-library-lacks-prerequisites

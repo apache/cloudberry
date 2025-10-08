@@ -195,6 +195,7 @@ test: rpt rpt_joins rpt_tpch rpt_returning bfv_dml_rpt
 # other sessions. Therefore the other tests in this group mustn't create
 # temp tables
 test: bfv_cte bfv_joins bfv_planner bfv_subquery bfv_legacy bfv_temp bfv_dml
+test: bfv_oom
 
 test: qp_olap_mdqa qp_misc gp_recursive_cte qp_dml_joins qp_dml_oids trigger_sets_oid qp_skew qp_select
 
@@ -312,5 +313,7 @@ test: syslogger_gp
 test: gp_check_files
 
 test: gp_query_id
+
+test: gp_orphaned_files
 
 # end of tests

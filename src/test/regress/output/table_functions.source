@@ -3162,11 +3162,57 @@ EXECUTE p6;
 (10 rows)
 
 DEALLOCATE p6;
+-- PASS: Check that resources can be freed with Squelch protocol if the function 
+-- has been cancelled
+create or replace function gp_get_int_tuples(max_values int)
+RETURNS table (
+    idx int,
+    value int
+  )
+ AS '@abs_srcdir@/regress.so',
+'gp_get_int_tuples' LANGUAGE C VOLATILE;
+select gp_inject_fault('check_SRF_cancel', 'finish_pending', 
+    '', '', '', 1, 2, 0, dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+ gp_inject_fault 
+-----------------
+ Success:
+(1 row)
+
+-- Check the case with regular no Squelch finish and no query cancel
+SELECT * FROM gp_get_int_tuples(3);
+ idx | value 
+-----+-------
+   0 |    10
+   1 |    11
+   2 |    12
+(3 rows)
+
+-- Check the case with regular no Squelch finish and query cancel
+SELECT * FROM gp_get_int_tuples(10);
+ idx | value 
+-----+-------
+   0 |    10
+(1 row)
+
+-- Check the case with Squelch finish and query cancel
+SELECT * FROM gp_get_int_tuples(100) LIMIT 10;
+ idx | value 
+-----+-------
+   0 |    10
+(1 row)
+
 -- =======
 -- Cleanup
 -- =======
+select gp_inject_fault('check_SRF_cancel', 'reset', 
+    '', '', '', 1, 2, 0, dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+ gp_inject_fault 
+-----------------
+ Success:
+(1 row)
+
 DROP SCHEMA table_function CASCADE;
-NOTICE:  drop cascades to 37 other objects
+NOTICE:  drop cascades to 38 other objects
 DETAIL:  drop cascades to table example
 drop cascades to table history
 drop cascades to table example_r
@@ -3204,4 +3250,5 @@ drop cascades to function project(anytable,integer)
 drop cascades to function ud_describe(internal)
 drop cascades to function ud_project(anytable)
 drop cascades to function noop_project(anytable)
+drop cascades to function gp_get_int_tuples(integer)
 SET search_path TO public;

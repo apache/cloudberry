@@ -85,6 +85,34 @@ CMappingColIdVarPlStmt::GetOutputContext()
 
 //---------------------------------------------------------------------------
 //	@function:
+//		CMappingColIdVarPlStmt::GetChildContexts
+//
+//	@doc:
+//		Returns the child contexts
+//
+//---------------------------------------------------------------------------
+CDXLTranslationContextArray *
+CMappingColIdVarPlStmt::GetChildContexts()
+{
+	return m_child_contexts;
+}
+
+//---------------------------------------------------------------------------
+//	@function:
+//		CMappingColIdVarPlStmt::GetBaseTableContext
+//
+//	@doc:
+//		Returns the base table context
+//
+//---------------------------------------------------------------------------
+const CDXLTranslateContextBaseTable *
+CMappingColIdVarPlStmt::GetBaseTableContext()
+{
+	return m_base_table_context;
+}
+
+//---------------------------------------------------------------------------
+//	@function:
 //		CMappingColIdVarPlStmt::ParamFromDXLNodeScId
 //
 //	@doc:

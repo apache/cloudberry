@@ -14,6 +14,7 @@
 
 #include "gpos/base.h"
 
+#include "gpopt/base/CColRefSetIter.h"
 #include "naucrates/dxl/operators/CDXLColRef.h"
 #include "naucrates/dxl/operators/CDXLScalar.h"
 
@@ -63,8 +64,10 @@ private:
 	// test expression -- not null if quantified/existential subplan
 	CDXLNode *m_dxlnode_test_expr;
 
-	// does test expression contain outer param
-	BOOL m_outer_param;
+	// Test expression params array - the columns refs of the inner
+	// node of the subplan.
+	// Params are not serialized, so it is not visible in DXL minidump.
+	CDXLColRefArray *m_test_expr_params;
 
 	// private copy ctor
 	CDXLScalarSubPlan(CDXLScalarSubPlan &);
@@ -74,7 +77,8 @@ public:
 	CDXLScalarSubPlan(CMemoryPool *mp, IMDId *first_col_type_mdid,
 					  CDXLColRefArray *dxl_colref_array,
 					  EdxlSubPlanType dxl_subplan_type,
-					  CDXLNode *dxlnode_test_expr, BOOL outer_param = false);
+					  CDXLNode *dxlnode_test_expr,
+					  CDXLColRefArray *test_expr_params = NULL);
 
 	virtual ~CDXLScalarSubPlan();
 
@@ -112,10 +116,11 @@ public:
 		return m_dxlnode_test_expr;
 	}
 
-	BOOL
-	FOuterParam() const
+	// return test expression params
+	CDXLColRefArray *
+	GetTestExprParams() const
 	{
-		return m_outer_param;
+		return m_test_expr_params;
 	}
 
 	// serialize operator in DXL format

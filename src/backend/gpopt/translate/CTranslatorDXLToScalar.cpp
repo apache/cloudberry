@@ -702,18 +702,65 @@ CTranslatorDXLToScalar::TranslateDXLScalarSubplanToScalar(
 
 	CDXLTranslateContext *output_context = plstmt->GetOutputContext();
 	CContextDXLToPlStmt *dxl_to_plstmt_ctxt = plstmt->GetDXLToPlStmtContext();
+	CDXLTranslationContextArray *outer_child_contexts =
+		plstmt->GetChildContexts();
+	const CDXLTranslateContextBaseTable *m_base_table_context =
+		plstmt->GetBaseTableContext();
 
 	CDXLScalarSubPlan *dxlop =
 		CDXLScalarSubPlan::Cast(scalar_subplan_node->GetOperator());
 
-	// translate subplan test expression
+	// When walking through the test expression tree, the test expression params.
+	// will be looked for in the output context.
+	// Generate output context for test expression params based on the outer output context.
+	CDXLTranslateContext test_expr_output_ctxt(
+		m_mp, output_context->IsParentAggNode(),
+		output_context->GetColIdToParamIdMap());
 	List *param_ids = NIL;
+	const CDXLColRefArray *test_expr_params = dxlop->GetTestExprParams();
+	// Fill in the param mapping of the output context and save the param ids
+	if (NULL != test_expr_params)
+	{
+		const ULONG size = test_expr_params->Size();
+		for (ULONG ul = 0; ul < size; ul++)
+		{
+			CDXLColRef *dxl_colref = (*test_expr_params)[ul];
+			IMDId *mdid = dxl_colref->MdidType();
+			ULONG colid = dxl_colref->Id();
+			INT type_modifier = dxl_colref->TypeModifier();
 
+			if (NULL == test_expr_output_ctxt.GetParamIdMappingElement(colid))
+			{
+				CMappingElementColIdParamId *colid_to_param_id_map =
+					GPOS_NEW(m_mp) CMappingElementColIdParamId(
+						colid, dxl_to_plstmt_ctxt->GetNextParamId(), mdid,
+						type_modifier);
+#ifdef GPOS_DEBUG
+				BOOL is_inserted =
+#endif
+					test_expr_output_ctxt.FInsertParamMapping(
+						colid, colid_to_param_id_map);
+				GPOS_ASSERT(is_inserted);
+				Param *param = TranslateParamFromMapping(colid_to_param_id_map);
+				param_ids = gpdb::LAppendInt(param_ids, param->paramid);
+			}
+		}
+	}
+
+	// Generate ColIdVar mapping to handle test expression based on the required
+	// output context. Test expression may contain vars from external
+	// (relative to subplan) nodes, so add their context too.
+	// We create a copy of the external mapping because we don't want to
+	// add TestExpr params to the original.
+	CMappingColIdVarPlStmt test_expr_var_mapping = CMappingColIdVarPlStmt(
+		m_mp, m_base_table_context, outer_child_contexts,
+		&test_expr_output_ctxt, plstmt->GetDXLToPlStmtContext());
+
+	// translate subplan test expression
 	SubLinkType slink = CTranslatorUtils::MapDXLSubplanToSublinkType(
 		dxlop->GetDxlSubplanType());
 	Expr *test_expr = TranslateDXLSubplanTestExprToScalar(
-		dxlop->GetDxlTestExpr(), slink, colid_var, dxlop->FOuterParam(),
-		&param_ids);
+		dxlop->GetDxlTestExpr(), slink, &test_expr_var_mapping);
 
 	const CDXLColRefArray *outer_refs = dxlop->GetDxlOuterColRefsArray();
 
@@ -785,57 +832,6 @@ CTranslatorDXLToScalar::TranslateDXLScalarSubplanToScalar(
 	return (Expr *) subplan;
 }
 
-//---------------------------------------------------------------------------
-//      @function:
-//              CTranslatorDXLToScalar::TranslateDXLTestExprScalarIdentToExpr
-//
-//      @doc:
-//              Translate subplan test expression parameter
-//
-//---------------------------------------------------------------------------
-void
-CTranslatorDXLToScalar::TranslateDXLTestExprScalarIdentToExpr(
-	CDXLNode *child_node, Param *param, CDXLScalarIdent **ident, Expr **expr)
-{
-	if (EdxlopScalarIdent == child_node->GetOperator()->GetDXLOperator())
-	{
-		// Ident
-		*ident = CDXLScalarIdent::Cast(child_node->GetOperator());
-		*expr = (Expr *) param;
-	}
-	else if (EdxlopScalarCast == child_node->GetOperator()->GetDXLOperator() &&
-			 child_node->Arity() > 0 &&
-			 EdxlopScalarIdent ==
-				 (*child_node)[0]->GetOperator()->GetDXLOperator())
-	{
-		// Casted Ident
-		*ident = CDXLScalarIdent::Cast((*child_node)[0]->GetOperator());
-		CDXLScalarCast *scalar_cast =
-			CDXLScalarCast::Cast(child_node->GetOperator());
-		*expr =
-			TranslateDXLScalarCastWithChildExpr(scalar_cast, (Expr *) param);
-	}
-	else if (EdxlopScalarCoerceViaIO ==
-				 child_node->GetOperator()->GetDXLOperator() &&
-			 child_node->Arity() > 0 &&
-			 EdxlopScalarIdent ==
-				 (*child_node)[0]->GetOperator()->GetDXLOperator())
-	{
-		// CoerceViaIO over Ident
-		*ident = CDXLScalarIdent::Cast((*child_node)[0]->GetOperator());
-		CDXLScalarCoerceViaIO *coerce =
-			CDXLScalarCoerceViaIO::Cast(child_node->GetOperator());
-		*expr =
-			TranslateDXLScalarCoerceViaIOWithChildExpr(coerce, (Expr *) param);
-	}
-	else
-	{
-		// ORCA currently only supports PARAMs of the form id or cast(id)
-		GPOS_RAISE(gpdxl::ExmaDXL, gpdxl::ExmiDXL2PlStmtConversion,
-				   GPOS_WSZ_LIT("Unsupported subplan test expression"));
-	}
-}
-
 
 //---------------------------------------------------------------------------
 //      @function:
@@ -847,8 +843,7 @@ CTranslatorDXLToScalar::TranslateDXLTestExprScalarIdentToExpr(
 //---------------------------------------------------------------------------
 Expr *
 CTranslatorDXLToScalar::TranslateDXLSubplanTestExprToScalar(
-	CDXLNode *test_expr_node, SubLinkType slink, CMappingColIdVar *colid_var,
-	BOOL has_outer_refs, List **param_ids)
+	CDXLNode *test_expr_node, SubLinkType slink, CMappingColIdVar *colid_var)
 {
 	if (EXPR_SUBLINK == slink || EXISTS_SUBLINK == slink ||
 		NOT_EXISTS_SUBLINK == slink)
@@ -880,68 +875,13 @@ CTranslatorDXLToScalar::TranslateDXLSubplanTestExprToScalar(
 	CDXLNode *outer_child_node = (*test_expr_node)[0];
 	CDXLNode *inner_child_node = (*test_expr_node)[1];
 
-	CContextDXLToPlStmt *dxl_to_plstmt_ctxt =
-		(dynamic_cast<CMappingColIdVarPlStmt *>(colid_var))
-			->GetDXLToPlStmtContext();
+	Expr *outer_expr = TranslateDXLToScalar(outer_child_node, colid_var);
+	GPOS_ASSERT(NULL != outer_expr);
+	args = gpdb::LAppend(args, outer_expr);
 
-	// translate outer expression (can be a deep scalar tree)
-	Expr *outer_arg_expr = NULL;
-	if (has_outer_refs)
-	{
-		Param *param1 = MakeNode(Param);
-		param1->paramkind = PARAM_EXEC;
-
-		CDXLScalarIdent *outer_ident = NULL;
-		Expr *outer_expr = NULL;
-
-		TranslateDXLTestExprScalarIdentToExpr(outer_child_node, param1,
-											  &outer_ident, &outer_expr);
-		GPOS_ASSERT(NULL != outer_ident);
-		GPOS_ASSERT(NULL != outer_expr);
-
-		// finalize outer expression
-		param1->paramtype = CMDIdGPDB::CastMdid(outer_ident->MdidType())->Oid();
-		param1->paramtypmod = outer_ident->TypeModifier();
-		param1->paramid = dxl_to_plstmt_ctxt->GetNextParamId();
-
-		// test expression is used for non-scalar subplan,
-		// first arg of test expression must be an EXEC param1 referring to subplan output
-		args = gpdb::LAppend(args, outer_expr);
-
-		// also, add this param1 to subplan param1 ids before translating other params
-		*param_ids = gpdb::LAppendInt(*param_ids, param1->paramid);
-	}
-	else
-	{
-		outer_arg_expr = TranslateDXLToScalar(outer_child_node, colid_var);
-		args = gpdb::LAppend(args, outer_arg_expr);
-	}
-
-	// translate inner expression (only certain forms supported)
-	// second arg must be an EXEC param which is replaced during query execution with subplan output
-	Param *param = MakeNode(Param);
-	param->paramkind = PARAM_EXEC;
-	param->paramid = dxl_to_plstmt_ctxt->GetNextParamId();
-
-	CDXLScalarIdent *inner_ident = NULL;
-	Expr *inner_expr = NULL;
-
-	TranslateDXLTestExprScalarIdentToExpr(inner_child_node, param, &inner_ident,
-										  &inner_expr);
-
-	GPOS_ASSERT(NULL != inner_ident);
+	Expr *inner_expr = TranslateDXLToScalar(inner_child_node, colid_var);
 	GPOS_ASSERT(NULL != inner_expr);
-
-	// finalize inner expression
-	param->paramtype = CMDIdGPDB::CastMdid(inner_ident->MdidType())->Oid();
-	param->paramtypmod = inner_ident->TypeModifier();
-
-	// test expression is used for non-scalar subplan,
-	// second arg of test expression must be an EXEC param referring to subplan output
 	args = gpdb::LAppend(args, inner_expr);
-
-	// also, add this param to subplan param ids before translating other params
-	*param_ids = gpdb::LAppendInt(*param_ids, param->paramid);
 
 	// finally, create an OpExpr for subplan test expression
 	CDXLScalarComp *scalar_cmp_dxl =

@@ -2166,7 +2166,7 @@ gpexplain_formatSlicesOutput(struct CdbExplain_ShowStatCtx *showstatctx,
             }
             else
             {
-                ExplainPropertyInteger("Executor Memory", ss->peakmemused.vmax, es);
+                ExplainPropertyFloat("Executor Memory", ss->peakmemused.vmax, 0, es);
             }
         }
         else if (ss->peakmemused.vcnt > 1)
@@ -2185,9 +2185,9 @@ gpexplain_formatSlicesOutput(struct CdbExplain_ShowStatCtx *showstatctx,
             else
             {
                 ExplainOpenGroup("Executor Memory", "Executor Memory", true, es);
-                ExplainPropertyInteger("Average", cdbexplain_agg_avg(&ss->peakmemused), es);
+                ExplainPropertyFloat("Average", cdbexplain_agg_avg(&ss->peakmemused), 0, es);
                 ExplainPropertyInteger("Workers", ss->peakmemused.vcnt, es);
-                ExplainPropertyInteger("Maximum Memory Used", ss->peakmemused.vmax, es);
+                ExplainPropertyFloat("Maximum Memory Used", ss->peakmemused.vmax, 0, es);
                 ExplainCloseGroup("Executor Memory", "Executor Memory", true, es);
             }
         }
@@ -2227,7 +2227,7 @@ gpexplain_formatSlicesOutput(struct CdbExplain_ShowStatCtx *showstatctx,
                 } 
                 else
                 {
-                    ExplainPropertyInteger("Global Peak Memory", ss->memory_accounting_global_peak.vmax, es);
+                    ExplainPropertyFloat("Global Peak Memory", ss->memory_accounting_global_peak.vmax, 0, es);
                 }
             }
             else if (ss->memory_accounting_global_peak.vcnt > 1)
@@ -2249,9 +2249,9 @@ gpexplain_formatSlicesOutput(struct CdbExplain_ShowStatCtx *showstatctx,
 				else
                 {
                     ExplainOpenGroup("Global Peak Memory", "Global Peak Memory", true, es);
-                    ExplainPropertyInteger("Average", cdbexplain_agg_avg(&ss->memory_accounting_global_peak), es);
+                    ExplainPropertyFloat("Average", cdbexplain_agg_avg(&ss->memory_accounting_global_peak), 0, es);
                     ExplainPropertyInteger("Workers", ss->memory_accounting_global_peak.vcnt, es);
-                    ExplainPropertyInteger("Maximum Memory Used", ss->memory_accounting_global_peak.vmax, es);
+                    ExplainPropertyFloat("Maximum Memory Used", ss->memory_accounting_global_peak.vmax, 0, es);
                     ExplainCloseGroup("Global Peak Memory", "Global Peak Memory", true, es);
                 }
             }
@@ -2287,7 +2287,7 @@ gpexplain_formatSlicesOutput(struct CdbExplain_ShowStatCtx *showstatctx,
                 }
                 else
                 {
-                    ExplainPropertyInteger("Virtual Memory", ss->vmem_reserved.vmax, es);
+                    ExplainPropertyFloat("Virtual Memory", ss->vmem_reserved.vmax, 0, es);
                 }
             }
             else if (ss->vmem_reserved.vcnt > 1)
@@ -2306,9 +2306,9 @@ gpexplain_formatSlicesOutput(struct CdbExplain_ShowStatCtx *showstatctx,
                 else
                 {
                     ExplainOpenGroup("Virtual Memory", "Virtual Memory", true, es);
-                    ExplainPropertyInteger("Average", cdbexplain_agg_avg(&ss->vmem_reserved), es);
+                    ExplainPropertyFloat("Average", cdbexplain_agg_avg(&ss->vmem_reserved), 0, es);
                     ExplainPropertyInteger("Workers", ss->vmem_reserved.vcnt, es);
-                    ExplainPropertyInteger("Maximum Memory Used", ss->vmem_reserved.vmax, es);
+                    ExplainPropertyFloat("Maximum Memory Used", ss->vmem_reserved.vmax, 0, es);
                     ExplainCloseGroup("Virtual Memory", "Virtual Memory", true, es);
                 }
 
@@ -2332,7 +2332,7 @@ gpexplain_formatSlicesOutput(struct CdbExplain_ShowStatCtx *showstatctx,
             }
             else
             {
-                ExplainPropertyInteger("Work Maximum Memory", ss->workmemused_max, es);
+                ExplainPropertyFloat("Work Maximum Memory", ss->workmemused_max, 0, es);
             }
         }
 
@@ -2353,7 +2353,7 @@ gpexplain_formatSlicesOutput(struct CdbExplain_ShowStatCtx *showstatctx,
         }
         else
         {
-            ExplainPropertyInteger("Total memory used across slices", total_memory_across_slices, es);
+            ExplainPropertyFloat("Total memory used across slices", total_memory_across_slices, 0, es);
         }
     }
 }

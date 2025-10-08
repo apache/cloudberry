@@ -29,6 +29,7 @@ ProtocolVersion FrontendProtocol;
 
 volatile bool InterruptPending = false;
 volatile bool QueryCancelPending = false;
+/* True if the query was cancelled and cleanup shall be done, Error otherwise. */
 volatile bool QueryCancelCleanup = false;
 volatile bool QueryFinishPending = false;
 volatile bool ProcDiePending = false;

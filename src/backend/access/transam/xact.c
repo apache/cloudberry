@@ -32,6 +32,7 @@
 #include "catalog/namespace.h"
 #include "catalog/oid_dispatch.h"
 #include "catalog/storage.h"
+#include "catalog/storage_pending_deletes_redo.h"
 #include "catalog/storage_tablespace.h"
 #include "catalog/storage_database.h"
 #include "commands/async.h"
@@ -3422,16 +3423,15 @@ AbortTransaction(void)
 		cdbcomponent_cleanupIdleQEs(false);
 	}
 
-	/*
-	 * If memprot decides to kill process, make sure we destroy all processes
-	 * so that all mem/resource will be freed
-	 */
-	if (elog_geterrcode() == ERRCODE_GP_MEMPROT_KILL)
+	/* It's an OOM error. Get rid of all gangs and their resources. */
+	if (in_oom_error_trouble())
 		DisconnectAndDestroyAllGangs(true);
 
 	/* Release resource group slot at the end of a transaction */
 	if (ShouldUnassignResGroup())
 		UnassignResGroup();
+
+	reset_oom_flag();
 }
 
 /*
@@ -6223,6 +6223,8 @@ xact_redo_commit_internal(TransactionId xid, XLogRecPtr lsn,
 
 	DoTablespaceDeletionForRedoXlog(tablespace_oid_to_delete);
 
+	PdlRedoRemoveTree(xid, sub_xids, nsubxacts);
+
 	/*
 	 * We issue an XLogFlush() for the same reason we emit ForceSyncCommit()
 	 * in normal operation. For example, in CREATE DATABASE, we copy all files
@@ -6380,6 +6382,8 @@ xact_redo_distributed_commit(xl_xact_commit *xlrec, TransactionId xid)
 		DropRelationFiles(xlrec->xnodes, xlrec->nrels, true);
 		DropDatabaseDirectories(deldbs, xlrec->ndeldbs, true);
 		DoTablespaceDeletionForRedoXlog(xlrec->tablespace_oid_to_delete_on_commit);
+
+		PdlRedoRemoveTree(xid, sub_xids, xlrec->nsubxacts);
 	}
 
 	/*
@@ -6455,6 +6459,8 @@ xact_redo_abort(xl_xact_abort *xlrec, TransactionId xid)
 	DropRelationFiles(xlrec->xnodes, xlrec->nrels, true);
 	DropDatabaseDirectories(deldbs, xlrec->ndeldbs, true);
 	DoTablespaceDeletionForRedoXlog(xlrec->tablespace_oid_to_delete_on_abort);
+
+	PdlRedoRemoveTree(xid, sub_xids, xlrec->nsubxacts);
 }
 
 static void

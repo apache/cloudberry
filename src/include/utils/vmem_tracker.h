@@ -66,6 +66,7 @@ extern void VmemTracker_UnregisterStartupMemory(void);
 extern void VmemTracker_RequestWaiver(int64 waiver_bytes);
 extern void VmemTracker_ResetWaiver(void);
 extern int64 VmemTracker_Fault(int32 reason, int64 arg);
+extern int32 VmemTracker_GetStartupChunks(void);
 
 extern int32 RedZoneHandler_GetRedZoneLimitChunks(void);
 extern int32 RedZoneHandler_GetRedZoneLimitMB(void);

@@ -615,7 +615,7 @@
     <dxl:Plan Id="0" SpaceSize="616">
       <dxl:GatherMotion InputSegments="0,1,2" OutputSegments="-1">
         <dxl:Properties>
-          <dxl:Cost StartupCost="0" TotalCost="1852062876647.470947" Rows="10.000001" Width="12"/>
+          <dxl:Cost StartupCost="0" TotalCost="1852063234561.412598" Rows="10.000001" Width="12"/>
         </dxl:Properties>
         <dxl:ProjList>
           <dxl:ProjElem ColId="55" Alias="?column?">
@@ -632,7 +632,7 @@
         <dxl:SortingColumnList/>
         <dxl:Sequence>
           <dxl:Properties>
-            <dxl:Cost StartupCost="0" TotalCost="1852062876647.470459" Rows="10.000001" Width="12"/>
+            <dxl:Cost StartupCost="0" TotalCost="1852063234561.412109" Rows="10.000001" Width="12"/>
           </dxl:Properties>
           <dxl:ProjList>
             <dxl:ProjElem ColId="55" Alias="?column?">
@@ -647,7 +647,7 @@
           </dxl:ProjList>
           <dxl:CTEProducer CTEId="0" Columns="0,1">
             <dxl:Properties>
-              <dxl:Cost StartupCost="0" TotalCost="862.001542" Rows="10.000001" Width="1"/>
+              <dxl:Cost StartupCost="0" TotalCost="862.001875" Rows="10.000001" Width="1"/>
             </dxl:Properties>
             <dxl:ProjList>
               <dxl:ProjElem ColId="0" Alias="a">
@@ -659,7 +659,7 @@
             </dxl:ProjList>
             <dxl:HashJoin JoinType="Inner">
               <dxl:Properties>
-                <dxl:Cost StartupCost="0" TotalCost="862.001539" Rows="10.000001" Width="8"/>
+                <dxl:Cost StartupCost="0" TotalCost="862.001872" Rows="10.000001" Width="8"/>
               </dxl:Properties>
               <dxl:ProjList>
                 <dxl:ProjElem ColId="0" Alias="a">
@@ -731,7 +731,7 @@
           </dxl:CTEProducer>
           <dxl:Result>
             <dxl:Properties>
-              <dxl:Cost StartupCost="0" TotalCost="1852062875785.468994" Rows="10.000001" Width="12"/>
+              <dxl:Cost StartupCost="0" TotalCost="1852063233699.410156" Rows="10.000001" Width="12"/>
             </dxl:Properties>
             <dxl:ProjList>
               <dxl:ProjElem ColId="55" Alias="?column?">
@@ -973,7 +973,7 @@
             <dxl:OneTimeFilter/>
             <dxl:HashJoin JoinType="Inner">
               <dxl:Properties>
-                <dxl:Cost StartupCost="0" TotalCost="862.001711" Rows="10.000001" Width="12"/>
+                <dxl:Cost StartupCost="0" TotalCost="862.002044" Rows="10.000001" Width="12"/>
               </dxl:Properties>
               <dxl:ProjList>
                 <dxl:ProjElem ColId="18" Alias="a">

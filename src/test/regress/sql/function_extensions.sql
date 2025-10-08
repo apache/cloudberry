@@ -343,3 +343,104 @@ SELECT count(*) FROM t6_function_scan;
 DROP TABLE IF EXISTS t7_function_scan;
 CREATE TABLE t7_function_scan AS SELECT * FROM  get_country() UNION ALL SELECT 100/(1+ 1* random())::int, 'cc'::text;
 SELECT count(*) FROM t7_function_scan;
+
+-- test resource cleanup in C functions using squelch protocol
+-- Check for proper resource deallocation for SRF which has been squelched
+
+-- start_ignore
+drop table if exists ao1_srf_test;
+drop table if exists ao2_srf_test;
+drop table if exists srf_test_t1;
+-- end_ignore
+
+create table ao1_srf_test (a int, b int) with (appendonly=true) DISTRIBUTED BY (a);
+insert into ao1_srf_test select i, i from generate_series(1, 10) i;
+delete from ao1_srf_test where a in (4, 8);
+
+select (gp_toolkit.__gp_aovisimap('ao1_srf_test'::regclass)).* from gp_dist_random('gp_id') limit 1;
+
+-- Check that SRF squelch performs when rescan is happens
+
+create table ao2_srf_test (a int) with (appendonly=true) DISTRIBUTED BY (a);
+
+insert into ao1_srf_test select a from generate_series(2, 10000)a;
+insert into ao2_srf_test select a from generate_series(1, 10000)a;
+
+create table srf_test_t1(a oid) DISTRIBUTED BY (a);
+
+insert into srf_test_t1 values ('ao1_srf_test'::regclass::oid), ('ao2_srf_test'::regclass::oid);
+
+select * from srf_test_t1 where a in
+       (select (gp_toolkit.__gp_aovisimap(srf_test_t1.a)).row_num
+        from gp_dist_random('gp_id') limit 1);
+
+drop table ao1_srf_test;
+drop table ao2_srf_test;
+drop table srf_test_t1;
+
+
+-- Check various SRFs switched to squenched Value-Per-Call
+-- start_ignore
+drop table if exists test_ao1;
+-- end_ignore
+
+create table test_ao1(i int) with (appendonly=true) distributed by (i);
+insert into test_ao1 values (generate_series(1,1000));
+select count(*) from (select get_ao_distribution('test_ao1') limit 1) sdist;
+drop table test_ao1;
+
+-- start_ignore
+drop table if exists test_ao2;
+-- end_ignore
+
+create table test_ao2 (a int, b int) with (appendonly=true, orientation=column) distributed by(a);
+insert into test_ao2 select i, i from generate_series(1, 10) i;
+update test_ao2 set b = 100 where a in (2, 5);
+delete from test_ao2 where a in (4, 8);
+select (gp_toolkit.__gp_aovisimap('test_ao2'::regclass)).* from gp_dist_random('gp_id') limit 1;
+
+select count (*) from (
+  select (gp_toolkit.__gp_aovisimap_entry('test_ao2'::regclass)).* from gp_dist_random('gp_id') limit 1) vme1;
+
+select count(*) from (select * from (select gp_toolkit.__gp_aovisimap_hidden_info('test_ao2'::regclass)) hi limit 1) hi1;
+
+drop table test_ao2;
+
+-- start_ignore
+drop table if exists test_ao3;
+-- end_ignore
+
+create table test_ao3(id int, key int) distributed by(id);
+
+insert into test_ao3 values(1,2),(2,3),(3,4);
+
+select count(*) from (select * from (select pg_catalog.gp_acquire_sample_rows('test_ao3'::regclass, 400, 'f')) ss limit 1) ss1;
+
+drop table test_ao3;
+
+-- Test initplan function referring the outer query.
+-- The query below previously led to a SIGSEGV.
+-- start_matchsubs
+-- m/ \(subselect\.c:.*\)/
+-- s/ \(subselect\.c:.*\)//
+-- end_matchsubs
+
+-- start_ignore
+drop table if exists test_table;
+drop function if exists test_function(param_in text);
+-- end_ignore
+
+create table test_table(a text);
+
+create function test_function(param_in text) returns
+table (param_out text) as
+$function$
+select param_in;
+$function$
+language sql execute on initplan;
+
+create table tnew as
+select * from test_table l join test_function(l.a) r on l.a = r.param_out;
+
+drop function test_function(param_in text);
+drop table test_table;

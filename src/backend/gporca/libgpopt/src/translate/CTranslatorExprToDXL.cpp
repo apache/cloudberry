@@ -3159,6 +3159,48 @@ CTranslatorExprToDXL::PdxlnRestrictResult(CDXLNode *dxlnode,
 
 //---------------------------------------------------------------------------
 //	@function:
+//		CTranslatorExprToDXL::GetResultProjectedColRefArray
+//
+//	@doc:
+//		Helper to build an CDXLColRefArray of projected columns of Result node
+//
+//---------------------------------------------------------------------------
+CDXLColRefArray *
+CTranslatorExprToDXL::GetResultProjectedColRefArray(CDXLNode *dxlProjectNode)
+{
+	if (NULL == dxlProjectNode)
+	{
+		return NULL;
+	}
+
+	CDXLNode *pdxlnProjList = (*dxlProjectNode)[0];
+	const ULONG ulPrjElems = pdxlnProjList->Arity();
+
+	if (0 == ulPrjElems)
+	{
+		return NULL;
+	}
+
+	CDXLColRefArray *dxlColRefArray = GPOS_NEW(m_mp) CDXLColRefArray(m_mp);
+	for (ULONG ul = 0; ul < ulPrjElems; ul++)
+	{
+		CDXLNode *child_dxlnode = (*pdxlnProjList)[ul];
+		CDXLScalarProjElem *pdxlPrjElem =
+			CDXLScalarProjElem::Cast(child_dxlnode->GetOperator());
+		CColRef *colref = m_pcf->LookupColRef(pdxlPrjElem->Id());
+
+		CMDName *mdname = GPOS_NEW(m_mp) CMDName(m_mp, colref->Name().Pstr());
+		IMDId *mdid = colref->RetrieveType()->MDId();
+		mdid->AddRef();
+		CDXLColRef *dxl_colref = GPOS_NEW(m_mp) CDXLColRef(
+			m_mp, mdname, colref->Id(), mdid, colref->TypeModifier());
+		dxlColRefArray->Append(dxl_colref);
+	}
+	return dxlColRefArray;
+}
+
+//---------------------------------------------------------------------------
+//	@function:
 //		CTranslatorExprToDXL::PdxlnQuantifiedSubplan
 //
 //	@doc:
@@ -3172,18 +3214,18 @@ CTranslatorExprToDXL::PdxlnQuantifiedSubplan(
 	CDistributionSpecArray *pdrgpdsBaseTables, ULONG *pulNonGatherMotions,
 	BOOL *pfDML)
 {
+#ifdef GPOS_DEBUG
 	COperator *popCorrelatedJoin = pexprCorrelatedNLJoin->Pop();
 	COperator::EOperatorId op_id = popCorrelatedJoin->Eopid();
-	BOOL fCorrelatedLOJ =
-		(COperator::EopPhysicalCorrelatedLeftOuterNLJoin == op_id);
+#endif	// GPOS_DEBUG
 	GPOS_ASSERT(COperator::EopPhysicalCorrelatedInLeftSemiNLJoin == op_id ||
 				COperator::EopPhysicalCorrelatedNotInLeftAntiSemiNLJoin ==
 					op_id ||
-				fCorrelatedLOJ);
+				COperator::EopPhysicalCorrelatedLeftOuterNLJoin == op_id);
 
 	EdxlSubPlanType dxl_subplan_type = Edxlsubplantype(pexprCorrelatedNLJoin);
-	GPOS_ASSERT_IMP(fCorrelatedLOJ, EdxlSubPlanTypeAny == dxl_subplan_type ||
-										EdxlSubPlanTypeAll == dxl_subplan_type);
+	GPOS_ASSERT(EdxlSubPlanTypeAny == dxl_subplan_type ||
+				EdxlSubPlanTypeAll == dxl_subplan_type);
 
 	CExpression *pexprInner = (*pexprCorrelatedNLJoin)[1];
 	CExpression *pexprScalar = (*pexprCorrelatedNLJoin)[2];
@@ -3193,39 +3235,37 @@ CTranslatorExprToDXL::PdxlnQuantifiedSubplan(
 		pexprInner, NULL /*colref_array*/, pdrgpdsBaseTables,
 		pulNonGatherMotions, pfDML, false /*fRemap*/, false /*fRoot*/);
 
-	// find required column from inner child
-	CColRefSet *pcrInner = GPOS_NEW(m_mp) CColRefSet(m_mp);
-	pcrInner->Include((*pdrgpcrInner)[0]);
-
-	BOOL outerParam = false;
-	if (fCorrelatedLOJ)
+	// In fact, the inner (right) part of CorrelatedNLJoin is transformed
+	// into a subquery. The scalar part of CorrelatedNLJoin is transformed
+	// into a Test Expression of the subquery.
+	// At execution, the subquery returns a tuple, and Test Expression checks
+	// the condition for returning the tuple - it acts as a filter.
+	// We do not need all the output columns of the subquery, so we need to
+	// restrict the projection of the inner node.
+	// We need the "Reqd Inner Col" of CorrelatedNLJoin (pdrgpcrInner[0])
+	// and the columns from the scalar that appear in the subquery (inner part).
+	CColRefSet *pcrsInner =
+		GPOS_NEW(m_mp) CColRefSet(m_mp, *pexprInner->DeriveOutputColumns());
+	CColRefSet *pcrsScalarUsed = pexprScalar->DeriveUsedColumns();
+	pcrsInner->Intersection(pcrsScalarUsed);
+	if (0 == pcrsInner->Size())
 	{
-		// overwrite required inner column based on scalar expression
-
-		CColRefSet *pcrsInner = pexprInner->DeriveOutputColumns();
-		CColRefSet *pcrsUsed =
-			GPOS_NEW(m_mp) CColRefSet(m_mp, *pexprScalar->DeriveUsedColumns());
-		pcrsUsed->Intersection(pcrsInner);
-		if (0 < pcrsUsed->Size())
-		{
-			GPOS_ASSERT(1 == pcrsUsed->Size() || 2 == pcrsUsed->Size());
-
-			// Both sides of the SubPlan test expression can come from the
-			// inner side. So we need to pass pcrsUsed instead of pcrInner into
-			// PdxlnRestrictResult()
-			outerParam = pcrsUsed->Size() > 1;
-
-			pcrInner->Release();
-			pcrInner = pcrsUsed;
-		}
-		else
-		{
-			pcrsUsed->Release();
-		}
+		pcrsInner->Include((*pdrgpcrInner)[0]);
 	}
+	CDXLNode *inner_dxlnode = PdxlnRestrictResult(pdxlnInnerChild, pcrsInner);
+	pcrsInner->Release();
 
-	CDXLNode *inner_dxlnode = PdxlnRestrictResult(pdxlnInnerChild, pcrInner);
-	pcrInner->Release();
+	// Params for the Test Expression are the output columns from the
+	// projection of the inner Result node. The order of the params must
+	// match the order of the columns from the projection. Therefore, the
+	// params are extracted from the projection of the inner Result node after
+	// restriction.
+	// Test Expression can also contain columns that are not in the inner
+	// part - such columns are considered as Vars.
+	// Note that test_expr_params are not serialized (not displayed in the DXL file).
+	CDXLColRefArray *test_expr_params =
+		GetResultProjectedColRefArray(inner_dxlnode);
+
 	if (NULL == inner_dxlnode)
 	{
 		GPOS_RAISE(
@@ -3245,7 +3285,7 @@ CTranslatorExprToDXL::PdxlnQuantifiedSubplan(
 	CDXLNode *pdxlnSubPlan = GPOS_NEW(m_mp)
 		CDXLNode(m_mp, GPOS_NEW(m_mp) CDXLScalarSubPlan(
 						   m_mp, mdid, dxl_colref_array, dxl_subplan_type,
-						   dxlnode_test_expr, outerParam));
+						   dxlnode_test_expr, test_expr_params));
 	pdxlnSubPlan->AddChild(inner_dxlnode);
 
 	// add to hashmap
@@ -3585,16 +3625,17 @@ CTranslatorExprToDXL::PdxlnCorrelatedNLJoin(
 	COperator::EOperatorId op_id = pexpr->Pop()->Eopid();
 	CDXLNode *pdxlnCond = NULL;
 
-	// Create a subplan with a Boolean from the inner child if we have a Const True as a join condition.
-	// One scenario for this is when IN sublinks contain a projection from the outer table only such as:
-	// select * from foo where foo.a in (select foo.b from bar);
-	// If bar is a very small table, ORCA generates a CorrelatedInLeftSemiNLJoin with a Const true join filter
-	// and condition foo.a = foo.b is added as a filter on the table scan of foo. If bar is a large table,
-	// ORCA generates a plan with CorrelatedInnerNLJoin with a Const true join filter and a LIMIT over the
-	// scan of bar. The same foo.a = foo.b condition is also added as a filter on the table scan of foo.
+	// Create a subplan with a Boolean from the inner child if we have a Const
+	// True as a join condition. One scenario for this is when sublink contain a
+	// projection from the outer table such as:
+	// select * from foo where 10 > (select bar.b from bar where foo.b = bar.b);
+	// If bar is a very small table, ORCA generates a CorrelatedInnerNLJoin with
+	// a Const true join filter and condition 10 > bar.b is added as a filter
+	// to the scan of bar.
+	// For the other cases function BuildSubplans generates another sublink type
+	// for correct type of join condition.
 	if (CUtils::FScalarConstTrue(pexprScalar) &&
-		(COperator::EopPhysicalCorrelatedInnerNLJoin == op_id ||
-		 COperator::EopPhysicalCorrelatedInLeftSemiNLJoin == op_id))
+		COperator::EopPhysicalCorrelatedInnerNLJoin == op_id)
 	{
 		// translate relational inner child expression
 		CDXLNode *pdxlnInnerChild =

@@ -790,7 +790,7 @@ explain select * from foo left join bar on foo.a=bar.a left join zoo on foo.a::i
     <dxl:Plan Id="0" SpaceSize="59">
       <dxl:GatherMotion InputSegments="0,1,2" OutputSegments="-1">
         <dxl:Properties>
-          <dxl:Cost StartupCost="0" TotalCost="1293.520466" Rows="2000.000000" Width="22"/>
+          <dxl:Cost StartupCost="0" TotalCost="1293.554000" Rows="2000.000000" Width="22"/>
         </dxl:Properties>
         <dxl:ProjList>
           <dxl:ProjElem ColId="0" Alias="a">
@@ -816,7 +816,7 @@ explain select * from foo left join bar on foo.a=bar.a left join zoo on foo.a::i
         <dxl:SortingColumnList/>
         <dxl:HashJoin JoinType="Left">
           <dxl:Properties>
-            <dxl:Cost StartupCost="0" TotalCost="1293.356493" Rows="2000.000000" Width="22"/>
+            <dxl:Cost StartupCost="0" TotalCost="1293.390026" Rows="2000.000000" Width="22"/>
           </dxl:Properties>
           <dxl:ProjList>
             <dxl:ProjElem ColId="0" Alias="a">
@@ -852,7 +852,7 @@ explain select * from foo left join bar on foo.a=bar.a left join zoo on foo.a::i
           </dxl:HashCondList>
           <dxl:HashJoin JoinType="Left">
             <dxl:Properties>
-              <dxl:Cost StartupCost="0" TotalCost="862.146758" Rows="1000.000000" Width="15"/>
+              <dxl:Cost StartupCost="0" TotalCost="862.146958" Rows="1000.000000" Width="15"/>
             </dxl:Properties>
             <dxl:ProjList>
               <dxl:ProjElem ColId="0" Alias="a">

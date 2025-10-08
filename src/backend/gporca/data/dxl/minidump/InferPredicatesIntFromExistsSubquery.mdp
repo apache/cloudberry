@@ -7,17 +7,19 @@
     create table r(r1 int, r2 int, r3 text, r4 varchar(20), r5 char(10));
     create table s(s1 int, s2 int, s3 text, s4 varchar(20), s5 char(10));
     explain select * from r where exists (select 1 from s where r2=s2 and s2=9);
-                                                QUERY PLAN
-    ---------------------------------------------------------------------------------------------------
-     Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..862.00 rows=1 width=46)
-       ->  Hash Semi Join  (cost=0.00..862.00 rows=1 width=46)
-             Hash Cond: (r.r2 = s.s2)
-             ->  Seq Scan on r  (cost=0.00..431.00 rows=1 width=46)
-                   Filter: (r2 = 9)
-             ->  Hash  (cost=431.00..431.00 rows=1 width=4)
-                   ->  Broadcast Motion 3:3  (slice2; segments: 3)  (cost=0.00..431.00 rows=1 width=4)
-                         ->  Seq Scan on s  (cost=0.00..431.00 rows=1 width=4)
-                               Filter: (s2 = 9)
+                                            QUERY PLAN                                             
+---------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice2; segments: 3)  (cost=0.00..862.00 rows=1 width=46)
+   ->  Hash Semi Join  (cost=0.00..862.00 rows=1 width=46)
+         Hash Cond: (r.r2 = s.s2)
+         ->  Seq Scan on r  (cost=0.00..431.00 rows=1 width=46)
+               Filter: (r2 = 9)
+         ->  Hash  (cost=431.00..431.00 rows=1 width=4)
+               ->  Broadcast Motion 3:3  (slice1; segments: 3)  (cost=0.00..431.00 rows=1 width=4)
+                     ->  Result  (cost=0.00..431.00 rows=1 width=4)
+                           ->  Result  (cost=0.00..431.00 rows=1 width=4)
+                                 ->  Seq Scan on s  (cost=0.00..431.00 rows=1 width=4)
+                                       Filter: (s2 = 9)
     		]]>
     </dxl:Comment>
   <dxl:Thread Id="0">
@@ -406,10 +408,10 @@
         </dxl:LogicalGet>
       </dxl:LogicalSelect>
     </dxl:Query>
-    <dxl:Plan Id="0" SpaceSize="792">
+    <dxl:Plan Id="0" SpaceSize="472">
       <dxl:GatherMotion InputSegments="0,1,2" OutputSegments="-1">
         <dxl:Properties>
-          <dxl:Cost StartupCost="0" TotalCost="862.000637" Rows="1.000000" Width="46"/>
+          <dxl:Cost StartupCost="0" TotalCost="862.000737" Rows="1.000000" Width="46"/>
         </dxl:Properties>
         <dxl:ProjList>
           <dxl:ProjElem ColId="0" Alias="r1">
@@ -432,7 +434,7 @@
         <dxl:SortingColumnList/>
         <dxl:HashJoin JoinType="In">
           <dxl:Properties>
-            <dxl:Cost StartupCost="0" TotalCost="862.000465" Rows="1.000000" Width="46"/>
+            <dxl:Cost StartupCost="0" TotalCost="862.000565" Rows="1.000000" Width="46"/>
           </dxl:Properties>
           <dxl:ProjList>
             <dxl:ProjElem ColId="0" Alias="r1">

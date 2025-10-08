@@ -155,6 +155,9 @@ typedef uint16 LOCKMETHODID;
 #define AccessExclusiveLock		8		/* ALTER TABLE, DROP TABLE, VACUUM
 										 * FULL, and unqualified LOCK TABLE */
 
+/* See README.tuplock section "Locking to write inplace-updated tables" */
+#define InplaceUpdateTupleLock ExclusiveLock
+
 /*
  * Map from lock methods to lock table data structures.
  */

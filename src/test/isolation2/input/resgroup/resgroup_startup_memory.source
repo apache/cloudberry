@@ -1,0 +1,113 @@
+-- start_ignore
+drop table if exists t1;
+drop role if exists test1;
+drop role if exists test2;
+drop resource group rg1;
+drop resource group rg2;
+-- end_ignore
+
+create extension if not exists gp_inject_fault;
+
+create or replace function resGroupPalloc(float) returns int as '@abs_builddir@/../regress/regress@DLSUFFIX@', 'resGroupPalloc' language C reads sql data;
+create or replace function hold_memory_by_percent_on_qe(float) returns int as $$
+select resGroupPalloc($1) from gp_dist_random('gp_id')
+$$ language sql;
+
+create or replace function repeatPalloc(int, int) returns int as
+'@abs_builddir@/../regress/regress@DLSUFFIX@', 'repeatPalloc'
+    language C reads sql data;
+
+-- In the next test, we need to be able to allocate 100% of the available
+-- memory. Therefore, we set the memory_limit for the built-in groups to 0.
+-- memory_spill_ratio must also be set to 0.
+alter resource group admin_group set memory_spill_ratio 0;
+alter resource group default_group set memory_spill_ratio 0;
+alter resource group admin_group set memory_limit 0;
+alter resource group default_group set memory_limit 0;
+
+create resource group rg1 with (cpu_rate_limit=20, memory_limit=15, memory_shared_quota=100);
+create resource group rg2 with (cpu_rate_limit=20, memory_limit=85, memory_shared_quota=100);
+
+create role test1 with resource group rg1;
+create role test2 with resource group rg2;
+
+1: set role test1;
+1: create table t1 (a int) distributed randomly;
+-- We need to have a random distribution so that each select in the join is
+-- performed in a separate slice.
+-- Add exactly one line to each segment.
+0U: insert into t1 values (1);
+1U: insert into t1 values (2);
+2U: insert into t1 values (3);
+0Uq:
+1Uq:
+2Uq:
+
+-- Force nested loop join to avoid unnecessary memory allocations.
+1: set enable_nestloop = on;
+1: set enable_hashjoin = off;
+
+set role test2;
+begin;
+
+-- Allocate all the memory in the second resource group.
+select hold_memory_by_percent_on_qe(1);
+-- Wait for all backends to run before executing the query. This is necessary
+-- to avoid executing repeatPalloc before all backends are up.
+select gp_inject_fault_infinite('executor_pre_tuple_processed', 'suspend', dbid)
+    from gp_segment_configuration where role = 'p' and content > -1;
+-- The first resource group has 682 * 0.15 = 102 MB of memory available.
+-- 6 slices consume 12 * 6 = 72 MB, plus one slice explicitly allocates 40 MB of
+-- memory, 72 + 40 = 112 MB. It is expected that the query will be canceled due
+-- to lack of memory in the resource group but not in the Vmem tracker.
+1&: with sleep_cte as
+(
+    select a, pg_sleep(60) is null from t1
+),
+alloc_cte as
+(
+    select * from sleep_cte where repeatPalloc(40, 1) is not null
+)
+select * from alloc_cte a1
+         join sleep_cte a2 using(a)
+         join sleep_cte a3 using(a)
+         join sleep_cte a4 using(a)
+         join sleep_cte a5 using(a);
+select gp_wait_until_triggered_fault('executor_pre_tuple_processed', 6, dbid)
+    from gp_segment_configuration where role = 'p' and content > -1;
+select gp_inject_fault('executor_pre_tuple_processed', 'reset', dbid)
+    from gp_segment_configuration where role = 'p' and content > -1;
+1<:
+rollback;
+
+-- Test that the starting memory is visible to the resource group.
+select gp_inject_fault('executor_pre_tuple_processed', 'suspend', dbid)
+    from gp_segment_configuration where role = 'p' and content > -1;
+1&: select count(*) from t1;
+select gp_wait_until_triggered_fault('executor_pre_tuple_processed', 1, dbid)
+    from gp_segment_configuration where role = 'p' and content > -1;
+
+select segment, mem.* from gp_toolkit.gp_resgroup_status, json_object_keys(memory_usage)
+    as segment, json_to_record(memory_usage -> segment) mem (used int) where rsgname = 'rg1';
+
+select gp_inject_fault('executor_pre_tuple_processed', 'reset', dbid)
+    from gp_segment_configuration where role = 'p' and content > -1;
+1<:
+1q:
+
+reset role;
+drop table t1;
+drop role test1;
+drop role test2;
+drop resource group rg1;
+drop resource group rg2;
+
+alter resource group default_group set memory_limit 30;
+alter resource group default_group set memory_spill_ratio 10;
+
+alter resource group admin_group set memory_limit 10;
+alter resource group admin_group set memory_spill_ratio 10;
+
+drop function repeatPalloc(int, int);
+drop function hold_memory_by_percent_on_qe(float);
+drop function resGroupPalloc(float);

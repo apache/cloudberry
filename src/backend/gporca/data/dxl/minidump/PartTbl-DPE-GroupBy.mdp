@@ -533,10 +533,10 @@
         </dxl:LogicalGet>
       </dxl:LogicalSelect>
     </dxl:Query>
-    <dxl:Plan Id="0" SpaceSize="731">
+    <dxl:Plan Id="0" SpaceSize="333">
       <dxl:GatherMotion InputSegments="0,1" OutputSegments="-1">
         <dxl:Properties>
-          <dxl:Cost StartupCost="0" TotalCost="862.022556" Rows="99.900000" Width="14"/>
+          <dxl:Cost StartupCost="0" TotalCost="862.022656" Rows="99.900000" Width="14"/>
         </dxl:Properties>
         <dxl:ProjList>
           <dxl:ProjElem ColId="0" Alias="dist">
@@ -559,7 +559,7 @@
         <dxl:SortingColumnList/>
         <dxl:HashJoin JoinType="In">
           <dxl:Properties>
-            <dxl:Cost StartupCost="0" TotalCost="862.016276" Rows="99.900000" Width="14"/>
+            <dxl:Cost StartupCost="0" TotalCost="862.016376" Rows="99.900000" Width="14"/>
           </dxl:Properties>
           <dxl:ProjList>
             <dxl:ProjElem ColId="0" Alias="dist">

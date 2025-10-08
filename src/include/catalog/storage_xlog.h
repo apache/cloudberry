@@ -26,14 +26,26 @@
  */
 
 /* XLOG gives us high 4 bits */
-#define XLOG_SMGR_CREATE	0x10
-#define XLOG_SMGR_TRUNCATE	0x20
+#define XLOG_SMGR_CREATE		0x10
+#define XLOG_SMGR_TRUNCATE		0x20
+#define XLOG_SMGR_CREATE_PDL	0x30
 
+/*
+ * We do not create `xl_smgr_create` records anymore. We use
+ * `xl_smgr_create_pdl` instead. But we still process `xl_smgr_create` records
+ * for backward compatibility.
+ */
 typedef struct xl_smgr_create
 {
 	RelFileNode rnode;
 	ForkNumber	forkNum;
 } xl_smgr_create;
+
+typedef struct xl_smgr_create_pdl
+{
+	xl_smgr_create createrec;
+	char relstorage;
+} xl_smgr_create_pdl;
 
 typedef struct xl_smgr_truncate
 {
@@ -41,7 +53,7 @@ typedef struct xl_smgr_truncate
 	RelFileNode rnode;
 } xl_smgr_truncate;
 
-extern void log_smgrcreate(RelFileNode *rnode, ForkNumber forkNum);
+extern void log_smgrcreate(RelFileNode *rnode, ForkNumber forkNum, char relstorage);
 
 extern void smgr_redo(XLogRecPtr beginLoc, XLogRecPtr lsn, XLogRecord *record);
 extern void smgr_desc(StringInfo buf, XLogRecord *record);

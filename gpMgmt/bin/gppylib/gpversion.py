@@ -88,10 +88,10 @@ class GpVersion:
             # There are several version formats that we anticipate receiving:
             #
             # Versions from "postgres --gp-version":
-            #    ".* (Greengage Database) <VERSION> build <BUILD>"
+            #    ".* (Green\w+ Database) <VERSION> build <BUILD>"
             #
             # Version from sql "select version()"
-            #    ".* (Greengage Database <VERSION> build <BUILD>) .*"
+            #    ".* (Green\w+ Database <VERSION> build <BUILD>) .*"
             #
             # Versions from python code:
             #    "<VERSION>"
@@ -99,7 +99,7 @@ class GpVersion:
             #
             if isinstance(v, str):
                 # See if it matches one of the two the long formats
-                regex = r"\(Greengage Database\)? ([^ ]+) build ([^ )]+)"
+                regex = r"\(Green\w+ Database\)? ([^ ]+) build ([^ )]+)"
                 m = re.search(regex, v)
                 if m:
                     (v, self.build) = m.groups()   # (version, build)

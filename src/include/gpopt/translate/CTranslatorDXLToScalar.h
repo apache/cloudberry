@@ -172,21 +172,13 @@ private:
 	// translate subplan test expression
 	Expr *TranslateDXLSubplanTestExprToScalar(CDXLNode *test_expr_node,
 											  SubLinkType slink,
-											  CMappingColIdVar *colid_var,
-											  BOOL has_outer_refs,
-											  List **param_ids_list);
+											  CMappingColIdVar *colid_var);
 
 	// translate subplan parameters
 	void TranslateSubplanParams(SubPlan *sub_plan,
 								CDXLTranslateContext *dxl_translator_ctxt,
 								const CDXLColRefArray *outer_refs,
 								CMappingColIdVar *colid_var);
-
-	// translate subplan test expression parameters
-	void TranslateDXLTestExprScalarIdentToExpr(CDXLNode *child_node,
-											   Param *param,
-											   CDXLScalarIdent **ident,
-											   Expr **expr);
 
 	CHAR *GetSubplanAlias(ULONG plan_id);
 

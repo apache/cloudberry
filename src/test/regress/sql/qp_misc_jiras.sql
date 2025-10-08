@@ -2629,6 +2629,105 @@ INSERT INTO pg_statistic VALUES (
 
 explain select b from epsilon_test where b in (11,30) limit 30;
 
+-- Check row count estimation in case gp_enable_relsize_collection is enabled,
+-- and stats are not available.
+--
+-- Use matchsubs to check that row count estimation differs at most +/- 10% from the real value.
+--
+-- start_matchsubs
+-- m/cost=\d+\.\d+\.\.\d+\.\d+ /
+-- s/cost=\d+\.\d+\.\.\d+\.\d+ /cost=##.###..##.### /
+-- m/rows=9\d\d\d\d /
+-- s/rows=9\d\d\d\d /rows=100000 /
+-- m/rows=10\d\d\d\d /
+-- s/rows=10\d\d\d\d /rows=100000 /
+-- end_matchsubs
+set gp_enable_relsize_collection = on;
+set gp_autostats_mode = none;
+
+-- Check heap table.
+-- start_ignore
+drop table if exists test_table;
+-- end_ignore
+create table test_table
+as (select generate_series(1, 300000)::int as col_1, 1::int as col_2, 1::int as col_3, 1::int as col_4, 1::int as col_5) distributed by (col_1);
+
+-- explain_processing_off
+explain select count(1) from test_table;
+
+-- Check AO table with column orientation and compression.
+drop table test_table;
+create table test_table with (APPENDONLY=true, ORIENTATION=column, COMPRESSTYPE=rle_type, COMPRESSLEVEL=2)
+as (select generate_series(1, 300000)::int as col_1, 1::int as col_2, 1::int as col_3, 1::int as col_4, 1::int as col_5) distributed by (col_1);
+
+-- explain_processing_off
+explain select count(1) from test_table;
+
+-- Check AO table with row orientation and compression.
+drop table test_table;
+create table test_table with (APPENDONLY=true, ORIENTATION=row, COMPRESSTYPE=zlib, COMPRESSLEVEL=2)
+as (select generate_series(1, 300000)::int as col_1, 1::int as col_2, 1::int as col_3, 1::int as col_4, 1::int as col_5) distributed by (col_1);
+
+-- explain_processing_off
+explain select count(1) from test_table;
+
+-- Check replicated AO table with row orientation and compression.
+drop table test_table;
+create table test_table with (APPENDONLY=true, ORIENTATION=row, COMPRESSTYPE=zlib, COMPRESSLEVEL=2)
+as (select generate_series(1, 100000)::int as col_1, 1::int as col_2, 1::int as col_3, 1::int as col_4, 1::int as col_5) distributed replicated;
+
+-- explain_processing_off
+explain select count(1) from test_table;
+
+-- Check AO table with row orientation and compression and with high skew.
+drop table test_table;
+create table test_table with (APPENDONLY=true, ORIENTATION=row, COMPRESSTYPE=zlib, COMPRESSLEVEL=2)
+as
+(select generate_series(1, 150000)::int as col_1, 1::int as col_2, 1::int as col_3, 1::int as col_4, 1::int as col_5)
+union all
+(select 1::int as col_1, 1::int as col_2, 1::int as col_3, 1::int as col_4, 1::int as col_5 from generate_series(1, 150000))
+distributed by (col_1);
+
+-- explain_processing_off
+explain select count(1) from test_table;
+
+-- Check 0 column tables
+drop table test_table;
+create table test_table();
+-- explain_processing_off
+explain select * from test_table;
+
+drop table test_table;
+create table test_table() with (APPENDONLY=true, ORIENTATION=row);
+-- explain_processing_off
+explain select * from test_table;
+
+drop table test_table;
+create table test_table() with (APPENDONLY=true, ORIENTATION=column);
+-- explain_processing_off
+explain select * from test_table;
+
+reset gp_enable_relsize_collection;
+
+-- Check 0 column tables with default gp_enable_relsize_collection
+drop table test_table;
+create table test_table();
+-- explain_processing_off
+explain select * from test_table;
+
+drop table test_table;
+create table test_table() with (APPENDONLY=true, ORIENTATION=row);
+-- explain_processing_off
+explain select * from test_table;
+
+drop table test_table;
+create table test_table() with (APPENDONLY=true, ORIENTATION=column);
+-- explain_processing_off
+explain select * from test_table;
+
+drop table test_table;
+reset gp_autostats_mode;
+
 -- start_ignore
 drop schema qp_misc_jiras cascade;
 -- end_ignore

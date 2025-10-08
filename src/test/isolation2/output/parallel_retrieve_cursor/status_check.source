@@ -1392,6 +1392,9 @@ CLOSE
 2: END;
 END
 
+1q: ... <quitting>
+2q: ... <quitting>
+
 ---------- Test9: Test parallel retrieve cursor auto-check
 1: drop table if exists t1;
 DROP

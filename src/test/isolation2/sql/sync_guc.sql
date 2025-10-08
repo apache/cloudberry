@@ -80,7 +80,7 @@
 !\retcode gpconfig -c log_min_messages -v 'warning' -m 'notice';
 !\retcode gpstop -u;
 
--- Query to execute GUC sync (GUC sync fails, query succeeds)
+-- Query to execute GUC sync (GUC sync fails)
 1: select 1;
 -- Should fail with "relation does not exist"
 1: select * from sync_temp_table;

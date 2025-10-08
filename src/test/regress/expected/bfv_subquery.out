@@ -564,3 +564,66 @@ select count(*) from ( values :lots_of_values ) as b(a) where b.a % 100000 in (s
 (1 row)
 
 drop table t1;
+-- Test that ORCA can build a plan for a query with a subquery that contains union all or distinct.
+-- start_ignore
+drop table if exists t1;
+NOTICE:  table "t1" does not exist, skipping
+drop table if exists t2;
+NOTICE:  table "t2" does not exist, skipping
+-- end_ignore
+create table t1 (a int, b int) distributed by (a);
+create table t2 (a int, b int) distributed by (a);
+insert into t1 values(1,1);
+insert into t1 values(2,2);
+insert into t2 values(0,0);
+insert into t2 values(3,3);
+set optimizer_donot_enforce_subplans = on;
+explain (costs off) select * from t1 where 0 in (select t2.b from t2 where t2.a = 0 or t2.b = t1.b union all select 1);
+                                 QUERY PLAN                                  
+-----------------------------------------------------------------------------
+ Gather Motion 3:1  (slice2; segments: 3)
+   ->  Seq Scan on t1
+         Filter: (SubPlan 1)
+         SubPlan 1  (slice2; segments: 3)
+           ->  Append
+                 ->  Result
+                       Filter: ((t2.a = 0) OR (t2.b = t1.b))
+                       ->  Materialize
+                             ->  Broadcast Motion 3:3  (slice1; segments: 3)
+                                   ->  Seq Scan on t2
+                 ->  Result
+ Optimizer: Postgres query optimizer
+(12 rows)
+
+select * from t1 where 0 in (select t2.b from t2 where t2.a = 0 or t2.b = t1.b union all select 1);
+ a | b 
+---+---
+ 2 | 2
+ 1 | 1
+(2 rows)
+
+explain (costs off) select * from t1 where 0 in (select t2.b from t2 where t2.a = 0 or t2.b = t1.b group by 1);
+                              QUERY PLAN                               
+-----------------------------------------------------------------------
+ Gather Motion 3:1  (slice2; segments: 3)
+   ->  Seq Scan on t1
+         Filter: (SubPlan 1)
+         SubPlan 1  (slice2; segments: 3)
+           ->  Result
+                 Filter: ((t2.a = 0) OR (t2.b = t1.b))
+                 ->  Materialize
+                       ->  Broadcast Motion 3:3  (slice1; segments: 3)
+                             ->  Seq Scan on t2
+ Optimizer: Postgres query optimizer
+(10 rows)
+
+select * from t1 where 0 in (select t2.b from t2 where t2.a = 0 or t2.b = t1.b group by 1);
+ a | b 
+---+---
+ 1 | 1
+ 2 | 2
+(2 rows)
+
+reset optimizer_donot_enforce_subplans;
+drop table t1;
+drop table t2;

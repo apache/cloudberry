@@ -340,7 +340,7 @@
     <dxl:Plan Id="0" SpaceSize="40">
       <dxl:DMLDelete Columns="" ActionCol="24" CtidCol="3" SegmentIdCol="9">
         <dxl:Properties>
-          <dxl:Cost StartupCost="0" TotalCost="862.014131" Rows="1.000000" Width="1"/>
+          <dxl:Cost StartupCost="0" TotalCost="862.014231" Rows="1.000000" Width="1"/>
         </dxl:Properties>
         <dxl:DirectDispatchInfo/>
         <dxl:ProjList/>
@@ -360,7 +360,7 @@
         </dxl:TableDescriptor>
         <dxl:Result>
           <dxl:Properties>
-            <dxl:Cost StartupCost="0" TotalCost="862.000459" Rows="1.000000" Width="14"/>
+            <dxl:Cost StartupCost="0" TotalCost="862.000559" Rows="1.000000" Width="14"/>
           </dxl:Properties>
           <dxl:ProjList>
             <dxl:ProjElem ColId="3" Alias="ctid">
@@ -377,7 +377,7 @@
           <dxl:OneTimeFilter/>
           <dxl:RoutedDistributeMotion SegmentIdCol="9" InputSegments="0,1,2,3" OutputSegments="0,1,2,3">
             <dxl:Properties>
-              <dxl:Cost StartupCost="0" TotalCost="862.000455" Rows="1.000000" Width="10"/>
+              <dxl:Cost StartupCost="0" TotalCost="862.000555" Rows="1.000000" Width="10"/>
             </dxl:Properties>
             <dxl:ProjList>
               <dxl:ProjElem ColId="3" Alias="ctid">
@@ -391,7 +391,7 @@
             <dxl:SortingColumnList/>
             <dxl:HashJoin JoinType="In">
               <dxl:Properties>
-                <dxl:Cost StartupCost="0" TotalCost="862.000448" Rows="1.000000" Width="10"/>
+                <dxl:Cost StartupCost="0" TotalCost="862.000548" Rows="1.000000" Width="10"/>
               </dxl:Properties>
               <dxl:ProjList>
                 <dxl:ProjElem ColId="3" Alias="ctid">

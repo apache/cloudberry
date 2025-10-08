@@ -100,16 +100,18 @@ cdbconn_createSegmentDescriptor(struct CdbComponentDatabaseInfo *cdbinfo, int id
 void
 cdbconn_termSegmentDescriptor(SegmentDatabaseDescriptor *segdbDesc)
 {
-	CdbComponentDatabases *cdbs;
-
 	Assert(CdbComponentsContext);
 
-	cdbs = segdbDesc->segment_database_info->cdbs;
+	/* Don't bother, since the gang would eventually be destroyed. */
+	if (!in_oom_error_trouble())
+	{
+		CdbComponentDatabases *cdbs = segdbDesc->segment_database_info->cdbs;
 
-	/* put qe identifier to free list for reuse */
-	cdbs->freeCounterList = lappend_int(cdbs->freeCounterList, segdbDesc->identifier);
+		cdbconn_disconnect(segdbDesc);
 
-	cdbconn_disconnect(segdbDesc);
+		/* Put QE identifier to free list for reuse. */
+		cdbs->freeCounterList = lappend_int(cdbs->freeCounterList, segdbDesc->identifier);
+	}
 
 	if (segdbDesc->whoami != NULL)
 	{

@@ -8,7 +8,7 @@ CREATE EXTENSION IF NOT EXISTS gp_inject_fault;
 -- s/^ \(seg\d .*:\d+\)//
 -- m/^DETAIL:  Internal error: No motion listener port \(seg\d.*:.*\)/
 -- s/^DETAIL:  Internal error: No motion listener port \(seg\d.*:.*\)/DETAIL:  Internal error: No motion listener port/
--- m/WARNING:.*Any temporary tables for this session have been dropped because the gang was disconnected/
+-- m/WARNING:.*Any temporary tables for this session have been dropped because the gang was disconnected \(session id = \d*\)/
 -- s/session id \=\s*\d+/session id \= DUMMY/gm
 -- m/WARNING:  Connection \(seg\d.*:.*\) is broken/
 -- s/WARNING:  Connection \(seg\d.*:.*\) is broken/WARNING:  Connection seg0 slice1 is broken/
@@ -1080,9 +1080,15 @@ drop table t_create_gang_time;
 -- GUCs that were changed in the configuration file of the QD should be re-sent
 -- to segments on gpstop -u, if GUC_GPDB_NEED_SYNC is present in the flags.
 --
+-- start_matchsubs
+-- m/^ERROR:  failed to synchronize GUC settings across segments \(postgres.c:\d+\)/
+-- s/^ERROR:  failed to synchronize GUC settings across segments \(postgres.c:\d+\)/ERROR:  failed to synchronize GUC settings across segments/
+-- end_matchsubs
 -- Use a separate user without any priveleges to catch possible context issues.
 CREATE ROLE dispatch_test_user2 NOSUPERUSER;
 SET SESSION AUTHORIZATION dispatch_test_user2;
+-- Make sure the gang wasn't dropped by a silent error.
+CREATE TEMP TABLE gang_is_the_same();
 CREATE OR REPLACE FUNCTION show_on_segments(show_name text)
 RETURNS table (guc_name text, guc_setting text)
 EXECUTE ON ALL SEGMENTS AS $$
@@ -1200,6 +1206,33 @@ SELECT * from show_on_segments('backslash_quote');
  backslash_quote | safe_encoding
  backslash_quote | safe_encoding
 (3 rows)
+
+SELECT FROM gang_is_the_same;
+--
+(0 rows)
+
+-- Make sure that at least one parameter from synced list has been changed
+-- Don't fail silently if we encountered an error.
+SELECT gp_inject_fault('dispatch_set_command', 'error', dbid)
+FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+ gp_inject_fault 
+-----------------
+ Success:
+(1 row)
+
+-- Table is gone after an error.
+DROP TABLE gang_is_the_same;
+WARNING:  fault triggered, fault name:'dispatch_set_command' fault type:'error'
+WARNING:  Any temporary tables for this session have been dropped because the gang was disconnected (session id = 36)
+ERROR:  failed to synchronize GUC settings across segments
+DETAIL:  Query aborted due to GUC synchronization failure
+HINT:  Check segment logs for more details
+SELECT gp_inject_fault('dispatch_set_command', 'reset', dbid)
+FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+ gp_inject_fault 
+-----------------
+ Success:
+(1 row)
 
 RESET SESSION AUTHORIZATION;
 DROP FUNCTION show_on_segments(show_name text);

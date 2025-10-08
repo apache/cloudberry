@@ -497,8 +497,7 @@ void check_version(PGconn *conn)
 {
 	PGresult *result;
 
-	result = PQexec(conn, "select (regexp_matches(version(), "
-					"E'\\\\(Greengage Database ([^)]+)\\\\)'))[1]");
+	result = PQexec(conn, "select current_setting('gp_server_version')");
 
 	if (PQresultStatus(result) == PGRES_TUPLES_OK && PQntuples(result) == 1)
 	{

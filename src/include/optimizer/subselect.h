@@ -51,4 +51,6 @@ extern List *generate_subquery_vars(PlannerInfo *root, List *tlist,
 					   Index varno);
 extern bool QueryHasDistributedRelation(Query *q, bool recursive);
 
+extern bool cte_contains_dml(Node *ctequery, PlannerInfo *root);
+
 #endif   /* SUBSELECT_H */

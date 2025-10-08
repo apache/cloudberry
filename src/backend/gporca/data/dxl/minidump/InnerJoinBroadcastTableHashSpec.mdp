@@ -363,7 +363,7 @@ EXPLAIN SELECT b2, sum(c1) FROM t1, t2 WHERE a1 = b2 GROUP BY b2 ORDER BY b2;
     <dxl:Plan Id="0" SpaceSize="50">
       <dxl:GatherMotion InputSegments="0,1,2" OutputSegments="-1">
         <dxl:Properties>
-          <dxl:Cost StartupCost="0" TotalCost="862.000572" Rows="1.000000" Width="12"/>
+          <dxl:Cost StartupCost="0" TotalCost="862.000672" Rows="1.000000" Width="12"/>
         </dxl:Properties>
         <dxl:ProjList>
           <dxl:ProjElem ColId="11" Alias="b2">
@@ -379,7 +379,7 @@ EXPLAIN SELECT b2, sum(c1) FROM t1, t2 WHERE a1 = b2 GROUP BY b2 ORDER BY b2;
         </dxl:SortingColumnList>
         <dxl:Sort SortDiscardDuplicates="false">
           <dxl:Properties>
-            <dxl:Cost StartupCost="0" TotalCost="862.000527" Rows="1.000000" Width="12"/>
+            <dxl:Cost StartupCost="0" TotalCost="862.000627" Rows="1.000000" Width="12"/>
           </dxl:Properties>
           <dxl:ProjList>
             <dxl:ProjElem ColId="11" Alias="b2">
@@ -397,7 +397,7 @@ EXPLAIN SELECT b2, sum(c1) FROM t1, t2 WHERE a1 = b2 GROUP BY b2 ORDER BY b2;
           <dxl:LimitOffset/>
           <dxl:Aggregate AggregationStrategy="Sorted" StreamSafe="false">
             <dxl:Properties>
-              <dxl:Cost StartupCost="0" TotalCost="862.000527" Rows="1.000000" Width="12"/>
+              <dxl:Cost StartupCost="0" TotalCost="862.000627" Rows="1.000000" Width="12"/>
             </dxl:Properties>
             <dxl:GroupingColumns>
               <dxl:GroupingColumn ColId="11"/>
@@ -420,7 +420,7 @@ EXPLAIN SELECT b2, sum(c1) FROM t1, t2 WHERE a1 = b2 GROUP BY b2 ORDER BY b2;
             <dxl:Filter/>
             <dxl:Sort SortDiscardDuplicates="false">
               <dxl:Properties>
-                <dxl:Cost StartupCost="0" TotalCost="862.000517" Rows="1.000000" Width="8"/>
+                <dxl:Cost StartupCost="0" TotalCost="862.000617" Rows="1.000000" Width="8"/>
               </dxl:Properties>
               <dxl:ProjList>
                 <dxl:ProjElem ColId="2" Alias="c1">
@@ -438,7 +438,7 @@ EXPLAIN SELECT b2, sum(c1) FROM t1, t2 WHERE a1 = b2 GROUP BY b2 ORDER BY b2;
               <dxl:LimitOffset/>
               <dxl:HashJoin JoinType="Inner">
                 <dxl:Properties>
-                  <dxl:Cost StartupCost="0" TotalCost="862.000517" Rows="1.000000" Width="8"/>
+                  <dxl:Cost StartupCost="0" TotalCost="862.000617" Rows="1.000000" Width="8"/>
                 </dxl:Properties>
                 <dxl:ProjList>
                   <dxl:ProjElem ColId="2" Alias="c1">

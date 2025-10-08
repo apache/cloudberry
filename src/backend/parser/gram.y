@@ -11612,7 +11612,7 @@ ExecuteStmt: EXECUTE name execute_param_clause
 					$$ = (Node *) n;
 				}
 			| CREATE OptTemp TABLE create_as_target AS
-				EXECUTE name execute_param_clause opt_with_data
+				EXECUTE name execute_param_clause opt_with_data OptDistributedBy
 				{
 					CreateTableAsStmt *ctas = makeNode(CreateTableAsStmt);
 					ExecuteStmt *n = makeNode(ExecuteStmt);
@@ -11624,6 +11624,7 @@ ExecuteStmt: EXECUTE name execute_param_clause
 					ctas->is_select_into = false;
 					/* cram additional flags into the IntoClause */
 					$4->rel->relpersistence = $2;
+					ctas->into->distributedBy = $10;
 					$4->skipData = !($9);
 					$$ = (Node *) ctas;
 				}

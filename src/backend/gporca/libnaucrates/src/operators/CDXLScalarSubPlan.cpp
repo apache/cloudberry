@@ -34,13 +34,13 @@ CDXLScalarSubPlan::CDXLScalarSubPlan(CMemoryPool *mp,
 									 CDXLColRefArray *dxl_colref_array,
 									 EdxlSubPlanType dxl_subplan_type,
 									 CDXLNode *dxlnode_test_expr,
-									 BOOL outer_param)
+									 CDXLColRefArray *test_expr_params)
 	: CDXLScalar(mp),
 	  m_first_col_type_mdid(first_col_type_mdid),
 	  m_dxl_colref_array(dxl_colref_array),
 	  m_dxl_subplan_type(dxl_subplan_type),
 	  m_dxlnode_test_expr(dxlnode_test_expr),
-	  m_outer_param(outer_param)
+	  m_test_expr_params(test_expr_params)
 {
 	GPOS_ASSERT(EdxlSubPlanTypeSentinel > dxl_subplan_type);
 	GPOS_ASSERT_IMP(EdxlSubPlanTypeAny == dxl_subplan_type ||
@@ -60,6 +60,7 @@ CDXLScalarSubPlan::~CDXLScalarSubPlan()
 {
 	m_first_col_type_mdid->Release();
 	m_dxl_colref_array->Release();
+	CRefCount::SafeRelease(m_test_expr_params);
 	CRefCount::SafeRelease(m_dxlnode_test_expr);
 }
 

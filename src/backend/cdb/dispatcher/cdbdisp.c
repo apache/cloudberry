@@ -327,6 +327,7 @@ cdbdisp_makeDispatcherState(bool isExtendedQuery)
 	handle->dispatcherState->allocatedGangs = NIL;
 	handle->dispatcherState->largestGangSize = 0;
 	handle->dispatcherState->rootGangSize = 0;
+	handle->dispatcherState->destroyIdleReaderGang = false;
 
 	return handle->dispatcherState;
 }
@@ -365,8 +366,7 @@ cdbdisp_destroyDispatcherState(CdbDispatcherState *ds)
 	if (!ds)
 		return;
 #ifdef USE_ASSERT_CHECKING
-	/* Disallow reentrance. */
-	Assert (!ds->isGangDestroying);
+	Assert(!ds->isGangDestroying || ds->forceDestroyGang);
 	ds->isGangDestroying = true;
 #endif
 
@@ -402,6 +402,12 @@ cdbdisp_destroyDispatcherState(CdbDispatcherState *ds)
 
 		RecycleGang(gp, ds->forceDestroyGang);
 	}
+
+	/*
+	 * Destroy all the idle reader gangs when flag destroyIdleReaderGang is true
+	 */
+	if (ds->destroyIdleReaderGang)
+		cdbcomponent_cleanupIdleQEs(false);
 
 	ds->allocatedGangs = NIL;
 	ds->dispatchParams = NULL;
@@ -516,7 +522,16 @@ cleanup_dispatcher_handle(dispatcher_handle_t *h)
 		return;
 	}
 
-	cdbdisp_cancelDispatch(h->dispatcherState);
+	if (in_oom_error_trouble())
+	{
+		/* We'll reset the session anyway. */
+		h->dispatcherState->forceDestroyGang = true;
+	}
+	else
+	{
+		cdbdisp_cancelDispatch(h->dispatcherState);
+	}
+
 	cdbdisp_destroyDispatcherState(h->dispatcherState);
 }
 

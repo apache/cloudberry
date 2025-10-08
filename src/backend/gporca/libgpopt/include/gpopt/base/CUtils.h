@@ -1187,9 +1187,6 @@ CUtils::PexprLogicalCorrelatedQuantifiedApply(
 	if (COperator::EopLogicalSelect != pexprRight->Pop()->Eopid())
 	{
 		// quantified comparison was pushed down, we create a dummy comparison here
-		GPOS_ASSERT(
-			!CUtils::HasOuterRefs(pexprRight) &&
-			"unexpected outer references in inner child of Semi Apply expression ");
 		pexprScalar->Release();
 		pexprScalar = PexprScalarConstBool(mp, true /*value*/);
 	}

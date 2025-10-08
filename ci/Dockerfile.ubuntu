@@ -24,6 +24,7 @@ RUN set -eux; \
     pip2 cache purge;
 
 WORKDIR /home/gpadmin
+ENV CONFIGURE_FLAGS="--enable-debug-extensions --with-gssapi --enable-cassert --enable-debug --enable-depend"
 
 FROM base as build
 
@@ -33,7 +34,6 @@ RUN mkdir /home/gpadmin/bin_gpdb
 
 ENV TARGET_OS=ubuntu
 ENV OUTPUT_ARTIFACT_DIR=bin_gpdb
-ENV CONFIGURE_FLAGS="--enable-debug-extensions --with-gssapi --enable-cassert --enable-debug --enable-depend"
 # Use python3.9 to compile into GPDB's plpython3u
 ENV PYTHON3=python3
 
@@ -48,6 +48,7 @@ RUN rm -rf gpdb_src/.git/
 FROM base as test
 COPY --from=code /home/gpadmin/gpdb_src gpdb_src
 COPY --from=build /home/gpadmin/bin_gpdb /home/gpadmin/bin_gpdb
+COPY --from=build /home/gpadmin/gpdb_src/VERSION gpdb_src
 
 # Install entab used by pgindent utility.
 # This should be done using gpdb sources.

@@ -122,6 +122,21 @@ init_MultiFuncCall(PG_FUNCTION_ARGS)
 }
 
 /*
+ * is_SquelchFuncCall
+ * Set squelch flag for this function and test if it's squelching already
+ */
+bool
+is_SquelchFuncCall(PG_FUNCTION_ARGS)
+{
+	ReturnSetInfo *rsi = (ReturnSetInfo *) fcinfo->resultinfo;
+
+	rsi->returnMode |= SFRM_Squelch;
+
+	return rsi->allowedModes & SFRM_Squelch;
+}
+
+
+/*
  * per_MultiFuncCall
  *
  * Do Multi-function per-call setup
@@ -159,12 +174,14 @@ end_MultiFuncCall(PG_FUNCTION_ARGS, FuncCallContext *funcctx)
 	ReturnSetInfo *rsi = (ReturnSetInfo *) fcinfo->resultinfo;
 
 	/* Deregister the shutdown callback */
-	UnregisterExprContextCallback(rsi->econtext,
-								  shutdown_MultiFuncCall,
-								  PointerGetDatum(fcinfo->flinfo));
-
-	/* But use it to do the real work */
-	shutdown_MultiFuncCall(PointerGetDatum(fcinfo->flinfo));
+	if (rsi->econtext != NULL)
+	{
+		UnregisterExprContextCallback(rsi->econtext,
+									shutdown_MultiFuncCall,
+									PointerGetDatum(fcinfo->flinfo));
+		/* But use it to do the real work */
+		shutdown_MultiFuncCall(PointerGetDatum(fcinfo->flinfo));
+	}
 }
 
 /*

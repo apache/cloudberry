@@ -80,7 +80,7 @@ SELECT * FROM memory_result;
  rsgname         | ismaster | avg_mem 
 -----------------+----------+---------
  rg1_memory_test | 0        | 0.0     
- rg1_memory_test | 1        | 20.0    
+ rg1_memory_test | 1        | 30.0    
  rg2_memory_test | 0        | 0.0     
  rg2_memory_test | 1        | 0.0     
 (4 rows)
@@ -144,8 +144,8 @@ BEGIN
 SELECT * FROM memory_result;
  rsgname         | ismaster | avg_mem 
 -----------------+----------+---------
- rg1_memory_test | 0        | 20.0    
- rg1_memory_test | 1        | 0.0     
+ rg1_memory_test | 0        | 30.0    
+ rg1_memory_test | 1        | 10.0    
  rg2_memory_test | 0        | 0.0     
  rg2_memory_test | 1        | 0.0     
 (4 rows)

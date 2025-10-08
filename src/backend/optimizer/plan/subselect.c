@@ -3134,3 +3134,148 @@ SS_make_initplan_from_plan(PlannerInfo *root, Plan *plan,
 
 	return prm;
 }
+
+typedef struct check_dml_context
+{
+	PlannerInfo *cteroot;
+	Index		m_query_level;	/* absolute query level */
+}			check_dml_context;
+
+/*
+ * Returns true if any subquery of given Query has any non-SELECT commandType.
+ */
+static bool
+cte_contains_dml_walker(Node *node, check_dml_context *ctx)
+{
+	if (node == NULL)
+		return false;
+
+	if (IsA(node, RangeTblEntry))
+	{
+		RangeTblEntry *rte = (RangeTblEntry *) node;
+
+		/*
+		 * Check if the rte is CTE, which has been defined at a higher query
+		 * level than entry level of last subquery we called the walker with.
+		 * In this case we would be able to iterate through cteList of higher
+		 * level and analyze corresponding CTE.
+		 *
+		 * rte->ctelevelsup is equal to number of levels up from the level
+		 * where rte is referenced to the level where its CTE is defined.
+		 * Difference ctx->m_query_level - rte->ctelevelsup stands for
+		 * absolute query level, where the CTE is defined. In case if this
+		 * level is higher than absolute level of last subquery with
+		 * initialized PlannerInfo (last CTE and its root, which the walker
+		 * was last called with), we are able to derive the root. Based on its
+		 * cteList it is possible to investigate the CTE. Otherwise, this CTE
+		 * should have already been processed by query_tree_walker.
+		 *
+		 * For e.x. WITH cte1 AS (INSERT into...) SELECT * FROM (WITH cte2 as
+		 * (SELECT * from cte1) SELECT * FROM (WITH cte3 as (SELECT * FROM
+		 * cte2) SELECT * FROM cte3 a join cte3 b using (i)) foo) bar;
+		 *
+		 * Here cte3's subquery is an entry point for the walker with
+		 * cteroot->query_level = 3. cte3 references the cte2, whose
+		 * ctelevelsup is 2. It means that cte2 is defined at 2 levels up from
+		 * the m_query_level = 4. This level is higher than level where cte3
+		 * is defined, because cte3 is defined at level 3 and cte2 is at level
+		 * 2. In this case we can derive parent root, whose cteList contains
+		 * query of cte2.
+		 */
+		if (rte->rtekind == RTE_CTE &&
+			rte->ctelevelsup < ctx->m_query_level &&
+			(ctx->m_query_level - rte->ctelevelsup) <= ctx->cteroot->query_level)
+		{
+			ListCell	*lcn;
+			PlannerInfo *cteroot = ctx->cteroot;
+			Index		query_level = ctx->m_query_level;
+			Index		levelsup = cteroot->query_level -
+								   (query_level - rte->ctelevelsup);
+
+			while (levelsup-- > 0)
+			{
+				ctx->cteroot = ctx->cteroot->parent_root;
+
+				if (ctx->cteroot == NULL)
+					return false;
+			}
+
+			ctx->m_query_level = ctx->cteroot->query_level;
+
+			foreach(lcn, ctx->cteroot->parse->cteList)
+			{
+				CommonTableExpr *cte = (CommonTableExpr *) lfirst(lcn);
+
+				/*
+				 * Find the CTE corresponding to current rte. When CTE is
+				 * recursive or is going to be shared, there is no need to
+				 * continue the processing. If such rtes contain non-SELECT
+				 * DML operations, which are possibly can be inlined, they
+				 * will be processed separately when make_one_rel will reach
+				 * them.
+				 */
+				if (strcmp(cte->ctename, rte->ctename) == 0 &&
+					!cte->cterecursive &&
+					cte_contains_dml_walker(cte->ctequery, ctx))
+				{
+					return true;
+				}
+			}
+
+			ctx->cteroot = cteroot;
+			ctx->m_query_level = query_level;
+		}
+
+		return false;			/* allow range_table_walker to continue */
+	}
+
+	if (IsA(node, Query))
+	{
+		Query	   *query = (Query *) node;
+		bool		result;
+
+		if (query->commandType != CMD_SELECT)
+			return true;
+
+		ctx->m_query_level++;
+		result = query_tree_walker(query, cte_contains_dml_walker,
+								   (void *) ctx, QTW_EXAMINE_RTES);
+		ctx->m_query_level--;
+
+		return result;
+	}
+
+	/*
+	 * The only reason why we consider this node is that CTE might be defined
+	 * but not referenced.
+	 */
+	if (IsA(node, CommonTableExpr))
+	{
+		CommonTableExpr *cte = (CommonTableExpr *) node;
+
+		if (cte->cterefcount > 0 && !cte->cterecursive)
+			return cte_contains_dml_walker(cte->ctequery, ctx);
+
+		return false;
+	}
+
+	return expression_tree_walker(node, cte_contains_dml_walker,
+								  (void *) ctx);
+}
+
+/*
+ * Checks whether given CTE carries a non-SELECT operation inside.
+ */
+bool
+cte_contains_dml(Node *ctequery, PlannerInfo *root)
+{
+	check_dml_context ctx;
+
+	/*
+	 * The root is related to the query level, where given CTE in defined,
+	 * and, m_query_level in initialized with root->query_level - this level.
+	 */
+	ctx.cteroot = root;
+	ctx.m_query_level = root->query_level;
+	return cte_contains_dml_walker(ctequery, &ctx);
+}

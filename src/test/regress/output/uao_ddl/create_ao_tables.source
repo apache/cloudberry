@@ -323,3 +323,25 @@ select count(*) from sto_heap_10;
 (1 row)
 
 COMMIT;
+-- Table with zero column
+create table sto_uao_0col() with (appendonly=true);
+select * from sto_uao_0col;
+--
+(0 rows)
+
+select count(*) from sto_uao_0col;
+ count 
+-------
+     0
+(1 row)
+
+copy sto_uao_0col to stdout;
+-- Non-empty table with all dropped columns
+create table sto_aocs_dropped_cols (i int, c text)
+with (appendonly=true)
+distributed randomly;
+insert into sto_aocs_dropped_cols select i, now() from generate_series(1,100)i;
+alter table sto_aocs_dropped_cols drop column c;
+alter table sto_aocs_dropped_cols drop column i;
+-- Result does not matter, query should not hang
+copy sto_aocs_dropped_cols to '/dev/null';

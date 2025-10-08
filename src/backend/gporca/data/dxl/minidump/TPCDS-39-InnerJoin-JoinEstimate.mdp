@@ -2651,7 +2651,7 @@
     <dxl:Plan Id="0" SpaceSize="10">
       <dxl:HashJoin JoinType="Inner">
         <dxl:Properties>
-          <dxl:Cost StartupCost="0" TotalCost="9093.176214" Rows="11530621.000000" Width="123"/>
+          <dxl:Cost StartupCost="0" TotalCost="9093.212319" Rows="11530621.000000" Width="123"/>
         </dxl:Properties>
         <dxl:ProjList>
           <dxl:ProjElem ColId="0" Alias="inv_date_sk">

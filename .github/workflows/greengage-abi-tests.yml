@@ -1,5 +1,10 @@
 name: Greengage ABI Tests
 
+# Concurrency control to cancel previous runs on new push to same PR/branch
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true  # Automatically cancel any previous runs for the same group
+
 on:
   workflow_dispatch:
   pull_request:
@@ -25,7 +30,7 @@ env:
   ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
 jobs:
   abi-dump-setup:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     outputs:
       BASELINE_REF: ${{ steps.vars.outputs.BASELINE_REF }}
       BASELINE_VERSION: ${{ steps.vars.outputs.BASELINE_VERSION }}
@@ -56,14 +61,14 @@ jobs:
 
       - name: Upload symbol/type checking exception list
         if: steps.check_exception_lists.outputs.EXCEPTION_LISTS_COUNT != '0'
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: exception_lists
           path: '.abi-check/${{ steps.vars.outputs.BASELINE_VERSION }}/'
 
   abi-dump:
     needs: abi-dump-setup
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     strategy:
       matrix:
         name:
@@ -113,7 +118,7 @@ jobs:
           abi-dumper -lver ${{ matrix.ref }} -skip-cxx -public-headers /usr/local/greengage-db-devel/include/${{ needs.abi-dump-setup.outputs.ABI_HEADERS }} -o postgres-${{ matrix.ref }}.abi /usr/local/greengage-db-devel/bin/postgres
 
       - name: Upload ABI files
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.name }}
           path: '*${{ matrix.ref }}.abi'
@@ -122,22 +127,22 @@ jobs:
     needs:
       - abi-dump-setup
       - abi-dump
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     steps:
       - name: Download baseline
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: build-baseline
           path: build-baseline/
       - name: Download latest
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: build-latest
           path: build-latest/
 
       - name: Download exception lists
         if: needs.abi-dump-setup.outputs.EXCEPTION_LISTS_COUNT != '0'
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: exception_lists
           path: exception_lists/
@@ -171,7 +176,7 @@ jobs:
 
       - name: Upload ABI Comparison
         if: always()
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: compat-report-${{ github.sha }}
           path: compat_reports/

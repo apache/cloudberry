@@ -353,7 +353,7 @@ SELECT a FROM y WHERE (a IN (SELECT b FROM bar WHERE b = 2));
     <dxl:Plan Id="0" SpaceSize="209">
       <dxl:GatherMotion InputSegments="0,1,2" OutputSegments="-1">
         <dxl:Properties>
-          <dxl:Cost StartupCost="0" TotalCost="868.000741" Rows="1.000000" Width="4"/>
+          <dxl:Cost StartupCost="0" TotalCost="868.000841" Rows="1.000000" Width="4"/>
         </dxl:Properties>
         <dxl:ProjList>
           <dxl:ProjElem ColId="33" Alias="a">
@@ -364,7 +364,7 @@ SELECT a FROM y WHERE (a IN (SELECT b FROM bar WHERE b = 2));
         <dxl:SortingColumnList/>
         <dxl:Result>
           <dxl:Properties>
-            <dxl:Cost StartupCost="0" TotalCost="868.000726" Rows="1.000000" Width="4"/>
+            <dxl:Cost StartupCost="0" TotalCost="868.000826" Rows="1.000000" Width="4"/>
           </dxl:Properties>
           <dxl:ProjList>
             <dxl:ProjElem ColId="33" Alias="a">
@@ -375,7 +375,7 @@ SELECT a FROM y WHERE (a IN (SELECT b FROM bar WHERE b = 2));
           <dxl:OneTimeFilter/>
           <dxl:HashJoin JoinType="In">
             <dxl:Properties>
-              <dxl:Cost StartupCost="0" TotalCost="868.000725" Rows="1.000000" Width="4"/>
+              <dxl:Cost StartupCost="0" TotalCost="868.000825" Rows="1.000000" Width="4"/>
             </dxl:Properties>
             <dxl:ProjList>
               <dxl:ProjElem ColId="33" Alias="a">

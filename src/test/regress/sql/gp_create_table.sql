@@ -72,20 +72,100 @@ select distkey, distclass from gp_distribution_policy where localoid = 'distpol3
 
 
 -- MPP-7268: CTAS produces incorrect distribution.
+-- start_ignore
 drop table if exists foo;
 drop table if exists bar;
-create table foo (a varchar(15), b int) distributed by (b);
-create table bar as select * from foo distributed by (b);
-select distkey, distclass from gp_distribution_policy where localoid='bar'::regclass;
+drop table if exists foo_by_a;
+drop table if exists bar_by_a;
+drop table if exists foo_by_b;
+drop table if exists bar_by_b;
+drop table if exists foo_by_c;
+drop table if exists bar_by_c;
+drop table if exists foo_by_d;
+drop table if exists bar_by_d;
+drop table if exists foo_by_ab;
+drop table if exists bar_by_ab;
+drop table if exists foo_by_bc;
+drop table if exists bar_by_bc;
+drop table if exists foo_by_cd;
+drop table if exists bar_by_cd;
+drop table if exists foo_by_abc;
+drop table if exists bar_by_abc;
+drop table if exists foo_by_bcd;
+drop table if exists bar_by_bcd;
+drop table if exists foo_rand;
+drop table if exists bar_rand;
+drop table if exists foo_repl;
+drop table if exists bar_repl;
+-- end_ignore
+create table foo (a int, b bool, c text, d date) distributed by (a);
+prepare bar as select * from foo;
 
-drop table if exists foo;
-drop table if exists bar;
-create table foo (a int, b varchar(15)) distributed by (b);
-create table bar as select * from foo distributed by (b);
-select distkey, distclass from gp_distribution_policy where localoid='bar'::regclass;
+create table foo_by_a as select * from foo distributed by (a);
+create table bar_by_a as execute bar distributed by (a);
 
-drop table if exists foo;
-drop table if exists bar;
+create table foo_by_b as select * from foo distributed by (b);
+create table bar_by_b as execute bar distributed by (b);
+
+create table foo_by_c as select * from foo distributed by (c);
+create table bar_by_c as execute bar distributed by (c);
+
+create table foo_by_d as select * from foo distributed by (d);
+create table bar_by_d as execute bar distributed by (d);
+
+create table foo_by_ab as select * from foo distributed by (a, b);
+create table bar_by_ab as execute bar distributed by (a, b);
+
+create table foo_by_bc as select * from foo distributed by (b, c);
+create table bar_by_bc as execute bar distributed by (b, c);
+
+create table foo_by_cd as select * from foo distributed by (c, d);
+create table bar_by_cd as execute bar distributed by (c, d);
+
+create table foo_by_abc as select * from foo distributed by (a, b, c);
+create table bar_by_abc as execute bar distributed by (a, b, c);
+
+create table foo_by_bcd as select * from foo distributed by (b, c, d);
+create table bar_by_bcd as execute bar distributed by (b, c, d);
+
+create table foo_rand as select * from foo distributed randomly;
+create table bar_rand as execute bar distributed randomly;
+
+create table foo_repl as select * from foo distributed replicated;
+create table bar_repl as execute bar distributed replicated;
+
+select localoid::regclass::name, policytype, numsegments, distkey, distclass
+from gp_distribution_policy where localoid::regclass::name in (
+   'foo', 'foo', 'foo_by_a', 'bar_by_a',  'foo_by_b', 'bar_by_b', 'foo_by_c',
+   'bar_by_c', 'foo_by_d', 'bar_by_d', 'foo_by_ab', 'bar_by_ab', 'foo_by_bc',
+   'bar_by_bc', 'foo_by_cd', 'bar_by_cd', 'foo_by_abc', 'bar_by_abc',
+   'foo_by_bcd', 'bar_by_bcd', 'foo_rand', 'bar_rand', 'foo_repl', 'bar_repl'
+) order by 1;
+
+deallocate bar;
+drop table foo;
+drop table foo_by_a;
+drop table bar_by_a;
+drop table foo_by_b;
+drop table bar_by_b;
+drop table foo_by_c;
+drop table bar_by_c;
+drop table foo_by_d;
+drop table bar_by_d;
+drop table foo_by_ab;
+drop table bar_by_ab;
+drop table foo_by_bc;
+drop table bar_by_bc;
+drop table foo_by_cd;
+drop table bar_by_cd;
+drop table foo_by_abc;
+drop table bar_by_abc;
+drop table foo_by_bcd;
+drop table bar_by_bcd;
+drop table foo_rand;
+drop table bar_rand;
+drop table foo_repl;
+drop table bar_repl;
 
 CREATE TABLE foo (
 col_with_default numeric DEFAULT 0,

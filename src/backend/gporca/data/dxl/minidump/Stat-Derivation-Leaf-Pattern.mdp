@@ -830,7 +830,7 @@ AND
     <dxl:Plan Id="0" SpaceSize="498">
       <dxl:HashJoin JoinType="In">
         <dxl:Properties>
-          <dxl:Cost StartupCost="0" TotalCost="1730.242933" Rows="512.000000" Width="106"/>
+          <dxl:Cost StartupCost="0" TotalCost="1730.243253" Rows="512.000000" Width="106"/>
         </dxl:Properties>
         <dxl:ProjList>
           <dxl:ProjElem ColId="0" Alias="rolname">

@@ -718,6 +718,15 @@ WalRcvFetchTimeLineHistoryFiles(TimeLineID first, TimeLineID last)
 			 */
 			writeTimeLineHistoryFile(tli, content, len);
 
+			/*
+			 * Mark the streamed history file as ready for archiving
+			 * if archive_mode is always.
+			 */
+			if (XLogArchiveMode != ARCHIVE_MODE_ALWAYS)
+				XLogArchiveForceDone(fname);
+			else
+				XLogArchiveNotify(fname);
+
 			pfree(fname);
 			pfree(content);
 		}
@@ -1368,7 +1377,7 @@ ProcessArchivalReport(void)
 
 	elog(DEBUG2, "received archival report from primary: %s", primary_last_archived);
 
-	if (wal_sender_archiving_status_interval <= 0)
+	if (wal_sender_archiving_status_interval <= 0 || XLogArchiveMode == ARCHIVE_MODE_ALWAYS)
 		return;
 
 	/* Check that the wal filename reported by primary looks valid */

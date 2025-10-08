@@ -1,6 +1,6 @@
 # PGAC_CHECK_ORCA_XERCES
 # ---------------------
-# Check if the Greengage patched version of Xerces-C is found
+# Check if the Xerces-C library is found
 AC_DEFUN([PGAC_CHECK_ORCA_XERCES],
 [
 AC_CHECK_LIB(xerces-c, strnicmp, [],

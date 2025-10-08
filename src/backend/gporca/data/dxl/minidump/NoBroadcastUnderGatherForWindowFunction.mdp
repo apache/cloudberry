@@ -436,7 +436,7 @@ WHERE buyer_name = 'ABC'
     <dxl:Plan Id="0" SpaceSize="4">
       <dxl:Result>
         <dxl:Properties>
-          <dxl:Cost StartupCost="0" TotalCost="431.008986" Rows="1.000000" Width="25"/>
+          <dxl:Cost StartupCost="0" TotalCost="431.009086" Rows="1.000000" Width="25"/>
         </dxl:Properties>
         <dxl:ProjList>
           <dxl:ProjElem ColId="4" Alias="buyer_name">
@@ -457,7 +457,7 @@ WHERE buyer_name = 'ABC'
         <dxl:OneTimeFilter/>
         <dxl:Window PartitionColumns="">
           <dxl:Properties>
-            <dxl:Cost StartupCost="0" TotalCost="431.008953" Rows="1.000012" Width="25"/>
+            <dxl:Cost StartupCost="0" TotalCost="431.009053" Rows="1.000012" Width="25"/>
           </dxl:Properties>
           <dxl:ProjList>
             <dxl:ProjElem ColId="12" Alias="curr_bidrate">
@@ -472,7 +472,7 @@ WHERE buyer_name = 'ABC'
           <dxl:Filter/>
           <dxl:HashJoin JoinType="Inner">
             <dxl:Properties>
-              <dxl:Cost StartupCost="0" TotalCost="431.008953" Rows="1.000012" Width="21"/>
+              <dxl:Cost StartupCost="0" TotalCost="431.009053" Rows="1.000012" Width="21"/>
             </dxl:Properties>
             <dxl:ProjList>
               <dxl:ProjElem ColId="2" Alias="curr_bidcnt">

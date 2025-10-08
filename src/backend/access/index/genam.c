@@ -21,6 +21,8 @@
 
 #include "access/relscan.h"
 #include "access/transam.h"
+#include "access/xact.h"
+#include "catalog/catalog.h"
 #include "catalog/index.h"
 #include "lib/stringinfo.h"
 #include "miscadmin.h"
@@ -32,6 +34,7 @@
 #include "utils/snapmgr.h"
 #include "utils/syscache.h"
 #include "utils/tqual.h"
+#include "catalog/pg_database.h"
 
 
 /* ----------------------------------------------------------------
@@ -605,4 +608,133 @@ systable_endscan_ordered(SysScanDesc sysscan)
 	if (sysscan->snapshot)
 		UnregisterSnapshot(sysscan->snapshot);
 	pfree(sysscan);
+}
+
+/*
+ * systable_inplace_update_begin --- update a row "in place" (overwrite it)
+ *
+ * Overwriting violates both MVCC and transactional safety, so the uses of
+ * this function in Postgres are extremely limited.  Nonetheless we find some
+ * places to use it.  See README.tuplock section "Locking to write
+ * inplace-updated tables" and later sections for expectations of readers and
+ * writers of a table that gets inplace updates.  Standard flow:
+ *
+ * ... [any slow preparation not requiring oldtup] ...
+ * oldtup = systable_inplace_update_begin([...], &tup, &inplace_state);
+ * if (!HeapTupleIsValid(oldtup))
+ *	elog(ERROR, [...]);
+ * ... [buffer is exclusive-locked; mutate "tup"] ...
+ * if (dirty)
+ *	systable_inplace_update_finish(inplace_state, oldtup, tup);
+ * else
+ *	systable_inplace_update_cancel(inplace_state, oldtup);
+ *
+ * The first several params duplicate the systable_beginscan() param list.
+ * "oldtupcopy" is an output parameter, assigned NULL if the key ceases to
+ * find a live tuple.  (In PROC_IN_VACUUM, that is a low-probability transient
+ * condition.)  If "oldtupcopy" gets non-NULL, you must pass output parameter
+ * "state" alongside with "oldtup" to systable_inplace_update_finish() or
+ * systable_inplace_update_cancel().
+ */
+HeapTuple
+systable_inplace_update_begin(Relation relation,
+							  Oid indexId,
+							  bool indexOK,
+							  Snapshot snapshot,
+							  int nkeys, const ScanKeyData *key,
+							  HeapTuple *oldtupcopy,
+							  void **state)
+{
+	Assert(nkeys > 0);
+	ScanKey		mutable_key = palloc(sizeof(ScanKeyData) * nkeys);
+	int			retries = 0;
+	SysScanDesc scan;
+	HeapTuple	oldtup;
+
+	/*
+	 * Accept a snapshot argument, for symmetry, but this function advances
+	 * its snapshot as needed to reach the tail of the updated tuple chain.
+	 */
+	Assert(snapshot == NULL);
+
+	Assert((relation->rd_id == RelationRelationId ||
+			relation->rd_id == DatabaseRelationId) ||
+			!IsSystemRelation(relation));
+
+	/* Loop for an exclusive-locked buffer of a non-updated tuple. */
+	for (;;)
+	{
+		CHECK_FOR_INTERRUPTS();
+
+		/*
+		 * Processes issuing heap_update (e.g. GRANT) at maximum speed could
+		 * drive us to this error.  A hostile table owner has stronger ways to
+		 * damage their own table, so that's minor.
+		 */
+		if (retries++ > 10000)
+			elog(ERROR, "giving up after too many tries to overwrite row");
+
+		memcpy(mutable_key, key, sizeof(ScanKeyData) * nkeys);
+		scan = systable_beginscan(relation, indexId, indexOK, snapshot,
+								  nkeys, mutable_key);
+		oldtup = systable_getnext(scan);
+		if (!HeapTupleIsValid(oldtup))
+		{
+			systable_endscan(scan);
+			*oldtupcopy = NULL;
+			return NULL;
+		}
+
+		Assert(scan->scan || scan->iscan);
+		if (heap_inplace_lock(scan->heap_rel,
+							  oldtup, scan->scan ?
+							  scan->scan->rs_cbuf :
+							  scan->iscan->xs_cbuf))
+			break;
+		systable_endscan(scan);
+	};
+
+	*oldtupcopy = heap_copytuple(oldtup);
+	*state = scan;
+
+	return oldtup;
+}
+
+/*
+ * systable_inplace_update_finish --- second phase of inplace update
+ *
+ * The tuple cannot change size, and therefore its header fields and null
+ * bitmap (if any) don't change either.
+ */
+void
+systable_inplace_update_finish(void *state, HeapTuple oldtup, HeapTuple tuple)
+{
+	SysScanDesc scan = (SysScanDesc) state;
+	Relation	relation = scan->heap_rel;
+	Assert(scan->scan || scan->iscan);
+	Buffer		buffer = scan->scan ?
+						 scan->scan->rs_cbuf :
+						 scan->iscan->xs_cbuf;
+
+	heap_inplace_update_and_unlock(relation, oldtup, tuple, buffer);
+	systable_endscan(scan);
+}
+
+/*
+ * systable_inplace_update_cancel --- abandon inplace update
+ *
+ * This is an alternative to making a no-op update.
+ */
+void
+systable_inplace_update_cancel(void *state, HeapTuple oldtup)
+{
+	SysScanDesc scan = (SysScanDesc) state;
+	Relation	relation = scan->heap_rel;
+	Assert(scan->scan || scan->iscan);
+	Buffer		buffer = scan->scan ?
+						 scan->scan->rs_cbuf :
+						 scan->iscan->xs_cbuf;
+
+	heap_inplace_unlock(relation, oldtup, buffer);
+	systable_endscan(scan);
 }

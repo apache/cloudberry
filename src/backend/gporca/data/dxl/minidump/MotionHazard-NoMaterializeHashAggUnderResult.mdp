@@ -450,7 +450,7 @@ explain select f.k, f.subq from (select tab3.k, (select tab2.k from tab2 where t
     <dxl:Plan Id="0" SpaceSize="90">
       <dxl:GatherMotion InputSegments="0,1,2" OutputSegments="-1">
         <dxl:Properties>
-          <dxl:Cost StartupCost="0" TotalCost="199109.213873" Rows="9846.000000" Width="16"/>
+          <dxl:Cost StartupCost="0" TotalCost="199125.452273" Rows="9846.000000" Width="16"/>
         </dxl:Properties>
         <dxl:ProjList>
           <dxl:ProjElem ColId="2" Alias="k">
@@ -464,7 +464,7 @@ explain select f.k, f.subq from (select tab3.k, (select tab2.k from tab2 where t
         <dxl:SortingColumnList/>
         <dxl:NestedLoopJoin JoinType="Inner" IndexNestedLoopJoin="false" OuterRefAsParam="false">
           <dxl:Properties>
-            <dxl:Cost StartupCost="0" TotalCost="199108.626788" Rows="9846.000000" Width="16"/>
+            <dxl:Cost StartupCost="0" TotalCost="199124.865188" Rows="9846.000000" Width="16"/>
           </dxl:Properties>
           <dxl:ProjList>
             <dxl:ProjElem ColId="2" Alias="k">
@@ -480,7 +480,7 @@ explain select f.k, f.subq from (select tab3.k, (select tab2.k from tab2 where t
           </dxl:JoinFilter>
           <dxl:BroadcastMotion InputSegments="0,1,2" OutputSegments="0,1,2">
             <dxl:Properties>
-              <dxl:Cost StartupCost="0" TotalCost="48914.890287" Rows="3.000000" Width="16"/>
+              <dxl:Cost StartupCost="0" TotalCost="48918.949887" Rows="3.000000" Width="16"/>
             </dxl:Properties>
             <dxl:ProjList>
               <dxl:ProjElem ColId="2" Alias="k">
@@ -494,7 +494,7 @@ explain select f.k, f.subq from (select tab3.k, (select tab2.k from tab2 where t
             <dxl:SortingColumnList/>
             <dxl:Result>
               <dxl:Properties>
-                <dxl:Cost StartupCost="0" TotalCost="48914.890001" Rows="1.000000" Width="16"/>
+                <dxl:Cost StartupCost="0" TotalCost="48918.949601" Rows="1.000000" Width="16"/>
               </dxl:Properties>
               <dxl:ProjList>
                 <dxl:ProjElem ColId="2" Alias="k">
@@ -508,7 +508,7 @@ explain select f.k, f.subq from (select tab3.k, (select tab2.k from tab2 where t
               <dxl:OneTimeFilter/>
               <dxl:Result>
                 <dxl:Properties>
-                  <dxl:Cost StartupCost="0" TotalCost="48914.890001" Rows="1.000000" Width="16"/>
+                  <dxl:Cost StartupCost="0" TotalCost="48918.949601" Rows="1.000000" Width="16"/>
                 </dxl:Properties>
                 <dxl:ProjList>
                   <dxl:ProjElem ColId="30" Alias="subq">
@@ -616,7 +616,7 @@ explain select f.k, f.subq from (select tab3.k, (select tab2.k from tab2 where t
                 <dxl:OneTimeFilter/>
                 <dxl:Aggregate AggregationStrategy="Hashed" StreamSafe="false">
                   <dxl:Properties>
-                    <dxl:Cost StartupCost="0" TotalCost="11365.140389" Rows="1.000000" Width="1"/>
+                    <dxl:Cost StartupCost="0" TotalCost="11366.155289" Rows="1.000000" Width="1"/>
                   </dxl:Properties>
                   <dxl:GroupingColumns>
                     <dxl:GroupingColumn ColId="0"/>
@@ -633,7 +633,7 @@ explain select f.k, f.subq from (select tab3.k, (select tab2.k from tab2 where t
                   <dxl:Filter/>
                   <dxl:RedistributeMotion InputSegments="0,1,2" OutputSegments="0,1,2">
                     <dxl:Properties>
-                      <dxl:Cost StartupCost="0" TotalCost="11365.140148" Rows="1.000000" Width="4"/>
+                      <dxl:Cost StartupCost="0" TotalCost="11366.155048" Rows="1.000000" Width="4"/>
                     </dxl:Properties>
                     <dxl:ProjList>
                       <dxl:ProjElem ColId="0" Alias="i">
@@ -655,7 +655,7 @@ explain select f.k, f.subq from (select tab3.k, (select tab2.k from tab2 where t
                     </dxl:HashExprList>
                     <dxl:Aggregate AggregationStrategy="Hashed" StreamSafe="true">
                       <dxl:Properties>
-                        <dxl:Cost StartupCost="0" TotalCost="11365.140142" Rows="1.000000" Width="4"/>
+                        <dxl:Cost StartupCost="0" TotalCost="11366.155042" Rows="1.000000" Width="4"/>
                       </dxl:Properties>
                       <dxl:GroupingColumns>
                         <dxl:GroupingColumn ColId="0"/>
@@ -672,7 +672,7 @@ explain select f.k, f.subq from (select tab3.k, (select tab2.k from tab2 where t
                       <dxl:Filter/>
                       <dxl:RandomMotion InputSegments="0,1,2" OutputSegments="0,1,2">
                         <dxl:Properties>
-                          <dxl:Cost StartupCost="0" TotalCost="3303.758223" Rows="99927054.000000" Width="4"/>
+                          <dxl:Cost StartupCost="0" TotalCost="3304.773123" Rows="99927054.000000" Width="4"/>
                         </dxl:Properties>
                         <dxl:ProjList>
                           <dxl:ProjElem ColId="0" Alias="i">
@@ -686,7 +686,7 @@ explain select f.k, f.subq from (select tab3.k, (select tab2.k from tab2 where t
                         <dxl:SortingColumnList/>
                         <dxl:HashJoin JoinType="Left">
                           <dxl:Properties>
-                            <dxl:Cost StartupCost="0" TotalCost="2265.849222" Rows="99927054.000000" Width="4"/>
+                            <dxl:Cost StartupCost="0" TotalCost="2266.864122" Rows="99927054.000000" Width="4"/>
                           </dxl:Properties>
                           <dxl:ProjList>
                             <dxl:ProjElem ColId="0" Alias="i">

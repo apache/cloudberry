@@ -11412,13 +11412,12 @@ SELECT a FROM ggg WHERE a IN (NULL, 'x');
 (3 rows)
 
 EXPLAIN SELECT a FROM ggg WHERE a NOT IN (NULL, '');
-                                 QUERY PLAN                                 
-----------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..1.01 rows=1 width=2)
-   ->  Seq Scan on ggg  (cost=0.00..1.01 rows=1 width=2)
-         Filter: a <> ALL ('{NULL,""}'::bpchar[])
+                QUERY PLAN                
+------------------------------------------
+ Result  (cost=0.00..0.00 rows=0 width=0)
+   One-Time Filter: false
  Optimizer: Postgres query optimizer
-(4 rows)
+(3 rows)
 
 EXPLAIN SELECT a FROM ggg WHERE a IN (NULL, 'x');
                                  QUERY PLAN                                 
@@ -14448,18 +14447,22 @@ create index part_table13_4_idx on part_table13_1_prt_p4 using bitmap(c);
 explain select * from part_table13 where c=7;
                                       QUERY PLAN                                      
 --------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..4295.00 rows=312 width=12)
-   ->  Append  (cost=0.00..4295.00 rows=104 width=12)
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..2744.90 rows=611 width=12)
+   ->  Append  (cost=0.00..2744.90 rows=204 width=12)
          ->  Seq Scan on part_table13_1_prt_p1  (cost=0.00..1073.75 rows=26 width=12)
                Filter: (c = 7)
-         ->  Seq Scan on part_table13_1_prt_p2  (cost=0.00..1073.75 rows=26 width=12)
-               Filter: (c = 7)
-         ->  Seq Scan on part_table13_1_prt_p3  (cost=0.00..1073.75 rows=26 width=12)
-               Filter: (c = 7)
+         ->  Bitmap Heap Scan on part_table13_1_prt_p2  (cost=101.58..391.87 rows=61 width=12)
+               Recheck Cond: (c = 7)
+               ->  Bitmap Index Scan on part_table13_2_idx  (cost=0.00..101.53 rows=61 width=0)
+                     Index Cond: (c = 7)
+         ->  Bitmap Heap Scan on part_table13_1_prt_p3  (cost=102.12..205.53 rows=91 width=12)
+               Recheck Cond: (c = 7)
+               ->  Bitmap Index Scan on part_table13_3_idx  (cost=0.00..102.05 rows=91 width=0)
+                     Index Cond: (c = 7)
          ->  Seq Scan on part_table13_1_prt_p4  (cost=0.00..1073.75 rows=26 width=12)
                Filter: (c = 7)
  Optimizer: Postgres query optimizer
-(11 rows)
+(15 rows)
 
 select * from part_table13 where c=7;
  a | b | c 

@@ -29,6 +29,19 @@ select gp_inject_fault_infinite('postmaster_delay_termination_bg_writer', 'skip'
  Success:                 
 (1 row)
 
+-- We need to set fault at the handler of abort signal from backend
+-- so then we can wait until it is triggered. We need to do this because
+-- sometimes process of calling abort() (which is issued by the injection
+-- of 'panic' fault in the next lines of this test) and abortion itself can
+-- take a long time to complete. So, sometimes this test can give unexpected
+-- results, when you think that commands sended after issuing panic fault
+-- should fail, but they are being executed without any errors.
+select gp_inject_fault('backend_abort_handling', 'skip', dbid) from gp_segment_configuration where role = 'p' and content = 0;
+ gp_inject_fault 
+-----------------
+ Success:        
+(1 row)
+
 -- Now bring down primary of seg0. There're a lot of ways to do that, in order
 -- to better emulate a real-world scnarios we're injecting a PANIC to do that.
 1:select gp_inject_fault('start_prepare', 'panic', dbid) from gp_segment_configuration where role = 'p' AND content = 0;
@@ -37,6 +50,14 @@ select gp_inject_fault_infinite('postmaster_delay_termination_bg_writer', 'skip'
  Success:        
 (1 row)
 1&:create table fts_reset_t(a int);  <waiting ...>
+
+-- We now wait till our seg0 will start reaping it's childs and resetting.
+-- We can ignore the results of this command, because it can throw 3 things:
+-- error because we couldn't send command because seg0 already restarting;
+-- error because reaper killed backend on seg0 because it started reaping
+-- backends (previous panic fault injection)
+-- no error, because we managed to overrun reaper and sendeed results
+-- of wait_until_triggered back
 
 -- This should fail due to the seg0 in reset mode
 2&:create table fts_reset_t2(a int);  <waiting ...>

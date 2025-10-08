@@ -103,6 +103,14 @@ gp_acquire_sample_rows(PG_FUNCTION_ARGS)
 {
 	FuncCallContext *funcctx = NULL;
 	gp_acquire_sample_rows_context *ctx;
+
+	if (SRF_IS_SQUELCH_CALL())
+	{
+		funcctx = SRF_PERCALL_SETUP();
+		ctx = funcctx->user_fctx;
+		goto srf_done;
+	}
+
 	MemoryContext oldcontext;
 	Oid			relOid = PG_GETARG_OID(0);
 	int32		targrows = PG_GETARG_INT32(1);
@@ -349,6 +357,7 @@ gp_acquire_sample_rows(PG_FUNCTION_ARGS)
 		SRF_RETURN_NEXT(funcctx, HeapTupleGetDatum(res));
 	}
 
+srf_done:
 	relation_close(ctx->onerel, AccessShareLock);
 
 	pfree(ctx);

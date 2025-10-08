@@ -673,3 +673,312 @@ INSERT INTO rem1(f2) VALUES ('test');
 
 -- Test returning a system attribute
 INSERT INTO rem1(f2) VALUES ('test') RETURNING ctid;
+
+-- ===================================================================
+-- test distribution keys for foreign tables
+-- ===================================================================
+
+--
+-- Test simple case for foreign table with 1 distribution key
+--
+\! env PGOPTIONS='' psql -p ${PG_PORT} contrib_regression -c 'CREATE TABLE "S 1"."test_distr" (i int);'
+
+DROP TABLE IF EXISTS test_internal;
+CREATE TABLE test_internal(a int) DISTRIBUTED BY (a);
+
+-- Check foreign table without distribution keys
+DROP FOREIGN TABLE IF EXISTS ftest_distr_randomly;
+CREATE FOREIGN TABLE ftest_distr_randomly(
+	i int
+) SERVER pgserver
+OPTIONS(schema_name 'S 1', table_name 'test_distr', mpp_execute 'all segments');
+
+-- Plan should contain Redistribute motion
+EXPLAIN (COSTS OFF) INSERT INTO ftest_distr_randomly SELECT a FROM test_internal;
+
+-- Check foreign table with a distribution key
+DROP FOREIGN TABLE IF EXISTS ftest_distr_hashed;
+CREATE FOREIGN TABLE ftest_distr_hashed(
+	i int OPTIONS(insert_dist_by_key 'true')
+) SERVER pgserver
+OPTIONS(schema_name 'S 1', table_name 'test_distr', mpp_execute 'all segments');
+
+-- Plan should NOT contain Redistribute motion
+EXPLAIN (COSTS OFF) INSERT INTO ftest_distr_hashed SELECT a FROM test_internal;
+
+-- Check that the reading from foreign table is not affected by distribution keys
+explain (costs off) insert into test_internal select i from ftest_distr_randomly;
+explain (costs off) insert into test_internal select i from ftest_distr_hashed;
+
+drop foreign table ftest_distr_randomly;
+drop foreign table ftest_distr_hashed;
+
+\! env PGOPTIONS='' psql -p ${PG_PORT} contrib_regression -c 'DROP TABLE "S 1"."test_distr";'
+
+DROP TABLE test_internal;
+
+--
+-- Test foreign table with several distribution keys
+--
+
+-- Create table with initial data, from which we insert data into foreign tables
+create table test_internal(c1 int, c2 int, c3 int, c4 int, c5 int, c6 int, c7 int, c8 int, c9 int, c10 int) distributed by (c1, c2, c3, c4, c5, c6);
+
+--
+-- Check plan (without Redistribute motion), with weights set explicitly and correct
+--
+\! env PGOPTIONS='' psql -p ${PG_PORT} contrib_regression -c 'CREATE TABLE "S 1"."test_distr" (c1 int, c2 int, c3 int, c4 int, c5 int, c6 int, c7 int, c8 int, c9 int, c10 int);'
+
+CREATE FOREIGN TABLE ftest_distr_hashed(
+	c1 int OPTIONS (insert_dist_by_key 'true', insert_dist_by_key_weight '1'),
+	c2 int OPTIONS (insert_dist_by_key 'true', insert_dist_by_key_weight '2'),
+	c3 int OPTIONS (insert_dist_by_key 'true', insert_dist_by_key_weight '3'),
+	c4 int OPTIONS (insert_dist_by_key 'true', insert_dist_by_key_weight '4'),
+	c5 int OPTIONS (insert_dist_by_key 'true', insert_dist_by_key_weight '5'),
+	c6 int OPTIONS (insert_dist_by_key 'true', insert_dist_by_key_weight '6'),
+	c7 int,
+	c8 int,
+	c9 int,
+	c10 int
+) SERVER pgserver
+OPTIONS(schema_name 'S 1', table_name 'test_distr', mpp_execute 'all segments');
+
+-- Plan should NOT contain Redistribute motion
+EXPLAIN (COSTS OFF) INSERT INTO ftest_distr_hashed SELECT * FROM test_internal;
+
+DROP FOREIGN TABLE ftest_distr_hashed;
+
+--
+-- Check plan (without Redistribute motion), with weights not set explicitly
+--
+CREATE FOREIGN TABLE ftest_distr_hashed(
+	c1 int OPTIONS (insert_dist_by_key 'true'),
+	c2 int OPTIONS (insert_dist_by_key 'true'),
+	c3 int OPTIONS (insert_dist_by_key 'true'),
+	c4 int OPTIONS (insert_dist_by_key 'true'),
+	c5 int OPTIONS (insert_dist_by_key 'true'),
+	c6 int OPTIONS (insert_dist_by_key 'true'),
+	c7 int,
+	c8 int,
+	c9 int,
+	c10 int
+) SERVER pgserver
+OPTIONS(schema_name 'S 1', table_name 'test_distr', mpp_execute 'all segments');
+
+-- Plan should NOT contain Redistribute motion
+EXPLAIN (COSTS OFF) INSERT INTO ftest_distr_hashed SELECT * FROM test_internal;
+
+DROP FOREIGN TABLE ftest_distr_hashed;
+
+--
+-- Check plan (without Redistribute motion), with weights partially set explicitly
+--
+CREATE FOREIGN TABLE ftest_distr_hashed(
+	c1 int OPTIONS (insert_dist_by_key 'true', insert_dist_by_key_weight '1'),
+	c2 int OPTIONS (insert_dist_by_key 'true', insert_dist_by_key_weight '2'),
+	c3 int OPTIONS (insert_dist_by_key 'true', insert_dist_by_key_weight '3'),
+	c4 int OPTIONS (insert_dist_by_key 'true'),
+	c5 int OPTIONS (insert_dist_by_key 'true'),
+	c6 int OPTIONS (insert_dist_by_key 'true'),
+	c7 int,
+	c8 int,
+	c9 int,
+	c10 int
+) SERVER pgserver
+OPTIONS(schema_name 'S 1', table_name 'test_distr', mpp_execute 'all segments');
+
+-- Plan should NOT contain Redistribute motion
+EXPLAIN (COSTS OFF) INSERT INTO ftest_distr_hashed SELECT * FROM test_internal;
+
+DROP FOREIGN TABLE ftest_distr_hashed;
+
+--
+-- Check plan (without Redistribute motion), with weights set to min and max allowed values
+--
+CREATE FOREIGN TABLE ftest_distr_hashed(
+	c1 int OPTIONS (insert_dist_by_key 'true', insert_dist_by_key_weight '0'),
+	c2 int OPTIONS (insert_dist_by_key 'true', insert_dist_by_key_weight '2'),
+	c3 int OPTIONS (insert_dist_by_key 'true', insert_dist_by_key_weight '2147483647'),
+	c4 int OPTIONS (insert_dist_by_key 'true'),
+	c5 int OPTIONS (insert_dist_by_key 'true'),
+	c6 int OPTIONS (insert_dist_by_key 'true'),
+	c7 int,
+	c8 int,
+	c9 int,
+	c10 int
+) SERVER pgserver
+OPTIONS(schema_name 'S 1', table_name 'test_distr', mpp_execute 'all segments');
+
+-- Plan should NOT contain Redistribute motion
+EXPLAIN (COSTS OFF) INSERT INTO ftest_distr_hashed SELECT * FROM test_internal;
+
+DROP FOREIGN TABLE ftest_distr_hashed;
+
+--
+-- Check weight set to a value more than allowed
+--
+CREATE FOREIGN TABLE ftest_distr_hashed(
+	c1 int OPTIONS (insert_dist_by_key 'true', insert_dist_by_key_weight '0'),
+	c2 int OPTIONS (insert_dist_by_key 'true', insert_dist_by_key_weight '2'),
+	c3 int OPTIONS (insert_dist_by_key 'true', insert_dist_by_key_weight '2147483648'),
+	c4 int OPTIONS (insert_dist_by_key 'true'),
+	c5 int OPTIONS (insert_dist_by_key 'true'),
+	c6 int OPTIONS (insert_dist_by_key 'true'),
+	c7 int,
+	c8 int,
+	c9 int,
+	c10 int
+) SERVER pgserver
+OPTIONS(schema_name 'S 1', table_name 'test_distr', mpp_execute 'all segments');
+
+-- We should get an error
+EXPLAIN (COSTS OFF) INSERT INTO ftest_distr_hashed SELECT * FROM test_internal;
+
+DROP FOREIGN TABLE ftest_distr_hashed;
+
+--
+-- Check NG cases (with Redistribute motion or with error)
+--
+
+-- Negative order
+CREATE FOREIGN TABLE ftest_distr_hashed(
+	c1 int OPTIONS (insert_dist_by_key 'true', insert_dist_by_key_weight '-1'),
+	c2 int OPTIONS (insert_dist_by_key 'true', insert_dist_by_key_weight '2'),
+	c3 int OPTIONS (insert_dist_by_key 'true', insert_dist_by_key_weight '3'),
+	c4 int OPTIONS (insert_dist_by_key 'true'),
+	c5 int OPTIONS (insert_dist_by_key 'true'),
+	c6 int OPTIONS (insert_dist_by_key 'true'),
+	c7 int,
+	c8 int,
+	c9 int,
+	c10 int
+) SERVER pgserver
+OPTIONS(schema_name 'S 1', table_name 'test_distr', mpp_execute 'all segments');
+
+-- Plan should fail
+EXPLAIN (COSTS OFF) INSERT INTO ftest_distr_hashed SELECT * FROM test_internal;
+
+DROP FOREIGN TABLE ftest_distr_hashed;
+
+-- Duplicate order
+CREATE FOREIGN TABLE ftest_distr_hashed(
+	c1 int OPTIONS (insert_dist_by_key 'true', insert_dist_by_key_weight '1'),
+	c2 int OPTIONS (insert_dist_by_key 'true', insert_dist_by_key_weight '1'),
+	c3 int OPTIONS (insert_dist_by_key 'true', insert_dist_by_key_weight '3'),
+	c4 int OPTIONS (insert_dist_by_key 'true'),
+	c5 int OPTIONS (insert_dist_by_key 'true'),
+	c6 int OPTIONS (insert_dist_by_key 'true'),
+	c7 int,
+	c8 int,
+	c9 int,
+	c10 int
+) SERVER pgserver
+OPTIONS(schema_name 'S 1', table_name 'test_distr', mpp_execute 'all segments');
+
+-- Plan should fail
+EXPLAIN (COSTS OFF) INSERT INTO ftest_distr_hashed SELECT * FROM test_internal;
+
+DROP FOREIGN TABLE ftest_distr_hashed;
+
+-- Wrong order
+CREATE FOREIGN TABLE ftest_distr_hashed(
+	c1 int OPTIONS (insert_dist_by_key 'true', insert_dist_by_key_weight '1'),
+	c2 int OPTIONS (insert_dist_by_key 'true', insert_dist_by_key_weight '3'),
+	c3 int OPTIONS (insert_dist_by_key 'true', insert_dist_by_key_weight '2'),
+	c4 int OPTIONS (insert_dist_by_key 'true', insert_dist_by_key_weight '4'),
+	c5 int OPTIONS (insert_dist_by_key 'true', insert_dist_by_key_weight '5'),
+	c6 int OPTIONS (insert_dist_by_key 'true', insert_dist_by_key_weight '6'),
+	c7 int,
+	c8 int,
+	c9 int,
+	c10 int
+) SERVER pgserver
+OPTIONS(schema_name 'S 1', table_name 'test_distr', mpp_execute 'all segments');
+
+-- Plan should contain Redistribute motion
+EXPLAIN (COSTS OFF) INSERT INTO ftest_distr_hashed SELECT * FROM test_internal;
+
+DROP FOREIGN TABLE ftest_distr_hashed;
+
+-- Wrong order (due to higher priority if explicit weights)
+CREATE FOREIGN TABLE ftest_distr_hashed(
+	c1 int OPTIONS (insert_dist_by_key 'true'),
+	c2 int OPTIONS (insert_dist_by_key 'true'),
+	c3 int OPTIONS (insert_dist_by_key 'true'),
+	c4 int OPTIONS (insert_dist_by_key 'true', insert_dist_by_key_weight '4'),
+	c5 int OPTIONS (insert_dist_by_key 'true', insert_dist_by_key_weight '5'),
+	c6 int OPTIONS (insert_dist_by_key 'true', insert_dist_by_key_weight '6'),
+	c7 int,
+	c8 int,
+	c9 int,
+	c10 int
+) SERVER pgserver
+OPTIONS(schema_name 'S 1', table_name 'test_distr', mpp_execute 'all segments');
+
+-- Plan should contain Redistribute motion
+EXPLAIN (COSTS OFF) INSERT INTO ftest_distr_hashed SELECT * FROM test_internal;
+
+DROP FOREIGN TABLE ftest_distr_hashed;
+
+-- Correct order, but insert_dist_by_key is set to false
+CREATE FOREIGN TABLE ftest_distr_hashed(
+	c1 int OPTIONS (insert_dist_by_key 'true', insert_dist_by_key_weight '1'),
+	c2 int OPTIONS (insert_dist_by_key 'true', insert_dist_by_key_weight '2'),
+	c3 int OPTIONS (insert_dist_by_key 'true', insert_dist_by_key_weight '3'),
+	c4 int OPTIONS (insert_dist_by_key 'false', insert_dist_by_key_weight '4'),
+	c5 int OPTIONS (insert_dist_by_key 'true', insert_dist_by_key_weight '5'),
+	c6 int OPTIONS (insert_dist_by_key 'true', insert_dist_by_key_weight '6'),
+	c7 int,
+	c8 int,
+	c9 int,
+	c10 int
+) SERVER pgserver
+OPTIONS(schema_name 'S 1', table_name 'test_distr', mpp_execute 'all segments');
+
+-- Plan should contain Redistribute motion
+EXPLAIN (COSTS OFF) INSERT INTO ftest_distr_hashed SELECT * FROM test_internal;
+
+DROP FOREIGN TABLE ftest_distr_hashed;
+
+-- Correct order, but insert_dist_by_key is not set
+CREATE FOREIGN TABLE ftest_distr_hashed(
+	c1 int OPTIONS (insert_dist_by_key 'true', insert_dist_by_key_weight '1'),
+	c2 int OPTIONS (insert_dist_by_key 'true', insert_dist_by_key_weight '2'),
+	c3 int OPTIONS (insert_dist_by_key 'true', insert_dist_by_key_weight '3'),
+	c4 int OPTIONS (insert_dist_by_key_weight '4'),
+	c5 int OPTIONS (insert_dist_by_key 'true', insert_dist_by_key_weight '5'),
+	c6 int OPTIONS (insert_dist_by_key 'true', insert_dist_by_key_weight '6'),
+	c7 int,
+	c8 int,
+	c9 int,
+	c10 int
+) SERVER pgserver
+OPTIONS(schema_name 'S 1', table_name 'test_distr', mpp_execute 'all segments');
+
+-- Plan should contain Redistribute motion
+EXPLAIN (COSTS OFF) INSERT INTO ftest_distr_hashed SELECT * FROM test_internal;
+
+DROP FOREIGN TABLE ftest_distr_hashed;
+
+\! env PGOPTIONS='' psql -p ${PG_PORT} contrib_regression -c 'DROP TABLE "S 1"."test_distr";'
+
+DROP TABLE test_internal;
+
+-- Check type not suitable for distribution
+\! env PGOPTIONS='' psql -p ${PG_PORT} contrib_regression -c 'CREATE TABLE "S 1"."test_distr" (c point);'
+
+CREATE TABLE test_internal(a int) DISTRIBUTED BY (a);
+
+CREATE FOREIGN TABLE ftest_distr_hashed (
+	c point OPTIONS(insert_dist_by_key 'true')
+) SERVER pgserver
+OPTIONS(schema_name 'S 1', table_name 'test_distr', mpp_execute 'all segments');
+
+-- Plan should contain Redistribute motion and show warning
+EXPLAIN INSERT INTO ftest_distr_hashed SELECT point(a,a) FROM test_internal;
+
+DROP FOREIGN TABLE ftest_distr_hashed;
+
+\! env PGOPTIONS='' psql -p ${PG_PORT} contrib_regression -c 'DROP TABLE "S 1"."test_distr";'
+
+DROP TABLE test_internal;

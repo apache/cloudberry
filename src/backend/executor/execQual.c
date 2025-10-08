@@ -1591,6 +1591,7 @@ init_fcache(Oid foid, Oid input_collation, FuncExprState *fcache,
 	fcache->funcResultSlot = NULL;
 	fcache->setArgsValid = false;
 	fcache->shutdown_reg = false;
+	fcache->isSquelchSupported = false;
 }
 
 /*
@@ -1601,6 +1602,39 @@ static void
 ShutdownFuncExpr(Datum arg)
 {
 	FuncExprState *fcache = (FuncExprState *) DatumGetPointer(arg);
+
+	/* Call the function last time to give a chance to release any resources */
+
+	/*
+	 * We make a last call if function supports SFRM_Squelch protocol and was
+	 * not invoked last time.
+	 */
+	if (fcache->isSquelchSupported && fcache->fcinfo_data.flinfo->fn_extra != NULL)
+	{
+		FunctionCallInfoData *fcinfo = &fcache->fcinfo_data;
+
+		/*
+		 * Prepare a resultinfo node for communication. We don't want to use
+		 * existing resultinfo node because we are in the middle of shutdown
+		 * functions chain and we do not want to interfere with other
+		 * functions in the chain
+		 */
+		ReturnSetInfo rsinfo = {
+			.type = T_ReturnSetInfo,
+			.expectedDesc = fcache->funcResultDesc,
+			.allowedModes = (int) SFRM_Squelch,
+			.setResult = NULL,
+			.setDesc = NULL,
+			.isDone = ExprEndResult,
+			.econtext = NULL,
+			.returnMode = SFRM_ValuePerCall | SFRM_Squelch
+		};
+
+		fcinfo->isnull = false;
+		fcinfo->resultinfo = (Node *)&rsinfo;
+
+		FunctionCallInvoke(fcinfo);
+	}
 
 	/* If we have a slot, make sure it's let go of any tuplestore pointer */
 	if (fcache->funcResultSlot)
@@ -1616,6 +1650,8 @@ ShutdownFuncExpr(Datum arg)
 
 	/* execUtils will deregister the callback... */
 	fcache->shutdown_reg = false;
+
+	fcache->isSquelchSupported = false;
 }
 
 /*
@@ -2013,6 +2049,9 @@ restart:
 				result = FunctionCallInvoke(fcinfo);
 				*isNull = fcinfo->isnull;
 				*isDone = rsinfo.isDone;
+				fcache->isSquelchSupported = rsinfo.returnMode & SFRM_Squelch;
+				/* Reset SFRM_Squelch bit */
+				rsinfo.returnMode &= ~SFRM_Squelch;
 
 				pgstat_end_function_usage(&fcusage,
 										rsinfo.isDone != ExprMultipleResult);
@@ -2394,6 +2433,24 @@ ExecMakeTableFunctionResult(ExprState *funcexpr,
 			fcinfo.isnull = false;
 			rsinfo.isDone = ExprSingleResult;
 			result = FunctionCallInvoke(&fcinfo);
+
+			Assert(IsA(funcexpr, FuncExprState) && IsA(funcexpr->expr, FuncExpr));
+			FuncExprState *fcache = (FuncExprState *) funcexpr;
+			fcache->isSquelchSupported = rsinfo.returnMode & SFRM_Squelch;
+
+			/* Reset SFRM_Squelch bit */
+			rsinfo.returnMode &= ~SFRM_Squelch;
+
+			/* Register cleanup callback if we didn't already */
+			if (fcache->isSquelchSupported && !fcache->shutdown_reg)
+			{
+				ereport(DEBUG3, (errmsg("SFRM_Squelch set after FunctionCallInvoke")));
+	
+				RegisterExprContextCallback(econtext,
+											ShutdownFuncExpr,
+										PointerGetDatum(fcache));
+				fcache->shutdown_reg = true;
+			}
 
 			pgstat_end_function_usage(&fcusage,
 									  rsinfo.isDone != ExprMultipleResult);

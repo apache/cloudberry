@@ -5,17 +5,30 @@ create table users(
 NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause, and no column type is suitable for a distribution key. Creating a NULL policy entry.
 -- And I have a large amount of data in the table
 insert into users
-  select to_tsvector(md5(random()::text))
-  from generate_series(1, 6000) i;
-insert into users values ('John');
+  select to_tsvector( md5(random()::text))
+  from generate_series(1, 60000) i;
+insert into users values (to_tsvector('John'));
 -- When I create a GIN index on users
-set gp_debug_linger=1;
 CREATE INDEX users_search_idx ON users USING gin (first_name);
-reset gp_debug_linger;
+-- Orca performs seq scan in this case, so disable Orca.
+set optimizer = 0;
 -- Then I should be able to query the table
-select * from users where first_name = 'John';
+select * from users where first_name @@ to_tsquery('John');
  first_name 
 ------------
- 'John'
+ 'john':1
 (1 row)
 
+explain (costs off) select * from users where first_name @@ to_tsquery('John');
+                          QUERY PLAN                           
+---------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Bitmap Heap Scan on users
+         Recheck Cond: (first_name @@ '''john'''::tsquery)
+         ->  Bitmap Index Scan on users_search_idx
+               Index Cond: (first_name @@ '''john'''::tsquery)
+ Optimizer: Postgres query optimizer
+(6 rows)
+
+drop table users;
+reset optimizer;

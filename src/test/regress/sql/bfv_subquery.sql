@@ -315,3 +315,30 @@ explain
 select count(*) from ( values :lots_of_values ) as b(a) where b.a % 100000 in (select a from t1);
 select count(*) from ( values :lots_of_values ) as b(a) where b.a % 100000 in (select a from t1);
 drop table t1;
+
+-- Test that ORCA can build a plan for a query with a subquery that contains union all or distinct.
+-- start_ignore
+drop table if exists t1;
+drop table if exists t2;
+-- end_ignore
+
+create table t1 (a int, b int) distributed by (a);
+create table t2 (a int, b int) distributed by (a);
+
+insert into t1 values(1,1);
+insert into t1 values(2,2);
+
+insert into t2 values(0,0);
+insert into t2 values(3,3);
+
+set optimizer_donot_enforce_subplans = on;
+
+explain (costs off) select * from t1 where 0 in (select t2.b from t2 where t2.a = 0 or t2.b = t1.b union all select 1);
+select * from t1 where 0 in (select t2.b from t2 where t2.a = 0 or t2.b = t1.b union all select 1);
+
+explain (costs off) select * from t1 where 0 in (select t2.b from t2 where t2.a = 0 or t2.b = t1.b group by 1);
+select * from t1 where 0 in (select t2.b from t2 where t2.a = 0 or t2.b = t1.b group by 1);
+
+reset optimizer_donot_enforce_subplans;
+drop table t1;
+drop table t2;

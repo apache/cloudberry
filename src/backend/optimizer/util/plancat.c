@@ -41,12 +41,14 @@
 #include "parser/parsetree.h"
 #include "rewrite/rewriteManip.h"
 #include "storage/bufmgr.h"
+#include "utils/builtins.h"
 #include "utils/lsyscache.h"
 #include "utils/rel.h"
 #include "utils/snapmgr.h"
 
 #include "cdb/cdbappendonlyam.h"
 #include "cdb/cdbrelsize.h"
+#include "cdb/cdbutil.h"
 #include "catalog/pg_appendonly_fn.h"
 #include "catalog/pg_exttable.h"
 #include "catalog/pg_inherits_fn.h"
@@ -466,8 +468,13 @@ cdb_estimate_rel_size(RelOptInfo   *relOptInfo,
 	BlockNumber relpages;
 	double		reltuples;
 	BlockNumber relallvisible;
-	double		density;
     BlockNumber curpages = 0;
+
+	/*
+	 * Set tuples to -1 to distinguish if we had set it for AO table from
+	 * FileSegTotals, and do not calculate it in this case.
+	 */
+	*tuples = -1;
 
     /* Rel not distributed?  RelationGetNumberOfBlocks can get actual #pages. */
     if (!relOptInfo->cdbpolicy ||
@@ -510,7 +517,36 @@ cdb_estimate_rel_size(RelOptInfo   *relOptInfo,
 		 * to derive curpages, else use the default value.
 		 */
 		if (gp_enable_relsize_collection)
-			curpages = cdbRelMaxSegSize(rel) / BLCKSZ;
+		{
+			if (RelationIsAppendOptimized(rel))
+			{
+				FileSegTotals totals = {0};
+				if (RelationIsAoRows(rel))
+					GetSegFilesTotalsCluster(rel, &totals);
+				else
+					GetAOCSSegFilesTotalsCluster(rel, &totals);
+
+				curpages = totals.totalbytes / BLCKSZ;
+				*tuples = totals.totaltuples;
+
+				if (relOptInfo->cdbpolicy->ptype == POLICYTYPE_REPLICATED)
+					*tuples /= getgpsegmentCount();
+			}
+			else
+			{
+				curpages = DatumGetInt64(DirectFunctionCall2(
+															 pg_relation_size,
+									 ObjectIdGetDatum(RelationGetRelid(rel)),
+									  CStringGetTextDatum("main"))) / BLCKSZ;
+			}
+
+			/*
+			 * If the relation is replicated, we need to scale down to the
+			 * value on one segment in order to calculate row count properly.
+			 */
+			if (relOptInfo->cdbpolicy->ptype == POLICYTYPE_REPLICATED)
+				curpages /= getgpsegmentCount();
+		}
 		else
 			curpages = DEFAULT_INTERNAL_TABLE_PAGES;
 	}
@@ -529,29 +565,64 @@ cdb_estimate_rel_size(RelOptInfo   *relOptInfo,
 		relpages--;
 	}
 
-	/*
-	 * Estimate number of tuples from previous tuple density (as of last
-	 * analyze)
-	 */
-	if (relpages > 0)
-		density = reltuples / (double) relpages;
-	else
+	/* Calculate tuples only if they were not set before */
+	if (*tuples < 0)
 	{
-		/*
-		 * When we have no data because the relation was truncated, estimate
-		 * tuples per page from attribute datatypes.
-		 *
-		 * (This is the same computation as in get_relation_info()
-		 */
-		int32		tuple_width;
+		double		density;
 
-		tuple_width = get_rel_data_width(rel, attr_widths);
-		tuple_width += sizeof(HeapTupleHeaderData);
-		tuple_width += sizeof(ItemPointerData);
-		/* note: integer division is intentional here */
-		density = (BLCKSZ - SizeOfPageHeaderData) / tuple_width;
+		/*
+		 * Estimate number of tuples from previous tuple density (as of last
+		 * analyze)
+		 */
+		if (relpages > 0)
+			density = reltuples / (double) relpages;
+		else
+		{
+			/*
+			 * When we have no data because the relation was truncated,
+			 * estimate tuples per page from attribute datatypes.
+			 *
+			 * (This is the same computation as in get_relation_info()
+			 */
+			int32		tuple_width;
+
+			tuple_width = get_rel_data_width(rel, attr_widths);
+
+			if (tuple_width == 0)
+				/*
+				 * If the relation has 0 columns, set the same value for tuple
+				 * count, as we would get if we run ANALYZE on the relation.
+				 */
+				*tuples = 1;
+			else
+			{
+				if (RelationIsAoRows(rel))
+				{
+					/*
+					 * Row oriented relations store memtuples, that have a
+					 * header, plus storage is done in VarBlock, which has
+					 * item-offsets array with at 2 or 3 byte offsets. For
+					 * simplicity, in our rough estimation we consider only 2
+					 * byte offsets. Thus, we add (2 + header size) to the
+					 * tuple width.
+					 */
+					tuple_width +=
+						(offsetof(MemTupleData, PRIVATE_mt_bits) + 2);
+				}
+				else if (!RelationIsAoCols(rel))
+				{
+					/* do the adjustment for heap relations */
+					tuple_width += sizeof(HeapTupleHeaderData);
+					tuple_width += sizeof(ItemPointerData);
+				}
+
+				/* note: integer division is intentional here */
+				density = (BLCKSZ - SizeOfPageHeaderData) / tuple_width;
+			}
+		}
+		if (*tuples < 0)
+			*tuples = rint(density * (double) curpages);
 	}
-	*tuples = rint(density * (double) curpages);
 
 	/*
 	 * We use relallvisible as-is, rather than scaling it up like we
@@ -1074,7 +1145,11 @@ relation_excluded_by_constraints(PlannerInfo *root,
 		}
 	}
 
-	if (predicate_refuted_by(safe_restrictions, safe_restrictions))
+	/*
+	 * We can use weak refutation here, since we're comparing restriction
+	 * clauses with restriction clauses.
+	 */
+	if (predicate_refuted_by_weak(safe_restrictions, safe_restrictions))
 		return true;
 
 	/* Only plain relations have constraints */
@@ -1112,9 +1187,19 @@ relation_excluded_by_constraints(PlannerInfo *root,
 	 * an obvious optimization.  Some of the clauses might be OR clauses that
 	 * have volatile and nonvolatile subclauses, and it's OK to make
 	 * deductions with the nonvolatile parts.
+	 *
+	 * For regular rels we have to prove that the constraints would yield
+	 * false,not just NULL. For partitions a row must definitively satisfy
+	 * the constraint to be stored, NULL constraint means "unknown" which
+	 * cannot satisfy a definitive storage requirement. Therefore, weak
+	 * refutation is sufficient for pruning. (However, this can
+	 * be bypassed if we exchanged partition without validation, but it's
+	 * user's responsibility.)
 	 */
-	if (predicate_refuted_by(safe_constraints, rel->baserestrictinfo))
-		return true;
+	if (rel_is_part_child(rte->relid))
+		return predicate_refuted_by_weak(safe_constraints, rel->baserestrictinfo);
+	else
+		return predicate_refuted_by(safe_constraints, rel->baserestrictinfo);
 
 	return false;
 }

@@ -108,3 +108,67 @@ having count(t1c) is not null;
 (1 row)
 
 DROP TABLE test_having;
+create temp table gstest2 (a integer, b integer, c integer, d integer,
+                           e integer, f integer, g integer, h integer);
+copy gstest2 from stdin;
+ANALYZE gstest2;
+explain (costs off)
+select a,count(*) from gstest2 group by rollup(a) having a is distinct from 1 order by a;
+                                              QUERY PLAN                                               
+-------------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice2; segments: 3)
+   Merge Key: "rollup".a
+   ->  Sort
+         Sort Key: "rollup".a
+         ->  GroupAggregate
+               Group Key: "rollup".a, "rollup"."grouping", "rollup"."group_id"
+               Filter: ("rollup".a IS DISTINCT FROM 1)
+               ->  Subquery Scan on "rollup"
+                     ->  Sort
+                           Sort Key: rollup_1.a, (Grouping), (group_id())
+                           ->  Redistribute Motion 3:3  (slice1; segments: 3)
+                                 Hash Key: rollup_1.a, (Grouping), group_id()
+                                 ->  GroupAggregate
+                                       Group Key: rollup_1."grouping", rollup_1."group_id", rollup_1.a
+                                       ->  Subquery Scan on rollup_1
+                                             ->  GroupAggregate
+                                                   Group Key: gstest2.a
+                                                   ->  Sort
+                                                         Sort Key: gstest2.a
+                                                         ->  Seq Scan on gstest2
+ Optimizer: Postgres query optimizer
+(21 rows)
+
+select a,count(*) from gstest2 group by rollup(a) having a is distinct from 1 order by a;
+ a | count 
+---+-------
+ 2 |     1
+   |     9
+(2 rows)
+
+explain (costs off)
+select v.c, (select count(*) from gstest2 group by () having v.c)
+  from (values (false),(true)) v(c) order by v.c;
+                                QUERY PLAN                                
+--------------------------------------------------------------------------
+ Sort
+   Sort Key: "*VALUES*".column1
+   ->  Values Scan on "*VALUES*"
+         SubPlan 1  (slice0)
+           ->  Aggregate
+                 Filter: "*VALUES*".column1
+                 ->  Result
+                       ->  Materialize
+                             ->  Gather Motion 3:1  (slice1; segments: 3)
+                                   ->  Seq Scan on gstest2
+ Optimizer: Postgres query optimizer
+(11 rows)
+
+select v.c, (select count(*) from gstest2 group by () having v.c)
+  from (values (false),(true)) v(c) order by v.c;
+ c | count 
+---+-------
+ f |      
+ t |     9
+(2 rows)
+

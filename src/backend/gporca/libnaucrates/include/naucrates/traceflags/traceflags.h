@@ -231,6 +231,8 @@ enum EOptTraceFlag
 	// Keep locks on partition children during planning
 	EopttraceKeepPartitionChildrenLocks = 103045,
 
+	EopttraceDoNotEnforceCorrelatedExecution = 103046,
+
 	///////////////////////////////////////////////////////
 	///////////////////// statistics flags ////////////////
 	//////////////////////////////////////////////////////

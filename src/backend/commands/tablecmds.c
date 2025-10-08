@@ -505,8 +505,7 @@ static void ATExecPartAddInternal(Relation rel, Node *def);
 
 static RangeVar *make_temp_table_name(Relation rel, BackendId id);
 static bool prebuild_temp_table(Relation rel, RangeVar *tmpname, DistributedBy *distro,
-								List *opts, bool isTmpTableAo,
-								bool useExistingColumnAttributes);
+								List *opts, bool useExistingColumnAttributes);
 static void ATPartitionCheck(AlterTableType subtype, Relation rel, bool rejectroot, bool recursing);
 static void ATExternalPartitionCheck(AlterTableType subtype, Relation rel, bool recursing);
 
@@ -3430,6 +3429,7 @@ RenameRelationInternal(Oid myrelid, const char *newrelname, bool is_internal)
 {
 	Relation	targetrelation;
 	Relation	relrelation;	/* for RELATION relation */
+	ItemPointerData otid;
 	HeapTuple	reltup;
 	Form_pg_class relform;
 	Oid			namespaceId;
@@ -3456,7 +3456,8 @@ RenameRelationInternal(Oid myrelid, const char *newrelname, bool is_internal)
 	 */
 	relrelation = heap_open(RelationRelationId, RowExclusiveLock);
 
-	reltup = SearchSysCacheCopy1(RELOID, ObjectIdGetDatum(myrelid));
+	reltup = SearchSysCacheLockedCopy1(RELOID, ObjectIdGetDatum(myrelid));
+	otid = reltup->t_self;
 	if (!HeapTupleIsValid(reltup))		/* shouldn't happen */
 		elog(ERROR, "cache lookup failed for relation %u", myrelid);
 	relform = (Form_pg_class) GETSTRUCT(reltup);
@@ -3473,7 +3474,8 @@ RenameRelationInternal(Oid myrelid, const char *newrelname, bool is_internal)
 	 */
 	namestrcpy(&(relform->relname), newrelname);
 
-	CatalogTupleUpdate(relrelation, &reltup->t_self, reltup);
+	CatalogTupleUpdate(relrelation, &otid, reltup);
+	UnlockTuple(relrelation, &otid, InplaceUpdateTupleLock);
 
 	InvokeObjectPostAlterHookArg(RelationRelationId, myrelid, 0,
 								 InvalidOid, is_internal);
@@ -12797,7 +12799,7 @@ ATExecSetRelOptions(Relation rel, List *defList, AlterTableType operation,
 
 	/* Fetch heap tuple */
 	relid = RelationGetRelid(rel);
-	tuple = SearchSysCache1(RELOID, ObjectIdGetDatum(relid));
+	tuple = SearchSysCacheLocked1(RELOID, ObjectIdGetDatum(relid));
 	if (!HeapTupleIsValid(tuple))
 		elog(ERROR, "cache lookup failed for relation %u", relid);
 
@@ -12951,6 +12953,7 @@ ATExecSetRelOptions(Relation rel, List *defList, AlterTableType operation,
 								 repl_val, repl_null, repl_repl);
 
 	CatalogTupleUpdate(pgclass, &newtuple->t_self, newtuple);
+	UnlockTuple(pgclass, &tuple->t_self, InplaceUpdateTupleLock);
 
 	InvokeObjectPostAlterHook(RelationRelationId, RelationGetRelid(rel), 0);
 
@@ -13196,7 +13199,7 @@ ATExecSetTableSpace(Oid tableOid, Oid newTableSpace, LOCKMODE lockmode)
 			if (rel->rd_rel->relpersistence == RELPERSISTENCE_PERMANENT ||
 				(rel->rd_rel->relpersistence == RELPERSISTENCE_UNLOGGED &&
 				 forkNum == INIT_FORKNUM))
-				log_smgrcreate(&newrnode, forkNum);
+				log_smgrcreate(&newrnode, forkNum, rel->rd_rel->relstorage);
 			copy_relation_data(rel->rd_smgr, dstrel, forkNum,
 							   rel->rd_rel->relpersistence);
 		}
@@ -14567,7 +14570,6 @@ build_ctas_with_dist(Relation rel, DistributedBy *dist_clause,
 
 	pre_built = prebuild_temp_table(rel, tmprel, dist_clause,
 									storage_opts,
-									RelationIsAppendOptimized(rel),
 									useExistingColumnAttributes);
 	if (pre_built)
 	{
@@ -14710,13 +14712,10 @@ make_temp_table_name(Relation rel, BackendId id)
  * If we need to do it, but fail, issue an error. (See make_type.)
  *
  * Specifically for build_ctas_with_dist.
- *
- * Note that the caller should guarantee that isTmpTableAo has
- * a value that matches 'opts'.
  */
 static bool
 prebuild_temp_table(Relation rel, RangeVar *tmpname, DistributedBy *distro, List *opts,
-					bool isTmpTableAo, bool useExistingColumnAttributes)
+					bool useExistingColumnAttributes)
 {
 	bool need_rebuild = false;
 	int attno = 0;
@@ -14749,7 +14748,7 @@ prebuild_temp_table(Relation rel, RangeVar *tmpname, DistributedBy *distro, List
 	 * important to create the block directory to support the reindex
 	 * later. See MPP-9545 for more info.
 	 */
-	if (isTmpTableAo &&
+	if (RelationIsAppendOptimized(rel) &&
 		rel->rd_rel->relhasindex)
 		need_rebuild = true;
 
@@ -14767,13 +14766,27 @@ prebuild_temp_table(Relation rel, RangeVar *tmpname, DistributedBy *distro, List
 		cs->tablespacename = get_tablespace_name(rel->rd_rel->reltablespace);
 		cs->buildAoBlkdir = false;
 
-		if (isTmpTableAo &&
+		if (RelationIsAppendOptimized(rel) &&
 			rel->rd_rel->relhasindex)
 			cs->buildAoBlkdir = true;
 
 		cs->options = opts;
 
-		if (RelationIsAoRows(rel))
+		if (!RelationIsAppendOptimized(rel))
+		{
+			/*
+			 * In order to avoid being affected by gp_default_storage_options,
+			 * we have to specify appendonly=false. This prevents accidentally
+			 * changing the access method to AO.
+			 */
+			if (!reloptions_has_opt(cs->options, "appendonly"))
+			{
+				DefElem *elem = makeDefElem("appendonly",
+											(Node *) makeString("false"));
+				cs->options = lappend(cs->options, elem);
+			}
+		}
+		else if (RelationIsAoRows(rel))
 		{
 			/*
 			* In order to avoid being affected by the GUC of gp_default_storage_options,
@@ -19546,7 +19559,8 @@ AlterRelationNamespaceInternal(Relation classRel, Oid relOid,
 	Form_pg_class classForm;
 	ObjectAddress thisobj;
 
-	classTup = SearchSysCacheCopy1(RELOID, ObjectIdGetDatum(relOid));
+	/* no rel lock for relkind=c so use LOCKTAG_TUPLE */
+	classTup = SearchSysCacheLockedCopy1(RELOID, ObjectIdGetDatum(relOid));
 	if (!HeapTupleIsValid(classTup))
 		elog(ERROR, "cache lookup failed for relation %u", relOid);
 	classForm = (Form_pg_class) GETSTRUCT(classTup);
@@ -19562,6 +19576,8 @@ AlterRelationNamespaceInternal(Relation classRel, Oid relOid,
 	 */
 	if (!object_address_present(&thisobj, objsMoved))
 	{
+		ItemPointerData otid = classTup->t_self;
+
 		/* check for duplicate name (more friendly than unique-index failure) */
 		if (get_relname_relid(NameStr(classForm->relname),
 							  newNspOid) != InvalidOid)
@@ -19574,7 +19590,9 @@ AlterRelationNamespaceInternal(Relation classRel, Oid relOid,
 		/* classTup is a copy, so OK to scribble on */
 		classForm->relnamespace = newNspOid;
 
-		CatalogTupleUpdate(classRel, &classTup->t_self, classTup);
+		CatalogTupleUpdate(classRel, &otid, classTup);
+		UnlockTuple(classRel, &otid, InplaceUpdateTupleLock);
+
 
 		/* Update dependency on schema if caller said so */
 		if (hasDependEntry &&
@@ -19590,6 +19608,8 @@ AlterRelationNamespaceInternal(Relation classRel, Oid relOid,
 
 		InvokeObjectPostAlterHook(RelationRelationId, relOid, 0);
 	}
+	else
+		UnlockTuple(classRel, &classTup->t_self, InplaceUpdateTupleLock);
 
 	heap_freetuple(classTup);
 }

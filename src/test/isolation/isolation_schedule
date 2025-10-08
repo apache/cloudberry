@@ -25,6 +25,7 @@
 #test: fk-deadlock
 #test: fk-deadlock2
 #test: eval-plan-qual
+test: inplace-inval
 #test: lock-update-delete
 #test: lock-update-traversal
 #test: read-write-unique

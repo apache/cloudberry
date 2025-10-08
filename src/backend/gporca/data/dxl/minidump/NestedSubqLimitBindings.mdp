@@ -484,7 +484,7 @@ select a from t as t1 where a in (
     <dxl:Plan Id="0" SpaceSize="7046592">
       <dxl:Result>
         <dxl:Properties>
-          <dxl:Cost StartupCost="0" TotalCost="4165951483148.106445" Rows="1.000000" Width="1"/>
+          <dxl:Cost StartupCost="0" TotalCost="4165951912644.835938" Rows="1.000000" Width="1"/>
         </dxl:Properties>
         <dxl:ProjList>
           <dxl:ProjElem ColId="80" Alias="?column?">
@@ -498,7 +498,7 @@ select a from t as t1 where a in (
               <dxl:ParamList/>
               <dxl:Result>
                 <dxl:Properties>
-                  <dxl:Cost StartupCost="0" TotalCost="4068311133.248707" Rows="1.000000" Width="5"/>
+                  <dxl:Cost StartupCost="0" TotalCost="4068311552.679107" Rows="1.000000" Width="5"/>
                 </dxl:Properties>
                 <dxl:ProjList>
                   <dxl:ProjElem ColId="8" Alias="a">
@@ -509,7 +509,7 @@ select a from t as t1 where a in (
                 <dxl:OneTimeFilter/>
                 <dxl:Result>
                   <dxl:Properties>
-                    <dxl:Cost StartupCost="0" TotalCost="4068311133.248707" Rows="1.000000" Width="5"/>
+                    <dxl:Cost StartupCost="0" TotalCost="4068311552.679107" Rows="1.000000" Width="5"/>
                   </dxl:Properties>
                   <dxl:ProjList>
                     <dxl:ProjElem ColId="85" Alias="ColRef_0085">
@@ -523,7 +523,7 @@ select a from t as t1 where a in (
                   <dxl:OneTimeFilter/>
                   <dxl:Materialize Eager="true">
                     <dxl:Properties>
-                      <dxl:Cost StartupCost="0" TotalCost="4068311133.248702" Rows="1.000000" Width="4"/>
+                      <dxl:Cost StartupCost="0" TotalCost="4068311552.679102" Rows="1.000000" Width="4"/>
                     </dxl:Properties>
                     <dxl:ProjList>
                       <dxl:ProjElem ColId="8" Alias="a">
@@ -533,7 +533,7 @@ select a from t as t1 where a in (
                     <dxl:Filter/>
                     <dxl:Result>
                       <dxl:Properties>
-                        <dxl:Cost StartupCost="0" TotalCost="4068311133.248698" Rows="1.000000" Width="4"/>
+                        <dxl:Cost StartupCost="0" TotalCost="4068311552.679098" Rows="1.000000" Width="4"/>
                       </dxl:Properties>
                       <dxl:ProjList>
                         <dxl:ProjElem ColId="8" Alias="a">
@@ -551,7 +551,7 @@ select a from t as t1 where a in (
                           <dxl:ParamList/>
                           <dxl:Materialize Eager="true">
                             <dxl:Properties>
-                              <dxl:Cost StartupCost="0" TotalCost="3972098.090727" Rows="1.000000" Width="4"/>
+                              <dxl:Cost StartupCost="0" TotalCost="3972098.500327" Rows="1.000000" Width="4"/>
                             </dxl:Properties>
                             <dxl:ProjList>
                               <dxl:ProjElem ColId="16" Alias="a">
@@ -561,7 +561,7 @@ select a from t as t1 where a in (
                             <dxl:Filter/>
                             <dxl:Result>
                               <dxl:Properties>
-                                <dxl:Cost StartupCost="0" TotalCost="3972098.090723" Rows="1.000000" Width="4"/>
+                                <dxl:Cost StartupCost="0" TotalCost="3972098.500323" Rows="1.000000" Width="4"/>
                               </dxl:Properties>
                               <dxl:ProjList>
                                 <dxl:ProjElem ColId="16" Alias="a">
@@ -579,7 +579,7 @@ select a from t as t1 where a in (
                                   <dxl:ParamList/>
                                   <dxl:Materialize Eager="true">
                                     <dxl:Properties>
-                                      <dxl:Cost StartupCost="0" TotalCost="3017.001705" Rows="1.000000" Width="4"/>
+                                      <dxl:Cost StartupCost="0" TotalCost="3017.002105" Rows="1.000000" Width="4"/>
                                     </dxl:Properties>
                                     <dxl:ProjList>
                                       <dxl:ProjElem ColId="24" Alias="a">
@@ -589,7 +589,7 @@ select a from t as t1 where a in (
                                     <dxl:Filter/>
                                     <dxl:GatherMotion InputSegments="0,1,2" OutputSegments="-1">
                                       <dxl:Properties>
-                                        <dxl:Cost StartupCost="0" TotalCost="3017.001701" Rows="1.000000" Width="4"/>
+                                        <dxl:Cost StartupCost="0" TotalCost="3017.002101" Rows="1.000000" Width="4"/>
                                       </dxl:Properties>
                                       <dxl:ProjList>
                                         <dxl:ProjElem ColId="24" Alias="a">
@@ -600,7 +600,7 @@ select a from t as t1 where a in (
                                       <dxl:SortingColumnList/>
                                       <dxl:HashJoin JoinType="Inner">
                                         <dxl:Properties>
-                                          <dxl:Cost StartupCost="0" TotalCost="3017.001686" Rows="1.000000" Width="4"/>
+                                          <dxl:Cost StartupCost="0" TotalCost="3017.002086" Rows="1.000000" Width="4"/>
                                         </dxl:Properties>
                                         <dxl:ProjList>
                                           <dxl:ProjElem ColId="24" Alias="a">
@@ -640,7 +640,7 @@ select a from t as t1 where a in (
                                         </dxl:TableScan>
                                         <dxl:Aggregate AggregationStrategy="Sorted" StreamSafe="false">
                                           <dxl:Properties>
-                                            <dxl:Cost StartupCost="0" TotalCost="2586.001288" Rows="1.000000" Width="4"/>
+                                            <dxl:Cost StartupCost="0" TotalCost="2586.001588" Rows="1.000000" Width="4"/>
                                           </dxl:Properties>
                                           <dxl:GroupingColumns>
                                             <dxl:GroupingColumn ColId="32"/>
@@ -653,7 +653,7 @@ select a from t as t1 where a in (
                                           <dxl:Filter/>
                                           <dxl:Sort SortDiscardDuplicates="false">
                                             <dxl:Properties>
-                                              <dxl:Cost StartupCost="0" TotalCost="2586.001282" Rows="1.000000" Width="4"/>
+                                              <dxl:Cost StartupCost="0" TotalCost="2586.001582" Rows="1.000000" Width="4"/>
                                             </dxl:Properties>
                                             <dxl:ProjList>
                                               <dxl:ProjElem ColId="32" Alias="a">
@@ -668,7 +668,7 @@ select a from t as t1 where a in (
                                             <dxl:LimitOffset/>
                                             <dxl:Append IsTarget="false" IsZapped="false">
                                               <dxl:Properties>
-                                                <dxl:Cost StartupCost="0" TotalCost="2586.001282" Rows="1.000000" Width="4"/>
+                                                <dxl:Cost StartupCost="0" TotalCost="2586.001582" Rows="1.000000" Width="4"/>
                                               </dxl:Properties>
                                               <dxl:ProjList>
                                                 <dxl:ProjElem ColId="32" Alias="a">
@@ -678,7 +678,7 @@ select a from t as t1 where a in (
                                               <dxl:Filter/>
                                               <dxl:Aggregate AggregationStrategy="Sorted" StreamSafe="false">
                                                 <dxl:Properties>
-                                                  <dxl:Cost StartupCost="0" TotalCost="862.000426" Rows="1.000000" Width="4"/>
+                                                  <dxl:Cost StartupCost="0" TotalCost="862.000526" Rows="1.000000" Width="4"/>
                                                 </dxl:Properties>
                                                 <dxl:GroupingColumns>
                                                   <dxl:GroupingColumn ColId="32"/>
@@ -691,7 +691,7 @@ select a from t as t1 where a in (
                                                 <dxl:Filter/>
                                                 <dxl:Sort SortDiscardDuplicates="false">
                                                   <dxl:Properties>
-                                                    <dxl:Cost StartupCost="0" TotalCost="862.000424" Rows="1.000000" Width="4"/>
+                                                    <dxl:Cost StartupCost="0" TotalCost="862.000524" Rows="1.000000" Width="4"/>
                                                   </dxl:Properties>
                                                   <dxl:ProjList>
                                                     <dxl:ProjElem ColId="32" Alias="a">
@@ -706,7 +706,7 @@ select a from t as t1 where a in (
                                                   <dxl:LimitOffset/>
                                                   <dxl:HashJoin JoinType="Inner">
                                                     <dxl:Properties>
-                                                      <dxl:Cost StartupCost="0" TotalCost="862.000424" Rows="1.000000" Width="4"/>
+                                                      <dxl:Cost StartupCost="0" TotalCost="862.000524" Rows="1.000000" Width="4"/>
                                                     </dxl:Properties>
                                                     <dxl:ProjList>
                                                       <dxl:ProjElem ColId="32" Alias="a">
@@ -772,7 +772,7 @@ select a from t as t1 where a in (
                                               </dxl:Aggregate>
                                               <dxl:Aggregate AggregationStrategy="Sorted" StreamSafe="false">
                                                 <dxl:Properties>
-                                                  <dxl:Cost StartupCost="0" TotalCost="862.000426" Rows="1.000000" Width="4"/>
+                                                  <dxl:Cost StartupCost="0" TotalCost="862.000526" Rows="1.000000" Width="4"/>
                                                 </dxl:Properties>
                                                 <dxl:GroupingColumns>
                                                   <dxl:GroupingColumn ColId="48"/>
@@ -785,7 +785,7 @@ select a from t as t1 where a in (
                                                 <dxl:Filter/>
                                                 <dxl:Sort SortDiscardDuplicates="false">
                                                   <dxl:Properties>
-                                                    <dxl:Cost StartupCost="0" TotalCost="862.000424" Rows="1.000000" Width="4"/>
+                                                    <dxl:Cost StartupCost="0" TotalCost="862.000524" Rows="1.000000" Width="4"/>
                                                   </dxl:Properties>
                                                   <dxl:ProjList>
                                                     <dxl:ProjElem ColId="48" Alias="a">
@@ -800,7 +800,7 @@ select a from t as t1 where a in (
                                                   <dxl:LimitOffset/>
                                                   <dxl:HashJoin JoinType="Inner">
                                                     <dxl:Properties>
-                                                      <dxl:Cost StartupCost="0" TotalCost="862.000424" Rows="1.000000" Width="4"/>
+                                                      <dxl:Cost StartupCost="0" TotalCost="862.000524" Rows="1.000000" Width="4"/>
                                                     </dxl:Properties>
                                                     <dxl:ProjList>
                                                       <dxl:ProjElem ColId="48" Alias="a">
@@ -866,7 +866,7 @@ select a from t as t1 where a in (
                                               </dxl:Aggregate>
                                               <dxl:Aggregate AggregationStrategy="Sorted" StreamSafe="false">
                                                 <dxl:Properties>
-                                                  <dxl:Cost StartupCost="0" TotalCost="862.000426" Rows="1.000000" Width="4"/>
+                                                  <dxl:Cost StartupCost="0" TotalCost="862.000526" Rows="1.000000" Width="4"/>
                                                 </dxl:Properties>
                                                 <dxl:GroupingColumns>
                                                   <dxl:GroupingColumn ColId="64"/>
@@ -879,7 +879,7 @@ select a from t as t1 where a in (
                                                 <dxl:Filter/>
                                                 <dxl:Sort SortDiscardDuplicates="false">
                                                   <dxl:Properties>
-                                                    <dxl:Cost StartupCost="0" TotalCost="862.000424" Rows="1.000000" Width="4"/>
+                                                    <dxl:Cost StartupCost="0" TotalCost="862.000524" Rows="1.000000" Width="4"/>
                                                   </dxl:Properties>
                                                   <dxl:ProjList>
                                                     <dxl:ProjElem ColId="64" Alias="a">
@@ -894,7 +894,7 @@ select a from t as t1 where a in (
                                                   <dxl:LimitOffset/>
                                                   <dxl:HashJoin JoinType="Inner">
                                                     <dxl:Properties>
-                                                      <dxl:Cost StartupCost="0" TotalCost="862.000424" Rows="1.000000" Width="4"/>
+                                                      <dxl:Cost StartupCost="0" TotalCost="862.000524" Rows="1.000000" Width="4"/>
                                                     </dxl:Properties>
                                                     <dxl:ProjList>
                                                       <dxl:ProjElem ColId="64" Alias="a">

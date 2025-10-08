@@ -1,0 +1,375 @@
+-- start_ignore
+-- end_ignore
+
+
+-- Test case 1
+-- Check that orphaned files are not left on the coordinator and the standby
+-- when the files are created before checkpoint
+
+-- Create tables of different access methods and return command to check their
+-- files existence on the coordinator and the standby
+1: create or replace function createTables(n text) returns text as $$ declare cmd text; /**/ begin execute 'create table t_orphaned_h'||n||'(i int) distributed by (i)'; /**/ 
+execute 'create table t_orphaned_r'||n||'(i int) with (appendonly=true, orientation=row) distributed by (i)'; /**/ -- Create index to create block directory table execute 'create index t_orphaned_r'||n||'_i on t_orphaned_r'||n||'(i)'; /**/ 
+execute 'create table t_orphaned_c'||n||'(i int) with (appendonly=true, orientation=column) distributed by (i)'; /**/ /* Create index to create block directory table */ execute 'create index t_orphaned_c'||n||'_i on t_orphaned_c'||n||'(i)'; /**/ 
+/* Ensure that the mirrors have applied the filesystem changes */ perform force_mirrors_to_catch_up(); /**/ 
+/* The command do not output PGDATA directories to make it possible to run the test without docker */ select string_agg('cd ' || datadir || '&&' || lswc, ';' order by datadir) into cmd from ( select 'ls ' || string_agg(pg_relation_filepath(a.unnest), ' ') || ' 2>/dev/null | wc -l' lswc from ( select unnest(array[('t_orphaned_h'||n)::regclass, ('t_orphaned_r'||n)::regclass, ('t_orphaned_r'||n||'_i')::regclass, ('t_orphaned_c'||n)::regclass, ('t_orphaned_c'||n||'_i')::regclass]) union all select unnest(array[segrelid, blkdirrelid, blkdiridxid, visimaprelid, visimapidxid]) from pg_catalog.pg_appendonly where relid in (('t_orphaned_r'||n)::regclass, ('t_orphaned_c'||n)::regclass) ) a ) f, (select datadir from gp_segment_configuration where content = -1) d; /**/ 
+return cmd; /**/ end $$ language plpgsql;
+CREATE
+
+-- Start transaction and create tables in it before checkpoint
+1: begin;
+BEGIN
+1: @post_run 'echo "${RAW_STR}" | awk \'NR==3\' > /tmp/gp_orphaned_files.sh' : select createTables('1') check_files;
+
+2: begin;
+BEGIN
+2: @post_run 'echo "${RAW_STR}" | awk \'NR==3\' >> /tmp/gp_orphaned_files.sh' : select createTables('2') check_files;
+
+1: checkpoint;
+CHECKPOINT
+
+-- Make sure that the tables files exist on the coordinator and the standby
+1: ! sh /tmp/gp_orphaned_files.sh;
+15
+15
+15
+15
+
+
+-- Get segfault on the coordinator and reconnect after its restart
+1: select gp_inject_fault('exec_simple_query_start', 'segv', dbid) from gp_segment_configuration where role = 'p' and content = -1;
+ gp_inject_fault 
+-----------------
+ Success:        
+(1 row)
+
+-- The error message can be different, so ignore it
+1: @post_run 'echo ""' : select 1;
+
+-- Wait for the coordinator to be recovered
+! while [ `psql -tc "select 1;" postgres 2>/dev/null | wc -l` != '2' ]; do sleep 1; done;
+
+1q: ... <quitting>
+2q: ... <quitting>
+
+1: select force_mirrors_to_catch_up();
+ force_mirrors_to_catch_up 
+---------------------------
+                           
+(1 row)
+
+-- Check that the tables files don't exist on the coordinator and the standby
+! sh /tmp/gp_orphaned_files.sh;
+0
+0
+0
+0
+
+
+-- Cleanup
+! rm /tmp/gp_orphaned_files.sh;
+
+1: drop function createTables(n text);
+DROP
+
+
+-- Test case 2
+-- Check that orphaned files are not left on segments when the files are created
+-- before checkpoint
+
+1: create or replace function getTableSegFiles (t regclass, out gp_contentid smallint, out filepath text) as 'select current_setting(''gp_contentid'')::smallint, pg_relation_filepath(t)' language sql execute on all segments;
+CREATE
+
+1: create or replace function createTables(n text) returns text as $$ declare cmd text; /**/ begin /* Minimal fillfactor to minimize rows number for creating second main fork file */ execute 'create table t_orphaned_h'||n||'(i int) with (fillfactor=10) distributed by (i)'; /**/ /* Create the .1 file. Separate insert to create FSM. */ execute 'insert into t_orphaned_h'||n||' select generate_series(1,9000000)'; /**/ 
+execute 'create table t_orphaned_r'||n||'(i int) with (appendonly=true, orientation=row) distributed by (i)'; /**/ /* Create the .1 file */ execute 'insert into t_orphaned_r'||n||' select generate_series(1,100)'; /**/ 
+/* Create the .128 file */ execute 'create table t_orphaned_c'||n||' with (appendonly=true, orientation=column) as select i as i, i*2 as j from generate_series(1,100) i distributed by (i)'; /**/ /* Create the .1 and .129 files */ execute 'insert into t_orphaned_c'||n||' select i as i, i*2 as j from generate_series(1,100) i'; /**/ 
+/* Ensure that the mirrors have applied the filesystem changes */ perform force_mirrors_to_catch_up(); /**/ 
+/* The command do not output PGDATA directories to make it possible to run the test without docker */ select string_agg('cd ' || datadir || '&&' || lswc, ';' order by datadir) into cmd from ( select gp_contentid, 'ls ' || string_agg(f, ' ') || ' 2>/dev/null | wc -l' lswc from ( select gp_contentid, filepath || suf f from getTableSegFiles('t_orphaned_h'||n), (values(''), ('.1'), ('_fsm')) v(suf) union all select gp_contentid, filepath || suf from getTableSegFiles('t_orphaned_r'||n), (values(''), ('.1')) v(suf) union all select gp_contentid, filepath || suf from getTableSegFiles('t_orphaned_c'||n), (values(''), ('.1'), ('.128'), ('.129')) v(suf) ) a group by gp_contentid ) f, (select content, datadir from gp_segment_configuration where content > -1) d where f.gp_contentid = d.content; /**/ 
+return cmd; /**/ end $$ language plpgsql;
+CREATE
+
+1: create or replace function resetInjectFaults(p_contentid int) returns void as $$ begin perform gp_inject_fault('qe_exec_finished', 'reset', dbid), gp_inject_fault('checkpoint',       'reset', dbid) from gp_segment_configuration where role = 'p' and content = p_contentid; /**/ end $$ language plpgsql;
+CREATE
+
+-- Skip FTS probes
+1: select gp_inject_fault_infinite('fts_probe', 'skip', 1);
+ gp_inject_fault_infinite 
+--------------------------
+ Success:                 
+(1 row)
+
+-- Test case 2.1
+-- Segfault on all segments
+
+-- Start transaction and create tables in it before checkpoint
+1: begin;
+BEGIN
+1: @post_run 'echo "${RAW_STR}" | awk \'NR==3\' > /tmp/gp_orphaned_files.sh' : select createTables('1') check_files;
+
+2: begin;
+BEGIN
+2: @post_run 'echo "${RAW_STR}" | awk \'NR==3\' >> /tmp/gp_orphaned_files.sh' : select createTables('2') check_files;
+
+1: checkpoint;
+CHECKPOINT
+
+-- Make sure that all the tables files exist on the segments
+1: ! sh /tmp/gp_orphaned_files.sh;
+9
+9
+9
+9
+9
+9
+9
+9
+9
+9
+9
+9
+
+
+-- Get segfault on all segments
+1: select gp_inject_fault('qe_exec_finished', 'segv', dbid) from gp_segment_configuration where role = 'p' and content != -1;
+ gp_inject_fault 
+-----------------
+ Success:        
+ Success:        
+ Success:        
+(3 rows)
+
+-- The error message can be different, so ignore it
+1: @post_run 'echo ""' : select 1 from gp_dist_random('gp_id');
+
+
+-- Rollback the transaction to make it possible to run queries after the error
+1: rollback;
+ROLLBACK
+2: rollback;
+ROLLBACK
+
+
+1: select force_mirrors_to_catch_up();
+ force_mirrors_to_catch_up 
+---------------------------
+                           
+(1 row)
+
+-- Make a checkpoint to remove orphaned files from segments where segfault did
+-- not happen
+1: checkpoint;
+CHECKPOINT
+
+-- Check that the tables files don't exist on the segments
+! sh /tmp/gp_orphaned_files.sh;
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+
+
+
+-- Test case 2.2
+-- Segfault on one segment
+
+-- Start transaction and create tables in it before checkpoint
+1: begin;
+BEGIN
+1: @post_run 'echo "${RAW_STR}" | awk \'NR==3\' > /tmp/gp_orphaned_files.sh' : select createTables('1') check_files;
+
+2: begin;
+BEGIN
+2: @post_run 'echo "${RAW_STR}" | awk \'NR==3\' >> /tmp/gp_orphaned_files.sh' : select createTables('2') check_files;
+
+1: checkpoint;
+CHECKPOINT
+
+-- Make sure that all the tables files exist on the segments
+1: ! sh /tmp/gp_orphaned_files.sh;
+9
+9
+9
+9
+9
+9
+9
+9
+9
+9
+9
+9
+
+
+-- Get segfault on a segment
+1: select gp_inject_fault('qe_exec_finished', 'segv', dbid) from gp_segment_configuration where role = 'p' and content = 1;
+ gp_inject_fault 
+-----------------
+ Success:        
+(1 row)
+
+-- The error message can be different, so ignore it
+1: @post_run 'echo ""' : select 1 from gp_dist_random('gp_id');
+
+
+-- Rollback the transaction to make it possible to run queries after the error
+1: rollback;
+ROLLBACK
+2: rollback;
+ROLLBACK
+
+1: select force_mirrors_to_catch_up();
+ force_mirrors_to_catch_up 
+---------------------------
+                           
+(1 row)
+
+-- Make a checkpoint to remove orphaned files from segments where segfault did
+-- not happen
+1: select gp_inject_fault_infinite('checkpoint', 'reset', dbid) from gp_segment_configuration where role = 'p' and content > -1;
+ gp_inject_fault_infinite 
+--------------------------
+ Success:                 
+ Success:                 
+ Success:                 
+(3 rows)
+1: checkpoint;
+CHECKPOINT
+
+-- Check that the tables files don't exist on the segments
+! sh /tmp/gp_orphaned_files.sh;
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+
+
+
+-- Cleanup
+! rm /tmp/gp_orphaned_files.sh;
+
+1: drop function resetInjectFaults(p_contentid int);
+DROP
+1: drop function createTables(n text);
+DROP
+1: drop function getTableSegFiles (t regclass, out gp_contentid smallint, out filepath text);
+DROP
+
+
+-- Test case 3
+-- Check that table files are not deleted in the case of prepared transaction
+
+-- Don't create checkpoints on the segment number 1
+1: select gp_inject_fault_infinite('checkpoint', 'skip', dbid) from gp_segment_configuration where role = 'p' and content = 1;
+ gp_inject_fault_infinite 
+--------------------------
+ Success:                 
+(1 row)
+
+-- Stop after `MyPgXact->delayChkpt = false` and before `PostPrepare_smgr()`
+-- Stop at the beginning of the checkpointer loop
+1: select gp_inject_fault_infinite('end_prepare_two_phase', 'suspend', dbid), gp_inject_fault_infinite('ckpt_loop_begin', 'suspend', dbid) from gp_segment_configuration where role = 'p' and content = 1;
+ gp_inject_fault_infinite | gp_inject_fault_infinite 
+--------------------------+--------------------------
+ Success:                 | Success:                 
+(1 row)
+
+1&: select gp_wait_until_triggered_fault('end_prepare_two_phase', 1, dbid) from gp_segment_configuration where role = 'p' and content = 1;  <waiting ...>
+
+2&: create table t(i int) distributed by (i);  <waiting ...>
+1<:  <... completed>
+ gp_wait_until_triggered_fault 
+-------------------------------
+ Success:                      
+(1 row)
+
+1&: select gp_wait_until_triggered_fault('ckpt_loop_begin', 1, dbid) from gp_segment_configuration where role = 'p' and content = 1;  <waiting ...>
+
+-- Create a checkpoint and the XLOG_PENDING_DELETE WAL record with RelFileNode
+-- of the created table. No more creating checkpoint
+3: select gp_inject_fault_infinite('checkpoint', 'reset', dbid) from gp_segment_configuration where role = 'p' and content = 1;
+ gp_inject_fault_infinite 
+--------------------------
+ Success:                 
+(1 row)
+3&: checkpoint;  <waiting ...>
+1<:  <... completed>
+ gp_wait_until_triggered_fault 
+-------------------------------
+ Success:                      
+(1 row)
+1: select gp_inject_fault_infinite('ckpt_loop_end', 'suspend', dbid) from gp_segment_configuration where role = 'p' and content = 1;
+ gp_inject_fault_infinite 
+--------------------------
+ Success:                 
+(1 row)
+1: select gp_inject_fault_infinite('ckpt_loop_begin', 'reset', dbid) from gp_segment_configuration where role = 'p' and content = 1;
+ gp_inject_fault_infinite 
+--------------------------
+ Success:                 
+(1 row)
+1: select gp_wait_until_triggered_fault('ckpt_loop_end', 1, dbid) from gp_segment_configuration where role = 'p' and content = 1;
+ gp_wait_until_triggered_fault 
+-------------------------------
+ Success:                      
+(1 row)
+3<:  <... completed>
+CHECKPOINT
+3q: ... <quitting>
+1: select gp_inject_fault_infinite('checkpoint', 'skip', dbid) from gp_segment_configuration where role = 'p' and content = 1;
+ gp_inject_fault_infinite 
+--------------------------
+ Success:                 
+(1 row)
+1: select gp_inject_fault_infinite('ckpt_loop_end', 'reset', dbid) from gp_segment_configuration where role = 'p' and content = 1;
+ gp_inject_fault_infinite 
+--------------------------
+ Success:                 
+(1 row)
+
+-- Get a segfault on the segment number 1 at the beginning of the prepared
+-- transaction commit
+1: select gp_inject_fault_infinite('finish_prepared_start_of_function', 'segv', dbid) from gp_segment_configuration where role = 'p' and content = 1;
+ gp_inject_fault_infinite 
+--------------------------
+ Success:                 
+(1 row)
+1: select gp_inject_fault_infinite('end_prepare_two_phase', 'resume', dbid) from gp_segment_configuration where role = 'p' and content = 1;
+ gp_inject_fault_infinite 
+--------------------------
+ Success:                 
+(1 row)
+1q: ... <quitting>
+2<:  <... completed>
+CREATE
+2q: ... <quitting>
+
+-- Check that the table files are not removed
+1: select * from t;
+ i 
+---
+(0 rows)
+
+-- Cleanup
+1: select gp_inject_fault_infinite('fts_probe', 'reset', 1);
+ gp_inject_fault_infinite 
+--------------------------
+ Success:                 
+(1 row)
+1: drop table t;
+DROP

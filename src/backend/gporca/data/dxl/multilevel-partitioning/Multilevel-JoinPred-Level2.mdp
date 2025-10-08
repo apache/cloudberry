@@ -358,7 +358,7 @@ select * from pt, t where pt.j = t.t1;
     <dxl:Plan Id="0" SpaceSize="0">
       <dxl:GatherMotion InputSegments="0,1" OutputSegments="-1">
         <dxl:Properties>
-          <dxl:Cost StartupCost="0" TotalCost="862.004126" Rows="1.000000" Width="20"/>
+          <dxl:Cost StartupCost="0" TotalCost="862.004226" Rows="1.000000" Width="20"/>
         </dxl:Properties>
         <dxl:ProjList>
           <dxl:ProjElem ColId="0" Alias="i">
@@ -381,7 +381,7 @@ select * from pt, t where pt.j = t.t1;
         <dxl:SortingColumnList/>
         <dxl:HashJoin JoinType="Inner">
           <dxl:Properties>
-            <dxl:Cost StartupCost="0" TotalCost="862.004036" Rows="1.000000" Width="20"/>
+            <dxl:Cost StartupCost="0" TotalCost="862.004136" Rows="1.000000" Width="20"/>
           </dxl:Properties>
           <dxl:ProjList>
             <dxl:ProjElem ColId="0" Alias="i">

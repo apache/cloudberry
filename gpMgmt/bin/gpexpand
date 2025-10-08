@@ -2050,18 +2050,19 @@ class gpexpand:
         And prompt user to set a proper value via gpconfig before expansion.
         """
 
-        conn = dbconn.connect(_gp_expand.dburl, encoding='UTF8')
-        # get GUC value: gp_interconnect_proxy_addresses
-        sql = "show gp_interconnect_proxy_addresses;"
-        cursor = dbconn.execSQL(conn, sql)
-        icproxy_addresses_string = cursor.fetchone()[0].strip()
-        cursor.close()
-        # get GUC value: gp_interconnect_type
-        sql = "show gp_interconnect_type;"
-        cursor = dbconn.execSQL(conn, sql)
-        ic_type = cursor.fetchone()[0].strip()
-        cursor.close()
-        conn.close()
+        with closing (dbconn.connect(_gp_expand.dburl, encoding='UTF8')) as conn:
+            try:
+                icproxy_addresses_string = catalog.getSessionGUC(conn, 'gp_interconnect_proxy_addresses').strip()
+            except DatabaseError as ex:
+                # If the error indicates that gp_interconnect_proxy_addresses is not recognized,
+                # it means the cluster was built without this GUC, for example,
+                # the --enable-ic-proxy flag was not set during compilation.
+                # In this case, we simply return without raising an error.
+                if re.search("unrecognized configuration parameter", ex.__str__()):
+                    return
+                raise
+
+            ic_type = catalog.getSessionGUC(conn, 'gp_interconnect_type').strip()
 
         # check if newly added dbid exists in gp_interconnect_proxy_addresses
         need_prompt = False

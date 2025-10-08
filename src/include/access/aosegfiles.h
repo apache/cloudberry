@@ -162,6 +162,9 @@ extern void ClearFileSegInfo(Relation parentrel, int segno, FileSegInfoState new
 extern void SetFileSegInfoState(Relation parentrel, int segno, FileSegInfoState newState);
 extern FileSegTotals *GetSegFilesTotals(Relation parentrel, Snapshot appendOnlyMetaDataSnapshot);
 
+extern void GetSegFilesTotalsCluster(Relation parentrel,
+						 FileSegTotals * totals);
+
 extern int64 GetAOTotalBytes(Relation parentrel, Snapshot appendOnlyMetaDataSnapshot);
 
 extern void FreeAllSegFileInfo(FileSegInfo **allSegInfo,

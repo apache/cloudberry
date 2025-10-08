@@ -920,9 +920,6 @@ cdbcomponent_recycleIdleQE(SegmentDatabaseDescriptor *segdbDesc, bool forceDestr
 	cdbinfo = segdbDesc->segment_database_info;
 	isWriter = segdbDesc->isWriter;
 
-	/* update num of active QEs */
-	DECR_COUNT(cdbinfo, numActiveQEs);
-
 	oldContext = MemoryContextSwitchTo(CdbComponentsContext);
 
 	if (forceDestroy || !cleanupQE(segdbDesc))
@@ -957,13 +954,24 @@ cdbcomponent_recycleIdleQE(SegmentDatabaseDescriptor *segdbDesc, bool forceDestr
 			 lastWriter = cell, cell = lnext(cell)) ;
 
 		if (lastWriter)
+		{
+#ifdef FAULT_INJECTOR
+			if (SIMPLE_FAULT_INJECTOR("cdb_freelist_append_oom") == FaultInjectorTypeSkip)
+			{
+				ereport(ERROR, (errcode(ERRCODE_GP_MEMPROT_KILL),
+								errmsg("out of memory was emulated")));
+			}
+#endif
 			lappend_cell(segdbDesc->segment_database_info->freelist,
 						 lastWriter, segdbDesc);
+		}
 		else
 			segdbDesc->segment_database_info->freelist =
 				lcons(segdbDesc, segdbDesc->segment_database_info->freelist);
 	}
 
+	/* update num of active and idle QEs */
+	DECR_COUNT(cdbinfo, numActiveQEs);
 	INCR_COUNT(cdbinfo, numIdleQEs);
 
 	MemoryContextSwitchTo(oldContext);
@@ -978,6 +986,8 @@ destroy_segdb:
 	{
 		markCurrentGxactWriterGangLost();
 	}
+
+	DECR_COUNT(cdbinfo, numActiveQEs);
 
 	MemoryContextSwitchTo(oldContext);
 }

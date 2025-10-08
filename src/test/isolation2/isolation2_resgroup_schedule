@@ -59,4 +59,6 @@ test: resgroup/resgroup_dumpinfo
 # test larget group id
 test: resgroup/resgroup_large_group_id
 
+test: resgroup/resgroup_startup_memory
+
 test: resgroup/disable_resgroup

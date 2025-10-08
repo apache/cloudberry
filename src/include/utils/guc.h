@@ -544,6 +544,7 @@ extern bool optimizer_penalize_skew;
 extern bool optimizer_prune_computed_columns;
 extern bool optimizer_push_requirements_from_consumer_to_producer;
 extern bool optimizer_enforce_subplans;
+extern bool optimizer_donot_enforce_subplans;
 extern bool optimizer_apply_left_outer_to_union_all_disregarding_stats;
 extern bool optimizer_use_external_constant_expression_evaluation_for_ints;
 extern bool optimizer_remove_order_below_dml;
@@ -600,6 +601,8 @@ extern bool gp_enable_global_deadlock_detector;
 extern bool gp_log_endpoints;
 
 extern bool gp_allow_date_field_width_5digits;
+
+extern bool gp_track_pending_delete;
 
 typedef enum
 {

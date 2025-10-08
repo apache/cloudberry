@@ -36,6 +36,7 @@
 #include "catalog/catversion.h"
 #include "catalog/pg_control.h"
 #include "catalog/pg_database.h"
+#include "catalog/storage_pending_deletes_redo.h"
 #include "miscadmin.h"
 #include "pgstat.h"
 #include "postmaster/bgwriter.h"
@@ -231,8 +232,9 @@ static XLogRecPtr missingContrecPtr;
 static bool lastFullPageWrites;
 
 /*
- * Local copy of SharedRecoveryInProgress variable. True actually means "not
- * known, need to check the shared state".
+ * Local copy of the state tracked by SharedRecoveryState in shared memory,
+ * It is false if SharedRecoveryState is RECOVERY_STATE_DONE.  True actually
+ * means "not known, need to check the shared state".
  */
 static bool LocalRecoveryInProgress = true;
 
@@ -621,10 +623,10 @@ typedef struct XLogCtlData
 	char		archiveCleanupCommand[MAXPGPATH];
 
 	/*
-	 * SharedRecoveryInProgress indicates if we're still in crash or archive
+	 * SharedRecoveryState indicates if we're still in crash or archive
 	 * recovery.  Protected by info_lck.
 	 */
-	bool		SharedRecoveryInProgress;
+	RecoveryState SharedRecoveryState;
 
 	/*
 	 * SharedHotStandbyActive indicates if we're still in crash or archive
@@ -1336,16 +1338,13 @@ begin:;
 	 */
 	if (StartPos / XLOG_BLCKSZ != EndPos / XLOG_BLCKSZ)
 	{
-		/* use volatile pointer to prevent code rearrangement */
-		volatile XLogCtlData *xlogctl = XLogCtl;
-
-		SpinLockAcquire(&xlogctl->info_lck);
+		SpinLockAcquire(&XLogCtl->info_lck);
 		/* advance global request to include new block(s) */
-		if (xlogctl->LogwrtRqst.Write < EndPos)
-			xlogctl->LogwrtRqst.Write = EndPos;
+		if (XLogCtl->LogwrtRqst.Write < EndPos)
+			XLogCtl->LogwrtRqst.Write = EndPos;
 		/* update local result copy while I have the chance */
-		LogwrtResult = xlogctl->LogwrtResult;
-		SpinLockRelease(&xlogctl->info_lck);
+		LogwrtResult = XLogCtl->LogwrtResult;
+		SpinLockRelease(&XLogCtl->info_lck);
 	}
 
 	/*
@@ -1439,7 +1438,7 @@ static void
 ReserveXLogInsertLocation(int size, XLogRecPtr *StartPos, XLogRecPtr *EndPos,
 						  XLogRecPtr *PrevPtr)
 {
-	volatile XLogCtlInsert *Insert = &XLogCtl->Insert;
+	XLogCtlInsert *Insert = &XLogCtl->Insert;
 	uint64		startbytepos;
 	uint64		endbytepos;
 	uint64		prevbytepos;
@@ -1494,7 +1493,7 @@ ReserveXLogInsertLocation(int size, XLogRecPtr *StartPos, XLogRecPtr *EndPos,
 static bool
 ReserveXLogSwitch(XLogRecPtr *StartPos, XLogRecPtr *EndPos, XLogRecPtr *PrevPtr)
 {
-	volatile XLogCtlInsert *Insert = &XLogCtl->Insert;
+	XLogCtlInsert *Insert = &XLogCtl->Insert;
 	uint64		startbytepos;
 	uint64		endbytepos;
 	uint64		prevbytepos;
@@ -1832,7 +1831,7 @@ WaitXLogInsertionsToFinish(XLogRecPtr upto)
 	uint64		bytepos;
 	XLogRecPtr	reservedUpto;
 	XLogRecPtr	finishedUpto;
-	volatile XLogCtlInsert *Insert = &XLogCtl->Insert;
+	XLogCtlInsert *Insert = &XLogCtl->Insert;
 	int			i;
 
 	if (MyProc == NULL)
@@ -2294,16 +2293,11 @@ AdvanceXLInsertBuffer(XLogRecPtr upto, bool opportunistic)
 				break;
 
 			/* Before waiting, get info_lck and update LogwrtResult */
-			{
-				/* use volatile pointer to prevent code rearrangement */
-				volatile XLogCtlData *xlogctl = XLogCtl;
-
-				SpinLockAcquire(&xlogctl->info_lck);
-				if (xlogctl->LogwrtRqst.Write < OldPageRqstPtr)
-					xlogctl->LogwrtRqst.Write = OldPageRqstPtr;
-				LogwrtResult = xlogctl->LogwrtResult;
-				SpinLockRelease(&xlogctl->info_lck);
-			}
+			SpinLockAcquire(&XLogCtl->info_lck);
+			if (XLogCtl->LogwrtRqst.Write < OldPageRqstPtr)
+				XLogCtl->LogwrtRqst.Write = OldPageRqstPtr;
+			LogwrtResult = XLogCtl->LogwrtResult;
+			SpinLockRelease(&XLogCtl->info_lck);
 
 			/*
 			 * Now that we have an up-to-date LogwrtResult value, see if we
@@ -2723,16 +2717,13 @@ XLogWrite(XLogwrtRqst WriteRqst, bool flexible)
 	 * code in a couple of places.
 	 */
 	{
-		/* use volatile pointer to prevent code rearrangement */
-		volatile XLogCtlData *xlogctl = XLogCtl;
-
-		SpinLockAcquire(&xlogctl->info_lck);
-		xlogctl->LogwrtResult = LogwrtResult;
-		if (xlogctl->LogwrtRqst.Write < LogwrtResult.Write)
-			xlogctl->LogwrtRqst.Write = LogwrtResult.Write;
-		if (xlogctl->LogwrtRqst.Flush < LogwrtResult.Flush)
-			xlogctl->LogwrtRqst.Flush = LogwrtResult.Flush;
-		SpinLockRelease(&xlogctl->info_lck);
+		SpinLockAcquire(&XLogCtl->info_lck);
+		XLogCtl->LogwrtResult = LogwrtResult;
+		if (XLogCtl->LogwrtRqst.Write < LogwrtResult.Write)
+			XLogCtl->LogwrtRqst.Write = LogwrtResult.Write;
+		if (XLogCtl->LogwrtRqst.Flush < LogwrtResult.Flush)
+			XLogCtl->LogwrtRqst.Flush = LogwrtResult.Flush;
+		SpinLockRelease(&XLogCtl->info_lck);
 	}
 }
 
@@ -2747,15 +2738,12 @@ XLogSetAsyncXactLSN(XLogRecPtr asyncXactLSN)
 	XLogRecPtr	WriteRqstPtr = asyncXactLSN;
 	bool		sleeping;
 
-	/* use volatile pointer to prevent code rearrangement */
-	volatile XLogCtlData *xlogctl = XLogCtl;
-
-	SpinLockAcquire(&xlogctl->info_lck);
-	LogwrtResult = xlogctl->LogwrtResult;
-	sleeping = xlogctl->WalWriterSleeping;
-	if (xlogctl->asyncXactLSN < asyncXactLSN)
-		xlogctl->asyncXactLSN = asyncXactLSN;
-	SpinLockRelease(&xlogctl->info_lck);
+	SpinLockAcquire(&XLogCtl->info_lck);
+	LogwrtResult = XLogCtl->LogwrtResult;
+	sleeping = XLogCtl->WalWriterSleeping;
+	if (XLogCtl->asyncXactLSN < asyncXactLSN)
+		XLogCtl->asyncXactLSN = asyncXactLSN;
+	SpinLockRelease(&XLogCtl->info_lck);
 
 	/*
 	 * If the WALWriter is sleeping, we should kick it to make it come out of
@@ -2788,12 +2776,9 @@ XLogSetAsyncXactLSN(XLogRecPtr asyncXactLSN)
 void
 XLogSetReplicationSlotMinimumLSN(XLogRecPtr lsn)
 {
-	/* use volatile pointer to prevent code rearrangement */
-	volatile XLogCtlData *xlogctl = XLogCtl;
-
-	SpinLockAcquire(&xlogctl->info_lck);
-	xlogctl->replicationSlotMinLSN = lsn;
-	SpinLockRelease(&xlogctl->info_lck);
+	SpinLockAcquire(&XLogCtl->info_lck);
+	XLogCtl->replicationSlotMinLSN = lsn;
+	SpinLockRelease(&XLogCtl->info_lck);
 }
 
 
@@ -2804,13 +2789,11 @@ XLogSetReplicationSlotMinimumLSN(XLogRecPtr lsn)
 static XLogRecPtr
 XLogGetReplicationSlotMinimumLSN(void)
 {
-	/* use volatile pointer to prevent code rearrangement */
-	volatile XLogCtlData *xlogctl = XLogCtl;
 	XLogRecPtr	retval;
 
-	SpinLockAcquire(&xlogctl->info_lck);
-	retval = xlogctl->replicationSlotMinLSN;
-	SpinLockRelease(&xlogctl->info_lck);
+	SpinLockAcquire(&XLogCtl->info_lck);
+	retval = XLogCtl->replicationSlotMinLSN;
+	SpinLockRelease(&XLogCtl->info_lck);
 
 	return retval;
 }
@@ -2858,8 +2841,6 @@ UpdateMinRecoveryPoint(XLogRecPtr lsn, bool force)
 		updateMinRecoveryPoint = false;
 	else if (force || minRecoveryPoint < lsn)
 	{
-		/* use volatile pointer to prevent code rearrangement */
-		volatile XLogCtlData *xlogctl = XLogCtl;
 		XLogRecPtr	newMinRecoveryPoint;
 		TimeLineID	newMinRecoveryPointTLI;
 
@@ -2876,10 +2857,10 @@ UpdateMinRecoveryPoint(XLogRecPtr lsn, bool force)
 		 * all.  Instead, we just log a warning and continue with recovery.
 		 * (See also the comments about corrupt LSNs in XLogFlush.)
 		 */
-		SpinLockAcquire(&xlogctl->info_lck);
-		newMinRecoveryPoint = xlogctl->replayEndRecPtr;
-		newMinRecoveryPointTLI = xlogctl->replayEndTLI;
-		SpinLockRelease(&xlogctl->info_lck);
+		SpinLockAcquire(&XLogCtl->info_lck);
+		newMinRecoveryPoint = XLogCtl->replayEndRecPtr;
+		newMinRecoveryPointTLI = XLogCtl->replayEndTLI;
+		SpinLockRelease(&XLogCtl->info_lck);
 
 		if (!force && newMinRecoveryPoint < lsn)
 			elog(WARNING,
@@ -2963,16 +2944,14 @@ XLogFlush(XLogRecPtr record)
 	 */
 	for (;;)
 	{
-		/* use volatile pointer to prevent code rearrangement */
-		volatile XLogCtlData *xlogctl = XLogCtl;
 		XLogRecPtr	insertpos;
 
 		/* read LogwrtResult and update local state */
-		SpinLockAcquire(&xlogctl->info_lck);
-		if (WriteRqstPtr < xlogctl->LogwrtRqst.Write)
-			WriteRqstPtr = xlogctl->LogwrtRqst.Write;
-		LogwrtResult = xlogctl->LogwrtResult;
-		SpinLockRelease(&xlogctl->info_lck);
+		SpinLockAcquire(&XLogCtl->info_lck);
+		if (WriteRqstPtr < XLogCtl->LogwrtRqst.Write)
+			WriteRqstPtr = XLogCtl->LogwrtRqst.Write;
+		LogwrtResult = XLogCtl->LogwrtResult;
+		SpinLockRelease(&XLogCtl->info_lck);
 
 		/* done already? */
 		if (record <= LogwrtResult.Flush)
@@ -3109,15 +3088,10 @@ XLogBackgroundFlush(void)
 		return false;
 
 	/* read LogwrtResult and update local state */
-	{
-		/* use volatile pointer to prevent code rearrangement */
-		volatile XLogCtlData *xlogctl = XLogCtl;
-
-		SpinLockAcquire(&xlogctl->info_lck);
-		LogwrtResult = xlogctl->LogwrtResult;
-		WriteRqstPtr = xlogctl->LogwrtRqst.Write;
-		SpinLockRelease(&xlogctl->info_lck);
-	}
+	SpinLockAcquire(&XLogCtl->info_lck);
+	LogwrtResult = XLogCtl->LogwrtResult;
+	WriteRqstPtr = XLogCtl->LogwrtRqst.Write;
+	SpinLockRelease(&XLogCtl->info_lck);
 
 	/* back off to last completed page boundary */
 	WriteRqstPtr -= WriteRqstPtr % XLOG_BLCKSZ;
@@ -3125,12 +3099,9 @@ XLogBackgroundFlush(void)
 	/* if we have already flushed that far, consider async commit records */
 	if (WriteRqstPtr <= LogwrtResult.Flush)
 	{
-		/* use volatile pointer to prevent code rearrangement */
-		volatile XLogCtlData *xlogctl = XLogCtl;
-
-		SpinLockAcquire(&xlogctl->info_lck);
-		WriteRqstPtr = xlogctl->asyncXactLSN;
-		SpinLockRelease(&xlogctl->info_lck);
+		SpinLockAcquire(&XLogCtl->info_lck);
+		WriteRqstPtr = XLogCtl->asyncXactLSN;
+		SpinLockRelease(&XLogCtl->info_lck);
 		flexible = false;		/* ensure it all gets written */
 	}
 
@@ -3251,14 +3222,9 @@ XLogNeedsFlush(XLogRecPtr record)
 		return false;
 
 	/* read LogwrtResult and update local state */
-	{
-		/* use volatile pointer to prevent code rearrangement */
-		volatile XLogCtlData *xlogctl = XLogCtl;
-
-		SpinLockAcquire(&xlogctl->info_lck);
-		LogwrtResult = xlogctl->LogwrtResult;
-		SpinLockRelease(&xlogctl->info_lck);
-	}
+	SpinLockAcquire(&XLogCtl->info_lck);
+	LogwrtResult = XLogCtl->LogwrtResult;
+	SpinLockRelease(&XLogCtl->info_lck);
 
 	/* check again */
 	if (record <= LogwrtResult.Flush)
@@ -3927,13 +3893,11 @@ void
 CheckXLogRemoved(XLogSegNo segno, TimeLineID tli)
 {
 	int			save_errno = errno;
-	/* use volatile pointer to prevent code rearrangement */
-	volatile XLogCtlData *xlogctl = XLogCtl;
 	XLogSegNo	lastRemovedSegNo;
 
-	SpinLockAcquire(&xlogctl->info_lck);
-	lastRemovedSegNo = xlogctl->lastRemovedSegNo;
-	SpinLockRelease(&xlogctl->info_lck);
+	SpinLockAcquire(&XLogCtl->info_lck);
+	lastRemovedSegNo = XLogCtl->lastRemovedSegNo;
+	SpinLockRelease(&XLogCtl->info_lck);
 
 	if (segno <= lastRemovedSegNo)
 	{
@@ -3959,13 +3923,11 @@ CheckXLogRemoved(XLogSegNo segno, TimeLineID tli)
 XLogSegNo
 XLogGetLastRemovedSegno(void)
 {
-	/* use volatile pointer to prevent code rearrangement */
-	volatile XLogCtlData *xlogctl = XLogCtl;
 	XLogSegNo	lastRemovedSegNo;
 
-	SpinLockAcquire(&xlogctl->info_lck);
-	lastRemovedSegNo = xlogctl->lastRemovedSegNo;
-	SpinLockRelease(&xlogctl->info_lck);
+	SpinLockAcquire(&XLogCtl->info_lck);
+	lastRemovedSegNo = XLogCtl->lastRemovedSegNo;
+	SpinLockRelease(&XLogCtl->info_lck);
 
 	return lastRemovedSegNo;
 }
@@ -3978,17 +3940,15 @@ XLogGetLastRemovedSegno(void)
 static void
 UpdateLastRemovedPtr(char *filename)
 {
-	/* use volatile pointer to prevent code rearrangement */
-	volatile XLogCtlData *xlogctl = XLogCtl;
 	uint32		tli;
 	XLogSegNo	segno;
 
 	XLogFromFileName(filename, &tli, &segno);
 
-	SpinLockAcquire(&xlogctl->info_lck);
-	if (segno > xlogctl->lastRemovedSegNo)
-		xlogctl->lastRemovedSegNo = segno;
-	SpinLockRelease(&xlogctl->info_lck);
+	SpinLockAcquire(&XLogCtl->info_lck);
+	if (segno > XLogCtl->lastRemovedSegNo)
+		XLogCtl->lastRemovedSegNo = segno;
+	SpinLockRelease(&XLogCtl->info_lck);
 }
 
 /*
@@ -4487,6 +4447,16 @@ ReadRecord(XLogReaderState *xlogreader, XLogRecPtr RecPtr, int emode,
 				updateMinRecoveryPoint = true;
 
 				UpdateControlFile();
+
+				/*
+				 * We update SharedRecoveryState while holding the lock on
+				 * ControlFileLock so both states are consistent in shared
+				 * memory.
+				 */
+				SpinLockAcquire(&XLogCtl->info_lck);
+				XLogCtl->SharedRecoveryState = RECOVERY_STATE_ARCHIVE;
+				SpinLockRelease(&XLogCtl->info_lck);
+
 				LWLockRelease(ControlFileLock);
 
 				CheckRecoveryConsistency();
@@ -4974,13 +4944,10 @@ GetFakeLSNForUnloggedRel(void)
 {
 	XLogRecPtr	nextUnloggedLSN;
 
-	/* use volatile pointer to prevent code rearrangement */
-	volatile XLogCtlData *xlogctl = XLogCtl;
-
 	/* increment the unloggedLSN counter, need SpinLock */
-	SpinLockAcquire(&xlogctl->ulsn_lck);
-	nextUnloggedLSN = xlogctl->unloggedLSN++;
-	SpinLockRelease(&xlogctl->ulsn_lck);
+	SpinLockAcquire(&XLogCtl->ulsn_lck);
+	nextUnloggedLSN = XLogCtl->unloggedLSN++;
+	SpinLockRelease(&XLogCtl->ulsn_lck);
 
 	return nextUnloggedLSN;
 }
@@ -5160,7 +5127,7 @@ XLOGShmemInit(void)
 	 * in additional info.)
 	 */
 	XLogCtl->XLogCacheBlck = XLOGbuffers - 1;
-	XLogCtl->SharedRecoveryInProgress = true;
+	XLogCtl->SharedRecoveryState = RECOVERY_STATE_CRASH;
 	XLogCtl->SharedHotStandbyActive = false;
 	XLogCtl->WalWriterSleeping = false;
 
@@ -6149,13 +6116,11 @@ recoveryPausesHere(void)
 bool
 RecoveryIsPaused(void)
 {
-	/* use volatile pointer to prevent code rearrangement */
-	volatile XLogCtlData *xlogctl = XLogCtl;
 	bool		recoveryPause;
 
-	SpinLockAcquire(&xlogctl->info_lck);
-	recoveryPause = xlogctl->recoveryPause;
-	SpinLockRelease(&xlogctl->info_lck);
+	SpinLockAcquire(&XLogCtl->info_lck);
+	recoveryPause = XLogCtl->recoveryPause;
+	SpinLockRelease(&XLogCtl->info_lck);
 
 	return recoveryPause;
 }
@@ -6163,12 +6128,9 @@ RecoveryIsPaused(void)
 void
 SetRecoveryPause(bool recoveryPause)
 {
-	/* use volatile pointer to prevent code rearrangement */
-	volatile XLogCtlData *xlogctl = XLogCtl;
-
-	SpinLockAcquire(&xlogctl->info_lck);
-	xlogctl->recoveryPause = recoveryPause;
-	SpinLockRelease(&xlogctl->info_lck);
+	SpinLockAcquire(&XLogCtl->info_lck);
+	XLogCtl->recoveryPause = recoveryPause;
+	SpinLockRelease(&XLogCtl->info_lck);
 }
 
 /*
@@ -6271,12 +6233,9 @@ recoveryApplyDelay(XLogRecord *record)
 static void
 SetLatestXTime(TimestampTz xtime)
 {
-	/* use volatile pointer to prevent code rearrangement */
-	volatile XLogCtlData *xlogctl = XLogCtl;
-
-	SpinLockAcquire(&xlogctl->info_lck);
-	xlogctl->recoveryLastXTime = xtime;
-	SpinLockRelease(&xlogctl->info_lck);
+	SpinLockAcquire(&XLogCtl->info_lck);
+	XLogCtl->recoveryLastXTime = xtime;
+	SpinLockRelease(&XLogCtl->info_lck);
 }
 
 /*
@@ -6285,13 +6244,11 @@ SetLatestXTime(TimestampTz xtime)
 TimestampTz
 GetLatestXTime(void)
 {
-	/* use volatile pointer to prevent code rearrangement */
-	volatile XLogCtlData *xlogctl = XLogCtl;
 	TimestampTz xtime;
 
-	SpinLockAcquire(&xlogctl->info_lck);
-	xtime = xlogctl->recoveryLastXTime;
-	SpinLockRelease(&xlogctl->info_lck);
+	SpinLockAcquire(&XLogCtl->info_lck);
+	xtime = XLogCtl->recoveryLastXTime;
+	SpinLockRelease(&XLogCtl->info_lck);
 
 	return xtime;
 }
@@ -6305,12 +6262,9 @@ GetLatestXTime(void)
 static void
 SetCurrentChunkStartTime(TimestampTz xtime)
 {
-	/* use volatile pointer to prevent code rearrangement */
-	volatile XLogCtlData *xlogctl = XLogCtl;
-
-	SpinLockAcquire(&xlogctl->info_lck);
-	xlogctl->currentChunkStartTime = xtime;
-	SpinLockRelease(&xlogctl->info_lck);
+	SpinLockAcquire(&XLogCtl->info_lck);
+	XLogCtl->currentChunkStartTime = xtime;
+	SpinLockRelease(&XLogCtl->info_lck);
 }
 
 /*
@@ -6463,13 +6417,11 @@ UpdateCatalogForStandbyPromotion(void)
 TimestampTz
 GetCurrentChunkReplayStartTime(void)
 {
-	/* use volatile pointer to prevent code rearrangement */
-	volatile XLogCtlData *xlogctl = XLogCtl;
 	TimestampTz xtime;
 
-	SpinLockAcquire(&xlogctl->info_lck);
-	xtime = xlogctl->currentChunkStartTime;
-	SpinLockRelease(&xlogctl->info_lck);
+	SpinLockAcquire(&XLogCtl->info_lck);
+	xtime = XLogCtl->currentChunkStartTime;
+	SpinLockRelease(&XLogCtl->info_lck);
 
 	return xtime;
 }
@@ -7059,9 +7011,6 @@ StartupXLOG(void)
 	{
 		int			rmid;
 
-		/* use volatile pointer to prevent code rearrangement */
-		volatile XLogCtlData *xlogctl = XLogCtl;
-
 		/*
 		 * Update pg_control to show that we are recovering and to show the
 		 * selected checkpoint as the place we are starting from. We also mark
@@ -7070,7 +7019,13 @@ StartupXLOG(void)
 		 */
 		dbstate_at_startup = ControlFile->state;
 		if (InArchiveRecovery)
+		{
 			ControlFile->state = DB_IN_ARCHIVE_RECOVERY;
+
+			SpinLockAcquire(&XLogCtl->info_lck);
+			XLogCtl->SharedRecoveryState = RECOVERY_STATE_ARCHIVE;
+			SpinLockRelease(&XLogCtl->info_lck);
+		}
 		else
 		{
 			ereport(LOG,
@@ -7083,6 +7038,10 @@ StartupXLOG(void)
 								ControlFile->checkPointCopy.ThisTimeLineID,
 								recoveryTargetTLI)));
 			ControlFile->state = DB_IN_CRASH_RECOVERY;
+
+			SpinLockAcquire(&XLogCtl->info_lck);
+			XLogCtl->SharedRecoveryState = RECOVERY_STATE_CRASH;
+			SpinLockRelease(&XLogCtl->info_lck);
 		}
 		ControlFile->prevCheckPoint = ControlFile->checkPoint;
 		ControlFile->checkPoint = checkPointLoc;
@@ -7272,18 +7231,18 @@ StartupXLOG(void)
 		 * if we had just replayed the record before the REDO location (or the
 		 * checkpoint record itself, if it's a shutdown checkpoint).
 		 */
-		SpinLockAcquire(&xlogctl->info_lck);
+		SpinLockAcquire(&XLogCtl->info_lck);
 		if (checkPoint.redo < RecPtr)
-			xlogctl->replayEndRecPtr = checkPoint.redo;
+			XLogCtl->replayEndRecPtr = checkPoint.redo;
 		else
-			xlogctl->replayEndRecPtr = EndRecPtr;
-		xlogctl->replayEndTLI = ThisTimeLineID;
-		xlogctl->lastReplayedEndRecPtr = xlogctl->replayEndRecPtr;
-		xlogctl->lastReplayedTLI = xlogctl->replayEndTLI;
-		xlogctl->recoveryLastXTime = 0;
-		xlogctl->currentChunkStartTime = 0;
-		xlogctl->recoveryPause = false;
-		SpinLockRelease(&xlogctl->info_lck);
+			XLogCtl->replayEndRecPtr = EndRecPtr;
+		XLogCtl->replayEndTLI = ThisTimeLineID;
+		XLogCtl->lastReplayedEndRecPtr = XLogCtl->replayEndRecPtr;
+		XLogCtl->lastReplayedTLI = XLogCtl->replayEndTLI;
+		XLogCtl->recoveryLastXTime = 0;
+		XLogCtl->currentChunkStartTime = 0;
+		XLogCtl->recoveryPause = false;
+		SpinLockRelease(&XLogCtl->info_lck);
 
 		/* Also ensure XLogReceiptTime has a sane value */
 		XLogReceiptTime = GetCurrentTimestamp();
@@ -7385,7 +7344,7 @@ StartupXLOG(void)
 				 * otherwise would is a minor issue, so it doesn't seem worth
 				 * adding another spinlock cycle to prevent that.
 				 */
-				if (xlogctl->recoveryPause)
+				if (((volatile XLogCtlData *) XLogCtl)->recoveryPause)
 					recoveryPausesHere();
 
 				/*
@@ -7410,7 +7369,7 @@ StartupXLOG(void)
 					 * here otherwise pausing during the delay-wait wouldn't
 					 * work.
 					 */
-					if (xlogctl->recoveryPause)
+					if (((volatile XLogCtlData *) XLogCtl)->recoveryPause)
 						recoveryPausesHere();
 				}
 
@@ -7451,6 +7410,40 @@ StartupXLOG(void)
 					TimeLineID	newTLI = ThisTimeLineID;
 					TimeLineID	prevTLI = ThisTimeLineID;
 
+					if ((info == XLOG_CHECKPOINT_SHUTDOWN) ||
+						(info == XLOG_END_OF_RECOVERY))
+					{
+						/*
+						 * At this point we may encounter a situation, when some
+						 * prepared transaction is yet not committed/aborted,
+						 * but the respective WAL segment file is already
+						 * recycled. It may happen is some corner cases, like:
+						 * 1. Primary successfully performs Prepare for a
+						 * transaction;
+						 * 2. Primary stops responding and Mirror is promoted;
+						 * 3. New Primary (ex Mirror) commits the transaction;
+						 * 4. New Primary (ex Mirror) recycles WAL segment with
+						 * the Prepare record (because both Primary and Mirror
+						 * has done the Prepare);
+						 * 5. Ex Primary is recovered as new Mirror, it has the
+						 * the transaction in the list of prepared transactions,
+						 * but doesn't have the WAL segment. And the new Mirror
+						 * should soon see the commit REDO record from the new
+						 * Primary (and remove the transaction from the list of
+						 * prepared transactions).
+						 *
+						 * In such a case
+						 * RemovePendingDeletesForPreparedTransactions() will
+						 * return FALSE. And we postpone the removal of orphaned
+						 * files until all such prepared transactions without
+						 * WAL segment files are wiped out from the list of
+						 * prepared transactions.
+						 */
+						if (RemovePendingDeletesForPreparedTransactions())
+							/* Clean up orphaned files */
+							PdlRedoDropFiles();
+					}
+
 					if (info == XLOG_CHECKPOINT_SHUTDOWN)
 					{
 						CheckPoint	checkPoint;
@@ -7483,10 +7476,10 @@ StartupXLOG(void)
 				 * Update shared replayEndRecPtr before replaying this record,
 				 * so that XLogFlush will update minRecoveryPoint correctly.
 				 */
-				SpinLockAcquire(&xlogctl->info_lck);
-				xlogctl->replayEndRecPtr = EndRecPtr;
-				xlogctl->replayEndTLI = ThisTimeLineID;
-				SpinLockRelease(&xlogctl->info_lck);
+				SpinLockAcquire(&XLogCtl->info_lck);
+				XLogCtl->replayEndRecPtr = EndRecPtr;
+				XLogCtl->replayEndTLI = ThisTimeLineID;
+				SpinLockRelease(&XLogCtl->info_lck);
 
 				/*
 				 * If we are attempting to enter Hot Standby mode, process
@@ -7514,10 +7507,10 @@ StartupXLOG(void)
 				 * Update lastReplayedEndRecPtr after this record has been
 				 * successfully replayed.
 				 */
-				SpinLockAcquire(&xlogctl->info_lck);
-				xlogctl->lastReplayedEndRecPtr = EndRecPtr;
-				xlogctl->lastReplayedTLI = ThisTimeLineID;
-				SpinLockRelease(&xlogctl->info_lck);
+				SpinLockAcquire(&XLogCtl->info_lck);
+				XLogCtl->lastReplayedEndRecPtr = EndRecPtr;
+				XLogCtl->lastReplayedTLI = ThisTimeLineID;
+				SpinLockRelease(&XLogCtl->info_lck);
 
 				if (create_restartpoint_on_ckpt_record_replay && ArchiveRecoveryRequested)
 				{
@@ -7652,8 +7645,6 @@ StartupXLOG(void)
 	}
 	else
 	{
-		volatile XLogCtlData *xlogctl = XLogCtl;
-
 		/*
 		 * For the !InRecovery case (e.g. there was a clean shutdown on
 		 * primary), we do not do any recovery so the below variables are not
@@ -7662,10 +7653,10 @@ StartupXLOG(void)
 		 * proper values for them else PrescanPreparedTransactions() could hang
 		 * in read_local_xlog_page().
 		 */
-		SpinLockAcquire(&xlogctl->info_lck);
-		xlogctl->lastReplayedEndRecPtr = LastRec;
-		xlogctl->lastReplayedTLI = checkPoint.ThisTimeLineID;
-		SpinLockRelease(&xlogctl->info_lck);
+		SpinLockAcquire(&XLogCtl->info_lck);
+		XLogCtl->lastReplayedEndRecPtr = LastRec;
+		XLogCtl->lastReplayedTLI = checkPoint.ThisTimeLineID;
+		SpinLockRelease(&XLogCtl->info_lck);
 	}
 
 
@@ -7970,6 +7961,21 @@ StartupXLOG(void)
 		UtilityModeCloseDtmRedoFile();
 
 		/*
+		 * By this moment, there shouldn't be any prepared transaction with
+		 * missing respective WAL segment file, meaning
+		 * RemovePendingDeletesForPreparedTransactions() should return TRUE.
+		 * If not, most likely the respective WAL segment file is recycled
+		 * illegally, and we do not perform orphaned files removal (as we might
+		 * remove smth that is already committed). Instead, we emit a warning.
+		 */
+		if (RemovePendingDeletesForPreparedTransactions())
+			/* Clean up orphaned files */
+			PdlRedoDropFiles();
+		else
+			ereport(WARNING, (errmsg(
+					"Couldn't drop orphaned files")));
+
+		/*
 		 * And finally, execute the recovery_end_command, if any.
 		 */
 		if (recoveryEndCommand)
@@ -8142,14 +8148,9 @@ StartupXLOG(void)
 	 * there are no race conditions concerning visibility of other recent
 	 * updates to shared memory.)
 	 */
-	{
-		/* use volatile pointer to prevent code rearrangement */
-		volatile XLogCtlData *xlogctl = XLogCtl;
-
-		SpinLockAcquire(&xlogctl->info_lck);
-		xlogctl->SharedRecoveryInProgress = false;
-		SpinLockRelease(&xlogctl->info_lck);
-	}
+	SpinLockAcquire(&XLogCtl->info_lck);
+	XLogCtl->SharedRecoveryState = RECOVERY_STATE_DONE;
+	SpinLockRelease(&XLogCtl->info_lck);
 
 	/*
 	 * GPDB: A timeline history file is only marked as ready for archival if
@@ -8298,12 +8299,9 @@ CheckRecoveryConsistency(void)
 		reachedConsistency &&
 		IsUnderPostmaster)
 	{
-		/* use volatile pointer to prevent code rearrangement */
-		volatile XLogCtlData *xlogctl = XLogCtl;
-
-		SpinLockAcquire(&xlogctl->info_lck);
-		xlogctl->SharedHotStandbyActive = true;
-		SpinLockRelease(&xlogctl->info_lck);
+		SpinLockAcquire(&XLogCtl->info_lck);
+		XLogCtl->SharedHotStandbyActive = true;
+		SpinLockRelease(&XLogCtl->info_lck);
 
 		LocalHotStandbyActive = true;
 
@@ -8338,7 +8336,7 @@ RecoveryInProgress(void)
 		 */
 		volatile XLogCtlData *xlogctl = XLogCtl;
 
-		LocalRecoveryInProgress = xlogctl->SharedRecoveryInProgress;
+		LocalRecoveryInProgress = (xlogctl->SharedRecoveryState != RECOVERY_STATE_DONE);
 
 		/*
 		 * Initialize TimeLineID and RedoRecPtr when we discover that recovery
@@ -8350,8 +8348,8 @@ RecoveryInProgress(void)
 		{
 			/*
 			 * If we just exited recovery, make sure we read TimeLineID and
-			 * RedoRecPtr after SharedRecoveryInProgress (for machines with
-			 * weak memory ordering).
+			 * RedoRecPtr after SharedRecoveryState (for machines with weak
+			 * memory ordering).
 			 */
 			pg_memory_barrier();
 			InitXLOGAccess();
@@ -8365,6 +8363,24 @@ RecoveryInProgress(void)
 
 		return LocalRecoveryInProgress;
 	}
+}
+
+/*
+ * Returns current recovery state from shared memory.
+ *
+ * This returned state is kept consistent with the contents of the control
+ * file.  See details about the possible values of RecoveryState in xlog.h.
+ */
+RecoveryState
+GetRecoveryState(void)
+{
+	RecoveryState retval;
+
+	SpinLockAcquire(&XLogCtl->info_lck);
+	retval = XLogCtl->SharedRecoveryState;
+	SpinLockRelease(&XLogCtl->info_lck);
+
+	return retval;
 }
 
 /*
@@ -8388,13 +8404,10 @@ HotStandbyActive(void)
 		return true;
 	else
 	{
-		/* use volatile pointer to prevent code rearrangement */
-		volatile XLogCtlData *xlogctl = XLogCtl;
-
 		/* spinlock is essential on machines with weak memory ordering! */
-		SpinLockAcquire(&xlogctl->info_lck);
-		LocalHotStandbyActive = xlogctl->SharedHotStandbyActive;
-		SpinLockRelease(&xlogctl->info_lck);
+		SpinLockAcquire(&XLogCtl->info_lck);
+		LocalHotStandbyActive = XLogCtl->SharedHotStandbyActive;
+		SpinLockRelease(&XLogCtl->info_lck);
 
 		return LocalHotStandbyActive;
 	}
@@ -8674,8 +8687,6 @@ InitXLOGAccess(void)
 XLogRecPtr
 GetRedoRecPtr(void)
 {
-	/* use volatile pointer to prevent code rearrangement */
-	volatile XLogCtlData *xlogctl = XLogCtl;
 	XLogRecPtr	ptr;
 
 	/*
@@ -8683,9 +8694,9 @@ GetRedoRecPtr(void)
 	 * grabbed a WAL insertion lock to read the master copy, someone might
 	 * update it just after we've released the lock.
 	 */
-	SpinLockAcquire(&xlogctl->info_lck);
-	ptr = xlogctl->RedoRecPtr;
-	SpinLockRelease(&xlogctl->info_lck);
+	SpinLockAcquire(&XLogCtl->info_lck);
+	ptr = XLogCtl->RedoRecPtr;
+	SpinLockRelease(&XLogCtl->info_lck);
 
 	if (RedoRecPtr < ptr)
 		RedoRecPtr = ptr;
@@ -8704,13 +8715,11 @@ GetRedoRecPtr(void)
 XLogRecPtr
 GetInsertRecPtr(void)
 {
-	/* use volatile pointer to prevent code rearrangement */
-	volatile XLogCtlData *xlogctl = XLogCtl;
 	XLogRecPtr	recptr;
 
-	SpinLockAcquire(&xlogctl->info_lck);
-	recptr = xlogctl->LogwrtRqst.Write;
-	SpinLockRelease(&xlogctl->info_lck);
+	SpinLockAcquire(&XLogCtl->info_lck);
+	recptr = XLogCtl->LogwrtRqst.Write;
+	SpinLockRelease(&XLogCtl->info_lck);
 
 	return recptr;
 }
@@ -8722,13 +8731,11 @@ GetInsertRecPtr(void)
 XLogRecPtr
 GetFlushRecPtr(void)
 {
-	/* use volatile pointer to prevent code rearrangement */
-	volatile XLogCtlData *xlogctl = XLogCtl;
 	XLogRecPtr	recptr;
 
-	SpinLockAcquire(&xlogctl->info_lck);
-	recptr = xlogctl->LogwrtResult.Flush;
-	SpinLockRelease(&xlogctl->info_lck);
+	SpinLockAcquire(&XLogCtl->info_lck);
+	recptr = XLogCtl->LogwrtResult.Flush;
+	SpinLockRelease(&XLogCtl->info_lck);
 
 	return recptr;
 }
@@ -8765,15 +8772,10 @@ GetNextXidAndEpoch(TransactionId *xid, uint32 *epoch)
 	TransactionId nextXid;
 
 	/* Must read checkpoint info first, else have race condition */
-	{
-		/* use volatile pointer to prevent code rearrangement */
-		volatile XLogCtlData *xlogctl = XLogCtl;
-
-		SpinLockAcquire(&xlogctl->info_lck);
-		ckptXidEpoch = xlogctl->ckptXidEpoch;
-		ckptXid = xlogctl->ckptXid;
-		SpinLockRelease(&xlogctl->info_lck);
-	}
+	SpinLockAcquire(&XLogCtl->info_lck);
+	ckptXidEpoch = XLogCtl->ckptXidEpoch;
+	ckptXid = XLogCtl->ckptXid;
+	SpinLockRelease(&XLogCtl->info_lck);
 
 	/* Now fetch current nextXid */
 	nextXid = ReadNewTransactionId();
@@ -8989,8 +8991,6 @@ LogCheckpointEnd(bool restartpoint)
 void
 CreateCheckPoint(int flags)
 {
-	/* use volatile pointer to prevent code rearrangement */
-	volatile XLogCtlData *xlogctl = XLogCtl;
 	bool		shutdown;
 	CheckPoint	checkPoint;
 	XLogRecPtr	recptr;
@@ -9178,7 +9178,7 @@ CreateCheckPoint(int flags)
 	 * XLogInserts that happen while we are dumping buffers must assume that
 	 * their buffer changes are not included in the checkpoint.
 	 */
-	RedoRecPtr = xlogctl->Insert.RedoRecPtr = checkPoint.redo;
+	RedoRecPtr = XLogCtl->Insert.RedoRecPtr = checkPoint.redo;
 
 	/*
 	 * Now we can release the WAL insertion locks, allowing other xacts to
@@ -9187,9 +9187,9 @@ CreateCheckPoint(int flags)
 	WALInsertLockRelease();
 
 	/* Update the info_lck-protected copy of RedoRecPtr as well */
-	SpinLockAcquire(&xlogctl->info_lck);
-	xlogctl->RedoRecPtr = checkPoint.redo;
-	SpinLockRelease(&xlogctl->info_lck);
+	SpinLockAcquire(&XLogCtl->info_lck);
+	XLogCtl->RedoRecPtr = checkPoint.redo;
+	SpinLockRelease(&XLogCtl->info_lck);
 
 	/*
 	 * If enabled, log checkpoint start.  We postpone this until now so as not
@@ -9315,6 +9315,9 @@ CreateCheckPoint(int flags)
 	 * checkpoint record.
 	 */
 	getDtxCheckPointInfo(&dtxCheckPointInfo, &dtxCheckPointInfoSize);
+
+	if (!shutdown)
+		PdlXLogInsert();
 
 	CheckPointGuts(checkPoint.redo, flags);
 
@@ -9447,15 +9450,10 @@ CreateCheckPoint(int flags)
 	LWLockRelease(ControlFileLock);
 
 	/* Update shared-memory copy of checkpoint XID/epoch */
-	{
-		/* use volatile pointer to prevent code rearrangement */
-		volatile XLogCtlData *xlogctl = XLogCtl;
-
-		SpinLockAcquire(&xlogctl->info_lck);
-		xlogctl->ckptXidEpoch = checkPoint.nextXidEpoch;
-		xlogctl->ckptXid = checkPoint.nextXid;
-		SpinLockRelease(&xlogctl->info_lck);
-	}
+	SpinLockAcquire(&XLogCtl->info_lck);
+	XLogCtl->ckptXidEpoch = checkPoint.nextXidEpoch;
+	XLogCtl->ckptXid = checkPoint.nextXid;
+	SpinLockRelease(&XLogCtl->info_lck);
 
 	/*
 	 * We are now done with critical updates; no need for system panic if we
@@ -9663,13 +9661,10 @@ CheckPointGuts(XLogRecPtr checkPointRedo, int flags)
 static void
 RecoveryRestartPoint(const CheckPoint *checkPoint)
 {
-	/* use volatile pointer to prevent code rearrangement */
-	volatile XLogCtlData *xlogctl = XLogCtl;
-
 	/* Update the shared RedoRecPtr */
-	 SpinLockAcquire(&xlogctl->info_lck);
-	 xlogctl->Insert.RedoRecPtr = checkPoint->redo;
-	 SpinLockRelease(&xlogctl->info_lck);
+	 SpinLockAcquire(&XLogCtl->info_lck);
+	 XLogCtl->Insert.RedoRecPtr = checkPoint->redo;
+	 SpinLockRelease(&XLogCtl->info_lck);
 
 	/*
 	 * Also refrain from creating a restartpoint if we have seen any
@@ -9698,11 +9693,11 @@ RecoveryRestartPoint(const CheckPoint *checkPoint)
 	 * Copy the checkpoint record to shared memory, so that checkpointer can
 	 * work out the next time it wants to perform a restartpoint.
 	 */
-	SpinLockAcquire(&xlogctl->info_lck);
-	xlogctl->lastCheckPointRecPtr = ReadRecPtr;
-	xlogctl->lastCheckPointEndPtr = EndRecPtr;
-	xlogctl->lastCheckPoint = *checkPoint;
-	SpinLockRelease(&xlogctl->info_lck);
+	SpinLockAcquire(&XLogCtl->info_lck);
+	XLogCtl->lastCheckPointRecPtr = ReadRecPtr;
+	XLogCtl->lastCheckPointEndPtr = EndRecPtr;
+	XLogCtl->lastCheckPoint = *checkPoint;
+	SpinLockRelease(&XLogCtl->info_lck);
 }
 
 /*
@@ -9725,9 +9720,6 @@ CreateRestartPoint(int flags)
 	XLogSegNo	_logSegNo;
 	TimestampTz xtime;
 
-	/* use volatile pointer to prevent code rearrangement */
-	volatile XLogCtlData *xlogctl = XLogCtl;
-
 	/*
 	 * Acquire CheckpointLock to ensure only one restartpoint or checkpoint
 	 * happens at a time.
@@ -9735,11 +9727,11 @@ CreateRestartPoint(int flags)
 	LWLockAcquire(CheckpointLock, LW_EXCLUSIVE);
 
 	/* Get a local copy of the last safe checkpoint record. */
-	SpinLockAcquire(&xlogctl->info_lck);
-	lastCheckPointRecPtr = xlogctl->lastCheckPointRecPtr;
-	lastCheckPointEndPtr = xlogctl->lastCheckPointEndPtr;
-	lastCheckPoint = xlogctl->lastCheckPoint;
-	SpinLockRelease(&xlogctl->info_lck);
+	SpinLockAcquire(&XLogCtl->info_lck);
+	lastCheckPointRecPtr = XLogCtl->lastCheckPointRecPtr;
+	lastCheckPointEndPtr = XLogCtl->lastCheckPointEndPtr;
+	lastCheckPoint = XLogCtl->lastCheckPoint;
+	SpinLockRelease(&XLogCtl->info_lck);
 
 	if (IsStandbyMode())
 	{
@@ -9807,13 +9799,13 @@ CreateRestartPoint(int flags)
 	 * happening.
 	 */
 	WALInsertLockAcquireExclusive();
-	xlogctl->Insert.RedoRecPtr = lastCheckPoint.redo;
+	XLogCtl->Insert.RedoRecPtr = lastCheckPoint.redo;
 	WALInsertLockRelease();
 
 	/* Also update the info_lck-protected copy */
-	SpinLockAcquire(&xlogctl->info_lck);
-	xlogctl->RedoRecPtr = lastCheckPoint.redo;
-	SpinLockRelease(&xlogctl->info_lck);
+	SpinLockAcquire(&XLogCtl->info_lck);
+	XLogCtl->RedoRecPtr = lastCheckPoint.redo;
+	SpinLockRelease(&XLogCtl->info_lck);
 
 	/*
 	 * Prepare to accumulate statistics.
@@ -10544,15 +10536,10 @@ xlog_redo(XLogRecPtr beginLoc __attribute__((unused)), XLogRecPtr lsn __attribut
 		LWLockRelease(ControlFileLock);
 
 		/* Update shared-memory copy of checkpoint XID/epoch */
-		{
-			/* use volatile pointer to prevent code rearrangement */
-			volatile XLogCtlData *xlogctl = XLogCtl;
-
-			SpinLockAcquire(&xlogctl->info_lck);
-			xlogctl->ckptXidEpoch = checkPoint.nextXidEpoch;
-			xlogctl->ckptXid = checkPoint.nextXid;
-			SpinLockRelease(&xlogctl->info_lck);
-		}
+		SpinLockAcquire(&XLogCtl->info_lck);
+		XLogCtl->ckptXidEpoch = checkPoint.nextXidEpoch;
+		XLogCtl->ckptXid = checkPoint.nextXid;
+		SpinLockRelease(&XLogCtl->info_lck);
 
 		/*
 		 * We should've already switched to the new TLI before replaying this
@@ -10607,15 +10594,10 @@ xlog_redo(XLogRecPtr beginLoc __attribute__((unused)), XLogRecPtr lsn __attribut
 		LWLockRelease(ControlFileLock);
 
 		/* Update shared-memory copy of checkpoint XID/epoch */
-		{
-			/* use volatile pointer to prevent code rearrangement */
-			volatile XLogCtlData *xlogctl = XLogCtl;
-
-			SpinLockAcquire(&xlogctl->info_lck);
-			xlogctl->ckptXidEpoch = checkPoint.nextXidEpoch;
-			xlogctl->ckptXid = checkPoint.nextXid;
-			SpinLockRelease(&xlogctl->info_lck);
-		}
+		SpinLockAcquire(&XLogCtl->info_lck);
+		XLogCtl->ckptXidEpoch = checkPoint.nextXidEpoch;
+		XLogCtl->ckptXid = checkPoint.nextXid;
+		SpinLockRelease(&XLogCtl->info_lck);
 
 		/* TLI should not change in an on-line checkpoint */
 		if (checkPoint.ThisTimeLineID != ThisTimeLineID)
@@ -10760,8 +10742,6 @@ xlog_redo(XLogRecPtr beginLoc __attribute__((unused)), XLogRecPtr lsn __attribut
 	}
 	else if (info == XLOG_FPW_CHANGE)
 	{
-		/* use volatile pointer to prevent code rearrangement */
-		volatile XLogCtlData *xlogctl = XLogCtl;
 		bool		fpw;
 
 		memcpy(&fpw, XLogRecGetData(record), sizeof(bool));
@@ -10773,14 +10753,18 @@ xlog_redo(XLogRecPtr beginLoc __attribute__((unused)), XLogRecPtr lsn __attribut
 		 */
 		if (!fpw)
 		{
-			SpinLockAcquire(&xlogctl->info_lck);
-			if (xlogctl->lastFpwDisableRecPtr < ReadRecPtr)
-				xlogctl->lastFpwDisableRecPtr = ReadRecPtr;
-			SpinLockRelease(&xlogctl->info_lck);
+			SpinLockAcquire(&XLogCtl->info_lck);
+			if (XLogCtl->lastFpwDisableRecPtr < ReadRecPtr)
+				XLogCtl->lastFpwDisableRecPtr = ReadRecPtr;
+			SpinLockRelease(&XLogCtl->info_lck);
 		}
 
 		/* Keep track of full_page_writes */
 		lastFullPageWrites = fpw;
+	}
+	else if (info == XLOG_PENDING_DELETE)
+	{
+		PdlRedoXLogRecord(record);
 	}
 }
 
@@ -11167,8 +11151,6 @@ do_pg_start_backup(const char *backupidstr, bool fast, TimeLineID *starttli_p,
 
 			if (backup_started_in_recovery)
 			{
-				/* use volatile pointer to prevent code rearrangement */
-				volatile XLogCtlData *xlogctl = XLogCtl;
 				XLogRecPtr	recptr;
 
 				/*
@@ -11176,9 +11158,9 @@ do_pg_start_backup(const char *backupidstr, bool fast, TimeLineID *starttli_p,
 				 * (i.e., since last restartpoint used as backup starting
 				 * checkpoint) contain full-page writes.
 				 */
-				SpinLockAcquire(&xlogctl->info_lck);
-				recptr = xlogctl->lastFpwDisableRecPtr;
-				SpinLockRelease(&xlogctl->info_lck);
+				SpinLockAcquire(&XLogCtl->info_lck);
+				recptr = XLogCtl->lastFpwDisableRecPtr;
+				SpinLockRelease(&XLogCtl->info_lck);
 
 				if (!checkpointfpw || startpoint <= recptr)
 					ereport(ERROR,
@@ -11578,17 +11560,15 @@ do_pg_stop_backup(char *labelfile, bool waitforarchive, TimeLineID *stoptli_p)
 	 */
 	if (backup_started_in_recovery)
 	{
-		/* use volatile pointer to prevent code rearrangement */
-		volatile XLogCtlData *xlogctl = XLogCtl;
 		XLogRecPtr	recptr;
 
 		/*
 		 * Check to see if all WAL replayed during online backup contain
 		 * full-page writes.
 		 */
-		SpinLockAcquire(&xlogctl->info_lck);
-		recptr = xlogctl->lastFpwDisableRecPtr;
-		SpinLockRelease(&xlogctl->info_lck);
+		SpinLockAcquire(&XLogCtl->info_lck);
+		recptr = XLogCtl->lastFpwDisableRecPtr;
+		SpinLockRelease(&XLogCtl->info_lck);
 
 		if (startpoint <= recptr)
 			ereport(ERROR,
@@ -11778,15 +11758,13 @@ do_pg_abort_backup(void)
 XLogRecPtr
 GetXLogReplayRecPtr(TimeLineID *replayTLI)
 {
-	/* use volatile pointer to prevent code rearrangement */
-	volatile XLogCtlData *xlogctl = XLogCtl;
 	XLogRecPtr	recptr;
 	TimeLineID	tli;
 
-	SpinLockAcquire(&xlogctl->info_lck);
-	recptr = xlogctl->lastReplayedEndRecPtr;
-	tli = xlogctl->lastReplayedTLI;
-	SpinLockRelease(&xlogctl->info_lck);
+	SpinLockAcquire(&XLogCtl->info_lck);
+	recptr = XLogCtl->lastReplayedEndRecPtr;
+	tli = XLogCtl->lastReplayedTLI;
+	SpinLockRelease(&XLogCtl->info_lck);
 
 	if (replayTLI)
 		*replayTLI = tli;
@@ -11799,7 +11777,7 @@ GetXLogReplayRecPtr(TimeLineID *replayTLI)
 XLogRecPtr
 GetXLogInsertRecPtr(void)
 {
-	volatile XLogCtlInsert *Insert = &XLogCtl->Insert;
+	XLogCtlInsert *Insert = &XLogCtl->Insert;
 	uint64		current_bytepos;
 
 	SpinLockAcquire(&Insert->insertpos_lck);
@@ -11815,14 +11793,9 @@ GetXLogInsertRecPtr(void)
 XLogRecPtr
 GetXLogWriteRecPtr(void)
 {
-	{
-		/* use volatile pointer to prevent code rearrangement */
-		volatile XLogCtlData *xlogctl = XLogCtl;
-
-		SpinLockAcquire(&xlogctl->info_lck);
-		LogwrtResult = xlogctl->LogwrtResult;
-		SpinLockRelease(&xlogctl->info_lck);
-	}
+	SpinLockAcquire(&XLogCtl->info_lck);
+	LogwrtResult = XLogCtl->LogwrtResult;
+	SpinLockRelease(&XLogCtl->info_lck);
 
 	return LogwrtResult.Write;
 }
@@ -12149,7 +12122,7 @@ retry:
 
 	/*
 	 * Check the page header immediately, so that we can retry immediately if
-	 * it's not valid. This may seem unnecessary, because XLogReadRecord()
+	 * it's not valid. This may seem unnecessary, because ReadPageInternal()
 	 * validates the page header anyway, and would propagate the failure up to
 	 * ReadRecord(), which would retry. However, there's a corner case with
 	 * continuation records, if a record is split across two pages such that
@@ -12172,9 +12145,23 @@ retry:
 	 *
 	 * Validating the page header is cheap enough that doing it twice
 	 * shouldn't be a big deal from a performance point of view.
+	 *
+	 * When not in standby mode, an invalid page header should cause recovery
+	 * to end, not retry reading the page, so we don't need to validate the
+	 * page header here for the retry. Instead, ReadPageInternal() is
+	 * responsible for the validation.
 	 */
-	if (!XLogReaderValidatePageHeader(xlogreader, targetPagePtr, readBuf))
+	if (StandbyMode &&
+		!XLogReaderValidatePageHeader(xlogreader, targetPagePtr, readBuf))
 	{
+		/*
+		 * Emit this error right now then retry this page immediately. Use
+		 * errmsg_internal() because the message was already translated.
+		 */
+		if (xlogreader->errormsg_buf[0])
+			ereport(emode_for_corrupt_record(emode, EndRecPtr),
+					(errmsg_internal("%s", xlogreader->errormsg_buf)));
+
 		/* reset any error XLogReaderValidatePageHeader() might have set */
 		xlogreader->errormsg_buf[0] = '\0';
 		goto next_record_is_invalid;
@@ -12736,12 +12723,9 @@ WakeupRecovery(void)
 void
 SetWalWriterSleeping(bool sleeping)
 {
-	/* use volatile pointer to prevent code rearrangement */
-	volatile XLogCtlData *xlogctl = XLogCtl;
-
-	SpinLockAcquire(&xlogctl->info_lck);
-	xlogctl->WalWriterSleeping = sleeping;
-	SpinLockRelease(&xlogctl->info_lck);
+	SpinLockAcquire(&XLogCtl->info_lck);
+	XLogCtl->WalWriterSleeping = sleeping;
+	SpinLockRelease(&XLogCtl->info_lck);
 }
 
 /*
@@ -12773,14 +12757,12 @@ IsCrashRecoveryOnly(void)
 XLogRecPtr
 last_xlog_replay_location()
 {
-	/* use volatile pointer to prevent code rearrangement */
-	volatile XLogCtlData *xlogctl = XLogCtl;
-	Assert(xlogctl != NULL);
+	Assert(XLogCtl != NULL);
 	XLogRecPtr	recptr;
 
-	SpinLockAcquire(&xlogctl->info_lck);
-	recptr = xlogctl->lastReplayedEndRecPtr;
-	SpinLockRelease(&xlogctl->info_lck);
+	SpinLockAcquire(&XLogCtl->info_lck);
+	recptr = XLogCtl->lastReplayedEndRecPtr;
+	SpinLockRelease(&XLogCtl->info_lck);
 
 	return recptr;
 }
@@ -12842,12 +12824,9 @@ void
 wait_for_mirror()
 {
     XLogwrtResult tmpLogwrtResult;
-    /* use volatile pointer to prevent code rearrangement */
-    volatile XLogCtlData *xlogctl = XLogCtl;
-
-    SpinLockAcquire(&xlogctl->info_lck);
-    tmpLogwrtResult = xlogctl->LogwrtResult;
-    SpinLockRelease(&xlogctl->info_lck);
+    SpinLockAcquire(&XLogCtl->info_lck);
+    tmpLogwrtResult = XLogCtl->LogwrtResult;
+    SpinLockRelease(&XLogCtl->info_lck);
 
 	SyncRepWaitForLSN(tmpLogwrtResult.Flush, false);
 }

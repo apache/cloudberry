@@ -412,13 +412,6 @@ ExplainOneQuery(Query *query, IntoClause *into, ExplainState *es,
 		INSTR_TIME_SET_CURRENT(planduration);
 		INSTR_TIME_SUBTRACT(planduration, planstart);
 
-		/*
-		 * GPDB_92_MERGE_FIXME: it really should be an optimizer's responsibility
-		 * to correctly set the into-clause and into-policy of the PlannedStmt.
-		 */
-		if (into != NULL)
-			plan->intoClause = copyObject(into);
-
 		/* run it (if needed) and produce output */
 		ExplainOnePlan(plan, into, es, queryString, params, &planduration, 0);
 	}
@@ -537,7 +530,16 @@ ExplainOnePlan(PlannedStmt *plannedstmt, IntoClause *into, ExplainState *es,
 	 * AS, we'd better use the appropriate tuple receiver.
 	 */
 	if (into)
+	{
 		dest = CreateIntoRelDestReceiver(into);
+
+		/*
+		 * GPDB_92_MERGE_FIXME: it really should be an optimizer's responsibility
+		 * to correctly set the into-clause and into-policy of the PlannedStmt.
+		 */
+		if (into != NULL)
+			plannedstmt->intoClause = copyObject(into);
+	}
 	else
 		dest = None_Receiver;
 
@@ -1857,7 +1859,7 @@ ExplainNode(PlanState *planstate, List *ancestors,
 
 	if (ResManagerPrintOperatorMemoryLimits())
 	{
-		ExplainPropertyInteger("operatorMem", PlanStateOperatorMemKB(planstate), es);
+		ExplainPropertyLong("operatorMem", PlanStateOperatorMemKB(planstate), es);
 	}
 	/*
 	 * We have to forcibly clean up the instrumentation state because we

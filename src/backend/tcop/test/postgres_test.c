@@ -19,6 +19,14 @@ errfinish_impl(int dummy __attribute__((unused)),...)
 	PG_RE_THROW();
 }
 
+bool __wrap_in_oom_error_trouble(void);
+
+bool
+__wrap_in_oom_error_trouble(void)
+{
+	return false;
+}
+
 #include "../postgres.c"
 
 #define EXPECT_EREPORT(LOG_LEVEL)     \

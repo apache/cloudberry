@@ -108,4 +108,6 @@ extern void getTwoPhasePreparedTransactionData(prepared_transaction_agg_state **
 
 extern void SetupCheckpointPreparedTransactionList(prepared_transaction_agg_state *ptas);
 
+extern bool RemovePendingDeletesForPreparedTransactions(void);
+
 #endif   /* TWOPHASE_H */

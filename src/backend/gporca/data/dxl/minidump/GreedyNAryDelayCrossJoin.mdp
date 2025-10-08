@@ -1280,7 +1280,7 @@ EXPLAIN SELECT * FROM t1, t2, t3, t4 where b = c;
     <dxl:Plan Id="0" SpaceSize="208">
       <dxl:GatherMotion InputSegments="0,1,2" OutputSegments="-1">
         <dxl:Properties>
-          <dxl:Cost StartupCost="0" TotalCost="1808731516.997376" Rows="60000.000000" Width="16"/>
+          <dxl:Cost StartupCost="0" TotalCost="1808742002.757376" Rows="60000.000000" Width="16"/>
         </dxl:Properties>
         <dxl:ProjList>
           <dxl:ProjElem ColId="0" Alias="a">
@@ -1300,7 +1300,7 @@ EXPLAIN SELECT * FROM t1, t2, t3, t4 where b = c;
         <dxl:SortingColumnList/>
         <dxl:NestedLoopJoin JoinType="Inner" IndexNestedLoopJoin="false">
           <dxl:Properties>
-            <dxl:Cost StartupCost="0" TotalCost="1808731513.419776" Rows="60000.000000" Width="16"/>
+            <dxl:Cost StartupCost="0" TotalCost="1808741999.179776" Rows="60000.000000" Width="16"/>
           </dxl:Properties>
           <dxl:ProjList>
             <dxl:ProjElem ColId="0" Alias="a">
@@ -1322,7 +1322,7 @@ EXPLAIN SELECT * FROM t1, t2, t3, t4 where b = c;
           </dxl:JoinFilter>
           <dxl:NestedLoopJoin JoinType="Inner" IndexNestedLoopJoin="false">
             <dxl:Properties>
-              <dxl:Cost StartupCost="0" TotalCost="1765476.046780" Rows="3000.000000" Width="12"/>
+              <dxl:Cost StartupCost="0" TotalCost="1765486.286780" Rows="3000.000000" Width="12"/>
             </dxl:Properties>
             <dxl:ProjList>
               <dxl:ProjElem ColId="0" Alias="a">
@@ -1341,7 +1341,7 @@ EXPLAIN SELECT * FROM t1, t2, t3, t4 where b = c;
             </dxl:JoinFilter>
             <dxl:HashJoin JoinType="Inner">
               <dxl:Properties>
-                <dxl:Cost StartupCost="0" TotalCost="862.044732" Rows="300.000000" Width="8"/>
+                <dxl:Cost StartupCost="0" TotalCost="862.054732" Rows="300.000000" Width="8"/>
               </dxl:Properties>
               <dxl:ProjList>
                 <dxl:ProjElem ColId="8" Alias="b">

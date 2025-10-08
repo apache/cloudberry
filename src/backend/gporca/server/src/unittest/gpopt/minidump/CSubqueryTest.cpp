@@ -79,6 +79,7 @@ const CHAR *rgszSubqueryFileNames[] = {
 	"../data/dxl/minidump/Subquery-ExistsAllAggregatesWithDisjuncts.mdp",
 	"../data/dxl/minidump/Subquery-AnyAllAggregates.mdp",
 	"../data/dxl/minidump/Join-With-Subq-Preds-2.mdp",
+	"../data/dxl/minidump/CorrelatedInSubqueryWithUnionAll.mdp",
 };
 
 

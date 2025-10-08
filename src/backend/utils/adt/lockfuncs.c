@@ -14,15 +14,16 @@
 
 #include "access/htup_details.h"
 #include "catalog/pg_type.h"
+#include "executor/tuptable.h"
 #include "funcapi.h"
 #include "miscadmin.h"
 #include "storage/predicate_internals.h"
+#include "tcop/tcopprot.h"
 #include "utils/builtins.h"
+#include "utils/faultinjector.h"
 
-#include "libpq-fe.h"
-#include "cdb/cdbdisp_query.h"
-#include "cdb/cdbdispatchresult.h"
 #include "cdb/cdbvars.h"
+#include "utils/snapmgr.h"
 
 /* This must match enum LockTagType! */
 static const char *const LockTagTypeNames[] = {
@@ -54,12 +55,7 @@ typedef struct
 	int			currIdx;		/* current PROCLOCK index */
 	PredicateLockData *predLockData;	/* state data for pred locks */
 	int			predLockIdx;	/* current index for pred lock */
-
-	int			numSegLocks;	/* Total number of locks being reported back to client */
-	int			numsegresults;	/* If we dispatch to segDBs, the number of segresults */
-	int			nextResultset;	/* which result set is being processed */
-	int			nextRow;		/* which row in current result set will be processed next */
-	struct pg_result **segresults;	/* pg_result for each segDB */
+	QueryDesc  *segQueryDesc;
 } PG_Lock_Status;
 
 /* Number of columns in pg_locks output */
@@ -84,6 +80,88 @@ VXIDGetDatum(BackendId bid, LocalTransactionId lxid)
 	return CStringGetTextDatum(vxidstr);
 }
 
+/*
+ * This query relies on the existance of pg_locks view to use a force random
+ * distribution on it.
+ */
+#define PG_LOCKS_INTERNAL_QUERY \
+	"SELECT * FROM gp_dist_random('pg_catalog.pg_locks')"
+
+/*
+ * Build a querydesc for SELECT on pg_locks relation to be passed to executor.
+ */
+static QueryDesc *
+build_pg_locks_querydesc(void)
+{
+	List	  *raw_parsetree_list;
+	Node	  *parsetree;
+	List	  *querytree_list;
+	List	  *plantree_list;
+	PlannedStmt *plan_stmt;
+	QueryDesc  *queryDesc = NULL;
+
+	/* Parse the SQL string into a list of raw parse trees. */
+	raw_parsetree_list = pg_parse_query(PG_LOCKS_INTERNAL_QUERY);
+	/* There is only one element in list due to simple select. */
+	Assert(list_length(raw_parsetree_list) == 1);
+
+	/*
+	 * Do parse analysis, rule rewrite, planning, and execution for each raw
+	 * parsetree.
+	 */
+	parsetree = (Node *) linitial(raw_parsetree_list);
+
+	querytree_list =
+		pg_analyze_and_rewrite(parsetree, PG_LOCKS_INTERNAL_QUERY, NULL, 0);
+	plantree_list = pg_plan_queries(querytree_list, 0, NULL);
+
+	/* There is only one statement in list due to simple select. */
+	Assert(list_length(plantree_list) == 1);
+	plan_stmt = (PlannedStmt *) linitial(plantree_list);
+
+	queryDesc =
+		CreateQueryDesc(plan_stmt, PG_LOCKS_INTERNAL_QUERY, GetActiveSnapshot(),
+						InvalidSnapshot, NULL, NULL, INSTRUMENT_NONE);
+
+	list_free_deep(querytree_list);
+	list_free_deep(raw_parsetree_list);
+
+	return queryDesc;
+}
+
+static TupleDesc
+build_pg_locks_tupdesc(void)
+{
+	TupleDesc	tupdesc = CreateTemplateTupleDesc(NUM_LOCK_STATUS_COLUMNS, false);
+
+	TupleDescInitEntry(tupdesc, (AttrNumber) 1, "locktype", TEXTOID, -1, 0);
+	TupleDescInitEntry(tupdesc, (AttrNumber) 2, "database", OIDOID, -1, 0);
+	TupleDescInitEntry(tupdesc, (AttrNumber) 3, "relation", OIDOID, -1, 0);
+	TupleDescInitEntry(tupdesc, (AttrNumber) 4, "page", INT4OID, -1, 0);
+	TupleDescInitEntry(tupdesc, (AttrNumber) 5, "tuple", INT2OID, -1, 0);
+	TupleDescInitEntry(tupdesc, (AttrNumber) 6, "virtualxid", TEXTOID, -1, 0);
+	TupleDescInitEntry(tupdesc, (AttrNumber) 7, "transactionid", XIDOID, -1, 0);
+	TupleDescInitEntry(tupdesc, (AttrNumber) 8, "classid", OIDOID, -1, 0);
+	TupleDescInitEntry(tupdesc, (AttrNumber) 9, "objid", OIDOID, -1, 0);
+	TupleDescInitEntry(tupdesc, (AttrNumber) 10, "objsubid", INT2OID, -1, 0);
+	TupleDescInitEntry(tupdesc, (AttrNumber) 11, "virtualtransaction", TEXTOID,
+					   -1, 0);
+	TupleDescInitEntry(tupdesc, (AttrNumber) 12, "pid", INT4OID, -1, 0);
+	TupleDescInitEntry(tupdesc, (AttrNumber) 13, "mode", TEXTOID, -1, 0);
+	TupleDescInitEntry(tupdesc, (AttrNumber) 14, "granted", BOOLOID, -1, 0);
+	TupleDescInitEntry(tupdesc, (AttrNumber) 15, "fastpath", BOOLOID, -1, 0);
+
+	/*
+	 * These next columns are specific to GPDB.
+	 */
+	TupleDescInitEntry(tupdesc, (AttrNumber) 16, "mppSessionId", INT4OID, -1,
+					   0);
+	TupleDescInitEntry(tupdesc, (AttrNumber) 17, "mppIsWriter", BOOLOID, -1, 0);
+	TupleDescInitEntry(tupdesc, (AttrNumber) 18, "gp_segment_id", INT4OID, -1,
+					   0);
+
+	return tupdesc;
+}
 
 /*
  * pg_lock_status - produce a view with one row per held or awaited lock mode
@@ -96,9 +174,25 @@ pg_lock_status(PG_FUNCTION_ARGS)
 	LockData   *lockData;
 	PredicateLockData *predLockData;
 
+	if (SRF_IS_SQUELCH_CALL())
+	{
+		funcctx = SRF_PERCALL_SETUP();
+		mystatus = funcctx->user_fctx;
+
+		if (mystatus->segQueryDesc != NULL)
+		{
+			ExecutorFinish(mystatus->segQueryDesc);
+			ExecutorEnd(mystatus->segQueryDesc);
+			FreeQueryDesc(mystatus->segQueryDesc);
+		}
+
+		SIMPLE_FAULT_INJECTOR("pg_lock_status_squelched");
+
+		SRF_RETURN_DONE(funcctx);
+	}
+
 	if (SRF_IS_FIRSTCALL())
 	{
-		TupleDesc	tupdesc;
 		MemoryContext oldcontext;
 
 		/* create a function context for cross-call persistence */
@@ -109,166 +203,48 @@ pg_lock_status(PG_FUNCTION_ARGS)
 		 */
 		oldcontext = MemoryContextSwitchTo(funcctx->multi_call_memory_ctx);
 
-		/* build tupdesc for result tuples */
-		/* this had better match pg_locks view in system_views.sql */
-		tupdesc = CreateTemplateTupleDesc(NUM_LOCK_STATUS_COLUMNS, false);
-		TupleDescInitEntry(tupdesc, (AttrNumber) 1, "locktype",
-						   TEXTOID, -1, 0);
-		TupleDescInitEntry(tupdesc, (AttrNumber) 2, "database",
-						   OIDOID, -1, 0);
-		TupleDescInitEntry(tupdesc, (AttrNumber) 3, "relation",
-						   OIDOID, -1, 0);
-		TupleDescInitEntry(tupdesc, (AttrNumber) 4, "page",
-						   INT4OID, -1, 0);
-		TupleDescInitEntry(tupdesc, (AttrNumber) 5, "tuple",
-						   INT2OID, -1, 0);
-		TupleDescInitEntry(tupdesc, (AttrNumber) 6, "virtualxid",
-						   TEXTOID, -1, 0);
-		TupleDescInitEntry(tupdesc, (AttrNumber) 7, "transactionid",
-						   XIDOID, -1, 0);
-		TupleDescInitEntry(tupdesc, (AttrNumber) 8, "classid",
-						   OIDOID, -1, 0);
-		TupleDescInitEntry(tupdesc, (AttrNumber) 9, "objid",
-						   OIDOID, -1, 0);
-		TupleDescInitEntry(tupdesc, (AttrNumber) 10, "objsubid",
-						   INT2OID, -1, 0);
-		TupleDescInitEntry(tupdesc, (AttrNumber) 11, "virtualtransaction",
-						   TEXTOID, -1, 0);
-		TupleDescInitEntry(tupdesc, (AttrNumber) 12, "pid",
-						   INT4OID, -1, 0);
-		TupleDescInitEntry(tupdesc, (AttrNumber) 13, "mode",
-						   TEXTOID, -1, 0);
-		TupleDescInitEntry(tupdesc, (AttrNumber) 14, "granted",
-						   BOOLOID, -1, 0);
-		TupleDescInitEntry(tupdesc, (AttrNumber) 15, "fastpath",
-						   BOOLOID, -1, 0);
-		/*
-		 * These next columns are specific to GPDB
-		 */
-		TupleDescInitEntry(tupdesc, (AttrNumber) 16, "mppSessionId",
-						   INT4OID, -1, 0);
-		TupleDescInitEntry(tupdesc, (AttrNumber) 17, "mppIsWriter",
-						   BOOLOID, -1, 0);
-		TupleDescInitEntry(tupdesc, (AttrNumber) 18, "gp_segment_id",
-						   INT4OID, -1, 0);
-
-		funcctx->tuple_desc = BlessTupleDesc(tupdesc);
-
 		/*
 		 * Collect all the locking information that we will format and send
 		 * out as a result set.
 		 */
-		mystatus = (PG_Lock_Status *) palloc(sizeof(PG_Lock_Status));
+		mystatus = (PG_Lock_Status *) palloc0(sizeof(PG_Lock_Status));
 		funcctx->user_fctx = (void *) mystatus;
 
 		mystatus->lockData = GetLockStatusData();
-		mystatus->currIdx = 0;
 		mystatus->predLockData = GetPredicateLockStatusData();
-		mystatus->predLockIdx = 0;
-
-		mystatus->numSegLocks = 0;
-		mystatus->numsegresults = 0;
-		mystatus->nextResultset = 0;
-		mystatus->nextRow = 0;
-		mystatus->segresults = NULL;
 
 		/*
-		 * Seeing the locks just from the masterDB isn't enough to know what is locked,
-		 * or if there is a deadlock.  That's because the segDBs also take locks.
-		 * Some locks show up only on the master, some only on the segDBs, and some on both.
+		 * Seeing the locks just from the masterDB isn't enough to know what
+		 * is locked, or if there is a deadlock, because segments also take
+		 * locks. Some show up only on the master, some only on the segDBs,
+		 * and some on both.
 		 *
-		 * So, let's collect the lock information from all the segDBs.  Sure, this means
-		 * there are a lot more rows coming back from pg_locks than before, since most locks
-		 * on the segDBs happen across all the segDBs at the same time.  But not always,
-		 * so let's play it safe and get them all.
+		 * We collect the lock information from all the segments via gather
+		 * motion. There might be multiple instances of the same lock coming
+		 * from different segments. Routines from executor are used to fetch
+		 * rows one-by-one.
 		 */
-
 		if (Gp_role == GP_ROLE_DISPATCH)
 		{
-			CdbPgResults cdb_pgresults = {NULL, 0};
-			StringInfoData buffer;
-			int i;
-			initStringInfo(&buffer);
+			QueryDesc  *queryDesc = build_pg_locks_querydesc();
+
+			ExecutorStart(queryDesc, 0);
+
+			mystatus->segQueryDesc = queryDesc;
 
 			/*
-			 * Why dispatch something here, rather than do a UNION ALL in pg_locks view, and
-			 * a join to gp_dist_random('gp_id')?  There are several important reasons.
-			 *
-			 * The union all method is much slower, and requires taking locks on gp_id.
-			 * More importantly, applications such as pgAdmin do queries of this view that
-			 * involve a correlated subqueries joining to other catalog tables,
-			 * which works if we do it this way, but fails
-			 * if the view includes the union all.  That completely breaks the server status
-			 * display in pgAdmin.
-			 *
-			 * Why dispatch this way, rather than via SPI?  There are several advantages.
-			 * First, it's easy to get "writer gang is busy" errors if we use SPI.
-			 *
-			 * Second, this should be much faster, as it doesn't require setting up
-			 * the interconnect, and doesn't need to touch any actual data tables to be
-			 * able to get the gp_segment_id.
-			 *
-			 * The downside is we get n result sets, where n == number of segDBs.
-			 *
-			 * It would be better yet if we sent a plan tree rather than a text string,
-			 * so the segDBs don't need to parse it.  That would also avoid taking any relation locks
-			 * on the segDB to get this info (normally need to get an accessShareLock on pg_locks on the segDB
-			 * to make sure it doesn't go away during parsing).  But the only safe way I know to do this
-			 * is to hand-build the plan tree, and I'm to lazy to do it right now. It's just a matter of
-			 * building a function scan node, and filling it in with our result set info (from the tupledesc).
-			 *
-			 * One thing to note:  it's OK to join pg_locks with any catalog table or master-only table,
-			 * but joining to a distributed table will result in "writer gang busy: possible attempt to
-			 * execute volatile function in unsupported context" errors, because
-			 * the scan of the distributed table might already be running on the writer gang
-			 * when we want to dispatch this.
-			 *
-			 * This could be fixed by allocating a reader gang and dispatching to that, but the cost
-			 * of setting up a new gang is high, and I've never seen anyone need to join this to a
-			 * distributed table.
-			 *
-			 * GPDB_84_MERGE_FIXME: Should we rewrite this in a different way now that we have
-			 * ON SEGMENT/ ON MASTER attributes on functions?
+			 * On coordinator, we receive proper tupDesc from the parsed
+			 * query.
 			 */
-			CdbDispatchCommand("SELECT * FROM pg_catalog.pg_lock_status()", DF_WITH_SNAPSHOT, &cdb_pgresults);
-
-			if (cdb_pgresults.numResults == 0)
-				elog(ERROR, "pg_locks didn't get back any data from the segDBs");
-
-			for (i = 0; i < cdb_pgresults.numResults; i++)
-			{
-				/*
-				 * Any error here should have propagated into errbuf, so we shouldn't
-				 * ever see anything other that tuples_ok here.  But, check to be
-				 * sure.
-				 */
-				if (PQresultStatus(cdb_pgresults.pg_results[i]) != PGRES_TUPLES_OK)
-				{
-					cdbdisp_clearCdbPgResults(&cdb_pgresults);
-					elog(ERROR,"pg_locks: resultStatus not tuples_Ok");
-				}
-
-				/*
-				 * numSegLocks needs to be the total size we are returning to
-				 * the application. At the start of this loop, it has the count
-				 * for the masterDB locks.  Add each of the segDB lock counts.
-				 */
-				mystatus->numSegLocks += PQntuples(cdb_pgresults.pg_results[i]);
-
-				/*
-				 * This query better match the tupledesc we just made above.
-				 */
-				if (PQnfields(cdb_pgresults.pg_results[i]) != tupdesc->natts)
-					elog(ERROR, "unexpected number of columns returned from pg_lock_status() on segment (%d, expected %d)",
-						 PQnfields(cdb_pgresults.pg_results[i]), tupdesc->natts);
-			}
-
-			mystatus->numsegresults = cdb_pgresults.numResults;
+			funcctx->tuple_desc = BlessTupleDesc(queryDesc->tupDesc);
+		}
+		else
+		{
 			/*
-			 * cdbdisp_dispatchRMCommand copies the result sets into our memory, which
-			 * will still exist on the subsequent calls.
+			 * On segments, build tupdesc for result tuples manually. It
+			 * should match pg_locks view in system_views.sql file.
 			 */
-			mystatus->segresults = cdb_pgresults.pg_results;
+			funcctx->tuple_desc = BlessTupleDesc(build_pg_locks_tupdesc());
 		}
 
 		MemoryContextSwitchTo(oldcontext);
@@ -492,98 +468,30 @@ pg_lock_status(PG_FUNCTION_ARGS)
 		SRF_RETURN_NEXT(funcctx, result);
 	}
 
-	/*
-	 * This loop only executes on the masterDB and only in dispatch mode,
-	 * because that is the only time we dispatched to the segDBs.
-	 */
-	while (mystatus->currIdx >= lockData->nelements && mystatus->currIdx < lockData->nelements + mystatus->numSegLocks)
+	SIMPLE_FAULT_INJECTOR("pg_lock_status_local_locks_collected");
+
+	/* Collect locks sent out by the segments on coordinator. */
+	if (Gp_role == GP_ROLE_DISPATCH)
 	{
-		HeapTuple	tuple;
-		Datum		result;
-		Datum		values[NUM_LOCK_STATUS_COLUMNS];
-		bool		nulls[NUM_LOCK_STATUS_COLUMNS];
-		int			i;
-		int			whichresultset;
-		int			whichrow;
+		HeapTuple ht;
+		QueryDesc *queryDesc = mystatus->segQueryDesc;
 
-		Assert(Gp_role == GP_ROLE_DISPATCH);
+		TupleTableSlot *tts = ExecProcNode(queryDesc->planstate);
 
-		/*
-		 * Because we have one result set per segDB (rather than one big result
-		 * set with everything), we use mystatus->nextResultset and
-		 * mystatus->nextRow to track which result set we are on, and which row
-		 * within that result set we are returning, respectively.
-		 */
-		whichresultset = mystatus->nextResultset;
-		whichrow = mystatus->nextRow;
-		Assert(whichresultset < mystatus->numsegresults);
-		Assert(whichrow < PQntuples(mystatus->segresults[whichresultset]));
-
-		/*
-		 * Advance to next row. If we're out of rows in this result set,
-		 * advance to next one.
-		 */
-		if (mystatus->nextRow + 1 < PQntuples(mystatus->segresults[mystatus->nextResultset]))
+		if (!TupIsNull(tts))
 		{
-			mystatus->nextRow++;
-		}
-		else
-		{
-			mystatus->nextResultset++;
-			mystatus->nextRow = 0;
-		}
-		mystatus->currIdx++;
+			Assert(tts->tts_tupleDescriptor->natts == NUM_LOCK_STATUS_COLUMNS);
 
-		/*
-		 * Form tuple with appropriate data we got from the segDBs
-		 */
-		MemSet(values, 0, sizeof(values));
-		MemSet(nulls, false, sizeof(nulls));
+			ht = ExecFetchSlotHeapTuple(tts);
 
-		/*
-		 * For each column, extract out the value (which comes out in text).
-		 * Convert it to the appropriate datatype to match our tupledesc,
-		 * and put that in values.
-		 * The columns look like this (from select statement earlier):
-		 *
-		 * "   (locktype text, database oid, relation oid, page int4, tuple int2,"
-		 *	"   transactionid xid, classid oid, objid oid, objsubid int2,"
-		 *	"    transaction xid, pid int4, mode text, granted boolean, "
-		 *	"    mppSessionId int4, mppIsWriter boolean, gp_segment_id int4) ,"
-		 */
-
-		values[0] = CStringGetTextDatum(PQgetvalue(mystatus->segresults[whichresultset], whichrow, 0));
-		values[1] = ObjectIdGetDatum(atoi(PQgetvalue(mystatus->segresults[whichresultset], whichrow, 1)));
-		values[2] = ObjectIdGetDatum(atoi(PQgetvalue(mystatus->segresults[whichresultset], whichrow, 2)));
-		values[3] = UInt32GetDatum(atoi(PQgetvalue(mystatus->segresults[whichresultset], whichrow, 3)));
-		values[4] = UInt16GetDatum(atoi(PQgetvalue(mystatus->segresults[whichresultset], whichrow, 4)));
-
-		values[5] = CStringGetTextDatum(PQgetvalue(mystatus->segresults[whichresultset], whichrow, 5));
-		values[6] = TransactionIdGetDatum(atoi(PQgetvalue(mystatus->segresults[whichresultset], whichrow, 6)));
-		values[7] = ObjectIdGetDatum(atoi(PQgetvalue(mystatus->segresults[whichresultset], whichrow, 7)));
-		values[8] = ObjectIdGetDatum(atoi(PQgetvalue(mystatus->segresults[whichresultset], whichrow, 8)));
-		values[9] = UInt16GetDatum(atoi(PQgetvalue(mystatus->segresults[whichresultset], whichrow, 9)));
-
-		values[10] = CStringGetTextDatum(PQgetvalue(mystatus->segresults[whichresultset], whichrow, 10));
-		values[11] = UInt32GetDatum(atoi(PQgetvalue(mystatus->segresults[whichresultset], whichrow, 11)));
-		values[12] = CStringGetTextDatum(PQgetvalue(mystatus->segresults[whichresultset], whichrow, 12));
-		values[13] = BoolGetDatum(strncmp(PQgetvalue(mystatus->segresults[whichresultset], whichrow,13),"t",1)==0);
-		values[14] = BoolGetDatum(strncmp(PQgetvalue(mystatus->segresults[whichresultset], whichrow,14),"t",1)==0);
-		values[15] = Int32GetDatum(atoi(PQgetvalue(mystatus->segresults[whichresultset], whichrow,15)));
-		values[16] = BoolGetDatum(strncmp(PQgetvalue(mystatus->segresults[whichresultset], whichrow,16),"t",1)==0);
-		values[17] = Int32GetDatum(atoi(PQgetvalue(mystatus->segresults[whichresultset], whichrow,17)));
-
-		/*
-		 * Copy the null info over.  It should all match properly.
-		 */
-		for (i = 0; i < NUM_LOCK_STATUS_COLUMNS; i++)
-		{
-			nulls[i] = PQgetisnull(mystatus->segresults[whichresultset], whichrow, i);
+			SRF_RETURN_NEXT(funcctx, HeapTupleGetDatum(ht));
 		}
 
-		tuple = heap_form_tuple(funcctx->tuple_desc, values, nulls);
-		result = HeapTupleGetDatum(tuple);
-		SRF_RETURN_NEXT(funcctx, result);
+		ExecutorFinish(queryDesc);
+		ExecutorEnd(queryDesc);
+		FreeQueryDesc(queryDesc);
+
+		mystatus->segQueryDesc = NULL;
 	}
 
 	/*
@@ -663,20 +571,6 @@ pg_lock_status(PG_FUNCTION_ARGS)
 		tuple = heap_form_tuple(funcctx->tuple_desc, values, nulls);
 		result = HeapTupleGetDatum(tuple);
 		SRF_RETURN_NEXT(funcctx, result);
-	}
-
-	/*
-	 * if we dispatched to the segDBs, free up the memory holding the result sets.
-	 * Otherwise we might leak this memory each time we got called (does it automatically
-	 * get freed by the pool being deleted?  Probably, but this is safer).
-	 */
-	if (mystatus->segresults != NULL)
-	{
-		int i;
-		for (i = 0; i < mystatus->numsegresults; i++)
-			PQclear(mystatus->segresults[i]);
-
-		pfree(mystatus->segresults);
 	}
 
 	SRF_RETURN_DONE(funcctx);

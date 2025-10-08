@@ -173,6 +173,8 @@ GlobalDeadLockDetectorLoop(void)
 		/* emergency bailout if postmaster has died */
 		if (rc & WL_POSTMASTER_DEATH)
 			proc_exit(1);
+
+		MemoryAccounting_Reset();
 	}
 
 	return;

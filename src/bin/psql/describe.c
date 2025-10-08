@@ -44,12 +44,12 @@ static bool describeOneTSConfig(const char *oid, const char *nspname,
 					const char *pnspname, const char *prsname);
 static void printACLColumn(PQExpBuffer buf, const char *colname);
 static bool listOneExtensionContents(const char *extname, const char *oid);
-static bool isGPDB(void);
+static bool gpCheckIsGP(void);
 static bool isGPDB4200OrLater(void);
 static bool isGPDB5000OrLater(void);
 static bool isGPDB6000OrLater(void);
 
-static bool isGPDB(void)
+static bool gpCheckIsGP(void)
 {
 	static enum
 	{
@@ -59,19 +59,18 @@ static bool isGPDB(void)
 	} talking_to_gpdb;
 
 	PGresult   *res;
-	char       *ver;
 
 	if (talking_to_gpdb == gpdb_yes)
 		return true;
 	else if (talking_to_gpdb == gpdb_no)
 		return false;
 
-	res = PSQLexec("select pg_catalog.version()", false);
+	res = PSQLexec("SELECT FROM pg_catalog.pg_settings"
+				   " WHERE name = 'gp_server_version'", false);
 	if (!res)
 		return false;
 
-	ver = PQgetvalue(res, 0, 0);
-	if (strstr(ver, "Greengage") != NULL)
+	if (PQntuples(res) == 1)
 	{
 		PQclear(res);
 		talking_to_gpdb = gpdb_yes;
@@ -98,7 +97,7 @@ static bool isGPDB4200OrLater(void)
 {
 	bool       retValue = false;
 
-	if (isGPDB() == true)
+	if (gpCheckIsGP() == true)
 	{
 		PGresult  *result;
 
@@ -119,7 +118,7 @@ isGPDB4300OrLater(void)
 {
 	bool       retValue = false;
 
-	if (isGPDB() == true)
+	if (gpCheckIsGP() == true)
 	{
 		PGresult  *result;
 
@@ -142,7 +141,7 @@ static bool isGPDB5000OrLater(void)
 {
 	bool	retValue = false;
 
-	if (isGPDB() == true)
+	if (gpCheckIsGP() == true)
 	{
 		PGresult   *res;
 
@@ -156,12 +155,13 @@ static bool isGPDB5000OrLater(void)
 static bool
 isGPDB6000OrLater(void)
 {
-	if (!isGPDB())
+	if (!gpCheckIsGP())
 		return false;		/* Not Greengage at all. */
 
 	/* GPDB 6 is based on PostgreSQL 8.4 */
 	return pset.sversion >= 80400;
 }
+
 
 /*----------------
  * Handlers for various slash commands displaying some sort of list
@@ -1400,7 +1400,7 @@ describeOneTableDetails(const char *schemaname,
 						   "array(select 'toast.' || x from pg_catalog.unnest(tc.reloptions) x), ', ')\n"
 						   : "''"),
 						  /* GPDB Only:  relstorage  */
-						  (isGPDB() ? "c.relstorage" : "'h'"),
+						  (gpCheckIsGP() ? "c.relstorage" : "'h'"),
 						  oid);
 	}
 	else if (pset.sversion >= 90100)
@@ -1420,7 +1420,7 @@ describeOneTableDetails(const char *schemaname,
 						   "array(select 'toast.' || x from pg_catalog.unnest(tc.reloptions) x), ', ')\n"
 						   : "''"),
 						  /* GPDB Only:  relstorage  */
-						  (isGPDB() ? "c.relstorage" : "'h'"),
+						  (gpCheckIsGP() ? "c.relstorage" : "'h'"),
 						  oid);
 	}
 	else if (pset.sversion >= 90000)
@@ -1439,7 +1439,7 @@ describeOneTableDetails(const char *schemaname,
 						   "array(select 'toast.' || x from pg_catalog.unnest(tc.reloptions) x), ', ')\n"
 						   : "''"),
 						  /* GPDB Only:  relstorage  */
-						  (isGPDB() ? "c.relstorage" : "'h'"),
+						  (gpCheckIsGP() ? "c.relstorage" : "'h'"),
 						  oid);
 	}
 	else if (pset.sversion >= 80400)
@@ -1456,7 +1456,7 @@ describeOneTableDetails(const char *schemaname,
 						   "array(select 'toast.' || x from pg_catalog.unnest(tc.reloptions) x), ', ')\n"
 						   : "''"),
 						  /* GPDB Only:  relstorage  */
-						  (isGPDB() ? "c.relstorage" : "'h'"),
+						  (gpCheckIsGP() ? "c.relstorage" : "'h'"),
 						  oid);
 	}
 	else if (pset.sversion >= 80200)
@@ -1469,7 +1469,7 @@ describeOneTableDetails(const char *schemaname,
 						  (verbose ?
 					 "pg_catalog.array_to_string(reloptions, E', ')" : "''"),
 						  /* GPDB Only:  relstorage  */
-						  (isGPDB() ? "relstorage" : "'h'"),
+						  (gpCheckIsGP() ? "relstorage" : "'h'"),
 						  oid);
 	}
 	else if (pset.sversion >= 80000)
@@ -1522,7 +1522,7 @@ describeOneTableDetails(const char *schemaname,
 		*(PQgetvalue(res, 0, 10)) : 'd';
 
 	/* GPDB Only:  relstorage  */
-	tableinfo.relstorage = (isGPDB()) ? *(PQgetvalue(res, 0, PQfnumber(res, "relstorage"))) : 'h';
+	tableinfo.relstorage = (gpCheckIsGP()) ? *(PQgetvalue(res, 0, PQfnumber(res, "relstorage"))) : 'h';
 
 	PQclear(res);
 	res = NULL;
@@ -2795,7 +2795,7 @@ describeOneTableDetails(const char *schemaname,
 							 * listing them.
 							 */
 							tgdef = PQgetvalue(result, i, 1);
-							if (isGPDB() && strstr(tgdef, "RI_FKey_") != NULL)
+							if (gpCheckIsGP() && strstr(tgdef, "RI_FKey_") != NULL)
 								list_trigger = false;
 
 							break;
@@ -3688,7 +3688,7 @@ listTables(const char *tabtypes, const char *pattern, bool verbose, bool showSys
 					  gettext_noop("Owner"));
 
 	/* Show Storage type for tables */
-	if (showTables && isGPDB())
+	if (showTables && gpCheckIsGP())
 	{
 		appendPQExpBuffer(&buf, ", CASE c.relstorage");
 		appendPQExpBuffer(&buf, " WHEN 'h' THEN '%s'", gettext_noop("heap"));
@@ -3754,7 +3754,7 @@ listTables(const char *tabtypes, const char *pattern, bool verbose, bool showSys
 	appendPQExpBufferStr(&buf, "''");	/* dummy */
 	appendPQExpBufferStr(&buf, ")\n");
 
-    if (isGPDB())   /* GPDB? */
+    if (gpCheckIsGP())   /* GPDB? */
     {
 	appendPQExpBuffer(&buf, "AND c.relstorage IN (");
 	if (showTables || showIndexes || showSeq || (showSystem && showTables) || showMatViews)

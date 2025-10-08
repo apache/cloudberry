@@ -1017,8 +1017,33 @@ ALTER TABLE example_r ALTER COLUMN a TYPE numeric;
 EXECUTE p6;
 DEALLOCATE p6;
 
+-- PASS: Check that resources can be freed with Squelch protocol if the function 
+-- has been cancelled
+create or replace function gp_get_int_tuples(max_values int)
+RETURNS table (
+    idx int,
+    value int
+  )
+ AS '@abs_srcdir@/regress.so',
+'gp_get_int_tuples' LANGUAGE C VOLATILE;
+
+select gp_inject_fault('check_SRF_cancel', 'finish_pending', 
+    '', '', '', 1, 2, 0, dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+
+-- Check the case with regular no Squelch finish and no query cancel
+SELECT * FROM gp_get_int_tuples(3);
+
+-- Check the case with regular no Squelch finish and query cancel
+SELECT * FROM gp_get_int_tuples(10);
+
+-- Check the case with Squelch finish and query cancel
+SELECT * FROM gp_get_int_tuples(100) LIMIT 10;
+
 -- =======
 -- Cleanup
 -- =======
+select gp_inject_fault('check_SRF_cancel', 'reset', 
+    '', '', '', 1, 2, 0, dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+
 DROP SCHEMA table_function CASCADE;
 SET search_path TO public;

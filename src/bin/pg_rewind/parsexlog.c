@@ -889,6 +889,7 @@ extractPageInfo(XLogRecord *record)
 			switch (info)
 			{
 				case XLOG_SMGR_CREATE:
+				case XLOG_SMGR_CREATE_PDL:
 					/*
 					 * We can safely ignore these. The local file will be
 					 * removed, if it doesn't exist in remote system. If a

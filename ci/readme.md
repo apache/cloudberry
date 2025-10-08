@@ -91,7 +91,7 @@ Greengage cluster in Docker containers has its own peculiarities in preparing a 
 All tests are run in one way or another on the demo cluster, wherever possible. 
 For example, cross_subnet tests or tests with tag `concourse_cluster` currently not worked because of too complex cluster preconditions.
 
-Tests in a docker-compose cluster use the same ssh keys for `gpadmin` user and pre-add the cluster hosts to `.ssh/know_hosts` and `/etc/hosts`.
+Tests in a `docker compose` cluster use the same ssh keys for `gpadmin` user and pre-add the cluster hosts to `.ssh/know_hosts` and `/etc/hosts`.
 
 Docker containers have installed `sigar` libraries. It is required only for `gpperfmon` tests.
 

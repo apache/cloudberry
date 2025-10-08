@@ -282,7 +282,7 @@ SELECT * FROM foo,bar WHERE a=(SELECT c);
     <dxl:Plan Id="0" SpaceSize="80">
       <dxl:GatherMotion InputSegments="0,1,2" OutputSegments="-1">
         <dxl:Properties>
-          <dxl:Cost StartupCost="0" TotalCost="883135.989715" Rows="1.000000" Width="16"/>
+          <dxl:Cost StartupCost="0" TotalCost="883135.989815" Rows="1.000000" Width="16"/>
         </dxl:Properties>
         <dxl:ProjList>
           <dxl:ProjElem ColId="0" Alias="a">
@@ -302,7 +302,7 @@ SELECT * FROM foo,bar WHERE a=(SELECT c);
         <dxl:SortingColumnList/>
         <dxl:HashJoin JoinType="Inner">
           <dxl:Properties>
-            <dxl:Cost StartupCost="0" TotalCost="883135.989655" Rows="1.000000" Width="16"/>
+            <dxl:Cost StartupCost="0" TotalCost="883135.989755" Rows="1.000000" Width="16"/>
           </dxl:Properties>
           <dxl:ProjList>
             <dxl:ProjElem ColId="0" Alias="a">

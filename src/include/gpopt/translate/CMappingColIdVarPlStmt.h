@@ -73,6 +73,12 @@ public:
 	// get the output translator context
 	CDXLTranslateContext *GetOutputContext();
 
+	// get the array of child translator contexts
+	CDXLTranslationContextArray *GetChildContexts();
+
+	// get the base table context
+	const CDXLTranslateContextBaseTable *GetBaseTableContext();
+
 	// return the context of the DXL->PlStmt translation
 	CContextDXLToPlStmt *GetDXLToPlStmtContext();
 };

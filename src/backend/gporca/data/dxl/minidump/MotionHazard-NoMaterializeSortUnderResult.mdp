@@ -436,7 +436,7 @@ explain select tab3.k, (select tab2.k from tab2 where tab2.i = tab1.i limit 1) a
     <dxl:Plan Id="0" SpaceSize="20">
       <dxl:Result>
         <dxl:Properties>
-          <dxl:Cost StartupCost="0" TotalCost="166193.741134" Rows="4994000.000000" Width="16"/>
+          <dxl:Cost StartupCost="0" TotalCost="166193.841134" Rows="4994000.000000" Width="16"/>
         </dxl:Properties>
         <dxl:ProjList>
           <dxl:ProjElem ColId="2" Alias="k">
@@ -544,7 +544,7 @@ explain select tab3.k, (select tab2.k from tab2 where tab2.i = tab1.i limit 1) a
         <dxl:OneTimeFilter/>
         <dxl:Sort SortDiscardDuplicates="false">
           <dxl:Properties>
-            <dxl:Cost StartupCost="0" TotalCost="166113.837134" Rows="1000.000000" Width="16"/>
+            <dxl:Cost StartupCost="0" TotalCost="166113.937134" Rows="1000.000000" Width="16"/>
           </dxl:Properties>
           <dxl:ProjList>
             <dxl:ProjElem ColId="2" Alias="k">
@@ -562,7 +562,7 @@ explain select tab3.k, (select tab2.k from tab2 where tab2.i = tab1.i limit 1) a
           <dxl:LimitOffset/>
           <dxl:HashJoin JoinType="Left">
             <dxl:Properties>
-              <dxl:Cost StartupCost="0" TotalCost="933.324563" Rows="4994000.000000" Width="4"/>
+              <dxl:Cost StartupCost="0" TotalCost="933.424563" Rows="4994000.000000" Width="4"/>
             </dxl:Properties>
             <dxl:ProjList>
               <dxl:ProjElem ColId="2" Alias="k">

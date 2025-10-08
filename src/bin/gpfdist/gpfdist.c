@@ -115,7 +115,6 @@ static bool base16_decode(char* data);
 
 #ifdef USE_SSL
 /* SSL additions */
-#define SSL_RENEGOTIATE_TIMEOUT_SEC	(600) /* 10 minutes */
 const char* const CertificateFilename = "server.crt";
 const char* const PrivateKeyFilename = "server.key";
 const char* const TrustedCaFilename = "root.crt";
@@ -2351,10 +2350,19 @@ static void do_read_request(int fd, short event, void* arg)
 		BIO_set_ssl(r->ssl_bio, r->ssl, BIO_CLOSE);
 		BIO_push(r->io, r->ssl_bio);
 
-		/* Set the renegotiate timeout in seconds. 	*/
-		/* When the renegotiate timeout elapses the */
-		/* session is automatically renegotiated	*/
-		BIO_set_ssl_renegotiate_timeout(r->ssl_bio, SSL_RENEGOTIATE_TIMEOUT_SEC);
+		/*
+		 * SSL renegotiation is considered to be harmful and has been
+		 * eliminated in TLS v1.3. However when using older clients we want to
+		 * make sure that the renegotiation is not used, so disable it
+		 * evidently if is possible.
+		 */
+#ifdef SSL_OP_NO_RENEGOTIATION
+		SSL_set_options(r->ssl, SSL_OP_NO_RENEGOTIATION);
+#endif
+#ifdef SSL_OP_NO_CLIENT_RENEGOTIATION
+		SSL_set_options(r->ssl, SSL_OP_NO_CLIENT_RENEGOTIATION);
+#endif
+
 	}
 #endif
 

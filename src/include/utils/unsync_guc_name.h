@@ -410,6 +410,7 @@
 		"optimizer_enable_replicated_table",
 		"optimizer_enable_right_outer_join",
 		"optimizer_enforce_subplans",
+		"optimizer_donot_enforce_subplans",
 		"optimizer_enumerate_plans",
 		"optimizer_expand_fulljoin",
 		"optimizer_extract_dxl_stats",
@@ -564,3 +565,4 @@
 		"xmlbinary",
 		"xmloption",
 		"zero_damaged_pages",
+		"gp_track_pending_delete",

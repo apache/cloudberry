@@ -8,17 +8,19 @@
     create table s(s1 int, s2 int, s3 int, s4 int, s5 int);
     explain select * from r where r1 > 0 and exists (
         select 1 from s where r5=s5 and r3=s3 and s3=20 and r4=s4 and s4 between 10 and 100);
-                                                 QUERY PLAN
-    ----------------------------------------------------------------------------------------------------
-     Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..862.00 rows=1 width=20)
-       ->  Hash Semi Join  (cost=0.00..862.00 rows=1 width=20)
-             Hash Cond: ((r.r5 = s.s5) AND (r.r3 = s.s3) AND (r.r4 = s.s4))
-             ->  Seq Scan on r  (cost=0.00..431.00 rows=1 width=20)
-                   Filter: ((r3 = 20) AND (r4 >= 10) AND (r4 <= 100) AND (r1 > 0))
-             ->  Hash  (cost=431.00..431.00 rows=1 width=12)
-                   ->  Broadcast Motion 3:3  (slice2; segments: 3)  (cost=0.00..431.00 rows=1 width=12)
-                         ->  Seq Scan on s  (cost=0.00..431.00 rows=1 width=12)
-                               Filter: ((s3 = 20) AND (s4 >= 10) AND (s4 <= 100))
+                                             QUERY PLAN                                             
+----------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice2; segments: 3)  (cost=0.00..862.00 rows=1 width=20)
+   ->  Hash Semi Join  (cost=0.00..862.00 rows=1 width=20)
+         Hash Cond: ((r.r5 = s.s5) AND (r.r3 = s.s3) AND (r.r4 = s.s4))
+         ->  Seq Scan on r  (cost=0.00..431.00 rows=1 width=20)
+               Filter: ((r3 = 20) AND (r4 >= 10) AND (r4 <= 100) AND (r1 > 0))
+         ->  Hash  (cost=431.00..431.00 rows=1 width=12)
+               ->  Broadcast Motion 3:3  (slice1; segments: 3)  (cost=0.00..431.00 rows=1 width=12)
+                     ->  Result  (cost=0.00..431.00 rows=1 width=12)
+                           ->  Result  (cost=0.00..431.00 rows=1 width=12)
+                                 ->  Seq Scan on s  (cost=0.00..431.00 rows=1 width=12)
+                                       Filter: ((s3 = 20) AND (s4 >= 10) AND (s4 <= 100))
     		]]>
     </dxl:Comment>
   <dxl:Thread Id="0">
@@ -421,10 +423,10 @@
         </dxl:LogicalGet>
       </dxl:LogicalSelect>
     </dxl:Query>
-    <dxl:Plan Id="0" SpaceSize="3363">
+    <dxl:Plan Id="0" SpaceSize="1539">
       <dxl:GatherMotion InputSegments="0,1,2" OutputSegments="-1">
         <dxl:Properties>
-          <dxl:Cost StartupCost="0" TotalCost="862.001244" Rows="1.000000" Width="20"/>
+          <dxl:Cost StartupCost="0" TotalCost="862.001544" Rows="1.000000" Width="20"/>
         </dxl:Properties>
         <dxl:ProjList>
           <dxl:ProjElem ColId="0" Alias="r1">
@@ -447,7 +449,7 @@
         <dxl:SortingColumnList/>
         <dxl:HashJoin JoinType="In">
           <dxl:Properties>
-            <dxl:Cost StartupCost="0" TotalCost="862.001170" Rows="1.000000" Width="20"/>
+            <dxl:Cost StartupCost="0" TotalCost="862.001470" Rows="1.000000" Width="20"/>
           </dxl:Properties>
           <dxl:ProjList>
             <dxl:ProjElem ColId="0" Alias="r1">

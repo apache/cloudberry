@@ -276,7 +276,7 @@ explain select * from foo,bar where b = (select min(b) from bar where a = b);
     <dxl:Plan Id="0" SpaceSize="12">
       <dxl:HashJoin JoinType="Inner">
         <dxl:Properties>
-          <dxl:Cost StartupCost="0" TotalCost="1324475.447525" Rows="1.000000" Width="8"/>
+          <dxl:Cost StartupCost="0" TotalCost="1324475.447625" Rows="1.000000" Width="8"/>
         </dxl:Properties>
         <dxl:ProjList>
           <dxl:ProjElem ColId="0" Alias="a">

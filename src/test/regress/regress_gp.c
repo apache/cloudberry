@@ -54,6 +54,7 @@
 #include "utils/memutils.h"
 #include "utils/resource_manager.h"
 #include "utils/timestamp.h"
+#include "utils/vmem_tracker.h"
 
 /* table_functions test */
 extern Datum multiset_example(PG_FUNCTION_ARGS);
@@ -112,6 +113,8 @@ extern Datum broken_int4out(PG_FUNCTION_ARGS);
 
 /* fts tests */
 extern Datum gp_fts_probe_stats(PG_FUNCTION_ARGS);
+
+extern Datum gp_get_int_tuples(PG_FUNCTION_ARGS);
 
 /* Triggers */
 
@@ -632,6 +635,7 @@ PG_FUNCTION_INFO_V1(resGroupPalloc);
 Datum
 resGroupPalloc(PG_FUNCTION_ARGS)
 {
+	static int32 startUpMbRemains = -1;
 	float ratio = PG_GETARG_FLOAT8(0);
 	int memLimit, slotQuota, sharedQuota;
 	int size;
@@ -641,8 +645,28 @@ resGroupPalloc(PG_FUNCTION_ARGS)
 	if (!IsResGroupEnabled())
 		PG_RETURN_INT32(0);
 
+	if (startUpMbRemains == -1)
+	{
+		startUpMbRemains =
+			(VmemTracker_GetStartupChunks())
+			<< (VmemTracker_GetChunkSizeInBits() - BITS_IN_MB);
+	}
+
 	ResGroupGetMemInfo(&memLimit, &slotQuota, &sharedQuota);
 	size = ceilf(memLimit * ratio);
+	/*
+	 * At startup, the backend process is already consuming some amount of
+	 * memory. In order not to complicate the logic of the tests, we take this
+	 * memory into account when allocating memory for tests.
+	 */
+	if (startUpMbRemains >= size)
+	{
+		startUpMbRemains -= size;
+		PG_RETURN_INT32(0);
+	}
+	size -= startUpMbRemains;
+	startUpMbRemains = 0;
+
 	count = size / 512;
 	for (i = 0; i < count; i++)
 		MemoryContextAlloc(TopMemoryContext, 512 * 1024 * 1024);
@@ -2326,4 +2350,99 @@ gp_keepalives_check(PG_FUNCTION_ARGS) {
 	}
 
 	SRF_RETURN_DONE(funcctx);
+}
+
+
+/*
+ * This test function intended to check possibility of resources deallocation 
+ * using squelch protocol in case of query termination during run of materialized
+ * Value Per Call table returning function.
+ */
+PG_FUNCTION_INFO_V1(gp_get_int_tuples);
+
+Datum
+gp_get_int_tuples(PG_FUNCTION_ARGS)
+{
+	typedef struct Context
+	{
+		int index;
+		int max_index;
+		Relation	aorel;
+	} Context;
+
+	FuncCallContext		*fctx;
+	Context *context;
+
+	int			n = PG_GETARG_INT32(0);	
+
+	if (SRF_IS_SQUELCH_CALL())
+	{
+		fctx = SRF_PERCALL_SETUP();
+		context = (Context *) fctx->user_fctx;
+		goto srf_done;
+	}
+
+	if (SRF_IS_FIRSTCALL())
+	{
+		TupleDesc tupdesc;
+		MemoryContext oldcontext;
+
+		fctx = SRF_FIRSTCALL_INIT();
+
+		/* Switch to memory context for appropriate multiple function call */
+		oldcontext = MemoryContextSwitchTo(fctx->multi_call_memory_ctx);
+
+		context = (Context *) palloc(sizeof(Context));
+		context->index = 0;
+		context->max_index = n;
+
+		context->aorel = heap_open(TypeRelationId, AccessShareLock);
+
+		/* Create tupdesc for result */
+		tupdesc = CreateTemplateTupleDesc(2, false);
+
+		TupleDescInitEntry(tupdesc, (AttrNumber) 1, "idx",
+							INT4OID, -1, 0);
+		TupleDescInitEntry(tupdesc, (AttrNumber) 2, "value",
+							INT4OID, -1, 0);
+		
+		fctx->tuple_desc = BlessTupleDesc(tupdesc);							
+		fctx->user_fctx = context;
+
+		MemoryContextSwitchTo(oldcontext);
+	}
+
+	fctx = SRF_PERCALL_SETUP();
+	context = (Context *) fctx->user_fctx;
+
+	if (context->index < context->max_index)
+	{
+		Datum values[2];
+		bool nulls[2];
+		HeapTuple tuple;
+		Datum result;
+
+		if (context->index == 3)
+		{
+			/* Simulate query cancellation */
+			SIMPLE_FAULT_INJECTOR("check_SRF_cancel");
+		}
+
+		MemSet(values, 0, sizeof(values));
+		MemSet(nulls, false, sizeof(nulls));
+
+		values[0] = Int16GetDatum(context->index);
+		values[1] = Int16GetDatum(context->index + 10);
+
+		context->index++;
+
+		tuple = heap_form_tuple(fctx->tuple_desc, values, nulls);
+		result = HeapTupleGetDatum(tuple);
+		SRF_RETURN_NEXT(fctx, result);
+	}
+
+srf_done:
+	heap_close(context->aorel, AccessShareLock);
+
+	SRF_RETURN_DONE(fctx);
 }

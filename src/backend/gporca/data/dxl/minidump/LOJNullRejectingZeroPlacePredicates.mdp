@@ -23,8 +23,8 @@
           ->  Nested Loop Left Join
                 Join Filter: true
                 ->  Result
-                ->  Aggregate
-                      ->  Materialize
+                ->  Materialize
+                    ->  Aggregate
                             ->  Gather Motion 3:1  (slice1; segments: 3)
                                   ->  Hash Join
                                         Hash Cond: (join_null_rej1.i = join_null_rej2.i)
@@ -417,21 +417,18 @@
     <dxl:Plan Id="0" SpaceSize="180">
       <dxl:Result>
         <dxl:Properties>
-          <dxl:Cost StartupCost="0" TotalCost="1324032.591012" Rows="1.000000" Width="8"/>
+          <dxl:Cost StartupCost="0" TotalCost="1324032.693412" Rows="1.000000" Width="8"/>
         </dxl:Properties>
         <dxl:ProjList>
           <dxl:ProjElem ColId="19" Alias="cnt">
-            <dxl:Coalesce TypeMdid="0.20.1.0">
-              <dxl:Ident ColId="20" ColName="ColRef_0020" TypeMdid="0.20.1.0"/>
-              <dxl:ConstValue TypeMdid="0.20.1.0" Value="0"/>
-            </dxl:Coalesce>
+            <dxl:Ident ColId="20" ColName="ColRef_0020" TypeMdid="0.20.1.0"/>
           </dxl:ProjElem>
         </dxl:ProjList>
         <dxl:Filter/>
         <dxl:OneTimeFilter/>
         <dxl:Result>
           <dxl:Properties>
-            <dxl:Cost StartupCost="0" TotalCost="1324032.591004" Rows="2.000000" Width="8"/>
+            <dxl:Cost StartupCost="0" TotalCost="1324032.693404" Rows="2.000000" Width="8"/>
           </dxl:Properties>
           <dxl:ProjList>
             <dxl:ProjElem ColId="20" Alias="ColRef_0020">
@@ -442,7 +439,7 @@
           <dxl:OneTimeFilter/>
           <dxl:NestedLoopJoin JoinType="Left" IndexNestedLoopJoin="false" OuterRefAsParam="false">
             <dxl:Properties>
-              <dxl:Cost StartupCost="0" TotalCost="1324032.590988" Rows="2.000000" Width="8"/>
+              <dxl:Cost StartupCost="0" TotalCost="1324032.693388" Rows="2.000000" Width="8"/>
             </dxl:Properties>
             <dxl:ProjList>
               <dxl:ProjElem ColId="18" Alias="cnt">
@@ -467,7 +464,7 @@
             </dxl:Result>
             <dxl:Materialize Eager="false">
               <dxl:Properties>
-                <dxl:Cost StartupCost="0" TotalCost="862.000485" Rows="1.000000" Width="8"/>
+                <dxl:Cost StartupCost="0" TotalCost="862.000585" Rows="1.000000" Width="8"/>
               </dxl:Properties>
               <dxl:ProjList>
                 <dxl:ProjElem ColId="18" Alias="cnt">
@@ -477,7 +474,7 @@
               <dxl:Filter/>
               <dxl:Aggregate AggregationStrategy="Plain" StreamSafe="false">
                 <dxl:Properties>
-                  <dxl:Cost StartupCost="0" TotalCost="862.000477" Rows="1.000000" Width="8"/>
+                  <dxl:Cost StartupCost="0" TotalCost="862.000577" Rows="1.000000" Width="8"/>
                 </dxl:Properties>
                 <dxl:GroupingColumns/>
                 <dxl:ProjList>
@@ -493,14 +490,14 @@
                 <dxl:Filter/>
                 <dxl:GatherMotion InputSegments="0,1,2" OutputSegments="-1">
                   <dxl:Properties>
-                    <dxl:Cost StartupCost="0" TotalCost="862.000477" Rows="1.200000" Width="1"/>
+                    <dxl:Cost StartupCost="0" TotalCost="862.000577" Rows="1.200000" Width="1"/>
                   </dxl:Properties>
                   <dxl:ProjList/>
                   <dxl:Filter/>
                   <dxl:SortingColumnList/>
                   <dxl:HashJoin JoinType="Inner">
                     <dxl:Properties>
-                      <dxl:Cost StartupCost="0" TotalCost="862.000473" Rows="1.200000" Width="1"/>
+                      <dxl:Cost StartupCost="0" TotalCost="862.000573" Rows="1.200000" Width="1"/>
                     </dxl:Properties>
                     <dxl:ProjList/>
                     <dxl:Filter/>
@@ -546,7 +543,7 @@
                       <dxl:Filter>
                         <dxl:Comparison ComparisonOperator="&lt;=" OperatorMdid="0.2535.1.0">
                           <dxl:Ident ColId="10" ColName="t" TypeMdid="0.1114.1.0"/>
-                          <dxl:FuncExpr FuncId="0.1299.1.0" FuncRetSet="false" TypeMdid="0.1184.1.0"/>
+                          <dxl:FuncExpr FuncId="0.1299.1.0" FuncRetSet="false" TypeMdid="0.1184.1.0" FuncVariadic="false"/>
                         </dxl:Comparison>
                       </dxl:Filter>
                       <dxl:TableDescriptor Mdid="6.72821.1.0" TableName="join_null_rej2">

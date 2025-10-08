@@ -1,0 +1,356 @@
+
+include: helpers/server_helpers.sql;
+CREATE
+
+1: create or replace function getTableSegFiles (t regclass, out gp_contentid smallint, out filepath text) as 'select current_setting(''gp_contentid'')::smallint, pg_relation_filepath(t)' language sql execute on all segments;
+CREATE
+
+1: create or replace function createTables(n text, mirror_catch_up bool default true) returns text as $$ declare cmd text; /**/ begin execute 'create table t_orphaned_h'||n||'(i int) distributed by (i)'; /**/ execute 'insert into t_orphaned_h'||n||' select generate_series(1,100)'; /**/ 
+execute 'create table t_orphaned_r'||n||'(i int) with (appendonly=true, orientation=row) distributed by (i)'; /**/ /* Create the .1 file */ execute 'insert into t_orphaned_r'||n||' select generate_series(1,100)'; /**/ 
+/* Create the .128 file */ execute 'create table t_orphaned_c'||n||' with (appendonly=true, orientation=column) as select i as i, i*2 as j from generate_series(1,100) i distributed by (i)'; /**/ /* Create the .1 and .129 files */ execute 'insert into t_orphaned_c'||n||' select i as i, i*2 as j from generate_series(1,100) i'; /**/ 
+if mirror_catch_up then /* Ensure that the mirrors have applied the filesystem changes */ perform force_mirrors_to_catch_up(); /**/ end if; /**/ 
+/* The command do not output PGDATA directories to make it possible to run the test without docker */ select string_agg('cd ' || datadir || '&&' || lswc, ';' order by datadir) into cmd from ( select gp_contentid, 'ls ' || string_agg(f, ' ') || ' 2>/dev/null | wc -l' lswc from ( select gp_contentid, filepath || suf f from getTableSegFiles('t_orphaned_h'||n), (values(''), ('.1'), ('_fsm')) v(suf) union all select gp_contentid, filepath || suf from getTableSegFiles('t_orphaned_r'||n), (values(''), ('.1')) v(suf) union all select gp_contentid, filepath || suf from getTableSegFiles('t_orphaned_c'||n), (values(''), ('.1'), ('.128'), ('.129')) v(suf) ) a group by gp_contentid ) f, (select content, datadir from gp_segment_configuration where content > -1) d where f.gp_contentid = d.content; /**/ 
+return cmd; /**/ end $$ language plpgsql;
+CREATE
+
+-- A copy of standard 'force_mirrors_to_catch_up()', but it forces all mirrors
+-- except the one specified by the argument
+-- (should be used in case one of mirrors is currently down).
+1: create or replace function force_mirrors_to_catch_up_with_exception(excluded_content int) returns void as $$ begin perform pg_switch_xlog(); /**/ perform pg_switch_xlog() from gp_dist_random('gp_id'); /**/ perform gp_inject_fault('after_xlog_redo_noop', 'sleep', dbid) from gp_segment_configuration where role='m' and content <> excluded_content; /**/ perform insert_noop_xlog_record(); /**/ perform insert_noop_xlog_record() from gp_dist_random('gp_id'); /**/ perform gp_wait_until_triggered_fault('after_xlog_redo_noop', 1, dbid) from gp_segment_configuration where role='m' and content <> excluded_content; /**/ perform gp_inject_fault('after_xlog_redo_noop', 'reset', dbid) from gp_segment_configuration where role='m' and content <> excluded_content; /**/ end $$ language plpgsql;
+CREATE
+
+-- Test case 1
+-- Check removal of orphaned files together with mirror promotion
+
+-- Start transaction and create tables in it before checkpoint
+1: begin;
+BEGIN
+1: @post_run 'echo "${RAW_STR}" | awk \'NR==3\' > /tmp/gp_orphaned_files_tx1.sh' : select createTables('_tx1');
+
+-- Let 2nd transaction to commit
+2: begin;
+BEGIN
+2: @post_run 'echo "${RAW_STR}" | awk \'NR==3\' > /tmp/gp_orphaned_files_tx2.sh' : select createTables('_tx2');
+2: commit;
+COMMIT
+1: checkpoint;
+CHECKPOINT
+
+-- Create another bunch of tables after savepoint
+1: savepoint sp1;
+SAVEPOINT
+1: @post_run 'echo "${RAW_STR}" | awk \'NR==3\' >> /tmp/gp_orphaned_files_tx1.sh' : select createTables('_tx1_sp1');
+
+-- Make sure that all the tables files exist on the segments
+1: ! sh /tmp/gp_orphaned_files_tx1.sh;
+7
+7
+7
+7
+7
+7
+7
+7
+7
+7
+7
+7
+
+
+-- shutdown primary and make sure the segment is down
+-1U: select pg_ctl((SELECT datadir from gp_segment_configuration c where c.role='p' and c.content=0), 'stop', 'immediate');
+ pg_ctl 
+--------
+ OK     
+(1 row)
+select gp_request_fts_probe_scan();
+ gp_request_fts_probe_scan 
+---------------------------
+ t                         
+(1 row)
+select role, preferred_role, status from gp_segment_configuration where content = 0;
+ role | preferred_role | status 
+------+----------------+--------
+ m    | p              | d      
+ p    | m              | u      
+(2 rows)
+
+-- Rollback the transaction to make it possible to run queries after the error
+1: rollback;
+ROLLBACK
+
+-- Make a checkpoint to remove orphaned files from segments that are still up
+1: checkpoint;
+CHECKPOINT
+
+1: select force_mirrors_to_catch_up_with_exception(0);
+ force_mirrors_to_catch_up_with_exception 
+------------------------------------------
+                                          
+(1 row)
+
+-- Check that the tables files don't exist on the segments (except ex-primary 0, which is yet down)
+! sh /tmp/gp_orphaned_files_tx1.sh;
+7
+0
+0
+0
+0
+0
+7
+0
+0
+0
+0
+0
+
+
+-- recovery the nodes
+!\retcode gprecoverseg -a;
+(exited with code 0)
+select wait_until_segment_synchronized(0);
+ wait_until_segment_synchronized 
+---------------------------------
+ OK                              
+(1 row)
+
+-- Check that the tables files don't exist on all segments now
+! sh /tmp/gp_orphaned_files_tx1.sh;
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+
+
+!\retcode gprecoverseg -ar;
+(exited with code 0)
+select wait_until_segment_synchronized(0);
+ wait_until_segment_synchronized 
+---------------------------------
+ OK                              
+(1 row)
+
+-- verify the first segment is recovered to the original state.
+select role, preferred_role, status from gp_segment_configuration where content = 0;
+ role | preferred_role | status 
+------+----------------+--------
+ p    | p              | u      
+ m    | m              | u      
+(2 rows)
+
+-- Check that the tables from the committed transaction still exist
+! sh /tmp/gp_orphaned_files_tx2.sh;
+7
+7
+7
+7
+7
+7
+
+
+drop table t_orphaned_h_tx2, t_orphaned_r_tx2, t_orphaned_c_tx2;
+DROP
+
+-- Test case 2
+-- Check that orphaned files are not removed after prepare is done
+-- together with mirror promotion
+-- and with orphaned files created (and later cleaned up) when the mirror is down.
+
+-- Start transaction and create tables in it before checkpoint
+1: begin;
+BEGIN
+1: @post_run 'echo "${RAW_STR}" | awk \'NR==3\' > /tmp/gp_orphaned_files_tx1.sh' : select createTables('_tx1');
+
+-- Let 2nd transaction to commit
+2: begin;
+BEGIN
+2: @post_run 'echo "${RAW_STR}" | awk \'NR==3\' > /tmp/gp_orphaned_files_tx2.sh' : select createTables('_tx2');
+2: commit;
+COMMIT
+1: checkpoint;
+CHECKPOINT
+
+-- Create another bunch of tables after savepoint
+1: savepoint sp1;
+SAVEPOINT
+1: @post_run 'echo "${RAW_STR}" | awk \'NR==3\' >> /tmp/gp_orphaned_files_tx1.sh' : select createTables('_tx1_sp1');
+
+-- Make sure that all the tables files exist on the segments
+1: ! sh /tmp/gp_orphaned_files_tx1.sh;
+7
+7
+7
+7
+7
+7
+7
+7
+7
+7
+7
+7
+
+
+-- Suspend commit after prepare
+select gp_inject_fault('dtm_broadcast_prepare', 'suspend', dbid) from gp_segment_configuration where role = 'p' and content = -1;
+ gp_inject_fault 
+-----------------
+ Success:        
+(1 row)
+
+1&: commit;  <waiting ...>
+select gp_wait_until_triggered_fault('dtm_broadcast_prepare', 1, dbid) from gp_segment_configuration where role = 'p' and content = -1;
+ gp_wait_until_triggered_fault 
+-------------------------------
+ Success:                      
+(1 row)
+
+-- shutdown primary and make sure the segment is down
+-1U: select pg_ctl((SELECT datadir from gp_segment_configuration c where c.role='p' and c.content=0), 'stop', 'immediate');
+ pg_ctl 
+--------
+ OK     
+(1 row)
+select gp_request_fts_probe_scan();
+ gp_request_fts_probe_scan 
+---------------------------
+ t                         
+(1 row)
+select role, preferred_role, status from gp_segment_configuration where content = 0;
+ role | preferred_role | status 
+------+----------------+--------
+ m    | p              | d      
+ p    | m              | u      
+(2 rows)
+
+3: begin;
+BEGIN
+3: @post_run 'echo "${RAW_STR}" | awk \'NR==3\' > /tmp/gp_orphaned_files_tx3.sh' : select createTables('_tx3', false);
+
+-- Get segfault on a segment
+3: select gp_inject_fault('qe_exec_finished', 'segv', dbid) from gp_segment_configuration where role = 'p' and content = 0;
+ gp_inject_fault 
+-----------------
+ Success:        
+(1 row)
+
+-- The error message can be different, so ignore it
+3: @post_run 'echo ""' : select 1 from gp_dist_random('gp_id');
+
+
+3: rollback;
+ROLLBACK
+3: checkpoint;
+CHECKPOINT
+
+3: select force_mirrors_to_catch_up_with_exception(0);
+ force_mirrors_to_catch_up_with_exception 
+------------------------------------------
+                                          
+(1 row)
+
+! sh /tmp/gp_orphaned_files_tx3.sh;
+0
+0
+0
+0
+0
+0
+
+
+-- recovery the nodes
+!\retcode gprecoverseg -a;
+(exited with code 0)
+select wait_until_segment_synchronized(0);
+ wait_until_segment_synchronized 
+---------------------------------
+ OK                              
+(1 row)
+
+!\retcode gprecoverseg -ar;
+(exited with code 0)
+select wait_until_segment_synchronized(0);
+ wait_until_segment_synchronized 
+---------------------------------
+ OK                              
+(1 row)
+
+-- verify the first segment is recovered to the original state.
+select role, preferred_role, status from gp_segment_configuration where content = 0;
+ role | preferred_role | status 
+------+----------------+--------
+ p    | p              | u      
+ m    | m              | u      
+(2 rows)
+
+select gp_inject_fault('dtm_broadcast_prepare', 'reset', dbid) from gp_segment_configuration where role = 'p' and content = -1;
+ gp_inject_fault 
+-----------------
+ Success:        
+(1 row)
+1<:  <... completed>
+COMMIT
+
+-- Check that the tables from the committed transactions still exist
+! sh /tmp/gp_orphaned_files_tx1.sh;
+7
+7
+7
+7
+7
+7
+7
+7
+7
+7
+7
+7
+
+! sh /tmp/gp_orphaned_files_tx2.sh;
+7
+7
+7
+7
+7
+7
+
+
+-- Check that the tables from the not committed transaction don't exist
+! sh /tmp/gp_orphaned_files_tx3.sh;
+0
+0
+0
+0
+0
+0
+
+
+-- Cleanup
+drop table t_orphaned_h_tx1, t_orphaned_r_tx1, t_orphaned_c_tx1;
+DROP
+drop table t_orphaned_h_tx1_sp1, t_orphaned_r_tx1_sp1, t_orphaned_c_tx1_sp1;
+DROP
+drop table t_orphaned_h_tx2, t_orphaned_r_tx2, t_orphaned_c_tx2;
+DROP
+
+drop function force_mirrors_to_catch_up_with_exception(excluded_content int);
+DROP
+drop function createTables(n text, mirror_catch_up bool);
+DROP
+drop function getTableSegFiles(t regclass, out gp_contentid smallint, out filepath text);
+DROP
+
+! rm /tmp/gp_orphaned_files_tx1.sh;
+
+! rm /tmp/gp_orphaned_files_tx2.sh;
+
+! rm /tmp/gp_orphaned_files_tx3.sh;
+

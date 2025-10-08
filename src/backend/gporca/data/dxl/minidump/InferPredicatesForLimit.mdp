@@ -276,7 +276,7 @@ a < 2 should also be outside the limit but not below.
     <dxl:Plan Id="0" SpaceSize="38">
       <dxl:Result>
         <dxl:Properties>
-          <dxl:Cost StartupCost="0" TotalCost="862.000626" Rows="1.000000" Width="4"/>
+          <dxl:Cost StartupCost="0" TotalCost="862.000726" Rows="1.000000" Width="4"/>
         </dxl:Properties>
         <dxl:ProjList>
           <dxl:ProjElem ColId="18" Alias="?column?">
@@ -287,14 +287,14 @@ a < 2 should also be outside the limit but not below.
         <dxl:OneTimeFilter/>
         <dxl:GatherMotion InputSegments="0,1,2" OutputSegments="-1">
           <dxl:Properties>
-            <dxl:Cost StartupCost="0" TotalCost="862.000622" Rows="1.000000" Width="1"/>
+            <dxl:Cost StartupCost="0" TotalCost="862.000722" Rows="1.000000" Width="1"/>
           </dxl:Properties>
           <dxl:ProjList/>
           <dxl:Filter/>
           <dxl:SortingColumnList/>
           <dxl:HashJoin JoinType="Inner">
             <dxl:Properties>
-              <dxl:Cost StartupCost="0" TotalCost="862.000618" Rows="1.000000" Width="1"/>
+              <dxl:Cost StartupCost="0" TotalCost="862.000718" Rows="1.000000" Width="1"/>
             </dxl:Properties>
             <dxl:ProjList/>
             <dxl:Filter/>

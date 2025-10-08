@@ -38,6 +38,7 @@
 #include "optimizer/restrictinfo.h"
 #include "optimizer/var.h"
 #include "optimizer/planshare.h"
+#include "optimizer/subselect.h"
 #include "parser/parse_clause.h"
 #include "parser/parsetree.h"
 #include "rewrite/rewriteManip.h"
@@ -2025,12 +2026,15 @@ set_cte_pathlist(PlannerInfo *root, RelOptInfo *rel, RangeTblEntry *rte)
 	{
 		/*
 		 * If plan sharing is disabled, we avoid performing DML inside CTE for
-		 * each reference. It'll cause duplicated DML operations or mutation
-		 * errors during cdbparallelize().
+		 * multi reference and recursive cases. Otherwise, it'll cause
+		 * duplicated DML operations.
 		 */
-		if (cte->cterefcount > 1 &&
-			((Query *) cte->ctequery)->commandType != CMD_SELECT)
+		if ((cte->cterefcount > 1 || cte->cterecursive) &&
+			(((Query *) cte->ctequery)->commandType != CMD_SELECT ||
+			cte_contains_dml(cte->ctequery, cteroot)))
+		{
 			elog(ERROR, "Too much references to non-SELECT CTE");
+		}
 
 		PlannerConfig *config = CopyPlannerConfig(root->config);
 

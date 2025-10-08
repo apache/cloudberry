@@ -1,3 +1,11 @@
+-- start_matchsubs
+-- m/Execution time: \d+\.\d+ ms/
+-- s/Execution time: \d+\.\d+ ms/Execution time: ##.### ms/
+-- s/Executor memory: (\d+)\w bytes \(seg\d+\)\./Executor memory: (#####)K bytes (seg#)./
+-- s/Executor memory: (\d+)\w bytes avg x \d+ workers, \d+\w bytes max \(seg\d+\)\./Executor memory: ####K bytes avg x #### workers, ####K bytes max (seg#)./
+-- m/Memory used:  \d+\w?B/
+-- s/Memory used:  \d+\w?B/Memory used: ###B/
+-- end_matchsubs
 -- Regression tests for prepareable statements. We query the content
 -- of the pg_prepared_statements view as prepared statements are
 -- created and removed.
@@ -145,6 +153,29 @@ SELECT * FROM q5_prep_results;
     9961 |    2058 |   1 |    1 |   1 |      1 |      61 |      961 |        1961 |      4961 |     9961 | 122 |  123 | DTAAAA   | EBDAAA   | OOOOxx
 (16 rows)
 
+-- ensure EXPLAIN ANALYZE CTAS from prepared statement creates table
+PREPARE p AS SELECT 1 i;
+EXPLAIN (ANALYZE, COSTS OFF, TIMING OFF)
+CREATE TEMPORARY TABLE t AS EXECUTE p;
+                                   QUERY PLAN                                    
+---------------------------------------------------------------------------------
+ Redistribute Motion 1:3  (slice1; segments: 1) (actual rows=1 loops=1)
+   Hash Key: 1
+   ->  Result (actual rows=1 loops=1)
+   (slice0)    Executor memory: 58K bytes avg x 3 workers, 58K bytes max (seg0).
+   (slice1)    Executor memory: 42K bytes (seg0).
+ Memory used:  128000kB
+ Optimizer: Postgres query optimizer
+ Execution time: 6.053 ms
+(8 rows)
+
+SELECT * FROM t;
+ i 
+---
+ 1
+(1 row)
+
+DEALLOCATE p;
 -- unknown or unspecified parameter types: should succeed
 PREPARE q6 AS
     SELECT * FROM tenk1 WHERE unique1 = $1 AND stringu1 = $2;
@@ -169,6 +200,17 @@ SELECT name, statement, parameter_types FROM pg_prepared_statements
  q7   | PREPARE q7(unknown) AS                                             +| {path}
       |     SELECT * FROM road WHERE thepath = $1;                          | 
 (5 rows)
+
+-- make sure the plan is correct after CTAS
+DROP TABLE t;
+PREPARE p AS SELECT * FROM generate_series(1, 10) i;
+CREATE TEMPORARY TABLE t AS EXECUTE p;
+EXPLAIN (COSTS OFF) EXECUTE p;
+             QUERY PLAN              
+-------------------------------------
+ Function Scan on generate_series i
+ Optimizer: Postgres query optimizer
+(2 rows)
 
 -- test DEALLOCATE ALL;
 DEALLOCATE ALL;

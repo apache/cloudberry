@@ -1,3 +1,12 @@
+-- start_matchsubs
+-- m/Execution time: \d+\.\d+ ms/
+-- s/Execution time: \d+\.\d+ ms/Execution time: ##.### ms/
+-- s/Executor memory: (\d+)\w bytes \(seg\d+\)\./Executor memory: (#####)K bytes (seg#)./
+-- s/Executor memory: (\d+)\w bytes avg x \d+ workers, \d+\w bytes max \(seg\d+\)\./Executor memory: ####K bytes avg x #### workers, ####K bytes max (seg#)./
+-- m/Memory used:  \d+\w?B/
+-- s/Memory used:  \d+\w?B/Memory used: ###B/
+-- end_matchsubs
+
 -- Regression tests for prepareable statements. We query the content
 -- of the pg_prepared_statements view as prepared statements are
 -- created and removed.
@@ -62,6 +71,13 @@ PREPARE q5(int, text) AS
 CREATE TEMPORARY TABLE q5_prep_results AS EXECUTE q5(200, 'DTAAAA');
 SELECT * FROM q5_prep_results;
 
+-- ensure EXPLAIN ANALYZE CTAS from prepared statement creates table
+PREPARE p AS SELECT 1 i;
+EXPLAIN (ANALYZE, COSTS OFF, TIMING OFF)
+CREATE TEMPORARY TABLE t AS EXECUTE p;
+SELECT * FROM t;
+DEALLOCATE p;
+
 -- unknown or unspecified parameter types: should succeed
 PREPARE q6 AS
     SELECT * FROM tenk1 WHERE unique1 = $1 AND stringu1 = $2;
@@ -70,6 +86,12 @@ PREPARE q7(unknown) AS
 
 SELECT name, statement, parameter_types FROM pg_prepared_statements
     ORDER BY name;
+
+-- make sure the plan is correct after CTAS
+DROP TABLE t;
+PREPARE p AS SELECT * FROM generate_series(1, 10) i;
+CREATE TEMPORARY TABLE t AS EXECUTE p;
+EXPLAIN (COSTS OFF) EXECUTE p;
 
 -- test DEALLOCATE ALL;
 DEALLOCATE ALL;

@@ -1,0 +1,40 @@
+#!/usr/bin/make -f
+# Run command: `make -C ./gpdb_src/gpAux pkg-deb`
+
+DH_VERBOSE = 1
+export DH_OPTIONS = -v
+export DEB_BUILD_OPTIONS = nocheck
+
+LSB_SI := $(shell lsb_release -si)
+LSB_SR := $(shell lsb_release -sr)
+
+ifeq ($(LSB_SI),Ubuntu)
+  ifeq ($(LSB_SR),22.04)
+    DEPS = python2.7
+  endif
+endif
+
+%:
+	dh $@
+
+override_dh_auto_clean:
+	@echo "Skipping clean"
+
+override_dh_auto_configure:
+	@echo "Skipping configure"
+
+override_dh_auto_build:
+	@echo "Skipping autobuild"
+
+override_dh_auto_install:
+	@echo "=== Building and installing with GPROOT=$(GPROOT), GPDIR=$(GPDIR), PACKAGE_NAME=$(PACKAGE_NAME) ==="
+	env -u CFLAGS -u CPPFLAGS -u CXXFLAGS -u LDFLAGS \
+	$(MAKE) dist \
+		DESTDIR=$(CURDIR)/debian/tmp/$(PACKAGE_NAME) \
+		GPROOT=$(GPROOT) \
+		GPDIR=$(GPDIR) \
+		PARALLEL_MAKE_OPTS=-j$(shell nproc)
+
+override_dh_gencontrol:
+	@echo "=== GENCONTROL GPROOT=$(GPROOT), GPDIR=$(GPDIR), PACKAGE_NAME=$(PACKAGE_NAME) ==="
+	dh_gencontrol -p$(PACKAGE_NAME) -- -VpythonRequires="$(DEPS)"

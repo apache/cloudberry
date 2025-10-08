@@ -1013,9 +1013,9 @@ CHistogram *
 CHistogram::CopyHistogram() const
 {
 	m_histogram_buckets->AddRef();
-	CHistogram *histogram_copy = GPOS_NEW(m_mp)
-		CHistogram(m_mp, m_histogram_buckets, m_is_well_defined, m_null_freq,
-				   m_distinct_remaining, m_freq_remaining);
+	CHistogram *histogram_copy = GPOS_NEW(m_mp) CHistogram(
+		m_mp, m_histogram_buckets, m_is_well_defined, m_null_freq,
+		m_distinct_remaining, m_freq_remaining, m_is_col_stats_missing);
 	if (WereNDVsScaled())
 	{
 		histogram_copy->SetNDVScaled();
@@ -1521,9 +1521,13 @@ CHistogram::MakeUnionAllHistogramNormalize(CDouble rows,
 		std::max((ULONG) max_num_buckets, std::max(num_buckets1, num_buckets2));
 	CBucketArray *result_buckets =
 		CombineBuckets(m_mp, new_buckets, desired_num_buckets);
-	CHistogram *result_histogram = GPOS_NEW(m_mp)
-		CHistogram(m_mp, result_buckets, true /*is_well_defined*/,
-				   new_null_freq, distinct_remaining, freq_remaining);
+
+	BOOL is_col_stat_missing =
+		IsColStatsMissing() && histogram->IsColStatsMissing();
+
+	CHistogram *result_histogram = GPOS_NEW(m_mp) CHistogram(
+		m_mp, result_buckets, true /*is_well_defined*/, new_null_freq,
+		distinct_remaining, freq_remaining, is_col_stat_missing);
 	(void) result_histogram->NormalizeHistogram();
 	GPOS_ASSERT(result_histogram->IsValid());
 

@@ -25,6 +25,8 @@ extern bool predicate_implied_by(List *predicate_list,
 					 List *restrictinfo_list);
 extern bool predicate_refuted_by(List *predicate_list,
 					 List *restrictinfo_list);
+extern bool predicate_implied_by_weak(List *predicate_list, List *clause_list);
+extern bool predicate_refuted_by_weak(List *predicate_list, List *clause_list);
 
 /***************************************************************************************
  * BEGIN functions and structures for determining a set of possible values from a clause

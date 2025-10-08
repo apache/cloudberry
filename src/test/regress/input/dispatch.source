@@ -10,7 +10,7 @@ CREATE EXTENSION IF NOT EXISTS gp_inject_fault;
 -- s/^ \(seg\d .*:\d+\)//
 -- m/^DETAIL:  Internal error: No motion listener port \(seg\d.*:.*\)/
 -- s/^DETAIL:  Internal error: No motion listener port \(seg\d.*:.*\)/DETAIL:  Internal error: No motion listener port/
--- m/WARNING:.*Any temporary tables for this session have been dropped because the gang was disconnected/
+-- m/WARNING:.*Any temporary tables for this session have been dropped because the gang was disconnected \(session id = \d*\)/
 -- s/session id \=\s*\d+/session id \= DUMMY/gm
 -- m/WARNING:  Connection \(seg\d.*:.*\) is broken/
 -- s/WARNING:  Connection \(seg\d.*:.*\) is broken/WARNING:  Connection seg0 slice1 is broken/
@@ -634,6 +634,11 @@ drop table t_create_gang_time;
 -- to segments on gpstop -u, if GUC_GPDB_NEED_SYNC is present in the flags.
 --
 
+-- start_matchsubs
+-- m/^ERROR:  failed to synchronize GUC settings across segments \(postgres.c:\d+\)/
+-- s/^ERROR:  failed to synchronize GUC settings across segments \(postgres.c:\d+\)/ERROR:  failed to synchronize GUC settings across segments/
+-- end_matchsubs
+
 -- start_ignore
 DROP ROLE IF EXISTS dispatch_test_user2;
 -- end_ignore
@@ -641,6 +646,9 @@ DROP ROLE IF EXISTS dispatch_test_user2;
 -- Use a separate user without any priveleges to catch possible context issues.
 CREATE ROLE dispatch_test_user2 NOSUPERUSER;
 SET SESSION AUTHORIZATION dispatch_test_user2;
+
+-- Make sure the gang wasn't dropped by a silent error.
+CREATE TEMP TABLE gang_is_the_same();
 
 CREATE OR REPLACE FUNCTION show_on_segments(show_name text)
 RETURNS table (guc_name text, guc_setting text)
@@ -704,6 +712,32 @@ SELECT * from show_on_segments('log_min_messages');
 -- After reset, QD and QE should hold the default value, 'safe_encoding'.
 SHOW backslash_quote;
 SELECT * from show_on_segments('backslash_quote');
+
+SELECT FROM gang_is_the_same;
+
+-- Make sure that at least one parameter from synced list has been changed
+--start_ignore
+\!gpconfig -c log_min_messages -v 'info'
+--end_ignore
+
+-- Don't fail silently if we encountered an error.
+SELECT gp_inject_fault('dispatch_set_command', 'error', dbid)
+FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+
+--start_ignore
+\!gpstop -u
+--end_ignore
+
+-- Table is gone after an error.
+DROP TABLE gang_is_the_same;
+
+SELECT gp_inject_fault('dispatch_set_command', 'reset', dbid)
+FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+
+--start_ignore
+\!gpconfig -r log_min_messages
+\!gpstop -u
+--end_ignore
 
 RESET SESSION AUTHORIZATION;
 

@@ -361,7 +361,7 @@
     <dxl:Plan Id="0" SpaceSize="420">
       <dxl:GatherMotion InputSegments="0,1,2" OutputSegments="-1">
         <dxl:Properties>
-          <dxl:Cost StartupCost="0" TotalCost="6896.001505" Rows="1.000000" Width="4"/>
+          <dxl:Cost StartupCost="0" TotalCost="6896.001905" Rows="1.000000" Width="4"/>
         </dxl:Properties>
         <dxl:ProjList>
           <dxl:ProjElem ColId="0" Alias="a">
@@ -372,7 +372,7 @@
         <dxl:SortingColumnList/>
         <dxl:NestedLoopJoin JoinType="In" IndexNestedLoopJoin="false" OuterRefAsParam="false">
           <dxl:Properties>
-            <dxl:Cost StartupCost="0" TotalCost="6896.001490" Rows="1.000000" Width="4"/>
+            <dxl:Cost StartupCost="0" TotalCost="6896.001890" Rows="1.000000" Width="4"/>
           </dxl:Properties>
           <dxl:ProjList>
             <dxl:ProjElem ColId="0" Alias="a">
@@ -408,20 +408,20 @@
           </dxl:TableScan>
           <dxl:Materialize Eager="false">
             <dxl:Properties>
-              <dxl:Cost StartupCost="0" TotalCost="862.000358" Rows="3.000000" Width="1"/>
+              <dxl:Cost StartupCost="0" TotalCost="862.000458" Rows="3.000000" Width="1"/>
             </dxl:Properties>
             <dxl:ProjList/>
             <dxl:Filter/>
             <dxl:BroadcastMotion InputSegments="0,1,2" OutputSegments="0,1,2">
               <dxl:Properties>
-                <dxl:Cost StartupCost="0" TotalCost="862.000357" Rows="3.000000" Width="1"/>
+                <dxl:Cost StartupCost="0" TotalCost="862.000457" Rows="3.000000" Width="1"/>
               </dxl:Properties>
               <dxl:ProjList/>
               <dxl:Filter/>
               <dxl:SortingColumnList/>
               <dxl:HashJoin JoinType="Inner">
                 <dxl:Properties>
-                  <dxl:Cost StartupCost="0" TotalCost="862.000339" Rows="1.000000" Width="1"/>
+                  <dxl:Cost StartupCost="0" TotalCost="862.000439" Rows="1.000000" Width="1"/>
                 </dxl:Properties>
                 <dxl:ProjList/>
                 <dxl:Filter/>

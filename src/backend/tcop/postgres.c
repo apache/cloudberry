@@ -25,6 +25,7 @@
 #include <time.h>
 #include <unistd.h>
 #include <sys/socket.h>
+#include "utils/elog.h"
 #ifdef HAVE_SYS_SELECT_H
 #include <sys/select.h>
 #endif
@@ -1589,11 +1590,19 @@ send_guc_to_QE(List *guc_list, bool is_restore)
 		}
 		PG_CATCH();
 		{
+			/*
+			 * report error as warning 
+			*/
+			if (!elog_dismiss(WARNING))
+			{
+				PG_RE_THROW();
+			}
+
 			/* if some guc can not restore successful
 			 * we can not keep alive gang anymore.
 			 */
 			DisconnectAndDestroyAllGangs(true);
-			CheckForResetSession();
+
 			/*
 			 * when qe elog an error, qd will use ReThrowError to
 			 * re throw the error, the errordata_stack_depth will ++,
@@ -1601,6 +1610,14 @@ send_guc_to_QE(List *guc_list, bool is_restore)
 			 * by FlushErrorState.
 			 */
 			FlushErrorState();
+
+			ereport(
+				ERROR,
+				(errcode(ERRCODE_INTERNAL_ERROR),
+					errmsg("failed to synchronize GUC settings across segments"),
+					errdetail("Query aborted due to GUC synchronization failure"),
+					errhint("Check segment logs for more details")));
+
 			/*
 			 * this is a top-level catch block and we are responsible for
 			 * restoring the right memory context.
@@ -3784,6 +3801,7 @@ ProcessInterrupts(const char* filename, int lineno)
 	{
 		ProcDiePending = false;
 		QueryCancelPending = false;		/* ProcDie trumps QueryCancel */
+		QueryCancelCleanup = false;		/* no cancel request means no error */
 		ImmediateInterruptOK = false;	/* not idle anymore */
 		ImmediateDieOK = false;		/* prevent re-entry */
 		LockErrorCleanup();
@@ -3857,6 +3875,7 @@ ProcessInterrupts(const char* filename, int lineno)
 	if (ClientConnectionLost)
 	{
 		QueryCancelPending = false;		/* lost connection trumps QueryCancel */
+		QueryCancelCleanup = false;		/* no cancel request means no error */
 		ImmediateInterruptOK = false;	/* not idle anymore */
 		LockErrorCleanup();
 		DisableNotifyInterrupt();
@@ -3878,6 +3897,7 @@ ProcessInterrupts(const char* filename, int lineno)
 	if (RecoveryConflictPending && DoingCommandRead)
 	{
 		QueryCancelPending = false;			/* this trumps QueryCancel */
+		QueryCancelCleanup = false;			/* no cancel request means no error */
 		ImmediateInterruptOK = false;		/* not idle anymore */
 		RecoveryConflictPending = false;
 		LockErrorCleanup();
@@ -4038,6 +4058,13 @@ ProcessInterrupts(const char* filename, int lineno)
 						break;
 				}
 			}
+		}
+		else
+		{
+			/*
+			 * Skip cleanup as far as we forget a cancel request
+			 */
+			QueryCancelCleanup = false;
 		}
 	}
 	/* If we get here, do nothing (probably, QueryCancelPending was reset) */

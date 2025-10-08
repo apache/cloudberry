@@ -740,6 +740,9 @@ private:
 	// helper to build a Result expression with project list restricted to required columns
 	CDXLNode *PdxlnRestrictResult(CDXLNode *dxlnode, const CColRefSet *colrefs);
 
+	// helper to build a projected DXLColRefs of Result node
+	CDXLColRefArray *GetResultProjectedColRefArray(CDXLNode *dxlProjectNode);
+
 	//	helper to build subplans from correlated LOJ
 	void BuildSubplansForCorrelatedLOJ(
 		CExpression *pexprCorrelatedLOJ, CDXLColRefArray *dxl_colref_array,

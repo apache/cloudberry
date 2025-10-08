@@ -61,3 +61,28 @@ from
 having count(t1c) is not null;
 
 DROP TABLE test_having;
+
+create temp table gstest2 (a integer, b integer, c integer, d integer,
+                           e integer, f integer, g integer, h integer);
+copy gstest2 from stdin;
+1	1	1	1	1	1	1	1
+1	1	1	1	1	1	1	2
+1	1	1	1	1	1	2	2
+1	1	1	1	1	2	2	2
+1	1	1	1	2	2	2	2
+1	1	1	2	2	2	2	2
+1	1	2	2	2	2	2	2
+1	2	2	2	2	2	2	2
+2	2	2	2	2	2	2	2
+\.
+ANALYZE gstest2;
+
+explain (costs off)
+select a,count(*) from gstest2 group by rollup(a) having a is distinct from 1 order by a;
+select a,count(*) from gstest2 group by rollup(a) having a is distinct from 1 order by a;
+
+explain (costs off)
+select v.c, (select count(*) from gstest2 group by () having v.c)
+  from (values (false),(true)) v(c) order by v.c;
+select v.c, (select count(*) from gstest2 group by () having v.c)
+  from (values (false),(true)) v(c) order by v.c;

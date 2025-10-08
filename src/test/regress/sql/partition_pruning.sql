@@ -1310,4 +1310,15 @@ select tableoid::regclass, ctid, i, j, k from test;
 
 drop table test, test_extra_exchanged, test_in_predicate;
 
+-- Check isnull clause prunes the not null partitions.
+create table test(i int, j int, k int) distributed by (i)
+partition by range(j) (start (1) end(3) every(2), default partition extra);
+insert into test values (1, null, 1), (2, 1, 2);
+
+explain (costs off) select * from test where j isnull;
+
+select * from test where j isnull;
+
+drop table test;
+
 RESET ALL;

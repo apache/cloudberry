@@ -68,6 +68,13 @@ CXformSubqueryUnnest::PexprSubqueryUnnest(CMemoryPool *mp, CExpression *pexpr,
 		return NULL;
 	}
 
+	if (GPOS_FTRACE(EopttraceDoNotEnforceCorrelatedExecution) &&
+		fEnforceCorrelatedApply)
+	{
+		// do not try to enforce correlated apply
+		return NULL;
+	}
+
 	// extract components
 	CExpression *pexprOuter = (*pexpr)[0];
 	CExpression *pexprScalar = (*pexpr)[1];

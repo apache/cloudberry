@@ -3183,13 +3183,13 @@ SetupUDPIFCInterconnect_Internal(SliceTable *sliceTable)
 		CursorICHistoryTable *ich_table = &rx_control_info.cursorHistoryTable;
 		DistributedTransactionId distTransId = getDistributedTransactionId();
 
-		if (ich_table->count > (2 * ich_table->size))
+		if (distTransId != rx_control_info.lastDXatId)
 		{
 			/*
 			 * distTransId != lastDXatId
 			 * Means the last transaction is finished, it's ok to make a prune.
 			 */
-			if (distTransId != rx_control_info.lastDXatId)
+			if (ich_table->count > (2 * ich_table->size))
 			{
 				if (gp_log_interconnect >= GPVARS_VERBOSITY_DEBUG)
 					elog(DEBUG1, "prune cursor history table (count %d), icid %d, prune_id %d",

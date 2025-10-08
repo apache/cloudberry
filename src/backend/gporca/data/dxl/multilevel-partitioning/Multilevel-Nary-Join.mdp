@@ -1429,7 +1429,7 @@ select * from pt, foo, bar where pt.k=foo.a and pt.j = bar.a;
     <dxl:Plan Id="0" SpaceSize="0">
       <dxl:GatherMotion InputSegments="0,1" OutputSegments="-1">
         <dxl:Properties>
-          <dxl:Cost StartupCost="0" TotalCost="1293.216628" Rows="810.000000" Width="28"/>
+          <dxl:Cost StartupCost="0" TotalCost="1293.222628" Rows="810.000000" Width="28"/>
         </dxl:Properties>
         <dxl:ProjList>
           <dxl:ProjElem ColId="0" Alias="i">
@@ -1458,7 +1458,7 @@ select * from pt, foo, bar where pt.k=foo.a and pt.j = bar.a;
         <dxl:SortingColumnList/>
         <dxl:HashJoin JoinType="Inner">
           <dxl:Properties>
-            <dxl:Cost StartupCost="0" TotalCost="1293.114794" Rows="810.000000" Width="28"/>
+            <dxl:Cost StartupCost="0" TotalCost="1293.120794" Rows="810.000000" Width="28"/>
           </dxl:Properties>
           <dxl:ProjList>
             <dxl:ProjElem ColId="0" Alias="i">
@@ -1493,7 +1493,7 @@ select * from pt, foo, bar where pt.k=foo.a and pt.j = bar.a;
           </dxl:HashCondList>
           <dxl:HashJoin JoinType="Inner">
             <dxl:Properties>
-              <dxl:Cost StartupCost="0" TotalCost="862.034622" Rows="270.000000" Width="20"/>
+              <dxl:Cost StartupCost="0" TotalCost="862.037622" Rows="270.000000" Width="20"/>
             </dxl:Properties>
             <dxl:ProjList>
               <dxl:ProjElem ColId="0" Alias="i">

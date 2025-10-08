@@ -507,20 +507,22 @@ analyze t1;
 -- Function Scan
 explain
 select count(*) from pg_backend_pid() b(a) where b.a % 100000 in (select a from t1);
-                                     QUERY PLAN                                     
-------------------------------------------------------------------------------------
- Aggregate  (cost=0.00..450.95 rows=1 width=8)
-   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..450.95 rows=1 width=1)
-         ->  Hash Semi Join  (cost=0.00..450.95 rows=1 width=1)
-               Hash Cond: ((b % 100000) = a)
-               ->  Result  (cost=0.00..0.00 rows=1 width=4)
-                     ->  Result  (cost=0.00..0.00 rows=1 width=4)
-                           ->  Result  (cost=0.00..0.00 rows=1 width=4)
+                                                QUERY PLAN                                                 
+-----------------------------------------------------------------------------------------------------------
+ Aggregate  (cost=0.00..450.99 rows=1 width=8)
+   ->  GroupAggregate  (cost=0.00..450.99 rows=1 width=1)
+         Group Key: 
+         ->  Sort  (cost=0.00..450.99 rows=1 width=1)
+               Sort Key: 
+               ->  Hash Join  (cost=0.00..450.99 rows=1 width=1)
+                     Hash Cond: (a = (b % 100000))
+                     ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..433.36 rows=100000 width=4)
+                           ->  Seq Scan on t1  (cost=0.00..431.62 rows=33334 width=4)
+                     ->  Hash  (cost=0.00..0.00 rows=1 width=5)
+                           ->  Result  (cost=0.00..0.00 rows=1 width=5)
                                  ->  Result  (cost=0.00..0.00 rows=1 width=1)
-               ->  Hash  (cost=431.62..431.62 rows=33334 width=4)
-                     ->  Seq Scan on t1  (cost=0.00..431.62 rows=33334 width=4)
  Optimizer: Pivotal Optimizer (GPORCA)
-(11 rows)
+(13 rows)
 
 select count(*) from pg_backend_pid() b(a) where b.a % 100000 in (select a from t1);
  count 
@@ -537,10 +539,10 @@ explain
 select count(*) from ( values :lots_of_values ) as b(a) where b.a % 100000 in (select a from t1);
                                             QUERY PLAN                                             
 ---------------------------------------------------------------------------------------------------
- Aggregate  (cost=0.00..443.14 rows=1 width=8)
-   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..443.14 rows=1 width=8)
-         ->  Aggregate  (cost=0.00..443.14 rows=1 width=8)
-               ->  Hash Semi Join  (cost=0.00..443.14 rows=22000 width=1)
+ Aggregate  (cost=0.00..446.47 rows=1 width=8)
+   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..446.47 rows=1 width=8)
+         ->  Aggregate  (cost=0.00..446.47 rows=1 width=8)
+               ->  Hash Semi Join  (cost=0.00..446.47 rows=22000 width=1)
                      Hash Cond: (("Values".column1 % 100000) = t1.a)
                      ->  Result  (cost=0.00..0.95 rows=22000 width=4)
                            ->  Result  (cost=0.00..0.95 rows=22000 width=4)
@@ -557,3 +559,77 @@ select count(*) from ( values :lots_of_values ) as b(a) where b.a % 100000 in (s
 (1 row)
 
 drop table t1;
+-- Test that ORCA can build a plan for a query with a subquery that contains union all or distinct.
+-- start_ignore
+drop table if exists t1;
+NOTICE:  table "t1" does not exist, skipping
+drop table if exists t2;
+NOTICE:  table "t2" does not exist, skipping
+-- end_ignore
+create table t1 (a int, b int) distributed by (a);
+create table t2 (a int, b int) distributed by (a);
+insert into t1 values(1,1);
+insert into t1 values(2,2);
+insert into t2 values(0,0);
+insert into t2 values(3,3);
+set optimizer_donot_enforce_subplans = on;
+explain (costs off) select * from t1 where 0 in (select t2.b from t2 where t2.a = 0 or t2.b = t1.b union all select 1);
+                             QUERY PLAN                             
+--------------------------------------------------------------------
+ Result
+   Filter: (SubPlan 1)
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         ->  Seq Scan on t1
+   SubPlan 1  (slice0)
+     ->  Append
+           ->  Result
+                 Filter: ((t2.a = 0) OR (t2.b = t1.b))
+                 ->  Materialize
+                       ->  Gather Motion 3:1  (slice2; segments: 3)
+                             ->  Seq Scan on t2
+                                   Filter: (0 = b)
+           ->  Result
+                 Filter: (0 = "outer".?column?)
+                 ->  Result
+                       ->  Result
+ Optimizer: Pivotal Optimizer (GPORCA)
+(17 rows)
+
+select * from t1 where 0 in (select t2.b from t2 where t2.a = 0 or t2.b = t1.b union all select 1);
+ a | b 
+---+---
+ 2 | 2
+ 1 | 1
+(2 rows)
+
+explain (costs off) select * from t1 where 0 in (select t2.b from t2 where t2.a = 0 or t2.b = t1.b group by 1);
+                                QUERY PLAN                                
+--------------------------------------------------------------------------
+ Result
+   Filter: (SubPlan 1)
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         ->  Seq Scan on t1
+   SubPlan 1  (slice0)
+     ->  GroupAggregate
+           Group Key: t2.b
+           ->  Sort
+                 Sort Key: t2.b
+                 ->  Result
+                       Filter: ((t2.a = 0) OR (t2.b = t1.b))
+                       ->  Materialize
+                             ->  Gather Motion 3:1  (slice2; segments: 3)
+                                   ->  Seq Scan on t2
+                                         Filter: (0 = b)
+ Optimizer: Pivotal Optimizer (GPORCA)
+(16 rows)
+
+select * from t1 where 0 in (select t2.b from t2 where t2.a = 0 or t2.b = t1.b group by 1);
+ a | b 
+---+---
+ 2 | 2
+ 1 | 1
+(2 rows)
+
+reset optimizer_donot_enforce_subplans;
+drop table t1;
+drop table t2;

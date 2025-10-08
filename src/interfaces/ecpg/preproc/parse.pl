@@ -102,8 +102,8 @@ my %replace_line = (
 	  'RETURNING target_list opt_ecpg_into',
 	'ExecuteStmtEXECUTEnameexecute_param_clause' =>
 	  'EXECUTE prepared_name execute_param_clause execute_rest',
-'ExecuteStmtCREATEOptTempTABLEcreate_as_targetASEXECUTEnameexecute_param_clause'
-	  => 'CREATE OptTemp TABLE create_as_target AS EXECUTE prepared_name execute_param_clause',
+'ExecuteStmtCREATEOptTempTABLEcreate_as_targetASEXECUTEnameexecute_param_clauseDistributedBy'
+	  => 'CREATE OptTemp TABLE create_as_target AS EXECUTE prepared_name execute_param_clause DistributedBy',
 	'PrepareStmtPREPAREnameprep_type_clauseASPreparableStmt' =>
 	  'PREPARE prepared_name prep_type_clause AS PreparableStmt',
 	'var_nameColId' => 'ECPGColId',);

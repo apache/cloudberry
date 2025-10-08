@@ -645,7 +645,7 @@ explain analyze insert into t1 select t2.a,t3.b from t2, t3 where t2.a = t3.a;
     <dxl:Plan Id="0" SpaceSize="18">
       <dxl:DMLInsert Columns="0,6" ActionCol="10" CtidCol="0" SegmentIdCol="0">
         <dxl:Properties>
-          <dxl:Cost StartupCost="0" TotalCost="877.746838" Rows="1000.000000" Width="7"/>
+          <dxl:Cost StartupCost="0" TotalCost="877.771838" Rows="1000.000000" Width="7"/>
         </dxl:Properties>
         <dxl:DirectDispatchInfo/>
         <dxl:ProjList>
@@ -667,7 +667,7 @@ explain analyze insert into t1 select t2.a,t3.b from t2, t3 where t2.a = t3.a;
         </dxl:TableDescriptor>
         <dxl:Result>
           <dxl:Properties>
-            <dxl:Cost StartupCost="0" TotalCost="862.121838" Rows="1000.000000" Width="16"/>
+            <dxl:Cost StartupCost="0" TotalCost="862.146838" Rows="1000.000000" Width="16"/>
           </dxl:Properties>
           <dxl:ProjList>
             <dxl:ProjElem ColId="0" Alias="a">
@@ -684,7 +684,7 @@ explain analyze insert into t1 select t2.a,t3.b from t2, t3 where t2.a = t3.a;
           <dxl:OneTimeFilter/>
           <dxl:HashJoin JoinType="Inner">
             <dxl:Properties>
-              <dxl:Cost StartupCost="0" TotalCost="862.117838" Rows="1000.000000" Width="7"/>
+              <dxl:Cost StartupCost="0" TotalCost="862.142838" Rows="1000.000000" Width="7"/>
             </dxl:Properties>
             <dxl:ProjList>
               <dxl:ProjElem ColId="0" Alias="a">

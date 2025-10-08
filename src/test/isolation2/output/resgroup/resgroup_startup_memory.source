@@ -1,0 +1,178 @@
+-- start_ignore
+drop table if exists t1;
+drop role if exists test1;
+drop role if exists test2;
+drop resource group rg1;
+drop resource group rg2;
+-- end_ignore
+
+create extension if not exists gp_inject_fault;
+CREATE
+
+create or replace function resGroupPalloc(float) returns int as '/home/gpadmin/gpdb_src/src/test/isolation2/../regress/regress.so', 'resGroupPalloc' language C reads sql data;
+CREATE
+create or replace function hold_memory_by_percent_on_qe(float) returns int as $$ select resGroupPalloc($1) from gp_dist_random('gp_id') $$ language sql;
+CREATE
+
+create or replace function repeatPalloc(int, int) returns int as '/home/gpadmin/gpdb_src/src/test/isolation2/../regress/regress.so', 'repeatPalloc' language C reads sql data;
+CREATE
+
+-- In the next test, we need to be able to allocate 100% of the available
+-- memory. Therefore, we set the memory_limit for the built-in groups to 0.
+-- memory_spill_ratio must also be set to 0.
+alter resource group admin_group set memory_spill_ratio 0;
+ALTER
+alter resource group default_group set memory_spill_ratio 0;
+ALTER
+alter resource group admin_group set memory_limit 0;
+ALTER
+alter resource group default_group set memory_limit 0;
+ALTER
+
+create resource group rg1 with (cpu_rate_limit=20, memory_limit=15, memory_shared_quota=100);
+CREATE
+create resource group rg2 with (cpu_rate_limit=20, memory_limit=85, memory_shared_quota=100);
+CREATE
+
+create role test1 with resource group rg1;
+CREATE
+create role test2 with resource group rg2;
+CREATE
+
+1: set role test1;
+SET
+1: create table t1 (a int) distributed randomly;
+CREATE
+-- We need to have a random distribution so that each select in the join is
+-- performed in a separate slice.
+-- Add exactly one line to each segment.
+0U: insert into t1 values (1);
+INSERT 1
+1U: insert into t1 values (2);
+INSERT 1
+2U: insert into t1 values (3);
+INSERT 1
+0Uq: ... <quitting>
+1Uq: ... <quitting>
+2Uq: ... <quitting>
+
+-- Force nested loop join to avoid unnecessary memory allocations.
+1: set enable_nestloop = on;
+SET
+1: set enable_hashjoin = off;
+SET
+
+set role test2;
+SET
+begin;
+BEGIN
+
+-- Allocate all the memory in the second resource group.
+select hold_memory_by_percent_on_qe(1);
+ hold_memory_by_percent_on_qe 
+------------------------------
+ 0                            
+(1 row)
+-- Wait for all backends to run before executing the query. This is necessary
+-- to avoid executing repeatPalloc before all backends are up.
+select gp_inject_fault_infinite('executor_pre_tuple_processed', 'suspend', dbid) from gp_segment_configuration where role = 'p' and content > -1;
+ gp_inject_fault_infinite 
+--------------------------
+ Success:                 
+ Success:                 
+ Success:                 
+(3 rows)
+-- The first resource group has 682 * 0.15 = 102 MB of memory available.
+-- 6 slices consume 12 * 6 = 72 MB, plus one slice explicitly allocates 40 MB of
+-- memory, 72 + 40 = 112 MB. It is expected that the query will be canceled due
+-- to lack of memory in the resource group but not in the Vmem tracker.
+1&: with sleep_cte as ( select a, pg_sleep(60) is null from t1 ), alloc_cte as ( select * from sleep_cte where repeatPalloc(40, 1) is not null ) select * from alloc_cte a1 join sleep_cte a2 using(a) join sleep_cte a3 using(a) join sleep_cte a4 using(a) join sleep_cte a5 using(a);  <waiting ...>
+select gp_wait_until_triggered_fault('executor_pre_tuple_processed', 6, dbid) from gp_segment_configuration where role = 'p' and content > -1;
+ gp_wait_until_triggered_fault 
+-------------------------------
+ Success:                      
+ Success:                      
+ Success:                      
+(3 rows)
+select gp_inject_fault('executor_pre_tuple_processed', 'reset', dbid) from gp_segment_configuration where role = 'p' and content > -1;
+ gp_inject_fault 
+-----------------
+ Success:        
+ Success:        
+ Success:        
+(3 rows)
+1<:  <... completed>
+ERROR:  Out of memory  (seg0 slice3 172.22.0.2:6002 pid=4876)
+DETAIL:  Resource group memory limit reached
+rollback;
+ROLLBACK
+
+-- Test that the starting memory is visible to the resource group.
+select gp_inject_fault('executor_pre_tuple_processed', 'suspend', dbid) from gp_segment_configuration where role = 'p' and content > -1;
+ gp_inject_fault 
+-----------------
+ Success:        
+ Success:        
+ Success:        
+(3 rows)
+1&: select count(*) from t1;  <waiting ...>
+select gp_wait_until_triggered_fault('executor_pre_tuple_processed', 1, dbid) from gp_segment_configuration where role = 'p' and content > -1;
+ gp_wait_until_triggered_fault 
+-------------------------------
+ Success:                      
+ Success:                      
+ Success:                      
+(3 rows)
+
+select segment, mem.* from gp_toolkit.gp_resgroup_status, json_object_keys(memory_usage) as segment, json_to_record(memory_usage -> segment) mem (used int) where rsgname = 'rg1';
+ segment | used 
+---------+------
+ -1      | 12   
+ 0       | 12   
+ 1       | 12   
+ 2       | 12   
+(4 rows)
+
+select gp_inject_fault('executor_pre_tuple_processed', 'reset', dbid) from gp_segment_configuration where role = 'p' and content > -1;
+ gp_inject_fault 
+-----------------
+ Success:        
+ Success:        
+ Success:        
+(3 rows)
+1<:  <... completed>
+ count 
+-------
+ 3     
+(1 row)
+1q: ... <quitting>
+
+reset role;
+RESET
+drop table t1;
+DROP
+drop role test1;
+DROP
+drop role test2;
+DROP
+drop resource group rg1;
+DROP
+drop resource group rg2;
+DROP
+
+alter resource group default_group set memory_limit 30;
+ALTER
+alter resource group default_group set memory_spill_ratio 10;
+ALTER
+
+alter resource group admin_group set memory_limit 10;
+ALTER
+alter resource group admin_group set memory_spill_ratio 10;
+ALTER
+
+drop function repeatPalloc(int, int);
+DROP
+drop function hold_memory_by_percent_on_qe(float);
+DROP
+drop function resGroupPalloc(float);
+DROP

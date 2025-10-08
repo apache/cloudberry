@@ -3195,6 +3195,7 @@ RelationSetNewRelfilenode(Relation relation, TransactionId freezeXid,
 	Oid			newrelfilenode;
 	RelFileNodeBackend newrnode;
 	Relation	pg_class;
+	ItemPointerData otid;
 	HeapTuple	tuple;
 	Form_pg_class classform;
 
@@ -3214,11 +3215,12 @@ RelationSetNewRelfilenode(Relation relation, TransactionId freezeXid,
 	 */
 	pg_class = heap_open(RelationRelationId, RowExclusiveLock);
 
-	tuple = SearchSysCacheCopy1(RELOID,
-								ObjectIdGetDatum(RelationGetRelid(relation)));
+	tuple = SearchSysCacheLockedCopy1(RELOID,
+									  ObjectIdGetDatum(RelationGetRelid(relation)));
 	if (!HeapTupleIsValid(tuple))
 		elog(ERROR, "could not find tuple for relation %u",
 			 RelationGetRelid(relation));
+	otid = tuple->t_self;
 	classform = (Form_pg_class) GETSTRUCT(tuple);
 
 	/*
@@ -3301,9 +3303,10 @@ RelationSetNewRelfilenode(Relation relation, TransactionId freezeXid,
 		}
 		classform->relminmxid = minmulti;
 
-		CatalogTupleUpdate(pg_class, &tuple->t_self, tuple);
+		CatalogTupleUpdate(pg_class, &otid, tuple);
 	}
 
+	UnlockTuple(pg_class, &otid, InplaceUpdateTupleLock);
 	heap_freetuple(tuple);
 
 	heap_close(pg_class, RowExclusiveLock);
