@@ -143,9 +143,23 @@ fi
 if [[ "${CODEBASE_VERSION}" = "main"  ]]; then
     DOCKERFILE=Dockerfile.${CODEBASE_VERSION}.${OS_VERSION}
 
+    # Single image build
     docker build --file ${DOCKERFILE} \
                  --build-arg TIMEZONE_VAR="${TIMEZONE_VAR}" \
                  --tag cbdb-${CODEBASE_VERSION}:${OS_VERSION} .
+
+    # Prepare shared cluster-ssh volume for multinode (keys live in /opt/cbdb/cluster-ssh inside the volume)
+    if [[ "${MULTINODE}" == "true" ]]; then
+        TMP_CLUSTER_SSH_DIR="$(mktemp -d)"
+        ssh-keygen -t rsa -b 4096 -N "" -f "${TMP_CLUSTER_SSH_DIR}/id_rsa" >/dev/null 2>&1
+        docker volume create cbdb-cluster-ssh >/dev/null 2>&1 || true
+        # Populate the volume using a one-off container
+        docker run --rm \
+          -v cbdb-cluster-ssh:/opt/cbdb/cluster-ssh \
+          -v "${TMP_CLUSTER_SSH_DIR}":/tmp/keys:ro \
+          cbdb-${CODEBASE_VERSION}:${OS_VERSION} bash -lc 'set -e; sudo mkdir -p /opt/cbdb/cluster-ssh; sudo cp /tmp/keys/id_rsa /opt/cbdb/cluster-ssh/id_rsa; sudo cp /tmp/keys/id_rsa.pub /opt/cbdb/cluster-ssh/id_rsa.pub; sudo cp /tmp/keys/id_rsa.pub /opt/cbdb/cluster-ssh/coordinator.pub; sudo chmod 700 /opt/cbdb/cluster-ssh; sudo chmod 600 /opt/cbdb/cluster-ssh/id_rsa; sudo chmod 644 /opt/cbdb/cluster-ssh/id_rsa.pub /opt/cbdb/cluster-ssh/coordinator.pub'
+        rm -rf "${TMP_CLUSTER_SSH_DIR}"
+    fi
 else
     DOCKERFILE=Dockerfile.RELEASE.${OS_VERSION}
 
@@ -153,6 +167,18 @@ else
                  --build-arg TIMEZONE_VAR="${TIMEZONE_VAR}" \
                  --build-arg CODEBASE_VERSION_VAR="${CODEBASE_VERSION}" \
                  --tag cbdb-${CODEBASE_VERSION}:${OS_VERSION} .
+
+    # For release multinode, also prepare shared cluster-ssh volume (same as main)
+    if [[ "${MULTINODE}" == "true" ]]; then
+        TMP_CLUSTER_SSH_DIR="$(mktemp -d)"
+        ssh-keygen -t rsa -b 4096 -N "" -f "${TMP_CLUSTER_SSH_DIR}/id_rsa" >/dev/null 2>&1
+        docker volume create cbdb-cluster-ssh >/dev/null 2>&1 || true
+        docker run --rm \
+          -v cbdb-cluster-ssh:/opt/cbdb/cluster-ssh \
+          -v "${TMP_CLUSTER_SSH_DIR}":/tmp/keys:ro \
+          cbdb-${CODEBASE_VERSION}:${OS_VERSION} bash -lc 'set -e; sudo mkdir -p /opt/cbdb/cluster-ssh; sudo cp /tmp/keys/id_rsa /opt/cbdb/cluster-ssh/id_rsa; sudo cp /tmp/keys/id_rsa.pub /opt/cbdb/cluster-ssh/id_rsa.pub; sudo cp /tmp/keys/id_rsa.pub /opt/cbdb/cluster-ssh/coordinator.pub; sudo chmod 700 /opt/cbdb/cluster-ssh; sudo chmod 600 /opt/cbdb/cluster-ssh/id_rsa; sudo chmod 644 /opt/cbdb/cluster-ssh/id_rsa.pub /opt/cbdb/cluster-ssh/coordinator.pub'
+        rm -rf "${TMP_CLUSTER_SSH_DIR}"
+    fi
 fi
 
 # Check if build only flag is set
@@ -170,8 +196,8 @@ else
            --name cbdb-cdw \
            --detach \
            --volume /sys/fs/cgroup:/sys/fs/cgroup:ro \
+           --hostname cdw \
            --publish 122:22 \
            --publish 15432:5432 \
-           --hostname cdw \
            cbdb-${CODEBASE_VERSION}:${OS_VERSION}
 fi

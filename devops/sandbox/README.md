@@ -37,11 +37,11 @@ Make sure that your environment meets the following requirements:
 
 ## Build the Sandbox
 
-When building and deploying Cloudberry in Docker, you will have 2 different deployment options as well as different build options.
+When building and deploying Apache Cloudberry in Docker, you will have 2 different deployment options as well as different build options.
 
 **Deployment Options**
-1. **Single Container** (Default) - With the single container option, you will have the coordinator as well as the Cloudberry segments all running on a single container. This is the default behavior when deploying using the `run.sh` script provided.
-2. **Multi-Container** - Deploying with the multi-container option will give you a more realistic deployment of what actual production Cloudberry clusters look like. With multi-node, you will have the coordinator, the standby coordinator, and 2 segment hosts all on their own respective containers. This is to both highlight the distributed nature of Apache Cloudberry as well as highlight how high availability (HA) features work in the event of a server (or in this case a container) failing. This is enabled by passing the -m flag to the `run.sh` script which will be highlighted below.
+1. **Single Container** (Default) - With the single container option, you will have the coordinator as well as the Apache Cloudberry segments all running on a single container. This is the default behavior when deploying using the `run.sh` script provided.
+2. **Multi-Container** - Deploying with the multi-container option will give you a more realistic deployment of what actual production Apache Cloudberry clusters look like. With multi-node, you will have the coordinator, the standby coordinator, and 2 segment hosts all on their own respective containers. This is to both highlight the distributed nature of Apache Cloudberry as well as highlight how high availability (HA) features work in the event of a server (or in this case a container) failing. This is enabled by passing the -m flag to the `run.sh` script which will be highlighted below.
 
 ![cloudberry Sandbox Deployments](../images/sandbox-deployment.jpg)
 
@@ -62,13 +62,13 @@ Build and deploy steps:
 
 3. Enter the repository and run the `run.sh` script to start the Docker container. This will start the automatic installation process. Depending on your environment, you may need to run this with 'sudo' command.
 
-    - For latest Cloudberry release running on a single container
+    - For latest Apache Cloudberry release running on a single container
 
     ```shell
     cd cloudberry/devops/sandbox
     ./run.sh -c 2.0.0
     ```
-    - For latest Cloudberry release running across multiple containers
+    - For latest Apache Cloudberry release running across multiple containers
 
     ```shell
     cd cloudberry/devops/sandbox
@@ -88,14 +88,14 @@ Build and deploy steps:
     ./run.sh -c main -m
     ```
 
-    Once the script finishes without error, the sandbox is built and running successfully. The `docker run` and `docker compose` commands use the --detach option allowing you to ssh or access the running CBDB instance remotely.
+    Once the script finishes without error, the sandbox is built and running successfully. The `docker run` and `docker compose` commands use the --detach option allowing you to ssh or access the running Apache Cloudberry instance remotely.
 
     Please review run.sh script for additional options (e.g. setting Timezone in running container, only building container). You can also execute `./run.sh -h` to see the usage.
 
 ## Connect to the database
 
 > [!NOTE]
-> When deploying the multi-container Cloudberry environment it may take extra time for the database to initialize, so you may need to wait a few minutes before you can execute the psql prompt successfully. You can run `docker logs cbdb-cdw -f` to see the current state of the database initialization process, you'll know the process is finished when you see the "Deployment Successful" output.
+> When deploying the multi-container Apache Cloudberry environment it may take extra time for the database to initialize, so you may need to wait a few minutes before you can execute the psql prompt successfully. You can run `docker logs cbdb-cdw -f` to see the current state of the database initialization process, you'll know the process is finished when you see the "Deployment Successful" output.
 
 You can now connect to the database and try some basic operations.
 
@@ -128,11 +128,11 @@ You can now connect to the database and try some basic operations.
     (1 row)
     ```
 
-Now you have a Apache Cloudberry and can continue with [Apache Cloudberry Tutorials](https://cloudberry.apache.org/docs/)! Enjoy!
+Now you have an Apache Cloudberry and can continue with [Apache Cloudberry Tutorials](https://cloudberry.apache.org/docs/)! Enjoy!
 
-## Working with your Cloudberry Docker environment
+## Working with your Apache Cloudberry Docker environment
 
-When working with the Cloudberry Docker environment there are a few commands that will be useful to you.
+When working with the Apache Cloudberry Docker environment there are a few commands that will be useful to you.
 
 **Stopping Your Single Container Deployment With Docker**
 
@@ -162,7 +162,7 @@ To stop the **multi-container** deployment and also remove the network and volum
 docker compose -f docker-compose-rockylinux9.yml down -v
 ```
 
-**Starting A Stopped Single Container Cloudberry Docker Deployment**
+**Starting A Stopped Single Container Apache Cloudberry Docker Deployment**
 
 If you've run any of the commands above that keep the Docker volumes persisted between shutting the containers down, you can use the following commands to bring that same deployment back up with it's previous state.
 
@@ -172,7 +172,7 @@ To start a **single container** deployment after it was shut down, you can simpl
 docker start cbdb-cdw
 ```
 
-**Starting A Stopped Multi-Container Cloudberry Docker Deployment**
+**Starting A Stopped Multi-Container Apache Cloudberry Docker Deployment**
 
 To start a **multi-container** deployment after it was shut down, you can run the following command.
 
@@ -181,7 +181,7 @@ docker compose -f docker-compose-rockylinux9.yml start
 ```
 
 > [!NOTE]
-> When starting a previously stopped Cloudberry Docker environment, you'll need to manually start the database back up. To do this, just run the following commands once the container(s) are back up and running. The `gpstart` command is used for starting the database, and -a is a flag saying to start the database without prompting (non-interactive).
+> When starting a previously stopped Apache Cloudberry Docker environment, you'll need to manually start the database back up. To do this, just run the following commands once the container(s) are back up and running. The `gpstart` command is used for starting the database, and -a is a flag saying to start the database without prompting (non-interactive).
 
 ```shell
 docker exec -it cbdb-cdw /bin/bash

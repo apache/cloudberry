@@ -57,17 +57,26 @@ ENV MULTINODE=false
 # Copy built Cloudberry from builder stage
 COPY --from=builder /usr/local/cloudberry-db /usr/local/cloudberry-db
 
+# Copy configuration files to their final destinations
+COPY ./configs/90-cbdb-limits.conf /etc/security/limits.d/90-cbdb-limits.conf
+COPY ./configs/90-cbdb-sysctl.conf /etc/sysctl.d/90-cbdb-sysctl.conf
+COPY ./configs/gpinitsystem_singlenode /tmp/gpinitsystem_singlenode
+COPY ./configs/gpinitsystem_multinode /tmp/gpinitsystem_multinode
+COPY ./configs/multinode-gpinit-hosts /tmp/multinode-gpinit-hosts
+COPY ./configs/init_system.sh /tmp/init_system.sh
+
 # Runtime configuration (only what's needed beyond base image)
 RUN echo root:cbdb@123 | chpasswd && \
-    cp ./configs/90-cbdb-sysctl.conf /etc/sysctl.conf && \
+    sudo sysctl -p /etc/sysctl.d/90-cbdb-sysctl.conf || true && \
     echo "cdw" > /tmp/gpdb-hosts && \
-    chmod 777 ./configs/gpinitsystem_singlenode && \
-    chmod 777 ./configs/init_system.sh && \
+    sudo chmod 755 /tmp/gpinitsystem_singlenode && \
+    sudo chmod 755 /tmp/gpinitsystem_multinode && \
+    sudo chmod 755 /tmp/init_system.sh && \
     hostname > ~/orig_hostname && \
     echo "export COORDINATOR_DATA_DIRECTORY=/data0/database/coordinator/gpseg-1" >> /home/gpadmin/.bashrc && \
-    echo "source /usr/local/cloudberry-db/greenplum_path.sh" >> /home/gpadmin/.bashrc && \
-    mkdir -p /data0/database/coordinator /data0/database/primary /data0/database/mirror && \
-    chown -R gpadmin:gpadmin /data0
+    echo -e '\n# Add Cloudberry entries\nif [ -f /usr/local/cloudberry-db/cloudberry-env.sh ]; then\n  source /usr/local/cloudberry-db/cloudberry-env.sh\nfi' >> /home/gpadmin/.bashrc && \
+    sudo mkdir -p /data0/database/coordinator /data0/database/primary /data0/database/mirror && \
+    sudo chown -R gpadmin:gpadmin /data0
 
 # ----------------------------------------------------------------------
 # Set the Default User and Command
@@ -83,4 +92,4 @@ WORKDIR /home/gpadmin
 EXPOSE 5432 22
 
 VOLUME [ "/sys/fs/cgroup" ]
-CMD ["bash","-c","./configs/init_system.sh"]
+CMD ["bash","-c","/tmp/init_system.sh"]

@@ -17,12 +17,31 @@
 # permissions and limitations under the License.
 #
 # --------------------------------------------------------------------
-# Common variables for multi-container deployment
-x-common-variables: &common-variables
-  TIMEZONE_VAR: "America/Los_Angeles"
-  MULTINODE: "true"
+
 
 services:
+  # One-shot init service to populate the shared cluster SSH volume
+  cluster-ssh-init:
+    container_name: cbdb-cluster-ssh-init
+    image: cbdb-${CODEBASE_VERSION}:${OS_VERSION}
+    command: >
+      bash -lc 'set -e;
+      sudo mkdir -p /opt/cbdb/cluster-ssh;
+      if [ ! -f /opt/cbdb/cluster-ssh/id_rsa ]; then
+        TMP_DIR="$(mktemp -d)";
+        ssh-keygen -t rsa -b 4096 -N "" -f "$TMP_DIR/id_rsa" >/dev/null 2>&1;
+        sudo cp "$TMP_DIR/id_rsa" /opt/cbdb/cluster-ssh/id_rsa;
+        sudo cp "$TMP_DIR/id_rsa.pub" /opt/cbdb/cluster-ssh/id_rsa.pub;
+        rm -rf "$TMP_DIR";
+      fi;
+      sudo cp /opt/cbdb/cluster-ssh/id_rsa.pub /opt/cbdb/cluster-ssh/coordinator.pub;
+      sudo chmod 700 /opt/cbdb/cluster-ssh;
+      sudo chmod 600 /opt/cbdb/cluster-ssh/id_rsa;
+      sudo chmod 644 /opt/cbdb/cluster-ssh/id_rsa.pub /opt/cbdb/cluster-ssh/coordinator.pub'
+    volumes:
+      - cbdb-cluster-ssh:/opt/cbdb/cluster-ssh
+    restart: "no"
+
   cbdb-coordinator:
     container_name: cbdb-cdw
     image: cbdb-${CODEBASE_VERSION}:${OS_VERSION}
@@ -34,14 +53,15 @@ services:
       interconnect:
         ipv4_address: 10.5.0.10
     environment:
-      <<: *common-variables
       MULTINODE: "true"
-    healthcheck:
-      test: ["CMD", "/devops/sandbox/scripts/health-check.sh", "cbdb-cdw"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 60s
+    volumes:
+      - cbdb-cluster-ssh:/opt/cbdb/cluster-ssh
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    depends_on:
+      cluster-ssh-init:
+        condition: service_completed_successfully
+
+
   cbdb-standby-coordinator:
     container_name: cbdb-scdw
     image: cbdb-${CODEBASE_VERSION}:${OS_VERSION}
@@ -51,7 +71,13 @@ services:
       interconnect:
         ipv4_address: 10.5.0.11
     environment:
-      <<: *common-variables
+      MULTINODE: "true"
+    volumes:
+      - cbdb-cluster-ssh:/opt/cbdb/cluster-ssh
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    depends_on:
+      cluster-ssh-init:
+        condition: service_completed_successfully
   cbdb-segment-host-1:
     container_name: cbdb-sdw1
     image: cbdb-${CODEBASE_VERSION}:${OS_VERSION}
@@ -61,7 +87,13 @@ services:
       interconnect:
         ipv4_address: 10.5.0.12
     environment:
-      <<: *common-variables
+      MULTINODE: "true"
+    volumes:
+      - cbdb-cluster-ssh:/opt/cbdb/cluster-ssh
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    depends_on:
+      cluster-ssh-init:
+        condition: service_completed_successfully
   cbdb-segment-host-2:
     container_name: cbdb-sdw2
     image: cbdb-${CODEBASE_VERSION}:${OS_VERSION}
@@ -71,7 +103,14 @@ services:
       interconnect:
         ipv4_address: 10.5.0.13
     environment:
-      <<: *common-variables
+      MULTINODE: "true"
+    volumes:
+      - cbdb-cluster-ssh:/opt/cbdb/cluster-ssh
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    depends_on:
+      cluster-ssh-init:
+        condition: service_completed_successfully
+
 networks:
   interconnect:
     name: cbdb-interconnect
@@ -80,3 +119,6 @@ networks:
      config:
        - subnet: 10.5.0.0/16
          gateway: 10.5.0.1
+
+volumes:
+  cbdb-cluster-ssh:

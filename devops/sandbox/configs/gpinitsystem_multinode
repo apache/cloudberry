@@ -17,12 +17,12 @@
 # permissions and limitations under the License.
 #
 # --------------------------------------------------------------------
-# FILE NAME: gpinitsystem_singlenode
+# FILE NAME: gpinitsystem_multinode
 
 # A configuration file is needed by the gpinitsystem utility.
-# This sample file initializes a Apache Cloudberry Single Node
-# Edition (SNE) system with one coordinator and  two segment instances
-# on the local host. This file is referenced when you run gpinitsystem.
+# This sample file initializes an Apache Cloudberry multi-node cluster
+# with one coordinator, one standby coordinator, and segment instances
+# across multiple hosts. This file is referenced when you run gpinitsystem.
 
 ################################################
 # REQUIRED PARAMETERS
