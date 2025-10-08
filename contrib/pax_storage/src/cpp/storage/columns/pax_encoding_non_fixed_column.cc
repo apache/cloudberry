@@ -145,8 +145,8 @@ PaxNonFixedEncodingColumn::PaxNonFixedEncodingColumn(
 
 PaxNonFixedEncodingColumn::~PaxNonFixedEncodingColumn() {}
 
-void PaxNonFixedEncodingColumn::Set(std::shared_ptr<DataBuffer<char>> data,
-                                    std::shared_ptr<DataBuffer<int32>> offsets,
+void PaxNonFixedEncodingColumn::Set(std::unique_ptr<DataBuffer<char>> data,
+                                    std::unique_ptr<DataBuffer<int32>> offsets,
                                     size_t total_size) {
   bool exist_decoder;
   Assert(data && offsets);
@@ -179,7 +179,7 @@ void PaxNonFixedEncodingColumn::Set(std::shared_ptr<DataBuffer<char>> data,
       // `data_` have the same buffer with `shared_data_`
       PaxNonFixedColumn::data_->Brush(shared_data_->Used());
       // no delete the origin data
-      shared_data_ = data;
+      shared_data_ = std::move(data);
     }
   };
 
@@ -228,16 +228,16 @@ void PaxNonFixedEncodingColumn::Set(std::shared_ptr<DataBuffer<char>> data,
     PaxNonFixedColumn::next_offsets_ = -1;
   } else if (exist_decoder && !has_offsets_processor) {
     data_decompress();
-    PaxNonFixedColumn::offsets_ = offsets;
+    PaxNonFixedColumn::offsets_ = std::move(offsets);
     PaxNonFixedColumn::estimated_size_ = total_size;
     PaxNonFixedColumn::next_offsets_ = -1;
   } else if (!exist_decoder && has_offsets_processor) {
-    PaxNonFixedColumn::data_ = data;
+    PaxNonFixedColumn::data_ = std::move(data);
     offsets_decompress();
     PaxNonFixedColumn::estimated_size_ = total_size;
     PaxNonFixedColumn::next_offsets_ = -1;
   } else {  // (!compressor_ && !offsets_compressor_)
-    PaxNonFixedColumn::Set(data, offsets, total_size);
+    PaxNonFixedColumn::Set(std::move(data), std::move(offsets), total_size);
   }
 }
 

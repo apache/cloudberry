@@ -137,7 +137,7 @@ static std::unique_ptr<PaxColumn> CreateDecodeColumn(
   std::unique_ptr<PaxColumn> column_rc;
   switch (bits) {
     case 16: {
-      auto buffer_for_read = std::make_shared<DataBuffer<int16>>(
+      auto buffer_for_read = std::make_unique<DataBuffer<int16>>(
           reinterpret_cast<int16 *>(encoded_buff), encoded_len, false, false);
       buffer_for_read->Brush(encoded_len);
 
@@ -145,19 +145,19 @@ static std::unique_ptr<PaxColumn> CreateDecodeColumn(
         auto int_column =
             ColumnOptCreateTraits<PaxEncodingColumn, int16>::create_decoding(
                 origin_len / sizeof(int16), std::move(decoding_option));
-        int_column->Set(buffer_for_read);
+        int_column->Set(std::move(buffer_for_read));
         column_rc = std::move(int_column);
       } else {
         auto int_column =
             ColumnOptCreateTraits<PaxVecEncodingColumn, int16>::create_decoding(
                 origin_len / sizeof(int16), std::move(decoding_option));
-        int_column->Set(buffer_for_read, column_not_nulls);
+        int_column->Set(std::move(buffer_for_read), column_not_nulls);
         column_rc = std::move(int_column);
       }
       break;
     }
     case 32: {
-      auto buffer_for_read = std::make_shared<DataBuffer<int32>>(
+      auto buffer_for_read = std::make_unique<DataBuffer<int32>>(
           reinterpret_cast<int32 *>(encoded_buff), encoded_len, false, false);
       buffer_for_read->Brush(encoded_len);
 
@@ -165,19 +165,19 @@ static std::unique_ptr<PaxColumn> CreateDecodeColumn(
         auto int_column =
             ColumnOptCreateTraits<PaxEncodingColumn, int32>::create_decoding(
                 origin_len / sizeof(int32), std::move(decoding_option));
-        int_column->Set(buffer_for_read);
+        int_column->Set(std::move(buffer_for_read));
         column_rc = std::move(int_column);
       } else {
         auto int_column =
             ColumnOptCreateTraits<PaxVecEncodingColumn, int32>::create_decoding(
                 origin_len / sizeof(int32), std::move(decoding_option));
-        int_column->Set(buffer_for_read, column_not_nulls);
+        int_column->Set(std::move(buffer_for_read), column_not_nulls);
         column_rc = std::move(int_column);
       }
       break;
     }
     case 64: {
-      auto buffer_for_read = std::make_shared<DataBuffer<int64>>(
+      auto buffer_for_read = std::make_unique<DataBuffer<int64>>(
           reinterpret_cast<int64 *>(encoded_buff), encoded_len, false, false);
       buffer_for_read->Brush(encoded_len);
 
@@ -185,13 +185,13 @@ static std::unique_ptr<PaxColumn> CreateDecodeColumn(
         auto int_column =
             ColumnOptCreateTraits<PaxEncodingColumn, int64>::create_decoding(
                 origin_len / sizeof(int64), std::move(decoding_option));
-        int_column->Set(buffer_for_read);
+        int_column->Set(std::move(buffer_for_read));
         column_rc = std::move(int_column);
       } else {
         auto int_column =
             ColumnOptCreateTraits<PaxVecEncodingColumn, int64>::create_decoding(
                 origin_len / sizeof(int64), std::move(decoding_option));
-        int_column->Set(buffer_for_read, column_not_nulls);
+        int_column->Set(std::move(buffer_for_read), column_not_nulls);
         column_rc = std::move(int_column);
       }
       break;
@@ -749,14 +749,14 @@ TEST_P(PaxNonFixedColumnCompressTest,
   auto non_fixed_column_for_read = new PaxNonFixedEncodingColumn(
       number_of_rows * number, sizeof(int32) * number_of_rows,
       std::move(decoding_option));
-  auto data_buffer_for_read = std::make_shared<DataBuffer<char>>(
+  auto data_buffer_for_read = std::make_unique<DataBuffer<char>>(
       encoded_buff, encoded_len, false, false);
   data_buffer_for_read->Brush(encoded_len);
-  auto length_buffer_cpy = std::make_shared<DataBuffer<int32>>(
+  auto length_buffer_cpy = std::make_unique<DataBuffer<int32>>(
       (int32 *)offset_stream_buff, offset_stream_len, false, false);
   length_buffer_cpy->BrushAll();
-  non_fixed_column_for_read->Set(data_buffer_for_read, length_buffer_cpy,
-                                 origin_len);
+  non_fixed_column_for_read->Set(std::move(data_buffer_for_read),
+                                 std::move(length_buffer_cpy), origin_len);
   ASSERT_EQ(non_fixed_column_for_read->GetCompressLevel(), 5);
   char *verify_buff;
   size_t verify_len;
