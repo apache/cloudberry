@@ -239,7 +239,9 @@ class PaxColumn {
   }
 
   // Get the null bitmap
-  inline const std::unique_ptr<Bitmap8>& GetBitmap() const { return null_bitmap_; }
+  inline const std::unique_ptr<Bitmap8> &GetBitmap() const {
+    return null_bitmap_;
+  }
 
   // Set the column kv attributes
   void SetAttributes(const std::map<std::string, std::string> &attrs);
@@ -425,7 +427,7 @@ class PaxCommColumn : public PaxColumn {
 
   PaxCommColumn();
 
-  virtual void Set(std::shared_ptr<DataBuffer<T>> data);
+  virtual void Set(std::unique_ptr<DataBuffer<T>> data);
 
   PaxColumnTypeInMem GetPaxColumnTypeInMem() const override;
 
@@ -455,7 +457,7 @@ class PaxCommColumn : public PaxColumn {
   int32 GetTypeLength() const override;
 
  protected:
-  std::shared_ptr<DataBuffer<T>> data_;
+  std::unique_ptr<DataBuffer<T>> data_;
 };
 
 extern template class PaxCommColumn<char>;
@@ -474,8 +476,8 @@ class PaxNonFixedColumn : public PaxColumn {
 
   ~PaxNonFixedColumn() override;
 
-  virtual void Set(std::shared_ptr<DataBuffer<char>> data,
-                   std::shared_ptr<DataBuffer<int32>> offsets,
+  virtual void Set(std::unique_ptr<DataBuffer<char>> data,
+                   std::unique_ptr<DataBuffer<int32>> offsets,
                    size_t total_size);
 
   void Append(char *buffer, size_t size) override;
@@ -514,13 +516,13 @@ class PaxNonFixedColumn : public PaxColumn {
 
  protected:
   size_t estimated_size_;
-  std::shared_ptr<DataBuffer<char>> data_;
+  std::unique_ptr<DataBuffer<char>> data_;
 
   // orc needs to serialize int32 array
   // the length of a single tuple field will not exceed 2GB,
   // so a variable-length element of the offsets stream can use int32
   // to represent the length
-  std::shared_ptr<DataBuffer<int32>> offsets_;
+  std::unique_ptr<DataBuffer<int32>> offsets_;
 
   // used to record next offset in write path
   // in read path, next_offsets_ always be -1
