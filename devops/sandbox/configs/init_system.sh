@@ -82,7 +82,7 @@ chown gpadmin:gpadmin /home/gpadmin/.ssh/id_rsa /home/gpadmin/.ssh/id_rsa.pub
 # Multi-node key distribution (HTTP removed):
 # - Require embedded coordinator pubkey in segment/standby images (/opt/cbdb/cluster-ssh/coordinator.pub)
 # - No network-based key distribution is performed.
-if [[ $MULTINODE == "true" ]]; then
+if [[ "${MULTINODE:-false}" == "true" ]]; then
     # Ensure local authorized_keys exists with strict permissions
     touch /home/gpadmin/.ssh/authorized_keys
     chmod 600 /home/gpadmin/.ssh/authorized_keys
@@ -125,7 +125,7 @@ else
 fi
 
 # Add container hostnames to the known_hosts file to avoid SSH warnings
-if [[ $MULTINODE == "true" ]]; then
+if [[ "${MULTINODE:-false}" == "true" ]]; then
     ssh-keyscan -t rsa cdw scdw sdw1 sdw2 > /home/gpadmin/.ssh/known_hosts 2>/dev/null || true
 else
     ssh-keyscan -t rsa cdw > /home/gpadmin/.ssh/known_hosts 2>/dev/null || true
@@ -139,13 +139,13 @@ source /usr/local/cloudberry-db/cloudberry-env.sh
 export COORDINATOR_DATA_DIRECTORY=/data0/database/coordinator/gpseg-1
 
 # Initialize single node Cloudberry cluster
-if [[ $MULTINODE == "false" && $HOSTNAME == "cdw" ]]; then
+if [[ "${MULTINODE:-false}" == "false" && "$HOSTNAME" == "cdw" ]]; then
     gpinitsystem -a \
                  -c /tmp/gpinitsystem_singlenode \
                  -h /tmp/gpdb-hosts \
                  --max_connections=100
 # Initialize multi node Cloudberry cluster
-elif [[ $MULTINODE == "true" && $HOSTNAME == "cdw" ]]; then
+elif [[ "${MULTINODE:-false}" == "true" && "$HOSTNAME" == "cdw" ]]; then
     # Wait for other containers' SSH to become reachable (max 300s per host)
     for host in sdw1 sdw2 scdw; do
         MAX_WAIT=300

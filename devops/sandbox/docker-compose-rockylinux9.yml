@@ -24,20 +24,22 @@ services:
   cluster-ssh-init:
     container_name: cbdb-cluster-ssh-init
     image: cbdb-${CODEBASE_VERSION}:${OS_VERSION}
+    user: "0"
     command: >
-      bash -lc 'set -e;
-      sudo mkdir -p /opt/cbdb/cluster-ssh;
+      bash -lc 'set -euxo pipefail;
+      mkdir -p /opt/cbdb/cluster-ssh;
       if [ ! -f /opt/cbdb/cluster-ssh/id_rsa ]; then
         TMP_DIR="$(mktemp -d)";
         ssh-keygen -t rsa -b 4096 -N "" -f "$TMP_DIR/id_rsa" >/dev/null 2>&1;
-        sudo cp "$TMP_DIR/id_rsa" /opt/cbdb/cluster-ssh/id_rsa;
-        sudo cp "$TMP_DIR/id_rsa.pub" /opt/cbdb/cluster-ssh/id_rsa.pub;
+        cp "$TMP_DIR/id_rsa" /opt/cbdb/cluster-ssh/id_rsa;
+        cp "$TMP_DIR/id_rsa.pub" /opt/cbdb/cluster-ssh/id_rsa.pub;
         rm -rf "$TMP_DIR";
       fi;
-      sudo cp /opt/cbdb/cluster-ssh/id_rsa.pub /opt/cbdb/cluster-ssh/coordinator.pub;
-      sudo chmod 700 /opt/cbdb/cluster-ssh;
-      sudo chmod 600 /opt/cbdb/cluster-ssh/id_rsa;
-      sudo chmod 644 /opt/cbdb/cluster-ssh/id_rsa.pub /opt/cbdb/cluster-ssh/coordinator.pub'
+      cp /opt/cbdb/cluster-ssh/id_rsa.pub /opt/cbdb/cluster-ssh/coordinator.pub;
+      chmod 700 /opt/cbdb/cluster-ssh;
+      chmod 600 /opt/cbdb/cluster-ssh/id_rsa;
+      chmod 644 /opt/cbdb/cluster-ssh/id_rsa.pub /opt/cbdb/cluster-ssh/coordinator.pub;
+      chown -R gpadmin:gpadmin /opt/cbdb/cluster-ssh'
     volumes:
       - cbdb-cluster-ssh:/opt/cbdb/cluster-ssh
     restart: "no"
