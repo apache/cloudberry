@@ -45,7 +45,6 @@ config.status.lineno
 autom4te.cache
 configure.lineno
 Debug
-Release
 pgsql.sln
 cscope.*
 build.sh
