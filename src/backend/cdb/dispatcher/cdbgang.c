@@ -627,6 +627,7 @@ makeCdbProcess(SegmentDatabaseDescriptor *segdbDesc)
 	process->listenerAddr = pstrdup(qeinfo->config->hostip);
 
 	process->listenerPort = (segdbDesc->motionListener & 0x0ffff);
+	process->listenerExtPort = segdbDesc->motionExtListener;
 	process->pid = segdbDesc->backendPid;
 	process->contentid = segdbDesc->segindex;
 	process->dbid = qeinfo->config->dbid;
@@ -1101,6 +1102,7 @@ gp_backend_info(PG_FUNCTION_ARGS)
 		qddesc->segindex = -1;
 		qddesc->conn = NULL;
 		qddesc->motionListener = 0;
+		qddesc->motionExtListener = 0;
 		qddesc->backendPid = MyProcPid;
 		qddesc->whoami = NULL;
 		qddesc->isWriter = false;

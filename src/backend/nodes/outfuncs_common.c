@@ -1460,6 +1460,7 @@ _outCdbProcess(StringInfo str, const CdbProcess *node)
 	WRITE_NODE_TYPE("CDBPROCESS");
 	WRITE_STRING_FIELD(listenerAddr);
 	WRITE_INT_FIELD(listenerPort);
+	WRITE_INT_FIELD(listenerExtPort);
 	WRITE_INT_FIELD(pid);
 	WRITE_INT_FIELD(contentid);
 	WRITE_INT_FIELD(dbid);

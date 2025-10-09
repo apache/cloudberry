@@ -536,6 +536,7 @@ _readCdbProcess(void)
 
 	READ_STRING_FIELD(listenerAddr);
 	READ_INT_FIELD(listenerPort);
+	READ_INT_FIELD(listenerExtPort);
 	READ_INT_FIELD(pid);
 	READ_INT_FIELD(contentid);
 	READ_INT_FIELD(dbid);

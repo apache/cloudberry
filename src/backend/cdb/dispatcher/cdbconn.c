@@ -31,7 +31,7 @@
 #include "cdb/cdbgang.h"
 
 
-static uint32 cdbconn_get_motion_listener_port(PGconn *conn);
+static int64 cdbconn_get_motion_listener_port(PGconn *conn);
 static void cdbconn_disconnect(SegmentDatabaseDescriptor *segdbDesc);
 
 static void MPPnoticeReceiver(void *arg, const PGresult *res);
@@ -83,6 +83,7 @@ cdbconn_createSegmentDescriptor(struct CdbComponentDatabaseInfo *cdbinfo, int id
 	/* Connection info, set in function cdbconn_doConnect */
 	segdbDesc->conn = NULL;
 	segdbDesc->motionListener = 0;
+	segdbDesc->motionExtListener = 0;
 	segdbDesc->backendPid = 0;
 
 	/* whoami */
@@ -294,16 +295,19 @@ cdbconn_doConnectComplete(SegmentDatabaseDescriptor *segdbDesc)
 	 * giving us the TCP port number where it listens for connections from the
 	 * gang below.
 	 */
-	segdbDesc->motionListener = cdbconn_get_motion_listener_port(segdbDesc->conn);
+	int64 ports = cdbconn_get_motion_listener_port(segdbDesc->conn);
+	segdbDesc->motionListener = (uint32) (ports & 0xFFFFFFFF);
+	segdbDesc->motionExtListener = ports >> 32;
 	segdbDesc->backendPid = PQbackendPID(segdbDesc->conn);
 
 	if (segdbDesc->motionListener != 0 &&
 		gp_log_gang >= GPVARS_VERBOSITY_DEBUG)
 	{
-		elog(LOG, "Connected to %s motionListenerPorts=%u/%u with options %s",
+		elog(LOG, "Connected to %s motionListenerPorts=%u/%u/%u with options %s",
 			 segdbDesc->whoami,
 			 (segdbDesc->motionListener & 0x0ffff),
 			 ((segdbDesc->motionListener >> 16) & 0x0ffff),
+			 segdbDesc->motionExtListener,
 			 PQoptions(segdbDesc->conn));
 	}
 }
@@ -483,25 +487,32 @@ cdbconn_signalQE(SegmentDatabaseDescriptor *segdbDesc,
 
 
 /* GPDB function to retrieve QE-backend details (motion listener) */
-static uint32
+static int64
 cdbconn_get_motion_listener_port(PGconn *conn)
 {
 	const char *val;
 	char	   *endptr;
-	uint32		result;
+	int64		result;
+	int64		ext_port;
 
 	val = PQparameterStatus(conn, "qe_listener_port");
 	if (!val)
 		return 0;
 
 	errno = 0;
-	result = strtoul(val, &endptr, 10);
+	result = strtol(val, &endptr, 10);
+	if (endptr == val || *endptr != ':' || errno == ERANGE)
+		return 0;
+
+	val = endptr + 1;
+	ext_port = strtol(val, &endptr, 10);
 	if (endptr == val || *endptr != '\0' || errno == ERANGE)
 		return 0;
 
-	return result;
-}
+	if (result < 0 || ext_port < 0) return 0;
 
+	return (result | (ext_port << 32));
+}
 
 /*-------------------------------------------------------------------------
  * QE Notice receiver support

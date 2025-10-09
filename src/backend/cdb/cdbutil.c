@@ -79,6 +79,7 @@
 
 MemoryContext CdbComponentsContext = NULL;
 static CdbComponentDatabases *cdb_component_dbs = NULL;
+const struct ExtInterconnectFuncs *ext_interconnect = NULL;
 
 #ifdef USE_INTERNAL_FTS
 
@@ -1149,6 +1150,9 @@ cdb_setup(void)
 		ensureInterconnectAddress();
 		/* Initialize the Motion Layer IPC subsystem. */
 		CurrentMotionIPCLayer->InitMotionLayerIPC();
+
+		if (ext_interconnect && ext_interconnect->init)
+			ext_interconnect->init();
 	}
 
 	/*
@@ -1213,6 +1217,9 @@ cdb_cleanup(int code pg_attribute_unused(), Datum arg
 	{
 		/* shutdown our listener socket */
 		CurrentMotionIPCLayer->CleanUpMotionLayerIPC();
+
+		if (ext_interconnect && ext_interconnect->exit)
+			ext_interconnect->exit();
 	}
 }
 
@@ -3542,6 +3549,9 @@ cdb_setup(void)
 		ensureInterconnectAddress();
 		/* Initialize the Motion Layer IPC subsystem. */
 		CurrentMotionIPCLayer->InitMotionLayerIPC();
+
+		if (ext_interconnect && ext_interconnect->init)
+			ext_interconnect->init();
 	}
 
 	/*
@@ -3595,6 +3605,9 @@ cdb_cleanup(int code pg_attribute_unused(), Datum arg
 	{
 		/* shutdown our listener socket */
 		CurrentMotionIPCLayer->CleanUpMotionLayerIPC();
+
+		if (ext_interconnect && ext_interconnect->exit)
+			ext_interconnect->exit();
 	}
 }
 
