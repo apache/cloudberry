@@ -134,12 +134,28 @@ struct BitmapRaw final {
     static_assert(BM_WORD_BITS == (1 << BM_WORD_SHIFTS));
     return (index >> BM_WORD_SHIFTS) < size;
   }
-  inline bool Empty() const {
+
+  inline bool Empty(uint32 end_index) const {
     if (!bitmap) return true;
-    for (size_t i = 0; i < size; i++)
-      if (bitmap[i]) return false;
+
+    uint32 end_word = BM_INDEX_WORD_OFF(end_index);
+    uint32 end_bit_offset = BM_INDEX_BIT_OFF(end_index);
+
+    for (uint32 i = 0; i < end_word && i < size; i++) {
+      if (bitmap[i] != 0) return false;
+    }
+
+    // Check partial word at end
+    if (end_word < size && end_bit_offset > 0) {
+      T mask = (T(1) << end_bit_offset) - 1;
+      if (bitmap[end_word] & mask) return false;
+    }
+
     return true;
   }
+
+  inline bool Empty() const { return Empty(size * sizeof(T) * 8ULL); }
+
   BitmapRaw() = default;
   BitmapRaw(T *buffer, size_t size) : bitmap(buffer), size(size) {}
   BitmapRaw(const BitmapRaw &) = delete;
@@ -160,13 +176,14 @@ struct BitmapRaw final {
 template <typename T>
 class BitmapTpl final {
  public:
-  using BitmapMemoryPolicy = void (*)(BitmapRaw<T> &, uint32);
-  explicit BitmapTpl(uint32 initial_size = 16) {
+  using BitmapMemoryPolicy = void (*)(BitmapRaw<T> &, uint32, uint8);
+  explicit BitmapTpl(uint32 initial_size = 16, uint8 init_value = 0) {
     static_assert(sizeof(T) == 1 || sizeof(T) == 2 || sizeof(T) == 4 ||
                   sizeof(T) == 8);
     static_assert(BM_WORD_BITS == (1 << BM_WORD_SHIFTS));
     policy_ = DefaultBitmapMemoryPolicy;
-    policy_(raw_, Max(initial_size, 16));
+    policy_(raw_, Max(initial_size, 16), init_value);
+    init_value_ = init_value;
   }
   explicit BitmapTpl(const BitmapRaw<T> &raw) {
     static_assert(sizeof(T) == 1 || sizeof(T) == 2 || sizeof(T) == 4 ||
@@ -177,8 +194,7 @@ class BitmapTpl final {
     raw_.size = raw.size;
   }
   BitmapTpl(const BitmapTpl &tpl) = delete;
-  BitmapTpl(BitmapTpl &&tpl)
-      : raw_(std::move(tpl.raw_)), policy_(tpl.policy_) {
+  BitmapTpl(BitmapTpl &&tpl) : raw_(std::move(tpl.raw_)), policy_(tpl.policy_) {
     tpl.raw_.bitmap = nullptr;
     tpl.policy_ = ReadOnlyRefBitmap;
   }
@@ -188,8 +204,7 @@ class BitmapTpl final {
   BitmapTpl &operator=(BitmapTpl &&tpl) = delete;
   ~BitmapTpl() {
     // Reference doesn't free the memory
-    if (policy_ == DefaultBitmapMemoryPolicy)
-      PAX_DELETE_ARRAY(raw_.bitmap);
+    if (policy_ == DefaultBitmapMemoryPolicy) PAX_DELETE_ARRAY(raw_.bitmap);
     raw_.bitmap = nullptr;
   }
 
@@ -205,11 +220,13 @@ class BitmapTpl final {
 
   inline size_t WordBits() const { return BM_WORD_BITS; }
   inline void Set(uint32 index) {
-    if (unlikely(!raw_.HasEnoughSpace(index))) policy_(raw_, index);
+    if (unlikely(!raw_.HasEnoughSpace(index)))
+      policy_(raw_, index, init_value_);
     raw_.Set(index);
   }
   inline void SetN(uint32 index) {
-    if (unlikely(!raw_.HasEnoughSpace(index))) policy_(raw_, index);
+    if (unlikely(!raw_.HasEnoughSpace(index)))
+      policy_(raw_, index, init_value_);
     raw_.SetN(index);
   }
   inline void Clear(uint32 index) {
@@ -228,7 +245,8 @@ class BitmapTpl final {
   }
   // invert the bit and return the old value.
   inline bool Toggle(uint32 index) {
-    if (unlikely(!raw_.HasEnoughSpace(index))) policy_(raw_, index);
+    if (unlikely(!raw_.HasEnoughSpace(index)))
+      policy_(raw_, index, init_value_);
     return raw_.Toggle(index);
   }
   // count bits in range [0, index]
@@ -248,23 +266,28 @@ class BitmapTpl final {
 
   inline bool Empty() const { return raw_.Empty(); }
 
+  // check if the bitmap is empty in the range [0, end_index)
+  inline bool Empty(uint32 end_index) const { return raw_.Empty(end_index); }
+
   BitmapMemoryPolicy Policy() const { return policy_; }
 
   const BitmapRaw<T> &Raw() const { return raw_; }
   BitmapRaw<T> &Raw() { return raw_; }
 
-  static void DefaultBitmapMemoryPolicy(BitmapRaw<T> &raw, uint32 index) {
+  static void DefaultBitmapMemoryPolicy(BitmapRaw<T> &raw, uint32 index,
+                                        uint8 init_value = 0) {
     auto old_bitmap = raw.bitmap;
     auto old_size = raw.size;
     auto size = Max(BM_INDEX_WORD_OFF(index) + 1, old_size * 2);
     auto p = PAX_NEW_ARRAY<T>(size);
     if (old_size > 0) memcpy(p, old_bitmap, sizeof(T) * old_size);
-    memset(&p[old_size], 0, sizeof(T) * (size - old_size));
+    memset(&p[old_size], init_value, sizeof(T) * (size - old_size));
     raw.bitmap = p;
     raw.size = size;
     PAX_DELETE_ARRAY(old_bitmap);
   }
-  static void ReadOnlyRefBitmap(BitmapRaw<T> & /*raw*/, uint32 /*index*/) {
+  static void ReadOnlyRefBitmap(BitmapRaw<T> & /*raw*/, uint32 /*index*/,
+                                uint8 /*init_value*/) {
     // raise
     CBDB_RAISE(cbdb::CException::kExTypeInvalidMemoryOperation);
   }
@@ -280,12 +303,14 @@ class BitmapTpl final {
     return nwords * sizeof(T);
   }
 
-  static std::unique_ptr<BitmapTpl<T>> BitmapTplCopy(const BitmapTpl<T> *bitmap) {
+  static std::unique_ptr<BitmapTpl<T>> BitmapTplCopy(
+      const BitmapTpl<T> *bitmap) {
     if (bitmap == nullptr) return nullptr;
     return bitmap->Clone();
   }
 
-  static std::unique_ptr<BitmapTpl<T>> Union(const BitmapTpl<T> *a, const BitmapTpl<T> *b) {
+  static std::unique_ptr<BitmapTpl<T>> Union(const BitmapTpl<T> *a,
+                                             const BitmapTpl<T> *b) {
     std::unique_ptr<BitmapTpl<T>> result;
     const BitmapTpl<T> *large;
     const BitmapTpl<T> *small;
@@ -315,6 +340,7 @@ class BitmapTpl final {
 
   BitmapRaw<T> raw_;
   BitmapMemoryPolicy policy_;
+  uint8 init_value_ = 0;
 };
 
 using Bitmap8 = BitmapTpl<uint8>;

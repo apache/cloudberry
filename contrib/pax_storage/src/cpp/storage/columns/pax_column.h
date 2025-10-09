@@ -46,7 +46,8 @@
 
 namespace pax {
 
-#define DEFAULT_CAPACITY MIN(2048, MAX(16, MAXALIGN(pax::pax_max_tuples_per_group)))
+#define DEFAULT_CAPACITY \
+  MIN(2048, MAX(16, MAXALIGN(pax::pax_max_tuples_per_group)))
 
 // Used to mapping pg_type
 enum PaxColumnTypeInMem {
@@ -230,7 +231,14 @@ class PaxColumn {
   inline bool HasNull() { return null_bitmap_ != nullptr; }
 
   // Are all values null?
-  inline bool AllNull() const { return null_bitmap_ && null_bitmap_->Empty(); }
+  // Check whether all bits in the specified range are zero.
+  // In pax_column, to avoid checking the capacity of the null bitmap, we
+  // allocate memory based on pax_max_tuples_per_group. As a result, the last
+  // group may contain fewer tuples than pax_max_tuples_per_group, so we need to
+  // check whether all bits in the range [0, total_rows_) are zero.
+  inline bool AllNull() const {
+    return null_bitmap_ && null_bitmap_->Empty(total_rows_);
+  }
 
   // Set the null bitmap
   inline void SetBitmap(std::unique_ptr<Bitmap8> null_bitmap) {
