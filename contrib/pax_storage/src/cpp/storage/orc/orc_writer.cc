@@ -249,6 +249,16 @@ OrcWriter::OrcWriter(
 
   group_stats_.Initialize(writer_options.enable_min_max_col_idxs,
                           writer_options.enable_bf_col_idxs);
+
+  // Precompute slowpath indices for varlena columns (non-byval and typlen == -1)
+  varlena_slowpath_indices_.clear();
+  varlena_slowpath_indices_.reserve(writer_options.rel_tuple_desc->natts);
+  for (int i = 0; i < writer_options.rel_tuple_desc->natts; ++i) {
+    auto attrs = TupleDescAttr(writer_options.rel_tuple_desc, i);
+    if (!attrs->attbyval && attrs->attlen == -1) {
+      varlena_slowpath_indices_.push_back(i);
+    }
+  }
 }
 
 OrcWriter::~OrcWriter() {}
@@ -311,8 +321,6 @@ void OrcWriter::Flush() {
 std::vector<std::pair<int, Datum>> OrcWriter::PrepareWriteTuple(
     TupleTableSlot *table_slot) {
   TupleDesc tuple_desc;
-  int16 type_len;
-  bool type_by_val;
   bool is_null;
   Datum tts_value;
   char type_storage;
@@ -323,18 +331,16 @@ std::vector<std::pair<int, Datum>> OrcWriter::PrepareWriteTuple(
   Assert(tuple_desc);
   const auto &required_stats_cols = group_stats_.GetRequiredStatsColsMask();
 
-  for (int i = 0; i < tuple_desc->natts; i++) {
+  for (int i : varlena_slowpath_indices_) {
     bool save_origin_datum;
     auto attrs = TupleDescAttr(tuple_desc, i);
-    type_len = attrs->attlen;
-    type_by_val = attrs->attbyval;
     is_null = table_slot->tts_isnull[i];
     tts_value = table_slot->tts_values[i];
     type_storage = attrs->attstorage;
 
     AssertImply(attrs->attisdropped, is_null);
 
-    if (is_null || type_by_val || type_len != -1) {
+    if (is_null) {
       continue;
     }
 
