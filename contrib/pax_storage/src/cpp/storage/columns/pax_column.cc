@@ -83,13 +83,21 @@ size_t PaxColumn::GetRangeNonNullRows(size_t start_pos, size_t len) {
 
 void PaxColumn::CreateNulls(size_t cap) {
   Assert(!null_bitmap_);
-  null_bitmap_ = std::make_unique<Bitmap8>(cap);
-  null_bitmap_->SetN(total_rows_);
+  // By default, initialize every bit in the null bitmap to 1.
+  // This is based on the assumption that null values are much less frequent
+  // than non-null values in most datasets. As a result, when appending non-null
+  // values, we can simply skip setting the bit to 1, since it is already set.
+  // Only when appending a null value do we need to explicitly clear the
+  // corresponding bit.
+  null_bitmap_ = std::make_unique<Bitmap8>(cap, 0xff);
 }
 
 void PaxColumn::AppendNull() {
   if (!null_bitmap_) {
-    CreateNulls(DEFAULT_CAPACITY);
+    // Ensure that the capacity of null_bitmap_ is pax_max_tuples_per_group.
+    // This design allows the use of raw_bitmap in normal cases without
+    // incurring the overhead of checking the bitmap's capacity.
+    CreateNulls(pax::pax_max_tuples_per_group);
   }
   null_bitmap_->Clear(total_rows_);
   ++total_rows_;
@@ -111,7 +119,6 @@ void PaxColumn::AppendToast(char *buffer, size_t size) {
 }
 
 void PaxColumn::Append(char * /*buffer*/, size_t /*size*/) {
-  if (null_bitmap_) null_bitmap_->Set(total_rows_);
   ++total_rows_;
   ++non_null_rows_;
 }
