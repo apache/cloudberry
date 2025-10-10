@@ -924,6 +924,16 @@ if test "$enable_external_fts" = no; then
 fi
 
 #
+# ic-udp2
+#
+PGAC_ARG_BOOL(enable, ic-udp2, no,
+              [enable interconnect udp2 implement],
+              [AC_DEFINE(ENABLE_IC_UDP2, 1,
+                         [Define to 1 to build with interconnect udp2 support (--enable-ic-udp2)])])
+AC_MSG_RESULT([checking whether to build with interconnect udp2 support ... $enable_ic_udp2])
+AC_SUBST(enable_ic_udp2)
+
+#
 # ic-proxy
 #
 PGAC_ARG_BOOL(enable, ic-proxy, no,
