@@ -29,6 +29,8 @@
 
 #ifdef VEC_BUILD
 
+#include <stdlib.h>
+
 #include "comm/vec_numeric.h"
 #include "storage/columns/pax_column_traits.h"
 #include "storage/toast/pax_toast.h"
@@ -37,6 +39,22 @@
 #include "storage/columns/pax_dict_encoding.h"  // GetRawDictionary
 #endif
 namespace pax {
+
+static inline struct varlena *VarlenaShortTo4B(struct varlena *attr) {
+  Assert(attr != nullptr);
+  Assert(VARATT_IS_SHORT(attr));
+  Size data_size = VARSIZE_SHORT(attr) - VARHDRSZ_SHORT;
+  Size new_size = data_size + VARHDRSZ;
+
+  struct varlena *new_attr =
+      reinterpret_cast<struct varlena *>(malloc(new_size));
+
+  Assert(new_attr != nullptr);
+
+  SET_VARSIZE(new_attr, new_size);
+  memcpy(VARDATA(new_attr), VARDATA_SHORT(attr), data_size);
+  return new_attr;
+}
 
 static void CopyFixedRawBufferWithNull(
     PaxColumn *column, std::shared_ptr<Bitmap8> visibility_map_bitset,
@@ -235,16 +253,22 @@ static void CopyDecimalBuffer(PaxColumn *column,
       out_data_buffer->Brush(type_len);
     } else {
       Numeric numeric;
+      bool should_free = false;
       size_t num_len = 0;
       std::tie(buffer, buffer_len) =
           column->GetBuffer(data_index_begin + non_null_offset);
 
       auto vl = (struct varlena *)DatumGetPointer(buffer);
-      Assert(!(VARATT_IS_EXTERNAL(vl) || VARATT_IS_COMPRESSED(vl) ||
-               VARATT_IS_SHORT(vl)));
+      Assert(!(VARATT_IS_EXTERNAL(vl) || VARATT_IS_COMPRESSED(vl)));
       num_len = VARSIZE_ANY_EXHDR(vl);
-      // direct cast
-      numeric = (Numeric)(buffer);
+      // it has been detoasted in OrcWriter::PrepareWriteTuple, except numeric
+      // type with short header should be detoasted to 4B header
+      if (unlikely(VARATT_IS_SHORT(vl))) {
+        numeric = VarlenaShortTo4B(vl);
+        should_free = true;
+      } else {  // direct cast
+        numeric = (Numeric)(buffer);
+      }
 
       char *dest_buff = out_data_buffer->GetAvailableBuffer();
       Assert(out_data_buffer->Available() >= (size_t)type_len);
@@ -253,6 +277,10 @@ static void CopyDecimalBuffer(PaxColumn *column,
           (int64 *)(dest_buff + sizeof(int64)));
       out_data_buffer->Brush(type_len);
       non_null_offset++;
+
+      if (should_free) {
+        free(numeric);
+      }
     }
   }
 
