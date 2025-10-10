@@ -74,7 +74,7 @@ jobs:
         fi
 
     - name: Install Build Wrapper
-      uses: SonarSource/sonarqube-scan-action/install-build-wrapper@v5
+      uses: SonarSource/sonarqube-scan-action/install-build-wrapper@v6
 
     - name: Run Build Wrapper
       run: |
@@ -112,7 +112,7 @@ jobs:
         build-wrapper-linux-x86-64 --out-dir ${{ env.BUILD_WRAPPER_OUT_DIR }} make -j$(nproc)
 
     - name: SonarQube Scan
-      uses: SonarSource/sonarqube-scan-action@v5
+      uses: SonarSource/sonarqube-scan-action@v6
       env:
         SONAR_TOKEN: ${{ secrets.SONARCLOUD_TOKEN }}
       with:
