@@ -2871,12 +2871,13 @@ process_sample_rows(Portal portal,
 				arrayVal = DatumGetArrayTypeP(funcRetValues[3]);
 				deconstruct_array(arrayVal, FLOAT8OID, 8, true, 'd',
 								&colndv, &nulls, &numelems);
-				for (i = 0; i < relDesc->natts; i++)
+				Assert(numelems == relDesc->natts);
+				for (i = 0; i < numelems; i++)
 				{
 					double this_colndv = DatumGetFloat8(colndv[i]);
 					if (this_colndv < 0) {
 						Assert(this_colndv >= -1);
-						colNDVBySeg[i] += abs(this_colndv) * this_totalrows;
+						colNDVBySeg[i] += fabs(this_colndv) * this_totalrows;
 					} else {
 						/* if current segment have any data, then ndv won't be 0.
 						 * if current segment have no rows, ndv is 0.
