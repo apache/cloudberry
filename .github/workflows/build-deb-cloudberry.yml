@@ -1,0 +1,622 @@
+# --------------------------------------------------------------------
+#
+# Licensed to the Apache Software Foundation (ASF) under one or more
+# contributor license agreements. See the NOTICE file distributed
+# with this work for additional information regarding copyright
+# ownership. The ASF licenses this file to You under the Apache
+# License, Version 2.0 (the "License"); you may not use this file
+# except in compliance with the License. You may obtain a copy of the
+# License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
+# implied. See the License for the specific language governing
+# permissions and limitations under the License.
+#
+# --------------------------------------------------------------------
+# GitHub Actions Workflow: Apache Cloudberry Build Pipeline
+# --------------------------------------------------------------------
+# Description:
+#
+#   This workflow builds, tests, and packages Apache Cloudberry on
+#   Ubuntu 22.04. It ensures artifact integrity and performs installation
+#   tests.
+#
+# Workflow Overview:
+# 1. **Build Job**:
+#    - Configures and builds Apache Cloudberry.
+#    - Supports debug build configuration via ENABLE_DEBUG flag.
+#    - Runs unit tests and verifies build artifacts.
+#    - Creates DEB packages (regular and debug), source tarball
+#    and additional files for dupload utility.
+#    - **Key Artifacts**: DEB package, source tarball, changes and dsc files, build logs.
+#
+# 2. **DEB Install Test Job**:
+#    - Verifies DEB integrity and installs Cloudberry.
+#    - Validates successful installation.
+#    - **Key Artifacts**: Installation logs, verification results.
+#
+# 3. **Report Job**:
+#    - Aggregates job results into a final report.
+#    - Sends failure notifications if any step fails.
+#
+# Execution Environment:
+# - **Runs On**: ubuntu-22.04 with ubuntu-22.04 containers.
+# - **Resource Requirements**:
+#   - Disk: Minimum 20GB free space.
+#   - Memory: Minimum 8GB RAM.
+#   - CPU: Recommended 4+ cores.
+#
+# Triggers:
+# - Push to `main` branch.
+# - Pull requests to `main` branch.
+# - Manual workflow dispatch.
+#
+# Container Images:
+# - **Build**: `apache/incubator-cloudberry:cbdb-build-ubuntu22.04-latest`
+# - **Test**: `apache/incubator-cloudberry:cbdb-test-ubuntu22.04-latest`
+#
+# Artifacts:
+# - DEB Package           (retention: ${{ env.LOG_RETENTION_DAYS }} days).
+# - Changes and DSC files (retention: ${{ env.LOG_RETENTION_DAYS }} days).
+# - Source Tarball        (retention: ${{ env.LOG_RETENTION_DAYS }} days).
+# - Logs and Test Results (retention: ${{ env.LOG_RETENTION_DAYS }} days).
+#
+# Notes:
+# - Supports concurrent job execution.
+# - Supports debug builds with preserved symbols.
+# --------------------------------------------------------------------
+
+name: Apache Cloudberry Debian Build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened, edited]
+  workflow_dispatch:  # Manual trigger
+
+# Note: Step details, logs, and artifacts require users to be logged into GitHub
+# even for public repositories. This is a GitHub security feature and cannot
+# be overridden by permissions.
+
+permissions:
+  # READ permissions allow viewing repository contents
+  contents: read      # Required for checking out code and reading repository files
+
+  # READ permissions for packages (Container registry, etc)
+  packages: read      # Allows reading from GitHub package registry
+
+  # WRITE permissions for actions includes read access to:
+  # - Workflow runs
+  # - Artifacts (requires GitHub login)
+  # - Logs (requires GitHub login)
+  actions: write
+
+  # READ permissions for checks API:
+  # - Step details visibility (requires GitHub login)
+  # - Check run status and details
+  checks: read
+
+  # READ permissions for pull request metadata:
+  # - PR status
+  # - Associated checks
+  # - Review states
+  pull-requests: read
+
+env:
+  LOG_RETENTION_DAYS: 7
+  ENABLE_DEBUG: false
+
+jobs:
+
+  ## ======================================================================
+  ## Job: check-skip
+  ## ======================================================================
+
+  check-skip:
+    runs-on: ubuntu-22.04
+    outputs:
+      should_skip: ${{ steps.skip-check.outputs.should_skip }}
+    steps:
+      - id: skip-check
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_TITLE: ${{ github.event.pull_request.title || '' }}
+          PR_BODY: ${{ github.event.pull_request.body || '' }}
+        run: |
+          # Default to not skipping
+          echo "should_skip=false" >> "$GITHUB_OUTPUT"
+
+          # Apply skip logic only for pull_request events
+          if [[ "$EVENT_NAME" == "pull_request" ]]; then
+            # Combine PR title and body for skip check
+            MESSAGE="${PR_TITLE}\n${PR_BODY}"
+
+            # Escape special characters using printf %s
+            ESCAPED_MESSAGE=$(printf "%s" "$MESSAGE")
+
+            echo "Checking PR title and body (escaped): $ESCAPED_MESSAGE"
+
+            # Check for skip patterns
+            if echo -e "$ESCAPED_MESSAGE" | grep -qEi '\[skip[ -]ci\]|\[ci[ -]skip\]|\[no[ -]ci\]'; then
+              echo "should_skip=true" >> "$GITHUB_OUTPUT"
+            fi
+          else
+            echo "Skip logic is not applied for $EVENT_NAME events."
+          fi
+
+      - name: Report Skip Status
+        if: steps.skip-check.outputs.should_skip == 'true'
+        run: |
+          echo "CI Skip flag detected in PR - skipping all checks."
+          exit 0
+
+  ## ======================================================================
+  ## Job: build
+  ## ======================================================================
+
+  build:
+    name: Build Apache Cloudberry DEB
+    env:
+      JOB_TYPE: build
+    needs: [check-skip]
+    runs-on: ubuntu-22.04
+    timeout-minutes: 120
+    outputs:
+      build_timestamp: ${{ steps.set_timestamp.outputs.timestamp }}
+
+    container:
+      image: apache/incubator-cloudberry:cbdb-build-ubuntu22.04-latest
+      options: >-
+        --user root
+        -h cdw
+
+    steps:
+      - name: Skip Check
+        if: needs.check-skip.outputs.should_skip == 'true'
+        run: |
+          echo "Build skipped via CI skip flag" >> "$GITHUB_STEP_SUMMARY"
+          exit 0
+
+      - name: Set build timestamp
+        id: set_timestamp  # Add an ID to reference this step
+        run: |
+          timestamp=$(date +'%Y%m%d_%H%M%S')
+          echo "timestamp=$timestamp" | tee -a "$GITHUB_OUTPUT"  # Use GITHUB_OUTPUT for job outputs
+          echo "BUILD_TIMESTAMP=$timestamp" | tee -a "$GITHUB_ENV" # Also set as environment variable
+
+      - name: Checkout Apache Cloudberry
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          submodules: true
+
+      - name: Checkout CI Build/Test Scripts
+        uses: actions/checkout@v4
+        with:
+          repository: leborchuk/cloudberry-devops-release
+          ref: main
+          path: cloudberry-devops-release
+          fetch-depth: 1
+
+      - name: Cloudberry Environment Initialization
+        shell: bash
+        env:
+          LOGS_DIR: build-logs
+        run: |
+          set -eo pipefail
+          if ! su - gpadmin -c "/tmp/init_system.sh"; then
+            echo "::error::Container initialization failed"
+            exit 1
+          fi
+
+          mkdir -p "${LOGS_DIR}/details"
+          chown -R gpadmin:gpadmin .
+          chmod -R 755 .
+          chmod 777 "${LOGS_DIR}"
+
+          df -kh /
+          rm -rf /__t/*
+          df -kh /
+
+          df -h | tee -a "${LOGS_DIR}/details/disk-usage.log"
+          free -h | tee -a "${LOGS_DIR}/details/memory-usage.log"
+
+          {
+            echo "=== Environment Information ==="
+            uname -a
+            df -h
+            free -h
+            env
+          } | tee -a "${LOGS_DIR}/details/environment.log"
+
+          echo "SRC_DIR=${GITHUB_WORKSPACE}" | tee -a "$GITHUB_ENV"
+
+      - name: Generate Build Job Summary Start
+        run: |
+          {
+            echo "# Build Job Summary"
+            echo "## Environment"
+            echo "- Start Time: $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
+            echo "- ENABLE_DEBUG: ${{ env.ENABLE_DEBUG }}"
+            echo "- OS Version: $(lsb_release -sd)"
+            echo "- GCC Version: $(gcc --version | head -n1)"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Run Apache Cloudberry configure script
+        shell: bash
+        env:
+          SRC_DIR: ${{ github.workspace }}
+        run: |
+          set -eo pipefail
+
+          export BUILD_DESTINATION=${SRC_DIR}/debian/build
+
+          chmod +x "${SRC_DIR}"/devops/build/automation/cloudberry/scripts/configure-cloudberry.sh
+          if ! time su - gpadmin -c "cd ${SRC_DIR} && SRC_DIR=${SRC_DIR} ENABLE_DEBUG=${{ env.ENABLE_DEBUG }} BUILD_DESTINATION=${BUILD_DESTINATION} ${SRC_DIR}/devops/build/automation/cloudberry/scripts/configure-cloudberry.sh"; then
+            echo "::error::Configure script failed"
+            exit 1
+          fi
+
+      - name: Run Apache Cloudberry build script
+        shell: bash
+        env:
+          SRC_DIR: ${{ github.workspace }}
+        run: |
+          set -eo pipefail
+
+          export BUILD_DESTINATION=${SRC_DIR}/debian/build
+
+          chmod +x "${SRC_DIR}"/devops/build/automation/cloudberry/scripts/build-cloudberry.sh
+          if ! time su - gpadmin -c "cd ${SRC_DIR} && SRC_DIR=${SRC_DIR} BUILD_DESTINATION=${BUILD_DESTINATION} ${SRC_DIR}/devops/build/automation/cloudberry/scripts/build-cloudberry.sh"; then
+            echo "::error::Build script failed"
+            exit 1
+          fi
+
+      - name: Verify build artifacts
+        shell: bash
+        run: |
+          set -eo pipefail
+
+          export BUILD_DESTINATION=${SRC_DIR}/debian/build
+
+          echo "Verifying build artifacts..."
+          {
+            echo "=== Build Artifacts Verification ==="
+            echo "Timestamp: $(date -u)"
+
+            export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:${BUILD_DESTINATION}/lib
+
+            if [ ! -d "${BUILD_DESTINATION}" ]; then
+              echo "::error::Build artifacts directory not found"
+              exit 1
+            fi
+
+            # Verify critical binaries
+            critical_binaries=(
+              "${BUILD_DESTINATION}/bin/postgres"
+              "${BUILD_DESTINATION}/bin/psql"
+            )
+
+            echo "Checking critical binaries..."
+            for binary in "${critical_binaries[@]}"; do
+              if [ ! -f "$binary" ]; then
+                echo "::error::Critical binary missing: $binary"
+                exit 1
+              fi
+              if [ ! -x "$binary" ]; then
+                echo "::error::Binary not executable: $binary"
+                exit 1
+              fi
+              echo "Binary verified: $binary"
+              ls -l "$binary"
+            done
+
+            # Test binary execution
+            echo "Testing binary execution..."
+            if ! ${BUILD_DESTINATION}/bin/postgres --version; then
+              echo "::error::postgres binary verification failed"
+              exit 1
+            fi
+            if ! ${BUILD_DESTINATION}/bin/psql --version; then
+              echo "::error::psql binary verification failed"
+              exit 1
+            fi
+
+            echo "All build artifacts verified successfully"
+          } 2>&1 | tee -a build-logs/details/build-verification.log
+
+      - name: Create Source tarball, create DEB and verify artifacts
+        shell: bash
+        env:
+          CBDB_VERSION: 99.0.0
+          BUILD_NUMBER: 1
+          SRC_DIR: ${{ github.workspace }}
+        run: |
+          set -eo pipefail
+
+          {
+            echo "=== Artifact Creation Log ==="
+            echo "Timestamp: $(date -u)"
+
+            cp -r "${SRC_DIR}"/devops/build/packaging/deb/ubuntu22.04/* debian/
+            chown -R "$(whoami)" debian
+            chmod -x debian/*install
+
+            # replace not supported symbols in version
+            CBDB_VERSION=$(echo "$CBDB_VERSION" | sed "s/\//./g")
+            CBDB_VERSION=$(echo "$CBDB_VERSION" | sed "s/_/-/g")
+          
+            echo "We will built ${CBDB_VERSION}"
+            export BUILD_DESTINATION=${SRC_DIR}/debian/build
+            export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:${BUILD_DESTINATION}/lib
+
+            if ! ${SRC_DIR}/devops/build/packaging/deb/build-deb.sh -v $CBDB_VERSION; then
+              echo "::error::Build script failed"
+              exit 1
+            fi
+
+            ARCH="amd64"
+            CBDB_PKG_VERSION=${CBDB_VERSION}-${BUILD_NUMBER}-$(git --git-dir=.git rev-list HEAD --count).$(git --git-dir=.git rev-parse --short HEAD)
+
+            echo "Produced artifacts"
+            ls -l ../
+
+            echo "Copy artifacts to subdirectory for sign/upload"
+            mkdir ${SRC_DIR}/deb
+            DEB_FILE="apache-cloudberry-db-incubating_${CBDB_PKG_VERSION}"_"${ARCH}".deb
+            DBG_DEB_FILE="apache-cloudberry-db-incubating-dbgsym_${CBDB_PKG_VERSION}"_"${ARCH}".ddeb
+            CHANGES_DEB_FILE="apache-cloudberry-db-incubating_${CBDB_PKG_VERSION}"_"${ARCH}".changes
+            BUILDINFO_DEB_FILE="apache-cloudberry-db-incubating_${CBDB_PKG_VERSION}"_"${ARCH}".buildinfo
+            DSC_DEB_FILE="apache-cloudberry-db-incubating_${CBDB_PKG_VERSION}".dsc
+            SOURCE_FILE="apache-cloudberry-db-incubating_${CBDB_PKG_VERSION}".tar.xz
+            cp ../"${DEB_FILE}" "${SRC_DIR}/deb"
+            cp ../"${DBG_DEB_FILE}" "${SRC_DIR}/deb"
+            cp ../"${CHANGES_DEB_FILE}" "${SRC_DIR}/deb"
+            cp ../"${BUILDINFO_DEB_FILE}" "${SRC_DIR}/deb"
+            cp ../"${DSC_DEB_FILE}" "${SRC_DIR}/deb"
+            cp ../"${SOURCE_FILE}" "${SRC_DIR}/deb"
+            mkdir "${SRC_DIR}/deb/debian"
+            cp debian/changelog "${SRC_DIR}/deb/debian"
+
+            # Get package information
+            echo "Package Information:"
+            dpkg --info "${SRC_DIR}/deb/${DEB_FILE}"
+            dpkg --contents "${SRC_DIR}/deb/${DEB_FILE}"
+
+            # Verify critical files in DEB
+            echo "Verifying critical files in DEB..."
+            for binary in "bin/postgres" "bin/psql"; do
+              if ! dpkg --contents "${SRC_DIR}/deb/${DEB_FILE}" | grep -c "${binary}$"; then
+                echo "::error::Critical binary '${binary}' not found in DEB"
+                exit 1
+              fi
+            done
+
+            # Record checksums
+            echo "Calculating checksums..."
+            sha256sum "${SRC_DIR}/deb/${DEB_FILE}" | tee -a build-logs/details/checksums.log
+
+            echo "Artifacts created and verified successfully"
+
+
+          } 2>&1 | tee -a build-logs/details/artifact-creation.log
+
+      - name: Generate Build Job Summary End
+        run: |
+          {
+            echo "## Build Results"
+            echo "- End Time: $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload build logs
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-logs-${{ env.BUILD_TIMESTAMP }}
+          path: |
+            build-logs/
+          retention-days: ${{ env.LOG_RETENTION_DAYS }}
+
+      - name: Upload Cloudberry DEB build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: apache-cloudberry-db-incubating-deb-build-artifacts
+          retention-days: ${{ env.LOG_RETENTION_DAYS }}
+          if-no-files-found: error
+          path: |
+            deb/*.deb
+            deb/*.ddeb
+
+      - name: Upload Cloudberry deb source build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: apache-cloudberry-db-incubating-deb-source-build-artifacts
+          retention-days: ${{ env.LOG_RETENTION_DAYS }}
+          if-no-files-found: error
+          path: |
+            deb/*.tar.xz
+            deb/*.changes
+            deb/*.dsc
+            deb/*.buildinfo
+            deb/debian/changelog
+
+  ## ======================================================================
+  ## Job: deb-install-test
+  ## ======================================================================
+
+  rpm-install-test:
+    name: DEB Install Test Apache Cloudberry
+    needs: [check-skip, build]
+    runs-on: ubuntu-22.04
+    timeout-minutes: 120
+
+    container:
+      image: apache/incubator-cloudberry:cbdb-test-ubuntu22.04-latest
+      options: >-
+        --user root
+        -h cdw
+
+    steps:
+      - name: Skip Check
+        if: needs.check-skip.outputs.should_skip == 'true'
+        run: |
+          echo "DEB install test skipped via CI skip flag" >> "$GITHUB_STEP_SUMMARY"
+          exit 0
+
+      - name: Download Cloudberry DEB build artifacts
+        if: needs.check-skip.outputs.should_skip != 'true'
+        uses: actions/download-artifact@v4
+        with:
+          name: apache-cloudberry-db-incubating-deb-build-artifacts
+          path: ${{ github.workspace }}/deb_build_artifacts
+          merge-multiple: false
+
+      - name: Cloudberry Environment Initialization
+        if: needs.check-skip.outputs.should_skip != 'true'
+        shell: bash
+        env:
+          LOGS_DIR: install-logs
+        run: |
+          set -eo pipefail
+          if ! su - gpadmin -c "/tmp/init_system.sh"; then
+            echo "::error::Container initialization failed"
+            exit 1
+          fi
+
+          mkdir -p "${LOGS_DIR}/details"
+          chown -R gpadmin:gpadmin .
+          chmod -R 755 .
+          chmod 777 "${LOGS_DIR}"
+
+          df -kh /
+          rm -rf /__t/*
+          df -kh /
+
+          df -h | tee -a "${LOGS_DIR}/details/disk-usage.log"
+          free -h | tee -a "${LOGS_DIR}/details/memory-usage.log"
+
+          {
+            echo "=== Environment Information ==="
+            uname -a
+            df -h
+            free -h
+            env
+          } | tee -a "${LOGS_DIR}/details/environment.log"
+
+          echo "SRC_DIR=${GITHUB_WORKSPACE}" | tee -a "$GITHUB_ENV"
+
+      - name: Verify DEB artifacts
+        id: verify-artifacts
+        shell: bash
+        run: |
+          set -eo pipefail
+
+          DEB_FILE=$(ls "${GITHUB_WORKSPACE}"/deb_build_artifacts/*.deb)
+          if [ ! -f "${DEB_FILE}" ]; then
+            echo "::error::DEB file not found"
+            exit 1
+          fi
+
+          echo "deb_file=${DEB_FILE}" >> "$GITHUB_OUTPUT"
+
+          echo "Verifying DEB artifacts..."
+          {
+            echo "=== DEB Verification Summary ==="
+            echo "Timestamp: $(date -u)"
+            echo "DEB File: ${DEB_FILE}"
+
+            # Get DEB metadata and verify contents
+            echo "Package Information:"
+            dpkg-deb -f "${DEB_FILE}"
+
+            # Get key DEB attributes for verification
+            DEB_VERSION=$(dpkg-deb -f "${DEB_FILE}" Version | cut -d'-' -f 1)
+            DEB_RELEASE=$(dpkg-deb -f "${DEB_FILE}" Version | cut -d'-' -f 3)
+            echo "version=${DEB_VERSION}" >> "$GITHUB_OUTPUT"
+            echo "release=${DEB_RELEASE}" >> "$GITHUB_OUTPUT"
+
+            # Verify expected binaries are in the DEB
+            echo "Verifying critical files in DEB..."
+            for binary in "bin/postgres" "bin/psql"; do
+              if ! dpkg-deb -c "${DEB_FILE}" | grep "${binary}" > /dev/null; then
+                echo "::error::Critical binary '${binary}' not found in DEB"
+                exit 1
+              fi
+            done
+
+            echo "DEB Details:"
+            echo "- Version: ${DEB_VERSION}"
+            echo "- Release: ${DEB_RELEASE}"
+
+            # Calculate and store checksum
+            echo "Checksum:"
+            sha256sum "${DEB_FILE}"
+
+          } 2>&1 | tee -a install-logs/details/deb-verification.log
+
+      - name: Install Cloudberry DEB
+        shell: bash
+        env:
+          DEB_FILE: ${{ steps.verify-artifacts.outputs.deb_file }}
+          DEB_VERSION: ${{ steps.verify-artifacts.outputs.version }}
+          DEB_RELEASE: ${{ steps.verify-artifacts.outputs.release }}
+        run: |
+          set -eo pipefail
+
+          if [ -z "${DEB_FILE}" ]; then
+            echo "::error::DEB_FILE environment variable is not set"
+            exit 1
+          fi
+
+          {
+            echo "=== DEB Installation Log ==="
+            echo "Timestamp: $(date -u)"
+            echo "DEB File: ${DEB_FILE}"
+            echo "Version: ${DEB_VERSION}"
+            echo "Release: ${DEB_RELEASE}"
+
+            # Clean install location
+            rm -rf /usr/local/cloudberry-db
+
+            # Install DEB
+            echo "Starting installation..."
+            apt-get update
+            if ! apt-get -y install "${DEB_FILE}"; then
+              echo "::error::DEB installation failed"
+              exit 1
+            fi
+
+            # Change ownership back to gpadmin - it is needed for future tests
+            chown -R gpadmin:gpadmin /usr/local/cloudberry-db
+
+            echo "Installation completed successfully"
+            dpkg-query -s apache-cloudberry-db-incubating
+            echo "Installed files:"
+            dpkg-query -L apache-cloudberry-db-incubating
+          } 2>&1 | tee -a install-logs/details/deb-installation.log
+
+      - name: Upload install logs
+        uses: actions/upload-artifact@v4
+        with:
+          name: install-logs-${{ matrix.name }}-${{ needs.build.outputs.build_timestamp }}
+          path: |
+            install-logs/
+          retention-days: ${{ env.LOG_RETENTION_DAYS }}
+
+      - name: Generate Install Test Job Summary End
+        if: always()
+        shell: bash {0}
+        run: |
+          {
+            echo "# Installed Package Summary"
+            echo "\`\`\`"
+
+            dpkg-query -s apache-cloudberry-db-incubating
+            echo "\`\`\`"
+          } >> "$GITHUB_STEP_SUMMARY" || true
