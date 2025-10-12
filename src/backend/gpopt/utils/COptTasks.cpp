@@ -385,7 +385,7 @@ COptTasks::LoadSearchStrategy(CMemoryPool *mp, char *path)
 //---------------------------------------------------------------------------
 COptimizerConfig *
 COptTasks::CreateOptimizerConfig(CMemoryPool *mp, ICostModel *cost_model,
-								 CPlanHint *plan_hints)
+								 CPlanHint *plan_hints, BOOL enable_parallel_plans)
 {
 	// get chosen plan number, cost threshold
 	ULLONG plan_id = (ULLONG) optimizer_plan_id;
@@ -424,7 +424,8 @@ COptTasks::CreateOptimizerConfig(CMemoryPool *mp, ICostModel *cost_model,
 				  push_group_by_below_setop_threshold, xform_bind_threshold,
 				  skew_factor),
 		plan_hints,
-		GPOS_NEW(mp) CWindowOids(mp, OID(F_ROW_NUMBER), OID(F_RANK_), OID(F_DENSE_RANK_)));
+		GPOS_NEW(mp) CWindowOids(mp, OID(F_ROW_NUMBER), OID(F_RANK_), OID(F_DENSE_RANK_)),
+		enable_parallel_plans);
 }
 
 //---------------------------------------------------------------------------
@@ -961,7 +962,7 @@ COptTasks::OptimizeTask(void *ptr)
 			ICostModel *cost_model = GetCostModel(mp, num_segments_for_costing);
 			CPlanHint *plan_hints = GetPlanHints(mp, opt_ctxt->m_query);
 			COptimizerConfig *optimizer_config =
-				CreateOptimizerConfig(mp, cost_model, plan_hints);
+				CreateOptimizerConfig(mp, cost_model, plan_hints, opt_ctxt->m_create_parallel_plan);
 			CConstExprEvaluatorProxy expr_eval_proxy(mp, &mda);
 			IConstExprEvaluator *expr_evaluator =
 				GPOS_NEW(mp) CConstExprEvaluatorDXL(mp, &mda, &expr_eval_proxy);
@@ -1186,6 +1187,7 @@ COptTasks::GPOPTOptimizedPlan(Query *query, SOptContext *gpopt_context, Optimize
 	gpopt_context->m_should_generate_plan_stmt = true;
 	// Copy options in `OptimizerOptions` to `SOptContext`
 	gpopt_context->m_create_vec_plan = opts->create_vectorization_plan;
+	gpopt_context->m_create_parallel_plan = opts->create_parallel_plan;
 	Execute(&OptimizeTask, gpopt_context);
 	return gpopt_context->m_plan_stmt;
 }
