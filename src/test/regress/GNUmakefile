@@ -223,6 +223,12 @@ installcheck-cbdb-parallel: all tablespace-setup twophase_pqexecparams
 	$(pg_regress_installcheck) $(REGRESS_OPTS) --schedule=$(srcdir)/parallel_schedule --schedule=$(srcdir)/greenplum_schedule --max-connections=5 $(EXTRA_TESTS) --exclude-tests explain \
 	)
 
+installcheck-orca-parallel: all tablespace-setup twophase_pqexecparams
+	( \
+	export PGOPTIONS='-c optimizer=on -c enable_parallel=true -c min_parallel_table_scan_size=0 -c min_parallel_index_scan_size=0 -c parallel_setup_cost=0'; \
+	$(pg_regress_installcheck) $(REGRESS_OPTS) --exclude-file=$(srcdir)/excluded_tests.conf --schedule=$(srcdir)/parallel_schedule --schedule=$(srcdir)/greenplum_schedule --max-connections=4 --ignore-plans $(EXTRA_TESTS) \
+	)
+
 installcheck-tests: all
 	$(pg_regress_installcheck) $(REGRESS_OPTS) $(TESTS) $(EXTRA_TESTS)
 
