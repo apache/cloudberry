@@ -516,7 +516,6 @@ CTranslatorRelcacheToDXL::RetrieveRel(CMemoryPool *mp, CMDAccessor *md_accessor,
 	IMdIdArray *check_constraint_mdids = nullptr;
 	BOOL is_temporary = false;
 	BOOL is_partitioned = false;
-	IMDRelation *md_rel = nullptr;
 	IMdIdArray *partition_oids = nullptr;
 	IMDId *foreign_server_mdid = nullptr;
 
@@ -618,14 +617,24 @@ CTranslatorRelcacheToDXL::RetrieveRel(CMemoryPool *mp, CMDAccessor *md_accessor,
 			CMDIdGPDB(IMDId::EmdidGeneral, gpdb::GetForeignServerId(oid));
 	}
 
-	md_rel = GPOS_NEW(mp) CMDRelationGPDB(
+	CMDRelationGPDB *md_rel_gpdb = GPOS_NEW(mp) CMDRelationGPDB(
 		mp, mdid, mdname, is_temporary, rel_storage_type, dist,
 		mdcol_array, distr_cols, distr_op_families, part_keys, part_types,
 		partition_oids, convert_hash_to_random, keyset_array,
 		md_index_info_array, check_constraint_mdids, mdpart_constraint,
 		foreign_server_mdid, rel->rd_rel->reltuples);
 
-	return md_rel;
+	// Set segment file count for AO/AOCO tables
+	// Skip partitioned tables as they don't have physical storage (only leaf partitions do)
+	if ((rel_storage_type == IMDRelation::ErelstorageAppendOnlyRows ||
+		 rel_storage_type == IMDRelation::ErelstorageAppendOnlyCols) &&
+		rel->rd_rel->relkind != RELKIND_PARTITIONED_TABLE)
+	{
+		INT seg_file_count = gpdb::GetAppendOnlySegmentFilesCount(rel.get());
+		md_rel_gpdb->SetSegFileCount(seg_file_count);
+	}
+
+	return md_rel_gpdb;
 }
 
 //---------------------------------------------------------------------------

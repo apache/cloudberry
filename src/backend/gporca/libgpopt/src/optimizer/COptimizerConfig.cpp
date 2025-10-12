@@ -33,14 +33,16 @@ COptimizerConfig::COptimizerConfig(CEnumeratorConfig *pec,
 								   CStatisticsConfig *stats_config,
 								   CCTEConfig *pcteconf, ICostModel *cost_model,
 								   CHint *phint, CPlanHint *pplanhint,
-								   CWindowOids *pwindowoids)
+								   CWindowOids *pwindowoids,
+								   BOOL enable_parallel_plans)
 	: m_enumerator_cfg(pec),
 	  m_stats_conf(stats_config),
 	  m_cte_conf(pcteconf),
 	  m_cost_model(cost_model),
 	  m_hint(phint),
 	  m_plan_hint(pplanhint),
-	  m_window_oids(pwindowoids)
+	  m_window_oids(pwindowoids),
+	  m_create_parallel_plan(enable_parallel_plans)
 {
 	GPOS_ASSERT(nullptr != pec);
 	GPOS_ASSERT(nullptr != stats_config);
@@ -85,7 +87,7 @@ COptimizerConfig::PoconfDefault(CMemoryPool *mp)
 		CStatisticsConfig::PstatsconfDefault(mp),
 		CCTEConfig::PcteconfDefault(mp), ICostModel::PcmDefault(mp),
 		CHint::PhintDefault(mp), nullptr /* pplanhint */,
-		CWindowOids::GetWindowOids(mp));
+		CWindowOids::GetWindowOids(mp), false /* enable_parallel_plans */);
 }
 
 //---------------------------------------------------------------------------
@@ -105,7 +107,7 @@ COptimizerConfig::PoconfDefault(CMemoryPool *mp, ICostModel *pcm)
 		GPOS_NEW(mp) CEnumeratorConfig(mp, 0 /*plan_id*/, 0 /*ullSamples*/),
 		CStatisticsConfig::PstatsconfDefault(mp),
 		CCTEConfig::PcteconfDefault(mp), pcm, CHint::PhintDefault(mp),
-		nullptr /* pplanhint */, CWindowOids::GetWindowOids(mp));
+		nullptr /* pplanhint */, CWindowOids::GetWindowOids(mp), false /* enable_parallel_plans */);
 }
 
 //---------------------------------------------------------------------------

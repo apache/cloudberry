@@ -62,7 +62,8 @@ CMDRelationGPDB::CMDRelationGPDB(
 	  m_colpos_nondrop_colpos_map(nullptr),
 	  m_attrno_nondrop_col_pos_map(nullptr),
 	  m_nondrop_col_pos_array(nullptr),
-	  m_rows(rows)
+	  m_rows(rows),
+	  m_seg_file_count(-1)
 {
 	GPOS_ASSERT(mdid->IsValid());
 	GPOS_ASSERT(nullptr != mdcol_array);
@@ -593,6 +594,26 @@ CDouble
 CMDRelationGPDB::Rows() const
 {
 	return m_rows;
+}
+
+INT
+CMDRelationGPDB::SegFileCount() const
+{
+	return m_seg_file_count;
+}
+
+//---------------------------------------------------------------------------
+//	@function:
+//		CMDRelationGPDB::SetSegFileCount
+//
+//	@doc:
+//		Set segment file count for AO/AOCO tables
+//
+//---------------------------------------------------------------------------
+void
+CMDRelationGPDB::SetSegFileCount(INT seg_file_count)
+{
+	m_seg_file_count = seg_file_count;
 }
 
 //---------------------------------------------------------------------------

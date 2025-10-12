@@ -330,6 +330,7 @@ BEGIN
 		SET enable_bitmapscan = 1;
 		SET optimizer_enable_tablescan = 0;
 		SET optimizer_enable_bitmapscan = 1;
+		SET enable_parallel = 0;
 
 		plan_ok := false;
 		is_planner_plan := false;

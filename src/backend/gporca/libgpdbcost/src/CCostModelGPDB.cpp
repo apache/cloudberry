@@ -12,6 +12,7 @@
 #include "gpdbcost/CCostModelGPDB.h"
 
 #include <limits>
+#include <cmath>
 
 #include "gpopt/base/CColRefSetIter.h"
 #include "gpopt/base/COptCtxt.h"
@@ -27,6 +28,7 @@
 #include "gpopt/operators/CPhysicalHashAgg.h"
 #include "gpopt/operators/CPhysicalIndexOnlyScan.h"
 #include "gpopt/operators/CPhysicalIndexScan.h"
+#include "gpopt/operators/CPhysicalParallelTableScan.h"
 #include "gpopt/operators/CPhysicalMotion.h"
 #include "gpopt/operators/CPhysicalMotionBroadcast.h"
 #include "gpopt/operators/CPhysicalPartitionSelector.h"
@@ -43,6 +45,9 @@
 using namespace gpos;
 using namespace gpdbcost;
 
+// Forward declare PostgreSQL GUC variables
+extern double parallel_setup_cost;
+extern double parallel_tuple_cost;
 
 //---------------------------------------------------------------------------
 //	@function:
@@ -2374,7 +2379,8 @@ CCostModelGPDB::CostScan(CMemoryPool *,	 // mp
 	GPOS_ASSERT(COperator::EopPhysicalTableScan == op_id ||
 				COperator::EopPhysicalDynamicTableScan == op_id ||
 				COperator::EopPhysicalForeignScan == op_id ||
-				COperator::EopPhysicalDynamicForeignScan == op_id);
+				COperator::EopPhysicalDynamicForeignScan == op_id ||
+				COperator::EopPhysicalParallelTableScan == op_id);
 
 	const CDouble dInitScan =
 		pcmgpdb->GetCostModelParams()
@@ -2396,6 +2402,7 @@ CCostModelGPDB::CostScan(CMemoryPool *,	 // mp
 		case COperator::EopPhysicalDynamicTableScan:
 		case COperator::EopPhysicalForeignScan:
 		case COperator::EopPhysicalDynamicForeignScan:
+		case COperator::EopPhysicalParallelTableScan:
 			// table scan cost considers only retrieving tuple cost,
 			// since we scan the entire table here, the cost is correlated with table rows and table width,
 			// since Scan's parent operator may be a filter that will be pushed into Scan node in GPDB plan,
@@ -2407,6 +2414,120 @@ CCostModelGPDB::CostScan(CMemoryPool *,	 // mp
 			GPOS_ASSERT(!"invalid index scan");
 			return CCost(0);
 	}
+}
+
+
+//---------------------------------------------------------------------------
+//	@function:
+//		CCostModelGPDB::CostParallelTableScan
+//
+//	@doc:
+//		Cost of parallel table scan
+//
+//---------------------------------------------------------------------------
+CCost
+CCostModelGPDB::CostParallelTableScan(CMemoryPool *mp,
+									  CExpressionHandle &exprhdl,
+									  const CCostModelGPDB *pcmgpdb,
+									  const SCostingInfo *pci)
+{
+	GPOS_ASSERT(nullptr != pcmgpdb);
+	GPOS_ASSERT(nullptr != pci);
+
+	COperator *pop = exprhdl.Pop();
+	GPOS_ASSERT(COperator::EopPhysicalParallelTableScan == pop->Eopid());
+
+	// Get the parallel table scan operator
+	CPhysicalParallelTableScan *popParallelScan =
+		CPhysicalParallelTableScan::PopConvert(pop);
+	ULONG ulWorkers = popParallelScan->UlParallelWorkers();
+
+	// If only 1 worker, use regular scan cost
+	if (ulWorkers <= 1)
+	{
+		return CostScan(mp, exprhdl, pcmgpdb, pci);
+	}
+
+	// Get base scan parameters
+	const CDouble dInitScan =
+		pcmgpdb->GetCostModelParams()
+			->PcpLookup(CCostModelParamsGPDB::EcpInitScanFactor)
+			->Get();
+	const CDouble dTableWidth =
+		CPhysicalScan::PopConvert(pop)->PstatsBaseTable()->Width();
+	const CDouble dTableScanCostUnit =
+		pcmgpdb->GetCostModelParams()
+			->PcpLookup(CCostModelParamsGPDB::EcpTableScanCostUnit)
+			->Get();
+
+	// Calculate base scan cost
+	CDouble dBaseScanCost = dInitScan + pci->Rows() * dTableWidth * dTableScanCostUnit;
+
+	// Calculate parallel efficiency (decreases with more workers)
+	CDouble dParallelEfficiency = CalculateParallelEfficiency(ulWorkers);
+
+	// Parallel scan cost = base cost / (workers * efficiency)
+	CDouble dParallelScanCost = dBaseScanCost / (ulWorkers * dParallelEfficiency);
+
+	// Add worker startup cost
+	CDouble dWorkerStartupCost = GetWorkerStartupCost(pcmgpdb, ulWorkers);
+
+	// Total cost
+	return CCost(pci->NumRebinds() * (dParallelScanCost + dWorkerStartupCost));
+}
+
+//---------------------------------------------------------------------------
+//	@function:
+//		CCostModelGPDB::CalculateParallelEfficiency
+//
+//	@doc:
+//		Calculate parallel efficiency factor (0-1) based on worker count
+//
+//---------------------------------------------------------------------------
+CDouble
+CCostModelGPDB::CalculateParallelEfficiency(ULONG ulWorkers)
+{
+	if (ulWorkers <= 1)
+	{
+		return 1.0;
+	}
+
+	// Efficiency decreases logarithmically with more workers
+	// Formula: efficiency = 1 / (1 + 0.1 * log2(workers))
+	// This gives: 2 workers = 0.91, 4 workers = 0.83, 8 workers = 0.77
+	double dLogWorkers = std::log2(static_cast<double>(ulWorkers));
+	return CDouble(1.0 / (1.0 + 0.1 * dLogWorkers));
+}
+
+
+//---------------------------------------------------------------------------
+//	@function:
+//		CCostModelGPDB::GetWorkerStartupCost
+//
+//	@doc:
+//		Get the cost of starting up parallel workers
+//
+//---------------------------------------------------------------------------
+CDouble
+CCostModelGPDB::GetWorkerStartupCost(const CCostModelGPDB * /* pcmgpdb */, ULONG ulWorkers)
+{
+	if (ulWorkers <= 1)
+	{
+		return 0.0;
+	}
+
+	// ORCA's cost units are much smaller than PostgreSQL's cost model
+	// PostgreSQL's parallel_setup_cost default is 1000, but ORCA's costs are:
+	//   - InitScanFactor: 431.0
+	//   - HJHashTableInitCostFactor: 500.0
+	//   - DefaultCost: 100.0
+	//
+	// Use a conversion factor to map parallel_setup_cost to ORCA's scale.
+	// With default parallel_setup_cost=1000, this gives 10.0, which is
+	// reasonable compared to InitScanFactor (431.0) - about 0.1% overhead
+	const double POSTGRES_TO_ORCA_COST_CONVERSION = 0.001;
+
+	return CDouble(parallel_setup_cost * POSTGRES_TO_ORCA_COST_CONVERSION);
 }
 
 
@@ -2483,9 +2604,13 @@ CCostModelGPDB::Cost(
 		case COperator::EopPhysicalDynamicTableScan:
 		case COperator::EopPhysicalForeignScan:
 		case COperator::EopPhysicalDynamicForeignScan:
-
 		{
 			return CostScan(m_mp, exprhdl, this, pci);
+		}
+
+		case COperator::EopPhysicalParallelTableScan:
+		{
+			return CostParallelTableScan(m_mp, exprhdl, this, pci);
 		}
 
 		case COperator::EopPhysicalFilter:

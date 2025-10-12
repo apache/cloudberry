@@ -140,6 +140,7 @@ CMemo::Add(
 		GPOS_ASSERT(nullptr != gp.PgexprFirst());
 
 		gp.SetId(id);
+		gp.SetMemo(this);
 		gp.InitProperties(pdp);
 	}
 

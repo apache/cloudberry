@@ -14,6 +14,7 @@
 #include "gpos/base.h"
 
 #include "gpopt/base/CCTEMap.h"
+#include "gpopt/base/CDistributionSpecRandom.h"
 #include "gpopt/base/COptCtxt.h"
 #include "gpopt/operators/CExpression.h"
 #include "gpopt/operators/CExpressionHandle.h"
@@ -165,6 +166,14 @@ CPhysicalCTEProducer::PdsRequired(CMemoryPool *mp, CExpressionHandle &exprhdl,
 ) const
 {
 	GPOS_ASSERT(0 == child_index);
+
+	// Check if parallel distribution is requested
+	// if (CDistributionSpec::EdtWorkerRandom == pdsRequired->Edt())
+	// {
+	// 	// CTE Producer needs rewindability, which is incompatible with parallel workers
+	// 	// Downgrade to non-parallel random distribution to maintain distributed characteristics
+	// 	return GPOS_NEW(mp) CDistributionSpecRandom();
+	// }
 
 	return PdsPassThru(mp, exprhdl, pdsRequired, child_index);
 }
