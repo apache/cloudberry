@@ -17,6 +17,7 @@
 #include "gpopt/base/CConstraintDisjunction.h"
 #include "gpopt/base/CConstraintInterval.h"
 #include "gpopt/base/CConstraintNegation.h"
+#include "gpopt/base/CDistributionSpecWorkerRandom.h"
 #include "gpopt/base/COptCtxt.h"
 #include "gpopt/exception.h"
 #include "gpopt/mdcache/CMDAccessorUtils.h"
@@ -759,10 +760,11 @@ CTranslatorExprToDXLUtils::SetDirectDispatchInfo(
 	//			  +--CScalarConst (5)
 
 	if (CDistributionSpec::EdtHashed == pds->Edt() ||
-		CDistributionSpec::EdtRandom == pds->Edt())
+		CDistributionSpec::EdtRandom == pds->Edt() ||
+		CDistributionSpec::EdtWorkerRandom == pds->Edt())
 	{
 		// direct dispatch supported for scans over
-		// hash & random distributed tables
+		// hash, random & worker-random distributed tables
 		for (ULONG i = 0; i < size; i++)
 		{
 			CExpression *pexprFilter = (*pexprFilterArray)[i];
@@ -815,6 +817,62 @@ CTranslatorExprToDXLUtils::SetDirectDispatchInfo(
 
 					dxl_direct_dispatch_info = GetDXLDirectDispatchInfoRandDist(
 						mp, md_accessor, pcrDistrCol, pcnstrDistrCol);
+				}
+				else if (CDistributionSpec::EdtWorkerRandom == pds->Edt())
+				{
+					CConstraint *pcnstr = ppc->Pcnstr();
+
+					CDistributionSpecWorkerRandom *pdsWorkerRandom =
+						CDistributionSpecWorkerRandom::PdsConvert(pds);
+
+					// Get the base segment distribution for worker-random distribution
+					CDistributionSpec *pdsSegmentBase = pdsWorkerRandom->PdsSegmentBase();
+
+					if (nullptr == pdsSegmentBase)
+					{
+						// No base segment distribution available, cannot proceed with direct dispatch
+						continue;
+					}
+
+					// Handle direct dispatch based on the base segment distribution type
+					if (CDistributionSpec::EdtHashed == pdsSegmentBase->Edt())
+					{
+						// Base distribution is hashed - use hash distribution keys
+						CDistributionSpecHashed *pdsHashed =
+							CDistributionSpecHashed::PdsConvert(pdsSegmentBase);
+						CExpressionArray *pdrgpexprHashed = pdsHashed->Pdrgpexpr();
+
+						dxl_direct_dispatch_info = GetDXLDirectDispatchInfo(
+							mp, md_accessor, pdrgpexprHashed, pcnstr);
+					}
+					else if (CDistributionSpec::EdtRandom == pdsSegmentBase->Edt())
+					{
+						// Base distribution is random - use gp_segment_id
+						CDistributionSpecRandom *pdsRandom =
+							CDistributionSpecRandom::PdsConvert(pdsSegmentBase);
+
+						// Extracting GpSegmentID for base random distribution
+						const CColRef *pcrDistrCol = pdsRandom->GetGpSegmentId();
+
+						if (pcrDistrCol == nullptr)
+						{
+							// Direct Dispatch not feasible - no gp_segment_id available
+							continue;
+						}
+
+						CConstraint *pcnstrDistrCol = pcnstr->Pcnstr(mp, pcrDistrCol);
+
+						if (pcnstrDistrCol == nullptr)
+						{
+							// Direct Dispatch not feasible - no constraint on gp_segment_id
+							continue;
+						}
+
+						dxl_direct_dispatch_info = GetDXLDirectDispatchInfoRandDist(
+							mp, md_accessor, pcrDistrCol, pcnstrDistrCol);
+					}
+					// Note: Other base distribution types (Singleton, Replicated, etc.)
+					// are not supported for direct dispatch in worker-random context
 				}
 
 				if (nullptr != dxl_direct_dispatch_info)

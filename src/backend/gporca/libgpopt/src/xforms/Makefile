@@ -47,6 +47,7 @@ OBJS        = CDecorrelator.o \
               CXformGbAggDedup2StreamAggDedup.o \
               CXformGbAggWithMDQA2Join.o \
               CXformGet2TableScan.o \
+              CXformGet2ParallelTableScan.o \
               CXformImplementAssert.o \
               CXformImplementBitmapTableGet.o \
               CXformImplementCTEConsumer.o \

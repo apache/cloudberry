@@ -54,6 +54,7 @@ CDistributionSpecRandom::CDistributionSpecRandom(CColRef *gp_segment_id_)
 	}
 }
 
+
 //---------------------------------------------------------------------------
 //	@function:
 //		CDistributionSpecRandom::Matches
@@ -116,11 +117,15 @@ CDistributionSpecRandom::FSatisfies(const CDistributionSpec *pds) const
 		return true;
 	}
 
-	if (EdtRandom == pds->Edt() &&
-		(IsDuplicateSensitive() ||
-		 !CDistributionSpecRandom::PdsConvert(pds)->IsDuplicateSensitive()))
+	// Regular segment-level satisfaction logic
+	if (EdtRandom == pds->Edt())
 	{
-		return true;
+		const CDistributionSpecRandom *pdsRandom = CDistributionSpecRandom::PdsConvert(pds);
+
+		if (IsDuplicateSensitive() || !pdsRandom->IsDuplicateSensitive())
+		{
+			return true;
+		}
 	}
 
 	return EdtAny == pds->Edt() || EdtNonSingleton == pds->Edt() ||
@@ -227,7 +232,8 @@ CDistributionSpecRandom::AppendEnforcers(CMemoryPool *mp,
 IOstream &
 CDistributionSpecRandom::OsPrint(IOstream &os) const
 {
-	return os << this->SzId();
+	os << this->SzId();
+	return os;
 }
 
 // EOF

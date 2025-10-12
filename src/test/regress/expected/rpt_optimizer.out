@@ -933,16 +933,17 @@ explain (costs off) select a from t_replicate_volatile union all select * from n
 
 -- CTAS
 explain (costs off) create table rpt_ctas as select random() from generate_series(1, 10) distributed replicated;
-QUERY PLAN
-___________
+                  QUERY PLAN                  
+----------------------------------------------
  Result
    ->  Broadcast Motion 1:3  (slice1)
          ->  Function Scan on generate_series
-GP_IGNORE:(4 rows)
+ Optimizer: GPORCA
+(4 rows)
 
 explain (costs off) create table rpt_ctas as select a from generate_series(1, 10) a group by a having sum(a) > random() distributed replicated;
-QUERY PLAN
-___________
+                                  QUERY PLAN                                   
+-------------------------------------------------------------------------------
  Result
    ->  Broadcast Motion 3:3  (slice1; segments: 3)
          ->  Result
@@ -951,8 +952,8 @@ ___________
                      Group Key: generate_series
                      ->  Result
                            ->  Function Scan on generate_series
- Optimizer: Pivotal Optimizer (GPORCA)
-GP_IGNORE:(9 rows)
+ Optimizer: GPORCA
+(9 rows)
 
 -- update & delete
 explain (costs off) update t_replicate_volatile set a = 1 where b > random();

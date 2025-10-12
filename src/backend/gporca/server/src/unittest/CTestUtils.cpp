@@ -3539,7 +3539,7 @@ CTestUtils::EresSamplePlans(const CHAR *rgszFileNames[], ULONG ulTests,
 				CStatisticsConfig::PstatsconfDefault(mp),
 				CCTEConfig::PcteconfDefault(mp), ICostModel::PcmDefault(mp),
 				CHint::PhintDefault(mp), nullptr,
-				CWindowOids::GetWindowOids(mp));
+				CWindowOids::GetWindowOids(mp), false);
 		}
 		else
 		{
@@ -3678,7 +3678,7 @@ CTestUtils::EresCheckPlans(const CHAR *rgszFileNames[], ULONG ulTests,
 				CStatisticsConfig::PstatsconfDefault(mp),
 				CCTEConfig::PcteconfDefault(mp), ICostModel::PcmDefault(mp),
 				CHint::PhintDefault(mp), nullptr,
-				CWindowOids::GetWindowOids(mp));
+				CWindowOids::GetWindowOids(mp), false);
 		}
 		else
 		{

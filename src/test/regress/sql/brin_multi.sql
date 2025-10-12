@@ -266,6 +266,7 @@ BEGIN
 		-- run the query using the brin index
 		SET enable_seqscan = 0;
 		SET enable_bitmapscan = 1;
+		SET enable_parallel = 0;
 
 		plan_ok := false;
 		FOR plan_line IN EXECUTE format($y$EXPLAIN SELECT array_agg(ctid) FROM brintest_multi WHERE %s $y$, cond) LOOP

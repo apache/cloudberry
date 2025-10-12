@@ -332,6 +332,37 @@ planner(Query *parse, const char *query_string, int cursorOptions,
 
 	optimizer_options = palloc(sizeof(OptimizerOptions));
 	optimizer_options->create_vectorization_plan = false;
+
+	/*
+	 * Set parallel plan creation based on PostgreSQL planner's parallel safety checks.
+	 * This synchronizes with the same conditions used in standard_planner().
+	 */
+	if ((cursorOptions & CURSOR_OPT_PARALLEL_OK) != 0 &&
+		IsUnderPostmaster &&
+		parse->commandType == CMD_SELECT &&
+		!parse->hasModifyingCTE &&
+		max_parallel_workers_per_gather > 0 &&
+		!IsParallelWorker())
+	{
+		/* All cheap tests pass, check query tree for parallel safety */
+		char maxParallelHazard = max_parallel_hazard(parse);
+		optimizer_options->create_parallel_plan = (maxParallelHazard != PROPARALLEL_UNSAFE);
+
+		/*
+		 * Disable ORCA parallel for CTAS when no distribution policy is specified.
+		 * This prevents potential issues with parallel plan generation in distributed
+		 * environments where the distribution strategy is not predetermined.
+		 */
+		// if (parse->intoPolicy == NULL && parse->parentStmtType == PARENTSTMTTYPE_CTAS)
+		// {
+		// 	optimizer_options->create_parallel_plan = false;
+		// }
+	}
+	else
+	{
+		/* Skip the query tree scan, assume unsafe */
+		optimizer_options->create_parallel_plan = false;
+	}
 	if (planner_hook)
 	{
 		if (gp_log_optimization_time)

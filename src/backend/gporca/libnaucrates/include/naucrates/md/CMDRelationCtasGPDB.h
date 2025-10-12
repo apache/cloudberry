@@ -264,6 +264,12 @@ public:
 		return 0;
 	}
 
+	INT SegFileCount() const override
+	{
+		GPOS_ASSERT("Function should not be called for CTAS tables");
+		return -1;
+	}
+
 #ifdef GPOS_DEBUG
 	// debug print of the metadata relation
 	void DebugPrint(IOstream &os) const override;

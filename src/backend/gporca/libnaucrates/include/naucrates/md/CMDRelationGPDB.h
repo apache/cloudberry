@@ -122,13 +122,16 @@ private:
 	// rows
 	CDouble m_rows;
 
+	// segment file count for AO/AOCO tables (-1 for non-AO tables)
+	INT m_seg_file_count;
+
 public:
 	CMDRelationGPDB(const CMDRelationGPDB &) = delete;
 
 	// ctor
 	CMDRelationGPDB(
 		CMemoryPool *mp, IMDId *mdid, CMDName *mdname, BOOL is_temp_table,
-		Erelstoragetype rel_storage_type, 
+		Erelstoragetype rel_storage_type,
 		Ereldistrpolicy rel_distr_policy, CMDColumnArray *mdcol_array,
 		ULongPtrArray *distr_col_array, IMdIdArray *distr_opfamilies,
 		ULongPtrArray *partition_cols_array, CharPtrArray *str_part_types_array,
@@ -241,6 +244,11 @@ public:
 	IMDId *ForeignServer() const override;
 
 	CDouble Rows() const override;
+
+	INT SegFileCount() const override;
+
+	// Set segment file count for AO/AOCO tables
+	void SetSegFileCount(INT seg_file_count);
 
 #ifdef GPOS_DEBUG
 	// debug print of the metadata relation

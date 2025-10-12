@@ -505,6 +505,7 @@ CCostContext::FBetterThan(const CCostContext *pcc) const
 	if (CDistributionSpec::EdtHashed == Pdpplan()->Pds()->Edt() &&
 		CDistributionSpec::EdtRandom == pcc->Pdpplan()->Pds()->Edt())
 	{
+		// FIXME:
 		return true;
 	}
 

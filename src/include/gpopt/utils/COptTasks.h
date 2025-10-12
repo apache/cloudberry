@@ -90,6 +90,9 @@ struct SOptContext
 	// is serializing a plan to DXL required ?
 	BOOL m_should_serialize_plan_dxl{false};
 
+	// should generate parallel plans ?
+	BOOL m_create_parallel_plan{false};
+
 	// did the optimizer fail unexpectedly?
 	BOOL m_is_unexpected_failure{false};
 
@@ -129,7 +132,8 @@ private:
 	// create optimizer configuration object
 	static COptimizerConfig *CreateOptimizerConfig(CMemoryPool *mp,
 												   ICostModel *cost_model,
-												   CPlanHint *plan_hints);
+												   CPlanHint *plan_hints,
+												   BOOL enable_parallel_plans = false);
 
 	// optimize a query to a physical DXL
 	static void *OptimizeTask(void *ptr);
