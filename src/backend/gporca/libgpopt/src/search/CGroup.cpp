@@ -152,6 +152,7 @@ CGroup::SContextLink::Equals(const SContextLink *pclink1,
 //---------------------------------------------------------------------------
 CGroup::CGroup(CMemoryPool *mp, BOOL fScalar)
 	: m_mp(mp),
+	  m_pmemo(nullptr),
 	  m_id(GPOPT_INVALID_GROUP_ID),
 	  m_fScalar(fScalar),
 	  m_pdrgpexprJoinKeysOuter(nullptr),
@@ -531,6 +532,25 @@ CGroup::SetState(EState estNewState)
 	GPOS_ASSERT(estNewState == (EState)(m_estate + 1));
 
 	m_estate = estNewState;
+}
+
+
+//---------------------------------------------------------------------------
+//	@function:
+//		CGroup::SetMemo
+//
+//	@doc:
+//		Set containing memo reference;
+//
+//---------------------------------------------------------------------------
+void
+CGroup::SetMemo(CMemo *pmemo)
+{
+	GPOS_ASSERT(nullptr != pmemo);
+	GPOS_ASSERT(nullptr == m_pmemo &&
+				"Overwriting previously assigned memo reference");
+
+	m_pmemo = pmemo;
 }
 
 

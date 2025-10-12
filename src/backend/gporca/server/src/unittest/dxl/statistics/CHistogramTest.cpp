@@ -268,7 +268,8 @@ CHistogramTest::PhistExampleInt4Remain(CMemoryPool *mp)
 
 	return GPOS_NEW(mp)
 		CHistogram(mp, histogram_buckets, true, 0.1 /*null_freq*/,
-				   2.0 /*distinct_remaining*/, 0.4 /*freq_remaining*/);
+				   2.0 /*distinct_remaining*/, 0.4 /*freq_remaining*/,
+				   2.0 /*distinct_by_segs*/);
 }
 
 // basis skew test

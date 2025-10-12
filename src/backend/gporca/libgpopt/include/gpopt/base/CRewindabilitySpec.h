@@ -108,6 +108,7 @@ public:
 		EmhtSentinel
 	};
 
+
 private:
 	// rewindability support
 	ERewindabilityType m_rewindability;

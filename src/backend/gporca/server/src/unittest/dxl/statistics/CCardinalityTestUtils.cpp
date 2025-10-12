@@ -112,7 +112,8 @@ CCardinalityTestUtils::PhistInt4Remain(CMemoryPool *mp, ULONG num_of_buckets,
 	}
 
 	return GPOS_NEW(mp) CHistogram(mp, histogram_buckets, true, null_freq,
-								   num_NDV_remain, freq_remaining);
+								   num_NDV_remain, freq_remaining,
+								   num_NDV_remain /* distinct_by_segs */);
 }
 
 // helper function to generate an example int histogram
