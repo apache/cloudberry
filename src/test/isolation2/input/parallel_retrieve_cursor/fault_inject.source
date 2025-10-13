@@ -249,3 +249,28 @@ SELECT gp_inject_fault('fetch_tuples_from_endpoint', 'resume', dbid)
     WHERE content=2 AND role='p';
 
 DROP TABLE t2;
+
+SELECT gp_inject_fault('alloc_endpoint_slot_full', 'reset', 2);
+SELECT gp_inject_fault('alloc_endpoint_slot_full_reset', 'reset', 2);
+
+-- Test 8: QD shouldn't hang waiting.
+
+-- start_ignore
+DROP TABLE t3;
+-- end_ignore
+
+CREATE TABLE t3 AS SELECT generate_series(1, 10) AS a DISTRIBUTED by (a);
+
+SELECT gp_inject_fault('alloc_endpoint_slot_full', 'error', dbid)
+FROM gp_segment_configuration WHERE role = 'p' AND content = 0;
+
+BEGIN;
+-- QE encounters error and destroys the endpoint immediately. QD successfully
+-- resets the query, sends ACKs, and discards transaction.
+DECLARE c1 PARALLEL RETRIEVE CURSOR FOR SELECT * FROM t3;
+ROLLBACK;
+
+SELECT gp_inject_fault('alloc_endpoint_slot_full', 'reset', dbid)
+FROM gp_segment_configuration WHERE role = 'p' AND content = 0;
+
+DROP TABLE t3;

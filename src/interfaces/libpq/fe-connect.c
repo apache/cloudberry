@@ -109,13 +109,31 @@ int     getpeereid(int, uid_t *__restrict__, gid_t *__restrict__);
  * than looking into errcodes.h since it reflects historical behavior
  * rather than that of the current code.
  */
+#ifdef ERRCODE_APPNAME_UNKNOWN
+#undef ERRCODE_APPNAME_UNKNOWN
+#endif
+
 #define ERRCODE_APPNAME_UNKNOWN "42704"
 
 /* This is part of the protocol so just define it */
+#ifdef ERRCODE_INVALID_PASSWORD
+#undef ERRCODE_INVALID_PASSWORD
+#endif
+
 #define ERRCODE_INVALID_PASSWORD "28P01"
+
 /* This too */
+#ifdef ERRCODE_CANNOT_CONNECT_NOW
+#undef ERRCODE_CANNOT_CONNECT_NOW
+#endif
+
 #define ERRCODE_CANNOT_CONNECT_NOW "57P03"
+
 /* And this GPDB-specific one, too */
+#ifdef ERRCODE_MIRROR_READY
+#undef ERRCODE_MIRROR_READY
+#endif
+
 #define ERRCODE_MIRROR_READY "57M02"
 
 /*

@@ -1,0 +1,65 @@
+-- start_matchsubs
+-- m/ERROR:  Out of memory.*/
+-- s/ERROR:  Out of memory.*/ERROR:  Out of memory/
+-- m/ERROR:  Canceling query because of high VMEM usage.*/
+-- s/ERROR:  Canceling query because of high VMEM usage.*/ERROR:  Out of memory/
+-- end_matchsubs
+
+CREATE RESOURCE GROUP rg_oom_test WITH (cpu_rate_limit=20, memory_limit=20, memory_shared_quota=100);
+CREATE
+CREATE ROLE role_oom_test RESOURCE GROUP rg_oom_test;
+CREATE
+CREATE FUNCTION gp_mock_cdbdispatchcommand(amount int) RETURNS SETOF text AS '@abs_srcdir@/../regress/regress.so', 'gp_mock_cdbdispatchcommand' LANGUAGE C;
+CREATE
+
+1: SET ROLE TO role_oom_test;
+SET
+
+-- Freeze coordinator's session after it reads results from segments.
+SELECT gp_inject_fault('check_dispatch_result_end', 'suspend', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+ gp_inject_fault 
+-----------------
+ Success:        
+(1 row)
+
+-- Send the heavy query.
+1&: SELECT count(*) FROM gp_mock_cdbdispatchcommand(1000000);  <waiting ...>
+
+-- Wait until we receive everything.
+SELECT gp_wait_until_triggered_fault('check_dispatch_result_end', 1, dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+ gp_wait_until_triggered_fault 
+-------------------------------
+ Success:                      
+(1 row)
+
+-- The query should've used ~135 MB of memory. Allow 15 MB error.
+WITH r AS ( SELECT (memory_usage->'-1'->'used')::text::int AS mb FROM gp_toolkit.gp_resgroup_status WHERE rsgname = 'rg_oom_test' ) SELECT r.mb < 150 AS "under 150 MB", r.mb > 120 AS "above 120 MB" FROM r;
+ under 150 MB | above 120 MB 
+--------------+--------------
+ t            | t            
+(1 row)
+
+SELECT gp_inject_fault('check_dispatch_result_end', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+ gp_inject_fault 
+-----------------
+ Success:        
+(1 row)
+
+1<:  <... completed>
+ count   
+---------
+ 4000000 
+(1 row)
+
+-- And finally, make sure we don't enter error recursion on fail.
+ALTER RESOURCE GROUP rg_oom_test SET memory_shared_quota 0;
+ALTER
+1: SELECT count(*) FROM gp_mock_cdbdispatchcommand(10000000);
+ERROR:  Out of memory
+
+DROP FUNCTION gp_mock_cdbdispatchcommand(amount int);
+DROP
+DROP ROLE role_oom_test;
+DROP
+DROP RESOURCE GROUP rg_oom_test;
+DROP

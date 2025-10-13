@@ -770,3 +770,47 @@ ROLLBACK
 
 DROP TABLE t2;
 DROP
+
+SELECT gp_inject_fault('alloc_endpoint_slot_full', 'reset', 2);
+ gp_inject_fault 
+-----------------
+ Success:        
+(1 row)
+SELECT gp_inject_fault('alloc_endpoint_slot_full_reset', 'reset', 2);
+ gp_inject_fault 
+-----------------
+ Success:        
+(1 row)
+
+-- Test 8: QD shouldn't hang waiting.
+
+-- start_ignore
+DROP TABLE t3;
+-- end_ignore
+
+CREATE TABLE t3 AS SELECT generate_series(1, 10) AS a DISTRIBUTED by (a);
+CREATE 10
+
+SELECT gp_inject_fault('alloc_endpoint_slot_full', 'error', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = 0;
+ gp_inject_fault 
+-----------------
+ Success:        
+(1 row)
+
+BEGIN;
+BEGIN
+-- QE encounters error and destroys the endpoint immediately. QD successfully
+-- resets the query, sends ACKs, and discards transaction.
+DECLARE c1 PARALLEL RETRIEVE CURSOR FOR SELECT * FROM t3;
+ERROR:  fault triggered, fault name:'alloc_endpoint_slot_full' fault type:'error'  (seg0 127.0.0.1:6002 pid=8916)
+ROLLBACK;
+ROLLBACK
+
+SELECT gp_inject_fault('alloc_endpoint_slot_full', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = 0;
+ gp_inject_fault 
+-----------------
+ Success:        
+(1 row)
+
+DROP TABLE t3;
+DROP
