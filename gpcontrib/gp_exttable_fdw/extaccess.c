@@ -491,6 +491,27 @@ external_getnext_init(PlanState *state)
 	return desc;
 }
 
+static void
+check_error(FileScanDesc scan)
+{
+	char   *relname = RelationGetRelationName(scan->fs_rd);
+	int		ebuflen = 512;
+	char	ebuf[512];
+
+	ebuf[0] = '\0';
+	/* current only CFTYPE_EXEC will read stderr to ebuf */
+	if (url_ferror(scan->fs_file, -1, ebuf, ebuflen))
+	{
+		if (*ebuf && strlen(ebuf) > 0)
+			ereport(ERROR,
+					(errcode(ERRCODE_EXTERNAL_ROUTINE_EXCEPTION),
+					 errmsg("external table %s command ended with error. %s",
+							(relname ? relname : ""), ebuf),
+					 errdetail("Command: %s", scan->fs_file->url)));
+	}
+
+}
+
 /* ----------------------------------------------------------------
 *		external_getnext
 *
@@ -529,6 +550,8 @@ external_getnext(FileScanDesc scan, ScanDirection direction, ExternalSelectDesc 
 	if (tuple == NULL)
 	{
 		FILEDEBUG_2;			/* external_getnext returning EOS */
+
+		check_error(scan);
 
 		return NULL;
 	}
