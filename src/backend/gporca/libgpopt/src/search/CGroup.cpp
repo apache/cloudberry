@@ -861,6 +861,12 @@ CGroup::AppendStats(CMemoryPool *mp, IStatistics *stats)
 	GPOS_ASSERT(nullptr != stats);
 	GPOS_ASSERT(nullptr != Pstats());
 
+	if (FDuplicateGroup())
+	{
+		PgroupDuplicate()->AppendStats(mp, stats);
+		return;
+	}
+
 	IStatistics *stats_copy = Pstats()->CopyStats(mp);
 	stats_copy->AppendStats(mp, stats);
 
