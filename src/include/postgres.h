@@ -221,6 +221,7 @@ typedef struct
  * checking for IS_1B.
  */
 
+#if 0 /* Upstream code not applicable to CBDB: see above. */
 #ifdef WORDS_BIGENDIAN
 
 #define VARATT_IS_4B(PTR) \
@@ -290,6 +291,39 @@ typedef struct
 #define VARSIZE_TO_SHORT(PTR)	((char)((VARSIZE(PTR)-VARHDRSZ+VARHDRSZ_SHORT) << 1) | 0x01)
 
 #endif							/* WORDS_BIGENDIAN */
+#endif
+
+#define VARATT_IS_4B(PTR) \
+	((((varattrib_1b *) (PTR))->va_header & 0x80) == 0x00)
+#define VARATT_IS_4B_U(PTR) \
+	((((varattrib_1b *) (PTR))->va_header & 0xC0) == 0x00)
+#define VARATT_IS_4B_C(PTR) \
+	((((varattrib_1b *) (PTR))->va_header & 0xC0) == 0x40)
+#define VARATT_IS_1B(PTR) \
+	((((varattrib_1b *) (PTR))->va_header & 0x80) == 0x80)
+#define VARATT_IS_1B_E(PTR) \
+	((((varattrib_1b *) (PTR))->va_header) == 0x80)
+#define VARATT_NOT_PAD_BYTE(PTR) \
+	(*((uint8 *) (PTR)) != 0)
+
+/* VARSIZE_4B() should only be used on known-aligned data */
+#define VARSIZE_4B(PTR) \
+	(ntohl(((varattrib_4b *) (PTR))->va_4byte.va_header) & 0x3FFFFFFF)
+#define VARSIZE_1B(PTR) \
+	(((varattrib_1b *) (PTR))->va_header & 0x7F)
+#define VARTAG_1B_E(PTR) \
+	(((varattrib_1b_e *) (PTR))->va_tag)
+
+#define SET_VARSIZE_4B(PTR,len) \
+	(((varattrib_4b *) (PTR))->va_4byte.va_header = htonl( (len) & 0x3FFFFFFF ))
+#define SET_VARSIZE_4B_C(PTR,len) \
+	(((varattrib_4b *) (PTR))->va_4byte.va_header = htonl( ((len) & 0x3FFFFFFF) | 0x40000000 ))
+#define SET_VARSIZE_1B(PTR,len) \
+	(((varattrib_1b *) (PTR))->va_header = (len) | 0x80)
+#define SET_VARTAG_1B_E(PTR,tag) \
+	(((varattrib_1b_e *) (PTR))->va_header = 0x80, \
+	 ((varattrib_1b_e *) (PTR))->va_tag = (tag))
+#define VARSIZE_TO_SHORT(PTR)	((char)(VARSIZE(PTR)-VARHDRSZ+VARHDRSZ_SHORT) | 0x80)
 
 #define VARDATA_4B(PTR)		(((varattrib_4b *) (PTR))->va_4byte.va_data)
 #define VARDATA_4B_C(PTR)	(((varattrib_4b *) (PTR))->va_compressed.va_data)
