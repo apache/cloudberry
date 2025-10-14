@@ -3743,6 +3743,25 @@ drop table foo;
 drop table bar;
 reset optimizer_enable_eageragg;
 
+--
+-- Test CTE with nested joins to verify fix for infinite recursion during statistic derivation
+-- This test case exercises ORCA's ability to handle CTEs with complex join patterns
+-- and redistribution motions without falling into infinite recursion
+--
+create table cte_test1 (a int, b int, c int) distributed randomly;
+create table cte_test2 (a int, b int, c int) distributed randomly;
+create table cte_test3 (a int, b int, c int) distributed randomly;
+
+explain (costs off) with cte1 as (
+  select cte_test1.a, cte_test2.b, cte_test1.c from cte_test1 inner join cte_test2 on cte_test1.a = cte_test2.b
+),
+cte2 as (select * from cte1)
+select * from cte2 inner join cte_test3 on cte2.c = cte_test3.a;
+
+drop table cte_test1;
+drop table cte_test2;
+drop table cte_test3;
+
 -- start_ignore
 DROP SCHEMA orca CASCADE;
 -- end_ignore
