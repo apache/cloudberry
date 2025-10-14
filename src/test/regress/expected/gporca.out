@@ -15012,3 +15012,144 @@ explain (costs off) select max(s1) from foo inner join bar on j1 = j2 group by g
 drop table foo;
 drop table bar;
 reset optimizer_enable_eageragg;
+--
+-- Test CTE with nested joins to verify fix for infinite recursion during statistic derivation
+-- This test case exercises ORCA's ability to handle CTEs with complex join patterns
+-- and redistribution motions without falling into infinite recursion
+--
+create table cte_test1 (a int, b int, c int) distributed randomly;
+create table cte_test2 (a int, b int, c int) distributed randomly;
+create table cte_test3 (a int, b int, c int) distributed randomly;
+explain (costs off) with cte1 as (
+  select cte_test1.a, cte_test2.b, cte_test1.c from cte_test1 inner join cte_test2 on cte_test1.a = cte_test2.b
+),
+cte2 as (select * from cte1)
+select * from cte2 inner join cte_test3 on cte2.c = cte_test3.a;
+                               QUERY PLAN                               
+------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Hash Join
+         Hash Cond: (cte_test1.c = cte_test3.a)
+         ->  Hash Join
+               Hash Cond: (cte_test1.a = cte_test2.b)
+               ->  Redistribute Motion 3:3  (slice2; segments: 3)
+                     Hash Key: cte_test1.a
+                     ->  Seq Scan on cte_test1
+               ->  Hash
+                     ->  Redistribute Motion 3:3  (slice3; segments: 3)
+                           Hash Key: cte_test2.b
+                           ->  Seq Scan on cte_test2
+         ->  Hash
+               ->  Broadcast Motion 3:3  (slice4; segments: 3)
+                     ->  Seq Scan on cte_test3
+ Optimizer: Postgres query optimizer
+(16 rows)
+
+drop table cte_test1;
+drop table cte_test2;
+drop table cte_test3;
+-- start_ignore
+DROP SCHEMA orca CASCADE;
+NOTICE:  drop cascades to 190 other objects
+DETAIL:  drop cascades to table bar1
+drop cascades to table bar2
+drop cascades to table r
+drop cascades to table s
+drop cascades to table m
+drop cascades to table m1
+drop cascades to table orca_w1
+drop cascades to table orca_w2
+drop cascades to table orca_w3
+drop cascades to table rcte
+drop cascades to table onek
+drop cascades to table pp
+drop cascades to table multilevel_p
+drop cascades to table t
+drop cascades to table t_date
+drop cascades to table t_text
+drop cascades to table t_ceeval_ints
+drop cascades to function csq_f(integer)
+drop cascades to table csq_r
+drop cascades to table fooh1
+drop cascades to table fooh2
+drop cascades to table t77
+drop cascades to table prod9
+drop cascades to table toanalyze
+drop cascades to table ur
+drop cascades to table us
+drop cascades to table ut
+drop cascades to table uu
+drop cascades to table twf1
+drop cascades to table twf2
+drop cascades to table tab1
+drop cascades to table tab2
+drop cascades to function sum_sfunc(anyelement,anyelement)
+drop cascades to function sum_combinefunc(anyelement,anyelement)
+drop cascades to function myagg1(anyelement)
+drop cascades to function sum_sfunc2(anyelement,anyelement,anyelement)
+drop cascades to function myagg2(anyelement,anyelement)
+drop cascades to function gptfp(anyarray,anyelement)
+drop cascades to function gpffp(anyarray)
+drop cascades to function myagg3(anyelement)
+drop cascades to table array_table
+drop cascades to table mpp22453
+drop cascades to table mpp22791
+drop cascades to table p1
+drop cascades to table tmp_verd_s_pp_provtabs_agt_0015_extract1
+drop cascades to table arrtest
+drop cascades to table foo_missing_stats
+drop cascades to table bar_missing_stats
+drop cascades to table table_with_small_statistic_precision_diff
+drop cascades to table cust
+drop cascades to table datedim
+drop cascades to function plusone(integer)
+drop cascades to table bm_test
+drop cascades to table bm_dyn_test
+drop cascades to table bm_dyn_test_onepart
+drop cascades to table bm_dyn_test_multilvl_part
+drop cascades to table my_tt_agg_opt
+drop cascades to table my_tq_agg_opt_part
+drop cascades to function plusone(numeric)
+drop cascades to table ggg
+drop cascades to table t3
+drop cascades to table index_test
+drop cascades to table btree_test
+drop cascades to table bitmap_test
+drop cascades to type rainbow
+drop cascades to table foo_ctas
+drop cascades to table input_tab1
+drop cascades to table input_tab2
+drop cascades to table tab_1
+drop cascades to table tab_2
+drop cascades to table tab_3
+drop cascades to table t_outer
+drop cascades to table t_inner
+drop cascades to table wst0
+drop cascades to table wst1
+drop cascades to table wst2
+drop cascades to table test1
+drop cascades to table t_new
+drop cascades to table x_tab
+drop cascades to table y_tab
+drop cascades to table z_tab
+drop cascades to function test_func_pg_stats()
+drop cascades to function myintin(cstring)
+drop cascades to type myint
+drop cascades to function myintout(myint)
+drop cascades to function myint_int8(myint)
+drop cascades to table csq_cast_param_outer
+drop cascades to table csq_cast_param_inner
+drop cascades to function myint_numeric(myint)
+drop cascades to cast from myint to numeric
+drop cascades to table onetimefilter1
+drop cascades to table onetimefilter2
+drop cascades to table ffoo
+drop cascades to table fbar
+drop cascades to table touter
+drop cascades to table tinnerbitmap
+drop cascades to table tinnerbtree
+drop cascades to table ds_part
+drop cascades to table non_part1
+drop cascades to table non_part2
+and 90 other objects (see server log for list)
+-- end_ignore
