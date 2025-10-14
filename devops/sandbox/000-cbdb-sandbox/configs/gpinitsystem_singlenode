@@ -1,0 +1,121 @@
+# FILE NAME: gpinitsystem_singlenode
+
+# A configuration file is needed by the gpinitsystem utility.
+# This sample file initializes a Apache Cloudberry Single Node
+# Edition (SNE) system with one coordinator and  two segment instances
+# on the local host. This file is referenced when you run gpinitsystem.
+
+################################################
+# REQUIRED PARAMETERS
+################################################
+
+# A name for the array you are configuring. You can use any name you
+# like. Enclose the name in quotes if the name contains spaces.
+
+ARRAY_NAME="Sandbox: Apache Cloudberry Cluster"
+
+# This specifies the file that contains the list of segment host names
+# that comprise the Greenplum system. For a single-node system, this
+# file contains the local OS-configured hostname (as output by the
+# hostname command). If the file does not reside in the same
+# directory where the gpinitsystem utility is executed, specify
+# the absolute path to the file.
+
+MACHINE_LIST_FILE=/tmp/gpdb-hosts
+
+# This specifies a prefix that will be used to name the data directories
+# of the coordinator and segment instances. The naming convention for data
+# directories in a Apache Cloudberry system is SEG_PREFIX<number>
+# where <number> starts with 0 for segment instances and the coordinator
+# is always -1. So for example, if you choose the prefix gpsne, your
+# coordinator instance data directory would be named gpsne-1, and the segment
+# instances would be named gpsne0, gpsne1, gpsne2, gpsne3, and so on.
+
+SEG_PREFIX=gpseg
+
+# Base port number on which primary segment instances will be
+# started on a segment host. The base port number will be
+# incremented by one for each segment instance started on a host.
+
+PORT_BASE=40000
+
+# This specifies the data storage location(s) where the script will
+# create the primary segment data directories. The script creates a
+# unique data directory for each segment instance. If you want multiple
+# segment instances per host, list a data storage area for each primary
+# segment you want created. The recommended number is one primary segment
+# per CPU. It is OK to list the same data storage area multiple times
+# if you want your data directories created in the same location. The
+# number of data directory locations specified will determine the number
+# of primary segment instances created per host.
+# You must make sure that the user who runs gpinitsystem (for example,
+# the gpadmin user) has permissions to write to these directories. You
+# may want to create these directories on the segment hosts before running
+# gpinitsystem and chown them to the appropriate user.
+
+declare -a DATA_DIRECTORY=(/data0/database/primary \
+                           /data0/database/primary \
+                           /data0/database/primary)
+
+# The OS-configured hostname of the Apache Cloudberry coordinator instance.
+
+COORDINATOR_HOSTNAME=cdw
+
+# The location where the data directory will be created on the
+# Greenplum coordinator host.
+# You must make sure that the user who runs gpinitsystem
+# has permissions to write to this directory. You may want to
+# create this directory on the coordinator host before running
+# gpinitsystem and chown it to the appropriate user.
+
+COORDINATOR_DIRECTORY=/data0/database/coordinator
+
+# The port number for the coordinator instance. This is the port number
+# that users and client connections will use when accessing the
+# Apache Cloudberry system.
+
+COORDINATOR_PORT=5432
+
+# The shell the gpinitsystem script uses to execute
+# commands on remote hosts. Allowed value is ssh. You must set up
+# your trusted host environment before running the gpinitsystem
+# script. You can use gpssh-exkeys to do this.
+
+TRUSTED_SHELL=ssh
+
+# Maximum distance between automatic write ahead log (WAL)
+# checkpoints, in log file segments (each segment is normally 16
+# megabytes). This will set the checkpoint_segments parameter
+# in the postgresql.conf file for each segment instance in the
+# Apache Cloudberry system.
+
+CHECK_POINT_SEGMENTS=8
+
+# The character set encoding to use. Greenplum supports the
+# same character sets as PostgreSQL. See 'Character Set Support'
+# in the PostgreSQL documentation for allowed character sets.
+# Should correspond to the OS locale specified with the
+# gpinitsystem -n option.
+
+ENCODING=UNICODE
+
+################################################
+# OPTIONAL PARAMETERS
+################################################
+
+# Optional. Uncomment to create a database of this name after the
+# system is initialized. You can always create a database later using
+# the CREATE DATABASE command or the createdb script.
+
+DATABASE_NAME=gpadmin
+
+# Mirror configuration
+
+MIRROR_PORT_BASE=50000
+
+declare -a MIRROR_DATA_DIRECTORY=(/data0/database/mirror \
+                                  /data0/database/mirror \
+                                  /data0/database/mirror)
+
+# REPLICATION_PORT_BASE=41000
+# MIRROR_REPLICATION_PORT_BASE=51000
