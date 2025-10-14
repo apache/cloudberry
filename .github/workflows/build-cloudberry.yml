@@ -113,6 +113,11 @@ on:
         required: false
         default: 'all'
         type: string
+      reuse_artifacts_from_run_id:
+        description: 'Reuse build artifacts from a previous run ID (leave empty to build fresh)'
+        required: false
+        default: ''
+        type: string
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -412,6 +417,7 @@ jobs:
     needs: [check-skip]
     runs-on: ubuntu-22.04
     timeout-minutes: 120
+    if: github.event.inputs.reuse_artifacts_from_run_id == ''
     outputs:
       build_timestamp: ${{ steps.set_timestamp.outputs.timestamp }}
 
@@ -687,6 +693,10 @@ jobs:
   rpm-install-test:
     name: RPM Install Test Apache Cloudberry
     needs: [check-skip, build]
+    if: |
+      !cancelled() &&
+      (needs.build.result == 'success' || needs.build.result == 'skipped') &&
+      github.event.inputs.reuse_artifacts_from_run_id == ''
     runs-on: ubuntu-22.04
     timeout-minutes: 120
 
@@ -710,6 +720,8 @@ jobs:
           name: apache-cloudberry-db-incubating-rpm-build-artifacts
           path: ${{ github.workspace }}/rpm_build_artifacts
           merge-multiple: false
+          run-id: ${{ github.event.inputs.reuse_artifacts_from_run_id || github.run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Cloudberry Environment Initialization
         if: needs.check-skip.outputs.should_skip != 'true'
@@ -814,12 +826,18 @@ jobs:
             echo "Version: ${RPM_VERSION}"
             echo "Release: ${RPM_RELEASE}"
 
+            # Refresh repository metadata to avoid mirror issues
+            echo "Refreshing repository metadata..."
+            dnf clean all
+            dnf makecache --refresh || dnf makecache
+
             # Clean install location
             rm -rf /usr/local/cloudberry-db
 
-            # Install RPM
+            # Install RPM with retry logic for mirror issues
+            # Use --releasever=9 to pin to stable Rocky Linux 9 repos (not bleeding-edge 9.6)
             echo "Starting installation..."
-            if ! time dnf install -y "${RPM_FILE}"; then
+            if ! time dnf install -y --setopt=retries=10 --releasever=9 "${RPM_FILE}"; then
               echo "::error::RPM installation failed"
               exit 1
             fi
@@ -858,6 +876,9 @@ jobs:
   test:
     name: ${{ matrix.test }}
     needs: [check-skip, build, prepare-test-matrix]
+    if: |
+      !cancelled() &&
+      (needs.build.result == 'success' || needs.build.result == 'skipped')
     runs-on: ubuntu-22.04
     timeout-minutes: 120
     # actionlint-allow matrix[*].pg_settings
@@ -1087,6 +1108,8 @@ jobs:
           name: apache-cloudberry-db-incubating-rpm-build-artifacts
           path: ${{ github.workspace }}/rpm_build_artifacts
           merge-multiple: false
+          run-id: ${{ github.event.inputs.reuse_artifacts_from_run_id || github.run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Download Cloudberry Source build artifacts
         if: needs.check-skip.outputs.should_skip != 'true'
@@ -1095,6 +1118,8 @@ jobs:
           name: apache-cloudberry-db-incubating-source-build-artifacts
           path: ${{ github.workspace }}/source_build_artifacts
           merge-multiple: false
+          run-id: ${{ github.event.inputs.reuse_artifacts_from_run_id || github.run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Verify downloaded artifacts
         if: needs.check-skip.outputs.should_skip != 'true'
@@ -1186,12 +1211,18 @@ jobs:
             echo "Version: ${RPM_VERSION}"
             echo "Release: ${RPM_RELEASE}"
 
+            # Refresh repository metadata to avoid mirror issues
+            echo "Refreshing repository metadata..."
+            dnf clean all
+            dnf makecache --refresh || dnf makecache
+
             # Clean install location
             rm -rf /usr/local/cloudberry-db
 
-            # Install RPM
+            # Install RPM with retry logic for mirror issues
+            # Use --releasever=9 to pin to stable Rocky Linux 9 repos (not bleeding-edge 9.6)
             echo "Starting installation..."
-            if ! time dnf install -y "${RPM_FILE}"; then
+            if ! time dnf install -y --setopt=retries=10 --releasever=9 "${RPM_FILE}"; then
               echo "::error::RPM installation failed"
               exit 1
             fi
