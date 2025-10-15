@@ -4880,7 +4880,7 @@ LocalXidGetDistributedXid(TransactionId xid)
 	{
 		DistributedLog_GetDistributedXid(xid, &tstamp, &gxid);
 		AssertImply(gxid != InvalidDistributedTransactionId,
-					tstamp == MyTmGxact->distribTimeStamp);
+					(tstamp == MyTmGxact->distribTimeStamp || MyTmGxact->distribTimeStamp == 0));
 	}
 
 	return gxid;
