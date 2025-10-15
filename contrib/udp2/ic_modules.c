@@ -33,6 +33,7 @@
 
 PG_MODULE_MAGIC;
 
+static
 MotionIPCLayer udp2_ipc_layer = {
     .ic_type = INTERCONNECT_TYPE_UDP2,
     .type_name = "udp2",

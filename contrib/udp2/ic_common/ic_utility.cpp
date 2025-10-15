@@ -1344,7 +1344,7 @@ comp_crc32c_sb8(uint32 crc, const void *data, size_t len)
 extern "C" {
 #endif
 
-static ICError ic_error = {LEVEL_ERROR};
+static thread_local ICError ic_error = {LEVEL_ERROR};
 
 ICError*
 GetLastError()

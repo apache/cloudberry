@@ -585,7 +585,7 @@ struct CursorICHistoryTable
 			while (table[index]) {
 				CursorICHistoryEntry *trash = table[index];
 				table[index] = trash->next;
-				ic_free(trash);
+				delete trash;
 			}
 		}
 	}
@@ -1086,7 +1086,6 @@ public:
  */
 struct CChunkTransportStateEntry
 {
-public:
 	int			motNodeId;
 	bool		valid;
 
@@ -1111,7 +1110,7 @@ public:
 
 class CChunkTransportStateImpl;
 
-struct TransportEntry : public CChunkTransportStateEntry
+class TransportEntry : public CChunkTransportStateEntry
 {
 public:
 	static std::unique_ptr<TransportEntry>
@@ -1159,7 +1158,7 @@ public:
 	uint64		stat_count_dropped;
 
 	std::vector<std::unique_ptr<UDPConn>> conns_;
-	CChunkTransportStateImpl *state_;
+	CChunkTransportStateImpl *state;
 };
 
 
