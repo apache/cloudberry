@@ -1968,12 +1968,11 @@ explain (costs off)
                            ->  Streaming Partial HashAggregate
                                  Group Key: share0_ref5.hundred
                                  ->  Shared Scan (share slice:id 5:0)
-               ->  Finalize HashAggregate
+               ->  HashAggregate
                      Group Key: share0_ref6.thousand
                      ->  Redistribute Motion 3:3  (slice6; segments: 3)
                            Hash Key: share0_ref6.thousand
-                           ->  Streaming Partial HashAggregate
-                                 Group Key: share0_ref6.thousand
+                           ->  Result
                                  ->  Shared Scan (share slice:id 6:0)
                ->  HashAggregate
                      Group Key: share0_ref7.twothousand
@@ -1985,7 +1984,7 @@ explain (costs off)
                      Group Key: share0_ref8.unique1
                      ->  Shared Scan (share slice:id 1:0)
  Optimizer: Pivotal Optimizer (GPORCA)
-(50 rows)
+(49 rows)
 
 explain (costs off)
   select unique1,
@@ -2076,12 +2075,11 @@ explain (costs off)
                            ->  Streaming Partial HashAggregate
                                  Group Key: share0_ref5.hundred
                                  ->  Shared Scan (share slice:id 5:0)
-               ->  Finalize HashAggregate
+               ->  HashAggregate
                      Group Key: share0_ref6.thousand
                      ->  Redistribute Motion 3:3  (slice6; segments: 3)
                            Hash Key: share0_ref6.thousand
-                           ->  Streaming Partial HashAggregate
-                                 Group Key: share0_ref6.thousand
+                           ->  Result
                                  ->  Shared Scan (share slice:id 6:0)
                ->  HashAggregate
                      Group Key: share0_ref7.twothousand
@@ -2093,7 +2091,7 @@ explain (costs off)
                      Group Key: share0_ref8.unique1
                      ->  Shared Scan (share slice:id 1:0)
  Optimizer: Pivotal Optimizer (GPORCA)
-(50 rows)
+(49 rows)
 
 reset hash_mem_multiplier;
 -- check collation-sensitive matching between grouping expressions
