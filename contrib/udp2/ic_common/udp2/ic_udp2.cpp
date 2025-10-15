@@ -245,7 +245,7 @@ static const char* flags_text[] =
 static char*
 flags2txt(uint32 pkt_flags)
 {
-	static char flags[64];
+	thread_local static char flags[64];
 
 	char *p = flags;
 	*p = '\0';
@@ -268,7 +268,7 @@ flags2txt(uint32 pkt_flags)
  */
 void
 CursorICHistoryTable::prune(uint32 icId) {
-	for (uint8 index = 0; index < size; index++) {
+	for (uint32 index = 0; index < size; index++) {
 		CursorICHistoryEntry *p = table[index], *q = NULL;
 		while (p) {
 			/* remove an entry if it is older than the prune-point */
@@ -4387,7 +4387,7 @@ UDPConn::checkExpirationCapacityFC(int timeout)
 		ic_control_info.lastPacketSendTime = now;
 
 		this->updateRetransmitStatistics();
-		checkNetworkTimeout(buf, now, &entry_->state_->networkTimeoutIsLogged);
+		checkNetworkTimeout(buf, now, &entry_->state->networkTimeoutIsLogged);
 	}
 }
 
@@ -4412,7 +4412,7 @@ UDPConn::checkExceptions(int retry, int timeout)
 
 		if (now - ic_control_info.lastExpirationCheckTime > uint64(TIMER_CHECKING_PERIOD))
 		{
-			UDPConn::checkExpiration(this->entry_->state_, now);
+			UDPConn::checkExpiration(this->entry_->state, now);
 			ic_control_info.lastExpirationCheckTime = now;
 		}
 	}
@@ -4422,7 +4422,7 @@ UDPConn::checkExceptions(int retry, int timeout)
 		this->checkDeadlock();
 
 		checkRxThreadError();
-		CHECK_INTERRUPTS(this->entry_->state_);
+		CHECK_INTERRUPTS(this->entry_->state);
 	}
 
 	/*
@@ -4599,7 +4599,6 @@ UDPConn::UDPConn(TransportEntry *entry)
 	this->pkt_q_head     = -1;
 	this->pkt_q_tail     = -1;
 	this->pkt_q          = nullptr;
-	this->entry_ = nullptr;
 	this->stat_total_ack_time = 0;
 	this->stat_count_acks     = 0;
 	this->stat_max_ack_time   = 0;
@@ -4711,7 +4710,7 @@ TransportEntry::handleAcks()
 				return ret;
 			}
 
-			CHECK_INTERRUPTS(this->state_);
+			CHECK_INTERRUPTS(this->state);
 
 			if (errno == EINTR)
 				continue;
@@ -4748,7 +4747,7 @@ TransportEntry::handleAcks()
 			pkt->srcPid == global_param.MyProcPid &&
 			pkt->srcListenerPort == (UDP2_GetListenPortUDP()) &&
 			pkt->sessionId == session_param.gp_session_id &&
-			pkt->icId == this->state_->icInstanceId)
+			pkt->icId == this->state->icInstanceId)
 		{
 			Assert(pkt->motNodeId == motNodeId);
 			LOG(DEBUG3, "TransportEntry::handleAcks(): icid: %d, motNodeId: %d, srcSeg: %d, dstSeg: %d, srcPid: %d, dstPid: %d, seq: %d, extraSeq: %d, len: %d, flags: %s",
@@ -4893,7 +4892,7 @@ TransportEntry::handleAcks()
 						pkt->flags, pkt->motNodeId, pkt->srcContentId, global_param.segindex,
 						pkt->srcPid, global_param.MyProcPid, pkt->dstPid, pkt->srcListenerPort,
 						(UDP2_GetListenPortUDP()), pkt->dstListenerPort, pkt->sessionId, session_param.gp_session_id,
-						pkt->icId, this->state_->icInstanceId);
+						pkt->icId, this->state->icInstanceId);
 		}
 	}
 
@@ -4967,7 +4966,7 @@ TransportEntry::pollAcks(int timeout)
 	n = poll(&nfd, 1, timeout);
 	if (n < 0)
 	{
-		CHECK_INTERRUPTS(this->state_);
+		CHECK_INTERRUPTS(this->state);
 
 		if (errno == EINTR)
 			return false;
@@ -5169,20 +5168,14 @@ TransportEntry::TransportEntry(CChunkTransportStateImpl *state,
 							   ICExecSlice *recvSlice)
 {
 	/* the field of CChunkTransportStateEntry */
-	this->motNodeId = -1;
 	this->valid     = false;
 	this->conns     = nullptr;
-	this->numConns  = 0;
-	this->scanStart = -1;
-	this->sendSlice = nullptr;
-	this->recvSlice = nullptr;
 
 	/* the field of TransportEntry */
 	this->txfd        = -1;
 	this->txfd_family = -1;
 	this->txport      = 0;
 	this->sendingEos  = false;
-	this->state_      = nullptr;
 	this->stat_total_ack_time = 0;
 	this->stat_count_acks     = 0;
 	this->stat_max_ack_time   = 0;
@@ -5191,13 +5184,13 @@ TransportEntry::TransportEntry(CChunkTransportStateImpl *state,
 	this->stat_max_resent     = 0;
 	this->stat_count_dropped  = 0;
 
-	this->valid     = true;
 	this->motNodeId = motNodeID;
 	this->numConns  = numConns;
 	this->scanStart = 0;
 	this->sendSlice = sendSlice;
 	this->recvSlice = recvSlice;
-	this->state_    = state;
+	this->state     = state;
+	this->valid     = true;
 }
 
 /*
@@ -5223,12 +5216,12 @@ TransportEntry::receiveChunksUDPIFC(int16 *srcRoute,
 	{
 		directed = true;
 		*srcRoute = conn->route;
-		rx_control_info.mainWaitingState.set(this->motNodeId, conn->route, this->state_->icInstanceId);
+		rx_control_info.mainWaitingState.set(this->motNodeId, conn->route, this->state->icInstanceId);
 	}
 	else
 	{
 		/* non-directed receive */
-		rx_control_info.mainWaitingState.set(this->motNodeId, ANY_ROUTE, this->state_->icInstanceId);
+		rx_control_info.mainWaitingState.set(this->motNodeId, ANY_ROUTE, this->state->icInstanceId);
 	}
 
 	std::unique_lock<std::mutex> lock(mtx);
@@ -5294,10 +5287,10 @@ TransportEntry::receiveChunksUDPIFC(int16 *srcRoute,
 		checkRxThreadError();
 
 		/* do not check interrupts when holding the lock */
-		CHECK_INTERRUPTS(this->state_);
+		CHECK_INTERRUPTS(this->state);
 
 		/* check to see if the task coordinator should cancel */
-		CHECK_CANCEL(this->state_);
+		CHECK_CANCEL(this->state);
 
 		/*
 		 * 1. NIC on master (and thus the QD connection) may become bad, check

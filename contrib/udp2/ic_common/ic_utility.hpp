@@ -82,16 +82,6 @@
  * CONTAINER_OF
  */
 #define CONTAINER_OF(ptr, type, member) \
-	({ \
-		const typeof( ((type *)0)->member ) *__member_ptr = (ptr); \
-		(type *)( (char *)__member_ptr - offsetof(type,member) ); \
-	})
-
-#ifdef CONTAINER_OF
-#undef CONTAINER_OF
-#endif
-
-#define CONTAINER_OF(ptr, type, member) \
 	( \
 	  reinterpret_cast<type*>(reinterpret_cast<char*>(ptr) - offsetof(type, member)) \
 	)
