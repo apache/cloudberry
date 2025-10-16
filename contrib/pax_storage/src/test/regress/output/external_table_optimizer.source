@@ -2601,14 +2601,36 @@ SELECT COUNT(*) FROM gp_read_error_log('exttab_heap_join_1');
 
 \! rm @abs_srcdir@/data/tableless.csv
 -- start_ignore
+DROP EXTERNAL TABLE IF EXISTS ext_nation_on_coordinator;
+NOTICE:  table "ext_nation_on_coordinator" does not exist, skipping
 DROP EXTERNAL TABLE IF EXISTS exttab_with_on_coordinator;
 NOTICE:  table "exttab_with_on_coordinator" does not exist, skipping
 -- end_ignore
--- Create external table with on clause
+-- Create external table on coordinator
+-- good, should fetch data from coordinator
+CREATE EXTERNAL TABLE ext_nation_on_coordinator ( N_NATIONKEY  INTEGER ,
+                            N_NAME       CHAR(25) ,
+                            N_REGIONKEY  INTEGER ,
+                            N_COMMENT    VARCHAR(152))
+location ('file://@hostname@@abs_srcdir@/data/nation.tbl' ) ON COORDINATOR
+FORMAT 'text' (delimiter '|');
+SELECT gp_segment_id, * FROM ext_nation_on_coordinator ORDER BY N_NATIONKEY DESC LIMIT 5;
+ gp_segment_id | n_nationkey |          n_name           | n_regionkey |                                                   n_comment                                                    
+---------------+-------------+---------------------------+-------------+----------------------------------------------------------------------------------------------------------------
+            -1 |          24 | UNITED STATES             |           1 | y final packages. slow foxes cajole quickly. quickly silent platelets breach ironic accounts. unusual pinto be
+            -1 |          23 | UNITED KINGDOM            |           3 | eans boost carefully special requests. accounts are. carefull
+            -1 |          22 | RUSSIA                    |           3 |  requests against the platelets use never according to the quickly regular pint
+            -1 |          21 | VIETNAM                   |           2 | hely enticingly express accounts. even, final 
+            -1 |          20 | SAUDI ARABIA              |           4 | ts. silent requests haggle. closely express packages sleep across the blithely
+(5 rows)
+
+DROP EXTERNAL TABLE IF EXISTS ext_nation_on_coordinator;
+-- bad, should error
 CREATE EXTERNAL TABLE exttab_with_on_coordinator( i int, j text )
 LOCATION ('file://@hostname@@abs_srcdir@/data/exttab_few_errors.data') ON COORDINATOR FORMAT 'TEXT' (DELIMITER '|');
 SELECT * FROM exttab_with_on_coordinator;
-ERROR:  'ON COORDINATOR' is not supported by this protocol yet
+ERROR:  invalid input syntax for type integer: "error_0"
+CONTEXT:  External table exttab_with_on_coordinator, line 3 of file://@hostname@@abs_srcdir@/data/exttab_few_errors.data, column i
 DROP EXTERNAL TABLE IF EXISTS exttab_with_on_coordinator;
 -- start_ignore
 DROP EXTERNAL TABLE IF EXISTS exttab_with_option_empty;

@@ -6,7 +6,7 @@
 SET client_min_messages TO 'warning';
 SET gp_enable_relsize_collection to on;
 -- Pax filter will call the f_leak, then output is not right
-set pax_enable_sparse_filter to off;
+set pax.enable_sparse_filter to off;
 DROP USER IF EXISTS regress_rls_alice;
 DROP USER IF EXISTS regress_rls_bob;
 DROP USER IF EXISTS regress_rls_carol;
@@ -4148,4 +4148,4 @@ CREATE POLICY p1 ON rls_tbl_force USING (c1 = 5) WITH CHECK (c1 < 5);
 CREATE POLICY p2 ON rls_tbl_force FOR SELECT USING (c1 = 8);
 CREATE POLICY p3 ON rls_tbl_force FOR UPDATE USING (c1 = 8) WITH CHECK (c1 >= 5);
 CREATE POLICY p4 ON rls_tbl_force FOR DELETE USING (c1 = 8);
-reset pax_enable_sparse_filter;
+reset pax.enable_sparse_filter;

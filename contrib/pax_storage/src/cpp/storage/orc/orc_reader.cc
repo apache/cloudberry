@@ -102,12 +102,12 @@ class OrcGroupStatsProvider final : public ColumnStatsProvider {
   size_t group_index_;
 };
 
-OrcReader::OrcReader(std::shared_ptr<File> file,
-                     std::shared_ptr<File> toast_file)
+OrcReader::OrcReader(std::unique_ptr<File> file,
+                     std::unique_ptr<File> toast_file)
     : working_group_(nullptr),
       cached_group_(nullptr),
       current_group_index_(0),
-      format_reader_(file, toast_file),
+      format_reader_(std::move(file), std::move(toast_file)),
       is_closed_(true) {}
 
 std::unique_ptr<ColumnStatsProvider> OrcReader::GetGroupStatsInfo(
@@ -129,7 +129,7 @@ std::unique_ptr<MicroPartitionReader::Group> OrcReader::ReadGroup(
   for (size_t i = 0; i < pax_columns->GetColumns(); i++) {
     auto column = (*pax_columns)[i].get();
     if (column && !column->GetBuffer().first) {
-      auto bm = column->GetBitmap();
+      const auto &bm = column->GetBitmap();
       // Assert(bm);
       if (bm) {
         for (size_t n = 0; n < column->GetRows(); n++) {

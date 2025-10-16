@@ -313,7 +313,8 @@ static void pgss_post_parse_analyze(ParseState *pstate, Query *query,
 static PlannedStmt *pgss_planner(Query *parse,
 								 const char *query_string,
 								 int cursorOptions,
-								 ParamListInfo boundParams);
+								 ParamListInfo boundParams,
+								 OptimizerOptions *optimizer_options);
 static void pgss_ExecutorStart(QueryDesc *queryDesc, int eflags);
 static void pgss_ExecutorRun(QueryDesc *queryDesc,
 							 ScanDirection direction,
@@ -866,7 +867,8 @@ static PlannedStmt *
 pgss_planner(Query *parse,
 			 const char *query_string,
 			 int cursorOptions,
-			 ParamListInfo boundParams)
+			 ParamListInfo boundParams,
+			 OptimizerOptions *optimizer_options)
 {
 	PlannedStmt *result;
 
@@ -908,10 +910,10 @@ pgss_planner(Query *parse,
 		{
 			if (prev_planner_hook)
 				result = prev_planner_hook(parse, query_string, cursorOptions,
-										   boundParams);
+										   boundParams, optimizer_options);
 			else
 				result = standard_planner(parse, query_string, cursorOptions,
-										  boundParams);
+										  boundParams, optimizer_options);
 		}
 		PG_FINALLY();
 		{
@@ -945,10 +947,10 @@ pgss_planner(Query *parse,
 	{
 		if (prev_planner_hook)
 			result = prev_planner_hook(parse, query_string, cursorOptions,
-									   boundParams);
+									   boundParams, optimizer_options);
 		else
 			result = standard_planner(parse, query_string, cursorOptions,
-									  boundParams);
+									  boundParams, optimizer_options);
 	}
 
 	return result;

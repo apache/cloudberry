@@ -49,6 +49,8 @@
 #include "storage/vec/pax_vec_reader.h"
 #endif
 
+#define PAX_SPLIT_STRATEGY_CHECK_INTERVAL (16)
+
 namespace paxc {
 class IndexUpdaterInternal {
  public:
@@ -174,8 +176,8 @@ std::unique_ptr<MicroPartitionWriter> TableWriter::CreateMicroPartitionWriter(
   std::string file_path;
   std::string toast_file_path;
   std::string block_id;
-  std::shared_ptr<File> file;
-  std::shared_ptr<File> toast_file;
+  std::unique_ptr<File> file;
+  std::unique_ptr<File> toast_file;
   int open_flags;
   int block_number;
 
@@ -200,8 +202,6 @@ std::unique_ptr<MicroPartitionWriter> TableWriter::CreateMicroPartitionWriter(
   options.file_name = std::move(file_path);
   options.encoding_opts = GetRelEncodingOptions();
   options.storage_format = GetStorageFormat();
-  options.offsets_encoding_opts = std::make_pair(
-      PAX_OFFSETS_DEFAULT_COMPRESSTYPE, PAX_OFFSETS_DEFAULT_COMPRESSLEVEL);
   options.enable_min_max_col_idxs = GetMinMaxColumnIndexes();
   options.enable_bf_col_idxs = GetBloomFilterColumnIndexes();
 
@@ -239,7 +239,7 @@ std::unique_ptr<MicroPartitionWriter> TableWriter::CreateMicroPartitionWriter(
   }
 
   auto mp_writer = MicroPartitionFileFactory::CreateMicroPartitionWriter(
-      std::move(options), file, toast_file);
+      std::move(options), std::move(file), std::move(toast_file));
 
   Assert(mp_writer);
   mp_writer->SetWriteSummaryCallback(summary_callback_)
@@ -261,8 +261,8 @@ void TableWriter::InitOptionsCaches() {
 }
 
 void TableWriter::Open() {
-  rel_path_ = cbdb::BuildPaxDirectoryPath(
-      relation_->rd_node, relation_->rd_backend);
+  rel_path_ =
+      cbdb::BuildPaxDirectoryPath(relation_->rd_node, relation_->rd_backend);
 
   InitOptionsCaches();
 
@@ -282,14 +282,25 @@ void TableWriter::Open() {
   // insert tuple into the aux table before inserting any tuples.
   cbdb::InsertMicroPartitionPlaceHolder(RelationGetRelid(relation_),
                                         current_blockno_);
+  cur_physical_size_ = 0;
 }
 
 void TableWriter::WriteTuple(TupleTableSlot *slot) {
   Assert(writer_);
   Assert(strategy_);
-  // should check split strategy before write tuple
-  // otherwise, may got a empty file in the disk
-  if (strategy_->ShouldSplit(writer_->PhysicalSize(), num_tuples_)) {
+  // Because of the CTID constraint, we have to strictly enforce the accuracy of
+  // the tuple count and make sure it doesn't exceed
+  // PAX_MAX_NUM_TUPLES_PER_FILE. That's why we kept this precise check here.
+
+  // On the other hand,the biggest performance hit here is the PhysicalSize()
+  // function.So to reduce the overhead of calling it so often,
+  // we only update the file size every PAX_SPLIT_STRATEGY_CHECK_INTERVAL
+  // tuples.
+  if ((num_tuples_ % PAX_SPLIT_STRATEGY_CHECK_INTERVAL) == 0) {
+    cur_physical_size_ = writer_->PhysicalSize();
+  }
+
+  if (strategy_->ShouldSplit(cur_physical_size_, num_tuples_)) {
     writer_->Close();
     writer_ = nullptr;
     Open();
@@ -374,7 +385,7 @@ bool TableReader::GetTuple(TupleTableSlot *slot, ScanDirection direction,
   size_t row_index = current_block_row_index_;
   size_t max_row_index;
   size_t remaining_offset = offset;
-  std::shared_ptr<File> toast_file;
+  std::unique_ptr<File> toast_file;
   bool ok;
 
   if (!reader_) {
@@ -460,7 +471,7 @@ bool TableReader::GetTuple(TupleTableSlot *slot, ScanDirection direction,
   reader_ = MicroPartitionFileFactory::CreateMicroPartitionReader(
       std::move(options), reader_flags,
       file_system_->Open(current_block_metadata_.GetFileName(), fs::kReadMode),
-      toast_file);
+      std::move(toast_file));
 
   // row_index start from 0, so row_index = offset -1
   current_block_row_index_ = remaining_offset - 1;
@@ -476,7 +487,7 @@ void TableReader::OpenFile() {
   auto it = iterator_->Next();
   current_block_metadata_ = it;
   MicroPartitionReader::ReaderOptions options;
-  std::shared_ptr<File> toast_file;
+  std::unique_ptr<File> toast_file;
   int32 reader_flags = FLAGS_EMPTY;
 
   micro_partition_id_ = it.GetMicroPartitionId();
@@ -509,14 +520,14 @@ void TableReader::OpenFile() {
 
   if (it.GetExistToast()) {
     // must exist the file in disk
-    toast_file = file_system_->Open(it.GetFileName() + TOAST_FILE_SUFFIX,
-                                    fs::kReadMode);
+    toast_file =
+        file_system_->Open(it.GetFileName() + TOAST_FILE_SUFFIX, fs::kReadMode);
   }
 
   reader_ = MicroPartitionFileFactory::CreateMicroPartitionReader(
       std::move(options), reader_flags,
       file_system_->Open(it.GetFileName(), fs::kReadMode),
-      toast_file);
+      std::move(toast_file));
 }
 
 TableDeleter::TableDeleter(
@@ -534,7 +545,7 @@ void TableDeleter::UpdateStatsInAuxTable(
     const std::vector<int> &min_max_col_idxs,
     const std::vector<int> &bf_col_idxs, std::shared_ptr<PaxFilter> filter) {
   MicroPartitionReader::ReaderOptions options;
-  std::shared_ptr<File> toast_file;
+  std::unique_ptr<File> toast_file;
   int32 reader_flags = FLAGS_EMPTY;
   TupleTableSlot *slot;
 
@@ -553,7 +564,7 @@ void TableDeleter::UpdateStatsInAuxTable(
       std::move(options), reader_flags,
       file_system_->Open(meta.GetFileName(), fs::kReadMode,
                          file_system_options_),
-      toast_file);
+      std::move(toast_file));
 
   slot = MakeTupleTableSlot(rel_->rd_att, &TTSOpsVirtual);
   auto updated_stats = MicroPartitionStatsUpdater(mp_reader.get(), visi_bitmap)
@@ -588,8 +599,7 @@ void TableDeleter::DeleteWithVisibilityMap(
 
   std::unique_ptr<Bitmap8> visi_bitmap;
   auto catalog_update = pax::PaxCatalogUpdater::Begin(rel_);
-  auto rel_path = cbdb::BuildPaxDirectoryPath(
-      rel_->rd_node, rel_->rd_backend);
+  auto rel_path = cbdb::BuildPaxDirectoryPath(rel_->rd_node, rel_->rd_backend);
 
   min_max_col_idxs = cbdb::GetMinMaxColumnIndexes(rel_);
   stats_updater_projection->SetColumnProjection(min_max_col_idxs,
@@ -615,8 +625,7 @@ void TableDeleter::DeleteWithVisibilityMap(
         auto buffer = LoadVisimap(file_system_, file_system_options_,
                                   visibility_map_filename);
         auto visibility_file_bitmap =
-            Bitmap8(BitmapRaw<uint8>(buffer->data(), buffer->size()),
-                    Bitmap8::ReadOnlyOwnBitmap);
+            Bitmap8(BitmapRaw<uint8>(buffer->data(), buffer->size()));
         visi_bitmap =
             Bitmap8::Union(&visibility_file_bitmap, delete_visi_bitmap.get());
 
@@ -663,12 +672,10 @@ void TableDeleter::DeleteWithVisibilityMap(
     // TODO: update stats and visimap all in one catalog update
     // Update the stats in pax aux table
     // Notice that: PAX won't update the stats in group
-    UpdateStatsInAuxTable(catalog_update, micro_partition_metadata,
-                          std::make_shared<Bitmap8>(visi_bitmap->Raw(),
-                                                    Bitmap8::ReadOnlyOwnBitmap),
-                          min_max_col_idxs,
-                          cbdb::GetBloomFilterColumnIndexes(rel_),
-                          stats_updater_projection);
+    UpdateStatsInAuxTable(
+        catalog_update, micro_partition_metadata,
+        std::make_shared<Bitmap8>(visi_bitmap->Raw()), min_max_col_idxs,
+        cbdb::GetBloomFilterColumnIndexes(rel_), stats_updater_projection);
 
     // write pg_pax_blocks_oid
     catalog_update.UpdateVisimap(block_id, visimap_file_name);

@@ -310,7 +310,7 @@ get_partitioned_policy_from_path(PlannerInfo *root, Path *path)
  * returned in that case.
  *
  * TODO: This only handles a few cases. For example, INSERT INTO SELECT ...
- * is not handled, because the parser injects a subquery for ti which makes
+ * is not handled, because the parser injects a subquery for it which makes
  * it tricky.
  */
 CdbPathLocus
@@ -1506,6 +1506,7 @@ motion_sanity_walker(Node *node, sanity_result_t *result)
 	{
 		case T_Result:
 		case T_WindowAgg:
+		case T_WindowHashAgg:
 		case T_TableFunctionScan:
 		case T_ShareInputScan:
 		case T_Append:

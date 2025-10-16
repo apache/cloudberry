@@ -238,6 +238,18 @@ enum EOptTraceFlag
 	// Disable dynamic seq/bitmap/index scan
 	EopttraceDisableDynamicTableScan = 103049,
 
+	// Enable window hash agg
+	EopttraceEnableWindowHashAgg = 103050,
+
+	// Use the first key in AGG Pds
+	EopttraceAggRRSFirstKey = 103051,
+
+	// Use the minimal length key in AGG Pds
+	EopttraceAggRRSMinimalLenKey = 103052,
+
+	// Use the all key exclude the non-fixed key in AGG pds
+	EopttraceAggRRSExcludeNonFixedKey = 103053,
+
 	///////////////////////////////////////////////////////
 	///////////////////// statistics flags ////////////////
 	//////////////////////////////////////////////////////

@@ -2622,7 +2622,15 @@ create_motion_path_for_insert(PlannerInfo *root, GpPolicy *policy,
 			}
 
 		}
-		subpath = cdbpath_create_broadcast_motion_path(root, subpath, policy->numsegments);
+
+		/*
+		 * planner may have add a top Motion eariler.
+		 * Create table t1(id int) distributed randomly;
+		 * Create table t2 as select random() from t1 distributed replicated;
+		 * Avoid Motion if there was already one.
+		 */
+		if (!CdbPathLocus_IsReplicated(subpath->locus))
+			subpath = cdbpath_create_broadcast_motion_path(root, subpath, policy->numsegments);
 	}
 	else
 		elog(ERROR, "unrecognized policy type %u", policyType);
@@ -3653,7 +3661,7 @@ cdbpath_motion_for_parallel_join(PlannerInfo *root,
 		int sp; /* small rel parallel workers */
 		
 		/* Consider locus when parallel_ware. */
-		if(parallel_aware)
+		if (parallel_aware)
 		{
 			/* can't parallel join if both are Hashed, it should be in non-parallel path */
 			if (CdbPathLocus_IsHashed(outer.locus) &&

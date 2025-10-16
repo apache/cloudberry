@@ -20,6 +20,7 @@ extern "C" {
 #include "catalog/heap.h"
 #include "catalog/namespace.h"
 #include "catalog/pg_am.h"
+#include "catalog/pg_namespace.h"
 #include "catalog/pg_proc.h"
 #include "catalog/pg_statistic.h"
 #include "catalog/pg_statistic_ext.h"
@@ -413,7 +414,7 @@ CTranslatorRelcacheToDXL::RetrieveExtStatsInfo(CMemoryPool *mp, IMDId *mdid)
 		CBitSet *keys = GPOS_NEW(mp) CBitSet(mp);
 
 		int attno = -1;
-		while ((attno = bms_next_member(info->keys, attno)) >= 0)
+		while ((attno = gpdb::BmsNextMember(info->keys, attno)) >= 0)
 		{
 			keys->ExchangeSet(attno);
 		}
@@ -1437,6 +1438,22 @@ CTranslatorRelcacheToDXL::LookupFuncProps(
 
 	*stability = GetFuncStability(gpdb::FuncStability(func_oid));
 
+	RegProcedure prosupport = gpdb::FuncSupport(func_oid);
+	if (OidIsValid(prosupport))
+	{
+		/*
+		  CBDB_FIXME:
+		  Check if function is NOT in pg_catalog namespace
+		  Functions outside pg_catalog are likely extension functions that unsupported yet.
+		*/
+		Oid func_namespace = gpdb::FuncNamespace(func_oid);
+		if (func_namespace != PG_CATALOG_NAMESPACE)
+		{
+			GPOS_RAISE(gpdxl::ExmaDXL, gpdxl::ExmiQuery2DXLUnsupportedFeature,
+					   GPOS_WSZ_LIT("extension functions with prosupport unsupported"));
+		}
+	}
+
 	if (gpdb::FuncExecLocation(func_oid) != PROEXECLOCATION_ANY)
 	{
 		GPOS_RAISE(gpdxl::ExmaDXL, gpdxl::ExmiQuery2DXLUnsupportedFeature,
@@ -2037,9 +2054,24 @@ CTranslatorRelcacheToDXL::RetrieveColStats(CMemoryPool *mp,
 			std::max(CDouble(0.0), (1 - num_freq_buckets - null_freq));
 	}
 
+	// histogram values extracted from the pg_statistic tuple for a given column
+	AttStatsSlot ndvbs_slot;
+
+	// get histogram datums from pg_statistic entry
+	(void) gpdb::GetAttrStatsSlot(&ndvbs_slot, stats_tup,
+								  STATISTIC_KIND_NDV_BY_SEGMENTS, InvalidOid,
+								  ATTSTATSSLOT_VALUES);
+	CDouble ndvbs = CHistogram::DefaultNDVBySegments;
+	if (InvalidOid != ndvbs_slot.valuetype)
+	{
+		GPOS_ASSERT(ndvbs_slot.nvalues == 1);
+		ndvbs = CDouble(gpdb::Float8FromDatum(ndvbs_slot.values[0]));
+	}
+
 	// free up allocated datum and float4 arrays
 	gpdb::FreeAttrStatsSlot(&mcv_slot);
 	gpdb::FreeAttrStatsSlot(&hist_slot);
+	gpdb::FreeAttrStatsSlot(&ndvbs_slot);
 
 	gpdb::FreeHeapTuple(stats_tup);
 
@@ -2047,8 +2079,7 @@ CTranslatorRelcacheToDXL::RetrieveColStats(CMemoryPool *mp,
 	mdid_col_stats->AddRef();
 	CDXLColStats *dxl_col_stats = GPOS_NEW(mp) CDXLColStats(
 		mp, mdid_col_stats, md_colname, width, null_freq, distinct_remaining,
-		freq_remaining, dxl_stats_bucket_array, false /* is_col_stats_missing */
-	);
+		freq_remaining, ndvbs, dxl_stats_bucket_array, false /* is_col_stats_missing */);
 
 	return dxl_col_stats;
 }
@@ -2118,7 +2149,7 @@ CTranslatorRelcacheToDXL::GenerateStatsForSystemCols(
 
 	return GPOS_NEW(mp) CDXLColStats(
 		mp, mdid_col_stats, md_colname, width, null_freq, distinct_remaining,
-		freq_remaining, dxl_stats_bucket_array, is_col_stats_missing);
+		freq_remaining, CHistogram::DefaultNDVBySegments, dxl_stats_bucket_array, is_col_stats_missing);
 }
 
 //---------------------------------------------------------------------------

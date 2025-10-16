@@ -443,7 +443,7 @@ create_external_scan_uri_list(ExtTableEntry *ext, bool *ismasteronly)
 	 * protocols only */
 	on_clause = (char *) strVal(linitial(ext->execlocations));
 	if ((strcmp(on_clause, "COORDINATOR_ONLY") == 0)
-		&& using_location && (uri->protocol != URI_CUSTOM)) {
+		&& using_location && (uri->protocol != URI_CUSTOM && uri->protocol != URI_FILE)) {
 		ereport(ERROR, (errcode(ERRCODE_INVALID_TABLE_DEFINITION),
 				errmsg("\'ON COORDINATOR\' is not supported by this protocol yet")));
 	}
@@ -523,6 +523,13 @@ create_external_scan_uri_list(ExtTableEntry *ext, bool *ismasteronly)
 
 			found_candidate = false;
 			found_match = false;
+
+			if ((strcmp(on_clause, "COORDINATOR_ONLY") == 0) && uri->protocol == URI_FILE)
+			{
+				found_match = true;
+				segdb_file_map[0] = pstrdup(uri_str);
+				*ismasteronly = true;
+			}
 
 			/*
 			 * look through our segment database list and try to find a

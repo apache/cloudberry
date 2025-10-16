@@ -438,6 +438,12 @@ AlterResourceGroup(AlterResourceGroupStmt *stmt)
 
 	/* Load current resource group capabilities */
 	GetResGroupCapabilities(pg_resgroupcapability_rel, groupid, &oldCaps);
+	/* If io_limit not been altered, reset io_limit field to NIL */
+	if (limitType != RESGROUP_LIMIT_TYPE_IO_LIMIT && oldCaps.io_limit != NIL)
+	{
+		cgroupOpsRoutine->freeio(oldCaps.io_limit);
+		oldCaps.io_limit = NIL;
+	}
 	caps = oldCaps;
 
 	switch (limitType)
@@ -479,6 +485,7 @@ AlterResourceGroup(AlterResourceGroupStmt *stmt)
 	}
 
 	validateCapabilities(pg_resgroupcapability_rel, groupid, &caps, false);
+	AssertImply(limitType != RESGROUP_LIMIT_TYPE_IO_LIMIT, caps.io_limit == NIL);
 
 	/* cpuset & cpu_max_percent can not coexist.
 	 * if cpuset is active, then cpu_max_percent must set to CPU_RATE_LIMIT_DISABLED,
@@ -511,6 +518,16 @@ AlterResourceGroup(AlterResourceGroupStmt *stmt)
 			updateResgroupCapabilityEntry(pg_resgroupcapability_rel,
 										  groupid, RESGROUP_LIMIT_TYPE_IO_LIMIT,
 										  0, cgroupOpsRoutine->dumpio(caps.io_limit));
+		else
+		{
+			/*
+			 * When alter io_limit to -1 , the caps.io_limit will be nil.
+			 * So we should update the io_limit in capability relation to -1.
+			 */
+			updateResgroupCapabilityEntry(pg_resgroupcapability_rel,
+										  groupid, RESGROUP_LIMIT_TYPE_IO_LIMIT,
+										  0, DefaultIOLimit);
+		}
 	}
 	else
 	{
@@ -552,6 +569,8 @@ AlterResourceGroup(AlterResourceGroupStmt *stmt)
 
 /*
  * Get all the capabilities of one resource group in pg_resgroupcapability.
+ *
+ * Note: the io_limit in ResGroupCaps will be NIL if parse io_limit string failed.
  */
 void
 GetResGroupCapabilities(Relation rel, Oid groupId, ResGroupCaps *resgroupCaps)
@@ -634,9 +653,34 @@ GetResGroupCapabilities(Relation rel, Oid groupId, ResGroupCaps *resgroupCaps)
 			case RESGROUP_LIMIT_TYPE_IO_LIMIT:
 				if (cgroupOpsRoutine != NULL)
 				{
+					/* if InterruptHoldoffCount doesn't restore in PG_CATCH,
+					 * the catch will failed. */
+					int32 savedholdoffCount = InterruptHoldoffCount;
+
 					oldContext = CurrentMemoryContext;
 					MemoryContextSwitchTo(TopMemoryContext);
-					resgroupCaps->io_limit = cgroupOpsRoutine->parseio(value);
+					/*
+					 * This function will be called in InitResGroups and AlterResourceGroup which
+					 * shoud not be abort. In some circumstances, for example, the directory of a
+					 * tablespace in io_limit be removed, then parseio will throw error. If
+					 * InitResGroups be aborted, the cluster cannot launched. */
+					PG_TRY();
+					{
+						resgroupCaps->io_limit = cgroupOpsRoutine->parseio(value);
+					}
+					PG_CATCH();
+					{
+						resgroupCaps->io_limit = NIL;
+
+						InterruptHoldoffCount = savedholdoffCount;
+
+						if (elog_demote(WARNING))
+						{
+							EmitErrorReport();
+							FlushErrorState();
+						}
+					}
+					PG_END_TRY();
 					MemoryContextSwitchTo(oldContext);
 				}
 				else
@@ -1096,7 +1140,7 @@ alterResgroupCallback(XactEvent event, void *arg)
 	if (callbackCtx->caps.io_limit != NIL)
 		cgroupOpsRoutine->freeio(callbackCtx->caps.io_limit);
 
-	if (callbackCtx->caps.io_limit != NIL)
+	if (callbackCtx->oldCaps.io_limit != NIL)
 		cgroupOpsRoutine->freeio(callbackCtx->oldCaps.io_limit);
 
 	pfree(callbackCtx);

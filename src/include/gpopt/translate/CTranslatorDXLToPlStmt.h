@@ -291,10 +291,17 @@ private:
 	);
 
 	// translate DXL window node into GPDB window node
-	Plan *TranslateDXLWindow(
+	Plan *TranslateDXLWindowAgg(
 		const CDXLNode *motion_dxlnode, CDXLTranslateContext *output_context,
 		CDXLTranslationContextArray *
 			ctxt_translation_prev_siblings	// translation contexts of previous siblings
+	);
+
+	// translate DXL window node into window hash agg node
+	Plan *TranslateDXLWindowHashAgg(
+		const CDXLNode *window_dxlnode, CDXLTranslateContext *output_context,
+		CDXLTranslationContextArray 
+			*ctxt_translation_prev_siblings	// translation contexts of previous siblings
 	);
 
 	// translate DXL sort node into GPDB Sort plan node

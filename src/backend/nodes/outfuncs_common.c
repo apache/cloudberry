@@ -398,6 +398,7 @@ _outShareInputScan(StringInfo str, const ShareInputScan *node)
 	WRITE_INT_FIELD(this_slice_id);
 	WRITE_INT_FIELD(nconsumers);
 	WRITE_BOOL_FIELD(discard_output);
+	WRITE_BOOL_FIELD(ref_set);
 
 	_outPlanInfo(str, (Plan *) node);
 }

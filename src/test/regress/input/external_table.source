@@ -1402,10 +1402,22 @@ SELECT COUNT(*) FROM gp_read_error_log('exttab_heap_join_1');
 \! rm @abs_srcdir@/data/tableless.csv
 
 -- start_ignore
+DROP EXTERNAL TABLE IF EXISTS ext_nation_on_coordinator;
 DROP EXTERNAL TABLE IF EXISTS exttab_with_on_coordinator;
 -- end_ignore
 
--- Create external table with on clause
+-- Create external table on coordinator
+-- good, should fetch data from coordinator
+CREATE EXTERNAL TABLE ext_nation_on_coordinator ( N_NATIONKEY  INTEGER ,
+                            N_NAME       CHAR(25) ,
+                            N_REGIONKEY  INTEGER ,
+                            N_COMMENT    VARCHAR(152))
+location ('file://@hostname@@abs_srcdir@/data/nation.tbl' ) ON COORDINATOR
+FORMAT 'text' (delimiter '|');
+SELECT gp_segment_id, * FROM ext_nation_on_coordinator ORDER BY N_NATIONKEY DESC LIMIT 5;
+DROP EXTERNAL TABLE IF EXISTS ext_nation_on_coordinator;
+
+-- bad, should error
 CREATE EXTERNAL TABLE exttab_with_on_coordinator( i int, j text )
 LOCATION ('file://@hostname@@abs_srcdir@/data/exttab_few_errors.data') ON COORDINATOR FORMAT 'TEXT' (DELIMITER '|');
 

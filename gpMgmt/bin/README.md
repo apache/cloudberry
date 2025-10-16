@@ -12,7 +12,7 @@ To run any of these python scripts, necessary libraries must be installed, and P
 PYTHONPATH="\$GPHOME/lib/python:${PYTHONPATH}"
 ```
 
-This will be set automatically with a `source $GPHOME/greenplum_path.sh`
+This will be set automatically with a `source $GPHOME/cloudberry-env.sh`
 
 
 ## Python Version

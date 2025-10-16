@@ -38,9 +38,9 @@ namespace pax {
 std::unique_ptr<MicroPartitionReader>
 MicroPartitionFileFactory::CreateMicroPartitionReader(
     const MicroPartitionReader::ReaderOptions &options, int32 flags,
-    std::shared_ptr<File> file, std::shared_ptr<File> toast_file) {
+    std::unique_ptr<File> file, std::unique_ptr<File> toast_file) {
   std::unique_ptr<MicroPartitionReader> reader =
-      std::make_unique<OrcReader>(file, toast_file);
+      std::make_unique<OrcReader>(std::move(file), std::move(toast_file));
 
 #ifdef VEC_BUILD
   if (flags & ReaderFlags::FLAGS_VECTOR_PATH) {
@@ -63,13 +63,13 @@ MicroPartitionFileFactory::CreateMicroPartitionReader(
 std::unique_ptr<MicroPartitionWriter>
 MicroPartitionFileFactory::CreateMicroPartitionWriter(
     const MicroPartitionWriter::WriterOptions &options,
-    std::shared_ptr<File> file, std::shared_ptr<File> toast_file) {
+    std::unique_ptr<File> file, std::unique_ptr<File> toast_file) {
   std::vector<pax::porc::proto::Type_Kind> type_kinds;
   type_kinds = OrcWriter::BuildSchema(
       options.rel_tuple_desc,
       options.storage_format == PaxStorageFormat::kTypeStoragePorcVec);
-  return std::make_unique<OrcWriter>(options, std::move(type_kinds), file,
-                                     toast_file);
+  return std::make_unique<OrcWriter>(options, std::move(type_kinds),
+                                     std::move(file), std::move(toast_file));
 }
 
 }  // namespace pax

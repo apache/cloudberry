@@ -15,6 +15,10 @@
 #ifndef COptTasks_H
 #define COptTasks_H
 
+extern "C" {
+#include "optimizer/orcaopt.h"
+}
+
 #include "gpos/error/CException.h"
 
 #include "gpopt/base/CColRef.h"
@@ -108,6 +112,9 @@ struct SOptContext
 	// casting function
 	static SOptContext *Cast(void *ptr);
 
+	// other options pass by OptimizerOptions
+	BOOL m_create_vec_plan;
+
 };	// struct SOptContext
 
 class COptTasks
@@ -160,7 +167,8 @@ public:
 
 	// optimize Query->DXL->LExpr->Optimize->PExpr->DXL->PlannedStmt
 	static PlannedStmt *GPOPTOptimizedPlan(Query *query,
-										   SOptContext *gpopt_context);
+										   SOptContext *gpopt_context,
+										   OptimizerOptions *opts);
 
 	// enable/disable a given xforms
 	static bool SetXform(char *xform_str, bool should_disable);

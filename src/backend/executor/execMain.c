@@ -4279,40 +4279,39 @@ already_under_executor_run(void)
 static void
 MaintainMaterializedViewStatus(QueryDesc *queryDesc, CmdType operation)
 {
-	Bitmapset *inserted = NULL;
-	Bitmapset *updated = NULL;
-	Bitmapset *deleted = NULL;
+	List *inserted = NULL;
+	List *updated = NULL;
+	List *deleted = NULL;
 	List		*unique_result_relations = NIL;
 	List		*rtable = queryDesc->plannedstmt->rtable;
 	int			length = list_length(rtable);
 	ListCell	*lc;
-	int relid = -1;
+	Oid relid;
 
 	/*
 	 * Process epd first to get the affected relations.
 	 */
 	ConsumeAndProcessExtendProtocolData_IUD(&inserted, &updated, &deleted);
 
-	relid = -1;
-	while((relid = bms_next_member(inserted, relid)) >= 0)
+	foreach (lc, inserted)
 	{
+		relid = lfirst_oid(lc);
 		/* Only need to transfer to UP direction. */
 		SetRelativeMatviewAuxStatus(relid, MV_DATA_STATUS_EXPIRED_INSERT_ONLY,
 										MV_DATA_STATUS_TRANSFER_DIRECTION_UP);
-
 	}
 
-	relid = -1;
-	while((relid = bms_next_member(updated, relid)) >= 0)
+	foreach (lc, updated)
 	{
+		relid = lfirst_oid(lc);
 		SetRelativeMatviewAuxStatus(relid, MV_DATA_STATUS_EXPIRED,
 										MV_DATA_STATUS_TRANSFER_DIRECTION_UP);
 
 	}
 
-	relid = -1;
-	while((relid = bms_next_member(deleted, relid)) >= 0)
+	foreach (lc, deleted)
 	{
+		relid = lfirst_oid(lc);
 		SetRelativeMatviewAuxStatus(relid, MV_DATA_STATUS_EXPIRED,
 										MV_DATA_STATUS_TRANSFER_DIRECTION_UP);
 
@@ -4338,9 +4337,9 @@ MaintainMaterializedViewStatus(QueryDesc *queryDesc, CmdType operation)
 			 * Do a second check and fall back to partitioned table
 			 * in case that if we failed to find a one.
 			 */
-			if (bms_is_empty(inserted) &&
-				bms_is_empty(updated) &&
-				bms_is_empty(deleted))
+			if ((list_length(inserted) == 0) &&
+				(list_length(updated) == 0) &&
+				(list_length(deleted) == 0))
 			{
 				ereport(WARNING,
 					(errmsg("fail to find leafs of partitioned table: %s", get_rel_name(rte->relid))));

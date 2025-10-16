@@ -85,6 +85,7 @@
 		"gp_interconnect_queue_depth",
 		"gp_interconnect_setup_timeout",
 		"gp_interconnect_snd_queue_depth",
+		"gp_interconnect_mem_size",
 		"gp_interconnect_tcp_listener_backlog",
 		"gp_interconnect_timer_checking_period",
 		"gp_interconnect_timer_period",
@@ -198,3 +199,4 @@
 		"wal_sender_timeout",
 		"work_mem",
 		"zero_damaged_pages",
+		"find_writer_proc_retry_time",

@@ -32,7 +32,7 @@
 #include "catalog/pax_catalog.h"
 #include "comm/cbdb_wrappers.h"
 #include "storage/oper/pax_stats.h"
-#include "stub.h"
+#include "cpp-stub/src/stub.h"
 
 bool MockMinMaxGetStrategyProcinfo(Oid, Oid, Oid *, FmgrInfo *,
                                    StrategyNumber) {

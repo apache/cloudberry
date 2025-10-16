@@ -2936,8 +2936,8 @@ select sum(Distinct e), count(b), sum(c) from dqa_f3 group by a;
  *
  */
 explain (verbose on, costs off) select sum(Distinct c), count(a), sum(d) from dqa_f3 group by b;
-                                      QUERY PLAN                                      
---------------------------------------------------------------------------------------
+                                                            QUERY PLAN                                                             
+-----------------------------------------------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    Output: (sum(c)), (count(a)), (sum(d))
    ->  Finalize HashAggregate
@@ -2946,23 +2946,20 @@ explain (verbose on, costs off) select sum(Distinct c), count(a), sum(d) from dq
          ->  Redistribute Motion 3:3  (slice2; segments: 3)
                Output: b, c, (PARTIAL count(a)), (PARTIAL sum(d))
                Hash Key: b
-               ->  Partial GroupAggregate
+               ->  Partial HashAggregate
                      Output: b, c, PARTIAL count(a), PARTIAL sum(d)
                      Group Key: dqa_f3.b, dqa_f3.c
-                     ->  Sort
+                     ->  Redistribute Motion 3:3  (slice3; segments: 3)
                            Output: b, c, (PARTIAL count(a)), (PARTIAL sum(d))
-                           Sort Key: dqa_f3.b, dqa_f3.c
-                           ->  Redistribute Motion 3:3  (slice3; segments: 3)
-                                 Output: b, c, (PARTIAL count(a)), (PARTIAL sum(d))
-                                 Hash Key: b, c
-                                 ->  Streaming Partial HashAggregate
-                                       Output: b, c, PARTIAL count(a), PARTIAL sum(d)
-                                       Group Key: dqa_f3.b, dqa_f3.c
-                                       ->  Seq Scan on public.dqa_f3
-                                             Output: a, b, c, d
- Optimizer: Pivotal Optimizer (GPORCA)
- Settings: enable_groupagg = 'off', gp_motion_cost_per_row = '1'
-(24 rows)
+                           Hash Key: b, c
+                           ->  Streaming Partial HashAggregate
+                                 Output: b, c, PARTIAL count(a), PARTIAL sum(d)
+                                 Group Key: dqa_f3.b, dqa_f3.c
+                                 ->  Seq Scan on public.dqa_f3
+                                       Output: a, b, c, d
+ Settings: enable_groupagg = 'off', enable_hashagg = 'on', enable_parallel = 'off', gp_motion_cost_per_row = '2', optimizer = 'on'
+ Optimizer: GPORCA
+(21 rows)
 
 select sum(Distinct c), count(a), sum(d) from dqa_f3 group by b;
  sum | count | sum  
@@ -2975,8 +2972,8 @@ select sum(Distinct c), count(a), sum(d) from dqa_f3 group by b;
 (5 rows)
 
 explain (verbose on, costs off) select sum(Distinct c), count(a), sum(d) from dqa_f3 group by b order by b;
-                                            QUERY PLAN                                            
---------------------------------------------------------------------------------------------------
+                                                            QUERY PLAN                                                             
+-----------------------------------------------------------------------------------------------------------------------------------
  Result
    Output: (sum(c)), (count(a)), (sum(d))
    ->  Gather Motion 3:1  (slice1; segments: 3)
@@ -2991,23 +2988,20 @@ explain (verbose on, costs off) select sum(Distinct c), count(a), sum(d) from dq
                      ->  Redistribute Motion 3:3  (slice2; segments: 3)
                            Output: b, c, (PARTIAL count(a)), (PARTIAL sum(d))
                            Hash Key: b
-                           ->  Partial GroupAggregate
+                           ->  Partial HashAggregate
                                  Output: b, c, PARTIAL count(a), PARTIAL sum(d)
                                  Group Key: dqa_f3.b, dqa_f3.c
-                                 ->  Sort
+                                 ->  Redistribute Motion 3:3  (slice3; segments: 3)
                                        Output: b, c, (PARTIAL count(a)), (PARTIAL sum(d))
-                                       Sort Key: dqa_f3.b, dqa_f3.c
-                                       ->  Redistribute Motion 3:3  (slice3; segments: 3)
-                                             Output: b, c, (PARTIAL count(a)), (PARTIAL sum(d))
-                                             Hash Key: b, c
-                                             ->  Streaming Partial HashAggregate
-                                                   Output: b, c, PARTIAL count(a), PARTIAL sum(d)
-                                                   Group Key: dqa_f3.b, dqa_f3.c
-                                                   ->  Seq Scan on public.dqa_f3
-                                                         Output: a, b, c, d
- Optimizer: Pivotal Optimizer (GPORCA)
- Settings: enable_groupagg = 'off', gp_motion_cost_per_row = '1'
-(30 rows)
+                                       Hash Key: b, c
+                                       ->  Streaming Partial HashAggregate
+                                             Output: b, c, PARTIAL count(a), PARTIAL sum(d)
+                                             Group Key: dqa_f3.b, dqa_f3.c
+                                             ->  Seq Scan on public.dqa_f3
+                                                   Output: a, b, c, d
+ Settings: enable_groupagg = 'off', enable_hashagg = 'on', enable_parallel = 'off', gp_motion_cost_per_row = '2', optimizer = 'on'
+ Optimizer: GPORCA
+(27 rows)
 
 select sum(Distinct c), count(a), sum(d) from dqa_f3 group by b order by b;
  sum | count | sum  
@@ -3039,23 +3033,20 @@ explain (verbose on, costs off) select distinct sum(Distinct c), count(a), sum(d
                            ->  Redistribute Motion 3:3  (slice3; segments: 3)
                                  Output: b, c, (PARTIAL count(a)), (PARTIAL sum(d))
                                  Hash Key: b
-                                 ->  Partial GroupAggregate
+                                 ->  Partial HashAggregate
                                        Output: b, c, PARTIAL count(a), PARTIAL sum(d)
                                        Group Key: dqa_f3.b, dqa_f3.c
-                                       ->  Sort
+                                       ->  Redistribute Motion 3:3  (slice4; segments: 3)
                                              Output: b, c, (PARTIAL count(a)), (PARTIAL sum(d))
-                                             Sort Key: dqa_f3.b, dqa_f3.c
-                                             ->  Redistribute Motion 3:3  (slice4; segments: 3)
-                                                   Output: b, c, (PARTIAL count(a)), (PARTIAL sum(d))
-                                                   Hash Key: b, c
-                                                   ->  Streaming Partial HashAggregate
-                                                         Output: b, c, PARTIAL count(a), PARTIAL sum(d)
-                                                         Group Key: dqa_f3.b, dqa_f3.c
-                                                         ->  Seq Scan on public.dqa_f3
-                                                               Output: a, b, c, d
+                                             Hash Key: b, c
+                                             ->  Streaming Partial HashAggregate
+                                                   Output: b, c, PARTIAL count(a), PARTIAL sum(d)
+                                                   Group Key: dqa_f3.b, dqa_f3.c
+                                                   ->  Seq Scan on public.dqa_f3
+                                                         Output: a, b, c, d
  Settings: enable_groupagg = 'off', enable_hashagg = 'on', enable_parallel = 'off', gp_motion_cost_per_row = '2', optimizer = 'on'
- Optimizer: Pivotal Optimizer (GPORCA)
-(33 rows)
+ Optimizer: GPORCA
+(30 rows)
 
 select distinct sum(Distinct c), count(a), sum(d) from dqa_f3 group by b;
  sum | count | sum  
@@ -3115,8 +3106,8 @@ select sum(Distinct c), count(a), sum(d) from dqa_f3 group by b having avg(e) > 
 -- Test gp_enable_agg_distinct_pruning is off on this branch
 set gp_enable_agg_distinct_pruning = off;
 explain (verbose on, costs off) select sum(Distinct c), count(a), sum(d) from dqa_f3 group by b;
-                                               QUERY PLAN                                                
----------------------------------------------------------------------------------------------------------
+                                                                                QUERY PLAN                                                                                 
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    Output: (sum(c)), (count(a)), (sum(d))
    ->  Finalize HashAggregate
@@ -3125,23 +3116,20 @@ explain (verbose on, costs off) select sum(Distinct c), count(a), sum(d) from dq
          ->  Redistribute Motion 3:3  (slice2; segments: 3)
                Output: b, c, (PARTIAL count(a)), (PARTIAL sum(d))
                Hash Key: b
-               ->  Partial GroupAggregate
+               ->  Partial HashAggregate
                      Output: b, c, PARTIAL count(a), PARTIAL sum(d)
                      Group Key: dqa_f3.b, dqa_f3.c
-                     ->  Sort
+                     ->  Redistribute Motion 3:3  (slice3; segments: 3)
                            Output: b, c, (PARTIAL count(a)), (PARTIAL sum(d))
-                           Sort Key: dqa_f3.b, dqa_f3.c
-                           ->  Redistribute Motion 3:3  (slice3; segments: 3)
-                                 Output: b, c, (PARTIAL count(a)), (PARTIAL sum(d))
-                                 Hash Key: b, c
-                                 ->  Streaming Partial HashAggregate
-                                       Output: b, c, PARTIAL count(a), PARTIAL sum(d)
-                                       Group Key: dqa_f3.b, dqa_f3.c
-                                       ->  Seq Scan on public.dqa_f3
-                                             Output: a, b, c, d
- Optimizer: Pivotal Optimizer (GPORCA)
- Settings: enable_groupagg = 'off', gp_enable_agg_distinct_pruning = 'off', gp_motion_cost_per_row = '1'
-(24 rows)
+                           Hash Key: b, c
+                           ->  Streaming Partial HashAggregate
+                                 Output: b, c, PARTIAL count(a), PARTIAL sum(d)
+                                 Group Key: dqa_f3.b, dqa_f3.c
+                                 ->  Seq Scan on public.dqa_f3
+                                       Output: a, b, c, d
+ Settings: enable_groupagg = 'off', enable_hashagg = 'on', enable_parallel = 'off', gp_enable_agg_distinct_pruning = 'off', gp_motion_cost_per_row = '2', optimizer = 'on'
+ Optimizer: GPORCA
+(21 rows)
 
 select sum(Distinct c), count(a), sum(d) from dqa_f3 group by b;
  sum | count | sum  
