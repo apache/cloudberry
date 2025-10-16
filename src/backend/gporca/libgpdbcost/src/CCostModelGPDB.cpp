@@ -47,7 +47,6 @@ using namespace gpdbcost;
 
 // Forward declare PostgreSQL GUC variables
 extern double parallel_setup_cost;
-extern double parallel_tuple_cost;
 
 //---------------------------------------------------------------------------
 //	@function:

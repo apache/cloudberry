@@ -2732,7 +2732,6 @@ gpdb::IsParallelModeOK(void)
 {
 	GP_WRAP_START;
 	{
-		// Basic GUC checks similar to PostgreSQL planner
 		if (!enable_parallel)
 			return false;
 
@@ -2742,37 +2741,21 @@ gpdb::IsParallelModeOK(void)
 		if (max_parallel_workers_per_gather <= 0)
 			return false;
 
-		// Check if we're in a parallel worker
-		if (!IsParallelPlansEnabled())
-			return false;
-
-		return true;
-	}
-	GP_WRAP_END;
-	return false;
-}
-
-bool
-gpdb::IsParallelPlansEnabled(void)
-{
-	GP_WRAP_START;
-	{
-		// Get from current optimizer context
+		// Check if parallel plans are enabled in current optimizer context
 		gpopt::COptCtxt *poctxt = gpopt::COptCtxt::PoctxtFromTLS();
 		if (nullptr != poctxt)
 		{
 			gpopt::COptimizerConfig *optimizer_config = poctxt->GetOptimizerConfig();
 			if (nullptr != optimizer_config)
 			{
-				return optimizer_config->CreateParallelPlan();
+				if (!optimizer_config->CreateParallelPlan())
+					return false;
 			}
 		}
-		return false;  // default to disabled if no context
+		return true;
 	}
 	GP_WRAP_END;
-	return false;
+	return false;  // default to disabled if no context
 }
-
-
 
 // EOF
