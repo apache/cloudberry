@@ -20,8 +20,9 @@
 #include "gpopt/operators/CPhysicalTableScan.h"
 #include "gpopt/optimizer/COptimizerConfig.h"
 
-// Forward declare GUC variables (defined in PostgreSQL)
-extern bool enable_parallel;
+namespace gpdb {
+	bool IsParallelModeOK(void);
+}
 
 using namespace gpopt;
 
@@ -62,7 +63,7 @@ CXformGet2TableScan::Exfp(CExpressionHandle &exprhdl) const
 
 	// If parallel processing is enabled, give lower priority to regular table scan
 	// to allow parallel table scan to take precedence
-	if (enable_parallel)
+	if (gpdb::IsParallelModeOK())
 	{
 		return CXform::ExfpLow;
 	}
