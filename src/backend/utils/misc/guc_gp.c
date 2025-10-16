@@ -1796,8 +1796,7 @@ struct config_bool ConfigureNamesBool_gp[] =
 	{
 		{"gp_cte_sharing", PGC_USERSET, QUERY_TUNING_METHOD,
 			gettext_noop("This guc enables sharing of plan fragments for common table expressions."),
-			NULL,
-			GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE
+			NULL
 		},
 		&gp_cte_sharing,
 		false,
