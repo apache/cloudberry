@@ -3700,3 +3700,6 @@ SELECT logerrors, options from pg_exttable a, pg_class b where a.reloid = b.oid 
 DROP EXTERNAL TABLE ext_false;
 DROP EXTERNAL TABLE ext_true;
 DROP EXTERNAL TABLE ext_persistently;
+
+CREATE EXTERNAL WEB TEMP TABLE test_program_not_exist(content text) EXECUTE '/xx/seq 1 5' ON MASTER FORMAT 'TEXT';
+SELECT * FROM test_program_not_exist;
