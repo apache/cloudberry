@@ -132,6 +132,7 @@ RUN dnf makecache && \
         zlib-devel && \
     dnf install -y -d0 --enablerepo=devel \
         libuv-devel \
+        libssh2-devel \
         libyaml-devel \
         perl-IPC-Run \
         protobuf-devel && \
