@@ -110,6 +110,7 @@ RUN apt-get update && \
             libperl-dev \
             libprotobuf-dev \
             libreadline-dev \
+            libssh2-1-dev \
             libssl-dev \
             libuv1-dev \
             libxerces-c-dev \
