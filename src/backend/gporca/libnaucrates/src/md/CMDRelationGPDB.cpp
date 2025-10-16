@@ -63,7 +63,8 @@ CMDRelationGPDB::CMDRelationGPDB(
 	  m_attrno_nondrop_col_pos_map(nullptr),
 	  m_nondrop_col_pos_array(nullptr),
 	  m_rows(rows),
-	  m_seg_file_count(-1)
+	  m_seg_file_count(-1),
+	  m_parallel_workers(-1)
 {
 	GPOS_ASSERT(mdid->IsValid());
 	GPOS_ASSERT(nullptr != mdcol_array);
@@ -614,6 +615,26 @@ void
 CMDRelationGPDB::SetSegFileCount(INT seg_file_count)
 {
 	m_seg_file_count = seg_file_count;
+}
+
+INT
+CMDRelationGPDB::ParallelWorkers() const
+{
+	return m_parallel_workers;
+}
+
+//---------------------------------------------------------------------------
+//	@function:
+//		CMDRelationGPDB::SetParallelWorkers
+//
+//	@doc:
+//		Set parallel workers from table options
+//
+//---------------------------------------------------------------------------
+void
+CMDRelationGPDB::SetParallelWorkers(INT parallel_workers)
+{
+	m_parallel_workers = parallel_workers;
 }
 
 //---------------------------------------------------------------------------

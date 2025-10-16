@@ -233,12 +233,23 @@ CXformGet2ParallelTableScan::Transform(CXformContext *pxfctxt, CXformResult *pxf
 	GPOS_ASSERT(nullptr != pdrgpcrOutput);
 	pdrgpcrOutput->AddRef();
 
-	// Use unified parallel degree from GUC parameter
-	ULONG ulParallelWorkers = 2;
-	// Use max_parallel_workers_per_gather as the unified parallel degree for all tables
-	// This ensures consistent parallelism across all table scans
-	if (max_parallel_workers_per_gather > 0)
+	// Determine parallel workers degree
+	// Priority: table-level parallel_workers setting > GUC max_parallel_workers_per_gather > default
+	ULONG ulParallelWorkers = 2;  // default
+
+	// Check if table has a specific parallel_workers setting
+	CMDAccessor *md_accessor = COptCtxt::PoctxtFromTLS()->Pmda();
+	const IMDRelation *pmdrel = md_accessor->RetrieveRel(ptabdesc->MDId());
+	INT table_parallel_workers = pmdrel->ParallelWorkers();
+
+	if (table_parallel_workers > 0)
 	{
+		// Use table-level setting if explicitly configured
+		ulParallelWorkers = (ULONG)table_parallel_workers;
+	}
+	else if (max_parallel_workers_per_gather > 0)
+	{
+		// Fall back to GUC setting
 		ulParallelWorkers = (ULONG)max_parallel_workers_per_gather;
 	}
 

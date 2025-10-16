@@ -634,6 +634,13 @@ CTranslatorRelcacheToDXL::RetrieveRel(CMemoryPool *mp, CMDAccessor *md_accessor,
 		md_rel_gpdb->SetSegFileCount(seg_file_count);
 	}
 
+	// Set parallel workers from table options
+	if (rel->rd_options != NULL)
+	{
+		INT parallel_workers = RelationGetParallelWorkers(rel.get(), -1);
+		md_rel_gpdb->SetParallelWorkers(parallel_workers);
+	}
+
 	return md_rel_gpdb;
 }
 

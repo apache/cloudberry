@@ -125,6 +125,9 @@ private:
 	// segment file count for AO/AOCO tables (-1 for non-AO tables)
 	INT m_seg_file_count;
 
+	// parallel workers setting from table options (-1 if not set)
+	INT m_parallel_workers;
+
 public:
 	CMDRelationGPDB(const CMDRelationGPDB &) = delete;
 
@@ -249,6 +252,11 @@ public:
 
 	// Set segment file count for AO/AOCO tables
 	void SetSegFileCount(INT seg_file_count);
+
+	INT ParallelWorkers() const override;
+
+	// Set parallel workers from table options
+	void SetParallelWorkers(INT parallel_workers);
 
 #ifdef GPOS_DEBUG
 	// debug print of the metadata relation
