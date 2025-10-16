@@ -347,16 +347,6 @@ planner(Query *parse, const char *query_string, int cursorOptions,
 		/* All cheap tests pass, check query tree for parallel safety */
 		char maxParallelHazard = max_parallel_hazard(parse);
 		optimizer_options->create_parallel_plan = (maxParallelHazard != PROPARALLEL_UNSAFE);
-
-		/*
-		 * Disable ORCA parallel for CTAS when no distribution policy is specified.
-		 * This prevents potential issues with parallel plan generation in distributed
-		 * environments where the distribution strategy is not predetermined.
-		 */
-		// if (parse->intoPolicy == NULL && parse->parentStmtType == PARENTSTMTTYPE_CTAS)
-		// {
-		// 	optimizer_options->create_parallel_plan = false;
-		// }
 	}
 	else
 	{

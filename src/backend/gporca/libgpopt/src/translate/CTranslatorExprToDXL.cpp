@@ -4583,6 +4583,7 @@ UlIndexFilter(Edxlopid edxlopid)
 	{
 		case EdxlopPhysicalTableScan:
 		case EdxlopPhysicalForeignScan:
+		case EdxlopPhysicalParallelTableScan:
 			return EdxltsIndexFilter;
 		case EdxlopPhysicalDynamicForeignScan:
 			return EdxldfsIndexFilter;

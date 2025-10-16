@@ -816,7 +816,7 @@ CTranslatorDXLToPlStmt::TranslateDXLParallelTblScan(
 	// Adjust row count to per-worker statistics
 	if (parallel_workers > 1)
 	{
-		plan->plan_rows = plan->plan_rows / parallel_workers;
+		plan->plan_rows = ceil(plan->plan_rows / parallel_workers);
 	}
 
 	SetParamIds(plan);
