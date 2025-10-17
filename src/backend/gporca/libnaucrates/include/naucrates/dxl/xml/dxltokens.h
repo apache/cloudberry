@@ -96,6 +96,7 @@ enum Edxltoken
 	EdxltokenPhysical,
 
 	EdxltokenPhysicalTableScan,
+	EdxltokenPhysicalParallelTableScan,
 	EdxltokenPhysicalBitmapTableScan,
 	EdxltokenPhysicalDynamicBitmapTableScan,
 	EdxltokenPhysicalForeignScan,
@@ -374,6 +375,7 @@ enum Edxltoken
 	EdxltokenColNdvBySeg,
 
 	EdxltokenParamId,
+	EdxltokenParallelWorkers,
 
 	EdxltokenCtidColName,
 	EdxltokenOidColName,

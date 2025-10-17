@@ -95,7 +95,7 @@ CLUSTER abbrev_abort_uuids USING abbrev_abort_uuids__abort_increasing_idx;
 -- head
 SELECT id, abort_increasing, abort_decreasing, noabort_increasing, noabort_decreasing
 FROM abbrev_abort_uuids
-ORDER BY ctid LIMIT 5;
+ORDER BY ctid, id LIMIT 5;
 
 -- tail
 SELECT id, abort_increasing, abort_decreasing, noabort_increasing, noabort_decreasing

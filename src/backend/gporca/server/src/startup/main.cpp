@@ -381,6 +381,24 @@ PvExec(void *pv)
 	return nullptr;
 }
 
+//---------------------------------------------------------------------------
+//	Stub implementations for PostgreSQL symbols required by GPORCA
+//	These are needed for standalone testing without linking to PostgreSQL
+//---------------------------------------------------------------------------
+
+// Stub for parallel mode check
+namespace gpdb {
+	bool IsParallelModeOK(void)
+	{
+		// For unittest, we enable parallel mode by default
+		return true;
+	}
+}
+
+// Stub GUC variables for parallel execution
+int max_parallel_workers_per_gather = 2;
+bool enable_parallel = true;
+double parallel_setup_cost = 1000.0;
 
 //---------------------------------------------------------------------------
 //	@function:
