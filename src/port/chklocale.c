@@ -18,6 +18,8 @@
 #else
 #include "postgres_fe.h"
 #endif
+#include "common/mdb_locale.h"
+
 
 #ifdef HAVE_LANGINFO_H
 #include <langinfo.h>
@@ -343,7 +345,7 @@ pg_get_encoding_from_locale(const char *ctype, bool write_message)
 			pg_strcasecmp(ctype, "POSIX") == 0)
 			return PG_SQL_ASCII;
 
-		save = setlocale(LC_CTYPE, NULL);
+		save = SETLOCALE(LC_CTYPE, NULL);
 		if (!save)
 			return -1;			/* setlocale() broken? */
 		/* must copy result, or it might change after setlocale */
@@ -351,7 +353,7 @@ pg_get_encoding_from_locale(const char *ctype, bool write_message)
 		if (!save)
 			return -1;			/* out of memory; unlikely */
 
-		name = setlocale(LC_CTYPE, ctype);
+		name = SETLOCALE(LC_CTYPE, ctype);
 		if (!name)
 		{
 			free(save);
@@ -366,13 +368,13 @@ pg_get_encoding_from_locale(const char *ctype, bool write_message)
 		sys = win32_langinfo(name);
 #endif
 
-		setlocale(LC_CTYPE, save);
+		SETLOCALE(LC_CTYPE, save);
 		free(save);
 	}
 	else
 	{
 		/* much easier... */
-		ctype = setlocale(LC_CTYPE, NULL);
+		ctype = SETLOCALE(LC_CTYPE, NULL);
 		if (!ctype)
 			return -1;			/* setlocale() broken? */
 

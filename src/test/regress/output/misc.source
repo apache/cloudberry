@@ -609,3 +609,10 @@ CONTEXT:  SQL function "equipment" during startup
 --
 -- rewrite rules
 --
+--- mdb-related
+SELECT mdb_locale_enabled();
+ mdb_locale_enabled 
+--------------------
+ f
+(1 row)
+
