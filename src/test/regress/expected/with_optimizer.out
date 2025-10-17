@@ -3284,3 +3284,18 @@ ERROR:  writable CTE queries cannot be used with writable queries
 DETAIL:  Apache Cloudberry currently only support CTEs with one writable clause, called in a non-writable context.
 HINT:  Rewrite the query to only include one writable clause.
 DROP TABLE t_w_cte_relp;
+--
+-- readable CTE with SELECT INTO clause.
+--
+WITH sel AS (
+  SELECT 1 as a
+)
+SELECT a INTO t_r_cte FROM sel;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause. Creating a NULL policy entry.
+SELECT * FROM t_r_cte;
+ a 
+---
+ 1
+(1 row)
+
+DROP TABLE t_r_cte;

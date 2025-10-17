@@ -1594,3 +1594,13 @@ EXPLAIN(COSTS OFF, VERBOSE) WITH ins AS (
 )
 SELECT sum(a) INTO t_w_cte_relp_1 FROM ins;
 DROP TABLE t_w_cte_relp;
+
+--
+-- readable CTE with SELECT INTO clause.
+--
+WITH sel AS (
+  SELECT 1 as a
+)
+SELECT a INTO t_r_cte FROM sel;
+SELECT * FROM t_r_cte;
+DROP TABLE t_r_cte;
