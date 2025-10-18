@@ -71,6 +71,10 @@
 #include <openssl/err.h>
 #endif
 
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <unistd.h>
+
 #define DEFAULT_COMPRESS_LEVEL 3
 #define MAX_FRAME_SIZE 65536
 
