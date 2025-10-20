@@ -72,6 +72,7 @@ ENV USER=gpadmin
 RUN dnf makecache && \
     dnf install -y \
         epel-release \
+        rocky-release-hpc \
         git && \
     dnf makecache && \
     dnf config-manager --disable epel && \
@@ -98,6 +99,7 @@ RUN dnf makecache && \
         krb5-devel \
         libcurl-devel \
         libevent-devel \
+        libssh2-devel \
         libuuid-devel \
         libxml2-devel \
         libzstd-devel \
@@ -132,7 +134,6 @@ RUN dnf makecache && \
         zlib-devel && \
     dnf install -y -d0 --enablerepo=devel \
         libuv-devel \
-        libssh2-devel \
         libyaml-devel \
         perl-IPC-Run \
         protobuf-devel && \
