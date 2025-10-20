@@ -161,6 +161,7 @@ get_partitioned_policy_from_path(PlannerInfo *root, Path *path)
 	ListCell   *dk_cell;
 	ListCell   *ec_cell;
 	ListCell   *em_cell;
+	bool duplicate_keys_detected = false;
 
 	/*
 	 * Is it a Hashed distribution?
@@ -183,6 +184,9 @@ get_partitioned_policy_from_path(PlannerInfo *root, Path *path)
 	{
 		DistributionKey *dk = lfirst(dk_cell);
 		bool		found_expr = false;
+
+		if (duplicate_keys_detected)
+			return NULL;
 
 		foreach(ec_cell, dk->dk_eclasses)
 		{
@@ -230,10 +234,17 @@ get_partitioned_policy_from_path(PlannerInfo *root, Path *path)
 						Assert(list_length(policykeys) < MaxPolicyAttributeNumber);
 
 						if (list_member_int(policykeys, attno))
-							ereport(ERROR,
-									(errcode(ERRCODE_DUPLICATE_COLUMN),
-									 errmsg("duplicate DISTRIBUTED BY column '%s'",
-											target->resname ? target->resname : "???")));
+						{
+							/*
+							 * Although the parser prevents duplicate distribution keys in regular grammar,
+							 * they can still occur in subqueries(e.g., window function PARTITION BY columns
+							 * with equivalent expressions).
+							 * We fall back to an alternative approach when duplicate distribution keys are detected;
+							 * the caller handles this scenario appropriately.
+							 */
+							duplicate_keys_detected = true;
+							break;
+						}
 
 						/*
 						 * We know the btree operator family corresponding to
