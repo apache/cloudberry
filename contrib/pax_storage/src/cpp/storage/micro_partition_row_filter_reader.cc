@@ -152,15 +152,15 @@ bool MicroPartitionRowFilterReader::ApplyFiltersWithSampling(
     return true;
   }
 
+  ctx->sample_rows++;
   bool all_pass = true;
+  // in the sampling phase, we need to evaluate all filter nodes, if any node
+  // fails, the tuple is rejected
   for (auto &node : ctx->filter_nodes) {
     if (!EvalFilterNode(ctx, group, desc, row_index, slot, node, true)) {
       all_pass = false;
-      break;
     }
   }
-  ctx->sample_rows++;
-  if (!all_pass) return false;
 
   if (ctx->sample_rows >= ctx->sample_target) {
     for (auto &node : ctx->filter_nodes) {
@@ -175,7 +175,7 @@ bool MicroPartitionRowFilterReader::ApplyFiltersWithSampling(
                      });
     ctx->sampling = false;
   }
-  return true;
+  return all_pass;
 }
 
 bool MicroPartitionRowFilterReader::ReadTuple(TupleTableSlot *slot) {
