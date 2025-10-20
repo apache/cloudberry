@@ -85,8 +85,8 @@ SET enable_parallel TO off;
 -- case 1: join on distribution table and replicated table.
 DROP TABLE IF EXISTS t1;
 DROP TABLE IF EXISTS t2;
-CREATE TABLE t1(c1 int, c2 int, c3 int, c4 int, c5 int) with (appendonly=true, orientation=column) distributed by (c1);
-CREATE TABLE t2(c1 int, c2 int, c3 int, c4 int, c5 int) with (appendonly=true, orientation=column) distributed REPLICATED;
+CREATE TABLE t1(c1 int, c2 int, c3 int, c4 int, c5 int) distributed by (c1);
+CREATE TABLE t2(c1 int, c2 int, c3 int, c4 int, c5 int) distributed REPLICATED;
 
 INSERT INTO t1 VALUES (5,5,5,5,5);
 INSERT INTO t2 VALUES (1,1,1,1,1), (2,2,2,2,2), (3,3,3,3,3), (4,4,4,4,4);
