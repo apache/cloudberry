@@ -188,7 +188,7 @@ set optimizer_force_multistage_agg = on;
 select count_operator('select count(*) from multi_stage_test group by b;','GroupAggregate');
  count_operator 
 ----------------
-              1
+              2
 (1 row)
 
 set optimizer_force_multistage_agg = off;
