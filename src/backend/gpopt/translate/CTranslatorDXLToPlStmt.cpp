@@ -2537,7 +2537,7 @@ CTranslatorDXLToPlStmt::TranslateDXLMotion(
 		bool supports_parallel = (sendslice->gangType == GANGTYPE_PRIMARY_READER ||
 		                          sendslice->gangType == GANGTYPE_PRIMARY_WRITER);
 
-		if (enable_parallel && supports_parallel)
+		if (supports_parallel)
 		{
 			sendslice->parallel_workers = child_parallel_workers;
 		}
@@ -6297,11 +6297,9 @@ CTranslatorDXLToPlStmt::TranslatePlanCosts(const CDXLNode *dxlnode, Plan *plan)
 	// process, whereas the row estimates in GPORCA are global, across all
 	// processes. Divide the row count estimate by the number of segments
 	// executing it.
-	PlanSlice *current_slice = m_dxl_to_plstmt_context->GetCurrentSlice();
-	double total_rows = CostFromStr(costs->GetRowsOutStr());
-	double rows_per_segment = total_rows / current_slice->numsegments;
-	
-	plan->plan_rows = ceil(rows_per_segment);
+	plan->plan_rows =
+		ceil(CostFromStr(costs->GetRowsOutStr()) /
+			 m_dxl_to_plstmt_context->GetCurrentSlice()->numsegments);
 }
 
 //---------------------------------------------------------------------------

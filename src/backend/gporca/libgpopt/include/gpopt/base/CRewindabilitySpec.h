@@ -108,12 +108,6 @@ public:
 		EmhtSentinel
 	};
 
-	enum EBarrierHazardType
-	{
-		EbhtNoBarrier,   // no barrier hazard in the tree
-		EbhtBarrier,     // barrier hazard in the tree (e.g., parallel hash join)
-		EbhtSentinel
-	};
 
 private:
 	// rewindability support
