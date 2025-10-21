@@ -293,12 +293,11 @@ CursorICHistoryTable::prune(uint32 icId) {
 }
 
 #ifdef TRANSFER_PROTOCOL_STATS
-typedef enum TransProtoEvent TransProtoEvent;
-enum TransProtoEvent
+typedef enum TransProtoEvent
 {
 	TPE_DATA_PKT_SEND,
 	TPE_ACK_PKT_QUERY
-};
+} TransProtoEvent;
 
 typedef struct TransProtoStatEntry TransProtoStatEntry;
 struct TransProtoStatEntry
@@ -322,7 +321,7 @@ struct TransProtoStatEntry
 typedef struct TransProtoStats TransProtoStats;
 struct TransProtoStats
 {
-	pthread_mutex_t lock;
+	std::mutex lock;
 	TransProtoStatEntry *head;
 	TransProtoStatEntry *tail;
 	uint64		count;
@@ -335,7 +334,7 @@ struct TransProtoStats
 
 static TransProtoStats trans_proto_stats =
 {
-	PTHREAD_MUTEX_INITIALIZER, NULL, NULL, 0
+	{}, NULL, NULL, 0
 };
 
 /*
@@ -345,7 +344,7 @@ static TransProtoStats trans_proto_stats =
 void
 TransProtoStats::init()
 {
-	pthread_mutex_lock(&this->lock);
+	std::lock_guard<std::mutex> guard(this->lock);
 
 	while (this->head) {
 		TransProtoStatEntry *cur = this->head;
@@ -358,8 +357,6 @@ TransProtoStats::init()
 	this->tail = NULL;
 	this->count = 0;
 	this->startTime = getCurrentTime();
-
-	pthread_mutex_unlock(&this->lock);
 }
 
 void
@@ -373,7 +370,7 @@ TransProtoStats::update(TransProtoEvent event, icpkthdr *pkt)
 	memset(entry, 0, sizeof(*entry));
 
 	/* change the list */
-	pthread_mutex_lock(&this->lock);
+	std::lock_guard<std::mutex> guard(this->lock);
 	if (this->count == 0) {
 		/* 1st element */
 		this->head = entry;
@@ -393,19 +390,17 @@ TransProtoStats::update(TransProtoEvent event, icpkthdr *pkt)
 	 * Other attributes can be added on demand new->cwnd =
 	 * snd_control_info.cwnd; new->capacity = conn->capacity;
 	 */
-
-	pthread_mutex_unlock(&this->lock);
 }
 
-static void
+void
 TransProtoStats::dump()
 {
 	char		tmpbuf[32];
 
-	snprintf(tmpbuf, 32, "%d." UINT64_FORMAT "txt", global_param.MyProcPid, getCurrentTime());
+	snprintf(tmpbuf, 32, "%d.%lu.txt", global_param.MyProcPid, getCurrentTime());
 	FILE	   *ofile = fopen(tmpbuf, "w+");
 
-	pthread_mutex_lock(&this->lock);
+	std::lock_guard<std::mutex> guard(this->lock);
 	while (this->head)
 	{
 		TransProtoStatEntry *cur = NULL;
@@ -419,9 +414,6 @@ TransProtoStats::dump()
 	}
 
 	this->tail = NULL;
-
-	pthread_mutex_unlock(&this->lock);
-
 	fclose(ofile);
 }
 
@@ -1539,10 +1531,6 @@ InitMotionUDPIFC(int *listenerSocketFd, int32 *listenerPort)
 	snd_control_info.cwnd = 0;
 	snd_control_info.minCwnd = 0;
 	snd_control_info.ackBuffer = (icpkthdr *)ic_malloc0(MIN_PACKET_SIZE);
-
-#ifdef TRANSFER_PROTOCOL_STATS
-	initMutex(&trans_proto_stats.lock);
-#endif
 
 	/* Start up our rx-thread */
 
