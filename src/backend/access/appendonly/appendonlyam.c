@@ -868,9 +868,10 @@ AppendOnlyExecutorReadBlock_BindingInit(AppendOnlyExecutorReadBlock *executorRea
 	int largestAttnum = executorReadBlock->curLargestAttnum;
 	MemoryContext oldContext;
 
-	/* for any row to be read, there's at least one column data in the row */
-	Assert(largestAttnum > 0);
 	Assert(executorReadBlock->attnum_to_rownum != NULL);
+
+	if (slot->tts_tupleDescriptor->natts == 0)
+		return;
 
 	/* Find the number of attributes that are not missing in the row. */
 	while (largestAttnum < slot->tts_tupleDescriptor->natts &&
@@ -931,10 +932,10 @@ AppendOnlyExecutorReadBlock_ProcessTuple(AppendOnlyExecutorReadBlock *executorRe
 	Assert (slot);
 
 	AppendOnlyExecutorReadBlock_BindingInit(executorReadBlock, slot, rowNum);
+	
+	ExecClearTuple(slot);
 
 	{
-		Assert(executorReadBlock->mt_bind);
-
 		/*
 		 * Hand the tuple to the slot as it is.  Attributes are fetched from
 		 * it only as the executor asks for them, so a query over a wide table
@@ -942,8 +943,12 @@ AppendOnlyExecutorReadBlock_ProcessTuple(AppendOnlyExecutorReadBlock *executorRe
 		 *
 		 * The tuple points into the read buffer and stays valid until the
 		 * next block is read, which is why the slot does not own it.
+		 *
+		 * GPDB_PORT: upstream asserts mt_bind here.  A relation whose columns
+		 * have all been dropped has no memtuple binding and nothing to
+		 * deform, so take the expand-up-front path, which handles that.
 		 */
-		if (TTS_IS_MEMTUPLE(slot))
+		if (TTS_IS_MEMTUPLE(slot) && executorReadBlock->mt_bind)
 		{
 			ExecStoreMemTuple(tuple, executorReadBlock->mt_bind, slot, false);
 			slot->tts_tid = fake_ctid;
@@ -955,8 +960,9 @@ AppendOnlyExecutorReadBlock_ProcessTuple(AppendOnlyExecutorReadBlock *executorRe
 			 * up front, which is all a virtual slot can represent.
 			 */
 			ExecClearTuple(slot);
-			memtuple_deform(tuple, executorReadBlock->mt_bind,
-							slot->tts_values, slot->tts_isnull);
+			if (executorReadBlock->mt_bind)
+				memtuple_deform(tuple, executorReadBlock->mt_bind,
+								slot->tts_values, slot->tts_isnull);
 			slot->tts_tid = fake_ctid;
 			ExecStoreVirtualTuple(slot);
 		}

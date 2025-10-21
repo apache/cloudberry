@@ -140,7 +140,7 @@ InsertInitialAOCSFileSegInfo(Relation prel, int32 segno, int32 nvp, Oid segrelid
  * the number of columns in the table row will be
  * greater than pg_class.relnatts.
  */
-static void
+void
 deformAOCSVPInfo(Relation rel, struct varlena *v, AOCSFileSegInfo *aocs_seginfo)
 {
 	int16 relnatts = RelationGetNumberOfAttributes(rel);

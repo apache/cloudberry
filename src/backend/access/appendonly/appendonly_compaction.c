@@ -773,15 +773,18 @@ AppendOptimizedTruncateToEOF(Relation aorel, AOVacuumRelStats *vacrelstats)
 		}
 		else
 		{
+			AOCSFileSegInfo 	*aocs_seginfo;
+
 			Datum		d = fastgetattr(tuple,
 										Anum_pg_aocs_vpinfo,
 										pg_aoseg_dsc, &isNull);
-			AOCSVPInfo *vpinfo = (AOCSVPInfo *) PG_DETOAST_DATUM(d);
 
-			AOCSSegmentFileTruncateToEOF(aorel, segno, vpinfo, vacrelstats);
+			aocs_seginfo = (AOCSFileSegInfo *) palloc0(aocsfileseginfo_size(RelationGetNumberOfAttributes(aorel)));			
+			deformAOCSVPInfo(aorel, (struct varlena *) DatumGetPointer(d), aocs_seginfo);
 
-			if (DatumGetPointer(d) != (Pointer) vpinfo)
-				pfree(vpinfo);
+			AOCSSegmentFileTruncateToEOF(aorel, segno, &aocs_seginfo->vpinfo, vacrelstats);
+
+			pfree(aocs_seginfo);
 		}
 	}
 	systable_endscan(aoscan);

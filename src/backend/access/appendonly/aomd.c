@@ -674,10 +674,12 @@ ao_rel_get_physical_size(Relation aorel)
 		else
 		{
 			Datum		d;
-			AOCSVPInfo *vpinfo;
+			AOCSFileSegInfo		*aocs_seginfo;
 			int			col;
 
 			Assert(RelationStorageIsAoCols(aorel));
+
+			aocs_seginfo = (AOCSFileSegInfo *) palloc0(aocsfileseginfo_size(RelationGetNumberOfAttributes(aorel)));
 
 			segno = DatumGetInt32(fastgetattr(tuple,
 											  Anum_pg_aocs_segno,
@@ -685,16 +687,16 @@ ao_rel_get_physical_size(Relation aorel)
 			d = fastgetattr(tuple,
 							Anum_pg_aocs_vpinfo,
 							pg_aoseg_dsc, &isNull);
-			vpinfo = (AOCSVPInfo *) PG_DETOAST_DATUM(d);
 
-			for (col = 0; col < vpinfo->nEntry; ++col)
+			deformAOCSVPInfo(aorel, (struct varlena *) DatumGetPointer(d), aocs_seginfo);
+
+			for (col = 0; col < aocs_seginfo->vpinfo.nEntry; ++col)
 			{
 				FileNumber filenum = GetFilenumForAttribute(RelationGetRelid(aorel), col + 1);
 				total_physical_size += ao_segfile_get_physical_size(aorel, segno, filenum);
 			}
 
-			if (DatumGetPointer(d) != (Pointer) vpinfo)
-				pfree(vpinfo);
+			pfree(aocs_seginfo);
 		}
 	}
 	systable_endscan(aoscan);

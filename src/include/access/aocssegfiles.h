@@ -36,6 +36,10 @@ typedef struct AOCSVPInfoEntry
 	int64		eof_uncompressed;
 } AOCSVPInfoEntry;
 
+/*
+ * NB: The number of AOCS entry might not match the number of attributes pg_class,
+ * more details could be found at deformAOCSVPInfo().
+ */
 typedef struct AOCSVPInfo
 {
 	/* total len.  Have to be the very first */
@@ -160,5 +164,7 @@ extern void AOCSFileSegInfoAddCount(Relation prel, int32 segno, int64 tupadded, 
 extern void ClearAOCSFileSegInfo(Relation prel, int segno);
 extern void MarkAOCSFileSegInfoAwaitingDrop(Relation parentrel, int segno);
 extern float8 aocol_compression_ratio_internal(Relation parentrel);
+
+extern void deformAOCSVPInfo(Relation rel, struct varlena *v, AOCSFileSegInfo *aocs_seginfo);
 
 #endif
