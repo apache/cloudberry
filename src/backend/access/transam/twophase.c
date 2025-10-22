@@ -1283,6 +1283,9 @@ StandbyTransactionIdIsPrepared(TransactionId xid)
 	 * files, so we cannot use ReadTwoPhaseFile() here. Fortunately, this
 	 * isn't needed until we try to use Hot Standby.
 	 */
+	if (Gp_role == GP_ROLE_UTILITY)
+		return false;
+
 	elog(ERROR, "Hot Standby not supported");
 #if 0
 	char	   *buf;
@@ -1883,7 +1886,8 @@ GetOldestPreparedTransaction()
 void
 StandbyRecoverPreparedTransactions(bool overwriteOK)
 {
-	elog(ERROR, "Hot Standby not supported");
+	if (Gp_role != GP_ROLE_UTILITY)
+		elog(ERROR, "Hot Standby not supported");
 }
 
 /*
