@@ -215,6 +215,8 @@ CXform::PbsHashJoinXforms(CMemoryPool *mp)
 	(void) pbs->ExchangeSet(GPOPT_DISABLE_XFORM_TF(
 		CXform::
 			ExfLeftJoin2RightJoin));  // Right joins are only used with hash joins, so disable this too
+	(void) pbs->ExchangeSet(
+		GPOPT_DISABLE_XFORM_TF(CXform::ExfInnerJoin2ParallelHashJoin));
 	return pbs;
 }
 

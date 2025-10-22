@@ -80,7 +80,7 @@ CXformDynamicGet2ParallelAppendTableScan::Exfp(CExpressionHandle &exprhdl) const
 	// Sequence are not worker-aware. If a parallel append scan ends up under
 	// one of them, a serial sibling in the same slice is executed by every
 	// worker and its rows are duplicated.
-	if (CXformGet2ParallelTableScan::FHasParallelIncompatibleOps(exprhdl))
+	if (CXformUtils::FHasParallelIncompatibleOps(exprhdl))
 	{
 		return CXform::ExfpNone;
 	}

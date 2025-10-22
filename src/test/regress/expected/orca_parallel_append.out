@@ -190,31 +190,32 @@ select count(*) from pa_empty;
      0
 (1 row)
 
--- dynamic partition elimination: the partition selector stays on the
--- hash side, the parallel append consumes its selector id
+-- a serial hash join does not take a worker-level child, so the join
+-- redistributes the parallel append and has no partition selector
 explain (costs off)
 select count(*) from pa_ao join pa_dim using (d) where pa_dim.name = 'two';
-                                   QUERY PLAN                                    
----------------------------------------------------------------------------------
+                                  QUERY PLAN                                  
+------------------------------------------------------------------------------
  Finalize Aggregate
-   ->  Gather Motion 6:1  (slice1; segments: 6)
+   ->  Gather Motion 3:1  (slice1; segments: 3)
          ->  Partial Aggregate
                ->  Hash Join
-                     Hash Cond: (pa_ao_1_prt_1.d = pa_dim.d)
-                     ->  Parallel Append
-                           Partition Selectors: $0
-                           ->  Parallel Seq Scan on pa_ao_1_prt_1
-                           ->  Parallel Seq Scan on pa_ao_1_prt_2
-                           ->  Parallel Seq Scan on pa_ao_1_prt_3
-                           ->  Parallel Seq Scan on pa_ao_1_prt_4
-                           ->  Parallel Seq Scan on pa_ao_1_prt_5
+                     Hash Cond: (pa_dim.d = pa_ao_1_prt_1.d)
+                     ->  Redistribute Motion 6:3  (slice2; segments: 6)
+                           Hash Key: pa_dim.d
+                           ->  Parallel Seq Scan on pa_dim
+                                 Filter: (name = 'two'::text)
                      ->  Hash
-                           ->  Partition Selector (selector id: $0)
-                                 ->  Broadcast Motion 6:6  (slice2; segments: 6)
-                                       ->  Parallel Seq Scan on pa_dim
-                                             Filter: (name = 'two'::text)
+                           ->  Redistribute Motion 6:3  (slice3; segments: 6)
+                                 Hash Key: pa_ao_1_prt_1.d
+                                 ->  Parallel Append
+                                       ->  Parallel Seq Scan on pa_ao_1_prt_1
+                                       ->  Parallel Seq Scan on pa_ao_1_prt_2
+                                       ->  Parallel Seq Scan on pa_ao_1_prt_3
+                                       ->  Parallel Seq Scan on pa_ao_1_prt_4
+                                       ->  Parallel Seq Scan on pa_ao_1_prt_5
  Optimizer: GPORCA
-(18 rows)
+(19 rows)
 
 select count(*) from pa_ao join pa_dim using (d) where pa_dim.name = 'two';
  count 

@@ -986,7 +986,8 @@ CPhysicalJoin::Edm(CReqdPropPlan *,	 // prppInput
 		CDrvdPropPlan::Pdpplan((*pdrgpdpCtxt)[0])->Pds()->Edt();
 
 	if (CDistributionSpec::EdtStrictReplicated == edtPrevChild ||
-		CDistributionSpec::EdtUniversal == edtPrevChild)
+		CDistributionSpec::EdtUniversal == edtPrevChild ||
+		CDistributionSpec::EdtReplicatedWorkers == edtPrevChild)
 	{
 		// if previous child is replicated or universal, we use
 		// distribution satisfaction for current child

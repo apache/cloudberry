@@ -244,7 +244,15 @@ CPhysicalParallelTableScan::EpetRewindability(CExpressionHandle &exprhdl,
 	}
 
 	// Cannot satisfy the rewindability requirement
-	// GPORCA will need to add an enforcer (e.g., Spool)
+	// Check if requirement originates from NL Join
+	if (per->PrsRequired()->IsOriginNLJoin())
+	{
+		// Prohibit enforcement - NL Join cannot work efficiently with parallel scan
+		// even with a Spool enforcer, so reject this plan combination
+		return CEnfdProp::EpetProhibited;
+	}
+
+	// For other contexts, allow enforcement with Spool
 	return CEnfdProp::EpetRequired;
 }
 
