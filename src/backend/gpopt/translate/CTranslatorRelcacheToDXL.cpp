@@ -862,13 +862,31 @@ CTranslatorRelcacheToDXL::RetrieveRelDistributionOpFamilies(CMemoryPool *mp,
 void
 CTranslatorRelcacheToDXL::AddSystemColumns(CMemoryPool *mp,
 										   CMDColumnArray *mdcol_array,
-										   Relation /*rel*/)
+										   Relation rel)
 {
+	// Get storage type to determine which system columns are supported
+	IMDRelation::Erelstoragetype rel_storage_type = RetrieveRelStorageType(rel);
+	BOOL is_standalone_ao_table = ((rel_storage_type == IMDRelation::ErelstorageAppendOnlyRows ||
+						rel_storage_type == IMDRelation::ErelstorageAppendOnlyCols ||
+						rel_storage_type == IMDRelation::ErelstoragePAX)) &&
+						rel->rd_rel->relkind != RELKIND_PARTITIONED_TABLE &&
+						!rel->rd_rel->relispartition;
+
 	for (INT i = SelfItemPointerAttributeNumber;
 		 i > FirstLowInvalidHeapAttributeNumber; i--)
 	{
 		AttrNumber attno = AttrNumber(i);
 		GPOS_ASSERT(0 != attno);
+		// AO tables don't support MVCC-related system columns (xmin, cmin, xmax, cmax)
+		// Skip these columns for AO tables to avoid "Invalid system target list" errors
+		if (is_standalone_ao_table &&
+			(attno == MinTransactionIdAttributeNumber ||  // xmin (-2)
+			 attno == MinCommandIdAttributeNumber ||      // cmin (-3)
+			 attno == MaxTransactionIdAttributeNumber ||  // xmax (-4)
+			 attno == MaxCommandIdAttributeNumber))       // cmax (-5)
+		{
+			continue;
+		}
 
 		const FormData_pg_attribute *att_tup = SystemAttributeDefinition(attno);
 
