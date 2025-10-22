@@ -47,6 +47,7 @@
 #include "ic_types.h"
 #include "udp2/ic_udp2.h"
 
+#define MAX_QUEUE_SIZE (64)
 
 #define HandleLastError() \
 do { \
@@ -159,11 +160,49 @@ WaitInterconnectQuitUDPIFC2(void)
 void
 SetupInterconnectUDP2(EState *estate)
 {
+	int32 sliceNum = 0;
+	int32 calcQueueDepth = 0;
+	int32 calcSndDepth = 0;
+
 	if (estate->interconnect_context)
 		elog(ERROR, "SetupInterconnectUDP: already initialized.");
 
 	if (!estate->es_sliceTable)
 		elog(ERROR, "SetupInterconnectUDP: no slice table ?");
+
+	if (estate != NULL && estate->es_sliceTable != NULL)
+		sliceNum = estate->es_sliceTable->numSlices;
+	else
+		sliceNum = 1;
+
+	if (Gp_interconnect_mem_size > 0 &&
+		Gp_interconnect_queue_depth == 4 &&
+		Gp_interconnect_snd_queue_depth == 2)
+	{
+		int32 perQueue = Gp_interconnect_mem_size /
+			(Gp_max_packet_size * sliceNum);
+
+		calcSndDepth = Max(Gp_interconnect_snd_queue_depth, perQueue / 2);
+		calcQueueDepth = Max(Gp_interconnect_queue_depth, perQueue - calcSndDepth);
+
+		if (calcSndDepth > MAX_QUEUE_SIZE)
+			calcSndDepth = MAX_QUEUE_SIZE;
+
+		if (calcQueueDepth > MAX_QUEUE_SIZE)
+			calcQueueDepth = MAX_QUEUE_SIZE;
+
+		Gp_interconnect_snd_queue_depth = calcSndDepth;
+		Gp_interconnect_queue_depth = calcQueueDepth;
+
+		elog(DEBUG1, "SetupUDPIFCInterconnect: queue depth, "
+				     "queue_depth=%d, snd_queue_depth=%d, "
+				     "mem_size=%d, slices=%d, packet_size=%d",
+				     Gp_interconnect_queue_depth,
+				     Gp_interconnect_snd_queue_depth,
+				     Gp_interconnect_mem_size,
+				     sliceNum,
+				     Gp_max_packet_size);
+	}
 
 	SessionMotionLayerIPCParam param;
 	SetupSessionMotionLayerIPCParam(&param);

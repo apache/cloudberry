@@ -50,9 +50,12 @@
 #include <signal.h>
 #include <stdbool.h>
 #include <stddef.h>
+#include <stdint.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include <sys/param.h>
+#include <sys/queue.h>
 #include <sys/socket.h>
 #include <sys/time.h>
 #include <sys/types.h>
@@ -230,6 +233,9 @@ typedef struct icpkthdr
      */
 	uint32		seq;
 	uint32		extraSeq;
+	uint64_t send_time;
+	uint64_t recv_time;
+	uint8_t retry_times;
 } icpkthdr;
 
 typedef struct ICBuffer ICBuffer;
@@ -434,6 +440,50 @@ ic_bswap32(uint32 x)
 		((x >> 24) & 0x000000ff);
 }
 
+#define TIMEOUT_Z
+#define RTT_SHIFT_ALPHA (3)       /* srtt (0.125) */
+#define LOSS_THRESH (3) /* Packet loss triggers Karn */
+#define RTO_MIN (5000)   /* MIN RTO(ms) */
+#define RTO_MAX (100000) /* MAX RTO(ms) */
+#define UDP_INFINITE_SSTHRESH   0x7fffffff
+
+#define SEC_TO_USEC(t)                  ((t) * 1000000)
+#define SEC_TO_MSEC(t)                  ((t) * 1000)
+#define MSEC_TO_USEC(t)                 ((t) * 1000)
+#define USEC_TO_SEC(t)                  ((t) / 1000000)
+#define TIME_TICK (1000000/HZ)/* in us */
+
+#define UDP_INITIAL_RTO                 (MSEC_TO_USEC(200))
+#define UDP_DEFAULT_MSS 1460
+
+#define RTO_HASH (3000)
+
+#define UDP_SEQ_LT(a,b) ((int32_t)((a)-(b)) < 0)
+#define UDP_SEQ_LEQ(a,b) ((int32_t)((a)-(b)) <= 0)
+#define UDP_SEQ_GT(a,b) ((int32_t)((a)-(b)) > 0)
+#define UDP_SEQ_GEQ(a,b) ((int32_t)((a)-(b)) >= 0)
+
+#define UDP_RTO_MIN ((unsigned)(HZ/5))
+
+struct UDPConn;
+struct rto_hashstore
+{
+	uint32_t    rto_now_idx;    /* pointing the hs_table_s index */
+	uint32_t    rto_now_ts;
+
+	TAILQ_HEAD(rto_head, UDPConn) rto_list[RTO_HASH + 1];
+};
+
+struct mudp_manager
+{
+	struct rto_hashstore *rto_store;     /* lists related to timeout */
+
+	int         rto_list_cnt;
+	uint32_t    cur_ts;
+};
+
+typedef struct mudp_manager* mudp_manager_t;
+
 #define MAX_TRY (11)
 #define TIMEOUT(try) ((try) < MAX_TRY ? (timeoutArray[(try)]) : (timeoutArray[MAX_TRY]))
 
@@ -456,6 +506,7 @@ ic_bswap32(uint32 x)
 #define UDPIC_FLAGS_DISORDER    		(32)
 #define UDPIC_FLAGS_DUPLICATE   		(64)
 #define UDPIC_FLAGS_CAPACITY    		(128)
+#define UDPIC_FLAGS_FULL                (256)
 
 #define UDPIC_MIN_BUF_SIZE (128 * 1024)
 
@@ -465,7 +516,6 @@ ic_bswap32(uint32 x)
  * A connection hash table bin.
  *
  */
-struct UDPConn;
 typedef struct ConnHtabBin ConnHtabBin;
 struct ConnHtabBin
 {
@@ -859,8 +909,10 @@ struct ICGlobalControlInfo
  */
 #define UNACK_QUEUE_RING_SLOTS_NUM (2000)
 #define TIMER_SPAN (session_param.Gp_interconnect_timer_period * 1000ULL)	/* default: 5ms */
+#define TIMER_SPAN_LOSS (session_param.Gp_interconnect_timer_period * 500ULL)     /* default: 5ms */
 #define TIMER_CHECKING_PERIOD (session_param.Gp_interconnect_timer_checking_period)	/* default: 20ms */
 #define UNACK_QUEUE_RING_LENGTH (UNACK_QUEUE_RING_SLOTS_NUM * TIMER_SPAN)
+#define UNACK_QUEUE_RING_LENGTH_LOSS (UNACK_QUEUE_RING_SLOTS_NUM * TIMER_SPAN_LOSS)
 
 #define DEFAULT_RTT (session_param.Gp_interconnect_default_rtt * 1000)	/* default: 20ms */
 #define MIN_RTT (100)			/* 0.1ms */
@@ -916,6 +968,13 @@ struct UnackQueueRing
 
 	/* time slots */
 	ICBufferList slots[UNACK_QUEUE_RING_SLOTS_NUM];
+#ifdef TIMEOUT_Z
+	uint32_t retrans_count;
+	uint32_t no_retrans_count;
+	uint32_t time_difference;
+	uint32_t min;
+	uint32_t max;
+#endif
 };
 
 /*
@@ -981,6 +1040,27 @@ typedef struct ICStatistics
 
 struct TransportEntry;
 
+struct udp_send_vars
+{
+	/* send sequence variables */
+	uint32_t snd_una;		/* send unacknoledged */
+	uint32_t snd_wnd;		/* send window (unscaled) */
+
+	/* retransmission timeout variables */
+	uint8_t nrtx;			/* number of retransmission */
+	uint8_t max_nrtx;		/* max number of retransmission */
+	uint32_t rto;			/* retransmission timeout */
+	uint32_t ts_rto;		/* timestamp for retransmission timeout */
+
+	/* congestion control variables */
+	uint32_t cwnd;				/* congestion window */
+	uint32_t ssthresh;			/* slow start threshold */
+
+	TAILQ_ENTRY(UDPConn) send_link;
+	TAILQ_ENTRY(UDPConn) timer_link;		/* timer link (rto list) */
+
+};
+
 /*
  * Structure used for keeping track of a pt-to-pt connection between two
  * Cdb Entities (either QE or QD).
@@ -1035,6 +1115,32 @@ public:
 	uint64		stat_max_resent;
 	uint64		stat_count_dropped;
 
+	struct {
+			uint32_t ts_rto;
+			uint32_t rto;
+			uint32_t srtt;
+			uint32_t rttvar;
+			uint32_t snd_una;
+			uint16_t nrtx;
+			uint16_t max_nrtx;
+			uint32_t mss;
+			uint32_t cwnd;
+			uint32_t ssthresh;
+			uint32_t fss;
+			uint8_t loss_count;
+			uint32_t mdev;
+			uint32_t mdev_max;
+			uint32_t rtt_seq;		/* sequence number to update rttvar */
+			uint32_t ts_all_rto;
+			bool karn_mode;
+	} rttvar;
+	
+	uint8_t on_timewait_list;
+	int16_t on_rto_idx;
+
+	uint32_t snd_nxt;		/* send next */
+	struct udp_send_vars sndvar;
+
 	TransportEntry *entry_;
 
 public:
@@ -1054,7 +1160,7 @@ public:
 	void prepareRxConnForRead();
 	void DeactiveConn();
 
-	void handleAckedPacket(ICBuffer *buf, uint64 now);
+	void handleAckedPacket(ICBuffer *buf, uint64 now, struct icpkthdr *pkt);
 	void prepareXmit();
 	void sendOnce(icpkthdr *pkt);
 	void handleStop();
@@ -1072,9 +1178,9 @@ public:
 
 	void updateRetransmitStatistics();
 	void checkExpirationCapacityFC(int timeout);
+	void checkExpiration(ICChunkTransportState *transportStates, uint64 now);
 
 	static void checkNetworkTimeout(ICBuffer *buf, uint64 now, bool *networkTimeoutIsLogged);
-	static void checkExpiration(ICChunkTransportState *transportStates, uint64 now);
 
 	static void sendAckWithParam(AckSendParam *param);
 	static void sendControlMessage(icpkthdr *pkt, int fd, struct sockaddr *addr, socklen_t peerLen);
@@ -1125,7 +1231,7 @@ public:
 
 	void aggregateStatistics();
 
-	bool handleAcks();
+	bool handleAcks(bool need_flush);
 	void handleStopMsgs();
 
 	bool pollAcks(int timeout);
