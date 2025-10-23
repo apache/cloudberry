@@ -1,0 +1,29 @@
+{"glossary": {"title": "example glossary","GlossDiv": {"title": "S","GlossList": {"GlossEntry": {"ID": "SGML","SortAs": "SGML","GlossTerm": "Standard Generalized Markup Language","Acronym": "SGML","Abbrev": "ISO 8879:1986","GlossDef": {"para": "A meta-markup language, used to create markup languages such as DocBook.","GlossSeeAlso": ["GML", "XML"]},"GlossSee": "markup"}}}}}
+{"menu": {"id": "file","value": "File","popup": {"menuitem": [{"value": "New", "onclick": "CreateNewDoc()"},{"value": "Open", "onclick": "OpenDoc()"},{"value": "Close", "onclick": "CloseDoc()"}]}}}
+{"widget": {"debug": "on","window": {"title": "Sample Konfabulator Widget","name": "main_window","width": 500,"height": 500},"image": { "src": "Images/Sun.png","name": "sun1","hOffset": 250,"vOffset": 250,"alignment": "center"},"text": {"data": "Click Here","size": 36,"style": "bold","name": "text1","hOffset": 250,"vOffset": 100,"alignment": "center","onMouseUp": "sun1.opacity = (sun1.opacity / 100) * 90;"}}}  
+{"menu": {"header": "SVG Viewer","items": [{"id": "Open"},{"id": "OpenNew", "label": "Open New"},null,{"id": "ZoomIn", "label": "Zoom In"},{"id": "ZoomOut", "label": "Zoom Out"},{"id": "OriginalView", "label": "Original View"},null,{"id": "Quality"},{"id": "Pause"},{"id": "Mute"},null,{"id": "Find", "label": "Find..."},{"id": "FindAgain", "label": "Find Again"},{"id": "Copy"},{"id": "CopyAgain", "label": "Copy Again"},{"id": "CopySVG", "label": "Copy SVG"},{"id": "ViewSVG", "label": "View SVG"},{"id": "ViewSource", "label": "View Source"},{"id": "SaveAs", "label": "Save As"},null,{"id": "Help"},{"id": "About", "label": "About Adobe CVG Viewer..."}]}}
+{"line":1, "date":"CB", "node":"AA"}
+{"cleaned":false, "status":59, "line":2, "disabled":false, "node":"CBB"}
+{"indexed":true, "status":35, "line":3, "disabled":false, "wait":"CAA", "subtitle":"BA", "user":"CCA"}
+{"line":4, "disabled":true, "space":"BB"}
+{"cleaned":false, "line":5, "wait":"BB", "query":"CAC", "coauthors":"ACA", "node":"CBA"}
+{"world":"CB", "query":"CBC", "indexed":false, "line":6, "pos":92, "date":"AAB", "space":"CB", "coauthors":"ACA", "node":"CBC"}
+{"state":98, "org":43, "line":7, "pos":97}
+{"auth":"BB", "title":"CAC", "query":"BA", "status":94, "line":8, "coauthors":"BBB"}
+{"auth":"BAC", "title":"CAA", "wait":"CA", "bad":true, "query":"AA", "indexed":true, "line":9, "pos":56}
+{"title":"AAC", "bad":true, "user":"AAB", "query":"AC", "line":10, "node":"AB"}
+{"world":"CAC", "user":"AB", "query":"ACA", "indexed":true, "line":11, "space":"CB"}
+{"line":12, "pos":72, "abstract":"BBA", "space":"AAC"}
+{}
+{"world":"CC", "query":"AA", "line":14, "disabled":false, "date":"CAC", "coauthors":"AB"}
+{"org":68, "title":"BBB", "query":"BAC", "line":15, "public":false}
+{"org":73, "user":"AA", "indexed":true, "line":16, "date":"CCC", "public":true, "coauthors":"AB"}
+{"indexed":false, "line":17}
+{"state":23, "auth":"BCC", "org":38, "status":28, "line":18, "disabled":false, "abstract":"CB"}
+{"state":99, "auth":"CA", "indexed":true, "line":19, "date":"BA"}
+{"wait":"CBA", "user":"BBA", "indexed":true, "line":20, "disabled":false, "abstract":"BA", "date":"ABA"}
+{"org":10, "query":"AC", "indexed":false, "line":21, "disabled":true, "abstract":"CA", "pos":44}
+{"state":65, "title":"AC", "user":"AAC", "cleaned":true, "status":93, "line":22, "abstract":"ABC", "node":"CCC"}
+{"subtitle":"AC", "user":"CCC", "line":23}
+{"state":67, "world":"ACB", "bad":true, "user":"CB", "line":24, "disabled":true}
+{}
