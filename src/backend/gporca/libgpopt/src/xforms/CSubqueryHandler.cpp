@@ -753,8 +753,7 @@ CSubqueryHandler::FCreateOuterApplyForScalarSubquery(
 	*ppexprNewOuter = pexprPrj;
 
 	BOOL fGeneratedByQuantified = popSubquery->FGeneratedByQuantified();
-	if (fGeneratedByQuantified ||
-		(fHasCountAggMatchingColumn && 0 == pgbAgg->Pdrgpcr()->Size()))
+	if (fGeneratedByQuantified)
 	{
 		CMDAccessor *md_accessor = COptCtxt::PoctxtFromTLS()->Pmda();
 		const IMDTypeInt8 *pmdtypeint8 = md_accessor->PtMDType<IMDTypeInt8>();
@@ -765,27 +764,17 @@ CSubqueryHandler::FCreateOuterApplyForScalarSubquery(
 						CUtils::PexprScalarIdent(mp, pcrComputed),
 						CUtils::PexprScalarConstInt8(mp, 0 /*val*/));
 
-		if (fGeneratedByQuantified)
-		{
-			// we produce Null if count(*) value is -1,
-			// this case can only occur when transforming quantified subquery to
-			// count(*) subquery using CXformSimplifySubquery
-			pmdidInt8->AddRef();
-			*ppexprResidualScalar = GPOS_NEW(mp) CExpression(
-				mp, GPOS_NEW(mp) CScalarIf(mp, pmdidInt8),
-				CUtils::PexprScalarEqCmp(
-					mp, pcrComputed,
-					CUtils::PexprScalarConstInt8(mp, -1 /*value*/)),
-				CUtils::PexprScalarConstInt8(mp, 0 /*value*/, true /*is_null*/),
-				pexprCoalesce);
-		}
-		else
-		{
-			// count(*) value can either be NULL (if produced by a lower outer join), or some value >= 0,
-			// we return coalesce(count(*), 0) in this case
-
-			*ppexprResidualScalar = pexprCoalesce;
-		}
+		// we produce Null if count(*) value is -1,
+		// this case can only occur when transforming quantified subquery to
+		// count(*) subquery using CXformSimplifySubquery
+		pmdidInt8->AddRef();
+		*ppexprResidualScalar = GPOS_NEW(mp) CExpression(
+			mp, GPOS_NEW(mp) CScalarIf(mp, pmdidInt8),
+			CUtils::PexprScalarEqCmp(
+				mp, pcrComputed,
+				CUtils::PexprScalarConstInt8(mp, -1 /*value*/)),
+			CUtils::PexprScalarConstInt8(mp, 0 /*value*/, true /*is_null*/),
+			pexprCoalesce);
 
 		return fSuccess;
 	}
