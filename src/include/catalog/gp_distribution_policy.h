@@ -86,7 +86,8 @@ typedef enum GpPolicyType
 {
 	POLICYTYPE_PARTITIONED,		/* Tuples partitioned onto segment database. */
 	POLICYTYPE_ENTRY,			/* Tuples stored on entry database. */
-	POLICYTYPE_REPLICATED		/* Tuples stored a copy on all segment database. */
+	POLICYTYPE_REPLICATED,  	/* Tuples stored a copy on all segment database. */
+	POLICYTYPE_LOCAL            /* Tuples stored on coordinator */
 } GpPolicyType;
 
 /*
