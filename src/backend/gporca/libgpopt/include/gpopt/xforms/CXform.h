@@ -69,6 +69,7 @@ public:
 		ExfExpandNAryJoinMinCard,
 		ExfExpandNAryJoinDP,
 		ExfGet2TableScan,
+		ExfGet2ParallelTableScan,
 		ExfIndexGet2IndexScan,
 		ExfDynamicGet2DynamicTableScan,
 		ExfDynamicIndexGet2DynamicIndexScan,

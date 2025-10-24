@@ -71,7 +71,8 @@ public:
 	{
 		GPOS_ASSERT(nullptr != pop);
 		GPOS_ASSERT(EopPhysicalTableScan == pop->Eopid() ||
-					EopPhysicalForeignScan == pop->Eopid());
+					EopPhysicalForeignScan == pop->Eopid() ||
+					EopPhysicalParallelTableScan == pop->Eopid());
 
 		return dynamic_cast<CPhysicalTableScan *>(pop);
 	}

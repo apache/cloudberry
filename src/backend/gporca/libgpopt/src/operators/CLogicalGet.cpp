@@ -305,6 +305,8 @@ CLogicalGet::PxfsCandidates(CMemoryPool *mp) const
 	CXformSet *xform_set = GPOS_NEW(mp) CXformSet(mp);
 
 	(void) xform_set->ExchangeSet(CXform::ExfGet2TableScan);
+	// add parallel table scan
+	(void) xform_set->ExchangeSet(CXform::ExfGet2ParallelTableScan);
 
 	return xform_set;
 }
