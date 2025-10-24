@@ -87,11 +87,24 @@ github:
         contexts:
           - rat-check
           - check-skip
-          - prepare-test-matrix
-          - build
-          - rpm-install-test
-          - test
-          - report
+          - Build Apache Cloudberry RPM
+          - RPM Install Test Apache Cloudberry
+          - ic-good-opt-off
+          - ic-good-opt-on
+          - pax-ic-good-opt-off
+          - pax-ic-good-opt-on
+          - pax-ic-isolation2-opt-off
+          - pax-ic-isolation2-opt-on
+          - ic-expandshrink
+          - ic-singlenode
+          - ic-resgroup-v2
+          - ic-contrib
+          - ic-gpcontrib
+          - ic-fixme
+          - ic-isolation2
+          - ic-isolation2-crash
+          - ic-parallel-retrieve-cursor
+          - Generate Apache Cloudberry Build Report
 
       # Pull request review requirements
       required_pull_request_reviews:
