@@ -46,6 +46,11 @@
 #ifdef VEC_BUILD
 #include "storage/vec_parallel_pax.h"
 #endif
+#include "access/pax_visimap.h"
+#include "comm/bitmap.h"
+#include "comm/iterator.h"
+#include "storage/micro_partition_file_factory.h"
+#include "storage/micro_partition_stats_updater.h"
 #include "storage/paxc_smgr.h"
 #include "storage/wal/pax_wal.h"
 #include "storage/wal/paxc_wal.h"
@@ -411,6 +416,107 @@ void CCPaxAccessMethod::FinishBulkInsert(Relation relation, int options) {
   CBDB_END_TRY();
 }
 
+void CCPaxAccessMethod::RelationVacuum(Relation rel, VacuumParams *params,
+                                       BufferAccessStrategy /*bstrategy*/) {
+  CBDB_TRY();
+  {
+    std::vector<int> minmax_cols = cbdb::GetMinMaxColumnIndexes(rel);
+    std::vector<int> bf_cols = cbdb::GetBloomFilterColumnIndexes(rel);
+
+    if (minmax_cols.empty() && bf_cols.empty()) {
+      return;
+    }
+
+    Oid aux_oid = cbdb::GetPaxAuxRelid(RelationGetRelid(rel));
+    Relation aux_rel = cbdb::TableOpen(aux_oid, RowExclusiveLock);
+
+    SysScanDesc scan =
+        cbdb::SystableBeginScan(aux_rel, InvalidOid, false, NULL, 0, NULL);
+    HeapTuple tup;
+
+    pax::PaxCatalogUpdater catalog = pax::PaxCatalogUpdater::Begin(rel);
+
+    std::vector<pax::MicroPartitionMetadata> batch_vec;
+    while (HeapTupleIsValid(tup = cbdb::SystableGetNext(scan))) {
+      bool isnull = false;
+      TupleDesc desc = RelationGetDescr(aux_rel);
+
+      int block_id = DatumGetInt32(cbdb::HeapGetAttr(
+          tup, ANUM_PG_PAX_BLOCK_TABLES_PTBLOCKNAME, desc, &isnull));
+      Assert(!isnull);
+
+      bool is_stats_valid = DatumGetBool(cbdb::HeapGetAttr(
+          tup, ANUM_PG_PAX_BLOCK_TABLES_PTISSTATSVALID, desc, &isnull));
+      Assert(!isnull);
+
+      bool need_scan = !is_stats_valid ||
+                       ((params->options & VACOPT_DISABLE_PAGE_SKIPPING) != 0);
+      if (!need_scan) {
+        cbdb::VacuumDelayPoint();
+        continue;
+      }
+
+      pax::MicroPartitionMetadata meta =
+          cbdb::GetMicroPartitionMetadata(rel, GetActiveSnapshot(), block_id);
+
+      // update stats
+      {
+        auto projection = std::make_shared<pax::PaxFilter>();
+        std::vector<int> all_cols = minmax_cols;
+        // should merge minmax_cols and bf_cols and remove the duplicate
+        if (!bf_cols.empty()) {
+          all_cols.insert(all_cols.end(), bf_cols.begin(), bf_cols.end());
+          std::sort(all_cols.begin(), all_cols.end());
+          all_cols.erase(std::unique(all_cols.begin(), all_cols.end()),
+                         all_cols.end());
+        }
+        projection->SetColumnProjection(all_cols, rel->rd_att->natts);
+
+        pax::MicroPartitionReader::ReaderOptions options;
+        std::unique_ptr<pax::File> toast_file;
+        int32 reader_flags = pax::FLAGS_EMPTY;
+
+        options.filter = projection;
+        options.reused_buffer = nullptr;
+        options.visibility_bitmap = nullptr;
+
+        if (meta.GetExistToast())
+          toast_file =
+              pax::Singleton<pax::LocalFileSystem>::GetInstance()->Open(
+                  meta.GetFileName() + TOAST_FILE_SUFFIX, pax::fs::kReadMode);
+
+        auto mp_reader =
+            pax::MicroPartitionFileFactory::CreateMicroPartitionReader(
+                std::move(options), reader_flags,
+                pax::Singleton<pax::LocalFileSystem>::GetInstance()->Open(
+                    meta.GetFileName(), pax::fs::kReadMode),
+                std::move(toast_file));
+
+        TupleTableSlot *slot =
+            cbdb::MakeSingleTupleTableSlot(rel->rd_att, &TTSOpsVirtual);
+        auto updated_stats =
+            pax::MicroPartitionStatsUpdater(mp_reader.get(), true, nullptr)
+                .Update(slot, minmax_cols, bf_cols);
+        catalog.UpdateStatistics(meta.GetMicroPartitionId(),
+                                 updated_stats->Serialize(), true);
+
+        mp_reader->Close();
+        cbdb::ExecDropSingleTupleTableSlot(slot);
+
+        cbdb::VacuumDelayPoint();
+      }
+    }
+
+    catalog.End();
+
+    cbdb::SystableEndScan(scan);
+    cbdb::TableClose(aux_rel, RowExclusiveLock);
+  }
+  CBDB_CATCH_DEFAULT();
+  CBDB_FINALLY({});
+  CBDB_END_TRY();
+}
+
 void CCPaxAccessMethod::ExtDmlInit(Relation rel, CmdType operation) {
   if (!RELATION_IS_PAX(rel)) return;
 
@@ -536,12 +642,6 @@ TransactionId PaxAccessMethod::IndexDeleteTuples(
     Relation /*rel*/, TM_IndexDeleteOp * /*delstate*/) {
   NOT_SUPPORTED_YET;
   return 0;
-}
-
-void PaxAccessMethod::RelationVacuum(Relation /*onerel*/,
-                                     VacuumParams * /*params*/,
-                                     BufferAccessStrategy /*bstrategy*/) {
-  /* PAX: micro-partitions have no dead tuples, so vacuum is empty */
 }
 
 BlockSequence *PaxAccessMethod::RelationGetBlockSequences(Relation rel,
@@ -771,7 +871,7 @@ static const TableAmRoutine kPaxColumnMethods = {
         pax::CCPaxAccessMethod::RelationNontransactionalTruncate,
     .relation_copy_data = pax::CCPaxAccessMethod::RelationCopyData,
     .relation_copy_for_cluster = pax::CCPaxAccessMethod::RelationCopyForCluster,
-    .relation_vacuum = paxc::PaxAccessMethod::RelationVacuum,
+    .relation_vacuum = pax::CCPaxAccessMethod::RelationVacuum,
     .scan_analyze_next_block = pax::CCPaxAccessMethod::ScanAnalyzeNextBlock,
     .scan_analyze_next_tuple = pax::CCPaxAccessMethod::ScanAnalyzeNextTuple,
     .index_build_range_scan = paxc::PaxAccessMethod::IndexBuildRangeScan,

@@ -156,6 +156,11 @@ TableWriter *TableWriter::SetFileSplitStrategy(
   return this;
 }
 
+TableWriter *TableWriter::SetEnableStats(bool enable_stats) {
+  enable_stats_ = enable_stats;
+  return this;
+}
+
 TableWriter::~TableWriter() {}
 
 const FileSplitStrategy *TableWriter::GetFileSplitStrategy() const {
@@ -202,6 +207,7 @@ std::unique_ptr<MicroPartitionWriter> TableWriter::CreateMicroPartitionWriter(
   options.file_name = std::move(file_path);
   options.encoding_opts = GetRelEncodingOptions();
   options.storage_format = GetStorageFormat();
+  options.enable_stats = enable_stats_;
   options.enable_min_max_col_idxs = GetMinMaxColumnIndexes();
   options.enable_bf_col_idxs = GetBloomFilterColumnIndexes();
 
@@ -271,8 +277,10 @@ void TableWriter::Open() {
   if (!mp_stats_) {
     mp_stats_ =
         std::make_shared<MicroPartitionStats>(RelationGetDescr(relation_));
+
     mp_stats_->Initialize(GetMinMaxColumnIndexes(),
                           GetBloomFilterColumnIndexes());
+
   } else {
     mp_stats_->Reset();
   }
@@ -567,12 +575,16 @@ void TableDeleter::UpdateStatsInAuxTable(
       std::move(toast_file));
 
   slot = MakeTupleTableSlot(rel_->rd_att, &TTSOpsVirtual);
-  auto updated_stats = MicroPartitionStatsUpdater(mp_reader.get(), visi_bitmap)
+
+  // if micro partition stats is valid, we need only update the invisible
+  // tuples, otherwise we need to update all groups
+  auto updated_stats = MicroPartitionStatsUpdater(
+                           mp_reader.get(), !meta.GetStatsValid(), visi_bitmap)
                            .Update(slot, min_max_col_idxs, bf_col_idxs);
 
   // update the statistics in aux table
   catalog_update.UpdateStatistics(meta.GetMicroPartitionId(),
-                                  updated_stats->Serialize());
+                                  updated_stats->Serialize(), true);
 
   mp_reader->Close();
 

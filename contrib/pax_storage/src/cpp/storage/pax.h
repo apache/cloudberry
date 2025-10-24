@@ -72,6 +72,8 @@ class TableWriter {
   TableWriter *SetFileSplitStrategy(
       std::unique_ptr<FileSplitStrategy> &&strategy);
 
+  TableWriter *SetEnableStats(bool enable_stats);
+
   BlockNumber GetBlockNumber() const { return current_blockno_; }
 
  protected:
@@ -125,6 +127,7 @@ class TableWriter {
   BlockNumber current_blockno_ = 0;
 
   bool options_cached_;
+  bool enable_stats_ = false;
   PaxStorageFormat storage_format_ = PaxStorageFormat::kTypeStoragePorcNonVec;
   std::vector<int> min_max_col_idx_;
   std::vector<int> bf_col_idx_;

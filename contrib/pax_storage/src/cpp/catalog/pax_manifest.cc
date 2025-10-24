@@ -515,8 +515,9 @@ void PaxCatalogUpdater::UpdateVisimap(int block_id, const char *visimap_filename
   CBDB_WRAP_END;
 }
 
-void PaxCatalogUpdater::UpdateStatistics(int block_id,
-                        pax::stats::MicroPartitionStatisticsInfo *mp_stats) {
+void PaxCatalogUpdater::UpdateStatistics(
+    int block_id, pax::stats::MicroPartitionStatisticsInfo *mp_stats,
+    bool is_stats_valid) {
   Assert(block_id >= 0 && "block is is negative");
   Assert(mp_stats);
 
@@ -667,8 +668,8 @@ Datum pax_get_catalog_rows(PG_FUNCTION_ARGS) {
 
   tuple = sctx->SearchMicroPartitionEntry();
   if (HeapTupleIsValid(tuple)) {
-    Datum values[8];
-    bool isnull[8];
+    Datum values[NATTS_PG_PAX_BLOCK_TABLES+1];
+    bool isnull[NATTS_PG_PAX_BLOCK_TABLES+1];
     Relation rel = sctx->GetRelation();
     TupleDesc desc = RelationGetDescr(rel);
 
@@ -683,6 +684,7 @@ Datum pax_get_catalog_rows(PG_FUNCTION_ARGS) {
     values[5] = heap_getattr(tuple, ANUM_PG_PAX_BLOCK_TABLES_PTVISIMAPNAME, desc, &isnull[5]);
     values[6] = heap_getattr(tuple, ANUM_PG_PAX_BLOCK_TABLES_PTEXISTEXTTOAST, desc, &isnull[6]);
     values[7] = heap_getattr(tuple, ANUM_PG_PAX_BLOCK_TABLES_PTISCLUSTERED, desc, &isnull[7]);
+    values[8] = heap_getattr(tuple, ANUM_PG_PAX_BLOCK_TABLES_PTISSTATSVALID, desc, &isnull[8]);
     tuple = heap_form_tuple(fctx->tuple_desc, values, isnull);
     SRF_RETURN_NEXT(fctx, HeapTupleGetDatum(tuple));
   }
@@ -748,6 +750,7 @@ void InsertOrUpdateMicroPartitionEntry(const pax::WriteSummary &summary) {
         summary.file_size,
         summary.mp_stats ? *summary.mp_stats
                          : ::pax::stats::MicroPartitionStatisticsInfo(),
+        summary.is_stats_valid,
         summary.exist_ext_toast, summary.is_clustered);
   }
   CBDB_WRAP_END;
@@ -801,9 +804,10 @@ void PaxCatalogUpdater::UpdateVisimap(int block_id, const char *visimap_filename
   cbdb::UpdateVisimap(this->aux_relid_, block_id, visimap_filename);
 }
 
-void PaxCatalogUpdater::UpdateStatistics(int block_id,
-                        pax::stats::MicroPartitionStatisticsInfo *mp_stats) {
-  cbdb::UpdateStatistics(this->aux_relid_, block_id, mp_stats);
+void PaxCatalogUpdater::UpdateStatistics(
+    int block_id, pax::stats::MicroPartitionStatisticsInfo *mp_stats,
+    bool is_stats_valid) {
+  cbdb::UpdateStatistics(this->aux_relid_, block_id, mp_stats, is_stats_valid);
 }
 
 } // namespace pax
