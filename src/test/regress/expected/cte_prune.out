@@ -1230,11 +1230,11 @@ LIMIT 10;
                                        ->  HashAggregate  (cost=102580688686565152.00..102596190789768272.00 rows=247107000000000 width=48)
                                              Output: cup.c, cup.d, cup.e, t.d, t.b
                                              Group Key: cup.c, cup.d, cup.e, t.d, t.b
-                                             Planned Partitions: 512
+                                             Planned Partitions: 256
                                              ->  Redistribute Motion 3:3  (slice3; segments: 3)  (cost=93196181903903024.00..102459992361252656.00 rows=741321000000000 width=48)
                                                    Output: cup.c, cup.d, cup.e, t.d, t.b
                                                    Hash Key: cup.c, cup.d, cup.e, t.d, t.b
-                                                   ->  HashAggregate  (cost=93196181903903024.00..102445165941252656.00 rows=741321000000000 width=48)
+                                                   ->  Streaming HashAggregate  (cost=93196181903903024.00..102445165941252656.00 rows=741321000000000 width=48)
                                                          Output: cup.c, cup.d, cup.e, t.d, t.b
                                                          Group Key: cup.c, cup.d, cup.e, t.d, t.b
                                                          Planned Partitions: 512
@@ -1590,7 +1590,7 @@ order by OUTERMOST_FOO.region,bad_headofstates.headofstate LIMIT 40;
                                              ->  Redistribute Motion 3:3  (slice4; segments: 3)  (cost=2625.14..2655.14 rows=1000 width=64)
                                                    Output: country_2.region, (PARTIAL avg(country_2.population))
                                                    Hash Key: country_2.region
-                                                   ->  Partial HashAggregate  (cost=2625.14..2635.14 rows=1000 width=64)
+                                                   ->  Streaming Partial HashAggregate  (cost=2625.14..2635.14 rows=1000 width=64)
                                                          Output: country_2.region, PARTIAL avg(country_2.population)
                                                          Group Key: country_2.region
                                                          ->  Hash Join  (cost=1662.17..2425.51 rows=39927 width=36)

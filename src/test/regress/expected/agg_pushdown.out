@@ -204,7 +204,7 @@ AS c1 ON c1.parent = p.x GROUP BY p.i;
          ->  Redistribute Motion 3:3  (slice2; segments: 3)
                Output: p.i, (PARTIAL avg(c1.v))
                Hash Key: p.i
-               ->  Partial HashAggregate
+               ->  Streaming Partial HashAggregate
                      Output: p.i, PARTIAL avg(c1.v)
                      Group Key: p.i
                      ->  Hash Join

@@ -2831,7 +2831,7 @@ explain (verbose on, costs off) select distinct sum(Distinct c), count(a), sum(d
    Group Key: (sum(DISTINCT dqa_f3.c)), (count(dqa_f3.a)), (sum(dqa_f3.d))
    ->  Gather Motion 3:1  (slice1; segments: 3)
          Output: (sum(DISTINCT c)), (count(a)), (sum(d)), b
-         ->  HashAggregate
+         ->  Streaming HashAggregate
                Output: (sum(DISTINCT c)), (count(a)), (sum(d)), b
                Group Key: sum(DISTINCT dqa_f3.c), count(dqa_f3.a), sum(dqa_f3.d)
                ->  GroupAggregate

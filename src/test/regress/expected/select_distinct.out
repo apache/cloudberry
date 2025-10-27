@@ -144,7 +144,7 @@ SELECT count(*) FROM
                      ->  Redistribute Motion 3:3  (slice2; segments: 3)
                            Output: tenk1.two, tenk1.four, tenk1.two
                            Hash Key: tenk1.two, tenk1.four, tenk1.two
-                           ->  HashAggregate
+                           ->  Streaming HashAggregate
                                  Output: tenk1.two, tenk1.four, tenk1.two
                                  Group Key: tenk1.two, tenk1.four, tenk1.two
                                  ->  Seq Scan on public.tenk1

@@ -3409,7 +3409,7 @@ select c, b, sum(a), count(b) from t0 group by b, c;
          ->  Redistribute Motion 3:3  (slice2; segments: 3)
                Output: c, b, (PARTIAL sum(a)), (PARTIAL count(b))
                Hash Key: b, c
-               ->  Partial HashAggregate
+               ->  Streaming Partial HashAggregate
                      Output: c, b, PARTIAL sum(a), PARTIAL count(b)
                      Group Key: t0.b, t0.c
                      ->  Seq Scan on aqumv.t0
@@ -3465,7 +3465,7 @@ select b, sum(a), c, count(b) from t0 group by c, b;
          ->  Redistribute Motion 3:3  (slice2; segments: 3)
                Output: b, c, (PARTIAL sum(a)), (PARTIAL count(b))
                Hash Key: c, b
-               ->  Partial HashAggregate
+               ->  Streaming Partial HashAggregate
                      Output: b, c, PARTIAL sum(a), PARTIAL count(b)
                      Group Key: t0.c, t0.b
                      ->  Seq Scan on aqumv.t0
@@ -3521,7 +3521,7 @@ select b + c + 1, sum(a) + count(b) from t0 group by c, b;
          ->  Redistribute Motion 3:3  (slice2; segments: 3)
                Output: c, b, (PARTIAL sum(a)), (PARTIAL count(b))
                Hash Key: c, b
-               ->  Partial HashAggregate
+               ->  Streaming Partial HashAggregate
                      Output: c, b, PARTIAL sum(a), PARTIAL count(b)
                      Group Key: t0.c, t0.b
                      ->  Seq Scan on aqumv.t0
@@ -3577,7 +3577,7 @@ select c, count(b) from t0 group by c ;
          ->  Redistribute Motion 3:3  (slice2; segments: 3)
                Output: c, (PARTIAL count(b))
                Hash Key: c
-               ->  Partial HashAggregate
+               ->  Streaming Partial HashAggregate
                      Output: c, PARTIAL count(b)
                      Group Key: t0.c
                      ->  Seq Scan on aqumv.t0
@@ -3609,7 +3609,7 @@ select c, count(b) from t0 group by c ;
          ->  Redistribute Motion 3:3  (slice2; segments: 3)
                Output: c, (PARTIAL count(b))
                Hash Key: c
-               ->  Partial HashAggregate
+               ->  Streaming Partial HashAggregate
                      Output: c, PARTIAL count(b)
                      Group Key: t0.c
                      ->  Seq Scan on aqumv.t0
@@ -3642,7 +3642,7 @@ select c, b, count(b) from t0 where a > 3 group by c, b;
          ->  Redistribute Motion 3:3  (slice2; segments: 3)
                Output: c, b, (PARTIAL count(b))
                Hash Key: c, b
-               ->  Partial HashAggregate
+               ->  Streaming Partial HashAggregate
                      Output: c, b, PARTIAL count(b)
                      Group Key: t0.c, t0.b
                      ->  Seq Scan on aqumv.t0
@@ -3693,7 +3693,7 @@ select count(b), b, c from t0 where a > 3 group by b, c;
          ->  Redistribute Motion 3:3  (slice2; segments: 3)
                Output: b, c, (PARTIAL count(b))
                Hash Key: b, c
-               ->  Partial HashAggregate
+               ->  Streaming Partial HashAggregate
                      Output: b, c, PARTIAL count(b)
                      Group Key: t0.b, t0.c
                      ->  Seq Scan on aqumv.t0
@@ -3744,7 +3744,7 @@ select count(b) + 1, b + 1, c from t0 where a > 3 group by b, c;
          ->  Redistribute Motion 3:3  (slice2; segments: 3)
                Output: c, b, (PARTIAL count(b))
                Hash Key: b, c
-               ->  Partial HashAggregate
+               ->  Streaming Partial HashAggregate
                      Output: c, b, PARTIAL count(b)
                      Group Key: t0.b, t0.c
                      ->  Seq Scan on aqumv.t0
@@ -3795,7 +3795,7 @@ select b, c, count(b) from t0 where a > 3 and b > 1 group by b, c;
          ->  Redistribute Motion 3:3  (slice2; segments: 3)
                Output: b, c, (PARTIAL count(b))
                Hash Key: b, c
-               ->  Partial HashAggregate
+               ->  Streaming Partial HashAggregate
                      Output: b, c, PARTIAL count(b)
                      Group Key: t0.b, t0.c
                      ->  Seq Scan on aqumv.t0
@@ -3825,7 +3825,7 @@ select b, c, count(b) from t0 where a > 3 and b > 1 group by b, c;
          ->  Redistribute Motion 3:3  (slice2; segments: 3)
                Output: b, c, (PARTIAL count(b))
                Hash Key: b, c
-               ->  Partial HashAggregate
+               ->  Streaming Partial HashAggregate
                      Output: b, c, PARTIAL count(b)
                      Group Key: t0.b, t0.c
                      ->  Seq Scan on aqumv.t0
