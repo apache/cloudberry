@@ -659,7 +659,7 @@ explain (costs off) select gp_segment_id, count(*) from bar_randDistr group by g
          Group Key: gp_segment_id
          ->  Redistribute Motion 3:3  (slice2; segments: 3)
                Hash Key: gp_segment_id
-               ->  Partial HashAggregate
+               ->  Streaming Partial HashAggregate
                      Group Key: gp_segment_id
                      ->  Seq Scan on bar_randdistr
  Optimizer: Postgres query optimizer
