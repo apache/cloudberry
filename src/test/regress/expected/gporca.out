@@ -10297,7 +10297,7 @@ ORDER BY 1 asc ;
                Group Key: ((((tt.event_ts / 100000) / 5) * 5))
                ->  Redistribute Motion 3:3  (slice2; segments: 3)  (cost=39875.47..39912.97 rows=1000 width=16)
                      Hash Key: ((((tt.event_ts / 100000) / 5) * 5))
-                     ->  Partial HashAggregate  (cost=39875.47..39892.97 rows=1000 width=16)
+                     ->  Streaming Partial HashAggregate  (cost=39875.47..39892.97 rows=1000 width=16)
                            Group Key: (((tt.event_ts / 100000) / 5) * 5)
                            ->  Hash Join  (cost=202.00..39819.05 rows=11283 width=8)
                                  Hash Cond: ((tq.sym)::bpchar = tt.symbol)
@@ -13084,7 +13084,7 @@ select * from foo join (select min_a, count(*) as cnt from (select min(a) as min
                Group Key: (min(tbitmap.a))
                ->  Redistribute Motion 3:3  (slice2; segments: 3)
                      Hash Key: (min(tbitmap.a))
-                     ->  Partial HashAggregate
+                     ->  Streaming Partial HashAggregate
                            Group Key: min(tbitmap.a)
                            ->  HashAggregate
                                  Group Key: tbitmap.b
@@ -14999,7 +14999,7 @@ explain (costs off) select max(s1) from foo inner join bar on j1 = j2 group by g
          Group Key: foo.g1
          ->  Redistribute Motion 3:3  (slice2; segments: 3)
                Hash Key: foo.g1
-               ->  Partial HashAggregate
+               ->  Streaming Partial HashAggregate
                      Group Key: foo.g1
                      ->  Hash Join
                            Hash Cond: (foo.j1 = bar.j2)

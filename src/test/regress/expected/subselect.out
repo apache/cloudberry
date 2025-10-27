@@ -2046,7 +2046,7 @@ group by j, q1;
          ->  Redistribute Motion 3:3  (slice2; segments: 3)
                Output: t.j, ((SubPlan 1))
                Hash Key: t.j, ((SubPlan 1))
-               ->  HashAggregate
+               ->  Streaming HashAggregate
                      Output: t.j, ((SubPlan 1))
                      Group Key: t.j, (SubPlan 1)
                      ->  Seq Scan on public.t
