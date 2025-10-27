@@ -86,7 +86,7 @@ explain select a, sum(d) from olap_test group by a;
          Group Key: a
          ->  Redistribute Motion 3:3  (slice2; segments: 3)  (cost=56.00..56.09 rows=3 width=12)
                Hash Key: a
-               ->  Partial HashAggregate  (cost=56.00..56.03 rows=3 width=12)
+               ->  Streaming Partial HashAggregate  (cost=56.00..56.03 rows=3 width=12)
                      Group Key: a
                      ->  Seq Scan on olap_test  (cost=0.00..39.33 rows=3333 width=8)
  Optimizer: Postgres query optimizer
@@ -306,7 +306,7 @@ explain create table bar_ctas as select * from foo_ctas group by a, b distribute
    Group Key: a, b
    ->  Redistribute Motion 3:3  (slice1; segments: 3)  (cost=1.50..11.42 rows=10 width=8)
          Hash Key: b
-         ->  HashAggregate  (cost=1.50..1.60 rows=10 width=8)
+         ->  Streaming HashAggregate  (cost=1.50..1.60 rows=10 width=8)
                Group Key: a, b
                ->  Seq Scan on foo_ctas  (cost=0.00..1.33 rows=33 width=8)
  Optimizer: Postgres query optimizer
@@ -325,7 +325,7 @@ explain insert into bar_ctas select * from foo_ctas group by a, b;
                Group Key: foo_ctas.a, foo_ctas.b
                ->  Redistribute Motion 3:3  (slice2; segments: 3)  (cost=1.50..11.42 rows=10 width=8)
                      Hash Key: foo_ctas.a, foo_ctas.b
-                     ->  HashAggregate  (cost=1.50..1.60 rows=10 width=8)
+                     ->  Streaming HashAggregate  (cost=1.50..1.60 rows=10 width=8)
                            Group Key: foo_ctas.a, foo_ctas.b
                            ->  Seq Scan on foo_ctas  (cost=0.00..1.33 rows=33 width=8)
  Optimizer: Postgres query optimizer

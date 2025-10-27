@@ -1315,7 +1315,7 @@ explain (costs off) select a,c from t1 group by a,c,d;
          Group Key: a, c, d
          ->  Redistribute Motion 3:3  (slice2; segments: 3)
                Hash Key: a, c, d
-               ->  HashAggregate
+               ->  Streaming HashAggregate
                      Group Key: a, c, d
                      ->  Seq Scan on t1
  Optimizer: Postgres query optimizer
@@ -3317,7 +3317,7 @@ having sum(tgb1.v3 * tgb2.v3) > 100 and
          AggRefs(TargetList): [(0, 0)]
          ->  Redistribute Motion 3:3  (slice2; segments: 3)  (cost=145944.41..145974.41 rows=1000 width=84)
                Hash Key: tgb2.v2
-               ->  Partial HashAggregate  (cost=145944.41..145954.41 rows=1000 width=84)
+               ->  Streaming Partial HashAggregate  (cost=145944.41..145954.41 rows=1000 width=84)
                      Group Key: tgb2.v2
                      AggRefs(TargetList): [(0, 0), (1, 1), (2, 2), (3, 3)]
                      ->  Hash Join  (cost=618.25..105488.34 rows=2022803 width=20)
@@ -3372,7 +3372,7 @@ having sum(tgb1.v3 * tgb2.v3) > 100 and
          AggRefs(TargetList): [(0, 0)]
          ->  Redistribute Motion 3:3  (slice2; segments: 3)  (cost=145944.41..145974.41 rows=1000 width=84)
                Hash Key: tgb2.v2
-               ->  Partial HashAggregate  (cost=145944.41..145954.41 rows=1000 width=84)
+               ->  Streaming Partial HashAggregate  (cost=145944.41..145954.41 rows=1000 width=84)
                      Group Key: tgb2.v2
                      AggRefs(TargetList): [(0, 0), (1, 1), (2, 2), (3, 3)]
                      ->  Hash Join  (cost=618.25..105488.34 rows=2022803 width=20)
@@ -3417,7 +3417,7 @@ explain (costs off) select v2,v3 from pds_t1 group by v2,v3;
          Group Key: v2, v3
          ->  Redistribute Motion 3:3  (slice2; segments: 3)
                Hash Key: v2, v3
-               ->  HashAggregate
+               ->  Streaming HashAggregate
                      Group Key: v2, v3
                      ->  Seq Scan on pds_t1
  Optimizer: Postgres query optimizer
@@ -3432,7 +3432,7 @@ explain (costs off) select v2,v3 from pds_t1 group by v2,v3;
          Group Key: v2, v3
          ->  Redistribute Motion 3:3  (slice2; segments: 3)
                Hash Key: v2, v3
-               ->  HashAggregate
+               ->  Streaming HashAggregate
                      Group Key: v2, v3
                      ->  Seq Scan on pds_t1
  Optimizer: Postgres query optimizer
@@ -3447,7 +3447,7 @@ explain (costs off) select v2,v3 from pds_t1 group by v2,v3;
          Group Key: v2, v3
          ->  Redistribute Motion 3:3  (slice2; segments: 3)
                Hash Key: v2, v3
-               ->  HashAggregate
+               ->  Streaming HashAggregate
                      Group Key: v2, v3
                      ->  Seq Scan on pds_t1
  Optimizer: Postgres query optimizer
@@ -3462,7 +3462,7 @@ explain (costs off) select v2,v3,v4,v5,v6 from pds_t1 group by v2,v3,v4,v5,v6;
          Group Key: v2, v3, v4, v5, v6
          ->  Redistribute Motion 3:3  (slice2; segments: 3)
                Hash Key: v2, v3, v4, v5, v6
-               ->  HashAggregate
+               ->  Streaming HashAggregate
                      Group Key: v2, v3, v4, v5, v6
                      ->  Seq Scan on pds_t1
  Optimizer: Postgres query optimizer
