@@ -2,6 +2,9 @@
 -- Queries that lead to hanging (not dead lock) when we don't handle synchronization properly in shared scan
 -- Queries that lead to wrong result when we don't finish executing the subtree below the shared scan being squelched.
 --
+-- start_ignore
+set gp_use_streaming_hashagg = off;
+-- end_ignore
 
 CREATE SCHEMA shared_scan;
 

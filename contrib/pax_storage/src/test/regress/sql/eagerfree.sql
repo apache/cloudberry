@@ -1,5 +1,8 @@
 create schema eagerfree;
 set search_path=eagerfree;
+-- start_ignore
+set gp_use_streaming_hashagg = off;
+-- end_ignore
 
 create table smallt (i int, t text, d date) distributed by (i);
 insert into smallt select i%10, 'text ' || (i%15), '2011-01-01'::date + ((i%20) || ' days')::interval

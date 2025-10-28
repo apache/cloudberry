@@ -5,6 +5,9 @@
 -- Note: to ensure plan stability, it's a good idea to make the partitions of
 -- any one partitioned table in this test all have different numbers of rows.
 --
+-- start_ignore
+set gp_use_streaming_hashagg = off;
+-- end_ignore
 
 -- Disable ORCA since it does support partition-wise aggregates
 set optimizer to off;

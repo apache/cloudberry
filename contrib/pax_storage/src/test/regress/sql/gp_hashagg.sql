@@ -10,6 +10,9 @@ insert into hashagg_test values (1,1,'1/1/2006','hi',2);
 insert into hashagg_test values (1,1,'1/2/2006','hi',3);
 insert into hashagg_test values (1,1,'1/3/2006','hi',4);
 
+-- start_ignore
+set gp_use_streaming_hashagg = off;
+-- end_ignore
 -- this will get the wrong answer (right number of rows, wrong aggregates)
 set enable_seqscan=off;
 select grp,sum(v) from hashagg_test where id1 = 1 and id2 = 1 and day between '1/1/2006' and '1/31/2006' group by grp order by sum(v) desc;

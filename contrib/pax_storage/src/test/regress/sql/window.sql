@@ -6,6 +6,9 @@
 -- m/DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: Non-default collation/
 -- end_matchignore
 set enable_incremental_sort=on;
+-- start_ignore
+set gp_use_streaming_hashagg = off;
+-- end_ignore
 
 --
 -- WINDOW FUNCTIONS
