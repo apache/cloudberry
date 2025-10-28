@@ -1774,22 +1774,21 @@ HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For 
                                   QUERY PLAN                                  
 ------------------------------------------------------------------------------
  Delete on tab1
-   ->  Result
-         ->  Redistribute Motion 3:3  (slice1; segments: 3)
-               Hash Key: tab1.b
-               ->  Hash Join
-                     Hash Cond: (tab2.a = tab1.a)
-                     ->  Seq Scan on tab2
-                     ->  Hash
-                           ->  Redistribute Motion 3:3  (slice2; segments: 3)
-                                 Hash Key: tab1.a
-                                 ->  Hash Join
-                                       Hash Cond: (tab3.b = tab1.b)
-                                       ->  Seq Scan on tab3
-                                       ->  Hash
-                                             ->  Seq Scan on tab1
+   ->  Hash Join
+         Hash Cond: (tab3.b = tab1.b)
+         ->  Seq Scan on tab3
+         ->  Hash
+               ->  Redistribute Motion 3:3  (slice1; segments: 3)
+                     Hash Key: tab1.b
+                     ->  Hash Join
+                           Hash Cond: (tab2.a = tab1.a)
+                           ->  Seq Scan on tab2
+                           ->  Hash
+                                 ->  Redistribute Motion 3:3  (slice2; segments: 3)
+                                       Hash Key: tab1.a
+                                       ->  Seq Scan on tab1
  Optimizer: GPORCA
-(16 rows)
+(15 rows)
 
 -- ----------------------------------------------------------------------
 -- Test delete on partition table from join on another partition table
