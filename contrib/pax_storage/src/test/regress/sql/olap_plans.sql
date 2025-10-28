@@ -2,6 +2,9 @@
 -- Test the planner's ability to produce different kinds of plans to implement
 -- grouping and aggregation.
 --
+-- start_ignore
+set gp_use_streaming_hashagg = off;
+-- end_ignore
 
 drop table if exists olap_test;
 drop table if exists olap_test_single;
