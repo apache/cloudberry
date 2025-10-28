@@ -1264,7 +1264,7 @@ add_first_stage_hash_agg_path(PlannerInfo *root,
 										  ctx->partial_grouping_target,
 										  AGG_HASHED,
 										  ctx->hasAggs ? AGGSPLIT_INITIAL_SERIAL : AGGSPLIT_SIMPLE,
-										  true, /* streaming */
+										  gp_use_streaming_hashagg, /* streaming */
 										  ctx->groupClause,
 										  NIL,
 										  ctx->agg_partial_costs,
