@@ -255,6 +255,8 @@ drop table t2;
 
 CREATE TABLE t3 AS SELECT i as a, i+1 as b from generate_series(1,10)i;
 CREATE TABLE t4 AS SELECT i as c, i+1 as d from generate_series(1,10)i;
+analyze t3;
+analyze t4;
 
 -- Additional filtering conditions are added to the consumer.
 -- This is caused by `PexprInferPredicates` in the ORCA preprocessor.
