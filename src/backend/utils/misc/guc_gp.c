@@ -153,6 +153,7 @@ bool		enable_parallel_semi_join = true;
 bool		enable_parallel_dedup_semi_join = true;
 bool		enable_parallel_dedup_semi_reverse_join = true;
 bool		parallel_query_use_streaming_hashagg = false;
+bool		gp_use_streaming_hashagg = true;
 int			gp_appendonly_insert_files = 0;
 int			gp_appendonly_insert_files_tuples_range = 0;
 int			gp_random_insert_segments = 0;
@@ -1896,6 +1897,16 @@ struct config_bool ConfigureNamesBool_gp[] =
 		},
 		&gp_eager_distinct_dedup,
 		false, NULL, NULL
+	},
+
+	{
+		{"gp_use_streaming_hashagg", PGC_USERSET, QUERY_TUNING_METHOD,
+			gettext_noop("Use streaming hash agg in the first phase for multi-phase aggregations."),
+			NULL,
+			GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE
+		},
+		&gp_use_streaming_hashagg,
+		true, NULL, NULL
 	},
 
 	{
