@@ -51,6 +51,62 @@ jobs:
         with:
           fetch-depth: 1
 
+      - name: Check NOTICE year is up-to-date
+        run: |
+          echo "📅 Checking NOTICE file year..."
+          current_year=$(date -u +"%Y")
+          echo "CURRENT_YEAR=$current_year" >> $GITHUB_ENV
+          # Check if the NOTICE file contains the current year
+          if ! grep -q "Copyright 2024-$current_year The Apache Software Foundation" NOTICE; then
+            echo "❌ NOTICE file does not contain the current year ($current_year)"
+            echo "::error::NOTICE file does not contain the current year ($current_year)"
+            echo "NOTICE_CHECK=fail" >> $GITHUB_ENV
+            exit 1
+          else
+            echo "✅ NOTICE file contains the current year ($current_year)"
+            echo "NOTICE_CHECK=pass" >> $GITHUB_ENV
+          fi
+
+      - name: Check for binary files
+        run: |
+          echo "📦 Checking for binary files..."
+          echo "Checking extensions: class, jar, tar, tgz, zip, exe, dll, so"
+          echo "----------------------------------------------------------------------"
+          
+          # Check for specific binary file extensions
+          binary_extensions="class jar tar tgz zip exe dll so"
+          echo "BINARY_EXTENSIONS=${binary_extensions}" >> $GITHUB_ENV
+          binary_results=""
+          binaryfiles_found=false
+          
+          for extension in ${binary_extensions}; do
+            printf "Checking *.%-4s files..." "${extension}"
+            found=$(find . -name "*.${extension}" || true)
+            if [ -n "$found" ]; then
+              echo "❌ FOUND"
+              echo "::error::${extension} files should not exist"
+              echo "For ASF compatibility: the source tree should not contain"
+              echo "binary files as users have a hard time verifying their contents."
+              echo "Found files:"
+              echo "$found" | sed 's/^/  /'
+              echo "${extension}:${found}" >> binary_results.txt
+              binaryfiles_found=true
+            else
+              echo "✅ NONE"
+              echo "${extension}:none" >> binary_results.txt
+            fi
+          done
+          
+          echo "----------------------------------------------------------------------"
+          if [ "$binaryfiles_found" = true ]; then
+            echo "❌ Binary files were found in the source tree"
+            echo "BINARY_CHECK=fail" >> $GITHUB_ENV
+            exit 1
+          else
+            echo "✅ No binary files found"
+            echo "BINARY_CHECK=pass" >> $GITHUB_ENV
+          fi
+
       - name: Set up Java and Maven
         uses: actions/setup-java@v3
         with:
@@ -88,6 +144,34 @@ jobs:
           {
             echo "## Apache Rat Audit Results"
             echo "- Run Time: $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
+            echo ""
+            
+            # NOTICE Year Check Summary
+            echo "### 📅 NOTICE Year Check"
+            if [ "$NOTICE_CHECK" = "pass" ]; then
+              echo "✅ NOTICE file contains the current year ($CURRENT_YEAR)"
+            else
+              echo "❌ NOTICE file does not contain the current year ($CURRENT_YEAR)"
+            fi
+            echo ""
+
+            # Binary Files Check Summary
+            echo "### 📦 Binary Files Check"
+            echo "Checked extensions: \`${BINARY_EXTENSIONS}\`"
+            echo ""
+            echo "Results:"
+            echo "\`\`\`"
+            if [ -f binary_results.txt ]; then
+              while IFS=: read -r ext files; do
+                if [ "$files" = "none" ]; then
+                  echo "✅ No .${ext} files found"
+                else
+                  echo "❌ Found .${ext} files:"
+                  echo "$files" | sed 's/^/  /'
+                fi
+              done < binary_results.txt
+            fi
+            echo "\`\`\`"
             echo ""
 
             if [[ -f rat-output.log ]]; then
