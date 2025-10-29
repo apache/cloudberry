@@ -51,6 +51,29 @@ jobs:
         with:
           fetch-depth: 1
 
+      - name: Set up Java and Maven
+        uses: actions/setup-java@v3
+        with:
+          distribution: 'temurin'
+          java-version: '11'
+          cache: maven
+
+      - name: Run Apache Rat check
+        run: |
+          echo "Running Apache Rat license check..."
+          mvn clean verify -Drat.consoleOutput=true | tee rat-output.log
+          
+          # Check for build failure
+          if grep -q "\[INFO\] BUILD FAILURE" rat-output.log; then
+            echo "rat_failed=true" >> $GITHUB_OUTPUT
+            echo "::error::Apache Rat check failed - build failure detected"
+            exit 1
+          fi
+          
+          # If we got here, the check passed
+          echo "rat_failed=false" >> $GITHUB_OUTPUT
+          echo "Apache Rat check passed successfully"
+
       - name: Check NOTICE year is up-to-date
         run: |
           echo "📅 Checking NOTICE file year..."
@@ -106,29 +129,6 @@ jobs:
             echo "✅ No binary files found"
             echo "BINARY_CHECK=pass" >> $GITHUB_ENV
           fi
-
-      - name: Set up Java and Maven
-        uses: actions/setup-java@v3
-        with:
-          distribution: 'temurin'
-          java-version: '11'
-          cache: maven
-
-      - name: Run Apache Rat check
-        run: |
-          echo "Running Apache Rat license check..."
-          mvn clean verify -Drat.consoleOutput=true | tee rat-output.log
-          
-          # Check for build failure
-          if grep -q "\[INFO\] BUILD FAILURE" rat-output.log; then
-            echo "rat_failed=true" >> $GITHUB_OUTPUT
-            echo "::error::Apache Rat check failed - build failure detected"
-            exit 1
-          fi
-          
-          # If we got here, the check passed
-          echo "rat_failed=false" >> $GITHUB_OUTPUT
-          echo "Apache Rat check passed successfully"
 
       - name: Upload Rat check results
         if: always()
