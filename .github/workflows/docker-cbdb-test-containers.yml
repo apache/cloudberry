@@ -50,6 +50,9 @@ on:
       - 'devops/deploy/docker/test/rocky8/**'
       - 'devops/deploy/docker/test/rocky9/**'
       - 'devops/deploy/docker/test/ubuntu22.04/**'
+  pull_request:
+    paths:
+      - 'devops/deploy/docker/test/**'
   workflow_dispatch:  # Manual trigger
 
 # Prevent multiple workflow runs from interfering with each other
@@ -104,7 +107,7 @@ jobs:
 
       # Login to DockerHub for pushing images
       - name: Login to Docker Hub
-        if: ${{ steps.platform-filter.outputs[matrix.platform] == 'true' }}
+        if: ${{ steps.platform-filter.outputs[matrix.platform] == 'true' && github.event_name == 'push' && github.ref == 'refs/heads/main' }}
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USER }}
@@ -135,7 +138,7 @@ jobs:
       # Build and push multi-architecture images
       # Creates a manifest list that supports both architectures
       - name: Build and Push Multi-arch Docker images
-        if: ${{ steps.platform-filter.outputs[matrix.platform] == 'true' }}
+        if: ${{ steps.platform-filter.outputs[matrix.platform] == 'true' && github.event_name == 'push' && github.ref == 'refs/heads/main' }}
         uses: docker/build-push-action@v6
         with:
           context: ./devops/deploy/docker/test/${{ matrix.platform }}
@@ -161,6 +164,17 @@ jobs:
       - name: Build Summary
         if: always()
         run: |
+          # Add PR context notification
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            echo "#### ℹ️  Pull Request Build" >> $GITHUB_STEP_SUMMARY
+            echo "This is a validation build. Images are built and tested locally but **not pushed to Docker Hub** for security." >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "- ✅ Dockerfile syntax validated" >> $GITHUB_STEP_SUMMARY
+            echo "- ✅ Multi-architecture builds tested" >> $GITHUB_STEP_SUMMARY
+            echo "- ⏭️  Docker Hub push skipped (requires main branch)" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+          fi
+
           echo "### Build Summary for ${{ matrix.platform }} 🚀" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "#### 🔍 Build Information" >> $GITHUB_STEP_SUMMARY
