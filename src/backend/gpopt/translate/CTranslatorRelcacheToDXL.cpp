@@ -1836,7 +1836,7 @@ CTranslatorRelcacheToDXL::RetrieveRelStats(CMemoryPool *mp, IMDId *mdid)
 	 * count of the partition table is -1.
 	 */
 	BOOL relation_empty = false;
-	if (num_rows == -1.0)
+	if (num_rows == -1.0 || num_rows == 0.0)
 	{
 		relation_empty = true;
 	}
