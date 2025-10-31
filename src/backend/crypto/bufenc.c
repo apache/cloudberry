@@ -51,12 +51,9 @@ InitializeBufferEncryption(void)
 
 	if (CheckIsSM4Method())
 	{
-		bool found;
-		BufEncCtx = ShmemInitStruct("sm4 encryption method encrypt ctx",
-												sizeof(sm4_ctx), &found);
+		BufEncCtx = malloc(sizeof(sm4_ctx));
+		BufDecCtx = malloc(sizeof(sm4_ctx));
 
-		BufDecCtx = ShmemInitStruct("sm4 encryption method decrypt ctx",
-												sizeof(sm4_ctx), &found);
 		sm4_ofb_setkey_enc((sm4_ctx *)BufEncCtx, (unsigned char *)key->key);
 		sm4_ofb_setkey_dec((sm4_ctx *)BufDecCtx, (unsigned char *)key->key);
 	}
