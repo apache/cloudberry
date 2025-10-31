@@ -2111,3 +2111,21 @@ rollback;
 begin;
 SELECT func1_mod_setint_stb(func2_mod_int_stb(5)) order by 1;
 rollback;
+
+-- Test motions are not allowed on QE
+--start_ignore
+drop table if exists d;
+drop function if exists f();
+--end_ignore
+create table d(i int) distributed by (i);
+insert into d select 1;
+
+create function f() returns int as $$
+    select 1 from gp_dist_random('pg_group') union all select 1 from pg_group;
+$$ language sql;
+
+-- error when execute such function on QE
+select f() from d;
+
+drop table d;
+drop function f();

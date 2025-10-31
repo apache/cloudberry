@@ -7673,3 +7673,15 @@ ERROR:  UPDATE is not allowed in a non-volatile function
 CONTEXT:  SQL statement "UPDATE bar SET d = d+1 WHERE c = $1"
 PL/pgSQL function func2_mod_int_stb(integer) line 3 at SQL statement
 rollback;
+-- Test motions are not allowed on QE
+create table d(i int) distributed by (i);
+insert into d select 1;
+create function f() returns int as $$
+    select 1 from gp_dist_random('pg_group') union all select 1 from pg_group;
+$$ language sql;
+-- error when execute such function on QE
+select f() from d;
+ERROR:  cannot create Motion on QE slice  (seg1 slice1 172.18.0.7:6003 pid=37574)
+CONTEXT:  SQL function "f" during startup
+drop table d;
+drop function f();

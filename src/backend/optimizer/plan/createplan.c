@@ -5702,6 +5702,13 @@ make_motion(PlannerInfo *root, Plan *lefttree,
 			Oid *sortOperators, Oid *collations, bool *nullsFirst,
 			bool useExecutorVarFormat)
 {
+	if (Gp_role != GP_ROLE_DISPATCH)
+	{
+		ereport(ERROR,
+				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+				 errmsg("cannot create Motion on QE slice")));
+	}
+
     Motion *node = makeNode(Motion);
     Plan   *plan = &node->plan;
 
