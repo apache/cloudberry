@@ -27,12 +27,14 @@
 
 #include "storage/micro_partition_row_filter_reader.h"
 
+#include <algorithm>
+
 #include "comm/guc.h"
 #include "comm/log.h"
 #include "comm/pax_memory.h"
 #include "storage/filter/pax_filter.h"
-#include "storage/filter/pax_sparse_filter.h"
 #include "storage/filter/pax_row_filter.h"
+#include "storage/filter/pax_sparse_filter.h"
 #include "storage/pax_defined.h"
 #include "storage/pax_itemptr.h"
 
@@ -73,6 +75,109 @@ retry_next_group:
   return group_;
 }
 
+void MicroPartitionRowFilterReader::LoadExprFilterColumns(
+    MicroPartitionReader::Group *group, TupleDesc desc,
+    const ExecutionFilterContext *ctx, size_t row_index, TupleTableSlot *slot) {
+  // There will not be duplicate attnos here because the attnos in ctx come from
+  // qual expressions. For each column index, there is at most one corresponding
+  // attno in ctx->attnos, so no attno appears more than once. As a result, this
+  // loop does not load the same column multiple times.
+  for (int i = 0; i < ctx->size; i++) {
+    auto attno = ctx->attnos[i];
+    Assert(attno > 0);
+    std::tie(slot->tts_values[attno - 1], slot->tts_isnull[attno - 1]) =
+        group->GetColumnValue(desc, attno - 1, row_index);
+  }
+}
+
+bool MicroPartitionRowFilterReader::EvalBloomNode(
+    const ExecutionFilterContext *ctx, MicroPartitionReader::Group *group,
+    TupleDesc desc, size_t row_index, int bloom_index) {
+  Assert(bloom_index >= 0 &&
+         (size_t)bloom_index < ctx->runtime_bloom_keys.size());
+  const auto &skd = ctx->runtime_bloom_keys[bloom_index];
+  const ScanKey sk = const_cast<ScanKeyData *>(&skd);
+  bool isnull = false;
+  Datum val;
+  std::tie(val, isnull) =
+      group->GetColumnValue(desc, sk->sk_attno - 1, row_index);
+  if (isnull) return true;
+  bloom_filter *bf = (bloom_filter *)DatumGetPointer(sk->sk_argument);
+  return !bloom_lacks_element(bf, (unsigned char *)&val, sizeof(Datum));
+}
+
+bool MicroPartitionRowFilterReader::EvalExprNode(
+    const ExecutionFilterContext *ctx, TupleTableSlot *slot, int expr_index) {
+  return TestRowScanInternal(slot, ctx->estates[expr_index],
+                             ctx->attnos[expr_index]);
+}
+
+// Execute a filter node.
+// During the sampling phase, updates the filter's pass rate statistics.
+bool MicroPartitionRowFilterReader::EvalFilterNode(
+    ExecutionFilterContext *ctx, MicroPartitionReader::Group *group,
+    TupleDesc desc, size_t row_index, TupleTableSlot *slot,
+    ExecutionFilterContext::FilterNode &node, bool update_stats) {
+  bool pass = true;
+  if (node.kind == ExecutionFilterContext::FilterKind::kBloom) {
+    pass = EvalBloomNode(ctx, group, desc, row_index, node.index);
+    if (ctx->ps->instrument && !pass) ctx->ps->instrument->nfilteredPRF += 1;
+  } else {
+    pass = EvalExprNode(ctx, slot, node.index);
+  }
+  if (update_stats) {
+    node.tested++;
+    node.passed += pass ? 1 : 0;
+  }
+  return pass;
+}
+
+// Applies the row filter nodes to the current tuple in two phases: Sampling and
+// Filtering.
+// In the sampling phase, pass rates for each filter expression are collected on
+// the first 64k rows, then the filters are sorted by effectiveness (lower pass
+// rate first) for optimal filtering order.
+// In the filtering phase, filters are applied in the determined order with
+// short-circuit evaluation; a failure in any filter causes immediate rejection
+// of the tuple.
+bool MicroPartitionRowFilterReader::ApplyFiltersWithSampling(
+    ExecutionFilterContext *ctx, MicroPartitionReader::Group *group,
+    TupleDesc desc, size_t row_index, TupleTableSlot *slot) {
+  if (!ctx->sampling) {
+    for (auto &node : ctx->filter_nodes) {
+      if (!EvalFilterNode(ctx, group, desc, row_index, slot, node, false)) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  ctx->sample_rows++;
+  bool all_pass = true;
+  // in the sampling phase, we need to evaluate all filter nodes, if any node
+  // fails, the tuple is rejected
+  for (auto &node : ctx->filter_nodes) {
+    if (!EvalFilterNode(ctx, group, desc, row_index, slot, node, true)) {
+      all_pass = false;
+    }
+  }
+
+  if (ctx->sample_rows >= ctx->sample_target) {
+    for (auto &node : ctx->filter_nodes) {
+      node.score =
+          (node.tested == 0) ? 1.0 : (double)node.passed / (double)node.tested;
+    }
+    std::stable_sort(ctx->filter_nodes.begin(), ctx->filter_nodes.end(),
+                     [](const auto &a, const auto &b) {
+                       // Lower pass rate first (better selectivity)
+                       if (a.score != b.score) return a.score < b.score;
+                       return (int)a.kind < (int)b.kind;
+                     });
+    ctx->sampling = false;
+  }
+  return all_pass;
+}
+
 bool MicroPartitionRowFilterReader::ReadTuple(TupleTableSlot *slot) {
   auto g = group_;
   Assert(filter_->GetRowFilter());
@@ -108,16 +213,14 @@ retry_next:
     }
   }
 
-  for (int i = 0; i < ctx->size; i++) {
-    auto attno = ctx->attnos[i];
-    Assert(attno > 0);
-    std::tie(slot->tts_values[attno - 1], slot->tts_isnull[attno - 1]) =
-        g->GetColumnValue(desc, attno - 1, current_group_row_index_);
-    if (!TestRowScanInternal(slot, ctx->estates[i], attno)) {
-      current_group_row_index_++;
-      goto retry_next;
-    }
+  LoadExprFilterColumns(g.get(), desc, ctx, current_group_row_index_, slot);
+  if (!ApplyFiltersWithSampling(const_cast<ExecutionFilterContext *>(ctx),
+                                g.get(), desc, current_group_row_index_,
+                                slot)) {
+    current_group_row_index_++;
+    goto retry_next;
   }
+
   for (auto attno : remaining_columns) {
     std::tie(slot->tts_values[attno - 1], slot->tts_isnull[attno - 1]) =
         g->GetColumnValue(desc, attno - 1, current_group_row_index_);
