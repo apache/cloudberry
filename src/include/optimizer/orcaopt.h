@@ -33,6 +33,7 @@
 typedef struct OptimizerOptions 
 {
     bool create_vectorization_plan;
+    bool create_parallel_plan;
 } OptimizerOptions;
 
 

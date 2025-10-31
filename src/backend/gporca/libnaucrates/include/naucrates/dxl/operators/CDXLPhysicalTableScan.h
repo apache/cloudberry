@@ -76,7 +76,8 @@ public:
 	{
 		GPOS_ASSERT(nullptr != dxl_op);
 		GPOS_ASSERT(EdxlopPhysicalTableScan == dxl_op->GetDXLOperator() ||
-					EdxlopPhysicalForeignScan == dxl_op->GetDXLOperator());
+					EdxlopPhysicalForeignScan == dxl_op->GetDXLOperator() ||
+					EdxlopPhysicalParallelTableScan == dxl_op->GetDXLOperator());
 
 		return dynamic_cast<CDXLPhysicalTableScan *>(dxl_op);
 	}

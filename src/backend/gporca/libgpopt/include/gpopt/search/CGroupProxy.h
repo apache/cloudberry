@@ -23,6 +23,7 @@ using namespace gpos;
 class CGroupExpression;
 class CDrvdProp;
 class COptimizationContext;
+class CMemo;
 
 //---------------------------------------------------------------------------
 //	@class:
@@ -61,6 +62,13 @@ public:
 	SetState(CGroup::EState estNewState)
 	{
 		m_pgroup->SetState(estNewState);
+	}
+
+	// set containing memo
+	void
+	SetMemo(CMemo *pmemo)
+	{
+		m_pgroup->SetMemo(pmemo);
 	}
 
 	// set hash join keys

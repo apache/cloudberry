@@ -25,6 +25,8 @@
 #include <limits>  // std::numeric_limits
 
 #include "gpos/base.h"
+#include "gpopt/base/COptCtxt.h"
+#include "gpopt/optimizer/COptimizerConfig.h"
 #include "gpos/error/CAutoExceptionStack.h"
 #include "gpos/error/CException.h"
 
@@ -36,8 +38,10 @@ extern "C" {
 #include "access/amapi.h"
 #include "access/external.h"
 #include "access/genam.h"
+#include "access/parallel.h"
 #include "catalog/pg_aggregate.h"
 #include "catalog/pg_inherits.h"
+#include "cdb/cdbvars.h"
 #include "foreign/fdwapi.h"
 #include "nodes/nodeFuncs.h"
 #include "optimizer/clauses.h"
@@ -52,6 +56,9 @@ extern "C" {
 #include "utils/lsyscache.h"
 #include "utils/memutils.h"
 #include "utils/partcache.h"
+
+extern bool enable_parallel;
+extern int max_parallel_workers_per_gather;
 }
 #define GP_WRAP_START                                            \
 	sigjmp_buf local_sigjmp_buf;                                 \
@@ -2548,6 +2555,19 @@ gpdb::GetForeignServerId(Oid reloid)
 	return 0;
 }
 
+int16
+gpdb::GetAppendOnlySegmentFilesCount(Relation rel)
+{
+	GP_WRAP_START;
+	{
+		FormData_pg_appendonly aoFormData;
+		GetAppendOnlyEntry(rel, &aoFormData);
+		return aoFormData.segfilecount;
+	}
+	GP_WRAP_END;
+	return -1;
+}
+
 // Locks on partition leafs and indexes are held during optimizer (after
 // parse-analyze stage). ORCA need this function to lock relation. Here
 // we do not need to consider lock-upgrade issue, reasons are:
@@ -2704,6 +2724,38 @@ gpdb::TestexprIsHashable(Node *testexpr, List *param_ids)
 	}
 	GP_WRAP_END;
 	return false;
+}
+
+// check if parallel mode is OK (comprehensive check)
+bool
+gpdb::IsParallelModeOK(void)
+{
+	GP_WRAP_START;
+	{
+		if (!enable_parallel)
+			return false;
+
+		if (IS_SINGLENODE())
+			return false;
+
+		if (max_parallel_workers_per_gather <= 0)
+			return false;
+
+		// Check if parallel plans are enabled in current optimizer context
+		gpopt::COptCtxt *poctxt = gpopt::COptCtxt::PoctxtFromTLS();
+		if (nullptr != poctxt)
+		{
+			gpopt::COptimizerConfig *optimizer_config = poctxt->GetOptimizerConfig();
+			if (nullptr != optimizer_config)
+			{
+				if (!optimizer_config->CreateParallelPlan())
+					return false;
+			}
+		}
+		return true;
+	}
+	GP_WRAP_END;
+	return false;  // default to disabled if no context
 }
 
 // EOF
