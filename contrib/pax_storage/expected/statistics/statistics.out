@@ -1,4 +1,5 @@
 set default_table_access_method = pax;
+set pax.enable_sync_collect_stats = on;
 -- 
 -- Test with small group
 -- 
@@ -11,9 +12,9 @@ insert into t1 select i,i::text,i::float8, i % 2 > 0 from generate_series(1, 100
 select * from get_pax_aux_table('t1');
  ptblockname | pttupcount |                                                                      ptstatistics                                                                      | ptexistvisimap | ptexistexttoast | ptisclustered 
 -------------+------------+--------------------------------------------------------------------------------------------------------------------------------------------------------+----------------+-----------------+---------------
-           0 |        340 | [(false,false),(340),(5,997),(172558)],[(false,false),(340),(10,997),None],[(false,false),(340),(5,997),(172558)],[(false,false),(340),(f,t),None]     | f              | f               | f
-           0 |        338 | [(false,false),(338),(2,1000),(166662)],[(false,false),(338),(1000,999),None],[(false,false),(338),(2,1000),(166662)],[(false,false),(338),(f,t),None] | f              | f               | f
            0 |        322 | [(false,false),(322),(1,998),(161280)],[(false,false),(322),(1,998),None],[(false,false),(322),(1,998),(161280)],[(false,false),(322),(f,t),None]      | f              | f               | f
+           0 |        338 | [(false,false),(338),(2,1000),(166662)],[(false,false),(338),(1000,999),None],[(false,false),(338),(2,1000),(166662)],[(false,false),(338),(f,t),None] | f              | f               | f
+           0 |        340 | [(false,false),(340),(5,997),(172558)],[(false,false),(340),(10,997),None],[(false,false),(340),(5,997),(172558)],[(false,false),(340),(f,t),None]     | f              | f               | f
 (3 rows)
 
 drop table t1;
@@ -24,8 +25,8 @@ insert into t2 select i::bpchar,i::bpchar,i::varchar, i::varchar from generate_s
 select * from get_pax_aux_table('t2');
  ptblockname | pttupcount |                                                                                       ptstatistics                                                                                       | ptexistvisimap | ptexistexttoast | ptisclustered 
 -------------+------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+----------------+-----------------+---------------
-           0 |        322 | [(false,false),(322),(1,998),None],[(false,false),(322),(1                   ,998                 ),None],[(false,false),(322),(1,998),None],[(false,false),(322),(1,998),None]          | f              | f               | f
            0 |        340 | [(false,false),(340),(1000,999),None],[(false,false),(340),(1000                ,999                 ),None],[(false,false),(340),(1000,999),None],[(false,false),(340),(1000,999),None] | f              | f               | f
+           0 |        322 | [(false,false),(322),(1,998),None],[(false,false),(322),(1                   ,998                 ),None],[(false,false),(322),(1,998),None],[(false,false),(322),(1,998),None]          | f              | f               | f
            0 |        338 | [(false,false),(338),(101,997),None],[(false,false),(338),(101                 ,997                 ),None],[(false,false),(338),(101,997),None],[(false,false),(338),(101,997),None]    | f              | f               | f
 (3 rows)
 
@@ -70,9 +71,9 @@ insert into t1 SELECT (CASE WHEN i % 2 > 0 THEN NULL ELSE i END), (CASE WHEN i %
 select * from get_pax_aux_table('t1');
  ptblockname | pttupcount |                         ptstatistics                          | ptexistvisimap | ptexistexttoast | ptisclustered 
 -------------+------------+---------------------------------------------------------------+----------------+-----------------+---------------
+           0 |        160 | [(false,false),(160),None,None],[(true,true),(0),None,None]   | f              | f               | f
            0 |        670 | [(false,true),(170),None,None],[(false,true),(500),None,None] | f              | f               | f
            0 |        170 | [(false,false),(170),None,None],[(true,true),(0),None,None]   | f              | f               | f
-           0 |        160 | [(false,false),(160),None,None],[(true,true),(0),None,None]   | f              | f               | f
 (3 rows)
 
 truncate t1;
@@ -86,9 +87,9 @@ insert into t1 values(generate_series(1, 1000), generate_series(1, 1000), genera
 select * from get_pax_aux_table('t1');
  ptblockname | pttupcount |                                                                                                                                                        ptstatistics                                                                                                                                                         | ptexistvisimap | ptexistexttoast | ptisclustered 
 -------------+------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+----------------+-----------------+---------------
+           0 |        322 | [(false,false),(322),(1,998),(161280)],[(false,false),(322),(1,998),(161280)],[(false,false),(322),(1,998),(161280)],[(false,false),(322),(1,998),(161280)],[(false,false),(322),(1,998),(161280)],[(false,false),(322),($1.00,$998.00),($161,280.00)],[(false,false),(322),(@ 3 secs,@ 3 secs),(@ 16 mins 6 secs)]         | f              | f               | f
            0 |        340 | [(false,false),(340),(5,997),(172558)],[(false,false),(340),(5,997),(172558)],[(false,false),(340),(5,997),(172558)],[(false,false),(340),(5,997),(172558)],[(false,false),(340),(5,997),(172558)],[(false,false),(340),($5.00,$997.00),($172,558.00)],[(false,false),(340),(@ 3 secs,@ 3 secs),(@ 17 mins)]                | f              | f               | f
            0 |        338 | [(false,false),(338),(2,1000),(166662)],[(false,false),(338),(2,1000),(166662)],[(false,false),(338),(2,1000),(166662)],[(false,false),(338),(2,1000),(166662)],[(false,false),(338),(2,1000),(166662)],[(false,false),(338),($2.00,$1,000.00),($166,662.00)],[(false,false),(338),(@ 3 secs,@ 3 secs),(@ 16 mins 54 secs)] | f              | f               | f
-           0 |        322 | [(false,false),(322),(1,998),(161280)],[(false,false),(322),(1,998),(161280)],[(false,false),(322),(1,998),(161280)],[(false,false),(322),(1,998),(161280)],[(false,false),(322),(1,998),(161280)],[(false,false),(322),($1.00,$998.00),($161,280.00)],[(false,false),(322),(@ 3 secs,@ 3 secs),(@ 16 mins 6 secs)]         | f              | f               | f
 (3 rows)
 
 drop table t1;
@@ -112,9 +113,9 @@ insert into t_int4 values(generate_series(1001, 2000));
 select * from get_pax_aux_table('t_int4');
  ptblockname | pttupcount |                ptstatistics                | ptexistvisimap | ptexistexttoast | ptisclustered 
 -------------+------------+--------------------------------------------+----------------+-----------------+---------------
+           0 |        331 | [(false,false),(331),(1001,1997),(499268)] | f              | f               | f
            0 |        335 | [(false,false),(335),(1013,2000),(507879)] | f              | f               | f
            0 |        334 | [(false,false),(334),(1002,1995),(493353)] | f              | f               | f
-           0 |        331 | [(false,false),(331),(1001,1997),(499268)] | f              | f               | f
 (3 rows)
 
 drop table t_int4;
@@ -125,9 +126,9 @@ insert into t_int8 values(generate_series(2001, 3000));
 select * from get_pax_aux_table('t_int8');
  ptblockname | pttupcount |                ptstatistics                | ptexistvisimap | ptexistexttoast | ptisclustered 
 -------------+------------+--------------------------------------------+----------------+-----------------+---------------
+           0 |        332 | [(false,false),(332),(2004,3000),(826908)] | f              | f               | f
            0 |        340 | [(false,false),(340),(2003,2998),(857576)] | f              | f               | f
            0 |        328 | [(false,false),(328),(2001,2997),(816016)] | f              | f               | f
-           0 |        332 | [(false,false),(332),(2004,3000),(826908)] | f              | f               | f
 (3 rows)
 
 drop table t_int8;
@@ -139,8 +140,8 @@ select * from get_pax_aux_table('t_float4');
  ptblockname | pttupcount |                   ptstatistics                   | ptexistvisimap | ptexistexttoast | ptisclustered 
 -------------+------------+--------------------------------------------------+----------------+-----------------+---------------
            0 |        341 | [(false,false),(341),(3001,3998),(1.194769e+06)] | f              | f               | f
-           0 |        335 | [(false,false),(335),(3002,4000),(1.169653e+06)] | f              | f               | f
            0 |        324 | [(false,false),(324),(3006,3996),(1.136078e+06)] | f              | f               | f
+           0 |        335 | [(false,false),(335),(3002,4000),(1.169653e+06)] | f              | f               | f
 (3 rows)
 
 drop table t_float4;
@@ -151,9 +152,9 @@ insert into t_float8 values(generate_series(4001, 5000));
 select * from get_pax_aux_table('t_float8');
  ptblockname | pttupcount |                ptstatistics                 | ptexistvisimap | ptexistexttoast | ptisclustered 
 -------------+------------+---------------------------------------------+----------------+-----------------+---------------
-           0 |        349 | [(false,false),(349),(4003,4998),(1571016)] | f              | f               | f
-           0 |        324 | [(false,false),(324),(4001,4999),(1450686)] | f              | f               | f
            0 |        327 | [(false,false),(327),(4004,5000),(1478798)] | f              | f               | f
+           0 |        324 | [(false,false),(324),(4001,4999),(1450686)] | f              | f               | f
+           0 |        349 | [(false,false),(349),(4003,4998),(1571016)] | f              | f               | f
 (3 rows)
 
 drop table t_float8;
@@ -164,9 +165,9 @@ insert into t_money values(generate_series(5001, 6000), generate_series(5001, 60
 select * from get_pax_aux_table('t_money');
  ptblockname | pttupcount |                                              ptstatistics                                               | ptexistvisimap | ptexistexttoast | ptisclustered 
 -------------+------------+---------------------------------------------------------------------------------------------------------+----------------+-----------------+---------------
+           0 |        341 | [(false,false),(341),(5001,5997),(1874732)],[(false,false),(341),($5,001.00,$5,997.00),($1,874,732.00)] | f              | f               | f
            0 |        348 | [(false,false),(348),(5002,6000),(1913581)],[(false,false),(348),($5,002.00,$6,000.00),($1,913,581.00)] | f              | f               | f
            0 |        311 | [(false,false),(311),(5007,5995),(1712187)],[(false,false),(311),($5,007.00,$5,995.00),($1,712,187.00)] | f              | f               | f
-           0 |        341 | [(false,false),(341),(5001,5997),(1874732)],[(false,false),(341),($5,001.00,$5,997.00),($1,874,732.00)] | f              | f               | f
 (3 rows)
 
 drop table t_money;
@@ -210,8 +211,8 @@ insert into t1 values(generate_series(1, 1000), NULL);
 select * from get_pax_aux_table('t1');
  ptblockname | pttupcount |                        ptstatistics                         | ptexistvisimap | ptexistexttoast | ptisclustered 
 -------------+------------+-------------------------------------------------------------+----------------+-----------------+---------------
-           0 |        338 | [(false,false),(338),None,None],[(true,true),(0),None,None] | f              | f               | f
            0 |        340 | [(false,false),(340),None,None],[(true,true),(0),None,None] | f              | f               | f
+           0 |        338 | [(false,false),(338),None,None],[(true,true),(0),None,None] | f              | f               | f
            0 |        322 | [(false,false),(322),None,None],[(true,true),(0),None,None] | f              | f               | f
 (3 rows)
 
@@ -244,8 +245,8 @@ select * from get_pax_aux_table('t1');
  ptblockname | pttupcount |                                                                                                                                                        ptstatistics                                                                                                                                                         | ptexistvisimap | ptexistexttoast | ptisclustered 
 -------------+------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+----------------+-----------------+---------------
            0 |        338 | [(false,false),(338),(2,1000),(166662)],[(false,false),(338),(2,1000),(166662)],[(false,false),(338),(2,1000),(166662)],[(false,false),(338),(2,1000),(166662)],[(false,false),(338),(2,1000),(166662)],[(false,false),(338),($2.00,$1,000.00),($166,662.00)],[(false,false),(338),(@ 3 secs,@ 3 secs),(@ 16 mins 54 secs)] | f              | f               | f
-           0 |        322 | [(false,false),(322),(1,998),(161280)],[(false,false),(322),(1,998),(161280)],[(false,false),(322),(1,998),(161280)],[(false,false),(322),(1,998),(161280)],[(false,false),(322),(1,998),(161280)],[(false,false),(322),($1.00,$998.00),($161,280.00)],[(false,false),(322),(@ 3 secs,@ 3 secs),(@ 16 mins 6 secs)]         | f              | f               | f
            0 |        340 | [(false,false),(340),(5,997),(172558)],[(false,false),(340),(5,997),(172558)],[(false,false),(340),(5,997),(172558)],[(false,false),(340),(5,997),(172558)],[(false,false),(340),(5,997),(172558)],[(false,false),(340),($5.00,$997.00),($172,558.00)],[(false,false),(340),(@ 3 secs,@ 3 secs),(@ 17 mins)]                | f              | f               | f
+           0 |        322 | [(false,false),(322),(1,998),(161280)],[(false,false),(322),(1,998),(161280)],[(false,false),(322),(1,998),(161280)],[(false,false),(322),(1,998),(161280)],[(false,false),(322),(1,998),(161280)],[(false,false),(322),($1.00,$998.00),($161,280.00)],[(false,false),(322),(@ 3 secs,@ 3 secs),(@ 16 mins 6 secs)]         | f              | f               | f
 (3 rows)
 
 drop table t1;
@@ -256,9 +257,9 @@ insert into t_int2 values(generate_series(1, 1000));
 select * from get_pax_aux_table('t_int2');
  ptblockname | pttupcount |              ptstatistics               | ptexistvisimap | ptexistexttoast | ptisclustered 
 -------------+------------+-----------------------------------------+----------------+-----------------+---------------
+           0 |        340 | [(false,false),(340),(5,997),(172558)]  | f              | f               | f
            0 |        338 | [(false,false),(338),(2,1000),(166662)] | f              | f               | f
            0 |        322 | [(false,false),(322),(1,998),(161280)]  | f              | f               | f
-           0 |        340 | [(false,false),(340),(5,997),(172558)]  | f              | f               | f
 (3 rows)
 
 drop table t_int2;
@@ -270,8 +271,8 @@ select * from get_pax_aux_table('t_int4');
  ptblockname | pttupcount |                ptstatistics                | ptexistvisimap | ptexistexttoast | ptisclustered 
 -------------+------------+--------------------------------------------+----------------+-----------------+---------------
            0 |        335 | [(false,false),(335),(1013,2000),(507879)] | f              | f               | f
-           0 |        331 | [(false,false),(331),(1001,1997),(499268)] | f              | f               | f
            0 |        334 | [(false,false),(334),(1002,1995),(493353)] | f              | f               | f
+           0 |        331 | [(false,false),(331),(1001,1997),(499268)] | f              | f               | f
 (3 rows)
 
 drop table t_int4;
@@ -282,9 +283,9 @@ insert into t_int8 values(generate_series(2001, 3000));
 select * from get_pax_aux_table('t_int8');
  ptblockname | pttupcount |                ptstatistics                | ptexistvisimap | ptexistexttoast | ptisclustered 
 -------------+------------+--------------------------------------------+----------------+-----------------+---------------
-           0 |        332 | [(false,false),(332),(2004,3000),(826908)] | f              | f               | f
            0 |        328 | [(false,false),(328),(2001,2997),(816016)] | f              | f               | f
            0 |        340 | [(false,false),(340),(2003,2998),(857576)] | f              | f               | f
+           0 |        332 | [(false,false),(332),(2004,3000),(826908)] | f              | f               | f
 (3 rows)
 
 drop table t_int8;
@@ -296,8 +297,8 @@ select * from get_pax_aux_table('t_float4');
  ptblockname | pttupcount |                   ptstatistics                   | ptexistvisimap | ptexistexttoast | ptisclustered 
 -------------+------------+--------------------------------------------------+----------------+-----------------+---------------
            0 |        335 | [(false,false),(335),(3002,4000),(1.169653e+06)] | f              | f               | f
-           0 |        341 | [(false,false),(341),(3001,3998),(1.194769e+06)] | f              | f               | f
            0 |        324 | [(false,false),(324),(3006,3996),(1.136078e+06)] | f              | f               | f
+           0 |        341 | [(false,false),(341),(3001,3998),(1.194769e+06)] | f              | f               | f
 (3 rows)
 
 drop table t_float4;
@@ -308,9 +309,9 @@ insert into t_float8 values(generate_series(4001, 5000));
 select * from get_pax_aux_table('t_float8');
  ptblockname | pttupcount |                ptstatistics                 | ptexistvisimap | ptexistexttoast | ptisclustered 
 -------------+------------+---------------------------------------------+----------------+-----------------+---------------
-           0 |        327 | [(false,false),(327),(4004,5000),(1478798)] | f              | f               | f
            0 |        349 | [(false,false),(349),(4003,4998),(1571016)] | f              | f               | f
            0 |        324 | [(false,false),(324),(4001,4999),(1450686)] | f              | f               | f
+           0 |        327 | [(false,false),(327),(4004,5000),(1478798)] | f              | f               | f
 (3 rows)
 
 drop table t_float8;
@@ -322,8 +323,8 @@ select * from get_pax_aux_table('t_money');
  ptblockname | pttupcount |                                              ptstatistics                                               | ptexistvisimap | ptexistexttoast | ptisclustered 
 -------------+------------+---------------------------------------------------------------------------------------------------------+----------------+-----------------+---------------
            0 |        348 | [(false,false),(348),(5002,6000),(1913581)],[(false,false),(348),($5,002.00,$6,000.00),($1,913,581.00)] | f              | f               | f
-           0 |        311 | [(false,false),(311),(5007,5995),(1712187)],[(false,false),(311),($5,007.00,$5,995.00),($1,712,187.00)] | f              | f               | f
            0 |        341 | [(false,false),(341),(5001,5997),(1874732)],[(false,false),(341),($5,001.00,$5,997.00),($1,874,732.00)] | f              | f               | f
+           0 |        311 | [(false,false),(311),(5007,5995),(1712187)],[(false,false),(311),($5,007.00,$5,995.00),($1,712,187.00)] | f              | f               | f
 (3 rows)
 
 drop table t_money;
@@ -339,8 +340,8 @@ select * from get_pax_aux_table('t_interval');
  ptblockname | pttupcount |                              ptstatistics                               | ptexistvisimap | ptexistexttoast | ptisclustered 
 -------------+------------+-------------------------------------------------------------------------+----------------+-----------------+---------------
            0 |          7 | [(false,false),(7),(@ 5 secs,@ 400 hours),(@ 400 hours 40 mins 5 secs)] | f              | f               | f
-           0 |          4 | [(false,false),(4),(@ 3 secs,@ 11 hours),(@ 12 hours 7 secs)]           | f              | f               | f
            0 |          7 | [(false,false),(7),(@ 1 sec,@ 10 hours),(@ 34 hours 53 secs)]           | f              | f               | f
+           0 |          4 | [(false,false),(4),(@ 3 secs,@ 11 hours),(@ 12 hours 7 secs)]           | f              | f               | f
 (3 rows)
 
 drop table t_interval;
@@ -356,8 +357,8 @@ insert into t1_update_stats values(generate_series(1, 1000), generate_series(100
 select * from get_pax_aux_table('t1_update_stats');
  ptblockname | pttupcount |                                                    ptstatistics                                                    | ptexistvisimap | ptexistexttoast | ptisclustered 
 -------------+------------+--------------------------------------------------------------------------------------------------------------------+----------------+-----------------+---------------
-           0 |        338 | [(false,false),(338),(2,1000),(166662)],[(false,false),(338),(1002,2000),(504662)],[(false,false),(338),None,None] | f              | f               | f
            0 |        322 | [(false,false),(322),(1,998),(161280)],[(false,false),(322),(1001,1998),(483280)],[(false,false),(322),None,None]  | f              | f               | f
+           0 |        338 | [(false,false),(338),(2,1000),(166662)],[(false,false),(338),(1002,2000),(504662)],[(false,false),(338),None,None] | f              | f               | f
            0 |        340 | [(false,false),(340),(5,997),(172558)],[(false,false),(340),(1005,1997),(512558)],[(false,false),(340),None,None]  | f              | f               | f
 (3 rows)
 
@@ -365,11 +366,20 @@ select * from get_pax_aux_table('t1_update_stats');
 -- v2: ((1001 + 2000) * 1000 / 2) - ((1001 + 1020) * 20 / 2) = 1480290
 delete from t1_update_stats where v1 <= 20;
 select * from get_pax_aux_table('t1_update_stats');
+ ptblockname | pttupcount |                                                    ptstatistics                                                    | ptexistvisimap | ptexistexttoast | ptisclustered 
+-------------+------------+--------------------------------------------------------------------------------------------------------------------+----------------+-----------------+---------------
+           0 |        322 | [(false,false),(322),(1,998),(161280)],[(false,false),(322),(1001,1998),(483280)],[(false,false),(322),None,None]  | t              | f               | f
+           0 |        338 | [(false,false),(338),(2,1000),(166662)],[(false,false),(338),(1002,2000),(504662)],[(false,false),(338),None,None] | t              | f               | f
+           0 |        340 | [(false,false),(340),(5,997),(172558)],[(false,false),(340),(1005,1997),(512558)],[(false,false),(340),None,None]  | t              | f               | f
+(3 rows)
+
+vacuum t1_update_stats;
+select * from get_pax_aux_table('t1_update_stats');
  ptblockname | pttupcount |                                                    ptstatistics                                                     | ptexistvisimap | ptexistexttoast | ptisclustered 
 -------------+------------+---------------------------------------------------------------------------------------------------------------------+----------------+-----------------+---------------
-           0 |        338 | [(false,false),(330),(22,1000),(166585)],[(false,false),(330),(1022,2000),(496585)],[(false,false),(330),None,None] | t              | f               | f
-           0 |        322 | [(false,false),(318),(23,998),(161232)],[(false,false),(318),(1023,1998),(479232)],[(false,false),(318),None,None]  | t              | f               | f
-           0 |        340 | [(false,false),(332),(21,997),(172473)],[(false,false),(332),(1021,1997),(504473)],[(false,false),(332),None,None]  | t              | f               | f
+           1 |        330 | [(false,false),(330),(22,1000),(166585)],[(false,false),(330),(1022,2000),(496585)],[(false,false),(330),None,None] | f              | f               | f
+           1 |        332 | [(false,false),(332),(21,997),(172473)],[(false,false),(332),(1021,1997),(504473)],[(false,false),(332),None,None]  | f              | f               | f
+           1 |        318 | [(false,false),(318),(23,998),(161232)],[(false,false),(318),(1023,1998),(479232)],[(false,false),(318),None,None]  | f              | f               | f
 (3 rows)
 
 drop table t1_update_stats;
@@ -392,9 +402,18 @@ delete from t2_update_stats where v1 <= 400 and v1 > 300;
 select * from get_pax_aux_table('t2_update_stats');
  ptblockname | pttupcount |                                                    ptstatistics                                                    | ptexistvisimap | ptexistexttoast | ptisclustered 
 -------------+------------+--------------------------------------------------------------------------------------------------------------------+----------------+-----------------+---------------
-           0 |        338 | [(false,false),(303),(2,1000),(154512)],[(false,false),(303),(1002,2000),(457512)],[(false,false),(303),None,None] | t              | f               | f
-           0 |        340 | [(false,false),(305),(5,997),(160201)],[(false,false),(305),(1005,1997),(465201)],[(false,false),(305),None,None]  | t              | f               | f
-           0 |        322 | [(false,false),(292),(1,998),(150737)],[(false,false),(292),(1001,1998),(442737)],[(false,false),(292),None,None]  | t              | f               | f
+           0 |        338 | [(false,false),(338),(2,1000),(166662)],[(false,false),(338),(1002,2000),(504662)],[(false,false),(338),None,None] | t              | f               | f
+           0 |        340 | [(false,false),(340),(5,997),(172558)],[(false,false),(340),(1005,1997),(512558)],[(false,false),(340),None,None]  | t              | f               | f
+           0 |        322 | [(false,false),(322),(1,998),(161280)],[(false,false),(322),(1001,1998),(483280)],[(false,false),(322),None,None]  | t              | f               | f
+(3 rows)
+
+vacuum t2_update_stats;
+select * from get_pax_aux_table('t2_update_stats');
+ ptblockname | pttupcount |                                                    ptstatistics                                                    | ptexistvisimap | ptexistexttoast | ptisclustered 
+-------------+------------+--------------------------------------------------------------------------------------------------------------------+----------------+-----------------+---------------
+           1 |        303 | [(false,false),(303),(2,1000),(154512)],[(false,false),(303),(1002,2000),(457512)],[(false,false),(303),None,None] | f              | f               | f
+           1 |        292 | [(false,false),(292),(1,998),(150737)],[(false,false),(292),(1001,1998),(442737)],[(false,false),(292),None,None]  | f              | f               | f
+           1 |        305 | [(false,false),(305),(5,997),(160201)],[(false,false),(305),(1005,1997),(465201)],[(false,false),(305),None,None]  | f              | f               | f
 (3 rows)
 
 drop table t2_update_stats;
@@ -407,19 +426,28 @@ select * from get_pax_aux_table('t3_update_stats');
  ptblockname | pttupcount |                                                    ptstatistics                                                    | ptexistvisimap | ptexistexttoast | ptisclustered 
 -------------+------------+--------------------------------------------------------------------------------------------------------------------+----------------+-----------------+---------------
            0 |        338 | [(false,false),(338),(2,1000),(166662)],[(false,false),(338),(1002,2000),(504662)],[(false,false),(338),None,None] | f              | f               | f
-           0 |        322 | [(false,false),(322),(1,998),(161280)],[(false,false),(322),(1001,1998),(483280)],[(false,false),(322),None,None]  | f              | f               | f
            0 |        340 | [(false,false),(340),(5,997),(172558)],[(false,false),(340),(1005,1997),(512558)],[(false,false),(340),None,None]  | f              | f               | f
+           0 |        322 | [(false,false),(322),(1,998),(161280)],[(false,false),(322),(1001,1998),(483280)],[(false,false),(322),None,None]  | f              | f               | f
 (3 rows)
 
 -- v1: ((1 + 1000) * 1000 / 2) - ((1 + 900) * 900 / 2) = 95050
 -- v2: ((1001 + 2000) * 1000 / 2) - ((1001 + 1900) * 900 / 2) = 195050
 delete from t3_update_stats where v2 <= 1900;
 select * from get_pax_aux_table('t3_update_stats');
+ ptblockname | pttupcount |                                                    ptstatistics                                                    | ptexistvisimap | ptexistexttoast | ptisclustered 
+-------------+------------+--------------------------------------------------------------------------------------------------------------------+----------------+-----------------+---------------
+           0 |        338 | [(false,false),(338),(2,1000),(166662)],[(false,false),(338),(1002,2000),(504662)],[(false,false),(338),None,None] | t              | f               | f
+           0 |        322 | [(false,false),(322),(1,998),(161280)],[(false,false),(322),(1001,1998),(483280)],[(false,false),(322),None,None]  | t              | f               | f
+           0 |        340 | [(false,false),(340),(5,997),(172558)],[(false,false),(340),(1005,1997),(512558)],[(false,false),(340),None,None]  | t              | f               | f
+(3 rows)
+
+vacuum t3_update_stats;
+select * from get_pax_aux_table('t3_update_stats');
  ptblockname | pttupcount |                                                  ptstatistics                                                   | ptexistvisimap | ptexistexttoast | ptisclustered 
 -------------+------------+-----------------------------------------------------------------------------------------------------------------+----------------+-----------------+---------------
-           0 |        338 | [(false,false),(30),(902,1000),(28591)],[(false,false),(30),(1902,2000),(58591)],[(false,false),(30),None,None] | t              | f               | f
-           0 |        322 | [(false,false),(36),(904,998),(34328)],[(false,false),(36),(1904,1998),(70328)],[(false,false),(36),None,None]  | t              | f               | f
-           0 |        340 | [(false,false),(34),(901,997),(32131)],[(false,false),(34),(1901,1997),(66131)],[(false,false),(34),None,None]  | t              | f               | f
+           1 |         36 | [(false,false),(36),(904,998),(34328)],[(false,false),(36),(1904,1998),(70328)],[(false,false),(36),None,None]  | f              | f               | f
+           1 |         34 | [(false,false),(34),(901,997),(32131)],[(false,false),(34),(1901,1997),(66131)],[(false,false),(34),None,None]  | f              | f               | f
+           1 |         30 | [(false,false),(30),(902,1000),(28591)],[(false,false),(30),(1902,2000),(58591)],[(false,false),(30),None,None] | f              | f               | f
 (3 rows)
 
 drop table t3_update_stats;
@@ -440,12 +468,18 @@ select * from get_pax_aux_table('t4_update_stats');
 -- v2: 0
 delete from t4_update_stats;
 select * from get_pax_aux_table('t4_update_stats');
- ptblockname | pttupcount |                                      ptstatistics                                      | ptexistvisimap | ptexistexttoast | ptisclustered 
--------------+------------+----------------------------------------------------------------------------------------+----------------+-----------------+---------------
-           0 |        338 | [(true,false),(0),None,None],[(true,false),(0),None,None],[(true,false),(0),None,None] | t              | f               | f
-           0 |        322 | [(true,false),(0),None,None],[(true,false),(0),None,None],[(true,false),(0),None,None] | t              | f               | f
-           0 |        340 | [(true,false),(0),None,None],[(true,false),(0),None,None],[(true,false),(0),None,None] | t              | f               | f
+ ptblockname | pttupcount |                                                    ptstatistics                                                    | ptexistvisimap | ptexistexttoast | ptisclustered 
+-------------+------------+--------------------------------------------------------------------------------------------------------------------+----------------+-----------------+---------------
+           0 |        338 | [(false,false),(338),(2,1000),(166662)],[(false,false),(338),(1002,2000),(504662)],[(false,false),(338),None,None] | t              | f               | f
+           0 |        322 | [(false,false),(322),(1,998),(161280)],[(false,false),(322),(1001,1998),(483280)],[(false,false),(322),None,None]  | t              | f               | f
+           0 |        340 | [(false,false),(340),(5,997),(172558)],[(false,false),(340),(1005,1997),(512558)],[(false,false),(340),None,None]  | t              | f               | f
 (3 rows)
+
+vacuum t4_update_stats;
+select * from get_pax_aux_table('t4_update_stats');
+ ptblockname | pttupcount | ptstatistics | ptexistvisimap | ptexistexttoast | ptisclustered 
+-------------+------------+--------------+----------------+-----------------+---------------
+(0 rows)
 
 drop table t4_update_stats;
 -- update part of data in the first group
@@ -456,8 +490,8 @@ insert into t5_update_stats values(generate_series(1, 1000), generate_series(100
 select * from get_pax_aux_table('t5_update_stats');
  ptblockname | pttupcount |                                                    ptstatistics                                                    | ptexistvisimap | ptexistexttoast | ptisclustered 
 -------------+------------+--------------------------------------------------------------------------------------------------------------------+----------------+-----------------+---------------
-           0 |        338 | [(false,false),(338),(2,1000),(166662)],[(false,false),(338),(1002,2000),(504662)],[(false,false),(338),None,None] | f              | f               | f
            0 |        322 | [(false,false),(322),(1,998),(161280)],[(false,false),(322),(1001,1998),(483280)],[(false,false),(322),None,None]  | f              | f               | f
+           0 |        338 | [(false,false),(338),(2,1000),(166662)],[(false,false),(338),(1002,2000),(504662)],[(false,false),(338),None,None] | f              | f               | f
            0 |        340 | [(false,false),(340),(5,997),(172558)],[(false,false),(340),(1005,1997),(512558)],[(false,false),(340),None,None]  | f              | f               | f
 (3 rows)
 
@@ -467,14 +501,26 @@ select * from get_pax_aux_table('t5_update_stats');
 -- v2(block 1): (1001 + 1020) * 20 / 2 + 20 = 20230
 update t5_update_stats set v1 = v1 + 1, v2 = v2 + 1 where v1 <= 20;
 select * from get_pax_aux_table('t5_update_stats');
+ ptblockname | pttupcount |                                                    ptstatistics                                                    | ptexistvisimap | ptexistexttoast | ptisclustered 
+-------------+------------+--------------------------------------------------------------------------------------------------------------------+----------------+-----------------+---------------
+           0 |        322 | [(false,false),(322),(1,998),(161280)],[(false,false),(322),(1001,1998),(483280)],[(false,false),(322),None,None]  | t              | f               | f
+           1 |          3 | [(false,false),(3),(12,20),(47)],[(false,false),(3),(1012,1020),(3047)],[(false,false),(3),None,None]              | f              | f               | f
+           0 |        340 | [(false,false),(340),(5,997),(172558)],[(false,false),(340),(1005,1997),(512558)],[(false,false),(340),None,None]  | t              | f               | f
+           1 |          9 | [(false,false),(9),(5,21),(106)],[(false,false),(9),(1005,1021),(9106)],[(false,false),(9),None,None]              | f              | f               | f
+           0 |        338 | [(false,false),(338),(2,1000),(166662)],[(false,false),(338),(1002,2000),(504662)],[(false,false),(338),None,None] | t              | f               | f
+           1 |          8 | [(false,false),(8),(2,19),(77)],[(false,false),(8),(1002,1019),(8077)],[(false,false),(8),None,None]               | f              | f               | f
+(6 rows)
+
+vacuum t5_update_stats;
+select * from get_pax_aux_table('t5_update_stats');
  ptblockname | pttupcount |                                                    ptstatistics                                                     | ptexistvisimap | ptexistexttoast | ptisclustered 
 -------------+------------+---------------------------------------------------------------------------------------------------------------------+----------------+-----------------+---------------
-           0 |        338 | [(false,false),(330),(22,1000),(166585)],[(false,false),(330),(1022,2000),(496585)],[(false,false),(330),None,None] | t              | f               | f
            1 |          8 | [(false,false),(8),(2,19),(77)],[(false,false),(8),(1002,1019),(8077)],[(false,false),(8),None,None]                | f              | f               | f
-           0 |        322 | [(false,false),(318),(23,998),(161232)],[(false,false),(318),(1023,1998),(479232)],[(false,false),(318),None,None]  | t              | f               | f
+           2 |        330 | [(false,false),(330),(22,1000),(166585)],[(false,false),(330),(1022,2000),(496585)],[(false,false),(330),None,None] | f              | f               | f
            1 |          3 | [(false,false),(3),(12,20),(47)],[(false,false),(3),(1012,1020),(3047)],[(false,false),(3),None,None]               | f              | f               | f
-           0 |        340 | [(false,false),(332),(21,997),(172473)],[(false,false),(332),(1021,1997),(504473)],[(false,false),(332),None,None]  | t              | f               | f
+           2 |        318 | [(false,false),(318),(23,998),(161232)],[(false,false),(318),(1023,1998),(479232)],[(false,false),(318),None,None]  | f              | f               | f
            1 |          9 | [(false,false),(9),(5,21),(106)],[(false,false),(9),(1005,1021),(9106)],[(false,false),(9),None,None]               | f              | f               | f
+           2 |        332 | [(false,false),(332),(21,997),(172473)],[(false,false),(332),(1021,1997),(504473)],[(false,false),(332),None,None]  | f              | f               | f
 (6 rows)
 
 drop table t5_update_stats;
@@ -499,12 +545,24 @@ update t6_update_stats set v1 = v1 + 1, v2 = v2 + 1 where v1 <= 400 and v1 > 300
 select * from get_pax_aux_table('t6_update_stats');
  ptblockname | pttupcount |                                                    ptstatistics                                                    | ptexistvisimap | ptexistexttoast | ptisclustered 
 -------------+------------+--------------------------------------------------------------------------------------------------------------------+----------------+-----------------+---------------
-           0 |        338 | [(false,false),(303),(2,1000),(154512)],[(false,false),(303),(1002,2000),(457512)],[(false,false),(303),None,None] | t              | f               | f
+           0 |        338 | [(false,false),(338),(2,1000),(166662)],[(false,false),(338),(1002,2000),(504662)],[(false,false),(338),None,None] | t              | f               | f
            1 |         34 | [(false,false),(34),(304,394),(11849)],[(false,false),(34),(1304,1394),(45849)],[(false,false),(34),None,None]     | f              | f               | f
-           0 |        340 | [(false,false),(305),(5,997),(160201)],[(false,false),(305),(1005,1997),(465201)],[(false,false),(305),None,None]  | t              | f               | f
+           0 |        340 | [(false,false),(340),(5,997),(172558)],[(false,false),(340),(1005,1997),(512558)],[(false,false),(340),None,None]  | t              | f               | f
            1 |         35 | [(false,false),(35),(306,399),(12357)],[(false,false),(35),(1306,1399),(47357)],[(false,false),(35),None,None]     | f              | f               | f
-           0 |        322 | [(false,false),(292),(1,998),(150737)],[(false,false),(292),(1001,1998),(442737)],[(false,false),(292),None,None]  | t              | f               | f
+           0 |        322 | [(false,false),(322),(1,998),(161280)],[(false,false),(322),(1001,1998),(483280)],[(false,false),(322),None,None]  | t              | f               | f
            1 |         31 | [(false,false),(31),(302,401),(10944)],[(false,false),(31),(1302,1401),(41944)],[(false,false),(31),None,None]     | f              | f               | f
+(6 rows)
+
+vacuum t6_update_stats;
+select * from get_pax_aux_table('t6_update_stats');
+ ptblockname | pttupcount |                                                    ptstatistics                                                    | ptexistvisimap | ptexistexttoast | ptisclustered 
+-------------+------------+--------------------------------------------------------------------------------------------------------------------+----------------+-----------------+---------------
+           1 |         34 | [(false,false),(34),(304,394),(11849)],[(false,false),(34),(1304,1394),(45849)],[(false,false),(34),None,None]     | f              | f               | f
+           2 |        303 | [(false,false),(303),(2,1000),(154512)],[(false,false),(303),(1002,2000),(457512)],[(false,false),(303),None,None] | f              | f               | f
+           1 |         31 | [(false,false),(31),(302,401),(10944)],[(false,false),(31),(1302,1401),(41944)],[(false,false),(31),None,None]     | f              | f               | f
+           2 |        292 | [(false,false),(292),(1,998),(150737)],[(false,false),(292),(1001,1998),(442737)],[(false,false),(292),None,None]  | f              | f               | f
+           1 |         35 | [(false,false),(35),(306,399),(12357)],[(false,false),(35),(1306,1399),(47357)],[(false,false),(35),None,None]     | f              | f               | f
+           2 |        305 | [(false,false),(305),(5,997),(160201)],[(false,false),(305),(1005,1997),(465201)],[(false,false),(305),None,None]  | f              | f               | f
 (6 rows)
 
 drop table t6_update_stats;
@@ -529,12 +587,24 @@ update t7_update_stats set v1 = v1 + 1, v2 = v2 + 1 where v2 <= 1900;
 select * from get_pax_aux_table('t7_update_stats');
  ptblockname | pttupcount |                                                    ptstatistics                                                    | ptexistvisimap | ptexistexttoast | ptisclustered 
 -------------+------------+--------------------------------------------------------------------------------------------------------------------+----------------+-----------------+---------------
-           0 |        338 | [(false,false),(30),(902,1000),(28591)],[(false,false),(30),(1902,2000),(58591)],[(false,false),(30),None,None]    | t              | f               | f
-           1 |        308 | [(false,false),(308),(2,896),(138071)],[(false,false),(308),(1002,1896),(446071)],[(false,false),(308),None,None]  | f              | f               | f
-           0 |        340 | [(false,false),(34),(901,997),(32131)],[(false,false),(34),(1901,1997),(66131)],[(false,false),(34),None,None]     | t              | f               | f
-           1 |        307 | [(false,false),(307),(5,901),(141328)],[(false,false),(307),(1005,1901),(448328)],[(false,false),(307),None,None]  | f              | f               | f
-           0 |        322 | [(false,false),(36),(904,998),(34328)],[(false,false),(36),(1904,1998),(70328)],[(false,false),(36),None,None]     | t              | f               | f
+           0 |        322 | [(false,false),(322),(1,998),(161280)],[(false,false),(322),(1001,1998),(483280)],[(false,false),(322),None,None]  | t              | f               | f
            1 |        285 | [(false,false),(285),(12,900),(126951)],[(false,false),(285),(1012,1900),(411951)],[(false,false),(285),None,None] | f              | f               | f
+           0 |        338 | [(false,false),(338),(2,1000),(166662)],[(false,false),(338),(1002,2000),(504662)],[(false,false),(338),None,None] | t              | f               | f
+           1 |        308 | [(false,false),(308),(2,896),(138071)],[(false,false),(308),(1002,1896),(446071)],[(false,false),(308),None,None]  | f              | f               | f
+           0 |        340 | [(false,false),(340),(5,997),(172558)],[(false,false),(340),(1005,1997),(512558)],[(false,false),(340),None,None]  | t              | f               | f
+           1 |        307 | [(false,false),(307),(5,901),(141328)],[(false,false),(307),(1005,1901),(448328)],[(false,false),(307),None,None]  | f              | f               | f
+(6 rows)
+
+vacuum t7_update_stats;
+select * from get_pax_aux_table('t7_update_stats');
+ ptblockname | pttupcount |                                                    ptstatistics                                                    | ptexistvisimap | ptexistexttoast | ptisclustered 
+-------------+------------+--------------------------------------------------------------------------------------------------------------------+----------------+-----------------+---------------
+           1 |        308 | [(false,false),(308),(2,896),(138071)],[(false,false),(308),(1002,1896),(446071)],[(false,false),(308),None,None]  | f              | f               | f
+           2 |         30 | [(false,false),(30),(902,1000),(28591)],[(false,false),(30),(1902,2000),(58591)],[(false,false),(30),None,None]    | f              | f               | f
+           1 |        285 | [(false,false),(285),(12,900),(126951)],[(false,false),(285),(1012,1900),(411951)],[(false,false),(285),None,None] | f              | f               | f
+           2 |         36 | [(false,false),(36),(904,998),(34328)],[(false,false),(36),(1904,1998),(70328)],[(false,false),(36),None,None]     | f              | f               | f
+           1 |        307 | [(false,false),(307),(5,901),(141328)],[(false,false),(307),(1005,1901),(448328)],[(false,false),(307),None,None]  | f              | f               | f
+           2 |         34 | [(false,false),(34),(901,997),(32131)],[(false,false),(34),(1901,1997),(66131)],[(false,false),(34),None,None]     | f              | f               | f
 (6 rows)
 
 drop table t7_update_stats;
@@ -546,9 +616,9 @@ insert into t8_update_stats values(generate_series(1, 1000), generate_series(100
 select * from get_pax_aux_table('t8_update_stats');
  ptblockname | pttupcount |                                                    ptstatistics                                                    | ptexistvisimap | ptexistexttoast | ptisclustered 
 -------------+------------+--------------------------------------------------------------------------------------------------------------------+----------------+-----------------+---------------
-           0 |        338 | [(false,false),(338),(2,1000),(166662)],[(false,false),(338),(1002,2000),(504662)],[(false,false),(338),None,None] | f              | f               | f
            0 |        340 | [(false,false),(340),(5,997),(172558)],[(false,false),(340),(1005,1997),(512558)],[(false,false),(340),None,None]  | f              | f               | f
            0 |        322 | [(false,false),(322),(1,998),(161280)],[(false,false),(322),(1001,1998),(483280)],[(false,false),(322),None,None]  | f              | f               | f
+           0 |        338 | [(false,false),(338),(2,1000),(166662)],[(false,false),(338),(1002,2000),(504662)],[(false,false),(338),None,None] | f              | f               | f
 (3 rows)
 
 -- v1(block 0): 0
@@ -559,13 +629,22 @@ update t8_update_stats set v1 = v1 + 1, v2 = v2 + 1;
 select * from get_pax_aux_table('t8_update_stats');
  ptblockname | pttupcount |                                                    ptstatistics                                                    | ptexistvisimap | ptexistexttoast | ptisclustered 
 -------------+------------+--------------------------------------------------------------------------------------------------------------------+----------------+-----------------+---------------
-           0 |        338 | [(true,false),(0),None,None],[(true,false),(0),None,None],[(true,false),(0),None,None]                             | t              | f               | f
-           1 |        338 | [(false,false),(338),(2,1000),(166662)],[(false,false),(338),(1002,2000),(504662)],[(false,false),(338),None,None] | f              | f               | f
-           0 |        340 | [(true,false),(0),None,None],[(true,false),(0),None,None],[(true,false),(0),None,None]                             | t              | f               | f
-           1 |        341 | [(false,false),(341),(5,1001),(173559)],[(false,false),(341),(1005,2001),(514559)],[(false,false),(341),None,None] | f              | f               | f
-           0 |        322 | [(true,false),(0),None,None],[(true,false),(0),None,None],[(true,false),(0),None,None]                             | t              | f               | f
+           0 |        322 | [(false,false),(322),(1,998),(161280)],[(false,false),(322),(1001,1998),(483280)],[(false,false),(322),None,None]  | t              | f               | f
            1 |        321 | [(false,false),(321),(12,998),(161279)],[(false,false),(321),(1012,1998),(482279)],[(false,false),(321),None,None] | f              | f               | f
+           0 |        338 | [(false,false),(338),(2,1000),(166662)],[(false,false),(338),(1002,2000),(504662)],[(false,false),(338),None,None] | t              | f               | f
+           1 |        338 | [(false,false),(338),(2,1000),(166662)],[(false,false),(338),(1002,2000),(504662)],[(false,false),(338),None,None] | f              | f               | f
+           0 |        340 | [(false,false),(340),(5,997),(172558)],[(false,false),(340),(1005,1997),(512558)],[(false,false),(340),None,None]  | t              | f               | f
+           1 |        341 | [(false,false),(341),(5,1001),(173559)],[(false,false),(341),(1005,2001),(514559)],[(false,false),(341),None,None] | f              | f               | f
 (6 rows)
+
+vacuum t8_update_stats;
+select * from get_pax_aux_table('t8_update_stats');
+ ptblockname | pttupcount |                                                    ptstatistics                                                    | ptexistvisimap | ptexistexttoast | ptisclustered 
+-------------+------------+--------------------------------------------------------------------------------------------------------------------+----------------+-----------------+---------------
+           1 |        338 | [(false,false),(338),(2,1000),(166662)],[(false,false),(338),(1002,2000),(504662)],[(false,false),(338),None,None] | f              | f               | f
+           1 |        321 | [(false,false),(321),(12,998),(161279)],[(false,false),(321),(1012,1998),(482279)],[(false,false),(321),None,None] | f              | f               | f
+           1 |        341 | [(false,false),(341),(5,1001),(173559)],[(false,false),(341),(1005,2001),(514559)],[(false,false),(341),None,None] | f              | f               | f
+(3 rows)
 
 drop table t8_update_stats;
 -- delete cross multi files
@@ -579,18 +658,18 @@ insert into t9_update_stats values(generate_series(100, 1000), generate_series(1
 select * from get_pax_aux_table('t9_update_stats');
  ptblockname | pttupcount |                                                    ptstatistics                                                     | ptexistvisimap | ptexistexttoast | ptisclustered 
 -------------+------------+---------------------------------------------------------------------------------------------------------------------+----------------+-----------------+---------------
-           0 |        338 | [(false,false),(338),(2,1000),(166662)],[(false,false),(338),(1002,2000),(504662)],[(false,false),(338),None,None]  | f              | f               | f
-           1 |        338 | [(false,false),(338),(2,1000),(166662)],[(false,false),(338),(1002,2000),(504662)],[(false,false),(338),None,None]  | f              | f               | f
-           2 |         38 | [(false,false),(38),(2,99),(1912)],[(false,false),(38),(102,199),(5712)],[(false,false),(38),None,None]             | f              | f               | f
-           3 |        300 | [(false,false),(300),(101,1000),(164750)],[(false,true),(299),(1102,2000),(463049)],[(false,false),(300),None,None] | f              | f               | f
-           0 |        340 | [(false,false),(340),(5,997),(172558)],[(false,false),(340),(1005,1997),(512558)],[(false,false),(340),None,None]   | f              | f               | f
-           1 |        340 | [(false,false),(340),(5,997),(172558)],[(false,false),(340),(1005,1997),(512558)],[(false,false),(340),None,None]   | f              | f               | f
-           2 |         25 | [(false,false),(25),(5,100),(1061)],[(false,false),(25),(105,200),(3561)],[(false,false),(25),None,None]            | f              | f               | f
-           3 |        316 | [(false,false),(316),(100,997),(171597)],[(false,false),(316),(1101,1998),(487913)],[(false,false),(316),None,None] | f              | f               | f
            0 |        322 | [(false,false),(322),(1,998),(161280)],[(false,false),(322),(1001,1998),(483280)],[(false,false),(322),None,None]   | f              | f               | f
            1 |        322 | [(false,false),(322),(1,998),(161280)],[(false,false),(322),(1001,1998),(483280)],[(false,false),(322),None,None]   | f              | f               | f
            2 |         37 | [(false,false),(37),(1,98),(2077)],[(false,false),(37),(101,198),(5777)],[(false,false),(37),None,None]             | f              | f               | f
            3 |        285 | [(false,false),(285),(114,998),(159203)],[(false,false),(285),(1115,1999),(444488)],[(false,false),(285),None,None] | f              | f               | f
+           0 |        340 | [(false,false),(340),(5,997),(172558)],[(false,false),(340),(1005,1997),(512558)],[(false,false),(340),None,None]   | f              | f               | f
+           1 |        340 | [(false,false),(340),(5,997),(172558)],[(false,false),(340),(1005,1997),(512558)],[(false,false),(340),None,None]   | f              | f               | f
+           2 |         25 | [(false,false),(25),(5,100),(1061)],[(false,false),(25),(105,200),(3561)],[(false,false),(25),None,None]            | f              | f               | f
+           3 |        316 | [(false,false),(316),(100,997),(171597)],[(false,false),(316),(1101,1998),(487913)],[(false,false),(316),None,None] | f              | f               | f
+           0 |        338 | [(false,false),(338),(2,1000),(166662)],[(false,false),(338),(1002,2000),(504662)],[(false,false),(338),None,None]  | f              | f               | f
+           1 |        338 | [(false,false),(338),(2,1000),(166662)],[(false,false),(338),(1002,2000),(504662)],[(false,false),(338),None,None]  | f              | f               | f
+           2 |         38 | [(false,false),(38),(2,99),(1912)],[(false,false),(38),(102,199),(5712)],[(false,false),(38),None,None]             | f              | f               | f
+           3 |        300 | [(false,false),(300),(101,1000),(164750)],[(false,true),(299),(1102,2000),(463049)],[(false,false),(300),None,None] | f              | f               | f
 (12 rows)
 
 delete from t9_update_stats where v1 <= 20;
@@ -598,18 +677,30 @@ select * from get_pax_aux_table('t9_update_stats');
  ptblockname | pttupcount |                                                    ptstatistics                                                     | ptexistvisimap | ptexistexttoast | ptisclustered 
 -------------+------------+---------------------------------------------------------------------------------------------------------------------+----------------+-----------------+---------------
            3 |        300 | [(false,false),(300),(101,1000),(164750)],[(false,true),(299),(1102,2000),(463049)],[(false,false),(300),None,None] | f              | f               | f
-           0 |        338 | [(false,false),(330),(22,1000),(166585)],[(false,false),(330),(1022,2000),(496585)],[(false,false),(330),None,None] | t              | f               | f
-           1 |        338 | [(false,false),(330),(22,1000),(166585)],[(false,false),(330),(1022,2000),(496585)],[(false,false),(330),None,None] | t              | f               | f
-           2 |         38 | [(false,false),(30),(22,99),(1835)],[(false,false),(30),(122,199),(4835)],[(false,false),(30),None,None]            | t              | f               | f
-           3 |        316 | [(false,false),(316),(100,997),(171597)],[(false,false),(316),(1101,1998),(487913)],[(false,false),(316),None,None] | f              | f               | f
-           0 |        340 | [(false,false),(332),(21,997),(172473)],[(false,false),(332),(1021,1997),(504473)],[(false,false),(332),None,None]  | t              | f               | f
-           1 |        340 | [(false,false),(332),(21,997),(172473)],[(false,false),(332),(1021,1997),(504473)],[(false,false),(332),None,None]  | t              | f               | f
-           2 |         25 | [(false,false),(17),(21,100),(976)],[(false,false),(17),(121,200),(2676)],[(false,false),(17),None,None]            | t              | f               | f
+           0 |        338 | [(false,false),(338),(2,1000),(166662)],[(false,false),(338),(1002,2000),(504662)],[(false,false),(338),None,None]  | t              | f               | f
+           1 |        338 | [(false,false),(338),(2,1000),(166662)],[(false,false),(338),(1002,2000),(504662)],[(false,false),(338),None,None]  | t              | f               | f
+           2 |         38 | [(false,false),(38),(2,99),(1912)],[(false,false),(38),(102,199),(5712)],[(false,false),(38),None,None]             | t              | f               | f
            3 |        285 | [(false,false),(285),(114,998),(159203)],[(false,false),(285),(1115,1999),(444488)],[(false,false),(285),None,None] | f              | f               | f
-           0 |        322 | [(false,false),(318),(23,998),(161232)],[(false,false),(318),(1023,1998),(479232)],[(false,false),(318),None,None]  | t              | f               | f
-           1 |        322 | [(false,false),(318),(23,998),(161232)],[(false,false),(318),(1023,1998),(479232)],[(false,false),(318),None,None]  | t              | f               | f
-           2 |         37 | [(false,false),(33),(23,98),(2029)],[(false,false),(33),(123,198),(5329)],[(false,false),(33),None,None]            | t              | f               | f
+           0 |        322 | [(false,false),(322),(1,998),(161280)],[(false,false),(322),(1001,1998),(483280)],[(false,false),(322),None,None]   | t              | f               | f
+           1 |        322 | [(false,false),(322),(1,998),(161280)],[(false,false),(322),(1001,1998),(483280)],[(false,false),(322),None,None]   | t              | f               | f
+           2 |         37 | [(false,false),(37),(1,98),(2077)],[(false,false),(37),(101,198),(5777)],[(false,false),(37),None,None]             | t              | f               | f
+           3 |        316 | [(false,false),(316),(100,997),(171597)],[(false,false),(316),(1101,1998),(487913)],[(false,false),(316),None,None] | f              | f               | f
+           0 |        340 | [(false,false),(340),(5,997),(172558)],[(false,false),(340),(1005,1997),(512558)],[(false,false),(340),None,None]   | t              | f               | f
+           1 |        340 | [(false,false),(340),(5,997),(172558)],[(false,false),(340),(1005,1997),(512558)],[(false,false),(340),None,None]   | t              | f               | f
+           2 |         25 | [(false,false),(25),(5,100),(1061)],[(false,false),(25),(105,200),(3561)],[(false,false),(25),None,None]            | t              | f               | f
 (12 rows)
+
+vacuum t9_update_stats;
+select * from get_pax_aux_table('t9_update_stats');
+ ptblockname | pttupcount |                                                    ptstatistics                                                     | ptexistvisimap | ptexistexttoast | ptisclustered 
+-------------+------------+---------------------------------------------------------------------------------------------------------------------+----------------+-----------------+---------------
+           3 |        300 | [(false,false),(300),(101,1000),(164750)],[(false,true),(299),(1102,2000),(463049)],[(false,false),(300),None,None] | f              | f               | f
+           4 |        690 | [(false,false),(690),(22,1000),(335005)],[(false,false),(690),(122,2000),(998005)],[(false,false),(690),None,None]  | f              | f               | f
+           3 |        285 | [(false,false),(285),(114,998),(159203)],[(false,false),(285),(1115,1999),(444488)],[(false,false),(285),None,None] | f              | f               | f
+           4 |        669 | [(false,false),(669),(23,998),(324493)],[(false,false),(669),(123,1998),(963793)],[(false,false),(669),None,None]   | f              | f               | f
+           3 |        316 | [(false,false),(316),(100,997),(171597)],[(false,false),(316),(1101,1998),(487913)],[(false,false),(316),None,None] | f              | f               | f
+           4 |        681 | [(false,false),(681),(21,997),(345922)],[(false,false),(681),(121,1997),(1011622)],[(false,false),(681),None,None]  | f              | f               | f
+(6 rows)
 
 drop table t9_update_stats;
 -- update cross multi files
@@ -623,10 +714,6 @@ insert into t10_update_stats values(generate_series(100, 1000), generate_series(
 select * from get_pax_aux_table('t10_update_stats');
  ptblockname | pttupcount |                                                    ptstatistics                                                     | ptexistvisimap | ptexistexttoast | ptisclustered 
 -------------+------------+---------------------------------------------------------------------------------------------------------------------+----------------+-----------------+---------------
-           0 |        338 | [(false,false),(338),(2,1000),(166662)],[(false,false),(338),(1002,2000),(504662)],[(false,false),(338),None,None]  | f              | f               | f
-           1 |        338 | [(false,false),(338),(2,1000),(166662)],[(false,false),(338),(1002,2000),(504662)],[(false,false),(338),None,None]  | f              | f               | f
-           2 |         38 | [(false,false),(38),(2,99),(1912)],[(false,false),(38),(102,199),(5712)],[(false,false),(38),None,None]             | f              | f               | f
-           3 |        300 | [(false,false),(300),(101,1000),(164750)],[(false,true),(299),(1102,2000),(463049)],[(false,false),(300),None,None] | f              | f               | f
            0 |        322 | [(false,false),(322),(1,998),(161280)],[(false,false),(322),(1001,1998),(483280)],[(false,false),(322),None,None]   | f              | f               | f
            1 |        322 | [(false,false),(322),(1,998),(161280)],[(false,false),(322),(1001,1998),(483280)],[(false,false),(322),None,None]   | f              | f               | f
            2 |         37 | [(false,false),(37),(1,98),(2077)],[(false,false),(37),(101,198),(5777)],[(false,false),(37),None,None]             | f              | f               | f
@@ -635,28 +722,47 @@ select * from get_pax_aux_table('t10_update_stats');
            1 |        340 | [(false,false),(340),(5,997),(172558)],[(false,false),(340),(1005,1997),(512558)],[(false,false),(340),None,None]   | f              | f               | f
            2 |         25 | [(false,false),(25),(5,100),(1061)],[(false,false),(25),(105,200),(3561)],[(false,false),(25),None,None]            | f              | f               | f
            3 |        316 | [(false,false),(316),(100,997),(171597)],[(false,false),(316),(1101,1998),(487913)],[(false,false),(316),None,None] | f              | f               | f
+           0 |        338 | [(false,false),(338),(2,1000),(166662)],[(false,false),(338),(1002,2000),(504662)],[(false,false),(338),None,None]  | f              | f               | f
+           1 |        338 | [(false,false),(338),(2,1000),(166662)],[(false,false),(338),(1002,2000),(504662)],[(false,false),(338),None,None]  | f              | f               | f
+           2 |         38 | [(false,false),(38),(2,99),(1912)],[(false,false),(38),(102,199),(5712)],[(false,false),(38),None,None]             | f              | f               | f
+           3 |        300 | [(false,false),(300),(101,1000),(164750)],[(false,true),(299),(1102,2000),(463049)],[(false,false),(300),None,None] | f              | f               | f
 (12 rows)
 
 update t10_update_stats set v1 = v1 + 1, v2 = v2 + 1 where v1 <= 20;
 select * from get_pax_aux_table('t10_update_stats');
  ptblockname | pttupcount |                                                    ptstatistics                                                     | ptexistvisimap | ptexistexttoast | ptisclustered 
 -------------+------------+---------------------------------------------------------------------------------------------------------------------+----------------+-----------------+---------------
-           3 |        300 | [(false,false),(300),(101,1000),(164750)],[(false,true),(299),(1102,2000),(463049)],[(false,false),(300),None,None] | f              | f               | f
-           0 |        338 | [(false,false),(330),(22,1000),(166585)],[(false,false),(330),(1022,2000),(496585)],[(false,false),(330),None,None] | t              | f               | f
-           1 |        338 | [(false,false),(330),(22,1000),(166585)],[(false,false),(330),(1022,2000),(496585)],[(false,false),(330),None,None] | t              | f               | f
-           2 |         38 | [(false,false),(30),(22,99),(1835)],[(false,false),(30),(122,199),(4835)],[(false,false),(30),None,None]            | t              | f               | f
-           4 |         24 | [(false,false),(24),(2,19),(231)],[(false,false),(24),(102,1019),(17031)],[(false,false),(24),None,None]            | f              | f               | f
-           3 |        285 | [(false,false),(285),(114,998),(159203)],[(false,false),(285),(1115,1999),(444488)],[(false,false),(285),None,None] | f              | f               | f
-           0 |        322 | [(false,false),(318),(23,998),(161232)],[(false,false),(318),(1023,1998),(479232)],[(false,false),(318),None,None]  | t              | f               | f
-           1 |        322 | [(false,false),(318),(23,998),(161232)],[(false,false),(318),(1023,1998),(479232)],[(false,false),(318),None,None]  | t              | f               | f
-           2 |         37 | [(false,false),(33),(23,98),(2029)],[(false,false),(33),(123,198),(5329)],[(false,false),(33),None,None]            | t              | f               | f
-           4 |          9 | [(false,false),(9),(12,20),(141)],[(false,false),(9),(112,1020),(6441)],[(false,false),(9),None,None]               | f              | f               | f
            3 |        316 | [(false,false),(316),(100,997),(171597)],[(false,false),(316),(1101,1998),(487913)],[(false,false),(316),None,None] | f              | f               | f
-           0 |        340 | [(false,false),(332),(21,997),(172473)],[(false,false),(332),(1021,1997),(504473)],[(false,false),(332),None,None]  | t              | f               | f
-           1 |        340 | [(false,false),(332),(21,997),(172473)],[(false,false),(332),(1021,1997),(504473)],[(false,false),(332),None,None]  | t              | f               | f
-           2 |         25 | [(false,false),(17),(21,100),(976)],[(false,false),(17),(121,200),(2676)],[(false,false),(17),None,None]            | t              | f               | f
+           0 |        340 | [(false,false),(340),(5,997),(172558)],[(false,false),(340),(1005,1997),(512558)],[(false,false),(340),None,None]   | t              | f               | f
+           1 |        340 | [(false,false),(340),(5,997),(172558)],[(false,false),(340),(1005,1997),(512558)],[(false,false),(340),None,None]   | t              | f               | f
+           2 |         25 | [(false,false),(25),(5,100),(1061)],[(false,false),(25),(105,200),(3561)],[(false,false),(25),None,None]            | t              | f               | f
            4 |         27 | [(false,false),(27),(5,21),(318)],[(false,false),(27),(105,1021),(19218)],[(false,false),(27),None,None]            | f              | f               | f
+           3 |        285 | [(false,false),(285),(114,998),(159203)],[(false,false),(285),(1115,1999),(444488)],[(false,false),(285),None,None] | f              | f               | f
+           0 |        322 | [(false,false),(322),(1,998),(161280)],[(false,false),(322),(1001,1998),(483280)],[(false,false),(322),None,None]   | t              | f               | f
+           1 |        322 | [(false,false),(322),(1,998),(161280)],[(false,false),(322),(1001,1998),(483280)],[(false,false),(322),None,None]   | t              | f               | f
+           2 |         37 | [(false,false),(37),(1,98),(2077)],[(false,false),(37),(101,198),(5777)],[(false,false),(37),None,None]             | t              | f               | f
+           4 |          9 | [(false,false),(9),(12,20),(141)],[(false,false),(9),(112,1020),(6441)],[(false,false),(9),None,None]               | f              | f               | f
+           3 |        300 | [(false,false),(300),(101,1000),(164750)],[(false,true),(299),(1102,2000),(463049)],[(false,false),(300),None,None] | f              | f               | f
+           0 |        338 | [(false,false),(338),(2,1000),(166662)],[(false,false),(338),(1002,2000),(504662)],[(false,false),(338),None,None]  | t              | f               | f
+           1 |        338 | [(false,false),(338),(2,1000),(166662)],[(false,false),(338),(1002,2000),(504662)],[(false,false),(338),None,None]  | t              | f               | f
+           2 |         38 | [(false,false),(38),(2,99),(1912)],[(false,false),(38),(102,199),(5712)],[(false,false),(38),None,None]             | t              | f               | f
+           4 |         24 | [(false,false),(24),(2,19),(231)],[(false,false),(24),(102,1019),(17031)],[(false,false),(24),None,None]            | f              | f               | f
 (15 rows)
+
+vacuum t10_update_stats;
+select * from get_pax_aux_table('t10_update_stats');
+ ptblockname | pttupcount |                                                    ptstatistics                                                     | ptexistvisimap | ptexistexttoast | ptisclustered 
+-------------+------------+---------------------------------------------------------------------------------------------------------------------+----------------+-----------------+---------------
+           3 |        316 | [(false,false),(316),(100,997),(171597)],[(false,false),(316),(1101,1998),(487913)],[(false,false),(316),None,None] | f              | f               | f
+           4 |         27 | [(false,false),(27),(5,21),(318)],[(false,false),(27),(105,1021),(19218)],[(false,false),(27),None,None]            | f              | f               | f
+           5 |        681 | [(false,false),(681),(21,997),(345922)],[(false,false),(681),(121,1997),(1011622)],[(false,false),(681),None,None]  | f              | f               | f
+           3 |        285 | [(false,false),(285),(114,998),(159203)],[(false,false),(285),(1115,1999),(444488)],[(false,false),(285),None,None] | f              | f               | f
+           4 |          9 | [(false,false),(9),(12,20),(141)],[(false,false),(9),(112,1020),(6441)],[(false,false),(9),None,None]               | f              | f               | f
+           5 |        669 | [(false,false),(669),(23,998),(324493)],[(false,false),(669),(123,1998),(963793)],[(false,false),(669),None,None]   | f              | f               | f
+           3 |        300 | [(false,false),(300),(101,1000),(164750)],[(false,true),(299),(1102,2000),(463049)],[(false,false),(300),None,None] | f              | f               | f
+           4 |         24 | [(false,false),(24),(2,19),(231)],[(false,false),(24),(102,1019),(17031)],[(false,false),(24),None,None]            | f              | f               | f
+           5 |        690 | [(false,false),(690),(22,1000),(335005)],[(false,false),(690),(122,2000),(998005)],[(false,false),(690),None,None]  | f              | f               | f
+(9 rows)
 
 drop table t10_update_stats;
 -- delete twice
@@ -680,9 +786,9 @@ select sum(v2), sum(v3) from t_delete_twice_stats;
 (1 row)
 
 select * from get_pax_aux_table('t_delete_twice_stats');
- ptblockname | pttupcount |                                                ptstatistics                                                | ptexistvisimap | ptexistexttoast | ptisclustered 
--------------+------------+------------------------------------------------------------------------------------------------------------+----------------+-----------------+---------------
-           0 |        100 | [(false,false),(90),None,None],[(false,false),(90),(11,100),(4995)],[(false,false),(90),(111,200),(13995)] | t              | f               | f
+ ptblockname | pttupcount |                                                 ptstatistics                                                 | ptexistvisimap | ptexistexttoast | ptisclustered 
+-------------+------------+--------------------------------------------------------------------------------------------------------------+----------------+-----------------+---------------
+           0 |        100 | [(false,false),(100),None,None],[(false,false),(100),(1,100),(5050)],[(false,false),(100),(101,200),(15050)] | t              | f               | f
 (1 row)
 
 -- delete from group 2
@@ -694,9 +800,16 @@ select sum(v2), sum(v3) from t_delete_twice_stats;
 (1 row)
 
 select * from get_pax_aux_table('t_delete_twice_stats');
+ ptblockname | pttupcount |                                                 ptstatistics                                                 | ptexistvisimap | ptexistexttoast | ptisclustered 
+-------------+------------+--------------------------------------------------------------------------------------------------------------+----------------+-----------------+---------------
+           0 |        100 | [(false,false),(100),None,None],[(false,false),(100),(1,100),(5050)],[(false,false),(100),(101,200),(15050)] | t              | f               | f
+(1 row)
+
+vacuum t_delete_twice_stats;
+select * from get_pax_aux_table('t_delete_twice_stats');
  ptblockname | pttupcount |                                                ptstatistics                                                | ptexistvisimap | ptexistexttoast | ptisclustered 
 -------------+------------+------------------------------------------------------------------------------------------------------------+----------------+-----------------+---------------
-           0 |        100 | [(false,false),(80),None,None],[(false,false),(80),(11,100),(4640)],[(false,false),(80),(111,200),(12640)] | t              | f               | f
+           1 |         80 | [(false,false),(80),None,None],[(false,false),(80),(11,100),(4640)],[(false,false),(80),(111,200),(12640)] | f              | f               | f
 (1 row)
 
 drop table t_delete_twice_stats;
@@ -720,10 +833,10 @@ select sum(v2), sum(v3) from t_update_twice_stats;
 (1 row)
 
 select * from get_pax_aux_table('t_update_twice_stats');
- ptblockname | pttupcount |                                                ptstatistics                                                | ptexistvisimap | ptexistexttoast | ptisclustered 
--------------+------------+------------------------------------------------------------------------------------------------------------+----------------+-----------------+---------------
-           0 |        100 | [(false,false),(90),None,None],[(false,false),(90),(11,100),(4995)],[(false,false),(90),(111,200),(13995)] | t              | f               | f
-           1 |         10 | [(false,false),(10),None,None],[(false,false),(10),(2,11),(65)],[(false,false),(10),(102,111),(1065)]      | f              | f               | f
+ ptblockname | pttupcount |                                                 ptstatistics                                                 | ptexistvisimap | ptexistexttoast | ptisclustered 
+-------------+------------+--------------------------------------------------------------------------------------------------------------+----------------+-----------------+---------------
+           0 |        100 | [(false,false),(100),None,None],[(false,false),(100),(1,100),(5050)],[(false,false),(100),(101,200),(15050)] | t              | f               | f
+           1 |         10 | [(false,false),(10),None,None],[(false,false),(10),(2,11),(65)],[(false,false),(10),(102,111),(1065)]        | f              | f               | f
 (2 rows)
 
 -- delete from group 2
@@ -735,12 +848,22 @@ select sum(v2), sum(v3) from t_update_twice_stats;
 (1 row)
 
 select * from get_pax_aux_table('t_update_twice_stats');
+ ptblockname | pttupcount |                                                 ptstatistics                                                 | ptexistvisimap | ptexistexttoast | ptisclustered 
+-------------+------------+--------------------------------------------------------------------------------------------------------------+----------------+-----------------+---------------
+           1 |         10 | [(false,false),(10),None,None],[(false,false),(10),(2,11),(65)],[(false,false),(10),(102,111),(1065)]        | f              | f               | f
+           0 |        100 | [(false,false),(100),None,None],[(false,false),(100),(1,100),(5050)],[(false,false),(100),(101,200),(15050)] | t              | f               | f
+           2 |         10 | [(false,false),(10),None,None],[(false,false),(10),(32,41),(365)],[(false,false),(10),(132,141),(1365)]      | f              | f               | f
+(3 rows)
+
+vacuum t_update_twice_stats;
+select * from get_pax_aux_table('t_update_twice_stats');
  ptblockname | pttupcount |                                                ptstatistics                                                | ptexistvisimap | ptexistexttoast | ptisclustered 
 -------------+------------+------------------------------------------------------------------------------------------------------------+----------------+-----------------+---------------
            1 |         10 | [(false,false),(10),None,None],[(false,false),(10),(2,11),(65)],[(false,false),(10),(102,111),(1065)]      | f              | f               | f
-           0 |        100 | [(false,false),(80),None,None],[(false,false),(80),(11,100),(4640)],[(false,false),(80),(111,200),(12640)] | t              | f               | f
            2 |         10 | [(false,false),(10),None,None],[(false,false),(10),(32,41),(365)],[(false,false),(10),(132,141),(1365)]    | f              | f               | f
+           3 |         80 | [(false,false),(80),None,None],[(false,false),(80),(11,100),(4640)],[(false,false),(80),(111,200),(12640)] | f              | f               | f
 (3 rows)
 
 drop table t_update_twice_stats;
 reset pax.max_tuples_per_group;
+reset pax.enable_sync_collect_stats;
