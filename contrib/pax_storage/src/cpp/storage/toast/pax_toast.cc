@@ -331,7 +331,7 @@ static std::pair<Datum, std::shared_ptr<MemoryObject>> pax_make_external_toast(
 std::pair<Datum, std::shared_ptr<MemoryObject>> pax_make_toast(
     Datum d, char storage_type) {
   std::shared_ptr<MemoryObject> mobj;
-  Datum result;
+  Datum result = d;
 
   if (!pax_enable_toast) {
     return {d, nullptr};
