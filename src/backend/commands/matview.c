@@ -966,12 +966,7 @@ transientrel_startup(DestReceiver *self, int operation, TupleDesc typeinfo)
 	myState->bistate = GetBulkInsertState();
 	myState->processed = 0;
 
-	if (RelationIsAoRows(myState->transientrel))
-		appendonly_dml_init(myState->transientrel, CMD_INSERT);
-	else if (RelationIsAoCols(myState->transientrel))
-		aoco_dml_init(myState->transientrel, CMD_INSERT);
-	else if (ext_dml_init_hook)
-		ext_dml_init_hook(myState->transientrel, CMD_INSERT);
+	table_dml_init(myState->transientrel, CMD_INSERT);
 
 	/*
 	 * Valid smgr_targblock implies something already wrote to the relation.
