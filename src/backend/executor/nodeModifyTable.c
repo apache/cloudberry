@@ -70,9 +70,6 @@
 #include "libpq/libpq.h"
 #include "libpq/pqformat.h"
 
-ext_dml_func_hook_type ext_dml_init_hook   = NULL;
-ext_dml_func_hook_type ext_dml_finish_hook = NULL;
-
 typedef struct MTTargetRelLookup
 {
 	Oid			relationOid;	/* hash key, must be first */
@@ -3261,12 +3258,7 @@ ExecInitModifyTable(ModifyTable *node, EState *estate, int eflags)
 								   "supported in serializable transactions")));
 		}
 
-		if (RelationIsAoRows(resultRelInfo->ri_RelationDesc))
-			appendonly_dml_init(resultRelInfo->ri_RelationDesc, operation);
-		else if (RelationIsAoCols(resultRelInfo->ri_RelationDesc))
-			aoco_dml_init(resultRelInfo->ri_RelationDesc, operation);
-		else if (ext_dml_init_hook)
-			ext_dml_init_hook(resultRelInfo->ri_RelationDesc, operation);
+		table_dml_init(resultRelInfo->ri_RelationDesc, operation);
 
 		resultRelInfo++;
 		i++;
@@ -3717,13 +3709,7 @@ ExecEndModifyTable(ModifyTableState *node)
 			resultRelInfo->ri_FdwRoutine->EndForeignModify(node->ps.state,
 														   resultRelInfo);
 
-		if (RelationIsAoRows(resultRelInfo->ri_RelationDesc))
-			appendonly_dml_finish(resultRelInfo->ri_RelationDesc,
-								  node->operation);
-		else if (RelationIsAoCols(resultRelInfo->ri_RelationDesc))
-			aoco_dml_finish(resultRelInfo->ri_RelationDesc, node->operation);
-		else if (ext_dml_finish_hook)
-			ext_dml_finish_hook(resultRelInfo->ri_RelationDesc, node->operation);
+		table_dml_fini(resultRelInfo->ri_RelationDesc, node->operation);
 
 		/*
 		 * Cleanup the initialized batch slots. This only matters for FDWs
