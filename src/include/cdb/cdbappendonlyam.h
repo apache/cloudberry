@@ -488,14 +488,12 @@ extern bool appendonly_fetch(
 	AOTupleId *aoTid,
 	TupleTableSlot *slot);
 extern void appendonly_fetch_finish(AppendOnlyFetchDesc aoFetchDesc);
-extern void appendonly_dml_init(Relation relation, CmdType operation);
 extern AppendOnlyInsertDesc appendonly_insert_init(Relation rel, int segno);
 extern void appendonly_insert(
 		AppendOnlyInsertDesc aoInsertDesc, 
 		MemTuple instup, 
 		AOTupleId *aoTupleId);
 extern void appendonly_insert_finish(AppendOnlyInsertDesc aoInsertDesc, dlist_head *head);
-extern void appendonly_dml_finish(Relation relation, CmdType operation);
 
 extern AppendOnlyDeleteDesc appendonly_delete_init(Relation rel);
 extern TM_Result appendonly_delete(
