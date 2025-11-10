@@ -421,9 +421,6 @@ extern void aocs_addcol_setfirstrownum(AOCSAddColumnDesc desc,
 
 extern bool aocs_get_target_tuple(AOCSScanDesc aoscan, int64 targrow, TupleTableSlot *slot);
 
-extern void aoco_dml_init(Relation relation, CmdType operation);
-extern void aoco_dml_finish(Relation relation, CmdType operation);
-
 extern bool extractcolumns_from_node(Node *expr, bool *cols, AttrNumber natts);
 extern ExprState * aocs_predicate_pushdown_prepare(AOCSScanDesc scan,
 								List *qual,

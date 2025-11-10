@@ -1025,13 +1025,8 @@ ExecInitPartitionInfo(ModifyTableState *mtstate, EState *estate,
 		}
 	}
 
-	if (RelationIsAoRows(leaf_part_rri->ri_RelationDesc))
-		appendonly_dml_init(leaf_part_rri->ri_RelationDesc, mtstate->operation);
-	else if (RelationIsAoCols(leaf_part_rri->ri_RelationDesc))
-		aoco_dml_init(leaf_part_rri->ri_RelationDesc, mtstate->operation);
-	else if (ext_dml_init_hook)
-		ext_dml_init_hook(leaf_part_rri->ri_RelationDesc, mtstate->operation);
-
+	table_dml_init(leaf_part_rri->ri_RelationDesc, mtstate->operation);
+	
 	MemoryContextSwitchTo(oldcxt);
 
 	return leaf_part_rri;
@@ -1334,12 +1329,7 @@ ExecCleanupTupleRouting(ModifyTableState *mtstate,
 		 * Only leaf node can have a valid access method.  If we find an
 		 * appendoptimized table, ensure the DML operation is finished.
 		 */
-		if (RelationIsAoRows(resultRelInfo->ri_RelationDesc))
-			appendonly_dml_finish(resultRelInfo->ri_RelationDesc, mtstate->operation);
-		else if (RelationIsAoCols(resultRelInfo->ri_RelationDesc))
-			aoco_dml_finish(resultRelInfo->ri_RelationDesc, mtstate->operation);
-		else if (ext_dml_finish_hook)
-			ext_dml_finish_hook(resultRelInfo->ri_RelationDesc, mtstate->operation);
+		table_dml_fini(resultRelInfo->ri_RelationDesc, mtstate->operation);
 
 		ExecCloseIndices(resultRelInfo);
 		table_close(resultRelInfo->ri_RelationDesc, NoLock);

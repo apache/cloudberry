@@ -39,6 +39,7 @@ struct SampleScanState;
 struct TBMIterateResult;
 struct VacuumParams;
 struct ValidateIndexState;
+enum CmdType;
 
 /**
  * Flags represented the supported features of scan.
@@ -974,6 +975,14 @@ typedef struct TableAmRoutine
 										   struct SampleScanState *scanstate,
 										   TupleTableSlot *slot);
 
+	/**
+	 * The pair of callbacks are invoked to perform any initialization and
+	 * cleanup required for DML operations (INSERT, UPDATE, DELETE) on a
+	 * relation of this table AM.
+	 */
+	void (*dml_init) (Relation relation, enum CmdType operation);
+	void (*dml_fini) (Relation relation, enum CmdType operation);
+
 	/*
 	 * This callback is used to parse reloptions for relation/matview/toast.
 	 */
@@ -1818,6 +1827,19 @@ table_finish_bulk_insert(Relation rel, int options)
 		rel->rd_tableam->finish_bulk_insert(rel, options);
 }
 
+static inline void
+table_dml_init(Relation rel, enum CmdType operation)
+{
+	if (rel->rd_tableam && rel->rd_tableam->dml_init)
+		rel->rd_tableam->dml_init(rel, operation);
+}
+
+static inline void
+table_dml_fini(Relation rel, enum CmdType operation)
+{
+	if (rel->rd_tableam && rel->rd_tableam->dml_fini)
+		rel->rd_tableam->dml_fini(rel, operation);
+}
 
 /* ------------------------------------------------------------------------
  * DDL related functionality.
@@ -2383,13 +2405,5 @@ extern const TableAmRoutine *GetTableAmRoutine(Oid amhandler);
 extern const TableAmRoutine *GetTableAmRoutineByAmId(Oid amoid);
 extern const TableAmRoutine *GetHeapamTableAmRoutine(void);
 
-/* ----------------------------------------------------------------------------
- * Hook function to run init/fini for storage extensions
- * ----------------------------------------------------------------------------
- */
-enum CmdType;
-typedef void (*ext_dml_func_hook_type) (Relation relation, enum CmdType operation);
-extern PGDLLIMPORT ext_dml_func_hook_type ext_dml_init_hook;
-extern PGDLLIMPORT ext_dml_func_hook_type ext_dml_finish_hook;
 
 #endif							/* TABLEAM_H */

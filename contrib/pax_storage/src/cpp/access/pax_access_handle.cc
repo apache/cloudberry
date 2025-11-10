@@ -412,8 +412,6 @@ void CCPaxAccessMethod::FinishBulkInsert(Relation relation, int options) {
 }
 
 void CCPaxAccessMethod::ExtDmlInit(Relation rel, CmdType operation) {
-  if (!RELATION_IS_PAX(rel)) return;
-
   CBDB_TRY();
   { pax::CPaxDmlStateLocal::Instance()->InitDmlState(rel, operation); }
   CBDB_CATCH_DEFAULT();
@@ -422,8 +420,6 @@ void CCPaxAccessMethod::ExtDmlInit(Relation rel, CmdType operation) {
 }
 
 void CCPaxAccessMethod::ExtDmlFini(Relation rel, CmdType operation) {
-  if (!RELATION_IS_PAX(rel)) return;
-
   CBDB_TRY();
   { pax::CPaxDmlStateLocal::Instance()->FinishDmlState(rel, operation); }
   CBDB_CATCH_DEFAULT();
@@ -791,6 +787,8 @@ static const TableAmRoutine kPaxColumnMethods = {
     .scan_sample_next_block = pax::CCPaxAccessMethod::ScanSampleNextBlock,
     .scan_sample_next_tuple = pax::CCPaxAccessMethod::ScanSampleNextTuple,
 
+    .dml_init = pax::CCPaxAccessMethod::ExtDmlInit,
+    .dml_fini = pax::CCPaxAccessMethod::ExtDmlFini,
     .amoptions = paxc::PaxAccessMethod::AmOptions,
     .swap_relation_files = paxc::PaxAccessMethod::SwapRelationFiles,
     .validate_column_encoding_clauses =
@@ -1190,9 +1188,6 @@ void _PG_init(void) {  // NOLINT
 
   prev_object_access_hook = object_access_hook;
   object_access_hook = PaxObjectAccessHook;
-
-  ext_dml_init_hook = pax::CCPaxAccessMethod::ExtDmlInit;
-  ext_dml_finish_hook = pax::CCPaxAccessMethod::ExtDmlFini;
 
   prev_ProcessUtilit_hook = ProcessUtility_hook;
   ProcessUtility_hook = paxProcessUtility;

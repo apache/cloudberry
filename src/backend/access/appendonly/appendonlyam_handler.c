@@ -228,7 +228,7 @@ remove_dml_state(const Oid relationOid)
  *
  * This function should be called exactly once per relation.
  */
-void
+static void
 appendonly_dml_init(Relation relation, CmdType operation)
 {
 	init_appendonly_dml_states();
@@ -238,7 +238,7 @@ appendonly_dml_init(Relation relation, CmdType operation)
 /*
  * This function should be called exactly once per relation.
  */
-void
+static void
 appendonly_dml_finish(Relation relation, CmdType operation)
 {
 	AppendOnlyDMLState *state;
@@ -2360,6 +2360,8 @@ static const TableAmRoutine ao_row_methods = {
 	.scan_sample_next_block = appendonly_scan_sample_next_block,
 	.scan_sample_next_tuple = appendonly_scan_sample_next_tuple,
 
+	.dml_init = appendonly_dml_init,
+	.dml_fini = appendonly_dml_finish,
 	.amoptions = ao_amoptions,
 	.swap_relation_files = appendonly_swap_relation_files,
 };
