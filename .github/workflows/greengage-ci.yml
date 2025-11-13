@@ -6,7 +6,7 @@ on:
     branches: ['main']  # Trigger on push to main (after merged PR)
     tags: ['6.*']   # Trigger on tags for versioned releases
   pull_request:
-    branches: ['*'] # Trigger on pull requests for all branches
+    branches: ['**'] # Trigger on pull requests for all branches
 
 # Concurrency control to cancel previous runs on new push to same PR/branch
 concurrency:
