@@ -5522,7 +5522,7 @@ check_hot_dr(bool *newval, void **extra, GucSource source)
 	if (*newval && IS_QUERY_DISPATCHER() && !checkGpSegConfigFtsFiles())
 		ereport(ERROR,
 				(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
-				 errmsg("cannot enable \"hot_dr\" since DR cluster segment configuration file does not exits")));
+				 errmsg("cannot enable \"hot_dr\" since DR cluster segment configuration file does not exist")));
 
 	return true;
 }
