@@ -19,7 +19,7 @@ SET default_table_access_method = ao_column;
 --
 -- Name: catalog_sales; Type: TABLE; Schema: cte_bug; Owner: -
 --
-DROP TABLE IF EXITS cte_bug.catalog_sales;
+DROP TABLE IF EXISTS cte_bug.catalog_sales;
 
 CREATE TABLE cte_bug.catalog_sales (
     cs_sold_date_sk integer,
@@ -98,7 +98,7 @@ WITH (appendonly = true, orientation = column, compresstype=zstd, compresslevel=
 -- Name: customer; Type: TABLE; Schema: cte_bug; Owner: -
 --
 
-DROP TABLE IF EXITS cte_bug.customer;
+DROP TABLE IF EXISTS cte_bug.customer;
 
 CREATE TABLE cte_bug.customer (
     c_customer_sk integer NOT NULL,
@@ -144,7 +144,7 @@ WITH (appendonly = true, orientation = column, compresstype=zstd, compresslevel=
 --
 -- Name: date_dim; Type: TABLE; Schema: cte_bug; Owner: -
 --
-DROP TABLE IF EXITS cte_bug.date_dim;
+DROP TABLE IF EXISTS cte_bug.date_dim;
 
 CREATE TABLE cte_bug.date_dim (
     d_date_sk integer NOT NULL,
@@ -210,7 +210,7 @@ WITH (appendonly = true, orientation = column, compresstype=zstd, compresslevel=
 --
 -- Name: store_sales; Type: TABLE; Schema: cte_bug; Owner: -
 --
-DROP TABLE IF EXITS cte_bug.store_sales;
+DROP TABLE IF EXISTS cte_bug.store_sales;
 
 CREATE TABLE cte_bug.store_sales (
     ss_sold_date_sk integer,
@@ -266,7 +266,7 @@ WITH (appendonly = true, orientation = column, compresstype=zstd, compresslevel=
 --
 -- Name: web_sales; Type: TABLE; Schema: cte_bug; Owner: -
 --
-DROP TABLE IF EXITS cte_bug.web_sales;
+DROP TABLE IF EXISTS cte_bug.web_sales;
 
 CREATE TABLE cte_bug.web_sales (
     ws_sold_date_sk integer,
