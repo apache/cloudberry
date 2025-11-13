@@ -1285,7 +1285,7 @@ load_last_minipage(AppendOnlyBlockDirectory *blockDirectory,
  * find_minipage_entry
  *
  * Find the minipage entry that covers the given rowNum.
- * If such an entry does not exists, -1 is returned. Otherwise
+ * If such an entry does not exist, -1 is returned. Otherwise
  * the index to such an entry in the minipage array is returned.
  */
 static int
