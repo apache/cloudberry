@@ -1252,9 +1252,10 @@ leaf_parts_analyzed(Oid attrelid, Oid relid_exclude, List *va_cols, int elevel)
 			continue;
 
 		float4		relTuples = get_rel_reltuples(partRelid);
+		int32		relpages = get_rel_relpages(partRelid);
 
 		/* Partition is not analyzed */
-		if (relTuples < 0.0)
+		if (relTuples < 0.0 || (relTuples == 0.0 && relpages == 0))
 		{
 			if (relid_exclude == InvalidOid)
 				ereport(elevel,
