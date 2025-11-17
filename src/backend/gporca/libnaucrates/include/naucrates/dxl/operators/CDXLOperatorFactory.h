@@ -177,6 +177,10 @@ public:
 	static CDXLPhysical *MakeDXLAppend(CDXLMemoryManager *dxl_memory_manager,
 									   const Attributes &attrs);
 
+	// create a parallel append operator
+	static CDXLPhysical *MakeDXLParallelAppend(CDXLMemoryManager *dxl_memory_manager,
+											   const Attributes &attrs);
+
 	// create a limit operator
 	static CDXLPhysical *MakeDXLLimit(CDXLMemoryManager *dxl_memory_manager,
 									  const Attributes &attrs);

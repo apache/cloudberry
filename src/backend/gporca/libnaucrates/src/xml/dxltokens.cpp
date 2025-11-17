@@ -137,6 +137,7 @@ CDXLTokens::Init(CMemoryPool *mp)
 		{EdxltokenPhysicalResult, GPOS_WSZ_LIT("Result")},
 		{EdxltokenPhysicalValuesScan, GPOS_WSZ_LIT("Values")},
 		{EdxltokenPhysicalAppend, GPOS_WSZ_LIT("Append")},
+		{EdxltokenPhysicalParallelAppend, GPOS_WSZ_LIT("Parallel Append")},
 		{EdxltokenPhysicalMaterialize, GPOS_WSZ_LIT("Materialize")},
 		{EdxltokenPhysicalDynamicForeignScan,
 		 GPOS_WSZ_LIT("DynamicForeignScan")},
