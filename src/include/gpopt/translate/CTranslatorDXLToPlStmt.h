@@ -361,6 +361,12 @@ private:
 			ctxt_translation_prev_siblings	// translation contexts of previous siblings
 	);
 
+	Plan *TranslateDXLParallelAppend(
+		const CDXLNode *append_dxlnode, CDXLTranslateContext *output_context,
+		CDXLTranslationContextArray *
+		ctxt_translation_prev_siblings  // translation contexts of previous siblings
+	);
+
 	Plan *TranslateDXLMaterialize(
 		const CDXLNode *materialize_dxlnode,
 		CDXLTranslateContext *output_context,

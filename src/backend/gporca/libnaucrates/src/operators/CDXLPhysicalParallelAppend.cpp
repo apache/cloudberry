@@ -1,15 +1,31 @@
-//---------------------------------------------------------------------------
-//	Greenplum Database
-//	Copyright (C) 2011 Greenplum, Inc.
-//
-//	@filename:
-//		CDXLPhysicalAppend.cpp
-//
-//	@doc:
-//		Implementation of DXL physical Append operator
-//---------------------------------------------------------------------------
+/*-------------------------------------------------------------------------
+ *
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ *
+ * CPhysicalParallelAppend.cpp
+ *
+ * IDENTIFICATION
+ *	  src/backend/gporca/libgpopt/src/operators/CPhysicalParallelAppend.cpp
+ *
+ *-------------------------------------------------------------------------
+ */
 
-#include "naucrates/dxl/operators/CDXLPhysicalAppend.h"
+#include "naucrates/dxl/operators/CDXLPhysicalParallelAppend.h"
 
 #include "gpos/common/CBitSetIter.h"
 
@@ -22,34 +38,36 @@ using namespace gpdxl;
 
 //---------------------------------------------------------------------------
 //	@function:
-//		CDXLPhysicalAppend::CDXLPhysicalAppend
+//		CDXLPhysicalParallelAppend::CDXLPhysicalParallelAppend
 //
 //	@doc:
 //		Constructor
 //
 //---------------------------------------------------------------------------
-CDXLPhysicalAppend::CDXLPhysicalAppend(CMemoryPool *mp, BOOL fIsTarget,
-									   BOOL fIsZapped)
-	: CDXLPhysical(mp), m_used_in_upd_del(fIsTarget), m_is_zapped(fIsZapped)
+CDXLPhysicalParallelAppend::CDXLPhysicalParallelAppend(CMemoryPool *mp, BOOL fIsTarget,
+													   BOOL fIsZapped, ULONG ulParallelWorkers)
+	: CDXLPhysical(mp), m_used_in_upd_del(fIsTarget), m_is_zapped(fIsZapped), m_ulParallelWorkers(ulParallelWorkers)
 {
 }
 
-CDXLPhysicalAppend::CDXLPhysicalAppend(CMemoryPool *mp,
-									   BOOL fIsTarget,
-									   BOOL fIsZapped,
-									   ULONG scan_id,
-									   CDXLTableDescr *dxl_table_desc,
-									   ULongPtrArray *selector_ids)
+CDXLPhysicalParallelAppend::CDXLPhysicalParallelAppend(CMemoryPool *mp,
+													   BOOL fIsTarget,
+													   BOOL fIsZapped,
+													   ULONG scan_id,
+													   CDXLTableDescr *dxl_table_desc,
+													   ULongPtrArray *selector_ids,
+													   ULONG ulParallelWorkers)
 	: CDXLPhysical(mp),
 	  m_used_in_upd_del(fIsTarget),
 	  m_is_zapped(fIsZapped),
 	  m_scan_id(scan_id),
 	  m_dxl_table_descr(dxl_table_desc),
-	  m_selector_ids(selector_ids)
+	  m_selector_ids(selector_ids),
+	  m_ulParallelWorkers(ulParallelWorkers)
 {
 }
 
-CDXLPhysicalAppend::~CDXLPhysicalAppend()
+CDXLPhysicalParallelAppend::~CDXLPhysicalParallelAppend() 
 {
 	CRefCount::SafeRelease(m_dxl_table_descr);
 	CRefCount::SafeRelease(m_selector_ids);
@@ -57,72 +75,42 @@ CDXLPhysicalAppend::~CDXLPhysicalAppend()
 
 //---------------------------------------------------------------------------
 //	@function:
-//		CDXLPhysicalAppend::GetDXLOperator
+//		CDXLPhysicalParallelAppend::GetDXLOperator
 //
 //	@doc:
 //		Operator type
 //
 //---------------------------------------------------------------------------
 Edxlopid
-CDXLPhysicalAppend::GetDXLOperator() const
+CDXLPhysicalParallelAppend::GetDXLOperator() const
 {
-	return EdxlopPhysicalAppend;
+	return EdxlopPhysicalParallelAppend;
 }
-
 
 //---------------------------------------------------------------------------
 //	@function:
-//		CDXLPhysicalAppend::GetOpNameStr
+//		CDXLPhysicalParallelAppend::GetOpNameStr
 //
 //	@doc:
 //		Operator name
 //
 //---------------------------------------------------------------------------
 const CWStringConst *
-CDXLPhysicalAppend::GetOpNameStr() const
+CDXLPhysicalParallelAppend::GetOpNameStr() const
 {
-	return CDXLTokens::GetDXLTokenStr(EdxltokenPhysicalAppend);
+	return CDXLTokens::GetDXLTokenStr(EdxltokenPhysicalParallelAppend);
 }
 
 //---------------------------------------------------------------------------
 //	@function:
-//		CDXLPhysicalAppend::IsUsedInUpdDel
-//
-//	@doc:
-//		Is the append node updating a target relation
-//
-//---------------------------------------------------------------------------
-BOOL
-CDXLPhysicalAppend::IsUsedInUpdDel() const
-{
-	return m_used_in_upd_del;
-}
-
-//---------------------------------------------------------------------------
-//	@function:
-//		CDXLPhysicalAppend::IsZapped
-//
-//	@doc:
-//		Is the append node zapped
-//
-//---------------------------------------------------------------------------
-BOOL
-CDXLPhysicalAppend::IsZapped() const
-{
-	return m_is_zapped;
-}
-
-//---------------------------------------------------------------------------
-//	@function:
-//		CDXLPhysicalAppend::SerializeToDXL
+//		CDXLPhysicalParallelAppend::SerializeToDXL
 //
 //	@doc:
 //		Serialize operator in DXL format
 //
 //---------------------------------------------------------------------------
 void
-CDXLPhysicalAppend::SerializeToDXL(CXMLSerializer *xml_serializer,
-								   const CDXLNode *dxlnode) const
+CDXLPhysicalParallelAppend::SerializeToDXL(CXMLSerializer *xml_serializer, const CDXLNode *dxlnode) const
 {
 	const CWStringConst *element_name = GetOpNameStr();
 
@@ -133,6 +121,8 @@ CDXLPhysicalAppend::SerializeToDXL(CXMLSerializer *xml_serializer,
 		CDXLTokens::GetDXLTokenStr(EdxltokenAppendIsTarget), m_used_in_upd_del);
 	xml_serializer->AddAttribute(
 		CDXLTokens::GetDXLTokenStr(EdxltokenAppendIsZapped), m_is_zapped);
+	xml_serializer->AddAttribute(
+		CDXLTokens::GetDXLTokenStr(EdxltokenParallelWorkers), m_ulParallelWorkers);
 
 	if (m_scan_id != gpos::ulong_max)
 	{
@@ -155,14 +145,12 @@ CDXLPhysicalAppend::SerializeToDXL(CXMLSerializer *xml_serializer,
 		m_dxl_table_descr->SerializeToDXL(xml_serializer);
 	}
 
-
 	// serialize children
 	dxlnode->SerializeChildrenToDXL(xml_serializer);
 
 	xml_serializer->CloseElement(
 		CDXLTokens::GetDXLTokenStr(EdxltokenNamespacePrefix), element_name);
 }
-
 
 #ifdef GPOS_DEBUG
 //---------------------------------------------------------------------------
@@ -174,7 +162,7 @@ CDXLPhysicalAppend::SerializeToDXL(CXMLSerializer *xml_serializer,
 //
 //---------------------------------------------------------------------------
 void
-CDXLPhysicalAppend::AssertValid(const CDXLNode *dxlnode,
+CDXLPhysicalParallelAppend::AssertValid(const CDXLNode *dxlnode,
 								BOOL validate_children) const
 {
 	// assert proj list and filter are valid
@@ -196,4 +184,4 @@ CDXLPhysicalAppend::AssertValid(const CDXLNode *dxlnode,
 }
 #endif	// GPOS_DEBUG
 
-// EOF
+//	EOF

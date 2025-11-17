@@ -59,6 +59,7 @@ extern "C" {
 #include "naucrates/dxl/operators/CDXLNode.h"
 #include "naucrates/dxl/operators/CDXLPhysicalAgg.h"
 #include "naucrates/dxl/operators/CDXLPhysicalAppend.h"
+#include "naucrates/dxl/operators/CDXLPhysicalParallelAppend.h"
 #include "naucrates/dxl/operators/CDXLPhysicalAssert.h"
 #include "naucrates/dxl/operators/CDXLPhysicalBitmapTableScan.h"
 #include "naucrates/dxl/operators/CDXLPhysicalCTAS.h"
@@ -440,6 +441,12 @@ CTranslatorDXLToPlStmt::TranslateDXLOperatorToPlan(
 		{
 			plan = TranslateDXLAppend(dxlnode, output_context,
 									  ctxt_translation_prev_siblings);
+			break;
+		}
+		case EdxlopPhysicalParallelAppend:
+		{
+			plan = TranslateDXLParallelAppend(dxlnode, output_context,
+									 		  ctxt_translation_prev_siblings);
 			break;
 		}
 		case EdxlopPhysicalMaterialize:
@@ -4506,6 +4513,142 @@ CTranslatorDXLToPlStmt::TranslateDXLAppend(
 
 	return (Plan *) append;
 }
+
+//---------------------------------------------------------------------------
+//	@function:
+//		CTranslatorDXLToPlStmt::TranslateDXLParallelAppend
+//
+//	@doc:
+//		Translates a DXL parallel append node into a parallel Append node
+Plan *
+CTranslatorDXLToPlStmt::TranslateDXLParallelAppend(
+	const CDXLNode *append_dxlnode, CDXLTranslateContext *output_context,
+	CDXLTranslationContextArray *ctxt_translation_prev_siblings)
+{
+	CDXLPhysicalParallelAppend *phy_parallel_append_dxlop =
+		CDXLPhysicalParallelAppend::Cast(append_dxlnode->GetOperator());
+
+	ULONG parallel_workers = phy_parallel_append_dxlop->UlParallelWorkers();
+
+	// create append plan node
+	Append *append = MakeNode(Append);
+	append->first_partial_plan = 0;
+
+	Plan *plan = &(append->plan);
+	plan->plan_node_id = m_dxl_to_plstmt_context->GetNextPlanId();
+
+	// Set parallel execution flags
+	plan->parallel_aware = true;
+	plan->parallel_safe = true;
+	plan->parallel = (int) parallel_workers;
+
+	// translate operator costs
+	TranslatePlanCosts(append_dxlnode, plan);
+
+	const ULONG arity = append_dxlnode->Arity();
+	GPOS_ASSERT(EdxlappendIndexFirstChild < arity);
+	append->appendplans = NIL;
+
+	// translate table descriptor into a range table entry
+	CDXLPhysicalParallelAppend *phy_append_dxlop =
+		CDXLPhysicalParallelAppend::Cast(append_dxlnode->GetOperator());
+
+	// If this append was create from a DynamicTableScan node in ORCA, it will
+	// contain the table descriptor of the root partitioned table. Add that to
+	// the range table in the PlStmt.
+	if (phy_append_dxlop->GetScanId() != gpos::ulong_max)
+	{
+		GPOS_ASSERT(nullptr != phy_append_dxlop->GetDXLTableDesc());
+
+		// translation context for column mappings in the base relation
+		CDXLTranslateContextBaseTable base_table_context(m_mp);
+
+		(void) ProcessDXLTblDescr(phy_append_dxlop->GetDXLTableDesc(),
+								  &base_table_context);
+
+		OID oid_type =
+			CMDIdGPDB::CastMdid(m_md_accessor->PtMDType<IMDTypeInt4>()->MDId())
+				->Oid();
+		append->join_prune_paramids =
+			TranslateJoinPruneParamids(phy_append_dxlop->GetSelectorIds(),
+									   oid_type, m_dxl_to_plstmt_context);
+	}
+
+	// translate children
+	CDXLTranslateContext child_context(m_mp, false,
+									   output_context->GetColIdToParamIdMap());
+	for (ULONG ul = EdxlappendIndexFirstChild; ul < arity; ul++)
+	{
+		CDXLNode *child_dxlnode = (*append_dxlnode)[ul];
+
+		Plan *child_plan = TranslateDXLOperatorToPlan(
+			child_dxlnode, &child_context, ctxt_translation_prev_siblings);
+
+		GPOS_ASSERT(nullptr != child_plan && "child plan cannot be NULL");
+
+		append->appendplans = gpdb::LAppend(append->appendplans, child_plan);
+	}
+
+	CDXLNode *project_list_dxlnode = (*append_dxlnode)[EdxlappendIndexProjList];
+	CDXLNode *filter_dxlnode = (*append_dxlnode)[EdxlappendIndexFilter];
+
+	plan->targetlist = NIL;
+	const ULONG length = project_list_dxlnode->Arity();
+	for (ULONG ul = 0; ul < length; ++ul)
+	{
+		CDXLNode *proj_elem_dxlnode = (*project_list_dxlnode)[ul];
+		GPOS_ASSERT(EdxlopScalarProjectElem ==
+			proj_elem_dxlnode->GetOperator()->GetDXLOperator());
+
+		CDXLScalarProjElem *sc_proj_elem_dxlop =
+			CDXLScalarProjElem::Cast(proj_elem_dxlnode->GetOperator());
+		GPOS_ASSERT(1 == proj_elem_dxlnode->Arity());
+
+		// translate proj element expression
+		CDXLNode *expr_dxlnode = (*proj_elem_dxlnode)[0];
+		CDXLScalarIdent *sc_ident_dxlop =
+			CDXLScalarIdent::Cast(expr_dxlnode->GetOperator());
+
+		Index idxVarno = OUTER_VAR;
+		AttrNumber attno = (AttrNumber)(ul + 1);
+
+		Var *var = gpdb::MakeVar(
+			idxVarno, attno,
+			CMDIdGPDB::CastMdid(sc_ident_dxlop->MdidType())->Oid(),
+			sc_ident_dxlop->TypeModifier(),
+			0  // varlevelsup
+		);
+
+		TargetEntry *target_entry = MakeNode(TargetEntry);
+		target_entry->expr = (Expr *) var;
+		target_entry->resname =
+			CTranslatorUtils::CreateMultiByteCharStringFromWCString(
+				sc_proj_elem_dxlop->GetMdNameAlias()->GetMDName()->GetBuffer());
+		target_entry->resno = attno;
+
+		// add column mapping to output translation context
+		output_context->InsertMapping(sc_proj_elem_dxlop->Id(), target_entry);
+
+		plan->targetlist = gpdb::LAppend(plan->targetlist, target_entry);
+	}
+
+	CDXLTranslationContextArray *child_contexts =
+		GPOS_NEW(m_mp) CDXLTranslationContextArray(m_mp);
+	child_contexts->Append(output_context);
+
+	// translate filter
+	plan->qual = TranslateDXLFilterToQual(
+		filter_dxlnode,
+		nullptr,  // translate context for the base table
+		child_contexts, output_context);
+
+	SetParamIds(plan);
+
+	// cleanup
+	child_contexts->Release();
+
+	return (Plan *) append;
+};
 
 //---------------------------------------------------------------------------
 //	@function:
