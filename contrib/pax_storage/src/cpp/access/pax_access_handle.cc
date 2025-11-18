@@ -49,6 +49,7 @@
 #include "storage/paxc_smgr.h"
 #include "storage/wal/pax_wal.h"
 #include "storage/wal/paxc_wal.h"
+#include "storage/pax_itemptr.h"
 
 #define NOT_IMPLEMENTED_YET                        \
   ereport(ERROR,                                   \
@@ -64,6 +65,111 @@
 
 // access methods that are implemented in C++
 namespace pax {
+struct AnalyzeBlockItem {
+  int block;
+  int row_count;
+  int64 start_sample_block;
+  int64 end_sample_block;
+};
+
+static std::vector<AnalyzeBlockItem> extract_micro_partitions(Relation rel, Snapshot snapshot, int64 *totalrows) {
+  auto iter = pax::MicroPartitionIterator::New(rel, snapshot);
+  std::vector<AnalyzeBlockItem> analyze_items;
+  int64 ntuples = 0;
+  while (iter->HasNext()) {
+    auto mp = iter->Next();
+    AnalyzeBlockItem item;
+    item.block = mp.GetMicroPartitionId();
+    item.row_count = mp.GetTupleCount();
+    Assert(item.row_count > 0);
+
+    ntuples += item.row_count;
+    analyze_items.emplace_back(item);
+  }
+  iter->Release();
+  *totalrows = ntuples;
+
+  std::sort(analyze_items.begin(), analyze_items.end(),
+            [](const AnalyzeBlockItem &a, const AnalyzeBlockItem &b) {
+              return a.block < b.block;
+            });
+  return analyze_items;
+}
+
+static std::vector<AnalyzeBlockItem>
+extract_sample_items(Relation rel, Snapshot snapshot, int64 *totalrows) {
+  std::vector<AnalyzeBlockItem> analyze_items;
+  analyze_items = extract_micro_partitions(rel, snapshot, totalrows);
+
+  int64 row_index = 0;
+  for (size_t i = 0; i < analyze_items.size(); i++) {
+    auto &item = analyze_items[i];
+    item.start_sample_block = row_index;
+    item.end_sample_block = row_index + item.row_count;
+    row_index = item.end_sample_block;
+  }
+
+  return analyze_items;
+}
+
+static int pax_acquire_sample_rows(Relation onerel, Snapshot snapshot,
+                                    HeapTuple *rows, int targrows,
+                                    double *totalrows, double *totaldeadrows) {
+  std::vector<AnalyzeBlockItem> analyze_items;
+  int64 ntuples = 0;
+  analyze_items = extract_sample_items(onerel, snapshot, &ntuples);
+
+  TupleTableSlot *slot = cbdb::MakeSingleTupleTableSlot(
+      RelationGetDescr(onerel), table_slot_callbacks(onerel));
+
+  // start sample rows
+  RowSamplerData rs;
+  size_t analyze_item_index = 0;
+  int numrows = 0;
+  double liverows = 0;
+  double deadrows = 0;
+
+  PaxIndexScanDesc desc(onerel);
+  RowSampler_Init(&rs, ntuples, targrows, random());
+  while (RowSampler_HasMore(&rs)) {
+    int64 sample_row = RowSampler_Next(&rs);
+    cbdb::VacuumDelayPoint();
+
+    // seek to the corresponding analyze item
+    while (analyze_item_index < analyze_items.size() &&
+           sample_row >= analyze_items[analyze_item_index].end_sample_block) {
+      analyze_item_index++;
+    }
+    if (analyze_item_index == analyze_items.size()) {
+      break;
+    }
+
+    const auto &item = analyze_items[analyze_item_index];
+    Assert(sample_row >= item.start_sample_block &&
+           sample_row < item.end_sample_block);
+    Assert(sample_row - item.start_sample_block < item.row_count);
+
+    int offset = static_cast<int>(sample_row - item.start_sample_block);
+
+    ItemPointerData ctid = pax::MakeCTID(item.block, offset);
+
+    bool ok = desc.FetchTuple(&ctid, snapshot, slot, nullptr, nullptr);
+    if (ok) {
+      liverows += 1;
+      rows[numrows++] = cbdb::ExecCopyHeapTuple(slot);
+    } else {
+      // dead rows
+      deadrows += 1;
+    }
+    cbdb::ExecClearTuple(slot);
+  }
+  *totaldeadrows = deadrows / rs.m * (double) ntuples;
+  *totalrows = ntuples - *totaldeadrows;
+  desc.Release();
+  cbdb::ExecDropSingleTupleTableSlot(slot);
+
+  return numrows;
+}
 
 TableScanDesc CCPaxAccessMethod::ScanBegin(Relation relation, Snapshot snapshot,
                                            int nkeys, struct ScanKeyData *key,
@@ -285,33 +391,34 @@ TM_Result CCPaxAccessMethod::TupleUpdate(Relation relation, ItemPointer otid,
   pg_unreachable();
 }
 
+int CCPaxAccessMethod::AcquireSampleRows(Relation onerel, int elevel, HeapTuple *rows,
+							   int targrows, double *totalrows, double *totaldeadrows) {
+  auto snapshot = GetCatalogSnapshot(InvalidOid);
+  CBDB_TRY();
+  {
+    return pax_acquire_sample_rows(onerel, snapshot, rows, targrows,
+                                   totalrows, totaldeadrows);
+  }
+  CBDB_CATCH_DEFAULT();
+  CBDB_END_TRY();
+  pg_unreachable();
+}
+
 bool CCPaxAccessMethod::ScanAnalyzeNextBlock(TableScanDesc scan,
                                              BlockNumber blockno,
                                              BufferAccessStrategy bstrategy) {
-  CBDB_TRY();
-  {
-    auto desc = PaxScanDesc::ToDesc(scan);
-    return desc->ScanAnalyzeNextBlock(blockno, bstrategy);
-  }
-  CBDB_CATCH_DEFAULT();
-  CBDB_FINALLY({});
-  CBDB_END_TRY();
-  pg_unreachable();
+  ereport(ERROR,
+          (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+           errmsg("analyze next block is not supported on pax relations")));
 }
 
 bool CCPaxAccessMethod::ScanAnalyzeNextTuple(TableScanDesc scan,
                                              TransactionId oldest_xmin,
                                              double *liverows, double *deadrows,
                                              TupleTableSlot *slot) {
-  CBDB_TRY();
-  {
-    auto desc = PaxScanDesc::ToDesc(scan);
-    return desc->ScanAnalyzeNextTuple(oldest_xmin, liverows, deadrows, slot);
-  }
-  CBDB_CATCH_DEFAULT();
-  CBDB_FINALLY({});
-  CBDB_END_TRY();
-  pg_unreachable();
+  ereport(ERROR,
+          (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+           errmsg("analyze next tuple is not supported on pax relations")));
 }
 
 bool CCPaxAccessMethod::ScanBitmapNextBlock(TableScanDesc scan,
@@ -770,6 +877,7 @@ static const TableAmRoutine kPaxColumnMethods = {
     .relation_vacuum = paxc::PaxAccessMethod::RelationVacuum,
     .scan_analyze_next_block = pax::CCPaxAccessMethod::ScanAnalyzeNextBlock,
     .scan_analyze_next_tuple = pax::CCPaxAccessMethod::ScanAnalyzeNextTuple,
+    .relation_acquire_sample_rows = pax::CCPaxAccessMethod::AcquireSampleRows,
     .index_build_range_scan = paxc::PaxAccessMethod::IndexBuildRangeScan,
     .index_validate_scan = paxc::PaxAccessMethod::IndexValidateScan,
 
