@@ -19,13 +19,19 @@
 # --------------------------------------------------------------------
 # Multi-stage Dockerfile for Apache Cloudberry Sandbox Environment
 # --------------------------------------------------------------------
-# This Dockerfile uses pre-built Apache Cloudberry build images to
-# compile and install Cloudberry from the main branch, then creates
-# a runtime environment for testing and development.
+# This Dockerfile supports two source modes:
+#   - Main branch: clone the latest main from GitHub (CODEBASE_VERSION=main)
+#   - Local source: use the repository contents from the Docker build context
+#     (CODEBASE_VERSION=local), recommended for developers working from
+#     their current checkout.
+# In both modes it compiles and installs Cloudberry, then creates a
+# runtime environment for testing and development.
 # --------------------------------------------------------------------
 
 # Build stage: Use pre-built image to compile Cloudberry
+ARG CODEBASE_VERSION=main
 FROM rockylinux/rockylinux:9.6 AS builder
+ARG CODEBASE_VERSION
 
 # Install build toolchains and development headers (avoid coreutils/curl conflicts on arm64)
 RUN dnf makecache && \
@@ -118,8 +124,20 @@ RUN groupadd -r gpadmin && \
 USER gpadmin
 WORKDIR /home/gpadmin
 
-# Clone the latest Cloudberry source code
-RUN git clone --recurse-submodules --branch main --single-branch --depth=1 https://github.com/apache/cloudberry.git
+# Copy repository contents from build context
+# Note: This COPY always executes regardless of CODEBASE_VERSION due to Docker
+# layer caching behavior. For main branch builds, the copied content will be
+# removed and replaced by a fresh git clone in the RUN step below. This is an
+# acceptable tradeoff to keep the Dockerfile simple and maintainable.
+COPY --chown=gpadmin:gpadmin . /home/gpadmin/cloudberry
+
+# Obtain Cloudberry source code based on build mode
+RUN if [ "${CODEBASE_VERSION}" = "local" ]; then \
+        echo "Using local source from build context"; \
+    else \
+        rm -rf /home/gpadmin/cloudberry && \
+        git clone --recurse-submodules --branch main --single-branch --depth=1 https://github.com/apache/cloudberry.git; \
+    fi
 
 # Build Cloudberry using the official build scripts
 RUN cd /home/gpadmin/cloudberry && \
@@ -188,12 +206,12 @@ COPY --from=builder /usr/local/xerces-c/lib/libxerces-c.so /usr/local/cloudberry
 COPY --from=builder /usr/local/xerces-c/lib/libxerces-c-3.*.so /usr/local/cloudberry-db/lib/
 
 # Copy configuration files to their final destinations
-COPY ./configs/90-cbdb-limits.conf /etc/security/limits.d/90-cbdb-limits.conf
-COPY ./configs/90-cbdb-sysctl.conf /etc/sysctl.d/90-cbdb-sysctl.conf
-COPY ./configs/gpinitsystem_singlenode /tmp/gpinitsystem_singlenode
-COPY ./configs/gpinitsystem_multinode /tmp/gpinitsystem_multinode
-COPY ./configs/multinode-gpinit-hosts /tmp/multinode-gpinit-hosts
-COPY ./configs/init_system.sh /tmp/init_system.sh
+COPY devops/sandbox/configs/90-cbdb-limits.conf /etc/security/limits.d/90-cbdb-limits.conf
+COPY devops/sandbox/configs/90-cbdb-sysctl.conf /etc/sysctl.d/90-cbdb-sysctl.conf
+COPY devops/sandbox/configs/gpinitsystem_singlenode /tmp/gpinitsystem_singlenode
+COPY devops/sandbox/configs/gpinitsystem_multinode /tmp/gpinitsystem_multinode
+COPY devops/sandbox/configs/multinode-gpinit-hosts /tmp/multinode-gpinit-hosts
+COPY devops/sandbox/configs/init_system.sh /tmp/init_system.sh
 
 # Runtime configuration
 RUN echo "cdw" > /tmp/gpdb-hosts && \
