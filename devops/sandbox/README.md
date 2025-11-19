@@ -54,8 +54,9 @@ When building and deploying Apache Cloudberry in Docker, you will have 2 differe
 
 **Build Options**
 
-1. Compile with the source code of the latest Apache Cloudberry (released in [Apache Cloudberry Release Page](https://github.com/apache/cloudberry/releases)). The base OS will be Rocky Linux 9 Docker image.
-2. Method 2 - Compile with the latest Apache Cloudberry [main](https://github.com/apache/cloudberry/tree/main) branch. The base OS will be Rocky Linux 9 Docker image.
+1. **Recommended for most users** – Build directly from your current local source code using `-c local`. This is the fastest way to get started as it reuses your existing checkout, avoiding the need to download the code again inside the container. It is also ideal for developers testing local changes.
+2. Compile with the source code of the latest Apache Cloudberry (released in [Apache Cloudberry Release Page](https://github.com/apache/cloudberry/releases)). The base OS will be Rocky Linux 9 Docker image.
+3. Compile with the latest Apache Cloudberry [main](https://github.com/apache/cloudberry/tree/main) branch. The base OS will be Rocky Linux 9 Docker image.
 
 Build and deploy steps:
 
@@ -69,18 +70,38 @@ Build and deploy steps:
 
 3. Enter the repository and run the `run.sh` script to start the Docker container. This will start the automatic installation process. Depending on your environment, you may need to run this with 'sudo' command.
 
+    - **Recommended: Build from your current local source code (single container)**
+
+        This is the most efficient option for both new users and developers. It uses your local checkout directly, saving time by skipping the code download step inside the container. It also allows you to immediately test any local code modifications.
+
+    ```shell
+    cd cloudberry/devops/sandbox
+    ./run.sh -c local
+    ```
+
+    - **Recommended: Build from your current local source code (multi-container)**
+
+        Same as above, but deploys a multi-container cluster. Ideal for testing distributed features or high availability with your local code.
+
+    ```shell
+    cd cloudberry/devops/sandbox
+    ./run.sh -c local -m
+    ```
+
     - For latest Apache Cloudberry release running on a single container
 
     ```shell
     cd cloudberry/devops/sandbox
     ./run.sh -c 2.0.0
     ```
+
     - For latest Apache Cloudberry release running across multiple containers
 
     ```shell
     cd cloudberry/devops/sandbox
     ./run.sh -c 2.0.0 -m
     ```
+
     - For latest main branch running on a single container
 
     ```shell
