@@ -163,8 +163,13 @@ static int pax_acquire_sample_rows(Relation onerel, Snapshot snapshot,
     }
     cbdb::ExecClearTuple(slot);
   }
-  *totaldeadrows = deadrows / rs.m * (double) ntuples;
-  *totalrows = ntuples - *totaldeadrows;
+  if (rs.m > 0) {
+    *totaldeadrows = deadrows / rs.m * (double) ntuples;
+    *totalrows = ntuples - *totaldeadrows;
+  } else {
+    *totalrows = 0.0;
+    *totaldeadrows = 0.0;
+  }
   desc.Release();
   cbdb::ExecDropSingleTupleTableSlot(slot);
 
