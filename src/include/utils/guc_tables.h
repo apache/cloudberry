@@ -204,6 +204,8 @@ struct config_generic
 	char	   *sourcefile;		/* file current setting is from (NULL if not
 								 * set in config file) */
 	int			sourceline;		/* line in source file */
+
+	bool		mdb_admin_allowed; /* is mdb admin allowed to change this, makes sence only for superuser/not superuser ctx */
 };
 
 /* bit values in status field */
