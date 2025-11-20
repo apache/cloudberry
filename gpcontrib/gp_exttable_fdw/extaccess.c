@@ -491,25 +491,20 @@ external_getnext_init(PlanState *state)
 	return desc;
 }
 
+/*
+ * check_exec_error
+ *
+ * check CFTYPE_EXEC error after external_getnext.
+ */
 static void
-check_error(FileScanDesc scan)
+check_exec_error(FileScanDesc scan)
 {
 	char   *relname = RelationGetRelationName(scan->fs_rd);
-	int		ebuflen = 512;
-	char	ebuf[512];
-
-	ebuf[0] = '\0';
-	/* current only CFTYPE_EXEC will read stderr to ebuf */
-	if (url_ferror(scan->fs_file, -1, ebuf, ebuflen))
+	if (scan->fs_file->type == CFTYPE_EXEC)
 	{
-		if (*ebuf && strlen(ebuf) > 0)
-			ereport(ERROR,
-					(errcode(ERRCODE_EXTERNAL_ROUTINE_EXCEPTION),
-					 errmsg("external table %s command ended with error. %s",
-							(relname ? relname : ""), ebuf),
-					 errdetail("Command: %s", scan->fs_file->url)));
+		url_fclose(scan->fs_file, !QueryFinishPending, relname);
+		scan->fs_file = NULL;
 	}
-
 }
 
 /* ----------------------------------------------------------------
@@ -551,7 +546,7 @@ external_getnext(FileScanDesc scan, ScanDirection direction, ExternalSelectDesc 
 	{
 		FILEDEBUG_2;			/* external_getnext returning EOS */
 
-		check_error(scan);
+		check_exec_error(scan);
 
 		return NULL;
 	}
