@@ -943,6 +943,30 @@ AC_MSG_RESULT([checking whether to build with preload ic module ... $enable_prel
 AC_SUBST(enable_preload_ic_module)
 
 #
+# mcp-server
+#
+PGAC_ARG_BOOL(enable, mcp-server, no,
+              [enable MCP server support],
+              [AC_DEFINE(ENABLE_MCP_SERVER, 1,
+                         [Define to 1 to build with MCP server support (--enable-mcp-server)])])
+AC_MSG_RESULT([checking whether to build with MCP server... $enable_mcp_server])
+AC_SUBST(enable_mcp_server)
+
+# Check for required dependencies when mcp-server is enabled
+if test "$enable_mcp_server" = yes; then
+  AC_PATH_PROG([PYTHON3], [python3])
+  if test -z "$PYTHON3"; then
+    AC_MSG_ERROR([python3 is required for --enable-mcp-server but was not found])
+  fi
+
+  # Check for uv (Python package manager)
+  AC_PATH_PROG([UV], [uv])
+  if test -z "$UV"; then
+    AC_MSG_WARN([uv not found. MCP server build will attempt to use pip as fallback.])
+  fi
+fi
+
+#
 # pax support
 #
 PGAC_ARG_BOOL(enable, pax, no,

@@ -37,6 +37,9 @@ ifeq ($(enable_pax), yes)
 endif
 	$(MAKE) -C gpMgmt all
 	$(MAKE) -C gpcontrib all
+ifeq ($(enable_mcp_server), yes)
+	$(MAKE) -C mcp-server all
+endif
 	+@echo "All of Apache Cloudberry successfully made. Ready to install."
 
 docs:
@@ -84,6 +87,9 @@ ifeq ($(with_openssl), yes)
 endif
 	$(MAKE) -C gpMgmt $@
 	$(MAKE) -C gpcontrib $@
+ifeq ($(enable_mcp_server), yes)
+	$(MAKE) -C mcp-server $@
+endif
 	+@echo "Apache Cloudberry installation complete."
 
 install-docs:
@@ -116,6 +122,9 @@ clean:
 # gpAux/Makefile is the entry point for the enterprise build, which ends up
 # calling top-level configure and this Makefile
 	$(MAKE) -C gpMgmt $@
+ifeq ($(enable_mcp_server), yes)
+	$(MAKE) -C mcp-server $@
+endif
 
 # Important: distclean `src' last, otherwise Makefile.global
 # will be gone too soon.
@@ -125,6 +134,9 @@ distclean maintainer-clean:
 	$(MAKE) -C gpcontrib $@
 	$(MAKE) -C config $@
 	$(MAKE) -C gpMgmt $@
+ifeq ($(enable_mcp_server), yes)
+	$(MAKE) -C mcp-server $@
+endif
 	$(MAKE) -C src $@
 	rm -rf tmp_install/
 # Garbage from autoconf:
