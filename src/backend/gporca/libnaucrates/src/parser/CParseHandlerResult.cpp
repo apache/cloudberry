@@ -178,7 +178,7 @@ CParseHandlerResult::EndElement(const XMLCh *const,	 // element_uri,
 	GPOS_ASSERT(NULL != one_time_filter_parse_handler);
 
 	m_dxl_node = GPOS_NEW(m_mp) CDXLNode(m_mp, m_dxl_op);
-	// set statictics and physical properties
+	// set statistics and physical properties
 	CParseHandlerUtils::SetProperties(m_dxl_node, prop_parse_handler);
 
 	// add constructed children
