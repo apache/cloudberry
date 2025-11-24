@@ -32,6 +32,7 @@
 # Triggers:
 # - Weekly schedule
 # - optional manual dispatch.
+# - Changes on sonarqube.yml file
 #
 # Notes:
 # - SONARCLOUD_TOKEN secret is provided by the ASF Infra team
@@ -42,6 +43,14 @@ on:
   schedule:
   - cron: "0 0 * * 1"
   workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/sonarqube.yml'
+  pull_request:
+    paths:
+      - '.github/workflows/sonarqube.yml'
 
 permissions:
   contents: read
@@ -112,9 +121,10 @@ jobs:
         build-wrapper-linux-x86-64 --out-dir ${{ env.BUILD_WRAPPER_OUT_DIR }} make -j$(nproc)
 
     - name: SonarQube Scan
+      if: ${{ github.event_name != 'pull_request' }}
       uses: SonarSource/sonarqube-scan-action@v6
       env:
         SONAR_TOKEN: ${{ secrets.SONARCLOUD_TOKEN }}
       with:
         args: >
-          --define sonar.cfamily.compile-commands="${{ env.BUILD_WRAPPER_OUT_DIR }}/compile_commands.json"
+          --define "sonar.cfamily.compile-commands=${{ env.BUILD_WRAPPER_OUT_DIR }}/compile_commands.json"
