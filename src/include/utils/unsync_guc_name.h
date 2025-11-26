@@ -427,6 +427,7 @@
 		"optimizer_enable_nljoin",
 		"optimizer_enable_outerjoin_rewrite",
 		"optimizer_enable_outerjoin_to_unionall_rewrite",
+		"optimizer_enable_parallel_append",
 		"optimizer_enable_partition_propagation",
 		"optimizer_enable_partition_selection",
 		"optimizer_enable_push_join_below_union_all",
