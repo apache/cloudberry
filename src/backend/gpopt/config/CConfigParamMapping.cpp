@@ -284,6 +284,10 @@ CConfigParamMapping::SConfigMappingElem CConfigParamMapping::m_elements[] = {
 	 GPOS_WSZ_LIT(
 		 "Enable Eager Agg transform for pushing aggregate below an innerjoin.")},
 
+	{EopttraceEnableParallelAppendScan, &optimizer_enable_parallel_append,
+	 false,	 // m_negate_param
+	 GPOS_WSZ_LIT("Enable parallel append for scan/bitmap/index scan in partition tables.")},
+
 	{EopttraceDisableOrderedAgg, &optimizer_enable_orderedagg,
 	 true,	// m_negate_param
 	 GPOS_WSZ_LIT("Disable ordered aggregate plans.")},
