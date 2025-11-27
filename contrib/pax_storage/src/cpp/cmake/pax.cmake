@@ -30,6 +30,7 @@ set(pax_comm_src
     comm/bitmap.cc
     comm/bloomfilter.cc
     comm/byte_buffer.cc
+    comm/fast_io.cc
     comm/guc.cc
     comm/paxc_wrappers.cc
     comm/pax_memory.cc
@@ -173,7 +174,7 @@ add_subdirectory(contrib/tabulate)
 set(pax_target_src  ${PROTO_SRCS} ${pax_storage_src} ${pax_clustering_src} ${pax_exceptions_src}
   ${pax_access_src} ${pax_comm_src} ${pax_catalog_src} ${pax_vec_src})
 set(pax_target_include ${pax_target_include} ${ZTSD_HEADER} ${CMAKE_CURRENT_SOURCE_DIR} ${CBDB_INCLUDE_DIR} contrib/tabulate/include)
-set(pax_target_link_libs ${pax_target_link_libs} protobuf zstd z postgres)
+set(pax_target_link_libs ${pax_target_link_libs} protobuf zstd z postgres uring)
 if (PAX_USE_LZ4)
   list(APPEND pax_target_link_libs lz4)
 endif()
@@ -207,7 +208,7 @@ endif(VEC_BUILD)
 
 target_include_directories(pax PUBLIC ${pax_target_include})
 target_link_directories(pax PUBLIC ${pax_target_link_directories})
-target_link_libraries(pax PUBLIC ${pax_target_link_libs})
+target_link_libraries(pax PRIVATE ${pax_target_link_libs})
 set_target_properties(pax PROPERTIES
   BUILD_RPATH_USE_ORIGIN ON
   BUILD_WITH_INSTALL_RPATH ON
@@ -233,8 +234,8 @@ if (BUILD_GTEST)
   add_dependencies(test_main ${pax_target_dependencies} gtest gmock)
   target_include_directories(test_main PUBLIC ${pax_target_include} ${CMAKE_CURRENT_SOURCE_DIR} ${gtest_SOURCE_DIR}/include contrib/cpp-stub/src/ contrib/cpp-stub/src_linux/)
 
-  target_link_directories(test_main PUBLIC ${pax_target_link_directories})
-  target_link_libraries(test_main PUBLIC ${pax_target_link_libs} gtest gmock postgres)
+  target_link_directories(test_main PRIVATE ${pax_target_link_directories})
+  target_link_libraries(test_main PRIVATE ${pax_target_link_libs} gtest gmock postgres)
 endif(BUILD_GTEST)
 
 if(BUILD_GBENCH)

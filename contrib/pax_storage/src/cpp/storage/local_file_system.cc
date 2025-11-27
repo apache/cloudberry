@@ -35,6 +35,7 @@
 
 #include "access/pax_access_handle.h"
 #include "comm/cbdb_wrappers.h"
+#include "comm/fast_io.h"
 #include "comm/fmt.h"
 #include "comm/pax_memory.h"
 #include "comm/pax_resource.h"
@@ -51,6 +52,7 @@ class LocalFile final : public File {
   ssize_t Write(const void *ptr, size_t n) override;
   ssize_t PWrite(const void *ptr, size_t n, off_t offset) override;
   ssize_t PRead(void *ptr, size_t n, off_t offset) const override;
+  void ReadBatch(const std::vector<IORequest> &requests) const override;
   size_t FileLength() const override;
   void Flush() override;
   void Delete() override;
@@ -130,6 +132,26 @@ ssize_t LocalFile::PWrite(const void *ptr, size_t n, off_t offset) {
       fmt("Fail to pwrite [offset=%ld, require=%lu, rc=%ld, errno=%d], %s",
           offset, n, num, errno, DebugString().c_str()));
   return num;
+}
+
+void LocalFile::ReadBatch(const std::vector<IORequest> &requests) const {
+  if (unlikely(requests.empty())) return;
+
+  if (IOUringFastIO::available()) {
+    IOUringFastIO fast_io(requests.size());
+    std::vector<bool> result(requests.size(), false);
+    auto res = fast_io.read(fd_, const_cast<std::vector<IORequest>&>(requests), result);
+    CBDB_CHECK(res.first == 0, cbdb::CException::ExType::kExTypeIOError,
+               fmt("Fail to ReadBatch with io_uring [successful=%d, total=%lu], %s",
+                   res.second, requests.size(), DebugString().c_str()));
+  } else {
+    SyncFastIO fast_io;
+    std::vector<bool> result(requests.size(), false);
+    auto res = fast_io.read(fd_, const_cast<std::vector<IORequest>&>(requests), result);
+    CBDB_CHECK(res.first == 0, cbdb::CException::ExType::kExTypeIOError,
+               fmt("Fail to ReadBatch with sync read [successful=%d, total=%lu], %s",
+                   res.second, requests.size(), DebugString().c_str()));
+  }
 }
 
 size_t LocalFile::FileLength() const {
