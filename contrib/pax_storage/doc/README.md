@@ -46,6 +46,7 @@ PAX will be built with `--enable-pax` when you build the Cloudberry. Dependency 
 - **CMake**: 3.11 or later
 - **Protobuf**: 3.5.0 or later
 - **ZSTD (libzstd)**: 1.4.0 or later
+- **liburing**: 2.12 or later
 
 Also, you need to run the following command at the top level of the Cloudberry source code directory to download the submodules:
 

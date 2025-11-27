@@ -327,6 +327,7 @@ pax::porc::proto::StripeFooter OrcFormatReader::ReadStripeWithProjection(
 
   batch_offset = stripe_footer_offset;
 
+  std::vector<IORequest> io_requests;
   while (index < column_types_.size()) {
     // Current column have been skipped
     // Move `batch_offset` and `streams_index` to the right position
@@ -398,10 +399,17 @@ pax::porc::proto::StripeFooter OrcFormatReader::ReadStripeWithProjection(
       continue;
     }
 
-    file_->PReadN(data_buffer->GetAvailableBuffer(), batch_len, batch_offset);
+    {
+      IORequest io_request;
+      io_request.offset = batch_offset;
+      io_request.size = batch_len;
+      io_request.buffer = data_buffer->GetAvailableBuffer();
+      io_requests.emplace_back(io_request);
+    }
     data_buffer->Brush(batch_len);
     batch_offset += batch_len;
   }
+  file_->ReadBatch(io_requests);
 
   return stripe_footer;
 }
