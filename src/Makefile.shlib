@@ -130,7 +130,7 @@ ifeq ($(PORTNAME), darwin)
     DLSUFFIX		= .so
     LINK.shared		= $(COMPILER) -bundle -multiply_defined suppress
   endif
-  BUILD.exports		= $(AWK) '/^[^\#]/ {printf "_%s\n",$$1}' $< >$@
+  BUILD.exports		= $(AWK) '/^[^\043]/ {printf "_%s\n",$$1}' $< >$@
   exports_file		= $(SHLIB_EXPORTS:%.txt=%.list)
   ifneq (,$(exports_file))
     exported_symbols_list = -exported_symbols_list $(exports_file)
@@ -142,7 +142,7 @@ ifeq ($(PORTNAME), openbsd)
   ifdef soname
     LINK.shared		+= -Wl,-x,-soname,$(soname)
   endif
-  BUILD.exports		= ( echo '{ global:'; $(AWK) '/^[^\#]/ {printf "%s;\n",$$1}' $<; echo ' local: *; };' ) >$@
+  BUILD.exports		= ( echo '{ global:'; $(AWK) '/^[^\043]/ {printf "%s;\n",$$1}' $<; echo ' local: *; };' ) >$@
   exports_file		= $(SHLIB_EXPORTS:%.txt=%.list)
   ifneq (,$(exports_file))
     LINK.shared		+= -Wl,--version-script=$(exports_file)
@@ -158,7 +158,7 @@ ifeq ($(PORTNAME), freebsd)
   ifdef soname
     LINK.shared		+= -Wl,-x,-soname,$(soname)
   endif
-  BUILD.exports		= ( echo '{ global:'; $(AWK) '/^[^\#]/ {printf "%s;\n",$$1}' $<; echo ' local: *; };' ) >$@
+  BUILD.exports		= ( echo '{ global:'; $(AWK) '/^[^\043]/ {printf "%s;\n",$$1}' $<; echo ' local: *; };' ) >$@
   exports_file		= $(SHLIB_EXPORTS:%.txt=%.list)
   ifneq (,$(exports_file))
     LINK.shared		+= -Wl,--version-script=$(exports_file)
@@ -170,7 +170,7 @@ ifeq ($(PORTNAME), netbsd)
   ifdef soname
     LINK.shared		+= -Wl,-x,-soname,$(soname)
   endif
-  BUILD.exports		= ( echo '{ global:'; $(AWK) '/^[^\#]/ {printf "%s;\n",$$1}' $<; echo ' local: *; };' ) >$@
+  BUILD.exports		= ( echo '{ global:'; $(AWK) '/^[^\043]/ {printf "%s;\n",$$1}' $<; echo ' local: *; };' ) >$@
   exports_file		= $(SHLIB_EXPORTS:%.txt=%.list)
   ifneq (,$(exports_file))
     LINK.shared		+= -Wl,--version-script=$(exports_file)
@@ -215,7 +215,7 @@ ifeq ($(PORTNAME), linux)
   ifdef soname
     LINK.shared		+= -Wl,-soname,$(soname)
   endif
-  BUILD.exports		= ( echo '{ global:'; $(AWK) '/^[^\#]/ {printf "%s;\n",$$1}' $<; echo ' local: *; };' ) >$@
+  BUILD.exports		= ( echo '{ global:'; $(AWK) '/^[^\043]/ {printf "%s;\n",$$1}' $<; echo ' local: *; };' ) >$@
   exports_file		= $(SHLIB_EXPORTS:%.txt=%.list)
   ifneq (,$(exports_file))
     LINK.shared		+= -Wl,--version-script=$(exports_file)
