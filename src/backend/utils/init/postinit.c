@@ -1267,8 +1267,14 @@ InitPostgres(const char *in_dbname, Oid dboid, const char *username,
      * Primary function is to establish connections to the qExecs.
      * This is SKIPPED when the database is in bootstrap mode or 
      * Is not UnderPostmaster.
+     *
+     * Also skip for auxiliary background workers (e.g., ftsprobe, global
+     * deadlock detector, dtx recovery, sweeper, pg_cron launcher). These
+     * processes don't require interconnect for data exchange and opening
+     * unnecessary network sockets may be considered a security issue.
      */
-    if (!bootstrap && IsUnderPostmaster && !IsLoginMonitorWorkerProcess())
+    if (!bootstrap && IsUnderPostmaster && !IsLoginMonitorWorkerProcess() &&
+        !amAuxiliaryBgWorker())
     {
 		cdb_setup();
 		on_proc_exit( cdb_cleanup, 0 );
