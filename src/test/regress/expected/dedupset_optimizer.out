@@ -196,44 +196,32 @@ select * from pt1 where v1 in (select v3 from pt2 where v3 < 10);
 (9 rows)
 
 explain verbose with cte1 as (select v3 from t2) select count(*) from t1,t2 where t1.v1 in (select v3 from cte1) and t1.v1 in (select v3 from cte1 where v3 < 10);
-                                                               QUERY PLAN                                                                
------------------------------------------------------------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..1324954.52 rows=1 width=8)
-   Output: (count(*))
-   ->  Sequence  (cost=0.00..1324954.52 rows=1 width=8)
-         Output: (count(*))
-         ->  Shared Scan (share slice:id 1:0)  (cost=0.00..431.00 rows=34 width=1)
-               Output: share0_ref1.v3
-               ->  Seq Scan on public.t2  (cost=0.00..431.00 rows=34 width=4)
-                     Output: t2.v3
-         ->  Redistribute Motion 1:3  (slice2)  (cost=0.00..1324523.52 rows=1 width=8)
-               Output: (count(*))
-               ->  Finalize Aggregate  (cost=0.00..1324523.52 rows=1 width=8)
-                     Output: count(*)
-                     ->  Gather Motion 3:1  (slice3; segments: 3)  (cost=0.00..1324523.52 rows=1 width=8)
-                           Output: (PARTIAL count(*))
-                           ->  Partial Aggregate  (cost=0.00..1324523.52 rows=1 width=8)
-                                 Output: PARTIAL count(*)
-                                 ->  Hash Semi Join  (cost=0.00..1324523.52 rows=304 width=1)
-                                       Hash Cond: (t1.v1 = share0_ref2.v3)
-                                       ->  Nested Loop  (cost=0.00..1324091.93 rows=3334 width=4)
-                                             Output: t1.v1
-                                             Join Filter: true
-                                             ->  Seq Scan on public.t1  (cost=0.00..431.00 rows=34 width=4)
-                                                   Output: t1.v1
-                                             ->  Materialize  (cost=0.00..431.00 rows=100 width=1)
-                                                   ->  Broadcast Motion 3:3  (slice4; segments: 3)  (cost=0.00..431.00 rows=100 width=1)
-                                                         ->  Seq Scan on public.t2 t2_1  (cost=0.00..431.00 rows=34 width=1)
-                                       ->  Hash  (cost=431.00..431.00 rows=4 width=4)
-                                             Output: share0_ref2.v3
-                                             ->  Result  (cost=0.00..431.00 rows=4 width=4)
-                                                   Output: share0_ref2.v3
-                                                   Filter: (share0_ref2.v3 < 10)
-                                                   ->  Shared Scan (share slice:id 3:0)  (cost=0.00..431.00 rows=34 width=4)
-                                                         Output: share0_ref2.v3
+                                                      QUERY PLAN                                                       
+-----------------------------------------------------------------------------------------------------------------------
+ Finalize Aggregate  (cost=0.00..1324523.52 rows=1 width=8)
+   Output: count(*)
+   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..1324523.52 rows=1 width=8)
+         Output: (PARTIAL count(*))
+         ->  Partial Aggregate  (cost=0.00..1324523.51 rows=1 width=8)
+               Output: PARTIAL count(*)
+               ->  Hash Semi Join  (cost=0.00..1324523.51 rows=304 width=1)
+                     Hash Cond: (t1.v1 = t2_1.v3)
+                     ->  Nested Loop  (cost=0.00..1324091.93 rows=3334 width=4)
+                           Output: t1.v1
+                           Join Filter: true
+                           ->  Seq Scan on public.t1  (cost=0.00..431.00 rows=34 width=4)
+                                 Output: t1.v1
+                           ->  Materialize  (cost=0.00..431.00 rows=100 width=1)
+                                 ->  Broadcast Motion 3:3  (slice2; segments: 3)  (cost=0.00..431.00 rows=100 width=1)
+                                       ->  Seq Scan on public.t2  (cost=0.00..431.00 rows=34 width=1)
+                     ->  Hash  (cost=431.00..431.00 rows=4 width=4)
+                           Output: t2_1.v3
+                           ->  Seq Scan on public.t2 t2_1  (cost=0.00..431.00 rows=4 width=4)
+                                 Output: t2_1.v3
+                                 Filter: (t2_1.v3 < 10)
  Settings: enable_parallel = 'off', optimizer = 'on'
  Optimizer: GPORCA
-(35 rows)
+(23 rows)
 
 explain verbose with cte1 as (select v3 from t2) select count(*) from t1,t2 where t1.v1 in (select v3 from cte1 where v3 < 10);
                                                       QUERY PLAN                                                       
@@ -635,41 +623,31 @@ select count(*) from pt1 where v1 in (select v3 from pt2);
 (1 row)
 
 explain verbose with cte1 as (select v3 from t2) select count(*) from t1,t2 where t1.v1 in (select v3 from cte1) and t1.v1 in (select v3 from cte1);
-                                                               QUERY PLAN                                                                
------------------------------------------------------------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..1324954.53 rows=1 width=8)
-   Output: (count(*))
-   ->  Sequence  (cost=0.00..1324954.53 rows=1 width=8)
-         Output: (count(*))
-         ->  Shared Scan (share slice:id 1:0)  (cost=0.00..431.00 rows=34 width=1)
-               Output: share0_ref1.v3
-               ->  Seq Scan on public.t2  (cost=0.00..431.00 rows=34 width=4)
-                     Output: t2.v3
-         ->  Redistribute Motion 1:3  (slice2)  (cost=0.00..1324523.53 rows=1 width=8)
-               Output: (count(*))
-               ->  Finalize Aggregate  (cost=0.00..1324523.53 rows=1 width=8)
-                     Output: count(*)
-                     ->  Gather Motion 3:1  (slice3; segments: 3)  (cost=0.00..1324523.53 rows=1 width=8)
-                           Output: (PARTIAL count(*))
-                           ->  Partial Aggregate  (cost=0.00..1324523.53 rows=1 width=8)
-                                 Output: PARTIAL count(*)
-                                 ->  Hash Semi Join  (cost=0.00..1324523.53 rows=3334 width=1)
-                                       Hash Cond: (t1.v1 = share0_ref2.v3)
-                                       ->  Nested Loop  (cost=0.00..1324091.93 rows=3334 width=4)
-                                             Output: t1.v1
-                                             Join Filter: true
-                                             ->  Seq Scan on public.t1  (cost=0.00..431.00 rows=34 width=4)
-                                                   Output: t1.v1
-                                             ->  Materialize  (cost=0.00..431.00 rows=100 width=1)
-                                                   ->  Broadcast Motion 3:3  (slice4; segments: 3)  (cost=0.00..431.00 rows=100 width=1)
-                                                         ->  Seq Scan on public.t2 t2_1  (cost=0.00..431.00 rows=34 width=1)
-                                       ->  Hash  (cost=431.00..431.00 rows=34 width=4)
-                                             Output: share0_ref2.v3
-                                             ->  Shared Scan (share slice:id 3:0)  (cost=0.00..431.00 rows=34 width=4)
-                                                   Output: share0_ref2.v3
+                                                      QUERY PLAN                                                       
+-----------------------------------------------------------------------------------------------------------------------
+ Finalize Aggregate  (cost=0.00..1324523.53 rows=1 width=8)
+   Output: count(*)
+   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..1324523.53 rows=1 width=8)
+         Output: (PARTIAL count(*))
+         ->  Partial Aggregate  (cost=0.00..1324523.53 rows=1 width=8)
+               Output: PARTIAL count(*)
+               ->  Hash Semi Join  (cost=0.00..1324523.53 rows=3334 width=1)
+                     Hash Cond: (t1.v1 = t2_1.v3)
+                     ->  Nested Loop  (cost=0.00..1324091.93 rows=3334 width=4)
+                           Output: t1.v1
+                           Join Filter: true
+                           ->  Seq Scan on public.t1  (cost=0.00..431.00 rows=34 width=4)
+                                 Output: t1.v1
+                           ->  Materialize  (cost=0.00..431.00 rows=100 width=1)
+                                 ->  Broadcast Motion 3:3  (slice2; segments: 3)  (cost=0.00..431.00 rows=100 width=1)
+                                       ->  Seq Scan on public.t2  (cost=0.00..431.00 rows=34 width=1)
+                     ->  Hash  (cost=431.00..431.00 rows=34 width=4)
+                           Output: t2_1.v3
+                           ->  Seq Scan on public.t2 t2_1  (cost=0.00..431.00 rows=34 width=4)
+                                 Output: t2_1.v3
  Settings: enable_parallel = 'off', optimizer = 'on'
  Optimizer: GPORCA
-(32 rows)
+(22 rows)
 
 explain verbose with cte1 as (select v3 from t2) select count(*) from t1,t2 where t1.v1 in (select v3 from cte1);
                                                       QUERY PLAN                                                       
@@ -1097,80 +1075,68 @@ select * from pt1 where v1 in (select v3 from pt2,t3 where v4=v6 and v4 < 10);
 (9 rows)
 
 explain verbose with cte1 as (select v3 from t2) select * from t1,t2 where t1.v1 in (select v3 from cte1) and t1.v1 in (select v3 from cte1,t3 where v4=v6);
-                                                   QUERY PLAN                                                    
------------------------------------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..2648910.08 rows=5625 width=16)
-   Output: t1.v1, t1.v2, t2_1.v3, t2_1.v4
-   ->  Sequence  (cost=0.00..2648909.74 rows=1875 width=16)
-         Output: t1.v1, t1.v2, t2_1.v3, t2_1.v4
-         ->  Shared Scan (share slice:id 1:0)  (cost=0.00..431.00 rows=34 width=1)
-               Output: share0_ref1.v3
-               ->  Seq Scan on public.t2  (cost=0.00..431.00 rows=34 width=4)
-                     Output: t2.v3
-         ->  Hash Semi Join  (cost=0.00..2648478.71 rows=1875 width=16)
-               Output: t1.v1, t1.v2, t2_1.v3, t2_1.v4
-               Hash Cond: ((t2_1.v4 = t3.v6) AND (t1.v1 = share0_ref2.v3))
-               ->  Nested Loop  (cost=0.00..1324306.71 rows=3334 width=16)
-                     Output: t1.v1, t1.v2, t2_1.v3, t2_1.v4
+                                                QUERY PLAN                                                 
+-----------------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..2648479.76 rows=5625 width=16)
+   Output: t1.v1, t1.v2, t2.v3, t2.v4
+   ->  Hash Semi Join  (cost=0.00..2648479.42 rows=1875 width=16)
+         Output: t1.v1, t1.v2, t2.v3, t2.v4
+         Hash Cond: ((t2.v4 = t3.v6) AND (t1.v1 = t2_1.v3))
+         ->  Nested Loop  (cost=0.00..1324306.71 rows=3334 width=16)
+               Output: t1.v1, t1.v2, t2.v3, t2.v4
+               Join Filter: true
+               ->  Broadcast Motion 3:3  (slice2; segments: 3)  (cost=0.00..431.02 rows=100 width=8)
+                     Output: t2.v3, t2.v4
+                     ->  Seq Scan on public.t2  (cost=0.00..431.00 rows=34 width=8)
+                           Output: t2.v3, t2.v4
+               ->  Seq Scan on public.t1  (cost=0.00..431.00 rows=34 width=8)
+                     Output: t1.v1, t1.v2
+         ->  Hash  (cost=1324170.14..1324170.14 rows=3334 width=8)
+               Output: t2_1.v3, t3.v6
+               ->  Nested Loop  (cost=0.00..1324170.14 rows=3334 width=8)
+                     Output: t2_1.v3, t3.v6
                      Join Filter: true
-                     ->  Broadcast Motion 3:3  (slice2; segments: 3)  (cost=0.00..431.02 rows=100 width=8)
-                           Output: t2_1.v3, t2_1.v4
-                           ->  Seq Scan on public.t2 t2_1  (cost=0.00..431.00 rows=34 width=8)
-                                 Output: t2_1.v3, t2_1.v4
-                     ->  Seq Scan on public.t1  (cost=0.00..431.00 rows=34 width=8)
-                           Output: t1.v1, t1.v2
-               ->  Hash  (cost=1324169.43..1324169.43 rows=3334 width=8)
-                     Output: share0_ref2.v3, t3.v6
-                     ->  Nested Loop  (cost=0.00..1324169.43 rows=3334 width=8)
-                           Output: share0_ref2.v3, t3.v6
-                           Join Filter: true
-                           ->  Broadcast Motion 3:3  (slice3; segments: 3)  (cost=0.00..431.01 rows=100 width=4)
+                     ->  Broadcast Motion 3:3  (slice3; segments: 3)  (cost=0.00..431.01 rows=100 width=4)
+                           Output: t3.v6
+                           ->  Seq Scan on public.t3  (cost=0.00..431.00 rows=34 width=4)
                                  Output: t3.v6
-                                 ->  Seq Scan on public.t3  (cost=0.00..431.00 rows=34 width=4)
-                                       Output: t3.v6
-                           ->  Shared Scan (share slice:id 1:0)  (cost=0.00..431.00 rows=34 width=4)
-                                 Output: share0_ref2.v3
+                     ->  Seq Scan on public.t2 t2_1  (cost=0.00..431.00 rows=34 width=4)
+                           Output: t2_1.v3
  Settings: enable_parallel = 'off', optimizer = 'on'
  Optimizer: GPORCA
-(33 rows)
+(27 rows)
 
 explain verbose with cte1 as (select v3 from t2) select * from t1,t2 where t1.v1 in (select v3 from cte1) and t1.v1 in (select v3 from t3,cte1 where v4=v6);
-                                                   QUERY PLAN                                                    
------------------------------------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..2648910.08 rows=5625 width=16)
-   Output: t1.v1, t1.v2, t2_1.v3, t2_1.v4
-   ->  Sequence  (cost=0.00..2648909.74 rows=1875 width=16)
-         Output: t1.v1, t1.v2, t2_1.v3, t2_1.v4
-         ->  Shared Scan (share slice:id 1:0)  (cost=0.00..431.00 rows=34 width=1)
-               Output: share0_ref1.v3
-               ->  Seq Scan on public.t2  (cost=0.00..431.00 rows=34 width=4)
-                     Output: t2.v3
-         ->  Hash Semi Join  (cost=0.00..2648478.71 rows=1875 width=16)
-               Output: t1.v1, t1.v2, t2_1.v3, t2_1.v4
-               Hash Cond: ((t2_1.v4 = t3.v6) AND (t1.v1 = share0_ref2.v3))
-               ->  Nested Loop  (cost=0.00..1324306.71 rows=3334 width=16)
-                     Output: t1.v1, t1.v2, t2_1.v3, t2_1.v4
+                                                QUERY PLAN                                                 
+-----------------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..2648479.76 rows=5625 width=16)
+   Output: t1.v1, t1.v2, t2.v3, t2.v4
+   ->  Hash Semi Join  (cost=0.00..2648479.42 rows=1875 width=16)
+         Output: t1.v1, t1.v2, t2.v3, t2.v4
+         Hash Cond: ((t2.v4 = t3.v6) AND (t1.v1 = t2_1.v3))
+         ->  Nested Loop  (cost=0.00..1324306.71 rows=3334 width=16)
+               Output: t1.v1, t1.v2, t2.v3, t2.v4
+               Join Filter: true
+               ->  Broadcast Motion 3:3  (slice2; segments: 3)  (cost=0.00..431.02 rows=100 width=8)
+                     Output: t2.v3, t2.v4
+                     ->  Seq Scan on public.t2  (cost=0.00..431.00 rows=34 width=8)
+                           Output: t2.v3, t2.v4
+               ->  Seq Scan on public.t1  (cost=0.00..431.00 rows=34 width=8)
+                     Output: t1.v1, t1.v2
+         ->  Hash  (cost=1324170.14..1324170.14 rows=3334 width=8)
+               Output: t3.v6, t2_1.v3
+               ->  Nested Loop  (cost=0.00..1324170.14 rows=3334 width=8)
+                     Output: t3.v6, t2_1.v3
                      Join Filter: true
-                     ->  Broadcast Motion 3:3  (slice2; segments: 3)  (cost=0.00..431.02 rows=100 width=8)
-                           Output: t2_1.v3, t2_1.v4
-                           ->  Seq Scan on public.t2 t2_1  (cost=0.00..431.00 rows=34 width=8)
-                                 Output: t2_1.v3, t2_1.v4
-                     ->  Seq Scan on public.t1  (cost=0.00..431.00 rows=34 width=8)
-                           Output: t1.v1, t1.v2
-               ->  Hash  (cost=1324169.43..1324169.43 rows=3334 width=8)
-                     Output: t3.v6, share0_ref2.v3
-                     ->  Nested Loop  (cost=0.00..1324169.43 rows=3334 width=8)
-                           Output: t3.v6, share0_ref2.v3
-                           Join Filter: true
-                           ->  Broadcast Motion 3:3  (slice3; segments: 3)  (cost=0.00..431.01 rows=100 width=4)
+                     ->  Broadcast Motion 3:3  (slice3; segments: 3)  (cost=0.00..431.01 rows=100 width=4)
+                           Output: t3.v6
+                           ->  Seq Scan on public.t3  (cost=0.00..431.00 rows=34 width=4)
                                  Output: t3.v6
-                                 ->  Seq Scan on public.t3  (cost=0.00..431.00 rows=34 width=4)
-                                       Output: t3.v6
-                           ->  Shared Scan (share slice:id 1:0)  (cost=0.00..431.00 rows=34 width=4)
-                                 Output: share0_ref2.v3
+                     ->  Seq Scan on public.t2 t2_1  (cost=0.00..431.00 rows=34 width=4)
+                           Output: t2_1.v3
  Settings: enable_parallel = 'off', optimizer = 'on'
  Optimizer: GPORCA
-(33 rows)
+(27 rows)
 
 explain verbose with cte1 as (select v3 from t2) select * from t1,t2 where t1.v1 in (select v3 from cte1,t3 where v4=v6 and v4 < 10);
                                                    QUERY PLAN                                                    
@@ -1212,49 +1178,43 @@ explain verbose with cte1 as (select v3 from t2) select * from t1,t2 where t1.v1
 (34 rows)
 
 explain verbose with cte1 as (select v3 from t2) select * from t1,t2 where t1.v1 in (select v3 from cte1) and t1.v1 in (select v3 from cte1,t3 where v4=v6 and v4 < 10);
-                                                      QUERY PLAN                                                       
------------------------------------------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..2648784.74 rows=512 width=16)
-   Output: t1.v1, t1.v2, t2_1.v3, t2_1.v4
-   ->  Sequence  (cost=0.00..2648784.71 rows=171 width=16)
-         Output: t1.v1, t1.v2, t2_1.v3, t2_1.v4
-         ->  Shared Scan (share slice:id 1:0)  (cost=0.00..431.00 rows=34 width=1)
-               Output: share0_ref1.v3
-               ->  Seq Scan on public.t2  (cost=0.00..431.00 rows=34 width=4)
-                     Output: t2.v3
-         ->  Hash Semi Join  (cost=0.00..2648353.70 rows=171 width=16)
-               Output: t1.v1, t1.v2, t2_1.v3, t2_1.v4
-               Hash Cond: ((t2_1.v4 = t3.v6) AND (t1.v1 = share0_ref2.v3))
-               ->  Redistribute Motion 3:3  (slice2; segments: 3)  (cost=0.00..1324306.84 rows=304 width=16)
-                     Output: t1.v1, t1.v2, t2_1.v3, t2_1.v4
-                     Hash Key: t1.v1
-                     ->  Result  (cost=0.00..1324306.82 rows=304 width=16)
-                           Output: t1.v1, t1.v2, t2_1.v3, t2_1.v4
-                           Filter: (t2_1.v4 < 10)
-                           ->  Nested Loop  (cost=0.00..1324306.71 rows=3334 width=16)
-                                 Output: t1.v1, t1.v2, t2_1.v3, t2_1.v4
-                                 Join Filter: true
-                                 ->  Broadcast Motion 3:3  (slice3; segments: 3)  (cost=0.00..431.02 rows=100 width=8)
-                                       Output: t1.v1, t1.v2
-                                       ->  Seq Scan on public.t1  (cost=0.00..431.00 rows=34 width=8)
-                                             Output: t1.v1, t1.v2
-                                 ->  Seq Scan on public.t2 t2_1  (cost=0.00..431.00 rows=34 width=8)
-                                       Output: t2_1.v3, t2_1.v4
-               ->  Hash  (cost=1324046.63..1324046.63 rows=304 width=8)
-                     Output: share0_ref2.v3, t3.v6
-                     ->  Nested Loop  (cost=0.00..1324046.63 rows=304 width=8)
-                           Output: share0_ref2.v3, t3.v6
+                                                   QUERY PLAN                                                    
+-----------------------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..2648354.45 rows=512 width=16)
+   Output: t1.v1, t1.v2, t2.v3, t2.v4
+   ->  Hash Semi Join  (cost=0.00..2648354.42 rows=171 width=16)
+         Output: t1.v1, t1.v2, t2.v3, t2.v4
+         Hash Cond: ((t2.v4 = t3.v6) AND (t1.v1 = t2_1.v3))
+         ->  Redistribute Motion 3:3  (slice2; segments: 3)  (cost=0.00..1324306.84 rows=304 width=16)
+               Output: t1.v1, t1.v2, t2.v3, t2.v4
+               Hash Key: t1.v1
+               ->  Result  (cost=0.00..1324306.82 rows=304 width=16)
+                     Output: t1.v1, t1.v2, t2.v3, t2.v4
+                     Filter: (t2.v4 < 10)
+                     ->  Nested Loop  (cost=0.00..1324306.71 rows=3334 width=16)
+                           Output: t1.v1, t1.v2, t2.v3, t2.v4
                            Join Filter: true
-                           ->  Broadcast Motion 3:3  (slice4; segments: 3)  (cost=0.00..431.00 rows=10 width=4)
+                           ->  Broadcast Motion 3:3  (slice3; segments: 3)  (cost=0.00..431.02 rows=100 width=8)
+                                 Output: t1.v1, t1.v2
+                                 ->  Seq Scan on public.t1  (cost=0.00..431.00 rows=34 width=8)
+                                       Output: t1.v1, t1.v2
+                           ->  Seq Scan on public.t2  (cost=0.00..431.00 rows=34 width=8)
+                                 Output: t2.v3, t2.v4
+         ->  Hash  (cost=1324047.35..1324047.35 rows=304 width=8)
+               Output: t2_1.v3, t3.v6
+               ->  Nested Loop  (cost=0.00..1324047.35 rows=304 width=8)
+                     Output: t2_1.v3, t3.v6
+                     Join Filter: true
+                     ->  Broadcast Motion 3:3  (slice4; segments: 3)  (cost=0.00..431.00 rows=10 width=4)
+                           Output: t3.v6
+                           ->  Seq Scan on public.t3  (cost=0.00..431.00 rows=4 width=4)
                                  Output: t3.v6
-                                 ->  Seq Scan on public.t3  (cost=0.00..431.00 rows=4 width=4)
-                                       Output: t3.v6
-                                       Filter: (t3.v6 < 10)
-                           ->  Shared Scan (share slice:id 1:0)  (cost=0.00..431.00 rows=34 width=4)
-                                 Output: share0_ref2.v3
+                                 Filter: (t3.v6 < 10)
+                     ->  Seq Scan on public.t2 t2_1  (cost=0.00..431.00 rows=34 width=4)
+                           Output: t2_1.v3
  Settings: enable_parallel = 'off', optimizer = 'on'
  Optimizer: GPORCA
-(40 rows)
+(34 rows)
 
 with cte1 as (select v3 from t2) select sum(v1) from t1,t2 where t1.v1 in (select v3 from cte1) and t1.v1 in (select v3 from cte1,t3 where v4=v6 and v4 < 10);
   sum  
