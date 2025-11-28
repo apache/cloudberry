@@ -101,7 +101,7 @@ CXformDynamicGet2ParallelAppendTableScan::Exfp(CExpressionHandle &exprhdl) const
 		{
 			// If segfilecount is 0 or 1, parallel execution is pointless
 			// Reject parallel scan early in promise phase
-			GPOS_TRACE_FORMAT("CXformGet2ParallelTableScan rejected for table %ls: AO/AOCO table has segfilecount=%d (needs >1 for parallel scan)",
+			GPOS_TRACE_FORMAT("CXformGet2ParallelAppendTableScan rejected for table %ls: AO/AOCO table has segfilecount=%d (needs >1 for parallel scan)",
 							  ptabdesc->Name().Pstr()->GetBuffer(), seg_file_count);
 			return CXform::ExfpNone;
 		}
