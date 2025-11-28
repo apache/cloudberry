@@ -65,6 +65,9 @@ CXformDynamicGet2AppendTableScan::Exfp(CExpressionHandle &exprhdl) const
 		return CXform::ExfpNone;
 	}
 
+	if (!GPOS_FTRACE(EopttraceEnableParallelAppendScan))
+		return CXform::ExfpNone;
+
 	return CXform::ExfpHigh;
 }
 
