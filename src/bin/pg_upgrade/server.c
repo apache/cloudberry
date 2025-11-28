@@ -260,7 +260,7 @@ start_postmaster(ClusterInfo *cluster, bool report_and_exit_on_error)
 	}
 
 	snprintf(cmd, sizeof(cmd),
-			 "\"%s/pg_ctl\" -w -l \"%s/%s\" -D \"%s\" -o \"-p %d -c %s -b%s %s %s%s\" start",
+			 "unset LD_LIBRARY_PATH;\"%s/pg_ctl\" -w -l \"%s/%s\" -D \"%s\" -o \"-p %d -c %s -b%s %s %s%s\" start",
 			 cluster->bindir,
 			 log_opts.logdir,
 			 SERVER_LOG_FILE,
