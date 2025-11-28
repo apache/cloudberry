@@ -303,7 +303,7 @@ CICGTest::EresUnittest_NegativeIndexApplyTests()
 				CEnumeratorConfig::GetEnumeratorCfg(mp, 0 /*plan_id*/),
 				CStatisticsConfig::PstatsconfDefault(mp),
 				CCTEConfig::PcteconfDefault(mp), pcm, CHint::PhintDefault(mp),
-				nullptr /* pplanhint */, CWindowOids::GetWindowOids(mp));
+				nullptr /* pplanhint */, CWindowOids::GetWindowOids(mp), false);
 			CDXLNode *pdxlnPlan = CMinidumperUtils::PdxlnExecuteMinidump(
 				mp, rgszNegativeIndexApplyFileNames[ul],
 				GPOPT_TEST_SEGMENTS /*ulSegments*/, 1 /*ulSessionId*/,

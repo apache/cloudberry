@@ -42,6 +42,7 @@ OBJS        = CAutoOptCtxt.o \
               CDistributionSpecStrictRandom.o \
               CDistributionSpecStrictSingleton.o \
               CDistributionSpecUniversal.o \
+              CDistributionSpecWorkerRandom.o \
               CDrvdProp.o \
               CDrvdPropCtxt.o \
               CDrvdPropCtxtPlan.o \
