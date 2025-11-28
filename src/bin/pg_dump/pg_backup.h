@@ -204,6 +204,18 @@ typedef struct _dumpOptions
 	int			do_nothing;
 } DumpOptions;
 
+
+typedef enum
+{
+	Greenplum,
+	Cloudberry
+} DatabaseType;
+
+typedef struct
+{
+	DatabaseType type;
+	int version;
+} DatabaseVersion;
 /*
  *	We may want to have some more user-readable data, but in the mean
  *	time this gives us some abstraction and type checking.
@@ -238,6 +250,8 @@ typedef struct Archive
 
 	/* prepared-query status */
 	bool	   *is_prepared;	/* indexed by enum _dumpPreparedQueries */
+
+	DatabaseVersion version;
 
 	/* The rest is private */
 } Archive;
