@@ -1,5 +1,6 @@
 set pax.enable_debug to on;
 set pax.enable_sparse_filter = on;
+set pax.enable_sync_collect_stats = on;
 create table pax_test.null_test_t(a int, b int, c text) using pax;
 
 insert into pax_test.null_test_t(a) select null from generate_series(1,2)i;
@@ -74,3 +75,4 @@ reset client_min_messages;
 drop table pax_test.in_test_t;
 
 reset pax.enable_sparse_filter;
+reset pax.enable_sync_collect_stats;

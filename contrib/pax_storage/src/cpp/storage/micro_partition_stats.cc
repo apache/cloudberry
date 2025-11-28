@@ -407,26 +407,6 @@ bool MicroPartitionStats::MicroPartitionStatisticsInfoCombine(
   return true;
 }
 
-// We place the information of each column in a nearby layout, so that for
-// each column status check, there is only one memory access, and other
-// accesses can hit the cache.
-
-struct NullCountStats {
-  // whether the column has been set the has_null to true, if done, we should
-  // not set it again
-  bool has_null = false;
-  // whether the column has been set the all_null to false, if done, we should
-  // not set it again
-  bool all_null = true;
-  // the count of not null rows
-  int32 not_null_count = 0;
-  void Reset() {
-    has_null = false;
-    all_null = true;
-    not_null_count = 0;
-  }
-};
-
 struct MinMaxStats {
   // status to indicate whether the oids are initialized
   // or the min-max values are initialized
@@ -645,7 +625,19 @@ MicroPartitionStats *MicroPartitionStats::Reset() {
   return this;
 }
 
-void MicroPartitionStats::AddRow(TupleTableSlot *slot) {
+void MicroPartitionStats::UpdateNullStats(int column_index,
+                                          NullCountStats null_count_stats) {
+  Assert(column_index >= 0);
+  Assert(column_index < static_cast<int>(column_mem_stats_.size()));
+  column_mem_stats_[column_index].null_count_stats_.all_null =
+      null_count_stats.all_null;
+  column_mem_stats_[column_index].null_count_stats_.has_null =
+      null_count_stats.has_null;
+  column_mem_stats_[column_index].null_count_stats_.not_null_count =
+      null_count_stats.not_null_count;
+}
+
+void MicroPartitionStats::AddRow(TupleTableSlot *slot, bool update_null_stats) {
   auto n = tuple_desc_->natts;
 
   Assert(initialized_);
@@ -654,10 +646,17 @@ void MicroPartitionStats::AddRow(TupleTableSlot *slot) {
              fmt("Current stats initialized [N=%lu], in tuple desc [natts=%d] ",
                  column_mem_stats_.size(), n));
   for (auto i = 0; i < n; i++) {
-    if (slot->tts_isnull[i])
-      AddNullColumn(i);
-    else
+    if (slot->tts_isnull[i]) {
+      if (update_null_stats) {
+        AddNullColumn(i);
+      }
+    } else {
+      if (update_null_stats) {
+        column_mem_stats_[i].null_count_stats_.all_null = false;
+        ++column_mem_stats_[i].null_count_stats_.not_null_count;
+      }
       AddNonNullColumn(i, slot->tts_values[i]);
+    }
   }
 }
 
@@ -748,8 +747,9 @@ void MicroPartitionStats::MergeRawInfo(
     // begin update sum
     auto sum_stat = &column_mem_stats_[column_index].sum_stats_;
     Assert(sum_stat->status != STATUS_UNINITIALIZED);
-    Assert(sum_stat->rettype ==
-           stats_info->columnstats(column_index).info().prorettype());
+    AssertImply(stats_info->columnstats(column_index).info().has_prorettype(),
+                sum_stat->rettype ==
+                    stats_info->columnstats(column_index).info().prorettype());
     sum_stat->final_func_called = true;  // no need call final function
 
     if (sum_stat->status == STATUS_NOT_SUPPORT) {
@@ -1009,9 +1009,6 @@ inline void MicroPartitionStats::AddNonNullColumn(int column_index,
   Oid &collation = att->attcollation;
   int16 &typlen = att->attlen;
   bool &typbyval = att->attbyval;
-
-  column_mem_stats_[column_index].null_count_stats_.all_null = false;
-  ++column_mem_stats_[column_index].null_count_stats_.not_null_count;
 
   // update min/max
   switch (column_mem_stats_[column_index].min_max_stats_.status) {
@@ -1312,7 +1309,6 @@ void MicroPartitionStats::Initialize(const std::vector<int> &minmax_columns,
 
     info->set_typid(att->atttypid);
     info->set_collation(att->attcollation);
-
     column_mem_stats_[i].min_max_stats_.status = STATUS_MISSING_INIT_VAL;
   init_sum_status:
     if (cbdb::SumAGGGetProcinfo(

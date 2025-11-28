@@ -36,6 +36,7 @@ class MicroPartitionStatsUpdater {
   // v1: 111000
   // v2: 000100(updater) -> 111100(reader)
   MicroPartitionStatsUpdater(MicroPartitionReader *reader,
+                             bool update_all_group,
                              std::shared_ptr<Bitmap8> visibility_bitmap);
   std::shared_ptr<MicroPartitionStats> Update(
       TupleTableSlot *slot, const std::vector<int> &minmax_columns,

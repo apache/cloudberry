@@ -36,10 +36,18 @@
 namespace pax {
 
 MicroPartitionStatsUpdater::MicroPartitionStatsUpdater(
-    MicroPartitionReader *reader, std::shared_ptr<Bitmap8> visibility_bitmap)
+    MicroPartitionReader *reader, bool update_all_group,
+    std::shared_ptr<Bitmap8> visibility_bitmap)
     : reader_(reader) {
   Assert(reader);
-  Assert(visibility_bitmap);
+  AssertImply(!update_all_group, visibility_bitmap);
+
+  if (update_all_group) {
+    exist_invisible_tuples_.resize(reader_->GetGroupNums());
+    std::fill(exist_invisible_tuples_.begin(), exist_invisible_tuples_.end(),
+              true);
+    return;
+  }
 
   // O(n) here
   size_t group_tup_offset = 0;
@@ -81,20 +89,9 @@ std::shared_ptr<MicroPartitionStats> MicroPartitionStatsUpdater::Update(
 
       // already setup the visible map
       auto group = reader_->ReadGroup(group_index);
-#ifdef ENABLE_DEBUG
-      size_t read_count = 0;
-#endif
       while (group->ReadTuple(slot).first) {
-        group_stats->AddRow(slot);
-#ifdef ENABLE_DEBUG
-        ++read_count;
-#endif
+        group_stats->AddRow(slot, true);
       }
-
-#ifdef ENABLE_DEBUG
-      // the read counts must less than the tuple counts in group
-      Assert(read_count < group->GetRows());
-#endif
 
     } else {
       ::pax::stats::MicroPartitionStatisticsInfo stat_info;

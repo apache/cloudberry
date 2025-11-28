@@ -1,0 +1,154 @@
+show autovacuum;
+ autovacuum 
+------------
+ off
+(1 row)
+
+-- async collect stats in vacuum
+set pax.enable_sync_collect_stats to off;
+create table pax_vacuum (a int, b int, c int) using pax with(minmax_columns='a,b') distributed by (a);
+insert into pax_vacuum select i, i from generate_series(1, 1000) i;
+select * from get_pax_aux_table('pax_vacuum');
+ ptblockname | pttupcount |                                        ptstatistics                                         | ptexistvisimap | ptexistexttoast | ptisclustered 
+-------------+------------+---------------------------------------------------------------------------------------------+----------------+-----------------+---------------
+           0 |        322 | [(false,false),(322),None,None],[(false,false),(322),None,None],[(true,true),(0),None,None] | f              | f               | f
+           0 |        340 | [(false,false),(340),None,None],[(false,false),(340),None,None],[(true,true),(0),None,None] | f              | f               | f
+           0 |        338 | [(false,false),(338),None,None],[(false,false),(338),None,None],[(true,true),(0),None,None] | f              | f               | f
+(3 rows)
+
+vacuum pax_vacuum;
+select * from get_pax_aux_table('pax_vacuum');
+ ptblockname | pttupcount |                                                  ptstatistics                                                   | ptexistvisimap | ptexistexttoast | ptisclustered 
+-------------+------------+-----------------------------------------------------------------------------------------------------------------+----------------+-----------------+---------------
+           0 |        338 | [(false,false),(338),(2,1000),(166662)],[(false,false),(338),(2,1000),(166662)],[(false,false),(338),None,None] | f              | f               | f
+           0 |        340 | [(false,false),(340),(5,997),(172558)],[(false,false),(340),(5,997),(172558)],[(false,false),(340),None,None]   | f              | f               | f
+           0 |        322 | [(false,false),(322),(1,998),(161280)],[(false,false),(322),(1,998),(161280)],[(false,false),(322),None,None]   | f              | f               | f
+(3 rows)
+
+truncate pax_vacuum;
+select * from get_pax_aux_table('pax_vacuum');
+ ptblockname | pttupcount | ptstatistics | ptexistvisimap | ptexistexttoast | ptisclustered 
+-------------+------------+--------------+----------------+-----------------+---------------
+(0 rows)
+
+-- sync collect stats in vacuum
+set pax.enable_sync_collect_stats to on;
+insert into pax_vacuum select i, i from generate_series(1, 1000) i;
+select * from get_pax_aux_table('pax_vacuum');
+ ptblockname | pttupcount |                                                ptstatistics                                                 | ptexistvisimap | ptexistexttoast | ptisclustered 
+-------------+------------+-------------------------------------------------------------------------------------------------------------+----------------+-----------------+---------------
+           0 |        322 | [(false,false),(322),(1,998),(161280)],[(false,false),(322),(1,998),(161280)],[(true,true),(0),None,None]   | f              | f               | f
+           0 |        338 | [(false,false),(338),(2,1000),(166662)],[(false,false),(338),(2,1000),(166662)],[(true,true),(0),None,None] | f              | f               | f
+           0 |        340 | [(false,false),(340),(5,997),(172558)],[(false,false),(340),(5,997),(172558)],[(true,true),(0),None,None]   | f              | f               | f
+(3 rows)
+
+vacuum pax_vacuum;
+select * from get_pax_aux_table('pax_vacuum');
+ ptblockname | pttupcount |                                                ptstatistics                                                 | ptexistvisimap | ptexistexttoast | ptisclustered 
+-------------+------------+-------------------------------------------------------------------------------------------------------------+----------------+-----------------+---------------
+           0 |        322 | [(false,false),(322),(1,998),(161280)],[(false,false),(322),(1,998),(161280)],[(true,true),(0),None,None]   | f              | f               | f
+           0 |        340 | [(false,false),(340),(5,997),(172558)],[(false,false),(340),(5,997),(172558)],[(true,true),(0),None,None]   | f              | f               | f
+           0 |        338 | [(false,false),(338),(2,1000),(166662)],[(false,false),(338),(2,1000),(166662)],[(true,true),(0),None,None] | f              | f               | f
+(3 rows)
+
+truncate pax_vacuum;
+select * from get_pax_aux_table('pax_vacuum');
+ ptblockname | pttupcount | ptstatistics | ptexistvisimap | ptexistexttoast | ptisclustered 
+-------------+------------+--------------+----------------+-----------------+---------------
+(0 rows)
+
+-- update and vacuum
+set pax.enable_sync_collect_stats to off;
+insert into pax_vacuum select i, i from generate_series(1, 1000) i;
+select * from get_pax_aux_table('pax_vacuum');
+ ptblockname | pttupcount |                                        ptstatistics                                         | ptexistvisimap | ptexistexttoast | ptisclustered 
+-------------+------------+---------------------------------------------------------------------------------------------+----------------+-----------------+---------------
+           0 |        340 | [(false,false),(340),None,None],[(false,false),(340),None,None],[(true,true),(0),None,None] | f              | f               | f
+           0 |        338 | [(false,false),(338),None,None],[(false,false),(338),None,None],[(true,true),(0),None,None] | f              | f               | f
+           0 |        322 | [(false,false),(322),None,None],[(false,false),(322),None,None],[(true,true),(0),None,None] | f              | f               | f
+(3 rows)
+
+vacuum pax_vacuum;
+select * from get_pax_aux_table('pax_vacuum');
+ ptblockname | pttupcount |                                                  ptstatistics                                                   | ptexistvisimap | ptexistexttoast | ptisclustered 
+-------------+------------+-----------------------------------------------------------------------------------------------------------------+----------------+-----------------+---------------
+           0 |        338 | [(false,false),(338),(2,1000),(166662)],[(false,false),(338),(2,1000),(166662)],[(false,false),(338),None,None] | f              | f               | f
+           0 |        322 | [(false,false),(322),(1,998),(161280)],[(false,false),(322),(1,998),(161280)],[(false,false),(322),None,None]   | f              | f               | f
+           0 |        340 | [(false,false),(340),(5,997),(172558)],[(false,false),(340),(5,997),(172558)],[(false,false),(340),None,None]   | f              | f               | f
+(3 rows)
+
+update pax_vacuum set b = b + 1;
+select * from get_pax_aux_table('pax_vacuum');
+ ptblockname | pttupcount |                                                  ptstatistics                                                   | ptexistvisimap | ptexistexttoast | ptisclustered 
+-------------+------------+-----------------------------------------------------------------------------------------------------------------+----------------+-----------------+---------------
+           0 |        340 | [(false,false),(340),(5,997),(172558)],[(false,false),(340),(5,997),(172558)],[(false,false),(340),None,None]   | t              | f               | f
+           1 |        340 | [(false,false),(340),None,None],[(false,false),(340),None,None],[(true,true),(0),None,None]                     | f              | f               | f
+           0 |        322 | [(false,false),(322),(1,998),(161280)],[(false,false),(322),(1,998),(161280)],[(false,false),(322),None,None]   | t              | f               | f
+           1 |        322 | [(false,false),(322),None,None],[(false,false),(322),None,None],[(true,true),(0),None,None]                     | f              | f               | f
+           0 |        338 | [(false,false),(338),(2,1000),(166662)],[(false,false),(338),(2,1000),(166662)],[(false,false),(338),None,None] | t              | f               | f
+           1 |        338 | [(false,false),(338),None,None],[(false,false),(338),None,None],[(true,true),(0),None,None]                     | f              | f               | f
+(6 rows)
+
+vacuum pax_vacuum;
+select * from get_pax_aux_table('pax_vacuum');
+ ptblockname | pttupcount |                                                  ptstatistics                                                   | ptexistvisimap | ptexistexttoast | ptisclustered 
+-------------+------------+-----------------------------------------------------------------------------------------------------------------+----------------+-----------------+---------------
+           1 |        338 | [(false,false),(338),(2,1000),(166662)],[(false,false),(338),(3,1001),(167000)],[(false,false),(338),None,None] | f              | f               | f
+           1 |        322 | [(false,false),(322),(1,998),(161280)],[(false,false),(322),(2,999),(161602)],[(false,false),(322),None,None]   | f              | f               | f
+           1 |        340 | [(false,false),(340),(5,997),(172558)],[(false,false),(340),(6,998),(172898)],[(false,false),(340),None,None]   | f              | f               | f
+(3 rows)
+
+truncate pax_vacuum;
+select * from get_pax_aux_table('pax_vacuum');
+ ptblockname | pttupcount | ptstatistics | ptexistvisimap | ptexistexttoast | ptisclustered 
+-------------+------------+--------------+----------------+-----------------+---------------
+(0 rows)
+
+-- sync collect stats with vacuum
+set pax.enable_sync_collect_stats to on;
+insert into pax_vacuum select i, i from generate_series(1, 1000) i;
+select * from get_pax_aux_table('pax_vacuum');
+ ptblockname | pttupcount |                                                ptstatistics                                                 | ptexistvisimap | ptexistexttoast | ptisclustered 
+-------------+------------+-------------------------------------------------------------------------------------------------------------+----------------+-----------------+---------------
+           0 |        322 | [(false,false),(322),(1,998),(161280)],[(false,false),(322),(1,998),(161280)],[(true,true),(0),None,None]   | f              | f               | f
+           0 |        340 | [(false,false),(340),(5,997),(172558)],[(false,false),(340),(5,997),(172558)],[(true,true),(0),None,None]   | f              | f               | f
+           0 |        338 | [(false,false),(338),(2,1000),(166662)],[(false,false),(338),(2,1000),(166662)],[(true,true),(0),None,None] | f              | f               | f
+(3 rows)
+
+vacuum pax_vacuum;
+select * from get_pax_aux_table('pax_vacuum');
+ ptblockname | pttupcount |                                                ptstatistics                                                 | ptexistvisimap | ptexistexttoast | ptisclustered 
+-------------+------------+-------------------------------------------------------------------------------------------------------------+----------------+-----------------+---------------
+           0 |        340 | [(false,false),(340),(5,997),(172558)],[(false,false),(340),(5,997),(172558)],[(true,true),(0),None,None]   | f              | f               | f
+           0 |        338 | [(false,false),(338),(2,1000),(166662)],[(false,false),(338),(2,1000),(166662)],[(true,true),(0),None,None] | f              | f               | f
+           0 |        322 | [(false,false),(322),(1,998),(161280)],[(false,false),(322),(1,998),(161280)],[(true,true),(0),None,None]   | f              | f               | f
+(3 rows)
+
+update pax_vacuum set b = b + 1;
+select * from get_pax_aux_table('pax_vacuum');
+ ptblockname | pttupcount |                                                ptstatistics                                                 | ptexistvisimap | ptexistexttoast | ptisclustered 
+-------------+------------+-------------------------------------------------------------------------------------------------------------+----------------+-----------------+---------------
+           0 |        338 | [(false,false),(338),(2,1000),(166662)],[(false,false),(338),(2,1000),(166662)],[(true,true),(0),None,None] | t              | f               | f
+           1 |        338 | [(false,false),(338),(2,1000),(166662)],[(false,false),(338),(3,1001),(167000)],[(true,true),(0),None,None] | f              | f               | f
+           0 |        340 | [(false,false),(340),(5,997),(172558)],[(false,false),(340),(5,997),(172558)],[(true,true),(0),None,None]   | t              | f               | f
+           1 |        340 | [(false,false),(340),(5,997),(172558)],[(false,false),(340),(6,998),(172898)],[(true,true),(0),None,None]   | f              | f               | f
+           0 |        322 | [(false,false),(322),(1,998),(161280)],[(false,false),(322),(1,998),(161280)],[(true,true),(0),None,None]   | t              | f               | f
+           1 |        322 | [(false,false),(322),(1,998),(161280)],[(false,false),(322),(2,999),(161602)],[(true,true),(0),None,None]   | f              | f               | f
+(6 rows)
+
+vacuum pax_vacuum;
+select * from get_pax_aux_table('pax_vacuum');
+ ptblockname | pttupcount |                                                ptstatistics                                                 | ptexistvisimap | ptexistexttoast | ptisclustered 
+-------------+------------+-------------------------------------------------------------------------------------------------------------+----------------+-----------------+---------------
+           1 |        322 | [(false,false),(322),(1,998),(161280)],[(false,false),(322),(2,999),(161602)],[(true,true),(0),None,None]   | f              | f               | f
+           1 |        338 | [(false,false),(338),(2,1000),(166662)],[(false,false),(338),(3,1001),(167000)],[(true,true),(0),None,None] | f              | f               | f
+           1 |        340 | [(false,false),(340),(5,997),(172558)],[(false,false),(340),(6,998),(172898)],[(true,true),(0),None,None]   | f              | f               | f
+(3 rows)
+
+truncate pax_vacuum;
+select * from get_pax_aux_table('pax_vacuum');
+ ptblockname | pttupcount | ptstatistics | ptexistvisimap | ptexistexttoast | ptisclustered 
+-------------+------------+--------------+----------------+-----------------+---------------
+(0 rows)
+
+drop table pax_vacuum;
