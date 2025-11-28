@@ -477,6 +477,7 @@ CREATE MATERIALIZED VIEW mat_view_heap_psql USING heap_psql AS SELECT f1 from tb
 \set HIDE_TABLEAM off
 \d+ tbl_heap_psql
 \d+ tbl_heap
+\dit+ tbl_heap
 -- AM is displayed for tables, indexes and materialized views.
 \d+
 \dt+
