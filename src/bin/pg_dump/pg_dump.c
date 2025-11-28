@@ -7384,7 +7384,7 @@ getTables(Archive *fout, int *numTables)
 						  "%s AS ispartition, "
 						  "%s AS partbound, "
 						  "c.relisivm AS isivm, "
-						  "c.relisdynamic AS isdynamic "
+						  "%s"
 						  "FROM pg_class c "
 						  "LEFT JOIN pg_depend d ON "
 						  "(c.relkind = '%c' AND "
@@ -7414,6 +7414,7 @@ getTables(Archive *fout, int *numTables)
 						  partkeydef,
 						  ispartition,
 						  partbound,
+						  (fout->version.type == Cloudberry && fout->version.version >= 2) ? "c.relisdynamic AS isdynamic " : "false AS isdynamic ",
 						  RELKIND_SEQUENCE,
 						  RELKIND_PARTITIONED_TABLE,
 						  RELKIND_RELATION, RELKIND_SEQUENCE,
@@ -15596,18 +15597,18 @@ dumpAgg(Archive *fout, const AggInfo *agginfo)
 	if (fout->remoteVersion >= 110000)
 		appendPQExpBufferStr(query,
 							 "aggfinalmodify,\n"
-							 "aggmfinalmodify\n");
+							 "aggmfinalmodify,\n");
 	else
 		appendPQExpBufferStr(query,
 							 "'0' AS aggfinalmodify,\n"
-							 "'0' AS aggmfinalmodify\n");
+							 "'0' AS aggmfinalmodify,\n");
 
-	if (fout->remoteVersion >= 140000)
+	if (fout->remoteVersion >= 140000 && fout->version.type == Cloudberry && fout->version.version >= 2)
 		appendPQExpBufferStr(query,
-								"aggrepsafeexec,\n");
+								"aggrepsafeexec\n");
 	else
 		appendPQExpBufferStr(query,
-								 "false AS aggrepsafeexec,\n");
+								 "false AS aggrepsafeexec\n");
 
 	appendPQExpBuffer(query,
 					  "FROM pg_catalog.pg_aggregate a, pg_catalog.pg_proc p "
