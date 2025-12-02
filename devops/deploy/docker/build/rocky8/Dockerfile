@@ -133,6 +133,7 @@ RUN dnf makecache && \
         which \
         zlib-devel && \
     dnf install -y -d0 --enablerepo=devel \
+        liburing-devel \
         libuv-devel \
         libyaml-devel \
         perl-IPC-Run \

@@ -136,6 +136,7 @@ RUN dnf makecache && \
         readline-devel \
         zlib-devel && \
     dnf install -y --enablerepo=crb \
+        liburing-devel \
         libuv-devel \
         libyaml-devel \
         perl-IPC-Run \

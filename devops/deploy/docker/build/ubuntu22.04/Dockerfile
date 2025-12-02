@@ -113,6 +113,7 @@ RUN apt-get update && \
             libreadline-dev \
             libssh2-1-dev \
             libssl-dev \
+            liburing-dev \
             libuv1-dev \
             libxerces-c-dev \
             libxml2-dev \
