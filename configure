@@ -744,7 +744,6 @@ with_gssapi
 with_pythonsrc_ext
 PIP3
 CURL
-PYTHON3
 with_python
 with_perl
 with_tcl
@@ -759,6 +758,9 @@ ZSTD_LIBS
 ZSTD_CFLAGS
 PROTOBUF_LIBS
 PROTOBUF_CFLAGS
+UV
+PYTHON3
+enable_mcp_server
 enable_preload_ic_module
 enable_ic_proxy
 enable_external_fts
@@ -911,6 +913,7 @@ enable_gpcloud
 enable_external_fts
 enable_ic_proxy
 enable_preload_ic_module
+enable_mcp_server
 enable_pax
 enable_thread_safety
 with_icu
@@ -1633,6 +1636,7 @@ Optional Features:
                           library)
   --disable-preload-ic-module
                           disable preload interconnect module
+  --enable-mcp-server     enable MCP server support
   --enable-pax            enable PAX support
   --disable-thread-safety disable thread-safety in client libraries
   --enable-openssl-redirect
@@ -9244,6 +9248,131 @@ fi
 { $as_echo "$as_me:${as_lineno-$LINENO}: result: checking whether to build with preload ic module ... $enable_preload_ic_module" >&5
 $as_echo "checking whether to build with preload ic module ... $enable_preload_ic_module" >&6; }
 
+
+#
+# mcp-server
+#
+
+
+# Check whether --enable-mcp-server was given.
+if test "${enable_mcp_server+set}" = set; then :
+  enableval=$enable_mcp_server;
+  case $enableval in
+    yes)
+
+$as_echo "#define ENABLE_MCP_SERVER 1" >>confdefs.h
+
+      ;;
+    no)
+      :
+      ;;
+    *)
+      as_fn_error $? "no argument expected for --enable-mcp-server option" "$LINENO" 5
+      ;;
+  esac
+
+else
+  enable_mcp_server=no
+
+fi
+
+
+{ $as_echo "$as_me:${as_lineno-$LINENO}: result: checking whether to build with MCP server... $enable_mcp_server" >&5
+$as_echo "checking whether to build with MCP server... $enable_mcp_server" >&6; }
+
+
+# Check for required dependencies when mcp-server is enabled
+if test "$enable_mcp_server" = yes; then
+  # Extract the first word of "python3", so it can be a program name with args.
+set dummy python3; ac_word=$2
+{ $as_echo "$as_me:${as_lineno-$LINENO}: checking for $ac_word" >&5
+$as_echo_n "checking for $ac_word... " >&6; }
+if ${ac_cv_path_PYTHON3+:} false; then :
+  $as_echo_n "(cached) " >&6
+else
+  case $PYTHON3 in
+  [\\/]* | ?:[\\/]*)
+  ac_cv_path_PYTHON3="$PYTHON3" # Let the user override the test with a path.
+  ;;
+  *)
+  as_save_IFS=$IFS; IFS=$PATH_SEPARATOR
+for as_dir in $PATH
+do
+  IFS=$as_save_IFS
+  test -z "$as_dir" && as_dir=.
+    for ac_exec_ext in '' $ac_executable_extensions; do
+  if as_fn_executable_p "$as_dir/$ac_word$ac_exec_ext"; then
+    ac_cv_path_PYTHON3="$as_dir/$ac_word$ac_exec_ext"
+    $as_echo "$as_me:${as_lineno-$LINENO}: found $as_dir/$ac_word$ac_exec_ext" >&5
+    break 2
+  fi
+done
+  done
+IFS=$as_save_IFS
+
+  ;;
+esac
+fi
+PYTHON3=$ac_cv_path_PYTHON3
+if test -n "$PYTHON3"; then
+  { $as_echo "$as_me:${as_lineno-$LINENO}: result: $PYTHON3" >&5
+$as_echo "$PYTHON3" >&6; }
+else
+  { $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
+$as_echo "no" >&6; }
+fi
+
+
+  if test -z "$PYTHON3"; then
+    as_fn_error $? "python3 is required for --enable-mcp-server but was not found" "$LINENO" 5
+  fi
+
+  # Check for uv (Python package manager)
+  # Extract the first word of "uv", so it can be a program name with args.
+set dummy uv; ac_word=$2
+{ $as_echo "$as_me:${as_lineno-$LINENO}: checking for $ac_word" >&5
+$as_echo_n "checking for $ac_word... " >&6; }
+if ${ac_cv_path_UV+:} false; then :
+  $as_echo_n "(cached) " >&6
+else
+  case $UV in
+  [\\/]* | ?:[\\/]*)
+  ac_cv_path_UV="$UV" # Let the user override the test with a path.
+  ;;
+  *)
+  as_save_IFS=$IFS; IFS=$PATH_SEPARATOR
+for as_dir in $PATH
+do
+  IFS=$as_save_IFS
+  test -z "$as_dir" && as_dir=.
+    for ac_exec_ext in '' $ac_executable_extensions; do
+  if as_fn_executable_p "$as_dir/$ac_word$ac_exec_ext"; then
+    ac_cv_path_UV="$as_dir/$ac_word$ac_exec_ext"
+    $as_echo "$as_me:${as_lineno-$LINENO}: found $as_dir/$ac_word$ac_exec_ext" >&5
+    break 2
+  fi
+done
+  done
+IFS=$as_save_IFS
+
+  ;;
+esac
+fi
+UV=$ac_cv_path_UV
+if test -n "$UV"; then
+  { $as_echo "$as_me:${as_lineno-$LINENO}: result: $UV" >&5
+$as_echo "$UV" >&6; }
+else
+  { $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
+$as_echo "no" >&6; }
+fi
+
+
+  if test -z "$UV"; then
+    { $as_echo "$as_me:${as_lineno-$LINENO}: WARNING: uv not found. MCP server build will attempt to use pip as fallback." >&5
+$as_echo "$as_me: WARNING: uv not found. MCP server build will attempt to use pip as fallback." >&2;}
+  fi
+fi
 
 #
 # pax support
