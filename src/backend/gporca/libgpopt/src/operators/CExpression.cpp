@@ -33,6 +33,7 @@
 #include "gpopt/operators/CPattern.h"
 #include "gpopt/operators/CPatternNode.h"
 #include "gpopt/operators/CPhysicalCTEProducer.h"
+#include "gpopt/operators/CPhysicalParallelCTEProducer.h"
 #include "gpopt/search/CGroupExpression.h"
 #include "naucrates/statistics/CStatistics.h"
 #include "naucrates/traceflags/traceflags.h"
@@ -1271,6 +1272,11 @@ CExpression::FValidPlan(const CReqdPropPlan *prpp,
 	if (COperator::EopPhysicalCTEProducer == m_pop->Eopid())
 	{
 		ULONG ulCTEId = CPhysicalCTEProducer::PopConvert(m_pop)->UlCTEId();
+		pdpctxtplan->CopyCTEProducerProps(pdpplan, ulCTEId);
+	}
+	else if (COperator::EopPhysicalParallelCTEProducer == m_pop->Eopid())
+	{
+		ULONG ulCTEId = CPhysicalParallelCTEProducer::PopConvert(m_pop)->UlCTEId();
 		pdpctxtplan->CopyCTEProducerProps(pdpplan, ulCTEId);
 	}
 

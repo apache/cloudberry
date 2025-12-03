@@ -60,6 +60,7 @@ CLogicalSequence::PxfsCandidates(CMemoryPool *mp) const
 {
 	CXformSet *xform_set = GPOS_NEW(mp) CXformSet(mp);
 	(void) xform_set->ExchangeSet(CXform::ExfImplementSequence);
+	(void) xform_set->ExchangeSet(CXform::ExfImplementParallelSequence);
 	return xform_set;
 }
 

@@ -149,6 +149,7 @@ enum Edxlopid
 	EdxlopPhysicalMaterialize,
 	EdxlopPhysicalDynamicForeignScan,
 	EdxlopPhysicalSequence,
+	EdxlopPhysicalParallelSequence,
 	EdxlopPhysicalDynamicTableScan,
 	EdxlopPhysicalDynamicIndexScan,
 	EdxlopPhysicalDynamicIndexOnlyScan,
@@ -158,6 +159,8 @@ enum Edxlopid
 
 	EdxlopPhysicalCTEProducer,
 	EdxlopPhysicalCTEConsumer,
+	EdxlopPhysicalParallelCTEProducer,
+	EdxlopPhysicalParallelCTEConsumer,
 
 	EdxlopPhysicalDML,
 	EdxlopPhysicalSplit,

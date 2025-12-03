@@ -64,6 +64,9 @@ private:
 	void CopyCTEProducerPlanProps(CMemoryPool *mp, CDrvdPropCtxt *pdpctxt,
 								  COperator *pop);
 
+	// copy parallel CTE producer plan properties from given context to current object
+	void CopyParallelCTEProducerPlanProps(CMemoryPool *mp, CDrvdPropCtxt *pdpctxt,
+								  COperator *pop);
 public:
 	CDrvdPropPlan(const CDrvdPropPlan &) = delete;
 

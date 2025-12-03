@@ -64,7 +64,10 @@ extern "C" {
 #include "naucrates/dxl/operators/CDXLPhysicalBitmapTableScan.h"
 #include "naucrates/dxl/operators/CDXLPhysicalCTAS.h"
 #include "naucrates/dxl/operators/CDXLPhysicalCTEConsumer.h"
+#include "naucrates/dxl/operators/CDXLPhysicalParallelCTEConsumer.h"
 #include "naucrates/dxl/operators/CDXLPhysicalCTEProducer.h"
+#include "naucrates/dxl/operators/CDXLPhysicalParallelCTEProducer.h"
+#include "naucrates/dxl/operators/CDXLPhysicalParallelSequence.h"
 #include "naucrates/dxl/operators/CDXLPhysicalDynamicBitmapTableScan.h"
 #include "naucrates/dxl/operators/CDXLPhysicalDynamicForeignScan.h"
 #include "naucrates/dxl/operators/CDXLPhysicalDynamicIndexOnlyScan.h"
@@ -461,6 +464,12 @@ CTranslatorDXLToPlStmt::TranslateDXLOperatorToPlan(
 										ctxt_translation_prev_siblings);
 			break;
 		}
+		case EdxlopPhysicalParallelSequence:
+		{
+			plan = TranslateDXLParallelSequence(dxlnode, output_context,
+									   			ctxt_translation_prev_siblings);
+			break;
+		}
 		case EdxlopPhysicalDynamicTableScan:
 		{
 			plan = TranslateDXLDynTblScan(dxlnode, output_context,
@@ -515,9 +524,21 @@ CTranslatorDXLToPlStmt::TranslateDXLOperatorToPlan(
 				dxlnode, output_context, ctxt_translation_prev_siblings);
 			break;
 		}
+		case EdxlopPhysicalParallelCTEProducer:
+		{
+			plan = TranslateDXLParallelCTEProducerToParallelSharedScan(
+				dxlnode, output_context, ctxt_translation_prev_siblings);
+			break;
+		}
 		case EdxlopPhysicalCTEConsumer:
 		{
 			plan = TranslateDXLCTEConsumerToSharedScan(
+				dxlnode, output_context, ctxt_translation_prev_siblings);
+			break;
+		}
+		case EdxlopPhysicalParallelCTEConsumer:
+		{
+			plan = TranslateDXLParallelCTEConsumerToParallelSharedScan(
 				dxlnode, output_context, ctxt_translation_prev_siblings);
 			break;
 		}
@@ -4774,6 +4795,71 @@ CTranslatorDXLToPlStmt::TranslateDXLCTEProducerToSharedScan(
 
 //---------------------------------------------------------------------------
 //	@function:
+//		CTranslatorDXLToPlStmt::TranslateDXLParallelCTEProducerToParallelSharedScan
+//
+//	@doc:
+//		Translate DXL CTE Producer node into GPDB parallel share input scan plan node
+//
+//---------------------------------------------------------------------------
+Plan *
+CTranslatorDXLToPlStmt::TranslateDXLParallelCTEProducerToParallelSharedScan(
+	const CDXLNode *cte_producer_dxlnode, CDXLTranslateContext *output_context,
+	CDXLTranslationContextArray *ctxt_translation_prev_siblings)
+{
+	CDXLPhysicalParallelCTEProducer *cte_prod_dxlop =
+		CDXLPhysicalParallelCTEProducer::Cast(cte_producer_dxlnode->GetOperator());
+	ULONG cte_id = cte_prod_dxlop->Id();
+	ULONG parallel_workers = cte_prod_dxlop->UlParallelWorkers();
+
+	// create the Share Input Scan representing the CTE Producer
+	ShareInputScan *shared_input_scan = MakeNode(ShareInputScan);
+	shared_input_scan->share_id = cte_id;
+	shared_input_scan->discard_output = true;
+
+	Plan *plan = &(shared_input_scan->scan.plan);
+	plan->plan_node_id = m_dxl_to_plstmt_context->GetNextPlanId();
+	// Set parallel execution flags
+	plan->parallel_aware = true;
+	plan->parallel_safe = true;
+	plan->parallel = (int) parallel_workers;
+
+	m_dxl_to_plstmt_context->RegisterCTEProducerInfo(cte_id,
+													 cte_prod_dxlop->GetOutputColIdxMap(), shared_input_scan);
+
+	// translate cost of the producer
+	TranslatePlanCosts(cte_producer_dxlnode, plan);
+
+	// translate child plan
+	CDXLNode *project_list_dxlnode = (*cte_producer_dxlnode)[0];
+	CDXLNode *child_dxlnode = (*cte_producer_dxlnode)[1];
+
+	CDXLTranslateContext child_context(m_mp, false,
+									   output_context->GetColIdToParamIdMap());
+	Plan *child_plan = TranslateDXLOperatorToPlan(
+		child_dxlnode, &child_context, ctxt_translation_prev_siblings);
+	GPOS_ASSERT(nullptr != child_plan && "child plan cannot be NULL");
+
+	CDXLTranslationContextArray *child_contexts =
+		GPOS_NEW(m_mp) CDXLTranslationContextArray(m_mp);
+	child_contexts->Append(&child_context);
+	// translate proj list
+	plan->targetlist =
+		TranslateDXLProjList(project_list_dxlnode,
+							 nullptr,  // base table translation context
+							 child_contexts, output_context);
+
+	plan->lefttree = child_plan;
+	plan->qual = NIL;
+	SetParamIds(plan);
+
+	// cleanup
+	child_contexts->Release();
+
+	return (Plan *) shared_input_scan;
+}
+
+//---------------------------------------------------------------------------
+//	@function:
 //		CTranslatorDXLToPlStmt::TranslateDXLCTEConsumerToSharedScan
 //
 //	@doc:
@@ -4876,6 +4962,114 @@ CTranslatorDXLToPlStmt::TranslateDXLCTEConsumerToSharedScan(
 
 //---------------------------------------------------------------------------
 //	@function:
+//		CTranslatorDXLToPlStmt::TranslateDXLParallelCTEConsumerToParallelSharedScan
+//
+//	@doc:
+//		Translate DXL CTE Consumer node into GPDB parallel share input scan plan node
+//
+//---------------------------------------------------------------------------
+Plan *
+CTranslatorDXLToPlStmt::TranslateDXLParallelCTEConsumerToParallelSharedScan(
+	const CDXLNode *cte_consumer_dxlnode, CDXLTranslateContext *output_context,
+	CDXLTranslationContextArray * /*ctxt_translation_prev_siblings*/)
+{
+	CDXLPhysicalParallelCTEConsumer *cte_consumer_dxlop =
+		CDXLPhysicalParallelCTEConsumer::Cast(cte_consumer_dxlnode->GetOperator());
+	ULONG cte_id = cte_consumer_dxlop->Id();
+	ULongPtrArray *output_colidx_map = cte_consumer_dxlop->GetOutputColIdxMap();
+	ULONG parallel_workers = cte_consumer_dxlop->UlParallelWorkers();
+
+	// get the producer idx map
+	ULongPtrArray *producer_colidx_map;
+	ShareInputScan *share_input_scan_cte_producer;
+
+	std::tie(producer_colidx_map, share_input_scan_cte_producer)
+		= m_dxl_to_plstmt_context->GetCTEProducerInfo(cte_id);
+
+	// init the consumer plan
+	ShareInputScan *share_input_scan_cte_consumer = MakeNode(ShareInputScan);
+	share_input_scan_cte_consumer->share_id = cte_id;
+	share_input_scan_cte_consumer->discard_output = false;
+
+	Plan *plan = &(share_input_scan_cte_consumer->scan.plan);
+	plan->plan_node_id = m_dxl_to_plstmt_context->GetNextPlanId();
+
+	// Set parallel execution flags
+	plan->parallel_aware = true;
+	plan->parallel_safe = true;
+	plan->parallel = (int) parallel_workers;
+
+	// translate operator costs
+	TranslatePlanCosts(cte_consumer_dxlnode, plan);
+
+#ifdef GPOS_DEBUG
+	ULongPtrArray *output_colids_array =
+		cte_consumer_dxlop->GetOutputColIdsArray();
+#endif
+
+	// generate the target list of the CTE Consumer
+	plan->targetlist = NIL;
+	CDXLNode *project_list_dxlnode = (*cte_consumer_dxlnode)[0];
+	const ULONG num_of_proj_list_elem = project_list_dxlnode->Arity();
+	GPOS_ASSERT(num_of_proj_list_elem == output_colids_array->Size());
+	for (ULONG ul = 0; ul < num_of_proj_list_elem; ul++)
+	{
+		AttrNumber varattno = (AttrNumber)ul + 1;
+		if (output_colidx_map) {
+			ULONG remapping_idx;
+			remapping_idx = *(*output_colidx_map)[ul];
+			if (producer_colidx_map) {
+				remapping_idx = *(*producer_colidx_map)[remapping_idx];
+			}
+			GPOS_ASSERT(remapping_idx != gpos::ulong_max);
+			varattno = (AttrNumber)remapping_idx + 1;
+		}
+
+		CDXLNode *proj_elem_dxlnode = (*project_list_dxlnode)[ul];
+		CDXLScalarProjElem *sc_proj_elem_dxlop =
+			CDXLScalarProjElem::Cast(proj_elem_dxlnode->GetOperator());
+		ULONG colid = sc_proj_elem_dxlop->Id();
+		GPOS_ASSERT(colid == *(*output_colids_array)[ul]);
+
+		CDXLNode *sc_ident_dxlnode = (*proj_elem_dxlnode)[0];
+		CDXLScalarIdent *sc_ident_dxlop =
+			CDXLScalarIdent::Cast(sc_ident_dxlnode->GetOperator());
+		OID oid_type = CMDIdGPDB::CastMdid(sc_ident_dxlop->MdidType())->Oid();
+
+		Var *var =
+			gpdb::MakeVar(OUTER_VAR, varattno, oid_type,
+						  sc_ident_dxlop->TypeModifier(), 0 /* varlevelsup */);
+
+		CHAR *resname = CTranslatorUtils::CreateMultiByteCharStringFromWCString(
+			sc_proj_elem_dxlop->GetMdNameAlias()->GetMDName()->GetBuffer());
+		TargetEntry *target_entry = gpdb::MakeTargetEntry(
+			(Expr *) var, (AttrNumber)(ul + 1), resname, false /* resjunk */);
+		plan->targetlist = gpdb::LAppend(plan->targetlist, target_entry);
+
+		output_context->InsertMapping(colid, target_entry);
+	}
+
+	plan->qual = nullptr;
+
+	SetParamIds(plan);
+
+	// DON'T REMOVE, if current consumer need projection, then we can direct add it.
+	// we still keep the path of projection in consumer
+
+	// 	Plan *producer_plan = &(share_input_scan_cte_producer->scan.plan);
+	// if (output_colidx_map != nullptr) {
+	// 	share_input_scan_cte_consumer->need_projection = true;
+	// 	share_input_scan_cte_consumer->producer_targetlist = gpdb::ListCopy(producer_plan->targetlist);
+	// 	if (!share_input_scan_cte_consumer->producer_targetlist) {
+	// 		share_input_scan_cte_consumer->need_projection = false;
+	// 	}
+	// }
+
+	return (Plan *) share_input_scan_cte_consumer;
+}
+
+//---------------------------------------------------------------------------
+//	@function:
 //		CTranslatorDXLToPlStmt::TranslateDXLSequence
 //
 //	@doc:
@@ -4892,6 +5086,72 @@ CTranslatorDXLToPlStmt::TranslateDXLSequence(
 
 	Plan *plan = &(psequence->plan);
 	plan->plan_node_id = m_dxl_to_plstmt_context->GetNextPlanId();
+
+	// translate operator costs
+	TranslatePlanCosts(sequence_dxlnode, plan);
+
+	ULONG arity = sequence_dxlnode->Arity();
+
+	CDXLTranslateContext child_context(m_mp, false,
+									   output_context->GetColIdToParamIdMap());
+
+	for (ULONG ul = 1; ul < arity; ul++)
+	{
+		CDXLNode *child_dxlnode = (*sequence_dxlnode)[ul];
+
+		Plan *child_plan = TranslateDXLOperatorToPlan(
+			child_dxlnode, &child_context, ctxt_translation_prev_siblings);
+
+		psequence->subplans = gpdb::LAppend(psequence->subplans, child_plan);
+	}
+
+	CDXLNode *project_list_dxlnode = (*sequence_dxlnode)[0];
+
+	CDXLTranslationContextArray *child_contexts =
+		GPOS_NEW(m_mp) CDXLTranslationContextArray(m_mp);
+	child_contexts->Append(&child_context);
+
+	// translate proj list
+	plan->targetlist =
+		TranslateDXLProjList(project_list_dxlnode,
+							 nullptr,  // base table translation context
+							 child_contexts, output_context);
+
+	SetParamIds(plan);
+
+	// cleanup
+	child_contexts->Release();
+
+	return (Plan *) psequence;
+}
+
+//---------------------------------------------------------------------------
+//	@function:
+//		CTranslatorDXLToPlStmt::TranslateDXLParallelSequence
+//
+//	@doc:
+//		Translate DXL sequence node into GPDB parallel Sequence plan node
+//
+//---------------------------------------------------------------------------
+Plan *
+CTranslatorDXLToPlStmt::TranslateDXLParallelSequence(
+	const CDXLNode *sequence_dxlnode, CDXLTranslateContext *output_context,
+	CDXLTranslationContextArray *ctxt_translation_prev_siblings)
+{
+	CDXLPhysicalParallelSequence *phy_parallel_sequence_dxlop =
+		CDXLPhysicalParallelSequence::Cast(sequence_dxlnode->GetOperator());
+
+	ULONG parallel_workers = phy_parallel_sequence_dxlop->UlParallelWorkers();
+
+	// create append plan node
+	Sequence *psequence = MakeNode(Sequence);
+
+	Plan *plan = &(psequence->plan);
+	plan->plan_node_id = m_dxl_to_plstmt_context->GetNextPlanId();
+
+	plan->parallel_aware = true;
+	plan->parallel_safe = true;
+	plan->parallel = (int) parallel_workers;
 
 	// translate operator costs
 	TranslatePlanCosts(sequence_dxlnode, plan);

@@ -29,6 +29,9 @@
 #include "gpopt/operators/CPhysicalIndexOnlyScan.h"
 #include "gpopt/operators/CPhysicalIndexScan.h"
 #include "gpopt/operators/CPhysicalParallelTableScan.h"
+#include "gpopt/operators/CPhysicalParallelSequence.h"
+#include "gpopt/operators/CPhysicalParallelCTEConsumer.h"
+#include "gpopt/operators/CPhysicalParallelCTEProducer.h"
 #include "gpopt/operators/CPhysicalMotion.h"
 #include "gpopt/operators/CPhysicalMotionBroadcast.h"
 #include "gpopt/operators/CPhysicalPartitionSelector.h"
@@ -444,6 +447,77 @@ CCostModelGPDB::CostCTEProducer(CMemoryPool *mp, CExpressionHandle &exprhdl,
 
 //---------------------------------------------------------------------------
 //	@function:
+//		CCostModelGPDB::CostParallelCTEProducer
+//
+//	@doc:
+//		Cost of parallel CTE producer
+//
+//---------------------------------------------------------------------------
+CCost
+CCostModelGPDB::CostParallelCTEProducer(CMemoryPool *mp, CExpressionHandle &exprhdl,
+								const CCostModelGPDB *pcmgpdb,
+								const SCostingInfo *pci)
+{
+	GPOS_ASSERT(nullptr != pcmgpdb);
+	GPOS_ASSERT(nullptr != pci);
+	COperator *pop = exprhdl.Pop();
+	GPOS_ASSERT(COperator::EopPhysicalParallelCTEProducer == pop->Eopid());
+
+	// Get the parallel cte producer operator
+	CPhysicalParallelCTEProducer *popCTEProducer =
+		CPhysicalParallelCTEProducer::PopConvert(pop);
+	ULONG ulWorkers = popCTEProducer->UlParallelWorkers();
+
+	CCost cost = CostUnary(mp, exprhdl, pci, pcmgpdb->GetCostModelParams());
+
+	// In GPDB, the child of a ShareInputScan representing the producer can
+	// only be a materialize or sort. Here, we check if a materialize node
+	// needs to be added during DXL->PlStmt translation
+
+	COperator *popChild = exprhdl.Pop(0 /*child_index*/);
+	if (nullptr == popChild)
+	{
+		// child operator is not known, this could happen when computing cost bound
+		return cost;
+	}
+
+	COperator::EOperatorId op_id = popChild->Eopid();
+	if (COperator::EopPhysicalSpool != op_id &&
+		COperator::EopPhysicalSort != op_id)
+	{
+		// no materialize needed
+		return CCost(cost/ulWorkers);
+	}
+
+	// a materialize (spool) node is added during DXL->PlStmt translation,
+	// we need to add the cost of writing the tuples to disk
+	const CDouble dMaterializeCostUnit =
+		pcmgpdb->GetCostModelParams()
+			->PcpLookup(CCostModelParamsGPDB::EcpMaterializeCostUnit)
+			->Get();
+	GPOS_ASSERT(0 < dMaterializeCostUnit);
+
+
+	// Calculate base scan cost
+	CDouble dBaseCost = pci->Rows() * pci->Width() * dMaterializeCostUnit;
+
+	// Calculate parallel efficiency (decreases with more workers)
+	CDouble dParallelEfficiency = CalculateParallelEfficiency(ulWorkers);
+
+	// Parallel scan cost = base cost / (workers * efficiency)
+	CDouble dParallelCost = dBaseCost / (ulWorkers * dParallelEfficiency);
+
+	// Add worker startup cost
+	CDouble dWorkerStartupCost = GetWorkerStartupCost(pcmgpdb, ulWorkers);
+
+	CCost costSpooling = CCost(pci->NumRebinds() * (dParallelCost + dWorkerStartupCost));
+
+	return cost + costSpooling;
+}
+
+
+//---------------------------------------------------------------------------
+//	@function:
 //		CCostModelGPDB::CostCTEConsumer
 //
 //	@doc:
@@ -482,6 +556,62 @@ CCostModelGPDB::CostCTEConsumer(CMemoryPool *,	// mp
 	return CCost(pci->NumRebinds() *
 				 (dInitScan + pci->Rows() * pci->Width() *
 								  (dTableScanCostUnit + dOutputTupCostUnit)));
+}
+
+//---------------------------------------------------------------------------
+//	@function:
+//		CCostModelGPDB::CostParallelCTEConsumer
+//
+//	@doc:
+//		Cost of parallel CTE consumer
+//
+//---------------------------------------------------------------------------
+CCost
+CCostModelGPDB::CostParallelCTEConsumer(CMemoryPool *,	// mp
+								CExpressionHandle &exprhdl,
+								const CCostModelGPDB *pcmgpdb,
+								const SCostingInfo *pci)
+{
+	GPOS_ASSERT(nullptr != pcmgpdb);
+	GPOS_ASSERT(nullptr != pci);
+
+	COperator *pop = exprhdl.Pop();
+	GPOS_ASSERT(COperator::EopPhysicalParallelCTEConsumer == pop->Eopid());
+
+	// Get the parallel cte consumer operator
+	CPhysicalParallelCTEConsumer *popCTEConsumer =
+		CPhysicalParallelCTEConsumer::PopConvert(pop);
+	ULONG ulWorkers = popCTEConsumer->UlParallelWorkers();
+
+	const CDouble dInitScan =
+		pcmgpdb->GetCostModelParams()
+			->PcpLookup(CCostModelParamsGPDB::EcpInitScanFactor)
+			->Get();
+	const CDouble dTableScanCostUnit =
+		pcmgpdb->GetCostModelParams()
+			->PcpLookup(CCostModelParamsGPDB::EcpTableScanCostUnit)
+			->Get();
+	const CDouble dOutputTupCostUnit =
+		pcmgpdb->GetCostModelParams()
+			->PcpLookup(CCostModelParamsGPDB::EcpOutputTupCostUnit)
+			->Get();
+	GPOS_ASSERT(0 < dOutputTupCostUnit);
+	GPOS_ASSERT(0 < dTableScanCostUnit);
+
+	// Calculate base scan cost
+	CDouble dBaseCost = dInitScan + pci->Rows() * pci->Width() *
+						(dTableScanCostUnit + dOutputTupCostUnit);
+
+	// Calculate parallel efficiency (decreases with more workers)
+	CDouble dParallelEfficiency = CalculateParallelEfficiency(ulWorkers);
+
+	// Parallel scan cost = base cost / (workers * efficiency)
+	CDouble dParallelCost = dBaseCost / (ulWorkers * dParallelEfficiency);
+
+	// Add worker startup cost
+	CDouble dWorkerStartupCost = GetWorkerStartupCost(pcmgpdb, ulWorkers);
+
+	return CCost(pci->NumRebinds() * (dParallelCost + dWorkerStartupCost));
 }
 
 
@@ -683,6 +813,47 @@ CCostModelGPDB::CostSequence(CMemoryPool *mp, CExpressionHandle &exprhdl,
 		CostChildren(mp, exprhdl, pci, pcmgpdb->GetCostModelParams());
 
 	return costLocal + costChild;
+}
+
+//---------------------------------------------------------------------------
+//	@function:
+//		CCostModelGPDB::CostParallelSequence
+//
+//	@doc:
+//		Cost of parallel sequence
+//
+//---------------------------------------------------------------------------
+CCost
+CCostModelGPDB::CostParallelSequence(CMemoryPool *mp, CExpressionHandle &exprhdl,
+							 const CCostModelGPDB *pcmgpdb,
+							 const SCostingInfo *pci)
+{
+	GPOS_ASSERT(nullptr != pcmgpdb);
+	GPOS_ASSERT(nullptr != pci);
+
+	COperator *pop = exprhdl.Pop();
+	GPOS_ASSERT(COperator::EopPhysicalParallelSequence == pop->Eopid());
+
+	// Get the parallel sequence operator
+	CPhysicalParallelSequence *popParallelSequence =
+		CPhysicalParallelSequence::PopConvert(pop);
+	ULONG ulWorkers = popParallelSequence->UlParallelWorkers();
+
+	// If only 1 worker, use regular scan cost
+	if (ulWorkers <= 1)
+	{
+		return CostSequence(mp, exprhdl, pcmgpdb, pci);
+	}
+
+	CCost costLocal = CCost(pci->NumRebinds() *
+		CostTupleProcessing(pci->Rows(), pci->Width(),
+							pcmgpdb->GetCostModelParams())
+			.Get());
+
+	CCost costChild =
+		CostChildren(mp, exprhdl, pci, pcmgpdb->GetCostModelParams());
+
+	return CCost((costLocal + costChild)/ulWorkers);
 }
 
 
@@ -2660,9 +2831,19 @@ CCostModelGPDB::Cost(
 			return CostCTEProducer(m_mp, exprhdl, this, pci);
 		}
 
+		case COperator::EopPhysicalParallelCTEProducer:
+		{
+			return CostParallelCTEProducer(m_mp, exprhdl, this, pci);
+		}
+
 		case COperator::EopPhysicalCTEConsumer:
 		{
 			return CostCTEConsumer(m_mp, exprhdl, this, pci);
+		}
+
+		case COperator::EopPhysicalParallelCTEConsumer:
+		{
+			return CostParallelCTEConsumer(m_mp, exprhdl, this, pci);
 		}
 
 		case COperator::EopPhysicalConstTableGet:
@@ -2695,6 +2876,10 @@ CCostModelGPDB::Cost(
 		case COperator::EopPhysicalSequence:
 		{
 			return CostSequence(m_mp, exprhdl, this, pci);
+		}
+		case COperator::EopPhysicalParallelSequence:
+		{
+			return CostParallelSequence(m_mp, exprhdl, this, pci);
 		}
 
 		case COperator::EopPhysicalSort:

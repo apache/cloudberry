@@ -98,14 +98,14 @@ CXformGet2ParallelTableScan::FHasParallelIncompatibleOps(CExpressionHandle &expr
 		{
 			COperator::EOperatorId eopid = pgexpr->Pop()->Eopid();
 
-			// Check for CTE-related operators (incompatible with parallel execution)
-			if (COperator::EopLogicalCTEProducer == eopid ||
-				COperator::EopLogicalCTEConsumer == eopid ||
-				COperator::EopLogicalSequence == eopid ||
-				COperator::EopLogicalSequenceProject == eopid)
-			{
-				return true;
-			}
+//			// Check for CTE-related operators (incompatible with parallel execution)
+//			if (COperator::EopLogicalCTEProducer == eopid ||
+//				COperator::EopLogicalCTEConsumer == eopid ||
+//				COperator::EopLogicalSequence == eopid ||
+//				COperator::EopLogicalSequenceProject == eopid)
+//			{
+//				return true;
+//			}
 
 			if (COperator::EopLogicalUnion == eopid ||
 				COperator::EopLogicalUnionAll == eopid ||

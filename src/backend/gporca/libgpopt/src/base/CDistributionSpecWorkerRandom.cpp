@@ -53,10 +53,8 @@ CDistributionSpecWorkerRandom::CDistributionSpecWorkerRandom(ULONG ulWorkers, CD
 	: m_ulWorkers(ulWorkers), m_pdsSegmentBase(pdsSegmentBase)
 {
 	GPOS_ASSERT(ulWorkers > 0);
-	GPOS_ASSERT(nullptr != pdsSegmentBase &&
-				"pdsSegmentBase must be non-null. Use PdsCreateWorkerRandom factory method.");
-
-	m_pdsSegmentBase->AddRef();
+	if (m_pdsSegmentBase)
+		m_pdsSegmentBase->AddRef();
 
 	if (COptCtxt::PoctxtFromTLS()->FDMLQuery())
 	{

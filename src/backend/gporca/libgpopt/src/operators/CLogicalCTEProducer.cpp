@@ -238,6 +238,7 @@ CLogicalCTEProducer::PxfsCandidates(CMemoryPool *mp) const
 {
 	CXformSet *xform_set = GPOS_NEW(mp) CXformSet(mp);
 	(void) xform_set->ExchangeSet(CXform::ExfImplementCTEProducer);
+	(void) xform_set->ExchangeSet(CXform::ExfImplementParallelCTEProducer);
 	return xform_set;
 }
 

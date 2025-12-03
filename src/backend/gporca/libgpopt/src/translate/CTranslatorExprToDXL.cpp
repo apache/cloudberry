@@ -36,6 +36,9 @@
 #include "gpopt/operators/CPhysicalBitmapTableScan.h"
 #include "gpopt/operators/CPhysicalCTEConsumer.h"
 #include "gpopt/operators/CPhysicalCTEProducer.h"
+#include "gpopt/operators/CPhysicalParallelCTEConsumer.h"
+#include "gpopt/operators/CPhysicalParallelCTEProducer.h"
+#include "gpopt/operators/CPhysicalParallelSequence.h"
 #include "gpopt/operators/CPhysicalConstTableGet.h"
 #include "gpopt/operators/CPhysicalCorrelatedLeftOuterNLJoin.h"
 #include "gpopt/operators/CPhysicalDML.h"
@@ -109,6 +112,8 @@
 #include "naucrates/dxl/operators/CDXLPhysicalCTAS.h"
 #include "naucrates/dxl/operators/CDXLPhysicalCTEConsumer.h"
 #include "naucrates/dxl/operators/CDXLPhysicalCTEProducer.h"
+#include "naucrates/dxl/operators/CDXLPhysicalParallelCTEConsumer.h"
+#include "naucrates/dxl/operators/CDXLPhysicalParallelCTEProducer.h"
 #include "naucrates/dxl/operators/CDXLPhysicalDynamicBitmapTableScan.h"
 #include "naucrates/dxl/operators/CDXLPhysicalDynamicForeignScan.h"
 #include "naucrates/dxl/operators/CDXLPhysicalDynamicIndexOnlyScan.h"
@@ -129,6 +134,7 @@
 #include "naucrates/dxl/operators/CDXLPhysicalResult.h"
 #include "naucrates/dxl/operators/CDXLPhysicalRoutedDistributeMotion.h"
 #include "naucrates/dxl/operators/CDXLPhysicalSequence.h"
+#include "naucrates/dxl/operators/CDXLPhysicalParallelSequence.h"
 #include "naucrates/dxl/operators/CDXLPhysicalSort.h"
 #include "naucrates/dxl/operators/CDXLPhysicalSplit.h"
 #include "naucrates/dxl/operators/CDXLPhysicalTVF.h"
@@ -478,6 +484,11 @@ CTranslatorExprToDXL::CreateDXLNode(CExpression *pexpr,
 				pexpr, colref_array, pdrgpdsBaseTables, pulNonGatherMotions,
 				pfDML);
 			break;
+		case COperator::EopPhysicalParallelSequence:
+			dxlnode = CTranslatorExprToDXL::PdxlnParallelSequence(
+				pexpr, colref_array, pdrgpdsBaseTables, pulNonGatherMotions,
+				pfDML);
+			break;
 		case COperator::EopPhysicalDynamicTableScan:
 			dxlnode = CTranslatorExprToDXL::PdxlnDynamicTableScan(
 				pexpr, colref_array, pdrgpdsBaseTables, pulNonGatherMotions,
@@ -554,8 +565,18 @@ CTranslatorExprToDXL::CreateDXLNode(CExpression *pexpr,
 				pexpr, colref_array, pdrgpdsBaseTables, pulNonGatherMotions,
 				pfDML);
 			break;
+		case COperator::EopPhysicalParallelCTEProducer:
+			dxlnode = CTranslatorExprToDXL::PdxlnParallelCTEProducer(
+				pexpr, colref_array, pdrgpdsBaseTables, pulNonGatherMotions,
+				pfDML);
+			break;
 		case COperator::EopPhysicalCTEConsumer:
 			dxlnode = CTranslatorExprToDXL::PdxlnCTEConsumer(
+				pexpr, colref_array, pdrgpdsBaseTables, pulNonGatherMotions,
+				pfDML);
+			break;
+		case COperator::EopPhysicalParallelCTEConsumer:
+			dxlnode = CTranslatorExprToDXL::PdxlnParallelCTEConsumer(
 				pexpr, colref_array, pdrgpdsBaseTables, pulNonGatherMotions,
 				pfDML);
 			break;
@@ -3225,6 +3246,66 @@ CTranslatorExprToDXL::PdxlnCTEProducer(
 
 //---------------------------------------------------------------------------
 //	@function:
+//		CTranslatorExprToDXL::PdxlnParallelCTEProducer
+//
+//	@doc:
+//		Translate a physical parallel cte producer expression
+//
+//---------------------------------------------------------------------------
+CDXLNode *
+CTranslatorExprToDXL::PdxlnParallelCTEProducer(
+	CExpression *pexprCTEProducer,
+	CColRefArray *,	 //colref_array,
+	CDistributionSpecArray *pdrgpdsBaseTables, ULONG *pulNonGatherMotions,
+	BOOL *pfDML)
+{
+	GPOS_ASSERT(nullptr != pexprCTEProducer);
+
+	ULONG ulParallelWorkers = 0;
+
+	// extract components
+	CExpression *pexprRelational = (*pexprCTEProducer)[0];
+	CPhysicalParallelCTEProducer *popCTEProducer =
+		CPhysicalParallelCTEProducer::PopConvert(pexprCTEProducer->Pop());
+
+	ulParallelWorkers = popCTEProducer->UlParallelWorkers();
+
+	// extract physical properties from cte producer
+	CDXLPhysicalProperties *dxl_properties = GetProperties(pexprCTEProducer);
+
+	// extract the CTE id and the array of colids
+	const ULONG ulCTEId = popCTEProducer->UlCTEId();
+	ULongPtrArray *colids = CUtils::Pdrgpul(m_mp, popCTEProducer->Pdrgpcr());
+
+	GPOS_ASSERT(nullptr != pexprCTEProducer->Prpp());
+	CColRefArray *pdrgpcrRequired = popCTEProducer->Pdrgpcr();
+	CColRefSet *pcrsOutput = GPOS_NEW(m_mp) CColRefSet(m_mp);
+	pcrsOutput->Include(pdrgpcrRequired);
+
+	// translate relational child expression
+	CDXLNode *child_dxlnode = CreateDXLNode(
+		pexprRelational, pdrgpcrRequired, pdrgpdsBaseTables,
+		pulNonGatherMotions, pfDML, true /*fRemap*/, false /*fRoot */);
+
+	CDXLNode *pdxlnPrL = PdxlnProjList(pcrsOutput, pdrgpcrRequired);
+	pcrsOutput->Release();
+
+	ULongPtrArray *producer_idx_map =  popCTEProducer->PCTEIdxMap();
+	if (producer_idx_map) {
+		producer_idx_map->AddRef();
+	}
+
+	CDXLNode *pdxlnCTEProducer = GPOS_NEW(m_mp) CDXLNode(
+		m_mp, GPOS_NEW(m_mp) CDXLPhysicalParallelCTEProducer(m_mp, ulCTEId, colids, producer_idx_map, ulParallelWorkers),
+		pdxlnPrL, child_dxlnode);
+
+	pdxlnCTEProducer->SetProperties(dxl_properties);
+
+	return pdxlnCTEProducer;
+}
+
+//---------------------------------------------------------------------------
+//	@function:
 //		CTranslatorExprToDXL::PdxlnCTEConsumer
 //
 //	@doc:
@@ -3266,6 +3347,62 @@ CTranslatorExprToDXL::PdxlnCTEConsumer(
 
 	CDXLNode *pdxlnCTEConsumer = GPOS_NEW(m_mp) CDXLNode(
 		m_mp, GPOS_NEW(m_mp) CDXLPhysicalCTEConsumer(m_mp, ulCTEId, colids, pidxmap),
+		pdxlnPrL);
+
+	pcrsOutput->Release();
+
+	pdxlnCTEConsumer->SetProperties(dxl_properties);
+
+	return pdxlnCTEConsumer;
+}
+
+//---------------------------------------------------------------------------
+//	@function:
+//		CTranslatorExprToDXL::PdxlnParallelCTEConsumer
+//
+//	@doc:
+//		Translate a physical parallel cte consumer expression
+//
+//---------------------------------------------------------------------------
+CDXLNode *
+CTranslatorExprToDXL::PdxlnParallelCTEConsumer(
+	CExpression *pexprCTEConsumer,
+	CColRefArray *,			   //colref_array,
+	CDistributionSpecArray *,  // pdrgpdsBaseTables,
+	ULONG *,				   // pulNonGatherMotions,
+	BOOL *					   // pfDML
+)
+{
+	GPOS_ASSERT(nullptr != pexprCTEConsumer);
+
+	ULONG ulParallelWorkers = 0;
+
+	// extract components
+	CPhysicalParallelCTEConsumer *popCTEConsumer =
+		CPhysicalParallelCTEConsumer::PopConvert(pexprCTEConsumer->Pop());
+
+	ulParallelWorkers = popCTEConsumer->UlParallelWorkers();
+
+	// extract physical properties from cte consumer
+	CDXLPhysicalProperties *dxl_properties = GetProperties(pexprCTEConsumer);
+
+	// extract the CTE id and the array of colids
+	const ULONG ulCTEId = popCTEConsumer->UlCTEId();
+	CColRefArray *colref_array = popCTEConsumer->Pdrgpcr();
+	ULongPtrArray *colids = CUtils::Pdrgpul(m_mp, colref_array);
+
+	CColRefSet *pcrsOutput = GPOS_NEW(m_mp) CColRefSet(m_mp);
+	pcrsOutput->Include(colref_array);
+
+	// translate relational child expression
+	CDXLNode *pdxlnPrL = PdxlnProjList(pcrsOutput, colref_array);
+	ULongPtrArray *pidxmap = popCTEConsumer->PCTEIdxMap();
+	if (pidxmap) {
+		pidxmap->AddRef();
+	}
+
+	CDXLNode *pdxlnCTEConsumer = GPOS_NEW(m_mp) CDXLNode(
+		m_mp, GPOS_NEW(m_mp) CDXLPhysicalParallelCTEConsumer(m_mp, ulCTEId, colids, pidxmap, ulParallelWorkers),
 		pdxlnPrL);
 
 	pcrsOutput->Release();
@@ -5785,6 +5922,85 @@ CTranslatorExprToDXL::PdxlnSequence(CExpression *pexprSequence,
 	// construct sequence node
 	CDXLPhysicalSequence *pdxlopSequence =
 		GPOS_NEW(m_mp) CDXLPhysicalSequence(m_mp);
+	CDXLNode *pdxlnSequence = GPOS_NEW(m_mp) CDXLNode(m_mp, pdxlopSequence);
+	CDXLPhysicalProperties *dxl_properties = GetProperties(pexprSequence);
+	pdxlnSequence->SetProperties(dxl_properties);
+
+	// translate children
+	CDXLNodeArray *pdrgpdxlnChildren = GPOS_NEW(m_mp) CDXLNodeArray(m_mp);
+
+	for (ULONG ul = 0; ul < arity; ul++)
+	{
+		CExpression *pexprChild = (*pexprSequence)[ul];
+
+		CColRefArray *pdrgpcrChildOutput = nullptr;
+		if (ul == arity - 1)
+		{
+			// impose output columns on last child
+			pdrgpcrChildOutput = colref_array;
+		}
+
+		CDXLNode *child_dxlnode = CreateDXLNode(
+			pexprChild, pdrgpcrChildOutput, pdrgpdsBaseTables,
+			pulNonGatherMotions, pfDML, false /*fRemap*/, false /*fRoot*/);
+		pdrgpdxlnChildren->Append(child_dxlnode);
+	}
+
+	// construct project list from the project list of the last child
+	CDXLNode *pdxlnLastChild = (*pdrgpdxlnChildren)[arity - 1];
+	CDXLNode *pdxlnProjListChild = (*pdxlnLastChild)[0];
+
+	CDXLNode *proj_list_dxlnode =
+		CTranslatorExprToDXLUtils::PdxlnProjListFromChildProjList(
+			m_mp, m_pcf, m_phmcrdxln, pdxlnProjListChild);
+	pdxlnSequence->AddChild(proj_list_dxlnode);
+
+	// add children
+	for (ULONG ul = 0; ul < arity; ul++)
+	{
+		CDXLNode *pdxlnChid = (*pdrgpdxlnChildren)[ul];
+		pdxlnChid->AddRef();
+		pdxlnSequence->AddChild(pdxlnChid);
+	}
+
+	pdrgpdxlnChildren->Release();
+
+#ifdef GPOS_DEBUG
+	pdxlopSequence->AssertValid(pdxlnSequence, false /* validate_children */);
+#endif
+
+	return pdxlnSequence;
+}
+
+//---------------------------------------------------------------------------
+//	@function:
+//		CTranslatorExprToDXL::PdxlnParallelSequence
+//
+//	@doc:
+//		Create a DXL parallel sequence node from an optimizer parallel sequence expression
+//
+//---------------------------------------------------------------------------
+CDXLNode *
+CTranslatorExprToDXL::PdxlnParallelSequence(CExpression *pexprSequence,
+									CColRefArray *colref_array,
+									CDistributionSpecArray *pdrgpdsBaseTables,
+									ULONG *pulNonGatherMotions, BOOL *pfDML)
+{
+	GPOS_ASSERT(nullptr != pexprSequence);
+
+	const ULONG arity = pexprSequence->Arity();
+	GPOS_ASSERT(0 < arity);
+
+	ULONG ulParallelWorkers = 0;
+
+	CPhysicalParallelSequence *popDTS =
+		CPhysicalParallelSequence::PopConvert(pexprSequence->Pop());
+
+	ulParallelWorkers = popDTS->UlParallelWorkers();
+
+	// construct parallel sequence node
+	CDXLPhysicalParallelSequence *pdxlopSequence =
+		GPOS_NEW(m_mp) CDXLPhysicalParallelSequence(m_mp, ulParallelWorkers);
 	CDXLNode *pdxlnSequence = GPOS_NEW(m_mp) CDXLNode(m_mp, pdxlopSequence);
 	CDXLPhysicalProperties *dxl_properties = GetProperties(pexprSequence);
 	pdxlnSequence->SetProperties(dxl_properties);

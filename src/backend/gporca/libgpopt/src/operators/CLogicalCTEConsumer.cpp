@@ -413,6 +413,7 @@ CLogicalCTEConsumer::PxfsCandidates(CMemoryPool *mp) const
 	CXformSet *xform_set = GPOS_NEW(mp) CXformSet(mp);
 	(void) xform_set->ExchangeSet(CXform::ExfInlineCTEConsumer);
 	(void) xform_set->ExchangeSet(CXform::ExfImplementCTEConsumer);
+	(void) xform_set->ExchangeSet(CXform::ExfImplementParallelCTEConsumer);
 	return xform_set;
 }
 

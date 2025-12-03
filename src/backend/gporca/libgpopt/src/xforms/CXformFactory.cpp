@@ -151,6 +151,7 @@ CXformFactory::Instantiate()
 	Add(GPOS_NEW(m_mp) CXformDynamicGet2ParallelAppendTableScan(m_mp));
 	Add(GPOS_NEW(m_mp) CXformDynamicIndexGet2DynamicIndexScan(m_mp));
 	Add(GPOS_NEW(m_mp) CXformImplementSequence(m_mp));
+	Add(GPOS_NEW(m_mp) CXformImplementParallelSequence(m_mp));
 	Add(GPOS_NEW(m_mp) CXformImplementConstTableGet(m_mp));
 	Add(GPOS_NEW(m_mp) CXformUnnestTVF(m_mp));
 	Add(GPOS_NEW(m_mp) CXformImplementTVF(m_mp));
@@ -259,7 +260,9 @@ CXformFactory::Instantiate()
 	Add(GPOS_NEW(m_mp) CXformInlineCTEConsumer(m_mp));
 	Add(GPOS_NEW(m_mp) CXformInlineCTEConsumerUnderSelect(m_mp));
 	Add(GPOS_NEW(m_mp) CXformImplementCTEProducer(m_mp));
+	Add(GPOS_NEW(m_mp) CXformImplementParallelCTEProducer(m_mp));
 	Add(GPOS_NEW(m_mp) CXformImplementCTEConsumer(m_mp));
+	Add(GPOS_NEW(m_mp) CXformImplementParallelCTEConsumer(m_mp));
 	Add(GPOS_NEW(m_mp) CXformExpandFullOuterJoin(m_mp));
 	Add(GPOS_NEW(m_mp) CXformForeignGet2ForeignScan(m_mp));
 	Add(GPOS_NEW(m_mp) CXformSelect2BitmapBoolOp(m_mp));
