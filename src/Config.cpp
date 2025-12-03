@@ -16,9 +16,9 @@ static bool guc_enable_cdbstats = true;
 static bool guc_enable_collector = true;
 static bool guc_report_nested_queries = true;
 static char *guc_ignored_users = nullptr;
-static int guc_max_text_size = 1024;     // in KB
-static int guc_max_plan_size = 1024;     // in KB
-static int guc_min_analyze_time = 10000; // in ms
+static int guc_max_text_size = 1 << 20;     // in bytes (1MB)
+static int guc_max_plan_size = 1024;        // in KB
+static int guc_min_analyze_time = 10000;    // in ms
 static int guc_logging_mode = LOG_MODE_UDS;
 static bool guc_enable_utility = false;
 
@@ -99,9 +99,9 @@ void Config::init() {
 
   DefineCustomIntVariable(
       "yagpcc.max_text_size",
-      "Make yagpcc trim query texts longer than configured size", NULL,
-      &guc_max_text_size, 1024, 0, INT_MAX / 1024, PGC_SUSET,
-      GUC_NOT_IN_SAMPLE | GUC_GPDB_NEED_SYNC | GUC_UNIT_KB, NULL, NULL, NULL);
+      "Make yagpcc trim query texts longer than configured size in bytes", NULL,
+      &guc_max_text_size, 1 << 20 /* 1MB */, 0, INT_MAX, PGC_SUSET,
+      GUC_NOT_IN_SAMPLE | GUC_GPDB_NEED_SYNC, NULL, NULL, NULL);
 
   DefineCustomIntVariable(
       "yagpcc.max_plan_size",
@@ -134,7 +134,7 @@ bool Config::enable_cdbstats() { return guc_enable_cdbstats; }
 bool Config::enable_collector() { return guc_enable_collector; }
 bool Config::enable_utility() { return guc_enable_utility; }
 bool Config::report_nested_queries() { return guc_report_nested_queries; }
-size_t Config::max_text_size() { return guc_max_text_size * 1024; }
+size_t Config::max_text_size() { return guc_max_text_size; }
 size_t Config::max_plan_size() { return guc_max_plan_size * 1024; }
 int Config::min_analyze_time() { return guc_min_analyze_time; };
 int Config::logging_mode() { return guc_logging_mode; }
