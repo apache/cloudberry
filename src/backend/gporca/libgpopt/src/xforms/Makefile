@@ -54,12 +54,15 @@ OBJS        = CDecorrelator.o \
               CXformImplementBitmapTableGet.o \
               CXformImplementCTEConsumer.o \
               CXformImplementCTEProducer.o \
+              CXformImplementParallelCTEConsumer.o \
+              CXformImplementParallelCTEProducer.o \
               CXformImplementConstTableGet.o \
               CXformImplementDML.o \
               CXformImplementDynamicBitmapTableGet.o \
               CXformImplementFullOuterMergeJoin.o \
               CXformImplementLimit.o \
               CXformImplementSequence.o \
+              CXformImplementParallelSequence.o \
               CXformImplementSequenceProject.o \
               CXformImplementHashSequenceProject.o \
               CXformImplementSplit.o \
