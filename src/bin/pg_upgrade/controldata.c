@@ -555,7 +555,7 @@ get_control_data(ClusterInfo *cluster, bool live_check)
 			cluster->controldata.data_checksum_version = str2uint(p);
 			got_data_checksum_version = true;
 		}
-		else if ((p = strstr(bufin, "Cluster file encryption method:")) != NULL)
+		else if ((p = strstr(bufin, "File encryption method:")) != NULL)
 		{
 			p = strchr(p, ':');
 
