@@ -233,6 +233,7 @@ enable_shared_postgres_backend    = @enable_shared_postgres_backend@
 enable_link_postgres_with_shared  = @enable_link_postgres_with_shared@
 enable_gpcloud 	    = @enable_gpcloud@
 enable_ic_proxy     = @enable_ic_proxy@
+enable_ic_udp2      = @enable_ic_udp2@
 enable_pax          = @enable_pax@
 enable_tap_tests = @enable_tap_tests@
 

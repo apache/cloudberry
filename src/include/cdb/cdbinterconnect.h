@@ -213,6 +213,10 @@ typedef struct ChunkTransportState
 
 	/* ic_proxy backend context */
 	struct ICProxyBackendContext *proxyContext;
+
+	/* used by IPC layer implement */
+	void *implement_state;
+
 } ChunkTransportState;
 
 #endif   /* CDBINTERCONNECT_H */
