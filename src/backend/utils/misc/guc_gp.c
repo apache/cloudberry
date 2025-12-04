@@ -3793,6 +3793,17 @@ struct config_int ConfigureNamesInt_gp[] =
 	},
 
 	{
+		{"gp_interconnect_cursor_ic_table_size", PGC_USERSET, GP_ARRAY_TUNING,
+			gettext_noop("Sets the size of Cursor History Table in the UDP interconnect"),
+			gettext_noop("You can try to increase it when a UDF which contains many concurrent "
+						 "cursor queries hangs. The default value is 128.")
+		},
+		&Gp_interconnect_cursor_ic_table_size,
+		128, 128, 102400,
+		NULL, NULL, NULL
+	},
+
+	{
 		{"gp_interconnect_timer_period", PGC_USERSET, GP_ARRAY_TUNING,
 			gettext_noop("Sets the timer period (in ms) for UDP interconnect"),
 			NULL,
@@ -5102,6 +5113,9 @@ struct config_string ConfigureNamesString_gp[] =
 		{"gp_interconnect_type", PGC_BACKEND, GP_ARRAY_TUNING,
 			gettext_noop("Sets the protocol used for inter-node communication."),
 			gettext_noop("Valid values are \"tcp\", \"udpifc\""
+#ifdef ENABLE_IC_UDP2
+						 ", \"udp2(experimental feature)\""
+#endif /* ENABLE_IC_UDP2 */
 #ifdef ENABLE_IC_PROXY
 						 " and \"proxy\""
 #endif  /* ENABLE_IC_PROXY */
