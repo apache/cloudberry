@@ -202,8 +202,8 @@ CPhysicalParallelSequence::PdsRequired(CMemoryPool *mp,
 	exprhdl
 #endif	// GPOS_DEBUG
 	,
-							   CDistributionSpec *pdsRequired,
-							   ULONG child_index, CDrvdPropArray *pdrgpdpCtxt,
+							   CDistributionSpec *,
+							   ULONG child_index, CDrvdPropArray *,
 							   ULONG ulOptReq) const
 {
 	GPOS_ASSERT(2 == exprhdl.Arity());
