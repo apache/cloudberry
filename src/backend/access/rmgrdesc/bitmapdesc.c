@@ -17,7 +17,6 @@
 #include "access/bitmap.h"
 #include "access/bitmap_xlog.h"
 #include "access/xlogreader.h"
-#include "storage/relfilenode.h"
 
 static void
 out_target(StringInfo buf, RelFileLocator *node)

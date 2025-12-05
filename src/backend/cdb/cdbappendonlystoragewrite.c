@@ -409,7 +409,7 @@ AppendOnlyStorageWrite_FlushAndCloseFile(
 	 * is not enqueued for an AO segment file that is written to disk on
 	 * primary.  Temp tables are not crash safe, no need to fsync them.
 	 */
-	if (!RelFileNodeBackendIsTemp(storageWrite->relFileNode) &&
+	if (!RelFileLocatorBackendIsTemp(storageWrite->relFileNode) &&
 		FileSync(storageWrite->file, WAIT_EVENT_DATA_FILE_SYNC) != 0)
 		ereport(ERROR,
 				(errcode_for_file_access(),
@@ -422,7 +422,7 @@ AppendOnlyStorageWrite_FlushAndCloseFile(
 	storageWrite->file = -1;
 	storageWrite->formatVersion = -1;
 
-	MemSet(&storageWrite->relFileNode, 0, sizeof(RelFileNode));
+	MemSet(&storageWrite->relFileNode, 0, sizeof(RelFileLocator));
 	storageWrite->segmentFileNum = 0;
 }
 
