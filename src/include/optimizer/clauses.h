@@ -68,9 +68,6 @@ extern Expr *transform_array_Const_to_ArrayExpr(Const *c);
 extern Query *inline_set_returning_function(PlannerInfo *root,
 											RangeTblEntry *rte);
 
-extern Bitmapset *pull_paramids(Expr *expr);
-
-
 extern Expr *evaluate_expr(Expr *expr, Oid result_type, int32 result_typmod,
 			  Oid result_collation);
 
