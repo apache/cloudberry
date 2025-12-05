@@ -19,7 +19,6 @@
 #include "lib/ilist.h"
 #include "storage/block.h"
 #include "storage/relfilelocator.h"
-#include "storage/relfilenode.h"
 #include "storage/dbdirnode.h"
 #include "storage/fd.h"
 #include "utils/relcache.h"

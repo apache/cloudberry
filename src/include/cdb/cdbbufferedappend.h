@@ -19,7 +19,7 @@
 #define CDBBUFFEREDAPPEND_H
 
 #include "storage/fd.h"
-#include "storage/relfilenode.h"
+#include "storage/relfilelocator.h"
 
 typedef struct BufferedAppend
 {

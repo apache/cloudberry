@@ -16,7 +16,6 @@
 #define DATUMSTREAMBLOCK_H
 
 #include "catalog/pg_attribute.h"
-#include "storage/relfilenode.h"
 #include "utils/guc.h"
 
 typedef enum DatumStreamVersion

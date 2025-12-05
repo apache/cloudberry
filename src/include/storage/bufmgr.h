@@ -17,7 +17,6 @@
 #include "storage/block.h"
 #include "storage/buf.h"
 #include "storage/bufpage.h"
-#include "storage/relfilenode.h"
 #include "storage/smgr.h"
 #include "storage/relfilelocator.h"
 #include "utils/relcache.h"

@@ -17,7 +17,6 @@
 #include "access/xlogreader.h"
 #include "lib/stringinfo.h"
 #include "storage/block.h"
-#include "storage/relfilenode.h"
 #include "storage/smgr.h"
 #include "storage/relfilelocator.h"
 

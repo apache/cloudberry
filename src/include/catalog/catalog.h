@@ -15,7 +15,6 @@
 #define CATALOG_H
 
 #include "catalog/pg_class.h"
-#include "storage/relfilenode.h"
 #include "storage/relfilelocator.h"
 #include "utils/relcache.h"
 

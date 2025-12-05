@@ -64,7 +64,7 @@ typedef struct RelFileLocator
 /*
  * Augmenting a relfilenode with a SMGR implementation identifier provides a
  * way to make optimal decisions in smgr and md layer. This is purposefully
- * kept out of RelFileNode for performance concerns where RelFileNode used in
+ * kept out of RelFileLocator for performance concerns where RelFileLocator used in
  * a hotpath for BufferTag hashing. The isTempRelation flag is necessary to
  * support file-system removal of temporary relations on a two-phase
  * commit/abort.

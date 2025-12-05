@@ -29,7 +29,6 @@
 #include "partitioning/partdefs.h"
 #include "rewrite/prs2lock.h"
 #include "storage/block.h"
-#include "storage/relfilenode.h"
 #include "storage/relfilelocator.h"
 #include "storage/smgr.h"
 #include "utils/fmgroids.h"
