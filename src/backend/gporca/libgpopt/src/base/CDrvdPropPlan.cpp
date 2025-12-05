@@ -87,10 +87,14 @@ CDrvdPropPlan::Derive(CMemoryPool *mp, CExpressionHandle &exprhdl,
 {
 	CPhysical *popPhysical = CPhysical::PopConvert(exprhdl.Pop());
 	if (nullptr != pdpctxt &&
-		(COperator::EopPhysicalCTEConsumer == popPhysical->Eopid() ||
-		 COperator::EopPhysicalParallelCTEConsumer == popPhysical->Eopid()))
+		COperator::EopPhysicalCTEConsumer == popPhysical->Eopid())
 	{
 		CopyCTEProducerPlanProps(mp, pdpctxt, popPhysical);
+	}
+	else if (nullptr != pdpctxt &&
+		COperator::EopPhysicalParallelCTEConsumer == popPhysical->Eopid())
+	{
+		CopyParallelCTEProducerPlanProps(mp, pdpctxt, popPhysical);
 	}
 	else
 	{
