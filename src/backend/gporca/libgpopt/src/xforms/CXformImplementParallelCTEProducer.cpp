@@ -34,7 +34,9 @@
 #include "gpopt/operators/CPhysicalParallelCTEProducer.h"
 
 using namespace gpopt;
-
+namespace gpdb {
+bool IsParallelModeOK(void);
+}
 
 //---------------------------------------------------------------------------
 //	@function:
@@ -65,6 +67,12 @@ CXform::EXformPromise
 CXformImplementParallelCTEProducer::Exfp(CExpressionHandle &  // exprhdl
 ) const
 {
+	// Check if parallel plans are enabled in context and parallel processing in safe
+	if (!gpdb::IsParallelModeOK())
+	{
+		return CXform::ExfpNone;
+	}
+
 	return CXform::ExfpHigh;
 }
 

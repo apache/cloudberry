@@ -34,6 +34,9 @@
 #include "gpopt/operators/CPhysicalParallelCTEConsumer.h"
 
 using namespace gpopt;
+namespace gpdb {
+bool IsParallelModeOK(void);
+}
 
 
 //---------------------------------------------------------------------------
@@ -63,6 +66,12 @@ CXform::EXformPromise
 CXformImplementParallelCTEConsumer::Exfp(CExpressionHandle &  // exprhdl
 ) const
 {
+	// Check if parallel plans are enabled in context and parallel processing in safe
+	if (!gpdb::IsParallelModeOK())
+	{
+		return CXform::ExfpNone;
+	}
+
 	return CXform::ExfpHigh;
 }
 

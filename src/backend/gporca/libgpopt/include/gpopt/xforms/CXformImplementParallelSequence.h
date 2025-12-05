@@ -69,13 +69,8 @@ public:
 		return "CXformImplementParallelSequence";
 	}
 
-	// compute xform promise for a given expression handle
-	EXformPromise
-	Exfp(CExpressionHandle &  // exprhdl
-	) const override
-	{
-		return CXform::ExfpHigh;
-	}
+	// compute xform promise for a given expresion handle
+	EXformPromise Exfp(CExpressionHandle &exprhdl) const override;
 
 	// actual transform
 	void Transform(CXformContext *pxfctxt, CXformResult *pxfres,

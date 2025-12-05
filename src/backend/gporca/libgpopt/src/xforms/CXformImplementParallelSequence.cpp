@@ -35,6 +35,9 @@
 #include "gpopt/operators/CPhysicalParallelSequence.h"
 
 using namespace gpopt;
+namespace gpdb {
+bool IsParallelModeOK(void);
+}
 
 
 //---------------------------------------------------------------------------
@@ -54,6 +57,27 @@ CXformImplementParallelSequence::CXformImplementParallelSequence(CMemoryPool *mp
 {
 }
 
+
+//---------------------------------------------------------------------------
+//	@function:
+//		CXformImplementParallelCTEProducer::Exfp
+//
+//	@doc:
+//		Compute promise of xform
+//
+//---------------------------------------------------------------------------
+CXform::EXformPromise
+CXformImplementParallelSequence::Exfp(CExpressionHandle &  // exprhdl
+) const
+{
+	// Check if parallel plans are enabled in context and parallel processing in safe
+	if (!gpdb::IsParallelModeOK())
+	{
+		return CXform::ExfpNone;
+	}
+
+	return CXform::ExfpHigh;
+}
 
 //---------------------------------------------------------------------------
 //	@function:
