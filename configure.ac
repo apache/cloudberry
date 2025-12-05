@@ -972,6 +972,10 @@ if test "$enable_pax" = yes; then
     [AC_MSG_ERROR([libzstd >= 1.4.0 is required for PAX support])]
   )
 
+  # Check liburing
+  AC_CHECK_LIB(uring, io_uring_queue_init, [],
+               [AC_MSG_ERROR([library 'uring' is required for PAX support])])
+
   # Check cmake >= 3.11.0 using AX_COMPARE_VERSION
   AC_PATH_PROG([CMAKE], [cmake], [no])
   if test "$CMAKE" = "no"; then
