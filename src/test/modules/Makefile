@@ -19,10 +19,7 @@ SUBDIRS = \
 		  test_custom_rmgrs \
 		  test_ddl_deparse \
 		  test_escape \
-<<<<<<< HEAD
-=======
 		  test_extensions \
->>>>>>> REL_16_9
 		  test_ginpostinglist \
 		  test_integerset \
 		  test_lfind \
@@ -35,11 +32,8 @@ SUBDIRS = \
 		  test_regex \
 		  test_rls_hooks \
 		  test_shm_mq \
-<<<<<<< HEAD
-=======
 		  test_slru \
 		  unsafe_tests \
->>>>>>> REL_16_9
 		  worker_spi
 
 #ignore cases:
