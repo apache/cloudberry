@@ -133,14 +133,16 @@ pg_store_delegated_credential(gss_cred_id_t cred)
 
 	if (major != GSS_S_COMPLETE)
 	{
-		pg_GSS_error("gss_store_cred", major, minor);
+		/* Cloudberry is different from upstream here, see 536fd6b */
+		pg_GSS_error_be("gss_store_cred", major, minor);
 	}
 
 	/* Credential stored, so we can release our credential handle. */
 	major = gss_release_cred(&minor, &cred);
 	if (major != GSS_S_COMPLETE)
 	{
-		pg_GSS_error("gss_release_cred", major, minor);
+		/* Cloudberry is different from upstream here, see 536fd6b */
+		pg_GSS_error_be("gss_release_cred", major, minor);
 	}
 
 	/*
