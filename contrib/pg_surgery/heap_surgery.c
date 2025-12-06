@@ -383,38 +383,6 @@ sanity_check_tid_array(ArrayType *ta, int *ntids)
 }
 
 /*-------------------------------------------------------------------------
- * sanity_check_relation()
- *
- * Perform sanity checks on the given relation.
- * ------------------------------------------------------------------------
- */
-static void
-sanity_check_relation(Relation rel)
-{
-	if (rel->rd_rel->relkind != RELKIND_RELATION &&
-		rel->rd_rel->relkind != RELKIND_MATVIEW &&
-		rel->rd_rel->relkind != RELKIND_TOASTVALUE &&
-		rel->rd_rel->relkind != RELKIND_DIRECTORY_TABLE)
-		ereport(ERROR,
-				(errcode(ERRCODE_WRONG_OBJECT_TYPE),
-				 errmsg("\"%s\" is not a table, materialized view, or TOAST table",
-						RelationGetRelationName(rel))));
-
-	if (rel->rd_rel->relam != HEAP_TABLE_AM_OID)
-		ereport(ERROR,
-				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-				 errmsg("only heap AM is supported")));
-
-	/* Must be owner of the table or superuser. */
-	if (!object_ownercheck(RelationRelationId, RelationGetRelid(rel), GetUserId()))
-		aclcheck_error(ACLCHECK_NOT_OWNER,
-					   get_relkind_objtype(rel->rd_rel->relkind),
-					   RelationGetRelationName(rel));
-}
-
-/*-------------------------------------------------------------------------
-=======
->>>>>>> REL_16_9
  * find_tids_one_page()
  *
  * Find all the tids residing in the same page as tids[next_start_ptr], and

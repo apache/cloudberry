@@ -830,29 +830,6 @@ verify_heapam(PG_FUNCTION_ARGS)
 }
 
 /*
-<<<<<<< HEAD
- * Check that a relation's relkind and access method are both supported.
- */
-static void
-sanity_check_relation(Relation rel)
-{
-	if (rel->rd_rel->relkind != RELKIND_RELATION &&
-		rel->rd_rel->relkind != RELKIND_MATVIEW &&
-		rel->rd_rel->relkind != RELKIND_TOASTVALUE &&
-		rel->rd_rel->relkind != RELKIND_DIRECTORY_TABLE)
-		ereport(ERROR,
-				(errcode(ERRCODE_WRONG_OBJECT_TYPE),
-				 errmsg("\"%s\" is not a table, directory table, materialized view, or TOAST table",
-						RelationGetRelationName(rel))));
-	if (rel->rd_rel->relam != HEAP_TABLE_AM_OID)
-		ereport(ERROR,
-				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-				 errmsg("only heap AM is supported")));
-}
-
-/*
-=======
->>>>>>> REL_16_9
  * Shared internal implementation for report_corruption and
  * report_toast_corruption.
  */
