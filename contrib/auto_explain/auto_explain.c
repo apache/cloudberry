@@ -16,17 +16,16 @@
 
 #include "access/parallel.h"
 #include "commands/explain.h"
-<<<<<<< HEAD
-#include "cdb/cdbdisp.h"
-#include "cdb/cdbexplain.h"
-#include "cdb/cdbvars.h"
-=======
 #include "common/pg_prng.h"
->>>>>>> REL_16_9
 #include "executor/instrument.h"
 #include "jit/jit.h"
 #include "nodes/params.h"
 #include "utils/guc.h"
+
+/* Cloubderry-related includes. */
+#include "cdb/cdbdisp.h"
+#include "cdb/cdbexplain.h"
+#include "cdb/cdbvars.h"
 
 PG_MODULE_MAGIC;
 
