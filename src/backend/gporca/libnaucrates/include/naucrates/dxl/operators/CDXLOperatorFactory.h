@@ -134,6 +134,10 @@ public:
 	static CDXLPhysical *MakeDXLTblScan(CDXLMemoryManager *dxl_memory_manager,
 										const Attributes &attrs);
 
+	// create a parallel table scan operator
+	static CDXLPhysical *MakeDXLParallelTblScan(CDXLMemoryManager *dxl_memory_manager,
+												const Attributes &attrs);
+
 	// create a result operator
 	static CDXLPhysical *MakeDXLResult(CDXLMemoryManager *dxl_memory_manager);
 
@@ -172,6 +176,10 @@ public:
 	// create an append operator
 	static CDXLPhysical *MakeDXLAppend(CDXLMemoryManager *dxl_memory_manager,
 									   const Attributes &attrs);
+
+	// create a parallel append operator
+	static CDXLPhysical *MakeDXLParallelAppend(CDXLMemoryManager *dxl_memory_manager,
+											   const Attributes &attrs);
 
 	// create a limit operator
 	static CDXLPhysical *MakeDXLLimit(CDXLMemoryManager *dxl_memory_manager,

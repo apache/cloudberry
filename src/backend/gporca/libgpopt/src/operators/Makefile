@@ -85,6 +85,8 @@ OBJS        = CExpression.o \
               CPhysicalBitmapTableScan.o \
               CPhysicalCTEConsumer.o \
               CPhysicalCTEProducer.o \
+              CPhysicalParallelCTEConsumer.o \
+              CPhysicalParallelCTEProducer.o \
               CPhysicalComputeScalar.o \
               CPhysicalConstTableGet.o \
               CPhysicalDML.o \
@@ -93,6 +95,8 @@ OBJS        = CExpression.o \
               CPhysicalDynamicIndexScan.o \
               CPhysicalDynamicScan.o \
               CPhysicalDynamicTableScan.o \
+              CPhysicalAppendTableScan.o \
+              CPhysicalParallelAppendTableScan.o \
               CPhysicalForeignScan.o \
               CPhysicalFilter.o \
               CPhysicalFullMergeJoin.o \
@@ -123,12 +127,14 @@ OBJS        = CExpression.o \
               CPhysicalMotionRoutedDistribute.o \
               CPhysicalDynamicForeignScan.o \
               CPhysicalNLJoin.o \
+              CPhysicalParallelTableScan.o \
               CPhysicalParallelUnionAll.o \
               CPhysicalPartitionSelector.o \
               CPhysicalRightOuterHashJoin.o \
               CPhysicalScalarAgg.o \
               CPhysicalScan.o \
               CPhysicalSequence.o \
+              CPhysicalParallelSequence.o \
               CPhysicalSequenceProject.o \
               CPhysicalHashSequenceProject.o \
               CPhysicalSerialUnionAll.o \

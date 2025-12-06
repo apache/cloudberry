@@ -26,6 +26,8 @@ OBJS        = CDecorrelator.o \
               CXformDifference2LeftAntiSemiJoin.o \
               CXformDifferenceAll2LeftAntiSemiJoin.o \
               CXformDynamicGet2DynamicTableScan.o \
+              CXformDynamicGet2AppendTableScan.o \
+              CXformDynamicGet2ParallelAppendTableScan.o \
               CXformDynamicIndexOnlyGet2DynamicIndexOnlyScan.o \
               CXformDynamicIndexGet2DynamicIndexScan.o \
               CXformEagerAgg.o \
@@ -47,16 +49,20 @@ OBJS        = CDecorrelator.o \
               CXformGbAggDedup2StreamAggDedup.o \
               CXformGbAggWithMDQA2Join.o \
               CXformGet2TableScan.o \
+              CXformGet2ParallelTableScan.o \
               CXformImplementAssert.o \
               CXformImplementBitmapTableGet.o \
               CXformImplementCTEConsumer.o \
               CXformImplementCTEProducer.o \
+              CXformImplementParallelCTEConsumer.o \
+              CXformImplementParallelCTEProducer.o \
               CXformImplementConstTableGet.o \
               CXformImplementDML.o \
               CXformImplementDynamicBitmapTableGet.o \
               CXformImplementFullOuterMergeJoin.o \
               CXformImplementLimit.o \
               CXformImplementSequence.o \
+              CXformImplementParallelSequence.o \
               CXformImplementSequenceProject.o \
               CXformImplementHashSequenceProject.o \
               CXformImplementSplit.o \

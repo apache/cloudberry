@@ -28,8 +28,10 @@
 #include "naucrates/dxl/operators/CDXLDatumStatsDoubleMappable.h"
 #include "naucrates/dxl/operators/CDXLDatumStatsLintMappable.h"
 #include "naucrates/dxl/operators/CDXLLogicalJoin.h"
+#include "naucrates/dxl/operators/CDXLPhysicalParallelTableScan.h"
 #include "naucrates/dxl/operators/CDXLPhysicalAgg.h"
 #include "naucrates/dxl/operators/CDXLPhysicalAppend.h"
+#include "naucrates/dxl/operators/CDXLPhysicalParallelAppend.h"
 #include "naucrates/dxl/operators/CDXLPhysicalBroadcastMotion.h"
 #include "naucrates/dxl/operators/CDXLPhysicalGatherMotion.h"
 #include "naucrates/dxl/operators/CDXLPhysicalHashJoin.h"
@@ -99,6 +101,31 @@ CDXLOperatorFactory::MakeDXLTblScan(CDXLMemoryManager *dxl_memory_manager,
 	CMemoryPool *mp = dxl_memory_manager->Pmp();
 
 	return GPOS_NEW(mp) CDXLPhysicalTableScan(mp);
+}
+
+//---------------------------------------------------------------------------
+//	@function:
+//		CDXLOperatorFactory::MakeDXLParallelTblScan
+//
+//	@doc:
+//		Construct a parallel table scan operator
+//
+//---------------------------------------------------------------------------
+CDXLPhysical *
+CDXLOperatorFactory::MakeDXLParallelTblScan(CDXLMemoryManager *dxl_memory_manager,
+											const Attributes &attrs)
+{
+	// get the memory pool from the memory manager
+	CMemoryPool *mp = dxl_memory_manager->Pmp();
+
+	// extract number of parallel workers
+	const XMLCh *parallel_workers_xml = ExtractAttrValue(attrs, EdxltokenParallelWorkers, 
+														 EdxltokenPhysicalParallelTableScan);
+	ULONG ulParallelWorkers = CDXLOperatorFactory::ConvertAttrValueToUlong(
+		dxl_memory_manager, parallel_workers_xml, EdxltokenParallelWorkers, 
+		EdxltokenPhysicalParallelTableScan);
+
+	return GPOS_NEW(mp) CDXLPhysicalParallelTableScan(mp, ulParallelWorkers);
 }
 
 //---------------------------------------------------------------------------
@@ -380,6 +407,48 @@ CDXLOperatorFactory::MakeDXLAppend(CDXLMemoryManager *dxl_memory_manager,
 											
 	return GPOS_NEW(mp) CDXLPhysicalAppend(mp, is_target, is_zapped, scan_id,
 												   nullptr, selector_ids);
+}
+
+//---------------------------------------------------------------------------
+//	@function:
+//		CDXLOperatorFactory::MakeDXLParallelAppend
+//	@doc:
+//		Construct a Parallel Append operator
+//
+//---------------------------------------------------------------------------
+CDXLPhysical *
+CDXLOperatorFactory::MakeDXLParallelAppend(CDXLMemoryManager *dxl_memory_manager,
+										   const Attributes &attrs)
+{
+	// get the memory pool from the memory manager
+	CMemoryPool *mp = dxl_memory_manager->Pmp();
+
+	BOOL is_target = ExtractConvertAttrValueToBool(dxl_memory_manager, attrs,
+												   EdxltokenAppendIsTarget,
+												   EdxltokenPhysicalParallelAppend);
+
+	BOOL is_zapped = ExtractConvertAttrValueToBool(dxl_memory_manager, attrs,
+												   EdxltokenAppendIsZapped,
+												   EdxltokenPhysicalParallelAppend);
+
+	ULONG scan_id = ExtractConvertAttrValueToUlong(dxl_memory_manager, attrs, EdxltokenPartIndexId,
+												   EdxltokenPhysicalParallelAppend, true /* is_optional */,
+												   gpos::ulong_max /* default_value */);
+
+	ULONG parallel_workers = ExtractConvertAttrValueToUlong(dxl_memory_manager, attrs, EdxltokenParallelWorkers,
+														    EdxltokenPhysicalParallelAppend, true,
+														    0);
+
+	ULongPtrArray *selector_ids = nullptr;
+	if (scan_id != gpos::ulong_max)
+	{
+		selector_ids = ExtractConvertValuesToArray(dxl_memory_manager, attrs,
+												   EdxltokenSelectorIds,
+												   EdxltokenPhysicalParallelAppend);
+	}
+
+	return GPOS_NEW(mp) CDXLPhysicalParallelAppend(mp, is_target, is_zapped, scan_id,
+												   nullptr, selector_ids, parallel_workers);
 }
 
 //---------------------------------------------------------------------------

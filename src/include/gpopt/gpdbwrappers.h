@@ -717,6 +717,9 @@ List *GetMergeJoinOpFamilies(Oid opno);
 // get the OID of base elementtype fora given typid
 Oid GetBaseType(Oid typid);
 
+// check if parallel mode is OK (comprehensive check)
+bool IsParallelModeOK(void);
+
 // returns the result of evaluating 'expr' as an Expr. Caller keeps ownership of 'expr'
 // and takes ownership of the result
 Expr *EvaluateExpr(Expr *expr, Oid result_type, int32 typmod);
@@ -767,6 +770,8 @@ void GPDBMemoryContextDelete(MemoryContext context);
 List *GetRelChildIndexes(Oid reloid);
 
 Oid GetForeignServerId(Oid reloid);
+
+int16 GetAppendOnlySegmentFilesCount(Relation rel);
 
 void GPDBLockRelationOid(Oid reloid, int lockmode);
 

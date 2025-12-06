@@ -80,6 +80,11 @@ private:
 						  const CCostModelGPDB *pcmgpdb,
 						  const SCostingInfo *pci);
 
+	// cost of parallel table scan
+	static CCost CostParallelTableScan(CMemoryPool *mp, CExpressionHandle &exprhdl,
+									   const CCostModelGPDB *pcmgpdb,
+									   const SCostingInfo *pci);
+
 	// cost of filter
 	static CCost CostFilter(CMemoryPool *mp, CExpressionHandle &exprhdl,
 							const CCostModelGPDB *pcmgpdb,
@@ -118,8 +123,18 @@ private:
 								 const CCostModelGPDB *pcmgpdb,
 								 const SCostingInfo *pci);
 
+	// cost of parallel CTE producer
+	static CCost CostParallelCTEProducer(CMemoryPool *mp, CExpressionHandle &exprhdl,
+								 const CCostModelGPDB *pcmgpdb,
+								 const SCostingInfo *pci);	
+
 	// cost of CTE consumer
 	static CCost CostCTEConsumer(CMemoryPool *mp, CExpressionHandle &exprhdl,
+								 const CCostModelGPDB *pcmgpdb,
+								 const SCostingInfo *pci);
+
+	// cost of parallel CTE consumer
+	static CCost CostParallelCTEConsumer(CMemoryPool *mp, CExpressionHandle &exprhdl,
 								 const CCostModelGPDB *pcmgpdb,
 								 const SCostingInfo *pci);
 
@@ -153,6 +168,11 @@ private:
 							  const CCostModelGPDB *pcmgpdb,
 							  const SCostingInfo *pci);
 
+	// cost of paralllel sequence
+	static CCost CostParallelSequence(CMemoryPool *mp, CExpressionHandle &exprhdl,
+							  const CCostModelGPDB *pcmgpdb,
+							  const SCostingInfo *pci);
+	
 	// cost of sort
 	static CCost CostSort(CMemoryPool *mp, CExpressionHandle &exprhdl,
 						  const CCostModelGPDB *pcmgpdb,
@@ -224,6 +244,10 @@ private:
 								   CColRefArray *&pdrgpcrIndexColumns,
 								   IStatistics *&stats,
 								   CMDAccessor *md_accessor, CMemoryPool *mp);
+
+	// Helper functions for parallel cost calculation
+	static CDouble CalculateParallelEfficiency(ULONG ulWorkers);
+	static CDouble GetWorkerStartupCost(const CCostModelGPDB *pcmgpdb, ULONG ulWorkers);
 
 public:
 	// ctor

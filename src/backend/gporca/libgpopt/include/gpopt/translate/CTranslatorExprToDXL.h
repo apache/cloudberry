@@ -101,6 +101,9 @@ private:
 	// id of master node
 	INT m_iMasterId;
 
+	// whether is set operator
+	BOOL m_isSet;
+
 	// private copy ctor
 	CTranslatorExprToDXL(const CTranslatorExprToDXL &);
 
@@ -268,7 +271,17 @@ private:
 							   CDistributionSpecArray *pdrgpdsBaseTables,
 							   ULONG *pulNonGatherMotions, BOOL *pfDML);
 
+	CDXLNode *PdxlnParallelCTEProducer(CExpression *pexprCTEProducer,
+							   CColRefArray *colref_array,
+							   CDistributionSpecArray *pdrgpdsBaseTables,
+							   ULONG *pulNonGatherMotions, BOOL *pfDML);
+
 	CDXLNode *PdxlnCTEConsumer(CExpression *pexprCTEConsumer,
+							   CColRefArray *colref_array,
+							   CDistributionSpecArray *pdrgpdsBaseTables,
+							   ULONG *pulNonGatherMotions, BOOL *pfDML);
+
+	CDXLNode *PdxlnParallelCTEConsumer(CExpression *pexprCTEConsumer,
 							   CColRefArray *colref_array,
 							   CDistributionSpecArray *pdrgpdsBaseTables,
 							   ULONG *pulNonGatherMotions, BOOL *pfDML);
@@ -313,6 +326,12 @@ private:
 							CDistributionSpecArray *pdrgpdsBaseTables,
 							ULONG *pulNonGatherMotions, BOOL *pfDML);
 
+	// translate a sequence expression
+	CDXLNode *PdxlnParallelSequence(CExpression *pexprSequence,
+							CColRefArray *colref_array,
+							CDistributionSpecArray *pdrgpdsBaseTables,
+							ULONG *pulNonGatherMotions, BOOL *pfDML);
+
 	// translate a dynamic seq/foreign scan to append
 	template <class PhysicalScanType>
 	CDXLNode *PdxlnDynamicScanToAppend(
@@ -345,6 +364,32 @@ private:
 									CDistributionSpecArray *pdrgpdsBaseTables,
 									CExpression *pexprScalarCond,
 									CDXLPhysicalProperties *dxl_properties);
+
+	// translate an append table scan
+	CDXLNode *PdxlnAppendTableScan(CExpression *pexprDTS,
+								   CColRefArray *colref_array,
+								   CDistributionSpecArray *pdrgpdsBaseTables,
+								   ULONG *pulNonGatherMotions, BOOL *pfDML);
+
+	// translate an append table scan with a scalar condition
+	CDXLNode *PdxlnAppendTableScan(CExpression *pexprDTS,
+								   CColRefArray *colref_array,
+								   CDistributionSpecArray *pdrgpdsBaseTables,
+								   CExpression *pexprScalarCond,
+								   CDXLPhysicalProperties *dxl_properties);
+
+	// translate a parallel append table scan
+	CDXLNode *PdxlnParallelAppendTableScan(CExpression *pexprDTS,
+										   CColRefArray *colref_array,
+										   CDistributionSpecArray *pdrgpdsBaseTables,
+										   ULONG *pulNonGatherMotions, BOOL *pfDML);
+
+	// translate a parallel append table scan with a scalar condition
+	CDXLNode *PdxlnParallelAppendTableScan(CExpression *pexprDTS,
+										   CColRefArray *colref_array,
+										   CDistributionSpecArray *pdrgpdsBaseTables,
+										   CExpression *pexprScalarCond,
+										   CDXLPhysicalProperties *dxl_properties);
 
 	// translate a dynamic bitmap table scan
 	CDXLNode *PdxlnDynamicBitmapTableScan(
