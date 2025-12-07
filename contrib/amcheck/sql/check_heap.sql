@@ -43,7 +43,7 @@ INSERT INTO heaptest (a, b)
 SET allow_in_place_tablespaces = true;
 CREATE TABLESPACE regress_test_stats_tblspc LOCATION '';
 SELECT sum(reads) AS stats_bulkreads_before
-  FROM pg_stat_io WHERE context = 'bulkread' \gset
+  FROM gp_dist_random('pg_stat_io') WHERE context = 'bulkread' \gset
 BEGIN;
 ALTER TABLE heaptest SET TABLESPACE regress_test_stats_tblspc;
 -- Check that valid options are not rejected nor corruption reported
@@ -57,9 +57,11 @@ COMMIT;
 -- verify_heapam should have read in the page written out by
 --   ALTER TABLE ... SET TABLESPACE ...
 -- causing an additional bulkread, which should be reflected in pg_stat_io.
-SELECT pg_stat_force_next_flush();
+-- XXX: Cloubderry version of this differs from upstream. We need to dispatch
+-- flush on segments, so use gp_dist_random
+SELECT pg_stat_force_next_flush() FROM gp_dist_random('gp_id');
 SELECT sum(reads) AS stats_bulkreads_after
-  FROM pg_stat_io WHERE context = 'bulkread' \gset
+  FROM gp_dist_random('pg_stat_io') WHERE context = 'bulkread' \gset
 SELECT :stats_bulkreads_after > :stats_bulkreads_before;
 
 CREATE ROLE regress_heaptest_role;

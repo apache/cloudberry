@@ -135,8 +135,6 @@ CREATE INDEX bttest_a_expr_idx ON bttest_a ((ifun(id) + ifun(0)))
 
 SELECT bt_index_check('bttest_a_expr_idx', true);
 
-<<<<<<< HEAD
-=======
 -- Check support of both 1B and 4B header sizes of short varlena datum
 CREATE TABLE varlena_bug (v text);
 ALTER TABLE varlena_bug ALTER column v SET storage plain;
@@ -153,7 +151,6 @@ INSERT INTO varlena_bug VALUES (repeat('Test', 250));
 ALTER TABLE varlena_bug ALTER COLUMN v SET STORAGE extended;
 SELECT bt_index_check('varlena_bug_idx', true);
 
->>>>>>> REL_16_9
 -- cleanup
 DROP TABLE bttest_a;
 DROP TABLE bttest_b;
