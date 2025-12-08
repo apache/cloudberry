@@ -162,7 +162,7 @@ SOptContext::Free(SOptContext::EPin input, SOptContext::EPin output) const
 //
 //---------------------------------------------------------------------------
 CHAR *
-SOptContext::CloneErrorMsg(MemoryContext context, BOOL *clone_failed)
+SOptContext::CloneErrorMsg(MemoryContext context, BOOL *clone_failed) const
 {
 	*clone_failed = false;
 
