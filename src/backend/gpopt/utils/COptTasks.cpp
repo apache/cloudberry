@@ -166,9 +166,9 @@ SOptContext::CloneErrorMsg(MemoryContext context, BOOL *clone_failed) const
 {
 	*clone_failed = false;
 
-	if (NULL == context || NULL == m_error_msg)
+	if (nullptr == context || nullptr == m_error_msg)
 	{
-		return NULL;
+		return nullptr;
 	}
 
 	CHAR *error_msg;
@@ -177,14 +177,14 @@ SOptContext::CloneErrorMsg(MemoryContext context, BOOL *clone_failed) const
 #ifdef FAULT_INJECTOR
 		if (gpdb::InjectFaultInOptTasks("opt_clone_error_msg") == FaultInjectorTypeSkip)
 		{
-			GpdbEreport(ERRCODE_INTERNAL_ERROR, ERROR, "Injected error", NULL);
+			GpdbEreport(ERRCODE_INTERNAL_ERROR, ERROR, "Injected error", nullptr);
 		}
 #endif
 		error_msg = gpdb::MemCtxtStrdup(context, m_error_msg);
 	}
 	GPOS_CATCH_EX(ex)
 	{
-		error_msg = NULL;
+		error_msg = nullptr;
 		*clone_failed = true;
 	}
 	GPOS_CATCH_END;
