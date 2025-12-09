@@ -17,9 +17,7 @@
 #include "postgres.h"
 
 #include "access/htup_details.h"
-#if GP_VERSION_NUM >= 70000
 #include "access/relation.h"
-#endif /* GP_VERSION_NUM */
 #include "access/xact.h"
 #include "catalog/catalog.h"
 #include "catalog/objectaccess.h"
@@ -37,6 +35,7 @@
 #include "utils/lsyscache.h"
 #include "utils/syscache.h"
 #include "utils/inval.h"
+#include "utils/array.h"
 
 #include "gp_activetable.h"
 #include "diskquota.h"
@@ -681,11 +680,7 @@ is_relation_being_altered(Oid relid)
 {
 	LOCKTAG locktag;
 	SetLocktagRelationOid(&locktag, relid);
-#if GP_VERSION_NUM < 70000
-	VirtualTransactionId *vxid_list = GetLockConflicts(&locktag, AccessShareLock);
-#else
 	VirtualTransactionId *vxid_list = GetLockConflicts(&locktag, AccessShareLock, NULL);
-#endif                                                            /* GP_VERSION_NUM */
 	bool being_altered = VirtualTransactionIdIsValid(*vxid_list); /* if vxid_list is empty */
 	pfree(vxid_list);
 	return being_altered;
@@ -959,13 +954,8 @@ load_table_size(HTAB *local_table_stats_map)
 	}
 
 	tupdesc = SPI_tuptable->tupdesc;
-#if GP_VERSION_NUM < 70000
-	if (tupdesc->natts != 3 || ((tupdesc)->attrs[0])->atttypid != OIDOID ||
-	    ((tupdesc)->attrs[1])->atttypid != INT8OID || ((tupdesc)->attrs[2])->atttypid != INT2OID)
-#else
 	if (tupdesc->natts != 3 || ((tupdesc)->attrs[0]).atttypid != OIDOID || ((tupdesc)->attrs[1]).atttypid != INT8OID ||
 	    ((tupdesc)->attrs[2]).atttypid != INT2OID)
-#endif /* GP_VERSION_NUM */
 	{
 		if (tupdesc->natts != 3)
 		{
@@ -973,13 +963,8 @@ load_table_size(HTAB *local_table_stats_map)
 		}
 		else
 		{
-#if GP_VERSION_NUM < 70000
-			ereport(WARNING, (errmsg("[diskquota] attrs: %d, %d, %d", tupdesc->attrs[0]->atttypid,
-			                         tupdesc->attrs[1]->atttypid, tupdesc->attrs[2]->atttypid)));
-#else
 			ereport(WARNING, (errmsg("[diskquota] attrs: %d, %d, %d", tupdesc->attrs[0].atttypid,
 			                         tupdesc->attrs[1].atttypid, tupdesc->attrs[2].atttypid)));
-#endif /* GP_VERSION_NUM */
 		}
 		ereport(ERROR, (errmsg("[diskquota] table \"table_size\" is corrupted in database \"%s\","
 		                       " please recreate diskquota extension",

@@ -101,7 +101,7 @@ insert into t select generate_series(1,1000) as a, repeat('a', 1000) as b;
 select count(*) from diskquota.show_relation_cache_all_seg();
  count 
 -------
-    18
+    12
 (1 row)
 
 select diskquota.check_relation_cache();

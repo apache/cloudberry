@@ -22,6 +22,10 @@ include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/Gpdb.cmake)
 # set include directories for all sub-projects
 include_directories(${PG_INCLUDE_DIR_SERVER})
 include_directories(${PG_INCLUDE_DIR}) # for libpq
+# For in-tree builds, libpq headers are in a separate directory
+if(PG_INCLUDE_DIR_LIBPQ)
+    include_directories(${PG_INCLUDE_DIR_LIBPQ})
+endif()
 # Overwrite the default build type flags set by cmake.
 # We don't want the '-O3 -DNDEBUG' from cmake. Instead, those will be set by the CFLAGS from pg_config.
 # And, the good news is, GPDB release always have '-g'.
@@ -85,9 +89,7 @@ set_target_properties(
              C_STANDARD 99
              LINKER_LANGUAGE "C")
 
-if (${GP_MAJOR_VERSION} STRGREATER_EQUAL "7")
-  TARGET_LINK_LIBRARIES(diskquota ${PG_LIB_DIR}/libpq.so)
-endif()
+TARGET_LINK_LIBRARIES(diskquota ${PG_LIB_DIR}/libpq.so)
 
 # packing part, move to a separate file if this part is too large
 include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/Distro.cmake)

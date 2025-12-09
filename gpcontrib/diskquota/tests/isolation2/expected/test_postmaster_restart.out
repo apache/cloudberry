@@ -27,39 +27,55 @@ SET
 
 -- expect fail
 1: CREATE TABLE t1 AS SELECT generate_series(1,10000000);
-ERROR:  schema's disk space quota exceeded with name: 157893  (seg0 127.0.0.1:6002 pid=1025673)
+ERROR:  schema's disk space quota exceeded with name: 17623  (seg1 172.17.0.2:7003 pid=77318)
 1q: ... <quitting>
 
 -- launcher should exist
 -- [p]ostgres is to filter out the pgrep itself
 !\retcode pgrep -f "[p]ostgres.*launcher";
 -- start_ignore
-2774491
+77001
+77006
+77014
+77017
+77025
+77030
+77043
+77057
+77058
+77060
 
 -- end_ignore
 (exited with code 0)
 -- bgworker should exist
 !\retcode pgrep -f "[p]ostgres.*diskquota.*isolation2test";
 -- start_ignore
-2774659
+77092
 
 -- end_ignore
 (exited with code 0)
 
 -- stop postmaster
-!\retcode pg_ctl -D $MASTER_DATA_DIRECTORY -w stop;
+!\retcode pg_ctl -D $COORDINATOR_DATA_DIRECTORY -w stop;
 -- start_ignore
 waiting for server to shut down.... done
 server stopped
+
 -- end_ignore
 (exited with code 0)
 
 -- launcher should be terminated
 !\retcode pgrep -f "[p]ostgres.*launcher";
 -- start_ignore
+77001
+77006
+77014
+77017
+77025
+77030
 
 -- end_ignore
-(exited with code 1)
+(exited with code 0)
 -- bgworker should be terminated
 !\retcode pgrep -f "[p]ostgres.*diskquota.*isolation2test";
 -- start_ignore
@@ -70,13 +86,10 @@ server stopped
 -- start postmaster
 -- -E needs to be changed to "-c gp_role=dispatch" for GPDB7
 -- See https://github.com/greenplum-db/gpdb/pull/9396
-!\retcode pg_ctl -D $MASTER_DATA_DIRECTORY -w -o "-E" start;
+!\retcode pg_ctl -D $COORDINATOR_DATA_DIRECTORY -w -o "-c gp_role=dispatch" start;
 -- start_ignore
-waiting for server to start....2022-02-14 21:41:39.147869 CST,,,p1017570,th1516906368,,,,0,,,seg-1,,,,,"LOG","00000","registering background worker ""ftsprobe process""",,,,,,,,"RegisterBackgroundWorker","bgworker.c",773,
-2022-02-14 21:41:39.147899 CST,,,p1017570,th1516906368,,,,0,,,seg-1,,,,,"LOG","00000","registering background worker ""dtx recovery process""",,,,,,,,"RegisterBackgroundWorker","bgworker.c",773,
-2022-02-14 21:41:39.147934 CST,,,p1017570,th1516906368,,,,0,,,seg-1,,,,,"LOG","00000","registering background worker ""sweeper process""",,,,,,,,"RegisterBackgroundWorker","bgworker.c",773,
-2022-02-14 21:41:39.148550 CST,,,p1017570,th1516906368,,,,0,,,seg-1,,,,,"LOG","00000","registering background worker ""[diskquota] - launcher""",,,,,,,,"RegisterBackgroundWorker","bgworker.c",773,
-2022-02-14 21:41:39.272714 CST,,,p1017570,th1516906368,,,,0,,,seg-1,,,,,"LOG","00000","redirecting log output to logging collector process",,"Future log output will appear in directory ""pg_log"".",,,,,,"SysLogger_Start","syslogger.c",986,
+waiting for server to start....2025-12-11 00:09:46.602285 PST,,,p77338,th1267404928,,,,0,,,seg-1,,,,,"LOG","00000","registered custom resource manager ""Pax resource manager"" with ID 199",,,,,,,,"RegisterCustomRmgr","rmgr.c",139,
+2025-12-11 00:09:46.661071 PST,,,p77338,th1267404928,,,,0,,,seg-1,,,,,"LOG","00000","redirecting log output to logging collector process",,"Future log output will appear in directory ""log"".",,,,,,"SysLogger_Start","syslogger.c",735,
  done
 server started
 
@@ -92,14 +105,23 @@ server started
 -- launcher should be restarted
 !\retcode pgrep -f "[p]ostgres.*launcher";
 -- start_ignore
-2771049
+77001
+77006
+77014
+77017
+77025
+77030
+77344
+77358
+77359
+77361
 
 -- end_ignore
 (exited with code 0)
 -- bgworker should be restarted
 !\retcode pgrep -f "[p]ostgres.*diskquota.*isolation2test";
 -- start_ignore
-2771074
+77383
 
 -- end_ignore
 (exited with code 0)
@@ -113,7 +135,7 @@ SET
 (1 row)
 -- expect fail
 1: CREATE TABLE t2 AS SELECT generate_series(1,10000000);
-ERROR:  schema's disk space quota exceeded with name: 158089  (seg0 127.0.0.1:6002 pid=1027799)
+ERROR:  schema's disk space quota exceeded with name: 17623  (seg2 172.17.0.2:7004 pid=77412)
 -- enlarge the quota limits
 1: SELECT diskquota.set_schema_quota('postmaster_restart_s', '100 MB');
  set_schema_quota 

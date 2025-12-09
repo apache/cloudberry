@@ -1,5 +1,6 @@
-#include "diskquota.h"
 #include "postgres.h"
+
+#include "diskquota.h"
 
 #include "funcapi.h"
 #include "pgstat.h"

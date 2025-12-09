@@ -39,18 +39,31 @@ exec_program(${PG_CONFIG} ARGS --libs OUTPUT_VARIABLE PG_LIBS)
 exec_program(${PG_CONFIG} ARGS --libdir OUTPUT_VARIABLE PG_LIB_DIR)
 exec_program(${PG_CONFIG} ARGS --pgxs OUTPUT_VARIABLE PG_PGXS)
 get_filename_component(PG_HOME "${PG_BIN_DIR}/.." ABSOLUTE)
-if (NOT PG_SRC_DIR)
+
+# If PG_SRC_DIR is provided (in-tree build), use source tree paths
+# This is necessary because pg_config returns install paths,
+# which don't exist yet during in-tree builds
+if(PG_SRC_DIR)
+    set(PG_INCLUDE_DIR "${PG_SRC_DIR}/src/include")
+    set(PG_INCLUDE_DIR_SERVER "${PG_SRC_DIR}/src/include")
+    # libpq headers and library are in src/interfaces/libpq in source tree
+    set(PG_INCLUDE_DIR_LIBPQ "${PG_SRC_DIR}/src/interfaces/libpq")
+    set(PG_LIB_DIR "${PG_SRC_DIR}/src/interfaces/libpq")
+    message(STATUS "In-tree build: using source include path '${PG_INCLUDE_DIR}'")
+else()
+    # Standalone build: try to derive PG_SRC_DIR from Makefile.global (optional)
     get_filename_component(pgsx_SRC_DIR ${PG_PGXS} DIRECTORY)
     set(makefile_global ${pgsx_SRC_DIR}/../Makefile.global)
-    # Some magic to find out the source code root from pg's Makefile.global
-    execute_process(
-        COMMAND_ECHO STDOUT
-        COMMAND
-        grep "^abs_top_builddir" ${makefile_global}
-        COMMAND
-        sed s/.*abs_top_builddir.*=\\\(.*\\\)/\\1/
-        OUTPUT_VARIABLE PG_SRC_DIR OUTPUT_STRIP_TRAILING_WHITESPACE)
-    string(STRIP ${PG_SRC_DIR} PG_SRC_DIR)
+    if(EXISTS ${makefile_global})
+        execute_process(
+            COMMAND grep "^abs_top_builddir" ${makefile_global}
+            COMMAND sed s/.*abs_top_builddir.*=\(.*\)/\\1/
+            OUTPUT_VARIABLE PG_SRC_DIR OUTPUT_STRIP_TRAILING_WHITESPACE
+            ERROR_QUIET)
+        if(PG_SRC_DIR)
+            string(STRIP ${PG_SRC_DIR} PG_SRC_DIR)
+        endif()
+    endif()
 endif()
 
 # Get the GP_MAJOR_VERSION from header
@@ -58,14 +71,23 @@ file(READ ${PG_INCLUDE_DIR}/pg_config.h config_header)
 string(REGEX MATCH "#define *GP_MAJORVERSION *\"[0-9]+\"" macrodef "${config_header}")
 string(REGEX MATCH "[0-9]+" GP_MAJOR_VERSION "${macrodef}")
 if (GP_MAJOR_VERSION)
-    message(STATUS "Build extension for GPDB ${GP_MAJOR_VERSION}")
+    message(STATUS "Build extension for Cloudberry ${GP_MAJOR_VERSION}")
 else()
     message(FATAL_ERROR "Cannot read GP_MAJORVERSION from '${PG_INCLUDE_DIR}/pg_config.h'")
 endif()
 string(REGEX MATCH "#define *GP_VERSION *\"[^\"]*\"" macrodef "${config_header}")
 string(REGEX REPLACE ".*\"\(.*\)\".*" "\\1" GP_VERSION "${macrodef}")
 if (GP_VERSION)
-    message(STATUS "The exact GPDB version is '${GP_VERSION}'")
+    message(STATUS "The exact Cloudberry version is '${GP_VERSION}'")
 else()
     message(FATAL_ERROR "Cannot read GP_VERSION from '${PG_INCLUDE_DIR}/pg_config.h'")
+endif()
+
+# Check if PG_SRC_DIR is available (for source-dependent features like isolation2 tests)
+if ("${PG_SRC_DIR}" STREQUAL "" OR NOT EXISTS "${PG_SRC_DIR}")
+    message(STATUS "PG_SRC_DIR not found or empty, source-dependent features will be disabled")
+    set(PG_SRC_DIR_AVAILABLE OFF CACHE BOOL "Whether PG_SRC_DIR is available")
+else()
+    message(STATUS "PG_SRC_DIR is '${PG_SRC_DIR}'")
+    set(PG_SRC_DIR_AVAILABLE ON CACHE BOOL "Whether PG_SRC_DIR is available")
 endif()

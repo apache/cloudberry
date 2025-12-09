@@ -1,6 +1,19 @@
 !\retcode gpconfig -c diskquota.naptime -v 2;
+-- start_ignore
+20251211:00:10:07:077993 gpconfig:cdw:gpadmin-[INFO]:-completed successfully with parameters '-c diskquota.naptime -v 2'
+
+-- end_ignore
 (exited with code 0)
 !\retcode gpstop -u;
+-- start_ignore
+20251211:00:10:07:078041 gpstop:cdw:gpadmin-[INFO]:-Starting gpstop with args: -u
+20251211:00:10:07:078041 gpstop:cdw:gpadmin-[INFO]:-Gathering information and validating the environment...
+20251211:00:10:07:078041 gpstop:cdw:gpadmin-[INFO]:-Obtaining Cloudberry Coordinator catalog information
+20251211:00:10:07:078041 gpstop:cdw:gpadmin-[INFO]:-Obtaining Segment details from coordinator...
+20251211:00:10:07:078041 gpstop:cdw:gpadmin-[INFO]:-Cloudberry Version: 'postgres (Apache Cloudberry) 3.0.0-devel build dev'
+20251211:00:10:07:078041 gpstop:cdw:gpadmin-[INFO]:-Signalling all postmaster processes to reload
+
+-- end_ignore
 (exited with code 0)
 
 1: SHOW diskquota.naptime;

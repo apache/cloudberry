@@ -1,1 +1,0 @@
-drop extension diskquota;

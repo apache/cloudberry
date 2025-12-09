@@ -1,11 +1,18 @@
-# Overview
+# Diskquota for Apache Cloudberry
+
+> **Note**: This project is forked from [greenplum-db/diskquota](https://github.com/greenplum-db/diskquota-archive) 
+> and has been adapted specifically for [Apache Cloudberry](https://cloudberry.apache.org/).
+> It requires Apache Cloudberry 2.0+ (based on PostgreSQL 14).
+
+## Overview
+
 Diskquota is an extension that provides disk usage enforcement for database 
-objects in Greenplum DB. Currently it supports to set quota limit on schema 
-and role in a given database and limit the amount of disk space that a schema 
+objects in Apache Cloudberry. Currently it supports setting quota limits on schema 
+and role in a given database and limiting the amount of disk space that a schema 
 or a role can use. 
 
 This project is inspired by Heikki's 
-[pg_quota project](https://github.com/hlinnaka/pg_quota) and enhance it in 
+[pg_quota project](https://github.com/hlinnaka/pg_quota) and enhances it in 
 two aspects:
 
 1. To support different kinds of DDL and DML which may change the disk usage 
@@ -13,28 +20,28 @@ of database objects.
 
 2. To support diskquota extension on MPP architecture.
 
-Diskquota is a soft limit of disk uages. On one hand it has some delay to 
+Diskquota is a soft limit of disk usage. On one hand it has some delay to 
 detect the schemas or roles whose quota limit is exceeded. On the other hand,
-'soft limit' supports two kinds of encforcement:  Query loading data into
+'soft limit' supports two kinds of enforcement: Query loading data into
 out-of-quota schema/role will be forbidden before query is running. Query 
 loading data into schema/role with rooms will be cancelled when the quota
 limit is reached dynamically during the query is running.
 
-# Design
-Diskquota extension is based on background worker framework in Greenplum (bg 
-worker needs pg_verion >= 9.4, which is supported in Greenplum 6 and later).
+## Design
+
+Diskquota extension is based on background worker framework in Apache Cloudberry.
 There are two kinds of background workers: diskquota launcher and diskquota worker.
 
-There is only one launcher process per database master. There is no launcher
+There is only one launcher process per database coordinator. There is no launcher
 process for segments. 
-Launcher process is reponsible for manage worker processes: Calling 
+Launcher process is responsible for managing worker processes: Calling 
 RegisterDynamicBackgroundWorker() to create new workers and keep their handle.
 Calling TerminateBackgroundWorker() to terminate workers which are disabled 
-when DBA modify GUC diskquota.monitor_databases.
+when DBA modifies GUC diskquota.monitor_databases.
 
 There are many worker processes, one for each database which is listed 
 in diskquota.monitor_databases. Same as launcher process, worker processes 
-only run at master node. Since each worker process needs to call SPI to fetch 
+only run at coordinator node. Since each worker process needs to call SPI to fetch 
 active table size, to limit the total cost of worker processes, we support to 
 monitor at most 10 databases at the same time currently. Worker processes are 
 responsible for monitoring the disk usage of schemas and roles for the target 
@@ -46,35 +53,38 @@ schemas or roles into the rejectmap in shared memory. Schemas or roles in
 rejectmap are used to do query enforcement to cancel queries which plan to 
 load data into these schemas or roles.
 
-From MPP perspective, diskquota launcher and worker processes are all run at
-Master side. Master only design allows us to save the memory resource on
-Segments, and simplifies the communication from Master to Segment by call SPI
-queries periodically. Segments are used to detected the active table and
-calculated the active table size. Master aggregate the table size from each
-segments and maintain the disk quota model.
+From MPP perspective, diskquota launcher and worker processes all run at
+the Coordinator side. Coordinator-only design allows us to save the memory resource on
+Segments, and simplifies the communication from Coordinator to Segment by calling SPI
+queries periodically. Segments are used to detect the active tables and
+calculate the active table size. Coordinator aggregates the table size from each
+segment and maintains the disk quota model.
 
-## Active table
+### Active table
+
 Active tables are the tables whose table size may change in the last quota 
 check interval. Active tables are detected at Segment QE side: hooks in 
-smgecreate(), smgrextend() and smgrtruncate() are used to detect active tables
+smgrcreate(), smgrextend() and smgrtruncate() are used to detect active tables
 and store them (currently relfilenode) in the shared memory. Diskquota worker
 process will periodically call dispatch queries to all the segments and 
-consume active tables in shared memories, convert relfilenode to relaton oid,
-and calcualte table size by calling pg_table_size(), which will sum
+consume active tables in shared memories, convert relfilenode to relation oid,
+and calculate table size by calling pg_table_size(), which will sum
 the size of table (including: base, vm, fsm, toast) in each segment.
 
-## Enforcement
+### Enforcement
+
 Enforcement is implemented as hooks. There are two kinds of enforcement hooks:
 enforcement before query is running and enforcement during query is running.
 The 'before query' one is implemented at ExecutorCheckPerms_hook in function 
-ExecCheckRTPerms() 
+ExecCheckRTPerms(). 
 The 'during query' one is implemented at DispatcherCheckPerms_hook in function 
 checkDispatchResult(). For queries loading a huge number of data, dispatcher 
-will poll the connnection with a poll timeout. Hook will be called at every 
+will poll the connection with a poll timeout. Hook will be called at every 
 poll timeout with waitMode == DISPATCH_WAIT_NONE. Currently only async 
-diskpatcher supports 'during query' quota enforcement.
+dispatcher supports 'during query' quota enforcement.
 
-## Quota setting store
+### Quota setting store
+
 Quota limit of a schema or a role is stored in table 'quota_config' in 
 'diskquota' schema in monitored database. So each database stores and manages 
 its own disk quota configuration. Note that although role is a db object in 
@@ -82,226 +92,257 @@ cluster level, we limit the diskquota of a role to be database specific.
 That is to say, a role may have different quota limit on different databases 
 and their disk usage is isolated between databases.
 
-# Development
+## Development
 
-[cmake](https://cmake.org) (>= 3.20) needs to be installed.
+### Prerequisites
 
-1. Build & install disk quota
-```
-mkdir -p <diskquota_src>/build
-cd <diskquota_src>/build
-```
+The following packages need to be installed:
 
-If the `greenplum_path.sh` has been source:
+- openssl-devel
+- krb5-devel
+- [cmake](https://cmake.org) (>= 3.20)
 
-```
-cmake ..
-```
-
-Otherwise:
-
-```
-# Without source greenplum_path.sh
-cmake .. --DPG_CONFIG=<gpdb_installation_dir>/bin/pg_config
-#
+On RHEL/CentOS/Rocky Linux:
+```bash
+sudo yum install openssl-devel krb5-devel cmake
 ```
 
-Build and install:
-
+On Ubuntu/Debian:
+```bash
+sudo apt-get install libssl-dev libkrb5-dev cmake
 ```
+
+### Build & Install
+
+Diskquota uses CMake as its build system, wrapped by a Makefile for integration with the Cloudberry build process.
+
+#### Option 1: Build with Apache Cloudberry Source Tree
+
+Diskquota is included in the Apache Cloudberry source tree:
+
+```bash
+cd <cloudberry_src>
+./configure [options...]
+
+# Build everything
+make -j$(nproc)
+make install
+
+# Or build diskquota only
+make -C gpcontrib/diskquota
+make -C gpcontrib/diskquota install
+```
+
+#### Option 2: Standalone Build (without source tree)
+
+If you only have an installed Apache Cloudberry (no source tree):
+
+```bash
+# Source the environment first
+source /path/to/cloudberry-db/cloudberry-env.sh
+
+cd gpcontrib/diskquota
+make
 make install
 ```
 
-2. Create database to store global information.
-```
-create database diskquota;
+### Setup
+
+1. Create database to store global information:
+```sql
+CREATE DATABASE diskquota;
 ```
 
-3. Enable diskquota as preload library 
-```
-# enable diskquota in preload library.
+2. Enable diskquota as preload library:
+```bash
+# Set USER environment variable if not set (required by gpconfig)
+export USER=$(whoami)
+
+# enable diskquota in preload library
 gpconfig -c shared_preload_libraries -v 'diskquota-<major.minor>'
-# restart database.
+# restart database
 gpstop -ar
 ```
 
-4. Config GUC of diskquota.
-```
-# set naptime ( second ) to refresh the disk quota stats periodically
+3. Config GUC of diskquota:
+```bash
+# set naptime (seconds) to refresh the disk quota stats periodically
 gpconfig -c diskquota.naptime -v 2
 ```
 
-5. Create diskquota extension in monitored database.
-```
-create extension diskquota;
-```
-
-6. Initialize existing table size information is needed if `create extension` is not executed in a new created database.
-```
-select diskquota.init_table_size_table();
+4. Create diskquota extension in monitored database:
+```sql
+CREATE EXTENSION diskquota;
 ```
 
-## clang-format
-
-In order to pass the CI check for PR, the changed code needs to be formated by
-[clang-format](https://clang.llvm.org/docs/ClangFormat.html) **13**. A static-linked
-version can be found at https://github.com/beeender/clang-tools-static-binaries/releases/tag/master-7d0aff9a .
-
-To format all the source files in the git tree:
-
-```
-git ls-files '*.c' '*.h' | xargs clang-format --style=file -i
+5. Initialize existing table size information (needed if `CREATE EXTENSION` is not executed in a newly created database):
+```sql
+SELECT diskquota.init_table_size_table();
 ```
 
-If you have `git-clang-format` installed, it can be as easy as:
+## Usage
 
-```
-git clang-format <base-branch>
-```
+### Set/update/delete schema quota limit
 
-To skip formatting a certain piece of code:
+```sql
+CREATE SCHEMA s1;
+SELECT diskquota.set_schema_quota('s1', '1 MB');
+SET search_path TO s1;
 
-```c
-/* clang-format off */
-#if SOME_MACRO
-#define DO_NOT_FORMAT_ME \
-    (1 \
-    + \
-    )\
-#endif
-/* clang-format on */
-```
+CREATE TABLE a(i int) DISTRIBUTED BY (i);
+-- insert small data succeeded
+INSERT INTO a SELECT generate_series(1,100);
+-- insert large data failed
+INSERT INTO a SELECT generate_series(1,10000000);
+-- insert small data failed
+INSERT INTO a SELECT generate_series(1,100);
 
-# Usage
-1. Set/update/delete schema quota limit using diskquota.set_schema_quota
-```
-create schema s1;
-select diskquota.set_schema_quota('s1', '1 MB');
-set search_path to s1;
-
-create table a(i int) DISTRIBUTED BY (i);
-# insert small data succeeded
-insert into a select generate_series(1,100);
-# insert large data failed
-insert into a select generate_series(1,10000000);
-# insert small data failed
-insert into a select generate_series(1,100);
-
-# delete quota configuration
-select diskquota.set_schema_quota('s1', '-1');
-# insert small data succeed
-select pg_sleep(5);
-insert into a select generate_series(1,100);
-reset search_path;
+-- delete quota configuration
+SELECT diskquota.set_schema_quota('s1', '-1');
+-- insert small data succeed
+SELECT pg_sleep(5);
+INSERT INTO a SELECT generate_series(1,100);
+RESET search_path;
 ```
 
-2. Set/update/delete role quota limit using diskquota.set_role_quota
-```
-create role u1 nologin;
-create table b (i int) DISTRIBUTED BY (i);
-alter table b owner to u1;
-select diskquota.set_role_quota('u1', '1 MB');
+### Set/update/delete role quota limit
 
-# insert small data succeeded
-insert into b select generate_series(1,100);
-# insert large data failed
-insert into b select generate_series(1,10000000);
-# insert small data failed
-insert into b select generate_series(1,100);
+```sql
+CREATE ROLE u1 NOLOGIN;
+CREATE TABLE b (i int) DISTRIBUTED BY (i);
+ALTER TABLE b OWNER TO u1;
+SELECT diskquota.set_role_quota('u1', '1 MB');
 
-# delete quota configuration
-select diskquota.set_role_quota('u1', '-1');
-# insert small data succeed
-select pg_sleep(5);
-insert into a select generate_series(1,100);
-reset search_path;
-```
+-- insert small data succeeded
+INSERT INTO b SELECT generate_series(1,100);
+-- insert large data failed
+INSERT INTO b SELECT generate_series(1,10000000);
+-- insert small data failed
+INSERT INTO b SELECT generate_series(1,100);
 
-3. Show schema quota limit and current usage
-```
-select * from diskquota.show_fast_schema_quota_view;
+-- delete quota configuration
+SELECT diskquota.set_role_quota('u1', '-1');
+-- insert small data succeed
+SELECT pg_sleep(5);
+INSERT INTO b SELECT generate_series(1,100);
+RESET search_path;
 ```
 
+### Show schema quota limit and current usage
 
-# Test
+```sql
+SELECT * FROM diskquota.show_fast_schema_quota_view;
+```
+
+## Test
+
+Before running regression tests, make sure:
+
+1. The diskquota extension is installed (`make install`) on all nodes
+2. The `shared_preload_libraries` is configured and the cluster is restarted
+3. The `diskquota` database exists
+
+```bash
+# Set USER environment variable if not set (required by gpconfig)
+export USER=$(whoami)
+
+# Configure shared_preload_libraries (use current version)
+gpconfig -c shared_preload_libraries -v 'diskquota-2.3'
+
+# Restart the cluster
+gpstop -ar
+
+# Create diskquota database if not exists
+createdb diskquota
+```
+
 Run regression tests:
-```
-cd <diskquota_src>/build;
+```bash
+# From source tree build:
+make -C gpcontrib/diskquota installcheck
+
+# Or from build directory:
+cd gpcontrib/diskquota/build
 make installcheck
 ```
+
 Show quick diff of regress results:
-```
+```bash
+cd gpcontrib/diskquota/build
 make diff_<test_target>_<case_name>
 ```
-Show all build target:
-```
-make help
-```
 
-# HA
+## HA
+
 Not implemented yet. One solution would be: start launcher process on standby 
-and enable it to fork worker processes when switch from standby Master to Master.
+and enable it to fork worker processes when switching from standby Coordinator to Coordinator.
 
-# Benchmark & Performence Test
-## Cost of diskquota worker.
+## Benchmark & Performance Test
+
+### Cost of diskquota worker
 To be added.
 
-## Impact on OLTP queries
+### Impact on OLTP queries
 To be added.
 
-# Notes
-1. Drop database with diskquota enabled.
+## Notes
+
+### Drop database with diskquota enabled
 
 If DBA created diskquota extension in a database, there will be a connection
-to this database from diskquota worker process. DBA need to firstly the drop diskquota
-extension in this database, and then database could be dropped successfully.
+to this database from diskquota worker process. DBA needs to first drop the diskquota
+extension in this database, and then the database can be dropped successfully.
 
-2. Temp table.
+### Temp table
 
-Diskquota supports to limit the disk usage of temp table as well. 
+Diskquota supports limiting the disk usage of temp tables as well. 
 But schema and role are different. For role, i.e. the owner of the temp table,
 diskquota will treat it the same as normal tables and sum its table size to 
 its owner's quota. While for schema, temp table is located under namespace 
-'pg_temp_backend_id', so temp table size will not sum to the current schema's qouta.
+'pg_temp_backend_id', so temp table size will not be summed to the current schema's quota.
 
-# Known Issue.
+## Known Issues
 
-1. Since Greenplum doesn't support READ UNCOMMITTED isolation level,
-our implementation cannot detect the new created table inside an
-uncommitted transaction (See below example). Hence enforcement on 
+### Uncommitted transactions
+
+Since Apache Cloudberry doesn't support READ UNCOMMITTED isolation level,
+our implementation cannot detect the newly created table inside an
+uncommitted transaction (see below example). Hence enforcement on 
 that newly created table will not work. After transaction commit,
-diskquota worker process could detect the newly create table
-and do enfocement accordingly in later queries.
-```
-# suppose quota of schema s1 is 1MB.
-set search_path to s1;
-create table b (i int) DISTRIBUTED BY (i);
+diskquota worker process could detect the newly created table
+and do enforcement accordingly in later queries.
+
+```sql
+-- suppose quota of schema s1 is 1MB
+SET search_path TO s1;
+CREATE TABLE b (i int) DISTRIBUTED BY (i);
 BEGIN;
-create table a (i int) DISTRIBUTED BY (i);
-# Issue: quota enforcement doesn't work on table a
-insert into a select generate_series(1,200000);
-# quota enforcement works on table b
-insert into b select generate_series(1,200000);
-# quota enforcement works on table a,
-# since quota limit of schema s1 has already exceeds.
-insert into a select generate_series(1,200000);
+CREATE TABLE a (i int) DISTRIBUTED BY (i);
+-- Issue: quota enforcement doesn't work on table a
+INSERT INTO a SELECT generate_series(1,200000);
+-- quota enforcement works on table b
+INSERT INTO b SELECT generate_series(1,200000);
+-- quota enforcement works on table a,
+-- since quota limit of schema s1 has already been exceeded
+INSERT INTO a SELECT generate_series(1,200000);
 END;
 ```
 
-'Create Table As' command has the similar problem.
+'CREATE TABLE AS' command has the similar problem.
 
-One solution direction is that we calculate the additional 'uncommited data size'
-for schema and role in worker process. Since pg_table_size need to hold
-AccessShareLock to relation (And worker process don't even know this reloid exists),
-we need to skip it, and call stat() directly with tolerant to file unlink.
-Skip lock is dangerous and we plan to leave it as known issue at current stage.
+One solution direction is that we calculate the additional 'uncommitted data size'
+for schema and role in worker process. Since pg_table_size needs to hold
+AccessShareLock to relation (and worker process doesn't even know this reloid exists),
+we need to skip it, and call stat() directly with tolerance to file unlink.
+Skipping lock is dangerous and we plan to leave it as a known issue at the current stage.
 
-2. Missing empty schema or role in show_fast_schema_quota_view and show_fast_role_quota_view
+### Missing empty schema or role in views
+
 Currently, if there is no table in a specific schema or no table's owner is a
 specific role, these schemas or roles will not be listed in 
 show_fast_schema_quota_view and show_fast_role_quota_view.
 
-3. Out of shared memory
+### Out of shared memory
 
 Diskquota extension uses two kinds of shared memories. One is used to save 
 rejectmap and another one is to save active table list. The rejectmap shared
@@ -313,7 +354,6 @@ As shared memory is pre-allocated, user needs to restart DB if they updated
 this GUC value.
 
 If rejectmap shared memory is full, it's possible to load data into some 
-schemas or roles which quota limit are reached.
-If active table shared memory is full, disk quota worker may failed to detect
+schemas or roles whose quota limits are reached.
+If active table shared memory is full, disk quota worker may fail to detect
 the corresponding disk usage change in time.
-

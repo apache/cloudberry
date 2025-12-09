@@ -53,7 +53,7 @@ SELECT gp_inject_fault_infinite('check_rejectmap_by_relfilenode', 'reset', dbid)
 
 -- Session 1 will return and emit an error message saying that the quota limit is exceeded on seg0.
 1<:  <... completed>
-ERROR:  schema's disk space quota exceeded with name: 2200  (seg0 127.0.0.1:6002 pid=2163)
+ERROR:  schema's disk space quota exceeded with name: 2200  (seg0 172.17.0.2:7002 pid=70646)
 
 -- Clean up the rejectmap on seg0.
 SELECT diskquota.refresh_rejectmap( ARRAY[]::diskquota.rejectmap_entry[], ARRAY[]::oid[]) FROM gp_dist_random('gp_id') WHERE gp_segment_id=0;
@@ -98,7 +98,7 @@ SELECT gp_inject_fault_infinite('check_rejectmap_by_relfilenode', 'reset', dbid)
 
 -- Session 1 will return and emit an error message saying that the quota limit is exceeded on seg0.
 1<:  <... completed>
-ERROR:  schema's disk space quota exceeded with name: 2200  (seg0 127.0.0.1:6002 pid=2163)
+ERROR:  schema's disk space quota exceeded with name: 2200  (seg0 172.17.0.2:7002 pid=70646)
 
 -- Clean up the rejectmap on seg0.
 SELECT diskquota.refresh_rejectmap( ARRAY[]::diskquota.rejectmap_entry[], ARRAY[]::oid[]) FROM gp_dist_random('gp_id') WHERE gp_segment_id=0;
@@ -143,7 +143,7 @@ SELECT gp_inject_fault_infinite('check_rejectmap_by_relfilenode', 'reset', dbid)
 
 -- Session 1 will return and emit an error message saying that the quota limit is exceeded on seg0.
 1<:  <... completed>
-ERROR:  schema's disk space quota exceeded with name: 2200  (seg0 127.0.0.1:6002 pid=2163)
+ERROR:  schema's disk space quota exceeded with name: 2200  (seg0 172.17.0.2:7002 pid=70646)
 
 -- Clean up the rejectmap on seg0.
 SELECT diskquota.refresh_rejectmap( ARRAY[]::diskquota.rejectmap_entry[], ARRAY[]::oid[]) FROM gp_dist_random('gp_id') WHERE gp_segment_id=0;
@@ -190,7 +190,7 @@ SELECT gp_inject_fault_infinite('check_rejectmap_by_relfilenode', 'reset', dbid)
 
 -- Session 1 will return and emit an error message saying that the quota limit is exceeded on seg0.
 1<:  <... completed>
-ERROR:  schema's disk space quota exceeded with name: 2200  (seg0 127.0.0.1:6002 pid=2163)
+ERROR:  schema's disk space quota exceeded with name: 2200  (seg0 172.17.0.2:7002 pid=70646)
 
 -- Clean up the rejectmap on seg0.
 SELECT diskquota.refresh_rejectmap( ARRAY[]::diskquota.rejectmap_entry[], ARRAY[]::oid[]) FROM gp_dist_random('gp_id') WHERE gp_segment_id=0;
@@ -229,7 +229,7 @@ SELECT gp_inject_fault_infinite('check_rejectmap_by_relfilenode', 'reset', dbid)
  Success:                 
 (1 row)
 1<:  <... completed>
-ERROR:  tablespace: 1663, schema: 2200 diskquota exceeded per segment quota  (seg0 127.0.0.1:6002 pid=2163)
+ERROR:  tablespace: 1663, schema: 2200 diskquota exceeded per segment quota  (seg0 172.17.0.2:7002 pid=70646)
 -- Clean up the rejectmap on seg0.
 SELECT diskquota.refresh_rejectmap( ARRAY[]::diskquota.rejectmap_entry[], ARRAY[]::oid[]) FROM gp_dist_random('gp_id') WHERE gp_segment_id=0;
  refresh_rejectmap 
@@ -268,7 +268,7 @@ SELECT gp_inject_fault_infinite('check_rejectmap_by_relfilenode', 'reset', dbid)
  Success:                 
 (1 row)
 1<:  <... completed>
-ERROR:  tablespace: 1663, role: 10 diskquota exceeded per segment quota  (seg0 127.0.0.1:6002 pid=2163)
+ERROR:  tablespace: 1663, role: 10 diskquota exceeded per segment quota  (seg0 172.17.0.2:7002 pid=70646)
 -- Clean up the rejectmap on seg0.
 SELECT diskquota.refresh_rejectmap( ARRAY[]::diskquota.rejectmap_entry[], ARRAY[]::oid[]) FROM gp_dist_random('gp_id') WHERE gp_segment_id=0;
  refresh_rejectmap 
@@ -294,18 +294,18 @@ DROP
 -- Below are helper functions for testing adding uncommitted relations to rejectmap.
 --
 -- start_ignore
-CREATE OR REPLACE LANGUAGE plpythonu;
+CREATE OR REPLACE LANGUAGE plpython3u;
 CREATE
 -- end_ignore
 CREATE TYPE cached_relation_entry AS ( reloid        oid, relname       text, relowner      oid, relnamespace  oid, reltablespace oid, relfilenode   oid, segid         int);
 CREATE
 
 -- This function dumps given relation_cache entries to the given file.
-CREATE OR REPLACE FUNCTION dump_relation_cache_to_file(filename text) RETURNS void AS $$ rv = plpy.execute(""" SELECT (oid, relname, relowner, relnamespace, reltablespace, relfilenode, gp_segment_id)::cached_relation_entry FROM gp_dist_random('pg_class') """) with open(filename, 'wt') as f: for v in rv: row = v['row'] # The composite type results are different between GP6 & GP7 if isinstance(row, dict): r = "{0},{1},{2},{3},{4},{5},{6}".format( row['reloid'], row['relname'], row['relowner'], row['relnamespace'], row['reltablespace'], row['relfilenode'], row['segid']) else: r = row[1:-1] f.write(r + '\n') $$ LANGUAGE plpython2u;
+CREATE OR REPLACE FUNCTION dump_relation_cache_to_file(filename text) RETURNS void AS $$ rv = plpy.execute(""" SELECT (oid, relname, relowner, relnamespace, reltablespace, relfilenode, gp_segment_id)::cached_relation_entry FROM gp_dist_random('pg_class') """) with open(filename, 'wt') as f: for v in rv: row = v['row'] # The composite type results are different between GP6 & GP7 if isinstance(row, dict): r = "{0},{1},{2},{3},{4},{5},{6}".format( row['reloid'], row['relname'], row['relowner'], row['relnamespace'], row['reltablespace'], row['relfilenode'], row['segid']) else: r = row[1:-1] f.write(r + '\n') $$ LANGUAGE plpython3u;
 CREATE
 
 -- This function reads relation_cache entries from the given file.
-CREATE OR REPLACE FUNCTION read_relation_cache_from_file(filename text) RETURNS SETOF cached_relation_entry AS $$ with open(filename) as f: for l in f: r = l.split(',') yield (r[0], r[1], r[2], r[3], r[4], r[5], r[6]) $$ LANGUAGE plpythonu;
+CREATE OR REPLACE FUNCTION read_relation_cache_from_file(filename text) RETURNS SETOF cached_relation_entry AS $$ with open(filename) as f: for l in f: r = l.split(',') yield (r[0], r[1], r[2], r[3], r[4], r[5], r[6]) $$ LANGUAGE plpython3u;
 CREATE
 
 -- This function replaces the oid appears in the auxiliary relation's name
@@ -352,7 +352,7 @@ SELECT gp_inject_fault_infinite('check_rejectmap_by_relfilenode', 'reset', dbid)
  Success:                 
 (1 row)
 1<:  <... completed>
-ERROR:  schema's disk space quota exceeded with name: 2200  (seg0 127.0.0.1:6002 pid=2163)
+ERROR:  schema's disk space quota exceeded with name: 2200  (seg0 172.17.0.2:7002 pid=70646)
 1: ABORT;
 ABORT
 -- Clean up the rejectmap on seg0.
@@ -397,7 +397,7 @@ SELECT gp_inject_fault_infinite('check_rejectmap_by_relfilenode', 'reset', dbid)
  Success:                 
 (1 row)
 1<:  <... completed>
-ERROR:  role's disk space quota exceeded with name: 10  (seg0 127.0.0.1:6002 pid=2163)
+ERROR:  role's disk space quota exceeded with name: 10  (seg0 172.17.0.2:7002 pid=70646)
 1: ABORT;
 ABORT
 -- Clean up the rejectmap on seg0.
@@ -442,7 +442,7 @@ SELECT gp_inject_fault_infinite('check_rejectmap_by_relfilenode', 'reset', dbid)
  Success:                 
 (1 row)
 1<:  <... completed>
-ERROR:  tablespace: 1663, schema: 2200 diskquota exceeded  (seg0 127.0.0.1:6002 pid=2163)
+ERROR:  tablespace: 1663, schema: 2200 diskquota exceeded  (seg0 172.17.0.2:7002 pid=70646)
 1: ABORT;
 ABORT
 -- Clean up the rejectmap on seg0.
@@ -487,7 +487,7 @@ SELECT gp_inject_fault_infinite('check_rejectmap_by_relfilenode', 'reset', dbid)
  Success:                 
 (1 row)
 1<:  <... completed>
-ERROR:  tablespace: 1663, role: 10 diskquota exceeded  (seg0 127.0.0.1:6002 pid=2163)
+ERROR:  tablespace: 1663, role: 10 diskquota exceeded  (seg0 172.17.0.2:7002 pid=70646)
 1: ABORT;
 ABORT
 -- Clean up the rejectmap on seg0.
@@ -532,7 +532,7 @@ SELECT gp_inject_fault_infinite('check_rejectmap_by_relfilenode', 'reset', dbid)
  Success:                 
 (1 row)
 1<:  <... completed>
-ERROR:  tablespace: 1663, schema: 2200 diskquota exceeded per segment quota  (seg0 127.0.0.1:6002 pid=2163)
+ERROR:  tablespace: 1663, schema: 2200 diskquota exceeded per segment quota  (seg0 172.17.0.2:7002 pid=70646)
 1: ABORT;
 ABORT
 -- Clean up the rejectmap on seg0.
@@ -577,7 +577,7 @@ SELECT gp_inject_fault_infinite('check_rejectmap_by_relfilenode', 'reset', dbid)
  Success:                 
 (1 row)
 1<:  <... completed>
-ERROR:  tablespace: 1663, role: 10 diskquota exceeded per segment quota  (seg0 127.0.0.1:6002 pid=2163)
+ERROR:  tablespace: 1663, role: 10 diskquota exceeded per segment quota  (seg0 172.17.0.2:7002 pid=70646)
 1: ABORT;
 ABORT
 -- Clean up the rejectmap on seg0.
@@ -624,7 +624,7 @@ SELECT gp_inject_fault_infinite('check_rejectmap_by_relfilenode', 'reset', dbid)
  Success:                 
 (1 row)
 1<:  <... completed>
-ERROR:  schema's disk space quota exceeded with name: 2200  (seg0 127.0.0.1:6002 pid=2163)
+ERROR:  schema's disk space quota exceeded with name: 2200  (seg0 172.17.0.2:7002 pid=70646)
 1: ABORT;
 ABORT
 -- Clean up the rejectmap on seg0.
@@ -661,9 +661,9 @@ SELECT block_uncommitted_relation_on_seg0('blocked_t7'::text, 'NAMESPACE'::text,
 2: SELECT rel.segid, rel.relnamespace, rel.reltablespace, rel.relowner, replace_oid_with_relname(rel.relname, '/tmp/test_rejectmap.csv'::text) AS relname, be.target_type, be.target_oid FROM gp_dist_random('diskquota.rejectmap') AS be, read_relation_cache_from_file('/tmp/test_rejectmap.csv') AS rel WHERE be.segid=rel.segid AND be.relnode=rel.relfilenode AND rel.relfilenode<>0 ORDER BY relname DESC;
  segid | relnamespace | reltablespace | relowner | relname                       | target_type     | target_oid 
 -------+--------------+---------------+----------+-------------------------------+-----------------+------------
- 0     | 6104         | 0             | 10       | pg_aovisimap_blocked_t7_index | NAMESPACE_QUOTA | 2200       
- 0     | 6104         | 0             | 10       | pg_aovisimap_blocked_t7       | NAMESPACE_QUOTA | 2200       
- 0     | 6104         | 0             | 10       | pg_aoseg_blocked_t7           | NAMESPACE_QUOTA | 2200       
+ 0     | 7134         | 0             | 10       | pg_aovisimap_blocked_t7_index | NAMESPACE_QUOTA | 2200       
+ 0     | 7134         | 0             | 10       | pg_aovisimap_blocked_t7       | NAMESPACE_QUOTA | 2200       
+ 0     | 7134         | 0             | 10       | pg_aoseg_blocked_t7           | NAMESPACE_QUOTA | 2200       
  0     | 2200         | 0             | 10       | blocked_t7                    | NAMESPACE_QUOTA | 2200       
 (4 rows)
 SELECT gp_inject_fault_infinite('check_rejectmap_by_relfilenode', 'reset', dbid) FROM gp_segment_configuration WHERE role='p' AND content=0;
@@ -672,7 +672,7 @@ SELECT gp_inject_fault_infinite('check_rejectmap_by_relfilenode', 'reset', dbid)
  Success:                 
 (1 row)
 1<:  <... completed>
-ERROR:  schema's disk space quota exceeded with name: 2200  (seg0 127.0.0.1:6002 pid=2163)
+ERROR:  schema's disk space quota exceeded with name: 2200  (seg0 172.17.0.2:7002 pid=70646)
 1: ABORT;
 ABORT
 -- Clean up the rejectmap on seg0.
@@ -709,9 +709,9 @@ SELECT block_uncommitted_relation_on_seg0('blocked_t7'::text, 'NAMESPACE'::text,
 2: SELECT rel.segid, rel.relnamespace, rel.reltablespace, rel.relowner, replace_oid_with_relname(rel.relname, '/tmp/test_rejectmap.csv'::text) AS relname, be.target_type, be.target_oid FROM gp_dist_random('diskquota.rejectmap') AS be, read_relation_cache_from_file('/tmp/test_rejectmap.csv') AS rel WHERE be.segid=rel.segid AND be.relnode=rel.relfilenode AND rel.relfilenode<>0 ORDER BY relname DESC;
  segid | relnamespace | reltablespace | relowner | relname                       | target_type     | target_oid 
 -------+--------------+---------------+----------+-------------------------------+-----------------+------------
- 0     | 6104         | 0             | 10       | pg_aovisimap_blocked_t7_index | NAMESPACE_QUOTA | 2200       
- 0     | 6104         | 0             | 10       | pg_aovisimap_blocked_t7       | NAMESPACE_QUOTA | 2200       
- 0     | 6104         | 0             | 10       | pg_aocsseg_blocked_t7         | NAMESPACE_QUOTA | 2200       
+ 0     | 7134         | 0             | 10       | pg_aovisimap_blocked_t7_index | NAMESPACE_QUOTA | 2200       
+ 0     | 7134         | 0             | 10       | pg_aovisimap_blocked_t7       | NAMESPACE_QUOTA | 2200       
+ 0     | 7134         | 0             | 10       | pg_aocsseg_blocked_t7         | NAMESPACE_QUOTA | 2200       
  0     | 2200         | 0             | 10       | blocked_t7                    | NAMESPACE_QUOTA | 2200       
 (4 rows)
 SELECT gp_inject_fault_infinite('check_rejectmap_by_relfilenode', 'reset', dbid) FROM gp_segment_configuration WHERE role='p' AND content=0;
@@ -720,7 +720,7 @@ SELECT gp_inject_fault_infinite('check_rejectmap_by_relfilenode', 'reset', dbid)
  Success:                 
 (1 row)
 1<:  <... completed>
-ERROR:  schema's disk space quota exceeded with name: 2200  (seg0 127.0.0.1:6002 pid=2163)
+ERROR:  schema's disk space quota exceeded with name: 2200  (seg0 172.17.0.2:7002 pid=70646)
 1: ABORT;
 ABORT
 -- Clean up the rejectmap on seg0.
