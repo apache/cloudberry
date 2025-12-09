@@ -967,13 +967,8 @@ SET SESSION AUTHORIZATION regress_dblink_user;
 -- should fail
 -- GPDB: We also check for hostname in connection string which is checked first
 SELECT dblink_connect('myconn', 'fdtest');
-<<<<<<< HEAD
 DETAIL:  Non-superusers must provide a host in the connection string.
 ERROR:  host is required
-=======
-ERROR:  password or GSSAPI delegated credentials required
-DETAIL:  Non-superusers must provide a password in the connection string or send delegated GSSAPI credentials.
->>>>>>> REL_16_9
 -- should succeed
 SELECT dblink_connect_u('myconn', 'fdtest');
  dblink_connect_u 
