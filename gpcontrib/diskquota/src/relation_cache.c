@@ -11,9 +11,7 @@
  */
 #include "postgres.h"
 
-#if GP_VERSION_NUM >= 70000
 #include "access/relation.h"
-#endif /* GP_VERSION_NUM */
 #include "catalog/indexing.h"
 #include "catalog/pg_class.h"
 #include "catalog/pg_namespace.h"

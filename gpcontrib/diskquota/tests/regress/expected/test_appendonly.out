@@ -22,13 +22,13 @@ SELECT tableid::regclass, size
   WHERE tableid=(SELECT oid FROM pg_class WHERE relname='t_ao') and segid=-1;
  tableid |  size  
 ---------+--------
- t_ao    | 590936
+ t_ao    | 558168
 (1 row)
 
 SELECT pg_table_size('t_ao');
  pg_table_size 
 ---------------
-        590936
+        558168
 (1 row)
 
 -- Query the size of t_aoco.
@@ -37,13 +37,13 @@ SELECT tableid::regclass, size
   WHERE tableid=(SELECT oid FROM pg_class WHERE relname='t_aoco') and segid=-1;
  tableid |  size  
 ---------+--------
- t_aoco  | 590352
+ t_aoco  | 557584
 (1 row)
 
 SELECT pg_table_size('t_aoco');
  pg_table_size 
 ---------------
-        590352
+        557584
 (1 row)
 
 -- 2. Test that we are able to perform quota limit on appendonly tables.
