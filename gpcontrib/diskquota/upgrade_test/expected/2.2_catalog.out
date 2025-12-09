@@ -25,8 +25,8 @@ GROUP BY
     t1.typname
 ORDER BY
     t1.typname;
-                typname                 |                                     typname                                      
-----------------------------------------+----------------------------------------------------------------------------------
+                typname                 |                        typname                        
+----------------------------------------+-------------------------------------------------------
  diskquota_active_table_type            | {int8,int2,oid}
  quota_config                           | {int8,int4,int4,oid,oid,tid,xid,xid,cid,cid,float4}
  rejectmap                              | {bool,int4,text,oid,oid,oid,oid,oid,oid}
@@ -43,8 +43,7 @@ ORDER BY
  state                                  | {int4,int4,oid,tid,xid,xid,cid,cid}
  table_size                             | {int8,int2,int4,oid,oid,tid,xid,xid,cid,cid}
  target                                 | {int4,int4,int4,oid,oid,oid,tid,xid,xid,cid,cid}
- target_rowid_seq                       | {bool,bool,name,int8,int8,int8,int8,int8,int8,int8,int4,oid,tid,xid,xid,cid,cid}
-(17 rows)
+(16 rows)
 
 -- types end
 -- tables
@@ -75,7 +74,7 @@ ORDER BY
  table_size_pkey             |                               | 
  target                      | {target}                      | 
  target_pkey                 |                               | 
- target_rowid_seq            | {target_rowid_seq}            | 
+ target_rowid_seq            |                               | 
 (13 rows)
 
 -- tables end
@@ -178,7 +177,7 @@ ORDER by
             |                                        |             f.relam                                                                                                                                                                +
             |                                        |            FROM diskquota.show_relation_cache() f(relid, primary_table_oid, auxrel_num, owneroid, namespaceoid, backendid, spcnode, dbnode, relnode, relstorage, auxrel_oid, relam)+
             |                                        |         )                                                                                                                                                                          +
-            |                                        |  SELECT union_relation.oid,                                                                                                                                                        +
+            |                                        |  SELECT DISTINCT union_relation.oid,                                                                                                                                               +
             |                                        |     union_relation.relowner,                                                                                                                                                       +
             |                                        |     union_relation.relnamespace,                                                                                                                                                   +
             |                                        |     union_relation.reltablespace                                                                                                                                                   +
@@ -192,8 +191,7 @@ ORDER by
             |                                        |             pg_class.relowner,                                                                                                                                                     +
             |                                        |             pg_class.relnamespace,                                                                                                                                                 +
             |                                        |             pg_class.reltablespace                                                                                                                                                 +
-            |                                        |            FROM pg_class) union_relation                                                                                                                                           +
-            |                                        |   GROUP BY union_relation.oid, union_relation.relowner, union_relation.relnamespace, union_relation.reltablespace;
+            |                                        |            FROM pg_class) union_relation;
  diskquota  | show_fast_database_size_view           |  SELECT (( SELECT sum(pg_relation_size((pg_class.oid)::regclass)) AS sum                                                                                                           +
             |                                        |            FROM pg_class                                                                                                                                                           +
             |                                        |           WHERE (pg_class.oid <= (16384)::oid)) + ( SELECT sum(table_size.size) AS sum                                                                                             +
@@ -237,7 +235,7 @@ ORDER by
             |                                        |             config.quotalimitmb                                                                                                                                                    +
             |                                        |            FROM diskquota.quota_config config,                                                                                                                                     +
             |                                        |             diskquota.target target                                                                                                                                                +
-            |                                        |           WHERE (((config.targetoid = (target.rowid)::oid) AND (config.quotatype = target.quotatype)) AND (config.quotatype = 3))                                                  +
+            |                                        |           WHERE ((config.targetoid = (target.rowid)::oid) AND (config.quotatype = target.quotatype) AND (config.quotatype = 3))                                                    +
             |                                        |         )                                                                                                                                                                          +
             |                                        |  SELECT pg_roles.rolname AS role_name,                                                                                                                                             +
             |                                        |     full_quota_config.primaryoid AS role_oid,                                                                                                                                      +
@@ -287,7 +285,7 @@ ORDER by
             |                                        |             config.quotalimitmb                                                                                                                                                    +
             |                                        |            FROM diskquota.quota_config config,                                                                                                                                     +
             |                                        |             diskquota.target target                                                                                                                                                +
-            |                                        |           WHERE (((config.targetoid = (target.rowid)::oid) AND (config.quotatype = target.quotatype)) AND (config.quotatype = 2))                                                  +
+            |                                        |           WHERE ((config.targetoid = (target.rowid)::oid) AND (config.quotatype = target.quotatype) AND (config.quotatype = 2))                                                    +
             |                                        |         )                                                                                                                                                                          +
             |                                        |  SELECT pg_namespace.nspname AS schema_name,                                                                                                                                       +
             |                                        |     full_quota_config.primaryoid AS schema_oid,                                                                                                                                    +

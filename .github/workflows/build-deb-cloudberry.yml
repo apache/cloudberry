@@ -1322,7 +1322,15 @@ jobs:
 
           {
             chmod +x "${SRC_DIR}"/devops/build/automation/cloudberry/scripts/create-cloudberry-demo-cluster.sh
-            if ! time su - gpadmin -c "cd ${SRC_DIR} && NUM_PRIMARY_MIRROR_PAIRS='${{ matrix.num_primary_mirror_pairs }}' SRC_DIR=${SRC_DIR} ${SRC_DIR}/devops/build/automation/cloudberry/scripts/create-cloudberry-demo-cluster.sh"; then
+
+            # Build BLDWRAP_POSTGRES_CONF_ADDONS for shared_preload_libraries if specified
+            EXTRA_CONF=""
+            if [[ -n "${{ matrix.shared_preload_libraries }}" ]]; then
+              EXTRA_CONF="shared_preload_libraries='${{ matrix.shared_preload_libraries }}'"
+              echo "Adding shared_preload_libraries: ${{ matrix.shared_preload_libraries }}"
+            fi
+
+            if ! time su - gpadmin -c "cd ${SRC_DIR} && NUM_PRIMARY_MIRROR_PAIRS='${{ matrix.num_primary_mirror_pairs }}' BLDWRAP_POSTGRES_CONF_ADDONS=\"${EXTRA_CONF}\" SRC_DIR=${SRC_DIR} ${SRC_DIR}/devops/build/automation/cloudberry/scripts/create-cloudberry-demo-cluster.sh"; then
               echo "::error::Demo cluster creation failed"
               exit 1
             fi
