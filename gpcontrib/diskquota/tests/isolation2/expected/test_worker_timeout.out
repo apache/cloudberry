@@ -1,6 +1,19 @@
 !\retcode gpconfig -c diskquota.worker_timeout -v 1;
+-- start_ignore
+20251211:00:09:53:077489 gpconfig:cdw:gpadmin-[INFO]:-completed successfully with parameters '-c diskquota.worker_timeout -v 1'
+
+-- end_ignore
 (exited with code 0)
 !\retcode gpstop -u;
+-- start_ignore
+20251211:00:09:53:077537 gpstop:cdw:gpadmin-[INFO]:-Starting gpstop with args: -u
+20251211:00:09:53:077537 gpstop:cdw:gpadmin-[INFO]:-Gathering information and validating the environment...
+20251211:00:09:53:077537 gpstop:cdw:gpadmin-[INFO]:-Obtaining Cloudberry Coordinator catalog information
+20251211:00:09:53:077537 gpstop:cdw:gpadmin-[INFO]:-Obtaining Segment details from coordinator...
+20251211:00:09:53:077537 gpstop:cdw:gpadmin-[INFO]:-Cloudberry Version: 'postgres (Apache Cloudberry) 3.0.0-devel build dev'
+20251211:00:09:53:077537 gpstop:cdw:gpadmin-[INFO]:-Signalling all postmaster processes to reload
+
+-- end_ignore
 (exited with code 0)
 
 SELECT gp_inject_fault_infinite('diskquota_worker_main', 'suspend', dbid) FROM gp_segment_configuration WHERE role='p' AND content=-1;
@@ -33,6 +46,19 @@ SELECT gp_inject_fault_infinite('diskquota_worker_main', 'resume', dbid) FROM gp
 ERROR:  canceling statement due to user request
 
 !\retcode gpconfig -r diskquota.worker_timeout;
+-- start_ignore
+20251211:00:09:56:077570 gpconfig:cdw:gpadmin-[INFO]:-completed successfully with parameters '-r diskquota.worker_timeout'
+
+-- end_ignore
 (exited with code 0)
 !\retcode gpstop -u;
+-- start_ignore
+20251211:00:09:56:077618 gpstop:cdw:gpadmin-[INFO]:-Starting gpstop with args: -u
+20251211:00:09:56:077618 gpstop:cdw:gpadmin-[INFO]:-Gathering information and validating the environment...
+20251211:00:09:56:077618 gpstop:cdw:gpadmin-[INFO]:-Obtaining Cloudberry Coordinator catalog information
+20251211:00:09:56:077618 gpstop:cdw:gpadmin-[INFO]:-Obtaining Segment details from coordinator...
+20251211:00:09:56:077618 gpstop:cdw:gpadmin-[INFO]:-Cloudberry Version: 'postgres (Apache Cloudberry) 3.0.0-devel build dev'
+20251211:00:09:56:077618 gpstop:cdw:gpadmin-[INFO]:-Signalling all postmaster processes to reload
+
+-- end_ignore
 (exited with code 0)
