@@ -130,7 +130,12 @@ function(RegressTarget_Add name)
         set(regress_BIN ${PG_SRC_DIR}/src/test/isolation2/pg_isolation2_regress)
         _PGIsolation2Target_Add(${working_DIR})
     else()
-        set(regress_BIN ${PG_PKG_LIB_DIR}/pgxs/src/test/regress/pg_regress)
+        # For in-tree builds, use source tree path; for standalone builds, use installed path
+        if(PG_SRC_DIR AND EXISTS ${PG_SRC_DIR}/src/test/regress/pg_regress)
+            set(regress_BIN ${PG_SRC_DIR}/src/test/regress/pg_regress)
+        else()
+            set(regress_BIN ${PG_PKG_LIB_DIR}/pgxs/src/test/regress/pg_regress)
+        endif()
         if (NOT EXISTS ${regress_BIN})
             message(FATAL_ERROR
                 "Cannot find 'pg_regress' executable by path '${regress_BIN}'. Is 'pg_config' in the $PATH?")
