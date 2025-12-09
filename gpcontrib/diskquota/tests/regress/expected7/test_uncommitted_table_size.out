@@ -1,0 +1,236 @@
+-- temp table
+begin;
+CREATE TEMP TABLE t1(i int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+INSERT INTO t1 SELECT generate_series(1, 100000);
+SELECT diskquota.wait_for_worker_new_epoch();
+ wait_for_worker_new_epoch 
+---------------------------
+ t
+(1 row)
+
+SELECT tableid::regclass, size, segid FROM diskquota.table_size WHERE tableid = 't1'::regclass and segid = -1;
+ tableid |  size   | segid 
+---------+---------+-------
+ t1      | 3932160 |    -1
+(1 row)
+
+SELECT pg_table_size('t1');
+ pg_table_size 
+---------------
+       3932160
+(1 row)
+
+commit;
+DROP table t1;
+-- heap table
+begin;
+CREATE TABLE t2(i int) DISTRIBUTED BY (i);
+INSERT INTO t2 SELECT generate_series(1, 100000);
+SELECT diskquota.wait_for_worker_new_epoch();
+ wait_for_worker_new_epoch 
+---------------------------
+ t
+(1 row)
+
+SELECT tableid::regclass, size, segid FROM diskquota.table_size WHERE tableid = 't2'::regclass and segid = -1;
+ tableid |  size   | segid 
+---------+---------+-------
+ t2      | 3932160 |    -1
+(1 row)
+
+SELECT pg_table_size('t2');
+ pg_table_size 
+---------------
+       3932160
+(1 row)
+
+commit;
+-- heap table index
+begin;
+CREATE INDEX idx2 on t2(i);
+SELECT diskquota.wait_for_worker_new_epoch();
+ wait_for_worker_new_epoch 
+---------------------------
+ t
+(1 row)
+
+SELECT tableid::regclass, size, segid FROM diskquota.table_size WHERE tableid = 'idx2'::regclass and segid = -1;
+ tableid |  size   | segid 
+---------+---------+-------
+ idx2    | 2490368 |    -1
+(1 row)
+
+SELECT pg_table_size('idx2');
+ pg_table_size 
+---------------
+       2490368
+(1 row)
+
+commit;
+DROP table t2;
+-- toast table
+begin;
+CREATE TABLE t3(t text) DISTRIBUTED BY (t);
+INSERT INTO t3 SELECT repeat('a', 10000) FROM generate_series(1, 1000);
+SELECT diskquota.wait_for_worker_new_epoch();
+ wait_for_worker_new_epoch 
+---------------------------
+ t
+(1 row)
+
+SELECT tableid::regclass, size, segid FROM diskquota.table_size WHERE tableid = 't3'::regclass and segid = -1;
+ tableid |  size  | segid 
+---------+--------+-------
+ t3      | 393216 |    -1
+(1 row)
+
+SELECT pg_table_size('t3');
+ pg_table_size 
+---------------
+        393216
+(1 row)
+
+commit;
+DROP table t3;
+-- AO table
+begin;
+CREATE TABLE ao (i int) WITH (appendonly=true) DISTRIBUTED BY (i);
+INSERT INTO ao SELECT generate_series(1, 100000);
+SELECT diskquota.wait_for_worker_new_epoch();
+ wait_for_worker_new_epoch 
+---------------------------
+ t
+(1 row)
+
+SELECT (SELECT size FROM diskquota.table_size WHERE tableid = 'ao'::regclass and segid = -1)=
+       (SELECT pg_table_size('ao'));
+ ?column? 
+----------
+ t
+(1 row)
+
+commit;
+-- AO table index
+begin;
+CREATE INDEX ao_idx on ao(i);
+SELECT diskquota.wait_for_worker_new_epoch();
+ wait_for_worker_new_epoch 
+---------------------------
+ t
+(1 row)
+
+SELECT tableid::regclass, size, segid FROM diskquota.table_size WHERE tableid = 'ao_idx'::regclass and segid = -1;
+ tableid |  size   | segid 
+---------+---------+-------
+ ao_idx  | 2490368 |    -1
+(1 row)
+
+SELECT pg_table_size('ao_idx');
+ pg_table_size 
+---------------
+       2490368
+(1 row)
+
+SELECT tableid::regclass, size, segid FROM diskquota.table_size WHERE tableid = 'ao'::regclass and segid = -1;
+ tableid |  size   | segid 
+---------+---------+-------
+ ao      | 1558696 |    -1
+(1 row)
+
+SELECT pg_table_size('ao');
+ pg_table_size 
+---------------
+       1558696
+(1 row)
+
+commit;
+DROP TABLE ao;
+-- AO table CTAS
+begin;
+CREATE TABLE ao (i) WITH(appendonly=true) AS SELECT generate_series(1, 10000) DISTRIBUTED BY (i);
+SELECT diskquota.wait_for_worker_new_epoch();
+ wait_for_worker_new_epoch 
+---------------------------
+ t
+(1 row)
+
+SELECT (SELECT size FROM diskquota.table_size WHERE tableid = 'ao'::regclass and segid = -1)=
+       (SELECT pg_table_size('ao'));
+ ?column? 
+----------
+ t
+(1 row)
+
+commit;
+DROP TABLE ao;
+-- AOCS table
+begin;
+CREATE TABLE aocs (i int, t text) WITH (appendonly=true, orientation=column) DISTRIBUTED BY (i);
+INSERT INTO aocs SELECT i, repeat('a', 1000) FROM generate_series(1, 10000) AS i;
+SELECT diskquota.wait_for_worker_new_epoch();
+ wait_for_worker_new_epoch 
+---------------------------
+ t
+(1 row)
+
+SELECT tableid::regclass, size, segid FROM diskquota.table_size WHERE tableid = 'aocs'::regclass and segid = -1;
+ tableid |   size   | segid 
+---------+----------+-------
+ aocs    | 10322072 |    -1
+(1 row)
+
+SELECT pg_table_size('aocs');
+ pg_table_size 
+---------------
+      10322072
+(1 row)
+
+commit;
+-- AOCS table index
+begin;
+CREATE INDEX aocs_idx on aocs(i);
+SELECT diskquota.wait_for_worker_new_epoch();
+ wait_for_worker_new_epoch 
+---------------------------
+ t
+(1 row)
+
+SELECT tableid::regclass, size, segid FROM diskquota.table_size WHERE tableid = 'aocs_idx'::regclass and segid = -1;
+ tableid  |  size  | segid 
+----------+--------+-------
+ aocs_idx | 524288 |    -1
+(1 row)
+
+SELECT pg_table_size('aocs_idx');
+ pg_table_size 
+---------------
+        524288
+(1 row)
+
+commit;
+DROP TABLE aocs;
+-- AOCS table CTAS
+begin;
+CREATE TABLE aocs WITH(appendonly=true, orientation=column) AS SELECT i, array(select * from generate_series(1,1000)) FROM generate_series(1, 100) AS i DISTRIBUTED BY (i);
+SELECT diskquota.wait_for_worker_new_epoch();
+ wait_for_worker_new_epoch 
+---------------------------
+ t
+(1 row)
+
+SELECT tableid::regclass, size, segid FROM diskquota.table_size WHERE tableid = 'aocs'::regclass and segid = -1;
+ tableid |  size  | segid 
+---------+--------+-------
+ aocs    | 632864 |    -1
+(1 row)
+
+SELECT pg_table_size('aocs');
+ pg_table_size 
+---------------
+        632864
+(1 row)
+
+commit;
+DROP TABLE aocs;
