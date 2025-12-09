@@ -14,11 +14,11 @@
  *
  * -------------------------------------------------------------------------
  */
+#include "postgres.h"
+
 #include "diskquota.h"
 #include "gp_activetable.h"
 #include "relation_cache.h"
-
-#include "postgres.h"
 
 #include "access/xact.h"
 #include "catalog/pg_tablespace.h"
@@ -415,11 +415,7 @@ init_disk_quota_shmem(void)
 	 */
 	RequestAddinShmemSpace(DiskQuotaShmemSize());
 	/* locks for diskquota refer to init_lwlocks() for details */
-#if GP_VERSION_NUM < 70000
-	RequestAddinLWLocks(DiskQuotaLocksItemNumber);
-#else
 	RequestNamedLWLockTranche("DiskquotaLocks", DiskQuotaLocksItemNumber);
-#endif /* GP_VERSION_NUM */
 
 	/* Install startup hook to initialize our shared memory. */
 	prev_shmem_startup_hook = shmem_startup_hook;
@@ -492,17 +488,6 @@ disk_quota_shmem_startup(void)
 static void
 init_lwlocks(void)
 {
-#if GP_VERSION_NUM < 70000
-	diskquota_locks.active_table_lock          = LWLockAssign();
-	diskquota_locks.reject_map_lock            = LWLockAssign();
-	diskquota_locks.extension_ddl_message_lock = LWLockAssign();
-	diskquota_locks.extension_ddl_lock         = LWLockAssign();
-	diskquota_locks.monitored_dbid_cache_lock  = LWLockAssign();
-	diskquota_locks.relation_cache_lock        = LWLockAssign();
-	diskquota_locks.dblist_lock                = LWLockAssign();
-	diskquota_locks.workerlist_lock            = LWLockAssign();
-	diskquota_locks.altered_reloid_cache_lock  = LWLockAssign();
-#else
 	LWLockPadded *lock_base                    = GetNamedLWLockTranche("DiskquotaLocks");
 	diskquota_locks.active_table_lock          = &lock_base[0].lock;
 	diskquota_locks.reject_map_lock            = &lock_base[1].lock;
@@ -513,7 +498,6 @@ init_lwlocks(void)
 	diskquota_locks.dblist_lock                = &lock_base[6].lock;
 	diskquota_locks.workerlist_lock            = &lock_base[7].lock;
 	diskquota_locks.altered_reloid_cache_lock  = &lock_base[8].lock;
-#endif /* GP_VERSION_NUM */
 }
 
 static Size
@@ -735,11 +719,7 @@ do_check_diskquota_state_is_ready(void)
 	           errmsg("[diskquota] check diskquota state SPI_execute failed: error code %d", ret)));
 
 	tupdesc = SPI_tuptable->tupdesc;
-#if GP_VERSION_NUM < 70000
-	if (SPI_processed != 1 || tupdesc->natts != 1 || ((tupdesc)->attrs[0])->atttypid != INT4OID)
-#else
 	if (SPI_processed != 1 || tupdesc->natts != 1 || ((tupdesc)->attrs[0]).atttypid != INT4OID)
-#endif /* GP_VERSION_NUM */
 	{
 		ereport(ERROR, (errcode(ERRCODE_INTERNAL_ERROR),
 		                errmsg("[diskquota] \"diskquota.state\" is corrupted in database \"%s\","
@@ -1511,13 +1491,8 @@ do_load_quotas(void)
 		                errmsg("[diskquota] load_quotas SPI_execute failed: error code %d", ret)));
 
 	tupdesc = SPI_tuptable->tupdesc;
-#if GP_VERSION_NUM < 70000
-	if (tupdesc->natts != NUM_QUOTA_CONFIG_ATTRS || ((tupdesc)->attrs[0])->atttypid != OIDOID ||
-	    ((tupdesc)->attrs[1])->atttypid != INT4OID || ((tupdesc)->attrs[2])->atttypid != INT8OID)
-#else
 	if (tupdesc->natts != NUM_QUOTA_CONFIG_ATTRS || ((tupdesc)->attrs[0]).atttypid != OIDOID ||
 	    ((tupdesc)->attrs[1]).atttypid != INT4OID || ((tupdesc)->attrs[2]).atttypid != INT8OID)
-#endif /* GP_VERSION_NUM */
 	{
 		ereport(ERROR, (errcode(ERRCODE_INTERNAL_ERROR),
 		                errmsg("[diskquota] configuration table is corrupted in database \"%s\","
@@ -1810,11 +1785,7 @@ GetUserName(Oid relowner, bool skip_name)
 		pg_ltoa(relowner, namestr.data);
 		return pstrdup(namestr.data);
 	}
-#if GP_VERSION_NUM < 70000
-	return GetUserNameFromId(relowner);
-#else
 	return GetUserNameFromId(relowner, false);
-#endif /* GP_VERSION_NUM */
 }
 
 static void
@@ -2266,19 +2237,19 @@ show_rejectmap(PG_FUNCTION_ARGS)
 		switch ((QuotaType)keyitem.targettype)
 		{
 			case ROLE_QUOTA:
-				StrNCpy(targettype_str, "ROLE_QUOTA", _TARGETTYPE_STR_SIZE);
+				snprintf(targettype_str, _TARGETTYPE_STR_SIZE, "%s", "ROLE_QUOTA");
 				break;
 			case NAMESPACE_QUOTA:
-				StrNCpy(targettype_str, "NAMESPACE_QUOTA", _TARGETTYPE_STR_SIZE);
+				snprintf(targettype_str, _TARGETTYPE_STR_SIZE, "%s", "NAMESPACE_QUOTA");
 				break;
 			case ROLE_TABLESPACE_QUOTA:
-				StrNCpy(targettype_str, "ROLE_TABLESPACE_QUOTA", _TARGETTYPE_STR_SIZE);
+				snprintf(targettype_str, _TARGETTYPE_STR_SIZE, "%s", "ROLE_TABLESPACE_QUOTA");
 				break;
 			case NAMESPACE_TABLESPACE_QUOTA:
-				StrNCpy(targettype_str, "NAMESPACE_TABLESPACE_QUOTA", _TARGETTYPE_STR_SIZE);
+				snprintf(targettype_str, _TARGETTYPE_STR_SIZE, "%s", "NAMESPACE_TABLESPACE_QUOTA");
 				break;
 			default:
-				StrNCpy(targettype_str, "UNKNOWN", _TARGETTYPE_STR_SIZE);
+				snprintf(targettype_str, _TARGETTYPE_STR_SIZE, "%s", "UNKNOWN");
 				break;
 		}
 

@@ -1,8 +1,8 @@
 \!gpconfig -s 'shared_preload_libraries'
 Values on all segments are consistent
-GUC          : shared_preload_libraries
-Master  value: diskquota-2.2.so
-Segment value: diskquota-2.2.so
+GUC              : shared_preload_libraries
+Coordinator value: diskquota-2.2.so
+Segment     value: diskquota-2.2.so
 create extension diskquota with version '2.2';
 select diskquota.init_table_size_table();
  init_table_size_table 

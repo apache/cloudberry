@@ -23,10 +23,9 @@
 #include "access/aomd.h"
 #include "access/xact.h"
 #include "access/heapam.h"
-#if GP_VERSION_NUM >= 70000
 #include "access/genam.h"
 #include "common/hashfn.h"
-#endif /* GP_VERSION_NUM */
+#include "catalog/gp_indexing.h"
 #include "catalog/namespace.h"
 #include "catalog/objectaccess.h"
 #include "catalog/pg_authid.h"
@@ -134,7 +133,7 @@ init_table_size_table(PG_FUNCTION_ARGS)
 
 	/* ensure table diskquota.state exists */
 	rv  = makeRangeVar("diskquota", "state", -1);
-	rel = heap_openrv_extended(rv, AccessShareLock, true);
+	rel = table_openrv_extended(rv, AccessShareLock, true);
 	if (!rel)
 	{
 		/* configuration table is missing. */
@@ -143,7 +142,7 @@ init_table_size_table(PG_FUNCTION_ARGS)
 		     " please recreate diskquota extension",
 		     get_database_name(MyDatabaseId));
 	}
-	heap_close(rel, NoLock);
+	table_close(rel, NoLock);
 
 	/*
 	 * Why don't use insert into diskquota.table_size select from pg_table_size here?
@@ -208,11 +207,7 @@ calculate_all_table_size()
 {
 	Relation  classRel;
 	HeapTuple tuple;
-#if GP_VERSION_NUM < 70000
-	HeapScanDesc relScan;
-#else
 	TableScanDesc relScan;
-#endif /* GP_VERSION_NUM */
 	Oid                        relid;
 	Oid                        prelid;
 	Size                       tablesize;
@@ -231,12 +226,8 @@ calculate_all_table_size()
 
 	local_table_size_map =
 	        diskquota_hash_create("local_table_size_map", 1024, &hashctl, HASH_ELEM | HASH_CONTEXT, DISKQUOTA_TAG_HASH);
-	classRel = heap_open(RelationRelationId, AccessShareLock);
-#if GP_VERSION_NUM < 70000
-	relScan = heap_beginscan_catalog(classRel, 0, NULL);
-#else
+	classRel = table_open(RelationRelationId, AccessShareLock);
 	relScan = table_beginscan_catalog(classRel, 0, NULL);
-#endif /* GP_VERSION_NUM */
 
 	while ((tuple = heap_getnext(relScan, ForwardScanDirection)) != NULL)
 	{
@@ -247,11 +238,7 @@ calculate_all_table_size()
 		    classForm->relkind != RELKIND_TOASTVALUE)
 			continue;
 
-#if GP_VERSION_NUM < 70000
-		relid = HeapTupleGetOid(tuple);
-#else
 		relid = classForm->oid;
-#endif /* GP_VERSION_NUM */
 		/* ignore system table */
 		if (relid < FirstNormalObjectId) continue;
 
@@ -279,8 +266,8 @@ calculate_all_table_size()
 		}
 		entry->tablesize += tablesize;
 	}
-	heap_endscan(relScan);
-	heap_close(classRel, AccessShareLock);
+	table_endscan(relScan);
+	table_close(classRel, AccessShareLock);
 
 	return local_table_size_map;
 }
@@ -644,8 +631,10 @@ __get_oid_auto_case_convert(Oid (*f)(const char *name, bool missing_ok), const c
 	if (l > 2 && name[0] == '"' && name[l - 1] == '"')
 	{
 		// object name wrapped by '"'. eg: "foo"
-		b = palloc(l);
-		StrNCpy(b, name + 1, l - 1); // trim the '"'. unlike strncpy, StrNCpy will ensure b[l-1] = '\0'
+		// l - 2 is the length without quotes, +1 for null terminator
+		b = palloc(l - 1);
+		memcpy(b, name + 1, l - 2);
+		b[l - 2] = '\0';
 	}
 	else
 	{
@@ -1487,7 +1476,7 @@ diskquota_get_index_list(Oid relid)
 	/* Prepare to scan pg_index for entries having indrelid = this rel. */
 	ScanKeyInit(&skey, Anum_pg_index_indrelid, BTEqualStrategyNumber, F_OIDEQ, relid);
 
-	indrel  = heap_open(IndexRelationId, AccessShareLock);
+	indrel  = table_open(IndexRelationId, AccessShareLock);
 	indscan = systable_beginscan(indrel, IndexIndrelidIndexId, true, NULL, 1, &skey);
 
 	while (HeapTupleIsValid(htup = systable_getnext(indscan)))
@@ -1508,7 +1497,7 @@ diskquota_get_index_list(Oid relid)
 
 	systable_endscan(indscan);
 
-	heap_close(indrel, AccessShareLock);
+	table_close(indrel, AccessShareLock);
 
 	return result;
 }
@@ -1528,7 +1517,7 @@ diskquota_get_appendonly_aux_oid_list(Oid reloid, Oid *segrelid, Oid *blkdirreli
 	bool        isnull;
 
 	ScanKeyInit(&skey, Anum_pg_appendonly_relid, BTEqualStrategyNumber, F_OIDEQ, reloid);
-	aorel   = heap_open(AppendOnlyRelationId, AccessShareLock);
+	aorel   = table_open(AppendOnlyRelationId, AccessShareLock);
 	tupDesc = RelationGetDescr(aorel);
 	scan = systable_beginscan(aorel, AppendOnlyRelidIndexId, true /*indexOk*/, NULL /*snapshot*/, 1 /*nkeys*/, &skey);
 	while (HeapTupleIsValid(htup = systable_getnext(scan)))
@@ -1553,7 +1542,7 @@ diskquota_get_appendonly_aux_oid_list(Oid reloid, Oid *segrelid, Oid *blkdirreli
 	}
 
 	systable_endscan(scan);
-	heap_close(aorel, AccessShareLock);
+	table_close(aorel, AccessShareLock);
 }
 
 Oid
@@ -1650,17 +1639,7 @@ check_role(Oid roleoid, char *rolname, int64 quota_limit_mb)
 HTAB *
 diskquota_hash_create(const char *tabname, long nelem, HASHCTL *info, int flags, DiskquotaHashFunction hashFunction)
 {
-#if GP_VERSION_NUM < 70000
-	if (hashFunction == DISKQUOTA_TAG_HASH)
-		info->hash = tag_hash;
-	else if (hashFunction == DISKQUOTA_OID_HASH)
-		info->hash = oid_hash;
-	else
-		info->hash = string_hash;
-	return hash_create(tabname, nelem, info, flags | HASH_FUNCTION);
-#else
 	return hash_create(tabname, nelem, info, flags | HASH_BLOBS);
-#endif /* GP_VERSION_NUM */
 }
 
 HTAB *
@@ -1671,15 +1650,5 @@ DiskquotaShmemInitHash(const char           *name,       /* table string name fo
                        int                   hash_flags, /* info about infoP */
                        DiskquotaHashFunction hashFunction)
 {
-#if GP_VERSION_NUM < 70000
-	if (hashFunction == DISKQUOTA_TAG_HASH)
-		infoP->hash = tag_hash;
-	else if (hashFunction == DISKQUOTA_OID_HASH)
-		infoP->hash = oid_hash;
-	else
-		infoP->hash = string_hash;
-	return ShmemInitHash(name, init_size, max_size, infoP, hash_flags | HASH_FUNCTION);
-#else
 	return ShmemInitHash(name, init_size, max_size, infoP, hash_flags | HASH_BLOBS);
-#endif /* GP_VERSION_NUM */
 }
