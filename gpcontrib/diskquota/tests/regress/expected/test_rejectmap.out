@@ -270,15 +270,13 @@ SELECT replace_oid_with_relname(rel.relname),
   ORDER BY rel.relname DESC;
    replace_oid_with_relname    | relkind |   target_type   | namespace_matched 
 -------------------------------+---------+-----------------+-------------------
- pg_toast_blocked_t5_index     | i       | NAMESPACE_QUOTA | f
- pg_toast_blocked_t5           | t       | NAMESPACE_QUOTA | f
  pg_aovisimap_blocked_t5_index | i       | NAMESPACE_QUOTA | f
  pg_aovisimap_blocked_t5       | M       | NAMESPACE_QUOTA | f
  pg_aocsseg_blocked_t5         | o       | NAMESPACE_QUOTA | f
  pg_aoblkdir_blocked_t5_index  | i       | NAMESPACE_QUOTA | f
  pg_aoblkdir_blocked_t5        | b       | NAMESPACE_QUOTA | f
  blocked_t5                    | r       | NAMESPACE_QUOTA | t
-(8 rows)
+(6 rows)
 
 -- Do some clean-ups.
 DROP FUNCTION replace_oid_with_relname(text);
