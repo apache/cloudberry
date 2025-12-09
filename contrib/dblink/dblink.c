@@ -312,7 +312,6 @@ dblink_connect(PG_FUNCTION_ARGS)
 
 	/* check password in connection string if not superuser */
 	connstr = dblink_connstr_check(connstr);
-	dblink_connstr_check(connstr);
 
 	/*
 	 * We must obey fd.c's limit on non-virtual file descriptors.  Assume that
