@@ -58,14 +58,6 @@ typedef enum
 #define EXTENSION_SCHEMA "diskquota"
 extern int diskquota_worker_timeout;
 
-#if GP_VERSION_NUM < 70000
-#define TableIsHeap(relstorage, relam) ((bool)(relstorage == RELSTORAGE_HEAP))
-#define TableIsAoRows(relstorage, relam) ((bool)(relstorage == RELSTORAGE_AOROWS))
-#define TableIsAoCols(relstorage, relam) ((bool)(relstorage == RELSTORAGE_AOCOLS))
-#define DiskquotaCreateTemplateTupleDesc(natts) CreateTemplateTupleDesc(natts, false /*hasoid*/)
-#define DiskquotaWaitLatch(latch, wakeEvents, timeout) WaitLatch(latch, wakeEvents, timeout)
-#define DiskquotaGetRelstorage(classForm) (classForm->relstorage)
-#else
 #define TableIsHeap(relstorage, relam) \
 	((bool)(relam != 0 && relam != AO_ROW_TABLE_AM_OID && relam != AO_COLUMN_TABLE_AM_OID))
 #define TableIsAoRows(relstorage, relam) ((bool)(relam == AO_ROW_TABLE_AM_OID))
@@ -73,7 +65,6 @@ extern int diskquota_worker_timeout;
 #define DiskquotaCreateTemplateTupleDesc(natts) CreateTemplateTupleDesc(natts);
 #define DiskquotaWaitLatch(latch, wakeEvents, timeout) WaitLatch(latch, wakeEvents, timeout, WAIT_EVENT_PG_SLEEP)
 #define DiskquotaGetRelstorage(classForm) (0)
-#endif /* GP_VERSION_NUM */
 
 typedef enum
 {

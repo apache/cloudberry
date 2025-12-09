@@ -76,10 +76,10 @@ WHERE tableid = 'a_index'::regclass
 ORDER BY segid;
  tableid |  size   | segid 
 ---------+---------+-------
- a_index | 1212416 |    -1
- a_index |  393216 |     0
- a_index |  393216 |     1
- a_index |  393216 |     2
+ a_index | 1015808 |    -1
+ a_index |  327680 |     0
+ a_index |  327680 |     1
+ a_index |  327680 |     2
 (4 rows)
 
 -- add index to tablespace indexspc
@@ -93,14 +93,14 @@ SELECT diskquota.wait_for_worker_new_epoch();
 SELECT schema_name,tablespace_name,quota_in_mb,nspsize_tablespace_in_bytes FROM diskquota.show_fast_schema_tablespace_quota_view WHERE schema_name ='indexschema1' and tablespace_name='indexspc';
  schema_name  | tablespace_name | quota_in_mb | nspsize_tablespace_in_bytes 
 --------------+-----------------+-------------+-----------------------------
- indexschema1 | indexspc        |           2 |                     2654208
+ indexschema1 | indexspc        |           2 |                     2457600
 (1 row)
 
 SELECT size, segid FROM diskquota.table_size , pg_class where tableid=oid and (relname='test_index_a' or relname='a_index') and segid=-1;
   size   | segid 
 ---------+-------
- 1212416 |    -1
  1441792 |    -1
+ 1015808 |    -1
 (2 rows)
 
 -- expect insert fail
