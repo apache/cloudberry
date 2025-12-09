@@ -1,0 +1,767 @@
+# --------------------------------------------------------------------
+#
+# Licensed to the Apache Software Foundation (ASF) under one or more
+# contributor license agreements. See the NOTICE file distributed
+# with this work for additional information regarding copyright
+# ownership. The ASF licenses this file to You under the Apache
+# License, Version 2.0 (the "License"); you may not use this file
+# except in compliance with the License. You may obtain a copy of the
+# License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
+# implied. See the License for the specific language governing
+# permissions and limitations under the License.
+#
+# --------------------------------------------------------------------
+# GitHub Actions Workflow: PostgreSQL 16 Merge Validation
+# --------------------------------------------------------------------
+# Description:
+#
+#   This workflow validates the cbdb-postgres-merge branch, which upgrades
+#   the PostgreSQL kernel from version 14 to version 16. It builds the
+#   codebase, creates a gpdemo cluster, and performs basic validation to
+#   ensure the upgrade is functional and prevent regressions.
+#
+# Workflow Overview:
+# 1. **Build and Test Job**:
+#    - Configures and builds Apache Cloudberry with PG16 kernel.
+#    - Installs required dependencies (ICU, Xerces-C).
+#    - Creates a gpdemo cluster for validation.
+#    - Runs basic smoke tests to verify cluster functionality.
+#    - **Key Artifacts**: Build logs, cluster configuration, test results.
+#
+# 2. **Report Job**:
+#    - Aggregates job results into a final report.
+#    - Sends failure notifications if any step fails.
+#
+# Triggers:
+# - Push to `cbdb-postgres-merge` branch.
+# - Pull requests to `cbdb-postgres-merge` branch.
+# - Manual workflow dispatch.
+#
+# Container Images:
+# - **Build/Test**: `apache/incubator-cloudberry:cbdb-build-rocky9-latest`
+#
+# Artifacts:
+# - Build Logs          (retention: ${{ env.LOG_RETENTION_DAYS }} days).
+# - Cluster Logs        (retention: ${{ env.LOG_RETENTION_DAYS }} days).
+# - Test Results        (retention: ${{ env.LOG_RETENTION_DAYS }} days).
+#
+# Notes:
+# - This workflow is specifically designed for the PG16 upgrade validation.
+# - Many extensions are not yet supported and will be disabled during build.
+# - The focus is on ensuring the core database functionality works correctly.
+# --------------------------------------------------------------------
+
+name: PostgreSQL 16 Merge Validation
+
+on:
+  push:
+    branches: [cbdb-postgres-merge]
+  pull_request:
+    branches: [cbdb-postgres-merge]
+    types: [opened, synchronize, reopened, edited]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  packages: read
+  actions: write
+  checks: read
+  pull-requests: read
+
+env:
+  LOG_RETENTION_DAYS: 7
+  INSTALL_PREFIX: /usr/local/cloudberry-db
+
+jobs:
+
+  ## ======================================================================
+  ## Job: prepare-test-matrix
+  ## ======================================================================
+
+  prepare-test-matrix:
+    runs-on: ubuntu-22.04
+    outputs:
+      test-matrix: ${{ steps.set-matrix.outputs.matrix }}
+      should_run: ${{ steps.set-matrix.outputs.should_run }}
+
+    steps:
+      - name: Generate Test Matrix
+        id: set-matrix
+        run: |
+          echo "=== PG16 Test Matrix Preparation ==="
+          
+          # Define defaults for test configurations
+          DEFAULT_NUM_PRIMARY_MIRROR_PAIRS=3
+          DEFAULT_ENABLE_CGROUPS=false
+          DEFAULT_ENABLE_CORE_CHECK=true
+          DEFAULT_PG_SETTINGS_OPTIMIZER=""
+          
+          # Define test configurations for PG16 merge validation
+          # Tests are currently disabled as installcheck support is being fixed
+          # Uncomment and add tests as features become available
+          ALL_TESTS='{
+            "include": [
+            ]
+          }'
+          
+          # Tests to be added as PG16 support improves:
+          # - ic-good-opt-off: Basic installcheck with optimizer off
+          #   {"test":"ic-good-opt-off",
+          #    "make_configs":["src/test/regress:installcheck-good"],
+          #    "pg_settings":{"optimizer":"off"}
+          #   }
+          #
+          # - ic-good-opt-on: Basic installcheck with optimizer on (requires ORCA)
+          #   {"test":"ic-good-opt-on",
+          #    "make_configs":["src/test/regress:installcheck-good"],
+          #    "pg_settings":{"optimizer":"on"}
+          #   }
+          #
+          # - ic-isolation2: Isolation2 tests
+          #   {"test":"ic-isolation2",
+          #    "make_configs":["src/test/isolation2:installcheck-isolation2"]
+          #   }
+          #
+          # - ic-contrib: Contrib module tests
+          #   {"test":"ic-contrib",
+          #    "make_configs":["contrib/auto_explain:installcheck",
+          #                    "contrib/citext:installcheck"]
+          #   }
+          #
+          # - ic-gpcontrib: GPContrib module tests
+          #   {"test":"ic-gpcontrib",
+          #    "make_configs":["gpcontrib/orafce:installcheck",
+          #                    "gpcontrib/gp_toolkit:installcheck"]
+          #   }
+          
+          # Function to apply defaults to test configurations
+          apply_defaults() {
+            echo "$1" | jq --arg     npm "$DEFAULT_NUM_PRIMARY_MIRROR_PAIRS" \
+                           --argjson ec  "$DEFAULT_ENABLE_CGROUPS" \
+                           --argjson ecc "$DEFAULT_ENABLE_CORE_CHECK" \
+                           --arg     opt "$DEFAULT_PG_SETTINGS_OPTIMIZER" \
+              'def get_defaults:
+                {
+                  num_primary_mirror_pairs: ($npm|tonumber),
+                  enable_cgroups: $ec,
+                  enable_core_check: $ecc,
+                  pg_settings: {
+                    optimizer: $opt
+                  }
+                };
+               get_defaults * .'
+          }
+          
+          # Build result JSON with defaults applied
+          RESULT='{"include":['
+          FIRST=true
+          
+          for TEST_CONFIG in $(echo "$ALL_TESTS" | jq -c '.include[]'); do
+            FILTERED_WITH_DEFAULTS=$(apply_defaults "$TEST_CONFIG")
+            if [[ "$FIRST" == true ]]; then
+              FIRST=false
+            else
+              RESULT="${RESULT},"
+            fi
+            RESULT="${RESULT}${FILTERED_WITH_DEFAULTS}"
+          done
+          
+          RESULT="${RESULT}]}"
+          
+          # Output the matrix for GitHub Actions
+          echo "Final test matrix configuration:"
+          echo "$RESULT" | jq .
+          
+          # Set output
+          {
+            echo "matrix<<EOF"
+            echo "$RESULT"
+            echo "EOF"
+            
+            # Check if matrix is empty
+            TEST_COUNT=$(echo "$RESULT" | jq '.include | length')
+            if [ "$TEST_COUNT" -gt 0 ]; then
+              echo "should_run=true"
+            else
+              echo "should_run=false"
+            fi
+          } >> "$GITHUB_OUTPUT"
+          
+          echo "=== Test Matrix Preparation Complete ==="
+
+  ## ======================================================================
+  ## Job: build
+  ## ======================================================================
+
+  build:
+    name: Build PG16 for Cloudberry
+    env:
+      JOB_TYPE: build
+    needs: [prepare-test-matrix]
+    runs-on: ubuntu-22.04
+    timeout-minutes: 180
+    outputs:
+      build_timestamp: ${{ steps.set_timestamp.outputs.timestamp }}
+
+    container:
+      image: apache/incubator-cloudberry:cbdb-build-rocky9-latest
+      options: >-
+        --privileged
+        --user root
+        -h cdw
+        --shm-size=2gb
+
+    steps:
+      - name: Set build timestamp
+        id: set_timestamp
+        run: |
+          timestamp=$(date +'%Y%m%d_%H%M%S')
+          echo "timestamp=$timestamp" | tee -a "$GITHUB_OUTPUT"
+          echo "BUILD_TIMESTAMP=$timestamp" | tee -a "$GITHUB_ENV"
+
+      - name: Checkout Apache Cloudberry (cbdb-postgres-merge branch)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          submodules: true
+
+      - name: Cloudberry Environment Initialization
+        env:
+          LOGS_DIR: pg16-build-logs
+        run: |
+          set -eo pipefail
+          
+          # Initialize system
+          if ! su - gpadmin -c "/tmp/init_system.sh"; then
+            echo "::error::Container initialization failed"
+            exit 1
+          fi
+
+          # Setup logging directories
+          mkdir -p "${LOGS_DIR}/details"
+          chown -R gpadmin:gpadmin .
+          chmod -R 755 .
+          chmod 777 "${LOGS_DIR}"
+
+          # Clean up disk space
+          df -kh /
+          rm -rf /__t/*
+          df -kh /
+
+          {
+            echo "=== Environment Information ==="
+            uname -a
+            df -h
+            free -h
+            env
+          } | tee -a "${LOGS_DIR}/details/environment.log"
+
+          echo "SRC_DIR=${GITHUB_WORKSPACE}" | tee -a "$GITHUB_ENV"
+
+      - name: Generate Build Job Summary Start
+        run: |
+          {
+            echo "# PostgreSQL 16 Merge Validation"
+            echo "## Environment"
+            echo "- Start Time: $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
+            echo "- OS Version: $(cat /etc/redhat-release)"
+            echo "- GCC Version: $(gcc --version | head -n1)"
+            echo ""
+            echo "## Build Configuration"
+            echo "- Install Prefix: ${INSTALL_PREFIX}"
+            echo "- Port: 5432"
+            echo "- Debug: Enabled (O0, g3, cassert)"
+            echo "- Disabled Features: ORCA, GPCloud, GPFdist, zstd"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Prepare Installation Directory
+        run: |
+          set -eo pipefail
+          
+          # Clean and prepare installation directory
+          sudo rm -rf ${INSTALL_PREFIX}
+          sudo chmod a+w /usr/local
+          mkdir -p ${INSTALL_PREFIX}/lib
+          
+          # Copy Xerces-C libraries
+          sudo cp -v /usr/local/xerces-c/lib/libxerces-c.so \
+                     /usr/local/xerces-c/lib/libxerces-c-3.*.so \
+                     ${INSTALL_PREFIX}/lib
+          
+          sudo chown -R gpadmin:gpadmin ${INSTALL_PREFIX}
+          
+          echo "Installation directory prepared successfully"
+
+      - name: Install ICU Development Libraries
+        run: |
+          set -eo pipefail
+          
+          echo "Installing ICU development libraries..."
+          sudo dnf install -y libicu-devel
+          
+          echo "ICU libraries installed successfully"
+          rpm -qa | grep libicu
+
+      - name: Configure PG16 for Cloudberry
+        env:
+          SRC_DIR: ${{ github.workspace }}
+        run: |
+          set -eo pipefail
+
+          {
+            echo "=== Configure Log ==="
+            echo "Timestamp: $(date -u)"
+            echo "Configure options:"
+            echo "  --prefix=${INSTALL_PREFIX}"
+            echo "  --with-pgport=5432"
+            echo "  --enable-cassert"
+            echo "  --enable-debug-extensions"
+            echo "  --with-perl --with-python --with-libxml --with-openssl"
+            echo "  --without-zstd"
+            echo "  --disable-gpcloud --disable-orca --disable-gpfdist"
+            echo "  --with-pythonsrc-ext"
+            echo "  --with-gssapi"
+            echo ""
+            
+            # Run configure as gpadmin
+            if ! su - gpadmin -c "
+              cd ${SRC_DIR}
+              export LD_LIBRARY_PATH=${INSTALL_PREFIX}/lib:\${LD_LIBRARY_PATH}
+              CFLAGS='-O0 -g3' ./configure \
+                --prefix=${INSTALL_PREFIX} \
+                --with-pgport=5432 \
+                --enable-cassert \
+                --with-perl \
+                --with-python \
+                --with-libxml \
+                --with-openssl \
+                --without-zstd \
+                --enable-debug-extensions \
+                --disable-gpcloud \
+                --disable-orca \
+                --disable-gpfdist \
+                --with-pythonsrc-ext \
+                --with-gssapi
+            "; then
+              echo "::error::Configure failed"
+              exit 1
+            fi
+            
+            echo "Configure completed successfully"
+          } 2>&1 | tee -a pg16-build-logs/details/configure.log
+
+      - name: Build and Install Apache Cloudberry
+        env:
+          SRC_DIR: ${{ github.workspace }}
+        run: |
+          set -eo pipefail
+
+          {
+            echo "=== Build and Install Log ==="
+            echo "Timestamp: $(date -u)"
+            echo "Starting build and installation (non-parallel)..."
+            
+            # Build and install as gpadmin (non-parallel to avoid issues)
+            if ! time su - gpadmin -c "
+              cd ${SRC_DIR}
+              export LD_LIBRARY_PATH=${INSTALL_PREFIX}/lib:\${LD_LIBRARY_PATH}
+              make
+              make install
+            "; then
+              echo "::error::Build and installation failed"
+              exit 1
+            fi
+            
+            echo "Build and installation completed successfully"
+          } 2>&1 | tee -a pg16-build-logs/details/build-install.log
+
+      - name: Verify Build Artifacts
+        run: |
+          set -eo pipefail
+
+          {
+            echo "=== Build Verification ==="
+            echo "Timestamp: $(date -u)"
+            
+            # Verify postgres binary exists and is executable
+            if [ ! -x "${INSTALL_PREFIX}/bin/postgres" ]; then
+              echo "::error::postgres binary not found or not executable"
+              exit 1
+            fi
+            
+            # Check versions
+            echo "PostgreSQL version:"
+            su - gpadmin -c "${INSTALL_PREFIX}/bin/postgres --version"
+            
+            echo ""
+            echo "Cloudberry version:"
+            su - gpadmin -c "${INSTALL_PREFIX}/bin/postgres --gp-version"
+            
+            echo ""
+            echo "Library dependencies:"
+            ldd ${INSTALL_PREFIX}/bin/postgres
+            
+            echo ""
+            echo "Build artifacts verified successfully"
+          } 2>&1 | tee -a pg16-build-logs/details/verification.log
+
+      - name: Create Build Artifact
+        run: |
+          set -eo pipefail
+          echo "Creating build artifact tarball..."
+          echo "Listing /usr/local:"
+          ls -la /usr/local
+          
+          if [ ! -d "/usr/local/cloudberry-db" ]; then
+            echo "::error::/usr/local/cloudberry-db does not exist!"
+            exit 1
+          fi
+          
+          # Create tarball of the installation directory
+          # We use -C /usr/local to avoid including full path structure
+          tar -czf cloudberry-pg16.tar.gz -C /usr/local cloudberry-db
+          
+          echo "Build artifact created: cloudberry-pg16.tar.gz"
+          ls -lh cloudberry-pg16.tar.gz
+
+      - name: Upload Build Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: cloudberry-pg16-binary
+          path: cloudberry-pg16.tar.gz
+          retention-days: 1
+
+      - name: Create gpdemo Cluster
+        env:
+          SRC_DIR: ${{ github.workspace }}
+        run: |
+          set -eo pipefail
+
+          {
+            echo "=== gpdemo Cluster Creation ==="
+            echo "Timestamp: $(date -u)"
+            echo "Creating demo cluster..."
+
+            # Source greenplum_path and create demo cluster
+            if ! su - gpadmin -c "
+              cd ${SRC_DIR}
+              source ${INSTALL_PREFIX}/greenplum_path.sh
+              make create-demo-cluster
+            "; then
+              echo "::error::Demo cluster creation failed"
+              exit 1
+            fi
+            
+            echo "Demo cluster created successfully"
+          } 2>&1 | tee -a pg16-build-logs/details/cluster-creation.log
+
+      - name: Generate Build Job Summary End
+        if: always()
+        run: |
+          {
+            echo ""
+            echo "## Build Results"
+            echo "- End Time: $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
+            echo "- Status: ${{ job.status }}"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload Build and Test Logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pg16-build-logs-${{ env.BUILD_TIMESTAMP }}
+          path: |
+            pg16-build-logs/
+          retention-days: ${{ env.LOG_RETENTION_DAYS }}
+
+  ## ======================================================================
+  ## Job: test
+  ## ======================================================================
+
+  test:
+    name: ${{ matrix.test }}
+    needs: [build, prepare-test-matrix]
+    if: needs.prepare-test-matrix.outputs.should_run == 'true'
+    runs-on: ubuntu-22.04
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false  # Continue with other tests if one fails
+      matrix: ${{ fromJson(needs.prepare-test-matrix.outputs.test-matrix) }}
+
+    container:
+      image: apache/incubator-cloudberry:cbdb-build-rocky9-latest
+      options: >-
+        --privileged
+        --user root
+        --hostname cdw
+        --shm-size=2gb
+        --ulimit core=-1
+
+    steps:
+      - name: Checkout Apache Cloudberry (cbdb-postgres-merge branch)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          submodules: true
+
+      - name: Cloudberry Environment Initialization
+        env:
+          LOGS_DIR: test-logs-${{ matrix.test }}
+        run: |
+          set -eo pipefail
+          
+          # Initialize system
+          if ! su - gpadmin -c "/tmp/init_system.sh"; then
+            echo "::error::Container initialization failed"
+            exit 1
+          fi
+
+          # Setup logging directories
+          mkdir -p "${LOGS_DIR}/details"
+          chown -R gpadmin:gpadmin .
+          chmod -R 755 .
+          chmod 777 "${LOGS_DIR}"
+
+          # Clean up disk space
+          df -kh /
+          rm -rf /__t/*
+          df -kh /
+
+          # Log system information
+          df -h | tee -a "${LOGS_DIR}/details/disk-usage.log"
+          free -h | tee -a "${LOGS_DIR}/details/memory-usage.log"
+
+          {
+            echo "=== Environment Information ==="
+            uname -a
+            df -h
+            free -h
+            env
+          } | tee -a "${LOGS_DIR}/details/environment.log"
+
+          echo "SRC_DIR=${GITHUB_WORKSPACE}" | tee -a "$GITHUB_ENV"
+          echo "LOGS_DIR=${LOGS_DIR}" | tee -a "$GITHUB_ENV"
+
+      - name: "Generate Test Job Summary Start: ${{ matrix.test }}"
+        run: |
+          {
+            echo "# Test: ${{ matrix.test }}"
+            echo "## Configuration"
+            echo "- Test Name: ${{ matrix.test }}"
+            echo "- Start Time: $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
+            echo "- Optimizer: ${{ matrix.pg_settings.optimizer || 'default' }}"
+            echo "- Num Segments: ${{ matrix.num_primary_mirror_pairs }}"
+            echo ""
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Prepare Installation Directory
+        run: |
+          set -eo pipefail
+          
+          # Clean and prepare installation directory
+          sudo rm -rf ${INSTALL_PREFIX}
+          sudo chmod a+w /usr/local
+          mkdir -p ${INSTALL_PREFIX}/lib
+          
+          # Copy Xerces-C libraries
+          sudo cp -v /usr/local/xerces-c/lib/libxerces-c.so \
+                     /usr/local/xerces-c/lib/libxerces-c-3.*.so \
+                     ${INSTALL_PREFIX}/lib
+          
+          sudo chown -R gpadmin:gpadmin ${INSTALL_PREFIX}
+
+      - name: Download Build Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: cloudberry-pg16-binary
+          path: .
+
+      - name: Install Cloudberry from Artifact
+        run: |
+          set -eo pipefail
+          echo "Installing Cloudberry from artifact..."
+          
+          # Extract tarball to /usr/local
+          sudo tar -xzf cloudberry-pg16.tar.gz -C /usr/local
+          
+          # Fix permissions
+          sudo chown -R gpadmin:gpadmin ${INSTALL_PREFIX}
+          
+          echo "Cloudberry installed successfully"
+          ${INSTALL_PREFIX}/bin/postgres --version
+
+      - name: Configure PG16 for Cloudberry
+        env:
+          SRC_DIR: ${{ github.workspace }}
+        run: |
+          set -eo pipefail
+          
+          # Run configure as gpadmin to generate Makefiles for tests
+          # We don't need to build, just configure
+          su - gpadmin -c "
+            cd ${SRC_DIR}
+            export LD_LIBRARY_PATH=${INSTALL_PREFIX}/lib:\${LD_LIBRARY_PATH}
+            CFLAGS='-O0 -g3' ./configure \
+              --prefix=${INSTALL_PREFIX} \
+              --with-pgport=5432 \
+              --enable-cassert \
+              --with-perl \
+              --with-python \
+              --with-libxml \
+              --with-openssl \
+              --without-zstd \
+              --enable-debug-extensions \
+              --disable-gpcloud \
+              --disable-orca \
+              --disable-gpfdist \
+              --with-pythonsrc-ext \
+              --with-gssapi
+          " 2>&1 | tee -a ${LOGS_DIR}/details/configure.log
+
+      - name: Create gpdemo Cluster
+        env:
+          SRC_DIR: ${{ github.workspace }}
+        run: |
+          set -eo pipefail
+          
+          # Create demo cluster with specified number of segments
+          su - gpadmin -c "
+            source ${INSTALL_PREFIX}/greenplum_path.sh
+            NUM_PRIMARY_MIRROR_PAIRS=${{ matrix.num_primary_mirror_pairs }} make create-demo-cluster
+          " 2>&1 | tee -a ${LOGS_DIR}/details/cluster-creation.log
+
+      - name: Configure PostgreSQL Settings
+        env:
+          SRC_DIR: ${{ github.workspace }}
+        run: |
+          set -eo pipefail
+
+          # Apply PostgreSQL settings from matrix configuration
+          su - gpadmin -c "
+            source ${INSTALL_PREFIX}/greenplum_path.sh
+            source ${SRC_DIR}/gpAux/gpdemo/gpdemo-env.sh
+            
+            # Set optimizer if specified
+            OPTIMIZER='${{ matrix.pg_settings.optimizer }}'
+            if [ -n \"\$OPTIMIZER\" ]; then
+              echo \"Setting optimizer to: \$OPTIMIZER\"
+              gpconfig -c optimizer -v \$OPTIMIZER
+              gpstop -u
+            fi
+          " 2>&1 | tee -a ${LOGS_DIR}/details/pg-settings.log
+
+      - name: Run Tests
+        env:
+          SRC_DIR: ${{ github.workspace }}
+        run: |
+          set -eo pipefail
+
+          # Run each make target from the test configuration
+          MAKE_CONFIGS='${{ toJson(matrix.make_configs) }}'
+          
+          su - gpadmin -c "
+            source ${INSTALL_PREFIX}/greenplum_path.sh
+            source ${SRC_DIR}/gpAux/gpdemo/gpdemo-env.sh
+            
+            echo '=== Running Tests for ${{ matrix.test }} ==='
+            echo 'Make configurations: ${MAKE_CONFIGS}'
+            
+            # Parse and run each make config
+            for config in \$(echo '${MAKE_CONFIGS}' | jq -r '.[]'); do
+              DIR=\$(echo \$config | cut -d: -f1)
+              TARGET=\$(echo \$config | cut -d: -f2)
+              
+              echo \"\"
+              echo \"Running: make -C \$DIR \$TARGET\"
+              echo \"\"
+              
+              if ! make -C \$DIR \$TARGET; then
+                echo \"::error::Test failed: \$DIR:\$TARGET\"
+                exit 1
+              fi
+            done
+            
+            echo \"\"
+            echo \"All tests completed successfully\"
+          " 2>&1 | tee -a ${LOGS_DIR}/details/test-run.log
+
+      - name: Collect Test Results
+        if: always()
+        env:
+          SRC_DIR: ${{ github.workspace }}
+        run: |
+          set -eo pipefail
+          
+          # Collect regression diffs and test results
+          mkdir -p ${LOGS_DIR}/regression-results
+          
+          # Find and copy all regression.diffs files
+          find ${SRC_DIR} -name "regression.diffs" -exec cp --parents {} ${LOGS_DIR}/regression-results/ \; || true
+          
+          # Find and copy all regression.out files
+          find ${SRC_DIR} -name "regression.out" -exec cp --parents {} ${LOGS_DIR}/regression-results/ \; || true
+          
+          echo "Test results collected"
+
+      - name: "Generate Test Job Summary End: ${{ matrix.test }}"
+        if: always()
+        run: |
+          {
+            echo ""
+            echo "## Test Results"
+            echo "- End Time: $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
+            echo "- Status: ${{ job.status }}"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload Test Logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-logs-${{ matrix.test }}-${{ needs.build.outputs.build_timestamp }}
+          path: |
+            test-logs-${{ matrix.test }}/
+          retention-days: ${{ env.LOG_RETENTION_DAYS }}
+
+  ## ======================================================================
+  ## Job: report
+  ## ======================================================================
+
+  report:
+    name: Report Results
+    needs: [build]
+    runs-on: ubuntu-22.04
+    if: always()
+
+    steps:
+      - name: Generate Final Report
+        run: |
+          {
+            echo "# PostgreSQL 16 Merge Validation Report"
+            echo ""
+            echo "## Job Status Summary"
+            echo "- Build: ${{ needs.build.result }}"
+            echo ""
+            echo "**Note**: Test matrix is currently empty as installcheck support is being fixed."
+            echo "Tests will be added incrementally as features become available."
+            echo ""
+            
+            if [ "${{ needs.build.result }}" == "success" ]; then
+              echo "✅ Build completed successfully!"
+              echo ""
+              echo "The cbdb-postgres-merge branch builds correctly and gpdemo cluster can be created."
+            else
+              echo "❌ Build failed!"
+              echo ""
+              echo "Please check the build logs for details."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
