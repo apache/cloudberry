@@ -273,7 +273,7 @@ CParseHandlerOptimizerConfig::EndElement(const XMLCh *const,  // element_uri,
 	}
 
 	m_optimizer_config = GPOS_NEW(m_mp) COptimizerConfig(
-		pec, stats_config, pcteconfig, pcm, phint, pplanhint, pwindowoidsGPDB);
+		pec, stats_config, pcteconfig, pcm, phint, pplanhint, pwindowoidsGPDB, false);
 
 	CParseHandlerTraceFlags *pphTraceFlags =
 		dynamic_cast<CParseHandlerTraceFlags *>((*this)[this->Length() - 1]);

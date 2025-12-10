@@ -108,6 +108,13 @@ public:
 
 	// CTAS storage options
 	virtual CDXLCtasStorageOptions *GetDxlCtasStorageOption() const = 0;
+
+	// parallel workers - CTAS tables don't have this setting yet
+	INT
+	ParallelWorkers() const override
+	{
+		return -1;  // not set
+	}
 };
 }  // namespace gpmd
 
