@@ -759,25 +759,3 @@ GetHashPageStats(Page page, HashIndexStat *stats)
 	}
 	stats->free_space += PageGetExactFreeSpace(page);
 }
-<<<<<<< HEAD
-
-/*
- * check_relation_relkind - convenience routine to check that relation
- * is of the relkind supported by the callers
- */
-static void
-check_relation_relkind(Relation rel)
-{
-	if (rel->rd_rel->relkind != RELKIND_RELATION &&
-		rel->rd_rel->relkind != RELKIND_INDEX &&
-		rel->rd_rel->relkind != RELKIND_MATVIEW &&
-		rel->rd_rel->relkind != RELKIND_SEQUENCE &&
-		rel->rd_rel->relkind != RELKIND_TOASTVALUE &&
-		rel->rd_rel->relkind != RELKIND_DIRECTORY_TABLE)
-		ereport(ERROR,
-				(errcode(ERRCODE_WRONG_OBJECT_TYPE),
-				 errmsg("\"%s\" is not a table, directory table, index, materialized view, sequence, or TOAST table",
-						RelationGetRelationName(rel))));
-}
-=======
->>>>>>> REL_16_9

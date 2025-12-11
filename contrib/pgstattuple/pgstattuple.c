@@ -253,63 +253,10 @@ pgstat_relation(Relation rel, FunctionCallInfo fcinfo)
 				 errmsg("cannot access temporary tables of other sessions")));
 
 	if (RELKIND_HAS_TABLE_AM(rel->rd_rel->relkind) ||
-		rel->rd_rel->relkind == RELKIND_SEQUENCE)
+		rel->rd_rel->relkind == RELKIND_SEQUENCE ||
+		/* This is CBDB addons */
+		rel->rd_rel->relkind == RELKIND_DIRECTORY_TABLE)
 	{
-<<<<<<< HEAD
-		case RELKIND_RELATION:
-		case RELKIND_MATVIEW:
-		case RELKIND_TOASTVALUE:
-		case RELKIND_SEQUENCE:
-		case RELKIND_AOSEGMENTS:
-		case RELKIND_AOBLOCKDIR:
-		case RELKIND_AOVISIMAP:
-		case RELKIND_DIRECTORY_TABLE:
-			return pgstat_heap(rel, fcinfo);
-		case RELKIND_INDEX:
-			switch (rel->rd_rel->relam)
-			{
-				case BTREE_AM_OID:
-					return pgstat_index(rel, BTREE_METAPAGE + 1,
-										pgstat_btree_page, fcinfo);
-				case HASH_AM_OID:
-					return pgstat_index(rel, HASH_METAPAGE + 1,
-										pgstat_hash_page, fcinfo);
-				case GIST_AM_OID:
-					return pgstat_index(rel, GIST_ROOT_BLKNO + 1,
-										pgstat_gist_page, fcinfo);
-				case GIN_AM_OID:
-					err = "gin index";
-					break;
-				case SPGIST_AM_OID:
-					err = "spgist index";
-					break;
-				case BRIN_AM_OID:
-					err = "brin index";
-					break;
-				default:
-					err = "unknown index";
-					break;
-			}
-			break;
-		case RELKIND_VIEW:
-			err = "view";
-			break;
-		case RELKIND_COMPOSITE_TYPE:
-			err = "composite type";
-			break;
-		case RELKIND_FOREIGN_TABLE:
-			err = "foreign table";
-			break;
-		case RELKIND_PARTITIONED_TABLE:
-			err = "partitioned table";
-			break;
-		case RELKIND_PARTITIONED_INDEX:
-			err = "partitioned index";
-			break;
-		default:
-			err = "unknown";
-			break;
-=======
 		return pgstat_heap(rel, fcinfo);
 	}
 	else if (rel->rd_rel->relkind == RELKIND_INDEX)
@@ -357,7 +304,6 @@ pgstat_relation(Relation rel, FunctionCallInfo fcinfo)
 				 errmsg("cannot get tuple-level statistics for relation \"%s\"",
 						RelationGetRelationName(rel)),
 				 errdetail_relkind_not_supported(rel->rd_rel->relkind)));
->>>>>>> REL_16_9
 	}
 
 	return 0;					/* should not happen */

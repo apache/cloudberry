@@ -293,14 +293,9 @@ pgstattuple_approx_internal(Oid relid, FunctionCallInfo fcinfo)
 		  rel->rd_rel->relkind == RELKIND_DIRECTORY_TABLE))
 		ereport(ERROR,
 				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-<<<<<<< HEAD
-				 errmsg("\"%s\" is not a table, directory table, materialized view, or TOAST table",
-						RelationGetRelationName(rel))));
-=======
 				 errmsg("relation \"%s\" is of wrong relation kind",
 						RelationGetRelationName(rel)),
 				 errdetail_relkind_not_supported(rel->rd_rel->relkind)));
->>>>>>> REL_16_9
 
 	if (rel->rd_rel->relam != HEAP_TABLE_AM_OID)
 		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
