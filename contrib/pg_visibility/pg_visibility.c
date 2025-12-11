@@ -787,14 +787,7 @@ tuple_all_visible(Relation rel, HeapTuple tup, TransactionId OldestXmin, Buffer 
 static void
 check_relation_relkind(Relation rel)
 {
-<<<<<<< HEAD
-	if (rel->rd_rel->relkind != RELKIND_RELATION &&
-		rel->rd_rel->relkind != RELKIND_MATVIEW &&
-		rel->rd_rel->relkind != RELKIND_TOASTVALUE &&
-		rel->rd_rel->relkind != RELKIND_DIRECTORY_TABLE)
-=======
 	if (!RELKIND_HAS_TABLE_AM(rel->rd_rel->relkind))
->>>>>>> REL_16_9
 		ereport(ERROR,
 				(errcode(ERRCODE_WRONG_OBJECT_TYPE),
 				 errmsg("relation \"%s\" is of wrong relation kind",

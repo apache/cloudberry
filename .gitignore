@@ -10,14 +10,11 @@
 *.so.[0-9]
 *.so.[0-9].[0-9]
 *.so.[0-9].[0-9][0-9]
-<<<<<<< HEAD
 *.sl
 *.sl.[0-9]
 *.sl.[0-9].[0-9]
 *.sl.[0-9].[0-9][0-9]
 *.swp
-=======
->>>>>>> REL_16_9
 *.dylib
 *.dll
 *.exp
@@ -80,9 +77,6 @@ lib*.pc
 /CMakeLists.txt
 /compile_commands.json
 /tmp_install/
-<<<<<<< HEAD
 /.cache/
 /install/
-=======
 /portlock/
->>>>>>> REL_16_9
