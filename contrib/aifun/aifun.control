@@ -1,4 +1,4 @@
-comment = 'AI Functions for Cloudberry/PostgreSQL'
+comment = 'AI Functions for Apache Cloudberry/PostgreSQL'
 default_version = '1.0'
 relocatable = true
 requires = 'plpython3u, vector'

@@ -1,6 +1,6 @@
 # AIFun PostgreSQL Extension
 
-A PostgreSQL extension that provides AI-powered functions using various LLM providers (OpenAI, Anthropic, Google Gemini, AWS Bedrock).
+An Apache Cloudberry/PostgreSQL extension that provides AI-powered functions that can be used with various LLM providers (OpenAI, Anthropic, Google Gemini, AWS Bedrock, any third-party providers that follow the OpenAI API specification, and locally hosted models using vLLM or SGLang).
 
 ## Features
 
