@@ -156,7 +156,8 @@ CDedupSupersetPreprocessor::ChildExprFullSuperset(CMemoryPool *mp,
 	}
 	CColRefSet *colrefsets = pexpr_child0->DeriveOutputColumns();
 
-	// The colref(in CScalarSubqueryAny) must in the output
+	// The colref(in CScalarSubqueryAny) must in the output 
+	// FIXME: do not use index, it does not follow ORCA design principle
 	(void) colrefsets->ExtractIndex(pop_subany->Pcr(), &ulidx_subany);
 	GPOS_ASSERT(ulidx_subany != gpos::ulong_max);
 
@@ -519,6 +520,23 @@ CDedupSupersetPreprocessor::PexprPreprocess(CMemoryPool *mp, CExpression *pexpr)
 		{
 			if (!dedupulmasks[ul])
 			{
+				if (COperator::EopScalarSubqueryAny == (*pexpr)[ul]->Pop()->Eopid())
+				{
+					CExpression *pdrgpexprSubqueryAny = (*pexpr)[ul];
+					CExpression *pdrgpexpr = (*pdrgpexprSubqueryAny)[0];
+
+					// remove the CTE consumer from CTEINFO
+					if (COperator::EopLogicalCTEConsumer == pdrgpexpr->Pop()->Eopid())
+					{
+						CCTEInfo *pcteinfo =
+							COptCtxt::PoctxtFromTLS()->Pcteinfo();
+						CLogicalCTEConsumer *pop =
+							CLogicalCTEConsumer::PopConvert(pdrgpexpr->Pop());
+
+						pcteinfo->DecrementConsumers(pop->UlCTEId());
+					}
+				}
+
 				continue;
 			}
 
@@ -534,7 +552,6 @@ CDedupSupersetPreprocessor::PexprPreprocess(CMemoryPool *mp, CExpression *pexpr)
 
 		return GPOS_NEW(mp) CExpression(mp, pop, pdrgpexprChildren);
 	}
-	// FIXME: should we consider remove the CTE consumer from CTEINFO?
 
 	const ULONG arity = pexpr->Arity();
 	CExpressionArray *pdrgpexprChildren = GPOS_NEW(mp) CExpressionArray(mp);

@@ -561,6 +561,28 @@ CCTEInfo::IncrementConsumers(ULONG ulConsumerId, ULONG ulParentCTEId)
 	}
 }
 
+//---------------------------------------------------------------------------
+//	@function:
+//		CCTEInfo::IncrementConsumers
+//
+//	@doc:
+//		Decrement number of CTE consumers
+//
+//---------------------------------------------------------------------------
+void
+CCTEInfo::DecrementConsumers(ULONG ulConsumerId, ULONG ulParentCTEId)
+{
+	UlongToConsumerCounterMap *phmulconsumermap =
+		m_phmulprodconsmap->Find(&ulParentCTEId);
+
+	GPOS_ASSERT(nullptr != phmulconsumermap);
+
+	SConsumerCounter *pconsumercounter = phmulconsumermap->Find(&ulConsumerId);
+	GPOS_ASSERT(nullptr != pconsumercounter);
+
+	pconsumercounter->Decrement();
+}
+
 
 //---------------------------------------------------------------------------
 //	@function:
