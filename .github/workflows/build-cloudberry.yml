@@ -286,6 +286,7 @@ jobs:
               },
               {"test":"ic-contrib",
                "make_configs":["contrib/auto_explain:installcheck",
+                               "contrib/amcheck:installcheck",
                                "contrib/citext:installcheck",
                                "contrib/btree_gin:installcheck",
                                "contrib/file_fdw:installcheck",
