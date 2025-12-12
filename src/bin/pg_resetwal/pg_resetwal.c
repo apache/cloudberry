@@ -564,6 +564,9 @@ main(int argc, char *argv[])
 			FullTransactionIdFromEpochAndXid(EpochFromFullTransactionId(ControlFile.checkPointCopy.nextXid),
 											 set_xid);
 
+	if (set_gxid != 0)
+		ControlFile.checkPointCopy.nextGxid = set_gxid;
+
 	if (set_oldest_commit_ts_xid != 0)
 		ControlFile.checkPointCopy.oldestCommitTsXid = set_oldest_commit_ts_xid;
 	if (set_newest_commit_ts_xid != 0)

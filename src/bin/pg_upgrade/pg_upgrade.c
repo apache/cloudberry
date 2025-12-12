@@ -59,6 +59,7 @@ static void copy_xact_xlog_xid(void);
 static void set_frozenxids(bool minmxid_only);
 static void make_outputdirs(char *pgdata);
 static void setup(char *argv0, bool *live_check);
+static void get_cluster_version(ClusterInfo *cluster);
 
 static void copy_subdir_files(const char *old_subdir, const char *new_subdir);
 
@@ -169,6 +170,9 @@ main(int argc, char **argv)
 					new_cluster.pgdata, strerror(errno));
 		umask(pg_mode_mask);
 	}
+
+	get_cluster_version(&old_cluster);
+	get_cluster_version(&new_cluster);
 
 
 	check_and_dump_old_cluster(live_check, &sequence_script_file_name);
@@ -302,6 +306,74 @@ main(int argc, char **argv)
 	cleanup_output_dirs();
 
 	return 0;
+}
+
+
+void
+get_cluster_version(ClusterInfo *cluster)
+{
+	PGconn	   *conn;
+	PGresult   *res;
+	char		query[QUERY_ALLOC];
+	char	   *version;
+	int			i_version;
+	int			ntups;
+	int			dbid;
+	int			i_dbid;
+	char		dbstring[MAX_STRING];
+	char		dbstring2[MAX_STRING];
+	int			v1;
+
+	start_postmaster(cluster, false);
+
+	conn = connectToServer(cluster, "template1");
+
+	snprintf(query, sizeof(query), "SELECT version()");
+
+	res = executeQueryOrDie(conn, "%s", query);
+
+	i_version = PQfnumber(res, "version");
+
+	ntups = PQntuples(res);
+	Assert(ntups == 1);
+
+	version = PQgetvalue(res, 0, i_version);
+
+	if(sscanf(version, "%*[^(](%s %s %d.%*d.%*d-%*[^)])", dbstring, dbstring2, &v1) != 3)
+		pg_fatal("could not get version output from select version();\n");
+
+	if (strcasecmp("Greenplum", dbstring) == 0 && strcasecmp("Database", dbstring2) == 0)
+	{
+		cluster->version.type = Greenplum;
+		cluster->version.version = v1;
+
+	} else if((strcasecmp("Cloudberry", dbstring) == 0 && strcasecmp("Database", dbstring2) == 0)
+				|| (strcasecmp("Apache", dbstring) == 0 && strcasecmp("Cloudberry", dbstring2) == 0))
+	{
+		cluster->version.type = Cloudberry;
+		cluster->version.version = v1;
+	}
+	else
+		pg_fatal("could not upgrade from non Greenplum/Cloudberry version: %s %s\n", dbstring, dbstring2);
+
+	res = executeQueryOrDie(conn, "%s", "show gp_dbid;");
+
+	i_dbid = PQfnumber(res, "gp_dbid");
+
+	ntups = PQntuples(res);
+	Assert(ntups == 1);
+
+	dbid = atoi(PQgetvalue(res, 0, i_dbid));
+
+	cluster->dbid = dbid;
+
+	PQclear(res);
+
+	PQfinish(conn);
+
+	stop_postmaster(cluster);
+
+	return;
 }
 
 #ifdef WIN32
