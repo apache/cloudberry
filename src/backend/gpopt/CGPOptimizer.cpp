@@ -63,8 +63,9 @@ CGPOptimizer::GPOPTOptimizedPlan(
 	GPOS_CATCH_EX(ex)
 	{
 		// clone the error message before context free.
+		BOOL clone_failed = false;
 		CHAR *serialized_error_msg =
-			gpopt_context.CloneErrorMsg(MessageContext);
+			gpopt_context.CloneErrorMsg(MessageContext, &clone_failed);
 		// clean up context
 		gpopt_context.Free(gpopt_context.epinQuery, gpopt_context.epinPlStmt);
 
@@ -72,7 +73,7 @@ CGPOptimizer::GPOPTOptimizedPlan(
 		// we want to use the correct error code for these, in case an application
 		// tries to do something smart with them.
 
-		if (GPOS_MATCH_EX(ex, gpdxl::ExmaGPDB, gpdxl::ExmiGPDBError))
+		if (clone_failed || GPOS_MATCH_EX(ex, gpdxl::ExmaGPDB, gpdxl::ExmiGPDBError))
 		{
 			PG_RE_THROW();
 		}
