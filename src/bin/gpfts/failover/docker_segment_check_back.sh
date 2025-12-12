@@ -1,4 +1,4 @@
-
+#!/usr/bin/env bash
 
 if !type gpssh >/dev/null 2>&1; then 
     echo "[FATAL]:- gpssh not exist, script Exits!"
