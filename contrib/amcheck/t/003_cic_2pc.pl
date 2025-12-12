@@ -9,7 +9,11 @@ use Config;
 use PostgresNode;
 use TestLib;
 
-use Test::More tests => 5;
+use Test::More tests => 0 + 1;#5;
+
+SKIP:
+{
+	skip "TWO PHASE transactions are not supported in Cloudberry, skip test", 1;
 
 Test::More->builder->todo_start('filesystem bug')
   if TestLib::has_wal_read_bug;
@@ -186,3 +190,4 @@ $node->pgbench(
 
 $node->stop;
 done_testing();
+}
