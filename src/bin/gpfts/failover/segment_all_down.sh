@@ -1,3 +1,4 @@
+#!/usr/bin/env bash
 
 if !type pg_ctl >/dev/null 2>&1; then 
     echo "[FATAL]:- pg_ctl not exist, script Exits!"
