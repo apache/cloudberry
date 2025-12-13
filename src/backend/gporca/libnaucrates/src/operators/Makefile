@@ -51,12 +51,15 @@ OBJS        = CDXLColDescr.o \
               CDXLPhysicalAbstractBitmapScan.o \
               CDXLPhysicalAgg.o \
               CDXLPhysicalAppend.o \
+			  CDXLPhysicalParallelAppend.o \
               CDXLPhysicalAssert.o \
               CDXLPhysicalBitmapTableScan.o \
               CDXLPhysicalBroadcastMotion.o \
               CDXLPhysicalCTAS.o \
               CDXLPhysicalCTEConsumer.o \
+              CDXLPhysicalParallelCTEConsumer.o \
               CDXLPhysicalCTEProducer.o \
+              CDXLPhysicalParallelCTEProducer.o \
               CDXLPhysicalDML.o \
               CDXLPhysicalDynamicBitmapTableScan.o \
               CDXLPhysicalDynamicIndexScan.o \
@@ -81,10 +84,12 @@ OBJS        = CDXLColDescr.o \
               CDXLPhysicalResult.o \
               CDXLPhysicalRoutedDistributeMotion.o \
               CDXLPhysicalSequence.o \
+              CDXLPhysicalParallelSequence.o \
               CDXLPhysicalSort.o \
               CDXLPhysicalSplit.o \
               CDXLPhysicalTVF.o \
               CDXLPhysicalTableScan.o \
+              CDXLPhysicalParallelTableScan.o \
               CDXLPhysicalValuesScan.o \
               CDXLPhysicalWindow.o \
               CDXLProperties.o \

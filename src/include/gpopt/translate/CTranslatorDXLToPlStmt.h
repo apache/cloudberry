@@ -213,6 +213,13 @@ private:
 			ctxt_translation_prev_siblings	// translation contexts of previous siblings
 	);
 
+	// translate DXL parallel table scan node into a parallel SeqScan node
+	Plan *TranslateDXLParallelTblScan(
+		const CDXLNode *tbl_scan_dxlnode, CDXLTranslateContext *output_context,
+		CDXLTranslationContextArray *
+			ctxt_translation_prev_siblings	// translation contexts of previous siblings
+	);
+
 	// translate DXL index scan node into a IndexScan node
 	Plan *TranslateDXLIndexScan(
 		const CDXLNode *index_scan_dxlnode,
@@ -354,6 +361,12 @@ private:
 			ctxt_translation_prev_siblings	// translation contexts of previous siblings
 	);
 
+	Plan *TranslateDXLParallelAppend(
+		const CDXLNode *append_dxlnode, CDXLTranslateContext *output_context,
+		CDXLTranslationContextArray *
+		ctxt_translation_prev_siblings  // translation contexts of previous siblings
+	);
+
 	Plan *TranslateDXLMaterialize(
 		const CDXLNode *materialize_dxlnode,
 		CDXLTranslateContext *output_context,
@@ -373,6 +386,13 @@ private:
 		const CDXLNode *sequence_dxlnode, CDXLTranslateContext *output_context,
 		CDXLTranslationContextArray *
 			ctxt_translation_prev_siblings	// translation contexts of previous siblings
+	);
+
+	// translate a parallel sequence operator
+	Plan *TranslateDXLParallelSequence(
+		const CDXLNode *sequence_dxlnode, CDXLTranslateContext *output_context,
+		CDXLTranslationContextArray *
+		ctxt_translation_prev_siblings	// translation contexts of previous siblings
 	);
 
 	// translate a dynamic table scan operator
@@ -436,12 +456,28 @@ private:
 			ctxt_translation_prev_siblings	// translation contexts of previous siblings
 	);
 
+	// translate a CTE producer into a GPDB parallel share input scan
+	Plan *TranslateDXLParallelCTEProducerToParallelSharedScan(
+		const CDXLNode *cte_producer_dxlnode,
+		CDXLTranslateContext *output_context,
+		CDXLTranslationContextArray *
+		ctxt_translation_prev_siblings	// translation contexts of previous siblings
+	);
+
 	// translate a CTE consumer into a GPDB share input scan
 	Plan *TranslateDXLCTEConsumerToSharedScan(
 		const CDXLNode *cte_consumer_dxlnode,
 		CDXLTranslateContext *output_context,
 		CDXLTranslationContextArray *
-			ctxt_translation_prev_siblings	// translation contexts of previous siblings
+		ctxt_translation_prev_siblings	// translation contexts of previous siblings
+	);
+
+	// translate a CTE consumer into a GPDB parallel share input scan
+	Plan *TranslateDXLParallelCTEConsumerToParallelSharedScan(
+		const CDXLNode *cte_consumer_dxlnode,
+		CDXLTranslateContext *output_context,
+		CDXLTranslationContextArray *
+		ctxt_translation_prev_siblings	// translation contexts of previous siblings
 	);
 
 	// translate a (dynamic) bitmap table scan operator
@@ -657,6 +693,10 @@ private:
 
 	// fill the aggno and transno for the aggnode
 	static void TranslateAggFillInfo(CContextDXLToPlStmt *context, Aggref *aggref);
+
+	// extract parallel workers from DXL node tree
+	static ULONG ExtractParallelWorkersFromDXL(const CDXLNode *dxlnode);
+
 };
 }  // namespace gpdxl
 

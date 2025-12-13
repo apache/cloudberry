@@ -33,6 +33,7 @@
 #include "gpopt/operators/COperator.h"
 #include "gpopt/operators/CPattern.h"
 #include "gpopt/operators/CPhysicalCTEConsumer.h"
+#include "gpopt/operators/CPhysicalParallelCTEConsumer.h"
 #include "gpopt/operators/CPhysicalScan.h"
 #include "naucrates/statistics/CStatisticsUtils.h"
 
@@ -678,6 +679,17 @@ CExpressionHandle::DerivePlanPropsForCostContext()
 	{
 		// copy producer plan properties to passed derived plan properties context
 		ULONG ulCTEId = CPhysicalCTEConsumer::PopConvert(pop)->UlCTEId();
+		CDrvdPropPlan *pdpplan =
+			m_pcc->Poc()->Prpp()->Pcter()->Pdpplan(ulCTEId);
+		if (nullptr != pdpplan)
+		{
+			pdpctxtplan->CopyCTEProducerProps(pdpplan, ulCTEId);
+		}
+	}
+	else if (COperator::EopPhysicalParallelCTEConsumer == pop->Eopid())
+	{
+		// copy producer plan properties to passed derived plan properties context
+		ULONG ulCTEId = CPhysicalParallelCTEConsumer::PopConvert(pop)->UlCTEId();
 		CDrvdPropPlan *pdpplan =
 			m_pcc->Poc()->Prpp()->Pcter()->Pdpplan(ulCTEId);
 		if (nullptr != pdpplan)

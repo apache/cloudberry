@@ -125,6 +125,7 @@ enum Edxlopid
 	EdxlopPhysicalValuesScan,
 	EdxlopPhysicalProjection,
 	EdxlopPhysicalTableScan,
+	EdxlopPhysicalParallelTableScan,
 	EdxlopPhysicalBitmapTableScan,
 	EdxlopPhysicalDynamicBitmapTableScan,
 	EdxlopPhysicalForeignScan,
@@ -144,9 +145,11 @@ enum Edxlopid
 	EdxlopPhysicalAgg,
 	EdxlopPhysicalSort,
 	EdxlopPhysicalAppend,
+	EdxlopPhysicalParallelAppend,
 	EdxlopPhysicalMaterialize,
 	EdxlopPhysicalDynamicForeignScan,
 	EdxlopPhysicalSequence,
+	EdxlopPhysicalParallelSequence,
 	EdxlopPhysicalDynamicTableScan,
 	EdxlopPhysicalDynamicIndexScan,
 	EdxlopPhysicalDynamicIndexOnlyScan,
@@ -156,6 +159,8 @@ enum Edxlopid
 
 	EdxlopPhysicalCTEProducer,
 	EdxlopPhysicalCTEConsumer,
+	EdxlopPhysicalParallelCTEProducer,
+	EdxlopPhysicalParallelCTEConsumer,
 
 	EdxlopPhysicalDML,
 	EdxlopPhysicalSplit,
