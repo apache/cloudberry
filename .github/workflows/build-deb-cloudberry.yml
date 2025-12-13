@@ -237,6 +237,7 @@ jobs:
                                "contrib/pgcrypto:installcheck",
                                "contrib/tablefunc:installcheck",
                                "contrib/passwordcheck:installcheck",
+                               "contrib/pg_buffercache:installcheck",
                                "contrib/sslinfo:installcheck"]
               },
               {"test":"ic-deb-gpcontrib",
