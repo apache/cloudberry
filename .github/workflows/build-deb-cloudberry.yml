@@ -246,12 +246,6 @@ jobs:
                                "gpcontrib/gp_sparse_vector:installcheck",
                                "gpcontrib/gp_toolkit:installcheck"]
               },
-              # TODO: Enable diskquota test after fixing deb build prefix inconsistency
-              # The deb build uses --prefix=/usr/cloudberry-db but installs to /usr/local/cloudberry-db
-              # {"test":"ic-deb-diskquota",
-              #  "make_configs":["gpcontrib/diskquota:installcheck"],
-              #  "shared_preload_libraries":"diskquota-2.3"
-              # },
               {"test":"ic-cbdb-parallel",
                "make_configs":["src/test/regress:installcheck-cbdb-parallel"]
               }
