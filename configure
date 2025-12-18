@@ -9283,8 +9283,11 @@ $as_echo "checking whether to build with MCP server... $enable_mcp_server" >&6; 
 
 # Check for required dependencies when mcp-server is enabled
 if test "$enable_mcp_server" = yes; then
-  # Extract the first word of "python3", so it can be a program name with args.
-set dummy python3; ac_word=$2
+  # Search for Python 3.10+ in order of preference
+  for ac_prog in python3.13 python3.12 python3.11 python3.10 python3
+do
+  # Extract the first word of "$ac_prog", so it can be a program name with args.
+set dummy $ac_prog; ac_word=$2
 { $as_echo "$as_me:${as_lineno-$LINENO}: checking for $ac_word" >&5
 $as_echo_n "checking for $ac_word... " >&6; }
 if ${ac_cv_path_PYTHON3+:} false; then :
@@ -9322,6 +9325,9 @@ else
 $as_echo "no" >&6; }
 fi
 
+
+  test -n "$PYTHON3" && break
+done
 
   if test -z "$PYTHON3"; then
     as_fn_error $? "python3 is required for --enable-mcp-server but was not found" "$LINENO" 5

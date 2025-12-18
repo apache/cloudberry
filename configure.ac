@@ -954,7 +954,8 @@ AC_SUBST(enable_mcp_server)
 
 # Check for required dependencies when mcp-server is enabled
 if test "$enable_mcp_server" = yes; then
-  AC_PATH_PROG([PYTHON3], [python3])
+  # Search for Python 3.10+ in order of preference
+  AC_PATH_PROGS([PYTHON3], [python3.13 python3.12 python3.11 python3.10 python3])
   if test -z "$PYTHON3"; then
     AC_MSG_ERROR([python3 is required for --enable-mcp-server but was not found])
   fi
