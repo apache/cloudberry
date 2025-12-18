@@ -40,6 +40,9 @@ PIP3 ?= pip3.11
 # Determine which package manager to use
 USE_UV := $(shell command -v $(UV) 2> /dev/null)
 
+# Get Python version at parse time for use in install target
+PYTHON_VER := $(shell $(PYTHON3) -c "import sys; print('%d.%d' % (sys.version_info.major, sys.version_info.minor))" 2>/dev/null || echo "3.11")
+
 # Build directory
 BUILD_DIR = dist
 VENV_DIR = .venv
@@ -69,16 +72,15 @@ ifdef USE_UV
 	$(UV) pip install --system --prefix=$(DESTDIR)$(prefix) $(BUILD_DIR)/*.whl
 else
 	@echo "Installing with pip..."
-	$(PIP3) install --target=$(DESTDIR)$(prefix)/lib/python$$($(PYTHON3) -c "import sys; print('%d.%d' % (sys.version_info.major, sys.version_info.minor))")/site-packages $(BUILD_DIR)/*.whl
+	$(PIP3) install --target=$(DESTDIR)$(prefix)/lib/python$(PYTHON_VER)/site-packages $(BUILD_DIR)/*.whl
 endif
 	@# Create a wrapper script for easier invocation
 	@echo '#!/bin/sh' > '$(DESTDIR)$(MCP_SERVER_BIN_DIR)/cloudberry-mcp-server'
 	@echo '# Wrapper script for Apache Cloudberry MCP Server' >> '$(DESTDIR)$(MCP_SERVER_BIN_DIR)/cloudberry-mcp-server'
 	@echo '' >> '$(DESTDIR)$(MCP_SERVER_BIN_DIR)/cloudberry-mcp-server'
-	@echo '# Detect Python version and set PYTHONPATH' >> '$(DESTDIR)$(MCP_SERVER_BIN_DIR)/cloudberry-mcp-server'
-	@echo 'PYTHON_VERSION=$$($(PYTHON3) -c "import sys; print(\"python%d.%d\" % (sys.version_info.major, sys.version_info.minor))")' >> '$(DESTDIR)$(MCP_SERVER_BIN_DIR)/cloudberry-mcp-server'
+	@echo '# Set PYTHONPATH for installed packages' >> '$(DESTDIR)$(MCP_SERVER_BIN_DIR)/cloudberry-mcp-server'
 	@echo 'GPHOME="$$(cd "$$(dirname "$$0")/.." && pwd)"' >> '$(DESTDIR)$(MCP_SERVER_BIN_DIR)/cloudberry-mcp-server'
-	@echo 'export PYTHONPATH="$$GPHOME/lib/$$PYTHON_VERSION/site-packages:$$PYTHONPATH"' >> '$(DESTDIR)$(MCP_SERVER_BIN_DIR)/cloudberry-mcp-server'
+	@echo 'export PYTHONPATH="$$GPHOME/lib/python$(PYTHON_VER)/site-packages:$$PYTHONPATH"' >> '$(DESTDIR)$(MCP_SERVER_BIN_DIR)/cloudberry-mcp-server'
 	@echo '' >> '$(DESTDIR)$(MCP_SERVER_BIN_DIR)/cloudberry-mcp-server'
 	@echo 'exec $(PYTHON3) -m cbmcp.server "$$@"' >> '$(DESTDIR)$(MCP_SERVER_BIN_DIR)/cloudberry-mcp-server'
 	@chmod +x '$(DESTDIR)$(MCP_SERVER_BIN_DIR)/cloudberry-mcp-server'
@@ -137,6 +139,7 @@ help:
 	@echo ""
 	@echo "Configuration:"
 	@echo "  PYTHON3    = $(PYTHON3)"
+	@echo "  PYTHON_VER = $(PYTHON_VER)"
 ifdef USE_UV
 	@echo "  UV         = $(UV) (using uv)"
 else
