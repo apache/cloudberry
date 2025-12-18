@@ -7,7 +7,6 @@
 #
 # import mainUtils FIRST to get python version check
 from gppylib.mainUtils import *
-from gppylib.commands.gp import *
 
 import os, sys
 import signal
@@ -960,7 +959,7 @@ class GpStop:
         
         if is_external_fts:
             if options.fts_hosts is None:
-                coordinator_data_directory = get_coordinatordatadir()
+                coordinator_data_directory = gp.get_coordinatordatadir()
                 
                 options.fts_hosts = coordinator_data_directory + '/config' + '/fts_host'
 
