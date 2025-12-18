@@ -9327,6 +9327,18 @@ fi
     as_fn_error $? "python3 is required for --enable-mcp-server but was not found" "$LINENO" 5
   fi
 
+  # Check Python version >= 3.10
+  { $as_echo "$as_me:${as_lineno-$LINENO}: checking Python version for mcp-server" >&5
+$as_echo_n "checking Python version for mcp-server... " >&6; }
+  PYTHON_VERSION=`$PYTHON3 -c "import sys; print('%d.%d' % (sys.version_info.major, sys.version_info.minor))"`
+  { $as_echo "$as_me:${as_lineno-$LINENO}: result: $PYTHON_VERSION" >&5
+$as_echo "$PYTHON_VERSION" >&6; }
+
+  PYTHON_VERSION_OK=`$PYTHON3 -c "import sys; print('yes' if sys.version_info >= (3, 10) else 'no')"`
+  if test "$PYTHON_VERSION_OK" != "yes"; then
+    as_fn_error $? "Python 3.10 or later is required for --enable-mcp-server, found $PYTHON_VERSION" "$LINENO" 5
+  fi
+
   # Check for uv (Python package manager)
   # Extract the first word of "uv", so it can be a program name with args.
 set dummy uv; ac_word=$2

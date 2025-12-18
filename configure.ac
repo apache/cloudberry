@@ -959,6 +959,16 @@ if test "$enable_mcp_server" = yes; then
     AC_MSG_ERROR([python3 is required for --enable-mcp-server but was not found])
   fi
 
+  # Check Python version >= 3.10
+  AC_MSG_CHECKING([Python version for mcp-server])
+  PYTHON_VERSION=`$PYTHON3 -c "import sys; print('%d.%d' % (sys.version_info.major, sys.version_info.minor))"`
+  AC_MSG_RESULT([$PYTHON_VERSION])
+
+  PYTHON_VERSION_OK=`$PYTHON3 -c "import sys; print('yes' if sys.version_info >= (3, 10) else 'no')"`
+  if test "$PYTHON_VERSION_OK" != "yes"; then
+    AC_MSG_ERROR([Python 3.10 or later is required for --enable-mcp-server, found $PYTHON_VERSION])
+  fi
+
   # Check for uv (Python package manager)
   AC_PATH_PROG([UV], [uv])
   if test -z "$UV"; then
