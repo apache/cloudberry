@@ -62,3 +62,24 @@ SELECT gp_inject_fault('opt_relcache_translator_catalog_access', 'reset', 1);
  Success:
 (1 row)
 
+-- Test to check that GPOPTOptimizedPlan() does not cause std::terminate() by throwing an uncaught exception.
+CREATE TABLE test_orca_uncaught_exc(a int, b int) DISTRIBUTED RANDOMLY;
+-- Since ORCA cannot optimize this query, an exception is generated. We then inject a second exception when the
+-- first is caught and verify that it is not propagated further (no std::terminate() is called and backend is alive).
+SELECT gp_inject_fault('opt_clone_error_msg', 'skip', 1);
+ gp_inject_fault 
+-----------------
+ Success:
+(1 row)
+
+SELECT sum(distinct a), count(distinct b) FROM test_orca_uncaught_exc;
+ERROR:  Injected error (COptTasks.cpp:180)
+SELECT gp_inject_fault('opt_clone_error_msg', 'reset', 1);
+ gp_inject_fault 
+-----------------
+ Success:
+(1 row)
+
+-- start_ignore
+DROP TABLE test_orca_uncaught_exc;
+-- end_ignore
