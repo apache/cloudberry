@@ -107,7 +107,7 @@ struct SOptContext
 	void Free(EPin input, EPin epinOutput) const;
 
 	// Clone the error message in given context.
-	CHAR *CloneErrorMsg(struct MemoryContextData *context) const;
+	CHAR *CloneErrorMsg(struct MemoryContextData *context, BOOL *clone_failed) const;
 
 	// casting function
 	static SOptContext *Cast(void *ptr);
