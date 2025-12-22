@@ -219,7 +219,8 @@ CJobGroupExpressionOptimization::Init(CGroupExpression *pgexpr,
 	m_ulOptReq = ulOptReq;
 	m_fChildOptimizationFailed = false;
 	m_fOptimizeCTESequence =
-		(COperator::EopPhysicalSequence == pgexpr->Pop()->Eopid() &&
+		((COperator::EopPhysicalSequence == pgexpr->Pop()->Eopid() || 
+		 COperator::EopPhysicalParallelSequence == pgexpr->Pop()->Eopid()) &&
 		 (*pgexpr)[0]->FHasCTEProducer());
 	if (nullptr != prppCTEProducer)
 	{

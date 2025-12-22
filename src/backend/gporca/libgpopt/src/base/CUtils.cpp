@@ -45,7 +45,9 @@
 #include "gpopt/operators/CLogicalUnary.h"
 #include "gpopt/operators/CPhysicalAgg.h"
 #include "gpopt/operators/CPhysicalCTEConsumer.h"
+#include "gpopt/operators/CPhysicalParallelCTEConsumer.h"
 #include "gpopt/operators/CPhysicalCTEProducer.h"
+#include "gpopt/operators/CPhysicalParallelCTEProducer.h"
 #include "gpopt/operators/CPhysicalMotionRandom.h"
 #include "gpopt/operators/CPhysicalNLJoin.h"
 #include "gpopt/operators/CPredicateUtils.h"
@@ -4455,9 +4457,30 @@ CUtils::ValidateCTEProducerConsumerLocality(
 		ULONG ulCTEID = CPhysicalCTEProducer::PopConvert(pop)->UlCTEId();
 		phmulul->Insert(GPOS_NEW(mp) ULONG(ulCTEID), GPOS_NEW(mp) ULONG(eelt));
 	}
+	else if (COperator::EopPhysicalParallelCTEProducer == pop->Eopid())
+	{
+		// record the location (either master or segment or singleton)
+		// where the CTE producer is being executed
+		ULONG ulCTEID = CPhysicalParallelCTEProducer::PopConvert(pop)->UlCTEId();
+		phmulul->Insert(GPOS_NEW(mp) ULONG(ulCTEID), GPOS_NEW(mp) ULONG(eelt));
+	}
 	else if (COperator::EopPhysicalCTEConsumer == pop->Eopid())
 	{
 		ULONG ulCTEID = CPhysicalCTEConsumer::PopConvert(pop)->UlCTEId();
+		ULONG *pulLocProducer = phmulul->Find(&ulCTEID);
+
+		// check if the CTEConsumer is being executed in the same location
+		// as the CTE Producer
+		if (nullptr == pulLocProducer || *pulLocProducer != (ULONG) eelt)
+		{
+			phmulul->Release();
+			GPOS_RAISE(gpopt::ExmaGPOPT,
+					   gpopt::ExmiCTEProducerConsumerMisAligned, ulCTEID);
+		}
+	}
+	else if (COperator::EopPhysicalParallelCTEConsumer == pop->Eopid())
+	{
+		ULONG ulCTEID = CPhysicalParallelCTEConsumer::PopConvert(pop)->UlCTEId();
 		ULONG *pulLocProducer = phmulul->Find(&ulCTEID);
 
 		// check if the CTEConsumer is being executed in the same location
