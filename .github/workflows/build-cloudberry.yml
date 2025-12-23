@@ -227,6 +227,10 @@ jobs:
           # Define base test configurations
           ALL_TESTS='{
             "include": [
+              {"test":"ic-check-bin-opt-off",
+               "make_configs":["src/bin:check"],
+               "pg_settings":{"optimizer":"off"}
+              },
               {"test":"ic-good-opt-off",
                "make_configs":["src/test/regress:installcheck-good"],
                "pg_settings":{"optimizer":"off"}
