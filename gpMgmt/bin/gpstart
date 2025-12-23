@@ -902,9 +902,7 @@ class GpStart:
         
         if is_external_fts:
             if options.fts_hosts is None:
-                coordinator_data_directory = os.getenv('COORDINATOR_DATA_DIRECTORY')
-                if coordinator_data_directory is None:
-                    coordinator_data_directory = options.coordinatorDataDirectory
+                coordinator_data_directory = gp.get_coordinatordatadir()
                 options.fts_hosts = coordinator_data_directory + '/config' + '/fts_host'
 
         return GpStart(options.specialMode, options.restricted,
