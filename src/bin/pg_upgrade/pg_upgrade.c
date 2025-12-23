@@ -384,9 +384,7 @@ get_cluster_version(ClusterInfo *cluster)
 
 	PQfinish(conn);
 
-	stop_postmaster(cluster);
-
-	return;
+	stop_postmaster(false);
 }
 
 #ifdef WIN32
