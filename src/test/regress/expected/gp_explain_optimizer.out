@@ -458,6 +458,42 @@ explain analyze SELECT * FROM explaintest;
 (8 rows)
 
 set gp_enable_explain_allstat=DEFAULT;
+-- Test explain rows out.
+begin;
+set local gp_enable_explain_rows_out=on;
+create table tt (a int, b int) distributed by(a, b);
+explain(costs off, summary off, timing off, analyze)
+insert into tt select * from generate_series(1,1000)a,generate_series(1,1000)b;
+                                                                    QUERY PLAN                                                                    
+--------------------------------------------------------------------------------------------------------------------------------------------------
+ Insert on tt (actual rows=0 loops=1)
+   Rows out: 0.00 rows avg x 0 workers from 3 segments, 0 rows max (seg0 worker0), 0 rows min (seg0 worker0).
+   ->  Redistribute Motion 1:3  (slice1; segments: 1) (actual rows=333518 loops=1)
+         Hash Key: a.a, b.b
+         Rows out: 333333.33 rows avg x 3 workers from 3 segments, 333518 rows max (seg2 worker2), 333150 rows min (seg1 worker1).
+         ->  Nested Loop (actual rows=1000000 loops=1)
+               Rows out: 1000000.00 rows avg x 1 workers from 1 segments, 1000000 rows max (seg0 worker0), 1000000 rows min (seg2 worker0).
+               ->  Function Scan on generate_series a (actual rows=1000 loops=1)
+                     Rows out: 1000.00 rows avg x 1 workers from 1 segments, 1000 rows max (seg0 worker0), 1000 rows min (seg2 worker0).
+               ->  Function Scan on generate_series b (actual rows=1000 loops=1000)
+                     Rows out: 1000000.00 rows avg x 1 workers from 1 segments, 1000000 rows max (seg0 worker0), 1000000 rows min (seg2 worker0).
+ Optimizer: Postgres query optimizer
+(12 rows)
+
+explain(costs off, summary off, timing off, analyze)
+select * from tt where a > b;
+                                                            QUERY PLAN                                                             
+-----------------------------------------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3) (actual rows=499500 loops=1)
+   Rows out: 499500.00 rows avg x 1 workers from 1 segments, 499500 rows max (seg-1 worker0), 499500 rows min (seg-1 worker0).
+   ->  Seq Scan on tt (actual rows=166461 loops=1)
+         Filter: (a > b)
+         Rows Removed by Filter: 167057
+         Rows out: 166500.00 rows avg x 3 workers from 3 segments, 166557 rows max (seg0 worker0), 166461 rows min (seg2 worker2).
+ Optimizer: Postgres query optimizer
+(7 rows)
+
+abort;
 --
 -- Test GPDB-specific EXPLAIN (SLICETABLE) option.
 --
