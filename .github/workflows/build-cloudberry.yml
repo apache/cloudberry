@@ -227,8 +227,8 @@ jobs:
           # Define base test configurations
           ALL_TESTS='{
             "include": [
-              {"test":"ic-check-bin-opt-off",
-               "make_configs":["src/bin:check"],
+              {"test":"ic-tap-bin-opt-off",
+               "make_configs":["src/bin:installcheck"],
                "pg_settings":{"optimizer":"off"}
               },
               {"test":"ic-good-opt-off",
@@ -1813,6 +1813,15 @@ jobs:
           name: test-logs-${{ matrix.test }}-${{ needs.build.outputs.build_timestamp }}
           path: |
             build-logs/
+          retention-days: ${{ env.LOG_RETENTION_DAYS }}
+
+      - name: Upload test logs TAP
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-logs-tap-${{ matrix.test }}-${{ needs.build.outputs.build_timestamp }}
+          path: |
+            src/bin/*/tmp_check/*
           retention-days: ${{ env.LOG_RETENTION_DAYS }}
 
       - name: Upload Test Metadata
