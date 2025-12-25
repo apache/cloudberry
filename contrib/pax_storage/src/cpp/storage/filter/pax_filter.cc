@@ -43,9 +43,8 @@ namespace pax {
 
 PaxFilter::PaxFilter() : sparse_filter_(nullptr), row_filter_(nullptr) {}
 
-void PaxFilter::InitSparseFilter(Relation relation, List *quals,
-                                 ScanKey key, int nkeys,
-                                 bool allow_fallback_to_pg) {
+void PaxFilter::InitSparseFilter(Relation relation, List *quals, ScanKey key,
+                                 int nkeys, bool allow_fallback_to_pg) {
   Assert(!sparse_filter_);
   sparse_filter_ =
       std::make_shared<PaxSparseFilter>(relation, allow_fallback_to_pg);
@@ -123,10 +122,11 @@ void PaxFilter::SetColumnProjection(const std::vector<int> &cols, int natts) {
 }
 
 void PaxFilter::InitRowFilter(Relation relation, PlanState *ps,
-                              const std::vector<bool> &projection) {
+                              const std::vector<bool> &projection, ScanKey key,
+                              int nkeys) {
   Assert(!row_filter_);
   row_filter_ = std::make_shared<PaxRowFilter>();
-  if (!row_filter_->Initialize(relation, ps, projection)) {
+  if (!row_filter_->Initialize(relation, ps, projection, key, nkeys)) {
     row_filter_ = nullptr;
   }
 }
