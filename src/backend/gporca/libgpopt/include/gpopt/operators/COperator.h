@@ -188,6 +188,7 @@ public:
 		EopScalarFieldSelect,
 
 		EopPhysicalTableScan,
+		EopPhysicalParallelTableScan,
 		EopPhysicalForeignScan,
 		EopPhysicalIndexScan,
 		EopPhysicalIndexOnlyScan,
