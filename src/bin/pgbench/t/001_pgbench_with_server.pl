@@ -108,7 +108,7 @@ $node->pgbench(
 	[qr{^$}],
 	[
 		qr{creating tables},
-		qr{reating non-unique keys},
+		qr{creating non-unique keys},
 		qr{done in \d+\.\d\d s }
 	],
 	'pgbench --use-non-unique-keys');
