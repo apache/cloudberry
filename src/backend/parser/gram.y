@@ -500,7 +500,7 @@ static void check_expressions_in_partition_key(PartitionSpec *spec, core_yyscan_
 
 %type <range>	OptTempTableName
 %type <into>	into_clause create_as_target create_mv_target
-%type <boolean>	incremental
+%type <boolean>	opt_incremental
 
 %type <defelt>	createfunc_opt_item common_func_opt_item dostmt_opt_item
 %type <fun_param> func_arg func_arg_with_default table_func_column aggr_arg
@@ -7216,7 +7216,7 @@ ext_opt_encoding_item:
  *****************************************************************************/
 
 CreateMatViewStmt:
-		CREATE OptNoLog incremental MATERIALIZED VIEW create_mv_target AS SelectStmt opt_with_data OptDistributedBy
+		CREATE OptNoLog opt_incremental MATERIALIZED VIEW create_mv_target AS SelectStmt opt_with_data OptDistributedBy
 				{
 					CreateTableAsStmt *ctas = makeNode(CreateTableAsStmt);
 					ctas->query = $8;
@@ -7231,7 +7231,7 @@ CreateMatViewStmt:
 					ctas->into->distributedBy = $10;
 					$$ = (Node *) ctas;
 				}
-		| CREATE OptNoLog incremental MATERIALIZED VIEW IF_P NOT EXISTS create_mv_target AS SelectStmt opt_with_data OptDistributedBy
+		| CREATE OptNoLog opt_incremental MATERIALIZED VIEW IF_P NOT EXISTS create_mv_target AS SelectStmt opt_with_data OptDistributedBy
 				{
 					CreateTableAsStmt *ctas = makeNode(CreateTableAsStmt);
 					ctas->query = $11;
@@ -7336,7 +7336,7 @@ create_mv_target:
 				}
 		;
 
-incremental:	INCREMENTAL					{ $$ = true; }
+opt_incremental:	INCREMENTAL					{ $$ = true; }
 			| /*EMPTY*/						{ $$ = false; }
 		;
 

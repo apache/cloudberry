@@ -1,5 +1,8 @@
 -- disable ORCA
 SET optimizer TO off;
+-- start_ignore
+set gp_use_streaming_hashagg = off;
+-- end_ignore
 
 -- Test case group 1: basic functions
 CREATE TABLE agg_pushdown_parent (

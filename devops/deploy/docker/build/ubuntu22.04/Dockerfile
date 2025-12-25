@@ -95,6 +95,7 @@ RUN apt-get update && \
             flex \
             g++-11 \
             gcc-11 \
+            gdb \
             git \
             iproute2 \
             iputils-ping \
@@ -110,7 +111,9 @@ RUN apt-get update && \
             libperl-dev \
             libprotobuf-dev \
             libreadline-dev \
+            libssh2-1-dev \
             libssl-dev \
+            liburing-dev \
             libuv1-dev \
             libxerces-c-dev \
             libxml2-dev \
@@ -178,7 +181,7 @@ RUN cp /tmp/90-cbdb-limits /etc/security/limits.d/90-cbdb-limits && \
     echo $TZ > /etc/timezone && \
     chmod 755 /tmp/init_system.sh && \
     /usr/sbin/groupadd gpadmin && \
-    /usr/sbin/useradd -m -g gpadmin gpadmin && \
+    /usr/sbin/useradd -m -g gpadmin gpadmin -s /bin/bash && \
     echo 'gpadmin ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/90-gpadmin && \
     chmod 0440 /etc/sudoers.d/90-gpadmin && \
     ssh-keygen -A && \

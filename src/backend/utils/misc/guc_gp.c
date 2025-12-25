@@ -153,6 +153,7 @@ bool		enable_parallel_semi_join = true;
 bool		enable_parallel_dedup_semi_join = true;
 bool		enable_parallel_dedup_semi_reverse_join = true;
 bool		parallel_query_use_streaming_hashagg = false;
+bool		gp_use_streaming_hashagg = true;
 int			gp_appendonly_insert_files = 0;
 int			gp_appendonly_insert_files_tuples_range = 0;
 int			gp_random_insert_segments = 0;
@@ -1796,8 +1797,7 @@ struct config_bool ConfigureNamesBool_gp[] =
 	{
 		{"gp_cte_sharing", PGC_USERSET, QUERY_TUNING_METHOD,
 			gettext_noop("This guc enables sharing of plan fragments for common table expressions."),
-			NULL,
-			GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE
+			NULL
 		},
 		&gp_cte_sharing,
 		false,
@@ -1897,6 +1897,16 @@ struct config_bool ConfigureNamesBool_gp[] =
 		},
 		&gp_eager_distinct_dedup,
 		false, NULL, NULL
+	},
+
+	{
+		{"gp_use_streaming_hashagg", PGC_USERSET, QUERY_TUNING_METHOD,
+			gettext_noop("Use streaming hash agg in the first phase for multi-phase aggregations."),
+			NULL,
+			GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE
+		},
+		&gp_use_streaming_hashagg,
+		true, NULL, NULL
 	},
 
 	{
@@ -5103,6 +5113,9 @@ struct config_string ConfigureNamesString_gp[] =
 		{"gp_interconnect_type", PGC_BACKEND, GP_ARRAY_TUNING,
 			gettext_noop("Sets the protocol used for inter-node communication."),
 			gettext_noop("Valid values are \"tcp\", \"udpifc\""
+#ifdef ENABLE_IC_UDP2
+						 ", \"udp2(experimental feature)\""
+#endif /* ENABLE_IC_UDP2 */
 #ifdef ENABLE_IC_PROXY
 						 " and \"proxy\""
 #endif  /* ENABLE_IC_PROXY */
@@ -5523,7 +5536,7 @@ check_hot_dr(bool *newval, void **extra, GucSource source)
 	if (*newval && IS_QUERY_DISPATCHER() && !checkGpSegConfigFtsFiles())
 		ereport(ERROR,
 				(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
-				 errmsg("cannot enable \"hot_dr\" since DR cluster segment configuration file does not exits")));
+				 errmsg("cannot enable \"hot_dr\" since DR cluster segment configuration file does not exist")));
 
 	return true;
 }

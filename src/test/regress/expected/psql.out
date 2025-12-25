@@ -2864,6 +2864,13 @@ Access method: heap_psql
  f2     | character(100) |           |          |         | extended |              | 
 Access method: heap
 
+\dit+ tbl_heap
+                                                         List of relations
+     Schema      |   Name   | Type  |        Owner         | Storage | Table | Persistence | Access method |  Size   | Description 
+-----------------+----------+-------+----------------------+---------+-------+-------------+---------------+---------+-------------
+ tableam_display | tbl_heap | table | regress_display_role | heap    |       | permanent   | heap          | 0 bytes | 
+(1 row)
+
 -- AM is displayed for tables, indexes and materialized views.
 \d+
                                                                  List of relations

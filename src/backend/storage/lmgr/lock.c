@@ -939,11 +939,26 @@ LockAcquireExtended(const LOCKTAG *locktag,
 			{
 				/* Find the guy who should manage our locks */
 				volatile PGPROC * proc = FindProcByGpSessionId(gp_session_id);
-				int count = 0;
-				while(proc==NULL && count < find_writer_proc_retry_time)
+				TimestampTz current_time;
+				TimestampTz start_time;
+				long        elapsed_secs;
+				int         elapsed_usecs;
+				start_time = GetCurrentTimestamp();
+
+				while (proc == NULL)
 				{
+					/*
+					 * The creation timeout retry logic of cdbgang_createGang_async
+					 * should be synchronized with the reader to avoid slow creation
+					 * due to platform, container, network and other reasons, 
+					 * which would cause the reader to prematurely consider it an abnormal termination.
+					 */
+					current_time = GetCurrentTimestamp();
+					TimestampDifference(start_time, current_time, &elapsed_secs, &elapsed_usecs);
+					if (elapsed_secs >= gp_segment_connect_timeout / 2)
+						break;
+
 					pg_usleep( /* microseconds */ 2000);
-					count++;
 					CHECK_FOR_INTERRUPTS();
 					/*
 					 * The reason for using pg_memory_barrier() is to ensure that
@@ -954,7 +969,7 @@ LockAcquireExtended(const LOCKTAG *locktag,
 				}
 				if (proc != NULL)
 				{
-					elog(DEBUG1,"Found writer proc entry.  My Pid %d, his pid %d", MyProc-> pid, proc->pid);
+					elog(DEBUG1, "Found writer proc entry.  My Pid %d, his pid %d", MyProc-> pid, proc->pid);
 					lockHolderProcPtr = (PGPROC*) proc;
 				}
 				else

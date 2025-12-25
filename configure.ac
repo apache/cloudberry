@@ -924,6 +924,16 @@ if test "$enable_external_fts" = no; then
 fi
 
 #
+# ic-udp2
+#
+PGAC_ARG_BOOL(enable, ic-udp2, no,
+              [enable interconnect udp2 implement],
+              [AC_DEFINE(ENABLE_IC_UDP2, 1,
+                         [Define to 1 to build with interconnect udp2 support (--enable-ic-udp2)])])
+AC_MSG_RESULT([checking whether to build with interconnect udp2 support ... $enable_ic_udp2])
+AC_SUBST(enable_ic_udp2)
+
+#
 # ic-proxy
 #
 PGAC_ARG_BOOL(enable, ic-proxy, no,
@@ -961,6 +971,10 @@ if test "$enable_pax" = yes; then
     [AC_DEFINE([HAVE_ZSTD], [1], [Define if zstd is available])],
     [AC_MSG_ERROR([libzstd >= 1.4.0 is required for PAX support])]
   )
+
+  # Check liburing
+  AC_CHECK_LIB(uring, io_uring_queue_init, [],
+               [AC_MSG_ERROR([library 'uring' is required for PAX support])])
 
   # Check cmake >= 3.11.0 using AX_COMPARE_VERSION
   AC_PATH_PROG([CMAKE], [cmake], [no])

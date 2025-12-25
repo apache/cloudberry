@@ -576,7 +576,7 @@ check_for_new_tablespace_dir(ClusterInfo *new_cluster)
 				 os_info.old_tablespaces[tblnum],
 				 new_cluster->tablespace_suffix);
 
-		if (stat(new_tablespace_dir, &statbuf) == 0 || errno != ENOENT)
+		if (is_greenplum_dispatcher_mode() && (stat(new_tablespace_dir, &statbuf) == 0 || errno != ENOENT))
 			gp_fatal_log("new cluster tablespace directory already exists: \"%s\"\n",
 					 new_tablespace_dir);
 	}
@@ -1597,6 +1597,8 @@ static void
 check_for_cluster_key_failure(ClusterInfo *cluster)
 {
 	struct stat buffer;
+
+	prep_status("Checking for presence of pg_cryptokeys");
 
 	if (stat (KMGR_DIR_PID, &buffer) == 0)
 	{

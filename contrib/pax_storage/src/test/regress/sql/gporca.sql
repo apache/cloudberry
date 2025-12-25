@@ -1,6 +1,9 @@
 --
 -- ORCA tests
 --
+-- start_ignore
+set gp_use_streaming_hashagg = off;
+-- end_ignore
 
 -- show version
 SELECT count(*) from gp_opt_version();
