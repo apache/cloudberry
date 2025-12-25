@@ -6528,6 +6528,7 @@ static void
 UpdateCatalogForStandbyPromotion(void)
 {
 	GpRoleValue old_role;
+	char *fullpath;
 	/*
 	 * NOTE: The following initialization logic was borrowed from ftsprobe.
 	 */
@@ -6599,8 +6600,6 @@ UpdateCatalogForStandbyPromotion(void)
 	 */
 	RelationCacheInitializePhase2();
 
-	char *fullpath;
-
 	/*
 	 * In order to access the catalog, we need a database, and a
 	 * tablespace; our access to the heap is going to be slightly
@@ -6620,6 +6619,7 @@ UpdateCatalogForStandbyPromotion(void)
 	fullpath = GetDatabasePath(MyDatabaseId, MyDatabaseTableSpace);
 
 	SetDatabasePath(fullpath);
+	pfree(fullpath);
 
 	RelationCacheInitializePhase3();
 
