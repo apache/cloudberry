@@ -111,8 +111,14 @@ jobs:
           # Uncomment and add tests as features become available
           ALL_TESTS='{
             "include": [
+              ic-good-opt-off: Basic bare-minimum installcheck with optimizer off
+              {"test":"ic-good-opt-off",
+                "make_configs":["src/test/regress:installcheck-small"],
+                "pg_settings":{"optimizer":"off"}
+              }
             ]
           }'
+
           
           # Tests to be added as PG16 support improves:
           # - ic-good-opt-off: Basic installcheck with optimizer off
