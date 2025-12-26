@@ -630,7 +630,8 @@ jobs:
               --disable-orca \
               --disable-gpfdist \
               --with-pythonsrc-ext \
-              --with-gssapi
+              --with-gssapi \
+              --without-icu 
           " 2>&1 | tee -a ${LOGS_DIR}/details/configure.log
 
       - name: Create gpdemo Cluster
