@@ -355,7 +355,8 @@ jobs:
                 --disable-orca \
                 --disable-gpfdist \
                 --with-pythonsrc-ext \
-                --with-gssapi
+                --with-gssapi \
+                --without-icu
             "; then
               echo "::error::Configure failed"
               exit 1
