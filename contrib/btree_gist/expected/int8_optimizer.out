@@ -82,7 +82,7 @@ SELECT a, a <-> '464571291354841' FROM int8tmp ORDER BY a <-> '464571291354841' 
          ->  Sort
                Sort Key: ((a <-> '464571291354841'::bigint))
                ->  Seq Scan on int8tmp
- Optimizer: Pivotal Optimizer (GPORCA)
+ Optimizer: GPORCA
 (7 rows)
 
 SELECT a, a <-> '464571291354841' FROM int8tmp ORDER BY a <-> '464571291354841' LIMIT 3;
