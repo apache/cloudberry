@@ -74,7 +74,7 @@ SELECT * FROM chartmp WHERE a BETWEEN '31a' AND '31c';
    ->  Index Scan using charidx on chartmp
          Index Cond: ((a >= '31a'::bpchar) AND (a <= '31c'::bpchar))
          Filter: ((a >= '31a'::bpchar) AND (a <= '31c'::bpchar))
- Optimizer: Pivotal Optimizer (GPORCA)
+ Optimizer: GPORCA
 (5 rows)
 
 SELECT * FROM chartmp WHERE a BETWEEN '31a' AND '31c';
