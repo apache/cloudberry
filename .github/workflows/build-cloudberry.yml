@@ -1251,6 +1251,12 @@ jobs:
 
             echo "Installation completed successfully"
             rpm -qi apache-cloudberry-db-incubating
+
+            # Clean up downloaded RPM artifacts to free disk space
+            echo "Cleaning up RPM artifacts to free disk space..."
+            rm -rf "${GITHUB_WORKSPACE}"/rpm_build_artifacts
+            echo "Disk space after RPM cleanup:"
+            df -kh /
           } 2>&1 | tee -a build-logs/details/rpm-installation.log
 
       - name: Extract source tarball
@@ -1276,6 +1282,12 @@ jobs:
             ls -la "${SRC_DIR}/../cloudberry"
             echo "Directory size:"
             du -sh "${SRC_DIR}/../cloudberry"
+
+            # Clean up source tarball to free disk space
+            echo "Cleaning up source tarball to free disk space..."
+            rm -rf "${GITHUB_WORKSPACE}"/source_build_artifacts
+            echo "Disk space after source tarball cleanup:"
+            df -kh /
           } 2>&1 | tee -a build-logs/details/source-extraction.log
 
       - name: Create Apache Cloudberry demo cluster
