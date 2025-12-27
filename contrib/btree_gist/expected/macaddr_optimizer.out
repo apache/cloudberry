@@ -74,7 +74,7 @@ SELECT * FROM macaddrtmp WHERE a < '02:03:04:05:06:07'::macaddr;
    ->  Index Scan using macaddridx on macaddrtmp
          Index Cond: (a < '02:03:04:05:06:07'::macaddr)
          Filter: (a < '02:03:04:05:06:07'::macaddr)
- Optimizer: Pivotal Optimizer (GPORCA)
+ Optimizer: GPORCA
 (5 rows)
 
 SELECT * FROM macaddrtmp WHERE a < '02:03:04:05:06:07'::macaddr;

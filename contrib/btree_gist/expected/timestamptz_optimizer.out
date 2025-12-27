@@ -202,7 +202,7 @@ SELECT a, a <-> '2018-12-18 10:59:54 GMT+2' FROM timestamptztmp ORDER BY a <-> '
          ->  Sort
                Sort Key: ((a <-> 'Tue Dec 18 04:59:54 2018 PST'::timestamp with time zone))
                ->  Seq Scan on timestamptztmp
- Optimizer: Pivotal Optimizer (GPORCA)
+ Optimizer: GPORCA
 (7 rows)
 
 SELECT a, a <-> '2018-12-18 10:59:54 GMT+2' FROM timestamptztmp ORDER BY a <-> '2018-12-18 10:59:54 GMT+2' LIMIT 3;

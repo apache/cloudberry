@@ -82,7 +82,7 @@ SELECT a, a <-> '-179.0' FROM float4tmp ORDER BY a <-> '-179.0' LIMIT 3;
          ->  Sort
                Sort Key: ((a <-> '-179'::real))
                ->  Seq Scan on float4tmp
- Optimizer: Pivotal Optimizer (GPORCA)
+ Optimizer: GPORCA
 (7 rows)
 
 SELECT a, a <-> '-179.0' FROM float4tmp ORDER BY a <-> '-179.0' LIMIT 3;
