@@ -74,6 +74,9 @@ public:
 	CPartitionPropagationSpec *PppsDerive(
 		CMemoryPool *mp, CExpressionHandle &exprhdl) const override;
 
+	// return rewindability property enforcing type for this operator
+	CEnfdProp::EPropEnforcingType EpetRewindability(CExpressionHandle &, const CEnfdRewindability *) const override;
+
 };	// class CPhysicalDynamicTableScan
 
 }  // namespace gpopt
