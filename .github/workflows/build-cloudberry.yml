@@ -227,7 +227,7 @@ jobs:
           # Define base test configurations
           ALL_TESTS='{
             "include": [
-              {"test":"ic-tap-bin-opt-off",
+              {"test":"ic-world-opt-off",
                "make_configs":["./:installcheck-world"],
                "pg_settings":{"optimizer":"off"}
               },
