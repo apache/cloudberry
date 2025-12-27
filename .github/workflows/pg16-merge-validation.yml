@@ -111,6 +111,10 @@ jobs:
           # Uncomment and add tests as features become available
           ALL_TESTS='{
             "include": [
+              {"test":"ic-small-opt-off",
+                "make_configs":["src/test/regress:installcheck-small"],
+                "pg_settings":{"optimizer":"off"}
+              }
             ]
           }'
           
@@ -351,7 +355,8 @@ jobs:
                 --disable-orca \
                 --disable-gpfdist \
                 --with-pythonsrc-ext \
-                --with-gssapi
+                --with-gssapi \
+                --without-icu
             "; then
               echo "::error::Configure failed"
               exit 1
@@ -625,7 +630,8 @@ jobs:
               --disable-orca \
               --disable-gpfdist \
               --with-pythonsrc-ext \
-              --with-gssapi
+              --with-gssapi \
+              --without-icu 
           " 2>&1 | tee -a ${LOGS_DIR}/details/configure.log
 
       - name: Create gpdemo Cluster
