@@ -926,8 +926,28 @@ jobs:
           chmod -R 755 .
           chmod 777 "${LOGS_DIR}"
 
+          echo "=== Disk space before cleanup ==="
           df -kh /
+
+          # Aggressive disk cleanup for test jobs
           rm -rf /__t/*
+          rm -rf /var/cache/dnf/*
+          rm -rf /var/cache/yum/*
+          rm -rf /tmp/* 2>/dev/null || true
+          rm -rf /var/tmp/* 2>/dev/null || true
+          rm -rf /root/.cache/* 2>/dev/null || true
+          rm -rf /home/*/.cache/* 2>/dev/null || true
+
+          # Clean up package manager caches
+          dnf clean all 2>/dev/null || true
+          yum clean all 2>/dev/null || true
+
+          # Remove unnecessary locale files
+          rm -rf /usr/share/locale/* 2>/dev/null || true
+          rm -rf /usr/share/doc/* 2>/dev/null || true
+          rm -rf /usr/share/man/* 2>/dev/null || true
+
+          echo "=== Disk space after cleanup ==="
           df -kh /
 
           df -h | tee -a "${LOGS_DIR}/details/disk-usage.log"
@@ -1385,6 +1405,17 @@ jobs:
             esac
 
             echo "Log file: $config_log"
+
+            # Clean up temporary files between test configurations to free disk space
+            echo "Cleaning up temporary files after configuration $((i+1))..."
+            rm -rf /tmp/gpdb_* 2>/dev/null || true
+            rm -rf /tmp/pg_* 2>/dev/null || true
+            rm -rf /tmp/*.sql 2>/dev/null || true
+            rm -rf /tmp/*.out 2>/dev/null || true
+            sync
+            echo "Disk space after cleanup:"
+            df -kh /
+
             echo "=== End configuration $((i+1)) execution ==="
             echo ""
           done
