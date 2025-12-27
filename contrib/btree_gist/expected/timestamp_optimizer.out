@@ -82,7 +82,7 @@ SELECT a, a <-> '2004-10-26 08:55:08' FROM timestamptmp ORDER BY a <-> '2004-10-
          ->  Sort
                Sort Key: ((a <-> 'Tue Oct 26 08:55:08 2004'::timestamp without time zone))
                ->  Seq Scan on timestamptmp
- Optimizer: Pivotal Optimizer (GPORCA)
+ Optimizer: GPORCA
 (7 rows)
 
 SELECT a, a <-> '2004-10-26 08:55:08' FROM timestamptmp ORDER BY a <-> '2004-10-26 08:55:08' LIMIT 3;

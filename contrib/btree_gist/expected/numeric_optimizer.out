@@ -199,7 +199,7 @@ SELECT * FROM numerictmp WHERE a BETWEEN 1 AND 300 ORDER BY a;
          ->  Index Scan using numericidx on numerictmp
                Index Cond: ((a >= '1'::numeric) AND (a <= '300'::numeric))
                Filter: ((a >= '1'::numeric) AND (a <= '300'::numeric))
- Optimizer: Pivotal Optimizer (GPORCA)
+ Optimizer: GPORCA
 (8 rows)
 
 SELECT * FROM numerictmp WHERE a BETWEEN 1 AND 300 ORDER BY a;
