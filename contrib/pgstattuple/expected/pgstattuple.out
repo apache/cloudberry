@@ -152,6 +152,8 @@ select pgstatginindex('test_hashidx');
 ERROR:  relation "test_hashidx" is not a GIN index
 -- check that using any of these functions with unsupported relations will fail
 create table test_partitioned (a int) partition by range (a);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create index test_partitioned_index on test_partitioned(a);
 -- these should all fail
 select pgstattuple('test_partitioned');
@@ -159,9 +161,9 @@ ERROR:  "test_partitioned" (partitioned table) is not supported
 select pgstattuple('test_partitioned_index');
 ERROR:  "test_partitioned_index" (partitioned index) is not supported
 select pgstattuple_approx('test_partitioned');
-ERROR:  "test_partitioned" is not a table, materialized view, or TOAST table
+ERROR:  "test_partitioned" is not a table, directory table, materialized view, or TOAST table
 select pg_relpages('test_partitioned');
-ERROR:  "test_partitioned" is not a table, index, materialized view, sequence, or TOAST table
+ERROR:  "test_partitioned" is not a table, directory table, index, materialized view, sequence, or TOAST table
 select pgstatindex('test_partitioned');
 ERROR:  relation "test_partitioned" is not a btree index
 select pgstatginindex('test_partitioned');
@@ -173,9 +175,9 @@ create view test_view as select 1;
 select pgstattuple('test_view');
 ERROR:  "test_view" (view) is not supported
 select pgstattuple_approx('test_view');
-ERROR:  "test_view" is not a table, materialized view, or TOAST table
+ERROR:  "test_view" is not a table, directory table, materialized view, or TOAST table
 select pg_relpages('test_view');
-ERROR:  "test_view" is not a table, index, materialized view, sequence, or TOAST table
+ERROR:  "test_view" is not a table, directory table, index, materialized view, sequence, or TOAST table
 select pgstatindex('test_view');
 ERROR:  relation "test_view" is not a btree index
 select pgstatginindex('test_view');
@@ -189,9 +191,9 @@ create foreign table test_foreign_table () server dummy_server;
 select pgstattuple('test_foreign_table');
 ERROR:  "test_foreign_table" (foreign table) is not supported
 select pgstattuple_approx('test_foreign_table');
-ERROR:  "test_foreign_table" is not a table, materialized view, or TOAST table
+ERROR:  "test_foreign_table" is not a table, directory table, materialized view, or TOAST table
 select pg_relpages('test_foreign_table');
-ERROR:  "test_foreign_table" is not a table, index, materialized view, sequence, or TOAST table
+ERROR:  "test_foreign_table" is not a table, directory table, index, materialized view, sequence, or TOAST table
 select pgstatindex('test_foreign_table');
 ERROR:  relation "test_foreign_table" is not a btree index
 select pgstatginindex('test_foreign_table');
@@ -200,6 +202,7 @@ select pgstathashindex('test_foreign_table');
 ERROR:  "test_foreign_table" is not an index
 -- a partition of a partitioned table should work though
 create table test_partition partition of test_partitioned for values from (1) to (100);
+NOTICE:  table has parent, setting distribution columns to match parent table
 select pgstattuple('test_partition');
      pgstattuple     
 ---------------------
