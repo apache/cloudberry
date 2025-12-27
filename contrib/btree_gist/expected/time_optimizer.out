@@ -82,7 +82,7 @@ SELECT a, a <-> '10:57:11' FROM timetmp ORDER BY a <-> '10:57:11' LIMIT 3;
          ->  Sort
                Sort Key: ((a <-> '10:57:11'::time without time zone))
                ->  Seq Scan on timetmp
- Optimizer: Pivotal Optimizer (GPORCA)
+ Optimizer: GPORCA
 (7 rows)
 
 SELECT a, a <-> '10:57:11' FROM timetmp ORDER BY a <-> '10:57:11' LIMIT 3;
