@@ -100,6 +100,19 @@ $node->pgbench(
 	],
 	'pgbench --init-steps');
 
+
+# Test interaction of --init-steps with legacy step-selection options
+$node->pgbench(
+	'--initialize --use-non-unique-keys',
+	0,
+	[qr{^$}],
+	[
+		qr{creating tables},
+		qr{creating non-unique keys},
+		qr{done in \d+\.\d\d s }
+	],
+	'pgbench --use-non-unique-keys');
+
 # Run all builtin scripts, for a few transactions each
 $node->pgbench(
 	'--transactions=5 -Dfoo=bla --client=2 --protocol=simple --builtin=t'
