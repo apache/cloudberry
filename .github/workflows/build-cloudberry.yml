@@ -312,7 +312,8 @@ jobs:
                                "gpcontrib/pxf_fdw:installcheck",
                                "gpcontrib/zstd:installcheck",
                                "gpcontrib/gp_sparse_vector:installcheck",
-                               "gpcontrib/gp_toolkit:installcheck"]
+                               "gpcontrib/gp_toolkit:installcheck",
+                               "gpcontrib/gp_exttable_fdw:installcheck"]
               },
               {"test":"ic-fixme",
                "make_configs":["src/test/regress:installcheck-fixme"],
