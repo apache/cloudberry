@@ -1218,6 +1218,7 @@ extern void ExceptionalCondition(const char *conditionName,
  *				Section 8:	random stuff
  * ----------------------------------------------------------------
  */
+#define HAVE_UNIX_SOCKETS 1
 
 /*
  * Invert the sign of a qsort-style comparison result, ie, exchange negative
