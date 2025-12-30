@@ -4,6 +4,8 @@ DATA       = gp_internal_tools--1.0.0.sql
 
 PG_CPPFLAGS = -I$(libpq_srcdir)
 
+REGRESS = gp_session_state_memory
+
 ifdef USE_PGXS
 PG_CONFIG = pg_config
 PGXS := $(shell $(PG_CONFIG) --pgxs)
