@@ -642,6 +642,7 @@ jobs:
           
           # Create demo cluster with specified number of segments
           su - gpadmin -c "
+          cd ${SRC_DIR}
             source ${INSTALL_PREFIX}/greenplum_path.sh
             NUM_PRIMARY_MIRROR_PAIRS=${{ matrix.num_primary_mirror_pairs }} make create-demo-cluster
           " 2>&1 | tee -a ${LOGS_DIR}/details/cluster-creation.log
