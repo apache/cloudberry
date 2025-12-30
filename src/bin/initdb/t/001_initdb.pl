@@ -11,7 +11,9 @@ use Fcntl ':mode';
 use File::stat qw{lstat};
 use PostgreSQL::Test::Cluster;
 use PostgreSQL::Test::Utils;
-use Test::More;
+use PostgresNode;
+use TestLib;
+use Test::More tests => 22 + 2;
 
 my $tempdir = PostgreSQL::Test::Utils::tempdir;
 my $xlogdir = "$tempdir/pgxlog";
