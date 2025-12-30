@@ -862,7 +862,7 @@ CTranslatorQueryToDXL::TranslateInsertQueryToDXL()
 				   GPOS_WSZ_LIT("Inserts with foreign tables"));
 	}
 	const RTEPermissionInfo *perminfo = gpdb::GetRTEPermissionInfo(
-		m_query->rtable, rte);
+		m_query->rteperminfos, rte);
 
 	CDXLTableDescr *table_descr = CTranslatorUtils::GetTableDescr(
 		m_mp, m_md_accessor, m_context->m_colid_counter, rte, perminfo, m_query_id,
@@ -1188,7 +1188,7 @@ CTranslatorQueryToDXL::TranslateDeleteQueryToDXL()
 				   GPOS_WSZ_LIT("Deletes with foreign tables"));
 	}
 	const RTEPermissionInfo *perminfo = gpdb::GetRTEPermissionInfo(
-		m_query->rtable, rte);
+		m_query->rteperminfos, rte);
 
 	CDXLTableDescr *table_descr = CTranslatorUtils::GetTableDescr(
 		m_mp, m_md_accessor, m_context->m_colid_counter, rte, perminfo, m_query_id,
@@ -1273,7 +1273,7 @@ CTranslatorQueryToDXL::TranslateUpdateQueryToDXL()
 				   GPOS_WSZ_LIT("Updates with foreign tables"));
 	}
 	const RTEPermissionInfo *perminfo = gpdb::GetRTEPermissionInfo(
-		m_query->rtable, rte);
+		m_query->rteperminfos, rte);
 
 	CDXLTableDescr *table_descr = CTranslatorUtils::GetTableDescr(
 		m_mp, m_md_accessor, m_context->m_colid_counter, rte, perminfo, m_query_id,
@@ -3266,7 +3266,7 @@ CTranslatorQueryToDXL::TranslateFromClauseToDXL(Node *node)
 					   GPOS_WSZ_LIT("WITH ORDINALITY"));
 		}
 
-		const RTEPermissionInfo *perminfo = gpdb::GetRTEPermissionInfo(m_query->rtable,
+		const RTEPermissionInfo *perminfo = gpdb::GetRTEPermissionInfo(m_query->rteperminfos,
 																		 rte);
 
 		switch (rte->rtekind)
