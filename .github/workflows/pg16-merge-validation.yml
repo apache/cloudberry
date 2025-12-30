@@ -642,7 +642,7 @@ jobs:
           
           # Create demo cluster with specified number of segments
           su - gpadmin -c "
-          cd ${SRC_DIR}
+            cd ${SRC_DIR}
             source ${INSTALL_PREFIX}/greenplum_path.sh
             NUM_PRIMARY_MIRROR_PAIRS=${{ matrix.num_primary_mirror_pairs }} make create-demo-cluster
           " 2>&1 | tee -a ${LOGS_DIR}/details/cluster-creation.log
@@ -674,7 +674,7 @@ jobs:
           set -eo pipefail
 
           # Run each make target from the test configuration
-          MAKE_CONFIGS='${{ toJson(matrix.make_configs) }}'
+          MAKE_CONFIGS='${{ join(matrix.make_configs, ' ') }}'
           
           su - gpadmin -c "
             source ${INSTALL_PREFIX}/greenplum_path.sh
@@ -684,7 +684,7 @@ jobs:
             echo 'Make configurations: ${MAKE_CONFIGS}'
             
             # Parse and run each make config
-            for config in \$(echo '${MAKE_CONFIGS}' | jq -r '.[]'); do
+            for config in ${MAKE_CONFIGS}; do
               DIR=\$(echo \$config | cut -d: -f1)
               TARGET=\$(echo \$config | cut -d: -f2)
               
