@@ -1896,6 +1896,24 @@ typedef struct SplitUpdate
 	int			numHashSegments;	/* # of segs to use in hash computation */
 } SplitUpdate;
 
+
+/*
+ * SplitMerge Node
+ *
+ */
+typedef struct SplitMerge
+{
+	Plan		plan;
+	List*		resultRelations;
+	int			numHashAttrs;
+	AttrNumber *hashAttnos pg_node_attr(array_size(numHashAttrs));
+	Oid		   *hashFuncs pg_node_attr(array_size(numHashAttrs));			/* corresponding hash functions */
+	int			numHashSegments;	/* # of segs to use in hash computation */
+
+	List	   *mergeActionLists;	/* per-target-table lists of actions for
+									 * MERGE */
+} SplitMerge;
+
 /*
  * AssertOp Node
  *

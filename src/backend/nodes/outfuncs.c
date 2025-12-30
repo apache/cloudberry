@@ -2925,6 +2925,7 @@ _outPlaceHolderVar(StringInfo str, const PlaceHolderVar *node)
 
 	WRITE_NODE_FIELD(phexpr);
 	WRITE_BITMAPSET_FIELD(phrels);
+	WRITE_BITMAPSET_FIELD(phnullingrels);
 	WRITE_UINT_FIELD(phid);
 	WRITE_UINT_FIELD(phlevelsup);
 }
@@ -4647,6 +4648,9 @@ outNode(StringInfo str, const void *obj)
 				break;
 			case T_SplitUpdate:
 				_outSplitUpdate(str, obj);
+				break;
+			case T_SplitMerge:
+				_outSplitMerge(str, obj);
 				break;
 			case T_AssertOp:
 				_outAssertOp(str, obj);

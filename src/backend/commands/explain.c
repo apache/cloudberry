@@ -1961,7 +1961,10 @@ ExplainNode(PlanState *planstate, List *ancestors,
 			}
 			break;
 		case T_SplitUpdate:
-			pname = sname = "Split";
+			pname = sname = "Split Update";
+			break;
+		case T_SplitMerge:
+			pname = sname = "Split Merge";
 			break;
 		case T_AssertOp:
 			pname = sname = "Assert";

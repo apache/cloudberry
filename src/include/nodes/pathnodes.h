@@ -2799,6 +2799,15 @@ typedef struct SplitUpdatePath
 	Index		resultRelation;
 } SplitUpdatePath;
 
+typedef struct SplitMergePath
+{
+	Path		path;
+	Path	   *subpath;
+	List 	   *resultRelations;
+	List	   *mergeActionLists;	/* per-target-table lists of actions for
+									 * MERGE */
+} SplitMergePath;
+
 /*
  * ModifyTablePath represents performing INSERT/UPDATE/DELETE/MERGE
  *

@@ -153,6 +153,9 @@ PrepareQuery(ParseState *pstate, PrepareStmt *stmt,
 		case CMD_DELETE:
 			srctag = T_DeleteStmt;
 			break;
+		case CMD_MERGE:
+			srctag = T_MergeStmt;
+			break;
 		default:
 			ereport(ERROR,
 					(errcode(ERRCODE_INVALID_PSTATEMENT_DEFINITION),

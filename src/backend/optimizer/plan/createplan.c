@@ -131,6 +131,7 @@ static Plan *create_unique_plan(PlannerInfo *root, UniquePath *best_path,
 								int flags);
 static Plan *create_motion_plan(PlannerInfo *root, CdbMotionPath *path);
 static Plan *create_splitupdate_plan(PlannerInfo *root, SplitUpdatePath *path);
+static Plan *create_splitmerge_plan(PlannerInfo *root, SplitMergePath *path);
 static Gather *create_gather_plan(PlannerInfo *root, GatherPath *best_path);
 static Plan *create_projection_plan(PlannerInfo *root,
 									ProjectionPath *best_path,
@@ -616,6 +617,9 @@ create_plan_recurse(PlannerInfo *root, Path *best_path, int flags)
 			break;
 		case T_SplitUpdate:
 			plan = create_splitupdate_plan(root, (SplitUpdatePath *) best_path);
+			break;
+		case T_SplitMerge:
+			plan = create_splitmerge_plan(root, (SplitMergePath *) best_path);
 			break;
 		default:
 			elog(ERROR, "unrecognized node type: %d",
@@ -3647,6 +3651,104 @@ create_splitupdate_plan(PlannerInfo *root, SplitUpdatePath *path)
 	root->numMotions++;
 
 	return (Plan *) splitupdate;
+}
+
+/*
+ * create_splitmerge_plan
+ */
+static Plan *
+create_splitmerge_plan(PlannerInfo *root, SplitMergePath *path)
+{
+	Path	   *subpath = path->subpath;
+	Plan	   *subplan;
+	SplitMerge *splitmerge;
+	Relation	resultRel;
+	TupleDesc	resultDesc;
+	GpPolicy   *cdbpolicy;
+	ListCell   *lc;
+	int			lastresno;
+	Oid		   *hashFuncs;
+	int			i;
+
+	//
+	RelOptInfo *relOptInfo = root->simple_rel_array[linitial_int(path->resultRelations)];
+	Assert(relOptInfo);
+	while (relOptInfo->reloptkind == RELOPT_OTHER_MEMBER_REL)
+	{
+		Assert(relOptInfo->top_parent_relids);
+
+		i = bms_next_member(relOptInfo->top_parent_relids, -1);
+
+		Assert(i >= 0 && i < root->simple_rel_array_size);
+		Assert(root->simple_rel_array[i] != NULL);
+
+		relOptInfo = root->simple_rel_array[i];
+	}
+	Assert(relOptInfo->reloptkind == RELOPT_BASEREL);
+	resultRel = relation_open(planner_rt_fetch(relOptInfo->relid, root)->relid, NoLock);
+	resultDesc = RelationGetDescr(resultRel);
+	cdbpolicy = resultRel->rd_cdbpolicy;
+
+	subplan = create_plan_recurse(root, subpath, CP_EXACT_TLIST);
+
+	/* Transfer resname/resjunk labeling, too, to keep executor happy */
+	apply_tlist_labeling(subplan->targetlist, root->processed_tlist);
+
+	splitmerge = makeNode(SplitMerge);
+
+	splitmerge->plan.targetlist = NIL; /* filled in below */
+	splitmerge->plan.qual = NIL;
+	splitmerge->plan.lefttree = subplan;
+	splitmerge->plan.righttree = NULL;
+
+	copy_generic_path_info(&splitmerge->plan, (Path *) path);
+
+	lc = list_head(subplan->targetlist);
+	lastresno = 0;
+
+	/* Copy all attributes. */
+	for (; lc != NULL; lc = lnext(subplan->targetlist, lc))
+	{
+		TargetEntry *tle = (TargetEntry *) lfirst(lc);
+		TargetEntry *newtle;
+
+		newtle = makeTargetEntry(tle->expr,
+								 ++lastresno,
+								 tle->resname,
+								 tle->resjunk);
+		splitmerge->plan.targetlist = lappend(splitmerge->plan.targetlist, newtle);
+	}
+
+	/* Look up the right hash functions for the hash expressions */
+	hashFuncs = palloc(cdbpolicy->nattrs * sizeof(Oid));
+	for (i = 0; i < cdbpolicy->nattrs; i++)
+	{
+		AttrNumber	attnum = cdbpolicy->attrs[i];
+		Oid			typeoid = resultDesc->attrs[attnum - 1].atttypid;
+		Oid			opfamily;
+
+		opfamily = get_opclass_family(cdbpolicy->opclasses[i]);
+
+		hashFuncs[i] = cdb_hashproc_in_opfamily(opfamily, typeoid);
+	}
+	splitmerge->numHashAttrs = cdbpolicy->nattrs;
+	splitmerge->hashAttnos = palloc(cdbpolicy->nattrs * sizeof(AttrNumber));
+	memcpy(splitmerge->hashAttnos, cdbpolicy->attrs, cdbpolicy->nattrs * sizeof(AttrNumber));
+	splitmerge->hashFuncs = hashFuncs;
+	splitmerge->numHashSegments = cdbpolicy->numsegments;
+
+	relation_close(resultRel, NoLock);
+
+	/*
+	 * A SplitMerge also computes the target segment ID, based on other columns,
+	 * so we treat it the same as a Motion node for this purpose.
+	 */
+	root->numMotions++;
+
+	splitmerge->mergeActionLists = path->mergeActionLists;
+	splitmerge->resultRelations = path->resultRelations;
+
+	return (Plan *) splitmerge;
 }
 
 

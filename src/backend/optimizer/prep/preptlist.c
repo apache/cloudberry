@@ -141,6 +141,20 @@ preprocess_targetlist(PlannerInfo *root)
 			tlist = expand_insert_targetlist(root, tlist, target_relation, result_relation);
 		}
 	}
+	else if (command_type == CMD_MERGE)
+	{
+		/* update distributed column in merge is not supported now */
+		foreach(lc, parse->mergeActionList)
+		{
+			MergeAction *action = lfirst(lc);
+		 	if(action->commandType == CMD_UPDATE)
+			{
+				if(check_splitupdate(action->targetList, result_relation, target_relation))
+						ereport(ERROR, (errcode(ERRCODE_GP_FEATURE_NOT_YET),
+										errmsg("cannot update column in merge with distributed column")));
+			}
+		}
+	}
 
 	/*
 	 * For non-inherited UPDATE/DELETE/MERGE, register any junk column(s)

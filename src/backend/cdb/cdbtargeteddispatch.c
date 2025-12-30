@@ -532,6 +532,7 @@ DirectDispatchUpdateContentIdsFromPlan(PlannerInfo *root, Plan *plan)
 													 * so disable */
 			break;
 		case T_SplitUpdate:
+		case T_SplitMerge:
 			break;
 		case T_CustomScan:
 			break;

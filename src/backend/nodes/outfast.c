@@ -1115,6 +1115,9 @@ _outNode(StringInfo str, void *obj)
 			case T_SplitUpdate:
 				_outSplitUpdate(str, obj);
 				break;
+			case T_SplitMerge:
+				_outSplitMerge(str, obj);
+				break;
 			case T_AssertOp:
 				_outAssertOp(str, obj);
 				break;

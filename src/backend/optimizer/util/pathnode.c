@@ -85,8 +85,8 @@ static bool set_append_path_locus(PlannerInfo *root, Path *pathnode, RelOptInfo 
 					  List *pathkeys, int parallel_workers, bool parallel_aware);
 static CdbPathLocus
 adjust_modifytable_subpath(PlannerInfo *root, CmdType operation,
-							int resultRelationRTI, Path **pSubpath,
-							bool splitUpdate);
+							List *resultRelationRTI, Path **pSubpath,
+							bool splitUpdate, List *mergeActionLists);
 
 /*****************************************************************************
  *		MISC. PATH UTILITIES
@@ -5922,9 +5922,10 @@ create_modifytable_path(PlannerInfo *root, RelOptInfo *rel,
 	if (Gp_role == GP_ROLE_DISPATCH)
 		pathnode->path.locus =
 			adjust_modifytable_subpath(root, operation,
-										linitial_int(resultRelations),
+										resultRelations,
 										&subpath, /* IN-OUT argument */
-										splitUpdate);
+										splitUpdate,
+										mergeActionLists);
 	else
 	{
 		/* don't allow split updates in utility mode. */
@@ -5999,8 +6000,8 @@ create_modifytable_path(PlannerInfo *root, RelOptInfo *rel,
  */
 static CdbPathLocus
 adjust_modifytable_subpath(PlannerInfo *root, CmdType operation,
-							int resultRelationRTI, Path **pSubpath,
-							bool splitUpdate)
+							List *resultRelations, Path **pSubpath,
+							bool splitUpdate, List *mergeActionLists)
 {
 	/*
 	 * The input plans must be distributed correctly.
@@ -6011,7 +6012,7 @@ adjust_modifytable_subpath(PlannerInfo *root, CmdType operation,
 
 
 	{
-		int			rti = resultRelationRTI;
+		int			rti = linitial_int(resultRelations);
 		Path *subpath = *pSubpath;
 		RangeTblEntry *rte = rt_fetch(rti, root->parse->rtable);
 		GpPolicy   *targetPolicy;
@@ -6056,6 +6057,10 @@ adjust_modifytable_subpath(PlannerInfo *root, CmdType operation,
 			else
 				subpath = create_motion_path_for_upddel(root, rti, targetPolicy, subpath);
 		}
+		else if(operation == CMD_MERGE)
+		{
+			subpath = create_motion_path_for_merge(root, resultRelations, targetPolicy, mergeActionLists, subpath);
+		}		
 		*pSubpath = subpath;
 	}
 

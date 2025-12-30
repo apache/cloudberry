@@ -1077,7 +1077,7 @@ standard_ExecutorRun(QueryDesc *queryDesc,
 		 */
 		if (IS_QD_OR_SINGLENODE() &&
 			(operation == CMD_INSERT || operation == CMD_UPDATE || operation == CMD_DELETE ||
-				queryDesc->plannedstmt->hasModifyingCTE) &&
+			 operation == CMD_MERGE || queryDesc->plannedstmt->hasModifyingCTE) &&
 			((es_processed > 0 || estate->es_processed > 0) || !queryDesc->plannedstmt->canSetTag))
 		{
 			MaintainMaterializedViewStatus(queryDesc, operation);

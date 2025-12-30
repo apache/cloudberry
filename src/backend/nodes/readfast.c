@@ -1152,6 +1152,42 @@ _readSplitUpdate(void)
 }
 
 /*
+ * _readSplitUpdate
+ */
+static SplitMerge *
+_readSplitMerge(void)
+{
+	READ_LOCALS(SplitMerge);
+
+	READ_INT_FIELD(numHashSegments);
+	READ_INT_FIELD(numHashAttrs);
+	READ_ATTRNUMBER_ARRAY(hashAttnos, local_node->numHashAttrs);
+	READ_OID_ARRAY(hashFuncs, local_node->numHashAttrs);
+
+	READ_NODE_FIELD(resultRelations);
+	READ_NODE_FIELD(mergeActionLists);
+
+	ReadCommonPlan(&local_node->plan);
+
+	READ_DONE();
+}
+
+
+static PlaceHolderVar *
+_readPlaceHolderVar(void)
+{
+	READ_LOCALS(PlaceHolderVar);
+
+	READ_NODE_FIELD(phexpr);
+	READ_BITMAPSET_FIELD(phrels);
+	READ_BITMAPSET_FIELD(phnullingrels);
+	READ_UINT_FIELD(phid);
+	READ_UINT_FIELD(phlevelsup);
+
+	READ_DONE();
+}
+
+/*
  * _readAssertOp
  */
 static AssertOp *
@@ -2142,6 +2178,9 @@ readNodeBinary(void)
 			case T_SplitUpdate:
 				return_value = _readSplitUpdate();
 				break;
+			case T_SplitMerge:
+				return_value = _readSplitMerge();
+				break;
 			case T_AssertOp:
 				return_value = _readAssertOp();
 				break;
@@ -2990,6 +3029,9 @@ readNodeBinary(void)
 				break;
 			case T_JsonFormat:
 				return_value = _readJsonFormat();
+				break;
+			case T_PlaceHolderVar:
+				return_value = _readPlaceHolderVar();
 				break;
 			default:
 				return_value = NULL; /* keep the compiler silent */

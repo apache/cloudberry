@@ -449,6 +449,24 @@ _outSplitUpdate(StringInfo str, const SplitUpdate *node)
 }
 
 /*
+ * _outSplitMerge
+ */
+static void
+_outSplitMerge(StringInfo str, const SplitMerge *node)
+{
+	WRITE_NODE_TYPE("SplitMerge");
+
+	WRITE_INT_FIELD(numHashSegments);
+	WRITE_INT_FIELD(numHashAttrs);
+	WRITE_ATTRNUMBER_ARRAY(hashAttnos, node->numHashAttrs);
+	WRITE_OID_ARRAY(hashFuncs, node->numHashAttrs);
+	WRITE_NODE_FIELD(resultRelations);
+	WRITE_NODE_FIELD(mergeActionLists);
+
+	_outPlanInfo(str, (Plan *) node);
+}
+
+/*
  * _outAssertOp
  */
 static void

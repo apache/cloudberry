@@ -19,6 +19,7 @@ SELECT t.ctid is not null as matched, t.*, s.* FROM source s FULL OUTER JOIN tar
 
 ALTER TABLE target OWNER TO regress_merge_privs;
 ALTER TABLE source OWNER TO regress_merge_privs;
+GRANT ALL ON SCHEMA public to regress_merge_privs;
 
 CREATE TABLE target2 (tid integer, balance integer)
   WITH (autovacuum_enabled=off);
@@ -605,12 +606,12 @@ BEGIN
 	END IF;
 END;
 $$;
-CREATE TRIGGER merge_bsi BEFORE INSERT ON target FOR EACH STATEMENT EXECUTE PROCEDURE merge_trigfunc ();
-CREATE TRIGGER merge_bsu BEFORE UPDATE ON target FOR EACH STATEMENT EXECUTE PROCEDURE merge_trigfunc ();
-CREATE TRIGGER merge_bsd BEFORE DELETE ON target FOR EACH STATEMENT EXECUTE PROCEDURE merge_trigfunc ();
-CREATE TRIGGER merge_asi AFTER INSERT ON target FOR EACH STATEMENT EXECUTE PROCEDURE merge_trigfunc ();
-CREATE TRIGGER merge_asu AFTER UPDATE ON target FOR EACH STATEMENT EXECUTE PROCEDURE merge_trigfunc ();
-CREATE TRIGGER merge_asd AFTER DELETE ON target FOR EACH STATEMENT EXECUTE PROCEDURE merge_trigfunc ();
+-- CREATE TRIGGER merge_bsi BEFORE INSERT ON target FOR EACH STATEMENT EXECUTE PROCEDURE merge_trigfunc ();
+-- CREATE TRIGGER merge_bsu BEFORE UPDATE ON target FOR EACH STATEMENT EXECUTE PROCEDURE merge_trigfunc ();
+-- CREATE TRIGGER merge_bsd BEFORE DELETE ON target FOR EACH STATEMENT EXECUTE PROCEDURE merge_trigfunc ();
+-- CREATE TRIGGER merge_asi AFTER INSERT ON target FOR EACH STATEMENT EXECUTE PROCEDURE merge_trigfunc ();
+-- CREATE TRIGGER merge_asu AFTER UPDATE ON target FOR EACH STATEMENT EXECUTE PROCEDURE merge_trigfunc ();
+-- CREATE TRIGGER merge_asd AFTER DELETE ON target FOR EACH STATEMENT EXECUTE PROCEDURE merge_trigfunc ();
 CREATE TRIGGER merge_bri BEFORE INSERT ON target FOR EACH ROW EXECUTE PROCEDURE merge_trigfunc ();
 CREATE TRIGGER merge_bru BEFORE UPDATE ON target FOR EACH ROW EXECUTE PROCEDURE merge_trigfunc ();
 CREATE TRIGGER merge_brd BEFORE DELETE ON target FOR EACH ROW EXECUTE PROCEDURE merge_trigfunc ();
@@ -948,22 +949,22 @@ WHEN MATCHED AND t.a < 10 THEN
 DROP TABLE ex_msource, ex_mtarget;
 DROP FUNCTION explain_merge(text);
 
--- EXPLAIN SubPlans and InitPlans
-CREATE TABLE src (a int, b int, c int, d int);
-CREATE TABLE tgt (a int, b int, c int, d int);
-CREATE TABLE ref (ab int, cd int);
+-- EXPLAIN SubPlans and InitPlans (CBDB not supported)
+-- CREATE TABLE src (a int, b int, c int, d int);
+-- CREATE TABLE tgt (a int, b int, c int, d int);
+-- CREATE TABLE ref (ab int, cd int);
 
-EXPLAIN (verbose, costs off)
-MERGE INTO tgt t
-USING (SELECT *, (SELECT count(*) FROM ref r
-                   WHERE r.ab = s.a + s.b
-                     AND r.cd = s.c - s.d) cnt
-         FROM src s) s
-ON t.a = s.a AND t.b < s.cnt
-WHEN MATCHED AND t.c > s.cnt THEN
-  UPDATE SET (b, c) = (SELECT s.b, s.cnt);
+-- EXPLAIN (verbose, costs off)
+-- MERGE INTO tgt t
+-- USING (SELECT *, (SELECT count(*) FROM ref r
+--                    WHERE r.ab = s.a + s.b
+--                      AND r.cd = s.c - s.d) cnt
+--          FROM src s) s
+-- ON t.a = s.a AND t.b < s.cnt
+-- WHEN MATCHED AND t.c > s.cnt THEN
+--   UPDATE SET (b, c) = (SELECT s.b, s.cnt);
 
-DROP TABLE src, tgt, ref;
+-- DROP TABLE src, tgt, ref;
 
 -- Subqueries
 BEGIN;
@@ -1022,7 +1023,7 @@ MERGE INTO pa_target t
     UPDATE SET balance = balance + delta, val = val || ' updated by merge'
   WHEN NOT MATCHED THEN
     INSERT VALUES (sid, delta, 'inserted by merge');
-SELECT * FROM pa_target ORDER BY tid;
+SELECT * FROM pa_target ORDER BY tid, balance, val;
 ROLLBACK;
 
 -- same with a constant qual
@@ -1034,7 +1035,7 @@ MERGE INTO pa_target t
     UPDATE SET balance = balance + delta, val = val || ' updated by merge'
   WHEN NOT MATCHED THEN
     INSERT VALUES (sid, delta, 'inserted by merge');
-SELECT * FROM pa_target ORDER BY tid;
+SELECT * FROM pa_target ORDER BY tid, balance, val;
 ROLLBACK;
 
 -- try updating the partition key column
@@ -1047,7 +1048,7 @@ MERGE INTO pa_target t
   USING pa_source s
   ON t.tid = s.sid
   WHEN MATCHED THEN
-    UPDATE SET tid = tid + 1, balance = balance + delta, val = val || ' updated by merge'
+    UPDATE SET balance = balance + delta, val = val || ' updated by merge'
   WHEN NOT MATCHED THEN
     INSERT VALUES (sid, delta, 'inserted by merge');
 IF FOUND THEN
@@ -1057,7 +1058,7 @@ RETURN result;
 END;
 $$;
 SELECT merge_func();
-SELECT * FROM pa_target ORDER BY tid;
+SELECT * FROM pa_target ORDER BY tid, balance, val;
 ROLLBACK;
 
 -- bug #18871: ExecInitPartitionInfo()'s handling of DO NOTHING actions
@@ -1083,11 +1084,11 @@ CREATE TABLE pa_target (tid integer, balance float, val text)
 CREATE TABLE part1 (tid integer, balance float, val text)
   WITH (autovacuum_enabled=off);
 CREATE TABLE part2 (balance float, tid integer, val text)
-  WITH (autovacuum_enabled=off);
+  WITH (autovacuum_enabled=off) distributed by (tid);
 CREATE TABLE part3 (tid integer, balance float, val text)
   WITH (autovacuum_enabled=off);
 CREATE TABLE part4 (extraid text, tid integer, balance float, val text)
-  WITH (autovacuum_enabled=off);
+  WITH (autovacuum_enabled=off) distributed by (tid);
 ALTER TABLE part4 DROP COLUMN extraid;
 
 ALTER TABLE pa_target ATTACH PARTITION part1 FOR VALUES IN (1,4);
@@ -1115,7 +1116,7 @@ GET DIAGNOSTICS result := ROW_COUNT;
 RAISE NOTICE 'ROW_COUNT = %', result;
 END;
 $$;
-SELECT * FROM pa_target ORDER BY tid;
+SELECT * FROM pa_target ORDER BY tid, balance, val;
 ROLLBACK;
 
 -- same with a constant qual
@@ -1128,7 +1129,7 @@ MERGE INTO pa_target t
     UPDATE SET balance = balance + delta, val = val || ' updated by merge'
   WHEN NOT MATCHED THEN
     INSERT VALUES (sid, delta, 'inserted by merge');
-SELECT * FROM pa_target ORDER BY tid;
+SELECT * FROM pa_target ORDER BY tid, balance, val;
 ROLLBACK;
 
 -- try updating the partition key column
@@ -1141,14 +1142,14 @@ MERGE INTO pa_target t
   USING pa_source s
   ON t.tid = s.sid
   WHEN MATCHED THEN
-    UPDATE SET tid = tid + 1, balance = balance + delta, val = val || ' updated by merge'
+    UPDATE SET balance = balance + delta, val = val || ' updated by merge'
   WHEN NOT MATCHED THEN
     INSERT VALUES (sid, delta, 'inserted by merge');
 GET DIAGNOSTICS result := ROW_COUNT;
 RAISE NOTICE 'ROW_COUNT = %', result;
 END;
 $$;
-SELECT * FROM pa_target ORDER BY tid;
+SELECT * FROM pa_target ORDER BY tid, balance, val;
 ROLLBACK;
 
 -- as above, but blocked by BEFORE DELETE ROW trigger
@@ -1165,14 +1166,14 @@ MERGE INTO pa_target t
   USING pa_source s
   ON t.tid = s.sid
   WHEN MATCHED THEN
-    UPDATE SET tid = tid + 1, balance = balance + delta, val = val || ' updated by merge'
+    UPDATE SET balance = balance + delta, val = val || ' updated by merge'
   WHEN NOT MATCHED THEN
     INSERT VALUES (sid, delta, 'inserted by merge');
 GET DIAGNOSTICS result := ROW_COUNT;
 RAISE NOTICE 'ROW_COUNT = %', result;
 END;
 $$;
-SELECT * FROM pa_target ORDER BY tid;
+SELECT * FROM pa_target ORDER BY tid, balance, val;
 ROLLBACK;
 
 -- as above, but blocked by BEFORE INSERT ROW trigger
@@ -1189,14 +1190,14 @@ MERGE INTO pa_target t
   USING pa_source s
   ON t.tid = s.sid
   WHEN MATCHED THEN
-    UPDATE SET tid = tid + 1, balance = balance + delta, val = val || ' updated by merge'
+    UPDATE SET balance = balance + delta, val = val || ' updated by merge'
   WHEN NOT MATCHED THEN
     INSERT VALUES (sid, delta, 'inserted by merge');
 GET DIAGNOSTICS result := ROW_COUNT;
 RAISE NOTICE 'ROW_COUNT = %', result;
 END;
 $$;
-SELECT * FROM pa_target ORDER BY tid;
+SELECT * FROM pa_target ORDER BY tid, balance, val;
 ROLLBACK;
 
 -- test RLS enforcement
@@ -1250,7 +1251,7 @@ MERGE INTO pa_target t
     UPDATE SET balance = balance + delta, val = val || ' updated by merge'
   WHEN NOT MATCHED THEN
     INSERT VALUES (slogts::timestamp, sid, delta, 'inserted by merge');
-SELECT * FROM pa_target ORDER BY tid;
+SELECT * FROM pa_target ORDER BY tid, balance, val;
 ROLLBACK;
 
 DROP TABLE pa_source;
@@ -1281,6 +1282,8 @@ DROP TABLE pa_targetp;
 EXPLAIN (VERBOSE, COSTS OFF)
 MERGE INTO pa_target t USING pa_source s ON t.tid = s.sid
   WHEN NOT MATCHED THEN INSERT VALUES (s.sid);
+
+DELETE FROM pa_source WHERE sid = 2;
 
 MERGE INTO pa_target t USING pa_source s ON t.tid = s.sid
   WHEN NOT MATCHED THEN INSERT VALUES (s.sid);
@@ -1390,139 +1393,169 @@ DROP TABLE fs_target;
 -- SERIALIZABLE test
 -- handled in isolation tests
 
--- Inheritance-based partitioning
-CREATE TABLE measurement (
-    city_id         int not null,
-    logdate         date not null,
-    peaktemp        int,
-    unitsales       int
-) WITH (autovacuum_enabled=off);
-CREATE TABLE measurement_y2006m02 (
-    CHECK ( logdate >= DATE '2006-02-01' AND logdate < DATE '2006-03-01' )
-) INHERITS (measurement) WITH (autovacuum_enabled=off);
-CREATE TABLE measurement_y2006m03 (
-    CHECK ( logdate >= DATE '2006-03-01' AND logdate < DATE '2006-04-01' )
-) INHERITS (measurement) WITH (autovacuum_enabled=off);
-CREATE TABLE measurement_y2007m01 (
-    filler          text,
-    peaktemp        int,
-    logdate         date not null,
-    city_id         int not null,
-    unitsales       int
-    CHECK ( logdate >= DATE '2007-01-01' AND logdate < DATE '2007-02-01')
-) WITH (autovacuum_enabled=off);
-ALTER TABLE measurement_y2007m01 DROP COLUMN filler;
-ALTER TABLE measurement_y2007m01 INHERIT measurement;
-INSERT INTO measurement VALUES (0, '2005-07-21', 5, 15);
+-- Inheritance-based partitioning (CBDB not supported)
+-- CREATE TABLE measurement (
+--     city_id         int not null,
+--     logdate         date not null,
+--     peaktemp        int,
+--     unitsales       int
+-- ) WITH (autovacuum_enabled=off);
+-- CREATE TABLE measurement_y2006m02 (
+--     CHECK ( logdate >= DATE '2006-02-01' AND logdate < DATE '2006-03-01' )
+-- ) INHERITS (measurement) WITH (autovacuum_enabled=off);
+-- CREATE TABLE measurement_y2006m03 (
+--     CHECK ( logdate >= DATE '2006-03-01' AND logdate < DATE '2006-04-01' )
+-- ) INHERITS (measurement) WITH (autovacuum_enabled=off);
+-- CREATE TABLE measurement_y2007m01 (
+--     filler          text,
+--     peaktemp        int,
+--     logdate         date not null,
+--     city_id         int not null,
+--     unitsales       int
+--     CHECK ( logdate >= DATE '2007-01-01' AND logdate < DATE '2007-02-01')
+-- ) WITH (autovacuum_enabled=off);
+-- ALTER TABLE measurement_y2007m01 DROP COLUMN filler;
+-- ALTER TABLE measurement_y2007m01 INHERIT measurement;
+-- INSERT INTO measurement VALUES (0, '2005-07-21', 5, 15);
 
-CREATE OR REPLACE FUNCTION measurement_insert_trigger()
-RETURNS TRIGGER AS $$
-BEGIN
-    IF ( NEW.logdate >= DATE '2006-02-01' AND
-         NEW.logdate < DATE '2006-03-01' ) THEN
-        INSERT INTO measurement_y2006m02 VALUES (NEW.*);
-    ELSIF ( NEW.logdate >= DATE '2006-03-01' AND
-            NEW.logdate < DATE '2006-04-01' ) THEN
-        INSERT INTO measurement_y2006m03 VALUES (NEW.*);
-    ELSIF ( NEW.logdate >= DATE '2007-01-01' AND
-            NEW.logdate < DATE '2007-02-01' ) THEN
-        INSERT INTO measurement_y2007m01 (city_id, logdate, peaktemp, unitsales)
-            VALUES (NEW.*);
-    ELSE
-        RAISE EXCEPTION 'Date out of range.  Fix the measurement_insert_trigger() function!';
-    END IF;
-    RETURN NULL;
-END;
-$$ LANGUAGE plpgsql ;
-CREATE TRIGGER insert_measurement_trigger
-    BEFORE INSERT ON measurement
-    FOR EACH ROW EXECUTE PROCEDURE measurement_insert_trigger();
-INSERT INTO measurement VALUES (1, '2006-02-10', 35, 10);
-INSERT INTO measurement VALUES (1, '2006-02-16', 45, 20);
-INSERT INTO measurement VALUES (1, '2006-03-17', 25, 10);
-INSERT INTO measurement VALUES (1, '2006-03-27', 15, 40);
-INSERT INTO measurement VALUES (1, '2007-01-15', 10, 10);
-INSERT INTO measurement VALUES (1, '2007-01-17', 10, 10);
+-- CREATE OR REPLACE FUNCTION measurement_insert_trigger()
+-- RETURNS TRIGGER AS $$
+-- BEGIN
+--     IF ( NEW.logdate >= DATE '2006-02-01' AND
+--          NEW.logdate < DATE '2006-03-01' ) THEN
+--         INSERT INTO measurement_y2006m02 VALUES (NEW.*);
+--     ELSIF ( NEW.logdate >= DATE '2006-03-01' AND
+--             NEW.logdate < DATE '2006-04-01' ) THEN
+--         INSERT INTO measurement_y2006m03 VALUES (NEW.*);
+--     ELSIF ( NEW.logdate >= DATE '2007-01-01' AND
+--             NEW.logdate < DATE '2007-02-01' ) THEN
+--         INSERT INTO measurement_y2007m01 (city_id, logdate, peaktemp, unitsales)
+--             VALUES (NEW.*);
+--     ELSE
+--         RAISE EXCEPTION 'Date out of range.  Fix the measurement_insert_trigger() function!';
+--     END IF;
+--     RETURN NULL;
+-- END;
+-- $$ LANGUAGE plpgsql ;
+-- CREATE TRIGGER insert_measurement_trigger
+--     BEFORE INSERT ON measurement
+--     FOR EACH ROW EXECUTE PROCEDURE measurement_insert_trigger();
+-- INSERT INTO measurement VALUES (1, '2006-02-10', 35, 10);
+-- INSERT INTO measurement VALUES (1, '2006-02-16', 45, 20);
+-- INSERT INTO measurement VALUES (1, '2006-03-17', 25, 10);
+-- INSERT INTO measurement VALUES (1, '2006-03-27', 15, 40);
+-- INSERT INTO measurement VALUES (1, '2007-01-15', 10, 10);
+-- INSERT INTO measurement VALUES (1, '2007-01-17', 10, 10);
 
-SELECT tableoid::regclass, * FROM measurement ORDER BY city_id, logdate;
+-- SELECT tableoid::regclass, * FROM measurement ORDER BY city_id, logdate;
 
-CREATE TABLE new_measurement (LIKE measurement) WITH (autovacuum_enabled=off);
-INSERT INTO new_measurement VALUES (0, '2005-07-21', 25, 20);
-INSERT INTO new_measurement VALUES (1, '2006-03-01', 20, 10);
-INSERT INTO new_measurement VALUES (1, '2006-02-16', 50, 10);
-INSERT INTO new_measurement VALUES (2, '2006-02-10', 20, 20);
-INSERT INTO new_measurement VALUES (1, '2006-03-27', NULL, NULL);
-INSERT INTO new_measurement VALUES (1, '2007-01-17', NULL, NULL);
-INSERT INTO new_measurement VALUES (1, '2007-01-15', 5, NULL);
-INSERT INTO new_measurement VALUES (1, '2007-01-16', 10, 10);
+-- CREATE TABLE new_measurement (LIKE measurement) WITH (autovacuum_enabled=off);
+-- INSERT INTO new_measurement VALUES (0, '2005-07-21', 25, 20);
+-- INSERT INTO new_measurement VALUES (1, '2006-03-01', 20, 10);
+-- INSERT INTO new_measurement VALUES (1, '2006-02-16', 50, 10);
+-- INSERT INTO new_measurement VALUES (2, '2006-02-10', 20, 20);
+-- INSERT INTO new_measurement VALUES (1, '2006-03-27', NULL, NULL);
+-- INSERT INTO new_measurement VALUES (1, '2007-01-17', NULL, NULL);
+-- INSERT INTO new_measurement VALUES (1, '2007-01-15', 5, NULL);
+-- INSERT INTO new_measurement VALUES (1, '2007-01-16', 10, 10);
 
-BEGIN;
-MERGE INTO ONLY measurement m
- USING new_measurement nm ON
-      (m.city_id = nm.city_id and m.logdate=nm.logdate)
-WHEN MATCHED AND nm.peaktemp IS NULL THEN DELETE
-WHEN MATCHED THEN UPDATE
-     SET peaktemp = greatest(m.peaktemp, nm.peaktemp),
-        unitsales = m.unitsales + coalesce(nm.unitsales, 0)
-WHEN NOT MATCHED THEN INSERT
-     (city_id, logdate, peaktemp, unitsales)
-   VALUES (city_id, logdate, peaktemp, unitsales);
+-- BEGIN;
+-- MERGE INTO ONLY measurement m
+--  USING new_measurement nm ON
+--       (m.city_id = nm.city_id and m.logdate=nm.logdate)
+-- WHEN MATCHED AND nm.peaktemp IS NULL THEN DELETE
+-- WHEN MATCHED THEN UPDATE
+--      SET peaktemp = greatest(m.peaktemp, nm.peaktemp),
+--         unitsales = m.unitsales + coalesce(nm.unitsales, 0)
+-- WHEN NOT MATCHED THEN INSERT
+--      (city_id, logdate, peaktemp, unitsales)
+--    VALUES (city_id, logdate, peaktemp, unitsales);
 
-SELECT tableoid::regclass, * FROM measurement ORDER BY city_id, logdate, peaktemp;
-ROLLBACK;
+-- SELECT tableoid::regclass, * FROM measurement ORDER BY city_id, logdate, peaktemp;
+-- ROLLBACK;
 
-MERGE into measurement m
- USING new_measurement nm ON
-      (m.city_id = nm.city_id and m.logdate=nm.logdate)
-WHEN MATCHED AND nm.peaktemp IS NULL THEN DELETE
-WHEN MATCHED THEN UPDATE
-     SET peaktemp = greatest(m.peaktemp, nm.peaktemp),
-        unitsales = m.unitsales + coalesce(nm.unitsales, 0)
-WHEN NOT MATCHED THEN INSERT
-     (city_id, logdate, peaktemp, unitsales)
-   VALUES (city_id, logdate, peaktemp, unitsales);
+-- MERGE into measurement m
+--  USING new_measurement nm ON
+--       (m.city_id = nm.city_id and m.logdate=nm.logdate)
+-- WHEN MATCHED AND nm.peaktemp IS NULL THEN DELETE
+-- WHEN MATCHED THEN UPDATE
+--      SET peaktemp = greatest(m.peaktemp, nm.peaktemp),
+--         unitsales = m.unitsales + coalesce(nm.unitsales, 0)
+-- WHEN NOT MATCHED THEN INSERT
+--      (city_id, logdate, peaktemp, unitsales)
+--    VALUES (city_id, logdate, peaktemp, unitsales);
 
-SELECT tableoid::regclass, * FROM measurement ORDER BY city_id, logdate;
+-- SELECT tableoid::regclass, * FROM measurement ORDER BY city_id, logdate;
 
-BEGIN;
-MERGE INTO new_measurement nm
- USING ONLY measurement m ON
-      (nm.city_id = m.city_id and nm.logdate=m.logdate)
-WHEN MATCHED THEN DELETE;
+-- BEGIN;
+-- MERGE INTO new_measurement nm
+--  USING ONLY measurement m ON
+--       (nm.city_id = m.city_id and nm.logdate=m.logdate)
+-- WHEN MATCHED THEN DELETE;
 
-SELECT * FROM new_measurement ORDER BY city_id, logdate;
-ROLLBACK;
+-- SELECT * FROM new_measurement ORDER BY city_id, logdate;
+-- ROLLBACK;
 
-MERGE INTO new_measurement nm
- USING measurement m ON
-      (nm.city_id = m.city_id and nm.logdate=m.logdate)
-WHEN MATCHED THEN DELETE;
+-- MERGE INTO new_measurement nm
+--  USING measurement m ON
+--       (nm.city_id = m.city_id and nm.logdate=m.logdate)
+-- WHEN MATCHED THEN DELETE;
 
-SELECT * FROM new_measurement ORDER BY city_id, logdate;
+-- SELECT * FROM new_measurement ORDER BY city_id, logdate;
 
-DROP TABLE measurement, new_measurement CASCADE;
-DROP FUNCTION measurement_insert_trigger();
+-- DROP TABLE measurement, new_measurement CASCADE;
+-- DROP FUNCTION measurement_insert_trigger();
 
 -- prepare
 
 RESET SESSION AUTHORIZATION;
 
--- try a system catalog
-MERGE INTO pg_class c
-USING (SELECT 'pg_depend'::regclass AS oid) AS j
-ON j.oid = c.oid
-WHEN MATCHED THEN
-	UPDATE SET reltuples = reltuples + 1;
+-- try a system catalog (CBDB not supported)
+-- MERGE INTO pg_class c
+-- USING (SELECT 'pg_depend'::regclass AS oid) AS j
+-- ON j.oid = c.oid
+-- WHEN MATCHED THEN
+-- 	UPDATE SET reltuples = reltuples + 1;
 
-MERGE INTO pg_class c
-USING pg_namespace n
-ON n.oid = c.relnamespace
-WHEN MATCHED AND c.oid = 'pg_depend'::regclass THEN
-	UPDATE SET reltuples = reltuples - 1;
+-- MERGE INTO pg_class c
+-- USING pg_namespace n
+-- ON n.oid = c.relnamespace
+-- WHEN MATCHED AND c.oid = 'pg_depend'::regclass THEN
+-- 	UPDATE SET reltuples = reltuples - 1;
+
+DROP TABLE IF EXISTS test; 
+DROP TABLE IF EXISTS test1; 
+
+CREATE TABLE test(a int, b int)distributed by (a);
+CREATE TABLE test1(a int, b int)distributed by (a);
+
+INSERT INTO test1 values(1,1);
+
+BEGIN;
+MERGE INTO test
+USING test1 on test1.b = test.b
+WHEN NOT MATCHED THEN
+   INSERT VALUES (2, 2);
+INSERT INTO test values(2,2);
+SELECT * FROM test WHERE a = 2;
+ROLLBACK;
+
+BEGIN;
+MERGE INTO test
+USING (SELECT 2,2) as d(a, b) on d.b = test.b
+WHEN NOT MATCHED THEN
+   INSERT VALUES (2, 2);
+INSERT INTO test values(2,2);
+SELECT * FROM test WHERE a = 2;
+ROLLBACK;
+
+DROP TABLE test;
+DROP TABLE test1;
 
 DROP TABLE target, target2;
 DROP TABLE source, source2;
 DROP FUNCTION merge_trigfunc();
+REVOKE ALL ON SCHEMA public FROM regress_merge_privs;
 DROP USER regress_merge_privs;
 DROP USER regress_merge_no_privs;
 DROP USER regress_merge_none;

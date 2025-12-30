@@ -115,6 +115,7 @@ typedef enum NodeTag
 	T_Motion,
 	T_ShareInputScan,
 	T_SplitUpdate,
+	T_SplitMerge,
 	T_AssertOp,
 	T_PartitionSelector,
 	T_Plan_End,
@@ -194,6 +195,7 @@ typedef enum NodeTag
 	T_MotionState,
 	T_ShareInputScanState,
 	T_SplitUpdateState,
+	T_SplitMergeState,
 	T_AssertOpState,
 	T_PartitionSelectorState,
 
@@ -373,6 +375,7 @@ typedef enum NodeTag
     T_CdbMotionPath = 580,
 	T_PartitionSelectorPath,
 	T_SplitUpdatePath,
+	T_SplitMergePath,
     T_CdbRelColumnInfo,
 	T_DistributionKey,
 

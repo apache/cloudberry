@@ -1511,6 +1511,7 @@ ExecDeleteEpilogue(ModifyTableContext *context, ResultRelInfo *resultRelInfo,
 	ModifyTableState *mtstate = context->mtstate;
 	EState	   *estate = context->estate;
 	TransitionCaptureState *ar_delete_trig_tcs;
+	Relation	resultRelationDesc = resultRelInfo->ri_RelationDesc;
 
 	/*
 	 * If this delete is the result of a partition key update that moved the
@@ -1539,6 +1540,14 @@ ExecDeleteEpilogue(ModifyTableContext *context, ResultRelInfo *resultRelInfo,
 	if (!RelationIsNonblockRelation(resultRelInfo->ri_RelationDesc) && !splitUpdate)
 		ExecARDeleteTriggers(estate, resultRelInfo, tupleid, oldtuple,
 							 ar_delete_trig_tcs, changingPart);
+	
+	if (resultRelationDesc->rd_rel->relispartition)
+	{
+
+		context->mtstate->mt_leaf_relids_deleted =
+			bms_add_member(context->mtstate->mt_leaf_relids_deleted, RelationGetRelid(resultRelationDesc));
+		context->mtstate->has_leaf_changed = true;
+	}
 }
 
 /* ----------------------------------------------------------------
@@ -1871,14 +1880,6 @@ ldelete:
 
 	if (canSetTag)
 		(estate->es_processed)++;
-
-	if (resultRelationDesc->rd_rel->relispartition)
-	{
-
-		context->mtstate->mt_leaf_relids_deleted =
-			bms_add_member(context->mtstate->mt_leaf_relids_deleted, RelationGetRelid(resultRelationDesc));
-		context->mtstate->has_leaf_changed = true;
-	}
 
 	/* Tell caller that the delete actually happened. */
 	if (tupleDeleted)
@@ -2354,6 +2355,7 @@ ExecUpdateEpilogue(ModifyTableContext *context, UpdateContext *updateCxt,
 {
 	ModifyTableState *mtstate = context->mtstate;
 	List	   *recheckIndexes = NIL;
+	Relation	resultRelationDesc = resultRelInfo->ri_RelationDesc;
 
 	/* insert index entries for tuple if necessary */
 	if (resultRelInfo->ri_NumIndices > 0 && (updateCxt->updateIndexes != TU_None))
@@ -2388,6 +2390,13 @@ ExecUpdateEpilogue(ModifyTableContext *context, UpdateContext *updateCxt,
 	if (resultRelInfo->ri_WithCheckOptions != NIL)
 		ExecWithCheckOptions(WCO_VIEW_CHECK, resultRelInfo,
 							 slot, context->estate);
+
+	if (resultRelationDesc->rd_rel->relispartition)
+	{
+		context->mtstate->mt_leaf_relids_updated =
+			bms_add_member(context->mtstate->mt_leaf_relids_updated, RelationGetRelid(resultRelationDesc));
+		context->mtstate->has_leaf_changed = true;
+	}
 }
 
 /*
@@ -2725,13 +2734,6 @@ redo_act:
 
 	if (canSetTag)
 		(estate->es_processed)++;
-
-	if (resultRelationDesc->rd_rel->relispartition)
-	{
-		context->mtstate->mt_leaf_relids_updated =
-			bms_add_member(context->mtstate->mt_leaf_relids_updated, RelationGetRelid(resultRelationDesc));
-		context->mtstate->has_leaf_changed = true;
-	}
 
 	ExecUpdateEpilogue(context, &updateCxt, resultRelInfo, tupleid, oldtuple,
 					   slot);

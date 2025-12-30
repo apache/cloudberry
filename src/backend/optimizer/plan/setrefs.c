@@ -1614,6 +1614,10 @@ set_plan_refs(PlannerInfo *root, Plan *plan, int rtoffset)
 			Assert(plan->qual == NIL);
 			set_splitupdate_tlist_references(plan, rtoffset);
 			break;
+		case T_SplitMerge:
+			/* mergeActionLists will be process in T_ModifyTable */ 
+			set_dummy_tlist_references(plan, rtoffset);
+			break;
 		default:
 			elog(ERROR, "unrecognized node type: %d",
 				 (int) nodeTag(plan));

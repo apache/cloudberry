@@ -970,6 +970,17 @@ plan_tree_mutator(Node *node,
 			}
 			break;
 
+		case T_SplitMerge:
+			{
+				SplitMerge	*splitMerge = (SplitMerge *) node;
+				SplitMerge	*newSplitMerge;
+
+				FLATCOPY(newSplitMerge, splitMerge, SplitMerge);
+				PLANMUTATE(newSplitMerge, splitMerge);
+				return (Node *) newSplitMerge;
+			}
+			break;
+
 		case T_IncrementalSort:
 			{
 				IncrementalSort	*incrementalSort = (IncrementalSort *) node;

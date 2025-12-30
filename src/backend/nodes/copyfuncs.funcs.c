@@ -6445,6 +6445,40 @@ _copySplitUpdate(const SplitUpdate *from)
 	return newnode;
 }
 
+static SplitMerge *
+_copySplitMerge(const SplitMerge *from)
+{
+	SplitMerge *newnode = makeNode(SplitMerge);
+
+	COPY_SCALAR_FIELD(plan.startup_cost);
+	COPY_SCALAR_FIELD(plan.total_cost);
+	COPY_SCALAR_FIELD(plan.plan_rows);
+	COPY_SCALAR_FIELD(plan.plan_width);
+	COPY_SCALAR_FIELD(plan.parallel_aware);
+	COPY_SCALAR_FIELD(plan.parallel_safe);
+	COPY_SCALAR_FIELD(plan.async_capable);
+	COPY_SCALAR_FIELD(plan.plan_node_id);
+	COPY_NODE_FIELD(plan.targetlist);
+	COPY_NODE_FIELD(plan.qual);
+	COPY_NODE_FIELD(plan.lefttree);
+	COPY_NODE_FIELD(plan.righttree);
+	COPY_NODE_FIELD(plan.initPlan);
+	COPY_BITMAPSET_FIELD(plan.extParam);
+	COPY_BITMAPSET_FIELD(plan.allParam);
+	COPY_NODE_FIELD(plan.flow);
+	COPY_SCALAR_FIELD(plan.locustype);
+	COPY_SCALAR_FIELD(plan.parallel);
+	COPY_SCALAR_FIELD(plan.operatorMemKB);
+	COPY_SCALAR_FIELD(numHashAttrs);
+	COPY_POINTER_FIELD(hashAttnos, from->numHashAttrs * sizeof(AttrNumber));
+	COPY_POINTER_FIELD(hashFuncs, from->numHashAttrs * sizeof(Oid));
+	COPY_SCALAR_FIELD(numHashSegments);
+	COPY_NODE_FIELD(resultRelations);
+	COPY_NODE_FIELD(mergeActionLists);
+
+	return newnode;
+}
+
 static AssertOp *
 _copyAssertOp(const AssertOp *from)
 {

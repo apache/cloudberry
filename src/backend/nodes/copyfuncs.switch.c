@@ -1122,6 +1122,9 @@
 		case T_SplitUpdate:
 			retval = _copySplitUpdate(from);
 			break;
+		case T_SplitMerge:
+			retval = _copySplitMerge(from);
+			break;
 		case T_AssertOp:
 			retval = _copyAssertOp(from);
 			break;

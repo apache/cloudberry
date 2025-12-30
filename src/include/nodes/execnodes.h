@@ -3381,6 +3381,34 @@ typedef struct SplitUpdateState
 
 } SplitUpdateState;
 
+
+/*
+ * ExecNode for Split.
+ * This operator contains a Plannode in PlanState.
+ * The Plannode contains indexes to the ctid, insert, delete, resjunk columns
+ * needed for adding the action (Insert/Delete).
+ * A MemoryContext and TupleTableSlot are maintained to keep the INSERT
+ * tuple until requested.
+ */
+typedef struct SplitMergeState
+{
+	PlanState	ps;
+
+	AttrNumber	segid_attno;		/* attribute number of "gp_segment_id" in target list */
+
+	struct CdbHash *cdbhash;	/* hash api object */
+
+	ResultRelInfo *resultRelInfo;
+
+	int mt_lastResultIndex;
+	int	mt_lastResultOid;
+	HTAB	   *mt_resultOidHash;	/* optional hash table to speed lookups */
+	int			nrel;
+
+	AttrNumber mt_resultOidAttno;
+
+} SplitMergeState;
+
 /*
  * ExecNode for AssertOp.
  * This operator contains a Plannode that contains the expressions
