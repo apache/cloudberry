@@ -111,6 +111,10 @@ jobs:
           # Uncomment and add tests as features become available
           ALL_TESTS='{
             "include": [
+              {"test":"ic-small-opt-off",
+                "make_configs":["src/test/regress:installcheck-small"],
+                "pg_settings":{"optimizer":"off"}
+              }
             ]
           }'
           
@@ -351,7 +355,8 @@ jobs:
                 --disable-orca \
                 --disable-gpfdist \
                 --with-pythonsrc-ext \
-                --with-gssapi
+                --with-gssapi \
+                --without-icu
             "; then
               echo "::error::Configure failed"
               exit 1
@@ -625,7 +630,8 @@ jobs:
               --disable-orca \
               --disable-gpfdist \
               --with-pythonsrc-ext \
-              --with-gssapi
+              --with-gssapi \
+              --without-icu 
           " 2>&1 | tee -a ${LOGS_DIR}/details/configure.log
 
       - name: Create gpdemo Cluster
@@ -636,6 +642,7 @@ jobs:
           
           # Create demo cluster with specified number of segments
           su - gpadmin -c "
+            cd ${SRC_DIR}
             source ${INSTALL_PREFIX}/greenplum_path.sh
             NUM_PRIMARY_MIRROR_PAIRS=${{ matrix.num_primary_mirror_pairs }} make create-demo-cluster
           " 2>&1 | tee -a ${LOGS_DIR}/details/cluster-creation.log
@@ -667,17 +674,19 @@ jobs:
           set -eo pipefail
 
           # Run each make target from the test configuration
-          MAKE_CONFIGS='${{ toJson(matrix.make_configs) }}'
+          MAKE_CONFIGS='${{ join(matrix.make_configs, ' ') }}'
           
           su - gpadmin -c "
             source ${INSTALL_PREFIX}/greenplum_path.sh
             source ${SRC_DIR}/gpAux/gpdemo/gpdemo-env.sh
             
+            cd ${SRC_DIR}
+            
             echo '=== Running Tests for ${{ matrix.test }} ==='
             echo 'Make configurations: ${MAKE_CONFIGS}'
             
             # Parse and run each make config
-            for config in \$(echo '${MAKE_CONFIGS}' | jq -r '.[]'); do
+            for config in ${MAKE_CONFIGS}; do
               DIR=\$(echo \$config | cut -d: -f1)
               TARGET=\$(echo \$config | cut -d: -f2)
               
@@ -713,6 +722,87 @@ jobs:
           
           echo "Test results collected"
 
+      - name: Parse Test Results
+        if: always()
+        env:
+          SRC_DIR: ${{ github.workspace }}
+        run: |
+          echo "=== Parsing Test Results for ${{ matrix.test }} ==="
+          
+          # Find regression.out and parse results
+          REGRESSION_OUT=$(find ${SRC_DIR} -name "regression.out" -type f | head -n 1)
+          
+          if [[ -n "$REGRESSION_OUT" && -f "$REGRESSION_OUT" ]]; then
+            echo "Found regression.out at: $REGRESSION_OUT"
+            echo ""
+            echo "=== Test Summary ==="
+            # Extract the summary lines from regression.out
+            grep -E "^(#|test |ok |FAILED|not ok)" "$REGRESSION_OUT" | tail -50 || true
+            echo ""
+            
+            # Count passed/failed tests
+            TOTAL=$(grep -c "^test " "$REGRESSION_OUT" 2>/dev/null || echo "0")
+            PASSED=$(grep -c "^ok " "$REGRESSION_OUT" 2>/dev/null || echo "0")
+            FAILED=$(grep -c "^not ok\|FAILED" "$REGRESSION_OUT" 2>/dev/null || echo "0")
+            
+            echo "=== Statistics ==="
+            echo "Total tests: $TOTAL"
+            echo "Passed: $PASSED"
+            echo "Failed: $FAILED"
+            
+            # Add to job summary
+            {
+              echo "### Test Results: ${{ matrix.test }}"
+              echo "| Metric | Count |"
+              echo "|--------|-------|"
+              echo "| Total | $TOTAL |"
+              echo "| Passed | $PASSED |"
+              echo "| Failed | $FAILED |"
+            } >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "No regression.out file found"
+          fi
+
+      - name: Check and Display Regression Diffs
+        if: always()
+        env:
+          SRC_DIR: ${{ github.workspace }}
+        run: |
+          echo "=== Checking for Regression Diffs ==="
+          
+          # Search for regression.diffs recursively
+          DIFF_FILES=$(find ${SRC_DIR} -type f -name "regression.diffs" 2>/dev/null)
+          
+          if [[ -n "$DIFF_FILES" ]]; then
+            echo "$DIFF_FILES" | while read -r diff_file; do
+              if [[ -s "$diff_file" ]]; then
+                echo ""
+                echo "=========================================="
+                echo "Found regression.diffs at: $diff_file"
+                echo "=========================================="
+                echo ""
+                cat "$diff_file"
+                echo ""
+                echo "=========================================="
+              fi
+            done
+            
+            # Add diff summary to job summary
+            {
+              echo ""
+              echo "### Regression Diffs Found"
+              echo "The following test differences were detected:"
+              echo "\`\`\`"
+              # Show first 100 lines of first diff file
+              head -100 $(echo "$DIFF_FILES" | head -n 1) || true
+              echo "\`\`\`"
+              echo ""
+              echo "*Full diffs available in uploaded artifacts*"
+            } >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "No regression.diffs file found - all tests passed!"
+          fi
+
       - name: "Generate Test Job Summary End: ${{ matrix.test }}"
         if: always()
         run: |
@@ -730,6 +820,24 @@ jobs:
           name: test-logs-${{ matrix.test }}-${{ needs.build.outputs.build_timestamp }}
           path: |
             test-logs-${{ matrix.test }}/
+            **/regression.out
+            **/regression.diffs
+            **/results/
+          retention-days: ${{ env.LOG_RETENTION_DAYS }}
+
+      - name: Upload Regression Logs on Failure
+        if: failure() || cancelled()
+        uses: actions/upload-artifact@v4
+        with:
+          name: regression-logs-${{ matrix.test }}-${{ needs.build.outputs.build_timestamp }}
+          path: |
+            **/regression.out
+            **/regression.diffs
+            **/results/
+            gpAux/gpdemo/datadirs/qddir/demoDataDir-1/log/
+            gpAux/gpdemo/datadirs/dbfast1/demoDataDir0/log/
+            gpAux/gpdemo/datadirs/dbfast2/demoDataDir1/log/
+            gpAux/gpdemo/datadirs/dbfast3/demoDataDir2/log/
           retention-days: ${{ env.LOG_RETENTION_DAYS }}
 
   ## ======================================================================
