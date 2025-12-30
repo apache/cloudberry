@@ -30,6 +30,7 @@
 #include "utils/acl.h"
 #include "utils/backend_status.h"
 #include "utils/builtins.h"
+#include "utils/faultinjector.h"
 #include "utils/guc_tables.h"
 #include "utils/snapmgr.h"
 
@@ -63,6 +64,9 @@ ExecSetVariableStmt(VariableSetStmt *stmt, bool isTopLevel)
 			if (stmt->is_local &&
 				Gp_role != GP_ROLE_EXECUTE && !IsBootstrapProcessingMode())
 				WarnNoTransactionBlock(isTopLevel, "SET LOCAL");
+
+			SIMPLE_FAULT_INJECTOR("set_variable_fault");
+
 			(void) set_config_option(stmt->name,
 									 ExtractSetVariableArgs(stmt),
 									 (superuser() ? PGC_SUSET : PGC_USERSET),
@@ -147,6 +151,7 @@ ExecSetVariableStmt(VariableSetStmt *stmt, bool isTopLevel)
 				WarnNoTransactionBlock(isTopLevel, "SET LOCAL");
 			/* fall through */
 		case VAR_RESET:
+			SIMPLE_FAULT_INJECTOR("reset_variable_fault");
 			(void) set_config_option(stmt->name,
 									 NULL,
 									 (superuser() ? PGC_SUSET : PGC_USERSET),
