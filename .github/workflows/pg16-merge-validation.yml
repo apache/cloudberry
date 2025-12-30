@@ -680,6 +680,8 @@ jobs:
             source ${INSTALL_PREFIX}/greenplum_path.sh
             source ${SRC_DIR}/gpAux/gpdemo/gpdemo-env.sh
             
+            cd ${SRC_DIR}
+            
             echo '=== Running Tests for ${{ matrix.test }} ==='
             echo 'Make configurations: ${MAKE_CONFIGS}'
             
