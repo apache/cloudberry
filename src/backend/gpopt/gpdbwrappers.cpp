@@ -1613,7 +1613,24 @@ gpdb::IsOpHashJoinable(Oid opno, Oid inputtype)
 	GP_WRAP_START;
 	{
 		/* catalog tables: pg_operator */
-		return op_hashjoinable(opno, inputtype);
+		if (!op_hashjoinable(opno, inputtype))
+			return false;
+
+		/*
+		 * Even if oprcanhash is true, we need to verify that hash functions
+		 * actually exist for this operator. This is because oprcanhash can be
+		 * set to true while the operator is only registered in a btree opfamily
+		 * and not in a hash opfamily, which would cause execution-time errors
+		 * when trying to build hash tables.
+		 *
+		 * See get_op_hash_functions() in lsyscache.c which requires operators
+		 * to be registered in a hash opfamily (amopmethod == HASH_AM_OID).
+		 */
+		RegProcedure hash_proc;
+		if (!get_op_hash_functions(opno, &hash_proc, NULL))
+			return false;
+
+		return true;
 	}
 	GP_WRAP_END;
 	return false;
