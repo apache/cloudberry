@@ -74,6 +74,6 @@ SELECT a FROM bittmp WHERE a BETWEEN '1000000' and '1000001';
    ->  Index Scan using bitidx on bittmp
          Index Cond: ((a >= '1000000'::"bit") AND (a <= '1000001'::"bit"))
          Filter: ((a >= '1000000'::"bit") AND (a <= '1000001'::"bit"))
- Optimizer: Pivotal Optimizer (GPORCA)
+ Optimizer: GPORCA
 (5 rows)
 
