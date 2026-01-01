@@ -12,7 +12,7 @@ CREATE database reindexdb2;
 
 \c reindexdb2
 BEGIN;
-SET role = test1;
+SET role = test2;
 CREATE TABLE mytab1_heap(a int, b int);
 CREATE INDEX idx_mytab1_heap ON mytab1_heap(b);
 INSERT INTO mytab1_heap SELECT a , a - 10 FROM generate_series(1,100) a;
