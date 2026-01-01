@@ -2095,6 +2095,7 @@ expression_tree_walker_impl(Node *node,
 		case T_AggExprId:
 		case T_RowIdExpr:
 		case T_CTESearchClause:
+		case T_A_Const:
 		case T_Gather:
 		case T_GatherMerge:
 			/* primitive node types with no expression subnodes */
