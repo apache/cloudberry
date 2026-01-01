@@ -2217,6 +2217,7 @@ ERROR:  UPDATE on distributed key column not allowed on relation with update tri
 -- update action in merge should behave the same
 merge into parted_trig using (select 1) as ss on true
   when matched and a = 2 then update set a = 1;
+ERROR:  cannot update column in merge with distributed column
 drop table parted_trig;
 -- Verify propagation of trigger arguments to partitions
 create table parted_trig (a int) partition by list (a);

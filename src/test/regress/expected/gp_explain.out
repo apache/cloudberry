@@ -545,7 +545,7 @@ EXPLAIN (analyze,  costs off, timing off, summary off) UPDATE explain_subplan.ra
    Update on part_a_1_a_10 range_parted_1
    Update on part_a_10_a_20 range_parted_2
    ->  Explicit Redistribute Motion 1:3  (slice1; segments: 1) (actual rows=1 loops=1)
-         ->  Split (actual rows=2 loops=1)
+         ->  Split Update (actual rows=2 loops=1)
                ->  Append (actual rows=1 loops=1)
                      ->  Seq Scan on part_a_1_a_10 range_parted_1 (actual rows=0 loops=1)
                            Filter: ((a = 'a'::text) AND (c = '200'::numeric))

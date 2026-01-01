@@ -427,7 +427,7 @@ EXPLAIN (costs off) UPDATE rw_view1 SET a=6 WHERE a=5;
 ---------------------------------------------------------------
  Update on base_tbl
    ->  Explicit Redistribute Motion 1:3  (slice1; segments: 1)
-         ->  Split
+         ->  Split Update
                ->  Seq Scan on base_tbl
                      Filter: ((a > 0) AND (a = 5))
  Optimizer: Postgres query optimizer
@@ -524,7 +524,7 @@ EXPLAIN (costs off) UPDATE rw_view2 SET aaa=5 WHERE aaa=4;
 ----------------------------------------------------------------
  Update on base_tbl
    ->  Explicit Redistribute Motion 1:3  (slice1; segments: 1)
-         ->  Split
+         ->  Split Update
                ->  Seq Scan on base_tbl
                      Filter: ((a < 10) AND (a > 0) AND (a = 4))
  Optimizer: Postgres query optimizer
@@ -2169,7 +2169,7 @@ EXPLAIN (costs off) UPDATE rw_view1 SET a = a + 5;
 -----------------------------------------------------------------
  Update on base_tbl b
    ->  Explicit Redistribute Motion 3:3  (slice1; segments: 3)
-         ->  Split
+         ->  Split Update
                ->  Nested Loop
                      Join Filter: (b.a = r.a)
                      ->  Seq Scan on base_tbl b
@@ -2839,7 +2839,7 @@ EXPLAIN (COSTS OFF) UPDATE v2 SET a = 1;
    InitPlan 1 (returns $0)  (slice2)
      ->  Result
    ->  Explicit Redistribute Motion 3:3  (slice1; segments: 3)
-         ->  Split
+         ->  Split Update
                ->  Merge Join
                      Merge Cond: (t1.a = v1.a)
                      ->  Sort

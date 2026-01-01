@@ -662,16 +662,16 @@ WHEN NOT MATCHED THEN
 SELECT * FROM itest15;
  a  |         b         
 ----+-------------------
-  1 | inserted by merge
+  2 | inserted by merge
  30 | inserted by merge
 (2 rows)
 
 SELECT * FROM itest16;
  a  |         b         
 ----+-------------------
- 10 | inserted by merge
-  1 | inserted by merge
+  2 | inserted by merge
  30 | inserted by merge
+ 10 | inserted by merge
 (3 rows)
 
 DROP TABLE itest15;

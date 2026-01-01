@@ -1023,7 +1023,7 @@ WHEN MATCHED THEN
 	UPDATE SET b = s.b, a = t.a + 1
 WHEN NOT MATCHED THEN
 	INSERT VALUES (a, b);
-ERROR:  permission denied for table mtarget
+ERROR:  cannot update column in merge with distributed column
 -- fail (no SELECT on t.b)
 MERGE INTO mtarget t USING msource s ON t.a = s.a
 WHEN MATCHED AND t.b IS NOT NULL THEN

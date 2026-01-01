@@ -177,7 +177,7 @@ UPDATE update_test t
  Update on public.update_test t
    ->  Explicit Redistribute Motion 3:3  (slice1; segments: 3)
          Output: ($1), ($2), t.c, ((SubPlan 1 (returns $1,$2))), t.ctid, t.gp_segment_id, (DMLAction)
-         ->  Split
+         ->  Split Update
                Output: ($1), ($2), t.c, ((SubPlan 1 (returns $1,$2))), t.ctid, t.gp_segment_id, DMLAction
                ->  Seq Scan on public.update_test t
                      Output: $1, $2, t.c, (SubPlan 1 (returns $1,$2)), t.ctid, t.gp_segment_id

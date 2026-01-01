@@ -2380,6 +2380,7 @@ WHEN MATCHED THEN
 	UPDATE SET dnotes = dnotes || ' notes added by merge5 '
 WHEN NOT MATCHED THEN
 	INSERT VALUES (12, 11, 1, 'regress_rls_bob', 'another novel');
+ERROR:  duplicate key value violates unique constraint "document_pkey"
 -- UPDATE action fails if new row is not visible
 MERGE INTO document d
 USING (SELECT 1 as sdid) s
@@ -2395,7 +2396,6 @@ ON did = s.sdid
 WHEN MATCHED THEN
 	UPDATE SET dnotes = dnotes || ' notes added by merge7 ',
 			   cid = (SELECT cid from category WHERE cname = 'novel');
-ERROR:  new row violates row-level security policy for table "document"
 -- OK to insert a new row that is not visible
 MERGE INTO document d
 USING (SELECT 13 as sdid) s
@@ -2410,8 +2410,8 @@ RESET SESSION AUTHORIZATION;
 DROP POLICY p1 ON document;
 -- Just check everything went per plan
 SELECT * FROM document;
- did | cid | dlevel |      dauthor      |              dtitle              |                                dnotes                                 
------+-----+--------+-------------------+----------------------------------+-----------------------------------------------------------------------
+ did | cid | dlevel |      dauthor      |              dtitle              |                                            dnotes                                            
+-----+-----+--------+-------------------+----------------------------------+----------------------------------------------------------------------------------------------
    5 |  44 |      2 | regress_rls_bob   | my second manga                  | 
    6 |  22 |      1 | regress_rls_carol | great science fiction            | 
    9 |  22 |      1 | regress_rls_dave  | awesome science fiction          | 
@@ -2419,16 +2419,15 @@ SELECT * FROM document;
   11 |  33 |      1 | regress_rls_carol | hoge                             | 
   33 |  22 |      1 | regress_rls_bob   | okay science fiction             | 
   13 |  44 |      1 | regress_rls_bob   | new manga                        | 
+  78 |  33 |      1 | regress_rls_bob   | some technology novel            | 
+  79 |  33 |      1 | regress_rls_bob   | technology book, can only insert | 
+  12 |  11 |      1 | regress_rls_bob   | another novel                    | 
+   1 |  11 |      1 | regress_rls_bob   | my first novel                   |  notes added by merge2  notes added by merge3  notes added by merge4  notes added by merge7 
    3 |  22 |      2 | regress_rls_bob   | my science fiction               | 
    7 |  33 |      2 | regress_rls_carol | great technology book            | 
    8 |  44 |      1 | regress_rls_carol | great manga                      | 
    2 |  11 |      2 | regress_rls_bob   | my first novel                   | 
-  12 |  11 |      1 | regress_rls_bob   | another novel                    | 
-  78 |  33 |      1 | regress_rls_bob   | some technology novel            | 
-  79 |  33 |      1 | regress_rls_bob   | technology book, can only insert | 
-  12 |  11 |      1 | regress_rls_bob   | another novel                    | 
-   1 |  11 |      1 | regress_rls_bob   | my first novel                   |  notes added by merge2  notes added by merge3  notes added by merge4 
-(16 rows)
+(15 rows)
 
 --
 -- ROLE/GROUP
