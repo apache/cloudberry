@@ -24,6 +24,9 @@
 -- s/Found.+//
 --
 -- end_matchsubs
+\getenv abs_srcdir PG_ABS_SRCDIR
+\getenv hostname PG_HOSTNAME
+\set nation_tbl 'file://' :hostname :abs_srcdir '/data/nation.tbl'
 CREATE TABLE REG_REGION (R_REGIONKEY INT, R_NAME CHAR(25), R_COMMENT VARCHAR(152)) DISTRIBUTED BY (R_REGIONKEY);
 -- --------------------------------------
 -- 'file' protocol - (only CREATE, don't SELECT - won't work on distributed installation)
@@ -32,10 +35,10 @@ CREATE EXTERNAL TABLE EXT_NATION  ( N_NATIONKEY  INTEGER ,
                             N_NAME       CHAR(25) ,
                             N_REGIONKEY  INTEGER ,
                             N_COMMENT    VARCHAR(152))
-location ('file://@hostname@@abs_srcdir@/data/nation.tbl' )
+location (:'nation_tbl' )
 FORMAT 'text' (delimiter '|');
 CREATE EXTERNAL TABLE EXT_REGION  (LIKE REG_REGION)
-location ('file://@hostname@@abs_srcdir@/data/region.tbl' )
+location (:'nation_tbl' )
 FORMAT 'text' (delimiter '|');
 -- Only tables with custom protocol should create dependency, due to a bug there
 -- used to be entries created for non custom protocol tables with refobjid=0.
@@ -51,81 +54,186 @@ DROP EXTERNAL TABLE EXT_REGION;
 -- --------------------------------------
 -- check platform
 -- --------------------------------------
+DROP TABLE IF EXISTS REG_REGION;
+DROP TABLE IF EXISTS tableless_heap;
+NOTICE:  table "tableless_heap" does not exist, skipping
+DROP TABLE IF EXISTS errlog_save;
+NOTICE:  table "errlog_save" does not exist, skipping
+DROP TABLE IF EXISTS exttab_insert_1;
+NOTICE:  table "exttab_insert_1" does not exist, skipping
+DROP TABLE IF EXISTS exttab_ctas_1;
+NOTICE:  table "exttab_ctas_1" does not exist, skipping
+DROP TABLE IF EXISTS exttab_constraints_insert_1;
+NOTICE:  table "exttab_constraints_insert_1" does not exist, skipping
+DROP EXTERNAL TABLE IF EXISTS tableless_ext;
+NOTICE:  foreign table "tableless_ext" does not exist, skipping
+DROP EXTERNAL TABLE IF EXISTS ret_too_many_uris;
+NOTICE:  foreign table "ret_too_many_uris" does not exist, skipping
+DROP EXTERNAL TABLE IF EXISTS wet_too_many_uris;
+NOTICE:  foreign table "wet_too_many_uris" does not exist, skipping
+DROP EXTERNAL TABLE IF EXISTS exttab_basic_1;
+NOTICE:  foreign table "exttab_basic_1" does not exist, skipping
+DROP EXTERNAL TABLE IF EXISTS exttab_basic_error_1;
+NOTICE:  foreign table "exttab_basic_error_1" does not exist, skipping
+DROP EXTERNAL TABLE IF EXISTS exttab_basic_2;
+NOTICE:  foreign table "exttab_basic_2" does not exist, skipping
+DROP EXTERNAL TABLE IF EXISTS exttab_basic_3;
+NOTICE:  foreign table "exttab_basic_3" does not exist, skipping
+DROP EXTERNAL TABLE IF EXISTS exttab_basic_4;
+NOTICE:  foreign table "exttab_basic_4" does not exist, skipping
+DROP EXTERNAL TABLE IF EXISTS exttab_basic_5;
+NOTICE:  foreign table "exttab_basic_5" does not exist, skipping
+DROP EXTERNAL TABLE IF EXISTS exttab_basic_6;
+NOTICE:  foreign table "exttab_basic_6" does not exist, skipping
+DROP EXTERNAL TABLE IF EXISTS exttab_basic_7;
+NOTICE:  foreign table "exttab_basic_7" does not exist, skipping
+DROP EXTERNAL TABLE IF EXISTS exttab_constraints_1;
+NOTICE:  foreign table "exttab_constraints_1" does not exist, skipping
+DROP EXTERNAL TABLE IF EXISTS exttab_cte_1;
+NOTICE:  foreign table "exttab_cte_1" does not exist, skipping
+DROP EXTERNAL TABLE IF EXISTS exttab_cte_2;
+NOTICE:  foreign table "exttab_cte_2" does not exist, skipping
+DROP EXTERNAL TABLE IF EXISTS exttab_permissions_1;
+NOTICE:  foreign table "exttab_permissions_1" does not exist, skipping
+DROP EXTERNAL TABLE IF EXISTS exttab_permissions_2;
+NOTICE:  foreign table "exttab_permissions_2" does not exist, skipping
+DROP EXTERNAL TABLE IF EXISTS exttab_permissions_3;
+NOTICE:  foreign table "exttab_permissions_3" does not exist, skipping
+DROP EXTERNAL TABLE IF EXISTS exttab_subq_1;
+NOTICE:  foreign table "exttab_subq_1" does not exist, skipping
+DROP EXTERNAL TABLE IF EXISTS exttab_subq_2;
+NOTICE:  foreign table "exttab_subq_2" does not exist, skipping
+DROP EXTERNAL TABLE IF EXISTS exttab_subtxs_1;
+NOTICE:  foreign table "exttab_subtxs_1" does not exist, skipping
+DROP EXTERNAL TABLE IF EXISTS exttab_subtxs_2;
+NOTICE:  foreign table "exttab_subtxs_2" does not exist, skipping
+DROP EXTERNAL TABLE IF EXISTS exttab_txs_1;
+NOTICE:  foreign table "exttab_txs_1" does not exist, skipping
+DROP EXTERNAL TABLE IF EXISTS exttab_txs_2;
+NOTICE:  foreign table "exttab_txs_2" does not exist, skipping
+DROP EXTERNAL TABLE IF EXISTS exttab_udfs_1;
+NOTICE:  foreign table "exttab_udfs_1" does not exist, skipping
+DROP EXTERNAL TABLE IF EXISTS exttab_udfs_2;
+NOTICE:  foreign table "exttab_udfs_2" does not exist, skipping
+DROP EXTERNAL TABLE IF EXISTS exttab_views_3;
+NOTICE:  foreign table "exttab_views_3" does not exist, skipping
+DROP EXTERNAL WEB TABLE IF EXISTS table_env;
+NOTICE:  foreign table "table_env" does not exist, skipping
+DROP EXTERNAL WEB TABLE IF EXISTS table_master;
+NOTICE:  foreign table "table_master" does not exist, skipping
+DROP EXTERNAL WEB TABLE IF EXISTS table_qry;
+NOTICE:  foreign table "table_qry" does not exist, skipping
+DROP VIEW IF EXISTS exttab_views_3;
+NOTICE:  view "exttab_views_3" does not exist, skipping
+DROP PROTOCOL IF EXISTS demoprot_untrusted;
+NOTICE:  protocol "demoprot_untrusted" does not exist, skipping
+DROP PROTOCOL IF EXISTS demoprot_untrusted2;
+NOTICE:  protocol "demoprot_untrusted2" does not exist, skipping
 drop external web table if exists check_ps;
-NOTICE:  table "check_ps" does not exist, skipping
+NOTICE:  foreign table "check_ps" does not exist, skipping
 CREATE EXTERNAL WEB TABLE check_ps (x text)
 execute E'( (ps -ef || ps -aux) | grep gpfdist | grep -v grep)'
 on SEGMENT 0
 format 'text';
 drop external web table if exists check_env;
-NOTICE:  table "check_env" does not exist, skipping
+NOTICE:  foreign table "check_env" does not exist, skipping
 CREATE EXTERNAL WEB TABLE check_env (x text)
 execute E'( env | sort)'
 on SEGMENT 0
 format 'text';
 select * from check_ps;
-ERROR:  external table check_ps command ended with error.  (seg0 slice1 @hostname@:50000 pid=64819)
+ERROR:  external table check_ps command ended with error.  (seg0 slice1 127.0.1.1:7002 pid=26072)
 DETAIL:  Command: execute:( (ps -ef || ps -aux) | grep gpfdist | grep -v grep)
 select * from check_env;
-                                                                                                                                                                                                                                      x                                                                                                                                                                                                                                      
------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
- CLICOLOR=1
- DYLD_LIBRARY_PATH=/Users/@curusername@/cloudberry-db-devel/lib:/Users/@curusername@/cloudberry-db-devel/ext/python/lib:/opt/gcc_infrastructure/lib:/Users/@curusername@/greenplum-perfmon-web-4.0.1.0/lib:/Users/@curusername@/cloudberry-db-devel/lib:/Users/@curusername@/cloudberry-db-devel/ext/python/lib:
- GPHOME=/Users/@curusername@/cloudberry-db-devel
- GPROOT=/Users/@curusername@
- GP_CID=0
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            x                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             
+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ BACKOUT_FILE=/home/gpadmin/cloudberry/gpAux/gpdemo/datadirs/gpAdminLogs/backout_gpinitsystem_gpadmin_20260102_233846
+ BLDWRAP_POSTGRES_CONF_ADDONS=fsync=on 
+ COORDINATOR_DATA_DIRECTORY=/home/gpadmin/cloudberry/gpAux/gpdemo/datadirs/qddir/demoDataDir-1
+ DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1000/bus
+ DEBUGINFOD_URLS=https://debuginfod.ubuntu.com 
+ DEFAULT_QD_MAX_CONNECT=150
+ DEMO_PORT_BASE=7002
+ ENCODING=UNICODE
+ GP_CID=35
  GP_DATABASE=regression
- GP_DATE=20110816
- GP_HADOOP_CONN_JARDIR=lib//hadoop
- GP_HADOOP_CONN_VERSION=CE_1.0.0.0
- GP_MASTER_HOST=127.0.0.1
- GP_MASTER_PORT=5432
+ GP_DATE=20260102
+ GPERA=2fe6e473bc3ac1f8_260102233947
+ GPHOME=/home/gpadmin/gpdb
+ GP_MASTER_HOST=127.0.1.1
+ GP_MASTER_PORT=7000
  GP_QUERY_STRING=select * from check_env;
- GP_SEGMENT_COUNT=2
+ GP_SEG_DATADIR=/home/gpadmin/cloudberry/gpAux/gpdemo/datadirs/dbfast1/demoDataDir0
+ GP_SEGMENT_COUNT=3
  GP_SEGMENT_ID=0
- GP_SEG_DATADIR=/Users/@curusername@/greenplum-db-data/dbfast1/gpseg0
- GP_SEG_PG_CONF=/Users/@curusername@/greenplum-db-data/dbfast1/gpseg0/postgresql.conf
- GP_SEG_PORT=50000
- GP_SESSION_ID=438
+ GP_SEG_PG_CONF=/home/gpadmin/cloudberry/gpAux/gpdemo/datadirs/dbfast1/demoDataDir0/postgresql.conf
+ GP_SEG_PORT=7002
+ GPSESSID=0000000000
+ GP_SESSION_ID=31
  GP_SN=1
- GP_TIME=132701
- GP_USER=@curusername@
- GP_XID=1313526180-0000006772
- HADOOP_HOME=/Users/@curusername@/WorkDir/hadoop-0.20.1-dev
- HADOOP_VERSION=0.21.0
- HOME=/Users/@curusername@
- JAVA_HOME=/System/Library/Frameworks/JavaVM.framework/Versions/1.6.0/Home
- LC_COLLATE=en_US.utf-8
- LC_CTYPE=en_US.utf-8
+ GP_TIME=234031
+ GP_USER=gpadmin
+ GP_XID=31-0000000053
+ HOME=/home/gpadmin
+ LANG=en_US.UTF-8
+ LC_ALL_SETTINGS=--lc-messages=en_US.UTF-8
+ LC_COLLATE=en_US.UTF-8
+ LC_CTYPE=en_US.UTF-8
  LC_MESSAGES=C
  LC_MONETARY=C
+ --lc-monetary=en_US.UTF-8
  LC_NUMERIC=C
+ --lc-numeric=en_US.UTF-8
+ LC_TERMINAL=iTerm2
+ LC_TERMINAL_VERSION=3.5.11
  LC_TIME=C
- LOGNAME=@curusername@
- MAIL=/var/mail/@curusername@
- COORDINATOR_DATA_DIRECTORY=//Users/@curusername@/greenplum-master/gpseg-1
- OPENSSL_CONF=/Users/@curusername@/cloudberry-db-devel/etc/openssl.cnf
- P4CONFIG=.p4config
- PATH=/Users/@curusername@/cloudberry-db-devel/bin:/Users/@curusername@/cloudberry-db-devel/ext/python/bin:/Users/@curusername@/cloudberry-db-devel/bin:/Users/@curusername@/cloudberry-db-devel/ext/python/bin:/opt/gcc-4.4.2/bin:/Users/@curusername@/Workdir/mybin:/Users/@curusername@/greenplum-perfmon-web-4.0.1.0/bin:/Users/@curusername@/cloudberry-db-devel/bin:/Users/@curusername@/cloudberry-db-devel/ext/python/bin:/Users/@curusername@/cloudberry-db-devel/bin:/Users/@curusername@/cloudberry-db-devel/ext/python/bin:/usr/bin:/bin:/usr/sbin:/sbin
- PGDATA=/Users/@curusername@/greenplum-db-data/dbfast1/gpseg0
- PGHOST=127.0.0.1
- PGSYSCONFDIR=/Users/@curusername@/cloudberry-db-devel/etc/postgresql
- PWD=/Users/@curusername@/greenplum-db-data/dbfast1/gpseg0
- PYTHONHOME=/Users/@curusername@/cloudberry-db-devel/ext/python
- PYTHONPATH=/Users/@curusername@/cloudberry-db-devel/lib/python
+ --lc-time=en_US.UTF-8
+ LD_LIBRARY_PATH=/home/gpadmin/gpdb/lib:/home/gpadmin/gpdb/lib
+ LESSCLOSE=/usr/bin/lesspipe %s %s
+ LESSOPEN=| /usr/bin/lesspipe %s
+ LOCALE_SETTING=
+ LOG_FILE=/home/gpadmin/cloudberry/gpAux/gpdemo/datadirs/gpAdminLogs/gpinitsystem_20260102.log
+ LOGNAME=gpadmin
+ LS_COLORS=rs=0:di=01;34:ln=01;36:mh=00:pi=40;33:so=01;35:do=01;35:bd=40;33;01:cd=40;33;01:or=40;31;01:mi=00:su=37;41:sg=30;43:ca=00:tw=30;42:ow=34;42:st=37;44:ex=01;32:*.tar=01;31:*.tgz=01;31:*.arc=01;31:*.arj=01;31:*.taz=01;31:*.lha=01;31:*.lz4=01;31:*.lzh=01;31:*.lzma=01;31:*.tlz=01;31:*.txz=01;31:*.tzo=01;31:*.t7z=01;31:*.zip=01;31:*.z=01;31:*.dz=01;31:*.gz=01;31:*.lrz=01;31:*.lz=01;31:*.lzo=01;31:*.xz=01;31:*.zst=01;31:*.tzst=01;31:*.bz2=01;31:*.bz=01;31:*.tbz=01;31:*.tbz2=01;31:*.tz=01;31:*.deb=01;31:*.rpm=01;31:*.jar=01;31:*.war=01;31:*.ear=01;31:*.sar=01;31:*.rar=01;31:*.alz=01;31:*.ace=01;31:*.zoo=01;31:*.cpio=01;31:*.7z=01;31:*.rz=01;31:*.cab=01;31:*.wim=01;31:*.swm=01;31:*.dwm=01;31:*.esd=01;31:*.avif=01;35:*.jpg=01;35:*.jpeg=01;35:*.mjpg=01;35:*.mjpeg=01;35:*.gif=01;35:*.bmp=01;35:*.pbm=01;35:*.pgm=01;35:*.ppm=01;35:*.tga=01;35:*.xbm=01;35:*.xpm=01;35:*.tif=01;35:*.tiff=01;35:*.png=01;35:*.svg=01;35:*.svgz=01;35:*.mng=01;35:*.pcx=01;35:*.mov=01;35:*.mpg=01;35:*.mpeg=01;35:*.m2v=01;35:*.mkv=01;35:*.webm=01;35:*.webp=01;35:*.ogm=01;35:*.mp4=01;35:*.m4v=01;35:*.mp4v=01;35:*.vob=01;35:*.qt=01;35:*.nuv=01;35:*.wmv=01;35:*.asf=01;35:*.rm=01;35:*.rmvb=01;35:*.flc=01;35:*.avi=01;35:*.fli=01;35:*.flv=01;35:*.gl=01;35:*.dl=01;35:*.xcf=01;35:*.xwd=01;35:*.yuv=01;35:*.cgm=01;35:*.emf=01;35:*.ogv=01;35:*.ogx=01;35:*.aac=00;36:*.au=00;36:*.flac=00;36:*.m4a=00;36:*.mid=00;36:*.midi=00;36:*.mka=00;36:*.mp3=00;36:*.mpc=00;36:*.ogg=00;36:*.ra=00;36:*.wav=00;36:*.oga=00;36:*.opus=00;36:*.spx=00;36:*.xspf=00;36:*~=00;90:*#=00;90:*.bak=00;90:*.crdownload=00;90:*.dpkg-dist=00;90:*.dpkg-new=00;90:*.dpkg-old=00;90:*.dpkg-tmp=00;90:*.old=00;90:*.orig=00;90:*.part=00;90:*.rej=00;90:*.rpmnew=00;90:*.rpmorig=00;90:*.rpmsave=00;90:*.swp=00;90:*.tmp=00;90:*.ucf-dist=00;90:*.ucf-new=00;90:*.ucf-old=00;90:
+ MAKEFLAGS=w
+ MAKELEVEL=2
+ MAKE_TERMERR=/dev/pts/2
+ MAKE_TERMOUT=/dev/pts/2
+ MASTER_DATA_DIRECTORY=/home/gpadmin/cloudberry/gpAux/gpdemo/datadirs/qddir/demoDataDir-1
+ MFLAGS=-w
+ NUM_PRIMARY_MIRROR_PAIRS=3
+ OLDPWD=/home/gpadmin/cloudberry
+ PARALLEL_STATUS_FILE=/tmp/gpinitsystem_parallel_status_file.22146
+ PATH=/home/gpadmin/gpdb/bin:/home/gpadmin/gpdb/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games:/snap/bin
+ PG_CONF_ADD_FILE=clusterConfigPostgresAddonsFile
+ PGDATA=/home/gpadmin/cloudberry/gpAux/gpdemo/datadirs/dbfast1/demoDataDir0
+ PG_GRANDPARENT_PID=25556
+ PGPORT=7000
+ PGSYSCONFDIR=/home/gpadmin/gpdb/etc/postgresql
+ PWD=/home/gpadmin/cloudberry/gpAux/gpdemo/datadirs/dbfast1/demoDataDir0
+ PYTHONPATH=/home/gpadmin/gpdb/lib/python
+ QD_DIR=/home/gpadmin/cloudberry/gpAux/gpdemo/datadirs/dbfast3/demoDataDir2
+ QE_MAX_CONNECT=750
+ QE_SHARED_BUFFERS=128000kB
+ SEG_PREFIX=demoDataDir
  SHELL=/bin/bash
  SHLVL=4
- SSH_CLIENT=127.0.0.1 50658 22
- SSH_CONNECTION=127.0.0.1 50658 127.0.0.1 22
- TERM=xterm-color
- USER=@curusername@
- VERSIONER_PERL_PREFER_32_BIT=yes
- VERSIONER_PERL_VERSION=5.8.9
- ZK_HOME=/Users/@curusername@/WorkDir/zookeeper-3.3.3
+ SSH_CLIENT=192.168.68.1 56133 22
+ SSH_CONNECTION=192.168.68.1 56133 192.168.68.136 22
+ SSH_TTY=/dev/pts/2
+ TERM=xterm-256color
+ TOTAL_SEG=3
+ USER=gpadmin
  _=/usr/bin/env
- __CF_USER_TEXT_ENCODING=0x1F7:0:0
-(55 rows)
+ XDG_DATA_DIRS=/usr/local/share:/usr/share:/var/lib/snapd/desktop
+ XDG_RUNTIME_DIR=/run/user/1000
+ XDG_SESSION_CLASS=user
+ XDG_SESSION_ID=16526
+ XDG_SESSION_TYPE=tty
+(83 rows)
 
+drop external table check_ps;
+drop external table check_env;
 -- end_ignore
 -- table to get shell command "env" output which list all environment variable
 CREATE EXTERNAL WEB TABLE table_env (val TEXT)
@@ -144,8 +252,9 @@ SELECT * FROM table_env WHERE val LIKE 'GP_QUERY%\%' ESCAPE '&' ORDER BY val ASC
 (1 row)
 
 -- ensure squelching on master
+\set lineitem 'cat ' :abs_srcdir '/data/lineitem.csv'
 CREATE EXTERNAL WEB TABLE table_master (val TEXT)
-  EXECUTE E'cat @abs_srcdir@/data/lineitem.csv' ON MASTER
+  EXECUTE E:'lineitem' ON MASTER
   FORMAT 'TEXT' (ESCAPE 'OFF');
 BEGIN;
 DECLARE _psql_cursor NO SCROLL CURSOR FOR SELECT 1 FROM table_master;
@@ -182,21 +291,22 @@ SELECT * FROM table_qry WHERE val LIKE '%\%' ESCAPE '&' ORDER BY val ASC;
 create external web table ext_stderr1(a text) execute 'nosuchcommand' format 'text';
 create external web table ext_stderr2(a text) execute 'cat nosuchfile.txt' format 'text';
 select * from ext_stderr1;
-ERROR:  external table ext_stderr1 command ended with error. sh: nosuchcommand: command not found  (seg0 slice1 @hostname@:50000 pid=64819)
+ERROR:  external table ext_stderr1 command ended with error. sh: 1: nosuchcommand: not found  (seg0 slice1 127.0.1.1:7002 pid=26072)
 DETAIL:  Command: execute:nosuchcommand
 select * from ext_stderr2;
-ERROR:  external table ext_stderr2 command ended with error. cat: nosuchfile.txt: No such file or directory  (seg0 slice1 @hostname@:50000 pid=64819)
+ERROR:  external table ext_stderr2 command ended with error. cat: nosuchfile.txt: No such file or directory  (seg1 slice1 127.0.1.1:7003 pid=26073)
 DETAIL:  Command: execute:cat nosuchfile.txt
 drop external web table ext_stderr1;
 drop external web table ext_stderr2;
 --
 -- bad csv (quote must be a single char)
 --
+\set whois_file 'gpfdist://' :hostname ':7070/exttab1/whois.csv'
 create external table bad_whois (
 source_lineno			int,
 domain_name			varchar(350)
 )
-location ('gpfdist://@hostname@:7070/exttab1/whois.csv' )
+location (:'whois_file' )
 format 'csv' ( header quote as 'ggg');
 ERROR:  COPY quote must be a single one-byte character
 select count(*) from bad_whois;
@@ -208,26 +318,28 @@ ERROR:  foreign table "bad_whois" does not exist
 --
 -- try a bad location
 --
+\set badt1_file 'file://' :hostname :abs_srcdir '/data/no/such/place/badt1.tbl'
 create external table badt1 (x text)
-location ('file://@hostname@@abs_srcdir@/data/no/such/place/badt1.tbl' )
+location (:'badt1_file' )
 format 'text' (delimiter '|');
 select * from badt1;
-NOTICE:  gfile stat @abs_srcdir@/data/no/such/place/badt1.tbl failure: No such file or directory  (seg0 slice1 @hostname@:50000 pid=64819)
-NOTICE:  fstream unable to open file @abs_srcdir@/data/no/such/place/badt1.tbl  (seg0 slice1 @hostname@:50000 pid=64819)
-ERROR:  could not open file "@abs_srcdir@/data/no/such/place/badt1.tbl": 404 file not found  (seg0 slice1 @hostname@:50000 pid=64819)
+NOTICE:  gfile stat /home/gpadmin/cloudberry/src/test/regress/data/no/such/place/badt1.tbl failure: No such file or directory  (seg0 slice1 127.0.1.1:7002 pid=26072)
+NOTICE:  fstream unable to open file /home/gpadmin/cloudberry/src/test/regress/data/no/such/place/badt1.tbl  (seg0 slice1 127.0.1.1:7002 pid=26072)
+ERROR:  could not open file "/home/gpadmin/cloudberry/src/test/regress/data/no/such/place/badt1.tbl": 404 file not found  (seg0 slice1 127.0.1.1:7002 pid=26072)
 drop external table badt1;
 --
 -- try a bad protocol
 --
+\set baadt2_file 'bad_protocol://' :hostname :abs_srcdir '/data/no/such/place/badt2.tbl'
 create external table badt2 (x text)
-location ('bad_protocol://@hostname@@abs_srcdir@/data/no/such/place/badt2.tbl' )
+location (:'baadt2_file' )
 format 'text' (delimiter '|');
 ERROR:  protocol "bad_protocol" does not exist
 --
 -- ALTER (partial support)
 --
 create external table ext (a int, x text)
-location ('file://@hostname@@abs_srcdir@/data/no/such/place/badt1.tbl' )
+location (:'badt1_file' )
 format 'text';
 alter table ext drop column a; -- should pass
 alter external table ext add column a int; -- pass
@@ -249,7 +361,8 @@ ERROR:  cannot update foreign table "ext"
 insert into ext(x) values(123);
 ERROR:  foreign table "ext" does not allow inserts
 create index ext_index on ext(x); -- should fail
-ERROR:  cannot create index on foreign table "ext"
+ERROR:  cannot create index on relation "ext"
+DETAIL:  This operation is not supported for foreign tables.
 drop table ext; -- should fail (wrong object)
 ERROR:  "ext" is not a table
 HINT:  Use DROP FOREIGN TABLE to remove a foreign table.
@@ -263,8 +376,6 @@ DROP EXTERNAL TABLE IF EXISTS ext_r;
 NOTICE:  foreign table "ext_r" does not exist, skipping
 DROP ROLE IF EXISTS extprotu;
 NOTICE:  role "extprotu" does not exist, skipping
-NOTICE:  role "extprotu" does not exist, skipping  (seg0 @hostname@:50000 pid=64819)
-NOTICE:  role "extprotu" does not exist, skipping  (seg1 @hostname@:50001 pid=64820)
 CREATE OR REPLACE FUNCTION write_to_file() RETURNS integer as '$libdir/gpextprotocol.so', 'demoprot_export' LANGUAGE C STABLE NO SQL;
 CREATE OR REPLACE FUNCTION read_from_file() RETURNS integer as '$libdir/gpextprotocol.so', 'demoprot_import' LANGUAGE C STABLE NO SQL;
 DROP PROTOCOL IF EXISTS demoprot;
@@ -300,7 +411,7 @@ GRANT INSERT ON PROTOCOL demoprot TO extprotu;
 \t on
 -- print with tuples-only mode : suppress diff related to user string length.
 SELECT ptcname, ptcacl FROM PG_EXTPROTOCOL WHERE ptcname = 'demoprot';
- demoprot | {@curusername@=ar/@curusername@,extprotu=ar/@curusername@}
+ demoprot | {gpadmin=ar/gpadmin,extprotu=ar/gpadmin}
 
 \t off
 SET SESSION AUTHORIZATION extprotu;
@@ -408,7 +519,8 @@ DROP EXTERNAL TABLE public.test_ext;
 -- positive
 create writable external web table wet_pos4(a text, b text) execute 'some command' format 'text';
 -- negative
-create writable external table wet_neg1(a text, b text) location('file://@hostname@@abs_srcdir@/badt1.tbl') format 'text';
+\set badt1_file2 'file://' :hostname :abs_srcdir '/badt1.tbl'
+create writable external table wet_neg1(a text, b text) location(:'badt1_file2') format 'text';
 ERROR:  unsupported URI protocol 'file' for writable external table
 HINT:  Writable external tables may use 'gpfdist' or 'gpfdists' URIs only.
 create writable external table wet_neg1(a text, b text) location('gpfdist://foo:7070/wet.out', 'gpfdist://foo:7070/wet.out') format 'text';
@@ -426,8 +538,9 @@ HINT:  Create the table as READABLE instead.
 -- scans, because the planner generated plans that used the CTID attribute
 -- to implement certain semi-joins. Nowadays, we use generated row IDs in
 -- such plans, and don't need CTID for that purpose anymore.
+\set mpp17980_file2 'file://' :hostname :abs_srcdir '/data/mpp17980.data'
 CREATE EXTERNAL TABLE ext_mpp17980 ( id int , id1 int , id2 int)
-LOCATION ('file://@hostname@@abs_srcdir@/data/mpp17980.data')
+LOCATION (:'mpp17980_file2')
 FORMAT 'CSV' ( DELIMITER ',' NULL ' ');
 CREATE TABLE mpp17980 (id int, date date, amt decimal(10,2))
 DISTRIBUTED randomly PARTITION BY RANGE (date)
@@ -471,9 +584,12 @@ SELECT ctid, * FROM ext_mpp17980;
 
 DROP EXTERNAL TABLE ext_mpp17980;
 DROP TABLE mpp17980;
-COPY (VALUES('1,2'),('1,2,3'),('1,'),('1')) TO '@abs_srcdir@/data/tableless.csv';
+\set tableless_file :abs_srcdir '/data/tableless.csv'
+COPY (VALUES('1,2'),('1,2,3'),('1,'),('1')) TO :'tableless_file';
 CREATE TABLE tableless_heap(a int, b int);
-COPY tableless_heap FROM '@abs_srcdir@/data/tableless.csv' CSV LOG ERRORS SEGMENT REJECT LIMIT 10;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+COPY tableless_heap FROM :'tableless_file' CSV LOG ERRORS SEGMENT REJECT LIMIT 10;
 NOTICE:  found 2 data formatting errors (2 or more input rows), rejected related input data
 SELECT relname, linenum, errmsg FROM gp_read_error_log('tableless_heap');
     relname     | linenum |                errmsg                 
@@ -483,6 +599,8 @@ SELECT relname, linenum, errmsg FROM gp_read_error_log('tableless_heap');
 (2 rows)
 
 create table errlog_save as select * from gp_read_error_log('tableless_heap');
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'cmdtime' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 select count(*) from errlog_save;
  count 
 -------
@@ -500,16 +618,17 @@ SELECT relname, linenum, errmsg FROM gp_read_error_log('tableless_heap');
 ---------+---------+--------
 (0 rows)
 
+\set tableless_file2 'file://' :hostname :abs_srcdir '/data/tableless.csv'
 create external table tableless_ext(a int, b int)
-location ('file://@hostname@@abs_srcdir@/data/tableless.csv')
+location (:'tableless_file2')
 format 'csv'
 log errors segment reject limit 10;
 select * from tableless_ext;
 NOTICE:  found 2 data formatting errors (2 or more input rows), rejected related input data
  a | b 
 ---+---
- 1 |  
  1 | 2
+ 1 |  
 (2 rows)
 
 SELECT relname, linenum, errmsg FROM gp_read_error_log('tableless_ext');
@@ -541,8 +660,8 @@ select * from tableless_ext;
 NOTICE:  found 2 data formatting errors (2 or more input rows), rejected related input data
  a | b 
 ---+---
- 1 |  
  1 | 2
+ 1 |  
 (2 rows)
 
 SELECT gp_truncate_error_log('*');
@@ -555,8 +674,8 @@ select * from tableless_ext;
 NOTICE:  found 2 data formatting errors (2 or more input rows), rejected related input data
  a | b 
 ---+---
- 1 |  
  1 | 2
+ 1 |  
 (2 rows)
 
 SELECT gp_truncate_error_log('*.*');
@@ -614,11 +733,12 @@ create writable external table wet_too_many_uris(a text, b text) location(
   'gpfdist://foo.invalid:7070/wet.out19', 'gpfdist://foo.invalid:7070/wet.out20'
 ) format 'text';
 insert into wet_too_many_uris values ('foo', 'bar');
-ERROR:  external table has more URLs than available primary segments that can write into them  (seg2 127.0.0.1:40002 pid=24162)
+ERROR:  external table has more URLs than available primary segments that can write into them  (seg1 127.0.1.1:7003 pid=26073)
 -- Test for error log functionality
 -- Scan with no errors
+\set exttab_file 'file://' :hostname :abs_srcdir '/data/exttab.data'
 CREATE EXTERNAL TABLE exttab_basic_1( i int, j text )
-LOCATION ('file://@hostname@@abs_srcdir@/data/exttab.data') FORMAT 'TEXT' (DELIMITER '|')
+LOCATION (:'exttab_file') FORMAT 'TEXT' (DELIMITER '|')
 LOG ERRORS SEGMENT REJECT LIMIT 2;
 -- Empty error log
 SELECT * FROM gp_read_error_log('exttab_basic_1');
@@ -639,8 +759,9 @@ SELECT * FROM gp_read_error_log('exttab_basic_1');
 (0 rows)
 
 -- test ON COORDINATOR without LOG ERRORS, return empty results for all rows error out
+\set cat_exttab 'cat ' :abs_srcdir '/data/exttab.data'
 CREATE EXTERNAL WEB TABLE exttab_basic_error_1( i int )
-EXECUTE E'cat @abs_srcdir@/data/exttab.data' ON COORDINATOR
+EXECUTE E:'cat_exttab' ON COORDINATOR
 FORMAT 'TEXT' (DELIMITER '|')
 SEGMENT REJECT LIMIT 20;
 SELECT * FROM exttab_basic_error_1;
@@ -652,7 +773,7 @@ NOTICE:  found 10 data formatting errors (10 or more input rows), rejected relat
 DROP EXTERNAL TABLE IF EXISTS exttab_basic_error_1;
 -- test ON MASTER still works (this syntax will be removed in GPDB8 and forward)
 CREATE EXTERNAL WEB TABLE exttab_basic_error_1( i int )
-EXECUTE E'cat @abs_srcdir@/data/exttab.data' ON MASTER
+EXECUTE E:'cat_exttab' ON MASTER
 FORMAT 'TEXT' (DELIMITER '|')
 SEGMENT REJECT LIMIT 20;
 SELECT * FROM exttab_basic_error_1;
@@ -662,8 +783,9 @@ NOTICE:  found 10 data formatting errors (10 or more input rows), rejected relat
 (0 rows)
 
 -- Some errors without exceeding reject limit
+\set exttab_few_errors_file 'file://' :hostname :abs_srcdir '/data/exttab_few_errors.data'
 CREATE EXTERNAL TABLE exttab_basic_2( i int, j text )
-LOCATION ('file://@hostname@@abs_srcdir@/data/exttab_few_errors.data') FORMAT 'TEXT' (DELIMITER '|')
+LOCATION (:'exttab_few_errors_file') FORMAT 'TEXT' (DELIMITER '|')
 LOG ERRORS SEGMENT REJECT LIMIT 10;
 -- should not error out as segment reject limit will not be reached
 SELECT * FROM exttab_basic_2 order by i;
@@ -688,14 +810,15 @@ select count(*) from gp_read_error_log('exttab_basic_2');
 (1 row)
 
 -- Errors with exceeding reject limit
+\set exttab_more_errors_file 'file://' :hostname :abs_srcdir '/data/exttab_more_errors.data'
 CREATE EXTERNAL TABLE exttab_basic_3( i int, j text )
-LOCATION ('file://@hostname@@abs_srcdir@/data/exttab_more_errors.data') FORMAT 'TEXT' (DELIMITER '|')
+LOCATION (:'exttab_more_errors_file') FORMAT 'TEXT' (DELIMITER '|')
 LOG ERRORS SEGMENT REJECT LIMIT 2;
 -- should error out as segment reject limit will be reached
 SELECT * FROM exttab_basic_3;
-ERROR:  segment reject limit reached, aborting operation
-DETAIL:  Last error was: invalid input syntax for type integer: "error_1", column i  (seg0 slice1 127.0.0.1:40000 pid=12084)
-CONTEXT:  External table exttab_basic_3, line 7 of file://@hostname@@abs_srcdir@/data/exttab_more_errors.data, column i
+ERROR:  segment reject limit reached, aborting operation  (seg0 slice1 127.0.1.1:7002 pid=26072)
+DETAIL:  Last error was: invalid input syntax for type integer: "error_1", column i
+CONTEXT:  External table exttab_basic_3, line 7 of file://gpadmin/home/gpadmin/cloudberry/src/test/regress/data/exttab_more_errors.data, column i
 -- Error log should be populated
 select count(*) > 0 from gp_read_error_log('exttab_basic_3');
  ?column? 
@@ -705,7 +828,7 @@ select count(*) > 0 from gp_read_error_log('exttab_basic_3');
 
 -- Insert into another table
 CREATE EXTERNAL TABLE exttab_basic_4( i int, j text )
-LOCATION ('file://@hostname@@abs_srcdir@/data/exttab_more_errors.data') FORMAT 'TEXT' (DELIMITER '|')
+LOCATION (:'exttab_more_errors_file') FORMAT 'TEXT' (DELIMITER '|')
 LOG ERRORS SEGMENT REJECT LIMIT 100;
 CREATE TABLE exttab_insert_1 (LIKE exttab_basic_4);
 NOTICE:  table doesn't have 'DISTRIBUTED BY' clause, defaulting to distribution columns from LIKE table
@@ -721,13 +844,13 @@ select count(*) > 0 from gp_read_error_log('exttab_basic_4');
 
 -- Use the same error log above
 CREATE EXTERNAL TABLE exttab_basic_5( i int, j text )
-LOCATION ('file://@hostname@@abs_srcdir@/data/exttab_more_errors.data') FORMAT 'TEXT' (DELIMITER '|')
+LOCATION (:'exttab_more_errors_file') FORMAT 'TEXT' (DELIMITER '|')
 LOG ERRORS SEGMENT REJECT LIMIT 5;
 -- Insert should fail
 INSERT INTO exttab_insert_1 select * from exttab_basic_5;
-ERROR:  segment reject limit reached, aborting operation
-DETAIL:  Last error was: invalid input syntax for type integer: "error_1", column i (seg0 slice1 127.0.0.1:40000 pid=12121)
-CONTEXT:  External table exttab_basic_5, line 18 of file://@hostname@@abs_srcdir@/data/exttab_more_errors.data, column i
+ERROR:  segment reject limit reached, aborting operation  (seg0 127.0.1.1:7002 pid=26072)
+DETAIL:  Last error was: invalid input syntax for type integer: "error_1", column i
+CONTEXT:  External table exttab_basic_5, line 18 of file://gpadmin/home/gpadmin/cloudberry/src/test/regress/data/exttab_more_errors.data, column i
 SELECT * from exttab_insert_1 order by i;
  i  |     j     
 ----+-----------
@@ -756,7 +879,7 @@ SELECT count(*) from gp_read_error_log('exttab_basic_5');
 
 -- CTAS
 CREATE EXTERNAL TABLE exttab_basic_6( i int, j text )
-LOCATION ('file://@hostname@@abs_srcdir@/data/exttab_more_errors.data') FORMAT 'TEXT' (DELIMITER '|')
+LOCATION (:'exttab_more_errors_file') FORMAT 'TEXT' (DELIMITER '|')
 LOG ERRORS SEGMENT REJECT LIMIT 100;
 CREATE TABLE exttab_ctas_1 as SELECT * FROM exttab_basic_6;
 NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'i' as the Apache Cloudberry data distribution key for this table.
@@ -790,15 +913,15 @@ select count(*) from gp_read_error_log('exttab_basic_6');
 (1 row)
 
 CREATE EXTERNAL TABLE exttab_basic_7( i int, j text )
-LOCATION ('file://@hostname@@abs_srcdir@/data/exttab_more_errors.data') FORMAT 'TEXT' (DELIMITER '|')
+LOCATION (:'exttab_more_errors_file') FORMAT 'TEXT' (DELIMITER '|')
 LOG ERRORS SEGMENT REJECT LIMIT 5;
 -- CTAS should fail
 CREATE TABLE exttab_ctas_2 AS select * from exttab_basic_7;
 NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'i' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
-ERROR:  segment reject limit reached, aborting operation
-DETAIL:  Last error was: invalid input syntax for type integer: "error_1", column i  (seg0 slice1 127.0.0.1:40000 pid=12121)
-CONTEXT:  External table exttab_basic_7, line 18 of file://@hostname@@abs_srcdir@/data/exttab_more_errors.data, column i
+ERROR:  segment reject limit reached, aborting operation  (seg0 slice1 127.0.1.1:7002 pid=26167)
+DETAIL:  Last error was: invalid input syntax for type integer: "error_1", column i
+CONTEXT:  External table exttab_basic_7, line 18 of file://gpadmin/home/gpadmin/cloudberry/src/test/regress/data/exttab_more_errors.data, column i
 -- Table should not exist
 SELECT * from exttab_ctas_2 order by i;
 ERROR:  relation "exttab_ctas_2" does not exist
@@ -815,7 +938,7 @@ SELECT count(*) from gp_read_error_log('exttab_basic_7');
 DROP EXTERNAL TABLE IF EXISTS exttab_error_log;
 NOTICE:  foreign table "exttab_error_log" does not exist, skipping
 CREATE EXTERNAL TABLE exttab_error_log( i int, j text )
-LOCATION ('file://@hostname@@abs_srcdir@/data/exttab.data') FORMAT 'TEXT' (DELIMITER '|')
+LOCATION (:'exttab_file') FORMAT 'TEXT' (DELIMITER '|')
 LOG ERRORS SEGMENT REJECT LIMIT 2;
 SELECT COUNT(*) FROM exttab_error_log;
  count 
@@ -838,7 +961,7 @@ SELECT COUNT(*) FROM gp_read_error_log('exttab_error_log');
 
 -- Insert into another table with unique constraints
 CREATE EXTERNAL TABLE exttab_constraints_1( i int, j text )
-LOCATION ('file://@hostname@@abs_srcdir@/data/exttab.data') FORMAT 'TEXT' (DELIMITER '|')
+LOCATION (:'exttab_file') FORMAT 'TEXT' (DELIMITER '|')
 LOG ERRORS SEGMENT REJECT LIMIT 10;
 -- Should not error out
 SELECT COUNT(*) FROM exttab_constraints_1;
@@ -874,11 +997,11 @@ SELECT COUNT(*) FROM gp_read_error_log('exttab_constraints_1');
 -- CTE with segment reject limit reached
 -- does not reach reject limit
 CREATE EXTERNAL TABLE exttab_cte_1( i int, j text )
-LOCATION ('file://@hostname@@abs_srcdir@/data/exttab_few_errors.data') FORMAT 'TEXT' (DELIMITER '|')
+LOCATION (:'exttab_few_errors_file') FORMAT 'TEXT' (DELIMITER '|')
 LOG ERRORS SEGMENT REJECT LIMIT 10;
 -- reaches reject limit, use the same err table
 CREATE EXTERNAL TABLE exttab_cte_2( i int, j text )
-LOCATION ('file://@hostname@@abs_srcdir@/data/exttab_more_errors.data') FORMAT 'TEXT' (DELIMITER '|')
+LOCATION (:'exttab_more_errors_file') FORMAT 'TEXT' (DELIMITER '|')
 LOG ERRORS SEGMENT REJECT LIMIT 2;
 with cte1 as
 (
@@ -886,9 +1009,9 @@ SELECT e1.i, e2.j FROM exttab_cte_2 e1, exttab_cte_1 e2
 WHERE e1.i = e2.i ORDER BY e1.i
 )
 SELECT * FROM cte1 ORDER BY cte1.i;
-ERROR:  segment reject limit reached, aborting operation
-DETAIL:  Last error was: invalid input syntax for type integer: "error_1", column i  (seg0 slice1 127.0.0.1:40000 pid=12121)
-CONTEXT:  External table exttab_cte_2, line 7 of file://@hostname@@abs_srcdir@/data/exttab_more_errors.data, column i
+ERROR:  segment reject limit reached, aborting operation  (seg0 slice2 127.0.1.1:7002 pid=26190)
+DETAIL:  Last error was: invalid input syntax for type integer: "error_1", column i
+CONTEXT:  External table exttab_cte_2, line 7 of file://gpadmin/home/gpadmin/cloudberry/src/test/regress/data/exttab_more_errors.data, column i
 select count(*) from gp_read_error_log('exttab_cte_2');
  count 
 -------
@@ -897,10 +1020,11 @@ select count(*) from gp_read_error_log('exttab_cte_2');
 
 -- start_ignore
 select gp_read_error_log('exttab_cte_2');
-                                                                                                                                                  gp_read_error_log                                                                                                                                                   
-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
- ("Tue Mar 27 13:18:48.708775 2018 PDT",exttab_cte_2,"file://@hostname@@abs_srcdir@/data/exttab_more_errors.data [/home/heikki/git-sandbox-gpdb/master/src/test/regress/data/exttab_more_errors.data]",5,,"invalid input syntax for type integer: ""error_1"", column i",error_1,)
-(1 row)
+                                                                                                                                        gp_read_error_log                                                                                                                                        
+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ ("Fri Jan 02 07:40:32.618206 2026 PST",exttab_cte_2,"file://gpadmin/home/gpadmin/cloudberry/src/test/regress/data/exttab_more_errors.data [/home/gpadmin/cloudberry/src/test/regress/data/exttab_more_errors.data]",5,,"invalid input syntax for type integer: ""error_1"", column i",error_1,)
+ ("Fri Jan 02 07:40:32.618206 2026 PST",exttab_cte_2,"file://gpadmin/home/gpadmin/cloudberry/src/test/regress/data/exttab_more_errors.data [/home/gpadmin/cloudberry/src/test/regress/data/exttab_more_errors.data]",7,,"invalid input syntax for type integer: ""error_1"", column i",error_1,)
+(2 rows)
 
 -- end_ignore
 -- CTE without segment reject limit exceeded
@@ -934,11 +1058,11 @@ NOTICE:  found 4 data formatting errors (4 or more input rows), rejected related
 -- Check permissions with gp_truncate_error_log and gp_read_error_log
 -- does not reach reject limit
 CREATE EXTERNAL TABLE exttab_permissions_1( i int, j text )
-LOCATION ('file://@hostname@@abs_srcdir@/data/exttab_few_errors.data') FORMAT 'TEXT' (DELIMITER '|')
+LOCATION (:'exttab_few_errors_file') FORMAT 'TEXT' (DELIMITER '|')
 LOG ERRORS SEGMENT REJECT LIMIT 10;
 -- reaches reject limit
 CREATE EXTERNAL TABLE exttab_permissions_2( i int, j text )
-LOCATION ('file://@hostname@@abs_srcdir@/data/exttab_more_errors.data') FORMAT 'TEXT' (DELIMITER '|')
+LOCATION (:'exttab_more_errors_file') FORMAT 'TEXT' (DELIMITER '|')
 LOG ERRORS SEGMENT REJECT LIMIT 2;
 -- generate some error logs
 SELECT COUNT(*) FROM exttab_permissions_1;
@@ -949,18 +1073,19 @@ NOTICE:  found 2 data formatting errors (2 or more input rows), rejected related
 (1 row)
 
 SELECT COUNT(*) FROM exttab_permissions_2;
-ERROR:  segment reject limit reached, aborting operation
-DETAIL:  Last error was: invalid input syntax for type integer: "error_1", column i  (seg0 slice1 127.0.0.1:40000 pid=12084)
-CONTEXT:  External table exttab_permissions_2, line 7 of file://@hostname@@abs_srcdir@/data/exttab_more_errors.data, column i
+ERROR:  segment reject limit reached, aborting operation  (seg0 slice1 127.0.1.1:7002 pid=26072)
+DETAIL:  Last error was: invalid input syntax for type integer: "error_1", column i
+CONTEXT:  External table exttab_permissions_2, line 7 of file://gpadmin/home/gpadmin/cloudberry/src/test/regress/data/exttab_more_errors.data, column i
 -- Only superuser can do gp_truncate_error_log('*.*')
 DROP ROLE IF EXISTS exttab_non_superuser;
+NOTICE:  role "exttab_non_superuser" does not exist, skipping
 CREATE ROLE exttab_non_superuser WITH NOSUPERUSER LOGIN CREATEDB;
 NOTICE:  resource queue required -- using default resource queue "pg_default"
 SET ROLE exttab_non_superuser;
 SELECT COUNT(*) FROM gp_read_error_log('exttab_permissions_1');
-ERROR:  permission denied for table exttab_permissions_1  (seg2 slice1 @hostname@:40002 pid=50448)
+ERROR:  permission denied for table exttab_permissions_1  (seg0 slice1 127.0.1.1:7002 pid=26072)
 SELECT COUNT(*) FROM gp_read_error_log('exttab_permissions_2');
-ERROR:  permission denied for table exttab_permissions_2  (seg1 slice1 @hostname@:40001 pid=50437)
+ERROR:  permission denied for table exttab_permissions_2  (seg0 slice1 127.0.1.1:7002 pid=26072)
 SELECT gp_truncate_error_log('exttab_permissions_1');
 ERROR:  permission denied for table exttab_permissions_1
 SELECT gp_truncate_error_log('exttab_permissions_2');
@@ -971,6 +1096,7 @@ SELECT gp_truncate_error_log('*.*');
 ERROR:  must be superuser to delete all error log files
 RESET ROLE;
 DROP ROLE IF EXISTS exttab_superuser;
+NOTICE:  role "exttab_superuser" does not exist, skipping
 CREATE ROLE exttab_superuser WITH SUPERUSER LOGIN;
 SET ROLE exttab_superuser;
 SELECT COUNT(*) FROM gp_read_error_log('exttab_permissions_2');
@@ -1016,8 +1142,11 @@ SELECT * FROM gp_read_error_log('exttab_permissions_2');
 
 -- Only database owner can do gp_truncate_error_log('*')
 DROP DATABASE IF EXISTS exttab_db;
+NOTICE:  database "exttab_db" does not exist, skipping
 DROP ROLE IF EXISTS exttab_user1;
+NOTICE:  role "exttab_user1" does not exist, skipping
 DROP ROLE IF EXISTS exttab_user2;
+NOTICE:  role "exttab_user2" does not exist, skipping
 CREATE ROLE exttab_user1 WITH NOSUPERUSER LOGIN;
 NOTICE:  resource queue required -- using default resource queue "pg_default"
 CREATE ROLE exttab_user2 WITH NOSUPERUSER LOGIN;
@@ -1025,9 +1154,8 @@ NOTICE:  resource queue required -- using default resource queue "pg_default"
 CREATE DATABASE exttab_db WITH OWNER=exttab_user1;
 \c exttab_db
 -- generate some error logs in this db
-NOTICE:  table "exttab_permissions_1" does not exist, skipping
 CREATE EXTERNAL TABLE exttab_permissions_1( i int, j text )
-LOCATION ('file://@hostname@@abs_srcdir@/data/exttab_few_errors.data') FORMAT 'TEXT' (DELIMITER '|')
+LOCATION (:'exttab_few_errors_file') FORMAT 'TEXT' (DELIMITER '|')
 LOG ERRORS SEGMENT REJECT LIMIT 10;
 SELECT COUNT(*) FROM exttab_permissions_1 e1, exttab_permissions_1 e2;
 NOTICE:  found 4 data formatting errors (4 or more input rows), rejected related input data
@@ -1044,7 +1172,7 @@ SELECT COUNT(*) FROM gp_read_error_log('exttab_permissions_1');
 
 SET ROLE exttab_user2;
 SELECT COUNT(*) FROM gp_read_error_log('exttab_permissions_1');
-ERROR:  permission denied for table exttab_permissions_1  (seg0 slice1 @hostname@:40000 pid=51060)
+ERROR:  permission denied for table exttab_permissions_1  (seg2 slice1 127.0.1.1:7004 pid=26214)
 SELECT gp_truncate_error_log('*');
 ERROR:  must be owner of database exttab_db
 SELECT gp_truncate_error_log('*.*');
@@ -1054,7 +1182,7 @@ ERROR:  permission denied for table exttab_permissions_1
 SET ROLE exttab_user1;
 -- Database owner can still not perform read / truncate on specific tables. This follows the same mechanism as TRUNCATE table.
 SELECT COUNT(*) FROM gp_read_error_log('exttab_permissions_1');
-ERROR:  permission denied for table exttab_permissions_1  (seg1 slice1 @hostname@:40001 pid=51061)
+ERROR:  permission denied for table exttab_permissions_1  (seg0 slice1 127.0.1.1:7002 pid=26212)
 SELECT gp_truncate_error_log('exttab_permissions_1');
 ERROR:  permission denied for table exttab_permissions_1
 SELECT gp_truncate_error_log('*');
@@ -1074,14 +1202,16 @@ SELECT * FROM gp_read_error_log('exttab_permissions_1');
 
 \c regression
 DROP ROLE IF EXISTS errlog_exttab_user3;
+NOTICE:  role "errlog_exttab_user3" does not exist, skipping
 DROP ROLE IF EXISTS errlog_exttab_user4;
+NOTICE:  role "errlog_exttab_user4" does not exist, skipping
 CREATE ROLE errlog_exttab_user3 WITH NOSUPERUSER LOGIN;
 NOTICE:  resource queue required -- using default resource queue "pg_default"
 CREATE ROLE errlog_exttab_user4 WITH NOSUPERUSER LOGIN;
 NOTICE:  resource queue required -- using default resource queue "pg_default"
 -- generate some error logs in this db
 CREATE EXTERNAL TABLE exttab_permissions_3( i int, j text )
-LOCATION ('file://@hostname@@abs_srcdir@/data/exttab_few_errors.data') FORMAT 'TEXT' (DELIMITER '|')
+LOCATION (:'exttab_few_errors_file') FORMAT 'TEXT' (DELIMITER '|')
 LOG ERRORS SEGMENT REJECT LIMIT 10;
 SELECT COUNT(*) FROM exttab_permissions_3 e1, exttab_permissions_3 e2;
 NOTICE:  found 4 data formatting errors (4 or more input rows), rejected related input data
@@ -1100,7 +1230,7 @@ ALTER EXTERNAL TABLE exttab_permissions_3 OWNER TO errlog_exttab_user3;
 -- This should fail with non table owner
 SET ROLE errlog_exttab_user4;
 SELECT COUNT(*) FROM gp_read_error_log('exttab_permissions_3');
-ERROR:  permission denied for table exttab_permissions_3  (seg0 slice1 @hostname@:40000 pid=51087)
+ERROR:  permission denied for table exttab_permissions_3  (seg0 slice1 127.0.1.1:7002 pid=26235)
 SELECT gp_truncate_error_log('exttab_permissions_3');
 ERROR:  permission denied for table exttab_permissions_3
 -- should go through fine with table owner
@@ -1148,19 +1278,19 @@ SELECT * FROM gp_read_error_log('exttab_permissions_3');
 -- Subqueries reaching segment reject limit
 -- does not reach reject limit
 CREATE EXTERNAL TABLE exttab_subq_1( i int, j text )
-LOCATION ('file://@hostname@@abs_srcdir@/data/exttab_few_errors.data') FORMAT 'TEXT' (DELIMITER '|')
+LOCATION (:'exttab_few_errors_file') FORMAT 'TEXT' (DELIMITER '|')
 LOG ERRORS SEGMENT REJECT LIMIT 10;
 -- reaches reject limit, use the same err table
 CREATE EXTERNAL TABLE exttab_subq_2( i int, j text )
-LOCATION ('file://@hostname@@abs_srcdir@/data/exttab_more_errors.data') FORMAT 'TEXT' (DELIMITER '|')
+LOCATION (:'exttab_more_errors_file') FORMAT 'TEXT' (DELIMITER '|')
 LOG ERRORS SEGMENT REJECT LIMIT 2;
 SELECT sum(distinct e1.i), sum(distinct e2.i), e1.j FROM
 (SELECT i, j FROM exttab_subq_1 WHERE i < 5 ) e1,
 (SELECT i, j FROM exttab_subq_2 WHERE i < 10) e2
 group by e1.j;
-ERROR:  segment reject limit reached, aborting operation
-DETAIL:  Last error was: invalid input syntax for type integer: "error_1", column i  (seg0 slice1 127.0.0.1:40000 pid=12226)
-CONTEXT:  External table exttab_subq_2, line 7 of file://@hostname@@abs_srcdir@/data/exttab_more_errors.data, column i
+ERROR:  segment reject limit reached, aborting operation  (seg0 slice3 127.0.1.1:7002 pid=26262)
+DETAIL:  Last error was: invalid input syntax for type integer: "error_1", column i
+CONTEXT:  External table exttab_subq_2, line 7 of file://gpadmin/home/gpadmin/cloudberry/src/test/regress/data/exttab_more_errors.data, column i
 SELECT COUNT(*) > 0 FROM
 (
 SELECT * FROM gp_read_error_log('exttab_subq_1')
@@ -1189,9 +1319,9 @@ SELECT sum(distinct e1.i), sum(distinct e2.i), e1.j FROM
 (SELECT i, j FROM exttab_subq_1 WHERE i < 10) e2
 group by e1.j
 HAVING sum(distinct e1.i) > (SELECT max(i) FROM exttab_subq_2);
-ERROR:  segment reject limit reached, aborting operation
-DETAIL:  Last error was: invalid input syntax for type integer: "error_1", column i  (seg0 slice3 127.0.0.1:40000 pid=12211)
-CONTEXT:  External table exttab_subq_2, line 7 of file://@hostname@@abs_srcdir@/data/exttab_more_errors.data, column i
+ERROR:  segment reject limit reached, aborting operation  (seg0 slice5 127.0.1.1:7002 pid=26235)
+DETAIL:  Last error was: invalid input syntax for type integer: "error_1", column i
+CONTEXT:  External table exttab_subq_2, line 7 of file://gpadmin/home/gpadmin/cloudberry/src/test/regress/data/exttab_more_errors.data, column i
 SELECT COUNT(*) > 0 FROM
 (
 SELECT * FROM gp_read_error_log('exttab_subq_1')
@@ -1286,9 +1416,9 @@ SELECT gp_truncate_error_log('exttab_subq_2');
 SELECT ( SELECT i FROM exttab_subq_2 WHERE i <= e1.i) as i, e1.j
 FROM exttab_subq_2 e1, exttab_subq_1 e2
 WHERE e1.i = e2.i;
-ERROR:  segment reject limit reached, aborting operation
-DETAIL:  Last error was: invalid input syntax for type integer: "error_1", column i  (seg0 slice1 127.0.0.1:40000 pid=12217)
-CONTEXT:  External table exttab_subq_2, line 7 of file://@hostname@@abs_srcdir@/data/exttab_more_errors.data, column i
+ERROR:  segment reject limit reached, aborting operation  (seg0 slice1 127.0.1.1:7002 pid=26235)
+DETAIL:  Last error was: invalid input syntax for type integer: "error_1", column i
+CONTEXT:  External table exttab_subq_2, line 7 of file://gpadmin/home/gpadmin/cloudberry/src/test/regress/data/exttab_more_errors.data, column i
 -- CSQ
 SELECT gp_truncate_error_log('exttab_subq_1');
  gp_truncate_error_log 
@@ -1306,9 +1436,9 @@ SELECT e1.i , e1.j FROM
 exttab_subq_1 e1, exttab_subq_1 e2
 WHERE e1.j = e2.j and
 e1.i + 1 IN ( SELECT i from exttab_subq_2 WHERE i <= e1.i);
-ERROR:  segment reject limit reached, aborting operation
-DETAIL:  Last error was: invalid input syntax for type integer: "error_1", column i  (seg0 slice1 127.0.0.1:40000 pid=12226)
-CONTEXT:  External table exttab_subq_2, line 7 of file://@hostname@@abs_srcdir@/data/exttab_more_errors.data, column i
+ERROR:  segment reject limit reached, aborting operation  (seg0 slice3 127.0.1.1:7002 pid=26262)
+DETAIL:  Last error was: invalid input syntax for type integer: "error_1", column i
+CONTEXT:  External table exttab_subq_2, line 7 of file://gpadmin/home/gpadmin/cloudberry/src/test/regress/data/exttab_more_errors.data, column i
 SELECT COUNT(*) > 0 FROM
 (
 SELECT * FROM gp_read_error_log('exttab_subq_1')
@@ -1335,9 +1465,9 @@ SELECT gp_truncate_error_log('exttab_subq_2');
 SELECT ( SELECT i FROM exttab_subq_2 WHERE i <= e1.i) as i, e1.j
 FROM exttab_subq_2 e1, exttab_subq_1 e2
 WHERE e1.i = e2.i;
-ERROR:  segment reject limit reached, aborting operation
-DETAIL:  Last error was: invalid input syntax for type integer: "error_1", column i  (seg0 slice3 127.0.0.1:40000 pid=12211)
-CONTEXT:  External table exttab_subq_2, line 7 of file://@hostname@@abs_srcdir@/data/exttab_more_errors.data, column i
+ERROR:  segment reject limit reached, aborting operation  (seg0 slice1 127.0.1.1:7002 pid=26235)
+DETAIL:  Last error was: invalid input syntax for type integer: "error_1", column i
+CONTEXT:  External table exttab_subq_2, line 7 of file://gpadmin/home/gpadmin/cloudberry/src/test/regress/data/exttab_more_errors.data, column i
 SELECT COUNT(*) > 0 FROM
 (
 SELECT * FROM gp_read_error_log('exttab_subq_1')
@@ -1352,11 +1482,12 @@ SELECT * FROM gp_read_error_log('exttab_subq_2')
 -- TRUNCATE / delete / write to error logs within subtransactions
 -- does not reach reject limit
 CREATE EXTERNAL TABLE exttab_subtxs_1( i int, j text )
-LOCATION ('file://@hostname@@abs_srcdir@/data/exttab_few_errors.data') FORMAT 'TEXT' (DELIMITER '|')
+LOCATION (:'exttab_few_errors_file') FORMAT 'TEXT' (DELIMITER '|')
 LOG ERRORS SEGMENT REJECT LIMIT 10;
 -- reaches reject limit, use the same err table
+\set exttab_more_errors_file2 'file://' :hostname ':' :abs_srcdir '/data/exttab_more_errors.data'
 CREATE EXTERNAL TABLE exttab_subtxs_2( i int, j text )
-LOCATION ('file://@hostname@:@abs_srcdir@/data/exttab_more_errors.data') FORMAT 'TEXT' (DELIMITER '|')
+LOCATION (:'exttab_more_errors_file2') FORMAT 'TEXT' (DELIMITER '|')
 LOG ERRORS SEGMENT REJECT LIMIT 2;
 -- Populate error logs before transaction
 SELECT e1.i, e2.j FROM
@@ -1366,8 +1497,8 @@ WHERE e1.i = e2.i;
 NOTICE:  found 4 data formatting errors (4 or more input rows), rejected related input data
  i |    j     
 ---+----------
- 1 | 1_number
  2 | 2_number
+ 1 | 1_number
  4 | 4_number
 (3 rows)
 
@@ -1403,8 +1534,8 @@ WHERE e1.i = e2.i;
 NOTICE:  found 4 data formatting errors (4 or more input rows), rejected related input data
  i |    j     
 ---+----------
- 1 | 1_number
  2 | 2_number
+ 1 | 1_number
  4 | 4_number
 (3 rows)
 
@@ -1428,8 +1559,8 @@ WHERE e1.i = e2.i;
 NOTICE:  found 4 data formatting errors (4 or more input rows), rejected related input data
  i |    j     
 ---+----------
- 1 | 1_number
  2 | 2_number
+ 1 | 1_number
  4 | 4_number
 (3 rows)
 
@@ -1441,8 +1572,8 @@ WHERE e1.i = e2.i;
 NOTICE:  found 4 data formatting errors (4 or more input rows), rejected related input data
  i |    j     
 ---+----------
- 1 | 1_number
  2 | 2_number
+ 1 | 1_number
  4 | 4_number
 (3 rows)
 
@@ -1464,9 +1595,9 @@ SELECT e1.i, e2.j FROM
 (SELECT i, j FROM exttab_subtxs_2 WHERE i < 5 ) e1,
 (SELECT i, j FROM exttab_subtxs_2 WHERE i < 10) e2
 WHERE e1.i = e2.i;
-ERROR:  segment reject limit reached, aborting operation
-DETAIL:  Last error was: invalid input syntax for type integer: "error_1", column i  (seg0 slice2 127.0.0.1:40000 pid=12211)
-CONTEXT:  External table exttab_subtxs_2, line 7 of file://@hostname@:@abs_srcdir@/data/exttab_more_errors.data, column i
+ERROR:  segment reject limit reached, aborting operation  (seg0 slice1 127.0.1.1:7002 pid=26235)
+DETAIL:  Last error was: invalid input syntax for type integer: "error_1", column i
+CONTEXT:  External table exttab_subtxs_2, line 7 of file://gpadmin:/home/gpadmin/cloudberry/src/test/regress/data/exttab_more_errors.data, column i
 COMMIT;
 -- Error logs should not have been rolled back.
 -- Check that number of errors is greater than 12 instead of checking for
@@ -1487,11 +1618,11 @@ SELECT * FROM gp_read_error_log('exttab_subtxs_2')
 -- TRUNCATE error logs within tx , abort transaction
 -- does not reach reject limit
 CREATE EXTERNAL TABLE exttab_txs_1( i int, j text )
-LOCATION ('file://@hostname@@abs_srcdir@/data/exttab_few_errors.data') FORMAT 'TEXT' (DELIMITER '|')
+LOCATION (:'exttab_few_errors_file') FORMAT 'TEXT' (DELIMITER '|')
 LOG ERRORS SEGMENT REJECT LIMIT 10;
 -- reaches reject limit, use the same err table
 CREATE EXTERNAL TABLE exttab_txs_2( i int, j text )
-LOCATION ('file://@hostname@@abs_srcdir@/data/exttab_more_errors.data') FORMAT 'TEXT' (DELIMITER '|')
+LOCATION (:'exttab_more_errors_file') FORMAT 'TEXT' (DELIMITER '|')
 LOG ERRORS SEGMENT REJECT LIMIT 2;
 -- Populate error log before transaction
 SELECT e1.i, e2.j FROM
@@ -1501,8 +1632,8 @@ WHERE e1.i = e2.i;
 NOTICE:  found 4 data formatting errors (4 or more input rows), rejected related input data
  i |    j     
 ---+----------
- 1 | 1_number
  2 | 2_number
+ 1 | 1_number
  4 | 4_number
 (3 rows)
 
@@ -1537,8 +1668,8 @@ WHERE e1.i = e2.i;
 NOTICE:  found 4 data formatting errors (4 or more input rows), rejected related input data
  i |    j     
 ---+----------
- 1 | 1_number
  2 | 2_number
+ 1 | 1_number
  4 | 4_number
 (3 rows)
 
@@ -1567,8 +1698,8 @@ WHERE e1.i = e2.i;
 NOTICE:  found 4 data formatting errors (4 or more input rows), rejected related input data
  i |    j     
 ---+----------
- 1 | 1_number
  2 | 2_number
+ 1 | 1_number
  4 | 4_number
 (3 rows)
 
@@ -1601,9 +1732,9 @@ SELECT e1.i, e2.j FROM
 (SELECT i, j FROM exttab_txs_1 WHERE i < 5 ) e1,
 (SELECT i, j FROM exttab_txs_2 WHERE i < 10) e2
 WHERE e1.i = e2.i;
-ERROR:  segment reject limit reached, aborting operation
-DETAIL:  Last error was: invalid input syntax for type integer: "error_1", column i  (seg0 slice2 127.0.0.1:40000 pid=12211)
-CONTEXT:  External table exttab_txs_2, line 7 of file://@hostname@@abs_srcdir@/data/exttab_more_errors.data, column i
+ERROR:  segment reject limit reached, aborting operation  (seg0 slice1 127.0.1.1:7002 pid=26235)
+DETAIL:  Last error was: invalid input syntax for type integer: "error_1", column i
+CONTEXT:  External table exttab_txs_2, line 7 of file://gpadmin/home/gpadmin/cloudberry/src/test/regress/data/exttab_more_errors.data, column i
 COMMIT;
 -- Additional error rows should have been inserted into the error logs even if the tx is aborted.
 -- Truncate of error logs should not be rolled back even if the transaction is aborted. All operation on error logs are persisted.
@@ -1643,11 +1774,11 @@ BEGIN;
 -- create an external table that will reach segment reject limit
 -- reaches reject limit
 CREATE EXTERNAL TABLE exttab_txs_3( i int, j text )
-LOCATION ('file://@hostname@@abs_srcdir@/data/exttab_more_errors.data') FORMAT 'TEXT' (DELIMITER '|')
+LOCATION (:'exttab_more_errors_file') FORMAT 'TEXT' (DELIMITER '|')
 LOG ERRORS SEGMENT REJECT LIMIT 2;
 -- new error log, within segment reject limit
 CREATE EXTERNAL TABLE exttab_txs_4( i int, j text )
-LOCATION ('file://@hostname@@abs_srcdir@/data/exttab_few_errors.data') FORMAT 'TEXT' (DELIMITER '|')
+LOCATION (:'exttab_few_errors_file') FORMAT 'TEXT' (DELIMITER '|')
 LOG ERRORS SEGMENT REJECT LIMIT 10;
 SELECT e1.i, e2.j FROM
 (SELECT i, j FROM exttab_txs_4 WHERE i < 5 ) e1,
@@ -1673,9 +1804,9 @@ SELECT e1.i, e2.j FROM
 (SELECT i, j FROM exttab_txs_3 WHERE i < 5 ) e1,
 (SELECT i, j FROM exttab_txs_4 WHERE i < 10) e2
 WHERE e1.i = e2.i order by e1.i;
-ERROR:  segment reject limit reached, aborting operation
-DETAIL:  Last error was: invalid input syntax for type integer: "error_1", column i  (seg0 slice1 127.0.0.1:40000 pid=12217)
-CONTEXT:  External table exttab_txs_3, line 7 of file://@hostname@@abs_srcdir@/data/exttab_more_errors.data, column i
+ERROR:  segment reject limit reached, aborting operation  (seg0 slice2 127.0.1.1:7002 pid=26343)
+DETAIL:  Last error was: invalid input syntax for type integer: "error_1", column i
+CONTEXT:  External table exttab_txs_3, line 7 of file://gpadmin/home/gpadmin/cloudberry/src/test/regress/data/exttab_more_errors.data, column i
 COMMIT;
 -- Error logs should not exist for these tables that would have been rolled back
 SELECT count(*) FROM gp_read_error_log('exttab_txs_3');
@@ -1702,11 +1833,11 @@ LINE 1: SELECT count(*) FROM exttab_txs_4;
 -- UDFS with segment reject limit reached
 -- does not reach reject limit
 CREATE EXTERNAL TABLE exttab_udfs_1( i int, j text )
-LOCATION ('file://@hostname@@abs_srcdir@/data/exttab_few_errors.data') FORMAT 'TEXT' (DELIMITER '|')
+LOCATION (:'exttab_few_errors_file') FORMAT 'TEXT' (DELIMITER '|')
 LOG ERRORS SEGMENT REJECT LIMIT 10;
 -- reaches reject limit, use the same err table
 CREATE EXTERNAL TABLE exttab_udfs_2( i int, j text )
-LOCATION ('file://@hostname@@abs_srcdir@/data/exttab_more_errors.data') FORMAT 'TEXT' (DELIMITER '|')
+LOCATION (:'exttab_more_errors_file') FORMAT 'TEXT' (DELIMITER '|')
 LOG ERRORS SEGMENT REJECT LIMIT 2;
 CREATE OR REPLACE FUNCTION exttab_udfs_func1 ()
 RETURNS boolean
@@ -1722,9 +1853,9 @@ $$
 LANGUAGE plpgsql volatile;
 -- Should fail
 SELECT * FROM exttab_udfs_func1();
-ERROR:  segment reject limit reached, aborting operation
-DETAIL:  Last error was: invalid input syntax for type integer: "error_1", column i  (seg0 slice1 127.0.0.1:40000 pid=12217)
-CONTEXT:  External table exttab_udfs_2, line 7 of file://@hostname@@abs_srcdir@/data/exttab_more_errors.data, column i
+ERROR:  segment reject limit reached, aborting operation  (seg0 slice3 127.0.1.1:7002 pid=26362)
+DETAIL:  Last error was: invalid input syntax for type integer: "error_1", column i
+CONTEXT:  External table exttab_udfs_2, line 7 of file://gpadmin/home/gpadmin/cloudberry/src/test/regress/data/exttab_more_errors.data, column i
 SQL statement "SELECT sum(distinct e1.i) as sum_i, sum(distinct e2.i) as sum_j, e1.j as j FROM
 	   (SELECT i, j FROM exttab_udfs_1 WHERE i < 5 ) e1,
 	   (SELECT i, j FROM exttab_udfs_2 WHERE i < 10) e2
@@ -1762,9 +1893,9 @@ SELECT gp_truncate_error_log('exttab_udfs_2');
 
 -- Should fail
 INSERT INTO exttab_udfs_insert_1 SELECT * FROM exttab_udfs_func1();
-ERROR:  segment reject limit reached, aborting operation
-DETAIL:  Last error was: invalid input syntax for type integer: "error_1", column i  (seg0 slice1 127.0.0.1:40000 pid=12217)
-CONTEXT:  External table exttab_udfs_2, line 7 of file://@hostname@@abs_srcdir@/data/exttab_more_errors.data, column i
+ERROR:  segment reject limit reached, aborting operation  (seg0 slice3 127.0.1.1:7002 pid=26389)
+DETAIL:  Last error was: invalid input syntax for type integer: "error_1", column i
+CONTEXT:  External table exttab_udfs_2, line 7 of file://gpadmin/home/gpadmin/cloudberry/src/test/regress/data/exttab_more_errors.data, column i
 SQL statement "SELECT sum(distinct e1.i) as sum_i, sum(distinct e2.i) as sum_j, e1.j as j FROM
 	   (SELECT i, j FROM exttab_udfs_1 WHERE i < 5 ) e1,
 	   (SELECT i, j FROM exttab_udfs_2 WHERE i < 10) e2
@@ -1848,9 +1979,9 @@ SELECT gp_truncate_error_log('exttab_udfs_2');
 -- All this should fail, error logs should be populated even if the UDF gets aborted as we persist error rows written within aborted txs.
 SELECT * FROM exttab_udfs_func2();
 NOTICE:  found 2 data formatting errors (2 or more input rows), rejected related input data
-ERROR:  segment reject limit reached, aborting operation
-DETAIL:  Last error was: invalid input syntax for type integer: "error_1", column i  (seg0 slice1 127.0.0.1:40000 pid=12226)
-CONTEXT:  External table exttab_udfs_2, line 7 of file://@hostname@@abs_srcdir@/data/exttab_more_errors.data, column i
+ERROR:  segment reject limit reached, aborting operation  (seg0 127.0.1.1:7002 pid=26235)
+DETAIL:  Last error was: invalid input syntax for type integer: "error_1", column i
+CONTEXT:  External table exttab_udfs_2, line 7 of file://gpadmin/home/gpadmin/cloudberry/src/test/regress/data/exttab_more_errors.data, column i
 SELECT COUNT(*) > 0 FROM
 (
 SELECT * FROM gp_read_error_log('exttab_udfs_1')
@@ -1876,9 +2007,9 @@ SELECT gp_truncate_error_log('exttab_udfs_2');
 
 SELECT exttab_udfs_func2();
 NOTICE:  found 2 data formatting errors (2 or more input rows), rejected related input data
-ERROR:  segment reject limit reached, aborting operation
-DETAIL:  Last error was: invalid input syntax for type integer: "error_1", column i  (seg0 slice1 127.0.0.1:40000 pid=12217)
-CONTEXT:  External table exttab_udfs_2, line 7 of file://@hostname@@abs_srcdir@/data/exttab_more_errors.data, column i
+ERROR:  segment reject limit reached, aborting operation  (seg0 127.0.1.1:7002 pid=26235)
+DETAIL:  Last error was: invalid input syntax for type integer: "error_1", column i
+CONTEXT:  External table exttab_udfs_2, line 7 of file://gpadmin/home/gpadmin/cloudberry/src/test/regress/data/exttab_more_errors.data, column i
 SELECT COUNT(*) > 0 FROM
 (
 SELECT * FROM gp_read_error_log('exttab_udfs_1')
@@ -1904,9 +2035,9 @@ SELECT gp_truncate_error_log('exttab_udfs_2');
 
 INSERT INTO exttab_udfs_insert_1 SELECT * FROM exttab_udfs_func2();
 NOTICE:  found 2 data formatting errors (2 or more input rows), rejected related input data
-ERROR:  segment reject limit reached, aborting operation
-DETAIL:  Last error was: invalid input syntax for type integer: "error_1", column i  (seg0 slice1 127.0.0.1:40000 pid=12226)
-CONTEXT:  External table exttab_udfs_2, line 7 of file://@hostname@@abs_srcdir@/data/exttab_more_errors.data, column i
+ERROR:  segment reject limit reached, aborting operation  (seg0 127.0.1.1:7002 pid=26235)
+DETAIL:  Last error was: invalid input syntax for type integer: "error_1", column i
+CONTEXT:  External table exttab_udfs_2, line 7 of file://gpadmin/home/gpadmin/cloudberry/src/test/regress/data/exttab_more_errors.data, column i
 SELECT COUNT(*) > 0 FROM
 (
 SELECT * FROM gp_read_error_log('exttab_udfs_1')
@@ -1934,9 +2065,9 @@ CREATE TABLE exttab_udfs_ctas_2 AS SELECT * FROM exttab_udfs_func2();
 NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'exttab_udfs_func2' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 NOTICE:  found 2 data formatting errors (2 or more input rows), rejected related input data
-ERROR:  segment reject limit reached, aborting operation
-DETAIL:  Last error was: invalid input syntax for type integer: "error_1", column i  (seg0 slice1 127.0.0.1:40000 pid=12217)
-CONTEXT:  External table exttab_udfs_2, line 7 of file://@hostname@@abs_srcdir@/data/exttab_more_errors.data, column i
+ERROR:  segment reject limit reached, aborting operation  (seg0 127.0.1.1:7002 pid=26235)
+DETAIL:  Last error was: invalid input syntax for type integer: "error_1", column i
+CONTEXT:  External table exttab_udfs_2, line 7 of file://gpadmin/home/gpadmin/cloudberry/src/test/regress/data/exttab_more_errors.data, column i
 SELECT COUNT(*) > 0 FROM
 (
 SELECT * FROM gp_read_error_log('exttab_udfs_1')
@@ -1961,11 +2092,11 @@ NOTICE:  foreign table "exttab_union_1" does not exist, skipping
 DROP EXTERNAL TABLE IF EXISTS exttab_union_2;
 NOTICE:  foreign table "exttab_union_2" does not exist, skipping
 CREATE EXTERNAL TABLE exttab_union_1( i int, j text )
-LOCATION ('file://@hostname@@abs_srcdir@/data/exttab_few_errors.data') FORMAT 'TEXT' (DELIMITER '|')
+LOCATION (:'exttab_few_errors_file') FORMAT 'TEXT' (DELIMITER '|')
 LOG ERRORS SEGMENT REJECT LIMIT 10;
 -- reaches reject limit
 CREATE EXTERNAL TABLE exttab_union_2( i int, j text )
-LOCATION ('file://@hostname@@abs_srcdir@/data/exttab_more_errors.data') FORMAT 'TEXT' (DELIMITER '|')
+LOCATION (:'exttab_more_errors_file') FORMAT 'TEXT' (DELIMITER '|')
 LOG ERRORS SEGMENT REJECT LIMIT 2;
 -- Should error out as exttab_union_2 would reach it's reject limit
 SELECT * FROM
@@ -1975,9 +2106,9 @@ UNION
 SELECT * FROM exttab_union_2
 ) FOO
 order by FOO.i;
-ERROR:  segment reject limit reached, aborting operation
-DETAIL:  Last error was: invalid input syntax for type integer: "error_1", column i  (seg0 slice1 127.0.0.1:40000 pid=12226)
-CONTEXT:  External table exttab_union_2, line 7 of file://@hostname@@abs_srcdir@/data/exttab_more_errors.data, column i
+ERROR:  segment reject limit reached, aborting operation  (seg0 slice2 127.0.1.1:7002 pid=26423)
+DETAIL:  Last error was: invalid input syntax for type integer: "error_1", column i
+CONTEXT:  External table exttab_union_2, line 7 of file://gpadmin/home/gpadmin/cloudberry/src/test/regress/data/exttab_more_errors.data, column i
 -- Error table count
 select count(*) > 0 from
 (
@@ -2011,9 +2142,9 @@ insert into exttab_union_insert_1
 SELECT e1.i, e2.j from exttab_union_2 e1 INNER JOIN exttab_union_2 e2 ON e1.i = e2.i
 UNION ALL
 SELECT e1.i, e2.j from exttab_union_2 e1 INNER JOIN exttab_union_2 e2 ON e1.i = e2.i;
-ERROR:  segment reject limit reached, aborting operation
-DETAIL:  Last error was: invalid input syntax for type integer: "error_1", column i  (seg0 slice1 127.0.0.1:40000 pid=12226)
-CONTEXT:  External table exttab_union_2, line 7 of file://@hostname@@abs_srcdir@/data/exttab_more_errors.data, column i
+ERROR:  segment reject limit reached, aborting operation  (seg0 slice2 127.0.1.1:7002 pid=26444)
+DETAIL:  Last error was: invalid input syntax for type integer: "error_1", column i
+CONTEXT:  External table exttab_union_2, line 7 of file://gpadmin/home/gpadmin/cloudberry/src/test/regress/data/exttab_more_errors.data, column i
 -- should return 0 rows
 SELECT * from exttab_union_insert_1;
  i | j 
@@ -2071,11 +2202,11 @@ DROP EXTERNAL TABLE IF EXISTS exttab_views_2 CASCADE;
 NOTICE:  foreign table "exttab_views_2" does not exist, skipping
 -- does not reach reject limit
 CREATE EXTERNAL TABLE exttab_views_1( i int, j text )
-LOCATION ('file://@hostname@@abs_srcdir@/data/exttab_few_errors.data') FORMAT 'TEXT' (DELIMITER '|')
+LOCATION (:'exttab_few_errors_file') FORMAT 'TEXT' (DELIMITER '|')
 LOG ERRORS SEGMENT REJECT LIMIT 10;
 -- reaches reject limit, use the same err table
 CREATE EXTERNAL TABLE exttab_views_2( i int, j text )
-LOCATION ('file://@hostname@@abs_srcdir@/data/exttab_more_errors.data') FORMAT 'TEXT' (DELIMITER '|')
+LOCATION (:'exttab_more_errors_file') FORMAT 'TEXT' (DELIMITER '|')
 LOG ERRORS SEGMENT REJECT LIMIT 2;
 DROP VIEW IF EXISTS exttab_views_3;
 NOTICE:  view "exttab_views_3" does not exist, skipping
@@ -2098,9 +2229,9 @@ SELECT gp_truncate_error_log('exttab_views_2');
 
 -- This should error out
 SELECT * FROM exttab_views_3;
-ERROR:  segment reject limit reached, aborting operation
-DETAIL:  Last error was: invalid input syntax for type integer: "error_1", column i  (seg0 slice1 127.0.0.1:40000 pid=12226)
-CONTEXT:  External table exttab_views_2, line 7 of file://@hostname@@abs_srcdir@/data/exttab_more_errors.data, column i
+ERROR:  segment reject limit reached, aborting operation  (seg0 slice3 127.0.1.1:7002 pid=26462)
+DETAIL:  Last error was: invalid input syntax for type integer: "error_1", column i
+CONTEXT:  External table exttab_views_2, line 7 of file://gpadmin/home/gpadmin/cloudberry/src/test/regress/data/exttab_more_errors.data, column i
 -- Error table should be populated
 SELECT count(*) > 0 FROM
 (
@@ -2133,9 +2264,9 @@ SELECT gp_truncate_error_log('exttab_views_2');
 
 -- Should fail
 INSERT INTO exttab_views_insert_1 SELECT * FROM exttab_views_3;
-ERROR:  segment reject limit reached, aborting operation
+ERROR:  segment reject limit reached, aborting operation  (seg0 slice3 127.0.1.1:7002 pid=26496)
 DETAIL:  Last error was: invalid input syntax for type integer: "error_1", column i
-CONTEXT:  External table exttab_views_2, line 7 of file://@hostname@@abs_srcdir@/data/exttab_more_errors.data, column i  (seg0 slice1 127.0.0.1:40000 pid=12217)
+CONTEXT:  External table exttab_views_2, line 7 of file://gpadmin/home/gpadmin/cloudberry/src/test/regress/data/exttab_more_errors.data, column i
 -- should not have any rows
 SELECT * FROM exttab_views_insert_1;
  i | j | k 
@@ -2173,9 +2304,9 @@ SELECT gp_truncate_error_log('exttab_views_2');
 CREATE TABLE exttab_views_ctas_1 AS SELECT * FROM exttab_views_3 where length(j) < 100;
 NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'j' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
-ERROR:  segment reject limit reached, aborting operation
-DETAIL:  Last error was: invalid input syntax for type integer: "error_1", column i  (seg0 slice1 127.0.0.1:40000 pid=12322)
-CONTEXT:  External table exttab_views_2, line 7 of file://@hostname@@abs_srcdir@/data/exttab_more_errors.data, column i
+ERROR:  segment reject limit reached, aborting operation  (seg0 slice2 127.0.1.1:7002 pid=26490)
+DETAIL:  Last error was: invalid input syntax for type integer: "error_1", column i
+CONTEXT:  External table exttab_views_2, line 7 of file://gpadmin/home/gpadmin/cloudberry/src/test/regress/data/exttab_more_errors.data, column i
 SELECT * FROM exttab_views_ctas_1;
 ERROR:  relation "exttab_views_ctas_1" does not exist
 LINE 1: SELECT * FROM exttab_views_ctas_1;
@@ -2211,9 +2342,9 @@ SELECT gp_truncate_error_log('exttab_views_2');
 CREATE TABLE exttab_views_ctas_1 AS SELECT * FROM exttab_views_3;
 NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'j' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
-ERROR:  segment reject limit reached, aborting operation
-DETAIL:  Last error was: invalid input syntax for type integer: "error_1", column i  (seg0 slice1 127.0.0.1:40000 pid=12313)
-CONTEXT:  External table exttab_views_2, line 7 of file://@hostname@@abs_srcdir@/data/exttab_more_errors.data, column i
+ERROR:  segment reject limit reached, aborting operation  (seg0 slice2 127.0.1.1:7002 pid=26490)
+DETAIL:  Last error was: invalid input syntax for type integer: "error_1", column i
+CONTEXT:  External table exttab_views_2, line 7 of file://gpadmin/home/gpadmin/cloudberry/src/test/regress/data/exttab_more_errors.data, column i
 -- Relation should not exist
 SELECT * FROM exttab_views_ctas_1;
 ERROR:  relation "exttab_views_ctas_1" does not exist
@@ -2238,11 +2369,11 @@ DROP EXTERNAL TABLE IF EXISTS exttab_windows_2;
 NOTICE:  foreign table "exttab_windows_2" does not exist, skipping
 -- does not reach reject limit
 CREATE EXTERNAL TABLE exttab_windows_1( i int, j text )
-LOCATION ('file://@hostname@@abs_srcdir@/data/exttab_few_errors.data') FORMAT 'TEXT' (DELIMITER '|')
+LOCATION (:'exttab_few_errors_file') FORMAT 'TEXT' (DELIMITER '|')
 LOG ERRORS SEGMENT REJECT LIMIT 10;
 -- reaches reject limit
 CREATE EXTERNAL TABLE exttab_windows_2( i int, j text )
-LOCATION ('file://@hostname@@abs_srcdir@/data/exttab_more_errors.data') FORMAT 'TEXT' (DELIMITER '|')
+LOCATION (:'exttab_more_errors_file') FORMAT 'TEXT' (DELIMITER '|')
 LOG ERRORS SEGMENT REJECT LIMIT 2;
 -- without reaching segment reject limit
 with cte1 as(
@@ -2326,9 +2457,9 @@ SELECT * FROM cte1 c1, cte2 c2
 WHERE c1.i = c2.i
 ORDER BY c1.i
 limit 5;
-ERROR:  segment reject limit reached, aborting operation
-DETAIL:  Last error was: invalid input syntax for type integer: "error_1", column i  (seg0 slice1 127.0.0.1:40000 pid=12357)
-CONTEXT:  External table exttab_windows_2, line 7 of file://@hostname@@abs_srcdir@/data/exttab_more_errors.data, column i
+ERROR:  segment reject limit reached, aborting operation  (seg0 slice9 127.0.1.1:7002 pid=26587)
+DETAIL:  Last error was: invalid input syntax for type integer: "error_1", column i
+CONTEXT:  External table exttab_windows_2, line 7 of file://gpadmin/home/gpadmin/cloudberry/src/test/regress/data/exttab_more_errors.data, column i
 SELECT COUNT(*) > 0
 FROM
 (
@@ -2348,11 +2479,11 @@ DROP EXTERNAL TABLE IF EXISTS exttab_limit_2 cascade;
 NOTICE:  foreign table "exttab_limit_2" does not exist, skipping
 -- does not reach reject limit
 CREATE EXTERNAL TABLE exttab_limit_1( i int, j text )
-LOCATION ('file://@hostname@@abs_srcdir@/data/exttab_few_errors.data') FORMAT 'TEXT' (DELIMITER '|')
+LOCATION (:'exttab_few_errors_file') FORMAT 'TEXT' (DELIMITER '|')
 LOG ERRORS SEGMENT REJECT LIMIT 10;
 -- reaches reject limit, use the same err table
 CREATE EXTERNAL TABLE exttab_limit_2( i int, j text )
-LOCATION ('file://@hostname@@abs_srcdir@/data/exttab_more_errors.data') FORMAT 'TEXT' (DELIMITER '|')
+LOCATION (:'exttab_more_errors_file') FORMAT 'TEXT' (DELIMITER '|')
 LOG ERRORS SEGMENT REJECT LIMIT 2;
 -- Note that even though we use exttab_limit_2 here , the LIMIT 3 will not throw a segment reject limit error
 with cte1 as
@@ -2361,9 +2492,9 @@ SELECT e1.i, e2.j FROM exttab_limit_1 e1, exttab_limit_1 e2
 WHERE e1.i = e2.i LIMIT 5
 )
 SELECT * FROM cte1, exttab_limit_2 e3 where cte1.i = e3.i ORDER BY cte1.i LIMIT 3;
-ERROR:  segment reject limit reached, aborting operation
-DETAIL:  Last error was: invalid input syntax for type integer: "error_1", column i  (seg0 slice4 127.0.0.1:40000 pid=12211)
-CONTEXT:  External table exttab_limit_2, line 7 of file://@hostname@@abs_srcdir@/data/exttab_more_errors.data, column i
+ERROR:  segment reject limit reached, aborting operation  (seg0 slice1 127.0.1.1:7002 pid=26235)
+DETAIL:  Last error was: invalid input syntax for type integer: "error_1", column i
+CONTEXT:  External table exttab_limit_2, line 7 of file://gpadmin/home/gpadmin/cloudberry/src/test/regress/data/exttab_more_errors.data, column i
 SELECT count(*) FROM gp_read_error_log('exttab_limit_2');
  count 
 -------
@@ -2437,9 +2568,9 @@ SELECT e1.i, e2.j FROM exttab_limit_1 e1, exttab_limit_1 e2
 WHERE e1.i = e2.i LIMIT 3
 )
 SELECT * FROM cte1, exttab_limit_2 e3 where cte1.i = e3.i ORDER BY cte1.i LIMIT 5;
-ERROR:  segment reject limit reached, aborting operation
-DETAIL:  Last error was: invalid input syntax for type integer: "error_1", column i  (seg0 slice4 127.0.0.1:40000 pid=12211)
-CONTEXT:  External table exttab_limit_2, line 7 of file://@hostname@@abs_srcdir@/data/exttab_more_errors.data, column i
+ERROR:  segment reject limit reached, aborting operation  (seg0 slice1 127.0.1.1:7002 pid=26235)
+DETAIL:  Last error was: invalid input syntax for type integer: "error_1", column i
+CONTEXT:  External table exttab_limit_2, line 7 of file://gpadmin/home/gpadmin/cloudberry/src/test/regress/data/exttab_more_errors.data, column i
 SELECT count(*) > 0 FROM gp_read_error_log('exttab_limit_2');
  ?column? 
 ----------
@@ -2512,9 +2643,9 @@ SELECT gp_truncate_error_log('exttab_limit_2');
 (1 row)
 
 SELECT * FROM exttab_limit_1 e1, exttab_limit_2 e2 where e1.i = e2.i LIMIT 3;
-ERROR:  segment reject limit reached, aborting operation
-DETAIL:  Last error was: invalid input syntax for type integer: "error_1", column i  (seg0 slice1 127.0.0.1:40000 pid=12436)
-CONTEXT:  External table exttab_limit_2, line 7 of file://@hostname@@abs_srcdir@/data/exttab_more_errors.data, column i
+ERROR:  segment reject limit reached, aborting operation  (seg0 slice3 127.0.1.1:7002 pid=26670)
+DETAIL:  Last error was: invalid input syntax for type integer: "error_1", column i
+CONTEXT:  External table exttab_limit_2, line 7 of file://gpadmin/home/gpadmin/cloudberry/src/test/regress/data/exttab_more_errors.data, column i
 SELECT count(*) > 0 FROM
 (
 SELECT * FROM gp_read_error_log('exttab_limit_1')
@@ -2531,6 +2662,7 @@ SELECT * FROM gp_read_error_log('exttab_limit_2')
 -- the data. If there is a valid row within the first 'n' rows specified by
 -- this guc, the database continues to load the data.
 -- default should be 1000
+\set exttab_first_errors_file 'file://' :hostname :abs_srcdir '/data/exttab_first_errors.data'
 SHOW gp_initial_bad_row_limit;
  gp_initial_bad_row_limit 
 --------------------------
@@ -2540,13 +2672,13 @@ SHOW gp_initial_bad_row_limit;
 DROP EXTERNAL TABLE IF EXISTS exttab_first_reject_limit_1 cascade;
 NOTICE:  foreign table "exttab_first_reject_limit_1" does not exist, skipping
 CREATE EXTERNAL TABLE exttab_first_reject_limit_1( i int, j text )
-LOCATION ('file://@hostname@@abs_srcdir@/data/exttab_first_errors.data') FORMAT 'TEXT' (DELIMITER '|')
+LOCATION (:'exttab_first_errors_file') FORMAT 'TEXT' (DELIMITER '|')
 LOG ERRORS SEGMENT REJECT LIMIT 20000;
 -- should fail with an appropriate error message
 SELECT COUNT(*) FROM exttab_first_reject_limit_1;
-ERROR:  all 1000 first rows in this segment were rejected
-DETAIL:  Aborting operation regardless of REJECT LIMIT value, last error was: invalid input syntax for type integer: "error_0", column i  (seg0 slice1 127.0.0.1:40000 pid=12211)
-CONTEXT:  External table exttab_first_reject_limit_1, line 1000 of file://@hostname@@abs_srcdir@/data/exttab_first_errors.data, column i
+ERROR:  all 1000 first rows in this segment were rejected  (seg0 slice1 127.0.1.1:7002 pid=26235)
+DETAIL:  Aborting operation regardless of REJECT LIMIT value, last error was: invalid input syntax for type integer: "error_0", column i
+CONTEXT:  External table exttab_first_reject_limit_1, line 1000 of file://gpadmin/home/gpadmin/cloudberry/src/test/regress/data/exttab_first_errors.data, column i
 SELECT COUNT(*) > 0 FROM gp_read_error_log('exttab_first_reject_limit_1');
  ?column? 
 ----------
@@ -2578,14 +2710,14 @@ SELECT COUNT(*) FROM gp_read_error_log('exttab_first_reject_limit_1');
 DROP EXTERNAL TABLE IF EXISTS exttab_first_reject_limit_2;
 NOTICE:  foreign table "exttab_first_reject_limit_2" does not exist, skipping
 CREATE EXTERNAL TABLE exttab_first_reject_limit_2( i int, j text )
-LOCATION ('file://@hostname@@abs_srcdir@/data/exttab_first_errors.data') FORMAT 'TEXT' (DELIMITER '|')
+LOCATION (:'exttab_first_errors_file') FORMAT 'TEXT' (DELIMITER '|')
 LOG ERRORS SEGMENT REJECT LIMIT 500;
 -- should report an error saying first rows were rejected
 SET gp_initial_bad_row_limit = 2;
 SELECT COUNT(*) FROM exttab_first_reject_limit_2;
-ERROR:  all 2 first rows in this segment were rejected
-DETAIL:  Aborting operation regardless of REJECT LIMIT value, last error was: invalid input syntax for type integer: "error_0", column i  (seg0 slice1 127.0.0.1:40000 pid=12211)
-CONTEXT:  External table exttab_first_reject_limit_2, line 2 of file://@hostname@@abs_srcdir@/data/exttab_first_errors.data, column i
+ERROR:  all 2 first rows in this segment were rejected  (seg0 slice1 127.0.1.1:7002 pid=26235)
+DETAIL:  Aborting operation regardless of REJECT LIMIT value, last error was: invalid input syntax for type integer: "error_0", column i
+CONTEXT:  External table exttab_first_reject_limit_2, line 2 of file://gpadmin/home/gpadmin/cloudberry/src/test/regress/data/exttab_first_errors.data, column i
 SELECT COUNT(*) > 0 from gp_read_error_log('exttab_first_reject_limit_2');
  ?column? 
 ----------
@@ -2601,9 +2733,9 @@ SELECT gp_truncate_error_log('exttab_first_reject_limit_2');
 (1 row)
 
 SELECT COUNT(*) FROM exttab_first_reject_limit_2;
-ERROR:  segment reject limit reached, aborting operation
-DETAIL:  Last error was: invalid input syntax for type integer: "error_0", column i  (seg0 slice1 127.0.0.1:40000 pid=12211)
-CONTEXT:  External table exttab_first_reject_limit_2, line 500 of file://@hostname@@abs_srcdir@/data/exttab_first_errors.data, column i
+ERROR:  segment reject limit reached, aborting operation  (seg0 slice1 127.0.1.1:7002 pid=26235)
+DETAIL:  Last error was: invalid input syntax for type integer: "error_0", column i
+CONTEXT:  External table exttab_first_reject_limit_2, line 500 of file://gpadmin/home/gpadmin/cloudberry/src/test/regress/data/exttab_first_errors.data, column i
 SELECT COUNT(*) > 0 from gp_read_error_log('exttab_first_reject_limit_2');
  ?column? 
 ----------
@@ -2619,9 +2751,9 @@ SELECT gp_truncate_error_log('exttab_first_reject_limit_2');
 (1 row)
 
 SELECT COUNT(*) FROM exttab_first_reject_limit_2;
-ERROR:  segment reject limit reached, aborting operation
-DETAIL:  Last error was: invalid input syntax for type integer: "error_0", column i  (seg0 slice1 127.0.0.1:40000 pid=12211)
-CONTEXT:  External table exttab_first_reject_limit_2, line 500 of file://@hostname@@abs_srcdir@/data/exttab_first_errors.data, column i
+ERROR:  segment reject limit reached, aborting operation  (seg0 slice1 127.0.1.1:7002 pid=26235)
+DETAIL:  Last error was: invalid input syntax for type integer: "error_0", column i
+CONTEXT:  External table exttab_first_reject_limit_2, line 500 of file://gpadmin/home/gpadmin/cloudberry/src/test/regress/data/exttab_first_errors.data, column i
 SELECT COUNT(*) > 0 from gp_read_error_log('exttab_first_reject_limit_2');
  ?column? 
 ----------
@@ -2632,7 +2764,7 @@ DROP EXTERNAL TABLE IF EXISTS exttab_heap_join_1;
 NOTICE:  foreign table "exttab_heap_join_1" does not exist, skipping
 -- does not reach reject limit
 CREATE EXTERNAL TABLE exttab_heap_join_1( i int, j text )
-LOCATION ('file://@hostname@@abs_srcdir@/data/exttab_few_errors.data') FORMAT 'TEXT' (DELIMITER '|')
+LOCATION (:'exttab_few_errors_file') FORMAT 'TEXT' (DELIMITER '|')
 LOG ERRORS SEGMENT REJECT LIMIT 10;
 DROP TABLE IF EXISTS test_ext_heap_join;
 NOTICE:  table "test_ext_heap_join" does not exist, skipping
@@ -2656,13 +2788,14 @@ SELECT COUNT(*) FROM gp_read_error_log('exttab_heap_join_1');
 (1 row)
 
 \! rm @abs_srcdir@/data/tableless.csv
+rm: cannot remove '@abs_srcdir@/data/tableless.csv': No such file or directory
 -- start_ignore
 DROP EXTERNAL TABLE IF EXISTS exttab_with_on_coordinator;
-NOTICE:  table "exttab_with_on_coordinator" does not exist, skipping
+NOTICE:  foreign table "exttab_with_on_coordinator" does not exist, skipping
 -- end_ignore
 -- Create external table with on clause
 CREATE EXTERNAL TABLE exttab_with_on_coordinator( i int, j text )
-LOCATION ('file://@hostname@@abs_srcdir@/data/exttab_few_errors.data') ON COORDINATOR FORMAT 'TEXT' (DELIMITER '|');
+LOCATION (:'exttab_few_errors_file') ON COORDINATOR FORMAT 'TEXT' (DELIMITER '|');
 SELECT * FROM exttab_with_on_coordinator;
 ERROR:  'ON COORDINATOR' is not supported by this protocol yet
 DROP EXTERNAL TABLE IF EXISTS exttab_with_on_coordinator;
@@ -2676,13 +2809,13 @@ NOTICE:  foreign table "exttab_with_options" does not exist, skipping
 -- end_ignore
 -- Create external table with 'OPTIONS'
 CREATE EXTERNAL TABLE exttab_with_option_empty( i int, j text )
-LOCATION ('file://@hostname@@abs_srcdir@/data/exttab_few_errors.data') FORMAT 'TEXT' (DELIMITER '|')
+LOCATION (:'exttab_few_errors_file') FORMAT 'TEXT' (DELIMITER '|')
 OPTIONS ();
 CREATE EXTERNAL TABLE exttab_with_option_1( i int, j text )
-LOCATION ('file://@hostname@@abs_srcdir@/data/exttab_few_errors.data') FORMAT 'TEXT' (DELIMITER '|')
+LOCATION (:'exttab_few_errors_file') FORMAT 'TEXT' (DELIMITER '|')
 OPTIONS (hello 'world');
 CREATE EXTERNAL TABLE exttab_with_options( i int, j text )
-LOCATION ('file://@hostname@@abs_srcdir@/data/exttab_few_errors.data') FORMAT 'TEXT' (DELIMITER '|')
+LOCATION (:'exttab_few_errors_file') FORMAT 'TEXT' (DELIMITER '|')
 OPTIONS (hello 'world', bonjour 'again', nihao 'again and again' );
 \d exttab_with_options
            Foreign table "public.exttab_with_options"
@@ -2690,7 +2823,7 @@ OPTIONS (hello 'world', bonjour 'again', nihao 'again and again' );
 --------+---------+-----------+----------+---------+-------------
  i      | integer |           |          |         | 
  j      | text    |           |          |         | 
-FDW options: (format 'text', delimiter '|', "null" E'\\N', escape E'\\', hello 'world', bonjour 'again', nihao 'again and again', format_type 't', location_uris 'file://@hostname@@abs_srcdir@/data/exttab_few_errors.data', execute_on 'ALL_SEGMENTS', log_errors 'f', encoding '6', is_writable 'false')
+FDW options: (format 'text', delimiter '|', "null" E'\\N', escape E'\\', hello 'world', bonjour 'again', nihao 'again and again', format_type 't', location_uris 'file://gpadmin/home/gpadmin/cloudberry/src/test/regress/data/exttab_few_errors.data', execute_on 'ALL_SEGMENTS', log_errors 'f', encoding '6', is_writable 'false')
 
 \d exttab_with_option_empty
          Foreign table "public.exttab_with_option_empty"
@@ -2698,7 +2831,7 @@ FDW options: (format 'text', delimiter '|', "null" E'\\N', escape E'\\', hello '
 --------+---------+-----------+----------+---------+-------------
  i      | integer |           |          |         | 
  j      | text    |           |          |         | 
-FDW options: (format 'text', delimiter '|', "null" E'\\N', escape E'\\', format_type 't', location_uris 'file://@hostname@@abs_srcdir@/data/exttab_few_errors.data', execute_on 'ALL_SEGMENTS', log_errors 'f', encoding '6', is_writable 'false')
+FDW options: (format 'text', delimiter '|', "null" E'\\N', escape E'\\', format_type 't', location_uris 'file://gpadmin/home/gpadmin/cloudberry/src/test/regress/data/exttab_few_errors.data', execute_on 'ALL_SEGMENTS', log_errors 'f', encoding '6', is_writable 'false')
 
 DROP EXTERNAL TABLE IF EXISTS exttab_with_option_empty;
 DROP EXTERNAL TABLE IF EXISTS exttab_with_option_1;
@@ -2716,16 +2849,22 @@ DROP EXTERNAL TABLE IF EXISTS tbl_wet_csv5;
 NOTICE:  foreign table "tbl_wet_csv5" does not exist, skipping
 -- end_ignore
 -- Create writable external table with AS for DELIMITER , NULL, ESCAPE
-CREATE WRITABLE EXTERNAL WEB TABLE tbl_wet_csv1 (a int, b text) EXECUTE 'cat > @abs_srcdir@/data/wet_csv1.tbl' FORMAT 'CSV' (DELIMITER AS '|' NULL AS 'null' ESCAPE AS ' ');
+\set wet_csv1_file 'cat > ' :abs_srcdir '/data/wet_csv1.tbl'
+CREATE WRITABLE EXTERNAL WEB TABLE tbl_wet_csv1 (a int, b text) EXECUTE :'wet_csv1_file' FORMAT 'CSV' (DELIMITER AS '|' NULL AS 'null' ESCAPE AS ' ');
 -- Create writable external table without AS for DELIMITER , NULL, ESCAPE
-CREATE WRITABLE EXTERNAL WEB TABLE tbl_wet_csv2 (a int, b text) EXECUTE 'cat > @abs_srcdir@/data/wet_csv2.tbl' FORMAT 'CSV' (DELIMITER AS ',' NULL 'null' ESCAPE ' ');
+\set wet_csv2_file 'cat > ' :abs_srcdir '/data/wet_csv2.tbl'
+CREATE WRITABLE EXTERNAL WEB TABLE tbl_wet_csv2 (a int, b text) EXECUTE :'wet_csv2_file' FORMAT 'CSV' (DELIMITER AS ',' NULL 'null' ESCAPE ' ');
 -- Create writable external table with double quotes
-CREATE WRITABLE EXTERNAL WEB TABLE tbl_wet_csv3 (a int, b text) EXECUTE 'cat > @abs_srcdir@/data/wet_csv3.tbl' FORMAT 'CSV' (DELIMITER AS '|' NULL AS 'null' ESCAPE AS ' '  QUOTE AS '"');
+\set wet_csv3_file 'cat > ' :abs_srcdir '/data/wet_csv3.tbl'
+CREATE WRITABLE EXTERNAL WEB TABLE tbl_wet_csv3 (a int, b text) EXECUTE :'wet_csv3_file' FORMAT 'CSV' (DELIMITER AS '|' NULL AS 'null' ESCAPE AS ' '  QUOTE AS '"');
 -- Create writable external table with single quotes
-CREATE WRITABLE EXTERNAL WEB TABLE tbl_wet_csv4 (a int, b text) EXECUTE 'cat > @abs_srcdir@/data/wet_csv4.tbl' FORMAT 'CSV' (DELIMITER AS '|' NULL AS 'null' ESCAPE AS ' '  QUOTE AS '''');
+\set wet_csv4_file 'cat > ' :abs_srcdir '/data/wet_csv4.tbl'
+CREATE WRITABLE EXTERNAL WEB TABLE tbl_wet_csv4 (a int, b text) EXECUTE :'wet_csv4_file' FORMAT 'CSV' (DELIMITER AS '|' NULL AS 'null' ESCAPE AS ' '  QUOTE AS '''');
 -- Create writable external table with force quote
-CREATE WRITABLE EXTERNAL WEB TABLE tbl_wet_csv5 (a int, b text) EXECUTE 'cat > @abs_srcdir@/data/wet_csv5.tbl' FORMAT 'CSV' (DELIMITER AS '|' NULL AS 'null' ESCAPE AS ' '  QUOTE AS '"' FORCE QUOTE b);
-CREATE WRITABLE EXTERNAL WEB TABLE tbl_wet_csv6 (a int, b text, c text) EXECUTE 'cat > @abs_srcdir@/data/wet_csv6.tbl' FORMAT 'CSV' (DELIMITER AS '|' NULL AS 'null' ESCAPE AS ' ' QUOTE AS '"' FORCE QUOTE *);
+\set wet_csv5_file 'cat > ' :abs_srcdir '/data/wet_csv5.tbl'
+CREATE WRITABLE EXTERNAL WEB TABLE tbl_wet_csv5 (a int, b text) EXECUTE :'wet_csv5_file' FORMAT 'CSV' (DELIMITER AS '|' NULL AS 'null' ESCAPE AS ' '  QUOTE AS '"' FORCE QUOTE b);
+\set wet_csv6_file 'cat > ' :abs_srcdir '/data/wet_csv6.tbl'   
+CREATE WRITABLE EXTERNAL WEB TABLE tbl_wet_csv6 (a int, b text, c text) EXECUTE :'wet_csv6_file' FORMAT 'CSV' (DELIMITER AS '|' NULL AS 'null' ESCAPE AS ' ' QUOTE AS '"' FORCE QUOTE *);
 INSERT INTO tbl_wet_csv1 VALUES (generate_series(1,256), 'test_1');
 INSERT INTO tbl_wet_csv2 VALUES (generate_series(1,256), 'test_2');
 INSERT INTO tbl_wet_csv3 VALUES (generate_series(1,256), 'test_3');
@@ -2740,18 +2879,21 @@ DROP EXTERNAL TABLE IF EXISTS tbl_wet_csv5;
 DROP EXTERNAL TABLE IF EXISTS tbl_wet_csv6;
 -- start_ignore
 DROP EXTERNAL TABLE IF EXISTS tbl_wet_text1;
-NOTICE:  table "tbl_wet_text1" does not exist, skipping
+NOTICE:  foreign table "tbl_wet_text1" does not exist, skipping
 DROP EXTERNAL TABLE IF EXISTS tbl_wet_text2;
-NOTICE:  table "tbl_wet_text2" does not exist, skipping
+NOTICE:  foreign table "tbl_wet_text2" does not exist, skipping
 DROP EXTERNAL TABLE IF EXISTS tbl_wet_text3;
-NOTICE:  table "tbl_wet_text3" does not exist, skipping
+NOTICE:  foreign table "tbl_wet_text3" does not exist, skipping
 -- end_ignore
 -- Create writable external table with AS for DELIMITER , NULL, ESCAPE
-CREATE WRITABLE EXTERNAL WEB TABLE tbl_wet_text1 (a int, b text) EXECUTE 'cat > @abs_srcdir@/data/wet_text1.tbl' FORMAT 'TEXT' (DELIMITER AS '|' NULL AS 'null' ESCAPE AS ' ');
+\set wet_text1_file 'cat > ' :abs_srcdir '/data/wet_text1.tbl'
+CREATE WRITABLE EXTERNAL WEB TABLE tbl_wet_text1 (a int, b text) EXECUTE :'wet_text1_file' FORMAT 'TEXT' (DELIMITER AS '|' NULL AS 'null' ESCAPE AS ' ');
 -- Create writable external table without AS for DELIMITER , NULL, ESCAPE
-CREATE WRITABLE EXTERNAL WEB TABLE tbl_wet_text2 (a int, b text) EXECUTE 'cat > @abs_srcdir@/data/wet_text2.tbl' FORMAT 'TEXT' (DELIMITER AS ',' NULL 'null' ESCAPE ' ');
+\set wet_text2_file 'cat > ' :abs_srcdir '/data/wet_text2.tbl'
+CREATE WRITABLE EXTERNAL WEB TABLE tbl_wet_text2 (a int, b text) EXECUTE :'wet_text2_file' FORMAT 'TEXT' (DELIMITER AS ',' NULL 'null' ESCAPE ' ');
 -- Create writable external table with ESCAPE OFF
-CREATE WRITABLE EXTERNAL WEB TABLE tbl_wet_text3 (a int, b text) EXECUTE 'cat > @abs_srcdir@/data/wet_text3.tbl' FORMAT 'TEXT' (DELIMITER AS '|' NULL AS 'null' ESCAPE 'OFF');
+\set wet_text3_file 'cat > ' :abs_srcdir '/data/wet_text3.tbl'
+CREATE WRITABLE EXTERNAL WEB TABLE tbl_wet_text3 (a int, b text) EXECUTE :'wet_text3_file' FORMAT 'TEXT' (DELIMITER AS '|' NULL AS 'null' ESCAPE 'OFF');
 INSERT INTO tbl_wet_text1 VALUES (generate_series(1,256), 'test_1');
 INSERT INTO tbl_wet_text2 VALUES (generate_series(1,256), 'test_2');
 INSERT INTO tbl_wet_text3 VALUES (generate_series(1,256), 'test_3');
@@ -2764,17 +2906,20 @@ NOTICE:  table "test_dp1" does not exist, skipping
 DROP TABLE IF EXISTS test_dp2;
 NOTICE:  table "test_dp2" does not exist, skipping
 DROP EXTERNAL TABLE IF EXISTS tbl_wet_syntax1;
-NOTICE:  table "tbl_wet_syntax1" does not exist, skipping
+NOTICE:  foreign table "tbl_wet_syntax1" does not exist, skipping
 DROP EXTERNAL TABLE IF EXISTS tbl_wet_syntax2;
-NOTICE:  table "tbl_wet_syntax2" does not exist, skipping
+NOTICE:  foreign table "tbl_wet_syntax2" does not exist, skipping
 DROP EXTERNAL TABLE IF EXISTS tbl_wet_syntax3;
-NOTICE:  table "tbl_wet_syntax3" does not exist, skipping
+NOTICE:  foreign table "tbl_wet_syntax3" does not exist, skipping
 -- end_ignore
 CREATE TABLE test_dp1 (a int, b text) DISTRIBUTED RANDOMLY;
 CREATE TABLE test_dp2 (a int, b text) DISTRIBUTED BY (b);
-CREATE WRITABLE EXTERNAL WEB TABLE tbl_wet_syntax1 (like test_dp1) EXECUTE 'cat > @abs_srcdir@/data/wet_syntax1.tbl' FORMAT 'TEXT' (DELIMITER '|' ) DISTRIBUTED BY (a);
-CREATE WRITABLE EXTERNAL WEB TABLE tbl_wet_syntax2 (like test_dp2) EXECUTE 'cat > @abs_srcdir@/data/wet_syntax2.tbl' FORMAT 'TEXT' (DELIMITER '|' ) DISTRIBUTED BY (a);
-CREATE WRITABLE EXTERNAL WEB TABLE tbl_wet_syntax3 (like test_dp2) EXECUTE 'cat > @abs_srcdir@/data/wet_syntax3.tbl' FORMAT 'TEXT' (DELIMITER '|' ) DISTRIBUTED RANDOMLY;
+\set wet_syntax1_file 'cat > ' :abs_srcdir '/data/wet_syntax1.tbl'
+CREATE WRITABLE EXTERNAL WEB TABLE tbl_wet_syntax1 (like test_dp1) EXECUTE :'wet_syntax1_file' FORMAT 'TEXT' (DELIMITER '|' ) DISTRIBUTED BY (a);
+\set wet_syntax2_file 'cat > ' :abs_srcdir '/data/wet_syntax2.tbl'
+CREATE WRITABLE EXTERNAL WEB TABLE tbl_wet_syntax2 (like test_dp2) EXECUTE :'wet_syntax2_file' FORMAT 'TEXT' (DELIMITER '|' ) DISTRIBUTED BY (a);
+\set wet_syntax3_file 'cat > ' :abs_srcdir '/data/wet_syntax3.tbl'
+CREATE WRITABLE EXTERNAL WEB TABLE tbl_wet_syntax3 (like test_dp2) EXECUTE :'wet_syntax3_file' FORMAT 'TEXT' (DELIMITER '|' ) DISTRIBUTED RANDOMLY;
 INSERT INTO tbl_wet_syntax1 VALUES (generate_series(1,256), 'test_1');
 INSERT INTO tbl_wet_syntax2 VALUES (generate_series(1,256), 'test_2');
 INSERT INTO tbl_wet_syntax3 VALUES (generate_series(1,256), 'test_3');
@@ -2793,7 +2938,8 @@ CREATE TABLE table_execute (id integer, name varchar(40)) DISTRIBUTED RANDOMLY;
 INSERT INTO table_execute VALUES (100, 'name_1');
 INSERT INTO table_execute VALUES (200, 'name_2');
 INSERT INTO table_execute VALUES (300, 'name_3');
-CREATE WRITABLE EXTERNAL WEB TABLE tbl_wet_execute (like table_execute) EXECUTE 'cat > @abs_srcdir@/data/wet_execute.tbl' FORMAT 'TEXT' (DELIMITER '|' );
+\set wet_execute_file 'cat > ' :abs_srcdir '/data/wet_execute.tbl'
+CREATE WRITABLE EXTERNAL WEB TABLE tbl_wet_execute (like table_execute) EXECUTE :'wet_execute_file' FORMAT 'TEXT' (DELIMITER '|' );
 NOTICE:  table doesn't have 'DISTRIBUTED BY' clause, defaulting to distribution columns from LIKE table
 INSERT INTO tbl_wet_execute SELECT * from table_execute ;
 DROP TABLE IF EXISTS table_execute;
@@ -2826,14 +2972,15 @@ DROP PROTOCOL if exists demoprot;
 NOTICE:  protocol "demoprot" does not exist, skipping
 DROP PROTOCOL if exists demoprot2;
 -- create external protocol with a serial type column
+\set serial_file 'file://' :hostname :abs_srcdir '/data/no/such/place/serial.tbl'
 CREATE EXTERNAL TABLE SERIAL (a serial, x text)
-LOCATION ('file://@hostname@@abs_srcdir@/data/no/such/place/serial.tbl')
+LOCATION (:'serial_file')
 FORMAT 'csv';
 -- drop temp external table
 DROP EXTERNAL TABLE IF EXISTS serial;
 -- External table query within plpgSQL function get error
 CREATE EXTERNAL TABLE exttab_error_context_callback(c1 int, c2 int)
-LOCATION ('file://@hostname@@abs_srcdir@/data/exttab.data') FORMAT 'TEXT';
+LOCATION (:'exttab_file') FORMAT 'TEXT';
 CREATE or REPLACE FUNCTION exttab_error_context_callback_func()
 RETURNS SETOF INTEGER
 AS
@@ -2851,8 +2998,8 @@ $$
 LANGUAGE plpgSQL READS SQL DATA;
 SET gp_log_gang TO DEBUG;
 SELECT * FROM exttab_error_context_callback_func();
-ERROR:  invalid input syntax for type integer: "1|1_number"  (seg0 slice1 127.0.0.1:40000 pid=12458)
-CONTEXT:  External table exttab_error_context_callback, line 1 of file://@hostname@@abs_srcdir@/data/exttab.data, column c1
+ERROR:  invalid input syntax for type integer: "1|1_number"  (seg0 slice1 127.0.1.1:7002 pid=26824)
+CONTEXT:  External table exttab_error_context_callback, line 1 of file://gpadmin/home/gpadmin/cloudberry/src/test/regress/data/exttab.data, column c1
 PL/pgSQL function exttab_error_context_callback_func() line 5 at FOR over SELECT rows
 SET gp_log_gang TO DEFAULT;
 DROP FUNCTION exttab_error_context_callback_func();
@@ -2860,8 +3007,9 @@ DROP EXTERNAL TABLE exttab_error_context_callback;
 -- --------------------------------------
 -- Encoding
 -- --------------------------------------
+\set latin1_encoding_file 'file://' :hostname :abs_srcdir '/data/latin1_encoding.csv'
 CREATE EXTERNAL TABLE encoding_issue (num int, word text)
-LOCATION ('file://@hostname@@abs_srcdir@/data/latin1_encoding.csv')
+LOCATION (:'latin1_encoding_file')
 FORMAT 'CSV' ENCODING 'LATIN1';
 SELECT * FROM encoding_issue WHERE num = 4;
  num |           word            
@@ -2870,8 +3018,9 @@ SELECT * FROM encoding_issue WHERE num = 4;
 (1 row)
 
 COPY (SELECT * FROM encoding_issue) TO '/tmp/latin1_encoding.csv' WITH (FORMAT 'csv', ENCODING 'LATIN1');
+\set latin1_encoding_file2 'file://' :hostname '/tmp/latin1_encoding.csv'
 CREATE EXTERNAL TABLE encoding_issue2 (num int, word text)
-LOCATION ('file://@hostname@/tmp/latin1_encoding.csv')
+LOCATION (:'latin1_encoding_file2')
 FORMAT 'CSV' ENCODING 'LATIN1';
 SELECT * FROM encoding_issue2 WHERE num = 5;
  num |                word                
@@ -4754,6 +4903,7 @@ line_delim=E'\n'
 ;
 drop external table large_custom_format_definitions;
 -- Incomplete external data file
+\set incomplete_formatter_data 'file://' :hostname :abs_srcdir '/data/incomplete_formatter_data.tbl'
 CREATE OR REPLACE FUNCTION gpformatter() RETURNS record
 AS '$libdir/gpformatter.so', 'formatter_import'
 LANGUAGE C STABLE;
@@ -4763,12 +4913,11 @@ CREATE READABLE EXTERNAL TABLE tbl_ext_gpformatter (
 d1 text
 )
 LOCATION (
-  'file://@hostname@@abs_srcdir@/data/incomplete_formatter_data.tbl'
+  :'incomplete_formatter_data'
 )
 FORMAT 'CUSTOM' (formatter='gpformatter');
 SELECT * FROM tbl_ext_gpformatter;
-WARNING:  unexpected end of file  (seg0 slice1 127.0.0.1:25432 pid=18207)
-CONTEXT:  External table tbl_ext_gpformatter
+WARNING:  unexpected end of file  (seg0 slice1 127.0.1.1:7002 pid=26235)
  d1 
 ----
  0
@@ -4823,10 +4972,10 @@ select gp_debug_reset_create_table_default_numsegments();
 --
 CREATE READABLE EXTERNAL TABLE ext_invalid_host() LOCATION ('gpfdist://not-exist-host/data.csv') FORMAT 'CSV' ( DELIMITER AS ',');
 SELECT * from ext_invalid_host;
-WARNING:  could not translate host name "not-exist-host", port "8080" to address: Name or service not known
-WARNING:  could not translate host name "not-exist-host", port "8080" to address: Name or service not known
-WARNING:  could not translate host name "not-exist-host", port "8080" to address: Name or service not known
-ERROR:  hostname cannot be resolved 'gpfdist://not-exist-host:8080/data.csv'  (seg0 slice1 127.0.0.1:5434 pid=181826)
+WARNING:  could not translate host name "not-exist-host", port "8080" to address: Temporary failure in name resolution  (seg0 slice1 127.0.1.1:7002 pid=26235)
+WARNING:  could not translate host name "not-exist-host", port "8080" to address: Temporary failure in name resolution  (seg1 slice1 127.0.1.1:7003 pid=26236)
+WARNING:  could not translate host name "not-exist-host", port "8080" to address: Temporary failure in name resolution  (seg2 slice1 127.0.1.1:7004 pid=26237)
+ERROR:  hostname cannot be resolved 'gpfdist://not-exist-host:8080/data.csv'  (seg0 slice1 127.0.1.1:7002 pid=26235)
 -- Test delimiter off
 CREATE EXTERNAL TABLE test_delimiter(data text) LOCATION('gpfdist://127.0.0.1/test_delimiter.txt') FORMAT 'text' (DELIMITER 'off');
 DROP EXTERNAL TABLE test_delimiter;
@@ -4892,10 +5041,10 @@ EXPLAIN SELECT
 FROM ext_subplan_t1;
                                    QUERY PLAN                                   
 --------------------------------------------------------------------------------
- Foreign Scan on ext_subplan_t1  (cost=0.00..0.00 rows=1 width=8)
+ Foreign Scan on ext_subplan_t1  (cost=0.00..0.02 rows=1 width=8)
    SubPlan 1
-     ->  Limit  (cost=0.00..0.00 rows=1 width=4)
-           ->  Foreign Scan on ext_subplan_t2  (cost=0.00..0.00 rows=1 width=4)
+     ->  Limit  (cost=0.00..0.01 rows=1 width=4)
+           ->  Foreign Scan on ext_subplan_t2  (cost=0.00..0.01 rows=1 width=4)
                  Filter: (c1 = ext_subplan_t1.c1)
  Optimizer: Postgres query optimizer
 (6 rows)
@@ -4943,7 +5092,8 @@ DROP TABLE test_part_integrity;
 CREATE WRITABLE EXTERNAL WEB TABLE ext_dist_repl(a int, b int) EXECUTE 'some command' FORMAT 'TEXT' DISTRIBUTED REPLICATED;
 ERROR:  external tables can't have DISTRIBUTED REPLICATED clause
 -- Testing altering the distribution policy of external tables.
-CREATE WRITABLE EXTERNAL WEB TABLE ext_w_dist(a int, b int) EXECUTE 'cat > @abs_srcdir@/data/ext_w_dist.tbl' FORMAT 'TEXT' (DELIMITER AS '|' NULL AS 'null' ESCAPE AS ' ') DISTRIBUTED BY (a);
+\set ext_w_dist_file 'cat > ' :abs_srcdir '/data/ext_w_dist.tbl'
+CREATE WRITABLE EXTERNAL WEB TABLE ext_w_dist(a int, b int) EXECUTE :'ext_w_dist_file' FORMAT 'TEXT' (DELIMITER AS '|' NULL AS 'null' ESCAPE AS ' ') DISTRIBUTED BY (a);
 ALTER TABLE ext_w_dist SET WITH (reorganize=true); -- should error out if forcing reorganize
 ERROR:  cannot reorganize external table "ext_w_dist"
 SELECT policytype, distkey FROM gp_distribution_policy WHERE localoid = 'ext_w_dist'::regclass;
@@ -4975,9 +5125,13 @@ ALTER TABLE ext_r_dist SET DISTRIBUTED BY (a); -- should error out altering read
 ERROR:  cannot set distribution policy of readable external table "ext_r_dist"
 -- Testing external table as the partition child.
 CREATE TABLE part_root(a int) PARTITION BY RANGE(a);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE part_child (LIKE part_root);
-CREATE EXTERNAL WEB TABLE part_ext_r(a int) EXECUTE 'cat > @abs_srcdir@/data/part_ext.tbl' FORMAT 'TEXT' (DELIMITER AS '|' NULL AS 'null' ESCAPE AS ' ');
-CREATE WRITABLE EXTERNAL WEB TABLE part_ext_w(a int, b int) EXECUTE 'cat > @abs_srcdir@/data/part_ext.tbl' FORMAT 'TEXT' (DELIMITER AS '|' NULL AS 'null' ESCAPE AS ' ') DISTRIBUTED BY (a);
+NOTICE:  table doesn't have 'DISTRIBUTED BY' clause, defaulting to distribution columns from LIKE table
+\set part_ext_file 'cat > ' :abs_srcdir '/data/part_ext.tbl'
+CREATE EXTERNAL WEB TABLE part_ext_r(a int) EXECUTE :'part_ext_file' FORMAT 'TEXT' (DELIMITER AS '|' NULL AS 'null' ESCAPE AS ' ');
+CREATE WRITABLE EXTERNAL WEB TABLE part_ext_w(a int, b int) EXECUTE :'part_ext_file' FORMAT 'TEXT' (DELIMITER AS '|' NULL AS 'null' ESCAPE AS ' ') DISTRIBUTED BY (a);
 ALTER TABLE part_root ATTACH PARTITION part_child FOR VALUES FROM (0) TO (10);
 ALTER TABLE part_root ATTACH PARTITION part_ext_r FOR VALUES FROM (10) TO (20);
 NOTICE:  partition constraints are not validated when attaching a readable external table
@@ -4999,14 +5153,17 @@ SELECT policytype, distkey FROM gp_distribution_policy WHERE localoid = 'part_ex
 
 DROP TABLE part_root;
 -- check logerrors value of pg_exttable
+\set ext_fasle_file 'file://' :hostname :abs_srcdir '/data/ext_fasle.tbl'
+\set ext_true_file 'file://' :hostname :abs_srcdir '/data/ext_true.tbl'
+\set ext_persistently_file 'file://' :hostname :abs_srcdir '/data/ext_persistently.tbl'
 CREATE EXTERNAL TABLE ext_false (c INT)
-location ('file://@hostname@@abs_srcdir@/data/ext_fasle.tbl' )
+location (:'ext_fasle_file' )
 FORMAT 'text' (delimiter '|');
 CREATE EXTERNAL TABLE ext_true (c INT)
-location ('file://@hostname@@abs_srcdir@/data/ext_true.tbl' )
+location (:'ext_true_file' )
 FORMAT 'text' (delimiter '|') LOG ERRORS SEGMENT REJECT LIMIT 100;
 CREATE EXTERNAL TABLE ext_persistently (c INT)
-location ('file://@hostname@@abs_srcdir@/data/ext_persistently.tbl' )
+location (:'ext_persistently_file' )
 FORMAT 'text' (delimiter '|') LOG ERRORS PERSISTENTLY SEGMENT REJECT LIMIT 100;
 SELECT logerrors, options from pg_exttable a, pg_class b where a.reloid = b.oid and b.relname = 'ext_false';
  logerrors | options 

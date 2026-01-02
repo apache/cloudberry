@@ -24,6 +24,9 @@
 -- s/Found.+//
 --
 -- end_matchsubs
+\getenv abs_srcdir PG_ABS_SRCDIR
+\getenv hostname PG_HOSTNAME
+\set nation_tbl 'file://' :hostname :abs_srcdir '/data/nation.tbl'
 CREATE TABLE REG_REGION (R_REGIONKEY INT, R_NAME CHAR(25), R_COMMENT VARCHAR(152)) DISTRIBUTED BY (R_REGIONKEY);
 
 -- --------------------------------------
@@ -33,11 +36,11 @@ CREATE EXTERNAL TABLE EXT_NATION  ( N_NATIONKEY  INTEGER ,
                             N_NAME       CHAR(25) ,
                             N_REGIONKEY  INTEGER ,
                             N_COMMENT    VARCHAR(152))
-location ('file://@hostname@@abs_srcdir@/data/nation.tbl' )
+location (:'nation_tbl' )
 FORMAT 'text' (delimiter '|');
 
 CREATE EXTERNAL TABLE EXT_REGION  (LIKE REG_REGION)
-location ('file://@hostname@@abs_srcdir@/data/region.tbl' )
+location (:'nation_tbl' )
 FORMAT 'text' (delimiter '|');
 
 -- Only tables with custom protocol should create dependency, due to a bug there
@@ -119,8 +122,9 @@ SELECT * FROM table_env WHERE val LIKE 'GP_QUERY%' ORDER BY val ASC;
 SELECT * FROM table_env WHERE val LIKE 'GP_QUERY%\%' ESCAPE '&' ORDER BY val ASC;
 
 -- ensure squelching on master
+\set lineitem 'cat ' :abs_srcdir '/data/lineitem.csv'
 CREATE EXTERNAL WEB TABLE table_master (val TEXT)
-  EXECUTE E'cat @abs_srcdir@/data/lineitem.csv' ON MASTER
+  EXECUTE E:'lineitem' ON MASTER
   FORMAT 'TEXT' (ESCAPE 'OFF');
 BEGIN;
 DECLARE _psql_cursor NO SCROLL CURSOR FOR SELECT 1 FROM table_master;
@@ -149,19 +153,21 @@ drop external web table ext_stderr2;
 --
 -- bad csv (quote must be a single char)
 --
+\set whois_file 'gpfdist://' :hostname ':7070/exttab1/whois.csv'
 create external table bad_whois (
 source_lineno			int,
 domain_name			varchar(350)
 )
-location ('gpfdist://@hostname@:7070/exttab1/whois.csv' )
+location (:'whois_file' )
 format 'csv' ( header quote as 'ggg');
 select count(*) from bad_whois;
 drop external table bad_whois;
 --
 -- try a bad location
 --
+\set badt1_file 'file://' :hostname :abs_srcdir '/data/no/such/place/badt1.tbl'
 create external table badt1 (x text)
-location ('file://@hostname@@abs_srcdir@/data/no/such/place/badt1.tbl' )
+location (:'badt1_file' )
 format 'text' (delimiter '|');
 select * from badt1;
 drop external table badt1;
@@ -169,15 +175,16 @@ drop external table badt1;
 --
 -- try a bad protocol
 --
+\set baadt2_file 'bad_protocol://' :hostname :abs_srcdir '/data/no/such/place/badt2.tbl'
 create external table badt2 (x text)
-location ('bad_protocol://@hostname@@abs_srcdir@/data/no/such/place/badt2.tbl' )
+location (:'baadt2_file' )
 format 'text' (delimiter '|');
 
 --
 -- ALTER (partial support)
 --
 create external table ext (a int, x text)
-location ('file://@hostname@@abs_srcdir@/data/no/such/place/badt1.tbl' )
+location (:'badt1_file' )
 format 'text';
 alter table ext drop column a; -- should pass
 alter external table ext add column a int; -- pass
@@ -318,7 +325,8 @@ DROP EXTERNAL TABLE public.test_ext;
 create writable external web table wet_pos4(a text, b text) execute 'some command' format 'text';
 
 -- negative
-create writable external table wet_neg1(a text, b text) location('file://@hostname@@abs_srcdir@/badt1.tbl') format 'text';
+\set badt1_file2 'file://' :hostname :abs_srcdir '/badt1.tbl'
+create writable external table wet_neg1(a text, b text) location(:'badt1_file2') format 'text';
 create writable external table wet_neg1(a text, b text) location('gpfdist://foo:7070/wet.out', 'gpfdist://foo:7070/wet.out') format 'text';
 create writable external web table wet_pos5(a text, b text) execute 'some command' on segment 0 format 'text';
 
@@ -331,8 +339,9 @@ select * from wet_pos4;
 -- to implement certain semi-joins. Nowadays, we use generated row IDs in
 -- such plans, and don't need CTID for that purpose anymore.
 
+\set mpp17980_file2 'file://' :hostname :abs_srcdir '/data/mpp17980.data'
 CREATE EXTERNAL TABLE ext_mpp17980 ( id int , id1 int , id2 int)
-LOCATION ('file://@hostname@@abs_srcdir@/data/mpp17980.data')
+LOCATION (:'mpp17980_file2')
 FORMAT 'CSV' ( DELIMITER ',' NULL ' ');
 
 CREATE TABLE mpp17980 (id int, date date, amt decimal(10,2))
@@ -351,17 +360,19 @@ SELECT ctid, * FROM ext_mpp17980;
 DROP EXTERNAL TABLE ext_mpp17980;
 DROP TABLE mpp17980;
 
-COPY (VALUES('1,2'),('1,2,3'),('1,'),('1')) TO '@abs_srcdir@/data/tableless.csv';
+\set tableless_file :abs_srcdir '/data/tableless.csv'
+COPY (VALUES('1,2'),('1,2,3'),('1,'),('1')) TO :'tableless_file';
 CREATE TABLE tableless_heap(a int, b int);
-COPY tableless_heap FROM '@abs_srcdir@/data/tableless.csv' CSV LOG ERRORS SEGMENT REJECT LIMIT 10;
+COPY tableless_heap FROM :'tableless_file' CSV LOG ERRORS SEGMENT REJECT LIMIT 10;
 SELECT relname, linenum, errmsg FROM gp_read_error_log('tableless_heap');
 create table errlog_save as select * from gp_read_error_log('tableless_heap');
 select count(*) from errlog_save;
 SELECT gp_truncate_error_log('tableless_heap');
 SELECT relname, linenum, errmsg FROM gp_read_error_log('tableless_heap');
 
+\set tableless_file2 'file://' :hostname :abs_srcdir '/data/tableless.csv'
 create external table tableless_ext(a int, b int)
-location ('file://@hostname@@abs_srcdir@/data/tableless.csv')
+location (:'tableless_file2')
 format 'csv'
 log errors segment reject limit 10;
 select * from tableless_ext;
@@ -417,8 +428,9 @@ insert into wet_too_many_uris values ('foo', 'bar');
 -- Test for error log functionality
 
 -- Scan with no errors
+\set exttab_file 'file://' :hostname :abs_srcdir '/data/exttab.data'
 CREATE EXTERNAL TABLE exttab_basic_1( i int, j text )
-LOCATION ('file://@hostname@@abs_srcdir@/data/exttab.data') FORMAT 'TEXT' (DELIMITER '|')
+LOCATION (:'exttab_file') FORMAT 'TEXT' (DELIMITER '|')
 LOG ERRORS SEGMENT REJECT LIMIT 2;
 -- Empty error log
 SELECT * FROM gp_read_error_log('exttab_basic_1');
@@ -427,8 +439,9 @@ SELECT COUNT(*) FROM exttab_basic_1;
 SELECT * FROM gp_read_error_log('exttab_basic_1');
 
 -- test ON COORDINATOR without LOG ERRORS, return empty results for all rows error out
+\set cat_exttab 'cat ' :abs_srcdir '/data/exttab.data'
 CREATE EXTERNAL WEB TABLE exttab_basic_error_1( i int )
-EXECUTE E'cat @abs_srcdir@/data/exttab.data' ON COORDINATOR
+EXECUTE E:'cat_exttab' ON COORDINATOR
 FORMAT 'TEXT' (DELIMITER '|')
 SEGMENT REJECT LIMIT 20;
 SELECT * FROM exttab_basic_error_1;
@@ -436,14 +449,15 @@ DROP EXTERNAL TABLE IF EXISTS exttab_basic_error_1;
 
 -- test ON MASTER still works (this syntax will be removed in GPDB8 and forward)
 CREATE EXTERNAL WEB TABLE exttab_basic_error_1( i int )
-EXECUTE E'cat @abs_srcdir@/data/exttab.data' ON MASTER
+EXECUTE E:'cat_exttab' ON MASTER
 FORMAT 'TEXT' (DELIMITER '|')
 SEGMENT REJECT LIMIT 20;
 SELECT * FROM exttab_basic_error_1;
 
 -- Some errors without exceeding reject limit
+\set exttab_few_errors_file 'file://' :hostname :abs_srcdir '/data/exttab_few_errors.data'
 CREATE EXTERNAL TABLE exttab_basic_2( i int, j text )
-LOCATION ('file://@hostname@@abs_srcdir@/data/exttab_few_errors.data') FORMAT 'TEXT' (DELIMITER '|')
+LOCATION (:'exttab_few_errors_file') FORMAT 'TEXT' (DELIMITER '|')
 LOG ERRORS SEGMENT REJECT LIMIT 10;
 -- should not error out as segment reject limit will not be reached
 SELECT * FROM exttab_basic_2 order by i;
@@ -451,8 +465,9 @@ SELECT * FROM exttab_basic_2 order by i;
 select count(*) from gp_read_error_log('exttab_basic_2');
 
 -- Errors with exceeding reject limit
+\set exttab_more_errors_file 'file://' :hostname :abs_srcdir '/data/exttab_more_errors.data'
 CREATE EXTERNAL TABLE exttab_basic_3( i int, j text )
-LOCATION ('file://@hostname@@abs_srcdir@/data/exttab_more_errors.data') FORMAT 'TEXT' (DELIMITER '|')
+LOCATION (:'exttab_more_errors_file') FORMAT 'TEXT' (DELIMITER '|')
 LOG ERRORS SEGMENT REJECT LIMIT 2;
 -- should error out as segment reject limit will be reached
 SELECT * FROM exttab_basic_3;
@@ -461,7 +476,7 @@ select count(*) > 0 from gp_read_error_log('exttab_basic_3');
 
 -- Insert into another table
 CREATE EXTERNAL TABLE exttab_basic_4( i int, j text )
-LOCATION ('file://@hostname@@abs_srcdir@/data/exttab_more_errors.data') FORMAT 'TEXT' (DELIMITER '|')
+LOCATION (:'exttab_more_errors_file') FORMAT 'TEXT' (DELIMITER '|')
 LOG ERRORS SEGMENT REJECT LIMIT 100;
 CREATE TABLE exttab_insert_1 (LIKE exttab_basic_4);
 -- Insert should go through fine
@@ -470,7 +485,7 @@ INSERT INTO exttab_insert_1 SELECT * FROM exttab_basic_4;
 select count(*) > 0 from gp_read_error_log('exttab_basic_4');
 -- Use the same error log above
 CREATE EXTERNAL TABLE exttab_basic_5( i int, j text )
-LOCATION ('file://@hostname@@abs_srcdir@/data/exttab_more_errors.data') FORMAT 'TEXT' (DELIMITER '|')
+LOCATION (:'exttab_more_errors_file') FORMAT 'TEXT' (DELIMITER '|')
 LOG ERRORS SEGMENT REJECT LIMIT 5;
 -- Insert should fail
 INSERT INTO exttab_insert_1 select * from exttab_basic_5;
@@ -480,7 +495,7 @@ SELECT count(*) from gp_read_error_log('exttab_basic_5');
 
 -- CTAS
 CREATE EXTERNAL TABLE exttab_basic_6( i int, j text )
-LOCATION ('file://@hostname@@abs_srcdir@/data/exttab_more_errors.data') FORMAT 'TEXT' (DELIMITER '|')
+LOCATION (:'exttab_more_errors_file') FORMAT 'TEXT' (DELIMITER '|')
 LOG ERRORS SEGMENT REJECT LIMIT 100;
 CREATE TABLE exttab_ctas_1 as SELECT * FROM exttab_basic_6;
 -- CTAS should go through fine
@@ -488,7 +503,7 @@ SELECT * FROM exttab_ctas_1 order by i;
 -- Error log should have six rows that were rejected
 select count(*) from gp_read_error_log('exttab_basic_6');
 CREATE EXTERNAL TABLE exttab_basic_7( i int, j text )
-LOCATION ('file://@hostname@@abs_srcdir@/data/exttab_more_errors.data') FORMAT 'TEXT' (DELIMITER '|')
+LOCATION (:'exttab_more_errors_file') FORMAT 'TEXT' (DELIMITER '|')
 LOG ERRORS SEGMENT REJECT LIMIT 5;
 -- CTAS should fail
 CREATE TABLE exttab_ctas_2 AS select * from exttab_basic_7;
@@ -499,7 +514,7 @@ SELECT count(*) from gp_read_error_log('exttab_basic_7');
 -- Drop external table gets rid off error logs
 DROP EXTERNAL TABLE IF EXISTS exttab_error_log;
 CREATE EXTERNAL TABLE exttab_error_log( i int, j text )
-LOCATION ('file://@hostname@@abs_srcdir@/data/exttab.data') FORMAT 'TEXT' (DELIMITER '|')
+LOCATION (:'exttab_file') FORMAT 'TEXT' (DELIMITER '|')
 LOG ERRORS SEGMENT REJECT LIMIT 2;
 SELECT COUNT(*) FROM exttab_error_log;
 SELECT COUNT(*) FROM gp_read_error_log('exttab_error_log');
@@ -508,7 +523,7 @@ SELECT COUNT(*) FROM gp_read_error_log('exttab_error_log');
 
 -- Insert into another table with unique constraints
 CREATE EXTERNAL TABLE exttab_constraints_1( i int, j text )
-LOCATION ('file://@hostname@@abs_srcdir@/data/exttab.data') FORMAT 'TEXT' (DELIMITER '|')
+LOCATION (:'exttab_file') FORMAT 'TEXT' (DELIMITER '|')
 LOG ERRORS SEGMENT REJECT LIMIT 10;
 -- Should not error out
 SELECT COUNT(*) FROM exttab_constraints_1;
@@ -525,11 +540,11 @@ SELECT COUNT(*) FROM gp_read_error_log('exttab_constraints_1');
 -- CTE with segment reject limit reached
 -- does not reach reject limit
 CREATE EXTERNAL TABLE exttab_cte_1( i int, j text )
-LOCATION ('file://@hostname@@abs_srcdir@/data/exttab_few_errors.data') FORMAT 'TEXT' (DELIMITER '|')
+LOCATION (:'exttab_few_errors_file') FORMAT 'TEXT' (DELIMITER '|')
 LOG ERRORS SEGMENT REJECT LIMIT 10;
 -- reaches reject limit, use the same err table
 CREATE EXTERNAL TABLE exttab_cte_2( i int, j text )
-LOCATION ('file://@hostname@@abs_srcdir@/data/exttab_more_errors.data') FORMAT 'TEXT' (DELIMITER '|')
+LOCATION (:'exttab_more_errors_file') FORMAT 'TEXT' (DELIMITER '|')
 LOG ERRORS SEGMENT REJECT LIMIT 2;
 with cte1 as
 (
@@ -554,11 +569,11 @@ SELECT  cte1.i , cte1.j FROM cte1 ORDER BY cte1.i;
 -- Check permissions with gp_truncate_error_log and gp_read_error_log
 -- does not reach reject limit
 CREATE EXTERNAL TABLE exttab_permissions_1( i int, j text )
-LOCATION ('file://@hostname@@abs_srcdir@/data/exttab_few_errors.data') FORMAT 'TEXT' (DELIMITER '|')
+LOCATION (:'exttab_few_errors_file') FORMAT 'TEXT' (DELIMITER '|')
 LOG ERRORS SEGMENT REJECT LIMIT 10;
 -- reaches reject limit
 CREATE EXTERNAL TABLE exttab_permissions_2( i int, j text )
-LOCATION ('file://@hostname@@abs_srcdir@/data/exttab_more_errors.data') FORMAT 'TEXT' (DELIMITER '|')
+LOCATION (:'exttab_more_errors_file') FORMAT 'TEXT' (DELIMITER '|')
 LOG ERRORS SEGMENT REJECT LIMIT 2;
 -- generate some error logs
 SELECT COUNT(*) FROM exttab_permissions_1;
@@ -597,7 +612,7 @@ CREATE DATABASE exttab_db WITH OWNER=exttab_user1;
 \c exttab_db
 -- generate some error logs in this db
 CREATE EXTERNAL TABLE exttab_permissions_1( i int, j text )
-LOCATION ('file://@hostname@@abs_srcdir@/data/exttab_few_errors.data') FORMAT 'TEXT' (DELIMITER '|')
+LOCATION (:'exttab_few_errors_file') FORMAT 'TEXT' (DELIMITER '|')
 LOG ERRORS SEGMENT REJECT LIMIT 10;
 SELECT COUNT(*) FROM exttab_permissions_1 e1, exttab_permissions_1 e2;
 SELECT COUNT(*) FROM gp_read_error_log('exttab_permissions_1');
@@ -622,7 +637,7 @@ CREATE ROLE errlog_exttab_user3 WITH NOSUPERUSER LOGIN;
 CREATE ROLE errlog_exttab_user4 WITH NOSUPERUSER LOGIN;
 -- generate some error logs in this db
 CREATE EXTERNAL TABLE exttab_permissions_3( i int, j text )
-LOCATION ('file://@hostname@@abs_srcdir@/data/exttab_few_errors.data') FORMAT 'TEXT' (DELIMITER '|')
+LOCATION (:'exttab_few_errors_file') FORMAT 'TEXT' (DELIMITER '|')
 LOG ERRORS SEGMENT REJECT LIMIT 10;
 SELECT COUNT(*) FROM exttab_permissions_3 e1, exttab_permissions_3 e2;
 SELECT COUNT(*) FROM gp_read_error_log('exttab_permissions_3');
@@ -649,11 +664,11 @@ SELECT * FROM gp_read_error_log('exttab_permissions_3');
 -- Subqueries reaching segment reject limit
 -- does not reach reject limit
 CREATE EXTERNAL TABLE exttab_subq_1( i int, j text )
-LOCATION ('file://@hostname@@abs_srcdir@/data/exttab_few_errors.data') FORMAT 'TEXT' (DELIMITER '|')
+LOCATION (:'exttab_few_errors_file') FORMAT 'TEXT' (DELIMITER '|')
 LOG ERRORS SEGMENT REJECT LIMIT 10;
 -- reaches reject limit, use the same err table
 CREATE EXTERNAL TABLE exttab_subq_2( i int, j text )
-LOCATION ('file://@hostname@@abs_srcdir@/data/exttab_more_errors.data') FORMAT 'TEXT' (DELIMITER '|')
+LOCATION (:'exttab_more_errors_file') FORMAT 'TEXT' (DELIMITER '|')
 LOG ERRORS SEGMENT REJECT LIMIT 2;
 SELECT sum(distinct e1.i), sum(distinct e2.i), e1.j FROM
 (SELECT i, j FROM exttab_subq_1 WHERE i < 5 ) e1,
@@ -733,11 +748,12 @@ SELECT * FROM gp_read_error_log('exttab_subq_2')
 -- TRUNCATE / delete / write to error logs within subtransactions
 -- does not reach reject limit
 CREATE EXTERNAL TABLE exttab_subtxs_1( i int, j text )
-LOCATION ('file://@hostname@@abs_srcdir@/data/exttab_few_errors.data') FORMAT 'TEXT' (DELIMITER '|')
+LOCATION (:'exttab_few_errors_file') FORMAT 'TEXT' (DELIMITER '|')
 LOG ERRORS SEGMENT REJECT LIMIT 10;
 -- reaches reject limit, use the same err table
+\set exttab_more_errors_file2 'file://' :hostname ':' :abs_srcdir '/data/exttab_more_errors.data'
 CREATE EXTERNAL TABLE exttab_subtxs_2( i int, j text )
-LOCATION ('file://@hostname@:@abs_srcdir@/data/exttab_more_errors.data') FORMAT 'TEXT' (DELIMITER '|')
+LOCATION (:'exttab_more_errors_file2') FORMAT 'TEXT' (DELIMITER '|')
 LOG ERRORS SEGMENT REJECT LIMIT 2;
 -- Populate error logs before transaction
 SELECT e1.i, e2.j FROM
@@ -804,11 +820,11 @@ SELECT * FROM gp_read_error_log('exttab_subtxs_2')
 -- TRUNCATE error logs within tx , abort transaction
 -- does not reach reject limit
 CREATE EXTERNAL TABLE exttab_txs_1( i int, j text )
-LOCATION ('file://@hostname@@abs_srcdir@/data/exttab_few_errors.data') FORMAT 'TEXT' (DELIMITER '|')
+LOCATION (:'exttab_few_errors_file') FORMAT 'TEXT' (DELIMITER '|')
 LOG ERRORS SEGMENT REJECT LIMIT 10;
 -- reaches reject limit, use the same err table
 CREATE EXTERNAL TABLE exttab_txs_2( i int, j text )
-LOCATION ('file://@hostname@@abs_srcdir@/data/exttab_more_errors.data') FORMAT 'TEXT' (DELIMITER '|')
+LOCATION (:'exttab_more_errors_file') FORMAT 'TEXT' (DELIMITER '|')
 LOG ERRORS SEGMENT REJECT LIMIT 2;
 -- Populate error log before transaction
 SELECT e1.i, e2.j FROM
@@ -883,11 +899,11 @@ BEGIN;
 -- create an external table that will reach segment reject limit
 -- reaches reject limit
 CREATE EXTERNAL TABLE exttab_txs_3( i int, j text )
-LOCATION ('file://@hostname@@abs_srcdir@/data/exttab_more_errors.data') FORMAT 'TEXT' (DELIMITER '|')
+LOCATION (:'exttab_more_errors_file') FORMAT 'TEXT' (DELIMITER '|')
 LOG ERRORS SEGMENT REJECT LIMIT 2;
 -- new error log, within segment reject limit
 CREATE EXTERNAL TABLE exttab_txs_4( i int, j text )
-LOCATION ('file://@hostname@@abs_srcdir@/data/exttab_few_errors.data') FORMAT 'TEXT' (DELIMITER '|')
+LOCATION (:'exttab_few_errors_file') FORMAT 'TEXT' (DELIMITER '|')
 LOG ERRORS SEGMENT REJECT LIMIT 10;
 SELECT e1.i, e2.j FROM
 (SELECT i, j FROM exttab_txs_4 WHERE i < 5 ) e1,
@@ -911,11 +927,11 @@ SELECT count(*) FROM exttab_txs_4;
 -- UDFS with segment reject limit reached
 -- does not reach reject limit
 CREATE EXTERNAL TABLE exttab_udfs_1( i int, j text )
-LOCATION ('file://@hostname@@abs_srcdir@/data/exttab_few_errors.data') FORMAT 'TEXT' (DELIMITER '|')
+LOCATION (:'exttab_few_errors_file') FORMAT 'TEXT' (DELIMITER '|')
 LOG ERRORS SEGMENT REJECT LIMIT 10;
 -- reaches reject limit, use the same err table
 CREATE EXTERNAL TABLE exttab_udfs_2( i int, j text )
-LOCATION ('file://@hostname@@abs_srcdir@/data/exttab_more_errors.data') FORMAT 'TEXT' (DELIMITER '|')
+LOCATION (:'exttab_more_errors_file') FORMAT 'TEXT' (DELIMITER '|')
 LOG ERRORS SEGMENT REJECT LIMIT 2;
 CREATE OR REPLACE FUNCTION exttab_udfs_func1 ()
 RETURNS boolean
@@ -1044,11 +1060,11 @@ SELECT * FROM exttab_udfs_insert_2;
 DROP EXTERNAL TABLE IF EXISTS exttab_union_1;
 DROP EXTERNAL TABLE IF EXISTS exttab_union_2;
 CREATE EXTERNAL TABLE exttab_union_1( i int, j text )
-LOCATION ('file://@hostname@@abs_srcdir@/data/exttab_few_errors.data') FORMAT 'TEXT' (DELIMITER '|')
+LOCATION (:'exttab_few_errors_file') FORMAT 'TEXT' (DELIMITER '|')
 LOG ERRORS SEGMENT REJECT LIMIT 10;
 -- reaches reject limit
 CREATE EXTERNAL TABLE exttab_union_2( i int, j text )
-LOCATION ('file://@hostname@@abs_srcdir@/data/exttab_more_errors.data') FORMAT 'TEXT' (DELIMITER '|')
+LOCATION (:'exttab_more_errors_file') FORMAT 'TEXT' (DELIMITER '|')
 LOG ERRORS SEGMENT REJECT LIMIT 2;
 
 -- Should error out as exttab_union_2 would reach it's reject limit
@@ -1101,11 +1117,11 @@ DROP EXTERNAL TABLE IF EXISTS exttab_views_1 CASCADE;
 DROP EXTERNAL TABLE IF EXISTS exttab_views_2 CASCADE;
 -- does not reach reject limit
 CREATE EXTERNAL TABLE exttab_views_1( i int, j text )
-LOCATION ('file://@hostname@@abs_srcdir@/data/exttab_few_errors.data') FORMAT 'TEXT' (DELIMITER '|')
+LOCATION (:'exttab_few_errors_file') FORMAT 'TEXT' (DELIMITER '|')
 LOG ERRORS SEGMENT REJECT LIMIT 10;
 -- reaches reject limit, use the same err table
 CREATE EXTERNAL TABLE exttab_views_2( i int, j text )
-LOCATION ('file://@hostname@@abs_srcdir@/data/exttab_more_errors.data') FORMAT 'TEXT' (DELIMITER '|')
+LOCATION (:'exttab_more_errors_file') FORMAT 'TEXT' (DELIMITER '|')
 LOG ERRORS SEGMENT REJECT LIMIT 2;
 DROP VIEW IF EXISTS exttab_views_3;
 CREATE VIEW exttab_views_3 as
@@ -1178,11 +1194,11 @@ DROP EXTERNAL TABLE IF EXISTS exttab_windows_1;
 DROP EXTERNAL TABLE IF EXISTS exttab_windows_2;
 -- does not reach reject limit
 CREATE EXTERNAL TABLE exttab_windows_1( i int, j text )
-LOCATION ('file://@hostname@@abs_srcdir@/data/exttab_few_errors.data') FORMAT 'TEXT' (DELIMITER '|')
+LOCATION (:'exttab_few_errors_file') FORMAT 'TEXT' (DELIMITER '|')
 LOG ERRORS SEGMENT REJECT LIMIT 10;
 -- reaches reject limit
 CREATE EXTERNAL TABLE exttab_windows_2( i int, j text )
-LOCATION ('file://@hostname@@abs_srcdir@/data/exttab_more_errors.data') FORMAT 'TEXT' (DELIMITER '|')
+LOCATION (:'exttab_more_errors_file') FORMAT 'TEXT' (DELIMITER '|')
 LOG ERRORS SEGMENT REJECT LIMIT 2;
 -- without reaching segment reject limit
 with cte1 as(
@@ -1260,11 +1276,11 @@ DROP EXTERNAL TABLE IF EXISTS exttab_limit_1 cascade;
 DROP EXTERNAL TABLE IF EXISTS exttab_limit_2 cascade;
 -- does not reach reject limit
 CREATE EXTERNAL TABLE exttab_limit_1( i int, j text )
-LOCATION ('file://@hostname@@abs_srcdir@/data/exttab_few_errors.data') FORMAT 'TEXT' (DELIMITER '|')
+LOCATION (:'exttab_few_errors_file') FORMAT 'TEXT' (DELIMITER '|')
 LOG ERRORS SEGMENT REJECT LIMIT 10;
 -- reaches reject limit, use the same err table
 CREATE EXTERNAL TABLE exttab_limit_2( i int, j text )
-LOCATION ('file://@hostname@@abs_srcdir@/data/exttab_more_errors.data') FORMAT 'TEXT' (DELIMITER '|')
+LOCATION (:'exttab_more_errors_file') FORMAT 'TEXT' (DELIMITER '|')
 LOG ERRORS SEGMENT REJECT LIMIT 2;
 
 -- Note that even though we use exttab_limit_2 here , the LIMIT 3 will not throw a segment reject limit error
@@ -1353,10 +1369,11 @@ SELECT * FROM gp_read_error_log('exttab_limit_2')
 -- this guc, the database continues to load the data.
 
 -- default should be 1000
+\set exttab_first_errors_file 'file://' :hostname :abs_srcdir '/data/exttab_first_errors.data'
 SHOW gp_initial_bad_row_limit;
 DROP EXTERNAL TABLE IF EXISTS exttab_first_reject_limit_1 cascade;
 CREATE EXTERNAL TABLE exttab_first_reject_limit_1( i int, j text )
-LOCATION ('file://@hostname@@abs_srcdir@/data/exttab_first_errors.data') FORMAT 'TEXT' (DELIMITER '|')
+LOCATION (:'exttab_first_errors_file') FORMAT 'TEXT' (DELIMITER '|')
 LOG ERRORS SEGMENT REJECT LIMIT 20000;
 -- should fail with an appropriate error message
 SELECT COUNT(*) FROM exttab_first_reject_limit_1;
@@ -1369,7 +1386,7 @@ SELECT COUNT(*) FROM gp_read_error_log('exttab_first_reject_limit_1');
 -- first segment reject limit should be checked before segment reject limit
 DROP EXTERNAL TABLE IF EXISTS exttab_first_reject_limit_2;
 CREATE EXTERNAL TABLE exttab_first_reject_limit_2( i int, j text )
-LOCATION ('file://@hostname@@abs_srcdir@/data/exttab_first_errors.data') FORMAT 'TEXT' (DELIMITER '|')
+LOCATION (:'exttab_first_errors_file') FORMAT 'TEXT' (DELIMITER '|')
 LOG ERRORS SEGMENT REJECT LIMIT 500;
 -- should report an error saying first rows were rejected
 SET gp_initial_bad_row_limit = 2;
@@ -1389,7 +1406,7 @@ SELECT COUNT(*) > 0 from gp_read_error_log('exttab_first_reject_limit_2');
 DROP EXTERNAL TABLE IF EXISTS exttab_heap_join_1;
 -- does not reach reject limit
 CREATE EXTERNAL TABLE exttab_heap_join_1( i int, j text )
-LOCATION ('file://@hostname@@abs_srcdir@/data/exttab_few_errors.data') FORMAT 'TEXT' (DELIMITER '|')
+LOCATION (:'exttab_few_errors_file') FORMAT 'TEXT' (DELIMITER '|')
 LOG ERRORS SEGMENT REJECT LIMIT 10;
 DROP TABLE IF EXISTS test_ext_heap_join;
 CREATE TABLE test_ext_heap_join( i int, j text);
@@ -1407,7 +1424,7 @@ DROP EXTERNAL TABLE IF EXISTS exttab_with_on_coordinator;
 
 -- Create external table with on clause
 CREATE EXTERNAL TABLE exttab_with_on_coordinator( i int, j text )
-LOCATION ('file://@hostname@@abs_srcdir@/data/exttab_few_errors.data') ON COORDINATOR FORMAT 'TEXT' (DELIMITER '|');
+LOCATION (:'exttab_few_errors_file') ON COORDINATOR FORMAT 'TEXT' (DELIMITER '|');
 
 SELECT * FROM exttab_with_on_coordinator;
 
@@ -1421,15 +1438,15 @@ DROP EXTERNAL TABLE IF EXISTS exttab_with_options;
 
 -- Create external table with 'OPTIONS'
 CREATE EXTERNAL TABLE exttab_with_option_empty( i int, j text )
-LOCATION ('file://@hostname@@abs_srcdir@/data/exttab_few_errors.data') FORMAT 'TEXT' (DELIMITER '|')
+LOCATION (:'exttab_few_errors_file') FORMAT 'TEXT' (DELIMITER '|')
 OPTIONS ();
 
 CREATE EXTERNAL TABLE exttab_with_option_1( i int, j text )
-LOCATION ('file://@hostname@@abs_srcdir@/data/exttab_few_errors.data') FORMAT 'TEXT' (DELIMITER '|')
+LOCATION (:'exttab_few_errors_file') FORMAT 'TEXT' (DELIMITER '|')
 OPTIONS (hello 'world');
 
 CREATE EXTERNAL TABLE exttab_with_options( i int, j text )
-LOCATION ('file://@hostname@@abs_srcdir@/data/exttab_few_errors.data') FORMAT 'TEXT' (DELIMITER '|')
+LOCATION (:'exttab_few_errors_file') FORMAT 'TEXT' (DELIMITER '|')
 OPTIONS (hello 'world', bonjour 'again', nihao 'again and again' );
 
 \d exttab_with_options
@@ -1449,21 +1466,27 @@ DROP EXTERNAL TABLE IF EXISTS tbl_wet_csv5;
 -- end_ignore
 
 -- Create writable external table with AS for DELIMITER , NULL, ESCAPE
-CREATE WRITABLE EXTERNAL WEB TABLE tbl_wet_csv1 (a int, b text) EXECUTE 'cat > @abs_srcdir@/data/wet_csv1.tbl' FORMAT 'CSV' (DELIMITER AS '|' NULL AS 'null' ESCAPE AS ' ');
+\set wet_csv1_file 'cat > ' :abs_srcdir '/data/wet_csv1.tbl'
+CREATE WRITABLE EXTERNAL WEB TABLE tbl_wet_csv1 (a int, b text) EXECUTE :'wet_csv1_file' FORMAT 'CSV' (DELIMITER AS '|' NULL AS 'null' ESCAPE AS ' ');
 
 -- Create writable external table without AS for DELIMITER , NULL, ESCAPE
-CREATE WRITABLE EXTERNAL WEB TABLE tbl_wet_csv2 (a int, b text) EXECUTE 'cat > @abs_srcdir@/data/wet_csv2.tbl' FORMAT 'CSV' (DELIMITER AS ',' NULL 'null' ESCAPE ' ');
+\set wet_csv2_file 'cat > ' :abs_srcdir '/data/wet_csv2.tbl'
+CREATE WRITABLE EXTERNAL WEB TABLE tbl_wet_csv2 (a int, b text) EXECUTE :'wet_csv2_file' FORMAT 'CSV' (DELIMITER AS ',' NULL 'null' ESCAPE ' ');
 
 -- Create writable external table with double quotes
-CREATE WRITABLE EXTERNAL WEB TABLE tbl_wet_csv3 (a int, b text) EXECUTE 'cat > @abs_srcdir@/data/wet_csv3.tbl' FORMAT 'CSV' (DELIMITER AS '|' NULL AS 'null' ESCAPE AS ' '  QUOTE AS '"');
+\set wet_csv3_file 'cat > ' :abs_srcdir '/data/wet_csv3.tbl'
+CREATE WRITABLE EXTERNAL WEB TABLE tbl_wet_csv3 (a int, b text) EXECUTE :'wet_csv3_file' FORMAT 'CSV' (DELIMITER AS '|' NULL AS 'null' ESCAPE AS ' '  QUOTE AS '"');
 
 -- Create writable external table with single quotes
-CREATE WRITABLE EXTERNAL WEB TABLE tbl_wet_csv4 (a int, b text) EXECUTE 'cat > @abs_srcdir@/data/wet_csv4.tbl' FORMAT 'CSV' (DELIMITER AS '|' NULL AS 'null' ESCAPE AS ' '  QUOTE AS '''');
+\set wet_csv4_file 'cat > ' :abs_srcdir '/data/wet_csv4.tbl'
+CREATE WRITABLE EXTERNAL WEB TABLE tbl_wet_csv4 (a int, b text) EXECUTE :'wet_csv4_file' FORMAT 'CSV' (DELIMITER AS '|' NULL AS 'null' ESCAPE AS ' '  QUOTE AS '''');
 
 -- Create writable external table with force quote
-CREATE WRITABLE EXTERNAL WEB TABLE tbl_wet_csv5 (a int, b text) EXECUTE 'cat > @abs_srcdir@/data/wet_csv5.tbl' FORMAT 'CSV' (DELIMITER AS '|' NULL AS 'null' ESCAPE AS ' '  QUOTE AS '"' FORCE QUOTE b);
+\set wet_csv5_file 'cat > ' :abs_srcdir '/data/wet_csv5.tbl'
+CREATE WRITABLE EXTERNAL WEB TABLE tbl_wet_csv5 (a int, b text) EXECUTE :'wet_csv5_file' FORMAT 'CSV' (DELIMITER AS '|' NULL AS 'null' ESCAPE AS ' '  QUOTE AS '"' FORCE QUOTE b);
 
-CREATE WRITABLE EXTERNAL WEB TABLE tbl_wet_csv6 (a int, b text, c text) EXECUTE 'cat > @abs_srcdir@/data/wet_csv6.tbl' FORMAT 'CSV' (DELIMITER AS '|' NULL AS 'null' ESCAPE AS ' ' QUOTE AS '"' FORCE QUOTE *);
+\set wet_csv6_file 'cat > ' :abs_srcdir '/data/wet_csv6.tbl'   
+CREATE WRITABLE EXTERNAL WEB TABLE tbl_wet_csv6 (a int, b text, c text) EXECUTE :'wet_csv6_file' FORMAT 'CSV' (DELIMITER AS '|' NULL AS 'null' ESCAPE AS ' ' QUOTE AS '"' FORCE QUOTE *);
 
 INSERT INTO tbl_wet_csv1 VALUES (generate_series(1,256), 'test_1');
 INSERT INTO tbl_wet_csv2 VALUES (generate_series(1,256), 'test_2');
@@ -1486,13 +1509,16 @@ DROP EXTERNAL TABLE IF EXISTS tbl_wet_text3;
 -- end_ignore
 
 -- Create writable external table with AS for DELIMITER , NULL, ESCAPE
-CREATE WRITABLE EXTERNAL WEB TABLE tbl_wet_text1 (a int, b text) EXECUTE 'cat > @abs_srcdir@/data/wet_text1.tbl' FORMAT 'TEXT' (DELIMITER AS '|' NULL AS 'null' ESCAPE AS ' ');
+\set wet_text1_file 'cat > ' :abs_srcdir '/data/wet_text1.tbl'
+CREATE WRITABLE EXTERNAL WEB TABLE tbl_wet_text1 (a int, b text) EXECUTE :'wet_text1_file' FORMAT 'TEXT' (DELIMITER AS '|' NULL AS 'null' ESCAPE AS ' ');
 
 -- Create writable external table without AS for DELIMITER , NULL, ESCAPE
-CREATE WRITABLE EXTERNAL WEB TABLE tbl_wet_text2 (a int, b text) EXECUTE 'cat > @abs_srcdir@/data/wet_text2.tbl' FORMAT 'TEXT' (DELIMITER AS ',' NULL 'null' ESCAPE ' ');
+\set wet_text2_file 'cat > ' :abs_srcdir '/data/wet_text2.tbl'
+CREATE WRITABLE EXTERNAL WEB TABLE tbl_wet_text2 (a int, b text) EXECUTE :'wet_text2_file' FORMAT 'TEXT' (DELIMITER AS ',' NULL 'null' ESCAPE ' ');
 
 -- Create writable external table with ESCAPE OFF
-CREATE WRITABLE EXTERNAL WEB TABLE tbl_wet_text3 (a int, b text) EXECUTE 'cat > @abs_srcdir@/data/wet_text3.tbl' FORMAT 'TEXT' (DELIMITER AS '|' NULL AS 'null' ESCAPE 'OFF');
+\set wet_text3_file 'cat > ' :abs_srcdir '/data/wet_text3.tbl'
+CREATE WRITABLE EXTERNAL WEB TABLE tbl_wet_text3 (a int, b text) EXECUTE :'wet_text3_file' FORMAT 'TEXT' (DELIMITER AS '|' NULL AS 'null' ESCAPE 'OFF');
 
 INSERT INTO tbl_wet_text1 VALUES (generate_series(1,256), 'test_1');
 INSERT INTO tbl_wet_text2 VALUES (generate_series(1,256), 'test_2');
@@ -1513,9 +1539,12 @@ DROP EXTERNAL TABLE IF EXISTS tbl_wet_syntax3;
 CREATE TABLE test_dp1 (a int, b text) DISTRIBUTED RANDOMLY;
 CREATE TABLE test_dp2 (a int, b text) DISTRIBUTED BY (b);
 
-CREATE WRITABLE EXTERNAL WEB TABLE tbl_wet_syntax1 (like test_dp1) EXECUTE 'cat > @abs_srcdir@/data/wet_syntax1.tbl' FORMAT 'TEXT' (DELIMITER '|' ) DISTRIBUTED BY (a);
-CREATE WRITABLE EXTERNAL WEB TABLE tbl_wet_syntax2 (like test_dp2) EXECUTE 'cat > @abs_srcdir@/data/wet_syntax2.tbl' FORMAT 'TEXT' (DELIMITER '|' ) DISTRIBUTED BY (a);
-CREATE WRITABLE EXTERNAL WEB TABLE tbl_wet_syntax3 (like test_dp2) EXECUTE 'cat > @abs_srcdir@/data/wet_syntax3.tbl' FORMAT 'TEXT' (DELIMITER '|' ) DISTRIBUTED RANDOMLY;
+\set wet_syntax1_file 'cat > ' :abs_srcdir '/data/wet_syntax1.tbl'
+CREATE WRITABLE EXTERNAL WEB TABLE tbl_wet_syntax1 (like test_dp1) EXECUTE :'wet_syntax1_file' FORMAT 'TEXT' (DELIMITER '|' ) DISTRIBUTED BY (a);
+\set wet_syntax2_file 'cat > ' :abs_srcdir '/data/wet_syntax2.tbl'
+CREATE WRITABLE EXTERNAL WEB TABLE tbl_wet_syntax2 (like test_dp2) EXECUTE :'wet_syntax2_file' FORMAT 'TEXT' (DELIMITER '|' ) DISTRIBUTED BY (a);
+\set wet_syntax3_file 'cat > ' :abs_srcdir '/data/wet_syntax3.tbl'
+CREATE WRITABLE EXTERNAL WEB TABLE tbl_wet_syntax3 (like test_dp2) EXECUTE :'wet_syntax3_file' FORMAT 'TEXT' (DELIMITER '|' ) DISTRIBUTED RANDOMLY;
 
 INSERT INTO tbl_wet_syntax1 VALUES (generate_series(1,256), 'test_1');
 INSERT INTO tbl_wet_syntax2 VALUES (generate_series(1,256), 'test_2');
@@ -1538,7 +1567,8 @@ INSERT INTO table_execute VALUES (100, 'name_1');
 INSERT INTO table_execute VALUES (200, 'name_2');
 INSERT INTO table_execute VALUES (300, 'name_3');
 
-CREATE WRITABLE EXTERNAL WEB TABLE tbl_wet_execute (like table_execute) EXECUTE 'cat > @abs_srcdir@/data/wet_execute.tbl' FORMAT 'TEXT' (DELIMITER '|' );
+\set wet_execute_file 'cat > ' :abs_srcdir '/data/wet_execute.tbl'
+CREATE WRITABLE EXTERNAL WEB TABLE tbl_wet_execute (like table_execute) EXECUTE :'wet_execute_file' FORMAT 'TEXT' (DELIMITER '|' );
 
 INSERT INTO tbl_wet_execute SELECT * from table_execute ;
 
@@ -1571,8 +1601,9 @@ DROP PROTOCOL if exists demoprot;
 DROP PROTOCOL if exists demoprot2;
 
 -- create external protocol with a serial type column
+\set serial_file 'file://' :hostname :abs_srcdir '/data/no/such/place/serial.tbl'
 CREATE EXTERNAL TABLE SERIAL (a serial, x text)
-LOCATION ('file://@hostname@@abs_srcdir@/data/no/such/place/serial.tbl')
+LOCATION (:'serial_file')
 FORMAT 'csv';
 
 -- drop temp external table
@@ -1580,7 +1611,7 @@ DROP EXTERNAL TABLE IF EXISTS serial;
 
 -- External table query within plpgSQL function get error
 CREATE EXTERNAL TABLE exttab_error_context_callback(c1 int, c2 int)
-LOCATION ('file://@hostname@@abs_srcdir@/data/exttab.data') FORMAT 'TEXT';
+LOCATION (:'exttab_file') FORMAT 'TEXT';
 
 CREATE or REPLACE FUNCTION exttab_error_context_callback_func()
 RETURNS SETOF INTEGER
@@ -1610,17 +1641,18 @@ DROP EXTERNAL TABLE exttab_error_context_callback;
 -- --------------------------------------
 -- Encoding
 -- --------------------------------------
-
+\set latin1_encoding_file 'file://' :hostname :abs_srcdir '/data/latin1_encoding.csv'
 CREATE EXTERNAL TABLE encoding_issue (num int, word text)
-LOCATION ('file://@hostname@@abs_srcdir@/data/latin1_encoding.csv')
+LOCATION (:'latin1_encoding_file')
 FORMAT 'CSV' ENCODING 'LATIN1';
 
 SELECT * FROM encoding_issue WHERE num = 4;
 
 COPY (SELECT * FROM encoding_issue) TO '/tmp/latin1_encoding.csv' WITH (FORMAT 'csv', ENCODING 'LATIN1');
 
+\set latin1_encoding_file2 'file://' :hostname '/tmp/latin1_encoding.csv'
 CREATE EXTERNAL TABLE encoding_issue2 (num int, word text)
-LOCATION ('file://@hostname@/tmp/latin1_encoding.csv')
+LOCATION (:'latin1_encoding_file2')
 FORMAT 'CSV' ENCODING 'LATIN1';
 
 SELECT * FROM encoding_issue2 WHERE num = 5;
@@ -3502,6 +3534,7 @@ line_delim=E'\n'
 drop external table large_custom_format_definitions;
 
 -- Incomplete external data file
+\set incomplete_formatter_data 'file://' :hostname :abs_srcdir '/data/incomplete_formatter_data.tbl'
 CREATE OR REPLACE FUNCTION gpformatter() RETURNS record
 AS '$libdir/gpformatter.so', 'formatter_import'
 LANGUAGE C STABLE;
@@ -3510,7 +3543,7 @@ CREATE READABLE EXTERNAL TABLE tbl_ext_gpformatter (
 d1 text
 )
 LOCATION (
-  'file://@hostname@@abs_srcdir@/data/incomplete_formatter_data.tbl'
+  :'incomplete_formatter_data'
 )
 FORMAT 'CUSTOM' (formatter='gpformatter');
 
@@ -3639,7 +3672,8 @@ DROP TABLE test_part_integrity;
 CREATE WRITABLE EXTERNAL WEB TABLE ext_dist_repl(a int, b int) EXECUTE 'some command' FORMAT 'TEXT' DISTRIBUTED REPLICATED;
 
 -- Testing altering the distribution policy of external tables.
-CREATE WRITABLE EXTERNAL WEB TABLE ext_w_dist(a int, b int) EXECUTE 'cat > @abs_srcdir@/data/ext_w_dist.tbl' FORMAT 'TEXT' (DELIMITER AS '|' NULL AS 'null' ESCAPE AS ' ') DISTRIBUTED BY (a);
+\set ext_w_dist_file 'cat > ' :abs_srcdir '/data/ext_w_dist.tbl'
+CREATE WRITABLE EXTERNAL WEB TABLE ext_w_dist(a int, b int) EXECUTE :'ext_w_dist_file' FORMAT 'TEXT' (DELIMITER AS '|' NULL AS 'null' ESCAPE AS ' ') DISTRIBUTED BY (a);
 ALTER TABLE ext_w_dist SET WITH (reorganize=true); -- should error out if forcing reorganize
 SELECT policytype, distkey FROM gp_distribution_policy WHERE localoid = 'ext_w_dist'::regclass;
 ALTER TABLE ext_w_dist SET DISTRIBUTED BY (b);
@@ -3654,8 +3688,9 @@ ALTER TABLE ext_r_dist SET DISTRIBUTED BY (a); -- should error out altering read
 -- Testing external table as the partition child.
 CREATE TABLE part_root(a int) PARTITION BY RANGE(a);
 CREATE TABLE part_child (LIKE part_root);
-CREATE EXTERNAL WEB TABLE part_ext_r(a int) EXECUTE 'cat > @abs_srcdir@/data/part_ext.tbl' FORMAT 'TEXT' (DELIMITER AS '|' NULL AS 'null' ESCAPE AS ' ');
-CREATE WRITABLE EXTERNAL WEB TABLE part_ext_w(a int, b int) EXECUTE 'cat > @abs_srcdir@/data/part_ext.tbl' FORMAT 'TEXT' (DELIMITER AS '|' NULL AS 'null' ESCAPE AS ' ') DISTRIBUTED BY (a);
+\set part_ext_file 'cat > ' :abs_srcdir '/data/part_ext.tbl'
+CREATE EXTERNAL WEB TABLE part_ext_r(a int) EXECUTE :'part_ext_file' FORMAT 'TEXT' (DELIMITER AS '|' NULL AS 'null' ESCAPE AS ' ');
+CREATE WRITABLE EXTERNAL WEB TABLE part_ext_w(a int, b int) EXECUTE :'part_ext_file' FORMAT 'TEXT' (DELIMITER AS '|' NULL AS 'null' ESCAPE AS ' ') DISTRIBUTED BY (a);
 ALTER TABLE part_root ATTACH PARTITION part_child FOR VALUES FROM (0) TO (10);
 ALTER TABLE part_root ATTACH PARTITION part_ext_r FOR VALUES FROM (10) TO (20);
 
@@ -3670,14 +3705,17 @@ SELECT policytype, distkey FROM gp_distribution_policy WHERE localoid = 'part_ex
 DROP TABLE part_root;
 
 -- check logerrors value of pg_exttable
+\set ext_fasle_file 'file://' :hostname :abs_srcdir '/data/ext_fasle.tbl'
+\set ext_true_file 'file://' :hostname :abs_srcdir '/data/ext_true.tbl'
+\set ext_persistently_file 'file://' :hostname :abs_srcdir '/data/ext_persistently.tbl'
 CREATE EXTERNAL TABLE ext_false (c INT)
-location ('file://@hostname@@abs_srcdir@/data/ext_fasle.tbl' )
+location (:'ext_fasle_file' )
 FORMAT 'text' (delimiter '|');
 CREATE EXTERNAL TABLE ext_true (c INT)
-location ('file://@hostname@@abs_srcdir@/data/ext_true.tbl' )
+location (:'ext_true_file' )
 FORMAT 'text' (delimiter '|') LOG ERRORS SEGMENT REJECT LIMIT 100;
 CREATE EXTERNAL TABLE ext_persistently (c INT)
-location ('file://@hostname@@abs_srcdir@/data/ext_persistently.tbl' )
+location (:'ext_persistently_file' )
 FORMAT 'text' (delimiter '|') LOG ERRORS PERSISTENTLY SEGMENT REJECT LIMIT 100;
 
 SELECT logerrors, options from pg_exttable a, pg_class b where a.reloid = b.oid and b.relname = 'ext_false';
