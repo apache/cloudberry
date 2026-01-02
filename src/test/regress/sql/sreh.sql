@@ -130,8 +130,9 @@ DROP TABLE sreh_constr;
 -- External Tables 
 -- ###########################################################
 \getenv binddir PG_BINDDIR
+\set gpfdist_sreh_start_e '((' :binddir '/gpfdist -p 8080 -d ' :abs_srcdir '/data  </dev/null >/dev/null 2>&1 &); for i in `seq 1 30`; do curl 127.0.0.1:8080 >/dev/null 2>&1 && break; sleep 1; done; echo "starting...") '
 CREATE EXTERNAL WEB TABLE gpfdist_sreh_start (x text)
-execute E'(('||:'binddir'||'/gpfdist -p 8080 -d '||:'abs_srcdir'||'/data  </dev/null >/dev/null 2>&1 &); for i in `seq 1 30`; do curl 127.0.0.1:8080 >/dev/null 2>&1 && break; sleep 1; done; echo "starting...") '
+execute E:'gpfdist_sreh_start_e'
 on MASTER
 FORMAT 'text' (delimiter '|');
 
@@ -150,8 +151,9 @@ CREATE TABLE sreh_target(a int, b int, c int) distributed by(a);
 -- reject limit only
 --
 \getenv hostname PG_HOSTNAME
+\set bad_data1 'gpfdist://' :hostname ':8080/bad_data1.data'
 CREATE EXTERNAL TABLE sreh_ext(a int, b int, c int)
-LOCATION ('gpfdist://'||'@hostname@'||':8080/bad_data1.data' )
+LOCATION (:'bad_data1' )
 FORMAT 'text' (delimiter '|')
 SEGMENT REJECT LIMIT 10000;
 
@@ -165,7 +167,7 @@ DROP EXTERNAL TABLE sreh_ext;
 -- reject limit only - low value that gets reached
 --
 CREATE EXTERNAL TABLE sreh_ext(a int, b int, c int)
-LOCATION ('gpfdist://@hostname@:8080/bad_data1.data' )
+LOCATION (:'bad_data1' )
 FORMAT 'text' (delimiter '|')
 SEGMENT REJECT LIMIT 2;
 
@@ -179,18 +181,19 @@ DROP EXTERNAL TABLE sreh_ext;
 -- error logs
 --
 CREATE EXTERNAL TABLE sreh_ext_err_tbl(a int, b int, c int)
-LOCATION ('gpfdist://@hostname@:8080/bad_data1.data' )
+LOCATION (:'bad_data1' )
 FORMAT 'text' (delimiter '|')
 LOG ERRORS INTO WHATEVER
 SEGMENT REJECT LIMIT 1000;
 
 SELECT * FROM sreh_ext_err_tbl ORDER BY a;
 -- Verify the fields that we easily can.
+\set bad_data1_like 'gpfdist://' :hostname ':8080/bad_data1.data [%]'
 WITH error_log AS (SELECT * FROM gp_read_error_log('sreh_ext_err_tbl'))
-  SELECT relname, filename LIKE 'gpfdist://@hostname@:8080/bad_data1.data [%]' as filename_ok, linenum, errmsg from error_log;
+  SELECT relname, filename LIKE :'bad_data1_like' as filename_ok, linenum, errmsg from error_log;
 
 CREATE EXTERNAL TABLE sreh_ext(a int, b int, c int)
-LOCATION ('gpfdist://@hostname@:8080/bad_data1.data' )
+LOCATION (:'bad_data1' )
 FORMAT 'text' (delimiter '|')
 LOG ERRORS
 SEGMENT REJECT LIMIT 1000;
@@ -219,7 +222,7 @@ DROP EXTERNAL TABLE sreh_ext_err_tbl;
 --
 CREATE TABLE sreh_constr(a int, b int, c int check (c < 10));
 CREATE EXTERNAL TABLE sreh_ext(a int, b int, c int)
-LOCATION ('gpfdist://@hostname@:8080/bad_data1.data' )
+LOCATION (:'bad_data1' )
 FORMAT 'text' (delimiter '|')
 LOG ERRORS
 SEGMENT REJECT LIMIT 1000;
@@ -237,15 +240,16 @@ SELECT COUNT(*) FROM sreh_constr; -- should be empty
 -- should always be the same regardless of number of QE's in the system.
 --
 set gp_reject_percent_threshold = 100;
+\set bad_data3 'gpfdist://' :hostname ':8080/bad_data3.data'
 CREATE EXTERNAL TABLE sreh_ext_10percent(a int, b int, c int)
-LOCATION ('gpfdist://@hostname@:8080/bad_data3.data' )
+LOCATION (:'bad_data3' )
 FORMAT 'text' (delimiter '|')
 SEGMENT REJECT LIMIT 10 PERCENT;
 
 SELECT count(*) FROM sreh_ext_10percent; -- pass
 
 CREATE EXTERNAL TABLE sreh_ext_2percent(a int, b int, c int)
-LOCATION ('gpfdist://@hostname@:8080/bad_data3.data' )
+LOCATION (:'bad_data3' )
 FORMAT 'text' (delimiter '|')
 SEGMENT REJECT LIMIT 2 PERCENT;
 
@@ -258,7 +262,7 @@ set gp_reject_percent_threshold = 10;
 SELECT count(*) FROM sreh_ext_10percent; -- fail
 
 CREATE EXTERNAL TABLE sreh_ext_20percent(a int, b int, c int)
-LOCATION ('gpfdist://@hostname@:8080/bad_data3.data' )
+LOCATION (:'bad_data3' )
 FORMAT 'text' (delimiter '|')
 SEGMENT REJECT LIMIT 20 PERCENT;
 

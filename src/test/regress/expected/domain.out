@@ -476,7 +476,7 @@ explain (verbose, costs off)
  Update on public.dcomptable
    ->  Explicit Redistribute Motion 3:3  (slice1; segments: 3)
          Output: (((d1[1].r := (d1[1].r - '1'::double precision))[1].i := (d1[1].i + '1'::double precision))::dcomptypea), ctid, gp_segment_id, (DMLAction)
-         ->  Split
+         ->  Split Update
                Output: (((d1[1].r := (d1[1].r - '1'::double precision))[1].i := (d1[1].i + '1'::double precision))::dcomptypea), ctid, gp_segment_id, DMLAction
                ->  Seq Scan on public.dcomptable
                      Output: (d1[1].r := (d1[1].r - '1'::double precision))[1].i := (d1[1].i + '1'::double precision), ctid, gp_segment_id

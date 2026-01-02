@@ -176,12 +176,14 @@ $$ language sql;
 -------------------- 
 -- supported sql
 --------------------
+\getenv abs_srcdir PG_ABS_SRCDIR
+\set tenk_data :abs_srcdir '/data/tenk.data'
 -- COPY
-COPY tenk_heap FROM '@abs_srcdir@/data/tenk.data';
-COPY tenk_ao1 FROM '@abs_srcdir@/data/tenk.data';
-COPY tenk_ao2 FROM '@abs_srcdir@/data/tenk.data';
-COPY tenk_ao3 FROM '@abs_srcdir@/data/tenk.data';
-COPY tenk_ao4 FROM '@abs_srcdir@/data/tenk.data';
+COPY tenk_heap FROM :'tenk_data';
+COPY tenk_ao1 FROM :'tenk_data';
+COPY tenk_ao2 FROM :'tenk_data';
+COPY tenk_ao3 FROM :'tenk_data';
+COPY tenk_ao4 FROM :'tenk_data';
 ANALYZE tenk_heap;
 ANALYZE tenk_ao1;
 ANALYZE tenk_ao2;
