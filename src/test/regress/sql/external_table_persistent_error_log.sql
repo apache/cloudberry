@@ -30,11 +30,14 @@ DROP EXTERNAL TABLE IF EXISTS ext_error_persistent;
 DROP EXTERNAL TABLE IF EXISTS ext_bytea;
 -- end_ignore
 SET optimizer_trace_fallback=on;
+\getenv abs_srcdir PG_ABS_SRCDIR
+\getenv hostname PG_HOSTNAME
+\set tableerr_file :abs_srcdir '/data/tableerr.csv'
+COPY (VALUES('1,2'),('1,2,3'),('1,'),('1')) TO :'tableerr_file';
 
-COPY (VALUES('1,2'),('1,2,3'),('1,'),('1')) TO '@abs_srcdir@/data/tableerr.csv';
-
+\set tableerr_file2 'file://' :hostname :abs_srcdir '/data/tableerr.csv'
 create external table ext_error_persistent(a int, b int)
-location ('file://@hostname@@abs_srcdir@/data/tableerr.csv')
+location (:'tableerr_file2')
 format 'csv'
 log errors persistently segment reject limit 10;
 
@@ -76,7 +79,7 @@ SELECT relname, linenum, errmsg FROM gp_read_persistent_error_log('ext_error_per
 
 -- with out the error_log_persistent option, which will use normal error log.
 create external table ext_error_persistent(a int, b int)
-location ('file://@hostname@@abs_srcdir@/data/tableerr.csv')
+location (:'tableerr_file2')
 format 'csv'
 log errors segment reject limit 10;
 
@@ -92,9 +95,10 @@ SELECT relname, linenum, errmsg FROM gp_read_persistent_error_log('ext_error_per
 SELECT gp_truncate_persistent_error_log('ext_error_persistent');
 SELECT relname, linenum, errmsg FROM gp_read_persistent_error_log('ext_error_persistent');
 
+\set bytea_file 'file://' :hostname :abs_srcdir '/data/bytea.data'
 CREATE EXTERNAL TABLE ext_bytea (id int, content bytea)
 LOCATION (
-    'file://@hostname@@abs_srcdir@/data/bytea.data'
+    :'bytea_file'
 ) FORMAT 'CSV'
 OPTIONS (error_log_persistent 'true')
 LOG ERRORS SEGMENT REJECT LIMIT 5;
