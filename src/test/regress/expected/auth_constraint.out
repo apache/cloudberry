@@ -1,9 +1,11 @@
 -- By design, every boolean query (which doesn't error out) in this test must return true.
 -- For reference, 2011-08-30 was a Tuesday!
 --
+\getenv abs_builddir PG_ABS_BUILDDIR
+\set regress_dll :abs_builddir '/regress.so'
 CREATE FUNCTION check_auth_time_constraints(cstring, timestamptz)
     RETURNS bool
-    AS '@abs_builddir@/regress@DLSUFFIX@'
+    AS :'regress_dll'
     LANGUAGE C IMMUTABLE STRICT NO SQL;
 --
 -- invalid timestamp should error out

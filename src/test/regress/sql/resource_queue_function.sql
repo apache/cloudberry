@@ -1,6 +1,7 @@
-
+\getenv abs_builddir PG_ABS_BUILDDIR
+\set regress_dll :abs_builddir '/regress.so'
 CREATE FUNCTION checkResourceQueueMemoryLimits(cstring) RETURNS boolean
-AS '@abs_builddir@/regress@DLSUFFIX@', 'checkResourceQueueMemoryLimits' LANGUAGE C READS SQL DATA;
+AS :'regress_dll', 'checkResourceQueueMemoryLimits' LANGUAGE C READS SQL DATA;
 
 CREATE TABLE test_table(c1 int, c2 int); 
 INSERT INTO test_table values(1, 2);

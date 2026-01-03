@@ -104,11 +104,13 @@ SELECT c.relname, count(a.attnum) FROM pg_attribute_encoding a, pg_class c WHERE
 -- supported sql
 --------------------
 -- COPY
-COPY tenk_heap_for_aocs FROM '@abs_srcdir@/data/tenk.data';
-COPY tenk_aocs1 FROM '@abs_srcdir@/data/tenk.data';
-COPY tenk_aocs2 FROM '@abs_srcdir@/data/tenk.data';
-COPY tenk_aocs3 FROM '@abs_srcdir@/data/tenk.data';
-COPY tenk_aocs4 FROM '@abs_srcdir@/data/tenk.data';
+\getenv abs_srcdir PG_ABS_SRCDIR
+\set tenk_file :abs_srcdir '/data/tenk.data'
+COPY tenk_heap_for_aocs FROM :'tenk_file';
+COPY tenk_aocs1 FROM :'tenk_file';
+COPY tenk_aocs2 FROM :'tenk_file';
+COPY tenk_aocs3 FROM :'tenk_file';
+COPY tenk_aocs4 FROM :'tenk_file';
 -- SELECT
 SELECT count(*) FROM tenk_heap_for_aocs;
  count 

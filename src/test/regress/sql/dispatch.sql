@@ -178,16 +178,18 @@ insert into dispatch_test_t1 values (1,1,2);
 insert into dispatch_test_t2 values (2,1,2);
 insert into dispatch_test_t3 values (3,1,2);
 
+\getenv abs_builddir PG_ABS_BUILDDIR
+\set regress_dll :abs_builddir '/regress.so'
 CREATE OR REPLACE FUNCTION cleanupAllGangs() RETURNS BOOL
-AS '@abs_builddir@/regress@DLSUFFIX@', 'cleanupAllGangs' LANGUAGE C;
+AS :'regress_dll', 'cleanupAllGangs' LANGUAGE C;
 
 -- check if segments has backend running
 CREATE OR REPLACE FUNCTION hasBackendsExist(int) RETURNS SETOF BOOL
-AS '@abs_builddir@/regress@DLSUFFIX@', 'hasBackendsExist' LANGUAGE C EXECUTE ON ALL SEGMENTS;
+AS :'regress_dll', 'hasBackendsExist' LANGUAGE C EXECUTE ON ALL SEGMENTS;
 
 -- check if QD has reusable gangs
 CREATE OR REPLACE FUNCTION hasGangsExist() RETURNS BOOL
-AS '@abs_builddir@/regress@DLSUFFIX@', 'hasGangsExist' LANGUAGE C;
+AS :'regress_dll', 'hasGangsExist' LANGUAGE C;
 
 -- test log debug related code within dispatch
 set gp_log_gang to debug;
@@ -357,7 +359,7 @@ SET gp_log_gang = 'debug';
 
 -- test INFO raised from segments with various kinds of fields
 CREATE OR REPLACE FUNCTION udf_raise_info() RETURNS BOOL
-AS '@abs_builddir@/regress@DLSUFFIX@', 'gangRaiseInfo' LANGUAGE C;
+AS :'regress_dll', 'gangRaiseInfo' LANGUAGE C;
 
 SELECT udf_raise_info() FROM gp_dist_random('gp_id') WHERE gp_segment_id = 0;
 
@@ -387,7 +389,7 @@ DROP TABLE dtx_dispatch_t;
 
 -- Test interconnect is shut down under portal failure
 CREATE OR REPLACE FUNCTION numActiveMotionConns() RETURNS INT
-AS '@abs_builddir@/regress@DLSUFFIX@', 'numActiveMotionConns' LANGUAGE C;
+AS :'regress_dll', 'numActiveMotionConns' LANGUAGE C;
 
 CREATE TABLE foo_test AS SELECT i AS c1 FROM generate_series(1, 10) i;
 
@@ -561,7 +563,7 @@ drop table t13393;
 
 -- test for print create time for gang.
 CREATE OR REPLACE FUNCTION cleanupAllGangs() RETURNS BOOL
-AS '@abs_builddir@/regress@DLSUFFIX@', 'cleanupAllGangs' LANGUAGE C;
+AS :'regress_dll', 'cleanupAllGangs' LANGUAGE C;
 
 -- cleanupAllGangs();
 select cleanupAllGangs();

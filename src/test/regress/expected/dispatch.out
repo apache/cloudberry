@@ -263,14 +263,16 @@ HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sur
 insert into dispatch_test_t1 values (1,1,2);
 insert into dispatch_test_t2 values (2,1,2);
 insert into dispatch_test_t3 values (3,1,2);
+\getenv abs_builddir PG_ABS_BUILDDIR
+\set regress_dll :abs_builddir '/regress.so'
 CREATE OR REPLACE FUNCTION cleanupAllGangs() RETURNS BOOL
-AS '@abs_builddir@/regress@DLSUFFIX@', 'cleanupAllGangs' LANGUAGE C;
+AS :'regress_dll', 'cleanupAllGangs' LANGUAGE C;
 -- check if segments has backend running
 CREATE OR REPLACE FUNCTION hasBackendsExist(int) RETURNS SETOF BOOL
-AS '@abs_builddir@/regress@DLSUFFIX@', 'hasBackendsExist' LANGUAGE C EXECUTE ON ALL SEGMENTS;
+AS :'regress_dll', 'hasBackendsExist' LANGUAGE C EXECUTE ON ALL SEGMENTS;
 -- check if QD has reusable gangs
 CREATE OR REPLACE FUNCTION hasGangsExist() RETURNS BOOL
-AS '@abs_builddir@/regress@DLSUFFIX@', 'hasGangsExist' LANGUAGE C;
+AS :'regress_dll', 'hasGangsExist' LANGUAGE C;
 -- test log debug related code within dispatch
 set gp_log_gang to debug;
 set log_min_messages to DEBUG;
@@ -599,7 +601,7 @@ reset max_parallel_workers_per_gather;
 SET gp_log_gang = 'debug';
 -- test INFO raised from segments with various kinds of fields
 CREATE OR REPLACE FUNCTION udf_raise_info() RETURNS BOOL
-AS '@abs_builddir@/regress@DLSUFFIX@', 'gangRaiseInfo' LANGUAGE C;
+AS :'regress_dll', 'gangRaiseInfo' LANGUAGE C;
 SELECT udf_raise_info() FROM gp_dist_random('gp_id') WHERE gp_segment_id = 0;
 INFO:  testing hook function MPPnoticeReceiver  (seg0 slice1 127.0.0.1:40000 pid=11337)
 DETAIL:  this test aims at covering code paths not hit before
@@ -631,13 +633,13 @@ $$
 LANGUAGE plpgSQL READS SQL DATA;
 SELECT dtx_dispatch_f(foo.c1) FROM (SELECT c1 FROM dtx_dispatch_t WHERE c1='1' limit 1) foo;
 ERROR:  query plan with multiple segworker groups is not supported
-HINT:  dispatching DTX commands to a busy gang
-CONTEXT:  PL/pgSQL function "dtx_dispatch_f" line 1 during statement block entry
+HINT:  likely caused by a function that reads or modifies data in a distributed table
+CONTEXT:  PL/pgSQL function dtx_dispatch_f(integer) line 2 during statement block entry
 DROP FUNCTION dtx_dispatch_f(integer);
 DROP TABLE dtx_dispatch_t;
 -- Test interconnect is shut down under portal failure
 CREATE OR REPLACE FUNCTION numActiveMotionConns() RETURNS INT
-AS '@abs_builddir@/regress@DLSUFFIX@', 'numActiveMotionConns' LANGUAGE C;
+AS :'regress_dll', 'numActiveMotionConns' LANGUAGE C;
 CREATE TABLE foo_test AS SELECT i AS c1 FROM generate_series(1, 10) i;
 NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause. Creating a NULL policy entry.
 SELECT c1/0 FROM foo_test WHERE c1 = 1;
@@ -908,7 +910,7 @@ SELECT gp_inject_fault('cdbcomponent_recycle_idle_qe_error', 'reset', dbid, curr
 drop table t13393;
 -- test for print create time for gang.
 CREATE OR REPLACE FUNCTION cleanupAllGangs() RETURNS BOOL
-AS '@abs_builddir@/regress@DLSUFFIX@', 'cleanupAllGangs' LANGUAGE C;
+AS :'regress_dll', 'cleanupAllGangs' LANGUAGE C;
 -- cleanupAllGangs();
 select cleanupAllGangs();
  cleanupallgangs 
