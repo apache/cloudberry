@@ -221,11 +221,11 @@ explain (analyze, costs off, timing off, summary off) select * from part join un
    ->  Hash Join (actual rows=150 loops=1)
          Hash Cond: (part.c2 = (((unnest('{-3,-2,-1,0,1,2,3}'::text[])))::integer))
          Extra Text: (seg0)   Hash chain length 1.0 avg, 1 max, using 7 of 524288 buckets.
-         ->  Append (actual rows=245 loops=1)
+         ->  Append (actual rows=340 loops=1)
                Partition Selectors: $0
                ->  Seq Scan on part_1_prt_part3 part_1 (actual rows=106 loops=1)
                ->  Seq Scan on part_1_prt_part1 part_2 (actual rows=150 loops=1)
-               ->  Seq Scan on part_1_prt_part2 part_3 (never executed)
+               ->  Seq Scan on part_1_prt_part2 part_3 (actual rows=113 loops=1)
          ->  Hash (actual rows=7 loops=1)
                Buckets: 524288  Batches: 1  Memory Usage: 4097kB
                ->  Partition Selector (selector id: $0) (actual rows=7 loops=1)
@@ -350,54 +350,54 @@ explain (analyze, costs off, timing off, summary off) select * from gen_series l
 -- it needs to be deduplicated. This is achieved by a hash
 -- filter (duplicate-sensitive hash motion).
 explain (analyze, costs off, timing off, summary off) select * from const_tvf(1) ct(c1) where not exists (select 1 from dist where dist.c1 = ct.c1);
-                                     QUERY PLAN                                     
-------------------------------------------------------------------------------------
+                                        QUERY PLAN                                        
+------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3) (actual rows=0 loops=1)
-   ->  Hash Anti Join (actual rows=0 loops=1)
-         Hash Cond: (($0) = dist.c1)
-         ->  Redistribute Motion 1:3  (slice2; segments: 1) (actual rows=1 loops=1)
-               Hash Key: ($0)
-               ->  Result (actual rows=1 loops=1)
-                     InitPlan 1 (returns $0)  (slice3)
-                       ->  Result (actual rows=1 loops=1)
-         ->  Hash (actual rows=340 loops=1)
-               Buckets: 524288  Batches: 1  Memory Usage: 4108kB
-               ->  Seq Scan on dist (actual rows=340 loops=1)
+   ->  Hash Right Anti Join (actual rows=0 loops=1)
+         Hash Cond: (dist.c1 = ($0))
+         ->  Seq Scan on dist (actual rows=322 loops=1)
+         ->  Hash (actual rows=1 loops=1)
+               Buckets: 524288  Batches: 1  Memory Usage: 4097kB
+               ->  Redistribute Motion 1:3  (slice2; segments: 1) (actual rows=1 loops=1)
+                     Hash Key: ($0)
+                     ->  Result (actual rows=1 loops=1)
+                           InitPlan 1 (returns $0)  (slice3)
+                             ->  Result (actual rows=1 loops=1)
  Optimizer: Postgres query optimizer
 (12 rows)
 
 explain (analyze, costs off, timing off, summary off) select * from unnest_arr where not exists (select 1 from dist where dist.c1 = unnest_arr.c1);
-                                         QUERY PLAN                                          
----------------------------------------------------------------------------------------------
+                                        QUERY PLAN                                         
+-------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3) (actual rows=4 loops=1)
-   ->  Hash Anti Join (actual rows=3 loops=1)
-         Hash Cond: ((((unnest('{-3,-2,-1,0,1,2,3}'::text[])))::integer) = dist.c1)
-         Extra Text: (seg1)   Hash chain length 1.0 avg, 1 max, using 322 of 524288 buckets.
-         ->  Redistribute Motion 1:3  (slice2; segments: 1) (actual rows=4 loops=1)
-               Hash Key: (((unnest('{-3,-2,-1,0,1,2,3}'::text[])))::integer)
-               ->  Result (actual rows=7 loops=1)
-                     ->  ProjectSet (actual rows=7 loops=1)
-                           ->  Result (actual rows=1 loops=1)
-         ->  Hash (actual rows=340 loops=1)
-               Buckets: 524288  Batches: 1  Memory Usage: 4108kB
-               ->  Seq Scan on dist (actual rows=340 loops=1)
+   ->  Hash Right Anti Join (actual rows=3 loops=1)
+         Hash Cond: (dist.c1 = (((unnest('{-3,-2,-1,0,1,2,3}'::text[])))::integer))
+         Extra Text: (seg1)   Hash chain length 1.0 avg, 1 max, using 4 of 524288 buckets.
+         ->  Seq Scan on dist (actual rows=340 loops=1)
+         ->  Hash (actual rows=4 loops=1)
+               Buckets: 524288  Batches: 1  Memory Usage: 4097kB
+               ->  Redistribute Motion 1:3  (slice2; segments: 1) (actual rows=4 loops=1)
+                     Hash Key: (((unnest('{-3,-2,-1,0,1,2,3}'::text[])))::integer)
+                     ->  Result (actual rows=7 loops=1)
+                           ->  ProjectSet (actual rows=7 loops=1)
+                                 ->  Result (actual rows=1 loops=1)
  Optimizer: Postgres query optimizer
 (13 rows)
 
 explain (analyze, costs off, timing off, summary off) select * from gen_series where not exists (select 1 from dist where dist.c1 = gen_series.c1);
-                                         QUERY PLAN                                          
----------------------------------------------------------------------------------------------
+                                        QUERY PLAN                                         
+-------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3) (actual rows=11 loops=1)
-   ->  Hash Anti Join (actual rows=6 loops=1)
-         Hash Cond: ((generate_series('-10'::integer, 10)) = dist.c1)
-         Extra Text: (seg1)   Hash chain length 1.0 avg, 1 max, using 322 of 524288 buckets.
-         ->  Redistribute Motion 1:3  (slice2; segments: 1) (actual rows=8 loops=1)
-               Hash Key: (generate_series('-10'::integer, 10))
-               ->  ProjectSet (actual rows=21 loops=1)
-                     ->  Result (actual rows=1 loops=1)
-         ->  Hash (actual rows=340 loops=1)
-               Buckets: 524288  Batches: 1  Memory Usage: 4108kB
-               ->  Seq Scan on dist (actual rows=340 loops=1)
+   ->  Hash Right Anti Join (actual rows=6 loops=1)
+         Hash Cond: (dist.c1 = (generate_series('-10'::integer, 10)))
+         Extra Text: (seg1)   Hash chain length 1.0 avg, 1 max, using 7 of 524288 buckets.
+         ->  Seq Scan on dist (actual rows=340 loops=1)
+         ->  Hash (actual rows=8 loops=1)
+               Buckets: 524288  Batches: 1  Memory Usage: 4097kB
+               ->  Redistribute Motion 1:3  (slice2; segments: 1) (actual rows=8 loops=1)
+                     Hash Key: (generate_series('-10'::integer, 10))
+                     ->  ProjectSet (actual rows=21 loops=1)
+                           ->  Result (actual rows=1 loops=1)
  Optimizer: Postgres query optimizer
 (12 rows)
 

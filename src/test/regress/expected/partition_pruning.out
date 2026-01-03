@@ -488,8 +488,7 @@ EXPLAIN SELECT * FROM pt_lt_tab WHERE col2 <> 10 ORDER BY col2,col3 LIMIT 5;
                ->  Incremental Sort  (cost=135.46..2022.12 rows=15 width=12)
                      Sort Key: pt_lt_tab.col2, pt_lt_tab.col3
                      Presorted Key: pt_lt_tab.col2
-                     ->  Merge Append  (cost=0.73..2021.44 rows=15 width=12)
-                           Sort Key: pt_lt_tab.col2
+                     ->  Append  (cost=0.68..2021.21 rows=15 width=12)
                            ->  Index Scan using pt_lt_tab_1_prt_part1_col2_idx on pt_lt_tab_1_prt_part1 pt_lt_tab_1  (cost=0.14..404.23 rows=3 width=12)
                                  Filter: (col2 <> '10'::numeric)
                            ->  Index Scan using pt_lt_tab_1_prt_part2_col2_idx on pt_lt_tab_1_prt_part2 pt_lt_tab_2  (cost=0.14..404.23 rows=3 width=12)
@@ -501,7 +500,7 @@ EXPLAIN SELECT * FROM pt_lt_tab WHERE col2 <> 10 ORDER BY col2,col3 LIMIT 5;
                            ->  Index Scan using pt_lt_tab_1_prt_part5_col2_idx on pt_lt_tab_1_prt_part5 pt_lt_tab_5  (cost=0.14..404.23 rows=3 width=12)
                                  Filter: (col2 <> '10'::numeric)
  Optimizer: Postgres query optimizer
-(20 rows)
+(19 rows)
 
 SELECT * FROM pt_lt_tab WHERE col2 > 10 AND col2 < 50 ORDER BY col2,col3 LIMIT 5;
  col1 | col2 | col3 | col4 
@@ -523,8 +522,7 @@ EXPLAIN SELECT * FROM pt_lt_tab WHERE col2 > 10 AND col2 < 50 ORDER BY col2,col3
                ->  Incremental Sort  (cost=122.12..1577.88 rows=13 width=12)
                      Sort Key: pt_lt_tab.col2, pt_lt_tab.col3
                      Presorted Key: pt_lt_tab.col2
-                     ->  Merge Append  (cost=0.58..1577.29 rows=13 width=12)
-                           Sort Key: pt_lt_tab.col2
+                     ->  Append  (cost=0.54..1577.12 rows=13 width=12)
                            ->  Index Scan using pt_lt_tab_1_prt_part2_col2_idx on pt_lt_tab_1_prt_part2 pt_lt_tab_1  (cost=0.14..404.27 rows=3 width=12)
                                  Index Cond: ((col2 > '10'::numeric) AND (col2 < '50'::numeric))
                            ->  Index Scan using pt_lt_tab_1_prt_part3_col2_idx on pt_lt_tab_1_prt_part3 pt_lt_tab_2  (cost=0.14..404.27 rows=3 width=12)
@@ -556,8 +554,7 @@ EXPLAIN SELECT * FROM pt_lt_tab WHERE col2 > 10 OR col2 = 50 ORDER BY col2,col3 
                ->  Incremental Sort  (cost=121.96..1617.78 rows=13 width=12)
                      Sort Key: pt_lt_tab.col2, pt_lt_tab.col3
                      Presorted Key: pt_lt_tab.col2
-                     ->  Merge Append  (cost=0.58..1617.18 rows=13 width=12)
-                           Sort Key: pt_lt_tab.col2
+                     ->  Append  (cost=0.54..1617.01 rows=13 width=12)
                            ->  Index Scan using pt_lt_tab_1_prt_part2_col2_idx on pt_lt_tab_1_prt_part2 pt_lt_tab_1  (cost=0.14..404.24 rows=3 width=12)
                                  Filter: ((col2 > '10'::numeric) OR (col2 = '50'::numeric))
                            ->  Index Scan using pt_lt_tab_1_prt_part3_col2_idx on pt_lt_tab_1_prt_part3 pt_lt_tab_2  (cost=0.14..404.24 rows=3 width=12)
@@ -589,8 +586,7 @@ EXPLAIN SELECT * FROM pt_lt_tab WHERE col2 between 10 AND 50 ORDER BY col2,col3 
                ->  Incremental Sort  (cost=116.85..1662.17 rows=14 width=12)
                      Sort Key: pt_lt_tab.col2, pt_lt_tab.col3
                      Presorted Key: pt_lt_tab.col2
-                     ->  Merge Append  (cost=0.73..1661.52 rows=14 width=12)
-                           Sort Key: pt_lt_tab.col2
+                     ->  Append  (cost=0.68..1661.30 rows=14 width=12)
                            ->  Index Scan using pt_lt_tab_1_prt_part1_col2_idx on pt_lt_tab_1_prt_part1 pt_lt_tab_1  (cost=0.14..44.15 rows=1 width=12)
                                  Index Cond: ((col2 >= '10'::numeric) AND (col2 <= '50'::numeric))
                            ->  Index Scan using pt_lt_tab_1_prt_part2_col2_idx on pt_lt_tab_1_prt_part2 pt_lt_tab_2  (cost=0.14..404.27 rows=3 width=12)
@@ -736,8 +732,7 @@ EXPLAIN SELECT * FROM pt_lt_tab WHERE col2 > 10 AND col1 = 10 ORDER BY col2,col3
                ->  Incremental Sort  (cost=44.62..176.90 rows=4 width=12)
                      Sort Key: pt_lt_tab.col2, pt_lt_tab.col3
                      Presorted Key: pt_lt_tab.col2
-                     ->  Merge Append  (cost=0.58..176.72 rows=4 width=12)
-                           Sort Key: pt_lt_tab.col2
+                     ->  Append  (cost=0.54..176.64 rows=4 width=12)
                            ->  Index Scan using pt_lt_tab_1_prt_part2_col1_col2_idx on pt_lt_tab_1_prt_part2 pt_lt_tab_1  (cost=0.14..44.15 rows=1 width=12)
                                  Index Cond: ((col1 = 10) AND (col2 > '10'::numeric))
                            ->  Index Scan using pt_lt_tab_1_prt_part3_col1_col2_idx on pt_lt_tab_1_prt_part3 pt_lt_tab_2  (cost=0.14..44.15 rows=1 width=12)

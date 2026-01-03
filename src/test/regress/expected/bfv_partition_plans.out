@@ -865,28 +865,28 @@ EVERY ('2 mons'::interval)
 NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'oid' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 explain analyze select a.* from mpp8031 a, mpp8031 b where a.oid = b.oid;
-                                                              QUERY PLAN                                                               
----------------------------------------------------------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)  (cost=2743.00..2475974.00 rows=80883360 width=16) (actual time=0.807..0.807 rows=0 loops=1)
-   ->  Hash Join  (cost=2743.00..1397529.20 rows=26961120 width=16) (never executed)
+                                                                QUERY PLAN                                                                
+------------------------------------------------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=2743.00..2475974.00 rows=80883360 width=16) (actual time=0.707..0.709 rows=0 loops=1)
+   ->  Hash Join  (cost=2743.00..1397529.20 rows=26961120 width=16) (actual time=0.024..0.028 rows=0 loops=1)
          Hash Cond: (a.oid = b.oid)
-         ->  Append  (cost=0.00..1558.00 rows=94800 width=16) (never executed)
-               ->  Seq Scan on mpp8031_1_prt_foo_1 a_1  (cost=0.00..271.00 rows=23700 width=16) (never executed)
-               ->  Seq Scan on mpp8031_1_prt_2 a_2  (cost=0.00..271.00 rows=23700 width=16) (never executed)
-               ->  Seq Scan on mpp8031_1_prt_3 a_3  (cost=0.00..271.00 rows=23700 width=16) (never executed)
-               ->  Seq Scan on mpp8031_1_prt_4 a_4  (cost=0.00..271.00 rows=23700 width=16) (never executed)
+         ->  Append  (cost=0.00..1558.00 rows=94800 width=16) (actual time=0.021..0.023 rows=0 loops=1)
+               ->  Seq Scan on mpp8031_1_prt_foo_1 a_1  (cost=0.00..271.00 rows=23700 width=16) (actual time=0.010..0.010 rows=0 loops=1)
+               ->  Seq Scan on mpp8031_1_prt_2 a_2  (cost=0.00..271.00 rows=23700 width=16) (actual time=0.003..0.004 rows=0 loops=1)
+               ->  Seq Scan on mpp8031_1_prt_3 a_3  (cost=0.00..271.00 rows=23700 width=16) (actual time=0.003..0.003 rows=0 loops=1)
+               ->  Seq Scan on mpp8031_1_prt_4 a_4  (cost=0.00..271.00 rows=23700 width=16) (actual time=0.003..0.003 rows=0 loops=1)
          ->  Hash  (cost=1558.00..1558.00 rows=94800 width=4) (never executed)
                ->  Append  (cost=0.00..1558.00 rows=94800 width=4) (never executed)
                      ->  Seq Scan on mpp8031_1_prt_foo_1 b_1  (cost=0.00..271.00 rows=23700 width=4) (never executed)
                      ->  Seq Scan on mpp8031_1_prt_2 b_2  (cost=0.00..271.00 rows=23700 width=4) (never executed)
                      ->  Seq Scan on mpp8031_1_prt_3 b_3  (cost=0.00..271.00 rows=23700 width=4) (never executed)
                      ->  Seq Scan on mpp8031_1_prt_4 b_4  (cost=0.00..271.00 rows=23700 width=4) (never executed)
- Planning Time: 2.439 ms
-   (slice0)    Executor memory: 51K bytes.
-   (slice1)    Executor memory: 57K bytes avg x 3 workers, 57K bytes max (seg0).
+ Planning Time: 2.080 ms
+   (slice0)    Executor memory: 122K bytes.
+   (slice1)    Executor memory: 121K bytes avg x 3x(0) workers, 121K bytes max (seg0).
  Memory used:  128000kB
  Optimizer: Postgres query optimizer
- Execution Time: 1.481 ms
+ Execution Time: 1.279 ms
 (20 rows)
 
 drop table mpp8031;
@@ -1236,11 +1236,11 @@ EXPLAIN (COSTS OFF, TIMING OFF, SUMMARY OFF, ANALYZE) DELETE FROM delete_from_pt
    ->  Hash Semi Join (actual rows=1 loops=1)
          Hash Cond: (delete_from_pt.b = t.a)
          Extra Text: (seg0)   Hash chain length 2.0 avg, 2 max, using 1 of 131072 buckets.
-         ->  Append (actual rows=3 loops=1)
+         ->  Append (actual rows=5 loops=1)
                Partition Selectors: $1
                ->  Seq Scan on delete_from_pt_1_prt_1 delete_from_pt_2 (actual rows=3 loops=1)
-               ->  Seq Scan on delete_from_pt_1_prt_2 delete_from_pt_3 (never executed)
-               ->  Seq Scan on delete_from_pt_1_prt_3 delete_from_pt_4 (never executed)
+               ->  Seq Scan on delete_from_pt_1_prt_2 delete_from_pt_3 (actual rows=3 loops=1)
+               ->  Seq Scan on delete_from_pt_1_prt_3 delete_from_pt_4 (actual rows=0 loops=1)
          ->  Hash (actual rows=2 loops=1)
                Buckets: 131072  Batches: 1  Memory Usage: 1025kB
                ->  Partition Selector (selector id: $1) (actual rows=2 loops=1)
@@ -1248,11 +1248,11 @@ EXPLAIN (COSTS OFF, TIMING OFF, SUMMARY OFF, ANALYZE) DELETE FROM delete_from_pt
                            ->  Hash Join (actual rows=1 loops=1)
                                  Hash Cond: (delete_from_pt_1.b = t.a)
                                  Extra Text: (seg0)   Hash chain length 1.0 avg, 1 max, using 1 of 262144 buckets.
-                                 ->  Append (actual rows=3 loops=1)
+                                 ->  Append (actual rows=5 loops=1)
                                        Partition Selectors: $2
                                        ->  Seq Scan on delete_from_pt_1_prt_1 delete_from_pt_5 (actual rows=3 loops=1)
-                                       ->  Seq Scan on delete_from_pt_1_prt_2 delete_from_pt_6 (never executed)
-                                       ->  Seq Scan on delete_from_pt_1_prt_3 delete_from_pt_7 (never executed)
+                                       ->  Seq Scan on delete_from_pt_1_prt_2 delete_from_pt_6 (actual rows=3 loops=1)
+                                       ->  Seq Scan on delete_from_pt_1_prt_3 delete_from_pt_7 (actual rows=0 loops=1)
                                  ->  Hash (actual rows=1 loops=1)
                                        Buckets: 262144  Batches: 1  Memory Usage: 2049kB
                                        ->  Partition Selector (selector id: $2) (actual rows=1 loops=1)

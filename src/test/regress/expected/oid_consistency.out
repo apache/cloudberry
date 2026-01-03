@@ -762,10 +762,12 @@ CREATE table oid_consistency_tt1 (a int) distributed by (a);
 CREATE table oid_consistency_tt2 (a int) distributed by (a);
 CREATE rule "_RETURN" as on select to oid_consistency_tt1
         do instead select * from oid_consistency_tt2;
+ERROR:  relation "oid_consistency_tt1" cannot have ON SELECT rules
+DETAIL:  This operation is not supported for tables.
 select verify('oid_consistency_tt1');
  verify 
 --------
-      1
+      0
 (1 row)
 
 --
