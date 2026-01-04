@@ -199,12 +199,12 @@ select * from update_pk_test order by 1,2;
 (1 row)
 
 explain update update_pk_test set a = 5;
-                                            QUERY PLAN                                            
---------------------------------------------------------------------------------------------------
- Update on update_pk_test  (cost=0.00..1.05 rows=1 width=22)
-   ->  Explicit Redistribute Motion 3:3  (slice1; segments: 3)  (cost=0.00..1.05 rows=1 width=22)
-         ->  Split  (cost=0.00..1.01 rows=1 width=22)
-               ->  Seq Scan on update_pk_test  (cost=0.00..1.01 rows=1 width=22)
+                                               QUERY PLAN                                                
+---------------------------------------------------------------------------------------------------------
+ Update on update_pk_test  (cost=0.00..1469.00 rows=0 width=0)
+   ->  Explicit Redistribute Motion 3:3  (slice1; segments: 3)  (cost=0.00..1469.00 rows=57400 width=18)
+         ->  Split Update  (cost=0.00..321.00 rows=57400 width=18)
+               ->  Seq Scan on update_pk_test  (cost=0.00..321.00 rows=28700 width=18)
  Optimizer: Postgres query optimizer
 (5 rows)
 

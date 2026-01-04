@@ -913,10 +913,12 @@ CREATE TABLE expand_table2(a int) distributed by (a);
 CREATE VIEW expand_view AS select * from expand_table1;
 CREATE rule "_RETURN" AS ON SELECT TO expand_table2
     DO INSTEAD SELECT * FROM expand_table1;
+ERROR:  relation "expand_table2" cannot have ON SELECT rules
+DETAIL:  This operation is not supported for tables.
 ALTER TABLE expand_table2 EXPAND TABLE;
-ERROR:  "expand_table2" is not a table, materialized view, or foreign table
 ALTER TABLE expand_view EXPAND TABLE;
-ERROR:  "expand_view" is not a table, materialized view, or foreign table
+ERROR:  ALTER action ALTER COLUMN ... EXPAND TABLE cannot be performed on relation "expand_view"
+DETAIL:  This operation is not supported for views.
 ALTER TABLE expand_table1 EXPAND TABLE;
 --
 -- Test expanding a table with a domain type as distribution key.
