@@ -91,16 +91,28 @@ CREATE TABLE heap_supplier (
 )
 WITH (appendonly=false) DISTRIBUTED BY (s_suppkey);
 
-\copy heap_customer (C_CUSTKEY,C_NAME,C_ADDRESS,C_NATIONKEY,C_PHONE,C_ACCTBAL,C_MKTSEGMENT,C_COMMENT) from '@abs_srcdir@/data/customer.csv' with delimiter '|';
-\copy heap_lineitem ( L_ORDERKEY, L_PARTKEY, L_SUPPKEY,L_LINENUMBER,L_QUANTITY, L_EXTENDEDPRICE,L_DISCOUNT,L_TAX,L_RETURNFLAG,L_LINESTATUS,L_SHIPDATE,L_COMMITDATE,L_RECEIPTDATE,L_SHIPINSTRUCT,L_SHIPMODE,L_COMMENT) from '@abs_srcdir@/data/lineitem_small.csv' with delimiter '|';
-\copy heap_lineitem ( L_ORDERKEY, L_PARTKEY, L_SUPPKEY,L_LINENUMBER,L_QUANTITY, L_EXTENDEDPRICE,L_DISCOUNT,L_TAX,L_RETURNFLAG,L_LINESTATUS,L_SHIPDATE,L_COMMITDATE,L_RECEIPTDATE,L_SHIPINSTRUCT,L_SHIPMODE,L_COMMENT) from '@abs_srcdir@/data/lineitem.csv' with delimiter '|'; 
-\copy heap_nation (N_NATIONKEY ,N_NAME, N_REGIONKEY,N_COMMENT) from '@abs_srcdir@/data/nation.csv' with delimiter '|';
-\copy heap_orders ( O_ORDERKEY,O_CUSTKEY,O_ORDERSTATUS,O_TOTALPRICE,O_ORDERDATE,O_ORDERPRIORITY,O_CLERK,O_SHIPPRIORITY,O_COMMENT) from '@abs_srcdir@/data/order_small.csv' with delimiter '|';
-\copy heap_orders ( O_ORDERKEY,O_CUSTKEY,O_ORDERSTATUS,O_TOTALPRICE,O_ORDERDATE,O_ORDERPRIORITY,O_CLERK,O_SHIPPRIORITY,O_COMMENT) from '@abs_srcdir@/data/order.csv' with delimiter '|'; 
-\copy heap_part (P_PARTKEY,P_NAME,P_MFGR,P_BRAND,P_TYPE,P_SIZE,P_CONTAINER,P_RETAILPRICE,P_COMMENT)from '@abs_srcdir@/data/part.csv' with delimiter '|'; 
-\copy heap_partsupp (PS_PARTKEY,PS_SUPPKEY,PS_AVAILQTY,PS_SUPPLYCOST,PS_COMMENT ) from '@abs_srcdir@/data/partsupp.csv' with delimiter '|';
-\copy heap_region ( R_REGIONKEY,R_NAME,R_COMMENT) from '@abs_srcdir@/data/region.csv' with delimiter '|';
-\copy heap_supplier (S_SUPPKEY,S_NAME,S_ADDRESS,S_NATIONKEY,S_PHONE,S_ACCTBAL,S_COMMENT) from '@abs_srcdir@/data/supplier.csv' with delimiter '|';
+\getenv abs_srcdir PG_ABS_SRCDIR
+\set customer_file :abs_srcdir '/data/customer.csv'
+\set lineitem_small_file :abs_srcdir '/data/lineitem_small.csv'
+\set lineitem_file :abs_srcdir '/data/lineitem.csv'
+\set nation_file :abs_srcdir '/data/nation.csv'
+\set order_small_file :abs_srcdir '/data/order_small.csv'
+\set order_file :abs_srcdir '/data/order.csv'
+\set part_file :abs_srcdir '/data/part.csv'
+\set partsupp_file :abs_srcdir '/data/partsupp.csv'
+\set region_file :abs_srcdir '/data/region.csv'
+\set supplier_file :abs_srcdir '/data/supplier.csv'
+
+copy heap_customer (C_CUSTKEY,C_NAME,C_ADDRESS,C_NATIONKEY,C_PHONE,C_ACCTBAL,C_MKTSEGMENT,C_COMMENT) from :'customer_file' with delimiter '|';
+copy heap_lineitem ( L_ORDERKEY, L_PARTKEY, L_SUPPKEY,L_LINENUMBER,L_QUANTITY, L_EXTENDEDPRICE,L_DISCOUNT,L_TAX,L_RETURNFLAG,L_LINESTATUS,L_SHIPDATE,L_COMMITDATE,L_RECEIPTDATE,L_SHIPINSTRUCT,L_SHIPMODE,L_COMMENT) from :'lineitem_small_file' with delimiter '|';
+copy heap_lineitem ( L_ORDERKEY, L_PARTKEY, L_SUPPKEY,L_LINENUMBER,L_QUANTITY, L_EXTENDEDPRICE,L_DISCOUNT,L_TAX,L_RETURNFLAG,L_LINESTATUS,L_SHIPDATE,L_COMMITDATE,L_RECEIPTDATE,L_SHIPINSTRUCT,L_SHIPMODE,L_COMMENT) from :'lineitem_file' with delimiter '|'; 
+copy heap_nation (N_NATIONKEY ,N_NAME, N_REGIONKEY,N_COMMENT) from :'nation_file' with delimiter '|';
+copy heap_orders ( O_ORDERKEY,O_CUSTKEY,O_ORDERSTATUS,O_TOTALPRICE,O_ORDERDATE,O_ORDERPRIORITY,O_CLERK,O_SHIPPRIORITY,O_COMMENT) from :'order_small_file' with delimiter '|';
+copy heap_orders ( O_ORDERKEY,O_CUSTKEY,O_ORDERSTATUS,O_TOTALPRICE,O_ORDERDATE,O_ORDERPRIORITY,O_CLERK,O_SHIPPRIORITY,O_COMMENT) from :'order_file' with delimiter '|'; 
+copy heap_part (P_PARTKEY,P_NAME,P_MFGR,P_BRAND,P_TYPE,P_SIZE,P_CONTAINER,P_RETAILPRICE,P_COMMENT)from :'part_file' with delimiter '|'; 
+copy heap_partsupp (PS_PARTKEY,PS_SUPPKEY,PS_AVAILQTY,PS_SUPPLYCOST,PS_COMMENT ) from :'partsupp_file' with delimiter '|';
+copy heap_region ( R_REGIONKEY,R_NAME,R_COMMENT) from :'region_file' with delimiter '|';
+copy heap_supplier (S_SUPPKEY,S_NAME,S_ADDRESS,S_NATIONKEY,S_PHONE,S_ACCTBAL,S_COMMENT) from :'supplier_file' with delimiter '|';
 
 ANALYZE heap_customer;
 ANALYZE heap_lineitem;
@@ -204,16 +216,16 @@ CREATE TABLE ao_supplier (
 )
 WITH (appendonly=true) DISTRIBUTED BY (s_suppkey);
 
-\copy ao_customer (C_CUSTKEY,C_NAME,C_ADDRESS,C_NATIONKEY,C_PHONE,C_ACCTBAL,C_MKTSEGMENT,C_COMMENT) from '@abs_srcdir@/data/customer.csv' with delimiter '|';
-\copy ao_lineitem ( L_ORDERKEY, L_PARTKEY, L_SUPPKEY,L_LINENUMBER,L_QUANTITY, L_EXTENDEDPRICE,L_DISCOUNT,L_TAX,L_RETURNFLAG,L_LINESTATUS,L_SHIPDATE,L_COMMITDATE,L_RECEIPTDATE,L_SHIPINSTRUCT,L_SHIPMODE,L_COMMENT) from '@abs_srcdir@/data/lineitem_small.csv' with delimiter '|';
-\copy ao_lineitem ( L_ORDERKEY, L_PARTKEY, L_SUPPKEY,L_LINENUMBER,L_QUANTITY, L_EXTENDEDPRICE,L_DISCOUNT,L_TAX,L_RETURNFLAG,L_LINESTATUS,L_SHIPDATE,L_COMMITDATE,L_RECEIPTDATE,L_SHIPINSTRUCT,L_SHIPMODE,L_COMMENT) from '@abs_srcdir@/data/lineitem.csv' with delimiter '|';
-\copy ao_nation (N_NATIONKEY ,N_NAME, N_REGIONKEY,N_COMMENT) from '@abs_srcdir@/data/nation.csv' with delimiter '|';
-\copy ao_orders ( O_ORDERKEY,O_CUSTKEY,O_ORDERSTATUS,O_TOTALPRICE,O_ORDERDATE,O_ORDERPRIORITY,O_CLERK,O_SHIPPRIORITY,O_COMMENT) from '@abs_srcdir@/data/order_small.csv' with delimiter '|';
-\copy ao_orders ( O_ORDERKEY,O_CUSTKEY,O_ORDERSTATUS,O_TOTALPRICE,O_ORDERDATE,O_ORDERPRIORITY,O_CLERK,O_SHIPPRIORITY,O_COMMENT) from '@abs_srcdir@/data/order.csv' with delimiter '|';
-\copy ao_part (P_PARTKEY,P_NAME,P_MFGR,P_BRAND,P_TYPE,P_SIZE,P_CONTAINER,P_RETAILPRICE,P_COMMENT)from '@abs_srcdir@/data/part.csv' with delimiter '|';
-\copy ao_partsupp (PS_PARTKEY,PS_SUPPKEY,PS_AVAILQTY,PS_SUPPLYCOST,PS_COMMENT ) from '@abs_srcdir@/data/partsupp.csv' with delimiter '|';
-\copy ao_region ( R_REGIONKEY,R_NAME,R_COMMENT) from '@abs_srcdir@/data/region.csv' with delimiter '|';
-\copy ao_supplier (S_SUPPKEY,S_NAME,S_ADDRESS,S_NATIONKEY,S_PHONE,S_ACCTBAL,S_COMMENT) from '@abs_srcdir@/data/supplier.csv' with delimiter '|';
+copy ao_customer (C_CUSTKEY,C_NAME,C_ADDRESS,C_NATIONKEY,C_PHONE,C_ACCTBAL,C_MKTSEGMENT,C_COMMENT) from :'customer_file' with delimiter '|';
+copy ao_lineitem ( L_ORDERKEY, L_PARTKEY, L_SUPPKEY,L_LINENUMBER,L_QUANTITY, L_EXTENDEDPRICE,L_DISCOUNT,L_TAX,L_RETURNFLAG,L_LINESTATUS,L_SHIPDATE,L_COMMITDATE,L_RECEIPTDATE,L_SHIPINSTRUCT,L_SHIPMODE,L_COMMENT) from :'lineitem_small_file' with delimiter '|';
+copy ao_lineitem ( L_ORDERKEY, L_PARTKEY, L_SUPPKEY,L_LINENUMBER,L_QUANTITY, L_EXTENDEDPRICE,L_DISCOUNT,L_TAX,L_RETURNFLAG,L_LINESTATUS,L_SHIPDATE,L_COMMITDATE,L_RECEIPTDATE,L_SHIPINSTRUCT,L_SHIPMODE,L_COMMENT) from :'lineitem_file' with delimiter '|';
+copy ao_nation (N_NATIONKEY ,N_NAME, N_REGIONKEY,N_COMMENT) from :'nation_file' with delimiter '|';
+copy ao_orders ( O_ORDERKEY,O_CUSTKEY,O_ORDERSTATUS,O_TOTALPRICE,O_ORDERDATE,O_ORDERPRIORITY,O_CLERK,O_SHIPPRIORITY,O_COMMENT) from :'order_small_file' with delimiter '|';
+copy ao_orders ( O_ORDERKEY,O_CUSTKEY,O_ORDERSTATUS,O_TOTALPRICE,O_ORDERDATE,O_ORDERPRIORITY,O_CLERK,O_SHIPPRIORITY,O_COMMENT) from :'order_file' with delimiter '|';
+copy ao_part (P_PARTKEY,P_NAME,P_MFGR,P_BRAND,P_TYPE,P_SIZE,P_CONTAINER,P_RETAILPRICE,P_COMMENT)from :'part_file' with delimiter '|';
+copy ao_partsupp (PS_PARTKEY,PS_SUPPKEY,PS_AVAILQTY,PS_SUPPLYCOST,PS_COMMENT ) from :'partsupp_file' with delimiter '|';
+copy ao_region ( R_REGIONKEY,R_NAME,R_COMMENT) from :'region_file' with delimiter '|';
+copy ao_supplier (S_SUPPKEY,S_NAME,S_ADDRESS,S_NATIONKEY,S_PHONE,S_ACCTBAL,S_COMMENT) from :'supplier_file' with delimiter '|';
 
 ANALYZE ao_customer;
 ANALYZE ao_lineitem;
@@ -317,16 +329,16 @@ CREATE TABLE co_supplier (
 )
 WITH (appendonly=true, orientation=column) DISTRIBUTED BY (s_suppkey);
 
-\copy co_customer (C_CUSTKEY,C_NAME,C_ADDRESS,C_NATIONKEY,C_PHONE,C_ACCTBAL,C_MKTSEGMENT,C_COMMENT) from '@abs_srcdir@/data/customer.csv' with delimiter '|';
-\copy co_lineitem ( L_ORDERKEY, L_PARTKEY, L_SUPPKEY,L_LINENUMBER,L_QUANTITY, L_EXTENDEDPRICE,L_DISCOUNT,L_TAX,L_RETURNFLAG,L_LINESTATUS,L_SHIPDATE,L_COMMITDATE,L_RECEIPTDATE,L_SHIPINSTRUCT,L_SHIPMODE,L_COMMENT) from '@abs_srcdir@/data/lineitem_small.csv' with delimiter '|';
-\copy co_lineitem ( L_ORDERKEY, L_PARTKEY, L_SUPPKEY,L_LINENUMBER,L_QUANTITY, L_EXTENDEDPRICE,L_DISCOUNT,L_TAX,L_RETURNFLAG,L_LINESTATUS,L_SHIPDATE,L_COMMITDATE,L_RECEIPTDATE,L_SHIPINSTRUCT,L_SHIPMODE,L_COMMENT) from '@abs_srcdir@/data/lineitem.csv' with delimiter '|'; 
-\copy co_nation (N_NATIONKEY ,N_NAME, N_REGIONKEY,N_COMMENT) from '@abs_srcdir@/data/nation.csv' with delimiter '|';
-\copy co_orders ( O_ORDERKEY,O_CUSTKEY,O_ORDERSTATUS,O_TOTALPRICE,O_ORDERDATE,O_ORDERPRIORITY,O_CLERK,O_SHIPPRIORITY,O_COMMENT) from '@abs_srcdir@/data/order_small.csv' with delimiter '|';
-\copy co_orders ( O_ORDERKEY,O_CUSTKEY,O_ORDERSTATUS,O_TOTALPRICE,O_ORDERDATE,O_ORDERPRIORITY,O_CLERK,O_SHIPPRIORITY,O_COMMENT) from '@abs_srcdir@/data/order.csv' with delimiter '|'; 
-\copy co_part (P_PARTKEY,P_NAME,P_MFGR,P_BRAND,P_TYPE,P_SIZE,P_CONTAINER,P_RETAILPRICE,P_COMMENT) from '@abs_srcdir@/data/part.csv' with delimiter '|'; 
-\copy co_partsupp (PS_PARTKEY,PS_SUPPKEY,PS_AVAILQTY,PS_SUPPLYCOST,PS_COMMENT ) from '@abs_srcdir@/data/partsupp.csv' with delimiter '|';
-\copy co_region ( R_REGIONKEY,R_NAME,R_COMMENT) from '@abs_srcdir@/data/region.csv' with delimiter '|';
-\copy co_supplier (S_SUPPKEY,S_NAME,S_ADDRESS,S_NATIONKEY,S_PHONE,S_ACCTBAL,S_COMMENT) from '@abs_srcdir@/data/supplier.csv' with delimiter '|';
+copy co_customer (C_CUSTKEY,C_NAME,C_ADDRESS,C_NATIONKEY,C_PHONE,C_ACCTBAL,C_MKTSEGMENT,C_COMMENT) from :'customer_file' with delimiter '|';
+copy co_lineitem ( L_ORDERKEY, L_PARTKEY, L_SUPPKEY,L_LINENUMBER,L_QUANTITY, L_EXTENDEDPRICE,L_DISCOUNT,L_TAX,L_RETURNFLAG,L_LINESTATUS,L_SHIPDATE,L_COMMITDATE,L_RECEIPTDATE,L_SHIPINSTRUCT,L_SHIPMODE,L_COMMENT) from :'lineitem_small_file' with delimiter '|';
+copy co_lineitem ( L_ORDERKEY, L_PARTKEY, L_SUPPKEY,L_LINENUMBER,L_QUANTITY, L_EXTENDEDPRICE,L_DISCOUNT,L_TAX,L_RETURNFLAG,L_LINESTATUS,L_SHIPDATE,L_COMMITDATE,L_RECEIPTDATE,L_SHIPINSTRUCT,L_SHIPMODE,L_COMMENT) from :'lineitem_file' with delimiter '|'; 
+copy co_nation (N_NATIONKEY ,N_NAME, N_REGIONKEY,N_COMMENT) from :'nation_file' with delimiter '|';
+copy co_orders ( O_ORDERKEY,O_CUSTKEY,O_ORDERSTATUS,O_TOTALPRICE,O_ORDERDATE,O_ORDERPRIORITY,O_CLERK,O_SHIPPRIORITY,O_COMMENT) from :'order_small_file' with delimiter '|';
+copy co_orders ( O_ORDERKEY,O_CUSTKEY,O_ORDERSTATUS,O_TOTALPRICE,O_ORDERDATE,O_ORDERPRIORITY,O_CLERK,O_SHIPPRIORITY,O_COMMENT) from :'order_file' with delimiter '|'; 
+copy co_part (P_PARTKEY,P_NAME,P_MFGR,P_BRAND,P_TYPE,P_SIZE,P_CONTAINER,P_RETAILPRICE,P_COMMENT) from :'part_file' with delimiter '|'; 
+copy co_partsupp (PS_PARTKEY,PS_SUPPKEY,PS_AVAILQTY,PS_SUPPLYCOST,PS_COMMENT ) from :'partsupp_file' with delimiter '|';
+copy co_region ( R_REGIONKEY,R_NAME,R_COMMENT) from :'region_file' with delimiter '|';
+copy co_supplier (S_SUPPKEY,S_NAME,S_ADDRESS,S_NATIONKEY,S_PHONE,S_ACCTBAL,S_COMMENT) from :'supplier_file' with delimiter '|';
 
 ANALYZE co_customer;
 ANALYZE co_lineitem;

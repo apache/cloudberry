@@ -29,9 +29,13 @@ set optimizer_trace_fallback=on;
 create schema part_external_table;
 set search_path=part_external_table;
 
+\getenv hostname PG_HOSTNAME
+\getenv abs_srcdir PG_ABS_SRCDIR
+\set part1_file 'file://' :hostname :abs_srcdir '/data/part1.csv'
+\set part2_file 'file://' :hostname :abs_srcdir '/data/part2.csv'
 create table part (a int, b int) partition by range (b);
-create external table p1_e (a int, b int) location ('file://@hostname@@abs_srcdir@/data/part1.csv') format 'csv';
-create external table p2_e (a int, b int) location ('file://@hostname@@abs_srcdir@/data/part2.csv') format 'csv';
+create external table p1_e (a int, b int) location (:'part1_file') format 'csv';
+create external table p2_e (a int, b int) location (:'part2_file') format 'csv';
 alter table part attach partition p1_e for values from (0) to (10);
 alter table part attach partition p2_e for values from (10) to (19);
 analyze part;
@@ -137,8 +141,9 @@ alter table part add partition exch1 start(60) end (70);
 alter table part add partition exch2 start(70) end (80);
 
 -- exchange with external tables
-create external web table p3_e (a int, b int) execute 'cat > @abs_srcdir@/data/part-ext.csv' format 'csv' (delimiter as '|' null as 'null' escape as ' ');
-create writable external web table p4_e (a int, b int) execute 'cat > @abs_srcdir@/data/part-ext.csv' format 'csv' (delimiter as '|' null as 'null' escape as ' ');
+\set part-ext_file 'cat > ' :abs_srcdir '/data/part-ext.csv'
+create external web table p3_e (a int, b int) execute :'part-ext_file' format 'csv' (delimiter as '|' null as 'null' escape as ' ');
+create writable external web table p4_e (a int, b int) execute :'part-ext_file' format 'csv' (delimiter as '|' null as 'null' escape as ' ');
 
 -- allow exchange readable external table
 alter table part exchange partition exch1 with table p3_e;
@@ -158,8 +163,8 @@ OPTIONS ( filename '/does/not/exist.csv', format 'csv');
 alter table part exchange partition exch2 with table ft3;
 
 -- same tests for attach partition
-create external web table p5_e (a int, b int) execute 'cat > @abs_srcdir@/data/part-ext.csv' format 'csv' (delimiter as '|' null as 'null' escape as ' ');
-create writable external web table p6_e (a int, b int) execute 'cat > @abs_srcdir@/data/part-ext.csv' format 'csv' (delimiter as '|' null as 'null' escape as ' ');
+create external web table p5_e (a int, b int) execute :'part-ext_file' format 'csv' (delimiter as '|' null as 'null' escape as ' ');
+create writable external web table p6_e (a int, b int) execute :'part-ext_file' format 'csv' (delimiter as '|' null as 'null' escape as ' ');
 
 -- allow attach readable external table
 alter table part attach partition p5_e for values from (80) to (90);
