@@ -4744,7 +4744,7 @@ struct config_enum ConfigureNamesEnum[] =
 			GUC_EXPLAIN
 		},
 		&constraint_exclusion,
-		CONSTRAINT_EXCLUSION_PARTITION, constraint_exclusion_options,
+		CONSTRAINT_EXCLUSION_ON, constraint_exclusion_options,
 		NULL, NULL, NULL
 	},
 

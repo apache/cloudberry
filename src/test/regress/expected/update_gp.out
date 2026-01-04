@@ -672,15 +672,13 @@ select * from s;
 -- constraints in the planner.
 create table nosplitupdate (a int) distributed by (a);
 explain update nosplitupdate set a=0 where a=1 and a<1;
-                                             QUERY PLAN                                              
------------------------------------------------------------------------------------------------------
- Update on nosplitupdate  (cost=0.00..516.24 rows=0 width=0)
-   ->  Explicit Redistribute Motion 1:3  (slice1; segments: 1)  (cost=0.00..516.24 rows=37 width=14)
-         ->  Split Update  (cost=0.00..515.50 rows=37 width=14)
-               ->  Seq Scan on nosplitupdate  (cost=0.00..515.50 rows=19 width=14)
-                     Filter: ((a < 1) AND (a = 1))
+                        QUERY PLAN                         
+-----------------------------------------------------------
+ Update on nosplitupdate  (cost=0.00..0.01 rows=0 width=0)
+   ->  Result  (cost=0.00..0.00 rows=0 width=14)
+         One-Time Filter: false
  Optimizer: Postgres query optimizer
-(6 rows)
+(4 rows)
 
 -- test split-update when split-node's flow is entry
 create table tsplit_entry (c int);

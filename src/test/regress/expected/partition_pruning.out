@@ -1102,8 +1102,7 @@ EXPLAIN SELECT * FROM pt_lt_tab WHERE col2 between 1 AND 50 ORDER BY col2,col3 L
                ->  Incremental Sort  (cost=122.27..2022.42 rows=17 width=12)
                      Sort Key: pt_lt_tab.col2, pt_lt_tab.col3
                      Presorted Key: pt_lt_tab.col2
-                     ->  Merge Append  (cost=0.73..2021.68 rows=17 width=12)
-                           Sort Key: pt_lt_tab.col2
+                     ->  Append  (cost=0.68..2021.42 rows=17 width=12)
                            ->  Index Scan using idx1 on pt_lt_tab_1_prt_part1 pt_lt_tab_1  (cost=0.14..404.27 rows=3 width=12)
                                  Index Cond: ((col2 >= '1'::numeric) AND (col2 <= '50'::numeric))
                            ->  Index Scan using idx2 on pt_lt_tab_1_prt_part2 pt_lt_tab_2  (cost=0.14..404.27 rows=3 width=12)
@@ -1137,8 +1136,7 @@ EXPLAIN SELECT * FROM pt_lt_tab WHERE col2 > 5 ORDER BY col2,col3 LIMIT 5;
                ->  Incremental Sort  (cost=123.40..1862.16 rows=15 width=12)
                      Sort Key: pt_lt_tab.col2, pt_lt_tab.col3
                      Presorted Key: pt_lt_tab.col2
-                     ->  Merge Append  (cost=0.73..1861.48 rows=15 width=12)
-                           Sort Key: pt_lt_tab.col2
+                     ->  Append  (cost=0.68..1861.25 rows=15 width=12)
                            ->  Index Scan using idx1 on pt_lt_tab_1_prt_part1 pt_lt_tab_1  (cost=0.14..244.20 rows=2 width=12)
                                  Index Cond: (col2 > '5'::numeric)
                            ->  Index Scan using idx2 on pt_lt_tab_1_prt_part2 pt_lt_tab_2  (cost=0.14..404.24 rows=3 width=12)
@@ -3400,29 +3398,36 @@ SELECT * FROM pt_bool_tab_df WHERE col2 IS unknown;
 (1 row)
 
 EXPLAIN SELECT * FROM pt_bool_tab_df WHERE col2 IS NOT true;
-                                                      QUERY PLAN                                                       
------------------------------------------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)  (cost=10000000000.00..10000000969.00 rows=46750 width=5)
-   ->  Seq Scan on pt_bool_tab_df_1_prt_part2 pt_bool_tab_df  (cost=10000000000.00..10000000345.67 rows=15583 width=5)
-         Filter: (col2 IS NOT TRUE)
+                                                          QUERY PLAN                                                           
+-------------------------------------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=10000000000.00..20000002093.83 rows=93500 width=5)
+   ->  Append  (cost=10000000000.00..20000000847.17 rows=31167 width=5)
+         ->  Seq Scan on pt_bool_tab_df_1_prt_part2 pt_bool_tab_df_1  (cost=10000000000.00..10000000345.67 rows=15583 width=5)
+               Filter: (col2 IS NOT TRUE)
+         ->  Seq Scan on pt_bool_tab_df_1_prt_def pt_bool_tab_df_2  (cost=10000000000.00..10000000345.67 rows=15583 width=5)
+               Filter: (col2 IS NOT TRUE)
  Optimizer: Postgres query optimizer
-(4 rows)
+(7 rows)
 
 SELECT * FROM pt_bool_tab_df WHERE col2 IS NOT true;
  col1 | col2 
 ------+------
     2 | f
     1 | f
-(2 rows)
+    1 | 
+(3 rows)
 
 EXPLAIN SELECT * FROM pt_bool_tab_df WHERE col2 IS NOT false;
-                                                      QUERY PLAN                                                       
------------------------------------------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)  (cost=10000000000.00..10000000969.00 rows=46750 width=5)
-   ->  Seq Scan on pt_bool_tab_df_1_prt_part1 pt_bool_tab_df  (cost=10000000000.00..10000000345.67 rows=15583 width=5)
-         Filter: (col2 IS NOT FALSE)
+                                                          QUERY PLAN                                                           
+-------------------------------------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=10000000000.00..20000002093.83 rows=93500 width=5)
+   ->  Append  (cost=10000000000.00..20000000847.17 rows=31167 width=5)
+         ->  Seq Scan on pt_bool_tab_df_1_prt_part1 pt_bool_tab_df_1  (cost=10000000000.00..10000000345.67 rows=15583 width=5)
+               Filter: (col2 IS NOT FALSE)
+         ->  Seq Scan on pt_bool_tab_df_1_prt_def pt_bool_tab_df_2  (cost=10000000000.00..10000000345.67 rows=15583 width=5)
+               Filter: (col2 IS NOT FALSE)
  Optimizer: Postgres query optimizer
-(4 rows)
+(7 rows)
 
 SELECT * FROM pt_bool_tab_df WHERE col2 IS NOT false;
  col1 | col2 
@@ -3430,7 +3435,8 @@ SELECT * FROM pt_bool_tab_df WHERE col2 IS NOT false;
     2 | t
     3 | t
     1 | t
-(3 rows)
+    1 | 
+(4 rows)
 
 EXPLAIN SELECT * FROM pt_bool_tab_df WHERE col2 IS NOT unknown;
                                                           QUERY PLAN                                                           
@@ -3740,29 +3746,36 @@ SELECT * FROM pt_bool_tab_null WHERE col2 IS unknown;
 (1 row)
 
 EXPLAIN SELECT * FROM pt_bool_tab_null WHERE col2 IS NOT true;
-                                                        QUERY PLAN                                                         
----------------------------------------------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)  (cost=10000000000.00..10000000969.00 rows=46750 width=5)
-   ->  Seq Scan on pt_bool_tab_null_1_prt_part2 pt_bool_tab_null  (cost=10000000000.00..10000000345.67 rows=15583 width=5)
-         Filter: (col2 IS NOT TRUE)
+                                                            QUERY PLAN                                                             
+-----------------------------------------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=10000000000.00..20000002093.83 rows=93500 width=5)
+   ->  Append  (cost=10000000000.00..20000000847.17 rows=31167 width=5)
+         ->  Seq Scan on pt_bool_tab_null_1_prt_part2 pt_bool_tab_null_1  (cost=10000000000.00..10000000345.67 rows=15583 width=5)
+               Filter: (col2 IS NOT TRUE)
+         ->  Seq Scan on pt_bool_tab_null_1_prt_part3 pt_bool_tab_null_2  (cost=10000000000.00..10000000345.67 rows=15583 width=5)
+               Filter: (col2 IS NOT TRUE)
  Optimizer: Postgres query optimizer
-(4 rows)
+(7 rows)
 
 SELECT * FROM pt_bool_tab_null WHERE col2 IS NOT true;
  col1 | col2 
 ------+------
-    1 | f
     2 | f
-(2 rows)
+    1 | f
+    1 | 
+(3 rows)
 
 EXPLAIN SELECT * FROM pt_bool_tab_null WHERE col2 IS NOT false;
-                                                        QUERY PLAN                                                         
----------------------------------------------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)  (cost=10000000000.00..10000000969.00 rows=46750 width=5)
-   ->  Seq Scan on pt_bool_tab_null_1_prt_part1 pt_bool_tab_null  (cost=10000000000.00..10000000345.67 rows=15583 width=5)
-         Filter: (col2 IS NOT FALSE)
+                                                            QUERY PLAN                                                             
+-----------------------------------------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=10000000000.00..20000002093.83 rows=93500 width=5)
+   ->  Append  (cost=10000000000.00..20000000847.17 rows=31167 width=5)
+         ->  Seq Scan on pt_bool_tab_null_1_prt_part1 pt_bool_tab_null_1  (cost=10000000000.00..10000000345.67 rows=15583 width=5)
+               Filter: (col2 IS NOT FALSE)
+         ->  Seq Scan on pt_bool_tab_null_1_prt_part3 pt_bool_tab_null_2  (cost=10000000000.00..10000000345.67 rows=15583 width=5)
+               Filter: (col2 IS NOT FALSE)
  Optimizer: Postgres query optimizer
-(4 rows)
+(7 rows)
 
 SELECT * FROM pt_bool_tab_null WHERE col2 IS NOT false;
  col1 | col2 
@@ -3770,7 +3783,8 @@ SELECT * FROM pt_bool_tab_null WHERE col2 IS NOT false;
     2 | t
     3 | t
     1 | t
-(3 rows)
+    1 | 
+(4 rows)
 
 EXPLAIN SELECT * FROM pt_bool_tab_null WHERE col2 IS NOT unknown;
                                                             QUERY PLAN                                                             

@@ -341,21 +341,12 @@ create table bar (c int, d int) distributed randomly;
 insert into foo select generate_series(1,10);
 insert into bar select generate_series(1,10);
 explain select a from foo where a<1 and a>1 and not exists (select c from bar where c=a);
-                                               QUERY PLAN                                               
---------------------------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)  (cost=473.83..1458.05 rows=430 width=4)
-   ->  Hash Right Anti Join  (cost=473.83..1452.31 rows=144 width=4)
-         Hash Cond: (bar.c = foo.a)
-         ->  Redistribute Motion 3:3  (slice2; segments: 3)  (cost=0.00..895.00 rows=28700 width=4)
-               Hash Key: bar.c
-               ->  Seq Scan on bar  (cost=0.00..321.00 rows=28700 width=4)
-         ->  Hash  (cost=470.24..470.24 rows=287 width=4)
-               ->  Redistribute Motion 3:3  (slice3; segments: 3)  (cost=0.00..470.24 rows=287 width=4)
-                     Hash Key: foo.a
-                     ->  Seq Scan on foo  (cost=0.00..464.50 rows=287 width=4)
-                           Filter: ((a < 1) AND (a > 1))
+                QUERY PLAN                
+------------------------------------------
+ Result  (cost=0.00..0.00 rows=0 width=4)
+   One-Time Filter: false
  Optimizer: Postgres query optimizer
-(12 rows)
+(3 rows)
 
 select a from foo where a<1 and a>1 and not exists (select c from bar where c=a);
  a 
