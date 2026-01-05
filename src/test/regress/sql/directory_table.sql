@@ -12,8 +12,11 @@ SELECT relname, relisshared, relpersistence, relkind FROM pg_class WHERE relname
 SELECT relname, relisshared, relpersistence, relkind FROM pg_class WHERE relname = 'gp_storage_server';
 SELECT relname, relisshared, relpersistence, relkind FROM pg_class WHERE relname = 'gp_storage_user_mapping';
 
+\getenv abs_builddir PG_ABS_BUILDDIR
+\set testtablespace :abs_builddir '/testtablespace'
+
 -- CREATE TABLESPACE
-CREATE TABLESPACE directory_tblspc LOCATION '@testtablespace@';
+CREATE TABLESPACE directory_tblspc LOCATION :'testtablespace';
 
 -- CREATE DATABASE
 CREATE DATABASE dirtable_db;
@@ -306,84 +309,87 @@ for each statement execute procedure triggertest();
 SELECT relative_path, size, tag FROM dir_table1 ORDER BY 1;
 SELECT relative_path, size, tag FROM dir_table2 ORDER BY 1;
 
-\COPY dir_table1 FROM '@abs_srcdir@/data/nation.csv';    -- fail
-\COPY dir_table1 FROM '@abs_srcdir@/data/nation.csv' 'nation'; -- fail
-\COPY BINARY dir_table1 FROM '@abs_srcdir@/data/nation.csv';    -- fail
-\COPY BINARY dir_table1 FROM '@abs_srcdir@/data/nation.csv' 'nation1';
-\COPY BINARY dir_table1 FROM '@abs_srcdir@/data/nation.csv' 'nation1'; -- fail
-\COPY BINARY dir_table1 FROM '@abs_srcdir@/data/nation.csv' 'nation2' 'nation2'; -- fail
-\COPY BINARY dir_table1 FROM '@abs_srcdir@/data/nation.csv' 'nation2';
-\COPY BINARY dir_table1 FROM '@abs_srcdir@/data/nation.csv' 'nation3' WITH TAG 'nation';
-\COPY BINARY dir_table1 FROM '@abs_srcdir@/data/nation.csv' 'nation3' WITH TAG 'nation';    -- fail
-\COPY BINARY dir_table1 FROM '@abs_srcdir@/data/nation.csv' 'nation3' WITH TAG 'nation2';    -- fail
-\COPY BINARY dir_table1 FROM '@abs_srcdir@/data/nation.csv' 'nation4' WITH TAG 'nation';
-\COPY BINARY dir_table1 FROM '@abs_srcdir@/data/nation.csv' 'nation5' WITH TAG 'nation' WITH TAG 'nation2';    -- fail
-\COPY BINARY dir_table1 FROM '@abs_srcdir@/data/nation.csv' 'nation6';
-\COPY BINARY dir_table1 FROM '@abs_srcdir@/data/nation.csv' 'nation7';
-\COPY BINARY dir_table1 FROM '@abs_srcdir@/data/nation.csv' 'nation8';
-\COPY BINARY dir_table1 FROM '@abs_srcdir@/data/nation.csv' 'nation9';
-\COPY BINARY dir_table1 FROM '@abs_srcdir@/data/nation.csv' 'nation10';
-\COPY BINARY dir_table1 FROM '@abs_srcdir@/data/nation.csv' 'nation11';
-\COPY BINARY dir_table1 FROM '@abs_srcdir@/data/nation.csv' 'nation12';
-\COPY BINARY dir_table1 FROM '@abs_srcdir@/data/nation.csv' 'nation13';
-\COPY BINARY dir_table1 FROM '@abs_srcdir@/data/nation.csv' 'nation14';
-\COPY BINARY dir_table1 FROM '@abs_srcdir@/data/nation.csv' 'nation15';
-\COPY BINARY dir_table1 FROM '@abs_srcdir@/data/nation.csv' 'nation16';
-\COPY BINARY dir_table1 FROM '@abs_srcdir@/data/nation.csv' 'nation17';
-\COPY BINARY dir_table1 FROM '@abs_srcdir@/data/nation.csv' 'nation18';
+\getenv abs_srcdir PG_ABS_SRCDIR
+\set nation_file :abs_srcdir '/data/nation.csv'
+\COPY dir_table1 FROM :'nation_file';    -- fail
+\COPY dir_table1 FROM :'nation_file' 'nation'; -- fail
+\COPY BINARY dir_table1 FROM :'nation_file';    -- fail
+\COPY BINARY dir_table1 FROM :'nation_file' 'nation1';
+\COPY BINARY dir_table1 FROM :'nation_file' 'nation1'; -- fail
+\COPY BINARY dir_table1 FROM :'nation_file' 'nation2' 'nation2'; -- fail
+\COPY BINARY dir_table1 FROM :'nation_file' 'nation2';
+\COPY BINARY dir_table1 FROM :'nation_file' 'nation3' WITH TAG 'nation';
+\COPY BINARY dir_table1 FROM :'nation_file' 'nation3' WITH TAG 'nation';    -- fail
+\COPY BINARY dir_table1 FROM :'nation_file' 'nation3' WITH TAG 'nation2';    -- fail
+\COPY BINARY dir_table1 FROM :'nation_file' 'nation4' WITH TAG 'nation';
+\COPY BINARY dir_table1 FROM :'nation_file' 'nation5' WITH TAG 'nation' WITH TAG 'nation2';    -- fail
+\COPY BINARY dir_table1 FROM :'nation_file' 'nation6';
+\COPY BINARY dir_table1 FROM :'nation_file' 'nation7';
+\COPY BINARY dir_table1 FROM :'nation_file' 'nation8';
+\COPY BINARY dir_table1 FROM :'nation_file' 'nation9';
+\COPY BINARY dir_table1 FROM :'nation_file' 'nation10';
+\COPY BINARY dir_table1 FROM :'nation_file' 'nation11';
+\COPY BINARY dir_table1 FROM :'nation_file' 'nation12';
+\COPY BINARY dir_table1 FROM :'nation_file' 'nation13';
+\COPY BINARY dir_table1 FROM :'nation_file' 'nation14';
+\COPY BINARY dir_table1 FROM :'nation_file' 'nation15';
+\COPY BINARY dir_table1 FROM :'nation_file' 'nation16';
+\COPY BINARY dir_table1 FROM :'nation_file' 'nation17';
+\COPY BINARY dir_table1 FROM :'nation_file' 'nation18';
 SELECT relative_path, size, tag FROM dir_table1 ORDER BY 1;
 SELECT relative_path, content FROM directory_table('dir_table1') ORDER BY 1;
 
-COPY dir_table2 FROM PROGRAM 'cat @abs_srcdir@/data/nation.csv';     -- fail
-COPY dir_table2 FROM PROGRAM 'cat @abs_srcdir@/data/nation.csv' 'nation';  -- fail
-COPY BINARY dir_table2 FROM PROGRAM 'cat @abs_srcdir@/data/nation.csv' 'nation1';
-COPY BINARY dir_table2 FROM PROGRAM 'cat @abs_srcdir@/data/nation.csv' 'nation1'; -- fail
-COPY BINARY dir_table2 FROM PROGRAM 'cat @abs_srcdir@/data/nation.csv' 'nation2';
-COPY BINARY dir_table2 FROM PROGRAM 'cat @abs_srcdir@/data/nation.csv' 'nation3' WITH TAG 'nation';
-COPY BINARY dir_table2 FROM PROGRAM 'cat @abs_srcdir@/data/nation.csv' 'nation3' WITH TAG 'nation';    -- fail
-COPY BINARY dir_table2 FROM PROGRAM 'cat @abs_srcdir@/data/nation.csv' 'nation3' WITH TAG 'nation2';    -- fail
-COPY BINARY dir_table2 FROM PROGRAM 'cat @abs_srcdir@/data/nation.csv' 'nation4' WITH TAG 'nation';
-COPY BINARY dir_table2 FROM PROGRAM 'cat @abs_srcdir@/data/nation.csv' 'nation5' WITH TAG 'nation' WITH TAG 'nation2';    -- fail
+\set cat_nation_file 'cat ' :abs_srcdir '/data/nation.csv'
+COPY dir_table2 FROM PROGRAM :'cat_nation_file';     -- fail
+COPY dir_table2 FROM PROGRAM :'cat_nation_file' 'nation';  -- fail
+COPY BINARY dir_table2 FROM PROGRAM :'cat_nation_file' 'nation1';
+COPY BINARY dir_table2 FROM PROGRAM :'cat_nation_file' 'nation1'; -- fail
+COPY BINARY dir_table2 FROM PROGRAM :'cat_nation_file' 'nation2';
+COPY BINARY dir_table2 FROM PROGRAM :'cat_nation_file' 'nation3' WITH TAG 'nation';
+COPY BINARY dir_table2 FROM PROGRAM :'cat_nation_file' 'nation3' WITH TAG 'nation';    -- fail
+COPY BINARY dir_table2 FROM PROGRAM :'cat_nation_file' 'nation3' WITH TAG 'nation2';    -- fail
+COPY BINARY dir_table2 FROM PROGRAM :'cat_nation_file' 'nation4' WITH TAG 'nation';
+COPY BINARY dir_table2 FROM PROGRAM :'cat_nation_file' 'nation5' WITH TAG 'nation' WITH TAG 'nation2';    -- fail
 SELECT relative_path, size, tag FROM dir_table2 ORDER BY 1;
 SELECT relative_path, content FROM directory_table('dir_table2') ORDER BY 1;
 
-\COPY BINARY dir_table1 FROM '@abs_srcdir@/data/nation.csv' 'nation.txt';   -- OK
-COPY BINARY dir_table1 FROM '@abs_srcdir@/data/nation.csv' 'nation2.txt';   -- OK
-\COPY BINARY "abs.dir_table" FROM '@abs_srcdir@/data/nation.csv' 'aa.bb';    -- OK
-COPY BINARY "abs.dir_table" FROM '@abs_srcdir@/data/nation.csv' 'cc.dd';    -- OK
+\COPY BINARY dir_table1 FROM :'nation_file' 'nation.txt';   -- OK
+COPY BINARY dir_table1 FROM :'nation_file' 'nation2.txt';   -- OK
+\COPY BINARY "abs.dir_table" FROM :'nation_file' 'aa.bb';    -- OK
+COPY BINARY "abs.dir_table" FROM :'nation_file' 'cc.dd';    -- OK
 
 -- Test copy binary from directory table
-\COPY BINARY dir_table1 FROM '@abs_srcdir@/data/nation.csv' 'nation_failed' (format CSV);
-\COPY BINARY dir_table1 FROM '@abs_srcdir@/data/nation.csv' 'nation_failed' (freeze off);
-\COPY BINARY dir_table1 FROM '@abs_srcdir@/data/nation.csv' 'nation_failed' (freeze on);
-\COPY BINARY dir_table1 FROM '@abs_srcdir@/data/nation.csv' 'nation_failed' (delimiter ',');
-\COPY BINARY dir_table1 FROM '@abs_srcdir@/data/nation.csv' 'nation_failed' (null ' ');
-\COPY BINARY dir_table1 FROM '@abs_srcdir@/data/nation.csv' 'nation_failed' (header off);
-\COPY BINARY dir_table1 FROM '@abs_srcdir@/data/nation.csv' 'nation_failed' (header on);
-\COPY BINARY dir_table1 FROM '@abs_srcdir@/data/nation.csv' 'nation_failed' (quote ':');
-\COPY BINARY dir_table1 FROM '@abs_srcdir@/data/nation.csv' 'nation_failed' (escape ':');
-\COPY BINARY dir_table1 FROM '@abs_srcdir@/data/nation.csv' 'nation_failed' (force_quote (a));
-\COPY BINARY dir_table1 FROM '@abs_srcdir@/data/nation.csv' 'nation_failed' (force_quote *);
-\COPY BINARY dir_table1 FROM '@abs_srcdir@/data/nation.csv' 'nation_failed' (force_not_null (a));
-\COPY BINARY dir_table1 FROM '@abs_srcdir@/data/nation.csv' 'nation_failed' (force_null (a));
-\COPY BINARY dir_table1 FROM '@abs_srcdir@/data/nation.csv' 'nation_failed' (convert_selectively (a));
-\COPY BINARY dir_table1 FROM '@abs_srcdir@/data/nation.csv' 'nation_failed' (encoding 'sql_ascii');
+\COPY BINARY dir_table1 FROM :'nation_file' 'nation_failed' (format CSV);
+\COPY BINARY dir_table1 FROM :'nation_file' 'nation_failed' (freeze off);
+\COPY BINARY dir_table1 FROM :'nation_file' 'nation_failed' (freeze on);
+\COPY BINARY dir_table1 FROM :'nation_file' 'nation_failed' (delimiter ',');
+\COPY BINARY dir_table1 FROM :'nation_file' 'nation_failed' (null ' ');
+\COPY BINARY dir_table1 FROM :'nation_file' 'nation_failed' (header off);
+\COPY BINARY dir_table1 FROM :'nation_file' 'nation_failed' (header on);
+\COPY BINARY dir_table1 FROM :'nation_file' 'nation_failed' (quote ':');
+\COPY BINARY dir_table1 FROM :'nation_file' 'nation_failed' (escape ':');
+\COPY BINARY dir_table1 FROM :'nation_file' 'nation_failed' (force_quote (a));
+\COPY BINARY dir_table1 FROM :'nation_file' 'nation_failed' (force_quote *);
+\COPY BINARY dir_table1 FROM :'nation_file' 'nation_failed' (force_not_null (a));
+\COPY BINARY dir_table1 FROM :'nation_file' 'nation_failed' (force_null (a));
+\COPY BINARY dir_table1 FROM :'nation_file' 'nation_failed' (convert_selectively (a));
+\COPY BINARY dir_table1 FROM :'nation_file' 'nation_failed' (encoding 'sql_ascii');
 
-COPY BINARY dir_table2 FROM '@abs_srcdir@/data/nation.csv' 'nation_failed' (format CSV);
-COPY BINARY dir_table2 FROM '@abs_srcdir@/data/nation.csv' 'nation_failed' (freeze off);
-COPY BINARY dir_table2 FROM '@abs_srcdir@/data/nation.csv' 'nation_failed' (freeze on);
-COPY BINARY dir_table2 FROM '@abs_srcdir@/data/nation.csv' 'nation_failed' (delimiter ',');
-COPY BINARY dir_table2 FROM '@abs_srcdir@/data/nation.csv' 'nation_failed' (null ' ');
-COPY BINARY dir_table2 FROM '@abs_srcdir@/data/nation.csv' 'nation_failed' (header off);
-COPY BINARY dir_table2 FROM '@abs_srcdir@/data/nation.csv' 'nation_failed' (header on);
-COPY BINARY dir_table2 FROM '@abs_srcdir@/data/nation.csv' 'nation_failed' (quote ':');
-COPY BINARY dir_table2 FROM '@abs_srcdir@/data/nation.csv' 'nation_failed' (escape ':');
-COPY BINARY dir_table2 FROM '@abs_srcdir@/data/nation.csv' 'nation_failed' (force_quote (a));
-COPY BINARY dir_table2 FROM '@abs_srcdir@/data/nation.csv' 'nation_failed' (force_quote *);
-COPY BINARY dir_table2 FROM '@abs_srcdir@/data/nation.csv' 'nation_failed' (force_not_null (a));
-COPY BINARY dir_table2 FROM '@abs_srcdir@/data/nation.csv' 'nation_failed' (force_null (a));
-COPY BINARY dir_table2 FROM '@abs_srcdir@/data/nation.csv' 'nation_failed' (convert_selectively (a));
-COPY BINARY dir_table2 FROM '@abs_srcdir@/data/nation.csv' 'nation_failed' (encoding 'sql_ascii');
+COPY BINARY dir_table2 FROM :'nation_file' 'nation_failed' (format CSV);
+COPY BINARY dir_table2 FROM :'nation_file' 'nation_failed' (freeze off);
+COPY BINARY dir_table2 FROM :'nation_file' 'nation_failed' (freeze on);
+COPY BINARY dir_table2 FROM :'nation_file' 'nation_failed' (delimiter ',');
+COPY BINARY dir_table2 FROM :'nation_file' 'nation_failed' (null ' ');
+COPY BINARY dir_table2 FROM :'nation_file' 'nation_failed' (header off);
+COPY BINARY dir_table2 FROM :'nation_file' 'nation_failed' (header on);
+COPY BINARY dir_table2 FROM :'nation_file' 'nation_failed' (quote ':');
+COPY BINARY dir_table2 FROM :'nation_file' 'nation_failed' (escape ':');
+COPY BINARY dir_table2 FROM :'nation_file' 'nation_failed' (force_quote (a));
+COPY BINARY dir_table2 FROM :'nation_file' 'nation_failed' (force_quote *);
+COPY BINARY dir_table2 FROM :'nation_file' 'nation_failed' (force_not_null (a));
+COPY BINARY dir_table2 FROM :'nation_file' 'nation_failed' (force_null (a));
+COPY BINARY dir_table2 FROM :'nation_file' 'nation_failed' (convert_selectively (a));
+COPY BINARY dir_table2 FROM :'nation_file' 'nation_failed' (encoding 'sql_ascii');
 
 -- Test copy file content md5
 CREATE OR REPLACE FUNCTION file_content(text, text) RETURNS BYTEA LANGUAGE SQL AS
@@ -406,33 +412,44 @@ SELECT md5_equal('dir_table2', 'nation3');
 SELECT md5_equal('dir_table2', 'nation4');
 
 -- Test Copy To directory table
-\COPY dir_table1 TO '@abs_srcdir@/data/dir_table1';  -- fail
-\COPY BINARY dir_table1 TO '@abs_srcdir@/data/dir_table1';  -- fail
-COPY dir_table1 TO '@abs_srcdir@/data/dir_table1';  -- fail
-COPY BINARY dir_table1 TO '@abs_srcdir@/data/dir_table1';  -- fail
-\COPY dir_table2 TO '@abs_srcdir@/data/dir_table2';  -- fail
-\COPY BINARY dir_table2 TO '@abs_srcdir@/data/dir_table2';  -- fail
-COPY dir_table2 TO '@abs_srcdir@/data/dir_table2';  -- fail
-COPY BINARY dir_table2 TO '@abs_srcdir@/data/dir_table2';  -- fail
-\COPY BINARY dir_table1 TO '@abs_srcdir@/data/dir_table1';   -- fail
-COPY BINARY dir_table1 TO '@abs_srcdir@/data/dir_table1';   -- fail
-\COPY BINARY DIRECTORY TABLE dir_table1 'nation1' TO '@abs_srcdir@/data/nation1';   -- OK
-COPY BINARY DIRECTORY TABLE dir_table1 'nation1' TO '@abs_srcdir@/data/nation1';   -- OK
-\COPY BINARY DIRECTORY TABLE dir_table1 'unknown' TO '@abs_srcdir@/data/unknown';   -- OK
-COPY BINARY DIRECTORY TABLE dir_table1 'unknown' TO '@abs_srcdir@/data/unknown';    -- OK
+\set dir_table1_file :abs_srcdir '/data/dir_table1'
+\set dir_table12_file :abs_srcdir '/data/dir_table2'
+\set dir_nation1_file :abs_srcdir '/data/dir_nation1'
+\set dir_unknown_file :abs_srcdir '/data/dir_unknown'
+\set nation2_gz 'gzip -c -1 > ' :abs_srcdir '/data/nation2.gz'
+\COPY dir_table1 TO :'dir_table1_file';  -- fail
+\COPY BINARY dir_table1 TO :'dir_table1_file';  -- fail
+COPY dir_table1 TO :'dir_table1_file';  -- fail
+COPY BINARY dir_table1 TO :'dir_table1_file';  -- fail
+\COPY dir_table2 TO :'dir_table12_file';  -- fail
+\COPY BINARY dir_table2 TO :'dir_table12_file';  -- fail
+COPY dir_table2 TO :'dir_table12_file';  -- fail
+COPY BINARY dir_table2 TO :'dir_table12_file';  -- fail
+\COPY BINARY dir_table1 TO :'dir_table1_file';   -- fail
+COPY BINARY dir_table1 TO :'dir_table1_file';   -- fail
+\COPY BINARY DIRECTORY TABLE dir_table1 'nation1' TO :'dir_nation1_file';   -- OK
+COPY BINARY DIRECTORY TABLE dir_table1 'nation1' TO :'dir_nation1_file';   -- OK
+\COPY BINARY DIRECTORY TABLE dir_table1 'unknown' TO :'dir_unknown_file';   -- OK
+COPY BINARY DIRECTORY TABLE dir_table1 'unknown' TO :'dir_unknown_file';    -- OK
 \COPY BINARY DIRECTORY TABLE dir_table1 'nation2' TO stdin; -- OK
 COPY BINARY DIRECTORY TABLE dir_table1 'nation2' TO stdin; -- OK
 \COPY BINARY DIRECTORY TABLE dir_table1 'nation2' TO stdout; -- OK
 COPY BINARY DIRECTORY TABLE dir_table1 'nation2' TO stdout; -- OK
-\COPY BINARY DIRECTORY TABLE dir_table1 'nation2' TO PROGRAM 'gzip -c -1 > @abs_srcdir@/data/nation2.gz';   -- OK
-COPY BINARY DIRECTORY TABLE dir_table1 'nation2' TO PROGRAM 'gzip -c -1 > @abs_srcdir@/data/nation2.gz';   -- OK
+\COPY BINARY DIRECTORY TABLE dir_table1 'nation2' TO PROGRAM :'nation2_gz';   -- OK
+COPY BINARY DIRECTORY TABLE dir_table1 'nation2' TO PROGRAM :'nation2_gz';   -- OK
 
-\COPY BINARY DIRECTORY TABLE "abs.dir_table" 'aa.bb' TO '@abs_srcdir@/data/aa.bb';   -- OK
-COPY BINARY DIRECTORY TABLE "abs.dir_table" 'cc.dd' TO '@abs_srcdir@/data/cc.dd';    -- OK
-\COPY BINARY DIRECTORY TABLE dir_table1 'nation.txt' TO '@abs_srcdir@/data/nation.txt'; -- OK
-COPY BINARY DIRECTORY TABLE dir_table1 'nation2.txt' TO '@abs_srcdir@/data/nation2.txt'; -- OK
-\COPY BINARY DIRECTORY TABLE public.dir_table1 'nation.txt' TO '@abs_srcdir@/data/nation3.txt'; -- OK
-COPY BINARY DIRECTORY TABLE public.dir_table1 'nation2.txt' TO '@abs_srcdir@/data/nation4.txt'; -- OK
+\set aa_bb_file :abs_srcdir '/data/aa.bb'
+\set cc_dd_file :abs_srcdir '/data/cc.dd'
+\set nation_txt_file :abs_srcdir '/data/nation.txt'
+\set nation2_txt_file :abs_srcdir '/data/nation2.txt'
+\set nation3_txt_file :abs_srcdir '/data/nation3.txt'
+\set nation4_txt_file :abs_srcdir '/data/nation4.txt'
+\COPY BINARY DIRECTORY TABLE "abs.dir_table" 'aa.bb' TO :'aa_bb_file';   -- OK
+COPY BINARY DIRECTORY TABLE "abs.dir_table" 'cc.dd' TO :'cc_dd_file';    -- OK
+\COPY BINARY DIRECTORY TABLE dir_table1 'nation.txt' TO :'nation_txt_file'; -- OK
+COPY BINARY DIRECTORY TABLE dir_table1 'nation2.txt' TO :'nation2_txt_file'; -- OK
+\COPY BINARY DIRECTORY TABLE public.dir_table1 'nation.txt' TO :'nation3_txt_file'; -- OK
+COPY BINARY DIRECTORY TABLE public.dir_table1 'nation2.txt' TO :'nation4_txt_file'; -- OK
 
 
 SELECT relative_path, size, tag FROM dir_table1 ORDER BY 1;
@@ -521,8 +538,8 @@ SELECT relative_path, size, tag FROM dir_table2 ORDER BY 1;
 CREATE DIRECTORY TABLE dir_table4 TABLESPACE directory_tblspc;
 
 BEGIN;
-COPY BINARY dir_table4 FROM '@abs_srcdir@/data/nation.csv' 'nation_commit';
-COPY BINARY dir_table4 FROM '@abs_srcdir@/data/nation.csv' 'nation_commit2' WITH TAG 'nation';
+COPY BINARY dir_table4 FROM :'nation_file' 'nation_commit';
+COPY BINARY dir_table4 FROM :'nation_file' 'nation_commit2' WITH TAG 'nation';
 
 COMMIT;
 SELECT relative_path, content FROM directory_table('dir_table4') ORDER BY 1;
@@ -542,7 +559,7 @@ SELECT relative_path, tag FROM dir_table4 ORDER BY 1;
 -- Test transaction rollback of directory table manipulation
 
 BEGIN;
-COPY BINARY dir_table4 FROM '@abs_srcdir@/data/nation.csv' 'nation_rollback';
+COPY BINARY dir_table4 FROM :'nation_file' 'nation_rollback';
 SELECT relative_path, content FROM directory_table('dir_table4') ORDER BY 1;
 ROLLBACK;
 SELECT relative_path, content FROM directory_table('dir_table4') ORDER BY 1;
@@ -555,7 +572,7 @@ SELECT relative_path, content FROM directory_table('dir_table4') ORDER BY 1;
 
 BEGIN;
 SELECT relative_path, tag FROM dir_table4 ORDER BY 1;
-COPY BINARY dir_table4 FROM '@abs_srcdir@/data/nation.csv' 'nation_rollback2' WITH TAG 'nation';
+COPY BINARY dir_table4 FROM :'nation_file' 'nation_rollback2' WITH TAG 'nation';
 UPDATE dir_table4 SET tag = 'nation_updated' WHERE relative_path = 'nation_rollback2';
 SELECT relative_path, tag FROM dir_table4 ORDER BY 1;
 ROLLBACK;
@@ -564,13 +581,13 @@ SELECT relative_path, tag FROM dir_table4 ORDER BY 1;
 -- Test subtransaction commit of directory table manipulation
 BEGIN;
 SELECT relative_path, tag FROM dir_table4 ORDER BY 1;
-COPY BINARY dir_table4 FROM '@abs_srcdir@/data/nation.csv' 'nation_subcommit' WITH TAG 'nation';
+COPY BINARY dir_table4 FROM :'nation_file' 'nation_subcommit' WITH TAG 'nation';
 SAVEPOINT s1;
 SELECT relative_path, tag FROM dir_table4 ORDER BY 1;
-COPY BINARY dir_table4 FROM '@abs_srcdir@/data/nation.csv' 'nation_subcommit2';
+COPY BINARY dir_table4 FROM :'nation_file' 'nation_subcommit2';
 SAVEPOINT s2;
 SELECT relative_path, tag FROM dir_table4 ORDER BY 1;
-COPY BINARY dir_table4 FROM '@abs_srcdir@/data/nation.csv' 'nation_subcommit3';
+COPY BINARY dir_table4 FROM :'nation_file' 'nation_subcommit3';
 RELEASE SAVEPOINT s1;
 SELECT relative_path, tag FROM dir_table4 ORDER BY 1;
 COMMIT;
@@ -581,7 +598,7 @@ SELECT relative_path, tag FROM dir_table4 ORDER BY 1;
 SELECT remove_file('dir_table4', 'nation_subcommit');
 SAVEPOINT s1;
 SELECT relative_path, tag FROM dir_table4 ORDER BY 1;
-COPY BINARY dir_table4 FROM '@abs_srcdir@/data/nation.csv' 'nation_subcommit';
+COPY BINARY dir_table4 FROM :'nation_file' 'nation_subcommit';
 SAVEPOINT s2;
 SELECT relative_path, tag FROM dir_table4 ORDER BY 1;
 RELEASE SAVEPOINT s1;
@@ -605,18 +622,18 @@ SELECT relative_path, tag FROM dir_table4 ORDER BY 1;
 SELECT remove_file('dir_table4', 'nation_subcommit2');
 SAVEPOINT s1;
 SELECT relative_path, tag FROM dir_table4 ORDER BY 1;
-COPY BINARY dir_table4 FROM '@abs_srcdir@/data/nation.csv' 'nation_subcommit4';
+COPY BINARY dir_table4 FROM :'nation_file' 'nation_subcommit4';
 SAVEPOINT s2;
 SELECT relative_path, tag FROM dir_table4 ORDER BY 1;
 ROLLBACK TO SAVEPOINT s1;
 COMMIT;
 
 -- Test subtransaction rollback of directory table manipulation
-COPY BINARY dir_table4 FROM '@abs_srcdir@/data/nation.csv' 'nation_subrollback1';
-COPY BINARY dir_table4 FROM '@abs_srcdir@/data/nation.csv' 'nation_subrollback2';
+COPY BINARY dir_table4 FROM :'nation_file' 'nation_subrollback1';
+COPY BINARY dir_table4 FROM :'nation_file' 'nation_subrollback2';
 BEGIN;
 SELECT relative_path, tag FROM dir_table4 ORDER BY 1;
-COPY BINARY dir_table4 FROM '@abs_srcdir@/data/nation.csv' 'nation_subrollback3';
+COPY BINARY dir_table4 FROM :'nation_file' 'nation_subrollback3';
 SELECT relative_path, tag FROM dir_table4 ORDER BY 1;
 SAVEPOINT s1;
 SELECT remove_file('dir_table4', 'nation_subrollback1');
@@ -625,7 +642,7 @@ SELECT relative_path, tag FROM dir_table4 ORDER BY 1;
 ROLLBACK;
 
 BEGIN;
-COPY BINARY dir_table4 FROM '@abs_srcdir@/data/nation.csv' 'nation_subrollback4';
+COPY BINARY dir_table4 FROM :'nation_file' 'nation_subrollback4';
 SELECT relative_path, tag FROM dir_table4 ORDER BY 1;
 SAVEPOINT s1;
 SELECT remove_file('dir_table4', 'nation_subrollback4');
@@ -636,14 +653,14 @@ ROLLBACK;
 
 BEGIN;
 SELECT remove_file('dir_table4', 'nation_subrollback2');
-COPY BINARY dir_table4 FROM '@abs_srcdir@/data/nation.csv' 'nation_subrollback5';
+COPY BINARY dir_table4 FROM :'nation_file' 'nation_subrollback5';
 SELECT relative_path, tag FROM dir_table4 ORDER BY 1;
 SAVEPOINT s1;
 SELECT remove_file('dir_table4', 'nation_subrollback5');
 SELECT relative_path, tag FROM dir_table4 ORDER BY 1;
 ROLLBACK TO SAVEPOINT s1;
 SELECT relative_path, tag FROM dir_table4 ORDER BY 1;
-COPY BINARY dir_table4 FROM '@abs_srcdir@/data/nation.csv' 'nation_subrollback6';
+COPY BINARY dir_table4 FROM :'nation_file' 'nation_subrollback6';
 SELECT relative_path, tag FROM dir_table4 ORDER BY 1;
 SAVEPOINT s2;
 ROLLBACK;

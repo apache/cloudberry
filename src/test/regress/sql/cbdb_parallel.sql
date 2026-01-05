@@ -31,7 +31,7 @@
 --  12  CdbLocusType_HashedWorkers
 --
 --
-set force_parallel_mode = 0;
+set debug_parallel_query=regress;
 set optimizer = off;
 
 create schema test_parallel;

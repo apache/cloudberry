@@ -141,9 +141,9 @@ alter table part add partition exch1 start(60) end (70);
 alter table part add partition exch2 start(70) end (80);
 
 -- exchange with external tables
-\set part-ext_file 'cat > ' :abs_srcdir '/data/part-ext.csv'
-create external web table p3_e (a int, b int) execute :'part-ext_file' format 'csv' (delimiter as '|' null as 'null' escape as ' ');
-create writable external web table p4_e (a int, b int) execute :'part-ext_file' format 'csv' (delimiter as '|' null as 'null' escape as ' ');
+\set part_ext_file 'cat > ' :abs_srcdir '/data/part-ext.csv'
+create external web table p3_e (a int, b int) execute :'part_ext_file' format 'csv' (delimiter as '|' null as 'null' escape as ' ');
+create writable external web table p4_e (a int, b int) execute :'part_ext_file' format 'csv' (delimiter as '|' null as 'null' escape as ' ');
 
 -- allow exchange readable external table
 alter table part exchange partition exch1 with table p3_e;
@@ -163,8 +163,8 @@ OPTIONS ( filename '/does/not/exist.csv', format 'csv');
 alter table part exchange partition exch2 with table ft3;
 
 -- same tests for attach partition
-create external web table p5_e (a int, b int) execute :'part-ext_file' format 'csv' (delimiter as '|' null as 'null' escape as ' ');
-create writable external web table p6_e (a int, b int) execute :'part-ext_file' format 'csv' (delimiter as '|' null as 'null' escape as ' ');
+create external web table p5_e (a int, b int) execute :'part_ext_file' format 'csv' (delimiter as '|' null as 'null' escape as ' ');
+create writable external web table p6_e (a int, b int) execute :'part_ext_file' format 'csv' (delimiter as '|' null as 'null' escape as ' ');
 
 -- allow attach readable external table
 alter table part attach partition p5_e for values from (80) to (90);

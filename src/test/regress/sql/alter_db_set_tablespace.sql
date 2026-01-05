@@ -31,13 +31,14 @@ except OSError:
 os.mkdir(tablespace_location_dir)
 $$ LANGUAGE plpython3u;
 
-\set adst_source_tablespace_location @testtablespace@/adst_source
-\set adst_destination_tablespace_location @testtablespace@/adst_dest
+\getenv abs_builddir PG_ABS_BUILDDIR
+\set adst_source_tablespace_location :abs_builddir '/testtablespace/adst_source'
+\set adst_destination_tablespace_location :abs_builddir '/testtablespace/adst_dest'
 
 CREATE or REPLACE FUNCTION setup() RETURNS VOID AS $$
 DECLARE
-    adst_source_tablespace_location text := '@testtablespace@/adst_source';
-    adst_destination_tablespace_location text := '@testtablespace@/adst_dest';
+    adst_source_tablespace_location text := :'adst_source_tablespace_location';
+    adst_destination_tablespace_location text := :'adst_destination_tablespace_location';
 BEGIN
     -- Setup tablespace directories
     PERFORM setup_tablespace_location_dir_for_test(adst_source_tablespace_location);

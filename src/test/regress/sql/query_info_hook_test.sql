@@ -1,4 +1,6 @@
-LOAD '@abs_builddir@/query_info_hook_test/query_info_hook_test@DLSUFFIX@';
+\getenv abs_builddir PG_ABS_BUILDDIR
+\set query_info_hook_test_dll :abs_builddir '/query_info_hook_test/query_info_hook_test.so'
+LOAD :'query_info_hook_test_dll';
 SET client_min_messages='warning';
 SET optimizer=off;
 

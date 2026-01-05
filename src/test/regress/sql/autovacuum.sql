@@ -1,5 +1,7 @@
+\getenv abs_srcdir PG_ABS_SRCDIR
+\set regress_dll :abs_srcdir '/regress.so'
 create or replace function test_consume_xids(int4) returns void
-as '@abs_srcdir@/regress.so', 'test_consume_xids'
+as :'regress_dll', 'test_consume_xids'
 language C;
 
 set debug_burn_xids=on;

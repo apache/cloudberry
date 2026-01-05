@@ -73,7 +73,10 @@ SELECT segment_setting('lc_time');
 -- QD should sync the lc_time to the newly created QEs.
 SELECT pg_terminate_backend(pid) FROM gp_dist_random('pg_stat_activity') WHERE sess_id
  in (SELECT sess_id from pg_stat_activity WHERE pid in (SELECT pg_backend_pid())) ; 
-ERROR:  terminating connection due to administrator command  (seg1 slice1 11.158.187.228:7003 pid=114379)
+ pg_terminate_backend 
+----------------------
+(0 rows)
+
 SELECT segment_setting('lc_time');
  segment_setting 
 -----------------

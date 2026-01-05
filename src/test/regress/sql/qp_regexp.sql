@@ -25,7 +25,9 @@ phone_num bigint
 )
 distributed by (lname);
 
-\copy public.phone_book from '@abs_srcdir@/data/phone_book.txt' delimiter as '|'
+\getenv abs_srcdir PG_ABS_SRCDIR
+\set phone_book_file :abs_srcdir '/data/phone_book.txt'
+\copy public.phone_book from :'phone_book_file' delimiter as '|'
 
 drop table if exists phone_book_substr;
 

@@ -1,4 +1,6 @@
-LOAD '@abs_builddir@/hooktest/test_hook@DLSUFFIX@';
+\getenv abs_builddir PG_ABS_BUILDDIR
+\set test_hook :abs_builddir '/hooktest/test_hook.so'
+LOAD :'test_hook';
 -----------------------------------
 -- Test planner hook
 -----------------------------------

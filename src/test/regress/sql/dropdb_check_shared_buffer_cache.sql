@@ -1,7 +1,8 @@
 -- Test that dropping a database will drop pages in the shared buffer cache.
-
+\getenv abs_srcdir PG_ABS_SRCDIR
+\set regress_dll :abs_srcdir '/regress.so'
 CREATE OR REPLACE FUNCTION check_shared_buffer_cache_for_dboid(Oid) RETURNS BOOL
-AS '@abs_srcdir@/regress.so', 'check_shared_buffer_cache_for_dboid'
+AS :'regress_dll', 'check_shared_buffer_cache_for_dboid'
 LANGUAGE C;
 
 -- Create a new database and a table. This should create entries in the shared
