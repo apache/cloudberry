@@ -1,0 +1,2 @@
+#!/bin/bash
+cp -r lib share $GPHOME || exit 1

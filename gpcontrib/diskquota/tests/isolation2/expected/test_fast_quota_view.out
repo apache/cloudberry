@@ -1,0 +1,182 @@
+CREATE SCHEMA s1;
+CREATE
+CREATE SCHEMA s2;
+CREATE
+
+CREATE ROLE r LOGIN SUPERUSER;
+CREATE
+
+!\retcode mkdir -p /tmp/spc1;
+-- start_ignore
+
+-- end_ignore
+(exited with code 0)
+!\retcode mkdir -p /tmp/spc2;
+-- start_ignore
+
+-- end_ignore
+(exited with code 0)
+
+DROP TABLESPACE IF EXISTS spc1;
+DROP
+CREATE TABLESPACE spc1 LOCATION '/tmp/spc1';
+CREATE
+DROP TABLESPACE IF EXISTS spc2;
+DROP
+CREATE TABLESPACE spc2 LOCATION '/tmp/spc2';
+CREATE
+
+SELECT diskquota.set_schema_quota('s1', '100 MB');
+ set_schema_quota 
+------------------
+                  
+(1 row)
+SELECT diskquota.set_schema_tablespace_quota('s2', 'spc1','100 MB');
+ set_schema_tablespace_quota 
+-----------------------------
+                             
+(1 row)
+SELECT diskquota.set_role_quota('r', '100 MB');
+ set_role_quota 
+----------------
+                
+(1 row)
+SELECT diskquota.set_role_tablespace_quota('r', 'spc2', '100 MB');
+ set_role_tablespace_quota 
+---------------------------
+                           
+(1 row)
+
+-- test show_fast_schema_quota_view and show_fast_schema_tablespace_quota_view
+1: BEGIN;
+BEGIN
+1: CREATE TABLE s1.t(i int) DISTRIBUTED BY (i);
+CREATE
+1: INSERT INTO s1.t SELECT generate_series(1, 100000);
+INSERT 100000
+
+1: CREATE TABLE s2.t(i int) TABLESPACE spc1 DISTRIBUTED BY (i);
+CREATE
+1: INSERT INTO s2.t SELECT generate_series(1, 100000);
+INSERT 100000
+
+1: SELECT diskquota.wait_for_worker_new_epoch();
+ wait_for_worker_new_epoch 
+---------------------------
+ t                         
+(1 row)
+
+-- check schema quota view before transaction commits
+2: SELECT schema_name, quota_in_mb, nspsize_in_bytes FROM diskquota.show_fast_schema_quota_view;
+ schema_name | quota_in_mb | nspsize_in_bytes 
+-------------+-------------+------------------
+ s1          | 100         | 3932160          
+(1 row)
+2: SELECT schema_name, tablespace_name, quota_in_mb, nspsize_tablespace_in_bytes FROM diskquota.show_fast_schema_tablespace_quota_view;
+ schema_name | tablespace_name | quota_in_mb | nspsize_tablespace_in_bytes 
+-------------+-----------------+-------------+-----------------------------
+ s2          | spc1            | 100         | 3932160                     
+(1 row)
+
+1: COMMIT;
+COMMIT
+2: SELECT diskquota.wait_for_worker_new_epoch();
+ wait_for_worker_new_epoch 
+---------------------------
+ t                         
+(1 row)
+2: SELECT schema_name, quota_in_mb, nspsize_in_bytes FROM diskquota.show_fast_schema_quota_view;
+ schema_name | quota_in_mb | nspsize_in_bytes 
+-------------+-------------+------------------
+ s1          | 100         | 3932160          
+(1 row)
+2: SELECT schema_name, tablespace_name, quota_in_mb, nspsize_tablespace_in_bytes FROM diskquota.show_fast_schema_tablespace_quota_view;
+ schema_name | tablespace_name | quota_in_mb | nspsize_tablespace_in_bytes 
+-------------+-----------------+-------------+-----------------------------
+ s2          | spc1            | 100         | 3932160                     
+(1 row)
+
+-- login r to test role quota view
+1: SET ROLE r;
+SET
+
+-- test show_fast_role_quota_view and show_fast_role_tablespace_quota_view
+1: BEGIN;
+BEGIN
+1: CREATE TABLE t1(i int) DISTRIBUTED BY (i);
+CREATE
+1: INSERT INTO t1 SELECT generate_series(1, 100000);
+INSERT 100000
+
+1: CREATE TABLE t2(i int) TABLESPACE spc2 DISTRIBUTED BY (i);
+CREATE
+1: INSERT INTO t2 SELECT generate_series(1, 100000);
+INSERT 100000
+
+1: SELECT diskquota.wait_for_worker_new_epoch();
+ wait_for_worker_new_epoch 
+---------------------------
+ t                         
+(1 row)
+
+-- check role quota view before transaction commits
+2: SELECT role_name, quota_in_mb, rolsize_in_bytes FROM diskquota.show_fast_role_quota_view;
+ role_name | quota_in_mb | rolsize_in_bytes 
+-----------+-------------+------------------
+ r         | 100         | 7864320          
+(1 row)
+2: SELECT role_name, tablespace_name, quota_in_mb, rolsize_tablespace_in_bytes FROM diskquota.show_fast_role_tablespace_quota_view;
+ role_name | tablespace_name | quota_in_mb | rolsize_tablespace_in_bytes 
+-----------+-----------------+-------------+-----------------------------
+ r         | spc2            | 100         | 3932160                     
+(1 row)
+
+1: COMMIT;
+COMMIT
+2: SELECT diskquota.wait_for_worker_new_epoch();
+ wait_for_worker_new_epoch 
+---------------------------
+ t                         
+(1 row)
+2: SELECT role_name, quota_in_mb, rolsize_in_bytes FROM diskquota.show_fast_role_quota_view;
+ role_name | quota_in_mb | rolsize_in_bytes 
+-----------+-------------+------------------
+ r         | 100         | 7864320          
+(1 row)
+2: SELECT role_name, tablespace_name, quota_in_mb, rolsize_tablespace_in_bytes FROM diskquota.show_fast_role_tablespace_quota_view;
+ role_name | tablespace_name | quota_in_mb | rolsize_tablespace_in_bytes 
+-----------+-----------------+-------------+-----------------------------
+ r         | spc2            | 100         | 3932160                     
+(1 row)
+
+DROP TABLE IF EXISTS s1.t;
+DROP
+DROP TABLE IF EXISTS s2.t;
+DROP
+DROP TABLE IF EXISTS t1;
+DROP
+DROP TABLE IF EXISTS t2;
+DROP
+
+DROP SCHEMA IF EXISTS s1;
+DROP
+DROP SCHEMA IF EXISTS s2;
+DROP
+DROP ROLE IF EXISTS r;
+DROP
+
+DROP TABLESPACE IF EXISTS spc1;
+DROP
+DROP TABLESPACE IF EXISTS spc2;
+DROP
+
+!\retcode rm -rf /tmp/spc1;
+-- start_ignore
+
+-- end_ignore
+(exited with code 0)
+!\retcode rm -rf /tmp/spc2;
+-- start_ignore
+
+-- end_ignore
+(exited with code 0)
