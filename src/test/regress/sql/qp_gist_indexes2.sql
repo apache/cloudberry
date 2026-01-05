@@ -30,9 +30,10 @@ language plpython3u;
 CREATE TABLE GistTable1 ( id INTEGER, owner VARCHAR, description VARCHAR, property BOX, poli POLYGON, bullseye CIRCLE, v VARCHAR, t TEXT, f FLOAT, p POINT, c CIRCLE, filler VARCHAR DEFAULT 'This is here just to take up space so that we use more pages of data and sequential scans take a lot more time.  Stones tinheads and mixers coming; we did it all on our own; this summer I hear the crunching; 11 dead in Ohio. Got right down to it; we were cutting us down; could have had fun but, no; left them face down dead on the ground.  How can you listen when you know?'
  )
  DISTRIBUTED BY (id);
-
+\getenv abs_srcdir PG_ABS_SRCDIR
+\set PropertyInfo_file :abs_srcdir '/data/PropertyInfo.txt'
 COPY GistTable1 FROM
-'@abs_srcdir@/data/PropertyInfo.txt'
+:'PropertyInfo_file'
  CSV
  ;
 ANALYZE GistTable1;
@@ -472,7 +473,7 @@ CREATE TABLE GistTable1 ( id INTEGER, owner VARCHAR, description VARCHAR, proper
  DISTRIBUTED BY (id);
 
 COPY GistTable1 FROM
-'@abs_srcdir@/data/PropertyInfo.txt'
+:'PropertyInfo_file'
  CSV
  ;
 -- ----------------------------------------------------------------------
@@ -871,7 +872,7 @@ CREATE TABLE GistTable1 ( id INTEGER, owner VARCHAR, description VARCHAR, proper
  DISTRIBUTED BY (id);
 
 COPY GistTable1 FROM
-'@abs_srcdir@/data/PropertyInfo.txt'
+:'PropertyInfo_file'
  CSV
  ;
 -- ----------------------------------------------------------------------
@@ -1271,7 +1272,7 @@ CREATE TABLE GistTable1 ( id INTEGER, owner VARCHAR, description VARCHAR, proper
  DISTRIBUTED BY (id);
 
 COPY GistTable1 FROM
-'@abs_srcdir@/data/PropertyInfo.txt'
+:'PropertyInfo_file'
  CSV
  ;
 -- ----------------------------------------------------------------------
@@ -1672,7 +1673,7 @@ CREATE TABLE GistTable1 ( id INTEGER, owner VARCHAR, description VARCHAR, proper
  DISTRIBUTED BY (id);
 
 COPY GistTable1 FROM
-'@abs_srcdir@/data/PropertyInfo.txt'
+:'PropertyInfo_file'
  CSV
  ;
 -- ----------------------------------------------------------------------
