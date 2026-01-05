@@ -3788,7 +3788,7 @@ struct config_int ConfigureNamesInt_gp[] =
 			NULL
 		},
 		&Gp_interconnect_mem_size,
-		10, 1, 1024,
+		1, 1, 1024,
 		NULL, NULL, NULL
 	},
 

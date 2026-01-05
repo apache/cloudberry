@@ -595,7 +595,7 @@ static ICGlobalControlInfo ic_control_info;
 
 #define MAX_SEQS_IN_DISORDER_ACK (4)
 
-#define MAX_QUEUE_SIZE (64)
+#define MAX_QUEUE_SIZE (12)
 /*
  * UnackQueueRing
  *
@@ -3753,7 +3753,7 @@ SetupUDPIFCInterconnect(EState *estate)
 			Gp_interconnect_queue_depth == 4 &&
 			Gp_interconnect_snd_queue_depth == 2)
 		{
-			int32 perQueue = Gp_interconnect_mem_size /
+			int32 perQueue = ((int64)Gp_interconnect_mem_size * 1024 * 1024) /
 				(Gp_max_packet_size * sliceNum);
 
 			calcSndDepth = Max(Gp_interconnect_snd_queue_depth, perQueue / 2);
