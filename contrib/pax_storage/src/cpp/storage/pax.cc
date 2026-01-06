@@ -43,6 +43,7 @@
 #include "storage/micro_partition_stats.h"
 #include "storage/micro_partition_stats_updater.h"
 #include "storage/orc/orc_dump_reader.h"
+#include "storage/pax_index_update.h"
 #include "storage/wal/pax_wal.h"
 #include "storage/wal/paxc_wal.h"
 #ifdef VEC_BUILD
@@ -51,87 +52,7 @@
 
 #define PAX_SPLIT_STRATEGY_CHECK_INTERVAL (16)
 
-namespace paxc {
-class IndexUpdaterInternal {
- public:
-  void Begin(Relation rel) {
-    Assert(rel);
 
-    rel_ = rel;
-    slot_ = MakeTupleTableSlot(rel->rd_att, &TTSOpsVirtual);
-
-    if (HasIndex()) {
-      estate_ = CreateExecutorState();
-
-      relinfo_ = makeNode(ResultRelInfo);
-      relinfo_->ri_RelationDesc = rel;
-      ExecOpenIndices(relinfo_, false);
-    }
-  }
-
-  void UpdateIndex(TupleTableSlot *slot) {
-    Assert(slot == slot_);
-    Assert(HasIndex());
-    auto recheck_index =
-        ExecInsertIndexTuples(relinfo_, slot_, estate_, true, false, NULL, NIL);
-    list_free(recheck_index);
-  }
-
-  void End() {
-    if (HasIndex()) {
-      Assert(relinfo_ && estate_);
-
-      ExecCloseIndices(relinfo_);
-      pfree(relinfo_);
-      relinfo_ = nullptr;
-
-      FreeExecutorState(estate_);
-      estate_ = nullptr;
-    }
-    Assert(relinfo_ == nullptr && estate_ == nullptr);
-
-    ExecDropSingleTupleTableSlot(slot_);
-    slot_ = nullptr;
-
-    rel_ = nullptr;
-  }
-
-  inline TupleTableSlot *GetSlot() { return slot_; }
-  inline bool HasIndex() const { return rel_->rd_rel->relhasindex; }
-
- private:
-  Relation rel_ = nullptr;
-  TupleTableSlot *slot_ = nullptr;
-  EState *estate_ = nullptr;
-  ResultRelInfo *relinfo_ = nullptr;
-};
-}  // namespace paxc
-
-namespace pax {
-class IndexUpdater final {
- public:
-  void Begin(Relation rel) {
-    CBDB_WRAP_START;
-    { stub_.Begin(rel); }
-    CBDB_WRAP_END;
-  }
-  void UpdateIndex(TupleTableSlot *slot) {
-    CBDB_WRAP_START;
-    { stub_.UpdateIndex(slot); }
-    CBDB_WRAP_END;
-  }
-  void End() {
-    CBDB_WRAP_START;
-    { stub_.End(); }
-    CBDB_WRAP_END;
-  }
-  inline TupleTableSlot *GetSlot() { return stub_.GetSlot(); }
-  inline bool HasIndex() const { return stub_.HasIndex(); }
-
- private:
-  paxc::IndexUpdaterInternal stub_;
-};
-}  // namespace pax
 
 namespace pax {
 
@@ -153,6 +74,11 @@ TableWriter *TableWriter::SetFileSplitStrategy(
     std::unique_ptr<FileSplitStrategy> &&strategy) {
   Assert(!strategy_);
   strategy_ = std::move(strategy);
+  return this;
+}
+
+TableWriter *TableWriter::SetEnableStats(bool enable_stats) {
+  enable_stats_ = enable_stats;
   return this;
 }
 
@@ -202,6 +128,7 @@ std::unique_ptr<MicroPartitionWriter> TableWriter::CreateMicroPartitionWriter(
   options.file_name = std::move(file_path);
   options.encoding_opts = GetRelEncodingOptions();
   options.storage_format = GetStorageFormat();
+  options.enable_stats = enable_stats_;
   options.enable_min_max_col_idxs = GetMinMaxColumnIndexes();
   options.enable_bf_col_idxs = GetBloomFilterColumnIndexes();
 
@@ -271,8 +198,10 @@ void TableWriter::Open() {
   if (!mp_stats_) {
     mp_stats_ =
         std::make_shared<MicroPartitionStats>(RelationGetDescr(relation_));
+
     mp_stats_->Initialize(GetMinMaxColumnIndexes(),
                           GetBloomFilterColumnIndexes());
+
   } else {
     mp_stats_->Reset();
   }
@@ -567,12 +496,16 @@ void TableDeleter::UpdateStatsInAuxTable(
       std::move(toast_file));
 
   slot = MakeTupleTableSlot(rel_->rd_att, &TTSOpsVirtual);
-  auto updated_stats = MicroPartitionStatsUpdater(mp_reader.get(), visi_bitmap)
+
+  // if micro partition stats is valid, we need only update the invisible
+  // tuples, otherwise we need to update all groups
+  auto updated_stats = MicroPartitionStatsUpdater(
+                           mp_reader.get(), !meta.GetStatsValid(), visi_bitmap)
                            .Update(slot, min_max_col_idxs, bf_col_idxs);
 
   // update the statistics in aux table
   catalog_update.UpdateStatistics(meta.GetMicroPartitionId(),
-                                  updated_stats->Serialize());
+                                  updated_stats->Serialize(), true);
 
   mp_reader->Close();
 
@@ -669,15 +602,8 @@ void TableDeleter::DeleteWithVisibilityMap(
       visimap_file->Close();
     }
 
-    // TODO: update stats and visimap all in one catalog update
-    // Update the stats in pax aux table
-    // Notice that: PAX won't update the stats in group
-    UpdateStatsInAuxTable(
-        catalog_update, micro_partition_metadata,
-        std::make_shared<Bitmap8>(visi_bitmap->Raw()), min_max_col_idxs,
-        cbdb::GetBloomFilterColumnIndexes(rel_), stats_updater_projection);
-
     // write pg_pax_blocks_oid
+    // update visimap file and update stats to invalid
     catalog_update.UpdateVisimap(block_id, visimap_file_name);
   } while (iterator->HasNext());
   catalog_update.End();

@@ -85,8 +85,6 @@ class PaxAccessMethod final {
                              LockWaitPolicy wait_policy, uint8 flags,
                              TM_FailureData *tmfd);
 
-  static void RelationVacuum(Relation onerel, VacuumParams *params,
-                             BufferAccessStrategy bstrategy);
   static double IndexBuildRangeScan(
       Relation heap_relation, Relation index_relation, IndexInfo *index_info,
       bool allow_sync, bool anyvisible, bool progress,
@@ -190,6 +188,9 @@ class CCPaxAccessMethod final {
                           BulkInsertState bistate);
 
   static void FinishBulkInsert(Relation relation, int options);
+
+  static void RelationVacuum(Relation onerel, VacuumParams *params,
+                             BufferAccessStrategy bstrategy);
 
   // DML init/fini hooks
   static void ExtDmlInit(Relation rel, CmdType operation);

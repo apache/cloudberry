@@ -41,7 +41,8 @@
 #define ANUM_PG_PAX_BLOCK_TABLES_PTVISIMAPNAME 5
 #define ANUM_PG_PAX_BLOCK_TABLES_PTEXISTEXTTOAST 6
 #define ANUM_PG_PAX_BLOCK_TABLES_PTISCLUSTERED 7
-#define NATTS_PG_PAX_BLOCK_TABLES 7
+#define ANUM_PG_PAX_BLOCK_TABLES_PTISSTATSVALID 8
+#define NATTS_PG_PAX_BLOCK_TABLES 8
 
 namespace paxc {
 void CPaxCreateMicroPartitionTable(Relation rel);
@@ -52,10 +53,11 @@ void InsertMicroPartitionPlaceHolder(Oid aux_relid, int block_id);
 void InsertOrUpdateMicroPartitionPlaceHolder(
     Oid aux_relid, int block_id, int num_tuples, int file_size,
     const ::pax::stats::MicroPartitionStatisticsInfo &mp_stats,
-    bool exist_ext_toast, bool is_clustered);
+    bool is_stats_valid, bool exist_ext_toast, bool is_clustered);
 void UpdateVisimap(Oid aux_relid, int block_id, const char *visimap_filename);
 void UpdateStatistics(Oid aux_relid, int block_id,
-                      pax::stats::MicroPartitionStatisticsInfo *mp_stats);
+                      pax::stats::MicroPartitionStatisticsInfo *mp_stats,
+                      bool is_stats_valid);
 void DeleteMicroPartitionEntry(Oid pax_relid, Snapshot snapshot, int block_id);
 // Scan aux table
 // seqscan: MicroPartitionInfoIterator
@@ -122,7 +124,8 @@ Oid FindAuxIndexOid(Oid aux_relid, Snapshot snapshot);
 void UpdateVisimap(Oid aux_relid, int block_id, const char *visimap_filename);
 
 void UpdateStatistics(Oid aux_relid, int block_id,
-                      pax::stats::MicroPartitionStatisticsInfo *mp_stats);
+                      pax::stats::MicroPartitionStatisticsInfo *mp_stats,
+                      bool is_stats_valid);
 
 bool IsMicroPartitionVisible(Relation pax_rel, BlockNumber block,
                              Snapshot snapshot);

@@ -249,6 +249,13 @@ MicroPartitionMetadata MicroPartitionInfoIterator::ToValue(HeapTuple tuple) {
     v.SetClustered(is_cluster);
   }
 
+  {
+    auto is_stats_valid = cbdb::HeapGetAttr(
+        tuple, ANUM_PG_PAX_BLOCK_TABLES_PTISSTATSVALID, tup_desc, &is_null);
+    CBDB_CHECK(!is_null, cbdb::CException::kExTypeLogicError);
+    v.SetStatsValid(cbdb::DatumToBool(is_stats_valid));
+  }
+
   // deserialize protobuf message
   return v;
 }
@@ -444,6 +451,13 @@ MicroPartitionMetadata MicroPartitionInfoParallelIterator::ToValue(
         tuple, ANUM_PG_PAX_BLOCK_TABLES_PTISCLUSTERED, tup_desc, &is_null));
     CBDB_CHECK(!is_null, cbdb::CException::kExTypeLogicError);
     v.SetClustered(is_cluster);
+  }
+
+  {
+    auto is_stats_valid = cbdb::HeapGetAttr(
+        tuple, ANUM_PG_PAX_BLOCK_TABLES_PTISSTATSVALID, tup_desc, &is_null);
+    CBDB_CHECK(!is_null, cbdb::CException::kExTypeLogicError);
+    v.SetStatsValid(cbdb::DatumToBool(is_stats_valid));
   }
 
   // deserialize protobuf message

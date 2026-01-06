@@ -114,6 +114,9 @@ void CPaxCreateMicroPartitionTable(Relation rel) {
   TupleDescInitEntry(tupdesc,
                      (AttrNumber)ANUM_PG_PAX_BLOCK_TABLES_PTISCLUSTERED,
                      PAX_AUX_PTISCLUSTERED, BOOLOID, -1, 0);
+  TupleDescInitEntry(tupdesc,
+                     (AttrNumber)ANUM_PG_PAX_BLOCK_TABLES_PTISSTATSVALID,
+                     PAX_AUX_PTISSTATSVALID, BOOLOID, -1, 0);
   {
     // Add constraints for the aux table
     auto attr =
@@ -249,6 +252,10 @@ void InsertMicroPartitionPlaceHolder(Oid aux_relid, int block_id) {
   values[ANUM_PG_PAX_BLOCK_TABLES_PTBLOCKNAME - 1] = Int32GetDatum(block_id);
   nulls[ANUM_PG_PAX_BLOCK_TABLES_PTBLOCKNAME - 1] = false;
 
+  // initial placeholder, mark stats as not fresh
+  values[ANUM_PG_PAX_BLOCK_TABLES_PTISSTATSVALID - 1] = BoolGetDatum(false);
+  nulls[ANUM_PG_PAX_BLOCK_TABLES_PTISSTATSVALID - 1] = false;
+
   InsertTuple(aux_relid, values, nulls);
   CommandCounterIncrement();
 }
@@ -278,6 +285,11 @@ void UpdateVisimap(Oid aux_relid, int block_id, const char *visimap_filename) {
         NameGetDatum(&pt_visimap_name);
   }
 
+  // visimap only update in delete operation, and stats is always invalid
+  repls[ANUM_PG_PAX_BLOCK_TABLES_PTISSTATSVALID - 1] = true;
+  nulls[ANUM_PG_PAX_BLOCK_TABLES_PTISSTATSVALID - 1] = false;
+  values[ANUM_PG_PAX_BLOCK_TABLES_PTISSTATSVALID - 1] = false;
+
   newtuple = heap_modify_tuple(oldtuple, RelationGetDescr(aux_rel), values,
                                nulls, repls);
 
@@ -289,7 +301,8 @@ void UpdateVisimap(Oid aux_relid, int block_id, const char *visimap_filename) {
 }
 
 void UpdateStatistics(Oid aux_relid, int block_id,
-                      pax::stats::MicroPartitionStatisticsInfo *mp_stats) {
+                      pax::stats::MicroPartitionStatisticsInfo *mp_stats,
+                      bool is_stats_valid) {
   // NameData pt_visimap_name;
   Datum values[NATTS_PG_PAX_BLOCK_TABLES];
   bool nulls[NATTS_PG_PAX_BLOCK_TABLES];
@@ -318,6 +331,11 @@ void UpdateStatistics(Oid aux_relid, int block_id,
   nulls[ANUM_PG_PAX_BLOCK_TABLES_PTSTATISITICS - 1] = false;
   values[ANUM_PG_PAX_BLOCK_TABLES_PTSTATISITICS - 1] =
       PointerGetDatum(stats_out);
+  repls[ANUM_PG_PAX_BLOCK_TABLES_PTISSTATSVALID - 1] = true;
+  nulls[ANUM_PG_PAX_BLOCK_TABLES_PTISSTATSVALID - 1] = false;
+  values[ANUM_PG_PAX_BLOCK_TABLES_PTISSTATSVALID - 1] =
+      BoolGetDatum(is_stats_valid);
+
   newtuple = heap_modify_tuple(oldtuple, RelationGetDescr(aux_rel), values,
                                nulls, repls);
 
@@ -336,6 +354,7 @@ void UpdateStatistics(Oid aux_relid, int block_id,
 void InsertOrUpdateMicroPartitionPlaceHolder(
     Oid aux_relid, int block_id, int num_tuples, int file_size,
     const ::pax::stats::MicroPartitionStatisticsInfo &mp_stats,
+    bool is_stats_valid,
     /* const char *visimap_filename, */
     bool exist_ext_toast, bool is_clustered) {
   int stats_length = mp_stats.ByteSizeLong();
@@ -372,6 +391,9 @@ void InsertOrUpdateMicroPartitionPlaceHolder(
   nulls[ANUM_PG_PAX_BLOCK_TABLES_PTISCLUSTERED - 1] = false;
   values[ANUM_PG_PAX_BLOCK_TABLES_PTISCLUSTERED - 1] =
       BoolGetDatum(is_clustered);
+
+  values[ANUM_PG_PAX_BLOCK_TABLES_PTISSTATSVALID - 1] = BoolGetDatum(is_stats_valid);
+  nulls[ANUM_PG_PAX_BLOCK_TABLES_PTISSTATSVALID - 1] = false;
 
   ScanAuxContext context;
   context.BeginSearchMicroPartition(aux_relid, InvalidOid, NULL,
@@ -629,8 +651,7 @@ static void FetchMicroPartitionAuxRowCallback(Datum *values, bool *isnull,
                                               void *arg) {
   auto ctx = reinterpret_cast<struct FetchMicroPartitionAuxRowContext *>(arg);
   auto rel = ctx->rel;
-  auto rel_path = cbdb::BuildPaxDirectoryPath(
-      rel->rd_node, rel->rd_backend);
+  auto rel_path = cbdb::BuildPaxDirectoryPath(rel->rd_node, rel->rd_backend);
 
   Assert(!isnull[ANUM_PG_PAX_BLOCK_TABLES_PTBLOCKNAME]);
   {
@@ -679,6 +700,10 @@ static void FetchMicroPartitionAuxRowCallback(Datum *values, bool *isnull,
   Assert(!isnull[ANUM_PG_PAX_BLOCK_TABLES_PTISCLUSTERED - 1]);
   ctx->info.SetClustered(
       cbdb::DatumToBool(values[ANUM_PG_PAX_BLOCK_TABLES_PTISCLUSTERED - 1]));
+
+  Assert(!isnull[ANUM_PG_PAX_BLOCK_TABLES_PTISSTATSVALID - 1]);
+  ctx->info.SetStatsValid(
+      cbdb::DatumToBool(values[ANUM_PG_PAX_BLOCK_TABLES_PTISSTATSVALID - 1]));
 }
 
 static void FetchMicroPartitionAuxRowCallbackWrapper(Datum *values,
@@ -712,9 +737,10 @@ void UpdateVisimap(Oid aux_relid, int block_id, const char *visimap_filename) {
 }
 
 void UpdateStatistics(Oid aux_relid, int block_id,
-                      pax::stats::MicroPartitionStatisticsInfo *mp_stats) {
+                      pax::stats::MicroPartitionStatisticsInfo *mp_stats,
+                      bool is_stats_valid) {
   CBDB_WRAP_START;
-  { paxc::UpdateStatistics(aux_relid, block_id, mp_stats); }
+  { paxc::UpdateStatistics(aux_relid, block_id, mp_stats, is_stats_valid); }
   CBDB_WRAP_END;
 }
 
