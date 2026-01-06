@@ -1,6 +1,6 @@
 
 set log_min_messages to ERROR;
-\getenv abs_builddir ABS_BUILDDIR
+\getenv abs_builddir PG_ABS_BUILDDIR
 \set regress_dll :abs_builddir '/regress.so'
 CREATE OR REPLACE FUNCTION gp_execute_on_server(content int, query text) returns text
 language C as :'regress_dll', 'gp_execute_on_server';

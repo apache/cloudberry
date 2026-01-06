@@ -2,7 +2,7 @@
 -- CBDB PARALLEL
 -- Test CBDB style parallel plan.
 -- GUCs shoule be set with local, do not disturb other parallel plans.
--- Should not use force_parallel_mode as it will ignore plan and check results only.
+-- Should not use debug_parallel_query as it will ignore plan and check results only.
 -- We want to check plan in this file!
 -- If there is need to do that, set it local inside a transaction.
 -- Set optimizer off in this file, ORCA parallel is not supported.
@@ -31,7 +31,7 @@
 --  12  CdbLocusType_HashedWorkers
 --
 --
-set force_parallel_mode = 0;
+set debug_parallel_query=off;
 set optimizer = off;
 create schema test_parallel;
 set search_path to test_parallel;
@@ -628,7 +628,7 @@ set local enable_parallel = on;
 create index on t1(c2);
 insert into t1 select i, i from generate_series(1, 10000000) i;
 analyze t1;
-set local force_parallel_mode = 1;
+set local debug_parallel_query=regress;
 set local enable_seqscan = off;
 explain(locus, costs off) select c2 from t1;
                       QUERY PLAN                      
@@ -2710,7 +2710,7 @@ abort;
 begin;
 set local optimizer=off;
 set local enable_parallel=on;
-set local force_parallel_mode =1 ;
+set local debug_parallel_query=regress;
 set local min_parallel_table_scan_size = 0;
 create table semi_t1 (c1 integer) with(parallel_workers=2) distributed randomly;
 create table semi_t2 (c2 integer) with(parallel_workers=2) distributed randomly;
@@ -3073,5 +3073,5 @@ abort;
 drop schema test_parallel cascade;
 -- end_ignore
 reset gp_appendonly_insert_files;
-reset force_parallel_mode;
+reset debug_parallel_query;
 reset optimizer;

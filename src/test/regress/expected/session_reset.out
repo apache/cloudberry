@@ -1,6 +1,8 @@
 set log_min_messages to ERROR;
+\getenv abs_builddir PG_ABS_BUILDDIR
+\set regress_dll :abs_builddir '/regress.so'
 CREATE OR REPLACE FUNCTION gp_execute_on_server(content int, query text) returns text
-language C as '@abs_builddir@/regress@DLSUFFIX@', 'gp_execute_on_server';
+language C as :'regress_dll', 'gp_execute_on_server';
 -- terminate backend process for this session on segment with content ID = 0
 select gp_execute_on_server(0, 'select pg_terminate_backend(pg_backend_pid())');
 ERROR:  terminating connection due to administrator command  (seg0 10.152.10.149:25432 pid=32665)
