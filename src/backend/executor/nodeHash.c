@@ -4075,13 +4075,6 @@ ExecHashTableDetach(HashJoinTable hashtable)
 {
 	ParallelHashJoinState *pstate = hashtable->parallel_state;
 
-	/*
-	 * If we're involved in a parallel query, we must either have gotten all
-	 * the way to PHJ_BUILD_RUN, or joined too late and be in PHJ_BUILD_FREE.
-	 */
-	Assert(!pstate ||
-		   BarrierPhase(&pstate->build_barrier) >= PHJ_BUILD_RUN);
-
 	if (pstate && BarrierPhase(&pstate->build_barrier) == PHJ_BUILD_RUN)
 	{
 		int			i;

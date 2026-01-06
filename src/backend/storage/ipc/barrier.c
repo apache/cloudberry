@@ -220,11 +220,17 @@ BarrierArriveAndDetachExceptLast(Barrier *barrier)
 
 		return false;
 	}
-	Assert(barrier->participants == 1);
-	++barrier->phase;
-	SpinLockRelease(&barrier->mutex);
-
-	return true;
+	else if (barrier->participants == 1)
+	{
+		++barrier->phase;
+		SpinLockRelease(&barrier->mutex);
+		return true;
+	}
+	else
+	{
+		SpinLockRelease(&barrier->mutex);
+		return true;
+	}
 }
 
 /*
