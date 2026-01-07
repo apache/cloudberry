@@ -35,10 +35,7 @@ $$ LANGUAGE plpython3u;
 \set adst_source_tablespace_location :abs_builddir '/testtablespace/adst_source'
 \set adst_destination_tablespace_location :abs_builddir '/testtablespace/adst_dest'
 
-CREATE or REPLACE FUNCTION setup() RETURNS VOID AS $$
-DECLARE
-    adst_source_tablespace_location text := :'adst_source_tablespace_location';
-    adst_destination_tablespace_location text := :'adst_destination_tablespace_location';
+CREATE or REPLACE FUNCTION setup(adst_source_tablespace_location text, adst_destination_tablespace_location text) RETURNS VOID AS $$
 BEGIN
     -- Setup tablespace directories
     PERFORM setup_tablespace_location_dir_for_test(adst_source_tablespace_location);
@@ -167,7 +164,7 @@ $fn$;
 -- | M2      | deleted   | moved     | XLOG_XACT_COMMIT_PREPARED    |       |
 -- +---------+-----------+-----------+------------------------------+-------+
 
-SELECT setup();
+SELECT setup(:'adst_source_tablespace_location', :'adst_destination_tablespace_location');
 -- Given we create the source and destination tablespaces
 CREATE TABLESPACE adst_source_tablespace LOCATION :'adst_source_tablespace_location';
 CREATE TABLESPACE adst_destination_tablespace LOCATION :'adst_destination_tablespace_location';
@@ -224,7 +221,7 @@ SELECT force_mirrors_to_catch_up();
 -- | SMaster | remains   | deleted   | XLOG_XACT_ABORT   |       |
 -- +---------+-----------+-----------+-------------------+-------+
 
-SELECT setup();
+SELECT setup(:'adst_source_tablespace_location', :'adst_destination_tablespace_location');
 -- Given we create the source and destination tablespaces
 CREATE TABLESPACE adst_source_tablespace LOCATION :'adst_source_tablespace_location';
 CREATE TABLESPACE adst_destination_tablespace LOCATION :'adst_destination_tablespace_location';
@@ -287,7 +284,7 @@ SELECT force_mirrors_to_catch_up();
 -- | M2      | remains   | deleted   | XLOG_XACT_ABORT   |       |
 -- +---------+-----------+-----------+-------------------+-------+
 
-SELECT setup();
+SELECT setup(:'adst_source_tablespace_location', :'adst_destination_tablespace_location');
 -- Given we create the source and destination tablespaces
 CREATE TABLESPACE adst_source_tablespace LOCATION :'adst_source_tablespace_location';
 CREATE TABLESPACE adst_destination_tablespace LOCATION :'adst_destination_tablespace_location';
@@ -357,7 +354,7 @@ SELECT force_mirrors_to_catch_up();
 -- | M2      | remains   | deleted   | XLOG_XACT_ABORT   |       |
 -- +---------+-----------+-----------+-------------------+-------+
 
-SELECT setup();
+SELECT setup(:'adst_source_tablespace_location', :'adst_destination_tablespace_location');
 -- Given we create the source and destination tablespaces
 CREATE TABLESPACE adst_source_tablespace LOCATION :'adst_source_tablespace_location';
 CREATE TABLESPACE adst_destination_tablespace LOCATION :'adst_destination_tablespace_location';
@@ -430,7 +427,7 @@ SELECT force_mirrors_to_catch_up();
 -- | M2      | remains   | deleted   | XLOG_XACT_ABORT_PREPARED |       |
 -- +---------+-----------+-----------+--------------------------+-------+
 
-SELECT setup();
+SELECT setup(:'adst_source_tablespace_location', :'adst_destination_tablespace_location');
 -- Given we create the source and destination tablespaces
 CREATE TABLESPACE adst_source_tablespace LOCATION :'adst_source_tablespace_location';
 CREATE TABLESPACE adst_destination_tablespace LOCATION :'adst_destination_tablespace_location';
@@ -493,7 +490,7 @@ SELECT force_mirrors_to_catch_up();
 -- | M2      | remains   | deleted   | XLOG_XACT_ABORT_PREPARED |       |
 -- +---------+-----------+-----------+--------------------------+-------+
 
-SELECT setup();
+SELECT setup(:'adst_source_tablespace_location', :'adst_destination_tablespace_location');
 -- Given we create the source and destination tablespaces
 CREATE TABLESPACE adst_source_tablespace LOCATION :'adst_source_tablespace_location';
 CREATE TABLESPACE adst_destination_tablespace LOCATION :'adst_destination_tablespace_location';
@@ -558,7 +555,7 @@ SELECT force_mirrors_to_catch_up();
 -- | M2      | remains   | deleted   | XLOG_XACT_ABORT_PREPARED |       |
 -- +---------+-----------+-----------+--------------------------+-------+
 
-SELECT setup();
+SELECT setup(:'adst_source_tablespace_location', :'adst_destination_tablespace_location');
 -- Given we create the source and destination tablespaces
 CREATE TABLESPACE adst_source_tablespace LOCATION :'adst_source_tablespace_location';
 CREATE TABLESPACE adst_destination_tablespace LOCATION :'adst_destination_tablespace_location';
@@ -620,7 +617,7 @@ SELECT force_mirrors_to_catch_up();
 -- | M2          | remains   | deleted   | XLOG_XACT_ABORT_PREPARED |       |
 -- +-------------+-----------+-----------+--------------------------+-------+
 
-SELECT setup();
+SELECT setup(:'adst_source_tablespace_location', :'adst_destination_tablespace_location');
 -- Given we create the source and destination tablespaces
 CREATE TABLESPACE adst_source_tablespace LOCATION :'adst_source_tablespace_location';
 CREATE TABLESPACE adst_destination_tablespace LOCATION :'adst_destination_tablespace_location';
@@ -688,7 +685,7 @@ SELECT force_mirrors_to_catch_up();
 -- | M2          | remains   | deleted   | XLOG_XACT_ABORT_PREPARED |       |
 -- +-------------+-----------+-----------+--------------------------+-------+
 
-SELECT setup();
+SELECT setup(:'adst_source_tablespace_location', :'adst_destination_tablespace_location');
 -- Given we create the source and destination tablespaces
 CREATE TABLESPACE adst_source_tablespace LOCATION :'adst_source_tablespace_location';
 CREATE TABLESPACE adst_destination_tablespace LOCATION :'adst_destination_tablespace_location';
@@ -773,7 +770,7 @@ show fsync;
 SELECT gp_wait_until_triggered_fault('ckpt_loop_begin', 1, mirror0());
 
 
-SELECT setup();
+SELECT setup(:'adst_source_tablespace_location', :'adst_destination_tablespace_location');
 -- Create the source and destination tablespaces
 CREATE TABLESPACE adst_source_tablespace LOCATION :'adst_source_tablespace_location';
 CREATE TABLESPACE adst_destination_tablespace LOCATION :'adst_destination_tablespace_location';
@@ -815,8 +812,9 @@ DROP SCHEMA adst CASCADE;
 
 SELECT gp_inject_fault('all', 'reset', dbid) FROM gp_segment_configuration;
 
-\!rm -rf @testtablespace@/adst_source
-\!rm -rf @testtablespace@/adst_dest
+
+\!rm -rf $PG_ABS_BUILDDIR/testtablespace/adst_source
+\!rm -rf $PG_ABS_BUILDDIR/testtablespace/adst_dest
 
 --- start_ignore
 -- Set fsync on because it is the value before the test

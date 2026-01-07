@@ -2787,8 +2787,7 @@ SELECT COUNT(*) FROM gp_read_error_log('exttab_heap_join_1');
      2
 (1 row)
 
-\! rm @abs_srcdir@/data/tableless.csv
-rm: cannot remove '@abs_srcdir@/data/tableless.csv': No such file or directory
+\! rm $PG_ABS_SRCDIR/data/tableless.csv
 -- start_ignore
 DROP EXTERNAL TABLE IF EXISTS exttab_with_on_coordinator;
 NOTICE:  foreign table "exttab_with_on_coordinator" does not exist, skipping

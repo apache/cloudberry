@@ -257,5 +257,4 @@ SELECT relname, linenum, errmsg FROM gp_read_persistent_error_log('ext_bytea');
 ---------+---------+--------
 (0 rows)
 
-\! rm @abs_srcdir@/data/tableerr.csv
-rm: cannot remove '@abs_srcdir@/data/tableerr.csv': No such file or directory
+\! rm $PG_ABS_SRCDIR/data/tableerr.csv

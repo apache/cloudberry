@@ -110,4 +110,4 @@ SELECT gp_truncate_persistent_error_log('ext_bytea');
 SELECT relname, linenum, errmsg FROM gp_read_persistent_error_log('ext_bytea');
 
 
-\! rm @abs_srcdir@/data/tableerr.csv
+\! rm $PG_ABS_SRCDIR/data/tableerr.csv

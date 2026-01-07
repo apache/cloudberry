@@ -245,6 +245,7 @@ DECLARE_INDEX(pg_class_tblspc_relfilenode_index, 3455, ClassTblspcRelfilenodeInd
  */
 #define RELKIND_HAS_TABLE_AM(relkind) \
 	((relkind) == RELKIND_RELATION || \
+	 (relkind) == RELKIND_DIRECTORY_TABLE || \
 	 (relkind) == RELKIND_TOASTVALUE || \
 	 (relkind) == RELKIND_AOSEGMENTS || \
 	 (relkind) == RELKIND_AOBLOCKDIR || \

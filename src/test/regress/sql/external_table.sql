@@ -1416,7 +1416,7 @@ INSERT INTO test_ext_heap_join SELECT i, i || '_number' FROM generate_series(1, 
 SELECT COUNT(*) FROM test_ext_heap_join, exttab_heap_join_1;
 SELECT COUNT(*) FROM gp_read_error_log('exttab_heap_join_1');
 
-\! rm @abs_srcdir@/data/tableless.csv
+\! rm $PG_ABS_SRCDIR/data/tableless.csv
 
 -- start_ignore
 DROP EXTERNAL TABLE IF EXISTS exttab_with_on_coordinator;

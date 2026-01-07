@@ -151,6 +151,7 @@ get_relation_info(PlannerInfo *root, Oid relationObjectId, bool inhparent,
 	if (!relation->rd_tableam)
 	{
 		if (!(relation->rd_rel->relkind == RELKIND_FOREIGN_TABLE ||
+			  relation->rd_rel->relkind == RELKIND_DIRECTORY_TABLE ||
 			  relation->rd_rel->relkind == RELKIND_PARTITIONED_TABLE))
 			ereport(ERROR,
 					(errcode(ERRCODE_WRONG_OBJECT_TYPE),

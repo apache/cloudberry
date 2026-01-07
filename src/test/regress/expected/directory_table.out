@@ -73,8 +73,10 @@ SELECT relname, relisshared, relpersistence, relkind FROM pg_class WHERE relname
  gp_storage_user_mapping | t           | p              | r
 (1 row)
 
+\getenv abs_builddir PG_ABS_BUILDDIR
+\set testtablespace :abs_builddir '/testtablespace'
 -- CREATE TABLESPACE
-CREATE TABLESPACE directory_tblspc LOCATION '@testtablespace@';
+CREATE TABLESPACE directory_tblspc LOCATION :'testtablespace';
 -- CREATE DATABASE
 CREATE DATABASE dirtable_db;
 \c dirtable_db
@@ -771,63 +773,65 @@ SELECT relative_path, size, tag FROM dir_table2 ORDER BY 1;
 ---------------+------+-----
 (0 rows)
 
-\COPY dir_table1 FROM '@abs_srcdir@/data/nation.csv';    -- fail
+\getenv abs_srcdir PG_ABS_SRCDIR
+\set nation_file :abs_srcdir '/data/nation.csv'
+COPY dir_table1 FROM :'nation_file';    -- fail
 ERROR:  Copy from directory table file name can't be null.
-\COPY dir_table1 FROM '@abs_srcdir@/data/nation.csv' 'nation'; -- fail
+COPY dir_table1 FROM :'nation_file' 'nation'; -- fail
 ERROR:  Only support copy binary from directory table.
-\COPY BINARY dir_table1 FROM '@abs_srcdir@/data/nation.csv';    -- fail
+COPY BINARY dir_table1 FROM :'nation_file';    -- fail
 ERROR:  Copy from directory table file name can't be null.
-\COPY BINARY dir_table1 FROM '@abs_srcdir@/data/nation.csv' 'nation1';
-NOTICE:  dir_table1 INSERT AFTER ROW  (seg1 127.0.1.1:7003 pid=31193)
-\COPY BINARY dir_table1 FROM '@abs_srcdir@/data/nation.csv' 'nation1'; -- fail
+COPY BINARY dir_table1 FROM :'nation_file' 'nation1';
+NOTICE:  dir_table1 INSERT AFTER ROW  (seg1 127.0.1.1:7003 pid=900443)
+COPY BINARY dir_table1 FROM :'nation_file' 'nation1'; -- fail
 ERROR:  duplicate key value violates unique constraint "dir_table1_pkey"
 DETAIL:  Key (relative_path)=(nation1) already exists.
-\COPY BINARY dir_table1 FROM '@abs_srcdir@/data/nation.csv' 'nation2' 'nation2'; -- fail
+COPY BINARY dir_table1 FROM :'nation_file' 'nation2' 'nation2'; -- fail
 ERROR:  syntax error at or near "'nation2'"
-LINE 1: COPY BINARY dir_table1 FROM STDIN 'nation2' 'nation2'; -- fa...
-                                                    ^
-\COPY BINARY dir_table1 FROM '@abs_srcdir@/data/nation.csv' 'nation2';
-NOTICE:  dir_table1 INSERT AFTER ROW  (seg2 127.0.1.1:7004 pid=31192)
-\COPY BINARY dir_table1 FROM '@abs_srcdir@/data/nation.csv' 'nation3' WITH TAG 'nation';
-NOTICE:  dir_table1 INSERT AFTER ROW  (seg1 127.0.1.1:7003 pid=31193)
-\COPY BINARY dir_table1 FROM '@abs_srcdir@/data/nation.csv' 'nation3' WITH TAG 'nation';    -- fail
-ERROR:  duplicate key value violates unique constraint "dir_table1_pkey"
-DETAIL:  Key (relative_path)=(nation3) already exists.
-\COPY BINARY dir_table1 FROM '@abs_srcdir@/data/nation.csv' 'nation3' WITH TAG 'nation2';    -- fail
-ERROR:  duplicate key value violates unique constraint "dir_table1_pkey"
-DETAIL:  Key (relative_path)=(nation3) already exists.
-\COPY BINARY dir_table1 FROM '@abs_srcdir@/data/nation.csv' 'nation4' WITH TAG 'nation';
-NOTICE:  dir_table1 INSERT AFTER ROW  (seg2 127.0.1.1:7004 pid=31192)
-\COPY BINARY dir_table1 FROM '@abs_srcdir@/data/nation.csv' 'nation5' WITH TAG 'nation' WITH TAG 'nation2';    -- fail
-ERROR:  syntax error at or near "WITH"
-LINE 1: ...dir_table1 FROM STDIN 'nation5' WITH TAG 'nation' WITH TAG '...
+LINE 1: ...berry/src/test/regress/data/nation.csv' 'nation2' 'nation2';
                                                              ^
-\COPY BINARY dir_table1 FROM '@abs_srcdir@/data/nation.csv' 'nation6';
-NOTICE:  dir_table1 INSERT AFTER ROW  (seg0 127.0.1.1:7002 pid=21790)
-\COPY BINARY dir_table1 FROM '@abs_srcdir@/data/nation.csv' 'nation7';
-NOTICE:  dir_table1 INSERT AFTER ROW  (seg1 127.0.1.1:7003 pid=21792)
-\COPY BINARY dir_table1 FROM '@abs_srcdir@/data/nation.csv' 'nation8';
-NOTICE:  dir_table1 INSERT AFTER ROW  (seg1 127.0.1.1:7003 pid=21792)
-\COPY BINARY dir_table1 FROM '@abs_srcdir@/data/nation.csv' 'nation9';
-NOTICE:  dir_table1 INSERT AFTER ROW  (seg1 127.0.1.1:7003 pid=21792)
-\COPY BINARY dir_table1 FROM '@abs_srcdir@/data/nation.csv' 'nation10';
-NOTICE:  dir_table1 INSERT AFTER ROW  (seg2 127.0.1.1:7004 pid=21791)
-\COPY BINARY dir_table1 FROM '@abs_srcdir@/data/nation.csv' 'nation11';
-NOTICE:  dir_table1 INSERT AFTER ROW  (seg0 127.0.1.1:7002 pid=21790)
-\COPY BINARY dir_table1 FROM '@abs_srcdir@/data/nation.csv' 'nation12';
-NOTICE:  dir_table1 INSERT AFTER ROW  (seg1 127.0.1.1:7003 pid=21792)
-\COPY BINARY dir_table1 FROM '@abs_srcdir@/data/nation.csv' 'nation13';
-NOTICE:  dir_table1 INSERT AFTER ROW  (seg1 127.0.1.1:7003 pid=21792)
-\COPY BINARY dir_table1 FROM '@abs_srcdir@/data/nation.csv' 'nation14';
-NOTICE:  dir_table1 INSERT AFTER ROW  (seg2 127.0.1.1:7004 pid=21791)
-\COPY BINARY dir_table1 FROM '@abs_srcdir@/data/nation.csv' 'nation15';
-NOTICE:  dir_table1 INSERT AFTER ROW  (seg0 127.0.1.1:7002 pid=21790)
-\COPY BINARY dir_table1 FROM '@abs_srcdir@/data/nation.csv' 'nation16';
-NOTICE:  dir_table1 INSERT AFTER ROW  (seg1 127.0.1.1:7003 pid=21792)
-\COPY BINARY dir_table1 FROM '@abs_srcdir@/data/nation.csv' 'nation17';
-NOTICE:  dir_table1 INSERT AFTER ROW  (seg1 127.0.1.1:7003 pid=21792)
-\COPY BINARY dir_table1 FROM '@abs_srcdir@/data/nation.csv' 'nation18';
-NOTICE:  dir_table1 INSERT AFTER ROW  (seg0 127.0.1.1:7002 pid=21790)
+COPY BINARY dir_table1 FROM :'nation_file' 'nation2';
+NOTICE:  dir_table1 INSERT AFTER ROW  (seg2 127.0.1.1:7004 pid=900444)
+COPY BINARY dir_table1 FROM :'nation_file' 'nation3' WITH TAG 'nation';
+NOTICE:  dir_table1 INSERT AFTER ROW  (seg1 127.0.1.1:7003 pid=900443)
+COPY BINARY dir_table1 FROM :'nation_file' 'nation3' WITH TAG 'nation';    -- fail
+ERROR:  duplicate key value violates unique constraint "dir_table1_pkey"
+DETAIL:  Key (relative_path)=(nation3) already exists.
+COPY BINARY dir_table1 FROM :'nation_file' 'nation3' WITH TAG 'nation2';    -- fail
+ERROR:  duplicate key value violates unique constraint "dir_table1_pkey"
+DETAIL:  Key (relative_path)=(nation3) already exists.
+COPY BINARY dir_table1 FROM :'nation_file' 'nation4' WITH TAG 'nation';
+NOTICE:  dir_table1 INSERT AFTER ROW  (seg2 127.0.1.1:7004 pid=900444)
+COPY BINARY dir_table1 FROM :'nation_file' 'nation5' WITH TAG 'nation' WITH TAG 'nation2';    -- fail
+ERROR:  syntax error at or near "WITH"
+LINE 1: ...ress/data/nation.csv' 'nation5' WITH TAG 'nation' WITH TAG '...
+                                                             ^
+COPY BINARY dir_table1 FROM :'nation_file' 'nation6';
+NOTICE:  dir_table1 INSERT AFTER ROW  (seg0 127.0.1.1:7002 pid=900442)
+COPY BINARY dir_table1 FROM :'nation_file' 'nation7';
+NOTICE:  dir_table1 INSERT AFTER ROW  (seg1 127.0.1.1:7003 pid=900443)
+COPY BINARY dir_table1 FROM :'nation_file' 'nation8';
+NOTICE:  dir_table1 INSERT AFTER ROW  (seg1 127.0.1.1:7003 pid=900443)
+COPY BINARY dir_table1 FROM :'nation_file' 'nation9';
+NOTICE:  dir_table1 INSERT AFTER ROW  (seg1 127.0.1.1:7003 pid=900443)
+COPY BINARY dir_table1 FROM :'nation_file' 'nation10';
+NOTICE:  dir_table1 INSERT AFTER ROW  (seg2 127.0.1.1:7004 pid=900444)
+COPY BINARY dir_table1 FROM :'nation_file' 'nation11';
+NOTICE:  dir_table1 INSERT AFTER ROW  (seg0 127.0.1.1:7002 pid=900442)
+COPY BINARY dir_table1 FROM :'nation_file' 'nation12';
+NOTICE:  dir_table1 INSERT AFTER ROW  (seg1 127.0.1.1:7003 pid=900443)
+COPY BINARY dir_table1 FROM :'nation_file' 'nation13';
+NOTICE:  dir_table1 INSERT AFTER ROW  (seg1 127.0.1.1:7003 pid=900443)
+COPY BINARY dir_table1 FROM :'nation_file' 'nation14';
+NOTICE:  dir_table1 INSERT AFTER ROW  (seg2 127.0.1.1:7004 pid=900444)
+COPY BINARY dir_table1 FROM :'nation_file' 'nation15';
+NOTICE:  dir_table1 INSERT AFTER ROW  (seg0 127.0.1.1:7002 pid=900442)
+COPY BINARY dir_table1 FROM :'nation_file' 'nation16';
+NOTICE:  dir_table1 INSERT AFTER ROW  (seg1 127.0.1.1:7003 pid=900443)
+COPY BINARY dir_table1 FROM :'nation_file' 'nation17';
+NOTICE:  dir_table1 INSERT AFTER ROW  (seg1 127.0.1.1:7003 pid=900443)
+COPY BINARY dir_table1 FROM :'nation_file' 'nation18';
+NOTICE:  dir_table1 INSERT AFTER ROW  (seg0 127.0.1.1:7002 pid=900442)
 SELECT relative_path, size, tag FROM dir_table1 ORDER BY 1;
  relative_path | size |  tag   
 ---------------+------+--------
@@ -872,24 +876,25 @@ SELECT relative_path, content FROM directory_table('dir_table1') ORDER BY 1;
  nation9       | \x307c414c47455249417c307c20686167676c652e206361726566756c6c792066696e616c206465706f736974732064657465637420736c796c7920616761690a317c415247454e54494e417c317c616c20666f7865732070726f6d69736520736c796c79206163636f7264696e6720746f2074686520726567756c6172206163636f756e74732e20626f6c6420726571756573747320616c6f6e0a327c4252415a494c7c317c7920616c6f6e6773696465206f66207468652070656e64696e67206465706f736974732e206361726566756c6c79207370656369616c207061636b61676573206172652061626f7574207468652069726f6e696320666f726765732e20736c796c79207370656369616c200a337c43414e4144417c317c6561732068616e672069726f6e69632c2073696c656e74207061636b616765732e20736c796c7920726567756c6172207061636b616765732061726520667572696f75736c79206f76657220746865207469746865732e20666c756666696c7920626f6c640a347c45475950547c347c792061626f766520746865206361726566756c6c7920756e757375616c207468656f646f6c697465732e2066696e616c206475676f7574732061726520717569636b6c79206163726f73732074686520667572696f75736c7920726567756c617220640a357c455448494f5049417c307c76656e207061636b616765732077616b6520717569636b6c792e20726567750a367c4652414e43457c337c726566756c6c792066696e616c2072657175657374732e20726567756c61722c2069726f6e690a377c4745524d414e597c337c6c20706c6174656c6574732e20726567756c6172206163636f756e747320782d7261793a20756e757375616c2c20726567756c6172206163636f0a387c494e4449417c327c737320657863757365732063616a6f6c6520736c796c79206163726f737320746865207061636b616765732e206465706f73697473207072696e742061726f756e0a397c494e444f4e455349417c327c20736c796c792065787072657373206173796d70746f7465732e20726567756c6172206465706f7369747320686167676c6520736c796c792e206361726566756c6c792069726f6e696320686f636b657920706c617965727320736c65657020626c697468656c792e206361726566756c6c0a31307c4952414e7c347c6566756c6c7920616c6f6e6773696465206f662074686520736c796c792066696e616c20646570656e64656e636965732e200a31317c495241517c347c6e6963206465706f7369747320626f6f73742061746f702074686520717569636b6c792066696e616c2072657175657374733f20717569636b6c7920726567756c610a31327c4a4150414e7c327c6f75736c792e2066696e616c2c20657870726573732067696674732063616a6f6c6520610a31337c4a4f5244414e7c347c6963206465706f736974732061726520626c697468656c792061626f757420746865206361726566756c6c7920726567756c61722070610a31347c4b454e59417c307c2070656e64696e67206578637573657320686167676c6520667572696f75736c79206465706f736974732e2070656e64696e672c20657870726573732070696e746f206265616e732077616b6520666c756666696c79207061737420740a31357c4d4f524f43434f7c307c726e732e20626c697468656c7920626f6c6420636f7572747320616d6f6e672074686520636c6f73656c7920726567756c6172207061636b616765732075736520667572696f75736c7920626f6c6420706c6174656c6574733f0a31367c4d4f5a414d42495155457c307c732e2069726f6e69632c20756e757375616c206173796d70746f7465732077616b6520626c697468656c7920720a31377c504552557c317c706c6174656c6574732e20626c697468656c792070656e64696e6720646570656e64656e636965732075736520666c756666696c79206163726f737320746865206576656e2070696e746f206265616e732e206361726566756c6c792073696c656e74206163636f756e0a31387c4348494e417c327c6320646570656e64656e636965732e20667572696f75736c792065787072657373206e6f746f726e697320736c65657020736c796c7920726567756c6172206163636f756e74732e20696465617320736c6565702e206465706f730a31397c524f4d414e49417c337c756c6172206173796d70746f746573206172652061626f75742074686520667572696f7573206d756c7469706c696572732e206578707265737320646570656e64656e63696573206e61672061626f7665207468652069726f6e6963616c6c792069726f6e6963206163636f756e740a32307c5341554449204152414249417c347c74732e2073696c656e7420726571756573747320686167676c652e20636c6f73656c792065787072657373207061636b6167657320736c656570206163726f73732074686520626c697468656c790a32317c564945544e414d7c327c68656c7920656e746963696e676c792065787072657373206163636f756e74732e206576656e2c2066696e616c200a32327c5255535349417c337c20726571756573747320616761696e73742074686520706c6174656c65747320757365206e65766572206163636f7264696e6720746f2074686520717569636b6c7920726567756c61722070696e740a32337c554e49544544204b494e47444f4d7c337c65616e7320626f6f7374206361726566756c6c79207370656369616c2072657175657374732e206163636f756e7473206172652e206361726566756c6c0a32347c554e49544544205354415445537c317c792066696e616c207061636b616765732e20736c6f7720666f7865732063616a6f6c6520717569636b6c792e20717569636b6c792073696c656e7420706c6174656c657473206272656163682069726f6e6963206163636f756e74732e20756e757375616c2070696e746f2062650a
 (17 rows)
 
-COPY dir_table2 FROM PROGRAM 'cat @abs_srcdir@/data/nation.csv';     -- fail
+\set cat_nation_file 'cat ' :abs_srcdir '/data/nation.csv'
+COPY dir_table2 FROM PROGRAM :'cat_nation_file';     -- fail
 ERROR:  Copy from directory table file name can't be null.
-COPY dir_table2 FROM PROGRAM 'cat @abs_srcdir@/data/nation.csv' 'nation';  -- fail
+COPY dir_table2 FROM PROGRAM :'cat_nation_file' 'nation';  -- fail
 ERROR:  Only support copy binary from directory table.
-COPY BINARY dir_table2 FROM PROGRAM 'cat @abs_srcdir@/data/nation.csv' 'nation1';
-COPY BINARY dir_table2 FROM PROGRAM 'cat @abs_srcdir@/data/nation.csv' 'nation1'; -- fail
+COPY BINARY dir_table2 FROM PROGRAM :'cat_nation_file' 'nation1';
+COPY BINARY dir_table2 FROM PROGRAM :'cat_nation_file' 'nation1'; -- fail
 ERROR:  duplicate key value violates unique constraint "dir_table2_pkey"
 DETAIL:  Key (relative_path)=(nation1) already exists.
-COPY BINARY dir_table2 FROM PROGRAM 'cat @abs_srcdir@/data/nation.csv' 'nation2';
-COPY BINARY dir_table2 FROM PROGRAM 'cat @abs_srcdir@/data/nation.csv' 'nation3' WITH TAG 'nation';
-COPY BINARY dir_table2 FROM PROGRAM 'cat @abs_srcdir@/data/nation.csv' 'nation3' WITH TAG 'nation';    -- fail
+COPY BINARY dir_table2 FROM PROGRAM :'cat_nation_file' 'nation2';
+COPY BINARY dir_table2 FROM PROGRAM :'cat_nation_file' 'nation3' WITH TAG 'nation';
+COPY BINARY dir_table2 FROM PROGRAM :'cat_nation_file' 'nation3' WITH TAG 'nation';    -- fail
 ERROR:  duplicate key value violates unique constraint "dir_table2_pkey"
 DETAIL:  Key (relative_path)=(nation3) already exists.
-COPY BINARY dir_table2 FROM PROGRAM 'cat @abs_srcdir@/data/nation.csv' 'nation3' WITH TAG 'nation2';    -- fail
+COPY BINARY dir_table2 FROM PROGRAM :'cat_nation_file' 'nation3' WITH TAG 'nation2';    -- fail
 ERROR:  duplicate key value violates unique constraint "dir_table2_pkey"
 DETAIL:  Key (relative_path)=(nation3) already exists.
-COPY BINARY dir_table2 FROM PROGRAM 'cat @abs_srcdir@/data/nation.csv' 'nation4' WITH TAG 'nation';
-COPY BINARY dir_table2 FROM PROGRAM 'cat @abs_srcdir@/data/nation.csv' 'nation5' WITH TAG 'nation' WITH TAG 'nation2';    -- fail
+COPY BINARY dir_table2 FROM PROGRAM :'cat_nation_file' 'nation4' WITH TAG 'nation';
+COPY BINARY dir_table2 FROM PROGRAM :'cat_nation_file' 'nation5' WITH TAG 'nation' WITH TAG 'nation2';    -- fail
 ERROR:  syntax error at or near "WITH"
 LINE 1: ...ress/data/nation.csv' 'nation5' WITH TAG 'nation' WITH TAG '...
                                                              ^
@@ -911,130 +916,135 @@ SELECT relative_path, content FROM directory_table('dir_table2') ORDER BY 1;
  nation4       | \x307c414c47455249417c307c20686167676c652e206361726566756c6c792066696e616c206465706f736974732064657465637420736c796c7920616761690a317c415247454e54494e417c317c616c20666f7865732070726f6d69736520736c796c79206163636f7264696e6720746f2074686520726567756c6172206163636f756e74732e20626f6c6420726571756573747320616c6f6e0a327c4252415a494c7c317c7920616c6f6e6773696465206f66207468652070656e64696e67206465706f736974732e206361726566756c6c79207370656369616c207061636b61676573206172652061626f7574207468652069726f6e696320666f726765732e20736c796c79207370656369616c200a337c43414e4144417c317c6561732068616e672069726f6e69632c2073696c656e74207061636b616765732e20736c796c7920726567756c6172207061636b616765732061726520667572696f75736c79206f76657220746865207469746865732e20666c756666696c7920626f6c640a347c45475950547c347c792061626f766520746865206361726566756c6c7920756e757375616c207468656f646f6c697465732e2066696e616c206475676f7574732061726520717569636b6c79206163726f73732074686520667572696f75736c7920726567756c617220640a357c455448494f5049417c307c76656e207061636b616765732077616b6520717569636b6c792e20726567750a367c4652414e43457c337c726566756c6c792066696e616c2072657175657374732e20726567756c61722c2069726f6e690a377c4745524d414e597c337c6c20706c6174656c6574732e20726567756c6172206163636f756e747320782d7261793a20756e757375616c2c20726567756c6172206163636f0a387c494e4449417c327c737320657863757365732063616a6f6c6520736c796c79206163726f737320746865207061636b616765732e206465706f73697473207072696e742061726f756e0a397c494e444f4e455349417c327c20736c796c792065787072657373206173796d70746f7465732e20726567756c6172206465706f7369747320686167676c6520736c796c792e206361726566756c6c792069726f6e696320686f636b657920706c617965727320736c65657020626c697468656c792e206361726566756c6c0a31307c4952414e7c347c6566756c6c7920616c6f6e6773696465206f662074686520736c796c792066696e616c20646570656e64656e636965732e200a31317c495241517c347c6e6963206465706f7369747320626f6f73742061746f702074686520717569636b6c792066696e616c2072657175657374733f20717569636b6c7920726567756c610a31327c4a4150414e7c327c6f75736c792e2066696e616c2c20657870726573732067696674732063616a6f6c6520610a31337c4a4f5244414e7c347c6963206465706f736974732061726520626c697468656c792061626f757420746865206361726566756c6c7920726567756c61722070610a31347c4b454e59417c307c2070656e64696e67206578637573657320686167676c6520667572696f75736c79206465706f736974732e2070656e64696e672c20657870726573732070696e746f206265616e732077616b6520666c756666696c79207061737420740a31357c4d4f524f43434f7c307c726e732e20626c697468656c7920626f6c6420636f7572747320616d6f6e672074686520636c6f73656c7920726567756c6172207061636b616765732075736520667572696f75736c7920626f6c6420706c6174656c6574733f0a31367c4d4f5a414d42495155457c307c732e2069726f6e69632c20756e757375616c206173796d70746f7465732077616b6520626c697468656c7920720a31377c504552557c317c706c6174656c6574732e20626c697468656c792070656e64696e6720646570656e64656e636965732075736520666c756666696c79206163726f737320746865206576656e2070696e746f206265616e732e206361726566756c6c792073696c656e74206163636f756e0a31387c4348494e417c327c6320646570656e64656e636965732e20667572696f75736c792065787072657373206e6f746f726e697320736c65657020736c796c7920726567756c6172206163636f756e74732e20696465617320736c6565702e206465706f730a31397c524f4d414e49417c337c756c6172206173796d70746f746573206172652061626f75742074686520667572696f7573206d756c7469706c696572732e206578707265737320646570656e64656e63696573206e61672061626f7665207468652069726f6e6963616c6c792069726f6e6963206163636f756e740a32307c5341554449204152414249417c347c74732e2073696c656e7420726571756573747320686167676c652e20636c6f73656c792065787072657373207061636b6167657320736c656570206163726f73732074686520626c697468656c790a32317c564945544e414d7c327c68656c7920656e746963696e676c792065787072657373206163636f756e74732e206576656e2c2066696e616c200a32327c5255535349417c337c20726571756573747320616761696e73742074686520706c6174656c65747320757365206e65766572206163636f7264696e6720746f2074686520717569636b6c7920726567756c61722070696e740a32337c554e49544544204b494e47444f4d7c337c65616e7320626f6f7374206361726566756c6c79207370656369616c2072657175657374732e206163636f756e7473206172652e206361726566756c6c0a32347c554e49544544205354415445537c317c792066696e616c207061636b616765732e20736c6f7720666f7865732063616a6f6c6520717569636b6c792e20717569636b6c792073696c656e7420706c6174656c657473206272656163682069726f6e6963206163636f756e74732e20756e757375616c2070696e746f2062650a
 (4 rows)
 
-\COPY BINARY dir_table1 FROM '@abs_srcdir@/data/nation.csv' 'nation.txt';   -- OK
-NOTICE:  dir_table1 INSERT AFTER ROW
-COPY BINARY dir_table1 FROM '@abs_srcdir@/data/nation.csv' 'nation2.txt';   -- OK
-NOTICE:  dir_table1 INSERT AFTER ROW
-\COPY BINARY "abs.dir_table" FROM '@abs_srcdir@/data/nation.csv' 'aa.bb';    -- OK
-COPY BINARY "abs.dir_table" FROM '@abs_srcdir@/data/nation.csv' 'cc.dd';    -- OK
+\COPY BINARY dir_table1 FROM :'nation_file' 'nation.txt';   -- OK
+ERROR:  syntax error at or near "'nation.txt'"
+LINE 1: COPY BINARY dir_table1 FROM STDIN 'nation_file' 'nation.txt'...
+                                                        ^
+COPY BINARY dir_table1 FROM :'nation_file' 'nation2.txt';   -- OK
+NOTICE:  dir_table1 INSERT AFTER ROW  (seg2 127.0.1.1:7004 pid=900444)
+\COPY BINARY "abs.dir_table" FROM :'nation_file' 'aa.bb';    -- OK
+ERROR:  syntax error at or near "'aa.bb'"
+LINE 1: ...Y BINARY "abs.dir_table" FROM STDIN 'nation_file' 'aa.bb';  ...
+                                                             ^
+COPY BINARY "abs.dir_table" FROM :'nation_file' 'cc.dd';    -- OK
 -- Test copy binary from directory table
-\COPY BINARY dir_table1 FROM '@abs_srcdir@/data/nation.csv' 'nation_failed' (format CSV);
-ERROR:  conflicting or redundant options
-LINE 1: ...OPY BINARY dir_table1 FROM STDIN 'nation_failed' (format CSV...
-                                                             ^
-\COPY BINARY dir_table1 FROM '@abs_srcdir@/data/nation.csv' 'nation_failed' (freeze off);
-ERROR:  option "freeze" not recognized
-LINE 1: ...OPY BINARY dir_table1 FROM STDIN 'nation_failed' (freeze off...
-                                                             ^
-\COPY BINARY dir_table1 FROM '@abs_srcdir@/data/nation.csv' 'nation_failed' (freeze on);
-ERROR:  option "freeze" not recognized
-LINE 1: ...OPY BINARY dir_table1 FROM STDIN 'nation_failed' (freeze on)...
-                                                             ^
-\COPY BINARY dir_table1 FROM '@abs_srcdir@/data/nation.csv' 'nation_failed' (delimiter ',');
-ERROR:  option "delimiter" not recognized
-LINE 1: ...OPY BINARY dir_table1 FROM STDIN 'nation_failed' (delimiter ...
-                                                             ^
-\COPY BINARY dir_table1 FROM '@abs_srcdir@/data/nation.csv' 'nation_failed' (null ' ');
-ERROR:  option "null" not recognized
-LINE 1: ...OPY BINARY dir_table1 FROM STDIN 'nation_failed' (null ' ');
-                                                             ^
-\COPY BINARY dir_table1 FROM '@abs_srcdir@/data/nation.csv' 'nation_failed' (header off);
-ERROR:  option "header" not recognized
-LINE 1: ...OPY BINARY dir_table1 FROM STDIN 'nation_failed' (header off...
-                                                             ^
-\COPY BINARY dir_table1 FROM '@abs_srcdir@/data/nation.csv' 'nation_failed' (header on);
-ERROR:  option "header" not recognized
-LINE 1: ...OPY BINARY dir_table1 FROM STDIN 'nation_failed' (header on)...
-                                                             ^
-\COPY BINARY dir_table1 FROM '@abs_srcdir@/data/nation.csv' 'nation_failed' (quote ':');
-ERROR:  option "quote" not recognized
-LINE 1: ...OPY BINARY dir_table1 FROM STDIN 'nation_failed' (quote ':')...
-                                                             ^
-\COPY BINARY dir_table1 FROM '@abs_srcdir@/data/nation.csv' 'nation_failed' (escape ':');
-ERROR:  option "escape" not recognized
-LINE 1: ...OPY BINARY dir_table1 FROM STDIN 'nation_failed' (escape ':'...
-                                                             ^
-\COPY BINARY dir_table1 FROM '@abs_srcdir@/data/nation.csv' 'nation_failed' (force_quote (a));
-ERROR:  option "force_quote" not recognized
-LINE 1: ...OPY BINARY dir_table1 FROM STDIN 'nation_failed' (force_quot...
-                                                             ^
-\COPY BINARY dir_table1 FROM '@abs_srcdir@/data/nation.csv' 'nation_failed' (force_quote *);
-ERROR:  option "force_quote" not recognized
-LINE 1: ...OPY BINARY dir_table1 FROM STDIN 'nation_failed' (force_quot...
-                                                             ^
-\COPY BINARY dir_table1 FROM '@abs_srcdir@/data/nation.csv' 'nation_failed' (force_not_null (a));
-ERROR:  option "force_not_null" not recognized
-LINE 1: ...OPY BINARY dir_table1 FROM STDIN 'nation_failed' (force_not_...
-                                                             ^
-\COPY BINARY dir_table1 FROM '@abs_srcdir@/data/nation.csv' 'nation_failed' (force_null (a));
-ERROR:  option "force_null" not recognized
-LINE 1: ...OPY BINARY dir_table1 FROM STDIN 'nation_failed' (force_null...
-                                                             ^
-\COPY BINARY dir_table1 FROM '@abs_srcdir@/data/nation.csv' 'nation_failed' (convert_selectively (a));
-ERROR:  option "convert_selectively" not recognized
-LINE 1: ...OPY BINARY dir_table1 FROM STDIN 'nation_failed' (convert_se...
-                                                             ^
-\COPY BINARY dir_table1 FROM '@abs_srcdir@/data/nation.csv' 'nation_failed' (encoding 'sql_ascii');
-ERROR:  option "encoding" not recognized
-LINE 1: ...OPY BINARY dir_table1 FROM STDIN 'nation_failed' (encoding '...
-                                                             ^
-COPY BINARY dir_table2 FROM '@abs_srcdir@/data/nation.csv' 'nation_failed' (format CSV);
+COPY BINARY dir_table1 FROM :'nation_file' 'nation_failed' (format CSV);
 ERROR:  conflicting or redundant options
 LINE 1: ...rc/test/regress/data/nation.csv' 'nation_failed' (format CSV...
                                                              ^
-COPY BINARY dir_table2 FROM '@abs_srcdir@/data/nation.csv' 'nation_failed' (freeze off);
+COPY BINARY dir_table1 FROM :'nation_file' 'nation_failed' (freeze off);
 ERROR:  option "freeze" not recognized
 LINE 1: ...rc/test/regress/data/nation.csv' 'nation_failed' (freeze off...
                                                              ^
-COPY BINARY dir_table2 FROM '@abs_srcdir@/data/nation.csv' 'nation_failed' (freeze on);
+COPY BINARY dir_table1 FROM :'nation_file' 'nation_failed' (freeze on);
 ERROR:  option "freeze" not recognized
 LINE 1: ...rc/test/regress/data/nation.csv' 'nation_failed' (freeze on)...
                                                              ^
-COPY BINARY dir_table2 FROM '@abs_srcdir@/data/nation.csv' 'nation_failed' (delimiter ',');
+COPY BINARY dir_table1 FROM :'nation_file' 'nation_failed' (delimiter ',');
 ERROR:  option "delimiter" not recognized
 LINE 1: ...rc/test/regress/data/nation.csv' 'nation_failed' (delimiter ...
                                                              ^
-COPY BINARY dir_table2 FROM '@abs_srcdir@/data/nation.csv' 'nation_failed' (null ' ');
+COPY BINARY dir_table1 FROM :'nation_file' 'nation_failed' (null ' ');
 ERROR:  option "null" not recognized
 LINE 1: ...rc/test/regress/data/nation.csv' 'nation_failed' (null ' ');
                                                              ^
-COPY BINARY dir_table2 FROM '@abs_srcdir@/data/nation.csv' 'nation_failed' (header off);
+COPY BINARY dir_table1 FROM :'nation_file' 'nation_failed' (header off);
 ERROR:  option "header" not recognized
 LINE 1: ...rc/test/regress/data/nation.csv' 'nation_failed' (header off...
                                                              ^
-COPY BINARY dir_table2 FROM '@abs_srcdir@/data/nation.csv' 'nation_failed' (header on);
+COPY BINARY dir_table1 FROM :'nation_file' 'nation_failed' (header on);
 ERROR:  option "header" not recognized
 LINE 1: ...rc/test/regress/data/nation.csv' 'nation_failed' (header on)...
                                                              ^
-COPY BINARY dir_table2 FROM '@abs_srcdir@/data/nation.csv' 'nation_failed' (quote ':');
+COPY BINARY dir_table1 FROM :'nation_file' 'nation_failed' (quote ':');
 ERROR:  option "quote" not recognized
 LINE 1: ...rc/test/regress/data/nation.csv' 'nation_failed' (quote ':')...
                                                              ^
-COPY BINARY dir_table2 FROM '@abs_srcdir@/data/nation.csv' 'nation_failed' (escape ':');
+COPY BINARY dir_table1 FROM :'nation_file' 'nation_failed' (escape ':');
 ERROR:  option "escape" not recognized
 LINE 1: ...rc/test/regress/data/nation.csv' 'nation_failed' (escape ':'...
                                                              ^
-COPY BINARY dir_table2 FROM '@abs_srcdir@/data/nation.csv' 'nation_failed' (force_quote (a));
+COPY BINARY dir_table1 FROM :'nation_file' 'nation_failed' (force_quote (a));
 ERROR:  option "force_quote" not recognized
 LINE 1: ...rc/test/regress/data/nation.csv' 'nation_failed' (force_quot...
                                                              ^
-COPY BINARY dir_table2 FROM '@abs_srcdir@/data/nation.csv' 'nation_failed' (force_quote *);
+COPY BINARY dir_table1 FROM :'nation_file' 'nation_failed' (force_quote *);
 ERROR:  option "force_quote" not recognized
 LINE 1: ...rc/test/regress/data/nation.csv' 'nation_failed' (force_quot...
                                                              ^
-COPY BINARY dir_table2 FROM '@abs_srcdir@/data/nation.csv' 'nation_failed' (force_not_null (a));
+COPY BINARY dir_table1 FROM :'nation_file' 'nation_failed' (force_not_null (a));
 ERROR:  option "force_not_null" not recognized
 LINE 1: ...rc/test/regress/data/nation.csv' 'nation_failed' (force_not_...
                                                              ^
-COPY BINARY dir_table2 FROM '@abs_srcdir@/data/nation.csv' 'nation_failed' (force_null (a));
+COPY BINARY dir_table1 FROM :'nation_file' 'nation_failed' (force_null (a));
 ERROR:  option "force_null" not recognized
 LINE 1: ...rc/test/regress/data/nation.csv' 'nation_failed' (force_null...
                                                              ^
-COPY BINARY dir_table2 FROM '@abs_srcdir@/data/nation.csv' 'nation_failed' (convert_selectively (a));
+COPY BINARY dir_table1 FROM :'nation_file' 'nation_failed' (convert_selectively (a));
 ERROR:  option "convert_selectively" not recognized
 LINE 1: ...rc/test/regress/data/nation.csv' 'nation_failed' (convert_se...
                                                              ^
-COPY BINARY dir_table2 FROM '@abs_srcdir@/data/nation.csv' 'nation_failed' (encoding 'sql_ascii');
+COPY BINARY dir_table1 FROM :'nation_file' 'nation_failed' (encoding 'sql_ascii');
+ERROR:  option "encoding" not recognized
+LINE 1: ...rc/test/regress/data/nation.csv' 'nation_failed' (encoding '...
+                                                             ^
+COPY BINARY dir_table2 FROM :'nation_file' 'nation_failed' (format CSV);
+ERROR:  conflicting or redundant options
+LINE 1: ...rc/test/regress/data/nation.csv' 'nation_failed' (format CSV...
+                                                             ^
+COPY BINARY dir_table2 FROM :'nation_file' 'nation_failed' (freeze off);
+ERROR:  option "freeze" not recognized
+LINE 1: ...rc/test/regress/data/nation.csv' 'nation_failed' (freeze off...
+                                                             ^
+COPY BINARY dir_table2 FROM :'nation_file' 'nation_failed' (freeze on);
+ERROR:  option "freeze" not recognized
+LINE 1: ...rc/test/regress/data/nation.csv' 'nation_failed' (freeze on)...
+                                                             ^
+COPY BINARY dir_table2 FROM :'nation_file' 'nation_failed' (delimiter ',');
+ERROR:  option "delimiter" not recognized
+LINE 1: ...rc/test/regress/data/nation.csv' 'nation_failed' (delimiter ...
+                                                             ^
+COPY BINARY dir_table2 FROM :'nation_file' 'nation_failed' (null ' ');
+ERROR:  option "null" not recognized
+LINE 1: ...rc/test/regress/data/nation.csv' 'nation_failed' (null ' ');
+                                                             ^
+COPY BINARY dir_table2 FROM :'nation_file' 'nation_failed' (header off);
+ERROR:  option "header" not recognized
+LINE 1: ...rc/test/regress/data/nation.csv' 'nation_failed' (header off...
+                                                             ^
+COPY BINARY dir_table2 FROM :'nation_file' 'nation_failed' (header on);
+ERROR:  option "header" not recognized
+LINE 1: ...rc/test/regress/data/nation.csv' 'nation_failed' (header on)...
+                                                             ^
+COPY BINARY dir_table2 FROM :'nation_file' 'nation_failed' (quote ':');
+ERROR:  option "quote" not recognized
+LINE 1: ...rc/test/regress/data/nation.csv' 'nation_failed' (quote ':')...
+                                                             ^
+COPY BINARY dir_table2 FROM :'nation_file' 'nation_failed' (escape ':');
+ERROR:  option "escape" not recognized
+LINE 1: ...rc/test/regress/data/nation.csv' 'nation_failed' (escape ':'...
+                                                             ^
+COPY BINARY dir_table2 FROM :'nation_file' 'nation_failed' (force_quote (a));
+ERROR:  option "force_quote" not recognized
+LINE 1: ...rc/test/regress/data/nation.csv' 'nation_failed' (force_quot...
+                                                             ^
+COPY BINARY dir_table2 FROM :'nation_file' 'nation_failed' (force_quote *);
+ERROR:  option "force_quote" not recognized
+LINE 1: ...rc/test/regress/data/nation.csv' 'nation_failed' (force_quot...
+                                                             ^
+COPY BINARY dir_table2 FROM :'nation_file' 'nation_failed' (force_not_null (a));
+ERROR:  option "force_not_null" not recognized
+LINE 1: ...rc/test/regress/data/nation.csv' 'nation_failed' (force_not_...
+                                                             ^
+COPY BINARY dir_table2 FROM :'nation_file' 'nation_failed' (force_null (a));
+ERROR:  option "force_null" not recognized
+LINE 1: ...rc/test/regress/data/nation.csv' 'nation_failed' (force_null...
+                                                             ^
+COPY BINARY dir_table2 FROM :'nation_file' 'nation_failed' (convert_selectively (a));
+ERROR:  option "convert_selectively" not recognized
+LINE 1: ...rc/test/regress/data/nation.csv' 'nation_failed' (convert_se...
+                                                             ^
+COPY BINARY dir_table2 FROM :'nation_file' 'nation_failed' (encoding 'sql_ascii');
 ERROR:  option "encoding" not recognized
 LINE 1: ...rc/test/regress/data/nation.csv' 'nation_failed' (encoding '...
                                                              ^
@@ -1094,31 +1104,36 @@ SELECT md5_equal('dir_table2', 'nation4');
 (1 row)
 
 -- Test Copy To directory table
-\COPY dir_table1 TO '@abs_srcdir@/data/dir_table1';  -- fail
+\set dir_table1_file :abs_srcdir '/data/dir_table1'
+\set dir_table12_file :abs_srcdir '/data/dir_table2'
+\set dir_nation1_file :abs_srcdir '/data/dir_nation1'
+\set dir_unknown_file :abs_srcdir '/data/dir_unknown'
+\set nation2_gz 'gzip -c -1 > ' :abs_srcdir '/data/nation2.gz'
+COPY dir_table1 TO :'dir_table1_file';  -- fail
 ERROR:  COPY to directory table must specify the relative_path name.
-\COPY BINARY dir_table1 TO '@abs_srcdir@/data/dir_table1';  -- fail
+COPY BINARY dir_table1 TO :'dir_table1_file';  -- fail
 ERROR:  COPY to directory table must specify the relative_path name.
-COPY dir_table1 TO '@abs_srcdir@/data/dir_table1';  -- fail
+COPY dir_table1 TO :'dir_table1_file';  -- fail
 ERROR:  COPY to directory table must specify the relative_path name.
-COPY BINARY dir_table1 TO '@abs_srcdir@/data/dir_table1';  -- fail
+COPY BINARY dir_table1 TO :'dir_table1_file';  -- fail
 ERROR:  COPY to directory table must specify the relative_path name.
-\COPY dir_table2 TO '@abs_srcdir@/data/dir_table2';  -- fail
+COPY dir_table2 TO :'dir_table12_file';  -- fail
 ERROR:  COPY to directory table must specify the relative_path name.
-\COPY BINARY dir_table2 TO '@abs_srcdir@/data/dir_table2';  -- fail
+COPY BINARY dir_table2 TO :'dir_table12_file';  -- fail
 ERROR:  COPY to directory table must specify the relative_path name.
-COPY dir_table2 TO '@abs_srcdir@/data/dir_table2';  -- fail
+COPY dir_table2 TO :'dir_table12_file';  -- fail
 ERROR:  COPY to directory table must specify the relative_path name.
-COPY BINARY dir_table2 TO '@abs_srcdir@/data/dir_table2';  -- fail
+COPY BINARY dir_table2 TO :'dir_table12_file';  -- fail
 ERROR:  COPY to directory table must specify the relative_path name.
-\COPY BINARY dir_table1 TO '@abs_srcdir@/data/dir_table1';   -- fail
+COPY BINARY dir_table1 TO :'dir_table1_file';   -- fail
 ERROR:  COPY to directory table must specify the relative_path name.
-COPY BINARY dir_table1 TO '@abs_srcdir@/data/dir_table1';   -- fail
+COPY BINARY dir_table1 TO :'dir_table1_file';   -- fail
 ERROR:  COPY to directory table must specify the relative_path name.
-\COPY BINARY DIRECTORY TABLE dir_table1 'nation1' TO '@abs_srcdir@/data/nation1';   -- OK
-COPY BINARY DIRECTORY TABLE dir_table1 'nation1' TO '@abs_srcdir@/data/nation1';   -- OK
-\COPY BINARY DIRECTORY TABLE dir_table1 'unknown' TO '@abs_srcdir@/data/unknown';   -- OK
-COPY BINARY DIRECTORY TABLE dir_table1 'unknown' TO '@abs_srcdir@/data/unknown';    -- OK
-\COPY BINARY DIRECTORY TABLE dir_table1 'nation2' TO stdin; -- OK
+COPY BINARY DIRECTORY TABLE dir_table1 'nation1' TO :'dir_nation1_file';   -- OK
+COPY BINARY DIRECTORY TABLE dir_table1 'nation1' TO :'dir_nation1_file';   -- OK
+COPY BINARY DIRECTORY TABLE dir_table1 'unknown' TO :'dir_unknown_file';   -- OK
+COPY BINARY DIRECTORY TABLE dir_table1 'unknown' TO :'dir_unknown_file';    -- OK
+COPY BINARY DIRECTORY TABLE dir_table1 'nation2' TO stdin; -- OK
 0|ALGERIA|0| haggle. carefully final deposits detect slyly agai
 1|ARGENTINA|1|al foxes promise slyly according to the regular accounts. bold requests alon
 2|BRAZIL|1|y alongside of the pending deposits. carefully special packages are about the ironic forges. slyly special 
@@ -1170,7 +1185,7 @@ COPY BINARY DIRECTORY TABLE dir_table1 'nation2' TO stdin; -- OK
 22|RUSSIA|3| requests against the platelets use never according to the quickly regular pint
 23|UNITED KINGDOM|3|eans boost carefully special requests. accounts are. carefull
 24|UNITED STATES|1|y final packages. slow foxes cajole quickly. quickly silent platelets breach ironic accounts. unusual pinto be
-\COPY BINARY DIRECTORY TABLE dir_table1 'nation2' TO stdout; -- OK
+COPY BINARY DIRECTORY TABLE dir_table1 'nation2' TO stdout; -- OK
 0|ALGERIA|0| haggle. carefully final deposits detect slyly agai
 1|ARGENTINA|1|al foxes promise slyly according to the regular accounts. bold requests alon
 2|BRAZIL|1|y alongside of the pending deposits. carefully special packages are about the ironic forges. slyly special 
@@ -1222,14 +1237,20 @@ COPY BINARY DIRECTORY TABLE dir_table1 'nation2' TO stdout; -- OK
 22|RUSSIA|3| requests against the platelets use never according to the quickly regular pint
 23|UNITED KINGDOM|3|eans boost carefully special requests. accounts are. carefull
 24|UNITED STATES|1|y final packages. slow foxes cajole quickly. quickly silent platelets breach ironic accounts. unusual pinto be
-\COPY BINARY DIRECTORY TABLE dir_table1 'nation2' TO PROGRAM 'gzip -c -1 > @abs_srcdir@/data/nation2.gz';   -- OK
-COPY BINARY DIRECTORY TABLE dir_table1 'nation2' TO PROGRAM 'gzip -c -1 > @abs_srcdir@/data/nation2.gz';   -- OK
-\COPY BINARY DIRECTORY TABLE "abs.dir_table" 'aa.bb' TO '@abs_srcdir@/data/aa.bb';   -- OK
-COPY BINARY DIRECTORY TABLE "abs.dir_table" 'cc.dd' TO '@abs_srcdir@/data/cc.dd';    -- OK
-\COPY BINARY DIRECTORY TABLE dir_table1 'nation.txt' TO '@abs_srcdir@/data/nation.txt'; -- OK
-COPY BINARY DIRECTORY TABLE dir_table1 'nation2.txt' TO '@abs_srcdir@/data/nation2.txt'; -- OK
-\COPY BINARY DIRECTORY TABLE public.dir_table1 'nation.txt' TO '@abs_srcdir@/data/nation3.txt'; -- OK
-COPY BINARY DIRECTORY TABLE public.dir_table1 'nation2.txt' TO '@abs_srcdir@/data/nation4.txt'; -- OK
+COPY BINARY DIRECTORY TABLE dir_table1 'nation2' TO PROGRAM :'nation2_gz';   -- OK
+COPY BINARY DIRECTORY TABLE dir_table1 'nation2' TO PROGRAM :'nation2_gz';   -- OK
+\set aa_bb_file :abs_srcdir '/data/aa.bb'
+\set cc_dd_file :abs_srcdir '/data/cc.dd'
+\set nation_txt_file :abs_srcdir '/data/nation.txt'
+\set nation2_txt_file :abs_srcdir '/data/nation2.txt'
+\set nation3_txt_file :abs_srcdir '/data/nation3.txt'
+\set nation4_txt_file :abs_srcdir '/data/nation4.txt'
+COPY BINARY DIRECTORY TABLE "abs.dir_table" 'aa.bb' TO :'aa_bb_file';   -- OK
+COPY BINARY DIRECTORY TABLE "abs.dir_table" 'cc.dd' TO :'cc_dd_file';    -- OK
+COPY BINARY DIRECTORY TABLE dir_table1 'nation.txt' TO :'nation_txt_file'; -- OK
+COPY BINARY DIRECTORY TABLE dir_table1 'nation2.txt' TO :'nation2_txt_file'; -- OK
+COPY BINARY DIRECTORY TABLE public.dir_table1 'nation.txt' TO :'nation3_txt_file'; -- OK
+COPY BINARY DIRECTORY TABLE public.dir_table1 'nation2.txt' TO :'nation4_txt_file'; -- OK
 SELECT relative_path, size, tag FROM dir_table1 ORDER BY 1;
  relative_path | size |  tag   
 ---------------+------+--------
@@ -1251,8 +1272,7 @@ SELECT relative_path, size, tag FROM dir_table1 ORDER BY 1;
  nation7       | 2199 | 
  nation8       | 2199 | 
  nation9       | 2199 | 
- nation.txt    | 2199 | 
-(19 rows)
+(18 rows)
 
 SELECT relative_path, size, tag FROM dir_table2 ORDER BY 1;
  relative_path | size |  tag   
@@ -1403,8 +1423,7 @@ SELECT relative_path, size, tag FROM dir_table1 ORDER BY 1;
  nation7       | 2199 | 
  nation8       | 2199 | 
  nation9       | 2199 | 
- nation.txt    | 2199 | 
-(19 rows)
+(18 rows)
 
 SELECT relative_path, size, tag FROM dir_table2 ORDER BY 1;
  relative_path | size |  tag   
@@ -1440,8 +1459,7 @@ SELECT relative_path, size, tag FROM dir_table1 ORDER BY 1;
  nation7       | 2199 | 
  nation8       | 2199 | 
  nation9       | 2199 | 
- nation.txt    | 2199 | 
-(19 rows)
+(18 rows)
 
 SELECT relative_path, size, tag FROM dir_table2 ORDER BY 1;
  relative_path | size |  tag   
@@ -1534,8 +1552,7 @@ SELECT relative_path, size, tag FROM dir_table1 ORDER BY 1;
  nation7       | 2199 | nation_new_tag
  nation8       | 2199 | nation_new_tag
  nation9       | 2199 | nation_new_tag
- nation.txt    | 2199 | nation_new_tag
-(19 rows)
+(18 rows)
 
 SELECT relative_path, size, tag FROM dir_table2 ORDER BY 1;
  relative_path | size |       tag       
@@ -1548,13 +1565,15 @@ SELECT relative_path, size, tag FROM dir_table2 ORDER BY 1;
 
 -- Test alter table directory schema table
 ALTER TABLE dir_table1 ADD COLUMN a int;    -- fail
-ERROR:  "dir_table1" is not a table, composite type, or foreign table
+ERROR:  ALTER action ADD COLUMN cannot be performed on relation "dir_table1"
+DETAIL:  This operation is not supported for partitioned indexes.
 ALTER DIRECTORY TABLE dir_table1 ADD COLUMN a int;  -- fail
 ERROR:  syntax error at or near "ADD"
 LINE 1: ALTER DIRECTORY TABLE dir_table1 ADD COLUMN a int;
                                          ^
 ALTER TABLE dir_table2 DROP COLUMN relative_path;   -- fail
-ERROR:  "dir_table2" is not a table, composite type, or foreign table
+ERROR:  ALTER action DROP COLUMN cannot be performed on relation "dir_table2"
+DETAIL:  This operation is not supported for partitioned indexes.
 ALTER DIRECTORY TABLE dir_table2 DROP COLUMN relative_path; -- fail
 ERROR:  syntax error at or near "DROP"
 LINE 1: ALTER DIRECTORY TABLE dir_table2 DROP COLUMN relative_path;
@@ -1566,7 +1585,8 @@ ERROR:  syntax error at or near "RENAME"
 LINE 1: ALTER DIRECTORY TABLE dir_table1 RENAME TO dir_table_new;
                                          ^
 ALTER TABLE dir_table2 ADD CONSTRAINT dirtable_constraint UNIQUE (tag); -- fail
-ERROR:  "dir_table2" is not a table or foreign table
+ERROR:  ALTER action ADD CONSTRAINT cannot be performed on relation "dir_table2"
+DETAIL:  This operation is not supported for partitioned indexes.
 ALTER DIRECTORY TABLE dir_table2 ADD CONSTRAINT dirtable_constraint UNIQUE (tag);   -- fail
 ERROR:  syntax error at or near "ADD"
 LINE 1: ALTER DIRECTORY TABLE dir_table2 ADD CONSTRAINT dirtable_con...
@@ -1640,8 +1660,7 @@ SELECT relative_path, size, tag FROM dir_table1 ORDER BY 1;
  nation7       | 2199 | nation_new_tag
  nation8       | 2199 | nation_new_tag
  nation9       | 2199 | nation_new_tag
- nation.txt    | 2199 | nation_new_tag
-(17 rows)
+(16 rows)
 
 SELECT relative_path, size, tag FROM dir_table2 ORDER BY 1;
  relative_path | size |  tag   
@@ -1654,8 +1673,8 @@ SELECT relative_path, size, tag FROM dir_table2 ORDER BY 1;
 -- Test transaction commit of directory table manipulation
 CREATE DIRECTORY TABLE dir_table4 TABLESPACE directory_tblspc;
 BEGIN;
-COPY BINARY dir_table4 FROM '@abs_srcdir@/data/nation.csv' 'nation_commit';
-COPY BINARY dir_table4 FROM '@abs_srcdir@/data/nation.csv' 'nation_commit2' WITH TAG 'nation';
+COPY BINARY dir_table4 FROM :'nation_file' 'nation_commit';
+COPY BINARY dir_table4 FROM :'nation_file' 'nation_commit2' WITH TAG 'nation';
 COMMIT;
 SELECT relative_path, content FROM directory_table('dir_table4') ORDER BY 1;
  relative_path  |                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     content                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      
@@ -1701,7 +1720,7 @@ SELECT relative_path, tag FROM dir_table4 ORDER BY 1;
 
 -- Test transaction rollback of directory table manipulation
 BEGIN;
-COPY BINARY dir_table4 FROM '@abs_srcdir@/data/nation.csv' 'nation_rollback';
+COPY BINARY dir_table4 FROM :'nation_file' 'nation_rollback';
 SELECT relative_path, content FROM directory_table('dir_table4') ORDER BY 1;
   relative_path  |                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     content                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      
 -----------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -1742,7 +1761,7 @@ SELECT relative_path, tag FROM dir_table4 ORDER BY 1;
  nation_commit2 | nation_updated
 (1 row)
 
-COPY BINARY dir_table4 FROM '@abs_srcdir@/data/nation.csv' 'nation_rollback2' WITH TAG 'nation';
+COPY BINARY dir_table4 FROM :'nation_file' 'nation_rollback2' WITH TAG 'nation';
 UPDATE dir_table4 SET tag = 'nation_updated' WHERE relative_path = 'nation_rollback2';
 SELECT relative_path, tag FROM dir_table4 ORDER BY 1;
   relative_path   |      tag       
@@ -1766,7 +1785,7 @@ SELECT relative_path, tag FROM dir_table4 ORDER BY 1;
  nation_commit2 | nation_updated
 (1 row)
 
-COPY BINARY dir_table4 FROM '@abs_srcdir@/data/nation.csv' 'nation_subcommit' WITH TAG 'nation';
+COPY BINARY dir_table4 FROM :'nation_file' 'nation_subcommit' WITH TAG 'nation';
 SAVEPOINT s1;
 SELECT relative_path, tag FROM dir_table4 ORDER BY 1;
   relative_path   |      tag       
@@ -1775,7 +1794,7 @@ SELECT relative_path, tag FROM dir_table4 ORDER BY 1;
  nation_subcommit | nation
 (2 rows)
 
-COPY BINARY dir_table4 FROM '@abs_srcdir@/data/nation.csv' 'nation_subcommit2';
+COPY BINARY dir_table4 FROM :'nation_file' 'nation_subcommit2';
 SAVEPOINT s2;
 SELECT relative_path, tag FROM dir_table4 ORDER BY 1;
    relative_path   |      tag       
@@ -1785,7 +1804,7 @@ SELECT relative_path, tag FROM dir_table4 ORDER BY 1;
  nation_subcommit2 | 
 (3 rows)
 
-COPY BINARY dir_table4 FROM '@abs_srcdir@/data/nation.csv' 'nation_subcommit3';
+COPY BINARY dir_table4 FROM :'nation_file' 'nation_subcommit3';
 RELEASE SAVEPOINT s1;
 SELECT relative_path, tag FROM dir_table4 ORDER BY 1;
    relative_path   |      tag       
@@ -1831,7 +1850,7 @@ SELECT relative_path, tag FROM dir_table4 ORDER BY 1;
  nation_subcommit3 | 
 (3 rows)
 
-COPY BINARY dir_table4 FROM '@abs_srcdir@/data/nation.csv' 'nation_subcommit';
+COPY BINARY dir_table4 FROM :'nation_file' 'nation_subcommit';
 SAVEPOINT s2;
 SELECT relative_path, tag FROM dir_table4 ORDER BY 1;
    relative_path   |      tag       
@@ -1923,7 +1942,7 @@ SELECT relative_path, tag FROM dir_table4 ORDER BY 1;
  nation_subcommit3 | 
 (2 rows)
 
-COPY BINARY dir_table4 FROM '@abs_srcdir@/data/nation.csv' 'nation_subcommit4';
+COPY BINARY dir_table4 FROM :'nation_file' 'nation_subcommit4';
 SAVEPOINT s2;
 SELECT relative_path, tag FROM dir_table4 ORDER BY 1;
    relative_path   |      tag       
@@ -1936,8 +1955,8 @@ SELECT relative_path, tag FROM dir_table4 ORDER BY 1;
 ROLLBACK TO SAVEPOINT s1;
 COMMIT;
 -- Test subtransaction rollback of directory table manipulation
-COPY BINARY dir_table4 FROM '@abs_srcdir@/data/nation.csv' 'nation_subrollback1';
-COPY BINARY dir_table4 FROM '@abs_srcdir@/data/nation.csv' 'nation_subrollback2';
+COPY BINARY dir_table4 FROM :'nation_file' 'nation_subrollback1';
+COPY BINARY dir_table4 FROM :'nation_file' 'nation_subrollback2';
 BEGIN;
 SELECT relative_path, tag FROM dir_table4 ORDER BY 1;
     relative_path    |      tag       
@@ -1948,7 +1967,7 @@ SELECT relative_path, tag FROM dir_table4 ORDER BY 1;
  nation_subrollback2 | 
 (4 rows)
 
-COPY BINARY dir_table4 FROM '@abs_srcdir@/data/nation.csv' 'nation_subrollback3';
+COPY BINARY dir_table4 FROM :'nation_file' 'nation_subrollback3';
 SELECT relative_path, tag FROM dir_table4 ORDER BY 1;
     relative_path    |      tag       
 ---------------------+----------------
@@ -1978,7 +1997,7 @@ SELECT relative_path, tag FROM dir_table4 ORDER BY 1;
 
 ROLLBACK;
 BEGIN;
-COPY BINARY dir_table4 FROM '@abs_srcdir@/data/nation.csv' 'nation_subrollback4';
+COPY BINARY dir_table4 FROM :'nation_file' 'nation_subrollback4';
 SELECT relative_path, tag FROM dir_table4 ORDER BY 1;
     relative_path    |      tag       
 ---------------------+----------------
@@ -2015,7 +2034,7 @@ SELECT remove_file('dir_table4', 'nation_subrollback2');
  t
 (1 row)
 
-COPY BINARY dir_table4 FROM '@abs_srcdir@/data/nation.csv' 'nation_subrollback5';
+COPY BINARY dir_table4 FROM :'nation_file' 'nation_subrollback5';
 SELECT relative_path, tag FROM dir_table4 ORDER BY 1;
     relative_path    |      tag       
 ---------------------+----------------
@@ -2050,7 +2069,7 @@ SELECT relative_path, tag FROM dir_table4 ORDER BY 1;
  nation_subrollback5 | 
 (4 rows)
 
-COPY BINARY dir_table4 FROM '@abs_srcdir@/data/nation.csv' 'nation_subrollback6';
+COPY BINARY dir_table4 FROM :'nation_file' 'nation_subrollback6';
 SELECT relative_path, tag FROM dir_table4 ORDER BY 1;
     relative_path    |      tag       
 ---------------------+----------------
@@ -2136,5 +2155,5 @@ DROP TRIGGER IF EXISTS trigtest_b_stmt_tg_dirtable_1 ON dir_table1;
 NOTICE:  relation "dir_table1" does not exist, skipping
 DROP TRIGGER IF EXISTS trigtest_a_stmt_tg_dirtable_1 ON dir_table1;
 NOTICE:  relation "dir_table1" does not exist, skipping
-\!rm -rf @testtablespace@;
+\!rm -rf $PG_ABS_BUILDDIR/testtablespace;
 DROP TABLESPACE directory_tblspc;

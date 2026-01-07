@@ -1567,6 +1567,9 @@ BeginCopyFromDirectoryTable(ParseState *pstate,
 
 	num_phys_attrs = tupDesc->natts;
 
+	cstate->defaults = (bool *) palloc0(tupDesc->natts * sizeof(bool));
+	cstate->num_defaults = tupDesc->natts;
+
 	cstate->attnumlist = CopyGetAttnums(tupDesc, cstate->rel, NIL);
 
 	/*

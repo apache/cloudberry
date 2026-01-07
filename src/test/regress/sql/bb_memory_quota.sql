@@ -10,10 +10,10 @@ alter resource queue memquota_resqueue1 with (memory_limit = '500MB');
 alter role memquota_role1 with resource queue memquota_resqueue1;
 
 -- concurrency = statement limit of the resource queue
-\! @abs_builddir@/mem_quota_util.py --complexity=1 --concurrency=4 --dbname=regress --username=memquota_role1
+\! $PG_ABS_BUILDDIR/mem_quota_util.py --complexity=1 --concurrency=4 --dbname=regress --username=memquota_role1
 
 -- trigger query waiting
-\! @abs_builddir@/mem_quota_util.py --complexity=1 --concurrency=15 --dbname=regress --username=memquota_role1
+\! $PG_ABS_BUILDDIR/mem_quota_util.py --complexity=1 --concurrency=15 --dbname=regress --username=memquota_role1
 
 -- use 'auto' memory allocation policy
 set gp_resqueue_memory_policy=auto;
