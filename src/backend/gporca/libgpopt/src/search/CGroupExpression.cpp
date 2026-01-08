@@ -179,7 +179,8 @@ CGroupExpression::SetOptimizationLevel()
 	// a sequence expression with a first child group that contains a CTE
 	// producer gets a higher optimization level. This is to be sure that the
 	// producer gets optimized before its consumers
-	if (COperator::EopPhysicalSequence == m_pop->Eopid())
+	if (COperator::EopPhysicalSequence == m_pop->Eopid() ||
+		COperator::EopPhysicalParallelSequence == m_pop->Eopid())
 	{
 		CGroup *pgroupFirst = (*this)[0];
 		if (pgroupFirst->FHasCTEProducer())

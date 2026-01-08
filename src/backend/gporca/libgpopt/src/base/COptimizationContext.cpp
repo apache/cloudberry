@@ -17,8 +17,10 @@
 #include "gpopt/base/CEnfdOrder.h"
 #include "gpopt/base/COptCtxt.h"
 #include "gpopt/base/COrderSpec.h"
+#include "gpopt/operators/COperator.h"
 #include "gpopt/operators/CPhysicalAgg.h"
 #include "gpopt/operators/CPhysicalCTEProducer.h"
+#include "gpopt/operators/CPhysicalParallelCTEProducer.h"
 #include "gpopt/operators/CPhysicalMotion.h"
 #include "gpopt/operators/CPhysicalNLJoin.h"
 #include "gpopt/operators/CPhysicalSort.h"
@@ -373,7 +375,8 @@ COptimizationContext::PrppCTEProducer(CMemoryPool *mp,
 	CCostContext *pccBest = poc->PccBest();
 	CGroupExpression *pgexpr = pccBest->Pgexpr();
 	BOOL fOptimizeCTESequence =
-		(COperator::EopPhysicalSequence == pgexpr->Pop()->Eopid() &&
+		((COperator::EopPhysicalSequence == pgexpr->Pop()->Eopid() ||
+		 COperator::EopPhysicalParallelSequence == pgexpr->Pop()->Eopid()) &&
 		 (*pgexpr)[0]->FHasCTEProducer());
 
 	if (!fOptimizeCTESequence)
@@ -407,15 +410,30 @@ COptimizationContext::PrppCTEProducer(CMemoryPool *mp,
 		return nullptr;
 	}
 
+	UlongToColRefMap *colref_mapping;
+
 	CColRefSet *pcrsInnerOutput =
 		CDrvdPropRelational::GetRelationalProperties((*pgexpr)[1]->Pdp())
 			->GetOutputColumns();
-	CPhysicalCTEProducer *popProducer =
-		CPhysicalCTEProducer::PopConvert(pccProducer->Pgexpr()->Pop());
-	UlongToColRefMap *colref_mapping =
-		COptCtxt::PoctxtFromTLS()->Pcteinfo()->PhmulcrConsumerToProducer(
-			mp, popProducer->UlCTEId(), pcrsInnerOutput,
-			popProducer->Pdrgpcr(), popProducer->PdrgpcrUnused());
+	if (COperator::EopPhysicalCTEProducer == pccProducer->Pgexpr()->Pop()->Eopid())
+	{
+		CPhysicalCTEProducer *popProducer =
+			CPhysicalCTEProducer::PopConvert(pccProducer->Pgexpr()->Pop());
+		colref_mapping =
+			COptCtxt::PoctxtFromTLS()->Pcteinfo()->PhmulcrConsumerToProducer(
+				mp, popProducer->UlCTEId(), pcrsInnerOutput,
+				popProducer->Pdrgpcr(), popProducer->PdrgpcrUnused());
+	}
+	else if (COperator::EopPhysicalParallelCTEProducer == pccProducer->Pgexpr()->Pop()->Eopid())
+	{
+		CPhysicalParallelCTEProducer *popProducer =
+			CPhysicalParallelCTEProducer::PopConvert(pccProducer->Pgexpr()->Pop());
+		colref_mapping =
+			COptCtxt::PoctxtFromTLS()->Pcteinfo()->PhmulcrConsumerToProducer(
+				mp, popProducer->UlCTEId(), pcrsInnerOutput,
+				popProducer->Pdrgpcr(), popProducer->PdrgpcrUnused());
+	}
+
 	CReqdPropPlan *prppProducer = CReqdPropPlan::PrppRemapForCTE(
 		mp, pocProducer->Prpp(), pccProducer->Pdpplan(), pccConsumer->Pdpplan(),
 		colref_mapping);

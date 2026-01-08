@@ -333,6 +333,12 @@ jobs:
               },
               {"test":"ic-cbdb-parallel",
                "make_configs":["src/test/regress:installcheck-cbdb-parallel"]
+              },
+              {"test":"ic-orca-parallel",
+               "make_configs":["src/test/regress:installcheck-orca-parallel"],
+               "pg_settings":{
+                 "optimizer_enable_parallel_append":"true"
+                }
               }
             ]
           }'

@@ -30,10 +30,15 @@
 #include "gpopt/exception.h"
 #include "gpopt/mdcache/CMDAccessorUtils.h"
 #include "gpopt/operators/CPhysicalAgg.h"
+#include "gpopt/operators/CPhysicalAppendTableScan.h"
+#include "gpopt/operators/CPhysicalParallelAppendTableScan.h"
 #include "gpopt/operators/CPhysicalAssert.h"
 #include "gpopt/operators/CPhysicalBitmapTableScan.h"
 #include "gpopt/operators/CPhysicalCTEConsumer.h"
 #include "gpopt/operators/CPhysicalCTEProducer.h"
+#include "gpopt/operators/CPhysicalParallelCTEConsumer.h"
+#include "gpopt/operators/CPhysicalParallelCTEProducer.h"
+#include "gpopt/operators/CPhysicalParallelSequence.h"
 #include "gpopt/operators/CPhysicalConstTableGet.h"
 #include "gpopt/operators/CPhysicalCorrelatedLeftOuterNLJoin.h"
 #include "gpopt/operators/CPhysicalDML.h"
@@ -66,6 +71,7 @@
 #include "gpopt/operators/CPhysicalStreamAggDeduplicate.h"
 #include "gpopt/operators/CPhysicalTVF.h"
 #include "gpopt/operators/CPhysicalTableScan.h"
+#include "gpopt/operators/CPhysicalParallelTableScan.h"
 #include "gpopt/operators/CPhysicalUnionAll.h"
 #include "gpopt/operators/CPredicateUtils.h"
 #include "gpopt/operators/CScalarArray.h"
@@ -99,12 +105,15 @@
 #include "naucrates/dxl/operators/CDXLDatumBool.h"
 #include "naucrates/dxl/operators/CDXLDirectDispatchInfo.h"
 #include "naucrates/dxl/operators/CDXLPhysicalAppend.h"
+#include "naucrates/dxl/operators/CDXLPhysicalParallelAppend.h"
 #include "naucrates/dxl/operators/CDXLPhysicalAssert.h"
 #include "naucrates/dxl/operators/CDXLPhysicalBitmapTableScan.h"
 #include "naucrates/dxl/operators/CDXLPhysicalBroadcastMotion.h"
 #include "naucrates/dxl/operators/CDXLPhysicalCTAS.h"
 #include "naucrates/dxl/operators/CDXLPhysicalCTEConsumer.h"
 #include "naucrates/dxl/operators/CDXLPhysicalCTEProducer.h"
+#include "naucrates/dxl/operators/CDXLPhysicalParallelCTEConsumer.h"
+#include "naucrates/dxl/operators/CDXLPhysicalParallelCTEProducer.h"
 #include "naucrates/dxl/operators/CDXLPhysicalDynamicBitmapTableScan.h"
 #include "naucrates/dxl/operators/CDXLPhysicalDynamicForeignScan.h"
 #include "naucrates/dxl/operators/CDXLPhysicalDynamicIndexOnlyScan.h"
@@ -125,10 +134,12 @@
 #include "naucrates/dxl/operators/CDXLPhysicalResult.h"
 #include "naucrates/dxl/operators/CDXLPhysicalRoutedDistributeMotion.h"
 #include "naucrates/dxl/operators/CDXLPhysicalSequence.h"
+#include "naucrates/dxl/operators/CDXLPhysicalParallelSequence.h"
 #include "naucrates/dxl/operators/CDXLPhysicalSort.h"
 #include "naucrates/dxl/operators/CDXLPhysicalSplit.h"
 #include "naucrates/dxl/operators/CDXLPhysicalTVF.h"
 #include "naucrates/dxl/operators/CDXLPhysicalTableScan.h"
+#include "naucrates/dxl/operators/CDXLPhysicalParallelTableScan.h"
 #include "naucrates/dxl/operators/CDXLPhysicalWindow.h"
 #include "naucrates/dxl/operators/CDXLScalarAggref.h"
 #include "naucrates/dxl/operators/CDXLScalarArray.h"
@@ -342,6 +353,7 @@ CTranslatorExprToDXL::CreateDXLNode(CExpression *pexpr,
 	GPOS_ASSERT(nullptr != pexpr);
 	ULONG ulOpId = (ULONG) pexpr->Pop()->Eopid();
 	if (COperator::EopPhysicalTableScan == ulOpId ||
+		COperator::EopPhysicalParallelTableScan == ulOpId ||
 		COperator::EopPhysicalForeignScan == ulOpId)
 	{
 		CDXLNode *dxlnode = PdxlnTblScan(
@@ -349,6 +361,13 @@ CTranslatorExprToDXL::CreateDXLNode(CExpression *pexpr,
 			nullptr /* pexprScalarCond */, nullptr /* cost info */);
 		CTranslatorExprToDXLUtils::SetStats(m_mp, m_pmda, dxlnode,
 											pexpr->Pstats(), fRoot);
+
+		return dxlnode;
+	}
+	else if (COperator::EopPhysicalParallelAppendTableScan == ulOpId && m_isSet)
+	{
+		CDXLNode *dxlnode = PdxlnAppendTableScan(
+			pexpr, colref_array, pdrgpdsBaseTables, pulNonGatherMotions, pfDML);
 
 		return dxlnode;
 	}
@@ -465,8 +484,23 @@ CTranslatorExprToDXL::CreateDXLNode(CExpression *pexpr,
 				pexpr, colref_array, pdrgpdsBaseTables, pulNonGatherMotions,
 				pfDML);
 			break;
+		case COperator::EopPhysicalParallelSequence:
+			dxlnode = CTranslatorExprToDXL::PdxlnParallelSequence(
+				pexpr, colref_array, pdrgpdsBaseTables, pulNonGatherMotions,
+				pfDML);
+			break;
 		case COperator::EopPhysicalDynamicTableScan:
 			dxlnode = CTranslatorExprToDXL::PdxlnDynamicTableScan(
+				pexpr, colref_array, pdrgpdsBaseTables, pulNonGatherMotions,
+				pfDML);
+			break;
+		case COperator::EopPhysicalAppendTableScan:
+			dxlnode = CTranslatorExprToDXL::PdxlnAppendTableScan(
+				pexpr, colref_array, pdrgpdsBaseTables, pulNonGatherMotions,
+				pfDML);
+			break;
+		case COperator::EopPhysicalParallelAppendTableScan:
+			dxlnode = CTranslatorExprToDXL::PdxlnParallelAppendTableScan(
 				pexpr, colref_array, pdrgpdsBaseTables, pulNonGatherMotions,
 				pfDML);
 			break;
@@ -531,8 +565,18 @@ CTranslatorExprToDXL::CreateDXLNode(CExpression *pexpr,
 				pexpr, colref_array, pdrgpdsBaseTables, pulNonGatherMotions,
 				pfDML);
 			break;
+		case COperator::EopPhysicalParallelCTEProducer:
+			dxlnode = CTranslatorExprToDXL::PdxlnParallelCTEProducer(
+				pexpr, colref_array, pdrgpdsBaseTables, pulNonGatherMotions,
+				pfDML);
+			break;
 		case COperator::EopPhysicalCTEConsumer:
 			dxlnode = CTranslatorExprToDXL::PdxlnCTEConsumer(
+				pexpr, colref_array, pdrgpdsBaseTables, pulNonGatherMotions,
+				pfDML);
+			break;
+		case COperator::EopPhysicalParallelCTEConsumer:
+			dxlnode = CTranslatorExprToDXL::PdxlnParallelCTEConsumer(
 				pexpr, colref_array, pdrgpdsBaseTables, pulNonGatherMotions,
 				pfDML);
 			break;
@@ -710,6 +754,13 @@ CTranslatorExprToDXL::PdxlnTblScan(CExpression *pexprTblScan,
 	if (COperator::EopPhysicalTableScan == op_id)
 	{
 		pdxlopTS = GPOS_NEW(m_mp) CDXLPhysicalTableScan(m_mp, table_descr);
+	}
+	else if (COperator::EopPhysicalParallelTableScan == op_id)
+	{
+		CPhysicalParallelTableScan *parallel_scan =
+			CPhysicalParallelTableScan::PopConvert(pexprTblScan->Pop());
+		pdxlopTS = GPOS_NEW(m_mp) CDXLPhysicalParallelTableScan(
+			m_mp, table_descr, parallel_scan->UlParallelWorkers());
 	}
 	else
 	{
@@ -1264,6 +1315,52 @@ CTranslatorExprToDXL::PdxlnDynamicTableScan(
 								 pexprScalarCond, dxl_properties);
 }
 
+//---------------------------------------------------------------------------
+//	@function:
+//		CTranslatorExprToDXL::PdxlnAppendTableScan
+//
+//	@doc:
+//		Create a DXL append table scan node from an optimizer
+//		append table scan node.
+//
+//---------------------------------------------------------------------------
+CDXLNode *
+CTranslatorExprToDXL::PdxlnAppendTableScan(
+	CExpression *pexprDTS, CColRefArray *colref_array,
+	CDistributionSpecArray *pdrgpdsBaseTables,
+	ULONG *,	// pulNonGatherMotions,
+	BOOL *		// pfDML
+)
+{
+	CExpression *pexprScalarCond = nullptr;
+	CDXLPhysicalProperties *dxl_properties = nullptr;
+	return PdxlnAppendTableScan(pexprDTS, colref_array, pdrgpdsBaseTables,
+							    pexprScalarCond, dxl_properties);
+}
+
+//---------------------------------------------------------------------------
+//	@function:
+//		CTranslatorExprToDXL::PdxlnParallelAppendTableScan
+//
+//	@doc:
+//		Create a DXL parallel append table scan node from an optimizer
+//		parallel append table scan node.
+//
+//---------------------------------------------------------------------------
+CDXLNode *
+CTranslatorExprToDXL::PdxlnParallelAppendTableScan(
+	CExpression *pexprDTS, CColRefArray *colref_array,
+	CDistributionSpecArray *pdrgpdsBaseTables,
+	ULONG *,	// pulNonGatherMotions,
+	BOOL *		// pfDML
+)
+{
+	CExpression *pexprScalarCond = nullptr;
+	CDXLPhysicalProperties *dxl_properties = nullptr;
+	return PdxlnParallelAppendTableScan(pexprDTS, colref_array, pdrgpdsBaseTables,
+									    pexprScalarCond, dxl_properties);
+}
+
 // Construct a dxl table descr for a child partition
 CTableDescriptor *
 CTranslatorExprToDXL::MakeTableDescForPart(const IMDRelation *part,
@@ -1432,6 +1529,291 @@ CTranslatorExprToDXL::PdxlnDynamicTableScan(
 	pdrgpdsBaseTables->Append(pds);
 
 	return pdxlnDTS;
+}
+
+// Translate CPhysicalAppendTableScan node. It creates a CDXLPhysicalAppend
+// node over a number of CDXLPhysicalTableScan nodes - include all child partition
+// tables of the root partition.
+//
+// To handle dropped and re-ordered columns, the project list and any filter
+// expression from the root table are modified using the per partition mappings
+// for each child CDXLPhysicalTableScan
+CDXLNode *
+CTranslatorExprToDXL::PdxlnAppendTableScan(
+	CExpression *pexprDTS, CColRefArray *colref_array,
+	CDistributionSpecArray *pdrgpdsBaseTables, CExpression *pexprScalarCond,
+	CDXLPhysicalProperties *dxl_properties)
+{
+		CPhysicalDynamicScan *popDTS =
+			CPhysicalDynamicScan::PopConvert(pexprDTS->Pop());
+
+		ULongPtrArray *selector_ids = GPOS_NEW(m_mp) ULongPtrArray(m_mp);
+		CPartitionPropagationSpec *pps_reqd =
+			pexprDTS->Prpp()->Pepp()->PppsRequired();
+		if (pps_reqd->Contains(popDTS->ScanId()))
+		{
+			const CBitSet *bs = pps_reqd->SelectorIds(popDTS->ScanId());
+			CBitSetIter bsi(*bs);
+			for (ULONG ul = 0; bsi.Advance(); ul++)
+			{
+				selector_ids->Append(GPOS_NEW(m_mp) ULONG(bsi.Bit()));
+			}
+		}
+
+		// construct plan costs
+		CDXLPhysicalProperties *pdxlpropDTS = GetProperties(pexprDTS);
+
+		if (nullptr != dxl_properties)
+		{
+			CWStringDynamic *rows_out_str = GPOS_NEW(m_mp) CWStringDynamic(
+				m_mp,
+				dxl_properties->GetDXLOperatorCost()->GetRowsOutStr()->GetBuffer());
+			CWStringDynamic *pstrCost = GPOS_NEW(m_mp)
+				CWStringDynamic(m_mp, dxl_properties->GetDXLOperatorCost()
+				->GetTotalCostStr()
+				->GetBuffer());
+
+			pdxlpropDTS->GetDXLOperatorCost()->SetRows(rows_out_str);
+			pdxlpropDTS->GetDXLOperatorCost()->SetCost(pstrCost);
+			dxl_properties->Release();
+		}
+		GPOS_ASSERT(nullptr != pexprDTS->Prpp());
+
+		// construct projection list for top-level Append node
+		CColRefSet *pcrsOutput = pexprDTS->Prpp()->PcrsRequired();
+		CDXLNode *pdxlnPrLAppend = PdxlnProjList(pcrsOutput, colref_array);
+		CDXLTableDescr *root_dxl_table_descr = MakeDXLTableDescr(
+			popDTS->Ptabdesc(), popDTS->PdrgpcrOutput(), pexprDTS->Prpp());
+
+		// Construct the Append node - even when there is only one child partition.
+		// This is done for two reasons:
+		// * Dynamic partition pruning
+		//   Even if one partition is present in the statically pruned plan, we could
+		//   still dynamically prune it away. This needs an Append node.
+		// * Col mappings issues
+		//   When the first selected child partition's cols have different types/order
+		//   than the root partition, we can no longer re-use the colrefs of the root
+		//   partition, since colrefs are immutable. Thus, we create new colrefs for
+		//   this partition. But, if there is no Append (in case of just one selected
+		//   partition), then we also go through update all references above the DTS
+		//   with the new colrefs. For simplicity, we decided to keep the Append
+		//   around to maintain this projection (mapping) from the old root colrefs
+		//   to the first selected partition colrefs.
+		//
+		// GPDB_12_MERGE_FIXME: An Append on a single TableScan can be removed in
+		// CTranslatorDXLToPlstmt since these points do not apply there.
+		CDXLNode *pdxlnAppend = GPOS_NEW(m_mp) CDXLNode(
+			m_mp,
+			GPOS_NEW(m_mp) CDXLPhysicalAppend(m_mp, false, false, popDTS->ScanId(),
+											  root_dxl_table_descr, selector_ids));
+		pdxlnAppend->SetProperties(pdxlpropDTS);
+		pdxlnAppend->AddChild(pdxlnPrLAppend);
+		pdxlnAppend->AddChild(PdxlnFilter(nullptr));
+
+		IMdIdArray *part_mdids = popDTS->GetPartitionMdids();
+		for (ULONG ul = 0; ul < part_mdids->Size(); ++ul)
+		{
+			IMDId *part_mdid = (*part_mdids)[ul];
+			const IMDRelation *part = m_pmda->RetrieveRel(part_mdid);
+
+			CTableDescriptor *part_tabdesc =
+				MakeTableDescForPart(part, popDTS->Ptabdesc());
+
+			// Create new colrefs for the child partition. The ColRefs from root
+			// DTS, which may be used in any parent node, can no longer be exported
+			// by a child of the Append node. Thus it is exported by the Append
+			// node itself, and new colrefs are created here.
+			CColRefArray *part_colrefs = GPOS_NEW(m_mp) CColRefArray(m_mp);
+			for (ULONG ul_col = 0; ul_col < part_tabdesc->ColumnCount(); ++ul_col)
+			{
+				const CColumnDescriptor *cd = part_tabdesc->Pcoldesc(ul_col);
+				CColRef *cr = m_pcf->PcrCreate(cd->RetrieveType(),
+											   cd->TypeModifier(), cd->Name());
+				part_colrefs->Append(cr);
+			}
+
+			CDXLTableDescr *dxl_table_descr =
+				MakeDXLTableDescr(part_tabdesc, part_colrefs, pexprDTS->Prpp());
+			part_tabdesc->Release();
+
+			CDXLNode *dxlnode = GPOS_NEW(m_mp) CDXLNode(
+				m_mp, GPOS_NEW(m_mp) CDXLPhysicalTableScan(m_mp, dxl_table_descr));
+
+			// GPDB_12_MERGE_FIXME: Compute stats & properties per scan
+			pdxlpropDTS->AddRef();
+			dxlnode->SetProperties(pdxlpropDTS);
+
+			// ColRef -> index in child table desc (per partition)
+			auto root_col_mapping = (*popDTS->GetRootColMappingPerPart())[ul];
+
+			// construct projection list, re-ordered to match root DTS
+			CDXLNode *pdxlnPrL = PdxlnProjListForChildPart(
+				root_col_mapping, part_colrefs, pcrsOutput, colref_array);
+			dxlnode->AddChild(pdxlnPrL);  // project list
+
+			// construct the filter
+			CDXLNode *filter_dxlnode = PdxlnFilter(
+				PdxlnCondForChildPart(root_col_mapping, part_colrefs,
+									  popDTS->PdrgpcrOutput(), pexprScalarCond));
+			dxlnode->AddChild(filter_dxlnode);	// filter
+
+			// add to the other scans under the created Append node
+			pdxlnAppend->AddChild(dxlnode);
+
+			// cleanup
+			part_colrefs->Release();
+		}
+
+		CDistributionSpec *pds = pexprDTS->GetDrvdPropPlan()->Pds();
+		pds->AddRef();
+		pdrgpdsBaseTables->Append(pds);
+
+		GPOS_ASSERT(pdxlnAppend);
+		return pdxlnAppend;
+}
+
+// Translate CPhysicalParallelAppendTableScan node. It creates a CDXLPhysicalParallelAppend
+// node over a number of CDXLPhysicalParallelTableScan nodes - include all child partition
+// tables of the root partition.
+//
+// To handle dropped and re-ordered columns, the project list and any filter
+// expression from the root table are modified using the per partition mappings
+// for each child CDXLPhysicalParallelTableScan
+CDXLNode *
+CTranslatorExprToDXL::PdxlnParallelAppendTableScan(
+	CExpression *pexprDTS, CColRefArray *colref_array,
+	CDistributionSpecArray *pdrgpdsBaseTables, CExpression *pexprScalarCond,
+	CDXLPhysicalProperties *dxl_properties)
+{
+	ULONG ulParallelWorkers = 0;
+
+	CPhysicalParallelAppendTableScan *popDTS =
+		CPhysicalParallelAppendTableScan::PopConvert(pexprDTS->Pop());
+
+	ulParallelWorkers = popDTS->UlParallelWorkers();
+	ULongPtrArray *selector_ids = GPOS_NEW(m_mp) ULongPtrArray(m_mp);
+	CPartitionPropagationSpec *pps_reqd =
+		pexprDTS->Prpp()->Pepp()->PppsRequired();
+	if (pps_reqd->Contains(popDTS->ScanId()))
+	{
+		const CBitSet *bs = pps_reqd->SelectorIds(popDTS->ScanId());
+		CBitSetIter bsi(*bs);
+		for (ULONG ul = 0; bsi.Advance(); ul++)
+		{
+			selector_ids->Append(GPOS_NEW(m_mp) ULONG(bsi.Bit()));
+		}
+	}
+
+	// construct plan costs
+	CDXLPhysicalProperties *pdxlpropDTS = GetProperties(pexprDTS);
+
+	if (nullptr != dxl_properties)
+	{
+		CWStringDynamic *rows_out_str = GPOS_NEW(m_mp) CWStringDynamic(
+			m_mp,
+			dxl_properties->GetDXLOperatorCost()->GetRowsOutStr()->GetBuffer());
+		CWStringDynamic *pstrCost = GPOS_NEW(m_mp)
+			CWStringDynamic(m_mp, dxl_properties->GetDXLOperatorCost()
+			->GetTotalCostStr()
+			->GetBuffer());
+
+		pdxlpropDTS->GetDXLOperatorCost()->SetRows(rows_out_str);
+		pdxlpropDTS->GetDXLOperatorCost()->SetCost(pstrCost);
+		dxl_properties->Release();
+	}
+	GPOS_ASSERT(nullptr != pexprDTS->Prpp());
+
+	// construct projection list for top-level Append node
+	CColRefSet *pcrsOutput = pexprDTS->Prpp()->PcrsRequired();
+	CDXLNode *pdxlnPrLAppend = PdxlnProjList(pcrsOutput, colref_array);
+	CDXLTableDescr *root_dxl_table_descr = MakeDXLTableDescr(
+		popDTS->Ptabdesc(), popDTS->PdrgpcrOutput(), pexprDTS->Prpp());
+
+	// Construct the Append node - even when there is only one child partition.
+	// This is done for two reasons:
+	// * Dynamic partition pruning
+	//   Even if one partition is present in the statically pruned plan, we could
+	//   still dynamically prune it away. This needs an Append node.
+	// * Col mappings issues
+	//   When the first selected child partition's cols have different types/order
+	//   than the root partition, we can no longer re-use the colrefs of the root
+	//   partition, since colrefs are immutable. Thus, we create new colrefs for
+	//   this partition. But, if there is no Append (in case of just one selected
+	//   partition), then we also go through update all references above the DTS
+	//   with the new colrefs. For simplicity, we decided to keep the Append
+	//   around to maintain this projection (mapping) from the old root colrefs
+	//   to the first selected partition colrefs.
+	//
+	// GPDB_12_MERGE_FIXME: An Append on a single TableScan can be removed in
+	// CTranslatorDXLToPlstmt since these points do not apply there.
+	CDXLNode *pdxlnAppend = GPOS_NEW(m_mp) CDXLNode(
+		m_mp,
+		GPOS_NEW(m_mp) CDXLPhysicalParallelAppend(m_mp, false, false, popDTS->ScanId(),
+										  root_dxl_table_descr, selector_ids, ulParallelWorkers));
+	pdxlnAppend->SetProperties(pdxlpropDTS);
+	pdxlnAppend->AddChild(pdxlnPrLAppend);
+	pdxlnAppend->AddChild(PdxlnFilter(nullptr));
+
+	IMdIdArray *part_mdids = popDTS->GetPartitionMdids();
+	for (ULONG ul = 0; ul < part_mdids->Size(); ++ul)
+	{
+		IMDId *part_mdid = (*part_mdids)[ul];
+		const IMDRelation *part = m_pmda->RetrieveRel(part_mdid);
+
+		CTableDescriptor *part_tabdesc =
+			MakeTableDescForPart(part, popDTS->Ptabdesc());
+
+		// Create new colrefs for the child partition. The ColRefs from root
+		// DTS, which may be used in any parent node, can no longer be exported
+		// by a child of the Append node. Thus it is exported by the Append
+		// node itself, and new colrefs are created here.
+		CColRefArray *part_colrefs = GPOS_NEW(m_mp) CColRefArray(m_mp);
+		for (ULONG ul_col = 0; ul_col < part_tabdesc->ColumnCount(); ++ul_col)
+		{
+			const CColumnDescriptor *cd = part_tabdesc->Pcoldesc(ul_col);
+			CColRef *cr = m_pcf->PcrCreate(cd->RetrieveType(),
+										   cd->TypeModifier(), cd->Name());
+			part_colrefs->Append(cr);
+		}
+
+		CDXLTableDescr *dxl_table_descr =
+			MakeDXLTableDescr(part_tabdesc, part_colrefs, pexprDTS->Prpp());
+		part_tabdesc->Release();
+
+		CDXLNode *dxlnode = GPOS_NEW(m_mp) CDXLNode(
+			m_mp, GPOS_NEW(m_mp) CDXLPhysicalParallelTableScan(m_mp, dxl_table_descr, ulParallelWorkers));
+
+		// GPDB_12_MERGE_FIXME: Compute stats & properties per scan
+		pdxlpropDTS->AddRef();
+		dxlnode->SetProperties(pdxlpropDTS);
+
+		// ColRef -> index in child table desc (per partition)
+		auto root_col_mapping = (*popDTS->GetRootColMappingPerPart())[ul];
+
+		// construct projection list, re-ordered to match root DTS
+		CDXLNode *pdxlnPrL = PdxlnProjListForChildPart(
+			root_col_mapping, part_colrefs, pcrsOutput, colref_array);
+		dxlnode->AddChild(pdxlnPrL);  // project list
+
+		// construct the filter
+		CDXLNode *filter_dxlnode = PdxlnFilter(
+			PdxlnCondForChildPart(root_col_mapping, part_colrefs,
+								  popDTS->PdrgpcrOutput(), pexprScalarCond));
+		dxlnode->AddChild(filter_dxlnode);	// filter
+
+		// add to the other scans under the created Append node
+		pdxlnAppend->AddChild(dxlnode);
+
+		// cleanup
+		part_colrefs->Release();
+	}
+
+	CDistributionSpec *pds = pexprDTS->GetDrvdPropPlan()->Pds();
+	pds->AddRef();
+	pdrgpdsBaseTables->Append(pds);
+
+	GPOS_ASSERT(pdxlnAppend);
+	return pdxlnAppend;
 }
 
 //---------------------------------------------------------------------------
@@ -2556,6 +2938,7 @@ CTranslatorExprToDXL::PdxlnFromFilter(CExpression *pexprFilter,
 	switch (eopidRelational)
 	{
 		case COperator::EopPhysicalTableScan:
+		case COperator::EopPhysicalParallelTableScan:
 		case COperator::EopPhysicalForeignScan:
 		{
 			// if there is a structure of the form
@@ -2612,6 +2995,20 @@ CTranslatorExprToDXL::PdxlnFromFilter(CExpression *pexprFilter,
 			return PdxlnDynamicBitmapTableScan(pexprRelational, colref_array,
 											   pdrgpdsBaseTables, pexprScalar,
 											   dxl_properties);
+		}
+		case COperator::EopPhysicalAppendTableScan:
+		{
+			dxl_properties->AddRef();
+
+			return PdxlnAppendTableScan(pexprRelational, colref_array,
+										pdrgpdsBaseTables, pexprScalar, dxl_properties);
+		}
+		case COperator::EopPhysicalParallelAppendTableScan:
+		{
+			dxl_properties->AddRef();
+
+			return PdxlnParallelAppendTableScan(pexprRelational, colref_array,
+									   			pdrgpdsBaseTables, pexprScalar, dxl_properties);
 		}
 		default:
 		{
@@ -2849,6 +3246,66 @@ CTranslatorExprToDXL::PdxlnCTEProducer(
 
 //---------------------------------------------------------------------------
 //	@function:
+//		CTranslatorExprToDXL::PdxlnParallelCTEProducer
+//
+//	@doc:
+//		Translate a physical parallel cte producer expression
+//
+//---------------------------------------------------------------------------
+CDXLNode *
+CTranslatorExprToDXL::PdxlnParallelCTEProducer(
+	CExpression *pexprCTEProducer,
+	CColRefArray *,	 //colref_array,
+	CDistributionSpecArray *pdrgpdsBaseTables, ULONG *pulNonGatherMotions,
+	BOOL *pfDML)
+{
+	GPOS_ASSERT(nullptr != pexprCTEProducer);
+
+	ULONG ulParallelWorkers = 0;
+
+	// extract components
+	CExpression *pexprRelational = (*pexprCTEProducer)[0];
+	CPhysicalParallelCTEProducer *popCTEProducer =
+		CPhysicalParallelCTEProducer::PopConvert(pexprCTEProducer->Pop());
+
+	ulParallelWorkers = popCTEProducer->UlParallelWorkers();
+
+	// extract physical properties from cte producer
+	CDXLPhysicalProperties *dxl_properties = GetProperties(pexprCTEProducer);
+
+	// extract the CTE id and the array of colids
+	const ULONG ulCTEId = popCTEProducer->UlCTEId();
+	ULongPtrArray *colids = CUtils::Pdrgpul(m_mp, popCTEProducer->Pdrgpcr());
+
+	GPOS_ASSERT(nullptr != pexprCTEProducer->Prpp());
+	CColRefArray *pdrgpcrRequired = popCTEProducer->Pdrgpcr();
+	CColRefSet *pcrsOutput = GPOS_NEW(m_mp) CColRefSet(m_mp);
+	pcrsOutput->Include(pdrgpcrRequired);
+
+	// translate relational child expression
+	CDXLNode *child_dxlnode = CreateDXLNode(
+		pexprRelational, pdrgpcrRequired, pdrgpdsBaseTables,
+		pulNonGatherMotions, pfDML, true /*fRemap*/, false /*fRoot */);
+
+	CDXLNode *pdxlnPrL = PdxlnProjList(pcrsOutput, pdrgpcrRequired);
+	pcrsOutput->Release();
+
+	ULongPtrArray *producer_idx_map =  popCTEProducer->PCTEIdxMap();
+	if (producer_idx_map) {
+		producer_idx_map->AddRef();
+	}
+
+	CDXLNode *pdxlnCTEProducer = GPOS_NEW(m_mp) CDXLNode(
+		m_mp, GPOS_NEW(m_mp) CDXLPhysicalParallelCTEProducer(m_mp, ulCTEId, colids, producer_idx_map, ulParallelWorkers),
+		pdxlnPrL, child_dxlnode);
+
+	pdxlnCTEProducer->SetProperties(dxl_properties);
+
+	return pdxlnCTEProducer;
+}
+
+//---------------------------------------------------------------------------
+//	@function:
 //		CTranslatorExprToDXL::PdxlnCTEConsumer
 //
 //	@doc:
@@ -2901,6 +3358,62 @@ CTranslatorExprToDXL::PdxlnCTEConsumer(
 
 //---------------------------------------------------------------------------
 //	@function:
+//		CTranslatorExprToDXL::PdxlnParallelCTEConsumer
+//
+//	@doc:
+//		Translate a physical parallel cte consumer expression
+//
+//---------------------------------------------------------------------------
+CDXLNode *
+CTranslatorExprToDXL::PdxlnParallelCTEConsumer(
+	CExpression *pexprCTEConsumer,
+	CColRefArray *,			   //colref_array,
+	CDistributionSpecArray *,  // pdrgpdsBaseTables,
+	ULONG *,				   // pulNonGatherMotions,
+	BOOL *					   // pfDML
+)
+{
+	GPOS_ASSERT(nullptr != pexprCTEConsumer);
+
+	ULONG ulParallelWorkers = 0;
+
+	// extract components
+	CPhysicalParallelCTEConsumer *popCTEConsumer =
+		CPhysicalParallelCTEConsumer::PopConvert(pexprCTEConsumer->Pop());
+
+	ulParallelWorkers = popCTEConsumer->UlParallelWorkers();
+
+	// extract physical properties from cte consumer
+	CDXLPhysicalProperties *dxl_properties = GetProperties(pexprCTEConsumer);
+
+	// extract the CTE id and the array of colids
+	const ULONG ulCTEId = popCTEConsumer->UlCTEId();
+	CColRefArray *colref_array = popCTEConsumer->Pdrgpcr();
+	ULongPtrArray *colids = CUtils::Pdrgpul(m_mp, colref_array);
+
+	CColRefSet *pcrsOutput = GPOS_NEW(m_mp) CColRefSet(m_mp);
+	pcrsOutput->Include(colref_array);
+
+	// translate relational child expression
+	CDXLNode *pdxlnPrL = PdxlnProjList(pcrsOutput, colref_array);
+	ULongPtrArray *pidxmap = popCTEConsumer->PCTEIdxMap();
+	if (pidxmap) {
+		pidxmap->AddRef();
+	}
+
+	CDXLNode *pdxlnCTEConsumer = GPOS_NEW(m_mp) CDXLNode(
+		m_mp, GPOS_NEW(m_mp) CDXLPhysicalParallelCTEConsumer(m_mp, ulCTEId, colids, pidxmap, ulParallelWorkers),
+		pdxlnPrL);
+
+	pcrsOutput->Release();
+
+	pdxlnCTEConsumer->SetProperties(dxl_properties);
+
+	return pdxlnCTEConsumer;
+}
+
+//---------------------------------------------------------------------------
+//	@function:
 //		CTranslatorExprToDXL::PdxlnAppend
 //
 //	@doc:
@@ -2919,6 +3432,7 @@ CTranslatorExprToDXL::PdxlnAppend(CExpression *pexprUnionAll,
 		CPhysicalUnionAll::PopConvert(pexprUnionAll->Pop());
 	CColRefArray *pdrgpcrOutputAll = popUnionAll->PdrgpcrOutput();
 	CColRefSet *reqdCols = pexprUnionAll->Prpp()->PcrsRequired();
+	m_isSet = true;
 
 	CDXLPhysicalAppend *dxl_op =
 		GPOS_NEW(m_mp) CDXLPhysicalAppend(m_mp, false, false);
@@ -2995,6 +3509,7 @@ CTranslatorExprToDXL::PdxlnAppend(CExpression *pexprUnionAll,
 		requiredInput->Release();
 	}
 	reqd_col_positions->Release();
+	m_isSet = false;
 
 	return pdxlnAppend;
 }
@@ -4383,6 +4898,7 @@ CTranslatorExprToDXL::PdxlnCorrelatedNLJoin(
 	switch (pexprOuterChild->Pop()->Eopid())
 	{
 		case COperator::EopPhysicalTableScan:
+		case COperator::EopPhysicalParallelTableScan:
 		{
 			dxl_properties->AddRef();
 			// create and return a table scan node
@@ -4571,6 +5087,7 @@ UlIndexFilter(Edxlopid edxlopid)
 	{
 		case EdxlopPhysicalTableScan:
 		case EdxlopPhysicalForeignScan:
+		case EdxlopPhysicalParallelTableScan:
 			return EdxltsIndexFilter;
 		case EdxlopPhysicalDynamicForeignScan:
 			return EdxldfsIndexFilter;
@@ -4626,6 +5143,7 @@ CTranslatorExprToDXL::PdxlnResultFromNLJoinOuter(
 		case EdxlopPhysicalDynamicIndexScan:
 		case EdxlopPhysicalDynamicBitmapTableScan:
 		case EdxlopPhysicalResult:
+		case EdxlopPhysicalParallelTableScan:
 		{
 			// if the scalar join condition is a constant TRUE, just translate the child, no need to create an AND expression
 			if (CTranslatorExprToDXLUtils::FScalarConstTrue(m_pmda,
@@ -5404,6 +5922,85 @@ CTranslatorExprToDXL::PdxlnSequence(CExpression *pexprSequence,
 	// construct sequence node
 	CDXLPhysicalSequence *pdxlopSequence =
 		GPOS_NEW(m_mp) CDXLPhysicalSequence(m_mp);
+	CDXLNode *pdxlnSequence = GPOS_NEW(m_mp) CDXLNode(m_mp, pdxlopSequence);
+	CDXLPhysicalProperties *dxl_properties = GetProperties(pexprSequence);
+	pdxlnSequence->SetProperties(dxl_properties);
+
+	// translate children
+	CDXLNodeArray *pdrgpdxlnChildren = GPOS_NEW(m_mp) CDXLNodeArray(m_mp);
+
+	for (ULONG ul = 0; ul < arity; ul++)
+	{
+		CExpression *pexprChild = (*pexprSequence)[ul];
+
+		CColRefArray *pdrgpcrChildOutput = nullptr;
+		if (ul == arity - 1)
+		{
+			// impose output columns on last child
+			pdrgpcrChildOutput = colref_array;
+		}
+
+		CDXLNode *child_dxlnode = CreateDXLNode(
+			pexprChild, pdrgpcrChildOutput, pdrgpdsBaseTables,
+			pulNonGatherMotions, pfDML, false /*fRemap*/, false /*fRoot*/);
+		pdrgpdxlnChildren->Append(child_dxlnode);
+	}
+
+	// construct project list from the project list of the last child
+	CDXLNode *pdxlnLastChild = (*pdrgpdxlnChildren)[arity - 1];
+	CDXLNode *pdxlnProjListChild = (*pdxlnLastChild)[0];
+
+	CDXLNode *proj_list_dxlnode =
+		CTranslatorExprToDXLUtils::PdxlnProjListFromChildProjList(
+			m_mp, m_pcf, m_phmcrdxln, pdxlnProjListChild);
+	pdxlnSequence->AddChild(proj_list_dxlnode);
+
+	// add children
+	for (ULONG ul = 0; ul < arity; ul++)
+	{
+		CDXLNode *pdxlnChid = (*pdrgpdxlnChildren)[ul];
+		pdxlnChid->AddRef();
+		pdxlnSequence->AddChild(pdxlnChid);
+	}
+
+	pdrgpdxlnChildren->Release();
+
+#ifdef GPOS_DEBUG
+	pdxlopSequence->AssertValid(pdxlnSequence, false /* validate_children */);
+#endif
+
+	return pdxlnSequence;
+}
+
+//---------------------------------------------------------------------------
+//	@function:
+//		CTranslatorExprToDXL::PdxlnParallelSequence
+//
+//	@doc:
+//		Create a DXL parallel sequence node from an optimizer parallel sequence expression
+//
+//---------------------------------------------------------------------------
+CDXLNode *
+CTranslatorExprToDXL::PdxlnParallelSequence(CExpression *pexprSequence,
+									CColRefArray *colref_array,
+									CDistributionSpecArray *pdrgpdsBaseTables,
+									ULONG *pulNonGatherMotions, BOOL *pfDML)
+{
+	GPOS_ASSERT(nullptr != pexprSequence);
+
+	const ULONG arity = pexprSequence->Arity();
+	GPOS_ASSERT(0 < arity);
+
+	ULONG ulParallelWorkers = 0;
+
+	CPhysicalParallelSequence *popDTS =
+		CPhysicalParallelSequence::PopConvert(pexprSequence->Pop());
+
+	ulParallelWorkers = popDTS->UlParallelWorkers();
+
+	// construct parallel sequence node
+	CDXLPhysicalParallelSequence *pdxlopSequence =
+		GPOS_NEW(m_mp) CDXLPhysicalParallelSequence(m_mp, ulParallelWorkers);
 	CDXLNode *pdxlnSequence = GPOS_NEW(m_mp) CDXLNode(m_mp, pdxlopSequence);
 	CDXLPhysicalProperties *dxl_properties = GetProperties(pexprSequence);
 	pdxlnSequence->SetProperties(dxl_properties);

@@ -19,6 +19,7 @@
 #include "gpopt/operators/CExpressionHandle.h"
 #include "gpopt/operators/CPhysical.h"
 #include "gpopt/operators/CPhysicalCTEConsumer.h"
+#include "gpopt/operators/CPhysicalParallelCTEConsumer.h"
 #include "gpopt/operators/CScalar.h"
 
 
@@ -90,6 +91,11 @@ CDrvdPropPlan::Derive(CMemoryPool *mp, CExpressionHandle &exprhdl,
 	{
 		CopyCTEProducerPlanProps(mp, pdpctxt, popPhysical);
 	}
+	else if (nullptr != pdpctxt &&
+		COperator::EopPhysicalParallelCTEConsumer == popPhysical->Eopid())
+	{
+		CopyParallelCTEProducerPlanProps(mp, pdpctxt, popPhysical);
+	}
 	else
 	{
 		// call property derivation functions on the operator
@@ -146,6 +152,45 @@ CDrvdPropPlan::CopyCTEProducerPlanProps(CMemoryPool *mp, CDrvdPropCtxt *pdpctxt,
 	}
 }
 
+//---------------------------------------------------------------------------
+//	@function:
+//		CDrvdPropPlan::CopyCTEProducerPlanProps
+//
+//	@doc:
+//		Copy CTE producer plan properties from given context to current object
+//
+//---------------------------------------------------------------------------
+void
+CDrvdPropPlan::CopyParallelCTEProducerPlanProps(CMemoryPool *mp, CDrvdPropCtxt *pdpctxt,
+										COperator *pop)
+{
+	CDrvdPropCtxtPlan *pdpctxtplan =
+		CDrvdPropCtxtPlan::PdpctxtplanConvert(pdpctxt);
+	CPhysicalParallelCTEConsumer *popCTEConsumer =
+		CPhysicalParallelCTEConsumer::PopConvert(pop);
+	ULONG ulCTEId = popCTEConsumer->UlCTEId();
+	UlongToColRefMap *colref_mapping = popCTEConsumer->Phmulcr();
+	CDrvdPropPlan *pdpplan = pdpctxtplan->PdpplanCTEProducer(ulCTEId);
+	if (nullptr != pdpplan)
+	{
+		// copy producer plan properties after remapping columns
+		m_pos = pdpplan->Pos()->PosCopyWithRemappedColumns(mp, colref_mapping,
+														   true /*must_exist*/);
+		m_pds = pdpplan->Pds()->PdsCopyWithRemappedColumns(mp, colref_mapping,
+														   true /*must_exist*/);
+		// rewindability and partition filter map do not need column remapping,
+		// we add-ref producer's properties directly
+		pdpplan->Prs()->AddRef();
+		m_prs = pdpplan->Prs();
+
+		// no need to copy the part index map. return an empty one. This is to
+		// distinguish between a CTE consumer and the inlined expression
+		m_ppps = GPOS_NEW(mp) CPartitionPropagationSpec(mp);
+
+		GPOS_ASSERT(CDistributionSpec::EdtAny != m_pds->Edt() &&
+			"CDistributionAny is a require-only, cannot be derived");
+	}
+}
 
 //---------------------------------------------------------------------------
 //	@function:
