@@ -213,6 +213,13 @@ private:
 			ctxt_translation_prev_siblings	// translation contexts of previous siblings
 	);
 
+	// translate DXL parallel table scan node into a parallel SeqScan node
+	Plan *TranslateDXLParallelTblScan(
+		const CDXLNode *tbl_scan_dxlnode, CDXLTranslateContext *output_context,
+		CDXLTranslationContextArray *
+			ctxt_translation_prev_siblings	// translation contexts of previous siblings
+	);
+
 	// translate DXL index scan node into a IndexScan node
 	Plan *TranslateDXLIndexScan(
 		const CDXLNode *index_scan_dxlnode,
@@ -657,6 +664,10 @@ private:
 
 	// fill the aggno and transno for the aggnode
 	static void TranslateAggFillInfo(CContextDXLToPlStmt *context, Aggref *aggref);
+
+	// extract parallel workers from DXL node tree
+	static ULONG ExtractParallelWorkersFromDXL(const CDXLNode *dxlnode);
+
 };
 }  // namespace gpdxl
 

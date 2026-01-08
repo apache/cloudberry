@@ -38,6 +38,7 @@ class CDrvdProp;
 class CDrvdPropCtxtPlan;
 class CReqdPropRelational;
 class CExpression;
+class CMemo;
 
 // type definitions
 // array of groups
@@ -160,6 +161,9 @@ private:
 	// memory pool
 	CMemoryPool *m_mp;
 
+	// containing memo
+	CMemo *m_pmemo;
+
 	// id is used when printing memo contents
 	ULONG m_id;
 
@@ -257,6 +261,9 @@ private:
 	// setter of group state
 	void SetState(EState estNewState);
 
+	// setter of containing memo
+	void SetMemo(CMemo *pmemo);
+
 	// set hash join keys
 	void SetJoinKeys(CExpressionArray *pdrgpexprOuter,
 					 CExpressionArray *pdrgpexprInner,
@@ -336,6 +343,13 @@ public:
 	Id() const
 	{
 		return m_id;
+	}
+
+	// containing memo accessor
+	CMemo *
+	Pmemo() const
+	{
+		return m_pmemo;
 	}
 
 	// group properties accessor
