@@ -1,0 +1,327 @@
+set extra_float_digits=-1;
+show enable_indexscan;
+ enable_indexscan 
+------------------
+ on
+(1 row)
+
+show enable_bitmapscan;
+ enable_bitmapscan 
+-------------------
+ on
+(1 row)
+
+-- Q1: Select the top 10 products that have not been audited.  
+SELECT product_id, description
+FROM sales_heap 
+WHERE is_audited = false 
+ORDER BY product_id DESC
+LIMIT 10;
+ product_id |        description        
+------------+---------------------------
+      10000 | Product description 10000
+       9999 | Product description 9999
+       9998 | Product description 9998
+       9997 | Product description 9997
+       9996 | Product description 9996
+       9995 | Product description 9995
+       9994 | Product description 9994
+       9989 | Product description 9989
+       9988 | Product description 9988
+       9986 | Product description 9986
+(10 rows)
+
+-- Q2: Select the top 10 cancelled orders, ordered by product_id in descending order. 
+SELECT product_id, quantity, total_sales, unit_price, discount, description
+FROM sales_heap
+WHERE status = 'Cancelled'
+ORDER BY product_id DESC
+LIMIT 10;
+ product_id | quantity | total_sales | unit_price |     discount     |       description        
+------------+----------+-------------+------------+------------------+--------------------------
+       9997 |       52 |      664200 |     15.632 | 0.20071600926189 | Product description 9997
+       9991 |       98 |      260558 |     24.799 | 0.56356715415699 | Product description 9991
+       9990 |       84 |      482141 |     24.757 | 0.98086579326338 | Product description 9990
+       9961 |       10 |       53803 |     78.575 | 0.72032278121593 | Product description 9961
+       9950 |       78 |      435689 |     36.358 | 0.31138895547812 | Product description 9950
+       9944 |       92 |      170818 |     51.792 | 0.98053487413122 | Product description 9944
+       9941 |       42 |      574027 |     81.664 | 0.78406659591726 | Product description 9941
+       9909 |        1 |      970526 |     51.848 |  0.5623460313463 | Product description 9909
+       9907 |       75 |      540200 |     92.663 | 0.33467137344455 | Product description 9907
+       9901 |       46 |      250640 |      31.31 |  0.7379296048182 | Product description 9901
+(10 rows)
+
+-- Q3: Select details of the product with ID 1. 
+SELECT product_id, quantity, total_sales, unit_price, discount, description, sale_date, customer_name, price
+FROM sales_heap
+WHERE product_id = 1;
+ product_id | quantity | total_sales | unit_price |     discount     |      description      |            sale_date            | customer_name |       price       
+------------+----------+-------------+------------+------------------+-----------------------+---------------------------------+---------------+-------------------
+          1 |       15 |      260565 |     35.085 | 0.68446827876582 | Product description 1 | Thu Aug 24 14:03:01.089303 2023 | Customer 1    | 697286.0419775450
+(1 row)
+
+-- Q4: Select details of the product with ID 1 sold on 2023-08-24 14:03:01.089303. 
+SELECT product_id, quantity, total_sales, unit_price, discount, description, sale_date, customer_name, price
+FROM sales_heap
+WHERE product_id = 1 AND sale_date = '2023-08-24 14:03:01.089303';
+ product_id | quantity | total_sales | unit_price |     discount     |      description      |            sale_date            | customer_name |       price       
+------------+----------+-------------+------------+------------------+-----------------------+---------------------------------+---------------+-------------------
+          1 |       15 |      260565 |     35.085 | 0.68446827876582 | Product description 1 | Thu Aug 24 14:03:01.089303 2023 | Customer 1    | 697286.0419775450
+(1 row)
+
+-- Q5: Select details of orders placed by a specific customer.
+SELECT product_id, quantity, total_sales, unit_price, discount, description, sale_date, customer_name, price
+FROM sales_heap
+WHERE customer_name = 'Customer 100';
+ product_id | quantity | total_sales | unit_price |     discount     |       description       |            sale_date            | customer_name |       price       
+------------+----------+-------------+------------+------------------+-------------------------+---------------------------------+---------------+-------------------
+        100 |       34 |      226715 |     67.896 | 0.79691144174661 | Product description 100 | Thu Aug 05 14:03:01.089303 2021 | Customer 100  | 595766.7648534400
+(1 row)
+
+-- Q6: Select details of orders placed by a specific customer and product ID.
+SELECT product_id, quantity, total_sales, unit_price, discount, description, sale_date, customer_name, price
+FROM sales_heap
+WHERE customer_name = 'Customer 10000' AND product_id = 10000;
+ product_id | quantity | total_sales | unit_price |     discount     |        description        |            sale_date            | customer_name  |       price       
+------------+----------+-------------+------------+------------------+---------------------------+---------------------------------+----------------+-------------------
+      10000 |       76 |      183682 |     98.781 | 0.69737919584949 | Product description 10000 | Wed May 29 14:03:01.089303 2024 | Customer 10000 | 715538.9384201850
+(1 row)
+
+-- Q7: Select sales data within a specific date range.
+SELECT product_id, quantity, total_sales, unit_price, discount, description, sale_date, customer_name, price
+FROM sales_heap
+WHERE sale_date BETWEEN '2023-01-02' AND '2023-01-05'
+ORDER BY product_id ASC
+LIMIT 10;
+ product_id | quantity | total_sales | unit_price |     discount      |       description        |            sale_date            | customer_name |       price       
+------------+----------+-------------+------------+-------------------+--------------------------+---------------------------------+---------------+-------------------
+        517 |       10 |      343834 |    0.80295 |  0.43073603707868 | Product description 517  | Mon Jan 02 14:03:01.089303 2023 | Customer 517  |  68007.3300707171
+        673 |       22 |      100474 |     17.656 | 0.088971368239687 | Product description 673  | Tue Jan 03 14:03:01.089303 2023 | Customer 673  | 736871.2175393450
+        738 |       95 |      996678 |     51.872 |  0.08455675407475 | Product description 738  | Mon Jan 02 14:03:01.089303 2023 | Customer 738  | 896261.9958819640
+       1426 |        9 |      595087 |     73.375 |   0.3496538700504 | Product description 1426 | Mon Jan 02 14:03:01.089303 2023 | Customer 1426 | 542261.7975503990
+       1826 |       44 |      767251 |     25.827 |  0.87655144783736 | Product description 1826 | Wed Jan 04 14:03:01.089303 2023 | Customer 1826 |  32666.5365096765
+       2534 |       31 |      574430 |      55.15 |  0.58655444407848 | Product description 2534 | Mon Jan 02 14:03:01.089303 2023 | Customer 2534 | 399392.3579024500
+       2985 |       69 |      517647 |     96.718 |  0.81265261041552 | Product description 2985 | Wed Jan 04 14:03:01.089303 2023 | Customer 2985 | 716825.5364521060
+       3430 |       99 |      841581 |     24.104 |  0.59218897829948 | Product description 3430 | Tue Jan 03 14:03:01.089303 2023 | Customer 3430 | 259675.1745113900
+       3468 |       34 |      726434 |     15.653 |  0.64234732802639 | Product description 3468 | Tue Jan 03 14:03:01.089303 2023 | Customer 3468 | 981543.1570081330
+       3641 |       70 |      216018 |     58.222 | 0.087048507174686 | Product description 3641 | Mon Jan 02 14:03:01.089303 2023 | Customer 3641 | 296126.6809656240
+(10 rows)
+
+-- Q8: Select sales data for a specific date.
+SELECT product_id, quantity, total_sales, unit_price, discount, description, sale_date, customer_name, price
+FROM sales_heap
+WHERE sale_date = '2023-01-02 14:03:01.089303'
+ORDER BY product_id ASC
+LIMIT 10;
+ product_id | quantity | total_sales | unit_price |     discount      |       description        |            sale_date            | customer_name |       price       
+------------+----------+-------------+------------+-------------------+--------------------------+---------------------------------+---------------+-------------------
+        517 |       10 |      343834 |    0.80295 |  0.43073603707868 | Product description 517  | Mon Jan 02 14:03:01.089303 2023 | Customer 517  |  68007.3300707171
+        738 |       95 |      996678 |     51.872 |  0.08455675407475 | Product description 738  | Mon Jan 02 14:03:01.089303 2023 | Customer 738  | 896261.9958819640
+       1426 |        9 |      595087 |     73.375 |   0.3496538700504 | Product description 1426 | Mon Jan 02 14:03:01.089303 2023 | Customer 1426 | 542261.7975503990
+       2534 |       31 |      574430 |      55.15 |  0.58655444407848 | Product description 2534 | Mon Jan 02 14:03:01.089303 2023 | Customer 2534 | 399392.3579024500
+       3641 |       70 |      216018 |     58.222 | 0.087048507174686 | Product description 3641 | Mon Jan 02 14:03:01.089303 2023 | Customer 3641 | 296126.6809656240
+       4713 |       18 |       48487 |     4.9871 |  0.14635050332437 | Product description 4713 | Mon Jan 02 14:03:01.089303 2023 | Customer 4713 | 357937.2729397610
+       5108 |       23 |      640582 |     18.072 |  0.44681020850263 | Product description 5108 | Mon Jan 02 14:03:01.089303 2023 | Customer 5108 | 676383.8184852060
+       5207 |       55 |      540787 |     44.207 |  0.70162033001446 | Product description 5207 | Mon Jan 02 14:03:01.089303 2023 | Customer 5207 | 742186.2328791880
+       7617 |       52 |       49620 |     1.8385 |  0.42209151129674 | Product description 7617 | Mon Jan 02 14:03:01.089303 2023 | Customer 7617 | 372502.3619243150
+       8610 |       37 |      926583 |     50.017 |  0.32244792684085 | Product description 8610 | Mon Jan 02 14:03:01.089303 2023 | Customer 8610 | 192966.2884207590
+(10 rows)
+
+-- Q9: Summarize total sales by status.
+SELECT status, SUM(total_sales) AS total_sales
+FROM sales_heap
+GROUP BY status
+ORDER BY total_sales DESC
+LIMIT 10;
+   status   | total_sales 
+------------+-------------
+ Closed     |  2831375056
+ Processing |  1901312546
+ Cancelled  |   246856986
+(3 rows)
+
+-- Q10: Compute the cumulative total sales over time for each product.
+SELECT product_id, sale_date, SUM(total_sales) OVER (PARTITION BY product_id ORDER BY sale_date) AS cumulative_sales
+FROM sales_heap
+ORDER BY product_id, sale_date
+LIMIT 20;
+ product_id |            sale_date            | cumulative_sales 
+------------+---------------------------------+------------------
+          1 | Thu Aug 24 14:03:01.089303 2023 |           260565
+          2 | Fri Dec 22 14:03:01.089303 2023 |           985876
+          3 | Tue May 09 14:03:01.089303 2023 |           287889
+          4 | Mon Jun 05 14:03:01.089303 2023 |           143098
+          5 | Sat Oct 07 14:03:01.089303 2023 |           766354
+          6 | Sun Oct 30 14:03:01.089303 2022 |            36798
+          7 | Tue Jun 11 14:03:01.089303 2024 |           205530
+          8 | Tue Jun 21 14:03:01.089303 2022 |           874677
+          9 | Fri Jan 06 14:03:01.089303 2023 |           688048
+         10 | Fri Mar 29 14:03:01.089303 2024 |           112202
+         11 | Sun Dec 25 14:03:01.089303 2022 |           399227
+         12 | Sat Dec 02 14:03:01.089303 2023 |           397758
+         13 | Wed Dec 15 14:03:01.089303 2021 |           167863
+         14 | Wed Oct 18 14:03:01.089303 2023 |           800511
+         15 | Sun Jan 08 14:03:01.089303 2023 |           843010
+         16 | Fri Jul 07 14:03:01.089303 2023 |           912574
+         17 | Sat May 25 14:03:01.089303 2024 |           508372
+         18 | Wed Jan 18 14:03:01.089303 2023 |           271252
+         19 | Fri Jun 07 14:03:01.089303 2024 |           520383
+         20 | Sat Jun 24 14:03:01.089303 2023 |           892088
+(20 rows)
+
+-- Q11: Calculate the monthly sales growth rate for each product.
+WITH monthly_sales AS (
+    SELECT EXTRACT(YEAR FROM sale_date) AS sale_year, EXTRACT(MONTH FROM sale_date) AS sale_month, product_id, SUM(total_sales) AS monthly_sales
+    FROM sales_heap
+    GROUP BY sale_year, sale_month, product_id
+)
+SELECT ms1.product_id, ms1.sale_year, ms1.sale_month, ms1.monthly_sales, 
+       (ms1.monthly_sales - COALESCE(ms2.monthly_sales, 0)) / COALESCE(ms2.monthly_sales, 1) AS growth_rate
+FROM monthly_sales ms1
+LEFT JOIN monthly_sales ms2 ON ms1.product_id = ms2.product_id AND ms1.sale_year = ms2.sale_year AND ms1.sale_month = ms2.sale_month + 1
+ORDER BY product_id, sale_year, sale_month
+LIMIT 20;
+ product_id | sale_year | sale_month | monthly_sales |     growth_rate     
+------------+-----------+------------+---------------+---------------------
+          1 |      2023 |          8 |        260565 | 260565.000000000000
+          2 |      2023 |         12 |        985876 | 985876.000000000000
+          3 |      2023 |          5 |        287889 | 287889.000000000000
+          4 |      2023 |          6 |        143098 | 143098.000000000000
+          5 |      2023 |         10 |        766354 | 766354.000000000000
+          6 |      2022 |         10 |         36798 |  36798.000000000000
+          7 |      2024 |          6 |        205530 | 205530.000000000000
+          8 |      2022 |          6 |        874677 | 874677.000000000000
+          9 |      2023 |          1 |        688048 | 688048.000000000000
+         10 |      2024 |          3 |        112202 | 112202.000000000000
+         11 |      2022 |         12 |        399227 | 399227.000000000000
+         12 |      2023 |         12 |        397758 | 397758.000000000000
+         13 |      2021 |         12 |        167863 | 167863.000000000000
+         14 |      2023 |         10 |        800511 | 800511.000000000000
+         15 |      2023 |          1 |        843010 | 843010.000000000000
+         16 |      2023 |          7 |        912574 | 912574.000000000000
+         17 |      2024 |          5 |        508372 | 508372.000000000000
+         18 |      2023 |          1 |        271252 | 271252.000000000000
+         19 |      2024 |          6 |        520383 | 520383.000000000000
+         20 |      2023 |          6 |        892088 | 892088.000000000000
+(20 rows)
+
+-- Q12: Determine the average discount applied per product.
+SELECT product_id, AVG(discount) AS avg_discount
+FROM sales_heap
+GROUP BY product_id
+ORDER BY avg_discount DESC
+LIMIT 20;
+ product_id |   avg_discount   
+------------+------------------
+       2701 | 0.99955353321422
+        838 | 0.99945177692834
+       9957 | 0.99919860041379
+       3216 | 0.99919220994529
+        576 | 0.99916495756835
+       6710 | 0.99898658835185
+       1020 | 0.99879184392668
+       5711 | 0.99874696581862
+       3776 | 0.99873921141062
+        622 | 0.99871512143099
+       1293 | 0.99868678064545
+       7555 | 0.99867974727096
+       1227 | 0.99865755975376
+       7029 | 0.99839744831375
+       5395 | 0.99837013360828
+       8039 | 0.99834627348089
+        331 | 0.99829718779691
+       9077 | 0.99824965324473
+       1691 | 0.99823019364079
+       1789 | 0.99804340724028
+(20 rows)
+
+-- Q13: Summarize total sales by customer.
+SELECT customer_name, SUM(total_sales) AS total_sales
+FROM sales_heap
+GROUP BY customer_name
+ORDER BY total_sales DESC
+LIMIT 20;
+ customer_name | total_sales 
+---------------+-------------
+ Customer 2480 |      999970
+ Customer 7091 |      999903
+ Customer 5406 |      999810
+ Customer 7974 |      999724
+ Customer 9183 |      999434
+ Customer 1670 |      999241
+ Customer 6518 |      998771
+ Customer 2674 |      998691
+ Customer 5953 |      998624
+ Customer 5676 |      998588
+ Customer 1875 |      998256
+ Customer 1255 |      998198
+ Customer 3633 |      997943
+ Customer 8513 |      997939
+ Customer 1308 |      997925
+ Customer 7354 |      997883
+ Customer 8856 |      997767
+ Customer 3684 |      997737
+ Customer 2637 |      997722
+ Customer 6101 |      997600
+(20 rows)
+
+-- Q14: Summarize product sales by month and year.
+SELECT EXTRACT(YEAR FROM sale_date) AS sale_year, EXTRACT(MONTH FROM sale_date) AS sale_month, product_id, SUM(total_sales) AS monthly_sales
+FROM sales_heap
+GROUP BY sale_year, sale_month, product_id
+ORDER BY sale_year, sale_month, monthly_sales DESC
+LIMIT 20;
+ sale_year | sale_month | product_id | monthly_sales 
+-----------+------------+------------+---------------
+      2021 |          8 |       3031 |        996843
+      2021 |          8 |       3864 |        996293
+      2021 |          8 |       7549 |        996127
+      2021 |          8 |       5547 |        995693
+      2021 |          8 |       8225 |        995245
+      2021 |          8 |       1876 |        992671
+      2021 |          8 |       3675 |        975330
+      2021 |          8 |       6139 |        969942
+      2021 |          8 |       9925 |        965769
+      2021 |          8 |       6651 |        962779
+      2021 |          8 |       3682 |        957252
+      2021 |          8 |       7633 |        954683
+      2021 |          8 |       4604 |        954042
+      2021 |          8 |       9360 |        953522
+      2021 |          8 |       8759 |        952251
+      2021 |          8 |       4306 |        951665
+      2021 |          8 |       4579 |        950473
+      2021 |          8 |       8838 |        945582
+      2021 |          8 |        728 |        944349
+      2021 |          8 |        424 |        943290
+(20 rows)
+
+-- Q15: Summarize total sales by customer and product.
+SELECT customer_name, product_id, SUM(total_sales) AS total_sales
+FROM sales_heap
+GROUP BY customer_name, product_id
+ORDER BY total_sales DESC
+LIMIT 20;
+ customer_name | product_id | total_sales 
+---------------+------------+-------------
+ Customer 2480 |       2480 |      999970
+ Customer 7091 |       7091 |      999903
+ Customer 5406 |       5406 |      999810
+ Customer 7974 |       7974 |      999724
+ Customer 9183 |       9183 |      999434
+ Customer 1670 |       1670 |      999241
+ Customer 6518 |       6518 |      998771
+ Customer 2674 |       2674 |      998691
+ Customer 5953 |       5953 |      998624
+ Customer 5676 |       5676 |      998588
+ Customer 1875 |       1875 |      998256
+ Customer 1255 |       1255 |      998198
+ Customer 3633 |       3633 |      997943
+ Customer 8513 |       8513 |      997939
+ Customer 1308 |       1308 |      997925
+ Customer 7354 |       7354 |      997883
+ Customer 8856 |       8856 |      997767
+ Customer 3684 |       3684 |      997737
+ Customer 2637 |       2637 |      997722
+ Customer 6101 |       6101 |      997600
+(20 rows)
+

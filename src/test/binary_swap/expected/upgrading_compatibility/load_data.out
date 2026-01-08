@@ -1,0 +1,12 @@
+COPY public.sales_heap (product_id, is_audited, quantity, total_sales, unit_price, discount, description, sale_date, order_date, status, customer_name, price) FROM stdin;
+INSERT INTO sales_ao SELECT * FROM sales_heap;
+INSERT INTO sales_aocs SELECT * FROM sales_heap;
+INSERT INTO sales_partition_heap SELECT * FROM sales_heap;
+INSERT INTO sales_partition_ao SELECT * FROM sales_heap;
+INSERT INTO sales_partition_aocs SELECT * FROM sales_heap;
+ANALYZE sales_heap;
+ANALYZE sales_ao;
+ANALYZE sales_aocs;
+ANALYZE rootpartition sales_partition_heap;
+ANALYZE rootpartition sales_partition_ao;
+ANALYZE rootpartition sales_partition_aocs;

@@ -1,0 +1,42 @@
+DELETE FROM sales_heap WHERE product_id > 1000000;
+DELETE FROM sales_ao WHERE product_id > 1000000;
+DELETE FROM sales_aocs WHERE product_id > 1000000;
+DELETE FROM sales_partition_heap WHERE product_id > 1000000;
+DELETE FROM sales_partition_ao WHERE product_id > 1000000;
+DELETE FROM sales_partition_aocs WHERE product_id > 1000000;
+SELECT COUNT(*) FROM sales_heap;
+ count 
+-------
+ 10000
+(1 row)
+
+SELECT COUNT(*) FROM sales_ao;
+ count 
+-------
+ 10000
+(1 row)
+
+SELECT COUNT(*) FROM sales_aocs;
+ count 
+-------
+ 10000
+(1 row)
+
+SELECT COUNT(*) FROM sales_partition_heap;
+ count 
+-------
+ 10000
+(1 row)
+
+SELECT COUNT(*) FROM sales_partition_ao;
+ count 
+-------
+ 10000
+(1 row)
+
+SELECT COUNT(*) FROM sales_partition_aocs;
+ count 
+-------
+ 10000
+(1 row)
+
