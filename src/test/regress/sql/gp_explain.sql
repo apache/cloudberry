@@ -229,6 +229,28 @@ explain analyze SELECT * FROM explaintest;
 set gp_enable_explain_allstat=DEFAULT;
 
 
+-- Test explain node summary.
+-- start_matchsubs
+-- m/\(seg-?\d+\) \d+ \d+ \d+ \d+.\d+ \d+.\d+ \d+.\d+ \d+ \d+ \d+ \d+ \d+ \d+ \d+ \d+ \d+ \d+ \d+ \d+ \d+ \d+/
+-- s/\(seg-?\d+\) \d+ \d+ \d+ \d+.\d+ \d+.\d+ \d+.\d+ \d+ \d+ \d+ \d+ \d+ \d+ \d+ \d+ \d+ \d+ \d+ \d+ \d+ \d+/(segX) X X X X.X X.X X.X X X X X X X X X X X X X X X/
+-- m/\(cost=\d+.\d+..\d+.\d+ rows=\d+ width=\d+\)/
+-- s/\(cost=\d+.\d+..\d+.\d+ /(cost=X.X..X.X /
+-- m/\(actual time=\d+.\d+..\d+.\d+ rows=\d+ loops=\d+\)/
+-- s/\(actual time=\d+.\d+..\d+.\d+ /(actual time=X.X..X.X /
+-- m/"firststart": \d+,\s*/
+-- s/"firststart": \d+,\s*/"firststart": XXXXXX, /
+-- m/"Actual Total Time": \d+\.\d+\s*/
+-- s/"Actual Total Time": \d+\.\d+,\s*/"Actual Total Time": X.XXX, /
+-- m/"Actual Startup Time": \d+\.\d+,\s*/
+-- s/"Actual Startup Time": \d+\.\d+,\s*/"Actual Startup Time": X.XXX, /
+-- end_matchsubs
+set gp_enable_explain_node_summary=on;
+explain (analyze, summary off)
+SELECT * FROM explaintest;
+explain (analyze, summary off, format json)
+SELECT * FROM explaintest;
+set gp_enable_explain_node_summary=DEFAULT;
+
 --
 -- Test GPDB-specific EXPLAIN (SLICETABLE) option.
 --
