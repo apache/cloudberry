@@ -32,11 +32,11 @@ select groupname from gp_toolkit.gp_resgroup_config
  system_group
 (3 rows)
 
-select rsgname from gp_toolkit.gp_resgroup_status
-  where rsgname not like 'rg_dump_test%'
+select groupname from gp_toolkit.gp_resgroup_status
+  where groupname not like 'rg_dump_test%'
   order by groupid;
- rsgname 
----------
+ groupname 
+-----------
 (0 rows)
 
 create resource group rg1 with (cpu_max_percent=10, memory_quota=10);
