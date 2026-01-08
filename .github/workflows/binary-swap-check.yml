@@ -1,0 +1,766 @@
+# --------------------------------------------------------------------
+#
+# Licensed to the Apache Software Foundation (ASF) under one or more
+# contributor license agreements. See the NOTICE file distributed
+# with this work for additional information regarding copyright
+# ownership. The ASF licenses this file to You under the Apache
+# License, Version 2.0 (the "License"); you may not use this file
+# except in compliance with the License. You may obtain a copy of the
+# License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
+# implied. See the License for the specific language governing
+# permissions and limitations under the License.
+#
+# --------------------------------------------------------------------
+# GitHub Actions Workflow: Apache Cloudberry Binary Swap Compatibility Check
+# --------------------------------------------------------------------
+#
+# This workflow detects binary/catalog incompatibilities by comparing the
+# current PR/push code against the latest release tag.
+#
+# Workflow:
+# 1. Resolve baseline: Find the latest release tag from REL_2_STABLE
+# 2. Build baseline: Build RPM from the baseline tag (parallel)
+# 3. Build current: Build RPM from current PR/push code (parallel)
+# 4. Binary swap test: Install baseline, create cluster, swap to current,
+#    verify data integrity
+#
+# Triggers:
+# - Pull requests to `REL_2_STABLE`
+# - Push to `REL_2_STABLE`
+# - Manual workflow dispatch
+#
+# --------------------------------------------------------------------
+
+name: Binary Swap Compatibility Check
+
+on:
+  push:
+    branches: [REL_2_STABLE]
+  pull_request:
+    branches: [REL_2_STABLE]
+    types: [opened, synchronize, reopened, edited]
+  workflow_dispatch:
+    inputs:
+      baseline_ref:
+        description: 'Baseline ref to compare against (leave empty for auto-detect latest tag)'
+        required: false
+        default: ''
+        type: string
+
+concurrency:
+  group: binary-swap-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  packages: read
+  actions: read
+
+env:
+  LOG_RETENTION_DAYS: 7
+  CBDB_INSTALL_DIR: /usr/local/cloudberry-db
+  BASELINE_INSTALL_DIR: /usr/local/cloudberry-db-baseline
+  CURRENT_INSTALL_DIR: /usr/local/cloudberry-db-current
+
+jobs:
+
+  ## ======================================================================
+  ## Job: resolve-baseline
+  ## ======================================================================
+
+  resolve-baseline:
+    name: Resolve Baseline Version
+    runs-on: ubuntu-22.04
+    outputs:
+      baseline_ref: ${{ steps.resolve.outputs.baseline_ref }}
+      baseline_version: ${{ steps.resolve.outputs.baseline_version }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Resolve latest release tag
+        id: resolve
+        run: |
+          set -eo pipefail
+
+          # Use manual input if provided
+          if [[ -n "${{ github.event.inputs.baseline_ref }}" ]]; then
+            echo "Using manually specified baseline: ${{ github.event.inputs.baseline_ref }}"
+            echo "baseline_ref=${{ github.event.inputs.baseline_ref }}" >> "$GITHUB_OUTPUT"
+            echo "baseline_version=${{ github.event.inputs.baseline_ref }}" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # Find the latest release tag
+          # Tag format: X.Y.Z-incubating (e.g., 2.0.0-incubating, 2.1.0-incubating)
+          # Exclude RC versions: X.Y.Z-incubating-rcN
+          echo "Finding latest release tag..."
+          
+          # Get all tags matching the incubating pattern, sort by version, filter out RC versions
+          TAG_INFO=$(git ls-remote --tags --refs origin '*-incubating' 2>/dev/null \
+            | grep -v '\-rc[0-9]*$' \
+            | sort -t'/' -k3 -V \
+            | tail -1 || echo "")
+
+          if [[ -z "$TAG_INFO" ]]; then
+            echo "::error::No release tags found matching pattern '*-incubating' (excluding RC versions)"
+            echo "::error::Expected format: X.Y.Z-incubating (e.g., 2.0.0-incubating)"
+            exit 1
+          fi
+
+          BASELINE_REF=$(echo "$TAG_INFO" | awk '{print $1}')
+          BASELINE_VERSION=$(echo "$TAG_INFO" | awk '{print $2}' | sed 's|refs/tags/||')
+
+          echo "Found baseline: ${BASELINE_VERSION} (${BASELINE_REF})"
+          echo "baseline_ref=${BASELINE_REF}" >> "$GITHUB_OUTPUT"
+          echo "baseline_version=${BASELINE_VERSION}" >> "$GITHUB_OUTPUT"
+
+  ## ======================================================================
+  ## Job: build-baseline
+  ## ======================================================================
+
+  build-baseline:
+    name: Build Baseline RPM
+    needs: [resolve-baseline]
+    runs-on: ubuntu-22.04
+    timeout-minutes: 120
+
+    container:
+      image: apache/incubator-cloudberry:cbdb-build-rocky9-latest
+      options: >-
+        --user root
+        -h cdw
+        -v /usr/share:/host_usr_share
+        -v /usr/local:/host_usr_local
+        -v /opt:/host_opt
+
+    steps:
+      - name: Free Disk Space
+        run: |
+          echo "=== Disk space before cleanup ==="
+          df -h /
+          rm -rf /host_opt/hostedtoolcache || true
+          rm -rf /host_usr_local/lib/android || true
+          rm -rf /host_usr_share/dotnet || true
+          rm -rf /host_opt/ghc || true
+          rm -rf /host_usr_local/.ghcup || true
+          rm -rf /host_usr_share/swift || true
+          rm -rf /host_usr_local/share/powershell || true
+          rm -rf /host_usr_local/share/chromium || true
+          rm -rf /host_usr_share/miniconda || true
+          rm -rf /host_opt/az || true
+          rm -rf /host_usr_share/sbt || true
+          echo "=== Disk space after cleanup ==="
+          df -h /
+
+      - name: Checkout Baseline Code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.resolve-baseline.outputs.baseline_version }}
+          fetch-depth: 1
+          submodules: recursive
+
+      - name: Checkout Build Tools
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          path: build_tools
+          sparse-checkout: |
+            devops
+          fetch-depth: 1
+
+      - name: Inject Build Tools
+        run: |
+          # Copy devops scripts to baseline source if they don't exist
+          if [ ! -d "devops" ]; then
+            echo "Injecting devops scripts from main branch..."
+            cp -r build_tools/devops .
+          fi
+
+      - name: Environment Initialization
+        run: |
+          set -eo pipefail
+          if ! su - gpadmin -c "/tmp/init_system.sh"; then
+            echo "::error::Container initialization failed"
+            exit 1
+          fi
+          chown -R gpadmin:gpadmin .
+          chmod -R 755 .
+          rm -rf /__t/*
+          echo "SRC_DIR=${GITHUB_WORKSPACE}" >> "$GITHUB_ENV"
+          
+          # Create log directory required by build scripts
+          mkdir -p "${GITHUB_WORKSPACE}/build-logs"
+          chown gpadmin:gpadmin "${GITHUB_WORKSPACE}/build-logs"
+
+      - name: Configure
+        env:
+          SRC_DIR: ${{ github.workspace }}
+        run: |
+          set -eo pipefail
+          echo "baseline" > "${SRC_DIR}/BUILD_NUMBER"
+          chmod +x "${SRC_DIR}"/devops/build/automation/cloudberry/scripts/configure-cloudberry.sh
+          time su - gpadmin -c "cd ${SRC_DIR} && SRC_DIR=${SRC_DIR} ENABLE_DEBUG=false ${SRC_DIR}/devops/build/automation/cloudberry/scripts/configure-cloudberry.sh"
+
+      - name: Build
+        env:
+          SRC_DIR: ${{ github.workspace }}
+        run: |
+          set -eo pipefail
+          chmod +x "${SRC_DIR}"/devops/build/automation/cloudberry/scripts/build-cloudberry.sh
+          time su - gpadmin -c "cd ${SRC_DIR} && SRC_DIR=${SRC_DIR} ${SRC_DIR}/devops/build/automation/cloudberry/scripts/build-cloudberry.sh"
+
+      - name: Run Unit Tests
+        env:
+          SRC_DIR: ${{ github.workspace }}
+        run: |
+          set -eo pipefail
+          chmod +x "${SRC_DIR}"/devops/build/automation/cloudberry/scripts/unittest-cloudberry.sh
+          if ! time su - gpadmin -c "cd ${SRC_DIR} && SRC_DIR=${SRC_DIR} ${SRC_DIR}/devops/build/automation/cloudberry/scripts/unittest-cloudberry.sh"; then
+            echo "::error::Unittest script failed"
+            exit 1
+          fi
+
+      - name: Create RPM
+        env:
+          CBDB_VERSION: ${{ needs.resolve-baseline.outputs.baseline_version }}
+          SRC_DIR: ${{ github.workspace }}
+        run: |
+          set -eo pipefail
+          rpmdev-setuptree
+          ln -s "${SRC_DIR}"/devops/build/packaging/rpm/apache-cloudberry-db-incubating.spec "${HOME}"/rpmbuild/SPECS/ || true
+          cp "${SRC_DIR}"/LICENSE /usr/local/cloudberry-db || true
+          
+          # Sanitize version for RPM (replace - with _)
+          SAFE_VERSION=$(echo "${CBDB_VERSION}" | tr '-' '_')
+          echo "Building RPM with Version: ${SAFE_VERSION}"
+          
+          "${SRC_DIR}"/devops/build/packaging/rpm/build-rpm.sh --version "${SAFE_VERSION}" --release "1"
+          os_version=$(grep -oP '(?<=^VERSION_ID=")[0-9]' /etc/os-release)
+          RPM_FILE="${HOME}"/rpmbuild/RPMS/x86_64/apache-cloudberry-db-incubating-"${SAFE_VERSION}"-"1".el"${os_version}".x86_64.rpm
+          
+          # Verify RPM
+          echo "Verifying RPM..."
+          rpm -qip "${RPM_FILE}"
+          for binary in "bin/postgres" "bin/psql"; do
+            if ! rpm -qlp "${RPM_FILE}" | grep -q "${binary}$"; then
+              echo "::error::Critical binary '${binary}' not found in RPM"
+              exit 1
+            fi
+          done
+          sha256sum "${RPM_FILE}"
+          
+          cp "${RPM_FILE}" "${GITHUB_WORKSPACE}/"
+
+      - name: Upload Baseline RPM
+        uses: actions/upload-artifact@v4
+        with:
+          name: baseline-rpm
+          retention-days: ${{ env.LOG_RETENTION_DAYS }}
+          if-no-files-found: error
+          path: |
+            *.rpm
+            !*debuginfo*.rpm
+
+  ## ======================================================================
+  ## Job: build-current
+  ## ======================================================================
+
+  build-current:
+    name: Build Current RPM
+    runs-on: ubuntu-22.04
+    timeout-minutes: 120
+
+    container:
+      image: apache/incubator-cloudberry:cbdb-build-rocky9-latest
+      options: >-
+        --user root
+        -h cdw
+        -v /usr/share:/host_usr_share
+        -v /usr/local:/host_usr_local
+        -v /opt:/host_opt
+
+    steps:
+      - name: Free Disk Space
+        run: |
+          echo "=== Disk space before cleanup ==="
+          df -h /
+          rm -rf /host_opt/hostedtoolcache || true
+          rm -rf /host_usr_local/lib/android || true
+          rm -rf /host_usr_share/dotnet || true
+          rm -rf /host_opt/ghc || true
+          rm -rf /host_usr_local/.ghcup || true
+          rm -rf /host_usr_share/swift || true
+          rm -rf /host_usr_local/share/powershell || true
+          rm -rf /host_usr_local/share/chromium || true
+          rm -rf /host_usr_share/miniconda || true
+          rm -rf /host_opt/az || true
+          rm -rf /host_usr_share/sbt || true
+          echo "=== Disk space after cleanup ==="
+          df -h /
+
+      - name: Checkout Current Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          submodules: recursive
+
+      - name: Checkout Build Tools
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          path: build_tools
+          sparse-checkout: |
+            devops
+          fetch-depth: 1
+
+      - name: Inject Build Tools
+        run: |
+          # Copy devops scripts to current source if they don't exist
+          if [ ! -d "devops" ]; then
+            echo "Injecting devops scripts from main branch..."
+            cp -r build_tools/devops .
+          fi
+
+      - name: Environment Initialization
+        run: |
+          set -eo pipefail
+          if ! su - gpadmin -c "/tmp/init_system.sh"; then
+            echo "::error::Container initialization failed"
+            exit 1
+          fi
+          chown -R gpadmin:gpadmin .
+          chmod -R 755 .
+          rm -rf /__t/*
+          echo "SRC_DIR=${GITHUB_WORKSPACE}" >> "$GITHUB_ENV"
+
+          # Create log directory required by build scripts
+          mkdir -p "${GITHUB_WORKSPACE}/build-logs"
+          chown gpadmin:gpadmin "${GITHUB_WORKSPACE}/build-logs"
+
+      - name: Configure
+        env:
+          SRC_DIR: ${{ github.workspace }}
+        run: |
+          set -eo pipefail
+          echo "current" > "${SRC_DIR}/BUILD_NUMBER"
+          chmod +x "${SRC_DIR}"/devops/build/automation/cloudberry/scripts/configure-cloudberry.sh
+          time su - gpadmin -c "cd ${SRC_DIR} && SRC_DIR=${SRC_DIR} ENABLE_DEBUG=false ${SRC_DIR}/devops/build/automation/cloudberry/scripts/configure-cloudberry.sh"
+
+      - name: Build
+        env:
+          SRC_DIR: ${{ github.workspace }}
+        run: |
+          set -eo pipefail
+          chmod +x "${SRC_DIR}"/devops/build/automation/cloudberry/scripts/build-cloudberry.sh
+          time su - gpadmin -c "cd ${SRC_DIR} && SRC_DIR=${SRC_DIR} ${SRC_DIR}/devops/build/automation/cloudberry/scripts/build-cloudberry.sh"
+
+      - name: Run Unit Tests
+        env:
+          SRC_DIR: ${{ github.workspace }}
+        run: |
+          set -eo pipefail
+          chmod +x "${SRC_DIR}"/devops/build/automation/cloudberry/scripts/unittest-cloudberry.sh
+          if ! time su - gpadmin -c "cd ${SRC_DIR} && SRC_DIR=${SRC_DIR} ${SRC_DIR}/devops/build/automation/cloudberry/scripts/unittest-cloudberry.sh"; then
+            echo "::error::Unittest script failed"
+            exit 1
+          fi
+
+      - name: Create RPM
+        env:
+          CBDB_VERSION: 99.0.0-current
+          SRC_DIR: ${{ github.workspace }}
+        run: |
+          set -eo pipefail
+          rpmdev-setuptree
+          ln -s "${SRC_DIR}"/devops/build/packaging/rpm/apache-cloudberry-db-incubating.spec "${HOME}"/rpmbuild/SPECS/ || true
+          cp "${SRC_DIR}"/LICENSE /usr/local/cloudberry-db || true
+          
+          # Sanitize
+          SAFE_VERSION=$(echo "99.0.0" | tr '-' '_')
+          "${SRC_DIR}"/devops/build/packaging/rpm/build-rpm.sh --version "${SAFE_VERSION}" --release "current"
+          
+          os_version=$(grep -oP '(?<=^VERSION_ID=")[0-9]' /etc/os-release)
+          RPM_FILE="${HOME}"/rpmbuild/RPMS/x86_64/apache-cloudberry-db-incubating-"${SAFE_VERSION}"-"current".el"${os_version}".x86_64.rpm
+
+          # Verify RPM
+          echo "Verifying RPM..."
+          rpm -qip "${RPM_FILE}"
+          for binary in "bin/postgres" "bin/psql"; do
+            if ! rpm -qlp "${RPM_FILE}" | grep -q "${binary}$"; then
+              echo "::error::Critical binary '${binary}' not found in RPM"
+              exit 1
+            fi
+          done
+          sha256sum "${RPM_FILE}"
+
+          cp "${RPM_FILE}" "${SRC_DIR}/"
+
+      - name: Compile pg_regress
+        run: |
+          # Use the environment where Cloudberry was built/installed
+          if [ -f "${CBDB_INSTALL_DIR}/cloudberry-env.sh" ]; then
+            source "${CBDB_INSTALL_DIR}/cloudberry-env.sh"
+          elif [ -f "${CBDB_INSTALL_DIR}/greenplum_path.sh" ]; then
+            source "${CBDB_INSTALL_DIR}/greenplum_path.sh"
+          else
+            echo "::error::No environment script found in ${CBDB_INSTALL_DIR}"
+            exit 1
+          fi
+          
+          # Compile pg_regress
+          make -C "${SRC_DIR}/src/test/regress" clean all
+          
+          # Package the whole directory
+          cp -r "${SRC_DIR}/src/test/regress" "${GITHUB_WORKSPACE}/regress_bin"
+
+      - name: Upload pg_regress
+        uses: actions/upload-artifact@v4
+        with:
+          name: pg-regress-bin
+          retention-days: ${{ env.LOG_RETENTION_DAYS }}
+          path: ${{ github.workspace }}/regress_bin/
+
+      - name: Upload Current RPM
+        uses: actions/upload-artifact@v4
+        with:
+          name: current-rpm
+          retention-days: ${{ env.LOG_RETENTION_DAYS }}
+          if-no-files-found: error
+          path: |
+            *.rpm
+            !*debuginfo*.rpm
+
+  ## ======================================================================
+  ## Job: binary-swap-test
+  ## ======================================================================
+
+  binary-swap-test:
+    name: Binary Swap Test
+    needs: [resolve-baseline, build-baseline, build-current]
+    runs-on: ubuntu-22.04
+    timeout-minutes: 60
+
+    container:
+      image: apache/incubator-cloudberry:cbdb-build-rocky9-latest
+      options: >-
+        --privileged
+        --user root
+        --hostname cdw
+        --shm-size=2gb
+        --ulimit core=-1
+        -v /usr/share:/host_usr_share
+        -v /usr/local:/host_usr_local
+        -v /opt:/host_opt
+
+    steps:
+      - name: Free Disk Space
+        run: |
+          echo "=== Disk space before cleanup ==="
+          df -h /
+          rm -rf /host_opt/hostedtoolcache || true
+          rm -rf /host_usr_local/lib/android || true
+          rm -rf /host_usr_share/dotnet || true
+          rm -rf /host_opt/ghc || true
+          rm -rf /host_usr_local/.ghcup || true
+          rm -rf /host_usr_share/swift || true
+          rm -rf /host_usr_local/share/powershell || true
+          rm -rf /host_usr_local/share/chromium || true
+          rm -rf /host_usr_share/miniconda || true
+          rm -rf /host_opt/az || true
+          rm -rf /host_usr_share/sbt || true
+          echo "=== Disk space after cleanup ==="
+          df -h /
+
+      - name: Checkout Current Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Environment Initialization
+        run: |
+          set -eo pipefail
+          if ! su - gpadmin -c "/tmp/init_system.sh"; then
+            echo "::error::Container initialization failed"
+            exit 1
+          fi
+          mkdir -p binary-swap-logs/details
+          chown -R gpadmin:gpadmin .
+          chmod -R 755 .
+          echo "SRC_DIR=${GITHUB_WORKSPACE}" >> "$GITHUB_ENV"
+          echo "LOGS_DIR=${GITHUB_WORKSPACE}/binary-swap-logs" >> "$GITHUB_ENV"
+
+      - name: Download Baseline RPM
+        uses: actions/download-artifact@v4
+        with:
+          name: baseline-rpm
+          path: ${{ github.workspace }}/baseline_rpm
+
+      - name: Download Current RPM
+        uses: actions/download-artifact@v4
+        with:
+          name: current-rpm
+          path: ${{ github.workspace }}/current_rpm
+
+      - name: Download pg_regress
+        uses: actions/download-artifact@v4
+        with:
+          name: pg-regress-bin
+          path: ${{ github.workspace }}/regress_bin
+
+      - name: Install Baseline RPM
+        run: |
+          set -eo pipefail
+          BASELINE_RPM=$(ls "${GITHUB_WORKSPACE}"/baseline_rpm/*.rpm | head -1)
+          echo "Installing baseline RPM: ${BASELINE_RPM}"
+          dnf install -y "${BASELINE_RPM}"
+          
+          # Check installed location based on where bin/postgres ended up
+          INSTALLED_PG=$(rpm -ql apache-cloudberry-db-incubating | grep "bin/postgres$" | head -1)
+          if [ -z "$INSTALLED_PG" ]; then
+             echo "::error::Could not find bin/postgres in installed RPM"
+             exit 1
+          fi
+          
+          # Get the installation root (parent of bin)
+          INSTALLED_DIR=$(dirname $(dirname "$INSTALLED_PG"))
+          echo "Detected installation at: ${INSTALLED_DIR}"
+          
+          # Prepare target directory
+          if [ -d "${BASELINE_INSTALL_DIR}" ]; then
+              rm -rf "${BASELINE_INSTALL_DIR}"
+          fi
+          echo "Moving ${INSTALLED_DIR} to ${BASELINE_INSTALL_DIR}..."
+          mv "${INSTALLED_DIR}" "${BASELINE_INSTALL_DIR}"
+          
+          # Cleanup the symlink created by RPM to avoid confusion in next install
+          rm -f /usr/local/cloudberry-db
+          
+          chown -R gpadmin:gpadmin "${BASELINE_INSTALL_DIR}"
+
+          # Verify Installation
+          echo "Verifying Baseline Installation..."
+          if [ ! -f "${BASELINE_INSTALL_DIR}/bin/postgres" ]; then
+             echo "::error::Critical binary '${BASELINE_INSTALL_DIR}/bin/postgres' missing"
+             exit 1
+          fi
+
+          # Extract catalog version
+          if [ -f "${BASELINE_INSTALL_DIR}/cloudberry-env.sh" ]; then
+             source "${BASELINE_INSTALL_DIR}/cloudberry-env.sh"
+          elif [ -f "${BASELINE_INSTALL_DIR}/greenplum_path.sh" ]; then
+             source "${BASELINE_INSTALL_DIR}/greenplum_path.sh"
+          fi
+
+          echo "Baseline RPM Catalog Version:"
+          CATALOG_VERSION=$("${BASELINE_INSTALL_DIR}/bin/postgres" --catalog-version 2>/dev/null | awk '{print $NF}' || echo "N/A")
+          echo "$CATALOG_VERSION"
+          echo "BASELINE_CATALOG_VERSION=$CATALOG_VERSION" >> "$GITHUB_ENV"
+
+          ls -la "${BASELINE_INSTALL_DIR}"
+
+      - name: Install Current RPM
+        run: |
+          set -eo pipefail
+          CURRENT_RPM=$(ls "${GITHUB_WORKSPACE}"/current_rpm/*.rpm | head -1)
+          echo "Installing current RPM: ${CURRENT_RPM}"
+
+          dnf install -y "${CURRENT_RPM}" || dnf upgrade -y "${CURRENT_RPM}"
+          
+          # Check installed location
+          INSTALLED_PG=$(rpm -ql apache-cloudberry-db-incubating | grep "bin/postgres$" | head -1)
+          INSTALLED_DIR=$(dirname $(dirname "$INSTALLED_PG"))
+          echo "Detected installation at: ${INSTALLED_DIR}"
+          
+          # Prepare target directory
+          if [ -d "${CURRENT_INSTALL_DIR}" ]; then
+              rm -rf "${CURRENT_INSTALL_DIR}"
+          fi
+          echo "Moving ${INSTALLED_DIR} to ${CURRENT_INSTALL_DIR}..."
+          mv "${INSTALLED_DIR}" "${CURRENT_INSTALL_DIR}"
+          
+          # Cleanup symlink
+          rm -f /usr/local/cloudberry-db
+          
+          chown -R gpadmin:gpadmin "${CURRENT_INSTALL_DIR}"
+          
+          # Verify Installation
+          echo "Verifying Current Installation..."
+          if [ ! -f "${CURRENT_INSTALL_DIR}/bin/postgres" ]; then
+             echo "::error::Critical binary '${CURRENT_INSTALL_DIR}/bin/postgres' missing"
+             exit 1
+          fi
+
+          # Extract catalog version
+          if [ -f "${CURRENT_INSTALL_DIR}/cloudberry-env.sh" ]; then
+             source "${CURRENT_INSTALL_DIR}/cloudberry-env.sh"
+          elif [ -f "${CURRENT_INSTALL_DIR}/greenplum_path.sh" ]; then
+             source "${CURRENT_INSTALL_DIR}/greenplum_path.sh"
+          fi
+
+          echo "Current RPM Catalog Version:"
+          CATALOG_VERSION=$("${CURRENT_INSTALL_DIR}/bin/postgres" --catalog-version 2>/dev/null | awk '{print $NF}' || echo "N/A")
+          echo "$CATALOG_VERSION"
+          echo "CURRENT_CATALOG_VERSION=$CATALOG_VERSION" >> "$GITHUB_ENV"
+
+          ls -la "${CURRENT_INSTALL_DIR}"
+
+      - name: Setup pg_regress
+        run: |
+          # Setup pg_regress at expected location (../regress/pg_regress)
+          mkdir -p "${SRC_DIR}/src/test/regress"
+          cp -r "${GITHUB_WORKSPACE}/regress_bin/." "${SRC_DIR}/src/test/regress/"
+          chown -R gpadmin:gpadmin "${SRC_DIR}/src/test/regress"
+          chmod +x "${SRC_DIR}/src/test/regress/pg_regress"
+          ls -la "${SRC_DIR}/src/test/regress/"
+
+      - name: Run Binary Swap Tests
+        id: binary-swap-test
+        run: |
+          set -eo pipefail
+          TEST_RESULT=0
+          
+          ln -sfn "${BASELINE_INSTALL_DIR}" "${CBDB_INSTALL_DIR}"
+          su - gpadmin -c "
+            set -e
+            
+            # Pass SRC_DIR to the subshell
+            export SRC_DIR=${SRC_DIR}
+            
+            # 1. Set up environment using baseline
+            if [ -f ${CBDB_INSTALL_DIR}/cloudberry-env.sh ]; then
+              source ${CBDB_INSTALL_DIR}/cloudberry-env.sh
+            else
+              source ${CBDB_INSTALL_DIR}/greenplum_path.sh
+            fi
+            
+            # 2. Create the cluster
+            # In CBDB, gpAux is located at the root of the source directory
+            cd \${SRC_DIR}/gpAux/gpdemo
+            make cluster
+            
+            # 3. Load gpdemo env and run basic state check
+            source gpdemo-env.sh
+            gpstate -s
+            
+            # 4. Populate the 'regression' database
+            echo \"=== Starting to populate the regression database ===\"
+            cd \${SRC_DIR}/src/test/regress
+            ls -ld \${SRC_DIR}/src/test/regress/sql || echo \"ERROR: sql dir missing\"
+            ./pg_regress --dbname=regression --host=localhost --port=7000 --init-file=init_file --schedule=./minimal_schedule || echo \"WARNING: Population finished with some output differences (check logs below if needed)\"
+            cat regression.diffs 2>/dev/null || true
+            
+            # 5. Run the actual binary swap test script
+            echo \"=== Starting binary swap test ===\"
+            cd \${SRC_DIR}/src/test/binary_swap
+            ./test_binary_swap.sh -b ${BASELINE_INSTALL_DIR} -c ${CURRENT_INSTALL_DIR}
+          " 2>&1 | tee -a "${LOGS_DIR}/details/test_binary_swap.log" || TEST_RESULT=$?
+          
+          if [[ $TEST_RESULT -ne 0 ]]; then
+            echo "::error::Binary swap test script failed"
+            echo "test_passed=false" >> "$GITHUB_OUTPUT"
+            exit 1
+          else
+            echo "test_passed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Check and Display Regression Diffs
+        if: always()
+        run: |
+          echo "Checking for regression diffs in ${SRC_DIR}/src/test/binary_swap"
+          DIFF_FILES_FOUND="false"
+          
+          if [ -d "${SRC_DIR}/src/test/binary_swap" ]; then
+            # Check for any .diff files or regression.diffs
+            if find "${SRC_DIR}/src/test/binary_swap" -name "*.diff" | grep -q . || [ -f "${SRC_DIR}/src/test/binary_swap/regression.diffs" ]; then
+              DIFF_FILES_FOUND="true"
+              
+              # Display all diff files
+              find "${SRC_DIR}/src/test/binary_swap" -name "*.diff" | while read diff_file; do
+                echo "======================================================================"
+                echo "Diff in ${diff_file}:"
+                echo "----------------------------------------------------------------------"
+                cat "${diff_file}"
+                echo "======================================================================"
+              done
+              
+              # Display regression.diffs if exists
+              if [ -f "${SRC_DIR}/src/test/binary_swap/regression.diffs" ]; then
+                echo "======================================================================"
+                echo "Content of regression.diffs:"
+                echo "----------------------------------------------------------------------"
+                cat "${SRC_DIR}/src/test/binary_swap/regression.diffs"
+                echo "======================================================================"
+              fi
+            fi
+          fi
+          
+          # Set test result based on whether diff files were found
+          if [ "$DIFF_FILES_FOUND" == "true" ]; then
+            echo "test_passed=false" >> "$GITHUB_OUTPUT"
+            echo "Regression diffs found - test failed"
+          else
+            echo "test_passed=true" >> "$GITHUB_OUTPUT"
+            echo "No regression diffs found - test passed"
+          fi
+
+      - name: Final Catalog Version Summary
+        if: always()
+        run: |
+          echo "=== Catalog Version Comparison ==="
+          echo "Baseline Catalog Version: ${BASELINE_CATALOG_VERSION:-N/A}"
+          echo "Current Catalog Version:  ${CURRENT_CATALOG_VERSION:-N/A}"
+          echo ""
+          echo "Catalog Status: $([[ "$BASELINE_CATALOG_VERSION" == "$CURRENT_CATALOG_VERSION" ]] && echo "✅ IDENTICAL" || echo "🔍 DIFFERENT")"
+          echo "=== Comparison completed ==="
+
+      - name: Generate Report
+        if: always()
+        env:
+          BASELINE_VERSION: ${{ needs.resolve-baseline.outputs.baseline_version }}
+          TEST_PASSED: ${{ steps.binary-swap-test.outputs.test_passed }}
+        run: |
+          # Simple status message
+          if [ "${TEST_PASSED}" == "true" ]; then
+            STATUS="PASSED"
+            MESSAGE="All compatibility tests completed successfully."
+          else
+            STATUS="FAILED" 
+            MESSAGE="Compatibility issues detected during testing."
+          fi
+
+          # Generate comprehensive report
+          cat > "${LOGS_DIR}/binary-swap-report.md" <<EOF
+          # Binary Swap Test Results
+
+          **Baseline Version**: ${BASELINE_VERSION}
+          **Status**: ${STATUS}
+          **Date**: $(date -u +"%Y-%m-%d %H:%M UTC")
+
+          ## Catalog Version Information
+          **Baseline Catalog Version**: ${BASELINE_CATALOG_VERSION}
+          **Current Catalog Version**: ${CURRENT_CATALOG_VERSION}
+
+          ${MESSAGE}
+          
+          EOF
+
+          cat "${LOGS_DIR}/binary-swap-report.md" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload Logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: binary-swap-logs
+          retention-days: ${{ env.LOG_RETENTION_DAYS }}
+          path: |
+            binary-swap-logs/
+            dump_*.sql

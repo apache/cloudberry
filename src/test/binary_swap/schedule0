@@ -1,0 +1,13 @@
+test: upgrading_compatibility/systables
+test: upgrading_compatibility/create_table
+test: upgrading_compatibility/load_data
+test: upgrading_compatibility/create_index
+test: upgrading_compatibility/query_sales_heap
+test: upgrading_compatibility/query_sales_ao
+test: upgrading_compatibility/query_sales_aocs
+test: upgrading_compatibility/query_sales_partition_heap
+test: upgrading_compatibility/query_sales_partition_ao
+test: upgrading_compatibility/query_sales_partition_aocs
+test: upgrading_compatibility/insert
+test: upgrading_compatibility/update
+test: upgrading_compatibility/delete
