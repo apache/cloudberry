@@ -434,7 +434,7 @@ max_prepared_transactions = 250		# can be 0 or more
 #cursor_tuple_fraction = 0.1		# range 0.0-1.0
 
 #from_collapse_limit = 20
-#join_collapse_limit = 20		# 1 disables collapsing of explicit
+#join_collapse_limit = 8		# 1 disables collapsing of explicit
 					# JOIN clauses
 #force_parallel_mode = off
 #jit = on				# allow JIT compilation
