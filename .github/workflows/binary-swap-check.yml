@@ -488,7 +488,6 @@ jobs:
       - name: Checkout Current Code
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.head_ref || github.ref }}
           fetch-depth: 1
 
       - name: Environment Initialization
