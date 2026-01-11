@@ -170,59 +170,9 @@ buildACLCommands(const char *name, const char *subname, const char *nspname,
 	 */
 	for (i = 0; i < nrevokeitems; i++)
 	{
-<<<<<<< HEAD
-		Assert(nraclitems == 0);
-
-		appendPQExpBuffer(firstsql, "%sREVOKE ALL", prefix);
-		if (subname)
-			appendPQExpBuffer(firstsql, "(%s)", subname);
-		appendPQExpBuffer(firstsql, " ON %s ", type);
-		if (nspname && *nspname)
-			appendPQExpBuffer(firstsql, "%s.", fmtId(nspname));
-		appendPQExpBuffer(firstsql, "%s FROM PUBLIC;\n", name);
-	}
-	else
-	{
-		/* Scan individual REVOKE ACL items */
-		for (i = 0; i < nraclitems; i++)
-		{
-			if (!parseAclItem(raclitems[i], type, name, subname, remoteVersion,
-							  grantee, grantor, privs, NULL))
-			{
-				ok = false;
-				break;
-			}
-
-			if (privs->len > 0)
-			{
-				appendPQExpBuffer(firstsql, "%sREVOKE %s ON %s ",
-								  prefix, privs->data, type);
-				if (nspname && *nspname)
-					appendPQExpBuffer(firstsql, "%s.", fmtId(nspname));
-				appendPQExpBuffer(firstsql, "%s FROM ", name);
-				if (grantee->len == 0)
-					appendPQExpBufferStr(firstsql, "PUBLIC;\n");
-				else if (strncmp(grantee->data, "group ",
-								 strlen("group ")) == 0)
-					appendPQExpBuffer(firstsql, "GROUP %s;\n",
-									  fmtId(grantee->data + strlen("group ")));
-				else
-					appendPQExpBuffer(firstsql, "%s;\n",
-									  fmtId(grantee->data));
-			}
-		}
-	}
-
-	/* Scan individual ACL items */
-	for (i = 0; i < naclitems; i++)
-	{
-		if (!parseAclItem(aclitems[i], type, name, subname, remoteVersion,
-						  grantee, grantor, privs, privswgo))
-=======
 		if (!parseAclItem(revokeitems[i],
 						  type, name, subname, remoteVersion,
 						  grantee, grantor, privs, NULL))
->>>>>>> REL_16_9
 		{
 			ok = false;
 			break;

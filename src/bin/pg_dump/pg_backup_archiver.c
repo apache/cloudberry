@@ -273,20 +273,9 @@ CloseArchive(Archive *AHX)
 	AH->ClosePtr(AH);
 
 	/* Close the output */
-<<<<<<< HEAD
-	errno = 0;					/* in case gzclose() doesn't set it */
-	if (AH->gzOut)
-		res = GZCLOSE(AH->OF);
-	else if (AH->OF != stdout)
-		res = fclose(AH->OF);
-
-	if (res != 0)
-		fatal("could not close output file: %m");
-=======
 	errno = 0;
 	if (!EndCompressFileHandle(AH->OF))
 		pg_fatal("could not close output file: %m");
->>>>>>> REL_16_9
 }
 
 /* Public */
@@ -1667,21 +1656,7 @@ RestoreOutput(ArchiveHandle *AH, CompressFileHandle *savedOutput)
 	if (!EndCompressFileHandle(AH->OF))
 		pg_fatal("could not close output file: %m");
 
-<<<<<<< HEAD
-	errno = 0;					/* in case gzclose() doesn't set it */
-	if (AH->gzOut)
-		res = GZCLOSE(AH->OF);
-	else
-		res = fclose(AH->OF);
-
-	if (res != 0)
-		fatal("could not close output file: %m");
-
-	AH->gzOut = savedContext.gzOut;
-	AH->OF = savedContext.OF;
-=======
 	AH->OF = savedOutput;
->>>>>>> REL_16_9
 }
 
 
@@ -3552,12 +3527,8 @@ _selectTableAccessMethod(ArchiveHandle *AH, const char *tableam)
 
 	destroyPQExpBuffer(cmd);
 
-<<<<<<< HEAD
 	if (AH->currTableAm)
 		free(AH->currTableAm);
-=======
-	free(AH->currTableAm);
->>>>>>> REL_16_9
 	AH->currTableAm = pg_strdup(want);
 }
 
@@ -3577,13 +3548,8 @@ _getObjectDescription(PQExpBuffer buf, const TocEntry *te)
 	if (strcmp(type, "COLLATION") == 0 ||
 		strcmp(type, "CONVERSION") == 0 ||
 		strcmp(type, "DOMAIN") == 0 ||
-<<<<<<< HEAD
-		strcmp(type, "TABLE") == 0 ||
 		strcmp(type, "EXTERNAL TABLE") == 0 ||
 		strcmp(type, "FOREIGN TABLE") == 0 ||
-		strcmp(type, "TYPE") == 0 ||
-=======
->>>>>>> REL_16_9
 		strcmp(type, "FOREIGN TABLE") == 0 ||
 		strcmp(type, "MATERIALIZED VIEW") == 0 ||
 		strcmp(type, "SEQUENCE") == 0 ||
@@ -3618,23 +3584,13 @@ _getObjectDescription(PQExpBuffer buf, const TocEntry *te)
 	 * These object types require additional decoration.  Fortunately, the
 	 * information needed is exactly what's in the DROP command.
 	 */
-<<<<<<< HEAD
-	if (strcmp(type, "AGGREGATE") == 0 ||
-		strcmp(type, "FUNCTION") == 0 ||
-		strcmp(type, "OPERATOR") == 0 ||
-		strcmp(type, "OPERATOR CLASS") == 0 ||
-		strcmp(type, "OPERATOR FAMILY") == 0 ||
-		strcmp(type, "PROCEDURE") == 0 ||
-		/* Cloudberry Additions */
-		strcmp(type, "PROTOCOL") == 0)
-=======
 	else if (strcmp(type, "AGGREGATE") == 0 ||
 			 strcmp(type, "FUNCTION") == 0 ||
 			 strcmp(type, "OPERATOR") == 0 ||
 			 strcmp(type, "OPERATOR CLASS") == 0 ||
 			 strcmp(type, "OPERATOR FAMILY") == 0 ||
-			 strcmp(type, "PROCEDURE") == 0)
->>>>>>> REL_16_9
+			 strcmp(type, "PROCEDURE") == 0 ||
+			 strcmp(type, "PROTOCOL") == 0))
 	{
 		/* Chop "DROP " off the front and make a modifiable copy */
 		char	   *first = pg_strdup(te->dropStmt + 5);
@@ -3780,68 +3736,6 @@ _printTocEntry(ArchiveHandle *AH, TocEntry *te, bool isData)
 		te->owner && strlen(te->owner) > 0 &&
 		te->dropStmt && strlen(te->dropStmt) > 0)
 	{
-<<<<<<< HEAD
-		if (strcmp(te->desc, "AGGREGATE") == 0 ||
-			strcmp(te->desc, "BLOB") == 0 ||
-			strcmp(te->desc, "COLLATION") == 0 ||
-			strcmp(te->desc, "CONVERSION") == 0 ||
-			strcmp(te->desc, "DATABASE") == 0 ||
-			strcmp(te->desc, "DOMAIN") == 0 ||
-			strcmp(te->desc, "FUNCTION") == 0 ||
-			strcmp(te->desc, "OPERATOR") == 0 ||
-			strcmp(te->desc, "OPERATOR CLASS") == 0 ||
-			strcmp(te->desc, "OPERATOR FAMILY") == 0 ||
-			strcmp(te->desc, "PROCEDURE") == 0 ||
-			strcmp(te->desc, "PROCEDURAL LANGUAGE") == 0 ||
-			strcmp(te->desc, "SCHEMA") == 0 ||
-			strcmp(te->desc, "EVENT TRIGGER") == 0 ||
-			strcmp(te->desc, "TABLE") == 0 ||
-			strcmp(te->desc, "EXTERNAL TABLE") == 0 ||
-			strcmp(te->desc, "FOREIGN TABLE") == 0 ||
-			strcmp(te->desc, "TYPE") == 0 ||
-			strcmp(te->desc, "VIEW") == 0 ||
-			strcmp(te->desc, "MATERIALIZED VIEW") == 0 ||
-			strcmp(te->desc, "SEQUENCE") == 0 ||
-			strcmp(te->desc, "FOREIGN TABLE") == 0 ||
-			strcmp(te->desc, "TEXT SEARCH DICTIONARY") == 0 ||
-			strcmp(te->desc, "TEXT SEARCH CONFIGURATION") == 0 ||
-			strcmp(te->desc, "FOREIGN DATA WRAPPER") == 0 ||
-			strcmp(te->desc, "SERVER") == 0 ||
-			strcmp(te->desc, "PROTOCOL") == 0 ||
-			strcmp(te->desc, "STATISTICS") == 0 ||
-			strcmp(te->desc, "PUBLICATION") == 0 ||
-			strcmp(te->desc, "SUBSCRIPTION") == 0)
-		{
-			PQExpBuffer temp = createPQExpBuffer();
-
-			appendPQExpBufferStr(temp, "ALTER ");
-			_getObjectDescription(temp, te);
-			appendPQExpBuffer(temp, " OWNER TO %s;", fmtId(te->owner));
-			ahprintf(AH, "%s\n\n", temp->data);
-			destroyPQExpBuffer(temp);
-		}
-		else if (strcmp(te->desc, "CAST") == 0 ||
-				 strcmp(te->desc, "CHECK CONSTRAINT") == 0 ||
-				 strcmp(te->desc, "CONSTRAINT") == 0 ||
-				 strcmp(te->desc, "DATABASE PROPERTIES") == 0 ||
-				 strcmp(te->desc, "DEFAULT") == 0 ||
-				 strcmp(te->desc, "FK CONSTRAINT") == 0 ||
-				 strcmp(te->desc, "INDEX") == 0 ||
-				 strcmp(te->desc, "RULE") == 0 ||
-				 strcmp(te->desc, "TRIGGER") == 0 ||
-				 strcmp(te->desc, "ROW SECURITY") == 0 ||
-				 strcmp(te->desc, "POLICY") == 0 ||
-				 strcmp(te->desc, "USER MAPPING") == 0 ||
-				 strcmp(te->desc, "BINARY UPGRADE"))
-		{
-			/* these object types don't have separate owners */
-		}
-		else
-		{
-			pg_log_warning("don't know how to set owner for object type \"%s\"",
-						   te->desc);
-		}
-=======
 		PQExpBufferData temp;
 
 		initPQExpBuffer(&temp);
@@ -3854,7 +3748,6 @@ _printTocEntry(ArchiveHandle *AH, TocEntry *te, bool isData)
 		if (temp.data[0])
 			ahprintf(AH, "ALTER %s OWNER TO %s;\n\n", temp.data, fmtId(te->owner));
 		termPQExpBuffer(&temp);
->>>>>>> REL_16_9
 	}
 
 	/*

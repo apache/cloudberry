@@ -370,13 +370,8 @@ _EndData(ArchiveHandle *AH, TocEntry *te)
 	lclContext *ctx = (lclContext *) AH->formatData;
 
 	/* Close the file */
-<<<<<<< HEAD
-	if (cfclose(ctx->dataFH) != 0)
-		fatal("could not close data file: %m");
-=======
 	if (!EndCompressFileHandle(ctx->dataFH))
 		pg_fatal("could not close data file: %m");
->>>>>>> REL_16_9
 
 	ctx->dataFH = NULL;
 }

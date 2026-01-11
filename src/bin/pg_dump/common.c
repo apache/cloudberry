@@ -168,13 +168,10 @@ getSchemaData(Archive *fout, int *numTablesPtr)
 	/* this must be after getTables and getFuncs */
 	pg_log_info("reading user-defined types");
 	(void) getTypes(fout, &numTypes);
-<<<<<<< HEAD
 
 	/* this must be after getFuncs */
 	pg_log_info("reading type storage options");
 	getTypeStorageOptions(fout, &numTypeStorageOptions);
-=======
->>>>>>> REL_16_9
 
 	/* this must be after getFuncs, too */
 	pg_log_info("reading procedural languages");
@@ -449,11 +446,7 @@ flagInhIndexes(Archive *fout, TableInfo tblinfo[], int numTables)
 			if (parentidx == NULL)
 				continue;
 
-<<<<<<< HEAD
-			attachinfo = (IndexAttachInfo *) pg_malloc(sizeof(IndexAttachInfo));
-=======
 			attachinfo = pg_malloc_object(IndexAttachInfo);
->>>>>>> REL_16_9
 
 			attachinfo->dobj.objType = DO_INDEX_ATTACH;
 			attachinfo->dobj.catId.tableoid = 0;

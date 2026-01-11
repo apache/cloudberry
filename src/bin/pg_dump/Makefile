@@ -16,19 +16,17 @@ subdir = src/bin/pg_dump
 top_builddir = ../../..
 include $(top_builddir)/src/Makefile.global
 
-<<<<<<< HEAD
+export GZIP_PROGRAM=$(GZIP)
+export LZ4
+export ZSTD
+export with_icu
+
 # the use of tempnam in pg_backup_tar.c causes a warning when using newer versions of GCC
 override CPPFLAGS := -Wno-deprecated-declarations -I$(libpq_srcdir) $(CPPFLAGS)
 
 ifeq ($(PORTNAME),openbsd)
 override CFLAGS += -pthread
 endif
-=======
-export GZIP_PROGRAM=$(GZIP)
-export LZ4
-export ZSTD
-export with_icu
->>>>>>> REL_16_9
 
 override CPPFLAGS := -I$(libpq_srcdir) $(CPPFLAGS)
 LDFLAGS_INTERNAL += -L$(top_builddir)/src/fe_utils -lpgfeutils $(libpq_pgport)

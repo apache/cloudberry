@@ -444,9 +444,9 @@ CreateRole(ParseState *pstate, CreateRoleStmt *stmt)
 	if (dprofile)
 		profilename = strVal(dprofile->arg);
 	if (daccountIsLock)
-		account_is_lock = boolVal(daccountIsLock->arg);
+		account_is_lock = intVal(daccountIsLock->arg) != 0;
 	if (denableProfile)
-		enable_profile = boolVal(denableProfile->arg);
+		enable_profile = intVal(denableProfile->arg) != 0;
 
 	/*
 	 * Only the super user has the privileges of profile.
