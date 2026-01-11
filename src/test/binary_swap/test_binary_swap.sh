@@ -35,12 +35,16 @@ run_tests()
     fi
 }
 
-##  Start up a Cloudberry binary using same $MASTER_DATA_DIRECTORY
+##  Start up a Cloudberry binary using same $COORDINATOR_DATA_DIRECTORY
 start_binary()
 {
     BINARY_PATH=$1
     gpstop -ai
-    source $BINARY_PATH/greenplum_path.sh
+    if [ -f $BINARY_PATH/cloudberry-env.sh ]; then
+        source $BINARY_PATH/cloudberry-env.sh
+    else
+        source $BINARY_PATH/greenplum_path.sh
+    fi
     gpstart -a
     echo "Select our Cloudberry version just to be sure..."
     psql -c "select version()" postgres
@@ -52,8 +56,8 @@ usage()
     echo "$appname usage:"
     echo " -b <dir>   Cloudberry install path for another binary to test upgrade/downgrade from (Required User Input)"
     echo " -c <dir>   Cloudberry install path for current binary to test upgrade/downgrade to (Default: \$GPHOME)"
-    echo " -m <dir>   Cloudberry Master Data Directory (Default: \$MASTER_DATA_DIRECTORY)"
-    echo " -p <port>  Cloudberry Master Port (Default: \$PGPORT)"
+    echo " -m <dir>   Cloudberry Coordinator Data Directory (Default: \$COORDINATOR_DATA_DIRECTORY)"
+    echo " -p <port>  Cloudberry Coordinator Port (Default: \$PGPORT)"
     echo " -v <variant> Variant of the test plan (Default: '')"
     exit 0
 }
@@ -67,7 +71,7 @@ while getopts ":c:b:m:p:v:" opt; do
             GPHOME_OTHER=$OPTARG
             ;;
         m)
-            MDD_CURRENT=$OPTARG
+            CDD_CURRENT=$OPTARG
             ;;
         p)
             PGPORT_CURRENT=$OPTARG
@@ -86,21 +90,21 @@ done
 
 ## Argument checking
 GPHOME_CURRENT=${GPHOME_CURRENT:=$GPHOME}
-MDD_CURRENT=${MDD_CURRENT:=$MASTER_DATA_DIRECTORY}
+CDD_CURRENT=${CDD_CURRENT:=$COORDINATOR_DATA_DIRECTORY}
 PGPORT_CURRENT=${PGPORT_CURRENT:=$PGPORT}
 
-if [ "${GPHOME_OTHER}x" == "x" ] || ! [ -f $GPHOME_OTHER/greenplum_path.sh ]; then
+if [ "${GPHOME_OTHER}x" == "x" ] || ( ! [ -f $GPHOME_OTHER/greenplum_path.sh ] && ! [ -f $GPHOME_OTHER/cloudberry-env.sh ] ); then
     echo "Use -b to provide a valid Cloudberry install path to upgrade/downgrade from"
     exit 1
 fi
 
-if [ "${GPHOME_CURRENT}x" == "x" ] || ! [ -f $GPHOME_CURRENT/greenplum_path.sh ]; then
+if [ "${GPHOME_CURRENT}x" == "x" ] || ( ! [ -f $GPHOME_CURRENT/greenplum_path.sh ] && ! [ -f $GPHOME_CURRENT/cloudberry-env.sh ] ); then
     echo "Use -c to provide a valid Cloudberry install path to upgrade/downgrade to (Default: \$GPHOME)"
     exit 1
 fi
 
-if [ "${MDD_CURRENT}x" == "x" ]; then
-    echo "Use -m to provide a valid Cloudberry Master Data Directory (Default: \$MASTER_DATA_DIRECTORY)"
+if [ "${CDD_CURRENT}x" == "x" ]; then
+    echo "Use -m to provide a valid Cloudberry Coordinator Data Directory (Default: \$COORDINATOR_DATA_DIRECTORY)"
     exit 1
 fi
 
@@ -117,8 +121,8 @@ if ! [ -e schedule1${VARIANT} -a \
 fi
 
 ## Grab the Cloudberry versions of each binary for display
-CURRENT_VERSION=`$GPHOME_CURRENT/bin/gpstart --version | awk '{ for (i=3; i<NF; i++) printf $i " "; print $NF }'`
-OTHER_VERSION=`$GPHOME_OTHER/bin/gpstart --version | awk '{ for (i=3; i<NF; i++) printf $i " "; print $NF }'`
+CURRENT_VERSION=$( (source $GPHOME_CURRENT/cloudberry-env.sh 2>/dev/null || source $GPHOME_CURRENT/greenplum_path.sh 2>/dev/null; $GPHOME_CURRENT/bin/gpstart --version) | awk '{ for (i=3; i<NF; i++) printf $i " "; print $NF }' )
+OTHER_VERSION=$( (source $GPHOME_OTHER/cloudberry-env.sh 2>/dev/null || source $GPHOME_OTHER/greenplum_path.sh 2>/dev/null; $GPHOME_OTHER/bin/gpstart --version) | awk '{ for (i=3; i<NF; i++) printf $i " "; print $NF }' )
 
 echo "Binary Swap tests"
 echo "=================================================="
@@ -131,6 +135,8 @@ echo "=================================================="
 
 ## Clean our directory of any previous test output
 clean_output
+
+run_tests schedule0${VARIANT}
 
 ## Start/restart current Cloudberry and do initial dump to compare against
 start_binary $GPHOME_CURRENT
@@ -145,7 +151,11 @@ run_tests schedule1${VARIANT}
 ## gpcheckcat should be from $GPHOME_CURRENT during the pg_regress
 ## test.
 start_binary $GPHOME_OTHER
-source $GPHOME_CURRENT/greenplum_path.sh
+if [ -f $GPHOME_CURRENT/cloudberry-env.sh ]; then
+    source $GPHOME_CURRENT/cloudberry-env.sh
+else
+    source $GPHOME_CURRENT/greenplum_path.sh
+fi
 run_tests schedule2${VARIANT}
 
 ## Change the binary back, dump, and then compare the two new dumps
