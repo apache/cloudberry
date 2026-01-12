@@ -492,15 +492,9 @@ my %pgdump_runs = (
 	},
 	inserts => {
 		dump_cmd => [
-<<<<<<< HEAD
-			'pg_dump',                     '--no-sync',
-			"--file=$tempdir/inserts.sql", '-a',
-			'--inserts',                   'postgres',
-=======
 			'pg_dump', '--no-sync',
 			"--file=$tempdir/inserts.sql", '-a',
 			'--inserts', 'postgres',
->>>>>>> REL_16_9
 		],
 	},
 	pg_dumpall_globals => {
@@ -575,9 +569,6 @@ my %pgdump_runs = (
 			"--file=$tempdir/only_dump_test_table.sql",
 			'--table=dump_test.test_table',
 			'--lock-wait-timeout='
-<<<<<<< HEAD
-			  . (1000 * $TestLib::timeout_default),
-=======
 			  . (1000 * $PostgreSQL::Test::Utils::timeout_default),
 			'postgres',
 		],
@@ -590,7 +581,6 @@ my %pgdump_runs = (
 			'--table-and-children=dump_test.measurement',
 			'--lock-wait-timeout='
 			  . (1000 * $PostgreSQL::Test::Utils::timeout_default),
->>>>>>> REL_16_9
 			'postgres',
 		],
 	},
@@ -761,32 +751,20 @@ my %tests = (
 	'ALTER DEFAULT PRIVILEGES FOR ROLE regress_dump_test_role GRANT EXECUTE ON FUNCTIONS'
 	  => {
 		create_order => 15,
-<<<<<<< HEAD
-		create_sql   => 'ALTER DEFAULT PRIVILEGES
-=======
 		create_sql => 'ALTER DEFAULT PRIVILEGES
->>>>>>> REL_16_9
 					   FOR ROLE regress_dump_test_role IN SCHEMA dump_test
 					   GRANT EXECUTE ON FUNCTIONS TO regress_dump_test_role;',
 		regexp => qr/^
 			\QALTER DEFAULT PRIVILEGES \E
 			\QFOR ROLE regress_dump_test_role IN SCHEMA dump_test \E
-<<<<<<< HEAD
-			\QGRANT ALL ON FUNCTIONS  TO regress_dump_test_role;\E
-=======
 			\QGRANT ALL ON FUNCTIONS TO regress_dump_test_role;\E
->>>>>>> REL_16_9
 			/xm,
 		like =>
 		  { %full_runs, %dump_test_schema_runs, section_post_data => 1, },
 		unlike => {
 			exclude_dump_test_schema => 1,
-<<<<<<< HEAD
-			no_privs                 => 1,
-=======
 			no_privs => 1,
 			only_dump_measurement => 1,
->>>>>>> REL_16_9
 		},
 	  },
 
@@ -938,7 +916,6 @@ my %tests = (
 		unlike => { no_owner => 1, },
 	},
 
-<<<<<<< HEAD
 # Disabled, because GPDB doesn't support large objects
 #	'ALTER LARGE OBJECT ... OWNER TO' => {
 #		regexp => qr/^ALTER LARGE OBJECT \d+ OWNER TO .+;/m,
@@ -956,24 +933,6 @@ my %tests = (
 #		},
 #	},
 
-=======
-	'ALTER LARGE OBJECT ... OWNER TO' => {
-		regexp => qr/^ALTER LARGE OBJECT \d+ OWNER TO .+;/m,
-		like => {
-			%full_runs,
-			column_inserts => 1,
-			data_only => 1,
-			inserts => 1,
-			section_pre_data => 1,
-			test_schema_plus_large_objects => 1,
-		},
-		unlike => {
-			no_large_objects => 1,
-			no_owner => 1,
-			schema_only => 1,
-		},
-	},
->>>>>>> REL_16_9
 
 	'ALTER PROCEDURAL LANGUAGE pltestlang OWNER TO' => {
 		regexp => qr/^ALTER PROCEDURAL LANGUAGE pltestlang OWNER TO .+;/m,
@@ -1334,7 +1293,6 @@ my %tests = (
 		},
 	},
 
-<<<<<<< HEAD
 # Disabled, because GPDB doesn't support large objects
 #	'BLOB create (using lo_from_bytea)' => {
 #		create_order => 50,
@@ -1375,48 +1333,6 @@ my %tests = (
 #			schema_only    => 1,
 #		},
 #	},
-=======
-	'LO create (using lo_from_bytea)' => {
-		create_order => 50,
-		create_sql =>
-		  'SELECT pg_catalog.lo_from_bytea(0, \'\\x310a320a330a340a350a360a370a380a390a\');',
-		regexp => qr/^SELECT pg_catalog\.lo_create\('\d+'\);/m,
-		like => {
-			%full_runs,
-			column_inserts => 1,
-			data_only => 1,
-			inserts => 1,
-			section_pre_data => 1,
-			test_schema_plus_large_objects => 1,
-		},
-		unlike => {
-			schema_only => 1,
-			no_large_objects => 1,
-		},
-	},
-
-	'LO load (using lo_from_bytea)' => {
-		regexp => qr/^
-			\QSELECT pg_catalog.lo_open\E \('\d+',\ \d+\);\n
-			\QSELECT pg_catalog.lowrite(0, \E
-			\Q'\x310a320a330a340a350a360a370a380a390a');\E\n
-			\QSELECT pg_catalog.lo_close(0);\E
-			/xm,
-		like => {
-			%full_runs,
-			column_inserts => 1,
-			data_only => 1,
-			inserts => 1,
-			section_data => 1,
-			test_schema_plus_large_objects => 1,
-		},
-		unlike => {
-			binary_upgrade => 1,
-			no_large_objects => 1,
-			schema_only => 1,
-		},
-	},
-
 	'LO create (with no data)' => {
 		create_sql => 'SELECT pg_catalog.lo_create(0);',
 		regexp => qr/^
@@ -1438,7 +1354,6 @@ my %tests = (
 			section_pre_data => 1,
 		},
 	},
->>>>>>> REL_16_9
 
 	'COMMENT ON DATABASE postgres' => {
 		regexp => qr/^COMMENT ON DATABASE postgres IS .+;/m,
@@ -1579,7 +1494,6 @@ my %tests = (
 		like => { %full_runs, section_pre_data => 1, },
 	},
 
-<<<<<<< HEAD
 
 # Disabled, because GPDB doesn't support large objects
 #	'COMMENT ON LARGE OBJECT ...' => {
@@ -1606,33 +1520,6 @@ my %tests = (
 #			schema_only => 1,
 #		},
 #	},
-=======
-	'COMMENT ON LARGE OBJECT ...' => {
-		create_order => 65,
-		create_sql => 'DO $$
-						 DECLARE myoid oid;
-						 BEGIN
-							SELECT loid FROM pg_largeobject INTO myoid;
-							EXECUTE \'COMMENT ON LARGE OBJECT \' || myoid || \' IS \'\'comment on large object\'\';\';
-						 END;
-						 $$;',
-		regexp => qr/^
-			\QCOMMENT ON LARGE OBJECT \E[0-9]+\Q IS 'comment on large object';\E
-			/xm,
-		like => {
-			%full_runs,
-			column_inserts => 1,
-			data_only => 1,
-			inserts => 1,
-			section_pre_data => 1,
-			test_schema_plus_large_objects => 1,
-		},
-		unlike => {
-			no_large_objects => 1,
-			schema_only => 1,
-		},
-	},
->>>>>>> REL_16_9
 
 	'COMMENT ON PUBLICATION pub1' => {
 		create_order => 55,
@@ -3512,32 +3399,6 @@ my %tests = (
 		},
 	},
 
-<<<<<<< HEAD
-	'Disabled trigger on partition is altered' => {
-		create_order => 93,
-		create_sql =>
-		  'CREATE TABLE dump_test_second_schema.measurement_y2006m3
-						PARTITION OF dump_test.measurement
-						FOR VALUES FROM (\'2006-03-01\') TO (\'2006-04-01\');
-						ALTER TABLE dump_test_second_schema.measurement_y2006m3 DISABLE TRIGGER test_trigger;
-						CREATE TABLE dump_test_second_schema.measurement_y2006m4
-						PARTITION OF dump_test.measurement
-						FOR VALUES FROM (\'2006-04-01\') TO (\'2006-05-01\');
-						ALTER TABLE dump_test_second_schema.measurement_y2006m4 ENABLE REPLICA TRIGGER test_trigger;
-						CREATE TABLE dump_test_second_schema.measurement_y2006m5
-						PARTITION OF dump_test.measurement
-						FOR VALUES FROM (\'2006-05-01\') TO (\'2006-06-01\');
-						ALTER TABLE dump_test_second_schema.measurement_y2006m5 ENABLE ALWAYS TRIGGER test_trigger;
-						',
-		regexp => qr/^
-			\QALTER TABLE dump_test_second_schema.measurement_y2006m3 DISABLE TRIGGER test_trigger;\E
-			/xm,
-		like => {
-			%full_runs,
-			section_post_data => 1,
-			role              => 1,
-			binary_upgrade    => 1,
-=======
 	'COPY measurement' => {
 		create_order => 93,
 		create_sql =>
@@ -3596,7 +3457,6 @@ my %tests = (
 		},
 		unlike => {
 			exclude_measurement => 1,
->>>>>>> REL_16_9
 		},
 	},
 
@@ -3607,17 +3467,12 @@ my %tests = (
 		like => {
 			%full_runs,
 			section_post_data => 1,
-<<<<<<< HEAD
-			role              => 1,
-			binary_upgrade    => 1,
-=======
 			role => 1,
 			binary_upgrade => 1,
 			only_dump_measurement => 1,
 		},
 		unlike => {
 			exclude_measurement => 1,
->>>>>>> REL_16_9
 		},
 	},
 
@@ -3628,48 +3483,31 @@ my %tests = (
 		like => {
 			%full_runs,
 			section_post_data => 1,
-<<<<<<< HEAD
-			role              => 1,
-			binary_upgrade    => 1,
-=======
 			role => 1,
 			binary_upgrade => 1,
 			only_dump_measurement => 1,
 		},
 		unlike => {
 			exclude_measurement => 1,
->>>>>>> REL_16_9
 		},
 	},
 
 	# We should never see the creation of a trigger on a partition
 	'Disabled trigger on partition is not created' => {
 		regexp => qr/CREATE TRIGGER test_trigger.*ON dump_test_second_schema/,
-<<<<<<< HEAD
-		like   => {},
-=======
 		like => {},
->>>>>>> REL_16_9
 		unlike => { %full_runs, %dump_test_schema_runs },
 	},
 
 	# Triggers on partitions should not be dropped individually
 	'Triggers on partitions are not dropped' => {
 		regexp => qr/DROP TRIGGER test_trigger.*ON dump_test_second_schema/,
-<<<<<<< HEAD
-		like   => {}
-=======
 		like => {}
->>>>>>> REL_16_9
 	},
 
 	'CREATE TABLE test_third_table_generated_cols' => {
 		create_order => 6,
-<<<<<<< HEAD
-		create_sql   => 'CREATE TABLE dump_test.test_third_table (
-=======
 		create_sql => 'CREATE TABLE dump_test.test_third_table (
->>>>>>> REL_16_9
 						f1 int, junk int,
 						g1 int generated always as (f1 * 2) stored,
 						"F3" int,
@@ -3686,15 +3524,11 @@ my %tests = (
 			/xm,
 		like =>
 		  { %full_runs, %dump_test_schema_runs, section_pre_data => 1, },
-<<<<<<< HEAD
-		unlike => { binary_upgrade => 1, exclude_dump_test_schema => 1, },
-=======
 		unlike => {
 			binary_upgrade => 1,
 			exclude_dump_test_schema => 1,
 			only_dump_measurement => 1,
 		},
->>>>>>> REL_16_9
 	},
 
 	'CREATE TABLE test_fourth_table_zero_col' => {
@@ -4476,11 +4310,7 @@ my %tests = (
 
 	'GRANT SELECT ON TABLE measurement_y2006m2' => {
 		create_order => 94,
-<<<<<<< HEAD
-		create_sql   => 'GRANT SELECT ON TABLE
-=======
 		create_sql => 'GRANT SELECT ON TABLE
->>>>>>> REL_16_9
 						   dump_test_second_schema.measurement_y2006m2,
 						   dump_test_second_schema.measurement_y2006m3,
 						   dump_test_second_schema.measurement_y2006m4,
@@ -4500,7 +4330,6 @@ my %tests = (
 		},
 	},
 
-<<<<<<< HEAD
 # Disabled, because GPDB doesn't support large objects
 #	'GRANT ALL ON LARGE OBJECT ...' => {
 #		create_order => 60,
@@ -4528,35 +4357,6 @@ my %tests = (
 #			schema_only => 1,
 #		},
 #	},
-=======
-	'GRANT ALL ON LARGE OBJECT ...' => {
-		create_order => 60,
-		create_sql => 'DO $$
-						 DECLARE myoid oid;
-						 BEGIN
-							SELECT loid FROM pg_largeobject INTO myoid;
-							EXECUTE \'GRANT ALL ON LARGE OBJECT \' || myoid || \' TO regress_dump_test_role;\';
-						 END;
-						 $$;',
-		regexp => qr/^
-			\QGRANT ALL ON LARGE OBJECT \E[0-9]+\Q TO regress_dump_test_role;\E
-			/xm,
-		like => {
-			%full_runs,
-			column_inserts => 1,
-			data_only => 1,
-			inserts => 1,
-			section_pre_data => 1,
-			test_schema_plus_large_objects => 1,
-			binary_upgrade => 1,
-		},
-		unlike => {
-			no_large_objects => 1,
-			no_privs => 1,
-			schema_only => 1,
-		},
-	},
->>>>>>> REL_16_9
 
 	'GRANT INSERT(col1) ON TABLE test_second_table' => {
 		create_order => 8,
@@ -4877,86 +4677,7 @@ $supports_icu = 0 if $encoding eq 'SQL_ASCII';
 
 # Create additional databases for mutations of schema public
 $node->psql('postgres', 'create database regress_pg_dump_test;');
-<<<<<<< HEAD
-
-# Start with number of command_fails_like()*2 tests below (each
-# command_fails_like is actually 2 tests) + number of command_ok()*3
-my $num_tests = 33;
-
-foreach my $run (sort keys %pgdump_runs)
-{
-	my $test_key = $run;
-	my $run_db   = 'postgres';
-
-	if (defined($pgdump_runs{$run}->{database}))
-	{
-		$run_db = $pgdump_runs{$run}->{database};
-	}
-
-	# Each run of pg_dump is a test itself
-	$num_tests++;
-
-	# If there is a restore cmd, that's another test
-	if ($pgdump_runs{$run}->{restore_cmd})
-	{
-		$num_tests++;
-	}
-
-	if ($pgdump_runs{$run}->{test_key})
-	{
-		$test_key = $pgdump_runs{$run}->{test_key};
-	}
-
-	# Then count all the tests run against each run
-	foreach my $test (sort keys %tests)
-	{
-
-		# postgres is the default database, if it isn't overridden
-		my $test_db = 'postgres';
-
-		# Specific tests can override the database to use
-		if (defined($tests{$test}->{database}))
-		{
-			$test_db = $tests{$test}->{database};
-		}
-
-		# The database to test against needs to match the database the run is
-		# for, so skip combinations where they don't match up.
-		if ($run_db ne $test_db)
-		{
-			next;
-		}
-
-		# Skip any collation-related commands if there is no collation support
-		if (!$collation_support && defined($tests{$test}->{collation}))
-		{
-			next;
-		}
-
-		# Skip tests specific to LZ4 if this build does not support
-		# this option.
-		if (!$supports_lz4 && defined($tests{$test}->{lz4}))
-		{
-			next;
-		}
-
-		# If there is a like entry, but no unlike entry, then we will test the like case
-		if ($tests{$test}->{like}->{$test_key}
-			&& !defined($tests{$test}->{unlike}->{$test_key}))
-		{
-			$num_tests++;
-		}
-		else
-		{
-			# We will test everything that isn't a 'like'
-			$num_tests++;
-		}
-	}
-}
-plan tests => $num_tests;
-=======
 $node->psql('postgres', 'create database regress_public_owner;');
->>>>>>> REL_16_9
 
 #########################################
 # Set up schemas, tables, etc, to be dumped.
@@ -5083,18 +4804,6 @@ command_fails_like(
 #########################################
 # Test invalid multipart database names
 
-<<<<<<< HEAD
-command_fails_like(
-	[ 'pg_dumpall', '-p', "$port", '--exclude-database', '.' ],
-	qr/pg_dumpall: error: improper qualified name \(too many dotted names\): \./,
-	'pg_dumpall: option --exclude-database rejects multipart pattern "."'
-);
-
-command_fails_like(
-	[ 'pg_dumpall', '-p', "$port", '--exclude-database', 'myhost.mydb' ],
-	qr/pg_dumpall: error: improper qualified name \(too many dotted names\): myhost\.mydb/,
-	'pg_dumpall: option --exclude-database rejects multipart database names'
-=======
 $node->command_fails_like(
 	[ 'pg_dumpall', '--exclude-database', '.' ],
 	qr/pg_dumpall: error: improper qualified name \(too many dotted names\): \./,
@@ -5111,7 +4820,6 @@ $node->command_fails_like(
 $node->command_ok(
 	[ 'pg_dump', '-p', "$port", '-n', 'pg_catalog' ],
 	'pg_dump: option -n pg_catalog'
->>>>>>> REL_16_9
 );
 
 #########################################
@@ -5125,22 +4833,6 @@ $node->command_ok(
 #########################################
 # Test invalid multipart schema names
 
-<<<<<<< HEAD
-command_fails_like(
-	[ 'pg_dump', '-p', "$port", '--schema', 'myhost.mydb.myschema' ],
-	qr/pg_dump: error: improper qualified name \(too many dotted names\): myhost\.mydb\.myschema/,
-	'pg_dump: option --schema rejects three-part schema names'
-);
-
-command_fails_like(
-	[ 'pg_dump', '-p', "$port", '--schema', 'otherdb.myschema' ],
-	qr/pg_dump: error: cross-database references are not implemented: otherdb\.myschema/,
-	'pg_dump: option --schema rejects cross-database multipart schema names'
-);
-
-command_fails_like(
-	[ 'pg_dump', '-p', "$port", '--schema', '"some.other.db".myschema' ],
-=======
 $node->command_fails_like(
 	[ 'pg_dump', '--schema', 'myhost.mydb.myschema' ],
 	qr/pg_dump: error: improper qualified name \(too many dotted names\): myhost\.mydb\.myschema/,
@@ -5158,24 +4850,12 @@ $node->command_fails_like(
 
 $node->command_fails_like(
 	[ 'pg_dump', '--schema', '"some.other.db".myschema' ],
->>>>>>> REL_16_9
 	qr/pg_dump: error: cross-database references are not implemented: "some\.other\.db"\.myschema/,
 	'pg_dump: option --schema rejects cross-database multipart schema names with embedded dots'
 );
 
-<<<<<<< HEAD
-command_fails_like(
-	[ 'pg_dump', '-p', "$port", '--schema', '.' ],
-	qr/pg_dump: error: cross-database references are not implemented: \./,
-	'pg_dump: option --schema rejects degenerate two-part schema name: "."'
-);
-
-command_fails_like(
-	[ 'pg_dump', '-p', "$port", '--schema', '..' ],
-=======
 $node->command_fails_like(
 	[ 'pg_dump', '--schema', '..' ],
->>>>>>> REL_16_9
 	qr/pg_dump: error: improper qualified name \(too many dotted names\): \.\./,
 	'pg_dump: option --schema rejects degenerate three-part schema name: ".."'
 );
@@ -5183,22 +4863,6 @@ $node->command_fails_like(
 #########################################
 # Test invalid multipart relation names
 
-<<<<<<< HEAD
-command_fails_like(
-	[ 'pg_dump', '-p', "$port", '--table', 'myhost.mydb.myschema.mytable' ],
-	qr/pg_dump: error: improper relation name \(too many dotted names\): myhost\.mydb\.myschema\.mytable/,
-	'pg_dump: option --table rejects four-part table names'
-);
-
-command_fails_like(
-	[ 'pg_dump', '-p', "$port", '--table', 'otherdb.pg_catalog.pg_class' ],
-	qr/pg_dump: error: cross-database references are not implemented: otherdb\.pg_catalog\.pg_class/,
-	'pg_dump: option --table rejects cross-database three part table names'
-);
-
-command_fails_like(
-	[ 'pg_dump', '-p', "$port", '--table', '"some.other.db".pg_catalog.pg_class' ],
-=======
 $node->command_fails_like(
 	[ 'pg_dump', '--table', 'myhost.mydb.myschema.mytable' ],
 	qr/pg_dump: error: improper relation name \(too many dotted names\): myhost\.mydb\.myschema\.mytable/,
@@ -5214,7 +4878,6 @@ command_fails_like(
 		'pg_dump', '-p', "$port", '--table',
 		'"some.other.db".pg_catalog.pg_class'
 	],
->>>>>>> REL_16_9
 	qr/pg_dump: error: cross-database references are not implemented: "some\.other\.db"\.pg_catalog\.pg_class/,
 	'pg_dump: option --table rejects cross-database three part table names with embedded dots'
 );

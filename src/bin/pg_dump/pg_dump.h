@@ -74,15 +74,10 @@ typedef enum
 	DO_FOREIGN_SERVER,
 	DO_DEFAULT_ACL,
 	DO_TRANSFORM,
-<<<<<<< HEAD
-	DO_BLOB,
-	DO_BLOB_DATA,
 	DO_EXTPROTOCOL,
 	DO_TYPE_STORAGE_OPTIONS,
-=======
 	DO_LARGE_OBJECT,
 	DO_LARGE_OBJECT_DATA,
->>>>>>> REL_16_9
 	DO_PRE_DATA_BOUNDARY,
 	DO_POST_DATA_BOUNDARY,
 	DO_EVENT_TRIGGER,
@@ -164,12 +159,11 @@ typedef struct _dumpableObject
 	int			allocDeps;		/* allocated size of dependencies[] */
 } DumpableObject;
 
-<<<<<<< HEAD
 typedef struct _binaryupgradeinfo
 {
 	DumpableObject dobj;
 } BinaryUpgradeInfo;
-=======
+
 /*
  * Object types that have ACLs must store them in a DumpableAcl sub-struct,
  * which must immediately follow the DumpableObject base struct.
@@ -189,7 +183,6 @@ typedef struct _dumpableObjectWithAcl
 	DumpableObject dobj;
 	DumpableAcl dacl;
 } DumpableObjectWithAcl;
->>>>>>> REL_16_9
 
 typedef struct _namespaceInfo
 {
@@ -221,15 +214,7 @@ typedef struct _typeInfo
 	 * schema-qualified too.
 	 */
 	char	   *ftypname;
-<<<<<<< HEAD
-	char	   *rolname;		/* name of owner, or empty string */
-	char	   *typacl;
-	char	   *rtypacl;
-	char	   *inittypacl;
-	char	   *initrtypacl;
-=======
 	const char *rolname;
->>>>>>> REL_16_9
 	Oid			typelem;
 	Oid			typrelid;
 	char		typrelkind;		/* 'r', 'v', 'c', etc */
@@ -423,13 +408,8 @@ typedef struct _tableInfo
 	/*
 	 * Stuff computed only for dumpable tables.
 	 */
-<<<<<<< HEAD
-	int			numParents;		/* number of (immediate) parent tables */
-	struct _tableInfo **parents;	/* TableInfos of immediate parents */
 	Oid			parrelid;			/* external partition's parent oid */
 	bool		parparent;		/* true if the table is partition parent */
-=======
->>>>>>> REL_16_9
 	int			numIndexes;		/* number of indexes */
 	struct _indxInfo *indexes;	/* indexes */
 	struct _tableDataInfo *dataObj; /* TableDataInfo, if dumping its data */
@@ -524,11 +504,7 @@ typedef struct _triggerInfo
 	Oid			tgconstrrelid;
 	char	   *tgconstrrelname;
 	char		tgenabled;
-<<<<<<< HEAD
-	bool		tgisinternal;
-=======
 	bool		tgispartition;
->>>>>>> REL_16_9
 	bool		tgdeferrable;
 	bool		tginitdeferred;
 	char	   *tgdef;

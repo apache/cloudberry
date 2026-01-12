@@ -117,11 +117,7 @@ $node->command_ok(
 	[
 		'pg_dumpall', '-U',
 		$src_bootstrap_super, '--no-sync',
-<<<<<<< HEAD
 		'--roles-only',       '-l',
-=======
-		'-r', '-l',
->>>>>>> REL_16_9
 		'dbname=template1'
 	],
 	'pg_dumpall -l accepts connection string');

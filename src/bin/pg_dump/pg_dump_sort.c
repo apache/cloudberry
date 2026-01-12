@@ -101,7 +101,6 @@ enum dbObjectTypePriorities
 /* This table is indexed by enum DumpableObjectType */
 static const int dbObjectTypePriority[] =
 {
-<<<<<<< HEAD
 	1,							/* DO_NAMESPACE */
 	4,							/* DO_EXTENSION */
 	5,							/* DO_TYPE */
@@ -135,7 +134,7 @@ static const int dbObjectTypePriority[] =
 	15,							/* DO_TSCONFIG */
 	16,							/* DO_FDW */
 	17,							/* DO_FOREIGN_SERVER */
-	38,							/* DO_DEFAULT_ACL --- done in ACL pass */
+	39,							/* DO_DEFAULT_ACL --- done in ACL pass */
 	3,							/* DO_TRANSFORM */
 	21,							/* DO_BLOB */
 	25,							/* DO_BLOB_DATA */
@@ -144,60 +143,13 @@ static const int dbObjectTypePriority[] =
 	1,							/* DO_BINARY_UPGRADE */
 	22,							/* DO_PRE_DATA_BOUNDARY */
 	26,							/* DO_POST_DATA_BOUNDARY */
-	39,							/* DO_EVENT_TRIGGER --- next to last! */
-	40,							/* DO_REFRESH_MATVIEW --- last! */
+	40,							/* DO_EVENT_TRIGGER --- next to last! */
+	41,							/* DO_REFRESH_MATVIEW --- last! */
 	34,							/* DO_POLICY */
 	35,							/* DO_PUBLICATION */
 	36,							/* DO_PUBLICATION_REL */
-	37							/* DO_SUBSCRIPTION */
-=======
-	PRIO_NAMESPACE,				/* DO_NAMESPACE */
-	PRIO_EXTENSION,				/* DO_EXTENSION */
-	PRIO_TYPE,					/* DO_TYPE */
-	PRIO_TYPE,					/* DO_SHELL_TYPE */
-	PRIO_FUNC,					/* DO_FUNC */
-	PRIO_AGG,					/* DO_AGG */
-	PRIO_OPERATOR,				/* DO_OPERATOR */
-	PRIO_ACCESS_METHOD,			/* DO_ACCESS_METHOD */
-	PRIO_OPFAMILY,				/* DO_OPCLASS */
-	PRIO_OPFAMILY,				/* DO_OPFAMILY */
-	PRIO_COLLATION,				/* DO_COLLATION */
-	PRIO_CONVERSION,			/* DO_CONVERSION */
-	PRIO_TABLE,					/* DO_TABLE */
-	PRIO_TABLE_ATTACH,			/* DO_TABLE_ATTACH */
-	PRIO_ATTRDEF,				/* DO_ATTRDEF */
-	PRIO_INDEX,					/* DO_INDEX */
-	PRIO_INDEX_ATTACH,			/* DO_INDEX_ATTACH */
-	PRIO_STATSEXT,				/* DO_STATSEXT */
-	PRIO_RULE,					/* DO_RULE */
-	PRIO_TRIGGER,				/* DO_TRIGGER */
-	PRIO_CONSTRAINT,			/* DO_CONSTRAINT */
-	PRIO_FK_CONSTRAINT,			/* DO_FK_CONSTRAINT */
-	PRIO_PROCLANG,				/* DO_PROCLANG */
-	PRIO_CAST,					/* DO_CAST */
-	PRIO_TABLE_DATA,			/* DO_TABLE_DATA */
-	PRIO_SEQUENCE_SET,			/* DO_SEQUENCE_SET */
-	PRIO_DUMMY_TYPE,			/* DO_DUMMY_TYPE */
-	PRIO_TSPARSER,				/* DO_TSPARSER */
-	PRIO_TSDICT,				/* DO_TSDICT */
-	PRIO_TSTEMPLATE,			/* DO_TSTEMPLATE */
-	PRIO_TSCONFIG,				/* DO_TSCONFIG */
-	PRIO_FDW,					/* DO_FDW */
-	PRIO_FOREIGN_SERVER,		/* DO_FOREIGN_SERVER */
-	PRIO_DEFAULT_ACL,			/* DO_DEFAULT_ACL */
-	PRIO_TRANSFORM,				/* DO_TRANSFORM */
-	PRIO_LARGE_OBJECT,			/* DO_LARGE_OBJECT */
-	PRIO_LARGE_OBJECT_DATA,		/* DO_LARGE_OBJECT_DATA */
-	PRIO_PRE_DATA_BOUNDARY,		/* DO_PRE_DATA_BOUNDARY */
-	PRIO_POST_DATA_BOUNDARY,	/* DO_POST_DATA_BOUNDARY */
-	PRIO_EVENT_TRIGGER,			/* DO_EVENT_TRIGGER */
-	PRIO_REFRESH_MATVIEW,		/* DO_REFRESH_MATVIEW */
-	PRIO_POLICY,				/* DO_POLICY */
-	PRIO_PUBLICATION,			/* DO_PUBLICATION */
-	PRIO_PUBLICATION_REL,		/* DO_PUBLICATION_REL */
-	PRIO_PUBLICATION_TABLE_IN_SCHEMA,	/* DO_PUBLICATION_TABLE_IN_SCHEMA */
-	PRIO_SUBSCRIPTION			/* DO_SUBSCRIPTION */
->>>>>>> REL_16_9
+	37, 						/* DO_PUBLICATION_TABLE_IN_SCHEMA */
+	38							/* DO_SUBSCRIPTION */
 };
 
 StaticAssertDecl(lengthof(dbObjectTypePriority) == (DO_SUBSCRIPTION + 1),

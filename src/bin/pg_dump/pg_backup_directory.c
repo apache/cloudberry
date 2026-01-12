@@ -434,10 +434,7 @@ _LoadLOs(ArchiveHandle *AH)
 {
 	Oid			oid;
 	lclContext *ctx = (lclContext *) AH->formatData;
-<<<<<<< HEAD
-=======
 	CompressFileHandle *CFH;
->>>>>>> REL_16_9
 	char		tocfname[MAXPGPATH];
 	char		line[MAXPGPATH];
 
@@ -445,35 +442,15 @@ _LoadLOs(ArchiveHandle *AH)
 
 	setFilePath(AH, tocfname, "blobs.toc");
 
-<<<<<<< HEAD
-	ctx->blobsTocFH = cfopen_read(tocfname, PG_BINARY_R);
-
-	if (ctx->blobsTocFH == NULL)
-		fatal("could not open large object TOC file \"%s\" for input: %m",
-			  tocfname);
-=======
 	CFH = ctx->LOsTocFH = InitDiscoverCompressFileHandle(tocfname, PG_BINARY_R);
 
 	if (ctx->LOsTocFH == NULL)
 		pg_fatal("could not open large object TOC file \"%s\" for input: %m",
 				 tocfname);
->>>>>>> REL_16_9
 
 	/* Read the LOs TOC file line-by-line, and process each LO */
 	while ((CFH->gets_func(line, MAXPGPATH, CFH)) != NULL)
 	{
-<<<<<<< HEAD
-		char		blobfname[MAXPGPATH + 1];
-		char		path[MAXPGPATH];
-
-		/* Can't overflow because line and blobfname are the same length */
-		if (sscanf(line, "%u %" CppAsString2(MAXPGPATH) "s\n", &oid, blobfname) != 2)
-			fatal("invalid line in large object TOC file \"%s\": \"%s\"",
-				  tocfname, line);
-
-		StartRestoreBlob(AH, oid, AH->public.ropt->dropSchema);
-		snprintf(path, MAXPGPATH, "%s/%s", ctx->directory, blobfname);
-=======
 		char		lofname[MAXPGPATH + 1];
 		char		path[MAXPGPATH];
 
@@ -484,19 +461,9 @@ _LoadLOs(ArchiveHandle *AH)
 
 		StartRestoreLO(AH, oid, AH->public.ropt->dropSchema);
 		snprintf(path, MAXPGPATH, "%s/%s", ctx->directory, lofname);
->>>>>>> REL_16_9
 		_PrintFileData(AH, path);
 		EndRestoreLO(AH, oid);
 	}
-<<<<<<< HEAD
-	if (!cfeof(ctx->blobsTocFH))
-		fatal("error reading large object TOC file \"%s\"",
-			  tocfname);
-
-	if (cfclose(ctx->blobsTocFH) != 0)
-		fatal("could not close large object TOC file \"%s\": %m",
-			  tocfname);
-=======
 	if (!CFH->eof_func(CFH))
 		pg_fatal("error reading large object TOC file \"%s\"",
 				 tocfname);
@@ -504,7 +471,6 @@ _LoadLOs(ArchiveHandle *AH)
 	if (!EndCompressFileHandle(ctx->LOsTocFH))
 		pg_fatal("could not close large object TOC file \"%s\": %m",
 				 tocfname);
->>>>>>> REL_16_9
 
 	ctx->LOsTocFH = NULL;
 
@@ -724,13 +690,8 @@ _EndLO(ArchiveHandle *AH, TocEntry *te, Oid oid)
 	int			len;
 
 	/* Close the BLOB data file itself */
-<<<<<<< HEAD
-	if (cfclose(ctx->dataFH) != 0)
-		fatal("could not close blob data file: %m");
-=======
 	if (!EndCompressFileHandle(ctx->dataFH))
 		pg_fatal("could not close LO data file: %m");
->>>>>>> REL_16_9
 	ctx->dataFH = NULL;
 
 	/* register the LO in blobs.toc */
@@ -755,15 +716,9 @@ _EndLOs(ArchiveHandle *AH, TocEntry *te)
 {
 	lclContext *ctx = (lclContext *) AH->formatData;
 
-<<<<<<< HEAD
-	if (cfclose(ctx->blobsTocFH) != 0)
-		fatal("could not close blobs TOC file: %m");
-	ctx->blobsTocFH = NULL;
-=======
 	if (!EndCompressFileHandle(ctx->LOsTocFH))
 		pg_fatal("could not close LOs TOC file: %m");
 	ctx->LOsTocFH = NULL;
->>>>>>> REL_16_9
 }
 
 /*
