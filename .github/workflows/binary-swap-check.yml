@@ -650,6 +650,8 @@ jobs:
             echo "::error::Binary swap test script failed"
             echo "test_passed=false" >> "$GITHUB_OUTPUT"
             exit 1
+          else
+            echo "test_passed=true" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Check and Display Regression Diffs
