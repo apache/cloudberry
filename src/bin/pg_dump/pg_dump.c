@@ -393,14 +393,9 @@ static bool forcePartitionRootLoad(const TableInfo *tbinfo);
 
 /* START MPP ADDITION */
 static void setExtPartDependency(TableInfo *tblinfo, int numTables);
-static char *format_table_function_columns(Archive *fout, const FuncInfo *finfo, int nallargs,
-							  char **allargtypes,
-							  char **argmodes,
-							  char **argnames);
 static void expand_oid_patterns(SimpleStringList *patterns,
 						   SimpleOidList *oids);
 
-static bool is_returns_table_function(int nallargs, char **argmodes);
 static bool testGPbackend(Archive *fout);
 static bool testPartitioningSupport(Archive *fout);
 
@@ -409,7 +404,6 @@ static void addDistributedBy(Archive *fout, PQExpBuffer q, const TableInfo *tbin
 static void addDistributedByOld(Archive *fout, PQExpBuffer q, const TableInfo *tbinfo, int actual_atts);
 static void addSchedule(Archive *fout, PQExpBuffer q, const TableInfo *tbinfo);
 static bool isGPDB(Archive *fout);
-static bool isGPDB5000OrLater(Archive *fout);
 static bool isGPDB6000OrLater(Archive *fout);
 
 /* END MPP ADDITION */
@@ -441,18 +435,6 @@ isGPDB(Archive *fout)
 	}
 	return (value == 1) ? true : false;
 }
-
-
-static bool
-isGPDB5000OrLater(Archive *fout)
-{
-	if (!isGPDB(fout))
-		return false;		/* Not Cloudberry at all. */
-
-	/* GPDB 5 is based on PostgreSQL 8.3 */
-	return fout->remoteVersion >= 80300;
-}
-
 
 static bool
 isGPDB6000OrLater(Archive *fout)
@@ -766,7 +748,7 @@ main(int argc, char **argv)
 
 			case 7:				/* no-sync */
 				dosync = false;
-                break;
+				break;
 
 			case 8:
 				have_extra_float_digits = true;
@@ -789,6 +771,7 @@ main(int argc, char **argv)
 				if (!option_parse_int(optarg, "--rows-per-insert", 1, INT_MAX,
 									  &dopt.dump_inserts))
 					exit_nicely(1);
+				break;
 			case 1000:				/* gp-syntax */
 				if (gp_syntax_option != GPS_NOT_SPECIFIED)
 				{
@@ -1010,6 +993,7 @@ main(int argc, char **argv)
 			break;
 	}
 
+	/*
 	 * On hot standbys, never try to dump unlogged table data, since it will
 	 * just throw an error.
 	 */
@@ -3573,26 +3557,35 @@ dumpDatabase(Archive *fout)
 	/* Compute correct tag for archive entry */
 	appendPQExpBuffer(labelq, "DATABASE %s", qdatname);
 
-	/* Dump DB comment if any */
 	{
-		resetPQExpBuffer(dbQry);
-
 		/*
-			* Generates warning when loaded into a differently-named
-			* database.
-			*/
-		appendPQExpBuffer(dbQry, "COMMENT ON DATABASE %s IS ", qdatname);
-		appendStringLiteralAH(dbQry, comment, fout);
-		appendPQExpBufferStr(dbQry, ";\n");
+		 * 8.2 and up keep comments on shared objects in a shared table, so we
+		 * cannot use the dumpComment() code used for other database objects.
+		 * Be careful that the ArchiveEntry parameters match that function.
+		 */
+		char *comment = PQgetvalue(res, 0, PQfnumber(res, "description"));
 
-		ArchiveEntry(fout, nilCatalogId, createDumpId(),
-						ARCHIVE_OPTS(.tag = labelq->data,
-									.owner = dba,
-									.description = "COMMENT",
-									.section = SECTION_NONE,
-									.createStmt = dbQry->data,
-									.deps = &dbDumpId,
-									.nDeps = 1));
+		if (comment && *comment && !dopt->no_comments)
+		{
+			resetPQExpBuffer(dbQry);
+
+			/*
+				* Generates warning when loaded into a differently-named
+				* database.
+				*/
+			appendPQExpBuffer(dbQry, "COMMENT ON DATABASE %s IS ", qdatname);
+			appendStringLiteralAH(dbQry, comment, fout);
+			appendPQExpBufferStr(dbQry, ";\n");
+
+			ArchiveEntry(fout, nilCatalogId, createDumpId(),
+						 ARCHIVE_OPTS(.tag = labelq->data,
+									  .owner = dba,
+									  .description = "COMMENT",
+									  .section = SECTION_NONE,
+									  .createStmt = dbQry->data,
+									  .deps = &dbDumpId,
+									  .nDeps = 1));
+		}
 	}
 
 	/* Dump DB security label, if enabled */
@@ -5642,6 +5635,7 @@ binary_upgrade_set_type_oids_by_rel_oid_impl(Archive *fout,
 	PQclear(upgrade_res);
 	destroyPQExpBuffer(upgrade_query);
 }
+
 static void
 binary_upgrade_set_type_oids_by_rel(Archive *fout,
 									PQExpBuffer upgrade_buffer,
@@ -5651,7 +5645,7 @@ binary_upgrade_set_type_oids_by_rel(Archive *fout,
 
 	if (OidIsValid(pg_type_oid))
 		binary_upgrade_set_type_oids_by_type_oid(fout, upgrade_buffer,
-												 pg_type_oid, false, false);
+												 pg_type_oid, InvalidOid, InvalidOid, false, false);
 }
 
 /*
@@ -5669,7 +5663,7 @@ binary_upgrade_set_type_oids_for_ao(Archive *fout,
 									char *ao_aux_typname)
 {
 	if (!ao_aux_typname)
-		fatal("binary_upgrade_set_type_oids_for_ao() requires an AO auxiliary type name");
+		pg_fatal("binary_upgrade_set_type_oids_for_ao() requires an AO auxiliary type name");
 
 	binary_upgrade_set_type_oids_by_rel_oid_impl(fout, upgrade_buffer,
 														pg_rel_oid, ao_aux_typname);
@@ -5681,7 +5675,7 @@ create_ao_relname(char *dst, size_t len, const char *prefix, Oid auxoid)
 	size_t actual = snprintf(dst, len, "%s_%u", prefix, auxoid);
 
 	if (actual >= len)
-		fatal("create_ao_relname: destination buffer is too short");
+		pg_fatal("create_ao_relname: destination buffer is too short");
 }
 
 static void
@@ -5690,7 +5684,7 @@ create_ao_idxname(char *dst, size_t len, const char *prefix, Oid auxoid)
 	size_t actual = snprintf(dst, len, "%s_%u_index", prefix, auxoid);
 
 	if (actual >= len)
-		fatal("create_ao_idxname: destination buffer is too short");
+		pg_fatal("create_ao_idxname: destination buffer is too short");
 }
 
 /*
@@ -5945,7 +5939,7 @@ binary_upgrade_set_pg_class_oids_for_ao(Archive *fout,
 										char *ao_aux_relname)
 {
 	if (!ao_aux_relname)
-		fatal("binary_upgrade_set_pg_class_oids_for_ao() requires an AO auxiliary relname");
+		pg_fatal("binary_upgrade_set_pg_class_oids_for_ao() requires an AO auxiliary relname");
 
 	binary_upgrade_set_pg_class_oids_impl(fout, upgrade_buffer, pg_class_oid,
 										  is_index, ao_aux_relname);
@@ -6438,11 +6432,11 @@ getTypeStorageOptions(Archive *fout, int *numTypes)
 					  "t.tableoid as tableoid, "
 					  "t.oid AS oid, "
 					  "t.typnamespace AS typnamespace, "
-					  "(%s typowner) as rolname, "
+					  "typowner, "
 					  "array_to_string(a.typoptions, ', ') AS typoptions "
 					  "FROM pg_type t "
 					  "JOIN pg_catalog.pg_type_encoding a ON a.typid = t.oid "
-					  "WHERE t.typisdefined = 't'", username_subquery);
+					  "WHERE t.typisdefined = 't'");
 
 	res = ExecuteSqlQuery(fout, query->data, PGRES_TUPLES_OK);
 
@@ -7076,42 +7070,19 @@ getExtProtocols(Archive *fout, int *numExtProtocols)
 
 	if (fout->remoteVersion >= 90600)
 	{
-		PQExpBuffer acl_subquery = createPQExpBuffer();
-		PQExpBuffer racl_subquery = createPQExpBuffer();
-		PQExpBuffer initacl_subquery = createPQExpBuffer();
-		PQExpBuffer initracl_subquery = createPQExpBuffer();
-
-		buildACLQueries(acl_subquery, racl_subquery, initacl_subquery,
-						initracl_subquery, "ptc.ptcacl", "ptc.ptcowner", "'E'",
-						fout->dopt->binary_upgrade);
-
 		appendPQExpBuffer(query, "SELECT ptc.tableoid as tableoid, "
 								 "       ptc.oid as oid, "
 								 "       ptc.ptcname as ptcname, "
 								 "       ptcreadfn as ptcreadoid, "
 								 "       ptcwritefn as ptcwriteoid, "
 								 "		 ptcvalidatorfn as ptcvaloid, "
-								 "       (%s ptc.ptcowner) as rolname, "
-								 "       ptc.ptctrusted as ptctrusted, "
-								 "       %s AS ptcacl, "
-								 "       %s AS ptcracl, "
-								 "       %s AS ptcinitacl, "
-								 "       %s AS ptcinitracl "
+								 "       ptcowner, "
+								 "       ptc.ptctrusted as ptctrusted "
 								 "FROM   pg_extprotocol ptc "
 								 "LEFT JOIN pg_init_privs pip ON "
 								 "		 (ptc.oid = pip.objoid "
 								 "		 AND pip.classoid = 'pg_extprotocol'::regclass "
-								 "		 AND pip.objsubid = 0)",
-										 username_subquery,
-										 acl_subquery->data,
-										 racl_subquery->data,
-										 initacl_subquery->data,
-										 initracl_subquery->data);
-
-		destroyPQExpBuffer(acl_subquery);
-		destroyPQExpBuffer(racl_subquery);
-		destroyPQExpBuffer(initacl_subquery);
-		destroyPQExpBuffer(initracl_subquery);
+								 "		 AND pip.objsubid = 0)");
 	}
 	else
 	{
@@ -7121,14 +7092,13 @@ getExtProtocols(Archive *fout, int *numExtProtocols)
 								 "       ptcreadfn as ptcreadoid, "
 								 "       ptcwritefn as ptcwriteoid, "
 								 "		 ptcvalidatorfn as ptcvaloid, "
-								 "       (%s ptc.ptcowner) as rolname, "
+								 "       ptcowner, "
 								 "       ptc.ptctrusted as ptctrusted, "
 								 "       ptc.ptcacl as ptcacl, "
 								 "       NULL as ptcracl, "
 								 "       NULL as ptcinitacl, "
 								 "       NULL as ptcinitracl "
-								 "FROM   pg_extprotocol ptc",
-										 username_subquery);
+								 "FROM   pg_extprotocol ptc");
 	}
 
 	res = ExecuteSqlQuery(fout, query->data, PGRES_TUPLES_OK);
@@ -7452,6 +7422,10 @@ getTables(Archive *fout, int *numTables)
 	int			i_amoid;
 	int			i_isivm;
 	int			i_isdynamic;
+	int			i_is_identity_sequence;
+	int			i_relacl;
+	int			i_acldefault;
+	int			i_ispartition;
 
 	/*
 	 * Find all the tables and table-like objects.
@@ -9707,6 +9681,8 @@ getTableAttrs(Archive *fout, TableInfo *tblinfo, int numTables)
 			pg_fatal("unexpected column data for table \"%s\"",
 					 tbinfo->dobj.name);
 
+		i_attencoding = PQfnumber(res, "attencoding");
+		
 		tbinfo->attencoding = (char **) pg_malloc(ntups * sizeof(char *));
 		/* Save data for this table */
 		tbinfo->numatts = numatts;
@@ -12994,70 +12970,6 @@ format_function_arguments(const FuncInfo *finfo, const char *funcargs, bool is_a
 }
 
 /*
- *	is_returns_table_function: returns true if function id declared as
- *	RETURNS TABLE, i.e. at least one argument is PROARGMODE_TABLE
- */
-static bool
-is_returns_table_function(int nallargs, char **argmodes)
-{
-	int			j;
-
-	if (argmodes)
-		for (j = 0; j < nallargs; j++)
-			if (argmodes[j][0] == PROARGMODE_TABLE)
-				return true;
-
-	return false;
-}
-
-
-/*
- * format_table_function_columns: generate column list for
- * table functions.
- */
-static char *
-format_table_function_columns(Archive *fout, const FuncInfo *finfo, int nallargs,
-							  char **allargtypes,
-							  char **argmodes,
-							  char **argnames)
-{
-	PQExpBufferData fn;
-	int			j;
-	bool		first_column = true;
-
-	initPQExpBuffer(&fn);
-	appendPQExpBuffer(&fn, "(");
-
-	for (j = 0; j < nallargs; j++)
-	{
-		Oid			typid;
-		const char	   *typname;
-
-		/*
-		 * argmodes are checked in format_function_arguments, it isn't necessary
-		 * to check argmodes here again
-		 */
-		if (argmodes[j][0] == PROARGMODE_TABLE)
-		{
-			typid = allargtypes ? atooid(allargtypes[j]) : finfo->argtypes[j];
-			typname = getFormattedTypeName(fout, typid, zeroIsError);
-
-			/* column's name is always NOT NULL (checked in gram.y) */
-			appendPQExpBuffer(&fn, "%s%s %s",
-							  first_column ? "" : ", ",
-							  fmtId(argnames[j]),
-							  typname);
-			free((void *)typname);
-			first_column = false;
-		}
-	}
-
-	appendPQExpBuffer(&fn, ")");
-	return fn.data;
-}
-
-
-/*
  * format_function_signature: generate function name and argument list
  *
  * Only a minimal list of input argument types is generated; this is
@@ -13127,7 +13039,6 @@ dumpFunc(Archive *fout, const FuncInfo *finfo)
 	char	   *prosupport;
 	char	   *proparallel;
 	char	   *lanname;
-	bool		isGE50 = isGPDB5000OrLater(fout);
 	char	  **configitems = NULL;
 	int			nconfigitems = 0;
 	const char *keyword;
@@ -13299,19 +13210,9 @@ dumpFunc(Archive *fout, const FuncInfo *finfo)
 			appendStringLiteralDQ(asPart, prosrc, NULL);
 	}
 
-	if (funcargs)
-	{
-		/* GPDB 5.0 or later; we rely on server-side code for most of the work */
-		funcfullsig = format_function_arguments(finfo, funcargs, false);
-		funcsig = format_function_arguments(finfo, funciargs, false);
-	}
-	else
-	{
-		/* pre-GPDB 5.0, do it ourselves */
-		funcsig = format_function_arguments_old(fout, finfo, nallargs, allargtypes,
-												argmodes, argnames);
-		funcfullsig = funcsig;
-	}
+
+	funcfullsig = format_function_arguments(finfo, funcargs, false);
+	funcsig = format_function_arguments(finfo, funciargs, false);
 	funcsig_tag = format_function_signature(fout, finfo, false);
 
 	if (*proconfig)
@@ -13362,22 +13263,11 @@ dumpFunc(Archive *fout, const FuncInfo *finfo)
 		 /* no result type to output */ ;
 	else if (funcresult)
 		appendPQExpBuffer(q, " RETURNS %s", funcresult);
-	else if (!is_returns_table_function(nallargs, argmodes))
-	{
+	else
 		appendPQExpBuffer(q, " RETURNS %s%s",
 						  (proretset[0] == 't') ? "SETOF " : "",
 						  getFormattedTypeName(fout, finfo->prorettype,
 											   zeroIsError));
-	}
-	else
-	{
-		/* RETURNS TABLE functions */
-		char	   *func_cols;
-		func_cols = format_table_function_columns(fout, finfo, nallargs, allargtypes,
-												  argmodes, argnames);
-		appendPQExpBuffer(q, "RETURNS TABLE %s", func_cols);
-		free(func_cols);
-	}
 
 	appendPQExpBuffer(q, "\n    LANGUAGE %s", fmtId(lanname));
 
@@ -15196,12 +15086,12 @@ dumpAgg(Archive *fout, const AggInfo *agginfo)
 								 "'0' AS aggfinalmodify,\n"
 								 "'0' AS aggmfinalmodify\n");
 
-	if (fout->remoteVersion >= 140000)
-		appendPQExpBufferStr(query,
-								"aggrepsafeexec,\n");
-	else
-		appendPQExpBufferStr(query,
-								 "false AS aggrepsafeexec,\n");
+		if (fout->remoteVersion >= 140000)
+			appendPQExpBufferStr(query,
+									"aggrepsafeexec,\n");
+		else
+			appendPQExpBufferStr(query,
+									 "false AS aggrepsafeexec,\n");
 
 		appendPQExpBufferStr(query,
 							 "FROM pg_catalog.pg_aggregate a, pg_catalog.pg_proc p "
@@ -15524,6 +15414,7 @@ dumpExtProtocol(Archive *fout, const ExtProtInfo *ptcinfo)
 	char	   *namecopy;
 	int			i;
 	bool		has_internal = false;
+	DumpableAcl dbdacl;
 
 	/* Skip if not to be dumped */
 	if (!ptcinfo->dobj.dump || fout->dopt->dataOnly)
@@ -15659,12 +15550,15 @@ dumpExtProtocol(Archive *fout, const ExtProtInfo *ptcinfo)
 
 	/* Handle the ACL */
 	namecopy = pg_strdup(fmtId(ptcinfo->dobj.name));
+	dbdacl.acl = ptcinfo->ptcacl;
+	dbdacl.acldefault = ptcinfo->rproacl;
+	dbdacl.privtype = 0;
+	dbdacl.initprivs = NULL;
 	dumpACL(fout, ptcinfo->dobj.dumpId, InvalidDumpId,
 			"PROTOCOL",
 			namecopy, NULL,
 			NULL, ptcinfo->ptcowner,
-			ptcinfo->ptcacl, ptcinfo->rproacl,
-			ptcinfo->initproacl, ptcinfo->initrproacl);
+			&dbdacl);
 	free(namecopy);
 
 	destroyPQExpBuffer(q);
@@ -17364,7 +17258,7 @@ dumpTableSchema(Archive *fout, const TableInfo *tbinfo)
 	char	   *ftoptions = NULL;
 	char	   *srvname = NULL;
 	char	   *foreign = "";
-
+	char	   *partkeydef = NULL;
 
 	/* We had better have loaded per-column details about this table */
 	Assert(tbinfo->interesting);
@@ -17419,6 +17313,10 @@ dumpTableSchema(Archive *fout, const TableInfo *tbinfo)
 	}
 	else
 	{
+		/*
+		 * Set reltypename, and collect any relkind-specific data that we
+		 * didn't fetch during getTables().
+		 */
 		switch (tbinfo->relkind)
 		{
 			case RELKIND_PARTITIONED_TABLE:

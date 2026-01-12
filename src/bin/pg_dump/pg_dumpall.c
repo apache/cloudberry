@@ -1207,7 +1207,7 @@ dumpRoles(PGconn *conn)
 						  " %s %s %s %s"
 						  "FROM %s "
 						  "WHERE rolname !~ '^pg_' "
-						  "ORDER BY 2", role_catalog, resq_col, resgroup_col, extauth_col, hdfs_col, role_catalog);
+						  "ORDER BY 2", resq_col, resgroup_col, extauth_col, hdfs_col, role_catalog);
 	else if (server_version >= 90500)
 		printfPQExpBuffer(buf,
 						  "SELECT oid, rolname, rolsuper, rolinherit, "
@@ -1218,7 +1218,7 @@ dumpRoles(PGconn *conn)
 						  "rolname = current_user AS is_current_user "
 						  " %s %s %s %s"
 						  "FROM %s "
-						  "ORDER BY 2", role_catalog, resq_col, resgroup_col, extauth_col, hdfs_col, role_catalog);
+						  "ORDER BY 2", resq_col, resgroup_col, extauth_col, hdfs_col, role_catalog);
 	else
 		printfPQExpBuffer(buf,
 						  "SELECT oid, rolname, rolsuper, rolinherit, "

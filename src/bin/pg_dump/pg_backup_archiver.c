@@ -2259,7 +2259,7 @@ _discoverArchiveFormat(ArchiveHandle *AH)
 			 * looks like it's probably a text format dump for Cloudberry. so suggest they
 			 * try psql
 			 */
-			fatal("input file appears to be a text format dump. Please use psql.");
+			pg_fatal("input file appears to be a text format dump. Please use psql.");
 		}
 
 		if (AH->lookaheadLen != 512)
@@ -3590,7 +3590,7 @@ _getObjectDescription(PQExpBuffer buf, const TocEntry *te)
 			 strcmp(type, "OPERATOR CLASS") == 0 ||
 			 strcmp(type, "OPERATOR FAMILY") == 0 ||
 			 strcmp(type, "PROCEDURE") == 0 ||
-			 strcmp(type, "PROTOCOL") == 0))
+			 strcmp(type, "PROTOCOL") == 0)
 	{
 		/* Chop "DROP " off the front and make a modifiable copy */
 		char	   *first = pg_strdup(te->dropStmt + 5);
