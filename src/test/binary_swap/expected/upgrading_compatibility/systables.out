@@ -3075,7 +3075,7 @@ Tablespace: "pg_global"
  in_doubt_tx_in_progress        | bigint |           |          | 
  in_doubt_tx_aborted            | bigint |           |          | 
 
-\d pg_dynamic_table
+\d pg_dynamic_tables
              View "pg_catalog.pg_dynamic_tables"
       Column       |  Type   | Collation | Nullable | Default 
 -------------------+---------+-----------+----------+---------
