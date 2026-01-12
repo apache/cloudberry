@@ -82,7 +82,7 @@ SELECT a, a <-> '21472.79' FROM moneytmp ORDER BY a <-> '21472.79' LIMIT 3;
          ->  Result
                ->  Gather Motion 3:1  (slice1; segments: 3)
                      ->  Seq Scan on moneytmp
- Optimizer: Pivotal Optimizer (GPORCA)
+ Optimizer: GPORCA
 (7 rows)
 
 SELECT a, a <-> '21472.79' FROM moneytmp ORDER BY a <-> '21472.79' LIMIT 3;

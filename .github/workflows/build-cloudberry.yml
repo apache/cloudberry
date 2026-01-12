@@ -289,14 +289,19 @@ jobs:
                                "contrib/amcheck:installcheck",
                                "contrib/citext:installcheck",
                                "contrib/btree_gin:installcheck",
+                               "contrib/btree_gist:installcheck",
+                               "contrib/dblink:installcheck",
+                               "contrib/dict_int:installcheck",
+                               "contrib/dict_xsyn:installcheck",
+                               "contrib/extprotocol:installcheck",
                                "contrib/file_fdw:installcheck",
                                "contrib/formatter_fixedwidth:installcheck",
-                               "contrib/extprotocol:installcheck",
-                               "contrib/dblink:installcheck",
+                               "contrib/hstore:installcheck",
+                               "contrib/indexscan:installcheck",
                                "contrib/pg_trgm:installcheck",
                                "contrib/indexscan:installcheck",
-                               "contrib/hstore:installcheck",
                                "contrib/pgcrypto:installcheck",
+                               "contrib/pgstattuple:installcheck",
                                "contrib/tablefunc:installcheck",
                                "contrib/passwordcheck:installcheck",
                                "contrib/pg_buffercache:installcheck",
@@ -428,8 +433,33 @@ jobs:
       options: >-
         --user root
         -h cdw
+        -v /usr/share:/host_usr_share
+        -v /usr/local:/host_usr_local
+        -v /opt:/host_opt
 
     steps:
+      - name: Free Disk Space
+        if: needs.check-skip.outputs.should_skip != 'true'
+        run: |
+          echo "=== Disk space before cleanup ==="
+          df -h /
+
+          # Remove pre-installed tools from host to free disk space
+          rm -rf /host_opt/hostedtoolcache || true   # GitHub Actions tool cache
+          rm -rf /host_usr_local/lib/android || true # Android SDK
+          rm -rf /host_usr_share/dotnet || true      # .NET SDK
+          rm -rf /host_opt/ghc || true               # Haskell GHC
+          rm -rf /host_usr_local/.ghcup || true      # Haskell GHCup
+          rm -rf /host_usr_share/swift || true       # Swift
+          rm -rf /host_usr_local/share/powershell || true  # PowerShell
+          rm -rf /host_usr_local/share/chromium || true    # Chromium
+          rm -rf /host_usr_share/miniconda || true   # Miniconda
+          rm -rf /host_opt/az || true                # Azure CLI
+          rm -rf /host_usr_share/sbt || true         # Scala Build Tool
+
+          echo "=== Disk space after cleanup ==="
+          df -h /
+
       - name: Skip Check
         if: needs.check-skip.outputs.should_skip == 'true'
         run: |
@@ -707,8 +737,33 @@ jobs:
       options: >-
         --user root
         -h cdw
+        -v /usr/share:/host_usr_share
+        -v /usr/local:/host_usr_local
+        -v /opt:/host_opt
 
     steps:
+      - name: Free Disk Space
+        if: needs.check-skip.outputs.should_skip != 'true'
+        run: |
+          echo "=== Disk space before cleanup ==="
+          df -h /
+
+          # Remove pre-installed tools from host to free disk space
+          rm -rf /host_opt/hostedtoolcache || true   # GitHub Actions tool cache
+          rm -rf /host_usr_local/lib/android || true # Android SDK
+          rm -rf /host_usr_share/dotnet || true      # .NET SDK
+          rm -rf /host_opt/ghc || true               # Haskell GHC
+          rm -rf /host_usr_local/.ghcup || true      # Haskell GHCup
+          rm -rf /host_usr_share/swift || true       # Swift
+          rm -rf /host_usr_local/share/powershell || true  # PowerShell
+          rm -rf /host_usr_local/share/chromium || true    # Chromium
+          rm -rf /host_usr_share/miniconda || true   # Miniconda
+          rm -rf /host_opt/az || true                # Azure CLI
+          rm -rf /host_usr_share/sbt || true         # Scala Build Tool
+
+          echo "=== Disk space after cleanup ==="
+          df -h /
+
       - name: Skip Check
         if: needs.check-skip.outputs.should_skip == 'true'
         run: |
@@ -898,8 +953,33 @@ jobs:
         --ulimit core=-1
         --cgroupns=host
         -v /sys/fs/cgroup:/sys/fs/cgroup:rw
+        -v /usr/share:/host_usr_share
+        -v /usr/local:/host_usr_local
+        -v /opt:/host_opt
 
     steps:
+      - name: Free Disk Space
+        if: needs.check-skip.outputs.should_skip != 'true'
+        run: |
+          echo "=== Disk space before cleanup ==="
+          df -h /
+
+          # Remove pre-installed tools from host to free disk space
+          rm -rf /host_opt/hostedtoolcache || true   # GitHub Actions tool cache
+          rm -rf /host_usr_local/lib/android || true # Android SDK
+          rm -rf /host_usr_share/dotnet || true      # .NET SDK
+          rm -rf /host_opt/ghc || true               # Haskell GHC
+          rm -rf /host_usr_local/.ghcup || true      # Haskell GHCup
+          rm -rf /host_usr_share/swift || true       # Swift
+          rm -rf /host_usr_local/share/powershell || true  # PowerShell
+          rm -rf /host_usr_local/share/chromium || true    # Chromium
+          rm -rf /host_usr_share/miniconda || true   # Miniconda
+          rm -rf /host_opt/az || true                # Azure CLI
+          rm -rf /host_usr_share/sbt || true         # Scala Build Tool
+
+          echo "=== Disk space after cleanup ==="
+          df -h /
+
       - name: Skip Check
         if: needs.check-skip.outputs.should_skip == 'true'
         run: |
@@ -1233,6 +1313,22 @@ jobs:
             rpm -qi apache-cloudberry-db-incubating
           } 2>&1 | tee -a build-logs/details/rpm-installation.log
 
+          # Clean up downloaded RPM artifacts to free disk space
+          echo "=== Disk space before RPM cleanup ==="
+          echo "Human readable:"
+          df -kh /
+          echo "Exact KB:"
+          df -k /
+          echo "RPM artifacts size:"
+          du -sh "${GITHUB_WORKSPACE}"/rpm_build_artifacts || true
+          echo "Cleaning up RPM artifacts to free disk space..."
+          rm -rf "${GITHUB_WORKSPACE}"/rpm_build_artifacts
+          echo "=== Disk space after RPM cleanup ==="
+          echo "Human readable:"
+          df -kh /
+          echo "Exact KB:"
+          df -k /
+
       - name: Extract source tarball
         if: success() && needs.check-skip.outputs.should_skip != 'true'
         env:
@@ -1257,6 +1353,22 @@ jobs:
             echo "Directory size:"
             du -sh "${SRC_DIR}/../cloudberry"
           } 2>&1 | tee -a build-logs/details/source-extraction.log
+
+          # Clean up source tarball to free disk space
+          echo "=== Disk space before source tarball cleanup ==="
+          echo "Human readable:"
+          df -kh /
+          echo "Exact KB:"
+          df -k /
+          echo "Source tarball artifacts size:"
+          du -sh "${GITHUB_WORKSPACE}"/source_build_artifacts || true
+          echo "Cleaning up source tarball to free disk space..."
+          rm -rf "${GITHUB_WORKSPACE}"/source_build_artifacts
+          echo "=== Disk space after source tarball cleanup ==="
+          echo "Human readable:"
+          df -kh /
+          echo "Exact KB:"
+          df -k /
 
       - name: Create Apache Cloudberry demo cluster
         if: success() && needs.check-skip.outputs.should_skip != 'true'
