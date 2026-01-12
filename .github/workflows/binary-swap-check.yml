@@ -632,16 +632,14 @@ jobs:
             gpstate -s
             
             # 4. Populate the 'regression' database
-            echo \"DEBUG: Starting population stage in \$(pwd)\"
+            echo \"=== Starting to populate the regression database ===\"
             cd \${SRC_DIR}/src/test/regress
-            
-            # Check for critical test directories
             ls -ld \${SRC_DIR}/src/test/regress/sql || echo \"ERROR: sql dir missing\"
-            
             ./pg_regress --dbname=regression --host=localhost --port=7000 --init-file=init_file char varchar boolean || echo \"WARNING: Population finished with some output differences (check logs below if needed)\"
             cat regression.diffs 2>/dev/null || true
             
             # 5. Run the actual binary swap test script
+            echo \"=== Starting binary swap test ===\"
             cd \${SRC_DIR}/src/test/binary_swap
             ./test_binary_swap.sh -b ${BASELINE_INSTALL_DIR} -c ${CURRENT_INSTALL_DIR}
           " 2>&1 | tee -a "${LOGS_DIR}/details/test_binary_swap.log" || TEST_RESULT=$?

@@ -194,4 +194,6 @@
 \d pg_statistic
 \d pg_shadow
 \d pg_authid
+\d gp_stat_progress_dtx_recovery
+\d pg_dynamic_tables
 

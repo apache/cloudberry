@@ -3064,3 +3064,26 @@ Indexes:
     "pg_authid_rolresqueue_index" btree (rolresqueue), tablespace "pg_global"
 Tablespace: "pg_global"
 
+\d gp_stat_progress_dtx_recovery
+             View "pg_catalog.gp_stat_progress_dtx_recovery"
+             Column             |  Type  | Collation | Nullable | Default 
+--------------------------------+--------+-----------+----------+---------
+ phase                          | text   |           |          | 
+ recover_commited_dtx_total     | bigint |           |          | 
+ recover_commited_dtx_completed | bigint |           |          | 
+ in_doubt_tx_total              | bigint |           |          | 
+ in_doubt_tx_in_progress        | bigint |           |          | 
+ in_doubt_tx_aborted            | bigint |           |          | 
+
+\d pg_dynamic_table
+             View "pg_catalog.pg_dynamic_tables"
+      Column       |  Type   | Collation | Nullable | Default 
+-------------------+---------+-----------+----------+---------
+ schemaname        | name    |           |          | 
+ dynamictablename  | name    |           |          | 
+ dynamictableowner | name    |           |          | 
+ tablespace        | name    |           |          | 
+ hasindexes        | boolean |           |          | 
+ ispopulated       | boolean |           |          | 
+ definition        | text    |           |          | 
+
