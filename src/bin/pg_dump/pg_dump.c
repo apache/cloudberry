@@ -5743,7 +5743,9 @@ binary_upgrade_set_pg_class_oids_impl(Archive *fout,
 
 	/* GPDB_14_MERGE_FIXME: we must put this sql here for variables which will befetched later by other sqls */
 	appendPQExpBuffer(upgrade_query,
-					  "SELECT c.reltoastrelid, c.relkind, t.relnamespace AS toast_relnamespace, t.relname AS toast_relname, "
+					  "SELECT c.reltoastrelid, c.relkind, c.relfilenode, t.relnamespace AS toast_relnamespace, t.relname AS toast_relname, "
+					  "       ti.relfilenode AS toast_index_relfilenode,"
+					  "       t.relfilenode AS toast_relfilenode,"
 					  "       c.relnamespace, c.relname, "
 					  "       i.indexrelid, ti.relname AS tidx_relname, "
 					  "       bi.oid AS bmoid, bidx.oid AS bmidxoid, "
@@ -7445,7 +7447,7 @@ getTables(Archive *fout, int *numTables)
 	 */
 
 	appendPQExpBufferStr(query,
-						 "SELECT c.tableoid, c.oid, c.relname, "
+						 "SELECT c.tableoid, c.oid, c.relname, '' AS relstorage,"
 						 "c.relnamespace, c.relkind, c.reltype, "
 						 "c.relowner, "
 						 "c.relchecks, "
@@ -7463,6 +7465,10 @@ getTables(Archive *fout, int *numTables)
 						 "tc.oid AS toid, "
 						 "tc.relpages AS toastpages, "
 						 "tc.reloptions AS toast_reloptions, "
+						 "0 as parrelid, "
+						 "0 as parlevel, "
+						 "c.relisivm AS isivm, "
+						 "c.relisdynamic AS isdynamic, "
 						 "d.refobjid AS owning_tab, "
 						 "d.refobjsubid AS owning_col, "
 						 "tsp.spcname AS reltablespace, ");

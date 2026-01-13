@@ -48,6 +48,7 @@ SUBDIRS = \
 	pg_config \
 	pg_controldata \
 	pg_ctl \
+	pg_dump \
 	pg_resetwal \
 	pg_rewind \
 	psql \
