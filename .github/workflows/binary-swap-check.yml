@@ -559,6 +559,12 @@ jobs:
           fi
 
           # Extract catalog version
+          if [ -f "${BASELINE_INSTALL_DIR}/cloudberry-env.sh" ]; then
+             source "${BASELINE_INSTALL_DIR}/cloudberry-env.sh"
+          elif [ -f "${BASELINE_INSTALL_DIR}/greenplum_path.sh" ]; then
+             source "${BASELINE_INSTALL_DIR}/greenplum_path.sh"
+          fi
+
           echo "Baseline RPM Catalog Version:"
           CATALOG_VERSION=$("${BASELINE_INSTALL_DIR}/bin/postgres" --catalog-version 2>/dev/null | awk '{print $NF}' || echo "N/A")
           echo "$CATALOG_VERSION"
@@ -599,6 +605,12 @@ jobs:
           fi
 
           # Extract catalog version
+          if [ -f "${CURRENT_INSTALL_DIR}/cloudberry-env.sh" ]; then
+             source "${CURRENT_INSTALL_DIR}/cloudberry-env.sh"
+          elif [ -f "${CURRENT_INSTALL_DIR}/greenplum_path.sh" ]; then
+             source "${CURRENT_INSTALL_DIR}/greenplum_path.sh"
+          fi
+
           echo "Current RPM Catalog Version:"
           CATALOG_VERSION=$("${CURRENT_INSTALL_DIR}/bin/postgres" --catalog-version 2>/dev/null | awk '{print $NF}' || echo "N/A")
           echo "$CATALOG_VERSION"
