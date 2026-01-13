@@ -557,6 +557,13 @@ jobs:
              echo "::error::Critical binary '${BASELINE_INSTALL_DIR}/bin/postgres' missing"
              exit 1
           fi
+
+          # Extract catalog version
+          echo "Baseline RPM Catalog Version:"
+          CATALOG_VERSION=$("${BASELINE_INSTALL_DIR}/bin/postgres" --catalog-version 2>/dev/null | awk '{print $NF}' || echo "N/A")
+          echo "$CATALOG_VERSION"
+          echo "BASELINE_CATALOG_VERSION=$CATALOG_VERSION" >> "$GITHUB_ENV"
+
           ls -la "${BASELINE_INSTALL_DIR}"
 
       - name: Install Current RPM
@@ -590,6 +597,13 @@ jobs:
              echo "::error::Critical binary '${CURRENT_INSTALL_DIR}/bin/postgres' missing"
              exit 1
           fi
+
+          # Extract catalog version
+          echo "Current RPM Catalog Version:"
+          CATALOG_VERSION=$("${CURRENT_INSTALL_DIR}/bin/postgres" --catalog-version 2>/dev/null | awk '{print $NF}' || echo "N/A")
+          echo "$CATALOG_VERSION"
+          echo "CURRENT_CATALOG_VERSION=$CATALOG_VERSION" >> "$GITHUB_ENV"
+
           ls -la "${CURRENT_INSTALL_DIR}"
 
       - name: Setup pg_regress
@@ -691,6 +705,17 @@ jobs:
             echo "test_passed=true" >> "$GITHUB_OUTPUT"
             echo "No regression diffs found - test passed"
           fi
+
+      - name: Final Catalog Version Summary
+        if: always()
+        run: |
+          echo "=== Catalog Version Comparison ==="
+          echo "Baseline Catalog Version: ${BASELINE_CATALOG_VERSION:-N/A}"
+          echo "Current Catalog Version:  ${CURRENT_CATALOG_VERSION:-N/A}"
+          echo ""
+          echo "Catalog Status: $([[ "$BASELINE_CATALOG_VERSION" == "$CURRENT_CATALOG_VERSION" ]] && echo "✅ IDENTICAL" || echo "🔍 DIFFERENT")"
+          echo "=== Comparison completed ==="
+
       - name: Generate Report
         if: always()
         env:
@@ -706,13 +731,17 @@ jobs:
             MESSAGE="Compatibility issues detected during testing."
           fi
 
-          # Generate concise report
+          # Generate comprehensive report
           cat > "${LOGS_DIR}/binary-swap-report.md" <<EOF
           # Binary Swap Test Results
 
           **Baseline Version**: ${BASELINE_VERSION}
           **Status**: ${STATUS}
           **Date**: $(date -u +"%Y-%m-%d %H:%M UTC")
+
+          ## Catalog Version Information
+          **Baseline Catalog Version**: ${BASELINE_CATALOG_VERSION}
+          **Current Catalog Version**: ${CURRENT_CATALOG_VERSION}
 
           ${MESSAGE}
           
