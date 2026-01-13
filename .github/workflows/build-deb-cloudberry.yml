@@ -355,8 +355,33 @@ jobs:
       options: >-
         --user root
         -h cdw
+        -v /usr/share:/host_usr_share
+        -v /usr/local:/host_usr_local
+        -v /opt:/host_opt
 
     steps:
+      - name: Free Disk Space
+        if: needs.check-skip.outputs.should_skip != 'true'
+        run: |
+          echo "=== Disk space before cleanup ==="
+          df -h /
+
+          # Remove pre-installed tools from host to free disk space
+          rm -rf /host_opt/hostedtoolcache || true   # GitHub Actions tool cache
+          rm -rf /host_usr_local/lib/android || true # Android SDK
+          rm -rf /host_usr_share/dotnet || true      # .NET SDK
+          rm -rf /host_opt/ghc || true               # Haskell GHC
+          rm -rf /host_usr_local/.ghcup || true      # Haskell GHCup
+          rm -rf /host_usr_share/swift || true       # Swift
+          rm -rf /host_usr_local/share/powershell || true  # PowerShell
+          rm -rf /host_usr_local/share/chromium || true    # Chromium
+          rm -rf /host_usr_share/miniconda || true   # Miniconda
+          rm -rf /host_opt/az || true                # Azure CLI
+          rm -rf /host_usr_share/sbt || true         # Scala Build Tool
+
+          echo "=== Disk space after cleanup ==="
+          df -h /
+
       - name: Skip Check
         if: needs.check-skip.outputs.should_skip == 'true'
         run: |
@@ -646,8 +671,33 @@ jobs:
       options: >-
         --user root
         -h cdw
+        -v /usr/share:/host_usr_share
+        -v /usr/local:/host_usr_local
+        -v /opt:/host_opt
 
     steps:
+      - name: Free Disk Space
+        if: needs.check-skip.outputs.should_skip != 'true'
+        run: |
+          echo "=== Disk space before cleanup ==="
+          df -h /
+
+          # Remove pre-installed tools from host to free disk space
+          rm -rf /host_opt/hostedtoolcache || true   # GitHub Actions tool cache
+          rm -rf /host_usr_local/lib/android || true # Android SDK
+          rm -rf /host_usr_share/dotnet || true      # .NET SDK
+          rm -rf /host_opt/ghc || true               # Haskell GHC
+          rm -rf /host_usr_local/.ghcup || true      # Haskell GHCup
+          rm -rf /host_usr_share/swift || true       # Swift
+          rm -rf /host_usr_local/share/powershell || true  # PowerShell
+          rm -rf /host_usr_local/share/chromium || true    # Chromium
+          rm -rf /host_usr_share/miniconda || true   # Miniconda
+          rm -rf /host_opt/az || true                # Azure CLI
+          rm -rf /host_usr_share/sbt || true         # Scala Build Tool
+
+          echo "=== Disk space after cleanup ==="
+          df -h /
+
       - name: Skip Check
         if: needs.check-skip.outputs.should_skip == 'true'
         run: |
@@ -834,8 +884,33 @@ jobs:
         --ulimit core=-1
         --cgroupns=host
         -v /sys/fs/cgroup:/sys/fs/cgroup:rw
+        -v /usr/share:/host_usr_share
+        -v /usr/local:/host_usr_local
+        -v /opt:/host_opt
 
     steps:
+      - name: Free Disk Space
+        if: needs.check-skip.outputs.should_skip != 'true'
+        run: |
+          echo "=== Disk space before cleanup ==="
+          df -h /
+
+          # Remove pre-installed tools from host to free disk space
+          rm -rf /host_opt/hostedtoolcache || true   # GitHub Actions tool cache
+          rm -rf /host_usr_local/lib/android || true # Android SDK
+          rm -rf /host_usr_share/dotnet || true      # .NET SDK
+          rm -rf /host_opt/ghc || true               # Haskell GHC
+          rm -rf /host_usr_local/.ghcup || true      # Haskell GHCup
+          rm -rf /host_usr_share/swift || true       # Swift
+          rm -rf /host_usr_local/share/powershell || true  # PowerShell
+          rm -rf /host_usr_local/share/chromium || true    # Chromium
+          rm -rf /host_usr_share/miniconda || true   # Miniconda
+          rm -rf /host_opt/az || true                # Azure CLI
+          rm -rf /host_usr_share/sbt || true         # Scala Build Tool
+
+          echo "=== Disk space after cleanup ==="
+          df -h /
+
       - name: Skip Check
         if: needs.check-skip.outputs.should_skip == 'true'
         run: |
