@@ -410,14 +410,14 @@ AppendOnlyStorageWrite_FlushAndCloseFile(
 	 * primary.  Temp tables are not crash safe, no need to fsync them.
 	 */
 	if (!RelFileNodeBackendIsTemp(storageWrite->relFileNode) &&
-		FileSync(storageWrite->file, WAIT_EVENT_DATA_FILE_SYNC) != 0)
+		storageWrite->smgrAO->smgr_FileSync(storageWrite->file, WAIT_EVENT_DATA_FILE_SYNC) != 0)
 		ereport(ERROR,
 				(errcode_for_file_access(),
 				 errmsg("Could not flush (fsync) Append-Only segment file '%s' to disk for relation '%s': %m",
 						storageWrite->segmentFileName,
 						storageWrite->relationName)));
 
-	FileClose(storageWrite->file);
+	storageWrite->smgrAO->smgr_FileClose(storageWrite->file);
 
 	storageWrite->file = -1;
 	storageWrite->formatVersion = -1;
