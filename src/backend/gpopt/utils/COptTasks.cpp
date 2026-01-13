@@ -162,13 +162,34 @@ SOptContext::Free(SOptContext::EPin input, SOptContext::EPin output) const
 //
 //---------------------------------------------------------------------------
 CHAR *
-SOptContext::CloneErrorMsg(MemoryContext context) const
+SOptContext::CloneErrorMsg(MemoryContext context, BOOL *clone_failed) const
 {
+	*clone_failed = false;
+
 	if (nullptr == context || nullptr == m_error_msg)
 	{
 		return nullptr;
 	}
-	return gpdb::MemCtxtStrdup(context, m_error_msg);
+
+	CHAR *error_msg;
+	GPOS_TRY
+	{
+#ifdef FAULT_INJECTOR
+		if (gpdb::InjectFaultInOptTasks("opt_clone_error_msg") == FaultInjectorTypeSkip)
+		{
+			GpdbEreport(ERRCODE_INTERNAL_ERROR, ERROR, "Injected error", nullptr);
+		}
+#endif
+		error_msg = gpdb::MemCtxtStrdup(context, m_error_msg);
+	}
+	GPOS_CATCH_EX(ex)
+	{
+		error_msg = nullptr;
+		*clone_failed = true;
+	}
+	GPOS_CATCH_END;
+
+	return error_msg;
 }
 
 
@@ -913,7 +934,7 @@ COptTasks::OptimizeTask(void *ptr)
 	{
 		// set trace flags
 		trace_flags = CConfigParamMapping::PackConfigParamInBitset(
-			mp, CXform::ExfSentinel);
+			mp, CXform::ExfSentinel, opt_ctxt->m_create_vec_plan);
 		SetTraceflags(mp, trace_flags, &enabled_trace_flags,
 					  &disabled_trace_flags);
 
@@ -1156,13 +1177,15 @@ COptTasks::Optimize(Query *query)
 //
 //---------------------------------------------------------------------------
 PlannedStmt *
-COptTasks::GPOPTOptimizedPlan(Query *query, SOptContext *gpopt_context)
+COptTasks::GPOPTOptimizedPlan(Query *query, SOptContext *gpopt_context, OptimizerOptions *opts)
 {
 	Assert(query);
 	Assert(gpopt_context);
 
 	gpopt_context->m_query = query;
 	gpopt_context->m_should_generate_plan_stmt = true;
+	// Copy options in `OptimizerOptions` to `SOptContext`
+	gpopt_context->m_create_vec_plan = opts->create_vectorization_plan;
 	Execute(&OptimizeTask, gpopt_context);
 	return gpopt_context->m_plan_stmt;
 }

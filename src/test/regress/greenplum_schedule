@@ -15,6 +15,16 @@
 #   hitting max_connections limit on segments.
 #
 
+# Run disk-intensive tests early when maximum disk space is available.
+# These tests consume significant disk space through WAL generation, XID consumption,
+# and autovacuum operations. Running them early helps avoid disk exhaustion issues.
+test: autovacuum
+test: autovacuum-segment
+test: autovacuum-template0-segment
+
+# check profile feature
+test: profile
+
 # test for builtin namespace pg_ext_aux
 test: pg_ext_aux
 
@@ -75,7 +85,7 @@ test: gp_dump_query_oids analyze gp_owner_permission incremental_analyze truncat
 test: indexjoin as_alias regex_gp gpparams with_clause transient_types gp_rules dispatch_encoding motion_gp gp_pullup_expr
 
 # interconnect tests
-test: icudp/gp_interconnect_queue_depth icudp/gp_interconnect_queue_depth_longtime icudp/gp_interconnect_snd_queue_depth icudp/gp_interconnect_snd_queue_depth_longtime icudp/gp_interconnect_min_retries_before_timeout icudp/gp_interconnect_transmit_timeout icudp/gp_interconnect_cache_future_packets icudp/gp_interconnect_default_rtt icudp/gp_interconnect_fc_method icudp/gp_interconnect_min_rto icudp/gp_interconnect_timer_checking_period icudp/gp_interconnect_timer_period icudp/queue_depth_combination_loss icudp/queue_depth_combination_capacity
+test: icudp/gp_interconnect_queue_depth icudp/gp_interconnect_queue_depth_longtime icudp/gp_interconnect_snd_queue_depth icudp/gp_interconnect_snd_queue_depth_longtime icudp/gp_interconnect_min_retries_before_timeout icudp/gp_interconnect_transmit_timeout icudp/gp_interconnect_cache_future_packets icudp/gp_interconnect_default_rtt icudp/gp_interconnect_fc_method icudp/gp_interconnect_min_rto icudp/gp_interconnect_timer_checking_period icudp/gp_interconnect_timer_period icudp/queue_depth_combination_loss icudp/queue_depth_combination_capacity icudp/queue_depth_combination_loss_advance
 
 # event triggers cannot run concurrently with any test that runs DDL
 test: event_trigger_gp
@@ -202,6 +212,9 @@ test: rpt rpt_joins rpt_tpch rpt_returning
 test: bfv_cte
 test: bfv_joins bfv_subquery bfv_planner bfv_legacy bfv_temp bfv_dml
 
+# test tpcds query 04
+test: tpcds_q04
+
 test: qp_olap_mdqa qp_misc gp_recursive_cte qp_dml_joins qp_skew qp_select partition_prune_opfamily gp_tsrf qp_join_union_all qp_join_universal qp_rowsecurity qp_query_params qp_full_join
 
 test: qp_misc_jiras qp_with_clause qp_executor qp_olap_windowerr qp_olap_window qp_derived_table qp_bitmapscan qp_dropped_cols
@@ -281,6 +294,9 @@ test: freeze_aux_tables
 # cbdb parallel test
 test: cbdb_parallel
 
+# window function parallel test
+test: window_parallel
+
 # These cannot run in parallel, because they check that VACUUM FULL shrinks table size.
 # A concurrent session could hold back the xid horizon and prevent old tuples from being
 # removed.
@@ -315,9 +331,6 @@ test: oid_wraparound
 # hence it should be run in isolation.
 test: fts_recovery_in_progress
 ignore: mirror_replay
-test: autovacuum
-test: autovacuum-segment
-test: autovacuum-template0-segment
 
 # gpexpand introduce the partial tables, check them if they can run correctly
 test: gangsize gang_reuse
@@ -327,9 +340,6 @@ test: run_utility_gpexpand_phase1
 
 # check correct error message when create extension error on segment
 test: create_extension_fail
-
-# check profile feature
-test: profile
 
 # check offload entry root slice to QE feature
 test: offload_entry_to_qe
@@ -374,8 +384,6 @@ test: dynamic_table
 # DML tests for AO/CO unique indexes.
 test: uao_dml/uao_dml_unique_index_delete_row uao_dml/uao_dml_unique_index_delete_column uao_dml/uao_dml_unique_index_update_row uao_dml/uao_dml_unique_index_update_column
 
-# test that distributing or hash partitioning by an enum field or expression is blocked
-test: enum_dist_part_ban
 
 # run pg_hba raleted testing
 test: hba_conf

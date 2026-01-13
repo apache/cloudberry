@@ -130,6 +130,7 @@ OBJS        = CExpression.o \
               CPhysicalScan.o \
               CPhysicalSequence.o \
               CPhysicalSequenceProject.o \
+              CPhysicalHashSequenceProject.o \
               CPhysicalSerialUnionAll.o \
               CPhysicalSort.o \
               CPhysicalSplit.o \

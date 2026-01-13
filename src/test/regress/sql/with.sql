@@ -1575,3 +1575,71 @@ create temp table with_test (i int);
 with with_test as (select 42) insert into with_test select * from with_test;
 select * from with_test;
 drop table with_test;
+
+--
+-- writable CTE with SELECT INTO clause.
+--
+CREATE TABLE t_w_cte(a integer);
+EXPLAIN(COSTS OFF, VERBOSE) WITH ins AS (
+  INSERT INTO t_w_cte(a) VALUES (1), (2), (3)
+  RETURNING a
+)
+SELECT sum(a) INTO t_w_cte_1 FROM ins;
+DROP TABLE t_w_cte;
+
+CREATE TABLE t_w_cte_relp(a integer) distributed replicated;
+EXPLAIN(COSTS OFF, VERBOSE) WITH ins AS (
+  INSERT INTO t_w_cte_relp(a) VALUES (1), (2), (3)
+  RETURNING a
+)
+SELECT sum(a) INTO t_w_cte_relp_1 FROM ins;
+DROP TABLE t_w_cte_relp;
+
+--
+-- readable CTE with SELECT INTO clause.
+--
+WITH sel AS (
+  SELECT 1 as a
+)
+SELECT a INTO t_r_cte FROM sel;
+SELECT * FROM t_r_cte;
+DROP TABLE t_r_cte;
+
+--
+-- Multiple readable CTEs with SELECT INTO
+--
+WITH cte1 AS (SELECT 1 as a),
+     cte2 AS (SELECT 2 as b)
+SELECT a, b INTO t_multi_r_cte FROM cte1, cte2;
+SELECT * FROM t_multi_r_cte;
+DROP TABLE t_multi_r_cte;
+
+--
+-- Nested SELECT in CTE with SELECT INTO
+--
+WITH nested_cte AS (
+  SELECT * FROM (SELECT 100 as val, 'test'::text as name) subq
+)
+SELECT val, name INTO t_nested_r_cte FROM nested_cte;
+SELECT * FROM t_nested_r_cte;
+DROP TABLE t_nested_r_cte;
+
+--
+-- CTE with JOIN and SELECT INTO
+--
+WITH cte1 AS (SELECT 1 as id, 'foo' as val),
+     cte2 AS (SELECT 1 as id, 'bar' as val)
+SELECT cte1.id, cte1.val as val1, cte2.val as val2
+INTO t_join_r_cte
+FROM cte1 JOIN cte2 ON cte1.id = cte2.id;
+SELECT * FROM t_join_r_cte;
+DROP TABLE t_join_r_cte;
+
+--
+-- Verify mixed readable and writable CTEs blocked (negative test)
+--
+CREATE TABLE t_mixed_test (a int);
+WITH read_cte AS (SELECT 1 as x),
+     write_cte AS (INSERT INTO t_mixed_test VALUES (1) RETURNING *)
+SELECT x INTO t_should_fail2 FROM read_cte;  -- should fail
+DROP TABLE t_mixed_test;

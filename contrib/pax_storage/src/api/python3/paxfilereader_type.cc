@@ -1,3 +1,25 @@
+/*-------------------------------------------------------------------------
+ *
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ *
+ *-------------------------------------------------------------------------
+ */
+
 #include "paxpy_types.h"
 
 #include "comm/fmt.h"
@@ -107,7 +129,7 @@ static int paxfilereader_init(PyObject *self, PyObject *args,
   PyObject *schema = NULL, *proj = NULL, *pax_file = NULL;
   PaxFileObject *pax_file_obj;
   std::shared_ptr<pax::Bitmap8> visible_map_bm = nullptr;
-  std::shared_ptr<pax::File> toast_file = nullptr;
+  std::unique_ptr<pax::File> toast_file = nullptr;
 
   PaxFileReaderObject *pax_file_reader;
   pax_file_reader = (PaxFileReaderObject *)self;
@@ -205,7 +227,7 @@ static int paxfilereader_init(PyObject *self, PyObject *args,
 
     auto file_ptr = pax::Singleton<pax::LocalFileSystem>::GetInstance()->Open(
         pax_file_obj->filepath, pax::fs::kReadMode);
-    auto reader = new pax::OrcReader(std::move(file_ptr), toast_file);
+    auto reader = new pax::OrcReader(std::move(file_ptr), std::move(toast_file));
     reader->Open(std::move(read_options));
     pax_file_reader->reader = reader;
   } catch (cbdb::CException &e) {
@@ -323,7 +345,6 @@ static PyObject *paxfilereader_readgroup(PaxFileReaderObject *self,
   try {
     for (; column_index < col_nums; column_index++) {
       const auto &column = (*columns)[column_index];
-      std::shared_ptr<pax::Bitmap8> bm;
       auto null_counts = 0;
       PyObject *schema_item = nullptr;
       long col_oid;
@@ -351,7 +372,7 @@ static PyObject *paxfilereader_readgroup(PaxFileReaderObject *self,
         continue;
       }
 
-      bm = column->GetBitmap();
+      const auto &bm = column->GetBitmap();
 
       py_rows = PyList_New(0);
       if (!py_rows) {
@@ -381,7 +402,7 @@ static PyObject *paxfilereader_readgroup(PaxFileReaderObject *self,
           if (column->IsToast(row_index)) {
             // safe to no keep the ref, because paxbuffer_to_pyobj will copy the
             // detoast datum
-            std::shared_ptr<pax::MemoryObject> ref = nullptr;
+            std::unique_ptr<pax::MemoryObject> ref = nullptr;
 
             auto datum = PointerGetDatum(buff);
             auto external_buffer = column->GetExternalToastDataBuffer();

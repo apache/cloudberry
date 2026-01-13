@@ -40,7 +40,7 @@
 #include "storage/local_file_system.h"
 #include "storage/filter/pax_filter.h"
 #include "storage/toast/pax_toast.h"
-#include "stub.h"
+#include "cpp-stub/src/stub.h"
 
 namespace pax::tests {
 
@@ -144,7 +144,7 @@ TEST_F(OrcTest, WriteTuple) {
   ASSERT_NE(nullptr, local_fs);
 
   auto file_ptr = local_fs->Open(file_name_, fs::kWriteMode);
-  EXPECT_NE(nullptr, file_ptr);
+  EXPECT_NE(nullptr, file_ptr.get());
 
   OrcWriter::WriterOptions writer_options;
   writer_options.rel_tuple_desc = tuple_slot->tts_tupleDescriptor;
@@ -164,7 +164,7 @@ TEST_F(OrcTest, OpenOrc) {
   ASSERT_NE(nullptr, local_fs);
 
   auto file_ptr = local_fs->Open(file_name_, fs::kWriteMode);
-  EXPECT_NE(nullptr, file_ptr);
+  EXPECT_NE(nullptr, file_ptr.get());
 
   MicroPartitionWriter::WriterOptions writer_options;
   writer_options.rel_tuple_desc = tuple_slot->tts_tupleDescriptor;
@@ -192,8 +192,8 @@ TEST_F(OrcTest, WriteReadStripes) {
   auto local_fs = Singleton<LocalFileSystem>::GetInstance();
   ASSERT_NE(nullptr, local_fs);
 
-  std::shared_ptr<File> file_ptr = local_fs->Open(file_name_, fs::kWriteMode);
-  EXPECT_NE(nullptr, file_ptr);
+  std::unique_ptr<File> file_ptr = local_fs->Open(file_name_, fs::kWriteMode);
+  EXPECT_NE(nullptr, file_ptr.get());
 
   MicroPartitionWriter::WriterOptions writer_options;
   writer_options.rel_tuple_desc = tuple_slot->tts_tupleDescriptor;
@@ -201,7 +201,7 @@ TEST_F(OrcTest, WriteReadStripes) {
   // file_ptr in orc writer will be freed when writer do destruct
   // current OrcWriter::CreateWriter only for test
   auto writer = OrcWriter::CreateWriter(
-      writer_options, std::move(CreateTestSchemaTypes()), file_ptr);
+      writer_options, std::move(CreateTestSchemaTypes()), std::move(file_ptr));
 
   writer->WriteTuple(tuple_slot);
   writer->Close();
@@ -210,7 +210,7 @@ TEST_F(OrcTest, WriteReadStripes) {
 
   // file_ptr in orc reader will be freed when reader do destruct
   MicroPartitionReader::ReaderOptions reader_options;
-  auto reader = new OrcReader(file_ptr);
+  auto reader = new OrcReader(std::move(file_ptr));
   reader->Open(reader_options);
 
   EXPECT_EQ(1UL, reader->GetGroupNums());
@@ -229,13 +229,13 @@ TEST_F(OrcTest, WriteReadStripesTwice) {
   auto local_fs = Singleton<LocalFileSystem>::GetInstance();
   ASSERT_NE(nullptr, local_fs);
 
-  std::shared_ptr<File> file_ptr = local_fs->Open(file_name_, fs::kWriteMode);
-  EXPECT_NE(nullptr, file_ptr);
+  std::unique_ptr<File> file_ptr = local_fs->Open(file_name_, fs::kWriteMode);
+  EXPECT_NE(nullptr, file_ptr.get());
 
   MicroPartitionWriter::WriterOptions writer_options;
   writer_options.rel_tuple_desc = tuple_slot->tts_tupleDescriptor;
   auto writer = OrcWriter::CreateWriter(
-      writer_options, std::move(CreateTestSchemaTypes()), file_ptr);
+      writer_options, std::move(CreateTestSchemaTypes()), std::move(file_ptr));
 
   writer->WriteTuple(tuple_slot);
   writer->WriteTuple(tuple_slot);
@@ -244,7 +244,7 @@ TEST_F(OrcTest, WriteReadStripesTwice) {
   file_ptr = local_fs->Open(file_name_, fs::kReadMode);
 
   MicroPartitionReader::ReaderOptions reader_options;
-  auto reader = new OrcReader(file_ptr);
+  auto reader = new OrcReader(std::move(file_ptr));
   reader->Open(reader_options);
 
   EXPECT_EQ(1UL, reader->GetGroupNums());
@@ -280,14 +280,14 @@ TEST_F(OrcTest, WriteReadMultiStripes) {
   auto local_fs = Singleton<LocalFileSystem>::GetInstance();
   ASSERT_NE(nullptr, local_fs);
 
-  std::shared_ptr<File> file_ptr = local_fs->Open(file_name_, fs::kWriteMode);
-  EXPECT_NE(nullptr, file_ptr);
+  std::unique_ptr<File> file_ptr = local_fs->Open(file_name_, fs::kWriteMode);
+  EXPECT_NE(nullptr, file_ptr.get());
 
   MicroPartitionWriter::WriterOptions writer_options;
   writer_options.rel_tuple_desc = tuple_slot->tts_tupleDescriptor;
 
   auto writer = OrcWriter::CreateWriter(
-      writer_options, std::move(CreateTestSchemaTypes()), file_ptr);
+      writer_options, std::move(CreateTestSchemaTypes()), std::move(file_ptr));
 
   writer->WriteTuple(tuple_slot);
   writer->Flush();
@@ -298,7 +298,7 @@ TEST_F(OrcTest, WriteReadMultiStripes) {
   file_ptr = local_fs->Open(file_name_, fs::kReadMode);
 
   MicroPartitionReader::ReaderOptions reader_options;
-  auto reader = new OrcReader(file_ptr);
+  auto reader = new OrcReader(std::move(file_ptr));
   reader->Open(reader_options);
 
   EXPECT_EQ(2UL, reader->GetGroupNums());
@@ -319,14 +319,14 @@ TEST_F(OrcTest, WriteReadCloseEmptyOrc) {
   auto local_fs = Singleton<LocalFileSystem>::GetInstance();
   ASSERT_NE(nullptr, local_fs);
 
-  std::shared_ptr<File> file_ptr = local_fs->Open(file_name_, fs::kWriteMode);
-  EXPECT_NE(nullptr, file_ptr);
+  std::unique_ptr<File> file_ptr = local_fs->Open(file_name_, fs::kWriteMode);
+  EXPECT_NE(nullptr, file_ptr.get());
 
   MicroPartitionWriter::WriterOptions writer_options;
   writer_options.rel_tuple_desc = tuple_slot->tts_tupleDescriptor;
 
   auto writer = OrcWriter::CreateWriter(
-      writer_options, std::move(CreateTestSchemaTypes()), file_ptr);
+      writer_options, std::move(CreateTestSchemaTypes()), std::move(file_ptr));
   writer->WriteTuple(tuple_slot);
   writer->Flush();
 
@@ -336,7 +336,7 @@ TEST_F(OrcTest, WriteReadCloseEmptyOrc) {
   file_ptr = local_fs->Open(file_name_, fs::kReadMode);
 
   MicroPartitionReader::ReaderOptions reader_options;
-  auto reader = new OrcReader(file_ptr);
+  auto reader = new OrcReader(std::move(file_ptr));
   reader->Open(reader_options);
 
   EXPECT_EQ(1UL, reader->GetGroupNums());
@@ -353,14 +353,14 @@ TEST_F(OrcTest, WriteReadEmptyOrc) {
   auto local_fs = Singleton<LocalFileSystem>::GetInstance();
   ASSERT_NE(nullptr, local_fs);
 
-  std::shared_ptr<File> file_ptr = local_fs->Open(file_name_, fs::kWriteMode);
-  EXPECT_NE(nullptr, file_ptr);
+  std::unique_ptr<File> file_ptr = local_fs->Open(file_name_, fs::kWriteMode);
+  EXPECT_NE(nullptr, file_ptr.get());
 
   MicroPartitionWriter::WriterOptions writer_options;
   writer_options.rel_tuple_desc = tuple_slot->tts_tupleDescriptor;
 
   auto writer = OrcWriter::CreateWriter(
-      writer_options, std::move(CreateTestSchemaTypes()), file_ptr);
+      writer_options, std::move(CreateTestSchemaTypes()), std::move(file_ptr));
   // flush empty
   writer->Flush();
   // direct close
@@ -369,7 +369,7 @@ TEST_F(OrcTest, WriteReadEmptyOrc) {
   file_ptr = local_fs->Open(file_name_, fs::kReadMode);
 
   MicroPartitionReader::ReaderOptions reader_options;
-  auto reader = new OrcReader(file_ptr);
+  auto reader = new OrcReader(std::move(file_ptr));
   reader->Open(reader_options);
   EXPECT_EQ(0UL, reader->GetGroupNums());
   reader->Close();
@@ -382,14 +382,14 @@ TEST_F(OrcTest, ReadTuple) {
   auto local_fs = Singleton<LocalFileSystem>::GetInstance();
   ASSERT_NE(nullptr, local_fs);
 
-  std::shared_ptr<File> file_ptr = local_fs->Open(file_name_, fs::kWriteMode);
-  EXPECT_NE(nullptr, file_ptr);
+  std::unique_ptr<File> file_ptr = local_fs->Open(file_name_, fs::kWriteMode);
+  EXPECT_NE(nullptr, file_ptr.get());
 
   MicroPartitionWriter::WriterOptions writer_options;
   writer_options.rel_tuple_desc = tuple_slot->tts_tupleDescriptor;
 
   auto writer = OrcWriter::CreateWriter(
-      writer_options, std::move(CreateTestSchemaTypes()), file_ptr);
+      writer_options, std::move(CreateTestSchemaTypes()), std::move(file_ptr));
   TupleTableSlot *tuple_slot_empty = CreateTestTupleTableSlot(false);
 
   writer->WriteTuple(tuple_slot);
@@ -398,7 +398,7 @@ TEST_F(OrcTest, ReadTuple) {
   file_ptr = local_fs->Open(file_name_, fs::kReadMode);
 
   MicroPartitionReader::ReaderOptions reader_options;
-  auto reader = new OrcReader(file_ptr);
+  auto reader = new OrcReader(std::move(file_ptr));
   reader->Open(reader_options);
   EXPECT_EQ(1UL, reader->GetGroupNums());
   reader->ReadTuple(tuple_slot_empty);
@@ -415,15 +415,15 @@ TEST_F(OrcTest, GetTuple) {
   auto local_fs = Singleton<LocalFileSystem>::GetInstance();
   ASSERT_NE(nullptr, local_fs);
 
-  std::shared_ptr<File> file_ptr = local_fs->Open(file_name_, fs::kWriteMode);
-  EXPECT_NE(nullptr, file_ptr);
+  std::unique_ptr<File> file_ptr = local_fs->Open(file_name_, fs::kWriteMode);
+  EXPECT_NE(nullptr, file_ptr.get());
 
   MicroPartitionWriter::WriterOptions writer_options;
   writer_options.rel_tuple_desc = tuple_slot->tts_tupleDescriptor;
   writer_options.group_limit = 100;
 
   auto writer = OrcWriter::CreateWriter(
-      writer_options, std::move(CreateTestSchemaTypes()), file_ptr);
+      writer_options, std::move(CreateTestSchemaTypes()), std::move(file_ptr));
   for (int i = 0; i < 1000; i++) {
     if (i % 5 == 0) {
       tuple_slot->tts_isnull[0] = true;
@@ -440,7 +440,7 @@ TEST_F(OrcTest, GetTuple) {
   file_ptr = local_fs->Open(file_name_, fs::kReadMode);
 
   MicroPartitionReader::ReaderOptions reader_options;
-  auto reader = new OrcReader(file_ptr);
+  auto reader = new OrcReader(std::move(file_ptr));
   TupleTableSlot *tuple_slot_empty = CreateTestTupleTableSlot(false);
 
   reader->Open(reader_options);
@@ -521,11 +521,11 @@ TEST_F(OrcTest, WriteReadTupleWithToast) {
   auto local_fs = Singleton<LocalFileSystem>::GetInstance();
   ASSERT_NE(nullptr, local_fs);
 
-  std::shared_ptr<File> file_ptr = local_fs->Open(file_name_, fs::kWriteMode);
-  EXPECT_NE(nullptr, file_ptr);
+  std::unique_ptr<File> file_ptr = local_fs->Open(file_name_, fs::kWriteMode);
+  EXPECT_NE(nullptr, file_ptr.get());
 
-  std::shared_ptr<File> toast_file_ptr = local_fs->Open(toast_file_name, fs::kWriteMode);
-  EXPECT_NE(nullptr, file_ptr);
+  std::unique_ptr<File> toast_file_ptr = local_fs->Open(toast_file_name, fs::kWriteMode);
+  EXPECT_NE(nullptr, toast_file_ptr.get());
 
   MicroPartitionWriter::WriterOptions writer_options;
   writer_options.rel_tuple_desc = tuple_slot->tts_tupleDescriptor;
@@ -539,7 +539,7 @@ TEST_F(OrcTest, WriteReadTupleWithToast) {
   std::vector<pax::porc::proto::Type_Kind> types_for_read = types;
 
   auto writer = OrcWriter::CreateWriter(writer_options, std::move(types),
-                                        file_ptr, toast_file_ptr);
+                                        std::move(file_ptr), std::move(toast_file_ptr));
   for (int i = 0; i < 106; i++) {
     switch (i % 3) {
       case 0: {
@@ -574,12 +574,12 @@ TEST_F(OrcTest, WriteReadTupleWithToast) {
 
   // begin full read without projection
   file_ptr = local_fs->Open(file_name_, fs::kReadMode);
-  EXPECT_NE(nullptr, file_ptr);
+  EXPECT_NE(nullptr, file_ptr.get());
 
   toast_file_ptr = local_fs->Open(toast_file_name, fs::kReadMode);
-  EXPECT_NE(nullptr, file_ptr);
+  EXPECT_NE(nullptr, toast_file_ptr.get());
   MicroPartitionReader::ReaderOptions reader_options;
-  auto reader = new OrcReader(file_ptr, toast_file_ptr);
+  auto reader = new OrcReader(std::move(file_ptr), std::move(toast_file_ptr));
   tuple_slot_empty = MakeTupleTableSlot(tuple_desc, &TTSOpsVirtual);
 
   reader->Open(reader_options);
@@ -657,16 +657,16 @@ TEST_F(OrcTest, WriteReadTupleWithToast) {
 
   // begin read with projection
   file_ptr = local_fs->Open(file_name_, fs::kReadMode);
-  EXPECT_NE(nullptr, file_ptr);
+  EXPECT_NE(nullptr, file_ptr.get());
 
   toast_file_ptr = local_fs->Open(toast_file_name, fs::kReadMode);
-  EXPECT_NE(nullptr, file_ptr);
+  EXPECT_NE(nullptr, toast_file_ptr.get());
   std::vector<bool> projection = {false, true, true, true};
   std::shared_ptr<PaxFilter> filter = std::make_shared<PaxFilter>();
 
   filter->SetColumnProjection(std::move(projection));
   reader_options.filter = filter;
-  reader = new OrcReader(file_ptr, toast_file_ptr);
+  reader = new OrcReader(std::move(file_ptr), std::move(toast_file_ptr));
   reader->Open(reader_options);
   EXPECT_EQ(6UL, reader->GetGroupNums());
 
@@ -776,8 +776,8 @@ TEST_P(OrcEncodingTest, ReadTupleWithEncoding) {
   auto local_fs = Singleton<LocalFileSystem>::GetInstance();
   ASSERT_NE(nullptr, local_fs);
 
-  std::shared_ptr<File> file_ptr = local_fs->Open(file_name_, fs::kWriteMode);
-  EXPECT_NE(nullptr, file_ptr);
+  std::unique_ptr<File> file_ptr = local_fs->Open(file_name_, fs::kWriteMode);
+  EXPECT_NE(nullptr, file_ptr.get());
 
   std::vector<pax::porc::proto::Type_Kind> types;
   types.emplace_back(pax::porc::proto::Type_Kind::Type_Kind_LONG);
@@ -789,7 +789,7 @@ TEST_P(OrcEncodingTest, ReadTupleWithEncoding) {
   writer_options.encoding_opts = types_encoding;
   writer_options.rel_tuple_desc = tuple_desc;
 
-  auto writer = new OrcWriter(writer_options, types, file_ptr);
+  auto writer = new OrcWriter(writer_options, types, std::move(file_ptr));
 
   for (size_t i = 0; i < 10000; i++) {
     tuple_slot->tts_values[0] = Int64GetDatum(i);
@@ -802,7 +802,7 @@ TEST_P(OrcEncodingTest, ReadTupleWithEncoding) {
   file_ptr = local_fs->Open(file_name_, fs::kReadMode);
 
   MicroPartitionReader::ReaderOptions reader_options;
-  auto reader = new OrcReader(file_ptr);
+  auto reader = new OrcReader(std::move(file_ptr));
   reader->Open(reader_options);
   EXPECT_EQ(1UL, reader->GetGroupNums());
   for (size_t i = 0; i < 10000; i++) {
@@ -847,8 +847,8 @@ TEST_P(OrcCompressTest, ReadTupleWithCompress) {
   auto local_fs = Singleton<LocalFileSystem>::GetInstance();
   ASSERT_NE(nullptr, local_fs);
 
-  std::shared_ptr<File> file_ptr = local_fs->Open(file_name_, fs::kWriteMode);
-  EXPECT_NE(nullptr, file_ptr);
+  std::unique_ptr<File> file_ptr = local_fs->Open(file_name_, fs::kWriteMode);
+  EXPECT_NE(nullptr, file_ptr.get());
 
   std::vector<pax::porc::proto::Type_Kind> types;
   types.emplace_back(pax::porc::proto::Type_Kind::Type_Kind_STRING);
@@ -860,7 +860,7 @@ TEST_P(OrcCompressTest, ReadTupleWithCompress) {
   writer_options.encoding_opts = types_encoding;
   writer_options.rel_tuple_desc = tuple_desc;
 
-  auto writer = new OrcWriter(writer_options, types, file_ptr);
+  auto writer = new OrcWriter(writer_options, types, std::move(file_ptr));
 
   for (size_t i = 0; i < COLUMN_SIZE; i++) {
     column_buff_str[i] = i;
@@ -878,7 +878,7 @@ TEST_P(OrcCompressTest, ReadTupleWithCompress) {
   file_ptr = local_fs->Open(file_name_, fs::kReadMode);
 
   MicroPartitionReader::ReaderOptions reader_options;
-  auto reader = new OrcReader(file_ptr);
+  auto reader = new OrcReader(std::move(file_ptr));
   reader->Open(reader_options);
 
   ASSERT_EQ(1UL, reader->GetGroupNums());
@@ -918,14 +918,14 @@ TEST_F(OrcTest, ReadTupleDefaultColumn) {
   auto *local_fs = Singleton<LocalFileSystem>::GetInstance();
   ASSERT_NE(nullptr, local_fs);
 
-  std::shared_ptr<File> file_ptr = local_fs->Open(file_name_, fs::kWriteMode);
-  EXPECT_NE(nullptr, file_ptr);
+  std::unique_ptr<File> file_ptr = local_fs->Open(file_name_, fs::kWriteMode);
+  EXPECT_NE(nullptr, file_ptr.get());
 
   MicroPartitionWriter::WriterOptions writer_options;
   writer_options.rel_tuple_desc = tuple_slot->tts_tupleDescriptor;
 
   auto writer = OrcWriter::CreateWriter(
-      writer_options, std::move(CreateTestSchemaTypes()), file_ptr);
+      writer_options, std::move(CreateTestSchemaTypes()), std::move(file_ptr));
 
   writer->WriteTuple(tuple_slot);
   writer->Close();
@@ -933,7 +933,7 @@ TEST_F(OrcTest, ReadTupleDefaultColumn) {
   file_ptr = local_fs->Open(file_name_, fs::kReadMode);
 
   MicroPartitionReader::ReaderOptions reader_options;
-  auto reader = new OrcReader(file_ptr);
+  auto reader = new OrcReader(std::move(file_ptr));
   reader->Open(reader_options);
   EXPECT_EQ(1UL, reader->GetGroupNums());
 
@@ -969,14 +969,14 @@ TEST_F(OrcTest, ReadTupleDroppedColumn) {
   auto *local_fs = Singleton<LocalFileSystem>::GetInstance();
   ASSERT_NE(nullptr, local_fs);
 
-  std::shared_ptr<File> file_ptr = local_fs->Open(file_name_, fs::kWriteMode);
-  EXPECT_NE(nullptr, file_ptr);
+  std::unique_ptr<File> file_ptr = local_fs->Open(file_name_, fs::kWriteMode);
+  EXPECT_NE(nullptr, file_ptr.get());
 
   MicroPartitionWriter::WriterOptions writer_options;
   writer_options.rel_tuple_desc = tuple_slot->tts_tupleDescriptor;
 
   auto writer = OrcWriter::CreateWriter(
-      writer_options, std::move(CreateTestSchemaTypes()), file_ptr);
+      writer_options, std::move(CreateTestSchemaTypes()), std::move(file_ptr));
 
   writer->WriteTuple(tuple_slot);
   writer->Close();
@@ -984,7 +984,7 @@ TEST_F(OrcTest, ReadTupleDroppedColumn) {
   file_ptr = local_fs->Open(file_name_, fs::kReadMode);
 
   MicroPartitionReader::ReaderOptions reader_options;
-  auto reader = new OrcReader(file_ptr);
+  auto reader = new OrcReader(std::move(file_ptr));
   reader->Open(reader_options);
   EXPECT_EQ(1UL, reader->GetGroupNums());
   TupleTableSlot *tuple_slot_empty = CreateTestTupleTableSlot(false);
@@ -1004,21 +1004,21 @@ TEST_F(OrcTest, ReadTupleDroppedColumnWithProjection) {
   auto *local_fs = Singleton<LocalFileSystem>::GetInstance();
   ASSERT_NE(nullptr, local_fs);
 
-  std::shared_ptr<File> file_ptr = local_fs->Open(file_name_, fs::kWriteMode);
-  EXPECT_NE(nullptr, file_ptr);
+  std::unique_ptr<File> file_ptr = local_fs->Open(file_name_, fs::kWriteMode);
+  EXPECT_NE(nullptr, file_ptr.get());
 
   MicroPartitionWriter::WriterOptions writer_options;
   writer_options.rel_tuple_desc = tuple_slot->tts_tupleDescriptor;
 
   auto writer = OrcWriter::CreateWriter(
-      writer_options, std::move(CreateTestSchemaTypes()), file_ptr);
+      writer_options, std::move(CreateTestSchemaTypes()), std::move(file_ptr));
   writer->WriteTuple(tuple_slot);
   writer->Close();
 
   file_ptr = local_fs->Open(file_name_, fs::kReadMode);
 
   MicroPartitionReader::ReaderOptions reader_options;
-  auto reader = new OrcReader(file_ptr);
+  auto reader = new OrcReader(std::move(file_ptr));
   reader->Open(reader_options);
   EXPECT_EQ(1UL, reader->GetGroupNums());
   TupleTableSlot *tuple_slot_empty = CreateTestTupleTableSlot(false);
@@ -1058,8 +1058,8 @@ TEST_F(OrcTest, WriteReadBigTuple) {
   auto local_fs = Singleton<LocalFileSystem>::GetInstance();
   ASSERT_NE(nullptr, local_fs);
 
-  std::shared_ptr<File> file_ptr = local_fs->Open(file_name_, fs::kWriteMode);
-  EXPECT_NE(nullptr, file_ptr);
+  std::unique_ptr<File> file_ptr = local_fs->Open(file_name_, fs::kWriteMode);
+  EXPECT_NE(nullptr, file_ptr.get());
 
   std::vector<pax::porc::proto::Type_Kind> types;
   types.emplace_back(pax::porc::proto::Type_Kind::Type_Kind_INT);
@@ -1067,7 +1067,7 @@ TEST_F(OrcTest, WriteReadBigTuple) {
   MicroPartitionWriter::WriterOptions writer_options;
   writer_options.rel_tuple_desc = tuple_desc;
 
-  auto writer = OrcWriter::CreateWriter(writer_options, types, file_ptr);
+  auto writer = OrcWriter::CreateWriter(writer_options, types, std::move(file_ptr));
 
   for (size_t i = 0; i < 10000; i++) {
     tuple_slot->tts_values[0] = Int32GetDatum(i);
@@ -1080,7 +1080,7 @@ TEST_F(OrcTest, WriteReadBigTuple) {
   file_ptr = local_fs->Open(file_name_, fs::kReadMode);
 
   MicroPartitionReader::ReaderOptions reader_options;
-  auto reader = new OrcReader(file_ptr);
+  auto reader = new OrcReader(std::move(file_ptr));
   reader->Open(reader_options);
   EXPECT_EQ(1UL, reader->GetGroupNums());
   for (size_t i = 0; i < 10000; i++) {
@@ -1102,14 +1102,14 @@ TEST_F(OrcTest, WriteReadNoFixedColumnInSameTuple) {
   auto local_fs = Singleton<LocalFileSystem>::GetInstance();
   ASSERT_NE(nullptr, local_fs);
 
-  std::shared_ptr<File> file_ptr = local_fs->Open(file_name_, fs::kWriteMode);
-  EXPECT_NE(nullptr, file_ptr);
+  std::unique_ptr<File> file_ptr = local_fs->Open(file_name_, fs::kWriteMode);
+  EXPECT_NE(nullptr, file_ptr.get());
 
   MicroPartitionWriter::WriterOptions writer_options;
   writer_options.rel_tuple_desc = tuple_slot->tts_tupleDescriptor;
 
   auto writer = OrcWriter::CreateWriter(
-      writer_options, std::move(CreateTestSchemaTypes()), file_ptr);
+      writer_options, std::move(CreateTestSchemaTypes()), std::move(file_ptr));
 
   writer->WriteTuple(tuple_slot);
 
@@ -1125,7 +1125,7 @@ TEST_F(OrcTest, WriteReadNoFixedColumnInSameTuple) {
   file_ptr = local_fs->Open(file_name_, fs::kReadMode);
 
   MicroPartitionReader::ReaderOptions reader_options;
-  auto reader = new OrcReader(file_ptr);
+  auto reader = new OrcReader(std::move(file_ptr));
   reader->Open(reader_options);
 
   EXPECT_EQ(1UL, reader->GetGroupNums());
@@ -1154,14 +1154,14 @@ TEST_F(OrcTest, WriteReadWithNullField) {
   auto *local_fs = Singleton<LocalFileSystem>::GetInstance();
   ASSERT_NE(nullptr, local_fs);
 
-  std::shared_ptr<File> file_ptr = local_fs->Open(file_name_, fs::kWriteMode);
-  EXPECT_NE(nullptr, file_ptr);
+  std::unique_ptr<File> file_ptr = local_fs->Open(file_name_, fs::kWriteMode);
+  EXPECT_NE(nullptr, file_ptr.get());
 
   OrcWriter::WriterOptions writer_options;
   writer_options.rel_tuple_desc = tuple_slot->tts_tupleDescriptor;
 
   auto writer = OrcWriter::CreateWriter(
-      writer_options, std::move(CreateTestSchemaTypes()), file_ptr);
+      writer_options, std::move(CreateTestSchemaTypes()), std::move(file_ptr));
 
   // str str int
   // null null int
@@ -1189,7 +1189,7 @@ TEST_F(OrcTest, WriteReadWithNullField) {
   file_ptr = local_fs->Open(file_name_, fs::kReadMode);
 
   MicroPartitionReader::ReaderOptions reader_options;
-  auto reader = new OrcReader(file_ptr);
+  auto reader = new OrcReader(std::move(file_ptr));
   reader->Open(reader_options);
   TupleTableSlot *tuple_slot_empty = CreateTestTupleTableSlot(false);
 
@@ -1231,14 +1231,14 @@ TEST_F(OrcTest, WriteReadWithBoundNullField) {
   auto *local_fs = Singleton<LocalFileSystem>::GetInstance();
   ASSERT_NE(nullptr, local_fs);
 
-  std::shared_ptr<File> file_ptr = local_fs->Open(file_name_, fs::kWriteMode);
-  EXPECT_NE(nullptr, file_ptr);
+  std::unique_ptr<File> file_ptr = local_fs->Open(file_name_, fs::kWriteMode);
+  EXPECT_NE(nullptr, file_ptr.get());
 
   OrcWriter::WriterOptions writer_options;
   writer_options.rel_tuple_desc = tuple_slot->tts_tupleDescriptor;
 
   auto writer = OrcWriter::CreateWriter(
-      writer_options, std::move(CreateTestSchemaTypes()), file_ptr);
+      writer_options, std::move(CreateTestSchemaTypes()), std::move(file_ptr));
 
   // null null null
   // str str int
@@ -1263,7 +1263,7 @@ TEST_F(OrcTest, WriteReadWithBoundNullField) {
   file_ptr = local_fs->Open(file_name_, fs::kReadMode);
 
   MicroPartitionReader::ReaderOptions reader_options;
-  auto reader = new OrcReader(file_ptr);
+  auto reader = new OrcReader(std::move(file_ptr));
   reader->Open(reader_options);
   TupleTableSlot *tuple_slot_empty = CreateTestTupleTableSlot(false);
 
@@ -1297,14 +1297,14 @@ TEST_F(OrcTest, WriteReadWithALLNullField) {
   auto *local_fs = Singleton<LocalFileSystem>::GetInstance();
   ASSERT_NE(nullptr, local_fs);
 
-  std::shared_ptr<File> file_ptr = local_fs->Open(file_name_, fs::kWriteMode);
-  EXPECT_NE(nullptr, file_ptr);
+  std::unique_ptr<File> file_ptr = local_fs->Open(file_name_, fs::kWriteMode);
+  EXPECT_NE(nullptr, file_ptr.get());
 
   OrcWriter::WriterOptions writer_options;
   writer_options.rel_tuple_desc = tuple_slot->tts_tupleDescriptor;
 
   auto writer = OrcWriter::CreateWriter(
-      writer_options, std::move(CreateTestSchemaTypes()), file_ptr);
+      writer_options, std::move(CreateTestSchemaTypes()), std::move(file_ptr));
 
   tuple_slot->tts_isnull[0] = true;
   tuple_slot->tts_isnull[1] = true;
@@ -1317,7 +1317,7 @@ TEST_F(OrcTest, WriteReadWithALLNullField) {
   file_ptr = local_fs->Open(file_name_, fs::kReadMode);
 
   MicroPartitionReader::ReaderOptions reader_options;
-  auto reader = new OrcReader(file_ptr);
+  auto reader = new OrcReader(std::move(file_ptr));
   reader->Open(reader_options);
   TupleTableSlot *tuple_slot_empty = CreateTestTupleTableSlot(false);
 
@@ -1353,14 +1353,14 @@ TEST_P(OrcTestProjection, ReadTupleWithProjectionColumn) {
     proj_map[proj_index] = !proj_map[proj_index];
   }
 
-  std::shared_ptr<File> file_ptr = local_fs->Open(file_name_, fs::kWriteMode);
-  EXPECT_NE(nullptr, file_ptr);
+  std::unique_ptr<File> file_ptr = local_fs->Open(file_name_, fs::kWriteMode);
+  EXPECT_NE(nullptr, file_ptr.get());
 
   MicroPartitionWriter::WriterOptions writer_options;
   writer_options.rel_tuple_desc = tuple_slot->tts_tupleDescriptor;
 
   auto writer = OrcWriter::CreateWriter(
-      writer_options, std::move(CreateTestSchemaTypes()), file_ptr);
+      writer_options, std::move(CreateTestSchemaTypes()), std::move(file_ptr));
 
   writer->WriteTuple(tuple_slot);
   writer->Flush();
@@ -1375,7 +1375,7 @@ TEST_P(OrcTestProjection, ReadTupleWithProjectionColumn) {
   MicroPartitionReader::ReaderOptions reader_options;
   reader_options.filter = pax_filter;
 
-  auto reader = new OrcReader(file_ptr);
+  auto reader = new OrcReader(std::move(file_ptr));
   reader->Open(reader_options);
 
   EXPECT_EQ(2UL, reader->GetGroupNums());
@@ -1414,9 +1414,9 @@ TEST_P(OrcEncodingTest, WriterMerge) {
 
   ASSERT_NE(nullptr, local_fs);
 
-  std::shared_ptr<File> file1_ptr = local_fs->Open(file1_name, fs::kReadWriteMode);
-  std::shared_ptr<File> file2_ptr = local_fs->Open(file2_name, fs::kReadWriteMode);
-  std::shared_ptr<File> file3_ptr = local_fs->Open(file3_name, fs::kReadWriteMode);
+  std::unique_ptr<File> file1_ptr = local_fs->Open(file1_name, fs::kReadWriteMode);
+  std::unique_ptr<File> file2_ptr = local_fs->Open(file2_name, fs::kReadWriteMode);
+  std::unique_ptr<File> file3_ptr = local_fs->Open(file3_name, fs::kReadWriteMode);
   EXPECT_NE(nullptr, file1_ptr);
   EXPECT_NE(nullptr, file2_ptr);
   EXPECT_NE(nullptr, file3_ptr);
@@ -1431,11 +1431,11 @@ TEST_P(OrcEncodingTest, WriterMerge) {
   writer_options.rel_tuple_desc = tuple_slot->tts_tupleDescriptor;
 
   auto *writer1 = new OrcWriter(writer_options,
-                                std::move(CreateTestSchemaTypes()), file1_ptr);
+                                std::move(CreateTestSchemaTypes()), std::move(file1_ptr));
   auto *writer2 = new OrcWriter(writer_options,
-                                std::move(CreateTestSchemaTypes()), file2_ptr);
+                                std::move(CreateTestSchemaTypes()), std::move(file2_ptr));
   auto *writer3 = new OrcWriter(writer_options,
-                                std::move(CreateTestSchemaTypes()), file3_ptr);
+                                std::move(CreateTestSchemaTypes()), std::move(file3_ptr));
 
   // two group + 51 rows in memory
   for (size_t i = 0; i < 251; i++) {
@@ -1472,7 +1472,7 @@ TEST_P(OrcEncodingTest, WriterMerge) {
   MicroPartitionReader::ReaderOptions reader_options;
   file3_ptr = local_fs->Open(file3_name, fs::kReadMode);
 
-  auto reader = new OrcReader(file3_ptr);
+  auto reader = new OrcReader(std::move(file3_ptr));
   reader->Open(reader_options);
 
   // no memory merge
@@ -1625,8 +1625,8 @@ TEST_F(OrcTest, ReadException) {
   auto local_fs = Singleton<LocalFileSystem>::GetInstance();
   ASSERT_NE(nullptr, local_fs);
 
-  std::shared_ptr<File> file_ptr = local_fs->Open(file_name_, fs::kWriteMode);
-  EXPECT_NE(nullptr, file_ptr);
+  std::unique_ptr<File> file_ptr = local_fs->Open(file_name_, fs::kWriteMode);
+  EXPECT_NE(nullptr, file_ptr.get());
 
   current_pb_func_call_times = 0;
   target_pb_func_call_times = 0;
@@ -1636,7 +1636,7 @@ TEST_F(OrcTest, ReadException) {
   writer_options.group_limit = 10;
 
   auto writer = OrcWriter::CreateWriter(
-      writer_options, std::move(CreateTestSchemaTypes()), file_ptr);
+      writer_options, std::move(CreateTestSchemaTypes()), std::move(file_ptr));
   for (int i = 0; i < 50; i++) {
     writer->WriteTuple(tuple_slot);
   }

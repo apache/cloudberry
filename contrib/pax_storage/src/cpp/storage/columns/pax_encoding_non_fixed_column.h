@@ -42,8 +42,8 @@ class PaxNonFixedEncodingColumn : public PaxNonFixedColumn {
 
   ~PaxNonFixedEncodingColumn() override;
 
-  void Set(std::shared_ptr<DataBuffer<char>> data,
-           std::shared_ptr<DataBuffer<int32>> offsets,
+  void Set(std::unique_ptr<DataBuffer<char>> data,
+           std::unique_ptr<DataBuffer<int32>> offsets,
            size_t total_size) override;
 
   std::pair<char *, size_t> GetBuffer() override;
@@ -83,6 +83,9 @@ class PaxNonFixedEncodingColumn : public PaxNonFixedColumn {
   std::shared_ptr<DataBuffer<char>> shared_data_;
 
   std::shared_ptr<PaxCompressor> offsets_compressor_;
+  // Optional encoder/decoder for offsets stream (alternative to compression)
+  std::shared_ptr<PaxEncoder> offsets_encoder_;
+  std::shared_ptr<PaxDecoder> offsets_decoder_;
   std::shared_ptr<DataBuffer<char>> shared_offsets_data_;
 };
 

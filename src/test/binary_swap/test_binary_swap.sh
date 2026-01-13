@@ -40,7 +40,7 @@ start_binary()
 {
     BINARY_PATH=$1
     gpstop -ai
-    source $BINARY_PATH/greenplum_path.sh
+    source $BINARY_PATH/cloudberry-env.sh
     gpstart -a
     echo "Select our Cloudberry version just to be sure..."
     psql -c "select version()" postgres
@@ -89,12 +89,12 @@ GPHOME_CURRENT=${GPHOME_CURRENT:=$GPHOME}
 MDD_CURRENT=${MDD_CURRENT:=$MASTER_DATA_DIRECTORY}
 PGPORT_CURRENT=${PGPORT_CURRENT:=$PGPORT}
 
-if [ "${GPHOME_OTHER}x" == "x" ] || ! [ -f $GPHOME_OTHER/greenplum_path.sh ]; then
+if [ "${GPHOME_OTHER}x" == "x" ] || ! [ -f $GPHOME_OTHER/cloudberry-env.sh ]; then
     echo "Use -b to provide a valid Cloudberry install path to upgrade/downgrade from"
     exit 1
 fi
 
-if [ "${GPHOME_CURRENT}x" == "x" ] || ! [ -f $GPHOME_CURRENT/greenplum_path.sh ]; then
+if [ "${GPHOME_CURRENT}x" == "x" ] || ! [ -f $GPHOME_CURRENT/cloudberry-env.sh ]; then
     echo "Use -c to provide a valid Cloudberry install path to upgrade/downgrade to (Default: \$GPHOME)"
     exit 1
 fi
@@ -138,14 +138,14 @@ run_tests schedule1${VARIANT}
 
 ## Change the binary, dump, and then compare the two dumps generated
 ## by both binaries. Then we do some inserts and dump again. We source
-## $GPHOME_CURRENT/greenplum_path.sh here after starting Cloudberry
+## $GPHOME_CURRENT/cloudberry-env.sh here after starting Cloudberry
 ## with $GPHOME_OTHER to use latest pg_dumpall to prevent catching
 ## diffs due to changes made to pg_dump. The running binaries are
 ## still from $GPHOME_OTHER. Only pg_regress, pg_dumpall, psql, and
 ## gpcheckcat should be from $GPHOME_CURRENT during the pg_regress
 ## test.
 start_binary $GPHOME_OTHER
-source $GPHOME_CURRENT/greenplum_path.sh
+source $GPHOME_CURRENT/cloudberry-env.sh
 run_tests schedule2${VARIANT}
 
 ## Change the binary back, dump, and then compare the two new dumps

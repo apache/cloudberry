@@ -136,7 +136,7 @@ explain select distinct(a), sum(b) from t_volatile_limit_1 group by a order by a
                            Group Key: a
                            ->  Redistribute Motion 3:3  (slice2; segments: 3)  (cost=464.50..494.50 rows=1000 width=12)
                                  Hash Key: a
-                                 ->  Partial HashAggregate  (cost=464.50..474.50 rows=1000 width=12)
+                                 ->  Streaming Partial HashAggregate  (cost=464.50..474.50 rows=1000 width=12)
                                        Group Key: a
                                        ->  Seq Scan on t_volatile_limit_1  (cost=0.00..321.00 rows=28700 width=8)
  Optimizer: Postgres query optimizer
@@ -156,7 +156,7 @@ explain select distinct(a), sum(b) from t_volatile_limit_1 group by a order by a
                            Group Key: a
                            ->  Redistribute Motion 3:3  (slice2; segments: 3)  (cost=464.50..494.50 rows=1000 width=12)
                                  Hash Key: a
-                                 ->  Partial HashAggregate  (cost=464.50..474.50 rows=1000 width=12)
+                                 ->  Streaming Partial HashAggregate  (cost=464.50..474.50 rows=1000 width=12)
                                        Group Key: a
                                        ->  Seq Scan on t_volatile_limit_1  (cost=0.00..321.00 rows=28700 width=8)
  Optimizer: Postgres query optimizer

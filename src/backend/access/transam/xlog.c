@@ -114,6 +114,7 @@ int			XLogArchiveTimeout = 0;
 int			XLogArchiveMode = ARCHIVE_MODE_OFF;
 char	   *XLogArchiveCommand = NULL;
 bool		EnableHotStandby = false;
+bool		EnableHotDR = false;
 bool		fullPageWrites = true;
 bool		wal_log_hints = false;
 bool		wal_compression = false;
@@ -133,7 +134,14 @@ bool		track_wal_io_timing = false;
 int         FileEncryptionEnabled = false;
 
 /* GPDB specific */
-bool gp_pause_on_restore_point_replay = false;
+char *gp_pause_on_restore_point_replay = "";
+
+/*
+ * GPDB: Have we reached a specific continuous recovery target? We set this to
+ * true if WAL replay has found a restore point matching the GPDB-specific GUC
+ * gp_pause_on_restore_point_replay and a promotion has been requested.
+ */
+static bool reachedContinuousRecoveryTarget = false;
 
 #ifdef WAL_DEBUG
 bool		XLOG_DEBUG = false;
@@ -6013,6 +6021,59 @@ recoveryStopsBefore(XLogReaderState *record)
 }
 
 /*
+ * GPDB: Restore point records can act as a point of synchronization to ensure
+ * cluster-wide consistency during WAL replay. If a restore point is specified
+ * in the gp_pause_on_restore_point_replay GUC, WAL replay will be paused at
+ * that restore point until replay is explicitly resumed.
+ */
+static void
+pauseRecoveryOnRestorePoint(XLogReaderState *record)
+{
+	uint8		info;
+	uint8		rmid;
+
+	/*
+	 * Ignore recovery target settings when not in archive recovery (meaning
+	 * we are in crash recovery).
+	 */
+	if (!ArchiveRecoveryRequested)
+		return;
+
+	info = XLogRecGetInfo(record) & ~XLR_INFO_MASK;
+	rmid = XLogRecGetRmid(record);
+
+	if (rmid == RM_XLOG_ID && info == XLOG_RESTORE_POINT)
+	{
+		xl_restore_point *recordRestorePointData;
+
+		recordRestorePointData = (xl_restore_point *) XLogRecGetData(record);
+
+		if (strcmp(recordRestorePointData->rp_name, gp_pause_on_restore_point_replay) == 0)
+		{
+			ereport(LOG,
+					(errmsg("setting recovery pause at restore point \"%s\", time %s",
+							recordRestorePointData->rp_name,
+							timestamptz_to_str(recordRestorePointData->rp_time))));
+
+			SetRecoveryPause(true);
+			recoveryPausesHere(false);
+
+			/*
+			 * If we've unpaused and there is a promotion request, then we've
+			 * reached our continuous recovery target and need to immediately
+			 * promote. We piggyback on the existing recovery target logic to
+			 * do this. See recoveryStopsAfter().
+			 */
+			if (CheckForStandbyTrigger())
+			{
+				reachedContinuousRecoveryTarget = true;
+				recoveryTargetAction = RECOVERY_TARGET_ACTION_PROMOTE;
+			}
+		}
+	}
+}
+
+/*
  * Same as recoveryStopsBefore, but called after applying the record.
  *
  * We also track the timestamp of the latest applied COMMIT/ABORT
@@ -6039,15 +6100,19 @@ recoveryStopsAfter(XLogReaderState *record)
 	/*
 	 * There can be many restore points that share the same name; we stop at
 	 * the first one.
+	 *
+	 * GPDB: If we've reached the continuous recovery target, we'll use the
+	 * below logic to immediately stop recovery.
 	 */
-	if (recoveryTarget == RECOVERY_TARGET_NAME &&
+	if ((reachedContinuousRecoveryTarget || recoveryTarget == RECOVERY_TARGET_NAME) &&
 		rmid == RM_XLOG_ID && info == XLOG_RESTORE_POINT)
 	{
 		xl_restore_point *recordRestorePointData;
 
 		recordRestorePointData = (xl_restore_point *) XLogRecGetData(record);
 
-		if (strcmp(recordRestorePointData->rp_name, recoveryTargetName) == 0)
+		if (reachedContinuousRecoveryTarget ||
+			strcmp(recordRestorePointData->rp_name, recoveryTargetName) == 0)
 		{
 			recoveryStopAfter = true;
 			recoveryStopXid = InvalidTransactionId;
@@ -6463,6 +6528,7 @@ static void
 UpdateCatalogForStandbyPromotion(void)
 {
 	GpRoleValue old_role;
+	char *fullpath;
 	/*
 	 * NOTE: The following initialization logic was borrowed from ftsprobe.
 	 */
@@ -6534,8 +6600,6 @@ UpdateCatalogForStandbyPromotion(void)
 	 */
 	RelationCacheInitializePhase2();
 
-	char *fullpath;
-
 	/*
 	 * In order to access the catalog, we need a database, and a
 	 * tablespace; our access to the heap is going to be slightly
@@ -6555,6 +6619,7 @@ UpdateCatalogForStandbyPromotion(void)
 	fullpath = GetDatabasePath(MyDatabaseId, MyDatabaseTableSpace);
 
 	SetDatabasePath(fullpath);
+	pfree(fullpath);
 
 	RelationCacheInitializePhase3();
 
@@ -7900,6 +7965,15 @@ StartupXLOG(void)
 						WalSndWakeup();
 				}
 
+				if (gp_pause_on_restore_point_replay)
+					pauseRecoveryOnRestorePoint(xlogreader);
+
+				/* Exit the recovery loop if a promotion is triggered in pauseRecoveryOnRestorePoint() */
+				if (reachedContinuousRecoveryTarget && recoveryTargetAction == RECOVERY_TARGET_ACTION_PROMOTE){
+					reachedRecoveryTarget = true;
+					break;
+				}
+
 				/* Exit loop if we reached inclusive recovery target */
 				if (recoveryStopsAfter(xlogreader))
 				{
@@ -8330,6 +8404,8 @@ StartupXLOG(void)
 	 * Okay, we're officially UP.
 	 */
 	InRecovery = false;
+
+	SIMPLE_FAULT_INJECTOR("out_of_recovery_in_startupxlog");
 
 	/*
 	 * Hook for plugins to do additional startup works.
@@ -9801,7 +9877,10 @@ CreateCheckPoint(int flags)
 	 * recovery we don't need to write running xact data.
 	 */
 	if (!shutdown && XLogStandbyInfoActive())
+	{
 		LogStandbySnapshot();
+
+	}
 
 	SIMPLE_FAULT_INJECTOR("checkpoint_after_redo_calculated");
 
@@ -10685,6 +10764,9 @@ XLogRestorePoint(const char *rpName)
 	xlrec.rp_time = GetCurrentTimestamp();
 	strlcpy(xlrec.rp_name, rpName, MAXFNAMELEN);
 
+	/* LogHotStandby for the restore here */
+	LogStandbySnapshot();
+
 	XLogBeginInsert();
 	XLogRegisterData((char *) &xlrec, sizeof(xl_restore_point));
 
@@ -11126,14 +11208,7 @@ xlog_redo(XLogReaderState *record)
 	}
 	else if (info == XLOG_RESTORE_POINT)
 	{
-		/*
-		 * GPDB: Restore point records can act as a point of
-		 * synchronization to ensure cluster-wide consistency during WAL
-		 * replay. WAL replay is paused at each restore point until it is
-		 * explicitly resumed.
-		 */
-		if (gp_pause_on_restore_point_replay)
-			SetRecoveryPause(true);
+		/* nothing to do here */
 	}
 	else if (info == XLOG_FPI || info == XLOG_FPI_FOR_HINT)
 	{

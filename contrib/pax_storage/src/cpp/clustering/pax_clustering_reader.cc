@@ -63,8 +63,8 @@ bool PaxClusteringReader::GetNextTuple(TupleTableSlot *slot) {
         file->Close();
       }
 
-      std::shared_ptr<File> file;
-      std::shared_ptr<File> toast_file;
+      std::unique_ptr<File> file;
+      std::unique_ptr<File> toast_file;
       file =
           file_system_->Open(meta_info.GetFileName(), pax::fs::kReadMode);
 
@@ -75,7 +75,7 @@ bool PaxClusteringReader::GetNextTuple(TupleTableSlot *slot) {
       }
 
       reader_ = MicroPartitionFileFactory::CreateMicroPartitionReader(
-          options, ReaderFlags::FLAGS_EMPTY, file, toast_file);
+          options, ReaderFlags::FLAGS_EMPTY, std::move(file), std::move(toast_file));
     } else {
       return false;
     }

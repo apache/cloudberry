@@ -44,11 +44,12 @@ namespace pax {
 PaxFilter::PaxFilter() : sparse_filter_(nullptr), row_filter_(nullptr) {}
 
 void PaxFilter::InitSparseFilter(Relation relation, List *quals,
+                                 ScanKey key, int nkeys,
                                  bool allow_fallback_to_pg) {
   Assert(!sparse_filter_);
   sparse_filter_ =
       std::make_shared<PaxSparseFilter>(relation, allow_fallback_to_pg);
-  sparse_filter_->Initialize(quals);
+  sparse_filter_->Initialize(quals, key, nkeys);
 }
 
 #ifdef VEC_BUILD

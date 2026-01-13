@@ -268,6 +268,7 @@
 #include "utils/dynahash.h"
 #include "utils/expandeddatum.h"
 #include "utils/faultinjector.h"
+#include "utils/guc.h"
 #include "utils/logtape.h"
 #include "utils/lsyscache.h"
 #include "utils/memutils.h"
@@ -1870,6 +1871,8 @@ hash_agg_set_limits(AggState *aggstate, double hashentrysize, double input_group
 			strict_memlimit = operator_mem;
 	}
 
+	strict_memlimit = strict_memlimit * hash_mem_multiplier;
+
 	/* if not expected to spill, use all of work_mem */
 	if (input_groups * hashentrysize < strict_memlimit * 1024L)
 	{
@@ -2092,6 +2095,26 @@ hash_agg_update_metrics(AggState *aggstate, bool from_tape, int npartitions)
 			}
 		}
 	}
+
+#ifdef USE_ASSERT_CHECKING
+	if (unlikely(DEBUG1 >= log_min_messages) && aggstate->streaming)
+	{
+		for (int setno = 0; setno < aggstate->num_hashes; setno++)
+		{
+			AggStatePerHash perhash = &aggstate->perhash[setno];
+			if (perhash->chain_count > 0)
+			{
+				elog(DEBUG1, "hash_agg_update_metrics streaming: setno=%d, chain_length_total=%.1f, chain_length_max=%d, bucket_used=%lu, bucket_total=%lu, num_expansions=%u",
+					 setno,
+					 (double)perhash->chain_length_total / perhash->chain_count,
+					 perhash->chain_length_max,
+					 perhash->bucket_used,
+					 perhash->bucket_total,
+					 perhash->num_expansions);
+			}
+		}
+	}
+#endif
 }
 
 /*
@@ -2147,6 +2170,8 @@ hash_choose_num_partitions(AggState *aggstate, double input_groups, double hashe
 		if (operator_mem < strict_memlimit)
 			strict_memlimit = operator_mem;
 	}
+
+	strict_memlimit = strict_memlimit * hash_mem_multiplier;
 
 	/*
 	 * Avoid creating so many partitions that the memory requirements of the
@@ -2276,7 +2301,7 @@ lookup_hash_entries(AggState *aggstate)
 				initialize_hash_entry(aggstate, hashtable, entry);
 			pergroup[setno] = entry->additional;
 		}
-		else
+		else if (!aggstate->streaming)
 		{
 			HashAggSpill *spill = &aggstate->hash_spills[setno];
 			TupleTableSlot *slot = aggstate->tmpcontext->ecxt_outertuple;

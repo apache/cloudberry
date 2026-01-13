@@ -95,26 +95,32 @@ SYMBOL_MAPPING_FLAGS =
 ifeq ($(PORTNAME), darwin)
 SYMBOL_MAP_FILE = hide_symbols.list
 $(SYMBOL_MAP_FILE): $(top_builddir)/src/interfaces/libpq/exports.txt
-	$(AWK) '/^[^\#]/ {printf "_%s\n",$$1}' $< | grep -v -E $(SAFELY_EXPORTED_SYMBOLS_PATTERN) >$@
+	$(AWK) '/^[^\043]/ {printf "_%s\n",$$1}' $< | grep -v -E $(SAFELY_EXPORTED_SYMBOLS_PATTERN) >$@
 SYMBOL_MAPPING_FLAGS = -unexported_symbols_list $(SYMBOL_MAP_FILE)
 endif
 
 ifeq ($(PORTNAME), linux)
 SYMBOL_MAP_FILE = postgres_symbols.map
 $(SYMBOL_MAP_FILE): $(top_builddir)/src/interfaces/libpq/exports.txt
-	( echo '{ global: *; '; echo ' local:'; $(AWK) '/^[^\#]/ {printf "%s;\n",$$1}' $< | grep -v -E $(SAFELY_EXPORTED_SYMBOLS_PATTERN); echo '};' ) >$@
+	( echo '{ global: *; '; echo ' local:'; $(AWK) '/^[^\043]/ {printf "%s;\n",$$1}' $< | grep -v -E $(SAFELY_EXPORTED_SYMBOLS_PATTERN); echo '};' ) >$@
 SYMBOL_MAPPING_FLAGS = -Wl,--version-script=$(SYMBOL_MAP_FILE)
 endif
-
 ifeq ($(enable_shared_postgres_backend),yes)
+all: libpostgres.so
 libpostgres.so: $(OBJS) $(SYMBOL_MAP_FILE)
 	$(CXX) -shared $(CXXFLAGS) $(LDFLAGS) $(LDFLAGS_SL) $(export_dynamic) \
 	  $(filter-out main/main.o, $(call expand_subsys,$(OBJS))) $(LIBS) $(SYMBOL_MAPPING_FLAGS) -o $@
 
+# if enable-build-postgres-with-shared is yes, link postgres with shared library libpostgres.so
+ifeq ($(enable_link_postgres_with_shared),yes)
 postgres: main/main.o libpostgres.so $(top_builddir)/src/port/libpgport_srv.a $(top_builddir)/src/common/libpgcommon_srv.a
 	$(CXX) $(CXXFLAGS) $(LDFLAGS) $(LDFLAGS_EX) $(export_dynamic) \
 	  main/main.o libpostgres.so $(top_builddir)/src/port/libpgport_srv.a \
 	  $(top_builddir)/src/common/libpgcommon_srv.a $(LIBS) -o $@
+else
+postgres: $(OBJS) $(SYMBOL_MAP_FILE)
+	$(CXX) $(CXXFLAGS) $(call expand_subsys,$(OBJS)) $(LDFLAGS) $(LDFLAGS_EX) $(export_dynamic) $(LIBS) $(SYMBOL_MAPPING_FLAGS) -o $@
+endif
 
 else
 postgres: $(OBJS) $(SYMBOL_MAP_FILE)

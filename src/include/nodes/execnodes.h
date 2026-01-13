@@ -1357,10 +1357,8 @@ typedef struct ModifyTableState
 	struct TransitionCaptureState *mt_oc_transition_capture;
 
 	/* Record modified leaf relation(s) */
-	bool		has_leaf_changed;
-	Bitmapset	*mt_leaf_relids_inserted;
-	Bitmapset	*mt_leaf_relids_updated;
-	Bitmapset	*mt_leaf_relids_deleted;
+	HTAB	*modified_leaf_relids;
+
 } ModifyTableState;
 
 /* ----------------
@@ -2231,6 +2229,9 @@ typedef struct DynamicSeqScanState
 	struct PartitionPruneState *as_prune_state; /* partition dynamic pruning state */
 	Bitmapset  *as_valid_subplans; /* used to determine partitions during dynamic pruning*/
 	bool 		did_pruning; /* flag that is set once dynamic pruning is performed */
+
+	/* runtime filter support */
+	List		*filters;			/* the list of struct ScanKeyData for runtime filters */
 } DynamicSeqScanState;
 
 /*

@@ -42,7 +42,7 @@
 #include "storage/local_file_system.h"
 #include "storage/micro_partition.h"
 #include "storage/orc/porc.h"
-#include "stub.h"
+#include "cpp-stub/src/stub.h"
 
 namespace pax::tests {
 using ::testing::_;

@@ -82,10 +82,6 @@ private:
 													CTableDescriptor *ptabdesc,
 													CColRefArray *colref_array);
 
-	// helper for extracting foreign key
-	static CColRefSet *PcrsFKey(CMemoryPool *mp, CExpressionArray *pdrgpexpr,
-								CColRefSet *prcsOutput, CColRefSet *pcrsKey);
-
 	// return the set of columns from the given array of columns which appear
 	// in the index included / key columns
 	static CColRefSet *PcrsIndexColumns(CMemoryPool *mp,
@@ -172,13 +168,6 @@ private:
 													CColRefSet *prcsOutput,
 													CColRefSet *pcrsGrpCols);
 
-	// check if the preconditions for pushing down Group by through join are satisfied
-	static BOOL FCanPushGbAggBelowJoin(CColRefSet *pcrsGrpCols,
-									   CColRefSet *pcrsJoinOuterChildOutput,
-									   CColRefSet *pcrsJoinScalarUsedFromOuter,
-									   CColRefSet *pcrsGrpByOutput,
-									   CColRefSet *pcrsGrpByUsed,
-									   CColRefSet *pcrsFKey);
 	// create a dynamic operator for a btree index plan
 	template <class T>
 	static CLogical *
@@ -296,9 +285,21 @@ public:
 													 const CXform *xform);
 
 	// extract foreign key
+	static CColRefSet *PcrsFKey(CMemoryPool *mp, CExpressionArray *pdrgpexpr,
+								CColRefSet *prcsOutput, CColRefSet *pcrsKey);
+
+	// extract foreign key
 	static CColRefSet *PcrsFKey(CMemoryPool *mp, CExpression *pexprOuter,
 								CExpression *pexprInner,
 								CExpression *pexprScalar);
+
+	// check if the preconditions for pushing down Group by through join are satisfied
+	static BOOL FCanPushGbAggBelowJoin(CColRefSet *pcrsGrpCols,
+									   CColRefSet *pcrsJoinOuterChildOutput,
+									   CColRefSet *pcrsJoinScalarUsedFromOuter,
+									   CColRefSet *pcrsGrpByOutput,
+									   CColRefSet *pcrsGrpByUsed,
+									   CColRefSet *pcrsFKey);
 
 	// compute a swap of the two given joins
 	static CExpression *PexprSwapJoins(CMemoryPool *mp,

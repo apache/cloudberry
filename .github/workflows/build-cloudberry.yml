@@ -113,6 +113,11 @@ on:
         required: false
         default: 'all'
         type: string
+      reuse_artifacts_from_run_id:
+        description: 'Reuse build artifacts from a previous run ID (leave empty to build fresh)'
+        required: false
+        default: ''
+        type: string
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -281,18 +286,25 @@ jobs:
               },
               {"test":"ic-contrib",
                "make_configs":["contrib/auto_explain:installcheck",
+                               "contrib/amcheck:installcheck",
                                "contrib/citext:installcheck",
                                "contrib/btree_gin:installcheck",
+                               "contrib/btree_gist:installcheck",
+                               "contrib/dblink:installcheck",
+                               "contrib/dict_int:installcheck",
+                               "contrib/dict_xsyn:installcheck",
+                               "contrib/extprotocol:installcheck",
                                "contrib/file_fdw:installcheck",
                                "contrib/formatter_fixedwidth:installcheck",
-                               "contrib/extprotocol:installcheck",
-                               "contrib/dblink:installcheck",
+                               "contrib/hstore:installcheck",
+                               "contrib/indexscan:installcheck",
                                "contrib/pg_trgm:installcheck",
                                "contrib/indexscan:installcheck",
-                               "contrib/hstore:installcheck",
                                "contrib/pgcrypto:installcheck",
+                               "contrib/pgstattuple:installcheck",
                                "contrib/tablefunc:installcheck",
                                "contrib/passwordcheck:installcheck",
+                               "contrib/pg_buffercache:installcheck",
                                "contrib/sslinfo:installcheck"]
               },
               {"test":"ic-gpcontrib",
@@ -309,12 +321,18 @@ jobs:
               {"test":"ic-isolation2",
                "make_configs":["src/test/isolation2:installcheck-isolation2"]
               },
+              {"test":"ic-isolation2-hot-standby",
+               "make_configs":["src/test/isolation2:installcheck-hot-standby"]
+              },
               {"test":"ic-isolation2-crash",
                "make_configs":["src/test/isolation2:installcheck-isolation2-crash"],
                "enable_core_check":false
               },
               {"test":"ic-parallel-retrieve-cursor",
                "make_configs":["src/test/isolation2:installcheck-parallel-retrieve-cursor"]
+              },
+              {"test":"ic-cbdb-parallel",
+               "make_configs":["src/test/regress:installcheck-cbdb-parallel"]
               }
             ]
           }'
@@ -406,6 +424,7 @@ jobs:
     needs: [check-skip]
     runs-on: ubuntu-22.04
     timeout-minutes: 120
+    if: github.event.inputs.reuse_artifacts_from_run_id == ''
     outputs:
       build_timestamp: ${{ steps.set_timestamp.outputs.timestamp }}
 
@@ -414,8 +433,33 @@ jobs:
       options: >-
         --user root
         -h cdw
+        -v /usr/share:/host_usr_share
+        -v /usr/local:/host_usr_local
+        -v /opt:/host_opt
 
     steps:
+      - name: Free Disk Space
+        if: needs.check-skip.outputs.should_skip != 'true'
+        run: |
+          echo "=== Disk space before cleanup ==="
+          df -h /
+
+          # Remove pre-installed tools from host to free disk space
+          rm -rf /host_opt/hostedtoolcache || true   # GitHub Actions tool cache
+          rm -rf /host_usr_local/lib/android || true # Android SDK
+          rm -rf /host_usr_share/dotnet || true      # .NET SDK
+          rm -rf /host_opt/ghc || true               # Haskell GHC
+          rm -rf /host_usr_local/.ghcup || true      # Haskell GHCup
+          rm -rf /host_usr_share/swift || true       # Swift
+          rm -rf /host_usr_local/share/powershell || true  # PowerShell
+          rm -rf /host_usr_local/share/chromium || true    # Chromium
+          rm -rf /host_usr_share/miniconda || true   # Miniconda
+          rm -rf /host_opt/az || true                # Azure CLI
+          rm -rf /host_usr_share/sbt || true         # Scala Build Tool
+
+          echo "=== Disk space after cleanup ==="
+          df -h /
+
       - name: Skip Check
         if: needs.check-skip.outputs.should_skip == 'true'
         run: |
@@ -436,24 +480,6 @@ jobs:
         with:
           fetch-depth: 1
           submodules: true
-
-      - name: Checkout CI Build/Test Scripts
-        if: needs.check-skip.outputs.should_skip != 'true'
-        uses: actions/checkout@v4
-        with:
-          repository: apache/cloudberry-devops-release
-          ref: main
-          path: cloudberry-devops-release
-          fetch-depth: 1
-
-      - name: Move cloudberry-devops-release directory
-        if: needs.check-skip.outputs.should_skip != 'true'
-        run: |
-          set -eo pipefail
-          if ! mv "${GITHUB_WORKSPACE}"/cloudberry-devops-release "${GITHUB_WORKSPACE}"/..; then
-            echo "::error::Container initialization failed"
-            exit 1
-          fi
 
       - name: Cloudberry Environment Initialization
         if: needs.check-skip.outputs.should_skip != 'true'
@@ -506,8 +532,8 @@ jobs:
           SRC_DIR: ${{ github.workspace }}
         run: |
           set -eo pipefail
-          chmod +x "${SRC_DIR}"/../cloudberry-devops-release/build_automation/cloudberry/scripts/configure-cloudberry.sh
-          if ! time su - gpadmin -c "cd ${SRC_DIR} && SRC_DIR=${SRC_DIR} ENABLE_DEBUG=${{ env.ENABLE_DEBUG }} ${SRC_DIR}/../cloudberry-devops-release/build_automation/cloudberry/scripts/configure-cloudberry.sh"; then
+          chmod +x "${SRC_DIR}"/devops/build/automation/cloudberry/scripts/configure-cloudberry.sh
+          if ! time su - gpadmin -c "cd ${SRC_DIR} && SRC_DIR=${SRC_DIR} ENABLE_DEBUG=${{ env.ENABLE_DEBUG }} ${SRC_DIR}/devops/build/automation/cloudberry/scripts/configure-cloudberry.sh"; then
             echo "::error::Configure script failed"
             exit 1
           fi
@@ -519,8 +545,8 @@ jobs:
         run: |
           set -eo pipefail
 
-          chmod +x "${SRC_DIR}"/../cloudberry-devops-release/build_automation/cloudberry/scripts/build-cloudberry.sh
-          if ! time su - gpadmin -c "cd ${SRC_DIR} && SRC_DIR=${SRC_DIR} ${SRC_DIR}/../cloudberry-devops-release/build_automation/cloudberry/scripts/build-cloudberry.sh"; then
+          chmod +x "${SRC_DIR}"/devops/build/automation/cloudberry/scripts/build-cloudberry.sh
+          if ! time su - gpadmin -c "cd ${SRC_DIR} && SRC_DIR=${SRC_DIR} ${SRC_DIR}/devops/build/automation/cloudberry/scripts/build-cloudberry.sh"; then
             echo "::error::Build script failed"
             exit 1
           fi
@@ -602,7 +628,7 @@ jobs:
             # Create RPM
             echo "Creating RPM package..."
             rpmdev-setuptree
-            ln -s "${SRC_DIR}"/../cloudberry-devops-release/packaging/rpm/el/SPECS/apache-cloudberry-db-incubating.spec "${HOME}"/rpmbuild/SPECS/apache-cloudberry-db-incubating.spec
+            ln -s "${SRC_DIR}"/devops/build/packaging/rpm/apache-cloudberry-db-incubating.spec "${HOME}"/rpmbuild/SPECS/apache-cloudberry-db-incubating.spec
             cp "${SRC_DIR}"/LICENSE /usr/local/cloudberry-db
 
             DEBUG_RPMBUILD_OPT=""
@@ -612,7 +638,7 @@ jobs:
                DEBUG_IDENTIFIER=".debug"
             fi
 
-            "${SRC_DIR}"/../cloudberry-devops-release/scripts/build-rpm.sh --version "${CBDB_VERSION}" --release "${BUILD_NUMBER}" "${DEBUG_RPMBUILD_OPT}"
+            "${SRC_DIR}"/devops/build/packaging/rpm/build-rpm.sh --version "${CBDB_VERSION}" --release "${BUILD_NUMBER}" "${DEBUG_RPMBUILD_OPT}"
 
             # Get OS version and move RPM
             os_version=$(grep -oP '(?<=^VERSION_ID=")[0-9]' /etc/os-release)
@@ -649,8 +675,8 @@ jobs:
           SRC_DIR: ${{ github.workspace }}
         run: |
           set -eo pipefail
-          chmod +x "${SRC_DIR}"/../cloudberry-devops-release/build_automation/cloudberry/scripts/unittest-cloudberry.sh
-          if ! time su - gpadmin -c "cd ${SRC_DIR} && SRC_DIR=${SRC_DIR} ${SRC_DIR}/../cloudberry-devops-release/build_automation/cloudberry/scripts/unittest-cloudberry.sh"; then
+          chmod +x "${SRC_DIR}"/devops/build/automation/cloudberry/scripts/unittest-cloudberry.sh
+          if ! time su - gpadmin -c "cd ${SRC_DIR} && SRC_DIR=${SRC_DIR} ${SRC_DIR}/devops/build/automation/cloudberry/scripts/unittest-cloudberry.sh"; then
             echo "::error::Unittest script failed"
             exit 1
           fi
@@ -699,6 +725,10 @@ jobs:
   rpm-install-test:
     name: RPM Install Test Apache Cloudberry
     needs: [check-skip, build]
+    if: |
+      !cancelled() &&
+      (needs.build.result == 'success' || needs.build.result == 'skipped') &&
+      github.event.inputs.reuse_artifacts_from_run_id == ''
     runs-on: ubuntu-22.04
     timeout-minutes: 120
 
@@ -707,8 +737,33 @@ jobs:
       options: >-
         --user root
         -h cdw
+        -v /usr/share:/host_usr_share
+        -v /usr/local:/host_usr_local
+        -v /opt:/host_opt
 
     steps:
+      - name: Free Disk Space
+        if: needs.check-skip.outputs.should_skip != 'true'
+        run: |
+          echo "=== Disk space before cleanup ==="
+          df -h /
+
+          # Remove pre-installed tools from host to free disk space
+          rm -rf /host_opt/hostedtoolcache || true   # GitHub Actions tool cache
+          rm -rf /host_usr_local/lib/android || true # Android SDK
+          rm -rf /host_usr_share/dotnet || true      # .NET SDK
+          rm -rf /host_opt/ghc || true               # Haskell GHC
+          rm -rf /host_usr_local/.ghcup || true      # Haskell GHCup
+          rm -rf /host_usr_share/swift || true       # Swift
+          rm -rf /host_usr_local/share/powershell || true  # PowerShell
+          rm -rf /host_usr_local/share/chromium || true    # Chromium
+          rm -rf /host_usr_share/miniconda || true   # Miniconda
+          rm -rf /host_opt/az || true                # Azure CLI
+          rm -rf /host_usr_share/sbt || true         # Scala Build Tool
+
+          echo "=== Disk space after cleanup ==="
+          df -h /
+
       - name: Skip Check
         if: needs.check-skip.outputs.should_skip == 'true'
         run: |
@@ -722,6 +777,8 @@ jobs:
           name: apache-cloudberry-db-incubating-rpm-build-artifacts
           path: ${{ github.workspace }}/rpm_build_artifacts
           merge-multiple: false
+          run-id: ${{ github.event.inputs.reuse_artifacts_from_run_id || github.run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Cloudberry Environment Initialization
         if: needs.check-skip.outputs.should_skip != 'true'
@@ -826,12 +883,18 @@ jobs:
             echo "Version: ${RPM_VERSION}"
             echo "Release: ${RPM_RELEASE}"
 
+            # Refresh repository metadata to avoid mirror issues
+            echo "Refreshing repository metadata..."
+            dnf clean all
+            dnf makecache --refresh || dnf makecache
+
             # Clean install location
             rm -rf /usr/local/cloudberry-db
 
-            # Install RPM
+            # Install RPM with retry logic for mirror issues
+            # Use --releasever=9 to pin to stable Rocky Linux 9 repos (not bleeding-edge 9.6)
             echo "Starting installation..."
-            if ! time dnf install -y "${RPM_FILE}"; then
+            if ! time dnf install -y --setopt=retries=10 --releasever=9 "${RPM_FILE}"; then
               echo "::error::RPM installation failed"
               exit 1
             fi
@@ -870,6 +933,9 @@ jobs:
   test:
     name: ${{ matrix.test }}
     needs: [check-skip, build, prepare-test-matrix]
+    if: |
+      !cancelled() &&
+      (needs.build.result == 'success' || needs.build.result == 'skipped')
     runs-on: ubuntu-22.04
     timeout-minutes: 120
     # actionlint-allow matrix[*].pg_settings
@@ -887,8 +953,33 @@ jobs:
         --ulimit core=-1
         --cgroupns=host
         -v /sys/fs/cgroup:/sys/fs/cgroup:rw
+        -v /usr/share:/host_usr_share
+        -v /usr/local:/host_usr_local
+        -v /opt:/host_opt
 
     steps:
+      - name: Free Disk Space
+        if: needs.check-skip.outputs.should_skip != 'true'
+        run: |
+          echo "=== Disk space before cleanup ==="
+          df -h /
+
+          # Remove pre-installed tools from host to free disk space
+          rm -rf /host_opt/hostedtoolcache || true   # GitHub Actions tool cache
+          rm -rf /host_usr_local/lib/android || true # Android SDK
+          rm -rf /host_usr_share/dotnet || true      # .NET SDK
+          rm -rf /host_opt/ghc || true               # Haskell GHC
+          rm -rf /host_usr_local/.ghcup || true      # Haskell GHCup
+          rm -rf /host_usr_share/swift || true       # Swift
+          rm -rf /host_usr_local/share/powershell || true  # PowerShell
+          rm -rf /host_usr_local/share/chromium || true    # Chromium
+          rm -rf /host_usr_share/miniconda || true   # Miniconda
+          rm -rf /host_opt/az || true                # Azure CLI
+          rm -rf /host_usr_share/sbt || true         # Scala Build Tool
+
+          echo "=== Disk space after cleanup ==="
+          df -h /
+
       - name: Skip Check
         if: needs.check-skip.outputs.should_skip == 'true'
         run: |
@@ -899,24 +990,6 @@ jobs:
         if: needs.check-skip.outputs.should_skip != 'true'
         run: |
           echo "Timestamp from output: ${{ needs.build.outputs.build_timestamp }}"
-
-      - name: Checkout CI Build/Test Scripts
-        if: needs.check-skip.outputs.should_skip != 'true'
-        uses: actions/checkout@v4
-        with:
-          repository: apache/cloudberry-devops-release
-          ref: main
-          path: cloudberry-devops-release
-          fetch-depth: 1
-
-      - name: Move cloudberry-devops-release directory
-        if: needs.check-skip.outputs.should_skip != 'true'
-        run: |
-          set -eo pipefail
-          if ! mv "${GITHUB_WORKSPACE}"/cloudberry-devops-release "${GITHUB_WORKSPACE}"/..; then
-            echo "::error::Container initialization failed"
-            exit 1
-          fi
 
       - name: Cloudberry Environment Initialization
         env:
@@ -1117,6 +1190,8 @@ jobs:
           name: apache-cloudberry-db-incubating-rpm-build-artifacts
           path: ${{ github.workspace }}/rpm_build_artifacts
           merge-multiple: false
+          run-id: ${{ github.event.inputs.reuse_artifacts_from_run_id || github.run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Download Cloudberry Source build artifacts
         if: needs.check-skip.outputs.should_skip != 'true'
@@ -1125,6 +1200,8 @@ jobs:
           name: apache-cloudberry-db-incubating-source-build-artifacts
           path: ${{ github.workspace }}/source_build_artifacts
           merge-multiple: false
+          run-id: ${{ github.event.inputs.reuse_artifacts_from_run_id || github.run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Verify downloaded artifacts
         if: needs.check-skip.outputs.should_skip != 'true'
@@ -1216,12 +1293,18 @@ jobs:
             echo "Version: ${RPM_VERSION}"
             echo "Release: ${RPM_RELEASE}"
 
+            # Refresh repository metadata to avoid mirror issues
+            echo "Refreshing repository metadata..."
+            dnf clean all
+            dnf makecache --refresh || dnf makecache
+
             # Clean install location
             rm -rf /usr/local/cloudberry-db
 
-            # Install RPM
+            # Install RPM with retry logic for mirror issues
+            # Use --releasever=9 to pin to stable Rocky Linux 9 repos (not bleeding-edge 9.6)
             echo "Starting installation..."
-            if ! time dnf install -y "${RPM_FILE}"; then
+            if ! time dnf install -y --setopt=retries=10 --releasever=9 "${RPM_FILE}"; then
               echo "::error::RPM installation failed"
               exit 1
             fi
@@ -1229,6 +1312,22 @@ jobs:
             echo "Installation completed successfully"
             rpm -qi apache-cloudberry-db-incubating
           } 2>&1 | tee -a build-logs/details/rpm-installation.log
+
+          # Clean up downloaded RPM artifacts to free disk space
+          echo "=== Disk space before RPM cleanup ==="
+          echo "Human readable:"
+          df -kh /
+          echo "Exact KB:"
+          df -k /
+          echo "RPM artifacts size:"
+          du -sh "${GITHUB_WORKSPACE}"/rpm_build_artifacts || true
+          echo "Cleaning up RPM artifacts to free disk space..."
+          rm -rf "${GITHUB_WORKSPACE}"/rpm_build_artifacts
+          echo "=== Disk space after RPM cleanup ==="
+          echo "Human readable:"
+          df -kh /
+          echo "Exact KB:"
+          df -k /
 
       - name: Extract source tarball
         if: success() && needs.check-skip.outputs.should_skip != 'true'
@@ -1255,6 +1354,22 @@ jobs:
             du -sh "${SRC_DIR}/../cloudberry"
           } 2>&1 | tee -a build-logs/details/source-extraction.log
 
+          # Clean up source tarball to free disk space
+          echo "=== Disk space before source tarball cleanup ==="
+          echo "Human readable:"
+          df -kh /
+          echo "Exact KB:"
+          df -k /
+          echo "Source tarball artifacts size:"
+          du -sh "${GITHUB_WORKSPACE}"/source_build_artifacts || true
+          echo "Cleaning up source tarball to free disk space..."
+          rm -rf "${GITHUB_WORKSPACE}"/source_build_artifacts
+          echo "=== Disk space after source tarball cleanup ==="
+          echo "Human readable:"
+          df -kh /
+          echo "Exact KB:"
+          df -k /
+
       - name: Create Apache Cloudberry demo cluster
         if: success() && needs.check-skip.outputs.should_skip != 'true'
         env:
@@ -1263,8 +1378,8 @@ jobs:
           set -eo pipefail
 
           {
-            chmod +x "${SRC_DIR}"/../cloudberry-devops-release/build_automation/cloudberry/scripts/create-cloudberry-demo-cluster.sh
-            if ! time su - gpadmin -c "cd ${SRC_DIR} && NUM_PRIMARY_MIRROR_PAIRS='${{ matrix.num_primary_mirror_pairs }}' SRC_DIR=${SRC_DIR} ${SRC_DIR}/../cloudberry-devops-release/build_automation/cloudberry/scripts/create-cloudberry-demo-cluster.sh"; then
+            chmod +x "${SRC_DIR}"/devops/build/automation/cloudberry/scripts/create-cloudberry-demo-cluster.sh
+            if ! time su - gpadmin -c "cd ${SRC_DIR} && NUM_PRIMARY_MIRROR_PAIRS='${{ matrix.num_primary_mirror_pairs }}' SRC_DIR=${SRC_DIR} ${SRC_DIR}/devops/build/automation/cloudberry/scripts/create-cloudberry-demo-cluster.sh"; then
               echo "::error::Demo cluster creation failed"
               exit 1
             fi
@@ -1339,7 +1454,7 @@ jobs:
                  MAKE_DIRECTORY='-C $dir' \
                  PGOPTIONS='${PG_OPTS}' \
                  SRC_DIR='${SRC_DIR}' \
-                 ${SRC_DIR}/../cloudberry-devops-release/build_automation/cloudberry/scripts/test-cloudberry.sh" \
+                 ${SRC_DIR}/devops/build/automation/cloudberry/scripts/test-cloudberry.sh" \
                  2>&1 | tee "$config_log"; then
               echo "::warning::Test execution failed for configuration $((i+1)): make -C $dir $target"
               overall_status=1
@@ -1372,7 +1487,7 @@ jobs:
             ls -Rl "/tmp/cloudberry-cores"
             echo "-----------------------------------------"
 
-            "${SRC_DIR}"/../cloudberry-devops-release/build_automation/cloudberry/scripts/analyze_core_dumps.sh "$test_id"
+            "${SRC_DIR}"/devops/build/automation/cloudberry/scripts/analyze_core_dumps.sh "$test_id"
             core_analysis_rc=$?
             case "$core_analysis_rc" in
               0) echo "No core dumps found for this configuration" ;;
@@ -1448,7 +1563,7 @@ jobs:
             # Parse this configuration's results
 
             MAKE_NAME="${{ matrix.test }}-config$i" \
-            "${SRC_DIR}"/../cloudberry-devops-release/build_automation/cloudberry/scripts/parse-test-results.sh "$config_log"
+            "${SRC_DIR}"/devops/build/automation/cloudberry/scripts/parse-test-results.sh "$config_log"
             status_code=$?
 
             {

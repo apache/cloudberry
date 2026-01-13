@@ -300,6 +300,14 @@ static split_rollup_data *make_new_rollups_for_hash_grouping_set(PlannerInfo *ro
 																 Path *path,
 																 grouping_sets_data *gd);
 
+static void create_partial_window_path(PlannerInfo *root,
+											RelOptInfo *window_rel,
+											Path *path,
+											PathTarget *input_target,
+											PathTarget *output_target,
+											WindowFuncLists *wflists,
+											List *activeWindows);
+
 
 /*****************************************************************************
  *
@@ -320,13 +328,16 @@ planner(Query *parse, const char *query_string, int cursorOptions,
 {
 	PlannedStmt *result;
 	instr_time	starttime, endtime;
+	OptimizerOptions *optimizer_options;
 
+	optimizer_options = palloc(sizeof(OptimizerOptions));
+	optimizer_options->create_vectorization_plan = false;
 	if (planner_hook)
 	{
 		if (gp_log_optimization_time)
 			INSTR_TIME_SET_CURRENT(starttime);
 
-		result = (*planner_hook) (parse, query_string, cursorOptions, boundParams);
+		result = (*planner_hook) (parse, query_string, cursorOptions, boundParams, optimizer_options);
 
 		if (gp_log_optimization_time)
 		{
@@ -336,14 +347,14 @@ planner(Query *parse, const char *query_string, int cursorOptions,
 		}
 	}
 	else
-		result = standard_planner(parse, query_string, cursorOptions, boundParams);
-
+		result = standard_planner(parse, query_string, cursorOptions, boundParams, optimizer_options);
+	pfree(optimizer_options);
 	return result;
 }
 
 PlannedStmt *
 standard_planner(Query *parse, const char *query_string, int cursorOptions,
-				 ParamListInfo boundParams)
+				 ParamListInfo boundParams, OptimizerOptions *optimizer_options)
 {
 	PlannedStmt *result;
 	PlannerGlobal *glob;
@@ -396,7 +407,7 @@ standard_planner(Query *parse, const char *query_string, int cursorOptions,
 			INSTR_TIME_SET_CURRENT(starttime);
 
 #ifdef USE_ORCA
-		result = optimize_query(parse, cursorOptions, boundParams);
+		result = optimize_query(parse, cursorOptions, boundParams, optimizer_options);
 #else
 		/* Make sure this branch is not taken in builds using --disable-orca. */
 		Assert(false);
@@ -4252,6 +4263,8 @@ make_grouping_rel(PlannerInfo *root, RelOptInfo *input_rel,
 	grouped_rel->useridiscurrent = input_rel->useridiscurrent;
 	grouped_rel->fdwroutine = input_rel->fdwroutine;
 	grouped_rel->exec_location = input_rel->exec_location;
+	grouped_rel->cdbpolicy = input_rel->cdbpolicy;
+	grouped_rel->relid = input_rel->relid;
 
 	return grouped_rel;
 }
@@ -4874,6 +4887,27 @@ create_window_paths(PlannerInfo *root,
 								   output_target,
 								   wflists,
 								   activeWindows);
+	}
+
+	/*
+	 * Unlike Upstream, we could make window function parallel by redistributing
+	 * the tuples according to the PARTITION BY clause which is similar to Group By.
+	 * Even there is no PARTITION BY, window function could be parallel from
+	 * sub partial paths.
+	 */
+	if (window_rel->consider_parallel &&
+		input_rel->partial_pathlist)
+	{
+		/* For partial, only the best one if enough. */
+		Path	   *path = (Path *) linitial(input_rel->partial_pathlist);
+
+		create_partial_window_path(root,
+							   window_rel,
+							   path,
+							   input_target,
+							   output_target,
+							   wflists,
+							   activeWindows);
 	}
 
 	/*
@@ -9102,4 +9136,77 @@ make_new_rollups_for_hash_grouping_set(PlannerInfo        *root,
 	srd->unhashed_rollup = unhashed_rollup;
 
 	return srd;
+}
+
+/*
+ * Parallel processing of window functions.
+ *
+ * NB: it may produce non-deterministic results if the window function
+ * lacks ORDER BY and PARTITION BY clause.
+ * SQL:2011 has clarified this behavior.
+ */
+static void
+create_partial_window_path(PlannerInfo *root,
+					   RelOptInfo *window_rel,
+					   Path *path,
+					   PathTarget *input_target,
+					   PathTarget *output_target,
+					   WindowFuncLists *wflists,
+					   List *activeWindows)
+{
+	PathTarget *window_target;
+	ListCell   *l;
+
+	window_target = input_target;
+
+	foreach(l, activeWindows)
+	{
+		WindowClause *wc = lfirst_node(WindowClause, l);
+		List	   *window_pathkeys;
+		int			presorted_keys;
+		bool		is_sorted;
+
+		window_pathkeys = make_pathkeys_for_window(root,
+												   wc,
+												   root->processed_tlist);
+
+		is_sorted = pathkeys_count_contained_in(window_pathkeys,
+												path->pathkeys,
+												&presorted_keys);
+
+		path = cdb_prepare_path_for_sorted_agg(root,
+											   is_sorted,
+											   presorted_keys,
+											   window_rel,
+											   path,
+											   path->pathtarget,
+											   window_pathkeys,
+											   -1.0,
+											   wc->partitionClause,
+											   NIL);
+		if (lnext(activeWindows, l))
+		{
+			ListCell   *lc2;
+
+			window_target = copy_pathtarget(window_target);
+			foreach(lc2, wflists->windowFuncs[wc->winref])
+			{
+				WindowFunc *wfunc = lfirst_node(WindowFunc, lc2);
+
+				add_column_to_pathtarget(window_target, (Expr *) wfunc, 0);
+				window_target->width += get_typavgwidth(wfunc->wintype, -1);
+			}
+		}
+		else
+		{
+			window_target = output_target;
+		}
+
+		path = (Path *)
+			create_windowagg_path(root, window_rel, path, window_target,
+								  wflists->windowFuncs[wc->winref],
+								  wc);
+	}
+
+	add_partial_path(window_rel, path);
 }

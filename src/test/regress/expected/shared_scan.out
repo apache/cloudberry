@@ -206,7 +206,7 @@ where
                                  Group Key: pk_list.schema_name, pk_list.table_name
                                  ->  Redistribute Motion 3:3  (slice3; segments: 3)
                                        Hash Key: pk_list.schema_name, pk_list.table_name
-                                       ->  HashAggregate
+                                       ->  Streaming HashAggregate
                                              Group Key: pk_list.schema_name, pk_list.table_name
                                              ->  Seq Scan on pk_list
                ->  Materialize
@@ -219,7 +219,7 @@ where
                                  Group Key: pk_list_1.schema_name, pk_list_1.table_name
                                  ->  Redistribute Motion 3:3  (slice5; segments: 3)
                                        Hash Key: pk_list_1.schema_name, pk_list_1.table_name
-                                       ->  HashAggregate
+                                       ->  Streaming HashAggregate
                                              Group Key: pk_list_1.schema_name, pk_list_1.table_name
                                              ->  Seq Scan on pk_list pk_list_1
                            SubPlan 1

@@ -208,28 +208,16 @@ This product includes software from PostgreSQL, under the PostgreSQL License:
 The PostgreSQL software includes:
 
 ----------------------------
-   Apache License - Version 2.0
-      contrib/pax_storage/src/cpp/contrib/googlebench
-      see licenses/LICENSE-googlebench.txt
-
-----------------------------
    BSD License
       
       src/bin/pg_controldata/pg_controldata.c
       copyright (c) Oliver Elphick <olly@lfix.co.uk>, 2001
-
-      gpMgmt/bin/pythonSrc/ext/behave-1.2.6.tar.gz
-      see licenses/LICENSE-bsd2-behave.txt
-
-      gpMgmt/bin/pythonSrc/ext/mock-1.0.1.tar.gz
-      see licenses/LICENSE-bsd2-mock.txt
 
 ----------------------------
    BSD-4-Clause (University of California-Specific)
       
       src/include/port/win32_msvc/glob.h
       src/port/glob.c
-
       see licenses/LICENSE-glob.txt
 
 ----------------------------
@@ -249,36 +237,6 @@ The PostgreSQL software includes:
       
       src/backend/libpq/sha2.h
       see licenses/LICENSE-bsd3-sha2.txt
-
-      gpMgmt/bin/pythonSrc/ext/psutil-5.7.0.tar.gz
-      see licenses/LICENSE-bsd3-psutil.txt
-
-      contrib/pax_storage/src/cpp/contrib/googletest
-      see licenses/LICENSE-googletest.txt
-
-      gpcontrib/gpcloud/test/googletest
-      see licenses/LICENSE-googletest.txt
-
-----------------------------
-    MIT LICENSE
-
-      gpMgmt/bin/pythonSrc/ext/PyYAML-5.4.1.tar.gz
-      see licenses/LICENSE-pyyaml.txt
-
-      gpMgmt/bin/pythonSrc/ext/setuptools-36.6.0.tar.gz
-      see licenses/LICENSE-setuptools.txt
-
-      gpMgmt/bin/pythonSrc/ext/parse-1.8.2.tar.gz
-      see licenses/LICENSE-parse.txt
-
-      dependencies/yyjson
-      see licenses/LICENSE-yyjson.txt
-
-      contrib/pax_storage/src/cpp/contrib/cpp-stub
-      see licenses/LICENSE-cpp-stub.txt
-
-      contrib/pax_storage/src/cpp/contrib/tabulate
-      see licenses/LICENSE-tabulate.txt
 
 ----------------------------
    Internet Systems Consortium/Internet Software Consortium (ISC) LICENSE
@@ -312,21 +270,18 @@ The PostgreSQL software includes:
    test-ctype LICENSE
 
       src/test/locale/test-ctype.c
-  
       see licenses/LICENSE-test-ctype.txt
 
 ----------------------------
    regex LICENSE
       
       src/backend/regex 
-  
       see licenses/LICENSE-regex.txt
 
 ----------------------------
    PostgreSQL-style License
 
       src/port/gettimeofday.c 
-  
       see licenses/LICENSE-gettimeofday.txt
 
 ================================================================================
@@ -340,8 +295,7 @@ Copyright (c) 2004-2020 VMware, Inc. or its affiliates. All Rights Reserved.
 All Rights Reserved.
 
 Greenplum Database is licensed under the Apache License Version 2.0
-(see LICENSE & NOTICE) and is based on the PostgreSQL Database
-Management System.
+(see LICENSE) and is based on the PostgreSQL Database Management System.
 
 The Greenplum Database software includes:
 
@@ -349,30 +303,55 @@ The Greenplum Database software includes:
    Stream License
 
       gpMgmt/bin/stream/*
-
       see licenses/LICENSE-stream.txt
 
 ----------------------------
    0-clause license ("Zero Clause BSD")
 
       gpcontrib/orafce/*
-
       see licenses/LICENSE-orafce.txt
 
+ ----------------------------
+   BSD 3 Clause License
+
+      gpcontrib/gpcloud/test/googletest
+      see licenses/LICENSE-googletest.txt
+
 ================================================================================
-PostgreSQL-style license
+Apache Cloudberry includes codes from
 
-   gpMgmt/bin/pythonSrc/ext/PyGreSQL-5.2.tar.gz
-   see licenses/LICENSE-pygresql.txt
+----------------------------
+   pg_cron under PostgreSQL license:
 
-================================================================================
-This product includes code from pg_cron under PostgreSQL license:
+      /src/include/task/pg_cron.h
+      /src/include/task/task_states.h
+      /src/include/task/job_metadata.h
+      /src/backend/task/task_states.c
+      /src/backend/task/job_metadata.c
+      /src/backend/task/pg_cron.c
 
-   /src/include/task/pg_cron.h
-   /src/include/task/task_states.h
-   /src/include/task/job_metadata.h
-   /src/backend/task/task_states.c
-   /src/backend/task/job_metadata.c
-   /src/backend/task/pg_cron.c
+      see licenses/LICENSE-citusdata.txt
 
-   see licenses/LICENSE-citusdata.txt
+----------------------------
+   Apache License - Version 2.0
+
+      contrib/pax_storage/src/cpp/contrib/googlebench
+      see licenses/LICENSE-googlebench.txt
+
+----------------------------
+   MIT LICENSE
+
+      dependencies/yyjson
+      see licenses/LICENSE-yyjson.txt
+
+      contrib/pax_storage/src/cpp/cpp-stub
+      see licenses/LICENSE-cpp-stub.txt
+
+      contrib/pax_storage/src/cpp/contrib/tabulate
+      see licenses/LICENSE-tabulate.txt
+
+ ----------------------------
+   BSD 3 Clause License 
+
+      contrib/pax_storage/src/cpp/contrib/googletest
+      see licenses/LICENSE-googletest.txt

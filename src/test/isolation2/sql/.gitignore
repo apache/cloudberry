@@ -7,6 +7,7 @@
 /pt_io_in_progress_deadlock.sql
 /distributed_snapshot.sql
 /local_directory_table_mixed.sql
+/hot_standby/query_conflict.sql
 
 # ignores including sub-directories
 autovacuum-analyze.sql

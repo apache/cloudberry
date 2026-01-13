@@ -222,9 +222,6 @@ jobs:
           # Define base test configurations
           ALL_TESTS='{
             "include": [
-              {"test":"ic-cbdb-parallel",
-               "make_configs":["src/test/regress:installcheck-cbdb-parallel"]
-              }
             ]
           }'
 
@@ -346,24 +343,6 @@ jobs:
           fetch-depth: 1
           submodules: true
 
-      - name: Checkout CI Build/Test Scripts
-        if: needs.check-skip.outputs.should_skip != 'true'
-        uses: actions/checkout@v4
-        with:
-          repository: apache/cloudberry-devops-release
-          ref: main
-          path: cloudberry-devops-release
-          fetch-depth: 1
-
-      - name: Move cloudberry-devops-release directory
-        if: needs.check-skip.outputs.should_skip != 'true'
-        run: |
-          set -eo pipefail
-          if ! mv "${GITHUB_WORKSPACE}"/cloudberry-devops-release "${GITHUB_WORKSPACE}"/..; then
-            echo "::error::Container initialization failed"
-            exit 1
-          fi
-
       - name: Cloudberry Environment Initialization
         if: needs.check-skip.outputs.should_skip != 'true'
         env:
@@ -415,8 +394,8 @@ jobs:
           SRC_DIR: ${{ github.workspace }}
         run: |
           set -eo pipefail
-          chmod +x "${SRC_DIR}"/../cloudberry-devops-release/build_automation/cloudberry/scripts/configure-cloudberry.sh
-          if ! time su - gpadmin -c "cd ${SRC_DIR} && SRC_DIR=${SRC_DIR} ENABLE_DEBUG=${{ env.ENABLE_DEBUG }} ${SRC_DIR}/../cloudberry-devops-release/build_automation/cloudberry/scripts/configure-cloudberry.sh"; then
+          chmod +x "${SRC_DIR}"/devops/build/automation/cloudberry/scripts/configure-cloudberry.sh
+          if ! time su - gpadmin -c "cd ${SRC_DIR} && SRC_DIR=${SRC_DIR} ENABLE_DEBUG=${{ env.ENABLE_DEBUG }} ${SRC_DIR}/devops/build/automation/cloudberry/scripts/configure-cloudberry.sh"; then
             echo "::error::Configure script failed"
             exit 1
           fi
@@ -428,8 +407,8 @@ jobs:
         run: |
           set -eo pipefail
 
-          chmod +x "${SRC_DIR}"/../cloudberry-devops-release/build_automation/cloudberry/scripts/build-cloudberry.sh
-          if ! time su - gpadmin -c "cd ${SRC_DIR} && SRC_DIR=${SRC_DIR} ${SRC_DIR}/../cloudberry-devops-release/build_automation/cloudberry/scripts/build-cloudberry.sh"; then
+          chmod +x "${SRC_DIR}"/devops/build/automation/cloudberry/scripts/build-cloudberry.sh
+          if ! time su - gpadmin -c "cd ${SRC_DIR} && SRC_DIR=${SRC_DIR} ${SRC_DIR}/devops/build/automation/cloudberry/scripts/build-cloudberry.sh"; then
             echo "::error::Build script failed"
             exit 1
           fi
@@ -511,7 +490,7 @@ jobs:
             # Create RPM
             echo "Creating RPM package..."
             rpmdev-setuptree
-            ln -s "${SRC_DIR}"/../cloudberry-devops-release/packaging/rpm/el/SPECS/apache-cloudberry-db-incubating.spec "${HOME}"/rpmbuild/SPECS/apache-cloudberry-db-incubating.spec
+            ln -s "${SRC_DIR}"/devops/build/packaging/rpm/apache-cloudberry-db-incubating.spec "${HOME}"/rpmbuild/SPECS/apache-cloudberry-db-incubating.spec
             cp "${SRC_DIR}"/LICENSE /usr/local/cloudberry-db
 
             DEBUG_RPMBUILD_OPT=""
@@ -521,7 +500,7 @@ jobs:
                DEBUG_IDENTIFIER=".debug"
             fi
 
-            "${SRC_DIR}"/../cloudberry-devops-release/scripts/build-rpm.sh --version "${CBDB_VERSION}" --release "${BUILD_NUMBER}" "${DEBUG_RPMBUILD_OPT}"
+            "${SRC_DIR}"/devops/build/packaging/rpm/build-rpm.sh --version "${CBDB_VERSION}" --release "${BUILD_NUMBER}" "${DEBUG_RPMBUILD_OPT}"
 
             # Get OS version and move RPM
             os_version=$(grep -oP '(?<=^VERSION_ID=")[0-9]' /etc/os-release)
@@ -556,8 +535,8 @@ jobs:
           SRC_DIR: ${{ github.workspace }}
         run: |
           set -eo pipefail
-          chmod +x "${SRC_DIR}"/../cloudberry-devops-release/build_automation/cloudberry/scripts/unittest-cloudberry.sh
-          if ! time su - gpadmin -c "cd ${SRC_DIR} && SRC_DIR=${SRC_DIR} ${SRC_DIR}/../cloudberry-devops-release/build_automation/cloudberry/scripts/unittest-cloudberry.sh"; then
+          chmod +x "${SRC_DIR}"/devops/build/automation/cloudberry/scripts/unittest-cloudberry.sh
+          if ! time su - gpadmin -c "cd ${SRC_DIR} && SRC_DIR=${SRC_DIR} ${SRC_DIR}/devops/build/automation/cloudberry/scripts/unittest-cloudberry.sh"; then
             echo "::error::Unittest script failed"
             exit 1
           fi
@@ -806,24 +785,6 @@ jobs:
         if: needs.check-skip.outputs.should_skip != 'true'
         run: |
           echo "Timestamp from output: ${{ needs.build.outputs.build_timestamp }}"
-
-      - name: Checkout CI Build/Test Scripts
-        if: needs.check-skip.outputs.should_skip != 'true'
-        uses: actions/checkout@v4
-        with:
-          repository: apache/cloudberry-devops-release
-          ref: main
-          path: cloudberry-devops-release
-          fetch-depth: 1
-
-      - name: Move cloudberry-devops-release directory
-        if: needs.check-skip.outputs.should_skip != 'true'
-        run: |
-          set -eo pipefail
-          if ! mv "${GITHUB_WORKSPACE}"/cloudberry-devops-release "${GITHUB_WORKSPACE}"/..; then
-            echo "::error::Container initialization failed"
-            exit 1
-          fi
 
       - name: Cloudberry Environment Initialization
         env:
@@ -1170,8 +1131,8 @@ jobs:
           set -eo pipefail
 
           {
-            chmod +x "${SRC_DIR}"/../cloudberry-devops-release/build_automation/cloudberry/scripts/create-cloudberry-demo-cluster.sh
-            if ! time su - gpadmin -c "cd ${SRC_DIR} && NUM_PRIMARY_MIRROR_PAIRS='${{ matrix.num_primary_mirror_pairs }}' SRC_DIR=${SRC_DIR} ${SRC_DIR}/../cloudberry-devops-release/build_automation/cloudberry/scripts/create-cloudberry-demo-cluster.sh"; then
+            chmod +x "${SRC_DIR}"/devops/build/automation/cloudberry/scripts/create-cloudberry-demo-cluster.sh
+            if ! time su - gpadmin -c "cd ${SRC_DIR} && NUM_PRIMARY_MIRROR_PAIRS='${{ matrix.num_primary_mirror_pairs }}' SRC_DIR=${SRC_DIR} ${SRC_DIR}/devops/build/automation/cloudberry/scripts/create-cloudberry-demo-cluster.sh"; then
               echo "::error::Demo cluster creation failed"
               exit 1
             fi
@@ -1242,7 +1203,7 @@ jobs:
                  MAKE_DIRECTORY='-C $dir' \
                  PGOPTIONS='${PG_OPTS}' \
                  SRC_DIR='${SRC_DIR}' \
-                 ${SRC_DIR}/../cloudberry-devops-release/build_automation/cloudberry/scripts/test-cloudberry.sh" \
+                 ${SRC_DIR}/devops/build/automation/cloudberry/scripts/test-cloudberry.sh" \
                  2>&1 | tee "$config_log"; then
               echo "::warning::Test execution failed for configuration $((i+1)): make -C $dir $target"
               overall_status=1
@@ -1275,7 +1236,7 @@ jobs:
             ls -Rl "/tmp/cloudberry-cores"
             echo "-----------------------------------------"
 
-            "${SRC_DIR}"/../cloudberry-devops-release/build_automation/cloudberry/scripts/analyze_core_dumps.sh "$test_id"
+            "${SRC_DIR}"/devops/build/automation/cloudberry/scripts/analyze_core_dumps.sh "$test_id"
             core_analysis_rc=$?
             case "$core_analysis_rc" in
               0) echo "No core dumps found for this configuration" ;;
@@ -1351,7 +1312,7 @@ jobs:
             # Parse this configuration's results
 
             MAKE_NAME="${{ matrix.test }}-config$i" \
-            "${SRC_DIR}"/../cloudberry-devops-release/build_automation/cloudberry/scripts/parse-test-results.sh "$config_log"
+            "${SRC_DIR}"/devops/build/automation/cloudberry/scripts/parse-test-results.sh "$config_log"
             status_code=$?
 
             {

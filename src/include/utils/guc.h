@@ -293,6 +293,8 @@ extern bool enable_parallel;
 extern bool enable_parallel_semi_join;
 extern bool enable_parallel_dedup_semi_join;
 extern bool enable_parallel_dedup_semi_reverse_join;
+extern bool	parallel_query_use_streaming_hashagg;
+extern bool gp_use_streaming_hashagg;
 extern int  gp_appendonly_insert_files;
 extern int  gp_appendonly_insert_files_tuples_range;
 extern int  gp_random_insert_segments;
@@ -465,6 +467,12 @@ extern bool create_restartpoint_on_ckpt_record_replay;
 #define OPTIMIZER_GPDB_CALIBRATED       1       /* GPDB's calibrated cost model */
 #define OPTIMIZER_GPDB_EXPERIMENTAL     2       /* GPDB's experimental cost model */
 
+/* optimizer cost model */
+#define OPTIMIZER_AGG_PDS_ALL_KEY             0
+#define OPTIMIZER_AGG_PDS_FIRST_KEY           1
+#define OPTIMIZER_AGG_PDS_MINIMAL_LEN_KEY     2
+#define OPTIMIZER_AGG_PDS_EXCLUDE_NON_FIXED   3
+
 
 /* Optimizer related gucs */
 extern bool	optimizer;
@@ -545,6 +553,8 @@ extern bool optimizer_enable_replicated_table;
 extern bool optimizer_enable_foreign_table;
 extern bool optimizer_enable_right_outer_join;
 extern bool optimizer_enable_query_parameter;
+extern bool optimizer_force_window_hash_agg;
+extern int optimizer_agg_pds_strategy;
 
 /* Optimizer plan enumeration related GUCs */
 extern bool optimizer_enumerate_plans;
@@ -852,6 +862,7 @@ extern void gpvars_assign_gp_resource_manager_policy(const char *newval, void *e
 extern const char *gpvars_show_gp_resource_manager_policy(void);
 extern const char *gpvars_assign_gp_resqueue_memory_policy(const char *newval, bool doit, GucSource source);
 extern const char *gpvars_show_gp_resqueue_memory_policy(void);
+extern bool gpvars_check_gp_resource_group_cgroup_parent(char **newval, void **extra, GucSource source);
 extern bool gpvars_check_statement_mem(int *newval, void **extra, GucSource source);
 extern bool gpvars_check_rg_query_fixed_mem(int *newval, void **extra, GucSource source);
 extern int guc_name_compare(const char *namea, const char *nameb);

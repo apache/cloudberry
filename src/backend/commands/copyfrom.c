@@ -2007,18 +2007,7 @@ CopyFrom(CopyFromState cstate)
 
 	CopyInitDataParser(cstate);
 
-	/*
-	 * GPDB_12_MERGE_FIXME: We still have to perform the initialization
-	 * here for AO relations. It is preferreable by all means to perform the
-	 * initialization via the table AP API, however it simply does not
-	 * provide a good enough interface for this yet.
-	 */
-	if (RelationIsAoRows(resultRelInfo->ri_RelationDesc))
-		appendonly_dml_init(resultRelInfo->ri_RelationDesc, CMD_INSERT);
-	else if (RelationIsAoCols(resultRelInfo->ri_RelationDesc))
-		aoco_dml_init(resultRelInfo->ri_RelationDesc, CMD_INSERT);
-	else if (ext_dml_init_hook)
-		ext_dml_init_hook(resultRelInfo->ri_RelationDesc, CMD_INSERT);
+	table_dml_init(resultRelInfo->ri_RelationDesc, CMD_INSERT);
 
 	for (;;)
 	{
@@ -2451,18 +2440,7 @@ CopyFrom(CopyFromState cstate)
 	if (bistate != NULL)
 		FreeBulkInsertState(bistate);
 
-	/*
-	 * GPDB_12_MERGE_FIXME: We still have to perform the finishment
-	 * here for AO relations. It is preferreable by all means to perform the
-	 * finishment via the table AP API, however it simply does not
-	 * provide a good enough interface for this yet.
-	 */
-	if (RelationIsAoRows(resultRelInfo->ri_RelationDesc))
-		appendonly_dml_finish(resultRelInfo->ri_RelationDesc, CMD_INSERT);
-	else if (RelationIsAoCols(resultRelInfo->ri_RelationDesc))
-		aoco_dml_finish(resultRelInfo->ri_RelationDesc, CMD_INSERT);
-	else if (ext_dml_finish_hook)
-		ext_dml_finish_hook(resultRelInfo->ri_RelationDesc, CMD_INSERT);
+	table_dml_fini(resultRelInfo->ri_RelationDesc, CMD_INSERT);
 
 	MemoryContextSwitchTo(oldcontext);
 

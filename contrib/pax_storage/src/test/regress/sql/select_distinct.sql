@@ -1,6 +1,9 @@
 --
 -- SELECT_DISTINCT
 --
+-- start_ignore
+set gp_use_streaming_hashagg = off;
+-- end_ignore
 
 --
 -- awk '{print $3;}' onek.data | sort -n | uniq

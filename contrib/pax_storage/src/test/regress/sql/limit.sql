@@ -37,7 +37,7 @@ select * from int8_tbl limit (case when random() < 0.5 then null::bigint end);
 select * from int8_tbl offset (case when random() < 0.5 then null::bigint end);
 
 -- Test assorted cases involving backwards fetch from a LIMIT plan node
--- Disable backward scan test which is not supported in this version of Cloudberry Database
+-- Disable backward scan test which is not supported in this version of Apache Cloudberry
 --start_ignore
 /*
  * begin;

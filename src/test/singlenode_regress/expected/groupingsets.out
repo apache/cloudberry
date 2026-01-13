@@ -2069,14 +2069,13 @@ select g100, g10, sum(g::numeric), count(*), max(g::text)
 from gs_data_1 group by cube (g1000, g100,g10);
              QUERY PLAN              
 -------------------------------------
- GroupAggregate
+ MixedAggregate
+   Hash Key: g100
+   Hash Key: g100, g10
    Group Key: g1000, g100, g10
    Group Key: g1000, g100
    Group Key: g1000
    Group Key: ()
-   Sort Key: g100, g10
-     Group Key: g100, g10
-     Group Key: g100
    Sort Key: g10, g1000
      Group Key: g10, g1000
      Group Key: g10
@@ -2084,7 +2083,7 @@ from gs_data_1 group by cube (g1000, g100,g10);
          Sort Key: g1000, g100, g10
          ->  Seq Scan on gs_data_1
  Optimizer: Postgres query optimizer
-(15 rows)
+(14 rows)
 
 create table gs_hash_1 as
 select g100, g10, sum(g::numeric), count(*), max(g::text)

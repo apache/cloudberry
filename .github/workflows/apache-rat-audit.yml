@@ -1,0 +1,162 @@
+# --------------------------------------------------------------------
+#
+# Licensed to the Apache Software Foundation (ASF) under one or more
+# contributor license agreements. See the NOTICE file distributed
+# with this work for additional information regarding copyright
+# ownership. The ASF licenses this file to You under the Apache
+# License, Version 2.0 (the "License"); you may not use this file
+# except in compliance with the License. You may obtain a copy of the
+# License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
+# implied. See the License for the specific language governing
+# permissions and limitations under the License.
+#
+# --------------------------------------------------------------------
+# Apache Rat Audit Workflow
+# Checks if all files comply with Apache licensing requirements
+# This workflow is based on the Apache Rat tool, you can run it locally
+# using the command: `mvn clean verify -Drat.consoleOutput=true`
+# --------------------------------------------------------------------
+
+name: Apache Rat License Check
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened, edited]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  rat-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Set up Java and Maven
+        uses: actions/setup-java@v3
+        with:
+          distribution: 'temurin'
+          java-version: '11'
+          cache: maven
+
+      - name: Run Apache Rat check
+        run: |
+          echo "Running Apache Rat license check..."
+          mvn clean verify -Drat.consoleOutput=true | tee rat-output.log
+          
+          # Check for build failure
+          if grep -q "\[INFO\] BUILD FAILURE" rat-output.log; then
+            echo "rat_failed=true" >> $GITHUB_OUTPUT
+            echo "::error::Apache Rat check failed - build failure detected"
+            exit 1
+          fi
+          
+          # If we got here, the check passed
+          echo "rat_failed=false" >> $GITHUB_OUTPUT
+          echo "Apache Rat check passed successfully"
+
+      - name: Upload Rat check results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rat-check-results
+          path: rat-output.log
+          retention-days: 7
+
+      - name: Generate Job Summary
+        if: always()
+        run: |
+          {
+            echo "## Apache Rat Audit Results"
+            echo "- Run Time: $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
+            echo ""
+
+            if [[ -f rat-output.log ]]; then
+              # First extract and display summary statistics (only once)
+              if grep -q "Rat check: Summary over all files" rat-output.log; then
+                echo "#### 📊 License Summary"
+                summary_line=$(grep "Rat check: Summary over all files" rat-output.log)
+                echo "\`\`\`"
+                echo "$summary_line"
+                echo "\`\`\`"
+                echo ""
+              fi
+
+              # Then determine the result status
+              if grep -q "\[INFO\] BUILD FAILURE" rat-output.log; then
+                echo "### ❌ Check Failed - License Compliance Issues Detected"
+                echo ""
+
+                # Extract and display files with unapproved licenses
+                if grep -q "Files with unapproved licenses:" rat-output.log; then
+                  echo "#### 🚫 Files with Unapproved Licenses"
+                  echo "\`\`\`"
+                  # Get the line with "Files with unapproved licenses:" and all following lines until the dashed line
+                  sed -n '/Files with unapproved licenses:/,/\[INFO\] ------------------------------------------------------------------------/p' rat-output.log | \
+                    grep -v "\[INFO\] ------------------------------------------------------------------------" | \
+                    grep -v "^$" | \
+                    head -20
+                  echo "\`\`\`"
+                  echo ""
+                fi
+
+                echo "💡 **How to fix:**"
+                echo ""
+                echo "**For new original files you created:**"
+                echo "- Add the standard Apache License header to each file"
+                echo ""
+                echo "**For third-party files with different licenses:**"
+                echo "- Add the file to exclusion list in \`pom.xml\` under the rat-maven-plugin configuration"
+                echo "- Ensure the license is compatible with Apache License 2.0"
+                echo "- Avoid introducing components with incompatible licenses"
+                echo ""
+                echo "**Need help?**"
+                echo "- Run \`mvn clean verify -Drat.consoleOutput=true\` locally for the full report"
+                echo "- Email dev@cloudberry.apache.org if you have questions about license compatibility"
+
+              elif grep -q "\[INFO\] BUILD SUCCESS" rat-output.log; then
+                echo "### ✅ Check Passed - All Files Comply with Apache License Requirements"
+
+              else
+                echo "### ⚠️ Indeterminate Result"
+                echo "Check the uploaded log file for details."
+              fi
+            else
+              echo "### ⚠️ No Output Log Found"
+              echo "The rat-output.log file was not generated."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Report Status
+        if: always()
+        shell: bash {0}
+        run: |
+          if [[ -f rat-output.log ]] && grep -q "\[INFO\] BUILD SUCCESS" rat-output.log; then
+            echo "✅ Apache Rat check completed successfully"
+            exit 0
+          elif [[ -f rat-output.log ]] && grep -q "\[INFO\] BUILD FAILURE" rat-output.log; then
+            echo "❌ Apache Rat check failed"
+            exit 1
+          else
+            echo "⚠️ Apache Rat check status unclear"
+            exit 1
+          fi

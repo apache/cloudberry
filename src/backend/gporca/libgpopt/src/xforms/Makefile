@@ -58,6 +58,7 @@ OBJS        = CDecorrelator.o \
               CXformImplementLimit.o \
               CXformImplementSequence.o \
               CXformImplementSequenceProject.o \
+              CXformImplementHashSequenceProject.o \
               CXformImplementSplit.o \
               CXformImplementTVF.o \
               CXformImplementTVFNoArgs.o \
@@ -113,6 +114,7 @@ OBJS        = CDecorrelator.o \
               CXformPushGbBelowJoin.o \
               CXformPushGbDedupBelowJoin.o \
               CXformPushGbWithHavingBelowJoin.o \
+              CXformPushPartialAggBelowJoin.o \
               CXformRemoveSubqDistinct.o \
               CXformResult.o \
               CXformRightOuterJoin2HashJoin.o \

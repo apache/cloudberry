@@ -19,6 +19,7 @@
 #ifndef CDBVARS_H
 #define CDBVARS_H
 
+#include "access/xlog.h"  /*RecoveryInProgress*/
 #include "access/xlogdefs.h"  /*XLogRecPtr*/
 #include "cdb/cdbutil.h" /* MASTER_CONTENT_ID */
 #ifdef USE_INTERNAL_FTS
@@ -334,6 +335,8 @@ typedef enum GpVars_Interconnect_Method
 {
 	INTERCONNECT_FC_METHOD_CAPACITY = 0,
 	INTERCONNECT_FC_METHOD_LOSS = 2,
+	INTERCONNECT_FC_METHOD_LOSS_ADVANCE = 3,
+	INTERCONNECT_FC_METHOD_LOSS_TIMER = 4,
 } GpVars_Interconnect_Method;
 
 extern int Gp_interconnect_fc_method;
@@ -360,6 +363,16 @@ extern int	Gp_interconnect_queue_depth;
  *
  */
 extern int	Gp_interconnect_snd_queue_depth;
+
+/*
+ * Cursor IC table size.
+ *
+ * For cursor case, there may be several concurrent interconnect
+ * instances on QD. The table is used to track the status of the
+ * instances, which is quite useful for "ACK the past and NAK the future" paradigm.
+ *
+ */
+extern int  Gp_interconnect_cursor_ic_table_size;
 extern int	Gp_interconnect_timer_period;
 extern int	Gp_interconnect_timer_checking_period;
 extern int	Gp_interconnect_default_rtt;
@@ -367,6 +380,7 @@ extern int	Gp_interconnect_min_rto;
 extern int  Gp_interconnect_transmit_timeout;
 extern int	Gp_interconnect_min_retries_before_timeout;
 extern int	Gp_interconnect_debug_retry_interval;
+extern int	Gp_interconnect_mem_size;
 
 /* UDP recv buf size in KB.  For testing */
 extern int 	Gp_udp_bufsize_k;
@@ -756,9 +770,12 @@ extern GpId GpIdentity;
 #define MAX_DBID_STRING_LENGTH  11
 
 #define UNINITIALIZED_GP_IDENTITY_VALUE (-10000)
+#define IS_HOT_DR_CLUSTER() (EnableHotDR)
 #define IS_QUERY_DISPATCHER() (GpIdentity.segindex == MASTER_CONTENT_ID)
+#define IS_HOT_STANDBY_QD() (EnableHotStandby && IS_QUERY_DISPATCHER() && RecoveryInProgress())
 
 #define IS_QUERY_EXECUTOR_BACKEND() (Gp_role == GP_ROLE_EXECUTE && gp_session_id > 0)
+#define IS_HOT_STANDBY_QE() (EnableHotStandby && IS_QUERY_EXECUTOR_BACKEND() && RecoveryInProgress())
 
 /* Stores the listener port that this process uses to listen for incoming
  * Interconnect connections from other Motion nodes.

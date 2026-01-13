@@ -145,7 +145,7 @@ size_t pax_toast_hdr_size(Datum d);
 // detoast pax toast
 size_t pax_detoast_raw(Datum d, char *dst_buff, size_t dst_size,
                        char *ext_buff = nullptr, size_t ext_buff_size = 0);
-std::pair<Datum, std::shared_ptr<MemoryObject>> pax_detoast(
+std::pair<Datum, std::unique_ptr<MemoryObject>> pax_detoast(
     Datum d, char *ext_buff = nullptr, size_t ext_buff_size = 0);
 
 // free pax toast

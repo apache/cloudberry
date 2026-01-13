@@ -112,6 +112,12 @@ check_for_data_types_usage(ClusterInfo *cluster,
 	FILE	   *script = NULL;
 	int			dbnum;
 
+	if (cluster->version.type == Cloudberry && cluster->version.version <= 2)
+	{
+		pg_log(PG_REPORT, "Skip checking for data type, current version CBDB do not support recursive query");
+		return false;
+	}
+
 	for (dbnum = 0; dbnum < cluster->dbarr.ndbs; dbnum++)
 	{
 		PQExpBuffer cte_oids;
@@ -547,7 +553,7 @@ report_extension_updates(ClusterInfo *cluster)
 	if (found)
 	{
 		report_status(PG_REPORT, "notice");
-		gp_fatal_log(
+		pg_log(PG_REPORT,
 				"| Your installation contains extensions that should be updated\n"
 				"| with the ALTER EXTENSION command.  The file\n"
 				"|     %s\n"

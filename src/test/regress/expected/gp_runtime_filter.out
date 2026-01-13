@@ -535,6 +535,60 @@ RESET gp_enable_runtime_filter_pushdown;
 DROP TABLE IF EXISTS t1;
 DROP TABLE IF EXISTS t2;
 DROP TABLE IF EXISTS t3;
+-- case 7: scan partition table with dynamic scan
+CREATE TABLE t1 (c1 INT, c2 INT) DISTRIBUTED BY (c1) PARTITION BY RANGE (c2) (START (1) END (100) EVERY (50));
+CREATE TABLE t2 (c1 INT, c2 INT) DISTRIBUTED REPLICATED;
+INSERT INTO t1 SELECT generate_series(1, 99), generate_series(1, 99);
+INSERT INTO t1 SELECT * FROM t1;
+INSERT INTO t1 SELECT * FROM t1;
+INSERT INTO t1 SELECT * FROM t1;
+INSERT INTO t1 SELECT * FROM t1;
+INSERT INTO t2 SELECT generate_series(1, 5), generate_series(1, 5);
+INSERT INTO t2 SELECT generate_series(51, 51), generate_series(51, 51);
+ANALYZE;
+SET optimizer TO on;
+EXPLAIN (ANALYZE, COSTS OFF, SUMMARY OFF, TIMING OFF)
+SELECT t1.c2 FROM t1, t2 WHERE t1.c2 = t2.c2;
+                                        QUERY PLAN                                         
+-------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3) (actual rows=96 loops=1)
+   ->  Hash Join (actual rows=64 loops=1)
+         Hash Cond: (t1.c2 = t2.c2)
+         Extra Text: (seg0)   Hash chain length 1.0 avg, 1 max, using 6 of 524288 buckets.
+         ->  Dynamic Seq Scan on t1 (actual rows=608 loops=1)
+               Number of partitions to scan: 2 (out of 2)
+               Partitions scanned:  Avg 2.0 x 3 workers.  Max 2 parts (seg0).
+         ->  Hash (actual rows=6 loops=1)
+               Buckets: 524288  Batches: 1  Memory Usage: 4097kB
+               ->  Partition Selector (selector id: $0) (actual rows=6 loops=1)
+                     ->  Seq Scan on t2 (actual rows=6 loops=1)
+ Optimizer: GPORCA
+(12 rows)
+
+SET gp_enable_runtime_filter_pushdown TO on;
+EXPLAIN (ANALYZE, COSTS OFF, SUMMARY OFF, TIMING OFF)
+SELECT t1.c2 FROM t1, t2 WHERE t1.c2 = t2.c2;
+                                        QUERY PLAN                                         
+-------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3) (actual rows=96 loops=1)
+   ->  Hash Join (actual rows=64 loops=1)
+         Hash Cond: (t1.c2 = t2.c2)
+         Extra Text: (seg0)   Hash chain length 1.0 avg, 1 max, using 6 of 524288 buckets.
+         ->  Dynamic Seq Scan on t1 (actual rows=64 loops=1)
+               Rows Removed by Pushdown Runtime Filter: 544
+               Number of partitions to scan: 2 (out of 2)
+               Partitions scanned:  Avg 2.0 x 3 workers.  Max 2 parts (seg0).
+         ->  Hash (actual rows=6 loops=1)
+               Buckets: 524288  Batches: 1  Memory Usage: 4097kB
+               ->  Partition Selector (selector id: $0) (actual rows=6 loops=1)
+                     ->  Seq Scan on t2 (actual rows=6 loops=1)
+ Optimizer: GPORCA
+(13 rows)
+
+RESET gp_enable_runtime_filter_pushdown;
+DROP TABLE IF EXISTS t1;
+DROP TABLE IF EXISTS t2;
+SET optimizer TO off;
 RESET enable_parallel;
 -- Clean up: reset guc
 SET gp_enable_runtime_filter TO off;

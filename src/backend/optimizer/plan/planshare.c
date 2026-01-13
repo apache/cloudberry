@@ -40,6 +40,7 @@ make_shareinputscan(PlannerInfo *root, Plan *inputplan)
 	sisc->this_slice_id = -1;
 	sisc->nconsumers = 0;
 	sisc->discard_output = false;
+	sisc->ref_set = false;
 
 	sisc->scan.plan.qual = NIL;
 	sisc->scan.plan.righttree = NULL;
@@ -50,6 +51,9 @@ make_shareinputscan(PlannerInfo *root, Plan *inputplan)
 	sisc->scan.plan.total_cost = sipath.total_cost; 
 	sisc->scan.plan.plan_rows = inputplan->plan_rows;
 	sisc->scan.plan.plan_width = inputplan->plan_width;
+
+	sisc->scan.plan.locustype = inputplan->locustype;
+	sisc->scan.plan.parallel = 0; /* No parallel ShareInputScan */
 
 	return sisc;
 }

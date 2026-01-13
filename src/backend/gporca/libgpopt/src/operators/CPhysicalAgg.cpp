@@ -8,7 +8,6 @@
 //	@doc:
 //		Implementation of basic aggregate operator
 //---------------------------------------------------------------------------
-
 #include "gpopt/operators/CPhysicalAgg.h"
 
 #include "gpos/base.h"
@@ -39,12 +38,14 @@ CPhysicalAgg::CPhysicalAgg(
 	CColRefArray *pdrgpcrMinimal,  // minimal grouping columns based on FD's
 	COperator::EGbAggType egbaggtype, BOOL fGeneratesDuplicates,
 	CColRefArray *pdrgpcrArgDQA, BOOL fMultiStage, BOOL isAggFromSplitDQA,
-	CLogicalGbAgg::EAggStage aggStage, BOOL should_enforce_distribution)
+	CLogicalGbAgg::EAggStage aggStage, BOOL isAggPushdown,
+	BOOL should_enforce_distribution)
 	: CPhysical(mp),
 	  m_pdrgpcr(colref_array),
 	  m_egbaggtype(egbaggtype),
 	  m_isAggFromSplitDQA(isAggFromSplitDQA),
 	  m_aggStage(aggStage),
+	  m_aggpushdown(isAggPushdown),
 	  m_pdrgpcrMinimal(nullptr),
 	  m_fGeneratesDuplicates(fGeneratesDuplicates),
 	  m_pdrgpcrArgDQA(pdrgpcrArgDQA),
@@ -293,11 +294,65 @@ CDistributionSpec *
 CPhysicalAgg::PdsMaximalHashed(CMemoryPool *mp, CColRefArray *colref_array)
 {
 	GPOS_ASSERT(nullptr != colref_array);
+	CColRefArray *pcraResHashs = nullptr;
+
+	if (GPOS_FTRACE(EopttraceAggRRSFirstKey)) {
+		pcraResHashs = GPOS_NEW(mp) CColRefArray(mp);
+		if (colref_array->Size() > 0) {
+			CColRef *colref = (*colref_array)[0];
+			pcraResHashs->Append(colref);
+		}
+	} else if (GPOS_FTRACE(EopttraceAggRRSMinimalLenKey)) {
+		ULONG ulsz = colref_array->Size();
+		pcraResHashs = GPOS_NEW(mp) CColRefArray(mp);
+
+		LINT minimal_typlen = gpos::lint_max; // less than minimal typlen
+		LINT minimal_typlen_ul = -1;
+		for (ULONG ul = 0; ul < ulsz; ul++) {
+			CColRef *pcr =(*colref_array)[ul];
+			const gpmd::IMDType *pmdtyp = pcr->RetrieveType();
+			LINT typlen = pmdtyp->IsFixedLength() ? pmdtyp->Length() : (gpos::lint_max - 1);
+
+			if (typlen < minimal_typlen) {
+				minimal_typlen = typlen;
+				minimal_typlen_ul = ul;
+			}
+		}
+
+		if (minimal_typlen_ul != -1) {
+			pcraResHashs->Append((*colref_array)[minimal_typlen_ul]);
+		}
+	} else if (GPOS_FTRACE(EopttraceAggRRSExcludeNonFixedKey)) {
+		ULONG ulsz = colref_array->Size();
+		pcraResHashs = GPOS_NEW(mp) CColRefArray(mp);
+
+		for (ULONG ul = 0; ul < ulsz; ul++) {
+			CColRef *pcr =(*colref_array)[ul];
+			const gpmd::IMDType *pmdtyp = pcr->RetrieveType();
+			if (pmdtyp->IsFixedLength()) {
+				pcraResHashs->Append(pcr);
+			}
+		}
+
+		// no key in result
+		if (pcraResHashs->Size() == 0) {
+			colref_array->AddRef();
+			pcraResHashs = colref_array;
+		}
+	} else {
+		colref_array->AddRef();
+		pcraResHashs = colref_array;
+	}
+
+	GPOS_ASSERT(nullptr != pcraResHashs);
+	GPOS_ASSERT_IMP(colref_array->Size() > 0, pcraResHashs->Size() > 0);
 
 	CDistributionSpecHashed *pdshashedMaximal =
 		CDistributionSpecHashed::PdshashedMaximal(
-			mp, colref_array, true /*fNullsColocated*/
+			mp, pcraResHashs, true /*fNullsColocated*/
 		);
+
+	pcraResHashs->Release();
 	if (nullptr != pdshashedMaximal)
 	{
 		return pdshashedMaximal;
@@ -695,6 +750,10 @@ CPhysicalAgg::OsPrint(IOstream &os) const
 	if (m_fMultiStage)
 	{
 		os << ", multi-stage";
+	}
+	if (m_aggpushdown)
+	{
+		os << ", pushdown";
 	}
 	os << " )";
 

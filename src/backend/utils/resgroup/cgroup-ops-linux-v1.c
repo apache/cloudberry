@@ -176,6 +176,7 @@ static void setio_v1(Oid group, List *limit_list);
 static void freeio_v1(List *limit_list);
 static List* getiostat_v1(Oid group, List *io_limit);
 static char *dumpio_v1(List *limit_list);
+static void cleario_v1(Oid groupid);
 
 /*
  * Detect gpdb cgroup component dirs.
@@ -651,11 +652,11 @@ createcgroup_v1(Oid group)
 {
 	int retry = 0;
 
-	if (!createDir(group, CGROUP_COMPONENT_CPU) ||
-		!createDir(group, CGROUP_COMPONENT_CPUACCT) ||
-		!createDir(group, CGROUP_COMPONENT_MEMORY) ||
+	if (!createDir(group, CGROUP_COMPONENT_CPU, "") ||
+		!createDir(group, CGROUP_COMPONENT_CPUACCT, "") ||
+		!createDir(group, CGROUP_COMPONENT_MEMORY, "") ||
 		(gp_resource_group_enable_cgroup_cpuset &&
-		 !createDir(group, CGROUP_COMPONENT_CPUSET)))
+		 !createDir(group, CGROUP_COMPONENT_CPUSET, "")))
 	{
 		CGROUP_ERROR("can't create cgroup for resource group '%d': %m", group);
 	}
@@ -704,7 +705,7 @@ create_default_cpuset_group_v1(void)
 	CGroupComponentType component = CGROUP_COMPONENT_CPUSET;
 	int retry = 0;
 
-	if (!createDir(DEFAULT_CPUSET_GROUP_ID, component))
+	if (!createDir(DEFAULT_CPUSET_GROUP_ID, component, ""))
 	{
 		CGROUP_ERROR("can't create cpuset cgroup for resgroup '%d': %m",
 					 DEFAULT_CPUSET_GROUP_ID);
@@ -1158,6 +1159,14 @@ dumpio_v1(List *limit_list)
 	return DefaultIOLimit;
 }
 
+static void
+cleario_v1(Oid groupid)
+{
+	ereport(WARNING,
+			(errcode(ERRCODE_SYSTEM_ERROR),
+			 errmsg("resource group io limit only can be used in cgroup v2.")));
+}
+
 static CGroupOpsRoutine cGroupOpsRoutineV1 = {
 		.getcgroupname = getcgroupname_v1,
 		.probecgroup = probecgroup_v1,
@@ -1187,7 +1196,8 @@ static CGroupOpsRoutine cGroupOpsRoutineV1 = {
 		.setio = setio_v1,
 		.freeio = freeio_v1,
 		.getiostat = getiostat_v1,
-		.dumpio = dumpio_v1
+		.dumpio = dumpio_v1,
+		.cleario = cleario_v1
 };
 
 CGroupOpsRoutine *get_group_routine_v1(void)
