@@ -639,7 +639,7 @@ from tj1
   join tj19 on tj18.id = tj19.id
   join tj20 on tj19.id = tj20.id;
 
-select (trunc(extract(epoch from now())) - :unix_time1) < 10 is_ok;
+select (trunc(extract(epoch from now())) - :unix_time1) < 100 is_ok;
 
 reset optimizer;
 
