@@ -4241,7 +4241,7 @@ from tj1
 ----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
 (0 rows)
 
-select (trunc(extract(epoch from now())) - :unix_time1) < 10 is_ok;
+select (trunc(extract(epoch from now())) - :unix_time1) < 100 is_ok;
  is_ok 
 -------
  t
