@@ -2779,20 +2779,22 @@ Leading((t2 (t1 t3)))
 not used hint:
 duplication hint:
 error hint:
-                  QUERY PLAN                  
-----------------------------------------------
+                     QUERY PLAN                     
+----------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
-   ->  Hash Join
-         Hash Cond: (t2.a = t1.a)
-         ->  Seq Scan on t2
-         ->  Hash
-               ->  Hash Left Join
-                     Hash Cond: (t1.a = t3.a)
-                     ->  Seq Scan on t1
-                     ->  Hash
-                           ->  Seq Scan on t3
- Optimizer: Postgres-based planner
-(11 rows)
+   ->  Merge Join
+         Merge Cond: (t2.a = t1.a)
+         ->  Index Scan using i2 on t2
+         ->  Materialize
+               ->  Sort
+                     Sort Key: t1.a
+                     ->  Hash Left Join
+                           Hash Cond: (t1.a = t3.a)
+                           ->  Seq Scan on t1
+                           ->  Hash
+                                 ->  Seq Scan on t3
+ Optimizer: Postgres query optimizer
+(13 rows)
 
 /*+
     Leading((t2 (t1 t3)))
@@ -2829,20 +2831,22 @@ Leading((t2 (t3 t1)))
 not used hint:
 duplication hint:
 error hint:
-                  QUERY PLAN                  
-----------------------------------------------
+                     QUERY PLAN                     
+----------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
-   ->  Hash Join
-         Hash Cond: (t2.a = t1.a)
-         ->  Seq Scan on t2
-         ->  Hash
-               ->  Hash Right Join
-                     Hash Cond: (t3.a = t1.a)
-                     ->  Seq Scan on t3
-                     ->  Hash
-                           ->  Seq Scan on t1
- Optimizer: Postgres-based planner
-(11 rows)
+   ->  Merge Join
+         Merge Cond: (t2.a = t1.a)
+         ->  Index Scan using i2 on t2
+         ->  Materialize
+               ->  Sort
+                     Sort Key: t1.a
+                     ->  Hash Right Join
+                           Hash Cond: (t3.a = t1.a)
+                           ->  Seq Scan on t3
+                           ->  Hash
+                                 ->  Seq Scan on t1
+ Optimizer: Postgres query optimizer
+(13 rows)
 
 /*+
     Leading((t2 (t3 t1)))
@@ -3423,23 +3427,21 @@ error hint:
          ->  Materialize
                ->  Sort
                      Sort Key: t2.a
-                     ->  Redistribute Motion 3:3  (slice2; segments: 3)
-                           Hash Key: t2.a
-                           ->  Merge Right Join
-                                 Merge Cond: (t4.a = t3.a)
-                                 ->  Index Scan using i4 on t4
-                                 ->  Materialize
-                                       ->  Sort
-                                             Sort Key: t3.a
-                                             ->  Redistribute Motion 3:3  (slice3; segments: 3)
-                                                   Hash Key: t3.a
-                                                   ->  Hash Left Join
-                                                         Hash Cond: (t2.a = t3.a)
-                                                         ->  Seq Scan on t2
-                                                         ->  Hash
-                                                               ->  Seq Scan on t3
- Optimizer: Postgres-based planner
-(27 rows)
+                     ->  Merge Left Join
+                           Merge Cond: (t3.a = t4.a)
+                           ->  Sort
+                                 Sort Key: t3.a
+                                 ->  Hash Left Join
+                                       Hash Cond: (t2.a = t3.a)
+                                       ->  Seq Scan on t2
+                                       ->  Hash
+                                             ->  Seq Scan on t3
+                           ->  Sort
+                                 Sort Key: t4.a
+                                 ->  Broadcast Motion 3:3  (slice2; segments: 3)
+                                       ->  Seq Scan on t4
+ Optimizer: Postgres query optimizer
+(25 rows)
 
 /*+
     Leading((t2 t3))
@@ -3491,23 +3493,21 @@ error hint:
          ->  Materialize
                ->  Sort
                      Sort Key: t2.a
-                     ->  Redistribute Motion 3:3  (slice2; segments: 3)
-                           Hash Key: t2.a
-                           ->  Merge Right Join
-                                 Merge Cond: (t4.a = t3.a)
-                                 ->  Index Scan using i4 on t4
-                                 ->  Materialize
-                                       ->  Sort
-                                             Sort Key: t3.a
-                                             ->  Redistribute Motion 3:3  (slice3; segments: 3)
-                                                   Hash Key: t3.a
-                                                   ->  Hash Right Join
-                                                         Hash Cond: (t3.a = t2.a)
-                                                         ->  Seq Scan on t3
-                                                         ->  Hash
-                                                               ->  Seq Scan on t2
- Optimizer: Postgres-based planner
-(27 rows)
+                     ->  Merge Left Join
+                           Merge Cond: (t3.a = t4.a)
+                           ->  Sort
+                                 Sort Key: t3.a
+                                 ->  Hash Right Join
+                                       Hash Cond: (t3.a = t2.a)
+                                       ->  Seq Scan on t3
+                                       ->  Hash
+                                             ->  Seq Scan on t2
+                           ->  Sort
+                                 Sort Key: t4.a
+                                 ->  Broadcast Motion 3:3  (slice2; segments: 3)
+                                       ->  Seq Scan on t4
+ Optimizer: Postgres query optimizer
+(25 rows)
 
 /*+
     Leading((t3 t2))
