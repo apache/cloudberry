@@ -1,0 +1,300 @@
+CREATE SCHEMA ftsr;
+SELECT diskquota.set_schema_quota('ftsr', '1 MB');
+ set_schema_quota 
+------------------
+ 
+(1 row)
+
+SET search_path TO ftsr;
+create or replace language plpythonu;
+--
+-- pg_ctl:
+--   datadir: data directory of process to target with `pg_ctl`
+--   command: commands valid for `pg_ctl`
+--   command_mode: modes valid for `pg_ctl -m`  
+--
+create or replace function pg_ctl(datadir text, command text, command_mode text default 'immediate')
+returns text as $$
+    import subprocess
+    if command not in ('stop', 'restart'):
+        return 'Invalid command input'
+
+    cmd = 'pg_ctl -l postmaster.log -D %s ' % datadir
+    cmd = cmd + '-W -m %s %s' % (command_mode, command)
+    if 'plpython2u' == 'plpython2u':
+        return subprocess.check_output(cmd, stderr=subprocess.STDOUT, shell=True).replace('.', '')
+    else:
+        return subprocess.check_output(cmd, stderr=subprocess.STDOUT, shell=True, encoding='utf8').replace('.', '')
+
+$$ language plpython2u;
+create or replace function pg_recoverseg(datadir text, command text)
+returns text as $$
+    import subprocess
+    cmd = 'gprecoverseg -%s -d %s; exit 0; ' % (command, datadir)
+    if 'plpython2u' == 'plpython2u':
+        return subprocess.check_output(cmd, stderr=subprocess.STDOUT, shell=True).replace('.', '')
+    else:
+        return subprocess.check_output(cmd, stderr=subprocess.STDOUT, shell=True, encoding='utf8').replace('.', '')
+$$ language plpython2u;
+CREATE TABLE a(i int, j int) DISTRIBUTED BY (i);
+-- the entries will be inserted into seg0
+INSERT INTO a SELECT 2, generate_series(1,100);
+INSERT INTO a SELECT 2, generate_series(1,100000);
+SELECT diskquota.wait_for_worker_new_epoch();
+ wait_for_worker_new_epoch 
+---------------------------
+ t
+(1 row)
+
+SELECT tableid::regclass, size, segid FROM diskquota.table_size WHERE tableid = 'a'::regclass ORDER BY segid;
+ tableid |  size   | segid 
+---------+---------+-------
+ a       | 3735552 |    -1
+ a       | 3735552 |     0
+ a       |       0 |     1
+ a       |       0 |     2
+(4 rows)
+
+-- expect insert fail
+INSERT INTO a SELECT 2, generate_series(1,100);
+ERROR:  schema's disk space quota exceeded with name: ftsr
+-- now one of primary is down
+select pg_ctl((select datadir from gp_segment_configuration c where c.role='p' and c.content=0), 'stop');
+        pg_ctl        
+----------------------
+ server shutting down+
+ 
+(1 row)
+
+-- switch mirror to primary
+select gp_request_fts_probe_scan();
+ gp_request_fts_probe_scan 
+---------------------------
+ t
+(1 row)
+
+-- check GPDB status
+select content, preferred_role, role, status, mode from gp_segment_configuration where content = 0;
+ content | preferred_role | role | status | mode 
+---------+----------------+------+--------+------
+       0 | p              | m    | d      | n
+       0 | m              | p    | u      | n
+(2 rows)
+
+-- expect insert fail
+INSERT INTO a SELECT 2, generate_series(1,100);
+ERROR:  schema's disk space quota exceeded with name: ftsr
+-- increase quota
+SELECT diskquota.set_schema_quota('ftsr', '200 MB');
+ set_schema_quota 
+------------------
+ 
+(1 row)
+
+SELECT diskquota.wait_for_worker_new_epoch();
+ wait_for_worker_new_epoch 
+---------------------------
+ t
+(1 row)
+
+-- expect insert success
+INSERT INTO a SELECT 2, generate_series(1,10000);
+SELECT diskquota.wait_for_worker_new_epoch();
+ wait_for_worker_new_epoch 
+---------------------------
+ t
+(1 row)
+
+-- check whether monitored_dbid_cache is refreshed in mirror
+-- diskquota.table_size should be updated
+SELECT tableid::regclass, size, segid FROM diskquota.table_size WHERE tableid = 'a'::regclass ORDER BY segid;
+ tableid |  size   | segid 
+---------+---------+-------
+ a       | 4096000 |    -1
+ a       | 4096000 |     0
+ a       |       0 |     1
+ a       |       0 |     2
+(4 rows)
+
+-- pull up failed primary
+-- start_ignore
+select pg_recoverseg((select datadir from gp_segment_configuration c where c.role='p' and c.content=-1), 'a');
+                                                                                                                                    pg_recoverseg                                                                                                                                     
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ 20211216:16:28:48:371791 gprecoverseg:laptop:v-[INFO]:-Starting gprecoverseg with args: -a -d /home/v/x/gh/gpdb/gpAux/gpdemo/datadirs/qddir/demoDataDir-1                                                                                                                           +
+ 20211216:16:28:48:371791 gprecoverseg:laptop:v-[INFO]:-local Greenplum Version: 'postgres (Greenplum Database) 6182+dev173g55557f44f3 build dev'                                                                                                                                    +
+ 20211216:16:28:48:371791 gprecoverseg:laptop:v-[INFO]:-master Greenplum Version: 'PostgreSQL 9426 (Greenplum Database 6182+dev173g55557f44f3 build dev) on x86_64-unknown-linux-gnu, compiled by clang version 1300, 64-bit compiled on Dec 16 2021 09:16:34 (with assert checking)'+
+ 20211216:16:28:48:371791 gprecoverseg:laptop:v-[INFO]:-Obtaining Segment details from master                                                                                                                                                                                        +
+ 20211216:16:28:48:371791 gprecoverseg:laptop:v-[INFO]:-Heap checksum setting is consistent between master and the segments that are candidates for recoverseg                                                                                                                       +
+ 20211216:16:28:48:371791 gprecoverseg:laptop:v-[INFO]:-Greenplum instance recovery parameters                                                                                                                                                                                       +
+ 20211216:16:28:48:371791 gprecoverseg:laptop:v-[INFO]:----------------------------------------------------------                                                                                                                                                                    +
+ 20211216:16:28:48:371791 gprecoverseg:laptop:v-[INFO]:-Recovery type              = Standard                                                                                                                                                                                        +
+ 20211216:16:28:48:371791 gprecoverseg:laptop:v-[INFO]:----------------------------------------------------------                                                                                                                                                                    +
+ 20211216:16:28:48:371791 gprecoverseg:laptop:v-[INFO]:-Recovery 1 of 1                                                                                                                                                                                                              +
+ 20211216:16:28:48:371791 gprecoverseg:laptop:v-[INFO]:----------------------------------------------------------                                                                                                                                                                    +
+ 20211216:16:28:48:371791 gprecoverseg:laptop:v-[INFO]:-   Synchronization mode                 = Incremental                                                                                                                                                                        +
+ 20211216:16:28:48:371791 gprecoverseg:laptop:v-[INFO]:-   Failed instance host                 = laptop                                                                                                                                                                             +
+ 20211216:16:28:48:371791 gprecoverseg:laptop:v-[INFO]:-   Failed instance address              = laptop                                                                                                                                                                             +
+ 20211216:16:28:48:371791 gprecoverseg:laptop:v-[INFO]:-   Failed instance directory            = /home/v/x/gh/gpdb/gpAux/gpdemo/datadirs/dbfast1/demoDataDir0                                                                                                                       +
+ 20211216:16:28:48:371791 gprecoverseg:laptop:v-[INFO]:-   Failed instance port                 = 6002                                                                                                                                                                               +
+ 20211216:16:28:48:371791 gprecoverseg:laptop:v-[INFO]:-   Recovery Source instance host        = laptop                                                                                                                                                                             +
+ 20211216:16:28:48:371791 gprecoverseg:laptop:v-[INFO]:-   Recovery Source instance address     = laptop                                                                                                                                                                             +
+ 20211216:16:28:48:371791 gprecoverseg:laptop:v-[INFO]:-   Recovery Source instance directory   = /home/v/x/gh/gpdb/gpAux/gpdemo/datadirs/dbfast_mirror1/demoDataDir0                                                                                                                +
+ 20211216:16:28:48:371791 gprecoverseg:laptop:v-[INFO]:-   Recovery Source instance port        = 6005                                                                                                                                                                               +
+ 20211216:16:28:48:371791 gprecoverseg:laptop:v-[INFO]:-   Recovery Target                      = in-place                                                                                                                                                                           +
+ 20211216:16:28:48:371791 gprecoverseg:laptop:v-[INFO]:----------------------------------------------------------                                                                                                                                                                    +
+ 20211216:16:28:48:371791 gprecoverseg:laptop:v-[INFO]:-Starting to create new pg_hbaconf on primary segments                                                                                                                                                                        +
+ 20211216:16:28:49:371791 gprecoverseg:laptop:v-[INFO]:-Successfully modified pg_hbaconf on primary segments to allow replication connections                                                                                                                                        +
+ 20211216:16:28:49:371791 gprecoverseg:laptop:v-[INFO]:-1 segment(s) to recover                                                                                                                                                                                                      +
+ 20211216:16:28:49:371791 gprecoverseg:laptop:v-[INFO]:-Ensuring 1 failed segment(s) are stopped                                                                                                                                                                                     +
+ 20211216:16:28:49:371791 gprecoverseg:laptop:v-[INFO]:-Ensuring that shared memory is cleaned up for stopped segments                                                                                                                                                               +
+ 20211216:16:28:50:371791 gprecoverseg:laptop:v-[INFO]:-Updating configuration with new mirrors                                                                                                                                                                                      +
+ 20211216:16:28:50:371791 gprecoverseg:laptop:v-[INFO]:-Updating mirrors                                                                                                                                                                                                             +
+ 20211216:16:28:50:371791 gprecoverseg:laptop:v-[INFO]:-Running pg_rewind on failed segments                                                                                                                                                                                         +
+ laptop (dbid 2):      0/689186 kB (0%) copied                                                                                                                                                                                                                                       +
+ laptop (dbid 2): syncing target data directory                                                                                                                                                                                                                                      +
+ laptop (dbid 2): syncing target data directory                                                                                                                                                                                                                                      +
+ laptop (dbid 2): Done!                                                                                                                                                                                                                                                              +
+ 20211216:16:28:55:371791 gprecoverseg:laptop:v-[INFO]:-Starting mirrors                                                                                                                                                                                                             +
+ 20211216:16:28:55:371791 gprecoverseg:laptop:v-[INFO]:-era is 85b8357bd546c506_211216162717                                                                                                                                                                                         +
+ 20211216:16:28:55:371791 gprecoverseg:laptop:v-[INFO]:-Commencing parallel segment instance startup, please wait                                                                                                                                                                    +
+ 20211216:16:28:56:371791 gprecoverseg:laptop:v-[INFO]:-Process results                                                                                                                                                                                                              +
+ 20211216:16:28:56:371791 gprecoverseg:laptop:v-[INFO]:-Triggering FTS probe                                                                                                                                                                                                         +
+ 20211216:16:28:56:371791 gprecoverseg:laptop:v-[INFO]:-********************************                                                                                                                                                                                             +
+ 20211216:16:28:56:371791 gprecoverseg:laptop:v-[INFO]:-Segments successfully recovered                                                                                                                                                                                              +
+ 20211216:16:28:56:371791 gprecoverseg:laptop:v-[INFO]:-********************************                                                                                                                                                                                             +
+ 20211216:16:28:56:371791 gprecoverseg:laptop:v-[INFO]:-Recovered mirror segments need to sync WAL with primary segments                                                                                                                                                             +
+ 20211216:16:28:56:371791 gprecoverseg:laptop:v-[INFO]:-Use 'gpstate -e' to check progress of WAL sync remaining bytes                                                                                                                                                               +
+ 
+(1 row)
+
+select pg_recoverseg((select datadir from gp_segment_configuration c where c.role='p' and c.content=-1), 'ar');
+                                                                                                                                    pg_recoverseg                                                                                                                                     
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ 20211216:16:28:56:373757 gprecoverseg:laptop:v-[INFO]:-Starting gprecoverseg with args: -ar -d /home/v/x/gh/gpdb/gpAux/gpdemo/datadirs/qddir/demoDataDir-1                                                                                                                          +
+ 20211216:16:28:56:373757 gprecoverseg:laptop:v-[INFO]:-local Greenplum Version: 'postgres (Greenplum Database) 6182+dev173g55557f44f3 build dev'                                                                                                                                    +
+ 20211216:16:28:56:373757 gprecoverseg:laptop:v-[INFO]:-master Greenplum Version: 'PostgreSQL 9426 (Greenplum Database 6182+dev173g55557f44f3 build dev) on x86_64-unknown-linux-gnu, compiled by clang version 1300, 64-bit compiled on Dec 16 2021 09:16:34 (with assert checking)'+
+ 20211216:16:28:56:373757 gprecoverseg:laptop:v-[INFO]:-Obtaining Segment details from master                                                                                                                                                                                        +
+ 20211216:16:28:56:373757 gprecoverseg:laptop:v-[INFO]:-Greenplum instance recovery parameters                                                                                                                                                                                       +
+ 20211216:16:28:56:373757 gprecoverseg:laptop:v-[INFO]:----------------------------------------------------------                                                                                                                                                                    +
+ 20211216:16:28:56:373757 gprecoverseg:laptop:v-[INFO]:-Recovery type              = Rebalance                                                                                                                                                                                       +
+ 20211216:16:28:56:373757 gprecoverseg:laptop:v-[INFO]:----------------------------------------------------------                                                                                                                                                                    +
+ 20211216:16:28:56:373757 gprecoverseg:laptop:v-[INFO]:-Unbalanced segment 1 of 2                                                                                                                                                                                                    +
+ 20211216:16:28:56:373757 gprecoverseg:laptop:v-[INFO]:----------------------------------------------------------                                                                                                                                                                    +
+ 20211216:16:28:56:373757 gprecoverseg:laptop:v-[INFO]:-   Unbalanced instance host        = laptop                                                                                                                                                                                  +
+ 20211216:16:28:56:373757 gprecoverseg:laptop:v-[INFO]:-   Unbalanced instance address     = laptop                                                                                                                                                                                  +
+ 20211216:16:28:56:373757 gprecoverseg:laptop:v-[INFO]:-   Unbalanced instance directory   = /home/v/x/gh/gpdb/gpAux/gpdemo/datadirs/dbfast_mirror1/demoDataDir0                                                                                                                     +
+ 20211216:16:28:56:373757 gprecoverseg:laptop:v-[INFO]:-   Unbalanced instance port        = 6005                                                                                                                                                                                    +
+ 20211216:16:28:56:373757 gprecoverseg:laptop:v-[INFO]:-   Balanced role                   = Mirror                                                                                                                                                                                  +
+ 20211216:16:28:56:373757 gprecoverseg:laptop:v-[INFO]:-   Current role                    = Primary                                                                                                                                                                                 +
+ 20211216:16:28:56:373757 gprecoverseg:laptop:v-[INFO]:----------------------------------------------------------                                                                                                                                                                    +
+ 20211216:16:28:56:373757 gprecoverseg:laptop:v-[INFO]:-Unbalanced segment 2 of 2                                                                                                                                                                                                    +
+ 20211216:16:28:56:373757 gprecoverseg:laptop:v-[INFO]:----------------------------------------------------------                                                                                                                                                                    +
+ 20211216:16:28:56:373757 gprecoverseg:laptop:v-[INFO]:-   Unbalanced instance host        = laptop                                                                                                                                                                                  +
+ 20211216:16:28:56:373757 gprecoverseg:laptop:v-[INFO]:-   Unbalanced instance address     = laptop                                                                                                                                                                                  +
+ 20211216:16:28:56:373757 gprecoverseg:laptop:v-[INFO]:-   Unbalanced instance directory   = /home/v/x/gh/gpdb/gpAux/gpdemo/datadirs/dbfast1/demoDataDir0                                                                                                                            +
+ 20211216:16:28:56:373757 gprecoverseg:laptop:v-[INFO]:-   Unbalanced instance port        = 6002                                                                                                                                                                                    +
+ 20211216:16:28:56:373757 gprecoverseg:laptop:v-[INFO]:-   Balanced role                   = Primary                                                                                                                                                                                 +
+ 20211216:16:28:56:373757 gprecoverseg:laptop:v-[INFO]:-   Current role                    = Mirror                                                                                                                                                                                  +
+ 20211216:16:28:56:373757 gprecoverseg:laptop:v-[INFO]:----------------------------------------------------------                                                                                                                                                                    +
+ 20211216:16:28:56:373757 gprecoverseg:laptop:v-[INFO]:-Determining primary and mirror segment pairs to rebalance                                                                                                                                                                    +
+ 20211216:16:28:56:373757 gprecoverseg:laptop:v-[INFO]:-Stopping unbalanced primary segments                                                                                                                                                                                         +
+ 20211216:16:28:57:373757 gprecoverseg:laptop:v-[INFO]:-Triggering segment reconfiguration                                                                                                                                                                                           +
+ 20211216:16:29:04:373757 gprecoverseg:laptop:v-[INFO]:-Starting segment synchronization                                                                                                                                                                                             +
+ 20211216:16:29:04:373757 gprecoverseg:laptop:v-[INFO]:-=============================START ANOTHER RECOVER=========================================                                                                                                                                  +
+ 20211216:16:29:04:373757 gprecoverseg:laptop:v-[INFO]:-local Greenplum Version: 'postgres (Greenplum Database) 6182+dev173g55557f44f3 build dev'                                                                                                                                    +
+ 20211216:16:29:04:373757 gprecoverseg:laptop:v-[INFO]:-master Greenplum Version: 'PostgreSQL 9426 (Greenplum Database 6182+dev173g55557f44f3 build dev) on x86_64-unknown-linux-gnu, compiled by clang version 1300, 64-bit compiled on Dec 16 2021 09:16:34 (with assert checking)'+
+ 20211216:16:29:04:373757 gprecoverseg:laptop:v-[INFO]:-Obtaining Segment details from master                                                                                                                                                                                        +
+ 20211216:16:29:04:373757 gprecoverseg:laptop:v-[INFO]:-Heap checksum setting is consistent between master and the segments that are candidates for recoverseg                                                                                                                       +
+ 20211216:16:29:04:373757 gprecoverseg:laptop:v-[INFO]:-Greenplum instance recovery parameters                                                                                                                                                                                       +
+ 20211216:16:29:04:373757 gprecoverseg:laptop:v-[INFO]:----------------------------------------------------------                                                                                                                                                                    +
+ 20211216:16:29:04:373757 gprecoverseg:laptop:v-[INFO]:-Recovery type              = Standard                                                                                                                                                                                        +
+ 20211216:16:29:04:373757 gprecoverseg:laptop:v-[INFO]:----------------------------------------------------------                                                                                                                                                                    +
+ 20211216:16:29:04:373757 gprecoverseg:laptop:v-[INFO]:-Recovery 1 of 1                                                                                                                                                                                                              +
+ 20211216:16:29:04:373757 gprecoverseg:laptop:v-[INFO]:----------------------------------------------------------                                                                                                                                                                    +
+ 20211216:16:29:04:373757 gprecoverseg:laptop:v-[INFO]:-   Synchronization mode                 = Incremental                                                                                                                                                                        +
+ 20211216:16:29:04:373757 gprecoverseg:laptop:v-[INFO]:-   Failed instance host                 = laptop                                                                                                                                                                             +
+ 20211216:16:29:04:373757 gprecoverseg:laptop:v-[INFO]:-   Failed instance address              = laptop                                                                                                                                                                             +
+ 20211216:16:29:04:373757 gprecoverseg:laptop:v-[INFO]:-   Failed instance directory            = /home/v/x/gh/gpdb/gpAux/gpdemo/datadirs/dbfast_mirror1/demoDataDir0                                                                                                                +
+ 20211216:16:29:04:373757 gprecoverseg:laptop:v-[INFO]:-   Failed instance port                 = 6005                                                                                                                                                                               +
+ 20211216:16:29:04:373757 gprecoverseg:laptop:v-[INFO]:-   Recovery Source instance host        = laptop                                                                                                                                                                             +
+ 20211216:16:29:04:373757 gprecoverseg:laptop:v-[INFO]:-   Recovery Source instance address     = laptop                                                                                                                                                                             +
+ 20211216:16:29:04:373757 gprecoverseg:laptop:v-[INFO]:-   Recovery Source instance directory   = /home/v/x/gh/gpdb/gpAux/gpdemo/datadirs/dbfast1/demoDataDir0                                                                                                                       +
+ 20211216:16:29:04:373757 gprecoverseg:laptop:v-[INFO]:-   Recovery Source instance port        = 6002                                                                                                                                                                               +
+ 20211216:16:29:04:373757 gprecoverseg:laptop:v-[INFO]:-   Recovery Target                      = in-place                                                                                                                                                                           +
+ 20211216:16:29:04:373757 gprecoverseg:laptop:v-[INFO]:----------------------------------------------------------                                                                                                                                                                    +
+ 20211216:16:29:04:373757 gprecoverseg:laptop:v-[INFO]:-Starting to create new pg_hbaconf on primary segments                                                                                                                                                                        +
+ 20211216:16:29:05:373757 gprecoverseg:laptop:v-[INFO]:-Successfully modified pg_hbaconf on primary segments to allow replication connections                                                                                                                                        +
+ 20211216:16:29:05:373757 gprecoverseg:laptop:v-[INFO]:-1 segment(s) to recover                                                                                                                                                                                                      +
+ 20211216:16:29:05:373757 gprecoverseg:laptop:v-[INFO]:-Ensuring 1 failed segment(s) are stopped                                                                                                                                                                                     +
+ 20211216:16:29:05:373757 gprecoverseg:laptop:v-[INFO]:-Ensuring that shared memory is cleaned up for stopped segments                                                                                                                                                               +
+ 20211216:16:29:06:373757 gprecoverseg:laptop:v-[INFO]:-Updating configuration with new mirrors                                                                                                                                                                                      +
+ 20211216:16:29:06:373757 gprecoverseg:laptop:v-[INFO]:-Updating mirrors                                                                                                                                                                                                             +
+ 20211216:16:29:06:373757 gprecoverseg:laptop:v-[INFO]:-Running pg_rewind on failed segments                                                                                                                                                                                         +
+ laptop (dbid 5): no rewind required                                                                                                                                                                                                                                                 +
+ 20211216:16:29:07:373757 gprecoverseg:laptop:v-[INFO]:-Starting mirrors                                                                                                                                                                                                             +
+ 20211216:16:29:07:373757 gprecoverseg:laptop:v-[INFO]:-era is 85b8357bd546c506_211216162717                                                                                                                                                                                         +
+ 20211216:16:29:07:373757 gprecoverseg:laptop:v-[INFO]:-Commencing parallel segment instance startup, please wait                                                                                                                                                                    +
+ 20211216:16:29:08:373757 gprecoverseg:laptop:v-[INFO]:-Process results                                                                                                                                                                                                              +
+ 20211216:16:29:08:373757 gprecoverseg:laptop:v-[INFO]:-Triggering FTS probe                                                                                                                                                                                                         +
+ 20211216:16:29:08:373757 gprecoverseg:laptop:v-[INFO]:-********************************                                                                                                                                                                                             +
+ 20211216:16:29:08:373757 gprecoverseg:laptop:v-[INFO]:-Segments successfully recovered                                                                                                                                                                                              +
+ 20211216:16:29:08:373757 gprecoverseg:laptop:v-[INFO]:-********************************                                                                                                                                                                                             +
+ 20211216:16:29:08:373757 gprecoverseg:laptop:v-[INFO]:-Recovered mirror segments need to sync WAL with primary segments                                                                                                                                                             +
+ 20211216:16:29:08:373757 gprecoverseg:laptop:v-[INFO]:-Use 'gpstate -e' to check progress of WAL sync remaining bytes                                                                                                                                                               +
+ 20211216:16:29:08:373757 gprecoverseg:laptop:v-[INFO]:-==============================END ANOTHER RECOVER==========================================                                                                                                                                  +
+ 20211216:16:29:08:373757 gprecoverseg:laptop:v-[INFO]:-******************************************************************                                                                                                                                                           +
+ 20211216:16:29:08:373757 gprecoverseg:laptop:v-[INFO]:-The rebalance operation has completed successfully                                                                                                                                                                           +
+ 20211216:16:29:08:373757 gprecoverseg:laptop:v-[INFO]:-******************************************************************                                                                                                                                                           +
+ 
+(1 row)
+
+select pg_recoverseg((select datadir from gp_segment_configuration c where c.role='p' and c.content=-1), 'a');
+                                                                                                                                    pg_recoverseg                                                                                                                                     
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ 20211216:16:29:08:375579 gprecoverseg:laptop:v-[INFO]:-Starting gprecoverseg with args: -a -d /home/v/x/gh/gpdb/gpAux/gpdemo/datadirs/qddir/demoDataDir-1                                                                                                                           +
+ 20211216:16:29:08:375579 gprecoverseg:laptop:v-[INFO]:-local Greenplum Version: 'postgres (Greenplum Database) 6182+dev173g55557f44f3 build dev'                                                                                                                                    +
+ 20211216:16:29:08:375579 gprecoverseg:laptop:v-[INFO]:-master Greenplum Version: 'PostgreSQL 9426 (Greenplum Database 6182+dev173g55557f44f3 build dev) on x86_64-unknown-linux-gnu, compiled by clang version 1300, 64-bit compiled on Dec 16 2021 09:16:34 (with assert checking)'+
+ 20211216:16:29:08:375579 gprecoverseg:laptop:v-[INFO]:-Obtaining Segment details from master                                                                                                                                                                                        +
+ 20211216:16:29:08:375579 gprecoverseg:laptop:v-[INFO]:-No segments to recover                                                                                                                                                                                                       +
+ 
+(1 row)
+
+select pg_recoverseg((select datadir from gp_segment_configuration c where c.role='p' and c.content=-1), 'ar');
+                                                                                                                                    pg_recoverseg                                                                                                                                     
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ 20211216:16:29:08:375616 gprecoverseg:laptop:v-[INFO]:-Starting gprecoverseg with args: -ar -d /home/v/x/gh/gpdb/gpAux/gpdemo/datadirs/qddir/demoDataDir-1                                                                                                                          +
+ 20211216:16:29:09:375616 gprecoverseg:laptop:v-[INFO]:-local Greenplum Version: 'postgres (Greenplum Database) 6182+dev173g55557f44f3 build dev'                                                                                                                                    +
+ 20211216:16:29:09:375616 gprecoverseg:laptop:v-[INFO]:-master Greenplum Version: 'PostgreSQL 9426 (Greenplum Database 6182+dev173g55557f44f3 build dev) on x86_64-unknown-linux-gnu, compiled by clang version 1300, 64-bit compiled on Dec 16 2021 09:16:34 (with assert checking)'+
+ 20211216:16:29:09:375616 gprecoverseg:laptop:v-[INFO]:-Obtaining Segment details from master                                                                                                                                                                                        +
+ 20211216:16:29:09:375616 gprecoverseg:laptop:v-[INFO]:-No segments are running in their non-preferred role and need to be rebalanced                                                                                                                                                +
+ 
+(1 row)
+
+-- check GPDB status
+select content, preferred_role, role, status, mode from gp_segment_configuration where content = 0;
+ content | preferred_role | role | status | mode 
+---------+----------------+------+--------+------
+       0 | p              | p    | u      | s
+       0 | m              | m    | u      | s
+(2 rows)
+
+-- end_ignore
+SELECT diskquota.wait_for_worker_new_epoch();
+ wait_for_worker_new_epoch 
+---------------------------
+ t
+(1 row)
+
+SELECT quota_in_mb, nspsize_in_bytes from diskquota.show_fast_schema_quota_view where schema_name='ftsr';
+ quota_in_mb | nspsize_in_bytes 
+-------------+------------------
+         200 |          4096000
+(1 row)
+
+INSERT INTO a SELECT 2, generate_series(1,100);
+DROP TABLE a;
+DROP SCHEMA ftsr CASCADE;
+NOTICE:  drop cascades to 2 other objects
+DETAIL:  drop cascades to function pg_ctl(text,text,text)
+drop cascades to function pg_recoverseg(text,text)

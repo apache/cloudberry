@@ -1,0 +1,6 @@
+SHOW diskquota.naptime;
+ diskquota.naptime 
+-------------------
+ 2
+(1 row)
+
