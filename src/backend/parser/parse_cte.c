@@ -281,6 +281,69 @@ analyzeCTE(ParseState *pstate, CommonTableExpr *cte)
 	/* Analysis not done already */
 	Assert(!IsA(cte->ctequery, Query));
 
+	/*
+	 * Before analyzing the CTE's query, we'd better identify the data type of
+	 * the cycle mark column if any, since the query could refer to that.
+	 * Other validity checks on the cycle clause will be done afterwards.
+	 */
+	if (cycle_clause)
+	{
+		TypeCacheEntry *typentry;
+		Oid			op;
+
+		cycle_clause->cycle_mark_value =
+			transformExpr(pstate, cycle_clause->cycle_mark_value,
+						  EXPR_KIND_CYCLE_MARK);
+		cycle_clause->cycle_mark_default =
+			transformExpr(pstate, cycle_clause->cycle_mark_default,
+						  EXPR_KIND_CYCLE_MARK);
+
+		cycle_clause->cycle_mark_type =
+			select_common_type(pstate,
+							   list_make2(cycle_clause->cycle_mark_value,
+										  cycle_clause->cycle_mark_default),
+							   "CYCLE", NULL);
+		cycle_clause->cycle_mark_value =
+			coerce_to_common_type(pstate,
+								  cycle_clause->cycle_mark_value,
+								  cycle_clause->cycle_mark_type,
+								  "CYCLE/SET/TO");
+		cycle_clause->cycle_mark_default =
+			coerce_to_common_type(pstate,
+								  cycle_clause->cycle_mark_default,
+								  cycle_clause->cycle_mark_type,
+								  "CYCLE/SET/DEFAULT");
+
+		cycle_clause->cycle_mark_typmod =
+			select_common_typmod(pstate,
+								 list_make2(cycle_clause->cycle_mark_value,
+											cycle_clause->cycle_mark_default),
+								 cycle_clause->cycle_mark_type);
+
+		cycle_clause->cycle_mark_collation =
+			select_common_collation(pstate,
+									list_make2(cycle_clause->cycle_mark_value,
+											   cycle_clause->cycle_mark_default),
+									true);
+
+		/* Might as well look up the relevant <> operator while we are at it */
+		typentry = lookup_type_cache(cycle_clause->cycle_mark_type,
+									 TYPECACHE_EQ_OPR);
+		if (!OidIsValid(typentry->eq_opr))
+			ereport(ERROR,
+					errcode(ERRCODE_UNDEFINED_FUNCTION),
+					errmsg("could not identify an equality operator for type %s",
+						   format_type_be(cycle_clause->cycle_mark_type)));
+		op = get_negator(typentry->eq_opr);
+		if (!OidIsValid(op))
+			ereport(ERROR,
+					errcode(ERRCODE_UNDEFINED_FUNCTION),
+					errmsg("could not identify an inequality operator for type %s",
+						   format_type_be(cycle_clause->cycle_mark_type)));
+
+		cycle_clause->cycle_mark_neop = op;
+	}
+
 	query = parse_sub_analyze(cte->ctequery, pstate, cte, NULL, true);
 	cte->ctequery = (Node *) query;
 

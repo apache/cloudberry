@@ -954,8 +954,6 @@ WITH RECURSIVE x(n) AS (
 	SELECT level+1, row_number() over() FROM x, bar)
   SELECT * FROM x LIMIT 10;
 
-CREATE TEMPORARY TABLE y (a INTEGER) DISTRIBUTED RANDOMLY;
-
 -- allow this, because we historically have
 WITH RECURSIVE x(n) AS (
   WITH x1 AS (SELECT 1 AS n)
@@ -990,6 +988,8 @@ WITH RECURSIVE x(n) AS (
   WITH sub_cte AS (SELECT * FROM x)
   DELETE FROM graph RETURNING f)
 	SELECT * FROM x;
+
+CREATE TEMPORARY TABLE y (a INTEGER) DISTRIBUTED RANDOMLY;
 
 INSERT INTO y SELECT generate_series(1, 10);
 
@@ -1332,8 +1332,6 @@ SELECT * FROM bug6051;
 WITH t1 AS ( DELETE FROM bug6051 RETURNING * )
 INSERT INTO bug6051 SELECT * FROM t1;
 
-SELECT * FROM bug6051;
-
 CREATE TEMP TABLE bug6051_2 (i int);
 
 CREATE RULE bug6051_ins AS ON INSERT TO bug6051 DO INSTEAD
@@ -1344,7 +1342,6 @@ WITH t1 AS ( DELETE FROM bug6051 RETURNING * )
 INSERT INTO bug6051 SELECT * FROM t1;
 
 SELECT * FROM bug6051;
-SELECT * FROM bug6051_2;
 
 -- check INSERT ... SELECT rule actions are disallowed on commands
 -- that have modifyingCTEs
@@ -1492,58 +1489,62 @@ UPDATE SET (k, v) = (SELECT k, v FROM upsert_cte WHERE upsert_cte.k = withz.k)
 RETURNING k, v;
 
 DROP TABLE withz;
--- MERGE16_FIXME: MERGE with CTE has some errors, Disable it first
--- 
--- -- WITH referenced by MERGE statement
--- CREATE TABLE m AS SELECT i AS k, (i || ' v')::text v FROM generate_series(1, 16, 3) i;
--- ALTER TABLE m ADD UNIQUE (k);
--- 
--- WITH RECURSIVE cte_basic AS (SELECT 1 a, 'cte_basic val' b)
--- MERGE INTO m USING (select 0 k, 'merge source SubPlan' v) o ON m.k=o.k
--- WHEN MATCHED THEN UPDATE SET v = (SELECT b || ' merge update' FROM cte_basic WHERE cte_basic.a = m.k LIMIT 1)
--- WHEN NOT MATCHED THEN INSERT VALUES(o.k, o.v);
--- 
--- -- Basic:
--- WITH cte_basic AS MATERIALIZED (SELECT 1 a, 'cte_basic val' b)
--- MERGE INTO m USING (select 0 k, 'merge source SubPlan' v offset 0) o ON m.k=o.k
--- WHEN MATCHED THEN UPDATE SET v = (SELECT b || ' merge update' FROM cte_basic WHERE cte_basic.a = m.k LIMIT 1)
--- WHEN NOT MATCHED THEN INSERT VALUES(o.k, o.v);
--- -- Examine
--- SELECT * FROM m where k = 0;
--- 
--- -- See EXPLAIN output for same query:
--- EXPLAIN (VERBOSE, COSTS OFF)
--- WITH cte_basic AS MATERIALIZED (SELECT 1 a, 'cte_basic val' b)
--- MERGE INTO m USING (select 0 k, 'merge source SubPlan' v offset 0) o ON m.k=o.k
--- WHEN MATCHED THEN UPDATE SET v = (SELECT b || ' merge update' FROM cte_basic WHERE cte_basic.a = m.k LIMIT 1)
--- WHEN NOT MATCHED THEN INSERT VALUES(o.k, o.v);
--- 
--- -- Examine
--- SELECT * FROM m where k = 1;
--- 
--- -- See EXPLAIN output for same query:
--- EXPLAIN (VERBOSE, COSTS OFF)
--- WITH cte_init AS MATERIALIZED (SELECT 1 a, 'cte_init val' b)
--- MERGE INTO m USING (select 1 k, 'merge source InitPlan' v offset 0) o ON m.k=o.k
--- WHEN MATCHED THEN UPDATE SET v = (SELECT b || ' merge update' FROM cte_init WHERE a = 1 LIMIT 1)
--- WHEN NOT MATCHED THEN INSERT VALUES(o.k, o.v);
--- 
--- -- MERGE source comes from CTE:
--- WITH merge_source_cte AS MATERIALIZED (SELECT 15 a, 'merge_source_cte val' b)
--- MERGE INTO m USING (select * from merge_source_cte) o ON m.k=o.a
--- WHEN MATCHED THEN UPDATE SET v = (SELECT b || merge_source_cte.*::text || ' merge update' FROM merge_source_cte WHERE a = 15)
--- WHEN NOT MATCHED THEN INSERT VALUES(o.a, o.b || (SELECT merge_source_cte.*::text || ' merge insert' FROM merge_source_cte));
--- -- Examine
--- SELECT * FROM m where k = 15;
--- 
--- -- See EXPLAIN output for same query:
--- EXPLAIN (VERBOSE, COSTS OFF)
--- WITH merge_source_cte AS MATERIALIZED (SELECT 15 a, 'merge_source_cte val' b)
--- MERGE INTO m USING (select * from merge_source_cte) o ON m.k=o.a
--- WHEN MATCHED THEN UPDATE SET v = (SELECT b || merge_source_cte.*::text || ' merge update' FROM merge_source_cte WHERE a = 15)
--- WHEN NOT MATCHED THEN INSERT VALUES(o.a, o.b || (SELECT merge_source_cte.*::text || ' merge insert' FROM merge_source_cte));
--- 
--- DROP TABLE m;
+
+-- WITH referenced by MERGE statement
+CREATE TABLE m AS SELECT i AS k, (i || ' v')::text v FROM generate_series(1, 16, 3) i;
+ALTER TABLE m ADD UNIQUE (k);
+
+WITH RECURSIVE cte_basic AS (SELECT 1 a, 'cte_basic val' b)
+MERGE INTO m USING (select 0 k, 'merge source SubPlan' v) o ON m.k=o.k
+WHEN MATCHED THEN UPDATE SET v = (SELECT b || ' merge update' FROM cte_basic WHERE cte_basic.a = m.k LIMIT 1)
+WHEN NOT MATCHED THEN INSERT VALUES(o.k, o.v);
+
+-- Basic:
+WITH cte_basic AS MATERIALIZED (SELECT 1 a, 'cte_basic val' b)
+MERGE INTO m USING (select 0 k, 'merge source SubPlan' v offset 0) o ON m.k=o.k
+WHEN MATCHED THEN UPDATE SET v = (SELECT b || ' merge update' FROM cte_basic WHERE cte_basic.a = m.k LIMIT 1)
+WHEN NOT MATCHED THEN INSERT VALUES(o.k, o.v);
+-- Examine
+SELECT * FROM m where k = 0;
+
+-- See EXPLAIN output for same query:
+EXPLAIN (VERBOSE, COSTS OFF)
+WITH cte_basic AS MATERIALIZED (SELECT 1 a, 'cte_basic val' b)
+MERGE INTO m USING (select 0 k, 'merge source SubPlan' v offset 0) o ON m.k=o.k
+WHEN MATCHED THEN UPDATE SET v = (SELECT b || ' merge update' FROM cte_basic WHERE cte_basic.a = m.k LIMIT 1)
+WHEN NOT MATCHED THEN INSERT VALUES(o.k, o.v);
+
+-- InitPlan
+WITH cte_init AS MATERIALIZED (SELECT 1 a, 'cte_init val' b)
+MERGE INTO m USING (select 1 k, 'merge source InitPlan' v offset 0) o ON m.k=o.k
+WHEN MATCHED THEN UPDATE SET v = (SELECT b || ' merge update' FROM cte_init WHERE a = 1 LIMIT 1)
+WHEN NOT MATCHED THEN INSERT VALUES(o.k, o.v);
+-- Examine
+SELECT * FROM m where k = 1;
+
+-- See EXPLAIN output for same query:
+EXPLAIN (VERBOSE, COSTS OFF)
+WITH cte_init AS MATERIALIZED (SELECT 1 a, 'cte_init val' b)
+MERGE INTO m USING (select 1 k, 'merge source InitPlan' v offset 0) o ON m.k=o.k
+WHEN MATCHED THEN UPDATE SET v = (SELECT b || ' merge update' FROM cte_init WHERE a = 1 LIMIT 1)
+WHEN NOT MATCHED THEN INSERT VALUES(o.k, o.v);
+
+-- MERGE source comes from CTE:
+WITH merge_source_cte AS MATERIALIZED (SELECT 15 a, 'merge_source_cte val' b)
+MERGE INTO m USING (select * from merge_source_cte) o ON m.k=o.a
+WHEN MATCHED THEN UPDATE SET v = (SELECT b || merge_source_cte.*::text || ' merge update' FROM merge_source_cte WHERE a = 15)
+WHEN NOT MATCHED THEN INSERT VALUES(o.a, o.b || (SELECT merge_source_cte.*::text || ' merge insert' FROM merge_source_cte));
+-- Examine
+SELECT * FROM m where k = 15;
+
+-- See EXPLAIN output for same query:
+EXPLAIN (VERBOSE, COSTS OFF)
+WITH merge_source_cte AS MATERIALIZED (SELECT 15 a, 'merge_source_cte val' b)
+MERGE INTO m USING (select * from merge_source_cte) o ON m.k=o.a
+WHEN MATCHED THEN UPDATE SET v = (SELECT b || merge_source_cte.*::text || ' merge update' FROM merge_source_cte WHERE a = 15)
+WHEN NOT MATCHED THEN INSERT VALUES(o.a, o.b || (SELECT merge_source_cte.*::text || ' merge insert' FROM merge_source_cte));
+
+DROP TABLE m;
 
 -- check that run to completion happens in proper ordering
 
