@@ -13091,6 +13091,8 @@ dumpFunc(Archive *fout, const FuncInfo *finfo)
 							 "proconfig,\n"
 							 "procost,\n"
 							 "prorows,\n"
+							 "prodataaccess,\n"
+							 "proexeclocation,\n"
 							 "pg_catalog.pg_get_function_arguments(p.oid) AS funcargs,\n"
 							 "pg_catalog.pg_get_function_identity_arguments(p.oid) AS funciargs,\n"
 							 "pg_catalog.pg_get_function_result(p.oid) AS funcresult,\n"
