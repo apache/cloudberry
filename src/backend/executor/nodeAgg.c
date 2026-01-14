@@ -1960,6 +1960,21 @@ hash_agg_enter_spill_mode(AggState *aggstate)
 
 		aggstate->hash_spills = palloc(sizeof(HashAggSpill) * aggstate->num_hashes);
 
+#ifdef FAULT_INJECTOR
+		if (SIMPLE_FAULT_INJECTOR("hashagg_spill_temp_files") == FaultInjectorTypeSkip) {
+			const char *filename = LogicalTapeGetBufFilename(aggstate->hash_tapeset);
+			if (!filename)
+				ereport(NOTICE, (errmsg("hashagg: buffilename is null")));
+			else if (strstr(filename, "base/" PG_TEMP_FILES_DIR) == filename)
+				ereport(NOTICE, (errmsg("hashagg: Use default tablespace")));
+			else if (strstr(filename, "pg_tblspc/") == filename)
+				ereport(NOTICE, (errmsg("hashagg: Use temp tablespace")));
+			else
+				ereport(NOTICE, (errmsg("hashagg: Unexpected prefix of the tablespace path")));
+
+		}
+#endif
+
 		for (int setno = 0; setno < aggstate->num_hashes; setno++)
 		{
 			AggStatePerHash perhash = &aggstate->perhash[setno];

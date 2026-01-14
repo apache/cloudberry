@@ -1,5 +1,9 @@
-create tablespace some_temp_tablespace location '@testtablespace@_temp_tablespace';
-create tablespace some_default_tablespace location '@testtablespace@_default_tablespace';
+\getenv abs_builddir PG_ABS_BUILDDIR
+\set temp_tablespace :abs_builddir '/testtablespace_temp_tablespace'
+\set dddefault_tablepace :abs_builddir '/testtablespace_default_tablespace'
+
+create tablespace some_temp_tablespace location :'temp_tablespace';
+create tablespace some_default_tablespace location :'dddefault_tablepace';
 
 -- Given I've set up GUCS for how to use tablespaces
 set temp_tablespaces to some_temp_tablespace;
@@ -31,11 +35,16 @@ reset temp_tablespaces;
 -- When the GUC temp_tablespaces is set, one of the temp tablespaces is used instead of the default tablespace.
 -- create several tablespaces and use them as temp tablespaces
 -- all QD/QEs in one session should have the same temp tablespace
-create tablespace mytempsp0 location '@testtablespace@_mytempsp0';
-create tablespace mytempsp1 location '@testtablespace@_mytempsp1';
-create tablespace mytempsp2 location '@testtablespace@_mytempsp2';
-create tablespace mytempsp3 location '@testtablespace@_mytempsp3';
-create tablespace mytempsp4 location '@testtablespace@_mytempsp4';
+\set mytempsp0 :abs_builddir '/testtablespace_mytempsp0'
+\set mytempsp1 :abs_builddir '/testtablespace_mytempsp1'
+\set mytempsp2 :abs_builddir '/testtablespace_mytempsp2'
+\set mytempsp3 :abs_builddir '/testtablespace_mytempsp3'
+\set mytempsp4 :abs_builddir '/testtablespace_mytempsp4'
+create tablespace mytempsp0 location :'mytempsp0';
+create tablespace mytempsp1 location :'mytempsp1';
+create tablespace mytempsp2 location :'mytempsp2';
+create tablespace mytempsp3 location :'mytempsp3';
+create tablespace mytempsp4 location :'mytempsp4';
 
 CREATE TABLE tts_foo (i int, j int) distributed by(i);
 insert into tts_foo select i, i from generate_series(1,80000)i;
