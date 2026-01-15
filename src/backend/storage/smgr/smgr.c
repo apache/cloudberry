@@ -127,6 +127,7 @@ static File	AORelOpenSegFileXlog(RelFileNode node, int32 segmentFileNum, int fil
 static const f_smgr_ao smgrswao[] = {
 	/* regular file */
 	{
+		.smgr_create_ao = mdcreate_ao,
 		.smgr_FileClose = FileClose,
 		.smgr_FileDiskSize = FileDiskSize,
 		.smgr_FileTruncate = FileTruncate,
@@ -492,9 +493,11 @@ smgrcreate(SMgrRelation reln, ForkNumber forknum, bool isRedo)
  *		already because we are in a WAL replay sequence.
  */
 void
-smgrcreate_ao(RelFileNodeBackend rnode, int32 segmentFileNum, bool isRedo)
+smgrcreate_ao(const struct f_smgr_ao *smgr,
+				RelFileNodeBackend rnode,
+				int32 segmentFileNum, bool isRedo)
 {
-	mdcreate_ao(rnode, segmentFileNum, isRedo);
+	smgr->smgr_create_ao(rnode, segmentFileNum, isRedo);
 	if (file_create_hook)
 		(*file_create_hook)(rnode);
 }
