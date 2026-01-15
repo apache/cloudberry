@@ -84,6 +84,15 @@ private:
 		{
 			m_ulCount++;
 		}
+
+		void
+		Decrement()
+		{
+			GPOS_ASSERT(m_ulCount > 1);
+			m_ulCount--;
+			GPOS_ASSERT(m_ulCount > 0);
+		}
+
 	};
 
 	// hash map mapping ULONG -> SConsumerCounter
@@ -281,6 +290,10 @@ public:
 
 	// increment number of CTE consumers
 	void IncrementConsumers(ULONG ulConsumerId,
+							ULONG ulParentCTEId = gpos::ulong_max);
+
+	// decrement number of CTE consumers
+	void DecrementConsumers(ULONG ulConsumerId,
 							ULONG ulParentCTEId = gpos::ulong_max);
 
 	// add cte producer to hashmap
