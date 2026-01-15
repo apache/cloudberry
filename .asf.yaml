@@ -122,6 +122,18 @@ github:
       # Require conversation threads to be resolved
       required_conversation_resolution: true
 
+    # Branch protection for REL_2_STABLE release branch
+    REL_2_STABLE:
+      # Pull request review requirements
+      required_pull_request_reviews:
+        # Require new reviews when new commits are pushed
+        dismiss_stale_reviews: false
+        # Require at least 2 approving reviews
+        required_approving_review_count: 2
+
+      # Require conversation threads to be resolved
+      required_conversation_resolution: true
+
   # Branch cleanup settings
   # Don't automatically delete branches after merging
   del_branch_on_merge: true
