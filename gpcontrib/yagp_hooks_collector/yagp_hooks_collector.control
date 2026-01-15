@@ -1,0 +1,5 @@
+# yagp_hooks_collector extension
+comment = 'Intercept query and plan execution hooks and report them to Yandex GPCC agents'
+default_version = '1.1'
+module_pathname = '$libdir/yagp_hooks_collector'
+superuser = true

@@ -1,0 +1,53 @@
+syntax = "proto3";
+
+import "google/protobuf/timestamp.proto";
+
+import "protos/yagpcc_metrics.proto";
+import "protos/yagpcc_plan.proto";
+
+package yagpcc;
+option java_outer_classname = "SegmentYAGPCCAS";
+option go_package = "a.yandex-team.ru/cloud/mdb/yagpcc/api/proto/agent_segment;greenplum";
+
+service SetQueryInfo {
+    rpc SetMetricPlanNode (SetPlanNodeReq) returns (MetricResponse) {}
+
+    rpc SetMetricQuery (SetQueryReq) returns (MetricResponse) {}
+}
+
+message MetricResponse {
+    MetricResponseStatusCode error_code = 1;
+    string error_text = 2;
+}
+
+enum MetricResponseStatusCode {
+    METRIC_RESPONSE_STATUS_CODE_UNSPECIFIED = 0;
+    METRIC_RESPONSE_STATUS_CODE_SUCCESS = 1;
+    METRIC_RESPONSE_STATUS_CODE_ERROR = 2;
+}
+
+message SetQueryReq {
+    QueryStatus           query_status    = 1;
+    google.protobuf.Timestamp datetime    = 2;
+    QueryKey                 query_key    = 3;
+    SegmentKey             segment_key    = 4;
+    QueryInfo               query_info    = 5;
+    GPMetrics            query_metrics    = 6;
+    repeated MetricPlan      plan_tree    = 7;
+    google.protobuf.Timestamp submit_time = 8;
+    google.protobuf.Timestamp start_time  = 9;
+    google.protobuf.Timestamp end_time    = 10;
+    AdditionalQueryInfo add_info          = 11;
+}
+
+message SetPlanNodeReq {
+    PlanNodeStatus         node_status = 1;
+    google.protobuf.Timestamp datetime = 2;
+    QueryKey                 query_key = 3;
+    SegmentKey             segment_key = 4;
+    GPMetrics             node_metrics = 5;
+    MetricPlan               plan_node = 6;
+    google.protobuf.Timestamp submit_time = 7;
+    google.protobuf.Timestamp start_time  = 8;
+    google.protobuf.Timestamp end_time    = 9;
+}
