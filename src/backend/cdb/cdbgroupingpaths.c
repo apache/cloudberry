@@ -88,6 +88,7 @@ typedef struct
 	/* From the Query */
 	bool		hasAggs;
 	bool		hasDistinctOn;
+	List	   *parseGroupClause;	/* a list of SortGroupClause's */
 	List	   *groupClause;	/* a list of SortGroupClause's */
 	List	   *groupingSets;	/* a list of GroupingSet's if present */
 	List	   *group_tles;
@@ -314,6 +315,7 @@ cdb_create_multistage_grouping_paths(PlannerInfo *root,
 
 	ctx.hasAggs = parse->hasAggs;
 	ctx.hasDistinctOn = parse->hasDistinctOn;
+	ctx.parseGroupClause = parse->groupClause;
 	ctx.groupClause = root->processed_groupClause;
 	ctx.groupingSets = parse->groupingSets;
 	ctx.havingQual = havingQual;
@@ -623,6 +625,7 @@ cdb_create_twostage_distinct_paths(PlannerInfo *root,
 	ctx.hasDistinctOn = true;
 	ctx.groupingSets = NIL;
 	ctx.havingQual = NULL;
+	ctx.parseGroupClause = parse->distinctClause;
 	ctx.groupClause = parse->distinctClause;
 	ctx.group_tles = get_common_group_tles(target, parse->distinctClause, NIL);
 	ctx.final_groupClause = ctx.groupClause;
@@ -1056,7 +1059,7 @@ add_first_stage_group_agg_path(PlannerInfo *root,
 									 ctx->partial_rel,
 									 path,
 									 ctx->partial_grouping_target,
-									 ctx->groupClause ? AGG_SORTED : AGG_PLAIN,
+									 ctx->parseGroupClause ? AGG_SORTED : AGG_PLAIN,
 									 ctx->hasAggs ? AGGSPLIT_INITIAL_SERIAL : AGGSPLIT_SIMPLE,
 									 false, /* streaming */
 									 ctx->groupClause,
@@ -1136,7 +1139,7 @@ add_second_stage_group_agg_path(PlannerInfo *root,
 										output_rel,
 										path,
 										ctx->target,
-										(ctx->final_groupClause ? AGG_SORTED : AGG_PLAIN),
+										(ctx->parseGroupClause ? AGG_SORTED : AGG_PLAIN),
 										ctx->hasAggs ? AGGSPLIT_FINAL_DESERIAL : AGGSPLIT_SIMPLE,
 										false, /* streaming */
 										ctx->final_groupClause,
@@ -1174,7 +1177,7 @@ add_second_stage_group_agg_path(PlannerInfo *root,
 								output_rel,
 								path,
 								ctx->target,
-								(ctx->final_groupClause ? AGG_SORTED : AGG_PLAIN),
+								(ctx->parseGroupClause ? AGG_SORTED : AGG_PLAIN),
 								ctx->hasAggs ? AGGSPLIT_FINAL_DESERIAL : AGGSPLIT_SIMPLE,
 								false, /* streaming */
 								ctx->final_groupClause,
