@@ -20,9 +20,9 @@ CWindowOids::CWindowOids(CMemoryPool *mp, OID row_number_oid, OID rank_oid,
 
 CWindowOids::~CWindowOids()
 {
-	m_MDIdRowNumber->Release();
-	m_MDIdRank->Release();
-	m_MDDenseRank->Release();
+	CRefCount::SafeRelease(m_MDIdRowNumber);
+	CRefCount::SafeRelease(m_MDIdRank);
+	CRefCount::SafeRelease(m_MDDenseRank);
 }
 
 OID
