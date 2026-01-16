@@ -2402,6 +2402,9 @@ replace_rte_with_delta(RangeTblEntry *rte, MV_TriggerTable *table, bool is_new,
 	rte->tablesample = NULL;
 	rte->inh = false;			/* must not be set for a subquery */
 
+	/* Be tidy */
+	pfree(str.data);
+
 	return rte;
 }
 
