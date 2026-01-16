@@ -157,6 +157,7 @@ typedef struct f_smgr
 } f_smgr;
 
 typedef struct f_smgr_ao {
+	void			(*smgr_create_ao) (RelFileNodeBackend rnode, int32 segmentFileNum, bool isRedo);
 	off_t			(*smgr_FileDiskSize) (File file);
 	void			(*smgr_FileClose) (File file);
 	int				(*smgr_FileTruncate) (File file, int64 offset, uint32 wait_event_info);
@@ -197,7 +198,9 @@ extern void smgrcloserellocator(RelFileLocatorBackend rlocator);
 extern void smgrrelease(SMgrRelation reln);
 extern void smgrreleaseall(void);
 extern void smgrcreate(SMgrRelation reln, ForkNumber forknum, bool isRedo);
-extern void smgrcreate_ao(RelFileLocatorBackend rnode, int32 segmentFileNum, bool isRedo);
+extern void smgrcreate_ao(const struct f_smgr_ao *smgr,
+						  RelFileLocatorBackend rnode,
+						  int32 segmentFileNum, bool isRedo);
 extern void smgrdosyncall(SMgrRelation *rels, int nrels);
 extern void smgrdounlinkall(SMgrRelation *rels, int nrels, bool isRedo);
 extern void smgrextend(SMgrRelation reln, ForkNumber forknum,
