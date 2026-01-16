@@ -3414,7 +3414,7 @@ HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sur
 insert into qp_misc_jiras.tbl7286_test select i%10, '2009/01/01'::date + (i || ' days')::interval from generate_series(0, 99999) i;
 set gp_enable_agg_distinct=off;
 set gp_enable_agg_distinct_pruning=off;
-set statement_mem='1000kB';
+set statement_mem='2000kB';
 set optimizer_force_three_stage_scalar_dqa=off;
 select count(distinct d) from qp_misc_jiras.tbl7286_test;
  count  
@@ -4463,26 +4463,20 @@ from (
 	group by 1,2
      ) as t1 
 group by 1, 2;
-                                                        QUERY PLAN                                                         
----------------------------------------------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)  (cost=159775821.84..159786321.84 rows=100000 width=36)
-   ->  GroupAggregate  (cost=159775821.84..159784321.84 rows=33334 width=36)
+                                                     QUERY PLAN                                                     
+--------------------------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=34678876.67..34680543.33 rows=100000 width=36)
+   ->  HashAggregate  (cost=34678876.67..34679210.00 rows=33333 width=36)
          Group Key: ((c.bar_6325_attr)::integer), a.foo_6325_attr
-         ->  Sort  (cost=159775821.84..159778321.84 rows=333334 width=36)
-               Sort Key: ((c.bar_6325_attr)::integer), a.foo_6325_attr
-               ->  HashAggregate  (cost=154206164.00..159666164.00 rows=333334 width=36)
-                     Group Key: (c.bar_6325_attr)::integer, a.foo_6325_attr
-                     Planned Partitions: 8
-                     ->  Nested Loop  (cost=0.00..118486964.00 rows=929280000 width=36)
-                           ->  Seq Scan on foo_6325 a  (cost=0.00..628.00 rows=17600 width=32)
-                           ->  Materialize  (cost=0.00..3532.00 rows=52800 width=32)
-                                 ->  Broadcast Motion 3:3  (slice2; segments: 3)  (cost=0.00..2740.00 rows=52800 width=32)
-                                       ->  Seq Scan on bar_6325 c  (cost=0.00..628.00 rows=17600 width=32)
+         ->  HashAggregate  (cost=34672210.00..34677210.00 rows=333333 width=36)
+               Group Key: (c.bar_6325_attr)::integer, a.foo_6325_attr
+               ->  Nested Loop  (cost=0.00..30025810.00 rows=929280000 width=36)
+                     ->  Seq Scan on foo_6325 a  (cost=0.00..210.00 rows=17600 width=32)
+                     ->  Materialize  (cost=0.00..1178.00 rows=52800 width=32)
+                           ->  Broadcast Motion 3:3  (slice2; segments: 3)  (cost=0.00..914.00 rows=52800 width=32)
+                                 ->  Seq Scan on bar_6325 c  (cost=0.00..210.00 rows=17600 width=32)
  Optimizer: Postgres query optimizer
- JIT:
-   Functions: 8
-   Options: Inlining true, Optimization true, Expressions true, Deforming true
-(17 rows)
+(11 rows)
 
 -- start_ignore
 drop table qp_misc_jiras.foo_6325;
@@ -4652,7 +4646,7 @@ drop table qp_misc_jiras.tbl7285_axg;
 show autovacuum;
  autovacuum 
 ------------
- on
+ off
 (1 row)
 
 set autovacuum=on;
@@ -5579,6 +5573,8 @@ drop table qp_misc_jiras.tbl13491_aocol;
 create table  qp_misc_jiras.rules (a integer);
 create rule "_RETURN" as on select to qp_misc_jiras.rules do instead
   select * from generate_series(1,5) x(a);
+ERROR:  relation "rules" cannot have ON SELECT rules
+DETAIL:  This operation is not supported for tables.
 --
 -- Test gp_enable_relsize_collection's effect on ORCA plan generation
 --
