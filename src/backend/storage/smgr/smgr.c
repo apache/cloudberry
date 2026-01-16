@@ -497,6 +497,11 @@ smgrcreate_ao(const struct f_smgr_ao *smgr,
 				RelFileNodeBackend rnode,
 				int32 segmentFileNum, bool isRedo)
 {
+	/* If we get there, check that provided smgr structure is sane.
+	 * First off all, outer Appendonly IO utilities should
+	 * pass valid smgr. Also, in-kernel smgr interface implementation
+	 * smgr_create_ao as mdcreate_ao, and extension should define its own. */
+	Assert(smgr != NULL && smgr->smgr_create_ao != NULL);
 	smgr->smgr_create_ao(rnode, segmentFileNum, isRedo);
 	if (file_create_hook)
 		(*file_create_hook)(rnode);
