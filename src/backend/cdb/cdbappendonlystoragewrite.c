@@ -271,7 +271,7 @@ AppendOnlyStorageWrite_TransactionCreateFile(AppendOnlyStorageWrite *storageWrit
 	// WALREP_FIXME: Pass isRedo == true, so that you don't get an error if it
 	// exists already. That's currently OK, but in the future, other things
 	// might depend on the isRedo flag, like whether to WAL-log the creation.
-	smgrcreate_ao(*relFileNode, segmentFileNum, true);
+	smgrcreate_ao(storageWrite->smgrAO, *relFileNode, segmentFileNum, true);
 
 	/*
 	 * Create a WAL record, so that the segfile is also created after crash or
