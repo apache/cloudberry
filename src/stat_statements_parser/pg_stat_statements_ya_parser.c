@@ -17,20 +17,20 @@
 
 #include "pg_stat_statements_ya_parser.h"
 
-#ifndef ICONST
-#define ICONST 276
-#endif
 #ifndef FCONST
-#define FCONST 277
+#define FCONST 260
 #endif
 #ifndef SCONST
-#define SCONST 278
+#define SCONST 261
 #endif
 #ifndef BCONST
-#define BCONST 279
+#define BCONST 263
 #endif
 #ifndef XCONST
-#define XCONST 280
+#define XCONST 264
+#endif
+#ifndef ICONST
+#define ICONST 266
 #endif
 
 static void fill_in_constant_lengths(JumbleState *jstate, const char *query);

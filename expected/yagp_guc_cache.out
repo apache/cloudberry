@@ -1,0 +1,57 @@
+--
+-- Test GUC caching for query lifecycle consistency.
+--
+-- The extension logs SUBMIT and DONE events for each query.
+-- GUC values that control logging (enable_utility, ignored_users_list, ...)
+-- must be cached at SUBMIT time to ensure DONE uses the same filtering
+-- criteria. Otherwise, a SET command that modifies these GUCs would
+-- have its DONE event rejected, creating orphaned SUBMIT entries.
+-- This is due to query being actually executed between SUBMIT and DONE.
+-- start_ignore
+CREATE EXTENSION IF NOT EXISTS yagp_hooks_collector;
+SELECT yagpcc.truncate_log();
+-- end_ignore
+CREATE OR REPLACE FUNCTION print_last_query(query text)
+RETURNS TABLE(query_status text) AS $$
+    SELECT query_status
+    FROM yagpcc.log
+    WHERE segid = -1 AND query_text = query
+    ORDER BY ccnt DESC
+$$ LANGUAGE sql;
+SET yagpcc.ignored_users_list TO '';
+SET yagpcc.enable TO TRUE;
+SET yagpcc.enable_utility TO TRUE;
+SET yagpcc.logging_mode TO 'TBL';
+-- SET below disables utility logging and DONE must still be logged.
+SET yagpcc.enable_utility TO FALSE;
+SELECT * FROM print_last_query('SET yagpcc.enable_utility TO FALSE;');
+    query_status     
+---------------------
+ QUERY_STATUS_SUBMIT
+ QUERY_STATUS_DONE
+(2 rows)
+
+-- SELECT below adds current user to ignore list and DONE must still be logged.
+-- start_ignore
+SELECT set_config('yagpcc.ignored_users_list', current_user, false);
+ set_config 
+------------
+ gpadmin
+(1 row)
+
+-- end_ignore
+SELECT * FROM print_last_query('SELECT set_config(''yagpcc.ignored_users_list'', current_user, false);');
+    query_status     
+---------------------
+ QUERY_STATUS_SUBMIT
+ QUERY_STATUS_START
+ QUERY_STATUS_END
+ QUERY_STATUS_DONE
+(4 rows)
+
+DROP FUNCTION print_last_query(text);
+DROP EXTENSION yagp_hooks_collector;
+RESET yagpcc.enable;
+RESET yagpcc.enable_utility;
+RESET yagpcc.ignored_users_list;
+RESET yagpcc.logging_mode;

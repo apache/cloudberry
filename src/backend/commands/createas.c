@@ -478,10 +478,6 @@ ExecCreateTableAs(ParseState *pstate, CreateTableAsStmt *stmt,
 									dest, params, queryEnv, 0);
 	}
 
-	/* GPDB hook for collecting query info */
-	if (query_info_collect_hook)
-		(*query_info_collect_hook)(METRICS_QUERY_SUBMIT, queryDesc);
-
 	if (into->skipData)
 	{
 		/*
@@ -495,6 +491,10 @@ ExecCreateTableAs(ParseState *pstate, CreateTableAsStmt *stmt,
 	}
 	else
 	{
+		/* GPDB hook for collecting query info */
+		if (query_info_collect_hook)
+			(*query_info_collect_hook)(METRICS_QUERY_SUBMIT, queryDesc);
+
 		check_and_unassign_from_resgroup(queryDesc->plannedstmt);
 		queryDesc->plannedstmt->query_mem = ResourceManagerGetQueryMemoryLimit(queryDesc->plannedstmt);
 
