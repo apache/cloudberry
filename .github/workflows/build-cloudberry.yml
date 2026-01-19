@@ -1429,7 +1429,7 @@ jobs:
           if [[ "${{ matrix.extension != '' }}" == "true" ]]; then
             case "${{ matrix.extension }}" in
               yagp_hooks_collector)
-                if ! su - gpadmin -c "source ${BUILD_DESTINATION}/greenplum_path.sh && \
+                if ! su - gpadmin -c "source ${BUILD_DESTINATION}/cloudberry-env.sh && \
                   source ${SRC_DIR}/gpAux/gpdemo/gpdemo-env.sh && \
                   gpconfig -c shared_preload_libraries -v 'yagp_hooks_collector' && \
                   gpstop -ra && \
