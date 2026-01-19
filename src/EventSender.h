@@ -14,6 +14,7 @@ extern "C" {
 #undef typeid
 
 #include "memory/gpdbwrappers.h"
+#include "Config.h"
 
 class UDSConnector;
 struct QueryDesc;
@@ -108,8 +109,8 @@ private:
     explicit QueryItem(QueryState st);
   };
 
-  static bool log_query_req(const yagpcc::SetQueryReq &req,
-                            const std::string &event, bool utility);
+  bool log_query_req(const yagpcc::SetQueryReq &req, const std::string &event,
+                     bool utility);
   bool verify_query(QueryDesc *query_desc, QueryState state, bool utility);
   void update_query_state(QueryItem &query, QueryState new_state, bool utility,
                           bool success = true);
@@ -123,6 +124,9 @@ private:
                           QueryMetricsStatus status, ErrorData *edata = NULL);
   void update_nested_counters(QueryDesc *query_desc);
   bool qdesc_submitted(QueryDesc *query_desc);
+  bool nesting_is_valid(QueryDesc *query_desc, int nesting_level);
+  bool need_report_nested_query();
+  bool filter_query(QueryDesc *query_desc);
 
   bool proto_verified = false;
   int nesting_level = 0;
@@ -132,4 +136,6 @@ private:
   ICStatistics ic_statistics;
 #endif
   std::unordered_map<QueryKey, QueryItem> queries;
+
+  Config config;
 };

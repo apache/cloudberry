@@ -27,7 +27,6 @@ RESET yagpcc.logging_mode;
 SELECT segid, query_text, query_status FROM yagpcc.log WHERE segid = -1 AND utility = true ORDER BY segid, ccnt, yagp_status_order(query_status) ASC;
  segid |                     query_text                     |    query_status     
 -------+----------------------------------------------------+---------------------
-    -1 | SET yagpcc.logging_mode to 'TBL';                  | QUERY_STATUS_DONE
     -1 | CREATE TABLE test_table (a int, b text);           | QUERY_STATUS_SUBMIT
     -1 | CREATE TABLE test_table (a int, b text);           | QUERY_STATUS_DONE
     -1 | CREATE INDEX test_idx ON test_table(a);            | QUERY_STATUS_SUBMIT
@@ -37,6 +36,7 @@ SELECT segid, query_text, query_status FROM yagpcc.log WHERE segid = -1 AND util
     -1 | DROP TABLE test_table;                             | QUERY_STATUS_SUBMIT
     -1 | DROP TABLE test_table;                             | QUERY_STATUS_DONE
     -1 | RESET yagpcc.logging_mode;                         | QUERY_STATUS_SUBMIT
+    -1 | RESET yagpcc.logging_mode;                         | QUERY_STATUS_DONE
 (10 rows)
 
 SELECT yagpcc.truncate_log() IS NOT NULL AS t;
@@ -55,7 +55,6 @@ RESET yagpcc.logging_mode;
 SELECT segid, query_text, query_status FROM yagpcc.log WHERE segid = -1 AND utility = true ORDER BY segid, ccnt, yagp_status_order(query_status) ASC;
  segid |             query_text              |    query_status     
 -------+-------------------------------------+---------------------
-    -1 | SET yagpcc.logging_mode to 'TBL';   | QUERY_STATUS_DONE
     -1 | CREATE TABLE pt_test (a int, b int)+| QUERY_STATUS_SUBMIT
        | DISTRIBUTED BY (a)                 +| 
        | PARTITION BY RANGE (a)             +| 
@@ -67,6 +66,7 @@ SELECT segid, query_text, query_status FROM yagpcc.log WHERE segid = -1 AND util
     -1 | DROP TABLE pt_test;                 | QUERY_STATUS_SUBMIT
     -1 | DROP TABLE pt_test;                 | QUERY_STATUS_DONE
     -1 | RESET yagpcc.logging_mode;          | QUERY_STATUS_SUBMIT
+    -1 | RESET yagpcc.logging_mode;          | QUERY_STATUS_DONE
 (6 rows)
 
 SELECT yagpcc.truncate_log() IS NOT NULL AS t;
@@ -84,7 +84,6 @@ RESET yagpcc.logging_mode;
 SELECT segid, query_text, query_status FROM yagpcc.log WHERE segid = -1 AND utility = true ORDER BY segid, ccnt, yagp_status_order(query_status) ASC;
  segid |                                     query_text                                     |    query_status     
 -------+------------------------------------------------------------------------------------+---------------------
-    -1 | SET yagpcc.logging_mode to 'TBL';                                                  | QUERY_STATUS_DONE
     -1 | CREATE VIEW test_view AS SELECT 1 AS a;                                            | QUERY_STATUS_SUBMIT
     -1 | CREATE VIEW test_view AS SELECT 1 AS a;                                            | QUERY_STATUS_DONE
     -1 | CREATE FUNCTION test_func(i int) RETURNS int AS $$ SELECT $1 + 1; $$ LANGUAGE SQL; | QUERY_STATUS_SUBMIT
@@ -94,6 +93,7 @@ SELECT segid, query_text, query_status FROM yagpcc.log WHERE segid = -1 AND util
     -1 | DROP FUNCTION test_func(int);                                                      | QUERY_STATUS_SUBMIT
     -1 | DROP FUNCTION test_func(int);                                                      | QUERY_STATUS_DONE
     -1 | RESET yagpcc.logging_mode;                                                         | QUERY_STATUS_SUBMIT
+    -1 | RESET yagpcc.logging_mode;                                                         | QUERY_STATUS_DONE
 (10 rows)
 
 SELECT yagpcc.truncate_log() IS NOT NULL AS t;
@@ -114,26 +114,26 @@ BEGIN;
 ROLLBACK;
 RESET yagpcc.logging_mode;
 SELECT segid, query_text, query_status FROM yagpcc.log WHERE segid = -1 AND utility = true ORDER BY segid, ccnt, yagp_status_order(query_status) ASC;
- segid |            query_text             |    query_status     
--------+-----------------------------------+---------------------
-    -1 | SET yagpcc.logging_mode to 'TBL'; | QUERY_STATUS_DONE
-    -1 | BEGIN;                            | QUERY_STATUS_SUBMIT
-    -1 | BEGIN;                            | QUERY_STATUS_DONE
-    -1 | SAVEPOINT sp1;                    | QUERY_STATUS_SUBMIT
-    -1 | ROLLBACK TO sp1;                  | QUERY_STATUS_SUBMIT
-    -1 | ROLLBACK TO sp1;                  | QUERY_STATUS_DONE
-    -1 | COMMIT;                           | QUERY_STATUS_SUBMIT
-    -1 | COMMIT;                           | QUERY_STATUS_DONE
-    -1 | BEGIN;                            | QUERY_STATUS_SUBMIT
-    -1 | BEGIN;                            | QUERY_STATUS_DONE
-    -1 | SAVEPOINT sp2;                    | QUERY_STATUS_SUBMIT
-    -1 | ABORT;                            | QUERY_STATUS_SUBMIT
-    -1 | ABORT;                            | QUERY_STATUS_DONE
-    -1 | BEGIN;                            | QUERY_STATUS_SUBMIT
-    -1 | BEGIN;                            | QUERY_STATUS_DONE
-    -1 | ROLLBACK;                         | QUERY_STATUS_SUBMIT
-    -1 | ROLLBACK;                         | QUERY_STATUS_DONE
-    -1 | RESET yagpcc.logging_mode;        | QUERY_STATUS_SUBMIT
+ segid |         query_text         |    query_status     
+-------+----------------------------+---------------------
+    -1 | BEGIN;                     | QUERY_STATUS_SUBMIT
+    -1 | BEGIN;                     | QUERY_STATUS_DONE
+    -1 | SAVEPOINT sp1;             | QUERY_STATUS_SUBMIT
+    -1 | ROLLBACK TO sp1;           | QUERY_STATUS_SUBMIT
+    -1 | ROLLBACK TO sp1;           | QUERY_STATUS_DONE
+    -1 | COMMIT;                    | QUERY_STATUS_SUBMIT
+    -1 | COMMIT;                    | QUERY_STATUS_DONE
+    -1 | BEGIN;                     | QUERY_STATUS_SUBMIT
+    -1 | BEGIN;                     | QUERY_STATUS_DONE
+    -1 | SAVEPOINT sp2;             | QUERY_STATUS_SUBMIT
+    -1 | ABORT;                     | QUERY_STATUS_SUBMIT
+    -1 | ABORT;                     | QUERY_STATUS_DONE
+    -1 | BEGIN;                     | QUERY_STATUS_SUBMIT
+    -1 | BEGIN;                     | QUERY_STATUS_DONE
+    -1 | ROLLBACK;                  | QUERY_STATUS_SUBMIT
+    -1 | ROLLBACK;                  | QUERY_STATUS_DONE
+    -1 | RESET yagpcc.logging_mode; | QUERY_STATUS_SUBMIT
+    -1 | RESET yagpcc.logging_mode; | QUERY_STATUS_DONE
 (18 rows)
 
 SELECT yagpcc.truncate_log() IS NOT NULL AS t;
@@ -154,12 +154,12 @@ RESET yagpcc.logging_mode;
 SELECT segid, query_text, query_status FROM yagpcc.log WHERE segid = -1 AND utility = true ORDER BY segid, ccnt, yagp_status_order(query_status) ASC;
  segid |               query_text               |    query_status     
 -------+----------------------------------------+---------------------
-    -1 | SET yagpcc.logging_mode to 'TBL';      | QUERY_STATUS_DONE
     -1 | CREATE TABLE dml_test (a int, b text); | QUERY_STATUS_SUBMIT
     -1 | CREATE TABLE dml_test (a int, b text); | QUERY_STATUS_DONE
     -1 | DROP TABLE dml_test;                   | QUERY_STATUS_SUBMIT
     -1 | DROP TABLE dml_test;                   | QUERY_STATUS_DONE
     -1 | RESET yagpcc.logging_mode;             | QUERY_STATUS_SUBMIT
+    -1 | RESET yagpcc.logging_mode;             | QUERY_STATUS_DONE
 (6 rows)
 
 SELECT yagpcc.truncate_log() IS NOT NULL AS t;
@@ -177,16 +177,16 @@ COPY (SELECT 1) TO STDOUT;
 DROP TABLE copy_test;
 RESET yagpcc.logging_mode;
 SELECT segid, query_text, query_status FROM yagpcc.log WHERE segid = -1 AND utility = true ORDER BY segid, ccnt, yagp_status_order(query_status) ASC;
- segid |            query_text             |    query_status     
--------+-----------------------------------+---------------------
-    -1 | SET yagpcc.logging_mode to 'TBL'; | QUERY_STATUS_DONE
-    -1 | CREATE TABLE copy_test (a int);   | QUERY_STATUS_SUBMIT
-    -1 | CREATE TABLE copy_test (a int);   | QUERY_STATUS_DONE
-    -1 | COPY (SELECT 1) TO STDOUT;        | QUERY_STATUS_SUBMIT
-    -1 | COPY (SELECT 1) TO STDOUT;        | QUERY_STATUS_DONE
-    -1 | DROP TABLE copy_test;             | QUERY_STATUS_SUBMIT
-    -1 | DROP TABLE copy_test;             | QUERY_STATUS_DONE
-    -1 | RESET yagpcc.logging_mode;        | QUERY_STATUS_SUBMIT
+ segid |           query_text            |    query_status     
+-------+---------------------------------+---------------------
+    -1 | CREATE TABLE copy_test (a int); | QUERY_STATUS_SUBMIT
+    -1 | CREATE TABLE copy_test (a int); | QUERY_STATUS_DONE
+    -1 | COPY (SELECT 1) TO STDOUT;      | QUERY_STATUS_SUBMIT
+    -1 | COPY (SELECT 1) TO STDOUT;      | QUERY_STATUS_DONE
+    -1 | DROP TABLE copy_test;           | QUERY_STATUS_SUBMIT
+    -1 | DROP TABLE copy_test;           | QUERY_STATUS_DONE
+    -1 | RESET yagpcc.logging_mode;      | QUERY_STATUS_SUBMIT
+    -1 | RESET yagpcc.logging_mode;      | QUERY_STATUS_DONE
 (8 rows)
 
 SELECT yagpcc.truncate_log() IS NOT NULL AS t;
@@ -204,7 +204,6 @@ RESET yagpcc.logging_mode;
 SELECT segid, query_text, query_status FROM yagpcc.log WHERE segid = -1 AND utility = true ORDER BY segid, ccnt, yagp_status_order(query_status) ASC;
  segid |                   query_text                    |    query_status     
 -------+-------------------------------------------------+---------------------
-    -1 | SET yagpcc.logging_mode to 'TBL';               | QUERY_STATUS_DONE
     -1 | PREPARE test_prep(int) AS SELECT $1/0 AS value; | QUERY_STATUS_SUBMIT
     -1 | PREPARE test_prep(int) AS SELECT $1/0 AS value; | QUERY_STATUS_DONE
     -1 | EXECUTE test_prep(0::int);                      | QUERY_STATUS_SUBMIT
@@ -212,6 +211,7 @@ SELECT segid, query_text, query_status FROM yagpcc.log WHERE segid = -1 AND util
     -1 | DEALLOCATE test_prep;                           | QUERY_STATUS_SUBMIT
     -1 | DEALLOCATE test_prep;                           | QUERY_STATUS_DONE
     -1 | RESET yagpcc.logging_mode;                      | QUERY_STATUS_SUBMIT
+    -1 | RESET yagpcc.logging_mode;                      | QUERY_STATUS_DONE
 (8 rows)
 
 SELECT yagpcc.truncate_log() IS NOT NULL AS t;
@@ -227,12 +227,12 @@ RESET yagpcc.logging_mode;
 SELECT segid, query_text, query_status FROM yagpcc.log WHERE segid = -1 AND utility = true ORDER BY segid, ccnt, yagp_status_order(query_status) ASC;
  segid |                 query_text                 |    query_status     
 -------+--------------------------------------------+---------------------
-    -1 | SET yagpcc.logging_mode to 'TBL';          | QUERY_STATUS_DONE
     -1 | SET yagpcc.report_nested_queries TO FALSE; | QUERY_STATUS_SUBMIT
     -1 | SET yagpcc.report_nested_queries TO FALSE; | QUERY_STATUS_DONE
     -1 | RESET yagpcc.report_nested_queries;        | QUERY_STATUS_SUBMIT
     -1 | RESET yagpcc.report_nested_queries;        | QUERY_STATUS_DONE
     -1 | RESET yagpcc.logging_mode;                 | QUERY_STATUS_SUBMIT
+    -1 | RESET yagpcc.logging_mode;                 | QUERY_STATUS_DONE
 (6 rows)
 
 SELECT yagpcc.truncate_log() IS NOT NULL AS t;

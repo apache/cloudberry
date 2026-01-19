@@ -71,7 +71,7 @@ R cpp_call(T *obj, R (T::*func)(Args...), Args... args) {
 }
 
 void hooks_init() {
-  Config::init();
+  Config::init_gucs();
   YagpStat::init();
   previous_ExecutorStart_hook = ExecutorStart_hook;
   ExecutorStart_hook = ya_ExecutorStart_hook;
