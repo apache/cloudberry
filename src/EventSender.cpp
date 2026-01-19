@@ -169,7 +169,7 @@ void EventSender::executor_after_start(QueryDesc *query_desc, int /* eflags*/) {
     if (query_desc->totaltime == NULL) {
       MemoryContext oldcxt =
           ya_gpdb::mem_ctx_switch_to(query_desc->estate->es_query_cxt);
-      query_desc->totaltime = ya_gpdb::instr_alloc(1, INSTRUMENT_ALL);
+      query_desc->totaltime = ya_gpdb::instr_alloc(1, INSTRUMENT_ALL, false);
       ya_gpdb::mem_ctx_switch_to(oldcxt);
     }
   }

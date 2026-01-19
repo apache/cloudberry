@@ -19,10 +19,9 @@ extern "C" {
 
 static void inline log_tracing_failure(const yagpcc::SetQueryReq &req,
                                        const std::string &event) {
-  ereport(LOG,
-          (errmsg("Query {%d-%d-%d} %s tracing failed with error %s",
-                  req.query_key().tmid(), req.query_key().ssid(),
-                  req.query_key().ccnt(), event.c_str(), strerror(errno))));
+  ereport(LOG, (errmsg("Query {%d-%d-%d} %s tracing failed with error %m",
+                       req.query_key().tmid(), req.query_key().ssid(),
+                       req.query_key().ccnt(), event.c_str())));
 }
 
 bool UDSConnector::report_query(const yagpcc::SetQueryReq &req,
@@ -77,8 +76,7 @@ bool UDSConnector::report_query(const yagpcc::SetQueryReq &req,
       // That's a very important error that should never happen, so make it
       // visible to an end-user and admins.
       ereport(WARNING,
-              (errmsg("Unable to create non-blocking socket connection %s",
-                      strerror(errno))));
+              (errmsg("Unable to create non-blocking socket connection %m")));
       success = false;
       YagpStat::report_error();
     }

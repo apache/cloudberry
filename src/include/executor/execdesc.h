@@ -22,6 +22,14 @@
 
 struct CdbExplain_ShowStatCtx;  /* private, in "cdb/cdbexplain.c" */
 
+typedef struct YagpQueryKey
+{
+	int tmid; /* transaction time */
+	int ssid; /* session id */
+	int ccnt; /* command count */
+	int nesting_level;
+	uintptr_t query_desc_addr;
+} YagpQueryKey;
 
 /*
  * SerializedParams is used to serialize external query parameters
@@ -330,6 +338,9 @@ typedef struct QueryDesc
 
 	/* This is always set NULL by the core system, but plugins can change it */
 	struct Instrumentation *totaltime;	/* total time spent in ExecutorRun */
+
+	/* YAGP Hooks collector */
+	YagpQueryKey *yagp_query_key;
 } QueryDesc;
 
 /* in pquery.c */

@@ -37,12 +37,12 @@ void init_log() {
   relationId = heap_create_with_catalog(
       log_relname.data() /* relname */, namespaceId /* namespace */,
       0 /* tablespace */, InvalidOid /* relid */, InvalidOid /* reltype oid */,
-      InvalidOid /* reloftypeid */, GetUserId() /* owner */,
-      DescribeTuple() /* rel tuple */, NIL, InvalidOid /* relam */,
-      RELKIND_RELATION, RELPERSISTENCE_PERMANENT, RELSTORAGE_HEAP, false, false,
-      true, 0, ONCOMMIT_NOOP, NULL /* GP Policy */, (Datum)0,
-      false /* use_user_acl */, true, true, false /* valid_opts */,
-      false /* is_part_child */, false /* is part parent */, NULL);
+      InvalidOid /* reloftypeid */, GetUserId() /* owner */, HEAP_TABLE_AM_OID,
+      DescribeTuple() /* rel tuple */, NIL, RELKIND_RELATION,
+      RELPERSISTENCE_PERMANENT, false, false, ONCOMMIT_NOOP,
+      NULL /* GP Policy */, (Datum)0, false /* use_user_acl */, true, true,
+      InvalidOid /* relrewrite */, NULL /* typaddress */,
+      false /* valid_opts */);
 
   /* Make the table visible */
   CommandCounterIncrement();
