@@ -24,6 +24,8 @@ extern "C" {
 #include <ctime>
 #include <string>
 
+extern void gp_gettmid(int32 *);
+
 namespace {
 constexpr uint8_t UTF8_CONTINUATION_BYTE_MASK = (1 << 7) | (1 << 6);
 constexpr uint8_t UTF8_CONTINUATION_BYTE = (1 << 7);
@@ -49,7 +51,7 @@ void set_query_key(yagpcc::QueryKey *key) {
   key->set_ccnt(gp_command_count);
   key->set_ssid(gp_session_id);
   int32 tmid = 0;
-  gpmon_gettmid(&tmid);
+  gp_gettmid(&tmid);
   key->set_tmid(tmid);
 }
 
@@ -81,7 +83,7 @@ std::string trim_str_shrink_utf8(const char *str, size_t len, size_t lim) {
 }
 
 void set_query_plan(yagpcc::SetQueryReq *req, QueryDesc *query_desc) {
-  if (Gp_session_role == GP_ROLE_DISPATCH && query_desc->plannedstmt) {
+  if (Gp_role == GP_ROLE_DISPATCH && query_desc->plannedstmt) {
     auto qi = req->mutable_query_info();
     qi->set_generator(query_desc->plannedstmt->planGen == PLANGEN_OPTIMIZER
                           ? yagpcc::PlanGenerator::PLAN_GENERATOR_OPTIMIZER
@@ -106,7 +108,7 @@ void set_query_plan(yagpcc::SetQueryReq *req, QueryDesc *query_desc) {
 }
 
 void set_query_text(yagpcc::SetQueryReq *req, QueryDesc *query_desc) {
-  if (Gp_session_role == GP_ROLE_DISPATCH && query_desc->sourceText) {
+  if (Gp_role == GP_ROLE_DISPATCH && query_desc->sourceText) {
     auto qi = req->mutable_query_info();
     *qi->mutable_query_text() = trim_str_shrink_utf8(
         query_desc->sourceText, strlen(query_desc->sourceText),
@@ -118,7 +120,7 @@ void set_query_text(yagpcc::SetQueryReq *req, QueryDesc *query_desc) {
 }
 
 void clear_big_fields(yagpcc::SetQueryReq *req) {
-  if (Gp_session_role == GP_ROLE_DISPATCH) {
+  if (Gp_role == GP_ROLE_DISPATCH) {
     auto qi = req->mutable_query_info();
     qi->clear_plan_text();
     qi->clear_template_plan_text();
@@ -129,7 +131,7 @@ void clear_big_fields(yagpcc::SetQueryReq *req) {
 }
 
 void set_query_info(yagpcc::SetQueryReq *req) {
-  if (Gp_session_role == GP_ROLE_DISPATCH) {
+  if (Gp_role == GP_ROLE_DISPATCH) {
     auto qi = req->mutable_query_info();
     qi->set_username(get_user_name());
     if (IsTransactionState())

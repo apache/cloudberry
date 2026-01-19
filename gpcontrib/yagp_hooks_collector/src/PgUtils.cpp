@@ -72,7 +72,7 @@ bool nesting_is_valid(QueryDesc *query_desc, int nesting_level) {
 }
 
 bool need_report_nested_query() {
-  return Config::report_nested_queries() && Gp_session_role == GP_ROLE_DISPATCH;
+  return Config::report_nested_queries() && Gp_role == GP_ROLE_DISPATCH;
 }
 
 bool filter_query(QueryDesc *query_desc) {
