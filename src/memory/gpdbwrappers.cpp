@@ -7,6 +7,7 @@ extern "C" {
 #include "commands/dbcommands.h"
 #include "commands/resgroupcmds.h"
 #include "utils/builtins.h"
+#include "utils/varlena.h"
 #include "nodes/pg_list.h"
 #include "commands/explain.h"
 #include "executor/instrument.h"
@@ -115,41 +116,40 @@ bool ya_gpdb::split_identifier_string(char *rawstring, char separator,
 ExplainState ya_gpdb::get_explain_state(QueryDesc *query_desc,
                                         bool costs) noexcept {
   return wrap_noexcept([&]() {
-    ExplainState es;
-    ExplainInitState(&es);
-    es.costs = costs;
-    es.verbose = true;
-    es.format = EXPLAIN_FORMAT_TEXT;
-    ExplainBeginOutput(&es);
-    ExplainPrintPlan(&es, query_desc);
-    ExplainEndOutput(&es);
-    return es;
+    ExplainState *es = NewExplainState();
+    es->costs = costs;
+    es->verbose = true;
+    es->format = EXPLAIN_FORMAT_TEXT;
+    ExplainBeginOutput(es);
+    ExplainPrintPlan(es, query_desc);
+    ExplainEndOutput(es);
+    return *es;
   });
 }
 
 ExplainState ya_gpdb::get_analyze_state(QueryDesc *query_desc,
                                         bool analyze) noexcept {
   return wrap_noexcept([&]() {
-    ExplainState es;
-    ExplainInitState(&es);
-    es.analyze = analyze;
-    es.verbose = true;
-    es.buffers = es.analyze;
-    es.timing = es.analyze;
-    es.summary = es.analyze;
-    es.format = EXPLAIN_FORMAT_TEXT;
-    ExplainBeginOutput(&es);
+    ExplainState *es = NewExplainState();
+    es->analyze = analyze;
+    es->verbose = true;
+    es->buffers = es->analyze;
+    es->timing = es->analyze;
+    es->summary = es->analyze;
+    es->format = EXPLAIN_FORMAT_TEXT;
+    ExplainBeginOutput(es);
     if (analyze) {
-      ExplainPrintPlan(&es, query_desc);
-      ExplainPrintExecStatsEnd(&es, query_desc);
+      ExplainPrintPlan(es, query_desc);
+      ExplainPrintExecStatsEnd(es, query_desc);
     }
-    ExplainEndOutput(&es);
-    return es;
+    ExplainEndOutput(es);
+    return *es;
   });
 }
 
-Instrumentation *ya_gpdb::instr_alloc(size_t n, int instrument_options) {
-  return wrap_throw(InstrAlloc, n, instrument_options);
+Instrumentation *ya_gpdb::instr_alloc(size_t n, int instrument_options,
+                                      bool async_mode) {
+  return wrap_throw(InstrAlloc, n, instrument_options, async_mode);
 }
 
 HeapTuple ya_gpdb::heap_form_tuple(TupleDesc tupleDescriptor, Datum *values,

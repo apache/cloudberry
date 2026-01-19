@@ -32,7 +32,7 @@ bool split_identifier_string(char *rawstring, char separator,
                              List **namelist) noexcept;
 ExplainState get_explain_state(QueryDesc *query_desc, bool costs) noexcept;
 ExplainState get_analyze_state(QueryDesc *query_desc, bool analyze) noexcept;
-Instrumentation *instr_alloc(size_t n, int instrument_options);
+Instrumentation *instr_alloc(size_t n, int instrument_options, bool async_mode);
 HeapTuple heap_form_tuple(TupleDesc tupleDescriptor, Datum *values,
                           bool *isnull);
 CdbExplain_ShowStatCtx *cdbexplain_showExecStatsBegin(QueryDesc *query_desc,
