@@ -38,9 +38,9 @@ void init_log() {
       log_relname.data() /* relname */, namespaceId /* namespace */,
       0 /* tablespace */, InvalidOid /* relid */, InvalidOid /* reltype oid */,
       InvalidOid /* reloftypeid */, GetUserId() /* owner */, HEAP_TABLE_AM_OID,
-      DescribeTuple() /* rel tuple */, NIL, RELKIND_RELATION,
-      RELPERSISTENCE_PERMANENT, false, false, ONCOMMIT_NOOP,
-      NULL /* GP Policy */, (Datum)0, false /* use_user_acl */, true, true,
+      DescribeTuple() /* rel tuple */, NIL /* cooked_constraints */, RELKIND_RELATION,
+      RELPERSISTENCE_PERMANENT, false /* shared_relation */, false /* mapped_relation */, ONCOMMIT_NOOP,
+      NULL /* GP Policy */, (Datum)0 /* reloptions */, false /* use_user_acl */, true /* allow_system_table_mods */, true /* is_internal */,
       InvalidOid /* relrewrite */, NULL /* typaddress */,
       false /* valid_opts */);
 

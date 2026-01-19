@@ -26,7 +26,6 @@ RESET yagpcc.logging_mode;
 SELECT segid, query_text, query_status FROM yagpcc.log WHERE segid = -1 AND utility = true ORDER BY segid, ccnt, yagp_status_order(query_status) ASC;
  segid |                 query_text                  |    query_status     
 -------+---------------------------------------------+---------------------
-    -1 | SET yagpcc.logging_mode to 'TBL';           | QUERY_STATUS_DONE
     -1 | BEGIN;                                      | QUERY_STATUS_SUBMIT
     -1 | BEGIN;                                      | QUERY_STATUS_DONE
     -1 | DECLARE cursor_stats_0 CURSOR FOR SELECT 0; | QUERY_STATUS_SUBMIT
@@ -36,6 +35,7 @@ SELECT segid, query_text, query_status FROM yagpcc.log WHERE segid = -1 AND util
     -1 | COMMIT;                                     | QUERY_STATUS_SUBMIT
     -1 | COMMIT;                                     | QUERY_STATUS_DONE
     -1 | RESET yagpcc.logging_mode;                  | QUERY_STATUS_SUBMIT
+    -1 | RESET yagpcc.logging_mode;                  | QUERY_STATUS_DONE
 (10 rows)
 
 SELECT yagpcc.truncate_log() IS NOT NULL AS t;
@@ -55,7 +55,6 @@ RESET yagpcc.logging_mode;
 SELECT segid, query_text, query_status FROM yagpcc.log WHERE segid = -1 AND utility = true ORDER BY segid, ccnt, yagp_status_order(query_status) ASC;
  segid |                      query_text                       |    query_status     
 -------+-------------------------------------------------------+---------------------
-    -1 | SET yagpcc.logging_mode to 'TBL';                     | QUERY_STATUS_DONE
     -1 | BEGIN;                                                | QUERY_STATUS_SUBMIT
     -1 | BEGIN;                                                | QUERY_STATUS_DONE
     -1 | DECLARE cursor_stats_1 CURSOR WITH HOLD FOR SELECT 1; | QUERY_STATUS_SUBMIT
@@ -69,6 +68,7 @@ SELECT segid, query_text, query_status FROM yagpcc.log WHERE segid = -1 AND util
     -1 | COMMIT;                                               | QUERY_STATUS_SUBMIT
     -1 | COMMIT;                                               | QUERY_STATUS_DONE
     -1 | RESET yagpcc.logging_mode;                            | QUERY_STATUS_SUBMIT
+    -1 | RESET yagpcc.logging_mode;                            | QUERY_STATUS_DONE
 (14 rows)
 
 SELECT yagpcc.truncate_log() IS NOT NULL AS t;
@@ -87,7 +87,6 @@ RESET yagpcc.logging_mode;
 SELECT segid, query_text, query_status FROM yagpcc.log WHERE segid = -1 AND utility = true ORDER BY segid, ccnt, yagp_status_order(query_status) ASC;
  segid |                 query_text                  |    query_status     
 -------+---------------------------------------------+---------------------
-    -1 | SET yagpcc.logging_mode to 'TBL';           | QUERY_STATUS_DONE
     -1 | BEGIN;                                      | QUERY_STATUS_SUBMIT
     -1 | BEGIN;                                      | QUERY_STATUS_DONE
     -1 | DECLARE cursor_stats_3 CURSOR FOR SELECT 1; | QUERY_STATUS_SUBMIT
@@ -99,6 +98,7 @@ SELECT segid, query_text, query_status FROM yagpcc.log WHERE segid = -1 AND util
     -1 | ROLLBACK;                                   | QUERY_STATUS_SUBMIT
     -1 | ROLLBACK;                                   | QUERY_STATUS_DONE
     -1 | RESET yagpcc.logging_mode;                  | QUERY_STATUS_SUBMIT
+    -1 | RESET yagpcc.logging_mode;                  | QUERY_STATUS_DONE
 (12 rows)
 
 SELECT yagpcc.truncate_log() IS NOT NULL AS t;
@@ -130,7 +130,6 @@ RESET yagpcc.logging_mode;
 SELECT segid, query_text, query_status FROM yagpcc.log WHERE segid = -1 AND utility = true ORDER BY segid, ccnt, yagp_status_order(query_status) ASC;
  segid |                      query_text                       |    query_status     
 -------+-------------------------------------------------------+---------------------
-    -1 | SET yagpcc.logging_mode to 'TBL';                     | QUERY_STATUS_DONE
     -1 | BEGIN;                                                | QUERY_STATUS_SUBMIT
     -1 | BEGIN;                                                | QUERY_STATUS_DONE
     -1 | DECLARE cursor_stats_5 CURSOR WITH HOLD FOR SELECT 2; | QUERY_STATUS_SUBMIT
@@ -148,6 +147,7 @@ SELECT segid, query_text, query_status FROM yagpcc.log WHERE segid = -1 AND util
     -1 | COMMIT;                                               | QUERY_STATUS_SUBMIT
     -1 | COMMIT;                                               | QUERY_STATUS_DONE
     -1 | RESET yagpcc.logging_mode;                            | QUERY_STATUS_SUBMIT
+    -1 | RESET yagpcc.logging_mode;                            | QUERY_STATUS_DONE
 (18 rows)
 
 SELECT yagpcc.truncate_log() IS NOT NULL AS t;

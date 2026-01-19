@@ -1,4 +1,3 @@
-#include "Config.h"
 #include "UDSConnector.h"
 #include "memory/gpdbwrappers.h"
 #include "log/LogOps.h"
@@ -22,10 +21,8 @@ extern "C" {
 #include "ProtoUtils.h"
 
 #define need_collect_analyze()                                                 \
-  (Gp_role == GP_ROLE_DISPATCH && Config::min_analyze_time() >= 0 &&           \
-   Config::enable_analyze())
-
-static bool enable_utility = Config::enable_utility();
+  (Gp_role == GP_ROLE_DISPATCH && config.min_analyze_time() >= 0 &&            \
+   config.enable_analyze())
 
 bool EventSender::verify_query(QueryDesc *query_desc, QueryState state,
                                bool utility) {
@@ -38,16 +35,16 @@ bool EventSender::verify_query(QueryDesc *query_desc, QueryState state,
 
   switch (state) {
   case QueryState::SUBMIT:
-    // Cache enable_utility at SUBMIT to ensure consistent behavior at DONE.
-    // Without caching, a query that sets enable_utility to false from true
-    // would be accepted at SUBMIT (guc is true) but rejected at DONE (guc
-    // is false), causing a leak.
-    enable_utility = Config::enable_utility();
-    if (utility && enable_utility == false) {
+    // Cache GUCs once at SUBMIT. Synced GUCs are visible to all subsequent
+    // states. Without caching, a query that unsets/sets filtering GUCs would
+    // see different filter criteria at DONE, because at SUBMIT the query was
+    // not executed yet, causing DONE to be skipped/added.
+    config.sync();
+
+    if (utility && !config.enable_utility()) {
       return false;
     }
-    // Sync config in case current query changes it.
-    Config::sync();
+
     // Register qkey for a nested query we won't report,
     // so we can detect nesting_level > 0 and skip reporting at end/done.
     if (!need_report_nested_query() && nesting_level > 0) {
@@ -65,7 +62,7 @@ bool EventSender::verify_query(QueryDesc *query_desc, QueryState state,
     }
     break;
   case QueryState::DONE:
-    if (utility && enable_utility == false) {
+    if (utility && !config.enable_utility()) {
       return false;
     }
   default:
@@ -85,9 +82,9 @@ bool EventSender::verify_query(QueryDesc *query_desc, QueryState state,
 bool EventSender::log_query_req(const yagpcc::SetQueryReq &req,
                                 const std::string &event, bool utility) {
   bool clear_big_fields = false;
-  switch (Config::logging_mode()) {
+  switch (config.logging_mode()) {
   case LOG_MODE_UDS:
-    clear_big_fields = UDSConnector::report_query(req, event);
+    clear_big_fields = UDSConnector::report_query(req, event, config);
     break;
   case LOG_MODE_TBL:
     ya_gpdb::insert_log(req, utility);
@@ -135,12 +132,12 @@ void EventSender::executor_before_start(QueryDesc *query_desc, int eflags) {
     return;
   }
 
-  if (Gp_role == GP_ROLE_DISPATCH && Config::enable_analyze() &&
+  if (Gp_role == GP_ROLE_DISPATCH && config.enable_analyze() &&
       (eflags & EXEC_FLAG_EXPLAIN_ONLY) == 0) {
     query_desc->instrument_options |= INSTRUMENT_BUFFERS;
     query_desc->instrument_options |= INSTRUMENT_ROWS;
     query_desc->instrument_options |= INSTRUMENT_TIMER;
-    if (Config::enable_cdbstats()) {
+    if (config.enable_cdbstats()) {
       query_desc->instrument_options |= INSTRUMENT_CDB;
       if (!query_desc->showstatctx) {
         instr_time starttime;
@@ -161,7 +158,7 @@ void EventSender::executor_after_start(QueryDesc *query_desc, int /* eflags*/) {
   auto query_msg = query.message.get();
   *query_msg->mutable_start_time() = current_ts();
   update_query_state(query, QueryState::START, false /* utility */);
-  set_query_plan(query_msg, query_desc);
+  set_query_plan(query_msg, query_desc, config);
   if (need_collect_analyze()) {
     // Set up to track total elapsed time during query run.
     // Make sure the space is allocated in the per-query
@@ -214,7 +211,7 @@ void EventSender::collect_query_submit(QueryDesc *query_desc, bool utility) {
   set_query_info(query_msg);
   set_qi_nesting_level(query_msg, nesting_level);
   set_qi_slice_id(query_msg);
-  set_query_text(query_msg, query_desc);
+  set_query_text(query_msg, query_desc, config);
   if (log_query_req(*query_msg, "submit", utility)) {
     clear_big_fields(query_msg);
   }
@@ -271,8 +268,8 @@ void EventSender::report_query_done(QueryDesc *query_desc, QueryItem &query,
       ereport(DEBUG3,
               (errmsg("YAGPCC query sourceText: %s", query_desc->sourceText)));
     } else {
-      set_qi_error_message(query_msg,
-                           error_flushed ? edata->message : elog_message());
+      set_qi_error_message(
+          query_msg, error_flushed ? edata->message : elog_message(), config);
     }
   }
   if (prev_state == START) {
@@ -331,8 +328,8 @@ void EventSender::ic_metrics_collect() {
   if (Gp_interconnect_type != INTERCONNECT_TYPE_UDPIFC) {
     return;
   }
-  if (!proto_verified || gp_command_count == 0 || !Config::enable_collector() ||
-      Config::filter_user(get_user_name())) {
+  if (!proto_verified || gp_command_count == 0 || !config.enable_collector() ||
+      config.filter_user(get_user_name())) {
     return;
   }
   // we also would like to know nesting level here and filter queries BUT we
@@ -374,15 +371,18 @@ void EventSender::analyze_stats_collect(QueryDesc *query_desc) {
   ya_gpdb::instr_end_loop(query_desc->totaltime);
 
   double ms = query_desc->totaltime->total * 1000.0;
-  if (ms >= Config::min_analyze_time()) {
+  if (ms >= config.min_analyze_time()) {
     auto &query = get_query(query_desc);
     auto *query_msg = query.message.get();
-    set_analyze_plan_text(query_desc, query_msg);
+    set_analyze_plan_text(query_desc, query_msg, config);
   }
 }
 
 EventSender::EventSender() {
-  if (Config::enable_collector()) {
+  // Perform initial sync to get default GUC values
+  config.sync();
+
+  if (config.enable_collector()) {
     try {
       GOOGLE_PROTOBUF_VERIFY_VERSION;
       proto_verified = true;
@@ -484,6 +484,20 @@ bool EventSender::qdesc_submitted(QueryDesc *query_desc) {
     return false;
   }
   return queries.find(QueryKey::from_qdesc(query_desc)) != queries.end();
+}
+
+bool EventSender::nesting_is_valid(QueryDesc *query_desc, int nesting_level) {
+  return need_report_nested_query() ||
+         is_top_level_query(query_desc, nesting_level);
+}
+
+bool EventSender::need_report_nested_query() {
+  return config.report_nested_queries() && Gp_role == GP_ROLE_DISPATCH;
+}
+
+bool EventSender::filter_query(QueryDesc *query_desc) {
+  return gp_command_count == 0 || query_desc->sourceText == nullptr ||
+         !config.enable_collector() || config.filter_user(get_user_name());
 }
 
 EventSender::QueryItem::QueryItem(QueryState st)

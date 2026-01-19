@@ -27,45 +27,13 @@ static const struct config_enum_entry logging_mode_options[] = {
     {"tbl", LOG_MODE_TBL, false},
     {NULL, 0, false}};
 
-static std::unique_ptr<std::unordered_set<std::string>> ignored_users_set =
-    nullptr;
 static bool ignored_users_guc_dirty = false;
-
-static void update_ignored_users(const char *new_guc_ignored_users) {
-  auto new_ignored_users_set =
-      std::make_unique<std::unordered_set<std::string>>();
-  if (new_guc_ignored_users != nullptr && new_guc_ignored_users[0] != '\0') {
-    /* Need a modifiable copy of string */
-    char *rawstring = ya_gpdb::pstrdup(new_guc_ignored_users);
-    List *elemlist;
-    ListCell *l;
-
-    /* Parse string into list of identifiers */
-    if (!ya_gpdb::split_identifier_string(rawstring, ',', &elemlist)) {
-      /* syntax error in list */
-      ya_gpdb::pfree(rawstring);
-      ya_gpdb::list_free(elemlist);
-      ereport(
-          LOG,
-          (errcode(ERRCODE_SYNTAX_ERROR),
-           errmsg(
-               "invalid list syntax in parameter yagpcc.ignored_users_list")));
-      return;
-    }
-    foreach (l, elemlist) {
-      new_ignored_users_set->insert((char *)lfirst(l));
-    }
-    ya_gpdb::pfree(rawstring);
-    ya_gpdb::list_free(elemlist);
-  }
-  ignored_users_set = std::move(new_ignored_users_set);
-}
 
 static void assign_ignored_users_hook(const char *, void *) {
   ignored_users_guc_dirty = true;
 }
 
-void Config::init() {
+void Config::init_gucs() {
   DefineCustomStringVariable(
       "yagpcc.uds_path", "Sets filesystem path of the agent socket", 0LL,
       &guc_uds_path, "/tmp/yagpcc_agent.sock", PGC_SUSET,
@@ -128,22 +96,40 @@ void Config::init() {
       GUC_NOT_IN_SAMPLE | GUC_GPDB_NEED_SYNC, NULL, NULL, NULL);
 }
 
-std::string Config::uds_path() { return guc_uds_path; }
-bool Config::enable_analyze() { return guc_enable_analyze; }
-bool Config::enable_cdbstats() { return guc_enable_cdbstats; }
-bool Config::enable_collector() { return guc_enable_collector; }
-bool Config::enable_utility() { return guc_enable_utility; }
-bool Config::report_nested_queries() { return guc_report_nested_queries; }
-size_t Config::max_text_size() { return guc_max_text_size; }
-size_t Config::max_plan_size() { return guc_max_plan_size * 1024; }
-int Config::min_analyze_time() { return guc_min_analyze_time; };
-int Config::logging_mode() { return guc_logging_mode; }
+void Config::update_ignored_users(const char *new_guc_ignored_users) {
+  auto new_ignored_users_set = std::make_unique<IgnoredUsers>();
+  if (new_guc_ignored_users != nullptr && new_guc_ignored_users[0] != '\0') {
+    /* Need a modifiable copy of string */
+    char *rawstring = ya_gpdb::pstrdup(new_guc_ignored_users);
+    List *elemlist;
+    ListCell *l;
 
-bool Config::filter_user(std::string username) {
-  if (!ignored_users_set) {
+    /* Parse string into list of identifiers */
+    if (!ya_gpdb::split_identifier_string(rawstring, ',', &elemlist)) {
+      /* syntax error in list */
+      ya_gpdb::pfree(rawstring);
+      ya_gpdb::list_free(elemlist);
+      ereport(
+          LOG,
+          (errcode(ERRCODE_SYNTAX_ERROR),
+           errmsg(
+               "invalid list syntax in parameter yagpcc.ignored_users_list")));
+      return;
+    }
+    foreach (l, elemlist) {
+      new_ignored_users_set->insert((char *)lfirst(l));
+    }
+    ya_gpdb::pfree(rawstring);
+    ya_gpdb::list_free(elemlist);
+  }
+  ignored_users_ = std::move(new_ignored_users_set);
+}
+
+bool Config::filter_user(const std::string &username) const {
+  if (!ignored_users_) {
     return true;
   }
-  return ignored_users_set->find(username) != ignored_users_set->end();
+  return ignored_users_->find(username) != ignored_users_->end();
 }
 
 void Config::sync() {
@@ -151,4 +137,14 @@ void Config::sync() {
     update_ignored_users(guc_ignored_users);
     ignored_users_guc_dirty = false;
   }
+  uds_path_ = guc_uds_path;
+  enable_analyze_ = guc_enable_analyze;
+  enable_cdbstats_ = guc_enable_cdbstats;
+  enable_collector_ = guc_enable_collector;
+  enable_utility_ = guc_enable_utility;
+  report_nested_queries_ = guc_report_nested_queries;
+  max_text_size_ = static_cast<size_t>(guc_max_text_size);
+  max_plan_size_ = static_cast<size_t>(guc_max_plan_size);
+  min_analyze_time_ = guc_min_analyze_time;
+  logging_mode_ = guc_logging_mode;
 }
