@@ -1,58 +1,41 @@
-override CFLAGS = -Wall -Wmissing-prototypes -Wpointer-arith -Wendif-labels -Wmissing-format-attribute -Wformat-security -fno-strict-aliasing -fwrapv -fexcess-precision=standard -Wno-unused-but-set-variable -Wno-address -Wno-format-truncation -Wno-stringop-truncation -g -ggdb -std=gnu99 -Werror=uninitialized -Werror=implicit-function-declaration -DGPBUILD
-override CXXFLAGS = -fPIC -g3 -Wall -Wpointer-arith -Wendif-labels -Wmissing-format-attribute -Wformat-security -fno-strict-aliasing -fwrapv -Wno-unused-but-set-variable -Wno-address -Wno-format-truncation -Wno-stringop-truncation -g -ggdb -std=c++17 -Iinclude -Isrc/protos -Isrc -DGPBUILD
-COMMON_CPP_FLAGS := -Isrc -Iinclude -Isrc/stat_statements_parser
-PG_CXXFLAGS += $(COMMON_CPP_FLAGS)
+MODULE_big = yagp_hooks_collector
+EXTENSION  = yagp_hooks_collector
+DATA       = $(wildcard *--*.sql)
+REGRESS    = yagp_cursors yagp_dist yagp_select yagp_utf8_trim yagp_utility
+
+PROTO_BASES = yagpcc_plan yagpcc_metrics yagpcc_set_service
+PROTO_OBJS  = $(patsubst %,src/protos/%.pb.o,$(PROTO_BASES))
+
+C_OBJS   = $(patsubst %.c,%.o,$(wildcard src/*.c src/*/*.c))
+CPP_OBJS = $(patsubst %.cpp,%.o,$(wildcard src/*.cpp src/*/*.cpp))
+OBJS     = $(C_OBJS) $(CPP_OBJS) $(PROTO_OBJS)
+
+override CXXFLAGS = -fPIC -g3 -Wall -Wpointer-arith -Wendif-labels \
+	-Wmissing-format-attribute -Wformat-security -fno-strict-aliasing -fwrapv \
+	-Wno-unused-but-set-variable -Wno-address -Wno-format-truncation \
+	-Wno-stringop-truncation -g -ggdb -std=c++17 -Iinclude -Isrc/protos -Isrc -DGPBUILD
+
+PG_CXXFLAGS += -Isrc -Iinclude
 SHLIB_LINK += -lprotobuf -lpthread -lstdc++
+EXTRA_CLEAN = src/protos
 
-PROTOC = protoc
-SRC_DIR = ./src
-GEN_DIR = ./src/protos
-PROTO_DIR = ./protos
-PROTO_GEN_OBJECTS = $(GEN_DIR)/yagpcc_plan.pb.o $(GEN_DIR)/yagpcc_metrics.pb.o \
-					$(GEN_DIR)/yagpcc_set_service.pb.o
-
-$(GEN_DIR)/%.pb.cpp $(GEN_DIR)/%.pb.h: $(PROTO_DIR)/%.proto
-	sed -i 's/optional //g' $^
-	sed -i 's/cloud\/mdb\/yagpcc\/api\/proto\/common\//\protos\//g' $^
-	$(PROTOC) --cpp_out=$(SRC_DIR) $^
-	mv $(GEN_DIR)/$*.pb.cc $(GEN_DIR)/$*.pb.cpp
-
-PG_STAT_DIR		:= $(SRC_DIR)/stat_statements_parser
-PG_STAT_OBJS	:= $(PG_STAT_DIR)/pg_stat_statements_ya_parser.o
-
-OBJS			:=	$(PG_STAT_OBJS)						\
-					$(PROTO_GEN_OBJECTS)			 	\
-					$(SRC_DIR)/ProcStats.o				\
-					$(SRC_DIR)/Config.o					\
-					$(SRC_DIR)/PgUtils.o				\
-					$(SRC_DIR)/ProtoUtils.o				\
-					$(SRC_DIR)/YagpStat.o				\
-					$(SRC_DIR)/UDSConnector.o			\
-					$(SRC_DIR)/EventSender.o 			\
-					$(SRC_DIR)/hook_wrappers.o		 	\
-					$(SRC_DIR)/memory/gpdbwrappers.o		\
-					$(SRC_DIR)/yagp_hooks_collector.o	\
-					$(SRC_DIR)/log/LogOps.o				\
-					$(SRC_DIR)/log/LogSchema.o
-EXTRA_CLEAN     := $(GEN_DIR)
-DATA			:= $(wildcard *--*.sql)
-EXTENSION		:= yagp_hooks_collector
-EXTVERSION		:= $(shell grep default_version $(EXTENSION).control | \
-			   	sed -e "s/default_version[[:space:]]*=[[:space:]]*'\([^']*\)'/\1/")
-MODULE_big		:= yagp_hooks_collector
-PG_CONFIG		:= pg_config
-PGXS			:= $(shell $(PG_CONFIG) --pgxs)
+ifdef USE_PGXS
+PG_CONFIG = pg_config
+PGXS := $(shell $(PG_CONFIG) --pgxs)
 include $(PGXS)
+else
+subdir = gpcontrib/yagp_hooks_collector
+top_builddir = ../..
+include $(top_builddir)/src/Makefile.global
+include $(top_srcdir)/contrib/contrib-global.mk
+endif
 
-$(GEN_DIR)/yagpcc_set_service.pb.o: $(GEN_DIR)/yagpcc_metrics.pb.h
+src/protos/%.pb.cpp src/protos/%.pb.h: protos/%.proto
+	@mkdir -p src/protos
+	sed -i 's/optional //g' $^
+	sed -i 's|cloud/mdb/yagpcc/api/proto/common/|protos/|g' $^
+	protoc -I /usr/include -I /usr/local/include -I . --cpp_out=src $^
+	mv src/protos/$*.pb.cc src/protos/$*.pb.cpp
 
-PROTO_INCLUDES = $(GEN_DIR)/yagpcc_set_service.pb.h $(GEN_DIR)/yagpcc_metrics.pb.h $(GEN_DIR)/yagpcc_plan.pb.h
-$(SRC_DIR)/UDSConnector.o: $(PROTO_INCLUDES) src/log/LogOps.h
-$(SRC_DIR)/ProtoUtils.o: $(PROTO_INCLUDES)
-$(SRC_DIR)/EventSender.o: $(PROTO_INCLUDES)
-$(SRC_DIR)/ProcStats.o: $(GEN_DIR)/yagpcc_metrics.pb.h
-$(SRC_DIR)/log/LogOps.o: $(PROTO_INCLUDES)
-
-gen: $(PROTO_GEN_OBJECTS)
-
-.DEFAULT_GOAL := all
+$(CPP_OBJS): src/protos/yagpcc_metrics.pb.h src/protos/yagpcc_plan.pb.h src/protos/yagpcc_set_service.pb.h
+src/protos/yagpcc_set_service.pb.o: src/protos/yagpcc_metrics.pb.h

@@ -14,6 +14,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql IMMUTABLE;
 
+SET yagpcc.ignored_users_list TO '';
 SET yagpcc.enable TO TRUE;
 SET yagpcc.report_nested_queries TO TRUE;
 SET yagpcc.enable_utility TO FALSE;
@@ -65,3 +66,4 @@ DROP EXTENSION yagp_hooks_collector;
 RESET yagpcc.enable;
 RESET yagpcc.report_nested_queries;
 RESET yagpcc.enable_utility;
+RESET yagpcc.ignored_users_list;

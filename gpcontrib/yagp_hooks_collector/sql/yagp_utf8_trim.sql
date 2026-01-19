@@ -9,6 +9,7 @@ RETURNS TEXT AS $$
     LIMIT 1
 $$ LANGUAGE sql VOLATILE;
 
+SET yagpcc.ignored_users_list TO '';
 SET yagpcc.enable TO TRUE;
 
 -- Test 1: 1 byte chars
@@ -39,5 +40,6 @@ DROP FUNCTION get_marked_query(TEXT);
 RESET yagpcc.max_text_size;
 RESET yagpcc.logging_mode;
 RESET yagpcc.enable;
+RESET yagpcc.ignored_users_list;
 
 DROP EXTENSION yagp_hooks_collector;

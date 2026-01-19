@@ -722,6 +722,7 @@ with_apr_config
 with_libcurl
 with_rt
 with_zstd
+with_yagp_hooks_collector
 with_libbz2
 LZ4_LIBS
 LZ4_CFLAGS
@@ -942,6 +943,7 @@ with_zlib
 with_lz4
 with_libbz2
 with_zstd
+with_yagp_hooks_collector
 with_rt
 with_libcurl
 with_apr_config
@@ -11148,6 +11150,32 @@ else
 $as_echo "yes" >&6; }
 
 fi
+fi
+
+#
+# yagp_hooks_collector
+#
+
+
+
+# Check whether --with-yagp-hooks-collector was given.
+if test "${with_yagp_hooks_collector+set}" = set; then :
+  withval=$with_yagp_hooks_collector;
+  case $withval in
+    yes)
+      :
+      ;;
+    no)
+      :
+      ;;
+    *)
+      as_fn_error $? "no argument expected for --with-yagp-hooks-collector option" "$LINENO" 5
+      ;;
+  esac
+
+else
+  with_yagp_hooks_collector=no
+
 fi
 
 #
