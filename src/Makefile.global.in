@@ -271,6 +271,7 @@ with_zstd 		= @with_zstd@
 ZSTD_CFLAGS		= @ZSTD_CFLAGS@
 ZSTD_LIBS		= @ZSTD_LIBS@
 EVENT_LIBS		= @EVENT_LIBS@
+with_yagp_hooks_collector 		= @with_yagp_hooks_collector@
 
 ##########################################################################
 #
