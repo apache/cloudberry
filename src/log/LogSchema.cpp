@@ -19,7 +19,7 @@ const std::unordered_map<std::string_view, size_t> &proto_name_to_col_idx() {
 }
 
 TupleDesc DescribeTuple() {
-  TupleDesc tupdesc = CreateTemplateTupleDesc(natts_yagp_log, false);
+  TupleDesc tupdesc = CreateTemplateTupleDesc(natts_yagp_log);
 
   for (size_t anum = 1; anum <= natts_yagp_log; ++anum) {
     TupleDescInitEntry(tupdesc, anum, log_tbl_desc[anum - 1].pg_att_name.data(),

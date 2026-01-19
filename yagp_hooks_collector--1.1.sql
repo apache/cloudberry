@@ -6,17 +6,17 @@
 CREATE SCHEMA yagpcc;
 
 CREATE FUNCTION yagpcc.__stat_messages_reset_f_on_master()
-RETURNS void
+RETURNS SETOF void
 AS 'MODULE_PATHNAME', 'yagp_stat_messages_reset'
 LANGUAGE C EXECUTE ON MASTER;
 
 CREATE FUNCTION yagpcc.__stat_messages_reset_f_on_segments()
-RETURNS void
+RETURNS SETOF void
 AS 'MODULE_PATHNAME', 'yagp_stat_messages_reset'
 LANGUAGE C EXECUTE ON ALL SEGMENTS;
 
 CREATE FUNCTION yagpcc.stat_messages_reset()
-RETURNS void
+RETURNS SETOF void
 AS
 $$
   SELECT yagpcc.__stat_messages_reset_f_on_master();
@@ -57,12 +57,12 @@ CREATE VIEW yagpcc.stat_messages AS
 ORDER BY segid;
 
 CREATE FUNCTION yagpcc.__init_log_on_master()
-RETURNS void
+RETURNS SETOF void
 AS 'MODULE_PATHNAME', 'yagp_init_log'
 LANGUAGE C STRICT VOLATILE EXECUTE ON MASTER;
 
 CREATE FUNCTION yagpcc.__init_log_on_segments()
-RETURNS void
+RETURNS SETOF void
 AS 'MODULE_PATHNAME', 'yagp_init_log'
 LANGUAGE C STRICT VOLATILE EXECUTE ON ALL SEGMENTS;
 
@@ -77,17 +77,17 @@ CREATE VIEW yagpcc.log AS
 ORDER BY tmid, ssid, ccnt;
 
 CREATE FUNCTION yagpcc.__truncate_log_on_master()
-RETURNS void
+RETURNS SETOF void
 AS 'MODULE_PATHNAME', 'yagp_truncate_log'
 LANGUAGE C STRICT VOLATILE EXECUTE ON MASTER;
 
 CREATE FUNCTION yagpcc.__truncate_log_on_segments()
-RETURNS void
+RETURNS SETOF void
 AS 'MODULE_PATHNAME', 'yagp_truncate_log'
 LANGUAGE C STRICT VOLATILE EXECUTE ON ALL SEGMENTS;
 
 CREATE FUNCTION yagpcc.truncate_log()
-RETURNS void AS $$
+RETURNS SETOF void AS $$
 BEGIN
     PERFORM yagpcc.__truncate_log_on_master();
     PERFORM yagpcc.__truncate_log_on_segments();
