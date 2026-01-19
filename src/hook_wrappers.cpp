@@ -36,7 +36,7 @@ static ProcessUtility_hook_type previous_ProcessUtility_hook = nullptr;
 
 static void ya_ExecutorStart_hook(QueryDesc *query_desc, int eflags);
 static void ya_ExecutorRun_hook(QueryDesc *query_desc, ScanDirection direction,
-                                long count);
+                                uint64 count, bool execute_once);
 static void ya_ExecutorFinish_hook(QueryDesc *query_desc);
 static void ya_ExecutorEnd_hook(QueryDesc *query_desc);
 static void ya_query_info_collect_hook(QueryMetricsStatus status, void *arg);
@@ -45,10 +45,12 @@ static void ya_ic_teardown_hook(ChunkTransportState *transportStates,
 #ifdef ANALYZE_STATS_COLLECT_HOOK
 static void ya_analyze_stats_collect_hook(QueryDesc *query_desc);
 #endif
-static void ya_process_utility_hook(Node *parsetree, const char *queryString,
+static void ya_process_utility_hook(PlannedStmt *pstmt, const char *queryString,
+                                    bool readOnlyTree,
                                     ProcessUtilityContext context,
-                                    ParamListInfo params, DestReceiver *dest,
-                                    char *completionTag);
+                                    ParamListInfo params,
+                                    QueryEnvironment *queryEnv,
+                                    DestReceiver *dest, QueryCompletion *qc);
 
 static EventSender *sender = nullptr;
 
@@ -127,14 +129,14 @@ void ya_ExecutorStart_hook(QueryDesc *query_desc, int eflags) {
 }
 
 void ya_ExecutorRun_hook(QueryDesc *query_desc, ScanDirection direction,
-                         long count) {
+                         uint64 count, bool execute_once) {
   get_sender()->incr_depth();
   PG_TRY();
   {
     if (previous_ExecutorRun_hook)
-      previous_ExecutorRun_hook(query_desc, direction, count);
+      previous_ExecutorRun_hook(query_desc, direction, count, execute_once);
     else
-      standard_ExecutorRun(query_desc, direction, count);
+      standard_ExecutorRun(query_desc, direction, count, execute_once);
     get_sender()->decr_depth();
   }
   PG_CATCH();
@@ -198,10 +200,12 @@ void ya_analyze_stats_collect_hook(QueryDesc *query_desc) {
 }
 #endif
 
-static void ya_process_utility_hook(Node *parsetree, const char *queryString,
+static void ya_process_utility_hook(PlannedStmt *pstmt, const char *queryString,
+                                    bool readOnlyTree,
                                     ProcessUtilityContext context,
-                                    ParamListInfo params, DestReceiver *dest,
-                                    char *completionTag) {
+                                    ParamListInfo params,
+                                    QueryEnvironment *queryEnv,
+                                    DestReceiver *dest, QueryCompletion *qc) {
   /* Project utility data on QueryDesc to use existing logic */
   QueryDesc *query_desc = (QueryDesc *)palloc0(sizeof(QueryDesc));
   query_desc->sourceText = queryString;
@@ -214,11 +218,11 @@ static void ya_process_utility_hook(Node *parsetree, const char *queryString,
   PG_TRY();
   {
     if (previous_ProcessUtility_hook) {
-      (*previous_ProcessUtility_hook)(parsetree, queryString, context, params,
-                                      dest, completionTag);
+      (*previous_ProcessUtility_hook)(pstmt, queryString, readOnlyTree, context,
+                                      params, queryEnv, dest, qc);
     } else {
-      standard_ProcessUtility(parsetree, queryString, context, params, dest,
-                              completionTag);
+      standard_ProcessUtility(pstmt, queryString, readOnlyTree, context, params,
+                              queryEnv, dest, qc);
     }
 
     get_sender()->decr_depth();
@@ -264,7 +268,7 @@ Datum yagp_functions_get(FunctionCallInfo fcinfo) {
   const int ATTNUM = 6;
   check_stats_loaded();
   auto stats = YagpStat::get_stats();
-  TupleDesc tupdesc = CreateTemplateTupleDesc(ATTNUM, false);
+  TupleDesc tupdesc = CreateTemplateTupleDesc(ATTNUM);
   TupleDescInitEntry(tupdesc, (AttrNumber)1, "segid", INT4OID, -1 /* typmod */,
                      0 /* attdim */);
   TupleDescInitEntry(tupdesc, (AttrNumber)2, "total_messages", INT8OID,

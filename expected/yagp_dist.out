@@ -46,8 +46,7 @@ SELECT segid, query_text, query_status FROM yagpcc.log ORDER BY segid, ccnt, yag
 SELECT yagpcc.truncate_log() IS NOT NULL AS t;
  t 
 ---
- t
-(1 row)
+(0 rows)
 
 SET yagpcc.logging_mode to 'TBL';
 -- Scan all segments.
@@ -83,8 +82,7 @@ SELECT segid, query_text, query_status FROM yagpcc.log ORDER BY segid, ccnt, yag
 SELECT yagpcc.truncate_log() IS NOT NULL AS t;
  t 
 ---
- t
-(1 row)
+(0 rows)
 
 -- Replicated table
 CREATE FUNCTION force_segments() RETURNS SETOF text AS $$
@@ -128,8 +126,7 @@ SELECT segid, query_text, query_status FROM yagpcc.log ORDER BY segid, ccnt, yag
 SELECT yagpcc.truncate_log() IS NOT NULL AS t;
  t 
 ---
- t
-(1 row)
+(0 rows)
 
 -- Partially distributed table (2 numsegments)
 SET allow_system_table_mods = ON;
@@ -167,8 +164,7 @@ SELECT query_text, query_status FROM yagpcc.log ORDER BY segid, ccnt, yagp_statu
 SELECT yagpcc.truncate_log() IS NOT NULL AS t;
  t 
 ---
- t
-(1 row)
+(0 rows)
 
 DROP FUNCTION yagp_status_order(text);
 DROP EXTENSION yagp_hooks_collector;

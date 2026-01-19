@@ -4,17 +4,17 @@
 \echo Use "CREATE EXTENSION yagp_hooks_collector" to load this file. \quit
 
 CREATE FUNCTION __yagp_stat_messages_reset_f_on_master()
-RETURNS void
+RETURNS SETOF void
 AS 'MODULE_PATHNAME', 'yagp_stat_messages_reset'
 LANGUAGE C EXECUTE ON MASTER;
 
 CREATE FUNCTION __yagp_stat_messages_reset_f_on_segments()
-RETURNS void
+RETURNS SETOF void
 AS 'MODULE_PATHNAME', 'yagp_stat_messages_reset'
 LANGUAGE C EXECUTE ON ALL SEGMENTS;
 
 CREATE FUNCTION yagp_stat_messages_reset()
-RETURNS void
+RETURNS SETOF void
 AS
 $$
   SELECT __yagp_stat_messages_reset_f_on_master();

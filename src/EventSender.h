@@ -23,6 +23,8 @@ class SetQueryReq;
 
 #include <cstdint>
 
+extern void gp_gettmid(int32 *);
+
 struct QueryKey {
   int tmid;
   int ssid;
@@ -40,7 +42,7 @@ struct QueryKey {
     query_desc->yagp_query_key =
         (YagpQueryKey *)ya_gpdb::palloc0(sizeof(YagpQueryKey));
     int32 tmid;
-    gpmon_gettmid(&tmid);
+    gp_gettmid(&tmid);
     query_desc->yagp_query_key->tmid = tmid;
     query_desc->yagp_query_key->ssid = gp_session_id;
     query_desc->yagp_query_key->ccnt = gp_command_count;
