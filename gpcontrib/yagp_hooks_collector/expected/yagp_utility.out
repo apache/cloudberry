@@ -49,31 +49,13 @@ CREATE TABLE pt_test (a int, b int)
 DISTRIBUTED BY (a)
 PARTITION BY RANGE (a)
 (START (0) END (100) EVERY (50));
-NOTICE:  CREATE TABLE will create partition "pt_test_1_prt_1" for table "pt_test"
-NOTICE:  CREATE TABLE will create partition "pt_test_1_prt_2" for table "pt_test"
 DROP TABLE pt_test;
 RESET yagpcc.logging_mode;
 SELECT segid, query_text, query_status FROM yagpcc.log WHERE segid = -1 AND utility = true ORDER BY segid, ccnt, yagp_status_order(query_status) ASC;
  segid |             query_text              |    query_status     
 -------+-------------------------------------+---------------------
-    -1 |                                     | QUERY_STATUS_DONE
+    -1 | SET yagpcc.logging_mode to 'TBL';   | QUERY_STATUS_DONE
     -1 | CREATE TABLE pt_test (a int, b int)+| QUERY_STATUS_SUBMIT
-       | DISTRIBUTED BY (a)                 +| 
-       | PARTITION BY RANGE (a)             +| 
-       | (START (0) END (100) EVERY (50));   | 
-    -1 | CREATE TABLE pt_test (a int, b int)+| QUERY_STATUS_SUBMIT
-       | DISTRIBUTED BY (a)                 +| 
-       | PARTITION BY RANGE (a)             +| 
-       | (START (0) END (100) EVERY (50));   | 
-    -1 | CREATE TABLE pt_test (a int, b int)+| QUERY_STATUS_SUBMIT
-       | DISTRIBUTED BY (a)                 +| 
-       | PARTITION BY RANGE (a)             +| 
-       | (START (0) END (100) EVERY (50));   | 
-    -1 | CREATE TABLE pt_test (a int, b int)+| QUERY_STATUS_DONE
-       | DISTRIBUTED BY (a)                 +| 
-       | PARTITION BY RANGE (a)             +| 
-       | (START (0) END (100) EVERY (50));   | 
-    -1 | CREATE TABLE pt_test (a int, b int)+| QUERY_STATUS_DONE
        | DISTRIBUTED BY (a)                 +| 
        | PARTITION BY RANGE (a)             +| 
        | (START (0) END (100) EVERY (50));   | 
@@ -84,7 +66,7 @@ SELECT segid, query_text, query_status FROM yagpcc.log WHERE segid = -1 AND util
     -1 | DROP TABLE pt_test;                 | QUERY_STATUS_SUBMIT
     -1 | DROP TABLE pt_test;                 | QUERY_STATUS_DONE
     -1 | RESET yagpcc.logging_mode;          | QUERY_STATUS_SUBMIT
-(10 rows)
+(6 rows)
 
 SELECT yagpcc.truncate_log() IS NOT NULL AS t;
  t 
