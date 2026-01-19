@@ -40,8 +40,7 @@ SELECT segid, query_text, query_status FROM yagpcc.log WHERE segid = -1 AND util
 SELECT yagpcc.truncate_log() IS NOT NULL AS t;
  t 
 ---
- t
-(1 row)
+(0 rows)
 
 -- DECLARE WITH HOLD
 SET yagpcc.logging_mode to 'TBL';
@@ -74,8 +73,7 @@ SELECT segid, query_text, query_status FROM yagpcc.log WHERE segid = -1 AND util
 SELECT yagpcc.truncate_log() IS NOT NULL AS t;
  t 
 ---
- t
-(1 row)
+(0 rows)
 
 -- ROLLBACK
 SET yagpcc.logging_mode to 'TBL';
@@ -105,8 +103,7 @@ SELECT segid, query_text, query_status FROM yagpcc.log WHERE segid = -1 AND util
 SELECT yagpcc.truncate_log() IS NOT NULL AS t;
  t 
 ---
- t
-(1 row)
+(0 rows)
 
 -- FETCH
 SET yagpcc.logging_mode to 'TBL';
@@ -155,8 +152,7 @@ SELECT segid, query_text, query_status FROM yagpcc.log WHERE segid = -1 AND util
 SELECT yagpcc.truncate_log() IS NOT NULL AS t;
  t 
 ---
- t
-(1 row)
+(0 rows)
 
 DROP FUNCTION yagp_status_order(text);
 DROP EXTENSION yagp_hooks_collector;
