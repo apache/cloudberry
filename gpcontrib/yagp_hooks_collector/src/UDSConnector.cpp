@@ -27,67 +27,77 @@ static void inline log_tracing_failure(const yagpcc::SetQueryReq &req,
 bool UDSConnector::report_query(const yagpcc::SetQueryReq &req,
                                 const std::string &event,
                                 const Config &config) {
-  sockaddr_un address;
+  sockaddr_un address{};
   address.sun_family = AF_UNIX;
-  const std::string &uds_path = config.uds_path();
+  const auto &uds_path = config.uds_path();
+
   if (uds_path.size() >= sizeof(address.sun_path)) {
     ereport(WARNING, (errmsg("UDS path is too long for socket buffer")));
     YagpStat::report_error();
     return false;
   }
   strcpy(address.sun_path, uds_path.c_str());
-  bool success = true;
-  auto sockfd = socket(AF_UNIX, SOCK_STREAM, 0);
-  if (sockfd != -1) {
-    if (fcntl(sockfd, F_SETFL, O_NONBLOCK) != -1) {
-      if (connect(sockfd, (sockaddr *)&address, sizeof(address)) != -1) {
-        auto data_size = req.ByteSize();
-        auto total_size = data_size + sizeof(uint32_t);
-        uint8_t *buf = (uint8_t *)ya_gpdb::palloc(total_size);
-        uint32_t *size_payload = (uint32_t *)buf;
-        *size_payload = data_size;
-        req.SerializeWithCachedSizesToArray(buf + sizeof(uint32_t));
-        int64_t sent = 0, sent_total = 0;
-        do {
-          sent = send(sockfd, buf + sent_total, total_size - sent_total,
-                      MSG_DONTWAIT);
-          if (sent > 0)
-            sent_total += sent;
-        } while (
-            sent > 0 && size_t(sent_total) != total_size &&
-            // the line below is a small throttling hack:
-            // if a message does not fit a single packet, we take a nap
-            // before sending the next one.
-            // Otherwise, MSG_DONTWAIT send might overflow the UDS
-            (std::this_thread::sleep_for(std::chrono::milliseconds(1)), true));
-        if (sent < 0) {
-          log_tracing_failure(req, event);
-          success = false;
-          YagpStat::report_bad_send(total_size);
-        } else {
-          YagpStat::report_send(total_size);
-        }
-        ya_gpdb::pfree(buf);
-      } else {
-        // log the error and go on
-        log_tracing_failure(req, event);
-        success = false;
-        YagpStat::report_bad_connection();
-      }
-    } else {
-      // That's a very important error that should never happen, so make it
-      // visible to an end-user and admins.
-      ereport(WARNING,
-              (errmsg("Unable to create non-blocking socket connection %m")));
-      success = false;
-      YagpStat::report_error();
-    }
-    close(sockfd);
-  } else {
-    // log the error and go on
+
+  const auto sockfd = socket(AF_UNIX, SOCK_STREAM, 0);
+  if (sockfd == -1) {
     log_tracing_failure(req, event);
-    success = false;
     YagpStat::report_error();
+    return false;
   }
-  return success;
+
+  // Close socket automatically on error path.
+  struct SockGuard {
+    int fd;
+    ~SockGuard() { close(fd); }
+  } sock_guard{sockfd};
+
+  if (fcntl(sockfd, F_SETFL, O_NONBLOCK) == -1) {
+    // That's a very important error that should never happen, so make it
+    // visible to an end-user and admins.
+    ereport(WARNING,
+            (errmsg("Unable to create non-blocking socket connection %m")));
+    YagpStat::report_error();
+    return false;
+  }
+
+  if (connect(sockfd, reinterpret_cast<sockaddr *>(&address),
+              sizeof(address)) == -1) {
+    log_tracing_failure(req, event);
+    YagpStat::report_bad_connection();
+    return false;
+  }
+
+  const auto data_size = req.ByteSize();
+  const auto total_size = data_size + sizeof(uint32_t);
+  auto *buf = static_cast<uint8_t *>(ya_gpdb::palloc(total_size));
+  // Free buf automatically on error path.
+  struct BufGuard {
+    void *p;
+    ~BufGuard() { ya_gpdb::pfree(p); }
+  } buf_guard{buf};
+
+  *reinterpret_cast<uint32_t *>(buf) = data_size;
+  req.SerializeWithCachedSizesToArray(buf + sizeof(uint32_t));
+
+  int64_t sent = 0, sent_total = 0;
+  do {
+    sent =
+        send(sockfd, buf + sent_total, total_size - sent_total, MSG_DONTWAIT);
+    if (sent > 0)
+      sent_total += sent;
+  } while (sent > 0 && size_t(sent_total) != total_size &&
+           // the line below is a small throttling hack:
+           // if a message does not fit a single packet, we take a nap
+           // before sending the next one.
+           // Otherwise, MSG_DONTWAIT send might overflow the UDS
+           (std::this_thread::sleep_for(std::chrono::milliseconds(1)), true));
+
+  if (sent < 0) {
+    log_tracing_failure(req, event);
+    YagpStat::report_bad_send(total_size);
+    return false;
+  }
+
+  YagpStat::report_send(total_size);
+  return true;
 }

@@ -19,15 +19,13 @@ PG_FUNCTION_INFO_V1(yagp_test_uds_receive);
 PG_FUNCTION_INFO_V1(yagp_test_uds_stop_server);
 
 void _PG_init(void) {
-  if (Gp_role == GP_ROLE_DISPATCH || Gp_role == GP_ROLE_EXECUTE) {
+  if (Gp_role == GP_ROLE_DISPATCH || Gp_role == GP_ROLE_EXECUTE)
     hooks_init();
-  }
 }
 
 void _PG_fini(void) {
-  if (Gp_role == GP_ROLE_DISPATCH || Gp_role == GP_ROLE_EXECUTE) {
+  if (Gp_role == GP_ROLE_DISPATCH || Gp_role == GP_ROLE_EXECUTE)
     hooks_deinit();
-  }
 }
 
 Datum yagp_stat_messages_reset(PG_FUNCTION_ARGS) {
@@ -72,7 +70,7 @@ Datum yagp_truncate_log(PG_FUNCTION_ARGS) {
 
 Datum yagp_test_uds_start_server(PG_FUNCTION_ARGS) {
   FuncCallContext *funcctx;
-  
+
   if (SRF_IS_FIRSTCALL()) {
     funcctx = SRF_FIRSTCALL_INIT();
     char *path = text_to_cstring(PG_GETARG_TEXT_PP(0));
@@ -93,7 +91,7 @@ Datum yagp_test_uds_receive(PG_FUNCTION_ARGS) {
 
     funcctx = SRF_FIRSTCALL_INIT();
     oldcontext = MemoryContextSwitchTo(funcctx->multi_call_memory_ctx);
-    result = (int64 *) palloc(sizeof(int64));
+    result = (int64 *)palloc(sizeof(int64));
     funcctx->user_fctx = result;
     funcctx->max_calls = 1;
     MemoryContextSwitchTo(oldcontext);
@@ -105,7 +103,7 @@ Datum yagp_test_uds_receive(PG_FUNCTION_ARGS) {
   funcctx = SRF_PERCALL_SETUP();
 
   if (funcctx->call_cntr < funcctx->max_calls) {
-    result = (int64 *) funcctx->user_fctx;
+    result = (int64 *)funcctx->user_fctx;
     SRF_RETURN_NEXT(funcctx, Int64GetDatum(*result));
   }
 
@@ -114,7 +112,7 @@ Datum yagp_test_uds_receive(PG_FUNCTION_ARGS) {
 
 Datum yagp_test_uds_stop_server(PG_FUNCTION_ARGS) {
   FuncCallContext *funcctx;
-  
+
   if (SRF_IS_FIRSTCALL()) {
     funcctx = SRF_FIRSTCALL_INIT();
     test_uds_stop_server();

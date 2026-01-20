@@ -239,8 +239,9 @@ static void ya_process_utility_hook(PlannedStmt *pstmt, const char *queryString,
     }
 
     get_sender()->decr_depth();
-    cpp_call(get_sender(), &EventSender::query_metrics_collect, METRICS_QUERY_DONE,
-         (void *)query_desc, true /* utility */, (ErrorData *)NULL);
+    cpp_call(get_sender(), &EventSender::query_metrics_collect,
+             METRICS_QUERY_DONE, (void *)query_desc, true /* utility */,
+             (ErrorData *)NULL);
 
     pfree(query_desc);
   }
@@ -255,8 +256,9 @@ static void ya_process_utility_hook(PlannedStmt *pstmt, const char *queryString,
     MemoryContextSwitchTo(oldctx);
 
     get_sender()->decr_depth();
-    cpp_call(get_sender(), &EventSender::query_metrics_collect, METRICS_QUERY_ERROR,
-         (void *)query_desc, true /* utility */, edata);
+    cpp_call(get_sender(), &EventSender::query_metrics_collect,
+             METRICS_QUERY_ERROR, (void *)query_desc, true /* utility */,
+             edata);
 
     pfree(query_desc);
     ReThrowError(edata);
