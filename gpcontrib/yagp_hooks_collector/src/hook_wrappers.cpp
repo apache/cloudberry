@@ -11,6 +11,12 @@ extern "C" {
 #include "cdb/ml_ipc.h"
 #include "tcop/utility.h"
 #include "stat_statements_parser/pg_stat_statements_ya_parser.h"
+
+#include <sys/socket.h>
+#include <sys/un.h>
+#include <unistd.h>
+#include <errno.h>
+#include <poll.h>
 }
 #undef typeid
 
@@ -51,6 +57,13 @@ static void ya_process_utility_hook(PlannedStmt *pstmt, const char *queryString,
                                     ParamListInfo params,
                                     QueryEnvironment *queryEnv,
                                     DestReceiver *dest, QueryCompletion *qc);
+
+#define TEST_MAX_CONNECTIONS 4
+#define TEST_RCV_BUF_SIZE 8192
+#define TEST_POLL_TIMEOUT_MS 200
+
+static int test_server_fd = -1;
+static char *test_sock_path = NULL;
 
 static EventSender *sender = nullptr;
 
@@ -294,4 +307,77 @@ Datum yagp_functions_get(FunctionCallInfo fcinfo) {
   HeapTuple tuple = ya_gpdb::heap_form_tuple(tupdesc, values, nulls);
   Datum result = HeapTupleGetDatum(tuple);
   PG_RETURN_DATUM(result);
+}
+
+void test_uds_stop_server() {
+  if (test_server_fd >= 0) {
+    close(test_server_fd);
+    test_server_fd = -1;
+  }
+  if (test_sock_path) {
+    unlink(test_sock_path);
+    pfree(test_sock_path);
+    test_sock_path = NULL;
+  }
+}
+
+void test_uds_start_server(const char *path) {
+  struct sockaddr_un addr = {.sun_family = AF_UNIX};
+
+  if (strlen(path) >= sizeof(addr.sun_path))
+    ereport(ERROR, (errmsg("path too long")));
+
+  test_uds_stop_server();
+
+  strlcpy(addr.sun_path, path, sizeof(addr.sun_path));
+  test_sock_path = MemoryContextStrdup(TopMemoryContext, path);
+  unlink(path);
+
+  if ((test_server_fd = socket(AF_UNIX, SOCK_STREAM, 0)) < 0 ||
+      bind(test_server_fd, (struct sockaddr *)&addr, sizeof(addr)) < 0 ||
+      listen(test_server_fd, TEST_MAX_CONNECTIONS) < 0) {
+    test_uds_stop_server();
+    ereport(ERROR, (errmsg("socket setup failed: %m")));
+  }
+}
+
+int64 test_uds_receive(int timeout_ms) {
+  char buf[TEST_RCV_BUF_SIZE];
+  int rc;
+  struct pollfd pfd = {.fd = test_server_fd, .events = POLLIN};
+  int64 total = 0;
+
+  if (test_server_fd < 0)
+    ereport(ERROR, (errmsg("server not started")));
+
+  for (;;) {
+    CHECK_FOR_INTERRUPTS();
+    rc = poll(&pfd, 1, Min(timeout_ms, TEST_POLL_TIMEOUT_MS));
+    if (rc > 0)
+      break;
+    if (rc < 0 && errno != EINTR)
+      ereport(ERROR, (errmsg("poll: %m")));
+    timeout_ms -= TEST_POLL_TIMEOUT_MS;
+    if (timeout_ms <= 0)
+      return total;
+  }
+
+  if (pfd.revents & POLLIN) {
+    int client = accept(test_server_fd, NULL, NULL);
+    ssize_t n;
+
+    if (client < 0)
+      ereport(ERROR, (errmsg("accept: %m")));
+
+    while ((n = recv(client, buf, sizeof(buf), 0)) != 0) {
+      if (n > 0)
+        total += n;
+      else if (errno != EINTR)
+        break;
+    }
+
+    close(client);
+  }
+
+  return total;
 }
