@@ -16,9 +16,9 @@ static bool guc_enable_cdbstats = true;
 static bool guc_enable_collector = true;
 static bool guc_report_nested_queries = true;
 static char *guc_ignored_users = nullptr;
-static int guc_max_text_size = 1 << 20;     // in bytes (1MB)
-static int guc_max_plan_size = 1024;        // in KB
-static int guc_min_analyze_time = 10000;    // in ms
+static int guc_max_text_size = 1 << 20;  // in bytes (1MB)
+static int guc_max_plan_size = 1024;     // in KB
+static int guc_min_analyze_time = 10000; // in ms
 static int guc_logging_mode = LOG_MODE_UDS;
 static bool guc_enable_utility = false;
 
@@ -143,8 +143,8 @@ void Config::sync() {
   enable_collector_ = guc_enable_collector;
   enable_utility_ = guc_enable_utility;
   report_nested_queries_ = guc_report_nested_queries;
-  max_text_size_ = static_cast<size_t>(guc_max_text_size);
-  max_plan_size_ = static_cast<size_t>(guc_max_plan_size);
+  max_text_size_ = guc_max_text_size;
+  max_plan_size_ = guc_max_plan_size;
   min_analyze_time_ = guc_min_analyze_time;
   logging_mode_ = guc_logging_mode;
 }

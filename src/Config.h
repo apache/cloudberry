@@ -21,8 +21,8 @@ public:
   bool enable_collector() const { return enable_collector_; }
   bool enable_utility() const { return enable_utility_; }
   bool report_nested_queries() const { return report_nested_queries_; }
-  size_t max_text_size() const { return max_text_size_; }
-  size_t max_plan_size() const { return max_plan_size_ * 1024; }
+  int max_text_size() const { return max_text_size_; }
+  int max_plan_size() const { return max_plan_size_ * 1024; }
   int min_analyze_time() const { return min_analyze_time_; }
   int logging_mode() const { return logging_mode_; }
   bool filter_user(const std::string &username) const;
@@ -37,8 +37,8 @@ private:
   bool enable_collector_;
   bool enable_utility_;
   bool report_nested_queries_;
-  size_t max_text_size_;
-  size_t max_plan_size_;
+  int max_text_size_;
+  int max_plan_size_;
   int min_analyze_time_;
   int logging_mode_;
 };
