@@ -82,7 +82,8 @@ std::string trim_str_shrink_utf8(const char *str, size_t len, size_t lim) {
   return std::string(str, cut_pos);
 }
 
-void set_query_plan(yagpcc::SetQueryReq *req, QueryDesc *query_desc) {
+void set_query_plan(yagpcc::SetQueryReq *req, QueryDesc *query_desc,
+                    const Config &config) {
   if (Gp_role == GP_ROLE_DISPATCH && query_desc->plannedstmt) {
     auto qi = req->mutable_query_info();
     qi->set_generator(query_desc->plannedstmt->planGen == PLANGEN_OPTIMIZER
@@ -93,10 +94,10 @@ void set_query_plan(yagpcc::SetQueryReq *req, QueryDesc *query_desc) {
     ExplainState es = ya_gpdb::get_explain_state(query_desc, true);
     if (es.str) {
       *qi->mutable_plan_text() = trim_str_shrink_utf8(es.str->data, es.str->len,
-                                                      Config::max_plan_size());
+                                                      config.max_plan_size());
       StringInfo norm_plan = ya_gpdb::gen_normplan(es.str->data);
       *qi->mutable_template_plan_text() = trim_str_shrink_utf8(
-          norm_plan->data, norm_plan->len, Config::max_plan_size());
+          norm_plan->data, norm_plan->len, config.max_plan_size());
       qi->set_plan_id(
           hash_any((unsigned char *)norm_plan->data, norm_plan->len));
       qi->set_query_id(query_desc->plannedstmt->queryId);
@@ -107,15 +108,16 @@ void set_query_plan(yagpcc::SetQueryReq *req, QueryDesc *query_desc) {
   }
 }
 
-void set_query_text(yagpcc::SetQueryReq *req, QueryDesc *query_desc) {
+void set_query_text(yagpcc::SetQueryReq *req, QueryDesc *query_desc,
+                    const Config &config) {
   if (Gp_role == GP_ROLE_DISPATCH && query_desc->sourceText) {
     auto qi = req->mutable_query_info();
     *qi->mutable_query_text() = trim_str_shrink_utf8(
         query_desc->sourceText, strlen(query_desc->sourceText),
-        Config::max_text_size());
+        config.max_text_size());
     char *norm_query = ya_gpdb::gen_normquery(query_desc->sourceText);
     *qi->mutable_template_query_text() = trim_str_shrink_utf8(
-        norm_query, strlen(norm_query), Config::max_text_size());
+        norm_query, strlen(norm_query), config.max_text_size());
   }
 }
 
@@ -150,10 +152,11 @@ void set_qi_slice_id(yagpcc::SetQueryReq *req) {
   aqi->set_slice_id(currentSliceId);
 }
 
-void set_qi_error_message(yagpcc::SetQueryReq *req, const char *err_msg) {
+void set_qi_error_message(yagpcc::SetQueryReq *req, const char *err_msg,
+                          const Config &config) {
   auto aqi = req->mutable_add_info();
   *aqi->mutable_error_message() =
-      trim_str_shrink_utf8(err_msg, strlen(err_msg), Config::max_text_size());
+      trim_str_shrink_utf8(err_msg, strlen(err_msg), config.max_text_size());
 }
 
 void set_metric_instrumentation(yagpcc::MetricInstrumentation *metrics,
@@ -257,7 +260,8 @@ double protots_to_double(const google::protobuf::Timestamp &ts) {
   return double(ts.seconds()) + double(ts.nanos()) / 1000000000.0;
 }
 
-void set_analyze_plan_text(QueryDesc *query_desc, yagpcc::SetQueryReq *req) {
+void set_analyze_plan_text(QueryDesc *query_desc, yagpcc::SetQueryReq *req,
+                           const Config &config) {
   // Make sure it is a valid txn and it is not an utility
   // statement for ExplainPrintPlan() later.
   if (!IsTransactionState() || !query_desc->plannedstmt) {
@@ -266,15 +270,15 @@ void set_analyze_plan_text(QueryDesc *query_desc, yagpcc::SetQueryReq *req) {
   MemoryContext oldcxt =
       ya_gpdb::mem_ctx_switch_to(query_desc->estate->es_query_cxt);
   ExplainState es = ya_gpdb::get_analyze_state(
-      query_desc, query_desc->instrument_options && Config::enable_analyze());
+      query_desc, query_desc->instrument_options && config.enable_analyze());
   ya_gpdb::mem_ctx_switch_to(oldcxt);
   if (es.str) {
     // Remove last line break.
     if (es.str->len > 0 && es.str->data[es.str->len - 1] == '\n') {
       es.str->data[--es.str->len] = '\0';
     }
-    auto trimmed_analyze = trim_str_shrink_utf8(es.str->data, es.str->len,
-                                                Config::max_plan_size());
+    auto trimmed_analyze =
+        trim_str_shrink_utf8(es.str->data, es.str->len, config.max_plan_size());
     req->mutable_query_info()->set_analyze_text(trimmed_analyze);
     ya_gpdb::pfree(es.str->data);
   }

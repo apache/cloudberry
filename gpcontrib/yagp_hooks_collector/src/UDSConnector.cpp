@@ -25,10 +25,11 @@ static void inline log_tracing_failure(const yagpcc::SetQueryReq &req,
 }
 
 bool UDSConnector::report_query(const yagpcc::SetQueryReq &req,
-                                const std::string &event) {
+                                const std::string &event,
+                                const Config &config) {
   sockaddr_un address;
   address.sun_family = AF_UNIX;
-  std::string uds_path = Config::uds_path();
+  const std::string &uds_path = config.uds_path();
   if (uds_path.size() >= sizeof(address.sun_path)) {
     ereport(WARNING, (errmsg("UDS path is too long for socket buffer")));
     YagpStat::report_error();
