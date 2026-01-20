@@ -51,7 +51,8 @@ bool UDSConnector::report_query(const yagpcc::SetQueryReq &req,
         do {
           sent = send(sockfd, buf + sent_total, total_size - sent_total,
                       MSG_DONTWAIT);
-          sent_total += sent;
+          if (sent > 0)
+            sent_total += sent;
         } while (
             sent > 0 && size_t(sent_total) != total_size &&
             // the line below is a small throttling hack:
