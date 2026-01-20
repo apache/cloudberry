@@ -134,8 +134,14 @@ s/ERROR:  FIPS enabled OpenSSL is required for strict FIPS mode .*/ERROR:  FIPS 
 # Mask out OpenSSL behavior change in different version
 m/ERROR:  Cannot use "md5": No such hash algorithm/
 s/ERROR:  Cannot use "md5": No such hash algorithm/ERROR:  Cannot use "md5": /
-m/ERROR: Cannot use "md5": Some PX error \(not specified\)/
-s/ERROR: Cannot use "md5": Some PX error \(not specified\)/ERROR:  Cannot use "md5": /
+m/ERROR:  Cannot use "md5": Some PX error \(not specified\)/
+s/ERROR:  Cannot use "md5": Some PX error \(not specified\)/ERROR:  Cannot use "md5": /
+
+# Mask out FIPS error line numbers
+m/ERROR:  requested functionality not allowed in FIPS mode \(pgcrypto.c:\d+\)/
+s/ERROR:  requested functionality not allowed in FIPS mode \(pgcrypto.c:\d+\)/ERROR:  requested functionality not allowed in FIPS mode (pgcrypto.c:XXX)/
+m/ERROR:  requested functionality not allowed in FIPS mode \(openssl.c:\d+\)/
+s/ERROR:  requested functionality not allowed in FIPS mode \(openssl.c:\d+\)/ERROR:  requested functionality not allowed in FIPS mode (openssl.c:XXX)/
 
 # Mask out gp_execution_segment()
 m/One-Time Filter: \(gp_execution_segment\(\) = \d+/
