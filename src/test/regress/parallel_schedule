@@ -4,6 +4,7 @@
 # By convention, we put no more than twenty tests in any one parallel group;
 # this limits the number of connections needed to run the tests.
 # ----------
+test: local_distribution
 
 # run tablespace by itself, and first, because it forces a checkpoint;
 # we'd prefer not to have checkpoints later in the tests because that
