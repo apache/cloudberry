@@ -204,15 +204,12 @@ void ya_gpdb::instr_end_loop(Instrumentation *instr) {
   wrap_throw(::InstrEndLoop, instr);
 }
 
-char *ya_gpdb::gen_normquery(const char *query) {
-  return wrap_throw(::gen_normquery, query);
+char *ya_gpdb::gen_normquery(const char *query) noexcept {
+  return wrap_noexcept(::gen_normquery, query);
 }
 
-StringInfo ya_gpdb::gen_normplan(const char *exec_plan) {
-  if (!exec_plan)
-    throw std::runtime_error("Invalid execution plan string");
-
-  return wrap_throw(::gen_normplan, exec_plan);
+StringInfo ya_gpdb::gen_normplan(const char *exec_plan) noexcept {
+  return wrap_noexcept(::gen_normplan, exec_plan);
 }
 
 char *ya_gpdb::get_rg_name_for_id(Oid group_id) {

@@ -1,0 +1,29 @@
+-- The extension generates normalized query text and plan using jumbling functions.
+-- Those functions may fail when translating to wide character if the current locale
+-- cannot handle the character set. This test checks that even when those functions
+-- fail, the plan is still generated and executed. This test is partially taken from
+-- gp_locale.
+
+-- start_ignore
+DROP DATABASE IF EXISTS yagp_test_locale;
+-- end_ignore
+
+CREATE DATABASE yagp_test_locale WITH LC_COLLATE='C' LC_CTYPE='C' TEMPLATE=template0;
+\c yagp_test_locale
+
+CREATE EXTENSION yagp_hooks_collector;
+
+SET yagpcc.ignored_users_list TO '';
+SET yagpcc.enable_utility TO TRUE;
+SET yagpcc.enable TO TRUE;
+
+CREATE TABLE yagp_hi_안녕세계 (a int, 안녕세계1 text, 안녕세계2 text, 안녕세계3 text) DISTRIBUTED BY (a);
+INSERT INTO yagp_hi_안녕세계 VALUES(1, '안녕세계1 first', '안녕세2 first', '안녕세계3 first');
+-- Should not see error here
+UPDATE yagp_hi_안녕세계 SET 안녕세계1='안녕세계1 first UPDATE' WHERE 안녕세계1='안녕세계1 first';
+
+RESET yagpcc.enable;
+RESET yagpcc.enable_utility;
+RESET yagpcc.ignored_users_list;
+DROP TABLE yagp_hi_안녕세계;
+DROP EXTENSION yagp_hooks_collector;
