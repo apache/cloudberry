@@ -10,7 +10,7 @@ C_OBJS   = $(patsubst %.c,%.o,$(wildcard src/*.c src/*/*.c))
 CPP_OBJS = $(patsubst %.cpp,%.o,$(wildcard src/*.cpp src/*/*.cpp))
 OBJS     = $(C_OBJS) $(CPP_OBJS) $(PROTO_OBJS)
 
-override CXXFLAGS = -fPIC -g3 -Wall -Wpointer-arith -Wendif-labels \
+override CXXFLAGS = -Werror -fPIC -g3 -Wall -Wpointer-arith -Wendif-labels \
 	-Wmissing-format-attribute -Wformat-security -fno-strict-aliasing -fwrapv \
 	-Wno-unused-but-set-variable -Wno-address -Wno-format-truncation \
 	-Wno-stringop-truncation -g -ggdb -std=c++17 -Iinclude -Isrc/protos -Isrc -DGPBUILD
