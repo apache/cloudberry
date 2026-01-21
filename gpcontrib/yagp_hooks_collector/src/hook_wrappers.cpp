@@ -46,8 +46,10 @@ static void ya_ExecutorRun_hook(QueryDesc *query_desc, ScanDirection direction,
 static void ya_ExecutorFinish_hook(QueryDesc *query_desc);
 static void ya_ExecutorEnd_hook(QueryDesc *query_desc);
 static void ya_query_info_collect_hook(QueryMetricsStatus status, void *arg);
+#ifdef IC_TEARDOWN_HOOK
 static void ya_ic_teardown_hook(ChunkTransportState *transportStates,
                                 bool hasErrors);
+#endif
 #ifdef ANALYZE_STATS_COLLECT_HOOK
 static void ya_analyze_stats_collect_hook(QueryDesc *query_desc);
 #endif
@@ -195,14 +197,14 @@ void ya_query_info_collect_hook(QueryMetricsStatus status, void *arg) {
   }
 }
 
+#ifdef IC_TEARDOWN_HOOK
 void ya_ic_teardown_hook(ChunkTransportState *transportStates, bool hasErrors) {
   cpp_call(get_sender(), &EventSender::ic_metrics_collect);
-#ifdef IC_TEARDOWN_HOOK
   if (previous_ic_teardown_hook) {
     (*previous_ic_teardown_hook)(transportStates, hasErrors);
   }
-#endif
 }
+#endif
 
 #ifdef ANALYZE_STATS_COLLECT_HOOK
 void ya_analyze_stats_collect_hook(QueryDesc *query_desc) {

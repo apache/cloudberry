@@ -67,7 +67,7 @@ bool UDSConnector::report_query(const yagpcc::SetQueryReq &req,
     return false;
   }
 
-  const auto data_size = req.ByteSize();
+  const auto data_size = req.ByteSizeLong();
   const auto total_size = data_size + sizeof(uint32_t);
   auto *buf = static_cast<uint8_t *>(ya_gpdb::palloc(total_size));
   // Free buf automatically on error path.
