@@ -1,7 +1,7 @@
 MODULE_big = yagp_hooks_collector
 EXTENSION  = yagp_hooks_collector
 DATA       = $(wildcard *--*.sql)
-REGRESS    = yagp_cursors yagp_dist yagp_select yagp_utf8_trim yagp_utility yagp_guc_cache yagp_uds
+REGRESS    = yagp_cursors yagp_dist yagp_select yagp_utf8_trim yagp_utility yagp_guc_cache yagp_uds yagp_locale
 
 PROTO_BASES = yagpcc_plan yagpcc_metrics yagpcc_set_service
 PROTO_OBJS  = $(patsubst %,src/protos/%.pb.o,$(PROTO_BASES))
