@@ -38,8 +38,8 @@ HeapTuple heap_form_tuple(TupleDesc tupleDescriptor, Datum *values,
 CdbExplain_ShowStatCtx *cdbexplain_showExecStatsBegin(QueryDesc *query_desc,
                                                       instr_time starttime);
 void instr_end_loop(Instrumentation *instr);
-char *gen_normquery(const char *query);
-StringInfo gen_normplan(const char *executionPlan);
+char *gen_normquery(const char *query) noexcept;
+StringInfo gen_normplan(const char *executionPlan) noexcept;
 char *get_rg_name_for_id(Oid group_id);
 void insert_log(const yagpcc::SetQueryReq &req, bool utility);
 
