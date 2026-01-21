@@ -96,13 +96,15 @@ void set_query_plan(yagpcc::SetQueryReq *req, QueryDesc *query_desc,
       *qi->mutable_plan_text() = trim_str_shrink_utf8(es.str->data, es.str->len,
                                                       config.max_plan_size());
       StringInfo norm_plan = ya_gpdb::gen_normplan(es.str->data);
-      *qi->mutable_template_plan_text() = trim_str_shrink_utf8(
-          norm_plan->data, norm_plan->len, config.max_plan_size());
-      qi->set_plan_id(
-          hash_any((unsigned char *)norm_plan->data, norm_plan->len));
+      if (norm_plan) {
+        *qi->mutable_template_plan_text() = trim_str_shrink_utf8(
+            norm_plan->data, norm_plan->len, config.max_plan_size());
+        qi->set_plan_id(
+            hash_any((unsigned char *)norm_plan->data, norm_plan->len));
+        ya_gpdb::pfree(norm_plan->data);
+      }
       qi->set_query_id(query_desc->plannedstmt->queryId);
       ya_gpdb::pfree(es.str->data);
-      ya_gpdb::pfree(norm_plan->data);
     }
     ya_gpdb::mem_ctx_switch_to(oldcxt);
   }
@@ -116,8 +118,11 @@ void set_query_text(yagpcc::SetQueryReq *req, QueryDesc *query_desc,
         query_desc->sourceText, strlen(query_desc->sourceText),
         config.max_text_size());
     char *norm_query = ya_gpdb::gen_normquery(query_desc->sourceText);
-    *qi->mutable_template_query_text() = trim_str_shrink_utf8(
-        norm_query, strlen(norm_query), config.max_text_size());
+    if (norm_query) {
+      *qi->mutable_template_query_text() = trim_str_shrink_utf8(
+          norm_query, strlen(norm_query), config.max_text_size());
+      ya_gpdb::pfree(norm_query);
+    }
   }
 }
 
