@@ -1,3 +1,30 @@
+/*-------------------------------------------------------------------------
+ *
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ *
+ * hook_wrappers.cpp
+ *
+ * IDENTIFICATION
+ *	  gpcontrib/yagp_hooks_collector/src/hook_wrappers.cpp
+ *
+ *-------------------------------------------------------------------------
+ */
+
 #define typeid __typeid
 extern "C" {
 #include "postgres.h"
@@ -46,8 +73,10 @@ static void ya_ExecutorRun_hook(QueryDesc *query_desc, ScanDirection direction,
 static void ya_ExecutorFinish_hook(QueryDesc *query_desc);
 static void ya_ExecutorEnd_hook(QueryDesc *query_desc);
 static void ya_query_info_collect_hook(QueryMetricsStatus status, void *arg);
+#ifdef IC_TEARDOWN_HOOK
 static void ya_ic_teardown_hook(ChunkTransportState *transportStates,
                                 bool hasErrors);
+#endif
 #ifdef ANALYZE_STATS_COLLECT_HOOK
 static void ya_analyze_stats_collect_hook(QueryDesc *query_desc);
 #endif
@@ -195,14 +224,14 @@ void ya_query_info_collect_hook(QueryMetricsStatus status, void *arg) {
   }
 }
 
+#ifdef IC_TEARDOWN_HOOK
 void ya_ic_teardown_hook(ChunkTransportState *transportStates, bool hasErrors) {
   cpp_call(get_sender(), &EventSender::ic_metrics_collect);
-#ifdef IC_TEARDOWN_HOOK
   if (previous_ic_teardown_hook) {
     (*previous_ic_teardown_hook)(transportStates, hasErrors);
   }
-#endif
 }
+#endif
 
 #ifdef ANALYZE_STATS_COLLECT_HOOK
 void ya_analyze_stats_collect_hook(QueryDesc *query_desc) {
