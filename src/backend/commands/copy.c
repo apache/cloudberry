@@ -1420,20 +1420,17 @@ close_program_pipes(ProgramPipes *program_pipes, bool ifThrow)
 {
 	int ret = 0;
 	StringInfoData sinfo;
-	initStringInfo(&sinfo);
 
 	/* just return if pipes not created, like when relation does not exist */
 	if (!program_pipes)
-	{
 		return;
-	}
+	
+	initStringInfo(&sinfo);
 
 	ret = pclose_with_stderr(program_pipes->pid, program_pipes->pipes, &sinfo);
 
 	if (ret == 0 || !ifThrow)
-	{
 		return;
-	}
 
 	if (ret == -1)
 	{
