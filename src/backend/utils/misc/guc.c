@@ -2290,7 +2290,7 @@ static struct config_int ConfigureNamesInt[] =
 			GUC_EXPLAIN
 		},
 		&join_collapse_limit,
-		20, 1, INT_MAX,
+		13, 1, INT_MAX,
 		NULL, NULL, NULL
 	},
 	{
