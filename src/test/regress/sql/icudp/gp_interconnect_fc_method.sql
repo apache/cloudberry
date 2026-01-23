@@ -27,3 +27,11 @@ SELECT ROUND(foo.rval * foo.rval)::INT % 30 AS rval2, COUNT(*) AS count, SUM(len
     JOIN small_table USING(jkey)
   GROUP BY rval2
   ORDER BY rval2;
+
+SET gp_interconnect_fc_method = "loss_advance";
+SHOW gp_interconnect_fc_method;
+SELECT ROUND(foo.rval * foo.rval)::INT % 30 AS rval2, COUNT(*) AS count, SUM(length(foo.tval)) AS sum_len_tval
+  FROM (SELECT 5001 AS jkey, rval, tval FROM small_table ORDER BY dkey LIMIT 3000) foo
+    JOIN small_table USING(jkey)
+  GROUP BY rval2
+  ORDER BY rval2;
