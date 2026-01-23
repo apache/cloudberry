@@ -42,7 +42,13 @@ CDatumSortedSet::CDatumSortedSet(CMemoryPool *mp, CExpression *pexprArray,
 	{
 		return;
 	}
-	aprngdatum->Sort(&CUtils::IDatumCmp);
+	// Only sort if not already sorted - IsSorted is O(n-1) comparisons,
+	// while Sort is O(n log n), so this optimization helps when data
+	// is already sorted (common case for IN lists in queries)
+	if (!aprngdatum->IsSorted(&CUtils::IDatumCmp))
+	{
+		aprngdatum->Sort(&CUtils::IDatumCmp);
+	}
 
 	// de-duplicate
 	const ULONG ulRangeArrayArity = aprngdatum->Size();
