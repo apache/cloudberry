@@ -271,6 +271,10 @@ jobs:
                 },
                 "enable_core_check":false
               },
+              {"test":"gpcontrib-yagp-hooks-collector",
+               "make_configs":["gpcontrib/yagp_hooks_collector:installcheck"],
+               "extension":"yagp_hooks_collector"
+              },
               {"test":"ic-expandshrink",
                "make_configs":["src/test/isolation2:installcheck-expandshrink"]
               },
@@ -530,10 +534,11 @@ jobs:
         if: needs.check-skip.outputs.should_skip != 'true'
         env:
           SRC_DIR: ${{ github.workspace }}
+          CONFIGURE_EXTRA_OPTS: --with-yagp-hooks-collector
         run: |
           set -eo pipefail
           chmod +x "${SRC_DIR}"/devops/build/automation/cloudberry/scripts/configure-cloudberry.sh
-          if ! time su - gpadmin -c "cd ${SRC_DIR} && SRC_DIR=${SRC_DIR} ENABLE_DEBUG=${{ env.ENABLE_DEBUG }} ${SRC_DIR}/devops/build/automation/cloudberry/scripts/configure-cloudberry.sh"; then
+          if ! time su - gpadmin -c "cd ${SRC_DIR} && SRC_DIR=${SRC_DIR} ENABLE_DEBUG=${{ env.ENABLE_DEBUG }} CONFIGURE_EXTRA_OPTS=${{ env.CONFIGURE_EXTRA_OPTS }} ${SRC_DIR}/devops/build/automation/cloudberry/scripts/configure-cloudberry.sh"; then
             echo "::error::Configure script failed"
             exit 1
           fi
@@ -1390,6 +1395,7 @@ jobs:
         if: success() && needs.check-skip.outputs.should_skip != 'true'
         env:
           SRC_DIR: ${{ github.workspace }}
+          BUILD_DESTINATION: /usr/local/cloudberry-db
         shell: bash {0}
         run: |
           set -o pipefail
@@ -1417,6 +1423,30 @@ jobs:
           PG_OPTS=""
           if [[ "${{ matrix.pg_settings.optimizer != '' }}" == "true" ]]; then
             PG_OPTS="$PG_OPTS -c optimizer=${{ matrix.pg_settings.optimizer }}"
+          fi
+
+          # Create extension if required
+          if [[ "${{ matrix.extension != '' }}" == "true" ]]; then
+            case "${{ matrix.extension }}" in
+              yagp_hooks_collector)
+                if ! su - gpadmin -c "source ${BUILD_DESTINATION}/cloudberry-env.sh && \
+                  source ${SRC_DIR}/gpAux/gpdemo/gpdemo-env.sh && \
+                  gpconfig -c shared_preload_libraries -v 'yagp_hooks_collector' && \
+                  gpstop -ra && \
+                  echo 'CREATE EXTENSION IF NOT EXISTS yagp_hooks_collector; \
+                        SHOW shared_preload_libraries; \
+                        TABLE pg_extension;' | \
+                    psql postgres"
+                then
+                    echo "Error creating yagp_hooks_collector extension"
+                    exit 1
+                fi
+                ;;
+              *)
+                echo "Unknown extension: ${{ matrix.extension }}"
+                exit 1
+                ;;
+            esac
           fi
 
           if [[ "${{ matrix.pg_settings.default_table_access_method != '' }}" == "true" ]]; then

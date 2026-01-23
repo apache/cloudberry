@@ -1,0 +1,185 @@
+syntax = "proto3";
+
+package yagpcc;
+option java_outer_classname = "SegmentYAGPCCM";
+option go_package = "a.yandex-team.ru/cloud/mdb/yagpcc/api/proto/common;greenplum";
+
+enum QueryStatus {
+    QUERY_STATUS_UNSPECIFIED = 0;
+    QUERY_STATUS_SUBMIT = 1;
+    QUERY_STATUS_START = 2;
+    QUERY_STATUS_DONE = 3;
+    QUERY_STATUS_QUERY_DONE = 4;
+    QUERY_STATUS_ERROR = 5;
+    QUERY_STATUS_CANCELLING = 6;
+    QUERY_STATUS_CANCELED = 7;
+    QUERY_STATUS_END = 8;
+}
+
+enum PlanNodeStatus {
+    PLAN_NODE_STATUS_UNSPECIFIED = 0;
+    PLAN_NODE_STATUS_INITIALIZED = 1;
+    PLAN_NODE_STATUS_EXECUTING = 2;
+    PLAN_NODE_STATUS_FINISHED = 3;
+}
+
+message QueryInfo {
+    PlanGenerator generator = 1;
+    uint64 query_id = 2;
+    uint64 plan_id = 3;
+    string query_text = 4;
+    string plan_text = 5;
+    string template_query_text = 6;
+    string template_plan_text = 7;
+    string userName = 8;
+    string databaseName = 9;
+    string rsgname = 10;
+    string analyze_text = 11;
+}
+
+message AdditionalQueryInfo {
+    int64 nested_level                    = 1;
+    string error_message                  = 2;
+    int64 slice_id                        = 3;
+}
+
+message AdditionalQueryStat {
+    string error_message                  = 1;
+    repeated int64 slices                 = 2;
+}
+
+enum PlanGenerator
+{
+    PLAN_GENERATOR_UNSPECIFIED = 0;
+    PLAN_GENERATOR_PLANNER = 1;         /* plan produced by the planner*/
+    PLAN_GENERATOR_OPTIMIZER = 2;       /* plan produced by the optimizer*/
+}
+
+message GPMetrics {
+    SystemStat systemStat = 1;
+    MetricInstrumentation instrumentation = 2;
+    SpillInfo spill = 3;
+}
+
+message QueryKey {
+    int32 tmid = 1; /* A time identifier for a particular query. All records associated with the query will have the same tmid. */
+    int32 ssid = 2; /* The session id as shown by gp_session_id. All records associated with the query will have the same ssid */
+    int32 ccnt = 3; /* The command number within this session as shown by gp_command_count. All records associated with the query will have the same ccnt */
+}
+
+message SegmentKey {
+    int32		dbid = 1;		/* the dbid of this database */
+    int32		segindex = 2;		/* content indicator: -1 for entry database,
+                                                 * 0, ..., n-1 for segment database *
+                                                 * a primary and its mirror have the same segIndex */
+}
+
+message SystemStat {
+    /* CPU stat*/
+    double runningTimeSeconds = 1;
+    double userTimeSeconds = 2;
+    double kernelTimeSeconds = 3;
+
+    /* Memory stat */
+    uint64 vsize = 4;
+    uint64 rss = 5;
+    uint64 VmSizeKb = 6;
+    uint64 VmPeakKb = 7;
+
+   /* Storage stat */
+    uint64 rchar = 8;
+    uint64 wchar = 9;
+    uint64 syscr = 10;
+    uint64 syscw = 11;
+    uint64 read_bytes = 12;
+    uint64 write_bytes = 13;
+    uint64 cancelled_write_bytes = 14;
+}
+
+message NetworkStat {
+    uint32 total_bytes  = 1;
+    uint32 tuple_bytes = 2;
+    uint32 chunks = 3;
+}
+
+message InterconnectStat {
+    // Receive queue size sum when main thread is trying to get a packet
+    uint64 total_recv_queue_size = 1;
+    // Counting times when computing total_recv_queue_size
+    uint64 recv_queue_size_counting_time = 2;
+
+    // The capacity sum when packets are tried to be sent
+    uint64 total_capacity = 3;
+    // Counting times used to compute total_capacity
+    uint64 capacity_counting_time = 4;
+
+    // Total buffers available when sending packets
+    uint64 total_buffers = 5;
+    // Counting times when compute total_buffers
+    uint64 buffer_counting_time = 6;
+
+    // The number of active connections
+    uint64 active_connections_num = 7;
+
+    // The number of packet retransmits
+    int64 retransmits = 8;
+
+    // The number of cached future packets
+    int64 startup_cached_pkt_num = 9;
+
+    // The number of mismatched packets received
+    int64 mismatch_num = 10;
+
+    // The number of crc errors
+    int64 crc_errors = 11;
+
+    // The number of packets sent by sender
+    int64 snd_pkt_num = 12;
+
+    // The number of packets received by receiver
+    int64 recv_pkt_num = 13;
+
+    // Disordered packet number
+    int64 disordered_pkt_num = 14;
+
+    // Duplicate packet number
+    int64 duplicated_pkt_num = 15;
+
+    // The number of Acks received
+    int64 recv_ack_num = 16;
+
+    // The number of status query messages sent
+    int64 status_query_msg_num = 17;
+}
+
+message MetricInstrumentation {
+    uint64  ntuples     = 1;    /* Total tuples produced */
+    uint64  nloops      = 2;    /* # of run cycles for this node */
+    uint64  tuplecount  = 3;    /* Tuples emitted so far this cycle */
+    double  firsttuple  = 4;    /* Time for first tuple of this cycle */
+    double  startup     = 5;    /* Total startup time (in seconds) (optimiser's cost estimation) */
+    double  total       = 6;    /* Total total time (in seconds) */
+    uint64 shared_blks_hit     = 7; /* shared blocks stats*/
+    uint64 shared_blks_read    = 8;
+    uint64 shared_blks_dirtied = 9;
+    uint64 shared_blks_written = 10;
+    uint64 local_blks_hit      = 11; /* data read from disks */
+    uint64 local_blks_read     = 12;
+    uint64 local_blks_dirtied  = 13;
+    uint64 local_blks_written  = 14;
+    uint64 temp_blks_read      = 15; /* temporary tables read stat */
+    uint64 temp_blks_written   = 16;
+    double blk_read_time       = 17; /* measured read/write time */
+    double blk_write_time      = 18;
+    NetworkStat sent           = 19;
+    NetworkStat received       = 20;
+    double  startup_time       = 21; /* real query startup time (planning + queue time) */
+    uint64  inherited_calls    = 22; /* the number of executed sub-queries */
+    double  inherited_time     = 23; /* total time spend on inherited execution */
+    InterconnectStat interconnect = 24;
+}
+
+message SpillInfo {
+    int32 fileCount = 1;
+    int64 totalBytes = 2;
+}

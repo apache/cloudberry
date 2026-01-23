@@ -153,6 +153,13 @@ code or new licensing patterns.
             <exclude>gpcontrib/gp_exttable_fdw/data/**</exclude>
             <exclude>gpcontrib/gp_exttable_fdw/gp_exttable_fdw.control</exclude>
 
+            <exclude>gpcontrib/yagp_hooks_collector/yagp_hooks_collector.control</exclude>
+            <exclude>gpcontrib/yagp_hooks_collector/protos/yagpcc_set_service.proto</exclude>
+            <exclude>gpcontrib/yagp_hooks_collector/protos/yagpcc_plan.proto</exclude>
+            <exclude>gpcontrib/yagp_hooks_collector/protos/yagpcc_metrics.proto</exclude>
+            <exclude>gpcontrib/yagp_hooks_collector/.clang-format</exclude>
+            <exclude>gpcontrib/yagp_hooks_collector/Makefile</exclude>
+
             <exclude>getversion</exclude>
             <exclude>.git-blame-ignore-revs</exclude>
             <exclude>.dir-locals.el</exclude>

@@ -192,6 +192,9 @@ static void unpin_workset(workfile_set *work_set);
 
 static bool proc_exit_hook_registered = false;
 
+static uint64 total_bytes_written = 0;
+static uint64 total_files_created = 0;
+
 Datum gp_workfile_mgr_cache_entries(PG_FUNCTION_ARGS);
 Datum gp_workfile_mgr_used_diskspace(PG_FUNCTION_ARGS);
 
@@ -371,6 +374,7 @@ RegisterFileWithSet(File file, workfile_set *work_set)
 	localCtl.entries[file].work_set = work_set;
 	work_set->num_files++;
 	work_set->perquery->num_files++;
+	total_files_created++;
 
 	/* Enforce the limit on number of files */
 	if (gp_workfile_limit_files_per_query > 0 &&
@@ -447,6 +451,7 @@ UpdateWorkFileSize(File file, uint64 newsize)
 					(errcode(ERRCODE_INSUFFICIENT_RESOURCES),
 					 errmsg("workfile per segment size limit exceeded")));
 		}
+		total_bytes_written += diff;
 	}
 
 	/*
@@ -985,4 +990,23 @@ bool
 workfile_is_active(workfile_set *workfile)
 {
 	return workfile ? workfile->active : false;
+}
+
+uint64
+WorkfileTotalBytesWritten(void)
+{
+	return total_bytes_written;
+}
+
+uint64
+WorkfileTotalFilesCreated(void)
+{
+	return total_files_created;
+}
+
+void
+WorkfileResetBackendStats(void)
+{
+	total_bytes_written = 0;
+	total_files_created = 0;
 }
