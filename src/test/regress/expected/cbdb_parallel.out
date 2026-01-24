@@ -3073,6 +3073,35 @@ select t1_anti.a, t1_anti.b from t1_anti left join t2_anti on t1_anti.a = t2_ant
 (4 rows)
 
 abort;
+-- test rows out
+-- start_matchsubs
+-- m/\(actual rows=\d+ loops=\d+\)/
+-- s/\(actual rows=\d+ loops=\d+\)/(actual rows=# loops=#)/
+-- m/Rows Removed by Filter: \d+/
+-- s/Rows Removed by Filter: \d+/Rows Removed by Filter: ###/
+-- m/\d+ rows max \(seg\d+ worker\d+\), \d+ rows min \(seg\d+ worker\d+\)/
+-- s/\d+ rows max \(seg\d+ worker\d+\), \d+ rows min \(seg\d+ worker\d+\)/##### rows max (seg# worker#), ##### rows min (seg# worker#)/
+-- end_matchsubs
+begin;
+create table tt (a int, b int) with(parallel_workers=2) distributed by(a, b);
+insert into tt select * from generate_series(1,1000)a,generate_series(1,1000)b;
+set local enable_parallel = on;
+set local max_parallel_workers_per_gather = 2;
+set local gp_enable_explain_rows_out = on;
+explain(costs off, summary off, timing off, analyze) select * from tt where a > b;
+                                                           QUERY PLAN                                                           
+--------------------------------------------------------------------------------------------------------------------------------
+ Gather Motion 6:1  (slice1; segments: 6) (actual rows=499500 loops=1)
+   Rows out: 499500.00 rows avg x 1 workers from 1 segments, 499500 rows max (seg-1 worker0), 499500 rows min (seg-1 worker0).
+   ->  Parallel Seq Scan on tt (actual rows=86074 loops=1)
+         Filter: (a > b)
+         Rows Removed by Filter: 84852
+         Rows out: 83250.00 rows avg x 6 workers from 3 segments, 86144 rows max (seg2 worker4), 80391 rows min (seg1 worker2).
+ Optimizer: Postgres query optimizer
+(7 rows)
+
+abort;
+<<<<<<< HEAD
 --
 -- Test Parallel DISTINCT
 --
