@@ -6,21 +6,23 @@ CREATE DATABASE oid_wraparound;
 \c oid_wraparound
 -- Create the functions that we will be using to set and observe the Oid counter
 -- on the master and the segments.
+\getenv abs_builddir PG_ABS_BUILDDIR
+\set regress_dll :abs_builddir '/regress.so'
 CREATE OR REPLACE FUNCTION gp_set_next_oid_master(new_oid Oid)
 	RETURNS SETOF VOID
-	AS '@abs_builddir@/regress.so', 'gp_set_next_oid'
+	AS :'regress_dll', 'gp_set_next_oid'
 	LANGUAGE C EXECUTE ON COORDINATOR;
 CREATE OR REPLACE FUNCTION gp_set_next_oid_segments(new_oid Oid)
 	RETURNS SETOF VOID
-	AS '@abs_builddir@/regress.so', 'gp_set_next_oid'
+	AS :'regress_dll', 'gp_set_next_oid'
 	LANGUAGE C EXECUTE ON ALL SEGMENTS;
 CREATE OR REPLACE FUNCTION gp_get_next_oid_master()
 	RETURNS SETOF OID
-	AS '@abs_builddir@/regress.so', 'gp_get_next_oid'
+	AS :'regress_dll', 'gp_get_next_oid'
 	LANGUAGE C EXECUTE ON COORDINATOR;
 CREATE OR REPLACE FUNCTION gp_get_next_oid_segments()
 	RETURNS SETOF OID
-	AS '@abs_builddir@/regress.so', 'gp_get_next_oid'
+	AS :'regress_dll', 'gp_get_next_oid'
 	LANGUAGE C EXECUTE ON ALL SEGMENTS;
 -- Scenario 1: QD is at 16384 while QE is at 4 billion
 SELECT gp_set_next_oid_master(16384);

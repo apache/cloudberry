@@ -1777,9 +1777,9 @@ explain (costs off)
 select 1, sum(col1) from group_by_const group by 1;
                    QUERY PLAN                   
 ------------------------------------------------
- Finalize Aggregate
+ Finalize GroupAggregate
    ->  Gather Motion 3:1  (slice1; segments: 3)
-         ->  Partial Aggregate
+         ->  Partial GroupAggregate
                ->  Seq Scan on group_by_const
  Optimizer: Postgres query optimizer
 (5 rows)
