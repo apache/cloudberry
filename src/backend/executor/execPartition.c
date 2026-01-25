@@ -2381,7 +2381,7 @@ ExecAddMatchingSubPlans(PartitionPruneState *prunestate, Bitmapset *result)
 {
 	Bitmapset *thisresult;
 
-	thisresult = ExecFindMatchingSubPlans(prunestate, true, NULL, -1, NIL);
+	thisresult = ExecFindMatchingSubPlans(prunestate, false, NULL, -1, NIL);
 
 	result = bms_add_members(result, thisresult);
 
