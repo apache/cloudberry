@@ -1206,7 +1206,10 @@ test_config_settings(void)
 		}
 
 		if (test_specific_config_settings(n_connections, test_buffs))
+		{
+			n_buffers = test_buffs;
 			break;
+		}
 	}
 	if (i == bufslen)
 	{
@@ -1241,7 +1244,7 @@ test_specific_config_settings(int test_conns, int test_buffs)
 					  "\"%s\" --check %s %s %s"
 					  "-c max_connections=%d "
 					  "-c shared_buffers=%d "
-					  "-c dynamic_shared_memory_type=%s"
+					  "-c dynamic_shared_memory_type=%s "
 					  "-D %s",
 					  backend_exec, boot_options, extra_options,
 					  term_fd_opt ? term_fd_opt : "",
