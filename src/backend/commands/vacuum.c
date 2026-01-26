@@ -217,6 +217,7 @@ ExecVacuum(ParseState *pstate, VacuumStmt *vacstmt, bool isTopLevel, bool auto_s
 
 	/* By default parallel vacuum is enabled */
 	params.nworkers = 0;
+	params.buffer_usage_limit = 0;
 
 	/*
 	 * Set this to an invalid value so it is clear whether or not a
@@ -262,6 +263,7 @@ ExecVacuum(ParseState *pstate, VacuumStmt *vacstmt, bool isTopLevel, bool auto_s
 			}
 
 			ring_size = result;
+			params.buffer_usage_limit = result;
 		}
 		else if (!vacstmt->is_vacuumcmd)
 			ereport(ERROR,
@@ -370,7 +372,9 @@ ExecVacuum(ParseState *pstate, VacuumStmt *vacstmt, bool isTopLevel, bool auto_s
 		(process_toast ? VACOPT_PROCESS_TOAST : 0) |
 		(skip_database_stats ? VACOPT_SKIP_DATABASE_STATS : 0) |
 		(only_database_stats ? VACOPT_ONLY_DATABASE_STATS : 0) |
-		(update_datfrozenxid ? VACOPT_UPDATE_DATFROZENXID : 0);
+		(update_datfrozenxid ? VACOPT_UPDATE_DATFROZENXID : 0) |
+		(params.nworkers != 0 ? VACOPT_PARALLEL : 0) |
+		(params.buffer_usage_limit != 0 ? VACOPT_BUFFER_USAGE_LIMIT : 0) ;
 
 	if (rootonly)
 		params.options |= VACOPT_ROOTONLY;
@@ -3438,6 +3442,18 @@ vacuum_params_to_options_list(VacuumParams *params)
 	{
 		options = lappend(options, makeDefElem("only_database_stats", (Node *) makeInteger(1), -1));
 		optmask &= ~VACOPT_ONLY_DATABASE_STATS;
+	}
+	if ((optmask & VACOPT_PARALLEL))
+	{
+		Assert(params->nworkers!=0);
+		options = lappend(options, makeDefElem("parallel", (Node *) makeInteger(params->nworkers==-1 ? 0 : params->nworkers), -1));
+		optmask &= ~VACOPT_PARALLEL;
+	}
+	if ((optmask & VACOPT_BUFFER_USAGE_LIMIT))
+	{
+		Assert(params->buffer_usage_limit!=0);
+		options = lappend(options, makeDefElem("buffer_usage_limit", (Node *) makeInteger(params->buffer_usage_limit), -1));
+		optmask &= ~VACOPT_BUFFER_USAGE_LIMIT;
 	}
 
 

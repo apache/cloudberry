@@ -297,7 +297,7 @@ BTPageIsRecyclable(Page page, Relation heaprel)
 
 	/* Recycling okay iff page is deleted and safexid is old enough */
 	opaque = BTPageGetOpaque(page);
-	if (P_ISDELETED(opaque))
+	if (RelationIsHeap(heaprel) && P_ISDELETED(opaque))
 	{
 		FullTransactionId safexid = BTPageGetDeleteXid(page);
 

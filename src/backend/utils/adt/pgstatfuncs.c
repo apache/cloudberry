@@ -40,6 +40,12 @@
 #include "utils/syscache.h"
 #include "utils/timestamp.h"
 
+#include "fmgr.h"
+#include "cdb/cdbdisp_query.h"
+#include "cdb/cdbvars.h"
+#include "cdb/cdbdispatchresult.h"
+#include "libpq-int.h"
+
 #define UINT32_ACCESS_ONCE(var)		 ((uint32)(*((volatile uint32 *)&(var))))
 
 #define HAS_PGSTAT_PERMISSIONS(role)	 (has_privs_of_role(GetUserId(), ROLE_PG_READ_ALL_STATS) || has_privs_of_role(GetUserId(), role))

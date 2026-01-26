@@ -203,19 +203,21 @@ typedef enum VacuumOption
 	VACOPT_PROCESS_MAIN = 1 << 6,	/* skip if cannot get lock */
 	VACOPT_PROCESS_TOAST = 1 << 7,	/* process the TOAST table, if any */
 	VACOPT_DISABLE_PAGE_SKIPPING = 1 << 8,	/* don't skip any pages */
+	VACOPT_BUFFER_USAGE_LIMIT = 1 << 9,	/* vacuum buffer usage limit */
+	VACOPT_PARALLEL = 1 << 10,	/* parallel vacuum */
 
 	/* Extra GPDB options */
-	VACOPT_AO_AUX_ONLY = 1 << 9,
-	VACOPT_ROOTONLY = 1 << 10,
-	VACOPT_FULLSCAN = 1 << 11,
-	VACOPT_SKIP_DATABASE_STATS = 1 << 12,
-	VACOPT_ONLY_DATABASE_STATS = 1 << 13,
+	VACOPT_AO_AUX_ONLY = 1 << 11,
+	VACOPT_ROOTONLY = 1 << 12,
+	VACOPT_FULLSCAN = 1 << 13,
+	VACOPT_SKIP_DATABASE_STATS = 1 << 14,
+	VACOPT_ONLY_DATABASE_STATS = 1 << 15,
 
 	/* AO vacuum phases. Mutually exclusive */
-	VACOPT_AO_PRE_CLEANUP_PHASE = 1 << 14,
-	VACOPT_AO_COMPACT_PHASE = 1 << 15,
-	VACOPT_AO_POST_CLEANUP_PHASE = 1 << 16,
-	VACOPT_UPDATE_DATFROZENXID = 1 << 17
+	VACOPT_AO_PRE_CLEANUP_PHASE = 1 << 16,
+	VACOPT_AO_COMPACT_PHASE = 1 << 17,
+	VACOPT_AO_POST_CLEANUP_PHASE = 1 << 18,
+	VACOPT_UPDATE_DATFROZENXID = 1 << 19
 } VacuumOption;
 
 #define VACUUM_AO_PHASE_MASK (VACOPT_AO_PRE_CLEANUP_PHASE | \
@@ -316,6 +318,7 @@ typedef struct VacuumParams
 	 * disabled.
 	 */
 	int			nworkers;
+	int			buffer_usage_limit;
 	bool auto_stats;      /* invoked via automatic statistic collection */
 } VacuumParams;
 

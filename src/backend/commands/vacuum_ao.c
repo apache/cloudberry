@@ -634,6 +634,7 @@ vacuum_appendonly_index(Relation indexRelation,
 	pg_rusage_init(&ru0);
 
 	ivinfo.index = indexRelation;
+	ivinfo.heaprel = aoRelation;
 	ivinfo.analyze_only = false;
 	ivinfo.message_level = elevel;
 	/* 
@@ -808,6 +809,7 @@ scan_index(Relation indrel, Relation aorel, int elevel, BufferAccessStrategy vac
 	pg_rusage_init(&ru0);
 
 	ivinfo.index = indrel;
+	ivinfo.heaprel = aorel;
 	ivinfo.analyze_only = false;
 	ivinfo.message_level = elevel;
 	/* 

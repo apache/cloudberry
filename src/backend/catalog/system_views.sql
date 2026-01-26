@@ -673,7 +673,7 @@ GRANT EXECUTE ON FUNCTION pg_get_backend_memory_contexts() TO pg_read_all_stats;
 
 -- Statistics views
 
-CREATE VIEW pg_stat_all_tables_internal AS
+CREATE VIEW pg_stat_all_tables AS
     SELECT
             C.oid AS relid,
             N.nspname AS schemaname,
@@ -810,7 +810,7 @@ CREATE VIEW pg_statio_user_tables AS
     WHERE schemaname NOT IN ('pg_catalog', 'information_schema') AND
           schemaname !~ '^pg_toast';
 
-CREATE VIEW pg_stat_all_indexes_internal AS
+CREATE VIEW pg_stat_all_indexes AS
     SELECT
             C.oid AS relid,
             I.oid AS indexrelid,
@@ -1205,19 +1205,6 @@ CREATE VIEW pg_stat_database AS
         UNION ALL
         SELECT oid, datname FROM pg_database
     ) D;
-
-CREATE VIEW pg_stat_resqueues AS
-    SELECT
-        pg_catalog.gp_execution_segment() AS gp_segment_id,
-        Q.oid AS queueid,
-        Q.rsqname AS queuename,
-        pg_stat_get_queue_num_exec(Q.oid) AS n_queries_exec,
-        pg_stat_get_queue_num_wait(Q.oid) AS n_queries_wait,
-        pg_stat_get_queue_elapsed_exec(Q.oid) AS elapsed_exec,
-        pg_stat_get_queue_elapsed_wait(Q.oid) AS elapsed_wait
-    FROM pg_resqueue AS Q;
-
--- Resource queue views
 
 CREATE VIEW pg_resqueue_status AS
     SELECT
@@ -1834,3 +1821,94 @@ CREATE VIEW relation_tag_descriptions AS
          pg_namespace AS ns
     WHERE td.tagid = t.oid AND td.tdobjid = c.oid
           AND td.tddatabaseid = d.oid AND ns.oid = c.relnamespace;
+
+CREATE FUNCTION gp_stat_get_snapshot_timestamp() RETURNS timestamptz AS
+$$
+    SELECT MAX(pg_stat_get_snapshot_timestamp) as gp_stat_get_snapshot_timestamp
+    FROM
+    (
+    SELECT pg_stat_get_snapshot_timestamp()
+    UNION ALL
+    SELECT pg_stat_get_snapshot_timestamp() FROM gp_dist_random('gp_id')
+    )
+    WHERE pg_stat_get_snapshot_timestamp IS NOT NULL;
+$$
+LANGUAGE SQL;
+
+CREATE FUNCTION gp_stat_force_next_flush() RETURNS VOID AS
+$$
+    SELECT pg_stat_force_next_flush()
+    UNION ALL
+    SELECT pg_stat_force_next_flush() FROM gp_dist_random('gp_id');
+$$
+LANGUAGE SQL;
+
+CREATE FUNCTION gp_stat_reset(tableoid oid) RETURNS VOID AS
+$$
+    SELECT pg_stat_reset()
+    UNION ALL
+    SELECT pg_stat_reset() FROM gp_dist_random('gp_id');
+$$ LANGUAGE SQL;
+
+CREATE FUNCTION gp_stat_reset_shared(target text) RETURNS VOID AS
+$$
+    SELECT pg_stat_reset_shared(target)
+    UNION ALL
+    SELECT pg_stat_reset_shared(target) FROM gp_dist_random('gp_id');
+$$ LANGUAGE SQL;
+
+CREATE FUNCTION gp_stat_reset_single_table_counters(tableoid oid) RETURNS VOID AS
+$$
+    WITH table_info AS (
+    SELECT tableoid::regclass::text AS v_relname
+    )
+    SELECT pg_stat_reset_single_table_counters(v_relname::regclass)
+    FROM table_info
+    UNION ALL
+    SELECT pg_stat_reset_single_table_counters(v_relname::regclass)
+    FROM table_info, gp_dist_random('gp_id');
+$$ LANGUAGE SQL;
+
+CREATE FUNCTION gp_stat_reset_single_function_counters(funcoid oid) RETURNS VOID AS
+$$
+    WITH func_info AS (
+    SELECT proname FROM pg_proc WHERE oid = funcoid
+    )
+    SELECT pg_stat_reset_single_function_counters(funcoid)
+    UNION ALL
+    SELECT (
+        SELECT pg_stat_reset_single_function_counters(pg_proc.oid)
+        FROM pg_proc, func_info 
+        WHERE pg_proc.proname = func_info.proname
+    )
+    from gp_dist_random('gp_id');
+$$ LANGUAGE SQL;
+
+CREATE FUNCTION gp_stat_reset_slru(target text) RETURNS VOID AS
+$$
+    SELECT pg_stat_reset_slru(target)
+    UNION ALL
+    SELECT pg_stat_reset_slru(target) FROM gp_dist_random('gp_id');
+$$ LANGUAGE SQL;
+
+CREATE FUNCTION gp_stat_reset_replication_slot(target text) RETURNS VOID AS
+$$
+    SELECT pg_stat_reset_replication_slot(target)
+    UNION ALL
+    SELECT pg_stat_reset_replication_slot(target) FROM gp_dist_random('gp_id');
+$$ LANGUAGE SQL;
+
+CREATE FUNCTION gp_stat_reset_subscription_stats(subid oid) RETURNS VOID AS
+$$
+    WITH sub_info AS (
+    SELECT subname FROM pg_subscription WHERE oid = subid
+    )
+    SELECT pg_stat_reset_single_function_counters(subid)
+    UNION ALL
+    SELECT (
+        SELECT pg_stat_reset_single_function_counters(pg_subscription.oid)
+        FROM pg_subscription, sub_info 
+        WHERE pg_subscription.subname = sub_info.subname
+    )
+    from gp_dist_random('gp_id');
+$$ LANGUAGE SQL;

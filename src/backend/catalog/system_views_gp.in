@@ -46,3 +46,4 @@ pg_statio_user_sequences
 pg_statio_user_tables
 pg_stats
 pg_stats_ext
+pg_stat_io
