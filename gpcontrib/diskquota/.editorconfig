@@ -1,0 +1,26 @@
+root = true
+
+[*.{c,cpp,h,y}]
+indent_style = tab
+indent_size = 4
+
+[{GNUmakefile,Makefile}*]
+indent_style = tab
+indent_size = 4
+
+[*.mk]
+indent_style = tab
+indent_size = 4
+
+[*.py]
+indent_style = space
+indent_size = 4
+
+[{*.cmake,CMakeLists.txt}]
+indent_style = space
+indent_size = 2
+
+[cmake/**.cmake]
+indent_style = space
+indent_size = 4
+

@@ -1,0 +1,25 @@
+-- Test Update
+CREATE SCHEMA s4;
+SELECT diskquota.set_schema_quota('s4', '1 MB');
+ set_schema_quota 
+------------------
+ 
+(1 row)
+
+SET search_path TO s4;
+CREATE TABLE a(i int) DISTRIBUTED BY (i);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+INSERT INTO a SELECT generate_series(1,100000);
+SELECT diskquota.wait_for_worker_new_epoch();
+ wait_for_worker_new_epoch 
+---------------------------
+ t
+(1 row)
+
+-- expect update fail.
+UPDATE a SET i = 100;
+ERROR:  schema's disk space quota exceeded with name: s4
+DROP TABLE a;
+RESET search_path;
+DROP SCHEMA s4;
