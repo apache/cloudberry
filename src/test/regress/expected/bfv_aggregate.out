@@ -1777,7 +1777,7 @@ explain (costs off)
 select 1, sum(col1) from group_by_const group by 1;
                    QUERY PLAN                   
 ------------------------------------------------
- Finalize GroupAggregate
+ Finalize Aggregate
    ->  Gather Motion 3:1  (slice1; segments: 3)
          ->  Partial GroupAggregate
                ->  Seq Scan on group_by_const

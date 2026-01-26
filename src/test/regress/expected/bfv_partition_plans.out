@@ -1236,11 +1236,11 @@ EXPLAIN (COSTS OFF, TIMING OFF, SUMMARY OFF, ANALYZE) DELETE FROM delete_from_pt
    ->  Hash Semi Join (actual rows=1 loops=1)
          Hash Cond: (delete_from_pt.b = t.a)
          Extra Text: (seg0)   Hash chain length 2.0 avg, 2 max, using 1 of 131072 buckets.
-         ->  Append (actual rows=5 loops=1)
+         ->  Append (actual rows=3 loops=1)
                Partition Selectors: $1
                ->  Seq Scan on delete_from_pt_1_prt_1 delete_from_pt_2 (actual rows=3 loops=1)
-               ->  Seq Scan on delete_from_pt_1_prt_2 delete_from_pt_3 (actual rows=3 loops=1)
-               ->  Seq Scan on delete_from_pt_1_prt_3 delete_from_pt_4 (actual rows=0 loops=1)
+               ->  Seq Scan on delete_from_pt_1_prt_2 delete_from_pt_3 (never executed)
+               ->  Seq Scan on delete_from_pt_1_prt_3 delete_from_pt_4 (never executed)
          ->  Hash (actual rows=2 loops=1)
                Buckets: 131072  Batches: 1  Memory Usage: 1025kB
                ->  Partition Selector (selector id: $1) (actual rows=2 loops=1)
@@ -1248,11 +1248,11 @@ EXPLAIN (COSTS OFF, TIMING OFF, SUMMARY OFF, ANALYZE) DELETE FROM delete_from_pt
                            ->  Hash Join (actual rows=1 loops=1)
                                  Hash Cond: (delete_from_pt_1.b = t.a)
                                  Extra Text: (seg0)   Hash chain length 1.0 avg, 1 max, using 1 of 262144 buckets.
-                                 ->  Append (actual rows=5 loops=1)
+                                 ->  Append (actual rows=3 loops=1)
                                        Partition Selectors: $2
                                        ->  Seq Scan on delete_from_pt_1_prt_1 delete_from_pt_5 (actual rows=3 loops=1)
-                                       ->  Seq Scan on delete_from_pt_1_prt_2 delete_from_pt_6 (actual rows=3 loops=1)
-                                       ->  Seq Scan on delete_from_pt_1_prt_3 delete_from_pt_7 (actual rows=0 loops=1)
+                                       ->  Seq Scan on delete_from_pt_1_prt_2 delete_from_pt_6 (never executed)
+                                       ->  Seq Scan on delete_from_pt_1_prt_3 delete_from_pt_7 (never executed)
                                  ->  Hash (actual rows=1 loops=1)
                                        Buckets: 262144  Batches: 1  Memory Usage: 2049kB
                                        ->  Partition Selector (selector id: $2) (actual rows=1 loops=1)

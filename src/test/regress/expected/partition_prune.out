@@ -3070,8 +3070,8 @@ select explain_parallel_append('select avg(ab.a) from ab inner join lprt_a a on 
 
 delete from lprt_a where a = 1;
 select explain_parallel_append('select avg(ab.a) from ab inner join lprt_a a on ab.a = a.a where a.a in(1, 0, 0)');
-                                        explain_parallel_append                                        
--------------------------------------------------------------------------------------------------------
+                                    explain_parallel_append                                     
+------------------------------------------------------------------------------------------------
  Finalize Aggregate (actual rows=N loops=N)
    ->  Gather Motion 1:1  (slice1; segments: 1) (actual rows=N loops=N)
          ->  Partial Aggregate (actual rows=N loops=N)
@@ -3082,17 +3082,17 @@ select explain_parallel_append('select avg(ab.a) from ab inner join lprt_a a on 
                            Sort Method:  quicksort  Memory: 25kB
                            ->  Append (actual rows=N loops=N)
                                  Partition Selectors: $0
-                                 ->  Bitmap Heap Scan on ab_a1_b1 ab_1 (actual rows=N loops=N)
+                                 ->  Bitmap Heap Scan on ab_a1_b1 ab_1 (never executed)
                                        Recheck Cond: (a = ANY ('{1,0,0}'::integer[]))
-                                       ->  Bitmap Index Scan on ab_a1_b1_a_idx (actual rows=N loops=N)
+                                       ->  Bitmap Index Scan on ab_a1_b1_a_idx (never executed)
                                              Index Cond: (a = ANY ('{1,0,0}'::integer[]))
-                                 ->  Bitmap Heap Scan on ab_a1_b2 ab_2 (actual rows=N loops=N)
+                                 ->  Bitmap Heap Scan on ab_a1_b2 ab_2 (never executed)
                                        Recheck Cond: (a = ANY ('{1,0,0}'::integer[]))
-                                       ->  Bitmap Index Scan on ab_a1_b2_a_idx (actual rows=N loops=N)
+                                       ->  Bitmap Index Scan on ab_a1_b2_a_idx (never executed)
                                              Index Cond: (a = ANY ('{1,0,0}'::integer[]))
-                                 ->  Bitmap Heap Scan on ab_a1_b3 ab_3 (actual rows=N loops=N)
+                                 ->  Bitmap Heap Scan on ab_a1_b3 ab_3 (never executed)
                                        Recheck Cond: (a = ANY ('{1,0,0}'::integer[]))
-                                       ->  Bitmap Index Scan on ab_a1_b3_a_idx (actual rows=N loops=N)
+                                       ->  Bitmap Index Scan on ab_a1_b3_a_idx (never executed)
                                              Index Cond: (a = ANY ('{1,0,0}'::integer[]))
                      ->  Sort (actual rows=N loops=N)
                            Sort Key: a.a

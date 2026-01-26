@@ -221,11 +221,11 @@ explain (analyze, costs off, timing off, summary off) select * from part join un
    ->  Hash Join (actual rows=150 loops=1)
          Hash Cond: (part.c2 = (((unnest('{-3,-2,-1,0,1,2,3}'::text[])))::integer))
          Extra Text: (seg0)   Hash chain length 1.0 avg, 1 max, using 7 of 524288 buckets.
-         ->  Append (actual rows=340 loops=1)
+         ->  Append (actual rows=245 loops=1)
                Partition Selectors: $0
                ->  Seq Scan on part_1_prt_part3 part_1 (actual rows=106 loops=1)
                ->  Seq Scan on part_1_prt_part1 part_2 (actual rows=150 loops=1)
-               ->  Seq Scan on part_1_prt_part2 part_3 (actual rows=113 loops=1)
+               ->  Seq Scan on part_1_prt_part2 part_3 (never executed)
          ->  Hash (actual rows=7 loops=1)
                Buckets: 524288  Batches: 1  Memory Usage: 4097kB
                ->  Partition Selector (selector id: $0) (actual rows=7 loops=1)

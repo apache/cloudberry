@@ -452,21 +452,22 @@ explain SELECT * FROM (SELECT dense_rank() OVER (PARTITION BY four ORDER BY ten)
 (12 rows)
 
 explain SELECT * FROM (SELECT percent_rank() OVER (PARTITION BY four ORDER BY ten) AS rank_1, ten, four FROM tenk1 WHERE unique2 < 10) t WHERE rank_1 < 0.5;
-                                             QUERY PLAN                                             
-----------------------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)  (cost=8.60..8.80 rows=10 width=16)
-   ->  WindowAgg  (cost=8.60..8.67 rows=3 width=16)
-         Run Condition: (percent_rank() OVER (?) < '0.5'::double precision)
-         Partition By: tenk1.four
-         Order By: tenk1.ten
-         ->  Sort  (cost=8.60..8.61 rows=3 width=8)
-               Sort Key: tenk1.four, tenk1.ten
-               ->  Redistribute Motion 3:3  (slice2; segments: 3)  (cost=0.16..8.57 rows=3 width=8)
-                     Hash Key: tenk1.four
-                     ->  Index Scan using tenk1_unique2 on tenk1  (cost=0.16..8.51 rows=3 width=8)
-                           Index Cond: (unique2 < 10)
+                                                QUERY PLAN                                                
+----------------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=8.60..8.73 rows=3 width=16)
+   ->  Subquery Scan on t  (cost=8.60..8.68 rows=1 width=16)
+         Filter: (t.rank_1 < '0.5'::double precision)
+         ->  WindowAgg  (cost=8.60..8.67 rows=3 width=16)
+               Partition By: tenk1.four
+               Order By: tenk1.ten
+               ->  Sort  (cost=8.60..8.61 rows=3 width=8)
+                     Sort Key: tenk1.four, tenk1.ten
+                     ->  Redistribute Motion 3:3  (slice2; segments: 3)  (cost=0.16..8.57 rows=3 width=8)
+                           Hash Key: tenk1.four
+                           ->  Index Scan using tenk1_unique2 on tenk1  (cost=0.16..8.51 rows=3 width=8)
+                                 Index Cond: (unique2 < 10)
  Optimizer: Postgres query optimizer
-(12 rows)
+(13 rows)
 
 set optimizer_force_split_window_function to on;
 -- worked
@@ -574,38 +575,40 @@ explain SELECT * FROM (SELECT dense_rank() OVER (PARTITION BY four ORDER BY ten)
 
 -- no worked
 explain SELECT * FROM (SELECT cume_dist() OVER (PARTITION BY four ORDER BY ten) AS rank_1, ten, four FROM tenk1 WHERE unique2 < 10) t WHERE rank_1 <= 1;
-                                             QUERY PLAN                                             
-----------------------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)  (cost=8.60..8.80 rows=10 width=16)
-   ->  WindowAgg  (cost=8.60..8.67 rows=3 width=16)
-         Run Condition: (cume_dist() OVER (?) <= '1'::double precision)
-         Partition By: tenk1.four
-         Order By: tenk1.ten
-         ->  Sort  (cost=8.60..8.61 rows=3 width=8)
-               Sort Key: tenk1.four, tenk1.ten
-               ->  Redistribute Motion 3:3  (slice2; segments: 3)  (cost=0.16..8.57 rows=3 width=8)
-                     Hash Key: tenk1.four
-                     ->  Index Scan using tenk1_unique2 on tenk1  (cost=0.16..8.51 rows=3 width=8)
-                           Index Cond: (unique2 < 10)
+                                                QUERY PLAN                                                
+----------------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=8.60..8.73 rows=3 width=16)
+   ->  Subquery Scan on t  (cost=8.60..8.68 rows=1 width=16)
+         Filter: (t.rank_1 <= '1'::double precision)
+         ->  WindowAgg  (cost=8.60..8.67 rows=3 width=16)
+               Partition By: tenk1.four
+               Order By: tenk1.ten
+               ->  Sort  (cost=8.60..8.61 rows=3 width=8)
+                     Sort Key: tenk1.four, tenk1.ten
+                     ->  Redistribute Motion 3:3  (slice2; segments: 3)  (cost=0.16..8.57 rows=3 width=8)
+                           Hash Key: tenk1.four
+                           ->  Index Scan using tenk1_unique2 on tenk1  (cost=0.16..8.51 rows=3 width=8)
+                                 Index Cond: (unique2 < 10)
  Optimizer: Postgres query optimizer
-(12 rows)
+(13 rows)
 
 explain SELECT * FROM (SELECT percent_rank() OVER (PARTITION BY four ORDER BY ten) AS rank_1, ten, four FROM tenk1 WHERE unique2 < 10) t WHERE rank_1 < 0.5;
-                                             QUERY PLAN                                             
-----------------------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)  (cost=8.60..8.80 rows=10 width=16)
-   ->  WindowAgg  (cost=8.60..8.67 rows=3 width=16)
-         Run Condition: (percent_rank() OVER (?) < '0.5'::double precision)
-         Partition By: tenk1.four
-         Order By: tenk1.ten
-         ->  Sort  (cost=8.60..8.61 rows=3 width=8)
-               Sort Key: tenk1.four, tenk1.ten
-               ->  Redistribute Motion 3:3  (slice2; segments: 3)  (cost=0.16..8.57 rows=3 width=8)
-                     Hash Key: tenk1.four
-                     ->  Index Scan using tenk1_unique2 on tenk1  (cost=0.16..8.51 rows=3 width=8)
-                           Index Cond: (unique2 < 10)
+                                                QUERY PLAN                                                
+----------------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=8.60..8.73 rows=3 width=16)
+   ->  Subquery Scan on t  (cost=8.60..8.68 rows=1 width=16)
+         Filter: (t.rank_1 < '0.5'::double precision)
+         ->  WindowAgg  (cost=8.60..8.67 rows=3 width=16)
+               Partition By: tenk1.four
+               Order By: tenk1.ten
+               ->  Sort  (cost=8.60..8.61 rows=3 width=8)
+                     Sort Key: tenk1.four, tenk1.ten
+                     ->  Redistribute Motion 3:3  (slice2; segments: 3)  (cost=0.16..8.57 rows=3 width=8)
+                           Hash Key: tenk1.four
+                           ->  Index Scan using tenk1_unique2 on tenk1  (cost=0.16..8.51 rows=3 width=8)
+                                 Index Cond: (unique2 < 10)
  Optimizer: Postgres query optimizer
-(12 rows)
+(13 rows)
 
 explain SELECT * FROM (SELECT rank() OVER (PARTITION BY four ORDER BY ten) AS rank_1, ten, four FROM tenk1 WHERE unique2 < 10) t WHERE rank_1 > 1;
                                                 QUERY PLAN                                                
@@ -3800,17 +3803,24 @@ SELECT
     cume_dist() OVER (PARTITION BY depname ORDER BY enroll_date RANGE BETWEEN
                       CURRENT ROW AND UNBOUNDED FOLLOWING) cd
 FROM empsalary;
-                  QUERY PLAN                  
-----------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)
+                        QUERY PLAN                        
+----------------------------------------------------------
+ WindowAgg
+   Partition By: depname
+   Order By: enroll_date
    ->  WindowAgg
          Partition By: depname
          Order By: enroll_date
-         ->  Sort
-               Sort Key: depname, enroll_date
-               ->  Seq Scan on empsalary
+         ->  Gather Motion 3:1  (slice1; segments: 3)
+               Merge Key: depname, enroll_date
+               ->  WindowAgg
+                     Partition By: depname
+                     Order By: enroll_date
+                     ->  Sort
+                           Sort Key: depname, enroll_date
+                           ->  Seq Scan on empsalary
  Optimizer: Postgres query optimizer
-(8 rows)
+(15 rows)
 
 -- Ensure WindowFuncs which cannot support their WindowClause's frameOptions
 -- being changed are untouched
@@ -3824,14 +3834,15 @@ SELECT
     count(*) OVER (PARTITION BY depname ORDER BY enroll_date RANGE BETWEEN
                    CURRENT ROW AND CURRENT ROW) cnt
 FROM empsalary;
-                                                 QUERY PLAN                                                 
-------------------------------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)
-   Output: empno, depname, (row_number() OVER (?)), (rank() OVER (?)), (count(*) OVER (?)), enroll_date
-   ->  WindowAgg
-         Output: empno, depname, (row_number() OVER (?)), (rank() OVER (?)), count(*) OVER (?), enroll_date
-         Partition By: empsalary.depname
-         Order By: empsalary.enroll_date
+                                              QUERY PLAN                                              
+------------------------------------------------------------------------------------------------------
+ WindowAgg
+   Output: empno, depname, (row_number() OVER (?)), (rank() OVER (?)), count(*) OVER (?), enroll_date
+   Partition By: empsalary.depname
+   Order By: empsalary.enroll_date
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         Output: depname, enroll_date, empno, (row_number() OVER (?)), (rank() OVER (?))
+         Merge Key: depname, enroll_date
          ->  WindowAgg
                Output: depname, enroll_date, empno, row_number() OVER (?), rank() OVER (?)
                Partition By: empsalary.depname
@@ -3843,7 +3854,7 @@ FROM empsalary;
                            Output: depname, enroll_date, empno
  Settings: enable_incremental_sort = 'on'
  Optimizer: Postgres query optimizer
-(17 rows)
+(18 rows)
 
 -- Ensure the above query gives us the expected results
 SELECT
@@ -3930,8 +3941,8 @@ SELECT * FROM
           min(salary) OVER (PARTITION BY depname || 'A', depname) depminsalary
    FROM empsalary) emp
 WHERE depname = 'sales' OR RANDOM() > 0.5;
-                                               QUERY PLAN                                                
----------------------------------------------------------------------------------------------------------
+                                                     QUERY PLAN                                                      
+---------------------------------------------------------------------------------------------------------------------
  Subquery Scan on emp
    Filter: (((emp.depname)::text = 'sales'::text) OR (random() > '0.5'::double precision))
    ->  Gather Motion 3:1  (slice1; segments: 3)
@@ -3940,13 +3951,17 @@ WHERE depname = 'sales' OR RANDOM() > 0.5;
                Partition By: empsalary.depname
                ->  Sort
                      Sort Key: empsalary.depname
-                     ->  WindowAgg
-                           Partition By: (((empsalary.depname)::text || 'A'::text)), empsalary.depname
-                           ->  Sort
-                                 Sort Key: (((empsalary.depname)::text || 'A'::text)), empsalary.depname
-                                 ->  Seq Scan on empsalary
+                     ->  Redistribute Motion 3:3  (slice2; segments: 3)
+                           Hash Key: empsalary.depname
+                           ->  WindowAgg
+                                 Partition By: (((empsalary.depname)::text || 'A'::text)), empsalary.depname
+                                 ->  Sort
+                                       Sort Key: (((empsalary.depname)::text || 'A'::text)), empsalary.depname
+                                       ->  Redistribute Motion 3:3  (slice3; segments: 3)
+                                             Hash Key: empsalary.depname, (((empsalary.depname)::text || 'A'::text))
+                                             ->  Seq Scan on empsalary
  Optimizer: Postgres query optimizer
-(14 rows)
+(18 rows)
 
 -- Test window function run conditions are properly pushed down into the
 -- WindowAgg
@@ -4346,10 +4361,11 @@ SELECT * FROM
                                                     QUERY PLAN                                                     
 -------------------------------------------------------------------------------------------------------------------
  Subquery Scan on e
+   Filter: (e.nt < 2)
    ->  Gather Motion 3:1  (slice1; segments: 3)
          Merge Key: (((empsalary.depname)::text || ''::text))
          ->  WindowAgg
-               Filter: (((row_number() OVER (?)) <= 1) AND ((ntile(2) OVER (?)) < 2))
+               Filter: ((row_number() OVER (?)) <= 1)
                Run Condition: (count(1) OVER (?) <= 3)
                Partition By: (((empsalary.depname)::text || ''::text))
                ->  Sort
@@ -4357,7 +4373,7 @@ SELECT * FROM
                      ->  Redistribute Motion 3:3  (slice2; segments: 3)
                            Hash Key: (((empsalary.depname)::text || ''::text))
                            ->  WindowAgg
-                                 Run Condition: ((row_number() OVER (?) <= 1) AND (ntile(2) OVER (?) < 2))
+                                 Run Condition: (row_number() OVER (?) <= 1)
                                  Partition By: empsalary.depname
                                  ->  Sort
                                        Sort Key: empsalary.depname
@@ -4371,7 +4387,7 @@ SELECT * FROM
                                                                Hash Key: ((''::text || (empsalary.depname)::text))
                                                                ->  Seq Scan on empsalary
  Optimizer: Postgres query optimizer
-(26 rows)
+(27 rows)
 
 -- Ensure we correctly filter out all of the run conditions from each window
 SELECT * FROM
@@ -4632,20 +4648,22 @@ ORDER BY depname, enroll_date;
          Group Key: depname, enroll_date, empno, (sum(salary) OVER (?)), (min(salary) OVER (?))
          ->  Sort
                Sort Key: depname, enroll_date, empno, (sum(salary) OVER (?)), (min(salary) OVER (?))
-               ->  WindowAgg
-                     Partition By: depname
-                     Order By: enroll_date
-                     ->  Incremental Sort
-                           Sort Key: depname, enroll_date
-                           Presorted Key: depname
-                           ->  WindowAgg
-                                 Partition By: depname
-                                 Order By: empno
-                                 ->  Sort
-                                       Sort Key: depname, empno
-                                       ->  Seq Scan on empsalary
+               ->  Redistribute Motion 3:3  (slice2; segments: 3)
+                     Hash Key: depname, enroll_date, empno, (sum(salary) OVER (?)), (min(salary) OVER (?))
+                     ->  WindowAgg
+                           Partition By: depname
+                           Order By: enroll_date
+                           ->  Incremental Sort
+                                 Sort Key: depname, enroll_date
+                                 Presorted Key: depname
+                                 ->  WindowAgg
+                                       Partition By: depname
+                                       Order By: empno
+                                       ->  Sort
+                                             Sort Key: depname, empno
+                                             ->  Seq Scan on empsalary
  Optimizer: Postgres query optimizer
-(19 rows)
+(21 rows)
 
 -- As above but adjust the ORDER BY clause to help ensure the plan with the
 -- minimum amount of sorting wasn't a fluke.
@@ -4666,20 +4684,22 @@ ORDER BY depname, empno;
          Group Key: depname, empno, enroll_date, (sum(salary) OVER (?)), (min(salary) OVER (?))
          ->  Sort
                Sort Key: depname, empno, enroll_date, (sum(salary) OVER (?)), (min(salary) OVER (?))
-               ->  WindowAgg
-                     Partition By: depname
-                     Order By: empno
-                     ->  Incremental Sort
-                           Sort Key: depname, empno
-                           Presorted Key: depname
-                           ->  WindowAgg
-                                 Partition By: depname
-                                 Order By: enroll_date
-                                 ->  Sort
-                                       Sort Key: depname, enroll_date
-                                       ->  Seq Scan on empsalary
+               ->  Redistribute Motion 3:3  (slice2; segments: 3)
+                     Hash Key: depname, empno, enroll_date, (sum(salary) OVER (?)), (min(salary) OVER (?))
+                     ->  WindowAgg
+                           Partition By: depname
+                           Order By: empno
+                           ->  Incremental Sort
+                                 Sort Key: depname, empno
+                                 Presorted Key: depname
+                                 ->  WindowAgg
+                                       Partition By: depname
+                                       Order By: enroll_date
+                                       ->  Sort
+                                             Sort Key: depname, enroll_date
+                                             ->  Seq Scan on empsalary
  Optimizer: Postgres query optimizer
-(19 rows)
+(21 rows)
 
 RESET enable_hashagg;
 -- Test Sort node reordering
@@ -4690,10 +4710,11 @@ SELECT
 FROM empsalary;
                             QUERY PLAN                             
 -------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)
-   ->  WindowAgg
-         Partition By: depname
-         Order By: salary, enroll_date
+ WindowAgg
+   Partition By: depname
+   Order By: salary, enroll_date
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         Merge Key: depname, salary, enroll_date
          ->  WindowAgg
                Partition By: depname
                Order By: salary, enroll_date, empno
@@ -4701,7 +4722,7 @@ FROM empsalary;
                      Sort Key: depname, salary, enroll_date, empno
                      ->  Seq Scan on empsalary
  Optimizer: Postgres query optimizer
-(11 rows)
+(12 rows)
 
 -- Test incremental sorting
 EXPLAIN (COSTS OFF)
