@@ -1904,3 +1904,68 @@ ReplaceVarsFromTargetList_1(Node *node,
 								 (void *) &context,
 								 outer_hasSubLinks);
 }
+
+static Node *
+ReplaceVarnoFromSubquery_callback(Var *var,
+								   replace_rte_variables_context *context)
+{
+	ReplaceVarsFromTargetList_context *rcon = (ReplaceVarsFromTargetList_context *) context->callback_arg;
+
+	if (var->varattno == InvalidAttrNumber)
+	{
+		/* Must expand whole-tuple reference into RowExpr */
+		RowExpr    *rowexpr;
+		List	   *colnames;
+		List	   *fields;
+
+		/*
+		 * If generating an expansion for a var of a named rowtype (ie, this
+		 * is a plain relation RTE), then we must include dummy items for
+		 * dropped columns.  If the var is RECORD (ie, this is a JOIN), then
+		 * omit dropped columns.  Either way, attach column names to the
+		 * RowExpr for use of ruleutils.c.
+		 */
+		expandRTE(rcon->target_rte,
+				  var->varno, var->varlevelsup, var->location,
+				  (var->vartype != RECORDOID),
+				  &colnames, &fields);
+		/* Adjust the generated per-field Vars... */
+		fields = (List *) replace_rte_variables_mutator((Node *) fields,
+														context);
+		rowexpr = makeNode(RowExpr);
+		rowexpr->args = fields;
+		rowexpr->row_typeid = var->vartype;
+		rowexpr->row_format = COERCE_IMPLICIT_CAST;
+		rowexpr->colnames = colnames;
+		rowexpr->location = var->location;
+
+		return (Node *) rowexpr;
+	}
+
+	Var *newnode = (Var *)copyObject(var);
+	/* Make var to the subquery itself. */
+	((Var *) newnode)->varno = 1;
+	return (Node *) newnode;
+}
+
+Node *
+ReplaceVarnoFromSubquery(Node *node,
+						  int target_varno, int sublevels_up,
+						  RangeTblEntry *target_rte,
+						  List *targetlist,
+						  ReplaceVarsNoMatchOption nomatch_option,
+						  int nomatch_varno,
+						  bool *outer_hasSubLinks)
+{
+	ReplaceVarsFromTargetList_context context;
+
+	context.target_rte = target_rte;
+	context.targetlist = targetlist;
+	context.nomatch_option = nomatch_option;
+	context.nomatch_varno = nomatch_varno;
+
+	return replace_rte_variables(node, target_varno, sublevels_up,
+								 ReplaceVarnoFromSubquery_callback,
+								 (void *)&context,
+								 outer_hasSubLinks);
+}

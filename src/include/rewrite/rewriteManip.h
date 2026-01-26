@@ -102,5 +102,13 @@ extern Node *ReplaceVarsFromTargetList_1(Node *node,
 									   ReplaceVarsNoMatchOption nomatch_option,
 									   int nomatch_varno,
 									   bool *outer_hasSubLinks);
+extern Node *
+ReplaceVarnoFromSubquery(Node *node,
+						  int target_varno, int sublevels_up,
+						  RangeTblEntry *target_rte,
+						  List *targetlist,
+						  ReplaceVarsNoMatchOption nomatch_option,
+						  int nomatch_varno,
+						  bool *outer_hasSubLinks);
 
 #endif							/* REWRITEMANIP_H */

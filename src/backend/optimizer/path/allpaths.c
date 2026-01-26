@@ -3712,6 +3712,8 @@ set_cte_pathlist(PlannerInfo *root, RelOptInfo *rel, RangeTblEntry *rte)
 			List *quals = make_ands_implicit(new_quals);
 
 			ListCell   *lc;
+			// hack to make varno = 1 in bms
+			cteplaninfo->relids = bms_add_member(cteplaninfo->relids, 1);
 			foreach(lc, quals)
 			{
 				subquery_push_qual_1(cteplaninfo->subquery, cteplaninfo->relids, (Node *)lfirst(lc));
@@ -4688,10 +4690,10 @@ collect_cte_quals(PlannerInfo *root, RelOptInfo *rel,
 			if (!rinfo->pseudoconstant &&
 				qual_is_pushdown_safe(subquery, rti, rinfo, &safetyInfo))
 			{
-				// TODO: replace varno to the first one?
+				// TODO: replace varno to the subquery itself.
 				// Is it possible that baseresctictinfo has quals with sublink or whole row? 
 
-				qual = ReplaceVarsFromTargetList(qual, rti, 0, rte,
+				qual = ReplaceVarnoFromSubquery(qual, rti, 0, rte,
 												 subquery->targetList,
 												 REPLACEVARS_REPORT_ERROR, 0,
 												 &subquery->hasSubLinks);
