@@ -486,6 +486,7 @@ bool		gp_enable_refresh_fast_path = true;
 static const struct config_enum_entry gp_log_format_options[] = {
 	{"text", 0},
 	{"csv", 1},
+	{"json", 2},
 	{NULL, 0}
 };
 
@@ -5176,7 +5177,7 @@ struct config_enum ConfigureNamesEnum_gp[] =
 	{
 		{"gp_log_format", PGC_POSTMASTER, LOGGING_WHERE,
 			gettext_noop("Sets the format for log files."),
-			gettext_noop("Valid values are TEXT, CSV.")
+			gettext_noop("Valid values are TEXT, CSV, JSON.")
 		},
 		&gp_log_format,
 		1, gp_log_format_options,
