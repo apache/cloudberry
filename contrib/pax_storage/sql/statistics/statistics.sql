@@ -1,5 +1,5 @@
 set default_table_access_method = pax;
-
+set pax.enable_sync_collect_stats = on;
 
 -- 
 -- Test with small group
@@ -172,6 +172,8 @@ select * from get_pax_aux_table('t1_update_stats');
 -- v2: ((1001 + 2000) * 1000 / 2) - ((1001 + 1020) * 20 / 2) = 1480290
 delete from t1_update_stats where v1 <= 20;
 select * from get_pax_aux_table('t1_update_stats');
+vacuum t1_update_stats;
+select * from get_pax_aux_table('t1_update_stats');
 drop table t1_update_stats;
 
 -- delete part of data in the second group
@@ -181,6 +183,8 @@ select * from get_pax_aux_table('t2_update_stats');
 -- v1: ((1 + 1000) * 1000 / 2) - ((301 + 400) * 100 / 2) = 465450
 -- v2: ((1001 + 2000) * 1000 / 2) - ((1301 + 1400) * 100 / 2) = 1365450
 delete from t2_update_stats where v1 <= 400 and v1 > 300;
+select * from get_pax_aux_table('t2_update_stats');
+vacuum t2_update_stats;
 select * from get_pax_aux_table('t2_update_stats');
 drop table t2_update_stats;
 
@@ -192,6 +196,8 @@ select * from get_pax_aux_table('t3_update_stats');
 -- v2: ((1001 + 2000) * 1000 / 2) - ((1001 + 1900) * 900 / 2) = 195050
 delete from t3_update_stats where v2 <= 1900;
 select * from get_pax_aux_table('t3_update_stats');
+vacuum t3_update_stats;
+select * from get_pax_aux_table('t3_update_stats');
 drop table t3_update_stats;
 
 -- delete all 
@@ -201,6 +207,8 @@ select * from get_pax_aux_table('t4_update_stats');
 -- v1: 0
 -- v2: 0
 delete from t4_update_stats;
+select * from get_pax_aux_table('t4_update_stats');
+vacuum t4_update_stats;
 select * from get_pax_aux_table('t4_update_stats');
 drop table t4_update_stats;
 
@@ -214,6 +222,8 @@ select * from get_pax_aux_table('t5_update_stats');
 -- v2(block 1): (1001 + 1020) * 20 / 2 + 20 = 20230
 update t5_update_stats set v1 = v1 + 1, v2 = v2 + 1 where v1 <= 20;
 select * from get_pax_aux_table('t5_update_stats');
+vacuum t5_update_stats;
+select * from get_pax_aux_table('t5_update_stats');
 drop table t5_update_stats;
 
 -- update part of data in the second group
@@ -225,6 +235,8 @@ select * from get_pax_aux_table('t6_update_stats');
 -- v1(block 1): (301 + 400) * 100 / 2 + 100 = 35150
 -- v2(block 1): (1301 + 1400) * 100 / 2 + 100 = 135150
 update t6_update_stats set v1 = v1 + 1, v2 = v2 + 1 where v1 <= 400 and v1 > 300;
+select * from get_pax_aux_table('t6_update_stats');
+vacuum t6_update_stats;
 select * from get_pax_aux_table('t6_update_stats');
 drop table t6_update_stats;
 
@@ -238,6 +250,8 @@ select * from get_pax_aux_table('t7_update_stats');
 -- v2(block 1): (1001 + 1900) * 900 / 2 + 900 = 1306350
 update t7_update_stats set v1 = v1 + 1, v2 = v2 + 1 where v2 <= 1900;
 select * from get_pax_aux_table('t7_update_stats');
+vacuum t7_update_stats;
+select * from get_pax_aux_table('t7_update_stats');
 drop table t7_update_stats;
 
 -- update all 
@@ -250,6 +264,8 @@ select * from get_pax_aux_table('t8_update_stats');
 -- v2(block 1): (1002 + 2001) * 1000 / 2 = 1501500
 update t8_update_stats set v1 = v1 + 1, v2 = v2 + 1;
 select * from get_pax_aux_table('t8_update_stats');
+vacuum t8_update_stats;
+select * from get_pax_aux_table('t8_update_stats');
 drop table t8_update_stats;
 
 -- delete cross multi files
@@ -261,6 +277,8 @@ insert into t9_update_stats values(generate_series(100, 1000), generate_series(1
 select * from get_pax_aux_table('t9_update_stats');
 delete from t9_update_stats where v1 <= 20;
 select * from get_pax_aux_table('t9_update_stats');
+vacuum t9_update_stats;
+select * from get_pax_aux_table('t9_update_stats');
 drop table t9_update_stats;
 
 -- update cross multi files
@@ -271,6 +289,8 @@ insert into t10_update_stats values(generate_series(1, 100), generate_series(101
 insert into t10_update_stats values(generate_series(100, 1000), generate_series(1101, 2000), 1);
 select * from get_pax_aux_table('t10_update_stats');
 update t10_update_stats set v1 = v1 + 1, v2 = v2 + 1 where v1 <= 20;
+select * from get_pax_aux_table('t10_update_stats');
+vacuum t10_update_stats;
 select * from get_pax_aux_table('t10_update_stats');
 drop table t10_update_stats;
 
@@ -288,6 +308,8 @@ select * from get_pax_aux_table('t_delete_twice_stats');
 delete from t_delete_twice_stats where v2 > 30 and v2 <= 40;
 select sum(v2), sum(v3) from t_delete_twice_stats;
 select * from get_pax_aux_table('t_delete_twice_stats');
+vacuum t_delete_twice_stats;
+select * from get_pax_aux_table('t_delete_twice_stats');
 drop table t_delete_twice_stats;
 
 -- update twice
@@ -302,6 +324,9 @@ select * from get_pax_aux_table('t_update_twice_stats');
 update t_update_twice_stats set v2 = v2 + 1, v3 = v3 + 1 where v2 > 30 and v2 <= 40;
 select sum(v2), sum(v3) from t_update_twice_stats;
 select * from get_pax_aux_table('t_update_twice_stats');
+vacuum t_update_twice_stats;
+select * from get_pax_aux_table('t_update_twice_stats');
 drop table t_update_twice_stats;
 
 reset pax.max_tuples_per_group;
+reset pax.enable_sync_collect_stats;
