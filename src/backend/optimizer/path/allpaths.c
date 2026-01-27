@@ -200,7 +200,7 @@ static List *
 collect_cte_quals(PlannerInfo *root, RelOptInfo *rel,
 				   RangeTblEntry *rte, Index rti, Query *subquery);
 
-static void subquery_push_qual_1(Query *subquery, Relids relids, Node *qual);
+static void subquery_push_qual_cte(Query *subquery, Relids relids, Node *qual);
 
 /*
  * make_one_rel
@@ -3335,7 +3335,7 @@ set_tablefunction_pathlist(PlannerInfo *root, RelOptInfo *rel, RangeTblEntry *rt
 }
 
 static void
-recurse_push_qual_1(Node *setOp, Query *topquery,
+recurse_push_qual_cte(Node *setOp, Query *topquery,
 				   Relids relids, Node *qual)
 {
 	if (IsA(setOp, RangeTblRef))
@@ -3345,14 +3345,14 @@ recurse_push_qual_1(Node *setOp, Query *topquery,
 		Query	   *subquery = subrte->subquery;
 
 		Assert(subquery != NULL);
-		subquery_push_qual_1(subquery, relids, qual);
+		subquery_push_qual_cte(subquery, relids, qual);
 	}
 	else if (IsA(setOp, SetOperationStmt))
 	{
 		SetOperationStmt *op = (SetOperationStmt *) setOp;
 
-		recurse_push_qual_1(op->larg, topquery, relids, qual);
-		recurse_push_qual_1(op->rarg, topquery, relids, qual);
+		recurse_push_qual_cte(op->larg, topquery, relids, qual);
+		recurse_push_qual_cte(op->rarg, topquery, relids, qual);
 	}
 	else
 	{
@@ -3365,12 +3365,12 @@ recurse_push_qual_1(Node *setOp, Query *topquery,
  * subquery_push_qual - push down a qual that we have determined is safe
  */
 static void
-subquery_push_qual_1(Query *subquery, Relids relids, Node *qual)
+subquery_push_qual_cte(Query *subquery, Relids relids, Node *qual)
 {
 	if (subquery->setOperations != NULL)
 	{
 		/* Recurse to push it separately to each component query */
-		recurse_push_qual_1(subquery->setOperations, subquery,
+		recurse_push_qual_cte(subquery->setOperations, subquery,
 						  relids, qual);
 	}
 	else
@@ -3384,7 +3384,7 @@ subquery_push_qual_1(Query *subquery, Relids relids, Node *qual)
 		 * This step also ensures that when we are pushing into a setop tree,
 		 * each component query gets its own copy of the qual.
 		 */
-		qual = ReplaceVarsFromTargetList_1(qual, relids, 0,
+		qual = ReplaceVarsFromTargetList_CTE(qual, relids, 0,
 										 subquery->targetList,
 										 REPLACEVARS_REPORT_ERROR, 0,
 										 &subquery->hasSubLinks);
@@ -3716,7 +3716,7 @@ set_cte_pathlist(PlannerInfo *root, RelOptInfo *rel, RangeTblEntry *rte)
 			cteplaninfo->relids = bms_add_member(cteplaninfo->relids, 1);
 			foreach(lc, quals)
 			{
-				subquery_push_qual_1(cteplaninfo->subquery, cteplaninfo->relids, (Node *)lfirst(lc));
+				subquery_push_qual_cte(cteplaninfo->subquery, cteplaninfo->relids, (Node *)lfirst(lc));
 			}
 
 			subroot = subquery_planner(cteroot->glob, cteplaninfo->subquery, cteroot, cte->cterecursive,

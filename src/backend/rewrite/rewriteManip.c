@@ -1885,7 +1885,7 @@ replace_rte_variables_1(Node *node, Bitmapset *target_varno_bms, int sublevels_u
 
 
 Node *
-ReplaceVarsFromTargetList_1(Node *node,
+ReplaceVarsFromTargetList_CTE(Node *node,
 						  Bitmapset *target_varno_bms, int sublevels_up,
 						  List *targetlist,
 						  ReplaceVarsNoMatchOption nomatch_option,

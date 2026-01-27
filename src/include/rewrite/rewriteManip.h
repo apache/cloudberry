@@ -96,7 +96,7 @@ extern Node *ReplaceVarsFromTargetList(Node *node,
 									   int nomatch_varno,
 									   bool *outer_hasSubLinks);
 
-extern Node *ReplaceVarsFromTargetList_1(Node *node,
+extern Node *ReplaceVarsFromTargetList_CTE(Node *node,
 									   Bitmapset *target_varno_bms, int sublevels_up,
 									   List *targetlist,
 									   ReplaceVarsNoMatchOption nomatch_option,
