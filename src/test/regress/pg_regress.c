@@ -1071,12 +1071,12 @@ convert_sourcefiles_in(const char *source_subdir, const char *dest_dir, const ch
 	 * If we didn't process any files, complain because it probably means
 	 * somebody neglected to pass the needed --inputdir argument.
 	 */
-//	if (count <= 0)
-//	{
-//		fprintf(stderr, _("%s: no *.source files found in \"%s\"\n"),
-//				progname, indir);
-//		exit(2);
-//	}
+	if (count <= 0)
+	{
+		fprintf(stderr, _("%s: no *.source files found in \"%s\"\n"),
+				progname, indir);
+		exit(2);
+	}
 
 	pgfnames_cleanup(names);
 
