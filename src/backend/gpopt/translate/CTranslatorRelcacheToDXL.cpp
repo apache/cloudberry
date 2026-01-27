@@ -3147,6 +3147,20 @@ CTranslatorRelcacheToDXL::RetrieveStorageTypeForPartitionedTable(Relation rel)
 						"Queries with partitions of greenplum_fdw are not supported"));
 			}
 			GPOS_DELETE(fdw_name_str);
+
+			// Check for mixed storage before continuing
+			// If we already encountered non-foreign partitions, mark as mixed
+			if (rel_storage_type != IMDRelation::ErelstorageSentinel &&
+				rel_storage_type != IMDRelation::ErelstorageForeign)
+			{
+				// Already have non-foreign partition(s), now found foreign → mixed
+				rel_storage_type = IMDRelation::ErelstorageMixedPartitioned;
+			}
+			else if (rel_storage_type == IMDRelation::ErelstorageSentinel)
+			{
+				// First partition is foreign
+				rel_storage_type = IMDRelation::ErelstorageForeign;
+			}
 			continue;
 		}
 		all_foreign = false;
@@ -3154,11 +3168,15 @@ CTranslatorRelcacheToDXL::RetrieveStorageTypeForPartitionedTable(Relation rel)
 		{
 			rel_storage_type = child_storage;
 		}
-
+		else if (rel_storage_type == IMDRelation::ErelstorageForeign)
+		{
+			// Previously had foreign partition(s), now found non-foreign → mixed
+			rel_storage_type = IMDRelation::ErelstorageMixedPartitioned;
+		}
 		// mark any partitioned table with supported partitions of mixed storage types,
 		// this is more conservative for certain skans (eg: we can't do an index scan if any
 		// partition is ao, we must only do a sequential or bitmap scan)
-		if (rel_storage_type != child_storage)
+		else if (rel_storage_type != child_storage)
 		{
 			rel_storage_type = IMDRelation::ErelstorageMixedPartitioned;
 		}
