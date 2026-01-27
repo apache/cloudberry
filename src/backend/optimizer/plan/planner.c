@@ -604,6 +604,8 @@ standard_planner(Query *parse, const char *query_string, int cursorOptions,
 	{
 		Path	   *cheapest_partial_path;
 		cheapest_partial_path = linitial(final_rel->partial_pathlist);
+		if (force_parallel_mode == FORCE_PARALLEL_ON)
+			final_rel->pathlist = NIL;
 		add_path(final_rel, cheapest_partial_path, root);
 		set_cheapest(final_rel);
 	}
