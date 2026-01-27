@@ -74,9 +74,9 @@ name: Apache Cloudberry Debian Build
 
 on:
   push:
-    branches: [main]
+    branches: [main, REL_2_STABLE]
   pull_request:
-    branches: [main]
+    branches: [main, REL_2_STABLE]
     types: [opened, synchronize, reopened, edited]
   workflow_dispatch:  # Manual trigger
     inputs:

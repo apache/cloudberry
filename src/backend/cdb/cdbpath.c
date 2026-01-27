@@ -2964,7 +2964,6 @@ can_elide_explicit_motion(PlannerInfo *root, Index rti, Path *subpath,
  *  There was once an idea reseting path's parallel_works to avoid
  * 	Motion if inner and outer's parallel_workers doesn't match.
  * 	But there are a lot of issues we don't have a clear answer.
- *  See https://code.hashdata.xyz/cloudberry/cbdb-postgres-merge/-/issues/43.
  *
  * We couldn't expect the parallel_workers of outer or inner path.
  * Partial path may generate locus(parallel_workers=0) if needed, ex:

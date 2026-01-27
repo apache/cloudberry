@@ -102,9 +102,9 @@ name: Apache Cloudberry Build
 
 on:
   push:
-    branches: [main]
+    branches: [main, REL_2_STABLE]
   pull_request:
-    branches: [main]
+    branches: [main, REL_2_STABLE]
     types: [opened, synchronize, reopened, edited]
   workflow_dispatch:
     inputs:
@@ -316,7 +316,8 @@ jobs:
                                "gpcontrib/pxf_fdw:installcheck",
                                "gpcontrib/zstd:installcheck",
                                "gpcontrib/gp_sparse_vector:installcheck",
-                               "gpcontrib/gp_toolkit:installcheck"]
+                               "gpcontrib/gp_toolkit:installcheck",
+                               "gpcontrib/gp_exttable_fdw:installcheck"]
               },
               {"test":"ic-fixme",
                "make_configs":["src/test/regress:installcheck-fixme"],
