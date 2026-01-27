@@ -186,6 +186,7 @@
 		"gp_enable_ao_indexscan",
 		"gp_enable_direct_dispatch",
 		"gp_enable_explain_allstat",
+		"gp_enable_explain_node_summary",
 		"gp_enable_fast_sri",
 		"gp_enable_global_deadlock_detector",
 		"gp_enable_groupext_distinct_gather",
