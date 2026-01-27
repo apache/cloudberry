@@ -108,7 +108,7 @@ if(USE_MANIFEST_API AND NOT USE_PAX_CATALOG)
 
     set(BUILD_SHARED_LIBS ON)
     set(CMAKE_INSTALL_SO_NO_EXE OFF)
-    add_subdirectory(${CMAKE_SOURCE_DIR}/../../dependency/yyjson ${CMAKE_BINARY_DIR}/yyjson_build)
+    add_subdirectory(src/cpp/contrib/yyjson ${CMAKE_BINARY_DIR}/yyjson_build)
 
     set(BUILD_SHARED_LIBS ${SAVED_BUILD_SHARED_LIBS})
     set(CMAKE_INSTALL_SO_NO_EXE ${SAVED_CMAKE_INSTALL_SO_NO_EXE})
