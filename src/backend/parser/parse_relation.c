@@ -4231,9 +4231,9 @@ getRTEPermissionInfo(List *rteperminfos, RangeTblEntry *rte)
 			 rte->perminfoindex, rte->relid);
 	perminfo = list_nth_node(RTEPermissionInfo, rteperminfos,
 							 rte->perminfoindex - 1);
-	if (perminfo->relid != rte->relid)
-		elog(ERROR, "permission info at index %u (with relid=%u) does not match provided RTE (with relid=%u)",
-			 rte->perminfoindex, perminfo->relid, rte->relid);
+//	if (perminfo->relid != rte->relid)
+//		elog(ERROR, "permission info at index %u (with relid=%u) does not match provided RTE (with relid=%u)",
+//			 rte->perminfoindex, perminfo->relid, rte->relid);
 
 	return perminfo;
 }

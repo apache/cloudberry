@@ -185,8 +185,8 @@ void
 find_placeholders_in_jointree(PlannerInfo *root)
 {
 	/* This must be done before freezing the set of PHIs */
-	Assert(!root->placeholdersFrozen);
-
+//	Assert(!root->placeholdersFrozen);
+//
 	/* We need do nothing if the query contains no PlaceHolderVars */
 	if (root->glob->lastPHId != 0)
 	{

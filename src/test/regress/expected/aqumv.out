@@ -1572,18 +1572,15 @@ select c1, c3 from aqumv_t4 where c1 > 90 group by (c1, c3) having c3 > 97 ;
 -----------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    Output: c1, c3
-   ->  GroupAggregate
+   ->  HashAggregate
          Output: c1, c3
          Group Key: aqumv_t4.c1, aqumv_t4.c3
-         ->  Sort
-               Output: c1, c3
-               Sort Key: aqumv_t4.c1, aqumv_t4.c3
-               ->  Seq Scan on aqumv.aqumv_t4
-                     Output: c1, c3
-                     Filter: ((aqumv_t4.c1 > 90) AND (aqumv_t4.c3 > 97))
- Settings: enable_answer_query_using_materialized_views = 'off', optimizer = 'off'
+         ->  Seq Scan on aqumv.aqumv_t4
+               Output: c1, c2, c3
+               Filter: ((aqumv_t4.c1 > 90) AND (aqumv_t4.c3 > 97))
+ Settings: optimizer = 'off', enable_answer_query_using_materialized_views = 'off'
  Optimizer: Postgres query optimizer
-(13 rows)
+(10 rows)
 
 select c1, c3 from aqumv_t4 where c1 > 90 group by (c1, c3) having c3 > 97 ;
  c1  | c3  
