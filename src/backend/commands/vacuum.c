@@ -2273,7 +2273,14 @@ vac_update_datfrozenxid(void)
 		newMinMulti = dbform->datminmxid;
 
 	if (dirty)
+	{
 		systable_inplace_update_finish(inplace_state, tuple);
+#ifdef FAULT_INJECTOR
+		FaultInjector_InjectFaultIfSet(
+				"vacuum_update_dat_frozen_xid", DDLNotSpecified,
+				NameStr(dbform->datname), "");
+#endif
+	}
 	else
 		systable_inplace_update_cancel(inplace_state);
 

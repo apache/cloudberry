@@ -2,8 +2,10 @@
 -- 'template0'. Because of that, the age of template0 should not go
 -- above autovacuum_freeze_max_age (we assume the default of 200
 -- million here)
+\getenv abs_srcdir PG_ABS_SRCDIR
+\set regress_dll :abs_srcdir '/regress.so'
 create or replace function test_consume_xids(int4) returns void
-as '@abs_srcdir@/regress.so', 'test_consume_xids'
+as :'regress_dll', 'test_consume_xids'
 language C;
 -- start_ignore
 \! gpconfig -c debug_burn_xids -v on --skipvalidation
