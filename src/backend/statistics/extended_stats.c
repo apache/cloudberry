@@ -1332,8 +1332,8 @@ choose_best_statistics(List *stats, char requiredkind, bool inh,
  *
  * (c) combinations using AND/OR/NOT
  *
- * (d) ScalarArrayOpExprs of the form (Var/Expr op ANY (Const)) or
- * (Var/Expr op ALL (Const))
+ * (d) ScalarArrayOpExprs of the form (Var/Expr op ANY (array)) or (Var/Expr
+ * op ALL (array))
  *
  * In the future, the range of supported clauses may be expanded to more
  * complex cases, for example (Var op Var).
