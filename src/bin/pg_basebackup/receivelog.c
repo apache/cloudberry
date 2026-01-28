@@ -68,17 +68,10 @@ mark_file_as_archived(StreamCtl *stream, const char *fname)
 		return false;
 	}
 
-<<<<<<< HEAD
-	if (stream->walmethod->close(f, CLOSE_NORMAL) != 0)
-	{
-		pg_log_error("could not close archive status file \"%s\": %s",
-					 tmppath, stream->walmethod->getlasterror());
-=======
 	if (stream->walmethod->ops->close(f, CLOSE_NORMAL) != 0)
 	{
 		pg_log_error("could not close archive status file \"%s\": %s",
 					 tmppath, GetLastWalMethodError(stream->walmethod));
->>>>>>> REL_16_9
 		return false;
 	}
 
@@ -106,14 +99,9 @@ open_walfile(StreamCtl *stream, XLogRecPtr startpoint)
 	XLogFileName(walfile_name, stream->timeline, segno, WalSegSz);
 
 	/* Note that this considers the compression used if necessary */
-<<<<<<< HEAD
-	fn = stream->walmethod->get_file_name(current_walfile_name,
-										  stream->partial_suffix);
-=======
 	fn = stream->walmethod->ops->get_file_name(stream->walmethod,
 											   walfile_name,
 											   stream->partial_suffix);
->>>>>>> REL_16_9
 
 	/*
 	 * When streaming to files, if an existing file exists we verify that it's
@@ -125,23 +113,14 @@ open_walfile(StreamCtl *stream, XLogRecPtr startpoint)
 	 * When streaming to tar, no file with this name will exist before, so we
 	 * never have to verify a size.
 	 */
-<<<<<<< HEAD
-	if (stream->walmethod->compression() == 0 &&
-		stream->walmethod->existsfile(fn))
-=======
 	if (stream->walmethod->compression_algorithm == PG_COMPRESSION_NONE &&
 		stream->walmethod->ops->existsfile(stream->walmethod, fn))
->>>>>>> REL_16_9
 	{
 		size = stream->walmethod->ops->get_file_size(stream->walmethod, fn);
 		if (size < 0)
 		{
 			pg_log_error("could not get size of write-ahead log file \"%s\": %s",
-<<<<<<< HEAD
-						 fn, stream->walmethod->getlasterror());
-=======
 						 fn, GetLastWalMethodError(stream->walmethod));
->>>>>>> REL_16_9
 			pg_free(fn);
 			return false;
 		}
@@ -152,11 +131,7 @@ open_walfile(StreamCtl *stream, XLogRecPtr startpoint)
 			if (f == NULL)
 			{
 				pg_log_error("could not open existing write-ahead log file \"%s\": %s",
-<<<<<<< HEAD
-							 fn, stream->walmethod->getlasterror());
-=======
 							 fn, GetLastWalMethodError(stream->walmethod));
->>>>>>> REL_16_9
 				pg_free(fn);
 				return false;
 			}
@@ -182,11 +157,7 @@ open_walfile(StreamCtl *stream, XLogRecPtr startpoint)
 			pg_log_error(ngettext("write-ahead log file \"%s\" has %zd byte, should be 0 or %d",
 								  "write-ahead log file \"%s\" has %zd bytes, should be 0 or %d",
 								  size),
-<<<<<<< HEAD
-						 fn, (int) size, WalSegSz);
-=======
 						 fn, size, WalSegSz);
->>>>>>> REL_16_9
 			pg_free(fn);
 			return false;
 		}
@@ -202,11 +173,7 @@ open_walfile(StreamCtl *stream, XLogRecPtr startpoint)
 	if (f == NULL)
 	{
 		pg_log_error("could not open write-ahead log file \"%s\": %s",
-<<<<<<< HEAD
-					 fn, stream->walmethod->getlasterror());
-=======
 					 fn, GetLastWalMethodError(stream->walmethod));
->>>>>>> REL_16_9
 		pg_free(fn);
 		return false;
 	}

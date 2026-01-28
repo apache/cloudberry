@@ -839,12 +839,8 @@ main(int argc, char **argv)
 	 * if one is needed, in GetConnection.)
 	 */
 #ifndef WIN32
-<<<<<<< HEAD
-	pqsignal(SIGINT, sigint_handler);
-=======
 	pqsignal(SIGINT, sigexit_handler);
 	pqsignal(SIGTERM, sigexit_handler);
->>>>>>> REL_16_9
 #endif
 
 	/*

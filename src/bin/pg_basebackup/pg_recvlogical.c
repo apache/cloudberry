@@ -900,8 +900,6 @@ main(int argc, char **argv)
 		exit(1);
 	}
 
-<<<<<<< HEAD
-=======
 	if (two_phase && !do_create_slot)
 	{
 		pg_log_error("--two-phase may only be specified with --create-slot");
@@ -909,7 +907,6 @@ main(int argc, char **argv)
 		exit(1);
 	}
 
->>>>>>> REL_16_9
 	/*
 	 * Obtain a connection to server.  Notably, if we need a password, we want
 	 * to collect it from the user immediately.
@@ -925,12 +922,8 @@ main(int argc, char **argv)
 	 * if one is needed, in GetConnection.)
 	 */
 #ifndef WIN32
-<<<<<<< HEAD
-	pqsignal(SIGINT, sigint_handler);
-=======
 	pqsignal(SIGINT, sigexit_handler);
 	pqsignal(SIGTERM, sigexit_handler);
->>>>>>> REL_16_9
 	pqsignal(SIGHUP, sighup_handler);
 #endif
 

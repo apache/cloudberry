@@ -44,6 +44,7 @@ SUBDIRS = \
 	gpfts \
 	pg_amcheck \
 	pg_archivecleanup \
+	pg_basebackup \
 	pg_checksums \
 	pg_config \
 	pg_controldata \
