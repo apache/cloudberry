@@ -1510,7 +1510,7 @@ struct config_bool ConfigureNamesBool[] =
 			NULL
 		},
 		&autovacuum_start_daemon,
-		false,
+		true,
 		NULL, NULL, NULL
 	},
 
