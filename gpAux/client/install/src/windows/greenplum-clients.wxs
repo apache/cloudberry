@@ -1100,7 +1100,7 @@ If you want to review or change any of your installation settings, click Back. C
               <Environment Id="CLIENTS_ENV" Action="set" Permanent="no" System="yes" Part="all" Name="GPHOME_CLIENTS" Value="[BASEDIR]" />
               <Environment Id="PYTHON_ENV" Action="set" Permanent="no" System="yes" Part="last" Name="PYTHONPATH" Value="%GPHOME_CLIENTS%\lib\python" />
               <Environment Id="PATH_ENV" Action="set" Permanent="no" System="yes" Part="last" Name="PATH" Value="%GPHOME_CLIENTS%bin;%GPHOME_CLIENTS%lib" />
-              <File Id="greenplum_clients_path.bat" Name="greenplum_clients_path.bat" ShortName="BIZGRES1.BAT" Source="$(var.SRCDIR)\greenplum_clients_path.bat" />
+              <File Id="cloudberry_clients_path.bat" Name="cloudberry_clients_path.bat" ShortName="BIZGRES1.BAT" Source="$(var.SRCDIR)\cloudberry_clients_path.bat" />
               <File Id="LICENSE" Name="Pivotal License" ShortName="LICENSE" Source="$(var.SRCDIR)\LICENSE" />
               <File Id="NOTICE" Name="Thirdpary Notice" ShortName="NOTICE" Source="$(var.SRCDIR)\NOTICE" />
               <File Id="VERSION" Name="GPDB Clients Version" ShortName="VERSION" Source="$(var.SRCDIR)\VERSION" />

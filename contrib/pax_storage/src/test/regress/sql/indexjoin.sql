@@ -4,6 +4,9 @@ CREATE TABLE my_tt_agg_small (
     trade_price numeric,
     trade_volume bigint
 ) DISTRIBUTED BY (symbol);
+-- start_ignore
+set gp_use_streaming_hashagg = off;
+-- end_ignore
 
 
 CREATE TABLE my_tq_agg_small (

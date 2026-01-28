@@ -534,6 +534,7 @@ makeFuncExpr(Oid funcid, Oid rettype, List *args,
 	funcexpr->inputcollid = inputcollid;
 	funcexpr->args = args;
 	funcexpr->location = -1;
+	funcexpr->is_tablefunc = false;
 
 	return funcexpr;
 }

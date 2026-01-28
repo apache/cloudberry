@@ -42,7 +42,7 @@ extern BlockNumber BlockSampler_Init(BlockSampler bs, BlockNumber nblocks,
 extern bool BlockSampler_HasMore(BlockSampler bs);
 extern BlockNumber BlockSampler_Next(BlockSampler bs);
 
-/* 64 bit version of BlockSampler */
+/* 64 bit version of BlockSampler (used for sampling AO/CO table rows) */
 typedef struct
 {
 	int64           N;				/* number of objects, known in advance */

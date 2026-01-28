@@ -491,6 +491,22 @@ external_getnext_init(PlanState *state)
 	return desc;
 }
 
+/*
+ * check_exec_error
+ *
+ * check CFTYPE_EXEC error after external_getnext.
+ */
+static void
+check_exec_error(FileScanDesc scan)
+{
+	char   *relname = RelationGetRelationName(scan->fs_rd);
+	if (scan->fs_file->type == CFTYPE_EXEC)
+	{
+		url_fclose(scan->fs_file, !QueryFinishPending, relname);
+		scan->fs_file = NULL;
+	}
+}
+
 /* ----------------------------------------------------------------
 *		external_getnext
 *
@@ -529,6 +545,8 @@ external_getnext(FileScanDesc scan, ScanDirection direction, ExternalSelectDesc 
 	if (tuple == NULL)
 	{
 		FILEDEBUG_2;			/* external_getnext returning EOS */
+
+		check_exec_error(scan);
 
 		return NULL;
 	}

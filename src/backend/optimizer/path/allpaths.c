@@ -1826,7 +1826,6 @@ add_paths_to_append_rel(PlannerInfo *root, RelOptInfo *rel,
 		Assert(parallel_workers > 0);
 #endif
 
-		/* GPDB parallel, parallel_workers <= 1 is bogus */
 		if (parallel_workers > 1)
 		{
 			/* Generate a partial append path. */
@@ -1840,8 +1839,38 @@ add_paths_to_append_rel(PlannerInfo *root, RelOptInfo *rel,
 			 * estimate.
 			 */
 			partial_rows = appendpath->path.rows;
-			/* Add the path if subpath has not Motion.*/
-			if (appendpath->path.parallel_safe && appendpath->path.motionHazard == false)
+
+			if (enable_parallel_append)
+			{
+				/* Add the path if subpath didn't encounter motion hazard.*/
+				if (appendpath->path.parallel_safe && (appendpath->path.motionHazard == false))
+					add_partial_path(rel, (Path *)appendpath);
+				else
+				{
+					/*
+					 * CBDB_PARALLEL:
+					 * When a parallel-aware Append is dropped due to motion hazard,
+					 * we attempt a second pass using parallel-oblivious Append.
+					 *
+					 * This approach is feasible in CBDB because:
+					 * 1. All Motions in a parallel plan handle tuples individually
+					 * 2. Parallel Append might miss executing slices containing Motions,
+					 *    whereas regular Append does not have this problem
+					 *
+					 * This behavior is conceptually similar to UPSTREAM's Append node
+					 * with partial paths implementation.
+					 */
+					appendpath = create_append_path(root, rel, NIL, partial_subpaths,
+													NIL, NULL, parallel_workers,
+													false /*enable_parallel_append*/,
+													-1);
+					partial_rows = appendpath->path.rows;
+
+					if (appendpath->path.parallel_safe)
+						add_partial_path(rel, (Path *)appendpath);
+				}
+			}
+			else if (appendpath->path.parallel_safe)
 				add_partial_path(rel, (Path *)appendpath);
 		}
 	}

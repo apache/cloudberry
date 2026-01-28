@@ -75,6 +75,8 @@ class PaxEncoder {
 
   virtual size_t GetBufferSize() const;
 
+  virtual size_t GetBoundSize(size_t src_len) const = 0;
+
   /**
    * steaming encoder
    *

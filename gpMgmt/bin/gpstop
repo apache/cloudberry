@@ -36,7 +36,7 @@ try:
     from gppylib.operations.rebalanceSegments import ReconfigDetectionSQLQueryCommand
     from gppylib.operations.detect_unreachable_hosts import get_unreachable_segment_hosts
 except ImportError as e:
-    sys.exit('ERROR: Cannot import modules.  Please check that you have sourced greenplum_path.sh.  Detail: ' + str(e))
+    sys.exit('ERROR: Cannot import modules.  Please check that you have sourced cloudberry-env.sh.  Detail: ' + str(e))
 
 DEFAULT_NUM_WORKERS = 64
 logger = get_default_logger()
@@ -959,9 +959,7 @@ class GpStop:
         
         if is_external_fts:
             if options.fts_hosts is None:
-                coordinator_data_directory = os.getenv('COORDINATOR_DATA_DIRECTORY')
-                if coordinator_data_directory is None:
-                    coordinator_data_directory = options.coordinatorDataDirectory
+                coordinator_data_directory = gp.get_coordinatordatadir()
                 
                 options.fts_hosts = coordinator_data_directory + '/config' + '/fts_host'
 

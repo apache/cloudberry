@@ -716,7 +716,7 @@ usage(void)
 		   "  -q, --quiet              quiet logging (one message each 5 seconds)\n"
 		   "  -s, --scale=NUM          scaling factor\n"
 		   "  --foreign-keys           create foreign key constraints between tables\n"
-		   "  --use-unique-keys        make the indexes that are created non-unique indexes\n"
+		   "  --use-non-unique-keys        make the indexes that are created non-unique indexes\n"
 		   "                           (default: unique)\n"
 		   "  --index-tablespace=TABLESPACE\n"
 		   "                           create indexes in the specified tablespace\n"
@@ -4382,7 +4382,11 @@ initCreatePKeys(PGconn *con)
 	int			i;
 	PQExpBufferData query;
 
-	fprintf(stderr, "creating primary keys...\n");
+	if (use_unique_key)
+		fprintf(stderr, "creating primary keys...\n");
+	else
+		fprintf(stderr, "creating non-unique keys...\n");
+
 	initPQExpBuffer(&query);
 
 	for (i = 0; i < lengthof(DDLINDEXes); i++)
@@ -5837,7 +5841,8 @@ main(int argc, char **argv)
 		{"show-script", required_argument, NULL, 10},
 		{"partitions", required_argument, NULL, 11},
 		{"partition-method", required_argument, NULL, 12},
-		{"use-unique-keys", no_argument, &use_unique_key, 1},
+		/* Cloudberry-specific */
+		{"use-non-unique-keys", no_argument, NULL, 13},
 		{NULL, 0, NULL, 0}
 	};
 
@@ -6216,6 +6221,9 @@ main(int argc, char **argv)
 								 optarg);
 					exit(1);
 				}
+				break;
+			case 13:
+				use_unique_key = 0;
 				break;
 			default:
 				fprintf(stderr, _("Try \"%s --help\" for more information.\n"), progname);

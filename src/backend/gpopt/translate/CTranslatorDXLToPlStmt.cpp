@@ -407,8 +407,13 @@ CTranslatorDXLToPlStmt::TranslateDXLOperatorToPlan(
 		}
 		case EdxlopPhysicalWindow:
 		{
-			plan = TranslateDXLWindow(dxlnode, output_context,
+			if (CDXLPhysicalWindow::Cast(dxlnode->GetOperator())->IsWindowHashAgg()) {
+				plan = TranslateDXLWindowHashAgg(dxlnode, output_context,
+									  	ctxt_translation_prev_siblings);
+			} else {
+				plan = TranslateDXLWindowAgg(dxlnode, output_context,
 									  ctxt_translation_prev_siblings);
+			}
 			break;
 		}
 		case EdxlopPhysicalSort:
@@ -2765,6 +2770,124 @@ CTranslatorDXLToPlStmt::TranslateDXLRedistributeMotionToResultHashFilters(
 	return (Plan *) result;
 }
 
+
+//---------------------------------------------------------------------------
+//	@function:
+//		CTranslatorDXLToPlStmt::TranslateAggFillInfo
+//
+//	@doc:
+//		Fill the aggregate node with aggno and aggtransno
+//
+//---------------------------------------------------------------------------
+void
+CTranslatorDXLToPlStmt::TranslateAggFillInfo(CContextDXLToPlStmt *ctx,
+											 Aggref *aggref)
+{
+	Oid aggtransfn;
+	Oid aggfinalfn;
+	Oid aggcombinefn;
+	Oid aggserialfn;
+	Oid aggdeserialfn;
+	Oid aggtranstype;
+	int32 aggtranstypmod;
+	int32 aggtransspace;
+
+	Datum initValue;
+	bool initValueIsNull;
+	List *same_input_transnos;
+
+	bool shareable;
+	int16 resulttypeLen;
+	bool resulttypeByVal;
+	int16 transtypeLen;
+	bool transtypeByVal;
+
+	int aggno, transno;
+
+	gpdb::GetAggregateInfo(aggref, &aggtransfn, &aggfinalfn,
+						   &aggcombinefn, &aggserialfn, &aggdeserialfn,
+						   &aggtranstype, &aggtransspace, &initValue,
+						   &initValueIsNull, &shareable);
+
+	/*
+	 * If transition state is of same type as first aggregated input, assume
+	 * it's the same typmod (same width) as well.  This works for cases like
+	 * MAX/MIN and is probably somewhat reasonable otherwise.
+	 */
+	aggtranstypmod = -1;
+	if (aggref->args)
+	{
+		TargetEntry *tle = (TargetEntry *) linitial(aggref->args);
+
+		if (aggtranstype == gpdb::ExprType((Node *) tle->expr))
+			aggtranstypmod = gpdb::ExprTypeMod((Node *) tle->expr);
+	}
+
+	gpdb::TypLenByVal(aggref->aggtype, &resulttypeLen, &resulttypeByVal);
+
+	/*
+	 * 1. See if this is identical to another aggregate function call that
+	 * we've seen already.
+	 */
+	aggno = gpdb::FindCompatibleAgg(ctx->GetAggInfos(), aggref,
+									&same_input_transnos);
+	if (aggno != -1)
+	{
+		AggInfo *agginfo = (AggInfo *) gpdb::ListNth(ctx->GetAggInfos(), aggno);
+
+		transno = agginfo->transno;
+	}
+	else
+	{
+		AggInfo *agginfo = (AggInfo *) gpdb::GPDBAlloc(sizeof(AggInfo));
+
+		agginfo->finalfn_oid = aggfinalfn;
+		agginfo->representative_aggref = aggref;
+		agginfo->shareable = shareable;
+
+		aggno = gpdb::ListLength(ctx->GetAggInfos());
+		ctx->AppendAggInfos(agginfo);
+
+		gpdb::TypLenByVal(aggtranstype, &transtypeLen, &transtypeByVal);
+
+		/*
+		 * 2. See if this aggregate can share transition state with another
+		 * aggregate that we've initialized already.
+		 */
+		transno = gpdb::FindCompatibleTrans(
+			ctx->GetAggTransInfos(), shareable, aggtransfn, aggtranstype,
+			transtypeLen, transtypeByVal, aggcombinefn, aggserialfn,
+			aggdeserialfn, initValue, initValueIsNull, same_input_transnos);
+		if (transno == -1)
+		{
+			AggTransInfo *transinfo =
+				(AggTransInfo *) gpdb::GPDBAlloc(sizeof(AggTransInfo));
+
+			transinfo->args = aggref->args;
+			transinfo->aggfilter = aggref->aggfilter;
+			transinfo->transfn_oid = aggtransfn;
+			transinfo->combinefn_oid = aggcombinefn;
+			transinfo->serialfn_oid = aggserialfn;
+			transinfo->deserialfn_oid = aggdeserialfn;
+			transinfo->aggtranstype = aggtranstype;
+			transinfo->aggtranstypmod = aggtranstypmod;
+			transinfo->transtypeLen = transtypeLen;
+			transinfo->transtypeByVal = transtypeByVal;
+			transinfo->aggtransspace = aggtransspace;
+			transinfo->initValue = initValue;
+			transinfo->initValueIsNull = initValueIsNull;
+
+			transno = gpdb::ListLength(ctx->GetAggTransInfos());
+			ctx->AppendAggTransInfos(transinfo);
+		}
+		agginfo->transno = transno;
+	}
+
+	// setting the aggno and transno
+	aggref->aggno = aggno;
+	aggref->aggtransno = transno;
+}
+
 //---------------------------------------------------------------------------
 //	@function:
 //		CTranslatorDXLToPlStmt::TranslateDXLAgg
@@ -2811,44 +2934,6 @@ CTranslatorDXLToPlStmt::TranslateDXLAgg(
 							   nullptr,	 // translate context for the base table
 							   child_contexts,	// pdxltrctxRight,
 							   &plan->targetlist, &plan->qual, output_context);
-
-	/*
-	 * GPDB_14_MERGE_FIXME: TODO Deduplicate aggregates and transition functions in orca
-	 */
-	// Set the aggsplit for the agg node
-	ListCell *lc;
-	INT aggsplit = 0;
-	int idx = 0;
-	ForEach (lc, plan->targetlist)
-	{
-		TargetEntry *te = (TargetEntry *) lfirst(lc);
-		if (IsA(te->expr, Aggref))
-		{
-			Aggref *aggref = (Aggref *) te->expr;
-
-			if (AGGSPLIT_INTERMEDIATE != aggsplit)
-			{
-				aggsplit |= aggref->aggsplit;
-			}
-
-			aggref->aggno = idx;
-			aggref->aggtransno = idx;
-			idx++;
-		}
-	}
-	agg->aggsplit = (AggSplit) aggsplit;
-
-	ForEach (lc, plan->qual)
-	{
-		Expr *expr = (Expr *) lfirst(lc);
-		if (IsA(expr, Aggref))
-		{
-			Aggref *aggref = (Aggref *) expr;
-			aggref->aggno = idx;
-			aggref->aggtransno = idx;
-			idx++;
-		}
-	}
 
 	plan->lefttree = child_plan;
 
@@ -2919,6 +3004,39 @@ CTranslatorDXLToPlStmt::TranslateDXLAgg(
 
 	agg->numGroups =
 		std::max(1L, (long) std::min(agg->plan.plan_rows, (double) LONG_MAX));
+
+	// Set the aggsplit,aggno,aggtransno for the agg node
+	ListCell *lc;
+	INT aggsplit = 0;
+	ForEach (lc, plan->targetlist)
+	{
+		TargetEntry *te = (TargetEntry *) lfirst(lc);
+		if (IsA(te->expr, Aggref))
+		{
+			Aggref *aggref = (Aggref *) te->expr;
+
+			if (AGGSPLIT_INTERMEDIATE != aggsplit)
+			{
+				aggsplit |= aggref->aggsplit;
+			}
+			TranslateAggFillInfo(m_dxl_to_plstmt_context, aggref);
+		}
+	}
+	agg->aggsplit = (AggSplit) aggsplit;
+
+	ForEach (lc, plan->qual)
+	{
+		Expr *expr = (Expr *) lfirst(lc);
+		if (IsA(expr, Aggref))
+		{
+			Aggref *aggref = (Aggref *) expr;
+			// ORCA won't create the qual but a scalar in AGG
+			TranslateAggFillInfo(m_dxl_to_plstmt_context, aggref);
+		}
+	}
+
+	m_dxl_to_plstmt_context->ResetAggInfosAndTransInfos();
+
 	SetParamIds(plan);
 
 	// cleanup
@@ -2927,16 +3045,121 @@ CTranslatorDXLToPlStmt::TranslateDXLAgg(
 	return (Plan *) agg;
 }
 
+static
+int WindowFrameSpecToOptions(const EdxlFrameSpec &dxlFS) {
+	int winFrameOptions = 0;
+	if (EdxlfsRow == dxlFS)
+	{
+		winFrameOptions |= FRAMEOPTION_ROWS;
+	}
+	else if (EdxlfsGroups == dxlFS)
+	{
+		winFrameOptions |= FRAMEOPTION_GROUPS;
+	}
+	else
+	{
+		winFrameOptions |= FRAMEOPTION_RANGE;
+	}
+	return winFrameOptions;
+}
+
+static
+int WindowFrameExclusionStrategyToOptions(const EdxlFrameExclusionStrategy &dxlFES) {
+	int winFrameOptions = 0;
+	if (dxlFES == EdxlfesCurrentRow)
+	{
+		winFrameOptions |= FRAMEOPTION_EXCLUDE_CURRENT_ROW;
+	}
+	else if (dxlFES == EdxlfesGroup)
+	{
+		winFrameOptions |= FRAMEOPTION_EXCLUDE_GROUP;
+	}
+	else if (dxlFES == EdxlfesTies)
+	{
+		winFrameOptions |= FRAMEOPTION_EXCLUDE_TIES;
+	}
+
+	return winFrameOptions;
+}
+
+static 
+int WindowFrameStartBoundaryToOptions(const EdxlFrameBoundary &dxlFB) {
+	int winFrameOptions = 0;
+	if (dxlFB == EdxlfbUnboundedPreceding)
+	{
+		winFrameOptions |= FRAMEOPTION_START_UNBOUNDED_PRECEDING;
+	}
+	if (dxlFB == EdxlfbBoundedPreceding)
+	{
+		winFrameOptions |= FRAMEOPTION_START_OFFSET_PRECEDING;
+	}
+	if (dxlFB == EdxlfbCurrentRow)
+	{
+		winFrameOptions |= FRAMEOPTION_START_CURRENT_ROW;
+	}
+	if (dxlFB == EdxlfbBoundedFollowing)
+	{
+		winFrameOptions |= FRAMEOPTION_START_OFFSET_FOLLOWING;
+	}
+	if (dxlFB == EdxlfbUnboundedFollowing)
+	{
+		winFrameOptions |= FRAMEOPTION_START_UNBOUNDED_FOLLOWING;
+	}
+	if (dxlFB == EdxlfbDelayedBoundedPreceding)
+	{
+		winFrameOptions |= FRAMEOPTION_START_OFFSET_PRECEDING;
+	}
+	if (dxlFB == EdxlfbDelayedBoundedFollowing)
+	{
+		winFrameOptions |= FRAMEOPTION_START_OFFSET_FOLLOWING;
+	}
+	return winFrameOptions;
+}
+
+static 
+int WindowFrameEndBoundaryToOptions(const EdxlFrameBoundary &dxlFB) {
+	int winFrameOptions = 0;
+	if (dxlFB == EdxlfbUnboundedPreceding)
+	{
+		winFrameOptions |= FRAMEOPTION_END_UNBOUNDED_PRECEDING;
+	}
+	if (dxlFB == EdxlfbBoundedPreceding)
+	{
+		winFrameOptions |= FRAMEOPTION_END_OFFSET_PRECEDING;
+	}
+	if (dxlFB == EdxlfbCurrentRow)
+	{
+		winFrameOptions |= FRAMEOPTION_END_CURRENT_ROW;
+	}
+	if (dxlFB == EdxlfbBoundedFollowing)
+	{
+		winFrameOptions |= FRAMEOPTION_END_OFFSET_FOLLOWING;
+	}
+	if (dxlFB == EdxlfbUnboundedFollowing)
+	{
+		winFrameOptions |= FRAMEOPTION_END_UNBOUNDED_FOLLOWING;
+	}
+	if (dxlFB == EdxlfbDelayedBoundedPreceding)
+	{
+		winFrameOptions |= FRAMEOPTION_END_OFFSET_PRECEDING;
+	}
+	if (dxlFB == EdxlfbDelayedBoundedFollowing)
+	{
+		winFrameOptions |= FRAMEOPTION_END_OFFSET_FOLLOWING;
+	}
+	return winFrameOptions;
+}
+
 //---------------------------------------------------------------------------
 //	@function:
-//		CTranslatorDXLToPlStmt::TranslateDXLWindow
+//		CTranslatorDXLToPlStmt::TranslateDXLWindowAgg
 //
 //	@doc:
 //		Translate DXL window node into GPDB window plan node
 //
 //---------------------------------------------------------------------------
 Plan *
-CTranslatorDXLToPlStmt::TranslateDXLWindow(
+CTranslatorDXLToPlStmt::TranslateDXLWindowAgg(
 	const CDXLNode *window_dxlnode, CDXLTranslateContext *output_context,
 	CDXLTranslationContextArray *ctxt_translation_prev_siblings)
 {
@@ -2991,9 +3214,6 @@ CTranslatorDXLToPlStmt::TranslateDXLWindow(
 	const ULongPtrArray *part_by_cols_array =
 		window_dxlop->GetPartByColsArray();
 	window->partNumCols = part_by_cols_array->Size();
-	window->partColIdx = nullptr;
-	window->partOperators = nullptr;
-	window->partCollations = nullptr;
 
 	if (window->partNumCols > 0)
 	{
@@ -3003,6 +3223,10 @@ CTranslatorDXLToPlStmt::TranslateDXLWindow(
 			(Oid *) gpdb::GPDBAlloc(window->partNumCols * sizeof(Oid));
 		window->partCollations =
 			(Oid *) gpdb::GPDBAlloc(window->partNumCols * sizeof(Oid));
+	} else {
+		window->partColIdx = nullptr;
+		window->partOperators = nullptr;
+		window->partCollations = nullptr;
 	}
 
 	const ULONG num_of_part_cols = part_by_cols_array->Size();
@@ -3083,33 +3307,9 @@ CTranslatorDXLToPlStmt::TranslateDXLWindow(
 		if (nullptr != window_key->GetWindowFrame())
 		{
 			window->frameOptions = FRAMEOPTION_NONDEFAULT;
-			if (EdxlfsRow == window_frame->ParseDXLFrameSpec())
-			{
-				window->frameOptions |= FRAMEOPTION_ROWS;
-			}
-			else if (EdxlfsGroups == window_frame->ParseDXLFrameSpec())
-			{
-				window->frameOptions |= FRAMEOPTION_GROUPS;
-			}
-			else
-			{
-				window->frameOptions |= FRAMEOPTION_RANGE;
-			}
-
-			if (window_frame->ParseFrameExclusionStrategy() ==
-				EdxlfesCurrentRow)
-			{
-				window->frameOptions |= FRAMEOPTION_EXCLUDE_CURRENT_ROW;
-			}
-			else if (window_frame->ParseFrameExclusionStrategy() ==
-					 EdxlfesGroup)
-			{
-				window->frameOptions |= FRAMEOPTION_EXCLUDE_GROUP;
-			}
-			else if (window_frame->ParseFrameExclusionStrategy() == EdxlfesTies)
-			{
-				window->frameOptions |= FRAMEOPTION_EXCLUDE_TIES;
-			}
+			window->frameOptions |= WindowFrameSpecToOptions(window_frame->ParseDXLFrameSpec());
+			window->frameOptions |= WindowFrameExclusionStrategyToOptions(
+				window_frame->ParseFrameExclusionStrategy());
 
 			// translate the CDXLNodes representing the leading and trailing edge
 			CDXLTranslationContextArray *child_contexts =
@@ -3127,38 +3327,9 @@ CTranslatorDXLToPlStmt::TranslateDXLWindow(
 			// without our help.
 			//
 			CDXLNode *win_frame_leading_dxlnode = window_frame->PdxlnLeading();
-			EdxlFrameBoundary lead_boundary_type =
-				CDXLScalarWindowFrameEdge::Cast(
-					win_frame_leading_dxlnode->GetOperator())
-					->ParseDXLFrameBoundary();
-			if (lead_boundary_type == EdxlfbUnboundedPreceding)
-			{
-				window->frameOptions |= FRAMEOPTION_START_UNBOUNDED_PRECEDING;
-			}
-			if (lead_boundary_type == EdxlfbBoundedPreceding)
-			{
-				window->frameOptions |= FRAMEOPTION_START_OFFSET_PRECEDING;
-			}
-			if (lead_boundary_type == EdxlfbCurrentRow)
-			{
-				window->frameOptions |= FRAMEOPTION_START_CURRENT_ROW;
-			}
-			if (lead_boundary_type == EdxlfbBoundedFollowing)
-			{
-				window->frameOptions |= FRAMEOPTION_START_OFFSET_FOLLOWING;
-			}
-			if (lead_boundary_type == EdxlfbUnboundedFollowing)
-			{
-				window->frameOptions |= FRAMEOPTION_START_UNBOUNDED_FOLLOWING;
-			}
-			if (lead_boundary_type == EdxlfbDelayedBoundedPreceding)
-			{
-				window->frameOptions |= FRAMEOPTION_START_OFFSET_PRECEDING;
-			}
-			if (lead_boundary_type == EdxlfbDelayedBoundedFollowing)
-			{
-				window->frameOptions |= FRAMEOPTION_START_OFFSET_FOLLOWING;
-			}
+			window->frameOptions |= WindowFrameStartBoundaryToOptions(
+					CDXLScalarWindowFrameEdge::Cast(win_frame_leading_dxlnode->GetOperator())
+					->ParseDXLFrameBoundary());
 			if (0 != win_frame_leading_dxlnode->Arity())
 			{
 				window->startOffset =
@@ -3169,38 +3340,215 @@ CTranslatorDXLToPlStmt::TranslateDXLWindow(
 			// And the same for the trail boundary
 			CDXLNode *win_frame_trailing_dxlnode =
 				window_frame->PdxlnTrailing();
-			EdxlFrameBoundary trail_boundary_type =
+			window->frameOptions |= WindowFrameEndBoundaryToOptions(
 				CDXLScalarWindowFrameEdge::Cast(
 					win_frame_trailing_dxlnode->GetOperator())
-					->ParseDXLFrameBoundary();
-			if (trail_boundary_type == EdxlfbUnboundedPreceding)
+					->ParseDXLFrameBoundary());
+
+			if (0 != win_frame_trailing_dxlnode->Arity())
 			{
-				window->frameOptions |= FRAMEOPTION_END_UNBOUNDED_PRECEDING;
+				window->endOffset =
+					(Node *) m_translator_dxl_to_scalar->TranslateDXLToScalar(
+						(*win_frame_trailing_dxlnode)[0], &colid_var_mapping);
 			}
-			if (trail_boundary_type == EdxlfbBoundedPreceding)
+
+			window->startInRangeFunc = window_frame->PdxlnStartInRangeFunc();
+			window->endInRangeFunc = window_frame->PdxlnEndInRangeFunc();
+			window->inRangeColl = window_frame->PdxlnInRangeColl();
+			window->inRangeAsc = window_frame->PdxlnInRangeAsc();
+			window->inRangeNullsFirst = window_frame->PdxlnInRangeNullsFirst();
+
+			// cleanup
+			child_contexts->Release();
+		}
+		else
+		{
+			window->frameOptions = FRAMEOPTION_DEFAULTS;
+		}
+	}
+
+	SetParamIds(plan);
+
+	// cleanup
+	child_contexts->Release();
+
+	return (Plan *) window;
+}
+
+//---------------------------------------------------------------------------
+//	@function:
+//		CTranslatorDXLToPlStmt::TranslateDXLWindowHashAgg
+//
+//	@doc:
+//		Translate DXL window node into GPDB window hash plan node
+//
+//---------------------------------------------------------------------------
+Plan *
+CTranslatorDXLToPlStmt::TranslateDXLWindowHashAgg(
+	const CDXLNode *window_dxlnode, CDXLTranslateContext *output_context,
+	CDXLTranslationContextArray *ctxt_translation_prev_siblings)
+{
+	WindowHashAgg *window = MakeNode(WindowHashAgg);
+
+	Plan *plan = &(window->plan);
+	plan->plan_node_id = m_dxl_to_plstmt_context->GetNextPlanId();
+
+	CDXLPhysicalWindow *window_dxlop =
+		CDXLPhysicalWindow::Cast(window_dxlnode->GetOperator());
+
+	// translate the operator costs
+	TranslatePlanCosts(window_dxlnode, plan);
+
+	// translate children
+	CDXLNode *child_dxlnode = (*window_dxlnode)[EdxlwindowIndexChild];
+	CDXLNode *project_list_dxlnode = (*window_dxlnode)[EdxlwindowIndexProjList];
+	CDXLNode *filter_dxlnode = (*window_dxlnode)[EdxlwindowIndexFilter];
+
+	CDXLTranslateContext child_context(m_mp, true,
+									   output_context->GetColIdToParamIdMap());
+	Plan *child_plan = TranslateDXLOperatorToPlan(
+		child_dxlnode, &child_context, ctxt_translation_prev_siblings);
+
+	CDXLTranslationContextArray *child_contexts =
+		GPOS_NEW(m_mp) CDXLTranslationContextArray(m_mp);
+	child_contexts->Append(&child_context);
+
+	// translate proj list and filter
+	TranslateProjListAndFilter(project_list_dxlnode, filter_dxlnode,
+							   nullptr,	 // translate context for the base table
+							   child_contexts,	// pdxltrctxRight,
+							   &plan->targetlist, &plan->qual, output_context);
+
+	ListCell *lc;
+
+	foreach (lc, plan->targetlist)
+	{
+		TargetEntry *target_entry = (TargetEntry *) lfirst(lc);
+		if (IsA(target_entry->expr, WindowFunc))
+		{
+			WindowFunc *window_func = (WindowFunc *) target_entry->expr;
+			window->winref = window_func->winref;
+			break;
+		}
+	}
+
+	plan->lefttree = child_plan;
+
+	// translate partition columns
+	const ULongPtrArray *part_by_cols_array =
+		window_dxlop->GetPartByColsArray();
+	window->partNumCols = part_by_cols_array->Size();
+
+	if (window->partNumCols > 0)
+	{
+		window->partColIdx = (AttrNumber *) gpdb::GPDBAlloc(
+			window->partNumCols * sizeof(AttrNumber));
+		window->partOperators =
+			(Oid *) gpdb::GPDBAlloc(window->partNumCols * sizeof(Oid));
+		window->partCollations =
+			(Oid *) gpdb::GPDBAlloc(window->partNumCols * sizeof(Oid));
+	} else {
+		window->partColIdx = nullptr;
+		window->partOperators = nullptr;
+		window->partCollations = nullptr;
+	}
+
+	const ULONG num_of_part_cols = part_by_cols_array->Size();
+	for (ULONG ul = 0; ul < num_of_part_cols; ul++)
+	{
+		ULONG part_colid = *((*part_by_cols_array)[ul]);
+		const TargetEntry *te_part_colid =
+			child_context.GetTargetEntry(part_colid);
+		if (nullptr == te_part_colid)
+		{
+			GPOS_RAISE(gpdxl::ExmaDXL, gpdxl::ExmiDXL2PlStmtAttributeNotFound,
+					   part_colid);
+		}
+		window->partColIdx[ul] = te_part_colid->resno;
+
+		// Also find the equality operators to use for each partitioning key col.
+		Oid type_id = gpdb::ExprType((Node *) te_part_colid->expr);
+		window->partOperators[ul] = gpdb::GetEqualityOp(type_id);
+		Assert(window->partOperators[ul] != 0);
+		window->partCollations[ul] =
+			gpdb::ExprCollation((Node *) te_part_colid->expr);
+	}
+
+	// translate window keys
+	const ULONG size = window_dxlop->WindowKeysCount();
+	if (size > 1)
+	{
+		GpdbEreport(ERRCODE_INTERNAL_ERROR, ERROR,
+					"ORCA produced a plan with more than one window key",
+					nullptr);
+	}
+	GPOS_ASSERT(size <= 1 && "cannot have more than one window key");
+
+	if (size == 1)
+	{
+		// translate the sorting columns used in the window key
+		const CDXLWindowKey *window_key = window_dxlop->GetDXLWindowKeyAt(0);
+		const CDXLWindowFrame *window_frame = window_key->GetWindowFrame();
+		const CDXLNode *sort_col_list_dxlnode = window_key->GetSortColListDXL();
+
+		const ULONG num_of_cols = sort_col_list_dxlnode->Arity();
+
+		window->ordNumCols = num_of_cols;
+		window->ordColIdx =
+			(AttrNumber *) gpdb::GPDBAlloc(num_of_cols * sizeof(AttrNumber));
+		window->ordOperators =
+			(Oid *) gpdb::GPDBAlloc(num_of_cols * sizeof(Oid));
+		window->ordCollations =
+			(Oid *) gpdb::GPDBAlloc(num_of_cols * sizeof(Oid));
+		window->ordNullsFirst =
+			(bool *) gpdb::GPDBAlloc(num_of_cols * sizeof(bool));
+		// different with windowagg, sort should be full
+		TranslateSortCols(sort_col_list_dxlnode, &child_context,
+						  window->ordColIdx, window->ordOperators,
+						  window->ordCollations, window->ordNullsFirst);
+
+		// translate the window frame specified in the window key
+		if (nullptr != window_key->GetWindowFrame())
+		{
+			window->frameOptions = FRAMEOPTION_NONDEFAULT;
+			window->frameOptions |= WindowFrameSpecToOptions(window_frame->ParseDXLFrameSpec());
+			window->frameOptions |= WindowFrameExclusionStrategyToOptions(
+				window_frame->ParseFrameExclusionStrategy());
+
+			// translate the CDXLNodes representing the leading and trailing edge
+			CDXLTranslationContextArray *child_contexts =
+				GPOS_NEW(m_mp) CDXLTranslationContextArray(m_mp);
+			child_contexts->Append(&child_context);
+
+			CMappingColIdVarPlStmt colid_var_mapping =
+				CMappingColIdVarPlStmt(m_mp, nullptr, child_contexts,
+									   output_context, m_dxl_to_plstmt_context);
+
+			// Translate lead boundary
+			//
+			// Note that we don't distinguish between the delayed and undelayed
+			// versions beoynd this point. Executor will make that decision
+			// without our help.
+			//
+			CDXLNode *win_frame_leading_dxlnode = window_frame->PdxlnLeading();
+			window->frameOptions |= WindowFrameStartBoundaryToOptions(
+					CDXLScalarWindowFrameEdge::Cast(win_frame_leading_dxlnode->GetOperator())
+					->ParseDXLFrameBoundary());
+			if (0 != win_frame_leading_dxlnode->Arity())
 			{
-				window->frameOptions |= FRAMEOPTION_END_OFFSET_PRECEDING;
+				window->startOffset =
+					(Node *) m_translator_dxl_to_scalar->TranslateDXLToScalar(
+						(*win_frame_leading_dxlnode)[0], &colid_var_mapping);
 			}
-			if (trail_boundary_type == EdxlfbCurrentRow)
-			{
-				window->frameOptions |= FRAMEOPTION_END_CURRENT_ROW;
-			}
-			if (trail_boundary_type == EdxlfbBoundedFollowing)
-			{
-				window->frameOptions |= FRAMEOPTION_END_OFFSET_FOLLOWING;
-			}
-			if (trail_boundary_type == EdxlfbUnboundedFollowing)
-			{
-				window->frameOptions |= FRAMEOPTION_END_UNBOUNDED_FOLLOWING;
-			}
-			if (trail_boundary_type == EdxlfbDelayedBoundedPreceding)
-			{
-				window->frameOptions |= FRAMEOPTION_END_OFFSET_PRECEDING;
-			}
-			if (trail_boundary_type == EdxlfbDelayedBoundedFollowing)
-			{
-				window->frameOptions |= FRAMEOPTION_END_OFFSET_FOLLOWING;
-			}
+
+			// And the same for the trail boundary
+			CDXLNode *win_frame_trailing_dxlnode =
+				window_frame->PdxlnTrailing();
+			window->frameOptions |= WindowFrameEndBoundaryToOptions(
+				CDXLScalarWindowFrameEdge::Cast(
+					win_frame_trailing_dxlnode->GetOperator())
+					->ParseDXLFrameBoundary());
+
 			if (0 != win_frame_trailing_dxlnode->Arity())
 			{
 				window->endOffset =
@@ -3917,6 +4265,31 @@ CTranslatorDXLToPlStmt::TranslateDXLAppend(
 	GPOS_ASSERT(EdxlappendIndexFirstChild < arity);
 	append->appendplans = NIL;
 
+	// translate table descriptor into a range table entry
+	CDXLPhysicalAppend *phy_append_dxlop =
+		CDXLPhysicalAppend::Cast(append_dxlnode->GetOperator());
+
+	// If this append was create from a DynamicTableScan node in ORCA, it will
+	// contain the table descriptor of the root partitioned table. Add that to
+	// the range table in the PlStmt.
+	if (phy_append_dxlop->GetScanId() != gpos::ulong_max)
+	{
+		GPOS_ASSERT(nullptr != phy_append_dxlop->GetDXLTableDesc());
+
+		// translation context for column mappings in the base relation
+		CDXLTranslateContextBaseTable base_table_context(m_mp);
+
+		(void) ProcessDXLTblDescr(phy_append_dxlop->GetDXLTableDesc(),
+								  &base_table_context);
+
+		OID oid_type =
+			CMDIdGPDB::CastMdid(m_md_accessor->PtMDType<IMDTypeInt4>()->MDId())
+				->Oid();
+		append->join_prune_paramids =
+			TranslateJoinPruneParamids(phy_append_dxlop->GetSelectorIds(),
+									   oid_type, m_dxl_to_plstmt_context);
+	}
+
 	// translate children
 	CDXLTranslateContext child_context(m_mp, false,
 									   output_context->GetColIdToParamIdMap());
@@ -4072,15 +4445,16 @@ CTranslatorDXLToPlStmt::TranslateDXLCTEProducerToSharedScan(
 		CDXLPhysicalCTEProducer::Cast(cte_producer_dxlnode->GetOperator());
 	ULONG cte_id = cte_prod_dxlop->Id();
 
-	// create the shared input scan representing the CTE Producer
+	// create the Share Input Scan representing the CTE Producer
 	ShareInputScan *shared_input_scan = MakeNode(ShareInputScan);
 	shared_input_scan->share_id = cte_id;
 	shared_input_scan->discard_output = true;
+
 	Plan *plan = &(shared_input_scan->scan.plan);
 	plan->plan_node_id = m_dxl_to_plstmt_context->GetNextPlanId();
 
-	// store share scan node for the translation of CTE Consumers
-	m_dxl_to_plstmt_context->AddCTEConsumerInfo(cte_id, shared_input_scan);
+	m_dxl_to_plstmt_context->RegisterCTEProducerInfo(cte_id, 
+		cte_prod_dxlop->GetOutputColIdxMap(), shared_input_scan);
 
 	// translate cost of the producer
 	TranslatePlanCosts(cte_producer_dxlnode, plan);
@@ -4130,7 +4504,16 @@ CTranslatorDXLToPlStmt::TranslateDXLCTEConsumerToSharedScan(
 	CDXLPhysicalCTEConsumer *cte_consumer_dxlop =
 		CDXLPhysicalCTEConsumer::Cast(cte_consumer_dxlnode->GetOperator());
 	ULONG cte_id = cte_consumer_dxlop->Id();
+	ULongPtrArray *output_colidx_map = cte_consumer_dxlop->GetOutputColIdxMap();
 
+	// get the producer idx map
+	ULongPtrArray *producer_colidx_map;
+	ShareInputScan *share_input_scan_cte_producer;
+	
+	std::tie(producer_colidx_map, share_input_scan_cte_producer) 
+		= m_dxl_to_plstmt_context->GetCTEProducerInfo(cte_id);
+
+	// init the consumer plan
 	ShareInputScan *share_input_scan_cte_consumer = MakeNode(ShareInputScan);
 	share_input_scan_cte_consumer->share_id = cte_id;
 	share_input_scan_cte_consumer->discard_output = false;
@@ -4153,6 +4536,17 @@ CTranslatorDXLToPlStmt::TranslateDXLCTEConsumerToSharedScan(
 	GPOS_ASSERT(num_of_proj_list_elem == output_colids_array->Size());
 	for (ULONG ul = 0; ul < num_of_proj_list_elem; ul++)
 	{
+		AttrNumber varattno = (AttrNumber)ul + 1;
+		if (output_colidx_map) {
+			ULONG remapping_idx;
+			remapping_idx = *(*output_colidx_map)[ul];
+			if (producer_colidx_map) {
+				remapping_idx = *(*producer_colidx_map)[remapping_idx];
+			}
+			GPOS_ASSERT(remapping_idx != gpos::ulong_max);
+			varattno = (AttrNumber)remapping_idx + 1;
+		}
+
 		CDXLNode *proj_elem_dxlnode = (*project_list_dxlnode)[ul];
 		CDXLScalarProjElem *sc_proj_elem_dxlop =
 			CDXLScalarProjElem::Cast(proj_elem_dxlnode->GetOperator());
@@ -4165,7 +4559,7 @@ CTranslatorDXLToPlStmt::TranslateDXLCTEConsumerToSharedScan(
 		OID oid_type = CMDIdGPDB::CastMdid(sc_ident_dxlop->MdidType())->Oid();
 
 		Var *var =
-			gpdb::MakeVar(OUTER_VAR, (AttrNumber)(ul + 1), oid_type,
+			gpdb::MakeVar(OUTER_VAR, varattno, oid_type,
 						  sc_ident_dxlop->TypeModifier(), 0 /* varlevelsup */);
 
 		CHAR *resname = CTranslatorUtils::CreateMultiByteCharStringFromWCString(
@@ -4181,9 +4575,17 @@ CTranslatorDXLToPlStmt::TranslateDXLCTEConsumerToSharedScan(
 
 	SetParamIds(plan);
 
-	// store share scan node for the translation of CTE Consumers
-	m_dxl_to_plstmt_context->AddCTEConsumerInfo(cte_id,
-												share_input_scan_cte_consumer);
+	// DON'T REMOVE, if current consumer need projection, then we can direct add it.
+	// we still keep the path of projection in consumer
+	
+	// 	Plan *producer_plan = &(share_input_scan_cte_producer->scan.plan);
+	// if (output_colidx_map != nullptr) {
+	// 	share_input_scan_cte_consumer->need_projection = true;
+	// 	share_input_scan_cte_consumer->producer_targetlist = gpdb::ListCopy(producer_plan->targetlist);
+	// 	if (!share_input_scan_cte_consumer->producer_targetlist) {
+	// 		share_input_scan_cte_consumer->need_projection = false;
+	// 	}
+	// }
 
 	return (Plan *) share_input_scan_cte_consumer;
 }

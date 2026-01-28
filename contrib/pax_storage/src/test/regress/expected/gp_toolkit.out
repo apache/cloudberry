@@ -304,7 +304,7 @@ update pg_statistic set stawidth=2034567890 where starelid = 'wide_width_test'::
 select btdrelpages, btdexppages from gp_toolkit.gp_bloat_expected_pages where btdrelid='wide_width_test'::regclass;
  btdrelpages | btdexppages 
 -------------+-------------
-           4 |  3104504228
+           1 |  3104504228
 (1 row)
 
 select * from gp_toolkit.gp_bloat_diag WHERE bdinspname <> 'pg_catalog';

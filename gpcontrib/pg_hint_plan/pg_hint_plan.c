@@ -428,7 +428,7 @@ pg_hint_plan_add_paths_to_joinrel(PlannerInfo *root,
 static void *external_plan_hint_hook(Query *parse);
 #endif
 static PlannedStmt *pg_hint_plan_planner(Query *parse, const char *query_string, int cursorOptions,
-										 ParamListInfo boundParams);
+										 ParamListInfo boundParams, OptimizerOptions *optimizer_options);
 static RelOptInfo *pg_hint_plan_join_search(PlannerInfo *root,
 											int levels_needed,
 											List *initial_rels);
@@ -3118,7 +3118,7 @@ pg_hint_plan_ProcessUtility(PlannedStmt *pstmt, const char *queryString,
  */
 static PlannedStmt *
 pg_hint_plan_planner(Query *parse, const char *query_string,
-	int cursorOptions, ParamListInfo boundParams)
+	int cursorOptions, ParamListInfo boundParams, OptimizerOptions *optimizer_options)
 {
 	int				save_nestlevel;
 	PlannedStmt	   *result;
@@ -3236,9 +3236,9 @@ pg_hint_plan_planner(Query *parse, const char *query_string,
 		}
 
 		if (prev_planner)
-			result = (*prev_planner) (parse, query_string, cursorOptions, boundParams);
+			result = (*prev_planner) (parse, query_string, cursorOptions, boundParams, optimizer_options);
 		else
-			result = standard_planner(parse, query_string, cursorOptions, boundParams);
+			result = standard_planner(parse, query_string, cursorOptions, boundParams, optimizer_options);
 
 		current_hint_str = prev_hint_str;
 		recurse_level--;
@@ -3298,9 +3298,9 @@ standard_planner_proc:
 	}
 	current_hint_state = NULL;
 	if (prev_planner)
-		result =  (*prev_planner) (parse, query_string, cursorOptions, boundParams);
+		result =  (*prev_planner) (parse, query_string, cursorOptions, boundParams, optimizer_options);
 	else
-		result = standard_planner(parse, query_string, cursorOptions, boundParams);
+		result = standard_planner(parse, query_string, cursorOptions, boundParams, optimizer_options);
 
 	/* The upper-level planner still needs the current hint state */
 	if (HintStateStack != NIL)

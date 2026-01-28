@@ -198,7 +198,7 @@ dblink_get_conn(char *conname_or_str,
 		connstr = get_connect_string(conname_or_str);
 		if (connstr == NULL)
 			connstr = conname_or_str;
-		dblink_connstr_check(connstr);
+		connstr = dblink_connstr_check(connstr);
 
 		/*
 		 * We must obey fd.c's limit on non-virtual file descriptors.  Assume
@@ -312,7 +312,6 @@ dblink_connect(PG_FUNCTION_ARGS)
 
 	/* check password in connection string if not superuser */
 	connstr = dblink_connstr_check(connstr);
-	dblink_connstr_check(connstr);
 
 	/*
 	 * We must obey fd.c's limit on non-virtual file descriptors.  Assume that

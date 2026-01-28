@@ -79,7 +79,8 @@ static List *plan_union_children(PlannerInfo *root,
 								 List *refnames_tlist,
 								 List **tlist_list);
 static Path *make_union_unique(SetOperationStmt *op, Path *path, List *tlist,
-							   PlannerInfo *root);
+							   PlannerInfo *root,
+							   Relids relids);
 static void postprocess_setop_rel(PlannerInfo *root, RelOptInfo *rel);
 static bool choose_hashed_setop(PlannerInfo *root, List *groupClauses,
 								Path *input_path,
@@ -573,7 +574,7 @@ generate_recursion_path(SetOperationStmt *setOp, PlannerInfo *root,
 	if (!setOp->all && CdbPathLocus_IsPartitioned(path->locus))
 	{
 		path = make_motion_hash_all_targets(root, path, tlist);
-		path = make_union_unique(setOp, path, tlist, root);
+		path = make_union_unique(setOp, path, tlist, root, bms_union(lrel->relids, rrel->relids));
 	}
 
 	add_path(result_rel, path, root);
@@ -595,7 +596,7 @@ generate_union_paths(SetOperationStmt *op, PlannerInfo *root,
 	ListCell   *lc;
 	List	   *pathlist = NIL;
 	List	   *partial_pathlist = NIL;
-	bool		partial_paths_valid = false; /* CBDB_PARALLEL_FIXME: temproary disable partial path */
+	bool		partial_paths_valid = true;
 	bool		consider_parallel = true;
 	List	   *rellist;
 	List	   *tlist_list;
@@ -680,7 +681,7 @@ generate_union_paths(SetOperationStmt *op, PlannerInfo *root,
 			/* CDB: Hash motion to collocate non-distinct tuples. */
 			path = make_motion_hash_all_targets(root, path, tlist);
 		}
-		path = make_union_unique(op, path, tlist, root);
+		path = make_union_unique(op, path, tlist, root, relids);
 	}
 
 	add_path(result_rel, path, root);
@@ -709,7 +710,16 @@ generate_union_paths(SetOperationStmt *op, PlannerInfo *root,
 
 			parallel_workers = Max(parallel_workers, path->parallel_workers);
 		}
+#if 0
+		/*
+		 * CBDB_PARALLEL:
+		 * Unlike upstream, this scenario can occur when there are paths with
+		 * parallel_workers set to 0, but have subpaths with parallel_workers > 0.
+		 * This is a valid case that allows our Cloudberry
+		 * to maximize parallel execution where possible.
+		 */
 		Assert(parallel_workers > 0);
+#endif
 
 		/*
 		 * If the use of parallel append is permitted, always request at least
@@ -725,12 +735,17 @@ generate_union_paths(SetOperationStmt *op, PlannerInfo *root,
 			parallel_workers = Min(parallel_workers,
 								   max_parallel_workers_per_gather);
 		}
+#if 0
+		/*
+		 * See above comments.
+		 */
 		Assert(parallel_workers > 0);
+#endif
 
 		ppath = (Path *)
 			create_append_path(root, result_rel, NIL, partial_pathlist,
 							   NIL, NULL,
-							   parallel_workers, enable_parallel_append,
+							   parallel_workers, false /* enable_parallel_append */,
 							   -1);
 		/* CBDB_PARALLEL_FIXME: we disable pg styple Gather/GatherMerge node */
 #if 0
@@ -739,8 +754,15 @@ generate_union_paths(SetOperationStmt *op, PlannerInfo *root,
 							   result_rel->reltarget, NULL, NULL);
 #endif
 		if (!op->all)
-			ppath = make_union_unique(op, ppath, tlist, root);
-		add_path(result_rel, ppath, root);
+		{
+			/* CDB: Hash motion to collocate non-distinct tuples. */
+			if (CdbPathLocus_IsPartitioned(ppath->locus))
+			{
+				ppath = make_motion_hash_all_targets(root, ppath, tlist);
+			}
+			ppath = make_union_unique(op, ppath, tlist, root, relids);
+		}
+		add_partial_path(result_rel, ppath);
 	}
 
 	/* Undo effects of possibly forcing tuple_fraction to 0 */
@@ -1010,9 +1032,9 @@ plan_union_children(PlannerInfo *root,
  */
 static Path *
 make_union_unique(SetOperationStmt *op, Path *path, List *tlist,
-				  PlannerInfo *root)
+				  PlannerInfo *root, Relids relids)
 {
-	RelOptInfo *result_rel = fetch_upper_rel(root, UPPERREL_SETOP, NULL);
+	RelOptInfo *result_rel = fetch_upper_rel(root, UPPERREL_SETOP, relids);
 	List	   *groupList;
 	double		dNumGroups;
 

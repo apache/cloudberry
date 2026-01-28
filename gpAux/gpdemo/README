@@ -31,13 +31,13 @@ RUNNING GP DEMO
 
 	su - gpadmin
 
-2. Source greenplum_path.sh
+2. Source cloudberry-env.sh
 
-	. /usr/local/gpdb/greenplum_path.sh
+	. /usr/local/cloudberry-db/cloudberry-env.sh
 
    Note: There is a space between the dot and the slash.
 
-   The "." will source the greenplum_path.sh into the current
+   The "." will source the cloudberry-env.sh into the current
    shell, instead of starting a subprocess.
 
 3. Create the cluster at the current directory:

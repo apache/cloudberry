@@ -60,8 +60,8 @@ public:
 		CColRefArray *pdrgpcrMinimal,  // minimal grouping columns based on FD's
 		COperator::EGbAggType egbaggtype, BOOL fGeneratesDuplicates,
 		CColRefArray *pdrgpcrArgDQA, BOOL fMultiStage, BOOL isAggFromSplitDQA,
-		CLogicalGbAgg::EAggStage aggStage,
-		BOOL should_enforce_distribution = true
+		CLogicalGbAgg::EAggStage aggStage, BOOL isAggPushdown,
+		BOOL should_enforce_distribution
 		// should_enforce_distribution should be set to false if
 		// 'local' and 'global' splits don't need to have different
 		// distributions. This flag is set to false if the local

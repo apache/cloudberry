@@ -79,18 +79,20 @@ select a, b, c, sum(d) from olap_test group by a, b, c;
 
 -- If it's not a superset, redistribution is needed.
 explain select a, sum(d) from olap_test group by a;
-                                           QUERY PLAN                                            
--------------------------------------------------------------------------------------------------
+                                              QUERY PLAN                                               
+-------------------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..431.55 rows=3 width=12)
-   ->  Finalize HashAggregate  (cost=0.00..431.55 rows=1 width=12)
+   ->  Finalize GroupAggregate  (cost=0.00..431.55 rows=1 width=12)
          Group Key: a
-         ->  Redistribute Motion 3:3  (slice2; segments: 3)  (cost=0.00..431.55 rows=1 width=12)
-               Hash Key: a
-               ->  Streaming Partial HashAggregate  (cost=0.00..431.55 rows=1 width=12)
-                     Group Key: a
-                     ->  Seq Scan on olap_test  (cost=0.00..431.09 rows=3334 width=8)
+         ->  Sort  (cost=0.00..431.55 rows=2 width=12)
+               Sort Key: a
+               ->  Redistribute Motion 3:3  (slice2; segments: 3)  (cost=0.00..431.55 rows=2 width=12)
+                     Hash Key: a
+                     ->  Streaming Partial HashAggregate  (cost=0.00..431.55 rows=2 width=12)
+                           Group Key: a
+                           ->  Seq Scan on olap_test  (cost=0.00..431.09 rows=3334 width=8)
  Optimizer: GPORCA
-(9 rows)
+(11 rows)
 
 select a, sum(d) from olap_test group by a;
  a |   sum    
@@ -185,8 +187,8 @@ set gp_motion_cost_per_row=1.0;
 -- If the query produces a relatively small number of groups in comparison to
 -- the number of input rows, two-stage aggregation will be picked.
 explain select a, b, c, sum(d) from olap_test group by grouping sets((a, b), (a), (b, c));
-                                                  QUERY PLAN                                                  
---------------------------------------------------------------------------------------------------------------
+                                                    QUERY PLAN                                                     
+-------------------------------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..1726.51 rows=152 width=20)
    ->  Sequence  (cost=0.00..1726.50 rows=51 width=20)
          ->  Shared Scan (share slice:id 1:0)  (cost=0.00..431.19 rows=3334 width=1)
@@ -199,18 +201,20 @@ explain select a, b, c, sum(d) from olap_test group by grouping sets((a, b), (a)
                            ->  Streaming Partial HashAggregate  (cost=0.00..431.91 rows=44 width=16)
                                  Group Key: share0_ref2.b, share0_ref2.c
                                  ->  Shared Scan (share slice:id 2:0)  (cost=0.00..431.10 rows=3334 width=12)
-               ->  Finalize HashAggregate  (cost=0.00..431.47 rows=1 width=12)
+               ->  Finalize GroupAggregate  (cost=0.00..431.47 rows=1 width=12)
                      Group Key: share0_ref3.a
-                     ->  Redistribute Motion 3:3  (slice3; segments: 3)  (cost=0.00..431.47 rows=1 width=12)
-                           Hash Key: share0_ref3.a
-                           ->  Streaming Partial HashAggregate  (cost=0.00..431.47 rows=1 width=12)
-                                 Group Key: share0_ref3.a
-                                 ->  Shared Scan (share slice:id 3:0)  (cost=0.00..431.06 rows=3334 width=8)
+                     ->  Sort  (cost=0.00..431.47 rows=2 width=12)
+                           Sort Key: share0_ref3.a
+                           ->  Redistribute Motion 3:3  (slice3; segments: 3)  (cost=0.00..431.47 rows=2 width=12)
+                                 Hash Key: share0_ref3.a
+                                 ->  Streaming Partial HashAggregate  (cost=0.00..431.47 rows=2 width=12)
+                                       Group Key: share0_ref3.a
+                                       ->  Shared Scan (share slice:id 3:0)  (cost=0.00..431.06 rows=3334 width=8)
                ->  HashAggregate  (cost=0.00..431.91 rows=7 width=16)
                      Group Key: share0_ref4.a, share0_ref4.b
                      ->  Shared Scan (share slice:id 1:0)  (cost=0.00..431.10 rows=3334 width=12)
  Optimizer: GPORCA
-(23 rows)
+(25 rows)
 
 select a, b, c, sum(d) from olap_test group by grouping sets((a, b), (a), (b, c));
  a | b  | c  |   sum    
@@ -255,8 +259,8 @@ select a, b, c, sum(d) from olap_test group by grouping sets((a, b), (a), (b, c)
 -- If the query produces a relatively large number of groups in comparison to
 -- the number of input rows, one-stage aggregation will be picked.
 explain select a, b, d, sum(d) from olap_test group by grouping sets((a, b), (a), (b, d));
-                                                  QUERY PLAN                                                   
----------------------------------------------------------------------------------------------------------------
+                                                    QUERY PLAN                                                     
+-------------------------------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..1727.48 rows=10022 width=20)
    ->  Sequence  (cost=0.00..1726.74 rows=3341 width=20)
          ->  Shared Scan (share slice:id 1:0)  (cost=0.00..431.17 rows=3334 width=1)
@@ -268,18 +272,20 @@ explain select a, b, d, sum(d) from olap_test group by grouping sets((a, b), (a)
                            Hash Key: share0_ref2.b, share0_ref2.d
                            ->  Result  (cost=0.00..431.06 rows=3334 width=8)
                                  ->  Shared Scan (share slice:id 2:0)  (cost=0.00..431.06 rows=3334 width=8)
-               ->  Finalize HashAggregate  (cost=0.00..431.47 rows=1 width=12)
+               ->  Finalize GroupAggregate  (cost=0.00..431.47 rows=1 width=12)
                      Group Key: share0_ref3.a
-                     ->  Redistribute Motion 3:3  (slice3; segments: 3)  (cost=0.00..431.47 rows=1 width=12)
-                           Hash Key: share0_ref3.a
-                           ->  Streaming Partial HashAggregate  (cost=0.00..431.47 rows=1 width=12)
-                                 Group Key: share0_ref3.a
-                                 ->  Shared Scan (share slice:id 3:0)  (cost=0.00..431.06 rows=3334 width=8)
+                     ->  Sort  (cost=0.00..431.47 rows=2 width=12)
+                           Sort Key: share0_ref3.a
+                           ->  Redistribute Motion 3:3  (slice3; segments: 3)  (cost=0.00..431.47 rows=2 width=12)
+                                 Hash Key: share0_ref3.a
+                                 ->  Streaming Partial HashAggregate  (cost=0.00..431.47 rows=2 width=12)
+                                       Group Key: share0_ref3.a
+                                       ->  Shared Scan (share slice:id 3:0)  (cost=0.00..431.06 rows=3334 width=8)
                ->  HashAggregate  (cost=0.00..431.91 rows=7 width=16)
                      Group Key: share0_ref4.a, share0_ref4.b
                      ->  Shared Scan (share slice:id 1:0)  (cost=0.00..431.10 rows=3334 width=12)
  Optimizer: GPORCA
-(22 rows)
+(24 rows)
 
 -- do not execute this query as it would produce too many tuples.
 -- Test that when the second-stage Agg doesn't try to preserve the
@@ -292,8 +298,8 @@ explain select a, b, d, sum(d) from olap_test group by grouping sets((a, b), (a)
 -- from the Merge Key.
 set enable_hashagg=off;
 explain select a, b, c, sum(d) from olap_test group by grouping sets((a, b), (a), (b, c)) limit 200;
-                                                     QUERY PLAN                                                     
---------------------------------------------------------------------------------------------------------------------
+                                                       QUERY PLAN                                                        
+-------------------------------------------------------------------------------------------------------------------------
  Limit  (cost=0.00..1726.51 rows=152 width=20)
    ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..1726.51 rows=152 width=20)
          ->  Sequence  (cost=0.00..1726.50 rows=51 width=20)
@@ -307,18 +313,20 @@ explain select a, b, c, sum(d) from olap_test group by grouping sets((a, b), (a)
                                  ->  Streaming Partial HashAggregate  (cost=0.00..431.91 rows=44 width=16)
                                        Group Key: share0_ref2.b, share0_ref2.c
                                        ->  Shared Scan (share slice:id 2:0)  (cost=0.00..431.10 rows=3334 width=12)
-                     ->  Finalize HashAggregate  (cost=0.00..431.47 rows=1 width=12)
+                     ->  Finalize GroupAggregate  (cost=0.00..431.47 rows=1 width=12)
                            Group Key: share0_ref3.a
-                           ->  Redistribute Motion 3:3  (slice3; segments: 3)  (cost=0.00..431.47 rows=1 width=12)
-                                 Hash Key: share0_ref3.a
-                                 ->  Streaming Partial HashAggregate  (cost=0.00..431.47 rows=1 width=12)
-                                       Group Key: share0_ref3.a
-                                       ->  Shared Scan (share slice:id 3:0)  (cost=0.00..431.06 rows=3334 width=8)
+                           ->  Sort  (cost=0.00..431.47 rows=2 width=12)
+                                 Sort Key: share0_ref3.a
+                                 ->  Redistribute Motion 3:3  (slice3; segments: 3)  (cost=0.00..431.47 rows=2 width=12)
+                                       Hash Key: share0_ref3.a
+                                       ->  Streaming Partial HashAggregate  (cost=0.00..431.47 rows=2 width=12)
+                                             Group Key: share0_ref3.a
+                                             ->  Shared Scan (share slice:id 3:0)  (cost=0.00..431.06 rows=3334 width=8)
                      ->  HashAggregate  (cost=0.00..431.91 rows=7 width=16)
                            Group Key: share0_ref4.a, share0_ref4.b
                            ->  Shared Scan (share slice:id 1:0)  (cost=0.00..431.10 rows=3334 width=12)
  Optimizer: GPORCA
-(24 rows)
+(26 rows)
 
 reset enable_hashagg;
 --
@@ -331,48 +339,40 @@ create table foo_ctas(a int, b int) distributed randomly;
 insert into foo_ctas select g%5, g%2 from generate_series(1, 100) g;
 analyze foo_ctas;
 explain create table bar_ctas as select * from foo_ctas group by a, b distributed by (b);
-                                                 QUERY PLAN                                                 
-------------------------------------------------------------------------------------------------------------
+                                                 QUERY PLAN                                                  
+-------------------------------------------------------------------------------------------------------------
  Result  (cost=0.00..431.10 rows=6 width=8)
    ->  Redistribute Motion 3:3  (slice1; segments: 3)  (cost=0.00..431.01 rows=6 width=8)
          Hash Key: b
          ->  GroupAggregate  (cost=0.00..431.01 rows=2 width=8)
                Group Key: a, b
-               ->  Sort  (cost=0.00..431.01 rows=2 width=8)
+               ->  Sort  (cost=0.00..431.01 rows=34 width=8)
                      Sort Key: a, b
-                     ->  Redistribute Motion 3:3  (slice2; segments: 3)  (cost=0.00..431.01 rows=2 width=8)
+                     ->  Redistribute Motion 3:3  (slice2; segments: 3)  (cost=0.00..431.00 rows=34 width=8)
                            Hash Key: a, b
-                           ->  GroupAggregate  (cost=0.00..431.01 rows=2 width=8)
-                                 Group Key: a, b
-                                 ->  Sort  (cost=0.00..431.01 rows=34 width=8)
-                                       Sort Key: a, b
-                                       ->  Seq Scan on foo_ctas  (cost=0.00..431.00 rows=34 width=8)
- Optimizer: Pivotal Optimizer (GPORCA)
-(15 rows)
+                           ->  Seq Scan on foo_ctas  (cost=0.00..431.00 rows=34 width=8)
+ Optimizer: GPORCA
+(11 rows)
 
 create table bar_ctas as select * from foo_ctas group by a, b distributed by (b);
 -- Currently, the planner misses this optimization with INSERT, so this
 -- needs an extra Redistribute Motion.
 explain insert into bar_ctas select * from foo_ctas group by a, b;
-                                                    QUERY PLAN                                                    
-------------------------------------------------------------------------------------------------------------------
+                                                    QUERY PLAN                                                     
+-------------------------------------------------------------------------------------------------------------------
  Insert on bar_ctas  (cost=0.00..431.10 rows=2 width=8)
    ->  Result  (cost=0.00..431.01 rows=6 width=12)
          ->  Redistribute Motion 3:3  (slice1; segments: 3)  (cost=0.00..431.01 rows=6 width=8)
                Hash Key: foo_ctas.b
                ->  GroupAggregate  (cost=0.00..431.01 rows=2 width=8)
                      Group Key: foo_ctas.a, foo_ctas.b
-                     ->  Sort  (cost=0.00..431.01 rows=2 width=8)
+                     ->  Sort  (cost=0.00..431.01 rows=34 width=8)
                            Sort Key: foo_ctas.a, foo_ctas.b
-                           ->  Redistribute Motion 3:3  (slice2; segments: 3)  (cost=0.00..431.01 rows=2 width=8)
+                           ->  Redistribute Motion 3:3  (slice2; segments: 3)  (cost=0.00..431.00 rows=34 width=8)
                                  Hash Key: foo_ctas.a, foo_ctas.b
-                                 ->  GroupAggregate  (cost=0.00..431.01 rows=2 width=8)
-                                       Group Key: foo_ctas.a, foo_ctas.b
-                                       ->  Sort  (cost=0.00..431.01 rows=34 width=8)
-                                             Sort Key: foo_ctas.a, foo_ctas.b
-                                             ->  Seq Scan on foo_ctas  (cost=0.00..431.00 rows=34 width=8)
- Optimizer: Pivotal Optimizer (GPORCA)
-(16 rows)
+                                 ->  Seq Scan on foo_ctas  (cost=0.00..431.00 rows=34 width=8)
+ Optimizer: GPORCA
+(12 rows)
 
 drop table foo_ctas;
 drop table bar_ctas;

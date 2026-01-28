@@ -76,9 +76,11 @@ CXformSplitGbAgg::CXformSplitGbAgg(CExpression *pexprPattern)
 CXform::EXformPromise
 CXformSplitGbAgg::Exfp(CExpressionHandle &exprhdl) const
 {
+	CLogicalGbAgg *popGbAgg = CLogicalGbAgg::PopConvert(exprhdl.Pop());
 	// do not split aggregate if it is a local aggregate, has distinct aggs, has outer references,
 	// or return types of Agg functions are ambiguous
-	if (!CLogicalGbAgg::PopConvert(exprhdl.Pop())->FGlobal() ||
+	if (!popGbAgg->FGlobal() ||
+		popGbAgg->FAggPushdown() || // current agg have been pushdown
 		0 < exprhdl.DeriveTotalDistinctAggs(1) ||
 		0 < exprhdl.DeriveOuterReferences()->Size() ||
 		nullptr == exprhdl.PexprScalarExactChild(1) ||

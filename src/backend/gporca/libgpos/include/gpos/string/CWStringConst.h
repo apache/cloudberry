@@ -57,6 +57,9 @@ public:
 
 	// checks whether the string is byte-wise equal to another string
 	BOOL Equals(const CWStringBase *str) const override;
+
+	// bring base class Equals(const WCHAR*) into scope to avoid hiding
+	using CWStringBase::Equals;
 };
 }  // namespace gpos
 

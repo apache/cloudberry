@@ -39,6 +39,7 @@ struct SampleScanState;
 struct TBMIterateResult;
 struct VacuumParams;
 struct ValidateIndexState;
+enum CmdType;
 
 /**
  * Flags represented the supported features of scan.
@@ -751,6 +752,13 @@ typedef struct TableAmRoutine
 											double *liverows,
 											double *deadrows,
 											TupleTableSlot *slot);
+	
+	int			(*relation_acquire_sample_rows) (Relation onerel,
+												 int elevel,
+												 HeapTuple *rows,
+												 int targrows,
+												 double *totalrows,
+												 double *totaldeadrows);
 
 	/* see table_index_build_range_scan for reference about parameters */
 	double		(*index_build_range_scan) (Relation table_rel,
@@ -948,15 +956,14 @@ typedef struct TableAmRoutine
 										   struct SampleScanState *scanstate,
 										   TupleTableSlot *slot);
 
-	/*
-	 * Like scan_sample_next_block and scan_sample_next_tuple, this callback
-	 * is also used to sample tuple rows. As different storage maybe need to
-	 * use different acquire sample rows process, we extend an interface to
-	 * achieve this requirement. 
+	/**
+	 * The pair of callbacks are invoked to perform any initialization and
+	 * cleanup required for DML operations (INSERT, UPDATE, DELETE) on a
+	 * relation of this table AM.
 	 */
-	int			(*acquire_sample_rows) (Relation onerel, int elevel,
-										HeapTuple *rows, int targrows,
-										double *totalrows, double *totaldeadrows);
+	void (*dml_init) (Relation relation, enum CmdType operation);
+	void (*dml_fini) (Relation relation, enum CmdType operation);
+
 	/*
 	 * This callback is used to parse reloptions for relation/matview/toast.
 	 */
@@ -1793,6 +1800,19 @@ table_finish_bulk_insert(Relation rel, int options)
 		rel->rd_tableam->finish_bulk_insert(rel, options);
 }
 
+static inline void
+table_dml_init(Relation rel, enum CmdType operation)
+{
+	if (rel->rd_tableam && rel->rd_tableam->dml_init)
+		rel->rd_tableam->dml_init(rel, operation);
+}
+
+static inline void
+table_dml_fini(Relation rel, enum CmdType operation)
+{
+	if (rel->rd_tableam && rel->rd_tableam->dml_fini)
+		rel->rd_tableam->dml_fini(rel, operation);
+}
 
 /* ------------------------------------------------------------------------
  * DDL related functionality.
@@ -1901,6 +1921,38 @@ table_relation_vacuum(Relation rel, struct VacuumParams *params,
 					  BufferAccessStrategy bstrategy)
 {
 	rel->rd_tableam->relation_vacuum(rel, params, bstrategy);
+}
+
+/*
+ * GPDB: Interface to acquire sample rows from a given relation (currently
+ * AO/CO).
+ *
+ * Selected rows are returned in the caller-allocated array rows[], which
+ * must have space to hold at least targrows entries.
+ *
+ * The actual number of rows selected is returned as the function result.
+ * We also estimate the total numbers of live and dead rows in the table,
+ * and return them into *totalrows and *totaldeadrows, respectively.
+ *
+ * The returned list of tuples is in order by physical position in the table.
+ * (We will rely on this later to derive correlation estimates.)
+ *
+ * Note: this interface is not used by upstream code.
+ * The upstream interface (implemented by heap) uses a 2-stage sampling method
+ * using table_scan_analyze_next_block() and table_scan_analyze_next_tuple().
+ * See acquire_sample_rows(). Since this upstream method does not suit AO/CO
+ * tables we have created the relation_acquire_sample_rows() interface.
+ *
+ * Note for future merges:
+ * We have to keep this interface consistent with acquire_sample_rows().
+ */
+static inline int
+table_relation_acquire_sample_rows(Relation rel, int elevel, HeapTuple *rows,
+								   int targrows, double *totalrows, double *totaldeadrows)
+{
+	return rel->rd_tableam->relation_acquire_sample_rows(rel, elevel, rows,
+														 targrows, totalrows,
+														 totaldeadrows);
 }
 
 /*
@@ -2327,13 +2379,5 @@ extern const TableAmRoutine *GetHeapamTableAmRoutine(void);
 extern bool check_default_table_access_method(char **newval, void **extra,
 											  GucSource source);
 
-/* ----------------------------------------------------------------------------
- * Hook function to run init/fini for storage extensions
- * ----------------------------------------------------------------------------
- */
-enum CmdType;
-typedef void (*ext_dml_func_hook_type) (Relation relation, enum CmdType operation);
-extern PGDLLIMPORT ext_dml_func_hook_type ext_dml_init_hook;
-extern PGDLLIMPORT ext_dml_func_hook_type ext_dml_finish_hook;
 
 #endif							/* TABLEAM_H */

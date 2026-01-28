@@ -103,6 +103,15 @@ size_t find_Nth(const string &str,  // where to work
     return pos;
 }
 
+#// Suppress deprecation warnings for MD5 functions on OpenSSL >= 3.0
+#if defined(__clang__)
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+#elif defined(__GNUC__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+#endif
+
 MD5Calc::MD5Calc() {
     memset(this->md5, 0, MD5_DIGEST_STRING_LENGTH);
     MD5_Init(&this->c);
@@ -125,6 +134,12 @@ const char *MD5Calc::Get() {
     MD5_Init(&this->c);
     return this->result.c_str();
 }
+
+#if defined(__clang__)
+#pragma clang diagnostic pop
+#elif defined(__GNUC__)
+#pragma GCC diagnostic pop
+#endif
 
 Config::Config(const string &filename, const string &url, const char *datadir) : _conf(NULL) {
     if (!url.empty()) {

@@ -65,20 +65,18 @@ select count(distinct d) from dqa_t1 group by i;
 (12 rows)
 
 explain (costs off) select count(distinct d) from dqa_t1 group by i;
-                         QUERY PLAN                         
-------------------------------------------------------------
+                            QUERY PLAN                            
+------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
-   ->  Finalize HashAggregate
+   ->  GroupAggregate
          Group Key: i
-         ->  Redistribute Motion 3:3  (slice2; segments: 3)
-               Hash Key: i
-               ->  Partial GroupAggregate
-                     Group Key: i
-                     ->  Sort
-                           Sort Key: i, d
-                           ->  Seq Scan on dqa_t1
+         ->  Sort
+               Sort Key: i
+               ->  Redistribute Motion 3:3  (slice2; segments: 3)
+                     Hash Key: i
+                     ->  Seq Scan on dqa_t1
  Optimizer: Pivotal Optimizer (GPORCA) version 3.83.0
-(11 rows)
+(9 rows)
 
 select count(distinct d), sum(distinct d) from dqa_t1 group by i;
  count | sum 
@@ -98,20 +96,18 @@ select count(distinct d), sum(distinct d) from dqa_t1 group by i;
 (12 rows)
 
 explain (costs off) select count(distinct d), sum(distinct d) from dqa_t1 group by i;
-                         QUERY PLAN                         
-------------------------------------------------------------
+                            QUERY PLAN                            
+------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
-   ->  Finalize HashAggregate
+   ->  GroupAggregate
          Group Key: i
-         ->  Redistribute Motion 3:3  (slice2; segments: 3)
-               Hash Key: i
-               ->  Partial GroupAggregate
-                     Group Key: i
-                     ->  Sort
-                           Sort Key: i, d
-                           ->  Seq Scan on dqa_t1
+         ->  Sort
+               Sort Key: i
+               ->  Redistribute Motion 3:3  (slice2; segments: 3)
+                     Hash Key: i
+                     ->  Seq Scan on dqa_t1
  Optimizer: Pivotal Optimizer (GPORCA) version 3.83.0
-(11 rows)
+(9 rows)
 
 select count(distinct d), count(distinct dt) from dqa_t1;
  count | count 
@@ -1909,20 +1905,18 @@ select count(distinct d) from dqa_t1 group by i;
 (12 rows)
 
 explain (costs off) select count(distinct d) from dqa_t1 group by i;
-                         QUERY PLAN                         
-------------------------------------------------------------
+                            QUERY PLAN                            
+------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
-   ->  Finalize HashAggregate
+   ->  GroupAggregate
          Group Key: i
-         ->  Redistribute Motion 3:3  (slice2; segments: 3)
-               Hash Key: i
-               ->  Partial GroupAggregate
-                     Group Key: i
-                     ->  Sort
-                           Sort Key: i, d
-                           ->  Seq Scan on dqa_t1
+         ->  Sort
+               Sort Key: i
+               ->  Redistribute Motion 3:3  (slice2; segments: 3)
+                     Hash Key: i
+                     ->  Seq Scan on dqa_t1
  Optimizer: Pivotal Optimizer (GPORCA) version 3.83.0
-(11 rows)
+(9 rows)
 
 select count(distinct d), count(distinct c), count(distinct dt) from dqa_t1;
  count | count | count 

@@ -164,7 +164,7 @@ MicroPartitionMetadata MicroPartitionInfoIterator::Next() {
   Assert(tuple);
 
   tuple_ = nullptr;
-  return std::move(ToValue(tuple));
+  return ToValue(tuple);
 }
 
 void MicroPartitionInfoIterator::Rewind() {
@@ -375,7 +375,7 @@ MicroPartitionMetadata MicroPartitionInfoParallelIterator::Next() {
   Assert(tuple);
 
   tuple_ = nullptr;
-  return std::move(ToValue(tuple));
+  return ToValue(tuple);
 }
 
 void MicroPartitionInfoParallelIterator::Rewind() {

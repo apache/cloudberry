@@ -10,12 +10,15 @@ select buffers_used + buffers_unused > 0,
         buffers_pinned <= buffers_used
 from pg_buffercache_summary();
 
+SELECT count(*) > 0 FROM pg_buffercache_usage_counts() WHERE buffers >= 0;
+
 -- Check that the functions / views can't be accessed by default. To avoid
 -- having to create a dedicated user, use the pg_database_owner pseudo-role.
 SET ROLE pg_database_owner;
 SELECT * FROM pg_buffercache;
 SELECT * FROM pg_buffercache_pages() AS p (wrong int);
 SELECT * FROM pg_buffercache_summary();
+SELECT * FROM pg_buffercache_usage_counts();
 RESET role;
 SELECT count(*) > 0 FROM pg_buffercache_usage_counts() WHERE buffers >= 0;
 
@@ -42,12 +45,7 @@ SELECT count(*) > 0 FROM gp_buffercache_usage_counts WHERE buffers >= 0;
 SELECT count(*) > 0 FROM gp_buffercache_usage_counts_aggregated WHERE buffers >= 0;
 
 -- Check that the functions / views can't be accessed by default.
-CREATE ROLE buffercache_test;
-SET ROLE buffercache_test;
-SELECT * FROM pg_buffercache;
-SELECT * FROM pg_buffercache_pages() AS p (wrong int);
-SELECT * FROM pg_buffercache_summary();
-SELECT * FROM pg_buffercache_usage_counts();
+SET ROLE pg_database_owner;
 -- GPDB
 SELECT * FROM pg_buffercache_summary;
 SELECT * FROM pg_buffercache_usage_counts;
@@ -73,5 +71,3 @@ SELECT buffers_used + buffers_unused > 0 FROM gp_buffercache_summary_aggregated;
 SELECT count(*) > 0 FROM gp_buffercache_usage_counts;
 SELECT count(*) > 0 FROM gp_buffercache_usage_counts_aggregated;
 RESET ROLE;
-
-DROP ROLE buffercache_test;

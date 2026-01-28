@@ -1,28 +1,24 @@
--- disable ORCA
-SET optimizer TO off;
-
 -- Test case group 1: basic functions
 CREATE TABLE agg_pushdown_parent (
-	i int primary key,
-	x int);
+    i int,
+    x int);
 
 CREATE TABLE agg_pushdown_child1 (
-	j int,
-	parent int,
-	v double precision,
-	PRIMARY KEY (j, parent));
-
-CREATE INDEX ON agg_pushdown_child1(parent);
+    j int,
+    parent int,
+    v double precision
+    )
+    DISTRIBUTED BY (j, parent);
 
 CREATE TABLE agg_pushdown_child2 (
-	k int,
-	parent int,
-	v double precision,
-	PRIMARY KEY (k, parent));;
+    k int,
+    parent int,
+    v double precision)
+    DISTRIBUTED BY (k, parent);
 
 INSERT INTO agg_pushdown_parent(i, x)
 SELECT n, n
-FROM generate_series(0, 7) AS s(n);
+FROM generate_series(0, 10) AS s(n);
 
 INSERT INTO agg_pushdown_child1(j, parent, v)
 SELECT 128 * i + n, i, random()
@@ -36,29 +32,12 @@ ANALYZE agg_pushdown_parent;
 ANALYZE agg_pushdown_child1;
 ANALYZE agg_pushdown_child2;
 
-SET enable_nestloop TO on;
-SET enable_hashjoin TO off;
-SET enable_mergejoin TO off;
-
 -- Perform scan of a table, aggregate the result, join it to the other table
 -- and finalize the aggregation.
---
--- In addition, check that functionally dependent column "p.x" can be
--- referenced by SELECT although GROUP BY references "p.i".
-SET gp_enable_agg_pushdown TO off;
-EXPLAIN (VERBOSE on, COSTS off)
-SELECT p.x, avg(c1.v) FROM agg_pushdown_parent AS p JOIN agg_pushdown_child1
-AS c1 ON c1.parent = p.i GROUP BY p.i;
-
-SET gp_enable_agg_pushdown TO on;
-EXPLAIN (VERBOSE on, COSTS off)
-SELECT p.x, avg(c1.v) FROM agg_pushdown_parent AS p JOIN agg_pushdown_child1
-AS c1 ON c1.parent = p.i GROUP BY p.i;
-
--- The same for hash join.
+SET enable_mergejoin TO off;
 SET enable_nestloop TO off;
 SET enable_hashjoin TO on;
-
+SET gp_enable_agg_pushdown TO on;
 EXPLAIN (VERBOSE on, COSTS off)
 SELECT p.i, avg(c1.v) FROM agg_pushdown_parent AS p JOIN agg_pushdown_child1
 AS c1 ON c1.parent = p.i GROUP BY p.i;
@@ -160,6 +139,7 @@ SET enable_hashjoin TO on;
 SET enable_mergejoin TO off;
 
 SET gp_enable_agg_pushdown TO ON;
+SET optimizer_force_multistage_agg to ON;
 
 -- Join key and group key are the same.
 EXPLAIN (VERBOSE on, COSTS off)
@@ -235,7 +215,7 @@ DROP TABLE part, lineitem;
 -- Test case group 4: construct grouped join rel from 2 plain rels
 DROP TABLE IF EXISTS vendor_pd, customer_pd, nation_pd;
 CREATE TABLE vendor_pd (v_id int, v_name VARCHAR(20)) WITH (APPENDONLY=true, ORIENTATION=column);
-CREATE TABLE customer_pd (c_id int primary key, c_v_id int, c_n_id int, c_type int, c_consumption int);
+CREATE TABLE customer_pd (c_id int, c_v_id int, c_n_id int, c_type int, c_consumption int);
 CREATE TABLE nation_pd (n_id int, n_name VARCHAR(20), n_type int, n_population int) WITH (APPENDONLY=true, ORIENTATION=column);
 
 INSERT INTO nation_pd SELECT i, 'abc', 1, 1 from generate_series(1, 100) s(i);
@@ -316,11 +296,9 @@ SELECT t1.c, sum(t1.a)
 DROP TABLE pagg_pd;
 
 CREATE TABLE pagg_pd_p (a int, b int);
-CREATE TABLE pagg_pd (c text, d int) inherits (pagg_pd_p) PARTITION BY LIST(c);
 
 DROP TABLE IF EXISTS pagg_pd, pagg_pd_p;
 CREATE TABLE pagg_pd_p (a int, b int, c text) PARTITION BY LIST(c);
-CREATE TABLE pagg_pd (d int) inherits (pagg_pd_p);
 
 DROP TABLE IF EXISTS pagg_pd, pagg_pd_p;
 CREATE TABLE pagg_pd_p (a int, b int);
@@ -343,8 +321,7 @@ DROP TABLE pagg_pd, pagg_pd_p;
 RESET enable_incremental_sort;
 
 -- Clear settings
-SET optimizer TO default;
-
+RESET optimizer_force_multistage_agg;
 SET gp_enable_agg_pushdown TO off;
 
 SET enable_seqscan TO on;

@@ -2310,6 +2310,38 @@ select json_data,id from my_table  where json_data->>'age' = '30' union all sele
 set optimizer_parallel_union to off;
 drop table if exists my_table;
 --
+-- test Github issue https://github.com/apache/cloudberry/issues/1240
+--
+create table r_1240(a int) distributed replicated;
+insert into r_1240 select generate_series(1,10);
+create table p1_1240(a int) distributed by (a);
+insert into p1_1240 select generate_series(1,3);
+explain(costs off) with result as (update r_1240 set a = a +1 where a < 5 returning *) select * from result except select * from p1_1240;
+                          QUERY PLAN                           
+---------------------------------------------------------------
+ HashSetOp Except
+   ->  Append
+         ->  Explicit Gather Motion 3:1  (slice1; segments: 3)
+               ->  Subquery Scan on "*SELECT* 1"
+                     ->  Update on r_1240
+                           ->  Seq Scan on r_1240
+                                 Filter: (a < 5)
+         ->  Gather Motion 3:1  (slice2; segments: 3)
+               ->  Subquery Scan on "*SELECT* 2"
+                     ->  Seq Scan on p1_1240
+ Optimizer: Postgres-based planner
+(11 rows)
+
+with result as (update r_1240 set a = a +1 where a < 5 returning *) select * from result except select * from p1_1240;
+ a 
+---
+ 5
+ 4
+(2 rows)
+
+drop table r_1240;
+drop table p1_1240;
+--
 -- Clean up
 --
 DROP TABLE IF EXISTS T_a1 CASCADE;

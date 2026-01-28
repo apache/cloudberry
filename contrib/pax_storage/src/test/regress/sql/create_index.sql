@@ -1111,7 +1111,6 @@ COMMIT;
 -- we keep the `CONCURRENTLY` to make the following commands fail,
 -- so these commands will not cause deadlock with test create_view,
 -- like `drop schema xxx cascade;`.
--- See more details at https://code.hashdata.xyz/cloudberry/cbdb/-/issues/54
 REINDEX TABLE CONCURRENTLY pg_class; -- no catalog relation
 REINDEX INDEX CONCURRENTLY pg_class_oid_index; -- no catalog index
 -- These are the toast table and index of pg_authid.

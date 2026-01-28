@@ -210,7 +210,7 @@ cluster(ParseState *pstate, ClusterStmt *stmt, bool isTopLevel)
 		table_close(rel, NoLock);
 
 		/* Do the job. */
-		/* GPDB_14_MERGE_FIXME: do we need the return value of cluster_rel to dispath ? */
+		/* GPDB_14_MERGE_FIXME: do we need the return value of cluster_rel to dispatch ? */
 		cluster_rel(tableOid, indexOid, &params);
 
 		if (Gp_role == GP_ROLE_DISPATCH)

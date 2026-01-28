@@ -2592,13 +2592,19 @@ RestoreSnapshot(char *start_address)
 	if (serialized_snapshot.haveDistribSnapshot &&
 		serialized_snapshot.ds_count > 0)
 	{
+		Size ds_off = sizeof(SerializedSnapshotData) +
+					serialized_snapshot.xcnt * sizeof(TransactionId) +
+					serialized_snapshot.subxcnt * sizeof(TransactionId);
+		Size ds_lmoff = ds_off +
+					serialized_snapshot.ds_count * sizeof(DistributedTransactionId);
+
 		snapshot->distribSnapshotWithLocalMapping.ds.inProgressXidArray =
 			(DistributedTransactionId*) ((char *) snapshot + dsoff);
 		snapshot->distribSnapshotWithLocalMapping.inProgressMappedLocalXids =
 			(TransactionId*) ((char *) snapshot + dslmoff);
 
 		memcpy(snapshot->distribSnapshotWithLocalMapping.ds.inProgressXidArray,
-				(DistributedTransactionId*) (start_address + dsoff),
+				(DistributedTransactionId*) (start_address + ds_off),
 				serialized_snapshot.ds_count *
 				sizeof(DistributedTransactionId));
 
@@ -2608,7 +2614,7 @@ RestoreSnapshot(char *start_address)
 					0,
 					serialized_snapshot.ds_count * sizeof(TransactionId));
 			memcpy(snapshot->distribSnapshotWithLocalMapping.inProgressMappedLocalXids,
-					(TransactionId*) (start_address + dslmoff),
+					(TransactionId*) (start_address + ds_lmoff),
 					serialized_snapshot.currentLocalXidsCount *
 					sizeof(TransactionId));
 		}

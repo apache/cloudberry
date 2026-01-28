@@ -33,7 +33,7 @@ try:
     from gppylib.userinput import ask_yesno
 except Exception as e:
     sys.exit('ERROR: Cannot import modules.  Please check that you '
-             'have sourced greenplum_path.sh.  Detail: ' + str(e))
+             'have sourced cloudberry-env.sh.  Detail: ' + str(e))
 
 EXECNAME = os.path.split(__file__)[-1]
 

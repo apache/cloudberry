@@ -1098,6 +1098,16 @@ CGroupExpression::OsPrintCostContexts(IOstream &os, const CHAR *szPrefix) const
 // 4: CLogicalInnerJoin [ 6 7 3 ] Origin: (xform: CXformExpandNAryJoinGreedy, Grp: 4, GrpExpr: 3)
 //
 // Group 0 (#GExprs: 0, Duplicate Group: 4):
+//
+// There is also a chance that one of the group's expressions refers to the same group.
+// This can happen if one of the groups has a link to another group, which in turn is its duplicate.
+// Example: Group 0 is a duplicate of group 12, while it has an expression 1
+// that refers to group 12. After the groups merge, this expression will end up
+// in group 12, which will lead to a cyclical relationship.
+// Group 0 (#GExprs: 3, Duplicate Group: 12):
+//  0: CLogicalCTEConsumer (1), Columns: ["a" (98), "b" (99), "c" (100)] [ ]
+//  1: CLogicalSelect [ 12 3 ]
+//  2: CLogicalNAryJoin [ 13 14 15 ]
 BOOL
 CGroupExpression::ContainsCircularDependencies()
 {
@@ -1118,6 +1128,14 @@ CGroupExpression::ContainsCircularDependencies()
 		{
 			continue;
 		}
+
+		if (child_group->Id() == m_pgroup->Id())
+		{
+			m_ecirculardependency = CGroupExpression::ecdCircularDependency;
+			GPOS_ASSERT(Pgroup()->UlGExprs() > 1);
+			break;
+		}
+
 		CGroup *child_duplicate_group = child_group->PgroupDuplicate();
 		if (child_duplicate_group != nullptr)
 		{

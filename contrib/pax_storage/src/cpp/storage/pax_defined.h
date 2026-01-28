@@ -39,7 +39,7 @@ namespace pax {
 #define BITS_TO_BYTES(bits) (((bits) + 7) / 8)
 
 #define PAX_OFFSETS_DEFAULT_COMPRESSTYPE \
-  ColumnEncoding_Kind::ColumnEncoding_Kind_COMPRESS_ZSTD
+  ColumnEncoding_Kind::ColumnEncoding_Kind_DIRECT_DELTA
 #define PAX_OFFSETS_DEFAULT_COMPRESSLEVEL 5
 
 #define COLUMN_STORAGE_FORMAT_IS_VEC(column) \

@@ -91,4 +91,19 @@ CPhysicalDynamicTableScan::PppsDerive(CMemoryPool *mp,
 	return pps;
 }
 
+
+CEnfdProp::EPropEnforcingType
+CPhysicalDynamicTableScan::EpetRewindability(CExpressionHandle &exprhdl,
+											 const CEnfdRewindability *per) const
+{
+	CRewindabilitySpec *prs = CDrvdPropPlan::Pdpplan(exprhdl.Pdp())->Prs();
+	if (per->FCompatible(prs))
+	{
+		// required rewindability is already provided
+		return CEnfdProp::EpetUnnecessary;
+	}
+
+	return CEnfdProp::EpetRequired;
+}
+
 // EOF

@@ -186,30 +186,38 @@ typedef struct
 } varattrib_1b_e;
 
 /*
- * Bit layouts for varlena headers: (GPDB always stores this big-endian format)
+ * Bit layouts for varlena headers on big-endian machines:
  *
  * 00xxxxxx 4-byte length word, aligned, uncompressed data (up to 1G)
  * 01xxxxxx 4-byte length word, aligned, *compressed* data (up to 1G)
  * 10000000 1-byte length word, unaligned, TOAST pointer
  * 1xxxxxxx 1-byte length word, unaligned, uncompressed data (up to 126b)
  *
- * Cloudberry differs from PostgreSQL here... In Postgres, they use different
- * macros for big-endian and little-endian machines, so the length is contiguous,
- * while the 4 byte lengths are stored in native endian format.
+ * Bit layouts for varlena headers on little-endian machines:
  *
- * Cloudberry stored the 4 byte varlena header in network byte order, so it always
- * look big-endian in the tuple.   This is a bit ugly, but changing it would require
- * all our customers to initdb.
+ * xxxxxx00 4-byte length word, aligned, uncompressed data (up to 1G)
+ * xxxxxx10 4-byte length word, aligned, *compressed* data (up to 1G)
+ * 00000001 1-byte length word, unaligned, TOAST pointer
+ * xxxxxxx1 1-byte length word, unaligned, uncompressed data (up to 126b)
  *
  * The "xxx" bits are the length field (which includes itself in all cases).
- * In the big-endian case we mask to extract the length.
- * Note that in both cases the flag bits are in the physically
+ * In the big-endian case we mask to extract the length, in the little-endian
+ * case we shift.  Note that in both cases the flag bits are in the physically
  * first byte.  Also, it is not possible for a 1-byte length word to be zero;
  * this lets us disambiguate alignment padding bytes from the start of an
  * unaligned datum.  (We now *require* pad bytes to be filled with zero!)
  *
  * In TOAST pointers the va_tag field (see varattrib_1b_e) is used to discern
  * the specific type and length of the pointer datum.
+ *
+ * NOTE:
+ * Greenplum differs from PostgreSQL here... In Postgres, it use different
+ * macros for big-endian and little-endian machines, so the length is contiguous,
+ * while the 4 byte lengths are stored in native endian format.
+ *
+ * Greenplum stored the 4 byte varlena header in network byte order, so it always
+ * look big-endian in the tuple.
+ *
  */
 
 /*

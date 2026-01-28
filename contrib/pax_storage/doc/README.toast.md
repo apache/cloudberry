@@ -60,7 +60,7 @@ Compress toast is consistent with Cloudberry compress toast.
 
 This part of the data is a varlena structure, and it is of type `varattrib_4b`, which means that it has a varlena head and the storage range is less than 1G.
 
-In addition, the lower limit of the datum length that needs to be compressed on PAX may be set to larger, and TOAST_TUPLE_THRESHOLD is no longer used as the threshold. Instead, we added a GUC(`pax_min_size_of_compress_toast`) to use.
+In addition, the lower limit of the datum length that needs to be compressed on PAX may be set to larger, and TOAST_TUPLE_THRESHOLD is no longer used as the threshold. Instead, we added a GUC(`pax.min_size_of_compress_toast`) to use.
 
 ```
 typedef union

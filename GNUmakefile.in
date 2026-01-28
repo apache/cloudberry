@@ -35,6 +35,9 @@ endif
 ifeq ($(enable_pax), yes)
 	$(MAKE) -C contrib/pax_storage all
 endif
+ifeq ($(enable_ic_udp2),yes)
+	$(MAKE) -C contrib/udp2 all
+endif
 	$(MAKE) -C gpMgmt all
 	$(MAKE) -C gpcontrib all
 	+@echo "All of Apache Cloudberry successfully made. Ready to install."
@@ -81,6 +84,9 @@ ifeq ($(enable_pax), yes)
 endif
 ifeq ($(with_openssl), yes)
 	$(MAKE) -C contrib/sslinfo $@
+endif
+ifeq ($(enable_ic_udp2),yes)
+	$(MAKE) -C contrib/udp2 $@
 endif
 	$(MAKE) -C gpMgmt $@
 	$(MAKE) -C gpcontrib $@
@@ -154,17 +160,17 @@ check-tests installcheck installcheck-parallel installcheck-tests: submake-gener
 	$(MAKE) -C src/test/regress $@
 
 check:
-	if [ ! -f $(prefix)/greenplum_path.sh ]; then \
+	if [ ! -f $(prefix)/cloudberry-env.sh ]; then \
 		$(MAKE) -C $(top_builddir) install; \
 	fi
-	. $(prefix)/greenplum_path.sh; \
+	. $(prefix)/cloudberry-env.sh; \
 	if pg_isready 1>/dev/null; then \
 	  $(MAKE) -C $(top_builddir) installcheck; \
 	else \
 	  if [ ! -f $(top_builddir)/gpAux/gpdemo/gpdemo-env.sh ]; then \
-	    . $(prefix)/greenplum_path.sh && $(MAKE) -C $(top_builddir) create-demo-cluster; \
+	    . $(prefix)/cloudberry-env.sh && $(MAKE) -C $(top_builddir) create-demo-cluster; \
 	  fi; \
-	  . $(prefix)/greenplum_path.sh && . $(top_builddir)/gpAux/gpdemo/gpdemo-env.sh && $(MAKE) -C $(top_builddir) installcheck; \
+	  . $(prefix)/cloudberry-env.sh && . $(top_builddir)/gpAux/gpdemo/gpdemo-env.sh && $(MAKE) -C $(top_builddir) installcheck; \
 	fi
 
 $(call recurse,check-world,src/test src/pl src/interfaces/ecpg contrib src/bin gpcontrib,check)
@@ -211,6 +217,11 @@ installcheck-gpcheckcat:
 	gpcheckcat -A
 $(call recurse,installcheck-world,gpcontrib/gp_replica_check,installcheck)
 $(call recurse,installcheck-world,src/bin/pg_upgrade,check)
+
+.PHONY: installcheck-hot-standby
+installcheck-hot-standby: submake-generated-headers
+	$(MAKE) -C src/test/regress installcheck-hot-standby
+	$(MAKE) -C src/test/isolation2 installcheck-hot-standby
 
 # Run mock tests, that don't require a running server. Arguably these should
 # be part of [install]check-world, but we treat them more like part of

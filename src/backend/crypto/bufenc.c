@@ -36,6 +36,8 @@ static unsigned char buf_encryption_iv[BUFENC_IV_SIZE];
 
 void *BufEncCtx = NULL;
 void *BufDecCtx = NULL;
+static sm4_ctx sm4_enc_ctx;
+static sm4_ctx sm4_dec_ctx;
 
 static void set_buffer_encryption_iv(Page page, BlockNumber blkno);
 
@@ -47,16 +49,28 @@ InitializeBufferEncryption(void)
 	if (!FileEncryptionEnabled)
 		return;
 
+	/* 
+	 * To avoid memory leaks, when the postmaster resets the cluster, 
+	 * need to release the memory which was alloced at last time. 
+	 */
+	if (BufEncCtx && BufEncCtx != &sm4_enc_ctx)
+	{
+		pg_cipher_ctx_free(BufEncCtx);
+		BufEncCtx = NULL;
+	}
+	if (BufDecCtx && BufDecCtx != &sm4_dec_ctx)
+	{
+		pg_cipher_ctx_free(BufDecCtx);
+		BufDecCtx = NULL;
+	}
+	
 	key = KmgrGetKey(KMGR_KEY_ID_REL);
 
 	if (CheckIsSM4Method())
 	{
-		bool found;
-		BufEncCtx = ShmemInitStruct("sm4 encryption method encrypt ctx",
-												sizeof(sm4_ctx), &found);
+		BufEncCtx = &sm4_enc_ctx;
+		BufDecCtx = &sm4_dec_ctx;
 
-		BufDecCtx = ShmemInitStruct("sm4 encryption method decrypt ctx",
-												sizeof(sm4_ctx), &found);
 		sm4_ofb_setkey_enc((sm4_ctx *)BufEncCtx, (unsigned char *)key->key);
 		sm4_ofb_setkey_dec((sm4_ctx *)BufDecCtx, (unsigned char *)key->key);
 	}

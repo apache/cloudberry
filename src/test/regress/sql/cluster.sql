@@ -226,9 +226,9 @@ set enable_indexscan = off;
 set maintenance_work_mem = '1MB';
 cluster clstr_4 using cluster_sort;
 select * from
-(select hundred, lag(hundred) over () as lhundred,
-        thousand, lag(thousand) over () as lthousand,
-        tenthous, lag(tenthous) over () as ltenthous from clstr_4) ss
+(select hundred, lag(hundred) over (order by hundred) as lhundred,
+        thousand, lag(thousand) over (order by hundred) as lthousand,
+        tenthous, lag(tenthous) over (order by hundred) as ltenthous from clstr_4) ss
 where row(hundred, thousand, tenthous) <= row(lhundred, lthousand, ltenthous);
 
 reset enable_indexscan;

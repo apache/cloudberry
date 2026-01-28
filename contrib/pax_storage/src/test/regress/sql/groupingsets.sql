@@ -518,6 +518,7 @@ select array(select row(v.a,s1.*) from (select two,four, count(*) from onek grou
 
 -- test the knapsack
 
+set hash_mem_multiplier = 1;
 set enable_indexscan = false;
 set work_mem = '64kB';
 explain (costs off)
@@ -541,6 +542,7 @@ explain (costs off)
          count(*)
     from tenk1 group by grouping sets (unique1,twothousand,thousand,hundred,ten,four,two);
 
+reset hash_mem_multiplier;
 -- check collation-sensitive matching between grouping expressions
 -- (similar to a check for aggregates, but there are additional code
 -- paths for GROUPING, so check again here)

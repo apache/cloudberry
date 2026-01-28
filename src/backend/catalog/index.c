@@ -1388,7 +1388,7 @@ index_create_internal(Relation heapRelation,
 		 *
 		 * We should bring it back in the future.
 		 */
-		index_build(heapRelation, indexRelation, indexInfo, false, indexInfo->ii_ParallelWorkers != -1);
+		index_build(heapRelation, indexRelation, indexInfo, false, indexInfo->ii_ParallelWorkers > 0);
 	}
 
 	/*

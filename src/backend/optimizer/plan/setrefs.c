@@ -387,6 +387,7 @@ set_plan_references(PlannerInfo *root, Plan *plan)
 	PlannerGlobal *glob = root->glob;
 	int			rtoffset = list_length(glob->finalrtable);
 	ListCell   *lc;
+	bool need_append_rel = true;
 
 #ifdef USE_ASSERT_CHECKING
 	/* 
@@ -423,6 +424,17 @@ set_plan_references(PlannerInfo *root, Plan *plan)
 	}
 
 	/*
+	 * ShareInputScan nodes can be reused multiple times during execution, but this
+	 * causes a crash when explaining plans with append info in the function
+	 * deparse_context_for_plan_tree().
+	 *
+	 * To fix this, we only add appendrels for the producer ShareInputScan node of
+	 * a given share_id, rather than all nodes with the same share_id. 
+	 */
+	if (plan != NULL && IsA(plan, ShareInputScan))
+		need_append_rel = ((ShareInputScan *) plan)->ref_set;
+
+	/*
 	 * Adjust RT indexes of AppendRelInfos and add to final appendrels list.
 	 * We assume the AppendRelInfos were built during planning and don't need
 	 * to be copied.
@@ -430,6 +442,9 @@ set_plan_references(PlannerInfo *root, Plan *plan)
 	foreach(lc, root->append_rel_list)
 	{
 		AppendRelInfo *appinfo = lfirst_node(AppendRelInfo, lc);
+
+		if (!need_append_rel)
+			break;
 
 		/* adjust RT indexes */
 		appinfo->parent_relid += rtoffset;

@@ -22,4 +22,11 @@ insert into hs3 values (115);
 DROP sequence if exists hsseq;
 create sequence hsseq;
 
+-- start_ignore
 SELECT pg_switch_wal();
+
+-- GPDB: enable hot_standby for this cluster
+\! gpconfig -c hot_standby -v on;
+\! gpstop -ari;
+
+-- end_ignore

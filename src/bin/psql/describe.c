@@ -5091,7 +5091,7 @@ listTables(const char *tabtypes, const char *pattern, bool verbose, bool showSys
 	PGresult   *res;
 	printQueryOpt myopt = pset.popt;
 	int			cols_so_far;
-	bool		translate_columns[] = {false, false, true, false, false, false, false, false, false};
+	bool		translate_columns[] = {false, false, true, false, false, false, false, false, false, false};
 
 	/* If tabtypes is empty, we default to \dtvmsE (but see also command.c) */
 	if (!(showTables || showIndexes || showViews || showMatViews || showSeq || showForeign || showDirectory))
@@ -5164,6 +5164,8 @@ listTables(const char *tabtypes, const char *pattern, bool verbose, bool showSys
 			appendPQExpBuffer(&buf, " WHEN 'f' THEN '%s'", gettext_noop("foreign"));
 			appendPQExpBuffer(&buf, " END as \"%s\"\n", gettext_noop("Storage"));
 		}
+		translate_columns[cols_so_far] = true;
+		cols_so_far++;
 	}
 
 	if (showIndexes)

@@ -38,3 +38,15 @@ The following entities have contributed to the Greenplum-based source code under
 - Broadcom Inc.
 
 RAT matchers are used to classify their license headers accordingly.
+
+## Compressed Files in Source
+
+The following compressed files are included in the source tree. These files are archives of text files used for testing purposes and do not contain binary executables. They are not used during the build process.
+
+- contrib/formatter_fixedwidth/data/fixedwidth_small_correct.tbl.gz
+- gpMgmt/demo/gppkg/sample-sources.tar.gz
+- src/bin/gpfdist/regress/data/exttab1/nation.tbl.gz
+- src/bin/gpfdist/regress/data/gpfdist2/gz_multi_chunk.tbl.gz
+- src/bin/gpfdist/regress/data/gpfdist2/gz_multi_chunk_2.tbl.gz
+- src/bin/gpfdist/regress/data/gpfdist2/lineitem.tbl.bz2
+- src/bin/gpfdist/regress/data/gpfdist2/lineitem.tbl.gz

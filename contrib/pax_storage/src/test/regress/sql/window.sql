@@ -2,6 +2,9 @@
 -- wrong result for some core case. Turn it on to run the existing tests
 -- and minimize the difference from upstream.
 set enable_incremental_sort=on;
+-- start_ignore
+set gp_use_streaming_hashagg = off;
+-- end_ignore
 
 --
 -- WINDOW FUNCTIONS

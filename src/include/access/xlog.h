@@ -11,6 +11,8 @@
 #ifndef XLOG_H
 #define XLOG_H
 
+#include "postgres.h" /* for Datum */
+
 #include "access/rmgr.h"
 #include "access/xlogdefs.h"
 #include "access/xloginsert.h"
@@ -121,6 +123,7 @@ extern int	XLogArchiveTimeout;
 extern int	wal_retrieve_retry_interval;
 extern char *XLogArchiveCommand;
 extern bool EnableHotStandby;
+extern bool EnableHotDR;
 
 extern bool fullPageWrites;
 extern bool wal_log_hints;

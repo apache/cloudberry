@@ -31,10 +31,10 @@ CREATE TABLE my_tt_agg_small (
 --
 COPY my_tt_agg_small (symbol, event_ts, trade_price, trade_volume) FROM stdin;
 --
--- Cloudberry Database database dump complete
+-- Apache Cloudberry database dump complete
 --
 --
--- Cloudberry Database database dump
+-- Apache Cloudberry database dump
 --
 --
 -- Name: my_tq_agg_small; Type: TABLE; Schema: public; Tablespace: 
@@ -55,7 +55,7 @@ COPY my_tq_agg_small (ets, sym, bid_price, ask_price, end_ts) FROM stdin;
 --
 CREATE INDEX my_tq_agg_small_ets_end_ts_ix ON my_tq_agg_small USING btree (ets, end_ts);
 --
--- Cloudberry Database database dump complete
+-- Apache Cloudberry database dump complete
 --
 set enable_hashjoin=off;
 create index my_tt_agg_small_event_ts_ix on my_tt_agg_small(event_ts);

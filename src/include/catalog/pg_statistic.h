@@ -288,6 +288,18 @@ DECLARE_FOREIGN_KEY((starelid, staattnum), pg_attribute, (attrelid, attnum));
 #define STATISTIC_KIND_BOUNDS_HISTOGRAM  7
 
 /*
+ * Used to calculate the summary of ndv on the segment.
+ * It will be used to count the number of rows produced
+ * when optimizer generating the partial agg node, and 
+ * thus calculate the cost value of the operator.
+ * 
+ * In the past, partial agg used histogram (on master) 
+ * data to calculate NDV, which may be quite different
+ * from the NDV on the segment.
+ */
+#define STATISTIC_KIND_NDV_BY_SEGMENTS  8
+
+/*
  * A "hyperloglog" slot stores the hyperloglog_counter created for sampled data.
  * This hyperloglog_counter data structure is converted into a bytea and stored
  * in "stavalues4" slot of pg_statistic catalog table

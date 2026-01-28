@@ -694,6 +694,25 @@ plan_tree_mutator(Node *node,
 				return (Node *) newwindow;
 			}
 			break;
+		case T_WindowHashAgg:
+			{
+				WindowHashAgg  *window = (WindowHashAgg *) node;
+				WindowHashAgg  *newwindow;
+
+				FLATCOPY(newwindow, window, WindowHashAgg);
+				PLANMUTATE(newwindow, window);
+
+				COPYARRAY(newwindow, window, partNumCols, partColIdx);
+				COPYARRAY(newwindow, window, partNumCols, partOperators);
+
+				COPYARRAY(newwindow, window, ordNumCols, ordColIdx);
+				COPYARRAY(newwindow, window, ordNumCols, ordOperators);
+				MUTATE(newwindow->startOffset, window->startOffset, Node *);
+				MUTATE(newwindow->endOffset, window->endOffset, Node *);
+
+				return (Node *) newwindow;
+			}
+			break;
 
 		case T_Unique:
 			{

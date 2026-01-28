@@ -335,8 +335,17 @@ ginPostingListDecodeAllSegments(GinPostingList *segment, int len, int *ndecoded_
 		}
 
 		/* copy the first item */
+		/*
+		 * Keep this commented out.
+		 * See comments in itemptr_to_uint64().
+		 * 
+		 * FIXME: Correct like this in other files (e.g., ginpostinglist.c and gist.c)
+		 * if we can reproduce the cases.
+		 */
+#if 0
 		Assert(OffsetNumberIsValid(ItemPointerGetOffsetNumber(&segment->first)));
-		Assert(ndecoded == 0 || ginCompareItemPointers(&segment->first, &result[ndecoded - 1]) > 0);
+#endif
+			Assert(ndecoded == 0 || ginCompareItemPointers(&segment->first, &result[ndecoded - 1]) > 0);
 		result[ndecoded] = segment->first;
 		ndecoded++;
 

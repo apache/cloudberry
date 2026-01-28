@@ -61,9 +61,8 @@ CXformSimplifyGbAgg::Exfp(CExpressionHandle &exprhdl) const
 {
 	CLogicalGbAgg *popAgg = CLogicalGbAgg::PopConvert(exprhdl.Pop());
 
-	GPOS_ASSERT(COperator::EgbaggtypeGlobal == popAgg->Egbaggtype());
-
-	if (0 == popAgg->Pdrgpcr()->Size() || nullptr != popAgg->PdrgpcrMinimal())
+	if (0 == popAgg->Pdrgpcr()->Size() || nullptr != popAgg->PdrgpcrMinimal()
+		|| popAgg->Egbaggtype() != COperator::EgbaggtypeGlobal)
 	{
 		return CXform::ExfpNone;
 	}

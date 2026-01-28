@@ -54,6 +54,14 @@ extern void compute_agg_clause_costs(PlannerInfo *root, AggSplit aggsplit,
 								 AggClauseCosts *agg_costs);
 extern void preprocess_aggrefs(PlannerInfo *root, Node *clause);
 
+extern int find_compatible_agg(List *agginfos, Aggref *newagg, List **same_input_transnos);
+extern int find_compatible_trans(List *aggtransinfos, bool shareable,
+								  Oid aggtransfn, Oid aggtranstype,
+								  int transtypeLen, bool transtypeByVal,
+								  Oid aggcombinefn,
+								  Oid aggserialfn, Oid aggdeserialfn,
+								  Datum initValue, bool initValueIsNull,
+								  List *transnos);
 /*
  * prototypes for prepunion.c
  */

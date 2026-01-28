@@ -65,7 +65,7 @@ class PaxSparseFilter final {
 
   bool ExistsFilterPath() const;
 
-  void Initialize(List *quals);
+  void Initialize(List *quals, ScanKey key, int nkeys);
 
 #ifdef VEC_BUILD
   void Initialize(
@@ -82,6 +82,8 @@ class PaxSparseFilter final {
 #ifndef RUN_GTEST
  private:
 #endif
+
+  std::shared_ptr<PFTNode> ProcessScanKey(ScanKey key);
 
   // Used to build the filter tree with the PG quals
   std::shared_ptr<PFTNode> ExprWalker(Expr *expr);

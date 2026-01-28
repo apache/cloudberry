@@ -71,14 +71,17 @@ enum EOptTraceFlag
 	// print MEMO during property enforcement process
 	EopttracePrintMemoEnforcement = 101015,
 
-	// print required columns
-	EopttracePrintRequiredColumns = 101016,
-
 	// print equivalent distribution specs
 	EopttracePrintEquivDistrSpecs = 101017,
 
 	// log results of hint parsing
 	EopttracePrintPgHintPlanLog = 101018,
+
+	// print result of preprocess
+	EopttracePrintPreProcessResult = 101019,
+
+	// print debug info of CTE
+	EopttraceDebugCTE = 101020,
 
 	///////////////////////////////////////////////////////
 	////////////////// transformations flags //////////////
@@ -232,6 +235,21 @@ enum EOptTraceFlag
 	// Force split the window function
 	EopttraceForceSplitWindowFunc = 103048,
 
+	// Disable dynamic seq/bitmap/index scan
+	EopttraceDisableDynamicTableScan = 103049,
+
+	// Enable window hash agg
+	EopttraceEnableWindowHashAgg = 103050,
+
+	// Use the first key in AGG Pds
+	EopttraceAggRRSFirstKey = 103051,
+
+	// Use the minimal length key in AGG Pds
+	EopttraceAggRRSMinimalLenKey = 103052,
+
+	// Use the all key exclude the non-fixed key in AGG pds
+	EopttraceAggRRSExcludeNonFixedKey = 103053,
+
 	///////////////////////////////////////////////////////
 	///////////////////// statistics flags ////////////////
 	//////////////////////////////////////////////////////
@@ -273,6 +291,8 @@ enum EOptTraceFlag
 
 	// is nestloop params enabled, it is only enabled in GPDB 6.x onwards.
 	EopttraceIndexedNLJOuterRefAsParams = 106000,
+
+	// 
 
 	// max
 	EopttraceSentinel = 199999

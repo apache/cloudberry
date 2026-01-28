@@ -330,6 +330,7 @@ client_side_global_var_init(MotionIPCLayer * motion_ipc_layer, pid_t *ic_proxy_p
 
 	Gp_interconnect_queue_depth = 800;
 	Gp_interconnect_snd_queue_depth = 600;
+	Gp_interconnect_mem_size = 20;
 	Gp_interconnect_timer_period = 1;
 	Gp_interconnect_timer_checking_period = 2;
 	InitializeLatchSupport();
@@ -374,6 +375,7 @@ server_side_global_var_init(MotionIPCLayer * motion_ipc_layer, pid_t *ic_proxy_p
 
 	Gp_interconnect_queue_depth = 800;
 	Gp_interconnect_snd_queue_depth = 600;
+	Gp_interconnect_mem_size = 20;
 	Gp_interconnect_timer_period = 1;
 	Gp_interconnect_timer_checking_period = 2;
 	InitializeLatchSupport();

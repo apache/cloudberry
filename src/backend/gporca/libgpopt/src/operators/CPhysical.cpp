@@ -61,6 +61,35 @@ CPhysical::CPhysical(CMemoryPool *mp)
 
 //---------------------------------------------------------------------------
 //	@function:
+//		CPhysical::BackTraceOptRequests
+//
+//	@doc:
+//		Use back trace to generated the
+//
+//---------------------------------------------------------------------------
+void
+CPhysical::BackTraceOptRequests(UlongPtrArray *pdrgpulpOptReqsExpanded,
+								const ULONG *ulOptReqs, ULONG ulOptReqsSize,
+								ULONG_PTR *current, ULONG cursz)
+{
+	if (cursz == ulOptReqsSize)
+	{
+		ULONG_PTR *copyOne = GPOS_NEW_ARRAY(m_mp, ULONG_PTR, GPOPT_PLAN_PROPS);
+		clib::Memcpy(copyOne, current, GPOPT_PLAN_PROPS * sizeof(ULONG_PTR));
+		pdrgpulpOptReqsExpanded->Append(copyOne);
+		return;
+	}
+
+	for (ULONG i = 0; i < ulOptReqs[cursz]; i++)
+	{
+		current[cursz] = i;
+		BackTraceOptRequests(pdrgpulpOptReqsExpanded, ulOptReqs, ulOptReqsSize,
+							 current, cursz + 1);
+	}
+}
+
+//---------------------------------------------------------------------------
+//	@function:
 //		CPhysical::UpdateOptRequests
 //
 //	@doc:
@@ -88,37 +117,17 @@ CPhysical::UpdateOptRequests(ULONG ulPropIndex, ULONG ulRequests)
 	m_ulTotalOptRequests = ulOptReqs;
 
 	// update expanded requests
-	const ULONG ulOrderRequests = UlOrderRequests();
-	const ULONG ulDistrRequests = UlDistrRequests();
-	const ULONG ulRewindRequests = UlRewindRequests();
-	const ULONG ulPartPropagateRequests = UlPartPropagateRequests();
+	ULONG ulaOptReqs[GPOPT_PLAN_PROPS] = {UlOrderRequests(), UlDistrRequests(),
+										  UlRewindRequests(),
+										  UlPartPropagateRequests()};
 
 	CRefCount::SafeRelease(m_pdrgpulpOptReqsExpanded);
-	m_pdrgpulpOptReqsExpanded = nullptr;
 	m_pdrgpulpOptReqsExpanded = GPOS_NEW(m_mp) UlongPtrArray(m_mp);
-	for (ULONG ulOrder = 0; ulOrder < ulOrderRequests; ulOrder++)
-	{
-		for (ULONG ulDistr = 0; ulDistr < ulDistrRequests; ulDistr++)
-		{
-			for (ULONG ulRewind = 0; ulRewind < ulRewindRequests; ulRewind++)
-			{
-				for (ULONG ulPartPropagate = 0;
-					 ulPartPropagate < ulPartPropagateRequests;
-					 ulPartPropagate++)
-				{
-					ULONG_PTR *pulpRequest =
-						GPOS_NEW_ARRAY(m_mp, ULONG_PTR, GPOPT_PLAN_PROPS);
 
-					pulpRequest[0] = ulOrder;
-					pulpRequest[1] = ulDistr;
-					pulpRequest[2] = ulRewind;
-					pulpRequest[3] = ulPartPropagate;
-
-					m_pdrgpulpOptReqsExpanded->Append(pulpRequest);
-				}
-			}
-		}
-	}
+	ULONG_PTR *pulpRequest = GPOS_NEW_ARRAY(m_mp, ULONG_PTR, GPOPT_PLAN_PROPS);
+	BackTraceOptRequests(m_pdrgpulpOptReqsExpanded, ulaOptReqs,
+						 GPOPT_PLAN_PROPS, pulpRequest, 0);
+	GPOS_DELETE_ARRAY(pulpRequest);
 }
 
 

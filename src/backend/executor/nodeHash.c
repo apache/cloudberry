@@ -4161,7 +4161,9 @@ PushdownRuntimeFilter(HashState *node)
 		scankeys = NIL;
 
 		attr_filter = lfirst(lc);
-		if (!IsA(attr_filter->target, SeqScanState) || attr_filter->empty)
+		if (attr_filter->empty ||
+			(!IsA(attr_filter->target, SeqScanState) &&
+			 !IsA(attr_filter->target, DynamicSeqScanState)))
 			continue;
 
 		/* bloom filter */
@@ -4190,8 +4192,21 @@ PushdownRuntimeFilter(HashState *node)
 		scankeys = lappend(scankeys, sk);
 
 		/* append new runtime filters to target node */
-		SeqScanState *sss = castNode(SeqScanState, attr_filter->target);
-		sss->filters = list_concat(sss->filters, scankeys);
+		if (IsA(attr_filter->target, SeqScanState))
+		{
+			SeqScanState *sss = castNode(SeqScanState, attr_filter->target);
+			sss->filters = list_concat(sss->filters, scankeys);
+		}
+		else if (IsA(attr_filter->target, DynamicSeqScanState))
+		{
+			DynamicSeqScanState *dsss = castNode(DynamicSeqScanState, attr_filter->target);
+			dsss->filters = list_concat(dsss->filters, scankeys);
+		}
+		else
+		{
+			/* never reach here */
+			pg_unreachable();
+		}
 	}
 }
 
@@ -4250,6 +4265,7 @@ ResetRuntimeFilter(HashState *node)
 	ListCell		*lc;
 	AttrFilter		*attr_filter;
 	SeqScanState	*sss;
+	DynamicSeqScanState *dsss;
 
 	if (!node->filters)
 		return;
@@ -4267,6 +4283,20 @@ ResetRuntimeFilter(HashState *node)
 				list_free_deep(sss->filters);
 				sss->filters = NIL;
 			}
+		}
+		else if (IsA(attr_filter->target, DynamicSeqScanState))
+		{
+			dsss = castNode(DynamicSeqScanState, attr_filter->target);
+			if (dsss->filters)
+			{
+				list_free_deep(dsss->filters);
+				dsss->filters = NIL;
+			}
+		}
+		else
+		{
+			/* never reach here */
+			pg_unreachable();
 		}
 
 		if (attr_filter->blm_filter)

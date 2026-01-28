@@ -1,5 +1,8 @@
 create schema bfv_aggregate;
 set search_path=bfv_aggregate;
+-- start_ignore
+set gp_use_streaming_hashagg = off;
+-- end_ignore
 
 --
 -- Window function with outer references in PARTITION BY/ORDER BY clause

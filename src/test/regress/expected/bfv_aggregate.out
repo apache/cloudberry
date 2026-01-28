@@ -1686,7 +1686,7 @@ SELECT a.x, sum(b.x) FROM pagg_tab1 a FULL OUTER JOIN pagg_tab2 b ON a.x = b.y G
                Group Key: a.x
                ->  Redistribute Motion 3:3  (slice2; segments: 3)
                      Hash Key: a.x
-                     ->  Partial HashAggregate
+                     ->  Streaming Partial HashAggregate
                            Group Key: a.x
                            ->  Hash Full Join
                                  Hash Cond: (a.x = b.y)
@@ -1961,7 +1961,7 @@ explain (verbose on, costs off) select ex2.b/2, sum(ex1.a) from ex1, (select a, 
          ->  Redistribute Motion 3:3  (slice2; segments: 3)
                Output: ((COALESCE(ex2.b, 1) / 2)), (PARTIAL sum(ex1.a))
                Hash Key: ((COALESCE(ex2.b, 1) / 2))
-               ->  Partial HashAggregate
+               ->  Streaming Partial HashAggregate
                      Output: ((COALESCE(ex2.b, 1) / 2)), PARTIAL sum(ex1.a)
                      Group Key: (COALESCE(ex2.b, 1) / 2)
                      ->  Hash Join
@@ -1999,7 +1999,7 @@ explain (verbose on, costs off) SELECT b/2, sum(b) * (b/2) FROM ex1  GROUP BY b/
          ->  Redistribute Motion 3:3  (slice2; segments: 3)
                Output: ((b / 2)), (PARTIAL sum(b))
                Hash Key: ((b / 2))
-               ->  Partial HashAggregate
+               ->  Streaming Partial HashAggregate
                      Output: ((b / 2)), PARTIAL sum(b)
                      Group Key: (ex1.b / 2)
                      ->  Seq Scan on bfv_aggregate.ex1

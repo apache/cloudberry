@@ -619,7 +619,7 @@ explain (locus, costs off) select * from rt1 union all select * from rt2;
 explain (locus, costs off) select * from rt1 union all select * from t1;
 -- SegmentGeneralWorkers (Converted to Strewn, Limited on One Segment) + Hashed = Strewn
 explain (locus, costs off) select * from rt1 union all select * from t2;
--- SingleQE as subquery seems cannot produce partial_pathlist and don't have chance to parallel append.
+-- partial subpath under UNION ALL
 explain (locus, costs off) select a from rt1 union all select count(*) as a from sq1;
 -- SegmentGeneralWorkers + General = SegmentGeneralWorkers
 explain (locus, costs off) select a from rt1 union all select a from generate_series(1, 1000) a;
@@ -985,6 +985,169 @@ explain(costs off, verbose)
 select t1_anti.a, t1_anti.b from t1_anti left join t2_anti on t1_anti.a = t2_anti.a where t2_anti.a is null;
 select t1_anti.a, t1_anti.b from t1_anti left join t2_anti on t1_anti.a = t2_anti.a where t2_anti.a is null;
 abort;
+
+--
+-- Test Parallel DISTINCT
+--
+drop table if exists t_distinct_0;
+create table t_distinct_0(a int, b int) using ao_column distributed randomly;
+insert into t_distinct_0 select i, i+1 from generate_series(1, 1000) i;
+insert into t_distinct_0 select * from t_distinct_0;
+insert into t_distinct_0 select * from t_distinct_0;
+insert into t_distinct_0 select * from t_distinct_0;
+insert into t_distinct_0 select * from t_distinct_0;
+insert into t_distinct_0 select * from t_distinct_0;
+insert into t_distinct_0 select * from t_distinct_0;
+insert into t_distinct_0 select * from t_distinct_0;
+insert into t_distinct_0 select * from t_distinct_0;
+insert into t_distinct_0 select * from t_distinct_0;
+insert into t_distinct_0 select * from t_distinct_0;
+insert into t_distinct_0 select * from t_distinct_0;
+insert into t_distinct_0 select * from t_distinct_0;
+insert into t_distinct_0 select * from t_distinct_0;
+insert into t_distinct_0 select * from t_distinct_0;
+insert into t_distinct_0 select * from t_distinct_0;
+analyze t_distinct_0;
+explain(costs off)
+select distinct a from t_distinct_0;
+set enable_parallel = on;
+-- first stage HashAgg, second stage GroupAgg
+explain(costs off)
+select distinct a from t_distinct_0;
+set parallel_query_use_streaming_hashagg = off;
+explain(costs off)
+select distinct a from t_distinct_0;
+-- GroupAgg
+set enable_hashagg = off;
+explain(costs off)
+select distinct a from t_distinct_0;
+-- HashAgg
+set enable_hashagg = on;
+set enable_groupagg = off;
+explain(costs off)
+select distinct a from t_distinct_0;
+set parallel_query_use_streaming_hashagg = on;
+explain(costs off)
+select distinct a from t_distinct_0;
+-- multi DISTINCT tlist
+explain(costs off)
+select distinct a, b from t_distinct_0;
+
+-- DISTINCT on distribution key 
+drop table if exists t_distinct_1;
+create table t_distinct_1(a int, b int) using ao_column;
+insert into t_distinct_1 select * from t_distinct_0;
+analyze t_distinct_1;
+set enable_parallel = off;
+explain(costs off)
+select distinct a from t_distinct_1;
+set enable_parallel = on;
+explain(costs off)
+select distinct a from t_distinct_1;
+
+--
+-- End of test Parallel DISTINCT
+--
+
+--
+-- Test Parallel UNION
+--
+set enable_parallel = off;
+explain(costs off)
+select distinct a from t_distinct_0 union select distinct b from t_distinct_0;
+set enable_parallel = on;
+set enable_groupagg = off;
+set enable_hashagg = on;
+explain(costs off)
+select distinct a from t_distinct_0 union select distinct b from t_distinct_0;
+reset enable_groupagg;
+set enable_hashagg = off;
+set enable_groupagg = on;
+explain(costs off)
+select distinct a from t_distinct_0 union select distinct b from t_distinct_0;
+reset enable_groupagg;
+reset enable_hashagg;
+explain(costs off)
+select distinct a from t_distinct_0 union select distinct b from t_distinct_0;
+reset enable_parallel;
+--
+-- End of test Parallel UNION
+--
+
+--
+-- Test Parallel Subquery.
+--
+CREATE TABLE departments (
+    department_id INT PRIMARY KEY,
+    department_name VARCHAR(100)
+);
+
+CREATE TABLE employees (
+    employee_id INT PRIMARY KEY,
+    name VARCHAR(100),
+    salary NUMERIC,
+    department_id INT
+);
+
+INSERT INTO departments VALUES 
+(1, 'Sales'),
+(2, 'IT'),
+(3, 'HR');
+
+INSERT INTO employees VALUES
+(1, 'Alice', 5000, 1),
+(2, 'Bob', 6000, 1),
+(3, 'Charlie', 7000, 2),
+(4, 'David', 8000, 2),
+(5, 'Eve', 9000, 3);
+
+set enable_parallel = off;
+explain SELECT e.name
+FROM employees e
+WHERE e.salary > (
+    SELECT AVG(salary)
+    FROM employees
+    WHERE department_id = e.department_id);
+
+SELECT e.name
+FROM employees e
+WHERE e.salary > (
+    SELECT AVG(salary)
+    FROM employees
+    WHERE department_id = e.department_id);
+
+set enable_parallel = on;
+set min_parallel_table_scan_size = 0;
+
+explain SELECT e.name
+FROM employees e
+WHERE e.salary > (
+    SELECT AVG(salary)
+    FROM employees
+    WHERE department_id = e.department_id);
+
+SELECT e.name
+FROM employees e
+WHERE e.salary > (
+    SELECT AVG(salary)
+    FROM employees
+    WHERE department_id = e.department_id);
+
+--
+-- Test https://github.com/apache/cloudberry/issues/1376
+--
+create table t1(a int, b int);
+create table t2 (like t1);
+set gp_cte_sharing = on;
+
+explain(locus, costs off) with x as
+  (select a, count(*) as b from t1 group by a union all
+    select a, count(*) as b from t2 group by a)
+  select count(*) from x a join x b on a.a = b.b;
+
+reset gp_cte_sharing;
+reset enable_parallel;
+reset min_parallel_table_scan_size;
 
 -- start_ignore
 drop schema test_parallel cascade;

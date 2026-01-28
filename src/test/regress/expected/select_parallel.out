@@ -1056,6 +1056,7 @@ select count(*) from tenk1;
 reset force_parallel_mode;
 reset role;
 -- Window function calculation can't be pushed to workers.
+-- CBDB_PARALLEL: window function's subpath could be parallel.
 explain (costs off, verbose)
   select count(*) from tenk1 a where (unique1, two) in
     (select unique1, row_number() over() from tenk1 b);
@@ -1063,28 +1064,29 @@ explain (costs off, verbose)
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
  Finalize Aggregate
    Output: count(*)
-   ->  Gather Motion 3:1  (slice1; segments: 3)
+   ->  Gather Motion 6:1  (slice1; segments: 6)
          Output: (PARTIAL count(*))
          ->  Partial Aggregate
                Output: PARTIAL count(*)
-               ->  Hash Semi Join
+               ->  Parallel Hash Semi Join
                      Hash Cond: ((a.unique1 = b.unique1) AND (a.two = (row_number() OVER (?))))
-                     ->  Seq Scan on public.tenk1 a
+                     ->  Parallel Seq Scan on public.tenk1 a
                            Output: a.unique1, a.unique2, a.two, a.four, a.ten, a.twenty, a.hundred, a.thousand, a.twothousand, a.fivethous, a.tenthous, a.odd, a.even, a.stringu1, a.stringu2, a.string4
-                     ->  Hash
+                     ->  Parallel Hash
                            Output: b.unique1, (row_number() OVER (?))
-                           ->  Redistribute Motion 1:3  (slice2; segments: 1)
+                           ->  Redistribute Motion 1:6  (slice2; segments: 1)
                                  Output: b.unique1, (row_number() OVER (?))
                                  Hash Key: b.unique1
+                                 Hash Module: 3
                                  ->  WindowAgg
                                        Output: b.unique1, row_number() OVER (?)
-                                       ->  Gather Motion 3:1  (slice3; segments: 3)
+                                       ->  Gather Motion 6:1  (slice3; segments: 6)
                                              Output: b.unique1
-                                             ->  Seq Scan on public.tenk1 b
+                                             ->  Parallel Seq Scan on public.tenk1 b
                                                    Output: b.unique1
  Settings: enable_parallel = 'on', min_parallel_table_scan_size = '0', optimizer = 'off', parallel_setup_cost = '0', parallel_tuple_cost = '0'
  Optimizer: Postgres query optimizer
-(23 rows)
+(24 rows)
 
 -- LIMIT/OFFSET within sub-selects can't be pushed to workers.
 explain (costs off)

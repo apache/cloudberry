@@ -199,7 +199,8 @@ CLeftOuterJoinStatsProcessor::AddHistogramsLOJInner(
 		CHistogram *null_histogram = GPOS_NEW(mp) CHistogram(
 			mp, GPOS_NEW(mp) CBucketArray(mp), true /*is_well_defined*/,
 			1.0 /*null_freq*/, CHistogram::DefaultNDVRemain,
-			CHistogram::DefaultNDVFreqRemain);
+			CHistogram::DefaultNDVFreqRemain,
+			CHistogram::DefaultNDVBySegments);
 		CHistogram *LOJ_histogram =
 			inner_join_histogram->MakeUnionAllHistogramNormalize(
 				num_rows_inner_join, null_histogram, num_rows_LASJ);

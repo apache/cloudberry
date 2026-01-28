@@ -564,6 +564,8 @@ plannode_type(Plan *p)
 			return "TupleSplit";
 		case T_WindowAgg:
 			return "WINDOWAGG";
+		case T_WindowHashAgg:
+			return "WINDOWHASHAGG";
 		case T_TableFunctionScan:
 			return "TABLEFUNCTIONSCAN";
 		case T_Unique:

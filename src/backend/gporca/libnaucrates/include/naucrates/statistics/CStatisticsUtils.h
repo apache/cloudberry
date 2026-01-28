@@ -109,13 +109,15 @@ private:
 	static void AddNdvForAllGrpCols(
 		CMemoryPool *mp, const CStatistics *input_stats,
 		const ULongPtrArray *grouping_columns,
-		CDoubleArray *output_ndvs  // output array of NDV
+		CDoubleArray *output_ndvs,  // output array of NDV
+		BOOL is_partial
 	);
 
 	// compute max number of groups when grouping on columns from the given source
 	static CDouble MaxNumGroupsForGivenSrcGprCols(
 		CMemoryPool *mp, const CStatisticsConfig *stats_config,
-		CStatistics *input_stats, const ULongPtrArray *src_grouping_cols);
+		CStatistics *input_stats, const ULongPtrArray *src_grouping_cols,
+		BOOL is_partial);
 
 	// check to see if any one of the grouping columns has been capped
 	static BOOL CappedGrpColExists(const CStatistics *stats,
@@ -245,13 +247,15 @@ public:
 		CMemoryPool *mp, const CStatisticsConfig *stats_config,
 		const IStatistics *stats,
 		CColRefSet *grp_cols_refset,  // grouping columns
-		CBitSet *keys				  // keys derived during optimization
+		CBitSet *keys,				  // keys derived during optimization
+		BOOL is_partial
 	);
 
 	// compute the cumulative number of groups for the given set of grouping columns
 	static CDouble Groups(CMemoryPool *mp, IStatistics *stats,
 						  const CStatisticsConfig *stats_config,
-						  ULongPtrArray *grouping_cols, CBitSet *keys);
+						  ULongPtrArray *grouping_cols, CBitSet *keys,
+						  BOOL is_partial);
 
 	// return the default number of distinct values
 	static CDouble

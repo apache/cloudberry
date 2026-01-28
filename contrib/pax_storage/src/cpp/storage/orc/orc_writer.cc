@@ -104,7 +104,6 @@ static std::unique_ptr<PaxColumns> BuildColumns(
     const std::vector<pax::porc::proto::Type_Kind> &types, const TupleDesc desc,
     const std::vector<std::tuple<ColumnEncoding_Kind, int>>
         &column_encoding_types,
-    const std::pair<ColumnEncoding_Kind, int> &offsets_encoding_types,
     const PaxStorageFormat &storage_format) {
   std::unique_ptr<PaxColumns> columns;
   bool is_vec;
@@ -125,14 +124,7 @@ static std::unique_ptr<PaxColumns> BuildColumns(
     encoding_option.is_sign = true;
     encoding_option.compress_level = std::get<1>(column_encoding_types[i]);
 
-    if (offsets_encoding_types.first == ColumnEncoding_Kind_DEF_ENCODED) {
-      // default value of offsets_stream is zstd
-      encoding_option.offsets_encode_type = ColumnEncoding_Kind_COMPRESS_ZSTD;
-      encoding_option.offsets_compress_level = 5;
-    } else {
-      encoding_option.offsets_encode_type = offsets_encoding_types.first;
-      encoding_option.offsets_compress_level = offsets_encoding_types.second;
-    }
+    encoding_option.offsets_encode_type = ColumnEncoding_Kind_DIRECT_DELTA;
 
     switch (type) {
       case (pax::porc::proto::Type_Kind::Type_Kind_STRING): {
@@ -225,12 +217,12 @@ static std::unique_ptr<PaxColumns> BuildColumns(
 OrcWriter::OrcWriter(
     const MicroPartitionWriter::WriterOptions &writer_options,
     const std::vector<pax::porc::proto::Type_Kind> &column_types,
-    std::shared_ptr<File> file, std::shared_ptr<File> toast_file)
+    std::unique_ptr<File> file, std::unique_ptr<File> toast_file)
     : MicroPartitionWriter(writer_options),
       is_closed_(false),
       column_types_(column_types),
-      file_(file),
-      toast_file_(toast_file),
+      file_(std::move(file)),
+      toast_file_(std::move(toast_file)),
       current_written_phy_size_(0),
       row_index_(0),
       total_rows_(0),
@@ -241,10 +233,9 @@ OrcWriter::OrcWriter(
   Assert(writer_options.rel_tuple_desc->natts ==
          static_cast<int>(column_types.size()));
 
-  pax_columns_ = BuildColumns(column_types_, writer_options.rel_tuple_desc,
-                              writer_options.encoding_opts,
-                              writer_options.offsets_encoding_opts,
-                              writer_options.storage_format);
+  pax_columns_ =
+      BuildColumns(column_types_, writer_options.rel_tuple_desc,
+                   writer_options.encoding_opts, writer_options.storage_format);
 
   summary_.rel_oid = writer_options.rel_oid;
   summary_.block_id = writer_options.block_id;
@@ -258,6 +249,16 @@ OrcWriter::OrcWriter(
 
   group_stats_.Initialize(writer_options.enable_min_max_col_idxs,
                           writer_options.enable_bf_col_idxs);
+
+  // Precompute slowpath indices for varlena columns (non-byval and typlen == -1)
+  varlena_slowpath_indices_.clear();
+  varlena_slowpath_indices_.reserve(writer_options.rel_tuple_desc->natts);
+  for (int i = 0; i < writer_options.rel_tuple_desc->natts; ++i) {
+    auto attrs = TupleDescAttr(writer_options.rel_tuple_desc, i);
+    if (!attrs->attbyval && attrs->attlen == -1) {
+      varlena_slowpath_indices_.push_back(i);
+    }
+  }
 }
 
 OrcWriter::~OrcWriter() {}
@@ -300,7 +301,6 @@ void OrcWriter::Flush() {
 
     new_columns = BuildColumns(column_types_, writer_options_.rel_tuple_desc,
                                writer_options_.encoding_opts,
-                               writer_options_.offsets_encoding_opts,
                                writer_options_.storage_format);
 
     for (size_t i = 0; i < column_types_.size(); ++i) {
@@ -321,8 +321,6 @@ void OrcWriter::Flush() {
 std::vector<std::pair<int, Datum>> OrcWriter::PrepareWriteTuple(
     TupleTableSlot *table_slot) {
   TupleDesc tuple_desc;
-  int16 type_len;
-  bool type_by_val;
   bool is_null;
   Datum tts_value;
   char type_storage;
@@ -333,18 +331,16 @@ std::vector<std::pair<int, Datum>> OrcWriter::PrepareWriteTuple(
   Assert(tuple_desc);
   const auto &required_stats_cols = group_stats_.GetRequiredStatsColsMask();
 
-  for (int i = 0; i < tuple_desc->natts; i++) {
+  for (int i : varlena_slowpath_indices_) {
     bool save_origin_datum;
     auto attrs = TupleDescAttr(tuple_desc, i);
-    type_len = attrs->attlen;
-    type_by_val = attrs->attbyval;
     is_null = table_slot->tts_isnull[i];
     tts_value = table_slot->tts_values[i];
     type_storage = attrs->attstorage;
 
     AssertImply(attrs->attisdropped, is_null);
 
-    if (is_null || type_by_val || type_len != -1) {
+    if (is_null) {
       continue;
     }
 
@@ -371,7 +367,11 @@ std::vector<std::pair<int, Datum>> OrcWriter::PrepareWriteTuple(
     // Numeric always need ensure that with the 4B header, otherwise it will
     // be converted twice in the vectorization path.
     if (required_stats_cols[i] || VARATT_IS_COMPRESSED(tts_value_vl) ||
-        VARATT_IS_EXTERNAL(tts_value_vl) || attrs->atttypid == NUMERICOID) {
+        VARATT_IS_EXTERNAL(tts_value_vl)
+#ifdef VEC_BUILD
+        || attrs->atttypid == NUMERICOID
+#endif
+    ) {
       // still detoast the origin toast
       detoast_vl = cbdb::PgDeToastDatum(tts_value_vl);
       Assert(detoast_vl != nullptr);

@@ -49,7 +49,7 @@ explain analyze select d, count(*) from smallt group by d;
          Peak Memory Usage: 0 kB
          ->  Redistribute Motion 3:3  (slice2; segments: 3)  (cost=1.50..3.47 rows=18 width=12) (actual time=0.395..1.643 rows=7 loops=1)
                Hash Key: d
-               ->  Partial HashAggregate  (cost=1.50..1.68 rows=18 width=12) (actual time=0.058..0.061 rows=10 loops=1)
+               ->  Streaming Partial HashAggregate  (cost=1.50..1.68 rows=18 width=12) (actual time=0.000..0.000 rows=10 loops=1)
                      Group Key: d
                      Peak Memory Usage: 0 kB
                      ->  Seq Scan on smallt  (cost=0.00..1.33 rows=33 width=4) (actual time=0.017..0.024 rows=50 loops=1)
@@ -183,7 +183,7 @@ where t1.d = t2.d;
                Peak Memory Usage: 0 kB
                ->  Redistribute Motion 3:3  (slice2; segments: 3)  (cost=1.50..3.47 rows=18 width=12) (actual time=0.659..1.284 rows=7 loops=1)
                      Hash Key: smallt.d
-                     ->  Partial HashAggregate  (cost=1.50..1.68 rows=18 width=12) (actual time=0.055..0.058 rows=10 loops=1)
+                     ->  Streaming Partial HashAggregate  (cost=1.50..1.68 rows=18 width=12) (actual time=0.000..0.000 rows=10 loops=1)
                            Group Key: smallt.d
                            Peak Memory Usage: 0 kB
                            ->  Seq Scan on smallt  (cost=0.00..1.33 rows=33 width=4) (actual time=0.015..0.022 rows=50 loops=1)
@@ -193,7 +193,7 @@ where t1.d = t2.d;
                      Peak Memory Usage: 0 kB
                      ->  Redistribute Motion 3:3  (slice3; segments: 3)  (cost=1.50..3.47 rows=18 width=12) (actual time=0.003..0.470 rows=7 loops=1)
                            Hash Key: smallt_1.d
-                           ->  Partial HashAggregate  (cost=1.50..1.68 rows=18 width=12) (actual time=0.084..0.090 rows=10 loops=1)
+                           ->  Streaming Partial HashAggregate  (cost=1.50..1.68 rows=18 width=12) (actual time=0.000..0.000 rows=10 loops=1)
                                  Group Key: smallt_1.d
                                  Peak Memory Usage: 0 kB
                                  ->  Seq Scan on smallt smallt_1  (cost=0.00..1.33 rows=33 width=8) (actual time=0.022..0.033 rows=50 loops=1)
@@ -282,7 +282,7 @@ explain analyze select d, count(*) from smallt group by d limit 5;
                ->  Sort  (cost=2.05..2.10 rows=18 width=12) (actual time=0.173..0.178 rows=10 loops=1)
                      Sort Key: d
                      Sort Method:  quicksort  Memory: 81kB
-                     ->  Partial HashAggregate  (cost=1.50..1.68 rows=18 width=12) (actual time=0.108..0.130 rows=10 loops=1)
+                     ->  Streaming Partial HashAggregate  (cost=1.50..1.68 rows=18 width=12) (actual time=0.000..0.000 rows=10 loops=1)
                            Group Key: d
                            Extra Text: (seg0)   Hash chain length 1.1 avg, 2 max, using 9 of 32 buckets; total 0 expansions.
                            ->  Seq Scan on smallt  (cost=0.00..1.33 rows=33 width=4) (actual time=0.025..0.036 rows=50 loops=1)

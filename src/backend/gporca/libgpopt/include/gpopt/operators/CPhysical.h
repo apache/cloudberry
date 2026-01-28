@@ -158,6 +158,11 @@ private:
 	// total number of optimization requests
 	ULONG m_ulTotalOptRequests;
 
+	// use back trace generate the opt requires
+	void BackTraceOptRequests(UlongPtrArray *pdrgpulpOptReqsExpanded,
+							  const ULONG *ulOptReqs, ULONG ulOptReqsSize,
+							  ULONG_PTR *current, ULONG cursz);
+
 	// update number of requests of a given property
 	void UpdateOptRequests(ULONG ulPropIndex, ULONG ulRequests);
 

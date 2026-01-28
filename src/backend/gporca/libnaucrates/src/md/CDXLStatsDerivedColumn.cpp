@@ -30,12 +30,13 @@ using namespace gpmd;
 //---------------------------------------------------------------------------
 CDXLStatsDerivedColumn::CDXLStatsDerivedColumn(
 	ULONG colid, CDouble width, CDouble null_freq, CDouble distinct_remaining,
-	CDouble freq_remaining, CDXLBucketArray *dxl_stats_bucket_array)
+	CDouble freq_remaining, CDouble distinct_by_segs, CDXLBucketArray *dxl_stats_bucket_array)
 	: m_colid(colid),
 	  m_width(width),
 	  m_null_freq(null_freq),
 	  m_distinct_remaining(distinct_remaining),
 	  m_freq_remaining(freq_remaining),
+	  m_distinct_by_segs(distinct_by_segs),
 	  m_dxl_stats_bucket_array(dxl_stats_bucket_array)
 {
 	GPOS_ASSERT(0 <= m_width);

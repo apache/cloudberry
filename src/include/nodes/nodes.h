@@ -103,6 +103,7 @@ typedef enum NodeTag
 	T_Agg,
 	T_TupleSplit,
 	T_WindowAgg,
+	T_WindowHashAgg,
 	T_Unique,
 	T_Gather,
 	T_GatherMerge,

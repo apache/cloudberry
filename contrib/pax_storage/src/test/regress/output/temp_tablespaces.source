@@ -56,7 +56,7 @@ CREATE TABLE tts_foo (i int, j int) distributed by(i);
 insert into tts_foo select i, i from generate_series(1,80000)i;
 ANALYZE tts_foo;
 set gp_cte_sharing=on;
--- CBDB_PARALLEL_FIXME: since we disabled shared input scan in parallel mode, sisc_xslice_temp_files
+-- CBDB_PARALLEL_FIXME: since we disabled Share Input Scan in parallel mode, sisc_xslice_temp_files
 -- will never be triggered. We need set max_parallel_workers_per_gather to 0 in this case.
 set max_parallel_workers_per_gather = 0;
 -- CASE 1: when temp_tablespaces is set, hashagg and share-input-scan

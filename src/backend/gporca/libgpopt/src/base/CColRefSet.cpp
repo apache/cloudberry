@@ -405,6 +405,33 @@ CColRefSet::ExtractColIds(CMemoryPool *mp, ULongPtrArray *colids) const
 
 //---------------------------------------------------------------------------
 //	@function:
+//		CColRefSet::ExtractColIds
+//
+//	@doc:
+//		extract the index(relative position) in current CColRefSet
+//		notice that: Whenever the current CColRefSet changes, the index will also change.
+//
+//---------------------------------------------------------------------------
+void
+CColRefSet::ExtractIndex(const CColRef *querycr, ULONG *colidx) const
+{
+	GPOS_ASSERT(nullptr != querycr);
+	GPOS_ASSERT(FMember(querycr));
+	*colidx = 0;
+	CColRefSetIter crsi(*this);
+	while (crsi.Advance())
+	{
+		CColRef *colref = crsi.Pcr();
+		if (colref == querycr) {
+			return;
+		}
+		*colidx += 1;
+	}
+	*colidx = gpos::ulong_max;
+}
+
+//---------------------------------------------------------------------------
+//	@function:
 //		CColRefSet::FContained
 //
 //	@doc:

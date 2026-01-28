@@ -75,3 +75,4 @@ LoginFailedControlLock				65
 LoginFailedSharedMemoryLock			66
 GPIVMResLock						67
 DirectoryTableLock                  68
+CommittedGxidArrayLock				69

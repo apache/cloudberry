@@ -75,7 +75,9 @@ CMDName::CMDName(const CMDName &name)
 //---------------------------------------------------------------------------
 CMDName::~CMDName()
 {
-	GPOS_ASSERT(m_name->IsValid());
+	// Some of `m_name` is reference only, there is no guarantee
+	// that the referenced object lives longer than the CMDName
+	// object when running the destructor of a process.
 
 	if (m_deep_copy)
 	{

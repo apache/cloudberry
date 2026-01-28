@@ -45,7 +45,7 @@ explain select distinct b from distinct_test;
          Group Key: b
          ->  Redistribute Motion 3:3  (slice2; segments: 3)  (cost=46.67..46.85 rows=6 width=4)
                Hash Key: b
-               ->  HashAggregate  (cost=46.67..46.73 rows=6 width=4)
+               ->  Streaming HashAggregate  (cost=46.67..46.73 rows=6 width=4)
                      Group Key: b
                      ->  Seq Scan on distinct_test  (cost=0.00..38.33 rows=3333 width=4)
  Optimizer: Postgres query optimizer

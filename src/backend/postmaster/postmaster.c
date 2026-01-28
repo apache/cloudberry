@@ -1541,9 +1541,6 @@ PostmasterMain(int argc, char *argv[])
 	}
 #endif
 
-	InitializeKmgr();
-	InitializeBufferEncryption();
-
 	if (terminal_fd != -1)
 		close(terminal_fd);
 
@@ -3202,6 +3199,14 @@ reset_shared(void)
 	 * clean up dead IPC objects if the postmaster crashes and is restarted.
 	 */
 	CreateSharedMemoryAndSemaphores();
+
+	/*
+	 * When backend process crashes, postmaster restart database,
+	 * we need to init kmgr share memory.
+	 */
+	InitializeKmgr();
+	InitializeBufferEncryption();
+
 }
 
 

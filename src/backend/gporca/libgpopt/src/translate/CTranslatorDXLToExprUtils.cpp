@@ -213,37 +213,6 @@ CTranslatorDXLToExprUtils::EBoolOperator(EdxlBoolExprType edxlbooltype)
 	return eboolop;
 }
 
-//---------------------------------------------------------------------------
-//	@function:
-//		CTranslatorDXLToExprUtils::Pdrgpcr
-//
-//	@doc:
-// 		Construct a dynamic array of column references corresponding to the
-//		given col ids
-//
-//---------------------------------------------------------------------------
-CColRefArray *
-CTranslatorDXLToExprUtils::Pdrgpcr(CMemoryPool *mp,
-								   UlongToColRefMap *colref_mapping,
-								   const ULongPtrArray *colids)
-{
-	GPOS_ASSERT(nullptr != colids);
-
-	CColRefArray *colref_array = GPOS_NEW(mp) CColRefArray(mp);
-
-	for (ULONG ul = 0; ul < colids->Size(); ul++)
-	{
-		ULONG *pulColId = (*colids)[ul];
-		CColRef *colref = colref_mapping->Find(pulColId);
-		colref->MarkAsUsed();
-		GPOS_ASSERT(nullptr != colref);
-
-		colref_array->Append(colref);
-	}
-
-	return colref_array;
-}
-
 
 //---------------------------------------------------------------------------
 //	@function:

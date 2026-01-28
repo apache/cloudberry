@@ -227,7 +227,7 @@ CREATE TABLE test_partitioned (a int, b text default repeat('x', 5000))
 SELECT * FROM verify_heapam('test_partitioned',
 							startblock := NULL,
 							endblock := NULL);
-ERROR:  "test_partitioned" is not a table, materialized view, or TOAST table
+ERROR:  "test_partitioned" is not a table, directory table, materialized view, or TOAST table
 CONTEXT:  SQL statement "SELECT t.blkno, t.offnum, t.attnum, t.msg
 	FROM verify_heapam_internal(relation,
 							 on_error_stop,
@@ -268,7 +268,7 @@ CREATE INDEX test_index ON test_partition (a);
 SELECT * FROM verify_heapam('test_index',
 							startblock := NULL,
 							endblock := NULL);
-ERROR:  "test_index" is not a table, materialized view, or TOAST table
+ERROR:  "test_index" is not a table, directory table, materialized view, or TOAST table
 CONTEXT:  SQL statement "SELECT t.blkno, t.offnum, t.attnum, t.msg
 	FROM verify_heapam_internal(relation,
 							 on_error_stop,
@@ -283,7 +283,7 @@ CREATE VIEW test_view AS SELECT 1;
 SELECT * FROM verify_heapam('test_view',
 							startblock := NULL,
 							endblock := NULL);
-ERROR:  "test_view" is not a table, materialized view, or TOAST table
+ERROR:  "test_view" is not a table, directory table, materialized view, or TOAST table
 CONTEXT:  SQL statement "SELECT t.blkno, t.offnum, t.attnum, t.msg
 	FROM verify_heapam_internal(relation,
 							 on_error_stop,
@@ -298,7 +298,7 @@ CREATE SEQUENCE test_sequence;
 SELECT * FROM verify_heapam('test_sequence',
 							startblock := NULL,
 							endblock := NULL);
-ERROR:  "test_sequence" is not a table, materialized view, or TOAST table
+ERROR:  "test_sequence" is not a table, directory table, materialized view, or TOAST table
 CONTEXT:  SQL statement "SELECT t.blkno, t.offnum, t.attnum, t.msg
 	FROM verify_heapam_internal(relation,
 							 on_error_stop,
@@ -315,7 +315,7 @@ CREATE FOREIGN TABLE test_foreign_table () SERVER dummy_server;
 SELECT * FROM verify_heapam('test_foreign_table',
 							startblock := NULL,
 							endblock := NULL);
-ERROR:  "test_foreign_table" is not a table, materialized view, or TOAST table
+ERROR:  "test_foreign_table" is not a table, directory table, materialized view, or TOAST table
 CONTEXT:  SQL statement "SELECT t.blkno, t.offnum, t.attnum, t.msg
 	FROM verify_heapam_internal(relation,
 							 on_error_stop,

@@ -101,7 +101,7 @@ OPTIONS
 -s
 
  Optional. If specified, before executing any commands on the target 
- host, gpssh sources the file greenplum_path.sh in the directory 
+ host, gpssh sources the file cloudberry-env.sh in the directory 
  specified by the $GPHOME environment variable. 
 
  This option is valid for both interactive mode and single command mode. 

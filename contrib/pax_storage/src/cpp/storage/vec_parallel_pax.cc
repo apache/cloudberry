@@ -60,7 +60,7 @@ class MicroPartitionInfo : public MicroPartitionInfoProvider {
     if (!visimap_name.empty()) {
       visimap = pax::LoadVisimap(file_system, nullptr, visimap_name);
       BitmapRaw<uint8_t> raw(visimap->data(), visimap->size());
-      bitmap = std::make_unique<Bitmap8>(raw, BitmapTpl<uint8>::ReadOnlyRefBitmap);
+      bitmap = std::make_unique<Bitmap8>(raw);
     }
     return {std::move(visimap), std::move(bitmap)};
   }

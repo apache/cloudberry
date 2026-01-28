@@ -1540,10 +1540,10 @@ cost_subqueryscan(SubqueryScanPath *path, PlannerInfo *root,
 	Assert(baserel->relid > 0);
 	Assert(baserel->rtekind == RTE_SUBQUERY);
 
-	/* Adjust row count if this runs in multiple segments and parallel model */
 	if (CdbPathLocus_IsPartitioned(path->path.locus))
 	{
-		numsegments = CdbPathLocus_NumSegments(path->path.locus);
+		/* Adjust row count if this runs in multiple segments and parallel model */
+		numsegments = CdbPathLocus_NumSegmentsPlusParallelWorkers(path->path.locus);
 	}
 	else
 		numsegments = 1;

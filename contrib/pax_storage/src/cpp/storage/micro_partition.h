@@ -58,7 +58,6 @@ class MicroPartitionWriter {
     RelFileNode node;
     bool need_wal = false;
     std::vector<std::tuple<ColumnEncoding_Kind, int>> encoding_opts;
-    std::pair<ColumnEncoding_Kind, int> offsets_encoding_opts;
     std::vector<int> enable_min_max_col_idxs;
     std::vector<int> enable_bf_col_idxs;
 
@@ -181,7 +180,7 @@ class MicroPartitionReader {
     // fetch, compression/encoding. At the same time, pax column can also be
     // used as a general interface for internal using, because it's zero copy
     // from buffer. more details in `storage/columns`
-    virtual const std::shared_ptr<PaxColumns> &GetAllColumns() const = 0;
+    virtual const std::unique_ptr<PaxColumns> &GetAllColumns() const = 0;
 
     virtual void SetVisibilityMap(
         std::shared_ptr<Bitmap8> visibility_bitmap) = 0;
@@ -204,12 +203,10 @@ class MicroPartitionReader {
 
     std::shared_ptr<PaxFilter> filter;
 
-#ifdef VEC_BUILD
-    TupleDesc tuple_desc = nullptr;
-#endif
-
     // should only reference
     std::shared_ptr<Bitmap8> visibility_bitmap = nullptr;
+
+    TupleDesc tuple_desc = nullptr;
   };
   MicroPartitionReader() = default;
 

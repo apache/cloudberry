@@ -7,8 +7,8 @@
 -- end_matchignore
 
 set default_table_access_method to pax;
-set pax_enable_debug to on;
-set pax_enable_sparse_filter to on;
+set pax.enable_debug to on;
+set pax.enable_sparse_filter to on;
 
 create  or replace function intrc(iint int)
  returns int as $$ 
@@ -132,11 +132,11 @@ select count(*) from t1 where v1 + v2 < v3;
 select count(*) from t1 where intrc(v1) + 10 > v2;
 
 -- simply the filter tree
-set pax_log_filter_tree to on;
+set pax.log_filter_tree to on;
 select count(*) from t1 where v1 > 10 or intrc(v2) < 120;
 select count(*) from t1 where v1 > 10 and intrc(v2) < 120;
 select count(*) from t1 where v1 is not null;
-reset pax_log_filter_tree;
+reset pax.log_filter_tree;
 
 reset client_min_messages;
 

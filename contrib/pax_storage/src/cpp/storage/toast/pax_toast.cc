@@ -331,7 +331,7 @@ static std::pair<Datum, std::shared_ptr<MemoryObject>> pax_make_external_toast(
 std::pair<Datum, std::shared_ptr<MemoryObject>> pax_make_toast(
     Datum d, char storage_type) {
   std::shared_ptr<MemoryObject> mobj;
-  Datum result;
+  Datum result = d;
 
   if (!pax_enable_toast) {
     return {d, nullptr};
@@ -495,15 +495,15 @@ size_t pax_detoast_raw(Datum d, char *dst_buff, size_t dst_cap, char *ext_buff,
   return decompress_size;
 }
 
-std::pair<Datum, std::shared_ptr<MemoryObject>> pax_detoast(
+std::pair<Datum, std::unique_ptr<MemoryObject>> pax_detoast(
     Datum d, char *ext_buff, size_t ext_buff_size) {
-  std::shared_ptr<ExternalToastValue> value;
+  std::unique_ptr<ExternalToastValue> value;
 
   if (VARATT_IS_COMPRESSED(d)) {
     char *result;
     size_t raw_size = VARDATA_COMPRESSED_GET_EXTSIZE(d);
 
-    value = std::make_shared<ExternalToastValue>(raw_size + VARHDRSZ);
+    value = std::make_unique<ExternalToastValue>(raw_size + VARHDRSZ);
     result = reinterpret_cast<char *>(value->Addr());
     // only external toast exist invalid compress toast
     Assert((ToastCompressionId)(TOAST_COMPRESS_METHOD(d)) !=
@@ -515,8 +515,8 @@ std::pair<Datum, std::shared_ptr<MemoryObject>> pax_detoast(
 
     SET_VARSIZE(result, raw_size + VARHDRSZ);
 
-    return std::pair<Datum, std::shared_ptr<MemoryObject>>{
-        PointerGetDatum(result), value};
+    return std::pair<Datum, std::unique_ptr<MemoryObject>>{
+        PointerGetDatum(result), std::move(value)};
   } else if (VARATT_IS_PAX_EXTERNAL_TOAST(d)) {
     char *result;
     Assert(ext_buff);
@@ -531,7 +531,7 @@ std::pair<Datum, std::shared_ptr<MemoryObject>> pax_detoast(
                    "buff size=%lu]",
                    offset, raw_size, ext_buff_size));
 
-    value = std::make_shared<ExternalToastValue>(origin_size + VARHDRSZ);
+    value = std::make_unique<ExternalToastValue>(origin_size + VARHDRSZ);
 
     result = reinterpret_cast<char *>(value->Addr());
     auto pg_attribute_unused() decompress_size =
@@ -540,11 +540,11 @@ std::pair<Datum, std::shared_ptr<MemoryObject>> pax_detoast(
 
     Assert(decompress_size == origin_size);
     SET_VARSIZE(result, origin_size + VARHDRSZ);
-    return std::pair<Datum, std::shared_ptr<MemoryObject>>{
-        PointerGetDatum(result), value};
+    return std::pair<Datum, std::unique_ptr<MemoryObject>>{
+        PointerGetDatum(result), std::move(value)};
   }
 
-  return std::pair<Datum, std::shared_ptr<MemoryObject>>{d, nullptr};
+  return std::pair<Datum, std::unique_ptr<MemoryObject>>{d, nullptr};
 }
 
 ExternalToastValue::ExternalToastValue(size_t size)

@@ -6,7 +6,7 @@
 -- roughly the same estimates as in upstream.
 set gp_selectivity_damping_for_scans = off;
 set gp_selectivity_damping_for_joins = off;
-set pax_enable_sparse_filter to off;
+set pax.enable_sparse_filter to off;
 -- Set constraint_exclusion to partition as same as upstream to make test pass.
 set constraint_exclusion to 'partition';
 
@@ -1644,4 +1644,4 @@ DROP FUNCTION op_leak(int, int);
 RESET SESSION AUTHORIZATION;
 DROP SCHEMA tststats CASCADE;
 DROP USER regress_stats_user1;
-reset pax_enable_sparse_filter;
+reset pax.enable_sparse_filter;

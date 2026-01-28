@@ -124,12 +124,6 @@ void cbdb::MemoryCtxRegisterResetCallback(MemoryContext context,
   CBDB_WRAP_END;
 }
 
-Oid cbdb::RelationGetRelationId(Relation rel) {
-  CBDB_WRAP_START;
-  { return RelationGetRelid(rel); }
-  CBDB_WRAP_END;
-}
-
 #ifdef RUN_GTEST
 Datum cbdb::DatumFromCString(const char *src, size_t length) {
   CBDB_WRAP_START;

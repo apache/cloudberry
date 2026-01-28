@@ -1,6 +1,6 @@
 -- start_ignore
 --
--- Cloudberry Database database dump
+-- Apache Cloudberry database dump
 --
 
 SET client_encoding = 'UTF8';
@@ -1153,7 +1153,7 @@ ALTER TABLE ONLY tclob
     ADD CONSTRAINT clobpk PRIMARY KEY (rnum);
 
 --
--- Cloudberry Database database dump complete
+-- Apache Cloudberry database dump complete
 --
 
 -- end_ignore
@@ -1379,7 +1379,7 @@ f1,f2,f3
 ) Q ) P;
 -- SubqueryInCase_p1
 -- test expected to fail until function supported in GPDB
--- GPDB Limitation ERROR:  Cloudberry Database does not yet support that query.  DETAIL:  The query contains a multi-row subquery.
+-- GPDB Limitation ERROR:  Apache Cloudberry does not yet support that query.  DETAIL:  The query contains a multi-row subquery.
 select 'SubqueryInCase_p1' test_name_part, case when c = 1 then 1 else 0 end pass_ind from (
 select count(distinct c) c from (
 select f1,f2,f3, count(*) c  from (
@@ -1452,7 +1452,7 @@ f1,f2,f3
 ) Q ) P;
 -- SubqueryPredicateNotIn_p1
 -- test expected to fail until function supported in GPDB
--- GPDB Limitation ERROR:  Cloudberry Database does not yet support that query.  DETAIL:  The query contains a multi-row subquery.
+-- GPDB Limitation ERROR:  Apache Cloudberry does not yet support that query.  DETAIL:  The query contains a multi-row subquery.
 select 'SubqueryPredicateNotIn_p1' test_name_part, case when c = 1 then 1 else 0 end pass_ind from (
 select count(distinct c) c from (
 select f1,f2,f3, count(*) c  from (
@@ -1507,7 +1507,7 @@ f1,f2,f3
 ) Q ) P;
 -- SubqueryQuantifiedPredicateEmpty_p1
 -- test expected to fail until GPDB support this function
--- GPDB Limitation ERROR:  Cloudberry Database does not yet support this query.  DETAIL:  The query contains a multi-row subquery.
+-- GPDB Limitation ERROR:  Apache Cloudberry does not yet support this query.  DETAIL:  The query contains a multi-row subquery.
 select 'SubqueryQuantifiedPredicateEmpty_p1' test_name_part, case when c = 1 then 1 else 0 end pass_ind from (
 select count(distinct c) c from (
 select f1,f2,f3, count(*) c  from (
@@ -1522,7 +1522,7 @@ f1,f2,f3
 ) Q ) P;
 -- SubqueryQuantifiedPredicateLarge_p1
 -- test expected to fail until GPDB supports this function
--- GPDB Limitation ERROR:  Cloudberry Database does not yet support that query.  DETAIL:  The query contains a multi-row subquery.
+-- GPDB Limitation ERROR:  Apache Cloudberry does not yet support that query.  DETAIL:  The query contains a multi-row subquery.
 select 'SubqueryQuantifiedPredicateLarge_p1' test_name_part, case when c = 1 then 1 else 0 end pass_ind from (
 select count(distinct c) c from (
 select f1,f2,f3, count(*) c  from (
@@ -2801,7 +2801,7 @@ f1
 ) Q ) P;
 -- SubqueryQuantifiedPredicateNull_gp_p1
 -- test expected to fail until GPDB support function
--- GPDB Limitation ERROR:  Cloudberry Database does not yet support this query.  DETAIL:  The query contains a multi-row subquery.
+-- GPDB Limitation ERROR:  Apache Cloudberry does not yet support this query.  DETAIL:  The query contains a multi-row subquery.
 select 'SubqueryQuantifiedPredicateNull_gp_p1' test_name_part, case when c = 1 then 1 else 0 end pass_ind from (
 select count(distinct c) c from (
 select f1, count(*) c  from (
@@ -2813,7 +2813,7 @@ f1
 ) Q ) P;
 -- SubqueryQuantifiedPredicateSmall_gp_p1
 -- test expected to fail until GPDB supports function
--- GPDB Limitation ERROR:  Cloudberry Database does not yet support this query.  DETAIL:  The query contains a multi-row subquery.
+-- GPDB Limitation ERROR:  Apache Cloudberry does not yet support this query.  DETAIL:  The query contains a multi-row subquery.
 select 'SubqueryQuantifiedPredicateSmall_gp_p1' test_name_part, case when c = 1 then 1 else 0 end pass_ind from (
 select count(distinct c) c from (
 select f1, count(*) c  from (

@@ -20,7 +20,7 @@ try:
     from gppylib.operations.unix import ListFilesByPattern
 
 except ImportError as ex:
-    sys.exit('Cannot import modules.  Please check that you have sourced greenplum_path.sh.  Detail: ' + str(ex))
+    sys.exit('Cannot import modules.  Please check that you have sourced cloudberry-env.sh.  Detail: ' + str(ex))
 
 logger = gplog.get_default_logger()
 

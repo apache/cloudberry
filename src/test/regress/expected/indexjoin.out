@@ -37,7 +37,7 @@ ORDER BY 1 asc ;
                Group Key: ((((tt.event_ts / 100000) / 5) * 5))
                ->  Redistribute Motion 3:3  (slice2; segments: 3)  (cost=1236.97..1252.45 rows=413 width=16)
                      Hash Key: ((((tt.event_ts / 100000) / 5) * 5))
-                     ->  Partial HashAggregate  (cost=1236.97..1244.19 rows=413 width=16)
+                     ->  Streaming Partial HashAggregate  (cost=1236.97..1244.19 rows=413 width=16)
                            Group Key: (((tt.event_ts / 100000) / 5) * 5)
                            ->  Hash Join  (cost=17.20..1161.31 rows=15131 width=8)
                                  Hash Cond: (tt.symbol = (tq.sym)::bpchar)

@@ -59,7 +59,7 @@ private:
 	// check if a given expression has a subquery exists node
 	static BOOL FHasSubqueryExists(CExpression *pexpr);
 
-	// check if a given expression has a subquery not exitst node
+	// check if a given expression has a subquery not exists node
 	static BOOL FHasSubqueryNotExists(CExpression *pexpr);
 
 	// check if a given expression has an ALL subquery

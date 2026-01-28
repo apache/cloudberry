@@ -45,7 +45,8 @@ PlannedStmt *
 CGPOptimizer::GPOPTOptimizedPlan(
 	Query *query,
 	bool *
-		had_unexpected_failure	// output : set to true if optimizer unexpectedly failed to produce plan
+		had_unexpected_failure,	// output : set to true if optimizer unexpectedly failed to produce plan
+	OptimizerOptions *opts
 )
 {
 	SOptContext gpopt_context;
@@ -55,15 +56,16 @@ CGPOptimizer::GPOPTOptimizedPlan(
 
 	GPOS_TRY
 	{
-		plStmt = COptTasks::GPOPTOptimizedPlan(query, &gpopt_context);
+		plStmt = COptTasks::GPOPTOptimizedPlan(query, &gpopt_context, opts);
 		// clean up context
 		gpopt_context.Free(gpopt_context.epinQuery, gpopt_context.epinPlStmt);
 	}
 	GPOS_CATCH_EX(ex)
 	{
 		// clone the error message before context free.
+		BOOL clone_failed = false;
 		CHAR *serialized_error_msg =
-			gpopt_context.CloneErrorMsg(MessageContext);
+			gpopt_context.CloneErrorMsg(MessageContext, &clone_failed);
 		// clean up context
 		gpopt_context.Free(gpopt_context.epinQuery, gpopt_context.epinPlStmt);
 
@@ -71,7 +73,7 @@ CGPOptimizer::GPOPTOptimizedPlan(
 		// we want to use the correct error code for these, in case an application
 		// tries to do something smart with them.
 
-		if (GPOS_MATCH_EX(ex, gpdxl::ExmaGPDB, gpdxl::ExmiGPDBError))
+		if (clone_failed || GPOS_MATCH_EX(ex, gpdxl::ExmaGPDB, gpdxl::ExmiGPDBError))
 		{
 			PG_RE_THROW();
 		}
@@ -199,9 +201,9 @@ CGPOptimizer::TerminateGPOPT()
 //---------------------------------------------------------------------------
 extern "C" {
 PlannedStmt *
-GPOPTOptimizedPlan(Query *query, bool *had_unexpected_failure)
+GPOPTOptimizedPlan(Query *query, bool *had_unexpected_failure, OptimizerOptions *opts)
 {
-	return CGPOptimizer::GPOPTOptimizedPlan(query, had_unexpected_failure);
+	return CGPOptimizer::GPOPTOptimizedPlan(query, had_unexpected_failure, opts);
 }
 }
 

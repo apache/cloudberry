@@ -166,6 +166,7 @@ static void setio_v2(Oid group, List *limit_list);
 static void freeio_v2(List *limit_list);
 static List	*getiostat_v2(Oid group, List *io_limit);
 static char *dumpio_v2(List *limit_list);
+static void cleario_v2(Oid groupid);
 
 /*
  * Dump component dir to the log.
@@ -385,7 +386,8 @@ createcgroup_v2(Oid group)
 {
 	int retry = 0;
 
-	if (!createDir(group, CGROUP_COMPONENT_PLAIN))
+	if (!createDir(group, CGROUP_COMPONENT_PLAIN, "") ||
+		!createDir(group, CGROUP_COMPONENT_PLAIN, CGROUPV2_LEAF_INDENTIFIER))
 	{
 		CGROUP_ERROR("can't create cgroup for resource group '%d': %m", group);
 	}
@@ -417,7 +419,7 @@ create_default_cpuset_group_v2(void)
 	CGroupComponentType component = CGROUP_COMPONENT_PLAIN;
 	int retry = 0;
 
-	if (!createDir(DEFAULT_CPUSET_GROUP_ID, component))
+	if (!createDir(DEFAULT_CPUSET_GROUP_ID, component, ""))
 	{
 		CGROUP_ERROR("can't create cpuset cgroup for resgroup '%d': %m",
 					 DEFAULT_CPUSET_GROUP_ID);
@@ -465,6 +467,7 @@ create_default_cpuset_group_v2(void)
 static void
 attachcgroup_v2(Oid group, int pid, bool is_cpuset_enabled)
 {
+	char path_of_leaf[MAXPATHLEN];
 	/*
 	 * needn't write to file if the pid has already been written in.
 	 * Unless it has not been written or the group has changed or
@@ -473,8 +476,9 @@ attachcgroup_v2(Oid group, int pid, bool is_cpuset_enabled)
 	if (IsUnderPostmaster && group == currentGroupIdInCGroup)
 		return;
 
+	pg_sprintf(path_of_leaf, "%s/cgroup.procs", CGROUPV2_LEAF_INDENTIFIER);
 	writeInt64(group, BASEDIR_GPDB, CGROUP_COMPONENT_PLAIN,
-			   "cgroup.procs", pid);
+			   path_of_leaf, pid);
 
 	/*
 	 * Do not assign the process to cgroup/memory for now.
@@ -498,6 +502,7 @@ detachcgroup_v2(Oid group, CGroupComponentType component, int fd_dir)
 {
 	char 	path[MAX_CGROUP_PATHLEN];
 	size_t 	path_size = sizeof(path);
+	char	path_of_leaf[MAXPATHLEN];
 
 	char 	*buf;
 	size_t 	buf_size;
@@ -532,7 +537,8 @@ detachcgroup_v2(Oid group, CGroupComponentType component, int fd_dir)
 	} \
 } while (0)
 
-	buildPath(group, BASEDIR_GPDB, component, "cgroup.procs", path, path_size);
+	pg_sprintf(path_of_leaf, "%s/cgroup.procs", CGROUPV2_LEAF_INDENTIFIER);
+	buildPath(group, BASEDIR_GPDB, component, path_of_leaf, path, path_size);
 
 	fdr = open(path, O_RDONLY);
 
@@ -560,7 +566,7 @@ detachcgroup_v2(Oid group, CGroupComponentType component, int fd_dir)
 	if (buf_len == 0)
 		return;
 
-	buildPath(DEFAULTRESGROUP_OID, BASEDIR_GPDB, component, "cgroup.procs",
+	buildPath(DEFAULTRESGROUP_OID, BASEDIR_GPDB, component, path_of_leaf,
 			  path, path_size);
 
 	fdw = open(path, O_WRONLY);
@@ -856,22 +862,22 @@ setio_v2(Oid group, List *limit_list)
 	{
 		TblSpcIOLimit *limit = (TblSpcIOLimit *)lfirst(tblspc_cell);
 
-		if (limit->ioconfig->rbps == IO_LIMIT_MAX )
+		if (limit->ioconfig->rbps == IO_LIMIT_MAX || limit->ioconfig->rbps == IO_LIMIT_EMPTY)
 			sprintf(rbps_str, "rbps=max");
 		else
 			sprintf(rbps_str, "rbps=%lu", limit->ioconfig->rbps * 1024 * 1024);
 
-		if (limit->ioconfig->wbps == IO_LIMIT_MAX)
+		if (limit->ioconfig->wbps == IO_LIMIT_MAX || limit->ioconfig->wbps == IO_LIMIT_EMPTY)
 			sprintf(wbps_str, "wbps=max");
 		else
 			sprintf(wbps_str, "wbps=%lu", limit->ioconfig->wbps * 1024 * 1024);
 
-		if (limit->ioconfig->riops == IO_LIMIT_MAX)
+		if (limit->ioconfig->riops == IO_LIMIT_MAX || limit->ioconfig->riops == IO_LIMIT_EMPTY)
 			sprintf(riops_str, "riops=max");
 		else
 			sprintf(riops_str, "riops=%u", (uint32)limit->ioconfig->riops);
 
-		if (limit->ioconfig->wiops == IO_LIMIT_MAX)
+		if (limit->ioconfig->wiops == IO_LIMIT_MAX || limit->ioconfig->wiops == IO_LIMIT_EMPTY)
 			sprintf(wiops_str, "wiops=max");
 		else
 			sprintf(wiops_str, "wiops=%u", (uint32)limit->ioconfig->wiops);
@@ -906,6 +912,12 @@ dumpio_v2(List *limit_list)
 	return io_limit_dump(limit_list);
 }
 
+static void
+cleario_v2(Oid groupid)
+{
+	clear_io_max(groupid);
+}
+
 static CGroupOpsRoutine cGroupOpsRoutineV2 = {
 		.getcgroupname = getcgroupname_v2,
 		.probecgroup = probecgroup_v2,
@@ -935,7 +947,8 @@ static CGroupOpsRoutine cGroupOpsRoutineV2 = {
 		.setio = setio_v2,
 		.freeio = freeio_v2,
 		.getiostat = getiostat_v2,
-		.dumpio = dumpio_v2
+		.dumpio = dumpio_v2,
+		.cleario = cleario_v2
 };
 
 CGroupOpsRoutine *get_group_routine_v2(void)

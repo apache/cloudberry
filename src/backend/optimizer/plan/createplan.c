@@ -2312,12 +2312,12 @@ create_projection_plan(PlannerInfo *root, ProjectionPath *best_path, int flags)
 	 * https://github.com/greenplum-db/gpdb/issues/9874 for more
 	 * detailed info.
 	 */
-	if (root->config->gp_enable_direct_dispatch && best_path->direct_dispath_contentIds)
+	if (root->config->gp_enable_direct_dispatch && best_path->direct_dispatch_contentIds)
 	{
 		DirectDispatchInfo dispatchInfo;
 
 		dispatchInfo.isDirectDispatch = true;
-		dispatchInfo.contentIds = best_path->direct_dispath_contentIds;
+		dispatchInfo.contentIds = best_path->direct_dispatch_contentIds;
 		dispatchInfo.haveProcessedAnyCalculations = true;
 
 		MergeDirectDispatchCalculationInfo(&root->curSlice->directDispatch, &dispatchInfo);

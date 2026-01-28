@@ -50,6 +50,10 @@ static const relopt_compress_type_mapping kSelfRelCompressMap[] = {
      pax::ColumnEncoding_Kind::ColumnEncoding_Kind_COMPRESS_ZSTD},
     {ColumnEncoding_Kind_COMPRESS_ZLIB_STR,
      pax::ColumnEncoding_Kind::ColumnEncoding_Kind_COMPRESS_ZLIB},
+#ifdef USE_LZ4
+    {ColumnEncoding_Kind_COMPRESS_LZ4_STR,
+     pax::ColumnEncoding_Kind::ColumnEncoding_Kind_COMPRESS_LZ4},
+#endif
 };
 
 typedef struct {

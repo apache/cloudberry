@@ -138,7 +138,7 @@ static SerializedParams *serializeParamsForDispatch(QueryDesc *queryDesc,
 													ParamExecData *execParams,
 													Bitmapset *sendParams);
 
-static Bitmapset* process_epd_iud_internal(List* subtagdata);
+static List* process_epd_iud_internal(List* subtagdata);
 
 /*
  * Compose and dispatch the MPPEXEC commands corresponding to a plan tree
@@ -867,6 +867,7 @@ buildGpQueryString(DispatchCommandQueryParms *pQueryParms,
 {
 	const char *command = pQueryParms->strCommand;
 	int			command_len;
+	int			is_hs_dispatch = IS_HOT_STANDBY_QD() ? 1 : 0;
 	const char *plantree = pQueryParms->serializedPlantree;
 	int			plantree_len = pQueryParms->serializedPlantreelen;
 	const char *sddesc = pQueryParms->serializedQueryDispatchDesc;
@@ -921,6 +922,7 @@ buildGpQueryString(DispatchCommandQueryParms *pQueryParms,
 		sizeof(outerUserId) /* outerUserIsSuper */ +
 		sizeof(currentUserId) +
 		sizeof(n32) * 2 /* currentStatementStartTimestamp */ +
+		sizeof(is_hs_dispatch) +
 		sizeof(command_len) +
 		sizeof(plantree_len) +
 		sizeof(sddesc_len) +
@@ -975,6 +977,10 @@ buildGpQueryString(DispatchCommandQueryParms *pQueryParms,
 	n32 = htonl(n32);
 	memcpy(pos, &n32, sizeof(n32));
 	pos += sizeof(n32);
+
+	tmp = htonl(is_hs_dispatch);
+	memcpy(pos, &tmp, sizeof(is_hs_dispatch));
+	pos += sizeof(is_hs_dispatch);
 
 	tmp = htonl(command_len);
 	memcpy(pos, &tmp, sizeof(command_len));
@@ -1729,7 +1735,7 @@ ConsumeExtendProtocolData(ExtendProtocolSubTag subtag)
 }
 
 void
-ConsumeAndProcessExtendProtocolData_IUD(Bitmapset **inserted, Bitmapset **updated, Bitmapset **deleted)
+ConsumeAndProcessExtendProtocolData_IUD(List **inserted, List **updated, List **deleted)
 {
 	List *ilist = NIL;
 	List *ulist = NIL;
@@ -1749,10 +1755,10 @@ ConsumeAndProcessExtendProtocolData_IUD(Bitmapset **inserted, Bitmapset **update
 	return;
 }
 
-static Bitmapset*
+static List*
 process_epd_iud_internal(List* subtagdata)
 {
-	Bitmapset	*res = NULL;
+	List		*res = NIL;
 	ListCell 	*lc;
 	int 		count;
 
@@ -1763,10 +1769,10 @@ process_epd_iud_internal(List* subtagdata)
 		data += sizeof(int);
 		for (int i = 0; i < count; i++)
 		{
-			int relid;
-			memcpy(&relid, data, sizeof(int));
-			data += sizeof(int);
-			res = bms_add_member(res, relid);
+			Oid relid;
+			memcpy(&relid, data, sizeof(Oid));
+			data += sizeof(Oid);
+			res = list_append_unique_oid(res, relid);
 		}
 	}
 	return res;

@@ -81,6 +81,14 @@ CConfigParamMapping::SConfigMappingElem CConfigParamMapping::m_elements[] = {
 	 false,	 // m_negate_param
 	 GPOS_WSZ_LIT("Prints optimization stats.")},
 
+	{EopttracePrintPreProcessResult, &optimizer_print_preprocess_result,
+		false,	 // m_negate_param
+		GPOS_WSZ_LIT("Prints the expression tree produced by the optimizer preprocess(every steps). Only worked with debug version of CBDB.")},
+
+	{EopttraceDebugCTE, &optimizer_debug_cte,
+	 false,	 // m_negate_param
+	 GPOS_WSZ_LIT("Print debug info of CTE. Only worked with debug version of CBDB.")},
+
 	{EopttraceMinidump,
 	 // GPDB_91_MERGE_FIXME: I turned optimizer_minidump from bool into
 	 // an enum-type GUC. It's a bit dirty to cast it like this..
@@ -306,8 +314,7 @@ CConfigParamMapping::SConfigMappingElem CConfigParamMapping::m_elements[] = {
 	{EopttraceEnableUseDistributionInDQA,
 	 &optimizer_enable_use_distribution_in_dqa,
 	 false,	 // m_negate_param
-	 GPOS_WSZ_LIT(
-		 "Enable use the distribution key in DQA")},
+	 GPOS_WSZ_LIT("Enable use the distribution key in DQA")},
 	{EopttraceDisableInnerHashJoin, &optimizer_enable_hashjoin,
 	 true,	// m_negate_param
 	 GPOS_WSZ_LIT("Explore hash join alternatives")},
@@ -315,6 +322,16 @@ CConfigParamMapping::SConfigMappingElem CConfigParamMapping::m_elements[] = {
 	 true,	// m_negate_param
 	 GPOS_WSZ_LIT("Enable nested loop join alternatives")},
 
+	{EopttraceDisableDynamicTableScan, &optimizer_disable_dynamic_table_scan,
+	 false,	 // m_negate_param
+	 GPOS_WSZ_LIT(
+		 "Disable the dynamic seq/bitmap/index scan in partition table")},
+
+	{EopttraceEnableWindowHashAgg, &optimizer_force_window_hash_agg,
+	 false,	 // m_negate_param
+	 GPOS_WSZ_LIT(
+		 "Enable create window hash agg")},
+	
 };
 
 //---------------------------------------------------------------------------
@@ -328,7 +345,8 @@ CConfigParamMapping::SConfigMappingElem CConfigParamMapping::m_elements[] = {
 CBitSet *
 CConfigParamMapping::PackConfigParamInBitset(
 	CMemoryPool *mp,
-	ULONG xform_id	// number of available xforms
+	ULONG xform_id,	// number of available xforms
+	BOOL create_vec_plan
 )
 {
 	CBitSet *traceflag_bitset = GPOS_NEW(mp) CBitSet(mp, EopttraceSentinel);
@@ -548,6 +566,18 @@ CConfigParamMapping::PackConfigParamInBitset(
 			GPOPT_DISABLE_XFORM_TF(CXform::ExfLeftJoin2RightJoin));
 		traceflag_bitset->ExchangeSet(
 			GPOPT_DISABLE_XFORM_TF(CXform::ExfRightOuterJoin2HashJoin));
+	}
+
+	if (create_vec_plan) {
+		traceflag_bitset->ExchangeSet(EopttraceEnableWindowHashAgg);
+	}
+
+	if (optimizer_agg_pds_strategy == OPTIMIZER_AGG_PDS_FIRST_KEY) {
+		traceflag_bitset->ExchangeSet(EopttraceAggRRSFirstKey);
+	} else if (optimizer_agg_pds_strategy == OPTIMIZER_AGG_PDS_MINIMAL_LEN_KEY) {
+		traceflag_bitset->ExchangeSet(EopttraceAggRRSMinimalLenKey);
+	} else if (optimizer_agg_pds_strategy == OPTIMIZER_AGG_PDS_EXCLUDE_NON_FIXED) {
+		traceflag_bitset->ExchangeSet(EopttraceAggRRSExcludeNonFixedKey);
 	}
 
 	return traceflag_bitset;

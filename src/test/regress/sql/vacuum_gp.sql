@@ -291,3 +291,18 @@ VACUUM vac_reltuple_distortion; -- 2nd call to VACUUM after ANALYZE
 SELECT reltuples, relname FROM pg_class WHERE oid='vac_reltuple_distortion'::regclass;
 VACUUM vac_reltuple_distortion;
 SELECT reltuples, relname FROM pg_class WHERE oid='vac_reltuple_distortion'::regclass;
+
+-- test wrong log relcache leak in pg_catalog.gp_acquire_sample_rows
+-- start_ignore
+drop table if exists relcache_leak_in_motion;
+-- end_ignore
+create table relcache_leak_in_motion(v1 int);
+insert into relcache_leak_in_motion values(generate_series(0, 10000));
+SELECT gp_inject_fault('interconnect_stop_recv_chunk', 'interrupt', dbid)
+  FROM gp_segment_configuration WHERE content = -1 and role='p';
+analyze relcache_leak_in_motion;
+SELECT gp_inject_fault('interconnect_stop_recv_chunk', 'reset', dbid)
+  FROM gp_segment_configuration WHERE content = -1 and role='p';
+-- start_ignore
+drop table if exists relcache_leak_in_motion;
+-- end_ignore

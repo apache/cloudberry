@@ -290,7 +290,7 @@ def deleteBlock(fileName,beginPattern, endPattern):
             print(("IOERROR", IOError))
             sys.exit()
     else:
-        print("***********%s  file does not exits"%(fileName))
+        print("***********%s  file does not exist"%(fileName))
 
 def make_inf_hosts(hp, hstart, hend, istart, iend, hf=None):
     hfArr = []
