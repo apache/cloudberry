@@ -699,11 +699,85 @@ static Expr *
 deduplicate_cnf_result(Expr *expr);
 
 /*
- * convert_expr_to_cnf_complete
- *    Complete CNF conversion with built-in deduplication
- *    Handles: (s='s' AND year=2001) OR (s='s' AND year=2002) OR
- *             (s='c' AND year=2001 AND sum>0) OR (s='c' AND year=2002 AND sum>0)
- *    Should produce: (year=2001 OR year=2002) AND (s='s' OR s='c') AND (s='s' OR sum>0)
+ * CNF Conversion for CTE Predicate Pushdown
+ *
+ * MOTIVATION:
+ * When a CTE is referenced multiple times with different filter predicates,
+ * we want to push down the combined predicates to reduce materialization.
+ * For example:
+ *
+ *   WITH cte AS (SELECT ... FROM large_table)
+ *   SELECT * FROM cte WHERE store_id = 10
+ *   UNION ALL
+ *   SELECT * FROM cte WHERE store_id = 20
+ *
+ * We collect predicates from all consumers and combine them:
+ *   (store_id = 10) OR (store_id = 20)
+ *
+ * For more complex cases with AND predicates:
+ *   WHERE (store_id = 10 AND year = 2001)
+ *   WHERE (store_id = 20 AND year = 2001)
+ *
+ * Combined: (store_id = 10 AND year = 2001) OR (store_id = 20 AND year = 2001)
+ *
+ * WHY CNF CONVERSION:
+ * CNF (Conjunctive Normal Form) is required because:
+ * 1. The planner expects filter predicates in AND-of-ORs form
+ * 2. CNF enables individual clauses to be pushed down independently
+ * 3. After CNF conversion, (year = 2001) can be extracted as a separate
+ *    conjunct and pushed down even if other parts cannot be
+ *
+ * ALGORITHM:
+ * We use the distributive law to convert OR-of-ANDs to AND-of-ORs:
+ *
+ *   (A AND B) OR (A AND C)
+ *   = (A OR A) AND (A OR C) AND (B OR A) AND (B OR C)  [distribute]
+ *   = A AND (A OR C) AND (B OR A) AND (B OR C)         [simplify A OR A = A]
+ *   = A AND (A OR C) AND (A OR B) AND (B OR C)         [reorder]
+ *
+ * With subsumption detection, we can further simplify:
+ *   - (A OR C) subsumes any clause containing all its terms plus more
+ *   - So A AND (A OR C) simplifies to A (since A subsumes A OR C? No...)
+ *   
+ * Actually: In CNF context, (A) subsumes (A OR B) because:
+ *   - If A is true, both A and (A OR B) are true
+ *   - (A) is more restrictive, so (A OR B) is redundant
+ *
+ * EXAMPLE WALKTHROUGH:
+ * Input: (s='s' AND year=2001) OR (s='s' AND year=2002)
+ *
+ * Step 1: Identify AND clauses to distribute
+ *   - First AND: (s='s' AND year=2001)
+ *   - Remaining: (s='s' AND year=2002)
+ *
+ * Step 2: Distribute first AND over remaining
+ *   - (s='s' OR (s='s' AND year=2002))  → recurse
+ *   - (year=2001 OR (s='s' AND year=2002))  → recurse
+ *
+ * Step 3: Recursively convert each:
+ *   - (s='s' OR (s='s' AND year=2002))
+ *     = (s='s' OR s='s') AND (s='s' OR year=2002)
+ *     = s='s' AND (s='s' OR year=2002)
+ *   
+ *   - (year=2001 OR (s='s' AND year=2002))
+ *     = (year=2001 OR s='s') AND (year=2001 OR year=2002)
+ *
+ * Step 4: Combine with AND:
+ *   = s='s' AND (s='s' OR year=2002) AND (year=2001 OR s='s') AND (year=2001 OR year=2002)
+ *
+ * Step 5: Deduplicate and remove subsumed clauses:
+ *   - s='s' subsumes (s='s' OR year=2002) and (year=2001 OR s='s')
+ *   - Final: s='s' AND (year=2001 OR year=2002)
+ *
+ * DEDUPLICATION STRATEGY:
+ * 1. Exact duplicate removal: (A OR B) appears twice → keep one
+ * 2. Subsumption removal: (A OR B) AND (A OR B OR C) → keep only (A OR B)
+ *    because (A OR B) being true implies (A OR B OR C) is true
+ *
+ * COMPLEXITY NOTE:
+ * CNF conversion can cause exponential blowup in the worst case.
+ * For n AND-clauses each with m terms: O(m^n) output clauses.
+ * The deduplication helps mitigate this for practical queries.
  */
 Expr *
 convert_expr_to_cnf_complete(Expr *expr)
@@ -773,7 +847,7 @@ convert_or_to_cnf_complete(Expr *expr)
 	if (!has_and)
 	{
 		if (list_length(or_args) == 0)
-			return (Expr *)makeBoolConst(true, false);
+			return (Expr *)makeBoolConst(false, false);
 		else if (list_length(or_args) == 1)
 			return (Expr *)linitial(or_args);
 		else
@@ -1013,6 +1087,7 @@ remove_duplicate_and_subsumed_clauses(List *clauses)
 	{
 		Expr *clause = (Expr *)lfirst(lc);
 		bool keep = true;
+		List *to_remove = NIL;
 
 		/* Check against all existing clauses */
 		ListCell *lc_exist;
@@ -1038,11 +1113,25 @@ remove_duplicate_and_subsumed_clauses(List *clauses)
 				}
 				else if (or_clause_subsumes(clause, existing))
 				{
-					/* Current subsumes existing, remove existing */
-					result = list_delete_cell(result, lc_exist);
-					break;
+					/*
+					 * Current subsumes existing, mark for removal.
+					 * Continue checking other clauses since the current
+					 * clause may subsume multiple existing clauses.
+					 */
+					to_remove = lappend(to_remove, existing);
 				}
 			}
+		}
+
+		/* Remove all clauses that current clause subsumes */
+		if (to_remove != NIL)
+		{
+			ListCell *lc_rm;
+			foreach (lc_rm, to_remove)
+			{
+				result = list_delete_ptr(result, lfirst(lc_rm));
+			}
+			list_free(to_remove);
 		}
 
 		if (keep)
