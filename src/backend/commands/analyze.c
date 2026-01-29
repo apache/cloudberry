@@ -1728,24 +1728,12 @@ acquire_sample_rows(Relation onerel, int elevel,
 	 * the relation should not be an AO/CO table.
 	 */
 	Assert(!RelationIsAppendOptimized(onerel));
-	if (RelationIsPax(onerel))
-	{
-		/* PAX use non-fixed block layout */
-		BlockNumber pages;
-		double		tuples;
-		double		allvisfrac;
-		int32		attr_widths;
+	/*
+	 * PAX uses table_relation_acquire_sample_rows() as well.
+	 */
+	Assert(!RelationIsPax(onerel));
 
-		table_relation_estimate_size(onerel,	&attr_widths, &pages,
-									&tuples, &allvisfrac);
-
-		if (tuples > UINT_MAX)
-			tuples = UINT_MAX;
-
-		totalblocks = (BlockNumber)tuples;
-	}
-	else
-		totalblocks = RelationGetNumberOfBlocks(onerel);
+	totalblocks = RelationGetNumberOfBlocks(onerel);
 
 	/* Need a cutoff xmin for HeapTupleSatisfiesVacuum */
 	OldestXmin = GetOldestNonRemovableTransactionId(onerel);
