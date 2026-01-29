@@ -136,21 +136,12 @@ CreateDirectoryTable(CreateDirectoryTableStmt *stmt, Oid relId)
 	}
 	else
 	{
-		Form_pg_class pg_class_tuple = NULL;
-		HeapTuple	class_tuple = NULL;
 		RelFileNode relFileNode = {0};
-
-		class_tuple = SearchSysCache1(RELOID, ObjectIdGetDatum(relId));
-		if (!HeapTupleIsValid(class_tuple))
-			elog(ERROR, "cache lookup failed for relation %u", relId);
-		pg_class_tuple = (Form_pg_class) GETSTRUCT(class_tuple);
 
 		relFileNode.spcNode = spcId;
 		relFileNode.dbNode = MyDatabaseId;
-		relFileNode.relNode = pg_class_tuple->relfilenode;
 
-		dirTablePath = UFileFormatPathName(&relFileNode);
-		ReleaseSysCache(class_tuple);
+		dirTablePath = UFileFormatPathName(relId, &relFileNode);
 	}
 
 	/*

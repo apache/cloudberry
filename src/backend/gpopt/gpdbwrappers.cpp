@@ -36,17 +36,20 @@ extern "C" {
 #include "access/amapi.h"
 #include "access/external.h"
 #include "access/genam.h"
+#include "catalog/pg_aggregate.h"
 #include "catalog/pg_inherits.h"
 #include "foreign/fdwapi.h"
 #include "nodes/nodeFuncs.h"
 #include "optimizer/clauses.h"
 #include "optimizer/optimizer.h"
 #include "optimizer/plancat.h"
+#include "optimizer/prep.h"
 #include "optimizer/subselect.h"
 #include "parser/parse_agg.h"
 #include "partitioning/partdesc.h"
 #include "storage/lmgr.h"
 #include "utils/fmgroids.h"
+#include "utils/lsyscache.h"
 #include "utils/memutils.h"
 #include "utils/partcache.h"
 }
@@ -70,283 +73,6 @@ extern "C" {
 using namespace gpos;
 
 bool
-gpdb::BoolFromDatum(Datum d)
-{
-	GP_WRAP_START;
-	{
-		return DatumGetBool(d);
-	}
-	GP_WRAP_END;
-	return false;
-}
-
-Datum
-gpdb::DatumFromBool(bool b)
-{
-	GP_WRAP_START;
-	{
-		return BoolGetDatum(b);
-	}
-	GP_WRAP_END;
-	return 0;
-}
-
-char
-gpdb::CharFromDatum(Datum d)
-{
-	GP_WRAP_START;
-	{
-		return DatumGetChar(d);
-	}
-	GP_WRAP_END;
-	return '\0';
-}
-
-Datum
-gpdb::DatumFromChar(char c)
-{
-	GP_WRAP_START;
-	{
-		return CharGetDatum(c);
-	}
-	GP_WRAP_END;
-	return 0;
-}
-
-int8
-gpdb::Int8FromDatum(Datum d)
-{
-	GP_WRAP_START;
-	{
-		return DatumGetInt8(d);
-	}
-	GP_WRAP_END;
-	return 0;
-}
-
-Datum
-gpdb::DatumFromInt8(int8 i8)
-{
-	GP_WRAP_START;
-	{
-		return Int8GetDatum(i8);
-	}
-	GP_WRAP_END;
-	return 0;
-}
-
-uint8
-gpdb::Uint8FromDatum(Datum d)
-{
-	GP_WRAP_START;
-	{
-		return DatumGetUInt8(d);
-	}
-	GP_WRAP_END;
-	return 0;
-}
-
-Datum
-gpdb::DatumFromUint8(uint8 ui8)
-{
-	GP_WRAP_START;
-	{
-		return UInt8GetDatum(ui8);
-	}
-	GP_WRAP_END;
-	return 0;
-}
-
-int16
-gpdb::Int16FromDatum(Datum d)
-{
-	GP_WRAP_START;
-	{
-		return DatumGetInt16(d);
-	}
-	GP_WRAP_END;
-	return 0;
-}
-
-Datum
-gpdb::DatumFromInt16(int16 i16)
-{
-	GP_WRAP_START;
-	{
-		return Int16GetDatum(i16);
-	}
-	GP_WRAP_END;
-	return 0;
-}
-
-uint16
-gpdb::Uint16FromDatum(Datum d)
-{
-	GP_WRAP_START;
-	{
-		return DatumGetUInt16(d);
-	}
-	GP_WRAP_END;
-	return 0;
-}
-
-Datum
-gpdb::DatumFromUint16(uint16 ui16)
-{
-	GP_WRAP_START;
-	{
-		return UInt16GetDatum(ui16);
-	}
-	GP_WRAP_END;
-	return 0;
-}
-
-int32
-gpdb::Int32FromDatum(Datum d)
-{
-	GP_WRAP_START;
-	{
-		return DatumGetInt32(d);
-	}
-	GP_WRAP_END;
-	return 0;
-}
-
-Datum
-gpdb::DatumFromInt32(int32 i32)
-{
-	GP_WRAP_START;
-	{
-		return Int32GetDatum(i32);
-	}
-	GP_WRAP_END;
-	return 0;
-}
-
-uint32
-gpdb::lUint32FromDatum(Datum d)
-{
-	GP_WRAP_START;
-	{
-		return DatumGetUInt32(d);
-	}
-	GP_WRAP_END;
-	return 0;
-}
-
-Datum
-gpdb::DatumFromUint32(uint32 ui32)
-{
-	GP_WRAP_START;
-	{
-		return UInt32GetDatum(ui32);
-	}
-	GP_WRAP_END;
-	return 0;
-}
-
-int64
-gpdb::Int64FromDatum(Datum d)
-{
-	Datum d2 = d;
-	GP_WRAP_START;
-	{
-		return DatumGetInt64(d2);
-	}
-	GP_WRAP_END;
-	return 0;
-}
-
-Datum
-gpdb::DatumFromInt64(int64 i64)
-{
-	int64 ii64 = i64;
-	GP_WRAP_START;
-	{
-		return Int64GetDatum(ii64);
-	}
-	GP_WRAP_END;
-	return 0;
-}
-
-uint64
-gpdb::Uint64FromDatum(Datum d)
-{
-	GP_WRAP_START;
-	{
-		return DatumGetUInt64(d);
-	}
-	GP_WRAP_END;
-	return 0;
-}
-
-Datum
-gpdb::DatumFromUint64(uint64 ui64)
-{
-	GP_WRAP_START;
-	{
-		return UInt64GetDatum(ui64);
-	}
-	GP_WRAP_END;
-	return 0;
-}
-
-Oid
-gpdb::OidFromDatum(Datum d)
-{
-	GP_WRAP_START;
-	{
-		return DatumGetObjectId(d);
-	}
-	GP_WRAP_END;
-	return 0;
-}
-
-void *
-gpdb::PointerFromDatum(Datum d)
-{
-	GP_WRAP_START;
-	{
-		return DatumGetPointer(d);
-	}
-	GP_WRAP_END;
-	return nullptr;
-}
-
-float4
-gpdb::Float4FromDatum(Datum d)
-{
-	GP_WRAP_START;
-	{
-		return DatumGetFloat4(d);
-	}
-	GP_WRAP_END;
-	return 0;
-}
-
-float8
-gpdb::Float8FromDatum(Datum d)
-{
-	GP_WRAP_START;
-	{
-		return DatumGetFloat8(d);
-	}
-	GP_WRAP_END;
-	return 0;
-}
-
-Datum
-gpdb::DatumFromPointer(const void *p)
-{
-	GP_WRAP_START;
-	{
-		return PointerGetDatum(p);
-	}
-	GP_WRAP_END;
-	return 0;
-}
-
-bool
 gpdb::AggregateExists(Oid oid)
 {
 	GP_WRAP_START;
@@ -366,6 +92,17 @@ gpdb::BmsAddMember(Bitmapset *a, int x)
 	}
 	GP_WRAP_END;
 	return nullptr;
+}
+
+int
+gpdb::BmsNextMember(const Bitmapset *a, int prevbit)
+{
+	GP_WRAP_START;
+	{
+		return bms_next_member(a, prevbit);
+	}
+	GP_WRAP_END;
+	return -2;
 }
 
 void *
@@ -490,6 +227,15 @@ gpdb::TypeCollation(Oid type)
 	return 0;
 }
 
+void
+gpdb::TypLenByVal(Oid typid, int16 *typlen, bool *typbyval)
+{
+	GP_WRAP_START;
+	{
+		get_typlenbyval(typid, typlen, typbyval);
+	}
+	GP_WRAP_END;
+}
 
 List *
 gpdb::ExtractNodesPlan(Plan *pl, int node_tag, bool descend_into_subqueries)
@@ -601,6 +347,30 @@ gpdb::FuncStability(Oid funcid)
 	return '\0';
 }
 
+RegProcedure
+gpdb::FuncSupport(Oid funcid)
+{
+	GP_WRAP_START;
+	{
+		/* catalog tables: pg_proc */
+		return get_func_support(funcid);
+	}
+	GP_WRAP_END;
+	return InvalidOid;
+}
+
+Oid
+gpdb::FuncNamespace(Oid funcid)
+{
+	GP_WRAP_START;
+	{
+		/* catalog tables: pg_proc */
+		return get_func_namespace(funcid);
+	}
+	GP_WRAP_END;
+	return InvalidOid;
+}
+
 char
 gpdb::FuncExecLocation(Oid funcid)
 {
@@ -660,6 +430,126 @@ gpdb::ResolveAggregateTransType(Oid aggfnoid, Oid aggtranstype, Oid *inputTypes,
 	GP_WRAP_END;
 	return 0;
 }
+
+static Datum
+GetAggInitVal(Datum textInitVal, Oid transtype)
+{
+	Oid			typinput,
+				typioparam;
+	char	   *strInitVal;
+	Datum		initVal;
+
+	getTypeInputInfo(transtype, &typinput, &typioparam);
+	strInitVal = TextDatumGetCString(textInitVal);
+	initVal = OidInputFunctionCall(typinput, strInitVal,
+								   typioparam, -1);
+	pfree(strInitVal);
+	return initVal;
+}
+
+void
+gpdb::GetAggregateInfo(Aggref *aggref, Oid *aggtransfn,
+					   Oid *aggfinalfn, Oid *aggcombinefn,
+					   Oid *aggserialfn, Oid *aggdeserialfn,
+					   Oid *aggtranstype, int *aggtransspace,
+					   Datum *initValue, bool *initValueIsNull,
+					   bool *shareable)
+{
+	GP_WRAP_START;
+	{
+		HeapTuple	aggTuple;
+		Form_pg_aggregate aggform;
+		Datum		textInitVal;
+		Oid			inputTypes[FUNC_MAX_ARGS];
+		int			numArguments;
+
+		aggTuple = SearchSysCache1(AGGFNOID,
+							   ObjectIdGetDatum(aggref->aggfnoid));
+		if (!HeapTupleIsValid(aggTuple))
+			elog(ERROR, "cache lookup failed for aggregate %u",
+				 aggref->aggfnoid);
+
+		aggform = (Form_pg_aggregate) GETSTRUCT(aggTuple);
+		*aggtransfn = aggform->aggtransfn;
+		*aggfinalfn = aggform->aggfinalfn;
+		*aggcombinefn = aggform->aggcombinefn;
+		*aggserialfn = aggform->aggserialfn;
+		*aggdeserialfn = aggform->aggdeserialfn;
+		*aggtranstype = aggform->aggtranstype;
+		*aggtransspace = aggform->aggtransspace;
+
+		/*
+		 * Resolve the possibly-polymorphic aggregate transition type.
+		 */
+		/* extract argument types (ignoring any ORDER BY expressions) */
+		numArguments = get_aggregate_argtypes(aggref, inputTypes);
+
+		/* resolve actual type of transition state, if polymorphic */
+		*aggtranstype = resolve_aggregate_transtype(aggref->aggfnoid,
+											   *aggtranstype,
+											   inputTypes,
+											   numArguments);
+
+		/* get initial value */
+		textInitVal = SysCacheGetAttr(AGGFNOID, aggTuple,
+									Anum_pg_aggregate_agginitval,
+									initValueIsNull);
+
+
+		if (*initValueIsNull)
+			*initValue = (Datum) 0;
+		else
+			*initValue = GetAggInitVal(textInitVal, *aggtranstype);
+		
+		/*
+		 * If finalfn is marked read-write, we can't share transition states; but
+		 * it is okay to share states for AGGMODIFY_SHAREABLE aggs.
+		 *
+		 * In principle, in a partial aggregate, we could share the transition
+		 * state even if the final function is marked as read-write, because the
+		 * partial aggregate doesn't execute the final function.  But it's too
+		 * early to know whether we're going perform a partial aggregate.
+		 */
+		*shareable = (aggform->aggfinalmodify != AGGMODIFY_READ_WRITE);
+
+		ReleaseSysCache(aggTuple);
+
+	}
+	GP_WRAP_END;
+}
+
+
+int
+gpdb::FindCompatibleAgg(List *agginfos, Aggref *newagg,
+						List **same_input_transnos)
+{
+
+	GP_WRAP_START;
+	{
+		return find_compatible_agg(agginfos, newagg, same_input_transnos);
+	}
+	GP_WRAP_END;
+	return -1;
+}
+
+int
+gpdb::FindCompatibleTrans(List *aggtransinfos, bool shareable,
+						  Oid aggtransfn, Oid aggtranstype,
+						  int transtypeLen, bool transtypeByVal,
+						  Oid aggcombinefn, Oid aggserialfn,
+						  Oid aggdeserialfn, Datum initValue, 
+						  bool initValueIsNull, List *transnos)
+{
+	GP_WRAP_START;
+	{
+		return find_compatible_trans(aggtransinfos, shareable, aggtransfn,
+			aggtranstype, transtypeLen, transtypeByVal, aggcombinefn, aggserialfn,
+			aggdeserialfn, initValue, initValueIsNull, transnos);
+	}
+	GP_WRAP_END;
+	return -1;
+}
+
 
 Query *
 gpdb::FlattenJoinAliasVar(Query *query, gpos::ULONG query_level)
@@ -1723,7 +1613,24 @@ gpdb::IsOpHashJoinable(Oid opno, Oid inputtype)
 	GP_WRAP_START;
 	{
 		/* catalog tables: pg_operator */
-		return op_hashjoinable(opno, inputtype);
+		if (!op_hashjoinable(opno, inputtype))
+			return false;
+
+		/*
+		 * Even if oprcanhash is true, we need to verify that hash functions
+		 * actually exist for this operator. This is because oprcanhash can be
+		 * set to true while the operator is only registered in a btree opfamily
+		 * and not in a hash opfamily, which would cause execution-time errors
+		 * when trying to build hash tables.
+		 *
+		 * See get_op_hash_functions() in lsyscache.c which requires operators
+		 * to be registered in a hash opfamily (amopmethod == HASH_AM_OID).
+		 */
+		RegProcedure hash_proc;
+		if (!get_op_hash_functions(opno, &hash_proc, NULL))
+			return false;
+
+		return true;
 	}
 	GP_WRAP_END;
 	return false;

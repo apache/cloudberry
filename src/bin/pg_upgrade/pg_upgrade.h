@@ -351,6 +351,18 @@ typedef enum
 
 typedef long pgpid_t;
 
+typedef enum
+{
+	Greenplum,
+	Cloudberry
+} DatabaseType;
+
+typedef struct
+{
+	DatabaseType type;
+	int version;
+} DatabaseVersion;
+
 
 /*
  * cluster
@@ -373,6 +385,8 @@ typedef struct
 	char		major_version_str[64];	/* string PG_VERSION of cluster */
 	uint32		bin_version;	/* version returned from pg_ctl */
 	const char *tablespace_suffix;	/* directory specification */
+	DatabaseVersion version;
+	int32		dbid;
 } ClusterInfo;
 
 

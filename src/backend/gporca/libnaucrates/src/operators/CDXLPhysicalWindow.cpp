@@ -28,10 +28,12 @@ using namespace gpdxl;
 //---------------------------------------------------------------------------
 CDXLPhysicalWindow::CDXLPhysicalWindow(CMemoryPool *mp,
 									   ULongPtrArray *part_by_colid_array,
-									   CDXLWindowKeyArray *window_key_array)
+									   CDXLWindowKeyArray *window_key_array,
+									   BOOL fWindowHashAgg)
 	: CDXLPhysical(mp),
 	  m_part_by_colid_array(part_by_colid_array),
-	  m_dxl_window_key_array(window_key_array)
+	  m_dxl_window_key_array(window_key_array),
+	  m_window_hash_agg(fWindowHashAgg)
 {
 	GPOS_ASSERT(nullptr != m_part_by_colid_array);
 	GPOS_ASSERT(nullptr != m_dxl_window_key_array);
@@ -124,6 +126,18 @@ CDXLPhysicalWindow::GetDXLWindowKeyAt(ULONG position) const
 
 //---------------------------------------------------------------------------
 //	@function:
+//		CDXLPhysicalWindow::IsWindowHashAgg
+//
+//	@doc:
+//		Is windowagg implements by window hash agg
+//
+//---------------------------------------------------------------------------
+BOOL CDXLPhysicalWindow::IsWindowHashAgg() const {
+	return m_window_hash_agg;
+}
+
+//---------------------------------------------------------------------------
+//	@function:
 //		CDXLPhysicalWindow::SerializeToDXL
 //
 //	@doc:
@@ -168,6 +182,8 @@ CDXLPhysicalWindow::SerializeToDXL(CXMLSerializer *xml_serializer,
 		CDXLTokens::GetDXLTokenStr(EdxltokenNamespacePrefix),
 		window_keys_list_str);
 
+	xml_serializer->AddAttribute(
+		CDXLTokens::GetDXLTokenStr(EdxltokenWindowHashAgg), m_window_hash_agg);
 	xml_serializer->CloseElement(
 		CDXLTokens::GetDXLTokenStr(EdxltokenNamespacePrefix), element_name);
 }

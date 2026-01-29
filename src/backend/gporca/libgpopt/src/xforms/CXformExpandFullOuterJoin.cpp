@@ -95,17 +95,18 @@ CXformExpandFullOuterJoin::Transform(CXformContext *pxfctxt,
 	GPOS_ASSERT(FCheckPattern(pexpr));
 
 	CMemoryPool *mp = pxfctxt->Pmp();
+	CCTEInfo *pcteinfo = COptCtxt::PoctxtFromTLS()->Pcteinfo();
 
 	CExpression *pexprA = (*pexpr)[0];
 	CExpression *pexprB = (*pexpr)[1];
 	CExpression *pexprScalar = (*pexpr)[2];
 
 	// 1. create the CTE producers
-	const ULONG ulCTEIdA = COptCtxt::PoctxtFromTLS()->Pcteinfo()->next_id();
+	const ULONG ulCTEIdA = pcteinfo->next_id();
 	CColRefArray *pdrgpcrOutA = pexprA->DeriveOutputColumns()->Pdrgpcr(mp);
 	(void) CXformUtils::PexprAddCTEProducer(mp, ulCTEIdA, pdrgpcrOutA, pexprA);
 
-	const ULONG ulCTEIdB = COptCtxt::PoctxtFromTLS()->Pcteinfo()->next_id();
+	const ULONG ulCTEIdB = pcteinfo->next_id();
 	CColRefArray *pdrgpcrOutB = pexprB->DeriveOutputColumns()->Pdrgpcr(mp);
 	(void) CXformUtils::PexprAddCTEProducer(mp, ulCTEIdB, pdrgpcrOutB, pexprB);
 
@@ -194,11 +195,13 @@ CXformExpandFullOuterJoin::PexprLogicalJoinOverCTEs(
 		GPOS_NEW(mp) CLogicalCTEConsumer(mp, ulLeftCTEId, pdrgpcrLeft);
 	CExpression *pexprLeft = GPOS_NEW(mp) CExpression(mp, popConsumerLeft);
 	pcteinfo->IncrementConsumers(ulLeftCTEId);
+	pcteinfo->AddCTEConsumer(pexprLeft);
 
 	CLogicalCTEConsumer *popConsumerRight =
 		GPOS_NEW(mp) CLogicalCTEConsumer(mp, ulRightCTEId, pdrgpcrRight);
 	CExpression *pexprRight = GPOS_NEW(mp) CExpression(mp, popConsumerRight);
 	pcteinfo->IncrementConsumers(ulRightCTEId);
+	pcteinfo->AddCTEConsumer(pexprRight);
 
 	pdrgpexprChildren->Append(pexprLeft);
 	pdrgpexprChildren->Append(pexprRight);

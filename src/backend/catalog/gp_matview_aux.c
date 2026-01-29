@@ -98,7 +98,14 @@ GetViewBaseRelids(const Query *viewQuery, bool *has_foreign)
 		return NIL;
 	}
 
-	/* As we will use views, make it strict to unmutable. */
+	/*
+	 * Use immutable functions for views to ensure strict immutability.
+	 * While STABLE functions don't modify the database and return consistent
+	 * results for the same arguments within a statement, AQUMV rewrites
+	 * the query to new SQL. The behavior with STABLE functions isn't entirely
+	 * clear in this context, so we're conservatively requiring IMMUTABLE
+	 * functions for now.
+	 */
 	if (contain_mutable_functions((Node*)viewQuery))
 		return NIL;
 
@@ -331,7 +338,8 @@ SetRelativeMatviewAuxStatus(Oid relid, char status, char direction)
 	/*
 	 * Do a quick check if relation has relative materialized views.
 	 */
-	if (get_rel_relmvrefcount(relid) <= 0)
+	if (get_rel_relmvrefcount(relid) <= 0 &&
+		!get_rel_relispartition(relid))
 		return;
 
 	mvauxRel = table_open(GpMatviewAuxId, RowExclusiveLock);

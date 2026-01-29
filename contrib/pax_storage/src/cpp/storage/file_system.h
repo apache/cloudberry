@@ -33,6 +33,7 @@
 #include <string>
 #include <vector>
 
+#include "comm/common_io.h"
 #include "comm/pax_memory.h"
 
 namespace pax {
@@ -74,6 +75,7 @@ class File {
   virtual void WriteN(const void *ptr, size_t n);
   virtual void PWriteN(const void *buf, size_t count, off_t offset);
   virtual void PReadN(void *buf, size_t count, off_t offset) const;
+  virtual void ReadBatch(const std::vector<IORequest> &requests) const;
 
   virtual void Flush() = 0;
   virtual void Delete() = 0;

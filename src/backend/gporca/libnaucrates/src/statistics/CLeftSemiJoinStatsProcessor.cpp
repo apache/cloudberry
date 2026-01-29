@@ -43,7 +43,8 @@ CLeftSemiJoinStatsProcessor::CalcLSJoinStatsStatic(
 	IStatistics *inner_stats = CGroupByStatsProcessor::CalcGroupByStats(
 		mp, dynamic_cast<const CStatistics *>(inner_stats_input), inner_colids,
 		aggs,
-		nullptr	 // keys: no keys, use all grouping cols
+		nullptr,	 // keys: no keys, use all grouping cols
+		false /* isPartial*/
 	);
 
 	const CStatistics *outer_stats =

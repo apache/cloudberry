@@ -94,7 +94,7 @@ generate_dev_version() {
 }
 
 # Check if we're in a Git repo and git is available
-if type git >/dev/null 2>&1 && [ -d '.git' ]; then
+if type git >/dev/null 2>&1 && [ -e '.git' ]; then
     # Ensure git describe doesn't fail due to shallow clone
     if git describe --tags --long >/dev/null 2>&1; then
         if git describe --exact-match >/dev/null 2>&1; then

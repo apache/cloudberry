@@ -36,7 +36,7 @@
 
 namespace pax {
 
-void PaxSparseFilter::Initialize(List *quals) {
+void PaxSparseFilter::Initialize(List *quals, ScanKey key, int nkeys) {
   ListCell *qual_cell;
   std::vector<std::shared_ptr<PFTNode>> fl_nodes; /* first level nodes */
   std::string origin_tree_str;
@@ -44,8 +44,25 @@ void PaxSparseFilter::Initialize(List *quals) {
   // no inited
   Assert(!filter_tree_);
 
-  if (!quals) {
+  if (!quals && nkeys == 0) {
     return;
+  }
+
+  // walk scan key and only support min/max filter now
+  for (int i = 0; i < nkeys; i++) {
+    // TODO: support bloom filter in PaxFilter
+    // but now just skip it, SeqNext() will check bloom filter in PassByBloomFilter()
+    if (key[i].sk_flags & SK_BLOOM_FILTER) {
+      continue;
+    }
+
+    if (key[i].sk_strategy != BTGreaterEqualStrategyNumber &&
+        key[i].sk_strategy != BTLessEqualStrategyNumber) {
+      continue;
+    }
+    std::shared_ptr<PFTNode> fl_node = ProcessScanKey(&key[i]);
+    Assert(fl_node);
+    fl_nodes.emplace_back(std::move(fl_node));
   }
 
   foreach (qual_cell, quals) {
@@ -65,6 +82,47 @@ void PaxSparseFilter::Initialize(List *quals) {
   PAX_LOG_IF(pax_log_filter_tree,
              "Origin filter tree: \n%s\nFinal filter tree: \n%s\n",
              origin_tree_str.c_str(), DebugString().c_str());
+}
+
+std::shared_ptr<PFTNode> PaxSparseFilter::ProcessScanKey(ScanKey key) {
+  std::shared_ptr<PFTNode> node = nullptr;
+  Assert(key);
+  Assert(!(key->sk_flags & SK_BLOOM_FILTER));
+  Assert(key->sk_strategy == BTGreaterEqualStrategyNumber ||
+         key->sk_strategy == BTLessEqualStrategyNumber);
+  Assert(key->sk_attno > 0 &&
+         key->sk_attno <= RelationGetNumberOfAttributes(rel_));
+
+  AttrNumber attno = key->sk_attno;
+
+  // Build VarNode on the left
+  auto var_node = std::make_shared<VarNode>();
+  var_node->attrno = attno;
+
+  // Build ConstNode on the right from ScanKey
+  auto const_node = std::make_shared<ConstNode>();
+  const_node->const_val = key->sk_argument;
+  const_node->const_type = key->sk_subtype;
+  if (key->sk_flags & SK_ISNULL) {
+    const_node->sk_flags |= SK_ISNULL;
+  }
+
+  // Build OpNode and attach children: (var, const)
+  auto op_node = std::make_shared<OpNode>();
+  op_node->strategy = key->sk_strategy;
+  op_node->collation = key->sk_collation;  // may be InvalidOid; executor will
+                                           // fallback to attr collation
+
+  // Set operand types
+  Form_pg_attribute attr = TupleDescAttr(RelationGetDescr(rel_), attno - 1);
+  op_node->left_typid = attr->atttypid;
+  op_node->right_typid = key->sk_subtype;
+
+  PFTNode::AppendSubNode(op_node, std::move(var_node));
+  PFTNode::AppendSubNode(op_node, std::move(const_node));
+
+  node = op_node;
+  return node;
 }
 
 Expr *PaxSparseFilter::ExprFlatVar(Expr *clause) {

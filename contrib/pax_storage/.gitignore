@@ -12,6 +12,7 @@
 Thumbs.db
 
 # Temp files dir
+bench_data
 .tmp/**
 build*/**
 results/**

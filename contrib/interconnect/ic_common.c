@@ -541,14 +541,15 @@ GetMotionSentRecordTypmod(ChunkTransportState * transportStates,
 						   int16 motNodeID,
 						   int16 targetRoute)
 {
-	MotionConn *conn;
+	MotionConn *conn = NULL;
 	ChunkTransportStateEntry *pEntry = NULL;
 	getChunkTransportState(transportStates, motNodeID, &pEntry);
 
-	if (targetRoute == BROADCAST_SEGIDX)
-		conn = &pEntry->conns[0];
-	else
-		conn = &pEntry->conns[targetRoute];
+	if (targetRoute == BROADCAST_SEGIDX) {
+		targetRoute = 0;
+	}
+
+	getMotionConn(pEntry, targetRoute, &conn);
 
 	return &conn->sent_record_typmod;
 }

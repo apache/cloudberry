@@ -2239,7 +2239,7 @@ CreateRuntimeFilter(HashJoinState* hjstate)
 		foreach(lc, targets)
 		{
 			PlanState *target = lfirst(lc);
-			Assert(IsA(target, SeqScanState));
+			Assert(IsA(target, SeqScanState) || IsA(target, DynamicSeqScanState));
 
 			attr_filter = CreateAttrFilter(target, lattno, rattno,
 					hstate->ps.plan->plan_rows);
@@ -2334,13 +2334,25 @@ CheckTargetNode(PlanState *node, AttrNumber attno, AttrNumber *lattno)
 	Var *var;
 	TargetEntry *te;
 
-	if (!IsA(node, SeqScanState))
+	if (!IsA(node, SeqScanState) && !IsA(node, DynamicSeqScanState))
 		return false;
 
 	te = (TargetEntry *)list_nth(node->plan->targetlist, attno - 1);
 	if (!IsA(te->expr, Var))
 		return false;
 
+	if (IsA(node, DynamicSeqScanState))
+	{
+		*lattno = te->resno;
+		return true;
+	}
+
+	/*
+	 * seqscan is a special case, it's targetlist is a projection of the
+	 * relation's attributes. so we need to find the attribute number of the
+	 * column in the relation, because PassByBloomFilter runs before
+	 * projection in seqscan.
+	 */
 	var = castNode(Var, te->expr);
 
 	/* system column is not allowed */
@@ -2375,16 +2387,14 @@ FindTargetNodes(HashJoinState *hjstate, AttrNumber attno, AttrNumber *lattno)
 	targetNodes = NIL;
 	while (true)
 	{
-		/* target is seqscan */
-		if ((IsA(parent, HashJoinState) || IsA(parent, ResultState)) && IsA(child, SeqScanState))
+		/* target is seqscan or dynamic seqscan */
+		if ((IsA(parent, HashJoinState) || IsA(parent, ResultState)) && 
+			(IsA(child, SeqScanState) || IsA(child, DynamicSeqScanState)))
 		{
 			/*
 			 * hashjoin
-			 *   seqscan
-			 * or
-			 * hashjoin
-			 *   result
-			 *     seqscan
+			 *   [result]
+			 *     seqscan | dynamicseqscan
 			 */
 			if (!CheckTargetNode(child, attno, lattno))
 				return NULL;

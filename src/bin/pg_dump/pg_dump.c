@@ -266,7 +266,6 @@ static void dumpForeignServer(Archive *fout, const ForeignServerInfo *srvinfo);
 
 /* GPDB follow upstream style */
 static void dumpExtProtocol(Archive *fout, const ExtProtInfo *ptcinfo);
-static void dumpTypeStorageOptions(Archive *fout, const TypeStorageOptions *tstorageoptions);
 
 static void dumpUserMappings(Archive *fout,
 							 const char *servername, const char *namespace,
@@ -364,9 +363,11 @@ static void appendReloptionsArrayAH(PQExpBuffer buffer, const char *reloptions,
 static char *get_synchronized_snapshot(Archive *fout);
 static void setupDumpWorker(Archive *AHX);
 static TableInfo *getRootTableInfo(const TableInfo *tbinfo);
+static bool forcePartitionRootLoad(const TableInfo *tbinfo);
 
 
 /* START MPP ADDITION */
+static void dumpTypeStorageOptions(Archive *fout, const TypeInfo *tyinfo);
 static void setExtPartDependency(TableInfo *tblinfo, int numTables);
 static char *format_table_function_columns(Archive *fout, const FuncInfo *finfo, int nallargs,
 							  char **allargtypes,
@@ -2537,11 +2538,13 @@ dumpTableData_insert(Archive *fout, const void *dcontext)
 			insertStmt = createPQExpBuffer();
 
 			/*
-			 * When load-via-partition-root is set, get the root table name
-			 * for the partition table, so that we can reload data through the
-			 * root table.
+			 * When load-via-partition-root is set or forced, get the root
+			 * table name for the partition table, so that we can reload data
+			 * through the root table.
 			 */
-			if (dopt->load_via_partition_root && tbinfo->ispartition)
+			if (tbinfo->ispartition &&
+				(dopt->load_via_partition_root ||
+				 forcePartitionRootLoad(tbinfo)))
 				targettab = getRootTableInfo(tbinfo);
 			else
 				targettab = tbinfo;
@@ -2740,6 +2743,35 @@ getRootTableInfo(const TableInfo *tbinfo)
 }
 
 /*
+ * forcePartitionRootLoad
+ *     Check if we must force load_via_partition_root for this partition.
+ *
+ * This is required if any level of ancestral partitioned table has an
+ * unsafe partitioning scheme.
+ */
+static bool
+forcePartitionRootLoad(const TableInfo *tbinfo)
+{
+	TableInfo  *parentTbinfo;
+
+	Assert(tbinfo->ispartition);
+	Assert(tbinfo->numParents == 1);
+
+	parentTbinfo = tbinfo->parents[0];
+	if (parentTbinfo->unsafe_partitions)
+		return true;
+	while (parentTbinfo->ispartition)
+	{
+		Assert(parentTbinfo->numParents == 1);
+		parentTbinfo = parentTbinfo->parents[0];
+		if (parentTbinfo->unsafe_partitions)
+			return true;
+	}
+
+	return false;
+}
+
+/*
  * dumpTableData -
  *	  dump the contents of a single table
  *
@@ -2753,34 +2785,40 @@ dumpTableData(Archive *fout, const TableDataInfo *tdinfo)
 	PQExpBuffer copyBuf = createPQExpBuffer();
 	PQExpBuffer clistBuf = createPQExpBuffer();
 	DataDumperPtr dumpFn;
+	char	   *tdDefn = NULL;
 	char	   *copyStmt;
 	const char *copyFrom;
 
 	/* We had better have loaded per-column details about this table */
 	Assert(tbinfo->interesting);
 
+	/*
+	 * When load-via-partition-root is set or forced, get the root table name
+	 * for the partition table, so that we can reload data through the root
+	 * table.  Then construct a comment to be inserted into the TOC entry's
+	 * defn field, so that such cases can be identified reliably.
+	 */
+	if (tbinfo->ispartition &&
+		(dopt->load_via_partition_root ||
+		 forcePartitionRootLoad(tbinfo)))
+	{
+		TableInfo  *parentTbinfo;
+
+		parentTbinfo = getRootTableInfo(tbinfo);
+		copyFrom = fmtQualifiedDumpable(parentTbinfo);
+		printfPQExpBuffer(copyBuf, "-- load via partition root %s",
+						  copyFrom);
+		tdDefn = pg_strdup(copyBuf->data);
+	}
+	else
+		copyFrom = fmtQualifiedDumpable(tbinfo);
+
 	if (dopt->dump_inserts == 0)
 	{
 		/* Dump/restore using COPY */
 		dumpFn = dumpTableData_copy;
-
-		/*
-		 * When load-via-partition-root is set, get the root table name for
-		 * the partition table, so that we can reload data through the root
-		 * table.
-		 */
-		if (dopt->load_via_partition_root && tbinfo->ispartition)
-		{
-			TableInfo  *parentTbinfo;
-
-			parentTbinfo = getRootTableInfo(tbinfo);
-			copyFrom = fmtQualifiedDumpable(parentTbinfo);
-		}
-		else
-			copyFrom = fmtQualifiedDumpable(tbinfo);
-
 		/* must use 2 steps here 'cause fmtId is nonreentrant */
-		appendPQExpBuffer(copyBuf, "COPY %s ",
+		printfPQExpBuffer(copyBuf, "COPY %s ",
 						  copyFrom);
 		appendPQExpBuffer(copyBuf, "%s FROM stdin;\n",
 						  fmtCopyColumnList(tbinfo, clistBuf));
@@ -2808,6 +2846,7 @@ dumpTableData(Archive *fout, const TableDataInfo *tdinfo)
 									   .owner = tbinfo->rolname,
 									   .description = "TABLE DATA",
 									   .section = SECTION_DATA,
+									   .createStmt = tdDefn,
 									   .copyStmt = copyStmt,
 									   .deps = &(tbinfo->dobj.dumpId),
 									   .nDeps = 1,
@@ -5909,6 +5948,7 @@ getTypes(Archive *fout, int *numTypes)
 	int			i_typtype;
 	int			i_typisdefined;
 	int			i_isarray;
+	int			i_typstorage;
 
 	/*
 	 * we include even the built-in types because those may be used as array
@@ -5949,8 +5989,10 @@ getTypes(Archive *fout, int *numTypes)
 						  "ELSE (SELECT relkind FROM pg_class WHERE oid = t.typrelid) END AS typrelkind, "
 						  "t.typtype, t.typisdefined, "
 						  "t.typname[0] = '_' AND t.typelem != 0 AND "
-						  "(SELECT typarray FROM pg_type te WHERE oid = t.typelem) = t.oid AS isarray "
+						  "(SELECT typarray FROM pg_type te WHERE oid = t.typelem) = t.oid AS isarray, "
+							"coalesce(array_to_string(e.typoptions, ', '), '') AS typstorage "
 						  "FROM pg_type t "
+							"LEFT JOIN pg_type_encoding e ON t.oid = e.typid "
 						  "LEFT JOIN pg_init_privs pip ON "
 						  "(t.oid = pip.objoid "
 						  "AND pip.classoid = 'pg_type'::regclass "
@@ -6018,6 +6060,7 @@ getTypes(Archive *fout, int *numTypes)
 	i_typtype = PQfnumber(res, "typtype");
 	i_typisdefined = PQfnumber(res, "typisdefined");
 	i_isarray = PQfnumber(res, "isarray");
+	i_typstorage = PQfnumber(res, "typstorage");
 
 	for (i = 0; i < ntups; i++)
 	{
@@ -6049,6 +6092,8 @@ getTypes(Archive *fout, int *numTypes)
 			tyinfo[i].isArray = true;
 		else
 			tyinfo[i].isArray = false;
+
+		tyinfo[i].typstorage = pg_strdup(PQgetvalue(res, i, i_typstorage));
 
 		if (tyinfo[i].typtype == 'm')
 			tyinfo[i].isMultirange = true;
@@ -6117,91 +6162,6 @@ getTypes(Archive *fout, int *numTypes)
 
 	return tyinfo;
 }
-
-
-
-/*
- * getTypeStorageOptions:
- *	  read all types with storage options in the system catalogs and return them in the
- * TypeStorageOptions* structure
- *
- *	numTypes is set to the number of types with storage options read in
- *
- */
-TypeStorageOptions *
-getTypeStorageOptions(Archive *fout, int *numTypes)
-{
-	PGresult   *res;
-	int			ntups;
-	int			i;
-	PQExpBuffer query = createPQExpBuffer();
-	TypeStorageOptions   *tstorageoptions;
-	int			i_tableoid;
-	int			i_oid;
-	int			i_typname;
-	int			i_typnamespace;
-	int			i_typoptions;
-	int			i_rolname;
-
-	/*
-	 * The following statement used format_type to resolve an internal name to its equivalent sql name.
-	 * The format_type seems to do two things, it translates an internal type name (e.g. bpchar) into its
-	 * sql equivalent (e.g. character), and it puts trailing "[]" on a type if it is an array.
-	 * For any user defined type (ie. oid > 10000) or any type that might be an array (ie. starts with '_'),
-	 * then we will call quote_ident. If the type is a system defined type (i.e. oid <= 10000)
-	 * and can not possibly be an array (i.e. does not start with '_'), then call format_type to get the name. The
-	 * reason we do not call format_type for arrays is that it will return a '[]' on the end, which can not be used
-	 * when dumping the type.
-	 */
-	appendPQExpBuffer(query, "SELECT "
-					  "CASE WHEN t.oid > 10000 OR substring(t.typname from 1 for 1) = '_' "
-					  "THEN quote_ident(t.typname) "
-					  "ELSE pg_catalog.format_type(t.oid, NULL) "
-					  "END  as typname, "
-					  "t.tableoid as tableoid, "
-					  "t.oid AS oid, "
-					  "t.typnamespace AS typnamespace, "
-					  "(%s typowner) as rolname, "
-					  "array_to_string(a.typoptions, ', ') AS typoptions "
-					  "FROM pg_type t "
-					  "JOIN pg_catalog.pg_type_encoding a ON a.typid = t.oid "
-					  "WHERE t.typisdefined = 't'", username_subquery);
-
-	res = ExecuteSqlQuery(fout, query->data, PGRES_TUPLES_OK);
-
-	ntups = PQntuples(res);
-
-	tstorageoptions = (TypeStorageOptions *) pg_malloc(ntups * sizeof(TypeStorageOptions));
-
-	i_tableoid = PQfnumber(res, "tableoid");
-	i_oid = PQfnumber(res, "oid");
-	i_typname = PQfnumber(res, "typname");
-	i_typnamespace = PQfnumber(res, "typnamespace");
-	i_typoptions = PQfnumber(res, "typoptions");
-	i_rolname = PQfnumber(res, "rolname");
-
-	for (i = 0; i < ntups; i++)
-	{
-		tstorageoptions[i].dobj.objType = DO_TYPE_STORAGE_OPTIONS;
-		tstorageoptions[i].dobj.catId.tableoid = atooid(PQgetvalue(res, i, i_tableoid));
-		tstorageoptions[i].dobj.catId.oid = atooid(PQgetvalue(res, i, i_oid));
-		AssignDumpId(&tstorageoptions[i].dobj);
-		tstorageoptions[i].dobj.name = pg_strdup(PQgetvalue(res, i, i_typname));
-		tstorageoptions[i].dobj.namespace = findNamespace(atooid(PQgetvalue(res, i, i_typnamespace)));
-		tstorageoptions[i].typoptions = pg_strdup(PQgetvalue(res, i, i_typoptions));
-		tstorageoptions[i].rolname = pg_strdup(PQgetvalue(res, i, i_rolname));
-	}
-
-	*numTypes = ntups;
-
-	PQclear(res);
-
-	destroyPQExpBuffer(query);
-
-	return tstorageoptions;
-}
-
-
 
 /*
  * getOperators:
@@ -7424,7 +7384,7 @@ getTables(Archive *fout, int *numTables)
 						  "%s AS ispartition, "
 						  "%s AS partbound, "
 						  "c.relisivm AS isivm, "
-						  "c.relisdynamic AS isdynamic "
+						  "%s"
 						  "FROM pg_class c "
 						  "LEFT JOIN pg_depend d ON "
 						  "(c.relkind = '%c' AND "
@@ -7454,6 +7414,7 @@ getTables(Archive *fout, int *numTables)
 						  partkeydef,
 						  ispartition,
 						  partbound,
+						  (fout->version.type == Cloudberry && fout->version.version >= 2) ? "c.relisdynamic AS isdynamic " : "false AS isdynamic ",
 						  RELKIND_SEQUENCE,
 						  RELKIND_PARTITIONED_TABLE,
 						  RELKIND_RELATION, RELKIND_SEQUENCE,
@@ -8258,6 +8219,76 @@ getInherits(Archive *fout, int *numInherits)
 	destroyPQExpBuffer(query);
 
 	return inhinfo;
+}
+
+/*
+ * getPartitioningInfo
+ *	  get information about partitioning
+ *
+ * For the most part, we only collect partitioning info about tables we
+ * intend to dump.  However, this function has to consider all partitioned
+ * tables in the database, because we need to know about parents of partitions
+ * we are going to dump even if the parents themselves won't be dumped.
+ *
+ * Specifically, what we need to know is whether each partitioned table
+ * has an "unsafe" partitioning scheme that requires us to force
+ * load-via-partition-root mode for its children.  Currently the only case
+ * for which we force that is hash partitioning on enum columns, since the
+ * hash codes depend on enum value OIDs which won't be replicated across
+ * dump-and-reload.  There are other cases in which load-via-partition-root
+ * might be necessary, but we expect users to cope with them.
+ */
+void
+getPartitioningInfo(Archive *fout)
+{
+	PQExpBuffer query;
+	PGresult   *res;
+	int			ntups;
+
+	/* hash partitioning didn't exist before v11 */
+	if (fout->remoteVersion < 110000)
+		return;
+	/* needn't bother if schema-only dump */
+	if (fout->dopt->schemaOnly)
+		return;
+
+	query = createPQExpBuffer();
+
+	/*
+	 * Unsafe partitioning schemes are exactly those for which hash enum_ops
+	 * appears among the partition opclasses.  We needn't check partstrat.
+	 *
+	 * Note that this query may well retrieve info about tables we aren't
+	 * going to dump and hence have no lock on.  That's okay since we need not
+	 * invoke any unsafe server-side functions.
+	 */
+	appendPQExpBufferStr(query,
+						 "SELECT partrelid FROM pg_partitioned_table WHERE\n"
+						 "(SELECT c.oid FROM pg_opclass c JOIN pg_am a "
+						 "ON c.opcmethod = a.oid\n"
+						 "WHERE opcname = 'enum_ops' "
+						 "AND opcnamespace = 'pg_catalog'::regnamespace "
+						 "AND amname = 'hash') = ANY(partclass)");
+
+	res = ExecuteSqlQuery(fout, query->data, PGRES_TUPLES_OK);
+
+	ntups = PQntuples(res);
+
+	for (int i = 0; i < ntups; i++)
+	{
+		Oid			tabrelid = atooid(PQgetvalue(res, i, 0));
+		TableInfo  *tbinfo;
+
+		tbinfo = findTableByOid(tabrelid);
+		if (tbinfo == NULL)
+			fatal("failed sanity check, table OID %u appearing in pg_partitioned_table not found",
+					 tabrelid);
+		tbinfo->unsafe_partitions = true;
+	}
+
+	PQclear(res);
+
+	destroyPQExpBuffer(query);
 }
 
 /*
@@ -11379,9 +11410,6 @@ dumpDumpableObject(Archive *fout, const DumpableObject *dobj)
 		case DO_TYPE:
 			dumpType(fout, (const TypeInfo *) dobj);
 			break;
-		case DO_TYPE_STORAGE_OPTIONS:
-			dumpTypeStorageOptions(fout, (const TypeStorageOptions *) dobj);
-			break;
 		case DO_SHELL_TYPE:
 			dumpShellType(fout, (const ShellTypeInfo *) dobj);
 			break;
@@ -11762,6 +11790,10 @@ dumpType(Archive *fout, const TypeInfo *tyinfo)
 	else
 		pg_log_warning("typtype of data type \"%s\" appears to be invalid",
 					   tyinfo->dobj.name);
+
+	if (tyinfo->typstorage && *tyinfo->typstorage != '\0')
+		dumpTypeStorageOptions(fout, tyinfo);
+
 }
 
 /*
@@ -12377,36 +12409,28 @@ dumpBaseType(Archive *fout, const TypeInfo *tyinfo)
  *     writes out to fout the ALTER TYPE queries to set default storage options for type
  */
 static void
-dumpTypeStorageOptions(Archive *fout, const TypeStorageOptions *tstorageoptions)
+dumpTypeStorageOptions(Archive *fout, const TypeInfo *tyinfo)
 {
 	PQExpBuffer q;
-	PQExpBuffer delq;
-
 	q = createPQExpBuffer();
-	delq = createPQExpBuffer();
 
-	/*
-	 * Type name is already quoted by caller using quote_ident, hence used
-	 * directly here.
-	 */
 	appendPQExpBuffer(q, "ALTER TYPE %s.",
-					  fmtId(tstorageoptions->dobj.namespace->dobj.name));
+					  fmtId(tyinfo->dobj.namespace->dobj.name));
 	appendPQExpBuffer(q, "%s SET DEFAULT ENCODING (%s);\n",
-					  tstorageoptions->dobj.name,
-					  tstorageoptions->typoptions);
+					  fmtId(tyinfo->dobj.name),
+					  tyinfo->typstorage);
 
 	ArchiveEntry(fout,
-				 tstorageoptions->dobj.catId,
-				 tstorageoptions->dobj.dumpId,
-				 ARCHIVE_OPTS(.tag = tstorageoptions->dobj.name,
-				 			  .namespace = tstorageoptions->dobj.namespace->dobj.name,
-							  .owner = tstorageoptions->rolname,
+				 tyinfo->dobj.catId,
+				 tyinfo->dobj.dumpId,
+				 ARCHIVE_OPTS(.tag = tyinfo->dobj.name,
+							  .namespace = tyinfo->dobj.namespace->dobj.name,
+							  .owner = tyinfo->rolname,
 							  .description = "TYPE STORAGE OPTIONS",
 							  .section = SECTION_PRE_DATA,
 							  .createStmt = q->data));
 
 	destroyPQExpBuffer(q);
-	destroyPQExpBuffer(delq);
 }
 
 /*
@@ -15573,18 +15597,18 @@ dumpAgg(Archive *fout, const AggInfo *agginfo)
 	if (fout->remoteVersion >= 110000)
 		appendPQExpBufferStr(query,
 							 "aggfinalmodify,\n"
-							 "aggmfinalmodify\n");
+							 "aggmfinalmodify,\n");
 	else
 		appendPQExpBufferStr(query,
 							 "'0' AS aggfinalmodify,\n"
-							 "'0' AS aggmfinalmodify\n");
+							 "'0' AS aggmfinalmodify,\n");
 
-	if (fout->remoteVersion >= 140000)
+	if (fout->remoteVersion >= 140000 && fout->version.type == Cloudberry && fout->version.version >= 2)
 		appendPQExpBufferStr(query,
-								"aggrepsafeexec,\n");
+								"aggrepsafeexec\n");
 	else
 		appendPQExpBufferStr(query,
-								 "false AS aggrepsafeexec,\n");
+								 "false AS aggrepsafeexec\n");
 
 	appendPQExpBuffer(query,
 					  "FROM pg_catalog.pg_aggregate a, pg_catalog.pg_proc p "
@@ -18111,13 +18135,30 @@ dumpTableSchema(Archive *fout, const TableInfo *tbinfo)
 			actual_atts = 0;
 
 		if (nonemptyReloptions(tbinfo->reloptions) ||
-			nonemptyReloptions(tbinfo->toast_reloptions))
+			nonemptyReloptions(tbinfo->toast_reloptions) ||
+			(tbinfo->amoid &&
+			(tbinfo->amoid == AO_ROW_TABLE_AM_OID ||
+			tbinfo->amoid == AO_COLUMN_TABLE_AM_OID)))
 		{
 			bool		addcomma = false;
 
 			appendPQExpBufferStr(q, "\nWITH (");
+			if (tbinfo->amoid && tbinfo->amoid == AO_ROW_TABLE_AM_OID)
+			{
+				addcomma = true;
+				appendPQExpBufferStr(q, "appendonly = true");
+			}
+			else if (tbinfo->amoid && tbinfo->amoid == AO_COLUMN_TABLE_AM_OID)
+			{
+				addcomma = true;
+				appendPQExpBufferStr(q, "appendonly = true, orientation = column");
+			}
+
 			if (nonemptyReloptions(tbinfo->reloptions))
 			{
+				if (addcomma)
+					appendPQExpBufferStr(q, ", ");
+
 				addcomma = true;
 				appendReloptionsArrayAH(q, tbinfo->reloptions, "", fout);
 			}
@@ -20904,7 +20945,6 @@ addBoundaryDependencies(DumpableObject **dobjs, int numObjs,
 			case DO_TRANSFORM:
 			case DO_BLOB:
 			case DO_EXTPROTOCOL:
-			case DO_TYPE_STORAGE_OPTIONS:
 			case DO_BINARY_UPGRADE:
 				/* Pre-data objects: must come before the pre-data boundary */
 				addObjectDependency(preDataBound, dobj->dumpId);

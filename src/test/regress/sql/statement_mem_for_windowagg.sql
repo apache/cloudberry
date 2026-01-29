@@ -2,6 +2,7 @@ CREATE TABLE dummy_table(x int, y int) DISTRIBUTED BY (y);
 INSERT INTO dummy_table SELECT generate_series(0, 20000), 0;
 INSERT INTO dummy_table SELECT generate_series(0, 20000), 3;
 INSERT INTO dummy_table SELECT generate_series(0, 20000), 10;
+set enable_parallel = off; 
 
 -- 1. Test that if we set statement_mem to a larger value, the tuplestore
 -- for caching the tuples in partition used in WindowAgg is able to be fitted
@@ -53,5 +54,6 @@ SELECT gp_inject_fault_infinite('distinct_winagg_perform_sort', 'reset', dbid)
   FROM gp_segment_configuration WHERE role='p' AND content>=0;
 
 -- Do some clean-ups.
+reset enable_parallel;
 DROP TABLE dummy_table;
 RESET statement_mem;

@@ -693,7 +693,7 @@ print_copyright(void)
 {
 	puts(
 		 "Apache Cloudberry (Incubating)\n"
-		 "Copyright 2024-2025 The Apache Software Foundation\n\n"
+		 "Copyright 2024-2026 The Apache Software Foundation\n\n"
 		 "Greenplum Database version of PostgreSQL Database Management System\n"
 		 "Portions Copyright (c) 1996-2020, PostgreSQL Global Development Group\n\n"
 		 "Portions Copyright (c) 2014-Present VMware, Inc. or its affiliates.\n\n"

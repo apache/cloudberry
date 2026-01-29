@@ -5,9 +5,9 @@
 -- end_matchignore
 
 set default_table_access_method to pax;
-set pax_enable_debug to on;
-set pax_enable_sparse_filter to on;
-set pax_max_tuples_per_group to 5;
+set pax.enable_debug to on;
+set pax.enable_sparse_filter to on;
+set pax.max_tuples_per_group to 5;
 
 -- 
 -- Test the oid min/max types support 
@@ -145,6 +145,6 @@ select count(*) from t_uuid where v <= 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a30'::u
 reset client_min_messages;
 drop table t_uuid;
 
-reset pax_enable_debug;
-reset pax_enable_sparse_filter;
-reset pax_max_tuples_per_group;
+reset pax.enable_debug;
+reset pax.enable_sparse_filter;
+reset pax.max_tuples_per_group;

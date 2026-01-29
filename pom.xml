@@ -131,9 +131,7 @@ code or new licensing patterns.
 
             <exclude>gpcontrib/zstd/zstd_compression.c</exclude>
             <exclude>gpcontrib/zstd/Makefile</exclude>
-
-            <exclude>gpcontrib/quicklz/Makefile</exclude>
-
+            
             <exclude>gpcontrib/gp_toolkit/**</exclude>
 
             <exclude>gpcontrib/pg_hint_plan/**/*.source</exclude>
@@ -294,7 +292,7 @@ code or new licensing patterns.
             <exclude>gpMgmt/bin/gpsync</exclude>
             <exclude>gpMgmt/bin/gpssh-exkeys</exclude>
 
-            <exclude>gpMgmt/bin/generate-greenplum-path.sh</exclude>
+            <exclude>gpMgmt/bin/generate-cloudberry-env.sh</exclude>
             <exclude>gpMgmt/bin/ifaddrs/Makefile</exclude>
             <exclude>gpMgmt/bin/ifaddrs/main.c</exclude>
             <exclude>gpMgmt/Makefile</exclude>
@@ -558,8 +556,8 @@ code or new licensing patterns.
             <exclude>gpAux/client/install/src/windows/CreatePackage.bat</exclude>
             <exclude>gpAux/client/install/src/windows/CopyDependencies.bat</exclude>
             <exclude>gpAux/client/install/src/windows/license.rtf</exclude>
-            <exclude>gpAux/client/scripts/greenplum_clients_path.sh</exclude>
-            <exclude>gpAux/client/scripts/greenplum_clients_path.bat</exclude>
+            <exclude>gpAux/client/scripts/cloudberry_clients_path.sh</exclude>
+            <exclude>gpAux/client/scripts/cloudberry_clients_path.bat</exclude>
 
             <exclude>doc/**</exclude>
 
@@ -665,7 +663,6 @@ code or new licensing patterns.
             <exclude>src/tools/make_mkid</exclude>
             <exclude>src/tools/tidy</exclude>
             <exclude>src/tools/find_typedef</exclude>
-            <exclude>src/tools/hooks/pre-push</exclude>
             <exclude>src/tools/valgrind.supp</exclude>
             <exclude>src/tools/pgindent/perltidyrc</exclude>
             <exclude>src/tools/pgindent/README.gpdb</exclude>
@@ -999,6 +996,7 @@ code or new licensing patterns.
             <exclude>src/template/win32</exclude>
             <exclude>src/template/cygwin</exclude>
             <exclude>src/template/aix</exclude>
+            <exclude>src/backend/cdb/dispatcher/test/cdbdisp_query_test.c</exclude>
             <exclude>src/backend/cdb/cdbdistributedxid.c</exclude>
             <exclude>src/backend/cdb/test/cdbdistributedsnapshot_test.c</exclude>
             <exclude>src/backend/cdb/test/cdbbufferedread_test.c</exclude>
@@ -1242,7 +1240,6 @@ code or new licensing patterns.
             <exclude>aclocal.m4</exclude>
             <exclude>python-dependencies.txt</exclude>
 
-            
             <!-- Finally we exclude a few file types (based on
                  extension) for which comments are tough to
                  maintain. Note that this is a combination of files
@@ -1738,6 +1735,21 @@ code or new licensing patterns.
             <exclude>contrib/pax_storage/src/cpp/contrib/tabulate/samples/unicode.cpp</exclude>
             <exclude>contrib/pax_storage/src/cpp/contrib/tabulate/.clang-format</exclude>
             <exclude>contrib/pax_storage/src/cpp/contrib/tabulate/.travis.yml</exclude>
+
+            <!-- Exclude python requirements files, since they are just a list of packages and do not support any comments
+            -->
+
+            <exclude>devops/deploy/docker/build/rocky8/tests/requirements.txt</exclude>
+            <exclude>devops/deploy/docker/build/rocky9/tests/requirements.txt</exclude>
+	    <exclude>devops/deploy/docker/build/ubuntu22.04/tests/requirements.txt</exclude>
+
+	    <!-- Exclude ubuntu debian packaging files since they do not support comments
+            -->
+            <exclude>devops/build/packaging/deb/ubuntu22.04/**</exclude>
+
+            <!-- Exclude the multinode hosts configuration file for Cloudberry sandbox
+            -->
+            <exclude>devops/sandbox/configs/multinode-gpinit-hosts</exclude>
 
           </excludes>
 

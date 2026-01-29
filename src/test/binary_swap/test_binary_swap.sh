@@ -144,7 +144,7 @@ run_tests schedule1${VARIANT}
 
 ## Change the binary, dump, and then compare the two dumps generated
 ## by both binaries. Then we do some inserts and dump again. We source
-## $GPHOME_CURRENT/greenplum_path.sh here after starting Cloudberry
+## $GPHOME_CURRENT/cloudberry-env.sh here after starting Cloudberry
 ## with $GPHOME_OTHER to use latest pg_dumpall to prevent catching
 ## diffs due to changes made to pg_dump. The running binaries are
 ## still from $GPHOME_OTHER. Only pg_regress, pg_dumpall, psql, and

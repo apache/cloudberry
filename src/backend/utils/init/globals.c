@@ -145,7 +145,7 @@ int			max_statement_mem = 2048000;
  * do not enforce per-query memory limit
  */
 int			gp_vmem_limit_per_query = 0;
-double		hash_mem_multiplier = 1.0;
+double		hash_mem_multiplier = 1.5;
 int			maintenance_work_mem = 65536;
 int			max_parallel_maintenance_workers = 2;
 

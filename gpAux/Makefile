@@ -124,13 +124,13 @@ DEFPORT=5432
 
 ORCA_CONFIG=--enable-orca
 
-rhel6_x86_64_CONFIGFLAGS=--with-quicklz --with-lz4 --with-gssapi --enable-mapreduce --enable-orafce --enable-ic-proxy ${ORCA_CONFIG} --enable-gpcloud --with-libxml --with-ssl=openssl --with-pam --with-ldap --with-pythonsrc-ext
-rhel7_x86_64_CONFIGFLAGS=--with-quicklz --with-lz4 --with-gssapi --enable-mapreduce --enable-orafce --enable-ic-proxy ${ORCA_CONFIG} --enable-gpcloud --with-libxml --with-ssl=openssl --with-pam --with-ldap --with-pythonsrc-ext
-rhel8_x86_64_CONFIGFLAGS=--with-quicklz --with-lz4 --with-gssapi --enable-mapreduce --enable-orafce --enable-ic-proxy ${ORCA_CONFIG} --enable-gpcloud --with-libxml --with-ssl=openssl --with-pam --with-ldap --with-pythonsrc-ext
-ubuntu18.04_x86_64_CONFIGFLAGS=--with-quicklz --with-lz4 --with-gssapi --enable-mapreduce --enable-orafce --enable-ic-proxy ${ORCA_CONFIG} --enable-gpcloud --with-libxml --with-ssl=openssl --with-pam --with-ldap --with-pythonsrc-ext
-sles12_x86_64_CONFIGFLAGS=--with-quicklz --with-lz4 --with-gssapi --enable-mapreduce --enable-orafce --enable-ic-proxy ${ORCA_CONFIG} --enable-gpcloud --with-libxml --with-ssl=openssl --with-pam --with-ldap --with-pythonsrc-ext
-rhel7_aarch64_CONFIGFLAGS=--with-quicklz --with-lz4 --with-gssapi --enable-mapreduce --enable-orafce --enable-ic-proxy ${ORCA_CONFIG} --enable-gpcloud --with-libxml --with-ssl=openssl --with-pam --with-ldap --with-pythonsrc-ext
-common_CONFIGFLAGS=--with-quicklz --with-lz4 --with-gssapi --enable-mapreduce --enable-orafce --enable-ic-proxy ${ORCA_CONFIG} --enable-gpcloud --with-libxml --with-ssl=openssl --with-pam --with-ldap --with-pythonsrc-ext
+rhel6_x86_64_CONFIGFLAGS=--with-lz4 --with-gssapi --enable-mapreduce --enable-orafce --enable-ic-proxy ${ORCA_CONFIG} --enable-gpcloud --with-libxml --with-ssl=openssl --with-pam --with-ldap --with-pythonsrc-ext
+rhel7_x86_64_CONFIGFLAGS=--with-lz4 --with-gssapi --enable-mapreduce --enable-orafce --enable-ic-proxy ${ORCA_CONFIG} --enable-gpcloud --with-libxml --with-ssl=openssl --with-pam --with-ldap --with-pythonsrc-ext
+rhel8_x86_64_CONFIGFLAGS=--with-lz4 --with-gssapi --enable-mapreduce --enable-orafce --enable-ic-proxy ${ORCA_CONFIG} --enable-gpcloud --with-libxml --with-ssl=openssl --with-pam --with-ldap --with-pythonsrc-ext
+ubuntu18.04_x86_64_CONFIGFLAGS=--with-lz4 --with-gssapi --enable-mapreduce --enable-orafce --enable-ic-proxy ${ORCA_CONFIG} --enable-gpcloud --with-libxml --with-ssl=openssl --with-pam --with-ldap --with-pythonsrc-ext
+sles12_x86_64_CONFIGFLAGS=--with-lz4 --with-gssapi --enable-mapreduce --enable-orafce --enable-ic-proxy ${ORCA_CONFIG} --enable-gpcloud --with-libxml --with-ssl=openssl --with-pam --with-ldap --with-pythonsrc-ext
+rhel7_aarch64_CONFIGFLAGS=--with-lz4 --with-gssapi --enable-mapreduce --enable-orafce --enable-ic-proxy ${ORCA_CONFIG} --enable-gpcloud --with-libxml --with-ssl=openssl --with-pam --with-ldap --with-pythonsrc-ext
+common_CONFIGFLAGS=--with-lz4 --with-gssapi --enable-mapreduce --enable-orafce --enable-ic-proxy ${ORCA_CONFIG} --enable-gpcloud --with-libxml --with-ssl=openssl --with-pam --with-ldap --with-pythonsrc-ext
 #BLD_CONFIGFLAGS=$($(BLD_ARCH)_CONFIGFLAGS)
 BLD_CONFIGFLAGS=$(common_CONFIGFLAGS)
 
@@ -221,7 +221,6 @@ define BUILD_STEPS
 	cd $(BUILDDIR) && PYGRESQL_LDFLAGS=' -Wl,-rpath,\$$$$ORIGIN/.. -Wl,--enable-new-dtags ' $(MAKE) $(PARALLEL_MAKE_OPTS) install
 	cd $(BUILDDIR)/src/pl/plpython && $(MAKE) clean && $(MAKE) $(PARALLEL_MAKE_OPTS) install && cd $(BUILDDIR)
 	cd $(BUILDDIR)/src/pl/plperl && $(MAKE) clean && echo "LDFLAGS += -Wl,-rpath,$(perl_archlibexp)/CORE -Wl,--enable-new-dtags" >> GNUmakefile && echo "LDFLAGS_SL += -Wl,-rpath,$(perl_archlibexp)/CORE -Wl,--enable-new-dtags" >> GNUmakefile && $(MAKE) $(PARALLEL_MAKE_OPTS) install && cd $(BUILDDIR)
-	#@$(MAKE) greenplum_path INSTLOC=$(INSTLOC)
 	#@$(MAKE) mgmtcopy INSTLOC=$(INSTLOC)
 	@$(MAKE) copylibs INSTLOC=$(INSTLOC)
 	@$(MAKE) clients INSTLOC=$(INSTLOC) CLIENTSINSTLOC=$(CLIENTSINSTLOC)
@@ -233,7 +232,7 @@ endef
 ifeq "$(BLD_GPDB_BUILDSET)" "partial"
 define BUILD_STEPS
 	rm -rf $(INSTLOC)
-	cd $(BUILDDIR)/gpMgmt/ && $(MAKE) generate_greenplum_path_file
+	cd $(BUILDDIR)/gpMgmt/ && $(MAKE) generate_cloudberry_env_file
 	cd $(BUILDDIR)/src/backend/ && $(MAKE) ../../src/include/parser/gram.h
 	cd $(BUILDDIR)/src/backend/ && $(MAKE) ../../src/include/utils/errcodes.h
 	cd $(BUILDDIR)/src/backend/ && $(MAKE) ../../src/include/utils/fmgroids.h

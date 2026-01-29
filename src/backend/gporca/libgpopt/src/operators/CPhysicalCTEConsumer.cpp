@@ -34,11 +34,29 @@ CPhysicalCTEConsumer::CPhysicalCTEConsumer(CMemoryPool *mp, ULONG id,
 										   UlongToColRefMap *colref_mapping)
 	: CPhysical(mp),
 	  m_id(id),
-	  m_pdrgpcr(colref_array),
-	  m_phmulcr(colref_mapping)
+	  m_pdrgpcr(nullptr),
+	  m_phmulcr(colref_mapping),
+	  m_pidxmap(nullptr)
 {
 	GPOS_ASSERT(nullptr != colref_array);
 	GPOS_ASSERT(nullptr != colref_mapping);
+
+	ULONG colref_size = colref_array->Size();
+	m_pdrgpcr = GPOS_NEW(mp) CColRefArray(mp);
+	m_pidxmap = GPOS_NEW(mp) ULongPtrArray(mp);
+
+	for (ULONG index = 0; index < colref_size; index++) {
+		CColRef *col_ref = (*colref_array)[index];
+		if (col_ref->GetUsage(true, true) == CColRef::EUsed) {
+			m_pdrgpcr->Append(col_ref);
+			m_pidxmap->Append(GPOS_NEW(m_mp) ULONG(index));
+		} 
+	}
+
+	if (m_pidxmap->Size() == colref_size) {
+		m_pidxmap->Release();
+		m_pidxmap = nullptr;
+	}
 }
 
 //---------------------------------------------------------------------------
@@ -53,6 +71,7 @@ CPhysicalCTEConsumer::~CPhysicalCTEConsumer()
 {
 	m_pdrgpcr->Release();
 	m_phmulcr->Release();
+	CRefCount::SafeRelease(m_pidxmap);
 }
 
 //---------------------------------------------------------------------------

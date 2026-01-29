@@ -218,7 +218,7 @@ bool PaxScanDesc::BitmapNextTuple(struct TBMIterateResult *tbmres,
 }
 
 TableScanDesc PaxScanDesc::BeginScan(Relation relation, Snapshot snapshot,
-                                     int nkeys, struct ScanKeyData * /*key*/,
+                                     int nkeys, struct ScanKeyData *key,
                                      ParallelTableScanDesc pscan, uint32 flags,
                                      std::shared_ptr<PaxFilter> &&pax_filter,
                                      bool build_bitmap) {
@@ -326,8 +326,8 @@ void PaxScanDesc::EndScan() {
 }
 
 TableScanDesc PaxScanDesc::BeginScanExtractColumns(
-    Relation rel, Snapshot snapshot, int /*nkeys*/,
-    struct ScanKeyData * /*key*/, ParallelTableScanDesc parallel_scan,
+    Relation rel, Snapshot snapshot, int nkeys,
+    struct ScanKeyData *key, ParallelTableScanDesc parallel_scan,
     struct PlanState *ps, uint32 flags) {
   std::shared_ptr<PaxFilter> filter;
   List *targetlist = ps->plan->targetlist;
@@ -361,7 +361,7 @@ TableScanDesc PaxScanDesc::BeginScanExtractColumns(
   filter->SetColumnProjection(std::move(col_bits));
 
   if (pax_enable_sparse_filter) {
-    filter->InitSparseFilter(rel, qual);
+    filter->InitSparseFilter(rel, qual, key, nkeys);
 
     // FIXME: enable predicate pushdown can filter rows immediately without
     // assigning all columns. But it may mess the filter orders for multiple
@@ -375,7 +375,7 @@ TableScanDesc PaxScanDesc::BeginScanExtractColumns(
       filter->InitRowFilter(rel, ps, filter->GetColumnProjection());
     }
   }
-  return BeginScan(rel, snapshot, 0, nullptr, parallel_scan, flags,
+  return BeginScan(rel, snapshot, nkeys, key, parallel_scan, flags,
                    std::move(filter), build_bitmap);
 }
 

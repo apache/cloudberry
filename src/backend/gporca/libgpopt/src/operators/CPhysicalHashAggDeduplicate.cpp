@@ -33,11 +33,12 @@ CPhysicalHashAggDeduplicate::CPhysicalHashAggDeduplicate(
 	CMemoryPool *mp, CColRefArray *colref_array, CColRefArray *pdrgpcrMinimal,
 	COperator::EGbAggType egbaggtype, CColRefArray *pdrgpcrKeys,
 	BOOL fGeneratesDuplicates, BOOL fMultiStage, BOOL isAggFromSplitDQA,
-	CLogicalGbAgg::EAggStage aggStage, BOOL should_enforce_distribution)
+	CLogicalGbAgg::EAggStage aggStage, BOOL isAggPushdown,
+	BOOL should_enforce_distribution)
 	: CPhysicalHashAgg(mp, colref_array, pdrgpcrMinimal, egbaggtype,
 					   fGeneratesDuplicates, nullptr /*pdrgpcrGbMinusDistinct*/,
 					   fMultiStage, isAggFromSplitDQA, aggStage,
-					   should_enforce_distribution),
+					   isAggPushdown, should_enforce_distribution),
 	  m_pdrgpcrKeys(pdrgpcrKeys)
 {
 	GPOS_ASSERT(nullptr != pdrgpcrKeys);

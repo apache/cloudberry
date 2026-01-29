@@ -665,6 +665,7 @@ with_ssl
 have_yaml
 YAML_LIBS
 EVENT_LIBS
+EVENT_CFLAGS
 apr_cppflags
 apr_cflags
 apr_link_ld_libs
@@ -719,7 +720,6 @@ GREP
 with_apr_config
 with_libcurl
 with_rt
-with_quicklz
 with_zstd
 with_libbz2
 LZ4_LIBS
@@ -761,9 +761,11 @@ PROTOBUF_LIBS
 PROTOBUF_CFLAGS
 enable_preload_ic_module
 enable_ic_proxy
+enable_ic_udp2
 enable_external_fts
 HAVE_CXX14
 enable_gpcloud
+enable_link_postgres_with_shared
 enable_shared_postgres_backend
 enable_mapreduce
 enable_serverless
@@ -906,8 +908,10 @@ enable_catalog_ext
 enable_serverless
 enable_mapreduce
 enable_shared_postgres_backend
+enable_link_postgres_with_shared
 enable_gpcloud
 enable_external_fts
+enable_ic_udp2
 enable_ic_proxy
 enable_preload_ic_module
 enable_pax
@@ -938,7 +942,6 @@ with_zlib
 with_lz4
 with_libbz2
 with_zstd
-with_quicklz
 with_rt
 with_libcurl
 with_apr_config
@@ -980,6 +983,8 @@ LDFLAGS_EX
 LDFLAGS_SL
 PERL
 PYTHON
+EVENT_CFLAGS
+EVENT_LIBS
 MSGFMT
 TCLSH'
 
@@ -1633,8 +1638,12 @@ Optional Features:
   --enable-mapreduce      enable Cloudberry Mapreduce support
   --disable-shared-postgres-backend
                           enable Cloudberry shared postgres backend support
+  --enable-link-postgres-with-shared
+                          build Cloudberry using the shared library
+                          libpostgres.so
   --enable-gpcloud        enable gpcloud support
   --enable-external-fts   enable external fts support
+  --enable-ic-udp2        enable interconnect udp2 implement
   --enable-ic-proxy       enable interconnect proxy mode (requires libuv
                           library)
   --disable-preload-ic-module
@@ -1692,8 +1701,6 @@ Optional Packages:
   --with-lz4              build with LZ4 support
   --without-libbz2        do not use bzip2
   --without-zstd          do not build with Zstandard
-  --with-quicklz          build with QuickLZ support (requires quicklz
-                          library)
   --without-rt            do not use Realtime Library
   --without-libcurl       do not use libcurl
   --with-apr-config=PATH  path to apr-1-config utility
@@ -1736,6 +1743,9 @@ Some influential environment variables:
   LDFLAGS_SL  extra linker flags for linking shared libraries only
   PERL        Perl program
   PYTHON      Python program
+  EVENT_CFLAGS
+              C compiler flags for EVENT, overriding pkg-config
+  EVENT_LIBS  linker flags for EVENT, overriding pkg-config
   MSGFMT      msgfmt program for NLS
   TCLSH       Tcl interpreter program (tclsh)
 
@@ -8593,6 +8603,45 @@ if test "$enable_shared_postgres_backend" = yes ; then :
 fi # fi
 
 #
+# --enable-link-postgres-with-shared enables linking postgres with shared library libpostgres.so
+#
+
+
+# Check whether --enable-link-postgres-with-shared was given.
+if test "${enable_link_postgres_with_shared+set}" = set; then :
+  enableval=$enable_link_postgres_with_shared;
+  case $enableval in
+    yes)
+
+$as_echo "#define USE_LINK_POSTGRES_WITH_SHARED 1" >>confdefs.h
+
+      ;;
+    no)
+      :
+      ;;
+    *)
+      as_fn_error $? "no argument expected for --enable-link-postgres-with-shared option" "$LINENO" 5
+      ;;
+  esac
+
+else
+  enable_link_postgres_with_shared=no
+
+fi
+
+
+{ $as_echo "$as_me:${as_lineno-$LINENO}: result: checking whether to build Cloudberry using the shared library libpostgres.so... $enable_link_postgres_with_shared" >&5
+$as_echo "checking whether to build Cloudberry using the shared library libpostgres.so... $enable_link_postgres_with_shared" >&6; }
+
+
+# check if enable-shared-postgres-backend is yes when enable-link-postgres-with-shared is yes
+if test "$enable_link_postgres_with_shared" = yes; then
+  if test "$enable_shared_postgres_backend" = no; then
+    as_fn_error $? "--enable-link-postgres-with-shared is yes, but --enable-shared-postgres-backend is no" "$LINENO" 5
+  fi
+fi
+
+#
 # gpcloud, enabled by default
 #
 
@@ -9141,10 +9190,43 @@ $as_echo "checking whether to build with external-fts... $enable_external_fts" >
 
 
 if test "$enable_external_fts" = no; then
-  $as_echo "#define USE_INTERNAL_FTS 1" >>confdefs.h
+
+$as_echo "#define USE_INTERNAL_FTS 1" >>confdefs.h
 
   CFLAGS="$CFLAGS -DUSE_INTERNAL_FTS=1"
 fi
+
+#
+# ic-udp2
+#
+
+
+# Check whether --enable-ic-udp2 was given.
+if test "${enable_ic_udp2+set}" = set; then :
+  enableval=$enable_ic_udp2;
+  case $enableval in
+    yes)
+
+$as_echo "#define ENABLE_IC_UDP2 1" >>confdefs.h
+
+      ;;
+    no)
+      :
+      ;;
+    *)
+      as_fn_error $? "no argument expected for --enable-ic-udp2 option" "$LINENO" 5
+      ;;
+  esac
+
+else
+  enable_ic_udp2=no
+
+fi
+
+
+{ $as_echo "$as_me:${as_lineno-$LINENO}: result: checking whether to build with interconnect udp2 support ... $enable_ic_udp2" >&5
+$as_echo "checking whether to build with interconnect udp2 support ... $enable_ic_udp2" >&6; }
+
 
 #
 # ic-proxy
@@ -9392,6 +9474,55 @@ $as_echo "yes" >&6; }
 $as_echo "#define HAVE_ZSTD 1" >>confdefs.h
 
 fi
+
+  # Check liburing
+  { $as_echo "$as_me:${as_lineno-$LINENO}: checking for io_uring_queue_init in -luring" >&5
+$as_echo_n "checking for io_uring_queue_init in -luring... " >&6; }
+if ${ac_cv_lib_uring_io_uring_queue_init+:} false; then :
+  $as_echo_n "(cached) " >&6
+else
+  ac_check_lib_save_LIBS=$LIBS
+LIBS="-luring  $LIBS"
+cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+/* end confdefs.h.  */
+
+/* Override any GCC internal prototype to avoid an error.
+   Use char because int might match the return type of a GCC
+   builtin and then its argument prototype would still apply.  */
+#ifdef __cplusplus
+extern "C"
+#endif
+char io_uring_queue_init ();
+int
+main ()
+{
+return io_uring_queue_init ();
+  ;
+  return 0;
+}
+_ACEOF
+if ac_fn_c_try_link "$LINENO"; then :
+  ac_cv_lib_uring_io_uring_queue_init=yes
+else
+  ac_cv_lib_uring_io_uring_queue_init=no
+fi
+rm -f core conftest.err conftest.$ac_objext \
+    conftest$ac_exeext conftest.$ac_ext
+LIBS=$ac_check_lib_save_LIBS
+fi
+{ $as_echo "$as_me:${as_lineno-$LINENO}: result: $ac_cv_lib_uring_io_uring_queue_init" >&5
+$as_echo "$ac_cv_lib_uring_io_uring_queue_init" >&6; }
+if test "x$ac_cv_lib_uring_io_uring_queue_init" = xyes; then :
+  cat >>confdefs.h <<_ACEOF
+#define HAVE_LIBURING 1
+_ACEOF
+
+  LIBS="-luring $LIBS"
+
+else
+  as_fn_error $? "library 'uring' is required for PAX support" "$LINENO" 5
+fi
+
 
   # Check cmake >= 3.11.0 using AX_COMPARE_VERSION
   # Extract the first word of "cmake", so it can be a program name with args.
@@ -11028,35 +11159,6 @@ $as_echo "yes" >&6; }
 
 fi
 fi
-
-#
-# quicklz
-#
-
-
-
-# Check whether --with-quicklz was given.
-if test "${with_quicklz+set}" = set; then :
-  withval=$with_quicklz;
-  case $withval in
-    yes)
-      :
-      ;;
-    no)
-      :
-      ;;
-    *)
-      as_fn_error $? "no argument expected for --with-quicklz option" "$LINENO" 5
-      ;;
-  esac
-
-else
-  with_quicklz=no
-
-fi
-
-
-
 
 #
 # Realtime library
@@ -14678,56 +14780,6 @@ fi
 
 fi
 
-if test "$with_quicklz" = yes; then
-  { $as_echo "$as_me:${as_lineno-$LINENO}: checking for qlz_compress in -lquicklz" >&5
-$as_echo_n "checking for qlz_compress in -lquicklz... " >&6; }
-if ${ac_cv_lib_quicklz_qlz_compress+:} false; then :
-  $as_echo_n "(cached) " >&6
-else
-  ac_check_lib_save_LIBS=$LIBS
-LIBS="-lquicklz  $LIBS"
-cat confdefs.h - <<_ACEOF >conftest.$ac_ext
-/* end confdefs.h.  */
-
-/* Override any GCC internal prototype to avoid an error.
-   Use char because int might match the return type of a GCC
-   builtin and then its argument prototype would still apply.  */
-#ifdef __cplusplus
-extern "C"
-#endif
-char qlz_compress ();
-int
-main ()
-{
-return qlz_compress ();
-  ;
-  return 0;
-}
-_ACEOF
-if ac_fn_c_try_link "$LINENO"; then :
-  ac_cv_lib_quicklz_qlz_compress=yes
-else
-  ac_cv_lib_quicklz_qlz_compress=no
-fi
-rm -f core conftest.err conftest.$ac_objext \
-    conftest$ac_exeext conftest.$ac_ext
-LIBS=$ac_check_lib_save_LIBS
-fi
-{ $as_echo "$as_me:${as_lineno-$LINENO}: result: $ac_cv_lib_quicklz_qlz_compress" >&5
-$as_echo "$ac_cv_lib_quicklz_qlz_compress" >&6; }
-if test "x$ac_cv_lib_quicklz_qlz_compress" = xyes; then :
-  cat >>confdefs.h <<_ACEOF
-#define HAVE_LIBQUICKLZ 1
-_ACEOF
-
-  LIBS="-lquicklz $LIBS"
-
-else
-  as_fn_error $? "quicklz library not found." "$LINENO" 5
-fi
-
-fi
-
 if test "$enable_external_fts" = yes; then
 { $as_echo "$as_me:${as_lineno-$LINENO}: checking for jansson_version_str in -ljansson" >&5
 $as_echo_n "checking for jansson_version_str in -ljansson... " >&6; }
@@ -15059,65 +15111,78 @@ fi
   LIBS="$_LIBS"
 
   _LIBS="$LIBS"
-  { $as_echo "$as_me:${as_lineno-$LINENO}: checking for library containing event_add" >&5
-$as_echo_n "checking for library containing event_add... " >&6; }
-if ${ac_cv_search_event_add+:} false; then :
-  $as_echo_n "(cached) " >&6
+
+pkg_failed=no
+{ $as_echo "$as_me:${as_lineno-$LINENO}: checking for libevent >= 2.0.0" >&5
+$as_echo_n "checking for libevent >= 2.0.0... " >&6; }
+
+if test -n "$EVENT_CFLAGS"; then
+    pkg_cv_EVENT_CFLAGS="$EVENT_CFLAGS"
+ elif test -n "$PKG_CONFIG"; then
+    if test -n "$PKG_CONFIG" && \
+    { { $as_echo "$as_me:${as_lineno-$LINENO}: \$PKG_CONFIG --exists --print-errors \"libevent >= 2.0.0\""; } >&5
+  ($PKG_CONFIG --exists --print-errors "libevent >= 2.0.0") 2>&5
+  ac_status=$?
+  $as_echo "$as_me:${as_lineno-$LINENO}: \$? = $ac_status" >&5
+  test $ac_status = 0; }; then
+  pkg_cv_EVENT_CFLAGS=`$PKG_CONFIG --cflags "libevent >= 2.0.0" 2>/dev/null`
+		      test "x$?" != "x0" && pkg_failed=yes
 else
-  ac_func_search_save_LIBS=$LIBS
-cat confdefs.h - <<_ACEOF >conftest.$ac_ext
-/* end confdefs.h.  */
-
-/* Override any GCC internal prototype to avoid an error.
-   Use char because int might match the return type of a GCC
-   builtin and then its argument prototype would still apply.  */
-#ifdef __cplusplus
-extern "C"
-#endif
-char event_add ();
-int
-main ()
-{
-return event_add ();
-  ;
-  return 0;
-}
-_ACEOF
-for ac_lib in '' event; do
-  if test -z "$ac_lib"; then
-    ac_res="none required"
-  else
-    ac_res=-l$ac_lib
-    LIBS="-l$ac_lib  $ac_func_search_save_LIBS"
-  fi
-  if ac_fn_c_try_link "$LINENO"; then :
-  ac_cv_search_event_add=$ac_res
+  pkg_failed=yes
 fi
-rm -f core conftest.err conftest.$ac_objext \
-    conftest$ac_exeext
-  if ${ac_cv_search_event_add+:} false; then :
-  break
+ else
+    pkg_failed=untried
 fi
-done
-if ${ac_cv_search_event_add+:} false; then :
-
+if test -n "$EVENT_LIBS"; then
+    pkg_cv_EVENT_LIBS="$EVENT_LIBS"
+ elif test -n "$PKG_CONFIG"; then
+    if test -n "$PKG_CONFIG" && \
+    { { $as_echo "$as_me:${as_lineno-$LINENO}: \$PKG_CONFIG --exists --print-errors \"libevent >= 2.0.0\""; } >&5
+  ($PKG_CONFIG --exists --print-errors "libevent >= 2.0.0") 2>&5
+  ac_status=$?
+  $as_echo "$as_me:${as_lineno-$LINENO}: \$? = $ac_status" >&5
+  test $ac_status = 0; }; then
+  pkg_cv_EVENT_LIBS=`$PKG_CONFIG --libs "libevent >= 2.0.0" 2>/dev/null`
+		      test "x$?" != "x0" && pkg_failed=yes
 else
-  ac_cv_search_event_add=no
+  pkg_failed=yes
 fi
-rm conftest.$ac_ext
-LIBS=$ac_func_search_save_LIBS
+ else
+    pkg_failed=untried
 fi
-{ $as_echo "$as_me:${as_lineno-$LINENO}: result: $ac_cv_search_event_add" >&5
-$as_echo "$ac_cv_search_event_add" >&6; }
-ac_res=$ac_cv_search_event_add
-if test "$ac_res" != no; then :
-  test "$ac_res" = "none required" || LIBS="$ac_res $LIBS"
 
+
+
+if test $pkg_failed = yes; then
+        { $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
+$as_echo "no" >&6; }
+
+if $PKG_CONFIG --atleast-pkgconfig-version 0.20; then
+        _pkg_short_errors_supported=yes
 else
-  as_fn_error $? "libevent is required for gpfdist" "$LINENO" 5
+        _pkg_short_errors_supported=no
 fi
+        if test $_pkg_short_errors_supported = yes; then
+	        EVENT_PKG_ERRORS=`$PKG_CONFIG --short-errors --print-errors --cflags --libs "libevent >= 2.0.0" 2>&1`
+        else
+	        EVENT_PKG_ERRORS=`$PKG_CONFIG --print-errors --cflags --libs "libevent >= 2.0.0" 2>&1`
+        fi
+	# Put the nasty error message in config.log where it belongs
+	echo "$EVENT_PKG_ERRORS" >&5
 
-  EVENT_LIBS=" -levent"
+	as_fn_error $? "libevent >= 2.0.0 is required for gpfdist" "$LINENO" 5
+elif test $pkg_failed = untried; then
+        { $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
+$as_echo "no" >&6; }
+	as_fn_error $? "libevent >= 2.0.0 is required for gpfdist" "$LINENO" 5
+else
+	EVENT_CFLAGS=$pkg_cv_EVENT_CFLAGS
+	EVENT_LIBS=$pkg_cv_EVENT_LIBS
+        { $as_echo "$as_me:${as_lineno-$LINENO}: result: yes" >&5
+$as_echo "yes" >&6; }
+
+fi
+  EVENT_LIBS="$EVENT_LIBS"
 
 
   { $as_echo "$as_me:${as_lineno-$LINENO}: checking for library containing yaml_parser_initialize" >&5
@@ -15761,7 +15826,8 @@ if test "$enable_openssl_redirect" = yes; then
     as_fn_error $? "--enable-openssl-redirect must specify --with-ssl" "$LINENO" 5
   fi
 
-  $as_echo "#define OPENSSL_ALLOW_REDIRECT 1" >>confdefs.h
+
+$as_echo "#define OPENSSL_ALLOW_REDIRECT 1" >>confdefs.h
 
 fi
 
@@ -16195,6 +16261,13 @@ fi
 fi
 
 
+
+# for contrib/pax_storage
+if test "$enable_pax" = yes; then
+  if test "$enable_shared_postgres_backend" = no; then
+    as_fn_error $? "PAX support requires --enable-shared-postgres-backend" "$LINENO" 5
+  fi
+fi
 
 # for contrib/sepgsql
 if test "$with_selinux" = yes; then
@@ -16972,18 +17045,6 @@ if test "x$ac_cv_header_bzlib_h" = xyes; then :
 
 else
   as_fn_error $? "header file <bzlib.h> is required for bzip2 support" "$LINENO" 5
-fi
-
-
-fi
-
-# Check for quicklz.h
-if test "$with_quicklz" = yes; then
-  ac_fn_c_check_header_mongrel "$LINENO" "quicklz.h" "ac_cv_header_quicklz_h" "$ac_includes_default"
-if test "x$ac_cv_header_quicklz_h" = xyes; then :
-
-else
-  as_fn_error $? "header file <quicklz.h> is required for QuickLZ support" "$LINENO" 5
 fi
 
 

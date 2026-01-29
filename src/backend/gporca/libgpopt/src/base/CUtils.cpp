@@ -3657,7 +3657,9 @@ CUtils::PdrgpcrExactCopy(CMemoryPool *mp, CColRefArray *colref_array)
 // from old to copied variables are added to it.
 CColRefArray *
 CUtils::PdrgpcrCopy(CMemoryPool *mp, CColRefArray *colref_array,
-					BOOL fAllComputed, UlongToColRefMap *colref_mapping)
+					BOOL fAllComputed, UlongToColRefMap *colref_mapping,
+					UlongToColRefMap *consumer_mapping, UlongToColRefArrayMap *producer_mapping,
+					 BOOL check_usage)
 {
 	// get column factory from optimizer context object
 	CColumnFactory *col_factory = COptCtxt::PoctxtFromTLS()->Pcf();
@@ -3678,12 +3680,62 @@ CUtils::PdrgpcrCopy(CMemoryPool *mp, CColRefArray *colref_array,
 			new_colref = col_factory->PcrCopy(colref);
 		}
 
+		if (check_usage) {
+			CColRef::EUsedStatus colref_status = colref->GetUsage(true, true);
+			switch(colref_status) {
+				case CColRef::EUsedStatus::EUsed:
+				{
+					new_colref->MarkAsUsed();
+					break;
+				}
+				case CColRef::EUsedStatus::EUnused:
+				{
+					new_colref->MarkAsUnused();
+					break;
+				}
+				case CColRef::EUsedStatus::EUnknown:
+				{
+					new_colref->MarkAsUnknown();
+					break;
+				}
+				default:
+					GPOS_ASSERT(false);
+			}
+		}
+
 		pdrgpcrNew->Append(new_colref);
+
 		if (nullptr != colref_mapping)
 		{
 			BOOL fInserted GPOS_ASSERTS_ONLY = colref_mapping->Insert(
 				GPOS_NEW(mp) ULONG(colref->Id()), new_colref);
 			GPOS_ASSERT(fInserted);
+		}
+
+		if (nullptr != consumer_mapping) {
+			BOOL fInserted GPOS_ASSERTS_ONLY = consumer_mapping->Insert(
+				GPOS_NEW(mp) ULONG(new_colref->Id()), colref);
+			GPOS_ASSERT(fInserted);
+		}
+
+		if (nullptr != producer_mapping) {
+			ULONG *producer_cid = GPOS_NEW(mp) ULONG(colref->Id());
+
+			const CColRefArray *crarray = producer_mapping->Find(producer_cid);
+			if (nullptr == crarray)
+			{
+				CColRefArray *crarray_new = GPOS_NEW(mp) CColRefArray(mp);
+				crarray_new->Append(new_colref);
+
+				BOOL fInserted GPOS_ASSERTS_ONLY =
+					producer_mapping->Insert(producer_cid, crarray_new);
+				GPOS_ASSERT(fInserted);
+			}
+			else
+			{
+				(const_cast<CColRefArray *>(crarray))
+					->Append(new_colref);
+			}
 		}
 	}
 

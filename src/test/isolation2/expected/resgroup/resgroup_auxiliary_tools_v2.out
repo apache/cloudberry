@@ -20,7 +20,19 @@ ERROR:  language "plpython3u" already exists
 -- end_ignore
 
 -- enable resource group and restart cluster.
+-- prerequisites:
+--     1. '/sys/fs/cgroup/gpdb' must exist,
+--        otherwise create it before run installcheck-resgroup-v2;
+--     2. 'gpconfig -c gp_resource_group_cgroup_parent -v "gpdb" && gpstop -rai'
+--        must run before 'gpconfig -c gp_resource_manager -v group-v2', because
+--        during the process of setting gp_resource_manager to group-v2, the
+--        system will check whether the directory
+--        '/sys/fs/cgroup/$gp_resource_group_cgroup_parent' exists.
 -- start_ignore
+! gpconfig -c gp_resource_group_cgroup_parent -v "gpdb";
+
+! gpstop -rai;
+
 ! gpconfig -c gp_resource_manager -v group-v2;
 
 ! gpconfig -c max_connections -v 250 -m 25;
@@ -36,6 +48,11 @@ ERROR:  language "plpython3u" already exists
  gp_resource_manager 
 ---------------------
  group-v2            
+(1 row)
+0: SHOW gp_resource_group_cgroup_parent;
+ gp_resource_group_cgroup_parent 
+---------------------------------
+ gpdb                            
 (1 row)
 
 -- resource queue statistics should not crash
@@ -118,7 +135,7 @@ sql = "select sess_id from pg_stat_activity where pid = '%d'" % pid result = plp
 sql = "select groupid from gp_toolkit.gp_resgroup_config where groupname='%s'" % groupname result = plpy.execute(sql) groupid = result[0]['groupid'] 
 sql = "select hostname from gp_segment_configuration group by hostname" result = plpy.execute(sql) hosts = [_['hostname'] for _ in result] 
 def get_result(host): stdout = subprocess.run(["ssh", "{}".format(host), "ps -ef | grep postgres | grep con{} | grep -v grep | awk '{{print $2}}'".format(session_id)], stdout=subprocess.PIPE, check=True).stdout session_pids = stdout.splitlines() 
-path = "/sys/fs/cgroup/gpdb/{}/cgroup.procs".format(groupid) stdout = subprocess.run(["ssh", "{}".format(host), "cat {}".format(path)], stdout=subprocess.PIPE, check=True).stdout cgroups_pids = stdout.splitlines() 
+path = "/sys/fs/cgroup/gpdb/{}/queries/cgroup.procs".format(groupid) stdout = subprocess.run(["ssh", "{}".format(host), "cat {}".format(path)], stdout=subprocess.PIPE, check=True).stdout cgroups_pids = stdout.splitlines() 
 return set(session_pids).issubset(set(cgroups_pids)) 
 for host in hosts: if not get_result(host): return False return True 
 $$ LANGUAGE plpython3u;
@@ -138,10 +155,26 @@ CREATE
 
 0: CREATE OR REPLACE FUNCTION mkdir(dirname text) RETURNS BOOL AS $$ import os 
 if os.path.exists(dirname): return True 
-try: os.makedirs(dirname) except Exception as e: plpy.error("cannot create dir {}".format(e)) else: return True $$ LANGUAGE plpython3u;
+try: os.makedirs(dirname) except FileExistsError: return True except Exception as e: plpy.error("cannot create dir {}".format(e)) else: return True $$ LANGUAGE plpython3u;
 CREATE
 
-0: CREATE OR REPLACE FUNCTION rmdir(dirname text) RETURNS BOOL AS $$ import shutil import os 
-if not os.path.exists(dirname): return True 
-try: shutil.rmtree(dirname) except Exception as e: plpy.error("cannot remove dir {}".format(e)) else: return True $$ LANGUAGE plpython3u;
+0: CREATE OR REPLACE FUNCTION rmdir(dirname text) RETURNS BOOL AS $$ import shutil import fcntl import os 
+try: f = os.open(dirname, os.O_RDONLY) except FileNotFoundError: return True 
+fcntl.flock(f, fcntl.LOCK_EX) 
+if not os.path.exists(dirname): os.close(f) return True 
+try: shutil.rmtree(dirname) except Exception as e: plpy.error("cannot remove dir {}".format(e)) else: return True finally: os.close(f) $$ LANGUAGE plpython3u;
+CREATE
+
+0: CREATE OR REPLACE FUNCTION check_clear_io_max(groupname text) RETURNS BOOL AS $$ import ctypes import os 
+postgres = ctypes.CDLL(None) clear_io_max = postgres['clear_io_max'] 
+# get group oid sql = "select groupid from gp_toolkit.gp_resgroup_config where groupname = '%s'" % groupname result = plpy.execute(sql) groupid = result[0]['groupid'] 
+clear_io_max(groupid) 
+cgroup_path = "/sys/fs/cgroup/gpdb/%d/io.max" % groupid 
+return os.stat(cgroup_path).st_size == 0 $$ LANGUAGE plpython3u;
+CREATE
+
+0: CREATE OR REPLACE FUNCTION check_io_max_empty(groupname text) RETURNS BOOL AS $$ import os 
+# get group oid sql = "select groupid from gp_toolkit.gp_resgroup_config where groupname = '%s'" % groupname result = plpy.execute(sql) groupid = result[0]['groupid'] 
+cgroup_path = "/sys/fs/cgroup/gpdb/%d/io.max" % groupid 
+return os.stat(cgroup_path).st_size == 0 $$ LANGUAGE plpython3u;
 CREATE

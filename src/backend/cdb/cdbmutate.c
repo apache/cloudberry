@@ -403,6 +403,14 @@ shareinput_walker(SHAREINPUT_MUTATOR f, Node *node, PlannerInfo *root)
 			foreach(cell, app->appendplans)
 				shareinput_walker(f, (Node *) lfirst(cell), root);
 		}
+		else if (IsA(node, MergeAppend))
+		{
+			ListCell   *cell;
+			MergeAppend *mapp = (MergeAppend *) node;
+
+			foreach(cell, mapp->mergeplans)
+				shareinput_walker(f, (Node *) lfirst(cell), root);
+		}
 		/* GPDB_14_MERGE_FIXME: double check on following logics. */
 		// else if (IsA(node, ModifyTable))
 		// {
@@ -651,6 +659,8 @@ shareinput_save_producer(ShareInputScan *plan, ApplyShareInputContext *ctxt)
 		ctxt->shared_input_count = new_shared_input_count;
 	}
 
+	plan->ref_set = true;
+
 	Assert(ctxt->shared_plans[share_id] == NULL);
 	ctxt->shared_plans[share_id] = plan->scan.plan.lefttree;
 }
@@ -817,8 +827,8 @@ shareinput_peekmot(ApplyShareInputContext *ctxt)
  * plan.
  *
  * To work around that issue, create a CTE for each shared input node, with
- * columns that match the target list of the SharedInputScan's subplan,
- * and replace the target list entries of the SharedInputScan with
+ * columns that match the target list of the ShareInputScan's subplan,
+ * and replace the target list entries of the ShareInputScan with
  * Vars that point to the CTE instead of the child plan.
  */
 Plan *
@@ -885,8 +895,8 @@ replace_shareinput_targetlists_walker(Node *node, PlannerInfo *root, bool fPop)
 		/*
 		 * Replace all the target list entries.
 		 *
-		 * SharedInputScan nodes are not projection-capable, so the target
-		 * list of the SharedInputScan matches the subplan's target list.
+		 * ShareInputScan nodes are not projection-capable, so the target
+		 * list of the ShareInputScan matches the subplan's target list.
 		 */
 		newtargetlist = NIL;
 		attno = 1;

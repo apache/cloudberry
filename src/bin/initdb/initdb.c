@@ -3391,6 +3391,11 @@ main(int argc, char *argv[])
 				pwprompt = true;
 				break;
 			case 'U':
+				if (optarg[0] == '\0')
+				{
+					pg_log_error("superuser name must not be empty.");
+					exit(1);
+				}
 				username = pg_strdup(optarg);
 				break;
 			case 'd':

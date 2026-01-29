@@ -1,5 +1,8 @@
 -- turn off autostats so we don't have to worry about the logging of the autostat queries
 set gp_autostats_mode = None;
+-- start_ignore
+set gp_use_streaming_hashagg = off;
+-- end_ignore
 
 -- create needed tables (in a transaction, for speed)
 begin;

@@ -68,7 +68,7 @@ public:
 	CConfigParamMapping(const CConfigParamMapping &) = delete;
 
 	// pack enabled optimizer config params in a traceflag bitset
-	static CBitSet *PackConfigParamInBitset(CMemoryPool *mp, ULONG xform_id);
+	static CBitSet *PackConfigParamInBitset(CMemoryPool *mp, ULONG xform_id, BOOL create_vec_plan);
 };
 }  // namespace gpdxl
 

@@ -65,4 +65,14 @@ void File::PWriteN(const void *buf, size_t count, off64_t offset) {
                  "errno=%d], %s",
                  offset, count, num, errno, DebugString().c_str()));
 }
+
+void File::ReadBatch(const std::vector<IORequest> &requests) const {
+  if (requests.empty()) {
+    return;
+  }
+  for (const auto &req : requests) {
+    PReadN(req.buffer, req.size, req.offset);
+  }
+}
+
 }  // namespace pax

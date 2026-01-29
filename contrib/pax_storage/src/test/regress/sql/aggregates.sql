@@ -1,6 +1,9 @@
 --
 -- AGGREGATES
 --
+-- start_ignore
+set gp_use_streaming_hashagg = off;
+-- end_ignore
 
 -- start_ignore
 -- end_ignore

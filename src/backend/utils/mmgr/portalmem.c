@@ -224,6 +224,7 @@ CreatePortal(const char *name, bool allowDup, bool dupSilent)
 	portal->atEnd = true;		/* disallow fetches until query is set */
 	portal->visible = true;
 	portal->creation_time = GetCurrentStatementStartTimestamp();
+	portal->stop_requested_in_motion = false;
 
 	if (IsResQueueEnabled())
 	{
@@ -587,7 +588,7 @@ PortalDrop(Portal portal, bool isTopCommit)
 	if (portal->resowner &&
 		(!isTopCommit || portal->status == PORTAL_FAILED))
 	{
-		bool		isCommit = (portal->status != PORTAL_FAILED);
+		bool		isCommit = (portal->status != PORTAL_FAILED) && !portal->stop_requested_in_motion;
 
 		ResourceOwnerRelease(portal->resowner,
 							 RESOURCE_RELEASE_BEFORE_LOCKS,

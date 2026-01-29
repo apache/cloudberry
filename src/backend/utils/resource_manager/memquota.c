@@ -247,6 +247,7 @@ IsMemoryIntensiveOperator(Node *node, PlannedStmt *stmt)
 		case T_Hash:
 		case T_BitmapIndexScan:
 		case T_WindowAgg:
+		case T_WindowHashAgg:
 		case T_TableFunctionScan:
 		case T_FunctionScan:
 			return true;

@@ -50,6 +50,12 @@ std::shared_ptr<PaxCompressor> PaxCompressor::CreateBlockCompressor(
       compressor = std::make_shared<PaxZlibCompressor>();
       break;
     }
+#ifdef USE_LZ4
+    case ColumnEncoding_Kind::ColumnEncoding_Kind_COMPRESS_LZ4: {
+      compressor = std::make_shared<PaxLZ4Compressor>();
+      break;
+    }
+#endif
     case ColumnEncoding_Kind::ColumnEncoding_Kind_DEF_ENCODED: {
       CBDB_RAISE(cbdb::CException::ExType::kExTypeLogicError,
                  fmt("Invalid compress type %d",
@@ -230,9 +236,12 @@ size_t PaxLZ4Compressor::GetCompressBound(size_t src_len) {
 }
 
 size_t PaxLZ4Compressor::Compress(void *dst_buff, size_t dst_cap,
-                                  void *src_buff, size_t src_len, int /*lvl*/) {
-  return LZ4_compress_default((char *)src_buff, (char *)dst_buff, src_len,
-                              dst_cap);
+                                  void *src_buff, size_t src_len, int lvl) {
+  // acceleration affects compression speed, the larger acceleration value,
+  // the less compression ratio.
+  int acceleration = (20 - lvl) / 6;
+  return LZ4_compress_fast((char *)src_buff, (char *)dst_buff, src_len,
+                              dst_cap, acceleration);
 }
 
 size_t PaxLZ4Compressor::Decompress(void *dst_buff, size_t dst_len,

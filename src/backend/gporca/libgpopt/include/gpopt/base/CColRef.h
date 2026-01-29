@@ -36,6 +36,10 @@ using CColRef2dArray = CDynamicPtrArray<CColRefArray, CleanupRelease>;
 using UlongToColRefMap =
 	CHashMap<ULONG, CColRef, gpos::HashValue<ULONG>, gpos::Equals<ULONG>,
 			 CleanupDelete<ULONG>, CleanupNULL<CColRef>>;
+// hash map mapping ULONG -> CColRefArray
+using UlongToColRefArrayMap =
+	CHashMap<ULONG, CColRefArray, gpos::HashValue<ULONG>, gpos::Equals<ULONG>,
+			 CleanupDelete<ULONG>, CleanupRelease<CColRefArray>>;
 // hash map mapping ULONG -> const CColRef
 using UlongToConstColRefMap =
 	CHashMap<ULONG, const CColRef, gpos::HashValue<ULONG>, gpos::Equals<ULONG>,
@@ -81,6 +85,9 @@ private:
 
 	// table info
 	IMDId *m_mdid_table;
+
+	// debug function
+	const char* UsedStatusToString(EUsedStatus status) const;
 
 public:
 	CColRef(const CColRef &) = delete;
