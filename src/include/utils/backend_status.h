@@ -319,6 +319,9 @@ extern uint64 pgstat_get_my_query_id(void);
 extern int	pgstat_fetch_stat_numbackends(void);
 extern PgBackendStatus *pgstat_fetch_stat_beentry(int beid);
 extern LocalPgBackendStatus *pgstat_fetch_stat_local_beentry(int beid);
+/* -- mdb admin patch -- */
+extern LocalPgBackendStatus *pgstat_fetch_stat_local_beentry_by_pid(int pid);
+/* -- mdb admin patch end -- */
 extern char *pgstat_clip_activity(const char *raw_activity);
 
 

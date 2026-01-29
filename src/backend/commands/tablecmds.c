@@ -15704,13 +15704,14 @@ ATExecChangeOwner(Oid relationOid, Oid newOwnerId, bool recursing, LOCKMODE lock
 				AclResult	aclresult;
 
 				/* Otherwise, must be owner of the existing object */
-				if (!pg_class_ownercheck(relationOid, GetUserId()))
+				if (!mdb_admin_allow_bypass_owner_checks(GetUserId(), tuple_class->relowner) 
+						&& !pg_class_ownercheck(relationOid, GetUserId()))
 					aclcheck_error(ACLCHECK_NOT_OWNER, get_relkind_objtype(get_rel_relkind(relationOid)),
 								   RelationGetRelationName(target_rel));
 
-				/* Must be able to become new owner */
-				check_is_member_of_role(GetUserId(), newOwnerId);
 
+				check_mdb_admin_is_member_of_role(GetUserId(), newOwnerId);
+				
 				/* New owner must have CREATE privilege on namespace */
 				aclresult = pg_namespace_aclcheck(namespaceOid, newOwnerId,
 												  ACL_CREATE);
@@ -20791,7 +20792,7 @@ RangeVarCallbackForAlterRelation(const RangeVar *rv, Oid relid, Oid oldrelid,
 	Form_pg_class classform;
 	AclResult	aclresult;
 	char		relkind;
-
+	
 	tuple = SearchSysCache1(RELOID, ObjectIdGetDatum(relid));
 	if (!HeapTupleIsValid(tuple))
 		return;					/* concurrently dropped */
@@ -20799,7 +20800,8 @@ RangeVarCallbackForAlterRelation(const RangeVar *rv, Oid relid, Oid oldrelid,
 	relkind = classform->relkind;
 
 	/* Must own relation. */
-	if (!pg_class_ownercheck(relid, GetUserId()))
+	if (!mdb_admin_allow_bypass_owner_checks(GetUserId(), classform->relowner) 
+			&& !pg_class_ownercheck(relid, GetUserId()))
 		aclcheck_error(ACLCHECK_NOT_OWNER, get_relkind_objtype(get_rel_relkind(relid)), rv->relname);
 
 	/* No system table modifications unless explicitly allowed. */
