@@ -309,7 +309,6 @@ jobs:
               },
               {"test":"ic-gpcontrib",
                "make_configs":["gpcontrib/orafce:installcheck",
-                               "gpcontrib/pxf_fdw:installcheck",
                                "gpcontrib/zstd:installcheck",
                                "gpcontrib/gp_sparse_vector:installcheck",
                                "gpcontrib/gp_toolkit:installcheck",

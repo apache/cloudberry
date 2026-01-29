@@ -152,7 +152,7 @@ RUN cd /home/gpadmin/cloudberry && \
                 --enable-orafce \
                 --enable-orca \
                 --enable-pax \
-                --enable-pxf \
+                --disable-pxf \
                 --enable-tap-tests \
                 --with-gssapi \
                 --with-ldap \
