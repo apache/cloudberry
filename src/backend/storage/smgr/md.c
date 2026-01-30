@@ -248,8 +248,9 @@ mdcreate(SMgrRelation reln, ForkNumber forknum, bool isRedo)
 	mdfd->mdfd_vfd = fd;
 	mdfd->mdfd_segno = 0;
 
-	if (!SmgrIsTemp(reln))
-		register_dirty_segment(reln, forknum, mdfd);
+	/* MERGE16_FIXME delete the register_dirty_segment, but this is not correct */
+//	if (!SmgrIsTemp(reln))
+//		register_dirty_segment(reln, forknum, mdfd);
 }
 
 /*

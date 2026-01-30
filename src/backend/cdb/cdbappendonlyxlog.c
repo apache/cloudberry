@@ -107,7 +107,7 @@ ao_insert_replay(XLogReaderState *record)
 						path)));
 	}
 
-	
+	/* MERGE16_FIXME delete the register_dirty_segment, but this is not correct */
 //	register_dirty_segment_ao(xlrec->target.node,
 //							  xlrec->target.segment_filenum,
 //							  file);
