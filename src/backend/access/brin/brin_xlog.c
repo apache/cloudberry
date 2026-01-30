@@ -229,7 +229,8 @@ brin_xlog_revmap_extend(XLogReaderState *record)
 	 * GPDB: If we have registered backup block id = 2, it means that this index
 	 * is on an AO/CO relation, and we are extending a revmap chain.
 	 */
-	XLogRecGetBlockTag(record, 2, NULL, NULL, NULL);
+	ao_chain_exists = XLogRecGetBlockTagExtended(record, 2, NULL, NULL, NULL, NULL);
+	if (ao_chain_exists)
 	{
 		XLogRedoAction 	currLastRevmapBufAction =
 							  XLogReadBufferForRedo(record, 2, &currLastRevmapBuf);

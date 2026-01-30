@@ -406,7 +406,7 @@ fill_val(Form_pg_attribute att,
  * @param isnull will only be used if <code>bit</code> is non-NULL
  * @param bit should be non-NULL (refer to td->t_bits) if isnull is set and contains non-null values
  */
-Size
+void
 heap_fill_tuple(TupleDesc tupleDesc,
 				Datum *values, bool *isnull,
 				char *data, Size data_size,
@@ -449,9 +449,8 @@ heap_fill_tuple(TupleDesc tupleDesc,
 	}
 
 	Assert((data - start) == data_size);
-
-	return data_size;
 }
+
 
 /* ----------------------------------------------------------------
  *						heap tuple interface

@@ -580,12 +580,6 @@ dir_get_file_size(WalWriteMethod *wwmethod, const char *pathname)
 	return statbuf.st_size;
 }
 
-static int
-dir_compression(void)
-{
-	return dir_data->compression;
-}
-
 static bool
 dir_existsfile(WalWriteMethod *wwmethod, const char *pathname)
 {
