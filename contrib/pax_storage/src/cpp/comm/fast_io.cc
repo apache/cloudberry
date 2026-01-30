@@ -26,7 +26,7 @@
  */
 
 #include "fast_io.h"
-
+#include <stdint.h>
 #include <unistd.h>  // for pread
 
 // uring_likely may not be defined in older liburing versions
@@ -42,7 +42,7 @@ namespace pax
 {
 
 bool IOUringFastIO::available() {
-  static char support_io_uring = 0;
+  static int8_t support_io_uring = 0;
 
   if (support_io_uring == 1) return true;
   if (support_io_uring == -1) return false;
