@@ -270,7 +270,7 @@ remove_dml_state(const Oid relationOid)
  *
  * This function should be called exactly once per relation.
  */
-void
+static void
 aoco_dml_init(Relation relation, CmdType operation)
 {
 	init_aoco_dml_states();
@@ -280,7 +280,7 @@ aoco_dml_init(Relation relation, CmdType operation)
 /*
  * This function should be called exactly once per relation.
  */
-void
+static void
 aoco_dml_finish(Relation relation, CmdType operation)
 {
 	AOCODMLState *state;
@@ -2658,6 +2658,8 @@ static TableAmRoutine ao_column_methods = {
 	.scan_sample_next_block = aoco_scan_sample_next_block,
 	.scan_sample_next_tuple = aoco_scan_sample_next_tuple,
 
+	.dml_init = aoco_dml_init,
+	.dml_fini = aoco_dml_finish,
 	.amoptions = ao_amoptions,
 	.swap_relation_files = aoco_swap_relation_files,
 	.validate_column_encoding_clauses = aoco_validate_column_encoding_clauses,

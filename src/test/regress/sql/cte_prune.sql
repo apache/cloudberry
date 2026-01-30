@@ -10,6 +10,7 @@ analyze t1;
 
 create table t2(v1 int, v2 int, v3 int);
 insert into t2 values(generate_series(0, 100), generate_series(100, 200), generate_series(200, 300));
+analyze t2;
 
 -- should pruned both seq scan and shared scan
 explain verbose with c1 as (select v1, v2, v3 from t1) select c11.v1 from c1 as c11 left join c1 as c22 on c11.v1=c22.v1 where c11.v1 < 5;
@@ -255,6 +256,8 @@ drop table t2;
 
 CREATE TABLE t3 AS SELECT i as a, i+1 as b from generate_series(1,10)i;
 CREATE TABLE t4 AS SELECT i as c, i+1 as d from generate_series(1,10)i;
+analyze t3;
+analyze t4;
 
 -- Additional filtering conditions are added to the consumer.
 -- This is caused by `PexprInferPredicates` in the ORCA preprocessor.

@@ -762,6 +762,7 @@ PROTOBUF_LIBS
 PROTOBUF_CFLAGS
 enable_preload_ic_module
 enable_ic_proxy
+enable_ic_udp2
 enable_external_fts
 HAVE_CXX14
 enable_gpcloud
@@ -910,6 +911,7 @@ enable_shared_postgres_backend
 enable_link_postgres_with_shared
 enable_gpcloud
 enable_external_fts
+enable_ic_udp2
 enable_ic_proxy
 enable_preload_ic_module
 enable_pax
@@ -1631,6 +1633,7 @@ Optional Features:
                           libpostgres.so
   --enable-gpcloud        enable gpcloud support
   --enable-external-fts   enable external fts support
+  --enable-ic-udp2        enable interconnect udp2 implement
   --enable-ic-proxy       enable interconnect proxy mode (requires libuv
                           library)
   --disable-preload-ic-module
@@ -9184,6 +9187,38 @@ $as_echo "#define USE_INTERNAL_FTS 1" >>confdefs.h
 fi
 
 #
+# ic-udp2
+#
+
+
+# Check whether --enable-ic-udp2 was given.
+if test "${enable_ic_udp2+set}" = set; then :
+  enableval=$enable_ic_udp2;
+  case $enableval in
+    yes)
+
+$as_echo "#define ENABLE_IC_UDP2 1" >>confdefs.h
+
+      ;;
+    no)
+      :
+      ;;
+    *)
+      as_fn_error $? "no argument expected for --enable-ic-udp2 option" "$LINENO" 5
+      ;;
+  esac
+
+else
+  enable_ic_udp2=no
+
+fi
+
+
+{ $as_echo "$as_me:${as_lineno-$LINENO}: result: checking whether to build with interconnect udp2 support ... $enable_ic_udp2" >&5
+$as_echo "checking whether to build with interconnect udp2 support ... $enable_ic_udp2" >&6; }
+
+
+#
 # ic-proxy
 #
 
@@ -9429,6 +9464,55 @@ $as_echo "yes" >&6; }
 $as_echo "#define HAVE_ZSTD 1" >>confdefs.h
 
 fi
+
+  # Check liburing
+  { $as_echo "$as_me:${as_lineno-$LINENO}: checking for io_uring_queue_init in -luring" >&5
+$as_echo_n "checking for io_uring_queue_init in -luring... " >&6; }
+if ${ac_cv_lib_uring_io_uring_queue_init+:} false; then :
+  $as_echo_n "(cached) " >&6
+else
+  ac_check_lib_save_LIBS=$LIBS
+LIBS="-luring  $LIBS"
+cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+/* end confdefs.h.  */
+
+/* Override any GCC internal prototype to avoid an error.
+   Use char because int might match the return type of a GCC
+   builtin and then its argument prototype would still apply.  */
+#ifdef __cplusplus
+extern "C"
+#endif
+char io_uring_queue_init ();
+int
+main ()
+{
+return io_uring_queue_init ();
+  ;
+  return 0;
+}
+_ACEOF
+if ac_fn_c_try_link "$LINENO"; then :
+  ac_cv_lib_uring_io_uring_queue_init=yes
+else
+  ac_cv_lib_uring_io_uring_queue_init=no
+fi
+rm -f core conftest.err conftest.$ac_objext \
+    conftest$ac_exeext conftest.$ac_ext
+LIBS=$ac_check_lib_save_LIBS
+fi
+{ $as_echo "$as_me:${as_lineno-$LINENO}: result: $ac_cv_lib_uring_io_uring_queue_init" >&5
+$as_echo "$ac_cv_lib_uring_io_uring_queue_init" >&6; }
+if test "x$ac_cv_lib_uring_io_uring_queue_init" = xyes; then :
+  cat >>confdefs.h <<_ACEOF
+#define HAVE_LIBURING 1
+_ACEOF
+
+  LIBS="-luring $LIBS"
+
+else
+  as_fn_error $? "library 'uring' is required for PAX support" "$LINENO" 5
+fi
+
 
   # Check cmake >= 3.11.0 using AX_COMPARE_VERSION
   # Extract the first word of "cmake", so it can be a program name with args.

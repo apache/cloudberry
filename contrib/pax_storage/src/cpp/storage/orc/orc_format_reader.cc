@@ -327,6 +327,7 @@ pax::porc::proto::StripeFooter OrcFormatReader::ReadStripeWithProjection(
 
   batch_offset = stripe_footer_offset;
 
+  std::vector<IORequest> io_requests;
   while (index < column_types_.size()) {
     // Current column have been skipped
     // Move `batch_offset` and `streams_index` to the right position
@@ -398,10 +399,17 @@ pax::porc::proto::StripeFooter OrcFormatReader::ReadStripeWithProjection(
       continue;
     }
 
-    file_->PReadN(data_buffer->GetAvailableBuffer(), batch_len, batch_offset);
+    {
+      IORequest io_request;
+      io_request.offset = batch_offset;
+      io_request.size = batch_len;
+      io_request.buffer = data_buffer->GetAvailableBuffer();
+      io_requests.emplace_back(io_request);
+    }
     data_buffer->Brush(batch_len);
     batch_offset += batch_len;
   }
+  file_->ReadBatch(io_requests);
 
   return stripe_footer;
 }
@@ -413,14 +421,14 @@ static std::unique_ptr<PaxColumn> BuildEncodingColumn(
     const ColumnEncoding &data_encoding, bool is_vec) {
   uint32 not_null_rows = 0;
   uint64 data_stream_len = 0;
-  std::shared_ptr<DataBuffer<T>> data_stream_buffer;
+  std::unique_ptr<DataBuffer<T>> data_stream_buffer;
 
   Assert(data_stream.kind() == pax::porc::proto::Stream_Kind_DATA);
 
   not_null_rows = static_cast<uint32>(data_stream.column());
   data_stream_len = static_cast<uint64>(data_stream.length());
 
-  data_stream_buffer = std::make_shared<DataBuffer<T>>(
+  data_stream_buffer = std::make_unique<DataBuffer<T>>(
       reinterpret_cast<T *>(data_buffer->GetAvailableBuffer()), data_stream_len,
       false, false);
 
@@ -443,7 +451,7 @@ static std::unique_ptr<PaxColumn> BuildEncodingColumn(
     auto pax_column =
         traits::ColumnOptCreateTraits<PaxVecEncodingColumn, T>::create_decoding(
             alloc_size, decoding_option);
-    pax_column->Set(data_stream_buffer, (size_t)not_null_rows);
+    pax_column->Set(std::move(data_stream_buffer), (size_t)not_null_rows);
     return pax_column;
   } else {
     AssertImply(data_encoding.kind() ==
@@ -455,7 +463,7 @@ static std::unique_ptr<PaxColumn> BuildEncodingColumn(
     auto pax_column =
         traits::ColumnOptCreateTraits<PaxEncodingColumn, T>::create_decoding(
             alloc_size, decoding_option);
-    pax_column->Set(data_stream_buffer);
+    pax_column->Set(std::move(data_stream_buffer));
     return pax_column;
   }
 }
@@ -466,14 +474,14 @@ static std::unique_ptr<PaxColumn> BuildEncodingBitPackedColumn(
     bool is_vec) {
   uint32 not_null_rows = 0;
   uint64 column_data_len = 0;
-  std::shared_ptr<DataBuffer<int8>> column_data_buffer;
+  std::unique_ptr<DataBuffer<int8>> column_data_buffer;
 
   Assert(data_stream.kind() == pax::porc::proto::Stream_Kind_DATA);
 
   not_null_rows = static_cast<uint32>(data_stream.column());
   column_data_len = static_cast<uint64>(data_stream.length());
 
-  column_data_buffer = std::make_shared<DataBuffer<int8>>(
+  column_data_buffer = std::make_unique<DataBuffer<int8>>(
       reinterpret_cast<int8 *>(data_buffer->GetAvailableBuffer()),
       column_data_len, false, false);
 
@@ -496,7 +504,7 @@ static std::unique_ptr<PaxColumn> BuildEncodingBitPackedColumn(
     auto pax_column =
         traits::ColumnOptCreateTraits2<PaxVecBitPackedColumn>::create_decoding(
             alloc_size, decoding_option);
-    pax_column->Set(column_data_buffer, (size_t)not_null_rows);
+    pax_column->Set(std::move(column_data_buffer), (size_t)not_null_rows);
     return pax_column;
   } else {
     AssertImply(data_encoding.kind() ==
@@ -508,7 +516,7 @@ static std::unique_ptr<PaxColumn> BuildEncodingBitPackedColumn(
     auto pax_column =
         traits::ColumnOptCreateTraits2<PaxBitPackedColumn>::create_decoding(
             alloc_size, decoding_option);
-    pax_column->Set(column_data_buffer);
+    pax_column->Set(std::move(column_data_buffer));
     return pax_column;
   }
 }
@@ -521,8 +529,8 @@ static std::unique_ptr<PaxColumn> BuildEncodingDecimalColumn(
   uint32 not_null_rows = 0;
   uint64 offset_stream_len = 0;
   uint64 data_stream_len = 0;
-  std::shared_ptr<DataBuffer<int32>> offset_stream_buffer;
-  std::shared_ptr<DataBuffer<char>> data_stream_buffer;
+  std::unique_ptr<DataBuffer<int32>> offset_stream_buffer;
+  std::unique_ptr<DataBuffer<char>> data_stream_buffer;
   std::unique_ptr<PaxNonFixedColumn> pax_column;
   uint64 padding = 0;
 
@@ -530,7 +538,7 @@ static std::unique_ptr<PaxColumn> BuildEncodingDecimalColumn(
   offset_stream_len = static_cast<uint64>(len_stream.length());
   padding = len_stream.padding();
 
-  offset_stream_buffer = std::make_shared<DataBuffer<int32>>(
+  offset_stream_buffer = std::make_unique<DataBuffer<int32>>(
       reinterpret_cast<int32 *>(data_buffer->GetAvailableBuffer()),
       offset_stream_len, false, false);
 
@@ -560,7 +568,7 @@ static std::unique_ptr<PaxColumn> BuildEncodingDecimalColumn(
   }
 #endif
 
-  data_stream_buffer = std::make_shared<DataBuffer<char>>(
+  data_stream_buffer = std::make_unique<DataBuffer<char>>(
       data_buffer->GetAvailableBuffer(), data_stream_len, false, false);
   data_stream_buffer->BrushAll();
   data_buffer->Brush(data_stream_len);
@@ -591,7 +599,7 @@ static std::unique_ptr<PaxColumn> BuildEncodingDecimalColumn(
           data_cap, offsets_cap, std::move(decoding_option));
 
   // current memory will be freed in pax_columns->data_
-  pax_column->Set(data_stream_buffer, offset_stream_buffer, data_stream_len);
+  pax_column->Set(std::move(data_stream_buffer), std::move(offset_stream_buffer), data_stream_len);
   return pax_column;
 }
 
@@ -601,7 +609,7 @@ static std::unique_ptr<PaxColumn> BuildVecEncodingDecimalColumn(
     const ColumnEncoding &data_encoding, bool is_vec) {
   uint32 not_null_rows = 0;
   uint64 data_stream_len = 0;
-  std::shared_ptr<DataBuffer<int8>> data_stream_buffer;
+  std::unique_ptr<DataBuffer<int8>> data_stream_buffer;
 
   CBDB_CHECK(is_vec, cbdb::CException::ExType::kExTypeLogicError);
 
@@ -610,7 +618,7 @@ static std::unique_ptr<PaxColumn> BuildVecEncodingDecimalColumn(
   not_null_rows = static_cast<uint32>(data_stream.column());
   data_stream_len = static_cast<uint64>(data_stream.length());
 
-  data_stream_buffer = std::make_shared<DataBuffer<int8>>(
+  data_stream_buffer = std::make_unique<DataBuffer<int8>>(
       reinterpret_cast<int8 *>(data_buffer->GetAvailableBuffer()),
       data_stream_len, false, false);
 
@@ -630,7 +638,7 @@ static std::unique_ptr<PaxColumn> BuildVecEncodingDecimalColumn(
 
   auto pax_column = traits::ColumnOptCreateTraits2<PaxShortNumericColumn>::  //
       create_decoding(alloc_size, decoding_option);
-  pax_column->Set(data_stream_buffer, (size_t)not_null_rows);
+  pax_column->Set(std::move(data_stream_buffer), (size_t)not_null_rows);
 
   return pax_column;
 }
@@ -644,8 +652,8 @@ static std::unique_ptr<PaxColumn> BuildEncodingVecNonFixedColumn(
   uint64 offset_stream_len = 0;
   uint64 padding = 0;
   uint64 data_stream_len = 0;
-  std::shared_ptr<DataBuffer<int32>> offset_stream_buffer;
-  std::shared_ptr<DataBuffer<char>> data_stream_buffer;
+  std::unique_ptr<DataBuffer<int32>> offset_stream_buffer;
+  std::unique_ptr<DataBuffer<char>> data_stream_buffer;
   std::unique_ptr<PaxVecNonFixedColumn> pax_column;
   PaxDecoder::DecodingOption decoding_option;
   size_t data_cap, offsets_cap;
@@ -658,7 +666,7 @@ static std::unique_ptr<PaxColumn> BuildEncodingVecNonFixedColumn(
   offset_stream_len = static_cast<uint64>(len_stream.length());
   padding = len_stream.padding();
 
-  offset_stream_buffer = std::make_shared<DataBuffer<int32>>(
+  offset_stream_buffer = std::make_unique<DataBuffer<int32>>(
       reinterpret_cast<int32 *>(data_buffer->GetAvailableBuffer()),
       offset_stream_len, false, false);
 
@@ -676,7 +684,7 @@ static std::unique_ptr<PaxColumn> BuildEncodingVecNonFixedColumn(
   }
 
   data_buffer->Brush(offset_stream_len);
-  data_stream_buffer = std::make_shared<DataBuffer<char>>(
+  data_stream_buffer = std::make_unique<DataBuffer<char>>(
       data_buffer->GetAvailableBuffer(), data_stream_len, false, false);
 
   decoding_option.column_encode_type = data_encoding.kind();
@@ -730,7 +738,7 @@ static std::unique_ptr<PaxColumn> BuildEncodingVecNonFixedColumn(
           create_decoding(data_cap, offsets_cap, std::move(decoding_option));
     }
   }
-  pax_column->Set(data_stream_buffer, offset_stream_buffer, data_stream_len,
+  pax_column->Set(std::move(data_stream_buffer), std::move(offset_stream_buffer), data_stream_len,
                   not_null_rows);
   return pax_column;
 }
@@ -743,8 +751,8 @@ static std::unique_ptr<PaxColumn> BuildEncodingNonFixedColumn(
   [[maybe_unused]] uint32 not_null_rows = 0;
   uint64 offset_stream_len = 0;
   uint64 data_stream_len = 0;
-  std::shared_ptr<DataBuffer<int32>> offset_stream_buffer;
-  std::shared_ptr<DataBuffer<char>> data_stream_buffer;
+  std::unique_ptr<DataBuffer<int32>> offset_stream_buffer;
+  std::unique_ptr<DataBuffer<char>> data_stream_buffer;
   std::unique_ptr<PaxNonFixedColumn> pax_column;
   uint64 padding = 0;
   PaxDecoder::DecodingOption decoding_option;
@@ -754,7 +762,7 @@ static std::unique_ptr<PaxColumn> BuildEncodingNonFixedColumn(
   offset_stream_len = static_cast<uint64>(len_stream.length());
   padding = len_stream.padding();
 
-  offset_stream_buffer = std::make_shared<DataBuffer<int32>>(
+  offset_stream_buffer = std::make_unique<DataBuffer<int32>>(
       reinterpret_cast<int32 *>(data_buffer->GetAvailableBuffer()),
       offset_stream_len, false, false);
 
@@ -776,7 +784,7 @@ static std::unique_ptr<PaxColumn> BuildEncodingNonFixedColumn(
   }
 #endif
 
-  data_stream_buffer = std::make_shared<DataBuffer<char>>(
+  data_stream_buffer = std::make_unique<DataBuffer<char>>(
       data_buffer->GetAvailableBuffer(), data_stream_len, false, false);
   data_stream_buffer->BrushAll();
   data_buffer->Brush(data_stream_len);
@@ -819,7 +827,7 @@ static std::unique_ptr<PaxColumn> BuildEncodingNonFixedColumn(
   }
 
   // current memory will be freed in pax_columns->data_
-  pax_column->Set(data_stream_buffer, offset_stream_buffer, data_stream_len);
+  pax_column->Set(std::move(data_stream_buffer), std::move(offset_stream_buffer), data_stream_len);
   return pax_column;
 }
 

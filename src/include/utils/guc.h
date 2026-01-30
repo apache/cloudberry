@@ -294,6 +294,7 @@ extern bool enable_parallel_semi_join;
 extern bool enable_parallel_dedup_semi_join;
 extern bool enable_parallel_dedup_semi_reverse_join;
 extern bool	parallel_query_use_streaming_hashagg;
+extern bool gp_use_streaming_hashagg;
 extern int  gp_appendonly_insert_files;
 extern int  gp_appendonly_insert_files_tuples_range;
 extern int  gp_random_insert_segments;

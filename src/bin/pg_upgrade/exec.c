@@ -52,11 +52,12 @@ get_bin_version(ClusterInfo *cluster)
 
 	pclose(output);
 
-	if (sscanf(cmd_output, "%*s (%s %s) %d.%d", dbstring, dbstring2, &v1, &v2) < 1)
+	if (sscanf(cmd_output, "%*s (%s %[^)]) %d.%d", dbstring, dbstring2, &v1, &v2) != 4)
 		pg_fatal("could not get pg_ctl version output from %s\n", cmd);
 
-	if ((strcmp("Greenplum", dbstring) == 0 && strcmp("Database", dbstring2) == 0) \
-				|| (strcmp("Apache", dbstring2) == 0 && strcmp("Cloudberry", dbstring2) == 0))
+	if (!((strcmp("Greenplum", dbstring) == 0 && strcmp("Database", dbstring2) == 0) \
+				|| (strcmp("Cloudberry", dbstring) == 0 && strcmp("Database", dbstring2) == 0)
+				|| (strcmp("Apache", dbstring) == 0 && strcmp("Cloudberry", dbstring2) == 0)))
 		pg_fatal("could not upgrade from non Greenplum/Cloudberry version: %s %s\n", dbstring, dbstring2);
 
 	if (v1 < 10)

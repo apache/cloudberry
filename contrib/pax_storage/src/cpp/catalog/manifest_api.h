@@ -28,7 +28,7 @@
 #pragma once
 
 /*
- * abstract interface of hashdata manifest
+ * abstract interface of manifest
  */
 
 #ifdef __cplusplus
@@ -42,7 +42,7 @@ extern "C" {
  * memory management.
  */
 
-/* hashdata manifest support following data types for fields */
+/* manifest support following data types for fields */
 typedef enum MetaFieldType
 {
   Meta_Field_Type_Int = 1,

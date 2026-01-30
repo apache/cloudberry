@@ -85,8 +85,8 @@ RUN apt-get update && \
             silversearcher-ag \
             vim \
             wget \
+            gdb \
             git \
-            iproute2 \
             iputils-ping \
             lsof \
             openssh-server \
@@ -95,7 +95,6 @@ RUN apt-get update && \
             python3-distutils \
             python3-pip \
             python3-setuptools \
-            rsync \
             sudo \
             tzdata && \
     apt-get install -y -qq locales && \
@@ -113,7 +112,7 @@ RUN ln -s /usr/bin/python3.10 /usr/bin/python
 # - Add Cloudberry-specific entries to the gpadmin's .bashrc.
 # --------------------------------------------------------------------
 RUN /usr/sbin/groupadd gpadmin && \
-    /usr/sbin/useradd -m -g gpadmin gpadmin && \
+    /usr/sbin/useradd -m -g gpadmin gpadmin -s /bin/bash && \
     echo 'gpadmin ALL=(ALL) NOPASSWD: ALL' > /etc/sudoers.d/90-gpadmin && \
     chmod 0440 /etc/sudoers.d/90-gpadmin && \
     echo '\n# Add Cloudberry entries\nif [ -f /usr/local/cloudberry/cloudberry-env.sh ]; then\n  source /usr/local/cloudberry/cloudberry-env.sh\n  export COORDINATOR_DATA_DIRECTORY=/data1/coordinator/gpseg-1\nfi' >> /home/gpadmin/.bashrc

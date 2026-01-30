@@ -104,6 +104,12 @@ else
 ALWAYS_SUBDIRS += pax_storage
 endif
 
+ifeq ($(enable_ic_udp2),yes)
+SUBDIRS += udp2
+else
+ALWAYS_SUBDIRS += udp2
+endif
+
 # Missing:
 #		start-scripts	\ (does not have a makefile)
 

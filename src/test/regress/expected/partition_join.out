@@ -1881,7 +1881,7 @@ SELECT avg(t1.a), avg(t2.b), t1.c, t2.c FROM plt1 t1 RIGHT JOIN plt2 t2 ON t1.c 
                Group Key: t1.c, t2.c
                ->  Redistribute Motion 3:3  (slice2; segments: 3)
                      Hash Key: t1.c, t1.c
-                     ->  Partial HashAggregate
+                     ->  Streaming Partial HashAggregate
                            Group Key: t1.c, t2.c
                            ->  Append
                                  ->  Hash Join

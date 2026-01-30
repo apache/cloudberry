@@ -2022,6 +2022,16 @@ my %tests = (
 		unlike => { exclude_dump_test_schema => 1, },
 	},
 
+	'ALTER TYPE dump_test.int42 SET DEFAULT ENCODING' => {
+		create_order => 43,
+		create_sql => 'ALTER TYPE dump_test.int42 SET DEFAULT ENCODING
+		(compresstype=rle_type, blocksize=8192, compresslevel=4);',
+		regexp => qr/^\QALTER TYPE dump_test.int42 SET DEFAULT ENCODING (compresstype=rle_type, blocksize=8192, compresslevel=4);\E/m,
+		like =>
+			{ %full_runs, %dump_test_schema_runs, section_pre_data => 1, },
+		unlike => { exclude_dump_test_schema => 1, },
+	},
+
 	'CREATE FOREIGN DATA WRAPPER dummy' => {
 		create_order => 35,
 		create_sql   => 'CREATE FOREIGN DATA WRAPPER dummy;',
@@ -2204,20 +2214,22 @@ my %tests = (
 		create_order => 19,
 		create_sql	=> 'CREATE TABLE dump_test.test_table_ao(a integer, b text)
 						WITH (appendonly = true, compresstype = zlib, compresslevel = 1);',
-		regexp => qr/^
-			\QCREATE TABLE dump_test.test_table_ao (\E\n
-			\s+\Qa integer,\E\n
-			\s+\Qb text\E\n
-			\QWITH (appendonly = true, orientation = column, compresstype = zlib, compresslevel = 1);\E\n/xm,
+		regexp => qr{^
+			\QCREATE TABLE dump_test.test_table_ao (\E
+			\n\s+\Qa integer,\E
+			\n\s+\Qb text\E
+			\n\Q)\E
+			\n\QWITH (appendonly = true, compresstype=zlib, compresslevel='1');\E
+			}xm,
 		like => {
 			%full_runs,
 			%dump_test_schema_runs,
-			only_dump_test_table => 1,
 			section_pre_data     => 1,
+			exclude_test_table       => 1,
 		},
 		unlike => {
+			only_dump_test_table => 1,
 			exclude_dump_test_schema => 1,
-			exclude_test_table       => 1,
 		},
 	},
 

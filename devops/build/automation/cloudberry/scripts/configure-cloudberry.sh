@@ -110,6 +110,12 @@ CONFIGURE_LOG="${LOG_DIR}/configure.log"
 # Initialize environment
 init_environment "Cloudberry Configure Script" "${CONFIGURE_LOG}"
 
+# Check if BUILD_DESTINATION is set
+if [ -z "${BUILD_DESTINATION}" ]; then
+  log_completion "BUILD_DESTINATION is empty - error with exit"
+  exit 1
+fi
+
 # Initial setup
 log_section "Initial Setup"
 execute_cmd sudo rm -rf ${BUILD_DESTINATION} || exit 2
@@ -153,7 +159,7 @@ execute_cmd ./configure --prefix=${BUILD_DESTINATION} \
             --enable-orafce \
             --enable-orca \
             --enable-pax \
-            --enable-pxf \
+            --disable-pxf \
             --enable-tap-tests \
             ${CONFIGURE_DEBUG_OPTS} \
             --with-gssapi \

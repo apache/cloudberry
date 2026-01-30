@@ -72,6 +72,7 @@ ENV USER=gpadmin
 RUN dnf makecache && \
     dnf install -y \
         epel-release \
+        rocky-release-hpc \
         git && \
     dnf config-manager --disable epel-cisco-openh264 && \
     dnf makecache && \
@@ -117,6 +118,7 @@ RUN dnf makecache && \
         java-11-openjdk-devel \
         krb5-devel \
         libcurl-devel \
+        libssh2-devel \
         libevent-devel \
         libxml2-devel \
         libuuid-devel \
@@ -134,6 +136,7 @@ RUN dnf makecache && \
         readline-devel \
         zlib-devel && \
     dnf install -y --enablerepo=crb \
+        liburing-devel \
         libuv-devel \
         libyaml-devel \
         perl-IPC-Run \

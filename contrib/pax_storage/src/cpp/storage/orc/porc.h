@@ -138,6 +138,9 @@ class OrcWriter : public MicroPartitionWriter {
   ::pax::porc::proto::Footer file_footer_;
   ::pax::porc::proto::PostScript post_script_;
   ::pax::MicroPartitionStats group_stats_;
+
+  // indices of columns that are non-byval and have typlen == -1 (varlena)
+  std::vector<int> varlena_slowpath_indices_;
 };
 
 class OrcReader : public MicroPartitionReader {

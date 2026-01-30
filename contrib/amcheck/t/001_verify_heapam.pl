@@ -31,18 +31,18 @@ check_all_options_uncorrupted('test', 'plain');
 #
 fresh_test_table('test');
 corrupt_first_page('test');
-detects_heap_corruption("verify_heapam('test')", "plain corrupted table");
+detects_heap_corruption("verify_heapam_internal('test')", "plain corrupted table");
 detects_heap_corruption(
-	"verify_heapam('test', skip := 'all-visible')",
+	"verify_heapam_internal('test', skip := 'all-visible')",
 	"plain corrupted table skipping all-visible");
 detects_heap_corruption(
-	"verify_heapam('test', skip := 'all-frozen')",
+	"verify_heapam_internal('test', skip := 'all-frozen')",
 	"plain corrupted table skipping all-frozen");
 detects_heap_corruption(
-	"verify_heapam('test', check_toast := false)",
+	"verify_heapam_internal('test', check_toast := false)",
 	"plain corrupted table skipping toast");
 detects_heap_corruption(
-	"verify_heapam('test', startblock := 0, endblock := 0)",
+	"verify_heapam_internal('test', startblock := 0, endblock := 0)",
 	"plain corrupted table checking only block zero");
 
 #
@@ -50,13 +50,13 @@ detects_heap_corruption(
 #
 fresh_test_table('test');
 $node->safe_psql('postgres', q(VACUUM (FREEZE, DISABLE_PAGE_SKIPPING) test));
-detects_no_corruption("verify_heapam('test')",
+detects_no_corruption("verify_heapam_internal('test')",
 	"all-frozen not corrupted table");
 corrupt_first_page('test');
-detects_heap_corruption("verify_heapam('test')",
+detects_heap_corruption("verify_heapam_internal('test')",
 	"all-frozen corrupted table");
 detects_no_corruption(
-	"verify_heapam('test', skip := 'all-frozen')",
+	"verify_heapam_internal('test', skip := 'all-frozen')",
 	"all-frozen corrupted table skipping all-frozen");
 
 # Returns the filesystem path for the named relation.
@@ -208,7 +208,7 @@ sub check_all_options_uncorrupted
 						  . "endblock := $endblock";
 
 						detects_no_corruption(
-							"verify_heapam('$relname', $opts)",
+							"verify_heapam_internal('$relname', $opts)",
 							"$prefix: $opts");
 					}
 				}

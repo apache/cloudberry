@@ -665,6 +665,14 @@ check_for_plpython2_dependent_functions(ClusterInfo *cluster)
 	char		output_path[MAXPGPATH];
 	bool		found = false;
 
+
+	if (cluster->version.type == Cloudberry)
+	{
+		prep_status("Skip checking for plpython2 functions, CBDB use plpython3");
+		check_ok();
+		return ;
+	}
+
 	prep_status("Checking for functions dependent on plpython2");
 
 	snprintf(output_path, sizeof(output_path), "%s/%s",

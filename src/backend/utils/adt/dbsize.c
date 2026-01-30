@@ -153,6 +153,15 @@ db_dir_size(const char *path)
 			continue;
 
 		snprintf(filename, sizeof(filename), "%s/%s", path, direntry->d_name);
+		if (direntry->d_type == DT_DIR)
+		{
+			/**
+			 * Recurse into subdirectory. PAX stores data file in a separate
+			 * directory, so we need to account for that.
+			 */
+			dirsize += db_dir_size(filename);
+			continue;
+		}
 
 		if (stat(filename, &fst) < 0)
 		{

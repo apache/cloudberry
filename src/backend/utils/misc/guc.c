@@ -2290,7 +2290,7 @@ static struct config_int ConfigureNamesInt[] =
 			GUC_EXPLAIN
 		},
 		&join_collapse_limit,
-		20, 1, INT_MAX,
+		13, 1, INT_MAX,
 		NULL, NULL, NULL
 	},
 	{
@@ -2649,6 +2649,16 @@ static struct config_int ConfigureNamesInt[] =
 		},
 		&max_prepared_xacts,
 		50, 1, MAX_BACKENDS,
+		NULL, NULL, NULL
+	},
+
+	{
+		{"find_writer_proc_retry_time", PGC_USERSET, DEVELOPER_OPTIONS,
+			gettext_noop("Sets the retry time of find writer proc entry."),
+			NULL
+		},
+		&find_writer_proc_retry_time,
+		5, 1, 5000,
 		NULL, NULL, NULL
 	},
 
