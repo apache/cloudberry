@@ -2890,12 +2890,12 @@ vacuum_rel(Oid relid, RangeVar *relation, VacuumParams *params,
 	}
 	/* TODO: vacuum directory table's temp files */
 
-	if (!is_appendoptimized && (params->options & VACOPT_PROCESS_MAIN))
+	if (params->options & VACOPT_PROCESS_MAIN)
 	{
 		/*
 		 * Do the actual work --- either FULL or "lazy" vacuum
 		 */
-		if (params->options & VACOPT_FULL)
+		if (!is_appendoptimized && (params->options & VACOPT_FULL))
 		{
 			ClusterParams cluster_params = {0};
 
@@ -2909,7 +2909,7 @@ vacuum_rel(Oid relid, RangeVar *relation, VacuumParams *params,
 			/* VACUUM FULL is now a variant of CLUSTER; see cluster.c */
 			cluster_rel(relid, InvalidOid, &cluster_params);
 		}
-		else
+		else /* Heap vacuum or AO/CO vacuum in specific phase */
 			table_relation_vacuum(rel, params, bstrategy);
 	}
 

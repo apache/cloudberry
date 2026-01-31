@@ -159,7 +159,7 @@ select segid = -1 as is_master, relname, classify_age(age) from aux_rel_ages('te
 group by segid = -1, relname, classify_age(age);
  is_master |     relname     | classify_age 
 -----------+-----------------+--------------
- f         | test_table_heap | young
+ f         | test_table_heap | zero
  t         | test_table_heap | very young
 (2 rows)
 
@@ -177,38 +177,38 @@ select segid = -1 as is_master, relname, classify_age(age) from aux_rel_ages('te
 group by segid = -1, relname, classify_age(age);
  is_master |      relname       | classify_age 
 -----------+--------------------+--------------
- f         | pg_aoblkdir_<oid>  | young
- f         | pg_aovisimap_<oid> | young
- t         | pg_aovisimap_<oid> | very young
- t         | pg_aoseg_<oid>     | very young
- f         | pg_aoseg_<oid>     | young
  t         | pg_aoblkdir_<oid>  | very young
+ f         | pg_aoblkdir_<oid>  | zero
+ t         | pg_aovisimap_<oid> | very young
+ f         | pg_aovisimap_<oid> | zero
+ t         | pg_aoseg_<oid>     | very young
+ f         | pg_aoseg_<oid>     | zero
 (6 rows)
 
 select segid = -1 as is_master, relname, classify_age(age) from aux_rel_ages('test_table_ao_with_toast')
 group by segid = -1, relname, classify_age(age);
  is_master |      relname       | classify_age 
 -----------+--------------------+--------------
- f         | pg_aoblkdir_<oid>  | young
- f         | pg_toast_<oid>     | young
- t         | pg_toast_<oid>     | very young
- f         | pg_aovisimap_<oid> | young
- t         | pg_aovisimap_<oid> | very young
- t         | pg_aoseg_<oid>     | very young
- f         | pg_aoseg_<oid>     | young
  t         | pg_aoblkdir_<oid>  | very young
+ f         | pg_aoblkdir_<oid>  | zero
+ t         | pg_toast_<oid>     | very young
+ t         | pg_aovisimap_<oid> | very young
+ f         | pg_aovisimap_<oid> | zero
+ t         | pg_aoseg_<oid>     | very young
+ f         | pg_toast_<oid>     | zero
+ f         | pg_aoseg_<oid>     | zero
 (8 rows)
 
 select segid = -1 as is_master, relname, classify_age(age) from aux_rel_ages('test_table_co')
 group by segid = -1, relname, classify_age(age);
  is_master |      relname       | classify_age 
 -----------+--------------------+--------------
- t         | pg_aocsseg_<oid>   | very young
- f         | pg_aocsseg_<oid>   | young
- f         | pg_aoblkdir_<oid>  | young
- f         | pg_aovisimap_<oid> | young
- t         | pg_aovisimap_<oid> | very young
  t         | pg_aoblkdir_<oid>  | very young
+ t         | pg_aocsseg_<oid>   | very young
+ f         | pg_aoblkdir_<oid>  | zero
+ t         | pg_aovisimap_<oid> | very young
+ f         | pg_aovisimap_<oid> | zero
+ f         | pg_aocsseg_<oid>   | zero
 (6 rows)
 
 -- Repeat the tests on a table that has been inserted to, but all the rows

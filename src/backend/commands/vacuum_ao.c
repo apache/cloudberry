@@ -643,6 +643,7 @@ vacuum_appendonly_index(Relation indexRelation,
 	ivinfo.num_heap_tuples = aoRelation->rd_rel->reltuples;
 	ivinfo.estimated_count = true;
 	ivinfo.strategy = bstrategy;
+	ivinfo.heaprel = aoRelation;
 
 	/* Do bulk deletion */
 	stats = index_bulk_delete(&ivinfo, NULL, appendonly_tid_reaped,
@@ -816,6 +817,7 @@ scan_index(Relation indrel, Relation aorel, int elevel, BufferAccessStrategy vac
 	ivinfo.num_heap_tuples = aorel->rd_rel->reltuples;
 	ivinfo.estimated_count = true;
 	ivinfo.strategy = vac_strategy;
+	ivinfo.heaprel = aorel;
 
 
 	/* Do post-VACUUM cleanup */
