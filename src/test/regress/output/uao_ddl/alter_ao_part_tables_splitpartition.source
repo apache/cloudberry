@@ -134,7 +134,7 @@ set gp_select_invisible = true;
 select count(*) AS all_tuples from sto_alt_uao_part_splitpartition;
  all_tuples 
 ------------
-         27
+         10
 (1 row)
 
 set gp_select_invisible = false;

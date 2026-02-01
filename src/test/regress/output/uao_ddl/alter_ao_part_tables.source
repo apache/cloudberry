@@ -453,7 +453,7 @@ set gp_select_invisible=true;
 select count(*) as all_tuples_post_vacuum from sto_altap3;
  all_tuples_post_vacuum 
 ------------------------
-                     21
+                     15
 (1 row)
 
 set gp_select_invisible=false;
