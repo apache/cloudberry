@@ -1396,6 +1396,13 @@ if test "$with_zstd" = yes; then
 fi
 
 #
+# yezzey
+#
+PGAC_ARG_BOOL(with, yezzey, no,
+              [build with Yezzey extension])
+AC_SUBST(with_yezzey)
+
+#
 # Realtime library
 #
 PGAC_ARG_BOOL(with, rt, yes,

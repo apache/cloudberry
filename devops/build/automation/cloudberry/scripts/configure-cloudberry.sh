@@ -178,6 +178,7 @@ execute_cmd ./configure --prefix=${BUILD_DESTINATION} \
             --with-openssl \
             --with-uuid=e2fs \
             ${CONFIGURE_MDBLOCALES_OPTS} \
+	    ${CONFIGURE_EXTRA_OPTS:-} \
             --with-includes=/usr/local/xerces-c/include \
             --with-libraries=${BUILD_DESTINATION}/lib || exit 4
 log_section_end "Configure"
