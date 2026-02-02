@@ -1,0 +1,21 @@
+name: Yezzey testing
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+
+  build_and_run_yezzey:
+
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Test Yezzey
+        run: docker compose -f docker/yezzey/docker-compose.yaml run --build --remove-orphans yezzey
+      
+      
