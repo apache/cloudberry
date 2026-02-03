@@ -1075,7 +1075,21 @@ remove_duplicates_in_list(List *clauses)
 
 /*
  * remove_duplicate_and_subsumed_clauses
- *    Remove duplicates and subsumed OR clauses
+ *    Remove duplicates and logically redundant clauses from a CNF conjunction.
+ *
+ * In a CNF conjunction (AND of clauses), a clause is redundant if it is
+ * logically implied by another clause already in the list. We detect three
+ * cases of redundancy:
+ *
+ * 1. Exact duplicates: (A OR B) AND (A OR B) → keep one
+ *
+ * 2. OR-vs-OR subsumption: (A OR B) AND (A OR B OR C) → keep (A OR B)
+ *    A shorter OR-clause with all its terms present in a longer one
+ *    makes the longer one always-true when the shorter one is true.
+ *
+ * 3. Literal-vs-OR subsumption: A AND (A OR B) → keep A
+ *    A bare literal makes any OR-clause containing it redundant,
+ *    because if the literal is true, the OR-clause is trivially true.
  */
 static List *
 remove_duplicate_and_subsumed_clauses(List *clauses)
@@ -1121,6 +1135,22 @@ remove_duplicate_and_subsumed_clauses(List *clauses)
 					to_remove = lappend(to_remove, existing);
 				}
 			}
+			else if (!is_orclause(clause) && is_orclause(existing))
+			{
+				/* A AND (A OR B) could be simplied to A */
+				if (list_member(((BoolExpr *)existing)->args, clause))
+				{
+					to_remove = lappend(to_remove, existing);
+				}
+			}
+			else if (is_orclause(clause) && !is_orclause(existing))
+			{
+				if (list_member(((BoolExpr *)clause)->args, existing))
+				{
+					keep = false;
+					break;
+				}
+			}
 		}
 
 		/* Remove all clauses that current clause subsumes */
@@ -1144,7 +1174,7 @@ remove_duplicate_and_subsumed_clauses(List *clauses)
 /*
  * or_clause_subsumes
  *    Check if or_clause1 subsumes or_clause2
- *    (A OR B) subsumes (A OR B OR C) means we can remove (A OR B OR C)
+ *    (A OR B) subsumes (B OR C OR A) means we can remove (B OR C OR A)
  */
 static bool
 or_clause_subsumes(Expr *or_clause1, Expr *or_clause2)
