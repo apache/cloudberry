@@ -3,15 +3,8 @@
 
 import os
 import sys
+import argparse
 from functools import reduce
-
-# Add the gppylib path to sys.path to import database connection modules
-try:
-    from gppylib.db import dbconn
-    from pg import DatabaseError
-except ImportError as err:
-    sys.exit('Cannot import modules. Please check that you have sourced '
-             'cloudberry-env.sh. Detail: ' + str(err))
 
 
 class ValidationException(Exception):
@@ -35,10 +28,10 @@ class CgroupValidation(object):
 
 
 class CgroupValidationVersionTwo(CgroupValidation):
-    def __init__(self):
+    def __init__(self, cgroup_parent=None):
         self.mount_point = self.detect_cgroup_mount_point()
         self.tab = {"r": os.R_OK, "w": os.W_OK, "x": os.X_OK, "f": os.F_OK}
-        self.cgroup_parent = self.get_cgroup_parent()
+        self.cgroup_parent = cgroup_parent if cgroup_parent else "gpdb.service"
 
     def validate_all(self):
         """
@@ -71,29 +64,6 @@ class CgroupValidationVersionTwo(CgroupValidation):
 
         self.validate_permission(self.cgroup_parent + "/io.max", "rw")
 
-    def get_cgroup_parent(self):
-        """
-        Get the cgroup parent directory from the database GUC parameter
-        gp_resource_group_cgroup_parent. If unable to connect to database
-        or retrieve the parameter, report error using die function.
-        """
-        try:
-            dburl = dbconn.DbURL()
-
-            with dbconn.connect(dburl, utility=True) as conn:
-                # Query the GUC parameter value
-                sql = "SHOW gp_resource_group_cgroup_parent"
-                cursor = dbconn.query(conn, sql)
-                result = cursor.fetchone()
-
-                if result and result[0]:
-                    return result[0]
-                else:
-                    self.die("failed to retrieve gp_resource_group_cgroup_parent parameter from database")
- 
-        except Exception as e:
-            self.die("failed to retrieve gp_resource_group_cgroup_parent parameter: {}".format(str(e)))
-
     def die(self, msg):
         raise ValidationException("cgroup is not properly configured: {}".format(msg))
 
@@ -118,7 +88,15 @@ class CgroupValidationVersionTwo(CgroupValidation):
 
 
 if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description='Validate cgroup v2 configuration for resource groups')
+    parser.add_argument('--cgroup-parent',
+                        dest='cgroup_parent',
+                        default=None,
+                        help='The cgroup parent directory name (gp_resource_group_cgroup_parent value)')
+
+    args = parser.parse_args()
+
     try:
-        CgroupValidationVersionTwo().validate_all()
+        CgroupValidationVersionTwo(cgroup_parent=args.cgroup_parent).validate_all()
     except ValidationException as e:
         exit(e.message)

@@ -11,7 +11,7 @@ use Fcntl ':mode';
 use File::stat qw{lstat};
 use PostgresNode;
 use TestLib;
-use Test::More tests => 22;
+use Test::More tests => 22 + 2;
 
 my $tempdir = TestLib::tempdir;
 my $xlogdir = "$tempdir/pgxlog";

@@ -26,12 +26,23 @@
  */
 
 #include "fast_io.h"
+#include <stdint.h>
+#include <unistd.h>  // for pread
+
+// uring_likely may not be defined in older liburing versions
+#ifndef uring_likely
+#if __GNUC__ >= 3
+#define uring_likely(x) __builtin_expect((x) != 0, 1)
+#else
+#define uring_likely(x) ((x) != 0)
+#endif
+#endif
 
 namespace pax
 {
 
 bool IOUringFastIO::available() {
-  static char support_io_uring = 0;
+  static int8_t support_io_uring = 0;
 
   if (support_io_uring == 1) return true;
   if (support_io_uring == -1) return false;

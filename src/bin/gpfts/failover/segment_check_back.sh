@@ -1,3 +1,4 @@
+#!/usr/bin/env bash
 
 if !type gprecoverseg >/dev/null 2>&1; then 
     echo "[FATAL]:- gprecoverseg not exist, script Exits!"

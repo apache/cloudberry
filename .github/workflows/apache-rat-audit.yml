@@ -17,19 +17,24 @@
 # permissions and limitations under the License.
 #
 # --------------------------------------------------------------------
-# Apache Rat Audit Workflow
-# Checks if all files comply with Apache licensing requirements
-# This workflow is based on the Apache Rat tool, you can run it locally
-# using the command: `mvn clean verify -Drat.consoleOutput=true`
+# Apache Cloudberry (Incubating) Compliance Workflow
+#
+# Comprehensive compliance checks for Apache Cloudberry:
+# 1. Apache RAT license header validation
+# 2. Copyright year verification (NOTICE and psql help.c)
+# 3. Binary file presence detection with approved allowlist
+#
+# Based on Apache Rat tool, run locally with:
+# `mvn clean verify -Drat.consoleOutput=true`
 # --------------------------------------------------------------------
 
 name: Apache Rat License Check
 
 on:
   push:
-    branches: [main]
+    branches: [main, REL_2_STABLE]
   pull_request:
-    branches: [main]
+    branches: [main, REL_2_STABLE]
     types: [opened, synchronize, reopened, edited]
   workflow_dispatch:
 
@@ -65,14 +70,128 @@ jobs:
           
           # Check for build failure
           if grep -q "\[INFO\] BUILD FAILURE" rat-output.log; then
-            echo "rat_failed=true" >> $GITHUB_OUTPUT
             echo "::error::Apache Rat check failed - build failure detected"
-            exit 1
+            echo "RAT_CHECK=fail" >> $GITHUB_ENV
+          else
+            echo "RAT_CHECK=pass" >> $GITHUB_ENV
+            echo "Apache Rat check passed successfully"
+          fi
+
+      - name: Check copyright years are up-to-date
+        run: |
+          echo "Checking copyright years..."
+          current_year=$(date -u +"%Y")
+          echo "CURRENT_YEAR=$current_year" >> $GITHUB_ENV
+
+          # Initialize to pass, will be updated if checks fail
+          echo "NOTICE_CHECK=pass" >> $GITHUB_ENV
+          echo "PSQL_HELP_CHECK=pass" >> $GITHUB_ENV
+
+          # Check NOTICE file
+          echo "Checking NOTICE file..."
+          if ! grep -q "Copyright 2024-$current_year The Apache Software Foundation" NOTICE; then
+            echo "::error::NOTICE file does not contain the current year ($current_year)"
+            echo "NOTICE_CHECK=fail" >> $GITHUB_ENV
+          else
+            echo "PASS: NOTICE file contains the current year ($current_year)"
           fi
           
-          # If we got here, the check passed
-          echo "rat_failed=false" >> $GITHUB_OUTPUT
-          echo "Apache Rat check passed successfully"
+          # Check psql help.c file
+          echo "Checking src/bin/psql/help.c..."
+          if ! grep -q "Copyright 2024-$current_year The Apache Software Foundation" src/bin/psql/help.c; then
+            echo "::error::src/bin/psql/help.c does not contain the current year ($current_year)"
+            echo "PSQL_HELP_CHECK=fail" >> $GITHUB_ENV
+          else
+            echo "PASS: src/bin/psql/help.c contains the current year ($current_year)"
+          fi
+          
+          # Continue execution even if checks fail
+          if [ "$NOTICE_CHECK" = "pass" ] && [ "$PSQL_HELP_CHECK" = "pass" ]; then
+            echo "All copyright year checks passed"
+          else
+            echo "Copyright year checks completed with errors"
+          fi
+
+      - name: Check for binary files
+        run: |
+          echo "Checking for binary files..."
+          echo "Checking extensions: class, jar, tar, tgz, zip, exe, dll, so, gz, bz2"
+          echo "----------------------------------------------------------------------"
+          
+          # Binary file allowlist, see README.apache.md
+          ALLOWLIST=(
+            "contrib/formatter_fixedwidth/data/fixedwidth_small_correct.tbl.gz"
+            "gpMgmt/demo/gppkg/sample-sources.tar.gz"
+            "src/bin/gpfdist/regress/data/exttab1/nation.tbl.gz"
+            "src/bin/gpfdist/regress/data/gpfdist2/gz_multi_chunk.tbl.gz"
+            "src/bin/gpfdist/regress/data/gpfdist2/gz_multi_chunk_2.tbl.gz"
+            "src/bin/gpfdist/regress/data/gpfdist2/lineitem.tbl.bz2"
+            "src/bin/gpfdist/regress/data/gpfdist2/lineitem.tbl.gz"
+          )
+          
+          # Check for specific binary file extensions
+          binary_extensions="class jar tar tgz zip exe dll so gz bz2"
+          echo "BINARY_EXTENSIONS=${binary_extensions}" >> $GITHUB_ENV
+          binary_results=""
+          binaryfiles_found=false
+          
+          for extension in ${binary_extensions}; do
+            printf "Checking *.%-4s files..." "${extension}"
+            found=$(find . -name "*.${extension}" -type f || true)
+            
+            # Filter out allowed files
+            if [ -n "$found" ]; then
+              filtered_found=""
+              while IFS= read -r file; do
+                is_allowed=false
+                for allowlist_file in "${ALLOWLIST[@]}"; do
+                  if [ "$file" = "./$allowlist_file" ]; then
+                    is_allowed=true
+                    echo "Allowed: $file" >> binary_allowlist.txt
+                    break
+                  fi
+                done
+                if [ "$is_allowed" = false ]; then
+                  filtered_found+="$file"$'\n'
+                fi
+              done <<< "$found"
+              
+              filtered_found=$(echo "$filtered_found" | sed '/^$/d')
+              
+              if [ -n "$filtered_found" ]; then
+                echo "FOUND"
+                echo "::error::${extension} files should not exist"
+                echo "For ASF compatibility: the source tree should not contain"
+                echo "binary files as users have a hard time verifying their contents."
+                echo "Found files:"
+                echo "$filtered_found" | sed 's/^/  /'
+                echo "${extension}:${filtered_found}" >> binary_results.txt
+                binaryfiles_found=true
+              else
+                echo "NONE (all allowed)"
+                echo "${extension}:none" >> binary_results.txt
+              fi
+            else
+              echo "NONE"
+              echo "${extension}:none" >> binary_results.txt
+            fi
+          done
+          
+          echo "----------------------------------------------------------------------"
+          if [ "$binaryfiles_found" = true ]; then
+            echo "ERROR: Non-allowed binary files were found in the source tree"
+            echo "BINARY_CHECK=fail" >> $GITHUB_ENV
+          else
+            echo "PASS: No non-allowed binary files found"
+            echo "BINARY_CHECK=pass" >> $GITHUB_ENV
+          fi
+          
+          # Show allowlist summary if any allowed files were found
+          if [ -f binary_allowlist.txt ]; then
+            echo ""
+            echo "Allowed binary files (approved):"
+            cat binary_allowlist.txt | sed 's/^/  /'
+          fi
 
       - name: Upload Rat check results
         if: always()
@@ -86,14 +205,62 @@ jobs:
         if: always()
         run: |
           {
-            echo "## Apache Rat Audit Results"
+            echo "## Apache Cloudberry Compliance Audit Results"
             echo "- Run Time: $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
             echo ""
+            
+            # Copyright Year Check Summary
+            echo "### Copyright Year Checks"
+            echo "**NOTICE file:**"
+            if [ "$NOTICE_CHECK" = "pass" ]; then
+              echo "PASS: Contains current year ($CURRENT_YEAR)"
+            else
+              echo "ERROR: Does not contain current year ($CURRENT_YEAR)"
+            fi
+            echo ""
+            echo "**psql help.c:**"
+            if [ "$PSQL_HELP_CHECK" = "pass" ]; then
+              echo "PASS: Contains current year ($CURRENT_YEAR)"
+            else
+              echo "ERROR: Does not contain current year ($CURRENT_YEAR)"
+            fi
+            echo ""
 
+            # Binary Files Check Summary
+            echo "### Binary Files Check"
+            echo "Checked extensions: \`${BINARY_EXTENSIONS}\`"
+            echo ""
+            echo "Results:"
+            echo "\`\`\`"
+            if [ -f binary_results.txt ]; then
+              while IFS=: read -r ext files; do
+                if [ "$files" = "none" ]; then
+                  echo "PASS: No .${ext} files found"
+                else
+                  echo "ERROR: Found .${ext} files:"
+                  echo "$files" | sed 's/^/  /'
+                fi
+              done < binary_results.txt
+            fi
+            echo "\`\`\`"
+            echo ""
+            
+            # Allowlist summary
+            if [ -f binary_allowlist.txt ]; then
+              echo "### Allowed Binary Files"
+              echo "The following binary files are approved for testing purposes:"
+              echo "You can see [README.apache.md](https://github.com/apache/cloudberry/blob/main/README.apache.md) for details."
+              echo "\`\`\`"
+              cat binary_allowlist.txt | sed 's/Allowed: //'
+              echo "\`\`\`"
+              echo ""
+            fi
+
+            # Rat check summary
             if [[ -f rat-output.log ]]; then
               # First extract and display summary statistics (only once)
               if grep -q "Rat check: Summary over all files" rat-output.log; then
-                echo "#### 📊 License Summary"
+                echo "### License Header Check"
                 summary_line=$(grep "Rat check: Summary over all files" rat-output.log)
                 echo "\`\`\`"
                 echo "$summary_line"
@@ -102,13 +269,13 @@ jobs:
               fi
 
               # Then determine the result status
-              if grep -q "\[INFO\] BUILD FAILURE" rat-output.log; then
-                echo "### ❌ Check Failed - License Compliance Issues Detected"
+              if [ "$RAT_CHECK" = "fail" ]; then
+                echo "#### Check Failed - License Compliance Issues Detected"
                 echo ""
 
                 # Extract and display files with unapproved licenses
                 if grep -q "Files with unapproved licenses:" rat-output.log; then
-                  echo "#### 🚫 Files with Unapproved Licenses"
+                  echo "##### Files with Unapproved Licenses"
                   echo "\`\`\`"
                   # Get the line with "Files with unapproved licenses:" and all following lines until the dashed line
                   sed -n '/Files with unapproved licenses:/,/\[INFO\] ------------------------------------------------------------------------/p' rat-output.log | \
@@ -119,7 +286,7 @@ jobs:
                   echo ""
                 fi
 
-                echo "💡 **How to fix:**"
+                echo "**How to fix:**"
                 echo ""
                 echo "**For new original files you created:**"
                 echo "- Add the standard Apache License header to each file"
@@ -133,16 +300,9 @@ jobs:
                 echo "- Run \`mvn clean verify -Drat.consoleOutput=true\` locally for the full report"
                 echo "- Email dev@cloudberry.apache.org if you have questions about license compatibility"
 
-              elif grep -q "\[INFO\] BUILD SUCCESS" rat-output.log; then
-                echo "### ✅ Check Passed - All Files Comply with Apache License Requirements"
-
-              else
-                echo "### ⚠️ Indeterminate Result"
-                echo "Check the uploaded log file for details."
+              elif [ "$RAT_CHECK" = "pass" ]; then
+                echo "#### Check Passed - All Files Comply with Apache License Requirements"
               fi
-            else
-              echo "### ⚠️ No Output Log Found"
-              echo "The rat-output.log file was not generated."
             fi
           } >> "$GITHUB_STEP_SUMMARY"
 
@@ -150,13 +310,38 @@ jobs:
         if: always()
         shell: bash {0}
         run: |
-          if [[ -f rat-output.log ]] && grep -q "\[INFO\] BUILD SUCCESS" rat-output.log; then
-            echo "✅ Apache Rat check completed successfully"
+          # Check overall status of all checks
+          overall_status=0
+          
+          # Check Apache RAT status
+          if [ "$RAT_CHECK" = "fail" ]; then
+            echo "ERROR: Apache Rat check failed"
+            overall_status=1
+          elif [ "$RAT_CHECK" = "pass" ]; then
+            echo "Apache Rat check passed"
+          fi
+          
+          # Check copyright year status
+          if [ -n "$NOTICE_CHECK" ] && [ "$NOTICE_CHECK" = "fail" ]; then
+            echo "ERROR: NOTICE file copyright year check failed"
+            overall_status=1
+          fi
+          if [ -n "$PSQL_HELP_CHECK" ] && [ "$PSQL_HELP_CHECK" = "fail" ]; then
+            echo "ERROR: psql help.c copyright year check failed"
+            overall_status=1
+          fi
+          
+          # Check binary files status (if this variable exists)
+          if [ -n "$BINARY_CHECK" ] && [ "$BINARY_CHECK" = "fail" ]; then
+            echo "ERROR: Binary files check failed"
+            overall_status=1
+          fi
+          
+          # Exit with appropriate status
+          if [ $overall_status -eq 0 ]; then
+            echo "SUCCESS: All checks passed"
             exit 0
-          elif [[ -f rat-output.log ]] && grep -q "\[INFO\] BUILD FAILURE" rat-output.log; then
-            echo "❌ Apache Rat check failed"
-            exit 1
           else
-            echo "⚠️ Apache Rat check status unclear"
+            echo "FAILURE: One or more checks failed"
             exit 1
           fi

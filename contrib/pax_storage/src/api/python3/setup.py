@@ -48,7 +48,7 @@ setup (name = 'paxpy',
        version = '1.0',
        description = 'PAXPY is the PYTHON3 API of PAX',
        author = 'jiaqizho',
-       author_email = 'jiaqizho@hashdata.cn',
+       author_email = 'jiaqizho@apache.org',
        url = '-',
        ext_modules = [paxpy_module]
 )

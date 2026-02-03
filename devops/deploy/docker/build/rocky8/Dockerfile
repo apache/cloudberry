@@ -131,6 +131,8 @@ RUN dnf makecache && \
         util-linux-ng \
         wget \
         which \
+        rpm-build \
+        rpmdevtools \
         zlib-devel && \
     dnf install -y -d0 --enablerepo=devel \
         liburing-devel \

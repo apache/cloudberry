@@ -140,3 +140,141 @@ HAVING max(c) = '31'
 $$ AS qry \gset
 EXPLAIN (COSTS OFF, VERBOSE) :qry;
 :qry;
+
+drop schema if exists tinc_base_types cascade;
+
+create schema tinc_base_types;
+set search_path=tinc_base_types;
+
+
+CREATE FUNCTION int42_in(cstring)
+   RETURNS int42
+   AS 'int4in'
+   LANGUAGE internal IMMUTABLE STRICT;
+CREATE FUNCTION int42_out(int42)
+   RETURNS cstring
+   AS 'int4out'
+   LANGUAGE internal IMMUTABLE STRICT;
+CREATE TYPE int42 (
+   internallength = 4,
+   input = int42_in,
+   output = int42_out,
+   alignment = int4,
+   default = 42,
+   passedbyvalue
+);
+
+CREATE TABLE aTABLE(k int, a int42);
+INSERT INTO aTABLE VALUES(1, '21');
+INSERT INTO aTABLE VALUES(2, '22');
+INSERT INTO aTABLE VALUES(3, '23');
+INSERT INTO aTABLE VALUES(4, '24');
+SELECT * FROM aTABLE;
+
+CREATE OR REPLACE FUNCTION my_lt(int42, int42)
+RETURNS boolean AS
+'int4lt'
+language internal;
+
+CREATE OR REPLACE FUNCTION my_lteq(int42, int42)
+RETURNS boolean AS
+'int4le'
+language internal;
+
+CREATE OR REPLACE FUNCTION my_gt(int42, int42)
+RETURNS boolean AS
+'int4gt'
+language internal;
+
+CREATE OR REPLACE FUNCTION my_gteq(int42, int42)
+RETURNS boolean AS
+'int4ge'
+language internal;
+
+CREATE OR REPLACE FUNCTION my_eq(int42, int42)
+RETURNS boolean AS
+'int4eq'
+language internal;
+
+CREATE OPERATOR < (
+  leftarg = int42,
+  rightarg = int42,
+  procedure = my_lt,
+  hashes
+);
+
+CREATE OPERATOR <= (
+  leftarg = int42,
+  rightarg = int42,
+  procedure = my_lteq,
+  hashes
+);
+
+CREATE OPERATOR = (
+  leftarg = int42,
+  rightarg = int42,
+  procedure = my_eq,
+  hashes
+);
+
+CREATE OPERATOR > (
+  leftarg = int42,
+  rightarg = int42,
+  procedure = my_gt,
+  hashes
+);
+
+CREATE OPERATOR >= (
+  leftarg = int42,
+  rightarg = int42,
+  procedure = my_gteq,
+  hashes
+);
+
+CREATE OR REPLACE FUNCTION my_comp_func(int42, int42)
+RETURNS int AS
+$$
+BEGIN
+IF $1 < $2 THEN
+  return -1;
+ELSIF $1 = $2 THEN
+  return 0;
+ELSE
+  return 1;
+END IF;
+END;
+$$ LANGUAGE PLPGSQL;
+
+CREATE OPERATOR CLASS my_operator_class_comp_type
+DEFAULT
+FOR TYPE int42 USING btree
+AS
+OPERATOR 1 <,
+OPERATOR 2 <=,
+OPERATOR 3 =,
+OPERATOR 4 >=,
+OPERATOR 5 >,
+FUNCTION 1 my_comp_func(int42, int42);
+
+CREATE OPERATOR CLASS my_operator_class_comp_type_hash_lt
+DEFAULT
+FOR TYPE int42 USING hash
+AS
+OPERATOR 1 <,
+FUNCTION 1 my_comp_func(int42, int42);
+
+CREATE OPERATOR CLASS my_operator_class_comp_type_hash_eq
+FOR TYPE int42 USING hash
+AS
+OPERATOR 1 =,
+FUNCTION 1 my_comp_func(int42, int42);
+
+select * from atable group by a,k;
+-- Before fix: This would fail at runtime with:
+--   ERROR: could not find hash function for hash operator XXXXX (execGrouping.c:118)
+-- After fix: ORCA should detect missing hash function at planning time
+--   and either use GroupAgg or report a clear planning error
+SET optimizer_enable_groupagg=off;
+select * from atable group by a,k;
+
+drop schema if exists tinc_base_types cascade;

@@ -1083,11 +1083,11 @@ get_target_dbid(const char *argv0)
 		if (ret == -1)
 			pg_fatal("The program \"postgres\" is needed by %s but was \n"
 					 "not found in the same directory as \"%s\".\n"
-					 "Check your installation.\n", progname, full_path);
+					 "Check your installation.", progname, full_path);
 		else
 			pg_fatal("The program \"postgres\" was found by \"%s\"\n"
 					 "but was not the same version as %s.\n"
-					 "Check your installation.\n", full_path, progname);
+					 "Check your installation.`", full_path, progname);
 	}
 
 	snprintf(cmd, MAXCMDLEN, "\"%s\" -D \"%s\" -C gp_dbid",
