@@ -489,7 +489,8 @@ logicaltape_test(void)
 	long test_entry_block = 0;
 	int test_entry_offset = 0;
 
-	LogicalTapeSet *tape_set = LogicalTapeSetCreate(max_tapes, false, NULL, NULL, -1);
+	LogicalTapeSet *tape_set = LogicalTapeSetCreate(false, NULL, -1);
+	LogicalTape *tape = LogicalTapeCreate(tape_set);
 
 	StringInfo test_string = create_text_stringinfo(nchars);
 
@@ -507,16 +508,16 @@ logicaltape_test(void)
 				if ( j == test_entry)
 				{
 					/* Keep record position of target record in LogicalTape */
-					LogicalTapeTell(tape_set, i, &test_entry_block, &test_entry_offset);
+					LogicalTapeTell(tape, &test_entry_block, &test_entry_offset);
 
-					LogicalTapeWrite(tape_set, i, test_string->data, (size_t)test_string->len);
+					LogicalTapeWrite(tape, test_string->data, (size_t)test_string->len);
 				}
 				else
 				{
 					/* Add additional records */
 					StringInfo text = create_text_stringinfo(nchars);
 
-					LogicalTapeWrite(tape_set, i, text->data, (size_t)text->len);
+					LogicalTapeWrite(tape, text->data, (size_t)text->len);
 
 					pfree(text->data);
 					pfree(text);
@@ -528,7 +529,7 @@ logicaltape_test(void)
 			/* Add additional records */
 			StringInfo text = create_text_stringinfo(nchars);
 
-			LogicalTapeWrite(tape_set, i, text->data, (size_t)text->len);
+			LogicalTapeWrite(tape, text->data, (size_t)text->len);
 
 			pfree(text->data);
 			pfree(text);
@@ -540,15 +541,16 @@ logicaltape_test(void)
 	char *buffer = palloc(nchars * sizeof(char));
 
 	elog(LOG, "Running sub-test: Freeze LogicalTape");
-	LogicalTapeFreeze(tape_set, test_tape, NULL);
+	LogicalTapeFreeze(tape, NULL);
 
 	elog(LOG, "Running sub-test: Seek in LogicalTape");
-	LogicalTapeSeek(tape_set, test_tape, test_entry_block, test_entry_offset);
+	LogicalTapeSeek(tape, test_entry_block, test_entry_offset);
 
 	elog(LOG, "Running sub-test: Reading from LogicalTape");
-	LogicalTapeRead(tape_set, test_tape, buffer, (size_t)(nchars*sizeof(char)));
+	LogicalTapeRead(tape, buffer, (size_t)(nchars*sizeof(char)));
 
 	LogicalTapeSetClose(tape_set);
+	LogicalTapeClose(tape);
 
 	unit_test_result (strncmp(test_string->data, buffer, test_string->len) == 0);
 
