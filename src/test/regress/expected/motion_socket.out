@@ -48,7 +48,7 @@ for pid in pids_to_check:
     # We check count of those connections which have not been established.
     # Use the regex for example: "TCP <ip>:\d+ .*" (without '->')
     lsof_ret = subprocess.run(["lsof", "-i", "-nP", "-a", "-p", str(pid)],
-        capture_output=True, check=True).stdout
+        stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True).stdout
     plpy.info(
         f'Checking postgres backend {pid}, ' \
         f'lsof output:\n{os.linesep.join(map(str, lsof_ret.splitlines()))}')
