@@ -484,6 +484,8 @@ ALTER MATERIALIZED VIEW ALL IN TABLESPACE regress_tblspace_renamed SET TABLESPAC
 -- Should succeed
 DROP TABLESPACE regress_tblspace_renamed;
 
+DROP TABLE tablespace_table1;
+
 DROP SCHEMA testschema CASCADE;
 
 DROP ROLE regress_tablespace_user1;

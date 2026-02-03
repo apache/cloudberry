@@ -1036,6 +1036,7 @@ ALTER MATERIALIZED VIEW ALL IN TABLESPACE regress_tblspace_renamed SET TABLESPAC
 NOTICE:  no matching relations in tablespace "regress_tblspace_renamed" found
 -- Should succeed
 DROP TABLESPACE regress_tblspace_renamed;
+DROP TABLE tablespace_table1;
 DROP SCHEMA testschema CASCADE;
 NOTICE:  drop cascades to 7 other objects
 DETAIL:  drop cascades to table testschema.foo
