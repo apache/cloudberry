@@ -208,7 +208,7 @@ installdirs:
 
 .PHONY: uninstall-data
 uninstall-data:
-	rm -f $(addprefix '$(DESTDIR)$(datadir)'/, postgres.bki system_constraints.sql system_functions.sql system_views.sql information_schema.sql cdb_init.d/cdb_schema.sql cdb_init.d/gp_toolkit.sql sql_features.txt fix-CVE-2024-4317.sql)
+	rm -f $(addprefix '$(DESTDIR)$(datadir)'/, postgres.bki system_constraints.sql system_functions.sql system_views.sql system_views_gp_summary.sql information_schema.sql cdb_init.d/cdb_schema.sql cdb_init.d/gp_toolkit.sql sql_features.txt fix-CVE-2024-4317.sql)
 ifeq ($(USE_INTERNAL_FTS_FOUND), false)
 	rm -f $(addprefix '$(DESTDIR)$(datadir)'/, external_fts.sql)
 endif
