@@ -63,6 +63,12 @@
 #                   --enable-cassert
 #                   --enable-debug-extensions
 #
+#   ENABLE_MDBLOCALES - Enable custom locales (true/false, defaults to
+#                       false)
+#
+#                 When true, add option:
+#                   --with-mdblocales
+#
 # Prerequisites:
 #   - System dependencies must be installed:
 #     * xerces-c development files
@@ -139,6 +145,11 @@ if [ "${ENABLE_DEBUG:-false}" = "true" ]; then
                           --enable-debug-extensions"
 fi
 
+CONFIGURE_MDBLOCALES_OPTS="--without-mdblocales"
+if [ "${ENABLE_MDBLOCALES:-false}" = "true" ]; then
+    CONFIGURE_MDBLOCALES_OPTS="--with-mdblocales"
+fi
+
 # Configure build
 log_section "Configure"
 execute_cmd ./configure --prefix=${BUILD_DESTINATION} \
@@ -165,6 +176,7 @@ execute_cmd ./configure --prefix=${BUILD_DESTINATION} \
             --with-ssl=openssl \
             --with-openssl \
             --with-uuid=e2fs \
+            ${CONFIGURE_MDBLOCALES_OPTS} \
             --with-includes=/usr/local/xerces-c/include \
             --with-libraries=${BUILD_DESTINATION}/lib \
             ${CONFIGURE_EXTRA_OPTS:-""} || exit 4
