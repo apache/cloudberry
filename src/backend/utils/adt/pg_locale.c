@@ -97,6 +97,7 @@
 
 
 /* GUC settings */
+char	   *locale_ctype;
 char	   *locale_messages;
 char	   *locale_monetary;
 char	   *locale_numeric;

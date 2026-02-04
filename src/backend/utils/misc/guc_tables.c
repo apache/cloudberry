@@ -4147,6 +4147,17 @@ struct config_string ConfigureNamesString[] =
 		NULL, NULL, NULL
 	},
 
+	{
+			{"lc_ctype", PGC_INTERNAL, PRESET_OPTIONS,
+					gettext_noop("Shows the character classification and case conversion locale."),
+					NULL,
+					GUC_NOT_IN_SAMPLE | GUC_DISALLOW_IN_FILE
+			},
+			&locale_ctype,
+			"C",
+			NULL, NULL, NULL
+	},
+	
 	/* See main.c about why defaults for LC_foo are not all alike */
 
 	{

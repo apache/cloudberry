@@ -36,6 +36,7 @@
 #define LOCALE_NAME_BUFLEN 128
 
 /* GUC settings */
+extern PGDLLIMPORT char *locale_ctype;
 extern PGDLLIMPORT char *locale_messages;
 extern PGDLLIMPORT char *locale_monetary;
 extern PGDLLIMPORT char *locale_numeric;
