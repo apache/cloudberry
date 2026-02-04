@@ -16,6 +16,8 @@
 #include "mb/pg_wchar.h"
 #include "pg_upgrade.h"
 #include "greenplum/pg_upgrade_greenplum.h"
+#include "common/mdb_locale.h"
+
 
 static void check_new_cluster_is_empty(void);
 static void check_databases_are_compatible(void);
@@ -1629,7 +1631,8 @@ get_canonical_locale_name(int category, const char *locale)
 	char	   *res;
 
 	/* get the current setting, so we can restore it. */
-	save = setlocale(category, NULL);
+
+	save = SETLOCALE(category, NULL);
 	if (!save)
 		pg_fatal("failed to get the current locale\n");
 
@@ -1637,7 +1640,7 @@ get_canonical_locale_name(int category, const char *locale)
 	save = (char *) pg_strdup(save);
 
 	/* set the locale with setlocale, to see if it accepts it. */
-	res = setlocale(category, locale);
+	res = SETLOCALE(category, locale);
 
 	if (!res)
 		pg_fatal("failed to get system locale name for \"%s\"\n", locale);
@@ -1645,7 +1648,7 @@ get_canonical_locale_name(int category, const char *locale)
 	res = pg_strdup(res);
 
 	/* restore old value. */
-	if (!setlocale(category, save))
+	if (!SETLOCALE(category, save))
 		pg_fatal("failed to restore old locale \"%s\"\n", save);
 
 	pg_free(save);

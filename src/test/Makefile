@@ -18,6 +18,9 @@ SUBDIRS = perl regress isolation modules authentication recovery
 
 SUBDIRS += fsync walrep heap_checksum isolation2 fdw singlenode_regress singlenode_isolation2
 
+# MDB addon
+SUBDIRS += mdb_admin
+
 # Test suites that are not safe by default but can be run if selected
 # by the user via the whitespace-separated list in variable
 # PG_TEST_EXTRA:
