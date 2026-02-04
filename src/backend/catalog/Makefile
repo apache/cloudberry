@@ -205,6 +205,7 @@ endif
 	$(INSTALL_DATA) $(srcdir)/information_schema.sql '$(DESTDIR)$(datadir)/information_schema.sql'
 	$(INSTALL_DATA) $(call vpathsearch,cdb_schema.sql) '$(DESTDIR)$(datadir)/cdb_init.d/cdb_schema.sql'
 	$(INSTALL_DATA) $(srcdir)/sql_features.txt '$(DESTDIR)$(datadir)/sql_features.txt'
+	$(INSTALL_DATA) $(srcdir)/fix-CVE-2024-4317.sql '$(DESTDIR)$(datadir)/fix-CVE-2024-4317.sql'
 
 installdirs:
 	$(MKDIR_P) '$(DESTDIR)$(datadir)'
@@ -212,7 +213,7 @@ installdirs:
 
 .PHONY: uninstall-data
 uninstall-data:
-	rm -f $(addprefix '$(DESTDIR)$(datadir)'/, postgres.bki system_constraints.sql system_functions.sql system_views.sql system_views_gp_summary.sql information_schema.sql cdb_init.d/cdb_schema.sql cdb_init.d/gp_toolkit.sql sql_features.txt)
+	rm -f $(addprefix '$(DESTDIR)$(datadir)'/, postgres.bki system_constraints.sql system_functions.sql system_views.sql system_views_gp_summary.sql information_schema.sql cdb_init.d/cdb_schema.sql cdb_init.d/gp_toolkit.sql sql_features.txt fix-CVE-2024-4317.sql)
 ifeq ($(USE_INTERNAL_FTS_FOUND), false)
 	rm -f $(addprefix '$(DESTDIR)$(datadir)'/, external_fts.sql)
 endif
