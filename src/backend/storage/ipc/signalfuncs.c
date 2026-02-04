@@ -52,6 +52,7 @@ static int
 pg_signal_backend(int pid, int sig, char *msg)
 {
 	PGPROC	   *proc = BackendPidGetProc(pid);
+	LocalPgBackendStatus *local_beentry;
 
 	/*
 	 * BackendPidGetProc returns NULL if the pid isn't valid; but by the time
@@ -72,9 +73,34 @@ pg_signal_backend(int pid, int sig, char *msg)
 		return SIGNAL_BACKEND_ERROR;
 	}
 
+	local_beentry = pgstat_fetch_stat_local_beentry_by_pid(pid);
+
 	/* Only allow superusers to signal superuser-owned backends. */
 	if (superuser_arg(proc->roleId) && !superuser())
-		return SIGNAL_BACKEND_NOSUPERUSER;
+	{
+		Oid role;
+		char * appname;
+
+		if (local_beentry == NULL) {
+			return SIGNAL_BACKEND_NOSUPERUSER;
+		}
+
+		role = get_role_oid("mdb_admin", true /*if nodoby created mdb_admin role in this database*/);
+		appname = local_beentry->backendStatus.st_appname;
+
+		// only allow mdb_admin to kill su queries
+		if (!is_member_of_role(GetUserId(), role)) {
+			return SIGNAL_BACKEND_NOSUPERUSER;
+		}
+
+		if (local_beentry->backendStatus.st_backendType == B_AUTOVAC_WORKER) {
+			// ok
+		} else if (appname != NULL && strcmp(appname, "MDB") == 0) {
+			// ok
+		} else {
+			return SIGNAL_BACKEND_NOSUPERUSER;
+		}
+	}
 
 	/* Users can signal backends they have role membership in. */
 	if (!has_privs_of_role(GetUserId(), proc->roleId) &&
