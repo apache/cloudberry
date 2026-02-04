@@ -69,6 +69,7 @@
 #include "utils/memutils.h"
 #include "utils/pg_locale.h"
 #include "utils/syscache.h"
+#include "common/mdb_locale.h"
 
 #ifdef USE_ICU
 #include <unicode/ucnv.h>
@@ -182,7 +183,7 @@ pg_perm_setlocale(int category, const char *locale)
 	const char *envvar;
 
 #ifndef WIN32
-	result = setlocale(category, locale);
+	result = SETLOCALE(category, locale);
 #else
 
 	/*
@@ -200,7 +201,7 @@ pg_perm_setlocale(int category, const char *locale)
 	}
 	else
 #endif
-		result = setlocale(category, locale);
+		result = SETLOCALE(category, locale);
 #endif							/* WIN32 */
 
 	if (result == NULL)
@@ -297,7 +298,7 @@ check_locale(int category, const char *locale, char **canonname)
 	if (canonname)
 		*canonname = NULL;		/* in case of failure */
 
-	save = setlocale(category, NULL);
+	save = SETLOCALE(category, NULL);
 	if (!save)
 		return false;			/* won't happen, we hope */
 
@@ -305,14 +306,14 @@ check_locale(int category, const char *locale, char **canonname)
 	save = pstrdup(save);
 
 	/* set the locale with setlocale, to see if it accepts it. */
-	res = setlocale(category, locale);
+	res = SETLOCALE(category, locale);
 
 	/* save canonical name if requested. */
 	if (res && canonname)
 		*canonname = pstrdup(res);
 
 	/* restore old value. */
-	if (!setlocale(category, save))
+	if (!SETLOCALE(category, save))
 		elog(WARNING, "failed to restore old locale \"%s\"", save);
 	pfree(save);
 
@@ -548,12 +549,12 @@ PGLC_localeconv(void)
 	memset(&worklconv, 0, sizeof(worklconv));
 
 	/* Save prevailing values of monetary and numeric locales */
-	save_lc_monetary = setlocale(LC_MONETARY, NULL);
+	save_lc_monetary = SETLOCALE(LC_MONETARY, NULL);
 	if (!save_lc_monetary)
 		elog(ERROR, "setlocale(NULL) failed");
 	save_lc_monetary = pstrdup(save_lc_monetary);
 
-	save_lc_numeric = setlocale(LC_NUMERIC, NULL);
+	save_lc_numeric = SETLOCALE(LC_NUMERIC, NULL);
 	if (!save_lc_numeric)
 		elog(ERROR, "setlocale(NULL) failed");
 	save_lc_numeric = pstrdup(save_lc_numeric);
@@ -575,7 +576,7 @@ PGLC_localeconv(void)
 	 */
 
 	/* Save prevailing value of ctype locale */
-	save_lc_ctype = setlocale(LC_CTYPE, NULL);
+	save_lc_ctype = SETLOCALE(LC_CTYPE, NULL);
 	if (!save_lc_ctype)
 		elog(ERROR, "setlocale(NULL) failed");
 	save_lc_ctype = pstrdup(save_lc_ctype);
@@ -583,11 +584,11 @@ PGLC_localeconv(void)
 	/* Here begins the critical section where we must not throw error */
 
 	/* use numeric to set the ctype */
-	setlocale(LC_CTYPE, locale_numeric);
+	SETLOCALE(LC_CTYPE, locale_numeric);
 #endif
 
 	/* Get formatting information for numeric */
-	setlocale(LC_NUMERIC, locale_numeric);
+	SETLOCALE(LC_NUMERIC, locale_numeric);
 	extlconv = localeconv();
 
 	/* Must copy data now in case setlocale() overwrites it */
@@ -597,11 +598,11 @@ PGLC_localeconv(void)
 
 #ifdef WIN32
 	/* use monetary to set the ctype */
-	setlocale(LC_CTYPE, locale_monetary);
+	SETLOCALE(LC_CTYPE, locale_monetary);
 #endif
 
 	/* Get formatting information for monetary */
-	setlocale(LC_MONETARY, locale_monetary);
+	SETLOCALE(LC_MONETARY, locale_monetary);
 	extlconv = localeconv();
 
 	/* Must copy data now in case setlocale() overwrites it */
@@ -631,12 +632,12 @@ PGLC_localeconv(void)
 	 * should fail.
 	 */
 #ifdef WIN32
-	if (!setlocale(LC_CTYPE, save_lc_ctype))
+	if (!SETLOCALE(LC_CTYPE, save_lc_ctype))
 		elog(FATAL, "failed to restore LC_CTYPE to \"%s\"", save_lc_ctype);
 #endif
-	if (!setlocale(LC_MONETARY, save_lc_monetary))
+	if (!SETLOCALE(LC_MONETARY, save_lc_monetary))
 		elog(FATAL, "failed to restore LC_MONETARY to \"%s\"", save_lc_monetary);
-	if (!setlocale(LC_NUMERIC, save_lc_numeric))
+	if (!SETLOCALE(LC_NUMERIC, save_lc_numeric))
 		elog(FATAL, "failed to restore LC_NUMERIC to \"%s\"", save_lc_numeric);
 
 	/*
@@ -820,7 +821,7 @@ cache_locale_time(void)
 	 */
 
 	/* Save prevailing value of time locale */
-	save_lc_time = setlocale(LC_TIME, NULL);
+	save_lc_time = SETLOCALE(LC_TIME, NULL);
 	if (!save_lc_time)
 		elog(ERROR, "setlocale(NULL) failed");
 	save_lc_time = pstrdup(save_lc_time);
@@ -835,16 +836,16 @@ cache_locale_time(void)
 	 */
 
 	/* Save prevailing value of ctype locale */
-	save_lc_ctype = setlocale(LC_CTYPE, NULL);
+	save_lc_ctype = SETLOCALE(LC_CTYPE, NULL);
 	if (!save_lc_ctype)
 		elog(ERROR, "setlocale(NULL) failed");
 	save_lc_ctype = pstrdup(save_lc_ctype);
 
 	/* use lc_time to set the ctype */
-	setlocale(LC_CTYPE, locale_time);
+	SETLOCALE(LC_CTYPE, locale_time);
 #endif
 
-	setlocale(LC_TIME, locale_time);
+	SETLOCALE(LC_TIME, locale_time);
 
 	/* We use times close to current time as data for strftime(). */
 	timenow = time(NULL);
@@ -893,10 +894,10 @@ cache_locale_time(void)
 	 * failure to do so is fatal.
 	 */
 #ifdef WIN32
-	if (!setlocale(LC_CTYPE, save_lc_ctype))
+	if (!SETLOCALE(LC_CTYPE, save_lc_ctype))
 		elog(FATAL, "failed to restore LC_CTYPE to \"%s\"", save_lc_ctype);
 #endif
-	if (!setlocale(LC_TIME, save_lc_time))
+	if (!SETLOCALE(LC_TIME, save_lc_time))
 		elog(FATAL, "failed to restore LC_TIME to \"%s\"", save_lc_time);
 
 	/*
@@ -1183,7 +1184,46 @@ IsoLocaleName(const char *winlocname)
 static char *
 IsoLocaleName(const char *winlocname)
 {
-	return NULL;				/* Not supported on MinGW */
+	char		buf[32];
+	const int	canary = 0x7F;
+	bool		ok = true;
+
+	/*
+	 * Given a two-byte ASCII string and length limit 7, 8 or 9, Solaris 10
+	 * 05/08 returns 18 and modifies 10 bytes.  It respects limits above or
+	 * below that range.
+	 *
+	 * The bug is present in Solaris 8 as well; it is absent in Solaris 10
+	 * 01/13 and Solaris 11.2.  Affected locales include is_IS.ISO8859-1,
+	 * en_US.UTF-8, en_US.ISO8859-1, and ru_RU.KOI8-R.  Unaffected locales
+	 * include de_DE.UTF-8, de_DE.ISO8859-1, zh_TW.UTF-8, and C.
+	 */
+	buf[7] = canary;
+	(void) strxfrm(buf, "ab", 7);
+	if (buf[7] != canary)
+		ok = false;
+
+	/*
+	 * illumos bug #1594 was present in the source tree from 2010-10-11 to
+	 * 2012-02-01.  Given an ASCII string of any length and length limit 1,
+	 * affected systems ignore the length limit and modify a number of bytes
+	 * one less than the return value.  The problem inputs for this bug do not
+	 * overlap those for the Solaris bug, hence a distinct test.
+	 *
+	 * Affected systems include smartos-20110926T021612Z.  Affected locales
+	 * include en_US.ISO8859-1 and en_US.UTF-8.  Unaffected locales include C.
+	 */
+	buf[1] = canary;
+	(void) strxfrm(buf, "a", 1);
+	if (buf[1] != canary)
+		ok = false;
+
+	if (!ok)
+		ereport(ERROR,
+				(errcode(ERRCODE_SYSTEM_ERROR),
+				 errmsg_internal("strxfrm(), in locale \"%s\", writes past the specified array length",
+					SETLOCALE(LC_COLLATE, NULL)),
+				 errhint("Apply system library package updates.")));
 }
 
 #endif							/* defined(_MSC_VER) */
@@ -1315,7 +1355,7 @@ lc_collate_is_c(Oid collation)
 
 		if (result >= 0)
 			return (bool) result;
-		localeptr = setlocale(LC_COLLATE, NULL);
+		localeptr = SETLOCALE(LC_COLLATE, NULL);
 		if (!localeptr)
 			elog(ERROR, "invalid LC_COLLATE setting");
 
@@ -1368,7 +1408,7 @@ lc_ctype_is_c(Oid collation)
 
 		if (result >= 0)
 			return (bool) result;
-		localeptr = setlocale(LC_CTYPE, NULL);
+		localeptr = SETLOCALE(LC_CTYPE, NULL);
 		if (!localeptr)
 			elog(ERROR, "invalid LC_CTYPE setting");
 
@@ -1563,8 +1603,10 @@ pg_newlocale_from_collation(Oid collid)
 				/* Normal case where they're the same */
 				errno = 0;
 #ifndef WIN32
-				loc = newlocale(LC_COLLATE_MASK | LC_CTYPE_MASK, collcollate,
+
+				loc = NEWLOCALE(LC_COLLATE_MASK | LC_CTYPE_MASK, collcollate,
 								NULL);
+
 #else
 				loc = _create_locale(LC_ALL, collcollate);
 #endif
@@ -1578,11 +1620,11 @@ pg_newlocale_from_collation(Oid collid)
 				locale_t	loc1;
 
 				errno = 0;
-				loc1 = newlocale(LC_COLLATE_MASK, collcollate, NULL);
+				loc1 = NEWLOCALE(LC_COLLATE_MASK, collcollate, NULL);
 				if (!loc1)
 					report_newlocale_failure(collcollate);
 				errno = 0;
-				loc = newlocale(LC_CTYPE_MASK, collctype, loc1);
+				loc = NEWLOCALE(LC_CTYPE_MASK, collctype, loc1);
 				if (!loc)
 					report_newlocale_failure(collctype);
 #else
@@ -1707,12 +1749,16 @@ get_collation_actual_version(char collprovider, const char *collcollate)
 	{
 #if defined(__GLIBC__)
 		/* Use the glibc version because we don't have anything better. */
+#ifdef USE_MDBLOCALES
+		collversion = pstrdup(mdb_localesversion());
+#else
 		collversion = pstrdup(gnu_get_libc_version());
+#endif
 #elif defined(LC_VERSION_MASK)
 		locale_t	loc;
 
 		/* Look up FreeBSD collation version. */
-		loc = newlocale(LC_COLLATE_MASK, collcollate, NULL);
+		loc = NEWLOCALE(LC_COLLATE, collcollate, NULL);
 		if (loc)
 		{
 			collversion =

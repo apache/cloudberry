@@ -12,7 +12,7 @@
 #define SUBTRANS_H
 
 /* Number of SLRU buffers to use for subtrans */
-#define NUM_SUBTRANS_BUFFERS	32
+#define NUM_SUBTRANS_BUFFERS	64
 
 typedef struct SubTransData
 {

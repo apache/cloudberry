@@ -1166,6 +1166,22 @@ pgstat_get_local_beentry_by_index(int idx)
 	return &localBackendStatusTable[idx - 1];
 }
 
+/* -- mdb admin patch -- */
+LocalPgBackendStatus *
+pgstat_fetch_stat_local_beentry_by_pid(int pid)
+{
+	pgstat_read_current_status();
+
+	for (int i = 1; i <= localNumBackends; ++i) {
+		if (localBackendStatusTable[i - 1].backendStatus.st_procpid == pid) {
+			return &localBackendStatusTable[i - 1];
+		}
+	}
+
+	return NULL;
+}
+
+/*  -- mdb admin patch end -- */
 
 /* ----------
  * pgstat_fetch_stat_numbackends() -

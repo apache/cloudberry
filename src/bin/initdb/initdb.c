@@ -81,6 +81,7 @@
 #include "getopt_long.h"
 #include "mb/pg_wchar.h"
 #include "miscadmin.h"
+#include "common/mdb_locale.h"
 
 #include "catalog/catalog.h"
 
@@ -2335,7 +2336,7 @@ locale_date_order(const char *locale)
 
 	save = save_global_locale(LC_TIME);
 
-	setlocale(LC_TIME, locale);
+	SETLOCALE(LC_TIME, locale);
 
 	memset(&testtime, 0, sizeof(testtime));
 	testtime.tm_mday = 22;
@@ -2398,7 +2399,7 @@ check_locale_name(int category, const char *locale, char **canonname)
 		locale = "";
 
 	/* set the locale with setlocale, to see if it accepts it. */
-	res = setlocale(category, locale);
+	res = SETLOCALE(category, locale);
 
 	/* save canonical name if requested. */
 	if (res && canonname)

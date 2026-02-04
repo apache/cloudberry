@@ -4900,7 +4900,7 @@ struct config_enum ConfigureNamesEnum[] =
 	{
 		{"session_replication_role", PGC_SUSET, CLIENT_CONN_STATEMENT,
 			gettext_noop("Sets the session's behavior for triggers and rewrite rules."),
-			NULL
+			NULL, 0, 0, 0, 0, 0, 0, 0, 0, NULL, NULL, NULL, 0, true,
 		},
 		&SessionReplicationRole,
 		SESSION_REPLICATION_ROLE_ORIGIN, session_replication_role_options,

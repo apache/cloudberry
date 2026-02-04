@@ -1523,6 +1523,14 @@ case $INSTALL in
 esac
 AC_SUBST(install_bin)
 
+#
+# MDB locales
+#
+
+PGAC_ARG_BOOL(with, mdblocales, yes, [build without MDB locales],
+              [AC_DEFINE([USE_MDBLOCALES], 1, [Define to 1 to build with MDB locales. (--with-mdblocales)])])
+AC_SUBST(USE_MDBLOCALES)
+
 PGAC_PATH_PROGS(TAR, tar)
 AC_PROG_LN_S
 AC_PROG_MKDIR_P
@@ -1677,6 +1685,11 @@ if test "$with_zlib" = yes; then
 If you have zlib already installed, see config.log for details on the
 failure.  It is possible the compiler isn't looking in the proper directory.
 Use --without-zlib to disable zlib support.])])
+fi
+
+if test "$with_mdblocales" = yes; then
+  AC_CHECK_LIB(mdblocales, mdb_setlocale, [],
+               [AC_MSG_ERROR([mdblocales library not found])])
 fi
 
 if test "$enable_external_fts" = yes; then
@@ -2036,6 +2049,10 @@ fi
 PGAC_PATH_PROGS(ZSTD, zstd)
 if test "$with_zstd" = yes; then
   AC_CHECK_HEADER(zstd.h, [], [AC_MSG_ERROR([zstd.h header file is required for ZSTD])])
+fi
+
+if test "$with_mdblocales" = yes; then
+  AC_CHECK_HEADER(mdblocales.h, [], [AC_MSG_ERROR([mdblocales header not found.])])
 fi
 
 if test "$with_gssapi" = yes ; then

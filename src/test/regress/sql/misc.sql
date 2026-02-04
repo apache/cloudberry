@@ -275,3 +275,8 @@ SELECT *, (equipment(CAST((h.*) AS hobbies_r))).name FROM hobbies_r h;
 --
 -- rewrite rules
 --
+
+
+--- mdb-related
+
+SELECT mdb_locale_enabled();

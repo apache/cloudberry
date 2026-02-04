@@ -218,6 +218,14 @@ extern bool is_admin_of_role(Oid member, Oid role);
 extern Oid	select_best_admin(Oid member, Oid role);
 extern Oid	get_role_oid(const char *rolname, bool missing_ok);
 extern Oid	get_role_oid_or_public(const char *rolname);
+extern bool has_privs_of_role_strict(Oid member, Oid role);
+
+// -- non-upstream patch begin
+extern bool mdb_admin_allow_bypass_owner_checks(Oid userId,  Oid ownerId);
+
+extern void check_mdb_admin_is_member_of_role(Oid member, Oid role);
+// -- non-upstream patch end
+
 extern Oid	get_rolespec_oid(const RoleSpec *role, bool missing_ok);
 extern void check_rolespec_name(const RoleSpec *role, const char *detail_msg);
 extern HeapTuple get_rolespec_tuple(const RoleSpec *role);

@@ -166,10 +166,10 @@ SET SESSION AUTHORIZATION regress_unpriv_user;
 SET search_path TO temp_func_test, public;
 ALTER FUNCTION functest_E_1(int) NOT LEAKPROOF;
 ALTER FUNCTION functest_E_2(int) LEAKPROOF;
-ERROR:  only superuser can define a leakproof function
+ERROR:  only superuser or mdb_admin can define a leakproof function
 CREATE FUNCTION functest_E_3(int) RETURNS bool LANGUAGE 'sql'
        LEAKPROOF AS 'SELECT $1 < 200';	-- fail
-ERROR:  only superuser can define a leakproof function
+ERROR:  only superuser or mdb_admin can define a leakproof function
 RESET SESSION AUTHORIZATION;
 --
 -- CALLED ON NULL INPUT | RETURNS NULL ON NULL INPUT | STRICT

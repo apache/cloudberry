@@ -1118,7 +1118,8 @@ AlterObjectOwner_internal(Relation rel, Oid objectId, Oid new_ownerId)
 		if (!superuser())
 		{
 			/* must be owner */
-			if (!has_privs_of_role(GetUserId(), old_ownerId))
+			if (!has_privs_of_role(GetUserId(), old_ownerId) 
+			&& !mdb_admin_allow_bypass_owner_checks(GetUserId(), old_ownerId))
 			{
 				char	   *objname;
 				char		namebuf[NAMEDATALEN];
@@ -1138,8 +1139,8 @@ AlterObjectOwner_internal(Relation rel, Oid objectId, Oid new_ownerId)
 				aclcheck_error(ACLCHECK_NOT_OWNER, get_object_type(classId, objectId),
 							   objname);
 			}
-			/* Must be able to become new owner */
-			check_can_set_role(GetUserId(), new_ownerId);
+
+			check_mdb_admin_is_member_of_role(GetUserId(), new_ownerId);
 
 			/* New owner must have CREATE privilege on namespace */
 			if (OidIsValid(namespaceId))

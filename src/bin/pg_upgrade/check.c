@@ -16,6 +16,8 @@
 #include "mb/pg_wchar.h"
 #include "pg_upgrade.h"
 #include "greenplum/pg_upgrade_greenplum.h"
+#include "common/mdb_locale.h"
+
 
 static void check_new_cluster_is_empty(void);
 static void check_is_install_user(ClusterInfo *cluster);
@@ -1674,4 +1676,3 @@ check_for_cluster_key_failure(ClusterInfo *cluster)
 
 	check_ok();
 }
-

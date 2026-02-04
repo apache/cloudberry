@@ -11,6 +11,10 @@
 # required setup steps
 test: test_setup
 
+test: mdb_admin
+
+test: mdb_superuser
+
 # ----------
 # The first group of parallel tests
 # ----------
