@@ -2108,6 +2108,16 @@ BaseBackup(char *compression_algorithm, char *compression_detail,
 
 		if (pg_check_dir(xlog_path) != 0)
 			rmtree(xlog_path, true);
+
+		snprintf(xlog_path, MAXPGPATH, "%s/%s", basedir, "pg_distributedlog");
+
+		if (pg_check_dir(xlog_path) != 0)
+			rmtree(xlog_path, true);
+
+		snprintf(xlog_path, MAXPGPATH, "%s/%s", basedir, "pg_notify");
+
+		if (pg_check_dir(xlog_path) != 0)
+			rmtree(xlog_path, true);
 	}
 
 	/*
@@ -2142,6 +2152,7 @@ BaseBackup(char *compression_algorithm, char *compression_detail,
 	{
 		/* Receive a single tar stream with everything. */
 		ReceiveArchiveStream(conn, client_compress);
+		WriteInternalConfFile();
 	}
 	else
 	{
@@ -2174,7 +2185,10 @@ BaseBackup(char *compression_algorithm, char *compression_detail,
 			ReceiveTarFile(conn, archive_name, spclocation, i,
 						   client_compress);
 		}
+		
+		WriteInternalConfFile();
 
+		
 		/*
 		 * Now receive backup manifest, if appropriate.
 		 *

@@ -315,6 +315,26 @@ should_allow_existing_directory(const char *pathname)
 static void
 extract_directory(const char *filename, mode_t mode)
 {
+	/* MERGE16_FIXME: We should test forceoverwrite here ? */
+	if (pg_check_dir(filename) != 0)
+	{
+		/*
+		 * We want to retain the contents of pg_log. And for
+		 * pg_xlog we assume is deleted at the start of
+		 * pg_basebackup. We cannot delete pg_xlog because if
+		 * streammode was used then it may have already copied
+		 * new xlog files into pg_xlog directory.
+		 */
+		if (pg_str_endswith(filename, "/pg_log") ||
+			pg_str_endswith(filename, "/log") ||
+			pg_str_endswith(filename, "/pg_wal") ||
+			pg_str_endswith(filename, "/pg_xlog"))
+			return;
+
+		rmtree(filename, true);
+	}
+
+
 	if (mkdir(filename, pg_dir_create_mode) != 0 &&
 		(errno != EEXIST || !should_allow_existing_directory(filename)))
 		pg_fatal("could not create directory \"%s\": %m",
