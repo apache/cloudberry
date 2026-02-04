@@ -149,7 +149,7 @@ execute_cmd ./configure --prefix=${BUILD_DESTINATION} \
             --enable-orafce \
             --enable-orca \
             --enable-pax \
-            --enable-pxf \
+            --disable-pxf \
             --enable-tap-tests \
             ${CONFIGURE_DEBUG_OPTS} \
             --with-gssapi \
