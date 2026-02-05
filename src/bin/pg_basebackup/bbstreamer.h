@@ -100,6 +100,7 @@ struct bbstreamer
 	const bbstreamer_ops *bbs_ops;
 	bbstreamer *bbs_next;
 	StringInfoData bbs_buffer;
+	int target_gp_dbid;
 };
 
 /*
@@ -213,7 +214,7 @@ extern bbstreamer *bbstreamer_lz4_decompressor_new(bbstreamer *next);
 extern bbstreamer *bbstreamer_zstd_compressor_new(bbstreamer *next,
 												  pg_compress_specification *compress);
 extern bbstreamer *bbstreamer_zstd_decompressor_new(bbstreamer *next);
-extern bbstreamer *bbstreamer_tar_parser_new(bbstreamer *next);
+extern bbstreamer *bbstreamer_tar_parser_new(bbstreamer *next, int target_gp_dbid);
 extern bbstreamer *bbstreamer_tar_terminator_new(bbstreamer *next);
 extern bbstreamer *bbstreamer_tar_archiver_new(bbstreamer *next);
 

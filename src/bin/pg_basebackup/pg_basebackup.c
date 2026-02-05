@@ -1196,7 +1196,7 @@ CreateBackupStreamer(char *archive_name, char *spclocation,
 		else
 		{
 			snprintf(archive_filename, sizeof(archive_filename),
-					 "%s/%s", basedir, archive_name);
+					 "%s/%s/%d", basedir, archive_name, target_gp_dbid);
 			archive_file = NULL;
 		}
 
@@ -1266,7 +1266,7 @@ CreateBackupStreamer(char *archive_name, char *spclocation,
 	 * we're talking to such a server we'll need to add the terminator here.
 	 */
 	if (must_parse_archive)
-		streamer = bbstreamer_tar_parser_new(streamer);
+		streamer = bbstreamer_tar_parser_new(streamer, target_gp_dbid);
 	else if (expect_unterminated_tarfile)
 		streamer = bbstreamer_tar_terminator_new(streamer);
 

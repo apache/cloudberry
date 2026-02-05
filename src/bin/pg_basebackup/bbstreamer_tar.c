@@ -34,6 +34,7 @@ typedef struct bbstreamer_tar_parser
 	bbstreamer_member member;
 	size_t		file_bytes_sent;
 	size_t		pad_bytes_expected;
+	int			target_gp_dbid;
 } bbstreamer_tar_parser;
 
 typedef struct bbstreamer_tar_archiver
@@ -90,7 +91,7 @@ const bbstreamer_ops bbstreamer_tar_terminator_ops = {
  * conventions described in bbstreamer.h.
  */
 extern bbstreamer *
-bbstreamer_tar_parser_new(bbstreamer *next)
+bbstreamer_tar_parser_new(bbstreamer *next, int target_gp_dbid)
 {
 	bbstreamer_tar_parser *streamer;
 
@@ -100,7 +101,7 @@ bbstreamer_tar_parser_new(bbstreamer *next)
 	streamer->base.bbs_next = next;
 	initStringInfo(&streamer->base.bbs_buffer);
 	streamer->next_context = BBSTREAMER_MEMBER_HEADER;
-
+	streamer->target_gp_dbid = target_gp_dbid;
 	return &streamer->base;
 }
 
@@ -302,6 +303,9 @@ bbstreamer_tar_header(bbstreamer_tar_parser *mystreamer)
 	member->is_link = (buffer[156] == '2');
 	if (member->is_link)
 		strlcpy(member->linktarget, &buffer[157], 100);
+
+	if (strlen(member->linktarget) != 0 && mystreamer->target_gp_dbid)
+		sprintf(member->linktarget, "%s/%d", member->linktarget, mystreamer->target_gp_dbid);
 
 	/* Compute number of padding bytes. */
 	mystreamer->pad_bytes_expected = tarPaddingBytesRequired(member->size);
