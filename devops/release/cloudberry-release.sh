@@ -32,11 +32,13 @@
 #   - Verifies Git identity (user.name and user.email) prior to tagging
 #   - Creates a BUILD_NUMBER file (currently hardcoded as 1) in the release tarball
 #   - Recursively archives all submodules into the source tarball
-#   - Generates SHA-512 checksum (.sha512) for the source tarball
+#   - Generates SHA-512 checksum (.sha512) using sha512sum for cross-platform consistency
 #   - Generates GPG signature (.asc) for the source tarball, unless --skip-signing is used
 #   - Moves signed artifacts into a dedicated artifacts/ directory
 #   - Verifies integrity and authenticity of artifacts via SHA-512 checksum and GPG signature
 #   - Allows skipping of upstream remote URL validation (e.g., for forks) via --skip-remote-check
+#   - Excludes macOS extended attribute files (._*, .DS_Store, __MACOSX) for cross-platform compatibility
+#   - Validates availability of required tools (sha512sum, gtar, gpg) with platform-specific guidance
 #
 # Usage:
 #   ./cloudberry-release.sh --stage --tag 2.0.0-incubating-rc1 --gpg-user your@apache.org
@@ -56,6 +58,8 @@
 #     or the path must be explicitly provided using --repo
 #   - Git user.name and user.email must be configured
 #   - Repository remote must be: git@github.com:apache/cloudberry.git
+#   - Required tools: sha512sum, tar (gtar on macOS), gpg, xmllint
+#   - On macOS: brew install coreutils gnu-tar gnupg
 #
 # Examples:
 #   ./cloudberry-release.sh -s -t 2.0.0-incubating-rc1 --gpg-user your@apache.org
@@ -70,11 +74,125 @@
 
 set -euo pipefail
 
+# Global variables for detected platform and tools
+DETECTED_PLATFORM=""
+DETECTED_SHA_TOOL=""
+DETECTED_TAR_TOOL=""
+
+# Platform detection and tool check
+check_platform_and_tools() {
+  local has_errors=false
+  
+  # Detect platform
+  case "$(uname -s)" in
+    Linux*)   DETECTED_PLATFORM="Linux" ;;
+    Darwin*)  DETECTED_PLATFORM="macOS" ;;
+    CYGWIN*|MINGW*|MSYS*) DETECTED_PLATFORM="Windows" ;;
+    *)        DETECTED_PLATFORM="Unknown" ;;
+  esac
+  
+  echo "Platform detected: $DETECTED_PLATFORM"
+  echo
+  
+  # Check sha512sum
+  if command -v sha512sum >/dev/null 2>&1; then
+    DETECTED_SHA_TOOL="sha512sum"
+    echo "[OK] SHA-512 tool: $DETECTED_SHA_TOOL"
+  else
+    echo "[ERROR] SHA-512 tool: sha512sum not found"
+    has_errors=true
+  fi
+  
+  # Check tar tool
+  if [[ "$DETECTED_PLATFORM" == "macOS" ]]; then
+    if command -v gtar >/dev/null 2>&1; then
+      DETECTED_TAR_TOOL="gtar"
+      echo "[OK] Tar tool: $DETECTED_TAR_TOOL (GNU tar)"
+    else
+      echo "[ERROR] Tar tool: gtar not found (GNU tar required on macOS)"
+      has_errors=true
+    fi
+  else
+    if command -v tar >/dev/null 2>&1; then
+      DETECTED_TAR_TOOL="tar"
+      echo "[OK] Tar tool: $DETECTED_TAR_TOOL"
+    else
+      echo "[ERROR] Tar tool: tar not found"
+      has_errors=true
+    fi
+  fi
+  
+  # Check GPG tool (only when signing is required)
+  if [[ "$SKIP_SIGNING" == true ]]; then
+    echo "- GPG tool: skipped (--skip-signing enabled)"
+  else
+    if command -v gpg >/dev/null 2>&1; then
+      local gpg_version=$(gpg --version | head -n1 | sed 's/gpg (GnuPG) //')
+      echo "[OK] GPG tool: gpg $gpg_version"
+    else
+      echo "[ERROR] GPG tool: gpg not found"
+      has_errors=true
+    fi
+  fi
+  
+  # Check xmllint tool
+  if command -v xmllint >/dev/null 2>&1; then
+    echo "[OK] XML tool: xmllint"
+  else
+    echo "[ERROR] XML tool: xmllint not found"
+    has_errors=true
+  fi
+  
+  # Show installation guidance if there are errors
+  if [[ "$has_errors" == true ]]; then
+    echo
+    echo "Missing required tools. Installation guidance:"
+    case "$DETECTED_PLATFORM" in
+      Linux)
+        echo "  Please install required packages: coreutils tar gnupg libxml2-utils"
+        ;;
+      macOS)
+        echo "  brew install coreutils gnu-tar gnupg"
+        ;;
+      Windows)
+        echo "  Please use Git Bash or install GNU tools"
+        ;;
+      *)
+        echo "  Please install GNU coreutils, tar, GnuPG, and libxml2"
+        ;;
+    esac
+    echo
+    echo "These tools ensure consistent cross-platform behavior and secure signing."
+    return 1
+  fi
+  
+  return 0
+}
+
 confirm() {
   read -r -p "$1 [y/N] " response
   case "$response" in
     [yY][eE][sS]|[yY]) true ;;
     *) echo "Aborted."; exit 1 ;;
+  esac
+}
+
+# Interactive step confirmation
+confirm_next_step() {
+  echo
+  read -r -p "Press Enter or type y/yes to continue, or 'n' to exit: " response
+  case "$response" in
+    ""|[yY][eE][sS]|[yY]) 
+      return 0 
+      ;;
+    [nN]|[nN][oO]) 
+      echo "Process stopped by user."
+      exit 0 
+      ;;
+    *) 
+      echo "Invalid input. Please press Enter or type y/yes to continue, or 'n' to exit."
+      confirm_next_step
+      ;;
   esac
 }
 
@@ -199,22 +317,16 @@ else
 fi
 
 if [[ -n "$REPO_ARG" ]]; then
-  if [[ -n "$REPO_ARG" ]]; then
-    if [[ ! -d "$REPO_ARG" || ! -f "$REPO_ARG/configure.ac" ]]; then
-      echo "ERROR: '$REPO_ARG' does not appear to be a valid Cloudberry source directory."
-      echo "Expected to find a 'configure.ac' file but it is missing."
-      echo
-      echo "Hint: Make sure you passed the correct --repo path to a valid Git clone."
-      exit 1
-    fi
-    cd "$REPO_ARG"
-  elif [[ ! -f configure.ac ]]; then
-    echo "ERROR: No Cloudberry source directory specified and no 'configure.ac' found in the current directory."
+  # Validate the specified repository path
+  if [[ ! -d "$REPO_ARG" || ! -f "$REPO_ARG/configure.ac" ]]; then
+    echo "ERROR: '$REPO_ARG' does not appear to be a valid Cloudberry source directory."
+    echo "Expected to find a 'configure.ac' file but it is missing."
     echo
-    echo "Hint: Either run this script from the root of a Cloudberry Git clone,"
-    echo "or use the --repo <path> option to specify the source directory."
+    echo "Hint: Make sure you passed the correct --repo path to a valid Git clone."
     exit 1
   fi
+  
+  # Change to the specified repository directory
   cd "$REPO_ARG"
 
   if [[ ! -d ".git" ]]; then
@@ -258,6 +370,15 @@ if $STAGE && [[ -z "$TAG" ]]; then
   show_help
 fi
 
+# Check platform and required tools early
+if $STAGE; then
+  section "Platform and Tool Detection"
+  if ! check_platform_and_tools; then
+    exit 1
+  fi
+  confirm_next_step
+fi
+
 section "Validating Version Consistency"
 
 # Extract version from configure.ac
@@ -272,6 +393,16 @@ if ! [[ "$TAG" =~ $SEMVER_REGEX ]]; then
   exit 1
 fi
 
+# Extract base version from tag (remove -rc suffix if present)
+BASE_VERSION="$TAG"
+if [[ "$TAG" =~ ^(.+)-rc[0-9]+$ ]]; then
+  BASE_VERSION="${BASH_REMATCH[1]}"
+fi
+
+echo "Version validation strategy:"
+echo "  Tag: $TAG"
+echo "  Base version (for source files): $BASE_VERSION"
+
 # Check gpversion.py consistency
 PY_LINE=$(grep "^MAIN_VERSION" gpMgmt/bin/gppylib/gpversion.py | sed -E 's/#.*//' | tr -d '[:space:]')
 
@@ -281,28 +412,24 @@ if [[ "$PY_LINE" != "MAIN_VERSION=$EXPECTED" ]]; then
   exit 1
 fi
 
-# For final releases (non-RC), ensure configure.ac version matches tag exactly
-if [[ "$TAG" != *-rc* && "$CONFIGURE_AC_VERSION" != "$TAG" ]]; then
-  echo "ERROR: configure.ac version ($CONFIGURE_AC_VERSION) does not match final release tag ($TAG)"
-  echo "Please update configure.ac to match the tag before proceeding."
+# Ensure configure.ac version matches base version (without -rc suffix)
+if [[ "$CONFIGURE_AC_VERSION" != "$BASE_VERSION" ]]; then
+  echo "ERROR: configure.ac version ($CONFIGURE_AC_VERSION) does not match base version ($BASE_VERSION)"
+  echo "For RC tags like '$TAG', configure.ac should contain the base version '$BASE_VERSION'"
   exit 1
 fi
 
-# Ensure the generated 'configure' script is up to date
+# Ensure the generated 'configure' script matches base version
 CONFIGURE_VERSION_LINE=$(grep "^PACKAGE_VERSION=" configure || true)
 CONFIGURE_VERSION=$(echo "$CONFIGURE_VERSION_LINE" | sed -E "s/^PACKAGE_VERSION='([^']+)'.*/\1/")
 
-if [[ "$CONFIGURE_VERSION" != "$TAG" ]]; then
-  echo "ERROR: Version in generated 'configure' script ($CONFIGURE_VERSION) does not match release tag ($TAG)."
-  echo "This likely means autoconf was not run after updating configure.ac."
+if [[ "$CONFIGURE_VERSION" != "$BASE_VERSION" ]]; then
+  echo "ERROR: Version in generated 'configure' script ($CONFIGURE_VERSION) does not match base version ($BASE_VERSION)."
+  echo "This likely means autoconf was not run after updating configure.ac to the base version."
   exit 1
 fi
 
-# Ensure xmllint is available
-if ! command -v xmllint >/dev/null 2>&1; then
-  echo "ERROR: xmllint is required but not installed."
-  exit 1
-fi
+
 
 # Extract version from pom.xml using xmllint with namespace stripping
 POM_VERSION=$(xmllint --xpath '//*[local-name()="project"]/*[local-name()="version"]/text()' pom.xml 2>/dev/null || true)
@@ -312,9 +439,9 @@ if [[ -z "$POM_VERSION" ]]; then
   exit 1
 fi
 
-if [[ "$POM_VERSION" != "$TAG" ]]; then
-  echo "ERROR: Version in pom.xml ($POM_VERSION) does not match release tag ($TAG)."
-  echo "Please update pom.xml before tagging."
+if [[ "$POM_VERSION" != "$BASE_VERSION" ]]; then
+  echo "ERROR: Version in pom.xml ($POM_VERSION) does not match base version ($BASE_VERSION)."
+  echo "For RC tags like '$TAG', pom.xml should contain the base version '$BASE_VERSION'"
   exit 1
 fi
 
@@ -324,12 +451,14 @@ if ! git diff-index --quiet HEAD --; then
   exit 1
 fi
 
-echo "MAIN_VERSION verified"
+echo "Version consistency verified"
 printf "    %-14s: %s\n" "Release Tag"   "$TAG"
+printf "    %-14s: %s\n" "Base Version"  "$BASE_VERSION"
 printf "    %-14s: %s\n" "configure.ac"  "$CONFIGURE_AC_VERSION"
 printf "    %-14s: %s\n" "configure"     "$CONFIGURE_VERSION"
 printf "    %-14s: %s\n" "pom.xml"       "$POM_VERSION"
 printf "    %-14s: %s\n" "gpversion.py"  "${EXPECTED//[\[\]]}"
+confirm_next_step
 
 section "Checking the state of the Tag"
 
@@ -356,6 +485,8 @@ elif [[ "$FORCE_TAG_REUSE" == true ]]; then
 else
   echo "INFO: Tag '$TAG' does not yet exist. It will be created during staging."
 fi
+
+confirm_next_step
 
 # Check and display submodule initialization status
 if [ -s .gitmodules ]; then
@@ -417,8 +548,9 @@ section "Staging release: $TAG"
     echo "INFO: Reusing existing tag '$TAG'; skipping tag creation."
   fi
 
-  echo "Creating BUILD_NUMBER file with value of 1"
-  echo "1" > BUILD_NUMBER
+  echo "Creating BUILD_NUMBER file with commit hash"
+  build_num=$(git rev-parse --short HEAD)
+  echo "$build_num" > BUILD_NUMBER
 
   echo -e "\nTag Summary"
   TAG_OBJECT=$(git rev-parse "$TAG")
@@ -426,12 +558,17 @@ section "Staging release: $TAG"
   echo "$TAG (tag object): $TAG_OBJECT"
   echo "    Points to commit: $TAG_COMMIT"
   git log -1 --format="%C(auto)%h %d" "$TAG"
+  confirm_next_step
 
   section "Creating Source Tarball"
 
   TAR_NAME="apache-cloudberry-${TAG}-src.tar.gz"
   TMP_DIR=$(mktemp -d)
   trap 'rm -rf "$TMP_DIR"' EXIT
+
+  # Set environment variables to prevent macOS extended attributes
+  export COPYFILE_DISABLE=1
+  export COPY_EXTENDED_ATTRIBUTES_DISABLE=1
 
   git archive --format=tar --prefix="apache-cloudberry-${TAG}/" "$TAG" | tar -x -C "$TMP_DIR"
   cp BUILD_NUMBER "$TMP_DIR/apache-cloudberry-${TAG}/"
@@ -447,16 +584,66 @@ section "Staging release: $TAG"
     "
   fi
 
-  tar -czf "$TAR_NAME" -C "$TMP_DIR" "apache-cloudberry-${TAG}"
+  # Clean up macOS extended attributes if on macOS
+  if [[ "$DETECTED_PLATFORM" == "macOS" ]]; then
+    echo "Cleaning macOS extended attributes from extracted files..."
+    # Remove all extended attributes recursively
+    if command -v xattr >/dev/null 2>&1; then
+      find "$TMP_DIR/apache-cloudberry-${TAG}" -type f -exec xattr -c {} \; 2>/dev/null || true
+      echo "[OK] Extended attributes cleaned using xattr"
+    fi
+    
+    # Remove any ._* files that might have been created
+    find "$TMP_DIR/apache-cloudberry-${TAG}" -name '._*' -delete 2>/dev/null || true
+    find "$TMP_DIR/apache-cloudberry-${TAG}" -name '.DS_Store' -delete 2>/dev/null || true
+    find "$TMP_DIR/apache-cloudberry-${TAG}" -name '__MACOSX' -type d -exec rm -rf {} \; 2>/dev/null || true
+    echo "[OK] macOS-specific files removed"
+  fi
+
+  # Create tarball using the detected tar tool
+  if [[ "$DETECTED_PLATFORM" == "macOS" ]]; then
+    echo "Using GNU tar for cross-platform compatibility..."
+    $DETECTED_TAR_TOOL --exclude='._*' --exclude='.DS_Store' --exclude='__MACOSX' -czf "$TAR_NAME" -C "$TMP_DIR" "apache-cloudberry-${TAG}"
+    echo "INFO: macOS detected - applied extended attribute cleanup and GNU tar"
+  else
+    # On other platforms, use standard tar
+    $DETECTED_TAR_TOOL -czf "$TAR_NAME" -C "$TMP_DIR" "apache-cloudberry-${TAG}"
+  fi
+  
   rm -rf "$TMP_DIR"
   echo -e "Archive saved to: $TAR_NAME"
+  
+  # Verify that no macOS extended attribute files are included
+  if [[ "$DETECTED_PLATFORM" == "macOS" ]]; then
+    echo "Verifying tarball does not contain macOS-specific files..."
+    MACOS_FILES=$($DETECTED_TAR_TOOL -tzf "$TAR_NAME" | grep -E '\._|\.DS_Store|__MACOSX' || true)
+    if [[ -n "$MACOS_FILES" ]]; then
+      echo "WARNING: Found macOS-specific files in tarball:"
+      echo "$MACOS_FILES"
+      echo "This may cause compilation issues on Linux systems."
+    else
+      echo "[OK] Tarball verified clean of macOS-specific files"
+    fi
+    
+    # Additional check for extended attributes in tar headers
+    echo "Checking for extended attribute headers in tarball..."
+    if $DETECTED_TAR_TOOL -tvf "$TAR_NAME" 2>&1 | grep -q "LIBARCHIVE.xattr" 2>/dev/null; then
+      echo "WARNING: Tarball may still contain extended attribute headers"
+      echo "This could cause 'Ignoring unknown extended header keyword' warnings on Linux"
+    else
+      echo "[OK] No extended attribute headers detected in tarball (GNU tar used)"
+    fi
+  fi
+  
+  confirm_next_step
 
   # Generate SHA-512 checksum
   section "Generating SHA-512 Checksum"
 
   echo -e "\nGenerating SHA-512 checksum"
-  shasum -a 512 "$TAR_NAME" > "${TAR_NAME}.sha512"
+  sha512sum "$TAR_NAME" > "${TAR_NAME}.sha512"
   echo "Checksum saved to: ${TAR_NAME}.sha512"
+  confirm_next_step
 
   section "Signing with GPG key: $GPG_USER"
   # Conditionally generate GPG signature
@@ -469,8 +656,10 @@ section "Staging release: $TAG"
   fi
 
   # Move artifacts to top-level artifacts directory
-
-  ARTIFACTS_DIR="$(cd "$(dirname "$REPO_ARG")" && cd .. && pwd)/artifacts"
+  # At this point, we're always in the cloudberry repository directory
+  # (either we started there, or we cd'd there via --repo)
+  ARTIFACTS_DIR="$(cd .. && pwd)/artifacts"
+  
   mkdir -p "$ARTIFACTS_DIR"
 
   section "Moving Artifacts to $ARTIFACTS_DIR"
@@ -479,10 +668,11 @@ section "Staging release: $TAG"
   mv -vf "$TAR_NAME" "$ARTIFACTS_DIR/"
   mv -vf "${TAR_NAME}.sha512" "$ARTIFACTS_DIR/"
   [[ -f "${TAR_NAME}.asc" ]] && mv -vf "${TAR_NAME}.asc" "$ARTIFACTS_DIR/"
+  confirm_next_step
 
   section "Verifying sha512 ($ARTIFACTS_DIR/${TAR_NAME}.sha512) Release Artifact"
-  cd "$ARTIFACTS_DIR"
-  sha512sum -c "$ARTIFACTS_DIR/${TAR_NAME}.sha512"
+  (cd "$ARTIFACTS_DIR" && sha512sum -c "${TAR_NAME}.sha512")
+  confirm_next_step
 
   section "Verifying GPG Signature ($ARTIFACTS_DIR/${TAR_NAME}.asc) Release Artifact"
 
@@ -491,6 +681,7 @@ section "Staging release: $TAG"
   else
     echo "INFO: Signature verification skipped (--skip-signing). Signature is only available when generated via this script."
   fi
+  confirm_next_step
 
   section "Release candidate for $TAG staged successfully"
 fi
