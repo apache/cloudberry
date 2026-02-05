@@ -1156,9 +1156,23 @@ CreateBackupStreamer(char *archive_name, char *spclocation,
 		if (spclocation == NULL)
 			directory = basedir;
 		else if (!is_absolute_path(spclocation))
-			directory = psprintf("%s/%s", basedir, spclocation);
+		{
+			if (target_gp_dbid < 1)
+			{
+				pg_log_error("cannot restore user-defined tablespaces without the --target-gp-dbid option");
+				exit(1);
+			}
+			directory = psprintf("%s/%s/%d", basedir, spclocation, target_gp_dbid);
+		}
 		else
-			directory = get_tablespace_mapping(spclocation);
+		{
+			if (target_gp_dbid < 1)
+			{
+				pg_log_error("cannot restore user-defined tablespaces without the --target-gp-dbid option");
+				exit(1);
+			}
+			directory = psprintf("%s/%d", spclocation, target_gp_dbid);
+		}
 		streamer = bbstreamer_extractor_new(directory,
 											get_tablespace_mapping,
 											progress_update_filename);
@@ -2066,11 +2080,12 @@ BaseBackup(char *compression_algorithm, char *compression_detail,
 		 * won't be storing anything into these directories and thus should
 		 * not create them.
 		 */
+//		sleep(30);
 		if (backup_target == NULL && format == 'p' && !PQgetisnull(res, i, 1))
 		{
 			char path_with_subdir[MAXPGPATH];
 			char	   *path = PQgetvalue(res, i, 1);
-
+			
 			if (is_absolute_path(path))
 				path = unconstify(char *, get_tablespace_mapping(path));
 			else

@@ -167,12 +167,24 @@ bbsink_copystream_begin_archive(bbsink *sink, const char *archive_name)
 	bbsink_state *state = sink->bbs_state;
 	tablespaceinfo *ti;
 	StringInfoData buf;
+	char *link_path_to_be_sent;
 
 	ti = list_nth(state->tablespaces, state->tablespace_num);
 	pq_beginmessage(&buf, 'd'); /* CopyData */
 	pq_sendbyte(&buf, 'n');		/* New archive */
 	pq_sendstring(&buf, archive_name);
-	pq_sendstring(&buf, ti->path == NULL ? "" : ti->path);
+	if(ti->rpath == NULL && ti->path)
+	{
+		/* Lop off the dbid before sending the link target. */
+		char *link_path_without_dbid = pstrdup(ti->path);
+		char *file_sep_before_dbid_in_link_path =
+				strrchr(link_path_without_dbid, '/');
+		*file_sep_before_dbid_in_link_path = '\0';
+		link_path_to_be_sent = link_path_without_dbid;
+	}
+	else
+		link_path_to_be_sent = ti->path;
+	pq_sendstring(&buf, ti->path == NULL ? "" : link_path_to_be_sent);
 	pq_endmessage(&buf);
 }
 
@@ -407,8 +419,23 @@ SendTablespaceList(List *tablespaces)
 		}
 		else
 		{
+			char		*link_path_to_be_sent;
+
 			values[0] = ObjectIdGetDatum(strtoul(ti->oid, NULL, 10));
-			values[1] = CStringGetTextDatum(ti->path);
+
+			if(ti->rpath == NULL && ti->path)
+			{
+				/* Lop off the dbid before sending the link target. */
+				char *link_path_without_dbid = pstrdup(ti->path);
+				char *file_sep_before_dbid_in_link_path =
+						strrchr(link_path_without_dbid, '/');
+				*file_sep_before_dbid_in_link_path = '\0';
+				link_path_to_be_sent = link_path_without_dbid;
+			}
+			else
+				link_path_to_be_sent = ti->path;
+
+			values[1] = CStringGetTextDatum(link_path_to_be_sent);
 		}
 		if (ti->size >= 0)
 			values[2] = Int64GetDatum(ti->size / 1024);
