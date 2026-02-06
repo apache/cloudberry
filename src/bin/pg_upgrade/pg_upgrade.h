@@ -3,12 +3,8 @@
 /*
  *	pg_upgrade.h
  *
-<<<<<<< HEAD
  *	Portions Copyright (c) 2016-Present, VMware, Inc. or its affiliates
  *	Copyright (c) 2010-2021, PostgreSQL Global Development Group
-=======
- *	Copyright (c) 2010-2023, PostgreSQL Global Development Group
->>>>>>> REL_16_9
  *	src/bin/pg_upgrade/pg_upgrade.h
  */
 
@@ -17,17 +13,11 @@
 #include <sys/stat.h>
 #include <sys/time.h>
 
-<<<<<<< HEAD
 #include "postgres.h"
-=======
 #include "common/relpath.h"
->>>>>>> REL_16_9
 #include "libpq-fe.h"
 #include "pqexpbuffer.h"
 #include "common/kmgr_utils.h"
-
-/* For now, pg_upgrade does not use common/logging.c; use our own pg_fatal */
-#undef pg_fatal
 
 /* For now, pg_upgrade does not use common/logging.c; use our own pg_fatal */
 #undef pg_fatal
@@ -118,15 +108,10 @@ extern char *output_files[];
 #endif
 
 
-<<<<<<< HEAD
 #define atooid(x)  ((Oid) strtoul((x), NULL, 10))
 
 /*
- * The format of visibility map is changed with this 9.6 commit,
-=======
-/*
  * The format of visibility map was changed with this 9.6 commit.
->>>>>>> REL_16_9
  */
 #define VISIBILITY_MAP_FROZEN_BIT_CAT_VER 201603011
 
@@ -225,12 +210,8 @@ typedef struct
 	char	   *nspname;		/* namespace name */
 	char	   *relname;		/* relation name */
 	Oid			reloid;			/* relation OID */
-<<<<<<< HEAD
 	char		relstorage;
-	Oid 		relfilenode;	/* relation file node */
-=======
 	RelFileNumber relfilenumber;	/* relation file number */
->>>>>>> REL_16_9
 	Oid			indtable;		/* if index, OID of its table, else 0 */
 	Oid			toastheap;		/* if toast table, OID of base table, else 0 */
 	char	   *tablespace;		/* tablespace path; "" for cluster default */
@@ -270,20 +251,9 @@ typedef struct
 	const char *new_tablespace;
 	const char *old_tablespace_suffix;
 	const char *new_tablespace_suffix;
-<<<<<<< HEAD
-	Oid			old_db_oid;
-	Oid			new_db_oid;
 
-	/*
-	 * old/new relfilenodes might differ for pg_largeobject(_metadata) indexes
-	 * due to VACUUM FULL or REINDEX.  Other relfilenodes are preserved.
-	 */
-	Oid 		old_relfilenode;
-	Oid 		new_relfilenode;
-=======
 	Oid			db_oid;
 	RelFileNumber relfilenumber;
->>>>>>> REL_16_9
 	/* the rest are used only for logging and error reporting */
 	char	   *nspname;		/* namespaces */
 	char	   *relname;
@@ -359,10 +329,7 @@ typedef struct
 	bool		date_is_int;
 	bool		float8_pass_by_value;
 	uint32		data_checksum_version;
-<<<<<<< HEAD
 	int			file_encryption_method;
-=======
->>>>>>> REL_16_9
 } ControlData;
 
 /*
@@ -388,11 +355,8 @@ typedef enum
 	PG_FATAL
 } eLogType;
 
-<<<<<<< HEAD
 typedef long pgpid_t;
 
-=======
->>>>>>> REL_16_9
 
 /*
  * cluster

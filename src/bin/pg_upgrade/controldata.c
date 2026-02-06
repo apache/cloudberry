@@ -13,17 +13,13 @@
 #include <ctype.h>
 
 #include "pg_upgrade.h"
-<<<<<<< HEAD
 #include "greenplum/pg_upgrade_greenplum.h"
 
+#include "common/string.h"
 #include "access/xlog_internal.h"
 #include "common/controldata_utils.h"
 #include "common/file_utils.h"
 #include "common/kmgr_utils.h"
-=======
-#include "common/string.h"
-
->>>>>>> REL_16_9
 
 /*
  * get_control_data()
@@ -385,11 +381,7 @@ get_control_data(ClusterInfo *cluster, bool live_check)
 			p = strchr(p, ':');
 
 			if (p == NULL || strlen(p) <= 1)
-<<<<<<< HEAD
-				pg_fatal("%d: controldata retrieval problem\n", __LINE__);
-=======
 				pg_fatal("%d: controldata retrieval problem", __LINE__);
->>>>>>> REL_16_9
 
 			p++;				/* remove ':' char */
 			cluster->controldata.chkpnt_oldstxid = str2uint(p);
@@ -724,12 +716,8 @@ get_control_data(ClusterInfo *cluster, bool live_check)
 
 #if 0	/* not mandatory in GPDB, see comment in check_control_data() */
 		if (!got_toast)
-<<<<<<< HEAD
-			pg_log(PG_REPORT, "  maximum TOAST chunk size\n");
-#endif
-=======
 			pg_log(PG_REPORT, "  maximum TOAST chunk size");
->>>>>>> REL_16_9
+#endif
 
 		if (!got_large_object &&
 			cluster->controldata.ctrl_ver >= LARGE_OBJECT_SIZE_PG_CONTROL_VER)
@@ -746,13 +734,10 @@ get_control_data(ClusterInfo *cluster, bool live_check)
 		if (!got_data_checksum_version)
 			pg_log(PG_REPORT, "  data checksum version");
 
-<<<<<<< HEAD
 		/* value added in Postgres 14 */
 		if (!got_file_encryption_method)
 			pg_log(PG_REPORT, "  file encryption method\n");
 
-=======
->>>>>>> REL_16_9
 		pg_fatal("Cannot continue without required control information, terminating");
 	}
 }
@@ -789,12 +774,9 @@ check_control_data(ControlData *oldctrl,
 	if (oldctrl->index == 0 || oldctrl->index != newctrl->index)
 		pg_fatal("old and new pg_controldata maximum indexed columns are invalid or do not match");
 
-<<<<<<< HEAD
-=======
 	if (oldctrl->toast == 0 || oldctrl->toast != newctrl->toast)
 		pg_fatal("old and new pg_controldata maximum TOAST chunk sizes are invalid or do not match");
 
->>>>>>> REL_16_9
 	/* large_object added in 9.5, so it might not exist in the old cluster */
 	if (oldctrl->large_object != 0 &&
 		oldctrl->large_object != newctrl->large_object)
@@ -805,21 +787,7 @@ check_control_data(ControlData *oldctrl,
 	 * still keep it to support upgrading from GPDB 5
 	 */
 	if (oldctrl->date_is_int != newctrl->date_is_int)
-<<<<<<< HEAD
-	{
-		pg_log(PG_WARNING,
-			   "\nOld and new pg_controldata date/time storage types do not match.\n");
-
-		/*
-		 * This is a common 8.3 -> 8.4 upgrade problem, so we are more verbose
-		 */
-		pg_fatal("You will need to rebuild the new server with configure option\n"
-				 "--disable-integer-datetimes or get server binaries built with those\n"
-				 "options.\n");
-	}
-=======
 		pg_fatal("old and new pg_controldata date/time storage types do not match");
->>>>>>> REL_16_9
 
 	/*
 	 * float8_pass_by_value does not need to match, but is used in
@@ -838,10 +806,6 @@ check_control_data(ControlData *oldctrl,
 		pg_fatal("old cluster uses data checksums but the new one does not");
 	else if (oldctrl->data_checksum_version != newctrl->data_checksum_version)
 		pg_fatal("old and new cluster pg_controldata checksum versions do not match");
-<<<<<<< HEAD
-
-=======
->>>>>>> REL_16_9
 }
 
 

@@ -16,34 +16,12 @@ include $(top_builddir)/src/Makefile.global
 unittest-check:
 	$(MAKE) -C pg_dump/test check
 
-#SUBDIRS = \
-#	initdb \
-#	gpfts \
-#	pg_amcheck \
-#	pg_archivecleanup \
-#	pg_alterckey \
-#	pg_basebackup \
-#	pg_checksums \
-#	pg_config \
-#	pg_controldata \
-#	pg_ctl \
-#	pg_dump \
-#	pg_resetwal \
-#	pg_rewind \
-#	pg_test_fsync \
-#	pg_test_timing \
-#	pg_upgrade \
-#	pg_verifybackup \
-#	pg_waldump \
-#	pgbench \
-#	psql \
-#	scripts
-
 SUBDIRS = \
 	initdb \
 	gpfts \
 	pg_amcheck \
 	pg_archivecleanup \
+	pg_alterckey \
 	pg_basebackup \
 	pg_checksums \
 	pg_config \
@@ -52,6 +30,12 @@ SUBDIRS = \
 	pg_dump \
 	pg_resetwal \
 	pg_rewind \
+	pg_test_fsync \
+	pg_test_timing \
+	pg_upgrade \
+	pg_verifybackup \
+	pg_waldump \
+	pgbench \
 	psql \
 	scripts
 
