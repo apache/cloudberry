@@ -258,7 +258,6 @@ start_postmaster(ClusterInfo *cluster, bool report_and_exit_on_error)
 	}
 
 	snprintf(cmd, sizeof(cmd),
-<<<<<<< HEAD
 			 "\"%s/pg_ctl\" -w -l \"%s/%s\" -D \"%s\" -o \"-p %d -c %s -b%s %s %s%s\" start",
 			 cluster->bindir,
 			 log_opts.logdir,
@@ -270,16 +269,6 @@ start_postmaster(ClusterInfo *cluster, bool report_and_exit_on_error)
 			 cluster->pgopts ? cluster->pgopts : "", 
 			 socket_string, 
 			 version_opts);
-
-=======
-			 "\"%s/pg_ctl\" -w -l \"%s/%s\" -D \"%s\" -o \"-p %d -b%s %s%s\" start",
-			 cluster->bindir,
-			 log_opts.logdir,
-			 SERVER_LOG_FILE, cluster->pgconfig, cluster->port,
-			 (cluster == &new_cluster) ?
-			 " -c synchronous_commit=off -c fsync=off -c full_page_writes=off" : "",
-			 cluster->pgopts ? cluster->pgopts : "", socket_string);
->>>>>>> REL_16_9
 
 	/*
 	 * Don't throw an error right away, let connecting throw the error because

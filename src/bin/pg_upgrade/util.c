@@ -49,18 +49,12 @@ end_progress_output(void)
 	 * nicely.
 	 */
 	if (log_opts.isatty)
-<<<<<<< HEAD
-		pg_log(PG_REPORT, "\r%-*s", MESSAGE_WIDTH, "");
-	else if (log_opts.verbose)
-		pg_log(PG_REPORT, "%-*s", MESSAGE_WIDTH, "");
-=======
 	{
 		printf("\r");
 		pg_log(PG_REPORT_NONL, "%-*s", MESSAGE_WIDTH, "");
 	}
 	else if (log_opts.verbose)
 		pg_log(PG_REPORT_NONL, "%-*s", MESSAGE_WIDTH, "");
->>>>>>> REL_16_9
 }
 
 /*
@@ -75,16 +69,12 @@ cleanup_output_dirs(void)
 	if (log_opts.retain)
 		return;
 
-<<<<<<< HEAD
-	(void) rmtree(log_opts.basedir, true);
-=======
 	/*
 	 * Try twice.  The second time might wait for files to finish being
 	 * unlinked, on Windows.
 	 */
 	if (!rmtree(log_opts.basedir, true))
 		rmtree(log_opts.basedir, true);
->>>>>>> REL_16_9
 
 	/* Remove pg_upgrade_output.d only if empty */
 	switch (pg_check_dir(log_opts.rootdir))
@@ -96,9 +86,6 @@ cleanup_output_dirs(void)
 
 		case 1:					/* exists and empty */
 		case 2:					/* exists and contains only dot files */
-<<<<<<< HEAD
-			(void) rmtree(log_opts.rootdir, true);
-=======
 
 			/*
 			 * Try twice.  The second time might wait for files to finish
@@ -106,7 +93,6 @@ cleanup_output_dirs(void)
 			 */
 			if (!rmtree(log_opts.rootdir, true))
 				rmtree(log_opts.rootdir, true);
->>>>>>> REL_16_9
 			break;
 
 		case 4:					/* exists */
@@ -151,11 +137,7 @@ prep_status(const char *fmt,...)
 	va_end(args);
 
 	/* trim strings */
-<<<<<<< HEAD
-	pg_log(PG_REPORT, "%-*s", MESSAGE_WIDTH, message);
-=======
 	pg_log(PG_REPORT_NONL, "%-*s", MESSAGE_WIDTH, message);
->>>>>>> REL_16_9
 }
 
 /*
@@ -186,15 +168,9 @@ prep_status_progress(const char *fmt,...)
 	 * put the individual progress items onto the next line.
 	 */
 	if (log_opts.isatty || log_opts.verbose)
-<<<<<<< HEAD
-		pg_log(PG_REPORT, "%-*s\n", MESSAGE_WIDTH, message);
-	else
-		pg_log(PG_REPORT, "%-*s", MESSAGE_WIDTH, message);
-=======
 		pg_log(PG_REPORT, "%-*s", MESSAGE_WIDTH, message);
 	else
 		pg_log(PG_REPORT_NONL, "%-*s", MESSAGE_WIDTH, message);
->>>>>>> REL_16_9
 }
 
 static void
@@ -231,42 +207,28 @@ pg_log_v(eLogType type, const char *fmt, va_list ap)
 			break;
 
 		case PG_STATUS:
-<<<<<<< HEAD
-			/*
-			 * For output to a display, do leading truncation. Append \r so
-			 * that the next message is output at the start of the line.
-=======
 
 			/*
 			 * For output to a terminal, we add two leading spaces and no
 			 * newline; instead append \r so that the next message is output
 			 * on the same line.  Truncate on the left to fit into
 			 * MESSAGE_WIDTH (counting the spaces as part of that).
->>>>>>> REL_16_9
-			 *
+			 * 
 			 * If going to non-interactive output, only display progress if
 			 * verbose is enabled. Otherwise the output gets unreasonably
 			 * large by default.
 			 */
 			if (log_opts.isatty)
-<<<<<<< HEAD
-				/* -2 because we use a 2-space indent */
-				printf("  %s%-*.*s\r",
-=======
 			{
 				bool		itfits = (strlen(message) <= MESSAGE_WIDTH - 2);
 
->>>>>>> REL_16_9
 				/* prefix with "..." if we do leading truncation */
 				printf("  %s%-*.*s\r",
 					   itfits ? "" : "...",
 					   MESSAGE_WIDTH - 2, MESSAGE_WIDTH - 2,
 					   itfits ? message :
 					   message + strlen(message) - MESSAGE_WIDTH + 3 + 2);
-<<<<<<< HEAD
-=======
 			}
->>>>>>> REL_16_9
 			else if (log_opts.verbose)
 				printf("  %s\n", message);
 			break;

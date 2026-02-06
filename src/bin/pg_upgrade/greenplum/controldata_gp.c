@@ -125,7 +125,7 @@ freeze_master_data(void)
 		if (txns_from_freeze < 0)
 		{
 			/* Needed if a wrap around occurs between txid after and before. */
-			txns_from_freeze = INT32_MAX - Abs(txns_from_freeze);
+			txns_from_freeze = INT32_MAX - abs(txns_from_freeze);
 		}
 
 		/* Reset datallowconn flag before possibly raising an error. */

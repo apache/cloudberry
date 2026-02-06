@@ -108,11 +108,7 @@ parseCommandLine(int argc, char *argv[])
 	if (os_user_effective_id == 0)
 		pg_fatal("%s: cannot be run as root", os_info.progname);
 
-<<<<<<< HEAD
-	while ((option = getopt_long(argc, argv, "d:D:b:B:cj:ko:O:p:P:rRs:U:v",
-=======
-	while ((option = getopt_long(argc, argv, "b:B:cd:D:j:kNo:O:p:P:rs:U:v",
->>>>>>> REL_16_9
+	while ((option = getopt_long(argc, argv, "b:B:cd:D:j:kNo:O:p:P:rRs:U:v",
 								 long_options, &optindex)) != -1)
 	{
 		switch (option)
@@ -227,11 +223,7 @@ parseCommandLine(int argc, char *argv[])
 	}
 
 	if (optind < argc)
-<<<<<<< HEAD
-		pg_fatal("too many command-line arguments (first is \"%s\")\n", argv[optind]);
-=======
 		pg_fatal("too many command-line arguments (first is \"%s\")", argv[optind]);
->>>>>>> REL_16_9
 
 	if (log_opts.verbose)
 		pg_log(PG_REPORT, "Running in verbose mode");
@@ -317,12 +309,9 @@ usage(void)
 	printf(_("  -v, --verbose                 enable verbose internal logging\n"));
 	printf(_("  -V, --version                 display version information, then exit\n"));
 	printf(_("  --clone                       clone instead of copying files to new cluster\n"));
-<<<<<<< HEAD
 	printf(_("  --continue-check-on-fatal     goes through all pg_upgrade checks; should be used with -c\n"));
 	printf(_("  --skip-target-check           skip all checks and comparisons of new cluster; should be used with -c\n"));
-=======
 	printf(_("  --copy                        copy files to new cluster (default)\n"));
->>>>>>> REL_16_9
 	printf(_("  -?, --help                    show this help, then exit\n"));
 	printf(_("\n"
 			 "Before running pg_upgrade you must:\n"

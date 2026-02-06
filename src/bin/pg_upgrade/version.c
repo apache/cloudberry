@@ -14,7 +14,6 @@
 #include "pg_upgrade.h"
 
 
-<<<<<<< HEAD
 static PQExpBuffer
 create_recursive_oids(PGconn *conn, int major_version, const char *base_query)
 {
@@ -91,8 +90,6 @@ create_recursive_oids(PGconn *conn, int major_version, const char *base_query)
 
 	return querybuf;
 }
-=======
->>>>>>> REL_16_9
 /*
  * check_for_data_types_usage()
  *	Detect whether there are any stored columns depending on given type(s)
@@ -137,7 +134,6 @@ check_for_data_types_usage(ClusterInfo *cluster,
 		 * concern here).  To handle all these cases we need a recursive CTE.
 		 */
 		initPQExpBuffer(&querybuf);
-<<<<<<< HEAD
 		if (GET_MAJOR_VERSION(cluster->major_version) <= 904)
 		{
 			/*
@@ -179,36 +175,10 @@ check_for_data_types_usage(ClusterInfo *cluster,
 				appendPQExpBuffer(&querybuf,
 						  "			UNION ALL "
 			/* ranges containing any type selected so far */
-=======
-		appendPQExpBuffer(&querybuf,
-						  "WITH RECURSIVE oids AS ( "
-		/* start with the type(s) returned by base_query */
-						  "	%s "
-						  "	UNION ALL "
-						  "	SELECT * FROM ( "
-		/* inner WITH because we can only reference the CTE once */
-						  "		WITH x AS (SELECT oid FROM oids) "
-		/* domains on any type selected so far */
-						  "			SELECT t.oid FROM pg_catalog.pg_type t, x WHERE typbasetype = x.oid AND typtype = 'd' "
-						  "			UNION ALL "
-		/* arrays over any type selected so far */
-						  "			SELECT t.oid FROM pg_catalog.pg_type t, x WHERE typelem = x.oid AND typtype = 'b' "
-						  "			UNION ALL "
-		/* composite types containing any type selected so far */
-						  "			SELECT t.oid FROM pg_catalog.pg_type t, pg_catalog.pg_class c, pg_catalog.pg_attribute a, x "
-						  "			WHERE t.typtype = 'c' AND "
-						  "				  t.oid = c.reltype AND "
-						  "				  c.oid = a.attrelid AND "
-						  "				  NOT a.attisdropped AND "
-						  "				  a.atttypid = x.oid "
-						  "			UNION ALL "
-		/* ranges containing any type selected so far */
->>>>>>> REL_16_9
 						  "			SELECT t.oid FROM pg_catalog.pg_type t, pg_catalog.pg_range r, x "
 						  "			WHERE t.typtype = 'r' AND r.rngtypid = t.oid AND r.rngsubtype = x.oid"
 						  "	) foo "
 						  ") "
-<<<<<<< HEAD
 			/* now look for stored columns of any such type */
 							  "SELECT n.nspname, c.relname, a.attname "
 							  "FROM	pg_catalog.pg_class c, "
@@ -228,27 +198,6 @@ check_for_data_types_usage(ClusterInfo *cluster,
 			/* exclude system catalogs, too */
 							  "		n.nspname NOT IN ('pg_catalog', 'information_schema')");
 		}
-=======
-		/* now look for stored columns of any such type */
-						  "SELECT n.nspname, c.relname, a.attname "
-						  "FROM	pg_catalog.pg_class c, "
-						  "		pg_catalog.pg_namespace n, "
-						  "		pg_catalog.pg_attribute a "
-						  "WHERE	c.oid = a.attrelid AND "
-						  "		NOT a.attisdropped AND "
-						  "		a.atttypid IN (SELECT oid FROM oids) AND "
-						  "		c.relkind IN ("
-						  CppAsString2(RELKIND_RELATION) ", "
-						  CppAsString2(RELKIND_MATVIEW) ", "
-						  CppAsString2(RELKIND_INDEX) ") AND "
-						  "		c.relnamespace = n.oid AND "
-		/* exclude possible orphaned temp tables */
-						  "		n.nspname !~ '^pg_temp_' AND "
-						  "		n.nspname !~ '^pg_toast_temp_' AND "
-		/* exclude system catalogs, too */
-						  "		n.nspname NOT IN ('pg_catalog', 'information_schema')",
-						  base_query);
->>>>>>> REL_16_9
 
 		res = executeQueryOrDie(conn, "%s", querybuf.data);
 		destroyPQExpBuffer(cte_oids);
@@ -372,23 +321,13 @@ old_9_6_check_for_unknown_data_type_usage(ClusterInfo *cluster)
 	prep_status("Checking for invalid \"unknown\" user columns");
 
 	snprintf(output_path, sizeof(output_path), "%s/%s",
-<<<<<<< HEAD
-				 log_opts.basedir,
-				 "tables_using_unknown.txt");
-
-	if (check_for_data_type_usage(cluster, "pg_catalog.unknown", output_path))
-	{
-		pg_log(PG_REPORT, "fatal\n");
-		gp_fatal_log("Your installation contains the \"unknown\" data type in user tables.\n"
-=======
 			 log_opts.basedir,
 			 "tables_using_unknown.txt");
 
 	if (check_for_data_type_usage(cluster, "pg_catalog.unknown", output_path))
 	{
-		pg_log(PG_REPORT, "fatal");
-		pg_fatal("Your installation contains the \"unknown\" data type in user tables.\n"
->>>>>>> REL_16_9
+		pg_log(PG_REPORT, "fatal\n");
+		gp_fatal_log("Your installation contains the \"unknown\" data type in user tables.\n"
 				 "This data type is no longer allowed in tables, so this\n"
 				 "cluster cannot currently be upgraded.  You can\n"
 				 "drop the problem columns and restart the upgrade.\n"
@@ -527,23 +466,13 @@ old_11_check_for_sql_identifier_data_type_usage(ClusterInfo *cluster)
 	prep_status("Checking for invalid \"sql_identifier\" user columns");
 
 	snprintf(output_path, sizeof(output_path), "%s/%s",
-<<<<<<< HEAD
 			 log_opts.basedir, "tables_using_sql_identifier.txt");
-=======
-			 log_opts.basedir,
-			 "tables_using_sql_identifier.txt");
->>>>>>> REL_16_9
 
 	if (check_for_data_type_usage(cluster, "information_schema.sql_identifier",
 								  output_path))
 	{
-<<<<<<< HEAD
 		pg_log(PG_REPORT, "fatal\n");
 		gp_fatal_log("Your installation contains the \"sql_identifier\" data type in user tables.\n"
-=======
-		pg_log(PG_REPORT, "fatal");
-		pg_fatal("Your installation contains the \"sql_identifier\" data type in user tables.\n"
->>>>>>> REL_16_9
 				 "The on-disk format for this data type has changed, so this\n"
 				 "cluster cannot currently be upgraded.  You can\n"
 				 "drop the problem columns and restart the upgrade.\n"
@@ -553,80 +482,6 @@ old_11_check_for_sql_identifier_data_type_usage(ClusterInfo *cluster)
 	else
 		check_ok();
 }
-
-
-/*
- * report_extension_updates()
- *	Report extensions that should be updated.
- */
-void
-report_extension_updates(ClusterInfo *cluster)
-{
-	int			dbnum;
-	FILE	   *script = NULL;
-	char	   *output_path = "update_extensions.sql";
-
-	prep_status("Checking for extension updates");
-
-	for (dbnum = 0; dbnum < cluster->dbarr.ndbs; dbnum++)
-	{
-		PGresult   *res;
-		bool		db_used = false;
-		int			ntups;
-		int			rowno;
-		int			i_name;
-		DbInfo	   *active_db = &cluster->dbarr.dbs[dbnum];
-		PGconn	   *conn = connectToServer(cluster, active_db->db_name);
-
-		/* find extensions needing updates */
-		res = executeQueryOrDie(conn,
-								"SELECT name "
-								"FROM pg_available_extensions "
-								"WHERE installed_version != default_version"
-			);
-
-		ntups = PQntuples(res);
-		i_name = PQfnumber(res, "name");
-		for (rowno = 0; rowno < ntups; rowno++)
-		{
-			if (script == NULL && (script = fopen_priv(output_path, "w")) == NULL)
-				pg_fatal("could not open file \"%s\": %s", output_path,
-						 strerror(errno));
-			if (!db_used)
-			{
-				PQExpBufferData connectbuf;
-
-				initPQExpBuffer(&connectbuf);
-				appendPsqlMetaConnect(&connectbuf, active_db->db_name);
-				fputs(connectbuf.data, script);
-				termPQExpBuffer(&connectbuf);
-				db_used = true;
-			}
-			fprintf(script, "ALTER EXTENSION %s UPDATE;\n",
-					quote_identifier(PQgetvalue(res, rowno, i_name)));
-		}
-
-		PQclear(res);
-
-		PQfinish(conn);
-	}
-
-	if (script)
-	{
-		fclose(script);
-		report_status(PG_REPORT, "notice");
-		pg_log(PG_REPORT, "\n"
-			   "Your installation contains extensions that should be updated\n"
-			   "with the ALTER EXTENSION command.  The file\n"
-			   "    %s\n"
-			   "when executed by psql by the database superuser will update\n"
-			   "these extensions.",
-			   output_path);
-	}
-	else
-		check_ok();
-}
-
 
 /*
  * report_extension_updates()

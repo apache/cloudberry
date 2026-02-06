@@ -750,7 +750,7 @@ get_hex(const char *cp)
 		res = hexlookup[c];
 
 	if (res < 0)
-		pg_log_fatal("invalid hexadecimal digit: \"%s\"",cp);
+		pg_fatal("invalid hexadecimal digit: \"%s\"",cp);
 
 	return (char) res;
 }
@@ -777,7 +777,7 @@ hex_decode(const char *src, size_t len, char *dst)
 		v1 = get_hex(s) << 4;
 		s++;
 		if (s >= srcend)
-			pg_log_fatal("invalid hexadecimal data: odd number of digits");
+			pg_fatal("invalid hexadecimal data: odd number of digits");
 
 		v2 = get_hex(s);
 		s++;

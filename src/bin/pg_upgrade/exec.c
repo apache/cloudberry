@@ -444,7 +444,6 @@ check_exec(const char *dir, const char *program, bool check_version)
 	char		cmd[MAXPGPATH];
 	char		versionstr[128];
 	char		gp_versionstr[128];
-	int			ret;
 
 	snprintf(path, sizeof(path), "%s/%s", dir, program);
 
