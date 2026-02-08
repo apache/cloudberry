@@ -379,7 +379,7 @@ pg_tablespace_location(PG_FUNCTION_ARGS)
 Datum
 get_tablespace_version_directory_name(PG_FUNCTION_ARGS)
 {
-	PG_RETURN_TEXT_P(GP_TABLESPACE_VERSION_DIRECTORY);
+	PG_RETURN_TEXT_P(cstring_to_text(GP_TABLESPACE_VERSION_DIRECTORY));
 }
 
 /*
