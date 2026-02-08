@@ -1428,7 +1428,7 @@ SELECT :io_sum_local_after_evictions > :io_sum_local_before_evictions,
        :io_sum_local_after_extends > :io_sum_local_before_extends;
  ?column? | ?column? | ?column? | ?column? 
 ----------+----------+----------+----------
- f        | f        | t        | t
+ t        | f        | t        | t
 (1 row)
 
 -- Change the tablespaces so that the temporary table is rewritten to other

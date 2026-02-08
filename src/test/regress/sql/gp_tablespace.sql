@@ -63,6 +63,9 @@ FROM pg_tablespace WHERE spcname = 'testspace';
 -- Ensure mirrors have applied filesystem changes
 SELECT force_mirrors_to_catch_up();
 
+\! ls $PG_ABS_SRCDIR/testtablespace
+
+
 -- Test moving AO/AOCO tables from one tablespace to another.
 CREATE TABLE ao_ts_table (id int4, t text) with (appendonly=true, orientation=row) distributed by (id);
 CREATE TABLE aoco_ts_table (id int4, t text) with (appendonly=true, orientation=column) distributed by (id);
@@ -227,8 +230,9 @@ DROP TABLESPACE testspace_existing_version_dir;
 -- Ensure mirrors have applied filesystem changes
 SELECT force_mirrors_to_catch_up();
 
--- Test alter tablespace: PG does not seem to test these.
+\! ls $PG_ABS_SRCDIR/testtablespace_existing_version_dir/*
 
+-- Test alter tablespace: PG does not seem to test these.    
 -- test SET & OWNER
 ALTER TABLESPACE testspace_otherloc SET (random_page_cost=20.0);
 SELECT spcoptions FROM pg_tablespace WHERE spcname = 'testspace_otherloc';
@@ -257,6 +261,7 @@ DROP TABLESPACE testspace_otherloc;
 
 CREATE TABLESPACE testspace_dir_empty LOCATION :'testtablespace';
 CREATE TABLE t_dir_empty(a int);
+\! rm -rf $PG_ABS_SRCDIR/testtablespace
 DROP TABLE IF EXISTS t_dir_empty;
 DROP TABLESPACE testspace_dir_empty;
 

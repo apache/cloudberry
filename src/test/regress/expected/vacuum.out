@@ -344,17 +344,19 @@ CREATE VIEW vac_option_tab_counts AS
   ORDER BY rel;
 VACUUM (PROCESS_TOAST TRUE) vac_option_tab;
 SELECT * FROM vac_option_tab_counts;
- rel  | vacuum_count 
-------+--------------
- main |            1
-(1 row)
+  rel  | vacuum_count 
+-------+--------------
+ main  |            1
+ toast |            1
+(2 rows)
 
 VACUUM (PROCESS_TOAST FALSE) vac_option_tab;
 SELECT * FROM vac_option_tab_counts;
- rel  | vacuum_count 
-------+--------------
- main |            2
-(1 row)
+  rel  | vacuum_count 
+-------+--------------
+ main  |            2
+ toast |            1
+(2 rows)
 
 VACUUM (PROCESS_TOAST FALSE, FULL) vac_option_tab; -- error
 ERROR:  PROCESS_TOAST required with VACUUM FULL
@@ -362,18 +364,20 @@ ERROR:  PROCESS_TOAST required with VACUUM FULL
 -- Only the toast table is processed.
 VACUUM (PROCESS_MAIN FALSE) vac_option_tab;
 SELECT * FROM vac_option_tab_counts;
- rel  | vacuum_count 
-------+--------------
- main |            2
-(1 row)
+  rel  | vacuum_count 
+-------+--------------
+ main  |            2
+ toast |            2
+(2 rows)
 
 -- Nothing is processed.
 VACUUM (PROCESS_MAIN FALSE, PROCESS_TOAST FALSE) vac_option_tab;
 SELECT * FROM vac_option_tab_counts;
- rel  | vacuum_count 
-------+--------------
- main |            2
-(1 row)
+  rel  | vacuum_count 
+-------+--------------
+ main  |            2
+ toast |            2
+(2 rows)
 
 -- Check if the filenodes nodes have been updated as wanted after FULL.
 SELECT relfilenode AS main_filenode FROM pg_class

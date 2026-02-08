@@ -32,7 +32,7 @@ create or replace function remove_tablespace_location_directory(tablespace_locat
 		tablespace_symlink
 			for tablespace_symlink
 			in sum(tablespace_symlinks, [])
-			if os.readlink(tablespace_symlink).startswith(tablespace_location_dir)]
+			if os.path.islink(tablespace_symlink) and os.readlink(tablespace_symlink).startswith(tablespace_location_dir)]
 
 	for tablespace_symlink_to_remove in tablespace_symlinks_to_remove:
 		os.unlink(tablespace_symlink_to_remove);
