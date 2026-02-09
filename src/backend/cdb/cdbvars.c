@@ -580,7 +580,7 @@ bool gpvars_check_gp_resource_group_cgroup_parent(char **newval, void **extra, G
 	pg_wchar *wpattern = palloc((strlen(pattern) + 1) * sizeof(pg_wchar));
 	int		  wlen = pg_mb2wchar_with_len(pattern, wpattern, strlen(pattern));
 	pg_wchar *data = palloc((strlen(*newval) + 1) * sizeof(pg_wchar));
-	int		  data_len = pg_mb2wchar_with_len(*newval, data, sizeof(*newval));
+	int		  data_len = pg_mb2wchar_with_len(*newval, data, strlen(*newval));
 	bool	  match = true;
 
 	regres = pg_regcomp(&re, wpattern, wlen, REG_ADVANCED, DEFAULT_COLLATION_OID);
