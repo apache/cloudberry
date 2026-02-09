@@ -43,6 +43,7 @@
 #include "catalog/pg_directory_table.h"
 #include "catalog/pg_enum.h"
 #include "catalog/pg_event_trigger.h"
+#include "catalog/pg_extension.h"
 #include "catalog/pg_foreign_data_wrapper.h"
 #include "catalog/pg_foreign_server.h"
 #include "catalog/pg_foreign_table.h"
@@ -823,6 +824,13 @@ static const struct cachedesc cacheinfo[] = {
 			0
 		},
 		128
+	},
+	/* intentionally out of alphabetical order, to avoid an ABI break: */
+	[EXTENSIONOID] = {
+		ExtensionRelationId,
+		ExtensionOidIndexId,
+		KEY(Anum_pg_extension_oid),
+		2
 	}
 };
 

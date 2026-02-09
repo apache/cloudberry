@@ -134,7 +134,10 @@ enum SysCacheIdentifier
 	USERMAPPINGUSERSERVER,
 	ATTENCODINGNUM
 
-#define SysCacheSize (ATTENCODINGNUM + 1)
+	/* intentionally out of alphabetical order, to avoid an ABI break: */
+	EXTENSIONOID
+
+#define SysCacheSize (EXTENSIONOID + 1)
 };
 
 extern void InitCatalogCache(void);
