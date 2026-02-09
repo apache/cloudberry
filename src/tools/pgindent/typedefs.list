@@ -702,6 +702,7 @@ ExtensibleNodeMethods
 ExtensionControlFile
 ExtensionInfo
 ExtensionMemberId
+ExtensionSiblingCache
 ExtensionVersionInfo
 FDWCollateState
 FD_SET
