@@ -3470,14 +3470,14 @@ dbase_redo(XLogReaderState *record)
 		}
 		pfree(parentdir);
 
+		/* Close all sgmr fds in all backends. */
+		WaitForProcSignalBarrier(EmitProcSignalBarrier(PROCSIGNAL_BARRIER_SMGRRELEASE));
+
 		/*
 		 * Force dirty buffers out to disk, to ensure source database is
 		 * up-to-date for the copy.
 		 */
 		FlushDatabaseBuffers(xlrec->src_db_id);
-
-		/* Close all sgmr fds in all backends. */
-		WaitForProcSignalBarrier(EmitProcSignalBarrier(PROCSIGNAL_BARRIER_SMGRRELEASE));
 
 		/*
 		 * Copy this subdirectory to the new location
