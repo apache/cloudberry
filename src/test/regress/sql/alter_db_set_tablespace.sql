@@ -22,13 +22,14 @@ CREATE LANGUAGE plpython3u;
 CREATE OR REPLACE FUNCTION setup_tablespace_location_dir_for_test(tablespace_location_dir text) RETURNS VOID AS $$
 import os;
 import shutil;
-import traceback
+import traceback;
+from pathlib import Path
 try:
     shutil.rmtree(tablespace_location_dir)
 except OSError:
     plpy.debug(traceback.format_exc())
     plpy.debug('failed to remove tablespace location directory: %s' % (tablespace_location_dir))
-os.mkdir(tablespace_location_dir)
+Path(tablespace_location_dir).mkdir(parents=True, exist_ok=True)
 $$ LANGUAGE plpython3u;
 
 \getenv abs_builddir PG_ABS_BUILDDIR

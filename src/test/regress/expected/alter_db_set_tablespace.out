@@ -13,17 +13,19 @@ CREATE SCHEMA adst;
 SET search_path TO adst,public;
 -- start_ignore
 CREATE LANGUAGE plpython3u;
+ERROR:  extension "plpython3u" already exists
 -- end_ignore
 CREATE OR REPLACE FUNCTION setup_tablespace_location_dir_for_test(tablespace_location_dir text) RETURNS VOID AS $$
 import os;
 import shutil;
-import traceback
+import traceback;
+from pathlib import Path
 try:
     shutil.rmtree(tablespace_location_dir)
 except OSError:
     plpy.debug(traceback.format_exc())
     plpy.debug('failed to remove tablespace location directory: %s' % (tablespace_location_dir))
-os.mkdir(tablespace_location_dir)
+Path(tablespace_location_dir).mkdir(parents=True, exist_ok=True)
 $$ LANGUAGE plpython3u;
 \getenv abs_builddir PG_ABS_BUILDDIR
 \set adst_source_tablespace_location :abs_builddir '/testtablespace/adst_source'
@@ -1346,7 +1348,7 @@ DROP TABLESPACE adst_destination_tablespace;
 DROP SCHEMA adst CASCADE;
 DETAIL:  drop cascades to function setup_tablespace_location_dir_for_test(text)
 NOTICE:  drop cascades to 4 other objects
-drop cascades to function setup()
+drop cascades to function setup(text,text)
 drop cascades to function list_db_tablespace(text,text)
 drop cascades to function stat_db_objects(text,text)
 SELECT gp_inject_fault('all', 'reset', dbid) FROM gp_segment_configuration;
