@@ -241,8 +241,6 @@ SELECT page_checksum(decode(repeat('00', :block_size), 'hex'), 1);
               
 (1 row)
 
-<<<<<<< HEAD
-=======
 -- tests for sequences
 create sequence test_sequence start 72057594037927937;
 select tuple_data_split('test_sequence'::regclass, t_data, t_infomask, t_infomask2, t_bits)
@@ -253,4 +251,3 @@ select tuple_data_split('test_sequence'::regclass, t_data, t_infomask, t_infomas
 (1 row)
 
 drop sequence test_sequence;
->>>>>>> REL_16_9

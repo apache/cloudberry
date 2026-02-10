@@ -416,9 +416,6 @@ EXPLAIN (VERBOSE, COSTS OFF)
   SELECT * FROM ft1 t1 WHERE t1.c1 === t1.c2 order by t1.c2 limit 1;
 SELECT * FROM ft1 t1 WHERE t1.c1 === t1.c2 order by t1.c2 limit 1;
 
-<<<<<<< HEAD
--- check schema-qualification of regconfig constant
-=======
 -- Ensure we don't ship FETCH FIRST .. WITH TIES
 EXPLAIN (VERBOSE, COSTS OFF)
 SELECT t1.c2 FROM ft1 t1 WHERE t1.c1 > 960 ORDER BY t1.c2 FETCH FIRST 2 ROWS WITH TIES;
@@ -455,7 +452,6 @@ SELECT * FROM ft1 WHERE CASE c3 COLLATE "C" WHEN c6 THEN true ELSE c3 < 'bar' EN
 
 -- a regconfig constant referring to this text search configuration
 -- is initially unshippable
->>>>>>> REL_16_9
 CREATE TEXT SEARCH CONFIGURATION public.custom_search
   (COPY = pg_catalog.english);
 EXPLAIN (VERBOSE, COSTS OFF)
@@ -463,8 +459,6 @@ SELECT c1, to_tsvector('custom_search'::regconfig, c3) FROM ft1
 WHERE c1 = 642 AND length(to_tsvector('custom_search'::regconfig, c3)) > 0;
 SELECT c1, to_tsvector('custom_search'::regconfig, c3) FROM ft1
 WHERE c1 = 642 AND length(to_tsvector('custom_search'::regconfig, c3)) > 0;
-<<<<<<< HEAD
-=======
 -- but if it's in a shippable extension, it can be shipped
 ALTER EXTENSION postgres_fdw ADD TEXT SEARCH CONFIGURATION public.custom_search;
 -- however, that doesn't flush the shippability cache, so do a quick reconnect
@@ -500,7 +494,6 @@ SELECT * FROM (
     UNION ALL
     SELECT 2 AS type,c1 FROM ft2
 ) a ORDER BY type;
->>>>>>> REL_16_9
 
 -- ===================================================================
 -- JOIN queries
@@ -1285,8 +1278,6 @@ SELECT ftx.x1, ft2.c2, ftx FROM ft1 ftx(x1,x2,x3,x4,x5,x6,x7,x8), ft2
   WHERE ftx.x1 = ft2.c1 AND ftx.x1 = 1; -- ERROR
 SELECT sum(c2), array_agg(c8) FROM ft1 GROUP BY c8; -- ERROR
 ANALYZE ft1; -- ERROR
-<<<<<<< HEAD
-=======
 ALTER FOREIGN TABLE ft1 ALTER COLUMN c8 TYPE user_enum;
 
 -- ===================================================================
@@ -1305,7 +1296,6 @@ SELECT * FROM ft1 WHERE 'foo' = c8 LIMIT 1;
 -- with that remote type
 SELECT * FROM ft1 WHERE c8 LIKE 'foo' LIMIT 1; -- ERROR
 SELECT * FROM ft1 WHERE c8::text LIKE 'foo' LIMIT 1; -- ERROR; cast not pushed down
->>>>>>> REL_16_9
 ALTER FOREIGN TABLE ft1 ALTER COLUMN c8 TYPE user_enum;
 
 -- ===================================================================
@@ -1756,8 +1746,6 @@ insert into grem1 (a) values (1), (2);
 select * from gloc1;
 select * from grem1;
 delete from grem1;
-<<<<<<< HEAD
-=======
 -- batch insert with foreign partitions.
 -- This schema uses two partitions, one local and one remote with a modulo
 -- to loop across all of them in batches.
@@ -1776,7 +1764,6 @@ drop table tab_batch_local;
 drop table tab_batch_sharded;
 drop table tab_batch_sharded_p1_remote;
 
->>>>>>> REL_16_9
 alter server loopback options (drop batch_size);
 
 -- ===================================================================
@@ -3224,15 +3211,6 @@ ROLLBACK;
 -- so that we can easily terminate the connection later.
 ALTER SERVER loopback OPTIONS (application_name 'fdw_retry_check');
 
-<<<<<<< HEAD
--- If debug_discard_caches is active, it results in
--- dropping remote connections after every transaction, making it
--- impossible to test termination meaningfully.  So turn that off
--- for this test.
-SET debug_discard_caches = 0;
-
-=======
->>>>>>> REL_16_9
 -- Make sure we have a remote connection.
 SELECT 1 FROM ft1 LIMIT 1;
 
@@ -3263,11 +3241,6 @@ SELECT 1 FROM ft1 LIMIT 1;    -- should fail
 \set VERBOSITY default
 COMMIT;
 
-<<<<<<< HEAD
-RESET debug_discard_caches;
-
-=======
->>>>>>> REL_16_9
 -- =============================================================================
 -- test connection invalidation cases and postgres_fdw_get_connections function
 -- =============================================================================
@@ -3821,8 +3794,6 @@ DROP INDEX base_tbl1_idx;
 DROP INDEX base_tbl2_idx;
 DROP INDEX async_p3_idx;
 
-<<<<<<< HEAD
-=======
 -- UNION queries
 EXPLAIN (VERBOSE, COSTS OFF)
 INSERT INTO result_tbl
@@ -3850,14 +3821,11 @@ UNION ALL
 SELECT * FROM result_tbl ORDER BY a;
 DELETE FROM result_tbl;
 
->>>>>>> REL_16_9
 -- Disable async execution if we use gating Result nodes for pseudoconstant
 -- quals
 EXPLAIN (VERBOSE, COSTS OFF)
 SELECT * FROM async_pt WHERE CURRENT_USER = SESSION_USER;
 
-<<<<<<< HEAD
-=======
 EXPLAIN (VERBOSE, COSTS OFF)
 (SELECT * FROM async_p1 WHERE CURRENT_USER = SESSION_USER)
 UNION ALL
@@ -3866,7 +3834,6 @@ UNION ALL
 EXPLAIN (VERBOSE, COSTS OFF)
 SELECT * FROM ((SELECT * FROM async_p1 WHERE b < 10) UNION ALL (SELECT * FROM async_p2 WHERE b < 10)) s WHERE CURRENT_USER = SESSION_USER;
 
->>>>>>> REL_16_9
 -- Test that pending requests are processed properly
 SET enable_mergejoin TO false;
 SET enable_hashjoin TO false;
@@ -3970,11 +3937,7 @@ ALTER SERVER loopback OPTIONS (DROP async_capable);
 ALTER SERVER loopback2 OPTIONS (DROP async_capable);
 
 -- ===================================================================
-<<<<<<< HEAD
--- test invalid server and foreign table options
-=======
 -- test invalid server, foreign table and foreign data wrapper options
->>>>>>> REL_16_9
 -- ===================================================================
 -- Invalid fdw_startup_cost option
 CREATE SERVER inv_scst FOREIGN DATA WRAPPER postgres_fdw
@@ -3988,8 +3951,6 @@ CREATE FOREIGN TABLE inv_fsz (c1 int )
 -- Invalid batch_size option
 CREATE FOREIGN TABLE inv_bsz (c1 int )
 	SERVER loopback OPTIONS (batch_size '100$%$#$#');
-<<<<<<< HEAD
-=======
 
 -- No option is allowed to be specified at foreign data wrapper level
 ALTER FOREIGN DATA WRAPPER postgres_fdw OPTIONS (nonexistent 'fdw');
@@ -4153,4 +4114,3 @@ ANALYZE analyze_table;
 -- cleanup
 DROP FOREIGN TABLE analyze_ftable;
 DROP TABLE analyze_table;
->>>>>>> REL_16_9

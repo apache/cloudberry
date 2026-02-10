@@ -1274,16 +1274,6 @@ FROM test_seg WHERE s @> '11.2..11.3' OR s IS NULL ORDER BY s;
            |            |          
 (144 rows)
 
-<<<<<<< HEAD
--- Test that has all opclasses
-select opcname,amname from pg_opclass opc,  pg_am am  where am.oid=opc.opcmethod and opcintype='seg'::regtype;
-   opcname    | amname
---------------+--------
- seg_ops      | btree
- gist_seg_ops | gist
- seg_ops      | bitmap
-(3 rows)
-=======
 -- test non error throwing API
 SELECT str as seg,
        pg_input_is_valid(str,'seg') as ok,
@@ -1307,5 +1297,4 @@ FROM unnest(ARRAY['-1 .. 1'::text,
  1 e7     | f  | 42601          | bad seg representation                | syntax error at or near "e"  | 
  1e700    | f  | 22003          | "1e700" is out of range for type real |                              | 
 (6 rows)
->>>>>>> REL_16_9
 

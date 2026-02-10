@@ -4,19 +4,9 @@
 use strict;
 use warnings;
 
-<<<<<<< HEAD
-use PostgresNode;
-use TestLib;
-use Test::More tests => 0 + 1;
-
-SKIP:
-{
-	skip "auto_explain is only expected to run on QD, skip test for utility mode", 1;
-=======
 use PostgreSQL::Test::Cluster;
 use PostgreSQL::Test::Utils;
 use Test::More;
->>>>>>> REL_16_9
 
 # Runs the specified query and returns the emitted server log.
 # params is an optional hash mapping GUC names to values;
@@ -181,9 +171,6 @@ like(
 	$log_contents,
 	qr/"Node Type": "Index Scan"[^}]*"Index Name": "pg_class_relname_nsp_index"/s,
 	"index scan logged, json mode");
-<<<<<<< HEAD
-}
-=======
 
 # Check that PGC_SUSET parameters can be set by non-superuser if granted,
 # otherwise not
@@ -226,4 +213,3 @@ DROP USER regress_user1;
 });
 
 done_testing();
->>>>>>> REL_16_9

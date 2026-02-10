@@ -423,11 +423,7 @@ gen_ossl_decrypt(PX_Cipher *c, int padding, const uint8 *data, unsigned dlen,
 	{
 		if (!EVP_DecryptInit_ex(od->evp_ctx, od->evp_ciph, NULL, NULL, NULL))
 			return PXE_CIPHER_INIT;
-<<<<<<< HEAD
-		if (!EVP_CIPHER_CTX_set_padding(od->evp_ctx, 0))
-=======
 		if (!EVP_CIPHER_CTX_set_padding(od->evp_ctx, padding))
->>>>>>> REL_16_9
 			return PXE_CIPHER_INIT;
 		if (!EVP_CIPHER_CTX_set_key_length(od->evp_ctx, od->klen))
 			return PXE_CIPHER_INIT;
@@ -457,11 +453,7 @@ gen_ossl_encrypt(PX_Cipher *c, int padding, const uint8 *data, unsigned dlen,
 	{
 		if (!EVP_EncryptInit_ex(od->evp_ctx, od->evp_ciph, NULL, NULL, NULL))
 			return PXE_CIPHER_INIT;
-<<<<<<< HEAD
-		if (!EVP_CIPHER_CTX_set_padding(od->evp_ctx, 0))
-=======
 		if (!EVP_CIPHER_CTX_set_padding(od->evp_ctx, padding))
->>>>>>> REL_16_9
 			return PXE_CIPHER_INIT;
 		if (!EVP_CIPHER_CTX_set_key_length(od->evp_ctx, od->klen))
 			return PXE_CIPHER_INIT;

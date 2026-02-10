@@ -124,8 +124,6 @@ SELECT data FROM pg_logical_slot_get_changes('regression_slot_no_lsn', NULL, NUL
 SELECT pg_replication_origin_session_reset();
 SELECT pg_drop_replication_slot('regression_slot_no_lsn');
 SELECT pg_replication_origin_drop('regress_test_decoding: regression_slot_no_lsn');
-<<<<<<< HEAD
-=======
 
 -- Test that the pgoutput correctly filters changes corresponding to the provided origin value.
 SELECT 'init' FROM pg_create_logical_replication_slot('regression_slot', 'pgoutput');
@@ -148,4 +146,3 @@ SELECT pg_replication_origin_session_reset();
 SELECT pg_drop_replication_slot('regression_slot');
 SELECT pg_replication_origin_drop('regress_test_decoding: regression_slot');
 DROP PUBLICATION pub;
->>>>>>> REL_16_9

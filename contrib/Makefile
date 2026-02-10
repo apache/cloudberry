@@ -11,6 +11,10 @@ include $(top_builddir)/src/Makefile.global
 # adminpack is disabled since the functionality has been imported into
 # GPDB.
 
+# FIXME: installcheck for extension pageinspect, pg_visibility, postgres_fdw, 
+# seg, tsm_system_rows, tsm_system_time, xml2 is failed, which is also failed
+# in gpdb. We'll fix it if we need these plugins to work properly.
+
 SUBDIRS = \
 		amcheck		\
 		auth_delay	\

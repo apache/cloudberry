@@ -33,6 +33,7 @@ GRANT EXECUTE ON FUNCTION bt_index_check(regclass) TO regress_bttest_role;
 GRANT EXECUTE ON FUNCTION bt_index_parent_check(regclass) TO regress_bttest_role;
 GRANT EXECUTE ON FUNCTION bt_index_check(regclass, boolean) TO regress_bttest_role;
 GRANT EXECUTE ON FUNCTION bt_index_parent_check(regclass, boolean) TO regress_bttest_role;
+GRANT CREATE ON SCHEMA public TO regress_bttest_role;
 SET ROLE regress_bttest_role;
 SELECT bt_index_check('bttest_a_idx');
 SELECT bt_index_parent_check('bttest_a_idx');

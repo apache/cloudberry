@@ -5416,29 +5416,16 @@ SELECT similarity('Szczecin', 'Warsaw');
 EXPLAIN (COSTS OFF)
 SELECT DISTINCT city, similarity(city, 'Warsaw'), show_limit()
   FROM restaurants WHERE city % 'Warsaw';
-<<<<<<< HEAD
-                               QUERY PLAN                               
-------------------------------------------------------------------------
+                      QUERY PLAN                       
+-------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  HashAggregate
-         Group Key: city, similarity(city, 'Warsaw'::text), '0.3'::real
+         Group Key: city, similarity(city, 'Warsaw'::text)
          ->  Bitmap Heap Scan on restaurants
                Recheck Cond: (city % 'Warsaw'::text)
                ->  Bitmap Index Scan on restaurants_city_idx
                      Index Cond: (city % 'Warsaw'::text)
- Optimizer: Postgres query optimizer
 (8 rows)
-=======
-                      QUERY PLAN                       
--------------------------------------------------------
- HashAggregate
-   Group Key: city, similarity(city, 'Warsaw'::text)
-   ->  Bitmap Heap Scan on restaurants
-         Recheck Cond: (city % 'Warsaw'::text)
-         ->  Bitmap Index Scan on restaurants_city_idx
-               Index Cond: (city % 'Warsaw'::text)
-(6 rows)
->>>>>>> REL_16_9
 
 SELECT set_limit(0.3);
  set_limit 
