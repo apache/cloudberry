@@ -290,7 +290,7 @@ void EventSender::report_query_done(QueryDesc *query_desc, QueryItem &query,
   query_msg->set_query_status(query_status);
   if (status == METRICS_QUERY_ERROR) {
     bool error_flushed = elog_message() == NULL;
-    if (error_flushed && edata->message == NULL) {
+    if (error_flushed && (edata == NULL || edata->message == NULL)) {
       ereport(WARNING, (errmsg("YAGPCC missing error message")));
       ereport(DEBUG3,
               (errmsg("YAGPCC query sourceText: %s", query_desc->sourceText)));
