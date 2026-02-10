@@ -31,13 +31,6 @@ SELECT * FROM gist_page_opaque_info(get_raw_page('test_gist_idx', 2));
 
 COMMIT;
 SELECT * FROM gist_page_items(get_raw_page('test_gist_idx', 0), 'test_gist_idx');
-<<<<<<< HEAD
- itemoffset |   ctid    | itemlen | dead |       keys        
-------------+-----------+---------+------+-------------------
-          1 | (1,65535) |      40 | f    | (p)=((669,669))
-          2 | (2,65535) |      40 | f    | (p)=((1000,1000))
-(2 rows)
-=======
  itemoffset |   ctid    | itemlen | dead |             keys              
 ------------+-----------+---------+------+-------------------------------
           1 | (1,65535) |      40 | f    | (p)=("(185,185),(1,1)")
@@ -47,7 +40,6 @@ SELECT * FROM gist_page_items(get_raw_page('test_gist_idx', 0), 'test_gist_idx')
           5 | (5,65535) |      40 | f    | (p)=("(870,870),(741,741)")
           6 | (6,65535) |      40 | f    | (p)=("(1000,1000),(871,871)")
 (6 rows)
->>>>>>> REL_16_9
 
 SELECT * FROM gist_page_items(get_raw_page('test_gist_idx', 1), 'test_gist_idx') LIMIT 5;
  itemoffset | ctid  | itemlen | dead |        keys         
@@ -66,18 +58,6 @@ SELECT itemoffset, ctid, itemlen FROM gist_page_items_bytea(get_raw_page('test_g
 ------------+-----------+---------
           1 | (1,65535) |      40
           2 | (2,65535) |      40
-<<<<<<< HEAD
-(2 rows)
-
--- Failure with non-GiST index.
-CREATE INDEX test_gist_btree on test_gist(t);
-SELECT gist_page_items(get_raw_page('test_gist_btree', 0), 'test_gist_btree');
-ERROR:  "test_gist_btree" is not a GiST index
--- Failure with various modes.
--- Suppress the DETAIL message, to allow the tests to work across various
--- page sizes and architectures.
-\set VERBOSITY terse
-=======
           3 | (3,65535) |      40
           4 | (4,65535) |      40
           5 | (5,65535) |      40
@@ -94,7 +74,6 @@ ERROR:  "test_gist_btree" is not a GiST index
 SELECT gist_page_items(get_raw_page('test_gist_btree', 0), 'test_gist_idx');
 ERROR:  input page is not a valid GiST page
 -- Failure with various modes.
->>>>>>> REL_16_9
 -- invalid page size
 SELECT gist_page_items_bytea('aaa'::bytea);
 ERROR:  invalid page size
@@ -127,8 +106,6 @@ SELECT gist_page_opaque_info(decode(repeat('00', :block_size), 'hex'));
 -----------------------
  
 (1 row)
-<<<<<<< HEAD
-=======
 
 -- Test gist_page_items with included columns.
 -- Non-leaf pages contain only the key attributes, and leaf pages contain
@@ -152,6 +129,5 @@ SELECT keys AS keys_leaf_1
 ------------------------------------------------------
  (p) INCLUDE (t, i)=("(1,1),(1,1)") INCLUDE (1, null)
 (1 row)
->>>>>>> REL_16_9
 
 DROP TABLE test_gist;

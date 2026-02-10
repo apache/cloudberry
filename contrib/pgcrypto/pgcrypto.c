@@ -39,15 +39,12 @@
 #include "px.h"
 #include "utils/builtins.h"
 #include "utils/uuid.h"
-<<<<<<< HEAD
 #include "utils/guc.h"
 
 #include "px-crypt.h"
 #include "pgcrypto.h"
 #include "pgp.h"
-=======
 #include "varatt.h"
->>>>>>> REL_16_9
 
 PG_MODULE_MAGIC;
 

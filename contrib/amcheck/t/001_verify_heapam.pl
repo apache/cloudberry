@@ -7,11 +7,7 @@ use warnings;
 use PostgreSQL::Test::Cluster;
 use PostgreSQL::Test::Utils;
 
-<<<<<<< HEAD
-use Test::More tests => 80;
-=======
 use Test::More;
->>>>>>> REL_16_9
 
 my ($node, $result);
 

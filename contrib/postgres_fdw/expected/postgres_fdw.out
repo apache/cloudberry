@@ -553,10 +553,6 @@ EXPLAIN (VERBOSE, COSTS OFF)
    Output: t1."C 1"
    ->  Gather Motion 3:1  (slice1; segments: 3)
          Output: t1."C 1"
-<<<<<<< HEAD
-         Merge Key: t1."C 1"
-         ->  Limit
-=======
          Inner Unique: true
          Merge Cond: (t3.c1 = t1."C 1")
          ->  Foreign Scan
@@ -564,7 +560,6 @@ EXPLAIN (VERBOSE, COSTS OFF)
                Relations: (public.ft1 t2) INNER JOIN (public.ft2 t3)
                Remote SQL: SELECT r3."C 1" FROM ("S 1"."T 1" r2 INNER JOIN "S 1"."T 1" r3 ON (((r3."C 1" = r2."C 1")))) ORDER BY r2."C 1" ASC NULLS LAST
          ->  Index Only Scan using t1_pkey on "S 1"."T 1" t1
->>>>>>> REL_16_9
                Output: t1."C 1"
                ->  Merge Left Join
                      Output: t1."C 1"
@@ -834,25 +829,6 @@ EXPLAIN (VERBOSE, COSTS OFF)
 -------------------------------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    Output: a."C 1", a.c2, a.c3, a.c4, a.c5, a.c6, a.c7, a.c8, b.c1, b.c2, b.c3, b.c4, b.c5, b.c6, b.c7, b.c8
-<<<<<<< HEAD
-   ->  Hash Join
-         Output: a."C 1", a.c2, a.c3, a.c4, a.c5, a.c6, a.c7, a.c8, b.c1, b.c2, b.c3, b.c4, b.c5, b.c6, b.c7, b.c8
-         Inner Unique: true
-         Hash Cond: (b.c1 = a.c2)
-         ->  Redistribute Motion 1:3  (slice2)
-               Output: b.c1, b.c2, b.c3, b.c4, b.c5, b.c6, b.c7, b.c8
-               Hash Key: 47
-               ->  Foreign Scan on public.ft2 b
-                     Output: b.c1, b.c2, b.c3, b.c4, b.c5, b.c6, b.c7, b.c8
-                     Remote SQL: SELECT "C 1", c2, c3, c4, c5, c6, c7, c8 FROM "S 1"."T 1"
-         ->  Hash
-               Output: a."C 1", a.c2, a.c3, a.c4, a.c5, a.c6, a.c7, a.c8
-               ->  Seq Scan on "S 1"."T 1" a
-                     Output: a."C 1", a.c2, a.c3, a.c4, a.c5, a.c6, a.c7, a.c8
-                     Filter: (a."C 1" = 47)
- Optimizer: Postgres query optimizer
-(18 rows)
-=======
    ->  Index Scan using t1_pkey on "S 1"."T 1" a
          Output: a."C 1", a.c2, a.c3, a.c4, a.c5, a.c6, a.c7, a.c8
          Index Cond: (a."C 1" = 47)
@@ -860,7 +836,6 @@ EXPLAIN (VERBOSE, COSTS OFF)
          Output: b.c1, b.c2, b.c3, b.c4, b.c5, b.c6, b.c7, b.c8
          Remote SQL: SELECT "C 1", c2, c3, c4, c5, c6, c7, c8 FROM "S 1"."T 1" WHERE (("C 1" = $1::integer))
 (8 rows)
->>>>>>> REL_16_9
 
 SELECT * FROM "S 1"."T 1" a, ft2 b WHERE a."C 1" = 47 AND b.c1 = a.c2;
  C 1 | c2 |  c3   |              c4              |            c5            | c6 |     c7     | c8  | c1 | c2 |  c3   |              c4              |            c5            | c6 |     c7     | c8  
@@ -879,21 +854,9 @@ EXPLAIN (VERBOSE, COSTS OFF)
    Hash Cond: ((b.c1 = a.c1) AND ((b.c7)::text = upper((a.c7)::text)))
    ->  Foreign Scan on public.ft2 b
          Output: b.c1, b.c2, b.c3, b.c4, b.c5, b.c6, b.c7, b.c8
-<<<<<<< HEAD
-         Remote SQL: SELECT "C 1", c2, c3, c4, c5, c6, c7, c8 FROM "S 1"."T 1"
-   ->  Hash
-         Output: a.c1, a.c2, a.c3, a.c4, a.c5, a.c6, a.c7, a.c8
-         ->  Foreign Scan on public.ft2 a
-               Output: a.c1, a.c2, a.c3, a.c4, a.c5, a.c6, a.c7, a.c8
-               Filter: (a.c8 = 'foo'::user_enum)
-               Remote SQL: SELECT "C 1", c2, c3, c4, c5, c6, c7, c8 FROM "S 1"."T 1" WHERE ((c2 = 6))
- Optimizer: Postgres query optimizer
-(13 rows)
-=======
          Filter: ((b.c7)::text = upper((a.c7)::text))
          Remote SQL: SELECT "C 1", c2, c3, c4, c5, c6, c7, c8 FROM "S 1"."T 1" WHERE (($1::integer = "C 1"))
 (10 rows)
->>>>>>> REL_16_9
 
 SELECT * FROM ft2 a, ft2 b
 WHERE a.c2 = 6 AND b.c1 = a.c1 AND a.c8 = 'foo' AND b.c7 = upper(a.c7);
@@ -1174,9 +1137,6 @@ SELECT * FROM ft1 t1 WHERE t1.c1 === t1.c2 order by t1.c2 limit 1;
   1 |  1 | 00001 | Fri Jan 02 00:00:00 1970 PST | Fri Jan 02 00:00:00 1970 | 1  | 1          | foo
 (1 row)
 
-<<<<<<< HEAD
--- check schema-qualification of regconfig constant
-=======
 -- Ensure we don't ship FETCH FIRST .. WITH TIES
 EXPLAIN (VERBOSE, COSTS OFF)
 SELECT t1.c2 FROM ft1 t1 WHERE t1.c1 > 960 ORDER BY t1.c2 FETCH FIRST 2 ROWS WITH TIES;
@@ -1290,14 +1250,11 @@ SELECT * FROM ft1 WHERE CASE c3 COLLATE "C" WHEN c6 THEN true ELSE c3 < 'bar' EN
 
 -- a regconfig constant referring to this text search configuration
 -- is initially unshippable
->>>>>>> REL_16_9
 CREATE TEXT SEARCH CONFIGURATION public.custom_search
   (COPY = pg_catalog.english);
 EXPLAIN (VERBOSE, COSTS OFF)
 SELECT c1, to_tsvector('custom_search'::regconfig, c3) FROM ft1
 WHERE c1 = 642 AND length(to_tsvector('custom_search'::regconfig, c3)) > 0;
-<<<<<<< HEAD
-=======
                                QUERY PLAN                                
 -------------------------------------------------------------------------
  Foreign Scan on public.ft1
@@ -1320,7 +1277,6 @@ ALTER EXTENSION postgres_fdw ADD TEXT SEARCH CONFIGURATION public.custom_search;
 EXPLAIN (VERBOSE, COSTS OFF)
 SELECT c1, to_tsvector('custom_search'::regconfig, c3) FROM ft1
 WHERE c1 = 642 AND length(to_tsvector('custom_search'::regconfig, c3)) > 0;
->>>>>>> REL_16_9
                                                                   QUERY PLAN                                                                  
 ----------------------------------------------------------------------------------------------------------------------------------------------
  Foreign Scan on public.ft1
@@ -1335,8 +1291,6 @@ WHERE c1 = 642 AND length(to_tsvector('custom_search'::regconfig, c3)) > 0;
  642 | '00642':1
 (1 row)
 
-<<<<<<< HEAD
-=======
 -- ===================================================================
 -- ORDER BY queries
 -- ===================================================================
@@ -1404,7 +1358,6 @@ SELECT * FROM (
          Remote SQL: SELECT "C 1" FROM "S 1"."T 1"
 (8 rows)
 
->>>>>>> REL_16_9
 -- ===================================================================
 -- JOIN queries
 -- ===================================================================
@@ -1445,29 +1398,9 @@ SELECT t1.c1, t2.c2, t3.c3 FROM ft1 t1 JOIN ft2 t2 ON (t1.c1 = t2.c1) JOIN ft4 t
 ------------------------------------------------------------------------------------------------------------------------------------------------------
  Limit
    Output: t1.c1, t2.c2, t3.c3, t1.c3
-<<<<<<< HEAD
-   ->  Sort
-         Output: t1.c1, t2.c2, t3.c3, t1.c3
-         Sort Key: t1.c3, t1.c1
-         ->  Hash Join
-               Output: t1.c1, t2.c2, t3.c3, t1.c3
-               Hash Cond: (t2.c1 = t1.c1)
-               ->  Foreign Scan on public.ft2 t2
-                     Output: t2.c2, t2.c1
-                     Remote SQL: SELECT "C 1", c2 FROM "S 1"."T 1"
-               ->  Hash
-                     Output: t1.c1, t1.c3, t3.c3, t3.c1
-                     ->  Foreign Scan
-                           Output: t1.c1, t1.c3, t3.c3, t3.c1
-                           Relations: (public.ft1 t1) INNER JOIN (public.ft4 t3)
-                           Remote SQL: SELECT r1."C 1", r1.c3, r4.c3, r4.c1 FROM ("S 1"."T 1" r1 INNER JOIN "S 1"."T 3" r4 ON (((r1."C 1" = r4.c1))))
- Optimizer: Postgres query optimizer
-(18 rows)
-=======
    Relations: ((public.ft1 t1) INNER JOIN (public.ft2 t2)) INNER JOIN (public.ft4 t3)
    Remote SQL: SELECT r1."C 1", r2.c2, r4.c3, r1.c3 FROM (("S 1"."T 1" r1 INNER JOIN "S 1"."T 1" r2 ON (((r2."C 1" = r1."C 1")))) INNER JOIN "S 1"."T 3" r4 ON (((r1."C 1" = r4.c1)))) ORDER BY r1.c3 ASC NULLS LAST, r1."C 1" ASC NULLS LAST LIMIT 10::bigint OFFSET 10::bigint
 (4 rows)
->>>>>>> REL_16_9
 
 SELECT t1.c1, t2.c2, t3.c3 FROM ft1 t1 JOIN ft2 t2 ON (t1.c1 = t2.c1) JOIN ft4 t3 ON (t3.c1 = t1.c1) ORDER BY t1.c3, t1.c1 OFFSET 10 LIMIT 10;
  c1 | c2 |   c3   
@@ -2525,11 +2458,7 @@ SELECT t1."C 1" FROM "S 1"."T 1" t1, LATERAL (SELECT DISTINCT t2.c1, t3.c1 FROM 
                            ->  Foreign Scan
                                  Output: t2.c1, t3.c1
                                  Relations: (public.ft1 t2) INNER JOIN (public.ft2 t3)
-<<<<<<< HEAD
-                                 Remote SQL: SELECT r1."C 1", r2."C 1" FROM ("S 1"."T 1" r1 INNER JOIN "S 1"."T 1" r2 ON (((r1."C 1" = r2."C 1")) AND ((r1.c2 = $1::integer))))
-=======
                                  Remote SQL: SELECT r1."C 1", r2."C 1" FROM ("S 1"."T 1" r1 INNER JOIN "S 1"."T 1" r2 ON (((r2."C 1" = r1."C 1")) AND ((r1.c2 = $1::integer))))
->>>>>>> REL_16_9
 (17 rows)
 
 SELECT t1."C 1" FROM "S 1"."T 1" t1, LATERAL (SELECT DISTINCT t2.c1, t3.c1 FROM ft1 t2, ft2 t3 WHERE t2.c1 = t3.c1 AND t2.c2 = t1.c2) q ORDER BY t1."C 1" OFFSET 10 LIMIT 10;
@@ -3740,10 +3669,7 @@ select array_agg(c1 order by c1 using operator(public.<^)) from ft2 where c2 = 6
  {6,16,26,36,46,56,66,76,86,96}
 (1 row)
 
-<<<<<<< HEAD
-=======
 alter server loopback options (drop fdw_tuple_cost);
->>>>>>> REL_16_9
 -- This should be pushed too.
 explain (verbose, costs off)
 select * from ft2 order by c1 using operator(public.<^);
@@ -4674,8 +4600,6 @@ CONTEXT:  processing expression at position 2 in select list
 ANALYZE ft1; -- ERROR
 ERROR:  invalid input syntax for type integer: "foo"
 CONTEXT:  column "c8" of foreign table "ft1"
-<<<<<<< HEAD
-=======
 ALTER FOREIGN TABLE ft1 ALTER COLUMN c8 TYPE user_enum;
 -- ===================================================================
 -- local type can be different from remote type in some cases,
@@ -4723,7 +4647,6 @@ SELECT * FROM ft1 WHERE c8::text LIKE 'foo' LIMIT 1; -- ERROR; cast not pushed d
 ERROR:  operator does not exist: public.user_enum ~~ unknown
 HINT:  No operator matches the given name and argument types. You might need to add explicit type casts.
 CONTEXT:  remote SQL command: SELECT "C 1", c2, c3, c4, c5, c6, c7, c8 FROM "S 1"."T 1" WHERE ((c8 ~~ 'foo')) LIMIT 1::bigint
->>>>>>> REL_16_9
 ALTER FOREIGN TABLE ft1 ALTER COLUMN c8 TYPE user_enum;
 -- ===================================================================
 -- subtransaction
@@ -7294,8 +7217,6 @@ select * from grem1;
 (2 rows)
 
 delete from grem1;
-<<<<<<< HEAD
-=======
 -- batch insert with foreign partitions.
 -- This schema uses two partitions, one local and one remote with a modulo
 -- to loop across all of them in batches.
@@ -7318,7 +7239,6 @@ select count(*) from tab_batch_sharded;
 drop table tab_batch_local;
 drop table tab_batch_sharded;
 drop table tab_batch_sharded_p1_remote;
->>>>>>> REL_16_9
 alter server loopback options (drop batch_size);
 -- ===================================================================
 -- test local triggers
@@ -10319,14 +10239,6 @@ WARNING:  there is no transaction in progress
 -- Change application_name of remote connection to special one
 -- so that we can easily terminate the connection later.
 ALTER SERVER loopback OPTIONS (application_name 'fdw_retry_check');
-<<<<<<< HEAD
--- If debug_discard_caches is active, it results in
--- dropping remote connections after every transaction, making it
--- impossible to test termination meaningfully.  So turn that off
--- for this test.
-SET debug_discard_caches = 0;
-=======
->>>>>>> REL_16_9
 -- Make sure we have a remote connection.
 SELECT 1 FROM ft1 LIMIT 1;
  ?column? 
@@ -10364,10 +10276,6 @@ SELECT 1 FROM ft1 LIMIT 1;    -- should fail
 ERROR:  08006
 \set VERBOSITY default
 COMMIT;
-<<<<<<< HEAD
-RESET debug_discard_caches;
-=======
->>>>>>> REL_16_9
 -- =============================================================================
 -- test connection invalidation cases and postgres_fdw_get_connections function
 -- =============================================================================
@@ -11523,8 +11431,6 @@ DROP TABLE local_tbl;
 DROP INDEX base_tbl1_idx;
 DROP INDEX base_tbl2_idx;
 DROP INDEX async_p3_idx;
-<<<<<<< HEAD
-=======
 -- UNION queries
 EXPLAIN (VERBOSE, COSTS OFF)
 INSERT INTO result_tbl
@@ -11607,7 +11513,6 @@ SELECT * FROM result_tbl ORDER BY a;
 (12 rows)
 
 DELETE FROM result_tbl;
->>>>>>> REL_16_9
 -- Disable async execution if we use gating Result nodes for pseudoconstant
 -- quals
 EXPLAIN (VERBOSE, COSTS OFF)
@@ -11634,8 +11539,6 @@ SELECT * FROM async_pt WHERE CURRENT_USER = SESSION_USER;
                Output: async_pt_3.a, async_pt_3.b, async_pt_3.c
 (18 rows)
 
-<<<<<<< HEAD
-=======
 EXPLAIN (VERBOSE, COSTS OFF)
 (SELECT * FROM async_p1 WHERE CURRENT_USER = SESSION_USER)
 UNION ALL
@@ -11676,7 +11579,6 @@ SELECT * FROM ((SELECT * FROM async_p1 WHERE b < 10) UNION ALL (SELECT * FROM as
                Remote SQL: SELECT a, b, c FROM public.base_tbl2 WHERE ((b < 10))
 (13 rows)
 
->>>>>>> REL_16_9
 -- Test that pending requests are processed properly
 SET enable_mergejoin TO false;
 SET enable_hashjoin TO false;
@@ -12001,11 +11903,7 @@ DROP TABLE base_tbl;
 ALTER SERVER loopback OPTIONS (DROP async_capable);
 ALTER SERVER loopback2 OPTIONS (DROP async_capable);
 -- ===================================================================
-<<<<<<< HEAD
--- test invalid server and foreign table options
-=======
 -- test invalid server, foreign table and foreign data wrapper options
->>>>>>> REL_16_9
 -- ===================================================================
 -- Invalid fdw_startup_cost option
 CREATE SERVER inv_scst FOREIGN DATA WRAPPER postgres_fdw
@@ -12023,8 +11921,6 @@ ERROR:  invalid value for integer option "fetch_size": 100$%$#$#
 CREATE FOREIGN TABLE inv_bsz (c1 int )
 	SERVER loopback OPTIONS (batch_size '100$%$#$#');
 ERROR:  invalid value for integer option "batch_size": 100$%$#$#
-<<<<<<< HEAD
-=======
 -- No option is allowed to be specified at foreign data wrapper level
 ALTER FOREIGN DATA WRAPPER postgres_fdw OPTIONS (nonexistent 'fdw');
 ERROR:  invalid option "nonexistent"
@@ -12247,4 +12143,3 @@ ANALYZE analyze_table;
 -- cleanup
 DROP FOREIGN TABLE analyze_ftable;
 DROP TABLE analyze_table;
->>>>>>> REL_16_9

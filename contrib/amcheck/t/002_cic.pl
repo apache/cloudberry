@@ -1,43 +1,24 @@
 
-<<<<<<< HEAD
-# Copyright (c) 2021, PostgreSQL Global Development Group
-=======
 # Copyright (c) 2021-2023, PostgreSQL Global Development Group
->>>>>>> REL_16_9
 
 # Test CREATE INDEX CONCURRENTLY with concurrent modifications
 use strict;
 use warnings;
 
-<<<<<<< HEAD
-use Config;
-use PostgresNode;
-use TestLib;
-
-use Test::More tests => 3;
-=======
 use PostgreSQL::Test::Cluster;
 use PostgreSQL::Test::Utils;
 
 use Test::More;
->>>>>>> REL_16_9
 
 my ($node, $result);
 
 #
 # Test set-up
 #
-<<<<<<< HEAD
-$node = get_new_node('CIC_test');
-$node->init;
-$node->append_conf('postgresql.conf',
-	'lock_timeout = ' . (1000 * $TestLib::timeout_default));
-=======
 $node = PostgreSQL::Test::Cluster->new('CIC_test');
 $node->init;
 $node->append_conf('postgresql.conf',
 	'lock_timeout = ' . (1000 * $PostgreSQL::Test::Utils::timeout_default));
->>>>>>> REL_16_9
 $node->start;
 $node->safe_psql('postgres', q(CREATE EXTENSION amcheck));
 $node->safe_psql('postgres', q(CREATE TABLE tbl(i int)));

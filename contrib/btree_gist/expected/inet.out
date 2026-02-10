@@ -92,7 +92,7 @@ SELECT count(*) FROM inettmp WHERE a  = '89.225.196.191'::inet;
 ----------------------------------------------------------
  Aggregate
    ->  Gather Motion 1:1  (slice1; segments: 1)
-         ->  Index Scan using inettmp_a_a1_idx on inettmp
+         ->  Index Only Scan using inettmp_a_a1_idx on inettmp
                Index Cond: (a = '89.225.196.191'::inet)
  Optimizer: Postgres query optimizer
 (5 rows)

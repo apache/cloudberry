@@ -267,8 +267,6 @@ SELECT pg_replication_origin_drop('regress_test_decoding: regression_slot_no_lsn
  
 (1 row)
 
-<<<<<<< HEAD
-=======
 -- Test that the pgoutput correctly filters changes corresponding to the provided origin value.
 SELECT 'init' FROM pg_create_logical_replication_slot('regression_slot', 'pgoutput');
  ?column? 
@@ -325,4 +323,3 @@ SELECT pg_replication_origin_drop('regress_test_decoding: regression_slot');
 (1 row)
 
 DROP PUBLICATION pub;
->>>>>>> REL_16_9

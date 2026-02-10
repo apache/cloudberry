@@ -15,6 +15,7 @@
 #define _PG_NUMERIC_H_
 
 #include "fmgr.h"
+#include "nodes/nodes.h"
 
 /*
  * Limits on the precision and scale specifiable in a NUMERIC typmod.  The

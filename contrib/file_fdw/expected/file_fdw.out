@@ -56,11 +56,7 @@ ERROR:  COPY format "xml" not recognized
 CREATE FOREIGN TABLE tbl () SERVER file_server OPTIONS (format 'text', quote ':');          -- ERROR
 ERROR:  COPY quote available only in CSV mode
 CREATE FOREIGN TABLE tbl () SERVER file_server OPTIONS (format 'binary', header 'true');    -- ERROR
-<<<<<<< HEAD:contrib/file_fdw/output/file_fdw.source
-ERROR:  COPY cannot specify HEADER in BINARY mode
-=======
 ERROR:  cannot specify HEADER in BINARY mode
->>>>>>> REL_16_9:contrib/file_fdw/expected/file_fdw.out
 CREATE FOREIGN TABLE tbl () SERVER file_server OPTIONS (format 'binary', quote ':');        -- ERROR
 ERROR:  COPY quote available only in CSV mode
 CREATE FOREIGN TABLE tbl () SERVER file_server OPTIONS (format 'text', delimiter 'a');      -- ERROR
@@ -212,13 +208,8 @@ CONTEXT:  COPY agg_bad, line 3, column b: "aaa"
 SELECT explain_filter('EXPLAIN (VERBOSE, COSTS FALSE) SELECT * FROM agg_csv');
  Foreign Scan on public.agg_csv
    Output: a, b
-<<<<<<< HEAD:contrib/file_fdw/output/file_fdw.source
-   Foreign File: @abs_srcdir@/data/agg.csv
- Optimizer: Postgres query optimizer
- Settings: optimizer=off
-=======
    Foreign File: .../agg.csv
->>>>>>> REL_16_9:contrib/file_fdw/expected/file_fdw.out
+ Optimizer: Postgres query optimizer
 
 \t off
 PREPARE st(int) AS SELECT * FROM agg_csv WHERE a = $1;
@@ -267,20 +258,11 @@ COPY agg_csv FROM STDIN;
 ERROR:  cannot insert into foreign table "agg_csv"
 -- constraint exclusion tests
 \t on
-<<<<<<< HEAD:contrib/file_fdw/output/file_fdw.source
-EXPLAIN (VERBOSE, COSTS FALSE) SELECT * FROM agg_csv WHERE a < 0;
+SELECT explain_filter('EXPLAIN (VERBOSE, COSTS FALSE) SELECT * FROM agg_csv WHERE a < 0');
  Result
    Output: a, b
    One-Time Filter: false
  Optimizer: Postgres query optimizer
- Settings: optimizer=off
-=======
-SELECT explain_filter('EXPLAIN (VERBOSE, COSTS FALSE) SELECT * FROM agg_csv WHERE a < 0');
- Foreign Scan on public.agg_csv
-   Output: a, b
-   Filter: (agg_csv.a < 0)
-   Foreign File: .../agg.csv
->>>>>>> REL_16_9:contrib/file_fdw/expected/file_fdw.out
 
 \t off
 SELECT * FROM agg_csv WHERE a < 0;
@@ -489,13 +471,8 @@ SELECT explain_filter('EXPLAIN (VERBOSE, COSTS FALSE) SELECT * FROM agg_text WHE
  Foreign Scan on public.agg_text
    Output: a, b
    Filter: (agg_text.a > 0)
-<<<<<<< HEAD:contrib/file_fdw/output/file_fdw.source
-   Foreign File: @abs_srcdir@/data/agg.data
- Optimizer: Postgres query optimizer
- Settings: optimizer=off
-=======
    Foreign File: .../agg.data
->>>>>>> REL_16_9:contrib/file_fdw/expected/file_fdw.out
+ Optimizer: Postgres query optimizer
 
 \t off
 -- file FDW allows foreign tables to be accessed without user mapping

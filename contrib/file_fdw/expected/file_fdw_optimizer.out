@@ -1,6 +1,8 @@
 --
 -- Test foreign-data wrapper file_fdw.
 --
+-- directory paths are passed to us in environment variables
+\getenv abs_srcdir PG_ABS_SRCDIR
 -- Clean up in case a prior regression run failed
 SET client_min_messages TO 'warning';
 SET optimizer_trace_fallback = on;
