@@ -1,0 +1,111 @@
+-- Test parallel foreign scan support in the Cloudberry kernel.
+-- Uses a mock FDW that generates synthetic rows (id, val).
+CREATE EXTENSION parallel_foreign_scan_test_fdw;
+-- ============================================================
+-- PART 1: Coordinator mode (deterministic, tests planner paths)
+-- ============================================================
+CREATE SERVER coord_srv FOREIGN DATA WRAPPER parallel_foreign_scan_test_fdw
+  OPTIONS (mpp_execute 'coordinator');
+CREATE FOREIGN TABLE parallel_ft (id int, val text)
+  SERVER coord_srv OPTIONS (num_rows '10000');
+SET optimizer = off;
+SET enable_parallel = on;
+SET max_parallel_workers_per_gather = 2;
+SET parallel_setup_cost = 0;
+SET parallel_tuple_cost = 0;
+-- EXPLAIN: should show Gather + Parallel Foreign Scan
+EXPLAIN (costs off) SELECT count(*) FROM parallel_ft;
+                    QUERY PLAN                    
+--------------------------------------------------
+ Aggregate
+   ->  Gather
+         Workers Planned: 2
+         ->  Parallel Foreign Scan on parallel_ft
+ Optimizer: Postgres query optimizer
+(5 rows)
+
+-- Correctness: count
+SELECT count(*) FROM parallel_ft;
+ count 
+-------
+ 10000
+(1 row)
+
+-- Correctness: sum
+SELECT sum(id) FROM parallel_ft;
+   sum    
+----------
+ 50005000
+(1 row)
+
+-- Correctness: ordered rows
+SELECT id, val FROM parallel_ft ORDER BY id LIMIT 5;
+ id |  val  
+----+-------
+  1 | row_1
+  2 | row_2
+  3 | row_3
+  4 | row_4
+  5 | row_5
+(5 rows)
+
+-- Parallel off: no Gather in plan
+SET enable_parallel = off;
+EXPLAIN (costs off) SELECT count(*) FROM parallel_ft;
+             QUERY PLAN              
+-------------------------------------
+ Aggregate
+   ->  Foreign Scan on parallel_ft
+ Optimizer: Postgres query optimizer
+(3 rows)
+
+SELECT count(*) FROM parallel_ft;
+ count 
+-------
+ 10000
+(1 row)
+
+-- ============================================================
+-- PART 2: All-segments mode (tests execMain.c parallel launch)
+-- Each segment produces 1000 rows; verify parallel doesn't
+-- change the total by comparing EXPLAIN plans.
+-- ============================================================
+CREATE SERVER seg_srv FOREIGN DATA WRAPPER parallel_foreign_scan_test_fdw
+  OPTIONS (mpp_execute 'all segments');
+CREATE FOREIGN TABLE parallel_ft_seg (id int, val text)
+  SERVER seg_srv OPTIONS (num_rows '100');
+-- Non-parallel plan
+SET enable_parallel = off;
+EXPLAIN (costs off) SELECT count(*) FROM parallel_ft_seg;
+                    QUERY PLAN                     
+---------------------------------------------------
+ Finalize Aggregate
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         ->  Partial Aggregate
+               ->  Foreign Scan on parallel_ft_seg
+ Optimizer: Postgres query optimizer
+(5 rows)
+
+-- Parallel plan: should show Gather under Gather Motion
+SET enable_parallel = on;
+SET max_parallel_workers_per_gather = 2;
+SET parallel_setup_cost = 0;
+SET parallel_tuple_cost = 0;
+EXPLAIN (costs off) SELECT count(*) FROM parallel_ft_seg;
+                         QUERY PLAN                         
+------------------------------------------------------------
+ Finalize Aggregate
+   ->  Gather Motion 6:1  (slice1; segments: 6)
+         ->  Partial Aggregate
+               ->  Parallel Foreign Scan on parallel_ft_seg
+ Optimizer: Postgres query optimizer
+(5 rows)
+
+-- ============================================================
+-- Cleanup
+-- ============================================================
+DROP FOREIGN TABLE parallel_ft;
+DROP FOREIGN TABLE parallel_ft_seg;
+DROP SERVER coord_srv;
+DROP SERVER seg_srv;
+DROP EXTENSION parallel_foreign_scan_test_fdw;

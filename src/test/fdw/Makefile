@@ -1,4 +1,4 @@
-SUBDIRS = extension
+SUBDIRS = extension parallel_foreign_scan_test
 
 PROGRAM = extended_protocol_commit_test
 
