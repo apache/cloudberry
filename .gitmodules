@@ -15,3 +15,6 @@
 	path = dependency/yyjson
 	url = https://github.com/ibireme/yyjson.git
 
+[submodule "gpcontrib/yezzey"]
+	path = gpcontrib/yezzey
+	url = git@github.com:open-gpdb/yezzey.git
