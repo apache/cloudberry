@@ -17,4 +17,4 @@
 
 [submodule "gpcontrib/yezzey"]
 	path = gpcontrib/yezzey
-	url = git@github.com:open-gpdb/yezzey.git
+	url = https://github.com/open-gpdb/yezzey.git
