@@ -554,8 +554,15 @@ jobs:
               exit 1
             fi
 
-            ARCH="amd64"
-            CBDB_PKG_VERSION=${CBDB_VERSION}-${BUILD_NUMBER}-$(git --git-dir=.git rev-list HEAD --count).$(git --git-dir=.git rev-parse --short HEAD)
+            ARCH=$(dpkg --print-architecture)
+            # Detect OS distribution (e.g., ubuntu22.04, debian12)
+            if [ -f /etc/os-release ]; then
+              . /etc/os-release
+              OS_DISTRO=$(echo "${ID}${VERSION_ID}" | tr '[:upper:]' '[:lower:]')
+            else
+              OS_DISTRO="unknown"
+            fi
+            CBDB_PKG_VERSION=${CBDB_VERSION}-${BUILD_NUMBER}-${OS_DISTRO}
 
             echo "Produced artifacts"
             ls -l ../
