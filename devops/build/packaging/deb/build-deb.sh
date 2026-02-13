@@ -124,7 +124,17 @@ if [ -z ${BUILD_USER+x} ]; then
   export BUILD_USER=github
 fi
 
-export CBDB_PKG_VERSION=${CBDB_FULL_VERSION}-${BUILD_NUMBER}-$(git --git-dir=.git rev-list HEAD --count).$(git --git-dir=.git rev-parse --short HEAD)
+# Detect OS distribution (e.g., ubuntu22.04, debian12)
+if [ -z ${OS_DISTRO+x} ]; then
+  if [ -f /etc/os-release ]; then
+    . /etc/os-release
+    OS_DISTRO=$(echo "${ID}${VERSION_ID}" | tr '[:upper:]' '[:lower:]')
+  else
+    OS_DISTRO="unknown"
+  fi
+fi
+
+export CBDB_PKG_VERSION=${CBDB_FULL_VERSION}-${BUILD_NUMBER}-${OS_DISTRO}
 
 # Check if required commands are available
 check_commands
