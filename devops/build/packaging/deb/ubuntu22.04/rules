@@ -19,7 +19,7 @@ include /usr/share/dpkg/default.mk
 	dh $@ --parallel
 
 gpinstall:
-	make install
+	make install DESTDIR=${DEBIAN_DESTINATION} prefix=
 
 override_dh_auto_install: gpinstall
 	# the staging directory for creating a debian is NOT the right GPHOME.
@@ -43,7 +43,7 @@ override_dh_gencontrol:
 	dh_gencontrol -- -v${CBDB_PKG_VERSION} -p${PACKAGE_CBDB}
 
 override_dh_shlibdeps:
-	LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/lib/x86_64-linux-gnu/libfakeroot:${DEBIAN_DESTINATION}/lib dh_shlibdeps --dpkg-shlibdeps-params=--ignore-missing-info
+	LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/lib/$(DEB_HOST_MULTIARCH)/libfakeroot:${DEBIAN_DESTINATION}/lib dh_shlibdeps --dpkg-shlibdeps-params=--ignore-missing-info
 
 clean_dev_local:
 	rm -rf ${DEBIAN_DESTINATION}

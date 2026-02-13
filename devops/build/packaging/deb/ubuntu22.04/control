@@ -43,7 +43,7 @@ Build-Depends: debhelper (>= 9),
 
 Package: apache-cloudberry-db-incubating
 Provides: apache-cloudberry-db
-Architecture: amd64
+Architecture: any
 Depends: curl,
     cgroup-tools,
     iputils-ping,
