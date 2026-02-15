@@ -1903,6 +1903,10 @@ DefineIndex(Oid relationId,
 		}
 
 		stmt->idxname = indexRelationName;
+
+		AtEOXact_GUC(false, root_save_nestlevel);
+		SetUserIdAndSecContext(root_save_userid, root_save_sec_context);
+		
 		if (shouldDispatch)
 		{
 			/* make sure the QE uses the same index name that we chose */
@@ -1923,8 +1927,6 @@ DefineIndex(Oid relationId,
 		 * Indexes on partitioned tables are not themselves built, so we're
 		 * done here.
 		 */
-		AtEOXact_GUC(false, root_save_nestlevel);
-		SetUserIdAndSecContext(root_save_userid, root_save_sec_context);
 		table_close(rel, NoLock);
 		if (!OidIsValid(parentIndexId))
 			pgstat_progress_end_command();
@@ -1932,6 +1934,10 @@ DefineIndex(Oid relationId,
 	}
 
 	stmt->idxname = indexRelationName;
+
+	AtEOXact_GUC(false, root_save_nestlevel);
+	SetUserIdAndSecContext(root_save_userid, root_save_sec_context);
+
 	if (shouldDispatch)
 	{
 		int flags = DF_CANCEL_ON_ERROR | DF_WITH_SNAPSHOT;
@@ -1941,6 +1947,7 @@ DefineIndex(Oid relationId,
 		/* make sure the QE uses the same index name that we chose */
 		stmt->oldNode = InvalidOid;
 		Assert(stmt->relation != NULL);
+
 		CdbDispatchUtilityStatement((Node *) stmt, flags,
 									GetAssignedOidsForDispatch(),
 									NULL);
@@ -1949,9 +1956,6 @@ DefineIndex(Oid relationId,
 		if (!indexInfo->ii_BrokenHotChain)
 			cdb_sync_indcheckxmin_with_segments(indexRelationId);
 	}
-
-	AtEOXact_GUC(false, root_save_nestlevel);
-	SetUserIdAndSecContext(root_save_userid, root_save_sec_context);
 
 	if (!concurrent || Gp_role == GP_ROLE_EXECUTE)
 	{
