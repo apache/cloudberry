@@ -2049,7 +2049,7 @@ ProcessUtilitySlow(ParseState *pstate,
 
 					/*
 					 * The QD might have looked up the OID of the base table
-					 * already, and stashed it in stmt->relid
+					 * already, and stashed it in stmt->relationOid
 					 */
 					if (stmt->relationOid)
 						relid = stmt->relationOid;
