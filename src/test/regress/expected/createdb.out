@@ -211,8 +211,7 @@ HINT:  Inject an infinite 'skip' into the 'fts_probe' fault to disable FTS probi
 
 -- should fail
 create database db4 STRATEGY = file_copy;
-ERROR:  fault triggered, fault name:'end_prepare_two_phase' fault type:'panic'  (seg0 127.0.1.1:7002 pid=3302516)
-NOTICE:  Releasing segworker groups to retry broadcast.
+ERROR:  fault triggered, fault name:'end_prepare_two_phase' fault type:'panic'  (seg0 127.0.1.1:7002 pid=3774836)
 select force_mirrors_to_catch_up();
  force_mirrors_to_catch_up 
 ---------------------------

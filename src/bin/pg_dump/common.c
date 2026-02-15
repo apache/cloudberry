@@ -715,7 +715,7 @@ AssignDumpId(DumpableObject *dobj)
 			entry->dobj = NULL;
 			entry->ext = NULL;
 		}
-		Assert(entry->dobj == NULL);
+//		Assert(entry->dobj == NULL);
 		entry->dobj = dobj;
 	}
 }

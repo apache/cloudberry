@@ -353,9 +353,9 @@ COPY BINARY dir_table2 FROM PROGRAM :'cat_nation_file' 'nation5' WITH TAG 'natio
 SELECT relative_path, size, tag FROM dir_table2 ORDER BY 1;
 SELECT relative_path, content FROM directory_table('dir_table2') ORDER BY 1;
 
-\COPY BINARY dir_table1 FROM :'nation_file' 'nation.txt';   -- OK
+COPY BINARY dir_table1 FROM :'nation_file' 'nation.txt';   -- OK
 COPY BINARY dir_table1 FROM :'nation_file' 'nation2.txt';   -- OK
-\COPY BINARY "abs.dir_table" FROM :'nation_file' 'aa.bb';    -- OK
+COPY BINARY "abs.dir_table" FROM :'nation_file' 'aa.bb';    -- OK
 COPY BINARY "abs.dir_table" FROM :'nation_file' 'cc.dd';    -- OK
 
 -- Test copy binary from directory table

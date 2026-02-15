@@ -114,6 +114,13 @@ bool		isGPbackend;
 
 /* END MPP ADDITION */
 
+/* subquery used to convert user ID (eg, datdba) to user name */
+static const char *username_subquery;
+
+/*
+ * For 8.0 and earlier servers, pulled from pg_database, for 8.1+ we use
+ * FirstNormalObjectId - 1.
+ */
 static Oid	g_last_builtin_oid; /* value of the last builtin oid */
 
 /* The specified names/patterns should to match at least one entity */
@@ -999,6 +1006,8 @@ main(int argc, char **argv)
 	 */
 	if (fout->isStandby)
 		dopt.no_unlogged_table_data = true;
+
+	username_subquery = "SELECT rolname FROM pg_catalog.pg_roles WHERE oid =";
 
 	/*
 	 * Remember whether or not this GP database supports partitioning.
@@ -6434,11 +6443,11 @@ getTypeStorageOptions(Archive *fout, int *numTypes)
 					  "t.tableoid as tableoid, "
 					  "t.oid AS oid, "
 					  "t.typnamespace AS typnamespace, "
-					  "typowner, "
+					  "(%s typowner) as rolname, "
 					  "array_to_string(a.typoptions, ', ') AS typoptions "
 					  "FROM pg_type t "
 					  "JOIN pg_catalog.pg_type_encoding a ON a.typid = t.oid "
-					  "WHERE t.typisdefined = 't'");
+					  "WHERE t.typisdefined = 't'", username_subquery);
 
 	res = ExecuteSqlQuery(fout, query->data, PGRES_TUPLES_OK);
 
@@ -7059,9 +7068,7 @@ getExtProtocols(Archive *fout, int *numExtProtocols)
 	int			i_ptcname;
 	int			i_rolname;
 	int			i_ptcacl;
-	int			i_ptcracl;
-	int			i_ptcinitacl;
-	int			i_ptcinitracl;
+	int			i_acldefault;
 	int			i_ptctrusted;
 	int 		i_ptcreadid;
 	int			i_ptcwriteid;
@@ -7079,7 +7086,9 @@ getExtProtocols(Archive *fout, int *numExtProtocols)
 								 "       ptcwritefn as ptcwriteoid, "
 								 "		 ptcvalidatorfn as ptcvaloid, "
 								 "       ptcowner, "
-								 "       ptc.ptctrusted as ptctrusted "
+								 "       ptc.ptctrusted as ptctrusted, "
+								 "       ptc.ptcacl as ptcacl, "
+								 "acldefault('T', ptcowner) AS acldefault "
 								 "FROM   pg_extprotocol ptc "
 								 "LEFT JOIN pg_init_privs pip ON "
 								 "		 (ptc.oid = pip.objoid "
@@ -7113,11 +7122,9 @@ getExtProtocols(Archive *fout, int *numExtProtocols)
 	i_tableoid = PQfnumber(res, "tableoid");
 	i_oid = PQfnumber(res, "oid");
 	i_ptcname = PQfnumber(res, "ptcname");
-	i_rolname = PQfnumber(res, "rolname");
+	i_rolname = PQfnumber(res, "ptcowner");
 	i_ptcacl = PQfnumber(res, "ptcacl");
-	i_ptcracl = PQfnumber(res, "ptcracl");
-	i_ptcinitacl = PQfnumber(res, "ptcinitacl");
-	i_ptcinitracl = PQfnumber(res, "ptcinitracl");
+	i_acldefault = PQfnumber(res, "acldefault");
 	i_ptctrusted = PQfnumber(res, "ptctrusted");
 	i_ptcreadid = PQfnumber(res, "ptcreadoid");
 	i_ptcwriteid = PQfnumber(res, "ptcwriteoid");
@@ -7151,10 +7158,8 @@ getExtProtocols(Archive *fout, int *numExtProtocols)
 		else
 			ptcinfo[i].ptcvalidid = atooid(PQgetvalue(res, i, i_ptcvalidid));
 
-		ptcinfo[i].ptcacl = pg_strdup(PQgetvalue(res, i, i_ptcacl));
-		ptcinfo[i].rproacl = pg_strdup(PQgetvalue(res, i, i_ptcracl));
-		ptcinfo[i].initproacl = pg_strdup(PQgetvalue(res, i, i_ptcinitacl));
-		ptcinfo[i].initrproacl = pg_strdup(PQgetvalue(res, i, i_ptcinitracl));
+		ptcinfo[i].pacl.acl = pg_strdup(PQgetvalue(res, i, i_ptcacl));
+		ptcinfo[i].pacl.acldefault = pg_strdup(PQgetvalue(res, i, i_acldefault));
 		ptcinfo[i].ptctrusted = *(PQgetvalue(res, i, i_ptctrusted)) == 't';
 
 		/* Decide whether we want to dump it */
@@ -15422,7 +15427,6 @@ dumpExtProtocol(Archive *fout, const ExtProtInfo *ptcinfo)
 	char	   *namecopy;
 	int			i;
 	bool		has_internal = false;
-	DumpableAcl dbdacl;
 
 	/* Skip if not to be dumped */
 	if (!ptcinfo->dobj.dump || fout->dopt->dataOnly)
@@ -15558,15 +15562,11 @@ dumpExtProtocol(Archive *fout, const ExtProtInfo *ptcinfo)
 
 	/* Handle the ACL */
 	namecopy = pg_strdup(fmtId(ptcinfo->dobj.name));
-	dbdacl.acl = ptcinfo->ptcacl;
-	dbdacl.acldefault = ptcinfo->rproacl;
-	dbdacl.privtype = 0;
-	dbdacl.initprivs = NULL;
 	dumpACL(fout, ptcinfo->dobj.dumpId, InvalidDumpId,
 			"PROTOCOL",
 			namecopy, NULL,
 			NULL, ptcinfo->ptcowner,
-			&dbdacl);
+			&ptcinfo->pacl);
 	free(namecopy);
 
 	destroyPQExpBuffer(q);

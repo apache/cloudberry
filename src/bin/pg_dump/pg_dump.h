@@ -274,13 +274,10 @@ typedef struct _aggInfo
 typedef struct _ptcInfo
 {
 	DumpableObject dobj;
+	DumpableAcl pacl;
 	char	   *ptcreadfn;
 	char	   *ptcwritefn;
 	char	   *ptcowner;
-	char	   *ptcacl;
-	char	   *rproacl;
-	char	   *initproacl;
-	char	   *initrproacl;
 	bool	   ptctrusted;
 	Oid		   ptcreadid;
 	Oid		   ptcwriteid;

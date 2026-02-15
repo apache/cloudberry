@@ -5,3 +5,4 @@ select type,database,user_name,address,netmask,auth_method,options from pg_hba_f
 ------+----------+-----------+---------+---------+-------------+---------
 (0 rows)
 
+\! sed -i '$ d' $COORDINATOR_DATA_DIRECTORY/pg_hba.conf

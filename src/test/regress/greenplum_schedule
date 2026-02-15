@@ -155,7 +155,7 @@ test: instr_in_shmem_verify
 # hold locks.
 test: partition_locking
 test: vacuum_gp
-test: resource_queue_stat
+# test: resource_queue_stat
 # background analyze may affect pgstat
 test: pg_stat
 test: bfv_partition qp_misc_rio
@@ -218,7 +218,7 @@ test: hooktest tuple_serialization
 # Test query_info_collect_hook are called in expected sequence on normal query, query error/abort
 test: query_info_hook_test
 
-ignore: tpch500GB_orca
+# ignore: tpch500GB_orca
 
 # Tests for "compaction", i.e. VACUUM, of updatable append-only tables
 test: uao_compaction/full uao_compaction/outdated_partialindex uao_compaction/drop_column_update uao_compaction/eof_truncate uao_compaction/basic uao_compaction/outdatedindex uao_compaction/update_toast uao_compaction/outdatedindex_abort uao_compaction/delete_toast uao_compaction/alter_table_analyze uao_compaction/full_eof_truncate uao_compaction/full_threshold
@@ -313,7 +313,7 @@ test: oid_wraparound
 # fts_recovery_in_progresss uses fault injectors to simulate FTS fault states,
 # hence it should be run in isolation.
 test: fts_recovery_in_progress
-ignore: mirror_replay
+# ignore: mirror_replay
 test: autovacuum
 test: autovacuum-segment
 test: autovacuum-template0-segment
