@@ -11,6 +11,7 @@ CREATE TABLESPACE regress_create_idx_tblspace LOCATION '';
 RESET allow_in_place_tablespaces;
 
 BEGIN;
+SET allow_segment_DML TO true;
 CREATE ROLE regress_minimal;
 CREATE SCHEMA s;
 CREATE EXTENSION citext SCHEMA s;
@@ -46,7 +47,7 @@ REVOKE ALL ON FUNCTION s.index_row_if FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION s.index_row_if TO regress_minimal;
 -- Non-extension, non-function objects.
 CREATE COLLATION s.coll (LOCALE="C");
-CREATE TABLE s.x (y s.citext);
+CREATE TABLE s.x (y s.citext) DISTRIBUTED REPLICATED;
 ALTER TABLE s.x OWNER TO regress_minimal;
 -- Empty-table DefineIndex()
 CREATE UNIQUE INDEX u0rows ON s.x USING btree
