@@ -53,5 +53,5 @@ SELECT gp_set_next_oid_segments(16384);
 SELECT gp_get_next_oid_master();
 SELECT gp_get_next_oid_segments();
 CREATE TABLE oid_wraparound_table_other AS SELECT 1 AS a;
-SELECT gp_get_next_oid_master() in (16391, 16392);
+SELECT gp_get_next_oid_master() in (16390, 16391);
 SELECT gp_get_next_oid_segments();
