@@ -5324,7 +5324,6 @@ SELECT * FROM (SELECT * FROM rls_child_tbl UNION ALL
  a 
 ---
 (0 rows)
-
 DROP OPERATOR <<< (int, int);
 DROP FUNCTION op_leak(int, int);
 RESET SESSION AUTHORIZATION;
