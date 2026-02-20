@@ -223,7 +223,37 @@ _bt_validate_tid(Relation irel, ItemPointer h_tid)
 			{
 				itup = (IndexTuple) PageGetItem(page,
 												PageGetItemId(page, offnum));
-				if (ItemPointerEquals(&itup->t_tid, h_tid))
+				if(BTreeTupleIsPosting(itup))
+				{
+					ItemPointer current;
+					for (int i = 0; i < BTreeTupleGetNPosting(itup); i++)
+					{
+
+						current = BTreeTupleGetPostingN(itup, i);
+
+						if (ItemPointerEquals(current, h_tid) )
+						{
+							Form_pg_attribute key_att = TupleDescAttr(RelationGetDescr(irel), 0);
+							Oid key = InvalidOid;
+							bool isnull;
+							if (key_att->atttypid == OIDOID)
+							{
+								key = DatumGetInt32(
+										index_getattr(itup, 1, RelationGetDescr(irel), &isnull));
+								elog(ERROR, "found tid (%d,%d), %s (%d) already in index (%s)",
+									ItemPointerGetBlockNumber(h_tid), ItemPointerGetOffsetNumber(h_tid),
+									NameStr(key_att->attname), key, RelationGetRelationName(irel));
+							}
+							else
+							{
+								elog(ERROR, "found tid (%d,%d) already in index (%s)",
+									ItemPointerGetBlockNumber(h_tid), ItemPointerGetOffsetNumber(h_tid),
+									RelationGetRelationName(irel));
+							}
+						}
+					}
+				}
+				else if (ItemPointerEquals(&itup->t_tid, h_tid))
 				{
 					Form_pg_attribute key_att = TupleDescAttr(RelationGetDescr(irel), 0);
 					Oid key = InvalidOid;
