@@ -279,10 +279,6 @@ bool		report_per_command = false; /* report per-command latencies,
 										 * (errors without retrying) */
 int			main_pid;			/* main process id used in log filename */
 
-<<<<<<< HEAD
-
-int			use_unique_key=1;	/* indexes will be primary key if set, otherwise non-unique indexes */
-=======
 /*
  * There are different types of restrictions for deciding that the current
  * transaction with a serialization/deadlock error can no longer be retried and
@@ -305,13 +301,11 @@ uint32		max_tries = 1;
 
 bool		failures_detailed = false;	/* whether to group failures in
 										 * reports or logs by basic types */
->>>>>>> REL_16_9
 
 const char *pghost = NULL;
 const char *pgport = NULL;
 const char *username = NULL;
 const char *dbName = NULL;
-char	   *storage_clause = "appendonly=false";
 
 char	   *logfile_prefix = NULL;
 const char *progname;
@@ -893,8 +887,6 @@ usage(void)
 		   "  -q, --quiet              quiet logging (one message each 5 seconds)\n"
 		   "  -s, --scale=NUM          scaling factor\n"
 		   "  --foreign-keys           create foreign key constraints between tables\n"
-		   "  --use-unique-keys        make the indexes that are created non-unique indexes\n"
-		   "                           (default: unique)\n"
 		   "  --index-tablespace=TABLESPACE\n"
 		   "                           create indexes in the specified tablespace\n"
 		   "  --partition-method=(range|hash)\n"
@@ -5128,13 +5120,6 @@ initCreatePKeys(PGconn *con)
 		"alter table pgbench_tellers add primary key (tid)",
 		"alter table pgbench_accounts add primary key (aid)"
 	};
-	static const char *const NON_UNIQUE_INDEX_DDLINDEXes[] = {
-		"CREATE INDEX branch_idx ON pgbench_branches (bid) ",
-		"CREATE INDEX teller_idx ON pgbench_tellers (tid) ",
-		"CREATE INDEX account_idx ON pgbench_accounts (aid) "
-	};
-	StaticAssertStmt(lengthof(DDLINDEXes) == lengthof(NON_UNIQUE_INDEX_DDLINDEXes),
-					 "NON_UNIQUE_INDEX_DDLINDEXes must have same size as DDLINDEXes");
 	int			i;
 	PQExpBufferData query;
 
@@ -5145,10 +5130,7 @@ initCreatePKeys(PGconn *con)
 	{
 
 		resetPQExpBuffer(&query);
-		if (use_unique_key)
-			appendPQExpBufferStr(&query, DDLINDEXes[i]);
-		else
-			appendPQExpBufferStr(&query, NON_UNIQUE_INDEX_DDLINDEXes[i]);
+		appendPQExpBufferStr(&query, DDLINDEXes[i]);
 
 
 		if (index_tablespace != NULL)
@@ -6654,7 +6636,6 @@ main(int argc, char **argv)
 		{"show-script", required_argument, NULL, 10},
 		{"partitions", required_argument, NULL, 11},
 		{"partition-method", required_argument, NULL, 12},
-		{"use-unique-keys", no_argument, &use_unique_key, 1},
 		{"failures-detailed", no_argument, NULL, 13},
 		{"max-tries", required_argument, NULL, 14},
 		{"verbose-errors", no_argument, NULL, 15},
@@ -6729,137 +6710,12 @@ main(int argc, char **argv)
 	if (!set_random_seed(getenv("PGBENCH_RANDOM_SEED")))
 		pg_fatal("error while setting random seed from PGBENCH_RANDOM_SEED environment variable");
 
-<<<<<<< HEAD
-	while ((c = getopt_long(argc, argv, "iI:h:nvp:dqb:SNc:j:Crs:t:T:U:lf:D:F:M:P:R:L:x:", long_options, &optindex)) != -1)
-=======
 	while ((c = getopt_long(argc, argv, "b:c:CdD:f:F:h:iI:j:lL:M:nNp:P:qrR:s:St:T:U:v", long_options, &optindex)) != -1)
->>>>>>> REL_16_9
 	{
 		char	   *script;
 
 		switch (c)
 		{
-<<<<<<< HEAD
-			case 'i':
-				is_init_mode = true;
-				break;
-			case 'x':
-				storage_clause = optarg;
-				break;
-			case 'I':
-				if (initialize_steps)
-					pg_free(initialize_steps);
-				initialize_steps = pg_strdup(optarg);
-				checkInitSteps(initialize_steps);
-				initialization_option_set = true;
-				break;
-			case 'h':
-				pghost = pg_strdup(optarg);
-				break;
-			case 'n':
-				is_no_vacuum = true;
-				break;
-			case 'v':
-				benchmarking_option_set = true;
-				do_vacuum_accounts = true;
-				break;
-			case 'p':
-				pgport = pg_strdup(optarg);
-				break;
-			case 'd':
-				pg_logging_increase_verbosity();
-				break;
-			case 'c':
-				benchmarking_option_set = true;
-				nclients = atoi(optarg);
-				if (nclients <= 0)
-				{
-					pg_log_fatal("invalid number of clients: \"%s\"", optarg);
-					exit(1);
-				}
-#ifdef HAVE_GETRLIMIT
-#ifdef RLIMIT_NOFILE			/* most platforms use RLIMIT_NOFILE */
-				if (getrlimit(RLIMIT_NOFILE, &rlim) == -1)
-#else							/* but BSD doesn't ... */
-				if (getrlimit(RLIMIT_OFILE, &rlim) == -1)
-#endif							/* RLIMIT_NOFILE */
-				{
-					pg_log_fatal("getrlimit failed: %m");
-					exit(1);
-				}
-				if (rlim.rlim_cur < nclients + 3)
-				{
-					pg_log_fatal("need at least %d open files, but system limit is %ld",
-								 nclients + 3, (long) rlim.rlim_cur);
-					pg_log_info("Reduce number of clients, or use limit/ulimit to increase the system limit.");
-					exit(1);
-				}
-#endif							/* HAVE_GETRLIMIT */
-				break;
-			case 'j':			/* jobs */
-				benchmarking_option_set = true;
-				nthreads = atoi(optarg);
-				if (nthreads <= 0)
-				{
-					pg_log_fatal("invalid number of threads: \"%s\"", optarg);
-					exit(1);
-				}
-#ifndef ENABLE_THREAD_SAFETY
-				if (nthreads != 1)
-				{
-					pg_log_fatal("threads are not supported on this platform; use -j1");
-					exit(1);
-				}
-#endif							/* !ENABLE_THREAD_SAFETY */
-				break;
-			case 'C':
-				benchmarking_option_set = true;
-				is_connect = true;
-				break;
-			case 'r':
-				benchmarking_option_set = true;
-				report_per_command = true;
-				break;
-			case 's':
-				scale_given = true;
-				scale = atoi(optarg);
-				if (scale <= 0)
-				{
-					pg_log_fatal("invalid scaling factor: \"%s\"", optarg);
-					exit(1);
-				}
-				break;
-			case 't':
-				benchmarking_option_set = true;
-				nxacts = atoi(optarg);
-				if (nxacts <= 0)
-				{
-					pg_log_fatal("invalid number of transactions: \"%s\"", optarg);
-					exit(1);
-				}
-				break;
-			case 'T':
-				benchmarking_option_set = true;
-				duration = atoi(optarg);
-				if (duration <= 0)
-				{
-					pg_log_fatal("invalid duration: \"%s\"", optarg);
-					exit(1);
-				}
-				break;
-			case 'U':
-				username = pg_strdup(optarg);
-				break;
-			case 'l':
-				benchmarking_option_set = true;
-				use_log = true;
-				break;
-			case 'q':
-				initialization_option_set = true;
-				use_quiet = true;
-				break;
-=======
->>>>>>> REL_16_9
 			case 'b':
 				if (strcmp(optarg, "list") == 0)
 				{

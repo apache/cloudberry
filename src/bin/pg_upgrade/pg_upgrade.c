@@ -3,12 +3,8 @@
  *
  *	main source file
  *
-<<<<<<< HEAD
  *	Portions Copyright (c) 2016-Present, VMware, Inc. or its affiliates
- *	Copyright (c) 2010-2021, PostgreSQL Global Development Group
-=======
  *	Copyright (c) 2010-2023, PostgreSQL Global Development Group
->>>>>>> REL_16_9
  *	src/bin/pg_upgrade/pg_upgrade.c
  */
 
@@ -57,12 +53,9 @@
 #include "fe_utils/string_utils.h"
 #include "pg_upgrade.h"
 
-<<<<<<< HEAD
 #include "greenplum/pg_upgrade_greenplum.h"
 
-=======
 static void set_locale_and_encoding(void);
->>>>>>> REL_16_9
 static void prepare_new_cluster(void);
 static void prepare_new_globals(void);
 static void create_new_objects(void);
@@ -70,15 +63,12 @@ static void copy_xact_xlog_xid(void);
 static void set_frozenxids(bool minmxid_only);
 static void make_outputdirs(char *pgdata);
 static void setup(char *argv0, bool *live_check);
-<<<<<<< HEAD
 
 static void copy_subdir_files(const char *old_subdir, const char *new_subdir);
 
 #ifdef WIN32
 static int	CreateRestrictedProcess(char *cmd, PROCESS_INFORMATION *processInfo, const char *progname);
 #endif
-=======
->>>>>>> REL_16_9
 
 ClusterInfo old_cluster,
 			new_cluster;
@@ -131,7 +121,6 @@ main(int argc, char **argv)
 
 	adjust_data_dir(&old_cluster);
 
-<<<<<<< HEAD
 	if(!is_skip_target_check())
 		adjust_data_dir(&new_cluster);
 
@@ -162,36 +151,6 @@ main(int argc, char **argv)
 		make_outputdirs_gp(output_dir);
 	else
 		make_outputdirs(new_cluster.pgdata);
-=======
-	/*
-	 * Set mask based on PGDATA permissions, needed for the creation of the
-	 * output directories with correct permissions.
-	 */
-	if (!GetDataDirectoryCreatePerm(new_cluster.pgdata))
-		pg_fatal("could not read permissions of directory \"%s\": %s",
-				 new_cluster.pgdata, strerror(errno));
-
-	umask(pg_mode_mask);
-
-	/*
-	 * This needs to happen after adjusting the data directory of the new
-	 * cluster in adjust_data_dir().
-	 */
-	make_outputdirs(new_cluster.pgdata);
-
-	setup(argv[0], &live_check);
-
-	output_check_banner(live_check);
-
-	check_cluster_versions();
-
-	get_sock_dir(&old_cluster, live_check);
-	get_sock_dir(&new_cluster, false);
-
-	check_cluster_compatibility(live_check);
-
-	check_and_dump_old_cluster(live_check);
->>>>>>> REL_16_9
 
 	setup(argv[0], &live_check);
 
@@ -358,7 +317,6 @@ main(int argc, char **argv)
 	return 0;
 }
 
-<<<<<<< HEAD
 #ifdef WIN32
 typedef BOOL(WINAPI * __CreateRestrictedToken) (HANDLE, DWORD, DWORD, PSID_AND_ATTRIBUTES, DWORD, PLUID_AND_ATTRIBUTES, DWORD, PSID_AND_ATTRIBUTES, PHANDLE);
 
@@ -468,8 +426,6 @@ CreateRestrictedProcess(char *cmd, PROCESS_INFORMATION *processInfo, const char 
 }
 #endif
 
-=======
->>>>>>> REL_16_9
 /*
  * Create and assign proper permissions to the set of output directories
  * used to store any data generated internally, filling in log_opts in
@@ -490,11 +446,7 @@ make_outputdirs(char *pgdata)
 	log_opts.rootdir = (char *) pg_malloc0(MAXPGPATH);
 	len = snprintf(log_opts.rootdir, MAXPGPATH, "%s/%s", pgdata, BASE_OUTPUTDIR);
 	if (len >= MAXPGPATH)
-<<<<<<< HEAD
-		pg_fatal("directory path for new cluster is too long\n");
-=======
 		pg_fatal("directory path for new cluster is too long");
->>>>>>> REL_16_9
 
 	/* BASE_OUTPUTDIR/$timestamp/ */
 	gettimeofday(&time, NULL);
@@ -507,48 +459,27 @@ make_outputdirs(char *pgdata)
 	len = snprintf(log_opts.basedir, MAXPGPATH, "%s/%s", log_opts.rootdir,
 				   timebuf);
 	if (len >= MAXPGPATH)
-<<<<<<< HEAD
-		pg_fatal("directory path for new cluster is too long\n");
-=======
 		pg_fatal("directory path for new cluster is too long");
->>>>>>> REL_16_9
 
 	/* BASE_OUTPUTDIR/$timestamp/dump/ */
 	log_opts.dumpdir = (char *) pg_malloc0(MAXPGPATH);
 	len = snprintf(log_opts.dumpdir, MAXPGPATH, "%s/%s/%s", log_opts.rootdir,
 				   timebuf, DUMP_OUTPUTDIR);
 	if (len >= MAXPGPATH)
-<<<<<<< HEAD
-		pg_fatal("directory path for new cluster is too long\n");
-=======
 		pg_fatal("directory path for new cluster is too long");
->>>>>>> REL_16_9
 
 	/* BASE_OUTPUTDIR/$timestamp/log/ */
 	log_opts.logdir = (char *) pg_malloc0(MAXPGPATH);
 	len = snprintf(log_opts.logdir, MAXPGPATH, "%s/%s/%s", log_opts.rootdir,
 				   timebuf, LOG_OUTPUTDIR);
 	if (len >= MAXPGPATH)
-<<<<<<< HEAD
-		pg_fatal("directory path for new cluster is too long\n");
-=======
 		pg_fatal("directory path for new cluster is too long");
->>>>>>> REL_16_9
 
 	/*
 	 * Ignore the error case where the root path exists, as it is kept the
 	 * same across runs.
 	 */
 	if (mkdir(log_opts.rootdir, pg_dir_create_mode) < 0 && errno != EEXIST)
-<<<<<<< HEAD
-		pg_fatal("could not create directory \"%s\": %m\n", log_opts.rootdir);
-	if (mkdir(log_opts.basedir, pg_dir_create_mode) < 0)
-		pg_fatal("could not create directory \"%s\": %m\n", log_opts.basedir);
-	if (mkdir(log_opts.dumpdir, pg_dir_create_mode) < 0)
-		pg_fatal("could not create directory \"%s\": %m\n", log_opts.dumpdir);
-	if (mkdir(log_opts.logdir, pg_dir_create_mode) < 0)
-		pg_fatal("could not create directory \"%s\": %m\n", log_opts.logdir);
-=======
 		pg_fatal("could not create directory \"%s\": %m", log_opts.rootdir);
 	if (mkdir(log_opts.basedir, pg_dir_create_mode) < 0)
 		pg_fatal("could not create directory \"%s\": %m", log_opts.basedir);
@@ -556,22 +487,14 @@ make_outputdirs(char *pgdata)
 		pg_fatal("could not create directory \"%s\": %m", log_opts.dumpdir);
 	if (mkdir(log_opts.logdir, pg_dir_create_mode) < 0)
 		pg_fatal("could not create directory \"%s\": %m", log_opts.logdir);
->>>>>>> REL_16_9
 
 	len = snprintf(filename_path, sizeof(filename_path), "%s/%s",
 				   log_opts.logdir, INTERNAL_LOG_FILE);
 	if (len >= sizeof(filename_path))
-<<<<<<< HEAD
-		pg_fatal("directory path for new cluster is too long\n");
-
-	if ((log_opts.internal = fopen_priv(filename_path, "a")) == NULL)
-		pg_fatal("could not open log file \"%s\": %m\n", filename_path);
-=======
 		pg_fatal("directory path for new cluster is too long");
 
 	if ((log_opts.internal = fopen_priv(filename_path, "a")) == NULL)
 		pg_fatal("could not open log file \"%s\": %m", filename_path);
->>>>>>> REL_16_9
 
 	/* label start of upgrade in logfiles */
 	for (filename = output_files; *filename != NULL; filename++)
@@ -579,15 +502,9 @@ make_outputdirs(char *pgdata)
 		len = snprintf(filename_path, sizeof(filename_path), "%s/%s",
 					   log_opts.logdir, *filename);
 		if (len >= sizeof(filename_path))
-<<<<<<< HEAD
-			pg_fatal("directory path for new cluster is too long\n");
-		if ((fp = fopen_priv(filename_path, "a")) == NULL)
-			pg_fatal("could not write to log file \"%s\": %m\n", filename_path);
-=======
 			pg_fatal("directory path for new cluster is too long");
 		if ((fp = fopen_priv(filename_path, "a")) == NULL)
 			pg_fatal("could not write to log file \"%s\": %m", filename_path);
->>>>>>> REL_16_9
 
 		fprintf(fp,
 				"-----------------------------------------------------------------\n"
@@ -654,22 +571,14 @@ setup(char *argv0, bool *live_check)
 	/* same goes for the new postmaster */
 	if (!is_skip_target_check())
 	{
-<<<<<<< HEAD
 		if (pid_lock_file_exists(new_cluster.pgdata))
 		{
 			if (start_postmaster(&new_cluster, false))
 				stop_postmaster(false);
 			else
 				pg_fatal("There seems to be a postmaster servicing the new cluster.\n"
-						 "Please shutdown that postmaster and try again.\n");
+						 "Please shutdown that postmaster and try again.");
 		}
-=======
-		if (start_postmaster(&new_cluster, false))
-			stop_postmaster(false);
-		else
-			pg_fatal("There seems to be a postmaster servicing the new cluster.\n"
-					 "Please shutdown that postmaster and try again.");
->>>>>>> REL_16_9
 	}
 }
 
@@ -800,12 +709,8 @@ prepare_new_globals(void)
 	prep_status("Restoring global objects in the new cluster");
 
 	exec_prog(UTILITY_LOG_FILE, NULL, true, true,
-<<<<<<< HEAD
 			  "%s \"%s/psql\" " EXEC_PSQL_ARGS " %s -f \"%s/%s\"",
 			  PG_OPTIONS_UTILITY_MODE_VERSION(new_cluster.major_version),
-=======
-			  "\"%s/psql\" " EXEC_PSQL_ARGS " %s -f \"%s/%s\"",
->>>>>>> REL_16_9
 			  new_cluster.bindir, cluster_conn_opts(&new_cluster),
 			  log_opts.dumpdir,
 			  GLOBALS_DUMP_FILE);
@@ -852,10 +757,7 @@ create_new_objects(void)
 				  true,
 				  true,
 				  "\"%s/pg_restore\" %s %s --exit-on-error --verbose "
-<<<<<<< HEAD
 				  "--binary-upgrade "
-=======
->>>>>>> REL_16_9
 				  "--dbname postgres \"%s/%s\"",
 				  new_cluster.bindir,
 				  cluster_conn_opts(&new_cluster),
@@ -893,15 +795,10 @@ create_new_objects(void)
 
 		parallel_exec_prog(log_file_name,
 						   NULL,
-<<<<<<< HEAD
 						   "%s \"%s/pg_restore\" %s %s --exit-on-error --verbose "
 						   "--binary-upgrade "
 						   "--dbname template1 \"%s/%s\"",
 						   PG_OPTIONS_UTILITY_MODE_VERSION(new_cluster.major_version),
-=======
-						   "\"%s/pg_restore\" %s %s --exit-on-error --verbose "
-						   "--dbname template1 \"%s/%s\"",
->>>>>>> REL_16_9
 						   new_cluster.bindir,
 						   cluster_conn_opts(&new_cluster),
 						   create_opts,
@@ -1002,11 +899,7 @@ copy_xact_xlog_xid(void)
 
 	prep_status("Setting oldest XID for new cluster");
 	exec_prog(UTILITY_LOG_FILE, NULL, true, true,
-<<<<<<< HEAD
 			  "\"%s/pg_resetwal\" --binary-upgrade -f -u %u \"%s\"",
-=======
-			  "\"%s/pg_resetwal\" -f -u %u \"%s\"",
->>>>>>> REL_16_9
 			  new_cluster.bindir, old_cluster.controldata.chkpnt_oldstxid,
 			  new_cluster.pgdata);
 	check_ok();

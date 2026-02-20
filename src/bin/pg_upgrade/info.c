@@ -401,9 +401,6 @@ get_db_infos(ClusterInfo *cluster)
 	char		query[QUERY_ALLOC];
 
 	snprintf(query, sizeof(query),
-<<<<<<< HEAD
-			 "SELECT d.oid, d.datname, d.encoding, d.datcollate, d.datctype, "
-=======
 			 "SELECT d.oid, d.datname, d.encoding, d.datcollate, d.datctype, ");
 	if (GET_MAJOR_VERSION(cluster->major_version) < 1500)
 		snprintf(query + strlen(query), sizeof(query) - strlen(query),
@@ -412,18 +409,13 @@ get_db_infos(ClusterInfo *cluster)
 		snprintf(query + strlen(query), sizeof(query) - strlen(query),
 				 "datlocprovider, daticulocale, ");
 	snprintf(query + strlen(query), sizeof(query) - strlen(query),
->>>>>>> REL_16_9
 			 "pg_catalog.pg_tablespace_location(t.oid) AS spclocation "
 			 "FROM pg_catalog.pg_database d "
 			 " LEFT OUTER JOIN pg_catalog.pg_tablespace t "
 			 " ON d.dattablespace = t.oid "
 			 "WHERE d.datallowconn = true "
-<<<<<<< HEAD
 	/* we don't preserve pg_database.oid so we sort by name */
 			 "ORDER BY 2");
-=======
-			 "ORDER BY 1");
->>>>>>> REL_16_9
 
 	res = executeQueryOrDie(conn, "%s", query);
 
@@ -562,10 +554,7 @@ get_rel_infos(ClusterInfo *cluster, DbInfo *dbinfo)
 	 */
 	snprintf(query + strlen(query), sizeof(query) - strlen(query),
 			 "SELECT all_rels.*, n.nspname, c.relname, "
-<<<<<<< HEAD
 			 "  %s as relstorage, c.relkind, "
-=======
->>>>>>> REL_16_9
 			 "  c.relfilenode, c.reltablespace, "
 			 "  pg_catalog.pg_tablespace_location(t.oid) AS spclocation "
 			 "FROM (SELECT * FROM regular_heap "
@@ -580,7 +569,6 @@ get_rel_infos(ClusterInfo *cluster, DbInfo *dbinfo)
 			 "  %s"
 			 "  LEFT OUTER JOIN pg_catalog.pg_tablespace t "
 			 "     ON c.reltablespace = t.oid "
-<<<<<<< HEAD
 			 "ORDER BY 1;",
 	/*
 	 * GPDB 7 with PostgreSQL v12 merge removed the relstorage column.
@@ -596,9 +584,6 @@ get_rel_infos(ClusterInfo *cluster, DbInfo *dbinfo)
 
 			(GET_MAJOR_VERSION(cluster->major_version) <= 1000) ?
 			 "" : "LEFT OUTER JOIN pg_catalog.pg_am am ON c.relam = am.oid");
-=======
-			 "ORDER BY 1;");
->>>>>>> REL_16_9
 
 	res = executeQueryOrDie(conn, "%s", query);
 
@@ -611,13 +596,9 @@ get_rel_infos(ClusterInfo *cluster, DbInfo *dbinfo)
 	i_toastheap = PQfnumber(res, "toastheap");
 	i_nspname = PQfnumber(res, "nspname");
 	i_relname = PQfnumber(res, "relname");
-<<<<<<< HEAD
 	i_relstorage = PQfnumber(res, "relstorage");
 	i_relkind = PQfnumber(res, "relkind");
-	i_relfilenode = PQfnumber(res, "relfilenode");
-=======
 	i_relfilenumber = PQfnumber(res, "relfilenode");
->>>>>>> REL_16_9
 	i_reltablespace = PQfnumber(res, "reltablespace");
 	i_spclocation = PQfnumber(res, "spclocation");
 
