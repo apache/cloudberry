@@ -47,6 +47,24 @@ class MicroPartitionStatsData;
 class BloomFilter;
 struct ColumnMemStats;
 
+// We place the information of each column in a nearby layout, so that for
+// each column status check, there is only one memory access, and other
+// accesses can hit the cache.
+struct NullCountStats {
+  // whether the column has been set the has_null to true, if done, we should
+  // not set it again
+  bool has_null = false;
+  // whether the column has been set the all_null to false, if done, we should
+  // not set it again
+  bool all_null = true;
+  // the count of not null rows
+  int32 not_null_count = 0;
+  void Reset() {
+    has_null = false;
+    all_null = true;
+    not_null_count = 0;
+  }
+};
 class MicroPartitionStats final {
  public:
   MicroPartitionStats(TupleDesc desc, bool allow_fallback_to_pg = false);
@@ -54,7 +72,15 @@ class MicroPartitionStats final {
 
   void Initialize(const std::vector<int> &minmax_columns,
                   const std::vector<int> &bf_columns);
-  void AddRow(TupleTableSlot *slot);
+
+  // update_null_stats: whether to update the null stats for the column, in
+  // orc_writer, we don't need to update the null stats,because pax_column
+  // already updated the null stats
+  void AddRow(TupleTableSlot *slot, bool update_null_stats);
+
+  // update the null stats for the column
+  void UpdateNullStats(int column_index, NullCountStats null_count_stats);
+
   MicroPartitionStats *Reset();
   ::pax::stats::MicroPartitionStatisticsInfo *Serialize();
 

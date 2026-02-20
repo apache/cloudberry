@@ -8,7 +8,7 @@ set default_table_access_method to pax;
 set pax.enable_debug to on;
 set pax.enable_sparse_filter to on;
 set pax.max_tuples_per_group to 5;
-
+set pax.enable_sync_collect_stats = on;
 -- 
 -- Test the float4 min/max types support 
 -- 
@@ -159,3 +159,4 @@ drop table t_float8;
 reset pax.enable_debug;
 reset pax.enable_sparse_filter;
 reset pax.max_tuples_per_group;
+reset pax.enable_sync_collect_stats;
