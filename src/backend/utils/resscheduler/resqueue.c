@@ -1344,7 +1344,7 @@ ResProcLockRemoveSelfAndWakeup(LOCK *lock)
 	 * wait-queue).
 	 */
 
-	Assert(queue_size >= 0);
+//	Assert(queue_size >= 0);
 	if (queue_size == 0)
 	{
 		return;

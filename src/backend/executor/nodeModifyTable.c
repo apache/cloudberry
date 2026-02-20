@@ -2513,6 +2513,20 @@ ExecUpdate(ModifyTableContext *context, ResultRelInfo *resultRelInfo,
 		elog(ERROR, "cannot UPDATE during bootstrap");
 
 	/*
+	 * Sanity check the distribution of the tuple to prevent
+	 * potential data corruption in case users manipulate data
+	 * incorrectly (e.g. insert data on incorrect segment through
+	 * utility mode) or there is bug in code, etc.
+	 */
+	if (segid != GpIdentity.segindex)
+		elog(ERROR,
+			 "distribution key of the tuple (%u, %u) doesn't belong to "
+			 "current segment (actually from seg%d)",
+			 BlockIdGetBlockNumber(&(tupleid->ip_blkid)),
+			 tupleid->ip_posid,
+			 segid);
+	
+	/*
 	 * Prepare for the update.  This includes BEFORE ROW triggers, so we're
 	 * done if it says we are.
 	 */
