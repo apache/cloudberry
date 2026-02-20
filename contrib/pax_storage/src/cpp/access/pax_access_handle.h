@@ -171,6 +171,8 @@ class CCPaxAccessMethod final {
 
   static void RelationNontransactionalTruncate(Relation rel);
 
+  static int AcquireSampleRows(Relation onerel, int elevel, HeapTuple *rows,
+							   int targrows, double *totalrows, double *totaldeadrows);
   static bool ScanAnalyzeNextBlock(TableScanDesc scan, BlockNumber blockno,
                                    BufferAccessStrategy bstrategy);
   static bool ScanAnalyzeNextTuple(TableScanDesc scan,
