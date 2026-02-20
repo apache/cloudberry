@@ -1241,6 +1241,27 @@ set_foreign_pathlist(PlannerInfo *root, RelOptInfo *rel, RangeTblEntry *rte)
 	/* Call the FDW's GetForeignPaths function to generate path(s) */
 	rel->fdwroutine->GetForeignPaths(root, rel, rte->relid);
 	adjust_costs_for_mpp_foreign_scan(rel->pathlist);
+
+	/* Generate Gather paths for FDW parallel partial paths.
+	 * Scoped to foreign tables only — does not affect SeqScan/IndexScan. */
+	if (rel->partial_pathlist != NIL)
+	{
+		Path   *cheapest_partial = (Path *) linitial(rel->partial_pathlist);
+
+		if (cheapest_partial->parallel_safe &&
+			cheapest_partial->parallel_workers > 0)
+		{
+			double	rows = cheapest_partial->rows *
+						   cheapest_partial->parallel_workers;
+
+			add_path(rel,
+					 (Path *) create_gather_path(root, rel,
+												 cheapest_partial,
+												 rel->reltarget,
+												 NULL, &rows),
+					 root);
+		}
+	}
 }
 
 /*

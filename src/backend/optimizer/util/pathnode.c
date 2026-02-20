@@ -3004,7 +3004,6 @@ GatherPath *
 create_gather_path(PlannerInfo *root, RelOptInfo *rel, Path *subpath,
 				   PathTarget *target, Relids required_outer, double *rows)
 {
-	Assert(false);
 	GatherPath *pathnode = makeNode(GatherPath);
 
 	Assert(subpath->parallel_safe);
@@ -3018,6 +3017,16 @@ create_gather_path(PlannerInfo *root, RelOptInfo *rel, Path *subpath,
 	pathnode->path.parallel_safe = false;
 	pathnode->path.parallel_workers = 0;
 	pathnode->path.pathkeys = NIL;	/* Gather has unordered result */
+
+	/* Inherit locus from subpath — Gather collects within the same segment,
+	 * data distribution across segments doesn't change. */
+	pathnode->path.locus = subpath->locus;
+	pathnode->path.locus.parallel_workers = 0;	/* Gather output is single-stream */
+
+	pathnode->path.motionHazard = subpath->motionHazard;
+	pathnode->path.barrierHazard = subpath->barrierHazard;
+	pathnode->path.rescannable = false;
+	pathnode->path.sameslice_relids = subpath->sameslice_relids;
 
 	pathnode->subpath = subpath;
 	pathnode->num_workers = subpath->parallel_workers;

@@ -2741,6 +2741,18 @@ ExecutePlan(EState *estate,
 	if (!execute_once || GP_ROLE_DISPATCH == Gp_role)
 		use_parallel_mode = false;
 
+	/*
+	 * If the plan contains Gather/GatherMerge nodes (parallelModeNeeded),
+	 * enable PG-style parallel mode on segments even if CBDB MPP parallel
+	 * mode (useMppParallelMode) didn't set it. This ensures ExecGather
+	 * can launch parallel workers.
+	 */
+	if (!use_parallel_mode &&
+		execute_once &&
+		Gp_role != GP_ROLE_DISPATCH &&
+		estate->es_plannedstmt->parallelModeNeeded)
+		use_parallel_mode = true;
+
 	estate->es_use_parallel_mode = use_parallel_mode;
 	if (use_parallel_mode)
 		EnterParallelMode();

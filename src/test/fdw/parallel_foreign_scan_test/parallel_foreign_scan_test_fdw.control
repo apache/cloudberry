@@ -1,0 +1,3 @@
+comment = 'Parallel foreign scan test FDW'
+default_version = '1.0'
+relocatable = true
