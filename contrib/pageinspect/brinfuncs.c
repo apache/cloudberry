@@ -362,6 +362,7 @@ brin_metapage_info(PG_FUNCTION_ARGS)
 
 	/* Extract values from the metapage */
 	meta = (BrinMetaPageData *) PageGetContents(page);
+	MemSet(nulls, 0, sizeof(nulls));
 	values[0] = CStringGetTextDatum(psprintf("0x%08X", meta->brinMagic));
 	values[1] = Int32GetDatum(meta->brinVersion);
 	values[2] = Int32GetDatum(meta->pagesPerRange);
