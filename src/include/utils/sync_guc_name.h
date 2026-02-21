@@ -10,6 +10,7 @@
 		"allow_dml_directory_table",
 		"allow_segment_DML",
 		"allow_system_table_mods",
+		"allow_in_place_tablespaces",
 		"array_nulls",
 		"backtrace_functions",
 		"bytea_output",
