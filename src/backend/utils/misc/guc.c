@@ -4749,29 +4749,6 @@ AlterSystemSetConfigFile(AlterSystemStmt *altersysstmt)
 	}
 
 	/*
-	 * Check permission to run ALTER SYSTEM on the target variable
-	 */
-	if (!superuser())
-	{
-		if (resetall)
-			ereport(ERROR,
-					(errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
-					 errmsg("permission denied to perform ALTER SYSTEM RESET ALL")));
-		else
-		{
-			AclResult	aclresult;
-
-			aclresult = pg_parameter_aclcheck(name, GetUserId(),
-											  ACL_ALTER_SYSTEM);
-			if (aclresult != ACLCHECK_OK)
-				ereport(ERROR,
-						(errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
-						 errmsg("permission denied to set parameter \"%s\"",
-								name)));
-		}
-	}
-
-	/*
 	 * Unless it's RESET_ALL, validate the target variable and value
 	 */
 	if (!resetall)

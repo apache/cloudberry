@@ -222,7 +222,8 @@ SyncRepWaitForLSN(XLogRecPtr lsn, bool commit)
 	 * don't touch the queue.
 	 */
 	if (!SyncRepRequested() ||
-		(!IS_QUERY_DISPATCHER() && !((volatile WalSndCtlData *) WalSndCtl)->sync_standbys_defined))
+		(!IS_QUERY_DISPATCHER() && ((((volatile WalSndCtlData *) WalSndCtl)->sync_standbys_status) &
+									(SYNC_STANDBY_INIT | SYNC_STANDBY_DEFINED)) == SYNC_STANDBY_INIT))
 		return;
 
 	/* Cap the level for anything other than commit to remote flush only. */
@@ -335,19 +336,46 @@ SyncRepWaitForLSN(XLogRecPtr lsn, bool commit)
 	 * (SYNC_STANDBY_INIT is not set), fall back to a check based on the LSN,
 	 * then do a direct GUC check.
 	 */
-	if (((!IS_QUERY_DISPATCHER()) && !WalSndCtl->sync_standbys_defined) ||
-		lsn <= WalSndCtl->lsn[mode])
+	if (!IS_QUERY_DISPATCHER())
 	{
-		elogif(debug_walrepl_syncrep, LOG,
-				"syncrep wait -- Not waiting for syncrep because xlog up to LSN (%X/%X) which is "
-				"greater than this backend's commit LSN (%X/%X) has already "
-				"been replicated.",
-			   (uint32) (WalSndCtl->lsn[mode] >> 32), (uint32) WalSndCtl->lsn[mode],
-			   (uint32) (lsn >> 32), (uint32) lsn);
-
-
-		LWLockRelease(SyncRepLock);
-		return;
+		if (WalSndCtl->sync_standbys_status & SYNC_STANDBY_INIT)
+		{
+			if ((WalSndCtl->sync_standbys_status & SYNC_STANDBY_DEFINED) == 0 ||
+				lsn <= WalSndCtl->lsn[mode])
+			{
+				LWLockRelease(SyncRepLock);
+				return;
+			}
+		}
+		else if (lsn <= WalSndCtl->lsn[mode])
+		{
+			/*
+			 * The LSN is older than what we need to wait for.  The sync standby
+			 * data has not been initialized yet, but we are OK to not wait
+			 * because we know that there is no point in doing so based on the
+			 * LSN.
+			 */
+			LWLockRelease(SyncRepLock);
+			return;
+		}
+		else if (!SyncStandbysDefined())
+		{
+			/*
+			 * If we are here, the sync standby data has not been initialized yet,
+			 * and the LSN is newer than what need to wait for, so we have fallen
+			 * back to the best thing we could do in this case: a check on
+			 * SyncStandbysDefined() to see if the GUC is set or not.
+			 *
+			 * When the GUC has a value, we wait until the checkpointer updates
+			 * the status data because we cannot be sure yet if we should wait or
+			 * not. Here, the GUC has *no* value, we are sure that there is no
+			 * point to wait; this matters for example when initializing a
+			 * cluster, where we should never wait, and no sync standbys is the
+			 * default behavior.
+			 */
+			LWLockRelease(SyncRepLock);
+			return;
+		}
 	}
 
 	/*
