@@ -1622,21 +1622,24 @@ CCostModelGPDB::CostSequenceProject(CMemoryPool *mp, CExpressionHandle &exprhdl,
 	}
 
 	// we process (sorted window of) input tuples to compute window function values
+	// Use at least 1 to account for the base cost of evaluating window functions
+	// even when there are no sort columns (e.g., no ORDER BY in the window spec)
+	ULONG ulCostFactor = std::max(ulSortCols, (ULONG) 1);
 	CCost costLocal =
-		CCost(pci->NumRebinds() * (ulSortCols * num_rows_outer * dWidthOuter *
+		CCost(pci->NumRebinds() * (ulCostFactor * num_rows_outer * dWidthOuter *
 								   dTupDefaultProcCostUnit));
 	CCost costChild =
 		CostChildren(mp, exprhdl, pci, pcmgpdb->GetCostModelParams());
-	
+
 	return costLocal + costChild;
 }
 
 //---------------------------------------------------------------------------
 //	@function:
-//		CCostModelGPDB::CostSequenceProject
+//		CCostModelGPDB::CostHashSequenceProject
 //
 //	@doc:
-//		Cost of sequence project
+//		Cost of hash sequence project
 //
 //---------------------------------------------------------------------------
 CCost
@@ -1675,8 +1678,11 @@ CCostModelGPDB::CostHashSequenceProject(CMemoryPool *mp, CExpressionHandle &expr
 	}
 
 	// we process (sorted window of) input tuples to compute window function values
+	// Use at least 1 to account for the base cost of evaluating window functions
+	// even when there are no sort columns (e.g., no ORDER BY in the window spec)
+	ULONG ulCostFactor = std::max(ulSortCols, (ULONG) 1);
 	CCost costLocal =
-		CCost(pci->NumRebinds() * (ulSortCols * num_rows_outer * dWidthOuter *
+		CCost(pci->NumRebinds() * (ulCostFactor * num_rows_outer * dWidthOuter *
 								   dTupDefaultProcCostUnit));
 	CCost costChild =
 		CostChildren(mp, exprhdl, pci, pcmgpdb->GetCostModelParams());
