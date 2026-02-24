@@ -4066,6 +4066,7 @@ _copyAlterTableCmd(const AlterTableCmd *from)
 	COPY_SCALAR_FIELD(missing_ok);
 	COPY_NODE_FIELD(tags);
 	COPY_SCALAR_FIELD(unsettag);
+	COPY_SCALAR_FIELD(recurse);
 
 	return newnode;
 }

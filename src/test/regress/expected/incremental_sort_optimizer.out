@@ -1658,17 +1658,3 @@ order by 1, 2;
  Optimizer: Postgres query optimizer
 (8 rows)
 
--- Disallow pushing down sort when pathkey is an SRF.
-explain (costs off) select unique1 from tenk1 order by unnest('{1,2}'::int[]);
-                     QUERY PLAN
------------------------------------------------------
- Result
-   ->  Gather Motion 3:1  (slice1; segments: 3)
-         Merge Key: (unnest('{1,2}'::anyarray))
-         ->  Sort
-               Sort Key: (unnest('{1,2}'::anyarray))
-               ->  ProjectSet
-                     ->  Seq Scan on tenk1
- Optimizer: Pivotal Optimizer (GPORCA)
-(8 rows)
-

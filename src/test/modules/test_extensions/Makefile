@@ -21,6 +21,9 @@ REGRESS = test_extensions #test_extdepend TODO: enable this test after https://g
 # force C locale for output stability
 NO_LOCALE = 1
 
+# force C locale for output stability
+NO_LOCALE = 1
+
 ifdef USE_PGXS
 PG_CONFIG = pg_config
 PGXS := $(shell $(PG_CONFIG) --pgxs)

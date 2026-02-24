@@ -2181,6 +2181,7 @@ typedef struct AlterTableCmd	/* one subcommand of an ALTER TABLE */
 	Node	   *transform;		/* transformation expr for ALTER TYPE */
 	DropBehavior behavior;		/* RESTRICT or CASCADE for DROP cases */
 	bool		missing_ok;		/* skip error if missing? */
+	bool		recurse;		/* exec-time recursion */
 
 	/*
 	 * Extra information dispatched from QD to QEs in AT_SetDistributedBy and
