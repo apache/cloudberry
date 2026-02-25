@@ -152,6 +152,7 @@ test: uao/fast_analyze_row
 
 test: uao/create_index_allows_readonly_row
 test: reorganize_after_ao_vacuum_skip_drop truncate_after_ao_vacuum_skip_drop mark_all_aoseg_await_drop
+test: copy_to_concurrent_reorganize
 # below test(s) inject faults so each of them need to be in a separate group
 test: segwalrep/master_wal_switch
 
