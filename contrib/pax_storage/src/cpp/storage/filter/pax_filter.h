@@ -73,7 +73,8 @@ class PaxFilter final {
 
   // The row filter
   void InitRowFilter(Relation relation, PlanState *ps,
-                     const std::vector<bool> &projection);
+                     const std::vector<bool> &projection, ScanKey key,
+                     int nkeys);
   std::shared_ptr<PaxRowFilter> GetRowFilter();
 
   void LogStatistics() const;
