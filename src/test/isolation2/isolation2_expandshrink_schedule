@@ -1,3 +1,4 @@
 # Tests for gpexpand and gpshrink
 # Keep for single schedule due to redistribute all the table in all database
 test: gpexpand_gpshrink
+test: gpexpand_archive_restore_conf

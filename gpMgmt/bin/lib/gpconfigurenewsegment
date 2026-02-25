@@ -9,7 +9,7 @@ import shutil
 from optparse import Option, OptionGroup, OptionParser, OptionValueError, SUPPRESS_USAGE
 
 from gppylib.gpparseopts import OptParser, OptChecker
-from gppylib.commands.gp import ModifyConfSetting, SegmentStart, SegmentStop
+from gppylib.commands.gp import GpConfigHelper, ModifyConfSetting, SegmentStart, SegmentStop
 from gppylib.commands.pg import PgBaseBackup, ensure_replication_slot_exists
 from gppylib.db import dbconn
 from gppylib.commands import unix
@@ -250,6 +250,24 @@ class ConfExpSegCmd(Command):
                 except:
                     self.set_results(modifyConfCmd.get_results())
                     raise
+
+                # Update --content-id flag in wal-g for archive-restore GUCs if present
+                for guc in ['archive_command', 'restore_command']:
+                    read_cmd = GpConfigHelper('Read %s' % guc, self.datadir, guc, getParameter=True)
+                    read_cmd.run(validateAfter=True)
+
+                    val = read_cmd.get_value()
+                    if not read_cmd.was_successful() or not val:
+                        continue
+
+                    new_val = re.sub(r'(--content-id(?:=|\s+))-?\d+', r'\g<1>' + str(self.contentid), val)
+                    if new_val != val:
+                        write_cmd = GpConfigHelper('Update %s' % guc, self.datadir, guc, value=new_val)
+                        try:
+                            write_cmd.run(validateAfter=True)
+                        except Exception:
+                            self.set_results(write_cmd.get_results())
+                            raise
 
             # We might need to stop the segment if the last setup failed past this point
             if os.path.exists('%s/postmaster.pid' % self.datadir):

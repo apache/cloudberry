@@ -1,0 +1,1047 @@
+-- Verify that gpexpand correctly updates segment-specific flags for wal-g in
+-- archive_command and restore_command when initializing new segments.
+--
+-- Previously, these GUCs were copied verbatim from the template segment
+-- (content 0), causing new segments to invoke archiving with an incorrect
+-- content-id (possible overwriting archive or restoring other's data).
+
+-- Cleanup any previous state
+!\retcode yes | gpexpand -c;
+-- start_ignore
+20260225:10:13:28:029615 gpexpand:cdw:gpadmin-[INFO]:-local Cloudberry Version: 'postgres (Apache Cloudberry) 3.0.0-devel+dev.4.g01c21009c35 build dev'
+20260225:10:13:28:029615 gpexpand:cdw:gpadmin-[INFO]:-coordinator Cloudberry Version: 'PostgreSQL 14.4 (Apache Cloudberry 3.0.0-devel+dev.4.g01c21009c35 build dev) on x86_64-pc-linux-gnu, compiled by gcc (Ubuntu 11.4.0-1ubuntu1~22.04.2) 11.4.0, 64-bit compiled on Feb 25 2026 10:08:48 (with assert checking)'
+20260225:10:13:28:029615 gpexpand:cdw:gpadmin-[INFO]:-Querying gpexpand schema for current expansion state
+
+System Expansion is used to add segments to an existing CBDB array.
+gpexpand did not detect a System Expansion that is in progress.
+
+Before initiating a System Expansion, you need to provision and burn-in
+the new hardware.  Please be sure to run gpcheckperf to make sure the
+new hardware is working properly.
+
+Please refer to the Admin Guide for more information.
+
+Would you like to initiate a new System Expansion Yy|Nn (default=N):
+> 
+Enter a comma separated list of new hosts you want
+to add to your array.  Do not include interface hostnames.
+**Enter a blank line to only add segments to existing hosts**[]:
+> 20260225:10:13:28:029615 gpexpand:cdw:gpadmin-[ERROR]:-gpexpand failed: You must be adding two or more hosts when expanding a system with mirroring enabled. 
+
+Exiting...
+20260225:10:13:28:029615 gpexpand:cdw:gpadmin-[INFO]:-Shutting down gpexpand...
+
+-- end_ignore
+(exited with code 3)
+!\retcode gpshrink -c;
+-- start_ignore
+20260225:10:13:28:029633 gpshrink:cdw:gpadmin-[INFO]:-local Cloudberry Version: 'postgres (Apache Cloudberry) 3.0.0-devel+dev.4.g01c21009c35 build dev'
+20260225:10:13:28:029633 gpshrink:cdw:gpadmin-[INFO]:-coordinator Cloudberry Version: 'PostgreSQL 14.4 (Apache Cloudberry 3.0.0-devel+dev.4.g01c21009c35 build dev) on x86_64-pc-linux-gnu, compiled by gcc (Ubuntu 11.4.0-1ubuntu1~22.04.2) 11.4.0, 64-bit compiled on Feb 25 2026 10:08:48 (with assert checking)'
+20260225:10:13:28:029633 gpshrink:cdw:gpadmin-[INFO]:-Removing gpshrink schema
+20260225:10:13:28:029633 gpshrink:cdw:gpadmin-[INFO]:-Cleanup Finished.  exiting...
+
+-- end_ignore
+(exited with code 0)
+!\retcode rm -r /tmp/datadirs/;
+-- start_ignore
+rm: cannot remove '/tmp/datadirs/': No such file or directory
+
+-- end_ignore
+(exited with code 1)
+
+-- Set GUCs on all segments, hardcode --content-id to 0
+!\retcode gpconfig -c restore_command -v '/bin/true';
+-- start_ignore
+20260225:10:13:29:029665 gpconfig:cdw:gpadmin-[INFO]:-completed successfully with parameters '-c restore_command -v /bin/true'
+
+-- end_ignore
+(exited with code 0)
+!\retcode gpconfig -c archive_command -v 'wal-g seg wal-push %p --content-id=0';
+-- start_ignore
+20260225:10:13:29:029714 gpconfig:cdw:gpadmin-[INFO]:-completed successfully with parameters '-c archive_command -v 'wal-g seg wal-push %p --content-id=0''
+
+-- end_ignore
+(exited with code 0)
+!\retcode gpstop -u;
+-- start_ignore
+20260225:10:13:29:029763 gpstop:cdw:gpadmin-[INFO]:-Starting gpstop with args: -u
+20260225:10:13:29:029763 gpstop:cdw:gpadmin-[INFO]:-Gathering information and validating the environment...
+20260225:10:13:29:029763 gpstop:cdw:gpadmin-[INFO]:-Obtaining Cloudberry Coordinator catalog information
+20260225:10:13:29:029763 gpstop:cdw:gpadmin-[INFO]:-Obtaining Segment details from coordinator...
+20260225:10:13:29:029763 gpstop:cdw:gpadmin-[INFO]:-Cloudberry Version: 'postgres (Apache Cloudberry) 3.0.0-devel+dev.4.g01c21009c35 build dev'
+20260225:10:13:29:029763 gpstop:cdw:gpadmin-[INFO]:-Signalling all postmaster processes to reload
+
+-- end_ignore
+(exited with code 0)
+
+-- Prepare expansion configuration
+!\retcode echo "localhost|localhost|7008|/tmp/datadirs/dbfast4/demoDataDir3|9|3|p localhost|localhost|7009|/tmp/datadirs/dbfast_mirror4/demoDataDir3|10|3|m" > /tmp/testexpand;
+-- start_ignore
+
+-- end_ignore
+(exited with code 0)
+
+-- Expand
+!\retcode gpexpand -i /tmp/testexpand;
+-- start_ignore
+20260225:10:13:29:029792 gpexpand:cdw:gpadmin-[INFO]:-local Cloudberry Version: 'postgres (Apache Cloudberry) 3.0.0-devel+dev.4.g01c21009c35 build dev'
+20260225:10:13:29:029792 gpexpand:cdw:gpadmin-[INFO]:-coordinator Cloudberry Version: 'PostgreSQL 14.4 (Apache Cloudberry 3.0.0-devel+dev.4.g01c21009c35 build dev) on x86_64-pc-linux-gnu, compiled by gcc (Ubuntu 11.4.0-1ubuntu1~22.04.2) 11.4.0, 64-bit compiled on Feb 25 2026 10:08:48 (with assert checking)'
+20260225:10:13:29:029792 gpexpand:cdw:gpadmin-[INFO]:-Querying gpexpand schema for current expansion state
+20260225:10:13:29:029792 gpexpand:cdw:gpadmin-[INFO]:-Successfully finished pg_controldata /home/gpadmin/cloudberry/gpAux/gpdemo/datadirs/dbfast1/demoDataDir0 for dbid 2:
+stdout: pg_control version number:            13000700
+Catalog version number:               302509031
+Database system identifier:           7610743540553465864
+Database cluster state:               in production
+pg_control last modified:             Wed 25 Feb 2026 10:13:25 AM GMT
+Latest checkpoint location:           0/C067FA8
+Latest checkpoint's REDO location:    0/C067F70
+Latest checkpoint's REDO WAL file:    000000010000000000000003
+Latest checkpoint's TimeLineID:       1
+Latest checkpoint's PrevTimeLineID:   1
+Latest checkpoint's full_page_writes: on
+Latest checkpoint's NextXID:          0:877
+Latest checkpoint's NextGxid:         9
+Latest checkpoint's NextOID:          16392
+Latest checkpoint's NextRelfilenode:  12002
+Latest checkpoint's NextMultiXactId:  1
+Latest checkpoint's NextMultiOffset:  0
+Latest checkpoint's oldestXID:        810
+Latest checkpoint's oldestXID's DB:   13425
+Latest checkpoint's oldestActiveXID:  876
+Latest checkpoint's oldestMultiXid:   1
+Latest checkpoint's oldestMulti's DB: 1
+Latest checkpoint's oldestCommitTsXid:0
+Latest checkpoint's newestCommitTsXid:0
+Time of latest checkpoint:            Wed 25 Feb 2026 10:13:25 AM GMT
+Fake LSN counter for unlogged rels:   0/3E8
+Minimum recovery ending location:     0/0
+Min recovery ending loc's timeline:   0
+Backup start location:                0/0
+Backup end location:                  0/0
+End-of-backup record required:        no
+wal_level setting:                    replica
+wal_log_hints setting:                off
+max_connections setting:              750
+max_worker_processes setting:         14
+max_wal_senders setting:              10
+max_prepared_xacts setting:           250
+max_locks_per_xact setting:           128
+track_commit_timestamp setting:       off
+Maximum data alignment:               8
+Database block size:                  32768
+Blocks per segment of large relation: 32768
+WAL block size:                       32768
+Bytes per WAL segment:                67108864
+Maximum length of identifiers:        64
+Maximum columns in an index:          32
+Maximum size of a TOAST chunk:        8140
+Size of a large-object chunk:         8192
+Date/time type storage:               64-bit integers
+Float8 argument passing:              by value
+Data page checksum version:           1
+Mock authentication nonce:            4ab1899cbfd68b59268d02e0d5a1966c0ee3f4b463979bc5372053c2b14ece58
+File encryption method:               
+
+stderr: 
+20260225:10:13:29:029792 gpexpand:cdw:gpadmin-[INFO]:-Successfully finished pg_controldata /home/gpadmin/cloudberry/gpAux/gpdemo/datadirs/dbfast_mirror1/demoDataDir0 for dbid 5:
+stdout: pg_control version number:            13000700
+Catalog version number:               302509031
+Database system identifier:           7610743540553465864
+Database cluster state:               in archive recovery
+pg_control last modified:             Wed 25 Feb 2026 10:12:19 AM GMT
+Latest checkpoint location:           0/C005578
+Latest checkpoint's REDO location:    0/C005578
+Latest checkpoint's REDO WAL file:    000000010000000000000003
+Latest checkpoint's TimeLineID:       1
+Latest checkpoint's PrevTimeLineID:   1
+Latest checkpoint's full_page_writes: on
+Latest checkpoint's NextXID:          0:872
+Latest checkpoint's NextGxid:         3
+Latest checkpoint's NextOID:          16392
+Latest checkpoint's NextRelfilenode:  12002
+Latest checkpoint's NextMultiXactId:  1
+Latest checkpoint's NextMultiOffset:  0
+Latest checkpoint's oldestXID:        810
+Latest checkpoint's oldestXID's DB:   13425
+Latest checkpoint's oldestActiveXID:  0
+Latest checkpoint's oldestMultiXid:   1
+Latest checkpoint's oldestMulti's DB: 1
+Latest checkpoint's oldestCommitTsXid:0
+Latest checkpoint's newestCommitTsXid:0
+Time of latest checkpoint:            Wed 25 Feb 2026 10:12:16 AM GMT
+Fake LSN counter for unlogged rels:   0/3E8
+Minimum recovery ending location:     0/C005600
+Min recovery ending loc's timeline:   1
+Backup start location:                0/0
+Backup end location:                  0/0
+End-of-backup record required:        no
+wal_level setting:                    replica
+wal_log_hints setting:                off
+max_connections setting:              750
+max_worker_processes setting:         14
+max_wal_senders setting:              10
+max_prepared_xacts setting:           250
+max_locks_per_xact setting:           128
+track_commit_timestamp setting:       off
+Maximum data alignment:               8
+Database block size:                  32768
+Blocks per segment of large relation: 32768
+WAL block size:                       32768
+Bytes per WAL segment:                67108864
+Maximum length of identifiers:        64
+Maximum columns in an index:          32
+Maximum size of a TOAST chunk:        8140
+Size of a large-object chunk:         8192
+Date/time type storage:               64-bit integers
+Float8 argument passing:              by value
+Data page checksum version:           1
+Mock authentication nonce:            4ab1899cbfd68b59268d02e0d5a1966c0ee3f4b463979bc5372053c2b14ece58
+File encryption method:               
+
+stderr: 
+20260225:10:13:29:029792 gpexpand:cdw:gpadmin-[INFO]:-Successfully finished pg_controldata /home/gpadmin/cloudberry/gpAux/gpdemo/datadirs/dbfast2/demoDataDir1 for dbid 3:
+stdout: pg_control version number:            13000700
+Catalog version number:               302509031
+Database system identifier:           7610743540653109260
+Database cluster state:               in production
+pg_control last modified:             Wed 25 Feb 2026 10:13:25 AM GMT
+Latest checkpoint location:           0/C067FA8
+Latest checkpoint's REDO location:    0/C067F70
+Latest checkpoint's REDO WAL file:    000000010000000000000003
+Latest checkpoint's TimeLineID:       1
+Latest checkpoint's PrevTimeLineID:   1
+Latest checkpoint's full_page_writes: on
+Latest checkpoint's NextXID:          0:877
+Latest checkpoint's NextGxid:         9
+Latest checkpoint's NextOID:          16392
+Latest checkpoint's NextRelfilenode:  12002
+Latest checkpoint's NextMultiXactId:  1
+Latest checkpoint's NextMultiOffset:  0
+Latest checkpoint's oldestXID:        810
+Latest checkpoint's oldestXID's DB:   13425
+Latest checkpoint's oldestActiveXID:  876
+Latest checkpoint's oldestMultiXid:   1
+Latest checkpoint's oldestMulti's DB: 1
+Latest checkpoint's oldestCommitTsXid:0
+Latest checkpoint's newestCommitTsXid:0
+Time of latest checkpoint:            Wed 25 Feb 2026 10:13:25 AM GMT
+Fake LSN counter for unlogged rels:   0/3E8
+Minimum recovery ending location:     0/0
+Min recovery ending loc's timeline:   0
+Backup start location:                0/0
+Backup end location:                  0/0
+End-of-backup record required:        no
+wal_level setting:                    replica
+wal_log_hints setting:                off
+max_connections setting:              750
+max_worker_processes setting:         14
+max_wal_senders setting:              10
+max_prepared_xacts setting:           250
+max_locks_per_xact setting:           128
+track_commit_timestamp setting:       off
+Maximum data alignment:               8
+Database block size:                  32768
+Blocks per segment of large relation: 32768
+WAL block size:                       32768
+Bytes per WAL segment:                67108864
+Maximum length of identifiers:        64
+Maximum columns in an index:          32
+Maximum size of a TOAST chunk:        8140
+Size of a large-object chunk:         8192
+Date/time type storage:               64-bit integers
+Float8 argument passing:              by value
+Data page checksum version:           1
+Mock authentication nonce:            91cf6a7a7826dd0c9f8ff23a43d226c7a1a72752a9b1544a78c7cfbe62970991
+File encryption method:               
+
+stderr: 
+20260225:10:13:29:029792 gpexpand:cdw:gpadmin-[INFO]:-Successfully finished pg_controldata /home/gpadmin/cloudberry/gpAux/gpdemo/datadirs/dbfast_mirror2/demoDataDir1 for dbid 6:
+stdout: pg_control version number:            13000700
+Catalog version number:               302509031
+Database system identifier:           7610743540653109260
+Database cluster state:               in archive recovery
+pg_control last modified:             Wed 25 Feb 2026 10:12:19 AM GMT
+Latest checkpoint location:           0/C005578
+Latest checkpoint's REDO location:    0/C005578
+Latest checkpoint's REDO WAL file:    000000010000000000000003
+Latest checkpoint's TimeLineID:       1
+Latest checkpoint's PrevTimeLineID:   1
+Latest checkpoint's full_page_writes: on
+Latest checkpoint's NextXID:          0:872
+Latest checkpoint's NextGxid:         3
+Latest checkpoint's NextOID:          16392
+Latest checkpoint's NextRelfilenode:  12002
+Latest checkpoint's NextMultiXactId:  1
+Latest checkpoint's NextMultiOffset:  0
+Latest checkpoint's oldestXID:        810
+Latest checkpoint's oldestXID's DB:   13425
+Latest checkpoint's oldestActiveXID:  0
+Latest checkpoint's oldestMultiXid:   1
+Latest checkpoint's oldestMulti's DB: 1
+Latest checkpoint's oldestCommitTsXid:0
+Latest checkpoint's newestCommitTsXid:0
+Time of latest checkpoint:            Wed 25 Feb 2026 10:12:16 AM GMT
+Fake LSN counter for unlogged rels:   0/3E8
+Minimum recovery ending location:     0/C005600
+Min recovery ending loc's timeline:   1
+Backup start location:                0/0
+Backup end location:                  0/0
+End-of-backup record required:        no
+wal_level setting:                    replica
+wal_log_hints setting:                off
+max_connections setting:              750
+max_worker_processes setting:         14
+max_wal_senders setting:              10
+max_prepared_xacts setting:           250
+max_locks_per_xact setting:           128
+track_commit_timestamp setting:       off
+Maximum data alignment:               8
+Database block size:                  32768
+Blocks per segment of large relation: 32768
+WAL block size:                       32768
+Bytes per WAL segment:                67108864
+Maximum length of identifiers:        64
+Maximum columns in an index:          32
+Maximum size of a TOAST chunk:        8140
+Size of a large-object chunk:         8192
+Date/time type storage:               64-bit integers
+Float8 argument passing:              by value
+Data page checksum version:           1
+Mock authentication nonce:            91cf6a7a7826dd0c9f8ff23a43d226c7a1a72752a9b1544a78c7cfbe62970991
+File encryption method:               
+
+stderr: 
+20260225:10:13:29:029792 gpexpand:cdw:gpadmin-[INFO]:-Successfully finished pg_controldata /home/gpadmin/cloudberry/gpAux/gpdemo/datadirs/dbfast3/demoDataDir2 for dbid 4:
+stdout: pg_control version number:            13000700
+Catalog version number:               302509031
+Database system identifier:           7610743540636610571
+Database cluster state:               in production
+pg_control last modified:             Wed 25 Feb 2026 10:13:25 AM GMT
+Latest checkpoint location:           0/C067FA8
+Latest checkpoint's REDO location:    0/C067F70
+Latest checkpoint's REDO WAL file:    000000010000000000000003
+Latest checkpoint's TimeLineID:       1
+Latest checkpoint's PrevTimeLineID:   1
+Latest checkpoint's full_page_writes: on
+Latest checkpoint's NextXID:          0:877
+Latest checkpoint's NextGxid:         9
+Latest checkpoint's NextOID:          16392
+Latest checkpoint's NextRelfilenode:  12002
+Latest checkpoint's NextMultiXactId:  1
+Latest checkpoint's NextMultiOffset:  0
+Latest checkpoint's oldestXID:        810
+Latest checkpoint's oldestXID's DB:   13425
+Latest checkpoint's oldestActiveXID:  876
+Latest checkpoint's oldestMultiXid:   1
+Latest checkpoint's oldestMulti's DB: 1
+Latest checkpoint's oldestCommitTsXid:0
+Latest checkpoint's newestCommitTsXid:0
+Time of latest checkpoint:            Wed 25 Feb 2026 10:13:25 AM GMT
+Fake LSN counter for unlogged rels:   0/3E8
+Minimum recovery ending location:     0/0
+Min recovery ending loc's timeline:   0
+Backup start location:                0/0
+Backup end location:                  0/0
+End-of-backup record required:        no
+wal_level setting:                    replica
+wal_log_hints setting:                off
+max_connections setting:              750
+max_worker_processes setting:         14
+max_wal_senders setting:              10
+max_prepared_xacts setting:           250
+max_locks_per_xact setting:           128
+track_commit_timestamp setting:       off
+Maximum data alignment:               8
+Database block size:                  32768
+Blocks per segment of large relation: 32768
+WAL block size:                       32768
+Bytes per WAL segment:                67108864
+Maximum length of identifiers:        64
+Maximum columns in an index:          32
+Maximum size of a TOAST chunk:        8140
+Size of a large-object chunk:         8192
+Date/time type storage:               64-bit integers
+Float8 argument passing:              by value
+Data page checksum version:           1
+Mock authentication nonce:            deb1a8b64d8bc3ddf938a6ec69c7c9785d8f32343c42e3878fe207fbee3ac992
+File encryption method:               
+
+stderr: 
+20260225:10:13:29:029792 gpexpand:cdw:gpadmin-[INFO]:-Successfully finished pg_controldata /home/gpadmin/cloudberry/gpAux/gpdemo/datadirs/dbfast_mirror3/demoDataDir2 for dbid 7:
+stdout: pg_control version number:            13000700
+Catalog version number:               302509031
+Database system identifier:           7610743540636610571
+Database cluster state:               in archive recovery
+pg_control last modified:             Wed 25 Feb 2026 10:12:19 AM GMT
+Latest checkpoint location:           0/C005578
+Latest checkpoint's REDO location:    0/C005578
+Latest checkpoint's REDO WAL file:    000000010000000000000003
+Latest checkpoint's TimeLineID:       1
+Latest checkpoint's PrevTimeLineID:   1
+Latest checkpoint's full_page_writes: on
+Latest checkpoint's NextXID:          0:872
+Latest checkpoint's NextGxid:         3
+Latest checkpoint's NextOID:          16392
+Latest checkpoint's NextRelfilenode:  12002
+Latest checkpoint's NextMultiXactId:  1
+Latest checkpoint's NextMultiOffset:  0
+Latest checkpoint's oldestXID:        810
+Latest checkpoint's oldestXID's DB:   13425
+Latest checkpoint's oldestActiveXID:  0
+Latest checkpoint's oldestMultiXid:   1
+Latest checkpoint's oldestMulti's DB: 1
+Latest checkpoint's oldestCommitTsXid:0
+Latest checkpoint's newestCommitTsXid:0
+Time of latest checkpoint:            Wed 25 Feb 2026 10:12:16 AM GMT
+Fake LSN counter for unlogged rels:   0/3E8
+Minimum recovery ending location:     0/C005600
+Min recovery ending loc's timeline:   1
+Backup start location:                0/0
+Backup end location:                  0/0
+End-of-backup record required:        no
+wal_level setting:                    replica
+wal_log_hints setting:                off
+max_connections setting:              750
+max_worker_processes setting:         14
+max_wal_senders setting:              10
+max_prepared_xacts setting:           250
+max_locks_per_xact setting:           128
+track_commit_timestamp setting:       off
+Maximum data alignment:               8
+Database block size:                  32768
+Blocks per segment of large relation: 32768
+WAL block size:                       32768
+Bytes per WAL segment:                67108864
+Maximum length of identifiers:        64
+Maximum columns in an index:          32
+Maximum size of a TOAST chunk:        8140
+Size of a large-object chunk:         8192
+Date/time type storage:               64-bit integers
+Float8 argument passing:              by value
+Data page checksum version:           1
+Mock authentication nonce:            deb1a8b64d8bc3ddf938a6ec69c7c9785d8f32343c42e3878fe207fbee3ac992
+File encryption method:               
+
+stderr: 
+20260225:10:13:29:029792 gpexpand:cdw:gpadmin-[INFO]:-Heap checksum setting consistent across cluster
+20260225:10:13:29:029792 gpexpand:cdw:gpadmin-[INFO]:-Syncing Apache Cloudberry extensions
+20260225:10:13:29:029792 gpexpand:cdw:gpadmin-[ERROR]:-Syncing of Apache Cloudberry extensions has failed.
+Traceback (most recent call last):
+  File "/usr/local/cloudberry-db/bin/gpexpand", line 1935, in sync_packages
+    operation.get_ret()
+  File "/usr/local/cloudberry-db/lib/python/gppylib/operations/__init__.py", line 64, in get_ret
+    if isinstance(self.ret, Exception):
+AttributeError: 'SyncPackages' object has no attribute 'ret'
+20260225:10:13:29:029792 gpexpand:cdw:gpadmin-[WARNING]:-Please run gppkg --clean after successful expansion.
+20260225:10:13:30:029792 gpexpand:cdw:gpadmin-[INFO]:-Locking catalog
+20260225:10:13:30:029792 gpexpand:cdw:gpadmin-[INFO]:-Locked catalog
+20260225:10:13:30:029792 gpexpand:cdw:gpadmin-[INFO]:-Creating segment template
+20260225:10:13:33:029792 gpexpand:cdw:gpadmin-[INFO]:-Copying postgresql.conf from existing segment into template
+20260225:10:13:33:029792 gpexpand:cdw:gpadmin-[INFO]:-Copying pg_hba.conf from existing segment into template
+20260225:10:13:34:029792 gpexpand:cdw:gpadmin-[INFO]:-Creating schema tar file
+20260225:10:13:36:029792 gpexpand:cdw:gpadmin-[INFO]:-Distributing template tar file to new hosts
+20260225:10:13:52:029792 gpexpand:cdw:gpadmin-[INFO]:-Configuring new segments (primary)
+20260225:10:13:52:029792 gpexpand:cdw:gpadmin-[INFO]:-{'localhost': '/tmp/datadirs/dbfast4/demoDataDir3:7008:true:false:9:3::-1:'}
+20260225:10:13:54:029792 gpexpand:cdw:gpadmin-[INFO]:-Starting to create new pg_hba.conf on primary segments
+20260225:10:13:54:029792 gpexpand:cdw:gpadmin-[INFO]:-None of the reachable segments require update to pg_hba.conf
+20260225:10:13:54:029792 gpexpand:cdw:gpadmin-[INFO]:-SegmentStart pg_ctl cmd is env GPSESSID=0000000000 GPERA=None $GPHOME/bin/pg_ctl -D /tmp/datadirs/dbfast4/demoDataDir3 -l /tmp/datadirs/dbfast4/demoDataDir3/log/startup.log -w -t 600 -o " -p 7008 -c gp_role=utility -M " start
+20260225:10:13:55:029792 gpexpand:cdw:gpadmin-[INFO]:-Cleaning up temporary template files
+20260225:10:13:56:029792 gpexpand:cdw:gpadmin-[INFO]:-Cleaning up databases in new segments.
+20260225:10:13:56:029792 gpexpand:cdw:gpadmin-[INFO]:-SegmentStart pg_ctl cmd is env GPSESSID=0000000000 GPERA=None $GPHOME/bin/pg_ctl -D /tmp/datadirs/dbfast4/demoDataDir3 -l /tmp/datadirs/dbfast4/demoDataDir3/log/startup.log -w -t 600 -o " -p 7008 -c gp_role=utility " start
+20260225:10:13:56:029792 gpexpand:cdw:gpadmin-[INFO]:-Unlocking catalog
+20260225:10:13:56:029792 gpexpand:cdw:gpadmin-[INFO]:-Unlocked catalog
+20260225:10:13:57:029792 gpexpand:cdw:gpadmin-[INFO]:-Creating expansion schema
+20260225:10:13:57:029792 gpexpand:cdw:gpadmin-[INFO]:-Populating gpexpand.status_detail with data from database postgres
+20260225:10:13:57:029792 gpexpand:cdw:gpadmin-[INFO]:-Populating gpexpand.status_detail with data from database template1
+20260225:10:13:57:029792 gpexpand:cdw:gpadmin-[INFO]:-Populating gpexpand.status_detail with data from database isolation2parallelretrcursor
+20260225:10:13:57:029792 gpexpand:cdw:gpadmin-[INFO]:-Populating gpexpand.status_detail with data from database isolation2test
+20260225:10:13:58:029792 gpexpand:cdw:gpadmin-[INFO]:-Starting new mirror segment synchronization
+20260225:10:14:08:029792 gpexpand:cdw:gpadmin-[INFO]:-************************************************
+20260225:10:14:08:029792 gpexpand:cdw:gpadmin-[INFO]:-Initialization of the system expansion complete.
+20260225:10:14:08:029792 gpexpand:cdw:gpadmin-[INFO]:-To begin table expansion onto the new segments
+20260225:10:14:08:029792 gpexpand:cdw:gpadmin-[INFO]:-rerun gpexpand
+20260225:10:14:08:029792 gpexpand:cdw:gpadmin-[INFO]:-************************************************
+20260225:10:14:08:029792 gpexpand:cdw:gpadmin-[INFO]:-Exiting...
+
+-- end_ignore
+(exited with code 0)
+!\retcode gpexpand -i /tmp/testexpand;
+-- start_ignore
+20260225:10:14:08:030678 gpexpand:cdw:gpadmin-[INFO]:-local Cloudberry Version: 'postgres (Apache Cloudberry) 3.0.0-devel+dev.4.g01c21009c35 build dev'
+20260225:10:14:08:030678 gpexpand:cdw:gpadmin-[INFO]:-coordinator Cloudberry Version: 'PostgreSQL 14.4 (Apache Cloudberry 3.0.0-devel+dev.4.g01c21009c35 build dev) on x86_64-pc-linux-gnu, compiled by gcc (Ubuntu 11.4.0-1ubuntu1~22.04.2) 11.4.0, 64-bit compiled on Feb 25 2026 10:08:48 (with assert checking)'
+20260225:10:14:08:030678 gpexpand:cdw:gpadmin-[INFO]:-Querying gpexpand schema for current expansion state
+20260225:10:14:09:030678 gpexpand:cdw:gpadmin-[INFO]:-EXPANSION COMPLETED SUCCESSFULLY
+20260225:10:14:09:030678 gpexpand:cdw:gpadmin-[INFO]:-Exiting...
+
+-- end_ignore
+(exited with code 0)
+
+-- Get the new segment's datadir (content=3)
+!\retcode psql -d postgres -Aqt -c "SELECT datadir FROM gp_segment_configuration WHERE content = 3 AND role = 'p'" > /tmp/new_segment_datadir;
+-- start_ignore
+
+-- end_ignore
+(exited with code 0)
+
+-- Confirm that the --content-id flag within archive_command has been
+-- updated to match the new segment's content. The restore_command
+-- lacks --content-id flag and should be unchanged.
+! grep "^archive_command" $(cat /tmp/new_segment_datadir)/postgresql.conf;
+archive_command='wal-g seg wal-push %p --content-id=3'
+
+! grep "^restore_command" $(cat /tmp/new_segment_datadir)/postgresql.conf;
+restore_command='/bin/true'
+
+
+-- Cleanup
+!\retcode gpconfig -r restore_command;
+-- start_ignore
+20260225:10:14:09:030725 gpconfig:cdw:gpadmin-[INFO]:-completed successfully with parameters '-r restore_command'
+
+-- end_ignore
+(exited with code 0)
+!\retcode gpconfig -r archive_command;
+-- start_ignore
+20260225:10:14:10:030829 gpconfig:cdw:gpadmin-[INFO]:-completed successfully with parameters '-r archive_command'
+
+-- end_ignore
+(exited with code 0)
+!\retcode gpstop -u;
+-- start_ignore
+20260225:10:14:10:030933 gpstop:cdw:gpadmin-[INFO]:-Starting gpstop with args: -u
+20260225:10:14:10:030933 gpstop:cdw:gpadmin-[INFO]:-Gathering information and validating the environment...
+20260225:10:14:10:030933 gpstop:cdw:gpadmin-[INFO]:-Obtaining Cloudberry Coordinator catalog information
+20260225:10:14:10:030933 gpstop:cdw:gpadmin-[INFO]:-Obtaining Segment details from coordinator...
+20260225:10:14:10:030933 gpstop:cdw:gpadmin-[INFO]:-Cloudberry Version: 'postgres (Apache Cloudberry) 3.0.0-devel+dev.4.g01c21009c35 build dev'
+20260225:10:14:10:030933 gpstop:cdw:gpadmin-[INFO]:-Signalling all postmaster processes to reload
+
+-- end_ignore
+(exited with code 0)
+
+!\retcode gpshrink -i /tmp/testexpand;
+-- start_ignore
+20260225:10:14:10:030997 gpshrink:cdw:gpadmin-[INFO]:-local Cloudberry Version: 'postgres (Apache Cloudberry) 3.0.0-devel+dev.4.g01c21009c35 build dev'
+20260225:10:14:10:030997 gpshrink:cdw:gpadmin-[INFO]:-coordinator Cloudberry Version: 'PostgreSQL 14.4 (Apache Cloudberry 3.0.0-devel+dev.4.g01c21009c35 build dev) on x86_64-pc-linux-gnu, compiled by gcc (Ubuntu 11.4.0-1ubuntu1~22.04.2) 11.4.0, 64-bit compiled on Feb 25 2026 10:08:48 (with assert checking)'
+20260225:10:14:10:030997 gpshrink:cdw:gpadmin-[INFO]:-Successfully finished pg_controldata /home/gpadmin/cloudberry/gpAux/gpdemo/datadirs/dbfast1/demoDataDir0 for dbid 2:
+stdout: pg_control version number:            13000700
+Catalog version number:               302509031
+Database system identifier:           7610743540553465864
+Database cluster state:               in production
+pg_control last modified:             Wed 25 Feb 2026 10:13:25 AM GMT
+Latest checkpoint location:           0/C067FA8
+Latest checkpoint's REDO location:    0/C067F70
+Latest checkpoint's REDO WAL file:    000000010000000000000003
+Latest checkpoint's TimeLineID:       1
+Latest checkpoint's PrevTimeLineID:   1
+Latest checkpoint's full_page_writes: on
+Latest checkpoint's NextXID:          0:877
+Latest checkpoint's NextGxid:         9
+Latest checkpoint's NextOID:          16392
+Latest checkpoint's NextRelfilenode:  12002
+Latest checkpoint's NextMultiXactId:  1
+Latest checkpoint's NextMultiOffset:  0
+Latest checkpoint's oldestXID:        810
+Latest checkpoint's oldestXID's DB:   13425
+Latest checkpoint's oldestActiveXID:  876
+Latest checkpoint's oldestMultiXid:   1
+Latest checkpoint's oldestMulti's DB: 1
+Latest checkpoint's oldestCommitTsXid:0
+Latest checkpoint's newestCommitTsXid:0
+Time of latest checkpoint:            Wed 25 Feb 2026 10:13:25 AM GMT
+Fake LSN counter for unlogged rels:   0/3E8
+Minimum recovery ending location:     0/0
+Min recovery ending loc's timeline:   0
+Backup start location:                0/0
+Backup end location:                  0/0
+End-of-backup record required:        no
+wal_level setting:                    replica
+wal_log_hints setting:                off
+max_connections setting:              750
+max_worker_processes setting:         14
+max_wal_senders setting:              10
+max_prepared_xacts setting:           250
+max_locks_per_xact setting:           128
+track_commit_timestamp setting:       off
+Maximum data alignment:               8
+Database block size:                  32768
+Blocks per segment of large relation: 32768
+WAL block size:                       32768
+Bytes per WAL segment:                67108864
+Maximum length of identifiers:        64
+Maximum columns in an index:          32
+Maximum size of a TOAST chunk:        8140
+Size of a large-object chunk:         8192
+Date/time type storage:               64-bit integers
+Float8 argument passing:              by value
+Data page checksum version:           1
+Mock authentication nonce:            4ab1899cbfd68b59268d02e0d5a1966c0ee3f4b463979bc5372053c2b14ece58
+File encryption method:               
+
+stderr: 
+20260225:10:14:10:030997 gpshrink:cdw:gpadmin-[INFO]:-Successfully finished pg_controldata /home/gpadmin/cloudberry/gpAux/gpdemo/datadirs/dbfast_mirror1/demoDataDir0 for dbid 5:
+stdout: pg_control version number:            13000700
+Catalog version number:               302509031
+Database system identifier:           7610743540553465864
+Database cluster state:               in archive recovery
+pg_control last modified:             Wed 25 Feb 2026 10:12:19 AM GMT
+Latest checkpoint location:           0/C005578
+Latest checkpoint's REDO location:    0/C005578
+Latest checkpoint's REDO WAL file:    000000010000000000000003
+Latest checkpoint's TimeLineID:       1
+Latest checkpoint's PrevTimeLineID:   1
+Latest checkpoint's full_page_writes: on
+Latest checkpoint's NextXID:          0:872
+Latest checkpoint's NextGxid:         3
+Latest checkpoint's NextOID:          16392
+Latest checkpoint's NextRelfilenode:  12002
+Latest checkpoint's NextMultiXactId:  1
+Latest checkpoint's NextMultiOffset:  0
+Latest checkpoint's oldestXID:        810
+Latest checkpoint's oldestXID's DB:   13425
+Latest checkpoint's oldestActiveXID:  0
+Latest checkpoint's oldestMultiXid:   1
+Latest checkpoint's oldestMulti's DB: 1
+Latest checkpoint's oldestCommitTsXid:0
+Latest checkpoint's newestCommitTsXid:0
+Time of latest checkpoint:            Wed 25 Feb 2026 10:12:16 AM GMT
+Fake LSN counter for unlogged rels:   0/3E8
+Minimum recovery ending location:     0/C005600
+Min recovery ending loc's timeline:   1
+Backup start location:                0/0
+Backup end location:                  0/0
+End-of-backup record required:        no
+wal_level setting:                    replica
+wal_log_hints setting:                off
+max_connections setting:              750
+max_worker_processes setting:         14
+max_wal_senders setting:              10
+max_prepared_xacts setting:           250
+max_locks_per_xact setting:           128
+track_commit_timestamp setting:       off
+Maximum data alignment:               8
+Database block size:                  32768
+Blocks per segment of large relation: 32768
+WAL block size:                       32768
+Bytes per WAL segment:                67108864
+Maximum length of identifiers:        64
+Maximum columns in an index:          32
+Maximum size of a TOAST chunk:        8140
+Size of a large-object chunk:         8192
+Date/time type storage:               64-bit integers
+Float8 argument passing:              by value
+Data page checksum version:           1
+Mock authentication nonce:            4ab1899cbfd68b59268d02e0d5a1966c0ee3f4b463979bc5372053c2b14ece58
+File encryption method:               
+
+stderr: 
+20260225:10:14:10:030997 gpshrink:cdw:gpadmin-[INFO]:-Successfully finished pg_controldata /home/gpadmin/cloudberry/gpAux/gpdemo/datadirs/dbfast2/demoDataDir1 for dbid 3:
+stdout: pg_control version number:            13000700
+Catalog version number:               302509031
+Database system identifier:           7610743540653109260
+Database cluster state:               in production
+pg_control last modified:             Wed 25 Feb 2026 10:13:25 AM GMT
+Latest checkpoint location:           0/C067FA8
+Latest checkpoint's REDO location:    0/C067F70
+Latest checkpoint's REDO WAL file:    000000010000000000000003
+Latest checkpoint's TimeLineID:       1
+Latest checkpoint's PrevTimeLineID:   1
+Latest checkpoint's full_page_writes: on
+Latest checkpoint's NextXID:          0:877
+Latest checkpoint's NextGxid:         9
+Latest checkpoint's NextOID:          16392
+Latest checkpoint's NextRelfilenode:  12002
+Latest checkpoint's NextMultiXactId:  1
+Latest checkpoint's NextMultiOffset:  0
+Latest checkpoint's oldestXID:        810
+Latest checkpoint's oldestXID's DB:   13425
+Latest checkpoint's oldestActiveXID:  876
+Latest checkpoint's oldestMultiXid:   1
+Latest checkpoint's oldestMulti's DB: 1
+Latest checkpoint's oldestCommitTsXid:0
+Latest checkpoint's newestCommitTsXid:0
+Time of latest checkpoint:            Wed 25 Feb 2026 10:13:25 AM GMT
+Fake LSN counter for unlogged rels:   0/3E8
+Minimum recovery ending location:     0/0
+Min recovery ending loc's timeline:   0
+Backup start location:                0/0
+Backup end location:                  0/0
+End-of-backup record required:        no
+wal_level setting:                    replica
+wal_log_hints setting:                off
+max_connections setting:              750
+max_worker_processes setting:         14
+max_wal_senders setting:              10
+max_prepared_xacts setting:           250
+max_locks_per_xact setting:           128
+track_commit_timestamp setting:       off
+Maximum data alignment:               8
+Database block size:                  32768
+Blocks per segment of large relation: 32768
+WAL block size:                       32768
+Bytes per WAL segment:                67108864
+Maximum length of identifiers:        64
+Maximum columns in an index:          32
+Maximum size of a TOAST chunk:        8140
+Size of a large-object chunk:         8192
+Date/time type storage:               64-bit integers
+Float8 argument passing:              by value
+Data page checksum version:           1
+Mock authentication nonce:            91cf6a7a7826dd0c9f8ff23a43d226c7a1a72752a9b1544a78c7cfbe62970991
+File encryption method:               
+
+stderr: 
+20260225:10:14:10:030997 gpshrink:cdw:gpadmin-[INFO]:-Successfully finished pg_controldata /home/gpadmin/cloudberry/gpAux/gpdemo/datadirs/dbfast_mirror2/demoDataDir1 for dbid 6:
+stdout: pg_control version number:            13000700
+Catalog version number:               302509031
+Database system identifier:           7610743540653109260
+Database cluster state:               in archive recovery
+pg_control last modified:             Wed 25 Feb 2026 10:12:19 AM GMT
+Latest checkpoint location:           0/C005578
+Latest checkpoint's REDO location:    0/C005578
+Latest checkpoint's REDO WAL file:    000000010000000000000003
+Latest checkpoint's TimeLineID:       1
+Latest checkpoint's PrevTimeLineID:   1
+Latest checkpoint's full_page_writes: on
+Latest checkpoint's NextXID:          0:872
+Latest checkpoint's NextGxid:         3
+Latest checkpoint's NextOID:          16392
+Latest checkpoint's NextRelfilenode:  12002
+Latest checkpoint's NextMultiXactId:  1
+Latest checkpoint's NextMultiOffset:  0
+Latest checkpoint's oldestXID:        810
+Latest checkpoint's oldestXID's DB:   13425
+Latest checkpoint's oldestActiveXID:  0
+Latest checkpoint's oldestMultiXid:   1
+Latest checkpoint's oldestMulti's DB: 1
+Latest checkpoint's oldestCommitTsXid:0
+Latest checkpoint's newestCommitTsXid:0
+Time of latest checkpoint:            Wed 25 Feb 2026 10:12:16 AM GMT
+Fake LSN counter for unlogged rels:   0/3E8
+Minimum recovery ending location:     0/C005600
+Min recovery ending loc's timeline:   1
+Backup start location:                0/0
+Backup end location:                  0/0
+End-of-backup record required:        no
+wal_level setting:                    replica
+wal_log_hints setting:                off
+max_connections setting:              750
+max_worker_processes setting:         14
+max_wal_senders setting:              10
+max_prepared_xacts setting:           250
+max_locks_per_xact setting:           128
+track_commit_timestamp setting:       off
+Maximum data alignment:               8
+Database block size:                  32768
+Blocks per segment of large relation: 32768
+WAL block size:                       32768
+Bytes per WAL segment:                67108864
+Maximum length of identifiers:        64
+Maximum columns in an index:          32
+Maximum size of a TOAST chunk:        8140
+Size of a large-object chunk:         8192
+Date/time type storage:               64-bit integers
+Float8 argument passing:              by value
+Data page checksum version:           1
+Mock authentication nonce:            91cf6a7a7826dd0c9f8ff23a43d226c7a1a72752a9b1544a78c7cfbe62970991
+File encryption method:               
+
+stderr: 
+20260225:10:14:10:030997 gpshrink:cdw:gpadmin-[INFO]:-Successfully finished pg_controldata /home/gpadmin/cloudberry/gpAux/gpdemo/datadirs/dbfast3/demoDataDir2 for dbid 4:
+stdout: pg_control version number:            13000700
+Catalog version number:               302509031
+Database system identifier:           7610743540636610571
+Database cluster state:               in production
+pg_control last modified:             Wed 25 Feb 2026 10:13:25 AM GMT
+Latest checkpoint location:           0/C067FA8
+Latest checkpoint's REDO location:    0/C067F70
+Latest checkpoint's REDO WAL file:    000000010000000000000003
+Latest checkpoint's TimeLineID:       1
+Latest checkpoint's PrevTimeLineID:   1
+Latest checkpoint's full_page_writes: on
+Latest checkpoint's NextXID:          0:877
+Latest checkpoint's NextGxid:         9
+Latest checkpoint's NextOID:          16392
+Latest checkpoint's NextRelfilenode:  12002
+Latest checkpoint's NextMultiXactId:  1
+Latest checkpoint's NextMultiOffset:  0
+Latest checkpoint's oldestXID:        810
+Latest checkpoint's oldestXID's DB:   13425
+Latest checkpoint's oldestActiveXID:  876
+Latest checkpoint's oldestMultiXid:   1
+Latest checkpoint's oldestMulti's DB: 1
+Latest checkpoint's oldestCommitTsXid:0
+Latest checkpoint's newestCommitTsXid:0
+Time of latest checkpoint:            Wed 25 Feb 2026 10:13:25 AM GMT
+Fake LSN counter for unlogged rels:   0/3E8
+Minimum recovery ending location:     0/0
+Min recovery ending loc's timeline:   0
+Backup start location:                0/0
+Backup end location:                  0/0
+End-of-backup record required:        no
+wal_level setting:                    replica
+wal_log_hints setting:                off
+max_connections setting:              750
+max_worker_processes setting:         14
+max_wal_senders setting:              10
+max_prepared_xacts setting:           250
+max_locks_per_xact setting:           128
+track_commit_timestamp setting:       off
+Maximum data alignment:               8
+Database block size:                  32768
+Blocks per segment of large relation: 32768
+WAL block size:                       32768
+Bytes per WAL segment:                67108864
+Maximum length of identifiers:        64
+Maximum columns in an index:          32
+Maximum size of a TOAST chunk:        8140
+Size of a large-object chunk:         8192
+Date/time type storage:               64-bit integers
+Float8 argument passing:              by value
+Data page checksum version:           1
+Mock authentication nonce:            deb1a8b64d8bc3ddf938a6ec69c7c9785d8f32343c42e3878fe207fbee3ac992
+File encryption method:               
+
+stderr: 
+20260225:10:14:10:030997 gpshrink:cdw:gpadmin-[INFO]:-Successfully finished pg_controldata /home/gpadmin/cloudberry/gpAux/gpdemo/datadirs/dbfast_mirror3/demoDataDir2 for dbid 7:
+stdout: pg_control version number:            13000700
+Catalog version number:               302509031
+Database system identifier:           7610743540636610571
+Database cluster state:               in archive recovery
+pg_control last modified:             Wed 25 Feb 2026 10:12:19 AM GMT
+Latest checkpoint location:           0/C005578
+Latest checkpoint's REDO location:    0/C005578
+Latest checkpoint's REDO WAL file:    000000010000000000000003
+Latest checkpoint's TimeLineID:       1
+Latest checkpoint's PrevTimeLineID:   1
+Latest checkpoint's full_page_writes: on
+Latest checkpoint's NextXID:          0:872
+Latest checkpoint's NextGxid:         3
+Latest checkpoint's NextOID:          16392
+Latest checkpoint's NextRelfilenode:  12002
+Latest checkpoint's NextMultiXactId:  1
+Latest checkpoint's NextMultiOffset:  0
+Latest checkpoint's oldestXID:        810
+Latest checkpoint's oldestXID's DB:   13425
+Latest checkpoint's oldestActiveXID:  0
+Latest checkpoint's oldestMultiXid:   1
+Latest checkpoint's oldestMulti's DB: 1
+Latest checkpoint's oldestCommitTsXid:0
+Latest checkpoint's newestCommitTsXid:0
+Time of latest checkpoint:            Wed 25 Feb 2026 10:12:16 AM GMT
+Fake LSN counter for unlogged rels:   0/3E8
+Minimum recovery ending location:     0/C005600
+Min recovery ending loc's timeline:   1
+Backup start location:                0/0
+Backup end location:                  0/0
+End-of-backup record required:        no
+wal_level setting:                    replica
+wal_log_hints setting:                off
+max_connections setting:              750
+max_worker_processes setting:         14
+max_wal_senders setting:              10
+max_prepared_xacts setting:           250
+max_locks_per_xact setting:           128
+track_commit_timestamp setting:       off
+Maximum data alignment:               8
+Database block size:                  32768
+Blocks per segment of large relation: 32768
+WAL block size:                       32768
+Bytes per WAL segment:                67108864
+Maximum length of identifiers:        64
+Maximum columns in an index:          32
+Maximum size of a TOAST chunk:        8140
+Size of a large-object chunk:         8192
+Date/time type storage:               64-bit integers
+Float8 argument passing:              by value
+Data page checksum version:           1
+Mock authentication nonce:            deb1a8b64d8bc3ddf938a6ec69c7c9785d8f32343c42e3878fe207fbee3ac992
+File encryption method:               
+
+stderr: 
+20260225:10:14:10:030997 gpshrink:cdw:gpadmin-[INFO]:-Successfully finished pg_controldata /tmp/datadirs/dbfast_mirror4/demoDataDir3 for dbid 10:
+stdout: pg_control version number:            13000700
+Catalog version number:               302509031
+Database system identifier:           7610743519254633466
+Database cluster state:               in archive recovery
+pg_control last modified:             Wed 25 Feb 2026 10:14:07 AM GMT
+Latest checkpoint location:           0/1C000060
+Latest checkpoint's REDO location:    0/1C000028
+Latest checkpoint's REDO WAL file:    000000010000000000000007
+Latest checkpoint's TimeLineID:       1
+Latest checkpoint's PrevTimeLineID:   1
+Latest checkpoint's full_page_writes: on
+Latest checkpoint's NextXID:          0:966
+Latest checkpoint's NextGxid:         8196
+Latest checkpoint's NextOID:          33402
+Latest checkpoint's NextRelfilenode:  24576
+Latest checkpoint's NextMultiXactId:  1
+Latest checkpoint's NextMultiOffset:  0
+Latest checkpoint's oldestXID:        810
+Latest checkpoint's oldestXID's DB:   13425
+Latest checkpoint's oldestActiveXID:  966
+Latest checkpoint's oldestMultiXid:   1
+Latest checkpoint's oldestMulti's DB: 1
+Latest checkpoint's oldestCommitTsXid:0
+Latest checkpoint's newestCommitTsXid:0
+Time of latest checkpoint:            Wed 25 Feb 2026 10:14:02 AM GMT
+Fake LSN counter for unlogged rels:   0/3E8
+Minimum recovery ending location:     0/1C000110
+Min recovery ending loc's timeline:   1
+Backup start location:                0/0
+Backup end location:                  0/0
+End-of-backup record required:        no
+wal_level setting:                    replica
+wal_log_hints setting:                off
+max_connections setting:              750
+max_worker_processes setting:         14
+max_wal_senders setting:              10
+max_prepared_xacts setting:           250
+max_locks_per_xact setting:           128
+track_commit_timestamp setting:       off
+Maximum data alignment:               8
+Database block size:                  32768
+Blocks per segment of large relation: 32768
+WAL block size:                       32768
+Bytes per WAL segment:                67108864
+Maximum length of identifiers:        64
+Maximum columns in an index:          32
+Maximum size of a TOAST chunk:        8140
+Size of a large-object chunk:         8192
+Date/time type storage:               64-bit integers
+Float8 argument passing:              by value
+Data page checksum version:           1
+Mock authentication nonce:            ec79bca6b7c99a5ea2ac78e41778e68c225231739152db9d7d59cc19b9096a29
+File encryption method:               
+
+stderr: 
+20260225:10:14:10:030997 gpshrink:cdw:gpadmin-[INFO]:-Successfully finished pg_controldata /tmp/datadirs/dbfast4/demoDataDir3 for dbid 9:
+stdout: pg_control version number:            13000700
+Catalog version number:               302509031
+Database system identifier:           7610743519254633466
+Database cluster state:               in production
+pg_control last modified:             Wed 25 Feb 2026 10:14:02 AM GMT
+Latest checkpoint location:           0/1C000060
+Latest checkpoint's REDO location:    0/1C000028
+Latest checkpoint's REDO WAL file:    000000010000000000000007
+Latest checkpoint's TimeLineID:       1
+Latest checkpoint's PrevTimeLineID:   1
+Latest checkpoint's full_page_writes: on
+Latest checkpoint's NextXID:          0:966
+Latest checkpoint's NextGxid:         8196
+Latest checkpoint's NextOID:          33402
+Latest checkpoint's NextRelfilenode:  24576
+Latest checkpoint's NextMultiXactId:  1
+Latest checkpoint's NextMultiOffset:  0
+Latest checkpoint's oldestXID:        810
+Latest checkpoint's oldestXID's DB:   13425
+Latest checkpoint's oldestActiveXID:  966
+Latest checkpoint's oldestMultiXid:   1
+Latest checkpoint's oldestMulti's DB: 1
+Latest checkpoint's oldestCommitTsXid:0
+Latest checkpoint's newestCommitTsXid:0
+Time of latest checkpoint:            Wed 25 Feb 2026 10:14:02 AM GMT
+Fake LSN counter for unlogged rels:   0/3E8
+Minimum recovery ending location:     0/0
+Min recovery ending loc's timeline:   0
+Backup start location:                0/0
+Backup end location:                  0/0
+End-of-backup record required:        no
+wal_level setting:                    replica
+wal_log_hints setting:                off
+max_connections setting:              750
+max_worker_processes setting:         14
+max_wal_senders setting:              10
+max_prepared_xacts setting:           250
+max_locks_per_xact setting:           128
+track_commit_timestamp setting:       off
+Maximum data alignment:               8
+Database block size:                  32768
+Blocks per segment of large relation: 32768
+WAL block size:                       32768
+Bytes per WAL segment:                67108864
+Maximum length of identifiers:        64
+Maximum columns in an index:          32
+Maximum size of a TOAST chunk:        8140
+Size of a large-object chunk:         8192
+Date/time type storage:               64-bit integers
+Float8 argument passing:              by value
+Data page checksum version:           1
+Mock authentication nonce:            ec79bca6b7c99a5ea2ac78e41778e68c225231739152db9d7d59cc19b9096a29
+File encryption method:               
+
+stderr: 
+20260225:10:14:10:030997 gpshrink:cdw:gpadmin-[INFO]:-Heap checksum setting consistent across cluster
+20260225:10:14:11:030997 gpshrink:cdw:gpadmin-[INFO]:-Locking catalog
+20260225:10:14:11:030997 gpshrink:cdw:gpadmin-[INFO]:-Locked catalog
+20260225:10:14:11:030997 gpshrink:cdw:gpadmin-[INFO]:-Unlocking catalog
+20260225:10:14:11:030997 gpshrink:cdw:gpadmin-[INFO]:-Unlocked catalog
+20260225:10:14:11:030997 gpshrink:cdw:gpadmin-[INFO]:-Creating shrink schema
+20260225:10:14:12:030997 gpshrink:cdw:gpadmin-[INFO]:-Populating gpshrink.status_detail with data from database postgres
+20260225:10:14:12:030997 gpshrink:cdw:gpadmin-[INFO]:-Populating gpshrink.status_detail with data from database template1
+20260225:10:14:12:030997 gpshrink:cdw:gpadmin-[INFO]:-Populating gpshrink.status_detail with data from database isolation2parallelretrcursor
+20260225:10:14:12:030997 gpshrink:cdw:gpadmin-[INFO]:-Populating gpshrink.status_detail with data from database isolation2test
+20260225:10:14:12:030997 gpshrink:cdw:gpadmin-[INFO]:-************************************************
+20260225:10:14:12:030997 gpshrink:cdw:gpadmin-[INFO]:-Initialization of the system shrink complete.
+20260225:10:14:12:030997 gpshrink:cdw:gpadmin-[INFO]:-To begin table shrink onto the new segments
+20260225:10:14:12:030997 gpshrink:cdw:gpadmin-[INFO]:-rerun gpshrink
+20260225:10:14:12:030997 gpshrink:cdw:gpadmin-[INFO]:-************************************************
+20260225:10:14:12:030997 gpshrink:cdw:gpadmin-[INFO]:-Exiting...
+
+-- end_ignore
+(exited with code 0)
+!\retcode gpshrink -i /tmp/testexpand;
+-- start_ignore
+20260225:10:14:13:031255 gpshrink:cdw:gpadmin-[INFO]:-local Cloudberry Version: 'postgres (Apache Cloudberry) 3.0.0-devel+dev.4.g01c21009c35 build dev'
+20260225:10:14:13:031255 gpshrink:cdw:gpadmin-[INFO]:-coordinator Cloudberry Version: 'PostgreSQL 14.4 (Apache Cloudberry 3.0.0-devel+dev.4.g01c21009c35 build dev) on x86_64-pc-linux-gnu, compiled by gcc (Ubuntu 11.4.0-1ubuntu1~22.04.2) 11.4.0, 64-bit compiled on Feb 25 2026 10:08:48 (with assert checking)'
+20260225:10:14:13:031255 gpshrink:cdw:gpadmin-[INFO]:-Shrinking postgres.gpexpand.status_detail
+20260225:10:14:13:031255 gpshrink:cdw:gpadmin-[INFO]:-Finished shrinking postgres.gpexpand.status_detail
+20260225:10:14:14:031255 gpshrink:cdw:gpadmin-[INFO]:-Shrinking postgres.gpshrink.status_detail
+20260225:10:14:14:031255 gpshrink:cdw:gpadmin-[INFO]:-Finished shrinking postgres.gpshrink.status_detail
+20260225:10:14:14:031255 gpshrink:cdw:gpadmin-[INFO]:-Shrinking postgres.gpexpand.status
+20260225:10:14:14:031255 gpshrink:cdw:gpadmin-[INFO]:-Finished shrinking postgres.gpexpand.status
+20260225:10:14:14:031255 gpshrink:cdw:gpadmin-[INFO]:-Shrinking postgres.gpshrink.status
+20260225:10:14:14:031255 gpshrink:cdw:gpadmin-[INFO]:-Finished shrinking postgres.gpshrink.status
+20260225:10:14:18:031255 gpshrink:cdw:gpadmin-[INFO]:-SHRINK COMPLETED SUCCESSFULLY
+20260225:10:14:18:031255 gpshrink:cdw:gpadmin-[INFO]:-Locking catalog
+20260225:10:14:18:031255 gpshrink:cdw:gpadmin-[INFO]:-Locked catalog
+20260225:10:14:19:031255 gpshrink:cdw:gpadmin-[INFO]:-Unlocking catalog
+20260225:10:14:19:031255 gpshrink:cdw:gpadmin-[INFO]:-Unlocked catalog
+20260225:10:14:19:031255 gpshrink:cdw:gpadmin-[INFO]:-Exiting...
+
+-- end_ignore
+(exited with code 0)
+
+!\retcode yes | gpexpand -c;
+-- start_ignore
+20260225:10:14:19:031525 gpexpand:cdw:gpadmin-[INFO]:-local Cloudberry Version: 'postgres (Apache Cloudberry) 3.0.0-devel+dev.4.g01c21009c35 build dev'
+20260225:10:14:19:031525 gpexpand:cdw:gpadmin-[INFO]:-coordinator Cloudberry Version: 'PostgreSQL 14.4 (Apache Cloudberry 3.0.0-devel+dev.4.g01c21009c35 build dev) on x86_64-pc-linux-gnu, compiled by gcc (Ubuntu 11.4.0-1ubuntu1~22.04.2) 11.4.0, 64-bit compiled on Feb 25 2026 10:08:48 (with assert checking)'
+20260225:10:14:19:031525 gpexpand:cdw:gpadmin-[INFO]:-Querying gpexpand schema for current expansion state
+
+
+Do you want to dump the gpexpand.status_detail table to file? Yy|Nn (default=Y):
+> 20260225:10:14:19:031525 gpexpand:cdw:gpadmin-[INFO]:-Dumping gpexpand.status_detail to /home/gpadmin/cloudberry/gpAux/gpdemo/datadirs/qddir/demoDataDir-1/gpexpand.status_detail
+20260225:10:14:19:031525 gpexpand:cdw:gpadmin-[INFO]:-Removing gpexpand schema
+20260225:10:14:19:031525 gpexpand:cdw:gpadmin-[INFO]:-Cleanup Finished.  exiting...
+
+-- end_ignore
+(exited with code 0)
+!\retcode gpshrink -c;
+-- start_ignore
+20260225:10:14:20:031554 gpshrink:cdw:gpadmin-[INFO]:-local Cloudberry Version: 'postgres (Apache Cloudberry) 3.0.0-devel+dev.4.g01c21009c35 build dev'
+20260225:10:14:20:031554 gpshrink:cdw:gpadmin-[INFO]:-coordinator Cloudberry Version: 'PostgreSQL 14.4 (Apache Cloudberry 3.0.0-devel+dev.4.g01c21009c35 build dev) on x86_64-pc-linux-gnu, compiled by gcc (Ubuntu 11.4.0-1ubuntu1~22.04.2) 11.4.0, 64-bit compiled on Feb 25 2026 10:08:48 (with assert checking)'
+20260225:10:14:20:031554 gpshrink:cdw:gpadmin-[INFO]:-Removing gpshrink schema
+20260225:10:14:20:031554 gpshrink:cdw:gpadmin-[INFO]:-Cleanup Finished.  exiting...
+
+-- end_ignore
+(exited with code 0)
+!\retcode rm -r /tmp/datadirs/;
+-- start_ignore
+
+-- end_ignore
+(exited with code 0)
+!\retcode rm /tmp/new_segment_datadir;
+-- start_ignore
+
+-- end_ignore
+(exited with code 0)
+
