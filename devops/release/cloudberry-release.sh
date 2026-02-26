@@ -677,7 +677,7 @@ section "Staging release: $TAG"
   section "Verifying GPG Signature ($ARTIFACTS_DIR/${TAR_NAME}.asc) Release Artifact"
 
   if [[ "$SKIP_SIGNING" != true ]]; then
-    gpg --verify "${TAR_NAME}.asc" "$TAR_NAME"
+    gpg --verify "$ARTIFACTS_DIR/${TAR_NAME}.asc" "$ARTIFACTS_DIR/$TAR_NAME"
   else
     echo "INFO: Signature verification skipped (--skip-signing). Signature is only available when generated via this script."
   fi
