@@ -697,7 +697,7 @@ GetResGroupCapabilities(Relation rel, Oid groupId, ResGroupCaps *resgroupCaps)
 	{
 		ereport(ERROR,
 				(errcode(ERRCODE_UNDEFINED_OBJECT),
-				 errmsg("cannot find limit capabilities for resource group: %d",
+				 errmsg("cannot find limit capabilities for resource group: %u",
 						groupId)));
 	}
 }
@@ -1370,7 +1370,7 @@ validateCapabilities(Relation rel,
 
 			ereport(ERROR,
 					(errcode(ERRCODE_DUPLICATE_OBJECT),
-					 errmsg("found duplicate resource group id: %d",
+					 errmsg("found duplicate resource group id: %u",
 							groupid)));
 		}
 
