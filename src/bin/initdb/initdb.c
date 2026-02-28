@@ -2011,6 +2011,7 @@ setup_cdb_schema(FILE *cmdfd)
 	DIR		   *dir;
 	struct dirent *file;
 	int			nscripts;
+	int			readdir_errno;
 	char	  **scriptnames = NULL;
 	int			i;
 
@@ -2024,6 +2025,7 @@ setup_cdb_schema(FILE *cmdfd)
 
 	/* Collect all files with .sql suffix in array. */
 	nscripts = 0;
+	errno = 0;
 	while ((file = readdir(dir)) != NULL)
 	{
 		int			namelen = strlen(file->d_name);
@@ -2054,11 +2056,18 @@ setup_cdb_schema(FILE *cmdfd)
 		errno = 0;
 #endif
 
-	closedir(dir);
+	readdir_errno = errno;
 
-	if (errno != 0)
+	if (closedir(dir))
+	{
+		pg_log_error("could not close cdb_init.d directory: %m");
+		exit(1);
+	}
+
+	if (readdir_errno != 0)
 	{
 		/* some kind of I/O error? */
+		errno = readdir_errno;
 		pg_log_error("error while reading cdb_init.d directory: %m");
 		exit(1);
 	}
