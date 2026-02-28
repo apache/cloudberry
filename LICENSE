@@ -339,6 +339,12 @@ Apache Cloudberry includes codes from
       see licenses/LICENSE-citusdata.txt
 
 ----------------------------
+   PostgreSQL License
+
+      contrib/fixeddecimal/*
+      see licenses/LICENSE-fixeddecimal.txt
+
+----------------------------
    Apache License - Version 2.0
 
       contrib/pax_storage/src/cpp/contrib/googlebench
