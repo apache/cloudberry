@@ -1,4 +1,5 @@
 CREATE TABLE fixed_decimal(a FIXEDDECIMAL NOT NULL);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
 INSERT INTO fixed_decimal VALUES('92233720368547758.07'),('0.01'),('-92233720368547758.08'),('-0.01');
 SELECT SUM(a) FROM fixed_decimal WHERE a > 0;
 ERROR:  fixeddecimal out of range

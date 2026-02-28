@@ -6,33 +6,57 @@ EXTENSION = fixeddecimal
 DATA = fixeddecimal--1.0.0--1.1.0.sql
 DATA_built = fixeddecimal--1.1.0.sql
 
-CFLAGS = `pg_config --includedir-server`
-
-TESTS = $(wildcard test/sql/*.sql)
-
-REGRESS_BRIN := $(shell pg_config --version | grep -qE "XL 9\.[5-9]| 10\.0| 11\.[0-9]| 12\.[0-9]" && echo brin-xl)
-REGRESS_BRIN += $(shell pg_config --version | grep -E "9\.[5-9]| 10\.0| 11\.[0-9]| 12\.[0-9]" | grep -qEv "XL" && echo brin)
-REGRESS_VERSION_SPECIFIC := $(shell pg_config --version | grep -qE "XL" && echo index-xl || echo index)
-REGRESS = $(shell echo aggregate cast comparison overflow $(REGRESS_BRIN) $(REGRESS_VERSION_SPECIFIC))
-
 REGRESS_OPTS = --inputdir=test --outputdir=test --load-extension=fixeddecimal
 
+ifdef USE_PGXS
 PG_CONFIG = pg_config
 PGXS := $(shell $(PG_CONFIG) --pgxs)
-include $(PGXS)
 
-AGGSTATESQL := $(shell pg_config --version | grep -qE "XL" && echo fixeddecimalaggstate.sql)
-AGGFUNCSSQL := $(shell pg_config --version | grep -qE "XL" && echo fixeddecimal--xlaggs.sql)
+PG_VERSION_STR := $(shell $(PG_CONFIG) --version)
+ifeq (,$(findstring XL,$(PG_VERSION_STR)))
+REGRESS_BRIN := brin
+REGRESS_VERSION_SPECIFIC := index
+AGGSTATESQL :=
+AGGFUNCSSQL := fixeddecimal--parallelaggs.sql
+BRINSQL := fixeddecimal--brin.sql
+BASESQL := fixeddecimal--1.1.0_base_parallel.sql
+else
+REGRESS_BRIN := brin-xl
+REGRESS_VERSION_SPECIFIC := index-xl
+AGGSTATESQL := fixeddecimalaggstate.sql
+AGGFUNCSSQL := fixeddecimal--xlaggs.sql
+BRINSQL :=
+BASESQL := fixeddecimal--1.1.0_base.sql
+endif
+else
+subdir = contrib/fixeddecimal
+top_builddir = ../..
 
-AGGFUNCSSQL := $(shell pg_config --version | grep -qE "9\.[6-9]| 10\.[0-9]| 11\.[0-9]| 12\.[0-9]" && echo fixeddecimal--parallelaggs.sql || echo fixeddecimal--aggs.sql)
+# Cloudberry in-tree builds are non-XL and support parallel/BRIN paths.
+REGRESS_BRIN := brin
+REGRESS_VERSION_SPECIFIC := index
+AGGSTATESQL :=
+AGGFUNCSSQL := fixeddecimal--parallelaggs.sql
+BRINSQL := fixeddecimal--brin.sql
+BASESQL := fixeddecimal--1.1.0_base_parallel.sql
+endif
 
-BRINSQL := $(shell pg_config --version | grep -qE "9\.[5-9]| 10\.[0-9]| 11\.[0-9]| 12\.[0-9]" && echo fixeddecimal--brin.sql)
+REGRESS = aggregate cast comparison overflow $(REGRESS_BRIN) $(REGRESS_VERSION_SPECIFIC)
 
-# 9.6 was the dawn of parallel query, so we'll use the parallel enabled .sql file from then on.
-BASESQL := $(shell pg_config --version | grep -qE "9\.[6-9]| 10\.[0-9]| 11\.[0-9]| 12\.[0-9]" && echo fixeddecimal--1.1.0_base_parallel.sql || echo fixeddecimal--1.1.0_base.sql)
+ifeq ($(srcdir),)
+FD_SRC_PREFIX :=
+else
+FD_SRC_PREFIX := $(srcdir)/
+endif
 
-OBJECTS := $(addprefix $(srcdir)/, $(AGGSTATESQL) $(BASESQL) $(AGGFUNCSSQL) $(BRINSQL))
+OBJECTS := $(addprefix $(FD_SRC_PREFIX), $(AGGSTATESQL) $(BASESQL) $(AGGFUNCSSQL) $(BRINSQL))
 
 fixeddecimal--1.1.0.sql: $(OBJECTS)
 	cat $^ > $@
 
+ifdef USE_PGXS
+include $(PGXS)
+else
+include $(top_builddir)/src/Makefile.global
+include $(top_srcdir)/contrib/contrib-global.mk
+endif

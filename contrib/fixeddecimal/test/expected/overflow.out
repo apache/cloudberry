@@ -116,6 +116,7 @@ ERROR:  FIXEDDECIMAL precision 18 must be between 2 and 17
 LINE 1: SELECT 12345.33::FIXEDDECIMAL(18,2);
                          ^
 CREATE TABLE fixdec (d FIXEDDECIMAL(3,2));
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'd' as the Apache Cloudberry data distribution key for this table.
 INSERT INTO fixdec VALUES(12.34); -- Fail
 ERROR:  FIXEDDECIMAL field overflow
 DETAIL:  A field with precision 2, scale 2 must round to an absolute value less than 10^1.

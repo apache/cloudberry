@@ -305,6 +305,7 @@ jobs:
                                "contrib/formatter_fixedwidth:installcheck",
                                "contrib/hstore:installcheck",
                                "contrib/indexscan:installcheck",
+                               "contrib/fixeddecimal:installcheck",
                                "contrib/pg_trgm:installcheck",
                                "contrib/indexscan:installcheck",
                                "contrib/pgcrypto:installcheck",

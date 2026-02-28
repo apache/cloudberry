@@ -1,4 +1,5 @@
 CREATE TABLE fixdec (id INT, d FIXEDDECIMAL(5,2));
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'id' as the Apache Cloudberry data distribution key for this table.
 INSERT INTO fixdec (id,d) VALUES(1,-123.45);
 INSERT INTO fixdec (id,d) VALUES(2,-123);
 INSERT INTO fixdec (id,d) VALUES(3,-12.34);
@@ -10,16 +11,23 @@ INSERT INTO fixdec (id,d) VALUES(8, 123.45);
 INSERT INTO fixdec (id,d) VALUES(9, 123.456);
 -- Should fail
 CREATE UNIQUE INDEX fixdec_d_idx ON fixdec (d);
-ERROR:  could not create unique index "fixdec_d_idx"
-DETAIL:  Key (d)=(123.45) is duplicated.
+ERROR:  UNIQUE index must contain all columns in the table's distribution key
+DETAIL:  Distribution key column "id" is not included in the constraint.
 DELETE FROM fixdec WHERE id = 9;
 CREATE UNIQUE INDEX fixdec_d_idx ON fixdec (d);
+ERROR:  UNIQUE index must contain all columns in the table's distribution key
+DETAIL:  Distribution key column "id" is not included in the constraint.
 SET enable_seqscan = off;
 EXPLAIN (COSTS OFF) SELECT * FROM fixdec ORDER BY d;
-               QUERY PLAN                
------------------------------------------
- Index Scan using fixdec_d_idx on fixdec
-(1 row)
+              QUERY PLAN               
+---------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Merge Key: d
+   ->  Sort
+         Sort Key: d
+         ->  Seq Scan on fixdec
+ Optimizer: GPORCA
+(6 rows)
 
 SELECT * FROM fixdec ORDER BY d;
  id |    d    
@@ -35,11 +43,13 @@ SELECT * FROM fixdec ORDER BY d;
 (8 rows)
 
 EXPLAIN (COSTS OFF) SELECT * FROM fixdec WHERE d = '12.34'::FIXEDDECIMAL;
-                QUERY PLAN                 
--------------------------------------------
- Index Scan using fixdec_d_idx on fixdec
-   Index Cond: (d = '12.34'::fixeddecimal)
-(2 rows)
+                QUERY PLAN
+------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Seq Scan on fixdec
+         Filter: (d = '12.34'::fixeddecimal)
+ Optimizer: GPORCA
+(4 rows)
 
 SELECT * FROM fixdec WHERE d = '12.34'::FIXEDDECIMAL;
  id |   d   
@@ -60,15 +70,18 @@ SELECT * FROM fixdec WHERE d = '123.45'::FIXEDDECIMAL;
 (1 row)
 
 DROP INDEX fixdec_d_idx;
+ERROR:  index "fixdec_d_idx" does not exist
 SET client_min_messages = ERROR;
 CREATE INDEX fixdec_d_idx ON fixdec USING hash (d);
 RESET client_min_messages;
 EXPLAIN (COSTS OFF) SELECT * FROM fixdec WHERE d = '12.34'::FIXEDDECIMAL;
-                QUERY PLAN                 
--------------------------------------------
- Index Scan using fixdec_d_idx on fixdec
-   Index Cond: (d = '12.34'::fixeddecimal)
-(2 rows)
+                       QUERY PLAN
+---------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Index Scan using fixdec_d_idx on fixdec
+         Index Cond: (d = '12.34'::fixeddecimal)
+ Optimizer: GPORCA
+(4 rows)
 
 SELECT * FROM fixdec WHERE d = '12.34'::FIXEDDECIMAL;
  id |   d   

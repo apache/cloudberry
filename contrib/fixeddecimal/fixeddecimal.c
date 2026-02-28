@@ -22,6 +22,7 @@
 #include "funcapi.h"
 #include "libpq/pqformat.h"
 #include "access/hash.h"
+#include "common/int.h"
 #include "utils/array.h"
 #include "utils/builtins.h"
 
@@ -29,7 +30,7 @@
 
 #include "utils/numeric.h"
 
-#define MAXINT8LEN		25
+#define FIXEDDECIMAL_INT64STRLEN	25
 
 /*
  * The scale which the number is actually stored.
@@ -681,7 +682,7 @@ Datum
 fixeddecimalout(PG_FUNCTION_ARGS)
 {
 	int64		val = PG_GETARG_INT64(0);
-	char		buf[MAXINT8LEN + 1];
+	char		buf[FIXEDDECIMAL_INT64STRLEN + 1];
 	char	   *end = fixeddecimal2str(val, buf);
 	PG_RETURN_CSTRING(pnstrdup(buf, end - buf));
 }
@@ -1258,21 +1259,11 @@ fixeddecimalum(PG_FUNCTION_ARGS)
 	int64		arg = PG_GETARG_INT64(0);
 	int64		result;
 
-#ifdef HAVE_BUILTIN_OVERFLOW
-	int64 zero = 0;
+	if (pg_sub_s64_overflow(0, arg, &result))
+		ereport(ERROR,
+				(errcode(ERRCODE_NUMERIC_VALUE_OUT_OF_RANGE),
+				 errmsg("fixeddecimal out of range")));
 
- 	if (__builtin_sub_overflow(zero, arg, &result))
-		ereport(ERROR,
-				(errcode(ERRCODE_NUMERIC_VALUE_OUT_OF_RANGE),
-				 errmsg("fixeddecimal out of range")));
-#else
-	result = -arg;
-	/* overflow check (needed for INT64_MIN) */
-	if (arg != 0 && SAMESIGN(result, arg))
-		ereport(ERROR,
-				(errcode(ERRCODE_NUMERIC_VALUE_OUT_OF_RANGE),
-				 errmsg("fixeddecimal out of range")));
-#endif /* HAVE_BUILTIN_OVERFLOW */
 	PG_RETURN_INT64(result);
 }
 
@@ -1291,24 +1282,10 @@ fixeddecimalpl(PG_FUNCTION_ARGS)
 	int64		arg2 = PG_GETARG_INT64(1);
 	int64		result;
 
-#ifdef HAVE_BUILTIN_OVERFLOW
-	if (__builtin_add_overflow(arg1, arg2, &result))
+	if (pg_add_s64_overflow(arg1, arg2, &result))
 		ereport(ERROR,
 				(errcode(ERRCODE_NUMERIC_VALUE_OUT_OF_RANGE),
 				 errmsg("fixeddecimal out of range")));
-#else
-	result = arg1 + arg2;
-
-	/*
-	 * Overflow check.  If the inputs are of different signs then their sum
-	 * cannot overflow.  If the inputs are of the same sign, their sum had
-	 * better be that sign too.
-	 */
-	if (SAMESIGN(arg1, arg2) && !SAMESIGN(result, arg1))
-		ereport(ERROR,
-				(errcode(ERRCODE_NUMERIC_VALUE_OUT_OF_RANGE),
-				 errmsg("fixeddecimal out of range")));
-#endif /* HAVE_BUILTIN_OVERFLOW */
 
 	PG_RETURN_INT64(result);
 }
@@ -1320,24 +1297,10 @@ fixeddecimalmi(PG_FUNCTION_ARGS)
 	int64		arg2 = PG_GETARG_INT64(1);
 	int64		result;
 
-#ifdef HAVE_BUILTIN_OVERFLOW
-	if (__builtin_sub_overflow(arg1, arg2, &result))
+	if (pg_sub_s64_overflow(arg1, arg2, &result))
 		ereport(ERROR,
 				(errcode(ERRCODE_NUMERIC_VALUE_OUT_OF_RANGE),
 				 errmsg("fixeddecimal out of range")));
-#else
-	result = arg1 - arg2;
-
-	/*
-	 * Overflow check.  If the inputs are of the same sign then their
-	 * difference cannot overflow.  If they are of different signs then the
-	 * result should be of the same sign as the first input.
-	 */
-	if (!SAMESIGN(arg1, arg2) && !SAMESIGN(result, arg1))
-		ereport(ERROR,
-				(errcode(ERRCODE_NUMERIC_VALUE_OUT_OF_RANGE),
-				 errmsg("fixeddecimal out of range")));
-#endif /* HAVE_BUILTIN_OVERFLOW */
 
 	PG_RETURN_INT64(result);
 }
@@ -2163,18 +2126,11 @@ makeFixedDecimalAggState(FunctionCallInfo fcinfo)
 static void
 fixeddecimal_accum(FixedDecimalAggState *state, int64 newval)
 {
-#ifdef HAVE_BUILTIN_OVERFLOW
-	if (__builtin_add_overflow(state->sumX, newval, &state->sumX))
-		ereport(ERROR,
-				(errcode(ERRCODE_NUMERIC_VALUE_OUT_OF_RANGE),
-				 errmsg("fixeddecimal out of range")));
-	state->N++;
-#else
 	if (state->N++ > 0)
 	{
-		int64 result = state->sumX + newval;
+		int64 result;
 
-		if (SAMESIGN(state->sumX, newval) && !SAMESIGN(result, state->sumX))
+		if (pg_add_s64_overflow(state->sumX, newval, &result))
 			ereport(ERROR,
 					(errcode(ERRCODE_NUMERIC_VALUE_OUT_OF_RANGE),
 					 errmsg("fixeddecimal out of range")));
@@ -2183,7 +2139,6 @@ fixeddecimal_accum(FixedDecimalAggState *state, int64 newval)
 	}
 	else
 		state->sumX = newval;
-#endif /* HAVE_BUILTIN_OVERFLOW */
 }
 
 Datum
@@ -2264,7 +2219,7 @@ Datum
 fixeddecimalaggstateout(PG_FUNCTION_ARGS)
 {
 	FixedDecimalAggState *state = (FixedDecimalAggState *) PG_GETARG_POINTER(0);
-	char		buf[MAXINT8LEN + 1 + MAXINT8LEN + 1];
+	char		buf[FIXEDDECIMAL_INT64STRLEN + 1 + FIXEDDECIMAL_INT64STRLEN + 1];
 	char	   *p;
 
 	p = fixeddecimal2str(state->sumX, buf);
@@ -2318,6 +2273,9 @@ fixeddecimalaggstateserialize(PG_FUNCTION_ARGS)
 	if (!AggCheckCallContext(fcinfo, NULL))
 		elog(ERROR, "aggregate function called in non-aggregate context");
 
+	if (PG_ARGISNULL(0))
+		PG_RETURN_NULL();
+
 	state = (FixedDecimalAggState *) PG_GETARG_POINTER(0);
 
 	pq_begintypsend(&buf);
@@ -2342,6 +2300,9 @@ fixeddecimalaggstatedeserialize(PG_FUNCTION_ARGS)
 
 	if (!AggCheckCallContext(fcinfo, NULL))
 		elog(ERROR, "aggregate function called in non-aggregate context");
+
+	if (PG_ARGISNULL(0))
+		PG_RETURN_NULL();
 
 	sstate = PG_GETARG_BYTEA_P(0);
 
@@ -2395,7 +2356,10 @@ fixeddecimalaggstatecombine(PG_FUNCTION_ARGS)
 		PG_GETARG_POINTER(1);
 
 	if (transstate == NULL)
+	{
+		MemoryContextSwitchTo(old_context);
 		PG_RETURN_POINTER(collectstate);
+	}
 
 	collectstate->sumX = DatumGetInt64(DirectFunctionCall2(fixeddecimalpl,
 				Int64GetDatum(collectstate->sumX), Int64GetDatum(transstate->sumX)));
