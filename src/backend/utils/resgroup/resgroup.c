@@ -1939,7 +1939,7 @@ groupHashFind(Oid groupId, bool raise)
 	{
 		ereport(raise ? ERROR : LOG,
 				(errcode(ERRCODE_DATA_CORRUPTED),
-				 errmsg("cannot find resource group with Oid %d in shared memory",
+				 errmsg("cannot find resource group with Oid %u in shared memory",
 						groupId)));
 		return NULL;
 	}
@@ -1974,7 +1974,7 @@ groupHashRemove(Oid groupId)
 	if (!found)
 		ereport(ERROR,
 				(errcode(ERRCODE_DATA_CORRUPTED),
-				 errmsg("cannot find resource group with Oid %d in shared memory to remove",
+				 errmsg("cannot find resource group with Oid %u in shared memory to remove",
 						groupId)));
 
 	group = &pResGroupControl->groups[entry->index];
@@ -3535,7 +3535,7 @@ ResGroupMoveQuery(int sessionId, Oid groupId, const char *groupName)
 	{
 		ereport(ERROR,
 				(errcode(ERRCODE_UNDEFINED_OBJECT),
-				 (errmsg("invalid resource group id: %d", groupId))));
+				 (errmsg("invalid resource group id: %u", groupId))));
 	}
 
 	groupInfo.group = group;
@@ -3544,7 +3544,7 @@ ResGroupMoveQuery(int sessionId, Oid groupId, const char *groupName)
 	if (slot == NULL)
 		ereport(ERROR,
 				(errcode(ERRCODE_INSUFFICIENT_RESOURCES),
-				 (errmsg("cannot get slot in resource group %d", groupId))));
+				 (errmsg("cannot get slot in resource group %u", groupId))));
 
 	PG_TRY();
 	{
