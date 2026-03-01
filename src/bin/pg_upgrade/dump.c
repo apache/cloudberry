@@ -22,14 +22,9 @@ generate_old_dump(void)
 
 	/* run new pg_dumpall binary for globals */
 	exec_prog(UTILITY_LOG_FILE, NULL, true, true,
-<<<<<<< HEAD
 			  "%s \"%s/pg_dumpall\" %s --globals-only --quote-all-identifiers "
 			  "--resource-groups --resource-queues --binary-upgrade %s -f \"%s/%s\"",
 			  PG_OPTIONS_UTILITY_MODE_VERSION(old_cluster.major_version),
-=======
-			  "\"%s/pg_dumpall\" %s --globals-only --quote-all-identifiers "
-			  "--binary-upgrade %s -f \"%s/%s\"",
->>>>>>> REL_16_9
 			  new_cluster.bindir, cluster_conn_opts(&old_cluster),
 			  log_opts.verbose ? "--verbose" : "",
 			  log_opts.dumpdir,
@@ -59,14 +54,9 @@ generate_old_dump(void)
 		snprintf(log_file_name, sizeof(log_file_name), DB_DUMP_LOG_FILE_MASK, old_db->db_oid);
 
 		parallel_exec_prog(log_file_name, NULL,
-<<<<<<< HEAD
 						   "%s \"%s/pg_dump\" %s --schema-only --quote-all-identifiers "
 						   "--binary-upgrade --format=custom %s --file=\"%s/%s\" %s",
 						   PG_OPTIONS_UTILITY_MODE_VERSION(old_cluster.major_version),
-=======
-						   "\"%s/pg_dump\" %s --schema-only --quote-all-identifiers "
-						   "--binary-upgrade --format=custom %s --file=\"%s/%s\" %s",
->>>>>>> REL_16_9
 						   new_cluster.bindir, cluster_conn_opts(&old_cluster),
 						   log_opts.verbose ? "--verbose" : "",
 						   log_opts.dumpdir,

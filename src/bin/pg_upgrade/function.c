@@ -81,7 +81,6 @@ get_loadable_libraries(void)
 										FirstNormalObjectId);
 		totaltups += PQntuples(ress[dbnum]);
 
-<<<<<<< HEAD
 		/*
 		 * Systems that install plpython before 8.1 have
 		 * plpython_call_handler() defined in the "public" schema, causing
@@ -141,8 +140,6 @@ get_loadable_libraries(void)
 			PQclear(res);
 		}
 
-=======
->>>>>>> REL_16_9
 		PQfinish(conn);
 	}
 
@@ -247,7 +244,6 @@ check_loadable_libraries(void)
 	if (script)
 	{
 		fclose(script);
-<<<<<<< HEAD
 		pg_log(PG_REPORT, "fatal\n");
 		gp_fatal_log(
 				"| Your installation references loadable libraries that are missing from the\n"
@@ -255,14 +251,6 @@ check_loadable_libraries(void)
 				"| or remove the functions using them from the old installation.  A list of\n"
 				"| problem libraries is in the file:\n"
 				"|     %s\n\n", output_path);
-=======
-		pg_log(PG_REPORT, "fatal");
-		pg_fatal("Your installation references loadable libraries that are missing from the\n"
-				 "new installation.  You can add these libraries to the new installation,\n"
-				 "or remove the functions using them from the old installation.  A list of\n"
-				 "problem libraries is in the file:\n"
-				 "    %s", output_path);
->>>>>>> REL_16_9
 	}
 	else
 		check_ok();

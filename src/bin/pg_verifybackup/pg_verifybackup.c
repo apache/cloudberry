@@ -320,16 +320,8 @@ main(int argc, char **argv)
 				pg_fatal("program \"%s\" is needed by %s but was not found in the same directory as \"%s\"",
 						 "pg_waldump", "pg_verifybackup", full_path);
 			else
-<<<<<<< HEAD
-				pg_log_fatal("The program \"%s\" was found by \"%s\"\n"
-							 "but was not the same version as %s.\n"
-							 "Check your installation.",
-							 "pg_waldump", full_path, "pg_verifybackup");
-			exit(1);
-=======
 				pg_fatal("program \"%s\" was found by \"%s\" but was not the same version as %s",
 						 "pg_waldump", full_path, "pg_verifybackup");
->>>>>>> REL_16_9
 		}
 	}
 
