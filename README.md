@@ -94,7 +94,7 @@ feedback, and chat:
 | New ideas / Feature Requests | Share ideas for new features, visit [GitHub Discussions - Ideas](https://github.com/apache/cloudberry/discussions/categories/ideas-feature-requests).  |
 | Report bugs | Problems and issues in Apache Cloudberry core. If you find bugs, welcome to submit them [here](https://github.com/apache/cloudberry/issues).  |
 | Report a security vulnerability | View our [security policy](https://github.com/apache/cloudberry/security/policy) to learn how to report and contact us.  |
-| Community events | Including meetups, webinars, conferences, and more events, visit the [Events page](https://cloudberry.apache.org/community/events) and subscribe events calendar.  |
+| Community events | Including meetups, webinars, conferences, and more events, visit the [Events page](https://cloudberry.apache.org/community/events) and subscribe to the events calendar.  |
 | Documentation | [Official documentation](https://cloudberry.apache.org/docs/) for Cloudberry. You can explore it to discover more details about us. |
 
 ## Contribution
