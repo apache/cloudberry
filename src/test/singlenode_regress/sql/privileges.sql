@@ -196,8 +196,6 @@ CREATE VIEW atest12v AS
   SELECT * FROM atest12 WHERE b <<< 5;
 CREATE VIEW atest12sbv WITH (security_barrier=true) AS
   SELECT * FROM atest12 WHERE b <<< 5;
-GRANT SELECT ON atest12v TO PUBLIC;
-GRANT SELECT ON atest12sbv TO PUBLIC;
 
 -- This plan should use nestloop, knowing that few rows will be selected.
 EXPLAIN (COSTS OFF) SELECT * FROM atest12v x, atest12v y WHERE x.a = y.b;
