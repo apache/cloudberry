@@ -67,7 +67,7 @@ def FilterLogEntries(iterable,
                      filters=[],
                      ibegin=0,
                      jend=None):
-    """
+    r"""
     Generator to consume the lines of a GPDB log file from iterable,
     yield the lines which satisfy the given criteria, and skip the rest.
 
@@ -668,7 +668,7 @@ def MatchInFirstLine(iterable, regex):
 
 
 def NoMatchInFirstLine(iterable, regex):
-    """
+    r"""
     Generator to filter a stream of groups.  Skips those groups whose
     first line contains a match for the given regex; yields all other
     groups.
