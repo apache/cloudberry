@@ -1,0 +1,310 @@
+-- True comparisons
+SELECT '123'::FIXEDDECIMAL < '123.01'::FIXEDDECIMAL;
+ ?column? 
+----------
+ t
+(1 row)
+
+SELECT '123'::FIXEDDECIMAL <= '123.01'::FIXEDDECIMAL;
+ ?column? 
+----------
+ t
+(1 row)
+
+SELECT '123'::FIXEDDECIMAL > '122.99'::FIXEDDECIMAL;
+ ?column? 
+----------
+ t
+(1 row)
+
+SELECT '123'::FIXEDDECIMAL >= '122.99'::FIXEDDECIMAL;
+ ?column? 
+----------
+ t
+(1 row)
+
+SELECT '123.00'::FIXEDDECIMAL = '123'::FIXEDDECIMAL;
+ ?column? 
+----------
+ t
+(1 row)
+
+-- Compare to int4
+SELECT '123'::INT < '123.01'::FIXEDDECIMAL;
+ ?column? 
+----------
+ t
+(1 row)
+
+SELECT '123'::INT <= '123.01'::FIXEDDECIMAL;
+ ?column? 
+----------
+ t
+(1 row)
+
+SELECT '123'::INT > '122.99'::FIXEDDECIMAL;
+ ?column? 
+----------
+ t
+(1 row)
+
+SELECT '123'::INT >= '122.99'::FIXEDDECIMAL;
+ ?column? 
+----------
+ t
+(1 row)
+
+SELECT '123'::INT = '123.00'::FIXEDDECIMAL;
+ ?column? 
+----------
+ t
+(1 row)
+
+-- Compare to int4 reversed
+SELECT '123.01'::FIXEDDECIMAL > '123'::INT;
+ ?column? 
+----------
+ t
+(1 row)
+
+SELECT  '123.01'::FIXEDDECIMAL >= '123'::INT;
+ ?column? 
+----------
+ t
+(1 row)
+
+SELECT '122.99'::FIXEDDECIMAL < '123'::INT;
+ ?column? 
+----------
+ t
+(1 row)
+
+SELECT '122.99'::FIXEDDECIMAL <= '123'::INT;
+ ?column? 
+----------
+ t
+(1 row)
+
+SELECT '123.00'::FIXEDDECIMAL = '123'::INT;
+ ?column? 
+----------
+ t
+(1 row)
+
+-- Compare to int2
+SELECT '123'::SMALLINT < '123.01'::FIXEDDECIMAL;
+ ?column? 
+----------
+ t
+(1 row)
+
+SELECT '123'::SMALLINT <= '123.01'::FIXEDDECIMAL;
+ ?column? 
+----------
+ t
+(1 row)
+
+SELECT '123'::SMALLINT > '122.99'::FIXEDDECIMAL;
+ ?column? 
+----------
+ t
+(1 row)
+
+SELECT '123'::SMALLINT >= '122.99'::FIXEDDECIMAL;
+ ?column? 
+----------
+ t
+(1 row)
+
+SELECT '123'::SMALLINT = '123.00'::FIXEDDECIMAL;
+ ?column? 
+----------
+ t
+(1 row)
+
+-- Compare to int4 reversed
+SELECT '123.01'::FIXEDDECIMAL > '123'::SMALLINT;
+ ?column? 
+----------
+ t
+(1 row)
+
+SELECT  '123.01'::FIXEDDECIMAL >= '123'::SMALLINT;
+ ?column? 
+----------
+ t
+(1 row)
+
+SELECT '122.99'::FIXEDDECIMAL < '123'::SMALLINT;
+ ?column? 
+----------
+ t
+(1 row)
+
+SELECT '122.99'::FIXEDDECIMAL <= '123'::SMALLINT;
+ ?column? 
+----------
+ t
+(1 row)
+
+SELECT '123.00'::FIXEDDECIMAL = '123'::SMALLINT;
+ ?column? 
+----------
+ t
+(1 row)
+
+-- False comparisons
+SELECT '123'::FIXEDDECIMAL >= '123.01'::FIXEDDECIMAL;
+ ?column? 
+----------
+ f
+(1 row)
+
+SELECT '123'::FIXEDDECIMAL > '123.01'::FIXEDDECIMAL;
+ ?column? 
+----------
+ f
+(1 row)
+
+SELECT '123'::FIXEDDECIMAL <= '122.99'::FIXEDDECIMAL;
+ ?column? 
+----------
+ f
+(1 row)
+
+SELECT '123'::FIXEDDECIMAL < '122.99'::FIXEDDECIMAL;
+ ?column? 
+----------
+ f
+(1 row)
+
+SELECT '123.00'::FIXEDDECIMAL <> '123'::FIXEDDECIMAL;
+ ?column? 
+----------
+ f
+(1 row)
+
+-- Compare to int4
+SELECT '123'::INT >= '123.01'::FIXEDDECIMAL;
+ ?column? 
+----------
+ f
+(1 row)
+
+SELECT '123'::INT > '123.01'::FIXEDDECIMAL;
+ ?column? 
+----------
+ f
+(1 row)
+
+SELECT '123'::INT <= '122.99'::FIXEDDECIMAL;
+ ?column? 
+----------
+ f
+(1 row)
+
+SELECT '123'::INT < '122.99'::FIXEDDECIMAL;
+ ?column? 
+----------
+ f
+(1 row)
+
+SELECT '123'::INT <> '123.00'::FIXEDDECIMAL;
+ ?column? 
+----------
+ f
+(1 row)
+
+-- Compare to int4 reversed
+SELECT '123.01'::FIXEDDECIMAL <= '123'::INT;
+ ?column? 
+----------
+ f
+(1 row)
+
+SELECT  '123.01'::FIXEDDECIMAL < '123'::INT;
+ ?column? 
+----------
+ f
+(1 row)
+
+SELECT '122.99'::FIXEDDECIMAL >= '123'::INT;
+ ?column? 
+----------
+ f
+(1 row)
+
+SELECT '122.99'::FIXEDDECIMAL > '123'::INT;
+ ?column? 
+----------
+ f
+(1 row)
+
+SELECT '123.00'::FIXEDDECIMAL <> '123'::INT;
+ ?column? 
+----------
+ f
+(1 row)
+
+-- Compare to int2
+SELECT '123'::SMALLINT >= '123.01'::FIXEDDECIMAL;
+ ?column? 
+----------
+ f
+(1 row)
+
+SELECT '123'::SMALLINT > '123.01'::FIXEDDECIMAL;
+ ?column? 
+----------
+ f
+(1 row)
+
+SELECT '123'::SMALLINT <= '122.99'::FIXEDDECIMAL;
+ ?column? 
+----------
+ f
+(1 row)
+
+SELECT '123'::SMALLINT < '122.99'::FIXEDDECIMAL;
+ ?column? 
+----------
+ f
+(1 row)
+
+SELECT '123'::SMALLINT <> '123.00'::FIXEDDECIMAL;
+ ?column? 
+----------
+ f
+(1 row)
+
+-- Compare to int4 reversed
+SELECT '123.01'::FIXEDDECIMAL <= '123'::SMALLINT;
+ ?column? 
+----------
+ f
+(1 row)
+
+SELECT  '123.01'::FIXEDDECIMAL < '123'::SMALLINT;
+ ?column? 
+----------
+ f
+(1 row)
+
+SELECT '122.99'::FIXEDDECIMAL >= '123'::SMALLINT;
+ ?column? 
+----------
+ f
+(1 row)
+
+SELECT '122.99'::FIXEDDECIMAL > '123'::SMALLINT;
+ ?column? 
+----------
+ f
+(1 row)
+
+SELECT '123.00'::FIXEDDECIMAL <> '123'::SMALLINT;
+ ?column? 
+----------
+ f
+(1 row)
+
