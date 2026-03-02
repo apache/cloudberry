@@ -83,6 +83,7 @@ typedef enum {
 	FINC_OS_NET_INTERFACE = 19,
 	FINC_OS_MEM_INTERFACE = 20,
 	FINC_OS_CREATE_THREAD = 21,
+	FINC_PKT_TOO_LONG = 22,
 
 	/* These are used to inject network faults. */
 	FINC_NET_RECV_ERROR = 23,
@@ -301,6 +302,13 @@ testmode_sendto(const char *caller_name, int socket, const void *buffer,
 			errno = EFAULT;
 			return -1;
 
+		case FINC_PKT_TOO_LONG:
+			if (!FINC_HAS_FAULT(fault_type) || !is_pkt)
+				break;
+			write_log("inject fault to sendto: FINC_PKT_TOO_LONG");
+			errno = EMSGSIZE;
+			return -1;
+
 		default:
 			break;
 	}
@@ -481,25 +489,6 @@ testmode_getsockname(const char *caller_name, int socket,
 	return getsockname(socket, address, address_len);
 }
 
-/*
- * testmode_getsockopt
- * 		getsockopt function with faults injected
- */
-static int
-testmode_getsockopt(const char *caller_name, int socket, int level,
-					int option_name, void *restrict option_value,
-					socklen_t *restrict option_len)
-{
-	if (FINC_HAS_FAULT(FINC_OS_NET_INTERFACE) &&
-		testmode_inject_fault(gp_udpic_fault_inject_percent))
-	{
-		write_log("inject fault to getsockopt: FINC_OS_NET_INTERFACE");
-		errno = EFAULT;
-		return -1;
-	}
-
-	return getsockopt(socket, level, option_name, option_value, option_len);
-}
 
 /*
  * testmode_setsockopt
@@ -656,9 +645,6 @@ testmode_pthread_create(const char *caller_name, pthread_t *thread,
 
 #define getsockname(socket, address, address_len) \
 	testmode_getsockname(PG_FUNCNAME_MACRO, socket, address, address_len)
-
-#define getsockopt(socket, level, option_name, option_value, option_len) \
-	testmode_getsockopt(PG_FUNCNAME_MACRO, socket, level, option_name, option_value, option_len)
 
 #define setsockopt(socket, level, option_name, option_value, option_len) \
 	testmode_setsockopt(PG_FUNCNAME_MACRO, socket, level, option_name, option_value, option_len)
