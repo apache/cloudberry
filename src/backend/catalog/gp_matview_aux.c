@@ -52,6 +52,9 @@
 #include "optimizer/transform.h"
 #include "parser/parsetree.h"
 
+static bool extract_base_relids_from_jointree(Node *jtnode, List *rtable,
+											   List **relids, bool *has_foreign);
+
 static void InsertMatviewTablesEntries(Oid mvoid, List *relids);
 
 static void RemoveMatviewTablesEntries(Oid mvoid);
@@ -61,19 +64,105 @@ static void SetMatviewAuxStatus_guts(Oid mvoid, char status);
 static void addRelationMVRefCount(Oid relid, int32 mvrefcount);
 
 /*
+ * extract_base_relids_from_jointree
+ * Recursively walk a join tree node and collect base relation OIDs.
+ *
+ * Handles RangeTblRef (leaf), JoinExpr (explicit JOIN), and FromExpr
+ * (implicit cross-join / comma-separated FROM list).
+ *
+ * Returns false if any unsupported RTE kind is found (subquery, function,
+ * CTE, etc.). Self-joins are deduplicated via list_append_unique_oid.
+ */
+static bool
+extract_base_relids_from_jointree(Node *jtnode, List *rtable,
+								  List **relids, bool *has_foreign)
+{
+	if (jtnode == NULL)
+		return false;
+
+	if (IsA(jtnode, RangeTblRef))
+	{
+		int				rtindex = ((RangeTblRef *) jtnode)->rtindex;
+		RangeTblEntry  *rte = rt_fetch(rtindex, rtable);
+		char			relkind;
+		bool			can_be_partition;
+
+		if (rte->rtekind != RTE_RELATION)
+			return false;
+
+		relkind = get_rel_relkind(rte->relid);
+
+		/*
+		 * Allow foreign table here, however we don't know if the data is
+		 * up to date or not of the view.
+		 * But if users want to query matview instead of query foreign tables
+		 * outside CBDB, let them decide with aqumv_allow_foreign_table.
+		 */
+		if (relkind != RELKIND_RELATION &&
+			relkind != RELKIND_PARTITIONED_TABLE &&
+			relkind != RELKIND_FOREIGN_TABLE)
+			return false;
+
+		if (has_foreign && relkind == RELKIND_FOREIGN_TABLE)
+			*has_foreign = true;
+
+		/*
+		 * Inherit tables are not supported.
+		 */
+		can_be_partition = (relkind == RELKIND_PARTITIONED_TABLE) ||
+						   get_rel_relispartition(rte->relid);
+
+		if (!can_be_partition &&
+			(has_superclass(rte->relid) || has_subclass(rte->relid)))
+			return false;
+
+		/* Deduplicate for self-joins (t1 JOIN t1). */
+		*relids = list_append_unique_oid(*relids, rte->relid);
+
+		return true;
+	}
+	else if (IsA(jtnode, JoinExpr))
+	{
+		JoinExpr   *j = (JoinExpr *) jtnode;
+
+		if (!extract_base_relids_from_jointree(j->larg, rtable, relids, has_foreign))
+			return false;
+		if (!extract_base_relids_from_jointree(j->rarg, rtable, relids, has_foreign))
+			return false;
+
+		return true;
+	}
+	else if (IsA(jtnode, FromExpr))
+	{
+		FromExpr   *f = (FromExpr *) jtnode;
+		ListCell   *lc;
+
+		foreach(lc, f->fromlist)
+		{
+			if (!extract_base_relids_from_jointree((Node *) lfirst(lc),
+												   rtable, relids, has_foreign))
+				return false;
+		}
+
+		return true;
+	}
+
+	/* Unsupported node type */
+	return false;
+}
+
+/*
  * GetViewBaseRelids
  * Get all base tables's oid of a query tree.
- * Currently there is only one base table, but there should be
- * distinct func on it later. Self join tables: t1 join t1, will
- * get only one oid.
- * 
+ * Supports single-table and multi-table (JOIN) queries.
+ * Self join tables: t1 join t1, will get only one oid.
+ *
  * Return NIL if the query we think it's useless.
  */
 List*
 GetViewBaseRelids(const Query *viewQuery, bool *has_foreign)
 {
 	List	*relids = NIL;
-	Node	*mvjtnode;
 
 	if ((viewQuery->commandType != CMD_SELECT) ||
 		(viewQuery->rowMarks != NIL) ||
@@ -109,43 +198,13 @@ GetViewBaseRelids(const Query *viewQuery, bool *has_foreign)
 	if (contain_mutable_functions((Node*)viewQuery))
 		return NIL;
 
-	if (list_length(viewQuery->jointree->fromlist) != 1)
-		return NIL;
-
-	mvjtnode = (Node *) linitial(viewQuery->jointree->fromlist);
-	if (!IsA(mvjtnode, RangeTblRef))
-		return NIL;
-
-	RangeTblEntry	*rte = rt_fetch(1, viewQuery->rtable);
-	if (rte->rtekind != RTE_RELATION)
-		return NIL;
-
-	char relkind = get_rel_relkind(rte->relid);
-
-	/*
-	 * Allow foreign table here, however we don't know if the data is
-	 * up to date or not of the view.
-	 * But if users want to query matview instead of query foreign tables
-	 * outside CBDB, let them decide with aqumv_allow_foreign_table.
-	 */
-	if (relkind != RELKIND_RELATION &&
-		relkind != RELKIND_PARTITIONED_TABLE &&
-		relkind != RELKIND_FOREIGN_TABLE)
-		return NIL;
-
 	if (has_foreign)
-		*has_foreign = relkind == RELKIND_FOREIGN_TABLE;
+		*has_foreign = false;
 
-	/*
-	 * inherit tables are not supported.
-	 */
-	bool can_be_partition = (relkind == RELKIND_PARTITIONED_TABLE) || get_rel_relispartition(rte->relid);
-
-	if (!can_be_partition &&
-		(has_superclass(rte->relid) || has_subclass(rte->relid)))
+	if (!extract_base_relids_from_jointree((Node *) viewQuery->jointree,
+										   viewQuery->rtable,
+										   &relids, has_foreign))
 		return NIL;
-
-	relids = list_make1_oid(rte->relid);
 
 	return relids;
 }
