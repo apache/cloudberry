@@ -2024,6 +2024,7 @@ setup_cdb_schema(FILE *cmdfd)
 
 	/* Collect all files with .sql suffix in array. */
 	nscripts = 0;
+	errno = 0;
 	while ((file = readdir(dir)) != NULL)
 	{
 		int			namelen = strlen(file->d_name);
@@ -2054,12 +2055,16 @@ setup_cdb_schema(FILE *cmdfd)
 		errno = 0;
 #endif
 
-	closedir(dir);
-
-	if (errno != 0)
+	if (errno)
 	{
-		/* some kind of I/O error? */
 		pg_log_error("error while reading cdb_init.d directory: %m");
+		closedir(dir);
+		exit(1);
+	}
+
+	if (closedir(dir))
+	{
+		pg_log_error("error while closing cdb_init.d directory: %m");
 		exit(1);
 	}
 
