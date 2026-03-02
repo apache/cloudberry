@@ -134,11 +134,11 @@ void DefineGUCs() {
                            "enable pax filter, contains min/max and bloom "
                            "filters for sparse filtering",
                            NULL, &pax::pax_enable_sparse_filter, true,
-                           PGC_USERSET, 0, NULL, NULL, NULL);
+                           PGC_USERSET, GUC_GPDB_NEED_SYNC, NULL, NULL, NULL);
 
   DefineCustomBoolVariable("pax.enable_row_filter", "enable pax row filter",
                            NULL, &pax::pax_enable_row_filter, false,
-                           PGC_USERSET, 0, NULL, NULL, NULL);
+                           PGC_USERSET, GUC_GPDB_NEED_SYNC, NULL, NULL, NULL);
 
   DefineCustomIntVariable(
       "pax.scan_reuse_buffer_size", "set the reuse buffer size", NULL,
