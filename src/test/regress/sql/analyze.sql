@@ -700,3 +700,34 @@ FROM pg_statistic s
 JOIN pg_attribute a ON a.attrelid = s.starelid AND a.attnum = s.staattnum
 WHERE s.starelid = 'analyze_col_ndv_drop'::regclass AND a.attname = 'b';
 DROP TABLE analyze_col_ndv_drop;
+
+--
+-- Test merging leaf stats when an emptied leaf partition carries a stale
+-- pg_statistic tuple that lacks the NDV_BY_SEGMENTS slot (here because
+-- column c is entirely NULL in that leaf, so no slot was ever written).
+-- aggregate_leaf_partition_ndvbs used to dereference the zeroed slot's
+-- NULL values array and crash the QD.
+--
+CREATE TABLE analyze_ndvbs_empty_part (a int, b int, c int)
+DISTRIBUTED BY (a)
+PARTITION BY RANGE (b) (START (1) END (3) EVERY (1));
+INSERT INTO analyze_ndvbs_empty_part SELECT i, 1, NULL FROM generate_series(1, 100) i;
+INSERT INTO analyze_ndvbs_empty_part SELECT i, 2, i FROM generate_series(1, 100) i;
+ANALYZE analyze_ndvbs_empty_part_1_prt_1;
+ANALYZE analyze_ndvbs_empty_part_1_prt_2;
+-- empty the first leaf; its stale stats tuple survives with reltuples = 0
+DELETE FROM analyze_ndvbs_empty_part_1_prt_1;
+VACUUM analyze_ndvbs_empty_part_1_prt_1;
+-- must not crash; the empty leaf contributes nothing to the aggregated NDV
+ANALYZE ROOTPARTITION analyze_ndvbs_empty_part;
+SELECT a.attname,
+       CASE WHEN s.stakind1 = 8 THEN array_to_string(s.stavalues1, ',')
+            WHEN s.stakind2 = 8 THEN array_to_string(s.stavalues2, ',')
+            WHEN s.stakind3 = 8 THEN array_to_string(s.stavalues3, ',')
+            WHEN s.stakind4 = 8 THEN array_to_string(s.stavalues4, ',')
+            WHEN s.stakind5 = 8 THEN array_to_string(s.stavalues5, ',')
+       END AS stadistinctbyseg
+FROM pg_statistic s
+JOIN pg_attribute a ON a.attrelid = s.starelid AND a.attnum = s.staattnum
+WHERE s.starelid = 'analyze_ndvbs_empty_part'::regclass AND a.attname = 'c';
+DROP TABLE analyze_ndvbs_empty_part;
