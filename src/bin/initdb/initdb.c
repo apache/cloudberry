@@ -2011,7 +2011,6 @@ setup_cdb_schema(FILE *cmdfd)
 	DIR		   *dir;
 	struct dirent *file;
 	int			nscripts;
-	int			readdir_errno;
 	char	  **scriptnames = NULL;
 	int			i;
 
@@ -2056,19 +2055,16 @@ setup_cdb_schema(FILE *cmdfd)
 		errno = 0;
 #endif
 
-	readdir_errno = errno;
-
-	if (closedir(dir))
+	if (errno)
 	{
-		pg_log_error("could not close cdb_init.d directory: %m");
+		pg_log_error("error while reading cdb_init.d directory: %m");
+		closedir(dir);
 		exit(1);
 	}
 
-	if (readdir_errno != 0)
+	if (closedir(dir))
 	{
-		/* some kind of I/O error? */
-		errno = readdir_errno;
-		pg_log_error("error while reading cdb_init.d directory: %m");
+		pg_log_error("error while closing cdb_init.d directory: %m");
 		exit(1);
 	}
 
