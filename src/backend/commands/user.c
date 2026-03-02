@@ -1521,7 +1521,7 @@ AlterRole(AlterRoleStmt *stmt)
 		if (!HeapTupleIsValid(profiletuple))
 			ereport(ERROR,
 						(errcode(ERRCODE_UNDEFINED_OBJECT),
-						 errmsg("profile \"%d\" does not exist", profileid)));
+						 errmsg("profile \"%u\" does not exist", profileid)));
 
 		/* Get PASSWORD_REUSE_MAX from profile tuple and transform it to normal value */
 		profileform = (Form_pg_profile) GETSTRUCT(profiletuple);
