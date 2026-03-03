@@ -1,0 +1,107 @@
+--
+-- Test COPY FROM with invalid multi-byte encoding and SEGMENT REJECT LIMIT.
+--
+-- Regression test for https://github.com/apache/cloudberry/issues/1425
+-- COPY FROM should correctly count encoding errors as single rejected rows,
+-- not double-count them.  Also, encoding error SREH should work when
+-- transcoding is required.
+--
+
+-- ===================================================================
+-- Test 1: Non-transcoding case (invalid UTF-8 into UTF-8 database)
+--
+-- The file has 3 lines:
+--   line 1: valid
+--   line 2: ends with 0xC2 (incomplete 2-byte UTF-8 sequence before newline)
+--   line 3: valid
+--
+-- With SEGMENT REJECT LIMIT 2, this should succeed: only 1 error row,
+-- and 1 < 2.  Before the fix, the error was double-counted (counted as 2),
+-- which would cause the reject limit to be reached on the next error check.
+-- ===================================================================
+
+CREATE TABLE copy_enc_err(a int, b text) DISTRIBUTED BY (a);
+
+COPY copy_enc_err FROM '@abs_srcdir@/data/copy_enc_err_utf8.data' DELIMITER '|'
+    LOG ERRORS SEGMENT REJECT LIMIT 2 ROWS;
+
+-- Verify that valid rows (lines 1 and 3) were imported.
+SELECT * FROM copy_enc_err ORDER BY a;
+
+-- Verify that exactly 1 error was logged (not 2).
+SELECT count(*) AS error_count FROM gp_read_error_log('copy_enc_err');
+
+SELECT gp_truncate_error_log('copy_enc_err');
+TRUNCATE copy_enc_err;
+
+-- ===================================================================
+-- Test 2: Non-transcoding with multiple bad lines
+--
+-- The file has 5 lines: lines 2 and 4 are bad.
+-- With SEGMENT REJECT LIMIT 10, this should succeed with 2 errors.
+-- ===================================================================
+
+COPY copy_enc_err FROM '@abs_srcdir@/data/copy_enc_err_utf8_multi.data' DELIMITER '|'
+    LOG ERRORS SEGMENT REJECT LIMIT 10 ROWS;
+
+-- All 3 valid rows should be imported.
+SELECT * FROM copy_enc_err ORDER BY a;
+
+-- Exactly 2 errors should be logged.
+SELECT count(*) AS error_count FROM gp_read_error_log('copy_enc_err');
+
+SELECT gp_truncate_error_log('copy_enc_err');
+TRUNCATE copy_enc_err;
+
+-- ===================================================================
+-- Test 3: Non-transcoding, reject limit reached correctly
+--
+-- 2 bad lines with SEGMENT REJECT LIMIT 2 should fail, because
+-- rejectcount (2) >= rejectlimit (2).
+-- ===================================================================
+
+COPY copy_enc_err FROM '@abs_srcdir@/data/copy_enc_err_utf8_multi.data' DELIMITER '|'
+    LOG ERRORS SEGMENT REJECT LIMIT 2 ROWS;
+
+SELECT gp_truncate_error_log('copy_enc_err');
+
+-- ===================================================================
+-- Test 4: Transcoding case (invalid EUC_CN into UTF-8 database)
+--
+-- The file has 3 lines with data that claims to be EUC_CN:
+--   line 1: valid ASCII (valid in EUC_CN)
+--   line 2: ends with 0xA1 (starts a 2-byte EUC_CN char, but \n follows)
+--   line 3: valid ASCII (valid in EUC_CN)
+--
+-- Before the fix, this would error with:
+--   "Data validation error: since the source data need transcoding
+--    sreh can not handle yet."
+-- After the fix, it should skip line 2 and import lines 1 and 3.
+-- ===================================================================
+
+COPY copy_enc_err FROM '@abs_srcdir@/data/copy_enc_err_euccn.data' DELIMITER '|'
+    ENCODING 'euc_cn' LOG ERRORS SEGMENT REJECT LIMIT 2 ROWS;
+
+-- Valid rows should be imported.
+SELECT * FROM copy_enc_err ORDER BY a;
+
+-- Exactly 1 error should be logged.
+SELECT count(*) AS error_count FROM gp_read_error_log('copy_enc_err');
+
+SELECT gp_truncate_error_log('copy_enc_err');
+TRUNCATE copy_enc_err;
+
+-- ===================================================================
+-- Test 5: Transcoding with multiple bad lines
+-- ===================================================================
+
+COPY copy_enc_err FROM '@abs_srcdir@/data/copy_enc_err_euccn_multi.data' DELIMITER '|'
+    ENCODING 'euc_cn' LOG ERRORS SEGMENT REJECT LIMIT 10 ROWS;
+
+SELECT * FROM copy_enc_err ORDER BY a;
+
+SELECT count(*) AS error_count FROM gp_read_error_log('copy_enc_err');
+
+-- Cleanup
+SELECT gp_truncate_error_log('copy_enc_err');
+DROP TABLE copy_enc_err;
