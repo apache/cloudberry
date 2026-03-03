@@ -562,6 +562,11 @@ section "Staging release: $TAG"
 
   section "Creating Source Tarball"
 
+  # NOTE: For RC tags like "X.Y.Z-incubating-rcN", keep the tag as-is but
+  # generate the tarball name and top-level directory using BASE_VERSION
+  # (without "-rcN"). This allows promoting the voted bits without rebuilding.
+  # Keep -rcN in the artifact filename for RC voting, but keep the extracted
+  # top-level directory name as BASE_VERSION (without -rcN).
   TAR_NAME="apache-cloudberry-${TAG}-src.tar.gz"
   TMP_DIR=$(mktemp -d)
   trap 'rm -rf "$TMP_DIR"' EXIT
@@ -570,17 +575,17 @@ section "Staging release: $TAG"
   export COPYFILE_DISABLE=1
   export COPY_EXTENDED_ATTRIBUTES_DISABLE=1
 
-  git archive --format=tar --prefix="apache-cloudberry-${TAG}/" "$TAG" | tar -x -C "$TMP_DIR"
-  cp BUILD_NUMBER "$TMP_DIR/apache-cloudberry-${TAG}/"
+  git archive --format=tar --prefix="apache-cloudberry-${BASE_VERSION}/" "$TAG" | tar -x -C "$TMP_DIR"
+  cp BUILD_NUMBER "$TMP_DIR/apache-cloudberry-${BASE_VERSION}/"
 
   # Archive submodules if any
   if [ -s .gitmodules ]; then
     git submodule foreach --recursive --quiet "
       echo \"Archiving submodule: \$sm_path\"
       fullpath=\"\$toplevel/\$sm_path\"
-      destpath=\"$TMP_DIR/apache-cloudberry-$TAG/\$sm_path\"
+      destpath=\"$TMP_DIR/apache-cloudberry-$BASE_VERSION/\$sm_path\"
       mkdir -p \"\$destpath\"
-      git -C \"\$fullpath\" archive --format=tar --prefix=\"\$sm_path/\" HEAD | tar -x -C \"$TMP_DIR/apache-cloudberry-$TAG\"
+      git -C \"\$fullpath\" archive --format=tar --prefix=\"\$sm_path/\" HEAD | tar -x -C \"$TMP_DIR/apache-cloudberry-$BASE_VERSION\"
     "
   fi
 
@@ -589,25 +594,25 @@ section "Staging release: $TAG"
     echo "Cleaning macOS extended attributes from extracted files..."
     # Remove all extended attributes recursively
     if command -v xattr >/dev/null 2>&1; then
-      find "$TMP_DIR/apache-cloudberry-${TAG}" -type f -exec xattr -c {} \; 2>/dev/null || true
+      find "$TMP_DIR/apache-cloudberry-${BASE_VERSION}" -type f -exec xattr -c {} \; 2>/dev/null || true
       echo "[OK] Extended attributes cleaned using xattr"
     fi
     
     # Remove any ._* files that might have been created
-    find "$TMP_DIR/apache-cloudberry-${TAG}" -name '._*' -delete 2>/dev/null || true
-    find "$TMP_DIR/apache-cloudberry-${TAG}" -name '.DS_Store' -delete 2>/dev/null || true
-    find "$TMP_DIR/apache-cloudberry-${TAG}" -name '__MACOSX' -type d -exec rm -rf {} \; 2>/dev/null || true
+    find "$TMP_DIR/apache-cloudberry-${BASE_VERSION}" -name '._*' -delete 2>/dev/null || true
+    find "$TMP_DIR/apache-cloudberry-${BASE_VERSION}" -name '.DS_Store' -delete 2>/dev/null || true
+    find "$TMP_DIR/apache-cloudberry-${BASE_VERSION}" -name '__MACOSX' -type d -exec rm -rf {} \; 2>/dev/null || true
     echo "[OK] macOS-specific files removed"
   fi
 
   # Create tarball using the detected tar tool
   if [[ "$DETECTED_PLATFORM" == "macOS" ]]; then
     echo "Using GNU tar for cross-platform compatibility..."
-    $DETECTED_TAR_TOOL --exclude='._*' --exclude='.DS_Store' --exclude='__MACOSX' -czf "$TAR_NAME" -C "$TMP_DIR" "apache-cloudberry-${TAG}"
+    $DETECTED_TAR_TOOL --exclude='._*' --exclude='.DS_Store' --exclude='__MACOSX' -czf "$TAR_NAME" -C "$TMP_DIR" "apache-cloudberry-${BASE_VERSION}"
     echo "INFO: macOS detected - applied extended attribute cleanup and GNU tar"
   else
     # On other platforms, use standard tar
-    $DETECTED_TAR_TOOL -czf "$TAR_NAME" -C "$TMP_DIR" "apache-cloudberry-${TAG}"
+    $DETECTED_TAR_TOOL -czf "$TAR_NAME" -C "$TMP_DIR" "apache-cloudberry-${BASE_VERSION}"
   fi
   
   rm -rf "$TMP_DIR"
