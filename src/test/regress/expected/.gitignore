@@ -69,3 +69,4 @@
 /tag.out
 /ao_unique_index_partition.out
 /bfv_copy.out
+/copy_encoding_error.out

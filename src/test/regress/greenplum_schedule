@@ -35,6 +35,7 @@ test: gp_dispatch_keepalives
 # copy command
 # copy form a file with different EOL
 test: copy_eol
+test: copy_encoding_error
 
 test: dedupset
 
