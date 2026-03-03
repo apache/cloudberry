@@ -650,8 +650,7 @@ sreh_conversion_error:
 		 */
 		if (cstate->input_reached_error)
 		{
-			/* so far, we only support no transcoding conversion error handling */
-			if (cstate->cdbsreh && !cstate->need_transcoding)
+			if (cstate->cdbsreh)
 			{
 				MemoryContext oldcontext = CurrentMemoryContext;
 				PG_TRY();
@@ -2289,7 +2288,6 @@ CopyReadBinaryAttribute(CopyFromState cstate, FmgrInfo *flinfo,
 void
 RemoveInvalidDataInBuf(CopyFromState cstate)
 {
-	int nbytes;
 	int scanidx;
 
 	if (cstate->errMode == ALL_OR_NOTHING)
@@ -2301,6 +2299,8 @@ RemoveInvalidDataInBuf(CopyFromState cstate)
 
 	if (!cstate->need_transcoding)
 	{
+		int nbytes;
+
 		/*
 		 * According to `BeginCopyFrom`, if not need_transcoding these two
 		 * pointer share one memory space.
@@ -2327,22 +2327,38 @@ RemoveInvalidDataInBuf(CopyFromState cstate)
 			/* leave a hint to identify find eol after next raw page read */
 			cstate->find_eol_with_rawreading = true;
 		}
-
-		/* reset input buf, so we can redo conversion/verification */
-		cstate->input_reached_error = false;
-		cstate->input_buf_index = 0;
-		cstate->input_buf_len = 0;
-
-		/* reset line_buf */
-		resetStringInfo(&cstate->line_buf);
-		cstate->line_buf_valid = false;
-		cstate->cdbsreh->rejectcount++;
 	}
 	else
 	{
-		ereport(ERROR, (errmsg("Data validation error: since the source data "
-							   "need transcoding sreh can not handle yet.")));
+		/*
+		 * Transcoding case: raw_buf and input_buf are separate buffers.
+		 * Skip the bad line in raw_buf by finding the next EOL.  No need to
+		 * memmove raw_buf here; CopyLoadRawBuf() will compact it when more
+		 * raw data is needed.
+		 */
+		if (FindEolInUnverifyRawBuf(cstate, &scanidx))
+		{
+			cstate->raw_buf_index += scanidx;
+		}
+		else
+		{
+			/* Current page can not find eol, to skip current raw buffer */
+			cstate->raw_buf_len = 0;
+			cstate->raw_buf_index = 0;
+
+			/* leave a hint to identify find eol after next raw page read */
+			cstate->find_eol_with_rawreading = true;
+		}
 	}
+
+	/* reset input buf, so we can redo conversion/verification */
+	cstate->input_reached_error = false;
+	cstate->input_buf_index = 0;
+	cstate->input_buf_len = 0;
+
+	/* reset line_buf */
+	resetStringInfo(&cstate->line_buf);
+	cstate->line_buf_valid = false;
 }
 
 static bool
