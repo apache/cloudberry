@@ -343,6 +343,541 @@ drop table jt3;
 drop table jt2;
 drop table jt1;
 
+--
+-- Test AQUMV (Answer Query Using Materialized Views) with join queries.
+-- Each matching test shows EXPLAIN + SELECT with GUC off (original plan),
+-- then EXPLAIN + SELECT with GUC on (MV rewrite). Results must match.
+--
+create table aqj_t1(a int, b int) distributed by (a);
+create table aqj_t2(a int, b int) distributed by (a);
+create table aqj_t3(a int, b int) distributed by (a);
+insert into aqj_t1 select i, i*10 from generate_series(1, 100) i;
+insert into aqj_t2 select i, i*100 from generate_series(1, 100) i;
+insert into aqj_t3 select i, i*1000 from generate_series(1, 100) i;
+analyze aqj_t1;
+analyze aqj_t2;
+analyze aqj_t3;
+
+-- 1. Two-table INNER JOIN exact match
+create materialized view mv_aqj_join2 as
+  select aqj_t1.a, aqj_t2.b from aqj_t1 join aqj_t2 on aqj_t1.a = aqj_t2.a;
+analyze mv_aqj_join2;
+
+set enable_answer_query_using_materialized_views = off;
+explain(costs off) select aqj_t1.a, aqj_t2.b from aqj_t1 join aqj_t2 on aqj_t1.a = aqj_t2.a;
+select aqj_t1.a, aqj_t2.b from aqj_t1 join aqj_t2 on aqj_t1.a = aqj_t2.a order by 1 limit 5;
+
+set enable_answer_query_using_materialized_views = on;
+explain(costs off) select aqj_t1.a, aqj_t2.b from aqj_t1 join aqj_t2 on aqj_t1.a = aqj_t2.a;
+select aqj_t1.a, aqj_t2.b from aqj_t1 join aqj_t2 on aqj_t1.a = aqj_t2.a order by 1 limit 5;
+
+-- 2. Join with WHERE clause
+create materialized view mv_aqj_where as
+  select aqj_t1.a, aqj_t2.b from aqj_t1 join aqj_t2 on aqj_t1.a = aqj_t2.a where aqj_t1.a > 5;
+analyze mv_aqj_where;
+
+set enable_answer_query_using_materialized_views = off;
+explain(costs off) select aqj_t1.a, aqj_t2.b from aqj_t1 join aqj_t2 on aqj_t1.a = aqj_t2.a where aqj_t1.a > 5;
+select aqj_t1.a, aqj_t2.b from aqj_t1 join aqj_t2 on aqj_t1.a = aqj_t2.a where aqj_t1.a > 5 order by 1 limit 5;
+
+set enable_answer_query_using_materialized_views = on;
+explain(costs off) select aqj_t1.a, aqj_t2.b from aqj_t1 join aqj_t2 on aqj_t1.a = aqj_t2.a where aqj_t1.a > 5;
+select aqj_t1.a, aqj_t2.b from aqj_t1 join aqj_t2 on aqj_t1.a = aqj_t2.a where aqj_t1.a > 5 order by 1 limit 5;
+
+-- 3. Join with GROUP BY + aggregate
+create materialized view mv_aqj_agg as
+  select aqj_t1.a, count(*) as cnt from aqj_t1 join aqj_t2 on aqj_t1.a = aqj_t2.a group by aqj_t1.a;
+analyze mv_aqj_agg;
+
+set enable_answer_query_using_materialized_views = off;
+explain(costs off) select aqj_t1.a, count(*) as cnt from aqj_t1 join aqj_t2 on aqj_t1.a = aqj_t2.a group by aqj_t1.a;
+select aqj_t1.a, count(*) as cnt from aqj_t1 join aqj_t2 on aqj_t1.a = aqj_t2.a group by aqj_t1.a order by 1 limit 5;
+
+set enable_answer_query_using_materialized_views = on;
+explain(costs off) select aqj_t1.a, count(*) as cnt from aqj_t1 join aqj_t2 on aqj_t1.a = aqj_t2.a group by aqj_t1.a;
+select aqj_t1.a, count(*) as cnt from aqj_t1 join aqj_t2 on aqj_t1.a = aqj_t2.a group by aqj_t1.a order by 1 limit 5;
+
+-- 4. Non-match: different WHERE clause (should show Hash Join, not MV)
+set enable_answer_query_using_materialized_views = on;
+explain(costs off) select aqj_t1.a, aqj_t2.b from aqj_t1 join aqj_t2 on aqj_t1.a = aqj_t2.a where aqj_t1.a > 10;
+
+-- 5. Non-match: different target list
+explain(costs off) select aqj_t1.b, aqj_t2.a from aqj_t1 join aqj_t2 on aqj_t1.a = aqj_t2.a;
+
+-- 6. Non-match: different join type (INNER vs LEFT)
+explain(costs off) select aqj_t1.a, aqj_t2.b from aqj_t1 left join aqj_t2 on aqj_t1.a = aqj_t2.a;
+
+-- 7. Three-table join
+create materialized view mv_aqj_join3 as
+  select aqj_t1.a, aqj_t2.b, aqj_t3.b as c
+  from aqj_t1 join aqj_t2 on aqj_t1.a = aqj_t2.a join aqj_t3 on aqj_t2.a = aqj_t3.a;
+analyze mv_aqj_join3;
+
+set enable_answer_query_using_materialized_views = off;
+explain(costs off) select aqj_t1.a, aqj_t2.b, aqj_t3.b as c
+  from aqj_t1 join aqj_t2 on aqj_t1.a = aqj_t2.a join aqj_t3 on aqj_t2.a = aqj_t3.a;
+select aqj_t1.a, aqj_t2.b, aqj_t3.b as c
+  from aqj_t1 join aqj_t2 on aqj_t1.a = aqj_t2.a join aqj_t3 on aqj_t2.a = aqj_t3.a
+  order by 1 limit 5;
+
+set enable_answer_query_using_materialized_views = on;
+explain(costs off) select aqj_t1.a, aqj_t2.b, aqj_t3.b as c
+  from aqj_t1 join aqj_t2 on aqj_t1.a = aqj_t2.a join aqj_t3 on aqj_t2.a = aqj_t3.a;
+select aqj_t1.a, aqj_t2.b, aqj_t3.b as c
+  from aqj_t1 join aqj_t2 on aqj_t1.a = aqj_t2.a join aqj_t3 on aqj_t2.a = aqj_t3.a
+  order by 1 limit 5;
+
+-- 8. Implicit join (FROM t1, t2 WHERE ...)
+create materialized view mv_aqj_implicit as
+  select aqj_t1.a, aqj_t2.b from aqj_t1, aqj_t2 where aqj_t1.a = aqj_t2.a;
+analyze mv_aqj_implicit;
+
+set enable_answer_query_using_materialized_views = off;
+explain(costs off) select aqj_t1.a, aqj_t2.b from aqj_t1, aqj_t2 where aqj_t1.a = aqj_t2.a;
+select aqj_t1.a, aqj_t2.b from aqj_t1, aqj_t2 where aqj_t1.a = aqj_t2.a order by 1 limit 5;
+
+set enable_answer_query_using_materialized_views = on;
+explain(costs off) select aqj_t1.a, aqj_t2.b from aqj_t1, aqj_t2 where aqj_t1.a = aqj_t2.a;
+select aqj_t1.a, aqj_t2.b from aqj_t1, aqj_t2 where aqj_t1.a = aqj_t2.a order by 1 limit 5;
+
+-- 9. MV not up-to-date: after INSERT on base table
+insert into aqj_t1 values(999, 9990);
+set enable_answer_query_using_materialized_views = on;
+-- Should NOT use mv_aqj_join2 (status is 'i')
+explain(costs off) select aqj_t1.a, aqj_t2.b from aqj_t1 join aqj_t2 on aqj_t1.a = aqj_t2.a;
+
+-- 10. After REFRESH: should use MV again
+refresh materialized view mv_aqj_join2;
+analyze mv_aqj_join2;
+explain(costs off) select aqj_t1.a, aqj_t2.b from aqj_t1 join aqj_t2 on aqj_t1.a = aqj_t2.a;
+
+-- 11. GUC off: should NOT use MV
+set enable_answer_query_using_materialized_views = off;
+explain(costs off) select aqj_t1.a, aqj_t2.b from aqj_t1 join aqj_t2 on aqj_t1.a = aqj_t2.a;
+
+--
+-- More complex join AQUMV test cases with richer schemas
+--
+
+create table aqj_orders(
+  order_id int,
+  customer_id int,
+  amount numeric(10,2),
+  status text,
+  order_date date
+) distributed by (order_id);
+
+create table aqj_customers(
+  customer_id int,
+  name text,
+  region text,
+  credit_limit numeric(10,2)
+) distributed by (customer_id);
+
+create table aqj_products(
+  product_id int,
+  name text,
+  category text,
+  price numeric(10,2)
+) distributed by (product_id);
+
+create table aqj_order_items(
+  item_id int,
+  order_id int,
+  product_id int,
+  quantity int
+) distributed by (item_id);
+
+insert into aqj_customers select i, 'cust_' || i, case when i % 3 = 0 then 'east' when i % 3 = 1 then 'west' else 'north' end, (i * 100)::numeric(10,2) from generate_series(1, 50) i;
+insert into aqj_orders select i, (i % 50) + 1, (i * 10.5)::numeric(10,2), case when i % 4 = 0 then 'shipped' when i % 4 = 1 then 'pending' when i % 4 = 2 then 'delivered' else 'cancelled' end, '2024-01-01'::date + (i % 365) from generate_series(1, 200) i;
+insert into aqj_products select i, 'prod_' || i, case when i % 5 = 0 then 'electronics' when i % 5 = 1 then 'books' when i % 5 = 2 then 'clothing' when i % 5 = 3 then 'food' else 'toys' end, (i * 5.99)::numeric(10,2) from generate_series(1, 30) i;
+insert into aqj_order_items select i, (i % 200) + 1, (i % 30) + 1, (i % 10) + 1 from generate_series(1, 500) i;
+
+analyze aqj_customers;
+analyze aqj_orders;
+analyze aqj_products;
+analyze aqj_order_items;
+
+-- 12. Join with multiple columns + WHERE on text column
+create materialized view mv_aqj_orders_cust as
+  select o.order_id, o.amount, c.name, c.region
+  from aqj_orders o join aqj_customers c on o.customer_id = c.customer_id
+  where o.status = 'shipped';
+analyze mv_aqj_orders_cust;
+
+set enable_answer_query_using_materialized_views = off;
+explain(costs off) select o.order_id, o.amount, c.name, c.region
+  from aqj_orders o join aqj_customers c on o.customer_id = c.customer_id
+  where o.status = 'shipped';
+select o.order_id, o.amount, c.name, c.region
+  from aqj_orders o join aqj_customers c on o.customer_id = c.customer_id
+  where o.status = 'shipped'
+  order by o.order_id limit 5;
+
+set enable_answer_query_using_materialized_views = on;
+explain(costs off) select o.order_id, o.amount, c.name, c.region
+  from aqj_orders o join aqj_customers c on o.customer_id = c.customer_id
+  where o.status = 'shipped';
+select o.order_id, o.amount, c.name, c.region
+  from aqj_orders o join aqj_customers c on o.customer_id = c.customer_id
+  where o.status = 'shipped'
+  order by o.order_id limit 5;
+
+-- 13. Four-table join
+create materialized view mv_aqj_order_details as
+  select o.order_id, c.name as customer_name, p.name as product_name, oi.quantity, p.price
+  from aqj_orders o
+  join aqj_customers c on o.customer_id = c.customer_id
+  join aqj_order_items oi on o.order_id = oi.order_id
+  join aqj_products p on oi.product_id = p.product_id;
+analyze mv_aqj_order_details;
+
+set enable_answer_query_using_materialized_views = off;
+explain(costs off)
+  select o.order_id, c.name as customer_name, p.name as product_name, oi.quantity, p.price
+  from aqj_orders o
+  join aqj_customers c on o.customer_id = c.customer_id
+  join aqj_order_items oi on o.order_id = oi.order_id
+  join aqj_products p on oi.product_id = p.product_id;
+select o.order_id, c.name as customer_name, p.name as product_name, oi.quantity, p.price
+  from aqj_orders o
+  join aqj_customers c on o.customer_id = c.customer_id
+  join aqj_order_items oi on o.order_id = oi.order_id
+  join aqj_products p on oi.product_id = p.product_id
+  order by o.order_id, p.name limit 5;
+
+set enable_answer_query_using_materialized_views = on;
+explain(costs off)
+  select o.order_id, c.name as customer_name, p.name as product_name, oi.quantity, p.price
+  from aqj_orders o
+  join aqj_customers c on o.customer_id = c.customer_id
+  join aqj_order_items oi on o.order_id = oi.order_id
+  join aqj_products p on oi.product_id = p.product_id;
+select o.order_id, c.name as customer_name, p.name as product_name, oi.quantity, p.price
+  from aqj_orders o
+  join aqj_customers c on o.customer_id = c.customer_id
+  join aqj_order_items oi on o.order_id = oi.order_id
+  join aqj_products p on oi.product_id = p.product_id
+  order by o.order_id, p.name limit 5;
+
+-- 14. GROUP BY on join with multiple aggregates: sum, count, avg
+create materialized view mv_aqj_cust_summary as
+  select c.region, count(*) as order_count, sum(o.amount) as total_amount, avg(o.amount) as avg_amount
+  from aqj_orders o join aqj_customers c on o.customer_id = c.customer_id
+  group by c.region;
+analyze mv_aqj_cust_summary;
+
+set enable_answer_query_using_materialized_views = off;
+explain(costs off)
+  select c.region, count(*) as order_count, sum(o.amount) as total_amount, avg(o.amount) as avg_amount
+  from aqj_orders o join aqj_customers c on o.customer_id = c.customer_id
+  group by c.region;
+select c.region, count(*) as order_count, sum(o.amount) as total_amount, avg(o.amount) as avg_amount
+  from aqj_orders o join aqj_customers c on o.customer_id = c.customer_id
+  group by c.region
+  order by c.region;
+
+set enable_answer_query_using_materialized_views = on;
+explain(costs off)
+  select c.region, count(*) as order_count, sum(o.amount) as total_amount, avg(o.amount) as avg_amount
+  from aqj_orders o join aqj_customers c on o.customer_id = c.customer_id
+  group by c.region;
+select c.region, count(*) as order_count, sum(o.amount) as total_amount, avg(o.amount) as avg_amount
+  from aqj_orders o join aqj_customers c on o.customer_id = c.customer_id
+  group by c.region
+  order by c.region;
+
+-- 15. Join with expression in target list (arithmetic + function)
+create materialized view mv_aqj_expr as
+  select o.order_id, o.amount * 1.1 as amount_with_tax, c.name, upper(c.region) as region_upper
+  from aqj_orders o join aqj_customers c on o.customer_id = c.customer_id;
+analyze mv_aqj_expr;
+
+set enable_answer_query_using_materialized_views = off;
+explain(costs off) select o.order_id, o.amount * 1.1 as amount_with_tax, c.name, upper(c.region) as region_upper
+  from aqj_orders o join aqj_customers c on o.customer_id = c.customer_id;
+select o.order_id, o.amount * 1.1 as amount_with_tax, c.name, upper(c.region) as region_upper
+  from aqj_orders o join aqj_customers c on o.customer_id = c.customer_id
+  order by o.order_id limit 5;
+
+set enable_answer_query_using_materialized_views = on;
+explain(costs off) select o.order_id, o.amount * 1.1 as amount_with_tax, c.name, upper(c.region) as region_upper
+  from aqj_orders o join aqj_customers c on o.customer_id = c.customer_id;
+select o.order_id, o.amount * 1.1 as amount_with_tax, c.name, upper(c.region) as region_upper
+  from aqj_orders o join aqj_customers c on o.customer_id = c.customer_id
+  order by o.order_id limit 5;
+
+-- 16. Non-match: same tables + expressions, but extra WHERE (should NOT match mv_aqj_expr)
+set enable_answer_query_using_materialized_views = on;
+explain(costs off) select o.order_id, o.amount * 1.1 as amount_with_tax, c.name, upper(c.region) as region_upper
+  from aqj_orders o join aqj_customers c on o.customer_id = c.customer_id
+  where c.region = 'east';
+
+-- 17. Non-match: same tables but different aggregate target list
+explain(costs off)
+  select c.region, sum(o.amount) as total_amount
+  from aqj_orders o join aqj_customers c on o.customer_id = c.customer_id
+  group by c.region;
+
+-- 18. Non-match: different join order (o JOIN c vs c JOIN o)
+explain(costs off) select o.order_id, o.amount, c.name, c.region
+  from aqj_customers c join aqj_orders o on o.customer_id = c.customer_id
+  where o.status = 'shipped';
+
+-- 19. Join with compound WHERE (multiple AND conditions)
+create materialized view mv_aqj_compound_where as
+  select o.order_id, o.amount, c.name
+  from aqj_orders o join aqj_customers c on o.customer_id = c.customer_id
+  where o.status = 'pending' and c.region = 'west' and o.amount > 50;
+analyze mv_aqj_compound_where;
+
+set enable_answer_query_using_materialized_views = off;
+explain(costs off) select o.order_id, o.amount, c.name
+  from aqj_orders o join aqj_customers c on o.customer_id = c.customer_id
+  where o.status = 'pending' and c.region = 'west' and o.amount > 50;
+select o.order_id, o.amount, c.name
+  from aqj_orders o join aqj_customers c on o.customer_id = c.customer_id
+  where o.status = 'pending' and c.region = 'west' and o.amount > 50
+  order by o.order_id limit 5;
+
+set enable_answer_query_using_materialized_views = on;
+explain(costs off) select o.order_id, o.amount, c.name
+  from aqj_orders o join aqj_customers c on o.customer_id = c.customer_id
+  where o.status = 'pending' and c.region = 'west' and o.amount > 50;
+select o.order_id, o.amount, c.name
+  from aqj_orders o join aqj_customers c on o.customer_id = c.customer_id
+  where o.status = 'pending' and c.region = 'west' and o.amount > 50
+  order by o.order_id limit 5;
+
+-- 20. Self-join
+create materialized view mv_aqj_selfjoin as
+  select o1.order_id as id1, o2.order_id as id2, o1.amount as amt1, o2.amount as amt2
+  from aqj_orders o1 join aqj_orders o2 on o1.customer_id = o2.customer_id
+  where o1.order_id < o2.order_id;
+analyze mv_aqj_selfjoin;
+
+set enable_answer_query_using_materialized_views = off;
+explain(costs off)
+  select o1.order_id as id1, o2.order_id as id2, o1.amount as amt1, o2.amount as amt2
+  from aqj_orders o1 join aqj_orders o2 on o1.customer_id = o2.customer_id
+  where o1.order_id < o2.order_id;
+select o1.order_id as id1, o2.order_id as id2, o1.amount as amt1, o2.amount as amt2
+  from aqj_orders o1 join aqj_orders o2 on o1.customer_id = o2.customer_id
+  where o1.order_id < o2.order_id
+  order by o1.order_id, o2.order_id limit 5;
+
+set enable_answer_query_using_materialized_views = on;
+explain(costs off)
+  select o1.order_id as id1, o2.order_id as id2, o1.amount as amt1, o2.amount as amt2
+  from aqj_orders o1 join aqj_orders o2 on o1.customer_id = o2.customer_id
+  where o1.order_id < o2.order_id;
+select o1.order_id as id1, o2.order_id as id2, o1.amount as amt1, o2.amount as amt2
+  from aqj_orders o1 join aqj_orders o2 on o1.customer_id = o2.customer_id
+  where o1.order_id < o2.order_id
+  order by o1.order_id, o2.order_id limit 5;
+
+-- 21. GROUP BY with multi-column key on join
+create materialized view mv_aqj_grp_multi as
+  select c.region, o.status, count(*) as cnt, sum(o.amount) as total
+  from aqj_orders o join aqj_customers c on o.customer_id = c.customer_id
+  group by c.region, o.status;
+analyze mv_aqj_grp_multi;
+
+set enable_answer_query_using_materialized_views = off;
+explain(costs off)
+  select c.region, o.status, count(*) as cnt, sum(o.amount) as total
+  from aqj_orders o join aqj_customers c on o.customer_id = c.customer_id
+  group by c.region, o.status;
+select c.region, o.status, count(*) as cnt, sum(o.amount) as total
+  from aqj_orders o join aqj_customers c on o.customer_id = c.customer_id
+  group by c.region, o.status
+  order by c.region, o.status limit 6;
+
+set enable_answer_query_using_materialized_views = on;
+explain(costs off)
+  select c.region, o.status, count(*) as cnt, sum(o.amount) as total
+  from aqj_orders o join aqj_customers c on o.customer_id = c.customer_id
+  group by c.region, o.status;
+select c.region, o.status, count(*) as cnt, sum(o.amount) as total
+  from aqj_orders o join aqj_customers c on o.customer_id = c.customer_id
+  group by c.region, o.status
+  order by c.region, o.status limit 6;
+
+-- 22. Four-table join with WHERE and aggregate
+create materialized view mv_aqj_3way_agg as
+  select c.region, p.category, sum(oi.quantity) as total_qty, count(*) as line_count
+  from aqj_orders o
+  join aqj_customers c on o.customer_id = c.customer_id
+  join aqj_order_items oi on o.order_id = oi.order_id
+  join aqj_products p on oi.product_id = p.product_id
+  where o.status = 'delivered'
+  group by c.region, p.category;
+analyze mv_aqj_3way_agg;
+
+set enable_answer_query_using_materialized_views = off;
+explain(costs off)
+  select c.region, p.category, sum(oi.quantity) as total_qty, count(*) as line_count
+  from aqj_orders o
+  join aqj_customers c on o.customer_id = c.customer_id
+  join aqj_order_items oi on o.order_id = oi.order_id
+  join aqj_products p on oi.product_id = p.product_id
+  where o.status = 'delivered'
+  group by c.region, p.category;
+select c.region, p.category, sum(oi.quantity) as total_qty, count(*) as line_count
+  from aqj_orders o
+  join aqj_customers c on o.customer_id = c.customer_id
+  join aqj_order_items oi on o.order_id = oi.order_id
+  join aqj_products p on oi.product_id = p.product_id
+  where o.status = 'delivered'
+  group by c.region, p.category
+  order by c.region, p.category limit 6;
+
+set enable_answer_query_using_materialized_views = on;
+explain(costs off)
+  select c.region, p.category, sum(oi.quantity) as total_qty, count(*) as line_count
+  from aqj_orders o
+  join aqj_customers c on o.customer_id = c.customer_id
+  join aqj_order_items oi on o.order_id = oi.order_id
+  join aqj_products p on oi.product_id = p.product_id
+  where o.status = 'delivered'
+  group by c.region, p.category;
+select c.region, p.category, sum(oi.quantity) as total_qty, count(*) as line_count
+  from aqj_orders o
+  join aqj_customers c on o.customer_id = c.customer_id
+  join aqj_order_items oi on o.order_id = oi.order_id
+  join aqj_products p on oi.product_id = p.product_id
+  where o.status = 'delivered'
+  group by c.region, p.category
+  order by c.region, p.category limit 6;
+
+-- 23. Implicit four-table join (comma style)
+create materialized view mv_aqj_implicit3 as
+  select o.order_id, c.name, p.name as product_name
+  from aqj_orders o, aqj_customers c, aqj_order_items oi, aqj_products p
+  where o.customer_id = c.customer_id and o.order_id = oi.order_id and oi.product_id = p.product_id
+    and o.status = 'pending';
+analyze mv_aqj_implicit3;
+
+set enable_answer_query_using_materialized_views = off;
+explain(costs off)
+  select o.order_id, c.name, p.name as product_name
+  from aqj_orders o, aqj_customers c, aqj_order_items oi, aqj_products p
+  where o.customer_id = c.customer_id and o.order_id = oi.order_id and oi.product_id = p.product_id
+    and o.status = 'pending';
+select o.order_id, c.name, p.name as product_name
+  from aqj_orders o, aqj_customers c, aqj_order_items oi, aqj_products p
+  where o.customer_id = c.customer_id and o.order_id = oi.order_id and oi.product_id = p.product_id
+    and o.status = 'pending'
+  order by o.order_id, p.name limit 5;
+
+set enable_answer_query_using_materialized_views = on;
+explain(costs off)
+  select o.order_id, c.name, p.name as product_name
+  from aqj_orders o, aqj_customers c, aqj_order_items oi, aqj_products p
+  where o.customer_id = c.customer_id and o.order_id = oi.order_id and oi.product_id = p.product_id
+    and o.status = 'pending';
+select o.order_id, c.name, p.name as product_name
+  from aqj_orders o, aqj_customers c, aqj_order_items oi, aqj_products p
+  where o.customer_id = c.customer_id and o.order_id = oi.order_id and oi.product_id = p.product_id
+    and o.status = 'pending'
+  order by o.order_id, p.name limit 5;
+
+-- 24. Result correctness across DML + REFRESH cycle
+insert into aqj_orders values(201, 1, 9999.99, 'shipped', '2025-12-31');
+set enable_answer_query_using_materialized_views = on;
+-- Stale: should NOT use MV
+explain(costs off) select o.order_id, o.amount, c.name, c.region
+  from aqj_orders o join aqj_customers c on o.customer_id = c.customer_id
+  where o.status = 'shipped';
+-- Refresh and verify MV is used again
+refresh materialized view mv_aqj_orders_cust;
+analyze mv_aqj_orders_cust;
+explain(costs off) select o.order_id, o.amount, c.name, c.region
+  from aqj_orders o join aqj_customers c on o.customer_id = c.customer_id
+  where o.status = 'shipped';
+-- The new row should appear in results via MV scan
+select o.order_id, o.amount, c.name, c.region
+  from aqj_orders o join aqj_customers c on o.customer_id = c.customer_id
+  where o.status = 'shipped' and o.order_id = 201;
+
+-- 25. Post-DML comprehensive: refresh all, then verify GUC off vs on results
+refresh materialized view mv_aqj_order_details;
+refresh materialized view mv_aqj_expr;
+refresh materialized view mv_aqj_selfjoin;
+refresh materialized view mv_aqj_grp_multi;
+refresh materialized view mv_aqj_3way_agg;
+refresh materialized view mv_aqj_implicit3;
+analyze mv_aqj_order_details;
+analyze mv_aqj_expr;
+analyze mv_aqj_selfjoin;
+analyze mv_aqj_grp_multi;
+analyze mv_aqj_3way_agg;
+analyze mv_aqj_implicit3;
+
+-- Verify four-table join results after DML+refresh
+set enable_answer_query_using_materialized_views = off;
+select o.order_id, c.name as customer_name, p.name as product_name, oi.quantity, p.price
+  from aqj_orders o
+  join aqj_customers c on o.customer_id = c.customer_id
+  join aqj_order_items oi on o.order_id = oi.order_id
+  join aqj_products p on oi.product_id = p.product_id
+  order by o.order_id, p.name limit 5;
+
+set enable_answer_query_using_materialized_views = on;
+select o.order_id, c.name as customer_name, p.name as product_name, oi.quantity, p.price
+  from aqj_orders o
+  join aqj_customers c on o.customer_id = c.customer_id
+  join aqj_order_items oi on o.order_id = oi.order_id
+  join aqj_products p on oi.product_id = p.product_id
+  order by o.order_id, p.name limit 5;
+
+-- Verify expression MV results after DML+refresh
+set enable_answer_query_using_materialized_views = off;
+select o.order_id, o.amount * 1.1 as amount_with_tax, c.name, upper(c.region) as region_upper
+  from aqj_orders o join aqj_customers c on o.customer_id = c.customer_id
+  order by o.order_id limit 5;
+
+set enable_answer_query_using_materialized_views = on;
+select o.order_id, o.amount * 1.1 as amount_with_tax, c.name, upper(c.region) as region_upper
+  from aqj_orders o join aqj_customers c on o.customer_id = c.customer_id
+  order by o.order_id limit 5;
+
+-- Verify multi-key GROUP BY results after DML+refresh
+set enable_answer_query_using_materialized_views = off;
+select c.region, o.status, count(*) as cnt, sum(o.amount) as total
+  from aqj_orders o join aqj_customers c on o.customer_id = c.customer_id
+  group by c.region, o.status
+  order by c.region, o.status limit 6;
+
+set enable_answer_query_using_materialized_views = on;
+select c.region, o.status, count(*) as cnt, sum(o.amount) as total
+  from aqj_orders o join aqj_customers c on o.customer_id = c.customer_id
+  group by c.region, o.status
+  order by c.region, o.status limit 6;
+
+-- Clean up AQUMV join test objects
+drop materialized view mv_aqj_implicit3;
+drop materialized view mv_aqj_3way_agg;
+drop materialized view mv_aqj_grp_multi;
+drop materialized view mv_aqj_selfjoin;
+drop materialized view mv_aqj_compound_where;
+drop materialized view mv_aqj_expr;
+drop materialized view mv_aqj_cust_summary;
+drop materialized view mv_aqj_order_details;
+drop materialized view mv_aqj_orders_cust;
+drop materialized view mv_aqj_implicit;
+drop materialized view mv_aqj_join3;
+drop materialized view mv_aqj_agg;
+drop materialized view mv_aqj_where;
+drop materialized view mv_aqj_join2;
+drop table aqj_order_items;
+drop table aqj_products;
+drop table aqj_customers;
+drop table aqj_orders;
+drop table aqj_t3;
+drop table aqj_t2;
+drop table aqj_t1;
+
 -- test drop table
 select mvname, datastatus from gp_matview_aux where mvname in ('mv0','mv1', 'mv2', 'mv3');
 drop materialized view mv2;

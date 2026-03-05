@@ -996,3 +996,348 @@ groupby_query_rewrite(PlannerInfo *subroot,
 	subroot->append_rel_list = NIL;
 	return true;
 }
+
+/*
+ * aqumv_query_is_exact_match
+ *
+ * Compare two Query trees for semantic identity.  Both should be at the
+ * same preprocessing stage (raw parser output).  Returns true only if
+ * they are structurally identical in all query-semantics fields.
+ */
+static bool
+aqumv_query_is_exact_match(Query *raw_parse, Query *viewQuery)
+{
+	/* Both must be CMD_SELECT */
+	if (raw_parse->commandType != CMD_SELECT ||
+		viewQuery->commandType != CMD_SELECT)
+		return false;
+
+	/* Same number of range table entries */
+	if (list_length(raw_parse->rtable) != list_length(viewQuery->rtable))
+		return false;
+
+	/* Compare range tables (table OIDs, join types, aliases structure) */
+	if (!equal(raw_parse->rtable, viewQuery->rtable))
+		return false;
+
+	/* Compare join tree (FROM clause + WHERE quals) */
+	if (!equal(raw_parse->jointree, viewQuery->jointree))
+		return false;
+
+	/* Compare target list entries: expressions and sort/group refs */
+	if (list_length(raw_parse->targetList) != list_length(viewQuery->targetList))
+		return false;
+	{
+		ListCell *lc1, *lc2;
+		forboth(lc1, raw_parse->targetList, lc2, viewQuery->targetList)
+		{
+			TargetEntry *tle1 = lfirst_node(TargetEntry, lc1);
+			TargetEntry *tle2 = lfirst_node(TargetEntry, lc2);
+			if (!equal(tle1->expr, tle2->expr))
+				return false;
+			if (tle1->resjunk != tle2->resjunk)
+				return false;
+			if (tle1->ressortgroupref != tle2->ressortgroupref)
+				return false;
+		}
+	}
+
+	/* Compare GROUP BY, HAVING, ORDER BY, DISTINCT, LIMIT */
+	if (!equal(raw_parse->groupClause, viewQuery->groupClause))
+		return false;
+	if (!equal(raw_parse->havingQual, viewQuery->havingQual))
+		return false;
+	if (!equal(raw_parse->sortClause, viewQuery->sortClause))
+		return false;
+	if (!equal(raw_parse->distinctClause, viewQuery->distinctClause))
+		return false;
+	if (!equal(raw_parse->limitCount, viewQuery->limitCount))
+		return false;
+	if (!equal(raw_parse->limitOffset, viewQuery->limitOffset))
+		return false;
+
+	/* Compare boolean flags */
+	if (raw_parse->hasAggs != viewQuery->hasAggs)
+		return false;
+	if (raw_parse->hasWindowFuncs != viewQuery->hasWindowFuncs)
+		return false;
+	if (raw_parse->hasDistinctOn != viewQuery->hasDistinctOn)
+		return false;
+
+	return true;
+}
+
+/*
+ * answer_query_using_materialized_views_for_join
+ *
+ * Handle multi-table JOIN queries via exact-match comparison.
+ * This is completely independent from the single-table AQUMV code path.
+ *
+ * We compare the saved raw parse tree (before any planner preprocessing)
+ * against the stored viewQuery from gp_matview_aux.  On exact match,
+ * rewrite the query to a simple SELECT FROM mv.
+ */
+RelOptInfo *
+answer_query_using_materialized_views_for_join(PlannerInfo *root, AqumvContext aqumv_context)
+{
+	RelOptInfo		*current_rel = aqumv_context->current_rel;
+	query_pathkeys_callback qp_callback = aqumv_context->qp_callback;
+	Query			*parse = root->parse;
+	Query			*raw_parse = root->aqumv_raw_parse;
+	RelOptInfo		*mv_final_rel = current_rel;
+	Relation		matviewRel;
+	Relation		mvauxDesc;
+	TupleDesc		mvaux_tupdesc;
+	SysScanDesc		mvscan;
+	HeapTuple		tup;
+	Form_gp_matview_aux mvaux_tup;
+	bool			need_close = false;
+
+	/* Must have the saved raw parse tree. */
+	if (raw_parse == NULL)
+		return mv_final_rel;
+
+	/* Must be a join query (more than one table in FROM). */
+	if (list_length(raw_parse->rtable) <= 1)
+		return mv_final_rel;
+
+	/* Basic eligibility checks (same as single-table AQUMV). */
+	if (parse->commandType != CMD_SELECT ||
+		parse->rowMarks != NIL ||
+		parse->scatterClause != NIL ||
+		parse->cteList != NIL ||
+		parse->setOperations != NULL ||
+		parse->hasModifyingCTE ||
+		parse->parentStmtType == PARENTSTMTTYPE_REFRESH_MATVIEW ||
+		parse->parentStmtType == PARENTSTMTTYPE_CTAS ||
+		contain_mutable_functions((Node *) raw_parse) ||
+		parse->hasSubLinks)
+		return mv_final_rel;
+
+	mvauxDesc = table_open(GpMatviewAuxId, AccessShareLock);
+	mvaux_tupdesc = RelationGetDescr(mvauxDesc);
+
+	mvscan = systable_beginscan(mvauxDesc, InvalidOid, false,
+								NULL, 0, NULL);
+
+	while (HeapTupleIsValid(tup = systable_getnext(mvscan)))
+	{
+		Datum		view_query_datum;
+		char		*view_query_str;
+		bool		is_null;
+		Query		*viewQuery;
+		RangeTblEntry *mvrte;
+		PlannerInfo	*subroot;
+		TupleDesc	mv_tupdesc;
+
+		CHECK_FOR_INTERRUPTS();
+		if (need_close)
+			table_close(matviewRel, AccessShareLock);
+
+		mvaux_tup = (Form_gp_matview_aux) GETSTRUCT(tup);
+		matviewRel = table_open(mvaux_tup->mvoid, AccessShareLock);
+		need_close = true;
+
+		if (!RelationIsPopulated(matviewRel))
+			continue;
+
+		/* MV must be up-to-date (IVM is always current). */
+		if (!RelationIsIVM(matviewRel) &&
+			!MatviewIsGeneralyUpToDate(RelationGetRelid(matviewRel)))
+			continue;
+
+		/* Get a copy of view query. */
+		view_query_datum = heap_getattr(tup,
+										Anum_gp_matview_aux_view_query,
+										mvaux_tupdesc,
+										&is_null);
+
+		view_query_str = TextDatumGetCString(view_query_datum);
+		viewQuery = copyObject(stringToNode(view_query_str));
+		pfree(view_query_str);
+		Assert(IsA(viewQuery, Query));
+
+		/* Skip single-table viewQueries (handled by existing AQUMV). */
+		if (list_length(viewQuery->rtable) <= 1)
+			continue;
+
+		/* Exact match comparison between raw parse and view query. */
+		if (!aqumv_query_is_exact_match(raw_parse, viewQuery))
+			continue;
+
+		/*
+		 * We have an exact match.  Rewrite viewQuery to:
+		 *   SELECT mv.col1, mv.col2, ... FROM mv
+		 */
+		mv_tupdesc = RelationGetDescr(matviewRel);
+
+		/* Build new target list referencing MV columns. */
+		{
+			List	   *new_tlist = NIL;
+			ListCell   *lc;
+			int			attnum = 0;
+
+			foreach(lc, viewQuery->targetList)
+			{
+				TargetEntry *old_tle = lfirst_node(TargetEntry, lc);
+				TargetEntry *new_tle;
+				Var			*newVar;
+				Form_pg_attribute attr;
+
+				if (old_tle->resjunk)
+					continue;
+
+				attnum++;
+				attr = TupleDescAttr(mv_tupdesc, attnum - 1);
+
+				newVar = makeVar(1,
+								attr->attnum,
+								attr->atttypid,
+								attr->atttypmod,
+								attr->attcollation,
+								0);
+				newVar->location = -1;
+
+				new_tle = makeTargetEntry((Expr *) newVar,
+										  (AttrNumber) attnum,
+										  old_tle->resname,
+										  false);
+				new_tlist = lappend(new_tlist, new_tle);
+			}
+
+			viewQuery->targetList = new_tlist;
+		}
+
+		/* Create new RTE for the MV. */
+		mvrte = makeNode(RangeTblEntry);
+		mvrte->rtekind = RTE_RELATION;
+		mvrte->relid = RelationGetRelid(matviewRel);
+		mvrte->relkind = RELKIND_MATVIEW;
+		mvrte->rellockmode = AccessShareLock;
+		mvrte->inh = false;
+		mvrte->inFromCl = true;
+
+		/* Build eref with column names from the MV's TupleDesc. */
+		{
+			Alias  *eref = makeAlias(RelationGetRelationName(matviewRel), NIL);
+			int		i;
+			for (i = 0; i < mv_tupdesc->natts; i++)
+			{
+				Form_pg_attribute attr = TupleDescAttr(mv_tupdesc, i);
+				if (!attr->attisdropped)
+					eref->colnames = lappend(eref->colnames,
+											 makeString(pstrdup(NameStr(attr->attname))));
+				else
+					eref->colnames = lappend(eref->colnames,
+											 makeString(pstrdup("")));
+			}
+			mvrte->eref = eref;
+			mvrte->alias = makeAlias(RelationGetRelationName(matviewRel), NIL);
+		}
+
+		viewQuery->rtable = list_make1(mvrte);
+		viewQuery->jointree = makeFromExpr(list_make1(makeNode(RangeTblRef)), NULL);
+		((RangeTblRef *) linitial(viewQuery->jointree->fromlist))->rtindex = 1;
+
+		/* Clear aggregation/grouping/sorting state — all materialized. */
+		viewQuery->hasAggs = false;
+		viewQuery->groupClause = NIL;
+		viewQuery->havingQual = NULL;
+		viewQuery->sortClause = NIL;
+		viewQuery->distinctClause = NIL;
+		viewQuery->hasDistinctOn = false;
+		viewQuery->hasWindowFuncs = false;
+		viewQuery->hasTargetSRFs = false;
+		viewQuery->limitCount = parse->limitCount;
+		viewQuery->limitOffset = parse->limitOffset;
+		viewQuery->limitOption = parse->limitOption;
+
+		/* Create subroot for planning the MV scan. */
+		subroot = (PlannerInfo *) palloc(sizeof(PlannerInfo));
+		memcpy(subroot, root, sizeof(PlannerInfo));
+		subroot->parent_root = root;
+		subroot->eq_classes = NIL;
+		subroot->plan_params = NIL;
+		subroot->outer_params = NULL;
+		subroot->init_plans = NIL;
+		subroot->agginfos = NIL;
+		subroot->aggtransinfos = NIL;
+		subroot->parse = viewQuery;
+		subroot->tuple_fraction = root->tuple_fraction;
+		subroot->limit_tuples = root->limit_tuples;
+		subroot->append_rel_list = NIL;
+		subroot->hasHavingQual = false;
+		subroot->hasNonPartialAggs = false;
+		subroot->hasNonSerialAggs = false;
+		subroot->numOrderedAggs = 0;
+		subroot->hasNonCombine = false;
+		subroot->numPureOrderedAggs = 0;
+
+		subroot->processed_tlist = NIL;
+		preprocess_targetlist(subroot);
+
+		/* Compute final locus for the MV scan. */
+		{
+			PathTarget *newtarget = make_pathtarget_from_tlist(subroot->processed_tlist);
+			subroot->final_locus = cdbllize_get_final_locus(subroot, newtarget);
+		}
+
+		/*
+		 * Plan the MV scan.
+		 *
+		 * We need a clean qp_extra with no groupClause or activeWindows,
+		 * because the rewritten viewQuery is a simple SELECT from the MV
+		 * with no GROUP BY, windowing, etc.  The standard_qp_callback uses
+		 * qp_extra->groupClause to compute group_pathkeys, which would fail
+		 * if it still contained the original query's GROUP BY expressions.
+		 *
+		 * standard_qp_extra is { List *activeWindows; List *groupClause; },
+		 * so a zeroed struct of that size works correctly (both fields NIL).
+		 */
+		{
+			char	clean_qp_extra[2 * sizeof(List *)];
+			memset(clean_qp_extra, 0, sizeof(clean_qp_extra));
+			mv_final_rel = query_planner(subroot, qp_callback, clean_qp_extra);
+		}
+
+		/* Cost-based decision: use MV only if cheaper. */
+		if (mv_final_rel->cheapest_total_path->total_cost < current_rel->cheapest_total_path->total_cost)
+		{
+			root->parse = viewQuery;
+			root->processed_tlist = subroot->processed_tlist;
+			root->agginfos = subroot->agginfos;
+			root->aggtransinfos = subroot->aggtransinfos;
+			root->simple_rte_array = subroot->simple_rte_array;
+			root->simple_rel_array = subroot->simple_rel_array;
+			root->simple_rel_array_size = subroot->simple_rel_array_size;
+			root->hasNonPartialAggs = subroot->hasNonPartialAggs;
+			root->hasNonSerialAggs = subroot->hasNonSerialAggs;
+			root->numOrderedAggs = subroot->numOrderedAggs;
+			root->hasNonCombine = subroot->hasNonCombine;
+			root->numPureOrderedAggs = subroot->numPureOrderedAggs;
+			root->hasHavingQual = subroot->hasHavingQual;
+			root->group_pathkeys = subroot->group_pathkeys;
+			root->sort_pathkeys = subroot->sort_pathkeys;
+			root->query_pathkeys = subroot->query_pathkeys;
+			root->distinct_pathkeys = subroot->distinct_pathkeys;
+			root->eq_classes = subroot->eq_classes;
+			root->append_rel_list = subroot->append_rel_list;
+			current_rel = mv_final_rel;
+			table_close(matviewRel, NoLock);
+			need_close = false;
+			break;
+		}
+		else
+		{
+			/* MV is not cheaper, reset and try next. */
+			mv_final_rel = current_rel;
+		}
+	}
+
+	if (need_close)
+		table_close(matviewRel, AccessShareLock);
+	systable_endscan(mvscan);
+	table_close(mvauxDesc, AccessShareLock);
+
+	return current_rel;
+}
