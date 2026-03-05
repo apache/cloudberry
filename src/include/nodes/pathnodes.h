@@ -668,6 +668,8 @@ struct PlannerInfo
 	int			numPureOrderedAggs; /* CDB: number that use ORDER BY/WITHIN GROUP, not counting DISTINCT */
 	bool		hasNonCombine;	/* CDB: any agg func w/o a combine func? */
 	bool		is_from_orca; /* true if this PlannerInfo was created from Orca*/
+
+	Query	   *aqumv_raw_parse;	/* Raw parse tree for AQUMV join exact-match */
 };
 
 /*

@@ -978,6 +978,17 @@ subquery_planner(PlannerGlobal *glob, Query *parse,
 	root->join_domains = list_make1(makeNode(JoinDomain));
 
 	/*
+	 * Save a copy of the raw parse tree for AQUMV join exact-match.
+	 * This must be done before any preprocessing modifies the parse tree.
+	 */
+	if (Gp_role == GP_ROLE_DISPATCH &&
+		enable_answer_query_using_materialized_views &&
+		parent_root == NULL)
+		root->aqumv_raw_parse = copyObject(parse);
+	else
+		root->aqumv_raw_parse = NULL;
+
+	/*
 	 * If there is a WITH list, process each WITH query and either convert it
 	 * to RTE_SUBQUERY RTE(s) or build an initplan SubPlan structure for it.
 	 *
@@ -1988,6 +1999,13 @@ grouping_planner(PlannerInfo *root, double tuple_fraction)
 
 			/* Do the real work. */
 			current_rel = answer_query_using_materialized_views(root, aqumv_context);
+
+			/* Try join AQUMV if single-table didn't rewrite. */
+			if (current_rel == aqumv_context->current_rel)
+			{
+				current_rel = answer_query_using_materialized_views_for_join(root, aqumv_context);
+			}
+
 			/* parse tree may be rewriten. */
 			parse = root->parse;
 		}
