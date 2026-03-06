@@ -13,6 +13,9 @@ subdir = src/backend/utils/activity
 top_builddir = ../../../..
 include $(top_builddir)/src/Makefile.global
 
+# GPDB: needed for libpq-int.h (PGExtraType, pg_result struct)
+override CPPFLAGS := -I$(libpq_srcdir) $(CPPFLAGS)
+
 OBJS = \
 	backend_progress.o \
 	backend_status.o \

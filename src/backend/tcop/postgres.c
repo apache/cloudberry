@@ -1499,6 +1499,14 @@ exec_mpp_query(const char *query_string,
 		PortalDrop(portal, false);
 
 		/*
+		 * GPDB: Send pending relation stats to QD before closing the
+		 * transaction.  The stats are in pgStatXactStack (transaction-level
+		 * counts); finish_xact_command() will call AtEOXact_PgStat() which
+		 * NULLs pgStatXactStack, so we must capture the stats first.
+		 */
+		pgstat_send_qd_tabstats();
+
+		/*
 		 * Close down transaction statement before reporting command-complete.
 		 * This is so that any end-of-transaction errors are reported before
 		 * the command-complete message is issued, to avoid confusing

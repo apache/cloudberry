@@ -705,6 +705,7 @@ extern void pgstat_subscription_reset_timestamp_cb(PgStatShared_Common *header, 
  */
 
 extern PgStat_SubXactStatus *pgstat_get_xact_stack_level(int nest_level);
+extern PgStat_SubXactStatus *pgstat_get_current_xact_stack(void);
 extern void pgstat_drop_transactional(PgStat_Kind kind, Oid dboid, Oid objoid);
 extern void pgstat_create_transactional(PgStat_Kind kind, Oid dboid, Oid objoid);
 

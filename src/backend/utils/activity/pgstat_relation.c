@@ -20,12 +20,16 @@
 #include "access/twophase_rmgr.h"
 #include "access/xact.h"
 #include "catalog/partition.h"
+#include "libpq-int.h"
 #include "postmaster/autovacuum.h"
 #include "utils/memutils.h"
 #include "utils/pgstat_internal.h"
 #include "utils/rel.h"
 #include "utils/timestamp.h"
 #include "catalog/catalog.h"
+#include "cdb/cdbdispatchresult.h"
+#include "utils/faultinjector.h"
+#include "utils/lsyscache.h"
 
 
 /* Record that's written to 2PC state file when pgstat state is persisted */
@@ -952,4 +956,108 @@ restore_truncdrop_counters(PgStat_TableXactStatus *trans)
 		trans->tuples_updated = trans->updated_pre_truncdrop;
 		trans->tuples_deleted = trans->deleted_pre_truncdrop;
 	}
+}
+
+
+/* -----------------------------------------------------------------------
+ * GPDB: QD side — merge relation stats received from QEs.
+ *
+ * Called from mppExecutorFinishup() / mppExecutorWait() after QEs have
+ * completed their work.  Each QE sends a 'y' protocol message containing
+ * an array of PgStatTabRecordFromQE — the current nesting level's
+ * per-table insert/update/delete counts.
+ *
+ * We place these into the QD's own transactional state (PgStat_TableXactStatus)
+ * at the current nesting level.  This lets PG's normal end-of-transaction
+ * machinery (AtEOXact_PgStat_Relations / AtEOSubXact_PgStat_Relations) handle
+ * delta_live_tuples, delta_dead_tuples, changed_tuples, and subtransaction
+ * commit/abort correctly — just as if the DML had happened locally.
+ *
+ * Because QE sends cumulative values for the current nesting level (trans
+ * accumulates within a level across statements), we must zero QD's trans
+ * before re-accumulating from all segments.  On first encounter of each
+ * relation we zero its trans, then sum across all segments in one pass.
+ * -----------------------------------------------------------------------
+ */
+void
+pgstat_combine_from_qe(CdbDispatchResults *primaryResults)
+{
+	int		i,
+			j;
+	int		nest_level = GetCurrentTransactionNestLevel();
+	List   *zeroed_rels = NIL;
+
+	if (primaryResults == NULL)
+		return;
+
+	for (i = 0; i < primaryResults->resultCount; i++)
+	{
+		CdbDispatchResult  *dispResult = &primaryResults->resultArray[i];
+		int					nres = cdbdisp_numPGresult(dispResult);
+
+		for (j = 0; j < nres; j++)
+		{
+			PGresult		   *pgresult = cdbdisp_getPGresult(dispResult, j);
+			PgStatTabRecordFromQE *records;
+			int					nrecords,
+								k;
+
+			if (pgresult == NULL ||
+				pgresult->extras == NULL ||
+				pgresult->extraType != PGExtraTypeTableStats)
+				continue;
+
+			records = (PgStatTabRecordFromQE *) pgresult->extras;
+			nrecords = pgresult->extraslen / sizeof(PgStatTabRecordFromQE);
+
+			for (k = 0; k < nrecords; k++)
+			{
+				PgStatTabRecordFromQE *rec = &records[k];
+				PgStat_TableStatus	  *tabstat;
+				PgStat_TableXactStatus *trans;
+
+#ifdef FAULT_INJECTOR
+				if (*numActiveFaults_ptr > 0)
+				{
+					char *relname = get_rel_name(rec->t_id);
+					if (relname)
+					{
+						FaultInjector_InjectFaultIfSet(
+							"gp_pgstat_report_on_master", DDLNotSpecified,
+							"", relname);
+						pfree(relname);
+					}
+				}
+#endif
+
+				tabstat = pgstat_prep_relation_pending(rec->t_id, rec->t_shared);
+
+				/* Ensure a trans exists at current nesting level */
+				if (tabstat->trans == NULL ||
+					tabstat->trans->nest_level != nest_level)
+					add_tabstat_xact_level(tabstat, nest_level);
+
+				trans = tabstat->trans;
+
+				/* Zero on first encounter to undo previous merge */
+				if (!list_member_oid(zeroed_rels, rec->t_id))
+				{
+					trans->tuples_inserted = 0;
+					trans->tuples_updated = 0;
+					trans->tuples_deleted = 0;
+					trans->truncdropped = false;
+					zeroed_rels = lappend_oid(zeroed_rels, rec->t_id);
+				}
+
+				/* Accumulate QE counts from this segment */
+				trans->tuples_inserted += rec->tuples_inserted;
+				trans->tuples_updated  += rec->tuples_updated;
+				trans->tuples_deleted  += rec->tuples_deleted;
+				if (rec->truncdropped)
+					trans->truncdropped = true;
+			}
+		}
+	}
+
+	list_free(zeroed_rels);
 }

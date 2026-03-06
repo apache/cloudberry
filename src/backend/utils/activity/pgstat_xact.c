@@ -254,6 +254,16 @@ pgstat_get_xact_stack_level(int nest_level)
 }
 
 /*
+ * GPDB: Return the current xact stats stack without allocating new levels.
+ * Used by pgstat_send_qd_tabstats() to read in-progress transaction stats.
+ */
+PgStat_SubXactStatus *
+pgstat_get_current_xact_stack(void)
+{
+	return pgStatXactStack;
+}
+
+/*
  * Get stat items that need to be dropped at commit / abort.
  *
  * When committing, stats for objects that have been dropped in the
