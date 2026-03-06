@@ -13005,3 +13005,11 @@
 { oid => 8693, descr => 'deparse SCHEDULE clause for a given dynamic table',
   proname => 'pg_get_dynamic_table_schedule', provolatile => 's', prorettype => 'text',
   proargtypes => 'oid', prosrc => 'pg_get_dynamic_table_schedule' },
+
+{ oid => '9200', descr => 'statistics: cumulative statistics for a resource queue',
+  proname => 'pg_stat_get_resqueue_stats', provolatile => 's',
+  proparallel => 'r', prorettype => 'record', proargtypes => 'oid',
+  proallargtypes => '{oid,oid,int8,int8,int8,int8,int8,int8,int8,int8,int8,int8,timestamptz,bool}',
+  proargmodes => '{i,o,o,o,o,o,o,o,o,o,o,o,o,o}',
+  proargnames => '{queueid,queueid,queries_submitted,queries_admitted,queries_rejected,queries_completed,elapsed_wait_secs,max_wait_secs,elapsed_exec_secs,max_exec_secs,total_cost,total_memory_kb,stat_reset_timestamp,have_stats}',
+  prosrc => 'pg_stat_get_resqueue_stats' },

@@ -2117,6 +2117,84 @@ pg_stat_get_subscription_stats(PG_FUNCTION_ARGS)
 }
 
 /*
+ * pg_stat_get_resqueue_stats
+ *
+ * Returns cumulative statistics for one resource queue as a composite row.
+ * Returns all-zeros if no stats entry exists for the given queue OID.
+ */
+Datum
+pg_stat_get_resqueue_stats(PG_FUNCTION_ARGS)
+{
+#define PG_STAT_GET_RESQUEUE_STATS_COLS	13
+	Oid			queueid = PG_GETARG_OID(0);
+	TupleDesc	tupdesc;
+	Datum		values[PG_STAT_GET_RESQUEUE_STATS_COLS] = {0};
+	bool		nulls[PG_STAT_GET_RESQUEUE_STATS_COLS] = {0};
+	PgStat_StatResQueueEntry *entry;
+	PgStat_StatResQueueEntry allzero;
+
+	/* Fetch stats; fall back to all-zero if queue has no stats yet */
+	entry = pgstat_fetch_stat_resqueue(queueid);
+	if (!entry)
+	{
+		memset(&allzero, 0, sizeof(PgStat_StatResQueueEntry));
+		entry = &allzero;
+	}
+
+	tupdesc = CreateTemplateTupleDesc(PG_STAT_GET_RESQUEUE_STATS_COLS);
+	TupleDescInitEntry(tupdesc, (AttrNumber) 1,  "queueid",
+					   OIDOID, -1, 0);
+	TupleDescInitEntry(tupdesc, (AttrNumber) 2,  "queries_submitted",
+					   INT8OID, -1, 0);
+	TupleDescInitEntry(tupdesc, (AttrNumber) 3,  "queries_admitted",
+					   INT8OID, -1, 0);
+	TupleDescInitEntry(tupdesc, (AttrNumber) 4,  "queries_rejected",
+					   INT8OID, -1, 0);
+	TupleDescInitEntry(tupdesc, (AttrNumber) 5,  "queries_completed",
+					   INT8OID, -1, 0);
+	TupleDescInitEntry(tupdesc, (AttrNumber) 6,  "elapsed_wait_secs",
+					   INT8OID, -1, 0);
+	TupleDescInitEntry(tupdesc, (AttrNumber) 7,  "max_wait_secs",
+					   INT8OID, -1, 0);
+	TupleDescInitEntry(tupdesc, (AttrNumber) 8,  "elapsed_exec_secs",
+					   INT8OID, -1, 0);
+	TupleDescInitEntry(tupdesc, (AttrNumber) 9,  "max_exec_secs",
+					   INT8OID, -1, 0);
+	TupleDescInitEntry(tupdesc, (AttrNumber) 10, "total_cost",
+					   INT8OID, -1, 0);
+	TupleDescInitEntry(tupdesc, (AttrNumber) 11, "total_memory_kb",
+					   INT8OID, -1, 0);
+	TupleDescInitEntry(tupdesc, (AttrNumber) 12, "stat_reset_timestamp",
+					   TIMESTAMPTZOID, -1, 0);
+	TupleDescInitEntry(tupdesc, (AttrNumber) 13, "have_stats",
+					   BOOLOID, -1, 0);
+	BlessTupleDesc(tupdesc);
+
+	values[0]  = ObjectIdGetDatum(queueid);
+	values[1]  = Int64GetDatum(entry->queries_submitted);
+	values[2]  = Int64GetDatum(entry->queries_admitted);
+	values[3]  = Int64GetDatum(entry->queries_rejected);
+	values[4]  = Int64GetDatum(entry->queries_completed);
+	values[5]  = Int64GetDatum(entry->elapsed_wait_secs);
+	values[6]  = Int64GetDatum(entry->max_wait_secs);
+	values[7]  = Int64GetDatum(entry->elapsed_exec_secs);
+	values[8]  = Int64GetDatum(entry->max_exec_secs);
+	values[9]  = Int64GetDatum(entry->total_cost);
+	values[10] = Int64GetDatum(entry->total_memory_kb);
+
+	if (entry->stat_reset_timestamp == 0)
+		nulls[11] = true;
+	else
+		values[11] = TimestampTzGetDatum(entry->stat_reset_timestamp);
+
+	/* have_stats: true when an actual stats entry was found */
+	values[12] = BoolGetDatum(pgstat_have_entry(PGSTAT_KIND_RESQUEUE,
+												 InvalidOid, queueid));
+
+	PG_RETURN_DATUM(HeapTupleGetDatum(heap_form_tuple(tupdesc, values, nulls)));
+}
+
+/*
  * Checks for presence of stats for object with provided kind, database oid,
  * object oid.
  *

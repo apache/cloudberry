@@ -25,6 +25,7 @@ OBJS = \
 	pgstat_io.o \
 	pgstat_relation.o \
 	pgstat_replslot.o \
+	pgstat_resqueue.o \
 	pgstat_shmem.o \
 	pgstat_slru.o \
 	pgstat_subscription.o \

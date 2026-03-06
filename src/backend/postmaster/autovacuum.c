@@ -676,16 +676,17 @@ AutoVacLauncherMain(int argc, char *argv[])
  * the database chosen is connectable, the launcher will never select it and the
  * worker will continue to signal for a new launcher.
  */
-#if 0
 	/*
 	 * Even when system is configured to use a different fetch consistency,
 	 * for autovac we always want fresh stats.
 	 */
 	SetConfigOption("stats_fetch_consistency", "none", PGC_SUSET, PGC_S_OVERRIDE);
 
+#if 0
 	/*
-	 * In emergency mode, just start a worker (unless shutdown was requested)
-	 * and go away.
+	 * In GPDB, we only want an autovacuum worker to start once we know
+	 * there is a database to vacuum. Therefore, we never want emergency mode
+	 * to start a worker immediately.
 	 */
 	if (!AutoVacuumingActive())
 	{
