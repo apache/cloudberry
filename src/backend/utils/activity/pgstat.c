@@ -96,6 +96,8 @@
 #include "access/transam.h"
 #include "access/xact.h"
 #include "lib/dshash.h"
+#include "libpq/pqformat.h"
+#include "libpq-int.h"
 #include "pgstat.h"
 #include "port/atomics.h"
 #include "storage/fd.h"
@@ -107,6 +109,8 @@
 #include "utils/memutils.h"
 #include "utils/pgstat_internal.h"
 #include "utils/timestamp.h"
+#include "catalog/gp_distribution_policy.h"
+#include "cdb/cdbvars.h"
 
 
 /* ----------
@@ -1743,4 +1747,137 @@ assign_stats_fetch_consistency(int newval, void *extra)
 	 */
 	if (pgstat_fetch_consistency != newval)
 		force_stats_snapshot_clear = true;
+}
+
+
+/* -----------------------------------------------------------------------
+ * GPDB: QE→QD pgstat collection.
+ *
+ * After a DML statement completes on QE, send the accumulated pending
+ * relation stats (from pgStatPending) to the QD via a 'y' protocol message.
+ * The QD collects these in pgstat_combine_from_qe() and merges them into
+ * its own pending stats, so autovacuum can see modification counts.
+ * -----------------------------------------------------------------------
+ */
+
+/*
+ * pgstat_send_qd_tabstats -- QE side: send relation stats to QD.
+ *
+ * Must be called only on QE (Gp_role == GP_ROLE_EXECUTE), BEFORE
+ * finish_xact_command().  At call time the transaction-level per-table
+ * counts are still in pgStatXactStack.  finish_xact_command() calls
+ * AtEOXact_PgStat() which NULLs pgStatXactStack, so we must read the
+ * stats before that happens.
+ */
+void
+pgstat_send_qd_tabstats(void)
+{
+	PgStat_SubXactStatus *xact_state;
+	StringInfoData		buf;
+	PgStatTabRecordFromQE *records;
+	int					nrecords = 0;
+	int					capacity = 64;
+
+	if (Gp_role != GP_ROLE_EXECUTE || !Gp_is_writer)
+		return;
+
+	/*
+	 * On QE inside a distributed transaction, stats for the current
+	 * statement are in pgStatXactStack (not yet merged to pgStatPending,
+	 * because the top-level transaction hasn't committed yet).  Read the
+	 * current nesting level's per-table insert/update/delete counts.
+	 */
+	xact_state = pgstat_get_current_xact_stack();
+
+	if (xact_state == NULL)
+		return;
+
+	records = (PgStatTabRecordFromQE *)
+		palloc(capacity * sizeof(PgStatTabRecordFromQE));
+
+	/*
+	 * Send only the current nesting level's per-table insert/update/delete
+	 * counts.  QD will place these into its own transactional state (trans),
+	 * letting PG's normal AtEOXact_PgStat_Relations / AtEOSubXact_PgStat_Relations
+	 * machinery handle delta_live_tuples, delta_dead_tuples, changed_tuples,
+	 * and subtransaction commit/abort correctly.
+	 */
+	{
+		PgStat_TableXactStatus *trans;
+
+		for (trans = xact_state->first; trans != NULL; trans = trans->next)
+		{
+			PgStat_TableStatus *tabstat = trans->parent;
+			PgStat_Counter	   ins, upd, del;
+
+			ins = trans->tuples_inserted;
+			upd = trans->tuples_updated;
+			del = trans->tuples_deleted;
+
+			if (ins == 0 && upd == 0 && del == 0 && !trans->truncdropped)
+				continue;
+
+			/*
+			 * Filter by distribution policy: skip catalog tables (QD has
+			 * the same updates) and deduplicate replicated tables (only
+			 * one segment reports, to avoid overcounting).
+			 */
+			{
+				GpPolicy *gppolicy = GpPolicyFetch(tabstat->id);
+
+				switch (gppolicy->ptype)
+				{
+					case POLICYTYPE_ENTRY:
+						pfree(gppolicy);
+						continue;
+					case POLICYTYPE_REPLICATED:
+						if (GpIdentity.segindex != tabstat->id % gppolicy->numsegments)
+						{
+							pfree(gppolicy);
+							continue;
+						}
+						break;
+					case POLICYTYPE_PARTITIONED:
+						break;
+					default:
+						elog(ERROR, "unrecognized policy type %d",
+							 gppolicy->ptype);
+				}
+				pfree(gppolicy);
+			}
+
+			/* New entry — each table appears at most once per nesting level */
+			if (nrecords >= capacity)
+			{
+				capacity *= 2;
+				records = (PgStatTabRecordFromQE *)
+					repalloc(records, capacity * sizeof(PgStatTabRecordFromQE));
+			}
+
+			records[nrecords].t_id			  = tabstat->id;
+			records[nrecords].t_shared		  = tabstat->shared;
+			records[nrecords].truncdropped	  = trans->truncdropped;
+			records[nrecords].tuples_inserted = ins;
+			records[nrecords].tuples_updated  = upd;
+			records[nrecords].tuples_deleted  = del;
+			nrecords++;
+		}
+	}
+
+	if (nrecords == 0)
+	{
+		pfree(records);
+		return;
+	}
+
+	pq_beginmessage(&buf, 'y');
+	pq_sendstring(&buf, "PGSTAT");
+	pq_sendbyte(&buf, false);	/* result not complete yet */
+	pq_sendint(&buf, PGExtraTypeTableStats, sizeof(PGExtraType));
+	pq_sendint(&buf, nrecords * sizeof(PgStatTabRecordFromQE), sizeof(int));
+	pq_sendbytes(&buf, (char *) records, nrecords * sizeof(PgStatTabRecordFromQE));
+	pq_endmessage(&buf);
+
+	pfree(records);
+
 }

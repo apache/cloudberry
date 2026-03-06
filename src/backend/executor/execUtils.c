@@ -2144,6 +2144,12 @@ void mppExecutorFinishup(QueryDesc *queryDesc)
 		if (ProcessDispatchResult_hook)
 			ProcessDispatchResult_hook(ds);
 
+		/*
+		 * GPDB: Merge relation stats sent by QEs so QD's mod_since_analyze
+		 * stays up to date for autovacuum triggering.
+		 */
+		pgstat_combine_from_qe(pr);
+
 		/* get num of rows processed from writer QEs. */
 		estate->es_processed +=
 			cdbdisp_sumCmdTuples(pr, primaryWriterSliceIndex);
@@ -2225,6 +2231,12 @@ uint64 mppExecutorWait(QueryDesc *queryDesc)
 										LocallyExecutingSliceIndex(queryDesc->estate),
 										estate->showstatctx);
 		}
+		/*
+		 * GPDB: Merge relation stats sent by QEs so QD's mod_since_analyze
+		 * stays up to date for autovacuum triggering.
+		 */
+		pgstat_combine_from_qe(pr);
+
 		/* get num of rows processed from writer QEs. */
 		es_processed +=
 			cdbdisp_sumCmdTuples(pr, primaryWriterSliceIndex);

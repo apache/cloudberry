@@ -719,6 +719,27 @@ extern PgStat_StatTabEntry *pgstat_fetch_stat_tabentry_ext(bool shared,
 														   Oid reloid);
 extern PgStat_TableStatus *find_tabstat_entry(Oid rel_id);
 
+/*
+ * GPDB: Data structure for transmitting per-table stats from QE to QD.
+ * Used by pgstat_send_qd_tabstats() and pgstat_combine_from_qe().
+ */
+typedef struct PgStatTabRecordFromQE
+{
+	Oid				t_id;				/* table OID */
+	bool			t_shared;			/* is it a shared catalog? */
+	bool			truncdropped;		/* was it truncated/dropped? */
+	PgStat_Counter	tuples_inserted;
+	PgStat_Counter	tuples_updated;
+	PgStat_Counter	tuples_deleted;
+} PgStatTabRecordFromQE;
+
+/* GPDB: QE sends pending relation stats to QD via 'y' protocol message */
+extern void pgstat_send_qd_tabstats(void);
+
+/* GPDB: QD combines relation stats received from QEs after dispatch */
+struct CdbDispatchResults;
+extern void pgstat_combine_from_qe(struct CdbDispatchResults *primaryResults);
+
 
 /*
  * Functions in pgstat_replslot.c
