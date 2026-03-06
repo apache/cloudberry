@@ -45,6 +45,7 @@ typedef enum PgStat_Kind
 	PGSTAT_KIND_FUNCTION,		/* per-function statistics */
 	PGSTAT_KIND_REPLSLOT,		/* per-slot statistics */
 	PGSTAT_KIND_SUBSCRIPTION,	/* per-subscription statistics */
+	PGSTAT_KIND_RESQUEUE,		/* per-resource-queue statistics */
 
 	/* stats for fixed-numbered objects */
 	PGSTAT_KIND_ARCHIVER,
@@ -237,7 +238,7 @@ typedef struct PgStat_TableXactStatus
  * ------------------------------------------------------------
  */
 
-#define PGSTAT_FILE_FORMAT_ID	0x01A5BCAC
+#define PGSTAT_FILE_FORMAT_ID	0x01A5BCAD
 
 typedef struct PgStat_ArchiverStats
 {
@@ -457,6 +458,63 @@ typedef struct PgStat_PendingWalStats
 } PgStat_PendingWalStats;
 
 
+/* ----------
+ * PgStat_StatResQueueEntry
+ *
+ * Per-resource-queue cumulative statistics, stored in shared memory and
+ * persisted to disk. Exposed via the pg_stat_resqueues view.
+ *
+ * Time values are in seconds (matching time() granularity used during
+ * portal tracking). max_wait_secs and max_exec_secs are historical peaks.
+ * ----------
+ */
+typedef struct PgStat_StatResQueueEntry
+{
+	/* throughput counters */
+	PgStat_Counter queries_submitted;	/* total queries entered the queue */
+	PgStat_Counter queries_admitted;	/* total queries admitted from queue */
+	PgStat_Counter queries_rejected;	/* queries cancelled/errored while waiting */
+	PgStat_Counter queries_completed;	/* queries finished execution */
+
+	/* wait time (seconds) */
+	PgStat_Counter elapsed_wait_secs;	/* cumulative wait seconds */
+	PgStat_Counter max_wait_secs;		/* peak single-query wait time */
+
+	/* exec time (seconds) */
+	PgStat_Counter elapsed_exec_secs;	/* cumulative exec seconds */
+	PgStat_Counter max_exec_secs;		/* peak single-query exec time */
+
+	/* resource usage */
+	PgStat_Counter total_cost;			/* cumulative planner cost estimate */
+	PgStat_Counter total_memory_kb;		/* cumulative memory granted (KB) */
+
+	TimestampTz stat_reset_timestamp;
+} PgStat_StatResQueueEntry;
+
+/* ----------
+ * PgStat_ResQueueCounts
+ *
+ * Pending (not-yet-flushed) per-resource-queue delta counters accumulated by
+ * a single backend. Flushed into PgStat_StatResQueueEntry in shared memory
+ * during pgstat_report_stat().
+ *
+ * This struct must contain only delta counters so that memcmp against zeroes
+ * reliably detects whether there are pending updates.
+ * ----------
+ */
+typedef struct PgStat_ResQueueCounts
+{
+	PgStat_Counter queries_submitted;
+	PgStat_Counter queries_admitted;
+	PgStat_Counter queries_rejected;
+	PgStat_Counter queries_completed;
+	PgStat_Counter elapsed_wait_secs;
+	PgStat_Counter elapsed_exec_secs;
+	PgStat_Counter max_wait_secs;		/* max in this flush batch */
+	PgStat_Counter max_exec_secs;		/* max in this flush batch */
+	PgStat_Counter total_cost;
+	PgStat_Counter total_memory_kb;
+} PgStat_ResQueueCounts;
 
 
 /*
@@ -700,6 +758,20 @@ extern void pgstat_report_subscription_error(Oid subid, bool is_apply_error);
 extern void pgstat_create_subscription(Oid subid);
 extern void pgstat_drop_subscription(Oid subid);
 extern PgStat_StatSubEntry *pgstat_fetch_stat_subscription(Oid subid);
+
+
+/*
+ * Functions in pgstat_resqueue.c
+ */
+
+extern void pgstat_resqueue_wait_start(uint32 portalid, Oid queueid,
+									   Cost query_cost, int64 query_memory_kb);
+extern void pgstat_resqueue_wait_end(uint32 portalid);
+extern void pgstat_resqueue_rejected(uint32 portalid);
+extern void pgstat_resqueue_exec_end(uint32 portalid);
+extern void pgstat_create_resqueue(Oid queueid);
+extern void pgstat_drop_resqueue(Oid queueid);
+extern PgStat_StatResQueueEntry *pgstat_fetch_stat_resqueue(Oid queueid);
 
 
 /*

@@ -1224,6 +1224,25 @@ CREATE VIEW pg_resqueue_status AS
              queueholders int4)
             ON (s.queueid = q.oid);
 
+-- Resource queue cumulative statistics view
+CREATE VIEW pg_stat_resqueues AS
+    SELECT
+        q.oid                           AS queueid,
+        q.rsqname                       AS queuename,
+        s.queries_submitted,
+        s.queries_admitted,
+        s.queries_rejected,
+        s.queries_completed,
+        s.elapsed_wait_secs             AS total_wait_time_secs,
+        s.max_wait_secs,
+        s.elapsed_exec_secs             AS total_exec_time_secs,
+        s.max_exec_secs,
+        s.total_cost,
+        s.total_memory_kb,
+        s.stat_reset_timestamp
+    FROM pg_resqueue AS q,
+         pg_stat_get_resqueue_stats(q.oid) AS s;
+
 -- External table views
 
 CREATE VIEW pg_max_external_files AS

@@ -413,6 +413,37 @@ typedef struct PgStatShared_ReplSlot
 	PgStat_StatReplSlotEntry stats;
 } PgStatShared_ReplSlot;
 
+typedef struct PgStatShared_ResQueue
+{
+	PgStatShared_Common header;
+	PgStat_StatResQueueEntry stats;
+} PgStatShared_ResQueue;
+
+/* ----------
+ * PgStat_ResQueuePortalEntry
+ *
+ * Backend-local tracking entry for a single portal subject to resource queue
+ * scheduling. Records timestamps and resource info for a portal's lifetime,
+ * then rolls them into per-queue PgStat_ResQueueCounts when the portal exits.
+ *
+ * The collector never sees this struct.
+ * ----------
+ */
+typedef struct PgStat_ResQueuePortalEntry
+{
+	uint32		portalid;			/* hash key */
+	Oid			queueid;			/* resource queue this portal belongs to */
+	time_t		t_wait_start;		/* time portal started waiting in queue */
+	time_t		t_exec_start;		/* time portal was admitted & began executing */
+	Cost		query_cost;			/* planner cost estimate */
+	int64		query_memory_kb;	/* memory granted (KB) */
+} PgStat_ResQueuePortalEntry;
+
+/* Callbacks for pgstat_kind_infos registration (used in pgstat.c). */
+extern bool pgstat_resqueue_flush_cb(PgStat_EntryRef *entry_ref, bool nowait);
+extern void pgstat_resqueue_reset_timestamp_cb(PgStatShared_Common *header,
+											   TimestampTz ts);
+
 
 /*
  * Central shared memory entry for the cumulative stats system.

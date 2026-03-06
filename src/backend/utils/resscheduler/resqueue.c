@@ -1367,8 +1367,7 @@ ResProcLockRemoveSelfAndWakeup(LOCK *lock)
 
 			nextproc = (PGPROC *) proc->links.next;
 
-			dclist_delete_from(waitQueue, &(proc->links));
-			(proc->waitLock->waitProcs.count)--;
+			dclist_delete_from_thoroughly(waitQueue, &(proc->links));
 
 			proc = nextproc;
 
@@ -1472,8 +1471,7 @@ ResProcWakeup(PGPROC *proc, int waitStatus)
 	retProc = (PGPROC *) proc->links.next;
 
 	/* Remove process from wait queue */
-	dclist_delete_from(&proc->waitLock->waitProcs, &(proc->links));
-	(proc->waitLock->waitProcs.count)--;
+	dclist_delete_from_thoroughly(&proc->waitLock->waitProcs, &(proc->links));
 
 	/* Clean up process' state and pass it the ok/fail signal */
 	proc->waitLock = NULL;
@@ -1511,8 +1509,7 @@ ResRemoveFromWaitQueue(PGPROC *proc, uint32 hashcode)
 	Assert(waitLock->waitProcs.count > 0);
 
 	/* Remove proc from lock's wait queue */
-	dclist_delete_from(&waitLock->waitProcs, &(proc->links));
-	waitLock->waitProcs.count--;
+	dclist_delete_from_thoroughly(&waitLock->waitProcs, &(proc->links));
 
 	/* Undo increments of request counts by waiting process */
 	Assert(waitLock->nRequested > 0);

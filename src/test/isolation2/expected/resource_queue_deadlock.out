@@ -5,6 +5,8 @@
 CREATE
 0: CREATE role role_deadlock_test RESOURCE QUEUE rq_deadlock_test;
 CREATE
+0: GRANT CREATE ON SCHEMA public TO role_deadlock_test;
+GRANT
 0: SET gp_autostats_lock_wait TO ON;
 SET
 
@@ -50,8 +52,8 @@ ANALYZE
 (1 row)
 2: SELECT * FROM t_deadlock_test;
 ERROR:  deadlock detected
-DETAIL:  Process 1618 waits for ExclusiveLock on resource queue 16520; blocked by process 1606.
-Process 1606 waits for ShareUpdateExclusiveLock on relation 16522 of database 16478; blocked by process 1618.
+Process PID waits for ExclusiveLock on resource queue OID; blocked by process PID.
+Process PID waits for ShareUpdateExclusiveLock on relation OID of database OID; blocked by process PID.
 HINT:  See server log for query details.
 2: ROLLBACK;
 ROLLBACK
@@ -68,6 +70,8 @@ INSERT 1
 -- Clean up the test
 0: DROP TABLE t_deadlock_test;
 DROP
+0: REVOKE CREATE ON SCHEMA public FROM role_deadlock_test;
+REVOKE
 0: DROP ROLE role_deadlock_test;
 DROP
 0: DROP RESOURCE QUEUE rq_deadlock_test;

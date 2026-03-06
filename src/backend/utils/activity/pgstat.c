@@ -337,6 +337,22 @@ static const PgStat_KindInfo pgstat_kind_infos[PGSTAT_NUM_KINDS] = {
 		.reset_timestamp_cb = pgstat_subscription_reset_timestamp_cb,
 	},
 
+	[PGSTAT_KIND_RESQUEUE] = {
+		.name = "resqueue",
+
+		.fixed_amount = false,
+		/* resource queues are cluster-wide objects, visible across databases */
+		.accessed_across_databases = true,
+
+		.shared_size = sizeof(PgStatShared_ResQueue),
+		.shared_data_off = offsetof(PgStatShared_ResQueue, stats),
+		.shared_data_len = sizeof(((PgStatShared_ResQueue *) 0)->stats),
+		.pending_size = sizeof(PgStat_ResQueueCounts),
+
+		.flush_pending_cb = pgstat_resqueue_flush_cb,
+		.reset_timestamp_cb = pgstat_resqueue_reset_timestamp_cb,
+	},
+
 
 	/* stats for fixed-numbered (mostly 1) objects */
 

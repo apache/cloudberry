@@ -3,6 +3,7 @@
 
 0: CREATE RESOURCE QUEUE rq_deadlock_test WITH (active_statements = 1);
 0: CREATE role role_deadlock_test RESOURCE QUEUE rq_deadlock_test;
+0: GRANT CREATE ON SCHEMA public TO role_deadlock_test;
 0: SET gp_autostats_lock_wait TO ON;
 
 0: SELECT gp_inject_fault_infinite('before_auto_stats', 'suspend', dbid) FROM gp_segment_configuration WHERE content = -1 AND role = 'p';
@@ -30,5 +31,6 @@
 
 -- Clean up the test
 0: DROP TABLE t_deadlock_test;
+0: REVOKE CREATE ON SCHEMA public FROM role_deadlock_test;
 0: DROP ROLE role_deadlock_test;
 0: DROP RESOURCE QUEUE rq_deadlock_test;
