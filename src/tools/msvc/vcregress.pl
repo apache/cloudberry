@@ -124,11 +124,7 @@ exit 0;
 # Helper function for set_command_env, to set one environment command.
 sub set_single_env
 {
-<<<<<<< HEAD
-	my $envname    = shift;
-=======
 	my $envname = shift;
->>>>>>> REL_16_9
 	my $envdefault = shift;
 
 	# If a command is defined by the environment, just use it.
@@ -149,13 +145,9 @@ sub set_single_env
 sub set_command_env
 {
 	set_single_env('GZIP_PROGRAM', 'gzip');
-<<<<<<< HEAD
-	set_single_env('LZ4',          'lz4');
-=======
 	set_single_env('LZ4', 'lz4');
 	set_single_env('OPENSSL', 'openssl');
 	set_single_env('ZSTD', 'zstd');
->>>>>>> REL_16_9
 }
 
 sub installcheck_internal
@@ -299,13 +291,9 @@ sub tap_check
 	$ENV{PG_REGRESS} = "$topdir/$Config/pg_regress/pg_regress";
 	$ENV{REGRESS_SHLIB} = "$topdir/src/test/regress/regress.dll";
 
-<<<<<<< HEAD
-	$ENV{TESTDIR} = "$dir";
-=======
 	$ENV{TESTDATADIR} = "$dir/tmp_check";
 	$ENV{TESTLOGDIR} = "$dir/tmp_check/log";
 
->>>>>>> REL_16_9
 	my $module = basename $dir;
 	# add the module build dir as the second element in the PATH
 	$ENV{PATH} =~ s!;!;$topdir/$Config/$module;!;
@@ -332,7 +320,6 @@ sub bincheck
 	foreach my $dir (@bin_dirs)
 	{
 		next unless -d "$dir/t";
-
 		my $status = tap_check($dir);
 		$mstat ||= $status;
 	}
@@ -364,58 +351,6 @@ sub taptest
 	return;
 }
 
-<<<<<<< HEAD
-sub mangle_plpython3
-{
-	my $tests = shift;
-	mkdir "results" unless -d "results";
-	mkdir "sql/python3";
-	mkdir "results/python3";
-	mkdir "expected/python3";
-
-	foreach my $test (@$tests)
-	{
-		local $/ = undef;
-		foreach my $dir ('sql', 'expected')
-		{
-			my $extension = ($dir eq 'sql' ? 'sql' : 'out');
-
-			my @files =
-			  glob("$dir/$test.$extension $dir/${test}_[0-9].$extension");
-			foreach my $file (@files)
-			{
-				open(my $handle, '<', $file)
-				  || die "test file $file not found";
-				my $contents = <$handle>;
-				close($handle);
-				do
-				{
-					s/<type 'exceptions\.([[:alpha:]]*)'>/<class '$1'>/g;
-					s/<type 'long'>/<class 'int'>/g;
-					s/([0-9][0-9]*)L/$1/g;
-					s/([ [{])u"/$1"/g;
-					s/([ [{])u'/$1'/g;
-					s/def next/def __next__/g;
-					s/LANGUAGE plpython2?u/LANGUAGE plpython3u/g;
-					s/EXTENSION (\S*?)plpython2?u/EXTENSION $1plpython3u/g;
-					s/installing required extension "plpython2u"/installing required extension "plpython3u"/g;
-				  }
-				  for ($contents);
-				my $base = basename $file;
-				open($handle, '>', "$dir/python3/$base")
-				  || die "opening python 3 file for $file";
-				print $handle $contents;
-				close($handle);
-			}
-		}
-	}
-	do { s!^!python3/!; }
-	  foreach (@$tests);
-	return @$tests;
-}
-
-=======
->>>>>>> REL_16_9
 sub plcheck
 {
 	chdir "$topdir/src/pl";

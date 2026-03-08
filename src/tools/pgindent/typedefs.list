@@ -492,12 +492,9 @@ CoverPos
 CreateAmStmt
 CreateCastStmt
 CreateConversionStmt
-<<<<<<< HEAD
 CreateDirectoryTableStmt
-=======
 CreateDBRelInfo
 CreateDBStrategy
->>>>>>> REL_16_9
 CreateDomainStmt
 CreateEnumStmt
 CreateEventTrigStmt
@@ -1552,10 +1549,7 @@ MemoizeKey
 MemoizePath
 MemoizeState
 MemoizeTuple
-<<<<<<< HEAD
-=======
 MemoryChunk
->>>>>>> REL_16_9
 MemoryContext
 MemoryContextCallback
 MemoryContextCallbackFunction
@@ -2077,39 +2071,6 @@ PgStat_EntryRefHashEntry
 PgStat_FetchConsistency
 PgStat_FunctionCallUsage
 PgStat_FunctionCounts
-<<<<<<< HEAD
-PgStat_FunctionEntry
-PgStat_GlobalStats
-PgStat_Msg
-PgStat_MsgAnalyze
-PgStat_MsgAnlAncestors
-PgStat_MsgArchiver
-PgStat_MsgAutovacStart
-PgStat_MsgBgWriter
-PgStat_MsgChecksumFailure
-PgStat_MsgConnect
-PgStat_MsgDeadlock
-PgStat_MsgDisconnect
-PgStat_MsgDropdb
-PgStat_MsgDummy
-PgStat_MsgFuncpurge
-PgStat_MsgFuncstat
-PgStat_MsgHdr
-PgStat_MsgInquiry
-PgStat_MsgRecoveryConflict
-PgStat_MsgReplSlot
-PgStat_MsgResetcounter
-PgStat_MsgResetreplslotcounter
-PgStat_MsgResetsharedcounter
-PgStat_MsgResetsinglecounter
-PgStat_MsgResetslrucounter
-PgStat_MsgSLRU
-PgStat_MsgTabpurge
-PgStat_MsgTabstat
-PgStat_MsgTempFile
-PgStat_MsgVacuum
-PgStat_MsgWal
-=======
 PgStat_HashKey
 PgStat_IO
 PgStat_Kind
@@ -2118,7 +2079,6 @@ PgStat_LocalState
 PgStat_PendingDroppedStatsItem
 PgStat_PendingIO
 PgStat_PendingWalStats
->>>>>>> REL_16_9
 PgStat_SLRUStats
 PgStat_ShmemControl
 PgStat_Snapshot

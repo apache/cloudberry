@@ -7,13 +7,6 @@ then	echo "Usage: $0 [-n]"
 	exit 1
 fi
 
-<<<<<<< HEAD
-rm -f ./TAGS
-
-find `pwd`/ -type f -name '*.[chyl]' -not -name "*_mock.c" -print |
-	xargs etags --append -o TAGS
-=======
 cdir=`dirname $0`
 dir=`(cd $cdir && pwd)`
 exec $dir/make_ctags -e $*
->>>>>>> REL_16_9

@@ -43,17 +43,6 @@ my $contrib_extralibs = { 'libpq_pipeline' => ['ws2_32.lib'] };
 my $contrib_extraincludes = {};
 my $contrib_extrasource = {};
 my @contrib_excludes = (
-<<<<<<< HEAD
-	'bool_plperl',      'commit_ts',
-	'hstore_plperl',    'hstore_plpython',
-	'intagg',           'jsonb_plperl',
-	'jsonb_plpython',   'ltree_plpython',
-	'pgcrypto',         'sepgsql',
-	'brin',             'test_extensions',
-	'test_misc',        'test_pg_dump',
-	'snapshot_too_old', 'unsafe_tests',
-	'test_escape');
-=======
 	'bool_plperl', 'commit_ts',
 	'hstore_plperl', 'hstore_plpython',
 	'intagg', 'jsonb_plperl',
@@ -62,7 +51,6 @@ my @contrib_excludes = (
 	'test_extensions', 'test_misc',
 	'test_pg_dump', 'snapshot_too_old',
 	'unsafe_tests', 'test_escape');
->>>>>>> REL_16_9
 
 # Set of variables for frontend modules
 my $frontend_defines = { 'pgbench' => 'FD_SETSIZE=1024' };
@@ -154,17 +142,10 @@ sub mkvcbuild
 	  archive.c base64.c checksum_helper.c compression.c
 	  config_info.c controldata_utils.c d2s.c encnames.c exec.c
 	  f2s.c file_perm.c file_utils.c hashfn.c ip.c jsonapi.c
-<<<<<<< HEAD
-	  keywords.c kmgr_utils.c kwlookup.c link-canary.c md5_common.c
-	  pg_get_line.c pg_lzcompress.c pgfnames.c psprintf.c relpath.c rmtree.c
-	  saslprep.c scram-common.c string.c stringinfo.c unicode_norm.c username.c
-	  wait_error.c wchar.c);
-=======
 	  keywords.c kwlookup.c link-canary.c md5_common.c percentrepl.c
 	  pg_get_line.c pg_lzcompress.c pg_prng.c pgfnames.c psprintf.c relpath.c
 	  rmtree.c saslprep.c scram-common.c string.c stringinfo.c unicode_norm.c
 	  username.c wait_error.c wchar.c);
->>>>>>> REL_16_9
 
 	if ($solution->{options}->{openssl})
 	{
