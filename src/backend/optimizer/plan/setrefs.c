@@ -729,7 +729,7 @@ add_rte_to_flat_rtable(PlannerGlobal *glob, List *rteperminfos,
 	 * Add a copy of the RTEPermissionInfo, if any, corresponding to this RTE
 	 * to the flattened global list.
 	 */
-	if (rte->perminfoindex > 0)
+	if (rte->perminfoindex > 0 && OidIsValid(rte->relid))
 	{
 		RTEPermissionInfo *perminfo;
 		RTEPermissionInfo *newperminfo;

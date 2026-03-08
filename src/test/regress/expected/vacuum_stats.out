@@ -8,8 +8,8 @@ SELECT true FROM pg_class WHERE oid='vacstat_test'::regclass
 AND relpages > 0
 AND reltuples > 0
 AND relallvisible > 0;
- bool 
-------
+ ?column? 
+----------
  t
 (1 row)
 
@@ -23,8 +23,8 @@ AND reltuples =
 AND relallvisible =
     (SELECT SUM(relallvisible) FROM gp_dist_random('pg_class')
      WHERE oid='vacstat_test'::regclass);
- bool 
-------
+ ?column? 
+----------
  t
 (1 row)
 

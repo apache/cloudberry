@@ -2301,6 +2301,7 @@ run_schedule(const char *schedule, test_start_function startfunc,
 	instr_time	starttimes[MAX_PARALLEL_TESTS];
 	instr_time	stoptimes[MAX_PARALLEL_TESTS];
 	int			statuses[MAX_PARALLEL_TESTS];
+	_stringlist *ignorelist = NULL;
 	char		scbuf[1024];
 	FILE	   *scf;
 	int			line_num = 0;
@@ -2338,6 +2339,20 @@ run_schedule(const char *schedule, test_start_function startfunc,
 			continue;
 		if (strncmp(scbuf, "test: ", 6) == 0)
 			test = scbuf + 6;
+		else if (strncmp(scbuf, "ignore: ", 8) == 0)
+		{
+			c = scbuf + 8;
+			while (*c && isspace((unsigned char) *c))
+				c++;
+			add_stringlist_item(&ignorelist, c);
+
+			/*
+			 * Note: ignore: lines do not run the test, they just say that
+			 * failure of this test when run later on is to be ignored. A bit
+			 * odd but that's how the shell-script version did it.
+			 */
+			continue;
+		}
 		else
 		{
 			bail("syntax error in schedule file \"%s\" line %d: %s",
@@ -2505,7 +2520,20 @@ run_schedule(const char *schedule, test_start_function startfunc,
 			{
 				if (differ)
 				{
-					test_status_failed(tests[i], INSTR_TIME_GET_MILLISEC(stoptimes[i]), (num_tests > 1));
+					bool		ignore = false;
+					_stringlist *sl;
+
+					for (sl = ignorelist; sl != NULL; sl = sl->next)
+					{
+						if (strcmp(tests[i], sl->str) == 0)
+						{
+							ignore = true;
+							break;
+						}
+					}
+
+					if (!ignore)
+						test_status_failed(tests[i], INSTR_TIME_GET_MILLISEC(stoptimes[i]), (num_tests > 1));
 				}
 				else
 				{
@@ -2523,6 +2551,8 @@ run_schedule(const char *schedule, test_start_function startfunc,
 			free_stringlist(&tags[i]);
 		}
 	}
+
+	free_stringlist(&ignorelist);
 
 	fclose(scf);
 }
