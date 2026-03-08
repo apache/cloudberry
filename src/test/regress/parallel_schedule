@@ -55,9 +55,9 @@ test: create_aggregate create_function_sql create_cast constraints triggers sele
 # Because vacuum will detect concurrently running transactions, it is necessary to
 # run this test on its own, or it might not detect the pages are 'all visible'
 # ----------
-# test: disable_autovacuum
-# test: vacuum_stats
-# test: enable_autovacuum
+test: disable_autovacuum
+test: vacuum_stats
+test: enable_autovacuum
 
 # ----------
 # sanity_check does a vacuum, affecting the sort order of SELECT *
@@ -69,7 +69,7 @@ test: sanity_check
 # aggregates depends on create_aggregate
 # join depends on create_misc
 # ----------
-# ignore: random
+ignore: random
 test: select_into select_distinct select_distinct_on select_implicit select_having subselect union case join aggregates random portals arrays btree_index hash_index update delete
 
 # In PostgreSQL, namespace test is run as part of the previous group, but there
@@ -108,7 +108,7 @@ test: create_table_like alter_generic alter_operator misc async dbsize misc_func
 # ----------
 # Additional incremental view maintenance tests
 # ----------
-# test: ivm
+test: ivm
 
 # rules cannot run concurrently with any test that creates
 # a view or rule in the public schema
@@ -143,8 +143,8 @@ test: publication subscription
 # Another group of parallel tests
 # select_views depends on create_view
 # ----------
-test: select_views portals_p2 cluster dependency guc bitmapops combocid tsearch tsdicts foreign_data window xmlmap functional_deps advisory_lock indirect_toast equivclass
-
+test: select_views portals_p2 cluster dependency guc bitmapops combocid tsearch tsdicts foreign_data xmlmap functional_deps advisory_lock indirect_toast equivclass
+ignore: window
 # 'foreign_key' test is disabled, because it contains several tables with
 # multiple UNIQUE constraints, which is not supported in GPDB.
 # See the foreign_key_gp test in greenplum_schedule for the GPDB-specific behavior.
