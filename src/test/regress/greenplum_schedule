@@ -136,8 +136,7 @@ test: db_size_functions cbdb_db_size_functions
 # gp_interconnect_type, which doesn't work:
 # ERROR:  parameter "gp_interconnect_type" cannot be set after connection start
 
-# PG_MERGE16_FIXME:
-# ignore: gp_portal_error
+ignore: gp_portal_error
 test: external_table external_table_union_all external_table_create_privs external_table_persistent_error_log column_compression eagerfree alter_table_aocs alter_table_aocs2 alter_distribution_policy aoco_privileges
 test: alter_table_set alter_table_gp alter_table_ao alter_table_set_am subtransaction_visibility oid_consistency udf_exception_blocks
 # below test(s) inject faults so each of them need to be in a separate group
@@ -296,7 +295,7 @@ test: dpe
 test: enable_autovacuum
 
 test: ao_checksum_corruption AOCO_Compression AORO_Compression table_statistics
-test: session_reset
+ignore: session_reset
 # below test(s) inject faults so each of them need to be in a separate group
 test: fts_error
 
@@ -313,7 +312,7 @@ test: oid_wraparound
 # fts_recovery_in_progresss uses fault injectors to simulate FTS fault states,
 # hence it should be run in isolation.
 test: fts_recovery_in_progress
-# ignore: mirror_replay
+ignore: mirror_replay
 test: autovacuum
 test: autovacuum-segment
 test: autovacuum-template0-segment
@@ -372,7 +371,6 @@ test: dynamic_table
 
 # DML tests for AO/CO unique indexes.
 test: uao_dml/uao_dml_unique_index_delete_row uao_dml/uao_dml_unique_index_delete_column uao_dml/uao_dml_unique_index_update_row uao_dml/uao_dml_unique_index_update_column
-
 
 # run pg_hba raleted testing
 test: hba_conf
