@@ -107,14 +107,9 @@ $node_primary->safe_psql('postgres',
 );
 
 my $stdout_recv = $node_primary->pg_recvlogical_upto(
-<<<<<<< HEAD
-	'postgres', 'test_slot', $endpos, $TestLib::timeout_default,
-	'include-xids'     => '0',
-=======
 	'postgres', 'test_slot', $endpos,
 	$PostgreSQL::Test::Utils::timeout_default,
 	'include-xids' => '0',
->>>>>>> REL_16_9
 	'skip-empty-xacts' => '1');
 chomp($stdout_recv);
 is($stdout_recv, $expected,
@@ -125,14 +120,9 @@ $node_primary->poll_query_until('postgres',
 ) or die "slot never became inactive";
 
 $stdout_recv = $node_primary->pg_recvlogical_upto(
-<<<<<<< HEAD
-	'postgres', 'test_slot', $endpos, $TestLib::timeout_default,
-	'include-xids'     => '0',
-=======
 	'postgres', 'test_slot', $endpos,
 	$PostgreSQL::Test::Utils::timeout_default,
 	'include-xids' => '0',
->>>>>>> REL_16_9
 	'skip-empty-xacts' => '1');
 chomp($stdout_recv);
 is($stdout_recv, '', 'pg_recvlogical acknowledged changes');

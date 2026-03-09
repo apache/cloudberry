@@ -17,16 +17,12 @@ if ($ENV{with_ssl} ne 'openssl')
 {
 	plan skip_all => 'OpenSSL not supported by this build';
 }
-<<<<<<< HEAD
 elsif (!$ENV{PG_TEST_EXTRA} || $ENV{PG_TEST_EXTRA} !~ /\bssl\b/)
 {
 	plan skip_all =>
 	  'Potentially unsafe test SSL not enabled in PG_TEST_EXTRA';
 }
-else
-=======
 elsif ($ENV{PG_TEST_EXTRA} !~ /\bssl\b/)
->>>>>>> REL_16_9
 {
 	plan skip_all =>
 	  'Potentially unsafe test SSL not enabled in PG_TEST_EXTRA';
@@ -285,8 +281,6 @@ switch_server_cert($node, certfile => 'server-ip-cn-only');
 
 $common_connstr =
   "$default_ssl_connstr user=ssltestuser dbname=trustdb sslrootcert=ssl/root+server_ca.crt hostaddr=$SERVERHOSTADDR sslmode=verify-full";
-<<<<<<< HEAD
-=======
 
 $node->connect_ok("$common_connstr host=192.0.2.1",
 	"IP address in the Common Name");
@@ -310,7 +304,6 @@ switch_server_cert($node, certfile => 'server-multiple-alt-names');
 
 $common_connstr =
   "$default_ssl_connstr user=ssltestuser dbname=trustdb sslrootcert=ssl/root+server_ca.crt hostaddr=$SERVERHOSTADDR sslmode=verify-full";
->>>>>>> REL_16_9
 
 $node->connect_ok(
 	"$common_connstr host=dns1.alt-name.pg-ssltest.test",
@@ -799,14 +792,11 @@ $node->connect_fails(
 	  . sslkey('client-revoked.key'),
 	"certificate authorization fails with revoked client cert",
 	expected_stderr => qr|SSL error: ssl[a-z0-9/]* alert certificate revoked|,
-<<<<<<< HEAD
-=======
 	# temporarily(?) skip this check due to timing issue
 	#	log_like => [
 	#		qr{Client certificate verification failed at depth 0: certificate revoked},
 	#		qr{Failed certificate data \(unverified\): subject "/CN=ssltestuser", serial number 2315134995201656577, issuer "/CN=Test CA for PostgreSQL SSL regression test client certs"},
 	#	],
->>>>>>> REL_16_9
 	# revoked certificates should not authenticate the user
 	log_unlike => [qr/connection authenticated:/],);
 
@@ -844,13 +834,9 @@ $node->connect_ok(
 # intermediate client_ca.crt is provided by client, and isn't in server's ssl_ca_file
 switch_server_cert($node, certfile => 'server-cn-only', cafile => 'root_ca');
 $common_connstr =
-<<<<<<< HEAD
-  "$default_ssl_connstr user=ssltestuser dbname=certdb sslkey=ssl/client_tmp.key sslrootcert=ssl/root+server_ca.crt hostaddr=$SERVERHOSTADDR host=localhost";
-=======
 	"$default_ssl_connstr user=ssltestuser dbname=certdb "
   . sslkey('client.key')
   . " sslrootcert=ssl/root+server_ca.crt hostaddr=$SERVERHOSTADDR host=localhost";
->>>>>>> REL_16_9
 
 $node->connect_ok(
 	"$common_connstr sslmode=require sslcert=ssl/client+client_ca.crt",
@@ -910,9 +896,6 @@ $node->connect_fails(
 	"$common_connstr user=ssltestuser sslcert=ssl/client-revoked.crt "
 	  . sslkey('client-revoked.key'),
 	"certificate authorization fails with revoked client cert with server-side CRL directory",
-<<<<<<< HEAD
-	expected_stderr => qr|SSL error: ssl[a-z0-9/]* alert certificate revoked|);
-=======
 	expected_stderr => qr|SSL error: ssl[a-z0-9/]* alert certificate revoked|,
 	# temporarily(?) skip this check due to timing issue
 	#	log_like => [
@@ -920,7 +903,6 @@ $node->connect_fails(
 	#		qr{Failed certificate data \(unverified\): subject "/CN=ssltestuser", serial number 2315134995201656577, issuer "/CN=Test CA for PostgreSQL SSL regression test client certs"},
 	#	]
 );
->>>>>>> REL_16_9
 
 # revoked client cert, non-ASCII subject
 $node->connect_fails(

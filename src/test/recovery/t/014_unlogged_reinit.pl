@@ -44,12 +44,8 @@ is($node->safe_psql('postgres', "SELECT nextval('seq_unlogged')"),
 
 my $tablespaceDir = PostgreSQL::Test::Utils::tempdir;
 
-<<<<<<< HEAD
-$node->safe_psql('postgres', "CREATE TABLESPACE ts1 LOCATION '$tablespaceDir'");
-=======
 $node->safe_psql('postgres',
 	"CREATE TABLESPACE ts1 LOCATION '$tablespaceDir'");
->>>>>>> REL_16_9
 $node->safe_psql('postgres',
 	'CREATE UNLOGGED TABLE ts1_unlogged (id int) TABLESPACE ts1');
 

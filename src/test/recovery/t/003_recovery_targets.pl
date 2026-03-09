@@ -15,16 +15,6 @@ use Time::HiRes qw(usleep);
 sub test_recovery_standby
 {
 	local $Test::Builder::Level = $Test::Builder::Level + 1;
-<<<<<<< HEAD
-
-	my $test_name       = shift;
-	my $node_name       = shift;
-	my $node_primary    = shift;
-	my $recovery_params = shift;
-	my $num_rows        = shift;
-	my $until_lsn       = shift;
-=======
->>>>>>> REL_16_9
 
 	my $test_name = shift;
 	my $node_name = shift;
@@ -67,7 +57,7 @@ $node_primary->init(has_archiving => 1, allows_streaming => 1);
 
 # Bump the transaction ID epoch.  This is useful to stress the portability
 # of recovery_target_xid parsing.
-system('echo yes|pg_resetwal', '--epoch', '1', $node_primary->data_dir);
+system_or_bail('pg_resetwal', '--epoch', '1', $node_primary->data_dir);
 
 # Start it
 $node_primary->start;
@@ -178,21 +168,12 @@ $node_standby->append_conf('postgresql.conf',
 
 run_log(
 	[
-<<<<<<< HEAD
-		'pg_ctl',               '-D', $node_standby->data_dir, '-l',
-		$node_standby->logfile, 'start', '-o', "--cluster-name=standby_8 -c gp_role=utility --gp_dbid=9 --gp_contentid=0"
-	]);
-
-# wait up to 180s for postgres to terminate
-foreach my $i (0..1800)
-=======
 		'pg_ctl', '-D', $node_standby->data_dir, '-l',
 		$node_standby->logfile, 'start'
 	]);
 
 # wait for postgres to terminate
 foreach my $i (0 .. 10 * $PostgreSQL::Test::Utils::timeout_default)
->>>>>>> REL_16_9
 {
 	last if !-f $node_standby->data_dir . '/postmaster.pid';
 	usleep(100_000);

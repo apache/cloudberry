@@ -6,19 +6,9 @@
 use strict;
 use warnings;
 
-<<<<<<< HEAD
-use PostgresNode;
-use TestLib;
-# GPDB: Effectively disable some of these tests. We cannot run
-# PREPARE TRANSACTION in utility-mode.
-# use Test::More tests => 10;
-use Test::More tests => 6;
-use Config;
-=======
 use PostgreSQL::Test::Cluster;
 use PostgreSQL::Test::Utils;
 use Test::More;
->>>>>>> REL_16_9
 
 # Initialize primary node
 my $node_primary = PostgreSQL::Test::Cluster->new('primary');
@@ -42,11 +32,7 @@ $node_standby->append_conf('postgresql.conf', 'max_prepared_transactions=10');
 $node_standby->start;
 
 my $psql_timeout =
-<<<<<<< HEAD
-  IPC::Run::timer(2 * $TestLib::timeout_default);
-=======
   IPC::Run::timer(2 * $PostgreSQL::Test::Utils::timeout_default);
->>>>>>> REL_16_9
 
 # One psql to primary and standby each, for all queries. That allows
 # to check uncommitted changes being replicated and such.
@@ -128,59 +114,45 @@ ok( send_query_and_wait(
 		qr/first update\n\(1 row\)$/m),
 	'committed update visible');
 
-# GPDB: Disable this test.
-# #
-# # 5. Check that changes in prepared xacts is invisible
-# #
-# ok( send_query_and_wait(
-# 		\%psql_primary, q[
-# DELETE from test_visibility; -- delete old data, so we start with clean slate
-# BEGIN;
-# INSERT INTO test_visibility VALUES('inserted in prepared will_commit');
-# PREPARE TRANSACTION 'will_commit';],
-# 		qr/^PREPARE TRANSACTION$/m),
-# 	'prepared will_commit');
+#
+# 5. Check that changes in prepared xacts is invisible
+#
+ok( send_query_and_wait(
+		\%psql_primary, q[
+DELETE from test_visibility; -- delete old data, so we start with clean slate
+BEGIN;
+INSERT INTO test_visibility VALUES('inserted in prepared will_commit');
+PREPARE TRANSACTION 'will_commit';],
+		qr/^PREPARE TRANSACTION$/m),
+	'prepared will_commit');
 
-# ok( send_query_and_wait(
-# 		\%psql_primary, q[
-# BEGIN;
-# INSERT INTO test_visibility VALUES('inserted in prepared will_abort');
-# PREPARE TRANSACTION 'will_abort';
-# 					   ],
-# 		qr/^PREPARE TRANSACTION$/m),
-# 	'prepared will_abort');
+ok( send_query_and_wait(
+		\%psql_primary, q[
+BEGIN;
+INSERT INTO test_visibility VALUES('inserted in prepared will_abort');
+PREPARE TRANSACTION 'will_abort';
+					   ],
+		qr/^PREPARE TRANSACTION$/m),
+	'prepared will_abort');
 
-<<<<<<< HEAD
-# $node_primary->wait_for_catchup($node_standby, 'replay',
-# 	$node_primary->lsn('insert'));
-=======
 $node_primary->wait_for_catchup($node_standby);
->>>>>>> REL_16_9
 
-# ok( send_query_and_wait(
-# 		\%psql_standby,
-# 		q[SELECT * FROM test_visibility ORDER BY data;],
-# 		qr/^\(0 rows\)$/m),
-# 	'uncommitted prepared invisible');
+ok( send_query_and_wait(
+		\%psql_standby,
+		q[SELECT * FROM test_visibility ORDER BY data;],
+		qr/^\(0 rows\)$/m),
+	'uncommitted prepared invisible');
 
-<<<<<<< HEAD
-# # For some variation, finish prepared xacts via separate connections
-# $node_primary->safe_psql('postgres', "COMMIT PREPARED 'will_commit';");
-# $node_primary->safe_psql('postgres', "ROLLBACK PREPARED 'will_abort';");
-# $node_primary->wait_for_catchup($node_standby, 'replay',
-# 	$node_primary->lsn('insert'));
-=======
 # For some variation, finish prepared xacts via separate connections
 $node_primary->safe_psql('postgres', "COMMIT PREPARED 'will_commit';");
 $node_primary->safe_psql('postgres', "ROLLBACK PREPARED 'will_abort';");
 $node_primary->wait_for_catchup($node_standby);
->>>>>>> REL_16_9
 
-# ok( send_query_and_wait(
-# 		\%psql_standby,
-# 		q[SELECT * FROM test_visibility ORDER BY data;],
-# 		qr/will_commit.*\n\(1 row\)$/m),
-# 	'finished prepared visible');
+ok( send_query_and_wait(
+		\%psql_standby,
+		q[SELECT * FROM test_visibility ORDER BY data;],
+		qr/will_commit.*\n\(1 row\)$/m),
+	'finished prepared visible');
 
 # explicitly shut down psql instances gracefully - to avoid hangs
 # or worse on windows

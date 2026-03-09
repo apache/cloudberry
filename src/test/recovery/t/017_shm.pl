@@ -131,11 +131,7 @@ my $slow_client = IPC::Run::start(
 	\$stdout,
 	'2>',
 	\$stderr,
-<<<<<<< HEAD
-	IPC::Run::timeout(5 * $TestLib::timeout_default));
-=======
 	IPC::Run::timeout(5 * $PostgreSQL::Test::Utils::timeout_default));
->>>>>>> REL_16_9
 ok( $gnat->poll_query_until(
 		'postgres',
 		"SELECT 1 FROM pg_stat_activity WHERE query = '$slow_query'", '1'),
@@ -147,19 +143,11 @@ unlink($gnat->data_dir . '/postmaster.pid');
 $gnat->rotate_logfile;    # on Windows, can't open old log for writing
 log_ipcs();
 # Reject ordinary startup.  Retry for the same reasons poll_start() does,
-<<<<<<< HEAD
-# every 0.1s for at least $TestLib::timeout_default seconds.
-my $pre_existing_msg = qr/pre-existing shared memory block/;
-{
-	my $max_attempts = 10 * $TestLib::timeout_default;
-	my $attempts     = 0;
-=======
 # every 0.1s for at least $PostgreSQL::Test::Utils::timeout_default seconds.
 my $pre_existing_msg = qr/pre-existing shared memory block/;
 {
 	my $max_attempts = 10 * $PostgreSQL::Test::Utils::timeout_default;
 	my $attempts = 0;
->>>>>>> REL_16_9
 	while ($attempts < $max_attempts)
 	{
 		last
@@ -205,13 +193,8 @@ sub poll_start
 {
 	my ($node) = @_;
 
-<<<<<<< HEAD
-	my $max_attempts = 10 * $TestLib::timeout_default;
-	my $attempts     = 0;
-=======
 	my $max_attempts = 10 * $PostgreSQL::Test::Utils::timeout_default;
 	my $attempts = 0;
->>>>>>> REL_16_9
 
 	while ($attempts < $max_attempts)
 	{

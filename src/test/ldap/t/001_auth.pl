@@ -41,67 +41,7 @@ my ($ldap_server, $ldap_port, $ldaps_port, $ldap_url,
 ) = $ldap->prop(qw(server port s_port url s_url basedn rootdn));
 
 # don't bother to check the server's cert (though perhaps we should)
-<<<<<<< HEAD
-append_to_file(
-	$ldap_conf,
-	qq{TLS_REQCERT never
-});
-
-mkdir $ldap_datadir or die;
-mkdir $slapd_certs  or die;
-
-system_or_bail "openssl", "req", "-new", "-nodes", "-keyout",
-  "$slapd_certs/ca.key", "-x509", "-out", "$slapd_certs/ca.crt", "-subj",
-  "/CN=CA";
-system_or_bail "openssl", "req", "-new", "-nodes", "-keyout",
-  "$slapd_certs/server.key", "-out", "$slapd_certs/server.csr", "-subj",
-  "/CN=server";
-system_or_bail "openssl", "x509", "-req", "-in", "$slapd_certs/server.csr",
-  "-CA", "$slapd_certs/ca.crt", "-CAkey", "$slapd_certs/ca.key",
-  "-CAcreateserial", "-out", "$slapd_certs/server.crt";
-
-system_or_bail $slapd, '-f', $slapd_conf, '-h', "$ldap_url $ldaps_url";
-
-END
-{
-	kill 'INT', `cat $slapd_pidfile` if -f $slapd_pidfile;
-}
-
-append_to_file($ldap_pwfile, $ldap_rootpw);
-chmod 0600, $ldap_pwfile or die;
-
-# wait until slapd accepts requests
-my $retries = 0;
-while (1)
-{
-	last
-	  if (
-		system_log(
-			"ldapsearch", "-sbase",
-			"-H",         $ldap_url,
-			"-b",         $ldap_basedn,
-			"-D",         $ldap_rootdn,
-			"-y",         $ldap_pwfile,
-			"-n",         "'objectclass=*'") == 0);
-	die "cannot connect to slapd" if ++$retries >= 300;
-	note "waiting for slapd to accept requests...";
-	Time::HiRes::usleep(1000000);
-}
-
-$ENV{'LDAPURI'}    = $ldap_url;
-$ENV{'LDAPBINDDN'} = $ldap_rootdn;
-$ENV{'LDAPCONF'}   = $ldap_conf;
-
-note "loading LDAP data";
-
-system_or_bail 'ldapadd',    '-x', '-y', $ldap_pwfile, '-f', 'authdata.ldif';
-system_or_bail 'ldappasswd', '-x', '-y', $ldap_pwfile, '-s', 'secret1',
-  'uid=test1,dc=example,dc=net';
-system_or_bail 'ldappasswd', '-x', '-y', $ldap_pwfile, '-s', 'secret2',
-  'uid=test2,dc=example,dc=net';
-=======
 $ENV{'LDAPTLS_REQCERT'} = "never";
->>>>>>> REL_16_9
 
 note "setting up PostgreSQL instance";
 

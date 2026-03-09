@@ -29,11 +29,7 @@ $node_primary->init(allows_streaming => 1, has_archiving => 1);
 # that arise from use of backslashes. That means we need to double-quote all
 # the paths in the archive_command
 my $perlbin = $^X;
-<<<<<<< HEAD
-$perlbin =~ s!\\!/!g if $TestLib::windows_os;
-=======
 $perlbin =~ s!\\!/!g if $PostgreSQL::Test::Utils::windows_os;
->>>>>>> REL_16_9
 my $archivedir_primary = $node_primary->archive_dir;
 $archivedir_primary =~ s!\\!/!g if $PostgreSQL::Test::Utils::windows_os;
 $node_primary->append_conf(

@@ -78,20 +78,11 @@ sub test_recovery_wal_level_minimal
 		[
 			'pg_ctl', '-D',
 			$recovery_node->data_dir, '-l',
-<<<<<<< HEAD
-			$recovery_node->logfile,  'start'
-			, '-o', "--cluster-name=$node_name -c gp_role=utility --gp_dbid=1 --gp_contentid=0"
-		]);
-
-	# wait for postgres to terminate
-	foreach my $i (0 .. 10 * $TestLib::timeout_default)
-=======
 			$recovery_node->logfile, 'start'
 		]);
 
 	# wait for postgres to terminate
 	foreach my $i (0 .. 10 * $PostgreSQL::Test::Utils::timeout_default)
->>>>>>> REL_16_9
 	{
 		last if !-f $recovery_node->data_dir . '/postmaster.pid';
 		usleep(100_000);
@@ -100,7 +91,7 @@ sub test_recovery_wal_level_minimal
 	# Confirm that the archive recovery fails with an expected error
 	my $logfile = slurp_file($recovery_node->logfile());
 	ok( $logfile =~
-		  qr/WARNING: .* WAL was generated with wal_level=minimal, cannot continue recovering/,
+		  qr/FATAL: .* WAL was generated with wal_level=minimal, cannot continue recovering/,
 		"$node_text ends with an error because it finds WAL generated with wal_level=minimal"
 	);
 }

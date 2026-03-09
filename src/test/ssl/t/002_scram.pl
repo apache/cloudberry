@@ -20,17 +20,11 @@ if ($ENV{with_ssl} ne 'openssl')
 {
 	plan skip_all => 'OpenSSL not supported by this build';
 }
-<<<<<<< HEAD
-elsif (!$ENV{PG_TEST_EXTRA} || $ENV{PG_TEST_EXTRA} !~ /\bssl\b/)
-=======
 elsif ($ENV{PG_TEST_EXTRA} !~ /\bssl\b/)
->>>>>>> REL_16_9
 {
 	plan skip_all =>
 	  'Potentially unsafe test SSL not enabled in PG_TEST_EXTRA';
 }
-<<<<<<< HEAD
-=======
 
 my $ssl_server = SSL::Server->new();
 
@@ -43,8 +37,6 @@ sub switch_server_cert
 {
 	$ssl_server->switch_server_cert(@_);
 }
-
->>>>>>> REL_16_9
 
 # This is the hostname used to connect to the server.
 my $SERVERHOSTADDR = '127.0.0.1';
@@ -176,12 +168,6 @@ else
 	);
 }
 
-<<<<<<< HEAD
-# clean up
-unlink($client_tmp_key);
-
-done_testing($number_of_tests);
-=======
 # Now test with a server certificate that uses the RSA-PSS algorithm.
 # This checks that the certificate can be loaded and that channel binding
 # works. (see bug #17760)
@@ -196,4 +182,3 @@ if ($supports_rsapss_certs)
 		]);
 }
 done_testing();
->>>>>>> REL_16_9

@@ -7,17 +7,9 @@
 use strict;
 use warnings;
 
-<<<<<<< HEAD
-use TestLib;
-use PostgresNode;
-
-use File::Path qw(rmtree);
-use Test::More tests => $TestLib::windows_os ? 16 : 20;
-=======
 use PostgreSQL::Test::Utils;
 use PostgreSQL::Test::Cluster;
 use Test::More;
->>>>>>> REL_16_9
 use Time::HiRes qw(usleep);
 
 $ENV{PGDATABASE} = 'postgres';
@@ -54,7 +46,6 @@ $node_standby->append_conf('postgresql.conf', "primary_slot_name = 'rep1'");
 
 $node_standby->start;
 
-$node_primary->safe_psql('postgres', "CHECKPOINT;");
 # Wait until standby has replayed enough data
 $node_primary->wait_for_catchup($node_standby);
 
@@ -90,13 +81,7 @@ is($result, "reserved|t", 'check that slot is working');
 # The standby can reconnect to primary
 $node_standby->start;
 
-<<<<<<< HEAD
-$node_primary->safe_psql('postgres', "CHECKPOINT;");
-$start_lsn = $node_primary->lsn('write');
-$node_primary->wait_for_catchup($node_standby, 'replay', $start_lsn);
-=======
 $node_primary->wait_for_catchup($node_standby);
->>>>>>> REL_16_9
 
 $node_standby->stop;
 
@@ -126,13 +111,7 @@ is($result, "reserved",
 
 # The standby can reconnect to primary
 $node_standby->start;
-<<<<<<< HEAD
-$node_primary->safe_psql('postgres', "CHECKPOINT;");
-$start_lsn = $node_primary->lsn('write');
-$node_primary->wait_for_catchup($node_standby, 'replay', $start_lsn);
-=======
 $node_primary->wait_for_catchup($node_standby);
->>>>>>> REL_16_9
 $node_standby->stop;
 
 # wal_keep_size overrides max_slot_wal_keep_size
@@ -151,13 +130,7 @@ $result = $node_primary->safe_psql('postgres',
 
 # The standby can reconnect to primary
 $node_standby->start;
-<<<<<<< HEAD
-$node_primary->safe_psql('postgres', "CHECKPOINT;");
-$start_lsn = $node_primary->lsn('write');
-$node_primary->wait_for_catchup($node_standby, 'replay', $start_lsn);
-=======
 $node_primary->wait_for_catchup($node_standby);
->>>>>>> REL_16_9
 $node_standby->stop;
 
 # Advance WAL again without checkpoint, reducing remain by 6 MB.
@@ -208,19 +181,10 @@ $node_primary->safe_psql('postgres',
 	'ALTER SYSTEM RESET max_wal_size; SELECT pg_reload_conf()');
 $node_primary->safe_psql('postgres', "CHECKPOINT;");
 my $invalidated = 0;
-<<<<<<< HEAD
-for (my $i = 0; $i < 10000; $i++)
-{
-	if (find_in_log(
-			$node_primary,
-			"invalidating slot \"rep1\" because its restart_lsn [0-9A-F/]+ exceeds max_slot_wal_keep_size",
-			$logstart))
-=======
 for (my $i = 0; $i < 10 * $PostgreSQL::Test::Utils::timeout_default; $i++)
 {
 	if ($node_primary->log_contains(
 			'invalidating obsolete replication slot "rep1"', $logstart))
->>>>>>> REL_16_9
 	{
 		$invalidated = 1;
 		last;
@@ -239,15 +203,9 @@ is($result, "rep1|f|t|lost|",
 
 # Wait until current checkpoint ends
 my $checkpoint_ended = 0;
-<<<<<<< HEAD
-for (my $i = 0; $i < 10000; $i++)
-{
-	if (find_in_log($node_primary, "checkpoint complete: ", $logstart))
-=======
 for (my $i = 0; $i < 10 * $PostgreSQL::Test::Utils::timeout_default; $i++)
 {
 	if ($node_primary->log_contains("checkpoint complete: ", $logstart))
->>>>>>> REL_16_9
 	{
 		$checkpoint_ended = 1;
 		last;
@@ -291,13 +249,8 @@ ok($failed, 'check that replication has been broken');
 $node_primary->stop;
 $node_standby->stop;
 
-<<<<<<< HEAD
-my $node_primary2 = get_new_node('primary2');
-$node_primary2->init(allows_streaming => 1, extra => ['--wal-segsize=16']);
-=======
 my $node_primary2 = PostgreSQL::Test::Cluster->new('primary2');
 $node_primary2->init(allows_streaming => 1);
->>>>>>> REL_16_9
 $node_primary2->append_conf(
 	'postgresql.conf', qq(
 min_wal_size = 32MB
@@ -332,11 +285,7 @@ my @result =
 		 SELECT pg_switch_wal();
 		 CHECKPOINT;
 		 SELECT 'finished';",
-<<<<<<< HEAD
-		timeout => $TestLib::timeout_default));
-=======
 		timeout => $PostgreSQL::Test::Utils::timeout_default));
->>>>>>> REL_16_9
 is($result[1], 'finished', 'check if checkpoint command is not blocked');
 
 $node_primary2->stop;
@@ -361,7 +310,6 @@ $node_primary3->append_conf(
 	max_wal_size = 2MB
 	log_checkpoints = yes
 	max_slot_wal_keep_size = 1MB
-	wal_keep_size = 0
 	));
 $node_primary3->start;
 $node_primary3->safe_psql('postgres',
@@ -426,12 +374,8 @@ $logstart = get_log_size($node_primary3);
 kill 'STOP', $senderpid, $receiverpid;
 advance_wal($node_primary3, 2);
 
-<<<<<<< HEAD
-my $max_attempts = $TestLib::timeout_default;
-=======
 my $msg_logged = 0;
 my $max_attempts = $PostgreSQL::Test::Utils::timeout_default;
->>>>>>> REL_16_9
 while ($max_attempts-- >= 0)
 {
 	if ($node_primary3->log_contains(
@@ -441,7 +385,7 @@ while ($max_attempts-- >= 0)
 		$msg_logged = 1;
 		last;
 	}
-	sleep 5;
+	sleep 1;
 }
 ok($msg_logged, "walsender termination logged");
 
@@ -454,12 +398,8 @@ $node_primary3->poll_query_until('postgres',
 	"lost")
   or die "timed out waiting for slot to be lost";
 
-<<<<<<< HEAD
-$max_attempts = $TestLib::timeout_default;
-=======
 $msg_logged = 0;
 $max_attempts = $PostgreSQL::Test::Utils::timeout_default;
->>>>>>> REL_16_9
 while ($max_attempts-- >= 0)
 {
 	if ($node_primary3->log_contains(
@@ -468,7 +408,7 @@ while ($max_attempts-- >= 0)
 		$msg_logged = 1;
 		last;
 	}
-	sleep 5;
+	sleep 1;
 }
 ok($msg_logged, "slot invalidation logged");
 

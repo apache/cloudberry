@@ -19,18 +19,7 @@ use Test::More;
 
 my $psql_timeout = IPC::Run::timer($PostgreSQL::Test::Utils::timeout_default);
 
-<<<<<<< HEAD
-
-# To avoid hanging while expecting some specific input from a psql
-# instance being driven by us, add a timeout high enough that it
-# should never trigger even on very slow machines, unless something
-# is really wrong.
-my $psql_timeout = IPC::Run::timer($TestLib::timeout_default);
-
-my $node = get_new_node('primary');
-=======
 my $node = PostgreSQL::Test::Cluster->new('primary');
->>>>>>> REL_16_9
 $node->init(allows_streaming => 1);
 $node->start();
 
@@ -77,12 +66,8 @@ CREATE TABLE alive(status text);
 INSERT INTO alive VALUES($$committed-before-sigquit$$);
 SELECT pg_backend_pid();
 ];
-<<<<<<< HEAD
-ok(pump_until($killme, $psql_timeout, \$killme_stdout, qr/[[:digit:]]+[\r\n]$/m),
-=======
 ok( pump_until(
 		$killme, $psql_timeout, \$killme_stdout, qr/[[:digit:]]+[\r\n]$/m),
->>>>>>> REL_16_9
 	'acquired pid for SIGQUIT');
 my $pid = $killme_stdout;
 chomp($pid);
@@ -94,13 +79,9 @@ $killme_stdin .= q[
 BEGIN;
 INSERT INTO alive VALUES($$in-progress-before-sigquit$$) RETURNING status;
 ];
-<<<<<<< HEAD
-ok(pump_until($killme, $psql_timeout, \$killme_stdout, qr/in-progress-before-sigquit/m),
-=======
 ok( pump_until(
 		$killme, $psql_timeout,
 		\$killme_stdout, qr/in-progress-before-sigquit/m),
->>>>>>> REL_16_9
 	'inserted in-progress-before-sigquit');
 $killme_stdout = '';
 $killme_stderr = '';
@@ -113,12 +94,8 @@ $monitor_stdin .= q[
 SELECT $$psql-connected$$;
 SELECT pg_sleep(3600);
 ];
-<<<<<<< HEAD
-ok(pump_until($monitor, $psql_timeout, \$monitor_stdout, qr/psql-connected/m),
-=======
 ok( pump_until(
 		$monitor, $psql_timeout, \$monitor_stdout, qr/psql-connected/m),
->>>>>>> REL_16_9
 	'monitor connected');
 $monitor_stdout = '';
 $monitor_stderr = '';
@@ -172,12 +149,8 @@ $monitor->run();
 $killme_stdin .= q[
 SELECT pg_backend_pid();
 ];
-<<<<<<< HEAD
-ok(pump_until($killme, $psql_timeout, \$killme_stdout, qr/[[:digit:]]+[\r\n]$/m),
-=======
 ok( pump_until(
 		$killme, $psql_timeout, \$killme_stdout, qr/[[:digit:]]+[\r\n]$/m),
->>>>>>> REL_16_9
 	"acquired pid for SIGKILL");
 $pid = $killme_stdout;
 chomp($pid);
@@ -190,13 +163,9 @@ INSERT INTO alive VALUES($$committed-before-sigkill$$) RETURNING status;
 BEGIN;
 INSERT INTO alive VALUES($$in-progress-before-sigkill$$) RETURNING status;
 ];
-<<<<<<< HEAD
-ok(pump_until($killme, $psql_timeout, \$killme_stdout, qr/in-progress-before-sigkill/m),
-=======
 ok( pump_until(
 		$killme, $psql_timeout,
 		\$killme_stdout, qr/in-progress-before-sigkill/m),
->>>>>>> REL_16_9
 	'inserted in-progress-before-sigkill');
 $killme_stdout = '';
 $killme_stderr = '';
@@ -208,12 +177,8 @@ $monitor_stdin .= q[
 SELECT $$psql-connected$$;
 SELECT pg_sleep(3600);
 ];
-<<<<<<< HEAD
-ok(pump_until($monitor, $psql_timeout, \$monitor_stdout, qr/psql-connected/m),
-=======
 ok( pump_until(
 		$monitor, $psql_timeout, \$monitor_stdout, qr/psql-connected/m),
->>>>>>> REL_16_9
 	'monitor connected');
 $monitor_stdout = '';
 $monitor_stderr = '';
@@ -281,8 +246,5 @@ is( $node->safe_psql(
 	'can still write after orderly restart');
 
 $node->stop();
-<<<<<<< HEAD
-=======
 
 done_testing();
->>>>>>> REL_16_9

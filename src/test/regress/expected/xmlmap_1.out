@@ -72,12 +72,7 @@ DETAIL:  This functionality requires the server to be built with libxml support.
 MOVE BACKWARD ALL IN xc;
 ERROR:  backward scan is not supported in this version of Apache Cloudberry
 SELECT cursor_to_xml('xc'::refcursor, 5, true, false, '');
-<<<<<<< HEAD
 ERROR:  portal "xc" cannot be run
-=======
-ERROR:  unsupported XML feature
-DETAIL:  This functionality requires the server to be built with libxml support.
->>>>>>> REL_16_9
 SELECT cursor_to_xmlschema('xc'::refcursor, true, false, '');
 ERROR:  unsupported XML feature
 DETAIL:  This functionality requires the server to be built with libxml support.

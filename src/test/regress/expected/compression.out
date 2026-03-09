@@ -317,13 +317,9 @@ SELECT pg_column_compression(f1) FROM cmdata;
 DROP TABLE cmdata2;
 CREATE TABLE cmdata2 (f1 TEXT COMPRESSION pglz, f2 TEXT COMPRESSION lz4);
 CREATE UNIQUE INDEX idx1 ON cmdata2 ((f1 || f2));
-<<<<<<< HEAD
 DETAIL:  Distribution key column "f1" is not included in the constraint.
 ERROR:  UNIQUE index must contain all columns in the table's distribution key
-INSERT INTO cmdata2 VALUES((SELECT array_agg(md5(g::TEXT))::TEXT FROM
-=======
-INSERT INTO cmdata2 VALUES((SELECT array_agg(fipshash(g::TEXT))::TEXT FROM
->>>>>>> REL_16_9
+INSERT INTO cmdata2 VALUES((SELECT array_agg(md5(g::TEXT))::TEXT FROM=
 generate_series(1, 50) g), VERSION());
 -- check data is ok
 SELECT length(f1) FROM cmdata;

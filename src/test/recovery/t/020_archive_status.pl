@@ -1,9 +1,5 @@
-<<<<<<< HEAD
-# Copyright (c) 2021, PostgreSQL Global Development Group
-=======
 
 # Copyright (c) 2021-2023, PostgreSQL Global Development Group
->>>>>>> REL_16_9
 
 #
 # Tests related to WAL archiving and recovery.
@@ -144,7 +140,6 @@ $primary->poll_query_until('postgres',
 my $standby1 = PostgreSQL::Test::Cluster->new('standby');
 $standby1->init_from_backup($primary, 'backup', has_restoring => 1);
 $standby1->append_conf('postgresql.conf', "archive_mode = on");
-$standby1->append_conf('postgresql.conf', "wal_keep_size = 0");
 my $standby1_data = $standby1->data_dir;
 $standby1->start;
 
@@ -158,14 +153,9 @@ $standby1->safe_psql('postgres', q{CHECKPOINT});
 
 # Recovery with archive_mode=on does not keep .ready signal files inherited
 # from backup.  Note that this WAL segment existed in the backup.
-# GPDB_13_MERGE_FIXME: disable the following test temporarily
-SKIP:
-{
-	skip 'skip the case temporarily in PG 13', 1;
 ok( !-f "$standby1_data/$segment_path_1_ready",
 	".ready file for WAL segment $segment_name_1 present in backup got removed with archive_mode=on on standby"
 );
-}
 
 # Recovery with archive_mode=on should not create .ready files.
 # Note that this segment did not exist in the backup.

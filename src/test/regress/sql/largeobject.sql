@@ -132,18 +132,6 @@ BEGIN;
 SELECT lo_open(loid, x'40000'::int) from lotest_stash_values;
 ABORT;
 
-<<<<<<< HEAD:src/test/regress/input/largeobject.source
-DO $$
-DECLARE
-  loid oid;
-BEGIN
-  SELECT tbl.loid INTO loid FROM lotest_stash_values tbl;
-  PERFORM lo_export(loid, '@abs_builddir@/results/invalid/path');
-EXCEPTION
-  WHEN UNDEFINED_FILE THEN RAISE NOTICE 'could not open file, as expected';
-END;
-$$;
-=======
 \set filename :abs_builddir '/results/invalid/path'
 \set dobody 'DECLARE loid oid; BEGIN '
 \set dobody :dobody 'SELECT tbl.loid INTO loid FROM lotest_stash_values tbl; '
@@ -151,7 +139,6 @@ $$;
 \set dobody :dobody 'EXCEPTION WHEN UNDEFINED_FILE THEN '
 \set dobody :dobody 'RAISE NOTICE ''could not open file, as expected''; END'
 DO :'dobody';
->>>>>>> REL_16_9:src/test/regress/sql/largeobject.sql
 
 -- Test truncation.
 BEGIN;

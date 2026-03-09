@@ -52,9 +52,7 @@ $primary->init(allows_streaming => 1);
 # file.  Autovacuum is disabled so as there is no risk of having other
 # processes than the checkpointer doing page flushes.
 $primary->append_conf("postgresql.conf", <<EOF);
-# The minimum on GPDB is higher
-#shared_buffers = 128kB
-shared_buffers = 512kB
+shared_buffers = 128kB
 autovacuum = off
 EOF
 
@@ -68,12 +66,10 @@ $standby->init_from_backup($primary, 'bkp', has_streaming => 1);
 $standby->start;
 
 # Create base table whose data consistency is checked.
-# Use more data in GPDB, because the block size is larger, and because
-# in GPDB the data will be distributed across segments.
 $primary->safe_psql(
 	'postgres', "
 CREATE TABLE test1 (a int) WITH (fillfactor = 10);
-INSERT INTO test1 SELECT generate_series(1, 10000 * 100);");
+INSERT INTO test1 SELECT generate_series(1, 10000);");
 
 # Take a checkpoint and enforce post-checkpoint full page writes
 # which makes the startup process replay those pages, updating

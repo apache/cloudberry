@@ -24,15 +24,7 @@ use PostgreSQL::Test::Cluster;
 use Test::More;
 use Time::HiRes qw(usleep);
 
-<<<<<<< HEAD
-if ($ENV{with_gssapi} eq 'yes')
-{
-	plan tests => 45;
-}
-else
-=======
 if ($ENV{with_gssapi} ne 'yes')
->>>>>>> REL_16_9
 {
 	plan skip_all => 'GSSAPI/Kerberos not supported by this build';
 }

@@ -14,23 +14,10 @@ if ($Config{osname} eq 'MSWin32')
 	plan skip_all => 'tests hang on Windows';
 	exit;
 }
-<<<<<<< HEAD
-else
-{
-	plan tests => 11;
-}
-=======
->>>>>>> REL_16_9
 
 my $psql_timeout = IPC::Run::timer($PostgreSQL::Test::Utils::timeout_default);
 
-<<<<<<< HEAD
-my $psql_timeout = IPC::Run::timer($TestLib::timeout_default);
-
-my $node = get_new_node('node_crash');
-=======
 my $node = PostgreSQL::Test::Cluster->new('node_crash');
->>>>>>> REL_16_9
 $node->init();
 $node->start();
 
@@ -66,12 +53,8 @@ my $killme = IPC::Run::start(
 $killme_stdin .= q[
 SELECT pg_backend_pid();
 ];
-<<<<<<< HEAD
-ok(pump_until($killme, $psql_timeout, \$killme_stdout, qr/[[:digit:]]+[\r\n]$/m),
-=======
 ok( pump_until(
 		$killme, $psql_timeout, \$killme_stdout, qr/[[:digit:]]+[\r\n]$/m),
->>>>>>> REL_16_9
 	'acquired pid for SIGKILL');
 my $pid = $killme_stdout;
 chomp($pid);
@@ -100,12 +83,8 @@ BEGIN;
 INSERT INTO tab_crash (a) VALUES(1);
 SELECT $$insert-tuple-to-lock-next-insert$$;
 ];
-<<<<<<< HEAD
-pump_until($killme2, $psql_timeout, \$killme_stdout2, qr/insert-tuple-to-lock-next-insert/m);
-=======
 pump_until($killme2, $psql_timeout, \$killme_stdout2,
 	qr/insert-tuple-to-lock-next-insert/m);
->>>>>>> REL_16_9
 $killme_stdout2 = '';
 $killme_stderr2 = '';
 
@@ -118,13 +97,9 @@ BEGIN;
 SELECT $$in-progress-before-sigkill$$;
 INSERT INTO tab_crash (a) SELECT i FROM generate_series(1, 5000) s(i);
 ];
-<<<<<<< HEAD
-ok(pump_until($killme, $psql_timeout, \$killme_stdout, qr/in-progress-before-sigkill/m),
-=======
 ok( pump_until(
 		$killme, $psql_timeout,
 		\$killme_stdout, qr/in-progress-before-sigkill/m),
->>>>>>> REL_16_9
 	'insert in-progress-before-sigkill');
 $killme_stdout = '';
 $killme_stderr = '';
@@ -146,12 +121,8 @@ END; $c$;
 SELECT $$insert-tuple-lock-waiting$$;
 ];
 
-<<<<<<< HEAD
-pump_until($killme2, $psql_timeout, \$killme_stdout2, qr/insert-tuple-lock-waiting/m);
-=======
 pump_until($killme2, $psql_timeout, \$killme_stdout2,
 	qr/insert-tuple-lock-waiting/m);
->>>>>>> REL_16_9
 $killme_stdout2 = '';
 $killme_stderr2 = '';
 
@@ -165,18 +136,11 @@ $killme->finish;
 # Wait till the other session reports failure, ensuring that the postmaster
 # has noticed its dead child and begun a restart cycle.
 $killme_stdin2 .= qq[
-<<<<<<< HEAD
-SELECT pg_sleep($TestLib::timeout_default);
-];
-ok( pump_until(
-		$killme2,
-=======
 SELECT pg_sleep($PostgreSQL::Test::Utils::timeout_default);
 ];
 ok( pump_until(
 		$killme2,
 		$psql_timeout,
->>>>>>> REL_16_9
 		\$killme_stderr2,
 		qr/WARNING:  terminating connection because of crash of another server process|server closed the connection unexpectedly|connection to server was lost|could not send data to server/m
 	),
@@ -208,12 +172,8 @@ $killme->run();
 $killme_stdin .= q[
 SELECT pg_backend_pid();
 ];
-<<<<<<< HEAD
-ok(pump_until($killme, $psql_timeout, \$killme_stdout, qr/[[:digit:]]+[\r\n]$/m),
-=======
 ok( pump_until(
 		$killme, $psql_timeout, \$killme_stdout, qr/[[:digit:]]+[\r\n]$/m),
->>>>>>> REL_16_9
 	'acquired pid for SIGKILL');
 $pid = $killme_stdout;
 chomp($pid);
@@ -230,12 +190,8 @@ BEGIN;
 INSERT INTO tab_crash (a) VALUES(1);
 SELECT $$insert-tuple-to-lock-next-insert$$;
 ];
-<<<<<<< HEAD
-pump_until($killme2, $psql_timeout, \$killme_stdout2, qr/insert-tuple-to-lock-next-insert/m);
-=======
 pump_until($killme2, $psql_timeout, \$killme_stdout2,
 	qr/insert-tuple-to-lock-next-insert/m);
->>>>>>> REL_16_9
 $killme_stdout2 = '';
 $killme_stderr2 = '';
 
@@ -248,13 +204,9 @@ BEGIN;
 SELECT $$in-progress-before-sigkill$$;
 INSERT INTO tab_crash (a) SELECT i FROM generate_series(1, 5000) s(i);
 ];
-<<<<<<< HEAD
-ok(pump_until($killme, $psql_timeout, \$killme_stdout, qr/in-progress-before-sigkill/m),
-=======
 ok( pump_until(
 		$killme, $psql_timeout,
 		\$killme_stdout, qr/in-progress-before-sigkill/m),
->>>>>>> REL_16_9
 	'insert in-progress-before-sigkill');
 $killme_stdout = '';
 $killme_stderr = '';
@@ -276,12 +228,8 @@ END; $c$;
 SELECT $$insert-tuple-lock-waiting$$;
 ];
 
-<<<<<<< HEAD
-pump_until($killme2, $psql_timeout, \$killme_stdout2, qr/insert-tuple-lock-waiting/m);
-=======
 pump_until($killme2, $psql_timeout, \$killme_stdout2,
 	qr/insert-tuple-lock-waiting/m);
->>>>>>> REL_16_9
 $killme_stdout2 = '';
 $killme_stderr2 = '';
 
@@ -295,18 +243,11 @@ $killme->finish;
 # Wait till the other session reports failure, ensuring that the postmaster
 # has noticed its dead child and begun a restart cycle.
 $killme_stdin2 .= qq[
-<<<<<<< HEAD
-SELECT pg_sleep($TestLib::timeout_default);
-];
-ok( pump_until(
-		$killme2,
-=======
 SELECT pg_sleep($PostgreSQL::Test::Utils::timeout_default);
 ];
 ok( pump_until(
 		$killme2,
 		$psql_timeout,
->>>>>>> REL_16_9
 		\$killme_stderr2,
 		qr/WARNING:  terminating connection because of crash of another server process|server closed the connection unexpectedly|connection to server was lost|could not send data to server/m
 	),
@@ -332,8 +273,5 @@ is( $node->safe_psql(
 	'temporary file was removed');
 
 $node->stop();
-<<<<<<< HEAD
-=======
 
 done_testing();
->>>>>>> REL_16_9

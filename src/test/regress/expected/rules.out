@@ -1869,16 +1869,7 @@ pg_stat_database_conflicts| SELECT oid AS datid,
     pg_stat_get_db_conflict_startup_deadlock(oid) AS confl_deadlock,
     pg_stat_get_db_conflict_logicalslot(oid) AS confl_active_logicalslot
    FROM pg_database d;
-<<<<<<< HEAD
-pg_stat_gssapi| SELECT s.pid,
-    s.gss_auth AS gss_authenticated,
-    s.gss_princ AS principal,
-    s.gss_enc AS encrypted
-   FROM pg_stat_get_activity(NULL::integer) s(datid, pid, usesysid, application_name, state, query, wait_event_type, wait_event, xact_start, query_start, backend_start, state_change, client_addr, client_hostname, client_port, backend_xid, backend_xmin, backend_type, ssl, sslversion, sslcipher, sslbits, ssl_client_dn, ssl_client_serial, ssl_issuer_dn, gss_auth, gss_princ, gss_enc, leader_pid, query_id)
-  WHERE (s.client_port IS NOT NULL);
-pg_stat_progress_analyze| SELECT d.gp_segment_id,
-    s.pid,
-=======
+
 pg_stat_gssapi| SELECT pid,
     gss_auth AS gss_authenticated,
     gss_princ AS principal,
@@ -1905,8 +1896,8 @@ pg_stat_io| SELECT backend_type,
     fsync_time,
     stats_reset
    FROM pg_stat_get_io() b(backend_type, object, context, reads, read_time, writes, write_time, writebacks, writeback_time, extends, extend_time, op_bytes, hits, evictions, reuses, fsyncs, fsync_time, stats_reset);
-pg_stat_progress_analyze| SELECT s.pid,
->>>>>>> REL_16_9
+pg_stat_progress_analyze| SELECT d.gp_segment_id,
+    s.pid,
     s.datid,
     d.datname,
     s.relid,
@@ -1928,14 +1919,9 @@ pg_stat_progress_analyze| SELECT s.pid,
     (s.param8)::oid AS current_child_table_relid
    FROM (pg_stat_get_progress_info('ANALYZE'::text) s(pid, datid, relid, param1, param2, param3, param4, param5, param6, param7, param8, param9, param10, param11, param12, param13, param14, param15, param16, param17, param18, param19, param20)
      LEFT JOIN pg_database d ON ((s.datid = d.oid)));
-<<<<<<< HEAD
 pg_stat_progress_basebackup| SELECT gp_execution_segment() AS gp_segment_id,
     s.pid,
         CASE s.param1
-=======
-pg_stat_progress_basebackup| SELECT pid,
-        CASE param1
->>>>>>> REL_16_9
             WHEN 0 THEN 'initializing'::text
             WHEN 1 THEN 'waiting for checkpoint to finish'::text
             WHEN 2 THEN 'estimating backup size'::text
@@ -3742,12 +3728,11 @@ SELECT * FROM ruletest2;
 
 DROP TABLE ruletest1;
 DROP TABLE ruletest2;
-<<<<<<< HEAD
 -- test rule for select-for-update
 create table t_test_rules_select_for_update (c int) distributed randomly;
 create rule myrule as on insert to t_test_rules_select_for_update
 do instead select * from t_test_rules_select_for_update for update;
-=======
+
 --
 -- Test non-SELECT rule on security invoker view.
 -- Should use view owner's permissions.
@@ -3792,4 +3777,3 @@ DROP TABLE ruletest_t3;
 DROP TABLE ruletest_t2;
 DROP TABLE ruletest_t1;
 DROP USER regress_rule_user1;
->>>>>>> REL_16_9

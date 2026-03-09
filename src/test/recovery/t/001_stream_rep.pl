@@ -98,15 +98,6 @@ note "testing connection parameter \"target_session_attrs\"";
 sub test_target_session_attrs
 {
 	local $Test::Builder::Level = $Test::Builder::Level + 1;
-<<<<<<< HEAD
-
-	my $node1       = shift;
-	my $node2       = shift;
-	my $target_node = shift;
-	my $mode        = shift;
-	my $status      = shift;
-=======
->>>>>>> REL_16_9
 
 	my $node1 = shift;
 	my $node2 = shift;
@@ -323,7 +314,6 @@ note "switching to physical replication slot";
 # also increase the standby feedback interval to ensure timely updates.
 my ($slotname_1, $slotname_2) = ('standby_1', 'standby_2');
 $node_primary->append_conf('postgresql.conf', "max_replication_slots = 4");
-$node_primary->append_conf('postgresql.conf', "wal_keep_size = 0");
 $node_primary->restart;
 is( $node_primary->psql(
 		'postgres',
@@ -518,8 +508,7 @@ $node_primary->psql(
 	'postgres', "
 	CREATE TABLE tab_phys_slot (a int);
 	INSERT INTO tab_phys_slot VALUES (generate_series(1,10));
-	SELECT pg_switch_wal();
-	checkpoint;");
+	SELECT pg_switch_wal();");
 my $current_lsn =
   $node_primary->safe_psql('postgres', "SELECT pg_current_wal_lsn();");
 chomp($current_lsn);

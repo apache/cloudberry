@@ -4,21 +4,9 @@
 # Test for point-in-time recovery (PITR) with prepared transactions
 use strict;
 use warnings;
-<<<<<<< HEAD
-use PostgresNode;
-use TestLib;
-
-# GPDB: Effectively disable this TAP test. We cannot run PREPARE
-# TRANSACTION in utility-mode.
-use Test::More tests => 1;
-is(-1, -1, "Disable this TAP test");
-exit;
-
-=======
 use PostgreSQL::Test::Cluster;
 use PostgreSQL::Test::Utils;
 use Test::More;
->>>>>>> REL_16_9
 use File::Compare;
 
 # Initialize and start primary node with WAL archiving
