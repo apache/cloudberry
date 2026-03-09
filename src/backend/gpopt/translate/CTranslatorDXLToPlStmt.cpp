@@ -5284,6 +5284,7 @@ CTranslatorDXLToPlStmt::ProcessDXLTblDescr(
 	RTEPermissionInfo *pi = MakeNode(RTEPermissionInfo);
 	rte->rtekind = RTE_RELATION;
 	rte->relid = oid;
+	pi->relid = oid;
 	pi->checkAsUser = table_descr->GetExecuteAsUserId();
 	pi->requiredPerms |= required_perms;
 	rte->rellockmode = table_descr->LockMode();

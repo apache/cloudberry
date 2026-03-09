@@ -3266,9 +3266,6 @@ CTranslatorQueryToDXL::TranslateFromClauseToDXL(Node *node)
 					   GPOS_WSZ_LIT("WITH ORDINALITY"));
 		}
 
-		const RTEPermissionInfo *perminfo = gpdb::GetRTEPermissionInfo(m_query->rteperminfos,
-																		 rte);
-
 		switch (rte->rtekind)
 		{
 			default:
@@ -3279,6 +3276,8 @@ CTranslatorQueryToDXL::TranslateFromClauseToDXL(Node *node)
 			}
 			case RTE_RELATION:
 			{
+				const RTEPermissionInfo *perminfo = gpdb::GetRTEPermissionInfo(m_query->rteperminfos,
+																			   rte);
 				return TranslateRTEToDXLLogicalGet(rte, perminfo, rt_index,
 												   m_query_level);
 			}
