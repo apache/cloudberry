@@ -34,17 +34,10 @@ sub test_login
 {
 	local $Test::Builder::Level = $Test::Builder::Level + 1;
 
-<<<<<<< HEAD
-	my $node          = shift;
-	my $role          = shift;
-	my $password      = shift;
-	my $expected_res  = shift;
-=======
 	my $node = shift;
 	my $role = shift;
 	my $password = shift;
 	my $expected_res = shift;
->>>>>>> REL_16_9
 	my $status_string = 'failed';
 
 	$status_string = 'success' if ($expected_res eq 0);

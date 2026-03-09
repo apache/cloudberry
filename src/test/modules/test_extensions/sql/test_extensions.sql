@@ -97,15 +97,6 @@ DROP FUNCTION create_extension_with_temp_schema();
 RESET client_min_messages;
 \unset SHOW_CONTEXT
 
-<<<<<<< HEAD
-=======
--- Test case of an event trigger run in an extension upgrade script.
--- See: https://postgr.es/m/20200902193715.6e0269d4@firost
-CREATE EXTENSION test_ext_evttrig;
-ALTER EXTENSION test_ext_evttrig UPDATE TO '2.0';
-DROP EXTENSION test_ext_evttrig;
-
->>>>>>> REL_16_9
 -- It's generally bad style to use CREATE OR REPLACE unnecessarily.
 -- Test what happens if an extension does it anyway.
 -- Replacing a shell type or operator is sort of like CREATE OR REPLACE;
@@ -221,9 +212,6 @@ ALTER EXTENSION test_ext_cine UPDATE TO '1.1';
 --
 CREATE SCHEMA "has space";
 CREATE EXTENSION test_ext_extschema SCHEMA has$dollar;
-<<<<<<< HEAD
-CREATE EXTENSION test_ext_extschema SCHEMA "has space";
-=======
 CREATE EXTENSION test_ext_extschema SCHEMA "has space";
 
 --
@@ -283,4 +271,3 @@ ALTER EXTENSION test_ext_req_schema1 SET SCHEMA test_s_dep2;  -- now ok
 SELECT test_s_dep2.dep_req1();
 SELECT test_s_dep.dep_req2();
 DROP EXTENSION test_ext_req_schema1 CASCADE;
->>>>>>> REL_16_9

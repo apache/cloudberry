@@ -156,14 +156,6 @@ DROP TABLE test_ext4_tab;
 DROP FUNCTION create_extension_with_temp_schema();
 RESET client_min_messages;
 \unset SHOW_CONTEXT
-<<<<<<< HEAD
-=======
--- Test case of an event trigger run in an extension upgrade script.
--- See: https://postgr.es/m/20200902193715.6e0269d4@firost
-CREATE EXTENSION test_ext_evttrig;
-ALTER EXTENSION test_ext_evttrig UPDATE TO '2.0';
-DROP EXTENSION test_ext_evttrig;
->>>>>>> REL_16_9
 -- It's generally bad style to use CREATE OR REPLACE unnecessarily.
 -- Test what happens if an extension does it anyway.
 -- Replacing a shell type or operator is sort of like CREATE OR REPLACE;
@@ -256,10 +248,7 @@ ERROR:  collation ext_cine_coll is not a member of extension "test_ext_cine"
 DETAIL:  An extension may only use CREATE ... IF NOT EXISTS to skip object creation if the conflicting object is one that it already owns.
 DROP COLLATION ext_cine_coll;
 CREATE MATERIALIZED VIEW ext_cine_mv AS SELECT 11 AS f1;
-<<<<<<< HEAD
 NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause. Creating a NULL policy entry.
-=======
->>>>>>> REL_16_9
 CREATE EXTENSION test_ext_cine;  -- fail
 ERROR:  materialized view ext_cine_mv is not a member of extension "test_ext_cine"
 DETAIL:  An extension may only use CREATE ... IF NOT EXISTS to skip object creation if the conflicting object is one that it already owns.
@@ -281,20 +270,13 @@ ERROR:  sequence ext_cine_seq is not a member of extension "test_ext_cine"
 DETAIL:  An extension may only use CREATE ... IF NOT EXISTS to skip object creation if the conflicting object is one that it already owns.
 DROP SEQUENCE ext_cine_seq;
 CREATE TABLE ext_cine_tab1 (x int);
-<<<<<<< HEAD
 NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'x' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
-=======
->>>>>>> REL_16_9
 CREATE EXTENSION test_ext_cine;  -- fail
 ERROR:  table ext_cine_tab1 is not a member of extension "test_ext_cine"
 DETAIL:  An extension may only use CREATE ... IF NOT EXISTS to skip object creation if the conflicting object is one that it already owns.
 DROP TABLE ext_cine_tab1;
 CREATE TABLE ext_cine_tab2 AS SELECT 42 AS y;
-<<<<<<< HEAD
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause. Creating a NULL policy entry.
-=======
->>>>>>> REL_16_9
 CREATE EXTENSION test_ext_cine;  -- fail
 ERROR:  table ext_cine_tab2 is not a member of extension "test_ext_cine"
 DETAIL:  An extension may only use CREATE ... IF NOT EXISTS to skip object creation if the conflicting object is one that it already owns.
@@ -337,8 +319,6 @@ CREATE SCHEMA "has space";
 CREATE EXTENSION test_ext_extschema SCHEMA has$dollar;
 ERROR:  invalid character in extension "test_ext_extschema" schema: must not contain any of ""$'\"
 CREATE EXTENSION test_ext_extschema SCHEMA "has space";
-<<<<<<< HEAD
-=======
 --
 -- Test extension with objects outside the extension's schema.
 --
@@ -464,4 +444,3 @@ SELECT test_s_dep.dep_req2();
 
 DROP EXTENSION test_ext_req_schema1 CASCADE;
 NOTICE:  drop cascades to extension test_ext_req_schema2
->>>>>>> REL_16_9

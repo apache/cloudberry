@@ -42,11 +42,7 @@ sub test_conn
 {
 	local $Test::Builder::Level = $Test::Builder::Level + 1;
 
-<<<<<<< HEAD
-	my ($node, $role, $method, $expected_res, %params) = @_;
-=======
 	my ($node, $connstr, $method, $expected_res, %params) = @_;
->>>>>>> REL_16_9
 	my $status_string = 'failed';
 	$status_string = 'success' if ($expected_res eq 0);
 

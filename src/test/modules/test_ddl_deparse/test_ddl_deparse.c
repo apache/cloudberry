@@ -288,16 +288,12 @@ get_altertable_subcmdinfo(PG_FUNCTION_ARGS)
 			case AT_GenericOptions:
 				strtype = "SET OPTIONS";
 				break;
-<<<<<<< HEAD
 			case AT_SetTags:
 				strtype = "SET TAGS";
 				break;
 			case AT_UnsetTags:
 				strtype = "UNSET TAGS";
 				break;
-			default:
-				strtype = "unrecognized";
-=======
 			case AT_DetachPartition:
 				strtype = "DETACH PARTITION";
 				break;
@@ -318,7 +314,6 @@ get_altertable_subcmdinfo(PG_FUNCTION_ARGS)
 				break;
 			case AT_ReAddStatistics:
 				strtype = "(re) ADD STATS";
->>>>>>> REL_16_9
 				break;
 		}
 

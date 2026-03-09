@@ -3574,8 +3574,6 @@ select * from test_regex('((.))(\2){0}', 'xy', 'RPQ');
  {x,x,x,NULL}
 (2 rows)
 
-<<<<<<< HEAD
-=======
 -- expectMatch	21.37 RP	((.))(\2)	xyy	yy	y	y	y
 select * from test_regex('((.))(\2)', 'xyy', 'RP');
            test_regex           
@@ -3592,7 +3590,6 @@ select * from test_regex('((.))(\2)', 'xyy', 'oRP');
  {yy,NULL,NULL,NULL}
 (2 rows)
 
->>>>>>> REL_16_9
 -- expectNomatch	21.39 PQR	{(.){0}(\1)}	xxx
 select * from test_regex('(.){0}(\1)', 'xxx', 'PQR');
                  test_regex                 

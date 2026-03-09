@@ -132,7 +132,6 @@ test_predtest(PG_FUNCTION_ARGS)
 		elog(ERROR, "test_predtest query must be a SELECT");
 	plan = stmt->planTree;
 	Assert(list_length(plan->targetlist) >= 2);
-<<<<<<< HEAD
 
 	/*
 	* GPDB will add Motion node whose target list is replaced by OUTER_VAR
@@ -145,12 +144,8 @@ test_predtest(PG_FUNCTION_ARGS)
 		plan = plan->lefttree;
 	}
 
-	clause1 = castNode(TargetEntry, linitial(plan->targetlist))->expr;
-	clause2 = castNode(TargetEntry, lsecond(plan->targetlist))->expr;
-=======
 	clause1 = linitial_node(TargetEntry, plan->targetlist)->expr;
 	clause2 = lsecond_node(TargetEntry, plan->targetlist)->expr;
->>>>>>> REL_16_9
 
 	/*
 	 * Because the clauses are in the SELECT list, preprocess_expression did

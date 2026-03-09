@@ -1035,13 +1035,10 @@ select * from test_regex('(a*)*', 'bc', 'N');
 select * from test_regex(' TO (([a-z0-9._]+|"([^"]+|"")+")+)', 'asd TO foo', 'M');
 -- expectMatch	21.36 RPQ	((.))(\2){0}	xy	x	x	x	{}
 select * from test_regex('((.))(\2){0}', 'xy', 'RPQ');
-<<<<<<< HEAD
-=======
 -- expectMatch	21.37 RP	((.))(\2)	xyy	yy	y	y	y
 select * from test_regex('((.))(\2)', 'xyy', 'RP');
 -- expectMatch	21.38 oRP	((.))(\2)	xyy	yy	{}	{}	{}
 select * from test_regex('((.))(\2)', 'xyy', 'oRP');
->>>>>>> REL_16_9
 -- expectNomatch	21.39 PQR	{(.){0}(\1)}	xxx
 select * from test_regex('(.){0}(\1)', 'xxx', 'PQR');
 -- expectNomatch	21.40 PQR	{((.)){0}(\2)}	xxx

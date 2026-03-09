@@ -6,16 +6,9 @@
 use strict;
 use warnings;
 
-<<<<<<< HEAD
-use TestLib;
-use Test::More tests => 1;
-# use Test::More tests => 2;
-use PostgresNode;
-=======
 use PostgreSQL::Test::Utils;
 use Test::More;
 use PostgreSQL::Test::Cluster;
->>>>>>> REL_16_9
 
 my $node = PostgreSQL::Test::Cluster->new('tango');
 $node->init;
@@ -36,19 +29,18 @@ my $count = $node->safe_psql('postgres',
 );
 is($count, '1', "initial index state is correct");
 
-# GPDB: Disabled until autovacuum on user tables can be enabled.
-# $node->safe_psql('postgres',
-# 	'insert into brin_wi select * from generate_series(1, 100)');
-#
-# $node->poll_query_until(
-# 	'postgres',
-# 	"select count(*) > 1 from brin_page_items(get_raw_page('brin_wi_idx', 2), 'brin_wi_idx'::regclass)",
-# 	't');
-#
-# $count = $node->safe_psql('postgres',
-# 	"select count(*) > 1 from brin_page_items(get_raw_page('brin_wi_idx', 2), 'brin_wi_idx'::regclass)"
-# );
-# is($count, 't', "index got summarized");
+$node->safe_psql('postgres',
+	'insert into brin_wi select * from generate_series(1, 100)');
+
+$node->poll_query_until(
+	'postgres',
+	"select count(*) > 1 from brin_page_items(get_raw_page('brin_wi_idx', 2), 'brin_wi_idx'::regclass)",
+	't');
+
+$count = $node->safe_psql('postgres',
+	"select count(*) > 1 from brin_page_items(get_raw_page('brin_wi_idx', 2), 'brin_wi_idx'::regclass)"
+);
+is($count, 't', "index got summarized");
 $node->stop;
 
 done_testing();

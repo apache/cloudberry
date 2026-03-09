@@ -1,8 +1,4 @@
-<<<<<<< HEAD
-# Copyright (c) 2021-2022, PostgreSQL Global Development Group
-=======
 # Copyright (c) 2021-2023, PostgreSQL Global Development Group
->>>>>>> REL_16_9
 
 # Verify WAL consistency
 
@@ -19,10 +15,7 @@ $whiskey->init(allows_streaming => 1);
 $whiskey->append_conf('postgresql.conf', 'wal_consistency_checking = brin');
 $whiskey->start;
 $whiskey->safe_psql('postgres', 'create extension pageinspect');
-<<<<<<< HEAD
-=======
 $whiskey->safe_psql('postgres', 'create extension pg_walinspect');
->>>>>>> REL_16_9
 is( $whiskey->psql(
 		'postgres',
 		qq[SELECT pg_create_physical_replication_slot('standby_1');]),
@@ -46,10 +39,7 @@ $whiskey->safe_psql(
 create table tbl_timestamp0 (d1 timestamp(0) without time zone) with (fillfactor=10);
 create index on tbl_timestamp0 using brin (d1) with (pages_per_range = 1, autosummarize=false);
 });
-<<<<<<< HEAD
-=======
 my $start_lsn = $whiskey->lsn('insert');
->>>>>>> REL_16_9
 # Run a loop that will end when the second revmap page is created
 $whiskey->safe_psql(
 	'postgres', q{
@@ -70,10 +60,6 @@ begin
 end
 $$;
 });
-<<<<<<< HEAD
-
-$whiskey->wait_for_catchup($charlie, 'replay', $whiskey->lsn('insert'));
-=======
 my $end_lsn = $whiskey->lsn('flush');
 
 my ($ret, $out, $err) = $whiskey->psql(
@@ -85,6 +71,5 @@ my ($ret, $out, $err) = $whiskey->psql(
 cmp_ok($out, '>=', 1);
 
 $whiskey->wait_for_replay_catchup($charlie);
->>>>>>> REL_16_9
 
 done_testing();
