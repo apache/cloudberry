@@ -93,7 +93,7 @@ postgres: main/main.o libpostgres.so $(top_builddir)/src/port/libpgport_srv.a $(
 	  $(top_builddir)/src/common/libpgcommon_srv.a $(LIBS) -o $@
 
 else
-postgres: $(OBJS)=
+postgres: $(OBJS)
 	$(CXX) $(CXXFLAGS) $(call expand_subsys,$^) $(LDFLAGS) $(LIBS) -o $@
 endif
 
