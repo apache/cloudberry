@@ -4,15 +4,9 @@
 # Tests for various bugs found over time
 use strict;
 use warnings;
-<<<<<<< HEAD
-use PostgresNode;
-use TestLib;
-use Test::More tests => 7;
-=======
 use PostgreSQL::Test::Cluster;
 use PostgreSQL::Test::Utils;
 use Test::More;
->>>>>>> REL_16_9
 
 # Bug #15114
 
@@ -245,22 +239,12 @@ $node_sub->stop('fast');
 # target table's relcache was not being invalidated. This leads to skipping
 # UPDATE/DELETE operations during apply on the subscriber side as the columns
 # required to search corresponding rows won't get logged.
-<<<<<<< HEAD
-$node_publisher = get_new_node('publisher3');
-$node_publisher->init(allows_streaming => 'logical');
-$node_publisher->start;
-
-$node_subscriber = get_new_node('subscriber3');
-$node_subscriber->init(allows_streaming => 'logical');
-$node_subscriber->start;
-=======
 
 $node_publisher->rotate_logfile();
 $node_publisher->start();
 
 $node_subscriber->rotate_logfile();
 $node_subscriber->start();
->>>>>>> REL_16_9
 
 $node_publisher->safe_psql('postgres',
 	"CREATE TABLE tab_replidentity_index(a int not null, b int not null)");
@@ -301,16 +285,8 @@ $node_subscriber->safe_psql('postgres',
 	"CREATE SUBSCRIPTION tap_sub CONNECTION '$publisher_connstr' PUBLICATION tap_pub"
 );
 
-<<<<<<< HEAD
-$node_publisher->wait_for_catchup('tap_sub');
-
-# Also wait for initial table sync to finish
-$node_subscriber->poll_query_until('postgres', $synced_query)
-  or die "Timed out while waiting for subscriber to synchronize data";
-=======
 # Wait for initial table sync to finish
 $node_subscriber->wait_for_subscription_sync($node_publisher, 'tap_sub');
->>>>>>> REL_16_9
 
 is( $node_subscriber->safe_psql(
 		'postgres', "SELECT * FROM tab_replidentity_index"),
@@ -332,10 +308,6 @@ is( $node_subscriber->safe_psql(
 	qq(-1|1),
 	"update works with REPLICA IDENTITY");
 
-<<<<<<< HEAD
-$node_publisher->stop('fast');
-$node_subscriber->stop('fast');
-=======
 # Clean up
 $node_subscriber->safe_psql('postgres', "DROP SUBSCRIPTION tap_sub");
 $node_publisher->safe_psql('postgres', "DROP PUBLICATION tap_pub");
@@ -597,4 +569,3 @@ $node_publisher->stop('fast');
 $node_subscriber->stop('fast');
 
 done_testing();
->>>>>>> REL_16_9

@@ -21,17 +21,6 @@ Sort
 Optimizer: Postgres query optimizer           
 (5 rows)
 
-<<<<<<< HEAD
-step explains: EXPLAIN (COSTS OFF) EXECUTE getrow_seq;
-QUERY PLAN                                    
-----------------------------------------------
-Sort                                          
-  Sort Key: id, data                          
-  ->  Index Scan using test_dc_pkey on test_dc
-        Filter: ((data)::text = '34'::text)   
-Optimizer: Postgres query optimizer           
-(5 rows)
-=======
 step enableseq: SET enable_seqscan = true;
 step explains: EXPLAIN (COSTS OFF) EXECUTE getrow_seqscan;
 QUERY PLAN                 
@@ -41,7 +30,6 @@ Sort
   ->  Seq Scan on test_dc  
         Filter: (data = 34)
 (4 rows)
->>>>>>> REL_16_9
 
 step select2: SELECT * FROM test_dc WHERE data = 34 ORDER BY id,data;
 id|data

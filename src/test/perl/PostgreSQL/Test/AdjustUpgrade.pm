@@ -76,8 +76,6 @@ sub adjust_database_contents
 	my ($old_version, %dbnames) = @_;
 	my $result = {};
 
-<<<<<<< HEAD
-=======
 	die "wrong type for \$old_version\n"
 	  unless $old_version->isa("PostgreSQL::Version");
 
@@ -86,7 +84,6 @@ sub adjust_database_contents
 	# Therefore, use a modified version object that only contains the major.
 	$old_version = PostgreSQL::Version->new($old_version->major);
 
->>>>>>> REL_16_9
 	# remove dbs of modules known to cause pg_upgrade to fail
 	# anything not builtin and incompatible should clean up its own db
 	foreach my $bad_module ('test_ddl_deparse', 'tsearch2')
@@ -99,33 +96,12 @@ sub adjust_database_contents
 		}
 	}
 
-<<<<<<< HEAD
-	# avoid version number issues with test_ext7
-=======
 	# avoid no-path-to-downgrade-extension-version issues
->>>>>>> REL_16_9
 	if ($dbnames{contrib_regression_test_extensions})
 	{
 		_add_st(
 			$result,
 			'contrib_regression_test_extensions',
-<<<<<<< HEAD
-			'drop extension if exists test_ext7');
-	}
-
-	# get rid of dblink's dependencies on regress.so
-	my $regrdb =
-	  $old_version le '9.4'
-	  ? 'contrib_regression'
-	  : 'contrib_regression_dblink';
-
-	if ($dbnames{$regrdb})
-	{
-		_add_st(
-			$result, $regrdb,
-			'drop function if exists public.putenv(text)',
-			'drop function if exists public.wait_pid(integer)');
-=======
 			'drop extension if exists test_ext_cine',
 			'drop extension if exists test_ext7');
 	}
@@ -168,7 +144,6 @@ sub adjust_database_contents
 				'drop function if exists public.putenv(text)',
 				'drop function if exists public.wait_pid(integer)');
 		}
->>>>>>> REL_16_9
 	}
 
 	# user table OIDs are gone from release 12 on
@@ -295,22 +270,17 @@ sub adjust_old_dumpfile
 {
 	my ($old_version, $dump) = @_;
 
-<<<<<<< HEAD
-=======
 	die "wrong type for \$old_version\n"
 	  unless $old_version->isa("PostgreSQL::Version");
 	# See adjust_database_contents about this
 	$old_version = PostgreSQL::Version->new($old_version->major);
 
->>>>>>> REL_16_9
 	# use Unix newlines
 	$dump =~ s/\r\n/\n/g;
 
 	# Version comments will certainly not match.
 	$dump =~ s/^-- Dumped from database version.*\n//mg;
 
-<<<<<<< HEAD
-=======
 	if ($old_version < 16)
 	{
 		# Fix up some view queries that no longer require table-qualification.
@@ -328,7 +298,6 @@ sub adjust_old_dumpfile
 				   {$1;}mxg;
 	}
 
->>>>>>> REL_16_9
 	# Change trigger definitions to say ... EXECUTE FUNCTION ...
 	if ($old_version < 12)
 	{
@@ -357,51 +326,11 @@ sub adjust_old_dumpfile
 		$dump =~ s/(?<=^\Q$prefix\E)\Q$orig\E/$repl/mg;
 	}
 
-<<<<<<< HEAD
-	# dumps from pre-9.6 databases will show assorted default grants explicitly
-	if ($old_version lt '9.6')
-	{
-		my $comment =
-		  "-- Name: SCHEMA public; Type: ACL; Schema: -; Owner: .*";
-		my $sql =
-		    "REVOKE ALL ON SCHEMA public FROM PUBLIC;\n"
-		  . "REVOKE ALL ON SCHEMA public FROM .*;\n"
-		  . "GRANT ALL ON SCHEMA public TO .*;\n"
-		  . "GRANT ALL ON SCHEMA public TO PUBLIC;";
-		$dump =~ s/^--\n$comment\n--\n+$sql\n+//mg;
-
-		$comment = "-- Name: DATABASE .*; Type: ACL; Schema: -; Owner: .*";
-		$sql =
-		    "REVOKE ALL ON DATABASE .* FROM PUBLIC;\n"
-		  . "REVOKE ALL ON DATABASE .* FROM .*;\n"
-		  . "GRANT ALL ON DATABASE .* TO .*;\n"
-		  . "GRANT CONNECT,TEMPORARY ON DATABASE .* TO PUBLIC;\n";
-		$dump =~ s/^--\n$comment\n--\n+$sql\n+//mg;
-		$dump =~ s/^$sql//mg;
-
-		$sql =
-		    "REVOKE ALL ON TABLE .* FROM PUBLIC;\n"
-		  . "REVOKE ALL ON TABLE .* FROM .*;\n"
-		  . "GRANT ALL ON TABLE .* TO .*;\n";
-		$dump =~ s/^$sql//mg;
-	}
-
-=======
->>>>>>> REL_16_9
 	if ($old_version lt '9.5')
 	{
 		# adjust some places where we don't print so many parens anymore
 
 		my $prefix = "CONSTRAINT (?:sequence|copy)_con CHECK [(][(]";
-<<<<<<< HEAD
-		my $orig   = "((x > 3) AND (y <> 'check failed'::text))";
-		my $repl   = "(x > 3) AND (y <> 'check failed'::text)";
-		$dump =~ s/($prefix)\Q$orig\E/$1$repl/mg;
-
-		$prefix = "CONSTRAINT insert_con CHECK [(][(]";
-		$orig   = "((x >= 3) AND (y <> 'check failed'::text))";
-		$repl   = "(x >= 3) AND (y <> 'check failed'::text)";
-=======
 		my $orig = "((x > 3) AND (y <> 'check failed'::text))";
 		my $repl = "(x > 3) AND (y <> 'check failed'::text)";
 		$dump =~ s/($prefix)\Q$orig\E/$1$repl/mg;
@@ -409,7 +338,6 @@ sub adjust_old_dumpfile
 		$prefix = "CONSTRAINT insert_con CHECK [(][(]";
 		$orig = "((x >= 3) AND (y <> 'check failed'::text))";
 		$repl = "(x >= 3) AND (y <> 'check failed'::text)";
->>>>>>> REL_16_9
 		$dump =~ s/($prefix)\Q$orig\E/$1$repl/mg;
 
 		$orig = "DEFAULT ((-1) * currval('public.insert_seq'::regclass))";
@@ -476,8 +404,6 @@ sub adjust_old_dumpfile
 	return $dump;
 }
 
-<<<<<<< HEAD
-=======
 
 # Data for _mash_view_qualifiers
 my @_unused_view_qualifiers = (
@@ -607,7 +533,6 @@ sub _mash_view_qualifiers
 }
 
 
->>>>>>> REL_16_9
 # Internal subroutine to mangle whitespace within view/rule commands.
 # Any consecutive sequence of whitespace is reduced to one space.
 sub _mash_view_whitespace
@@ -667,22 +592,17 @@ sub adjust_new_dumpfile
 {
 	my ($old_version, $dump) = @_;
 
-<<<<<<< HEAD
-=======
 	die "wrong type for \$old_version\n"
 	  unless $old_version->isa("PostgreSQL::Version");
 	# See adjust_database_contents about this
 	$old_version = PostgreSQL::Version->new($old_version->major);
 
->>>>>>> REL_16_9
 	# use Unix newlines
 	$dump =~ s/\r\n/\n/g;
 
 	# Version comments will certainly not match.
 	$dump =~ s/^-- Dumped from database version.*\n//mg;
 
-<<<<<<< HEAD
-=======
 	# pre-v16 dumps do not know about XMLSERIALIZE(NO INDENT).
 	if ($old_version < 16)
 	{
@@ -714,7 +634,6 @@ sub adjust_new_dumpfile
 						\s+FUNCTION\s2\s\(text,\stext\)\spublic\.part_hashtext_length\(text,bigint\);} {}mxg;
 	}
 
->>>>>>> REL_16_9
 	# pre-v12 dumps will not say anything about default_table_access_method.
 	if ($old_version < 12)
 	{

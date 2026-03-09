@@ -64,17 +64,11 @@ test: deadlock-soft-2
 #test: fk-contention
 test: fk-deadlock
 test: fk-deadlock2
-<<<<<<< HEAD
 #test: fk-partitioned-1
 #test: fk-partitioned-2
 #test: eval-plan-qual
-=======
-test: fk-partitioned-1
-test: fk-partitioned-2
 test: fk-snapshot
 test: subxid-overflow
-test: eval-plan-qual
->>>>>>> REL_16_9
 test: eval-plan-qual-trigger
 test: inplace-inval
 test: intra-grant-inplace
@@ -130,18 +124,14 @@ test: alter-table-2
 #test: create-trigger
 test: sequence-ddl
 test: async-notify
-<<<<<<< HEAD
 # vacuum-reltuples uses a cursor to keep page pinned, but in GPDB that doesn't
 # keep it pinned.
 #test: vacuum-reltuples
-=======
 test: vacuum-no-cleanup-lock
->>>>>>> REL_16_9
 test: timeouts
 test: vacuum-concurrent-drop
 test: vacuum-conflict
 test: vacuum-skip-locked
-<<<<<<< HEAD
 #test: predicate-hash
 #test: predicate-gist
 #test: predicate-gin
@@ -152,21 +142,15 @@ test: partition-drop-index-locking
 # because it fails when test errors from ExecLockRows. The reason is that
 # GPDB disabled triggers for foreign keys.
 #test: partition-key-update-1
-=======
 test: stats
->>>>>>> REL_16_9
 test: horizons
 test: partition-concurrent-attach
 test: partition-drop-index-locking
-<<<<<<< HEAD
 
 # GPDB_12_MERGE_FEATURE_NOT_SUPPORTED: Disabled test partition-key-update-1
 # because it fails when test errors from ExecLockRows. The reason is that
 # GPDB disabled triggers for foreign keys.
 #test: partition-key-update-1
-=======
-test: partition-key-update-1
->>>>>>> REL_16_9
 test: partition-key-update-2
 test: partition-key-update-3
 test: partition-key-update-4
@@ -174,7 +158,6 @@ test: plpgsql-toast
 test: cluster-conflict
 test: cluster-conflict-partition
 test: truncate-conflict
-<<<<<<< HEAD
 #test: serializable-parallel
 #test: serializable-parallel-2
 
@@ -187,9 +170,6 @@ test: ao-repeatable-read-vacuum
 
 test: ao-insert-eof create_index_hot udf-insert-deadlock heap-repeatable-read ao-repeatable-read
 test: vacuum-ao-concurrent-drop
-=======
-test: serializable-parallel
-test: serializable-parallel-2
+
 test: serializable-parallel-3
 test: matview-write-skew
->>>>>>> REL_16_9

@@ -424,11 +424,7 @@ is( $result, qq(11.11|baz|1
 # application_name to ensure that the walsender is (re)started.
 #
 # Not all of these are registered as tests as we need to poll for a change
-<<<<<<< HEAD
-# but the test suite will fail none the less when something goes wrong.
-=======
 # but the test suite will fail nonetheless when something goes wrong.
->>>>>>> REL_16_9
 my $oldpid = $node_publisher->safe_psql('postgres',
 	"SELECT pid FROM pg_stat_replication WHERE application_name = 'tap_sub' AND state = 'streaming';"
 );
@@ -437,13 +433,9 @@ $node_subscriber->safe_psql('postgres',
 );
 $node_publisher->poll_query_until('postgres',
 	"SELECT pid != $oldpid FROM pg_stat_replication WHERE application_name = 'tap_sub' AND state = 'streaming';"
-<<<<<<< HEAD
-) or die "Timed out while waiting for apply to restart after changing CONNECTION";
-=======
   )
   or die
   "Timed out while waiting for apply to restart after changing CONNECTION";
->>>>>>> REL_16_9
 
 $oldpid = $node_publisher->safe_psql('postgres',
 	"SELECT pid FROM pg_stat_replication WHERE application_name = 'tap_sub' AND state = 'streaming';"
@@ -453,13 +445,9 @@ $node_subscriber->safe_psql('postgres',
 );
 $node_publisher->poll_query_until('postgres',
 	"SELECT pid != $oldpid FROM pg_stat_replication WHERE application_name = 'tap_sub' AND state = 'streaming';"
-<<<<<<< HEAD
-) or die "Timed out while waiting for apply to restart after changing PUBLICATION";
-=======
   )
   or die
   "Timed out while waiting for apply to restart after changing PUBLICATION";
->>>>>>> REL_16_9
 
 $node_publisher->safe_psql('postgres',
 	"INSERT INTO tab_ins SELECT generate_series(1001,1100)");
@@ -539,13 +527,9 @@ $node_subscriber->safe_psql('postgres',
 	"ALTER SUBSCRIPTION tap_sub RENAME TO tap_sub_renamed");
 $node_publisher->poll_query_until('postgres',
 	"SELECT pid != $oldpid FROM pg_stat_replication WHERE application_name = 'tap_sub_renamed' AND state = 'streaming';"
-<<<<<<< HEAD
-) or die "Timed out while waiting for apply to restart after renaming SUBSCRIPTION";
-=======
   )
   or die
   "Timed out while waiting for apply to restart after renaming SUBSCRIPTION";
->>>>>>> REL_16_9
 
 # check all the cleanup
 $node_subscriber->safe_psql('postgres', "DROP SUBSCRIPTION tap_sub_renamed");

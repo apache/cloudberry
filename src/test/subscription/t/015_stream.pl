@@ -213,12 +213,8 @@ $node_subscriber->safe_psql('postgres', q{SELECT 1});
 # Interleave a pair of transactions, each exceeding the 64kB limit.
 my $h = $node_publisher->background_psql('postgres', on_error_stop => 0);
 
-<<<<<<< HEAD
-my $timer = IPC::Run::timeout($TestLib::timeout_default);
-=======
 # Confirm if a deadlock between the leader apply worker and the parallel apply
 # worker can be detected.
->>>>>>> REL_16_9
 
 my $offset = -s $node_subscriber->logfile;
 

@@ -77,11 +77,8 @@ against them and evaluate the results. For example:
 
 Each test script should end with:
 
-<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<< HEAD
-================================
 	done_testing();
 
->>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> REL_16_9
 Test::Builder::Level controls how far up in the call stack a test will look
 at when reporting a failure.  This should be incremented by any subroutine
 which directly or indirectly calls test routines from Test::More, such as
