@@ -437,7 +437,8 @@ CTranslatorQueryToDXL::CheckSupportedCmdType(Query *query)
 	}
 
 	static const SCmdNameElem unsupported_commands[] = {
-		{CMD_UTILITY, GPOS_WSZ_LIT("UTILITY command")}};
+		{CMD_UTILITY, GPOS_WSZ_LIT("UTILITY command")},
+		{CMD_MERGE, GPOS_WSZ_LIT("MERGE command")}};
 
 	const ULONG length = GPOS_ARRAY_SIZE(unsupported_commands);
 	for (ULONG ul = 0; ul < length; ul++)
