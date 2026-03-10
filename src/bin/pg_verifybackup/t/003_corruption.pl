@@ -16,11 +16,7 @@ $primary->start;
 
 # Include a user-defined tablespace in the hopes of detecting problems in that
 # area.
-<<<<<<< HEAD
-my $source_ts_path   = TestLib::tempdir_short();
-=======
 my $source_ts_path = PostgreSQL::Test::Utils::tempdir_short();
->>>>>>> REL_16_9
 my $source_ts_prefix = $source_ts_path;
 $source_ts_prefix =~ s!(^[A-Z]:/[^/]*)/.*!$1!;
 
@@ -109,25 +105,16 @@ for my $scenario (@scenario)
 			  ($windows_os || $Config::Config{osname} eq 'cygwin'));
 
 		# Take a backup and check that it verifies OK.
-<<<<<<< HEAD
-		my $backup_path    = $primary->backup_dir . '/' . $name;
-		my $backup_ts_path = TestLib::tempdir_short();
-=======
 		my $backup_path = $primary->backup_dir . '/' . $name;
 		my $backup_ts_path = PostgreSQL::Test::Utils::tempdir_short();
->>>>>>> REL_16_9
 		# The tablespace map parameter confuses Msys2, which tries to mangle
 		# it. Tell it not to.
 		# See https://www.msys2.org/wiki/Porting/#filesystem-namespaces
 		local $ENV{MSYS2_ARG_CONV_EXCL} = $source_ts_prefix;
 		$primary->command_ok(
 			[
-<<<<<<< HEAD
-				'pg_basebackup', '-D', $backup_path, '--no-sync',
-				'--target-gp-dbid', '123',
-=======
 				'pg_basebackup', '-D', $backup_path, '--no-sync', '-cfast',
->>>>>>> REL_16_9
+				'--target-gp-dbid', '123',
 				'-T', "${source_ts_path}=${backup_ts_path}"
 			],
 			"base backup ok");

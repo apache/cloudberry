@@ -16,14 +16,10 @@ my $backup_path = $primary->backup_dir . '/test_encoding';
 $primary->command_ok(
 	[
 		'pg_basebackup', '-D',
-<<<<<<< HEAD
-		$backup_path,    '--no-sync',
-		'--target-gp-dbid', '123',
-		'--manifest-force-encode'
-=======
 		$backup_path, '--no-sync',
 		'-cfast', '--manifest-force-encode'
->>>>>>> REL_16_9
+		'--target-gp-dbid', '123',
+		'--manifest-force-encode'
 	],
 	"backup ok with forced hex encoding");
 

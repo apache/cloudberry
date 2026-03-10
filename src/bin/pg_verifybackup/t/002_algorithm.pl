@@ -19,12 +19,8 @@ for my $algorithm (qw(bogus none crc32c sha224 sha256 sha384 sha512))
 	my $backup_path = $primary->backup_dir . '/' . $algorithm;
 	my @backup = (
 		'pg_basebackup', '-D', $backup_path,
-<<<<<<< HEAD
 		'--target-gp-dbid', '123',
-		'--manifest-checksums', $algorithm, '--no-sync');
-=======
 		'--manifest-checksums', $algorithm, '--no-sync', '-cfast');
->>>>>>> REL_16_9
 	my @verify = ('pg_verifybackup', '-e', $backup_path);
 
 	# A backup with a bogus algorithm should fail.

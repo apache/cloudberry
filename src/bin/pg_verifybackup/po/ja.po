@@ -5,19 +5,11 @@
 #
 msgid ""
 msgstr ""
-<<<<<<< HEAD
-"Project-Id-Version: pg_verifybackup (PostgreSQL 14)\n"
-"Report-Msgid-Bugs-To: pgsql-bugs@lists.postgresql.org\n"
-"POT-Creation-Date: 2021-08-25 17:22+0900\n"
-"PO-Revision-Date: 2021-05-17 16:02+0900\n"
-"Last-Translator: Haiying Tang <tanghy.fnst@cn.fujitsu.com>\n"
-=======
 "Project-Id-Version: pg_verifybackup (PostgreSQL 15)\n"
 "Report-Msgid-Bugs-To: pgsql-bugs@lists.postgresql.org\n"
 "POT-Creation-Date: 2023-02-06 16:00+0900\n"
 "PO-Revision-Date: 2023-02-06 17:30+0900\n"
 "Last-Translator: Kyotaro Horiguchi <horikyota.ntt@gmail.com>\n"
->>>>>>> REL_16_9
 "Language-Team: Japan PostgreSQL Users Group <jpug-doc@ml.postgresql.jp>\n"
 "Language: ja\n"
 "MIME-Version: 1.0\n"
@@ -25,25 +17,12 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "X-Generator: Poedit 1.8.13\n"
 
-<<<<<<< HEAD
-#: ../../../src/common/logging.c:259
-#, c-format
-msgid "fatal: "
-msgstr "致命的エラー: "
-
-#: ../../../src/common/logging.c:266
-=======
 #: ../../../src/common/logging.c:276
->>>>>>> REL_16_9
 #, c-format
 msgid "error: "
 msgstr "エラー: "
 
-<<<<<<< HEAD
-#: ../../../src/common/logging.c:273
-=======
 #: ../../../src/common/logging.c:283
->>>>>>> REL_16_9
 #, c-format
 msgid "warning: "
 msgstr "警告: "
@@ -62,139 +41,72 @@ msgstr "ヒント: "
 #: ../../common/fe_memutils.c:98 ../../common/fe_memutils.c:161
 #, c-format
 msgid "out of memory\n"
-msgstr "メモリ不足\n"
+msgstr "メモリ不足です\n"
 
 #: ../../common/fe_memutils.c:92 ../../common/fe_memutils.c:153
 #, c-format
 msgid "cannot duplicate null pointer (internal error)\n"
-msgstr "nullポインタは複製できません (内部エラー)\n"
+msgstr "null ポインタを複製できません (内部エラー)\n"
 
-<<<<<<< HEAD
-#: ../../common/jsonapi.c:1066
-=======
 #: ../../common/jsonapi.c:1126
->>>>>>> REL_16_9
 #, c-format
 msgid "Escape sequence \"\\%s\" is invalid."
 msgstr "エスケープシーケンス\"\\%s\"は不正です。"
 
-<<<<<<< HEAD
-#: ../../common/jsonapi.c:1069
-=======
 #: ../../common/jsonapi.c:1129
->>>>>>> REL_16_9
 #, c-format
 msgid "Character with value 0x%02x must be escaped."
 msgstr "0x%02x値を持つ文字はエスケープしなければなりません"
 
-<<<<<<< HEAD
-#: ../../common/jsonapi.c:1072
-=======
 #: ../../common/jsonapi.c:1132
->>>>>>> REL_16_9
 #, c-format
 msgid "Expected end of input, but found \"%s\"."
 msgstr "入力の終端を想定していましたが、\"%s\"でした。"
 
-<<<<<<< HEAD
-#: ../../common/jsonapi.c:1075
-=======
 #: ../../common/jsonapi.c:1135
->>>>>>> REL_16_9
 #, c-format
 msgid "Expected array element or \"]\", but found \"%s\"."
 msgstr "配列要素または\"]\"を想定していましたが、\"%s\"でした。"
 
-<<<<<<< HEAD
-#: ../../common/jsonapi.c:1078
-=======
 #: ../../common/jsonapi.c:1138
->>>>>>> REL_16_9
 #, c-format
 msgid "Expected \",\" or \"]\", but found \"%s\"."
 msgstr "\",\"または\"]\"を想定していましたが、\"%s\"でした。"
 
-<<<<<<< HEAD
-#: ../../common/jsonapi.c:1081
-=======
 #: ../../common/jsonapi.c:1141
->>>>>>> REL_16_9
 #, c-format
 msgid "Expected \":\", but found \"%s\"."
 msgstr "\":\"を想定していましたが、\"%s\"でした。"
 
-<<<<<<< HEAD
-#: ../../common/jsonapi.c:1084
-=======
 #: ../../common/jsonapi.c:1144
->>>>>>> REL_16_9
 #, c-format
 msgid "Expected JSON value, but found \"%s\"."
 msgstr "JSON値を想定していましたが、\"%s\"でした。"
 
-<<<<<<< HEAD
-#: ../../common/jsonapi.c:1087
-msgid "The input string ended unexpectedly."
-msgstr "入力文字列が予期せず終了しました。"
-
-#: ../../common/jsonapi.c:1089
-=======
 #: ../../common/jsonapi.c:1147
 msgid "The input string ended unexpectedly."
 msgstr "入力文字列が予期せず終了しました。"
 
 #: ../../common/jsonapi.c:1149
->>>>>>> REL_16_9
 #, c-format
 msgid "Expected string or \"}\", but found \"%s\"."
 msgstr "文字列または\"}\"を想定していましたが、\"%s\"でした。"
 
-<<<<<<< HEAD
-#: ../../common/jsonapi.c:1092
-=======
 #: ../../common/jsonapi.c:1152
->>>>>>> REL_16_9
 #, c-format
 msgid "Expected \",\" or \"}\", but found \"%s\"."
 msgstr "\",\"または\"}\"を想定していましたが、\"%s\"でした。"
 
-<<<<<<< HEAD
-#: ../../common/jsonapi.c:1095
-=======
 #: ../../common/jsonapi.c:1155
->>>>>>> REL_16_9
 #, c-format
 msgid "Expected string, but found \"%s\"."
 msgstr "文字列を想定していましたが、\"%s\"でした。"
 
-<<<<<<< HEAD
-#: ../../common/jsonapi.c:1098
-=======
 #: ../../common/jsonapi.c:1158
->>>>>>> REL_16_9
 #, c-format
 msgid "Token \"%s\" is invalid."
 msgstr "トークン\"%s\"は不正です。"
 
-<<<<<<< HEAD
-#: ../../common/jsonapi.c:1101
-msgid "\\u0000 cannot be converted to text."
-msgstr "\\u0000 はテキストに変換できません。"
-
-#: ../../common/jsonapi.c:1103
-msgid "\"\\u\" must be followed by four hexadecimal digits."
-msgstr "\"\\u\"の後には16進数の4桁が続かなければなりません。"
-
-#: ../../common/jsonapi.c:1106
-msgid "Unicode escape values cannot be used for code point values above 007F when the encoding is not UTF8."
-msgstr "エンコーディングがUTF-8ではない場合、コードポイントの値が 007F 以上についてはUnicodeエスケープの値は使用できません。"
-
-#: ../../common/jsonapi.c:1108
-msgid "Unicode high surrogate must not follow a high surrogate."
-msgstr "Unicodeの上位サロゲートは上位サロゲートに続いてはいけません。"
-
-#: ../../common/jsonapi.c:1110
-=======
 #: ../../common/jsonapi.c:1161
 msgid "\\u0000 cannot be converted to text."
 msgstr "\\u0000 はテキストに変換できません。"
@@ -217,9 +129,8 @@ msgid "Unicode high surrogate must not follow a high surrogate."
 msgstr "Unicodeのハイサロゲートはハイサロゲートに続いてはいけません。"
 
 #: ../../common/jsonapi.c:1174
->>>>>>> REL_16_9
 msgid "Unicode low surrogate must follow a high surrogate."
-msgstr "Unicodeの下位サロゲートは上位サロゲートに続かなければなりません。"
+msgstr "Unicodeのローサロゲートはハイサロゲートに続かなければなりません。"
 
 #: parse_manifest.c:150
 msgid "parsing failed"
@@ -339,47 +250,6 @@ msgstr "少なくとも2行が必要です"
 msgid "last line not newline-terminated"
 msgstr "最後の行が改行で終わっていません"
 
-<<<<<<< HEAD
-#: parse_manifest.c:657
-#, c-format
-msgid "out of memory"
-msgstr "メモリ不足"
-
-#: parse_manifest.c:659
-#, c-format
-msgid "could not initialize checksum of manifest"
-msgstr "目録のチェックサムを初期化に失敗しました"
-
-#: parse_manifest.c:661
-#, c-format
-msgid "could not update checksum of manifest"
-msgstr "目録のチェックサムの更新に失敗しました"
-
-#: parse_manifest.c:664
-#, c-format
-msgid "could not finalize checksum of manifest"
-msgstr "目録のチェックサムの完了に失敗しました"
-
-#: parse_manifest.c:668
-#, c-format
-msgid "manifest has no checksum"
-msgstr "目録にチェックサムがありません"
-
-#: parse_manifest.c:672
-#, c-format
-msgid "invalid manifest checksum: \"%s\""
-msgstr "無効な目録のチェックサム: \"%s\""
-
-#: parse_manifest.c:676
-#, c-format
-msgid "manifest checksum mismatch"
-msgstr "目録のチェックサムが合っていません"
-
-#: parse_manifest.c:691
-#, c-format
-msgid "could not parse backup manifest: %s"
-msgstr "バックアップ目録を解析できませんでした: %s"
-=======
 #: parse_manifest.c:669
 #, c-format
 msgid "out of memory"
@@ -419,7 +289,6 @@ msgstr "目録チェックサムの不一致"
 #, c-format
 msgid "could not parse backup manifest: %s"
 msgstr "バックアップ目録をパースできませんでした: %s"
->>>>>>> REL_16_9
 
 #: pg_verifybackup.c:273 pg_verifybackup.c:282 pg_verifybackup.c:293
 #, c-format
@@ -434,38 +303,15 @@ msgstr "バックアップディレクトリが指定されていません"
 #: pg_verifybackup.c:291
 #, c-format
 msgid "too many command-line arguments (first is \"%s\")"
-msgstr "コマンドライン引数が多すぎます (先頭は\"%s\")"
+msgstr "コマンドライン引数が多すぎます。(先頭は\"%s\")"
 
 #: pg_verifybackup.c:299
 #, c-format
-<<<<<<< HEAD
-msgid ""
-"The program \"%s\" is needed by %s but was not found in the\n"
-"same directory as \"%s\".\n"
-"Check your installation."
-msgstr ""
-"%2$sにはプログラム\"%1$s\"が必要ですが、\"%3$s\"と同じディレクトリ\n"
-"にはありませんでした。\n"
-"インストールの状態を確認してください。"
-=======
 msgid "cannot specify both %s and %s"
 msgstr "%sと%sの両方を同時には指定できません"
->>>>>>> REL_16_9
 
 #: pg_verifybackup.c:319
 #, c-format
-<<<<<<< HEAD
-msgid ""
-"The program \"%s\" was found by \"%s\"\n"
-"but was not the same version as %s.\n"
-"Check your installation."
-msgstr ""
-"\"%2$s\"がプログラム\"%1$s\"を見つけましたが、これは%3$sと同じ\n"
-"バージョンではありませんでした。\n"
-"インストールの状態を確認してください。"
-
-#: pg_verifybackup.c:362
-=======
 msgid "program \"%s\" is needed by %s but was not found in the same directory as \"%s\""
 msgstr "%2$sにはプログラム\"%1$s\"が必要ですが、\"%3$s\"と同じディレクトリにありませんでした"
 
@@ -475,118 +321,60 @@ msgid "program \"%s\" was found by \"%s\" but was not the same version as %s"
 msgstr "\"%2$s\"がプログラム\"%1$s\"を見つけましたが、これは%3$sと同じバージョンではありませんでした"
 
 #: pg_verifybackup.c:378
->>>>>>> REL_16_9
 #, c-format
 msgid "backup successfully verified\n"
 msgstr "バックアップが正常に検証されました\n"
 
-<<<<<<< HEAD
-#: pg_verifybackup.c:388 pg_verifybackup.c:724
-=======
 #: pg_verifybackup.c:404 pg_verifybackup.c:748
->>>>>>> REL_16_9
 #, c-format
 msgid "could not open file \"%s\": %m"
 msgstr "ファイル\"%s\"をオープンできませんでした: %m"
 
-<<<<<<< HEAD
-#: pg_verifybackup.c:392
-=======
 #: pg_verifybackup.c:408
->>>>>>> REL_16_9
 #, c-format
 msgid "could not stat file \"%s\": %m"
 msgstr "ファイル\"%s\"のstatに失敗しました: %m"
 
-<<<<<<< HEAD
-#: pg_verifybackup.c:412 pg_verifybackup.c:753
-=======
 #: pg_verifybackup.c:428 pg_verifybackup.c:779
->>>>>>> REL_16_9
 #, c-format
 msgid "could not read file \"%s\": %m"
 msgstr "ファイル\"%s\"の読み取りに失敗しました: %m"
 
-<<<<<<< HEAD
-#: pg_verifybackup.c:415
-=======
 #: pg_verifybackup.c:431
->>>>>>> REL_16_9
 #, c-format
 msgid "could not read file \"%s\": read %d of %lld"
 msgstr "ファイル\"%1$s\"を読み込めませんでした: %3$lldバイトのうち%2$dバイトを読み込みました"
 
-<<<<<<< HEAD
-#: pg_verifybackup.c:475
-#, c-format
-msgid "duplicate path name in backup manifest: \"%s\""
-msgstr "バックアップ目録内にパス名の重複: \"%s\""
-
-#: pg_verifybackup.c:538 pg_verifybackup.c:545
-=======
 #: pg_verifybackup.c:491
 #, c-format
 msgid "duplicate path name in backup manifest: \"%s\""
 msgstr "バックアップ目録内の重複パス名: \"%s\""
 
 #: pg_verifybackup.c:554 pg_verifybackup.c:561
->>>>>>> REL_16_9
 #, c-format
 msgid "could not open directory \"%s\": %m"
 msgstr "ディレクトリ\"%s\"をオープンできませんでした: %m"
 
-<<<<<<< HEAD
-#: pg_verifybackup.c:577
-=======
 #: pg_verifybackup.c:593
->>>>>>> REL_16_9
 #, c-format
 msgid "could not close directory \"%s\": %m"
 msgstr "ディレクトリ\"%s\"をクローズできませんでした: %m"
 
-<<<<<<< HEAD
-#: pg_verifybackup.c:597
-=======
 #: pg_verifybackup.c:613
->>>>>>> REL_16_9
 #, c-format
 msgid "could not stat file or directory \"%s\": %m"
 msgstr "\"%s\"というファイルまたはディレクトリの情報を取得できませんでした: %m"
 
-<<<<<<< HEAD
-#: pg_verifybackup.c:620
-=======
 #: pg_verifybackup.c:636
->>>>>>> REL_16_9
 #, c-format
 msgid "\"%s\" is not a file or directory"
 msgstr "\"%s\"はファイルまたはディレクトリではありません"
 
-<<<<<<< HEAD
-#: pg_verifybackup.c:630
-=======
 #: pg_verifybackup.c:646
->>>>>>> REL_16_9
 #, c-format
 msgid "\"%s\" is present on disk but not in the manifest"
 msgstr "\"%s\"はディスクに存在しますが、目録には存在しません"
 
-<<<<<<< HEAD
-#: pg_verifybackup.c:642
-#, c-format
-msgid "\"%s\" has size %lld on disk but size %zu in the manifest"
-msgstr "\"%s\"はディスク上ではサイズが%lldバイトですが、目録では%zuバイトです"
-
-#: pg_verifybackup.c:669
-#, c-format
-msgid "\"%s\" is present in the manifest but not on disk"
-msgstr "\"%s\"目録には存在しますが、ディスクには存在しません"
-
-#: pg_verifybackup.c:732
-#, c-format
-msgid "could not initialize checksum of file \"%s\""
-msgstr "ファイル\"%s\"のチェックサムの初期化に失敗しました"
-=======
 #: pg_verifybackup.c:658
 #, c-format
 msgid "\"%s\" has size %lld on disk but size %zu in the manifest"
@@ -596,7 +384,6 @@ msgstr "\"%s\"はディスク上でのサイズは%lldですが、目録上は%z
 #, c-format
 msgid "\"%s\" is present in the manifest but not on disk"
 msgstr "\"%s\"は目録には存在しますが、ディスクには存在しません"
->>>>>>> REL_16_9
 
 #: pg_verifybackup.c:756
 #, c-format
@@ -610,70 +397,40 @@ msgstr "ファイル\"%s\"のチェックサムの更新ができませんでし
 
 #: pg_verifybackup.c:785
 #, c-format
-msgid "could not update checksum of file \"%s\""
-msgstr "ファイル\"%s\"のチェックサムの更新に失敗しました"
-
-#: pg_verifybackup.c:759
-#, c-format
 msgid "could not close file \"%s\": %m"
 msgstr "ファイル\"%s\"をクローズできませんでした: %m"
 
-<<<<<<< HEAD
-#: pg_verifybackup.c:778
-=======
 #: pg_verifybackup.c:804
->>>>>>> REL_16_9
 #, c-format
 msgid "file \"%s\" should contain %zu bytes, but read %zu bytes"
 msgstr "file\"%s\"は%zuバイトを含む必要がありますが、%zuバイトが読み込まれました"
 
-<<<<<<< HEAD
-#: pg_verifybackup.c:788
-#, c-format
-msgid "could not finalize checksum of file \"%s\""
-msgstr "ファイル\"%s\"のチェックサムの完了に失敗しました"
-
-#: pg_verifybackup.c:796
-=======
 #: pg_verifybackup.c:814
 #, c-format
 msgid "could not finalize checksum of file \"%s\""
 msgstr "ファイル\"%s\"のチェックサムの完了ができませんでした"
 
 #: pg_verifybackup.c:822
->>>>>>> REL_16_9
 #, c-format
 msgid "file \"%s\" has checksum of length %d, but expected %d"
 msgstr "ファイル\"%s\"のチェックサムの長さは%dですが、予期されるのは%dです"
 
-<<<<<<< HEAD
-#: pg_verifybackup.c:800
-=======
 #: pg_verifybackup.c:826
->>>>>>> REL_16_9
 #, c-format
 msgid "checksum mismatch for file \"%s\""
 msgstr "ファイル\"%s\"のチェックサムが一致しません"
 
-<<<<<<< HEAD
-#: pg_verifybackup.c:824
-=======
 #: pg_verifybackup.c:851
->>>>>>> REL_16_9
 #, c-format
 msgid "WAL parsing failed for timeline %u"
 msgstr "タイムライン%uのWALのパースに失敗しました"
 
-<<<<<<< HEAD
-#: pg_verifybackup.c:910
-=======
 #: pg_verifybackup.c:965
 #, c-format
 msgid "%*s/%s kB (%d%%) verified"
 msgstr "%*s/%s kB (%d%%) 検証しました"
 
 #: pg_verifybackup.c:982
->>>>>>> REL_16_9
 #, c-format
 msgid ""
 "%s verifies a backup against the backup manifest.\n"
@@ -682,11 +439,7 @@ msgstr ""
 "%sはバックアップ目録に対してバックアップを検証します。\n"
 "\n"
 
-<<<<<<< HEAD
-#: pg_verifybackup.c:911
-=======
 #: pg_verifybackup.c:983
->>>>>>> REL_16_9
 #, c-format
 msgid ""
 "Usage:\n"
@@ -697,107 +450,62 @@ msgstr ""
 "  %s [オプション]... BACKUPDIR\n"
 "\n"
 
-<<<<<<< HEAD
-#: pg_verifybackup.c:912
-=======
 #: pg_verifybackup.c:984
->>>>>>> REL_16_9
 #, c-format
 msgid "Options:\n"
 msgstr "オプション:\n"
 
-<<<<<<< HEAD
-#: pg_verifybackup.c:913
-=======
 #: pg_verifybackup.c:985
->>>>>>> REL_16_9
 #, c-format
 msgid "  -e, --exit-on-error         exit immediately on error\n"
 msgstr "  -e, --exit-on-error         エラー時に直ちに終了する\n"
 
-<<<<<<< HEAD
-#: pg_verifybackup.c:914
-=======
 #: pg_verifybackup.c:986
->>>>>>> REL_16_9
 #, c-format
 msgid "  -i, --ignore=RELATIVE_PATH  ignore indicated path\n"
 msgstr "  -i, --ignore=RELATIVE_PATH  指示されたパスを無視\n"
 
-<<<<<<< HEAD
-#: pg_verifybackup.c:915
-#, c-format
-msgid "  -m, --manifest-path=PATH    use specified path for manifest\n"
-msgstr "  -m, --manifest-path=PATH    目録に指定されたパスを使用する\n"
-
-#: pg_verifybackup.c:916
-=======
 #: pg_verifybackup.c:987
 #, c-format
 msgid "  -m, --manifest-path=PATH    use specified path for manifest\n"
 msgstr "  -m, --manifest-path=PATH    目録として指定したパスを使用する\n"
 
 #: pg_verifybackup.c:988
->>>>>>> REL_16_9
 #, c-format
 msgid "  -n, --no-parse-wal          do not try to parse WAL files\n"
 msgstr "  -n, --no-parse-wal          WALファイルをパースしようとしない\n"
 
-<<<<<<< HEAD
-#: pg_verifybackup.c:917
-=======
 #: pg_verifybackup.c:989
 #, c-format
 msgid "  -P, --progress              show progress information\n"
 msgstr "  -P, --progress              進行状況を表示\n"
 
 #: pg_verifybackup.c:990
->>>>>>> REL_16_9
 #, c-format
 msgid "  -q, --quiet                 do not print any output, except for errors\n"
 msgstr "  -q, --quiet                 エラー以外何も出力しない\n"
 
-<<<<<<< HEAD
-#: pg_verifybackup.c:918
-=======
 #: pg_verifybackup.c:991
->>>>>>> REL_16_9
 #, c-format
 msgid "  -s, --skip-checksums        skip checksum verification\n"
 msgstr "  -s, --skip-checksums        チェックサム検証をスキップ\n"
 
-<<<<<<< HEAD
-#: pg_verifybackup.c:919
-=======
 #: pg_verifybackup.c:992
->>>>>>> REL_16_9
 #, c-format
 msgid "  -w, --wal-directory=PATH    use specified path for WAL files\n"
 msgstr "  -w, --wal-directory=PATH    WALファイルに指定したパスを使用する\n"
 
-<<<<<<< HEAD
-#: pg_verifybackup.c:920
-=======
 #: pg_verifybackup.c:993
->>>>>>> REL_16_9
 #, c-format
 msgid "  -V, --version               output version information, then exit\n"
 msgstr "  -V, --version               バージョン情報を表示して終了\n"
 
-<<<<<<< HEAD
-#: pg_verifybackup.c:921
-=======
 #: pg_verifybackup.c:994
->>>>>>> REL_16_9
 #, c-format
 msgid "  -?, --help                  show this help, then exit\n"
 msgstr "  -?, --help                  このヘルプを表示して終了\n"
 
-<<<<<<< HEAD
-#: pg_verifybackup.c:922
-=======
 #: pg_verifybackup.c:995
->>>>>>> REL_16_9
 #, c-format
 msgid ""
 "\n"
@@ -806,11 +514,7 @@ msgstr ""
 "\n"
 "バグは<%s>に報告してください。\n"
 
-<<<<<<< HEAD
-#: pg_verifybackup.c:923
-=======
 #: pg_verifybackup.c:996
->>>>>>> REL_16_9
 #, c-format
 msgid "%s home page: <%s>\n"
 msgstr "%s ホームページ: <%s>\n"
