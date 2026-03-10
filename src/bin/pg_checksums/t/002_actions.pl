@@ -10,11 +10,7 @@ use Config;
 use PostgreSQL::Test::Cluster;
 use PostgreSQL::Test::Utils;
 
-<<<<<<< HEAD
-use Test::More tests => 63;
-=======
 use Test::More;
->>>>>>> REL_16_9
 
 
 # Utility routine to create and check a table with corrupted checksums

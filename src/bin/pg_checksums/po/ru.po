@@ -3,13 +3,8 @@ msgid ""
 msgstr ""
 "Project-Id-Version: pg_verify_checksums (PostgreSQL) 11\n"
 "Report-Msgid-Bugs-To: pgsql-bugs@lists.postgresql.org\n"
-<<<<<<< HEAD
-"POT-Creation-Date: 2021-08-14 06:29+0300\n"
-"PO-Revision-Date: 2021-02-08 07:59+0300\n"
-=======
 "POT-Creation-Date: 2024-05-04 16:29+0300\n"
 "PO-Revision-Date: 2022-09-05 13:34+0300\n"
->>>>>>> REL_16_9
 "Last-Translator: Alexander Lakhin <exclusion@gmail.com>\n"
 "Language-Team: Russian <pgsql-ru-general@postgresql.org>\n"
 "Language: ru\n"
@@ -17,25 +12,12 @@ msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 
-<<<<<<< HEAD
-#: ../../../src/common/logging.c:259
-#, c-format
-msgid "fatal: "
-msgstr "важно: "
-
-#: ../../../src/common/logging.c:266
-=======
 #: ../../../src/common/logging.c:276
->>>>>>> REL_16_9
 #, c-format
 msgid "error: "
 msgstr "ошибка: "
 
-<<<<<<< HEAD
-#: ../../../src/common/logging.c:273
-=======
 #: ../../../src/common/logging.c:283
->>>>>>> REL_16_9
 #, c-format
 msgid "warning: "
 msgstr "предупреждение: "
@@ -192,11 +174,7 @@ msgstr "не удалось прочитать блок %u в файле \"%s\":
 msgid "could not read block %u in file \"%s\": read %d of %d"
 msgstr "не удалось прочитать блок %u в файле \"%s\" (прочитано байт: %d из %d)"
 
-<<<<<<< HEAD
-#: pg_checksums.c:250
-=======
 #: pg_checksums.c:240
->>>>>>> REL_16_9
 #, c-format
 msgid ""
 "checksum verification failed in file \"%s\", block %u: calculated checksum "
@@ -205,151 +183,82 @@ msgstr ""
 "ошибка контрольных сумм в файле \"%s\", блоке %u: вычислена контрольная "
 "сумма %X, но блок содержит %X"
 
-<<<<<<< HEAD
-#: pg_checksums.c:265
-=======
 #: pg_checksums.c:263
->>>>>>> REL_16_9
 #, c-format
 msgid "seek failed for block %u in file \"%s\": %m"
 msgstr "ошибка при переходе к блоку %u в файле \"%s\": %m"
 
-<<<<<<< HEAD
-#: pg_checksums.c:274
-=======
 #: pg_checksums.c:270
->>>>>>> REL_16_9
 #, c-format
 msgid "could not write block %u in file \"%s\": %m"
 msgstr "не удалось записать блок %u в файл \"%s\": %m"
 
-<<<<<<< HEAD
-#: pg_checksums.c:277
-=======
 #: pg_checksums.c:273
->>>>>>> REL_16_9
 #, c-format
 msgid "could not write block %u in file \"%s\": wrote %d of %d"
 msgstr "не удалось записать блок %u в файле \"%s\" (записано байт: %d из %d)"
 
-<<<<<<< HEAD
-#: pg_checksums.c:290
-=======
 #: pg_checksums.c:285
->>>>>>> REL_16_9
 #, c-format
 msgid "checksums verified in file \"%s\""
 msgstr "контрольные суммы в файле \"%s\" проверены"
 
-<<<<<<< HEAD
-#: pg_checksums.c:292
-=======
 #: pg_checksums.c:287
->>>>>>> REL_16_9
 #, c-format
 msgid "checksums enabled in file \"%s\""
 msgstr "контрольные суммы в файле \"%s\" включены"
 
-<<<<<<< HEAD
-#: pg_checksums.c:317
-=======
 #: pg_checksums.c:318
->>>>>>> REL_16_9
 #, c-format
 msgid "could not open directory \"%s\": %m"
 msgstr "не удалось открыть каталог \"%s\": %m"
 
-<<<<<<< HEAD
-#: pg_checksums.c:344 pg_checksums.c:423
-=======
 #: pg_checksums.c:346 pg_checksums.c:415
->>>>>>> REL_16_9
 #, c-format
 msgid "could not stat file \"%s\": %m"
 msgstr "не удалось получить информацию о файле \"%s\": %m"
 
-<<<<<<< HEAD
-#: pg_checksums.c:371
-=======
 #: pg_checksums.c:370
->>>>>>> REL_16_9
 #, c-format
 msgid "invalid segment number %d in file name \"%s\""
 msgstr "неверный номер сегмента %d в имени файла \"%s\""
 
-<<<<<<< HEAD
-#: pg_checksums.c:504
-=======
 #: pg_checksums.c:512 pg_checksums.c:528 pg_checksums.c:538 pg_checksums.c:546
->>>>>>> REL_16_9
 #, c-format
 msgid "Try \"%s --help\" for more information."
 msgstr "Для дополнительной информации попробуйте \"%s --help\"."
 
-<<<<<<< HEAD
-#: pg_checksums.c:522 pg_checksums.c:538 pg_checksums.c:548 pg_checksums.c:557
-#, c-format
-msgid "Try \"%s --help\" for more information.\n"
-msgstr "Для дополнительной информации попробуйте \"%s --help\".\n"
-
-#: pg_checksums.c:537
-=======
 #: pg_checksums.c:527
->>>>>>> REL_16_9
 #, c-format
 msgid "no data directory specified"
 msgstr "каталог данных не указан"
 
-<<<<<<< HEAD
-#: pg_checksums.c:546
-=======
 #: pg_checksums.c:536
->>>>>>> REL_16_9
 #, c-format
 msgid "too many command-line arguments (first is \"%s\")"
 msgstr "слишком много аргументов командной строки (первый: \"%s\")"
 
-<<<<<<< HEAD
-#: pg_checksums.c:556
-=======
 #: pg_checksums.c:545
->>>>>>> REL_16_9
 #, c-format
 msgid "option -f/--filenode can only be used with --check"
 msgstr "параметр -f/--filenode можно использовать только с --check"
 
-<<<<<<< HEAD
-#: pg_checksums.c:566
-=======
 #: pg_checksums.c:553
->>>>>>> REL_16_9
 #, c-format
 msgid "pg_control CRC value is incorrect"
 msgstr "ошибка контрольного значения в pg_control"
 
-<<<<<<< HEAD
-#: pg_checksums.c:572
-=======
 #: pg_checksums.c:556
->>>>>>> REL_16_9
 #, c-format
 msgid "cluster is not compatible with this version of pg_checksums"
 msgstr "кластер несовместим с этой версией pg_checksums"
 
-<<<<<<< HEAD
-#: pg_checksums.c:578
-=======
 #: pg_checksums.c:560
->>>>>>> REL_16_9
 #, c-format
 msgid "database cluster is not compatible"
 msgstr "несовместимый кластер баз данных"
 
-<<<<<<< HEAD
-#: pg_checksums.c:579
-=======
 #: pg_checksums.c:561
->>>>>>> REL_16_9
 #, c-format
 msgid ""
 "The database cluster was initialized with block size %u, but pg_checksums "
@@ -358,90 +267,51 @@ msgstr ""
 "Кластер баз данных был инициализирован с размером блока %u, а утилита "
 "pg_checksums скомпилирована для размера блока %u."
 
-<<<<<<< HEAD
-#: pg_checksums.c:592
-=======
 #: pg_checksums.c:573
->>>>>>> REL_16_9
 #, c-format
 msgid "cluster must be shut down"
 msgstr "кластер должен быть отключён"
 
-<<<<<<< HEAD
-#: pg_checksums.c:599
-=======
 #: pg_checksums.c:577
->>>>>>> REL_16_9
 #, c-format
 msgid "data checksums are not enabled in cluster"
 msgstr "контрольные суммы в кластере не включены"
 
-<<<<<<< HEAD
-#: pg_checksums.c:606
-=======
 #: pg_checksums.c:581
->>>>>>> REL_16_9
 #, c-format
 msgid "data checksums are already disabled in cluster"
 msgstr "контрольные суммы в кластере уже отключены"
 
-<<<<<<< HEAD
-#: pg_checksums.c:613
-=======
 #: pg_checksums.c:585
->>>>>>> REL_16_9
 #, c-format
 msgid "data checksums are already enabled in cluster"
 msgstr "контрольные суммы в кластере уже включены"
 
-<<<<<<< HEAD
-#: pg_checksums.c:639
-=======
 #: pg_checksums.c:609
->>>>>>> REL_16_9
 #, c-format
 msgid "Checksum operation completed\n"
 msgstr "Обработка контрольных сумм завершена\n"
 
-<<<<<<< HEAD
-#: pg_checksums.c:640
-=======
 #: pg_checksums.c:610
->>>>>>> REL_16_9
 #, c-format
 msgid "Files scanned:   %lld\n"
 msgstr "Просканировано файлов: %lld\n"
 
-<<<<<<< HEAD
-#: pg_checksums.c:641
-=======
 #: pg_checksums.c:611
->>>>>>> REL_16_9
 #, c-format
 msgid "Blocks scanned:  %lld\n"
 msgstr "Просканировано блоков: %lld\n"
 
-<<<<<<< HEAD
-#: pg_checksums.c:644
-=======
 #: pg_checksums.c:614
->>>>>>> REL_16_9
 #, c-format
 msgid "Bad checksums:  %lld\n"
 msgstr "Неверные контрольные суммы: %lld\n"
 
-<<<<<<< HEAD
-#: pg_checksums.c:645 pg_checksums.c:672
-=======
 #: pg_checksums.c:615 pg_checksums.c:647
->>>>>>> REL_16_9
 #, c-format
 msgid "Data checksum version: %u\n"
 msgstr "Версия контрольных сумм данных: %u\n"
 
-<<<<<<< HEAD
-#: pg_checksums.c:664
-=======
 #: pg_checksums.c:622
 #, c-format
 msgid "Files written:  %lld\n"
@@ -453,34 +323,21 @@ msgid "Blocks written: %lld\n"
 msgstr "Записано блоков: %lld\n"
 
 #: pg_checksums.c:639
->>>>>>> REL_16_9
 #, c-format
 msgid "syncing data directory"
 msgstr "синхронизация каталога данных"
 
-<<<<<<< HEAD
-#: pg_checksums.c:668
-=======
 #: pg_checksums.c:643
->>>>>>> REL_16_9
 #, c-format
 msgid "updating control file"
 msgstr "модификация управляющего файла"
 
-<<<<<<< HEAD
-#: pg_checksums.c:674
-=======
 #: pg_checksums.c:649
->>>>>>> REL_16_9
 #, c-format
 msgid "Checksums enabled in cluster\n"
 msgstr "Контрольные суммы в кластере включены\n"
 
-<<<<<<< HEAD
-#: pg_checksums.c:676
-=======
 #: pg_checksums.c:651
->>>>>>> REL_16_9
 #, c-format
 msgid "Checksums disabled in cluster\n"
 msgstr "Контрольные суммы в кластере отключены\n"

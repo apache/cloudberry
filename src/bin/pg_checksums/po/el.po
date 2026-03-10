@@ -9,24 +9,15 @@ msgid ""
 msgstr ""
 "Project-Id-Version: pg_checksums (PostgreSQL) 15\n"
 "Report-Msgid-Bugs-To: pgsql-bugs@lists.postgresql.org\n"
-<<<<<<< HEAD
-"POT-Creation-Date: 2021-07-21 05:18+0000\n"
-"PO-Revision-Date: 2021-07-21 09:45+0200\n"
-=======
 "POT-Creation-Date: 2023-04-14 09:21+0000\n"
 "PO-Revision-Date: 2023-04-14 13:01+0200\n"
->>>>>>> REL_16_9
 "Last-Translator: Georgios Kokolatos <gkokolatos@pm.me>\n"
 "Language-Team: \n"
 "Language: el\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-<<<<<<< HEAD
-"X-Generator: Poedit 3.0\n"
-=======
 "X-Generator: Poedit 3.2.2\n"
->>>>>>> REL_16_9
 
 #: ../../../src/common/logging.c:276
 #, c-format
@@ -86,57 +77,6 @@ msgstr ""
 "\n"
 "Επιλογές:\n"
 
-<<<<<<< HEAD
-#: pg_checksums.c:79
-#, c-format
-msgid " [-D, --pgdata=]DATADIR    data directory\n"
-msgstr " [-D, --pgdata=]DATADIR    κατάλογος δεδομένων\n"
-
-#: pg_checksums.c:80
-#, c-format
-msgid "  -c, --check              check data checksums (default)\n"
-msgstr "  -c, --check              έλεγξε αθροίσματα ελέγχου δεδομένων (προεπιλογή)\n"
-
-#: pg_checksums.c:81
-#, c-format
-msgid "  -d, --disable            disable data checksums\n"
-msgstr "  -d, --disable            απενεργοποίησε τα αθροίσματα ελέγχου δεδομένων\n"
-
-#: pg_checksums.c:82
-#, c-format
-msgid "  -e, --enable             enable data checksums\n"
-msgstr "  -e, --enable             ενεργοποίησε τα αθροίσματα ελέγχου δεδομένων\n"
-
-#: pg_checksums.c:83
-#, c-format
-msgid "  -f, --filenode=FILENODE  check only relation with specified filenode\n"
-msgstr "  -f, --filenode=FILENODE  έλεγξε μόνο τη σχέση με το καθορισμένο filenode\n"
-
-#: pg_checksums.c:84
-#, c-format
-msgid "  -N, --no-sync            do not wait for changes to be written safely to disk\n"
-msgstr "  -N, --no-sync            να μην αναμένει την ασφαλή εγγραφή αλλαγών στον δίσκο\n"
-
-#: pg_checksums.c:85
-#, c-format
-msgid "  -P, --progress           show progress information\n"
-msgstr "  -P, --progress           εμφάνισε πληροφορίες προόδου\n"
-
-#: pg_checksums.c:86
-#, c-format
-msgid "  -v, --verbose            output verbose messages\n"
-msgstr "  -v, --verbose            περιφραστικά μηνύματα εξόδου\n"
-
-#: pg_checksums.c:87
-#, c-format
-msgid "  -V, --version            output version information, then exit\n"
-msgstr "  -V, --version            εμφάνισε πληροφορίες έκδοσης, στη συνέχεια έξοδος\n"
-
-#: pg_checksums.c:88
-#, c-format
-msgid "  -?, --help               show this help, then exit\n"
-msgstr "  -?, --help               εμφάνισε αυτό το μήνυμα βοήθειας, στη συνέχεια έξοδος\n"
-=======
 #: pg_checksums.c:83
 #, c-format
 msgid " [-D, --pgdata=]DATADIR    data directory\n"
@@ -166,7 +106,6 @@ msgstr "  -f, --filenode=FILENODE  έλεγξε μόνο τη σχέση με τ
 #, c-format
 msgid "  -N, --no-sync            do not wait for changes to be written safely to disk\n"
 msgstr "  -N, --no-sync            να μην αναμένει την ασφαλή εγγραφή αλλαγών στον δίσκο\n"
->>>>>>> REL_16_9
 
 #: pg_checksums.c:89
 #, c-format
@@ -281,16 +220,7 @@ msgstr "μη έγκυρος αριθμός τμήματος %d στο αρχεί
 msgid "Try \"%s --help\" for more information."
 msgstr "Δοκιμάστε «%s --help» για περισσότερες πληροφορίες."
 
-<<<<<<< HEAD
-#: pg_checksums.c:522 pg_checksums.c:538 pg_checksums.c:548 pg_checksums.c:557
-#, c-format
-msgid "Try \"%s --help\" for more information.\n"
-msgstr "Δοκιμάστε «%s --help» για περισσότερες πληροφορίες.\n"
-
-#: pg_checksums.c:537
-=======
 #: pg_checksums.c:527
->>>>>>> REL_16_9
 #, c-format
 msgid "no data directory specified"
 msgstr "δεν ορίστηκε κατάλογος δεδομένων"

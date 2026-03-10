@@ -80,51 +80,6 @@ msgstr ""
 "\n"
 "Options :\n"
 
-<<<<<<< HEAD
-#: pg_checksums.c:79
-#, c-format
-msgid " [-D, --pgdata=]DATADIR    data directory\n"
-msgstr " [-D, --pgdata=]REP_DONNEES  répertoire des données\n"
-
-#: pg_checksums.c:80
-#, c-format
-msgid "  -c, --check              check data checksums (default)\n"
-msgstr "  -c, --check                vérifie les sommes de contrôle (par défaut)\n"
-
-#: pg_checksums.c:81
-#, c-format
-msgid "  -d, --disable            disable data checksums\n"
-msgstr "  -d, --disable              désactive les sommes de contrôle\n"
-
-#: pg_checksums.c:82
-#, c-format
-msgid "  -e, --enable             enable data checksums\n"
-msgstr "  -e, --enable               active les sommes de contrôle\n"
-
-#: pg_checksums.c:83
-#, c-format
-msgid "  -f, --filenode=FILENODE  check only relation with specified filenode\n"
-msgstr ""
-"  -f, --filenode=FILENODE    vérifie seulement la relation dont l'identifiant\n"
-"                             relfilenode est indiqué\n"
-
-#: pg_checksums.c:84
-#, c-format
-msgid "  -N, --no-sync            do not wait for changes to be written safely to disk\n"
-msgstr ""
-"  -N, --no-sync              n'attend pas que les modifications soient\n"
-"                             proprement écrites sur disque\n"
-
-#: pg_checksums.c:85
-#, c-format
-msgid "  -P, --progress           show progress information\n"
-msgstr "  -P, --progress             affiche la progression de l'opération\n"
-
-#: pg_checksums.c:86
-#, c-format
-msgid "  -v, --verbose            output verbose messages\n"
-msgstr "  -v, --verbose              affiche des messages verbeux\n"
-=======
 #: pg_checksums.c:83
 #, c-format
 msgid " [-D, --pgdata=]DATADIR    data directory\n"
@@ -144,7 +99,6 @@ msgstr "  -d, --disable              désactive les sommes de contrôle\n"
 #, c-format
 msgid "  -e, --enable             enable data checksums\n"
 msgstr "  -e, --enable               active les sommes de contrôle\n"
->>>>>>> REL_16_9
 
 #: pg_checksums.c:87
 #, c-format
