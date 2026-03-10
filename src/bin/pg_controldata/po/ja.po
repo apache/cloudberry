@@ -5,17 +5,10 @@
 #
 msgid ""
 msgstr ""
-<<<<<<< HEAD
-"Project-Id-Version: pg_controldata (PostgreSQL 14)\n"
-"Report-Msgid-Bugs-To: pgsql-bugs@lists.postgresql.org\n"
-"POT-Creation-Date: 2021-08-25 17:21+0900\n"
-"PO-Revision-Date: 2021-05-18 17:13+0900\n"
-=======
 "Project-Id-Version: pg_controldata (PostgreSQL 16)\n"
 "Report-Msgid-Bugs-To: pgsql-bugs@lists.postgresql.org\n"
 "POT-Creation-Date: 2022-07-14 10:48+0900\n"
 "PO-Revision-Date: 2022-05-10 13:48+0900\n"
->>>>>>> REL_16_9
 "Last-Translator: Kyotaro Horiguchi <horikyota.ntt@gmail.com>\n"
 "Language-Team: Japan PostgreSQL Users Group <jpug-doc@ml.postgresql.jp>\n"
 "Language: ja\n"
@@ -47,7 +40,7 @@ msgstr "ファイル\"%s\"をクローズできませんでした: %m"
 
 #: ../../common/controldata_utils.c:124
 msgid "byte ordering mismatch"
-msgstr "バイトオーダーの不整合"
+msgstr "バイトオーダの不整合"
 
 #: ../../common/controldata_utils.c:126
 #, c-format
@@ -57,17 +50,10 @@ msgid ""
 "used by this program.  In that case the results below would be incorrect, and\n"
 "the PostgreSQL installation would be incompatible with this data directory."
 msgstr ""
-<<<<<<< HEAD
-"バイトオーダーが異なる可能性があります。\n"
-"pg_controlファイルを格納するために使用するバイトオーダーが本プログラムで使用\n"
-"されるものと一致しないようです。この場合以下の結果は不正確になります。また、\n"
-"このPostgreSQLはこのデータディレクトリと互換性がなくなります。"
-=======
 "バイトオーダが異なる可能性があります。\n"
 "pg_controlファイルを格納するために使用するバイトオーダが本プログラムで使用\n"
 "されるものと一致しないようです。この場合以下の結果は不正確になります。また、\n"
 "PostgreSQLインストレーションはこのデータディレクトリと互換性がなくなります。"
->>>>>>> REL_16_9
 
 #: ../../common/controldata_utils.c:194
 #, c-format
@@ -187,18 +173,13 @@ msgstr "wal_level を認識できません"
 
 #: pg_controldata.c:138 pg_controldata.c:156 pg_controldata.c:163
 #, c-format
-<<<<<<< HEAD
-msgid "Try \"%s --help\" for more information.\n"
-msgstr "詳細は\"%s --help\"で確認してください。\n"
-=======
 msgid "Try \"%s --help\" for more information."
 msgstr "詳細は\"%s --help\"を実行してください。"
->>>>>>> REL_16_9
 
 #: pg_controldata.c:154
 #, c-format
 msgid "too many command-line arguments (first is \"%s\")"
-msgstr "コマンドライン引数が多すぎます (先頭は\"%s\")"
+msgstr "コマンドライン引数が多すぎます。(先頭は\"%s\")"
 
 #: pg_controldata.c:162
 #, c-format
@@ -522,8 +503,6 @@ msgstr "データベージチェックサムのバージョン:        %u\n"
 #, c-format
 msgid "Mock authentication nonce:            %s\n"
 msgstr "認証用の疑似nonce:                           %s\n"
-<<<<<<< HEAD
-=======
 
 #~ msgid "%s: could not open file \"%s\" for reading: %s\n"
 #~ msgstr "%s: 読み取り用の\"%s\"ファイルのオープンに失敗しました: %s\n"
@@ -545,4 +524,3 @@ msgstr "認証用の疑似nonce:                           %s\n"
 
 #~ msgid "Float4 argument passing:              %s\n"
 #~ msgstr "Float4引数の渡し方:                          %s\n"
->>>>>>> REL_16_9

@@ -7,17 +7,10 @@
 #
 msgid ""
 msgstr ""
-<<<<<<< HEAD
-"Project-Id-Version: pg_ctl (PostgreSQL) 14\n"
-"Report-Msgid-Bugs-To: pgsql-bugs@lists.postgresql.org\n"
-"POT-Creation-Date: 2021-07-13 05:15+0000\n"
-"PO-Revision-Date: 2021-03-30 10:28+0200\n"
-=======
 "Project-Id-Version: pg_ctl (PostgreSQL) 15\n"
 "Report-Msgid-Bugs-To: pgsql-bugs@lists.postgresql.org\n"
 "POT-Creation-Date: 2023-08-14 23:18+0000\n"
 "PO-Revision-Date: 2023-08-15 13:37+0200\n"
->>>>>>> REL_16_9
 "Last-Translator: Georgios Kokolatos <gkokolatos@pm.me>\n"
 "Language-Team: \n"
 "Language: el\n"
@@ -34,44 +27,20 @@ msgstr "μη έγκυρο δυαδικό αρχείο «%s»: %m"
 
 #: ../../common/exec.c:215
 #, c-format
-<<<<<<< HEAD
-msgid "invalid binary \"%s\""
-msgstr "μη έγκυρο δυαδικό αρχείο «%s»"
-
-#: ../../common/exec.c:205
-#, c-format
-msgid "could not read binary \"%s\""
-msgstr "δεν ήταν δυνατή η ανάγνωση του δυαδικού αρχείου  «%s»"
-
-#: ../../common/exec.c:213
-=======
 msgid "could not read binary \"%s\": %m"
 msgstr "δεν ήταν δυνατή η ανάγνωση του δυαδικού αρχείου «%s»: %m"
 
 #: ../../common/exec.c:223
->>>>>>> REL_16_9
 #, c-format
 msgid "could not find a \"%s\" to execute"
 msgstr "δεν βρέθηκε το αρχείο «%s» για να εκτελεστεί"
 
 #: ../../common/exec.c:250
 #, c-format
-<<<<<<< HEAD
-msgid "could not change directory to \"%s\": %m"
-msgstr "δεν ήταν δυνατή η μετάβαση στον κατάλογο «%s»: %m"
-
-#: ../../common/exec.c:286
-#, c-format
-msgid "could not read symbolic link \"%s\": %m"
-msgstr "δεν ήταν δυνατή η ανάγνωση του συμβολικού συνδέσμου «%s»: %m"
-
-#: ../../common/exec.c:409
-=======
 msgid "could not resolve path \"%s\" to absolute form: %m"
 msgstr "δεν δύναται η επίλυση διαδρομής «%s» σε απόλυτη μορφή: %m"
 
 #: ../../common/exec.c:412
->>>>>>> REL_16_9
 #, c-format
 msgid "%s() failed: %m"
 msgstr "%s() απέτυχε: %m"
@@ -146,16 +115,6 @@ msgstr "%s: ο κατάλογος «%s» δεν είναι κατάλογος σ
 #, c-format
 msgid "%s: could not open PID file \"%s\": %s\n"
 msgstr "%s: δεν ήταν δυνατό το άνοιγμα αρχείου PID «%s»: %s\n"
-<<<<<<< HEAD
-
-#: pg_ctl.c:296
-#, c-format
-msgid "%s: the PID file \"%s\" is empty\n"
-msgstr "%s: το αρχείο PID «%s» είναι άδειο\n"
-
-#: pg_ctl.c:299
-#, c-format
-=======
 
 #: pg_ctl.c:293
 #, c-format
@@ -164,7 +123,6 @@ msgstr "%s: το αρχείο PID «%s» είναι άδειο\n"
 
 #: pg_ctl.c:296
 #, c-format
->>>>>>> REL_16_9
 msgid "%s: invalid data in PID file \"%s\"\n"
 msgstr "%s: μη έγκυρα δεδομένα στο αρχείο PID «%s»\n"
 
@@ -197,51 +155,16 @@ msgstr "%s: δεν είναι δυνατός ο ορισμός ορίου μεγ
 #, c-format
 msgid "%s: could not read file \"%s\"\n"
 msgstr "%s: δεν ήταν δυνατή η ανάγνωση αρχείου «%s»\n"
-<<<<<<< HEAD
-
-#: pg_ctl.c:743
-#, c-format
-msgid "%s: option file \"%s\" must have exactly one line\n"
-msgstr "%s: το αρχείο επιλογής «%s» πρέπει να έχει ακριβώς μία γραμμή\n"
-
-#: pg_ctl.c:785 pg_ctl.c:974 pg_ctl.c:1070
-#, c-format
-msgid "%s: could not send stop signal (PID: %ld): %s\n"
-msgstr "%s: δεν ήταν δυνατή η αποστολή σήματος διακοπής (PID: %ld): %s\n"
-
-#: pg_ctl.c:813
-#, c-format
-msgid ""
-"The program \"%s\" is needed by %s but was not found in the\n"
-"same directory as \"%s\".\n"
-"Check your installation.\n"
-msgstr ""
-"Το πρόγραμμα «%s» απαιτείται από %s αλλά δεν βρέθηκε στον\n"
-"ίδιο κατάλογο με το «%s».\n"
-"Ελέγξτε την εγκατάστασή σας.\n"
-=======
 
 #: pg_ctl.c:813
 #, c-format
 msgid "%s: option file \"%s\" must have exactly one line\n"
 msgstr "%s: το αρχείο επιλογής «%s» πρέπει να έχει ακριβώς μία γραμμή\n"
->>>>>>> REL_16_9
 
 #: pg_ctl.c:855 pg_ctl.c:1039 pg_ctl.c:1107
 #, c-format
-<<<<<<< HEAD
-msgid ""
-"The program \"%s\" was found by \"%s\"\n"
-"but was not the same version as %s.\n"
-"Check your installation.\n"
-msgstr ""
-"Το πρόγραμμα «%s» βρέθηκε από το \"%s\"\n"
-"αλλά δεν ήταν στην ίδια έκδοση με %s.\n"
-"Ελέγξτε την εγκατάστασή σας.\n"
-=======
 msgid "%s: could not send stop signal (PID: %d): %s\n"
 msgstr "%s: δεν ήταν δυνατή η αποστολή σήματος διακοπής (PID: %d): %s\n"
->>>>>>> REL_16_9
 
 #: pg_ctl.c:883
 #, c-format
@@ -398,18 +321,8 @@ msgstr "%s: δεν ήταν δυνατή η εγγραφή του αρχείου
 
 #: pg_ctl.c:1225
 #, c-format
-<<<<<<< HEAD
-msgid "%s: could not send promote signal (PID: %ld): %s\n"
-msgstr "%s: δεν ήταν δυνατή η αποστολή σήματος προβιβασμού (PID: %ld): %s\n"
-
-#: pg_ctl.c:1218
-#, c-format
-msgid "%s: could not remove promote signal file \"%s\": %s\n"
-msgstr "%s: δεν ήταν δυνατή η κατάργηση του αρχείου σήματος προβιβασμού «%s»: %s\n"
-=======
 msgid "%s: could not send promote signal (PID: %d): %s\n"
 msgstr "%s: δεν ήταν δυνατή η αποστολή σήματος προβιβασμού (PID: %d): %s\n"
->>>>>>> REL_16_9
 
 #: pg_ctl.c:1228
 #, c-format
@@ -447,14 +360,11 @@ msgstr "%s: δεν ήταν δυνατή η δημιουργία αρχείου 
 #, c-format
 msgid "%s: could not write log rotation signal file \"%s\": %s\n"
 msgstr "%s: δεν ήταν δυνατή η εγγραφή του αρχείου σήματος περιστροφής αρχείου καταγραφής «%s»: %s\n"
-<<<<<<< HEAD
-=======
 
 #: pg_ctl.c:1298
 #, c-format
 msgid "%s: could not send log rotation signal (PID: %d): %s\n"
 msgstr "%s: δεν ήταν δυνατή η αποστολή σήματος περιστροφής αρχείου καταγραφής (PID: %d): %s\n"
->>>>>>> REL_16_9
 
 #: pg_ctl.c:1301
 #, c-format

@@ -9,24 +9,15 @@ msgid ""
 msgstr ""
 "Project-Id-Version: pg_config (PostgreSQL) 14\n"
 "Report-Msgid-Bugs-To: pgsql-bugs@lists.postgresql.org\n"
-<<<<<<< HEAD
-"POT-Creation-Date: 2021-07-20 03:45+0000\n"
-"PO-Revision-Date: 2021-07-20 10:27+0200\n"
-=======
 "POT-Creation-Date: 2023-08-14 23:17+0000\n"
 "PO-Revision-Date: 2023-08-15 13:21+0200\n"
->>>>>>> REL_16_9
 "Last-Translator: Georgios Kokolatos <gkokolatos@pm.me>\n"
 "Language-Team: \n"
 "Language: el\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-<<<<<<< HEAD
-"X-Generator: Poedit 3.0\n"
-=======
 "X-Generator: Poedit 3.3.2\n"
->>>>>>> REL_16_9
 
 #: ../../common/config_info.c:134 ../../common/config_info.c:142
 #: ../../common/config_info.c:150 ../../common/config_info.c:158
@@ -42,44 +33,20 @@ msgstr "μη έγκυρο δυαδικό αρχείο «%s»: %m"
 
 #: ../../common/exec.c:215
 #, c-format
-<<<<<<< HEAD
-msgid "invalid binary \"%s\""
-msgstr "μη έγκυρο δυαδικό αρχείο «%s»"
-
-#: ../../common/exec.c:205
-#, c-format
-msgid "could not read binary \"%s\""
-msgstr "δεν ήταν δυνατή η ανάγνωση του δυαδικού αρχείου «%s»"
-
-#: ../../common/exec.c:213
-=======
 msgid "could not read binary \"%s\": %m"
 msgstr "δεν ήταν δυνατή η ανάγνωση του δυαδικού αρχείου «%s»: %m"
 
 #: ../../common/exec.c:223
->>>>>>> REL_16_9
 #, c-format
 msgid "could not find a \"%s\" to execute"
 msgstr "δεν βρέθηκε το αρχείο «%s» για να εκτελεστεί"
 
 #: ../../common/exec.c:250
 #, c-format
-<<<<<<< HEAD
-msgid "could not change directory to \"%s\": %m"
-msgstr "δεν ήταν δυνατή η μετάβαση στον κατάλογο «%s»: %m"
-
-#: ../../common/exec.c:286
-#, c-format
-msgid "could not read symbolic link \"%s\": %m"
-msgstr "δεν ήταν δυνατή η ανάγνωση του συμβολικού συνδέσμου «%s»: %m"
-
-#: ../../common/exec.c:409
-=======
 msgid "could not resolve path \"%s\" to absolute form: %m"
 msgstr "δεν δύναται η επίλυση διαδρομής «%s» σε απόλυτη μορφή: %m"
 
 #: ../../common/exec.c:412
->>>>>>> REL_16_9
 #, c-format
 msgid "%s() failed: %m"
 msgstr "%s() απέτυχε: %m"
@@ -209,12 +176,7 @@ msgstr "  --cppflags            εμφάνισε την τιμή CPPFLAGS που
 #: pg_config.c:96
 #, c-format
 msgid "  --cflags              show CFLAGS value used when PostgreSQL was built\n"
-<<<<<<< HEAD
-msgstr ""
-"  --cflags              εμφάνισε την τιμή CFLAGS που χρησιμοποιήθηκε κατά την κατασκευή της PostgreSQL\n"
-=======
 msgstr "  --cflags              εμφάνισε την τιμή CFLAGS που χρησιμοποιήθηκε κατά την κατασκευή της PostgreSQL\n"
->>>>>>> REL_16_9
 
 #: pg_config.c:97
 #, c-format

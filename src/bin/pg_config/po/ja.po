@@ -5,17 +5,10 @@
 #
 msgid ""
 msgstr ""
-<<<<<<< HEAD
-"Project-Id-Version: pg_config (PostgreSQL 14)\n"
-"Report-Msgid-Bugs-To: pgsql-bugs@lists.postgresql.org\n"
-"POT-Creation-Date: 2021-08-20 15:39+0900\n"
-"PO-Revision-Date: 2021-08-19 17:24+0900\n"
-=======
 "Project-Id-Version: pg_config (PostgreSQL 16)\n"
 "Report-Msgid-Bugs-To: pgsql-bugs@lists.postgresql.org\n"
 "POT-Creation-Date: 2023-03-24 09:21+0900\n"
 "PO-Revision-Date: 2023-03-24 14:10+0900\n"
->>>>>>> REL_16_9
 "Last-Translator: Kyotaro Horiguchi <horikyota.ntt@gmail.com>\n"
 "Language-Team: Japan PostgreSQL Users Group <jpug-doc@ml.postgresql.jp>\n"
 "Language: ja\n"
@@ -32,24 +25,6 @@ msgstr ""
 msgid "not recorded"
 msgstr "記録されていません"
 
-<<<<<<< HEAD
-#: ../../common/exec.c:136 ../../common/exec.c:253 ../../common/exec.c:299
-#, c-format
-msgid "could not identify current directory: %m"
-msgstr "カレントディレクトリを確認できませんでした: %m"
-
-#: ../../common/exec.c:155
-#, c-format
-msgid "invalid binary \"%s\""
-msgstr "不正なバイナリ\"%s\""
-
-#: ../../common/exec.c:205
-#, c-format
-msgid "could not read binary \"%s\""
-msgstr "バイナリ\"%s\"を読み取れませんでした"
-
-#: ../../common/exec.c:213
-=======
 #: ../../common/exec.c:172
 #, c-format
 msgid "invalid binary \"%s\": %m"
@@ -61,41 +36,23 @@ msgid "could not read binary \"%s\": %m"
 msgstr "バイナリ\"%s\"を読み取れませんでした: %m"
 
 #: ../../common/exec.c:223
->>>>>>> REL_16_9
 #, c-format
 msgid "could not find a \"%s\" to execute"
-msgstr "実行対象の\"%s\"が見つかりませんでした"
+msgstr "実行する\"%s\"がありませんでした"
 
-<<<<<<< HEAD
-#: ../../common/exec.c:269 ../../common/exec.c:308
-=======
 #: ../../common/exec.c:250
->>>>>>> REL_16_9
 #, c-format
 msgid "could not resolve path \"%s\" to absolute form: %m"
 msgstr "パス\"%s\"を絶対パス形式に変換できませんでした: %m"
 
-<<<<<<< HEAD
-#: ../../common/exec.c:286
-=======
 #: ../../common/exec.c:412
->>>>>>> REL_16_9
 #, c-format
 msgid "%s() failed: %m"
 msgstr "%s()が失敗しました: %m"
 
-<<<<<<< HEAD
-#: ../../common/exec.c:409
-#, c-format
-msgid "%s() failed: %m"
-msgstr "%s() が失敗しました: %m"
-
-#: ../../common/exec.c:522 ../../common/exec.c:567 ../../common/exec.c:659
-=======
 #: ../../common/exec.c:550 ../../common/exec.c:595 ../../common/exec.c:687
->>>>>>> REL_16_9
 msgid "out of memory"
-msgstr "メモリ不足"
+msgstr "メモリ不足です"
 
 #: pg_config.c:74
 #, c-format
@@ -277,12 +234,12 @@ msgstr "%s ホームページ: <%s>\n"
 #: pg_config.c:112
 #, c-format
 msgid "Try \"%s --help\" for more information.\n"
-msgstr "詳細は\"%s --help\"で確認してください。\n"
+msgstr "詳細は\"%s --help\"を行ってください\n"
 
 #: pg_config.c:154
 #, c-format
 msgid "%s: could not find own program executable\n"
-msgstr "%s: 自身の実行ファイルが見つかりませんでした\n"
+msgstr "%s: 実行ファイル自体がありませんでした\n"
 
 #: pg_config.c:181
 #, c-format

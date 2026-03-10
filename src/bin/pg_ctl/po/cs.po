@@ -7,13 +7,8 @@ msgid ""
 msgstr ""
 "Project-Id-Version: pg_ctl-cs (PostgreSQL 9.3)\n"
 "Report-Msgid-Bugs-To: pgsql-bugs@lists.postgresql.org\n"
-<<<<<<< HEAD
-"POT-Creation-Date: 2020-10-31 16:14+0000\n"
-"PO-Revision-Date: 2021-09-16 09:07+0200\n"
-=======
 "POT-Creation-Date: 2023-04-24 03:48+0000\n"
 "PO-Revision-Date: 2023-04-24 08:53+0200\n"
->>>>>>> REL_16_9
 "Last-Translator: Tomas Vondra <tv@fuzzy.cz>\n"
 "Language-Team: Czech <info@cspug.cx>\n"
 "Language: cs\n"

@@ -102,12 +102,7 @@ msgstr "  --docdir              affiche l'emplacement des fichiers de documentat
 #: pg_config.c:80
 #, c-format
 msgid "  --htmldir             show location of HTML documentation files\n"
-<<<<<<< HEAD
-msgstr ""
-"  --htmldir             affiche l'emplacement des fichiers de documentation HTML\n"
-=======
 msgstr "  --htmldir             affiche l'emplacement des fichiers de documentation HTML\n"
->>>>>>> REL_16_9
 
 #: pg_config.c:81
 #, c-format
@@ -121,12 +116,7 @@ msgstr ""
 #: pg_config.c:83
 #, c-format
 msgid "  --pkgincludedir       show location of other C header files\n"
-<<<<<<< HEAD
-msgstr ""
-"  --pkgincludedir       affiche l'emplacement des autres fichiers d'en-tête C\n"
-=======
 msgstr "  --pkgincludedir       affiche l'emplacement des autres fichiers d'en-tête C\n"
->>>>>>> REL_16_9
 
 #: pg_config.c:84
 #, c-format

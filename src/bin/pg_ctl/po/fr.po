@@ -12,25 +12,16 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PostgreSQL 16\n"
 "Report-Msgid-Bugs-To: pgsql-bugs@lists.postgresql.org\n"
-<<<<<<< HEAD
-"POT-Creation-Date: 2021-10-28 16:15+0000\n"
-"PO-Revision-Date: 2021-10-29 16:13+0200\n"
-=======
 "POT-Creation-Date: 2023-07-29 09:18+0000\n"
 "PO-Revision-Date: 2024-09-16 16:35+0200\n"
->>>>>>> REL_16_9
 "Last-Translator: Guillaume Lelarge <guillaume@lelarge.info>\n"
 "Language-Team: French <guillaume@lelarge.info>\n"
 "Language: fr\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-<<<<<<< HEAD
-"X-Generator: Poedit 3.0\n"
-=======
 "Plural-Forms: nplurals=2; plural=(n > 1);\n"
 "X-Generator: Poedit 3.5\n"
->>>>>>> REL_16_9
 
 #: ../../common/exec.c:172
 #, c-format
@@ -187,19 +178,8 @@ msgstr "le programme « %s » est nécessaire pour %s, mais n'a pas été trouv�
 
 #: pg_ctl.c:886
 #, c-format
-<<<<<<< HEAD
-msgid ""
-"The program \"%s\" was found by \"%s\"\n"
-"but was not the same version as %s.\n"
-"Check your installation.\n"
-msgstr ""
-"Le programme « %s » a été trouvé par « %s »\n"
-"mais n'est pas de la même version que %s.\n"
-"Vérifiez votre installation.\n"
-=======
 msgid "program \"%s\" was found by \"%s\" but was not the same version as %s\n"
 msgstr "le programme « %s » a été trouvé par « %s » mais n'est pas de la même version que %s\n"
->>>>>>> REL_16_9
 
 #: pg_ctl.c:918
 #, c-format
@@ -585,11 +565,7 @@ msgstr "  %s promote    [-D RÉP_DONNÉES] [-W] [-t SECS] [-s]\n"
 #: pg_ctl.c:1977
 #, c-format
 msgid "  %s logrotate  [-D DATADIR] [-s]\n"
-<<<<<<< HEAD
-msgstr "  %s reload     [-D RÉP_DONNÉES] [-s]\n"
-=======
 msgstr "  %s logrotate  [-D RÉP_DONNÉES] [-s]\n"
->>>>>>> REL_16_9
 
 #: pg_ctl.c:1978
 #, c-format
@@ -899,101 +875,3 @@ msgid "%s: no database directory specified and environment variable PGDATA unset
 msgstr ""
 "%s : aucun répertoire de bases de données indiqué et variable\n"
 "d'environnement PGDATA non initialisée\n"
-<<<<<<< HEAD
-
-#~ msgid "pclose failed: %m"
-#~ msgstr "échec de pclose : %m"
-
-#~ msgid ""
-#~ "\n"
-#~ "%s: -w option is not supported when starting a pre-9.1 server\n"
-#~ msgstr ""
-#~ "\n"
-#~ "%s : l'option -w n'est pas supportée lors du démarrage d'un serveur pré-9.1\n"
-
-#~ msgid ""
-#~ "\n"
-#~ "%s: -w option cannot use a relative socket directory specification\n"
-#~ msgstr ""
-#~ "\n"
-#~ "%s : l'option -w ne peut pas utiliser un chemin relatif vers le répertoire de\n"
-#~ "la socket\n"
-
-#~ msgid "%s: could not wait for server because of misconfiguration\n"
-#~ msgstr "%s : n'a pas pu attendre le serveur à cause d'une mauvaise configuration\n"
-
-#~ msgid "  %s start   [-w] [-t SECS] [-D DATADIR] [-s] [-l FILENAME] [-o \"OPTIONS\"]\n"
-#~ msgstr ""
-#~ "  %s start      [-w] [-t SECS] [-D RÉP_DONNÉES] [-s] [-l NOM_FICHIER]\n"
-#~ "                [-o \"OPTIONS\"]\n"
-
-#~ msgid ""
-#~ "(The default is to wait for shutdown, but not for start or restart.)\n"
-#~ "\n"
-#~ msgstr ""
-#~ "(Le comportement par défaut attend l'arrêt, pas le démarrage ou le\n"
-#~ "redémarrage.)\n"
-#~ "\n"
-
-#~ msgid ""
-#~ "\n"
-#~ "Options for stop, restart, or promote:\n"
-#~ msgstr ""
-#~ "\n"
-#~ "Options pour l'arrêt, le redémarrage ou la promotion :\n"
-
-#~ msgid "could not change directory to \"%s\""
-#~ msgstr "n'a pas pu accéder au répertoire « %s »"
-
-#~ msgid ""
-#~ "%s is a utility to start, stop, restart, reload configuration files,\n"
-#~ "report the status of a PostgreSQL server, or signal a PostgreSQL process.\n"
-#~ "\n"
-#~ msgstr ""
-#~ "%s est un outil qui permet de démarrer, arrêter, redémarrer, recharger les\n"
-#~ "les fichiers de configuration, rapporter le statut d'un serveur PostgreSQL\n"
-#~ "ou d'envoyer un signal à un processus PostgreSQL\n"
-#~ "\n"
-
-#~ msgid "  --version              output version information, then exit\n"
-#~ msgstr "  --version                affiche la version et quitte\n"
-
-#~ msgid "  --help                 show this help, then exit\n"
-#~ msgstr "  --help                   affiche cette aide et quitte\n"
-
-#~ msgid "%s: could not open process token: %lu\n"
-#~ msgstr "%s : n'a pas pu ouvrir le jeton du processus : %lu\n"
-
-#~ msgid "%s: could not start server: exit code was %d\n"
-#~ msgstr "%s : n'a pas pu démarrer le serveur : le code de sortie est %d\n"
-
-#~ msgid ""
-#~ "\n"
-#~ "%s: this data directory appears to be running a pre-existing postmaster\n"
-#~ msgstr ""
-#~ "\n"
-#~ "%s : ce répertoire des données semble être utilisé par un postmaster déjà existant\n"
-
-#~ msgid "server is still starting up\n"
-#~ msgstr "le serveur est toujours en cours de démarrage\n"
-
-#~ msgid "child process was terminated by signal %s"
-#~ msgstr "le processus fils a été terminé par le signal %s"
-
-#~ msgid "could not read symbolic link \"%s\""
-#~ msgstr "n'a pas pu lire le lien symbolique « %s »"
-
-#~ msgid "could not change directory to \"%s\": %s"
-#~ msgstr "n'a pas pu modifier le répertoire par « %s » : %s"
-
-#~ msgid ""
-#~ "\n"
-#~ "Report bugs to <pgsql-bugs@lists.postgresql.org>.\n"
-#~ msgstr ""
-#~ "\n"
-#~ "Rapporter les bogues à <pgsql-bugs@lists.postgresql.org>.\n"
-
-#~ msgid "%s: could not create log file \"%s\": %s\n"
-#~ msgstr "%s : n'a pas pu créer le fichier de traces « %s » : %s\n"
-=======
->>>>>>> REL_16_9

@@ -2,13 +2,8 @@ msgid ""
 msgstr ""
 "Project-Id-Version: postgresql\n"
 "Report-Msgid-Bugs-To: pgsql-bugs@lists.postgresql.org\n"
-<<<<<<< HEAD
-"POT-Creation-Date: 2021-06-10 08:49+0000\n"
-"PO-Revision-Date: 2021-08-17 10:54\n"
-=======
 "POT-Creation-Date: 2022-08-12 10:51+0000\n"
 "PO-Revision-Date: 2022-09-13 11:52\n"
->>>>>>> REL_16_9
 "Last-Translator: \n"
 "Language-Team: Ukrainian\n"
 "Language: uk_UA\n"
@@ -19,13 +14,8 @@ msgstr ""
 "X-Crowdin-Project: postgresql\n"
 "X-Crowdin-Project-ID: 324573\n"
 "X-Crowdin-Language: uk\n"
-<<<<<<< HEAD
-"X-Crowdin-File: /REL_14_DEV/pg_controldata.pot\n"
-"X-Crowdin-File-ID: 744\n"
-=======
 "X-Crowdin-File: /REL_15_STABLE/pg_controldata.pot\n"
 "X-Crowdin-File-ID: 924\n"
->>>>>>> REL_16_9
 
 #: ../../common/controldata_utils.c:73
 #, c-format
@@ -168,13 +158,8 @@ msgstr "невизнаний wal_рівень"
 
 #: pg_controldata.c:138 pg_controldata.c:156 pg_controldata.c:163
 #, c-format
-<<<<<<< HEAD
-msgid "Try \"%s --help\" for more information.\n"
-msgstr "Спробуйте \"%s --help\" для додаткової інформації.\n"
-=======
 msgid "Try \"%s --help\" for more information."
 msgstr "Спробуйте \"%s --help\" для додаткової інформації."
->>>>>>> REL_16_9
 
 #: pg_controldata.c:154
 #, c-format

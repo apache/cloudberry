@@ -5,22 +5,13 @@
 # Serguei A. Mokhov <mokhov@cs.concordia.ca>, 2004-2005.
 # Sergey Burladyan <eshkinkot@gmail.com>, 2009, 2012.
 # Andrey Sudnik <sudnikand@gmail.com>, 2010.
-<<<<<<< HEAD
-# Alexander Lakhin <exclusion@gmail.com>, 2012-2016, 2017, 2019, 2020, 2021.
-=======
 # Alexander Lakhin <exclusion@gmail.com>, 2012-2016, 2017, 2019, 2020, 2021, 2023, 2024.
->>>>>>> REL_16_9
 msgid ""
 msgstr ""
 "Project-Id-Version: pg_config (PostgreSQL current)\n"
 "Report-Msgid-Bugs-To: pgsql-bugs@lists.postgresql.org\n"
-<<<<<<< HEAD
-"POT-Creation-Date: 2022-05-07 06:06+0300\n"
-"PO-Revision-Date: 2021-09-04 12:15+0300\n"
-=======
 "POT-Creation-Date: 2023-08-28 07:59+0300\n"
 "PO-Revision-Date: 2023-08-29 10:19+0300\n"
->>>>>>> REL_16_9
 "Last-Translator: Alexander Lakhin <exclusion@gmail.com>\n"
 "Language-Team: Russian <pgsql-ru-general@postgresql.org>\n"
 "Language: ru\n"
@@ -37,66 +28,32 @@ msgstr ""
 msgid "not recorded"
 msgstr "не записано"
 
-<<<<<<< HEAD
-#: ../../common/exec.c:141 ../../common/exec.c:258 ../../common/exec.c:304
-=======
 #: ../../common/exec.c:172
->>>>>>> REL_16_9
 #, c-format
 msgid "invalid binary \"%s\": %m"
 msgstr "неверный исполняемый файл \"%s\": %m"
 
-<<<<<<< HEAD
-#: ../../common/exec.c:160
-=======
 #: ../../common/exec.c:215
->>>>>>> REL_16_9
 #, c-format
 msgid "could not read binary \"%s\": %m"
 msgstr "не удалось прочитать исполняемый файл \"%s\": %m"
 
-<<<<<<< HEAD
-#: ../../common/exec.c:210
-#, c-format
-msgid "could not read binary \"%s\""
-msgstr "не удалось прочитать исполняемый файл \"%s\""
-
-#: ../../common/exec.c:218
-=======
 #: ../../common/exec.c:223
->>>>>>> REL_16_9
 #, c-format
 msgid "could not find a \"%s\" to execute"
 msgstr "не удалось найти запускаемый файл \"%s\""
 
-<<<<<<< HEAD
-#: ../../common/exec.c:274 ../../common/exec.c:313
-=======
 #: ../../common/exec.c:250
->>>>>>> REL_16_9
 #, c-format
 msgid "could not resolve path \"%s\" to absolute form: %m"
 msgstr "не удалось преобразовать относительный путь \"%s\" в абсолютный: %m"
 
-<<<<<<< HEAD
-#: ../../common/exec.c:291
-=======
 #: ../../common/exec.c:412
->>>>>>> REL_16_9
 #, c-format
 msgid "%s() failed: %m"
 msgstr "ошибка в %s(): %m"
 
-<<<<<<< HEAD
-#: ../../common/exec.c:414
-#, c-format
-msgid "%s() failed: %m"
-msgstr "ошибка в %s(): %m"
-
-#: ../../common/exec.c:527 ../../common/exec.c:572 ../../common/exec.c:664
-=======
 #: ../../common/exec.c:550 ../../common/exec.c:595 ../../common/exec.c:687
->>>>>>> REL_16_9
 msgid "out of memory"
 msgstr "нехватка памяти"
 
