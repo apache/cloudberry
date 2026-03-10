@@ -4,17 +4,10 @@
 #
 msgid ""
 msgstr ""
-<<<<<<< HEAD
-"Project-Id-Version: pg_archivecleanup (PostgreSQL 14)\n"
-"Report-Msgid-Bugs-To: pgsql-bugs@lists.postgresql.org\n"
-"POT-Creation-Date: 2021-08-25 17:21+0900\n"
-"PO-Revision-Date: 2021-05-18 17:08+0900\n"
-=======
 "Project-Id-Version: pg_archivecleanup (PostgreSQL 16)\n"
 "Report-Msgid-Bugs-To: pgsql-bugs@lists.postgresql.org\n"
 "POT-Creation-Date: 2023-07-04 09:43+0900\n"
 "PO-Revision-Date: 2023-07-04 09:48+0900\n"
->>>>>>> REL_16_9
 "Last-Translator: Kyotaro Horiguchi <horikyota.ntt@gmail.com>\n"
 "Language-Team: Japan PostgreSQL Users Group <jpug-doc@ml.postgresql.jp>\n"
 "Language: ja\n"
@@ -23,25 +16,12 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "X-Generator: Poedit 1.8.13\n"
 
-<<<<<<< HEAD
-#: ../../../src/common/logging.c:259
-#, c-format
-msgid "fatal: "
-msgstr "致命的エラー: "
-
-#: ../../../src/common/logging.c:266
-=======
 #: ../../../src/common/logging.c:276
->>>>>>> REL_16_9
 #, c-format
 msgid "error: "
 msgstr "エラー: "
 
-<<<<<<< HEAD
-#: ../../../src/common/logging.c:273
-=======
 #: ../../../src/common/logging.c:283
->>>>>>> REL_16_9
 #, c-format
 msgid "warning: "
 msgstr "警告: "
@@ -89,13 +69,8 @@ msgstr "ファイル名引数が無効です"
 #: pg_archivecleanup.c:238 pg_archivecleanup.c:313 pg_archivecleanup.c:333
 #: pg_archivecleanup.c:345 pg_archivecleanup.c:352
 #, c-format
-<<<<<<< HEAD
-msgid "Try \"%s --help\" for more information.\n"
-msgstr "詳細は\"%s --help\"で確認してください。\n"
-=======
 msgid "Try \"%s --help\" for more information."
 msgstr "詳細は\"%s --help\"を実行してください。"
->>>>>>> REL_16_9
 
 #: pg_archivecleanup.c:251
 #, c-format
@@ -109,7 +84,7 @@ msgstr ""
 #: pg_archivecleanup.c:252
 #, c-format
 msgid "Usage:\n"
-msgstr "使用方法:\n"
+msgstr "使用法:\n"
 
 #: pg_archivecleanup.c:253
 #, c-format
