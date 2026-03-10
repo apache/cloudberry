@@ -1,9 +1,5 @@
 # German message translation file for pg_basebackup
-<<<<<<< HEAD
-# Copyright (C) 2011 - 2022 PostgreSQL Global Development Group
-=======
 # Copyright (C) 2011 - 2023 PostgreSQL Global Development Group
->>>>>>> REL_16_9
 # This file is distributed under the same license as the PostgreSQL package.
 #
 # Use these quotes: »%s«
@@ -12,13 +8,8 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PostgreSQL 16\n"
 "Report-Msgid-Bugs-To: pgsql-bugs@lists.postgresql.org\n"
-<<<<<<< HEAD
-"POT-Creation-Date: 2022-01-31 20:46+0000\n"
-"PO-Revision-Date: 2022-02-01 12:35+0100\n"
-=======
 "POT-Creation-Date: 2023-05-19 17:19+0000\n"
 "PO-Revision-Date: 2023-05-19 20:49+0200\n"
->>>>>>> REL_16_9
 "Last-Translator: Peter Eisentraut <peter@eisentraut.org>\n"
 "Language-Team: German <pgsql-translators@postgresql.org>\n"
 "Language: de\n"
@@ -110,13 +101,8 @@ msgstr "Speicher aufgebraucht\n"
 msgid "cannot duplicate null pointer (internal error)\n"
 msgstr "kann NULL-Zeiger nicht kopieren (interner Fehler)\n"
 
-<<<<<<< HEAD
-#: ../../common/file_utils.c:87 ../../common/file_utils.c:451
-#: pg_receivewal.c:266 pg_recvlogical.c:339
-=======
 #: ../../common/file_utils.c:87 ../../common/file_utils.c:447
 #: pg_receivewal.c:319 pg_recvlogical.c:339
->>>>>>> REL_16_9
 #, c-format
 msgid "could not stat file \"%s\": %m"
 msgstr "konnte »stat« für Datei »%s« nicht ausführen: %m"
@@ -166,24 +152,14 @@ msgstr "%s muss im Bereich %d..%d sein"
 msgid "out of memory"
 msgstr "Speicher aufgebraucht"
 
-<<<<<<< HEAD
-#: ../../fe_utils/recovery_gen.c:140 pg_basebackup.c:1021 pg_basebackup.c:1715
-#: pg_basebackup.c:1771
-=======
 #: ../../fe_utils/recovery_gen.c:124 bbstreamer_file.c:121
 #: bbstreamer_file.c:258 pg_basebackup.c:1406 pg_basebackup.c:1700
->>>>>>> REL_16_9
 #, c-format
 msgid "could not write to file \"%s\": %m"
 msgstr "konnte nicht in Datei »%s« schreiben: %m"
 
-<<<<<<< HEAD
-#: ../../fe_utils/recovery_gen.c:152 pg_basebackup.c:1166 pg_basebackup.c:1672
-#: pg_basebackup.c:1748
-=======
 #: ../../fe_utils/recovery_gen.c:133 bbstreamer_file.c:93 bbstreamer_file.c:360
 #: pg_basebackup.c:1470 pg_basebackup.c:1679
->>>>>>> REL_16_9
 #, c-format
 msgid "could not create file \"%s\": %m"
 msgstr "konnte Datei »%s« nicht erstellen: %m"
@@ -694,13 +670,8 @@ msgstr "%s Homepage: <%s>\n"
 msgid "could not read from ready pipe: %m"
 msgstr "konnte nicht aus bereiter Pipe lesen: %m"
 
-<<<<<<< HEAD
-#: pg_basebackup.c:477 pg_basebackup.c:608 pg_basebackup.c:2134
-#: streamutil.c:450
-=======
 #: pg_basebackup.c:480 pg_basebackup.c:622 pg_basebackup.c:2151
 #: streamutil.c:441
->>>>>>> REL_16_9
 #, c-format
 msgid "could not parse write-ahead log location \"%s\""
 msgstr "konnte Write-Ahead-Log-Position »%s« nicht interpretieren"
@@ -725,16 +696,7 @@ msgstr "temporärer Replikations-Slot »%s« wurde erzeugt"
 msgid "created replication slot \"%s\""
 msgstr "Replikations-Slot »%s« wurde erzeugt"
 
-<<<<<<< HEAD
-#: pg_basebackup.c:678 pg_basebackup.c:731 pg_basebackup.c:1621
-#, c-format
-msgid "could not create directory \"%s\": %m"
-msgstr "konnte Verzeichnis »%s« nicht erzeugen: %m"
-
-#: pg_basebackup.c:696
-=======
 #: pg_basebackup.c:701
->>>>>>> REL_16_9
 #, c-format
 msgid "could not create background process: %m"
 msgstr "konnte Hintergrundprozess nicht erzeugen: %m"
@@ -810,13 +772,8 @@ msgstr "Transferrate »%s« ist außerhalb des gültigen Bereichs"
 msgid "could not get COPY data stream: %s"
 msgstr "konnte COPY-Datenstrom nicht empfangen: %s"
 
-<<<<<<< HEAD
-#: pg_basebackup.c:981 pg_recvlogical.c:434 pg_recvlogical.c:606
-#: receivelog.c:978
-=======
 #: pg_basebackup.c:1012 pg_recvlogical.c:436 pg_recvlogical.c:608
 #: receivelog.c:973
->>>>>>> REL_16_9
 #, c-format
 msgid "could not read COPY data: %s"
 msgstr "konnte COPY-Daten nicht lesen: %s"
@@ -846,100 +803,56 @@ msgstr "kann Archiv »%s« nicht parsen"
 msgid "Only tar archives can be parsed."
 msgstr "Nur Tar-Archive können geparst werden."
 
-<<<<<<< HEAD
-#: pg_basebackup.c:1268
-#, c-format
-msgid "could not close compressed file \"%s\": %m"
-msgstr "konnte komprimierte Datei »%s« nicht schließen: %m"
-
-#: pg_basebackup.c:1280 pg_recvlogical.c:631
-=======
 #: pg_basebackup.c:1107
 #, c-format
 msgid "Plain format requires pg_basebackup to parse the archive."
 msgstr "Format »plain« benötigt pg_basebackup, um das Archiv zu parsen."
 
 #: pg_basebackup.c:1109
->>>>>>> REL_16_9
 #, c-format
 msgid "Using - as the output directory requires pg_basebackup to parse the archive."
 msgstr "Wenn - als Ausgabeverzeichnis verwendet wird, wird pg_basebackup benötigt, um das Archiv zu parsen."
 
-<<<<<<< HEAD
-#: pg_basebackup.c:1542
-=======
 #: pg_basebackup.c:1111
->>>>>>> REL_16_9
 #, c-format
 msgid "The -R option requires pg_basebackup to parse the archive."
 msgstr "Die Option -R benötigt pg_basebackup, um das Archiv zu parsen."
 
-<<<<<<< HEAD
-#: pg_basebackup.c:1571
-=======
 #: pg_basebackup.c:1330
->>>>>>> REL_16_9
 #, c-format
 msgid "archives must precede manifest"
 msgstr "Archive müssen vor dem Manifest kommen"
 
-<<<<<<< HEAD
-#: pg_basebackup.c:1628
-=======
 #: pg_basebackup.c:1345
->>>>>>> REL_16_9
 #, c-format
 msgid "invalid archive name: \"%s\""
 msgstr "ungültiger Archivname: »%s«"
 
-<<<<<<< HEAD
-#: pg_basebackup.c:1652
-=======
 #: pg_basebackup.c:1417
->>>>>>> REL_16_9
 #, c-format
 msgid "unexpected payload data"
 msgstr "unerwartete Payload-Daten"
 
-<<<<<<< HEAD
-#: pg_basebackup.c:1659
-=======
 #: pg_basebackup.c:1560
->>>>>>> REL_16_9
 #, c-format
 msgid "empty COPY message"
 msgstr "leere COPY-Nachricht"
 
-<<<<<<< HEAD
-#: pg_basebackup.c:1678
-=======
 #: pg_basebackup.c:1562
->>>>>>> REL_16_9
 #, c-format
 msgid "malformed COPY message of type %d, length %zu"
 msgstr "fehlerhafte COPY-Nachricht vom Typ %d, Länge %zu"
 
-<<<<<<< HEAD
-#: pg_basebackup.c:1832
-=======
 #: pg_basebackup.c:1760
->>>>>>> REL_16_9
 #, c-format
 msgid "incompatible server version %s"
 msgstr "inkompatible Serverversion %s"
 
-<<<<<<< HEAD
-#: pg_basebackup.c:1847
-=======
 #: pg_basebackup.c:1776
->>>>>>> REL_16_9
 #, c-format
 msgid "Use -X none or -X fetch to disable log streaming."
 msgstr "Verwenden Sie -X none oder -X fetch, um Log-Streaming abzuschalten."
 
-<<<<<<< HEAD
-#: pg_basebackup.c:1883
-=======
 #: pg_basebackup.c:1844
 #, c-format
 msgid "backup targets are not supported by this server version"
@@ -956,16 +869,10 @@ msgid "server does not support server-side compression"
 msgstr "Server unterstützt keine serverseitige Komprimierung"
 
 #: pg_basebackup.c:1884
->>>>>>> REL_16_9
 #, c-format
 msgid "initiating base backup, waiting for checkpoint to complete"
 msgstr "Basissicherung eingeleitet, warte auf Abschluss des Checkpoints"
 
-<<<<<<< HEAD
-#: pg_basebackup.c:1909 pg_recvlogical.c:261 receivelog.c:494 receivelog.c:543
-#: receivelog.c:582 streamutil.c:297 streamutil.c:370 streamutil.c:422
-#: streamutil.c:533 streamutil.c:578
-=======
 #: pg_basebackup.c:1888
 #, c-format
 msgid "waiting for checkpoint"
@@ -974,281 +881,145 @@ msgstr "Warten auf Checkpoint"
 #: pg_basebackup.c:1901 pg_recvlogical.c:260 receivelog.c:543 receivelog.c:582
 #: streamutil.c:288 streamutil.c:361 streamutil.c:413 streamutil.c:501
 #: streamutil.c:653 streamutil.c:698
->>>>>>> REL_16_9
 #, c-format
 msgid "could not send replication command \"%s\": %s"
 msgstr "konnte Replikationsbefehl »%s« nicht senden: %s"
 
-<<<<<<< HEAD
-#: pg_basebackup.c:1920
-=======
 #: pg_basebackup.c:1909
->>>>>>> REL_16_9
 #, c-format
 msgid "could not initiate base backup: %s"
 msgstr "konnte Basissicherung nicht starten: %s"
 
-<<<<<<< HEAD
-#: pg_basebackup.c:1926
-=======
 #: pg_basebackup.c:1912
->>>>>>> REL_16_9
 #, c-format
 msgid "server returned unexpected response to BASE_BACKUP command; got %d rows and %d fields, expected %d rows and %d fields"
 msgstr "unerwartete Antwort auf Befehl BASE_BACKUP: %d Zeilen und %d Felder erhalten, %d Zeilen und %d Felder erwartet"
 
-<<<<<<< HEAD
-#: pg_basebackup.c:1934
-=======
 #: pg_basebackup.c:1918
->>>>>>> REL_16_9
 #, c-format
 msgid "checkpoint completed"
 msgstr "Checkpoint abgeschlossen"
 
-<<<<<<< HEAD
-#: pg_basebackup.c:1949
-=======
 #: pg_basebackup.c:1932
->>>>>>> REL_16_9
 #, c-format
 msgid "write-ahead log start point: %s on timeline %u"
 msgstr "Write-Ahead-Log-Startpunkt: %s auf Zeitleiste %u"
 
-<<<<<<< HEAD
-#: pg_basebackup.c:1958
-=======
 #: pg_basebackup.c:1940
->>>>>>> REL_16_9
 #, c-format
 msgid "could not get backup header: %s"
 msgstr "konnte Kopf der Sicherung nicht empfangen: %s"
 
-<<<<<<< HEAD
-#: pg_basebackup.c:1964
-=======
 #: pg_basebackup.c:1943
->>>>>>> REL_16_9
 #, c-format
 msgid "no data returned from server"
 msgstr "keine Daten vom Server zurückgegeben"
 
-<<<<<<< HEAD
-#: pg_basebackup.c:1996
-=======
 #: pg_basebackup.c:1986
->>>>>>> REL_16_9
 #, c-format
 msgid "can only write single tablespace to stdout, database has %d"
 msgstr "kann nur einen einzelnen Tablespace auf die Standardausgabe schreiben, Datenbank hat %d"
 
-<<<<<<< HEAD
-#: pg_basebackup.c:2008
-=======
 #: pg_basebackup.c:1999
->>>>>>> REL_16_9
 #, c-format
 msgid "starting background WAL receiver"
 msgstr "Hintergrund-WAL-Receiver wird gestartet"
 
-<<<<<<< HEAD
-#: pg_basebackup.c:2047
-=======
 #: pg_basebackup.c:2082
->>>>>>> REL_16_9
 #, c-format
 msgid "backup failed: %s"
 msgstr "Backup fehlgeschlagen: %s"
 
-<<<<<<< HEAD
-#: pg_basebackup.c:2053
-=======
 #: pg_basebackup.c:2085
->>>>>>> REL_16_9
 #, c-format
 msgid "no write-ahead log end position returned from server"
 msgstr "keine Write-Ahead-Log-Endposition vom Server zurückgegeben"
 
-<<<<<<< HEAD
-#: pg_basebackup.c:2058
-=======
 #: pg_basebackup.c:2088
->>>>>>> REL_16_9
 #, c-format
 msgid "write-ahead log end point: %s"
 msgstr "Write-Ahead-Log-Endposition: %s"
 
-<<<<<<< HEAD
-#: pg_basebackup.c:2069
-=======
 #: pg_basebackup.c:2099
->>>>>>> REL_16_9
 #, c-format
 msgid "checksum error occurred"
 msgstr "ein Prüfsummenfehler ist aufgetreten"
 
-<<<<<<< HEAD
-#: pg_basebackup.c:2074
-=======
 #: pg_basebackup.c:2104
->>>>>>> REL_16_9
 #, c-format
 msgid "final receive failed: %s"
 msgstr "letztes Empfangen fehlgeschlagen: %s"
 
-<<<<<<< HEAD
-#: pg_basebackup.c:2098
-=======
 #: pg_basebackup.c:2128
->>>>>>> REL_16_9
 #, c-format
 msgid "waiting for background process to finish streaming ..."
 msgstr "warte bis Hintergrundprozess Streaming beendet hat ..."
 
-<<<<<<< HEAD
-#: pg_basebackup.c:2103
-=======
 #: pg_basebackup.c:2132
->>>>>>> REL_16_9
 #, c-format
 msgid "could not send command to background pipe: %m"
 msgstr "konnte Befehl nicht an Hintergrund-Pipe senden: %m"
 
-<<<<<<< HEAD
-#: pg_basebackup.c:2111
-=======
 #: pg_basebackup.c:2137
->>>>>>> REL_16_9
 #, c-format
 msgid "could not wait for child process: %m"
 msgstr "konnte nicht auf Kindprozess warten: %m"
 
-<<<<<<< HEAD
-#: pg_basebackup.c:2116
-=======
 #: pg_basebackup.c:2139
->>>>>>> REL_16_9
 #, c-format
 msgid "child %d died, expected %d"
 msgstr "Kindprozess %d endete, aber %d wurde erwartet"
 
-<<<<<<< HEAD
-#: pg_basebackup.c:2121 streamutil.c:92 streamutil.c:203
-=======
 #: pg_basebackup.c:2141 streamutil.c:91 streamutil.c:196
->>>>>>> REL_16_9
 #, c-format
 msgid "%s"
 msgstr "%s"
 
-<<<<<<< HEAD
-#: pg_basebackup.c:2146
-=======
 #: pg_basebackup.c:2161
->>>>>>> REL_16_9
 #, c-format
 msgid "could not wait for child thread: %m"
 msgstr "konnte nicht auf Kind-Thread warten: %m"
 
-<<<<<<< HEAD
-#: pg_basebackup.c:2152
-=======
 #: pg_basebackup.c:2166
->>>>>>> REL_16_9
 #, c-format
 msgid "could not get child thread exit status: %m"
 msgstr "konnte Statuscode des Kind-Threads nicht ermitteln: %m"
 
-<<<<<<< HEAD
-#: pg_basebackup.c:2157
-=======
 #: pg_basebackup.c:2169
->>>>>>> REL_16_9
 #, c-format
 msgid "child thread exited with error %u"
 msgstr "Kind-Thread hat mit Fehler %u beendet"
 
-<<<<<<< HEAD
-#: pg_basebackup.c:2185
-=======
 #: pg_basebackup.c:2198
->>>>>>> REL_16_9
 #, c-format
 msgid "syncing data to disk ..."
 msgstr "synchronisiere Daten auf Festplatte ..."
 
-<<<<<<< HEAD
-#: pg_basebackup.c:2210
-=======
 #: pg_basebackup.c:2223
->>>>>>> REL_16_9
 #, c-format
 msgid "renaming backup_manifest.tmp to backup_manifest"
 msgstr "umbenennen von backup_manifest.tmp nach backup_manifest"
 
-<<<<<<< HEAD
-#: pg_basebackup.c:2221
-=======
 #: pg_basebackup.c:2243
->>>>>>> REL_16_9
 #, c-format
 msgid "base backup completed"
 msgstr "Basissicherung abgeschlossen"
 
-<<<<<<< HEAD
-#: pg_basebackup.c:2306
-#, c-format
-msgid "invalid output format \"%s\", must be \"plain\" or \"tar\""
-msgstr "ungültiges Ausgabeformat »%s«, muss »plain« oder »tar« sein"
-
-#: pg_basebackup.c:2350
-#, c-format
-msgid "invalid wal-method option \"%s\", must be \"fetch\", \"stream\", or \"none\""
-msgstr "ungültige Option »%s« für --wal-method, muss »fetch«, »stream« oder »none« sein"
-
-#: pg_basebackup.c:2378 pg_receivewal.c:580
-#, c-format
-msgid "invalid compression level \"%s\""
-msgstr "ungültiges Komprimierungsniveau »%s«"
-
-#: pg_basebackup.c:2389
-=======
 #: pg_basebackup.c:2326
->>>>>>> REL_16_9
 #, c-format
 msgid "invalid checkpoint argument \"%s\", must be \"fast\" or \"spread\""
 msgstr "ungültiges Checkpoint-Argument »%s«, muss »fast« oder »spread« sein"
 
-<<<<<<< HEAD
-#: pg_basebackup.c:2416 pg_receivewal.c:555 pg_recvlogical.c:819
-=======
 #: pg_basebackup.c:2344
->>>>>>> REL_16_9
 #, c-format
 msgid "invalid output format \"%s\", must be \"plain\" or \"tar\""
 msgstr "ungültiges Ausgabeformat »%s«, muss »plain« oder »tar« sein"
 
-<<<<<<< HEAD
-#: pg_basebackup.c:2446 pg_basebackup.c:2459 pg_basebackup.c:2470
-#: pg_basebackup.c:2481 pg_basebackup.c:2489 pg_basebackup.c:2497
-#: pg_basebackup.c:2507 pg_basebackup.c:2520 pg_basebackup.c:2529
-#: pg_basebackup.c:2540 pg_basebackup.c:2550 pg_basebackup.c:2568
-#: pg_basebackup.c:2577 pg_basebackup.c:2586 pg_receivewal.c:605
-#: pg_receivewal.c:618 pg_receivewal.c:626 pg_receivewal.c:636
-#: pg_receivewal.c:644 pg_receivewal.c:655 pg_recvlogical.c:845
-#: pg_recvlogical.c:858 pg_recvlogical.c:869 pg_recvlogical.c:877
-#: pg_recvlogical.c:885 pg_recvlogical.c:893 pg_recvlogical.c:901
-#: pg_recvlogical.c:909 pg_recvlogical.c:917
-=======
 #: pg_basebackup.c:2422
->>>>>>> REL_16_9
 #, c-format
 msgid "invalid wal-method option \"%s\", must be \"fetch\", \"stream\", or \"none\""
 msgstr "ungültige Option »%s« für --wal-method, muss »fetch«, »stream« oder »none« sein"
 
-<<<<<<< HEAD
-#: pg_basebackup.c:2457 pg_receivewal.c:616 pg_recvlogical.c:856
-=======
 #: pg_basebackup.c:2457 pg_basebackup.c:2469 pg_basebackup.c:2491
 #: pg_basebackup.c:2503 pg_basebackup.c:2509 pg_basebackup.c:2561
 #: pg_basebackup.c:2572 pg_basebackup.c:2582 pg_basebackup.c:2588
@@ -1266,23 +1037,15 @@ msgid "Try \"%s --help\" for more information."
 msgstr "Versuchen Sie »%s --help« für weitere Informationen."
 
 #: pg_basebackup.c:2467 pg_receivewal.c:758 pg_recvlogical.c:845
->>>>>>> REL_16_9
 #, c-format
 msgid "too many command-line arguments (first is \"%s\")"
 msgstr "zu viele Kommandozeilenargumente (das erste ist »%s«)"
 
-<<<<<<< HEAD
-#: pg_basebackup.c:2469 pg_receivewal.c:654
-=======
 #: pg_basebackup.c:2490
->>>>>>> REL_16_9
 #, c-format
 msgid "cannot specify both format and backup target"
 msgstr "Format und Backup-Ziel können nicht beide angegeben werden"
 
-<<<<<<< HEAD
-#: pg_basebackup.c:2480
-=======
 #: pg_basebackup.c:2502
 #, c-format
 msgid "must specify output directory or backup target"
@@ -1309,109 +1072,62 @@ msgid "client-side compression is not possible when a backup target is specified
 msgstr "clientseitige Komprimierung ist nicht möglich, wenn ein Backup-Ziel angegeben ist"
 
 #: pg_basebackup.c:2571
->>>>>>> REL_16_9
 #, c-format
 msgid "only tar mode backups can be compressed"
 msgstr "nur Sicherungen im Tar-Modus können komprimiert werden"
 
-<<<<<<< HEAD
-#: pg_basebackup.c:2488
-=======
 #: pg_basebackup.c:2581
 #, c-format
 msgid "WAL cannot be streamed when a backup target is specified"
 msgstr "WAL-Streaming ist nicht möglich, wenn ein Backup-Ziel angegeben ist"
 
 #: pg_basebackup.c:2587
->>>>>>> REL_16_9
 #, c-format
 msgid "cannot stream write-ahead logs in tar mode to stdout"
 msgstr "im Tar-Modus können Write-Ahead-Logs nicht auf Standardausgabe geschrieben werden"
 
-<<<<<<< HEAD
-#: pg_basebackup.c:2496
-=======
 #: pg_basebackup.c:2594
->>>>>>> REL_16_9
 #, c-format
 msgid "replication slots can only be used with WAL streaming"
 msgstr "Replikations-Slots können nur mit WAL-Streaming verwendet werden"
 
-<<<<<<< HEAD
-#: pg_basebackup.c:2506
-=======
 #: pg_basebackup.c:2606
->>>>>>> REL_16_9
 #, c-format
 msgid "--no-slot cannot be used with slot name"
 msgstr "--no-slot kann nicht zusammen mit einem Slot-Namen verwendet werden"
 
 #. translator: second %s is an option name
-<<<<<<< HEAD
-#: pg_basebackup.c:2518 pg_receivewal.c:634
-=======
 #: pg_basebackup.c:2617 pg_receivewal.c:774
->>>>>>> REL_16_9
 #, c-format
 msgid "%s needs a slot to be specified using --slot"
 msgstr "für %s muss ein Slot mit --slot angegeben werden"
 
-<<<<<<< HEAD
-#: pg_basebackup.c:2527 pg_basebackup.c:2566 pg_basebackup.c:2575
-#: pg_basebackup.c:2584
-=======
 #: pg_basebackup.c:2625 pg_basebackup.c:2665 pg_basebackup.c:2676
 #: pg_basebackup.c:2684
->>>>>>> REL_16_9
 #, c-format
 msgid "%s and %s are incompatible options"
 msgstr "%s und %s sind inkompatible Optionen"
 
-<<<<<<< HEAD
-#: pg_basebackup.c:2539
-=======
 #: pg_basebackup.c:2639
 #, c-format
 msgid "WAL directory location cannot be specified along with a backup target"
 msgstr "WAL-Verzeichnis kann nicht zusammen mit einem Backup-Ziel angegeben werden"
 
 #: pg_basebackup.c:2645
->>>>>>> REL_16_9
 #, c-format
 msgid "WAL directory location can only be specified in plain mode"
 msgstr "WAL-Verzeichnis kann nur im »plain«-Modus angegeben werden"
 
-<<<<<<< HEAD
-#: pg_basebackup.c:2549
-=======
 #: pg_basebackup.c:2654
->>>>>>> REL_16_9
 #, c-format
 msgid "WAL directory location must be an absolute path"
 msgstr "WAL-Verzeichnis muss absoluten Pfad haben"
 
-<<<<<<< HEAD
-#: pg_basebackup.c:2559 pg_receivewal.c:663
-#, c-format
-msgid "this build does not support compression"
-msgstr "diese Installation unterstützt keine Komprimierung"
-
-#: pg_basebackup.c:2644
-=======
 #: pg_basebackup.c:2754
->>>>>>> REL_16_9
 #, c-format
 msgid "could not create symbolic link \"%s\": %m"
 msgstr "konnte symbolische Verknüpfung »%s« nicht erstellen: %m"
 
-<<<<<<< HEAD
-#: pg_basebackup.c:2648
-#, c-format
-msgid "symlinks are not supported on this platform"
-msgstr "symbolische Verknüpfungen werden auf dieser Plattform nicht unterstützt"
-
-=======
->>>>>>> REL_16_9
 #: pg_receivewal.c:77
 #, c-format
 msgid ""
@@ -1589,16 +1305,7 @@ msgstr "kann Datei »%s« nicht prüfen: Komprimierung mit %s wird von dieser In
 msgid "starting log streaming at %X/%X (timeline %u)"
 msgstr "starte Log-Streaming bei %X/%X (Zeitleiste %u)"
 
-<<<<<<< HEAD
-#: pg_receivewal.c:537 pg_recvlogical.c:761
-#, c-format
-msgid "invalid port number \"%s\""
-msgstr "ungültige Portnummer »%s«"
-
-#: pg_receivewal.c:565 pg_recvlogical.c:787
-=======
 #: pg_receivewal.c:693 pg_recvlogical.c:783
->>>>>>> REL_16_9
 #, c-format
 msgid "could not parse end position \"%s\""
 msgstr "konnte Endposition »%s« nicht parsen"
@@ -1613,9 +1320,6 @@ msgstr "--create-slot kann nicht zusammen mit --drop-slot verwendet werden"
 msgid "cannot use --synchronous together with --no-sync"
 msgstr "--synchronous kann nicht zusammen mit --no-sync verwendet werden"
 
-<<<<<<< HEAD
-#: pg_receivewal.c:723
-=======
 #: pg_receivewal.c:792
 #, c-format
 msgid "no target directory specified"
@@ -1627,44 +1331,27 @@ msgid "compression with %s is not yet supported"
 msgstr "Komprimierung mit %s wird noch nicht unterstützt"
 
 #: pg_receivewal.c:859
->>>>>>> REL_16_9
 #, c-format
 msgid "replication connection using slot \"%s\" is unexpectedly database specific"
 msgstr "Replikationsverbindung, die Slot »%s« verwendet, ist unerwarteterweise datenbankspezifisch"
 
-<<<<<<< HEAD
-#: pg_receivewal.c:734 pg_recvlogical.c:968
-=======
 #: pg_receivewal.c:878 pg_recvlogical.c:954
->>>>>>> REL_16_9
 #, c-format
 msgid "dropping replication slot \"%s\""
 msgstr "lösche Replikations-Slot »%s«"
 
-<<<<<<< HEAD
-#: pg_receivewal.c:745 pg_recvlogical.c:978
-=======
 #: pg_receivewal.c:889 pg_recvlogical.c:964
->>>>>>> REL_16_9
 #, c-format
 msgid "creating replication slot \"%s\""
 msgstr "erzeuge Replikations-Slot »%s«"
 
-<<<<<<< HEAD
-#: pg_receivewal.c:771 pg_recvlogical.c:1003
-=======
 #: pg_receivewal.c:918 pg_recvlogical.c:988
->>>>>>> REL_16_9
 #, c-format
 msgid "disconnected"
 msgstr "Verbindung beendet"
 
 #. translator: check source for value for %d
-<<<<<<< HEAD
-#: pg_receivewal.c:777 pg_recvlogical.c:1009
-=======
 #: pg_receivewal.c:922 pg_recvlogical.c:992
->>>>>>> REL_16_9
 #, c-format
 msgid "disconnected; waiting %d seconds to try again"
 msgstr "Verbindung beendet; erneuter Versuch in %d Sekunden"
@@ -1749,212 +1436,118 @@ msgstr "  -d, --dbname=DBNAME    Datenbank, mit der verbunden werden soll\n"
 msgid "confirming write up to %X/%X, flush to %X/%X (slot %s)"
 msgstr "bestätige Schreiben bis %X/%X, Flush bis %X/%X (Slot %s)"
 
-<<<<<<< HEAD
-#: pg_recvlogical.c:157 receivelog.c:356
-=======
 #: pg_recvlogical.c:159 receivelog.c:360
->>>>>>> REL_16_9
 #, c-format
 msgid "could not send feedback packet: %s"
 msgstr "konnte Rückmeldungspaket nicht senden: %s"
 
-<<<<<<< HEAD
-#: pg_recvlogical.c:228
-=======
 #: pg_recvlogical.c:227
->>>>>>> REL_16_9
 #, c-format
 msgid "starting log streaming at %X/%X (slot %s)"
 msgstr "starte Log-Streaming bei %X/%X (Slot %s)"
 
-<<<<<<< HEAD
-#: pg_recvlogical.c:270
-=======
 #: pg_recvlogical.c:269
->>>>>>> REL_16_9
 #, c-format
 msgid "streaming initiated"
 msgstr "Streaming eingeleitet"
 
-<<<<<<< HEAD
-#: pg_recvlogical.c:334
-=======
 #: pg_recvlogical.c:333
->>>>>>> REL_16_9
 #, c-format
 msgid "could not open log file \"%s\": %m"
 msgstr "konnte Logdatei »%s« nicht öffnen: %m"
 
-<<<<<<< HEAD
-#: pg_recvlogical.c:360 receivelog.c:886
-=======
 #: pg_recvlogical.c:362 receivelog.c:882
->>>>>>> REL_16_9
 #, c-format
 msgid "invalid socket: %s"
 msgstr "ungültiges Socket: %s"
 
-<<<<<<< HEAD
-#: pg_recvlogical.c:413 receivelog.c:914
-=======
 #: pg_recvlogical.c:415 receivelog.c:910
->>>>>>> REL_16_9
 #, c-format
 msgid "%s() failed: %m"
 msgstr "%s() fehlgeschlagen: %m"
 
-<<<<<<< HEAD
-#: pg_recvlogical.c:420 receivelog.c:964
-=======
 #: pg_recvlogical.c:422 receivelog.c:959
->>>>>>> REL_16_9
 #, c-format
 msgid "could not receive data from WAL stream: %s"
 msgstr "konnte keine Daten vom WAL-Stream empfangen: %s"
 
-<<<<<<< HEAD
-#: pg_recvlogical.c:462 pg_recvlogical.c:513 receivelog.c:1008
-#: receivelog.c:1074
-=======
 #: pg_recvlogical.c:464 pg_recvlogical.c:515 receivelog.c:1003
 #: receivelog.c:1066
->>>>>>> REL_16_9
 #, c-format
 msgid "streaming header too small: %d"
 msgstr "Streaming-Header zu klein: %d"
 
-<<<<<<< HEAD
-#: pg_recvlogical.c:497 receivelog.c:846
-=======
 #: pg_recvlogical.c:499 receivelog.c:843
->>>>>>> REL_16_9
 #, c-format
 msgid "unrecognized streaming header: \"%c\""
 msgstr "unbekannter Streaming-Header: »%c«"
 
-<<<<<<< HEAD
-#: pg_recvlogical.c:551 pg_recvlogical.c:563
-=======
 #: pg_recvlogical.c:553 pg_recvlogical.c:565
->>>>>>> REL_16_9
 #, c-format
 msgid "could not write %d bytes to log file \"%s\": %m"
 msgstr "konnte %d Bytes nicht in Logdatei »%s« schreiben: %m"
 
-<<<<<<< HEAD
-#: pg_recvlogical.c:617 receivelog.c:642 receivelog.c:679
-=======
 #: pg_recvlogical.c:619 receivelog.c:642 receivelog.c:679
->>>>>>> REL_16_9
 #, c-format
 msgid "unexpected termination of replication stream: %s"
 msgstr "unerwarteter Abbruch des Replikations-Streams: %s"
 
-<<<<<<< HEAD
-#: pg_recvlogical.c:741
-#, c-format
-msgid "invalid fsync interval \"%s\""
-msgstr "ungültiges Fsync-Intervall »%s«"
-
-#: pg_recvlogical.c:779
-=======
 #: pg_recvlogical.c:778
->>>>>>> REL_16_9
 #, c-format
 msgid "could not parse start position \"%s\""
 msgstr "konnte Startposition »%s« nicht parsen"
 
-<<<<<<< HEAD
-#: pg_recvlogical.c:868
-=======
 #: pg_recvlogical.c:856
->>>>>>> REL_16_9
 #, c-format
 msgid "no slot specified"
 msgstr "kein Slot angegeben"
 
-<<<<<<< HEAD
-#: pg_recvlogical.c:876
-=======
 #: pg_recvlogical.c:863
->>>>>>> REL_16_9
 #, c-format
 msgid "no target file specified"
 msgstr "keine Zieldatei angegeben"
 
-<<<<<<< HEAD
-#: pg_recvlogical.c:884
-=======
 #: pg_recvlogical.c:870
->>>>>>> REL_16_9
 #, c-format
 msgid "no database specified"
 msgstr "keine Datenbank angegeben"
 
-<<<<<<< HEAD
-#: pg_recvlogical.c:892
-=======
 #: pg_recvlogical.c:877
->>>>>>> REL_16_9
 #, c-format
 msgid "at least one action needs to be specified"
 msgstr "mindestens eine Aktion muss angegeben werden"
 
-<<<<<<< HEAD
-#: pg_recvlogical.c:900
-=======
 #: pg_recvlogical.c:884
->>>>>>> REL_16_9
 #, c-format
 msgid "cannot use --create-slot or --start together with --drop-slot"
 msgstr "--create-slot oder --start kann nicht zusammen mit --drop-slot verwendet werden"
 
-<<<<<<< HEAD
-#: pg_recvlogical.c:908
-=======
 #: pg_recvlogical.c:891
->>>>>>> REL_16_9
 #, c-format
 msgid "cannot use --create-slot or --drop-slot together with --startpos"
 msgstr "--create-slot oder --drop-slot kann nicht zusammen mit --startpos verwendet werden"
 
-<<<<<<< HEAD
-#: pg_recvlogical.c:916
-=======
 #: pg_recvlogical.c:898
->>>>>>> REL_16_9
 #, c-format
 msgid "--endpos may only be specified with --start"
 msgstr "--endpos kann nur zusammen mit --start angegeben werden"
 
-<<<<<<< HEAD
-#: pg_recvlogical.c:950
-=======
 #: pg_recvlogical.c:905
 #, c-format
 msgid "--two-phase may only be specified with --create-slot"
 msgstr "--two-phase kann nur zusammen mit --create-slot angegeben werden"
 
 #: pg_recvlogical.c:938
->>>>>>> REL_16_9
 #, c-format
 msgid "could not establish database-specific replication connection"
 msgstr "konnte keine datenbankspezifische Replikationsverbindung herstellen"
 
-<<<<<<< HEAD
-#: pg_recvlogical.c:1049
-=======
 #: pg_recvlogical.c:1032
->>>>>>> REL_16_9
 #, c-format
 msgid "end position %X/%X reached by keepalive"
 msgstr "Endposition %X/%X durch Keepalive erreicht"
 
-<<<<<<< HEAD
-#: pg_recvlogical.c:1052
-=======
 #: pg_recvlogical.c:1035
->>>>>>> REL_16_9
 #, c-format
 msgid "end position %X/%X reached by WAL record at %X/%X"
 msgstr "Endposition %X/%X erreicht durch WAL-Eintrag bei %X/%X"
@@ -1964,148 +1557,79 @@ msgstr "Endposition %X/%X erreicht durch WAL-Eintrag bei %X/%X"
 msgid "could not create archive status file \"%s\": %s"
 msgstr "konnte Archivstatusdatei »%s« nicht erstellen: %s"
 
-<<<<<<< HEAD
-#: receivelog.c:75
-=======
 #: receivelog.c:73
->>>>>>> REL_16_9
 #, c-format
 msgid "could not close archive status file \"%s\": %s"
 msgstr "konnte Archivstatusdatei »%s« nicht schließen: %s"
 
-<<<<<<< HEAD
-#: receivelog.c:123
-=======
 #: receivelog.c:122
->>>>>>> REL_16_9
 #, c-format
 msgid "could not get size of write-ahead log file \"%s\": %s"
 msgstr "konnte Größe der Write-Ahead-Log-Datei »%s« nicht ermittlen: %s"
 
-<<<<<<< HEAD
-#: receivelog.c:134
-=======
 #: receivelog.c:133
->>>>>>> REL_16_9
 #, c-format
 msgid "could not open existing write-ahead log file \"%s\": %s"
 msgstr "konnte bestehende Write-Ahead-Log-Datei »%s« nicht öffnen: %s"
 
-<<<<<<< HEAD
-#: receivelog.c:143
-=======
 #: receivelog.c:142
->>>>>>> REL_16_9
 #, c-format
 msgid "could not fsync existing write-ahead log file \"%s\": %s"
 msgstr "konnte bestehende Write-Ahead-Log-Datei »%s« nicht fsyncen: %s"
 
-<<<<<<< HEAD
-#: receivelog.c:158
-=======
 #: receivelog.c:157
->>>>>>> REL_16_9
 #, c-format
 msgid "write-ahead log file \"%s\" has %zd byte, should be 0 or %d"
 msgid_plural "write-ahead log file \"%s\" has %zd bytes, should be 0 or %d"
 msgstr[0] "Write-Ahead-Log-Datei »%s« hat %zd Byte, sollte 0 oder %d sein"
 msgstr[1] "Write-Ahead-Log-Datei »%s« hat %zd Bytes, sollte 0 oder %d sein"
 
-<<<<<<< HEAD
-#: receivelog.c:174
-=======
 #: receivelog.c:175
->>>>>>> REL_16_9
 #, c-format
 msgid "could not open write-ahead log file \"%s\": %s"
 msgstr "konnte Write-Ahead-Log-Datei »%s« nicht öffnen: %s"
 
-<<<<<<< HEAD
-#: receivelog.c:202
-=======
 #: receivelog.c:216
->>>>>>> REL_16_9
 #, c-format
 msgid "not renaming \"%s\", segment is not complete"
 msgstr "»%s« wird nicht umbenannt, Segment ist noch nicht vollständig"
 
-<<<<<<< HEAD
-#: receivelog.c:216
-#, c-format
-msgid "not renaming \"%s%s\", segment is not complete"
-msgstr "»%s%s« wird nicht umbenannt, Segment ist noch nicht vollständig"
-
-#: receivelog.c:228 receivelog.c:313 receivelog.c:688
-=======
 #: receivelog.c:227 receivelog.c:317 receivelog.c:688
->>>>>>> REL_16_9
 #, c-format
 msgid "could not close file \"%s\": %s"
 msgstr "konnte Datei »%s« nicht schließen: %s"
 
-<<<<<<< HEAD
-#: receivelog.c:285
-=======
 #: receivelog.c:288
->>>>>>> REL_16_9
 #, c-format
 msgid "server reported unexpected history file name for timeline %u: %s"
 msgstr "Server berichtete unerwarteten History-Dateinamen für Zeitleiste %u: %s"
 
-<<<<<<< HEAD
-#: receivelog.c:293
-=======
 #: receivelog.c:297
->>>>>>> REL_16_9
 #, c-format
 msgid "could not create timeline history file \"%s\": %s"
 msgstr "konnte Zeitleisten-History-Datei »%s« nicht erzeugen: %s"
 
-<<<<<<< HEAD
-#: receivelog.c:300
-=======
 #: receivelog.c:304
->>>>>>> REL_16_9
 #, c-format
 msgid "could not write timeline history file \"%s\": %s"
 msgstr "konnte Zeitleisten-History-Datei »%s« nicht schreiben: %s"
 
-<<<<<<< HEAD
-#: receivelog.c:390
-=======
 #: receivelog.c:394
->>>>>>> REL_16_9
 #, c-format
 msgid "incompatible server version %s; client does not support streaming from server versions older than %s"
 msgstr "inkompatible Serverversion %s; Client unterstützt Streaming nicht mit Serverversionen älter als %s"
 
-<<<<<<< HEAD
-#: receivelog.c:399
-=======
 #: receivelog.c:403
->>>>>>> REL_16_9
 #, c-format
 msgid "incompatible server version %s; client does not support streaming from server versions newer than %s"
 msgstr "inkompatible Serverversion %s; Client unterstützt Streaming nicht mit Serverversionen neuer als %s"
 
-<<<<<<< HEAD
-#: receivelog.c:501 streamutil.c:430 streamutil.c:467
-#, c-format
-msgid "could not identify system: got %d rows and %d fields, expected %d rows and %d or more fields"
-msgstr "Konnte System nicht identifizieren: %d Zeilen und %d Felder erhalten, %d Zeilen und %d oder mehr Felder erwartet"
-
-=======
->>>>>>> REL_16_9
 #: receivelog.c:508
 #, c-format
 msgid "system identifier does not match between base backup and streaming connection"
 msgstr "Systemidentifikator stimmt nicht zwischen Basissicherung und Streaming-Verbindung überein"
 
-<<<<<<< HEAD
-#: receivelog.c:514
-=======
 #: receivelog.c:516
->>>>>>> REL_16_9
 #, c-format
 msgid "starting timeline %u is not present in the server"
 msgstr "Startzeitleiste %u ist auf dem Server nicht vorhanden"
@@ -2140,47 +1664,27 @@ msgstr "unerwartete Ergebnismenge nach Ende der Zeitleiste: %d Zeilen und %d Fel
 msgid "could not parse next timeline's starting point \"%s\""
 msgstr "konnte Startpunkt der nächsten Zeitleiste (»%s«) nicht interpretieren"
 
-<<<<<<< HEAD
-#: receivelog.c:776 receivelog.c:1028 walmethods.c:994
-=======
 #: receivelog.c:775 receivelog.c:1022 walmethods.c:1201
->>>>>>> REL_16_9
 #, c-format
 msgid "could not fsync file \"%s\": %s"
 msgstr "konnte Datei »%s« nicht fsyncen: %s"
 
-<<<<<<< HEAD
-#: receivelog.c:1091
-=======
 #: receivelog.c:1083
->>>>>>> REL_16_9
 #, c-format
 msgid "received write-ahead log record for offset %u with no file open"
 msgstr "Write-Ahead-Log-Eintrag für Offset %u erhalten ohne offene Datei"
 
-<<<<<<< HEAD
-#: receivelog.c:1101
-=======
 #: receivelog.c:1093
->>>>>>> REL_16_9
 #, c-format
 msgid "got WAL data offset %08x, expected %08x"
 msgstr "WAL-Daten-Offset %08x erhalten, %08x erwartet"
 
-<<<<<<< HEAD
-#: receivelog.c:1135
-=======
 #: receivelog.c:1128
->>>>>>> REL_16_9
 #, c-format
 msgid "could not write %d bytes to WAL file \"%s\": %s"
 msgstr "konnte %d Bytes nicht in WAL-Datei »%s« schreiben: %s"
 
-<<<<<<< HEAD
-#: receivelog.c:1160 receivelog.c:1200 receivelog.c:1230
-=======
 #: receivelog.c:1153 receivelog.c:1193 receivelog.c:1222
->>>>>>> REL_16_9
 #, c-format
 msgid "could not send copy-end packet: %s"
 msgstr "konnte COPY-Ende-Paket nicht senden: %s"
@@ -2271,37 +1775,6 @@ msgstr "konnte Replikations-Slot »%s« nicht erzeugen: %d Zeilen und %d Felder 
 msgid "could not drop replication slot \"%s\": got %d rows and %d fields, expected %d rows and %d fields"
 msgstr "konnte Replikations-Slot »%s« nicht löschen: %d Zeilen und %d Felder erhalten, %d Zeilen und %d Felder erwartet"
 
-<<<<<<< HEAD
-#: walmethods.c:521 walmethods.c:1057
-msgid "could not compress data"
-msgstr "konnte Daten nicht komprimieren"
-
-#: walmethods.c:550
-msgid "could not reset compression stream"
-msgstr "konnte Komprimierungsstrom nicht zurücksetzen"
-
-#: walmethods.c:670
-msgid "could not initialize compression library"
-msgstr "konnte Komprimierungsbibliothek nicht initialisieren"
-
-#: walmethods.c:681
-msgid "implementation error: tar files can't have more than one open file"
-msgstr "Implementierungsfehler: Tar-Dateien können nicht mehr als eine offene Datei haben"
-
-#: walmethods.c:695
-msgid "could not create tar header"
-msgstr "konnte Tar-Dateikopf nicht erzeugen"
-
-#: walmethods.c:711 walmethods.c:751 walmethods.c:965 walmethods.c:977
-msgid "could not change compression parameters"
-msgstr "konnte Komprimierungsparameter nicht ändern"
-
-#: walmethods.c:850
-msgid "unlink not supported with compression"
-msgstr "Unlink wird bei Komprimierung nicht unterstützt"
-
-#: walmethods.c:1081
-=======
 #: walmethods.c:721 walmethods.c:1264
 msgid "could not compress data"
 msgstr "konnte Daten nicht komprimieren"
@@ -2327,6 +1800,5 @@ msgid "unlink not supported with compression"
 msgstr "Unlink wird bei Komprimierung nicht unterstützt"
 
 #: walmethods.c:1288
->>>>>>> REL_16_9
 msgid "could not close compression stream"
 msgstr "konnte Komprimierungsstrom nicht schließen"
