@@ -3438,7 +3438,7 @@ recovery_create_dbdir(char *path, bool only_tblspc)
 		return;
 
 	if (only_tblspc && strstr(path, "pg_tblspc/") == NULL)
-		elog(PANIC, "requested to created invalid directory: %s", path);
+		elog(PANIC, "requested to create invalid directory: %s", path);
 
 	if (reachedConsistency && !allow_in_place_tablespaces)
 		ereport(PANIC,
@@ -3511,7 +3511,7 @@ dbase_redo(XLogReaderState *record)
 
 		/*
 		 * There's a case where the copy source directory is missing for the
-		 * same reason above.  Create the emtpy source directory so that
+		 * same reason above.  Create the empty source directory so that
 		 * copydir below doesn't fail.  The directory will be dropped soon by
 		 * recovery.
 		 */
