@@ -4,17 +4,10 @@
 #
 msgid ""
 msgstr ""
-<<<<<<< HEAD
-"Project-Id-Version: ecpglib (PostgreSQL 14)\n"
-"Report-Msgid-Bugs-To: pgsql-bugs@lists.postgresql.org\n"
-"POT-Creation-Date: 2021-08-20 15:39+0900\n"
-"PO-Revision-Date: 2021-08-19 15:13+0900\n"
-=======
 "Project-Id-Version: ecpglib (PostgreSQL 16)\n"
 "Report-Msgid-Bugs-To: pgsql-bugs@lists.postgresql.org\n"
 "POT-Creation-Date: 2022-07-14 10:48+0900\n"
 "PO-Revision-Date: 2019-06-11 09:04+0900\n"
->>>>>>> REL_16_9
 "Last-Translator: Kyotaro Horiguchi <horikyota.ntt@gmail.com>\n"
 "Language-Team: Japan PostgreSQL Users Group <jpug-doc@ml.postgresql.jp>\n"
 "Language: ja\n"
@@ -22,25 +15,17 @@ msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=1; plural=0;\n"
-"X-Generator: Poedit 1.8.13\n"
+"X-Generator: Poedit 1.5.4\n"
 
 #: connect.c:243
 msgid "empty message text"
-msgstr "空のメッセージテキスト"
+msgstr "メッセージテキストが空です"
 
-<<<<<<< HEAD
-#: connect.c:405 connect.c:627
-msgid "<DEFAULT>"
-msgstr "<デフォルト>"
-
-#: descriptor.c:871 misc.c:119
-=======
 #: connect.c:410 connect.c:675
 msgid "<DEFAULT>"
 msgstr "<デフォルト>"
 
 #: descriptor.c:876 misc.c:119
->>>>>>> REL_16_9
 msgid "NULL"
 msgstr "ヌル"
 
@@ -200,27 +185,15 @@ msgstr "行番号%2$dにおいて、データベース\"%1$s\"に接続できま
 msgid "SQL error %d on line %d"
 msgstr "行番号%2$dにおいて、SQLエラー%1$dがあります"
 
-<<<<<<< HEAD
-#: error.c:254
-=======
 #: error.c:253
->>>>>>> REL_16_9
 msgid "the connection to the server was lost"
 msgstr "サーバーへの接続が切れました"
 
-<<<<<<< HEAD
-#: error.c:346
-=======
 #: error.c:345
->>>>>>> REL_16_9
 #, c-format
 msgid "SQL error: %s\n"
 msgstr "SQLエラー: %s\n"
 
-<<<<<<< HEAD
-#: execute.c:2196 execute.c:2203
-=======
 #: execute.c:2188 execute.c:2195
->>>>>>> REL_16_9
 msgid "<empty>"
 msgstr "<空>"

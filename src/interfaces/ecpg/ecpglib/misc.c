@@ -531,15 +531,6 @@ char *
 ecpg_gettext(const char *msgid)
 {
 	/*
-<<<<<<< HEAD
-	 * If multiple threads come through here at about the same time, it's okay
-	 * for more than one of them to call bindtextdomain().  But it's not okay
-	 * for any of them to reach dgettext() before bindtextdomain() is
-	 * complete, so don't set the flag till that's done.  Use "volatile" just
-	 * to be sure the compiler doesn't try to get cute.
-	 */
-	static volatile bool already_bound = false;
-=======
 	 * At least on Windows, there are gettext implementations that fail if
 	 * multiple threads call bindtextdomain() concurrently.  Use a mutex and
 	 * flag variable to ensure that we call it just once per process.  It is
@@ -548,7 +539,6 @@ ecpg_gettext(const char *msgid)
 	 */
 	static volatile bool already_bound = false;
 	static pthread_mutex_t binddomain_mutex = PTHREAD_MUTEX_INITIALIZER;
->>>>>>> REL_16_9
 
 	if (!already_bound)
 	{
@@ -559,14 +549,6 @@ ecpg_gettext(const char *msgid)
 		int			save_errno = errno;
 #endif
 
-<<<<<<< HEAD
-		/* No relocatable lookup here because the binary could be anywhere */
-		ldir = getenv("PGLOCALEDIR");
-		if (!ldir)
-			ldir = LOCALEDIR;
-		bindtextdomain(PG_TEXTDOMAIN("ecpglib"), ldir);
-		already_bound = true;
-=======
 		(void) pthread_mutex_lock(&binddomain_mutex);
 
 		if (!already_bound)
@@ -586,7 +568,6 @@ ecpg_gettext(const char *msgid)
 
 		(void) pthread_mutex_unlock(&binddomain_mutex);
 
->>>>>>> REL_16_9
 #ifdef WIN32
 		SetLastError(save_errno);
 #else

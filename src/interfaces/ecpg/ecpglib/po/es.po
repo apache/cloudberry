@@ -7,11 +7,7 @@
 #
 msgid ""
 msgstr ""
-<<<<<<< HEAD
-"Project-Id-Version: ecpglib (PostgreSQL) 14\n"
-=======
 "Project-Id-Version: ecpglib (PostgreSQL) 16\n"
->>>>>>> REL_16_9
 "Report-Msgid-Bugs-To: pgsql-bugs@lists.postgresql.org\n"
 "POT-Creation-Date: 2024-11-09 05:58+0000\n"
 "PO-Revision-Date: 2023-05-22 12:04+0200\n"

@@ -1,22 +1,13 @@
 # Russian message translation file for ecpg
 # Copyright (C) 2012-2016 PostgreSQL Global Development Group
 # This file is distributed under the same license as the PostgreSQL package.
-<<<<<<< HEAD
-# Alexander Lakhin <exclusion@gmail.com>, 2012-2017, 2018, 2019, 2020, 2021.
-=======
 # Alexander Lakhin <exclusion@gmail.com>, 2012-2017, 2018, 2019, 2020, 2021, 2022, 2024.
->>>>>>> REL_16_9
 msgid ""
 msgstr ""
 "Project-Id-Version: ecpg (PostgreSQL current)\n"
 "Report-Msgid-Bugs-To: pgsql-bugs@lists.postgresql.org\n"
-<<<<<<< HEAD
-"POT-Creation-Date: 2021-09-01 12:57+0300\n"
-"PO-Revision-Date: 2021-09-04 10:54+0300\n"
-=======
 "POT-Creation-Date: 2025-02-08 07:45+0200\n"
 "PO-Revision-Date: 2022-09-05 13:32+0300\n"
->>>>>>> REL_16_9
 "Last-Translator: Alexander Lakhin <exclusion@gmail.com>\n"
 "Language-Team: Russian <pgsql-ru-general@postgresql.org>\n"
 "Language: ru\n"
@@ -31,65 +22,37 @@ msgstr ""
 msgid "variable \"%s\" must have a numeric type"
 msgstr "переменная \"%s\" должна иметь числовой тип"
 
-<<<<<<< HEAD
-#: descriptor.c:125 descriptor.c:156
-=======
 #: descriptor.c:124 descriptor.c:155
->>>>>>> REL_16_9
 #, c-format
 msgid "descriptor %s bound to connection %s does not exist"
 msgstr "дескриптор %s, привязанный к соединению %s, не существует"
 
-<<<<<<< HEAD
-#: descriptor.c:127 descriptor.c:158
-=======
 #: descriptor.c:126 descriptor.c:157
->>>>>>> REL_16_9
 #, c-format
 msgid "descriptor %s bound to the default connection does not exist"
 msgstr "дескриптор %s, привязанный к соединению по умолчанию, не существует"
 
-<<<<<<< HEAD
-#: descriptor.c:173 descriptor.c:225
-=======
 #: descriptor.c:172 descriptor.c:224
->>>>>>> REL_16_9
 #, c-format
 msgid "descriptor header item \"%d\" does not exist"
 msgstr "заголовок дескриптора не содержит элемент \"%d\""
 
-<<<<<<< HEAD
-#: descriptor.c:195
-=======
 #: descriptor.c:194
->>>>>>> REL_16_9
 #, c-format
 msgid "nullable is always 1"
 msgstr "NULLABLE всегда равно 1"
 
-<<<<<<< HEAD
-#: descriptor.c:198
-=======
 #: descriptor.c:197
->>>>>>> REL_16_9
 #, c-format
 msgid "key_member is always 0"
 msgstr "KEY_MEMBER всегда равно 0"
 
-<<<<<<< HEAD
-#: descriptor.c:292
-=======
 #: descriptor.c:291
->>>>>>> REL_16_9
 #, c-format
 msgid "descriptor item \"%s\" is not implemented"
 msgstr "поле \"%s\" в дескрипторе не реализовано"
 
-<<<<<<< HEAD
-#: descriptor.c:302
-=======
 #: descriptor.c:301
->>>>>>> REL_16_9
 #, c-format
 msgid "descriptor item \"%s\" cannot be set"
 msgstr "установить поле \"%s\" в дескрипторе нельзя"
@@ -223,93 +186,52 @@ msgstr ""
 msgid "%s home page: <%s>\n"
 msgstr "Домашняя страница %s: <%s>\n"
 
-<<<<<<< HEAD
-#: ecpg.c:141
-=======
 #: ecpg.c:152
->>>>>>> REL_16_9
 #, c-format
 msgid "%s: could not locate my own executable path\n"
 msgstr "%s: не удалось найти путь к собственному исполняемому файлу\n"
 
-<<<<<<< HEAD
-#: ecpg.c:176 ecpg.c:333 ecpg.c:344
-#, c-format
-msgid "%s: could not open file \"%s\": %s\n"
-msgstr "%s: не удалось открыть файл \"%s\": %s\n"
-
-#: ecpg.c:219 ecpg.c:232 ecpg.c:248 ecpg.c:274
-=======
 #: ecpg.c:195 ecpg.c:246 ecpg.c:260 ecpg.c:286
->>>>>>> REL_16_9
 #, c-format
 msgid "Try \"%s --help\" for more information.\n"
 msgstr "Для дополнительной информации попробуйте \"%s --help\".\n"
 
-<<<<<<< HEAD
-#: ecpg.c:243
-=======
 #: ecpg.c:203
->>>>>>> REL_16_9
 #, c-format
 msgid "%s: parser debug support (-d) not available\n"
 msgstr "%s: отладочные сообщения при разборе (-d) не поддерживаются\n"
 
-<<<<<<< HEAD
-#: ecpg.c:262
-=======
 #: ecpg.c:230 ecpg.c:345 ecpg.c:356
 #, c-format
 msgid "%s: could not open file \"%s\": %s\n"
 msgstr "%s: не удалось открыть файл \"%s\": %s\n"
 
 #: ecpg.c:274
->>>>>>> REL_16_9
 #, c-format
 msgid "%s, the PostgreSQL embedded C preprocessor, version %s\n"
 msgstr "%s, препроцессор внедрённого в С языка СУБД PostgreSQL, версия %s\n"
 
-<<<<<<< HEAD
-#: ecpg.c:264
-=======
 #: ecpg.c:276
->>>>>>> REL_16_9
 #, c-format
 msgid "EXEC SQL INCLUDE ... search starts here:\n"
 msgstr "поиск файлов для EXEC SQL INCLUDE ... начинается в каталогах:\n"
 
-<<<<<<< HEAD
-#: ecpg.c:267
-=======
 #: ecpg.c:279
->>>>>>> REL_16_9
 #, c-format
 msgid "end of search list\n"
 msgstr "конец списка поиска\n"
 
-<<<<<<< HEAD
-#: ecpg.c:273
-=======
 #: ecpg.c:285
->>>>>>> REL_16_9
 #, c-format
 msgid "%s: no input files specified\n"
 msgstr "%s: нет входных файлов\n"
 
-<<<<<<< HEAD
-#: ecpg.c:477
-=======
 #: ecpg.c:491
->>>>>>> REL_16_9
 #, c-format
 msgid "cursor \"%s\" has been declared but not opened"
 msgstr "курсор \"%s\" был объявлен, но не открыт"
 
-<<<<<<< HEAD
-#: ecpg.c:490 preproc.y:130
-=======
 #: ecpg.c:504 preproc.y:130
->>>>>>> REL_16_9
 #, c-format
 msgid "could not remove output file \"%s\"\n"
 msgstr "ошибка при удалении выходного файла \"%s\"\n"
@@ -346,45 +268,26 @@ msgstr ""
 "необрабатываемое предыдущее состояние при обнаружении закрывающего "
 "апострофа\n"
 
-<<<<<<< HEAD
-#: pgc.l:651 pgc.l:760
-=======
 #: pgc.l:691 pgc.l:800
->>>>>>> REL_16_9
 #, c-format
 msgid "unterminated quoted string"
 msgstr "незавершённая строка в кавычках"
 
-<<<<<<< HEAD
-#: pgc.l:702
-=======
 #: pgc.l:742
->>>>>>> REL_16_9
 #, c-format
 msgid "unterminated dollar-quoted string"
 msgstr "незавершённая строка с $"
 
-<<<<<<< HEAD
-#: pgc.l:720 pgc.l:740
-=======
 #: pgc.l:760 pgc.l:780
->>>>>>> REL_16_9
 #, c-format
 msgid "zero-length delimited identifier"
 msgstr "пустой идентификатор в кавычках"
 
-<<<<<<< HEAD
-#: pgc.l:751
-=======
 #: pgc.l:791
->>>>>>> REL_16_9
 #, c-format
 msgid "unterminated quoted identifier"
 msgstr "незавершённый идентификатор в кавычках"
 
-<<<<<<< HEAD
-#: pgc.l:1082
-=======
 #: pgc.l:960
 #, c-format
 msgid "trailing junk after parameter"
@@ -396,117 +299,68 @@ msgid "trailing junk after numeric literal"
 msgstr "мусорное содержимое после числовой константы"
 
 #: pgc.l:1141
->>>>>>> REL_16_9
 #, c-format
 msgid "nested /* ... */ comments"
 msgstr "вложенные комментарии /* ... */"
 
-<<<<<<< HEAD
-#: pgc.l:1175
-=======
 #: pgc.l:1240
->>>>>>> REL_16_9
 #, c-format
 msgid "missing identifier in EXEC SQL UNDEF command"
 msgstr "в команде EXEC SQL UNDEF отсутствует идентификатор"
 
-<<<<<<< HEAD
-#: pgc.l:1193 pgc.l:1206 pgc.l:1222 pgc.l:1235
-=======
 #: pgc.l:1258 pgc.l:1271 pgc.l:1287 pgc.l:1300
->>>>>>> REL_16_9
 #, c-format
 msgid "too many nested EXEC SQL IFDEF conditions"
 msgstr "слишком много вложенных условий EXEC SQL IFDEF"
 
-<<<<<<< HEAD
-#: pgc.l:1251 pgc.l:1262 pgc.l:1277 pgc.l:1299
-=======
 #: pgc.l:1316 pgc.l:1327 pgc.l:1342 pgc.l:1364
->>>>>>> REL_16_9
 #, c-format
 msgid "missing matching \"EXEC SQL IFDEF\" / \"EXEC SQL IFNDEF\""
 msgstr "нет соответствующего \"EXEC SQL IFDEF\" / \"EXEC SQL IFNDEF\""
 
-<<<<<<< HEAD
-#: pgc.l:1253 pgc.l:1264 pgc.l:1445
-=======
 #: pgc.l:1318 pgc.l:1329 pgc.l:1522
->>>>>>> REL_16_9
 #, c-format
 msgid "missing \"EXEC SQL ENDIF;\""
 msgstr "отсутствует \"EXEC SQL ENDIF;\""
 
-<<<<<<< HEAD
-#: pgc.l:1279 pgc.l:1301
-=======
 #: pgc.l:1344 pgc.l:1366
->>>>>>> REL_16_9
 #, c-format
 msgid "more than one EXEC SQL ELSE"
 msgstr "неоднократная команда EXEC SQL ELSE"
 
-<<<<<<< HEAD
-#: pgc.l:1324 pgc.l:1338
-=======
 #: pgc.l:1389 pgc.l:1403
->>>>>>> REL_16_9
 #, c-format
 msgid "unmatched EXEC SQL ENDIF"
 msgstr "непарная команда EXEC SQL ENDIF"
 
-<<<<<<< HEAD
-#: pgc.l:1393
-=======
 #: pgc.l:1464
->>>>>>> REL_16_9
 #, c-format
 msgid "missing identifier in EXEC SQL IFDEF command"
 msgstr "в команде EXEC SQL IFDEF отсутствует идентификатор"
 
-<<<<<<< HEAD
-#: pgc.l:1402
-=======
 #: pgc.l:1473
->>>>>>> REL_16_9
 #, c-format
 msgid "missing identifier in EXEC SQL DEFINE command"
 msgstr "в команде EXEC SQL DEFINE отсутствует идентификатор"
 
-<<<<<<< HEAD
-#: pgc.l:1435
-=======
 #: pgc.l:1511
->>>>>>> REL_16_9
 #, c-format
 msgid "syntax error in EXEC SQL INCLUDE command"
 msgstr "ошибка синтаксиса в команде EXEC SQL INCLUDE"
 
-<<<<<<< HEAD
-#: pgc.l:1485
-=======
 #: pgc.l:1566
->>>>>>> REL_16_9
 #, c-format
 msgid "internal error: unreachable state; please report this to <%s>"
 msgstr "внутренняя ошибка: недостижимое состояние; пожалуйста, сообщите в <%s>"
 
-<<<<<<< HEAD
-#: pgc.l:1637
-=======
 #: pgc.l:1718
->>>>>>> REL_16_9
 #, c-format
 msgid "Error: include path \"%s/%s\" is too long on line %d, skipping\n"
 msgstr ""
 "Ошибка: путь включаемых файлов \"%s/%s\" в строке %d слишком длинный, "
 "пропускается\n"
 
-<<<<<<< HEAD
-#: pgc.l:1660
-=======
 #: pgc.l:1741
->>>>>>> REL_16_9
 #, c-format
 msgid "could not open include file \"%s\" on line %d"
 msgstr "не удалось открыть включаемый файл \"%s\" (строка %d)"
@@ -540,20 +394,12 @@ msgstr "определение типа не может включать ини�
 msgid "type name \"string\" is reserved in Informix mode"
 msgstr "имя типа \"string\" в режиме Informix зарезервировано"
 
-<<<<<<< HEAD
-#: preproc.y:552 preproc.y:17675
-=======
 #: preproc.y:552 preproc.y:18393
->>>>>>> REL_16_9
 #, c-format
 msgid "type \"%s\" is already defined"
 msgstr "тип \"%s\" уже определён"
 
-<<<<<<< HEAD
-#: preproc.y:577 preproc.y:18310 preproc.y:18635 variable.c:621
-=======
 #: preproc.y:577 preproc.y:19028 preproc.y:19350 variable.c:624
->>>>>>> REL_16_9
 #, c-format
 msgid "multidimensional arrays for simple data types are not supported"
 msgstr "многомерные массивы с простыми типами данных не поддерживаются"
@@ -563,165 +409,90 @@ msgstr "многомерные массивы с простыми типами �
 msgid "connection %s is overwritten with %s by DECLARE statement %s"
 msgstr "подключение %s заменяется на %s оператором DECLARE %s"
 
-<<<<<<< HEAD
-#: preproc.y:1753
-=======
 #: preproc.y:1792
->>>>>>> REL_16_9
 #, c-format
 msgid "AT option not allowed in CLOSE DATABASE statement"
 msgstr "оператор CLOSE DATABASE с параметром AT не поддерживается"
 
-<<<<<<< HEAD
-#: preproc.y:2001
-=======
 #: preproc.y:2042
->>>>>>> REL_16_9
 #, c-format
 msgid "AT option not allowed in CONNECT statement"
 msgstr "оператор CONNECT с параметром AT не поддерживается"
 
-<<<<<<< HEAD
-#: preproc.y:2041
-=======
 #: preproc.y:2082
->>>>>>> REL_16_9
 #, c-format
 msgid "AT option not allowed in DISCONNECT statement"
 msgstr "оператор DISCONNECT с параметром AT не поддерживается"
 
-<<<<<<< HEAD
-#: preproc.y:2096
-=======
 #: preproc.y:2137
->>>>>>> REL_16_9
 #, c-format
 msgid "AT option not allowed in SET CONNECTION statement"
 msgstr "оператор SET CONNECTION с параметром AT не поддерживается"
 
-<<<<<<< HEAD
-#: preproc.y:2118
-=======
 #: preproc.y:2159
->>>>>>> REL_16_9
 #, c-format
 msgid "AT option not allowed in TYPE statement"
 msgstr "оператор TYPE с параметром AT не поддерживается"
 
-<<<<<<< HEAD
-#: preproc.y:2127
-=======
 #: preproc.y:2168
->>>>>>> REL_16_9
 #, c-format
 msgid "AT option not allowed in VAR statement"
 msgstr "оператор VAR с параметром AT не поддерживается"
 
-<<<<<<< HEAD
-#: preproc.y:2134
-=======
 #: preproc.y:2175
->>>>>>> REL_16_9
 #, c-format
 msgid "AT option not allowed in WHENEVER statement"
 msgstr "оператор WHENEVER с параметром AT не поддерживается"
 
-<<<<<<< HEAD
-#: preproc.y:2211 preproc.y:2383 preproc.y:2388 preproc.y:2511 preproc.y:4143
-#: preproc.y:4807 preproc.y:5340 preproc.y:5678 preproc.y:5978 preproc.y:7514
-#: preproc.y:9082 preproc.y:9087 preproc.y:11915
-=======
 #: preproc.y:2300 preproc.y:2587 preproc.y:4246 preproc.y:4918 preproc.y:5788
 #: preproc.y:6088 preproc.y:12207
->>>>>>> REL_16_9
 #, c-format
 msgid "unsupported feature will be passed to server"
 msgstr "неподдерживаемая функция будет передана серверу"
 
-<<<<<<< HEAD
-#: preproc.y:2769
-=======
 #: preproc.y:2845
->>>>>>> REL_16_9
 #, c-format
 msgid "SHOW ALL is not implemented"
 msgstr "SHOW ALL не реализовано"
 
-<<<<<<< HEAD
-#: preproc.y:3464
-=======
 #: preproc.y:3529
->>>>>>> REL_16_9
 #, c-format
 msgid "COPY FROM STDIN is not implemented"
 msgstr "операция COPY FROM STDIN не реализована"
 
-<<<<<<< HEAD
-#: preproc.y:10014 preproc.y:17250
-=======
 #: preproc.y:10304 preproc.y:17890
->>>>>>> REL_16_9
 #, c-format
 msgid "\"database\" cannot be used as cursor name in INFORMIX mode"
 msgstr ""
 "в режиме INFORMIX нельзя использовать \"database\" в качестве имени курсора"
 
-<<<<<<< HEAD
-#: preproc.y:10021 preproc.y:17260
-=======
 #: preproc.y:10311 preproc.y:17900
->>>>>>> REL_16_9
 #, c-format
 msgid "using variable \"%s\" in different declare statements is not supported"
 msgstr ""
 "использование переменной \"%s\" в разных операторах DECLARE не поддерживается"
 
-<<<<<<< HEAD
-#: preproc.y:10023 preproc.y:17262
-=======
 #: preproc.y:10313 preproc.y:17902
->>>>>>> REL_16_9
 #, c-format
 msgid "cursor \"%s\" is already defined"
 msgstr "курсор \"%s\" уже определён"
 
-<<<<<<< HEAD
-#: preproc.y:10497
-=======
 #: preproc.y:10787
->>>>>>> REL_16_9
 #, c-format
 msgid "no longer supported LIMIT #,# syntax passed to server"
 msgstr "не поддерживаемое более предложение LIMIT #,# передано на сервер"
 
-<<<<<<< HEAD
-#: preproc.y:10830 preproc.y:10837
-#, c-format
-msgid "subquery in FROM must have an alias"
-msgstr "подзапрос во FROM должен иметь псевдоним"
-
-#: preproc.y:16942 preproc.y:16949
-=======
 #: preproc.y:17582 preproc.y:17589
->>>>>>> REL_16_9
 #, c-format
 msgid "CREATE TABLE AS cannot specify INTO"
 msgstr "в CREATE TABLE AS нельзя указать INTO"
 
-<<<<<<< HEAD
-#: preproc.y:16985
-=======
 #: preproc.y:17625
->>>>>>> REL_16_9
 #, c-format
 msgid "expected \"@\", found \"%s\""
 msgstr "ожидался знак \"@\", но на этом месте \"%s\""
 
-<<<<<<< HEAD
-#: preproc.y:16997
-=======
 #: preproc.y:17637
->>>>>>> REL_16_9
 #, c-format
 msgid ""
 "only protocols \"tcp\" and \"unix\" and database type \"postgresql\" are "
@@ -730,157 +501,89 @@ msgstr ""
 "поддерживаются только протоколы \"tcp\" и \"unix\", а тип базы данных - "
 "\"postgresql\""
 
-<<<<<<< HEAD
-#: preproc.y:17000
-=======
 #: preproc.y:17640
->>>>>>> REL_16_9
 #, c-format
 msgid "expected \"://\", found \"%s\""
 msgstr "ожидалось \"://\", но на этом месте \"%s\""
 
-<<<<<<< HEAD
-#: preproc.y:17005
-=======
 #: preproc.y:17645
->>>>>>> REL_16_9
 #, c-format
 msgid "Unix-domain sockets only work on \"localhost\" but not on \"%s\""
 msgstr "Unix-сокеты работают только с \"localhost\", но не с адресом \"%s\""
 
-<<<<<<< HEAD
-#: preproc.y:17031
-=======
 #: preproc.y:17671
->>>>>>> REL_16_9
 #, c-format
 msgid "expected \"postgresql\", found \"%s\""
 msgstr "ожидался тип \"postgresql\", но на этом месте \"%s\""
 
-<<<<<<< HEAD
-#: preproc.y:17034
-=======
 #: preproc.y:17674
->>>>>>> REL_16_9
 #, c-format
 msgid "invalid connection type: %s"
 msgstr "неверный тип подключения: %s"
 
-<<<<<<< HEAD
-#: preproc.y:17043
-=======
 #: preproc.y:17683
->>>>>>> REL_16_9
 #, c-format
 msgid "expected \"@\" or \"://\", found \"%s\""
 msgstr "ожидалось \"@\" или \"://\", но на этом месте \"%s\""
 
-<<<<<<< HEAD
-#: preproc.y:17118 preproc.y:17136
-=======
 #: preproc.y:17758 preproc.y:17776
->>>>>>> REL_16_9
 #, c-format
 msgid "invalid data type"
 msgstr "неверный тип данных"
 
-<<<<<<< HEAD
-#: preproc.y:17147 preproc.y:17164
-=======
 #: preproc.y:17787 preproc.y:17804
->>>>>>> REL_16_9
 #, c-format
 msgid "incomplete statement"
 msgstr "неполный оператор"
 
-<<<<<<< HEAD
-#: preproc.y:17150 preproc.y:17167
-=======
 #: preproc.y:17790 preproc.y:17807
->>>>>>> REL_16_9
 #, c-format
 msgid "unrecognized token \"%s\""
 msgstr "нераспознанное ключевое слово \"%s\""
 
-<<<<<<< HEAD
-#: preproc.y:17212
-=======
 #: preproc.y:17852
->>>>>>> REL_16_9
 #, c-format
 msgid "name \"%s\" is already declared"
 msgstr "имя \"%s\" уже объявлено"
 
-<<<<<<< HEAD
-#: preproc.y:17478
-=======
 #: preproc.y:18141
->>>>>>> REL_16_9
 #, c-format
 msgid "only data types numeric and decimal have precision/scale argument"
 msgstr ""
 "точность/масштаб можно указать только для типов данных numeric и decimal"
 
-<<<<<<< HEAD
-#: preproc.y:17490
-=======
 #: preproc.y:18212
->>>>>>> REL_16_9
 #, c-format
 msgid "interval specification not allowed here"
 msgstr "определение интервала здесь не допускается"
 
-<<<<<<< HEAD
-#: preproc.y:17650 preproc.y:17702
-=======
 #: preproc.y:18368 preproc.y:18420
->>>>>>> REL_16_9
 #, c-format
 msgid "too many levels in nested structure/union definition"
 msgstr "слишком много уровней в определении вложенной структуры/объединения"
 
-<<<<<<< HEAD
-#: preproc.y:17825
-=======
 #: preproc.y:18543
->>>>>>> REL_16_9
 #, c-format
 msgid "pointers to varchar are not implemented"
 msgstr "указатели на varchar не реализованы"
 
-<<<<<<< HEAD
-#: preproc.y:18276
-=======
 #: preproc.y:18994
->>>>>>> REL_16_9
 #, c-format
 msgid "initializer not allowed in EXEC SQL VAR command"
 msgstr "команда EXEC SQL VAR не может включать инициализатор"
 
-<<<<<<< HEAD
-#: preproc.y:18593
-=======
 #: preproc.y:19308
->>>>>>> REL_16_9
 #, c-format
 msgid "arrays of indicators are not allowed on input"
 msgstr "массивы индикаторов на входе недопустимы"
 
-<<<<<<< HEAD
-#: preproc.y:18780
-=======
 #: preproc.y:19495
->>>>>>> REL_16_9
 #, c-format
 msgid "operator not allowed in variable definition"
 msgstr "недопустимый оператор в определении переменной"
 
 #. translator: %s is typically the translation of "syntax error"
-<<<<<<< HEAD
-#: preproc.y:18821
-=======
 #: preproc.y:19536
->>>>>>> REL_16_9
 #, c-format
 msgid "%s at or near \"%s\""
 msgstr "%s (примерное положение: \"%s\")"
@@ -1022,13 +725,10 @@ msgstr "для этого типа данных указатели на указ
 msgid "multidimensional arrays for structures are not supported"
 msgstr "многомерные массивы структур не поддерживаются"
 
-<<<<<<< HEAD
-=======
 #, c-format
 #~ msgid "subquery in FROM must have an alias"
 #~ msgstr "подзапрос во FROM должен иметь псевдоним"
 
->>>>>>> REL_16_9
 #~ msgid "using unsupported DESCRIBE statement"
 #~ msgstr "используется неподдерживаемый оператор DESCRIBE"
 

@@ -142,8 +142,4 @@
 
 %type  <action> action
 
-<<<<<<< HEAD
 %type  <describe> ECPGDescribe
-=======
-%type  <describe> ECPGDescribe
->>>>>>> REL_16_9
