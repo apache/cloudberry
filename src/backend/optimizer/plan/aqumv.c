@@ -1045,6 +1045,8 @@ aqumv_query_is_exact_match(Query *raw_parse, Query *viewQuery)
 	/* Compare GROUP BY, HAVING, ORDER BY, DISTINCT, LIMIT */
 	if (!equal(raw_parse->groupClause, viewQuery->groupClause))
 		return false;
+	if (raw_parse->groupDistinct != viewQuery->groupDistinct)
+		return false;
 	if (!equal(raw_parse->havingQual, viewQuery->havingQual))
 		return false;
 	if (!equal(raw_parse->sortClause, viewQuery->sortClause))
@@ -1054,6 +1056,8 @@ aqumv_query_is_exact_match(Query *raw_parse, Query *viewQuery)
 	if (!equal(raw_parse->limitCount, viewQuery->limitCount))
 		return false;
 	if (!equal(raw_parse->limitOffset, viewQuery->limitOffset))
+		return false;
+	if (raw_parse->limitOption != viewQuery->limitOption)
 		return false;
 
 	/* Compare boolean flags */
@@ -1285,20 +1289,19 @@ answer_query_using_materialized_views_for_join(PlannerInfo *root, AqumvContext a
 		/*
 		 * Plan the MV scan.
 		 *
-		 * We need a clean qp_extra with no groupClause or activeWindows,
-		 * because the rewritten viewQuery is a simple SELECT from the MV
-		 * with no GROUP BY, windowing, etc.  The standard_qp_callback uses
-		 * qp_extra->groupClause to compute group_pathkeys, which would fail
-		 * if it still contained the original query's GROUP BY expressions.
+		 * Clear qp_extra's groupClause and activeWindows because the
+		 * rewritten viewQuery is a simple SELECT from the MV with no
+		 * GROUP BY or windowing.  standard_qp_callback would otherwise
+		 * try to compute group_pathkeys from stale expressions.
 		 *
-		 * standard_qp_extra is { List *activeWindows; List *groupClause; },
-		 * so a zeroed struct of that size works correctly (both fields NIL).
+		 * Safe: grouping_planner() no longer reads qp_extra after AQUMV.
 		 */
 		{
-			char	clean_qp_extra[2 * sizeof(List *)];
-			memset(clean_qp_extra, 0, sizeof(clean_qp_extra));
-			mv_final_rel = query_planner(subroot, qp_callback, clean_qp_extra);
+			standard_qp_extra *qp = (standard_qp_extra *) aqumv_context->qp_extra;
+			qp->activeWindows = NIL;
+			qp->groupClause = NIL;
 		}
+		mv_final_rel = query_planner(subroot, qp_callback, aqumv_context->qp_extra);
 
 		/* Cost-based decision: use MV only if cheaper. */
 		if (mv_final_rel->cheapest_total_path->total_cost < current_rel->cheapest_total_path->total_cost)
