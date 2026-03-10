@@ -2077,14 +2077,17 @@ explain(costs off)
   from aqj_orders o join aqj_customers c on o.customer_id = c.customer_id
   where o.status = 'shipped'
   order by o.order_id limit 5;
-                   QUERY PLAN                    
--------------------------------------------------
+                      QUERY PLAN                       
+-------------------------------------------------------
  Limit
    ->  Gather Motion 3:1  (slice1; segments: 3)
+         Merge Key: order_id
          ->  Limit
-               ->  Seq Scan on mv_aqj_limit_test
+               ->  Sort
+                     Sort Key: order_id
+                     ->  Seq Scan on mv_aqj_limit_test
  Optimizer: Postgres query optimizer
-(5 rows)
+(8 rows)
 
 -- 27. Match: FETCH FIRST WITH TIES exact match
 create materialized view mv_aqj_with_ties as
@@ -2138,14 +2141,17 @@ explain(costs off)
   from aqj_orders o join aqj_customers c on o.customer_id = c.customer_id
   where o.status = 'pending'
   order by o.order_id fetch first 5 rows with ties;
-                   QUERY PLAN                   
-------------------------------------------------
+                      QUERY PLAN                      
+------------------------------------------------------
  Limit
    ->  Gather Motion 3:1  (slice1; segments: 3)
+         Merge Key: order_id
          ->  Limit
-               ->  Seq Scan on mv_aqj_with_ties
+               ->  Sort
+                     Sort Key: order_id
+                     ->  Seq Scan on mv_aqj_with_ties
  Optimizer: Postgres query optimizer
-(5 rows)
+(8 rows)
 
 select o.order_id, o.amount
   from aqj_orders o join aqj_customers c on o.customer_id = c.customer_id
