@@ -7,11 +7,7 @@ use warnings;
 use PostgreSQL::Test::Cluster;
 use PostgreSQL::Test::Utils;
 
-<<<<<<< HEAD
-use Test::More tests => 63;
-=======
 use Test::More;
->>>>>>> REL_16_9
 
 my ($node, $port, %corrupt_page, %remove_relation);
 
@@ -319,11 +315,7 @@ plan_to_remove_relation_file('db2', 's1.t1_btree');
 # Leave 'db3' uncorrupted
 #
 
-<<<<<<< HEAD
-# Standard first arguments to TestLib functions
-=======
 # Standard first arguments to PostgreSQL::Test::Utils functions
->>>>>>> REL_16_9
 my @cmd = ('pg_amcheck', '-p', $port);
 
 # Regular expressions to match various expected output
