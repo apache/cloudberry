@@ -78,18 +78,7 @@ close $FH;
 my $historyfile = "${PostgreSQL::Test::Utils::log_path}/010_psql_history.txt";
 
 # fire up an interactive psql session
-<<<<<<< HEAD
-my $in  = '';
-my $out = '';
-
-my $timer = timer($TestLib::timeout_default);
-
-my $h = $node->interactive_psql('postgres', \$in, \$out, $timer);
-
-like($out, qr/psql/, "print startup banner");
-=======
 my $h = $node->interactive_psql('postgres', history_file => $historyfile);
->>>>>>> REL_16_9
 
 # Simple test case: type something and see if psql responds as expected
 sub check_completion
@@ -100,20 +89,11 @@ sub check_completion
 	local $Test::Builder::Level = $Test::Builder::Level + 1;
 
 	# restart per-command timer
-<<<<<<< HEAD
-	$timer->start($TestLib::timeout_default);
-	# send the data to be sent
-	$in .= $send;
-	# wait ...
-	pump $h until ($out =~ $pattern || $timer->is_expired);
-	my $okay = ($out =~ $pattern && !$timer->is_expired);
-=======
 	$h->{timeout}->start($PostgreSQL::Test::Utils::timeout_default);
 
 	# send the data to be sent and wait for its result
 	my $out = $h->query_until($pattern, $send);
 	my $okay = ($out =~ $pattern && !$h->{timeout}->is_expired);
->>>>>>> REL_16_9
 	ok($okay, $annotation);
 	# for debugging, log actual output if it didn't match
 	local $Data::Dumper::Terse = 1;
@@ -129,12 +109,8 @@ sub clear_query
 {
 	local $Test::Builder::Level = $Test::Builder::Level + 1;
 
-<<<<<<< HEAD
-	check_completion("\\r\n", qr/postgres=# /, "\\r works");
-=======
 	check_completion("\\r\n", qr/Query buffer reset.*postgres=# /s,
 		"\\r works");
->>>>>>> REL_16_9
 	return;
 }
 
@@ -323,13 +299,6 @@ check_completion(
 
 clear_line();
 
-<<<<<<< HEAD
-# send psql an explicit \q to shut it down, else pty won't close properly
-$timer->start($TestLib::timeout_default);
-$in .= "\\q\n";
-finish $h or die "psql returned $?";
-$timer->reset;
-=======
 # enum labels are case sensitive, so this should complete BLACK immediately
 check_completion(
 	"ALTER TYPE enum1 RENAME VALUE 'B\t",
@@ -459,7 +428,6 @@ clear_line();
 
 # send psql an explicit \q to shut it down, else pty won't close properly
 $h->quit or die "psql returned $?";
->>>>>>> REL_16_9
 
 # done
 $node->stop;

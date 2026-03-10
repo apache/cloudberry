@@ -397,10 +397,6 @@ $node->append_conf('postgresql.conf',
 $node->reload;
 
 # test expressions
-<<<<<<< HEAD
-# command 1..3 and 23 depend on random seed which is used to call srandom.
-=======
->>>>>>> REL_16_9
 $node->pgbench(
 	'--random-seed=5432 -t 1 -Dfoo=-10.1 -Dbla=false -Di=+3 -Dn=null -Dt=t -Df=of -Dd=1.0',
 	0,
