@@ -855,7 +855,70 @@ select c.region, o.status, count(*) as cnt, sum(o.amount) as total
   group by c.region, o.status
   order by c.region, o.status limit 6;
 
+-- 26. Non-match: LIMIT vs FETCH FIRST WITH TIES (limitOption differs)
+create materialized view mv_aqj_limit_test as
+  select o.order_id, o.amount
+  from aqj_orders o join aqj_customers c on o.customer_id = c.customer_id
+  where o.status = 'shipped'
+  order by o.order_id limit 5;
+analyze mv_aqj_limit_test;
+
+set enable_answer_query_using_materialized_views = on;
+-- Same tables/WHERE/ORDER BY but FETCH FIRST WITH TIES: should NOT match
+explain(costs off)
+  select o.order_id, o.amount
+  from aqj_orders o join aqj_customers c on o.customer_id = c.customer_id
+  where o.status = 'shipped'
+  order by o.order_id fetch first 5 rows with ties;
+-- Identical LIMIT query: should match
+explain(costs off)
+  select o.order_id, o.amount
+  from aqj_orders o join aqj_customers c on o.customer_id = c.customer_id
+  where o.status = 'shipped'
+  order by o.order_id limit 5;
+
+-- 27. Match: FETCH FIRST WITH TIES exact match
+create materialized view mv_aqj_with_ties as
+  select o.order_id, o.amount
+  from aqj_orders o join aqj_customers c on o.customer_id = c.customer_id
+  where o.status = 'pending'
+  order by o.order_id fetch first 5 rows with ties;
+analyze mv_aqj_with_ties;
+
+set enable_answer_query_using_materialized_views = off;
+explain(costs off)
+  select o.order_id, o.amount
+  from aqj_orders o join aqj_customers c on o.customer_id = c.customer_id
+  where o.status = 'pending'
+  order by o.order_id fetch first 5 rows with ties;
+select o.order_id, o.amount
+  from aqj_orders o join aqj_customers c on o.customer_id = c.customer_id
+  where o.status = 'pending'
+  order by o.order_id fetch first 5 rows with ties;
+
+set enable_answer_query_using_materialized_views = on;
+explain(costs off)
+  select o.order_id, o.amount
+  from aqj_orders o join aqj_customers c on o.customer_id = c.customer_id
+  where o.status = 'pending'
+  order by o.order_id fetch first 5 rows with ties;
+select o.order_id, o.amount
+  from aqj_orders o join aqj_customers c on o.customer_id = c.customer_id
+  where o.status = 'pending'
+  order by o.order_id fetch first 5 rows with ties;
+
+-- 28. Non-match: GROUP BY vs GROUP BY DISTINCT (groupDistinct differs)
+-- MV mv_aqj_grp_multi uses GROUP BY (groupDistinct=false, registered in catalog)
+-- Query uses GROUP BY DISTINCT — should NOT match
+set enable_answer_query_using_materialized_views = on;
+explain(costs off)
+  select c.region, o.status, count(*) as cnt, sum(o.amount) as total
+  from aqj_orders o join aqj_customers c on o.customer_id = c.customer_id
+  group by distinct c.region, o.status;
+
 -- Clean up AQUMV join test objects
+drop materialized view mv_aqj_with_ties;
+drop materialized view mv_aqj_limit_test;
 drop materialized view mv_aqj_implicit3;
 drop materialized view mv_aqj_3way_agg;
 drop materialized view mv_aqj_grp_multi;
