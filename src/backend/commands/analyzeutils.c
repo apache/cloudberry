@@ -777,7 +777,13 @@ getNdvBySegHeapTuple(AttStatsSlot * *ndvbsSlots, HeapTuple *heaptupleStats, floa
 			continue;
 		}
 
-		Assert(ndvbsSlots[i]->nvalues == 1);
+		Assert(ndvbsSlots[i]->valuetype == FLOAT8OID);
+
+		if (ndvbsSlots[i]->nvalues != 1)
+		{
+			valid = false;
+			break;
+		}
 
 		/* Non-empty partition with zero NDV is suspicious */
 		if (relTuples[i] > 0 && DatumGetFloat8(ndvbsSlots[i]->values[0]) == 0)
