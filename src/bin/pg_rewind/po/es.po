@@ -8,11 +8,7 @@
 #
 msgid ""
 msgstr ""
-<<<<<<< HEAD
-"Project-Id-Version: pg_rewind (PostgreSQL) 14\n"
-=======
 "Project-Id-Version: pg_rewind (PostgreSQL) 16\n"
->>>>>>> REL_16_9
 "Report-Msgid-Bugs-To: pgsql-bugs@lists.postgresql.org\n"
 "POT-Creation-Date: 2024-11-09 06:10+0000\n"
 "PO-Revision-Date: 2023-10-04 11:47+0200\n"

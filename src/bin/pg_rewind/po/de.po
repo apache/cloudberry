@@ -1,22 +1,13 @@
 # German message translation file for pg_rewind
-<<<<<<< HEAD
-# Copyright (C) 2015-2022 PostgreSQL Global Development Group
-=======
 # Copyright (C) 2015-2023 PostgreSQL Global Development Group
->>>>>>> REL_16_9
 # This file is distributed under the same license as the PostgreSQL package.
 #
 msgid ""
 msgstr ""
 "Project-Id-Version: pg_rewind (PostgreSQL) 16\n"
 "Report-Msgid-Bugs-To: pgsql-bugs@lists.postgresql.org\n"
-<<<<<<< HEAD
-"POT-Creation-Date: 2022-03-29 14:49+0000\n"
-"PO-Revision-Date: 2022-03-29 22:48+0200\n"
-=======
 "POT-Creation-Date: 2023-05-19 17:22+0000\n"
 "PO-Revision-Date: 2023-05-19 20:50+0200\n"
->>>>>>> REL_16_9
 "Last-Translator: Peter Eisentraut <peter@eisentraut.org>\n"
 "Language-Team: German <pgsql-translators@postgresql.org>\n"
 "Language: de\n"
@@ -126,25 +117,14 @@ msgstr "restore_command fehlgeschlagen: %s"
 msgid "could not restore file \"%s\" from archive"
 msgstr "konnte Datei »%s« nicht aus Archiv wiederherstellen"
 
-<<<<<<< HEAD
-#: ../../fe_utils/recovery_gen.c:35 ../../fe_utils/recovery_gen.c:49
-#: ../../fe_utils/recovery_gen.c:77 ../../fe_utils/recovery_gen.c:100
-#: ../../fe_utils/recovery_gen.c:171 parsexlog.c:77 parsexlog.c:137
-#: parsexlog.c:197
-=======
 #: ../../fe_utils/recovery_gen.c:34 ../../fe_utils/recovery_gen.c:45
 #: ../../fe_utils/recovery_gen.c:70 ../../fe_utils/recovery_gen.c:90
 #: ../../fe_utils/recovery_gen.c:149
->>>>>>> REL_16_9
 #, c-format
 msgid "out of memory"
 msgstr "Speicher aufgebraucht"
 
-<<<<<<< HEAD
-#: ../../fe_utils/recovery_gen.c:134 parsexlog.c:310
-=======
 #: ../../fe_utils/recovery_gen.c:121 parsexlog.c:312
->>>>>>> REL_16_9
 #, c-format
 msgid "could not open file \"%s\": %m"
 msgstr "konnte Datei »%s« nicht öffnen: %m"
@@ -229,20 +209,12 @@ msgstr "konnte symbolische Verknüpfung »%s« nicht löschen: %m"
 msgid "could not open file \"%s\" for reading: %m"
 msgstr "konnte Datei »%s« nicht zum Lesen öffnen: %m"
 
-<<<<<<< HEAD
-#: file_ops.c:341 local_source.c:107 parsexlog.c:348
-=======
 #: file_ops.c:341 local_source.c:104 local_source.c:163 parsexlog.c:350
->>>>>>> REL_16_9
 #, c-format
 msgid "could not read file \"%s\": %m"
 msgstr "konnte Datei »%s« nicht lesen: %m"
 
-<<<<<<< HEAD
-#: file_ops.c:344 parsexlog.c:350
-=======
 #: file_ops.c:344 parsexlog.c:352
->>>>>>> REL_16_9
 #, c-format
 msgid "could not read file \"%s\": read %d of %zu"
 msgstr "konnte Datei »%s« nicht lesen: %d von %zu gelesen"
@@ -437,9 +409,6 @@ msgstr "Größe der Quelldatei »%s« nebenläufig verändert: %d Bytes erwartet
 msgid "could not close file \"%s\": %m"
 msgstr "konnte Datei »%s« nicht schließen: %m"
 
-<<<<<<< HEAD
-#: parsexlog.c:89 parsexlog.c:144
-=======
 #: local_source.c:146
 #, c-format
 msgid "could not seek in source file: %m"
@@ -456,61 +425,36 @@ msgid "out of memory while allocating a WAL reading processor"
 msgstr "Speicher aufgebraucht beim Anlegen eines WAL-Leseprozessors"
 
 #: parsexlog.c:92 parsexlog.c:146
->>>>>>> REL_16_9
 #, c-format
 msgid "could not read WAL record at %X/%X: %s"
 msgstr "konnte WAL-Eintrag bei %X/%X nicht lesen: %s"
 
-<<<<<<< HEAD
-#: parsexlog.c:93 parsexlog.c:147
-=======
 #: parsexlog.c:96 parsexlog.c:149
->>>>>>> REL_16_9
 #, c-format
 msgid "could not read WAL record at %X/%X"
 msgstr "konnte WAL-Eintrag bei %X/%X nicht lesen"
 
-<<<<<<< HEAD
-#: parsexlog.c:106
-=======
 #: parsexlog.c:108
->>>>>>> REL_16_9
 #, c-format
 msgid "end pointer %X/%X is not a valid end point; expected %X/%X"
 msgstr "Endpunkt %X/%X ist kein gültiger Endpunkt; %X/%X erwartet"
 
-<<<<<<< HEAD
-#: parsexlog.c:210
-=======
 #: parsexlog.c:212
->>>>>>> REL_16_9
 #, c-format
 msgid "could not find previous WAL record at %X/%X: %s"
 msgstr "konnte vorangegangenen WAL-Eintrag bei %X/%X nicht finden: %s"
 
-<<<<<<< HEAD
-#: parsexlog.c:214
-=======
 #: parsexlog.c:216
->>>>>>> REL_16_9
 #, c-format
 msgid "could not find previous WAL record at %X/%X"
 msgstr "konnte vorangegangenen WAL-Eintrag bei %X/%X nicht finden"
 
-<<<<<<< HEAD
-#: parsexlog.c:339
-=======
 #: parsexlog.c:341
->>>>>>> REL_16_9
 #, c-format
 msgid "could not seek in file \"%s\": %m"
 msgstr "konnte Positionszeiger in Datei »%s« nicht setzen: %m"
 
-<<<<<<< HEAD
-#: parsexlog.c:431
-=======
 #: parsexlog.c:440
->>>>>>> REL_16_9
 #, c-format
 msgid "WAL record modifies a relation, but record type is not recognized: lsn: %X/%X, rmid: %d, rmgr: %s, info: %02X"
 msgstr "WAL-Eintrag modifiziert eine Relation, aber Typ des Eintrags wurde nicht erkannt: lsn: %X/%X, rmid: %d, rmgr: %s, info: %02X"
@@ -885,255 +829,147 @@ msgstr "ungültige Daten in History-Datei"
 msgid "Timeline IDs must be less than child timeline's ID."
 msgstr "Zeitleisten-IDs müssen kleiner als die Zeitleisten-ID des Kindes sein."
 
-<<<<<<< HEAD
-#: xlogreader.c:354
-=======
 #: xlogreader.c:626
->>>>>>> REL_16_9
 #, c-format
 msgid "invalid record offset at %X/%X: expected at least %u, got %u"
 msgstr "ungültiger Datensatz-Offset bei %X/%X: mindestens %u erwartet, %u erhalten"
 
-<<<<<<< HEAD
-#: xlogreader.c:362
-=======
 #: xlogreader.c:635
->>>>>>> REL_16_9
 #, c-format
 msgid "contrecord is requested by %X/%X"
 msgstr "Contrecord angefordert von %X/%X"
 
-<<<<<<< HEAD
-#: xlogreader.c:403 xlogreader.c:733
-=======
 #: xlogreader.c:676 xlogreader.c:1123
->>>>>>> REL_16_9
 #, c-format
 msgid "invalid record length at %X/%X: expected at least %u, got %u"
 msgstr "ungültige Datensatzlänge bei %X/%X: mindestens %u erwartet, %u erhalten"
 
-<<<<<<< HEAD
-#: xlogreader.c:429
-=======
 #: xlogreader.c:705
 #, c-format
 msgid "out of memory while trying to decode a record of length %u"
 msgstr "Speicher aufgebraucht beim Versuch einen Datensatz mit Länge %u zu dekodieren"
 
 #: xlogreader.c:727
->>>>>>> REL_16_9
 #, c-format
 msgid "record length %u at %X/%X too long"
 msgstr "Datensatzlänge %u bei %X/%X ist zu lang"
 
-<<<<<<< HEAD
-#: xlogreader.c:477
-=======
 #: xlogreader.c:776
->>>>>>> REL_16_9
 #, c-format
 msgid "there is no contrecord flag at %X/%X"
 msgstr "keine Contrecord-Flag bei %X/%X"
 
-<<<<<<< HEAD
-#: xlogreader.c:490
-=======
 #: xlogreader.c:789
->>>>>>> REL_16_9
 #, c-format
 msgid "invalid contrecord length %u (expected %lld) at %X/%X"
 msgstr "ungültige Contrecord-Länge %u (erwartet %lld) bei %X/%X"
 
-<<<<<<< HEAD
-#: xlogreader.c:741
-=======
 #: xlogreader.c:924
 #, c-format
 msgid "missing contrecord at %X/%X"
 msgstr "Contrecord fehlt bei %X/%X"
 
 #: xlogreader.c:1131
->>>>>>> REL_16_9
 #, c-format
 msgid "invalid resource manager ID %u at %X/%X"
 msgstr "ungültige Resource-Manager-ID %u bei %X/%X"
 
-<<<<<<< HEAD
-#: xlogreader.c:754 xlogreader.c:770
-=======
 #: xlogreader.c:1144 xlogreader.c:1160
->>>>>>> REL_16_9
 #, c-format
 msgid "record with incorrect prev-link %X/%X at %X/%X"
 msgstr "Datensatz mit falschem Prev-Link %X/%X bei %X/%X"
 
-<<<<<<< HEAD
-#: xlogreader.c:806
-=======
 #: xlogreader.c:1196
->>>>>>> REL_16_9
 #, c-format
 msgid "incorrect resource manager data checksum in record at %X/%X"
 msgstr "ungültige Resource-Manager-Datenprüfsumme in Datensatz bei %X/%X"
 
-<<<<<<< HEAD
-#: xlogreader.c:843
-=======
 #: xlogreader.c:1230
->>>>>>> REL_16_9
 #, c-format
 msgid "invalid magic number %04X in WAL segment %s, LSN %X/%X, offset %u"
 msgstr "ungültige magische Zahl %04X in WAL-Segment %s, LSN %X/%X, Offset %u"
 
-<<<<<<< HEAD
-#: xlogreader.c:857 xlogreader.c:898
-=======
 #: xlogreader.c:1245 xlogreader.c:1287
->>>>>>> REL_16_9
 #, c-format
 msgid "invalid info bits %04X in WAL segment %s, LSN %X/%X, offset %u"
 msgstr "ungültige Info-Bits %04X in WAL-Segment %s, LSN %X/%X, Offset %u"
 
-<<<<<<< HEAD
-#: xlogreader.c:872
-=======
 #: xlogreader.c:1261
->>>>>>> REL_16_9
 #, c-format
 msgid "WAL file is from different database system: WAL file database system identifier is %llu, pg_control database system identifier is %llu"
 msgstr "WAL-Datei ist von einem anderen Datenbanksystem: Datenbanksystemidentifikator in WAL-Datei ist %llu, Datenbanksystemidentifikator in pg_control ist %llu"
 
-<<<<<<< HEAD
-#: xlogreader.c:880
-=======
 #: xlogreader.c:1269
->>>>>>> REL_16_9
 #, c-format
 msgid "WAL file is from different database system: incorrect segment size in page header"
 msgstr "WAL-Datei ist von einem anderen Datenbanksystem: falsche Segmentgröße im Seitenkopf"
 
-<<<<<<< HEAD
-#: xlogreader.c:886
-=======
 #: xlogreader.c:1275
->>>>>>> REL_16_9
 #, c-format
 msgid "WAL file is from different database system: incorrect XLOG_BLCKSZ in page header"
 msgstr "WAL-Datei ist von einem anderen Datenbanksystem: falsche XLOG_BLCKSZ im Seitenkopf"
 
-<<<<<<< HEAD
-#: xlogreader.c:917
-=======
 #: xlogreader.c:1307
->>>>>>> REL_16_9
 #, c-format
 msgid "unexpected pageaddr %X/%X in WAL segment %s, LSN %X/%X, offset %u"
 msgstr "unerwartete Pageaddr %X/%X in WAL-Segment %s, LSN %X/%X, Offset %u"
 
-<<<<<<< HEAD
-#: xlogreader.c:942
-=======
 #: xlogreader.c:1333
->>>>>>> REL_16_9
 #, c-format
 msgid "out-of-sequence timeline ID %u (after %u) in WAL segment %s, LSN %X/%X, offset %u"
 msgstr "Zeitleisten-ID %u außer der Reihe (nach %u) in WAL-Segment %s, LSN %X/%X, Offset %u"
 
-<<<<<<< HEAD
-#: xlogreader.c:1287
-=======
 #: xlogreader.c:1739
->>>>>>> REL_16_9
 #, c-format
 msgid "out-of-order block_id %u at %X/%X"
 msgstr "block_id %u außer der Reihe bei %X/%X"
 
-<<<<<<< HEAD
-#: xlogreader.c:1309
-=======
 #: xlogreader.c:1763
->>>>>>> REL_16_9
 #, c-format
 msgid "BKPBLOCK_HAS_DATA set, but no data included at %X/%X"
 msgstr "BKPBLOCK_HAS_DATA gesetzt, aber keine Daten enthalten bei %X/%X"
 
-<<<<<<< HEAD
-#: xlogreader.c:1316
-=======
 #: xlogreader.c:1770
->>>>>>> REL_16_9
 #, c-format
 msgid "BKPBLOCK_HAS_DATA not set, but data length is %u at %X/%X"
 msgstr "BKPBLOCK_HAS_DATA nicht gesetzt, aber Datenlänge ist %u bei %X/%X"
 
-<<<<<<< HEAD
-#: xlogreader.c:1352
-=======
 #: xlogreader.c:1806
->>>>>>> REL_16_9
 #, c-format
 msgid "BKPIMAGE_HAS_HOLE set, but hole offset %u length %u block image length %u at %X/%X"
 msgstr "BKPIMAGE_HAS_HOLE gesetzt, aber Loch Offset %u Länge %u Block-Abbild-Länge %u bei %X/%X"
 
-<<<<<<< HEAD
-#: xlogreader.c:1368
-=======
 #: xlogreader.c:1822
->>>>>>> REL_16_9
 #, c-format
 msgid "BKPIMAGE_HAS_HOLE not set, but hole offset %u length %u at %X/%X"
 msgstr "BKPIMAGE_HAS_HOLE nicht gesetzt, aber Loch Offset %u Länge %u bei %X/%X"
 
-<<<<<<< HEAD
-#: xlogreader.c:1383
-=======
 #: xlogreader.c:1836
->>>>>>> REL_16_9
 #, c-format
 msgid "BKPIMAGE_COMPRESSED set, but block image length %u at %X/%X"
 msgstr "BKPIMAGE_COMPRESSED gesetzt, aber Block-Abbild-Länge %u bei %X/%X"
 
-<<<<<<< HEAD
-#: xlogreader.c:1398
-=======
 #: xlogreader.c:1851
->>>>>>> REL_16_9
 #, c-format
 msgid "neither BKPIMAGE_HAS_HOLE nor BKPIMAGE_COMPRESSED set, but block image length is %u at %X/%X"
 msgstr "weder BKPIMAGE_HAS_HOLE noch BKPIMAGE_COMPRESSED gesetzt, aber Block-Abbild-Länge ist %u bei %X/%X"
 
-<<<<<<< HEAD
-#: xlogreader.c:1414
-=======
 #: xlogreader.c:1867
->>>>>>> REL_16_9
 #, c-format
 msgid "BKPBLOCK_SAME_REL set but no previous rel at %X/%X"
 msgstr "BKPBLOCK_SAME_REL gesetzt, aber keine vorangehende Relation bei %X/%X"
 
-<<<<<<< HEAD
-#: xlogreader.c:1426
-=======
 #: xlogreader.c:1879
->>>>>>> REL_16_9
 #, c-format
 msgid "invalid block_id %u at %X/%X"
 msgstr "ungültige block_id %u bei %X/%X"
 
-<<<<<<< HEAD
-#: xlogreader.c:1513
-=======
 #: xlogreader.c:1946
->>>>>>> REL_16_9
 #, c-format
 msgid "record with invalid length at %X/%X"
 msgstr "Datensatz mit ungültiger Länge bei %X/%X"
 
-<<<<<<< HEAD
-#: xlogreader.c:1602
-=======
 #: xlogreader.c:1972
->>>>>>> REL_16_9
 #, c-format
 msgid "could not locate backup block with ID %d in WAL record"
 msgstr "konnte Backup-Block mit ID %d nicht im WAL-Eintrag finden"

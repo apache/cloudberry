@@ -102,28 +102,10 @@ sub check_query
 	  ],
 	  '>', \$stdout, '2>', \$stderr;
 
-<<<<<<< HEAD
-	# We don't use ok() for the exit code and stderr, because we want this
-	# check to be just a single test.
-	if (!$result)
-	{
-		fail("$test_name: psql exit code");
-	}
-	elsif ($stderr ne '')
-	{
-		diag $stderr;
-		fail("$test_name: psql no stderr");
-	}
-	else
-	{
-		is($stdout, $expected_stdout, "$test_name: query result matches");
-	}
-=======
 	is($result, 1, "$test_name: psql exit code");
 	is($stderr, '', "$test_name: psql no stderr");
 	is($stdout, $expected_stdout, "$test_name: query result matches");
 
->>>>>>> REL_16_9
 	return;
 }
 
@@ -248,16 +230,9 @@ sub promote_primary
 
 sub run_pg_rewind
 {
-<<<<<<< HEAD
-	my $test_mode       = shift;
-	my (%params)        = @_;
-	my $primary_pgdata   = $node_primary->data_dir;
-	my $standby_pgdata  = $node_standby->data_dir;
-=======
 	my $test_mode = shift;
 	my $primary_pgdata = $node_primary->data_dir;
 	my $standby_pgdata = $node_standby->data_dir;
->>>>>>> REL_16_9
 	my $standby_connstr = $node_standby->connstr('postgres');
 	my $tmp_folder = PostgreSQL::Test::Utils::tempdir;
 
