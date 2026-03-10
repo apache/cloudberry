@@ -135,19 +135,15 @@ $node->issues_sql_like(
 	qr/statement: REINDEX \(VERBOSE, TABLESPACE $tbspace_name\) TABLE public\.test1;/,
 	'reindex with verbose output and tablespace');
 
-<<<<<<< HEAD
-# the same with --concurrently
 # GPDB: REINDEX CONCURRENTLY doesn't work on GPDB, skip.
 SKIP: {
 	skip "REINDEX CONCURRENTLY not implemented on GPDB", 9;
 
-=======
 # Same with --concurrently.
 # Save the state of the relations and compare them after the DATABASE
 # rebuild.
 $node->safe_psql('postgres',
 	"TRUNCATE index_relfilenodes; $save_relfilenodes");
->>>>>>> REL_16_9
 $node->issues_sql_like(
 	[ 'reindexdb', '--concurrently', 'postgres' ],
 	qr/statement: REINDEX DATABASE CONCURRENTLY postgres;/,
@@ -181,13 +177,8 @@ $node->issues_sql_like(
 	'reindex with verbose output');
 $node->issues_sql_like(
 	[
-<<<<<<< HEAD
-		'reindexdb', '-v',          '-t',
-		'test1',     '--tablespace',   $tbspace_name, 'postgres'
-=======
 		'reindexdb', '--concurrently', '-v', '-t',
 		'test1', '--tablespace', $tbspace_name, 'postgres'
->>>>>>> REL_16_9
 	],
 	qr/statement: REINDEX \(VERBOSE, TABLESPACE $tbspace_name\) TABLE public\.test1;/,
 	'reindex with verbose output and tablespace');
@@ -208,13 +199,8 @@ $node->command_checks_all(
 	'reindex toast table with tablespace');
 $node->command_checks_all(
 	[
-<<<<<<< HEAD
-		'reindexdb',  '-t', $toast_table,
-		'--tablespace', $tbspace_name,    'postgres'
-=======
 		'reindexdb', '--concurrently', '-t', $toast_table,
 		'--tablespace', $tbspace_name, 'postgres'
->>>>>>> REL_16_9
 	],
 	1,
 	[],
@@ -231,13 +217,8 @@ $node->command_checks_all(
 	'reindex toast index with tablespace');
 $node->command_checks_all(
 	[
-<<<<<<< HEAD
-		'reindexdb',    '-i', $toast_index,
-		'--tablespace', $tbspace_name,    'postgres'
-=======
 		'reindexdb', '--concurrently', '-i', $toast_index,
 		'--tablespace', $tbspace_name, 'postgres'
->>>>>>> REL_16_9
 	],
 	1,
 	[],
@@ -282,25 +263,8 @@ $node->issues_sql_like(
 $node->command_ok(
 	[ 'reindexdb', '-j', '2', '-S', 's3' ],
 	'parallel reindexdb with empty schema');
-<<<<<<< HEAD
-# the same with --concurrently
-# GPDB: REINDEX CONCURRENTLY doesn't work on GPDB, skip.
-SKIP: {
-	skip "cannot reindex system catalogs concurrently, skipping all", 3;
-
-$node->command_checks_all(
-	[ 'reindexdb', '-j', '2', '--concurrently', '-d', 'postgres' ],
-	0,
-	[qr/^$/],
-	[
-		qr/^reindexdb: warning: cannot reindex system catalogs concurrently, skipping all/s
-	],
-	'parallel reindexdb for system with --concurrently skips catalogs');
-} # end SKIP
-=======
 $node->command_ok(
 	[ 'reindexdb', '-j', '2', '--concurrently', '-d', 'postgres' ],
 	'parallel reindexdb on database, concurrently');
 
 done_testing();
->>>>>>> REL_16_9

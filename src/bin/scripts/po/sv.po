@@ -1,25 +1,14 @@
 # Swedish message translation file for postgresql
-<<<<<<< HEAD
-# Dennis Björklund <db@zigo.dhs.org>, 2003, 2004, 2005, 2006, 2017, 2018, 2019, 2020, 2021.
-=======
 # Dennis Björklund <db@zigo.dhs.org>, 2003, 2004, 2005, 2006, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024.
->>>>>>> REL_16_9
 # Peter Eisentraut <peter_e@gmx.net>, 2013.
 # Mats Erik Andersson <bsd@gisladisker.se>, 2014.
 #
 msgid ""
 msgstr ""
-<<<<<<< HEAD
-"Project-Id-Version: PostgreSQL 14\n"
-"Report-Msgid-Bugs-To: pgsql-bugs@lists.postgresql.org\n"
-"POT-Creation-Date: 2021-11-07 06:47+0000\n"
-"PO-Revision-Date: 2021-11-09 06:34+0100\n"
-=======
 "Project-Id-Version: PostgreSQL 16\n"
 "Report-Msgid-Bugs-To: pgsql-bugs@lists.postgresql.org\n"
 "POT-Creation-Date: 2024-07-13 16:08+0000\n"
 "PO-Revision-Date: 2024-07-12 22:17+0200\n"
->>>>>>> REL_16_9
 "Last-Translator: Dennis Björklund <db@zigo.dhs.org>\n"
 "Language-Team: Swedish <pgsql-translators@postgresql.org>\n"
 "Language: sv\n"
@@ -28,25 +17,12 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
 
-<<<<<<< HEAD
-#: ../../../src/common/logging.c:259
-#, c-format
-msgid "fatal: "
-msgstr "fatalt: "
-
-#: ../../../src/common/logging.c:266
-=======
 #: ../../../src/common/logging.c:276
->>>>>>> REL_16_9
 #, c-format
 msgid "error: "
 msgstr "fel: "
 
-<<<<<<< HEAD
-#: ../../../src/common/logging.c:273
-=======
 #: ../../../src/common/logging.c:283
->>>>>>> REL_16_9
 #, c-format
 msgid "warning: "
 msgstr "varning: "
@@ -90,17 +66,6 @@ msgstr "misslyckad sökning efter användarnamn: felkod %lu"
 msgid "Cancel request sent\n"
 msgstr "Förfrågan om avbrytning skickad\n"
 
-<<<<<<< HEAD
-#: ../../fe_utils/cancel.c:165 ../../fe_utils/cancel.c:210
-msgid "Could not send cancel request: "
-msgstr "Kunde inte skicka förfrågan om avbrytning: "
-
-#: ../../fe_utils/connect_utils.c:49 ../../fe_utils/connect_utils.c:107
-msgid "Password: "
-msgstr "Lösenord: "
-
-#: ../../fe_utils/connect_utils.c:92
-=======
 #: ../../fe_utils/cancel.c:190 ../../fe_utils/cancel.c:239
 msgid "Could not send cancel request: "
 msgstr "Kunde inte skicka förfrågan om avbrytning: "
@@ -110,28 +75,15 @@ msgid "Password: "
 msgstr "Lösenord: "
 
 #: ../../fe_utils/connect_utils.c:91
->>>>>>> REL_16_9
 #, c-format
 msgid "could not connect to database %s: out of memory"
 msgstr "kunde inte ansluta till databas %s: slut på minne"
 
-<<<<<<< HEAD
-#: ../../fe_utils/connect_utils.c:120 pg_isready.c:145
-=======
 #: ../../fe_utils/connect_utils.c:116 pg_isready.c:146
->>>>>>> REL_16_9
 #, c-format
 msgid "%s"
 msgstr "%s"
 
-<<<<<<< HEAD
-#: ../../fe_utils/parallel_slot.c:302
-#, c-format
-msgid "too many jobs for this platform"
-msgstr "för många jobb för denna plattform"
-
-#: ../../fe_utils/parallel_slot.c:522
-=======
 #: ../../fe_utils/option_utils.c:69
 #, c-format
 msgid "invalid value \"%s\" for option %s"
@@ -158,83 +110,42 @@ msgid "Try fewer jobs."
 msgstr "Försök med färre job."
 
 #: ../../fe_utils/parallel_slot.c:553
->>>>>>> REL_16_9
 #, c-format
 msgid "processing of database \"%s\" failed: %s"
 msgstr "processande av databas \"%s\" misslyckades: %s"
 
-<<<<<<< HEAD
-#: ../../fe_utils/print.c:336
-=======
 #: ../../fe_utils/print.c:406
->>>>>>> REL_16_9
 #, c-format
 msgid "(%lu row)"
 msgid_plural "(%lu rows)"
 msgstr[0] "(%lu rad)"
 msgstr[1] "(%lu rader)"
 
-<<<<<<< HEAD
-#: ../../fe_utils/print.c:3039
-=======
 #: ../../fe_utils/print.c:3154
->>>>>>> REL_16_9
 #, c-format
 msgid "Interrupted\n"
 msgstr "Avbruten\n"
 
-<<<<<<< HEAD
-#: ../../fe_utils/print.c:3103
-=======
 #: ../../fe_utils/print.c:3218
->>>>>>> REL_16_9
 #, c-format
 msgid "Cannot add header to table content: column count of %d exceeded.\n"
 msgstr "Kan inte lägga till rubrik till tabellinnehåll: antal kolumner (%d) överskridet.\n"
 
-<<<<<<< HEAD
-#: ../../fe_utils/print.c:3143
-=======
 #: ../../fe_utils/print.c:3258
->>>>>>> REL_16_9
 #, c-format
 msgid "Cannot add cell to table content: total cell count of %d exceeded.\n"
 msgstr "Kan inte lägga till cell till tabellinnehåll: totala cellantalet (%d) överskridet.\n"
 
-<<<<<<< HEAD
-#: ../../fe_utils/print.c:3401
-=======
 #: ../../fe_utils/print.c:3516
->>>>>>> REL_16_9
 #, c-format
 msgid "invalid output format (internal error): %d"
 msgstr "ogiltigt utdataformat (internt fel): %d"
 
 #: ../../fe_utils/query_utils.c:33 ../../fe_utils/query_utils.c:58
-<<<<<<< HEAD
 #, c-format
 msgid "query failed: %s"
 msgstr "fråga misslyckades: %s"
 
-#: ../../fe_utils/query_utils.c:34 ../../fe_utils/query_utils.c:59
-#, c-format
-msgid "query was: %s"
-msgstr "frågan var: %s"
-
-#: clusterdb.c:112 clusterdb.c:131 createdb.c:123 createdb.c:142
-#: createuser.c:172 createuser.c:187 dropdb.c:103 dropdb.c:112 dropdb.c:120
-#: dropuser.c:94 dropuser.c:109 dropuser.c:122 pg_isready.c:96 pg_isready.c:110
-#: reindexdb.c:174 reindexdb.c:193 vacuumdb.c:251 vacuumdb.c:270
-=======
->>>>>>> REL_16_9
-#, c-format
-msgid "query failed: %s"
-msgstr "fråga misslyckades: %s"
-
-<<<<<<< HEAD
-#: clusterdb.c:129 createdb.c:140 createuser.c:185 dropdb.c:118 dropuser.c:107
-#: pg_isready.c:108 reindexdb.c:191 vacuumdb.c:268
-=======
 #: ../../fe_utils/query_utils.c:34 ../../fe_utils/query_utils.c:59
 #, c-format
 msgid "Query was: %s"
@@ -250,7 +161,6 @@ msgstr "Försök med \"%s --help\" för mer information."
 
 #: clusterdb.c:130 createdb.c:161 createuser.c:208 dropdb.c:119 dropuser.c:108
 #: pg_isready.c:109 reindexdb.c:191 vacuumdb.c:297
->>>>>>> REL_16_9
 #, c-format
 msgid "too many command-line arguments (first is \"%s\")"
 msgstr "för många kommandoradsargument (första är \"%s\")"
@@ -260,47 +170,27 @@ msgstr "för många kommandoradsargument (första är \"%s\")"
 msgid "cannot cluster all databases and a specific one at the same time"
 msgstr "kan inte klustra alla databaser och en angiven på samma gång"
 
-<<<<<<< HEAD
-#: clusterdb.c:154
-=======
 #: clusterdb.c:151
->>>>>>> REL_16_9
 #, c-format
 msgid "cannot cluster specific table(s) in all databases"
 msgstr "kan inte klustra angivna tabeller i alla databaser"
 
-<<<<<<< HEAD
-#: clusterdb.c:220
-=======
 #: clusterdb.c:215
->>>>>>> REL_16_9
 #, c-format
 msgid "clustering of table \"%s\" in database \"%s\" failed: %s"
 msgstr "klustring av tabell \"%s\" i databas \"%s\" misslyckades: %s"
 
-<<<<<<< HEAD
-#: clusterdb.c:223
-=======
 #: clusterdb.c:218
->>>>>>> REL_16_9
 #, c-format
 msgid "clustering of database \"%s\" failed: %s"
 msgstr "klustring av databas \"%s\" misslyckades: %s"
 
-<<<<<<< HEAD
-#: clusterdb.c:251
-=======
 #: clusterdb.c:248
->>>>>>> REL_16_9
 #, c-format
 msgid "%s: clustering database \"%s\"\n"
 msgstr "%s: klustring av databas \"%s\"\n"
 
-<<<<<<< HEAD
-#: clusterdb.c:267
-=======
 #: clusterdb.c:264
->>>>>>> REL_16_9
 #, c-format
 msgid ""
 "%s clusters all previously clustered tables in a database.\n"
@@ -309,33 +199,19 @@ msgstr ""
 "%s klustrar alla tidigare klustrade tabeller i en databas.\n"
 "\n"
 
-<<<<<<< HEAD
-#: clusterdb.c:268 createdb.c:267 createuser.c:351 dropdb.c:171 dropuser.c:169
-#: pg_isready.c:225 reindexdb.c:792 vacuumdb.c:1025
-=======
 #: clusterdb.c:265 createdb.c:288 createuser.c:415 dropdb.c:172 dropuser.c:170
 #: pg_isready.c:226 reindexdb.c:750 vacuumdb.c:1156
->>>>>>> REL_16_9
 #, c-format
 msgid "Usage:\n"
 msgstr "Användning:\n"
 
-<<<<<<< HEAD
-#: clusterdb.c:269 reindexdb.c:793 vacuumdb.c:1026
-=======
 #: clusterdb.c:266 reindexdb.c:751 vacuumdb.c:1157
->>>>>>> REL_16_9
 #, c-format
 msgid "  %s [OPTION]... [DBNAME]\n"
 msgstr "  %s [FLAGGA]... [DBNAMN]\n"
 
-<<<<<<< HEAD
-#: clusterdb.c:270 createdb.c:269 createuser.c:353 dropdb.c:173 dropuser.c:171
-#: pg_isready.c:228 reindexdb.c:794 vacuumdb.c:1027
-=======
 #: clusterdb.c:267 createdb.c:290 createuser.c:417 dropdb.c:174 dropuser.c:172
 #: pg_isready.c:229 reindexdb.c:752 vacuumdb.c:1158
->>>>>>> REL_16_9
 #, c-format
 msgid ""
 "\n"
@@ -344,85 +220,48 @@ msgstr ""
 "\n"
 "Flaggor:\n"
 
-<<<<<<< HEAD
-#: clusterdb.c:271
-=======
 #: clusterdb.c:268
->>>>>>> REL_16_9
 #, c-format
 msgid "  -a, --all                 cluster all databases\n"
 msgstr "  -a, --all                 klustra alla databaser\n"
 
-<<<<<<< HEAD
-#: clusterdb.c:272
-=======
 #: clusterdb.c:269
->>>>>>> REL_16_9
 #, c-format
 msgid "  -d, --dbname=DBNAME       database to cluster\n"
 msgstr "  -d, --dbname=DBNAME       databas att klustra\n"
 
-<<<<<<< HEAD
-#: clusterdb.c:273 createuser.c:357 dropdb.c:174 dropuser.c:172
-=======
 #: clusterdb.c:270 createuser.c:423 dropdb.c:175 dropuser.c:173
->>>>>>> REL_16_9
 #, c-format
 msgid "  -e, --echo                show the commands being sent to the server\n"
 msgstr "  -e, --echo                visa kommandon som skickas till servern\n"
 
-<<<<<<< HEAD
-#: clusterdb.c:274
-=======
 #: clusterdb.c:271
->>>>>>> REL_16_9
 #, c-format
 msgid "  -q, --quiet               don't write any messages\n"
 msgstr "  -q, --quiet               skriv inte ut några meddelanden\n"
 
-<<<<<<< HEAD
-#: clusterdb.c:275
-=======
 #: clusterdb.c:272
->>>>>>> REL_16_9
 #, c-format
 msgid "  -t, --table=TABLE         cluster specific table(s) only\n"
 msgstr "  -t, --table=TABELL        klustra enbart ingivna tabeller\n"
 
-<<<<<<< HEAD
-#: clusterdb.c:276
-=======
 #: clusterdb.c:273
->>>>>>> REL_16_9
 #, c-format
 msgid "  -v, --verbose             write a lot of output\n"
 msgstr "  -v, --verbose             skriv massor med utdata\n"
 
-<<<<<<< HEAD
-#: clusterdb.c:277 createuser.c:369 dropdb.c:177 dropuser.c:175
-=======
 #: clusterdb.c:274 createuser.c:439 dropdb.c:178 dropuser.c:176
->>>>>>> REL_16_9
 #, c-format
 msgid "  -V, --version             output version information, then exit\n"
 msgstr "  -V, --version             visa versionsinformation, avsluta sedan\n"
 
-<<<<<<< HEAD
-#: clusterdb.c:278 createuser.c:374 dropdb.c:179 dropuser.c:177
-=======
 #: clusterdb.c:275 createuser.c:447 dropdb.c:180 dropuser.c:178
->>>>>>> REL_16_9
 #, c-format
 msgid "  -?, --help                show this help, then exit\n"
 msgstr "  -?, --help                visa denna hjälp, avsluta sedan\n"
 
-<<<<<<< HEAD
-#: clusterdb.c:279 createdb.c:280 createuser.c:375 dropdb.c:180 dropuser.c:178
-#: pg_isready.c:234 reindexdb.c:809 vacuumdb.c:1052
-=======
 #: clusterdb.c:276 createdb.c:306 createuser.c:448 dropdb.c:181 dropuser.c:179
 #: pg_isready.c:235 reindexdb.c:767 vacuumdb.c:1187
->>>>>>> REL_16_9
 #, c-format
 msgid ""
 "\n"
@@ -431,65 +270,37 @@ msgstr ""
 "\n"
 "Flaggor för anslutning:\n"
 
-<<<<<<< HEAD
-#: clusterdb.c:280 createuser.c:376 dropdb.c:181 dropuser.c:179 vacuumdb.c:1053
-=======
 #: clusterdb.c:277 createuser.c:449 dropdb.c:182 dropuser.c:180 vacuumdb.c:1188
->>>>>>> REL_16_9
 #, c-format
 msgid "  -h, --host=HOSTNAME       database server host or socket directory\n"
 msgstr "  -h, --host=VÄRDNAMN       databasens värdnamn eller socketkatalog\n"
 
-<<<<<<< HEAD
-#: clusterdb.c:281 createuser.c:377 dropdb.c:182 dropuser.c:180 vacuumdb.c:1054
-=======
 #: clusterdb.c:278 createuser.c:450 dropdb.c:183 dropuser.c:181 vacuumdb.c:1189
->>>>>>> REL_16_9
 #, c-format
 msgid "  -p, --port=PORT           database server port\n"
 msgstr "  -p, --port=PORT           databasserverns port\n"
 
-<<<<<<< HEAD
-#: clusterdb.c:282 dropdb.c:183 vacuumdb.c:1055
-=======
 #: clusterdb.c:279 dropdb.c:184 vacuumdb.c:1190
->>>>>>> REL_16_9
 #, c-format
 msgid "  -U, --username=USERNAME   user name to connect as\n"
 msgstr "  -U, --username=ANVÄNDARE  användarnamn att ansluta som\n"
 
-<<<<<<< HEAD
-#: clusterdb.c:283 createuser.c:379 dropdb.c:184 dropuser.c:182 vacuumdb.c:1056
-=======
 #: clusterdb.c:280 createuser.c:452 dropdb.c:185 dropuser.c:183 vacuumdb.c:1191
->>>>>>> REL_16_9
 #, c-format
 msgid "  -w, --no-password         never prompt for password\n"
 msgstr "  -w, --no-password         fråga ej efter lösenord\n"
 
-<<<<<<< HEAD
-#: clusterdb.c:284 createuser.c:380 dropdb.c:185 dropuser.c:183 vacuumdb.c:1057
-=======
 #: clusterdb.c:281 createuser.c:453 dropdb.c:186 dropuser.c:184 vacuumdb.c:1192
->>>>>>> REL_16_9
 #, c-format
 msgid "  -W, --password            force password prompt\n"
 msgstr "  -W, --password            framtvinga fråga om lösenord\n"
 
-<<<<<<< HEAD
-#: clusterdb.c:285 dropdb.c:186 vacuumdb.c:1058
-=======
 #: clusterdb.c:282 dropdb.c:187 vacuumdb.c:1193
->>>>>>> REL_16_9
 #, c-format
 msgid "  --maintenance-db=DBNAME   alternate maintenance database\n"
 msgstr "  --maintenance-db=DBNAMN   annat val av underhållsdatabas\n"
 
-<<<<<<< HEAD
-#: clusterdb.c:286
-=======
 #: clusterdb.c:283
->>>>>>> REL_16_9
 #, c-format
 msgid ""
 "\n"
@@ -498,13 +309,8 @@ msgstr ""
 "\n"
 "Läs beskrivningen av SQL-kommandot CLUSTER för detaljer.\n"
 
-<<<<<<< HEAD
-#: clusterdb.c:287 createdb.c:288 createuser.c:381 dropdb.c:187 dropuser.c:184
-#: pg_isready.c:239 reindexdb.c:817 vacuumdb.c:1060
-=======
 #: clusterdb.c:284 createdb.c:314 createuser.c:454 dropdb.c:188 dropuser.c:185
 #: pg_isready.c:240 reindexdb.c:775 vacuumdb.c:1195
->>>>>>> REL_16_9
 #, c-format
 msgid ""
 "\n"
@@ -513,13 +319,8 @@ msgstr ""
 "\n"
 "Rapportera fel till <%s>.\n"
 
-<<<<<<< HEAD
-#: clusterdb.c:288 createdb.c:289 createuser.c:382 dropdb.c:188 dropuser.c:185
-#: pg_isready.c:240 reindexdb.c:818 vacuumdb.c:1061
-=======
 #: clusterdb.c:285 createdb.c:315 createuser.c:455 dropdb.c:189 dropuser.c:186
 #: pg_isready.c:241 reindexdb.c:776 vacuumdb.c:1196
->>>>>>> REL_16_9
 #, c-format
 msgid "%s home page: <%s>\n"
 msgstr "hemsida för %s: <%s>\n"
@@ -553,48 +354,22 @@ msgstr "%s (%s/%s) "
 msgid "Please answer \"%s\" or \"%s\".\n"
 msgstr "Var vänlig att svara \"%s\" eller \"%s\".\n"
 
-<<<<<<< HEAD
-#: createdb.c:150
-#, c-format
-msgid "only one of --locale and --lc-ctype can be specified"
-msgstr "endast en av --locale och --lc-ctype kan anges"
-
-#: createdb.c:155
-#, c-format
-msgid "only one of --locale and --lc-collate can be specified"
-msgstr "endast en av --locale och --lc-collate kan anges"
-
-#: createdb.c:166
-=======
 #: createdb.c:170
->>>>>>> REL_16_9
 #, c-format
 msgid "\"%s\" is not a valid encoding name"
 msgstr "\"%s\" är inte ett giltigt kodningsnamn"
 
-<<<<<<< HEAD
-#: createdb.c:229
-=======
 #: createdb.c:250
->>>>>>> REL_16_9
 #, c-format
 msgid "database creation failed: %s"
 msgstr "misslyckades att skapa databas: %s"
 
-<<<<<<< HEAD
-#: createdb.c:248
-=======
 #: createdb.c:269
->>>>>>> REL_16_9
 #, c-format
 msgid "comment creation failed (database was created): %s"
 msgstr "misslyckades att skapa kommentar (databasen skapades): %s"
 
-<<<<<<< HEAD
-#: createdb.c:266
-=======
 #: createdb.c:287
->>>>>>> REL_16_9
 #, c-format
 msgid ""
 "%s creates a PostgreSQL database.\n"
@@ -603,72 +378,41 @@ msgstr ""
 "%s skapar en PostgreSQL-databas.\n"
 "\n"
 
-<<<<<<< HEAD
-#: createdb.c:268
-=======
 #: createdb.c:289
->>>>>>> REL_16_9
 #, c-format
 msgid "  %s [OPTION]... [DBNAME] [DESCRIPTION]\n"
 msgstr "  %s [FLAGGA]... [DBNAMN] [BESKRIVNING]\n"
 
-<<<<<<< HEAD
-#: createdb.c:270
-=======
 #: createdb.c:291
->>>>>>> REL_16_9
 #, c-format
 msgid "  -D, --tablespace=TABLESPACE  default tablespace for the database\n"
 msgstr "  -D, --tablespace=TABELLRYMD  förvalt tabellutrymme för databasen\n"
 
-<<<<<<< HEAD
-#: createdb.c:271 reindexdb.c:798
-=======
 #: createdb.c:292 reindexdb.c:756
->>>>>>> REL_16_9
 #, c-format
 msgid "  -e, --echo                   show the commands being sent to the server\n"
 msgstr "  -e, --echo                   visa kommandon som skickas till servern\n"
 
-<<<<<<< HEAD
-#: createdb.c:272
-=======
 #: createdb.c:293
->>>>>>> REL_16_9
 #, c-format
 msgid "  -E, --encoding=ENCODING      encoding for the database\n"
 msgstr "  -E, --encoding=KODNING       teckenkodning för databasen\n"
 
-<<<<<<< HEAD
-#: createdb.c:273
-=======
 #: createdb.c:294
->>>>>>> REL_16_9
 #, c-format
 msgid "  -l, --locale=LOCALE          locale settings for the database\n"
 msgstr "  -l, --locale=LOKAL           lokalnamn för databasen\n"
 
-<<<<<<< HEAD
-#: createdb.c:274
-=======
 #: createdb.c:295
->>>>>>> REL_16_9
 #, c-format
 msgid "      --lc-collate=LOCALE      LC_COLLATE setting for the database\n"
 msgstr "      --lc-collate=LOKAL       värde på LC_COLLATE för databasen\n"
 
-<<<<<<< HEAD
-#: createdb.c:275
-=======
 #: createdb.c:296
->>>>>>> REL_16_9
 #, c-format
 msgid "      --lc-ctype=LOCALE        LC_CTYPE setting for the database\n"
 msgstr "      --lc-ctype=LOKAL         värde på LC_CTYPE för databasen\n"
 
-<<<<<<< HEAD
-#: createdb.c:276
-=======
 #: createdb.c:297
 #, c-format
 msgid "      --icu-locale=LOCALE      ICU locale setting for the database\n"
@@ -689,14 +433,10 @@ msgstr ""
 "                               lokalleverantör av databasens standardjämförelser\n"
 
 #: createdb.c:301
->>>>>>> REL_16_9
 #, c-format
 msgid "  -O, --owner=OWNER            database user to own the new database\n"
 msgstr "  -O, --owner=ÄGARE            databasanvändare som äger nya databasen\n"
 
-<<<<<<< HEAD
-#: createdb.c:277
-=======
 #: createdb.c:302
 #, c-format
 msgid "  -S, --strategy=STRATEGY      database creation strategy wal_log or file_copy\n"
@@ -705,88 +445,51 @@ msgstr ""
 "                               eller file_copy\n"
 
 #: createdb.c:303
->>>>>>> REL_16_9
 #, c-format
 msgid "  -T, --template=TEMPLATE      template database to copy\n"
 msgstr "  -T, --template=MALL          databasmall att kopiera\n"
 
-<<<<<<< HEAD
-#: createdb.c:278 reindexdb.c:807
-=======
 #: createdb.c:304 reindexdb.c:765
->>>>>>> REL_16_9
 #, c-format
 msgid "  -V, --version                output version information, then exit\n"
 msgstr "  -V, --version                visa versionsinformation, avsluta sedan\n"
 
-<<<<<<< HEAD
-#: createdb.c:279 reindexdb.c:808
-=======
 #: createdb.c:305 reindexdb.c:766
->>>>>>> REL_16_9
 #, c-format
 msgid "  -?, --help                   show this help, then exit\n"
 msgstr "  -?, --help                   visa denna hjälp, avsluta sedan\n"
 
-<<<<<<< HEAD
-#: createdb.c:281 reindexdb.c:810
-=======
 #: createdb.c:307 reindexdb.c:768
->>>>>>> REL_16_9
 #, c-format
 msgid "  -h, --host=HOSTNAME          database server host or socket directory\n"
 msgstr "  -h, --host=VÄRDNAMN          databasens värdnamn eller socketkatalog\n"
 
-<<<<<<< HEAD
-#: createdb.c:282 reindexdb.c:811
-=======
 #: createdb.c:308 reindexdb.c:769
->>>>>>> REL_16_9
 #, c-format
 msgid "  -p, --port=PORT              database server port\n"
 msgstr "  -p, --port=PORT              databasserverns port\n"
 
-<<<<<<< HEAD
-#: createdb.c:283 reindexdb.c:812
-=======
 #: createdb.c:309 reindexdb.c:770
->>>>>>> REL_16_9
 #, c-format
 msgid "  -U, --username=USERNAME      user name to connect as\n"
 msgstr "  -U, --username=ANVÄNDARE     användarnamn att ansluta som\n"
 
-<<<<<<< HEAD
-#: createdb.c:284 reindexdb.c:813
-=======
 #: createdb.c:310 reindexdb.c:771
->>>>>>> REL_16_9
 #, c-format
 msgid "  -w, --no-password            never prompt for password\n"
 msgstr "  -w, --no-password            fråga ej efter lösenord\n"
 
-<<<<<<< HEAD
-#: createdb.c:285 reindexdb.c:814
-=======
 #: createdb.c:311 reindexdb.c:772
->>>>>>> REL_16_9
 #, c-format
 msgid "  -W, --password               force password prompt\n"
 msgstr "  -W, --password               framtvinga fråga om lösenord\n"
 
-<<<<<<< HEAD
-#: createdb.c:286 reindexdb.c:815
-=======
 #: createdb.c:312 reindexdb.c:773
->>>>>>> REL_16_9
 #, c-format
 msgid "  --maintenance-db=DBNAME      alternate maintenance database\n"
 msgstr "  --maintenance-db=DBNAMN      annat val av underhållsdatabas\n"
 
-<<<<<<< HEAD
-#: createdb.c:287
-=======
 #: createdb.c:313
->>>>>>> REL_16_9
 #, c-format
 msgid ""
 "\n"
@@ -795,26 +498,6 @@ msgstr ""
 "\n"
 "Som standard skapas en databas med samma namn som den nuvarande användares namn.\n"
 
-<<<<<<< HEAD
-#: createuser.c:151
-#, c-format
-msgid "invalid value for --connection-limit: %s"
-msgstr "ogiltigt värde till --connection-limit: %s"
-
-#: createuser.c:195
-msgid "Enter name of role to add: "
-msgstr "Mata in namn på den roll som skall läggas till: "
-
-#: createuser.c:210
-msgid "Enter password for new role: "
-msgstr "Mata in lösenord för den nya rollen: "
-
-#: createuser.c:211
-msgid "Enter it again: "
-msgstr "Mata in det igen: "
-
-#: createuser.c:214
-=======
 #: createuser.c:218
 msgid "Enter name of role to add: "
 msgstr "Mata in namn på den roll som skall läggas till: "
@@ -828,26 +511,10 @@ msgid "Enter it again: "
 msgstr "Mata in det igen: "
 
 #: createuser.c:237
->>>>>>> REL_16_9
 #, c-format
 msgid "Passwords didn't match.\n"
 msgstr "Lösenorden stämde inte överens.\n"
 
-<<<<<<< HEAD
-#: createuser.c:222
-msgid "Shall the new role be a superuser?"
-msgstr "Skall den nya rollen vara en superuser?"
-
-#: createuser.c:237
-msgid "Shall the new role be allowed to create databases?"
-msgstr "Skall den nya rollen tillåtas skapa databaser?"
-
-#: createuser.c:245
-msgid "Shall the new role be allowed to create more new roles?"
-msgstr "Skall den nya rollen tillåtas skapa fler nya roller?"
-
-#: createuser.c:281
-=======
 #: createuser.c:245
 msgid "Shall the new role be a superuser?"
 msgstr "Skall den nya rollen vara en superuser?"
@@ -861,25 +528,16 @@ msgid "Shall the new role be allowed to create more new roles?"
 msgstr "Skall den nya rollen tillåtas skapa fler nya roller?"
 
 #: createuser.c:309
->>>>>>> REL_16_9
 #, c-format
 msgid "password encryption failed: %s"
 msgstr "misslyckades med lösenordskryptering: %s"
 
-<<<<<<< HEAD
-#: createuser.c:336
-=======
 #: createuser.c:400
->>>>>>> REL_16_9
 #, c-format
 msgid "creation of new role failed: %s"
 msgstr "misslyckades med att skapa ny roll: %s"
 
-<<<<<<< HEAD
-#: createuser.c:350
-=======
 #: createuser.c:414
->>>>>>> REL_16_9
 #, c-format
 msgid ""
 "%s creates a new PostgreSQL role.\n"
@@ -888,18 +546,11 @@ msgstr ""
 "%s skapar en ny PostgreSQL-roll.\n"
 "\n"
 
-<<<<<<< HEAD
-#: createuser.c:352 dropuser.c:170
-=======
 #: createuser.c:416 dropuser.c:171
->>>>>>> REL_16_9
 #, c-format
 msgid "  %s [OPTION]... [ROLENAME]\n"
 msgstr "  %s [FLAGGA]... [ROLLNAMN]\n"
 
-<<<<<<< HEAD
-#: createuser.c:354
-=======
 #: createuser.c:418
 #, c-format
 msgid ""
@@ -910,48 +561,31 @@ msgstr ""
 "                            adminrättigheter\n"
 
 #: createuser.c:420
->>>>>>> REL_16_9
 #, c-format
 msgid "  -c, --connection-limit=N  connection limit for role (default: no limit)\n"
 msgstr "  -c, --connection-limit=N  anslutningsgräns för roll (standard: ingen gräns)\n"
 
-<<<<<<< HEAD
-#: createuser.c:355
-=======
 #: createuser.c:421
->>>>>>> REL_16_9
 #, c-format
 msgid "  -d, --createdb            role can create new databases\n"
 msgstr "  -d, --createdb            rollen kan skapa nya databaser\n"
 
-<<<<<<< HEAD
-#: createuser.c:356
-=======
 #: createuser.c:422
->>>>>>> REL_16_9
 #, c-format
 msgid "  -D, --no-createdb         role cannot create databases (default)\n"
 msgstr "  -D, --no-createdb         rollen kan inte skapa databaser (standard)\n"
 
-<<<<<<< HEAD
-#: createuser.c:358
-=======
 #: createuser.c:424
->>>>>>> REL_16_9
 #, c-format
 msgid "  -g, --member-of=ROLE      new role will be a member of ROLE\n"
 msgstr "  -g, --member-of=ROLL      nya rollen kommer bli medlem i ROLL\n"
 
-<<<<<<< HEAD
-#: createuser.c:359
-=======
 #: createuser.c:425
 #, c-format
 msgid "  --role=ROLE               (same as --member-of, deprecated)\n"
 msgstr "  --role=ROLL               (samma som --member-of, obsolet)\n"
 
 #: createuser.c:426
->>>>>>> REL_16_9
 #, c-format
 msgid ""
 "  -i, --inherit             role inherits privileges of roles it is a\n"
@@ -960,86 +594,51 @@ msgstr ""
 "  -i, --inherit             rollen ärver rättigheter från roller den\n"
 "                            är medlem i (standard)\n"
 
-<<<<<<< HEAD
-#: createuser.c:361
-=======
 #: createuser.c:428
->>>>>>> REL_16_9
 #, c-format
 msgid "  -I, --no-inherit          role does not inherit privileges\n"
 msgstr "  -I, --no-inherit          rollen ärver inga rättigheter\n"
 
-<<<<<<< HEAD
-#: createuser.c:362
-=======
 #: createuser.c:429
->>>>>>> REL_16_9
 #, c-format
 msgid "  -l, --login               role can login (default)\n"
 msgstr "  -l, --login               rollen kan logga in (standard)\n"
 
-<<<<<<< HEAD
-#: createuser.c:363
-=======
 #: createuser.c:430
->>>>>>> REL_16_9
 #, c-format
 msgid "  -L, --no-login            role cannot login\n"
 msgstr "  -L, --no-login            rollen kan inte logga in\n"
 
-<<<<<<< HEAD
-#: createuser.c:364
-=======
 #: createuser.c:431
 #, c-format
 msgid "  -m, --with-member=ROLE    ROLE will be a member of new role\n"
 msgstr "  -m, --with-member=ROLL    ROLL kommer bli medlem i den nya rollen\n"
 
 #: createuser.c:432
->>>>>>> REL_16_9
 #, c-format
 msgid "  -P, --pwprompt            assign a password to new role\n"
 msgstr "  -P, --pwprompt            tilldela den nya rollen ett lösenord\n"
 
-<<<<<<< HEAD
-#: createuser.c:365
-=======
 #: createuser.c:433
->>>>>>> REL_16_9
 #, c-format
 msgid "  -r, --createrole          role can create new roles\n"
 msgstr "  -r, --createrole          rollen kan skapa nya roller\n"
 
-<<<<<<< HEAD
-#: createuser.c:366
-=======
 #: createuser.c:434
->>>>>>> REL_16_9
 #, c-format
 msgid "  -R, --no-createrole       role cannot create roles (default)\n"
 msgstr "  -R, --no-createrole       rollen kan inte skapa roller (standard)\n"
 
-<<<<<<< HEAD
-#: createuser.c:367
-=======
 #: createuser.c:435
->>>>>>> REL_16_9
 #, c-format
 msgid "  -s, --superuser           role will be superuser\n"
 msgstr "  -s, --superuser           rollen blir en superuser\n"
 
-<<<<<<< HEAD
-#: createuser.c:368
-=======
 #: createuser.c:436
->>>>>>> REL_16_9
 #, c-format
 msgid "  -S, --no-superuser        role will not be superuser (default)\n"
 msgstr "  -S, --no-superuser        rollen blir inte superuser (standard)\n"
 
-<<<<<<< HEAD
-#: createuser.c:370
-=======
 #: createuser.c:437
 #, c-format
 msgid ""
@@ -1050,7 +649,6 @@ msgstr ""
 "                            datum och tid när rollens lösenord går ut\n"
 
 #: createuser.c:440
->>>>>>> REL_16_9
 #, c-format
 msgid ""
 "  --interactive             prompt for missing role name and attributes rather\n"
@@ -1059,9 +657,6 @@ msgstr ""
 "  --interactive             fråga efter rollnamn och egenskaper, snarare än\n"
 "                            att falla tillbaka på förval\n"
 
-<<<<<<< HEAD
-#: createuser.c:372
-=======
 #: createuser.c:442
 #, c-format
 msgid "  --bypassrls               role can bypass row-level security (RLS) policy\n"
@@ -1077,69 +672,40 @@ msgstr ""
 "                            (standard)\n"
 
 #: createuser.c:445
->>>>>>> REL_16_9
 #, c-format
 msgid "  --replication             role can initiate replication\n"
 msgstr "  --replication             rollen kan starta replikering\n"
 
-<<<<<<< HEAD
-#: createuser.c:373
-=======
 #: createuser.c:446
->>>>>>> REL_16_9
 #, c-format
 msgid "  --no-replication          role cannot initiate replication (default)\n"
 msgstr "  --no-replication          rollen får inte starta replikering (standard)\n"
 
-<<<<<<< HEAD
-#: createuser.c:378
-=======
 #: createuser.c:451
->>>>>>> REL_16_9
 #, c-format
 msgid "  -U, --username=USERNAME   user name to connect as (not the one to create)\n"
 msgstr "  -U, --username=ANVÄNDARE  användarnamn att ansluta som (ej den som skapas)\n"
 
-<<<<<<< HEAD
-#: dropdb.c:111
-=======
 #: dropdb.c:112
->>>>>>> REL_16_9
 #, c-format
 msgid "missing required argument database name"
 msgstr "saknar nödvändigt databasnamn"
 
-<<<<<<< HEAD
-#: dropdb.c:126
-=======
 #: dropdb.c:127
->>>>>>> REL_16_9
 #, c-format
 msgid "Database \"%s\" will be permanently removed.\n"
 msgstr "Databasen \"%s\" kommer att tas bort permanent.\n"
 
-<<<<<<< HEAD
-#: dropdb.c:127 dropuser.c:130
-msgid "Are you sure?"
-msgstr "Är du säker?"
-
-#: dropdb.c:156
-=======
 #: dropdb.c:128 dropuser.c:131
 msgid "Are you sure?"
 msgstr "Är du säker?"
 
 #: dropdb.c:157
->>>>>>> REL_16_9
 #, c-format
 msgid "database removal failed: %s"
 msgstr "borttagning av databas misslyckades: %s"
 
-<<<<<<< HEAD
-#: dropdb.c:170
-=======
 #: dropdb.c:171
->>>>>>> REL_16_9
 #, c-format
 msgid ""
 "%s removes a PostgreSQL database.\n"
@@ -1148,47 +714,27 @@ msgstr ""
 "%s tar bort en PostgreSQL-databas.\n"
 "\n"
 
-<<<<<<< HEAD
-#: dropdb.c:172
-=======
 #: dropdb.c:173
->>>>>>> REL_16_9
 #, c-format
 msgid "  %s [OPTION]... DBNAME\n"
 msgstr "  %s [FLAGGA]... DBNAMN\n"
 
-<<<<<<< HEAD
-#: dropdb.c:175
-=======
 #: dropdb.c:176
->>>>>>> REL_16_9
 #, c-format
 msgid "  -f, --force               try to terminate other connections before dropping\n"
 msgstr "  -f, --force               försöka stänga andra uppkopplingar innan radering\n"
 
-<<<<<<< HEAD
-#: dropdb.c:176
-=======
 #: dropdb.c:177
->>>>>>> REL_16_9
 #, c-format
 msgid "  -i, --interactive         prompt before deleting anything\n"
 msgstr "  -i, --interactive         fråga innan något tas bort\n"
 
-<<<<<<< HEAD
-#: dropdb.c:178
-=======
 #: dropdb.c:179
->>>>>>> REL_16_9
 #, c-format
 msgid "  --if-exists               don't report error if database doesn't exist\n"
 msgstr "  --if-exists               felrapportera ej om databasen saknas\n"
 
-<<<<<<< HEAD
-#: dropuser.c:117
-=======
 #: dropuser.c:118
->>>>>>> REL_16_9
 msgid "Enter name of role to drop: "
 msgstr "Mata inn namnet på den roll som skall tas bort: "
 
@@ -1202,31 +748,19 @@ msgstr "saknar ett nödvändigt rollnamn"
 msgid "Role \"%s\" will be permanently removed.\n"
 msgstr "Rollen \"%s\" kommer att tas bort permanent.\n"
 
-<<<<<<< HEAD
-#: dropuser.c:153
-=======
 #: dropuser.c:154
->>>>>>> REL_16_9
 #, c-format
 msgid "removal of role \"%s\" failed: %s"
 msgstr "borttagning av rollen \"%s\" misslyckades: %s"
 
-<<<<<<< HEAD
-#: dropuser.c:168
-=======
 #: dropuser.c:169
->>>>>>> REL_16_9
 #, c-format
 msgid ""
 "%s removes a PostgreSQL role.\n"
 "\n"
 msgstr "%s tar bort en PostgreSQL-roll.\n"
 
-<<<<<<< HEAD
-#: dropuser.c:173
-=======
 #: dropuser.c:174
->>>>>>> REL_16_9
 #, c-format
 msgid ""
 "  -i, --interactive         prompt before deleting anything, and prompt for\n"
@@ -1235,83 +769,47 @@ msgstr ""
 "  -i, --interactive         fråga innan något tas bort och fråga efter\n"
 "                            rollnamn om sådant saknas\n"
 
-<<<<<<< HEAD
-#: dropuser.c:176
-=======
 #: dropuser.c:177
->>>>>>> REL_16_9
 #, c-format
 msgid "  --if-exists               don't report error if user doesn't exist\n"
 msgstr "  --if-exists               felrapportera ej om användaren saknas\n"
 
-<<<<<<< HEAD
-#: dropuser.c:181
-=======
 #: dropuser.c:182
->>>>>>> REL_16_9
 #, c-format
 msgid "  -U, --username=USERNAME   user name to connect as (not the one to drop)\n"
 msgstr "  -U, --username=ANVÄNDARE  användare som ansluter (inte den som tas bort)\n"
 
-<<<<<<< HEAD
-#: pg_isready.c:153
-=======
 #: pg_isready.c:154
->>>>>>> REL_16_9
 #, c-format
 msgid "could not fetch default options"
 msgstr "kunde inte hämta förvalda värde."
 
-<<<<<<< HEAD
-#: pg_isready.c:202
-=======
 #: pg_isready.c:203
->>>>>>> REL_16_9
 #, c-format
 msgid "accepting connections\n"
 msgstr "accepterar anslutningar\n"
 
-<<<<<<< HEAD
-#: pg_isready.c:205
-=======
 #: pg_isready.c:206
->>>>>>> REL_16_9
 #, c-format
 msgid "rejecting connections\n"
 msgstr "vägrar anslutningar\n"
 
-<<<<<<< HEAD
-#: pg_isready.c:208
-=======
 #: pg_isready.c:209
->>>>>>> REL_16_9
 #, c-format
 msgid "no response\n"
 msgstr "inget svar\n"
 
-<<<<<<< HEAD
-#: pg_isready.c:211
-=======
 #: pg_isready.c:212
->>>>>>> REL_16_9
 #, c-format
 msgid "no attempt\n"
 msgstr "inget försök\n"
 
-<<<<<<< HEAD
-#: pg_isready.c:214
-=======
 #: pg_isready.c:215
->>>>>>> REL_16_9
 #, c-format
 msgid "unknown\n"
 msgstr "okänt\n"
 
-<<<<<<< HEAD
-#: pg_isready.c:224
-=======
 #: pg_isready.c:225
->>>>>>> REL_16_9
 #, c-format
 msgid ""
 "%s issues a connection check to a PostgreSQL database.\n"
@@ -1320,255 +818,139 @@ msgstr ""
 "%s utför en anslutningskontroll mot en PostgreSQL-databas.\n"
 "\n"
 
-<<<<<<< HEAD
-#: pg_isready.c:226
-=======
 #: pg_isready.c:227
->>>>>>> REL_16_9
 #, c-format
 msgid "  %s [OPTION]...\n"
 msgstr "  %s [FLAGGA]...\n"
 
-<<<<<<< HEAD
-#: pg_isready.c:229
-=======
 #: pg_isready.c:230
->>>>>>> REL_16_9
 #, c-format
 msgid "  -d, --dbname=DBNAME      database name\n"
 msgstr "  -d, --dbname=DBNAMN      databasens namn\n"
 
-<<<<<<< HEAD
-#: pg_isready.c:230
-=======
 #: pg_isready.c:231
->>>>>>> REL_16_9
 #, c-format
 msgid "  -q, --quiet              run quietly\n"
 msgstr "  -q, --quiet              tyst körning\n"
 
-<<<<<<< HEAD
-#: pg_isready.c:231
-=======
 #: pg_isready.c:232
->>>>>>> REL_16_9
 #, c-format
 msgid "  -V, --version            output version information, then exit\n"
 msgstr "  -V, --version            visa versionsinformation, avsluta sedan\n"
 
-<<<<<<< HEAD
-#: pg_isready.c:232
-=======
 #: pg_isready.c:233
->>>>>>> REL_16_9
 #, c-format
 msgid "  -?, --help               show this help, then exit\n"
 msgstr "  -?, --help               visa denna hjälp, avsluta sedan\n"
 
-<<<<<<< HEAD
-#: pg_isready.c:235
-=======
 #: pg_isready.c:236
->>>>>>> REL_16_9
 #, c-format
 msgid "  -h, --host=HOSTNAME      database server host or socket directory\n"
 msgstr "  -h, --host=VÄRDNAMN      databasens värdnamn eller socketkatalog\n"
 
-<<<<<<< HEAD
-#: pg_isready.c:236
-=======
 #: pg_isready.c:237
->>>>>>> REL_16_9
 #, c-format
 msgid "  -p, --port=PORT          database server port\n"
 msgstr "  -p, --port=PORT          databasserverns port\n"
 
-<<<<<<< HEAD
-#: pg_isready.c:237
-=======
 #: pg_isready.c:238
->>>>>>> REL_16_9
 #, c-format
 msgid "  -t, --timeout=SECS       seconds to wait when attempting connection, 0 disables (default: %s)\n"
 msgstr "  -t, --timeout=SEK        sekunder att vänta på anslutning; 0 stänger av (förval: %s)\n"
 
-<<<<<<< HEAD
-#: pg_isready.c:238
-=======
 #: pg_isready.c:239
->>>>>>> REL_16_9
 #, c-format
 msgid "  -U, --username=USERNAME  user name to connect as\n"
 msgstr "  -U, --username=ANVÄNDARE användarnamn att ansluta som\n"
 
-<<<<<<< HEAD
-#: reindexdb.c:157 vacuumdb.c:198
-#, c-format
-msgid "number of parallel jobs must be at least 1"
-msgstr "antalet parallella jobb måste vara minst 1"
-
-#: reindexdb.c:210
-=======
 #: reindexdb.c:209
->>>>>>> REL_16_9
 #, c-format
 msgid "cannot reindex all databases and a specific one at the same time"
 msgstr "kan inte omindexera alla databaser och samtidigt en specifik databas"
 
-<<<<<<< HEAD
-#: reindexdb.c:215
-=======
 #: reindexdb.c:211
->>>>>>> REL_16_9
 #, c-format
 msgid "cannot reindex all databases and system catalogs at the same time"
 msgstr "kan inte omindexera alla databaser samtidigt med systemkatalogerna"
 
-<<<<<<< HEAD
-#: reindexdb.c:220
-=======
 #: reindexdb.c:213
->>>>>>> REL_16_9
 #, c-format
 msgid "cannot reindex specific schema(s) in all databases"
 msgstr "kan inte omindexera angivna scheman i alla databaser"
 
-<<<<<<< HEAD
-#: reindexdb.c:225
-=======
 #: reindexdb.c:215
->>>>>>> REL_16_9
 #, c-format
 msgid "cannot reindex specific table(s) in all databases"
 msgstr "Kan inte indexera specifik tabell i alla databaser"
 
-#: reindexdb.c:230
+#: reindexdb.c:217
 #, c-format
 msgid "cannot reindex specific index(es) in all databases"
 msgstr "Kan inte omindexera angivet index i alla databaser"
 
-<<<<<<< HEAD
-#: reindexdb.c:243
-=======
 #: reindexdb.c:227
->>>>>>> REL_16_9
 #, c-format
 msgid "cannot reindex specific schema(s) and system catalogs at the same time"
 msgstr "kan inte omindexera angivna scheman och systemkataloger på samma gång"
 
-<<<<<<< HEAD
-#: reindexdb.c:248
-=======
 #: reindexdb.c:229
->>>>>>> REL_16_9
 #, c-format
 msgid "cannot reindex specific table(s) and system catalogs at the same time"
 msgstr "kan inte omindexera specifik tabell och systemkatalogerna samtidigt"
 
-<<<<<<< HEAD
-#: reindexdb.c:253
-=======
 #: reindexdb.c:231
->>>>>>> REL_16_9
 #, c-format
 msgid "cannot reindex specific index(es) and system catalogs at the same time"
 msgstr "kan inte omindexera angivna index och systemkatalogerna samtidigt."
 
-<<<<<<< HEAD
-#: reindexdb.c:259
-=======
 #: reindexdb.c:234
->>>>>>> REL_16_9
 #, c-format
 msgid "cannot use multiple jobs to reindex system catalogs"
 msgstr "kan inte använda multipla jobb för att omindexera systemkataloger"
 
-<<<<<<< HEAD
-#: reindexdb.c:288
-=======
 #: reindexdb.c:260
->>>>>>> REL_16_9
 #, c-format
 msgid "cannot use multiple jobs to reindex indexes"
 msgstr "kan inte använda multipla jobb för att omindexera index"
 
-<<<<<<< HEAD
-#: reindexdb.c:353 reindexdb.c:361 vacuumdb.c:471 vacuumdb.c:479 vacuumdb.c:487
-#: vacuumdb.c:495 vacuumdb.c:503 vacuumdb.c:511 vacuumdb.c:518 vacuumdb.c:525
-#: vacuumdb.c:532
-=======
 #: reindexdb.c:323 reindexdb.c:330 vacuumdb.c:525 vacuumdb.c:532 vacuumdb.c:539
 #: vacuumdb.c:546 vacuumdb.c:553 vacuumdb.c:560 vacuumdb.c:567 vacuumdb.c:572
 #: vacuumdb.c:576 vacuumdb.c:580 vacuumdb.c:584
->>>>>>> REL_16_9
 #, c-format
 msgid "cannot use the \"%s\" option on server versions older than PostgreSQL %s"
 msgstr "flaggan \"%s\" kan inte användas på serverversioner äldre än PostgreSQL %s"
 
-<<<<<<< HEAD
-#: reindexdb.c:401
-#, c-format
-msgid "cannot reindex system catalogs concurrently, skipping all"
-msgstr "kan inte omindexera systemkataloger parallellt, hoppar över alla"
-
-#: reindexdb.c:605
-=======
 #: reindexdb.c:561
->>>>>>> REL_16_9
 #, c-format
 msgid "reindexing of database \"%s\" failed: %s"
 msgstr "omindexering av databasen \"%s\" misslyckades: %s"
 
-<<<<<<< HEAD
-#: reindexdb.c:609
-=======
 #: reindexdb.c:565
->>>>>>> REL_16_9
 #, c-format
 msgid "reindexing of index \"%s\" in database \"%s\" failed: %s"
 msgstr "omindexering av index \"%s\" i databasen \"%s\" misslyckades: %s"
 
-<<<<<<< HEAD
-#: reindexdb.c:613
-=======
 #: reindexdb.c:569
->>>>>>> REL_16_9
 #, c-format
 msgid "reindexing of schema \"%s\" in database \"%s\" failed: %s"
 msgstr "omindexering av schemat \"%s\" i databasen \"%s\" misslyckades: %s"
 
-<<<<<<< HEAD
-#: reindexdb.c:617
-=======
 #: reindexdb.c:573
->>>>>>> REL_16_9
 #, c-format
 msgid "reindexing of system catalogs in database \"%s\" failed: %s"
 msgstr "omindexering av systemkataloger i databasen \"%s\" misslyckades: %s"
 
-<<<<<<< HEAD
-#: reindexdb.c:621
-=======
 #: reindexdb.c:577
->>>>>>> REL_16_9
 #, c-format
 msgid "reindexing of table \"%s\" in database \"%s\" failed: %s"
 msgstr "omindexering av tabell \"%s\" i databasen \"%s\" misslyckades: %s"
 
-<<<<<<< HEAD
-#: reindexdb.c:774
-=======
 #: reindexdb.c:732
->>>>>>> REL_16_9
 #, c-format
 msgid "%s: reindexing database \"%s\"\n"
 msgstr "%s: omindexering av databasen \"%s\"\n"
 
-<<<<<<< HEAD
-#: reindexdb.c:791
-=======
 #: reindexdb.c:749
->>>>>>> REL_16_9
 #, c-format
 msgid ""
 "%s reindexes a PostgreSQL database.\n"
@@ -1577,12 +959,6 @@ msgstr ""
 "%s indexerar om en PostgreSQL-databas.\n"
 "\n"
 
-<<<<<<< HEAD
-#: reindexdb.c:795
-#, c-format
-msgid "  -a, --all                    reindex all databases\n"
-msgstr "  -a, --all                    indexera om alla databaser\n"
-=======
 #: reindexdb.c:753
 #, c-format
 msgid "  -a, --all                    reindex all databases\n"
@@ -1597,24 +973,14 @@ msgstr "      --concurrently           indexera om utan att låsa\n"
 #, c-format
 msgid "  -d, --dbname=DBNAME          database to reindex\n"
 msgstr "  -d, --dbname=DBNAME          databas att indexera om\n"
->>>>>>> REL_16_9
 
-#: reindexdb.c:796
+#: reindexdb.c:757
 #, c-format
-<<<<<<< HEAD
-msgid "      --concurrently           reindex concurrently\n"
-msgstr "      --concurrently           indexera om utan att låsa\n"
-=======
 msgid "  -i, --index=INDEX            recreate specific index(es) only\n"
 msgstr "  -i, --index=INDEX            återskapa enbart angivna index\n"
->>>>>>> REL_16_9
 
-#: reindexdb.c:797
+#: reindexdb.c:758
 #, c-format
-<<<<<<< HEAD
-msgid "  -d, --dbname=DBNAME          database to reindex\n"
-msgstr "  -d, --dbname=DBNAME          databas att indexera om\n"
-=======
 msgid "  -j, --jobs=NUM               use this many concurrent connections to reindex\n"
 msgstr ""
 "  -j, --jobs=NUM               använd så här många samtida anslutningar\n"
@@ -1624,26 +990,14 @@ msgstr ""
 #, c-format
 msgid "  -q, --quiet                  don't write any messages\n"
 msgstr "  -q, --quiet                  skriv inte ut några meddelanden\n"
->>>>>>> REL_16_9
 
-#: reindexdb.c:799
+#: reindexdb.c:760
 #, c-format
-<<<<<<< HEAD
-msgid "  -i, --index=INDEX            recreate specific index(es) only\n"
-msgstr "  -i, --index=INDEX            återskapa enbart angivna index\n"
-=======
 msgid "  -s, --system                 reindex system catalogs only\n"
 msgstr "  -s, --system                 indexera enbart om systemkataloger\n"
->>>>>>> REL_16_9
 
-#: reindexdb.c:800
+#: reindexdb.c:761
 #, c-format
-<<<<<<< HEAD
-msgid "  -j, --jobs=NUM               use this many concurrent connections to reindex\n"
-msgstr ""
-"  -j, --jobs=NUM               använd så här många samtida anslutningar\n"
-"                               för omindexering\n"
-=======
 msgid "  -S, --schema=SCHEMA          reindex specific schema(s) only\n"
 msgstr "  -S, --schema=SCHEMA          indexera enbart om angivna scheman\n"
 
@@ -1651,51 +1005,18 @@ msgstr "  -S, --schema=SCHEMA          indexera enbart om angivna scheman\n"
 #, c-format
 msgid "  -t, --table=TABLE            reindex specific table(s) only\n"
 msgstr "  -t, --table=TABELL           indexera enbart om angivna tabeller\n"
->>>>>>> REL_16_9
 
-#: reindexdb.c:801
-#, c-format
-<<<<<<< HEAD
-msgid "  -q, --quiet                  don't write any messages\n"
-msgstr "  -q, --quiet                  skriv inte ut några meddelanden\n"
-=======
-msgid "      --tablespace=TABLESPACE  tablespace where indexes are rebuilt\n"
-msgstr "      --tablespace=TABELLRYMD  tabellutrymme där index byggs om\n"
->>>>>>> REL_16_9
-
-#: reindexdb.c:802
-#, c-format
-<<<<<<< HEAD
-msgid "  -s, --system                 reindex system catalogs only\n"
-msgstr "  -s, --system                 indexera enbart om systemkataloger\n"
-
-#: reindexdb.c:803
-#, c-format
-msgid "  -S, --schema=SCHEMA          reindex specific schema(s) only\n"
-msgstr "  -S, --schema=SCHEMA          indexera enbart om angivna scheman\n"
-
-#: reindexdb.c:804
-#, c-format
-msgid "  -t, --table=TABLE            reindex specific table(s) only\n"
-msgstr "  -t, --table=TABELL           indexera enbart om angivna tabeller\n"
-
-#: reindexdb.c:805
+#: reindexdb.c:763
 #, c-format
 msgid "      --tablespace=TABLESPACE  tablespace where indexes are rebuilt\n"
 msgstr "      --tablespace=TABELLRYMD  tabellutrymme där index byggs om\n"
 
-#: reindexdb.c:806
+#: reindexdb.c:764
 #, c-format
-msgid "  -v, --verbose                write a lot of output\n"
-msgstr "  -v, --verbose                skriv massor med utdata\n"
-
-#: reindexdb.c:816
-=======
 msgid "  -v, --verbose                write a lot of output\n"
 msgstr "  -v, --verbose                skriv massor med utdata\n"
 
 #: reindexdb.c:774
->>>>>>> REL_16_9
 #, c-format
 msgid ""
 "\n"
@@ -1704,83 +1025,32 @@ msgstr ""
 "\n"
 "Läs beskrivningen av SQL-kommandot REINDEX för detaljer.\n"
 
-<<<<<<< HEAD
-#: vacuumdb.c:206
-#, c-format
-msgid "parallel workers for vacuum must be greater than or equal to zero"
-msgstr "parallella arbetare för städning måste vara större än eller lika med noll"
-
-#: vacuumdb.c:226
-#, c-format
-msgid "minimum transaction ID age must be at least 1"
-msgstr "minimal transaktions-ID-ålder måste vara minst 1"
-
-#: vacuumdb.c:234
-#, c-format
-msgid "minimum multixact ID age must be at least 1"
-msgstr "minimal multixact-ID-ålder måste vara minst 1"
-
-#: vacuumdb.c:278 vacuumdb.c:284 vacuumdb.c:290 vacuumdb.c:296 vacuumdb.c:302
-#: vacuumdb.c:308 vacuumdb.c:314 vacuumdb.c:326
-=======
 #: vacuumdb.c:312 vacuumdb.c:315 vacuumdb.c:318 vacuumdb.c:321 vacuumdb.c:324
 #: vacuumdb.c:327 vacuumdb.c:330 vacuumdb.c:333 vacuumdb.c:342
->>>>>>> REL_16_9
 #, c-format
 msgid "cannot use the \"%s\" option when performing only analyze"
 msgstr "flaggan \"%s\" kan inte användas vid enbart analys"
 
-<<<<<<< HEAD
-#: vacuumdb.c:332
-=======
 #: vacuumdb.c:345
->>>>>>> REL_16_9
 #, c-format
 msgid "cannot use the \"%s\" option when performing full vacuum"
 msgstr "flaggan \"%s\" kan inte användas vid \"full vacuum\""
 
-<<<<<<< HEAD
-#: vacuumdb.c:341
-=======
 #: vacuumdb.c:351 vacuumdb.c:359
->>>>>>> REL_16_9
 #, c-format
 msgid "cannot use the \"%s\" option with the \"%s\" option"
 msgstr "flaggan \"%s\" kan inte användas tillsammans med flaggan \"%s\""
 
-<<<<<<< HEAD
-#: vacuumdb.c:363
-=======
 #: vacuumdb.c:430
->>>>>>> REL_16_9
 #, c-format
 msgid "cannot vacuum all databases and a specific one at the same time"
 msgstr "kan inte städa alla databaser och endast en angiven på samma gång"
 
-<<<<<<< HEAD
-#: vacuumdb.c:368
-=======
 #: vacuumdb.c:434
->>>>>>> REL_16_9
 #, c-format
 msgid "cannot vacuum specific table(s) in all databases"
 msgstr "kan inte städa en specifik tabell i alla databaser."
 
-<<<<<<< HEAD
-#: vacuumdb.c:458
-msgid "Generating minimal optimizer statistics (1 target)"
-msgstr "Skapar minimal optimeringsstatistik (1 mål)"
-
-#: vacuumdb.c:459
-msgid "Generating medium optimizer statistics (10 targets)"
-msgstr "Skapar medium optimeringsstatistik (10 mål)"
-
-#: vacuumdb.c:460
-msgid "Generating default (full) optimizer statistics"
-msgstr "Skapar förvald (full) optimeringsstatistik"
-
-#: vacuumdb.c:540
-=======
 #: vacuumdb.c:438
 #, c-format
 msgid "cannot vacuum specific schema(s) in all databases"
@@ -1824,43 +1094,26 @@ msgid "Generating default (full) optimizer statistics"
 msgstr "Skapar förvald (full) optimeringsstatistik"
 
 #: vacuumdb.c:593
->>>>>>> REL_16_9
 #, c-format
 msgid "%s: processing database \"%s\": %s\n"
 msgstr "%s: processar databasen \"%s\": %s\n"
 
-<<<<<<< HEAD
-#: vacuumdb.c:543
-=======
 #: vacuumdb.c:596
->>>>>>> REL_16_9
 #, c-format
 msgid "%s: vacuuming database \"%s\"\n"
 msgstr "%s: städar databasen \"%s\".\n"
 
-<<<<<<< HEAD
-#: vacuumdb.c:1013
-=======
 #: vacuumdb.c:1144
->>>>>>> REL_16_9
 #, c-format
 msgid "vacuuming of table \"%s\" in database \"%s\" failed: %s"
 msgstr "städning av tabell \"%s\" i databasen \"%s\" misslyckades: %s"
 
-<<<<<<< HEAD
-#: vacuumdb.c:1016
-=======
 #: vacuumdb.c:1147
->>>>>>> REL_16_9
 #, c-format
 msgid "vacuuming of database \"%s\" failed: %s"
 msgstr "städning av databasen \"%s\" misslyckades: %s"
 
-<<<<<<< HEAD
-#: vacuumdb.c:1024
-=======
 #: vacuumdb.c:1155
->>>>>>> REL_16_9
 #, c-format
 msgid ""
 "%s cleans and analyzes a PostgreSQL database.\n"
@@ -1869,136 +1122,81 @@ msgstr ""
 "%s städar och analyserar en PostgreSQL-databas.\n"
 "\n"
 
-<<<<<<< HEAD
-#: vacuumdb.c:1028
-=======
 #: vacuumdb.c:1159
->>>>>>> REL_16_9
 #, c-format
 msgid "  -a, --all                       vacuum all databases\n"
 msgstr "  -a, --all                       städa i alla databaser\n"
 
-<<<<<<< HEAD
-#: vacuumdb.c:1029
-=======
 #: vacuumdb.c:1160
 #, c-format
 msgid "      --buffer-usage-limit=SIZE   size of ring buffer used for vacuum\n"
 msgstr "      --buffer-usage-limit=STORLEK storlek på ringbuffert som används vid städning\n"
 
 #: vacuumdb.c:1161
->>>>>>> REL_16_9
 #, c-format
 msgid "  -d, --dbname=DBNAME             database to vacuum\n"
 msgstr "  -d, --dbname=DBNAMN             databas att städa i\n"
 
-<<<<<<< HEAD
-#: vacuumdb.c:1030
-=======
 #: vacuumdb.c:1162
->>>>>>> REL_16_9
 #, c-format
 msgid "      --disable-page-skipping     disable all page-skipping behavior\n"
 msgstr "      --disable-page-skipping     stäng av alla sidöverhoppande beteeenden\n"
 
-<<<<<<< HEAD
-#: vacuumdb.c:1031
-=======
 #: vacuumdb.c:1163
->>>>>>> REL_16_9
 #, c-format
 msgid "  -e, --echo                      show the commands being sent to the server\n"
 msgstr "  -e, --echo                      visa kommandon som skickas till servern\n"
 
-<<<<<<< HEAD
-#: vacuumdb.c:1032
-=======
 #: vacuumdb.c:1164
->>>>>>> REL_16_9
 #, c-format
 msgid "  -f, --full                      do full vacuuming\n"
 msgstr "  -f, --full                      utför full städning\n"
 
-<<<<<<< HEAD
-#: vacuumdb.c:1033
-=======
 #: vacuumdb.c:1165
->>>>>>> REL_16_9
 #, c-format
 msgid "  -F, --freeze                    freeze row transaction information\n"
 msgstr "  -F, --freeze                    frys information om radtransaktioner\n"
 
-<<<<<<< HEAD
-#: vacuumdb.c:1034
-=======
 #: vacuumdb.c:1166
->>>>>>> REL_16_9
 #, c-format
 msgid "      --force-index-cleanup       always remove index entries that point to dead tuples\n"
 msgstr "      --force-index-cleanup       ta alltid bort indexposter som pekar på döda tupler\n"
 
-<<<<<<< HEAD
-#: vacuumdb.c:1035
-=======
 #: vacuumdb.c:1167
->>>>>>> REL_16_9
 #, c-format
 msgid "  -j, --jobs=NUM                  use this many concurrent connections to vacuum\n"
 msgstr "  -j, --jobs=NUM                  använd så här många samtida anslutningar för städning\n"
 
-<<<<<<< HEAD
-#: vacuumdb.c:1036
-=======
 #: vacuumdb.c:1168
->>>>>>> REL_16_9
 #, c-format
 msgid "      --min-mxid-age=MXID_AGE     minimum multixact ID age of tables to vacuum\n"
 msgstr "      --min-mxid-age=MXID_ÅLDER   minimal multixact-ID-ålder i tabeller som skall städas\n"
 
-<<<<<<< HEAD
-#: vacuumdb.c:1037
-=======
 #: vacuumdb.c:1169
->>>>>>> REL_16_9
 #, c-format
 msgid "      --min-xid-age=XID_AGE       minimum transaction ID age of tables to vacuum\n"
 msgstr "      --min-xid-age=XID_ÅLDER     minimal transaktions-ID-ålder i tabeller som skall städas\n"
 
-<<<<<<< HEAD
-#: vacuumdb.c:1038
-=======
 #: vacuumdb.c:1170
->>>>>>> REL_16_9
 #, c-format
 msgid "      --no-index-cleanup          don't remove index entries that point to dead tuples\n"
 msgstr "      --no-index-cleanup          ta inte bort indexposter som pekar på döda tupler\n"
 
-<<<<<<< HEAD
-#: vacuumdb.c:1039
-=======
 #: vacuumdb.c:1171
 #, c-format
 msgid "      --no-process-main           skip the main relation\n"
 msgstr "      --no-process-main           skippa huvudrelationen\n"
 
 #: vacuumdb.c:1172
->>>>>>> REL_16_9
 #, c-format
 msgid "      --no-process-toast          skip the TOAST table associated with the table to vacuum\n"
 msgstr "      --no-process-toast          hoppa över TOAST-tabellen som hör ihop med tabellen som städas\n"
 
-<<<<<<< HEAD
-#: vacuumdb.c:1040
-=======
 #: vacuumdb.c:1173
->>>>>>> REL_16_9
 #, c-format
 msgid "      --no-truncate               don't truncate empty pages at the end of the table\n"
 msgstr "      --no-truncate               trunkera inte tomma sidor i slutet av tabellen\n"
 
-<<<<<<< HEAD
-#: vacuumdb.c:1041
-=======
 #: vacuumdb.c:1174
 #, c-format
 msgid "  -n, --schema=SCHEMA             vacuum tables in the specified schema(s) only\n"
@@ -2010,81 +1208,48 @@ msgid "  -N, --exclude-schema=SCHEMA     do not vacuum tables in the specified s
 msgstr "  -N, --exclude-schema=SCHEMA     städa inte tabeller i angivna scheman\n"
 
 #: vacuumdb.c:1176
->>>>>>> REL_16_9
 #, c-format
 msgid "  -P, --parallel=PARALLEL_WORKERS use this many background workers for vacuum, if available\n"
 msgstr ""
 "  -P, --parallel=PARALLELLA_ARBETARE\n"
 "                                  använda så här många bakgrundsarbetare för städning, om det finns\n"
 
-<<<<<<< HEAD
-#: vacuumdb.c:1042
-=======
 #: vacuumdb.c:1177
->>>>>>> REL_16_9
 #, c-format
 msgid "  -q, --quiet                     don't write any messages\n"
 msgstr "  -q, --quiet                     skriv inte ut några meddelanden\n"
 
-<<<<<<< HEAD
-#: vacuumdb.c:1043
-=======
 #: vacuumdb.c:1178
->>>>>>> REL_16_9
 #, c-format
 msgid "      --skip-locked               skip relations that cannot be immediately locked\n"
 msgstr "      --skip-locked               hoppa äver relationer som inte kan låsas direkt\n"
 
-<<<<<<< HEAD
-#: vacuumdb.c:1044
-=======
 #: vacuumdb.c:1179
->>>>>>> REL_16_9
 #, c-format
 msgid "  -t, --table='TABLE[(COLUMNS)]'  vacuum specific table(s) only\n"
 msgstr "  -t, --table='TABELL[(KOLUMNER)]' städa enbart i dessa tabeller\n"
 
-<<<<<<< HEAD
-#: vacuumdb.c:1045
-=======
 #: vacuumdb.c:1180
->>>>>>> REL_16_9
 #, c-format
 msgid "  -v, --verbose                   write a lot of output\n"
 msgstr "  -v, --verbose                   skriv massor med utdata\n"
 
-<<<<<<< HEAD
-#: vacuumdb.c:1046
-=======
 #: vacuumdb.c:1181
->>>>>>> REL_16_9
 #, c-format
 msgid "  -V, --version                   output version information, then exit\n"
 msgstr "  -V, --version                   visa versionsinformation, avsluta sedan\n"
 
-<<<<<<< HEAD
-#: vacuumdb.c:1047
-=======
 #: vacuumdb.c:1182
->>>>>>> REL_16_9
 #, c-format
 msgid "  -z, --analyze                   update optimizer statistics\n"
 msgstr "  -z, --analyze                   uppdatera optimeringsstatistik\n"
 
-<<<<<<< HEAD
-#: vacuumdb.c:1048
-=======
 #: vacuumdb.c:1183
->>>>>>> REL_16_9
 #, c-format
 msgid "  -Z, --analyze-only              only update optimizer statistics; no vacuum\n"
 msgstr "  -Z, --analyze-only              uppdatera bara optimeringsstatistik; ingen städning\n"
 
-<<<<<<< HEAD
-#: vacuumdb.c:1049
-=======
 #: vacuumdb.c:1184
->>>>>>> REL_16_9
 #, c-format
 msgid ""
 "      --analyze-in-stages         only update optimizer statistics, in multiple\n"
@@ -2093,20 +1258,12 @@ msgstr ""
 "      --analyze-in-stages         uppdatera bara optimeringsstatistik, men i\n"
 "                                  flera steg för snabbare resultat; ingen städning\n"
 
-<<<<<<< HEAD
-#: vacuumdb.c:1051
-=======
 #: vacuumdb.c:1186
->>>>>>> REL_16_9
 #, c-format
 msgid "  -?, --help                      show this help, then exit\n"
 msgstr "  -?, --help                      visa denna hjälp, avsluta sedan\n"
 
-<<<<<<< HEAD
-#: vacuumdb.c:1059
-=======
 #: vacuumdb.c:1194
->>>>>>> REL_16_9
 #, c-format
 msgid ""
 "\n"

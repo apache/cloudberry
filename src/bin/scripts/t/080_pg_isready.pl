@@ -20,11 +20,7 @@ $node->command_fails(['pg_isready'], 'fails with no server running');
 $node->start;
 
 $node->command_ok(
-<<<<<<< HEAD
-	[ 'pg_isready', "--timeout=$TestLib::timeout_default" ],
-=======
 	[ 'pg_isready', "--timeout=$PostgreSQL::Test::Utils::timeout_default" ],
->>>>>>> REL_16_9
 	'succeeds with server running');
 
 done_testing();

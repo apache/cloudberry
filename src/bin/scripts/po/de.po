@@ -7,13 +7,8 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PostgreSQL 16\n"
 "Report-Msgid-Bugs-To: pgsql-bugs@lists.postgresql.org\n"
-<<<<<<< HEAD
-"POT-Creation-Date: 2021-11-03 18:16+0000\n"
-"PO-Revision-Date: 2021-11-05 13:48+0100\n"
-=======
 "POT-Creation-Date: 2023-11-03 13:19+0000\n"
 "PO-Revision-Date: 2023-11-03 10:50-0400\n"
->>>>>>> REL_16_9
 "Last-Translator: Peter Eisentraut <peter@eisentraut.org>\n"
 "Language-Team: German <pgsql-translators@postgresql.org>\n"
 "Language: de\n"
@@ -156,28 +151,16 @@ msgstr "Anfrage fehlgeschlagen: %s"
 msgid "Query was: %s"
 msgstr "Anfrage war: %s"
 
-<<<<<<< HEAD
-#: clusterdb.c:112 clusterdb.c:131 createdb.c:123 createdb.c:142
-#: createuser.c:172 createuser.c:187 dropdb.c:103 dropdb.c:112 dropdb.c:120
-#: dropuser.c:94 dropuser.c:109 dropuser.c:122 pg_isready.c:96 pg_isready.c:110
-#: reindexdb.c:174 reindexdb.c:193 vacuumdb.c:251 vacuumdb.c:270
-=======
 #: clusterdb.c:113 clusterdb.c:132 createdb.c:144 createdb.c:163
 #: createuser.c:195 createuser.c:210 dropdb.c:104 dropdb.c:113 dropdb.c:121
 #: dropuser.c:95 dropuser.c:110 dropuser.c:123 pg_isready.c:97 pg_isready.c:111
 #: reindexdb.c:174 reindexdb.c:193 vacuumdb.c:279 vacuumdb.c:299
->>>>>>> REL_16_9
 #, c-format
 msgid "Try \"%s --help\" for more information."
 msgstr "Versuchen Sie »%s --help« für weitere Informationen."
 
-<<<<<<< HEAD
-#: clusterdb.c:129 createdb.c:140 createuser.c:185 dropdb.c:118 dropuser.c:107
-#: pg_isready.c:108 reindexdb.c:191 vacuumdb.c:268
-=======
 #: clusterdb.c:130 createdb.c:161 createuser.c:208 dropdb.c:119 dropuser.c:108
 #: pg_isready.c:109 reindexdb.c:191 vacuumdb.c:297
->>>>>>> REL_16_9
 #, c-format
 msgid "too many command-line arguments (first is \"%s\")"
 msgstr "zu viele Kommandozeilenargumente (das erste ist »%s«)"
@@ -216,33 +199,19 @@ msgstr ""
 "%s clustert alle vorher geclusterten Tabellen in einer Datenbank.\n"
 "\n"
 
-<<<<<<< HEAD
-#: clusterdb.c:268 createdb.c:267 createuser.c:351 dropdb.c:171 dropuser.c:169
-#: pg_isready.c:225 reindexdb.c:792 vacuumdb.c:1025
-=======
 #: clusterdb.c:265 createdb.c:288 createuser.c:415 dropdb.c:172 dropuser.c:170
 #: pg_isready.c:226 reindexdb.c:750 vacuumdb.c:1156
->>>>>>> REL_16_9
 #, c-format
 msgid "Usage:\n"
 msgstr "Aufruf:\n"
 
-<<<<<<< HEAD
-#: clusterdb.c:269 reindexdb.c:793 vacuumdb.c:1026
-=======
 #: clusterdb.c:266 reindexdb.c:751 vacuumdb.c:1157
->>>>>>> REL_16_9
 #, c-format
 msgid "  %s [OPTION]... [DBNAME]\n"
 msgstr "  %s [OPTION]... [DBNAME]\n"
 
-<<<<<<< HEAD
-#: clusterdb.c:270 createdb.c:269 createuser.c:353 dropdb.c:173 dropuser.c:171
-#: pg_isready.c:228 reindexdb.c:794 vacuumdb.c:1027
-=======
 #: clusterdb.c:267 createdb.c:290 createuser.c:417 dropdb.c:174 dropuser.c:172
 #: pg_isready.c:229 reindexdb.c:752 vacuumdb.c:1158
->>>>>>> REL_16_9
 #, c-format
 msgid ""
 "\n"
@@ -293,13 +262,8 @@ msgstr "  -V, --version             Versionsinformationen anzeigen, dann beenden
 msgid "  -?, --help                show this help, then exit\n"
 msgstr "  -?, --help                diese Hilfe anzeigen, dann beenden\n"
 
-<<<<<<< HEAD
-#: clusterdb.c:279 createdb.c:280 createuser.c:375 dropdb.c:180 dropuser.c:178
-#: pg_isready.c:234 reindexdb.c:809 vacuumdb.c:1052
-=======
 #: clusterdb.c:276 createdb.c:306 createuser.c:448 dropdb.c:181 dropuser.c:179
 #: pg_isready.c:235 reindexdb.c:767 vacuumdb.c:1187
->>>>>>> REL_16_9
 #, c-format
 msgid ""
 "\n"
@@ -308,56 +272,32 @@ msgstr ""
 "\n"
 "Verbindungsoptionen:\n"
 
-<<<<<<< HEAD
-#: clusterdb.c:280 createuser.c:376 dropdb.c:181 dropuser.c:179 vacuumdb.c:1053
-=======
 #: clusterdb.c:277 createuser.c:449 dropdb.c:182 dropuser.c:180 vacuumdb.c:1188
->>>>>>> REL_16_9
 #, c-format
 msgid "  -h, --host=HOSTNAME       database server host or socket directory\n"
 msgstr "  -h, --host=HOSTNAME       Name des Datenbankservers oder Socket-Verzeichnis\n"
 
-<<<<<<< HEAD
-#: clusterdb.c:281 createuser.c:377 dropdb.c:182 dropuser.c:180 vacuumdb.c:1054
-=======
 #: clusterdb.c:278 createuser.c:450 dropdb.c:183 dropuser.c:181 vacuumdb.c:1189
->>>>>>> REL_16_9
 #, c-format
 msgid "  -p, --port=PORT           database server port\n"
 msgstr "  -p, --port=PORT           Port des Datenbankservers\n"
 
-<<<<<<< HEAD
-#: clusterdb.c:282 dropdb.c:183 vacuumdb.c:1055
-=======
 #: clusterdb.c:279 dropdb.c:184 vacuumdb.c:1190
->>>>>>> REL_16_9
 #, c-format
 msgid "  -U, --username=USERNAME   user name to connect as\n"
 msgstr "  -U, --username=NAME       Datenbankbenutzername\n"
 
-<<<<<<< HEAD
-#: clusterdb.c:283 createuser.c:379 dropdb.c:184 dropuser.c:182 vacuumdb.c:1056
-=======
 #: clusterdb.c:280 createuser.c:452 dropdb.c:185 dropuser.c:183 vacuumdb.c:1191
->>>>>>> REL_16_9
 #, c-format
 msgid "  -w, --no-password         never prompt for password\n"
 msgstr "  -w, --no-password         niemals nach Passwort fragen\n"
 
-<<<<<<< HEAD
-#: clusterdb.c:284 createuser.c:380 dropdb.c:185 dropuser.c:183 vacuumdb.c:1057
-=======
 #: clusterdb.c:281 createuser.c:453 dropdb.c:186 dropuser.c:184 vacuumdb.c:1192
->>>>>>> REL_16_9
 #, c-format
 msgid "  -W, --password            force password prompt\n"
 msgstr "  -W, --password            Passwortfrage erzwingen\n"
 
-<<<<<<< HEAD
-#: clusterdb.c:285 dropdb.c:186 vacuumdb.c:1058
-=======
 #: clusterdb.c:282 dropdb.c:187 vacuumdb.c:1193
->>>>>>> REL_16_9
 #, c-format
 msgid "  --maintenance-db=DBNAME   alternate maintenance database\n"
 msgstr "  --maintenance-db=DBNAME   alternative Wartungsdatenbank\n"
@@ -372,13 +312,8 @@ msgstr ""
 "Für weitere Informationen lesen Sie bitte die Beschreibung des\n"
 "SQL-Befehls CLUSTER.\n"
 
-<<<<<<< HEAD
-#: clusterdb.c:287 createdb.c:288 createuser.c:381 dropdb.c:187 dropuser.c:184
-#: pg_isready.c:239 reindexdb.c:817 vacuumdb.c:1060
-=======
 #: clusterdb.c:284 createdb.c:314 createuser.c:454 dropdb.c:188 dropuser.c:185
 #: pg_isready.c:240 reindexdb.c:775 vacuumdb.c:1195
->>>>>>> REL_16_9
 #, c-format
 msgid ""
 "\n"
@@ -387,13 +322,8 @@ msgstr ""
 "\n"
 "Berichten Sie Fehler an <%s>.\n"
 
-<<<<<<< HEAD
-#: clusterdb.c:288 createdb.c:289 createuser.c:382 dropdb.c:188 dropuser.c:185
-#: pg_isready.c:240 reindexdb.c:818 vacuumdb.c:1061
-=======
 #: clusterdb.c:285 createdb.c:315 createuser.c:455 dropdb.c:189 dropuser.c:186
 #: pg_isready.c:241 reindexdb.c:776 vacuumdb.c:1196
->>>>>>> REL_16_9
 #, c-format
 msgid "%s home page: <%s>\n"
 msgstr "%s Homepage: <%s>\n"
@@ -947,16 +877,7 @@ msgstr "  -t, --timeout=SEK        Sekunden auf Verbindung warten, 0 schaltet au
 msgid "  -U, --username=USERNAME  user name to connect as\n"
 msgstr "  -U, --username=NAME      Datenbankbenutzername\n"
 
-<<<<<<< HEAD
-#: reindexdb.c:157 vacuumdb.c:198
-#, c-format
-msgid "number of parallel jobs must be at least 1"
-msgstr "Anzahl paralleler Jobs muss mindestens 1 sein"
-
-#: reindexdb.c:210
-=======
 #: reindexdb.c:209
->>>>>>> REL_16_9
 #, c-format
 msgid "cannot reindex all databases and a specific one at the same time"
 msgstr "kann nicht alle Datenbanken und eine bestimmte gleichzeitig reindizieren"
@@ -1006,15 +927,9 @@ msgstr "kann nicht mehrere Jobs verwenden, um Systemkataloge zu reindizieren"
 msgid "cannot use multiple jobs to reindex indexes"
 msgstr "kann nicht mehrere Jobs verwenden, um Indexe zu reindizieren"
 
-<<<<<<< HEAD
-#: reindexdb.c:353 reindexdb.c:361 vacuumdb.c:471 vacuumdb.c:479 vacuumdb.c:487
-#: vacuumdb.c:495 vacuumdb.c:503 vacuumdb.c:511 vacuumdb.c:518 vacuumdb.c:525
-#: vacuumdb.c:532
-=======
 #: reindexdb.c:323 reindexdb.c:330 vacuumdb.c:525 vacuumdb.c:532 vacuumdb.c:539
 #: vacuumdb.c:546 vacuumdb.c:553 vacuumdb.c:560 vacuumdb.c:567 vacuumdb.c:572
 #: vacuumdb.c:576 vacuumdb.c:580 vacuumdb.c:584
->>>>>>> REL_16_9
 #, c-format
 msgid "cannot use the \"%s\" option on server versions older than PostgreSQL %s"
 msgstr "Option »%s« kann nicht mit Serverversionen älter als PostgreSQL %s verwendet werden"
@@ -1125,83 +1040,32 @@ msgstr ""
 "Für weitere Informationen lesen Sie bitte die Beschreibung des\n"
 "SQL-Befehls REINDEX.\n"
 
-<<<<<<< HEAD
-#: vacuumdb.c:206
-#, c-format
-msgid "parallel workers for vacuum must be greater than or equal to zero"
-msgstr "parallele Arbeitsprozesse für Vacuum müssen größer oder gleich null sein"
-
-#: vacuumdb.c:226
-#, c-format
-msgid "minimum transaction ID age must be at least 1"
-msgstr "minimales Transaktions-ID-Alter muss mindestens 1 sein"
-
-#: vacuumdb.c:234
-#, c-format
-msgid "minimum multixact ID age must be at least 1"
-msgstr "minimales Multixact-ID-Alter muss mindestens 1 sein"
-
-#: vacuumdb.c:278 vacuumdb.c:284 vacuumdb.c:290 vacuumdb.c:296 vacuumdb.c:302
-#: vacuumdb.c:308 vacuumdb.c:314 vacuumdb.c:326
-=======
 #: vacuumdb.c:312 vacuumdb.c:315 vacuumdb.c:318 vacuumdb.c:321 vacuumdb.c:324
 #: vacuumdb.c:327 vacuumdb.c:330 vacuumdb.c:333 vacuumdb.c:342
->>>>>>> REL_16_9
 #, c-format
 msgid "cannot use the \"%s\" option when performing only analyze"
 msgstr "kann Option »%s« nicht verwenden, wenn nur Analyze durchgeführt wird"
 
-<<<<<<< HEAD
-#: vacuumdb.c:332
-=======
 #: vacuumdb.c:345
->>>>>>> REL_16_9
 #, c-format
 msgid "cannot use the \"%s\" option when performing full vacuum"
 msgstr "kann Option »%s« nicht verwenden, wenn volles Vacuum durchgeführt wird"
 
-<<<<<<< HEAD
-#: vacuumdb.c:341
-=======
 #: vacuumdb.c:351 vacuumdb.c:359
->>>>>>> REL_16_9
 #, c-format
 msgid "cannot use the \"%s\" option with the \"%s\" option"
 msgstr "kann Option »%s« nicht mit der Option »%s« verwenden"
 
-<<<<<<< HEAD
-#: vacuumdb.c:363
-=======
 #: vacuumdb.c:430
->>>>>>> REL_16_9
 #, c-format
 msgid "cannot vacuum all databases and a specific one at the same time"
 msgstr "kann nicht alle Datenbanken und eine bestimmte gleichzeitig vacuumen"
 
-<<<<<<< HEAD
-#: vacuumdb.c:368
-=======
 #: vacuumdb.c:434
->>>>>>> REL_16_9
 #, c-format
 msgid "cannot vacuum specific table(s) in all databases"
 msgstr "kann nicht bestimmte Tabelle(n) in allen Datenbanken vacuumen"
 
-<<<<<<< HEAD
-#: vacuumdb.c:458
-msgid "Generating minimal optimizer statistics (1 target)"
-msgstr "Erzeuge minimale Optimierer-Statistiken (1 Ziel)"
-
-#: vacuumdb.c:459
-msgid "Generating medium optimizer statistics (10 targets)"
-msgstr "Erzeuge mittlere Optimierer-Statistiken (10 Ziele)"
-
-#: vacuumdb.c:460
-msgid "Generating default (full) optimizer statistics"
-msgstr "Erzeuge volle Optimierer-Statistiken"
-
-#: vacuumdb.c:540
-=======
 #: vacuumdb.c:438
 #, c-format
 msgid "cannot vacuum specific schema(s) in all databases"
@@ -1245,43 +1109,26 @@ msgid "Generating default (full) optimizer statistics"
 msgstr "Erzeuge volle Optimierer-Statistiken"
 
 #: vacuumdb.c:593
->>>>>>> REL_16_9
 #, c-format
 msgid "%s: processing database \"%s\": %s\n"
 msgstr "%s: bearbeite Datenbank »%s«: %s\n"
 
-<<<<<<< HEAD
-#: vacuumdb.c:543
-=======
 #: vacuumdb.c:596
->>>>>>> REL_16_9
 #, c-format
 msgid "%s: vacuuming database \"%s\"\n"
 msgstr "%s: führe Vacuum in Datenbank »%s« aus\n"
 
-<<<<<<< HEAD
-#: vacuumdb.c:1013
-=======
 #: vacuumdb.c:1144
->>>>>>> REL_16_9
 #, c-format
 msgid "vacuuming of table \"%s\" in database \"%s\" failed: %s"
 msgstr "Vacuum der Tabelle »%s« in Datenbank »%s« fehlgeschlagen: %s"
 
-<<<<<<< HEAD
-#: vacuumdb.c:1016
-=======
 #: vacuumdb.c:1147
->>>>>>> REL_16_9
 #, c-format
 msgid "vacuuming of database \"%s\" failed: %s"
 msgstr "Vacuum der Datenbank »%s« fehlgeschlagen: %s"
 
-<<<<<<< HEAD
-#: vacuumdb.c:1024
-=======
 #: vacuumdb.c:1155
->>>>>>> REL_16_9
 #, c-format
 msgid ""
 "%s cleans and analyzes a PostgreSQL database.\n"
@@ -1290,145 +1137,89 @@ msgstr ""
 "%s säubert und analysiert eine PostgreSQL-Datenbank.\n"
 "\n"
 
-<<<<<<< HEAD
-#: vacuumdb.c:1028
-=======
 #: vacuumdb.c:1159
->>>>>>> REL_16_9
 #, c-format
 msgid "  -a, --all                       vacuum all databases\n"
 msgstr "  -a, --all                       führe Vacuum in allen Datenbanken aus\n"
 
-<<<<<<< HEAD
-#: vacuumdb.c:1029
-=======
 #: vacuumdb.c:1160
 #, c-format
 msgid "      --buffer-usage-limit=SIZE   size of ring buffer used for vacuum\n"
 msgstr "      --buffer-usage-limit=GRÖSSE  Größe des für Vacuum verwendeten Ringpuffers\n"
 
 #: vacuumdb.c:1161
->>>>>>> REL_16_9
 #, c-format
 msgid "  -d, --dbname=DBNAME             database to vacuum\n"
 msgstr "  -d, --dbname=DBNAME             führe Vacuum in dieser Datenbank aus\n"
 
-<<<<<<< HEAD
-#: vacuumdb.c:1030
-=======
 #: vacuumdb.c:1162
->>>>>>> REL_16_9
 #, c-format
 msgid "      --disable-page-skipping     disable all page-skipping behavior\n"
 msgstr "      --disable-page-skipping     Page-Skipping-Verhalten abschalten\n"
 
-<<<<<<< HEAD
-#: vacuumdb.c:1031
-=======
 #: vacuumdb.c:1163
->>>>>>> REL_16_9
 #, c-format
 msgid "  -e, --echo                      show the commands being sent to the server\n"
 msgstr ""
 "  -e, --echo                      zeige die Befehle, die an den Server\n"
 "                                  gesendet werden\n"
 
-<<<<<<< HEAD
-#: vacuumdb.c:1032
-=======
 #: vacuumdb.c:1164
->>>>>>> REL_16_9
 #, c-format
 msgid "  -f, --full                      do full vacuuming\n"
 msgstr "  -f, --full                      führe volles Vacuum durch\n"
 
-<<<<<<< HEAD
-#: vacuumdb.c:1033
-=======
 #: vacuumdb.c:1165
->>>>>>> REL_16_9
 #, c-format
 msgid "  -F, --freeze                    freeze row transaction information\n"
 msgstr "  -F, --freeze                    Zeilentransaktionsinformationen einfrieren\n"
 
-<<<<<<< HEAD
-#: vacuumdb.c:1034
-=======
 #: vacuumdb.c:1166
->>>>>>> REL_16_9
 #, c-format
 msgid "      --force-index-cleanup       always remove index entries that point to dead tuples\n"
 msgstr "      --force-index-cleanup       Indexeinträge, die auf tote Tupel zeigen, immer entfernen\n"
 
-<<<<<<< HEAD
-#: vacuumdb.c:1035
-=======
 #: vacuumdb.c:1167
->>>>>>> REL_16_9
 #, c-format
 msgid "  -j, --jobs=NUM                  use this many concurrent connections to vacuum\n"
 msgstr ""
 "  -j, --jobs=NUM                  so viele parallele Verbindungen zum Vacuum\n"
 "                                  verwenden\n"
 
-<<<<<<< HEAD
-#: vacuumdb.c:1036
-=======
 #: vacuumdb.c:1168
->>>>>>> REL_16_9
 #, c-format
 msgid "      --min-mxid-age=MXID_AGE     minimum multixact ID age of tables to vacuum\n"
 msgstr ""
 "      --min-mxid-age=MXID-ALTER   minimales Multixact-ID-Alter zu bearbeitender\n"
 "                                  Tabellen\n"
 
-<<<<<<< HEAD
-#: vacuumdb.c:1037
-=======
 #: vacuumdb.c:1169
->>>>>>> REL_16_9
 #, c-format
 msgid "      --min-xid-age=XID_AGE       minimum transaction ID age of tables to vacuum\n"
 msgstr ""
 "      --min-xid-age=XID-ALTER     minimales Transaktions-ID-Alter zu bearbeitender\n"
 "                                  Tabellen\n"
 
-<<<<<<< HEAD
-#: vacuumdb.c:1038
-=======
 #: vacuumdb.c:1170
->>>>>>> REL_16_9
 #, c-format
 msgid "      --no-index-cleanup          don't remove index entries that point to dead tuples\n"
 msgstr "      --no-index-cleanup          Indexeinträge, die auf tote Tupel zeigen, nicht entfernen\n"
 
-<<<<<<< HEAD
-#: vacuumdb.c:1039
-=======
 #: vacuumdb.c:1171
 #, c-format
 msgid "      --no-process-main           skip the main relation\n"
 msgstr "      --no-process-main           die Hauptrelation überspringen\n"
 
 #: vacuumdb.c:1172
->>>>>>> REL_16_9
 #, c-format
 msgid "      --no-process-toast          skip the TOAST table associated with the table to vacuum\n"
 msgstr "      --no-process-toast          zur Tabelle gehörige TOAST-Tabelle überspringen\n"
 
-<<<<<<< HEAD
-#: vacuumdb.c:1040
-=======
 #: vacuumdb.c:1173
->>>>>>> REL_16_9
 #, c-format
 msgid "      --no-truncate               don't truncate empty pages at the end of the table\n"
 msgstr "      --no-truncate               leere Seiten am Ende der Tabelle nicht abschneiden\n"
 
-<<<<<<< HEAD
-#: vacuumdb.c:1041
-#, c-format
-=======
 #: vacuumdb.c:1174
 #, c-format
 msgid "  -n, --schema=SCHEMA             vacuum tables in the specified schema(s) only\n"
@@ -1441,86 +1232,53 @@ msgstr "  -N, --exclude-schema=SCHEMA     Tabellen in den angegebenen Schemas ni
 
 #: vacuumdb.c:1176
 #, c-format
->>>>>>> REL_16_9
 msgid "  -P, --parallel=PARALLEL_WORKERS use this many background workers for vacuum, if available\n"
 msgstr ""
 "  -P, --parallel=PARALLEL-PROZ    so viele Background-Worker für Vacuum verwenden,\n"
 "                                  wenn verfügbar\n"
 
-<<<<<<< HEAD
-#: vacuumdb.c:1042
-=======
 #: vacuumdb.c:1177
->>>>>>> REL_16_9
 #, c-format
 msgid "  -q, --quiet                     don't write any messages\n"
 msgstr "  -q, --quiet                     unterdrücke alle Mitteilungen\n"
 
-<<<<<<< HEAD
-#: vacuumdb.c:1043
-=======
 #: vacuumdb.c:1178
->>>>>>> REL_16_9
 #, c-format
 msgid "      --skip-locked               skip relations that cannot be immediately locked\n"
 msgstr ""
 "      --skip-locked               Relationen überspringen, die nicht sofort\n"
 "                                  gesperrt werden können\n"
 
-<<<<<<< HEAD
-#: vacuumdb.c:1044
-=======
 #: vacuumdb.c:1179
->>>>>>> REL_16_9
 #, c-format
 msgid "  -t, --table='TABLE[(COLUMNS)]'  vacuum specific table(s) only\n"
 msgstr ""
 "  -t, --table='TABELLE[(SPALTEN)]'\n"
 "                                  führe Vacuum für bestimmte Tabelle(n) aus\n"
 
-<<<<<<< HEAD
-#: vacuumdb.c:1045
-=======
 #: vacuumdb.c:1180
->>>>>>> REL_16_9
 #, c-format
 msgid "  -v, --verbose                   write a lot of output\n"
 msgstr "  -v, --verbose                   erzeuge viele Meldungen\n"
 
-<<<<<<< HEAD
-#: vacuumdb.c:1046
-=======
 #: vacuumdb.c:1181
->>>>>>> REL_16_9
 #, c-format
 msgid "  -V, --version                   output version information, then exit\n"
 msgstr "  -V, --version                   Versionsinformationen anzeigen, dann beenden\n"
 
-<<<<<<< HEAD
-#: vacuumdb.c:1047
-=======
 #: vacuumdb.c:1182
->>>>>>> REL_16_9
 #, c-format
 msgid "  -z, --analyze                   update optimizer statistics\n"
 msgstr "  -z, --analyze                   aktualisiere Statistiken für den Optimierer\n"
 
-<<<<<<< HEAD
-#: vacuumdb.c:1048
-=======
 #: vacuumdb.c:1183
->>>>>>> REL_16_9
 #, c-format
 msgid "  -Z, --analyze-only              only update optimizer statistics; no vacuum\n"
 msgstr ""
 "  -Z, --analyze-only              aktualisiere nur Statistiken für den Optimierer;\n"
 "                                  kein Vacuum\n"
 
-<<<<<<< HEAD
-#: vacuumdb.c:1049
-=======
 #: vacuumdb.c:1184
->>>>>>> REL_16_9
 #, c-format
 msgid ""
 "      --analyze-in-stages         only update optimizer statistics, in multiple\n"
@@ -1530,20 +1288,12 @@ msgstr ""
 "                                  in mehreren Phasen für schnellere Ergebnisse;\n"
 "                                  kein Vacuum\n"
 
-<<<<<<< HEAD
-#: vacuumdb.c:1051
-=======
 #: vacuumdb.c:1186
->>>>>>> REL_16_9
 #, c-format
 msgid "  -?, --help                      show this help, then exit\n"
 msgstr "  -?, --help                      diese Hilfe anzeigen, dann beenden\n"
 
-<<<<<<< HEAD
-#: vacuumdb.c:1059
-=======
 #: vacuumdb.c:1194
->>>>>>> REL_16_9
 #, c-format
 msgid ""
 "\n"
