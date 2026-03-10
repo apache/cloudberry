@@ -66,4 +66,11 @@ extern bool optimizer_init;
 
 extern void preprocess_qual_conditions(PlannerInfo *root, Node *jtnode);
 
+/* Passthrough data for standard_qp_callback */
+typedef struct
+{
+	List	   *activeWindows;	/* active windows, if any */
+	List	   *groupClause;	/* overrides parse->groupClause */
+} standard_qp_extra;
+
 #endif							/* PLANNER_H */
