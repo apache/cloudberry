@@ -7,17 +7,10 @@
 #
 msgid ""
 msgstr ""
-<<<<<<< HEAD
-"Project-Id-Version: pg_waldump (PostgreSQL) 14\n"
-"Report-Msgid-Bugs-To: pgsql-bugs@lists.postgresql.org\n"
-"POT-Creation-Date: 2020-09-13 10:45+0000\n"
-"PO-Revision-Date: 2021-09-16 09:26+0200\n"
-=======
 "Project-Id-Version: pg_waldump (PostgreSQL) 16\n"
 "Report-Msgid-Bugs-To: pgsql-bugs@lists.postgresql.org\n"
 "POT-Creation-Date: 2024-11-09 06:06+0000\n"
 "PO-Revision-Date: 2023-09-05 07:35+0200\n"
->>>>>>> REL_16_9
 "Last-Translator: Carlos Chapi <carlos.chapi@2ndquadrant.com>\n"
 "Language-Team: PgSQL-es-Ayuda <pgsql-es-ayuda@lists.postgresql.org>\n"
 "Language: es\n"

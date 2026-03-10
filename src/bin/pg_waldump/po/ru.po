@@ -6,13 +6,8 @@ msgid ""
 msgstr ""
 "Project-Id-Version: pg_waldump (PostgreSQL) 10\n"
 "Report-Msgid-Bugs-To: pgsql-bugs@lists.postgresql.org\n"
-<<<<<<< HEAD
-"POT-Creation-Date: 2022-05-07 06:06+0300\n"
-"PO-Revision-Date: 2020-09-03 15:07+0300\n"
-=======
 "POT-Creation-Date: 2024-02-02 18:10+0300\n"
 "PO-Revision-Date: 2024-09-07 08:59+0300\n"
->>>>>>> REL_16_9
 "Last-Translator: Alexander Lakhin <exclusion@gmail.com>\n"
 "Language-Team: Russian <pgsql-ru-general@postgresql.org>\n"
 "Language: ru\n"
@@ -22,25 +17,12 @@ msgstr ""
 "Plural-Forms: nplurals=3; plural=(n%10==1 && n%100!=11 ? 0 : n%10>=2 && "
 "n%10<=4 && (n%100<10 || n%100>=20) ? 1 : 2);\n"
 
-<<<<<<< HEAD
-#: ../../../src/common/logging.c:259
-#, c-format
-msgid "fatal: "
-msgstr "важно: "
-
-#: ../../../src/common/logging.c:266
-=======
 #: ../../../src/common/logging.c:276
->>>>>>> REL_16_9
 #, c-format
 msgid "error: "
 msgstr "ошибка: "
 
-<<<<<<< HEAD
-#: ../../../src/common/logging.c:273
-=======
 #: ../../../src/common/logging.c:283
->>>>>>> REL_16_9
 #, c-format
 msgid "warning: "
 msgstr "предупреждение: "
@@ -93,72 +75,41 @@ msgstr[2] ""
 "Размер сегмента WAL должен задаваться степенью 2 в интервале от 1 МБ до 1 "
 "ГБ, но в заголовке файла WAL \"%s\" указано значение: %d"
 
-<<<<<<< HEAD
-#: pg_waldump.c:208
-=======
 #: pg_waldump.c:261
->>>>>>> REL_16_9
 #, c-format
 msgid "could not read file \"%s\": %m"
 msgstr "не удалось прочитать файл \"%s\": %m"
 
-<<<<<<< HEAD
-#: pg_waldump.c:211
-=======
 #: pg_waldump.c:264
->>>>>>> REL_16_9
 #, c-format
 msgid "could not read file \"%s\": read %d of %d"
 msgstr "не удалось прочитать файл \"%s\" (прочитано байт: %d из %d)"
 
-<<<<<<< HEAD
-#: pg_waldump.c:272
-=======
 #: pg_waldump.c:325
->>>>>>> REL_16_9
 #, c-format
 msgid "could not locate WAL file \"%s\""
 msgstr "не удалось найти файл WAL \"%s\""
 
-<<<<<<< HEAD
-#: pg_waldump.c:274
-=======
 #: pg_waldump.c:327
->>>>>>> REL_16_9
 #, c-format
 msgid "could not find any WAL file"
 msgstr "не удалось найти ни одного файла WAL"
 
-<<<<<<< HEAD
-#: pg_waldump.c:315
-=======
 #: pg_waldump.c:368
->>>>>>> REL_16_9
 #, c-format
 msgid "could not find file \"%s\": %m"
 msgstr "не удалось найти файл \"%s\": %m"
 
-<<<<<<< HEAD
-#: pg_waldump.c:364
-=======
 #: pg_waldump.c:417
->>>>>>> REL_16_9
 #, c-format
 msgid "could not read from file %s, offset %d: %m"
 msgstr "не удалось прочитать файл %s по смещению %d: %m"
 
-<<<<<<< HEAD
-#: pg_waldump.c:368
-=======
 #: pg_waldump.c:421
->>>>>>> REL_16_9
 #, c-format
 msgid "could not read from file %s, offset %d: read %d of %d"
 msgstr "не удалось прочитать файл %s по смещению %d (прочитано байт: %d из %d)"
 
-<<<<<<< HEAD
-#: pg_waldump.c:721
-=======
 #: pg_waldump.c:511
 #, c-format
 msgid "%s"
@@ -180,7 +131,6 @@ msgid "could not close file \"%s\": %m"
 msgstr "не удалось закрыть файл \"%s\": %m"
 
 #: pg_waldump.c:754
->>>>>>> REL_16_9
 #, c-format
 msgid ""
 "%s decodes and displays PostgreSQL write-ahead logs for debugging.\n"
@@ -189,29 +139,17 @@ msgstr ""
 "%s декодирует и показывает журналы предзаписи PostgreSQL для целей отладки.\n"
 "\n"
 
-<<<<<<< HEAD
-#: pg_waldump.c:723
-=======
 #: pg_waldump.c:756
->>>>>>> REL_16_9
 #, c-format
 msgid "Usage:\n"
 msgstr "Использование:\n"
 
-<<<<<<< HEAD
-#: pg_waldump.c:724
-=======
 #: pg_waldump.c:757
->>>>>>> REL_16_9
 #, c-format
 msgid "  %s [OPTION]... [STARTSEG [ENDSEG]]\n"
 msgstr "  %s [ПАРАМЕТР]... [НАЧАЛЬНЫЙ_СЕГМЕНТ [КОНЕЧНЫЙ_СЕГМЕНТ]]\n"
 
-<<<<<<< HEAD
-#: pg_waldump.c:725
-=======
 #: pg_waldump.c:758
->>>>>>> REL_16_9
 #, c-format
 msgid ""
 "\n"
@@ -220,11 +158,7 @@ msgstr ""
 "\n"
 "Параметры:\n"
 
-<<<<<<< HEAD
-#: pg_waldump.c:726
-=======
 #: pg_waldump.c:759
->>>>>>> REL_16_9
 #, c-format
 msgid ""
 "  -b, --bkp-details      output detailed information about backup blocks\n"
@@ -241,29 +175,18 @@ msgstr ""
 "                         записи, в которых меняется блок N\n"
 
 # well-spelled: ПОЗЗАП
-<<<<<<< HEAD
-#: pg_waldump.c:727
-=======
 #: pg_waldump.c:761
->>>>>>> REL_16_9
 #, c-format
 msgid "  -e, --end=RECPTR       stop reading at WAL location RECPTR\n"
 msgstr ""
 "  -e, --end=ПОЗЗАП       прекратить чтение в заданной позиции записи в WAL\n"
 
-<<<<<<< HEAD
-#: pg_waldump.c:728
-=======
 #: pg_waldump.c:762
->>>>>>> REL_16_9
 #, c-format
 msgid "  -f, --follow           keep retrying after reaching end of WAL\n"
 msgstr ""
 "  -f, --follow           повторять попытки чтения по достижении конца WAL\n"
 
-<<<<<<< HEAD
-#: pg_waldump.c:729
-=======
 # well-spelled: МНГР
 #: pg_waldump.c:763
 #, c-format
@@ -276,17 +199,12 @@ msgstr ""
 "                         с именем из списка: main, fsm, vm, init\n"
 
 #: pg_waldump.c:765
->>>>>>> REL_16_9
 #, c-format
 msgid "  -n, --limit=N          number of records to display\n"
 msgstr "  -n, --limit=N          число выводимых записей\n"
 
 # skip-rule: space-before-period
-<<<<<<< HEAD
-#: pg_waldump.c:730
-=======
 #: pg_waldump.c:766
->>>>>>> REL_16_9
 #, c-format
 msgid ""
 "  -p, --path=PATH        directory in which to find WAL segment files or a\n"
@@ -300,21 +218,13 @@ msgstr ""
 "                         (по умолчанию: текущий каталог,\n"
 "                         ./pg_wal, $PGDATA/pg_wal)\n"
 
-<<<<<<< HEAD
-#: pg_waldump.c:733
-=======
 #: pg_waldump.c:769
->>>>>>> REL_16_9
 #, c-format
 msgid "  -q, --quiet            do not print any output, except for errors\n"
 msgstr "  -q, --quiet            не выводить никаких сообщений, кроме ошибок\n"
 
 # well-spelled: МНГР
-<<<<<<< HEAD
-#: pg_waldump.c:734
-=======
 #: pg_waldump.c:770
->>>>>>> REL_16_9
 #, c-format
 msgid ""
 "  -r, --rmgr=RMGR        only show records generated by resource manager "
@@ -336,22 +246,14 @@ msgstr ""
 "                         в отношении T/D/R\n"
 
 # well-spelled: ПОЗЗАП
-<<<<<<< HEAD
-#: pg_waldump.c:736
-=======
 #: pg_waldump.c:773
->>>>>>> REL_16_9
 #, c-format
 msgid "  -s, --start=RECPTR     start reading at WAL location RECPTR\n"
 msgstr ""
 "  -s, --start=ПОЗЗАП     начать чтение с заданной позиции записи в WAL\n"
 
 # well-spelled: ЛВР
-<<<<<<< HEAD
-#: pg_waldump.c:737
-=======
 #: pg_waldump.c:774
->>>>>>> REL_16_9
 #, c-format
 msgid ""
 "  -t, --timeline=TLI     timeline from which to read WAL records\n"
@@ -362,18 +264,11 @@ msgstr ""
 "аргументом\n"
 "                         НАЧАЛЬНЫЙ_СЕГМЕНТ)\n"
 
-<<<<<<< HEAD
-#: pg_waldump.c:739
-=======
 #: pg_waldump.c:776
->>>>>>> REL_16_9
 #, c-format
 msgid "  -V, --version          output version information, then exit\n"
 msgstr "  -V, --version          показать версию и выйти\n"
 
-<<<<<<< HEAD
-#: pg_waldump.c:740
-=======
 #: pg_waldump.c:777
 #, c-format
 msgid "  -w, --fullpage         only show records with a full page write\n"
@@ -381,18 +276,13 @@ msgstr ""
 "  -w, --fullpage         выводить только записи, содержащие полные страницы\n"
 
 #: pg_waldump.c:778
->>>>>>> REL_16_9
 #, c-format
 msgid "  -x, --xid=XID          only show records with transaction ID XID\n"
 msgstr ""
 "  -x, --xid=XID          выводить только записи с заданным\n"
 "                         идентификатором транзакции\n"
 
-<<<<<<< HEAD
-#: pg_waldump.c:741
-=======
 #: pg_waldump.c:779
->>>>>>> REL_16_9
 #, c-format
 msgid ""
 "  -z, --stats[=record]   show statistics instead of records\n"
@@ -401,9 +291,6 @@ msgstr ""
 "  -z, --stats[=record]   показывать статистику вместо записей\n"
 "                         (также возможно получить статистику по записям)\n"
 
-<<<<<<< HEAD
-#: pg_waldump.c:743
-=======
 #: pg_waldump.c:781
 #, c-format
 msgid "  --save-fullpage=DIR    save full page images to DIR\n"
@@ -412,16 +299,11 @@ msgstr ""
 "каталог\n"
 
 #: pg_waldump.c:782
->>>>>>> REL_16_9
 #, c-format
 msgid "  -?, --help             show this help, then exit\n"
 msgstr "  -?, --help             показать эту справку и выйти\n"
 
-<<<<<<< HEAD
-#: pg_waldump.c:744
-=======
 #: pg_waldump.c:783
->>>>>>> REL_16_9
 #, c-format
 msgid ""
 "\n"
@@ -430,45 +312,26 @@ msgstr ""
 "\n"
 "Об ошибках сообщайте по адресу <%s>.\n"
 
-<<<<<<< HEAD
-#: pg_waldump.c:745
-=======
 #: pg_waldump.c:784
->>>>>>> REL_16_9
 #, c-format
 msgid "%s home page: <%s>\n"
 msgstr "Домашняя страница %s: <%s>\n"
 
-<<<<<<< HEAD
-#: pg_waldump.c:822
-=======
 #: pg_waldump.c:880
->>>>>>> REL_16_9
 #, c-format
 msgid "no arguments specified"
 msgstr "аргументы не указаны"
 
-<<<<<<< HEAD
-#: pg_waldump.c:837
-=======
 #: pg_waldump.c:896
->>>>>>> REL_16_9
 #, c-format
 msgid "invalid block number: \"%s\""
 msgstr "неверный номер блока: \"%s\""
 
-<<<<<<< HEAD
-#: pg_waldump.c:849
-=======
 #: pg_waldump.c:905 pg_waldump.c:1003
->>>>>>> REL_16_9
 #, c-format
 msgid "invalid WAL location: \"%s\""
 msgstr "неверная позиция в WAL: \"%s\""
 
-<<<<<<< HEAD
-#: pg_waldump.c:880
-=======
 #: pg_waldump.c:918
 #, c-format
 msgid "invalid fork name: \"%s\""
@@ -485,51 +348,31 @@ msgid "custom resource manager \"%s\" does not exist"
 msgstr "пользовательский менеджер ресурсов \"%s\" не существует"
 
 #: pg_waldump.c:978
->>>>>>> REL_16_9
 #, c-format
 msgid "resource manager \"%s\" does not exist"
 msgstr "менеджер ресурсов \"%s\" не существует"
 
-<<<<<<< HEAD
-#: pg_waldump.c:889
-=======
 #: pg_waldump.c:993
->>>>>>> REL_16_9
 #, c-format
 msgid "invalid relation specification: \"%s\""
 msgstr "неверное указание отношения: \"%s\""
 
-<<<<<<< HEAD
-#: pg_waldump.c:899
-=======
 #: pg_waldump.c:994
->>>>>>> REL_16_9
 #, c-format
 msgid "Expecting \"tablespace OID/database OID/relation filenode\"."
 msgstr ""
 "Ожидается \"OID табл. пространства/OID базы данных/файловый узел отношения\"."
 
-<<<<<<< HEAD
-#: pg_waldump.c:906
-=======
 #: pg_waldump.c:1036
->>>>>>> REL_16_9
 #, c-format
 msgid "%s must be in range %u..%u"
 msgstr "значение %s должно быть в диапазоне %u..%u"
 
-<<<<<<< HEAD
-#: pg_waldump.c:921
-=======
 #: pg_waldump.c:1051
->>>>>>> REL_16_9
 #, c-format
 msgid "invalid transaction ID specification: \"%s\""
 msgstr "неверное указание ID транзакции: \"%s\""
 
-<<<<<<< HEAD
-#: pg_waldump.c:934
-=======
 #: pg_waldump.c:1066
 #, c-format
 msgid "unrecognized value for option %s: %s"
@@ -541,34 +384,21 @@ msgid "option %s requires option %s to be specified"
 msgstr "параметр %s требует указания параметра %s"
 
 #: pg_waldump.c:1090
->>>>>>> REL_16_9
 #, c-format
 msgid "too many command-line arguments (first is \"%s\")"
 msgstr "слишком много аргументов командной строки (первый: \"%s\")"
 
-<<<<<<< HEAD
-#: pg_waldump.c:944 pg_waldump.c:964
-=======
 #: pg_waldump.c:1100 pg_waldump.c:1123
->>>>>>> REL_16_9
 #, c-format
 msgid "could not open directory \"%s\": %m"
 msgstr "не удалось открыть каталог \"%s\": %m"
 
-<<<<<<< HEAD
-#: pg_waldump.c:970 pg_waldump.c:1000
-=======
 #: pg_waldump.c:1129 pg_waldump.c:1159
->>>>>>> REL_16_9
 #, c-format
 msgid "could not open file \"%s\""
 msgstr "не удалось открыть файл \"%s\""
 
-<<<<<<< HEAD
-#: pg_waldump.c:980
-=======
 #: pg_waldump.c:1139
->>>>>>> REL_16_9
 #, c-format
 msgid "start WAL location %X/%X is not inside file \"%s\""
 msgstr "начальная позиция в WAL %X/%X находится не в файле \"%s\""
@@ -583,38 +413,22 @@ msgstr "КОНЕЧНЫЙ_СЕГМЕНТ %s меньше, чем НАЧАЛЬНЫ
 msgid "end WAL location %X/%X is not inside file \"%s\""
 msgstr "конечная позиция в WAL %X/%X находится не в файле \"%s\""
 
-<<<<<<< HEAD
-#: pg_waldump.c:1034
-=======
 #: pg_waldump.c:1193
->>>>>>> REL_16_9
 #, c-format
 msgid "no start WAL location given"
 msgstr "начальная позиция в WAL не задана"
 
-<<<<<<< HEAD
-#: pg_waldump.c:1048
-=======
 #: pg_waldump.c:1207
->>>>>>> REL_16_9
 #, c-format
 msgid "out of memory while allocating a WAL reading processor"
 msgstr "не удалось выделить память для чтения WAL"
 
-<<<<<<< HEAD
-#: pg_waldump.c:1054
-=======
 #: pg_waldump.c:1213
->>>>>>> REL_16_9
 #, c-format
 msgid "could not find a valid record after %X/%X"
 msgstr "не удалось найти корректную запись после %X/%X"
 
-<<<<<<< HEAD
-#: pg_waldump.c:1064
-=======
 #: pg_waldump.c:1223
->>>>>>> REL_16_9
 #, c-format
 msgid "first record is after %X/%X, at %X/%X, skipping over %u byte\n"
 msgid_plural "first record is after %X/%X, at %X/%X, skipping over %u bytes\n"
@@ -625,20 +439,12 @@ msgstr[1] ""
 msgstr[2] ""
 "первая запись обнаружена после %X/%X, в позиции %X/%X, пропускается %u Б\n"
 
-<<<<<<< HEAD
-#: pg_waldump.c:1115
-=======
 #: pg_waldump.c:1308
->>>>>>> REL_16_9
 #, c-format
 msgid "error in WAL record at %X/%X: %s"
 msgstr "ошибка в записи WAL в позиции %X/%X: %s"
 
-<<<<<<< HEAD
-#: pg_waldump.c:1124
-=======
 #: pg_waldump.c:1317
->>>>>>> REL_16_9
 #, c-format
 msgid "Try \"%s --help\" for more information."
 msgstr "Для дополнительной информации попробуйте \"%s --help\"."

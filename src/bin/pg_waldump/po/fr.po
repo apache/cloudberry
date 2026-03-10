@@ -180,16 +180,7 @@ msgstr ""
 "  -f, --follow                  continue après avoir atteint la fin des journaux\n"
 "                                de transactions\n"
 
-<<<<<<< HEAD
-#: pg_waldump.c:720
-#, c-format
-msgid "  -n, --limit=N          number of records to display\n"
-msgstr "  -n, --limit=N                 nombre d'enregistrements à afficher\n"
-
-#: pg_waldump.c:721
-=======
 #: pg_waldump.c:763
->>>>>>> REL_16_9
 #, c-format
 msgid ""
 "  -F, --fork=FORK        only show records that modify blocks in fork FORK;\n"
@@ -254,11 +245,7 @@ msgid ""
 "                         (default: 1 or the value used in STARTSEG)\n"
 msgstr ""
 "  -t, --timeline=TLI            timeline à partir de laquelle lire les\n"
-<<<<<<< HEAD
-"                                enregistrements des journaux (par défaut: 1 ou\n"
-=======
 "                                enregistrements des journaux (par défaut : 1 ou\n"
->>>>>>> REL_16_9
 "                                la valeur utilisée dans SEG_DÉBUT)\n"
 
 #: pg_waldump.c:776
@@ -312,11 +299,7 @@ msgstr ""
 #: pg_waldump.c:784
 #, c-format
 msgid "%s home page: <%s>\n"
-<<<<<<< HEAD
-msgstr "Page d'accueil %s : <%s>\n"
-=======
 msgstr "Page d'accueil de %s : <%s>\n"
->>>>>>> REL_16_9
 
 #: pg_waldump.c:880
 #, c-format
