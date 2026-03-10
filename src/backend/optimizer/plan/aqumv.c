@@ -1206,6 +1206,7 @@ answer_query_using_materialized_views_for_join(PlannerInfo *root, AqumvContext a
 										  (AttrNumber) attnum,
 										  old_tle->resname,
 										  false);
+				new_tle->ressortgroupref = old_tle->ressortgroupref;
 				new_tlist = lappend(new_tlist, new_tle);
 			}
 
@@ -1243,11 +1244,11 @@ answer_query_using_materialized_views_for_join(PlannerInfo *root, AqumvContext a
 		viewQuery->jointree = makeFromExpr(list_make1(makeNode(RangeTblRef)), NULL);
 		((RangeTblRef *) linitial(viewQuery->jointree->fromlist))->rtindex = 1;
 
-		/* Clear aggregation/grouping/sorting state — all materialized. */
+		/* Clear aggregation/grouping state — already materialized in MV. */
 		viewQuery->hasAggs = false;
 		viewQuery->groupClause = NIL;
 		viewQuery->havingQual = NULL;
-		viewQuery->sortClause = NIL;
+		/* Keep sortClause: upper planner needs it to add Sort node. */
 		viewQuery->distinctClause = NIL;
 		viewQuery->hasDistinctOn = false;
 		viewQuery->hasWindowFuncs = false;
