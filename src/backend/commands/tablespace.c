@@ -898,7 +898,7 @@ create_tablespace_directories(const char *location, const Oid tablespaceoid)
 	 * tablespace path. Unlike the location_with_version_dir, do not error out
 	 * if it already exists.
 	 */
-	if (stat(location_with_dbid_dir, &st) < 0) 
+	if (!in_place && stat(location_with_dbid_dir, &st) < 0)
 	{
 		if (errno == ENOENT)
 		{
