@@ -120,12 +120,7 @@ create_upper_paths_hook_type create_upper_paths_hook = NULL;
 #define EXPRKIND_TABLEFUNC_LATERAL	12
 #define EXPRKIND_WINDOW_BOUND		13
 
-/* Passthrough data for standard_qp_callback */
-typedef struct
-{
-	List	   *activeWindows;	/* active windows, if any */
-	List	   *groupClause;	/* overrides parse->groupClause */
-} standard_qp_extra;
+/* standard_qp_extra is defined in optimizer/planner.h */
 
 /*
  * Data specific to grouping sets
