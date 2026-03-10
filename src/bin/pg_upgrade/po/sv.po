@@ -1,16 +1,6 @@
 # Swedish message translation file for pg_upgrade
 # Copyright (C) 2017 PostgreSQL Global Development Group
 # This file is distributed under the same license as the PostgreSQL package.
-<<<<<<< HEAD
-# Dennis Björklund <db@zigo.dhs.org>, 2017, 2018, 2019, 2020, 2021.
-#
-msgid ""
-msgstr ""
-"Project-Id-Version: PostgreSQL 14\n"
-"Report-Msgid-Bugs-To: pgsql-bugs@lists.postgresql.org\n"
-"POT-Creation-Date: 2021-11-06 22:16+0000\n"
-"PO-Revision-Date: 2021-11-09 06:33+0100\n"
-=======
 # Dennis Björklund <db@zigo.dhs.org>, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024.
 #
 msgid ""
@@ -19,7 +9,6 @@ msgstr ""
 "Report-Msgid-Bugs-To: pgsql-bugs@lists.postgresql.org\n"
 "POT-Creation-Date: 2024-07-13 16:07+0000\n"
 "PO-Revision-Date: 2024-07-14 22:05+0200\n"
->>>>>>> REL_16_9
 "Last-Translator: Dennis Björklund <db@zigo.dhs.org>\n"
 "Language-Team: Swedish <pgsql-translators@postgresql.org>\n"
 "Language: sv\n"
@@ -28,11 +17,7 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=2; plural=n != 1;\n"
 
-<<<<<<< HEAD
-#: check.c:70
-=======
 #: check.c:72
->>>>>>> REL_16_9
 #, c-format
 msgid ""
 "Performing Consistency Checks on Old Live Server\n"
@@ -41,11 +26,7 @@ msgstr ""
 "Utför konsistenskontroller på gamla live-servern\n"
 "------------------------------------------------"
 
-<<<<<<< HEAD
-#: check.c:76
-=======
 #: check.c:78
->>>>>>> REL_16_9
 #, c-format
 msgid ""
 "Performing Consistency Checks\n"
@@ -54,11 +35,7 @@ msgstr ""
 "Utför konsistenskontroller\n"
 "--------------------------"
 
-<<<<<<< HEAD
-#: check.c:213
-=======
 #: check.c:234
->>>>>>> REL_16_9
 #, c-format
 msgid ""
 "\n"
@@ -67,11 +44,7 @@ msgstr ""
 "\n"
 "*Klustren är kompatibla*"
 
-<<<<<<< HEAD
-#: check.c:219
-=======
 #: check.c:242
->>>>>>> REL_16_9
 #, c-format
 msgid ""
 "\n"
@@ -82,26 +55,11 @@ msgstr ""
 "Om pg_upgrade misslyckas efter denna punkt så måste du\n"
 "köra om initdb på nya klustret innan du fortsätter."
 
-<<<<<<< HEAD
-#: check.c:264
-=======
 #: check.c:283
->>>>>>> REL_16_9
 #, c-format
 msgid ""
 "Optimizer statistics are not transferred by pg_upgrade.\n"
 "Once you start the new server, consider running:\n"
-<<<<<<< HEAD
-"    %s/vacuumdb %s--all --analyze-in-stages\n"
-"\n"
-msgstr ""
-"Optimeringsstatistik överförs inte av pg_upgrade.\n"
-"När du startar nya servern så vill du nog köra:\n"
-"     %s/vacuumdb %s--all --analyze-in-stages\n"
-"\n"
-
-#: check.c:270
-=======
 "    %s/vacuumdb %s--all --analyze-in-stages"
 msgstr ""
 "Optimeringsstatistik överförs inte av pg_upgrade.\n"
@@ -109,7 +67,6 @@ msgstr ""
 "     %s/vacuumdb %s--all --analyze-in-stages"
 
 #: check.c:289
->>>>>>> REL_16_9
 #, c-format
 msgid ""
 "Running this script will delete the old cluster's data files:\n"
@@ -118,11 +75,7 @@ msgstr ""
 "När detta skript körs så raderas gamla klustrets datafiler:\n"
 "    %s"
 
-<<<<<<< HEAD
-#: check.c:275
-=======
 #: check.c:294
->>>>>>> REL_16_9
 #, c-format
 msgid ""
 "Could not create a script to delete the old cluster's data files\n"
@@ -135,92 +88,36 @@ msgstr ""
 "ligger i gamla klusterkatalogen. Det gamla klustrets innehåll\n"
 "måste raderas för hand."
 
-<<<<<<< HEAD
-#: check.c:287
-=======
 #: check.c:306
->>>>>>> REL_16_9
 #, c-format
 msgid "Checking cluster versions"
 msgstr "Kontrollerar klustrets versioner"
 
-<<<<<<< HEAD
-#: check.c:299
-#, c-format
-msgid "This utility can only upgrade from PostgreSQL version 8.4 and later.\n"
-msgstr "Detta verktyg kan bara uppgradera från PostgreSQL version 8.4 eller nyare.\n"
-
-#: check.c:303
-#, c-format
-msgid "This utility can only upgrade to PostgreSQL version %s.\n"
-msgstr "Detta verktyg kan bara uppgradera till PostgreSQL version %s.\n"
-
-#: check.c:312
-#, c-format
-msgid "This utility cannot be used to downgrade to older major PostgreSQL versions.\n"
-msgstr "Detta verktyg kan inte användas för att nergradera till äldre major-versioner av PostgreSQL.\n"
-
-#: check.c:317
-#, c-format
-msgid "Old cluster data and binary directories are from different major versions.\n"
-msgstr "Gammal klusterdata och binära kataloger är från olika major-versioner.\n"
-
-#: check.c:320
-#, c-format
-msgid "New cluster data and binary directories are from different major versions.\n"
-msgstr "Nya klusterdata och binära kataloger är från olika major-versioner.\n"
-
-#: check.c:337
-#, c-format
-msgid "When checking a pre-PG 9.1 live old server, you must specify the old server's port number.\n"
-msgstr "Vid kontroll av en gammal live-server före PG 9.1 så måste den gamla serverns portnummer anges.\n"
-
-#: check.c:341
-#, c-format
-msgid "When checking a live server, the old and new port numbers must be different.\n"
-msgstr "Vid kontroll av en live-server så måste gamla och nya portnumren vara olika.\n"
-=======
 #: check.c:318
 #, c-format
 msgid "This utility can only upgrade from PostgreSQL version %s and later."
 msgstr "Detta verktyg kan bara uppgradera från PostgreSQL version %s eller senare."
->>>>>>> REL_16_9
 
-#: check.c:356
+#: check.c:323
 #, c-format
 msgid "This utility can only upgrade to PostgreSQL version %s."
 msgstr "Detta verktyg kan bara uppgradera till PostgreSQL version %s."
 
-<<<<<<< HEAD
-#: check.c:361
-=======
 #: check.c:332
->>>>>>> REL_16_9
 #, c-format
 msgid "This utility cannot be used to downgrade to older major PostgreSQL versions."
 msgstr "Detta verktyg kan inte användas för att nergradera till äldre major-versioner av PostgreSQL."
 
-<<<<<<< HEAD
-#: check.c:364
-=======
 #: check.c:337
->>>>>>> REL_16_9
 #, c-format
 msgid "Old cluster data and binary directories are from different major versions."
 msgstr "Gammal klusterdata och binära kataloger är från olika major-versioner."
 
-<<<<<<< HEAD
-#: check.c:437
-=======
 #: check.c:340
->>>>>>> REL_16_9
 #, c-format
 msgid "New cluster data and binary directories are from different major versions."
 msgstr "Nya klusterdata och binära kataloger är från olika major-versioner."
 
-<<<<<<< HEAD
-#: check.c:494
-=======
 #: check.c:355
 #, c-format
 msgid "When checking a live server, the old and new port numbers must be different."
@@ -232,25 +129,16 @@ msgid "New cluster database \"%s\" is not empty: found relation \"%s.%s\""
 msgstr "Nya databasklustret \"%s\" är inte tomt: hittade relation \"%s.%s\""
 
 #: check.c:398
->>>>>>> REL_16_9
 #, c-format
 msgid "Checking for new cluster tablespace directories"
 msgstr "Letar efter nya tablespace-kataloger i klustret"
 
-<<<<<<< HEAD
-#: check.c:505
-=======
 #: check.c:409
->>>>>>> REL_16_9
 #, c-format
 msgid "new cluster tablespace directory already exists: \"%s\""
 msgstr "i klustret finns redan ny tablespace-katalog: \"%s\""
 
-<<<<<<< HEAD
-#: check.c:538
-=======
 #: check.c:442
->>>>>>> REL_16_9
 #, c-format
 msgid ""
 "\n"
@@ -259,11 +147,7 @@ msgstr ""
 "\n"
 "VARNING:  nya datakatalogen skall inte ligga inuti den gamla datakatalogen, dvs. %s"
 
-<<<<<<< HEAD
-#: check.c:562
-=======
 #: check.c:466
->>>>>>> REL_16_9
 #, c-format
 msgid ""
 "\n"
@@ -272,30 +156,11 @@ msgstr ""
 "\n"
 "VARNING:  användardefinierade tabellutrymmens plats skall inte vara i datakatalogen, dvs. %s"
 
-<<<<<<< HEAD
-#: check.c:572
-=======
 #: check.c:476
->>>>>>> REL_16_9
 #, c-format
 msgid "Creating script to delete old cluster"
 msgstr "Skapar skript för att radera gamla klustret"
 
-<<<<<<< HEAD
-#: check.c:575 check.c:839 check.c:937 check.c:1016 check.c:1278 file.c:336
-#: function.c:240 option.c:497 version.c:54 version.c:204 version.c:376
-#: version.c:511
-#, c-format
-msgid "could not open file \"%s\": %s\n"
-msgstr "kan inte öppna fil \"%s\": %s\n"
-
-#: check.c:631
-#, c-format
-msgid "could not add execute permission to file \"%s\": %s\n"
-msgstr "kan inte sätta rättigheten \"körbar\" på filen \"%s\": %s\n"
-
-#: check.c:651
-=======
 #: check.c:479 check.c:652 check.c:768 check.c:863 check.c:992 check.c:1069
 #: check.c:1348 check.c:1422 file.c:339 function.c:163 option.c:476
 #: version.c:116 version.c:292 version.c:426
@@ -309,70 +174,42 @@ msgid "could not add execute permission to file \"%s\": %s"
 msgstr "kan inte sätta rättigheten \"körbar\" på filen \"%s\": %s"
 
 #: check.c:550
->>>>>>> REL_16_9
 #, c-format
 msgid "Checking database user is the install user"
 msgstr "Kontrollerar att databasanvändaren är installationsanvändaren"
 
-<<<<<<< HEAD
-#: check.c:667
-=======
 #: check.c:566
->>>>>>> REL_16_9
 #, c-format
 msgid "database user \"%s\" is not the install user"
 msgstr "databasanvändare \"%s\" är inte installationsanvändaren"
 
-<<<<<<< HEAD
-#: check.c:678
-=======
 #: check.c:577
->>>>>>> REL_16_9
 #, c-format
 msgid "could not determine the number of users"
 msgstr "kunde inte bestämma antalet användare"
 
-<<<<<<< HEAD
-#: check.c:686
-=======
 #: check.c:585
->>>>>>> REL_16_9
 #, c-format
 msgid "Only the install user can be defined in the new cluster."
 msgstr "Bara installationsanvändaren får finnas i nya klustret."
 
-<<<<<<< HEAD
-#: check.c:706
-=======
 #: check.c:614
->>>>>>> REL_16_9
 #, c-format
 msgid "Checking database connection settings"
 msgstr "Kontrollerar databasens anslutningsinställningar"
 
-<<<<<<< HEAD
-#: check.c:728
-=======
 #: check.c:640
->>>>>>> REL_16_9
 #, c-format
 msgid "template0 must not allow connections, i.e. its pg_database.datallowconn must be false"
 msgstr "template0 får inte tillåta anslutningar, dvs dess pg_database.datallowconn måste vara false"
 
-<<<<<<< HEAD
-#: check.c:738
-=======
 #: check.c:667 check.c:788 check.c:886 check.c:1012 check.c:1089 check.c:1148
 #: check.c:1209 check.c:1238 check.c:1272 check.c:1303 check.c:1362
 #: check.c:1443 function.c:185 version.c:192 version.c:232 version.c:378
->>>>>>> REL_16_9
 #, c-format
 msgid "fatal"
 msgstr "fatalt"
 
-<<<<<<< HEAD
-#: check.c:763
-=======
 #: check.c:668
 #, c-format
 msgid ""
@@ -393,49 +230,26 @@ msgstr ""
 "    %s"
 
 #: check.c:693
->>>>>>> REL_16_9
 #, c-format
 msgid "Checking for prepared transactions"
 msgstr "Letar efter förberedda transaktioner"
 
-<<<<<<< HEAD
-#: check.c:772
-=======
 #: check.c:702
->>>>>>> REL_16_9
 #, c-format
 msgid "The source cluster contains prepared transactions"
 msgstr "Källklustret innehåller förberedda transaktioner"
 
-<<<<<<< HEAD
-#: check.c:774
-=======
 #: check.c:704
->>>>>>> REL_16_9
 #, c-format
 msgid "The target cluster contains prepared transactions"
 msgstr "Målklustret innehåller förberedda transaktioner"
 
-<<<<<<< HEAD
-#: check.c:800
-=======
 #: check.c:729
->>>>>>> REL_16_9
 #, c-format
 msgid "Checking for contrib/isn with bigint-passing mismatch"
 msgstr "Letar efter contrib/isn med bigint-anropsfel"
 
-<<<<<<< HEAD
-#: check.c:861 check.c:962 check.c:1038 check.c:1095 check.c:1154 check.c:1183
-#: check.c:1301 function.c:262 version.c:278 version.c:316 version.c:460
-#, c-format
-msgid "fatal\n"
-msgstr "fatalt\n"
-
-#: check.c:862
-=======
 #: check.c:789
->>>>>>> REL_16_9
 #, c-format
 msgid ""
 "Your installation contains \"contrib/isn\" functions which rely on the\n"
@@ -454,43 +268,24 @@ msgstr ""
 "En lista med problemfunktionerna finns i filen:\n"
 "    %s"
 
-<<<<<<< HEAD
-#: check.c:885
-=======
 #: check.c:811
->>>>>>> REL_16_9
 #, c-format
 msgid "Checking for user-defined postfix operators"
 msgstr "Letar efter användardefinierade postfix-operatorer"
 
-<<<<<<< HEAD
-#: check.c:963
-=======
 #: check.c:887
->>>>>>> REL_16_9
 #, c-format
 msgid ""
 "Your installation contains user-defined postfix operators, which are not\n"
 "supported anymore.  Consider dropping the postfix operators and replacing\n"
 "them with prefix operators or function calls.\n"
 "A list of user-defined postfix operators is in the file:\n"
-<<<<<<< HEAD
-"    %s\n"
-"\n"
-=======
 "    %s"
->>>>>>> REL_16_9
 msgstr ""
 "Din installation innehåller användardefinierade postfix-operatorer, vilket\n"
 "inte stöds längre. Överväg att ta bort postfix-operatorer och ersätt dem\n"
 "med prefix-operatorer eller funktionsanrrop.\n"
 "En lista med användardefinierade postfix-operatorer finns i filen:\n"
-<<<<<<< HEAD
-"    %s\n"
-"\n"
-
-#: check.c:984
-=======
 "    %s"
 
 #: check.c:911
@@ -520,16 +315,11 @@ msgstr ""
 "    %s"
 
 #: check.c:1037
->>>>>>> REL_16_9
 #, c-format
 msgid "Checking for tables WITH OIDS"
 msgstr "Letar efter tabeller med WITH OIDS"
 
-<<<<<<< HEAD
-#: check.c:1039
-=======
 #: check.c:1090
->>>>>>> REL_16_9
 #, c-format
 msgid ""
 "Your installation contains tables declared WITH OIDS, which is not\n"
@@ -567,45 +357,12 @@ msgstr ""
 "    %s"
 
 # FIXME: is this msgid correct?
-<<<<<<< HEAD
-#: check.c:1067
-#, c-format
-msgid "Checking for system-defined composite types in user tables"
-msgstr "Letar i användartabeller efter systemdefinierade typer av sorten \"composite\""
-
-#: check.c:1096
-#, c-format
-msgid ""
-"Your installation contains system-defined composite type(s) in user tables.\n"
-"These type OIDs are not stable across PostgreSQL versions,\n"
-"so this cluster cannot currently be upgraded.  You can\n"
-"drop the problem columns and restart the upgrade.\n"
-"A list of the problem columns is in the file:\n"
-"    %s\n"
-"\n"
-msgstr ""
-"Din installation innehåller användartabeller med systemdefinierade typer\n"
-"av sorten \"composite\". OID:er för dessa typer är inte stabila över\n"
-"PostgreSQL-versioner så detta kluster kan inte uppgraderas för tillfället.\n"
-"Du kan slänga problemkolumnerna och återstarta uppgraderingen.\n"
-"En lista med problemkolumner finns i filen:\n"
-"    %s\n"
-"\n"
-
-# FIXME: is this msgid correct?
-#: check.c:1124
-=======
 #: check.c:1177
->>>>>>> REL_16_9
 #, c-format
 msgid "Checking for reg* data types in user tables"
 msgstr "Letar efter reg*-datatyper i användartabeller"
 
-<<<<<<< HEAD
-#: check.c:1155
-=======
 #: check.c:1210
->>>>>>> REL_16_9
 #, c-format
 msgid ""
 "Your installation contains one of the reg* data types in user tables.\n"
@@ -613,25 +370,13 @@ msgid ""
 "pg_upgrade, so this cluster cannot currently be upgraded.  You can\n"
 "drop the problem columns and restart the upgrade.\n"
 "A list of the problem columns is in the file:\n"
-<<<<<<< HEAD
-"    %s\n"
-"\n"
-=======
 "    %s"
->>>>>>> REL_16_9
 msgstr ""
 "Din installation använder en av reg*-datatyperna i en användartabell.\n"
 "Dessa datatyper refererar system-OID:er som inte bevaras av pg_upgrade\n"
 "så detta kluster kan för närvarande inte uppgraderas. Du kan ta bort\n"
 "problemkolumnerna och starta om uppgraderingen.\n"
 "En lista med problemkolumner finns i filen:\n"
-<<<<<<< HEAD
-"    %s\n"
-"\n"
-
-# FIXME: is this msgid correct?
-#: check.c:1177
-=======
 "    %s"
 
 #: check.c:1231
@@ -680,16 +425,11 @@ msgstr ""
 
 # FIXME: is this msgid correct?
 #: check.c:1295
->>>>>>> REL_16_9
 #, c-format
 msgid "Checking for incompatible \"jsonb\" data type"
 msgstr "Letar efter inkompatibel \"jsonb\"-datatyp"
 
-<<<<<<< HEAD
-#: check.c:1184
-=======
 #: check.c:1304
->>>>>>> REL_16_9
 #, c-format
 msgid ""
 "Your installation contains the \"jsonb\" data type in user tables.\n"
@@ -697,37 +437,21 @@ msgid ""
 "cluster cannot currently be upgraded.  You can\n"
 "drop the problem columns and restart the upgrade.\n"
 "A list of the problem columns is in the file:\n"
-<<<<<<< HEAD
-"    %s\n"
-"\n"
-=======
 "    %s"
->>>>>>> REL_16_9
 msgstr ""
 "Din installation innehåller \"jsonb\"-datatypen i användartabeller.\n"
 "Interna formatet för \"jsonb\" ändrades under 9.4-betan så detta kluster kan\n"
 "för närvarande inte uppgraderas. Du kan ta bort problemkolumnerna och\n"
 "starta om uppgraderingen.\n"
 "En lista med problemkolumner finns i filen:\n"
-<<<<<<< HEAD
-"    %s\n"
-"\n"
-
-#: check.c:1206
-=======
 "    %s"
 
 #: check.c:1331
->>>>>>> REL_16_9
 #, c-format
 msgid "Checking for roles starting with \"pg_\""
 msgstr "Letar efter roller som startar med \"pg_\""
 
-<<<<<<< HEAD
-#: check.c:1216
-=======
 #: check.c:1363
->>>>>>> REL_16_9
 #, c-format
 msgid ""
 "Your installation contains roles starting with \"pg_\".\n"
@@ -742,44 +466,12 @@ msgstr ""
 "En lista med rollerna som startar på \"pg_\" finns i denna fil:\n"
 "    %s"
 
-<<<<<<< HEAD
-#: check.c:1218
-=======
 #: check.c:1383
->>>>>>> REL_16_9
 #, c-format
 msgid "Checking for user-defined encoding conversions"
 msgstr "Letar efter användardefinierade teckenkodkonverteringar"
 
-<<<<<<< HEAD
-#: check.c:1239
-#, c-format
-msgid "Checking for user-defined encoding conversions"
-msgstr "Letar efter användardefinierade teckenkodkonverteringar"
-
-#: check.c:1302
-#, c-format
-msgid ""
-"Your installation contains user-defined encoding conversions.\n"
-"The conversion function parameters changed in PostgreSQL version 14\n"
-"so this cluster cannot currently be upgraded.  You can remove the\n"
-"encoding conversions in the old cluster and restart the upgrade.\n"
-"A list of user-defined encoding conversions is in the file:\n"
-"    %s\n"
-"\n"
-msgstr ""
-"Din installation innehåller användardefinierade teckenkodkonverteringar.\n"
-"Parametrar till konverteringsfunktioner ändrades i PostgreSQL 14 så\n"
-"detta kluster kan för närvarande inte uppgraderas. Du kan ta bort\n"
-"teckenkodkonverteringarna i gamla klustret och starta om uppgraderingen.\n"
-"En lista med användardefinierade teckenkodkonverteringar finns i filen:\n"
-"    %s\n"
-"\n"
-
-#: check.c:1329
-=======
 #: check.c:1444
->>>>>>> REL_16_9
 #, c-format
 msgid ""
 "Your installation contains user-defined encoding conversions.\n"
@@ -796,83 +488,41 @@ msgstr ""
 "En lista med användardefinierade teckenkodkonverteringar finns i filen:\n"
 "    %s"
 
-<<<<<<< HEAD
-#: check.c:1338
-=======
 #: controldata.c:129 controldata.c:175 controldata.c:199 controldata.c:508
->>>>>>> REL_16_9
 #, c-format
 msgid "could not get control data using %s: %s"
 msgstr "kunde inte hämta kontrolldata med %s: %s"
 
-<<<<<<< HEAD
-#: check.c:1344
-#, c-format
-msgid "failed to restore old locale \"%s\"\n"
-msgstr "misslyckades med att återställa gamla lokalen \"%s\"\n"
-
-#: controldata.c:128 controldata.c:196
-#, c-format
-msgid "could not get control data using %s: %s\n"
-msgstr "kunde inte hämta kontrolldata med %s: %s\n"
-
-#: controldata.c:139
-#, c-format
-msgid "%d: database cluster state problem\n"
-msgstr "%d: state-problem för databaskluster\n"
-
-#: controldata.c:157
-#, c-format
-msgid "The source cluster was shut down while in recovery mode.  To upgrade, use \"rsync\" as documented or shut it down as a primary.\n"
-msgstr "Källklustret stängdes ner när det var i återställningsläge. För att uppgradera så använd \"rsync\" enligt dokumentation eller stäng ner den som en primär.\n"
-=======
 #: controldata.c:140
 #, c-format
 msgid "%d: database cluster state problem"
 msgstr "%d: state-problem för databaskluster"
->>>>>>> REL_16_9
 
-#: controldata.c:159
+#: controldata.c:158
 #, c-format
 msgid "The source cluster was shut down while in recovery mode.  To upgrade, use \"rsync\" as documented or shut it down as a primary."
 msgstr "Källklustret stängdes ner när det var i återställningsläge. För att uppgradera så använd \"rsync\" enligt dokumentation eller stäng ner den som en primär."
 
-<<<<<<< HEAD
-#: controldata.c:164
-=======
 #: controldata.c:160
->>>>>>> REL_16_9
 #, c-format
 msgid "The target cluster was shut down while in recovery mode.  To upgrade, use \"rsync\" as documented or shut it down as a primary."
 msgstr "Målklustret stängdes ner när det var i återställningsläge. För att uppgradera så använd \"rsync\" enligt dokumentation eller stäng ner den som en primär."
 
-#: controldata.c:166
+#: controldata.c:165
 #, c-format
 msgid "The source cluster was not shut down cleanly."
 msgstr "Källklustret har inte stängts ner på ett korrekt sätt."
 
-<<<<<<< HEAD
-#: controldata.c:177
-=======
 #: controldata.c:167
->>>>>>> REL_16_9
 #, c-format
 msgid "The target cluster was not shut down cleanly."
 msgstr "Målklustret har inte stängts ner på ett korrekt sätt."
 
-<<<<<<< HEAD
-#: controldata.c:179
-=======
 #: controldata.c:181
->>>>>>> REL_16_9
 #, c-format
 msgid "The source cluster lacks cluster state information:"
 msgstr "Källklustret saknar information om kluster-state:"
 
-<<<<<<< HEAD
-#: controldata.c:209 dump.c:49 pg_upgrade.c:335 pg_upgrade.c:371
-#: relfilenode.c:243 server.c:33 util.c:79
-=======
 #: controldata.c:183
 #, c-format
 msgid "The target cluster lacks cluster state information:"
@@ -880,29 +530,15 @@ msgstr "Målklustret saknar information om kluster-state:"
 
 #: controldata.c:214 dump.c:50 exec.c:119 pg_upgrade.c:517 pg_upgrade.c:554
 #: relfilenumber.c:231 server.c:34 util.c:337
->>>>>>> REL_16_9
 #, c-format
 msgid "%s"
 msgstr "%s"
 
-<<<<<<< HEAD
-#: controldata.c:216
-=======
 #: controldata.c:221
->>>>>>> REL_16_9
 #, c-format
 msgid "%d: pg_resetwal problem"
 msgstr "%d: pg_resetwal-problem"
 
-<<<<<<< HEAD
-#: controldata.c:226 controldata.c:236 controldata.c:247 controldata.c:258
-#: controldata.c:269 controldata.c:288 controldata.c:299 controldata.c:310
-#: controldata.c:321 controldata.c:332 controldata.c:343 controldata.c:354
-#: controldata.c:357 controldata.c:361 controldata.c:371 controldata.c:383
-#: controldata.c:394 controldata.c:405 controldata.c:416 controldata.c:427
-#: controldata.c:438 controldata.c:449 controldata.c:460 controldata.c:471
-#: controldata.c:482 controldata.c:493
-=======
 #: controldata.c:231 controldata.c:241 controldata.c:252 controldata.c:263
 #: controldata.c:274 controldata.c:293 controldata.c:304 controldata.c:315
 #: controldata.c:326 controldata.c:337 controldata.c:348 controldata.c:359
@@ -910,210 +546,86 @@ msgstr "%d: pg_resetwal-problem"
 #: controldata.c:399 controldata.c:410 controldata.c:421 controldata.c:432
 #: controldata.c:443 controldata.c:454 controldata.c:465 controldata.c:476
 #: controldata.c:487 controldata.c:498
->>>>>>> REL_16_9
 #, c-format
 msgid "%d: controldata retrieval problem"
 msgstr "%d: problem vid hämtning av kontrolldata"
 
-<<<<<<< HEAD
-#: controldata.c:572
-=======
 #: controldata.c:579
->>>>>>> REL_16_9
 #, c-format
 msgid "The source cluster lacks some required control information:"
 msgstr "Källklustret saknar lite kontrolldata som krävs:"
 
-<<<<<<< HEAD
-#: controldata.c:575
-=======
 #: controldata.c:582
->>>>>>> REL_16_9
 #, c-format
 msgid "The target cluster lacks some required control information:"
 msgstr "Målklustret saknar lite kontrolldata som krävs:"
 
-<<<<<<< HEAD
-#: controldata.c:578
-=======
 #: controldata.c:585
->>>>>>> REL_16_9
 #, c-format
 msgid "  checkpoint next XID"
 msgstr "  checkpoint nästa-XID"
 
-<<<<<<< HEAD
-#: controldata.c:581
-=======
 #: controldata.c:588
->>>>>>> REL_16_9
 #, c-format
 msgid "  latest checkpoint next OID"
 msgstr "  senaste checkpoint nästa-OID"
 
-<<<<<<< HEAD
-#: controldata.c:584
-#, c-format
-msgid "  latest checkpoint next MultiXactId\n"
-msgstr "  senaster checkpoint nästa-MultiXactId\n"
-
-#: controldata.c:588
-#, c-format
-msgid "  latest checkpoint oldest MultiXactId\n"
-msgstr "  senaste checkpoint äldsta-MultiXactId\n"
-
-#: controldata.c:591
-#, c-format
-msgid "  latest checkpoint oldestXID\n"
-msgstr "  senaste checkpoint äldsta-XID\n"
-
-#: controldata.c:594
-#, c-format
-msgid "  latest checkpoint next MultiXactOffset\n"
-msgstr "  senaste checkpoint nästa-MultiXactOffset\n"
-
-#: controldata.c:597
-#, c-format
-msgid "  first WAL segment after reset\n"
-msgstr "  första WAL-segmentet efter reset\n"
-
-#: controldata.c:600
-#, c-format
-msgid "  float8 argument passing method\n"
-msgstr "  float8 argumentöverföringsmetod\n"
-
-#: controldata.c:603
-#, c-format
-msgid "  maximum alignment\n"
-msgstr "  maximal alignment\n"
-
-#: controldata.c:606
-#, c-format
-msgid "  block size\n"
-msgstr "  blockstorlek\n"
-
-#: controldata.c:609
-#, c-format
-msgid "  large relation segment size\n"
-msgstr "  stora relationers segmentstorlek\n"
-
-#: controldata.c:612
-#, c-format
-msgid "  WAL block size\n"
-msgstr "  WAL-blockstorlek\n"
-
-#: controldata.c:615
-#, c-format
-msgid "  WAL segment size\n"
-msgstr "  WAL-segmentstorlek\n"
-
-#: controldata.c:618
-#, c-format
-msgid "  maximum identifier length\n"
-msgstr "  maximal identifierarlängd\n"
-
-#: controldata.c:621
-#, c-format
-msgid "  maximum number of indexed columns\n"
-msgstr "  maximalt antal indexerade kolumner\n"
-=======
 #: controldata.c:591
 #, c-format
 msgid "  latest checkpoint next MultiXactId"
 msgstr "  senaster checkpoint nästa-MultiXactId"
->>>>>>> REL_16_9
 
-#: controldata.c:624
+#: controldata.c:595
 #, c-format
 msgid "  latest checkpoint oldest MultiXactId"
 msgstr "  senaste checkpoint äldsta-MultiXactId"
 
-<<<<<<< HEAD
-#: controldata.c:628
-=======
 #: controldata.c:598
->>>>>>> REL_16_9
 #, c-format
 msgid "  latest checkpoint oldestXID"
 msgstr "  senaste checkpoint äldsta-XID"
 
-<<<<<<< HEAD
-#: controldata.c:631
-=======
 #: controldata.c:601
->>>>>>> REL_16_9
 #, c-format
 msgid "  latest checkpoint next MultiXactOffset"
 msgstr "  senaste checkpoint nästa-MultiXactOffset"
 
-<<<<<<< HEAD
-#: controldata.c:635
-=======
 #: controldata.c:604
->>>>>>> REL_16_9
 #, c-format
 msgid "  first WAL segment after reset"
 msgstr "  första WAL-segmentet efter reset"
 
-<<<<<<< HEAD
-#: controldata.c:637
-=======
 #: controldata.c:607
->>>>>>> REL_16_9
 #, c-format
 msgid "  float8 argument passing method"
 msgstr "  float8 argumentöverföringsmetod"
 
-<<<<<<< HEAD
-#: controldata.c:652
-=======
 #: controldata.c:610
->>>>>>> REL_16_9
 #, c-format
 msgid "  maximum alignment"
 msgstr "  maximal alignment"
 
-<<<<<<< HEAD
-#: controldata.c:656
-=======
 #: controldata.c:613
->>>>>>> REL_16_9
 #, c-format
 msgid "  block size"
 msgstr "  blockstorlek"
 
-<<<<<<< HEAD
-#: controldata.c:659
-=======
 #: controldata.c:616
->>>>>>> REL_16_9
 #, c-format
 msgid "  large relation segment size"
 msgstr "  stora relationers segmentstorlek"
 
-<<<<<<< HEAD
-#: controldata.c:662
-=======
 #: controldata.c:619
->>>>>>> REL_16_9
 #, c-format
 msgid "  WAL block size"
 msgstr "  WAL-blockstorlek"
 
-<<<<<<< HEAD
-#: controldata.c:665
-=======
 #: controldata.c:622
->>>>>>> REL_16_9
 #, c-format
 msgid "  WAL segment size"
 msgstr "  WAL-segmentstorlek"
 
-<<<<<<< HEAD
-#: controldata.c:668
-=======
 #: controldata.c:625
->>>>>>> REL_16_9
 #, c-format
 msgid "  maximum identifier length"
 msgstr "  maximal identifierarlängd"
@@ -1138,25 +650,17 @@ msgstr "  stora-objekt chunkstorlek"
 msgid "  dates/times are integers?"
 msgstr "  datum/tid är heltal?"
 
-#: controldata.c:671
+#: controldata.c:642
 #, c-format
 msgid "  data checksum version"
 msgstr "  datachecksumversion"
 
-<<<<<<< HEAD
-#: controldata.c:674
-=======
 #: controldata.c:644
->>>>>>> REL_16_9
 #, c-format
 msgid "Cannot continue without required control information, terminating"
 msgstr "Kan inte fortsätta utan kontrollinformation som krävs, avslutar"
 
-<<<<<<< HEAD
-#: controldata.c:679
-=======
 #: controldata.c:659
->>>>>>> REL_16_9
 #, c-format
 msgid ""
 "old and new pg_controldata alignments are invalid or do not match.\n"
@@ -1165,37 +669,26 @@ msgstr ""
 "gamla och nya pg_controldata-alignments är ogiltiga eller matchar inte.\n"
 "Troligen är ett kluster en 32-bitars-installation och den andra 64-bitars"
 
-<<<<<<< HEAD
-#: controldata.c:682
-=======
 #: controldata.c:663
->>>>>>> REL_16_9
 #, c-format
 msgid "old and new pg_controldata block sizes are invalid or do not match"
 msgstr "gamla och nya pg_controldata-blockstorlekar är ogiltiga eller matchar inte"
 
-#: controldata.c:695
+#: controldata.c:666
 #, c-format
 msgid "old and new pg_controldata maximum relation segment sizes are invalid or do not match"
 msgstr "gamla och nya pg_controldata maximala relationssegmentstorlekar är ogiltiga eller matchar inte"
 
-#: controldata.c:698
+#: controldata.c:669
 #, c-format
 msgid "old and new pg_controldata WAL block sizes are invalid or do not match"
 msgstr "gamla och nya pg_controldata WAL-blockstorlekar är ogiltiga eller matchar inte"
 
-<<<<<<< HEAD
-#: controldata.c:700
-=======
 #: controldata.c:672
->>>>>>> REL_16_9
 #, c-format
 msgid "old and new pg_controldata WAL segment sizes are invalid or do not match"
 msgstr "gamla och nya pg_controldata WAL-segmentstorlekar är ogiltiga eller matchar inte"
 
-<<<<<<< HEAD
-#: controldata.c:711
-=======
 #: controldata.c:675
 #, c-format
 msgid "old and new pg_controldata maximum identifier lengths are invalid or do not match"
@@ -1237,25 +730,16 @@ msgid "old and new cluster pg_controldata checksum versions do not match"
 msgstr "gamla och nya klustrets pg_controldata checksumversioner matchar inte"
 
 #: controldata.c:718
->>>>>>> REL_16_9
 #, c-format
 msgid "Adding \".old\" suffix to old global/pg_control"
 msgstr "Lägger till \".old\"-suffix till gamla global/pg_control"
 
-<<<<<<< HEAD
-#: controldata.c:716
-=======
 #: controldata.c:723
->>>>>>> REL_16_9
 #, c-format
 msgid "could not rename file \"%s\" to \"%s\": %m"
 msgstr "kunde inte döpa om fil \"%s\" till \"%s\": %m"
 
-<<<<<<< HEAD
-#: controldata.c:719
-=======
 #: controldata.c:727
->>>>>>> REL_16_9
 #, c-format
 msgid ""
 "\n"
@@ -1280,52 +764,27 @@ msgstr "Skapar dump med globala objekt"
 msgid "Creating dump of database schemas"
 msgstr "Skapar dump innehållande databasscheman"
 
-<<<<<<< HEAD
-#: exec.c:45
-=======
 #: exec.c:47 exec.c:52
->>>>>>> REL_16_9
 #, c-format
 msgid "could not get pg_ctl version data using %s: %s"
 msgstr "kunde inte hämta pg_ctl versionsdata med %s: %s"
 
-<<<<<<< HEAD
-#: exec.c:51
-=======
 #: exec.c:56
->>>>>>> REL_16_9
 #, c-format
 msgid "could not get pg_ctl version output from %s"
 msgstr "kunde inte läsa versionutdata för pg_ctl från %s"
 
-<<<<<<< HEAD
-#: exec.c:105 exec.c:109
-=======
 #: exec.c:113 exec.c:117
->>>>>>> REL_16_9
 #, c-format
 msgid "command too long"
 msgstr "kommandot för långt"
 
-<<<<<<< HEAD
-#: exec.c:111 util.c:37 util.c:225
-=======
 #: exec.c:161 pg_upgrade.c:286
->>>>>>> REL_16_9
 #, c-format
 msgid "could not open log file \"%s\": %m"
 msgstr "kunde inte öppna loggfil \"%s\": %m"
 
-<<<<<<< HEAD
-#: exec.c:150 option.c:217
-#, c-format
-msgid "could not open log file \"%s\": %m\n"
-msgstr "kunde inte öppna loggfil \"%s\": %m\n"
-
-#: exec.c:179
-=======
 #: exec.c:193
->>>>>>> REL_16_9
 #, c-format
 msgid ""
 "\n"
@@ -1334,20 +793,12 @@ msgstr ""
 "\n"
 "*misslyckande*"
 
-<<<<<<< HEAD
-#: exec.c:182
-=======
 #: exec.c:196
->>>>>>> REL_16_9
 #, c-format
 msgid "There were problems executing \"%s\""
 msgstr "Det var problem med att köra \"%s\""
 
-<<<<<<< HEAD
-#: exec.c:185
-=======
 #: exec.c:199
->>>>>>> REL_16_9
 #, c-format
 msgid ""
 "Consult the last few lines of \"%s\" or \"%s\" for\n"
@@ -1356,11 +807,7 @@ msgstr ""
 "Se de sista raderna i \"%s\" eller \"%s\" för\n"
 "en trolig orsak till misslyckandet."
 
-<<<<<<< HEAD
-#: exec.c:190
-=======
 #: exec.c:204
->>>>>>> REL_16_9
 #, c-format
 msgid ""
 "Consult the last few lines of \"%s\" for\n"
@@ -1369,89 +816,47 @@ msgstr ""
 "Se de sista raderna i \"%s\" för\n"
 "en trolig orsak till misslyckandet."
 
-<<<<<<< HEAD
-#: exec.c:205 option.c:226
-=======
 #: exec.c:219 pg_upgrade.c:296
->>>>>>> REL_16_9
 #, c-format
 msgid "could not write to log file \"%s\": %m"
 msgstr "kunde inte skriva till loggfil \"%s\": %m"
 
-<<<<<<< HEAD
-#: exec.c:231
-=======
 #: exec.c:245
->>>>>>> REL_16_9
 #, c-format
 msgid "could not open file \"%s\" for reading: %s"
 msgstr "kunde inte öppna fil \"%s\" för läsning: %s"
 
-<<<<<<< HEAD
-#: exec.c:258
-=======
 #: exec.c:272
->>>>>>> REL_16_9
 #, c-format
 msgid "You must have read and write access in the current directory."
 msgstr "Du måste ha läs och skrivrättigheter till den aktuella katalogen."
 
-<<<<<<< HEAD
-#: exec.c:311 exec.c:377
-=======
 #: exec.c:325 exec.c:391
->>>>>>> REL_16_9
 #, c-format
 msgid "check for \"%s\" failed: %s"
 msgstr "kontroll av \"%s\" misslyckades: %s"
 
-<<<<<<< HEAD
-#: exec.c:314 exec.c:380
-=======
 #: exec.c:328 exec.c:394
->>>>>>> REL_16_9
 #, c-format
 msgid "\"%s\" is not a directory"
 msgstr "\"%s\" är inte en katalog"
 
-<<<<<<< HEAD
-#: exec.c:430
-=======
 #: exec.c:441
->>>>>>> REL_16_9
 #, c-format
 msgid "check for \"%s\" failed: %m"
 msgstr "kontroll av \"%s\" misslyckades: %m"
 
-<<<<<<< HEAD
-#: exec.c:433
-=======
 #: exec.c:446
 #, c-format
 msgid "check for \"%s\" failed: cannot execute"
 msgstr "kontroll av \"%s\" misslyckades: kan inte exekvera"
 
 #: exec.c:456
->>>>>>> REL_16_9
 #, c-format
 msgid "check for \"%s\" failed: incorrect version: found \"%s\", expected \"%s\""
 msgstr "kontroll av \"%s\" misslyckades: hittade felaktig version \"%s\", förväntade \"%s\""
 
-<<<<<<< HEAD
-#: exec.c:439
-#, c-format
-msgid "check for \"%s\" failed: cannot execute\n"
-msgstr "kontroll av \"%s\" misslyckades: kan inte exekvera\n"
-
-#: exec.c:449
-#, c-format
-msgid "check for \"%s\" failed: incorrect version: found \"%s\", expected \"%s\"\n"
-msgstr "kontroll av \"%s\" misslyckades: hittade felaktig version \"%s\", förväntade \"%s\"\n"
-
-#: file.c:43 file.c:61
-=======
 #: file.c:43 file.c:64
->>>>>>> REL_16_9
 #, c-format
 msgid "error while cloning relation \"%s.%s\" (\"%s\" to \"%s\"): %s"
 msgstr "fel vid kloning av relation \"%s.%s\" (\"%s\" till \"%s\"): %s"
@@ -1961,13 +1366,8 @@ msgstr "kunde inte skapa arbetstråd: %s"
 
 #: parallel.c:294
 #, c-format
-<<<<<<< HEAD
-msgid "%s() failed: %s\n"
-msgstr "%s() misslyckades: %s\n"
-=======
 msgid "%s() failed: %s"
 msgstr "%s() misslyckades: %s"
->>>>>>> REL_16_9
 
 #: parallel.c:298
 #, c-format
@@ -1984,11 +1384,7 @@ msgstr "barnprocess avslutade felaktigt: %s"
 msgid "could not read permissions of directory \"%s\": %s"
 msgstr "kunde inte läsa rättigheter på katalog \"%s\": %s"
 
-<<<<<<< HEAD
-#: pg_upgrade.c:122
-=======
 #: pg_upgrade.c:139
->>>>>>> REL_16_9
 #, c-format
 msgid ""
 "\n"
@@ -1999,29 +1395,17 @@ msgstr ""
 "Utför uppgradering\n"
 "------------------"
 
-<<<<<<< HEAD
-#: pg_upgrade.c:165
-=======
 #: pg_upgrade.c:184
->>>>>>> REL_16_9
 #, c-format
 msgid "Setting next OID for new cluster"
 msgstr "Sätter nästa OID för nya klustret"
 
-<<<<<<< HEAD
-#: pg_upgrade.c:172
-=======
 #: pg_upgrade.c:193
->>>>>>> REL_16_9
 #, c-format
 msgid "Sync data directory to disk"
 msgstr "Synkar datakatalog till disk"
 
-<<<<<<< HEAD
-#: pg_upgrade.c:183
-=======
 #: pg_upgrade.c:205
->>>>>>> REL_16_9
 #, c-format
 msgid ""
 "\n"
@@ -2032,19 +1416,12 @@ msgstr ""
 "Uppgradering klar\n"
 "-----------------"
 
-<<<<<<< HEAD
-#: pg_upgrade.c:216
-=======
 #: pg_upgrade.c:238 pg_upgrade.c:251 pg_upgrade.c:258 pg_upgrade.c:265
 #: pg_upgrade.c:283 pg_upgrade.c:294
->>>>>>> REL_16_9
 #, c-format
 msgid "directory path for new cluster is too long"
 msgstr "katalogsökväg för nytt kluster är för lång"
 
-<<<<<<< HEAD
-#: pg_upgrade.c:242
-=======
 #: pg_upgrade.c:272 pg_upgrade.c:274 pg_upgrade.c:276 pg_upgrade.c:278
 #, c-format
 msgid "could not create directory \"%s\": %m"
@@ -2056,7 +1433,6 @@ msgid "%s: could not find own program executable"
 msgstr "%s: kunde inte hitta det egna programmets körbara fil"
 
 #: pg_upgrade.c:353
->>>>>>> REL_16_9
 #, c-format
 msgid ""
 "There seems to be a postmaster servicing the old cluster.\n"
@@ -2065,11 +1441,7 @@ msgstr ""
 "Det verkar vara en postmaster igång som hanterar gamla klustret.\n"
 "Stänga ner den postmastern och försök igen."
 
-<<<<<<< HEAD
-#: pg_upgrade.c:255
-=======
 #: pg_upgrade.c:366
->>>>>>> REL_16_9
 #, c-format
 msgid ""
 "There seems to be a postmaster servicing the new cluster.\n"
@@ -2078,133 +1450,77 @@ msgstr ""
 "Det verkar vara en postmaster igång som hanterar nya klustret.\n"
 "Stänga ner den postmastern och försök igen."
 
-<<<<<<< HEAD
-#: pg_upgrade.c:269
-=======
 #: pg_upgrade.c:388
 #, c-format
 msgid "Setting locale and encoding for new cluster"
 msgstr "Sätter lokal och teckenkodning för nya klustret"
 
 #: pg_upgrade.c:450
->>>>>>> REL_16_9
 #, c-format
 msgid "Analyzing all rows in the new cluster"
 msgstr "Analyserar alla rader i nya klustret"
 
-<<<<<<< HEAD
-#: pg_upgrade.c:282
-=======
 #: pg_upgrade.c:463
->>>>>>> REL_16_9
 #, c-format
 msgid "Freezing all rows in the new cluster"
 msgstr "Fryser alla rader i nya klustret"
 
-<<<<<<< HEAD
-#: pg_upgrade.c:302
-=======
 #: pg_upgrade.c:483
->>>>>>> REL_16_9
 #, c-format
 msgid "Restoring global objects in the new cluster"
 msgstr "Återställer globala objekt i nya klustret"
 
-<<<<<<< HEAD
-#: pg_upgrade.c:317
-=======
 #: pg_upgrade.c:499
->>>>>>> REL_16_9
 #, c-format
 msgid "Restoring database schemas in the new cluster"
 msgstr "Återställer databasscheman i nya klustret"
 
-<<<<<<< HEAD
-#: pg_upgrade.c:421
-=======
 #: pg_upgrade.c:605
->>>>>>> REL_16_9
 #, c-format
 msgid "Deleting files from new %s"
 msgstr "Raderar filer från ny %s"
 
-<<<<<<< HEAD
-#: pg_upgrade.c:425
-=======
 #: pg_upgrade.c:609
->>>>>>> REL_16_9
 #, c-format
 msgid "could not delete directory \"%s\""
 msgstr "kunde inte ta bort katalog \"%s\""
 
-<<<<<<< HEAD
-#: pg_upgrade.c:444
-=======
 #: pg_upgrade.c:628
->>>>>>> REL_16_9
 #, c-format
 msgid "Copying old %s to new server"
 msgstr "Kopierar gammal %s till ny server"
 
-<<<<<<< HEAD
-#: pg_upgrade.c:470
-=======
 #: pg_upgrade.c:654
->>>>>>> REL_16_9
 #, c-format
 msgid "Setting oldest XID for new cluster"
 msgstr "Sätter äldsta XID för nya klustret"
 
-<<<<<<< HEAD
-#: pg_upgrade.c:478
-=======
 #: pg_upgrade.c:662
->>>>>>> REL_16_9
 #, c-format
 msgid "Setting next transaction ID and epoch for new cluster"
 msgstr "Sätter nästa transaktions-ID och epoch för nytt kluster"
 
-<<<<<<< HEAD
-#: pg_upgrade.c:508
-=======
 #: pg_upgrade.c:692
->>>>>>> REL_16_9
 #, c-format
 msgid "Setting next multixact ID and offset for new cluster"
 msgstr "Sätter nästa multixact-ID och offset för nytt kluster"
 
-<<<<<<< HEAD
-#: pg_upgrade.c:532
-=======
 #: pg_upgrade.c:716
->>>>>>> REL_16_9
 #, c-format
 msgid "Setting oldest multixact ID in new cluster"
 msgstr "Sätter äldsta multixact-ID i nytt kluster"
 
-<<<<<<< HEAD
-#: pg_upgrade.c:552
-=======
 #: pg_upgrade.c:736
->>>>>>> REL_16_9
 #, c-format
 msgid "Resetting WAL archives"
 msgstr "Resettar WAL-arkiv"
 
-<<<<<<< HEAD
-#: pg_upgrade.c:595
-=======
 #: pg_upgrade.c:779
->>>>>>> REL_16_9
 #, c-format
 msgid "Setting frozenxid and minmxid counters in new cluster"
 msgstr "Sätter räknarna frozenxid och minmxid för nytt kluster"
 
-<<<<<<< HEAD
-#: pg_upgrade.c:597
-=======
 #: pg_upgrade.c:781
->>>>>>> REL_16_9
 #, c-format
 msgid "Setting minmxid counter in new cluster"
 msgstr "Sätter räknarenm minmxid för nytt kluster"
@@ -2254,29 +1570,17 @@ msgstr "kopierar \"%s\" till \"%s\""
 msgid "linking \"%s\" to \"%s\""
 msgstr "länkar \"%s\" till \"%s\""
 
-<<<<<<< HEAD
-#: server.c:38 server.c:142 util.c:135 util.c:165
-=======
 #: server.c:39 server.c:143 util.c:248 util.c:278
->>>>>>> REL_16_9
 #, c-format
 msgid "Failure, exiting\n"
 msgstr "Misslyckades, avslutar\n"
 
-<<<<<<< HEAD
-#: server.c:132
-=======
 #: server.c:133
->>>>>>> REL_16_9
 #, c-format
 msgid "executing: %s"
 msgstr "kör: %s"
 
-<<<<<<< HEAD
-#: server.c:138
-=======
 #: server.c:139
->>>>>>> REL_16_9
 #, c-format
 msgid ""
 "SQL command failed\n"
@@ -2287,40 +1591,24 @@ msgstr ""
 "%s\n"
 "%s"
 
-<<<<<<< HEAD
-#: server.c:168
-=======
 #: server.c:169
->>>>>>> REL_16_9
 #, c-format
 msgid "could not open version file \"%s\": %m"
 msgstr "kunde inte öppna versionsfil \"%s\": %m"
 
-<<<<<<< HEAD
-#: server.c:172
-=======
 #: server.c:173
->>>>>>> REL_16_9
 #, c-format
 msgid "could not parse version file \"%s\""
 msgstr "kunde inte tolka versionsfil \"%s\""
 
-<<<<<<< HEAD
-#: server.c:298
-=======
 #: server.c:288
->>>>>>> REL_16_9
 #, c-format
 msgid ""
 "\n"
 "%s"
-<<<<<<< HEAD
-msgstr "\n%s"
-=======
 msgstr ""
 "\n"
 "%s"
->>>>>>> REL_16_9
 
 #: server.c:292
 #, c-format
@@ -2399,69 +1687,12 @@ msgstr "kunde inte komma åt katalog \"%s\": %m"
 msgid "ok"
 msgstr "ok"
 
-<<<<<<< HEAD
-#: version.c:29
-#, c-format
-msgid "Checking for large objects"
-msgstr "Letar efter stora objekt"
-
-#: version.c:77 version.c:419
-#, c-format
-msgid "warning"
-msgstr "varning"
-
-#: version.c:79
-#, c-format
-msgid ""
-"\n"
-"Your installation contains large objects.  The new database has an\n"
-"additional large object permission table.  After upgrading, you will be\n"
-"given a command to populate the pg_largeobject_metadata table with\n"
-"default permissions.\n"
-"\n"
-msgstr ""
-"\n"
-"Din installation innehåller stora objekt. Den nya databasen\n"
-"har en extra rättighetstabell för stora objekt. Efter uppgradering\n"
-"kommer du ges ett kommando för att populera rättighetstabellen\n"
-"pg_largeobject_metadata med standardrättigheter.\n"
-"\n"
-
-#: version.c:85
-#, c-format
-msgid ""
-"\n"
-"Your installation contains large objects.  The new database has an\n"
-"additional large object permission table, so default permissions must be\n"
-"defined for all large objects.  The file\n"
-"    %s\n"
-"when executed by psql by the database superuser will set the default\n"
-"permissions.\n"
-"\n"
-msgstr ""
-"\n"
-"Din installation innehåller stora objekt. Den nya databasen har en extra\n"
-"rättighetstabell för stora onbjekt så standardrättigheter måste ges för\n"
-"alla stora objekt. Filen\n"
-"    %s\n"
-"kan köras med psql av databasens superuser för att sätta\n"
-"standardrättigheter.\n"
-"\n"
-
-# FIXME: is this msgid correct?
-#: version.c:272
-=======
 #: version.c:184
->>>>>>> REL_16_9
 #, c-format
 msgid "Checking for incompatible \"line\" data type"
 msgstr "Letar efter inkompatibel \"line\"-datatyp"
 
-<<<<<<< HEAD
-#: version.c:279
-=======
 #: version.c:193
->>>>>>> REL_16_9
 #, c-format
 msgid ""
 "Your installation contains the \"line\" data type in user tables.\n"
@@ -2469,8 +1700,6 @@ msgid ""
 "between your old and new versions so this\n"
 "cluster cannot currently be upgraded.  You can\n"
 "drop the problem columns and restart the upgrade.\n"
-<<<<<<< HEAD
-=======
 "A list of the problem columns is in the file:\n"
 "    %s"
 msgstr ""
@@ -2493,45 +1722,9 @@ msgid ""
 "This data type is no longer allowed in tables, so this\n"
 "cluster cannot currently be upgraded.  You can\n"
 "drop the problem columns and restart the upgrade.\n"
->>>>>>> REL_16_9
 "A list of the problem columns is in the file:\n"
 "    %s"
 msgstr ""
-<<<<<<< HEAD
-"Din installation innehåller datatypen \"line\" i användartabeller. Denna\n"
-"datatype har ändrat sitt interna format samt sitt in/ut-format mellan din\n"
-"gamla och nya version så detta kluster kan för närvarande inte uppgraderas.\n"
-"Du kan radera problemkolumnerna och återstarta uppgraderingen.\n"
-"En lista med problemkolumner finns i filen:\n"
-"    %s\n"
-"\n"
-
-#: version.c:310
-#, c-format
-msgid "Checking for invalid \"unknown\" user columns"
-msgstr "Letar efter ogiltiga användarkolumner av typen \"unknown\""
-
-#: version.c:317
-#, c-format
-msgid ""
-"Your installation contains the \"unknown\" data type in user tables.\n"
-"This data type is no longer allowed in tables, so this\n"
-"cluster cannot currently be upgraded.  You can\n"
-"drop the problem columns and restart the upgrade.\n"
-"A list of the problem columns is in the file:\n"
-"    %s\n"
-"\n"
-msgstr ""
-"Din installation innehåller datatypen \"unknown\" i användartabeller.\n"
-"Denna datatyp tillåts inte längre i tabeller så detta kluster kan\n"
-"för närvarande inte uppgraderas. Du kan radera problemkolumnerna och\n"
-"återstarta uppgraderingen.\n"
-"En lista med problemkolumner finns i filen:\n"
-"    %s\n"
-"\n"
-
-#: version.c:341
-=======
 "Din installation innehåller datatypen \"unknown\" i användartabeller.\n"
 "Denna datatyp tillåts inte längre i tabeller så detta kluster kan\n"
 "för närvarande inte uppgraderas. Du kan radera problemkolumnerna och\n"
@@ -2540,21 +1733,16 @@ msgstr ""
 "    %s"
 
 #: version.c:257
->>>>>>> REL_16_9
 #, c-format
 msgid "Checking for hash indexes"
 msgstr "Letar efter hash-index"
 
-<<<<<<< HEAD
-#: version.c:421
-=======
 #: version.c:335
 #, c-format
 msgid "warning"
 msgstr "varning"
 
 #: version.c:337
->>>>>>> REL_16_9
 #, c-format
 msgid ""
 "\n"
@@ -2569,11 +1757,7 @@ msgstr ""
 "kommandot REINDEX. Efter uppgraderingen så kommer du få\n"
 "REINDEX-instruktioner."
 
-<<<<<<< HEAD
-#: version.c:427
-=======
 #: version.c:343
->>>>>>> REL_16_9
 #, c-format
 msgid ""
 "\n"
@@ -2590,25 +1774,14 @@ msgstr ""
 "kommandot REINDEX. Filen\n"
 "    %s\n"
 "kan köras med psql av databasens superuser och kommer återskapa alla\n"
-<<<<<<< HEAD
-"ogiltiga index; innan dess så kommer inget av dess index användas.\n"
-"\n"
-
-#: version.c:453
-=======
 "ogiltiga index; innan dess så kommer inget av dess index användas."
 
 #: version.c:369
->>>>>>> REL_16_9
 #, c-format
 msgid "Checking for invalid \"sql_identifier\" user columns"
 msgstr "Letar efter ogiltiga användarkolumner av typen \"sql_identifier\""
 
-<<<<<<< HEAD
-#: version.c:461
-=======
 #: version.c:379
->>>>>>> REL_16_9
 #, c-format
 msgid ""
 "Your installation contains the \"sql_identifier\" data type in user tables.\n"
@@ -2623,34 +1796,19 @@ msgstr ""
 "närvarande inte uppgraderas. Du kan radera problemkolumnerna och\n"
 "återstarta uppgraderingen.\n"
 "En lista med problemkolumner finns i filen:\n"
-<<<<<<< HEAD
-"    %s\n"
-"\n"
-
-#: version.c:485
-=======
 "    %s"
 
 #: version.c:402
->>>>>>> REL_16_9
 #, c-format
 msgid "Checking for extension updates"
 msgstr "Letar efter uppdatering av utökningar"
 
-<<<<<<< HEAD
-#: version.c:537
-=======
 #: version.c:450
->>>>>>> REL_16_9
 #, c-format
 msgid "notice"
 msgstr "notis"
 
-<<<<<<< HEAD
-#: version.c:538
-=======
 #: version.c:451
->>>>>>> REL_16_9
 #, c-format
 msgid ""
 "\n"
@@ -2658,21 +1816,11 @@ msgid ""
 "with the ALTER EXTENSION command.  The file\n"
 "    %s\n"
 "when executed by psql by the database superuser will update\n"
-<<<<<<< HEAD
-"these extensions.\n"
-"\n"
-=======
 "these extensions."
->>>>>>> REL_16_9
 msgstr ""
 "\n"
 "Din installation innehåller utökningar som skall updateras med kommandot\n"
 "ALTER EXTENSION. Filen\n"
 "    %s\n"
 "kan köras med psql av databasens superuser och kommer uppdatera\n"
-<<<<<<< HEAD
-"dessa utökningar.\n"
-
-=======
 "dessa utökningar."
->>>>>>> REL_16_9

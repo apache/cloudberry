@@ -6,13 +6,8 @@ msgid ""
 msgstr ""
 "Project-Id-Version: pg_upgrade (PostgreSQL) 16\n"
 "Report-Msgid-Bugs-To: pgsql-bugs@lists.postgresql.org\n"
-<<<<<<< HEAD
-"POT-Creation-Date: 2021-08-06 21:47+0000\n"
-"PO-Revision-Date: 2022-05-23 19:25+0200\n"
-=======
 "POT-Creation-Date: 2023-11-03 13:18+0000\n"
 "PO-Revision-Date: 2023-11-03 10:42-0400\n"
->>>>>>> REL_16_9
 "Last-Translator: Peter Eisentraut <peter@eisentraut.org>\n"
 "Language-Team: German <pgsql-translators@postgresql.org>\n"
 "Language: de\n"
@@ -59,11 +54,7 @@ msgstr ""
 "neuen Cluster neu mit initdb initialisieren, bevor fortgesetzt\n"
 "werden kann."
 
-<<<<<<< HEAD
-#: check.c:264
-=======
 #: check.c:283
->>>>>>> REL_16_9
 #, c-format
 msgid ""
 "Optimizer statistics are not transferred by pg_upgrade.\n"
@@ -74,11 +65,7 @@ msgstr ""
 "den neuen Server starten, sollte Sie diesen Befehl ausführen:\n"
 "    %s/vacuumdb %s--all --analyze-in-stages"
 
-<<<<<<< HEAD
-#: check.c:270
-=======
 #: check.c:289
->>>>>>> REL_16_9
 #, c-format
 msgid ""
 "Running this script will delete the old cluster's data files:\n"
@@ -87,11 +74,7 @@ msgstr ""
 "Mit diesem Skript können die Dateien des alten Clusters gelöscht werden:\n"
 "    %s"
 
-<<<<<<< HEAD
-#: check.c:275
-=======
 #: check.c:294
->>>>>>> REL_16_9
 #, c-format
 msgid ""
 "Could not create a script to delete the old cluster's data files\n"
@@ -104,121 +87,57 @@ msgstr ""
 "Datenverzeichnis des neuen Clusters im alten Cluster-Verzeichnis\n"
 "liegen.  Der Inhalt des alten Clusters muss von Hand gelöscht werden."
 
-<<<<<<< HEAD
-#: check.c:287
-=======
 #: check.c:306
->>>>>>> REL_16_9
 #, c-format
 msgid "Checking cluster versions"
 msgstr "Prüfe Cluster-Versionen"
 
-<<<<<<< HEAD
-#: check.c:299
-#, c-format
-msgid "This utility can only upgrade from PostgreSQL version 8.4 and later.\n"
-msgstr "Dieses Programm kann nur Upgrades von PostgreSQL Version 8.4 oder später durchführen.\n"
-
-#: check.c:303
-#, c-format
-msgid "This utility can only upgrade to PostgreSQL version %s.\n"
-msgstr "Dieses Programm kann nur Upgrades auf PostgreSQL Version %s durchführen.\n"
-
-#: check.c:312
-#, c-format
-msgid "This utility cannot be used to downgrade to older major PostgreSQL versions.\n"
-msgstr "Dieses Programm kann keine Downgrades auf ältere Hauptversionen von PostgreSQL durchführen.\n"
-
-#: check.c:317
-#, c-format
-msgid "Old cluster data and binary directories are from different major versions.\n"
-msgstr "Die Daten- und Programmverzeichnisse des alten Clusters stammen von verschiedenen Hauptversionen.\n"
-
-#: check.c:320
-=======
 #: check.c:318
->>>>>>> REL_16_9
 #, c-format
 msgid "This utility can only upgrade from PostgreSQL version %s and later."
 msgstr "Dieses Programm kann nur Upgrades von PostgreSQL Version %s oder später durchführen."
 
-<<<<<<< HEAD
-#: check.c:337
-=======
 #: check.c:323
->>>>>>> REL_16_9
 #, c-format
 msgid "This utility can only upgrade to PostgreSQL version %s."
 msgstr "Dieses Programm kann nur Upgrades auf PostgreSQL Version %s durchführen."
 
-<<<<<<< HEAD
-#: check.c:341
-=======
 #: check.c:332
->>>>>>> REL_16_9
 #, c-format
 msgid "This utility cannot be used to downgrade to older major PostgreSQL versions."
 msgstr "Dieses Programm kann keine Downgrades auf ältere Hauptversionen von PostgreSQL durchführen."
 
-<<<<<<< HEAD
-#: check.c:356
-=======
 #: check.c:337
->>>>>>> REL_16_9
 #, c-format
 msgid "Old cluster data and binary directories are from different major versions."
 msgstr "Die Daten- und Programmverzeichnisse des alten Clusters stammen von verschiedenen Hauptversionen."
 
-<<<<<<< HEAD
-#: check.c:361
-=======
 #: check.c:340
->>>>>>> REL_16_9
 #, c-format
 msgid "New cluster data and binary directories are from different major versions."
 msgstr "Die Daten- und Programmverzeichnisse des neuen Clusters stammen von verschiedenen Hauptversionen."
 
-<<<<<<< HEAD
-#: check.c:364
-=======
 #: check.c:355
->>>>>>> REL_16_9
 #, c-format
 msgid "When checking a live server, the old and new port numbers must be different."
 msgstr "Wenn ein laufender Server geprüft wird, müssen die alte und die neue Portnummer verschieden sein."
 
-<<<<<<< HEAD
-#: check.c:437
-=======
 #: check.c:375
->>>>>>> REL_16_9
 #, c-format
 msgid "New cluster database \"%s\" is not empty: found relation \"%s.%s\""
 msgstr "Datenbank »%s« im neuen Cluster ist nicht leer: Relation »%s.%s« gefunden"
 
-<<<<<<< HEAD
-#: check.c:494
-=======
 #: check.c:398
->>>>>>> REL_16_9
 #, c-format
 msgid "Checking for new cluster tablespace directories"
 msgstr "Prüfe Tablespace-Verzeichnisse des neuen Clusters"
 
-<<<<<<< HEAD
-#: check.c:505
-=======
 #: check.c:409
->>>>>>> REL_16_9
 #, c-format
 msgid "new cluster tablespace directory already exists: \"%s\""
 msgstr "Tablespace-Verzeichnis für neuen Cluster existiert bereits: »%s«"
 
-<<<<<<< HEAD
-#: check.c:538
-=======
 #: check.c:442
->>>>>>> REL_16_9
 #, c-format
 msgid ""
 "\n"
@@ -227,11 +146,7 @@ msgstr ""
 "\n"
 "WARNUNG:  das neue Datenverzeichnis sollte nicht im alten Datenverzeichnis, d.h. %s, liegen"
 
-<<<<<<< HEAD
-#: check.c:562
-=======
 #: check.c:466
->>>>>>> REL_16_9
 #, c-format
 msgid ""
 "\n"
@@ -240,105 +155,60 @@ msgstr ""
 "\n"
 "WARNUNG:  benutzerdefinierte Tablespace-Pfade sollten nicht im Datenverzeichnis, d.h. %s, liegen"
 
-<<<<<<< HEAD
-#: check.c:572
-=======
 #: check.c:476
->>>>>>> REL_16_9
 #, c-format
 msgid "Creating script to delete old cluster"
 msgstr "Erzeuge Skript zum Löschen des alten Clusters"
 
-<<<<<<< HEAD
-#: check.c:575 check.c:839 check.c:937 check.c:1016 check.c:1278 file.c:336
-#: function.c:240 option.c:497 version.c:54 version.c:204 version.c:376
-#: version.c:511
-=======
 #: check.c:479 check.c:652 check.c:768 check.c:863 check.c:992 check.c:1069
 #: check.c:1348 check.c:1422 file.c:339 function.c:163 option.c:476
 #: version.c:116 version.c:292 version.c:426
->>>>>>> REL_16_9
 #, c-format
 msgid "could not open file \"%s\": %s"
 msgstr "konnte Datei »%s« nicht öffnen: %s"
 
-<<<<<<< HEAD
-#: check.c:631
-=======
 #: check.c:530
->>>>>>> REL_16_9
 #, c-format
 msgid "could not add execute permission to file \"%s\": %s"
 msgstr "konnte Datei »%s« nicht ausführbar machen: %s"
 
-<<<<<<< HEAD
-#: check.c:651
-=======
 #: check.c:550
->>>>>>> REL_16_9
 #, c-format
 msgid "Checking database user is the install user"
 msgstr "Prüfe ob der Datenbankbenutzer der Installationsbenutzer ist"
 
-<<<<<<< HEAD
-#: check.c:667
-=======
 #: check.c:566
->>>>>>> REL_16_9
 #, c-format
 msgid "database user \"%s\" is not the install user"
 msgstr "Datenbankbenutzer »%s« ist nicht der Installationsbenutzer"
 
-<<<<<<< HEAD
-#: check.c:678
-=======
 #: check.c:577
->>>>>>> REL_16_9
 #, c-format
 msgid "could not determine the number of users"
 msgstr "konnte die Anzahl der Benutzer nicht ermitteln"
 
-<<<<<<< HEAD
-#: check.c:686
-=======
 #: check.c:585
->>>>>>> REL_16_9
 #, c-format
 msgid "Only the install user can be defined in the new cluster."
 msgstr "Nur der Installationsbenutzer darf im neuen Cluster definiert sein."
 
-<<<<<<< HEAD
-#: check.c:706
-=======
 #: check.c:614
->>>>>>> REL_16_9
 #, c-format
 msgid "Checking database connection settings"
 msgstr "Prüfe Verbindungseinstellungen der Datenbank"
 
-<<<<<<< HEAD
-#: check.c:728
-=======
 #: check.c:640
->>>>>>> REL_16_9
 #, c-format
 msgid "template0 must not allow connections, i.e. its pg_database.datallowconn must be false"
 msgstr "template0 darf keine Verbindungen erlauben, d.h. ihr pg_database.datallowconn muss falsch sein"
 
-<<<<<<< HEAD
-#: check.c:738
-=======
 #: check.c:667 check.c:788 check.c:886 check.c:1012 check.c:1089 check.c:1148
 #: check.c:1209 check.c:1238 check.c:1272 check.c:1303 check.c:1362
 #: check.c:1443 function.c:185 version.c:192 version.c:232 version.c:378
->>>>>>> REL_16_9
 #, c-format
 msgid "fatal"
 msgstr "fatal"
 
-<<<<<<< HEAD
-#: check.c:763
-=======
 #: check.c:668
 #, c-format
 msgid ""
@@ -360,49 +230,26 @@ msgstr ""
 "    %s"
 
 #: check.c:693
->>>>>>> REL_16_9
 #, c-format
 msgid "Checking for prepared transactions"
 msgstr "Prüfe auf vorbereitete Transaktionen"
 
-<<<<<<< HEAD
-#: check.c:772
-=======
 #: check.c:702
->>>>>>> REL_16_9
 #, c-format
 msgid "The source cluster contains prepared transactions"
 msgstr "Der alte Cluster enthält vorbereitete Transaktionen"
 
-<<<<<<< HEAD
-#: check.c:774
-=======
 #: check.c:704
->>>>>>> REL_16_9
 #, c-format
 msgid "The target cluster contains prepared transactions"
 msgstr "Der neue Cluster enthält vorbereitete Transaktionen"
 
-<<<<<<< HEAD
-#: check.c:800
-=======
 #: check.c:729
->>>>>>> REL_16_9
 #, c-format
 msgid "Checking for contrib/isn with bigint-passing mismatch"
 msgstr "Prüfe auf contrib/isn mit unpassender bigint-Übergabe"
 
-<<<<<<< HEAD
-#: check.c:861 check.c:962 check.c:1038 check.c:1095 check.c:1154 check.c:1183
-#: check.c:1301 function.c:262 version.c:278 version.c:316 version.c:460
-#, c-format
-msgid "fatal\n"
-msgstr "fatal\n"
-
-#: check.c:862
-=======
 #: check.c:789
->>>>>>> REL_16_9
 #, c-format
 msgid ""
 "Your installation contains \"contrib/isn\" functions which rely on the\n"
@@ -422,20 +269,12 @@ msgstr ""
 "der problematischen Funktionen ist in der Datei:\n"
 "    %s"
 
-<<<<<<< HEAD
-#: check.c:885
-=======
 #: check.c:811
->>>>>>> REL_16_9
 #, c-format
 msgid "Checking for user-defined postfix operators"
 msgstr "Prüfe auf benutzerdefinierte Postfix-Operatoren"
 
-<<<<<<< HEAD
-#: check.c:963
-=======
 #: check.c:887
->>>>>>> REL_16_9
 #, c-format
 msgid ""
 "Your installation contains user-defined postfix operators, which are not\n"
@@ -450,9 +289,6 @@ msgstr ""
 "Liste der benutzerdefinierten Postfixoperatoren ist in der Datei:\n"
 "    %s"
 
-<<<<<<< HEAD
-#: check.c:984
-=======
 #: check.c:911
 #, c-format
 msgid "Checking for incompatible polymorphic functions"
@@ -480,16 +316,11 @@ msgstr ""
 "    %s"
 
 #: check.c:1037
->>>>>>> REL_16_9
 #, c-format
 msgid "Checking for tables WITH OIDS"
 msgstr "Prüfe auf Tabellen mit WITH OIDS"
 
-<<<<<<< HEAD
-#: check.c:1039
-=======
 #: check.c:1090
->>>>>>> REL_16_9
 #, c-format
 msgid ""
 "Your installation contains tables declared WITH OIDS, which is not\n"
@@ -504,20 +335,12 @@ msgstr ""
 "Eine Liste der Tabellen mit dem Problem ist in der Datei:\n"
 "    %s"
 
-<<<<<<< HEAD
-#: check.c:1067
-=======
 #: check.c:1118
->>>>>>> REL_16_9
 #, c-format
 msgid "Checking for system-defined composite types in user tables"
 msgstr "Prüfe auf systemdefinierte zusammengesetzte Typen in Benutzertabellen"
 
-<<<<<<< HEAD
-#: check.c:1096
-=======
 #: check.c:1149
->>>>>>> REL_16_9
 #, c-format
 msgid ""
 "Your installation contains system-defined composite types in user tables.\n"
@@ -535,20 +358,12 @@ msgstr ""
 "Datei:\n"
 "    %s"
 
-<<<<<<< HEAD
-#: check.c:1124
-=======
 #: check.c:1177
->>>>>>> REL_16_9
 #, c-format
 msgid "Checking for reg* data types in user tables"
 msgstr "Prüfe auf reg*-Datentypen in Benutzertabellen"
 
-<<<<<<< HEAD
-#: check.c:1155
-=======
 #: check.c:1210
->>>>>>> REL_16_9
 #, c-format
 msgid ""
 "Your installation contains one of the reg* data types in user tables.\n"
@@ -566,9 +381,6 @@ msgstr ""
 "ist in der Datei:\n"
 "    %s"
 
-<<<<<<< HEAD
-#: check.c:1177
-=======
 #: check.c:1231
 #, c-format
 msgid "Checking for incompatible \"%s\" data type in user tables"
@@ -614,16 +426,11 @@ msgstr ""
 "    %s"
 
 #: check.c:1295
->>>>>>> REL_16_9
 #, c-format
 msgid "Checking for incompatible \"jsonb\" data type"
 msgstr "Prüfe auf inkompatiblen Datentyp »jsonb«"
 
-<<<<<<< HEAD
-#: check.c:1184
-=======
 #: check.c:1304
->>>>>>> REL_16_9
 #, c-format
 msgid ""
 "Your installation contains the \"jsonb\" data type in user tables.\n"
@@ -640,20 +447,12 @@ msgstr ""
 "Upgrade neu starten. Eine Liste der Problemspalten ist in der Datei:\n"
 "    %s"
 
-<<<<<<< HEAD
-#: check.c:1206
-=======
 #: check.c:1331
->>>>>>> REL_16_9
 #, c-format
 msgid "Checking for roles starting with \"pg_\""
 msgstr "Prüfe auf Rollen, die mit »pg_« anfangen"
 
-<<<<<<< HEAD
-#: check.c:1216
-=======
 #: check.c:1363
->>>>>>> REL_16_9
 #, c-format
 msgid ""
 "Your installation contains roles starting with \"pg_\".\n"
@@ -668,25 +467,12 @@ msgstr ""
 "Eine Liste der Rollen, die mit »pg_« anfangen, ist in der Datei:\n"
 "    %s"
 
-<<<<<<< HEAD
-#: check.c:1218
-#, c-format
-msgid "The target cluster contains roles starting with \"pg_\"\n"
-msgstr "Der neue Cluster enthält Rollen, die mit »pg_« anfangen\n"
-
-#: check.c:1239
-=======
 #: check.c:1383
->>>>>>> REL_16_9
 #, c-format
 msgid "Checking for user-defined encoding conversions"
 msgstr "Prüfe auf benutzerdefinierte Kodierungsumwandlungen"
 
-<<<<<<< HEAD
-#: check.c:1302
-=======
 #: check.c:1444
->>>>>>> REL_16_9
 #, c-format
 msgid ""
 "Your installation contains user-defined encoding conversions.\n"
@@ -705,88 +491,41 @@ msgstr ""
 "in der Datei:\n"
 "    %s"
 
-<<<<<<< HEAD
-#: check.c:1329
-=======
 #: controldata.c:129 controldata.c:175 controldata.c:199 controldata.c:508
->>>>>>> REL_16_9
 #, c-format
 msgid "could not get control data using %s: %s"
 msgstr "konnte Kontrolldaten mit %s nicht ermitteln: %s"
 
-<<<<<<< HEAD
-#: check.c:1338
-#, c-format
-msgid "failed to get system locale name for \"%s\"\n"
-msgstr "konnte System-Locale-Namen für »%s« nicht ermitteln\n"
-
-#: check.c:1344
-#, c-format
-msgid "failed to restore old locale \"%s\"\n"
-msgstr "konnte alte Locale »%s« nicht wiederherstellen\n"
-
-#: controldata.c:128 controldata.c:196
-#, c-format
-msgid "could not get control data using %s: %s\n"
-msgstr "konnte Kontrolldaten mit %s nicht ermitteln: %s\n"
-
-#: controldata.c:139
-#, c-format
-msgid "%d: database cluster state problem\n"
-msgstr "%d: Problem mit dem Zustand des Clusters\n"
-
-#: controldata.c:157
-#, c-format
-msgid "The source cluster was shut down while in recovery mode.  To upgrade, use \"rsync\" as documented or shut it down as a primary.\n"
-msgstr "Der alte Cluster wurde im Wiederherstellungsmodus heruntergefahren. Um ihn zu aktualisieren, verwenden Sie »rsync« wie in der Dokumentation beschrieben oder fahren Sie ihn im Primärmodus herunter.\n"
-=======
 #: controldata.c:140
 #, c-format
 msgid "%d: database cluster state problem"
 msgstr "%d: Problem mit dem Zustand des Clusters"
->>>>>>> REL_16_9
 
-#: controldata.c:159
+#: controldata.c:158
 #, c-format
 msgid "The source cluster was shut down while in recovery mode.  To upgrade, use \"rsync\" as documented or shut it down as a primary."
 msgstr "Der alte Cluster wurde im Wiederherstellungsmodus heruntergefahren. Um ihn zu aktualisieren, verwenden Sie »rsync« wie in der Dokumentation beschrieben oder fahren Sie ihn im Primärmodus herunter."
 
-<<<<<<< HEAD
-#: controldata.c:164
-=======
 #: controldata.c:160
->>>>>>> REL_16_9
 #, c-format
 msgid "The target cluster was shut down while in recovery mode.  To upgrade, use \"rsync\" as documented or shut it down as a primary."
 msgstr "Der neue Cluster wurde im Wiederherstellungsmodus heruntergefahren. Um ihn zu aktualisieren, verwenden Sie »rsync« wie in der Dokumentation beschrieben oder fahren Sie ihn im Primärmodus herunter."
 
-#: controldata.c:166
+#: controldata.c:165
 #, c-format
 msgid "The source cluster was not shut down cleanly."
 msgstr "Der alte Cluster wurde nicht sauber heruntergefahren."
 
-<<<<<<< HEAD
-#: controldata.c:177
-=======
 #: controldata.c:167
->>>>>>> REL_16_9
 #, c-format
 msgid "The target cluster was not shut down cleanly."
 msgstr "Der neue Cluster wurde nicht sauber heruntergefahren."
 
-<<<<<<< HEAD
-#: controldata.c:179
-=======
 #: controldata.c:181
->>>>>>> REL_16_9
 #, c-format
 msgid "The source cluster lacks cluster state information:"
 msgstr "Im alten Cluster fehlen Cluster-Zustandsinformationen:"
 
-<<<<<<< HEAD
-#: controldata.c:209 dump.c:49 pg_upgrade.c:335 pg_upgrade.c:371
-#: relfilenode.c:243 server.c:33 util.c:79
-=======
 #: controldata.c:183
 #, c-format
 msgid "The target cluster lacks cluster state information:"
@@ -794,62 +533,15 @@ msgstr "Im neuen Cluster fehlen Cluster-Zustandsinformationen:"
 
 #: controldata.c:214 dump.c:50 exec.c:119 pg_upgrade.c:517 pg_upgrade.c:554
 #: relfilenumber.c:231 server.c:34 util.c:337
->>>>>>> REL_16_9
 #, c-format
 msgid "%s"
 msgstr "%s"
 
-<<<<<<< HEAD
-#: controldata.c:216
-=======
 #: controldata.c:221
->>>>>>> REL_16_9
 #, c-format
 msgid "%d: pg_resetwal problem"
 msgstr "%d: Problem mit pg_resetwal"
 
-<<<<<<< HEAD
-#: controldata.c:226 controldata.c:236 controldata.c:247 controldata.c:258
-#: controldata.c:269 controldata.c:288 controldata.c:299 controldata.c:310
-#: controldata.c:321 controldata.c:332 controldata.c:343 controldata.c:354
-#: controldata.c:357 controldata.c:361 controldata.c:371 controldata.c:383
-#: controldata.c:394 controldata.c:405 controldata.c:416 controldata.c:427
-#: controldata.c:438 controldata.c:449 controldata.c:460 controldata.c:471
-#: controldata.c:482 controldata.c:493
-#, c-format
-msgid "%d: controldata retrieval problem\n"
-msgstr "%d: Problem beim Ermitteln der Kontrolldaten\n"
-
-#: controldata.c:572
-#, c-format
-msgid "The source cluster lacks some required control information:\n"
-msgstr "Im alten Cluster fehlen einige notwendige Kontrollinformationen:\n"
-
-#: controldata.c:575
-#, c-format
-msgid "The target cluster lacks some required control information:\n"
-msgstr "Im neuen Cluster fehlen einige notwendige Kontrollinformationen:\n"
-
-#: controldata.c:578
-#, c-format
-msgid "  checkpoint next XID\n"
-msgstr "  Checkpoint nächste XID\n"
-
-#: controldata.c:581
-#, c-format
-msgid "  latest checkpoint next OID\n"
-msgstr "  NextOID des letzten Checkpoints\n"
-
-#: controldata.c:584
-#, c-format
-msgid "  latest checkpoint next MultiXactId\n"
-msgstr "  NextMultiXactId des letzten Checkpoints\n"
-
-#: controldata.c:588
-#, c-format
-msgid "  latest checkpoint oldest MultiXactId\n"
-msgstr "  oldestMultiXid des letzten Checkpoints\n"
-=======
 #: controldata.c:231 controldata.c:241 controldata.c:252 controldata.c:263
 #: controldata.c:274 controldata.c:293 controldata.c:304 controldata.c:315
 #: controldata.c:326 controldata.c:337 controldata.c:348 controldata.c:359
@@ -860,130 +552,88 @@ msgstr "  oldestMultiXid des letzten Checkpoints\n"
 #, c-format
 msgid "%d: controldata retrieval problem"
 msgstr "%d: Problem beim Ermitteln der Kontrolldaten"
->>>>>>> REL_16_9
 
-#: controldata.c:591
-#, c-format
-msgid "  latest checkpoint oldestXID\n"
-msgstr "  oldestXID des letzten Checkpoints\n"
-
-#: controldata.c:594
+#: controldata.c:579
 #, c-format
 msgid "The source cluster lacks some required control information:"
 msgstr "Im alten Cluster fehlen einige notwendige Kontrollinformationen:"
 
-#: controldata.c:597
+#: controldata.c:582
 #, c-format
 msgid "The target cluster lacks some required control information:"
 msgstr "Im neuen Cluster fehlen einige notwendige Kontrollinformationen:"
 
-#: controldata.c:600
+#: controldata.c:585
 #, c-format
 msgid "  checkpoint next XID"
 msgstr "  Checkpoint nächste XID"
 
-#: controldata.c:603
+#: controldata.c:588
 #, c-format
 msgid "  latest checkpoint next OID"
 msgstr "  NextOID des letzten Checkpoints"
 
-#: controldata.c:606
+#: controldata.c:591
 #, c-format
 msgid "  latest checkpoint next MultiXactId"
 msgstr "  NextMultiXactId des letzten Checkpoints"
 
-<<<<<<< HEAD
-#: controldata.c:609
-=======
 #: controldata.c:595
->>>>>>> REL_16_9
 #, c-format
 msgid "  latest checkpoint oldest MultiXactId"
 msgstr "  oldestMultiXid des letzten Checkpoints"
 
-<<<<<<< HEAD
-#: controldata.c:612
-=======
 #: controldata.c:598
->>>>>>> REL_16_9
 #, c-format
 msgid "  latest checkpoint oldestXID"
 msgstr "  oldestXID des letzten Checkpoints"
 
-<<<<<<< HEAD
-#: controldata.c:615
-=======
 #: controldata.c:601
->>>>>>> REL_16_9
 #, c-format
 msgid "  latest checkpoint next MultiXactOffset"
 msgstr "  NextMultiOffset des letzten Checkpoints"
 
-<<<<<<< HEAD
-#: controldata.c:618
-=======
 #: controldata.c:604
->>>>>>> REL_16_9
 #, c-format
 msgid "  first WAL segment after reset"
 msgstr "  erstes WAL-Segment nach dem Reset"
 
-<<<<<<< HEAD
-#: controldata.c:621
-=======
 #: controldata.c:607
->>>>>>> REL_16_9
 #, c-format
 msgid "  float8 argument passing method"
 msgstr "  Übergabe von Float8-Argumenten"
 
-<<<<<<< HEAD
-#: controldata.c:624
-=======
 #: controldata.c:610
->>>>>>> REL_16_9
 #, c-format
 msgid "  maximum alignment"
 msgstr "  maximale Ausrichtung (Alignment)"
 
-#: controldata.c:628
+#: controldata.c:613
 #, c-format
 msgid "  block size"
 msgstr "  Blockgröße"
 
-#: controldata.c:631
+#: controldata.c:616
 #, c-format
 msgid "  large relation segment size"
 msgstr "  Segmentgröße für große Relationen"
 
-<<<<<<< HEAD
-#: controldata.c:635
-=======
 #: controldata.c:619
->>>>>>> REL_16_9
 #, c-format
 msgid "  WAL block size"
 msgstr "  WAL-Blockgröße"
 
-#: controldata.c:637
+#: controldata.c:622
 #, c-format
 msgid "  WAL segment size"
 msgstr "  WAL-Segmentgröße"
 
-<<<<<<< HEAD
-#: controldata.c:652
-=======
 #: controldata.c:625
->>>>>>> REL_16_9
 #, c-format
 msgid "  maximum identifier length"
 msgstr "  maximale Bezeichnerlänge"
 
-<<<<<<< HEAD
-#: controldata.c:656
-=======
 #: controldata.c:628
->>>>>>> REL_16_9
 #, c-format
 msgid "  maximum number of indexed columns"
 msgstr "  maximale Anzahl indizierter Spalten"
@@ -1008,37 +658,12 @@ msgstr "  Datum/Zeit sind Ganzzahlen?"
 msgid "  data checksum version"
 msgstr "  Datenprüfsummenversion"
 
-#: controldata.c:659
+#: controldata.c:644
 #, c-format
-<<<<<<< HEAD
-msgid "old and new pg_controldata maximum relation segment sizes are invalid or do not match\n"
-msgstr "alte und neue maximale Relationssegmentgrößen von pg_controldata sind ungültig oder stimmen nicht überein\n"
-
-#: controldata.c:662
-#, c-format
-msgid "old and new pg_controldata WAL block sizes are invalid or do not match\n"
-msgstr "alte und neue WAL-Blockgrößen von pg_controldata sind ungültig oder stimmen nicht überein\n"
-
-#: controldata.c:665
-#, c-format
-msgid "old and new pg_controldata WAL segment sizes are invalid or do not match\n"
-msgstr "alte und neue WAL-Segmentgrößen von pg_controldata sind ungültig oder stimmen nicht überein\n"
-
-#: controldata.c:668
-#, c-format
-msgid "old and new pg_controldata maximum identifier lengths are invalid or do not match\n"
-msgstr "alte und neue maximale Bezeichnerlängen von pg_controldata sind ungültig oder stimmen nicht überein\n"
-
-#: controldata.c:671
-#, c-format
-msgid "old and new pg_controldata maximum indexed columns are invalid or do not match\n"
-msgstr "alte und neue Maximalzahlen indizierter Spalten von pg_controldata sind ungültig oder stimmen nicht überein\n"
-=======
 msgid "Cannot continue without required control information, terminating"
 msgstr "Kann ohne die benötigten Kontrollinformationen nicht fortsetzen, Programm wird beendet"
->>>>>>> REL_16_9
 
-#: controldata.c:674
+#: controldata.c:659
 #, c-format
 msgid ""
 "old and new pg_controldata alignments are invalid or do not match.\n"
@@ -1047,54 +672,31 @@ msgstr ""
 "altes und neues Alignment in pg_controldata ist ungültig oder stimmt nicht überein\n"
 "Wahrscheinlich ist ein Cluster eine 32-Bit-Installation und der andere 64-Bit"
 
-<<<<<<< HEAD
-#: controldata.c:679
-=======
 #: controldata.c:663
->>>>>>> REL_16_9
 #, c-format
 msgid "old and new pg_controldata block sizes are invalid or do not match"
 msgstr "alte und neue Blockgrößen von pg_controldata sind ungültig oder stimmen nicht überein"
 
-<<<<<<< HEAD
-#: controldata.c:682
-=======
 #: controldata.c:666
->>>>>>> REL_16_9
 #, c-format
 msgid "old and new pg_controldata maximum relation segment sizes are invalid or do not match"
 msgstr "alte und neue maximale Relationssegmentgrößen von pg_controldata sind ungültig oder stimmen nicht überein"
 
-<<<<<<< HEAD
-#: controldata.c:695
-=======
 #: controldata.c:669
->>>>>>> REL_16_9
 #, c-format
 msgid "old and new pg_controldata WAL block sizes are invalid or do not match"
 msgstr "alte und neue WAL-Blockgrößen von pg_controldata sind ungültig oder stimmen nicht überein"
 
-<<<<<<< HEAD
-#: controldata.c:698
-=======
 #: controldata.c:672
->>>>>>> REL_16_9
 #, c-format
 msgid "old and new pg_controldata WAL segment sizes are invalid or do not match"
 msgstr "alte und neue WAL-Segmentgrößen von pg_controldata sind ungültig oder stimmen nicht überein"
 
-<<<<<<< HEAD
-#: controldata.c:700
-=======
 #: controldata.c:675
->>>>>>> REL_16_9
 #, c-format
 msgid "old and new pg_controldata maximum identifier lengths are invalid or do not match"
 msgstr "alte und neue maximale Bezeichnerlängen von pg_controldata sind ungültig oder stimmen nicht überein"
 
-<<<<<<< HEAD
-#: controldata.c:711
-=======
 #: controldata.c:678
 #, c-format
 msgid "old and new pg_controldata maximum indexed columns are invalid or do not match"
@@ -1131,25 +733,16 @@ msgid "old and new cluster pg_controldata checksum versions do not match"
 msgstr "Prüfsummenversionen im alten und neuen Cluster stimmen nicht überein"
 
 #: controldata.c:718
->>>>>>> REL_16_9
 #, c-format
 msgid "Adding \".old\" suffix to old global/pg_control"
 msgstr "Füge Endung ».old« an altes global/pg_control an"
 
-<<<<<<< HEAD
-#: controldata.c:716
-=======
 #: controldata.c:723
->>>>>>> REL_16_9
 #, c-format
 msgid "could not rename file \"%s\" to \"%s\": %m"
 msgstr "konnte Datei »%s« nicht in »%s« umbenennen: %m"
 
-<<<<<<< HEAD
-#: controldata.c:719
-=======
 #: controldata.c:727
->>>>>>> REL_16_9
 #, c-format
 msgid ""
 "\n"
@@ -1902,78 +1495,45 @@ msgstr "konnte Verzeichnis »%s« nicht löschen"
 msgid "Copying old %s to new server"
 msgstr "Kopiere altes %s zum neuen Server"
 
-<<<<<<< HEAD
-#: pg_upgrade.c:470
-=======
 #: pg_upgrade.c:654
->>>>>>> REL_16_9
 #, c-format
 msgid "Setting oldest XID for new cluster"
 msgstr "Setze älteste XID im neuen Cluster"
 
-<<<<<<< HEAD
-#: pg_upgrade.c:478
-=======
 #: pg_upgrade.c:662
->>>>>>> REL_16_9
 #, c-format
 msgid "Setting next transaction ID and epoch for new cluster"
 msgstr "Setze nächste Transaktions-ID und -epoche im neuen Cluster"
 
-<<<<<<< HEAD
-#: pg_upgrade.c:508
-=======
 #: pg_upgrade.c:692
->>>>>>> REL_16_9
 #, c-format
 msgid "Setting next multixact ID and offset for new cluster"
 msgstr "Setze nächste Multixact-ID und nächstes Offset im neuen Cluster"
 
-<<<<<<< HEAD
-#: pg_upgrade.c:532
-=======
 #: pg_upgrade.c:716
->>>>>>> REL_16_9
 #, c-format
 msgid "Setting oldest multixact ID in new cluster"
 msgstr "Setze älteste Multixact-ID im neuen Cluster"
 
-<<<<<<< HEAD
-#: pg_upgrade.c:552
-=======
 #: pg_upgrade.c:736
->>>>>>> REL_16_9
 #, c-format
 msgid "Resetting WAL archives"
 msgstr "Setze WAL-Archive zurück"
 
-<<<<<<< HEAD
-#: pg_upgrade.c:595
-=======
 #: pg_upgrade.c:779
->>>>>>> REL_16_9
 #, c-format
 msgid "Setting frozenxid and minmxid counters in new cluster"
 msgstr "Setze frozenxid und minmxid im neuen Cluster"
 
-<<<<<<< HEAD
-#: pg_upgrade.c:597
-=======
 #: pg_upgrade.c:781
->>>>>>> REL_16_9
 #, c-format
 msgid "Setting minmxid counter in new cluster"
 msgstr "Setze minmxid im neuen Cluster"
 
 #: relfilenumber.c:35
 #, c-format
-<<<<<<< HEAD
-msgid "Cloning user relation files\n"
-msgstr "Klone Benutzertabellendateien\n"
-=======
 msgid "Cloning user relation files"
 msgstr "Klone Benutzertabellendateien"
->>>>>>> REL_16_9
 
 #: relfilenumber.c:38
 #, c-format
@@ -2259,43 +1819,15 @@ msgstr "Hinweis"
 #, c-format
 msgid ""
 "\n"
-<<<<<<< HEAD
-
-#: version.c:485
-#, c-format
-msgid "Checking for extension updates"
-msgstr "Prüfe auf Aktualisierungen von Erweiterungen"
-
-#: version.c:537
-#, c-format
-msgid "notice"
-msgstr "Hinweis"
-
-#: version.c:538
-#, c-format
-msgid ""
-"\n"
-=======
->>>>>>> REL_16_9
 "Your installation contains extensions that should be updated\n"
 "with the ALTER EXTENSION command.  The file\n"
 "    %s\n"
 "when executed by psql by the database superuser will update\n"
-<<<<<<< HEAD
-"these extensions.\n"
-"\n"
-=======
 "these extensions."
->>>>>>> REL_16_9
 msgstr ""
 "\n"
 "Ihre Installation enthält Erweiterungen, die mit dem Befehl ALTER\n"
 "EXTENSION aktualisiert werden sollten. Die Datei\n"
 "    %s\n"
 "kann mit psql als Datenbank-Superuser ausgeführt werden, um die\n"
-<<<<<<< HEAD
-"Erweiterungen zu aktualisieren.\n"
-"\n"
-=======
 "Erweiterungen zu aktualisieren."
->>>>>>> REL_16_9
