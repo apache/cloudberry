@@ -9,13 +9,8 @@ msgid ""
 msgstr ""
 "Project-Id-Version: pg_test_fsync (PostgreSQL) 15\n"
 "Report-Msgid-Bugs-To: pgsql-bugs@lists.postgresql.org\n"
-<<<<<<< HEAD
-"POT-Creation-Date: 2021-07-20 08:49+0000\n"
-"PO-Revision-Date: 2021-07-20 10:59+0200\n"
-=======
 "POT-Creation-Date: 2023-04-14 09:21+0000\n"
 "PO-Revision-Date: 2023-04-14 14:41+0200\n"
->>>>>>> REL_16_9
 "Last-Translator: Georgios Kokolatos <gkokolatos@pm.me>\n"
 "Language-Team: \n"
 "Language: el\n"
@@ -23,9 +18,6 @@ msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=2; plural=n != 1;\n"
-<<<<<<< HEAD
-"X-Generator: Poedit 3.0\n"
-=======
 "X-Generator: Poedit 3.2.2\n"
 
 #: ../../../src/common/logging.c:276
@@ -47,7 +39,6 @@ msgstr "λεπτομέρεια: "
 #, c-format
 msgid "hint: "
 msgstr "υπόδειξη: "
->>>>>>> REL_16_9
 
 #. translator: maintain alignment with NA_FORMAT
 #: pg_test_fsync.c:32
@@ -72,13 +63,8 @@ msgstr "Χρήση: %s [-f FILENAME] [-s SECS-PER-TEST]\n"
 
 #: pg_test_fsync.c:185
 #, c-format
-<<<<<<< HEAD
-msgid "Try \"%s --help\" for more information.\n"
-msgstr "Δοκιμάστε «%s --help» για περισσότερες πληροφορίες.\n"
-=======
 msgid "invalid argument for option %s"
 msgstr "μη έγκυρη παράμετρος για την επιλογή %s"
->>>>>>> REL_16_9
 
 #: pg_test_fsync.c:186 pg_test_fsync.c:198 pg_test_fsync.c:207
 #, c-format
