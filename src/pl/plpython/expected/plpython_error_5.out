@@ -452,15 +452,9 @@ CREATE FUNCTION python_error_detail() RETURNS SETOF text AS $$
   plan = plpy.prepare("SELECT to_date('xy', 'DD') d")
   for row in plpy.cursor(plan):
     yield row['d']
-<<<<<<< HEAD
-$$ LANGUAGE plpythonu;
-SELECT python_error_detail();
-ERROR:  function "python_error_detail" error fetching next item from iterator
-=======
 $$ LANGUAGE plpython3u;
 SELECT python_error_detail();
 ERROR:  error fetching next item from iterator
->>>>>>> REL_16_9
 DETAIL:  spiexceptions.InvalidDatetimeFormat: invalid value "xy" for "DD"
 CONTEXT:  Traceback (most recent call last):
 PL/Python function "python_error_detail"

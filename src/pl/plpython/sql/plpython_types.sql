@@ -332,61 +332,37 @@ SELECT * FROM test_type_conversion_array_mixed2();
 -- check output of multi-dimensional arrays
 CREATE FUNCTION test_type_conversion_md_array_out() RETURNS text[] AS $$
 return [['a'], ['b'], ['c']]
-<<<<<<< HEAD
-$$ LANGUAGE plpythonu;
-=======
 $$ LANGUAGE plpython3u;
->>>>>>> REL_16_9
 
 select test_type_conversion_md_array_out();
 
 CREATE OR REPLACE FUNCTION test_type_conversion_md_array_out() RETURNS text[] AS $$
 return [[], []]
-<<<<<<< HEAD
-$$ LANGUAGE plpythonu;
-=======
 $$ LANGUAGE plpython3u;
->>>>>>> REL_16_9
 
 select test_type_conversion_md_array_out();
 
 CREATE OR REPLACE FUNCTION test_type_conversion_md_array_out() RETURNS text[] AS $$
 return [[], [1]]
-<<<<<<< HEAD
-$$ LANGUAGE plpythonu;
-=======
 $$ LANGUAGE plpython3u;
->>>>>>> REL_16_9
 
 select test_type_conversion_md_array_out();  -- fail
 
 CREATE OR REPLACE FUNCTION test_type_conversion_md_array_out() RETURNS text[] AS $$
 return [[], 1]
-<<<<<<< HEAD
-$$ LANGUAGE plpythonu;
-=======
 $$ LANGUAGE plpython3u;
->>>>>>> REL_16_9
 
 select test_type_conversion_md_array_out();  -- fail
 
 CREATE OR REPLACE FUNCTION test_type_conversion_md_array_out() RETURNS text[] AS $$
 return [1, []]
-<<<<<<< HEAD
-$$ LANGUAGE plpythonu;
-=======
 $$ LANGUAGE plpython3u;
->>>>>>> REL_16_9
 
 select test_type_conversion_md_array_out();  -- fail
 
 CREATE OR REPLACE FUNCTION test_type_conversion_md_array_out() RETURNS text[] AS $$
 return [[1], [[]]]
-<<<<<<< HEAD
-$$ LANGUAGE plpythonu;
-=======
 $$ LANGUAGE plpython3u;
->>>>>>> REL_16_9
 
 select test_type_conversion_md_array_out();  -- fail
 
@@ -399,21 +375,13 @@ SELECT * FROM test_type_conversion_mdarray_malformed();
 
 CREATE FUNCTION test_type_conversion_mdarray_malformed2() RETURNS text[] AS $$
 return [[1,2,3], "abc"]
-<<<<<<< HEAD
-$$ LANGUAGE plpythonu;
-=======
 $$ LANGUAGE plpython3u;
->>>>>>> REL_16_9
 
 SELECT * FROM test_type_conversion_mdarray_malformed2();
 
 CREATE FUNCTION test_type_conversion_mdarray_malformed3() RETURNS text[] AS $$
 return ["abc", [1,2,3]]
-<<<<<<< HEAD
-$$ LANGUAGE plpythonu;
-=======
 $$ LANGUAGE plpython3u;
->>>>>>> REL_16_9
 
 SELECT * FROM test_type_conversion_mdarray_malformed3();
 

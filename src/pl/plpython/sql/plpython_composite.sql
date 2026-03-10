@@ -215,11 +215,7 @@ if t == "text":
      return { "a": "x" }
 elif t == "int":
      return { "a": 1 }
-<<<<<<< HEAD
-$$ LANGUAGE plpythonu;
-=======
 $$ LANGUAGE plpython3u;
->>>>>>> REL_16_9
 
 SELECT * FROM return_record_3('text') AS (a text);
 

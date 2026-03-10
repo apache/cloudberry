@@ -5,17 +5,10 @@
 #
 msgid ""
 msgstr ""
-<<<<<<< HEAD
-"Project-Id-Version: pltcl (PostgreSQL 14)\n"
-"Report-Msgid-Bugs-To: pgsql-bugs@lists.postgresql.org\n"
-"POT-Creation-Date: 2021-08-25 17:23+0900\n"
-"PO-Revision-Date: 2021-08-25 11:48+0900\n"
-=======
 "Project-Id-Version: pltcl (PostgreSQL 16)\n"
 "Report-Msgid-Bugs-To: pgsql-bugs@lists.postgresql.org\n"
 "POT-Creation-Date: 2024-06-06 10:47+0900\n"
 "PO-Revision-Date: 2024-06-06 16:13+0900\n"
->>>>>>> REL_16_9
 "Last-Translator: Kyotaro Horiguchi <horikyota.ntt@gmail.com>\n"
 "Language-Team: Japan PostgreSQL Users Group <jpug-doc@ml.postgresql.jp>\n"
 "Language: ja\n"
@@ -25,69 +18,45 @@ msgstr ""
 "Plural-Forms: nplurals=1; plural=0;\n"
 "X-Generator: Poedit 1.8.13\n"
 
-<<<<<<< HEAD
-#: pltcl.c:463
-=======
 #: pltcl.c:462
->>>>>>> REL_16_9
 msgid "PL/Tcl function to call once when pltcl is first used."
-msgstr "pltclが最初に使用される際に一度だけ呼び出されるPL/Tcl関数。"
+msgstr "pltcl が最初に使用される際に一度だけ呼び出される PL/Tcl 関数。"
 
-<<<<<<< HEAD
-#: pltcl.c:470
-=======
 #: pltcl.c:469
->>>>>>> REL_16_9
 msgid "PL/TclU function to call once when pltclu is first used."
-msgstr "pltcluが最初に使用される際に一度だけ呼び出されるPL/TclU関数。"
+msgstr "pltclu が最初に使用される際に一度だけ呼び出される PL/TclU 関数。"
 
-#: pltcl.c:634
+#: pltcl.c:636
 #, c-format
 msgid "function \"%s\" is in the wrong language"
 msgstr "関数\"%s\"は言語が異なります"
 
-#: pltcl.c:645
+#: pltcl.c:647
 #, c-format
 msgid "function \"%s\" must not be SECURITY DEFINER"
 msgstr "関数\"%s\"はSECURITY DEFINERであってはなりません"
 
 #. translator: %s is "pltcl.start_proc" or "pltclu.start_proc"
-#: pltcl.c:679
+#: pltcl.c:681
 #, c-format
 msgid "processing %s parameter"
-msgstr "パラメーター%sを処理しています"
+msgstr "%sパラメーターを処理しています"
 
-<<<<<<< HEAD
-#: pltcl.c:833
-=======
 #: pltcl.c:834
->>>>>>> REL_16_9
 #, c-format
 msgid "set-valued function called in context that cannot accept a set"
-msgstr "集合を受け付けないコンテキストで集合値関数が呼び出されました"
+msgstr "このコンテキストでは、集合値の関数は集合を受け付けられません"
 
-<<<<<<< HEAD
-#: pltcl.c:1006
-#, c-format
-msgid "function returning record called in context that cannot accept type record"
-msgstr "レコード型を受け付けられないコンテキストでレコードを返す関数が呼び出されました"
-
-#: pltcl.c:1290
-=======
 #: pltcl.c:839
 #, c-format
 msgid "materialize mode required, but it is not allowed in this context"
 msgstr "マテリアライズモードが必要ですが、現在のコンテクストで禁止されています"
 
 #: pltcl.c:1012
->>>>>>> REL_16_9
 #, c-format
 msgid "function returning record called in context that cannot accept type record"
 msgstr "レコード型を受け付けられないコンテキストでレコードを返す関数が呼び出されました"
 
-<<<<<<< HEAD
-#: pltcl.c:1371 pltcl.c:1801
-=======
 #: pltcl.c:1031
 #, c-format
 msgid "could not parse function return value: %s"
@@ -99,93 +68,54 @@ msgid "could not parse trigger return value: %s"
 msgstr "トリガの戻り値をパースできませんでした: %s"
 
 #: pltcl.c:1383 pltcl.c:1810
->>>>>>> REL_16_9
 #, c-format
 msgid "%s"
 msgstr "%s"
 
-<<<<<<< HEAD
-#: pltcl.c:1372
-=======
 #: pltcl.c:1384
->>>>>>> REL_16_9
 #, c-format
 msgid ""
 "%s\n"
 "in PL/Tcl function \"%s\""
 msgstr ""
 "%s\n"
-"PL/Tcl関数\"%s\"内"
+"PL/Tcl 関数 \"%s\""
 
-<<<<<<< HEAD
-#: pltcl.c:1536
-=======
 #: pltcl.c:1547
->>>>>>> REL_16_9
 #, c-format
 msgid "trigger functions can only be called as triggers"
-msgstr "トリガー関数はトリガーとしてのみ呼び出せます"
+msgstr "トリガー関数はトリガーとしてのみコールできます"
 
-<<<<<<< HEAD
-#: pltcl.c:1540
-=======
 #: pltcl.c:1551
->>>>>>> REL_16_9
 #, c-format
 msgid "PL/Tcl functions cannot return type %s"
-msgstr "PL/Tcl関数は%s型の戻り値を返せません"
+msgstr "PL/Tcl 関数は%s型の戻り値を返せません"
 
-<<<<<<< HEAD
-#: pltcl.c:1579
-=======
 #: pltcl.c:1590
->>>>>>> REL_16_9
 #, c-format
 msgid "PL/Tcl functions cannot accept type %s"
-msgstr "PL/Tcl関数は%s型を受け付けません"
+msgstr "PL/Tcl 関数は%s型を受け付けません"
 
-<<<<<<< HEAD
-#: pltcl.c:1693
-=======
 #: pltcl.c:1702
->>>>>>> REL_16_9
 #, c-format
 msgid "could not create internal procedure \"%s\": %s"
 msgstr "内部プロシージャ\"%s\"を作成できませんでした: %s"
 
-<<<<<<< HEAD
-#: pltcl.c:3197
-=======
 #: pltcl.c:3206
->>>>>>> REL_16_9
 #, c-format
 msgid "column name/value list must have even number of elements"
 msgstr "列名/値のリストの要素は偶数個でなければなりません"
 
-<<<<<<< HEAD
-#: pltcl.c:3215
-=======
 #: pltcl.c:3224
->>>>>>> REL_16_9
 #, c-format
 msgid "column name/value list contains nonexistent column name \"%s\""
 msgstr "列名/値のリストの中に、存在しない列名\"%s\"が含まれています"
 
-<<<<<<< HEAD
-#: pltcl.c:3222
-=======
 #: pltcl.c:3231
->>>>>>> REL_16_9
 #, c-format
 msgid "cannot set system attribute \"%s\""
 msgstr "システム属性\"%s\"は設定できません"
 
-<<<<<<< HEAD
-#: pltcl.c:3228
-#, c-format
-msgid "cannot set generated column \"%s\""
-msgstr "生成列\"%s\"は設定できません"
-=======
 #: pltcl.c:3237
 #, c-format
 msgid "cannot set generated column \"%s\""
@@ -193,4 +123,3 @@ msgstr "生成列\"%s\"を変更できません"
 
 #~ msgid "could not split return value from trigger: %s"
 #~ msgstr "トリガーからの戻り値を分割できませんでした: %s"
->>>>>>> REL_16_9

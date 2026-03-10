@@ -8,11 +8,7 @@
 #
 msgid ""
 msgstr ""
-<<<<<<< HEAD
-"Project-Id-Version: plperl (PostgreSQL) 14\n"
-=======
 "Project-Id-Version: plperl (PostgreSQL) 16\n"
->>>>>>> REL_16_9
 "Report-Msgid-Bugs-To: pgsql-bugs@lists.postgresql.org\n"
 "POT-Creation-Date: 2024-11-09 05:57+0000\n"
 "PO-Revision-Date: 2024-11-09 09:32+0100\n"

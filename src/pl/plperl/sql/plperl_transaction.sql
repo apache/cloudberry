@@ -163,7 +163,6 @@ SELECT * FROM pg_cursors;
 CREATE TABLE testpk (id int PRIMARY KEY);
 CREATE TABLE testfk(f1 int REFERENCES testpk DEFERRABLE INITIALLY DEFERRED);
 
-<<<<<<< HEAD
 -- start_ignore
 -- NOTE: cbdb doesn't support foreign key constraint, so the violation check
 -- will not raise an error. We inject a fault to mock the error at the end
@@ -171,30 +170,22 @@ CREATE TABLE testfk(f1 int REFERENCES testpk DEFERRABLE INITIALLY DEFERRED);
 
 SELECT gp_inject_fault('after_trigger_fire_deferred', 'error', '','','',2,2,0, dbid, -1) from gp_segment_configuration where role='p' and content=-1;
 -- end_ignore
-=======
->>>>>>> REL_16_9
 DO LANGUAGE plperl $$
 # this insert will fail during commit:
 spi_exec_query("INSERT INTO testfk VALUES (0)");
 spi_commit();
 elog(WARNING, 'should not get here');
 $$;
-<<<<<<< HEAD
 -- start_ignore
 SELECT gp_inject_fault('after_trigger_fire_deferred', 'reset', dbid) from gp_segment_configuration where role='p' and content=-1;
 -- end_ignore
-=======
->>>>>>> REL_16_9
 
 SELECT * FROM testpk;
 SELECT * FROM testfk;
 
-<<<<<<< HEAD
 -- start_ignore
 SELECT gp_inject_fault('after_trigger_fire_deferred', 'error', '','','',2,2,0, dbid, -1) from gp_segment_configuration where role='p' and content=-1;
 -- end_ignore
-=======
->>>>>>> REL_16_9
 DO LANGUAGE plperl $$
 # this insert will fail during commit:
 spi_exec_query("INSERT INTO testfk VALUES (0)");
@@ -213,11 +204,8 @@ SELECT * FROM testpk;
 SELECT * FROM testfk;
 
 
-<<<<<<< HEAD
 -- start_ignore
 SELECT gp_inject_fault('after_trigger_fire_deferred', 'reset', dbid) from gp_segment_configuration where role='p' and content=-1;
 -- end_ignore
-=======
->>>>>>> REL_16_9
 DROP TABLE test1;
 DROP TABLE test2;

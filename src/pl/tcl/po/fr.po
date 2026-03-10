@@ -48,13 +48,7 @@ msgstr "traitement du paramètre %s"
 #: pltcl.c:834
 #, c-format
 msgid "set-valued function called in context that cannot accept a set"
-<<<<<<< HEAD
-msgstr ""
-"la fonction renvoyant un ensemble a été appelée dans un contexte qui n'accepte pas\n"
-"un ensemble"
-=======
 msgstr "la fonction renvoyant un ensemble a été appelée dans un contexte qui n'accepte pas un ensemble"
->>>>>>> REL_16_9
 
 #: pltcl.c:839
 #, c-format

@@ -2,16 +2,6 @@
 # Copyright (C) 2014 PostgreSQL Global Development Group
 # This file is distributed under the same license as the PostgreSQL package.
 # Mats Erik Andersson <bsd@gisladisker.se>, 2014.
-<<<<<<< HEAD
-# Dennis Björklund <db@zigo.dhs.org> 2017, 2018, 2019, 2020, 2021.
-#
-msgid ""
-msgstr ""
-"Project-Id-Version: PostgreSQL 14\n"
-"Report-Msgid-Bugs-To: pgsql-bugs@lists.postgresql.org\n"
-"POT-Creation-Date: 2020-04-11 01:08+0000\n"
-"PO-Revision-Date: 2021-11-07 10:37+0100\n"
-=======
 # Dennis Björklund <db@zigo.dhs.org> 2017, 2018, 2019, 2020, 2021, 2022, 2023.
 #
 msgid ""
@@ -20,7 +10,6 @@ msgstr ""
 "Report-Msgid-Bugs-To: pgsql-bugs@lists.postgresql.org\n"
 "POT-Creation-Date: 2022-04-11 13:38+0000\n"
 "PO-Revision-Date: 2023-03-09 22:40+0100\n"
->>>>>>> REL_16_9
 "Last-Translator: Dennis Björklund <db@zigo.dhs.org>\n"
 "Language-Team: Swedish <pgsql-translators@postgresql.org>\n"
 "Language: sv\n"

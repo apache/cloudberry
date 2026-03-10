@@ -6,11 +6,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: plpython (PostgreSQL current)\n"
 "Report-Msgid-Bugs-To: pgsql-bugs@lists.postgresql.org\n"
-<<<<<<< HEAD
-"POT-Creation-Date: 2021-08-14 06:29+0300\n"
-=======
 "POT-Creation-Date: 2025-02-08 07:45+0200\n"
->>>>>>> REL_16_9
 "PO-Revision-Date: 2019-08-29 15:42+0300\n"
 "Last-Translator: Alexander Lakhin <exclusion@gmail.com>\n"
 "Language-Team: Russian <pgsql-ru-general@postgresql.org>\n"
@@ -70,11 +66,7 @@ msgstr ""
 msgid "closing a cursor in an aborted subtransaction"
 msgstr "закрытие курсора в прерванной подтранзакции"
 
-<<<<<<< HEAD
-#: plpy_elog.c:125 plpy_elog.c:126 plpy_plpymodule.c:548
-=======
 #: plpy_elog.c:122 plpy_elog.c:123 plpy_plpymodule.c:530
->>>>>>> REL_16_9
 #, c-format
 msgid "%s"
 msgstr "%s"
@@ -263,88 +255,56 @@ msgstr "не удалось создать модуль spiexceptions"
 msgid "could not add the spiexceptions module"
 msgstr "не удалось добавить модуль spiexceptions"
 
-<<<<<<< HEAD
-#: plpy_plpymodule.c:275
-=======
 #: plpy_plpymodule.c:257
->>>>>>> REL_16_9
 #, c-format
 msgid "could not generate SPI exceptions"
 msgstr "не удалось сгенерировать исключения SPI"
 
-<<<<<<< HEAD
-#: plpy_plpymodule.c:443
-=======
 #: plpy_plpymodule.c:425
->>>>>>> REL_16_9
 #, c-format
 msgid "could not unpack arguments in plpy.elog"
 msgstr "не удалось распаковать аргументы в plpy.elog"
 
-<<<<<<< HEAD
-#: plpy_plpymodule.c:452
-msgid "could not parse error message in plpy.elog"
-msgstr "не удалось разобрать сообщение об ошибке в plpy.elog"
-
-#: plpy_plpymodule.c:469
-=======
 #: plpy_plpymodule.c:434
 msgid "could not parse error message in plpy.elog"
 msgstr "не удалось разобрать сообщение об ошибке в plpy.elog"
 
 #: plpy_plpymodule.c:451
->>>>>>> REL_16_9
 #, c-format
 msgid "argument 'message' given by name and position"
 msgstr "аргумент 'message' задан и по имени, и по позиции"
 
-<<<<<<< HEAD
-#: plpy_plpymodule.c:496
-=======
 #: plpy_plpymodule.c:478
->>>>>>> REL_16_9
 #, c-format
 msgid "'%s' is an invalid keyword argument for this function"
 msgstr "'%s' - недопустимое ключевое слово (аргумент) для этой функции"
 
-<<<<<<< HEAD
-#: plpy_plpymodule.c:507 plpy_plpymodule.c:513
-=======
 #: plpy_plpymodule.c:489 plpy_plpymodule.c:495
->>>>>>> REL_16_9
 #, c-format
 msgid "invalid SQLSTATE code"
 msgstr "неверный код SQLSTATE"
 
-#: plpy_procedure.c:225
+#: plpy_procedure.c:226
 #, c-format
 msgid "trigger functions can only be called as triggers"
 msgstr "триггерные функции могут вызываться только в триггерах"
 
-#: plpy_procedure.c:229
+#: plpy_procedure.c:230
 #, c-format
 msgid "PL/Python functions cannot return type %s"
 msgstr "функции PL/Python не могут возвращать тип %s"
 
-#: plpy_procedure.c:307
+#: plpy_procedure.c:308
 #, c-format
 msgid "PL/Python functions cannot accept type %s"
 msgstr "функции PL/Python не могут принимать тип %s"
 
-<<<<<<< HEAD
-#: plpy_procedure.c:397
-=======
 #: plpy_procedure.c:396
->>>>>>> REL_16_9
 #, c-format
 msgid "could not compile PL/Python function \"%s\""
 msgstr "не удалось скомпилировать функцию PL/Python \"%s\""
 
-<<<<<<< HEAD
-#: plpy_procedure.c:400
-=======
 #: plpy_procedure.c:399
->>>>>>> REL_16_9
 #, c-format
 msgid "could not compile anonymous PL/Python code block"
 msgstr "не удалось скомпилировать анонимный блок кода PL/Python"
@@ -438,28 +398,7 @@ msgstr ""
 "не удалось преобразовать объект Python в cstring: похоже, представление "
 "строки Python содержит нулевые байты"
 
-<<<<<<< HEAD
-#: plpy_typeio.c:1178
-#, c-format
-msgid "number of array dimensions exceeds the maximum allowed (%d)"
-msgstr "число размерностей массива превышает предел (%d)"
-
-#: plpy_typeio.c:1183
-#, c-format
-msgid "could not determine sequence length for function return value"
-msgstr ""
-"не удалось определить длину последовательности в возвращаемом функцией "
-"значении"
-
-#: plpy_typeio.c:1188 plpy_typeio.c:1194
-#, c-format
-msgid "array size exceeds the maximum allowed"
-msgstr "размер массива превышает предел"
-
-#: plpy_typeio.c:1222
-=======
 #: plpy_typeio.c:1157
->>>>>>> REL_16_9
 #, c-format
 msgid ""
 "return value of function with array return type is not a Python sequence"
@@ -467,22 +406,14 @@ msgstr ""
 "возвращаемое значение функции с результатом-массивом не является "
 "последовательностью"
 
-<<<<<<< HEAD
-#: plpy_typeio.c:1269
-=======
 #: plpy_typeio.c:1202
->>>>>>> REL_16_9
 #, c-format
 msgid "could not determine sequence length for function return value"
 msgstr ""
 "не удалось определить длину последовательности в возвращаемом функцией "
 "значении"
 
-<<<<<<< HEAD
-#: plpy_typeio.c:1271
-=======
 #: plpy_typeio.c:1222 plpy_typeio.c:1237 plpy_typeio.c:1253
->>>>>>> REL_16_9
 #, c-format
 msgid ""
 "multidimensional arrays must have array expressions with matching dimensions"
@@ -490,34 +421,22 @@ msgstr ""
 "для многомерных массивов должны задаваться выражения с соответствующими "
 "размерностями"
 
-<<<<<<< HEAD
-#: plpy_typeio.c:1350
-=======
 #: plpy_typeio.c:1227
 #, c-format
 msgid "number of array dimensions exceeds the maximum allowed (%d)"
 msgstr "число размерностей массива превышает предел (%d)"
 
 #: plpy_typeio.c:1329
->>>>>>> REL_16_9
 #, c-format
 msgid "malformed record literal: \"%s\""
 msgstr "ошибка в литерале записи: \"%s\""
 
-<<<<<<< HEAD
-#: plpy_typeio.c:1351
-=======
 #: plpy_typeio.c:1330
->>>>>>> REL_16_9
 #, c-format
 msgid "Missing left parenthesis."
 msgstr "Отсутствует левая скобка."
 
-<<<<<<< HEAD
-#: plpy_typeio.c:1352 plpy_typeio.c:1553
-=======
 #: plpy_typeio.c:1331 plpy_typeio.c:1532
->>>>>>> REL_16_9
 #, c-format
 msgid ""
 "To return a composite type in an array, return the composite type as a "
@@ -526,20 +445,12 @@ msgstr ""
 "Чтобы возвратить составной тип в массиве, нужно возвратить составное "
 "значение в виде кортежа Python, например: \"[('foo',)]\"."
 
-<<<<<<< HEAD
-#: plpy_typeio.c:1399
-=======
 #: plpy_typeio.c:1378
->>>>>>> REL_16_9
 #, c-format
 msgid "key \"%s\" not found in mapping"
 msgstr "ключ \"%s\" не найден в сопоставлении"
 
-<<<<<<< HEAD
-#: plpy_typeio.c:1400
-=======
 #: plpy_typeio.c:1379
->>>>>>> REL_16_9
 #, c-format
 msgid ""
 "To return null in a column, add the value None to the mapping with the key "
@@ -548,29 +459,17 @@ msgstr ""
 "Чтобы присвоить столбцу NULL, добавьте в сопоставление значение None с "
 "ключом-именем столбца."
 
-<<<<<<< HEAD
-#: plpy_typeio.c:1453
-=======
 #: plpy_typeio.c:1432
->>>>>>> REL_16_9
 #, c-format
 msgid "length of returned sequence did not match number of columns in row"
 msgstr "длина возвращённой последовательности не равна числу столбцов в строке"
 
-<<<<<<< HEAD
-#: plpy_typeio.c:1551
-=======
 #: plpy_typeio.c:1530
->>>>>>> REL_16_9
 #, c-format
 msgid "attribute \"%s\" does not exist in Python object"
 msgstr "в объекте Python не существует атрибут \"%s\""
 
-<<<<<<< HEAD
-#: plpy_typeio.c:1554
-=======
 #: plpy_typeio.c:1533
->>>>>>> REL_16_9
 #, c-format
 msgid ""
 "To return null in a column, let the returned object have an attribute named "

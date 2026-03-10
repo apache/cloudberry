@@ -201,11 +201,7 @@ spi_exec_query("INSERT INTO testfk VALUES (0)");
 spi_commit();
 elog(WARNING, 'should not get here');
 $$;
-<<<<<<< HEAD
 ERROR:  fault triggered, fault name:'after_trigger_fire_deferred' fault type:'error'  at line 4.
-=======
-ERROR:  insert or update on table "testfk" violates foreign key constraint "testfk_f1_fkey" at line 4.
->>>>>>> REL_16_9
 CONTEXT:  PL/Perl anonymous code block
 SELECT * FROM testpk;
  id 
@@ -230,12 +226,7 @@ if ($@) {
 spi_exec_query("INSERT INTO testpk VALUES (1)");
 spi_exec_query("INSERT INTO testfk VALUES (1)");
 $$;
-<<<<<<< HEAD
 INFO:  fault triggered, fault name:'after_trigger_fire_deferred' fault type:'error'  at line 5.
-=======
-INFO:  insert or update on table "testfk" violates foreign key constraint "testfk_f1_fkey" at line 5.
-
->>>>>>> REL_16_9
 SELECT * FROM testpk;
  id 
 ----

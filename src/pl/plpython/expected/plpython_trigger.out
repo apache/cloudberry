@@ -450,14 +450,9 @@ SET DateStyle = 'ISO';
 CREATE FUNCTION set_modif_time() RETURNS trigger AS $$
     TD['new']['modif_time'] = '2010-10-13 21:57:28.930486'
     return 'MODIFY'
-<<<<<<< HEAD
-$$ LANGUAGE plpythonu;
+$$ LANGUAGE plpython3u;
 -- Add 'DISTRIBUTED RANDOMLY' to avoid "ERROR:  Cannot parallelize an UPDATE statement that updates the distribution columns"
 CREATE TABLE pb (a TEXT, modif_time TIMESTAMP(0) WITHOUT TIME ZONE) DISTRIBUTED RANDOMLY;
-=======
-$$ LANGUAGE plpython3u;
-CREATE TABLE pb (a TEXT, modif_time TIMESTAMP(0) WITHOUT TIME ZONE);
->>>>>>> REL_16_9
 CREATE TRIGGER set_modif_time BEFORE UPDATE ON pb
   FOR EACH ROW EXECUTE PROCEDURE set_modif_time();
 INSERT INTO pb VALUES ('a', '2010-10-09 21:57:33.930486');
@@ -597,11 +592,7 @@ SELECT * FROM trigger_test_generated;
 -- recursive call of a trigger mustn't corrupt TD (bug #18456)
 CREATE TABLE recursive_trigger_test (a int, b int);
 CREATE FUNCTION recursive_trigger_func() RETURNS trigger
-<<<<<<< HEAD
-LANGUAGE plpythonu
-=======
 LANGUAGE plpython3u
->>>>>>> REL_16_9
 AS $$
 if TD["event"] == "UPDATE":
     plpy.execute("INSERT INTO recursive_trigger_test VALUES (1, 2)")
@@ -616,14 +607,6 @@ CREATE TRIGGER recursive_trigger_trig
 INSERT INTO recursive_trigger_test VALUES (0, 0);
 NOTICE:  TD[event] => INSERT, expecting INSERT
 UPDATE recursive_trigger_test SET a = 11 WHERE b = 0;
-<<<<<<< HEAD
-ERROR:  UPDATE on distributed key column not allowed on relation with update triggers
-SELECT * FROM recursive_trigger_test;
- a | b 
----+---
- 0 | 0
-(1 row)
-=======
 NOTICE:  TD[event] => INSERT, expecting INSERT
 NOTICE:  TD[event] => UPDATE, expecting UPDATE
 SELECT * FROM recursive_trigger_test;
@@ -632,5 +615,4 @@ SELECT * FROM recursive_trigger_test;
  11 | 0
   1 | 2
 (2 rows)
->>>>>>> REL_16_9
 

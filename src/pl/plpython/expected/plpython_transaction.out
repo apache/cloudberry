@@ -200,22 +200,14 @@ SELECT * FROM pg_cursors;
 -- check handling of an error during COMMIT
 CREATE TABLE testpk (id int PRIMARY KEY);
 CREATE TABLE testfk(f1 int REFERENCES testpk DEFERRABLE INITIALLY DEFERRED);
-<<<<<<< HEAD
-DO LANGUAGE plpythonu $$
-=======
 DO LANGUAGE plpython3u $$
->>>>>>> REL_16_9
 # this insert will fail during commit:
 plpy.execute("INSERT INTO testfk VALUES (0)")
 plpy.commit()
 plpy.warning('should not get here')
 $$;
-<<<<<<< HEAD
-ERROR:  spiexceptions.FaultInject: fault triggered, fault name:'after_trigger_fire_deferred' fault type:'error'
-=======
 ERROR:  spiexceptions.ForeignKeyViolation: insert or update on table "testfk" violates foreign key constraint "testfk_f1_fkey"
 DETAIL:  Key (f1)=(0) is not present in table "testpk".
->>>>>>> REL_16_9
 CONTEXT:  Traceback (most recent call last):
   PL/Python anonymous code block, line 4, in <module>
     plpy.commit()
@@ -230,11 +222,7 @@ SELECT * FROM testfk;
 ----
 (0 rows)
 
-<<<<<<< HEAD
-DO LANGUAGE plpythonu $$
-=======
 DO LANGUAGE plpython3u $$
->>>>>>> REL_16_9
 # this insert will fail during commit:
 plpy.execute("INSERT INTO testfk VALUES (0)")
 try:
@@ -245,11 +233,7 @@ except Exception as e:
 plpy.execute("INSERT INTO testpk VALUES (1)")
 plpy.execute("INSERT INTO testfk VALUES (1)")
 $$;
-<<<<<<< HEAD
-INFO:  sqlstate: XX009
-=======
 INFO:  sqlstate: 23503
->>>>>>> REL_16_9
 SELECT * FROM testpk;
  id 
 ----

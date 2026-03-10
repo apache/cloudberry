@@ -483,11 +483,7 @@ SELECT * FROM trigger_test_generated;
 CREATE TABLE recursive_trigger_test (a int, b int);
 
 CREATE FUNCTION recursive_trigger_func() RETURNS trigger
-<<<<<<< HEAD
-LANGUAGE plpythonu
-=======
 LANGUAGE plpython3u
->>>>>>> REL_16_9
 AS $$
 if TD["event"] == "UPDATE":
     plpy.execute("INSERT INTO recursive_trigger_test VALUES (1, 2)")

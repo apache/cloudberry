@@ -9,24 +9,15 @@ msgid ""
 msgstr ""
 "Project-Id-Version: pltcl (PostgreSQL) 15\n"
 "Report-Msgid-Bugs-To: pgsql-bugs@lists.postgresql.org\n"
-<<<<<<< HEAD
-"POT-Creation-Date: 2021-07-21 05:08+0000\n"
-"PO-Revision-Date: 2021-07-21 09:41+0200\n"
-=======
 "POT-Creation-Date: 2023-04-14 09:08+0000\n"
 "PO-Revision-Date: 2023-04-14 15:05+0200\n"
->>>>>>> REL_16_9
 "Last-Translator: Georgios Kokolatos <gkokolatos@pm.me>\n"
 "Language-Team: \n"
 "Language: el\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-<<<<<<< HEAD
-"X-Generator: Poedit 3.0\n"
-=======
 "X-Generator: Poedit 3.2.2\n"
->>>>>>> REL_16_9
 
 #: pltcl.c:463
 msgid "PL/Tcl function to call once when pltcl is first used."

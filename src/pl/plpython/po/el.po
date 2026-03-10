@@ -9,13 +9,8 @@ msgid ""
 msgstr ""
 "Project-Id-Version: plpython (PostgreSQL) 14\n"
 "Report-Msgid-Bugs-To: pgsql-bugs@lists.postgresql.org\n"
-<<<<<<< HEAD
-"POT-Creation-Date: 2021-07-15 06:08+0000\n"
-"PO-Revision-Date: 2021-07-15 09:57+0200\n"
-=======
 "POT-Creation-Date: 2023-08-15 13:38+0000\n"
 "PO-Revision-Date: 2023-08-15 16:14+0200\n"
->>>>>>> REL_16_9
 "Last-Translator: Georgios Kokolatos <gkokolatos@pm.me>\n"
 "Language-Team: \n"
 "Language: el\n"
@@ -23,11 +18,7 @@ msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=2; plural=n != 1;\n"
-<<<<<<< HEAD
-"X-Generator: Poedit 2.4.3\n"
-=======
 "X-Generator: Poedit 3.3.2\n"
->>>>>>> REL_16_9
 
 #: plpy_cursorobject.c:72
 #, c-format
@@ -165,29 +156,11 @@ msgstr "TD[«new»] διαγράφηκε, δεν είναι δυνατή η με
 #, c-format
 msgid "TD[\"new\"] is not a dictionary"
 msgstr "TD[«new»] δεν είναι ένα λεξικό"
-<<<<<<< HEAD
-
-#: plpy_exec.c:942
-#, c-format
-msgid "TD[\"new\"] dictionary key at ordinal position %d is not a string"
-msgstr "TD[«new»] κλειδί λεξικού στη τακτή θέση %d δεν είναι μία συμβολοσειρά"
-
-#: plpy_exec.c:949
-#, c-format
-msgid "key \"%s\" found in TD[\"new\"] does not exist as a column in the triggering row"
-msgstr "κλειδί «%s» που βρίσκεται στο TD[\"New\"] δεν υπάρχει ως στήλη στη γραμμή εναύσματος"
-
-#: plpy_exec.c:954
-#, c-format
-msgid "cannot set system attribute \"%s\""
-msgstr "δεν είναι δυνατός ο ορισμός του χαρακτηριστικού συστήματος «%s»"
-=======
 
 #: plpy_exec.c:954
 #, c-format
 msgid "TD[\"new\"] dictionary key at ordinal position %d is not a string"
 msgstr "TD[«new»] κλειδί λεξικού στη τακτή θέση %d δεν είναι μία συμβολοσειρά"
->>>>>>> REL_16_9
 
 #: plpy_exec.c:961
 #, c-format
