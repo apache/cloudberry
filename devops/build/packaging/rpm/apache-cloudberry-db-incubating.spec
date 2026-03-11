@@ -165,11 +165,6 @@ ln -sfn %{cloudberry_install_dir}-%{version} %{buildroot}%{cloudberry_install_di
 %{prefix}-%{version}
 %{prefix}
 
-%license %{cloudberry_install_dir}-%{version}/LICENSE
-%doc %{cloudberry_install_dir}-%{version}/NOTICE
-%doc %{cloudberry_install_dir}-%{version}/DISCLAIMER
-%{cloudberry_install_dir}-%{version}/licenses/
-
 %debug_package
 
 %post

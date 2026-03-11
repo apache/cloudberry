@@ -128,6 +128,9 @@ mkdir -p ~/rpmbuild/SOURCES
 # Find project root (assumed to be four levels up from scripts directory: devops/build/packaging/rpm/)
 PROJECT_ROOT="$(cd "$(dirname "$0")/../../../../" && pwd)"
 
+# Define the target spec file path
+SPEC_FILE=~/rpmbuild/SPECS/apache-cloudberry-db-incubating.spec
+
 # Copy the spec file to rpmbuild/SPECS if the source exists and is different
 if [ -f "$SOURCE_SPEC_FILE" ]; then
   # Avoid copying if SPEC_FILE is already a symlink/file pointing to SOURCE_SPEC_FILE (common in CI)
@@ -153,9 +156,6 @@ if [ -d "$PROJECT_ROOT/licenses" ]; then
 else
     echo "Warning: licenses directory not found in $PROJECT_ROOT"
 fi
-
-# Define the target spec file path
-SPEC_FILE=~/rpmbuild/SPECS/apache-cloudberry-db-incubating.spec
 
 # Check if the spec file exists at the target location before proceeding
 if [ ! -f "$SPEC_FILE" ]; then
