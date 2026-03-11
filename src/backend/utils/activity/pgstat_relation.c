@@ -22,6 +22,7 @@
 #include "catalog/partition.h"
 #include "libpq-int.h"
 #include "postmaster/autovacuum.h"
+#include "utils/hsearch.h"
 #include "utils/memutils.h"
 #include "utils/pgstat_internal.h"
 #include "utils/rel.h"
@@ -985,10 +986,18 @@ pgstat_combine_from_qe(CdbDispatchResults *primaryResults)
 	int		i,
 			j;
 	int		nest_level = GetCurrentTransactionNestLevel();
-	List   *zeroed_rels = NIL;
+	HASHCTL	hctl;
+	HTAB   *zeroed_rels;
 
 	if (primaryResults == NULL)
 		return;
+
+	/* Use a hash table for O(1) lookup instead of O(N) list scan */
+	hctl.keysize = sizeof(Oid);
+	hctl.entrysize = sizeof(Oid);
+	hctl.hcxt = CurrentMemoryContext;
+	zeroed_rels = hash_create("pgstat_combine zeroed_rels", 64, &hctl,
+							  HASH_ELEM | HASH_BLOBS | HASH_CONTEXT);
 
 	for (i = 0; i < primaryResults->resultCount; i++)
 	{
@@ -1040,13 +1049,13 @@ pgstat_combine_from_qe(CdbDispatchResults *primaryResults)
 				trans = tabstat->trans;
 
 				/* Zero on first encounter to undo previous merge */
-				if (!list_member_oid(zeroed_rels, rec->t_id))
+				if (!hash_search(zeroed_rels, &rec->t_id, HASH_FIND, NULL))
 				{
 					trans->tuples_inserted = 0;
 					trans->tuples_updated = 0;
 					trans->tuples_deleted = 0;
 					trans->truncdropped = false;
-					zeroed_rels = lappend_oid(zeroed_rels, rec->t_id);
+					hash_search(zeroed_rels, &rec->t_id, HASH_ENTER, NULL);
 				}
 
 				/* Accumulate QE counts from this segment */
@@ -1059,5 +1068,5 @@ pgstat_combine_from_qe(CdbDispatchResults *primaryResults)
 		}
 	}
 
-	list_free(zeroed_rels);
+	hash_destroy(zeroed_rels);
 }

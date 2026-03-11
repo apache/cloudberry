@@ -1496,15 +1496,16 @@ exec_mpp_query(const char *query_string,
 
 		(*receiver->rDestroy) (receiver);
 
-		PortalDrop(portal, false);
-
 		/*
-		 * GPDB: Send pending relation stats to QD before closing the
-		 * transaction.  The stats are in pgStatXactStack (transaction-level
-		 * counts); finish_xact_command() will call AtEOXact_PgStat() which
-		 * NULLs pgStatXactStack, so we must capture the stats first.
+		 * GPDB: Send pending relation stats to QD before PortalDrop and
+		 * finish_xact_command().  The stats are in pgStatXactStack
+		 * (transaction-level counts); finish_xact_command() calls
+		 * AtEOXact_PgStat() which NULLs pgStatXactStack.  We also send
+		 * before PortalDrop to avoid any subtransaction cleanup side effects.
 		 */
 		pgstat_send_qd_tabstats();
+
+		PortalDrop(portal, false);
 
 		/*
 		 * Close down transaction statement before reporting command-complete.
