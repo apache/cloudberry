@@ -139,10 +139,29 @@ export CBDB_PKG_VERSION=${CBDB_FULL_VERSION}-${BUILD_NUMBER}-${OS_DISTRO}
 # Check if required commands are available
 check_commands
 
-# Define the control file path
-CONTROL_FILE=debian/control
+# Find project root (assumed to be four levels up from scripts directory: devops/build/packaging/deb/)
+PROJECT_ROOT="$(cd "$(dirname "$0")/../../../../" && pwd)"
 
-# Check if the spec file exists
+# Define where the debian metadata is located
+DEBIAN_SRC_DIR="$(dirname "$0")/${OS_DISTRO}"
+
+# Prepare the debian directory at the project root (required by dpkg-buildpackage)
+if [ -d "$DEBIAN_SRC_DIR" ]; then
+    echo "Preparing debian directory from $DEBIAN_SRC_DIR..."
+    mkdir -p "$PROJECT_ROOT/debian"
+    # Use /. to copy directory contents if target exists instead of nested directories
+    cp -rf "$DEBIAN_SRC_DIR"/. "$PROJECT_ROOT/debian/"
+else
+    if [ ! -d "$PROJECT_ROOT/debian" ]; then
+        echo "Error: Debian metadata not found at $DEBIAN_SRC_DIR and no debian/ directory exists at root."
+        exit 1
+    fi
+fi
+
+# Define the control file path (at the project root)
+CONTROL_FILE="$PROJECT_ROOT/debian/control"
+
+# Check if the control file exists
 if [ ! -f "$CONTROL_FILE" ]; then
   echo "Error: Control file not found at $CONTROL_FILE."
   exit 1
@@ -160,10 +179,15 @@ if [ "${DRY_RUN:-false}" = true ]; then
   exit 0
 fi
 
-# Run debbuild with the provided options
-echo "Building DEB with Version $CBDB_FULL_VERSION ..."
+# Run debbuild from the project root
+echo "Building DEB with Version $CBDB_FULL_VERSION in $PROJECT_ROOT ..."
 
-print_changelog > debian/changelog
+print_changelog > "$PROJECT_ROOT/debian/changelog"
+
+# Only cd if we are not already at the project root
+if [ "$(pwd)" != "$PROJECT_ROOT" ]; then
+    cd "$PROJECT_ROOT"
+fi
 
 if ! eval "$DEBBUILD_CMD"; then
   echo "Error: deb build failed."

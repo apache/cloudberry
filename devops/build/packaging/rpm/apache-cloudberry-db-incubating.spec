@@ -152,6 +152,12 @@ mkdir -p %{buildroot}%{cloudberry_install_dir}-%{version}
 
 cp -R %{cloudberry_install_dir}/* %{buildroot}%{cloudberry_install_dir}-%{version}
 
+# Copy Apache mandatory compliance files from the SOURCES directory into the installation directory
+cp %{_sourcedir}/LICENSE %{buildroot}%{cloudberry_install_dir}-%{version}/
+cp %{_sourcedir}/NOTICE %{buildroot}%{cloudberry_install_dir}-%{version}/
+cp %{_sourcedir}/DISCLAIMER %{buildroot}%{cloudberry_install_dir}-%{version}/
+cp -R %{_sourcedir}/licenses %{buildroot}%{cloudberry_install_dir}-%{version}/
+
 # Create the symbolic link
 ln -sfn %{cloudberry_install_dir}-%{version} %{buildroot}%{cloudberry_install_dir}
 
@@ -160,6 +166,9 @@ ln -sfn %{cloudberry_install_dir}-%{version} %{buildroot}%{cloudberry_install_di
 %{prefix}
 
 %license %{cloudberry_install_dir}-%{version}/LICENSE
+%doc %{cloudberry_install_dir}-%{version}/NOTICE
+%doc %{cloudberry_install_dir}-%{version}/DISCLAIMER
+%{cloudberry_install_dir}-%{version}/licenses/
 
 %debug_package
 

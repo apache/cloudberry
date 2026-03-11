@@ -20,6 +20,13 @@ include /usr/share/dpkg/default.mk
 
 gpinstall:
 	make install DESTDIR=${DEBIAN_DESTINATION} prefix=
+	# Copy Apache compliance files
+	mkdir -p ${DEBIAN_DESTINATION}${CBDB_BIN_PATH}
+	cp -a LICENSE NOTICE DISCLAIMER ${DEBIAN_DESTINATION}${CBDB_BIN_PATH}/
+	cp -a licenses ${DEBIAN_DESTINATION}${CBDB_BIN_PATH}/
+	# Create debian/copyright for Debian policy compliance
+	mkdir -p $(shell pwd)/debian
+	cat LICENSE NOTICE > $(shell pwd)/debian/copyright
 
 override_dh_auto_install: gpinstall
 	# the staging directory for creating a debian is NOT the right GPHOME.
