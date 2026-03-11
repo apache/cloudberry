@@ -53,7 +53,7 @@ ENV LC_ALL=en_US.UTF-8
 # Cloudberry environment variables
 ENV GPHOME=/usr/local/cloudberry-db
 ENV PATH=$GPHOME/bin:$PATH
-ENV LD_LIBRARY_PATH=$GPHOME/lib:$LD_LIBRARY_PATH
+ENV LD_LIBRARY_PATH=$GPHOME/lib
 ENV COORDINATOR_DATA_DIRECTORY=/data0/database/coordinator/gpseg-1
 
 # Runtime dependencies (keep aligned with devops/sandbox/Dockerfile.*.rockylinux9 where possible)
