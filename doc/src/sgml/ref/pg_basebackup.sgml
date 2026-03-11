@@ -100,13 +100,7 @@ PostgreSQL documentation
     <listitem>
      <para>
       All WAL records required for the backup must contain sufficient full-page writes,
-<<<<<<< HEAD
-      which requires you to enable <varname>full_page_writes</varname> on the coordinator and
-      not to use a tool like <application>pg_compresslog</application> as
-      <varname>archive_command</varname> to remove full-page writes from WAL files.
-=======
       which requires you to enable <varname>full_page_writes</varname> on the primary.
->>>>>>> REL_16_9
      </para>
     </listitem>
    </itemizedlist>

@@ -1183,13 +1183,6 @@ gen_random_uuid() returns uuid
     versions, the legacy provider must be activated in the
     <filename>openssl.cnf</filename> configuration file in order to use older
     ciphers like DES or Blowfish.
-<<<<<<< HEAD
-   </para>
-
-   <para>
-    Notes:
-=======
->>>>>>> REL_16_9
    </para>
   </sect3>
 

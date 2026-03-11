@@ -70,8 +70,6 @@ ALTER SUBSCRIPTION <replaceable class="parameter">name</replaceable> RENAME TO <
    <command>ALTER SUBSCRIPTION ... {SET|ADD|DROP} PUBLICATION ...</command>
    with <literal>refresh</literal> option as <literal>true</literal> cannot be
    executed inside a transaction block.
-<<<<<<< HEAD
-=======
 
    These commands also cannot be executed when the subscription has
    <link linkend="sql-createsubscription-with-two-phase"><literal>two_phase</literal></link>
@@ -80,7 +78,6 @@ ALTER SUBSCRIPTION <replaceable class="parameter">name</replaceable> RENAME TO <
    is <literal>false</literal>. See column <structfield>subtwophasestate</structfield>
    of <link linkend="catalog-pg-subscription"><structname>pg_subscription</structname></link>
    to know the actual two-phase state.
->>>>>>> REL_16_9
   </para>
  </refsect1>
 

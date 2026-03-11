@@ -212,11 +212,7 @@ PostgreSQL documentation
         <command>pg_rewind</command> to return without waiting, which is
         faster, but means that a subsequent operating system crash can leave
         the data directory corrupt.  Generally, this option is useful for
-<<<<<<< HEAD
-        testing but should not be used when creating a production
-=======
         testing but should not be used on a production
->>>>>>> REL_16_9
         installation.
        </para>
       </listitem>

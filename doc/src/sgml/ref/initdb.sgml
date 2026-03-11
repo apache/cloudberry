@@ -189,7 +189,6 @@ PostgreSQL documentation
       </listitem>
      </varlistentry>
 
-<<<<<<< HEAD
      <varlistentry id="app-initdb-cluster-key-command" xreflabel="cluster key command">
       <term><option>-c <replaceable class="parameter">command</replaceable></option></term>
       <term><option>--cluster-key-command=<replaceable class="parameter">command</replaceable></option></term>
@@ -203,9 +202,6 @@ PostgreSQL documentation
      </varlistentry>
 
      <varlistentry>
-=======
-     <varlistentry id="app-initdb-option-pgdata">
->>>>>>> REL_16_9
       <term><option>-D <replaceable class="parameter">directory</replaceable></option></term>
       <term><option>--pgdata=<replaceable class="parameter">directory</replaceable></option></term>
       <listitem>
@@ -293,7 +289,6 @@ PostgreSQL documentation
       </listitem>
      </varlistentry>
 
-<<<<<<< HEAD
      <varlistentry id="app-initdb-file-encryption-method"
       xreflabel="file encryption">
       <term><option>-K <replaceable class="parameter">encryption_method</replaceable></option></term>
@@ -307,9 +302,6 @@ PostgreSQL documentation
      </varlistentry>
 
      <varlistentry>
-=======
-     <varlistentry id="app-initdb-option-locale">
->>>>>>> REL_16_9
       <term><option>--locale=<replaceable>locale</replaceable></option></term>
       <listitem>
        <para>
@@ -397,7 +389,6 @@ PostgreSQL documentation
       </listitem>
      </varlistentry>
 
-<<<<<<< HEAD
      <varlistentry>
       <term><option>-R</option></term>
       <term><option>--authprompt</option></term>
@@ -410,9 +401,6 @@ PostgreSQL documentation
      </varlistentry>
 
      <varlistentry>
-=======
-     <varlistentry id="app-initdb-option-sync-only">
->>>>>>> REL_16_9
       <term><option>-S</option></term>
       <term><option>--sync-only</option></term>
       <listitem>
@@ -437,7 +425,6 @@ PostgreSQL documentation
       </listitem>
      </varlistentry>
 
-<<<<<<< HEAD
      <varlistentry>
       <term><option>-u <replaceable>datadir</replaceable></option></term>
       <term><option>--copy-encryption-keys=<replaceable>datadir</replaceable></option></term>
@@ -451,9 +438,6 @@ PostgreSQL documentation
      </varlistentry>
 
      <varlistentry>
-=======
-     <varlistentry id="app-initdb-option-username">
->>>>>>> REL_16_9
       <term><option>-U <replaceable class="parameter">username</replaceable></option></term>
       <term><option>--username=<replaceable class="parameter">username</replaceable></option></term>
       <listitem>
@@ -491,21 +475,7 @@ PostgreSQL documentation
       </listitem>
      </varlistentry>
 
-<<<<<<< HEAD
-    <varlistentry>
-     <term><option>--text-search-config=<replaceable>CFG</></option></term>
-     <listitem>
-      <para>
-       Sets the default text search configuration.
-       See <xref linkend="guc-default-text-search-config"> for further information.
-      </para>
-     </listitem>
-    </varlistentry>
-
-     <varlistentry>
-=======
      <varlistentry id="app-initdb-option-wal-segsize">
->>>>>>> REL_16_9
       <term><option>--wal-segsize=<replaceable>size</replaceable></option></term>
       <listitem>
        <para>
@@ -563,11 +533,7 @@ PostgreSQL documentation
       </listitem>
      </varlistentry>
 
-<<<<<<< HEAD
-     <varlistentry>
-=======
      <varlistentry id="app-initdb-option-discard-caches">
->>>>>>> REL_16_9
       <term><option>--discard-caches</option></term>
       <listitem>
        <para>
@@ -578,11 +544,7 @@ PostgreSQL documentation
       </listitem>
      </varlistentry>
 
-<<<<<<< HEAD
-     <varlistentry>
-=======
      <varlistentry id="app-initdb-option-l">
->>>>>>> REL_16_9
       <term><option>-L <replaceable class="parameter">directory</replaceable></option></term>
       <listitem>
        <para>

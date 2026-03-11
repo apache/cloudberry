@@ -91,8 +91,6 @@ PostgreSQL documentation
     <listitem>
      <para>
       If a starting point cannot be calculated with the previous method,
-<<<<<<< HEAD
-=======
       and if a replication slot is used, an extra
       <command>READ_REPLICATION_SLOT</command> command is issued to retrieve
       the slot's <literal>restart_lsn</literal> to use as the starting point.
@@ -104,7 +102,6 @@ PostgreSQL documentation
     <listitem>
      <para>
       If a starting point cannot be calculated with the previous method,
->>>>>>> REL_16_9
       the latest WAL flush location is used as reported by the server from
       an <literal>IDENTIFY_SYSTEM</literal> command.
      </para>

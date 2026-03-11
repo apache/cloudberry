@@ -4888,12 +4888,7 @@ int PQsendQuery(PGconn *conn, const char *command);
       </para>
 
       <para>
-<<<<<<< HEAD
-       In pipeline mode, command strings containing more than one SQL command
-       are disallowed.
-=======
        In pipeline mode, this function is disallowed.
->>>>>>> REL_16_9
       </para>
      </listitem>
     </varlistentry>
@@ -5335,12 +5330,8 @@ int PQflush(PGconn *conn);
    While <application>libpq</application>'s pipeline API was introduced in
    <productname>PostgreSQL</productname> 14, it is a client-side feature
    which doesn't require special server support and works on any server
-<<<<<<< HEAD
-   that supports the v3 extended query protocol.
-=======
    that supports the v3 extended query protocol.  For more information see
    <xref linkend="protocol-flow-pipelining"/>.
->>>>>>> REL_16_9
   </para>
 
   <sect2 id="libpq-pipeline-using">
@@ -5353,10 +5344,7 @@ int PQflush(PGconn *conn);
     <xref linkend="libpq-PQpipelineStatus"/> can be used
     to test whether pipeline mode is active.
     In pipeline mode, only <link linkend="libpq-async">asynchronous operations</link>
-<<<<<<< HEAD
-=======
     that utilize the extended query protocol
->>>>>>> REL_16_9
     are permitted, command strings containing multiple SQL commands are
     disallowed, and so is <literal>COPY</literal>.
     Using synchronous command execution functions
@@ -7436,11 +7424,7 @@ defaultNoticeProcessor(void *arg, const char *message)
    <xref linkend="libpq-PQinstanceData"/>,
    <xref linkend="libpq-PQsetInstanceData"/>,
    <xref linkend="libpq-PQresultInstanceData"/> and
-<<<<<<< HEAD
-   <function>PQsetResultInstanceData</function> functions.  Note that
-=======
    <xref linkend="libpq-PQresultSetInstanceData"/> functions.  Note that
->>>>>>> REL_16_9
    unlike the pass-through pointer, instance data of a <structname>PGconn</structname>
    is not automatically inherited by <structname>PGresult</structname>s created from
    it.  <application>libpq</application> does not know what pass-through

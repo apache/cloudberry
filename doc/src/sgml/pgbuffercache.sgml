@@ -22,16 +22,10 @@
  </indexterm>
 
  <para>
-<<<<<<< HEAD
-  The module provides the <function>pg_buffercache_pages()</function>
-  function, wrapped in the <structname>pg_buffercache</structname> view, and
-  the <function>pg_buffercache_summary()</function> function.
-=======
   This module provides the <function>pg_buffercache_pages()</function>
   function (wrapped in the <structname>pg_buffercache</structname> view),
   the <function>pg_buffercache_summary()</function> function, and the
   <function>pg_buffercache_usage_counts()</function> function.
->>>>>>> REL_16_9
  </para>
 
  <para>
@@ -47,15 +41,12 @@
  </para>
 
  <para>
-<<<<<<< HEAD
-=======
   The <function>pg_buffercache_usage_counts()</function> function returns a set
   of records, each row describing the number of buffers with a given usage
   count.
  </para>
 
  <para>
->>>>>>> REL_16_9
   By default, use is restricted to superusers and roles with privileges of the
   <literal>pg_monitor</literal> role. Access may be granted to others
   using <command>GRANT</command>.
@@ -196,16 +187,6 @@
   </para>
  </sect2>
 
-<<<<<<< HEAD
- <sect2>
-  <title>The <function>pg_buffercache_summary()</function> Function</title>
-
-  <para>
-   The definitions of the columns exposed by the function are shown in <xref linkend="pgbuffercache_summary-columns"/>.
-  </para>
-
-  <table id="pgbuffercache_summary-columns">
-=======
  <sect2 id="pgbuffercache-summary">
   <title>The <function>pg_buffercache_summary()</function> Function</title>
 
@@ -214,7 +195,6 @@
   </para>
 
   <table id="pgbuffercache-summary-columns">
->>>>>>> REL_16_9
    <title><function>pg_buffercache_summary()</function> Output Columns</title>
    <tgroup cols="1">
     <thead>
@@ -234,11 +214,7 @@
        <structfield>buffers_used</structfield> <type>int4</type>
       </para>
       <para>
-<<<<<<< HEAD
-       Number of unused shared buffers
-=======
        Number of used shared buffers
->>>>>>> REL_16_9
       </para></entry>
      </row>
 
@@ -274,11 +250,7 @@
        <structfield>usagecount_avg</structfield> <type>float8</type>
       </para>
       <para>
-<<<<<<< HEAD
-       Average usagecount of used shared buffers
-=======
        Average usage count of used shared buffers
->>>>>>> REL_16_9
       </para></entry>
      </row>
     </tbody>
@@ -301,9 +273,6 @@
   </para>
  </sect2>
 
-<<<<<<< HEAD
- <sect2>
-=======
  <sect2 id="pgbuffercache-usage-counts">
   <title>The <function>pg_buffercache_usage_counts()</function> Function</title>
 
@@ -383,7 +352,6 @@
  </sect2>
 
  <sect2 id="pgbuffercache-sample-output">
->>>>>>> REL_16_9
   <title>Sample Output</title>
 
 <screen>
@@ -417,8 +385,6 @@ regression=# SELECT * FROM pg_buffercache_summary();
 --------------+----------------+---------------+----------------+----------------
           248 |        2096904 |            39 |              0 |       3.141129
 (1 row)
-<<<<<<< HEAD
-=======
 
 
 regression=# SELECT * FROM pg_buffercache_usage_counts();
@@ -431,7 +397,6 @@ regression=# SELECT * FROM pg_buffercache_usage_counts();
            4 |       9 |     7 |      0
            5 |     164 |   106 |      0
 (6 rows)
->>>>>>> REL_16_9
 </screen>
  </sect2>
 

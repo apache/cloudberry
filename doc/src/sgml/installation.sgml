@@ -221,15 +221,7 @@ documentation.  See standalone-profile.xsl for details.
       language, you need a <productname>Python</productname>
       installation with the header files and
       the <application>sysconfig</application> module.  The minimum
-<<<<<<< HEAD
-      required version is <productname>Python</productname> 2.7.
-      <productname>Python 3</productname> is supported if it's
-      version 3.2 or later; but see
-      <xref linkend="plpython-python23"/>
-      when using Python 3.
-=======
       required version is <productname>Python</productname> 3.2.
->>>>>>> REL_16_9
      </para>
 
      <para>

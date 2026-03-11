@@ -376,15 +376,9 @@ PostgreSQL documentation
        </para>
        <para>
         Requesting exclusive locks on database objects while running a parallel dump could
-<<<<<<< HEAD
-        cause the dump to fail. The reason is that the <application>pg_dump</application> coordinator process
-        requests shared locks on the objects that the worker processes are going to dump later
-        in order to
-=======
         cause the dump to fail. The reason is that the <application>pg_dump</application> leader process
         requests shared locks (<link linkend="locking-tables">ACCESS SHARE</link>) on the
         objects that the worker processes are going to dump later in order to
->>>>>>> REL_16_9
         make sure that nobody deletes them and makes them go away while the dump is running.
         If another client then requests an exclusive lock on a table, that lock will not be
         granted but will be queued waiting for the shared lock of the coordinator process to be
@@ -409,19 +403,6 @@ PostgreSQL documentation
         different worker jobs wouldn't be guaranteed to see the same data in
         each connection, which could lead to an inconsistent backup.
        </para>
-<<<<<<< HEAD
-       <para>
-        If you want to run a parallel dump of a pre-9.2 server, you need to make sure that the
-        database content doesn't change from between the time the coordinator connects to the
-        database until the last worker job has connected to the database. The easiest way to
-        do this is to halt any data modifying processes (DDL and DML) accessing the database
-        before starting the backup. You also need to specify the
-        <option>--no-synchronized-snapshots</option> parameter when running
-        <command>pg_dump -j</command> against a pre-9.2 <productname>PostgreSQL</productname>
-        server.
-       </para>
-=======
->>>>>>> REL_16_9
       </listitem>
      </varlistentry>
 

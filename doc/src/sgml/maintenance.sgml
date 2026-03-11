@@ -792,18 +792,11 @@ HINT:  Stop the postmaster and vacuum that database in single-user mode.
      As a safety device, an aggressive vacuum scan will
      occur for any table whose multixact-age is greater than <xref
      linkend="guc-autovacuum-multixact-freeze-max-age"/>.  Also, if the
-<<<<<<< HEAD
-     storage occupied by multixacts members exceeds 2GB, aggressive vacuum
-     scans will occur more often for all tables, starting with those that
-     have the oldest multixact-age.  Both of these kinds of aggressive
-     scans will occur even if autovacuum is nominally disabled.
-=======
      storage occupied by multixacts members exceeds about 10GB, aggressive vacuum
      scans will occur more often for all tables, starting with those that
      have the oldest multixact-age.  Both of these kinds of aggressive
      scans will occur even if autovacuum is nominally disabled. The members storage
      area can grow up to about 20GB before reaching wraparound.
->>>>>>> REL_16_9
     </para>
 
     <para>
@@ -951,12 +944,6 @@ analyze threshold = analyze base threshold + analyze scale factor * number of tu
    </para>
 
    <para>
-<<<<<<< HEAD
-    Partitioned tables are not processed by autovacuum.  Statistics
-    should be collected by running a manual <command>ANALYZE</command> when it is
-    first populated, and again whenever the distribution of data in its
-    partitions changes significantly.
-=======
     Partitioned tables do not directly store tuples and consequently
     are not processed by autovacuum.  (Autovacuum does process table
     partitions just like other tables.)  Unfortunately, this means that
@@ -966,7 +953,6 @@ analyze threshold = analyze base threshold + analyze scale factor * number of tu
     manually running <command>ANALYZE</command> on partitioned tables
     when they are first populated, and again whenever the distribution
     of data in their partitions changes significantly.
->>>>>>> REL_16_9
    </para>
 
    <para>

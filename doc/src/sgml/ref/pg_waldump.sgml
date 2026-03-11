@@ -181,8 +181,6 @@ PostgreSQL documentation
         "<literal>###</literal>" is the three-digit resource manager ID. Names
         of this form will always be considered valid.
        </para>
-<<<<<<< HEAD
-=======
       </listitem>
      </varlistentry>
 
@@ -196,7 +194,6 @@ PostgreSQL documentation
         separated by slashes, for example <literal>1234/12345/12345</literal>.
         This is the same format used for relations in the program's output.
        </para>
->>>>>>> REL_16_9
       </listitem>
      </varlistentry>
 

@@ -693,11 +693,7 @@ OPTIONS (ADD password_required 'false');
      </listitem>
     </varlistentry>
     <varlistentry>
-<<<<<<< HEAD
-     <term><literal>import_generated</literal></term>
-=======
      <term><literal>import_generated</literal> (<type>boolean</type>)</term>
->>>>>>> REL_16_9
      <listitem>
       <para>
        This option controls whether column <literal>GENERATED</literal> expressions
@@ -709,11 +705,7 @@ OPTIONS (ADD password_required 'false');
      </listitem>
     </varlistentry>
     <varlistentry>
-<<<<<<< HEAD
-     <term><literal>import_not_null</literal></term>
-=======
      <term><literal>import_not_null</literal> (<type>boolean</type>)</term>
->>>>>>> REL_16_9
      <listitem>
       <para>
        This option controls whether column <literal>NOT NULL</literal>

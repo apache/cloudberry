@@ -2016,8 +2016,6 @@ include_dir 'conf.d'
         that has no effect on the number of dead tuples that autovacuum can
         collect while scanning a table.
        </para>
-<<<<<<< HEAD
-=======
       </listitem>
      </varlistentry>
 
@@ -2048,7 +2046,6 @@ include_dir 'conf.d'
         setting may cause too many other useful pages to be evicted from
         shared buffers.
        </para>
->>>>>>> REL_16_9
       </listitem>
      </varlistentry>
 
@@ -2898,14 +2895,8 @@ include_dir 'conf.d'
         In fact, the server will not even start in this mode if
         <varname>max_wal_senders</varname> is non-zero.
         Note that changing <varname>wal_level</varname> to
-<<<<<<< HEAD
-        <literal>minimal</literal> makes any base backups taken before
-        unavailable for archive recovery and standby server, which may
-        lead to data loss. Cluster file encryption also does not support.
-=======
         <literal>minimal</literal> makes previous base backups unusable
         for point-in-time recovery and standby servers.
->>>>>>> REL_16_9
        </para>
        <para>
         In <literal>logical</literal> level, the same information is logged as
@@ -8105,14 +8096,6 @@ COPY postgres_log FROM '/full/path/to/logfile.csv' WITH csv;
         Enables the collection of information on the currently
         executing command of each session, along with its identifier and the
         time when that command began execution. This parameter is on by
-<<<<<<< HEAD
-        default. Note that even when enabled, this information is not
-        visible to all users, only to superusers, roles with privileges of the
-        <literal>pg_read_all_stats</literal> role and the user owning the
-        sessions being reported on (including sessions belonging to a role they
-        have the privileges of), so it should not represent a security risk.
-        Only superusers can change this setting.
-=======
         default. Note that even when enabled, this information is only
         visible to superusers, roles with privileges of the
         <literal>pg_read_all_stats</literal> role and the user owning the
@@ -8120,7 +8103,6 @@ COPY postgres_log FROM '/full/path/to/logfile.csv' WITH csv;
         have the privileges of), so it should not represent a security risk.
         Only superusers and users with the appropriate <literal>SET</literal>
         privilege can change this setting.
->>>>>>> REL_16_9
        </para>
       </listitem>
      </varlistentry>

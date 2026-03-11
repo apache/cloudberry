@@ -426,11 +426,7 @@ CREATE FUNCTION make_pair (name text, value integer)
 AS $$
   return ( name, value )
   # or alternatively, as list: return [ name, value ]
-<<<<<<< HEAD
-$$ LANGUAGE plpythonu;
-=======
 $$ LANGUAGE plpython3u;
->>>>>>> REL_16_9
 </programlisting>
 
        To return an SQL null for any column, insert <symbol>None</symbol> at

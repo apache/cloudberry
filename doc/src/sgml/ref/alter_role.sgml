@@ -196,38 +196,7 @@ ALTER ROLE <replaceable class="parameter">name</replaceable> RESOURCE GROUP {<re
       </listitem>
      </varlistentry>
 
-<<<<<<< HEAD
-     <varlistentry>
-      <term><literal>RESOURCE GROUP</> <replaceable class="parameter">group_name</replaceable></term>
-      <listitem>
-       <para>
-        The name of the resource group to assign to this role. Specifying
-        <replaceable>group_name</replaceable> <literal>NONE</literal> removes the role's
-        current resource group assignment and assigns a default resource
-        group based on the role's capability. <literal>SUPERUSER</literal> roles are assigned
-        the <literal>admin_group</literal> resource group, while the <literal>default_group</literal> resource
-        group is assigned to non-admin roles. See <xref linkend="sql-createresourcegroup"
-        endterm="sql-createresourcegroup-title"> for more information.
-       </para>
-      </listitem>
-     </varlistentry>
-
-     <varlistentry>
-      <term><literal>RESOURCE QUEUE</> <replaceable class="parameter">queue_name</replaceable></term>
-      <listitem>
-       <para>
-        The <literal>RESOURCE QUEUE</literal> that this role is in, or 
-        <literal>NONE</literal> to remove the role from any resource queuing 
-        restrictions. See <xref linkend="sql-createresourcequeue" 
-        endterm="sql-createresourcequeue-title"> for more information.
-       </para>
-      </listitem>
-     </varlistentry>
-
-     <varlistentry>
-=======
      <varlistentry id="sql-alterrole-params-new-name">
->>>>>>> REL_16_9
       <term><replaceable>new_name</replaceable></term>
       <listitem>
        <para>

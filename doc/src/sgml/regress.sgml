@@ -384,11 +384,7 @@ make check LANG=C ENCODING=EUC_JP
     set in the <varname>PGOPTIONS</varname> environment variable (for settings
     that allow this):
 <screen>
-<<<<<<< HEAD
-make check PGOPTIONS="-c force_parallel_mode=regress -c work_mem=50MB"
-=======
 make check PGOPTIONS="-c debug_parallel_query=regress -c work_mem=50MB"
->>>>>>> REL_16_9
 </screen>
     When running against a temporary installation, custom settings can also be
     set by supplying a pre-written <filename>postgresql.conf</filename>:
@@ -783,13 +779,9 @@ make check PROVE_TESTS='t/001_test1.pl t/003_test3.pl'
 
    <para>
     The TAP tests require the Perl module <literal>IPC::Run</literal>.
-<<<<<<< HEAD
-    This module is available from CPAN or an operating system package.
-=======
     This module is available from
     <ulink url="https://metacpan.org/dist/IPC-Run">CPAN</ulink>
     or an operating system package.
->>>>>>> REL_16_9
     They also require <productname>PostgreSQL</productname> to be
     configured with the option <option>--enable-tap-tests</option>.
    </para>

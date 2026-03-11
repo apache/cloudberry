@@ -823,12 +823,6 @@ PostgreSQL documentation
   </para>
 
   <para>
-<<<<<<< HEAD
-   <application>pg_dump</application> also supports a
-   <literal>--binary-upgrade</> option for upgrade utility usage.
-  </para>
-
-=======
    It is generally recommended to use the <option>-X</option>
    (<option>--no-psqlrc</option>) option when restoring a database from a
    <application>pg_dumpall</application> script to ensure a clean restore
@@ -838,7 +832,6 @@ PostgreSQL documentation
    include <application>psql</application> meta-commands, it may be
    incompatible with clients other than <application>psql</application>.
   </para>
->>>>>>> REL_16_9
  </refsect1>
 
 
