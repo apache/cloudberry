@@ -1874,6 +1874,11 @@ dropdb(const char *dbname, bool missing_ok, bool force)
 	dropDatabaseDependencies(db_id);
 
 	/*
+	 * Tell the cumulative stats system to forget it immediately, too.
+	 */
+	pgstat_drop_database(db_id);
+
+	/*
 	 * Drop db-specific replication slots.
 	 */
 	ReplicationSlotsDropDBSlots(db_id);
