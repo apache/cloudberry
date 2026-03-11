@@ -1,0 +1,49 @@
+#!/usr/bin/make -f
+
+DH_VERBOSE = 1
+DPKG_EXPORT_BUILDFLAGS = 1
+
+CBDB_BIN_PATH := /usr/local/cloudberry-db
+DEBIAN_DESTINATION := $(shell pwd)/debian/build
+
+# assumes that CWD is root of cbdb source
+CBDB_PKG_VERSION := $(CBDB_PKG_VERSION)
+PACKAGE_CBDB := $(shell cat debian/control | egrep "^Package: " | cut -d " " -f 2)
+PATH := ${DEBIAN_DESTINATION}/bin:${PATH}
+
+.PHONY: gpinstall
+
+include /usr/share/dpkg/default.mk
+
+%:
+	dh $@ --parallel
+
+gpinstall:
+	make install
+
+override_dh_auto_install: gpinstall
+	# the staging directory for creating a debian is NOT the right GPHOME.
+	# change GPHOME to point to the post-install target install directory.
+	sed -i "s#GPHOME=.*#GPHOME=${CBDB_BIN_PATH}#g" ${DEBIAN_DESTINATION}/cloudberry-env.sh
+
+override_dh_auto_build:
+	echo "Skipping build"
+
+override_dh_auto_clean:
+	echo "Skipping clean"
+
+override_dh_auto_configure:
+	echo "Skipping configure"
+
+override_dh_auto_test:
+	echo "Skipping auto test"
+
+override_dh_gencontrol:
+	echo "using version ${CBDB_PKG_VERSION} for binary Cloudberry"
+	dh_gencontrol -- -v${CBDB_PKG_VERSION} -p${PACKAGE_CBDB}
+
+override_dh_shlibdeps:
+	LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/lib/x86_64-linux-gnu/libfakeroot:${DEBIAN_DESTINATION}/lib dh_shlibdeps --dpkg-shlibdeps-params=--ignore-missing-info
+
+clean_dev_local:
+	rm -rf ${DEBIAN_DESTINATION}

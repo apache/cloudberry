@@ -50,6 +50,7 @@ on:
       - 'devops/deploy/docker/test/rocky8/**'
       - 'devops/deploy/docker/test/rocky9/**'
       - 'devops/deploy/docker/test/ubuntu22.04/**'
+      - 'devops/deploy/docker/test/ubuntu24.04/**'
   pull_request:
     paths:
       - 'devops/deploy/docker/test/**'
@@ -66,8 +67,8 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        # Build for both Rocky Linux 8 and 9, Ubuntu 22.04
-        platform: ['rocky8', 'rocky9', 'ubuntu22.04']
+        # Build for Rocky Linux 8 and 9, Ubuntu 22.04 and 24.04
+        platform: ['rocky8', 'rocky9', 'ubuntu22.04', 'ubuntu24.04']
 
     steps:
       # Checkout repository code
@@ -93,6 +94,8 @@ jobs:
               - 'devops/deploy/docker/test/rocky9/**'
             ubuntu22.04:
               - 'devops/deploy/docker/test/ubuntu22.04/**'
+            ubuntu24.04:
+              - 'devops/deploy/docker/test/ubuntu24.04/**'
 
       # Skip if no changes for current platform
       - name: Skip if not relevant
