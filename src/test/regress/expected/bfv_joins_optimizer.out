@@ -4210,7 +4210,7 @@ ERROR:  FULL JOIN is only supported with merge-joinable or hash-joinable join co
 do $$
 begin 
   for i in 1..20 loop
-    execute 'create table tj' ||  i ||  '(id int)';
+    execute 'create table tj' ||  i ||  '(id int) distributed by (id)';
   end loop; 
 end
 $$;
