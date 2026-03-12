@@ -114,12 +114,21 @@ jobs:
               {"test":"ic-small-opt-off",
                 "make_configs":["src/test/regress:installcheck-small"],
                 "pg_settings":{"optimizer":"off"}
+              },
+              {"test":"ic-greenplum-schedule",
+                "make_configs":["src/test/regress:installcheck-cbdb"],
+                "pg_settings":{"optimizer":"off"}
+              },
+              {"test":"ic-isolation2-basic",
+                "make_configs":["src/test/isolation2:installcheck-isolation2"],
+                "pg_settings":{"optimizer":"off"},
+                "enable_core_check":false
               }
             ]
           }'
           
           # Tests to be added as PG16 support improves:
-          # - ic-good-opt-off: Basic installcheck with optimizer off
+          # - ic-good-opt-off: Basic installcheck with optimizer off (includes greenplum_schedule)
           #   {"test":"ic-good-opt-off",
           #    "make_configs":["src/test/regress:installcheck-good"],
           #    "pg_settings":{"optimizer":"off"}
@@ -129,11 +138,6 @@ jobs:
           #   {"test":"ic-good-opt-on",
           #    "make_configs":["src/test/regress:installcheck-good"],
           #    "pg_settings":{"optimizer":"on"}
-          #   }
-          #
-          # - ic-isolation2: Isolation2 tests
-          #   {"test":"ic-isolation2",
-          #    "make_configs":["src/test/isolation2:installcheck-isolation2"]
           #   }
           #
           # - ic-contrib: Contrib module tests
@@ -146,6 +150,15 @@ jobs:
           #   {"test":"ic-gpcontrib",
           #    "make_configs":["gpcontrib/orafce:installcheck",
           #                    "gpcontrib/gp_toolkit:installcheck"]
+          #   }
+          #
+          # - ic-isolation2-advanced: More isolation2 tests
+          #   {"test":"ic-isolation2-expandshrink",
+          #    "make_configs":["src/test/isolation2:installcheck-expandshrink"]
+          #   }
+          #   {"test":"ic-isolation2-crash",
+          #    "make_configs":["src/test/isolation2:installcheck-isolation2-crash"],
+          #    "enable_core_check":false
           #   }
           
           # Function to apply defaults to test configurations
