@@ -264,7 +264,7 @@ TM_Result CCPaxAccessMethod::TupleUpdate(Relation relation, ItemPointer otid,
                                          Snapshot snapshot, Snapshot crosscheck,
                                          bool wait, TM_FailureData *tmfd,
                                          LockTupleMode *lockmode,
-                                         bool *update_indexes) {
+										 TU_UpdateIndexes *update_indexes) {
   CBDB_TRY();
   {
     MemoryContext old_ctx;
@@ -276,7 +276,7 @@ TM_Result CCPaxAccessMethod::TupleUpdate(Relation relation, ItemPointer otid,
                                       crosscheck, wait, tmfd, lockmode,
                                       update_indexes);
     MemoryContextSwitchTo(old_ctx);
-    if (result == TM_Ok) pgstat_count_heap_update(relation, false);
+    if (result == TM_Ok) pgstat_count_heap_update(relation, false, false);
     return result;
   }
   CBDB_CATCH_DEFAULT();
@@ -765,7 +765,7 @@ static const TableAmRoutine kPaxColumnMethods = {
     .tuple_lock = paxc::PaxAccessMethod::TupleLock,
     .finish_bulk_insert = pax::CCPaxAccessMethod::FinishBulkInsert,
 
-    .relation_set_new_filenode = pax::CCPaxAccessMethod::RelationSetNewFilenode,
+    .relation_set_new_filelocator = pax::CCPaxAccessMethod::RelationSetNewFilenode,
     .relation_nontransactional_truncate =
         pax::CCPaxAccessMethod::RelationNontransactionalTruncate,
     .relation_copy_data = pax::CCPaxAccessMethod::RelationCopyData,

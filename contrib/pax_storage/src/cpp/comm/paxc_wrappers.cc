@@ -96,10 +96,10 @@ void DeletePaxDirectoryPath(const char *dirname, bool delete_topleveldir) {
 
 // BuildPaxDirectoryPath: function used to build pax storage directory path
 // following pg convension, for example base/{database_oid}/{blocks_relid}_pax.
-// parameter rd_node IN relfilenode information.
+// parameter rd_node IN relfilelocator information.
 // parameter rd_backend IN backend transaction id.
 // return palloc'd pax storage directory path.
-char *BuildPaxDirectoryPath(RelFileNode rd_node, BackendId rd_backend) {
+char *BuildPaxDirectoryPath(RelFileLocator rd_node, BackendId rd_backend) {
   char *relpath = NULL;
   char *paxrelpath = NULL;
   relpath = relpathbackend(rd_node, rd_backend, MAIN_FORKNUM);
@@ -472,18 +472,19 @@ bool NeedWAL(Relation rel) {
 
 /**
  * @brief Create a directory for pax storage.
- * 1. Add pending delete for relfilenode/pax directory if abort transaction
- * 2. Add XLOG to create relfilenode/pax directory
- * 3. create relfilenode/pax directory, i.e. data directory.
+ * 1. Add pending delete for relfilelocator/pax directory if abort transaction
+ * 2. Add XLOG to create relfilelocator/pax directory
+ * 3. create relfilelocator/pax directory, i.e. data directory.
  *     This function will do following this function call
  */
-SMgrRelation PaxRelationCreateStorage(RelFileNode rnode, Relation rel)
+SMgrRelation PaxRelationCreateStorage(RelFileLocator rnode, Relation rel)
 {
   if (rel->rd_rel->relpersistence == RELPERSISTENCE_PERMANENT ||
       rel->rd_rel->relpersistence == RELPERSISTENCE_UNLOGGED) {
     paxc::XLogPaxCreateDirectory(rnode);
   }
-  return RelationCreateStorage(rnode, rel->rd_rel->relpersistence, SMGR_PAX, rel);
+  return RelationCreateStorage(rnode, rel->rd_rel->relpersistence, false,
+							   SMGR_PAX, rel);
 }
 
 }  // namespace paxc

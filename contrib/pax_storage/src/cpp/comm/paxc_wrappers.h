@@ -33,7 +33,7 @@ namespace paxc {
 // pax file operation, will refactor it later
 void DeletePaxDirectoryPath(const char *dirname, bool delete_topleveldir);
 void MakedirRecursive(const char *path);
-char *BuildPaxDirectoryPath(RelFileNode rd_node, BackendId rd_backend);
+char *BuildPaxDirectoryPath(RelFileLocator rd_node, BackendId rd_backend);
 bool PGGetOperatorNo(Oid opno, NameData *oprname, Oid *oprleft, Oid *oprright,
                      FmgrInfo *finfo);
 bool PGGetOperator(const char *operatorName, Oid operatorNamespace,
@@ -65,7 +65,7 @@ typedef struct PendingRelDeletePaxFile {
                                       * deleted */
 } PendingRelDeletePaxFile;
 
-SMgrRelation PaxRelationCreateStorage(RelFileNode rnode, Relation rel);
+SMgrRelation PaxRelationCreateStorage(RelFileLocator rnode, Relation rel);
 
 
 }  // namespace paxc

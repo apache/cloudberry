@@ -207,7 +207,7 @@ void PathNameDeleteDir(const char *path, bool delete_topleveldir);
 void MakedirRecursive(const char *path);
 
 // gopher file path must start with '/', so we need to add '/' to the path
-std::string BuildPaxDirectoryPath(RelFileNode rd_node, BackendId rd_backend);
+std::string BuildPaxDirectoryPath(RelFileLocator rd_node, BackendId rd_backend);
 
 std::string BuildPaxFilePath(const char *rel_path, const char *block_id);
 static inline std::string BuildPaxFilePath(const std::string &rel_path,
@@ -271,7 +271,7 @@ void RelOpenSmgr(Relation rel);
 
 void RelCloseSmgr(Relation rel);
 
-void PaxRelationCreateStorage(RelFileNode rnode, Relation rel);
+void PaxRelationCreateStorage(RelFileLocator rnode, Relation rel);
 
 void RelDropStorage(Relation rel);
 

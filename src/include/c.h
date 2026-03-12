@@ -1410,8 +1410,8 @@ extern int	fdatasync(int fildes);
  * strtoimax()/strtoumax() which return intmax_t/uintmax_t.)
  */
 #ifdef HAVE_LONG_INT_64
-#define strtoi64(str, endptr, base) ((int64) strtol(str, endptr, base))
-#define strtou64(str, endptr, base) ((uint64) strtoul(str, endptr, base))
+#define strtoi64(str, endptr, base) strtol(str, endptr, base)
+#define strtou64(str, endptr, base) strtoul(str, endptr, base)
 #else
 #define strtoi64(str, endptr, base) ((int64) strtoll(str, endptr, base))
 #define strtou64(str, endptr, base) ((uint64) strtoull(str, endptr, base))

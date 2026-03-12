@@ -119,7 +119,7 @@ std::unique_ptr<IteratorBase<MicroPartitionMetadata>>
 CPaxDeleter::BuildDeleteIterator() {
   std::vector<pax::MicroPartitionMetadata> micro_partitions;
   auto rel_path = cbdb::BuildPaxDirectoryPath(
-      rel_->rd_node, rel_->rd_backend);
+      rel_->rd_locator, rel_->rd_backend);
   for (auto &it : block_bitmap_map_) {
     std::string block_id = std::to_string(it.first);
     {

@@ -112,7 +112,7 @@ PaxIndexScanDesc::PaxIndexScanDesc(Relation rel) : base_{.rel = rel} {
   Assert(rel);
   Assert(&base_ == reinterpret_cast<IndexFetchTableData *>(this));
   rel_path_ = cbdb::BuildPaxDirectoryPath(
-      rel->rd_node, rel->rd_backend);
+      rel->rd_locator, rel->rd_backend);
 }
 
 PaxIndexScanDesc::~PaxIndexScanDesc() {}

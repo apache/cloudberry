@@ -38,22 +38,22 @@ extern smgr_get_impl_hook_type smgr_get_impl_hook;
 
 namespace paxc {
 
-static void mdunlink_pax(RelFileNodeBackend rnode, ForkNumber forkNumber,
+static void mdunlink_pax(RelFileLocatorBackend rnode, ForkNumber forkNumber,
                          bool isRedo) {
   // remove the data directory of pax table
   // FIXME(gongxun): can work well with dfs_tablespace
   if (forkNumber == MAIN_FORKNUM) {
     const char *path =
-        paxc::BuildPaxDirectoryPath(rnode.node, rnode.backend);
+        paxc::BuildPaxDirectoryPath(rnode.locator, rnode.backend);
     paxc::DeletePaxDirectoryPath(path, true);
 
     if (isRedo) {
-      paxc::XLogForgetRelation(rnode.node);
+      paxc::XLogForgetRelation(rnode.locator);
     }
   }
 
-  // unlink the relfilenode file directly, mdunlink will not remove
-  // the relfilenode file, only truncate it if isRedo is false.
+  // unlink the relfilelocator file directly, mdunlink will not remove
+  // the relfilelocator file, only truncate it if isRedo is false.
   auto relpath = relpath(rnode, MAIN_FORKNUM);
   auto ret = unlink(relpath);
   if (ret == -1 && errno != ENOENT) {

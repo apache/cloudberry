@@ -345,10 +345,10 @@ std::pair<Datum, std::shared_ptr<MemoryObject>> pax_make_toast(
     case TYPSTORAGE_EXTENDED: {
       if (VARATT_CAN_MAKE_PAX_COMPRESSED_TOAST(d) &&
           !VARATT_CAN_MAKE_PAX_EXTERNAL_TOAST(d)) {
-        std::tie(result, mobj) = pax_make_compressed_toast(PointerGetDatum(d));
+        std::tie(result, mobj) = pax_make_compressed_toast(d);
       } else if (VARATT_CAN_MAKE_PAX_EXTERNAL_TOAST(d)) {
         std::tie(result, mobj) =
-            pax_make_external_toast(PointerGetDatum(d), true);
+            pax_make_external_toast(d, true);
       }
       break;
     }
@@ -356,13 +356,13 @@ std::pair<Datum, std::shared_ptr<MemoryObject>> pax_make_toast(
       if (VARATT_CAN_MAKE_PAX_EXTERNAL_TOAST(d)) {
         // should not make compress toast here
         std::tie(result, mobj) =
-            pax_make_external_toast(PointerGetDatum(d), false);
+            pax_make_external_toast(d, false);
       }
       break;
     }
     case TYPSTORAGE_MAIN: {
       if (VARATT_CAN_MAKE_PAX_COMPRESSED_TOAST(d)) {
-        std::tie(result, mobj) = pax_make_compressed_toast(PointerGetDatum(d));
+        std::tie(result, mobj) = pax_make_compressed_toast(d);
       }
 
       break;

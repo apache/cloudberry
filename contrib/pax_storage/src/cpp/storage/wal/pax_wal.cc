@@ -33,20 +33,20 @@
 
 namespace cbdb {
 
-void XLogPaxInsert(RelFileNode node, const char *filename, int64 offset,
+void XLogPaxInsert(RelFileLocator node, const char *filename, int64 offset,
                    void *buffer, int32 bufferLen) {
   CBDB_WRAP_START;
   { paxc::XLogPaxInsert(node, filename, offset, buffer, bufferLen); }
   CBDB_WRAP_END;
 }
 
-void XLogPaxCreateDirectory(RelFileNode node) {
+void XLogPaxCreateDirectory(RelFileLocator node) {
   CBDB_WRAP_START;
   { paxc::XLogPaxCreateDirectory(node); }
   CBDB_WRAP_END;
 }
 
-void XLogPaxTruncate(RelFileNode node) {
+void XLogPaxTruncate(RelFileLocator node) {
   CBDB_WRAP_START;
   { paxc::XLogPaxTruncate(node); }
   CBDB_WRAP_END;

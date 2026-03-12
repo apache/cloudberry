@@ -138,7 +138,7 @@ std::shared_ptr<std::vector<uint8>> LoadVisimap(
 bool TestVisimap(Relation rel, const char *visimap_name, int offset) {
   FileSystem *fs;
   std::shared_ptr<FileSystemOptions> options;
-  auto rel_path = cbdb::BuildPaxDirectoryPath(rel->rd_node, rel->rd_backend);
+  auto rel_path = cbdb::BuildPaxDirectoryPath(rel->rd_locator, rel->rd_backend);
   auto file_path = cbdb::BuildPaxFilePath(rel_path, visimap_name);
   fs = Singleton<LocalFileSystem>::GetInstance();
 

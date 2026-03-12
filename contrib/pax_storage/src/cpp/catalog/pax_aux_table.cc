@@ -492,13 +492,13 @@ void PaxAuxRelationSetNewFilenode(Oid aux_relid) {
   ReindexParams reindex_params = {0};
 
   aux_rel = relation_open(aux_relid, AccessExclusiveLock);
-  RelationSetNewRelfilenode(aux_rel, aux_rel->rd_rel->relpersistence);
+  RelationSetNewRelfilenumber(aux_rel, aux_rel->rd_rel->relpersistence);
   toastrelid = aux_rel->rd_rel->reltoastrelid;
 
   if (OidIsValid(toastrelid)) {
     Relation toast_rel;
     toast_rel = relation_open(toastrelid, AccessExclusiveLock);
-    RelationSetNewRelfilenode(toast_rel, toast_rel->rd_rel->relpersistence);
+    RelationSetNewRelfilenumber(toast_rel, toast_rel->rd_rel->relpersistence);
     relation_close(toast_rel, NoLock);
   }
 
@@ -630,7 +630,7 @@ static void FetchMicroPartitionAuxRowCallback(Datum *values, bool *isnull,
   auto ctx = reinterpret_cast<struct FetchMicroPartitionAuxRowContext *>(arg);
   auto rel = ctx->rel;
   auto rel_path = cbdb::BuildPaxDirectoryPath(
-      rel->rd_node, rel->rd_backend);
+      rel->rd_locator, rel->rd_backend);
 
   Assert(!isnull[ANUM_PG_PAX_BLOCK_TABLES_PTBLOCKNAME]);
   {
@@ -738,24 +738,24 @@ void CCPaxAuxTable::PaxAuxRelationNontransactionalTruncate(Relation rel) {
   // Delete all micro partition file on non-transactional truncate  but reserve
   // top level PAX file directory.
   PaxAuxRelationFileUnlink(
-      rel->rd_node, rel->rd_backend, false,
+      rel->rd_locator, rel->rd_backend, false,
       rel->rd_rel->relpersistence == RELPERSISTENCE_PERMANENT);
 }
 
 void CCPaxAuxTable::PaxAuxRelationCopyData(Relation rel,
-                                           const RelFileNode *newrnode,
+                                           const RelFileLocator *newrnode,
                                            bool createnewpath) {
   PaxCopyAllDataFiles(rel, newrnode, createnewpath);
 }
 
 void CCPaxAuxTable::PaxAuxRelationCopyDataForCluster(Relation old_rel,
                                                      Relation new_rel) {
-  PaxAuxRelationCopyData(old_rel, &new_rel->rd_node, false);
+  PaxAuxRelationCopyData(old_rel, &new_rel->rd_locator, false);
   cbdb::PaxCopyPaxBlockEntry(old_rel, new_rel);
   // TODO(Tony) : here need to implement PAX re-organize semantics logic.
 }
 
-void CCPaxAuxTable::PaxAuxRelationFileUnlink(RelFileNode node,
+void CCPaxAuxTable::PaxAuxRelationFileUnlink(RelFileLocator node,
                                              BackendId backend,
                                              bool delete_topleveldir,
                                              bool need_wal) {
