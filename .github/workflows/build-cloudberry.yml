@@ -509,6 +509,17 @@ jobs:
           # Clean up temporary directory
           rm -rf main-devops
 
+      - name: Install ICU Development Libraries
+        if: needs.check-skip.outputs.should_skip != 'true'
+        run: |
+          set -eo pipefail
+          
+          echo "Installing ICU development libraries..."
+          sudo dnf install -y libicu-devel
+          
+          echo "ICU libraries installed successfully"
+          rpm -qa | grep libicu
+
       - name: Cloudberry Environment Initialization
         if: needs.check-skip.outputs.should_skip != 'true'
         env:
