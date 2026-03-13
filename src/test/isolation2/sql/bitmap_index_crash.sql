@@ -49,7 +49,7 @@ create index on test_bitmap using bitmap(type);
 select count(*) from test_bitmap where type = 520;
 
 -- start_ignore
-! gpstop -rai;
+! gpstop -raf;
 -- end_ignore
 
 0: select count(*) from test_bitmap where type = 520;

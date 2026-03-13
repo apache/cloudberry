@@ -413,7 +413,7 @@ INSERT INTO drop_stats_test_xact DEFAULT VALUES;
 SELECT n_tup_ins FROM gp_stat_xact_all_tables_summary where relid = :drop_stats_test_xact_oid;
  n_tup_ins 
 -----------
-         1
+         2
 (1 row)
 
 DROP TABLE drop_stats_test_xact;
@@ -459,7 +459,7 @@ INSERT INTO drop_stats_test_xact DEFAULT VALUES;
 SELECT n_tup_ins FROM gp_stat_xact_all_tables_summary where relid = :drop_stats_test_xact_oid;
  n_tup_ins 
 -----------
-         1
+         2
 (1 row)
 
 DROP TABLE drop_stats_test_xact;
@@ -499,7 +499,7 @@ INSERT INTO drop_stats_test_subxact DEFAULT VALUES;
 SELECT n_tup_ins FROM gp_stat_xact_all_tables_summary where relid = :drop_stats_test_subxact_oid;
  n_tup_ins 
 -----------
-         2
+         4
 (1 row)
 
 SAVEPOINT sp2;
@@ -508,7 +508,7 @@ ROLLBACK TO SAVEPOINT sp2;
 SELECT n_tup_ins FROM gp_stat_xact_all_tables_summary where relid = :drop_stats_test_subxact_oid;
  n_tup_ins 
 -----------
-         2
+         4
 (1 row)
 
 COMMIT;

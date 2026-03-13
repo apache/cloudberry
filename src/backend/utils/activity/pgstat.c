@@ -1772,6 +1772,7 @@ assign_stats_fetch_consistency(int newval, void *extra)
 void
 pgstat_send_qd_tabstats(void)
 {
+	int					nest_level;
 	PgStat_SubXactStatus *xact_state;
 	StringInfoData		buf;
 	PgStatTabRecordFromQE *records;
@@ -1788,8 +1789,12 @@ pgstat_send_qd_tabstats(void)
 	 * current nesting level's per-table insert/update/delete counts.
 	 */
 	xact_state = pgstat_get_current_xact_stack();
-
 	if (xact_state == NULL)
+		return;
+
+	nest_level = GetCurrentTransactionNestLevel();
+
+	if (nest_level != xact_state->nest_level)
 		return;
 
 	records = (PgStatTabRecordFromQE *)

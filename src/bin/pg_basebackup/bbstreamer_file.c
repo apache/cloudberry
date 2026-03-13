@@ -323,12 +323,15 @@ extract_directory(const char *filename, mode_t mode)
 		 * pg_xlog we assume is deleted at the start of
 		 * pg_basebackup. We cannot delete pg_xlog because if
 		 * streammode was used then it may have already copied
-		 * new xlog files into pg_xlog directory.
+		 * new xlog files into pg_xlog directory. Similarly,
+		 * archive_status may have .done files created by the
+		 * WAL streamer child process via mark_file_as_archived().
 		 */
 		if (pg_str_endswith(filename, "/pg_log") ||
 			pg_str_endswith(filename, "/log") ||
 			pg_str_endswith(filename, "/pg_wal") ||
-			pg_str_endswith(filename, "/pg_xlog"))
+			pg_str_endswith(filename, "/pg_xlog") ||
+			pg_str_endswith(filename, "/archive_status"))
 			return;
 
 		rmtree(filename, true);

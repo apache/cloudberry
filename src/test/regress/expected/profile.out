@@ -5,7 +5,7 @@
 SELECT COUNT(*) FROM pg_stat_activity;
  count 
 -------
-    10
+     9
 (1 row)
 
 -- Display pg_authid, pg_roles, pg_profile and pg_password_history catalog

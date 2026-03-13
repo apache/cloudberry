@@ -23,6 +23,10 @@
 -- m/DETAIL:  Found \d+ URLs and \d+ primary segments./
 -- s/Found.+//
 --
+-- # normalize absolute source paths across environments (also handles file:// URIs)
+-- m|/.+/src/test/regress/|
+-- s|/.+/src/test/regress/|/ABSPATH/src/test/regress/|
+--
 -- end_matchsubs
 \getenv abs_srcdir PG_ABS_SRCDIR
 \getenv hostname PG_HOSTNAME
