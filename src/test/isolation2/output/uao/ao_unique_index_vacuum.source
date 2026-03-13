@@ -83,6 +83,14 @@ INSERT 5
 DELETE FROM unique_index_vacuum_@amname@ WHERE i = 5;
 DELETE 1
 
+-- Enable debug logging to diagnose flaky compaction behavior.
+SET debug_appendonly_print_compaction = on;
+SET
+SET debug_appendonly_print_segfile_choice = on;
+SET
+SET debug_appendonly_print_visimap = on;
+SET
+
 select gp_inject_fault_infinite('vacuum_ao_after_index_delete', 'skip', dbid) from gp_segment_configuration where role = 'p' AND content <> -1;
  gp_inject_fault_infinite 
 --------------------------
@@ -91,6 +99,15 @@ select gp_inject_fault_infinite('vacuum_ao_after_index_delete', 'skip', dbid) fr
  Success:                 
 (3 rows)
 
+-- The first VACUUM performs COMPACT (marks old segfile AWAITING_DROP) and
+-- POST_CLEANUP. Due to a race condition, POST_CLEANUP's cutoff XID check in
+-- AppendOptimizedCollectDeadSegments() may find the AWAITING_DROP segment's
+-- xmin too new, resulting in an empty dead_segs bitmap and scan_index() being
+-- called instead of vacuum_appendonly_index() (which has the fault injector).
+-- The second VACUUM guarantees the xid is old enough for the dead segment to
+-- be collected, ensuring the fault is triggered.
+VACUUM unique_index_vacuum_@amname@;
+VACUUM
 VACUUM unique_index_vacuum_@amname@;
 VACUUM
 
@@ -111,6 +128,13 @@ SELECT gp_inject_fault_infinite('vacuum_ao_after_index_delete', 'reset', dbid) F
  Success:                 
  Success:                 
 (3 rows)
+
+RESET debug_appendonly_print_compaction;
+RESET
+RESET debug_appendonly_print_segfile_choice;
+RESET
+RESET debug_appendonly_print_visimap;
+RESET
 
 DROP TABLE unique_index_vacuum_@amname@;
 DROP

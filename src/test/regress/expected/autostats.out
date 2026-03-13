@@ -45,8 +45,8 @@ set role=autostats_nonowner;
 LOG:  statement: set role=autostats_nonowner;
 insert into autostats_test select generate_series(1, 10);
 LOG:  statement: insert into autostats_test select generate_series(1, 10);
-LOG:  An exception was encountered during the execution of statement: insert into autostats_test select generate_series(1, 10);
 ERROR:  permission denied for table autostats_test
+LOG:  An exception was encountered during the execution of statement: insert into autostats_test select generate_series(1, 10);
 select relname, reltuples from pg_class where relname='autostats_test';
 LOG:  statement: select relname, reltuples from pg_class where relname='autostats_test';
     relname     | reltuples 
@@ -87,8 +87,8 @@ LOG:  statement: select relname, reltuples from pg_class where relname='autostat
 -- Try to disable allow_nonowner GUC as ordinary user, should fail
 set gp_autostats_allow_nonowner=off;
 LOG:  statement: set gp_autostats_allow_nonowner=off;
-LOG:  An exception was encountered during the execution of statement: set gp_autostats_allow_nonowner=off;
 ERROR:  permission denied to set parameter "gp_autostats_allow_nonowner"
+LOG:  An exception was encountered during the execution of statement: set gp_autostats_allow_nonowner=off;
 show gp_autostats_allow_nonowner;
 LOG:  statement: show gp_autostats_allow_nonowner;
  gp_autostats_allow_nonowner 

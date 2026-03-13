@@ -23,6 +23,10 @@
 -- m/DETAIL:  Found \d+ URLs and \d+ primary segments./
 -- s/Found.+//
 --
+-- # normalize absolute source paths across environments (also handles file:// URIs)
+-- m|/.+/src/test/regress/|
+-- s|/.+/src/test/regress/|/ABSPATH/src/test/regress/|
+--
 -- end_matchsubs
 \getenv abs_srcdir PG_ABS_SRCDIR
 \getenv hostname PG_HOSTNAME
@@ -323,9 +327,9 @@ create external table badt1 (x text)
 location (:'badt1_file' )
 format 'text' (delimiter '|');
 select * from badt1;
-NOTICE:  gfile stat /home/gpadmin/cloudberry/src/test/regress/data/no/such/place/badt1.tbl failure: No such file or directory  (seg0 slice1 127.0.1.1:7002 pid=26072)
-NOTICE:  fstream unable to open file /home/gpadmin/cloudberry/src/test/regress/data/no/such/place/badt1.tbl  (seg0 slice1 127.0.1.1:7002 pid=26072)
-ERROR:  could not open file "/home/gpadmin/cloudberry/src/test/regress/data/no/such/place/badt1.tbl": 404 file not found  (seg0 slice1 127.0.1.1:7002 pid=26072)
+NOTICE:  gfile stat /ABSPATH/src/test/regress/data/no/such/place/badt1.tbl failure: No such file or directory  (seg0 slice1 127.0.1.1:7002 pid=26072)
+NOTICE:  fstream unable to open file /ABSPATH/src/test/regress/data/no/such/place/badt1.tbl  (seg0 slice1 127.0.1.1:7002 pid=26072)
+ERROR:  could not open file "/ABSPATH/src/test/regress/data/no/such/place/badt1.tbl": 404 file not found  (seg0 slice1 127.0.1.1:7002 pid=26072)
 drop external table badt1;
 --
 -- try a bad protocol
@@ -818,7 +822,7 @@ LOG ERRORS SEGMENT REJECT LIMIT 2;
 SELECT * FROM exttab_basic_3;
 ERROR:  segment reject limit reached, aborting operation  (seg0 slice1 127.0.1.1:7002 pid=26072)
 DETAIL:  Last error was: invalid input syntax for type integer: "error_1", column i
-CONTEXT:  External table exttab_basic_3, line 7 of file://gpadmin/home/gpadmin/cloudberry/src/test/regress/data/exttab_more_errors.data, column i
+CONTEXT:  External table exttab_basic_3, line 7 of file:/ABSPATH/src/test/regress/data/exttab_more_errors.data, column i
 -- Error log should be populated
 select count(*) > 0 from gp_read_error_log('exttab_basic_3');
  ?column? 
@@ -850,7 +854,7 @@ LOG ERRORS SEGMENT REJECT LIMIT 5;
 INSERT INTO exttab_insert_1 select * from exttab_basic_5;
 ERROR:  segment reject limit reached, aborting operation  (seg0 127.0.1.1:7002 pid=26072)
 DETAIL:  Last error was: invalid input syntax for type integer: "error_1", column i
-CONTEXT:  External table exttab_basic_5, line 18 of file://gpadmin/home/gpadmin/cloudberry/src/test/regress/data/exttab_more_errors.data, column i
+CONTEXT:  External table exttab_basic_5, line 18 of file:/ABSPATH/src/test/regress/data/exttab_more_errors.data, column i
 SELECT * from exttab_insert_1 order by i;
  i  |     j     
 ----+-----------
@@ -921,7 +925,7 @@ NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'i'
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 ERROR:  segment reject limit reached, aborting operation  (seg0 slice1 127.0.1.1:7002 pid=26167)
 DETAIL:  Last error was: invalid input syntax for type integer: "error_1", column i
-CONTEXT:  External table exttab_basic_7, line 18 of file://gpadmin/home/gpadmin/cloudberry/src/test/regress/data/exttab_more_errors.data, column i
+CONTEXT:  External table exttab_basic_7, line 18 of file:/ABSPATH/src/test/regress/data/exttab_more_errors.data, column i
 -- Table should not exist
 SELECT * from exttab_ctas_2 order by i;
 ERROR:  relation "exttab_ctas_2" does not exist
@@ -1011,7 +1015,7 @@ WHERE e1.i = e2.i ORDER BY e1.i
 SELECT * FROM cte1 ORDER BY cte1.i;
 ERROR:  segment reject limit reached, aborting operation  (seg0 slice2 127.0.1.1:7002 pid=26190)
 DETAIL:  Last error was: invalid input syntax for type integer: "error_1", column i
-CONTEXT:  External table exttab_cte_2, line 7 of file://gpadmin/home/gpadmin/cloudberry/src/test/regress/data/exttab_more_errors.data, column i
+CONTEXT:  External table exttab_cte_2, line 7 of file:/ABSPATH/src/test/regress/data/exttab_more_errors.data, column i
 select count(*) from gp_read_error_log('exttab_cte_2');
  count 
 -------
@@ -1022,8 +1026,8 @@ select count(*) from gp_read_error_log('exttab_cte_2');
 select gp_read_error_log('exttab_cte_2');
                                                                                                                                         gp_read_error_log                                                                                                                                        
 -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
- ("Fri Jan 02 07:40:32.618206 2026 PST",exttab_cte_2,"file://gpadmin/home/gpadmin/cloudberry/src/test/regress/data/exttab_more_errors.data [/home/gpadmin/cloudberry/src/test/regress/data/exttab_more_errors.data]",5,,"invalid input syntax for type integer: ""error_1"", column i",error_1,)
- ("Fri Jan 02 07:40:32.618206 2026 PST",exttab_cte_2,"file://gpadmin/home/gpadmin/cloudberry/src/test/regress/data/exttab_more_errors.data [/home/gpadmin/cloudberry/src/test/regress/data/exttab_more_errors.data]",7,,"invalid input syntax for type integer: ""error_1"", column i",error_1,)
+ ("Fri Jan 02 07:40:32.618206 2026 PST",exttab_cte_2,"file:/ABSPATH/src/test/regress/data/exttab_more_errors.data [/ABSPATH/src/test/regress/data/exttab_more_errors.data]",5,,"invalid input syntax for type integer: ""error_1"", column i",error_1,)
+ ("Fri Jan 02 07:40:32.618206 2026 PST",exttab_cte_2,"file:/ABSPATH/src/test/regress/data/exttab_more_errors.data [/ABSPATH/src/test/regress/data/exttab_more_errors.data]",7,,"invalid input syntax for type integer: ""error_1"", column i",error_1,)
 (2 rows)
 
 -- end_ignore
@@ -1075,7 +1079,7 @@ NOTICE:  found 2 data formatting errors (2 or more input rows), rejected related
 SELECT COUNT(*) FROM exttab_permissions_2;
 ERROR:  segment reject limit reached, aborting operation  (seg0 slice1 127.0.1.1:7002 pid=26072)
 DETAIL:  Last error was: invalid input syntax for type integer: "error_1", column i
-CONTEXT:  External table exttab_permissions_2, line 7 of file://gpadmin/home/gpadmin/cloudberry/src/test/regress/data/exttab_more_errors.data, column i
+CONTEXT:  External table exttab_permissions_2, line 7 of file:/ABSPATH/src/test/regress/data/exttab_more_errors.data, column i
 -- Only superuser can do gp_truncate_error_log('*.*')
 DROP ROLE IF EXISTS exttab_non_superuser;
 NOTICE:  role "exttab_non_superuser" does not exist, skipping
@@ -1290,7 +1294,7 @@ SELECT sum(distinct e1.i), sum(distinct e2.i), e1.j FROM
 group by e1.j;
 ERROR:  segment reject limit reached, aborting operation  (seg0 slice3 127.0.1.1:7002 pid=26262)
 DETAIL:  Last error was: invalid input syntax for type integer: "error_1", column i
-CONTEXT:  External table exttab_subq_2, line 7 of file://gpadmin/home/gpadmin/cloudberry/src/test/regress/data/exttab_more_errors.data, column i
+CONTEXT:  External table exttab_subq_2, line 7 of file:/ABSPATH/src/test/regress/data/exttab_more_errors.data, column i
 SELECT COUNT(*) > 0 FROM
 (
 SELECT * FROM gp_read_error_log('exttab_subq_1')
@@ -1321,7 +1325,7 @@ group by e1.j
 HAVING sum(distinct e1.i) > (SELECT max(i) FROM exttab_subq_2);
 ERROR:  segment reject limit reached, aborting operation  (seg0 slice5 127.0.1.1:7002 pid=26235)
 DETAIL:  Last error was: invalid input syntax for type integer: "error_1", column i
-CONTEXT:  External table exttab_subq_2, line 7 of file://gpadmin/home/gpadmin/cloudberry/src/test/regress/data/exttab_more_errors.data, column i
+CONTEXT:  External table exttab_subq_2, line 7 of file:/ABSPATH/src/test/regress/data/exttab_more_errors.data, column i
 SELECT COUNT(*) > 0 FROM
 (
 SELECT * FROM gp_read_error_log('exttab_subq_1')
@@ -1418,7 +1422,7 @@ FROM exttab_subq_2 e1, exttab_subq_1 e2
 WHERE e1.i = e2.i;
 ERROR:  segment reject limit reached, aborting operation  (seg0 slice1 127.0.1.1:7002 pid=26235)
 DETAIL:  Last error was: invalid input syntax for type integer: "error_1", column i
-CONTEXT:  External table exttab_subq_2, line 7 of file://gpadmin/home/gpadmin/cloudberry/src/test/regress/data/exttab_more_errors.data, column i
+CONTEXT:  External table exttab_subq_2, line 7 of file:/ABSPATH/src/test/regress/data/exttab_more_errors.data, column i
 -- CSQ
 SELECT gp_truncate_error_log('exttab_subq_1');
  gp_truncate_error_log 
@@ -1438,7 +1442,7 @@ WHERE e1.j = e2.j and
 e1.i + 1 IN ( SELECT i from exttab_subq_2 WHERE i <= e1.i);
 ERROR:  segment reject limit reached, aborting operation  (seg0 slice3 127.0.1.1:7002 pid=26262)
 DETAIL:  Last error was: invalid input syntax for type integer: "error_1", column i
-CONTEXT:  External table exttab_subq_2, line 7 of file://gpadmin/home/gpadmin/cloudberry/src/test/regress/data/exttab_more_errors.data, column i
+CONTEXT:  External table exttab_subq_2, line 7 of file:/ABSPATH/src/test/regress/data/exttab_more_errors.data, column i
 SELECT COUNT(*) > 0 FROM
 (
 SELECT * FROM gp_read_error_log('exttab_subq_1')
@@ -1467,7 +1471,7 @@ FROM exttab_subq_2 e1, exttab_subq_1 e2
 WHERE e1.i = e2.i;
 ERROR:  segment reject limit reached, aborting operation  (seg0 slice1 127.0.1.1:7002 pid=26235)
 DETAIL:  Last error was: invalid input syntax for type integer: "error_1", column i
-CONTEXT:  External table exttab_subq_2, line 7 of file://gpadmin/home/gpadmin/cloudberry/src/test/regress/data/exttab_more_errors.data, column i
+CONTEXT:  External table exttab_subq_2, line 7 of file:/ABSPATH/src/test/regress/data/exttab_more_errors.data, column i
 SELECT COUNT(*) > 0 FROM
 (
 SELECT * FROM gp_read_error_log('exttab_subq_1')
@@ -1597,7 +1601,7 @@ SELECT e1.i, e2.j FROM
 WHERE e1.i = e2.i;
 ERROR:  segment reject limit reached, aborting operation  (seg0 slice1 127.0.1.1:7002 pid=26235)
 DETAIL:  Last error was: invalid input syntax for type integer: "error_1", column i
-CONTEXT:  External table exttab_subtxs_2, line 7 of file://gpadmin:/home/gpadmin/cloudberry/src/test/regress/data/exttab_more_errors.data, column i
+CONTEXT:  External table exttab_subtxs_2, line 7 of file:/ABSPATH/src/test/regress/data/exttab_more_errors.data, column i
 COMMIT;
 -- Error logs should not have been rolled back.
 -- Check that number of errors is greater than 12 instead of checking for
@@ -1734,7 +1738,7 @@ SELECT e1.i, e2.j FROM
 WHERE e1.i = e2.i;
 ERROR:  segment reject limit reached, aborting operation  (seg0 slice1 127.0.1.1:7002 pid=26235)
 DETAIL:  Last error was: invalid input syntax for type integer: "error_1", column i
-CONTEXT:  External table exttab_txs_2, line 7 of file://gpadmin/home/gpadmin/cloudberry/src/test/regress/data/exttab_more_errors.data, column i
+CONTEXT:  External table exttab_txs_2, line 7 of file:/ABSPATH/src/test/regress/data/exttab_more_errors.data, column i
 COMMIT;
 -- Additional error rows should have been inserted into the error logs even if the tx is aborted.
 -- Truncate of error logs should not be rolled back even if the transaction is aborted. All operation on error logs are persisted.
@@ -1806,7 +1810,7 @@ SELECT e1.i, e2.j FROM
 WHERE e1.i = e2.i order by e1.i;
 ERROR:  segment reject limit reached, aborting operation  (seg0 slice2 127.0.1.1:7002 pid=26343)
 DETAIL:  Last error was: invalid input syntax for type integer: "error_1", column i
-CONTEXT:  External table exttab_txs_3, line 7 of file://gpadmin/home/gpadmin/cloudberry/src/test/regress/data/exttab_more_errors.data, column i
+CONTEXT:  External table exttab_txs_3, line 7 of file:/ABSPATH/src/test/regress/data/exttab_more_errors.data, column i
 COMMIT;
 -- Error logs should not exist for these tables that would have been rolled back
 SELECT count(*) FROM gp_read_error_log('exttab_txs_3');
@@ -1855,7 +1859,7 @@ LANGUAGE plpgsql volatile;
 SELECT * FROM exttab_udfs_func1();
 ERROR:  segment reject limit reached, aborting operation  (seg0 slice3 127.0.1.1:7002 pid=26362)
 DETAIL:  Last error was: invalid input syntax for type integer: "error_1", column i
-CONTEXT:  External table exttab_udfs_2, line 7 of file://gpadmin/home/gpadmin/cloudberry/src/test/regress/data/exttab_more_errors.data, column i
+CONTEXT:  External table exttab_udfs_2, line 7 of file:/ABSPATH/src/test/regress/data/exttab_more_errors.data, column i
 SQL statement "SELECT sum(distinct e1.i) as sum_i, sum(distinct e2.i) as sum_j, e1.j as j FROM
 	   (SELECT i, j FROM exttab_udfs_1 WHERE i < 5 ) e1,
 	   (SELECT i, j FROM exttab_udfs_2 WHERE i < 10) e2
@@ -1895,7 +1899,7 @@ SELECT gp_truncate_error_log('exttab_udfs_2');
 INSERT INTO exttab_udfs_insert_1 SELECT * FROM exttab_udfs_func1();
 ERROR:  segment reject limit reached, aborting operation  (seg0 slice3 127.0.1.1:7002 pid=26389)
 DETAIL:  Last error was: invalid input syntax for type integer: "error_1", column i
-CONTEXT:  External table exttab_udfs_2, line 7 of file://gpadmin/home/gpadmin/cloudberry/src/test/regress/data/exttab_more_errors.data, column i
+CONTEXT:  External table exttab_udfs_2, line 7 of file:/ABSPATH/src/test/regress/data/exttab_more_errors.data, column i
 SQL statement "SELECT sum(distinct e1.i) as sum_i, sum(distinct e2.i) as sum_j, e1.j as j FROM
 	   (SELECT i, j FROM exttab_udfs_1 WHERE i < 5 ) e1,
 	   (SELECT i, j FROM exttab_udfs_2 WHERE i < 10) e2
@@ -1981,7 +1985,7 @@ SELECT * FROM exttab_udfs_func2();
 NOTICE:  found 2 data formatting errors (2 or more input rows), rejected related input data
 ERROR:  segment reject limit reached, aborting operation  (seg0 127.0.1.1:7002 pid=26235)
 DETAIL:  Last error was: invalid input syntax for type integer: "error_1", column i
-CONTEXT:  External table exttab_udfs_2, line 7 of file://gpadmin/home/gpadmin/cloudberry/src/test/regress/data/exttab_more_errors.data, column i
+CONTEXT:  External table exttab_udfs_2, line 7 of file:/ABSPATH/src/test/regress/data/exttab_more_errors.data, column i
 SELECT COUNT(*) > 0 FROM
 (
 SELECT * FROM gp_read_error_log('exttab_udfs_1')
@@ -2009,7 +2013,7 @@ SELECT exttab_udfs_func2();
 NOTICE:  found 2 data formatting errors (2 or more input rows), rejected related input data
 ERROR:  segment reject limit reached, aborting operation  (seg0 127.0.1.1:7002 pid=26235)
 DETAIL:  Last error was: invalid input syntax for type integer: "error_1", column i
-CONTEXT:  External table exttab_udfs_2, line 7 of file://gpadmin/home/gpadmin/cloudberry/src/test/regress/data/exttab_more_errors.data, column i
+CONTEXT:  External table exttab_udfs_2, line 7 of file:/ABSPATH/src/test/regress/data/exttab_more_errors.data, column i
 SELECT COUNT(*) > 0 FROM
 (
 SELECT * FROM gp_read_error_log('exttab_udfs_1')
@@ -2037,7 +2041,7 @@ INSERT INTO exttab_udfs_insert_1 SELECT * FROM exttab_udfs_func2();
 NOTICE:  found 2 data formatting errors (2 or more input rows), rejected related input data
 ERROR:  segment reject limit reached, aborting operation  (seg0 127.0.1.1:7002 pid=26235)
 DETAIL:  Last error was: invalid input syntax for type integer: "error_1", column i
-CONTEXT:  External table exttab_udfs_2, line 7 of file://gpadmin/home/gpadmin/cloudberry/src/test/regress/data/exttab_more_errors.data, column i
+CONTEXT:  External table exttab_udfs_2, line 7 of file:/ABSPATH/src/test/regress/data/exttab_more_errors.data, column i
 SELECT COUNT(*) > 0 FROM
 (
 SELECT * FROM gp_read_error_log('exttab_udfs_1')
@@ -2067,7 +2071,7 @@ HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sur
 NOTICE:  found 2 data formatting errors (2 or more input rows), rejected related input data
 ERROR:  segment reject limit reached, aborting operation  (seg0 127.0.1.1:7002 pid=26235)
 DETAIL:  Last error was: invalid input syntax for type integer: "error_1", column i
-CONTEXT:  External table exttab_udfs_2, line 7 of file://gpadmin/home/gpadmin/cloudberry/src/test/regress/data/exttab_more_errors.data, column i
+CONTEXT:  External table exttab_udfs_2, line 7 of file:/ABSPATH/src/test/regress/data/exttab_more_errors.data, column i
 SELECT COUNT(*) > 0 FROM
 (
 SELECT * FROM gp_read_error_log('exttab_udfs_1')
@@ -2108,7 +2112,7 @@ SELECT * FROM exttab_union_2
 order by FOO.i;
 ERROR:  segment reject limit reached, aborting operation  (seg0 slice2 127.0.1.1:7002 pid=26423)
 DETAIL:  Last error was: invalid input syntax for type integer: "error_1", column i
-CONTEXT:  External table exttab_union_2, line 7 of file://gpadmin/home/gpadmin/cloudberry/src/test/regress/data/exttab_more_errors.data, column i
+CONTEXT:  External table exttab_union_2, line 7 of file:/ABSPATH/src/test/regress/data/exttab_more_errors.data, column i
 -- Error table count
 select count(*) > 0 from
 (
@@ -2144,7 +2148,7 @@ UNION ALL
 SELECT e1.i, e2.j from exttab_union_2 e1 INNER JOIN exttab_union_2 e2 ON e1.i = e2.i;
 ERROR:  segment reject limit reached, aborting operation  (seg0 slice2 127.0.1.1:7002 pid=26444)
 DETAIL:  Last error was: invalid input syntax for type integer: "error_1", column i
-CONTEXT:  External table exttab_union_2, line 7 of file://gpadmin/home/gpadmin/cloudberry/src/test/regress/data/exttab_more_errors.data, column i
+CONTEXT:  External table exttab_union_2, line 7 of file:/ABSPATH/src/test/regress/data/exttab_more_errors.data, column i
 -- should return 0 rows
 SELECT * from exttab_union_insert_1;
  i | j 
@@ -2231,7 +2235,7 @@ SELECT gp_truncate_error_log('exttab_views_2');
 SELECT * FROM exttab_views_3;
 ERROR:  segment reject limit reached, aborting operation  (seg0 slice3 127.0.1.1:7002 pid=26462)
 DETAIL:  Last error was: invalid input syntax for type integer: "error_1", column i
-CONTEXT:  External table exttab_views_2, line 7 of file://gpadmin/home/gpadmin/cloudberry/src/test/regress/data/exttab_more_errors.data, column i
+CONTEXT:  External table exttab_views_2, line 7 of file:/ABSPATH/src/test/regress/data/exttab_more_errors.data, column i
 -- Error table should be populated
 SELECT count(*) > 0 FROM
 (
@@ -2266,7 +2270,7 @@ SELECT gp_truncate_error_log('exttab_views_2');
 INSERT INTO exttab_views_insert_1 SELECT * FROM exttab_views_3;
 ERROR:  segment reject limit reached, aborting operation  (seg0 slice3 127.0.1.1:7002 pid=26496)
 DETAIL:  Last error was: invalid input syntax for type integer: "error_1", column i
-CONTEXT:  External table exttab_views_2, line 7 of file://gpadmin/home/gpadmin/cloudberry/src/test/regress/data/exttab_more_errors.data, column i
+CONTEXT:  External table exttab_views_2, line 7 of file:/ABSPATH/src/test/regress/data/exttab_more_errors.data, column i
 -- should not have any rows
 SELECT * FROM exttab_views_insert_1;
  i | j | k 
@@ -2306,7 +2310,7 @@ NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'j'
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 ERROR:  segment reject limit reached, aborting operation  (seg0 slice2 127.0.1.1:7002 pid=26490)
 DETAIL:  Last error was: invalid input syntax for type integer: "error_1", column i
-CONTEXT:  External table exttab_views_2, line 7 of file://gpadmin/home/gpadmin/cloudberry/src/test/regress/data/exttab_more_errors.data, column i
+CONTEXT:  External table exttab_views_2, line 7 of file:/ABSPATH/src/test/regress/data/exttab_more_errors.data, column i
 SELECT * FROM exttab_views_ctas_1;
 ERROR:  relation "exttab_views_ctas_1" does not exist
 LINE 1: SELECT * FROM exttab_views_ctas_1;
@@ -2344,7 +2348,7 @@ NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'j'
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 ERROR:  segment reject limit reached, aborting operation  (seg0 slice2 127.0.1.1:7002 pid=26490)
 DETAIL:  Last error was: invalid input syntax for type integer: "error_1", column i
-CONTEXT:  External table exttab_views_2, line 7 of file://gpadmin/home/gpadmin/cloudberry/src/test/regress/data/exttab_more_errors.data, column i
+CONTEXT:  External table exttab_views_2, line 7 of file:/ABSPATH/src/test/regress/data/exttab_more_errors.data, column i
 -- Relation should not exist
 SELECT * FROM exttab_views_ctas_1;
 ERROR:  relation "exttab_views_ctas_1" does not exist
@@ -2459,7 +2463,7 @@ ORDER BY c1.i
 limit 5;
 ERROR:  segment reject limit reached, aborting operation  (seg0 slice9 127.0.1.1:7002 pid=26587)
 DETAIL:  Last error was: invalid input syntax for type integer: "error_1", column i
-CONTEXT:  External table exttab_windows_2, line 7 of file://gpadmin/home/gpadmin/cloudberry/src/test/regress/data/exttab_more_errors.data, column i
+CONTEXT:  External table exttab_windows_2, line 7 of file:/ABSPATH/src/test/regress/data/exttab_more_errors.data, column i
 SELECT COUNT(*) > 0
 FROM
 (
@@ -2494,7 +2498,7 @@ WHERE e1.i = e2.i LIMIT 5
 SELECT * FROM cte1, exttab_limit_2 e3 where cte1.i = e3.i ORDER BY cte1.i LIMIT 3;
 ERROR:  segment reject limit reached, aborting operation  (seg0 slice1 127.0.1.1:7002 pid=26235)
 DETAIL:  Last error was: invalid input syntax for type integer: "error_1", column i
-CONTEXT:  External table exttab_limit_2, line 7 of file://gpadmin/home/gpadmin/cloudberry/src/test/regress/data/exttab_more_errors.data, column i
+CONTEXT:  External table exttab_limit_2, line 7 of file:/ABSPATH/src/test/regress/data/exttab_more_errors.data, column i
 SELECT count(*) FROM gp_read_error_log('exttab_limit_2');
  count 
 -------
@@ -2570,7 +2574,7 @@ WHERE e1.i = e2.i LIMIT 3
 SELECT * FROM cte1, exttab_limit_2 e3 where cte1.i = e3.i ORDER BY cte1.i LIMIT 5;
 ERROR:  segment reject limit reached, aborting operation  (seg0 slice1 127.0.1.1:7002 pid=26235)
 DETAIL:  Last error was: invalid input syntax for type integer: "error_1", column i
-CONTEXT:  External table exttab_limit_2, line 7 of file://gpadmin/home/gpadmin/cloudberry/src/test/regress/data/exttab_more_errors.data, column i
+CONTEXT:  External table exttab_limit_2, line 7 of file:/ABSPATH/src/test/regress/data/exttab_more_errors.data, column i
 SELECT count(*) > 0 FROM gp_read_error_log('exttab_limit_2');
  ?column? 
 ----------
@@ -2645,7 +2649,7 @@ SELECT gp_truncate_error_log('exttab_limit_2');
 SELECT * FROM exttab_limit_1 e1, exttab_limit_2 e2 where e1.i = e2.i LIMIT 3;
 ERROR:  segment reject limit reached, aborting operation  (seg0 slice3 127.0.1.1:7002 pid=26670)
 DETAIL:  Last error was: invalid input syntax for type integer: "error_1", column i
-CONTEXT:  External table exttab_limit_2, line 7 of file://gpadmin/home/gpadmin/cloudberry/src/test/regress/data/exttab_more_errors.data, column i
+CONTEXT:  External table exttab_limit_2, line 7 of file:/ABSPATH/src/test/regress/data/exttab_more_errors.data, column i
 SELECT count(*) > 0 FROM
 (
 SELECT * FROM gp_read_error_log('exttab_limit_1')
@@ -2678,7 +2682,7 @@ LOG ERRORS SEGMENT REJECT LIMIT 20000;
 SELECT COUNT(*) FROM exttab_first_reject_limit_1;
 ERROR:  all 1000 first rows in this segment were rejected  (seg0 slice1 127.0.1.1:7002 pid=26235)
 DETAIL:  Aborting operation regardless of REJECT LIMIT value, last error was: invalid input syntax for type integer: "error_0", column i
-CONTEXT:  External table exttab_first_reject_limit_1, line 1000 of file://gpadmin/home/gpadmin/cloudberry/src/test/regress/data/exttab_first_errors.data, column i
+CONTEXT:  External table exttab_first_reject_limit_1, line 1000 of file:/ABSPATH/src/test/regress/data/exttab_first_errors.data, column i
 SELECT COUNT(*) > 0 FROM gp_read_error_log('exttab_first_reject_limit_1');
  ?column? 
 ----------
@@ -2717,7 +2721,7 @@ SET gp_initial_bad_row_limit = 2;
 SELECT COUNT(*) FROM exttab_first_reject_limit_2;
 ERROR:  all 2 first rows in this segment were rejected  (seg0 slice1 127.0.1.1:7002 pid=26235)
 DETAIL:  Aborting operation regardless of REJECT LIMIT value, last error was: invalid input syntax for type integer: "error_0", column i
-CONTEXT:  External table exttab_first_reject_limit_2, line 2 of file://gpadmin/home/gpadmin/cloudberry/src/test/regress/data/exttab_first_errors.data, column i
+CONTEXT:  External table exttab_first_reject_limit_2, line 2 of file:/ABSPATH/src/test/regress/data/exttab_first_errors.data, column i
 SELECT COUNT(*) > 0 from gp_read_error_log('exttab_first_reject_limit_2');
  ?column? 
 ----------
@@ -2735,7 +2739,7 @@ SELECT gp_truncate_error_log('exttab_first_reject_limit_2');
 SELECT COUNT(*) FROM exttab_first_reject_limit_2;
 ERROR:  segment reject limit reached, aborting operation  (seg0 slice1 127.0.1.1:7002 pid=26235)
 DETAIL:  Last error was: invalid input syntax for type integer: "error_0", column i
-CONTEXT:  External table exttab_first_reject_limit_2, line 500 of file://gpadmin/home/gpadmin/cloudberry/src/test/regress/data/exttab_first_errors.data, column i
+CONTEXT:  External table exttab_first_reject_limit_2, line 500 of file:/ABSPATH/src/test/regress/data/exttab_first_errors.data, column i
 SELECT COUNT(*) > 0 from gp_read_error_log('exttab_first_reject_limit_2');
  ?column? 
 ----------
@@ -2753,7 +2757,7 @@ SELECT gp_truncate_error_log('exttab_first_reject_limit_2');
 SELECT COUNT(*) FROM exttab_first_reject_limit_2;
 ERROR:  segment reject limit reached, aborting operation  (seg0 slice1 127.0.1.1:7002 pid=26235)
 DETAIL:  Last error was: invalid input syntax for type integer: "error_0", column i
-CONTEXT:  External table exttab_first_reject_limit_2, line 500 of file://gpadmin/home/gpadmin/cloudberry/src/test/regress/data/exttab_first_errors.data, column i
+CONTEXT:  External table exttab_first_reject_limit_2, line 500 of file:/ABSPATH/src/test/regress/data/exttab_first_errors.data, column i
 SELECT COUNT(*) > 0 from gp_read_error_log('exttab_first_reject_limit_2');
  ?column? 
 ----------
@@ -2822,7 +2826,7 @@ OPTIONS (hello 'world', bonjour 'again', nihao 'again and again' );
 --------+---------+-----------+----------+---------+-------------
  i      | integer |           |          |         | 
  j      | text    |           |          |         | 
-FDW options: (format 'text', delimiter '|', "null" E'\\N', escape E'\\', hello 'world', bonjour 'again', nihao 'again and again', format_type 't', location_uris 'file://gpadmin/home/gpadmin/cloudberry/src/test/regress/data/exttab_few_errors.data', execute_on 'ALL_SEGMENTS', log_errors 'f', encoding '6', is_writable 'false')
+FDW options: (format 'text', delimiter '|', "null" E'\\N', escape E'\\', hello 'world', bonjour 'again', nihao 'again and again', format_type 't', location_uris 'file:/ABSPATH/src/test/regress/data/exttab_few_errors.data', execute_on 'ALL_SEGMENTS', log_errors 'f', encoding '6', is_writable 'false')
 
 \d exttab_with_option_empty
          Foreign table "public.exttab_with_option_empty"
@@ -2830,7 +2834,7 @@ FDW options: (format 'text', delimiter '|', "null" E'\\N', escape E'\\', hello '
 --------+---------+-----------+----------+---------+-------------
  i      | integer |           |          |         | 
  j      | text    |           |          |         | 
-FDW options: (format 'text', delimiter '|', "null" E'\\N', escape E'\\', format_type 't', location_uris 'file://gpadmin/home/gpadmin/cloudberry/src/test/regress/data/exttab_few_errors.data', execute_on 'ALL_SEGMENTS', log_errors 'f', encoding '6', is_writable 'false')
+FDW options: (format 'text', delimiter '|', "null" E'\\N', escape E'\\', format_type 't', location_uris 'file:/ABSPATH/src/test/regress/data/exttab_few_errors.data', execute_on 'ALL_SEGMENTS', log_errors 'f', encoding '6', is_writable 'false')
 
 DROP EXTERNAL TABLE IF EXISTS exttab_with_option_empty;
 DROP EXTERNAL TABLE IF EXISTS exttab_with_option_1;
@@ -2998,7 +3002,7 @@ LANGUAGE plpgSQL READS SQL DATA;
 SET gp_log_gang TO DEBUG;
 SELECT * FROM exttab_error_context_callback_func();
 ERROR:  invalid input syntax for type integer: "1|1_number"  (seg0 slice1 127.0.1.1:7002 pid=26824)
-CONTEXT:  External table exttab_error_context_callback, line 1 of file://gpadmin/home/gpadmin/cloudberry/src/test/regress/data/exttab.data, column c1
+CONTEXT:  External table exttab_error_context_callback, line 1 of file:/ABSPATH/src/test/regress/data/exttab.data, column c1
 PL/pgSQL function exttab_error_context_callback_func() line 5 at FOR over SELECT rows
 SET gp_log_gang TO DEFAULT;
 DROP FUNCTION exttab_error_context_callback_func();

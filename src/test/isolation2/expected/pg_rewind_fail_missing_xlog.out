@@ -19,7 +19,7 @@ INSERT 3
 
 -- end_ignore
 (exited with code 0)
-!\retcode gpstop -ari;
+!\retcode gpstop -arf;
 (exited with code 0)
 
 -- Test 1: Ensure that pg_rewind doesn't fail due to checkpoints inadvertently
@@ -543,7 +543,7 @@ server closed the connection unexpectedly
 
 -- end_ignore
 (exited with code 0)
-!\retcode gpstop -ari;
+!\retcode gpstop -arf;
 -- start_ignore
 -- end_ignore
 (exited with code 0)
@@ -551,6 +551,32 @@ server closed the connection unexpectedly
 -- Create an unlogged table on the primary that remembers replication slot's last restart_lsn and number of WAL files.
 1U: CREATE UNLOGGED TABLE unlogged_wal_retention_test(restart_lsn_before pg_lsn, wal_count_before int);
 CREATE
+-- Force WAL segment switches to ensure there are old WAL files that can be removed after checkpoint.
+1U: SELECT pg_switch_wal() IS NOT NULL;
+ ?column? 
+----------
+ t        
+(1 row)
+1U: SELECT pg_switch_wal() IS NOT NULL;
+ ?column? 
+----------
+ t        
+(1 row)
+1U: SELECT pg_switch_wal() IS NOT NULL;
+ ?column? 
+----------
+ t        
+(1 row)
+1U: SELECT pg_switch_wal() IS NOT NULL;
+ ?column? 
+----------
+ t        
+(1 row)
+1U: SELECT pg_switch_wal() IS NOT NULL;
+ ?column? 
+----------
+ t        
+(1 row)
 1U: INSERT INTO unlogged_wal_retention_test SELECT (select restart_lsn FROM pg_replication_slots WHERE slot_name = 'internal_wal_replication_slot') as restart_lsn_before, (select count(*) from pg_ls_waldir()) as wal_count_before;
 INSERT 1
 5: CHECKPOINT;
@@ -663,7 +689,7 @@ DROP
 
 -- end_ignore
 (exited with code 0)
-!\retcode gpstop -ari;
+!\retcode gpstop -arf;
 -- start_ignore
 -- end_ignore
 (exited with code 0)

@@ -1,3 +1,7 @@
+-- start_matchsubs
+-- m|/.*/testtablespace_existing_version_dir/|
+-- s|/.*/testtablespace_existing_version_dir/|/ABSPATH/testtablespace_existing_version_dir/|
+-- end_matchsubs
 -- start_matchignore
 -- m/WARNING:  tablespace symlink path is too long for TAR/
 -- m/DETAIL:  The symlinked path \".*\" will be truncated to 100 characters when sending a TAR to the utilities \(e.g. pg_basebackup\)/
@@ -416,28 +420,28 @@ SELECT force_mirrors_to_catch_up();
 (1 row)
 
 \! ls $PG_ABS_SRCDIR/testtablespace_existing_version_dir/*
-/home/gpadmin/cloudberry/src/test/regress/testtablespace_existing_version_dir/1:
+/ABSPATH/testtablespace_existing_version_dir/1:
 GPDB_99_399999991
 
-/home/gpadmin/cloudberry/src/test/regress/testtablespace_existing_version_dir/2:
+/ABSPATH/testtablespace_existing_version_dir/2:
 GPDB_99_399999991
 
-/home/gpadmin/cloudberry/src/test/regress/testtablespace_existing_version_dir/3:
+/ABSPATH/testtablespace_existing_version_dir/3:
 GPDB_99_399999991
 
-/home/gpadmin/cloudberry/src/test/regress/testtablespace_existing_version_dir/4:
+/ABSPATH/testtablespace_existing_version_dir/4:
 GPDB_99_399999991
 
-/home/gpadmin/cloudberry/src/test/regress/testtablespace_existing_version_dir/5:
+/ABSPATH/testtablespace_existing_version_dir/5:
 GPDB_99_399999991
 
-/home/gpadmin/cloudberry/src/test/regress/testtablespace_existing_version_dir/6:
+/ABSPATH/testtablespace_existing_version_dir/6:
 GPDB_99_399999991
 
-/home/gpadmin/cloudberry/src/test/regress/testtablespace_existing_version_dir/7:
+/ABSPATH/testtablespace_existing_version_dir/7:
 GPDB_99_399999991
 
-/home/gpadmin/cloudberry/src/test/regress/testtablespace_existing_version_dir/8:
+/ABSPATH/testtablespace_existing_version_dir/8:
 GPDB_99_399999991
 -- Test alter tablespace: PG does not seem to test these.    
 -- test SET & OWNER
