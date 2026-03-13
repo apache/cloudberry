@@ -1,0 +1,48 @@
+SELECT CAST('2147483647'::FIXEDDECIMAL AS INT);
+    int4    
+------------
+ 2147483647
+(1 row)
+
+-- Ensure overflow is detected
+SELECT CAST('2147483648'::FIXEDDECIMAL AS INT);
+ERROR:  integer out of range
+SELECT CAST('-2147483648'::FIXEDDECIMAL AS INT);
+    int4     
+-------------
+ -2147483648
+(1 row)
+
+-- Ensure underflow is detected
+SELECT CAST('-2147483649'::FIXEDDECIMAL AS INT);
+ERROR:  integer out of range
+SELECT CAST('32767'::FIXEDDECIMAL AS SMALLINT);
+ int2  
+-------
+ 32767
+(1 row)
+
+-- Ensure overflow is detected
+SELECT CAST('32768'::FIXEDDECIMAL AS SMALLINT);
+ERROR:  smallint out of range
+SELECT CAST('-32768'::FIXEDDECIMAL AS SMALLINT);
+  int2  
+--------
+ -32768
+(1 row)
+
+-- Ensure underflow is detected
+SELECT CAST('-32769'::FIXEDDECIMAL AS SMALLINT);
+ERROR:  smallint out of range
+SELECT CAST('1234321.23'::FIXEDDECIMAL AS FLOAT);
+   float8   
+------------
+ 1234321.23
+(1 row)
+
+SELECT CAST('1234321.23'::FIXEDDECIMAL AS DOUBLE PRECISION);
+   float8   
+------------
+ 1234321.23
+(1 row)
+

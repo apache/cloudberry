@@ -1272,6 +1272,11 @@ code or new licensing patterns.
             <exclude>src/include/task/task_states.h</exclude>
             <exclude>src/include/task/job_metadata.h</exclude>
 
+            <!-- The following files are from fixeddecimal under PostgreSQL
+                 license, introduced by Cloudberry.
+            -->
+            <exclude>contrib/fixeddecimal/**</exclude>
+
             <!-- The following files are used by PAX as the 
                  submodules or created originally by Cloudberry.
             -->
