@@ -111,12 +111,8 @@ jobs:
           # Uncomment and add tests as features become available
           ALL_TESTS='{
             "include": [
-              {"test":"ic-small-opt-off",
-                "make_configs":["src/test/regress:installcheck-small"],
-                "pg_settings":{"optimizer":"off"}
-              },
-              {"test":"ic-greenplum-schedule",
-                "make_configs":["src/test/regress:installcheck-cbdb"],
+              {"test":"ic-good-opt-off",
+                "make_configs":["src/test/regress:installcheck-good"],
                 "pg_settings":{"optimizer":"off"}
               },
               {"test":"ic-isolation2-basic",
