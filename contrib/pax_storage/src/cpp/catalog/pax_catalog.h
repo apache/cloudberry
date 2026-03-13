@@ -38,7 +38,7 @@ extern "C" {
 #define USE_OWN_MANIFEST_TUPLE
 typedef struct HeapTupleData *ManifestTuple;
 
-#endif // end USE_PAX_CATALOG
+#endif  // end USE_PAX_CATALOG
 
 #include "catalog/manifest_api.h"
 }
@@ -59,18 +59,18 @@ class PaxCatalogUpdater {
   void UpdateVisimap(int block_id, const char *visimap_filename);
   // update stats
   void UpdateStatistics(int block_id,
-                        pax::stats::MicroPartitionStatisticsInfo *mp_stats);
+                        pax::stats::MicroPartitionStatisticsInfo *mp_stats,
+                        bool is_stats_valid);
 
  private:
   PaxCatalogUpdater(Relation pax_rel) : pax_rel_(pax_rel) {}
   // disallow to allocate from heap
-  void* operator new(size_t) = delete;
-  void operator delete(void*) = delete;
+  void *operator new(size_t) = delete;
+  void operator delete(void *) = delete;
   PaxCatalogUpdater(const PaxCatalogUpdater &) = delete;
   PaxCatalogUpdater(PaxCatalogUpdater &&);
   PaxCatalogUpdater &operator=(const PaxCatalogUpdater &) = delete;
   PaxCatalogUpdater &operator=(PaxCatalogUpdater &&other);
-
 
  private:
   Relation pax_rel_;
@@ -83,7 +83,7 @@ class PaxCatalogUpdater {
 
 void PaxCopyAllDataFiles(Relation rel, const RelFileNode *newrnode,
                          bool createnewpath);
-} // namespace pax
+}  // namespace pax
 
 namespace cbdb {
 void InsertMicroPartitionPlaceHolder(Oid pax_relid, int block_id);
@@ -94,15 +94,14 @@ bool IsMicroPartitionVisible(Relation pax_rel, BlockNumber block,
 pax::MicroPartitionMetadata GetMicroPartitionMetadata(Relation rel,
                                                       Snapshot snapshot,
                                                       int block_id);
-}
+}  // namespace cbdb
 
 namespace paxc {
 #if !defined(USE_MANIFEST_API) || defined(USE_PAX_CATALOG)
-void CPaxAuxSwapRelationFiles(Oid relid1, Oid relid2,
-                              TransactionId frozen_xid,
+void CPaxAuxSwapRelationFiles(Oid relid1, Oid relid2, TransactionId frozen_xid,
                               MultiXactId cutoff_multi);
 #endif
 
 void CPaxCopyAllTuples(Relation old_rel, Relation new_rel, Snapshot snapshot);
 
-} // namespace paxc
+}  // namespace paxc
