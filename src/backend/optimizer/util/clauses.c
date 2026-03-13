@@ -5755,7 +5755,12 @@ flatten_join_alias_var_optimizer(Query *query, int queryLevel)
 	{
 		queryNew->havingQual = flatten_join_alias_vars(NULL, queryNew, havingQual);
 		if (havingQual != queryNew->havingQual)
-			pfree(havingQual);
+		{
+			if (IsA(havingQual, List))
+				list_free((List *) havingQual);
+			else
+				pfree(havingQual);
+		}
 	}
 
 	List *scatterClause = queryNew->scatterClause;

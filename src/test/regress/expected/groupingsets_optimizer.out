@@ -958,21 +958,21 @@ select v.c, (select count(*) from gstest2 group by () having v.c)
 explain (costs off)
   select v.c, (select count(*) from gstest2 group by () having v.c)
     from (values (false),(true)) v(c) order by v.c;
-                                QUERY PLAN                                
---------------------------------------------------------------------------
- Sort
-   Sort Key: "*VALUES*".column1
-   ->  Values Scan on "*VALUES*"
-         SubPlan 1
-           ->  Aggregate
-                 Group Key: ()
-                 Filter: "*VALUES*".column1
-                 ->  Result
-                       One-Time Filter: "*VALUES*".column1
-                       ->  Materialize
-                             ->  Gather Motion 3:1  (slice1; segments: 3)
+                             QUERY PLAN
+--------------------------------------------------------------------
+ Result
+   ->  Sort
+         Sort Key: "Values".column1
+         ->  Values Scan on "Values"
+   SubPlan 1
+     ->  Result
+           One-Time Filter: "Values".column1
+           ->  Finalize Aggregate
+                 ->  Materialize
+                       ->  Gather Motion 3:1  (slice1; segments: 3)
+                             ->  Partial Aggregate
                                    ->  Seq Scan on gstest2
- Optimizer: Postgres query optimizer
+ Optimizer: GPORCA
 (13 rows)
 
 -- HAVING with GROUPING queries
