@@ -77,7 +77,7 @@ SeqNext(SeqScanState *node)
 
 		/*
 		 * Just when gp_enable_runtime_filter_pushdown enabled and
-		 * node->filter_in_seqscan is false means scankey need to be pushed to
+		 * table am support runtime filter, scankey need to be pushed to
 		 * AM.
 		 */
 		if (gp_enable_runtime_filter_pushdown && node->filter_in_seqscan && node->filters &&
@@ -230,6 +230,10 @@ ExecInitSeqScanForPartition(SeqScan *node, EState *estate,
 		&& !estate->useMppParallelMode)
 	{
 		scanstate->filter_in_seqscan = true;
+	}
+	else 
+	{
+		scanstate->filter_in_seqscan = false;
 	}
 
 	return scanstate;
