@@ -111,12 +111,8 @@ jobs:
           # Uncomment and add tests as features become available
           ALL_TESTS='{
             "include": [
-              {"test":"ic-small-opt-off",
-                "make_configs":["src/test/regress:installcheck-small"],
-                "pg_settings":{"optimizer":"off"}
-              },
-              {"test":"ic-greenplum-schedule",
-                "make_configs":["src/test/regress:installcheck-cbdb"],
+              {"test":"ic-good-opt-off",
+                "make_configs":["src/test/regress:installcheck-good"],
                 "pg_settings":{"optimizer":"off"}
               },
               {"test":"ic-isolation2-basic",
@@ -298,7 +294,7 @@ jobs:
             echo "- Install Prefix: ${INSTALL_PREFIX}"
             echo "- Port: 5432"
             echo "- Debug: Enabled (O0, g3, cassert)"
-            echo "- Disabled Features: ORCA, GPCloud, GPFdist, zstd"
+            echo "- Disabled Features: GPCloud"
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Prepare Installation Directory
@@ -344,8 +340,8 @@ jobs:
             echo "  --enable-cassert"
             echo "  --enable-debug-extensions"
             echo "  --with-perl --with-python --with-libxml --with-openssl"
-            echo "  --without-zstd"
-            echo "  --disable-gpcloud --disable-orca --disable-gpfdist"
+            echo "  --with-zstd"
+            echo "  --disable-gpcloud"
             echo "  --with-pythonsrc-ext"
             echo "  --with-gssapi"
             echo ""
@@ -353,7 +349,7 @@ jobs:
             # Run configure as gpadmin
             if ! su - gpadmin -c "
               cd ${SRC_DIR}
-              export LD_LIBRARY_PATH=${INSTALL_PREFIX}/lib:\${LD_LIBRARY_PATH}
+              export LD_LIBRARY_PATH=${INSTALL_PREFIX}/lib:${LD_LIBRARY_PATH}
               CFLAGS='-O0 -g3' ./configure \
                 --prefix=${INSTALL_PREFIX} \
                 --with-pgport=5432 \
@@ -362,14 +358,14 @@ jobs:
                 --with-python \
                 --with-libxml \
                 --with-openssl \
-                --without-zstd \
+                --with-zstd \
                 --enable-debug-extensions \
                 --disable-gpcloud \
-                --disable-orca \
-                --disable-gpfdist \
                 --with-pythonsrc-ext \
                 --with-gssapi \
-                --without-icu
+                --without-icu \
+                --with-libraries=${INSTALL_PREFIX}/lib \
+                --with-includes=/usr/local/xerces-c/include
             "; then
               echo "::error::Configure failed"
               exit 1
@@ -392,9 +388,9 @@ jobs:
             # Build and install as gpadmin (non-parallel to avoid issues)
             if ! time su - gpadmin -c "
               cd ${SRC_DIR}
-              export LD_LIBRARY_PATH=${INSTALL_PREFIX}/lib:\${LD_LIBRARY_PATH}
-              make
-              make install
+              export LD_LIBRARY_PATH=${INSTALL_PREFIX}/lib:${LD_LIBRARY_PATH}
+              make -j$(nproc)
+              make -j$(nproc) install
             "; then
               echo "::error::Build and installation failed"
               exit 1
@@ -628,7 +624,7 @@ jobs:
           # We don't need to build, just configure
           su - gpadmin -c "
             cd ${SRC_DIR}
-            export LD_LIBRARY_PATH=${INSTALL_PREFIX}/lib:\${LD_LIBRARY_PATH}
+            export LD_LIBRARY_PATH=${INSTALL_PREFIX}/lib:${LD_LIBRARY_PATH}
             CFLAGS='-O0 -g3' ./configure \
               --prefix=${INSTALL_PREFIX} \
               --with-pgport=5432 \
@@ -637,14 +633,14 @@ jobs:
               --with-python \
               --with-libxml \
               --with-openssl \
-              --without-zstd \
+              --with-zstd \
               --enable-debug-extensions \
               --disable-gpcloud \
-              --disable-orca \
-              --disable-gpfdist \
               --with-pythonsrc-ext \
               --with-gssapi \
-              --without-icu 
+              --without-icu \
+              --with-libraries=${INSTALL_PREFIX}/lib \
+              --with-includes=/usr/local/xerces-c/include
           " 2>&1 | tee -a ${LOGS_DIR}/details/configure.log
 
       - name: Create gpdemo Cluster
