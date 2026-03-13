@@ -1,0 +1,70 @@
+All the world's a stage,
+And all the men and women merely players;
+They have their exits and their entrances,
+And one man in his time plays many parts,
+His acts being seven ages. At first, the infant,
+Mewling and puking in the nurse's arms.
+Then the whining schoolboy, with his satchel
+And shining morning face, creeping like snail
+Unwillingly to school. And then the lover,
+Sighing like furnace, with a woeful ballad
+Made to his mistress' eyebrow. Then a soldier,
+Full of strange oaths and bearded like the pard,
+Jealous in honor, sudden and quick in quarrel,
+Seeking the bubble reputation
+Even in the cannon's mouth. And then the justice,
+In fair round belly with good capon lined,
+With eyes severe and beard of formal cut,
+Full of wise saws and modern instances;
+And so he plays his part. The sixth age shifts
+Into the lean and slippered pantaloon,
+With spectacles on nose and pouch on side;
+His youthful hose, well saved, a world too wide
+For his shrunk shank, and his big manly voice,
+Turning again toward childish treble, pipes
+And whistles in his sound. Last scene of all,
+That ends this strange eventful history,
+Is second childishness and mere oblivion,
+Sans teeth, sans eyes, sans taste, sans everything.
+
+std::to_string
+ C++ Strings library std::basic_string 
+Defined in header <string>
+std::string to_string( int value );
+std::string to_string( long value );
+std::string to_string( long long value );
+std::string to_string( unsigned value );
+std::string to_string( unsigned long value );
+std::string to_string( unsigned long long value );
+std::string to_string( float value );
+std::string to_string( double value );
+std::string to_string( long double value );
+Converts a numeric value to std::string.
+
+Let buf be an internal to the conversion functions buffer, sufficiently large to contain the result of conversion.
+
+1) Converts a signed integer to a string as if by std::sprintf(buf, "%d", value).
+2) Converts a signed integer to a string as if by std::sprintf(buf, "%ld", value).
+3) Converts a signed integer to a string as if by std::sprintf(buf, "%lld", value).
+4) Converts an unsigned integer to a string as if by std::sprintf(buf, "%u", value).
+5) Converts an unsigned integer to a string as if by std::sprintf(buf, "%lu", value).
+6) Converts an unsigned integer to a string as if by std::sprintf(buf, "%llu", value).
+7,8) Converts a floating point value to a string as if by std::sprintf(buf, "%f", value).
+9) Converts a floating point value to a string as if by std::sprintf(buf, "%Lf", value).
+(until C++26)
+1-9) Converts a numeric value to a string as if by std::format("{}", value).
+(since C++26)
+Parameters
+Return value
+A string holding the converted value.
+
+Exceptions
+May throw std::bad_alloc from the std::string constructor.
+
+Notes
+With floating point types std::to_string may yield unexpected results as the number of significant digits in the returned string can be zero, see the example.
+The return value may differ significantly from what std::cout prints by default, see the example.
+std::to_string relies on the current C locale for formatting purposes, and therefore concurrent calls to std::to_string from multiple threads may result in partial serialization of calls.
+The results of overloads for integer types do not rely on the current C locale, and thus implementations generally avoid access to the current C locale in these overloads for both correctness and performance. However, such avoidance is not guaranteed by the standard.
+(until C++26)
+C++17 provides std::to_chars as a higher-performance locale-independent alternative.
