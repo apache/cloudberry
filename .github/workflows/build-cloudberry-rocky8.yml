@@ -17,12 +17,12 @@
 # permissions and limitations under the License.
 #
 # --------------------------------------------------------------------
-# GitHub Actions Workflow: Apache Cloudberry Build Pipeline
+# GitHub Actions Workflow: Apache Cloudberry Build Pipeline (Rocky 8)
 # --------------------------------------------------------------------
 # Description:
 #
 #   This workflow builds, tests, and packages Apache Cloudberry on
-#   Rocky Linux 9. It ensures artifact integrity, performs installation
+#   Rocky Linux 8. It ensures artifact integrity, performs installation
 #   tests, validates key operations, and provides detailed test reports,
 #   including handling for ignored test cases.
 #
@@ -67,7 +67,7 @@
 #    - Sends failure notifications if any step fails.
 #
 # Execution Environment:
-# - **Runs On**: ubuntu-22.04 with Rocky Linux 9 containers.
+# - **Runs On**: ubuntu-22.04 with Rocky Linux 8 containers.
 # - **Resource Requirements**:
 #   - Disk: Minimum 20GB free space.
 #   - Memory: Minimum 8GB RAM.
@@ -75,12 +75,13 @@
 #
 # Triggers:
 # - Push to `main` branch.
-# - Pull requests to `main` branch.
+# - Pull request that modifies this workflow file.
+# - Scheduled: Every Monday at 02:00 UTC.
 # - Manual workflow dispatch.
 #
 # Container Images:
-# - **Build**: `apache/incubator-cloudberry:cbdb-build-rocky9-latest`
-# - **Test**: `apache/incubator-cloudberry:cbdb-test-rocky9-latest`
+# - **Build**: `apache/incubator-cloudberry:cbdb-build-rocky8-latest`
+# - **Test**: `apache/incubator-cloudberry:cbdb-test-rocky8-latest`
 #
 # Artifacts:
 # - RPM Package          (retention: ${{ env.LOG_RETENTION_DAYS }} days).
@@ -98,14 +99,20 @@
 # - Supports debug builds with preserved symbols.
 # --------------------------------------------------------------------
 
-name: Apache Cloudberry Build
+name: Apache Cloudberry Build (Rocky 8)
 
 on:
   push:
     branches: [main, cbdb-postgres-merge]
   pull_request:
-    branches: [main, cbdb-postgres-merge]
-    types: [opened, synchronize, reopened, edited]
+    paths:
+      - '.github/workflows/build-cloudberry-rocky8.yml'
+    # We can enable the PR test when needed
+    # branches: [main, cbdb-postgres-merge]
+    # types: [opened, synchronize, reopened, edited]
+  schedule:
+    # Run every Monday at 02:00 UTC
+    - cron: '0 2 * * 1'
   workflow_dispatch:
     inputs:
       test_selection:
@@ -309,7 +316,6 @@ jobs:
               },
               {"test":"ic-gpcontrib",
                "make_configs":["gpcontrib/orafce:installcheck",
-                               "gpcontrib/pxf_fdw:installcheck",
                                "gpcontrib/zstd:installcheck",
                                "gpcontrib/gp_sparse_vector:installcheck",
                                "gpcontrib/gp_toolkit:installcheck"]
@@ -418,7 +424,7 @@ jobs:
   ## ======================================================================
 
   build:
-    name: Build Apache Cloudberry RPM
+    name: Build Apache Cloudberry RPM (Rocky 8)
     env:
       JOB_TYPE: build
     needs: [check-skip]
@@ -429,7 +435,7 @@ jobs:
       build_timestamp: ${{ steps.set_timestamp.outputs.timestamp }}
 
     container:
-      image: apache/incubator-cloudberry:cbdb-build-rocky9-latest
+      image: apache/incubator-cloudberry:cbdb-build-rocky8-latest
       options: >-
         --user root
         -h cdw
@@ -732,7 +738,7 @@ jobs:
         if: needs.check-skip.outputs.should_skip != 'true'
         uses: actions/upload-artifact@v4
         with:
-          name: build-logs-${{ env.BUILD_TIMESTAMP }}
+          name: build-logs-rocky8-${{ env.BUILD_TIMESTAMP }}
           path: |
             build-logs/
           retention-days: ${{ env.LOG_RETENTION_DAYS }}
@@ -741,7 +747,7 @@ jobs:
         if: needs.check-skip.outputs.should_skip != 'true'
         uses: actions/upload-artifact@v4
         with:
-          name: apache-cloudberry-db-incubating-rpm-build-artifacts
+          name: apache-cloudberry-db-incubating-rpm-build-artifacts-rocky8
           retention-days: ${{ env.LOG_RETENTION_DAYS }}
           if-no-files-found: error
           path: |
@@ -751,7 +757,7 @@ jobs:
         if: needs.check-skip.outputs.should_skip != 'true'
         uses: actions/upload-artifact@v4
         with:
-          name: apache-cloudberry-db-incubating-source-build-artifacts
+          name: apache-cloudberry-db-incubating-source-build-artifacts-rocky8
           retention-days: ${{ env.LOG_RETENTION_DAYS }}
           if-no-files-found: error
           path: |
@@ -762,7 +768,7 @@ jobs:
   ## ======================================================================
 
   rpm-install-test:
-    name: RPM Install Test Apache Cloudberry
+    name: RPM Install Test Apache Cloudberry (Rocky 8)
     needs: [check-skip, build]
     if: |
       !cancelled() &&
@@ -772,7 +778,7 @@ jobs:
     timeout-minutes: 120
 
     container:
-      image: apache/incubator-cloudberry:cbdb-test-rocky9-latest
+      image: apache/incubator-cloudberry:cbdb-test-rocky8-latest
       options: >-
         --user root
         -h cdw
@@ -813,7 +819,7 @@ jobs:
         if: needs.check-skip.outputs.should_skip != 'true'
         uses: actions/download-artifact@v4
         with:
-          name: apache-cloudberry-db-incubating-rpm-build-artifacts
+          name: apache-cloudberry-db-incubating-rpm-build-artifacts-rocky8
           path: ${{ github.workspace }}/rpm_build_artifacts
           merge-multiple: false
           run-id: ${{ github.event.inputs.reuse_artifacts_from_run_id || github.run_id }}
@@ -931,9 +937,9 @@ jobs:
             rm -rf /usr/local/cloudberry-db
 
             # Install RPM with retry logic for mirror issues
-            # Use --releasever=9 to pin to stable Rocky Linux 9 repos (not bleeding-edge 9.6)
+            # Use --releasever=8 to pin to stable Rocky Linux 8 repos (not bleeding-edge 8.10)
             echo "Starting installation..."
-            if ! time dnf install -y --setopt=retries=10 --releasever=9 "${RPM_FILE}"; then
+            if ! time dnf install -y --setopt=retries=10 --releasever=8 "${RPM_FILE}"; then
               echo "::error::RPM installation failed"
               exit 1
             fi
@@ -948,7 +954,7 @@ jobs:
         if: needs.check-skip.outputs.should_skip != 'true'
         uses: actions/upload-artifact@v4
         with:
-          name: install-logs-${{ needs.build.outputs.build_timestamp }}
+          name: install-logs-rocky8-${{ needs.build.outputs.build_timestamp }}
           path: |
             install-logs/
           retention-days: ${{ env.LOG_RETENTION_DAYS }}
@@ -970,7 +976,7 @@ jobs:
   ## ======================================================================
 
   test:
-    name: ${{ matrix.test }}
+    name: ${{ matrix.test }} (Rocky 8)
     needs: [check-skip, build, prepare-test-matrix]
     if: |
       !cancelled() &&
@@ -983,7 +989,7 @@ jobs:
       matrix: ${{ fromJson(needs.prepare-test-matrix.outputs.test-matrix) }}
 
     container:
-      image: apache/incubator-cloudberry:cbdb-build-rocky9-latest
+      image: apache/incubator-cloudberry:cbdb-build-rocky8-latest
       options: >-
         --privileged
         --user root
@@ -1210,7 +1216,7 @@ jobs:
         if: always()
         run: |
           {
-            echo "# Test Job Summary: ${{ matrix.test }}"
+            echo "# Test Job Summary: ${{ matrix.test }} (Rocky 8)"
             echo "## Environment"
             echo "- Start Time: $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
 
@@ -1226,7 +1232,7 @@ jobs:
         if: needs.check-skip.outputs.should_skip != 'true'
         uses: actions/download-artifact@v4
         with:
-          name: apache-cloudberry-db-incubating-rpm-build-artifacts
+          name: apache-cloudberry-db-incubating-rpm-build-artifacts-rocky8
           path: ${{ github.workspace }}/rpm_build_artifacts
           merge-multiple: false
           run-id: ${{ github.event.inputs.reuse_artifacts_from_run_id || github.run_id }}
@@ -1236,7 +1242,7 @@ jobs:
         if: needs.check-skip.outputs.should_skip != 'true'
         uses: actions/download-artifact@v4
         with:
-          name: apache-cloudberry-db-incubating-source-build-artifacts
+          name: apache-cloudberry-db-incubating-source-build-artifacts-rocky8
           path: ${{ github.workspace }}/source_build_artifacts
           merge-multiple: false
           run-id: ${{ github.event.inputs.reuse_artifacts_from_run_id || github.run_id }}
@@ -1341,9 +1347,9 @@ jobs:
             rm -rf /usr/local/cloudberry-db
 
             # Install RPM with retry logic for mirror issues
-            # Use --releasever=9 to pin to stable Rocky Linux 9 repos (not bleeding-edge 9.6)
+            # Use --releasever=8 to pin to stable Rocky Linux 8 repos (not bleeding-edge 8.10)
             echo "Starting installation..."
-            if ! time dnf install -y --setopt=retries=10 --releasever=9 "${RPM_FILE}"; then
+            if ! time dnf install -y --setopt=retries=10 --releasever=8 "${RPM_FILE}"; then
               echo "::error::RPM installation failed"
               exit 1
             fi
@@ -1845,7 +1851,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: test-logs-${{ matrix.test }}-${{ needs.build.outputs.build_timestamp }}
+          name: test-logs-${{ matrix.test }}-rocky8-${{ needs.build.outputs.build_timestamp }}
           path: |
             build-logs/
           retention-days: ${{ env.LOG_RETENTION_DAYS }}
@@ -1854,7 +1860,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: test-metadata-${{ matrix.test }}
+          name: test-metadata-${{ matrix.test }}-rocky8
           path: |
             test_results*.txt
           retention-days: ${{ env.LOG_RETENTION_DAYS }}
@@ -1862,7 +1868,7 @@ jobs:
       - name: Upload test results files
         uses: actions/upload-artifact@v4
         with:
-          name: results-${{ matrix.test }}-${{ needs.build.outputs.build_timestamp }}
+          name: results-${{ matrix.test }}-rocky8-${{ needs.build.outputs.build_timestamp }}
           path: |
             **/regression.out
             **/regression.diffs
@@ -1873,7 +1879,7 @@ jobs:
         if: failure() || cancelled()
         uses: actions/upload-artifact@v4
         with:
-          name: regression-logs-${{ matrix.test }}-${{ needs.build.outputs.build_timestamp }}
+          name: regression-logs-${{ matrix.test }}-rocky8-${{ needs.build.outputs.build_timestamp }}
           path: |
             **/regression.out
             **/regression.diffs
@@ -1893,7 +1899,7 @@ jobs:
   ## ======================================================================
 
   report:
-    name: Generate Apache Cloudberry Build Report
+    name: Generate Apache Cloudberry Build Report (Rocky 8)
     needs: [check-skip, build, prepare-test-matrix, rpm-install-test, test]
     if: always()
     runs-on: ubuntu-22.04
@@ -1901,7 +1907,7 @@ jobs:
       - name: Generate Final Report
         run: |
           {
-            echo "# Apache Cloudberry Build Pipeline Report"
+            echo "# Apache Cloudberry Build Pipeline Report (Rocky 8)"
 
             if [[ "${{ needs.check-skip.outputs.should_skip }}" == "true" ]]; then
               echo "## CI Skip Status"
