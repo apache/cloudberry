@@ -310,6 +310,93 @@ CSubqueryHandler::FProjectCountSubquery(CExpression *pexprSubquery,
 
 //---------------------------------------------------------------------------
 //	@function:
+//		FContainsEmptyGbAgg
+//
+//	@doc:
+//		Return true if pexpr contains a GbAgg with empty grouping columns
+//		(i.e., GROUP BY ())
+//
+//---------------------------------------------------------------------------
+static BOOL
+FContainsEmptyGbAgg(CExpression *pexpr)
+{
+	if (COperator::EopLogicalGbAgg == pexpr->Pop()->Eopid())
+	{
+		return 0 == CLogicalGbAgg::PopConvert(pexpr->Pop())->Pdrgpcr()->Size();
+	}
+	const ULONG arity = pexpr->Arity();
+	for (ULONG ul = 0; ul < arity; ul++)
+	{
+		CExpression *pexprChild = (*pexpr)[ul];
+		if (pexprChild->Pop()->FLogical() && FContainsEmptyGbAgg(pexprChild))
+		{
+			return true;
+		}
+	}
+	return false;
+}
+
+
+//---------------------------------------------------------------------------
+//	@function:
+//		FHasCorrelatedSelectAboveGbAgg
+//
+//	@doc:
+//		Return true if pexpr has a CLogicalSelect with outer references in its
+//		filter predicate that sits above a GROUP BY () aggregate.  This pattern
+//		arises when a correlated scalar subquery has a correlated HAVING clause,
+//		e.g. "SELECT count(*) FROM t GROUP BY () HAVING outer_col".
+//
+//		When such a pattern exists the scalar subquery must NOT be decorrelated
+//		with COALESCE(count,0) semantics: if the HAVING condition is false the
+//		subquery should return NULL (no rows), not 0.
+//
+//---------------------------------------------------------------------------
+static BOOL
+FHasCorrelatedSelectAboveGbAgg(CExpression *pexpr)
+{
+	// Stop recursion at a GbAgg boundary: we are looking for a Select
+	// that sits *above* a GbAgg, so once we reach the GbAgg there is
+	// nothing more to check in this branch.
+	if (COperator::EopLogicalGbAgg == pexpr->Pop()->Eopid())
+	{
+		return false;
+	}
+
+	if (COperator::EopLogicalSelect == pexpr->Pop()->Eopid() &&
+		pexpr->HasOuterRefs())
+	{
+		// The Select has outer references somewhere in its subtree.
+		// Check whether they originate from the filter (child 1) rather
+		// than from the logical child (child 0).  If the logical child has
+		// no outer refs but the Select as a whole does, the outer refs must
+		// come from the filter predicate — exactly the correlated-HAVING
+		// pattern we want to detect.
+		CExpression *pexprLogicalChild = (*pexpr)[0];
+		if (!pexprLogicalChild->HasOuterRefs() &&
+			FContainsEmptyGbAgg(pexprLogicalChild))
+		{
+			return true;
+		}
+	}
+
+	// Recurse into logical children only.
+	const ULONG arity = pexpr->Arity();
+	for (ULONG ul = 0; ul < arity; ul++)
+	{
+		CExpression *pexprChild = (*pexpr)[ul];
+		if (pexprChild->Pop()->FLogical() &&
+			FHasCorrelatedSelectAboveGbAgg(pexprChild))
+		{
+			return true;
+		}
+	}
+	return false;
+}
+
+
+//---------------------------------------------------------------------------
+//	@function:
 //		CSubqueryHandler::SSubqueryDesc::SetCorrelatedExecution
 //
 //	@doc:
@@ -381,6 +468,21 @@ CSubqueryHandler::Psd(CMemoryPool *mp, CExpression *pexprSubquery,
 
 	// set flag of correlated execution
 	psd->SetCorrelatedExecution();
+
+	// A correlated scalar subquery of the form
+	//   SELECT count(*) FROM t GROUP BY () HAVING <outer_ref_condition>
+	// must execute as a correlated SubPlan.  After NormalizeHaving() the HAVING
+	// clause becomes a CLogicalSelect with outer refs sitting above the GbAgg.
+	// If we decorrelate such a subquery the join filter replaces the HAVING
+	// condition, but a LEFT JOIN returns 0 (not NULL) for count(*) when no
+	// rows match — which is semantically wrong.  Forcing correlated execution
+	// preserves the correct NULL-when-no-rows semantics.
+	if (!psd->m_fCorrelatedExecution && psd->m_fHasCountAgg &&
+		psd->m_fHasOuterRefs &&
+		FHasCorrelatedSelectAboveGbAgg(pexprInner))
+	{
+		psd->m_fCorrelatedExecution = true;
+	}
 
 	return psd;
 }
@@ -753,8 +855,19 @@ CSubqueryHandler::FCreateOuterApplyForScalarSubquery(
 	*ppexprNewOuter = pexprPrj;
 
 	BOOL fGeneratedByQuantified = popSubquery->FGeneratedByQuantified();
+
+	// When GROUP BY () has a correlated HAVING clause (now represented as a
+	// CLogicalSelect with outer refs sitting above the GbAgg), the subquery
+	// must return NULL — not 0 — when the HAVING condition is false.
+	// Applying COALESCE(count,0) would incorrectly convert that NULL to 0,
+	// so we skip the special count(*) semantics in that case.
+	BOOL fCorrelatedHavingAboveEmptyGby =
+		(fHasCountAggMatchingColumn && 0 == pgbAgg->Pdrgpcr()->Size() &&
+		 FHasCorrelatedSelectAboveGbAgg((*pexprSubquery)[0]));
+
 	if (fGeneratedByQuantified ||
-		(fHasCountAggMatchingColumn && 0 == pgbAgg->Pdrgpcr()->Size()))
+		(fHasCountAggMatchingColumn && 0 == pgbAgg->Pdrgpcr()->Size() &&
+		 !fCorrelatedHavingAboveEmptyGby))
 	{
 		CMDAccessor *md_accessor = COptCtxt::PoctxtFromTLS()->Pmda();
 		const IMDTypeInt8 *pmdtypeint8 = md_accessor->PtMDType<IMDTypeInt8>();
