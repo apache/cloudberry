@@ -1333,8 +1333,8 @@ choose_best_statistics(List *stats, char requiredkind,
  *
  * (c) combinations using AND/OR/NOT
  *
- * (d) ScalarArrayOpExprs of the form (Var/Expr op ANY (array)) or (Var/Expr
- * op ALL (array))
+ * (d) ScalarArrayOpExprs of the form (Var/Expr op ANY (Const)) or
+ * (Var/Expr op ALL (Const))
  *
  * In the future, the range of supported clauses may be expanded to more
  * complex cases, for example (Var op Var).
@@ -1454,13 +1454,18 @@ statext_is_compatible_clause_internal(PlannerInfo *root, Node *clause,
 		RangeTblEntry *rte = root->simple_rte_array[relid];
 		ScalarArrayOpExpr *expr = (ScalarArrayOpExpr *) clause;
 		Node	   *clause_expr;
+		bool		expronleft;
 
 		/* Only expressions with two arguments are considered compatible. */
 		if (list_length(expr->args) != 2)
 			return false;
 
 		/* Check if the expression has the right shape (one Var, one Const) */
-		if (!examine_opclause_args(expr->args, &clause_expr, NULL, NULL))
+		if (!examine_opclause_args(expr->args, &clause_expr, NULL, &expronleft))
+			return false;
+
+		/* We only support Var on left, Const on right */
+		if (!expronleft)
 			return false;
 
 		/*
