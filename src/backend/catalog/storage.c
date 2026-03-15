@@ -170,11 +170,11 @@ RelationCreateStorage(RelFileLocator rlocator, char relpersistence, bool registe
 			return NULL;		/* placate compiler */
 	}
 
-	srel = smgropen(rlocator, backend, SMGR_MD, rel);
+	srel = smgropen(rlocator, backend, smgr_which, rel);
 	smgrcreate(srel, MAIN_FORKNUM, false);
 
 	if (needs_wal)
-		log_smgrcreate(&srel->smgr_rlocator.locator, MAIN_FORKNUM, SMGR_MD);
+		log_smgrcreate(&srel->smgr_rlocator.locator, MAIN_FORKNUM, smgr_which);
 
 	/*
 	 * Add the relation to the list of stuff to delete at abort, if we are
