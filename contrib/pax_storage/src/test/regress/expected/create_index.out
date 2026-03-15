@@ -2268,11 +2268,9 @@ WHERE classid = 'pg_class'::regclass AND
  index concur_reindex_ind3                | column c1 of table concur_reindex_tab                      | a
  index concur_reindex_ind4                | column c1 of table concur_reindex_tab                      | a
  index concur_reindex_ind4                | column c2 of table concur_reindex_tab                      | a
- materialized view concur_reindex_matview | access method pax                                          | n
  materialized view concur_reindex_matview | schema public                                              | n
- table concur_reindex_tab                 | access method pax                                          | n
  table concur_reindex_tab                 | schema public                                              | n
-(10 rows)
+(8 rows)
 
 REINDEX INDEX concur_reindex_ind1;
 REINDEX TABLE concur_reindex_tab;
@@ -2299,11 +2297,9 @@ WHERE classid = 'pg_class'::regclass AND
  index concur_reindex_ind3                | column c1 of table concur_reindex_tab                      | a
  index concur_reindex_ind4                | column c1 of table concur_reindex_tab                      | a
  index concur_reindex_ind4                | column c2 of table concur_reindex_tab                      | a
- materialized view concur_reindex_matview | access method pax                                          | n
  materialized view concur_reindex_matview | schema public                                              | n
- table concur_reindex_tab                 | access method pax                                          | n
  table concur_reindex_tab                 | schema public                                              | n
-(10 rows)
+(8 rows)
 
 -- Check that comments are preserved
 CREATE TABLE testcomment (i int);
@@ -2461,13 +2457,11 @@ WHERE classid = 'pg_class'::regclass AND
  table concur_reindex_part                | schema public                              | n
  table concur_reindex_part_0              | schema public                              | n
  table concur_reindex_part_0              | table concur_reindex_part                  | a
- table concur_reindex_part_0_1            | access method pax                          | n
  table concur_reindex_part_0_1            | schema public                              | n
  table concur_reindex_part_0_1            | table concur_reindex_part_0                | a
- table concur_reindex_part_0_2            | access method pax                          | n
  table concur_reindex_part_0_2            | schema public                              | n
  table concur_reindex_part_0_2            | table concur_reindex_part_0                | a
-(21 rows)
+(19 rows)
 
 REINDEX INDEX concur_reindex_part_index_0_1;
 REINDEX INDEX concur_reindex_part_index_0_2;
@@ -2515,13 +2509,11 @@ WHERE classid = 'pg_class'::regclass AND
  table concur_reindex_part                | schema public                              | n
  table concur_reindex_part_0              | schema public                              | n
  table concur_reindex_part_0              | table concur_reindex_part                  | a
- table concur_reindex_part_0_1            | access method pax                          | n
  table concur_reindex_part_0_1            | schema public                              | n
  table concur_reindex_part_0_1            | table concur_reindex_part_0                | a
- table concur_reindex_part_0_2            | access method pax                          | n
  table concur_reindex_part_0_2            | schema public                              | n
  table concur_reindex_part_0_2            | table concur_reindex_part_0                | a
-(21 rows)
+(19 rows)
 
 SELECT relid, parentrelid, level FROM pg_partition_tree('concur_reindex_part_index')
   ORDER BY relid, level;
