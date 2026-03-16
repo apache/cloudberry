@@ -44,7 +44,7 @@ CREATE GROUP regress_priv_group1;
 CREATE GROUP regress_priv_group2 WITH USER regress_priv_user1, regress_priv_user2;
 ALTER GROUP regress_priv_group1 ADD USER regress_priv_user4;
 ALTER GROUP regress_priv_group2 ADD USER regress_priv_user2;	-- duplicate
-NOTICE:  role "regress_priv_user2" is already a member of role "regress_priv_group2"
+NOTICE:  role "regress_priv_user2" has already been granted membership in role "regress_priv_group2" by role "gpadmin"
 ALTER GROUP regress_priv_group2 DROP USER regress_priv_user2;
 GRANT regress_priv_group2 TO regress_priv_user4 WITH ADMIN OPTION;
 -- prepare non-leakproof function for later

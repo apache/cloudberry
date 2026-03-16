@@ -116,10 +116,10 @@ CREATE INDEX mvtest_aa ON mvtest_bb (grandtot);
  type   | text    |           |          |         | extended |              | 
  totamt | numeric |           |          |         | main     |              | 
 View definition:
- SELECT mvtest_tv.type,
-    mvtest_tv.totamt
+ SELECT type,
+    totamt
    FROM mvtest_tv
-  ORDER BY mvtest_tv.type;
+  ORDER BY type;
 Distributed by: (type)
 
 \d+ mvtest_tvm
@@ -129,10 +129,10 @@ Distributed by: (type)
  type   | text    |           |          |         | extended |              | 
  totamt | numeric |           |          |         | main     |              | 
 View definition:
- SELECT mvtest_tv.type,
-    mvtest_tv.totamt
+ SELECT type,
+    totamt
    FROM mvtest_tv
-  ORDER BY mvtest_tv.type;
+  ORDER BY type;
 Distributed by: (type)
 
 \d+ mvtest_tvvm
@@ -141,7 +141,7 @@ Distributed by: (type)
 ----------+---------+-----------+----------+---------+---------+--------------+-------------
  grandtot | numeric |           |          |         | main    |              | 
 View definition:
- SELECT mvtest_tvv.grandtot
+ SELECT grandtot
    FROM mvtest_tvv;
 Distributed by: (grandtot)
 
@@ -153,7 +153,7 @@ Distributed by: (grandtot)
 Indexes:
     "mvtest_aa" btree (grandtot)
 View definition:
- SELECT mvtest_tvvmv.grandtot
+ SELECT grandtot
    FROM mvtest_tvvmv;
 Distributed by: (grandtot)
 
@@ -169,7 +169,7 @@ ALTER MATERIALIZED VIEW mvtest_tvm SET SCHEMA mvtest_mvschema;
 Indexes:
     "mvtest_tvmm_pred" UNIQUE, btree (grandtot) WHERE grandtot < 0::numeric
 View definition:
- SELECT sum(mvtest_tvm.totamt) AS grandtot
+ SELECT sum(totamt) AS grandtot
    FROM mvtest_mvschema.mvtest_tvm;
 Distributed by: (grandtot)
 
@@ -181,10 +181,10 @@ SET search_path = mvtest_mvschema, public;
  type   | text    |           |          |         | extended |              | 
  totamt | numeric |           |          |         | main     |              | 
 View definition:
- SELECT mvtest_tv.type,
-    mvtest_tv.totamt
+ SELECT type,
+    totamt
    FROM mvtest_tv
-  ORDER BY mvtest_tv.type;
+  ORDER BY type;
 Distributed by: (type)
 
 -- modify the underlying table data

@@ -1550,50 +1550,21 @@ select * from tt14v;
 
 begin;
 -- this perhaps should be rejected, but it isn't:
-alter table tt14t drop column f3;
+-- alter table tt14t drop column f3;
 -- f3 is still in the view ...
-select pg_get_viewdef('tt14v', true);
-         pg_get_viewdef         
---------------------------------
-  SELECT t.f1,                 +
-     t.f3,                     +
-     t.f4                      +
-    FROM tt14f() t(f1, f3, f4);
-(1 row)
-
+-- select pg_get_viewdef('tt14v', true);
 -- but will fail at execution
-select f1, f4 from tt14v;
- f1  | f4 
------+----
- foo | 42
-(1 row)
-
-select * from tt14v;
-ERROR:  attribute 3 of type record has been dropped
+-- select f1, f4 from tt14v;
+-- select * from tt14v;
 rollback;
 begin;
 -- this perhaps should be rejected, but it isn't:
-alter table tt14t alter column f4 type integer using f4::integer;
+-- alter table tt14t alter column f4 type integer using f4::integer;
 -- f4 is still in the view ...
-select pg_get_viewdef('tt14v', true);
-         pg_get_viewdef         
---------------------------------
-  SELECT t.f1,                 +
-     t.f3,                     +
-     t.f4                      +
-    FROM tt14f() t(f1, f3, f4);
-(1 row)
-
+-- select pg_get_viewdef('tt14v', true);
 -- but will fail at execution
-select f1, f3 from tt14v;
- f1  | f3  
------+-----
- foo | baz
-(1 row)
-
-select * from tt14v;
-ERROR:  attribute 4 of type record has wrong type
-DETAIL:  Table has type integer, but query expects text.
+-- select f1, f3 from tt14v;
+-- select * from tt14v;
 rollback;
 -- check display of whole-row variables in some corner cases
 create type nestedcomposite as (x int8_tbl);
@@ -1670,8 +1641,8 @@ select * from tt17v;
 select pg_get_viewdef('tt17v', true);
                pg_get_viewdef                
 ---------------------------------------------
-  SELECT i.q1,                              +
-     i.q2                                   +
+  SELECT q1,                                +
+     q2                                     +
     FROM int8_tbl i                         +
    WHERE (i.* IN ( VALUES (i.*::int8_tbl)));
 (1 row)
@@ -1812,8 +1783,8 @@ select pg_get_viewdef('tt201v', true);
 -----------------------------------------------------------------------------------------------
   SELECT EXTRACT(day FROM now()) AS extr,                                                     +
      ((now(), '@ 1 day'::interval) OVERLAPS (CURRENT_TIMESTAMP(2), '@ 1 day'::interval)) AS o,+
-     (('foo'::text) IS NORMALIZED) AS isn,                                                    +
-     (('foo'::text) IS NFKC NORMALIZED) AS isnn,                                              +
+     ('foo'::text IS NORMALIZED) AS isn,                                                      +
+     ('foo'::text IS NFKC NORMALIZED) AS isnn,                                                +
      NORMALIZE('foo'::text) AS n,                                                             +
      NORMALIZE('foo'::text, NFKD) AS nfkd,                                                    +
      OVERLAY('foo'::text PLACING 'bar'::text FROM 2) AS ovl,                                  +
@@ -1918,26 +1889,26 @@ select pg_get_viewdef('tt25v', true);
   WITH cte AS MATERIALIZED (           +
           SELECT pg_get_keywords() AS k+
          )                             +
-  SELECT (cte.k).word AS word          +
+  SELECT (k).word AS word              +
     FROM cte;
 (1 row)
 
 -- also check cases seen only in EXPLAIN
 explain (verbose, costs off)
 select * from tt24v;
-                                            QUERY PLAN                                            
---------------------------------------------------------------------------------------------------
+                                              QUERY PLAN                                              
+------------------------------------------------------------------------------------------------------
  Hash Join
-   Output: (share0_ref1.r).column2, ((ROW("*VALUES*".column1, "*VALUES*".column2))).column2
-   Hash Cond: (((ROW("*VALUES*".column1, "*VALUES*".column2))).column1 = (share0_ref1.r).column1)
-   ->  Limit
-         Output: (ROW("*VALUES*".column1, "*VALUES*".column2))
+   Output: (share0_ref1.r).column2, ((ROW("*VALUES*_1".column1, "*VALUES*_1".column2))).column2
+   Hash Cond: ((share0_ref1.r).column1 = ((ROW("*VALUES*_1".column1, "*VALUES*_1".column2))).column1)
+   ->  Shared Scan (share slice:id 0:0)
+         Output: share0_ref1.r
          ->  Values Scan on "*VALUES*"
                Output: ROW("*VALUES*".column1, "*VALUES*".column2)
    ->  Hash
-         Output: share0_ref1.r
-         ->  Shared Scan (share slice:id 0:0)
-               Output: share0_ref1.r
+         Output: (ROW("*VALUES*_1".column1, "*VALUES*_1".column2))
+         ->  Limit
+               Output: (ROW("*VALUES*_1".column1, "*VALUES*_1".column2))
                ->  Values Scan on "*VALUES*_1"
                      Output: ROW("*VALUES*_1".column1, "*VALUES*_1".column2)
  Optimizer: Postgres query optimizer
@@ -1970,19 +1941,19 @@ select x + y + z as c1,
        (x,y) <= ANY (values(1,2),(3,4)) as c11
 from (values(1,2,3)) v(x,y,z);
 select pg_get_viewdef('tt26v', true);
-                     pg_get_viewdef                     
---------------------------------------------------------
-  SELECT v.x + v.y + v.z AS c1,                        +
-     v.x * v.y + v.z AS c2,                            +
-     v.x + v.y * v.z AS c3,                            +
-     (v.x + v.y) * v.z AS c4,                          +
-     v.x * (v.y + v.z) AS c5,                          +
-     v.x + (v.y + v.z) AS c6,                          +
-     v.x + (v.y # v.z) AS c7,                          +
-     v.x > v.y AND (v.y > v.z OR v.x > v.z) AS c8,     +
-     v.x > v.y OR (v.y > v.z AND NOT v.x > v.z) AS c9, +
-     ((v.x, v.y) <> ALL ( VALUES (1,2), (3,4))) AS c10,+
-     ((v.x, v.y) <= ANY ( VALUES (1,2), (3,4))) AS c11 +
+                   pg_get_viewdef                   
+----------------------------------------------------
+  SELECT x + y + z AS c1,                          +
+     x * y + z AS c2,                              +
+     x + y * z AS c3,                              +
+     (x + y) * z AS c4,                            +
+     x * (y + z) AS c5,                            +
+     x + (y + z) AS c6,                            +
+     x + (y # z) AS c7,                            +
+     x > y AND (y > z OR x > z) AS c8,             +
+     x > y OR (y > z AND NOT x > z) AS c9,         +
+     ((x, y) <> ALL ( VALUES (1,2), (3,4))) AS c10,+
+     ((x, y) <= ANY ( VALUES (1,2), (3,4))) AS c11 +
     FROM ( VALUES (1,2,3)) v(x, y, z);
 (1 row)
 

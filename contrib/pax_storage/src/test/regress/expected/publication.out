@@ -24,9 +24,11 @@ ALTER PUBLICATION testpub_default SET (publish = update);
 CREATE PUBLICATION testpub_xxx WITH (foo);
 ERROR:  unrecognized publication parameter: "foo"
 CREATE PUBLICATION testpub_xxx WITH (publish = 'cluster, vacuum');
-ERROR:  unrecognized "publish" value: "cluster"
+ERROR:  unrecognized value for publication option "publish": "cluster"
 CREATE PUBLICATION testpub_xxx WITH (publish_via_partition_root = 'true', publish_via_partition_root = '0');
 ERROR:  conflicting or redundant options
+LINE 1: ...ub_xxx WITH (publish_via_partition_root = 'true', publish_vi...
+                                                             ^
 \dRp
                                               List of publications
         Name        |          Owner           | All tables | Inserts | Updates | Deletes | Truncates | Via root 
@@ -167,9 +169,9 @@ UPDATE testpub_parted2 SET a = 2;
 ALTER PUBLICATION testpub_forparted ADD TABLE testpub_parted, testpub_parted2;
 -- only parent is listed as being in publication, not the partition
 SELECT * FROM pg_publication_tables;
-      pubname      | schemaname |   tablename    
--------------------+------------+----------------
- testpub_forparted | public     | testpub_parted
+      pubname      | schemaname |   tablename    | attnames | rowfilter 
+-------------------+------------+----------------+----------+-----------
+ testpub_forparted | public     | testpub_parted | {a}      | 
 (1 row)
 
 DROP TABLE testpub_parted1, testpub_parted2;
@@ -191,8 +193,8 @@ UPDATE testpub_tbl4 set a = 3;
 DROP TABLE testpub_tbl4;
 -- fail - view
 CREATE PUBLICATION testpub_fortbl FOR TABLE testpub_view;
-ERROR:  "testpub_view" is not a table
-DETAIL:  Only tables can be added to publications.
+ERROR:  cannot add relation "testpub_view" to publication
+DETAIL:  This operation is not supported for views.
 SET client_min_messages = 'ERROR';
 CREATE PUBLICATION testpub_fortbl FOR TABLE testpub_tbl1, pub_test.testpub_nopk;
 RESET client_min_messages;
@@ -213,8 +215,8 @@ Tables:
 
 -- fail - view
 ALTER PUBLICATION testpub_default ADD TABLE testpub_view;
-ERROR:  "testpub_view" is not a table
-DETAIL:  Only tables can be added to publications.
+ERROR:  cannot add relation "testpub_view" to publication
+DETAIL:  This operation is not supported for views.
 ALTER PUBLICATION testpub_default ADD TABLE testpub_tbl1;
 ALTER PUBLICATION testpub_default SET TABLE testpub_tbl1;
 ALTER PUBLICATION testpub_default ADD TABLE pub_test.testpub_nopk;

@@ -2281,15 +2281,13 @@ order by 1, 2;
          ->  Hash Left Join
                Hash Cond: (i1.q2 = i2.q2)
                ->  Redistribute Motion 3:3  (slice2; segments: 3)
-                     Hash Key: i1.q2
+                     Hash Key: 123
                      ->  Seq Scan on int8_tbl i1
                ->  Hash
-                     ->  Redistribute Motion 1:3  (slice3; segments: 1)
-                           Hash Key: i2.q2
-                           ->  Seq Scan on int8_tbl i2
-                                 Filter: (q1 = 123)
+                     ->  Seq Scan on int8_tbl i2
+                           Filter: (q1 = 123)
  Optimizer: Postgres query optimizer
-(15 rows)
+(13 rows)
 
 select * from int8_tbl i1 left join (int8_tbl i2 join
   (select 123 as x) ss on i2.q1 = x) on i1.q2 = i2.q2
@@ -2337,10 +2335,11 @@ where b.f1 = t.thousand and a.f1 = b.f1 and (a.f1+b.f1+999) = t.tenthous;
 -----------------------------------------------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Nested Loop
+         Join Filter: (((((sum(i4a.f1) + 1)) + (sum(i4b.f1))) + 999) = t.tenthous)
          ->  Broadcast Motion 1:3  (slice2; segments: 1)
                ->  Aggregate
                      ->  Gather Motion 3:1  (slice3; segments: 3)
-                           ->  Seq Scan on int4_tbl i4b
+                           ->  Seq Scan on int4_tbl i4a
          ->  Materialize
                ->  Nested Loop
                      Join Filter: ((sum(i4b.f1)) = ((sum(i4a.f1) + 1)))
@@ -2348,11 +2347,11 @@ where b.f1 = t.thousand and a.f1 = b.f1 and (a.f1+b.f1+999) = t.tenthous;
                            ->  Broadcast Motion 1:3  (slice4; segments: 1)
                                  ->  Aggregate
                                        ->  Gather Motion 3:1  (slice5; segments: 3)
-                                             ->  Seq Scan on int4_tbl i4a
+                                             ->  Seq Scan on int4_tbl i4b
                      ->  Index Only Scan using tenk1_thous_tenthous on tenk1 t
                            Index Cond: ((thousand = (sum(i4b.f1))) AND (tenthous = ((((sum(i4a.f1) + 1)) + (sum(i4b.f1))) + 999)))
  Optimizer: Postgres query optimizer
-(17 rows)
+(18 rows)
 
 select a.f1, b.f1, t.thousand, t.tenthous from
   tenk1 t,
@@ -3107,7 +3106,7 @@ order by 1,2;
          Sort Key: t1.q1, t1.q2
          ->  Hash Left Join
                Hash Cond: (t1.q2 = t2.q1)
-               Filter: ((SubPlan 1) = 1)
+               Filter: (1 = (SubPlan 1))
                ->  Redistribute Motion 3:3  (slice3; segments: 3)
                      Hash Key: t1.q2
                      ->  Seq Scan on int8_tbl t1
@@ -3375,22 +3374,36 @@ select t1.unique2, t1.stringu1, t2.unique1, t2.stringu2 from
   left join tenk1 t2
   on (subq1.y1 = t2.unique1)
 where t1.unique2 < 42 and t1.stringu1 > t2.stringu2;
-                                  QUERY PLAN                                  
-------------------------------------------------------------------------------
- Nested Loop
+                                              QUERY PLAN                                              
+------------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
    ->  Nested Loop
-         Join Filter: ("*VALUES*".column2 = i1.f1)
-         ->  Nested Loop
-               ->  Nested Loop
-                     Join Filter: ("*VALUES*".column1 = "*VALUES*_1".column2)
-                     ->  Values Scan on "*VALUES*"
-                     ->  Values Scan on "*VALUES*_1"
-               ->  Index Scan using tenk1_unique2 on tenk1 t1
-                     Index Cond: ((unique2 = (11)) AND (unique2 < 42))
-         ->  Seq Scan on int4_tbl i1
-   ->  Index Scan using tenk1_unique1 on tenk1 t2
-         Index Cond: (unique1 = "*VALUES*_1".column1)
-(14 rows)
+         ->  Broadcast Motion 1:3  (slice2; segments: 1)
+               ->  Seq Scan on int4_tbl i1
+                     Filter: (f1 = 0)
+         ->  Materialize
+               ->  Hash Join
+                     Hash Cond: ((11) = t1.unique2)
+                     Join Filter: (t1.stringu1 > t2.stringu2)
+                     ->  Broadcast Motion 3:3  (slice3; segments: 3)
+                           ->  Nested Loop
+                                 Join Filter: (11 < 42)
+                                 ->  Broadcast Motion 3:3  (slice4; segments: 3)
+                                       ->  Seq Scan on onerow
+                                 ->  Materialize
+                                       ->  Hash Join
+                                             Hash Cond: (t2.unique1 = (3))
+                                             ->  Seq Scan on tenk1 t2
+                                             ->  Hash
+                                                   ->  Redistribute Motion 3:3  (slice5; segments: 3)
+                                                         Hash Key: (3)
+                                                         ->  Seq Scan on onerow onerow_1
+                     ->  Hash
+                           ->  Index Scan using tenk1_unique2 on tenk1 t1
+                                 Index Cond: (unique2 < 42)
+ Optimizer: Postgres query optimizer
+(26 rows)
+
 --end_ignore
 select t1.unique2, t1.stringu1, t2.unique1, t2.stringu2 from
   tenk1 t1
@@ -3640,16 +3653,17 @@ select unique1, x from tenk1 left join f_immutable_int4(1) x on unique1 = x;
 
 explain (costs off)
 select unique1, x from tenk1 right join f_immutable_int4(1) x on unique1 = x;
-                           QUERY PLAN                           
-----------------------------------------------------------------
- Nested Loop Left Join
-   ->  Result
-   ->  Materialize
-         ->  Gather Motion 1:1  (slice1; segments: 1)
-               ->  Index Only Scan using tenk1_unique1 on tenk1
-                     Index Cond: (unique1 = 1)
+                         QUERY PLAN                         
+------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Nested Loop Left Join
+         ->  Redistribute Motion 1:3  (slice2; segments: 1)
+               Hash Key: 1
+               ->  Result
+         ->  Index Only Scan using tenk1_unique1 on tenk1
+               Index Cond: (unique1 = 1)
  Optimizer: Postgres query optimizer
-(7 rows)
+(8 rows)
 
 explain (costs off)
 select unique1, x from tenk1 full join f_immutable_int4(1) x on unique1 = x;
@@ -4074,7 +4088,7 @@ select q1, unique2, thousand, hundred
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Hash Right Join
          Hash Cond: (b.unique2 = a.q1)
-         Filter: ((COALESCE(b.thousand, 123) = a.q1) AND (a.q1 = COALESCE(b.hundred, 123)))
+         Filter: ((COALESCE(b.thousand, 123) = COALESCE(b.hundred, 123)) AND (a.q1 = COALESCE(b.hundred, 123)))
          ->  Redistribute Motion 3:3  (slice2; segments: 3)
                Hash Key: b.unique2
                ->  Seq Scan on tenk1 b
@@ -4126,8 +4140,7 @@ select a.unique1, b.unique1, c.unique1, coalesce(b.twothousand, a.twothousand)
                                QUERY PLAN                                
 -------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
-   ->  Hash Left Join
-         Hash Cond: (COALESCE(b.twothousand, a.twothousand) = c.unique2)
+   ->  Nested Loop Left Join
          ->  Hash Right Join
                Hash Cond: (b.thousand = a.unique1)
                Filter: (COALESCE(b.twothousand, a.twothousand) = 44)
@@ -4137,12 +4150,12 @@ select a.unique1, b.unique1, c.unique1, coalesce(b.twothousand, a.twothousand)
                ->  Hash
                      ->  Index Scan using tenk1_unique2 on tenk1 a
                            Index Cond: (unique2 < 10)
-         ->  Hash
+         ->  Materialize
                ->  Broadcast Motion 3:3  (slice3; segments: 3)
                      ->  Index Scan using tenk1_unique2 on tenk1 c
                            Index Cond: (unique2 = 44)
  Optimizer: Postgres query optimizer
-(17 rows)
+(16 rows)
 
 select a.unique1, b.unique1, c.unique1, coalesce(b.twothousand, a.twothousand)
   from tenk1 a left join tenk1 b on b.thousand = a.unique1                        left join tenk1 c on c.unique2 = coalesce(b.twothousand, a.twothousand)
@@ -6162,10 +6175,10 @@ select * from
    ->  Nested Loop
          Output: c.q1, c.q2, a.q1, a.q2, b.q1, (COALESCE(b.q2, '42'::bigint)), d.q1, (COALESCE((COALESCE(b.q2, '42'::bigint)), d.q2)), ((COALESCE((COALESCE(b.q2, '42'::bigint)), d.q2)))
          ->  Hash Right Join
-               Output: c.q1, c.q2, a.q1, a.q2, b.q1, d.q1, (COALESCE(b.q2, '42'::bigint)), (COALESCE((COALESCE(b.q2, '42'::bigint)), d.q2))
+               Output: c.q1, c.q2, a.q1, a.q2, b.q1, (COALESCE(b.q2, '42'::bigint)), d.q1, (COALESCE((COALESCE(b.q2, '42'::bigint)), d.q2))
                Hash Cond: (d.q1 = c.q2)
                ->  Nested Loop
-                     Output: a.q1, a.q2, b.q1, d.q1, (COALESCE(b.q2, '42'::bigint)), (COALESCE((COALESCE(b.q2, '42'::bigint)), d.q2))
+                     Output: a.q1, a.q2, b.q1, (COALESCE(b.q2, '42'::bigint)), d.q1, (COALESCE((COALESCE(b.q2, '42'::bigint)), d.q2))
                      ->  Broadcast Motion 3:3  (slice2; segments: 3)
                            Output: a.q1, a.q2, b.q1, (COALESCE(b.q2, '42'::bigint))
                            ->  Hash Left Join
@@ -6301,6 +6314,7 @@ select * from int8_tbl i8 left join lateral
    Output: i8.q1, i8.q2, f1, (i8.q2)
    ->  Nested Loop Left Join
          Output: i8.q1, i8.q2, f1, (i8.q2)
+         Join Filter: false
          ->  Seq Scan on public.int8_tbl i8
                Output: i8.q1, i8.q2
          ->  Result
@@ -6418,22 +6432,26 @@ select f1,g from int4_tbl a, (select f1 as g) ss;
 ERROR:  column "f1" does not exist
 LINE 1: select f1,g from int4_tbl a, (select f1 as g) ss;
                                              ^
-HINT:  There is a column named "f1" in table "a", but it cannot be referenced from this part of the query.
+DETAIL:  There is a column named "f1" in table "a", but it cannot be referenced from this part of the query.
+HINT:  To reference that column, you must mark this subquery with LATERAL.
 select f1,g from int4_tbl a, (select a.f1 as g) ss;
 ERROR:  invalid reference to FROM-clause entry for table "a"
 LINE 1: select f1,g from int4_tbl a, (select a.f1 as g) ss;
                                              ^
-HINT:  There is an entry for table "a", but it cannot be referenced from this part of the query.
+DETAIL:  There is an entry for table "a", but it cannot be referenced from this part of the query.
+HINT:  To reference that table, you must mark this subquery with LATERAL.
 select f1,g from int4_tbl a cross join (select f1 as g) ss;
 ERROR:  column "f1" does not exist
 LINE 1: select f1,g from int4_tbl a cross join (select f1 as g) ss;
                                                        ^
-HINT:  There is a column named "f1" in table "a", but it cannot be referenced from this part of the query.
+DETAIL:  There is a column named "f1" in table "a", but it cannot be referenced from this part of the query.
+HINT:  To reference that column, you must mark this subquery with LATERAL.
 select f1,g from int4_tbl a cross join (select a.f1 as g) ss;
 ERROR:  invalid reference to FROM-clause entry for table "a"
 LINE 1: select f1,g from int4_tbl a cross join (select a.f1 as g) ss...
                                                        ^
-HINT:  There is an entry for table "a", but it cannot be referenced from this part of the query.
+DETAIL:  There is an entry for table "a", but it cannot be referenced from this part of the query.
+HINT:  To reference that table, you must mark this subquery with LATERAL.
 -- SQL:2008 says the left table is in scope but illegal to access here
 select f1,g from int4_tbl a right join lateral generate_series(0, a.f1) g on true;
 ERROR:  invalid reference to FROM-clause entry for table "a"
@@ -6463,12 +6481,12 @@ update xx1 set x2 = f1 from (select * from int4_tbl where f1 = x1) ss;
 ERROR:  column "x1" does not exist
 LINE 1: ... set x2 = f1 from (select * from int4_tbl where f1 = x1) ss;
                                                                 ^
-HINT:  There is a column named "x1" in table "xx1", but it cannot be referenced from this part of the query.
+DETAIL:  There is a column named "x1" in table "xx1", but it cannot be referenced from this part of the query.
 update xx1 set x2 = f1 from (select * from int4_tbl where f1 = xx1.x1) ss;
 ERROR:  invalid reference to FROM-clause entry for table "xx1"
 LINE 1: ...t x2 = f1 from (select * from int4_tbl where f1 = xx1.x1) ss...
                                                              ^
-HINT:  There is an entry for table "xx1", but it cannot be referenced from this part of the query.
+DETAIL:  There is an entry for table "xx1", but it cannot be referenced from this part of the query.
 -- can't do it even with LATERAL:
 update xx1 set x2 = f1 from lateral (select * from int4_tbl where f1 = x1) ss;
 ERROR:  invalid reference to FROM-clause entry for table "xx1"
@@ -6483,12 +6501,12 @@ delete from xx1 using (select * from int4_tbl where f1 = x1) ss;
 ERROR:  column "x1" does not exist
 LINE 1: ...te from xx1 using (select * from int4_tbl where f1 = x1) ss;
                                                                 ^
-HINT:  There is a column named "x1" in table "xx1", but it cannot be referenced from this part of the query.
+DETAIL:  There is a column named "x1" in table "xx1", but it cannot be referenced from this part of the query.
 delete from xx1 using (select * from int4_tbl where f1 = xx1.x1) ss;
 ERROR:  invalid reference to FROM-clause entry for table "xx1"
 LINE 1: ...from xx1 using (select * from int4_tbl where f1 = xx1.x1) ss...
                                                              ^
-HINT:  There is an entry for table "xx1", but it cannot be referenced from this part of the query.
+DETAIL:  There is an entry for table "xx1", but it cannot be referenced from this part of the query.
 delete from xx1 using lateral (select * from int4_tbl where f1 = x1) ss;
 ERROR:  invalid reference to FROM-clause entry for table "xx1"
 LINE 1: ...xx1 using lateral (select * from int4_tbl where f1 = x1) ss;
@@ -7037,7 +7055,7 @@ where j1.id1 % 1000 = 1 and j2.id1 % 1000 = 1;
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Merge Join
          Merge Cond: (j1.id1 = j2.id1)
-         Join Filter: (j1.id2 = j2.id2)
+         Join Filter: (j2.id2 = j1.id2)
          ->  Index Scan using j1_id1_idx on j1
          ->  Index Scan using j2_id1_idx on j2
  Optimizer: Postgres query optimizer
@@ -7061,7 +7079,7 @@ where j1.id1 % 1000 = 1 and j2.id1 % 1000 = 1 and j2.id1 = any (array[1]);
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Merge Join
          Merge Cond: (j1.id1 = j2.id1)
-         Join Filter: (j1.id2 = j2.id2)
+         Join Filter: (j2.id2 = j1.id2)
          ->  Index Scan using j1_id1_idx on j1
                Index Cond: (id1 = ANY ('{1}'::integer[]))
          ->  Index Scan using j2_id1_idx on j2

@@ -140,6 +140,7 @@ pg_namespace|t
 pg_opclass|t
 pg_operator|t
 pg_opfamily|t
+pg_parameter_acl|t
 pg_partitioned_table|t
 pg_password_history|t
 pg_policy|t
@@ -147,6 +148,7 @@ pg_proc|t
 pg_proc_callback|t
 pg_profile|t
 pg_publication|t
+pg_publication_namespace|t
 pg_publication_rel|t
 pg_range|t
 pg_replication_origin|t
