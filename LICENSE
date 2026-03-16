@@ -246,7 +246,7 @@ The PostgreSQL software includes:
       
       src/backend/utils/adt/inet_cidr_ntop.c
       src/backend/utils/adt/inet_net_pton.c
-      see licenses/licenses/LICENSE-isc.txt
+      see licenses/LICENSE-isc.txt
 
 ----------------------------
    Perl Artistic License 2.0 (exception)
