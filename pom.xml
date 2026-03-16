@@ -531,6 +531,7 @@ code or new licensing patterns.
             <exclude>contrib/test_decoding/specs/subxact_without_top.spec</exclude>
             <exclude>contrib/test_decoding/specs/snapshot_transfer.spec</exclude>
             <exclude>contrib/test_decoding/specs/concurrent_stream.spec</exclude>
+            <exclude>contrib/test_decoding/specs/catalog_change_snapshot.spec</exclude>
             <exclude>contrib/test_decoding/logical.conf</exclude>
 
             <exclude>contrib/hstore_plpython/hstore_plpython.c</exclude>
