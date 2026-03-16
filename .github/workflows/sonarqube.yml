@@ -94,7 +94,7 @@ jobs:
              /usr/local/xerces-c/lib/libxerces-c-3.3.so \
              /usr/local/cloudberry-db/lib
         sudo chown -R gpadmin:gpadmin /usr/local/cloudberry-db
-        export LD_LIBRARY_PATH=/usr/local/cloudberry-db/lib:LD_LIBRARY_PATH
+        export LD_LIBRARY_PATH=/usr/local/cloudberry-db/lib:${LD_LIBRARY_PATH:-""}
         ./configure --prefix=/usr/local/cloudberry-db \
             --disable-external-fts \
             --enable-gpcloud \
