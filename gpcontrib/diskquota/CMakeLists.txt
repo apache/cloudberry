@@ -12,10 +12,6 @@ endif()
 # generate 'compile_commands.json'
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-# Retrieve repository information
-include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/Git.cmake)
-GitHash_Get(DISKQUOTA_GIT_HASH)
-
 include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/Gpdb.cmake)
 
 
@@ -154,19 +150,6 @@ add_custom_target(create_artifact
   ${CMAKE_COMMAND} -E tar czvf ${artifact_NAME} "${tgz_NAME}.tar.gz")
 # packing end
 
-# Create build-info
-# The diskquota-build-info shouldn't be copied to GPDB release by install_gpdb_component
-include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/BuildInfo.cmake)
-set(build_info_PATH ${CMAKE_CURRENT_BINARY_DIR}/diskquota-build-info)
-BuildInfo_Create(${build_info_PATH}
-  VARS
-  DISKQUOTA_GIT_HASH
-  DISKQUOTA_VERSION
-  GP_MAJOR_VERSION
-  GP_VERSION
-  CMAKE_BUILD_TYPE)
-# Create build-info end
-
 # Add installcheck targets
 add_subdirectory(tests)
 add_subdirectory(upgrade_test)
@@ -175,4 +158,3 @@ add_subdirectory(upgrade_test)
 install(PROGRAMS "cmake/install_gpdb_component" DESTINATION ".")
 install(FILES ${diskquota_DDL} DESTINATION "share/postgresql/extension/")
 install(TARGETS diskquota DESTINATION "lib/postgresql/")
-install(FILES ${build_info_PATH} DESTINATION ".")
