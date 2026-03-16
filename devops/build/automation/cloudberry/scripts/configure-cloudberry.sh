@@ -131,7 +131,7 @@ log_section_end "Initial Setup"
 
 # Set environment
 log_section "Environment Setup"
-export LD_LIBRARY_PATH=${BUILD_DESTINATION}/lib:LD_LIBRARY_PATH
+export LD_LIBRARY_PATH=${BUILD_DESTINATION}/lib:${LD_LIBRARY_PATH:-""}
 log_section_end "Environment Setup"
 
 # Add debug options if ENABLE_DEBUG is set to "true"
