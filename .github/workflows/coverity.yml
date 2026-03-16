@@ -90,7 +90,7 @@ jobs:
              /usr/local/cloudberry-db/lib
         sudo chown -R gpadmin:gpadmin /usr/local/cloudberry-db
         su - gpadmin -c "cd $WORKSPACE"
-        export LD_LIBRARY_PATH=/usr/local/cloudberry-db/lib:LD_LIBRARY_PATH
+        export LD_LIBRARY_PATH=/usr/local/cloudberry-db/lib:${LD_LIBRARY_PATH:-""}
         export PATH=$WORKSPACE/coverity_tool/bin:$PATH
         ./configure --prefix=/usr/local/cloudberry-db \
             --disable-external-fts \
