@@ -330,12 +330,7 @@ CreateTableSpace(CreateTableSpaceStmt *stmt)
 	}
 
 	if (!location)
-	{
-		if (stmt->location == NULL)
-			stmt->location = "";
-
-		location = pstrdup(stmt->location);
-	}
+		location = pstrdup(stmt->location ? stmt->location : "");
 
 	if (stmt->filehandler)
 		fileHandler = pstrdup(stmt->filehandler);
