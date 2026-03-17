@@ -632,7 +632,7 @@ sub adjust_conf
 
     my $conffile = $self->data_dir . '/' . $filename;
 
-    my $contents = PostgreSQL::Test::Utils::slurp_file($conffile);
+    my $contents = TestLib::slurp_file($conffile);
     my @lines    = split(/\n/, $contents);
     my @result;
     my $eq = $skip_equals ? '' : '= ';
@@ -1220,7 +1220,7 @@ sub enable_archiving
 	my $copy_command =
 	  $TestLib::windows_os
 	  ? qq{copy "%p" "$path\\\\%f"}
-	  : qq{cp "%p" "$path/%f"};
+	  : qq{install -m 644 "%p" "$path/%f"};
 
 	# Enable archive_mode and archive_command on node
 	$self->append_conf(
