@@ -339,6 +339,10 @@ jobs:
               },
               {"test":"ic-cbdb-parallel",
                "make_configs":["src/test/regress:installcheck-cbdb-parallel"]
+              },
+              {"test":"ic-recovery",
+               "make_configs":["src/test/recovery:installcheck"],
+               "enable_core_check":false
               }
             ]
           }'
