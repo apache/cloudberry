@@ -124,7 +124,8 @@ DROP TABLE attmp;
 -- fails with incorrect object type
 CREATE VIEW at_v1 AS SELECT 1 as a;
 ALTER TABLE at_v1 ALTER COLUMN a SET STATISTICS 0;
-ERROR:  "at_v1" is not a table, materialized view, index, partitioned index, or foreign table
+ERROR:  ALTER action ALTER COLUMN ... SET STATISTICS cannot be performed on relation "at_v1"
+DETAIL:  This operation is not supported for views.
 DROP VIEW at_v1;
 --
 -- rename - check on both non-temp and temp tables

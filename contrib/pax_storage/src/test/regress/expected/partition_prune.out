@@ -1252,25 +1252,31 @@ explain (costs off) select * from boolpart where a is true or a is not true;
                Filter: ((a IS TRUE) OR (a IS NOT TRUE))
          ->  Seq Scan on boolpart_t boolpart_2
                Filter: ((a IS TRUE) OR (a IS NOT TRUE))
+         ->  Seq Scan on boolpart_default boolpart_3
+               Filter: ((a IS TRUE) OR (a IS NOT TRUE))
+ Optimizer: Postgres query optimizer
+(9 rows)
+
+explain (costs off) select * from boolpart where a is not true;
+                     QUERY PLAN                      
+-----------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Append
+         ->  Seq Scan on boolpart_f boolpart_1
+               Filter: (a IS NOT TRUE)
+         ->  Seq Scan on boolpart_default boolpart_2
+               Filter: (a IS NOT TRUE)
  Optimizer: Postgres query optimizer
 (7 rows)
 
-explain (costs off) select * from boolpart where a is not true;
-                QUERY PLAN                
-------------------------------------------
+explain (costs off) select * from boolpart where a is not true and a is not false;
+                       QUERY PLAN                       
+--------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
-   ->  Seq Scan on boolpart_f boolpart
-         Filter: (a IS NOT TRUE)
+   ->  Seq Scan on boolpart_default boolpart
+         Filter: ((a IS NOT TRUE) AND (a IS NOT FALSE))
  Optimizer: Postgres query optimizer
 (4 rows)
-
-explain (costs off) select * from boolpart where a is not true and a is not false;
-             QUERY PLAN              
--------------------------------------
- Result
-   One-Time Filter: false
- Optimizer: Postgres query optimizer
-(3 rows)
 
 explain (costs off) select * from boolpart where a is unknown;
                      QUERY PLAN                      
@@ -2411,7 +2417,7 @@ select explain_parallel_append('select avg(ab.a) from ab inner join lprt_a a on 
                                              Index Cond: (a = ANY ('{0,0,1}'::integer[]))
                      ->  Sort (actual rows=N loops=N)
                            Sort Key: a.a
-                           Sort Method:  quicksort  Memory: 60kB
+                           Sort Method:  quicksort  Memory: 25kB
                            ->  Partition Selector (selector id: $0) (actual rows=N loops=N)
                                  ->  Seq Scan on lprt_a a (actual rows=N loops=N)
                                        Filter: (a = ANY ('{0,0,1}'::integer[]))
@@ -4177,7 +4183,7 @@ explain (costs off) update listp1 set a = 1 where a = 2;
 ---------------------------------------------------------------
  Update on listp1
    ->  Explicit Redistribute Motion 1:3  (slice1; segments: 1)
-         ->  Split
+         ->  Split Update
                ->  Seq Scan on listp1
                      Filter: (a = 2)
  Optimizer: Postgres query optimizer
