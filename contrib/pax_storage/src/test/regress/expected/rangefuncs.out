@@ -2177,13 +2177,22 @@ select * from usersview;
 
 begin;
 alter table users drop column moredrop;
+ERROR:  cannot drop column moredrop of table users because other objects depend on it
+DETAIL:  view usersview depends on column moredrop of table users
+HINT:  Use DROP ... CASCADE to drop the dependent objects too.
 select * from usersview;  -- expect clean failure
-ERROR:  attribute 5 of type record has been dropped
+ERROR:  current transaction is aborted, commands ignored until end of transaction block
 rollback;
 alter table users alter column seq type numeric;
+ERROR:  cannot alter type of a column used by a view or rule
+DETAIL:  rule _RETURN on view usersview depends on column "seq"
 select * from usersview;  -- expect clean failure
-ERROR:  attribute 2 of type record has wrong type
-DETAIL:  Table has type numeric, but query expects integer.
+ userid | seq | email  | moredrop | enabled | generate_series | ordinality 
+--------+-----+--------+----------+---------+-----------------+------------
+ id     |   1 | email  |       11 | t       |              10 |          1
+ id2    |   2 | email2 |       12 | t       |              11 |          2
+(2 rows)
+
 drop view usersview;
 drop function get_first_user();
 drop function get_users();

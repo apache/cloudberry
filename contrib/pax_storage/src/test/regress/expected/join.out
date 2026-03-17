@@ -1638,7 +1638,7 @@ SELECT * FROM (J1_TBL JOIN J2_TBL USING (i)) AS x WHERE J1_TBL.t = 'one';  -- er
 ERROR:  invalid reference to FROM-clause entry for table "j1_tbl"
 LINE 1: ... * FROM (J1_TBL JOIN J2_TBL USING (i)) AS x WHERE J1_TBL.t =...
                                                              ^
-HINT:  There is an entry for table "j1_tbl", but it cannot be referenced from this part of the query.
+DETAIL:  There is an entry for table "j1_tbl", but it cannot be referenced from this part of the query.
 SELECT * FROM J1_TBL JOIN J2_TBL USING (i) AS x WHERE x.i = 1;  -- ok
  i | j |  t  | k  
 ---+---+-----+----
@@ -4787,36 +4787,31 @@ explain (costs off)
                          QUERY PLAN                          
 -------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
-   ->  Hash Right Join
-         Hash Cond: (b.unique2 = a.f1)
-         ->  Redistribute Motion 3:3  (slice2; segments: 3)
-               Hash Key: 0
-               ->  Index Scan using tenk1_unique2 on tenk1 b
-                     Index Cond: (unique2 = 0)
-         ->  Hash
-               ->  Seq Scan on int4_tbl a
-                     Filter: (f1 = 0)
+   ->  Nested Loop Left Join
+         ->  Seq Scan on int4_tbl a
+               Filter: (f1 = 0)
+         ->  Materialize
+               ->  Redistribute Motion 3:3  (slice2; segments: 3)
+                     Hash Key: 0
+                     ->  Index Scan using tenk1_unique2 on tenk1 b
+                           Index Cond: (unique2 = 0)
  Optimizer: Postgres query optimizer
 (11 rows)
 
 explain (costs off)
   select * from tenk1 a full join tenk1 b using(unique2) where unique2 = 42;
-                            QUERY PLAN                             
--------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)
-   ->  Hash Full Join
-         Hash Cond: (a.unique2 = b.unique2)
-         ->  Redistribute Motion 3:3  (slice2; segments: 3)
-               Hash Key: a.unique2
-               ->  Index Scan using tenk1_unique2 on tenk1 a
+                         QUERY PLAN                          
+-------------------------------------------------------------
+ Merge Full Join
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         ->  Index Scan using tenk1_unique2 on tenk1 a
+               Index Cond: (unique2 = 42)
+   ->  Materialize
+         ->  Gather Motion 3:1  (slice2; segments: 3)
+               ->  Index Scan using tenk1_unique2 on tenk1 b
                      Index Cond: (unique2 = 42)
-         ->  Hash
-               ->  Redistribute Motion 3:3  (slice3; segments: 3)
-                     Hash Key: b.unique2
-                     ->  Index Scan using tenk1_unique2 on tenk1 b
-                           Index Cond: (unique2 = 42)
  Optimizer: Postgres query optimizer
-(13 rows)
+(9 rows)
 
 --
 -- test that quals attached to an outer join have correct semantics,
@@ -5322,7 +5317,7 @@ select * from
 ERROR:  invalid reference to FROM-clause entry for table "y"
 LINE 2: ...bl x join (int4_tbl x cross join int4_tbl y) j on q1 = y.f1;
                                                                   ^
-HINT:  There is an entry for table "y", but it cannot be referenced from this part of the query.
+DETAIL:  There is an entry for table "y", but it cannot be referenced from this part of the query.
 select * from
   int8_tbl x join (int4_tbl x cross join int4_tbl y(ff)) j on q1 = f1; -- ok
  q1 | q2 | f1 | ff 
@@ -6609,8 +6604,8 @@ select * from fkest f1
   join fkest f2 on (f1.x = f2.x and f1.x10 = f2.x10b and f1.x100 = f2.x100)
   join fkest f3 on f1.x = f3.x
   where f1.x100 = 2;
-                     QUERY PLAN                      
------------------------------------------------------
+                        QUERY PLAN                         
+-----------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Hash Join
          Hash Cond: ((f1.x = f2.x) AND (f1.x10 = f2.x10b))
@@ -6676,7 +6671,7 @@ where f.c = 1;
                ->  Index Only Scan using fkest1_pkey on fkest1 f3
                      Index Cond: ((a = f.a) AND (b = f.b))
  Optimizer: Postgres query optimizer
-(13 rows)
+(19 rows)
 
 rollback;
 --
@@ -7185,13 +7180,13 @@ from onek t1, tenk1 t2
 where exists (select 1 from j3
               where j3.unique1 = t1.unique1 and j3.tenthous = t2.hundred)
       and t1.unique1 < 1;
-                                                      QUERY PLAN                                                      
-----------------------------------------------------------------------------------------------------------------------
+                                                              QUERY PLAN                                                               
+---------------------------------------------------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    Output: t1.unique1, t2.hundred
    ->  Nested Loop
          Output: t1.unique1, t2.hundred
-         Join Filter: (j3.unique1 = t1.unique1)
+         Join Filter: (t1.unique1 = j3.unique1)
          ->  Broadcast Motion 3:3  (slice2; segments: 3)
                Output: t1.unique1
                ->  Index Only Scan using onek_unique1 on public.onek t1

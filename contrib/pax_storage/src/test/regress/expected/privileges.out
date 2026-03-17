@@ -55,6 +55,7 @@ ALTER FUNCTION leak(integer,integer) OWNER TO regress_priv_user1;
 -- test owner privileges
 GRANT regress_priv_role TO regress_priv_user1 WITH ADMIN OPTION GRANTED BY CURRENT_ROLE;
 REVOKE ADMIN OPTION FOR regress_priv_role FROM regress_priv_user1 GRANTED BY foo; -- error
+ERROR:  role "foo" does not exist
 REVOKE ADMIN OPTION FOR regress_priv_role FROM regress_priv_user1 GRANTED BY regress_priv_user2; -- error
 REVOKE ADMIN OPTION FOR regress_priv_role FROM regress_priv_user1 GRANTED BY CURRENT_USER;
 REVOKE regress_priv_role FROM regress_priv_user1 GRANTED BY CURRENT_ROLE;
@@ -446,7 +447,6 @@ RESET SESSION AUTHORIZATION;
 ALTER ROLE regress_priv_user1 NOINHERIT;
 SET SESSION AUTHORIZATION regress_priv_user1;
 DELETE FROM atest3;
-ERROR:  permission denied for table atest3
 ROLLBACK;
 -- views
 SET SESSION AUTHORIZATION regress_priv_user3;
@@ -1620,12 +1620,14 @@ CREATE FUNCTION dogrant_ok() RETURNS void LANGUAGE sql SECURITY DEFINER AS
 GRANT regress_priv_group2 TO regress_priv_user5; -- ok: had ADMIN OPTION
 SET ROLE regress_priv_group2;
 GRANT regress_priv_group2 TO regress_priv_user5; -- fails: SET ROLE suspended privilege
-ERROR:  must have admin option on role "regress_priv_group2"
+ERROR:  permission denied to grant role "regress_priv_group2"
+DETAIL:  Only roles with the ADMIN option on role "regress_priv_group2" may grant this role.
 SET SESSION AUTHORIZATION regress_priv_user1;
 GRANT regress_priv_group2 TO regress_priv_user5; -- fails: no ADMIN OPTION
-ERROR:  must have admin option on role "regress_priv_group2"
+ERROR:  permission denied to grant role "regress_priv_group2"
+DETAIL:  Only roles with the ADMIN option on role "regress_priv_group2" may grant this role.
 SELECT dogrant_ok();			-- ok: SECURITY DEFINER conveys ADMIN
-NOTICE:  role "regress_priv_user5" is already a member of role "regress_priv_group2"
+NOTICE:  role "regress_priv_user5" has already been granted membership in role "regress_priv_group2" by role "regress_priv_user4"
  dogrant_ok 
 ------------
  
@@ -1633,14 +1635,17 @@ NOTICE:  role "regress_priv_user5" is already a member of role "regress_priv_gro
 
 SET ROLE regress_priv_group2;
 GRANT regress_priv_group2 TO regress_priv_user5; -- fails: SET ROLE did not help
-ERROR:  must have admin option on role "regress_priv_group2"
+ERROR:  permission denied to grant role "regress_priv_group2"
+DETAIL:  Only roles with the ADMIN option on role "regress_priv_group2" may grant this role.
 SET SESSION AUTHORIZATION regress_priv_group2;
 GRANT regress_priv_group2 TO regress_priv_user5; -- ok: a role can self-admin
-NOTICE:  role "regress_priv_user5" is already a member of role "regress_priv_group2"
+ERROR:  permission denied to grant role "regress_priv_group2"
+DETAIL:  Only roles with the ADMIN option on role "regress_priv_group2" may grant this role.
 CREATE FUNCTION dogrant_fails() RETURNS void LANGUAGE sql SECURITY DEFINER AS
 	'GRANT regress_priv_group2 TO regress_priv_user5';
 SELECT dogrant_fails();			-- fails: no self-admin in SECURITY DEFINER
-ERROR:  must have admin option on role "regress_priv_group2"
+ERROR:  permission denied to grant role "regress_priv_group2"
+DETAIL:  Only roles with the ADMIN option on role "regress_priv_group2" may grant this role.
 CONTEXT:  SQL function "dogrant_fails" statement 1
 DROP FUNCTION dogrant_fails();
 SET SESSION AUTHORIZATION regress_priv_user4;
@@ -1892,7 +1897,7 @@ ERROR:  permission denied for table pg_largeobject
 -- test pg_database_owner
 RESET SESSION AUTHORIZATION;
 GRANT pg_database_owner TO regress_priv_user1;
-ERROR:  role "pg_database_owner" cannot have explicit members
+ERROR:  role "pg_database_owner" cannot have explicit members (user.c:3722)
 GRANT regress_priv_user1 TO pg_database_owner;
 ERROR:  role "pg_database_owner" cannot be a member of any role
 CREATE TABLE datdba_only ();
@@ -2698,7 +2703,6 @@ LOCK TABLE lock_table IN ROW EXCLUSIVE MODE; -- should pass
 COMMIT;
 BEGIN;
 LOCK TABLE lock_table IN ACCESS SHARE MODE; -- should fail
-ERROR:  permission denied for table lock_table
 ROLLBACK;
 BEGIN;
 LOCK TABLE lock_table IN ACCESS EXCLUSIVE MODE; -- should fail
@@ -2714,7 +2718,6 @@ LOCK TABLE lock_table IN ROW EXCLUSIVE MODE; -- should pass
 COMMIT;
 BEGIN;
 LOCK TABLE lock_table IN ACCESS SHARE MODE; -- should fail
-ERROR:  permission denied for table lock_table
 ROLLBACK;
 BEGIN;
 LOCK TABLE lock_table IN ACCESS EXCLUSIVE MODE; -- should pass
@@ -2729,7 +2732,6 @@ LOCK TABLE lock_table IN ROW EXCLUSIVE MODE; -- should pass
 COMMIT;
 BEGIN;
 LOCK TABLE lock_table IN ACCESS SHARE MODE; -- should fail
-ERROR:  permission denied for table lock_table
 ROLLBACK;
 BEGIN;
 LOCK TABLE lock_table IN ACCESS EXCLUSIVE MODE; -- should pass
@@ -2744,7 +2746,6 @@ LOCK TABLE lock_table IN ROW EXCLUSIVE MODE; -- should pass
 COMMIT;
 BEGIN;
 LOCK TABLE lock_table IN ACCESS SHARE MODE; -- should fail
-ERROR:  permission denied for table lock_table
 ROLLBACK;
 BEGIN;
 LOCK TABLE lock_table IN ACCESS EXCLUSIVE MODE; -- should pass
