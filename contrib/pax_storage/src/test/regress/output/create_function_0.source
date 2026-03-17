@@ -1,19 +1,6 @@
 --
 -- CREATE_FUNCTION_0
 --
--- Create a bunch of C functions that will be used by later tests:
-CREATE FUNCTION check_primary_key ()
-	RETURNS trigger
-	AS '@libdir@/refint@DLSUFFIX@'
-	LANGUAGE C;
-CREATE FUNCTION check_foreign_key ()
-	RETURNS trigger
-	AS '@libdir@/refint@DLSUFFIX@'
-	LANGUAGE C;
-CREATE FUNCTION autoinc ()
-	RETURNS trigger
-	AS '@libdir@/autoinc@DLSUFFIX@'
-	LANGUAGE C;
 CREATE FUNCTION trigger_return_old ()
         RETURNS trigger
         AS '@libdir@/regress@DLSUFFIX@'
