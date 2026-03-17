@@ -1230,14 +1230,19 @@ remove_symlink:
 	linkloc = pstrdup(linkloc_with_version_dir);
 	get_parent_directory(linkloc);
 
-	/* Remove the symlink target directory if it exists or is valid. */
+	/*
+	 * Remove the symlink target directory if it exists or is valid.
+	 * If linkloc is a directory (e.g. in-place tablespace), readlink()
+	 * will fail with EINVAL, which we can safely skip.
+	 */
 	rllen = readlink(linkloc, link_target_dir, sizeof(link_target_dir));
 	if(rllen < 0)
 	{
-		ereport(redo ? LOG : ERROR,
-				(errcode_for_file_access(),
-					errmsg("could not read symbolic link \"%s\": %m",
-						   linkloc)));
+		if (errno != EINVAL)
+			ereport(redo ? LOG : ERROR,
+					(errcode_for_file_access(),
+						errmsg("could not read symbolic link \"%s\": %m",
+							   linkloc)));
 	}
 	else if(rllen >= sizeof(link_target_dir))
 	{
