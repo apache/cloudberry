@@ -3036,13 +3036,15 @@ CommitTransaction(void)
 	DoPendingDbDeletes(true);
 
 	/*
-	 * Only QD holds the session level lock this long for a movedb operation.
-	 * This is to prevent another transaction from moving database objects into
-	 * the source database oid directory while it is being deleted. We don't
-	 * worry about aborts as we release session level locks automatically during
-	 * an abort as opposed to a commit.
+	 * Release the session level lock held for a movedb operation. This is to
+	 * prevent another transaction from moving database objects into the source
+	 * database oid directory while it is being deleted. We don't worry about
+	 * aborts as we release session level locks automatically during an abort
+	 * as opposed to a commit. We must also release in utility mode (e.g.
+	 * standalone backends used in TAP tests).
 	 */
-	if(Gp_role == GP_ROLE_DISPATCH || IS_SINGLENODE())
+	if (Gp_role == GP_ROLE_DISPATCH || Gp_role == GP_ROLE_UTILITY ||
+		IS_SINGLENODE())
 		MoveDbSessionLockRelease();
 
 	/*
