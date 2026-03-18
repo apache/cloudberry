@@ -572,7 +572,6 @@ code or new licensing patterns.
 
             <exclude>src/backend/gporca/cmake/FindXerces.cmake</exclude>
             <exclude>src/backend/gporca/concourse/build_and_test.py</exclude>
-            <exclude>src/backend/gporca/concourse/xerces-c/build_xerces.py</exclude>
             <exclude>src/backend/gporca/concourse/xerces-c/xerces-c-3.1.2.tar.gz.sha256</exclude>
             <exclude>src/backend/gporca/server/fixdxl.sh</exclude>
             <exclude>src/backend/gporca/server/include/unittest/gpopt/operators/CScalarIsDistinctFromTest.h</exclude>
