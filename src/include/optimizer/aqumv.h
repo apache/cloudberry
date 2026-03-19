@@ -44,5 +44,6 @@ typedef struct AqumvContextData {
 typedef AqumvContextData *AqumvContext;
 
 extern RelOptInfo* answer_query_using_materialized_views(PlannerInfo *root, AqumvContextData *aqumv_context);
+extern RelOptInfo* answer_query_using_materialized_views_for_join(PlannerInfo *root, AqumvContextData *aqumv_context);
 
 #endif   /* AQUMV_H */

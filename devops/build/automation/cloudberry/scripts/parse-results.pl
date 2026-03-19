@@ -110,7 +110,7 @@ my @failed_test_list = ();
 my @ignored_test_list = ();
 
 while (<$fh>) {
-    # Match the summary lines
+    # Match the summary lines (pg_regress format)
     if (/All (\d+) tests passed\./) {
         $status = 'passed';
         $total_tests = $1;
@@ -132,8 +132,22 @@ while (<$fh>) {
         $status = 'failed';
         $failed_tests = $1 - $3;
         $ignored_tests = $3;
-        $total_tests = $2;
-        $passed_tests = $2 - $1;
+
+    # TAP/prove summary format: "Files=N, Tests=N, ..."
+    } elsif (/^Files=\d+, Tests=(\d+),/) {
+        $total_tests = $1;
+
+    # TAP/prove result: "Result: PASS" or "Result: FAIL"
+    } elsif (/^Result: PASS/) {
+        $status = 'passed';
+        $passed_tests = $total_tests;
+        $failed_tests = 0;
+    } elsif (/^Result: FAIL/) {
+        $status = 'failed';
+
+    # TAP individual test failure: "  t/xxx.pl (Wstat: ...)"
+    } elsif (/^\s+(t\/\S+\.pl)\s+\(Wstat:/) {
+        push @failed_test_list, $1;
     }
 
     # Capture failed tests
@@ -150,8 +164,15 @@ while (<$fh>) {
 # Close the log file
 close $fh;
 
-# Validate failed test count matches found test names
-if ($status eq 'failed' && scalar(@failed_test_list) != $failed_tests) {
+# For TAP format, derive failed/passed counts from collected test names
+if ($status eq 'failed' && $failed_tests == 0 && scalar(@failed_test_list) > 0) {
+    $failed_tests = scalar(@failed_test_list);
+    $passed_tests = $total_tests - $failed_tests if $total_tests > 0;
+}
+
+# Validate failed test count matches found test names (pg_regress format only)
+if ($status eq 'failed' && $failed_tests > 0 && scalar(@failed_test_list) > 0
+    && scalar(@failed_test_list) != $failed_tests) {
     print "Error: Found $failed_tests failed tests in summary but found " . scalar(@failed_test_list) . " failed test names\n";
     print "Failed test names found:\n";
     foreach my $test (@failed_test_list) {
