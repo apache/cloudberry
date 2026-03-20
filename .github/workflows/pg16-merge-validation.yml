@@ -112,50 +112,123 @@ jobs:
           ALL_TESTS='{
             "include": [
               {"test":"ic-good-opt-off",
-                "make_configs":["src/test/regress:installcheck-good"],
-                "pg_settings":{"optimizer":"off"}
+               "make_configs":["src/test/regress:installcheck-good"],
+               "pg_settings":{"optimizer":"off"}
               },
-              {"test":"ic-isolation2-basic",
-                "make_configs":["src/test/isolation2:installcheck-isolation2"],
-                "pg_settings":{"optimizer":"off"},
+              {"test":"ic-good-opt-on",
+               "make_configs":["src/test/regress:installcheck-good"],
+               "pg_settings":{"optimizer":"on"}
+              },
+              {"test":"pax-ic-good-opt-off",
+               "make_configs":[
+                "contrib/pax_storage/:pax-test",
+                "contrib/pax_storage/:regress_test"
+              ],
+               "pg_settings":{
+                 "optimizer":"off",
+                 "default_table_access_method":"pax"
+                }
+              },
+              {"test":"pax-ic-good-opt-on",
+               "make_configs":[
+                "contrib/pax_storage/:pax-test",
+                "contrib/pax_storage/:regress_test"
+              ],
+               "pg_settings":{
+                 "optimizer":"on",
+                 "default_table_access_method":"pax"
+                }
+              },
+              {"test":"pax-ic-isolation2-opt-off",
+               "make_configs":["contrib/pax_storage/:isolation2_test"],
+               "pg_settings":{
+                 "optimizer":"off",
+                 "default_table_access_method":"pax"
+                },
                 "enable_core_check":false
+              },
+              {"test":"pax-ic-isolation2-opt-on",
+               "make_configs":["contrib/pax_storage/:isolation2_test"],
+               "pg_settings":{
+                 "optimizer":"on",
+                 "default_table_access_method":"pax"
+                },
+                "enable_core_check":false
+              },
+              {"test":"ic-expandshrink",
+               "make_configs":["src/test/isolation2:installcheck-expandshrink"]
+              },
+              {"test":"ic-singlenode",
+               "make_configs":["src/test/isolation:installcheck-singlenode",
+                               "src/test/singlenode_regress:installcheck-singlenode",
+                               "src/test/singlenode_isolation2:installcheck-singlenode"],
+               "num_primary_mirror_pairs":0
+              },
+              {"test":"ic-resgroup-v2",
+               "make_configs":["src/test/isolation2:installcheck-resgroup-v2"],
+               "enable_cgroups":true
+              },
+              {"test":"ic-contrib",
+               "make_configs":["contrib/auto_explain:installcheck",
+                               "contrib/amcheck:installcheck",
+                               "contrib/citext:installcheck",
+                               "contrib/btree_gin:installcheck",
+                               "contrib/btree_gist:installcheck",
+                               "contrib/dblink:installcheck",
+                               "contrib/dict_int:installcheck",
+                               "contrib/dict_xsyn:installcheck",
+                               "contrib/extprotocol:installcheck",
+                               "contrib/file_fdw:installcheck",
+                               "contrib/formatter_fixedwidth:installcheck",
+                               "contrib/hstore:installcheck",
+                               "contrib/indexscan:installcheck",
+                               "contrib/pg_trgm:installcheck",
+                               "contrib/indexscan:installcheck",
+                               "contrib/pgcrypto:installcheck",
+                               "contrib/pgstattuple:installcheck",
+                               "contrib/tablefunc:installcheck",
+                               "contrib/passwordcheck:installcheck",
+                               "contrib/pg_buffercache:installcheck",
+                               "contrib/sslinfo:installcheck"]
+              },
+              {"test":"ic-gpcontrib",
+               "make_configs":["gpcontrib/orafce:installcheck",
+                               "gpcontrib/zstd:installcheck",
+                               "gpcontrib/gp_sparse_vector:installcheck",
+                               "gpcontrib/gp_toolkit:installcheck",
+                               "gpcontrib/gp_exttable_fdw:installcheck"]
+              },
+              {"test":"ic-fixme",
+               "make_configs":["src/test/regress:installcheck-fixme"],
+               "enable_core_check":false
+              },
+              {"test":"ic-isolation2-opt-on",
+               "make_configs":["src/test/isolation2:installcheck-isolation2"],
+               "pg_settings":{"optimizer":"on"}
+              },
+              {"test":"ic-isolation2-opt-off",
+               "make_configs":["src/test/isolation2:installcheck-isolation2"],
+               "pg_settings":{"optimizer":"off"}
+              },
+              {"test":"ic-isolation2-hot-standby",
+               "make_configs":["src/test/isolation2:installcheck-hot-standby"]
+              },
+              {"test":"ic-isolation2-crash",
+               "make_configs":["src/test/isolation2:installcheck-isolation2-crash"],
+               "enable_core_check":false
+              },
+              {"test":"ic-parallel-retrieve-cursor",
+               "make_configs":["src/test/isolation2:installcheck-parallel-retrieve-cursor"]
+              },
+              {"test":"ic-cbdb-parallel",
+               "make_configs":["src/test/regress:installcheck-cbdb-parallel"]
+              },
+              {"test":"ic-recovery",
+               "make_configs":["src/test/recovery:installcheck"],
+               "enable_core_check":false
               }
             ]
           }'
-          
-          # Tests to be added as PG16 support improves:
-          # - ic-good-opt-off: Basic installcheck with optimizer off (includes greenplum_schedule)
-          #   {"test":"ic-good-opt-off",
-          #    "make_configs":["src/test/regress:installcheck-good"],
-          #    "pg_settings":{"optimizer":"off"}
-          #   }
-          #
-          # - ic-good-opt-on: Basic installcheck with optimizer on (requires ORCA)
-          #   {"test":"ic-good-opt-on",
-          #    "make_configs":["src/test/regress:installcheck-good"],
-          #    "pg_settings":{"optimizer":"on"}
-          #   }
-          #
-          # - ic-contrib: Contrib module tests
-          #   {"test":"ic-contrib",
-          #    "make_configs":["contrib/auto_explain:installcheck",
-          #                    "contrib/citext:installcheck"]
-          #   }
-          #
-          # - ic-gpcontrib: GPContrib module tests
-          #   {"test":"ic-gpcontrib",
-          #    "make_configs":["gpcontrib/orafce:installcheck",
-          #                    "gpcontrib/gp_toolkit:installcheck"]
-          #   }
-          #
-          # - ic-isolation2-advanced: More isolation2 tests
-          #   {"test":"ic-isolation2-expandshrink",
-          #    "make_configs":["src/test/isolation2:installcheck-expandshrink"]
-          #   }
-          #   {"test":"ic-isolation2-crash",
-          #    "make_configs":["src/test/isolation2:installcheck-isolation2-crash"],
-          #    "enable_core_check":false
-          #   }
           
           # Function to apply defaults to test configurations
           apply_defaults() {
@@ -354,6 +427,7 @@ jobs:
                 --prefix=${INSTALL_PREFIX} \
                 --with-pgport=5432 \
                 --enable-cassert \
+                --enable-pax \
                 --with-perl \
                 --with-python \
                 --with-libxml \
@@ -391,6 +465,10 @@ jobs:
               export LD_LIBRARY_PATH=${INSTALL_PREFIX}/lib:${LD_LIBRARY_PATH}
               make -j$(nproc)
               make -j$(nproc) install
+              make -j$(nproc) -C ./contrib/
+              make -j$(nproc) -C ./gpcontrib/
+              make -j$(nproc) install -C ./contrib/
+              make -j$(nproc) install -C ./gpcontrib/
             "; then
               echo "::error::Build and installation failed"
               exit 1
@@ -629,6 +707,7 @@ jobs:
               --prefix=${INSTALL_PREFIX} \
               --with-pgport=5432 \
               --enable-cassert \
+              --enable-pax \
               --with-perl \
               --with-python \
               --with-libxml \
@@ -656,62 +735,59 @@ jobs:
             NUM_PRIMARY_MIRROR_PAIRS=${{ matrix.num_primary_mirror_pairs }} make create-demo-cluster
           " 2>&1 | tee -a ${LOGS_DIR}/details/cluster-creation.log
 
-      - name: Configure PostgreSQL Settings
-        env:
-          SRC_DIR: ${{ github.workspace }}
-        run: |
-          set -eo pipefail
-
-          # Apply PostgreSQL settings from matrix configuration
-          su - gpadmin -c "
-            source ${INSTALL_PREFIX}/greenplum_path.sh
-            source ${SRC_DIR}/gpAux/gpdemo/gpdemo-env.sh
-            
-            # Set optimizer if specified
-            OPTIMIZER='${{ matrix.pg_settings.optimizer }}'
-            if [ -n \"\$OPTIMIZER\" ]; then
-              echo \"Setting optimizer to: \$OPTIMIZER\"
-              gpconfig -c optimizer -v \$OPTIMIZER
-              gpstop -u
-            fi
-          " 2>&1 | tee -a ${LOGS_DIR}/details/pg-settings.log
-
       - name: Run Tests
         env:
           SRC_DIR: ${{ github.workspace }}
         run: |
           set -eo pipefail
 
-          # Run each make target from the test configuration
-          MAKE_CONFIGS='${{ join(matrix.make_configs, ' ') }}'
-          
-          su - gpadmin -c "
-            source ${INSTALL_PREFIX}/greenplum_path.sh
-            source ${SRC_DIR}/gpAux/gpdemo/gpdemo-env.sh
-            
-            cd ${SRC_DIR}
-            
-            echo '=== Running Tests for ${{ matrix.test }} ==='
-            echo 'Make configurations: ${MAKE_CONFIGS}'
-            
-            # Parse and run each make config
-            for config in ${MAKE_CONFIGS}; do
-              DIR=\$(echo \$config | cut -d: -f1)
-              TARGET=\$(echo \$config | cut -d: -f2)
-              
-              echo \"\"
-              echo \"Running: make -C \$DIR \$TARGET\"
-              echo \"\"
-              
-              if ! make -C \$DIR \$TARGET; then
-                echo \"::error::Test failed: \$DIR:\$TARGET\"
-                exit 1
-              fi
-            done
-            
-            echo \"\"
-            echo \"All tests completed successfully\"
-          " 2>&1 | tee -a ${LOGS_DIR}/details/test-run.log
+          # Build PGOPTIONS from matrix pg_settings
+          PG_OPTS=""
+          if [[ "${{ matrix.pg_settings.optimizer != '' }}" == "true" ]]; then
+            PG_OPTS="$PG_OPTS -c optimizer=${{ matrix.pg_settings.optimizer }}"
+          fi
+          if [[ "${{ matrix.pg_settings.default_table_access_method != '' }}" == "true" ]]; then
+            PG_OPTS="$PG_OPTS -c default_table_access_method=${{ matrix.pg_settings.default_table_access_method }}"
+          fi
+
+          # Read configs into array
+          IFS=' ' read -r -a configs <<< "${{ join(matrix.make_configs, ' ') }}"
+
+          echo "=== Starting test execution for ${{ matrix.test }} ==="
+          echo "Number of configurations to execute: ${#configs[@]}"
+          echo "PGOPTIONS: ${PG_OPTS}"
+          echo ""
+
+          overall_status=0
+
+          for ((i=0; i<${#configs[@]}; i++)); do
+            config="${configs[$i]}"
+            IFS=':' read -r dir target <<< "$config"
+
+            echo "=== Executing configuration $((i+1))/${#configs[@]} ==="
+            echo "Make command: make -C $dir $target"
+
+            config_log="${LOGS_DIR}/details/make-${{ matrix.test }}-config$i.log"
+
+            if ! su - gpadmin -c "
+              source ${INSTALL_PREFIX}/greenplum_path.sh
+              source ${SRC_DIR}/gpAux/gpdemo/gpdemo-env.sh
+              make -C ${SRC_DIR}/src/test/regress
+              cd ${SRC_DIR}
+              PGOPTIONS='${PG_OPTS}' make -C $dir $target
+            " 2>&1 | tee "$config_log"; then
+              echo "::warning::Test execution failed for configuration $((i+1)): make -C $dir $target"
+              overall_status=1
+            fi
+          done
+
+          if [ "$overall_status" -ne 0 ]; then
+            echo "::error::One or more test configurations failed for ${{ matrix.test }}"
+            exit 1
+          fi
+
+          echo ""
+          echo "All tests completed successfully"
 
       - name: Collect Test Results
         if: always()
