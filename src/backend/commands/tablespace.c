@@ -1221,43 +1221,6 @@ remove_symlink:
 	linkloc = pstrdup(linkloc_with_version_dir);
 	get_parent_directory(linkloc);
 
-	/* Remove the symlink target directory if it exists or is valid. */
-	rllen = readlink(linkloc, link_target_dir, sizeof(link_target_dir));
-	if(rllen < 0)
-	{
-		ereport(redo ? LOG : ERROR,
-				(errcode_for_file_access(),
-					errmsg("could not read symbolic link \"%s\": %m",
-						   linkloc)));
-	}
-	else if(rllen >= sizeof(link_target_dir))
-	{
-		ereport(redo ? LOG : ERROR,
-				(errcode_for_file_access(),
-					errmsg("symbolic link \"%s\" target is too long",
-						   linkloc)));
-	}
-	else
-	{
-		link_target_dir[rllen] = '\0';
-		if (access(link_target_dir, F_OK) != 0)
-		{
-			ereport(redo? LOG : ERROR,
-					(errcode_for_file_access(),
-							errmsg("could not open directory \"%s\": %m",
-								   link_target_dir)));
-		}
-		else
-		{
-			if(directory_is_empty(link_target_dir) && rmdir(link_target_dir) < 0)
-				ereport(redo ? LOG : ERROR,
-						(errcode_for_file_access(),
-								errmsg("could not remove directory \"%s\": %m",
-									   link_target_dir)));
-		}
-	}
-
-
 	if (lstat(linkloc, &st) < 0)
 	{
 		int			saved_errno = errno;
@@ -1281,6 +1244,42 @@ remove_symlink:
 	}
 	else if (S_ISLNK(st.st_mode))
 	{
+		/* Remove the symlink target directory if it exists or is valid. */
+		rllen = readlink(linkloc, link_target_dir, sizeof(link_target_dir));
+		if(rllen < 0)
+		{
+			ereport(redo ? LOG : ERROR,
+					(errcode_for_file_access(),
+					 errmsg("could not read symbolic link \"%s\": %m",
+						     linkloc)));
+		}
+		else if(rllen >= sizeof(link_target_dir))
+		{
+			ereport(redo ? LOG : ERROR,
+					(errcode_for_file_access(),
+					 errmsg("symbolic link \"%s\" target is too long",
+							linkloc)));
+		}
+		else
+		{
+			link_target_dir[rllen] = '\0';
+			if (access(link_target_dir, F_OK) != 0)
+			{
+				ereport(redo? LOG : ERROR,
+						(errcode_for_file_access(),
+						 errmsg("could not open directory \"%s\": %m",
+								link_target_dir)));
+			}
+			else
+			{
+				if(directory_is_empty(link_target_dir) && rmdir(link_target_dir) < 0)
+					ereport(redo ? LOG : ERROR,
+							(errcode_for_file_access(),
+							 errmsg("could not remove directory \"%s\": %m",
+									link_target_dir)));
+			}
+		}
+
 		if (unlink(linkloc) < 0)
 		{
 			int			saved_errno = errno;
