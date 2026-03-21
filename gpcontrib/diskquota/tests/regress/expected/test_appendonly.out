@@ -1,0 +1,78 @@
+-- Create new schema for running tests.
+CREATE SCHEMA s_appendonly;
+SET search_path TO s_appendonly;
+CREATE TABLE t_ao(i int) WITH (appendonly=true) DISTRIBUTED BY (i);
+CREATE TABLE t_aoco(i int) WITH (appendonly=true, orientation=column) DISTRIBUTED BY (i);
+-- Create an index on t_ao so that there will be pg_aoblkdir_XXX relations.
+CREATE INDEX index_t ON t_ao(i);
+CREATE INDEX index_t2 ON t_aoco(i);
+-- 1. Show that the relation's size in diskquota.table_size
+--    is identical to the result of pg_table_size().
+INSERT INTO t_ao SELECT generate_series(1, 100);
+INSERT INTO t_aoco SELECT generate_series(1, 100);
+SELECT diskquota.wait_for_worker_new_epoch();
+ wait_for_worker_new_epoch 
+---------------------------
+ t
+(1 row)
+
+-- Query the size of t_ao.
+SELECT tableid::regclass, size
+  FROM diskquota.table_size
+  WHERE tableid=(SELECT oid FROM pg_class WHERE relname='t_ao') and segid=-1;
+ tableid |  size  
+---------+--------
+ t_ao    | 558168
+(1 row)
+
+SELECT pg_table_size('t_ao');
+ pg_table_size 
+---------------
+        558168
+(1 row)
+
+-- Query the size of t_aoco.
+SELECT tableid::regclass, size
+  FROM diskquota.table_size
+  WHERE tableid=(SELECT oid FROM pg_class WHERE relname='t_aoco') and segid=-1;
+ tableid |  size  
+---------+--------
+ t_aoco  | 557584
+(1 row)
+
+SELECT pg_table_size('t_aoco');
+ pg_table_size 
+---------------
+        557584
+(1 row)
+
+-- 2. Test that we are able to perform quota limit on appendonly tables.
+SELECT diskquota.set_schema_quota('s_appendonly', '2 MB');
+ set_schema_quota 
+------------------
+ 
+(1 row)
+
+SELECT diskquota.wait_for_worker_new_epoch();
+ wait_for_worker_new_epoch 
+---------------------------
+ t
+(1 row)
+
+-- expect success.
+INSERT INTO t_ao SELECT generate_series(1, 100000);
+SELECT diskquota.wait_for_worker_new_epoch();
+ wait_for_worker_new_epoch 
+---------------------------
+ t
+(1 row)
+
+-- expect fail.
+INSERT INTO t_ao SELECT generate_series(1, 10);
+ERROR:  schema's disk space quota exceeded with name: s_appendonly
+INSERT INTO t_aoco SELECT generate_series(1, 10);
+ERROR:  schema's disk space quota exceeded with name: s_appendonly
+DROP TABLE t_ao;
+DROP TABLE t_aoco;
+SET search_path TO DEFAULT;
+DROP SCHEMA s_appendonly;

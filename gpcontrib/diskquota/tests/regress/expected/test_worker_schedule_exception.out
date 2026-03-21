@@ -1,0 +1,123 @@
+-- start_ignore
+\! gpconfig -c diskquota.max_workers -v 10;
+20221209:16:01:17:089154 gpconfig:wxiaoranVKGWQ:wxiaoran-[INFO]:-completed successfully with parameters '-c diskquota.max_workers -v 10'
+\! gpconfig -c diskquota.naptime -v 4;
+20221209:16:01:19:089255 gpconfig:wxiaoranVKGWQ:wxiaoran-[INFO]:-completed successfully with parameters '-c diskquota.naptime -v 4'
+\! gpstop -arf;
+20221209:18:21:23:045673 gpstop:wxiaoranVKGWQ:wxiaoran-[INFO]:-Starting gpstop with args: -arf
+20221209:18:21:23:045673 gpstop:wxiaoranVKGWQ:wxiaoran-[INFO]:-Gathering information and validating the environment...
+20221209:18:21:23:045673 gpstop:wxiaoranVKGWQ:wxiaoran-[INFO]:-Obtaining Greenplum Master catalog information
+20221209:18:21:23:045673 gpstop:wxiaoranVKGWQ:wxiaoran-[INFO]:-Obtaining Segment details from master...
+20221209:18:21:23:045673 gpstop:wxiaoranVKGWQ:wxiaoran-[INFO]:-Greenplum Version: 'postgres (Greenplum Database) 6.22.1+dev.36.gedf0e003f8 build dev'
+20221209:18:21:23:045673 gpstop:wxiaoranVKGWQ:wxiaoran-[INFO]:-Commencing Master instance shutdown with mode='fast'
+20221209:18:21:23:045673 gpstop:wxiaoranVKGWQ:wxiaoran-[INFO]:-Master segment instance directory=/Users/wxiaoran/gpdb/gpAux/gpdemo/datadirs/qddir/demoDataDir-1
+20221209:18:21:23:045673 gpstop:wxiaoranVKGWQ:wxiaoran-[INFO]:-Attempting forceful termination of any leftover master process
+20221209:18:21:23:045673 gpstop:wxiaoranVKGWQ:wxiaoran-[INFO]:-Terminating processes for segment /Users/wxiaoran/gpdb/gpAux/gpdemo/datadirs/qddir/demoDataDir-1
+20221209:18:21:23:045673 gpstop:wxiaoranVKGWQ:wxiaoran-[INFO]:-Stopping master standby host wxiaoranVKGWQ.vmware.com mode=fast
+20221209:18:21:24:045673 gpstop:wxiaoranVKGWQ:wxiaoran-[INFO]:-Successfully shutdown standby process on wxiaoranVKGWQ.vmware.com
+20221209:18:21:24:045673 gpstop:wxiaoranVKGWQ:wxiaoran-[INFO]:-Targeting dbid [2, 5, 3, 6, 4, 7] for shutdown
+20221209:18:21:24:045673 gpstop:wxiaoranVKGWQ:wxiaoran-[INFO]:-Commencing parallel primary segment instance shutdown, please wait...
+20221209:18:21:24:045673 gpstop:wxiaoranVKGWQ:wxiaoran-[INFO]:-0.00% of jobs completed
+20221209:18:21:25:045673 gpstop:wxiaoranVKGWQ:wxiaoran-[INFO]:-100.00% of jobs completed
+20221209:18:21:25:045673 gpstop:wxiaoranVKGWQ:wxiaoran-[INFO]:-Commencing parallel mirror segment instance shutdown, please wait...
+20221209:18:21:25:045673 gpstop:wxiaoranVKGWQ:wxiaoran-[INFO]:-0.00% of jobs completed
+20221209:18:21:26:045673 gpstop:wxiaoranVKGWQ:wxiaoran-[INFO]:-100.00% of jobs completed
+20221209:18:21:26:045673 gpstop:wxiaoranVKGWQ:wxiaoran-[INFO]:-----------------------------------------------------
+20221209:18:21:26:045673 gpstop:wxiaoranVKGWQ:wxiaoran-[INFO]:-   Segments stopped successfully      = 6
+20221209:18:21:26:045673 gpstop:wxiaoranVKGWQ:wxiaoran-[INFO]:-   Segments with errors during stop   = 0
+20221209:18:21:26:045673 gpstop:wxiaoranVKGWQ:wxiaoran-[INFO]:-----------------------------------------------------
+20221209:18:21:26:045673 gpstop:wxiaoranVKGWQ:wxiaoran-[INFO]:-Successfully shutdown 6 of 6 segment instances 
+20221209:18:21:26:045673 gpstop:wxiaoranVKGWQ:wxiaoran-[INFO]:-Database successfully shutdown with no errors reported
+20221209:18:21:26:045673 gpstop:wxiaoranVKGWQ:wxiaoran-[INFO]:-Cleaning up leftover gpmmon process
+20221209:18:21:26:045673 gpstop:wxiaoranVKGWQ:wxiaoran-[INFO]:-No leftover gpmmon process found
+20221209:18:21:26:045673 gpstop:wxiaoranVKGWQ:wxiaoran-[INFO]:-Cleaning up leftover gpsmon processes
+20221209:18:21:26:045673 gpstop:wxiaoranVKGWQ:wxiaoran-[INFO]:-No leftover gpsmon processes on some hosts. not attempting forceful termination on these hosts
+20221209:18:21:26:045673 gpstop:wxiaoranVKGWQ:wxiaoran-[INFO]:-Cleaning up leftover shared memory
+20221209:18:21:27:045673 gpstop:wxiaoranVKGWQ:wxiaoran-[INFO]:-Restarting System...
+\c
+DROP DATABASE IF EXISTS t1;
+NOTICE:  database "t1" does not exist, skipping
+DROP DATABASE IF EXISTS t2;
+NOTICE:  database "t2" does not exist, skipping
+--end_ignore
+CREATE DATABASE t1;
+CREATE DATABASE t2;
+\c t1
+CREATE EXTENSION diskquota;
+SELECT diskquota.wait_for_worker_new_epoch();
+ wait_for_worker_new_epoch 
+---------------------------
+ t
+(1 row)
+
+\! pgrep -f "[p]ostgres.*bgworker.*t1" | xargs kill;
+\! sleep 0.5 ; ps -ef | grep postgres | grep "\[diskquota]" | grep -v grep | wc -l
+2
+-- start_ignore
+\! ps -ef | grep postgres | grep "\[diskquota]" | grep -v grep
+  503 89701 89678   0  4:01PM ??         0:00.17 postgres:  6000, bgworker: [diskquota] - launcher        
+  503 89743 89678   0  4:01PM ??         0:00.03 postgres:  6000, bgworker: [diskquota] contrib_regression cmd1      
+--end_ignore
+\c contrib_regression
+DROP DATABASE t1;
+\c t2
+CREATE EXTENSION diskquota;
+SELECT diskquota.wait_for_worker_new_epoch();
+ wait_for_worker_new_epoch 
+---------------------------
+ t
+(1 row)
+
+\c t2
+SELECT diskquota.pause();
+ pause 
+-------
+ 
+(1 row)
+
+SELECT diskquota.wait_for_worker_new_epoch();
+ wait_for_worker_new_epoch 
+---------------------------
+ t
+(1 row)
+
+DROP EXTENSION diskquota;
+\c contrib_regression
+DROP DATABASE t2;
+--start_ignore
+\! gpconfig -r diskquota.naptime;
+20221209:16:02:10:089976 gpconfig:wxiaoranVKGWQ:wxiaoran-[INFO]:-completed successfully with parameters '-r diskquota.naptime'
+\! gpconfig -r diskquota.max_workers;
+20221209:16:02:12:090078 gpconfig:wxiaoranVKGWQ:wxiaoran-[INFO]:-completed successfully with parameters '-r diskquota.max_workers'
+\! gpstop -arf;
+20221209:16:02:12:090179 gpstop:wxiaoranVKGWQ:wxiaoran-[INFO]:-Starting gpstop with args: -arf
+20221209:16:02:12:090179 gpstop:wxiaoranVKGWQ:wxiaoran-[INFO]:-Gathering information and validating the environment...
+20221209:16:02:12:090179 gpstop:wxiaoranVKGWQ:wxiaoran-[INFO]:-Obtaining Greenplum Master catalog information
+20221209:16:02:12:090179 gpstop:wxiaoranVKGWQ:wxiaoran-[INFO]:-Obtaining Segment details from master...
+20221209:16:02:12:090179 gpstop:wxiaoranVKGWQ:wxiaoran-[INFO]:-Greenplum Version: 'postgres (Greenplum Database) 6.22.1+dev.36.gedf0e003f8 build dev'
+20221209:16:02:12:090179 gpstop:wxiaoranVKGWQ:wxiaoran-[INFO]:-Commencing Master instance shutdown with mode='fast'
+20221209:16:02:12:090179 gpstop:wxiaoranVKGWQ:wxiaoran-[INFO]:-Master segment instance directory=/Users/wxiaoran/gpdb/gpAux/gpdemo/datadirs/qddir/demoDataDir-1
+20221209:16:02:12:090179 gpstop:wxiaoranVKGWQ:wxiaoran-[INFO]:-Attempting forceful termination of any leftover master process
+20221209:16:02:12:090179 gpstop:wxiaoranVKGWQ:wxiaoran-[INFO]:-Terminating processes for segment /Users/wxiaoran/gpdb/gpAux/gpdemo/datadirs/qddir/demoDataDir-1
+20221209:16:02:13:090179 gpstop:wxiaoranVKGWQ:wxiaoran-[INFO]:-Stopping master standby host wxiaoranVKGWQ.vmware.com mode=fast
+20221209:16:02:14:090179 gpstop:wxiaoranVKGWQ:wxiaoran-[INFO]:-Successfully shutdown standby process on wxiaoranVKGWQ.vmware.com
+20221209:16:02:14:090179 gpstop:wxiaoranVKGWQ:wxiaoran-[INFO]:-Targeting dbid [2, 5, 3, 6, 4, 7] for shutdown
+20221209:16:02:14:090179 gpstop:wxiaoranVKGWQ:wxiaoran-[INFO]:-Commencing parallel primary segment instance shutdown, please wait...
+20221209:16:02:14:090179 gpstop:wxiaoranVKGWQ:wxiaoran-[INFO]:-0.00% of jobs completed
+20221209:16:02:14:090179 gpstop:wxiaoranVKGWQ:wxiaoran-[INFO]:-100.00% of jobs completed
+20221209:16:02:14:090179 gpstop:wxiaoranVKGWQ:wxiaoran-[INFO]:-Commencing parallel mirror segment instance shutdown, please wait...
+20221209:16:02:14:090179 gpstop:wxiaoranVKGWQ:wxiaoran-[INFO]:-0.00% of jobs completed
+20221209:16:02:15:090179 gpstop:wxiaoranVKGWQ:wxiaoran-[INFO]:-100.00% of jobs completed
+20221209:16:02:15:090179 gpstop:wxiaoranVKGWQ:wxiaoran-[INFO]:-----------------------------------------------------
+20221209:16:02:15:090179 gpstop:wxiaoranVKGWQ:wxiaoran-[INFO]:-   Segments stopped successfully      = 6
+20221209:16:02:15:090179 gpstop:wxiaoranVKGWQ:wxiaoran-[INFO]:-   Segments with errors during stop   = 0
+20221209:16:02:15:090179 gpstop:wxiaoranVKGWQ:wxiaoran-[INFO]:-----------------------------------------------------
+20221209:16:02:15:090179 gpstop:wxiaoranVKGWQ:wxiaoran-[INFO]:-Successfully shutdown 6 of 6 segment instances 
+20221209:16:02:15:090179 gpstop:wxiaoranVKGWQ:wxiaoran-[INFO]:-Database successfully shutdown with no errors reported
+20221209:16:02:15:090179 gpstop:wxiaoranVKGWQ:wxiaoran-[INFO]:-Cleaning up leftover gpmmon process
+20221209:16:02:15:090179 gpstop:wxiaoranVKGWQ:wxiaoran-[INFO]:-No leftover gpmmon process found
+20221209:16:02:15:090179 gpstop:wxiaoranVKGWQ:wxiaoran-[INFO]:-Cleaning up leftover gpsmon processes
+20221209:16:02:15:090179 gpstop:wxiaoranVKGWQ:wxiaoran-[INFO]:-No leftover gpsmon processes on some hosts. not attempting forceful termination on these hosts
+20221209:16:02:15:090179 gpstop:wxiaoranVKGWQ:wxiaoran-[INFO]:-Cleaning up leftover shared memory
+20221209:16:02:17:090179 gpstop:wxiaoranVKGWQ:wxiaoran-[INFO]:-Restarting System...
+--end_ignore

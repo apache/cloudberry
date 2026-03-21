@@ -1983,7 +1983,7 @@ appendonly_endscan(TableScanDesc scan)
 static pg_attribute_hot_inline bool
 appendonly_getnextslot_noqual(AppendOnlyScanDesc aoscan, ScanDirection direction, TupleTableSlot *slot)
 {
-	while (appendonlygettup(aoscan, direction, aoscan->rs_base.rs_nkeys, aoscan->aos_key, slot))
+	if (appendonlygettup(aoscan, direction, aoscan->rs_base.rs_nkeys, aoscan->aos_key, slot))
 	{
 		pgstat_count_heap_getnext(aoscan->aos_rd);
 		return true;

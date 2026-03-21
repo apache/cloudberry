@@ -1551,17 +1551,26 @@ select * from tt14v;
 begin;
 -- this perhaps should be rejected, but it isn't:
 alter table tt14t drop column f3;
--- f3 is still in the view ...
+-- column f3 is still in the view, sort of ...
 select pg_get_viewdef('tt14v', true);
-         pg_get_viewdef         
---------------------------------
-  SELECT t.f1,                 +
-     t.f3,                     +
-     t.f4                      +
-    FROM tt14f() t(f1, f3, f4);
+         pg_get_viewdef          
+---------------------------------
+  SELECT t.f1,                  +
+     t."?dropped?column?" AS f3,+
+     t.f4                       +
+    FROM tt14f() t(f1, f4);
 (1 row)
 
--- but will fail at execution
+-- ... and you can even EXPLAIN it ...
+explain (verbose, costs off) select * from tt14v;
+               QUERY PLAN               
+----------------------------------------
+ Function Scan on testviewschm2.tt14f t
+   Output: t.f1, t.f3, t.f4
+   Function Call: tt14f()
+(3 rows)
+
+-- but it will fail at execution
 select f1, f4 from tt14v;
  f1  | f4 
 -----+----
@@ -1988,6 +1997,44 @@ select pg_get_viewdef('tt26v', true);
     FROM ( VALUES (1,2,3)) v(x, y, z);
 (1 row)
 
+-- Test that changing the relkind of a relcache entry doesn't cause
+-- trouble. Prior instances of where it did:
+-- CALDaNm2yXz+zOtv7y5zBd5WKT8O0Ld3YxikuU3dcyCvxF7gypA@mail.gmail.com
+-- CALDaNm3oZA-8Wbps2Jd1g5_Gjrr-x3YWrJPek-mF5Asrrvz2Dg@mail.gmail.com
+CREATE TABLE tt26(c int);
+BEGIN;
+CREATE TABLE tt27(c int);
+SAVEPOINT q;
+CREATE RULE "_RETURN" AS ON SELECT TO tt27 DO INSTEAD SELECT * FROM tt26;
+SELECT * FROM tt27;
+ c 
+---
+(0 rows)
+
+ROLLBACK TO q;
+CREATE RULE "_RETURN" AS ON SELECT TO tt27 DO INSTEAD SELECT * FROM tt26;
+ROLLBACK;
+BEGIN;
+CREATE TABLE tt28(c int);
+CREATE RULE "_RETURN" AS ON SELECT TO tt28 DO INSTEAD SELECT * FROM tt26;
+CREATE RULE "_RETURN" AS ON SELECT TO tt28 DO INSTEAD SELECT * FROM tt26;
+ERROR:  "tt28" is already a view
+ROLLBACK;
+-- test restriction on non-system view expansion.
+create table tt27v_tbl (a int);
+create view tt27v as select a from tt27v_tbl;
+set restrict_nonsystem_relation_kind to 'view';
+select a from tt27v where a > 0; -- Error
+ERROR:  access to non-system view "tt27v" is restricted
+insert into tt27v values (1); -- Error
+ERROR:  access to non-system view "tt27v" is restricted
+select viewname from pg_views where viewname = 'tt27v'; -- Ok to access a system view.
+ viewname 
+----------
+ tt27v
+(1 row)
+
+reset restrict_nonsystem_relation_kind;
 -- test display negative operator of const-folder expression
 create table tdis(a int, b int, c int);
 NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
@@ -2035,7 +2082,7 @@ drop cascades to view aliased_view_2
 drop cascades to view aliased_view_3
 drop cascades to view aliased_view_4
 DROP SCHEMA testviewschm2 CASCADE;
-NOTICE:  drop cascades to 76 other objects
+NOTICE:  drop cascades to 79 other objects
 DETAIL:  drop cascades to table t1
 drop cascades to view temporal1
 drop cascades to view temporal2
@@ -2110,5 +2157,8 @@ drop cascades to view tt23v
 drop cascades to view tt24v
 drop cascades to view tt25v
 drop cascades to view tt26v
+drop cascades to table tt26
+drop cascades to table tt27v_tbl
+drop cascades to view tt27v
 drop cascades to table tdis
 drop cascades to view tdis_v1

@@ -1,0 +1,104 @@
+--start_ignore
+\! gpconfig -c diskquota.max_monitored_databases -v 3
+20230905:12:39:55:332748 gpconfig:zhrt:zhrt-[INFO]:-completed successfully with parameters '-c diskquota.max_monitored_databases -v 3'
+\! gpstop -ari
+--end_ignore
+\c
+DROP DATABASE IF EXISTS test_db1;
+NOTICE:  database "test_db1" does not exist, skipping
+DROP DATABASE IF EXISTS test_db2;
+NOTICE:  database "test_db2" does not exist, skipping
+DROP DATABASE IF EXISTS test_db3;
+NOTICE:  database "test_db3" does not exist, skipping
+CREATE DATABASE test_db1;
+CREATE DATABASE test_db2;
+CREATE DATABASE test_db3;
+\c test_db1
+CREATE EXTENSION diskquota;
+SELECT diskquota.wait_for_worker_new_epoch();
+ wait_for_worker_new_epoch 
+---------------------------
+ t
+(1 row)
+
+\c test_db2
+CREATE EXTENSION diskquota;
+SELECT diskquota.wait_for_worker_new_epoch();
+ wait_for_worker_new_epoch 
+---------------------------
+ t
+(1 row)
+
+-- expect fail
+\c test_db3
+CREATE EXTENSION diskquota;
+ERROR:  [diskquota] failed to create diskquota extension: too many databases to monitor (diskquota_utility.c:406)
+-- clean extension
+\c test_db1
+SELECT diskquota.pause();
+ pause 
+-------
+ 
+(1 row)
+
+SELECT diskquota.wait_for_worker_new_epoch();
+ wait_for_worker_new_epoch 
+---------------------------
+ t
+(1 row)
+
+DROP EXTENSION diskquota;
+\c test_db2
+SELECT diskquota.pause();
+ pause 
+-------
+ 
+(1 row)
+
+SELECT diskquota.wait_for_worker_new_epoch();
+ wait_for_worker_new_epoch 
+---------------------------
+ t
+(1 row)
+
+DROP EXTENSION diskquota;
+-- clean database
+\c contrib_regression
+DROP DATABASE test_db1;
+DROP DATABASE test_db2;
+DROP DATABASE test_db3;
+-- start_ignore
+\! gpconfig -r diskquota.max_monitored_databases
+20230905:12:40:29:350921 gpconfig:zhrt:zhrt-[INFO]:-completed successfully with parameters '-r diskquota.max_monitored_databases'
+\! gpstop -ari
+20230905:12:40:30:352551 gpstop:zhrt:zhrt-[INFO]:-Starting gpstop with args: -ari
+20230905:12:40:30:352551 gpstop:zhrt:zhrt-[INFO]:-Gathering information and validating the environment...
+20230905:12:40:30:352551 gpstop:zhrt:zhrt-[INFO]:-Obtaining Greenplum Master catalog information
+20230905:12:40:30:352551 gpstop:zhrt:zhrt-[INFO]:-Obtaining Segment details from master...
+20230905:12:40:30:352551 gpstop:zhrt:zhrt-[INFO]:-Greenplum Version: 'postgres (Greenplum Database) 6.24.4+dev.45.gad3671f087 build dev'
+20230905:12:40:30:352551 gpstop:zhrt:zhrt-[INFO]:-Commencing Master instance shutdown with mode='immediate'
+20230905:12:40:30:352551 gpstop:zhrt:zhrt-[INFO]:-Master segment instance directory=/home/zhrt/workspace/gpdb6/gpAux/gpdemo/datadirs/qddir/demoDataDir-1
+20230905:12:40:30:352551 gpstop:zhrt:zhrt-[INFO]:-Attempting forceful termination of any leftover master process
+20230905:12:40:30:352551 gpstop:zhrt:zhrt-[INFO]:-Terminating processes for segment /home/zhrt/workspace/gpdb6/gpAux/gpdemo/datadirs/qddir/demoDataDir-1
+20230905:12:40:37:352551 gpstop:zhrt:zhrt-[INFO]:-Stopping master standby host zhrt mode=immediate
+20230905:12:40:38:352551 gpstop:zhrt:zhrt-[INFO]:-Successfully shutdown standby process on zhrt
+20230905:12:40:38:352551 gpstop:zhrt:zhrt-[INFO]:-Targeting dbid [2, 5, 3, 6, 4, 7] for shutdown
+20230905:12:40:38:352551 gpstop:zhrt:zhrt-[INFO]:-Commencing parallel primary segment instance shutdown, please wait...
+20230905:12:40:38:352551 gpstop:zhrt:zhrt-[INFO]:-0.00% of jobs completed
+20230905:12:40:43:352551 gpstop:zhrt:zhrt-[INFO]:-100.00% of jobs completed
+20230905:12:40:43:352551 gpstop:zhrt:zhrt-[INFO]:-Commencing parallel mirror segment instance shutdown, please wait...
+20230905:12:40:43:352551 gpstop:zhrt:zhrt-[INFO]:-0.00% of jobs completed
+20230905:12:40:46:352551 gpstop:zhrt:zhrt-[INFO]:-100.00% of jobs completed
+20230905:12:40:46:352551 gpstop:zhrt:zhrt-[INFO]:-----------------------------------------------------
+20230905:12:40:46:352551 gpstop:zhrt:zhrt-[INFO]:-   Segments stopped successfully      = 6
+20230905:12:40:46:352551 gpstop:zhrt:zhrt-[INFO]:-   Segments with errors during stop   = 0
+20230905:12:40:46:352551 gpstop:zhrt:zhrt-[INFO]:-----------------------------------------------------
+20230905:12:40:46:352551 gpstop:zhrt:zhrt-[INFO]:-Successfully shutdown 6 of 6 segment instances 
+20230905:12:40:46:352551 gpstop:zhrt:zhrt-[INFO]:-Database successfully shutdown with no errors reported
+20230905:12:40:46:352551 gpstop:zhrt:zhrt-[INFO]:-Cleaning up leftover gpmmon process
+20230905:12:40:46:352551 gpstop:zhrt:zhrt-[INFO]:-No leftover gpmmon process found
+20230905:12:40:46:352551 gpstop:zhrt:zhrt-[INFO]:-Cleaning up leftover gpsmon processes
+20230905:12:40:47:352551 gpstop:zhrt:zhrt-[INFO]:-No leftover gpsmon processes on some hosts. not attempting forceful termination on these hosts
+20230905:12:40:47:352551 gpstop:zhrt:zhrt-[INFO]:-Cleaning up leftover shared memory
+20230905:12:40:48:352551 gpstop:zhrt:zhrt-[INFO]:-Restarting System...
+-- end_ignore

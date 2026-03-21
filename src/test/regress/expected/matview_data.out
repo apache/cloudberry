@@ -3,7 +3,11 @@ SET optimizer TO off;
 create schema matview_data_schema;
 set search_path to matview_data_schema;
 create table t1(a int, b int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table t2(a int, b int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into t1 select i, i+1 from generate_series(1, 5) i;
 insert into t1 select i, i+1 from generate_series(1, 3) i;
 create materialized view mv0 as select * from t1;
@@ -27,6 +31,8 @@ select mvname, datastatus from gp_matview_aux where mvname in ('mv0','mv1', 'mv2
 -- truncate in self transaction
 begin;
 create table t3(a int, b int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create materialized view mv3 as select * from t3;
 NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'a' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
@@ -326,6 +332,1890 @@ select mvname, datastatus from gp_matview_aux where mvname = 'mv_tp_issue_582';
 (0 rows)
 
 abort;
+--
+-- Test multi-table JOIN materialized views
+--
+create table jt1(id int, val int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'id' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+create table jt2(id int, val int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'id' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+create table jt3(id int, val int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'id' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+insert into jt1 select i, i*10 from generate_series(1,5) i;
+insert into jt2 select i, i*100 from generate_series(1,5) i;
+insert into jt3 select i, i*1000 from generate_series(1,5) i;
+-- Two-table INNER JOIN: verify registration
+create materialized view mv_join2 as
+  select jt1.id, jt1.val as v1, jt2.val as v2
+  from jt1 join jt2 on jt1.id = jt2.id;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'id' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+select mvname, datastatus from gp_matview_aux where mvname = 'mv_join2';
+  mvname  | datastatus 
+----------+------------
+ mv_join2 | u
+(1 row)
+
+select count(*) from gp_matview_tables mt
+  join pg_class c on mt.relid = c.oid
+  where mt.mvoid = 'mv_join2'::regclass;
+ count 
+-------
+     2
+(1 row)
+
+-- INSERT on table A: status -> 'i'
+insert into jt1 values(6, 60);
+select mvname, datastatus from gp_matview_aux where mvname = 'mv_join2';
+  mvname  | datastatus 
+----------+------------
+ mv_join2 | i
+(1 row)
+
+-- REFRESH: status -> 'u'
+refresh materialized view mv_join2;
+select mvname, datastatus from gp_matview_aux where mvname = 'mv_join2';
+  mvname  | datastatus 
+----------+------------
+ mv_join2 | u
+(1 row)
+
+-- INSERT on table B: status -> 'i'
+insert into jt2 values(7, 700);
+select mvname, datastatus from gp_matview_aux where mvname = 'mv_join2';
+  mvname  | datastatus 
+----------+------------
+ mv_join2 | i
+(1 row)
+
+-- UPDATE on table A: status -> 'e'
+refresh materialized view mv_join2;
+update jt1 set val = 99 where id = 1;
+select mvname, datastatus from gp_matview_aux where mvname = 'mv_join2';
+  mvname  | datastatus 
+----------+------------
+ mv_join2 | e
+(1 row)
+
+-- DELETE on table B: status -> 'e'
+refresh materialized view mv_join2;
+delete from jt2 where id = 7;
+select mvname, datastatus from gp_matview_aux where mvname = 'mv_join2';
+  mvname  | datastatus 
+----------+------------
+ mv_join2 | e
+(1 row)
+
+-- Implicit join (FROM t1, t2 WHERE ...): verify registration
+refresh materialized view mv_join2;
+create materialized view mv_implicit_join as
+  select jt1.id, jt1.val as v1, jt2.val as v2
+  from jt1, jt2 where jt1.id = jt2.id;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'id' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+select mvname, datastatus from gp_matview_aux where mvname = 'mv_implicit_join';
+      mvname      | datastatus 
+------------------+------------
+ mv_implicit_join | u
+(1 row)
+
+select count(*) from gp_matview_tables mt
+  join pg_class c on mt.relid = c.oid
+  where mt.mvoid = 'mv_implicit_join'::regclass;
+ count 
+-------
+     2
+(1 row)
+
+-- Three-table join: verify 3 entries in gp_matview_tables
+create materialized view mv_join3 as
+  select jt1.id, jt1.val as v1, jt2.val as v2, jt3.val as v3
+  from jt1 join jt2 on jt1.id = jt2.id join jt3 on jt2.id = jt3.id;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'id' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+select mvname, datastatus from gp_matview_aux where mvname = 'mv_join3';
+  mvname  | datastatus 
+----------+------------
+ mv_join3 | u
+(1 row)
+
+select count(*) from gp_matview_tables mt
+  join pg_class c on mt.relid = c.oid
+  where mt.mvoid = 'mv_join3'::regclass;
+ count 
+-------
+     3
+(1 row)
+
+-- DML on middle table expires mv_join3
+insert into jt2 values(8, 800);
+select mvname, datastatus from gp_matview_aux where mvname = 'mv_join3';
+  mvname  | datastatus 
+----------+------------
+ mv_join3 | i
+(1 row)
+
+-- Self-join: verify only 1 entry in gp_matview_tables
+create materialized view mv_selfjoin as
+  select a.id as aid, b.id as bid
+  from jt1 a join jt1 b on a.id = b.id;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'aid' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+select mvname, datastatus from gp_matview_aux where mvname = 'mv_selfjoin';
+   mvname    | datastatus 
+-------------+------------
+ mv_selfjoin | u
+(1 row)
+
+select count(*) from gp_matview_tables mt
+  join pg_class c on mt.relid = c.oid
+  where mt.mvoid = 'mv_selfjoin'::regclass;
+ count 
+-------
+     1
+(1 row)
+
+-- LEFT/RIGHT/FULL OUTER JOIN: verify all register correctly
+create materialized view mv_left_join as
+  select jt1.id, jt1.val as v1, jt2.val as v2
+  from jt1 left join jt2 on jt1.id = jt2.id;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'id' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+select mvname, datastatus from gp_matview_aux where mvname = 'mv_left_join';
+    mvname    | datastatus 
+--------------+------------
+ mv_left_join | u
+(1 row)
+
+create materialized view mv_right_join as
+  select jt1.id, jt2.val as v2
+  from jt1 right join jt2 on jt1.id = jt2.id;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'id' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+select mvname, datastatus from gp_matview_aux where mvname = 'mv_right_join';
+    mvname     | datastatus 
+---------------+------------
+ mv_right_join | u
+(1 row)
+
+create materialized view mv_full_join as
+  select jt1.id as id1, jt2.id as id2
+  from jt1 full join jt2 on jt1.id = jt2.id;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'id1' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+select mvname, datastatus from gp_matview_aux where mvname = 'mv_full_join';
+    mvname    | datastatus 
+--------------+------------
+ mv_full_join | u
+(1 row)
+
+-- Partitioned table in join: verify partition DML propagates
+create table jt_par(a int, b int) partition by range(a)
+  (start(1) end(3) every(1));
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+insert into jt_par values(1, 10), (2, 20);
+create materialized view mv_join_par as
+  select jt1.id, jt1.val as v1, jt_par.a, jt_par.b
+  from jt1 join jt_par on jt1.id = jt_par.a;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'id' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+select mvname, datastatus from gp_matview_aux where mvname = 'mv_join_par';
+   mvname    | datastatus 
+-------------+------------
+ mv_join_par | u
+(1 row)
+
+insert into jt_par values(1, 11);
+select mvname, datastatus from gp_matview_aux where mvname = 'mv_join_par';
+   mvname    | datastatus 
+-------------+------------
+ mv_join_par | i
+(1 row)
+
+refresh materialized view mv_join_par;
+insert into jt1 values(9, 90);
+select mvname, datastatus from gp_matview_aux where mvname = 'mv_join_par';
+   mvname    | datastatus 
+-------------+------------
+ mv_join_par | i
+(1 row)
+
+-- VACUUM FULL on one base table of a join MV: status -> 'r'
+refresh materialized view mv_join2;
+select mvname, datastatus from gp_matview_aux where mvname = 'mv_join2';
+  mvname  | datastatus 
+----------+------------
+ mv_join2 | u
+(1 row)
+
+vacuum full jt1;
+select mvname, datastatus from gp_matview_aux where mvname = 'mv_join2';
+  mvname  | datastatus 
+----------+------------
+ mv_join2 | r
+(1 row)
+
+-- TRUNCATE on one base table of a join MV: status -> 'e'
+refresh materialized view mv_join2;
+truncate jt2;
+select mvname, datastatus from gp_matview_aux where mvname = 'mv_join2';
+  mvname  | datastatus 
+----------+------------
+ mv_join2 | e
+(1 row)
+
+-- CREATE WITH NO DATA: status -> 'e'
+create materialized view mv_join_nodata as
+  select jt1.id, jt3.val from jt1 join jt3 on jt1.id = jt3.id
+  with no data;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'id' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+select mvname, datastatus from gp_matview_aux where mvname = 'mv_join_nodata';
+     mvname     | datastatus 
+----------------+------------
+ mv_join_nodata | e
+(1 row)
+
+-- DROP CASCADE: matview and aux entries removed
+drop materialized view mv_join_nodata;
+select count(*) from gp_matview_aux where mvname = 'mv_join_nodata';
+ count 
+-------
+     0
+(1 row)
+
+-- Mixed join types in one view (INNER + LEFT)
+create materialized view mv_mixed_join as
+  select jt1.id, jt2.val as v2, jt3.val as v3
+  from jt1 join jt2 on jt1.id = jt2.id left join jt3 on jt2.id = jt3.id;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'id' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+select mvname, datastatus from gp_matview_aux where mvname = 'mv_mixed_join';
+    mvname     | datastatus 
+---------------+------------
+ mv_mixed_join | u
+(1 row)
+
+select count(*) from gp_matview_tables mt
+  join pg_class c on mt.relid = c.oid
+  where mt.mvoid = 'mv_mixed_join'::regclass;
+ count 
+-------
+     3
+(1 row)
+
+-- Join with GROUP BY and aggregates
+create materialized view mv_join_agg as
+  select jt1.id, count(*) as cnt, sum(jt2.val) as total
+  from jt1 join jt2 on jt1.id = jt2.id group by jt1.id;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'id' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+select mvname, datastatus from gp_matview_aux where mvname = 'mv_join_agg';
+   mvname    | datastatus 
+-------------+------------
+ mv_join_agg | u
+(1 row)
+
+select count(*) from gp_matview_tables mt
+  join pg_class c on mt.relid = c.oid
+  where mt.mvoid = 'mv_join_agg'::regclass;
+ count 
+-------
+     2
+(1 row)
+
+-- Multiple MVs sharing base tables: DML on one table affects all dependent MVs
+refresh materialized view mv_join2;
+refresh materialized view mv_join3;
+refresh materialized view mv_mixed_join;
+refresh materialized view mv_join_agg;
+select mvname, datastatus from gp_matview_aux
+  where mvname in ('mv_join2', 'mv_join3', 'mv_mixed_join', 'mv_join_agg')
+  order by mvname;
+    mvname     | datastatus 
+---------------+------------
+ mv_join2      | u
+ mv_join3      | u
+ mv_join_agg   | u
+ mv_mixed_join | u
+(4 rows)
+
+insert into jt2 values(10, 1000);
+-- all four share jt2 as a base table
+select mvname, datastatus from gp_matview_aux
+  where mvname in ('mv_join2', 'mv_join3', 'mv_mixed_join', 'mv_join_agg')
+  order by mvname;
+    mvname     | datastatus 
+---------------+------------
+ mv_join2      | i
+ mv_join3      | i
+ mv_join_agg   | i
+ mv_mixed_join | i
+(4 rows)
+
+-- Transaction: multiple DML on different base tables
+refresh materialized view mv_join3;
+begin;
+select mvname, datastatus from gp_matview_aux where mvname = 'mv_join3';
+  mvname  | datastatus 
+----------+------------
+ mv_join3 | u
+(1 row)
+
+insert into jt1 values(20, 200);
+-- after insert: 'i' (insert-only)
+select mvname, datastatus from gp_matview_aux where mvname = 'mv_join3';
+  mvname  | datastatus 
+----------+------------
+ mv_join3 | i
+(1 row)
+
+delete from jt2 where id = 10;
+-- after delete: escalates to 'e' (expired)
+select mvname, datastatus from gp_matview_aux where mvname = 'mv_join3';
+  mvname  | datastatus 
+----------+------------
+ mv_join3 | e
+(1 row)
+
+end;
+-- committed: status persists as 'e'
+select mvname, datastatus from gp_matview_aux where mvname = 'mv_join3';
+  mvname  | datastatus 
+----------+------------
+ mv_join3 | e
+(1 row)
+
+-- Transaction rollback: status should revert
+refresh materialized view mv_join3;
+select mvname, datastatus from gp_matview_aux where mvname = 'mv_join3';
+  mvname  | datastatus 
+----------+------------
+ mv_join3 | u
+(1 row)
+
+begin;
+update jt1 set val = 999 where id = 1;
+select mvname, datastatus from gp_matview_aux where mvname = 'mv_join3';
+  mvname  | datastatus 
+----------+------------
+ mv_join3 | e
+(1 row)
+
+abort;
+-- after rollback: back to 'u'
+select mvname, datastatus from gp_matview_aux where mvname = 'mv_join3';
+  mvname  | datastatus 
+----------+------------
+ mv_join3 | u
+(1 row)
+
+-- Transaction: insert then insert on different tables stays 'i'
+refresh materialized view mv_join2;
+begin;
+insert into jt1 values(30, 300);
+select mvname, datastatus from gp_matview_aux where mvname = 'mv_join2';
+  mvname  | datastatus 
+----------+------------
+ mv_join2 | i
+(1 row)
+
+insert into jt2 values(31, 3100);
+-- still 'i' since both are inserts
+select mvname, datastatus from gp_matview_aux where mvname = 'mv_join2';
+  mvname  | datastatus 
+----------+------------
+ mv_join2 | i
+(1 row)
+
+abort;
+-- Cross join (FROM t1, t2 with no WHERE): verify registration
+create materialized view mv_cross_join as
+  select jt1.id as id1, jt2.id as id2 from jt1, jt2;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'id2' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+select mvname, datastatus from gp_matview_aux where mvname = 'mv_cross_join';
+    mvname     | datastatus 
+---------------+------------
+ mv_cross_join | u
+(1 row)
+
+select count(*) from gp_matview_tables mt
+  join pg_class c on mt.relid = c.oid
+  where mt.mvoid = 'mv_cross_join'::regclass;
+ count 
+-------
+     2
+(1 row)
+
+-- Drop base table CASCADE removes dependent join MVs and aux entries
+create table jt_drop(id int, val int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'id' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+insert into jt_drop values(1, 10);
+create materialized view mv_join_drop as
+  select jt1.id, jt_drop.val from jt1 join jt_drop on jt1.id = jt_drop.id;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'id' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+select mvname, datastatus from gp_matview_aux where mvname = 'mv_join_drop';
+    mvname    | datastatus 
+--------------+------------
+ mv_join_drop | u
+(1 row)
+
+drop table jt_drop cascade;
+NOTICE:  drop cascades to materialized view mv_join_drop
+select count(*) from gp_matview_aux where mvname = 'mv_join_drop';
+ count 
+-------
+     0
+(1 row)
+
+-- Clean up join test objects
+drop materialized view mv_cross_join;
+drop materialized view mv_join_agg;
+drop materialized view mv_mixed_join;
+drop materialized view mv_join_par;
+drop table jt_par cascade;
+drop materialized view mv_full_join;
+drop materialized view mv_right_join;
+drop materialized view mv_left_join;
+drop materialized view mv_selfjoin;
+drop materialized view mv_join3;
+drop materialized view mv_implicit_join;
+drop materialized view mv_join2;
+drop table jt3;
+drop table jt2;
+drop table jt1;
+--
+-- Test AQUMV (Answer Query Using Materialized Views) with join queries.
+-- Each matching test shows EXPLAIN + SELECT with GUC off (original plan),
+-- then EXPLAIN + SELECT with GUC on (MV rewrite). Results must match.
+--
+create table aqj_t1(a int, b int) distributed by (a);
+create table aqj_t2(a int, b int) distributed by (a);
+create table aqj_t3(a int, b int) distributed by (a);
+insert into aqj_t1 select i, i*10 from generate_series(1, 100) i;
+insert into aqj_t2 select i, i*100 from generate_series(1, 100) i;
+insert into aqj_t3 select i, i*1000 from generate_series(1, 100) i;
+analyze aqj_t1;
+analyze aqj_t2;
+analyze aqj_t3;
+-- 1. Two-table INNER JOIN exact match
+create materialized view mv_aqj_join2 as
+  select aqj_t1.a, aqj_t2.b from aqj_t1 join aqj_t2 on aqj_t1.a = aqj_t2.a;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'a' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+analyze mv_aqj_join2;
+set enable_answer_query_using_materialized_views = off;
+explain(costs off) select aqj_t1.a, aqj_t2.b from aqj_t1 join aqj_t2 on aqj_t1.a = aqj_t2.a;
+                QUERY PLAN                
+------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Hash Join
+         Hash Cond: (aqj_t1.a = aqj_t2.a)
+         ->  Seq Scan on aqj_t1
+         ->  Hash
+               ->  Seq Scan on aqj_t2
+ Optimizer: Postgres query optimizer
+(7 rows)
+
+select aqj_t1.a, aqj_t2.b from aqj_t1 join aqj_t2 on aqj_t1.a = aqj_t2.a order by 1 limit 5;
+ a |  b  
+---+-----
+ 1 | 100
+ 2 | 200
+ 3 | 300
+ 4 | 400
+ 5 | 500
+(5 rows)
+
+set enable_answer_query_using_materialized_views = on;
+explain(costs off) select aqj_t1.a, aqj_t2.b from aqj_t1 join aqj_t2 on aqj_t1.a = aqj_t2.a;
+                QUERY PLAN                
+------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Seq Scan on mv_aqj_join2
+ Optimizer: Postgres query optimizer
+(3 rows)
+
+select aqj_t1.a, aqj_t2.b from aqj_t1 join aqj_t2 on aqj_t1.a = aqj_t2.a order by 1 limit 5;
+ a |  b  
+---+-----
+ 1 | 100
+ 2 | 200
+ 3 | 300
+ 4 | 400
+ 5 | 500
+(5 rows)
+
+-- 2. Join with WHERE clause
+create materialized view mv_aqj_where as
+  select aqj_t1.a, aqj_t2.b from aqj_t1 join aqj_t2 on aqj_t1.a = aqj_t2.a where aqj_t1.a > 5;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'a' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+analyze mv_aqj_where;
+set enable_answer_query_using_materialized_views = off;
+explain(costs off) select aqj_t1.a, aqj_t2.b from aqj_t1 join aqj_t2 on aqj_t1.a = aqj_t2.a where aqj_t1.a > 5;
+                QUERY PLAN                
+------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Hash Join
+         Hash Cond: (aqj_t1.a = aqj_t2.a)
+         ->  Seq Scan on aqj_t1
+               Filter: (a > 5)
+         ->  Hash
+               ->  Seq Scan on aqj_t2
+                     Filter: (a > 5)
+ Optimizer: Postgres query optimizer
+(9 rows)
+
+select aqj_t1.a, aqj_t2.b from aqj_t1 join aqj_t2 on aqj_t1.a = aqj_t2.a where aqj_t1.a > 5 order by 1 limit 5;
+ a  |  b   
+----+------
+  6 |  600
+  7 |  700
+  8 |  800
+  9 |  900
+ 10 | 1000
+(5 rows)
+
+set enable_answer_query_using_materialized_views = on;
+explain(costs off) select aqj_t1.a, aqj_t2.b from aqj_t1 join aqj_t2 on aqj_t1.a = aqj_t2.a where aqj_t1.a > 5;
+                QUERY PLAN                
+------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Seq Scan on mv_aqj_where
+ Optimizer: Postgres query optimizer
+(3 rows)
+
+select aqj_t1.a, aqj_t2.b from aqj_t1 join aqj_t2 on aqj_t1.a = aqj_t2.a where aqj_t1.a > 5 order by 1 limit 5;
+ a  |  b   
+----+------
+  6 |  600
+  7 |  700
+  8 |  800
+  9 |  900
+ 10 | 1000
+(5 rows)
+
+-- 3. Join with GROUP BY + aggregate
+create materialized view mv_aqj_agg as
+  select aqj_t1.a, count(*) as cnt from aqj_t1 join aqj_t2 on aqj_t1.a = aqj_t2.a group by aqj_t1.a;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'a' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+analyze mv_aqj_agg;
+set enable_answer_query_using_materialized_views = off;
+explain(costs off) select aqj_t1.a, count(*) as cnt from aqj_t1 join aqj_t2 on aqj_t1.a = aqj_t2.a group by aqj_t1.a;
+                   QUERY PLAN                   
+------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  HashAggregate
+         Group Key: aqj_t1.a
+         ->  Hash Join
+               Hash Cond: (aqj_t1.a = aqj_t2.a)
+               ->  Seq Scan on aqj_t1
+               ->  Hash
+                     ->  Seq Scan on aqj_t2
+ Optimizer: Postgres query optimizer
+(9 rows)
+
+select aqj_t1.a, count(*) as cnt from aqj_t1 join aqj_t2 on aqj_t1.a = aqj_t2.a group by aqj_t1.a order by 1 limit 5;
+ a | cnt 
+---+-----
+ 1 |   1
+ 2 |   1
+ 3 |   1
+ 4 |   1
+ 5 |   1
+(5 rows)
+
+set enable_answer_query_using_materialized_views = on;
+explain(costs off) select aqj_t1.a, count(*) as cnt from aqj_t1 join aqj_t2 on aqj_t1.a = aqj_t2.a group by aqj_t1.a;
+                QUERY PLAN                
+------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Seq Scan on mv_aqj_agg
+ Optimizer: Postgres query optimizer
+(3 rows)
+
+select aqj_t1.a, count(*) as cnt from aqj_t1 join aqj_t2 on aqj_t1.a = aqj_t2.a group by aqj_t1.a order by 1 limit 5;
+ a | cnt 
+---+-----
+ 1 |   1
+ 2 |   1
+ 3 |   1
+ 4 |   1
+ 5 |   1
+(5 rows)
+
+-- 4. Non-match: different WHERE clause (should show Hash Join, not MV)
+set enable_answer_query_using_materialized_views = on;
+explain(costs off) select aqj_t1.a, aqj_t2.b from aqj_t1 join aqj_t2 on aqj_t1.a = aqj_t2.a where aqj_t1.a > 10;
+                QUERY PLAN                
+------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Hash Join
+         Hash Cond: (aqj_t1.a = aqj_t2.a)
+         ->  Seq Scan on aqj_t1
+               Filter: (a > 10)
+         ->  Hash
+               ->  Seq Scan on aqj_t2
+                     Filter: (a > 10)
+ Optimizer: Postgres query optimizer
+(9 rows)
+
+-- 5. Non-match: different target list
+explain(costs off) select aqj_t1.b, aqj_t2.a from aqj_t1 join aqj_t2 on aqj_t1.a = aqj_t2.a;
+                QUERY PLAN                
+------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Hash Join
+         Hash Cond: (aqj_t1.a = aqj_t2.a)
+         ->  Seq Scan on aqj_t1
+         ->  Hash
+               ->  Seq Scan on aqj_t2
+ Optimizer: Postgres query optimizer
+(7 rows)
+
+-- 6. Non-match: different join type (INNER vs LEFT)
+explain(costs off) select aqj_t1.a, aqj_t2.b from aqj_t1 left join aqj_t2 on aqj_t1.a = aqj_t2.a;
+                QUERY PLAN                
+------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Hash Left Join
+         Hash Cond: (aqj_t1.a = aqj_t2.a)
+         ->  Seq Scan on aqj_t1
+         ->  Hash
+               ->  Seq Scan on aqj_t2
+ Optimizer: Postgres query optimizer
+(7 rows)
+
+-- 7. Three-table join
+create materialized view mv_aqj_join3 as
+  select aqj_t1.a, aqj_t2.b, aqj_t3.b as c
+  from aqj_t1 join aqj_t2 on aqj_t1.a = aqj_t2.a join aqj_t3 on aqj_t2.a = aqj_t3.a;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'a' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+analyze mv_aqj_join3;
+set enable_answer_query_using_materialized_views = off;
+explain(costs off) select aqj_t1.a, aqj_t2.b, aqj_t3.b as c
+  from aqj_t1 join aqj_t2 on aqj_t1.a = aqj_t2.a join aqj_t3 on aqj_t2.a = aqj_t3.a;
+                   QUERY PLAN                   
+------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Hash Join
+         Hash Cond: (aqj_t1.a = aqj_t3.a)
+         ->  Hash Join
+               Hash Cond: (aqj_t1.a = aqj_t2.a)
+               ->  Seq Scan on aqj_t1
+               ->  Hash
+                     ->  Seq Scan on aqj_t2
+         ->  Hash
+               ->  Seq Scan on aqj_t3
+ Optimizer: Postgres query optimizer
+(11 rows)
+
+select aqj_t1.a, aqj_t2.b, aqj_t3.b as c
+  from aqj_t1 join aqj_t2 on aqj_t1.a = aqj_t2.a join aqj_t3 on aqj_t2.a = aqj_t3.a
+  order by 1 limit 5;
+ a |  b  |  c   
+---+-----+------
+ 1 | 100 | 1000
+ 2 | 200 | 2000
+ 3 | 300 | 3000
+ 4 | 400 | 4000
+ 5 | 500 | 5000
+(5 rows)
+
+set enable_answer_query_using_materialized_views = on;
+explain(costs off) select aqj_t1.a, aqj_t2.b, aqj_t3.b as c
+  from aqj_t1 join aqj_t2 on aqj_t1.a = aqj_t2.a join aqj_t3 on aqj_t2.a = aqj_t3.a;
+                QUERY PLAN                
+------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Seq Scan on mv_aqj_join3
+ Optimizer: Postgres query optimizer
+(3 rows)
+
+select aqj_t1.a, aqj_t2.b, aqj_t3.b as c
+  from aqj_t1 join aqj_t2 on aqj_t1.a = aqj_t2.a join aqj_t3 on aqj_t2.a = aqj_t3.a
+  order by 1 limit 5;
+ a |  b  |  c   
+---+-----+------
+ 1 | 100 | 1000
+ 2 | 200 | 2000
+ 3 | 300 | 3000
+ 4 | 400 | 4000
+ 5 | 500 | 5000
+(5 rows)
+
+-- 8. Implicit join (FROM t1, t2 WHERE ...)
+create materialized view mv_aqj_implicit as
+  select aqj_t1.a, aqj_t2.b from aqj_t1, aqj_t2 where aqj_t1.a = aqj_t2.a;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'a' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+analyze mv_aqj_implicit;
+set enable_answer_query_using_materialized_views = off;
+explain(costs off) select aqj_t1.a, aqj_t2.b from aqj_t1, aqj_t2 where aqj_t1.a = aqj_t2.a;
+                QUERY PLAN                
+------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Hash Join
+         Hash Cond: (aqj_t1.a = aqj_t2.a)
+         ->  Seq Scan on aqj_t1
+         ->  Hash
+               ->  Seq Scan on aqj_t2
+ Optimizer: Postgres query optimizer
+(7 rows)
+
+select aqj_t1.a, aqj_t2.b from aqj_t1, aqj_t2 where aqj_t1.a = aqj_t2.a order by 1 limit 5;
+ a |  b  
+---+-----
+ 1 | 100
+ 2 | 200
+ 3 | 300
+ 4 | 400
+ 5 | 500
+(5 rows)
+
+set enable_answer_query_using_materialized_views = on;
+explain(costs off) select aqj_t1.a, aqj_t2.b from aqj_t1, aqj_t2 where aqj_t1.a = aqj_t2.a;
+                QUERY PLAN                
+------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Seq Scan on mv_aqj_implicit
+ Optimizer: Postgres query optimizer
+(3 rows)
+
+select aqj_t1.a, aqj_t2.b from aqj_t1, aqj_t2 where aqj_t1.a = aqj_t2.a order by 1 limit 5;
+ a |  b  
+---+-----
+ 1 | 100
+ 2 | 200
+ 3 | 300
+ 4 | 400
+ 5 | 500
+(5 rows)
+
+-- 9. MV not up-to-date: after INSERT on base table
+insert into aqj_t1 values(999, 9990);
+set enable_answer_query_using_materialized_views = on;
+-- Should NOT use mv_aqj_join2 (status is 'i')
+explain(costs off) select aqj_t1.a, aqj_t2.b from aqj_t1 join aqj_t2 on aqj_t1.a = aqj_t2.a;
+                QUERY PLAN                
+------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Hash Join
+         Hash Cond: (aqj_t1.a = aqj_t2.a)
+         ->  Seq Scan on aqj_t1
+         ->  Hash
+               ->  Seq Scan on aqj_t2
+ Optimizer: Postgres query optimizer
+(7 rows)
+
+-- 10. After REFRESH: should use MV again
+refresh materialized view mv_aqj_join2;
+analyze mv_aqj_join2;
+explain(costs off) select aqj_t1.a, aqj_t2.b from aqj_t1 join aqj_t2 on aqj_t1.a = aqj_t2.a;
+                QUERY PLAN                
+------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Seq Scan on mv_aqj_join2
+ Optimizer: Postgres query optimizer
+(3 rows)
+
+-- 11. GUC off: should NOT use MV
+set enable_answer_query_using_materialized_views = off;
+explain(costs off) select aqj_t1.a, aqj_t2.b from aqj_t1 join aqj_t2 on aqj_t1.a = aqj_t2.a;
+                QUERY PLAN                
+------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Hash Join
+         Hash Cond: (aqj_t1.a = aqj_t2.a)
+         ->  Seq Scan on aqj_t1
+         ->  Hash
+               ->  Seq Scan on aqj_t2
+ Optimizer: Postgres query optimizer
+(7 rows)
+
+--
+-- More complex join AQUMV test cases with richer schemas
+--
+create table aqj_orders(
+  order_id int,
+  customer_id int,
+  amount numeric(10,2),
+  status text,
+  order_date date
+) distributed by (order_id);
+create table aqj_customers(
+  customer_id int,
+  name text,
+  region text,
+  credit_limit numeric(10,2)
+) distributed by (customer_id);
+create table aqj_products(
+  product_id int,
+  name text,
+  category text,
+  price numeric(10,2)
+) distributed by (product_id);
+create table aqj_order_items(
+  item_id int,
+  order_id int,
+  product_id int,
+  quantity int
+) distributed by (item_id);
+insert into aqj_customers select i, 'cust_' || i, case when i % 3 = 0 then 'east' when i % 3 = 1 then 'west' else 'north' end, (i * 100)::numeric(10,2) from generate_series(1, 50) i;
+insert into aqj_orders select i, (i % 50) + 1, (i * 10.5)::numeric(10,2), case when i % 4 = 0 then 'shipped' when i % 4 = 1 then 'pending' when i % 4 = 2 then 'delivered' else 'cancelled' end, '2024-01-01'::date + (i % 365) from generate_series(1, 200) i;
+insert into aqj_products select i, 'prod_' || i, case when i % 5 = 0 then 'electronics' when i % 5 = 1 then 'books' when i % 5 = 2 then 'clothing' when i % 5 = 3 then 'food' else 'toys' end, (i * 5.99)::numeric(10,2) from generate_series(1, 30) i;
+insert into aqj_order_items select i, (i % 200) + 1, (i % 30) + 1, (i % 10) + 1 from generate_series(1, 500) i;
+analyze aqj_customers;
+analyze aqj_orders;
+analyze aqj_products;
+analyze aqj_order_items;
+-- 12. Join with multiple columns + WHERE on text column
+create materialized view mv_aqj_orders_cust as
+  select o.order_id, o.amount, c.name, c.region
+  from aqj_orders o join aqj_customers c on o.customer_id = c.customer_id
+  where o.status = 'shipped';
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'order_id' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+analyze mv_aqj_orders_cust;
+set enable_answer_query_using_materialized_views = off;
+explain(costs off) select o.order_id, o.amount, c.name, c.region
+  from aqj_orders o join aqj_customers c on o.customer_id = c.customer_id
+  where o.status = 'shipped';
+                         QUERY PLAN                         
+------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Hash Join
+         Hash Cond: (o.customer_id = c.customer_id)
+         ->  Redistribute Motion 3:3  (slice2; segments: 3)
+               Hash Key: o.customer_id
+               ->  Seq Scan on aqj_orders o
+                     Filter: (status = 'shipped'::text)
+         ->  Hash
+               ->  Seq Scan on aqj_customers c
+ Optimizer: Postgres query optimizer
+(10 rows)
+
+select o.order_id, o.amount, c.name, c.region
+  from aqj_orders o join aqj_customers c on o.customer_id = c.customer_id
+  where o.status = 'shipped'
+  order by o.order_id limit 5;
+ order_id | amount |  name   | region 
+----------+--------+---------+--------
+        4 |  42.00 | cust_5  | north
+        8 |  84.00 | cust_9  | east
+       12 | 126.00 | cust_13 | west
+       16 | 168.00 | cust_17 | north
+       20 | 210.00 | cust_21 | east
+(5 rows)
+
+set enable_answer_query_using_materialized_views = on;
+explain(costs off) select o.order_id, o.amount, c.name, c.region
+  from aqj_orders o join aqj_customers c on o.customer_id = c.customer_id
+  where o.status = 'shipped';
+                QUERY PLAN                
+------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Seq Scan on mv_aqj_orders_cust
+ Optimizer: Postgres query optimizer
+(3 rows)
+
+select o.order_id, o.amount, c.name, c.region
+  from aqj_orders o join aqj_customers c on o.customer_id = c.customer_id
+  where o.status = 'shipped'
+  order by o.order_id limit 5;
+ order_id | amount |  name   | region 
+----------+--------+---------+--------
+        4 |  42.00 | cust_5  | north
+        8 |  84.00 | cust_9  | east
+       12 | 126.00 | cust_13 | west
+       16 | 168.00 | cust_17 | north
+       20 | 210.00 | cust_21 | east
+(5 rows)
+
+-- 13. Four-table join
+create materialized view mv_aqj_order_details as
+  select o.order_id, c.name as customer_name, p.name as product_name, oi.quantity, p.price
+  from aqj_orders o
+  join aqj_customers c on o.customer_id = c.customer_id
+  join aqj_order_items oi on o.order_id = oi.order_id
+  join aqj_products p on oi.product_id = p.product_id;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'order_id' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+analyze mv_aqj_order_details;
+set enable_answer_query_using_materialized_views = off;
+explain(costs off)
+  select o.order_id, c.name as customer_name, p.name as product_name, oi.quantity, p.price
+  from aqj_orders o
+  join aqj_customers c on o.customer_id = c.customer_id
+  join aqj_order_items oi on o.order_id = oi.order_id
+  join aqj_products p on oi.product_id = p.product_id;
+                                  QUERY PLAN                                  
+------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Hash Join
+         Hash Cond: (oi.product_id = p.product_id)
+         ->  Hash Join
+               Hash Cond: (o.order_id = oi.order_id)
+               ->  Broadcast Motion 3:3  (slice2; segments: 3)
+                     ->  Hash Join
+                           Hash Cond: (o.customer_id = c.customer_id)
+                           ->  Redistribute Motion 3:3  (slice3; segments: 3)
+                                 Hash Key: o.customer_id
+                                 ->  Seq Scan on aqj_orders o
+                           ->  Hash
+                                 ->  Seq Scan on aqj_customers c
+               ->  Hash
+                     ->  Seq Scan on aqj_order_items oi
+         ->  Hash
+               ->  Broadcast Motion 3:3  (slice4; segments: 3)
+                     ->  Seq Scan on aqj_products p
+ Optimizer: Postgres query optimizer
+(19 rows)
+
+select o.order_id, c.name as customer_name, p.name as product_name, oi.quantity, p.price
+  from aqj_orders o
+  join aqj_customers c on o.customer_id = c.customer_id
+  join aqj_order_items oi on o.order_id = oi.order_id
+  join aqj_products p on oi.product_id = p.product_id
+  order by o.order_id, p.name limit 5;
+ order_id | customer_name | product_name | quantity | price  
+----------+---------------+--------------+----------+--------
+        1 | cust_2        | prod_11      |        1 |  65.89
+        1 | cust_2        | prod_21      |        1 | 125.79
+        2 | cust_3        | prod_12      |        2 |  71.88
+        2 | cust_3        | prod_2       |        2 |  11.98
+        2 | cust_3        | prod_22      |        2 | 131.78
+(5 rows)
+
+set enable_answer_query_using_materialized_views = on;
+explain(costs off)
+  select o.order_id, c.name as customer_name, p.name as product_name, oi.quantity, p.price
+  from aqj_orders o
+  join aqj_customers c on o.customer_id = c.customer_id
+  join aqj_order_items oi on o.order_id = oi.order_id
+  join aqj_products p on oi.product_id = p.product_id;
+                QUERY PLAN                
+------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Seq Scan on mv_aqj_order_details
+ Optimizer: Postgres query optimizer
+(3 rows)
+
+select o.order_id, c.name as customer_name, p.name as product_name, oi.quantity, p.price
+  from aqj_orders o
+  join aqj_customers c on o.customer_id = c.customer_id
+  join aqj_order_items oi on o.order_id = oi.order_id
+  join aqj_products p on oi.product_id = p.product_id
+  order by o.order_id, p.name limit 5;
+ order_id | customer_name | product_name | quantity | price  
+----------+---------------+--------------+----------+--------
+        1 | cust_2        | prod_11      |        1 |  65.89
+        1 | cust_2        | prod_21      |        1 | 125.79
+        2 | cust_3        | prod_12      |        2 |  71.88
+        2 | cust_3        | prod_2       |        2 |  11.98
+        2 | cust_3        | prod_22      |        2 | 131.78
+(5 rows)
+
+-- 14. GROUP BY on join with multiple aggregates: sum, count, avg
+create materialized view mv_aqj_cust_summary as
+  select c.region, count(*) as order_count, sum(o.amount) as total_amount, avg(o.amount) as avg_amount
+  from aqj_orders o join aqj_customers c on o.customer_id = c.customer_id
+  group by c.region;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'region' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+analyze mv_aqj_cust_summary;
+set enable_answer_query_using_materialized_views = off;
+explain(costs off)
+  select c.region, count(*) as order_count, sum(o.amount) as total_amount, avg(o.amount) as avg_amount
+  from aqj_orders o join aqj_customers c on o.customer_id = c.customer_id
+  group by c.region;
+                                   QUERY PLAN                                    
+---------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Finalize HashAggregate
+         Group Key: c.region
+         ->  Redistribute Motion 3:3  (slice2; segments: 3)
+               Hash Key: c.region
+               ->  Streaming Partial HashAggregate
+                     Group Key: c.region
+                     ->  Hash Join
+                           Hash Cond: (o.customer_id = c.customer_id)
+                           ->  Seq Scan on aqj_orders o
+                           ->  Hash
+                                 ->  Broadcast Motion 3:3  (slice3; segments: 3)
+                                       ->  Seq Scan on aqj_customers c
+ Optimizer: Postgres query optimizer
+(14 rows)
+
+select c.region, count(*) as order_count, sum(o.amount) as total_amount, avg(o.amount) as avg_amount
+  from aqj_orders o join aqj_customers c on o.customer_id = c.customer_id
+  group by c.region
+  order by c.region;
+ region | order_count | total_amount |      avg_amount       
+--------+-------------+--------------+-----------------------
+ east   |          64 |     66864.00 | 1044.7500000000000000
+ north  |          68 |     71400.00 | 1050.0000000000000000
+ west   |          68 |     72786.00 | 1070.3823529411764706
+(3 rows)
+
+set enable_answer_query_using_materialized_views = on;
+explain(costs off)
+  select c.region, count(*) as order_count, sum(o.amount) as total_amount, avg(o.amount) as avg_amount
+  from aqj_orders o join aqj_customers c on o.customer_id = c.customer_id
+  group by c.region;
+                QUERY PLAN                
+------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Seq Scan on mv_aqj_cust_summary
+ Optimizer: Postgres query optimizer
+(3 rows)
+
+select c.region, count(*) as order_count, sum(o.amount) as total_amount, avg(o.amount) as avg_amount
+  from aqj_orders o join aqj_customers c on o.customer_id = c.customer_id
+  group by c.region
+  order by c.region;
+ region | order_count | total_amount |      avg_amount       
+--------+-------------+--------------+-----------------------
+ east   |          64 |     66864.00 | 1044.7500000000000000
+ north  |          68 |     71400.00 | 1050.0000000000000000
+ west   |          68 |     72786.00 | 1070.3823529411764706
+(3 rows)
+
+-- 15. Join with expression in target list (arithmetic + function)
+create materialized view mv_aqj_expr as
+  select o.order_id, o.amount * 1.1 as amount_with_tax, c.name, upper(c.region) as region_upper
+  from aqj_orders o join aqj_customers c on o.customer_id = c.customer_id;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'order_id' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+analyze mv_aqj_expr;
+set enable_answer_query_using_materialized_views = off;
+explain(costs off) select o.order_id, o.amount * 1.1 as amount_with_tax, c.name, upper(c.region) as region_upper
+  from aqj_orders o join aqj_customers c on o.customer_id = c.customer_id;
+                          QUERY PLAN                           
+---------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Hash Join
+         Hash Cond: (o.customer_id = c.customer_id)
+         ->  Seq Scan on aqj_orders o
+         ->  Hash
+               ->  Broadcast Motion 3:3  (slice2; segments: 3)
+                     ->  Seq Scan on aqj_customers c
+ Optimizer: Postgres query optimizer
+(8 rows)
+
+select o.order_id, o.amount * 1.1 as amount_with_tax, c.name, upper(c.region) as region_upper
+  from aqj_orders o join aqj_customers c on o.customer_id = c.customer_id
+  order by o.order_id limit 5;
+ order_id | amount_with_tax |  name  | region_upper 
+----------+-----------------+--------+--------------
+        1 |          11.550 | cust_2 | NORTH
+        2 |          23.100 | cust_3 | EAST
+        3 |          34.650 | cust_4 | WEST
+        4 |          46.200 | cust_5 | NORTH
+        5 |          57.750 | cust_6 | EAST
+(5 rows)
+
+set enable_answer_query_using_materialized_views = on;
+explain(costs off) select o.order_id, o.amount * 1.1 as amount_with_tax, c.name, upper(c.region) as region_upper
+  from aqj_orders o join aqj_customers c on o.customer_id = c.customer_id;
+                QUERY PLAN                
+------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Seq Scan on mv_aqj_expr
+ Optimizer: Postgres query optimizer
+(3 rows)
+
+select o.order_id, o.amount * 1.1 as amount_with_tax, c.name, upper(c.region) as region_upper
+  from aqj_orders o join aqj_customers c on o.customer_id = c.customer_id
+  order by o.order_id limit 5;
+ order_id | amount_with_tax |  name  | region_upper 
+----------+-----------------+--------+--------------
+        1 |          11.550 | cust_2 | NORTH
+        2 |          23.100 | cust_3 | EAST
+        3 |          34.650 | cust_4 | WEST
+        4 |          46.200 | cust_5 | NORTH
+        5 |          57.750 | cust_6 | EAST
+(5 rows)
+
+-- 16. Non-match: same tables + expressions, but extra WHERE (should NOT match mv_aqj_expr)
+set enable_answer_query_using_materialized_views = on;
+explain(costs off) select o.order_id, o.amount * 1.1 as amount_with_tax, c.name, upper(c.region) as region_upper
+  from aqj_orders o join aqj_customers c on o.customer_id = c.customer_id
+  where c.region = 'east';
+                          QUERY PLAN                           
+---------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Hash Join
+         Hash Cond: (o.customer_id = c.customer_id)
+         ->  Seq Scan on aqj_orders o
+         ->  Hash
+               ->  Broadcast Motion 3:3  (slice2; segments: 3)
+                     ->  Seq Scan on aqj_customers c
+                           Filter: (region = 'east'::text)
+ Optimizer: Postgres query optimizer
+(9 rows)
+
+-- 17. Non-match: same tables but different aggregate target list
+explain(costs off)
+  select c.region, sum(o.amount) as total_amount
+  from aqj_orders o join aqj_customers c on o.customer_id = c.customer_id
+  group by c.region;
+                                   QUERY PLAN                                    
+---------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Finalize HashAggregate
+         Group Key: c.region
+         ->  Redistribute Motion 3:3  (slice2; segments: 3)
+               Hash Key: c.region
+               ->  Streaming Partial HashAggregate
+                     Group Key: c.region
+                     ->  Hash Join
+                           Hash Cond: (o.customer_id = c.customer_id)
+                           ->  Seq Scan on aqj_orders o
+                           ->  Hash
+                                 ->  Broadcast Motion 3:3  (slice3; segments: 3)
+                                       ->  Seq Scan on aqj_customers c
+ Optimizer: Postgres query optimizer
+(14 rows)
+
+-- 18. Non-match: different join order (o JOIN c vs c JOIN o)
+explain(costs off) select o.order_id, o.amount, c.name, c.region
+  from aqj_customers c join aqj_orders o on o.customer_id = c.customer_id
+  where o.status = 'shipped';
+                         QUERY PLAN                         
+------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Hash Join
+         Hash Cond: (o.customer_id = c.customer_id)
+         ->  Redistribute Motion 3:3  (slice2; segments: 3)
+               Hash Key: o.customer_id
+               ->  Seq Scan on aqj_orders o
+                     Filter: (status = 'shipped'::text)
+         ->  Hash
+               ->  Seq Scan on aqj_customers c
+ Optimizer: Postgres query optimizer
+(10 rows)
+
+-- 19. Join with compound WHERE (multiple AND conditions)
+create materialized view mv_aqj_compound_where as
+  select o.order_id, o.amount, c.name
+  from aqj_orders o join aqj_customers c on o.customer_id = c.customer_id
+  where o.status = 'pending' and c.region = 'west' and o.amount > 50;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'order_id' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+analyze mv_aqj_compound_where;
+set enable_answer_query_using_materialized_views = off;
+explain(costs off) select o.order_id, o.amount, c.name
+  from aqj_orders o join aqj_customers c on o.customer_id = c.customer_id
+  where o.status = 'pending' and c.region = 'west' and o.amount > 50;
+                                   QUERY PLAN                                    
+---------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Hash Join
+         Hash Cond: (o.customer_id = c.customer_id)
+         ->  Seq Scan on aqj_orders o
+               Filter: ((amount > '50'::numeric) AND (status = 'pending'::text))
+         ->  Hash
+               ->  Broadcast Motion 3:3  (slice2; segments: 3)
+                     ->  Seq Scan on aqj_customers c
+                           Filter: (region = 'west'::text)
+ Optimizer: Postgres query optimizer
+(10 rows)
+
+select o.order_id, o.amount, c.name
+  from aqj_orders o join aqj_customers c on o.customer_id = c.customer_id
+  where o.status = 'pending' and c.region = 'west' and o.amount > 50
+  order by o.order_id limit 5;
+ order_id | amount |  name   
+----------+--------+---------
+        9 |  94.50 | cust_10
+       21 | 220.50 | cust_22
+       33 | 346.50 | cust_34
+       45 | 472.50 | cust_46
+       53 | 556.50 | cust_4
+(5 rows)
+
+set enable_answer_query_using_materialized_views = on;
+explain(costs off) select o.order_id, o.amount, c.name
+  from aqj_orders o join aqj_customers c on o.customer_id = c.customer_id
+  where o.status = 'pending' and c.region = 'west' and o.amount > 50;
+                QUERY PLAN                
+------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Seq Scan on mv_aqj_compound_where
+ Optimizer: Postgres query optimizer
+(3 rows)
+
+select o.order_id, o.amount, c.name
+  from aqj_orders o join aqj_customers c on o.customer_id = c.customer_id
+  where o.status = 'pending' and c.region = 'west' and o.amount > 50
+  order by o.order_id limit 5;
+ order_id | amount |  name   
+----------+--------+---------
+        9 |  94.50 | cust_10
+       21 | 220.50 | cust_22
+       33 | 346.50 | cust_34
+       45 | 472.50 | cust_46
+       53 | 556.50 | cust_4
+(5 rows)
+
+-- 20. Self-join
+create materialized view mv_aqj_selfjoin as
+  select o1.order_id as id1, o2.order_id as id2, o1.amount as amt1, o2.amount as amt2
+  from aqj_orders o1 join aqj_orders o2 on o1.customer_id = o2.customer_id
+  where o1.order_id < o2.order_id;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'id1' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+analyze mv_aqj_selfjoin;
+set enable_answer_query_using_materialized_views = off;
+explain(costs off)
+  select o1.order_id as id1, o2.order_id as id2, o1.amount as amt1, o2.amount as amt2
+  from aqj_orders o1 join aqj_orders o2 on o1.customer_id = o2.customer_id
+  where o1.order_id < o2.order_id;
+                            QUERY PLAN                            
+------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Hash Join
+         Hash Cond: (o1.customer_id = o2.customer_id)
+         Join Filter: (o1.order_id < o2.order_id)
+         ->  Redistribute Motion 3:3  (slice2; segments: 3)
+               Hash Key: o1.customer_id
+               ->  Seq Scan on aqj_orders o1
+         ->  Hash
+               ->  Redistribute Motion 3:3  (slice3; segments: 3)
+                     Hash Key: o2.customer_id
+                     ->  Seq Scan on aqj_orders o2
+ Optimizer: Postgres query optimizer
+(12 rows)
+
+select o1.order_id as id1, o2.order_id as id2, o1.amount as amt1, o2.amount as amt2
+  from aqj_orders o1 join aqj_orders o2 on o1.customer_id = o2.customer_id
+  where o1.order_id < o2.order_id
+  order by o1.order_id, o2.order_id limit 5;
+ id1 | id2 | amt1  |  amt2   
+-----+-----+-------+---------
+   1 |  51 | 10.50 |  535.50
+   1 | 101 | 10.50 | 1060.50
+   1 | 151 | 10.50 | 1585.50
+   2 |  52 | 21.00 |  546.00
+   2 | 102 | 21.00 | 1071.00
+(5 rows)
+
+set enable_answer_query_using_materialized_views = on;
+explain(costs off)
+  select o1.order_id as id1, o2.order_id as id2, o1.amount as amt1, o2.amount as amt2
+  from aqj_orders o1 join aqj_orders o2 on o1.customer_id = o2.customer_id
+  where o1.order_id < o2.order_id;
+                QUERY PLAN                
+------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Seq Scan on mv_aqj_selfjoin
+ Optimizer: Postgres query optimizer
+(3 rows)
+
+select o1.order_id as id1, o2.order_id as id2, o1.amount as amt1, o2.amount as amt2
+  from aqj_orders o1 join aqj_orders o2 on o1.customer_id = o2.customer_id
+  where o1.order_id < o2.order_id
+  order by o1.order_id, o2.order_id limit 5;
+ id1 | id2 | amt1  |  amt2   
+-----+-----+-------+---------
+   1 |  51 | 10.50 |  535.50
+   1 | 101 | 10.50 | 1060.50
+   1 | 151 | 10.50 | 1585.50
+   2 |  52 | 21.00 |  546.00
+   2 | 102 | 21.00 | 1071.00
+(5 rows)
+
+-- 21. GROUP BY with multi-column key on join
+create materialized view mv_aqj_grp_multi as
+  select c.region, o.status, count(*) as cnt, sum(o.amount) as total
+  from aqj_orders o join aqj_customers c on o.customer_id = c.customer_id
+  group by c.region, o.status;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'region, status' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+analyze mv_aqj_grp_multi;
+set enable_answer_query_using_materialized_views = off;
+explain(costs off)
+  select c.region, o.status, count(*) as cnt, sum(o.amount) as total
+  from aqj_orders o join aqj_customers c on o.customer_id = c.customer_id
+  group by c.region, o.status;
+                                   QUERY PLAN                                    
+---------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Finalize HashAggregate
+         Group Key: c.region, o.status
+         ->  Redistribute Motion 3:3  (slice2; segments: 3)
+               Hash Key: c.region, o.status
+               ->  Streaming Partial HashAggregate
+                     Group Key: c.region, o.status
+                     ->  Hash Join
+                           Hash Cond: (o.customer_id = c.customer_id)
+                           ->  Seq Scan on aqj_orders o
+                           ->  Hash
+                                 ->  Broadcast Motion 3:3  (slice3; segments: 3)
+                                       ->  Seq Scan on aqj_customers c
+ Optimizer: Postgres query optimizer
+(14 rows)
+
+select c.region, o.status, count(*) as cnt, sum(o.amount) as total
+  from aqj_orders o join aqj_customers c on o.customer_id = c.customer_id
+  group by c.region, o.status
+  order by c.region, o.status limit 6;
+ region |  status   | cnt |  total   
+--------+-----------+-----+----------
+ east   | cancelled |  16 | 16968.00
+ east   | delivered |  16 | 16464.00
+ east   | pending   |  16 | 16968.00
+ east   | shipped   |  16 | 16464.00
+ north  | cancelled |  18 | 19425.00
+ north  | delivered |  16 | 16800.00
+(6 rows)
+
+set enable_answer_query_using_materialized_views = on;
+explain(costs off)
+  select c.region, o.status, count(*) as cnt, sum(o.amount) as total
+  from aqj_orders o join aqj_customers c on o.customer_id = c.customer_id
+  group by c.region, o.status;
+                QUERY PLAN                
+------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Seq Scan on mv_aqj_grp_multi
+ Optimizer: Postgres query optimizer
+(3 rows)
+
+select c.region, o.status, count(*) as cnt, sum(o.amount) as total
+  from aqj_orders o join aqj_customers c on o.customer_id = c.customer_id
+  group by c.region, o.status
+  order by c.region, o.status limit 6;
+ region |  status   | cnt |  total   
+--------+-----------+-----+----------
+ east   | cancelled |  16 | 16968.00
+ east   | delivered |  16 | 16464.00
+ east   | pending   |  16 | 16968.00
+ east   | shipped   |  16 | 16464.00
+ north  | cancelled |  18 | 19425.00
+ north  | delivered |  16 | 16800.00
+(6 rows)
+
+-- 22. Four-table join with WHERE and aggregate
+create materialized view mv_aqj_3way_agg as
+  select c.region, p.category, sum(oi.quantity) as total_qty, count(*) as line_count
+  from aqj_orders o
+  join aqj_customers c on o.customer_id = c.customer_id
+  join aqj_order_items oi on o.order_id = oi.order_id
+  join aqj_products p on oi.product_id = p.product_id
+  where o.status = 'delivered'
+  group by c.region, p.category;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'region, category' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+analyze mv_aqj_3way_agg;
+set enable_answer_query_using_materialized_views = off;
+explain(costs off)
+  select c.region, p.category, sum(oi.quantity) as total_qty, count(*) as line_count
+  from aqj_orders o
+  join aqj_customers c on o.customer_id = c.customer_id
+  join aqj_order_items oi on o.order_id = oi.order_id
+  join aqj_products p on oi.product_id = p.product_id
+  where o.status = 'delivered'
+  group by c.region, p.category;
+                                              QUERY PLAN                                              
+------------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Finalize HashAggregate
+         Group Key: c.region, p.category
+         ->  Redistribute Motion 3:3  (slice2; segments: 3)
+               Hash Key: c.region, p.category
+               ->  Streaming Partial HashAggregate
+                     Group Key: c.region, p.category
+                     ->  Hash Join
+                           Hash Cond: (oi.product_id = p.product_id)
+                           ->  Hash Join
+                                 Hash Cond: (oi.order_id = o.order_id)
+                                 ->  Seq Scan on aqj_order_items oi
+                                 ->  Hash
+                                       ->  Broadcast Motion 3:3  (slice3; segments: 3)
+                                             ->  Hash Join
+                                                   Hash Cond: (o.customer_id = c.customer_id)
+                                                   ->  Redistribute Motion 3:3  (slice4; segments: 3)
+                                                         Hash Key: o.customer_id
+                                                         ->  Seq Scan on aqj_orders o
+                                                               Filter: (status = 'delivered'::text)
+                                                   ->  Hash
+                                                         ->  Seq Scan on aqj_customers c
+                           ->  Hash
+                                 ->  Broadcast Motion 3:3  (slice5; segments: 3)
+                                       ->  Seq Scan on aqj_products p
+ Optimizer: Postgres query optimizer
+(26 rows)
+
+select c.region, p.category, sum(oi.quantity) as total_qty, count(*) as line_count
+  from aqj_orders o
+  join aqj_customers c on o.customer_id = c.customer_id
+  join aqj_order_items oi on o.order_id = oi.order_id
+  join aqj_products p on oi.product_id = p.product_id
+  where o.status = 'delivered'
+  group by c.region, p.category
+  order by c.region, p.category limit 6;
+ region |  category   | total_qty | line_count 
+--------+-------------+-----------+------------
+ east   | books       |        30 |          5
+ east   | clothing    |        20 |         10
+ east   | electronics |        50 |          5
+ east   | food        |        80 |         10
+ east   | toys        |        40 |         10
+ north  | books       |        60 |         10
+(6 rows)
+
+set enable_answer_query_using_materialized_views = on;
+explain(costs off)
+  select c.region, p.category, sum(oi.quantity) as total_qty, count(*) as line_count
+  from aqj_orders o
+  join aqj_customers c on o.customer_id = c.customer_id
+  join aqj_order_items oi on o.order_id = oi.order_id
+  join aqj_products p on oi.product_id = p.product_id
+  where o.status = 'delivered'
+  group by c.region, p.category;
+                QUERY PLAN                
+------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Seq Scan on mv_aqj_3way_agg
+ Optimizer: Postgres query optimizer
+(3 rows)
+
+select c.region, p.category, sum(oi.quantity) as total_qty, count(*) as line_count
+  from aqj_orders o
+  join aqj_customers c on o.customer_id = c.customer_id
+  join aqj_order_items oi on o.order_id = oi.order_id
+  join aqj_products p on oi.product_id = p.product_id
+  where o.status = 'delivered'
+  group by c.region, p.category
+  order by c.region, p.category limit 6;
+ region |  category   | total_qty | line_count 
+--------+-------------+-----------+------------
+ east   | books       |        30 |          5
+ east   | clothing    |        20 |         10
+ east   | electronics |        50 |          5
+ east   | food        |        80 |         10
+ east   | toys        |        40 |         10
+ north  | books       |        60 |         10
+(6 rows)
+
+-- 23. Implicit four-table join (comma style)
+create materialized view mv_aqj_implicit3 as
+  select o.order_id, c.name, p.name as product_name
+  from aqj_orders o, aqj_customers c, aqj_order_items oi, aqj_products p
+  where o.customer_id = c.customer_id and o.order_id = oi.order_id and oi.product_id = p.product_id
+    and o.status = 'pending';
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'order_id' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+analyze mv_aqj_implicit3;
+set enable_answer_query_using_materialized_views = off;
+explain(costs off)
+  select o.order_id, c.name, p.name as product_name
+  from aqj_orders o, aqj_customers c, aqj_order_items oi, aqj_products p
+  where o.customer_id = c.customer_id and o.order_id = oi.order_id and oi.product_id = p.product_id
+    and o.status = 'pending';
+                                     QUERY PLAN                                     
+------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Hash Join
+         Hash Cond: (oi.product_id = p.product_id)
+         ->  Hash Join
+               Hash Cond: (oi.order_id = o.order_id)
+               ->  Seq Scan on aqj_order_items oi
+               ->  Hash
+                     ->  Broadcast Motion 3:3  (slice2; segments: 3)
+                           ->  Hash Join
+                                 Hash Cond: (o.customer_id = c.customer_id)
+                                 ->  Redistribute Motion 3:3  (slice3; segments: 3)
+                                       Hash Key: o.customer_id
+                                       ->  Seq Scan on aqj_orders o
+                                             Filter: (status = 'pending'::text)
+                                 ->  Hash
+                                       ->  Seq Scan on aqj_customers c
+         ->  Hash
+               ->  Broadcast Motion 3:3  (slice4; segments: 3)
+                     ->  Seq Scan on aqj_products p
+ Optimizer: Postgres query optimizer
+(20 rows)
+
+select o.order_id, c.name, p.name as product_name
+  from aqj_orders o, aqj_customers c, aqj_order_items oi, aqj_products p
+  where o.customer_id = c.customer_id and o.order_id = oi.order_id and oi.product_id = p.product_id
+    and o.status = 'pending'
+  order by o.order_id, p.name limit 5;
+ order_id |  name  | product_name 
+----------+--------+--------------
+        1 | cust_2 | prod_11
+        1 | cust_2 | prod_21
+        5 | cust_6 | prod_15
+        5 | cust_6 | prod_25
+        5 | cust_6 | prod_5
+(5 rows)
+
+set enable_answer_query_using_materialized_views = on;
+explain(costs off)
+  select o.order_id, c.name, p.name as product_name
+  from aqj_orders o, aqj_customers c, aqj_order_items oi, aqj_products p
+  where o.customer_id = c.customer_id and o.order_id = oi.order_id and oi.product_id = p.product_id
+    and o.status = 'pending';
+                QUERY PLAN                
+------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Seq Scan on mv_aqj_implicit3
+ Optimizer: Postgres query optimizer
+(3 rows)
+
+select o.order_id, c.name, p.name as product_name
+  from aqj_orders o, aqj_customers c, aqj_order_items oi, aqj_products p
+  where o.customer_id = c.customer_id and o.order_id = oi.order_id and oi.product_id = p.product_id
+    and o.status = 'pending'
+  order by o.order_id, p.name limit 5;
+ order_id |  name  | product_name 
+----------+--------+--------------
+        1 | cust_2 | prod_11
+        1 | cust_2 | prod_21
+        5 | cust_6 | prod_15
+        5 | cust_6 | prod_25
+        5 | cust_6 | prod_5
+(5 rows)
+
+-- 24. Result correctness across DML + REFRESH cycle
+insert into aqj_orders values(201, 1, 9999.99, 'shipped', '2025-12-31');
+set enable_answer_query_using_materialized_views = on;
+-- Stale: should NOT use MV
+explain(costs off) select o.order_id, o.amount, c.name, c.region
+  from aqj_orders o join aqj_customers c on o.customer_id = c.customer_id
+  where o.status = 'shipped';
+                         QUERY PLAN                         
+------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Hash Join
+         Hash Cond: (o.customer_id = c.customer_id)
+         ->  Redistribute Motion 3:3  (slice2; segments: 3)
+               Hash Key: o.customer_id
+               ->  Seq Scan on aqj_orders o
+                     Filter: (status = 'shipped'::text)
+         ->  Hash
+               ->  Seq Scan on aqj_customers c
+ Optimizer: Postgres query optimizer
+(10 rows)
+
+-- Refresh and verify MV is used again
+refresh materialized view mv_aqj_orders_cust;
+analyze mv_aqj_orders_cust;
+explain(costs off) select o.order_id, o.amount, c.name, c.region
+  from aqj_orders o join aqj_customers c on o.customer_id = c.customer_id
+  where o.status = 'shipped';
+                QUERY PLAN                
+------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Seq Scan on mv_aqj_orders_cust
+ Optimizer: Postgres query optimizer
+(3 rows)
+
+-- The new row should appear in results via MV scan
+select o.order_id, o.amount, c.name, c.region
+  from aqj_orders o join aqj_customers c on o.customer_id = c.customer_id
+  where o.status = 'shipped' and o.order_id = 201;
+ order_id | amount  |  name  | region 
+----------+---------+--------+--------
+      201 | 9999.99 | cust_1 | west
+(1 row)
+
+-- 25. Post-DML comprehensive: refresh all, then verify GUC off vs on results
+refresh materialized view mv_aqj_order_details;
+refresh materialized view mv_aqj_expr;
+refresh materialized view mv_aqj_selfjoin;
+refresh materialized view mv_aqj_grp_multi;
+refresh materialized view mv_aqj_3way_agg;
+refresh materialized view mv_aqj_implicit3;
+analyze mv_aqj_order_details;
+analyze mv_aqj_expr;
+analyze mv_aqj_selfjoin;
+analyze mv_aqj_grp_multi;
+analyze mv_aqj_3way_agg;
+analyze mv_aqj_implicit3;
+-- Verify four-table join results after DML+refresh
+set enable_answer_query_using_materialized_views = off;
+select o.order_id, c.name as customer_name, p.name as product_name, oi.quantity, p.price
+  from aqj_orders o
+  join aqj_customers c on o.customer_id = c.customer_id
+  join aqj_order_items oi on o.order_id = oi.order_id
+  join aqj_products p on oi.product_id = p.product_id
+  order by o.order_id, p.name limit 5;
+ order_id | customer_name | product_name | quantity | price  
+----------+---------------+--------------+----------+--------
+        1 | cust_2        | prod_11      |        1 |  65.89
+        1 | cust_2        | prod_21      |        1 | 125.79
+        2 | cust_3        | prod_12      |        2 |  71.88
+        2 | cust_3        | prod_2       |        2 |  11.98
+        2 | cust_3        | prod_22      |        2 | 131.78
+(5 rows)
+
+set enable_answer_query_using_materialized_views = on;
+select o.order_id, c.name as customer_name, p.name as product_name, oi.quantity, p.price
+  from aqj_orders o
+  join aqj_customers c on o.customer_id = c.customer_id
+  join aqj_order_items oi on o.order_id = oi.order_id
+  join aqj_products p on oi.product_id = p.product_id
+  order by o.order_id, p.name limit 5;
+ order_id | customer_name | product_name | quantity | price  
+----------+---------------+--------------+----------+--------
+        1 | cust_2        | prod_11      |        1 |  65.89
+        1 | cust_2        | prod_21      |        1 | 125.79
+        2 | cust_3        | prod_12      |        2 |  71.88
+        2 | cust_3        | prod_2       |        2 |  11.98
+        2 | cust_3        | prod_22      |        2 | 131.78
+(5 rows)
+
+-- Verify expression MV results after DML+refresh
+set enable_answer_query_using_materialized_views = off;
+select o.order_id, o.amount * 1.1 as amount_with_tax, c.name, upper(c.region) as region_upper
+  from aqj_orders o join aqj_customers c on o.customer_id = c.customer_id
+  order by o.order_id limit 5;
+ order_id | amount_with_tax |  name  | region_upper 
+----------+-----------------+--------+--------------
+        1 |          11.550 | cust_2 | NORTH
+        2 |          23.100 | cust_3 | EAST
+        3 |          34.650 | cust_4 | WEST
+        4 |          46.200 | cust_5 | NORTH
+        5 |          57.750 | cust_6 | EAST
+(5 rows)
+
+set enable_answer_query_using_materialized_views = on;
+select o.order_id, o.amount * 1.1 as amount_with_tax, c.name, upper(c.region) as region_upper
+  from aqj_orders o join aqj_customers c on o.customer_id = c.customer_id
+  order by o.order_id limit 5;
+ order_id | amount_with_tax |  name  | region_upper 
+----------+-----------------+--------+--------------
+        1 |          11.550 | cust_2 | NORTH
+        2 |          23.100 | cust_3 | EAST
+        3 |          34.650 | cust_4 | WEST
+        4 |          46.200 | cust_5 | NORTH
+        5 |          57.750 | cust_6 | EAST
+(5 rows)
+
+-- Verify multi-key GROUP BY results after DML+refresh
+set enable_answer_query_using_materialized_views = off;
+select c.region, o.status, count(*) as cnt, sum(o.amount) as total
+  from aqj_orders o join aqj_customers c on o.customer_id = c.customer_id
+  group by c.region, o.status
+  order by c.region, o.status limit 6;
+ region |  status   | cnt |  total   
+--------+-----------+-----+----------
+ east   | cancelled |  16 | 16968.00
+ east   | delivered |  16 | 16464.00
+ east   | pending   |  16 | 16968.00
+ east   | shipped   |  16 | 16464.00
+ north  | cancelled |  18 | 19425.00
+ north  | delivered |  16 | 16800.00
+(6 rows)
+
+set enable_answer_query_using_materialized_views = on;
+select c.region, o.status, count(*) as cnt, sum(o.amount) as total
+  from aqj_orders o join aqj_customers c on o.customer_id = c.customer_id
+  group by c.region, o.status
+  order by c.region, o.status limit 6;
+ region |  status   | cnt |  total   
+--------+-----------+-----+----------
+ east   | cancelled |  16 | 16968.00
+ east   | delivered |  16 | 16464.00
+ east   | pending   |  16 | 16968.00
+ east   | shipped   |  16 | 16464.00
+ north  | cancelled |  18 | 19425.00
+ north  | delivered |  16 | 16800.00
+(6 rows)
+
+-- 26. Non-match: LIMIT vs FETCH FIRST WITH TIES (limitOption differs)
+create materialized view mv_aqj_limit_test as
+  select o.order_id, o.amount
+  from aqj_orders o join aqj_customers c on o.customer_id = c.customer_id
+  where o.status = 'shipped'
+  order by o.order_id limit 5;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'order_id' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+analyze mv_aqj_limit_test;
+set enable_answer_query_using_materialized_views = on;
+-- Same tables/WHERE/ORDER BY but FETCH FIRST WITH TIES: should NOT match
+explain(costs off)
+  select o.order_id, o.amount
+  from aqj_orders o join aqj_customers c on o.customer_id = c.customer_id
+  where o.status = 'shipped'
+  order by o.order_id fetch first 5 rows with ties;
+                                QUERY PLAN                                 
+---------------------------------------------------------------------------
+ Limit
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         Merge Key: o.order_id
+         ->  Limit
+               ->  Sort
+                     Sort Key: o.order_id
+                     ->  Hash Join
+                           Hash Cond: (c.customer_id = o.customer_id)
+                           ->  Broadcast Motion 3:3  (slice2; segments: 3)
+                                 ->  Seq Scan on aqj_customers c
+                           ->  Hash
+                                 ->  Seq Scan on aqj_orders o
+                                       Filter: (status = 'shipped'::text)
+ Optimizer: Postgres query optimizer
+(14 rows)
+
+-- Identical LIMIT query: should match
+explain(costs off)
+  select o.order_id, o.amount
+  from aqj_orders o join aqj_customers c on o.customer_id = c.customer_id
+  where o.status = 'shipped'
+  order by o.order_id limit 5;
+                      QUERY PLAN                       
+-------------------------------------------------------
+ Limit
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         Merge Key: order_id
+         ->  Limit
+               ->  Sort
+                     Sort Key: order_id
+                     ->  Seq Scan on mv_aqj_limit_test
+ Optimizer: Postgres query optimizer
+(8 rows)
+
+-- 27. Match: FETCH FIRST WITH TIES exact match
+create materialized view mv_aqj_with_ties as
+  select o.order_id, o.amount
+  from aqj_orders o join aqj_customers c on o.customer_id = c.customer_id
+  where o.status = 'pending'
+  order by o.order_id fetch first 5 rows with ties;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'order_id' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+analyze mv_aqj_with_ties;
+set enable_answer_query_using_materialized_views = off;
+explain(costs off)
+  select o.order_id, o.amount
+  from aqj_orders o join aqj_customers c on o.customer_id = c.customer_id
+  where o.status = 'pending'
+  order by o.order_id fetch first 5 rows with ties;
+                                QUERY PLAN                                 
+---------------------------------------------------------------------------
+ Limit
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         Merge Key: o.order_id
+         ->  Limit
+               ->  Sort
+                     Sort Key: o.order_id
+                     ->  Hash Join
+                           Hash Cond: (c.customer_id = o.customer_id)
+                           ->  Broadcast Motion 3:3  (slice2; segments: 3)
+                                 ->  Seq Scan on aqj_customers c
+                           ->  Hash
+                                 ->  Seq Scan on aqj_orders o
+                                       Filter: (status = 'pending'::text)
+ Optimizer: Postgres query optimizer
+(14 rows)
+
+select o.order_id, o.amount
+  from aqj_orders o join aqj_customers c on o.customer_id = c.customer_id
+  where o.status = 'pending'
+  order by o.order_id fetch first 5 rows with ties;
+ order_id | amount 
+----------+--------
+        1 |  10.50
+        5 |  52.50
+        9 |  94.50
+       13 | 136.50
+       17 | 178.50
+(5 rows)
+
+set enable_answer_query_using_materialized_views = on;
+explain(costs off)
+  select o.order_id, o.amount
+  from aqj_orders o join aqj_customers c on o.customer_id = c.customer_id
+  where o.status = 'pending'
+  order by o.order_id fetch first 5 rows with ties;
+                      QUERY PLAN                      
+------------------------------------------------------
+ Limit
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         Merge Key: order_id
+         ->  Limit
+               ->  Sort
+                     Sort Key: order_id
+                     ->  Seq Scan on mv_aqj_with_ties
+ Optimizer: Postgres query optimizer
+(8 rows)
+
+select o.order_id, o.amount
+  from aqj_orders o join aqj_customers c on o.customer_id = c.customer_id
+  where o.status = 'pending'
+  order by o.order_id fetch first 5 rows with ties;
+ order_id | amount 
+----------+--------
+        1 |  10.50
+        5 |  52.50
+        9 |  94.50
+       13 | 136.50
+       17 | 178.50
+(5 rows)
+
+-- 28. Non-match: GROUP BY vs GROUP BY DISTINCT (groupDistinct differs)
+-- MV mv_aqj_grp_multi uses GROUP BY (groupDistinct=false, registered in catalog)
+-- Query uses GROUP BY DISTINCT — should NOT match
+set enable_answer_query_using_materialized_views = on;
+explain(costs off)
+  select c.region, o.status, count(*) as cnt, sum(o.amount) as total
+  from aqj_orders o join aqj_customers c on o.customer_id = c.customer_id
+  group by distinct c.region, o.status;
+                                   QUERY PLAN                                    
+---------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Finalize HashAggregate
+         Group Key: c.region, o.status
+         ->  Redistribute Motion 3:3  (slice2; segments: 3)
+               Hash Key: c.region, o.status
+               ->  Streaming Partial HashAggregate
+                     Group Key: c.region, o.status
+                     ->  Hash Join
+                           Hash Cond: (o.customer_id = c.customer_id)
+                           ->  Seq Scan on aqj_orders o
+                           ->  Hash
+                                 ->  Broadcast Motion 3:3  (slice3; segments: 3)
+                                       ->  Seq Scan on aqj_customers c
+ Optimizer: Postgres query optimizer
+(14 rows)
+
+-- Clean up AQUMV join test objects
+drop materialized view mv_aqj_with_ties;
+drop materialized view mv_aqj_limit_test;
+drop materialized view mv_aqj_implicit3;
+drop materialized view mv_aqj_3way_agg;
+drop materialized view mv_aqj_grp_multi;
+drop materialized view mv_aqj_selfjoin;
+drop materialized view mv_aqj_compound_where;
+drop materialized view mv_aqj_expr;
+drop materialized view mv_aqj_cust_summary;
+drop materialized view mv_aqj_order_details;
+drop materialized view mv_aqj_orders_cust;
+drop materialized view mv_aqj_implicit;
+drop materialized view mv_aqj_join3;
+drop materialized view mv_aqj_agg;
+drop materialized view mv_aqj_where;
+drop materialized view mv_aqj_join2;
+drop table aqj_order_items;
+drop table aqj_products;
+drop table aqj_customers;
+drop table aqj_orders;
+drop table aqj_t3;
+drop table aqj_t2;
+drop table aqj_t1;
 -- test drop table
 select mvname, datastatus from gp_matview_aux where mvname in ('mv0','mv1', 'mv2', 'mv3');
  mvname | datastatus 
@@ -506,9 +2396,9 @@ insert into par_1_prt_2_2_prt_1 values (1, 2, 1);
 select mvname, datastatus from gp_matview_aux where mvname like 'mv_par%';
   mvname   | datastatus 
 -----------+------------
+ mv_par1_2 | u
  mv_par1   | u
  mv_par1_1 | u
- mv_par1_2 | u
  mv_par2_1 | i
  mv_par2   | i
  mv_par    | i
@@ -521,9 +2411,9 @@ truncate par_1_prt_2;
 select mvname, datastatus from gp_matview_aux where mvname like 'mv_par%';
   mvname   | datastatus 
 -----------+------------
+ mv_par1_2 | u
  mv_par1   | u
  mv_par1_1 | u
- mv_par1_2 | u
  mv_par2_1 | e
  mv_par2   | e
  mv_par    | e
@@ -535,9 +2425,9 @@ truncate par_1_prt_2;
 select mvname, datastatus from gp_matview_aux where mvname like 'mv_par%';
   mvname   | datastatus 
 -----------+------------
+ mv_par1_2 | u
  mv_par1   | u
  mv_par1_1 | u
- mv_par1_2 | u
  mv_par2_1 | e
  mv_par2   | e
  mv_par    | e
@@ -679,10 +2569,10 @@ select mvname, datastatus from gp_matview_aux where mvname like 'mv_par%';
 -----------+------------
  mv_par2   | u
  mv_par2_1 | u
- mv_par1_1 | i
+ mv_par1_2 | i
  mv_par1   | i
  mv_par    | i
- mv_par1_2 | i
+ mv_par1_1 | i
 (6 rows)
 
 abort;
@@ -816,6 +2706,7 @@ abort;
 -- Test report warning if extend protocol data is not consumed.
 --start_ignore
 drop extension gp_inject_fault;
+ERROR:  extension "gp_inject_fault" does not exist
 create extension gp_inject_fault;
 --end_ignore
 select gp_inject_fault_infinite('consume_extend_protocol_data', 'skip', dbid)
@@ -937,10 +2828,20 @@ select mvname, datastatus from gp_matview_aux where mvname = 'mv_par_normal_oid'
 
 --start_ignore
 drop schema matview_data_schema cascade;
-NOTICE:  drop cascades to 3 other objects
+NOTICE:  drop cascades to 13 other objects
 DETAIL:  drop cascades to table t2
 drop cascades to table t3
 drop cascades to materialized view mv3
+drop cascades to table par
+drop cascades to materialized view mv_par
+drop cascades to materialized view mv_par1
+drop cascades to materialized view mv_par1_1
+drop cascades to materialized view mv_par1_2
+drop cascades to materialized view mv_par2
+drop cascades to materialized view mv_par2_1
+drop cascades to extension gp_inject_fault
+drop cascades to table par_normal_oid
+drop cascades to materialized view mv_par_normal_oid
 --end_ignore
 reset enable_answer_query_using_materialized_views;
 reset optimizer;

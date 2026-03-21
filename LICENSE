@@ -246,7 +246,7 @@ The PostgreSQL software includes:
       
       src/backend/utils/adt/inet_cidr_ntop.c
       src/backend/utils/adt/inet_net_pton.c
-      see licenses/licenses/LICENSE-isc.txt
+      see licenses/LICENSE-isc.txt
 
 ----------------------------
    Perl Artistic License 2.0 (exception)
@@ -311,11 +311,17 @@ The Greenplum Database software includes:
       gpcontrib/orafce/*
       see licenses/LICENSE-orafce.txt
 
- ----------------------------
+----------------------------
    BSD 3 Clause License
 
       gpcontrib/gpcloud/test/googletest
       see licenses/LICENSE-googletest.txt
+
+----------------------------
+   PostgreSQL License
+
+      gpcontrib/diskquota/*
+      see licenses/LICENSE-diskquota.txt
 
 ================================================================================
 Apache Cloudberry includes codes from

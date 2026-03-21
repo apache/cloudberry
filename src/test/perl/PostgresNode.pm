@@ -162,6 +162,17 @@ of finding port numbers, registering instances for cleanup, etc.
 sub new
 {
 	my ($class, $name, $pghost, $pgport) = @_;
+
+	# Use release 15+ semantics when the arguments look like (node_name,
+	# %params).  We can't use $class to decide, because get_new_node() passes
+	# a v14- argument list regardless of the class.  $class might be an
+	# out-of-core subclass.  $class->isa('PostgresNode') returns true even for
+	# descendants of PostgreSQL::Test::Cluster, so it doesn't help.
+	return $class->get_new_node(@_[ 1 .. $#_ ])
+	  if !$pghost
+	  or !$pgport
+	  or $pghost =~ /^[a-zA-Z0-9_]$/;
+
 	my $testname = basename($0);
 	$testname =~ s/\.[^.]+$//;
 
@@ -621,7 +632,7 @@ sub adjust_conf
 
     my $conffile = $self->data_dir . '/' . $filename;
 
-    my $contents = PostgreSQL::Test::Utils::slurp_file($conffile);
+    my $contents = TestLib::slurp_file($conffile);
     my @lines    = split(/\n/, $contents);
     my @result;
     my $eq = $skip_equals ? '' : '= ';
@@ -1209,7 +1220,7 @@ sub enable_archiving
 	my $copy_command =
 	  $TestLib::windows_os
 	  ? qq{copy "%p" "$path\\\\%f"}
-	  : qq{cp "%p" "$path/%f"};
+	  : qq{install -m 644 "%p" "$path/%f"};
 
 	# Enable archive_mode and archive_command on node
 	$self->append_conf(
@@ -3067,19 +3078,5 @@ sub corrupt_page_checksum
 =back
 
 =cut
-
-# support release 15+ perl module namespace
-
-package PostgreSQL::Test::Cluster; ## no critic (ProhibitMultiplePackages)
-
-sub new
-{
-	shift; # remove class param from args
-	return PostgresNode->get_new_node(@_);
-}
-
-no warnings 'once';
-
-*get_free_port = *PostgresNode::get_free_port;
 
 1;

@@ -608,7 +608,7 @@ explain SELECT 1 FROM ext_stats_tbl t11 FULL JOIN ext_stats_tbl t12 ON t12.c2;
 do $$
 begin 
   for i in 1..20 loop
-    execute 'create table tj' ||  i ||  '(id int)';
+    execute 'create table tj' ||  i ||  '(id int) distributed by (id)';
   end loop; 
 end
 $$;

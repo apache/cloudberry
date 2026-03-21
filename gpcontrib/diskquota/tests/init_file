@@ -1,0 +1,48 @@
+-- This file contains global patterns of messages that should be ignored or
+-- masked out, when comparing test results with the expected output.
+-- Individual tests can contain additional patterns specific to the test.
+
+-- start_matchignore
+# This pattern is extracted from gpdb/src/test/regress/init_file
+m/^(?:HINT|NOTICE):\s+.+\'DISTRIBUTED BY\' clause.*/
+m/WARNING:  \[diskquota\] worker not found for database.*/
+m/WARNING:  \[diskquota\] database .* not found for getting epoch .*/
+m/^NOTICE:  CREATE TABLE will create partition */
+m/^WARNING:  skipping .* cannot calculate this foreign table size.*/
+m/^NOTICE:  resource queue required -- using default resource queue "pg_default"/
+m/NOTICE:  One or more columns in the following table\(s\) do not have statistics: /
+m/HINT:  For non-partitioned tables, run analyze .+\. For partitioned tables, run analyze rootpartition .+\. See log for columns missing statistics\./
+-- end_matchignore
+
+-- start_matchsubs
+m/diskquota.c:\d+\)/
+s/diskquota.c:\d+\)/diskquota.c:xxx/
+m/diskquota_utility.c:\d+\)/
+s/diskquota_utility.c:\d+\)/diskquota_utility.c:xxx/
+m/^CONTEXT:*/
+s/^CONTEXT:/DETAIL:/
+m/plpython\du/
+s/plpython\du/plpythonu/
+
+# Remove segment identifiers from error message.
+# E.g., (slice1 XXX.XXX.XXX.XXX:XXXX pid=XXXX)
+m/(slice\d+ [0-9.]+:\d+ pid=\d+)/
+s/(slice\d+ [0-9.]+:\d+ pid=\d+)//
+
+# Remove oid of schema/role/tablespace from error message.
+m/ERROR:  role's disk space quota exceeded with name: \d+.*/
+s/ERROR:  role's disk space quota exceeded with name: \d+.*/[hardlimit] role's disk space quota exceeded/
+
+m/ERROR:  schema's disk space quota exceeded with name: \d+.*/
+s/ERROR:  schema's disk space quota exceeded with name: \d+.*/[hardlimit] schema's disk space quota exceeded/
+
+m/ERROR:  tablespace: \d+, role: \d+ diskquota exceeded.*/
+s/ERROR:  tablespace: \d+, role: \d+ diskquota exceeded.*/[hardlimit] tablespace-role's disk space quota exceeded/
+
+m/ERROR:  tablespace: \d+, schema: \d+ diskquota exceeded.*/
+s/ERROR:  tablespace: \d+, schema: \d+ diskquota exceeded.*/[hardlimit] tablespace-schema's disk space quota exceeded/
+
+m/^ERROR:  Can not set disk quota for system owner:.*/
+s/^ERROR:  Can not set disk quota for system owner:.*/ERROR:  Can not set disk quota from system owner:/
+
+-- end_matchsubs

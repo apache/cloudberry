@@ -389,7 +389,7 @@ createcgroup_v2(Oid group)
 	if (!createDir(group, CGROUP_COMPONENT_PLAIN, "") ||
 		!createDir(group, CGROUP_COMPONENT_PLAIN, CGROUPV2_LEAF_INDENTIFIER))
 	{
-		CGROUP_ERROR("can't create cgroup for resource group '%d': %m", group);
+		CGROUP_ERROR("can't create cgroup for resource group '%u': %m", group);
 	}
 
 	/*
@@ -421,7 +421,7 @@ create_default_cpuset_group_v2(void)
 
 	if (!createDir(DEFAULT_CPUSET_GROUP_ID, component, ""))
 	{
-		CGROUP_ERROR("can't create cpuset cgroup for resgroup '%d': %m",
+		CGROUP_ERROR("can't create cpuset cgroup for resgroup '%u': %m",
 					 DEFAULT_CPUSET_GROUP_ID);
 	}
 
@@ -626,7 +626,7 @@ destroycgroup_v2(Oid group, bool migrate)
 {
 	if (!deleteDir(group, CGROUP_COMPONENT_PLAIN, NULL, migrate, detachcgroup_v2))
 	{
-		CGROUP_ERROR("can't remove cgroup for resource group '%d': %m", group);
+		CGROUP_ERROR("can't remove cgroup for resource group '%u': %m", group);
 	}
 }
 
