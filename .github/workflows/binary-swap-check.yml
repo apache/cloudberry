@@ -565,6 +565,11 @@ jobs:
           echo "$CATALOG_VERSION"
           echo "BASELINE_CATALOG_VERSION=$CATALOG_VERSION" >> "$GITHUB_ENV"
 
+          echo "Baseline PostgreSQL Kernel Version:"
+          PG_VERSION=$("${BASELINE_INSTALL_DIR}/bin/pg_config" --version 2>/dev/null || echo "N/A")
+          echo "$PG_VERSION"
+          echo "BASELINE_PG_VERSION=$PG_VERSION" >> "$GITHUB_ENV"
+
           ls -la "${BASELINE_INSTALL_DIR}"
 
       - name: Install Current RPM
@@ -610,6 +615,11 @@ jobs:
           CATALOG_VERSION=$("${CURRENT_INSTALL_DIR}/bin/postgres" --catalog-version 2>/dev/null | awk '{print $NF}' || echo "N/A")
           echo "$CATALOG_VERSION"
           echo "CURRENT_CATALOG_VERSION=$CATALOG_VERSION" >> "$GITHUB_ENV"
+
+          echo "Current PostgreSQL Kernel Version:"
+          PG_VERSION=$("${CURRENT_INSTALL_DIR}/bin/pg_config" --version 2>/dev/null || echo "N/A")
+          echo "$PG_VERSION"
+          echo "CURRENT_PG_VERSION=$PG_VERSION" >> "$GITHUB_ENV"
 
           ls -la "${CURRENT_INSTALL_DIR}"
 
@@ -712,15 +722,18 @@ jobs:
             echo "No regression diffs found - test passed"
           fi
 
-      - name: Final Catalog Version Summary
+      - name: Final Version Summary
         if: always()
         run: |
           echo "=== Catalog Version Comparison ==="
           echo "Baseline Catalog Version: ${BASELINE_CATALOG_VERSION:-N/A}"
           echo "Current Catalog Version:  ${CURRENT_CATALOG_VERSION:-N/A}"
-          echo ""
           echo "Catalog Status: $([[ "$BASELINE_CATALOG_VERSION" == "$CURRENT_CATALOG_VERSION" ]] && echo "✅ IDENTICAL" || echo "🔍 DIFFERENT")"
-          echo "=== Comparison completed ==="
+          echo ""
+          echo "=== PostgreSQL Kernel Version Comparison ==="
+          echo "Baseline PG Version: ${BASELINE_PG_VERSION:-N/A}"
+          echo "Current PG Version:  ${CURRENT_PG_VERSION:-N/A}"
+          echo "PG Kernel Status: $([[ "$BASELINE_PG_VERSION" == "$CURRENT_PG_VERSION" ]] && echo "✅ IDENTICAL" || echo "🔍 DIFFERENT")"
 
       - name: Generate Report
         if: always()
@@ -748,6 +761,10 @@ jobs:
           ## Catalog Version Information
           **Baseline Catalog Version**: ${BASELINE_CATALOG_VERSION}
           **Current Catalog Version**: ${CURRENT_CATALOG_VERSION}
+
+          ## PostgreSQL Kernel Version
+          **Baseline PG Version**: ${BASELINE_PG_VERSION}
+          **Current PG Version**: ${CURRENT_PG_VERSION}
 
           ${MESSAGE}
           
