@@ -603,11 +603,18 @@ CTranslatorDXLToExpr::PexprLogicalTVF(const CDXLNode *dxlnode)
 			m_mp, pdxlcoldesc->MdName()->GetMDName()->GetBuffer());
 
 		INT attrnum = pdxlcoldesc->AttrNum();
+		OID collation = 0;
+		if (nullptr != pdxlcoldesc->MdidCollation() &&
+			pdxlcoldesc->MdidCollation()->IsValid())
+		{
+			collation =
+				CMDIdGPDB::CastMdid(pdxlcoldesc->MdidCollation())->Oid();
+		}
 		CColumnDescriptor *pcoldesc = GPOS_NEW(m_mp)
 			CColumnDescriptor(m_mp, pmdtype, pdxlcoldesc->TypeModifier(),
 							  CName(m_mp, &strColName), attrnum,
 							  true,	 // is_nullable
-							  pdxlcoldesc->Width());
+							  pdxlcoldesc->Width(), collation);
 		pdrgpcoldesc->Append(pcoldesc);
 	}
 
@@ -2377,9 +2384,17 @@ CTranslatorDXLToExpr::Ptabdesc(CDXLTableDescr *table_descr)
 		INT attrnum = pdxlcoldesc->AttrNum();
 
 		const ULONG ulWidth = pdxlcoldesc->Width();
+		OID col_collation = 0;
+		if (nullptr != pdxlcoldesc->MdidCollation() &&
+			pdxlcoldesc->MdidCollation()->IsValid())
+		{
+			col_collation =
+				CMDIdGPDB::CastMdid(pdxlcoldesc->MdidCollation())->Oid();
+		}
 		CColumnDescriptor *pcoldesc = GPOS_NEW(m_mp) CColumnDescriptor(
 			m_mp, pmdtype, pdxlcoldesc->TypeModifier(),
-			CName(m_mp, &strColName), attrnum, is_nullable, ulWidth);
+			CName(m_mp, &strColName), attrnum, is_nullable, ulWidth,
+			col_collation);
 
 		ptabdesc->AddColumn(pcoldesc);
 	}
@@ -2578,9 +2593,17 @@ CTranslatorDXLToExpr::PtabdescFromCTAS(CDXLLogicalCTAS *pdxlopCTAS)
 		INT attrnum = pdxlcoldesc->AttrNum();
 
 		const ULONG ulWidth = pdxlcoldesc->Width();
+		OID col_collation = 0;
+		if (nullptr != pdxlcoldesc->MdidCollation() &&
+			pdxlcoldesc->MdidCollation()->IsValid())
+		{
+			col_collation =
+				CMDIdGPDB::CastMdid(pdxlcoldesc->MdidCollation())->Oid();
+		}
 		CColumnDescriptor *pcoldesc = GPOS_NEW(m_mp) CColumnDescriptor(
 			m_mp, pmdtype, pdxlcoldesc->TypeModifier(),
-			CName(m_mp, &strColName), attrnum, is_nullable, ulWidth);
+			CName(m_mp, &strColName), attrnum, is_nullable, ulWidth,
+			col_collation);
 
 		ptabdesc->AddColumn(pcoldesc);
 	}

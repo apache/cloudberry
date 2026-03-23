@@ -298,6 +298,7 @@ enum Edxltoken
 
 	// CoerceToDomain and CoerceViaIO and ArrayCoerceExpr related tokens
 	EdxltokenTypeMod,
+	EdxltokenColCollation,
 	EdxltokenCoercionForm,
 	EdxltokenLocation,
 	EdxltokenIsExplicit,

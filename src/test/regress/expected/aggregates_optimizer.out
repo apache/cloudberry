@@ -2355,8 +2355,6 @@ from generate_series(1,6) x;
 (1 row)
 
 select ten, mode() within group (order by string4) from tenk1 group by ten order by ten;
-INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
-DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: Non-default collation
  ten |  mode  
 -----+--------
    0 | HHHHxx
@@ -2912,8 +2910,6 @@ from generate_series(1,6) x;
 (1 row)
 
 select ten, mode() within group (order by string4) from tenk1 group by ten;
-INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
-DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: Non-default collation
  ten |  mode  
 -----+--------
    0 | HHHHxx
@@ -3480,9 +3476,7 @@ FROM (SELECT * FROM tenk1
       UNION ALL SELECT * FROM tenk1
       UNION ALL SELECT * FROM tenk1
       UNION ALL SELECT * FROM tenk1) u;
-INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
-DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: Non-default collation
-                                                                                      QUERY PLAN                                                                                       
+                                                                                      QUERY PLAN
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
  Finalize Aggregate
    Output: variance(tenk1.unique1), sum((tenk1.unique1)::bigint), regr_count((tenk1.unique1)::double precision, (tenk1.unique1)::double precision)
@@ -3508,8 +3502,6 @@ FROM (SELECT * FROM tenk1
       UNION ALL SELECT * FROM tenk1
       UNION ALL SELECT * FROM tenk1
       UNION ALL SELECT * FROM tenk1) u;
-INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
-DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: Non-default collation
        variance       |    sum    | regr_count 
 ----------------------+-----------+------------
  8333541.588539713493 | 199980000 |      40000
@@ -3523,9 +3515,7 @@ FROM (SELECT * FROM tenk1
       UNION ALL SELECT * FROM tenk1
       UNION ALL SELECT * FROM tenk1
       UNION ALL SELECT * FROM tenk1) u;
-INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
-DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: Non-default collation
-                                                            QUERY PLAN                                                            
+                                                            QUERY PLAN
 ----------------------------------------------------------------------------------------------------------------------------------
  Finalize Aggregate
    Output: variance((tenk1.unique1)::bigint), avg((tenk1.unique1)::numeric)
@@ -3551,8 +3541,6 @@ FROM (SELECT * FROM tenk1
       UNION ALL SELECT * FROM tenk1
       UNION ALL SELECT * FROM tenk1
       UNION ALL SELECT * FROM tenk1) u;
-INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
-DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: Non-default collation
        variance       |          avg          
 ----------------------+-----------------------
  8333541.588539713493 | 4999.5000000000000000

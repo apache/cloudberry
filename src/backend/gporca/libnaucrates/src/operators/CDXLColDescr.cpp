@@ -30,14 +30,16 @@ using namespace gpmd;
 //---------------------------------------------------------------------------
 CDXLColDescr::CDXLColDescr(CMDName *md_name, ULONG column_id, INT attr_no,
 						   IMDId *column_mdid_type, INT type_modifier,
-						   BOOL is_dropped, ULONG width)
+						   BOOL is_dropped, ULONG width,
+						   IMDId *mdid_collation)
 	: m_md_name(md_name),
 	  m_column_id(column_id),
 	  m_attr_no(attr_no),
 	  m_column_mdid_type(column_mdid_type),
 	  m_type_modifier(type_modifier),
 	  m_is_dropped(is_dropped),
-	  m_column_width(width)
+	  m_column_width(width),
+	  m_mdid_collation(mdid_collation)
 {
 	GPOS_ASSERT_IMP(m_is_dropped, 0 == m_md_name->GetMDName()->Length());
 }
@@ -53,6 +55,10 @@ CDXLColDescr::CDXLColDescr(CMDName *md_name, ULONG column_id, INT attr_no,
 CDXLColDescr::~CDXLColDescr()
 {
 	m_column_mdid_type->Release();
+	if (m_mdid_collation)
+	{
+		m_mdid_collation->Release();
+	}
 	GPOS_DELETE(m_md_name);
 }
 
@@ -146,6 +152,12 @@ CDXLColDescr::Width() const
 	return m_column_width;
 }
 
+IMDId *
+CDXLColDescr::MdidCollation() const
+{
+	return m_mdid_collation;
+}
+
 //---------------------------------------------------------------------------
 //	@function:
 //		CDXLColDescr::SerializeToDXL
@@ -189,6 +201,13 @@ CDXLColDescr::SerializeToDXL(CXMLSerializer *xml_serializer) const
 	{
 		xml_serializer->AddAttribute(
 			CDXLTokens::GetDXLTokenStr(EdxltokenColWidth), m_column_width);
+	}
+
+	if (nullptr != m_mdid_collation && m_mdid_collation->IsValid())
+	{
+		m_mdid_collation->Serialize(
+			xml_serializer,
+			CDXLTokens::GetDXLTokenStr(EdxltokenColCollation));
 	}
 
 	xml_serializer->CloseElement(

@@ -112,6 +112,12 @@ CDXLScalarIdent::TypeModifier() const
 	return m_dxl_colref->TypeModifier();
 }
 
+IMDId *
+CDXLScalarIdent::MdidCollation() const
+{
+	return m_dxl_colref->MdidCollation();
+}
+
 //---------------------------------------------------------------------------
 //	@function:
 //		CDXLScalarIdent::SerializeToDXL
@@ -143,6 +149,13 @@ CDXLScalarIdent::SerializeToDXL(CXMLSerializer *xml_serializer,
 	{
 		xml_serializer->AddAttribute(
 			CDXLTokens::GetDXLTokenStr(EdxltokenTypeMod), TypeModifier());
+	}
+
+	if (nullptr != MdidCollation() && MdidCollation()->IsValid())
+	{
+		MdidCollation()->Serialize(
+			xml_serializer,
+			CDXLTokens::GetDXLTokenStr(EdxltokenColCollation));
 	}
 
 	node->SerializeChildrenToDXL(xml_serializer);

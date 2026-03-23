@@ -60,13 +60,16 @@ private:
 	// length of the column
 	ULONG m_length;
 
+	// collation OID
+	OID m_collation;
+
 public:
 	CMDColumn(const CMDColumn &) = delete;
 
 	// ctor
 	CMDColumn(CMDName *mdname, INT attrnum, IMDId *mdid_type, INT type_modifier,
 			  BOOL is_nullable, BOOL is_dropped,
-			  ULONG length = gpos::ulong_max);
+			  ULONG length = gpos::ulong_max, OID collation = 0);
 
 	// dtor
 	~CMDColumn() override;
@@ -94,6 +97,13 @@ public:
 	Length() const override
 	{
 		return m_length;
+	}
+
+	// collation of the column
+	OID
+	Collation() const override
+	{
+		return m_collation;
 	}
 
 	// is the column nullable
