@@ -1683,8 +1683,20 @@ CDXLOperatorFactory::MakeColumnDescr(CDXLMemoryManager *dxl_memory_manager,
 
 	GPOS_DELETE(col_name);
 
+	// parse optional collation
+	IMDId *mdid_collation = nullptr;
+	const XMLCh *collation_xml =
+		attrs.getValue(CDXLTokens::XmlstrToken(EdxltokenColCollation));
+	if (nullptr != collation_xml)
+	{
+		mdid_collation = ExtractConvertAttrValueToMdId(
+			dxl_memory_manager, attrs, EdxltokenColCollation,
+			EdxltokenColDescr);
+	}
+
 	return GPOS_NEW(mp) CDXLColDescr(mdname, id, attno, mdid_type,
-									 type_modifier, col_dropped, col_len);
+									 type_modifier, col_dropped, col_len,
+									 mdid_collation);
 }
 
 //---------------------------------------------------------------------------
@@ -1736,7 +1748,18 @@ CDXLOperatorFactory::MakeDXLColRef(CDXLMemoryManager *dxl_memory_manager,
 		dxl_memory_manager, attrs, EdxltokenTypeMod, target_elem, true,
 		default_type_modifier);
 
-	return GPOS_NEW(mp) CDXLColRef(mdname, id, mdid_type, type_modifier);
+	// parse optional collation
+	IMDId *mdid_collation = nullptr;
+	const XMLCh *collation_xml =
+		attrs.getValue(CDXLTokens::XmlstrToken(EdxltokenColCollation));
+	if (nullptr != collation_xml)
+	{
+		mdid_collation = ExtractConvertAttrValueToMdId(
+			dxl_memory_manager, attrs, EdxltokenColCollation, target_elem);
+	}
+
+	return GPOS_NEW(mp)
+		CDXLColRef(mdname, id, mdid_type, type_modifier, mdid_collation);
 }
 
 //---------------------------------------------------------------------------

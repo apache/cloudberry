@@ -3044,7 +3044,7 @@ ANALYZE expr_stats;
 SELECT * FROM check_estimated_rows('SELECT * FROM expr_stats WHERE a = 0 AND (b || c) <= ''z'' AND (c || b) >= ''0''');
  estimated | actual 
 -----------+--------
-        11 |    100
+        68 |    100
 (1 row)
 
 CREATE STATISTICS expr_stats_1 (mcv) ON a, b, (b || c), (c || b) FROM expr_stats;
@@ -3052,7 +3052,7 @@ ANALYZE expr_stats;
 SELECT * FROM check_estimated_rows('SELECT * FROM expr_stats WHERE a = 0 AND (b || c) <= ''z'' AND (c || b) >= ''0''');
  estimated | actual 
 -----------+--------
-       100 |    100
+        68 |    100
 (1 row)
 
 DROP TABLE expr_stats;

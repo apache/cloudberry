@@ -288,6 +288,7 @@ CDXLTokens::Init(CMemoryPool *mp)
 		{EdxltokenDatum, GPOS_WSZ_LIT("Datum")},
 
 		{EdxltokenTypeMod, GPOS_WSZ_LIT("TypeModifier")},
+		{EdxltokenColCollation, GPOS_WSZ_LIT("CollationMdid")},
 		{EdxltokenCoercionForm, GPOS_WSZ_LIT("CoercionForm")},
 		{EdxltokenLocation, GPOS_WSZ_LIT("Location")},
 		{EdxltokenIsExplicit, GPOS_WSZ_LIT("IsExplicit")},

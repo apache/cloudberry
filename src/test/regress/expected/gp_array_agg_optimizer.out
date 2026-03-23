@@ -341,24 +341,18 @@ from arrtest;
 $query$ AS qry \gset
 EXPLAIN (COSTS OFF, VERBOSE)
 :qry ;
-INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
-DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: Non-default collation
-                                                                                       QUERY PLAN                                                                                       
-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
- Finalize Aggregate
+                                                                   QUERY PLAN                                                                   
+------------------------------------------------------------------------------------------------------------------------------------------------
+ Aggregate
    Output: array_agg(a), array_dims(array_agg(b)), array_dims(array_agg(c)), array_agg(d), array_dims(array_agg(e)), array_agg(f), array_agg(g)
    ->  Gather Motion 3:1  (slice1; segments: 3)
-         Output: (PARTIAL array_agg(a)), (PARTIAL array_agg(b)), (PARTIAL array_agg(c)), (PARTIAL array_agg(d)), (PARTIAL array_agg(e)), (PARTIAL array_agg(f)), (PARTIAL array_agg(g))
-         ->  Partial Aggregate
-               Output: PARTIAL array_agg(a), PARTIAL array_agg(b), PARTIAL array_agg(c), PARTIAL array_agg(d), PARTIAL array_agg(e), PARTIAL array_agg(f), PARTIAL array_agg(g)
-               ->  Seq Scan on test_gp_array_agg.arrtest
-                     Output: a, b, c, d, e, f, g
- Optimizer: Postgres query optimizer
-(9 rows)
+         Output: a, b, c, d, e, f, g
+         ->  Seq Scan on test_gp_array_agg.arrtest
+               Output: a, b, c, d, e, f, g
+ Optimizer: GPORCA
+(7 rows)
 
 :qry ;
-INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
-DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: Non-default collation
      agg_a     |        dims_b        |   dims_c   |             agg_d             |   dims_e   |               agg_f               |           agg_g           
 ---------------+----------------------+------------+-------------------------------+------------+-----------------------------------+---------------------------
  {{1,2},{1,2}} | [1:2][1:2][1:2][1:2] | [1:2][1:1] | {{{elt1,elt2}},{{elt1,elt2}}} | [1:2][1:2] | {{"abc  ",abcde},{"abc  ",abcde}} | {{abc,abcde},{abc,abcde}}

@@ -926,7 +926,7 @@ TranslateDXLIndexTList(const IMDRelation *md_rel, const IMDIndex *md_index,
 		Expr *indexvar = (Expr *) gpdb::MakeVar(
 			new_varno, col->AttrNum(),
 			CMDIdGPDB::CastMdid(col->MdidType())->Oid(),
-			col->TypeModifier() /*vartypmod*/, 0 /*varlevelsup*/);
+			col->TypeModifier() /*vartypmod*/, InvalidOid, 0 /*varlevelsup*/);
 		target_entry->expr = indexvar;
 
 		// Fix up proj list. Since index only scan does not read full tuples,
@@ -962,7 +962,7 @@ TranslateDXLIndexTList(const IMDRelation *md_rel, const IMDIndex *md_index,
 		Expr *indexvar = (Expr *) gpdb::MakeVar(
 			new_varno, col->AttrNum(),
 			CMDIdGPDB::CastMdid(col->MdidType())->Oid(),
-			col->TypeModifier() /*vartypmod*/, 0 /*varlevelsup*/);
+			col->TypeModifier() /*vartypmod*/, InvalidOid, 0 /*varlevelsup*/);
 		target_entry->expr = indexvar;
 
 		for (ULONG j = 0; j < table_descr->Arity(); j++)
@@ -1691,11 +1691,16 @@ CTranslatorDXLToPlStmt::TranslateDXLTvf(
 
 	ListCell *lc_target_entry = nullptr;
 
+	// Save existing funccolcollations (set by TranslateDXLTvfToRangeTblEntry
+	// with correct collation from the function expression/DXL).
+	List *saved_collations = rtfunc->funccolcollations;
+
 	rtfunc->funccolnames = NIL;
 	rtfunc->funccoltypes = NIL;
 	rtfunc->funccoltypmods = NIL;
 	rtfunc->funccolcollations = NIL;
 	rtfunc->funccolcount = gpdb::ListLength(target_list);
+	ListCell *lc_saved = (saved_collations != NIL) ? list_head(saved_collations) : nullptr;
 	ForEach(lc_target_entry, target_list)
 	{
 		TargetEntry *target_entry = (TargetEntry *) lfirst(lc_target_entry);
@@ -1703,16 +1708,40 @@ CTranslatorDXLToPlStmt::TranslateDXLTvf(
 		GPOS_ASSERT(InvalidOid != oid_type);
 
 		INT typ_mod = gpdb::ExprTypeMod((Node *) target_entry->expr);
-		Oid collation_type_oid = gpdb::TypeCollation(oid_type);
+		Oid expr_coll = gpdb::ExprCollation((Node *) target_entry->expr);
+
+		// Prefer the pre-computed collation from the RTE (derived from the
+		// function call expression) over the target entry Var collation,
+		// because the Var may lack collation from the DXL representation.
+		Oid saved_coll = (lc_saved != nullptr) ? lfirst_oid(lc_saved) : InvalidOid;
+
+		// For polymorphic SRFs (e.g., unnest), ORCA generates an empty
+		// project list so saved_coll is unavailable.  The target entry Var
+		// is created by ProcessRecordFuncTargetList from the return type,
+		// which only carries DEFAULT collation.  Fall back to the FuncExpr's
+		// collation (funccollid), which correctly reflects the input's
+		// collation through our expression-level collation propagation fix.
+		Oid func_coll = gpdb::ExprCollation((Node *) rtfunc->funcexpr);
+		Oid collation_type_oid;
+		if (OidIsValid(saved_coll) && saved_coll != DEFAULT_COLLATION_OID)
+			collation_type_oid = saved_coll;
+		else if (OidIsValid(func_coll) && func_coll != DEFAULT_COLLATION_OID)
+			collation_type_oid = func_coll;
+		else if (OidIsValid(expr_coll))
+			collation_type_oid = expr_coll;
+		else
+			collation_type_oid = gpdb::TypeCollation(oid_type);
 
 		rtfunc->funccolnames = gpdb::LAppend(
 			rtfunc->funccolnames, gpdb::MakeStringValue(target_entry->resname));
 		rtfunc->funccoltypes = gpdb::LAppendOid(rtfunc->funccoltypes, oid_type);
 		rtfunc->funccoltypmods =
 			gpdb::LAppendInt(rtfunc->funccoltypmods, typ_mod);
-		// GPDB_91_MERGE_FIXME: collation
 		rtfunc->funccolcollations =
 			gpdb::LAppendOid(rtfunc->funccolcollations, collation_type_oid);
+
+		if (lc_saved != nullptr)
+			lc_saved = lnext(saved_collations, lc_saved);
 	}
 	func_scan->functions = ListMake1(rtfunc);
 
@@ -1826,9 +1855,14 @@ CTranslatorDXLToPlStmt::TranslateDXLTvfToRangeTblEntry(
 			func_expr->args = gpdb::LAppend(func_expr->args, pexprFuncArg);
 		}
 
-		// GPDB_91_MERGE_FIXME: collation
 		func_expr->inputcollid = gpdb::ExprCollation((Node *) func_expr->args);
-		func_expr->funccollid = gpdb::TypeCollation(func_expr->funcresulttype);
+		{
+			Oid rtc = gpdb::TypeCollation(func_expr->funcresulttype);
+			func_expr->funccollid =
+				OidIsValid(rtc)
+					? (OidIsValid(func_expr->inputcollid) ? func_expr->inputcollid : rtc)
+					: InvalidOid;
+		}
 
 		// Populate RangeTblFunction::funcparams, by walking down the entire
 		// func_expr to capture ids of all the PARAMs
@@ -1846,8 +1880,44 @@ CTranslatorDXLToPlStmt::TranslateDXLTvfToRangeTblEntry(
 
 	rtfunc->funccolcount = (int) num_of_cols;
 	rtfunc->funcparams = funcparams;
-	// GPDB_91_MERGE_FIXME: collation
-	// set rtfunc->funccoltypemods & rtfunc->funccolcollations?
+
+	// Derive column collations and type modifiers from the project list
+	{
+		rtfunc->funccoltypmods = NIL;
+		rtfunc->funccolcollations = NIL;
+		rtfunc->funccoltypes = NIL;
+		for (ULONG ul = 0; ul < num_of_cols; ul++)
+		{
+			CDXLNode *proj_elem_dxlnode = (*project_list_dxlnode)[ul];
+			CDXLNode *expr_dxlnode = (*proj_elem_dxlnode)[0];
+			CDXLScalarIdent *sc_ident =
+				CDXLScalarIdent::Cast(expr_dxlnode->GetOperator());
+
+			Oid col_type = CMDIdGPDB::CastMdid(sc_ident->MdidType())->Oid();
+			Oid col_coll = InvalidOid;
+			if (nullptr != sc_ident->MdidCollation() &&
+				sc_ident->MdidCollation()->IsValid())
+			{
+				col_coll = CMDIdGPDB::CastMdid(sc_ident->MdidCollation())->Oid();
+			}
+			if (!OidIsValid(col_coll))
+			{
+				// Fall back: derive from function expression collation
+				col_coll = gpdb::ExprCollation((Node *) rtfunc->funcexpr);
+			}
+			if (!OidIsValid(col_coll))
+			{
+				col_coll = gpdb::TypeCollation(col_type);
+			}
+
+			rtfunc->funccoltypes =
+				gpdb::LAppendOid(rtfunc->funccoltypes, col_type);
+			rtfunc->funccoltypmods =
+				gpdb::LAppendInt(rtfunc->funccoltypmods, sc_ident->TypeModifier());
+			rtfunc->funccolcollations =
+				gpdb::LAppendOid(rtfunc->funccolcollations, col_coll);
+		}
+	}
 	rte->functions = ListMake1(rtfunc);
 
 	rte->inFromCl = true;
@@ -2752,7 +2822,8 @@ CTranslatorDXLToPlStmt::TranslateDXLRedistributeMotionToResultHashFilters(
 			TargetEntry *te = (TargetEntry *) lfirst(lc);
 			Var *var = gpdb::MakeVar(
 				OUTER_VAR, te->resno, gpdb::ExprType((Node *) te->expr),
-				gpdb::ExprTypeMod((Node *) te->expr), 0 /* varlevelsup */);
+				gpdb::ExprTypeMod((Node *) te->expr), InvalidOid,
+				0 /* varlevelsup */);
 			TargetEntry *new_te =
 				gpdb::MakeTargetEntry((Expr *) var, ul, /* resno */
 									  te->resname, te->resjunk);
@@ -4332,6 +4403,10 @@ CTranslatorDXLToPlStmt::TranslateDXLAppend(
 			idxVarno, attno,
 			CMDIdGPDB::CastMdid(sc_ident_dxlop->MdidType())->Oid(),
 			sc_ident_dxlop->TypeModifier(),
+					  (nullptr != sc_ident_dxlop->MdidCollation() &&
+					   sc_ident_dxlop->MdidCollation()->IsValid())
+						  ? CMDIdGPDB::CastMdid(sc_ident_dxlop->MdidCollation())->Oid()
+						  : InvalidOid,
 			0  // varlevelsup
 		);
 
@@ -4560,7 +4635,8 @@ CTranslatorDXLToPlStmt::TranslateDXLCTEConsumerToSharedScan(
 
 		Var *var =
 			gpdb::MakeVar(OUTER_VAR, varattno, oid_type,
-						  sc_ident_dxlop->TypeModifier(), 0 /* varlevelsup */);
+						  sc_ident_dxlop->TypeModifier(), InvalidOid,
+						  0 /* varlevelsup */);
 
 		CHAR *resname = CTranslatorUtils::CreateMultiByteCharStringFromWCString(
 			sc_proj_elem_dxlop->GetMdNameAlias()->GetMDName()->GetBuffer());
@@ -6048,7 +6124,7 @@ CTranslatorDXLToPlStmt::TranslateDXLProjectListToHashTargetList(
 		// create a Var expression for this target list entry expression
 		Var *var =
 			gpdb::MakeVar(OUTER_VAR, te_child->resno, oid_type, type_modifier,
-						  0	 // varlevelsup
+						  InvalidOid, 0  // varlevelsup
 			);
 
 		// set old varno and varattno since makeVar does not set them
@@ -6549,7 +6625,7 @@ CTranslatorDXLToPlStmt::AddJunkTargetEntryForColId(
 	INT type_modifier = gpdb::ExprTypeMod((Node *) target_entry->expr);
 	Var *var =
 		gpdb::MakeVar(OUTER_VAR, target_entry->resno, expr_oid, type_modifier,
-					  0	 // varlevelsup
+					  InvalidOid, 0  // varlevelsup
 		);
 	ULONG resno = gpdb::ListLength(*target_list) + 1;
 	CHAR *resname_str = PStrDup(resname);
@@ -7170,7 +7246,8 @@ CTranslatorDXLToPlStmt::TranslateNestLoopParamList(
 
 		Var *new_var =
 			gpdb::MakeVar(OUTER_VAR, target_entry->resno, old_var->vartype,
-						  old_var->vartypmod, 0 /*varlevelsup*/);
+						  old_var->vartypmod, old_var->varcollid,
+						  0 /*varlevelsup*/);
 		new_var->varnosyn = old_var->varnosyn;
 		new_var->varattnosyn = old_var->varattnosyn;
 
@@ -7219,7 +7296,7 @@ CTranslatorDXLToPlStmt::CreateDirectCopyTargetList(List *target_list)
 		Node *expr = (Node *) te->expr;
 
 		Var *var = gpdb::MakeVar(OUTER_VAR, te->resno, gpdb::ExprType(expr),
-				gpdb::ExprTypeMod(expr), 0 /* varlevelsup */);
+				gpdb::ExprTypeMod(expr), InvalidOid, 0 /* varlevelsup */);
 		TargetEntry *new_te = gpdb::MakeTargetEntry((Expr *) var, te->resno, te->resname, te->resjunk);
 
 		result_target_list = gpdb::LAppend(result_target_list, new_te);

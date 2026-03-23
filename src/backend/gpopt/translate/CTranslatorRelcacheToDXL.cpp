@@ -695,7 +695,8 @@ CTranslatorRelcacheToDXL::RetrieveRelColumns(CMemoryPool *mp,
 
 		CMDColumn *md_col = GPOS_NEW(mp)
 			CMDColumn(md_colname, att->attnum, mdid_col, att->atttypmod,
-					  !att->attnotnull, att->attisdropped, col_len);
+					  !att->attnotnull, att->attisdropped, col_len,
+					  att->attcollation);
 
 		mdcol_array->Append(md_col);
 	}

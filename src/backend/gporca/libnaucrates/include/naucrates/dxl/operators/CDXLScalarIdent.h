@@ -57,6 +57,8 @@ public:
 
 	INT TypeModifier() const;
 
+	IMDId *MdidCollation() const;
+
 	// serialize operator in DXL format
 	void SerializeToDXL(CXMLSerializer *xml_serializer,
 						const CDXLNode *node) const override;

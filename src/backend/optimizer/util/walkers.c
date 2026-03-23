@@ -13,6 +13,7 @@
 #include "miscadmin.h"
 #include "nodes/nodeFuncs.h"
 #include "optimizer/walkers.h"
+#include "utils/lsyscache.h"
 
 /**
  * Plan node walker related methods.
@@ -892,7 +893,8 @@ check_collation_in_list(List *colllist, check_collation_context *context)
 	foreach (lc, colllist)
 	{
 		Oid coll = lfirst_oid(lc);
-		if (InvalidOid != coll && DEFAULT_COLLATION_OID != coll)
+		if (InvalidOid != coll && DEFAULT_COLLATION_OID != coll &&
+			C_COLLATION_OID != coll)
 		{
 			context->foundNonDefaultCollation = 1;
 			break;
@@ -916,10 +918,60 @@ check_collation_walker(Node *node, check_collation_context *context)
 		return query_tree_walker((Query *) node, check_collation_walker, (void *) context, 0 /* flags */);
 	}
 
+	/*
+	 * ORCA cannot propagate collation through SubPlan boundaries
+	 * (CColRefComputed doesn't carry collation).  When a set-returning
+	 * function (e.g. unnest) takes a SubLink argument whose output has
+	 * non-default collation (including C), the expanded rows lose their
+	 * collation, causing wrong sort order in collation-sensitive operations.
+	 * Fall back in this case.
+	 *
+	 * The SubLink may be wrapped in coercion nodes (RelabelType,
+	 * ArrayCoerceExpr, CoerceViaIO, etc.) so we strip those to find it.
+	 */
+	if (IsA(node, FuncExpr))
+	{
+		FuncExpr *func = (FuncExpr *) node;
+		if (func->funcretset)
+		{
+			ListCell *lc;
+			foreach(lc, func->args)
+			{
+				Node *arg = lfirst(lc);
+				/* Strip coercion wrappers to find a buried SubLink */
+				for (;;)
+				{
+					if (arg == NULL)
+						break;
+					if (IsA(arg, SubLink))
+						break;
+					if (IsA(arg, RelabelType))
+						arg = (Node *) ((RelabelType *) arg)->arg;
+					else if (IsA(arg, ArrayCoerceExpr))
+						arg = (Node *) ((ArrayCoerceExpr *) arg)->arg;
+					else if (IsA(arg, CoerceViaIO))
+						arg = (Node *) ((CoerceViaIO *) arg)->arg;
+					else if (IsA(arg, ConvertRowtypeExpr))
+						arg = (Node *) ((ConvertRowtypeExpr *) arg)->arg;
+					else
+						break;
+				}
+				if (arg && IsA(arg, SubLink))
+				{
+					Oid coll = exprCollation(arg);
+					if (OidIsValid(coll) && coll != DEFAULT_COLLATION_OID)
+					{
+						context->foundNonDefaultCollation = 1;
+						break;
+					}
+				}
+			}
+		}
+	}
+
 	switch (nodeTag(node))
 	{
 		case T_Var:
-		case T_Const:
 		case T_OpExpr:
 			type = exprType((node));
 			collation = exprCollation(node);
@@ -928,11 +980,35 @@ check_collation_walker(Node *node, check_collation_context *context)
 				if (collation != C_COLLATION_OID)
 					context->foundNonDefaultCollation = 1;
 			}
-			else if (InvalidOid != collation && DEFAULT_COLLATION_OID != collation)
+			else if (InvalidOid != collation && DEFAULT_COLLATION_OID != collation &&
+				 C_COLLATION_OID != collation)
 			{
 				context->foundNonDefaultCollation = 1;
 			}
 			break;
+		case T_Const:
+		{
+			/*
+			 * fold_constants() converts CollateExpr on a constant into a
+			 * Const with modified constcollid (no RelabelType wrapper).
+			 * Normal string constants have constcollid = DEFAULT_COLLATION_OID.
+			 * Constants with explicit COLLATE (e.g., 'foo' COLLATE "C")
+			 * have a different constcollid that ORCA cannot propagate.
+			 *
+			 * To distinguish explicit COLLATE from inherent type collation
+			 * (e.g., '1505703298'::name where name type has C collation),
+			 * compare constcollid with the type's default collation.
+			 * A mismatch means an explicit COLLATE override was applied.
+			 */
+			Const *c = (Const *) node;
+			if (OidIsValid(c->constcollid) &&
+				c->constcollid != DEFAULT_COLLATION_OID &&
+				c->constcollid != get_typcollation(c->consttype))
+			{
+				context->foundNonDefaultCollation = 1;
+			}
+			break;
+		}
 		case T_ScalarArrayOpExpr:
 		case T_DistinctExpr:
 		case T_BoolExpr:
@@ -946,7 +1022,6 @@ check_collation_walker(Node *node, check_collation_context *context)
 		case T_WindowFunc:
 		case T_NullTest:
 		case T_NullIfExpr:
-		case T_RelabelType:
 		case T_CoerceToDomain:
 		case T_CoerceViaIO:
 		case T_ArrayCoerceExpr:
@@ -973,14 +1048,57 @@ check_collation_walker(Node *node, check_collation_context *context)
 		case T_DMLActionExpr:
 			collation = exprCollation(node);
 			inputCollation = exprInputCollation(node);
-			if ((InvalidOid != collation && DEFAULT_COLLATION_OID != collation) ||
-				(InvalidOid != inputCollation && DEFAULT_COLLATION_OID != inputCollation))
+			if ((InvalidOid != collation && DEFAULT_COLLATION_OID != collation &&
+				 C_COLLATION_OID != collation) ||
+				(InvalidOid != inputCollation && DEFAULT_COLLATION_OID != inputCollation &&
+				 C_COLLATION_OID != inputCollation))
 			{
 				context->foundNonDefaultCollation = 1;
 			}
 			break;
+		case T_RelabelType:
+		{
+			/*
+			 * fold_constants() converts CollateExpr to RelabelType.
+			 * Detect expression-level COLLATE override by checking if the
+			 * RelabelType's collation differs from its argument's collation.
+			 * ORCA does not yet propagate expression-level collation, so
+			 * these must fall back to the Postgres planner.
+			 *
+			 * Skip the check when the argument's collation is InvalidOid.
+			 * This happens for CaseTestExpr inside ArrayCoerceExpr, where
+			 * the parser leaves the placeholder's collation unset.
+			 * Treating that as a mismatch would cause false fallback for
+			 * ordinary casts like text[]::varchar[].
+			 */
+			RelabelType *r = (RelabelType *) node;
+			Oid arg_coll = exprCollation((Node *) r->arg);
+			if (OidIsValid(r->resultcollid) &&
+				OidIsValid(arg_coll) &&
+				r->resultcollid != arg_coll)
+			{
+				context->foundNonDefaultCollation = 1;
+				break;
+			}
+			/* Normal type coercion: check like other expression nodes */
+			collation = exprCollation(node);
+			inputCollation = exprInputCollation(node);
+			if ((InvalidOid != collation && DEFAULT_COLLATION_OID != collation &&
+				 C_COLLATION_OID != collation) ||
+				(InvalidOid != inputCollation && DEFAULT_COLLATION_OID != inputCollation &&
+				 C_COLLATION_OID != inputCollation))
+			{
+				context->foundNonDefaultCollation = 1;
+			}
+			break;
+		}
 		case T_CollateClause:
-			/* unsupported */
+			/*
+			 * CollateClause is a raw parse node without a resolved OID.
+			 * Analyzed COLLATE expressions use T_CollateExpr instead,
+			 * which is handled above with the C_COLLATION_OID check.
+			 * Keep this as unconditional reject for safety.
+			 */
 			context->foundNonDefaultCollation = 1;
 			break;
 		case T_RangeTblEntry:

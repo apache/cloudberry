@@ -48,7 +48,6 @@ INSERT INTO uaccount VALUES
     ('regress_rls_carol', 2),
     ('regress_rls_dave', 3);
 INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
-DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: Non-default collation
 ANALYZE uaccount;
 CREATE TABLE category (
     cid        int primary key,
@@ -81,7 +80,6 @@ INSERT INTO document VALUES
     ( 9, 22, 1, 'regress_rls_dave', 'awesome science fiction'),
     (10, 33, 2, 'regress_rls_dave', 'awesome technology book');
 INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
-DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: Non-default collation
 ANALYZE document;
 ALTER TABLE document ENABLE ROW LEVEL SECURITY;
 -- user's security level must be higher than or equal to document's
@@ -105,7 +103,6 @@ CREATE POLICY p1r ON document AS RESTRICTIVE TO regress_rls_dave
     USING (cid <> 44);
 \dp
 INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
-DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: Non-default collation
                                                                   Access privileges
        Schema       |   Name   | Type  |              Access privileges              | Column privileges |                  Policies                  
 --------------------+----------+-------+---------------------------------------------+-------------------+--------------------------------------------
@@ -127,31 +124,24 @@ DETAIL:  Falling back to Postgres-based planner because GPORCA does not support 
 
 \d document
 INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
-DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: Non-default collation
 INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
 DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: Queries on master-only tables
 INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
-DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: Non-default collation
 INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
-DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: Non-default collation
 INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
-DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: Non-default collation
 INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
 DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: Queries on master-only tables
 INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
 DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: Queries on master-only tables
 INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
-DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: Non-default collation
 INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
 DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: Queries on master-only tables
 INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
-DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: Non-default collation
 INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
 DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: Queries on master-only tables
 INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
 DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: Queries on master-only tables
 INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
-DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: Non-default collation
         Table "regress_rls_schema.document"
  Column  |  Type   | Collation | Nullable | Default 
 ---------+---------+-----------+----------+---------
@@ -179,7 +169,6 @@ Distributed by: (did)
 
 SELECT * FROM pg_policies WHERE schemaname = 'regress_rls_schema' AND tablename = 'document' ORDER BY policyname;
 INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
-DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: Non-default collation
      schemaname     | tablename | policyname | permissive  |       roles        | cmd |                    qual                    | with_check 
 --------------------+-----------+------------+-------------+--------------------+-----+--------------------------------------------+------------
  regress_rls_schema | document  | p1         | PERMISSIVE  | {public}           | ALL | (dlevel <= ( SELECT uaccount.seclv        +| 
@@ -444,8 +433,6 @@ ALTER POLICY p1 ON document USING (dauthor = current_user);
 -- viewpoint from regress_rls_bob again
 SET SESSION AUTHORIZATION regress_rls_bob;
 SELECT * FROM document WHERE f_leak(dtitle) ORDER BY did;
-INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
-DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: Non-default collation
 NOTICE:  f_leak => my second novel
 NOTICE:  f_leak => my first novel
 NOTICE:  f_leak => my second manga
@@ -461,8 +448,6 @@ NOTICE:  f_leak => my first manga
 (5 rows)
 
 SELECT * FROM document NATURAL JOIN category WHERE f_leak(dtitle) ORDER by did;
-INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
-DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: Non-default collation
 NOTICE:  f_leak => my second novel
 NOTICE:  f_leak => my first novel
 NOTICE:  f_leak => my science fiction
@@ -480,8 +465,6 @@ NOTICE:  f_leak => my second manga
 -- viewpoint from rls_regres_carol again
 SET SESSION AUTHORIZATION regress_rls_carol;
 SELECT * FROM document WHERE f_leak(dtitle) ORDER BY did;
-INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
-DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: Non-default collation
 NOTICE:  f_leak => great technology book
 NOTICE:  f_leak => great science fiction
 NOTICE:  f_leak => great manga
@@ -493,8 +476,6 @@ NOTICE:  f_leak => great manga
 (3 rows)
 
 SELECT * FROM document NATURAL JOIN category WHERE f_leak(dtitle) ORDER by did;
-INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
-DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: Non-default collation
 NOTICE:  f_leak => great technology book
 NOTICE:  f_leak => great manga
 NOTICE:  f_leak => great science fiction
@@ -506,31 +487,28 @@ NOTICE:  f_leak => great science fiction
 (3 rows)
 
 EXPLAIN (COSTS OFF) SELECT * FROM document WHERE f_leak(dtitle);
-INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
-DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: Non-default collation
                                  QUERY PLAN                                 
 ----------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Seq Scan on document
          Filter: ((dauthor = 'regress_rls_carol'::name) AND f_leak(dtitle))
- Optimizer: Postgres query optimizer
+ Optimizer: GPORCA
 (4 rows)
 
 EXPLAIN (COSTS OFF) SELECT * FROM document NATURAL JOIN category WHERE f_leak(dtitle);
-INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
-DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: Non-default collation
                                        QUERY PLAN                                       
 ----------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
-   ->  Hash Join
-         Hash Cond: (category.cid = document.cid)
-         ->  Broadcast Motion 3:3  (slice2; segments: 3)
-               ->  Seq Scan on category
-         ->  Hash
+   ->  Nested Loop
+         Join Filter: true
+         ->  Redistribute Motion 3:3  (slice2; segments: 3)
+               Hash Key: document.cid
                ->  Seq Scan on document
                      Filter: ((dauthor = 'regress_rls_carol'::name) AND f_leak(dtitle))
- Optimizer: Postgres query optimizer
-(9 rows)
+         ->  Index Scan using category_pkey on category
+               Index Cond: (cid = document.cid)
+ Optimizer: GPORCA
+(10 rows)
 
 -- interaction of FK/PK constraints
 SET SESSION AUTHORIZATION regress_rls_alice;
@@ -542,8 +520,6 @@ ALTER TABLE category ENABLE ROW LEVEL SECURITY;
 -- cannot delete PK referenced by invisible FK
 SET SESSION AUTHORIZATION regress_rls_bob;
 SELECT * FROM document d FULL OUTER JOIN category c on d.cid = c.cid ORDER BY d.did, c.cid;
-INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
-DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: Non-default collation
  did | cid | dlevel |     dauthor     |       dtitle       | cid |   cname    
 -----+-----+--------+-----------------+--------------------+-----+------------
    1 |  11 |      1 | regress_rls_bob | my first novel     |  11 | novel
@@ -556,15 +532,11 @@ DETAIL:  Falling back to Postgres-based planner because GPORCA does not support 
 
 -- GPDB: referential integrity checks are not enforced
 -- start_ignore
-DELETE FROM category WHERE cid = 33;    -- fails with FK violation
-ERROR:  update or delete on table "category" violates foreign key constraint "document_cid_fkey" on table "document"
-DETAIL:  Key is still referenced from table "document".
+-- DELETE FROM category WHERE cid = 33;    -- fails with FK violation
 -- end_ignore
 -- can insert FK referencing invisible PK
 SET SESSION AUTHORIZATION regress_rls_carol;
 SELECT * FROM document d FULL OUTER JOIN category c on d.cid = c.cid ORDER BY d.did, c.cid;
-INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
-DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: Non-default collation
  did | cid | dlevel |      dauthor      |        dtitle         | cid |      cname      
 -----+-----+--------+-------------------+-----------------------+-----+-----------------
    6 |  22 |      1 | regress_rls_carol | great science fiction |  22 | science fiction
@@ -582,8 +554,6 @@ INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
 DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: View with WITH CHECK OPTION
 ERROR:  duplicate key value violates unique constraint "document_pkey"
 SELECT * FROM document WHERE did = 8; -- and confirm we can't see it
-INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
-DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: Non-default collation
  did | cid | dlevel | dauthor | dtitle 
 -----+-----+--------+---------+--------
 (0 rows)
@@ -1100,7 +1070,6 @@ INSERT INTO part_document VALUES
     ( 9, 11, 1, 'regress_rls_dave', 'awesome science fiction'),
     (10, 99, 2, 'regress_rls_dave', 'awesome technology book');
 INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
-DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: Non-default collation
 ALTER TABLE part_document ENABLE ROW LEVEL SECURITY;
 -- Create policy on parent
 -- user's security level must be higher than or equal to document's
@@ -1111,29 +1080,22 @@ CREATE POLICY pp1r ON part_document AS RESTRICTIVE TO regress_rls_dave
     USING (cid < 55);
 \d+ part_document
 INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
-DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: Non-default collation
 INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
 DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: Queries on master-only tables
 INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
-DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: Non-default collation
 INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
-DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: Non-default collation
 INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
-DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: Non-default collation
 INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
 DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: Queries on master-only tables
 INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
 DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: Queries on master-only tables
 INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
-DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: Non-default collation
 INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
 DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: Queries on master-only tables
 INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
-DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: Non-default collation
 INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
 DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: Queries on master-only tables
 INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
-DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: Non-default collation
                     Partitioned table "regress_rls_schema.part_document"
  Column  |  Type   | Collation | Nullable | Default | Storage  | Stats target | Description 
 ---------+---------+-----------+----------+---------+----------+--------------+-------------
@@ -1158,7 +1120,6 @@ Distributed by: (did)
 
 SELECT * FROM pg_policies WHERE schemaname = 'regress_rls_schema' AND tablename like '%part_document%' ORDER BY policyname;
 INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
-DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: Non-default collation
      schemaname     |   tablename   | policyname | permissive  |       roles        | cmd |                    qual                    | with_check 
 --------------------+---------------+------------+-------------+--------------------+-----+--------------------------------------------+------------
  regress_rls_schema | part_document | pp1        | PERMISSIVE  | {public}           | ALL | (dlevel <= ( SELECT uaccount.seclv        +| 
@@ -1442,8 +1403,6 @@ ALTER POLICY pp1 ON part_document USING (dauthor = current_user);
 -- viewpoint from regress_rls_bob again
 SET SESSION AUTHORIZATION regress_rls_bob;
 SELECT * FROM part_document WHERE f_leak(dtitle) ORDER BY did;
-INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
-DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: Non-default collation
 NOTICE:  f_leak => my second novel
 NOTICE:  f_leak => my first novel
 NOTICE:  f_leak => my first satire
@@ -1461,8 +1420,6 @@ NOTICE:  f_leak => my science textbook
 -- viewpoint from rls_regres_carol again
 SET SESSION AUTHORIZATION regress_rls_carol;
 SELECT * FROM part_document WHERE f_leak(dtitle) ORDER BY did;
-INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
-DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: Non-default collation
 NOTICE:  f_leak => great science fiction
 NOTICE:  f_leak => great satire
 NOTICE:  f_leak => great technology book
@@ -1474,20 +1431,13 @@ NOTICE:  f_leak => great technology book
 (3 rows)
 
 EXPLAIN (COSTS OFF) SELECT * FROM part_document WHERE f_leak(dtitle);
-INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
-DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: Non-default collation
-                                    QUERY PLAN                                    
+                                    QUERY PLAN
 ----------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
-   ->  Append
-         ->  Seq Scan on part_document_fiction part_document_1
-               Filter: ((dauthor = 'regress_rls_carol'::name) AND f_leak(dtitle))
-         ->  Seq Scan on part_document_satire part_document_2
-               Filter: ((dauthor = 'regress_rls_carol'::name) AND f_leak(dtitle))
-         ->  Seq Scan on part_document_nonfiction part_document_3
-               Filter: ((dauthor = 'regress_rls_carol'::name) AND f_leak(dtitle))
- Optimizer: Postgres query optimizer
-(9 rows)
+   ->  Dynamic Seq Scan on part_document
+         Number of partitions to scan: 3 (out of 3)
+         Filter: ((dauthor = 'regress_rls_carol'::name) AND f_leak(dtitle))
+(5 rows)
 
 -- database superuser does bypass RLS policy when enabled
 RESET SESSION AUTHORIZATION;
@@ -2974,8 +2924,6 @@ CREATE POLICY p4 ON x1 FOR DELETE USING (a < 8);
 ALTER TABLE x1 ENABLE ROW LEVEL SECURITY;
 SET SESSION AUTHORIZATION regress_rls_bob;
 SELECT * FROM x1 WHERE f_leak(b) ORDER BY a ASC;
-INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
-DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: Non-default collation
 NOTICE:  f_leak => bcd
 NOTICE:  f_leak => def
 NOTICE:  f_leak => abc
@@ -3013,8 +2961,6 @@ NOTICE:  f_leak => fgh
 
 SET SESSION AUTHORIZATION regress_rls_carol;
 SELECT * FROM x1 WHERE f_leak(b) ORDER BY a ASC;
-INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
-DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: Non-default collation
 NOTICE:  f_leak => fgh_updt
 NOTICE:  f_leak => cde
 NOTICE:  f_leak => fgh
@@ -3052,7 +2998,7 @@ NOTICE:  f_leak => fgh_updt
 
 DELETE FROM x1 WHERE f_leak(b) RETURNING *;
 INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
-DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: Non-default collation
+DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: RETURNING clause
 NOTICE:  f_leak => cde_updt
 NOTICE:  f_leak => fgh_updt_updt
 NOTICE:  f_leak => fgh_updt
@@ -3439,7 +3385,6 @@ SELECT polname, relname
     JOIN pg_class pc ON (pc.oid = pol.polrelid)
     WHERE relname = 't1';
 INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
-DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: Non-default collation
  polname | relname 
 ---------+---------
  p1      | t1
@@ -3451,7 +3396,6 @@ SELECT polname, relname
     JOIN pg_class pc ON (pc.oid = pol.polrelid)
     WHERE relname = 't1';
 INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
-DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: Non-default collation
  polname | relname 
 ---------+---------
  p2      | t1
@@ -4051,7 +3995,6 @@ ALTER TABLE coll_t ENABLE ROW LEVEL SECURITY;
 GRANT SELECT ON coll_t TO regress_rls_alice;
 SELECT (string_to_array(polqual, ':'))[7] AS inputcollid FROM pg_policy WHERE polrelid = 'coll_t'::regclass;
 INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
-DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: Non-default collation
    inputcollid    
 ------------------
  inputcollid 950 
@@ -4060,7 +4003,6 @@ DETAIL:  Falling back to Postgres-based planner because GPORCA does not support 
 SET SESSION AUTHORIZATION regress_rls_alice;
 SELECT * FROM coll_t;
 INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
-DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: Non-default collation
   c  
 -----
  bar
@@ -4711,8 +4653,6 @@ create function rls_f () returns setof rls_t
 prepare q as select current_user, * from rls_f();
 set role regress_rls_alice;
 execute q;
-INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
-DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: Non-default collation
    current_user    |        c         
 -------------------+------------------
  regress_rls_alice | invisible to bob
@@ -4720,8 +4660,6 @@ DETAIL:  Falling back to Postgres-based planner because GPORCA does not support 
 
 set role regress_rls_bob;
 execute q;
-INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
-DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: Non-default collation
  current_user | c 
 --------------+---
 (0 rows)

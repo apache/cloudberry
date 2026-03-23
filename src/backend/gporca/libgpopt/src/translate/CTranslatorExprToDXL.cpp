@@ -179,6 +179,7 @@
 #include "naucrates/dxl/operators/CDXLWindowFrame.h"
 #include "naucrates/dxl/operators/CDXLWindowKey.h"
 #include "naucrates/exception.h"
+#include "naucrates/md/CMDIdGPDB.h"
 #include "naucrates/md/CMDRelationCtasGPDB.h"
 #include "naucrates/md/IMDCast.h"
 #include "naucrates/md/IMDFunction.h"
@@ -4337,8 +4338,15 @@ CTranslatorExprToDXL::PdxlnCorrelatedNLJoin(
 		CMDName *mdname = GPOS_NEW(m_mp) CMDName(m_mp, colref->Name().Pstr());
 		IMDId *mdid = colref->RetrieveType()->MDId();
 		mdid->AddRef();
+		IMDId *mdid_coll = nullptr;
+		if (0 != colref->Collation())
+		{
+			mdid_coll = GPOS_NEW(m_mp)
+				CMDIdGPDB(IMDId::EmdidGeneral, colref->Collation());
+		}
 		CDXLColRef *dxl_colref = GPOS_NEW(m_mp)
-			CDXLColRef(mdname, colref->Id(), mdid, colref->TypeModifier());
+			CDXLColRef(mdname, colref->Id(), mdid, colref->TypeModifier(),
+					   mdid_coll);
 		dxl_colref_array->Append(dxl_colref);
 	}
 
@@ -4838,8 +4846,15 @@ CTranslatorExprToDXL::PdxlnNLJoin(CExpression *pexprInnerNLJ,
 				GPOS_NEW(m_mp) CMDName(m_mp, col_ref->Name().Pstr());
 			IMDId *mdid = col_ref->RetrieveType()->MDId();
 			mdid->AddRef();
+			IMDId *mdid_coll = nullptr;
+			if (0 != col_ref->Collation())
+			{
+				mdid_coll = GPOS_NEW(m_mp)
+					CMDIdGPDB(IMDId::EmdidGeneral, col_ref->Collation());
+			}
 			CDXLColRef *colref_dxl = GPOS_NEW(m_mp) CDXLColRef(
-				md_name, col_ref->Id(), mdid, col_ref->TypeModifier());
+				md_name, col_ref->Id(), mdid, col_ref->TypeModifier(),
+				mdid_coll);
 			col_refs->Append(colref_dxl);
 		}
 	}
@@ -5647,9 +5662,16 @@ CTranslatorExprToDXL::PdxlnCTAS(CExpression *pexpr,
 			CMDIdGPDB::CastMdid(colref->RetrieveType()->MDId());
 		pmdidColType->AddRef();
 
+		IMDId *mdid_collation = nullptr;
+		if (0 != pcd->Collation())
+		{
+			mdid_collation = GPOS_NEW(m_mp)
+				CMDIdGPDB(IMDId::EmdidGeneral, pcd->Collation());
+		}
 		CDXLColDescr *pdxlcd = GPOS_NEW(m_mp) CDXLColDescr(
 			pmdnameCol, colref->Id(), pcd->AttrNum(), pmdidColType,
-			colref->TypeModifier(), false /* fdropped */, pcd->Width());
+			colref->TypeModifier(), false /* fdropped */, pcd->Width(),
+			mdid_collation);
 
 		dxl_col_descr_array->Append(pdxlcd);
 	}
@@ -7366,9 +7388,16 @@ CTranslatorExprToDXL::MakeDXLTableDescr(
 			CMDIdGPDB::CastMdid(colref->RetrieveType()->MDId());
 		pmdidColType->AddRef();
 
+		IMDId *mdid_collation = nullptr;
+		if (0 != pcd->Collation())
+		{
+			mdid_collation = GPOS_NEW(m_mp)
+				CMDIdGPDB(IMDId::EmdidGeneral, pcd->Collation());
+		}
 		CDXLColDescr *pdxlcd = GPOS_NEW(m_mp) CDXLColDescr(
 			pmdnameCol, colref->Id(), pcd->AttrNum(), pmdidColType,
-			colref->TypeModifier(), false /* fdropped */, pcd->Width());
+			colref->TypeModifier(), false /* fdropped */, pcd->Width(),
+			mdid_collation);
 
 		table_descr->AddColumnDescr(pdxlcd);
 	}

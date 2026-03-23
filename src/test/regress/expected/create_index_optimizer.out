@@ -2007,12 +2007,11 @@ EXPLAIN (COSTS OFF)
  Finalize Aggregate
    ->  Gather Motion 3:1  (slice1; segments: 3)
          ->  Partial Aggregate
-               ->  Bitmap Heap Scan on dupindexcols
-                     Recheck Cond: ((f1 >= 'WA'::text) AND (f1 <= 'ZZZ'::text) AND (id < 1000) AND (f1 ~<~ 'YX'::text))
-                     ->  Bitmap Index Scan on dupindexcols_i
-                           Index Cond: ((f1 >= 'WA'::text) AND (f1 <= 'ZZZ'::text) AND (id < 1000) AND (f1 ~<~ 'YX'::text))
- Optimizer: Postgres query optimizer
-(8 rows)
+               ->  Index Scan using dupindexcols_i on dupindexcols
+                     Index Cond: ((f1 >= 'WA'::text) AND (f1 <= 'ZZZ'::text) AND (id < 1000))
+                     Filter: (f1 ~<~ 'YX'::text)
+ Optimizer: GPORCA
+(7 rows)
 
 SELECT count(*) FROM dupindexcols
   WHERE f1 BETWEEN 'WA' AND 'ZZZ' and id < 1000 and f1 ~<~ 'YX';

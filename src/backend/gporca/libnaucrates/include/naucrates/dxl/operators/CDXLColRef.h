@@ -56,11 +56,15 @@ private:
 	// column type modifier
 	INT m_iTypeModifer;
 
+	// column collation
+	IMDId *m_mdid_collation;
+
 public:
 	CDXLColRef(const CDXLColRef &) = delete;
 
 	// ctor/dtor
-	CDXLColRef(CMDName *mdname, ULONG id, IMDId *mdid_type, INT type_modifier);
+	CDXLColRef(CMDName *mdname, ULONG id, IMDId *mdid_type, INT type_modifier,
+			   IMDId *mdid_collation = nullptr);
 
 	~CDXLColRef() override;
 
@@ -70,6 +74,8 @@ public:
 	IMDId *MdidType() const;
 
 	INT TypeModifier() const;
+
+	IMDId *MdidCollation() const;
 
 	ULONG Id() const;
 };
