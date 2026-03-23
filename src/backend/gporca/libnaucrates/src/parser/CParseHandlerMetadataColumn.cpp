@@ -38,7 +38,8 @@ CParseHandlerMetadataColumn::CParseHandlerMetadataColumn(
 	  m_mdcol(nullptr),
 	  m_mdname(nullptr),
 	  m_mdid_type(nullptr),
-	  m_width(gpos::ulong_max)
+	  m_width(gpos::ulong_max),
+	  m_collation(0)
 {
 }
 
@@ -130,6 +131,16 @@ CParseHandlerMetadataColumn::StartElement(const XMLCh *const,  // element_uri,
 			m_parse_handler_mgr->GetDXLMemoryManager(), xmlszDropped,
 			EdxltokenColDropped, EdxltokenMetadataColumn);
 	}
+
+	// parse optional collation
+	const XMLCh *collation_xml =
+		attrs.getValue(CDXLTokens::XmlstrToken(EdxltokenColCollation));
+	if (nullptr != collation_xml)
+	{
+		m_collation = CDXLOperatorFactory::ConvertAttrValueToUlong(
+			m_parse_handler_mgr->GetDXLMemoryManager(), collation_xml,
+			EdxltokenColCollation, EdxltokenMetadataColumn);
+	}
 }
 
 //---------------------------------------------------------------------------
@@ -157,7 +168,7 @@ CParseHandlerMetadataColumn::EndElement(const XMLCh *const,	 // element_uri,
 
 	m_mdcol = GPOS_NEW(m_mp)
 		CMDColumn(m_mdname, m_attno, m_mdid_type, m_type_modifier,
-				  m_is_nullable, m_is_dropped, m_width);
+				  m_is_nullable, m_is_dropped, m_width, m_collation);
 
 	// deactivate handler
 	m_parse_handler_mgr->DeactivateHandler();

@@ -1332,14 +1332,19 @@ explain (costs off)
    UNION ALL
    SELECT 2 AS t, * FROM tenk1 b) c
  WHERE t = 2;
-INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
-DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: Non-default collation
-                QUERY PLAN                
-------------------------------------------
+                        QUERY PLAN
+----------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
-   ->  Seq Scan on tenk1 b
- Optimizer: Postgres query optimizer
-(3 rows)
+   ->  Append
+         ->  Result
+               One-Time Filter: (gp_execution_segment() = 0)
+               ->  Result
+                     One-Time Filter: false
+         ->  Result
+               Filter: ((2) = 2)
+               ->  Seq Scan on tenk1 b
+ Optimizer: GPORCA
+(10 rows)
 
 -- Test that we push quals into UNION sub-selects only when it's safe
 explain (costs off)

@@ -30,7 +30,8 @@ FORCE_GENERATE_DBGSTR(CColumnDescriptor);
 //---------------------------------------------------------------------------
 CColumnDescriptor::CColumnDescriptor(CMemoryPool *mp, const IMDType *pmdtype,
 									 INT type_modifier, const CName &name,
-									 INT attno, BOOL is_nullable, ULONG ulWidth)
+									 INT attno, BOOL is_nullable, ULONG ulWidth,
+									 OID collation)
 	: m_pmdtype(pmdtype),
 	  m_type_modifier(type_modifier),
 	  m_name(mp, name),
@@ -38,7 +39,8 @@ CColumnDescriptor::CColumnDescriptor(CMemoryPool *mp, const IMDType *pmdtype,
 	  m_is_nullable(is_nullable),
 	  m_width(ulWidth),
 	  m_is_dist_col(false),
-	  m_is_part_col(false)
+	  m_is_part_col(false),
+	  m_collation(collation)
 
 {
 	GPOS_ASSERT(nullptr != pmdtype);

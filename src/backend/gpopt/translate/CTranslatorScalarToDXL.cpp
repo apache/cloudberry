@@ -252,9 +252,15 @@ CTranslatorScalarToDXL::TranslateVarToDXL(
 	CMDName *mdname = GPOS_NEW(m_mp) CMDName(m_mp, str);
 
 	// create a column reference for the given var
+	IMDId *mdid_collation = nullptr;
+	if (OidIsValid(var->varcollid))
+	{
+		mdid_collation =
+			GPOS_NEW(m_mp) CMDIdGPDB(IMDId::EmdidGeneral, var->varcollid);
+	}
 	CDXLColRef *dxl_colref = GPOS_NEW(m_mp) CDXLColRef(
 		mdname, id, GPOS_NEW(m_mp) CMDIdGPDB(IMDId::EmdidGeneral, var->vartype),
-		var->vartypmod);
+		var->vartypmod, mdid_collation);
 
 	// create the scalar ident operator
 	CDXLScalarIdent *scalar_ident =
