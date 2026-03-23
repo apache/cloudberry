@@ -71,7 +71,7 @@ init_environment "Cloudberry Build Script" "${BUILD_LOG}"
 
 # Set environment
 log_section "Environment Setup"
-export LD_LIBRARY_PATH=${BUILD_DESTINATION}/lib:LD_LIBRARY_PATH
+export LD_LIBRARY_PATH=${BUILD_DESTINATION}/lib:${LD_LIBRARY_PATH:-""}
 log_section_end "Environment Setup"
 
 # Build process
