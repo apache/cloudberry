@@ -292,13 +292,13 @@ typedef struct CdbPathLocus
 		_locus->parallel_workers = (parallel_workers_); \
         Assert(cdbpathlocus_is_valid(*_locus));         \
     } while (0)
-#define CdbPathLocus_MakeHashedOJ(plocus, distkey_, numsegments_)     \
+#define CdbPathLocus_MakeHashedOJ(plocus, distkey_, numsegments_, parallel_workers_)     \
     do {                                                \
         CdbPathLocus *_locus = (plocus);                \
         _locus->locustype = CdbLocusType_HashedOJ;		\
         _locus->numsegments = (numsegments_);           \
         _locus->distkey = (distkey_);					\
-        _locus->parallel_workers = 0;                   \
+		_locus->parallel_workers = (parallel_workers_); \
         Assert(cdbpathlocus_is_valid(*_locus));         \
     } while (0)
 #define CdbPathLocus_MakeHashedWorkers(plocus, distkey_, numsegments_, parallel_workers_)      \

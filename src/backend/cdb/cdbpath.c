@@ -3112,8 +3112,9 @@ cdbpath_motion_for_parallel_join(PlannerInfo *root,
 		case JOIN_UNIQUE_INNER:
 		case JOIN_RIGHT:
 		case JOIN_FULL:
-			/* Join types are not supported in parallel yet. */
-			goto fail;
+			outer.ok_to_replicate = false;
+			inner.ok_to_replicate = false;
+			break;
 		case JOIN_DEDUP_SEMI:
 			if (!enable_parallel_dedup_semi_join)
 				goto fail;
