@@ -2401,11 +2401,11 @@ ExecParallelPrepHashTableForUnmatched(HashJoinState *hjstate)
 	int			curbatch = hashtable->curbatch;
 	ParallelHashJoinBatch *batch = hashtable->batches[curbatch].shared;
 
-	Assert(BarrierPhase(&batch->batch_barrier) == PHJ_BATCH_PROBE);
+	Assert(BarrierPhase(&batch->batch_barrier) == PHJ_BATCH_PROBING);
 
 	/*
 	 * It would not be deadlock-free to wait on the batch barrier, because it
-	 * is in PHJ_BATCH_PROBE phase, and thus processes attached to it have
+	 * is in PHJ_BATCH_PROBING phase, and thus processes attached to it have
 	 * already emitted tuples.  Therefore, we'll hold a wait-free election:
 	 * only one process can continue to the next phase, and all others detach
 	 * from this batch.  They can still go any work on other batches, if there
@@ -3975,12 +3975,12 @@ ExecHashTableDetachBatch(HashJoinTable hashtable)
 		sts_end_parallel_scan(hashtable->batches[curbatch].inner_tuples);
 		sts_end_parallel_scan(hashtable->batches[curbatch].outer_tuples);
 
-		/* After attaching we always get at least to PHJ_BATCH_PROBE. */
-		Assert(BarrierPhase(&batch->batch_barrier) == PHJ_BATCH_PROBE ||
+		/* After attaching we always get at least to PHJ_BATCH_PROBING. */
+		Assert(BarrierPhase(&batch->batch_barrier) == PHJ_BATCH_PROBING ||
 			   BarrierPhase(&batch->batch_barrier) == PHJ_BATCH_SCAN);
 
 		/*
-		 * If we're abandoning the PHJ_BATCH_PROBE phase early without having
+		 * If we're abandoning the PHJ_BATCH_PROBING phase early without having
 		 * reached the end of it, it means the plan doesn't want any more
 		 * tuples, and it is happy to abandon any tuples buffered in this
 		 * process's subplans.  For correctness, we can't allow any process to
@@ -3995,13 +3995,13 @@ ExecHashTableDetachBatch(HashJoinTable hashtable)
 		 * If phs_lasj_has_null is true, that means we have found null when building hash table,
 		 * there were no batches to detach.
 		 */
-		if (BarrierPhase(&batch->batch_barrier) == PHJ_BATCH_PROBE &&
+		if (BarrierPhase(&batch->batch_barrier) == PHJ_BATCH_PROBING &&
 			!hashtable->parallel_state->phs_lasj_has_null && /* CBDB_PARALLEL */
 			!hashtable->batches[curbatch].outer_eof)
 		{
 			/*
 			 * This flag may be written to by multiple backends during
-			 * PHJ_BATCH_PROBE phase, but will only be read in PHJ_BATCH_SCAN
+			 * PHJ_BATCH_PROBING phase, but will only be read in PHJ_BATCH_SCAN
 			 * phase so requires no extra locking.
 			 */
 			batch->skip_unmatched = true;
@@ -4012,10 +4012,11 @@ ExecHashTableDetachBatch(HashJoinTable hashtable)
 		 * the PHJ_BATCH_SCAN phase just to maintain the invariant that
 		 * freeing happens in PHJ_BATCH_FREE, but that'll be wait-free.
 		 */
-		if (BarrierPhase(&batch->batch_barrier) == PHJ_BATCH_PROBE &&
+		if (BarrierPhase(&batch->batch_barrier) == PHJ_BATCH_PROBING &&
 			!hashtable->parallel_state->phs_lasj_has_null /* CBDB_PARALLEL */)
 			attached = BarrierArriveAndDetachExceptLast(&batch->batch_barrier);
-		if (attached && BarrierArriveAndDetach(&batch->batch_barrier))
+		if (attached && !hashtable->parallel_state->phs_lasj_has_null /* CBDB_PARALLEL */ &&
+			BarrierArriveAndDetach(&batch->batch_barrier))
 		{
 			/*
 			 * We are not longer attached to the batch barrier, but we're the
