@@ -1395,7 +1395,7 @@ static void
 updateCursorIcEntry(CursorICHistoryTable *t, uint32 icId, uint8 status)
 {
 	struct CursorICHistoryEntry *p;
-	uint8		index;
+	uint32		index;
 
 	Assert(t->size > 0);
 	index = icId % t->size;
@@ -1419,7 +1419,7 @@ static CursorICHistoryEntry *
 getCursorIcEntry(CursorICHistoryTable *t, uint32 icId)
 {
 	struct CursorICHistoryEntry *p;
-	uint8		index;
+	uint32		index;
 
 	Assert(t->size > 0);
 	index = icId % t->size;
@@ -1442,7 +1442,7 @@ getCursorIcEntry(CursorICHistoryTable *t, uint32 icId)
 static void
 pruneCursorIcEntry(CursorICHistoryTable *t, uint32 icId)
 {
-	uint8		index;
+	uint32		index;
 
 	Assert(t->size > 0);
 	for (index = 0; index < t->size; index++)
@@ -1492,7 +1492,7 @@ pruneCursorIcEntry(CursorICHistoryTable *t, uint32 icId)
 static void
 purgeCursorIcEntry(CursorICHistoryTable *t)
 {
-	uint8		index;
+	uint32		index;
 
 	for (index = 0; index < t->size; index++)
 	{
