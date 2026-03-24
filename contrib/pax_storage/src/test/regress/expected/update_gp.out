@@ -413,7 +413,7 @@ EXPLAIN (COSTS OFF ) UPDATE tab3 SET C1 = C1 + 1, C5 = C5+1;
 ---------------------------------------------------------------
  Update on tab3
    ->  Explicit Redistribute Motion 3:3  (slice1; segments: 3)
-         ->  Split
+         ->  Split Update
                ->  Seq Scan on tab3
  Optimizer: Postgres query optimizer
 (5 rows)

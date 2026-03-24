@@ -1247,18 +1247,18 @@ select * from table_source3 where c3 = 'INC' and c4 = '0000000001' and c2 not in
 (0 rows)
 
 explain select * from table_source4 where c3 = 'INC' and c4 = '0000000001' and c2 not in (SELECT c1 from table_config where c2='test');
-                                           QUERY PLAN                                           
-------------------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)  (cost=9.33..10.54 rows=10 width=42)
-   ->  Hash Left Anti Semi (Not-In) Join  (cost=9.33..10.41 rows=3 width=42)
-         Hash Cond: ((table_source4.c2)::text = (table_config.c1)::text)
-         ->  Redistribute Motion 3:3  (slice2; segments: 3)  (cost=0.00..1.03 rows=1 width=42)
-               Hash Key: table_source4.c2
-               ->  Seq Scan on table_source4  (cost=0.00..1.01 rows=1 width=42)
-                     Filter: (((c3)::text = 'INC'::text) AND ((c4)::text = '0000000001'::text))
-         ->  Hash  (cost=5.17..5.17 rows=333 width=3)
-               ->  Seq Scan on table_config  (cost=0.00..5.17 rows=333 width=3)
-                     Filter: ((c2)::text = 'test'::text)
+                                              QUERY PLAN                                               
+-------------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=52.03..58.20 rows=10 width=872)
+   ->  Hash Right Anti Join  (cost=52.03..58.07 rows=3 width=872)
+         Hash Cond: ((table_config.c1)::text = (table_source4.c2)::text)
+         ->  Seq Scan on table_config  (cost=0.00..5.17 rows=333 width=3)
+               Filter: ((c2)::text = 'test'::text)
+         ->  Hash  (cost=52.02..52.02 rows=1 width=872)
+               ->  Redistribute Motion 3:3  (slice2; segments: 3)  (cost=0.00..52.02 rows=1 width=872)
+                     Hash Key: table_source4.c2
+                     ->  Seq Scan on table_source4  (cost=0.00..52.00 rows=1 width=872)
+                           Filter: (((c3)::text = 'INC'::text) AND ((c4)::text = '0000000001'::text))
  Optimizer: Postgres query optimizer
 (11 rows)
 
@@ -1415,15 +1415,15 @@ select * from t1_12930 where (a, b) not in (select a, b from t2_12930);
 (0 rows)
 
 explain select * from t1_12930 where (a, b) not in (select a, b from t2_12930) and b is not null;
-                                     QUERY PLAN                                     
-------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)  (cost=751.50..206932.71 rows=16 width=8)
-   ->  Hash Left Anti Semi (Not-In) Join  (cost=751.50..206932.49 rows=5 width=8)
-         Hash Cond: ((t1_12930.a = t2_12930.a) AND (t1_12930.b = t2_12930.b))
-         ->  Seq Scan on t1_12930  (cost=0.00..321.00 rows=28671 width=8)
-               Filter: (b IS NOT NULL)
-         ->  Hash  (cost=321.00..321.00 rows=28700 width=8)
-               ->  Seq Scan on t2_12930  (cost=0.00..321.00 rows=28700 width=8)
+                                      QUERY PLAN                                       
+---------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=751.07..208007.32 rows=64510 width=8)
+   ->  Hash Right Anti Join  (cost=751.07..207147.18 rows=21503 width=8)
+         Hash Cond: ((t2_12930.a = t1_12930.a) AND (t2_12930.b = t1_12930.b))
+         ->  Seq Scan on t2_12930  (cost=0.00..321.00 rows=28700 width=8)
+         ->  Hash  (cost=321.00..321.00 rows=28671 width=8)
+               ->  Seq Scan on t1_12930  (cost=0.00..321.00 rows=28671 width=8)
+                     Filter: (b IS NOT NULL)
  Optimizer: Postgres query optimizer
 (8 rows)
 

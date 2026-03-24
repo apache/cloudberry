@@ -25,19 +25,19 @@ select * from print_name;
 (3 rows)
 
 select pg_get_viewdef('print_name');
-                                 pg_get_viewdef                                  
----------------------------------------------------------------------------------
-  SELECT concat(' '::text, VARIADIC ARRAY[people.fname, people.lname]) AS concat+
-    FROM people                                                                 +
-   WHERE (people.id < 790);
+                          pg_get_viewdef                           
+-------------------------------------------------------------------
+  SELECT concat(' '::text, VARIADIC ARRAY[fname, lname]) AS concat+
+    FROM people                                                   +
+   WHERE (id < 790);
 (1 row)
 
 select pg_get_viewdef('print_name', true);
-                                 pg_get_viewdef                                  
----------------------------------------------------------------------------------
-  SELECT concat(' '::text, VARIADIC ARRAY[people.fname, people.lname]) AS concat+
-    FROM people                                                                 +
-   WHERE people.id < 790;
+                          pg_get_viewdef                           
+-------------------------------------------------------------------
+  SELECT concat(' '::text, VARIADIC ARRAY[fname, lname]) AS concat+
+    FROM people                                                   +
+   WHERE id < 790;
 (1 row)
 
 drop view print_name;

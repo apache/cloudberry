@@ -41,13 +41,13 @@ ALTER OPERATOR FAMILY alt_opf1 USING hash RENAME TO alt_opf2;  -- failed (name c
 ERROR:  operator family "alt_opf2" for access method "hash" already exists in schema "alt_nsp1"
 ALTER OPERATOR FAMILY alt_opf1 USING hash RENAME TO alt_opf3;  -- OK
 ALTER OPERATOR FAMILY alt_opf2 USING hash OWNER TO regtest_alter_user2;  -- failed (no role membership)
-ERROR:  must be member of role "regtest_alter_user2"
+ERROR:  must be able to SET ROLE "regtest_alter_user2"
 ALTER OPERATOR FAMILY alt_opf2 USING hash OWNER TO regtest_alter_user3;  -- OK
 ALTER OPERATOR CLASS alt_opc1 USING hash RENAME TO alt_opc2;  -- failed (name conflict)
 ERROR:  operator class "alt_opc2" for access method "hash" already exists in schema "alt_nsp1"
 ALTER OPERATOR CLASS alt_opc1 USING hash RENAME TO alt_opc3;  -- OK
 ALTER OPERATOR CLASS alt_opc2 USING hash OWNER TO regtest_alter_user2;  -- failed (no role membership)
-ERROR:  must be member of role "regtest_alter_user2"
+ERROR:  must be able to SET ROLE "regtest_alter_user2"
 ALTER OPERATOR CLASS alt_opc2 USING hash OWNER TO regtest_alter_user3;  -- OK
 RESET SESSION AUTHORIZATION;
 -- Test adding operators to an existing opfamily as that requires oid
