@@ -13,6 +13,9 @@ set allow_system_table_mods=on;
 set local min_parallel_table_scan_size = 0;
 set local parallel_setup_cost = 0;
 set local enable_hashjoin = on;
+-- CBDB: disable CBDB parallel for these PG-originated tests; parallel full join
+-- is tested separately in cbdb_parallel.sql.
+set local enable_parallel = off;
 
 -- Extract bucket and batch counts from an explain analyze plan.  In
 -- general we can't make assertions about how many batches (or
@@ -543,7 +546,10 @@ rollback;
 -- be guaranteed to produce correct results if all the hash join tuple match
 -- bits are reset before reuse. This is done upon loading them into the
 -- hashtable.
+begin;
 SAVEPOINT settings;
+-- CBDB: disable CBDB parallel; the serial full join match-bit test is what matters here.
+SET enable_parallel = off;
 SET enable_parallel_hash = on;
 SET min_parallel_table_scan_size = 0;
 SET parallel_setup_cost = 0;
