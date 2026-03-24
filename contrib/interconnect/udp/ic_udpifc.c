@@ -1362,7 +1362,10 @@ addCursorIcEntry(CursorICHistoryTable *t, uint32 icId, uint32 cid)
 {
 	MemoryContext old;
 	CursorICHistoryEntry *p;
-	uint32		index = icId % t->size;
+	uint32		index;
+
+	Assert(t->size > 0);
+	index = icId % t->size;
 
 	old = MemoryContextSwitchTo(ic_control_info.memContext);
 	p = palloc0(sizeof(struct CursorICHistoryEntry));
@@ -1392,7 +1395,10 @@ static void
 updateCursorIcEntry(CursorICHistoryTable *t, uint32 icId, uint8 status)
 {
 	struct CursorICHistoryEntry *p;
-	uint8		index = icId % t->size;
+	uint8		index;
+
+	Assert(t->size > 0);
+	index = icId % t->size;
 
 	for (p = t->table[index]; p; p = p->next)
 	{
@@ -1413,7 +1419,10 @@ static CursorICHistoryEntry *
 getCursorIcEntry(CursorICHistoryTable *t, uint32 icId)
 {
 	struct CursorICHistoryEntry *p;
-	uint8		index = icId % t->size;
+	uint8		index;
+
+	Assert(t->size > 0);
+	index = icId % t->size;
 
 	for (p = t->table[index]; p; p = p->next)
 	{
@@ -1435,6 +1444,7 @@ pruneCursorIcEntry(CursorICHistoryTable *t, uint32 icId)
 {
 	uint8		index;
 
+	Assert(t->size > 0);
 	for (index = 0; index < t->size; index++)
 	{
 		struct CursorICHistoryEntry *p,
