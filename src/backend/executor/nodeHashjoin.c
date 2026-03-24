@@ -151,7 +151,7 @@
  * to a barrier, unless the barrier has reached a phase that means that no
  * process will wait on it again.  We emit tuples while attached to the build
  * barrier in phase PHJ_BUILD_RUN, and to a per-batch barrier in phase
- * PHJ_BATCH_PROBE.  These are advanced to PHJ_BUILD_FREE and PHJ_BATCH_SCAN
+ * PHJ_BATCH_PROBING.  These are advanced to PHJ_BUILD_FREE and PHJ_BATCH_SCAN
  * respectively without waiting, using BarrierArriveAndDetach() and
  * BarrierArriveAndDetachExceptLast() respectively.  The last to detach
  * receives a different return value so that it knows that it's safe to
@@ -1630,7 +1630,7 @@ ExecParallelHashJoinNewBatch(HashJoinState *hjstate)
 					 * since that phase is already underway (the thing we
 					 * can't do under current deadlock-avoidance rules is wait
 					 * for others to arrive at PHJ_BATCH_SCAN, because
-					 * PHJ_BATCH_PROBE emits tuples, but in this case we just
+					 * PHJ_BATCH_PROBING emits tuples, but in this case we just
 					 * got here without waiting).  That is not yet done.  For
 					 * now, we just detach and go around again.  We have to
 					 * use ExecHashTableDetachBatch() because there's a small
