@@ -383,6 +383,13 @@ static XLogRecPtr recoveryStopLSN;
 static char recoveryStopName[MAXFNAMELEN];
 static bool recoveryStopAfter;
 
+/*
+ * GPDB: Have we reached a specific continuous recovery target? We set this to
+ * true if WAL replay has found a restore point matching the GPDB-specific GUC
+ * gp_pause_on_restore_point_replay and a promotion has been requested.
+ */
+static bool reachedContinuousRecoveryTarget = false;
+
 /* prototypes for local functions */
 static void ApplyWalRecord(XLogReaderState *xlogreader, XLogRecord *record, TimeLineID *replayTLI);
 
@@ -1614,6 +1621,60 @@ ShutdownWalRecovery(void)
 		DisownLatch(&XLogRecoveryCtl->recoveryWakeupLatch);
 }
 
+
+/*
+ * GPDB: Restore point records can act as a point of synchronization to ensure
+ * cluster-wide consistency during WAL replay. If a restore point is specified
+ * in the gp_pause_on_restore_point_replay GUC, WAL replay will be paused at
+ * that restore point until replay is explicitly resumed.
+ */
+static void
+pauseRecoveryOnRestorePoint(XLogReaderState *record)
+{
+	uint8		info;
+	uint8		rmid;
+
+	/*
+	 * Ignore recovery target settings when not in archive recovery (meaning
+	 * we are in crash recovery).
+	 */
+	if (!ArchiveRecoveryRequested)
+		return;
+
+	info = XLogRecGetInfo(record) & ~XLR_INFO_MASK;
+	rmid = XLogRecGetRmid(record);
+
+	if (rmid == RM_XLOG_ID && info == XLOG_RESTORE_POINT)
+	{
+		xl_restore_point *recordRestorePointData;
+
+		recordRestorePointData = (xl_restore_point *) XLogRecGetData(record);
+
+		if (gp_pause_on_restore_point_replay)
+		{
+			ereport(LOG,
+					(errmsg("setting recovery pause at restore point \"%s\", time %s",
+							recordRestorePointData->rp_name,
+							timestamptz_to_str(recordRestorePointData->rp_time))));
+
+			SetRecoveryPause(true);
+			recoveryPausesHere(false);
+
+			/*
+			 * If we've unpaused and there is a promotion request, then we've
+			 * reached our continuous recovery target and need to immediately
+			 * promote. We piggyback on the existing recovery target logic to
+			 * do this. See recoveryStopsAfter().
+			 */
+			if (CheckForStandbyTrigger())
+			{
+				reachedContinuousRecoveryTarget = true;
+				recoveryTargetAction = RECOVERY_TARGET_ACTION_PROMOTE;
+			}
+		}
+	}
+}
+
 /*
  * Perform WAL recovery.
  *
@@ -1782,7 +1843,16 @@ PerformWalRecovery(void)
 			 * Apply the record
 			 */
 			ApplyWalRecord(xlogreader, record, &replayTLI);
+			
+			if (gp_pause_on_restore_point_replay)
+				pauseRecoveryOnRestorePoint(xlogreader);
 
+			/* Exit the recovery loop if a promotion is triggered in pauseRecoveryOnRestorePoint() */
+			if (reachedContinuousRecoveryTarget && recoveryTargetAction == RECOVERY_TARGET_ACTION_PROMOTE){
+				reachedRecoveryTarget = true;
+				break;
+			}
+			
 			/* Exit loop if we reached inclusive recovery target */
 			if (recoveryStopsAfter(xlogreader))
 			{
@@ -2734,14 +2804,15 @@ recoveryStopsAfter(XLogReaderState *record)
 	 * There can be many restore points that share the same name; we stop at
 	 * the first one.
 	 */
-	if (recoveryTarget == RECOVERY_TARGET_NAME &&
+	if ((reachedContinuousRecoveryTarget || recoveryTarget == RECOVERY_TARGET_NAME) &&
 		rmid == RM_XLOG_ID && info == XLOG_RESTORE_POINT)
 	{
 		xl_restore_point *recordRestorePointData;
 
 		recordRestorePointData = (xl_restore_point *) XLogRecGetData(record);
 
-		if (strcmp(recordRestorePointData->rp_name, recoveryTargetName) == 0)
+		if (reachedContinuousRecoveryTarget ||
+			strcmp(recordRestorePointData->rp_name, recoveryTargetName) == 0)
 		{
 			recoveryStopAfter = true;
 			recoveryStopXid = InvalidTransactionId;
