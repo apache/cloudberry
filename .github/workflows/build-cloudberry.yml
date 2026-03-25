@@ -1456,6 +1456,9 @@ jobs:
               echo "=== Executing Behave test ==="
               config_log="build-logs/details/make-${{ matrix.test }}-config$i.log"
               
+              echo "Installing OS dependencies for Behave..."
+              dnf install -y libffi-devel || echo "Warning: failed to install libffi-devel"
+              
               echo "Installing Python dependencies for Behave..."
               su - gpadmin -c "pip3 install --user -r ${SRC_DIR}/gpMgmt/requirements-dev.txt || pip install --user -r ${SRC_DIR}/gpMgmt/requirements-dev.txt"
               
