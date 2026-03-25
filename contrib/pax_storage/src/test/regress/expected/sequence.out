@@ -2,8 +2,6 @@
 -- CREATE SEQUENCE
 --
 -- various error cases
-CREATE UNLOGGED SEQUENCE sequence_testx;
-ERROR:  unlogged sequences are not supported
 CREATE SEQUENCE sequence_testx INCREMENT BY 0;
 ERROR:  INCREMENT must not be zero
 CREATE SEQUENCE sequence_testx INCREMENT BY -1 MINVALUE 20;
@@ -21,7 +19,7 @@ CREATE SEQUENCE sequence_testx OWNED BY nobody;  -- nonsense word
 ERROR:  invalid OWNED BY option
 HINT:  Specify OWNED BY table.column or OWNED BY NONE.
 CREATE SEQUENCE sequence_testx OWNED BY pg_class_oid_index.oid;  -- not a table
-ERROR:  sequence cannot be owned by relation "pg_class_oid_index"  (seg0 127.0.1.1:7002 pid=3722097)
+ERROR:  sequence cannot be owned by relation "pg_class_oid_index"
 DETAIL:  This operation is not supported for indexes.
 CREATE SEQUENCE sequence_testx OWNED BY pg_class.relname;  -- not same schema
 ERROR:  sequence must be in same schema as table it is linked to
@@ -577,6 +575,18 @@ DROP SEQUENCE seq2;
 -- should fail
 SELECT lastval();
 ERROR:  lastval() not supported
+-- unlogged sequences
+-- (more tests in src/test/recovery/)
+CREATE UNLOGGED SEQUENCE sequence_test_unlogged;
+ERROR:  unlogged sequences are not supported
+ALTER SEQUENCE sequence_test_unlogged SET LOGGED;
+ERROR:  relation "sequence_test_unlogged" does not exist
+\d sequence_test_unlogged
+ALTER SEQUENCE sequence_test_unlogged SET UNLOGGED;
+ERROR:  relation "sequence_test_unlogged" does not exist
+\d sequence_test_unlogged
+DROP SEQUENCE sequence_test_unlogged;
+ERROR:  sequence "sequence_test_unlogged" does not exist
 -- Test sequences in read-only transactions
 CREATE TEMPORARY SEQUENCE sequence_test_temp1;
 START TRANSACTION READ ONLY;

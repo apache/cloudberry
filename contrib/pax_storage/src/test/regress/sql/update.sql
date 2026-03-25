@@ -313,37 +313,36 @@ DROP TRIGGER trans_inserttrig ON range_parted;
 -- the desired transition tuple format. But conversion happens when there is a
 -- BR trigger because the trigger can change the inserted row. So install a
 -- BR triggers on those child partitions where the rows will be moved.
--- Pax not support this trigger
--- CREATE FUNCTION func_parted_mod_b() RETURNS trigger AS $$
--- BEGIN
---    NEW.b = NEW.b + 1;
---    return NEW;
--- END $$ language plpgsql;
--- CREATE TRIGGER trig_c1_100 BEFORE UPDATE OR INSERT ON part_c_1_100
---    FOR EACH ROW EXECUTE PROCEDURE func_parted_mod_b();
--- CREATE TRIGGER trig_d1_15 BEFORE UPDATE OR INSERT ON part_d_1_15
---    FOR EACH ROW EXECUTE PROCEDURE func_parted_mod_b();
--- CREATE TRIGGER trig_d15_20 BEFORE UPDATE OR INSERT ON part_d_15_20
---    FOR EACH ROW EXECUTE PROCEDURE func_parted_mod_b();
--- :init_range_parted;
--- UPDATE range_parted set c = (case when c = 96 then 110 else c + 1 end) WHERE a = 'b' and b > 10 and c >= 96;
--- :show_data;
--- :init_range_parted;
--- UPDATE range_parted set c = c + 50 WHERE a = 'b' and b > 10 and c >= 96;
--- :show_data;
+CREATE FUNCTION func_parted_mod_b() RETURNS trigger AS $$
+BEGIN
+   NEW.b = NEW.b + 1;
+   return NEW;
+END $$ language plpgsql;
+CREATE TRIGGER trig_c1_100 BEFORE UPDATE OR INSERT ON part_c_1_100
+   FOR EACH ROW EXECUTE PROCEDURE func_parted_mod_b();
+CREATE TRIGGER trig_d1_15 BEFORE UPDATE OR INSERT ON part_d_1_15
+   FOR EACH ROW EXECUTE PROCEDURE func_parted_mod_b();
+CREATE TRIGGER trig_d15_20 BEFORE UPDATE OR INSERT ON part_d_15_20
+   FOR EACH ROW EXECUTE PROCEDURE func_parted_mod_b();
+:init_range_parted;
+UPDATE range_parted set c = (case when c = 96 then 110 else c + 1 end) WHERE a = 'b' and b > 10 and c >= 96;
+:show_data;
+:init_range_parted;
+UPDATE range_parted set c = c + 50 WHERE a = 'b' and b > 10 and c >= 96;
+:show_data;
 
 -- Case where per-partition tuple conversion map array is allocated, but the
 -- map is not required for the particular tuple that is routed, thanks to
 -- matching table attributes of the partition and the target table.
--- :init_range_parted;
--- UPDATE range_parted set b = 15 WHERE b = 1;
--- :show_data;
+:init_range_parted;
+UPDATE range_parted set b = 15 WHERE b = 1;
+:show_data;
 
--- DROP TRIGGER trans_updatetrig ON range_parted;
--- DROP TRIGGER trig_c1_100 ON part_c_1_100;
--- DROP TRIGGER trig_d1_15 ON part_d_1_15;
--- DROP TRIGGER trig_d15_20 ON part_d_15_20;
--- DROP FUNCTION func_parted_mod_b();
+DROP TRIGGER trans_updatetrig ON range_parted;
+DROP TRIGGER trig_c1_100 ON part_c_1_100;
+DROP TRIGGER trig_d1_15 ON part_d_1_15;
+DROP TRIGGER trig_d15_20 ON part_d_15_20;
+DROP FUNCTION func_parted_mod_b();
 
 -- RLS policies with update-row-movement
 -----------------------------------------
@@ -538,30 +537,35 @@ DROP TABLE list_parted;
 -- Test retrieval of system columns with non-consistent partition row types.
 -- This is only partially supported, as seen in the results.
 
--- Pax used virtual tuple, which without xmin/xmax
--- create table utrtest (a int, b text) partition by list (a);
--- create table utr1 (a int check (a in (1)), q text, b text);
--- create table utr2 (a int check (a in (2)), b text);
--- alter table utr1 drop column q;
--- alter table utrtest attach partition utr1 for values in (1);
--- alter table utrtest attach partition utr2 for values in (2);
+create table utrtest (a int, b text) partition by list (a);
+create table utr1 (a int check (a in (1)), q text, b text);
+create table utr2 (a int check (a in (2)), b text);
+alter table utr1 drop column q;
+alter table utrtest attach partition utr1 for values in (1);
+alter table utrtest attach partition utr2 for values in (2);
+
 -- xmin_ok is likely false, xmin and pg_current_xact_id() comes from
 -- data segment and master, respectively.
--- insert into utrtest values (1, 'foo')
---   returning *, tableoid::regclass, xmin = pg_current_xact_id()::xid as xmin_ok;
--- insert into utrtest values (2, 'bar')
---   returning *, tableoid::regclass, xmin = pg_current_xact_id()::xid as xmin_ok;  -- fails
--- insert into utrtest values (2, 'bar')
---   returning *, tableoid::regclass;
--- update utrtest set b = b || b from (values (1), (2)) s(x) where a = s.x
---   returning *, tableoid::regclass, xmin = pg_current_xact_id()::xid as xmin_ok;
--- update utrtest set a = 3 - a from (values (1), (2)) s(x) where a = s.x
---   returning *, tableoid::regclass, xmin = pg_current_xact_id()::xid as xmin_ok;  -- fails
--- update utrtest set a = 3 - a from (values (1), (2)) s(x) where a = s.x
---   returning *, tableoid::regclass;
--- delete from utrtest
---   returning *, tableoid::regclass, xmax = pg_current_xact_id()::xid as xmax_ok;
--- drop table utrtest;
+insert into utrtest values (1, 'foo')
+  returning *, tableoid::regclass, xmin = pg_current_xact_id()::xid as xmin_ok;
+insert into utrtest values (2, 'bar')
+  returning *, tableoid::regclass, xmin = pg_current_xact_id()::xid as xmin_ok;  -- fails
+insert into utrtest values (2, 'bar')
+  returning *, tableoid::regclass;
+
+update utrtest set b = b || b from (values (1), (2)) s(x) where a = s.x
+  returning *, tableoid::regclass, xmin = pg_current_xact_id()::xid as xmin_ok;
+
+update utrtest set a = 3 - a from (values (1), (2)) s(x) where a = s.x
+  returning *, tableoid::regclass, xmin = pg_current_xact_id()::xid as xmin_ok;  -- fails
+
+update utrtest set a = 3 - a from (values (1), (2)) s(x) where a = s.x
+  returning *, tableoid::regclass;
+
+delete from utrtest
+  returning *, tableoid::regclass, xmax = pg_current_xact_id()::xid as xmax_ok;
+
+drop table utrtest;
 
 
 --------------
@@ -605,8 +609,8 @@ BEGIN
    NEW.b = 2; -- This is changing partition key column.
    return NEW;
 END $$ LANGUAGE plpgsql;
--- CREATE TRIGGER parted_mod_b before update on sub_part1
---    for each row execute procedure func_parted_mod_b();
+CREATE TRIGGER parted_mod_b before update on sub_part1
+   for each row execute procedure func_parted_mod_b();
 
 SELECT tableoid::regclass::text, * FROM list_parted ORDER BY 1, 2, 3, 4;
 
@@ -615,7 +619,7 @@ SELECT tableoid::regclass::text, * FROM list_parted ORDER BY 1, 2, 3, 4;
 UPDATE list_parted set c = 70 WHERE b  = 1;
 SELECT tableoid::regclass::text, * FROM list_parted ORDER BY 1, 2, 3, 4;
 
--- DROP TRIGGER parted_mod_b ON sub_part1;
+DROP TRIGGER parted_mod_b ON sub_part1;
 
 -- If BR DELETE trigger prevented DELETE from happening, we should also skip
 -- the INSERT if that delete is part of UPDATE=>DELETE+INSERT.
@@ -624,12 +628,12 @@ BEGIN
    raise notice 'Trigger: Got OLD row %, but returning NULL', OLD;
    return NULL;
 END $$ LANGUAGE plpgsql;
--- CREATE TRIGGER trig_skip_delete before delete on sub_part2
---    for each row execute procedure func_parted_mod_b();
+CREATE TRIGGER trig_skip_delete before delete on sub_part2
+   for each row execute procedure func_parted_mod_b();
 UPDATE list_parted set b = 1 WHERE c = 70;
 SELECT tableoid::regclass::text, * FROM list_parted ORDER BY 1, 2, 3, 4;
 -- Drop the trigger. Now the row should be moved.
--- DROP TRIGGER trig_skip_delete ON sub_part2;
+DROP TRIGGER trig_skip_delete ON sub_part2;
 UPDATE list_parted set b = 1 WHERE c = 70;
 SELECT tableoid::regclass::text, * FROM list_parted ORDER BY 1, 2, 3, 4;
 DROP FUNCTION func_parted_mod_b();

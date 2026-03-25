@@ -3,7 +3,8 @@
 -- are flowing from different segments in different order. Mask those
 -- differences by setting 'extra_float_digits'. This isn't enough for all of
 -- the queries, so a few also use TO_CHAR() to truncate the results further.
-set extra_float_digits=0;
+set extra_float_digits=-1;
+SET optimizer_trace_fallback to on;
 drop table if exists dqa_t1;
 NOTICE:  table "dqa_t1" does not exist, skipping
 drop table if exists dqa_t2;
@@ -800,9 +801,9 @@ explain (costs off) select sum(distinct d), count(distinct i), count(distinct c)
 
 -- multi args singledqa
 select corr(distinct d, i) from dqa_t1;
-        corr        
---------------------
- 0.0824013341460019
+       corr        
+-------------------
+ 0.082401334146002
 (1 row)
 
 explain (costs off) select corr(distinct d, i) from dqa_t1;
@@ -895,9 +896,9 @@ explain (costs off) select to_char(corr(distinct d, i), '9.99999999999999') from
 
 -- multi args multidqa
 select count(distinct c), corr(distinct d, i) from dqa_t1;
- count |        corr        
--------+--------------------
-    10 | 0.0824013341460019
+ count |       corr        
+-------+-------------------
+    10 | 0.082401334146002
 (1 row)
 
 explain (costs off) select count(distinct c), corr(distinct d, i) from dqa_t1;
@@ -917,9 +918,9 @@ explain (costs off) select count(distinct c), corr(distinct d, i) from dqa_t1;
 (11 rows)
 
 select count(distinct d), corr(distinct d, i) from dqa_t1;
- count |        corr        
--------+--------------------
-    23 | 0.0824013341460019
+ count |       corr        
+-------+-------------------
+    23 | 0.082401334146002
 (1 row)
 
 explain (costs off) select count(distinct d), corr(distinct d, i) from dqa_t1;
@@ -939,9 +940,9 @@ explain (costs off) select count(distinct d), corr(distinct d, i) from dqa_t1;
 (11 rows)
 
 select count(distinct d), count(distinct i), corr(distinct d, i) from dqa_t1;
- count | count |        corr        
--------+-------+--------------------
-    23 |    12 | 0.0824013341460019
+ count | count |       corr        
+-------+-------+-------------------
+    23 |    12 | 0.082401334146002
 (1 row)
 
 explain (costs off) select count(distinct d), count(distinct i), corr(distinct d, i) from dqa_t1;
@@ -961,9 +962,9 @@ explain (costs off) select count(distinct d), count(distinct i), corr(distinct d
 (11 rows)
 
 select count(distinct c), count(distinct d), count(distinct i), corr(distinct d, i) from dqa_t1;
- count | count | count |        corr        
--------+-------+-------+--------------------
-    10 |    23 |    12 | 0.0824013341460019
+ count | count | count |       corr        
+-------+-------+-------+-------------------
+    10 |    23 |    12 | 0.082401334146002
 (1 row)
 
 explain (costs off) select count(distinct c), count(distinct d), count(distinct i), corr(distinct d, i) from dqa_t1;
@@ -1159,42 +1160,42 @@ explain (costs off) select count(distinct c), corr(distinct d, i), d, i from dqa
 (16 rows)
 
 select count(distinct c), corr(distinct d, i), dt from dqa_t1 group by dt;
- count |        corr        |     dt     
--------+--------------------+------------
-     3 |   0.59603956067927 | 06-25-2009
-     3 | 0.0750939261482638 | 06-20-2009
-     3 | 0.0750939261482638 | 07-11-2009
-     3 | 0.0750939261482638 | 06-18-2009
-     3 | 0.0750939261482638 | 06-14-2009
-     3 |  0.755928946018455 | 06-10-2009
-     3 | 0.0750939261482638 | 06-28-2009
-     3 | 0.0750939261482638 | 06-17-2009
-     3 | 0.0750939261482638 | 06-16-2009
-     3 |   0.59603956067927 | 06-24-2009
-     3 | 0.0750939261482638 | 06-29-2009
-     3 | 0.0750939261482638 | 07-09-2009
-     3 | 0.0750939261482638 | 06-21-2009
-     3 | 0.0750939261482638 | 06-26-2009
-     3 | -0.709570905570559 | 06-13-2009
-     3 | -0.709570905570559 | 06-23-2009
-     3 |   0.59603956067927 | 06-11-2009
-     3 | 0.0750939261482638 | 07-10-2009
-     3 | 0.0750939261482638 | 07-01-2009
-     3 | -0.709570905570559 | 06-12-2009
-     3 |   0.59603956067927 | 07-04-2009
-     3 | 0.0750939261482638 | 06-15-2009
-     3 | 0.0750939261482638 | 06-30-2009
-     3 |   0.59603956067927 | 07-05-2009
-     2 |                 -1 | 07-12-2009
-     3 | 0.0750939261482638 | 07-02-2009
-     3 | 0.0750939261482638 | 06-27-2009
-     3 |                 -1 | 07-03-2009
-     3 | -0.709570905570559 | 07-06-2009
-     2 |                 -1 | 07-13-2009
-     3 | -0.709570905570559 | 07-07-2009
-     3 | 0.0750939261482638 | 07-08-2009
-     3 | 0.0750939261482638 | 06-19-2009
-     3 | -0.709570905570559 | 06-22-2009
+ count |       corr        |     dt     
+-------+-------------------+------------
+     3 |  0.75592894601845 | 06-10-2009
+     3 | 0.075093926148264 | 07-11-2009
+     3 | 0.075093926148264 | 06-28-2009
+     3 | 0.075093926148264 | 06-19-2009
+     3 | 0.075093926148264 | 06-17-2009
+     3 | 0.075093926148264 | 07-08-2009
+     3 | 0.075093926148264 | 06-16-2009
+     2 |                -1 | 07-13-2009
+     3 | 0.075093926148264 | 06-29-2009
+     3 |  0.59603956067927 | 07-04-2009
+     3 | -0.70957090557056 | 06-23-2009
+     2 |                -1 | 07-12-2009
+     3 | 0.075093926148264 | 07-02-2009
+     3 |  0.59603956067927 | 06-11-2009
+     3 | 0.075093926148264 | 07-10-2009
+     3 | 0.075093926148264 | 06-18-2009
+     3 |  0.59603956067927 | 07-05-2009
+     3 | 0.075093926148264 | 06-20-2009
+     3 | 0.075093926148264 | 07-09-2009
+     3 | -0.70957090557056 | 06-12-2009
+     3 |  0.59603956067927 | 06-24-2009
+     3 | 0.075093926148264 | 06-14-2009
+     3 | 0.075093926148264 | 06-26-2009
+     3 | -0.70957090557056 | 06-22-2009
+     3 | -0.70957090557056 | 06-13-2009
+     3 | 0.075093926148264 | 06-21-2009
+     3 | -0.70957090557056 | 07-07-2009
+     3 | 0.075093926148264 | 06-27-2009
+     3 | -0.70957090557056 | 07-06-2009
+     3 | 0.075093926148264 | 07-01-2009
+     3 |                -1 | 07-03-2009
+     3 | 0.075093926148264 | 06-15-2009
+     3 |  0.59603956067927 | 06-25-2009
+     3 | 0.075093926148264 | 06-30-2009
 (34 rows)
 
 explain (costs off) select count(distinct c), corr(distinct d, i), dt from dqa_t1 group by dt;
@@ -1936,7 +1937,7 @@ explain (costs off) select count(distinct d) from dqa_t1 group by i;
          ->  Partial GroupAggregate
                Group Key: i
                ->  Sort
-                     Sort Key: i
+                     Sort Key: i, d
                      ->  Seq Scan on dqa_t1
  Optimizer: Postgres query optimizer
 (10 rows)
@@ -2048,6 +2049,13 @@ select count(distinct a) filter (where a > 3),count( distinct b) filter (where a
  count | count | sum 
 -------+-------+-----
     13 |     5 |  10
+(1 row)
+
+-- fix hang of multi-dqa with filter (https://github.com/greenplum-db/gpdb/issues/14728)
+select count(distinct a) filter (where a > 3), count(distinct b) from dqa_f1;
+ count | count 
+-------+-------
+    13 |     5
 (1 row)
 
 explain select sum(distinct a) filter (where a > 0), sum(distinct b) filter (where a > 0) from dqa_f1;
@@ -2190,6 +2198,54 @@ select count(distinct a), sum(b), sum(c) from dqa_f1;
 -------+------+------
     17 | 2000 | 1000
 (1 row)
+
+-- multi DQA with primary key
+create table dqa_unique(a int, b int, c int, d int, primary key(a, b));
+insert into dqa_unique select i%3, i%5, i%7, i%9 from generate_series(1, 10) i;
+explain(verbose on, costs off) select count(distinct a), count(distinct d), c from dqa_unique group by a, b;
+                                           QUERY PLAN                                           
+------------------------------------------------------------------------------------------------
+ Finalize HashAggregate
+   Output: count(a), count(d), c, a, b
+   Group Key: dqa_unique.a, dqa_unique.b
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         Output: a, b, (PARTIAL count(a)), (PARTIAL count(d)), c
+         ->  Partial HashAggregate
+               Output: a, b, PARTIAL count(a), PARTIAL count(d), c
+               Group Key: dqa_unique.a, dqa_unique.b
+               ->  HashAggregate
+                     Output: a, b, d, c, (AggExprId)
+                     Group Key: (AggExprId), dqa_unique.d, dqa_unique.a, dqa_unique.b
+                     ->  Redistribute Motion 3:3  (slice2; segments: 3)
+                           Output: a, b, d, c, (AggExprId)
+                           Hash Key: a, b, d, (AggExprId)
+                           ->  Streaming HashAggregate
+                                 Output: a, b, d, c, (AggExprId)
+                                 Group Key: AggExprId, dqa_unique.d, dqa_unique.a, dqa_unique.b
+                                 ->  TupleSplit
+                                       Output: a, b, d, c, AggExprId
+                                       Split by Col: (dqa_unique.a), (dqa_unique.d)
+                                       Group Key: dqa_unique.a, dqa_unique.b
+                                       ->  Seq Scan on public.dqa_unique
+                                             Output: a, b, c, d
+ Optimizer: Postgres query optimizer
+ Settings: enable_groupagg = 'off', gp_motion_cost_per_row = '1'
+(25 rows)
+
+select count(distinct a), count(distinct d), c from dqa_unique group by a, b;
+ count | count | c 
+-------+-------+---
+     1 |     1 | 5
+     1 |     1 | 6
+     1 |     1 | 0
+     1 |     1 | 2
+     1 |     1 | 1
+     1 |     1 | 1
+     1 |     1 | 2
+     1 |     1 | 4
+     1 |     1 | 3
+     1 |     1 | 3
+(10 rows)
 
 -- multi DQA with type conversions
 create table dqa_f3(a character varying, b bigint) distributed by (a);
@@ -2339,3 +2395,677 @@ explain (verbose, costs off) select count(distinct (b)::text) as b, count(distin
  Settings: enable_groupagg = 'off', gp_motion_cost_per_row = '1'
 (19 rows)
 
+drop table dqa_f3;
+-- Test 3-phase agg for DISTINCT on distribution keys
+-- or DISTINCT when GROUP BY on distribution keys
+create table t_issue_659(a int, b int) using ao_row;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+insert into t_issue_659 select i from generate_series(1, 1000) i;
+insert into t_issue_659 select * from t_issue_659;
+insert into t_issue_659 select * from t_issue_659;
+insert into t_issue_659 select * from t_issue_659;
+insert into t_issue_659 select * from t_issue_659;
+insert into t_issue_659 select * from t_issue_659;
+insert into t_issue_659 select * from t_issue_659;
+insert into t_issue_659 select * from t_issue_659;
+insert into t_issue_659 select * from t_issue_659;
+insert into t_issue_659 select * from t_issue_659;
+insert into t_issue_659 select * from t_issue_659;
+insert into t_issue_659 select * from t_issue_659;
+insert into t_issue_659 select * from t_issue_659;
+analyze t_issue_659;
+explain(costs off)
+select count(distinct a) from t_issue_659;
+                   QUERY PLAN                   
+------------------------------------------------
+ Finalize Aggregate
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         ->  Partial Aggregate
+               ->  Seq Scan on t_issue_659
+ Optimizer: Pivotal Optimizer (GPORCA)
+(5 rows)
+
+select count(distinct a) from t_issue_659;
+ count 
+-------
+  1000
+(1 row)
+
+set gp_eager_distinct_dedup = on;
+-- for ORCA
+set optimizer_force_three_stage_scalar_dqa to on;
+set optimizer_force_multistage_agg to on;
+set optimizer_enable_use_distribution_in_dqa to on;
+explain(costs off)
+select count(distinct a) from t_issue_659;
+                   QUERY PLAN                    
+-------------------------------------------------
+ Finalize Aggregate
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         ->  Partial Aggregate
+               ->  HashAggregate
+                     Group Key: a
+                     ->  Seq Scan on t_issue_659
+ Optimizer: Postgres query optimizer
+(7 rows)
+
+select count(distinct a) from t_issue_659;
+ count 
+-------
+  1000
+(1 row)
+
+reset gp_eager_distinct_dedup;
+reset optimizer_force_three_stage_scalar_dqa;
+reset optimizer_enable_use_distribution_in_dqa;
+drop table t_issue_659;
+-- fix dqa bug when optimizer_force_multistage_agg is on
+set optimizer_force_multistage_agg = on;
+create table multiagg1(a int, b bigint, c int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+create table multiagg2(a int, b bigint, c numeric(8, 4));
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+insert into multiagg1 values(generate_series(1, 10), generate_series(1, 10), generate_series(1, 10));
+insert into multiagg2 values(generate_series(1, 10), generate_series(1, 10), 555.55);
+analyze multiagg1;
+analyze multiagg2;
+explain (verbose, costs off) select count(distinct b), sum(c) from multiagg1;
+                                                QUERY PLAN                                                 
+-----------------------------------------------------------------------------------------------------------
+ Finalize Aggregate
+   Output: count(DISTINCT b), sum(c)
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         Output: (PARTIAL count(DISTINCT b)), (PARTIAL sum(c))
+         ->  Partial Aggregate
+               Output: PARTIAL count(DISTINCT b), PARTIAL sum(c)
+               ->  Redistribute Motion 3:3  (slice2; segments: 3)
+                     Output: b, c
+                     Hash Key: b
+                     ->  Seq Scan on public.multiagg1
+                           Output: b, c
+ Optimizer: Postgres query optimizer
+ Settings: enable_groupagg = 'off', gp_motion_cost_per_row = '1', optimizer_force_multistage_agg = 'on'
+(13 rows)
+
+select count(distinct b), sum(c) from multiagg1;
+ count | sum 
+-------+-----
+    10 |  55
+(1 row)
+
+explain (verbose, costs off) select count(distinct b), sum(c) from multiagg2;
+                                               QUERY PLAN                                               
+--------------------------------------------------------------------------------------------------------
+ Finalize Aggregate
+   Output: count(DISTINCT b), sum(c)
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         Output: (PARTIAL count(DISTINCT b)), (PARTIAL sum(c))
+         ->  Partial Aggregate
+               Output: PARTIAL count(DISTINCT b), PARTIAL sum(c)
+               ->  Redistribute Motion 3:3  (slice2; segments: 3)
+                     Output: b, c
+                     Hash Key: b
+                     ->  Seq Scan on public.multiagg2
+                           Output: b, c
+ Optimizer: Postgres query optimizer
+ Settings: enable_groupagg = 'off', gp_motion_cost_per_row = '1', optimizer_force_multistage_agg = 'on'
+(13 rows)
+
+select count(distinct b), sum(c) from multiagg2;
+ count |    sum    
+-------+-----------
+    10 | 5555.5000
+(1 row)
+
+drop table multiagg1;
+drop table multiagg2;
+-- Support Multi-stage DQA with ride along aggregation in ORCA
+-- Historically, Agg aggsplit is identically equal to Aggref aggsplit
+-- In ORCA's attempt to support intermediate aggregation
+-- The two are allowed to differ
+-- Now Agg aggsplit is derived as bitwise OR of its children Aggref aggsplit
+-- The plan is to eventually make Agg aggsplit a dummy
+-- And use Aggref aggsplit to build trans/combine functions
+set optimizer_force_multistage_agg=on;
+create table num_table(id int, a bigint, b int, c numeric);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'id' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+insert into num_table values(1,1,1,1),(2,2,2,2),(3,3,3,3);
+-- count(distinct a) is a simple aggregation
+-- sum(b) is a split aggregation
+-- Before the fix, in the final aggregation of sum(b)
+-- the executor mistakenly built a trans func instead of a combine func
+-- The trans func building process errored out due to mismatch between
+-- the input type (int) and trans type (bigint), and caused missing plan
+explain select count(distinct a), sum(b) from num_table;
+                                                 QUERY PLAN                                                  
+-------------------------------------------------------------------------------------------------------------
+ Finalize Aggregate  (cost=14212.19..14212.20 rows=1 width=16)
+   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=14210.17..14212.18 rows=3 width=16)
+         ->  Partial Aggregate  (cost=14210.17..14210.18 rows=1 width=16)
+               ->  Redistribute Motion 3:3  (slice2; segments: 3)  (cost=0.00..14140.33 rows=13967 width=12)
+                     Hash Key: a
+                     ->  Seq Scan on num_table  (cost=0.00..173.67 rows=13967 width=12)
+ Optimizer: Postgres query optimizer
+(7 rows)
+
+select count(distinct a), sum(b) from num_table;
+ count | sum 
+-------+-----
+     3 |   6
+(1 row)
+
+explain select count(distinct a), sum(b) from num_table group by id;
+                                             QUERY PLAN                                             
+----------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=10000001135.25..10000001944.92 rows=1000 width=20)
+   ->  GroupAggregate  (cost=10000001135.25..10000001278.25 rows=333 width=20)
+         Group Key: id
+         ->  Sort  (cost=1135.25..1170.17 rows=13967 width=16)
+               Sort Key: id
+               ->  Seq Scan on num_table  (cost=0.00..173.67 rows=13967 width=16)
+ Optimizer: Postgres query optimizer
+(7 rows)
+
+select count(distinct a), sum(b) from num_table group by id;
+ count | sum 
+-------+-----
+     1 |   1
+     1 |   2
+     1 |   3
+(3 rows)
+
+-- count(distinct a) is a simple aggregation
+-- sum(c) is a split aggregation
+-- Before the fix, the final aggregation of sum(c) was mistakenly
+-- treated as simple aggregation, and led to the missing 
+-- deserialization step in the aggregation execution prep
+-- Numeric aggregation serializes partial aggregation states
+-- The executor then evaluated the aggregation state without deserializing it first
+-- This led to the creation of garbage NaN count, and caused NaN output
+explain select count(distinct a), sum(c) from num_table;
+                                                 QUERY PLAN                                                  
+-------------------------------------------------------------------------------------------------------------
+ Finalize Aggregate  (cost=14212.20..14212.21 rows=1 width=40)
+   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=14210.17..14212.18 rows=3 width=40)
+         ->  Partial Aggregate  (cost=14210.17..14210.18 rows=1 width=40)
+               ->  Redistribute Motion 3:3  (slice2; segments: 3)  (cost=0.00..14140.33 rows=13967 width=40)
+                     Hash Key: a
+                     ->  Seq Scan on num_table  (cost=0.00..173.67 rows=13967 width=40)
+ Optimizer: Postgres query optimizer
+(7 rows)
+
+select count(distinct a), sum(c) from num_table;
+ count | sum 
+-------+-----
+     3 |   6
+(1 row)
+
+explain select id, count(distinct a), avg(b), sum(c) from num_table group by grouping sets ((id,c));
+                                             QUERY PLAN                                              
+-----------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=10000001135.25..10000004159.03 rows=4190 width=108)
+   ->  GroupAggregate  (cost=10000001135.25..10000001365.70 rows=1397 width=108)
+         Group Key: id, c
+         ->  Sort  (cost=1135.25..1170.17 rows=13967 width=48)
+               Sort Key: id, c
+               ->  Seq Scan on num_table  (cost=0.00..173.67 rows=13967 width=48)
+ Optimizer: Postgres query optimizer
+(7 rows)
+
+select id, count(distinct a), avg(b), sum(c) from num_table group by grouping sets ((id,c));
+ id | count |          avg           | sum 
+----+-------+------------------------+-----
+  1 |     1 | 1.00000000000000000000 |   1
+  2 |     1 |     2.0000000000000000 |   2
+  3 |     1 |     3.0000000000000000 |   3
+(3 rows)
+
+explain (verbose on, costs off) select count(distinct b) from num_table group by c;
+                                                        QUERY PLAN                                                         
+---------------------------------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Output: (count(b)), c
+   ->  HashAggregate
+         Output: count(b), c
+         Group Key: num_table.c
+         ->  HashAggregate
+               Output: c, b
+               Group Key: num_table.c, num_table.b
+               ->  Redistribute Motion 3:3  (slice2; segments: 3)
+                     Output: c, b
+                     Hash Key: c
+                     ->  Streaming HashAggregate
+                           Output: c, b
+                           Group Key: num_table.c, num_table.b
+                           ->  Seq Scan on public.num_table
+                                 Output: id, a, b, c
+ Optimizer: Postgres-based planner
+ Settings: enable_groupagg = 'off', gp_motion_cost_per_row = '1', optimizer = 'off', optimizer_force_multistage_agg = 'on'
+(18 rows)
+
+select count(distinct b) from num_table group by c;
+ count 
+-------
+     1
+     1
+     1
+(3 rows)
+
+reset optimizer_force_multistage_agg;
+-- DQA with Agg(Intermediate Agg)
+-- In PG optimizer Intermediate Agg have not support yet
+-- Current test cases will be changed after commit 971fa82(Support intermediate Agg in planner (#13959))
+set enable_hashagg=on;
+set enable_groupagg=off;
+create table dqa_f3(a int, b int, c int, d int, e int ) distributed by (a);
+insert into dqa_f3 select i % 17, i % 5 , i % 3, i %10, i % 7 from generate_series(1,1000) i;
+analyze dqa_f3;
+/*
+ * Test distinct or group by column is distributed key
+ *
+ * 1. If the input's locus matches the DISTINCT, but not GROUP BY:
+ *
+ *  HashAggregate
+ *     -> Redistribute (according to GROUP BY)
+ *         -> HashAggregate (to eliminate duplicates)
+ *             -> input (hashed by GROUP BY + DISTINCT)
+ *
+ * 2. If the input's locus matches the GROUP BY(don't care DISTINCT any more):
+ *
+ *  HashAggregate (to aggregate)
+ *     -> HashAggregate (to eliminate duplicates)
+ *           -> input (hashed by GROUP BY)
+ *
+ */
+explain (verbose on, costs off)select sum(Distinct a), count(b), sum(c) from dqa_f3 group by e;
+                                                             QUERY PLAN                                                             
+------------------------------------------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Output: (sum(DISTINCT a)), (count(b)), (sum(c)), e
+   ->  GroupAggregate
+         Output: sum(DISTINCT a), count(b), sum(c), e
+         Group Key: dqa_f3.e
+         ->  Sort
+               Output: e, a, b, c
+               Sort Key: dqa_f3.e, dqa_f3.a
+               ->  Redistribute Motion 3:3  (slice2; segments: 3)
+                     Output: e, a, b, c
+                     Hash Key: e
+                     ->  Seq Scan on public.dqa_f3
+                           Output: e, a, b, c
+ Settings: enable_groupagg = 'off', enable_hashagg = 'on', enable_parallel = 'off', gp_motion_cost_per_row = '2', optimizer = 'off'
+ Optimizer: Postgres query optimizer
+(15 rows)
+
+select sum(Distinct a), count(b), sum(c) from dqa_f3 group by e;
+ sum | count | sum 
+-----+-------+-----
+ 136 |   143 | 142
+ 136 |   143 | 143
+ 136 |   143 | 142
+ 136 |   143 | 143
+ 136 |   143 | 144
+ 136 |   142 | 142
+ 136 |   143 | 144
+(7 rows)
+
+explain (verbose on, costs off) select sum(Distinct e), count(b), sum(c) from dqa_f3 group by a;
+                                                             QUERY PLAN                                                             
+------------------------------------------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Output: (sum(DISTINCT e)), (count(b)), (sum(c)), a
+   ->  GroupAggregate
+         Output: sum(DISTINCT e), count(b), sum(c), a
+         Group Key: dqa_f3.a
+         ->  Sort
+               Output: a, e, b, c
+               Sort Key: dqa_f3.a, dqa_f3.e
+               ->  Seq Scan on public.dqa_f3
+                     Output: a, e, b, c
+ Settings: enable_groupagg = 'off', enable_hashagg = 'on', enable_parallel = 'off', gp_motion_cost_per_row = '2', optimizer = 'off'
+ Optimizer: Postgres query optimizer
+(12 rows)
+
+select sum(Distinct e), count(b), sum(c) from dqa_f3 group by a;
+ sum | count | sum 
+-----+-------+-----
+  21 |    58 |  59
+  21 |    59 |  58
+  21 |    58 |  57
+  21 |    59 |  59
+  21 |    59 |  58
+  21 |    59 |  59
+  21 |    59 |  58
+  21 |    59 |  60
+  21 |    58 |  58
+  21 |    59 |  60
+  21 |    59 |  60
+  21 |    59 |  58
+  21 |    59 |  58
+  21 |    59 |  59
+  21 |    59 |  60
+  21 |    59 |  59
+  21 |    59 |  60
+(17 rows)
+
+/*
+ *  Test both distinct and group by column are not distributed key 
+ *
+ *  HashAgg (to aggregate)
+ *     -> HashAgg (to eliminate duplicates)
+ *          -> Redistribute (according to GROUP BY)
+ *               -> Streaming HashAgg (to eliminate duplicates)
+ *                    -> input
+ *
+ */
+explain (verbose on, costs off) select sum(Distinct c), count(a), sum(d) from dqa_f3 group by b;
+                                                             QUERY PLAN                                                             
+------------------------------------------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Output: (sum(DISTINCT c)), (count(a)), (sum(d)), b
+   ->  GroupAggregate
+         Output: sum(DISTINCT c), count(a), sum(d), b
+         Group Key: dqa_f3.b
+         ->  Sort
+               Output: b, c, a, d
+               Sort Key: dqa_f3.b, dqa_f3.c
+               ->  Redistribute Motion 3:3  (slice2; segments: 3)
+                     Output: b, c, a, d
+                     Hash Key: b
+                     ->  Seq Scan on public.dqa_f3
+                           Output: b, c, a, d
+ Settings: enable_groupagg = 'off', enable_hashagg = 'on', enable_parallel = 'off', gp_motion_cost_per_row = '2', optimizer = 'off'
+ Optimizer: Postgres query optimizer
+(15 rows)
+
+select sum(Distinct c), count(a), sum(d) from dqa_f3 group by b;
+ sum | count | sum  
+-----+-------+------
+   3 |   200 | 1100
+   3 |   200 | 1300
+   3 |   200 |  900
+   3 |   200 |  500
+   3 |   200 |  700
+(5 rows)
+
+explain (verbose on, costs off) select sum(Distinct c), count(a), sum(d) from dqa_f3 group by b order by b;
+                                                             QUERY PLAN                                                             
+------------------------------------------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Output: (sum(DISTINCT c)), (count(a)), (sum(d)), b
+   Merge Key: b
+   ->  GroupAggregate
+         Output: sum(DISTINCT c), count(a), sum(d), b
+         Group Key: dqa_f3.b
+         ->  Sort
+               Output: b, c, a, d
+               Sort Key: dqa_f3.b, dqa_f3.c
+               ->  Redistribute Motion 3:3  (slice2; segments: 3)
+                     Output: b, c, a, d
+                     Hash Key: b
+                     ->  Seq Scan on public.dqa_f3
+                           Output: b, c, a, d
+ Settings: enable_groupagg = 'off', enable_hashagg = 'on', enable_parallel = 'off', gp_motion_cost_per_row = '2', optimizer = 'off'
+ Optimizer: Postgres query optimizer
+(16 rows)
+
+select sum(Distinct c), count(a), sum(d) from dqa_f3 group by b order by b;
+ sum | count | sum  
+-----+-------+------
+   3 |   200 |  500
+   3 |   200 |  700
+   3 |   200 |  900
+   3 |   200 | 1100
+   3 |   200 | 1300
+(5 rows)
+
+explain (verbose on, costs off) select distinct sum(Distinct c), count(a), sum(d) from dqa_f3 group by b;
+                                                             QUERY PLAN                                                             
+------------------------------------------------------------------------------------------------------------------------------------
+ HashAggregate
+   Output: (sum(DISTINCT c)), (count(a)), (sum(d)), b
+   Group Key: (sum(DISTINCT dqa_f3.c)), (count(dqa_f3.a)), (sum(dqa_f3.d))
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         Output: (sum(DISTINCT c)), (count(a)), (sum(d)), b
+         ->  HashAggregate
+               Output: (sum(DISTINCT c)), (count(a)), (sum(d)), b
+               Group Key: sum(DISTINCT dqa_f3.c), count(dqa_f3.a), sum(dqa_f3.d)
+               ->  GroupAggregate
+                     Output: sum(DISTINCT c), count(a), sum(d), b
+                     Group Key: dqa_f3.b
+                     ->  Sort
+                           Output: b, c, a, d
+                           Sort Key: dqa_f3.b, dqa_f3.c
+                           ->  Redistribute Motion 3:3  (slice2; segments: 3)
+                                 Output: b, c, a, d
+                                 Hash Key: b
+                                 ->  Seq Scan on public.dqa_f3
+                                       Output: b, c, a, d
+ Settings: enable_groupagg = 'off', enable_hashagg = 'on', enable_parallel = 'off', gp_motion_cost_per_row = '2', optimizer = 'off'
+ Optimizer: Postgres query optimizer
+(21 rows)
+
+select distinct sum(Distinct c), count(a), sum(d) from dqa_f3 group by b;
+ sum | count | sum  
+-----+-------+------
+   3 |   200 |  500
+   3 |   200 |  900
+   3 |   200 |  700
+   3 |   200 | 1100
+   3 |   200 | 1300
+(5 rows)
+
+explain (verbose on, costs off) select sum(Distinct c), count(a), sum(d) from dqa_f3 group by b having avg(e) > 3;
+                                                             QUERY PLAN                                                             
+------------------------------------------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Output: (sum(DISTINCT c)), (count(a)), (sum(d)), b
+   ->  GroupAggregate
+         Output: sum(DISTINCT c), count(a), sum(d), b
+         Group Key: dqa_f3.b
+         Filter: (avg(dqa_f3.e) > '3'::numeric)
+         ->  Sort
+               Output: b, c, a, d, e
+               Sort Key: dqa_f3.b, dqa_f3.c
+               ->  Redistribute Motion 3:3  (slice2; segments: 3)
+                     Output: b, c, a, d, e
+                     Hash Key: b
+                     ->  Seq Scan on public.dqa_f3
+                           Output: b, c, a, d, e
+ Settings: enable_groupagg = 'off', enable_hashagg = 'on', enable_parallel = 'off', gp_motion_cost_per_row = '2', optimizer = 'off'
+ Optimizer: Postgres query optimizer
+(16 rows)
+
+select sum(Distinct c), count(a), sum(d) from dqa_f3 group by b having avg(e) > 3;
+ sum | count | sum  
+-----+-------+------
+   3 |   200 | 1100
+   3 |   200 |  500
+   3 |   200 |  700
+(3 rows)
+
+-- flaky tests
+-- explain (verbose on, costs off)
+-- select sum(Distinct sub.c), count(a), sum(d)
+--             from dqa_f3 left join(select x, coalesce(y, 5) as c from dqa_f2) as sub
+--             on sub.x = dqa_f3.e group by b;
+-- select sum(Distinct sub.c), count(a), sum(d)
+--             from dqa_f3 left join(select x, coalesce(y, 5) as c from dqa_f2) as sub
+--             on sub.x = dqa_f3.e group by b;
+-- Test gp_enable_agg_distinct_pruning is off on this branch
+set gp_enable_agg_distinct_pruning = off;
+explain (verbose on, costs off) select sum(Distinct c), count(a), sum(d) from dqa_f3 group by b;
+                                                                                 QUERY PLAN                                                                                 
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Output: (sum(DISTINCT c)), (count(a)), (sum(d)), b
+   ->  GroupAggregate
+         Output: sum(DISTINCT c), count(a), sum(d), b
+         Group Key: dqa_f3.b
+         ->  Sort
+               Output: b, c, a, d
+               Sort Key: dqa_f3.b, dqa_f3.c
+               ->  Redistribute Motion 3:3  (slice2; segments: 3)
+                     Output: b, c, a, d
+                     Hash Key: b
+                     ->  Seq Scan on public.dqa_f3
+                           Output: b, c, a, d
+ Settings: enable_groupagg = 'off', enable_hashagg = 'on', enable_parallel = 'off', gp_enable_agg_distinct_pruning = 'off', gp_motion_cost_per_row = '2', optimizer = 'off'
+ Optimizer: Postgres query optimizer
+(15 rows)
+
+select sum(Distinct c), count(a), sum(d) from dqa_f3 group by b;
+ sum | count | sum  
+-----+-------+------
+   3 |   200 |  500
+   3 |   200 |  700
+   3 |   200 | 1100
+   3 |   200 | 1300
+   3 |   200 |  900
+(5 rows)
+
+reset gp_enable_agg_distinct_pruning;
+/*
+ * Test multistage through Gather Motion(grouplocus cannot hashed or not exist)
+ *
+ *  Finalize Aggregate
+ *     -> Gather Motion
+ *          -> Partial Aggregate
+ *              -> HashAggregate, to remove duplicates
+ *                  -> Redistribute Motion (according to DISTINCT arg)
+ *                      -> Streaming HashAgg (to eliminate duplicates)
+ *                          -> input
+ */
+explain (verbose on, costs off) select sum(Distinct b), count(c), sum(a) from dqa_f3;
+                                                             QUERY PLAN                                                             
+------------------------------------------------------------------------------------------------------------------------------------
+ Finalize Aggregate
+   Output: sum(DISTINCT b), count(c), sum(a)
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         Output: (PARTIAL sum(DISTINCT b)), (PARTIAL count(c)), (PARTIAL sum(a))
+         ->  Partial Aggregate
+               Output: PARTIAL sum(DISTINCT b), PARTIAL count(c), PARTIAL sum(a)
+               ->  Redistribute Motion 3:3  (slice2; segments: 3)
+                     Output: b, c, a
+                     Hash Key: b
+                     ->  Seq Scan on public.dqa_f3
+                           Output: b, c, a
+ Settings: enable_groupagg = 'off', enable_hashagg = 'on', enable_parallel = 'off', gp_motion_cost_per_row = '2', optimizer = 'off'
+ Optimizer: Postgres query optimizer
+(13 rows)
+
+select sum(Distinct b), count(c), sum(a) from dqa_f3;
+ sum | count | sum  
+-----+-------+------
+  10 |  1000 | 7993
+(1 row)
+
+explain (verbose on, costs off) select distinct sum(Distinct b), count(c), sum(a) from dqa_f3;
+                                                             QUERY PLAN                                                             
+------------------------------------------------------------------------------------------------------------------------------------
+ Finalize Aggregate
+   Output: sum(DISTINCT b), count(c), sum(a)
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         Output: (PARTIAL sum(DISTINCT b)), (PARTIAL count(c)), (PARTIAL sum(a))
+         ->  Partial Aggregate
+               Output: PARTIAL sum(DISTINCT b), PARTIAL count(c), PARTIAL sum(a)
+               ->  Redistribute Motion 3:3  (slice2; segments: 3)
+                     Output: b, c, a
+                     Hash Key: b
+                     ->  Seq Scan on public.dqa_f3
+                           Output: b, c, a
+ Settings: enable_groupagg = 'off', enable_hashagg = 'on', enable_parallel = 'off', gp_motion_cost_per_row = '2', optimizer = 'off'
+ Optimizer: Postgres query optimizer
+(13 rows)
+
+select distinct sum(Distinct b), count(c), sum(a) from dqa_f3;
+ sum | count | sum  
+-----+-------+------
+  10 |  1000 | 7993
+(1 row)
+
+explain (verbose on, costs off) select sum(Distinct b), count(c) filter(where c > 1), sum(a) from dqa_f3;
+                                                             QUERY PLAN                                                             
+------------------------------------------------------------------------------------------------------------------------------------
+ Finalize Aggregate
+   Output: sum(DISTINCT b), count(c) FILTER (WHERE (c > 1)), sum(a)
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         Output: (PARTIAL sum(DISTINCT b)), (PARTIAL count(c) FILTER (WHERE (c > 1))), (PARTIAL sum(a))
+         ->  Partial Aggregate
+               Output: PARTIAL sum(DISTINCT b), PARTIAL count(c) FILTER (WHERE (c > 1)), PARTIAL sum(a)
+               ->  Redistribute Motion 3:3  (slice2; segments: 3)
+                     Output: b, c, a
+                     Hash Key: b
+                     ->  Seq Scan on public.dqa_f3
+                           Output: b, c, a
+ Settings: enable_groupagg = 'off', enable_hashagg = 'on', enable_parallel = 'off', gp_motion_cost_per_row = '2', optimizer = 'off'
+ Optimizer: Postgres query optimizer
+(13 rows)
+
+select sum(Distinct b), count(c) filter(where c > 1), sum(a) from dqa_f3;
+ sum | count | sum  
+-----+-------+------
+  10 |   333 | 7993
+(1 row)
+
+drop table dqa_f3;
+-- Test some corner case of dqa ex.NULL
+create table dqa_f4(a int, b int, c int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+insert into dqa_f4 values(null, null, null);
+insert into dqa_f4 values(1, 1, 1);
+insert into dqa_f4 values(2, 2, 2);
+select count(distinct a), count(distinct b) from dqa_f4 group by c;
+ count | count 
+-------+-------
+     0 |     0
+     1 |     1
+     1 |     1
+(3 rows)
+
+set optimizer_enable_multiple_distinct_aggs=on;
+explain (verbose on, costs off) select count(distinct a), count(distinct b) from dqa_f4 group by c;
+                                                             QUERY PLAN                                                             
+------------------------------------------------------------------------------------------------------------------------------------
+ Finalize HashAggregate
+   Output: count(a), count(b), c
+   Group Key: dqa_f4.c
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         Output: c, (PARTIAL count(a)), (PARTIAL count(b))
+         ->  Partial HashAggregate
+               Output: c, PARTIAL count(a), PARTIAL count(b)
+               Group Key: dqa_f4.c
+               ->  HashAggregate
+                     Output: c, a, b, (AggExprId)
+                     Group Key: (AggExprId), dqa_f4.a, dqa_f4.b, dqa_f4.c
+                     ->  Redistribute Motion 3:3  (slice2; segments: 3)
+                           Output: c, a, b, (AggExprId)
+                           Hash Key: c, a, b, (AggExprId)
+                           ->  Streaming HashAggregate
+                                 Output: c, a, b, (AggExprId)
+                                 Group Key: AggExprId, dqa_f4.a, dqa_f4.b, dqa_f4.c
+                                 ->  TupleSplit
+                                       Output: c, a, b, AggExprId
+                                       Split by Col: (dqa_f4.a), (dqa_f4.b)
+                                       Group Key: dqa_f4.c
+                                       ->  Seq Scan on public.dqa_f4
+                                             Output: a, b, c
+ Optimizer: Postgres query optimizer
+ Settings: enable_groupagg = 'off', gp_motion_cost_per_row = '1', optimizer = 'off', optimizer_enable_multiple_distinct_aggs = 'on'
+(25 rows)
+
+select count(distinct a), count(distinct b) from dqa_f4 group by c;
+ count | count 
+-------+-------
+     0 |     0
+     1 |     1
+     1 |     1
+(3 rows)
+
+reset optimizer_enable_multiple_distinct_aggs;
+drop table dqa_f4;

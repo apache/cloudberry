@@ -56,7 +56,7 @@ select * from (select * from tenk1 order by four) t order by four, ten;
                Sort Key: tenk1.four
                ->  Seq Scan on tenk1
  Optimizer: Postgres query optimizer
-(8 rows)
+(9 rows)
 
 reset planner_work_mem;
 create table t(a integer, b integer);
@@ -1618,7 +1618,8 @@ explain (costs off) select distinct a,b from t;
          ->  Sort
                Sort Key: a, b
                ->  Seq Scan on t
-(7 rows)
+ Optimizer: Postgres query optimizer
+(8 rows)
 
 drop table t;
 -- Sort pushdown can't go below where expressions are part of the rel target.
@@ -1632,11 +1633,6 @@ set parallel_tuple_cost=0;
 set parallel_setup_cost=0;
 set min_parallel_table_scan_size = 0;
 set min_parallel_index_scan_size = 0;
--- The execution plan of pax will be inaccurate if it involves bitmap heap scan.
--- This depends on the fact that the pg cost estimate will be calculated based on page
--- but pax cannot give an accurate number of pages.
-set enable_bitmapscan=off;
-set optimizer_enable_bitmapscan=off;
 -- Parallel sort below join.
 explain (costs off) select distinct sub.unique1, stringu1
 from tenk1, lateral (select tenk1.unique1 from generate_series(1, 1000)) as sub;
@@ -1708,8 +1704,8 @@ from tenk1 t1
 join tenk1 t2 on t1.unique1 = t2.unique2
 join tenk1 t3 on t2.unique1 = t3.unique1
 order by count(*);
-                                      QUERY PLAN                                      
---------------------------------------------------------------------------------------
+                                        QUERY PLAN                                         
+-------------------------------------------------------------------------------------------
  Finalize Aggregate
    ->  Gather Motion 3:1  (slice1; segments: 3)
          ->  Partial Aggregate
@@ -1718,10 +1714,10 @@ order by count(*);
                      ->  Redistribute Motion 3:3  (slice2; segments: 3)
                            Hash Key: t2.unique2
                            ->  Hash Join
-                                 Hash Cond: (t3.unique1 = t2.unique1)
-                                 ->  Index Only Scan using tenk1_unique1 on tenk1 t3
+                                 Hash Cond: (t2.unique1 = t3.unique1)
+                                 ->  Index Scan using tenk1_unique2 on tenk1 t2
                                  ->  Hash
-                                       ->  Index Scan using tenk1_unique2 on tenk1 t2
+                                       ->  Index Only Scan using tenk1_unique1 on tenk1 t3
                      ->  Hash
                            ->  Index Only Scan using tenk1_unique1 on tenk1 t1
  Optimizer: Postgres query optimizer
@@ -1796,8 +1792,8 @@ from tenk1, lateral (select tenk1.unique1 from generate_series(1, 1000)) as sub;
 explain (costs off) select sub.unique1, stringu1 || random()::text
 from tenk1, lateral (select tenk1.unique1 from generate_series(1, 1000)) as sub
 order by 1, 2;
-                                         QUERY PLAN                                          
----------------------------------------------------------------------------------------------
+                                      QUERY PLAN                                       
+---------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    Merge Key: tenk1.unique1, (((tenk1.stringu1)::text || (random())::text))
    ->  Sort
@@ -1808,18 +1804,3 @@ order by 1, 2;
  Optimizer: Postgres query optimizer
 (8 rows)
 
--- Disallow pushing down sort when pathkey is an SRF.
-explain (costs off) select unique1 from tenk1 order by unnest('{1,2}'::int[]);
-                           QUERY PLAN                           
-----------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)
-   Merge Key: (unnest('{1,2}'::anyarray))
-   ->  Sort
-         Sort Key: (unnest('{1,2}'::anyarray))
-         ->  ProjectSet
-               ->  Index Only Scan using tenk1_unique1 on tenk1
- Optimizer: Postgres query optimizer
-(7 rows)
-
-reset enable_bitmapscan;
-reset optimizer_enable_bitmapscan;

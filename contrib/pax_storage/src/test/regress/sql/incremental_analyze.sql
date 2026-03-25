@@ -14,7 +14,6 @@ ALTER DATABASE incrementalanalyze SET lc_monetary TO 'C';
 \c incrementalanalyze
 DROP SCHEMA IF EXISTS incremental_analyze;
 CREATE SCHEMA incremental_analyze;
-set pax_enable_debug = false;
 -- end_ignore
 -- Test ANALYZE for different data types
 -- Case 1: Partitions have MCVs but after merge, none of the partition MCVs 

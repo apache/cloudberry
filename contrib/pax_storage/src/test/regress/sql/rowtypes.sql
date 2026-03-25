@@ -41,6 +41,18 @@ select '[]'::fullname;          -- bad
 select ' (Joe,Blow)  '::fullname;  -- ok, extra whitespace
 select '(Joe,Blow) /'::fullname;  -- bad
 
+-- test non-error-throwing API
+-- MERGE16_FIXME: 
+-- The greenplum implement complex type by itself, postgres implement
+-- it now. should we use the complex type implemented by postgres.
+-- start_ignore
+SELECT pg_input_is_valid('(1,2)', 'complex');
+SELECT pg_input_is_valid('(1,2', 'complex');
+SELECT pg_input_is_valid('(1,zed)', 'complex');
+SELECT * FROM pg_input_error_info('(1,zed)', 'complex');
+SELECT * FROM pg_input_error_info('(1,1e400)', 'complex');
+-- end_ignore
+
 create temp table quadtable(f1 int, q quad);
 
 insert into quadtable values (1, ((3.3,4.4),(5.5,6.6)));
@@ -87,6 +99,11 @@ create temp table pp (f1 text);
 insert into pp values (repeat('abcdefghijkl', 100000));
 
 insert into people select ('Jim', f1, null)::fullname, current_date from pp;
+
+select (fn).first, substr((fn).last, 1, 20), length((fn).last) from people;
+
+-- try an update on a toasted composite value, too
+update people set fn.first = 'Jack';
 
 select (fn).first, substr((fn).last, 1, 20), length((fn).last) from people;
 
@@ -353,11 +370,10 @@ $$ LANGUAGE SQL;
 
 insert into price values (1,false,42), (10,false,100), (11,true,17.99);
 
--- Known bug in cbdb
--- UPDATE price
---     SET active = true, price = input_prices.price
---     FROM unnest(ARRAY[(10, 123.00), (11, 99.99)]::price_input[]) input_prices
---     WHERE price_key_from_table(price.*) = price_key_from_input(input_prices.*);
+UPDATE price
+    SET active = true, price = input_prices.price
+    FROM unnest(ARRAY[(10, 123.00), (11, 99.99)]::price_input[]) input_prices
+    WHERE price_key_from_table(price.*) = price_key_from_input(input_prices.*);
 
 select * from price;
 
@@ -497,6 +513,52 @@ with r(a,b) as materialized
           (null,row(1,2)), (null,row(null,null)), (null,null) )
 select r, r is null as isnull, r is not null as isnotnull from r;
 
+--
+-- Check parsing of indirect references to composite values (bug #18077)
+--
+explain (verbose, costs off)
+with cte(c) as materialized (select row(1, 2)),
+     cte2(c) as (select * from cte)
+select * from cte2 as t
+where (select * from (select c as c1) s
+       where (select (c1).f1 > 0)) is not null;
+
+with cte(c) as materialized (select row(1, 2)),
+     cte2(c) as (select * from cte)
+select * from cte2 as t
+where (select * from (select c as c1) s
+       where (select (c1).f1 > 0)) is not null;
+
+-- Also check deparsing of such cases
+create view composite_v as
+with cte(c) as materialized (select row(1, 2)),
+     cte2(c) as (select * from cte)
+select 1 as one from cte2 as t
+where (select * from (select c as c1) s
+       where (select (c1).f1 > 0)) is not null;
+select pg_get_viewdef('composite_v', true);
+drop view composite_v;
+
+--
+-- Check cases where the composite comes from a proven-dummy rel (bug #18576)
+--
+explain (verbose, costs off)
+select (ss.a).x, (ss.a).n from
+  (select information_schema._pg_expandarray(array[1,2]) AS a) ss;
+explain (verbose, costs off)
+select (ss.a).x, (ss.a).n from
+  (select information_schema._pg_expandarray(array[1,2]) AS a) ss
+where false;
+
+explain (verbose, costs off)
+with cte(c) as materialized (select row(1, 2)),
+     cte2(c) as (select * from cte)
+select (c).f1 from cte2 as t;
+explain (verbose, costs off)
+with cte(c) as materialized (select row(1, 2)),
+     cte2(c) as (select * from cte)
+select (c).f1 from cte2 as t
+where false;
 
 --
 -- Tests for component access / FieldSelect

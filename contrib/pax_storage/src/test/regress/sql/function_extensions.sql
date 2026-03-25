@@ -268,17 +268,14 @@ SELECT trigger_unique();
 
 -- Helper function to count the number of temporary files in
 -- pgsql_tmp.
-CREATE or replace FUNCTION get_temp_file_num() returns text as
+CREATE or replace FUNCTION get_temp_file_num() returns int as
 $$
 import os
 fileNum = 0
-dirNum = 0
 for root, directories, filenames in os.walk('base/pgsql_tmp'):
   for filename in filenames:
     fileNum += 1
-  for dir in directories:
-    dirNum += 1
-return '{} files and {} directories'.format(fileNum, dirNum)
+return fileNum
 $$ language plpython3u;
 
 CREATE OR REPLACE FUNCTION get_country()
@@ -307,7 +304,9 @@ AS $$
 LANGUAGE 'plpgsql' EXECUTE ON INITPLAN;
 
 -- Temp file number before running INITPLAN function
-SELECT get_temp_file_num();
+SELECT get_temp_file_num() AS num_temp_files_before
+\gset
+
 SELECT * FROM get_country();
 SELECT get_country();
 
@@ -363,10 +362,12 @@ SELECT count(*) FROM t3_function_scan;
 DROP TABLE IF EXISTS t4_function_scan;
 CREATE TABLE t4_function_scan AS SELECT 444, (1 / (0* random()))::text UNION ALL SELECT * FROM get_country();
 
--- Temp file number after running INITPLAN function. All the files should've
--- been cleaned up, but it's normal that the temp directory to hold them is
--- still around.
-SELECT get_temp_file_num();
+-- Temp file number after running INITPLAN function. All the files generated during this time should've
+-- been cleaned up, so the number of files should not be more than previously (it could be less, if some
+-- existing temp file happens to be cleaned up at the same time).
+SELECT get_temp_file_num() AS num_temp_files_after
+\gset
+SELECT :num_temp_files_before >= :num_temp_files_after;
 
 -- test join case with two INITPLAN functions
 DROP TABLE IF EXISTS t5_function_scan;
@@ -381,3 +382,16 @@ SELECT count(*) FROM t6_function_scan;
 DROP TABLE IF EXISTS t7_function_scan;
 CREATE TABLE t7_function_scan AS SELECT * FROM  get_country() UNION ALL SELECT 100/(1+ 1* random())::int, 'cc'::text;
 SELECT count(*) FROM t7_function_scan;
+
+-- Test INITPLAN functions in INITPLAN
+-- more details could be found at https://github.com/greenplum-db/gpdb/issues/16679
+create or replace function hello_initplan() returns setof text as $$
+return ["hello"]
+$$ language plpython3u
+execute on initplan;
+
+explain select array(select f from hello_initplan() as f);
+select array(select f from hello_initplan() as f);
+
+
+

@@ -833,6 +833,31 @@ SELECT i as pow,
 	round((2.5 * 10 ^ i)::numeric, -i)
 FROM generate_series(-5,5) AS t(i);
 
+-- Check limits of rounding before the decimal point
+SELECT round(4.4e131071, -131071) = 4e131071;
+SELECT round(4.5e131071, -131071) = 5e131071;
+SELECT round(4.5e131071, -131072); -- loses all digits
+SELECT round(5.5e131071, -131072); -- rounds up and overflows
+SELECT round(5.5e131071, -131073); -- loses all digits
+SELECT round(5.5e131071, -1000000); -- loses all digits
+
+-- Check limits of rounding after the decimal point
+SELECT round(5e-16383, 1000000) = 5e-16383;
+SELECT round(5e-16383, 16383) = 5e-16383;
+SELECT round(5e-16383, 16382) = 1e-16382;
+SELECT round(5e-16383, 16381) = 0;
+
+-- Check limits of trunc() before the decimal point
+SELECT trunc(9.9e131071, -131071) = 9e131071;
+SELECT trunc(9.9e131071, -131072); -- loses all digits
+SELECT trunc(9.9e131071, -131073);  -- loses all digits
+SELECT trunc(9.9e131071, -1000000);  -- loses all digits
+
+-- Check limits of trunc() after the decimal point
+SELECT trunc(5e-16383, 1000000) = 5e-16383;
+SELECT trunc(5e-16383, 16383) = 5e-16383;
+SELECT trunc(5e-16383, 16382) = 0;
+
 -- Testing for width_bucket(). For convenience, we test both the
 -- numeric and float8 versions of the function in this file.
 
@@ -909,6 +934,33 @@ FROM generate_series(0, 110, 10) x;
 SELECT x, width_bucket(x::float8, 100, 10, 9) as flt,
        width_bucket(x::numeric, 100, 10, 9) as num
 FROM generate_series(0, 110, 10) x;
+-- Another roundoff-error hazard
+SELECT width_bucket(0, -1e100::numeric, 1, 10);
+SELECT width_bucket(0, -1e100::float8, 1, 10);
+SELECT width_bucket(1, 1e100::numeric, 0, 10);
+SELECT width_bucket(1, 1e100::float8, 0, 10);
+
+-- Check cases that could trigger overflow or underflow within the calculation
+SELECT oper, low, high, cnt, width_bucket(oper, low, high, cnt)
+FROM
+  (SELECT 1.797e+308::float8 AS big, 5e-324::float8 AS tiny) as v,
+  LATERAL (VALUES
+    (10.5::float8, -big, big, 1),
+    (10.5::float8, -big, big, 2),
+    (10.5::float8, -big, big, 3),
+    (big / 4, -big / 2, big / 2, 10),
+    (10.5::float8, big, -big, 1),
+    (10.5::float8, big, -big, 2),
+    (10.5::float8, big, -big, 3),
+    (big / 4, big / 2, -big / 2, 10),
+    (0, 0, tiny, 4),
+    (tiny, 0, tiny, 4),
+    (0, 0, 1, 2147483647),
+    (1, 1, 0, 2147483647)
+  ) as sample(oper, low, high, cnt);
+-- These fail because the result would be out of int32 range:
+SELECT width_bucket(1::float8, 0, 1, 2147483647);
+SELECT width_bucket(0::float8, 1, 0, 2147483647);
 
 --
 -- TO_CHAR()
@@ -979,6 +1031,7 @@ FROM v;
 SELECT to_char('100'::numeric, 'FM999.9');
 SELECT to_char('100'::numeric, 'FM999.');
 SELECT to_char('100'::numeric, 'FM999');
+SELECT to_char('12345678901'::float8, 'FM9999999999D9999900000000000000000');
 
 -- Check parsing of literal text in a format string
 SELECT to_char('100'::numeric, 'foo999');
@@ -1039,6 +1092,17 @@ INSERT INTO num_input_test(n1) VALUES (' -inf ');
 INSERT INTO num_input_test(n1) VALUES (' Infinity ');
 INSERT INTO num_input_test(n1) VALUES (' +inFinity ');
 INSERT INTO num_input_test(n1) VALUES (' -INFINITY ');
+INSERT INTO num_input_test(n1) VALUES ('12_000_000_000');
+INSERT INTO num_input_test(n1) VALUES ('12_000.123_456');
+INSERT INTO num_input_test(n1) VALUES ('23_000_000_000e-1_0');
+INSERT INTO num_input_test(n1) VALUES ('.000_000_000_123e1_0');
+INSERT INTO num_input_test(n1) VALUES ('.000_000_000_123e+1_1');
+INSERT INTO num_input_test(n1) VALUES ('0b10001110111100111100001001010');
+INSERT INTO num_input_test(n1) VALUES ('  -0B_1010_1011_0101_0100_1010_1001_1000_1100_1110_1011_0001_1111_0000_1010_1101_0010  ');
+INSERT INTO num_input_test(n1) VALUES ('  +0o112402761777 ');
+INSERT INTO num_input_test(n1) VALUES ('-0O0012_5524_5230_6334_3167_0261');
+INSERT INTO num_input_test(n1) VALUES ('-0x0000000000000000000000000deadbeef');
+INSERT INTO num_input_test(n1) VALUES (' 0X_30b1_F33a_6DF0_bD4E_64DF_9BdA_7D15 ');
 
 -- bad inputs
 INSERT INTO num_input_test(n1) VALUES ('     ');
@@ -1049,9 +1113,71 @@ INSERT INTO num_input_test(n1) VALUES ('5 . 0');
 INSERT INTO num_input_test(n1) VALUES ('5. 0   ');
 INSERT INTO num_input_test(n1) VALUES ('');
 INSERT INTO num_input_test(n1) VALUES (' N aN ');
+INSERT INTO num_input_test(n1) VALUES ('+NaN');
+INSERT INTO num_input_test(n1) VALUES ('-NaN');
 INSERT INTO num_input_test(n1) VALUES ('+ infinity');
+INSERT INTO num_input_test(n1) VALUES ('_123');
+INSERT INTO num_input_test(n1) VALUES ('123_');
+INSERT INTO num_input_test(n1) VALUES ('12__34');
+INSERT INTO num_input_test(n1) VALUES ('123_.456');
+INSERT INTO num_input_test(n1) VALUES ('123._456');
+INSERT INTO num_input_test(n1) VALUES ('1.2e_34');
+INSERT INTO num_input_test(n1) VALUES ('1.2e34_');
+INSERT INTO num_input_test(n1) VALUES ('1.2e3__4');
+INSERT INTO num_input_test(n1) VALUES ('0b1112');
+INSERT INTO num_input_test(n1) VALUES ('0c1112');
+INSERT INTO num_input_test(n1) VALUES ('0o12345678');
+INSERT INTO num_input_test(n1) VALUES ('0x1eg');
+INSERT INTO num_input_test(n1) VALUES ('0x12.34');
+INSERT INTO num_input_test(n1) VALUES ('0x__1234');
+INSERT INTO num_input_test(n1) VALUES ('0x1234_');
+INSERT INTO num_input_test(n1) VALUES ('0x12__34');
 
 SELECT * FROM num_input_test;
+
+-- Also try it with non-error-throwing API
+SELECT pg_input_is_valid('34.5', 'numeric');
+SELECT pg_input_is_valid('34xyz', 'numeric');
+SELECT pg_input_is_valid('1e400000', 'numeric');
+SELECT * FROM pg_input_error_info('1e400000', 'numeric');
+SELECT pg_input_is_valid('1234.567', 'numeric(8,4)');
+SELECT pg_input_is_valid('1234.567', 'numeric(7,4)');
+SELECT * FROM pg_input_error_info('1234.567', 'numeric(7,4)');
+SELECT * FROM pg_input_error_info('0x1234.567', 'numeric');
+
+--
+-- Test precision and scale typemods
+--
+
+CREATE TABLE num_typemod_test (
+  millions numeric(3, -6),
+  thousands numeric(3, -3),
+  units numeric(3, 0),
+  thousandths numeric(3, 3),
+  millionths numeric(3, 6)
+);
+\d num_typemod_test
+
+-- rounding of valid inputs
+INSERT INTO num_typemod_test VALUES (123456, 123, 0.123, 0.000123, 0.000000123);
+INSERT INTO num_typemod_test VALUES (654321, 654, 0.654, 0.000654, 0.000000654);
+INSERT INTO num_typemod_test VALUES (2345678, 2345, 2.345, 0.002345, 0.000002345);
+INSERT INTO num_typemod_test VALUES (7654321, 7654, 7.654, 0.007654, 0.000007654);
+INSERT INTO num_typemod_test VALUES (12345678, 12345, 12.345, 0.012345, 0.000012345);
+INSERT INTO num_typemod_test VALUES (87654321, 87654, 87.654, 0.087654, 0.000087654);
+INSERT INTO num_typemod_test VALUES (123456789, 123456, 123.456, 0.123456, 0.000123456);
+INSERT INTO num_typemod_test VALUES (987654321, 987654, 987.654, 0.987654, 0.000987654);
+INSERT INTO num_typemod_test VALUES ('NaN', 'NaN', 'NaN', 'NaN', 'NaN');
+
+SELECT scale(millions), * FROM num_typemod_test ORDER BY millions;
+
+-- invalid inputs
+INSERT INTO num_typemod_test (millions) VALUES ('inf');
+INSERT INTO num_typemod_test (millions) VALUES (999500000);
+INSERT INTO num_typemod_test (thousands) VALUES (999500);
+INSERT INTO num_typemod_test (units) VALUES (999.5);
+INSERT INTO num_typemod_test (thousandths) VALUES (0.9995);
+INSERT INTO num_typemod_test (millionths) VALUES (0.0009995);
 
 --
 -- Test some corner cases for multiplication
@@ -1108,8 +1234,8 @@ select 10.0 ^ 2147483647 as overflows;
 select 117743296169.0 ^ 1000000000 as overflows;
 
 -- cases that used to return inaccurate results
-select 3.789 ^ 21;
-select 3.789 ^ 35;
+select 3.789 ^ 21.0000000000000000;
+select 3.789 ^ 35.0000000000000000;
 select 1.2 ^ 345;
 select 0.12 ^ (-20);
 select 1.000000000123 ^ (-2147483648);
@@ -1127,6 +1253,10 @@ select (-1.0) ^ 2147483647;
 select (-1.0) ^ 2147483648;
 select (-1.0) ^ 1000000000000000;
 select (-1.0) ^ 1000000000000001;
+
+-- integer powers of 10
+select n, 10.0 ^ n as "10^n", (10.0 ^ n) * (10.0 ^ (-n)) = 1 as ok
+from generate_series(-20, 20) n;
 
 --
 -- Tests for raising to non-integer powers
@@ -1311,6 +1441,42 @@ select trim_scale(1e100);
 -- cases that need carry propagation
 SELECT SUM(9999::numeric) FROM generate_series(1, 100000);
 SELECT SUM((-9999)::numeric) FROM generate_series(1, 100000);
+
+--
+-- Tests for VARIANCE()
+--
+CREATE TABLE num_variance (a numeric);
+INSERT INTO num_variance VALUES (0);
+INSERT INTO num_variance VALUES (3e-500);
+INSERT INTO num_variance VALUES (-3e-500);
+INSERT INTO num_variance VALUES (4e-500 - 1e-16383);
+INSERT INTO num_variance VALUES (-4e-500 + 1e-16383);
+
+-- variance is just under 12.5e-1000 and so should round down to 12e-1000
+SELECT trim_scale(variance(a) * 1e1000) FROM num_variance;
+
+-- check that parallel execution produces the same result
+BEGIN;
+ALTER TABLE num_variance SET (parallel_workers = 4);
+SET LOCAL parallel_setup_cost = 0;
+SET LOCAL max_parallel_workers_per_gather = 4;
+SELECT trim_scale(variance(a) * 1e1000) FROM num_variance;
+ROLLBACK;
+
+-- case where sum of squares would overflow but variance does not
+DELETE FROM num_variance;
+INSERT INTO num_variance SELECT 9e131071 + x FROM generate_series(1, 5) x;
+SELECT variance(a) FROM num_variance;
+
+-- check that parallel execution produces the same result
+BEGIN;
+ALTER TABLE num_variance SET (parallel_workers = 4);
+SET LOCAL parallel_setup_cost = 0;
+SET LOCAL max_parallel_workers_per_gather = 4;
+SELECT variance(a) FROM num_variance;
+ROLLBACK;
+
+DROP TABLE num_variance;
 
 --
 -- Tests for GCD()

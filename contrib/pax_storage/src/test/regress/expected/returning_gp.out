@@ -71,7 +71,11 @@ update returning_parttab set partkey = 18 where partkey = 4 returning *;
 
 -- delete
 delete from returning_parttab where partkey = 14 returning *;
-ERROR:  not implemented yet on pax relations: TupleFetchRowVersion
+ distkey | partkey |    t     
+---------+---------+----------
+       2 |      14 | multi2 4
+(1 row)
+
 -- Check table contents, to be sure that all the commands did what they claimed.
 select * from returning_parttab;
  distkey | partkey |       t        
@@ -85,10 +89,9 @@ select * from returning_parttab;
        1 |      10 | single2 insert
        2 |      11 | multi2 1
        2 |      12 | multi2 2
-       2 |      14 | multi2 4
        2 |      15 | multi2 5
        2 |      19 | multi2 3
-(12 rows)
+(11 rows)
 
 --
 -- DELETE RETURNING is currently not supported on AO tables.

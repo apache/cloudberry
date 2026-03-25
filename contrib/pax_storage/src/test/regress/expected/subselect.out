@@ -30,6 +30,12 @@ SELECT * FROM ((SELECT 1 AS x)) ss;
  1
 (1 row)
 
+SELECT * FROM ((SELECT 1 AS x)), ((SELECT * FROM ((SELECT 2 AS y))));
+ x | y 
+---+---
+ 1 | 2
+(1 row)
+
 (SELECT 2) UNION SELECT 2;
  ?column? 
 ----------
@@ -196,6 +202,69 @@ SELECT f1 AS "Correlated Field"
                 3
 (5 rows)
 
+-- Subselects without aliases
+SELECT count FROM (SELECT COUNT(DISTINCT name) FROM road);
+ count 
+-------
+  2911
+(1 row)
+
+SELECT COUNT(*) FROM (SELECT DISTINCT name FROM road);
+ count 
+-------
+  2911
+(1 row)
+
+SELECT * FROM (SELECT * FROM int4_tbl), (VALUES (123456)) WHERE f1 = column1;
+   f1   | column1 
+--------+---------
+ 123456 |  123456
+(1 row)
+
+CREATE VIEW view_unnamed_ss AS
+SELECT * FROM (SELECT * FROM (SELECT abs(f1) AS a1 FROM int4_tbl)),
+              (SELECT * FROM int8_tbl)
+  WHERE a1 < 10 AND q1 > a1 ORDER BY q1, q2;
+SELECT * FROM view_unnamed_ss;
+ a1 |        q1        |        q2         
+----+------------------+-------------------
+  0 |              123 |               456
+  0 |              123 |  4567890123456789
+  0 | 4567890123456789 | -4567890123456789
+  0 | 4567890123456789 |               123
+  0 | 4567890123456789 |  4567890123456789
+(5 rows)
+
+\sv view_unnamed_ss
+CREATE OR REPLACE VIEW public.view_unnamed_ss AS
+ SELECT unnamed_subquery.a1,
+    unnamed_subquery_1.q1,
+    unnamed_subquery_1.q2
+   FROM ( SELECT unnamed_subquery_2.a1
+           FROM ( SELECT abs(int4_tbl.f1) AS a1
+                   FROM int4_tbl) unnamed_subquery_2) unnamed_subquery,
+    ( SELECT int8_tbl.q1,
+            int8_tbl.q2
+           FROM int8_tbl) unnamed_subquery_1
+  WHERE unnamed_subquery.a1 < 10 AND unnamed_subquery_1.q1 > unnamed_subquery.a1
+  ORDER BY unnamed_subquery_1.q1, unnamed_subquery_1.q2
+DROP VIEW view_unnamed_ss;
+-- Test matching of locking clause to correct alias
+CREATE VIEW view_unnamed_ss_locking AS
+SELECT * FROM (SELECT * FROM int4_tbl), int8_tbl AS unnamed_subquery
+  WHERE f1 = q1
+  FOR UPDATE OF unnamed_subquery;
+\sv view_unnamed_ss_locking
+CREATE OR REPLACE VIEW public.view_unnamed_ss_locking AS
+ SELECT unnamed_subquery.f1,
+    unnamed_subquery_1.q1,
+    unnamed_subquery_1.q2
+   FROM ( SELECT int4_tbl.f1
+           FROM int4_tbl) unnamed_subquery,
+    int8_tbl unnamed_subquery_1
+  WHERE unnamed_subquery.f1 = unnamed_subquery_1.q1
+ FOR UPDATE OF unnamed_subquery_1
+DROP VIEW view_unnamed_ss_locking;
 --
 -- Use some existing tables in the regression test
 --
@@ -298,11 +367,11 @@ select * from int4_tbl o where not exists
                 QUERY PLAN                
 ------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
-   ->  Hash Anti Join
-         Hash Cond: (o.f1 = i.f1)
-         ->  Seq Scan on int4_tbl o
+   ->  Hash Right Anti Join
+         Hash Cond: (i.f1 = o.f1)
+         ->  Seq Scan on int4_tbl i
          ->  Hash
-               ->  Seq Scan on int4_tbl i
+               ->  Seq Scan on int4_tbl o
  Optimizer: Postgres query optimizer
 (7 rows)
 
@@ -709,15 +778,25 @@ ERROR:  correlated subquery with skip-level correlations is not supported
 --
 -- Test case for subselect within UPDATE of INSERT...ON CONFLICT DO UPDATE
 --
--- pax not support TupleInsertSpeculative
--- create temp table upsert(key int4 primary key, val text);
--- insert into upsert values(1, 'val') on conflict (key) do update set val = 'not seen';
--- insert into upsert values(1, 'val') on conflict (key) do update set val = 'seen with subselect ' || (select f1 from int4_tbl where f1 != 0 order by f1 limit 1)::text;
--- select * from upsert;
--- with aa as (select 'int4_tbl' u from int4_tbl limit 1)
--- insert into upsert values (1, 'x'), (999, 'y')
--- on conflict (key) do update set val = (select u from aa)
--- returning *;
+create temp table upsert(key int4 primary key, val text);
+insert into upsert values(1, 'val') on conflict (key) do update set val = 'not seen';
+insert into upsert values(1, 'val') on conflict (key) do update set val = 'seen with subselect ' || (select f1 from int4_tbl where f1 != 0 order by f1 limit 1)::text;
+select * from upsert;
+ key |               val               
+-----+---------------------------------
+   1 | seen with subselect -2147483647
+(1 row)
+
+with aa as (select 'int4_tbl' u from int4_tbl limit 1)
+insert into upsert values (1, 'x'), (999, 'y')
+on conflict (key) do update set val = (select u from aa)
+returning *;
+ key |   val    
+-----+----------
+   1 | int4_tbl
+ 999 | y
+(2 rows)
+
 --
 -- Test case for cross-type partial matching in hashed subplan (bug #7597)
 --
@@ -785,8 +864,8 @@ select 'foo'::text in (select 'bar'::name union all select 'bar'::name);
 --
 explain (verbose, costs off)
 select row(row(row(1))) = any (select row(row(1)));
-                QUERY PLAN                 
--------------------------------------------
+             QUERY PLAN              
+-------------------------------------
  Result
    Output: (SubPlan 1)
    SubPlan 1
@@ -794,7 +873,8 @@ select row(row(row(1))) = any (select row(row(1)));
            Output: (ROW(ROW(1)))
            ->  Result
                  Output: ROW(ROW(1))
-(7 rows)
+ Optimizer: Postgres query optimizer
+(8 rows)
 
 select row(row(row(1))) = any (select row(row(1)));
  ?column? 
@@ -821,31 +901,79 @@ ERROR:  operator does not exist: bigint = text
 LINE 1: select * from int8_tbl where q1 in (select c1 from inner_tex...
                                         ^
 HINT:  No operator matches the given name and argument types. You might need to add explicit type casts.
--- It's a known bug in PAX
--- it will use row reader and exec the sub plan with same motion
--- begin;
--- -- make an operator to allow it to succeed
--- create function bogus_int8_text_eq(int8, text) returns boolean
--- language sql as 'select $1::text = $2';
--- create operator = (procedure=bogus_int8_text_eq, leftarg=int8, rightarg=text);
--- explain (costs off)
--- select * from int8_tbl where q1 in (select c1 from inner_text);
--- select * from int8_tbl where q1 in (select c1 from inner_text);
--- -- inlining of this function results in unusual number of hash clauses,
--- -- which we can still cope with
--- create or replace function bogus_int8_text_eq(int8, text) returns boolean
--- language sql as 'select $1::text = $2 and $1::text = $2';
--- explain (costs off)
--- select * from int8_tbl where q1 in (select c1 from inner_text);
--- select * from int8_tbl where q1 in (select c1 from inner_text);
--- -- inlining of this function causes LHS and RHS to be switched,
--- -- which we can't cope with, so hashing should be abandoned
--- create or replace function bogus_int8_text_eq(int8, text) returns boolean
--- language sql as 'select $2 = $1::text';
--- explain (costs off)
--- select * from int8_tbl where q1 in (select c1 from inner_text);
--- select * from int8_tbl where q1 in (select c1 from inner_text);
--- rollback;  -- to get rid of the bogus operator
+begin;
+-- make an operator to allow it to succeed
+create function bogus_int8_text_eq(int8, text) returns boolean
+language sql as 'select $1::text = $2';
+create operator = (procedure=bogus_int8_text_eq, leftarg=int8, rightarg=text);
+explain (costs off)
+select * from int8_tbl where q1 in (select c1 from inner_text);
+                        QUERY PLAN                         
+-----------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Seq Scan on int8_tbl
+         Filter: (hashed SubPlan 1)
+         SubPlan 1
+           ->  Broadcast Motion 3:3  (slice2; segments: 3)
+                 ->  Seq Scan on inner_text
+(7 rows)
+
+select * from int8_tbl where q1 in (select c1 from inner_text);
+ q1  |        q2        
+-----+------------------
+ 123 |              456
+ 123 | 4567890123456789
+(2 rows)
+
+-- inlining of this function results in unusual number of hash clauses,
+-- which we can still cope with
+create or replace function bogus_int8_text_eq(int8, text) returns boolean
+language sql as 'select $1::text = $2 and $1::text = $2';
+explain (costs off)
+select * from int8_tbl where q1 in (select c1 from inner_text);
+                        QUERY PLAN                         
+-----------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Seq Scan on int8_tbl
+         Filter: (hashed SubPlan 1)
+         SubPlan 1
+           ->  Broadcast Motion 3:3  (slice2; segments: 3)
+                 ->  Seq Scan on inner_text
+(7 rows)
+
+select * from int8_tbl where q1 in (select c1 from inner_text);
+ q1  |        q2        
+-----+------------------
+ 123 |              456
+ 123 | 4567890123456789
+(2 rows)
+
+-- inlining of this function causes LHS and RHS to be switched,
+-- which we can't cope with, so hashing should be abandoned
+create or replace function bogus_int8_text_eq(int8, text) returns boolean
+language sql as 'select $2 = $1::text';
+explain (costs off)
+select * from int8_tbl where q1 in (select c1 from inner_text);
+                           QUERY PLAN                            
+-----------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Seq Scan on int8_tbl
+         Filter: (SubPlan 1)
+         SubPlan 1
+           ->  Materialize
+                 ->  Broadcast Motion 3:3  (slice2; segments: 3)
+                       ->  Seq Scan on inner_text
+ Optimizer: Postgres query optimizer
+(8 rows)
+
+select * from int8_tbl where q1 in (select c1 from inner_text);
+ q1  |        q2        
+-----+------------------
+ 123 |              456
+ 123 | 4567890123456789
+(2 rows)
+
+rollback;  -- to get rid of the bogus operator
 --
 -- Test resolution of hashed vs non-hashed implementation of EXISTS subplan
 --
@@ -1116,8 +1244,8 @@ select sum(o.four), sum(ss.a) from
     select * from x
   ) ss
 where o.ten = 1;
-                       QUERY PLAN                        
----------------------------------------------------------
+                          QUERY PLAN                           
+---------------------------------------------------------------
  Finalize Aggregate
    ->  Gather Motion 3:1  (slice1; segments: 3)
          ->  Partial Aggregate
@@ -1253,7 +1381,7 @@ select * from int4_tbl where
                      Output: int4_tbl.f1, (RowIdExpr)
                      Hash Cond: (b.ten = CASE WHEN ((hashed SubPlan 1)) THEN int4_tbl.f1 ELSE NULL::integer END)
                      ->  Seq Scan on public.tenk1 b
-                           Output: b.ten
+                           Output: b.unique1, b.unique2, b.two, b.four, b.ten, b.twenty, b.hundred, b.thousand, b.twothousand, b.fivethous, b.tenthous, b.odd, b.even, b.stringu1, b.stringu2, b.string4
                      ->  Hash
                            Output: int4_tbl.f1, ((hashed SubPlan 1)), (RowIdExpr)
                            ->  Broadcast Motion 3:3  (slice3; segments: 3)
@@ -1302,9 +1430,8 @@ select * from int4_tbl o where (f1, f1) in
                                  Output: generate_series(1, 50), i.f1
                                  ->  Seq Scan on public.int4_tbl i
                                        Output: i.f1
- Settings: optimizer = 'off'
  Optimizer: Postgres query optimizer
-(20 rows)
+(19 rows)
 
 select * from int4_tbl o where (f1, f1) in
   (select f1, generate_series(1,50) / 10 g from int4_tbl i group by f1);
@@ -1525,16 +1652,10 @@ set optimizer to off;
 -- Test that LIMIT can be pushed to SORT through a subquery that just projects
 -- columns.  We check for that having happened by looking to see if EXPLAIN
 -- ANALYZE shows that a top-N sort was used.  We must suppress or filter away
--- all the non-invariant parts of the EXPLAIN ANALYZE output.
+-- all the non-invariant parts of the EXPLAIN ANALYZE output. Use a replicated
+-- table to genarate a plan like: Limit -> Subquery -> Sort
 --
--- GPDB_12_MERGE_FIXME: we need to revisit the following test because it is not
--- testing what it advertized in the above comment. Specificly, we don't
--- execute top-N sort for the planner plan. Orca on the other hand never honors
--- ORDER BY in a subquery, as permitted by the SQL spec.  Consider rewriting
--- the test using a replicated table so that we get the plan stucture like
--- this: Limit -> Subquery -> Sort
---
-create table sq_limit (pk int primary key, c1 int, c2 int);
+create table sq_limit (pk int primary key, c1 int, c2 int) distributed replicated;
 insert into sq_limit values
     (1, 1, 1),
     (2, 2, 2),
@@ -1560,18 +1681,17 @@ begin
 end;
 $$;
 select * from explain_sq_limit();
-                              explain_sq_limit                              
-----------------------------------------------------------------------------
- Limit (actual rows=3 loops=1)
-   ->  Gather Motion 3:1  (slice1; segments: 3) (actual rows=3 loops=1)
-         ->  Limit (actual rows=3 loops=1)
-               ->  Subquery Scan on x (actual rows=3 loops=1)
-                     ->  Sort (actual rows=3 loops=1)
-                           Sort Key: sq_limit.c1, sq_limit.pk
-                           Sort Method:  quicksort  Memory: xxx
-                           ->  Seq Scan on sq_limit (actual rows=5 loops=1)
+                           explain_sq_limit                           
+----------------------------------------------------------------------
+ Gather Motion 1:1  (slice1; segments: 1) (actual rows=3 loops=1)
+   ->  Limit (actual rows=3 loops=1)
+         ->  Subquery Scan on x (actual rows=3 loops=1)
+               ->  Sort (actual rows=3 loops=1)
+                     Sort Key: sq_limit.c1, sq_limit.pk
+                     Sort Method:  top-N heapsort  Memory: xxx
+                     ->  Seq Scan on sq_limit (actual rows=8 loops=1)
  Optimizer: Postgres query optimizer
-(9 rows)
+(8 rows)
 
 -- a subpath is sorted under a subqueryscan. however, the subqueryscan is not.
 -- whether the order of subpath can applied to the subqueryscan is up-to-implement.
@@ -1609,6 +1729,162 @@ fetch backward all in c1;
 
 commit;
 --end_ignore
+--
+-- Verify that we correctly flatten cases involving a subquery output
+-- expression that doesn't need to be wrapped in a PlaceHolderVar
+--
+explain (costs off)
+select tname, attname from (
+select relname::information_schema.sql_identifier as tname, * from
+  (select * from pg_class c) ss1) ss2
+  right join pg_attribute a on a.attrelid = ss2.oid
+where tname = 'tenk1' and attnum = 1;
+                              QUERY PLAN                               
+-----------------------------------------------------------------------
+ Hash Join
+   Hash Cond: (a.attrelid = c.oid)
+   ->  Seq Scan on pg_attribute a
+         Filter: (attnum = 1)
+   ->  Hash
+         ->  Index Scan using pg_class_relname_nsp_index on pg_class c
+               Index Cond: (relname = 'tenk1'::name)
+ Optimizer: Postgres query optimizer
+(8 rows)
+
+select tname, attname from (
+select relname::information_schema.sql_identifier as tname, * from
+  (select * from pg_class c) ss1) ss2
+  right join pg_attribute a on a.attrelid = ss2.oid
+where tname = 'tenk1' and attnum = 1;
+ tname | attname 
+-------+---------
+ tenk1 | unique1
+(1 row)
+
+-- Check behavior when there's a lateral reference in the output expression
+explain (verbose, costs off)
+select t1.ten, sum(x) from
+  tenk1 t1 left join lateral (
+    select t1.ten + t2.ten as x, t2.fivethous from tenk1 t2
+  ) ss on t1.unique1 = ss.fivethous
+group by t1.ten
+order by t1.ten;
+                                     QUERY PLAN                                     
+------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Output: t1.ten, (sum((t1.ten + t2.ten)))
+   Merge Key: t1.ten
+   ->  Sort
+         Output: t1.ten, (sum((t1.ten + t2.ten)))
+         Sort Key: t1.ten
+         ->  Finalize HashAggregate
+               Output: t1.ten, sum((t1.ten + t2.ten))
+               Group Key: t1.ten
+               ->  Redistribute Motion 3:3  (slice2; segments: 3)
+                     Output: t1.ten, (PARTIAL sum((t1.ten + t2.ten)))
+                     Hash Key: t1.ten
+                     ->  Partial HashAggregate
+                           Output: t1.ten, PARTIAL sum((t1.ten + t2.ten))
+                           Group Key: t1.ten
+                           ->  Hash Right Join
+                                 Output: t1.ten, t2.ten
+                                 Hash Cond: (t2.fivethous = t1.unique1)
+                                 ->  Redistribute Motion 3:3  (slice3; segments: 3)
+                                       Output: t2.ten, t2.fivethous
+                                       Hash Key: t2.fivethous
+                                       ->  Seq Scan on public.tenk1 t2
+                                             Output: t2.ten, t2.fivethous
+                                 ->  Hash
+                                       Output: t1.ten, t1.unique1
+                                       ->  Seq Scan on public.tenk1 t1
+                                             Output: t1.ten, t1.unique1
+ Optimizer: Postgres query optimizer
+(28 rows)
+
+select t1.ten, sum(x) from
+  tenk1 t1 left join lateral (
+    select t1.ten + t2.ten as x, t2.fivethous from tenk1 t2
+  ) ss on t1.unique1 = ss.fivethous
+group by t1.ten
+order by t1.ten;
+ ten |  sum  
+-----+-------
+   0 |     0
+   1 |  2000
+   2 |  4000
+   3 |  6000
+   4 |  8000
+   5 | 10000
+   6 | 12000
+   7 | 14000
+   8 | 16000
+   9 | 18000
+(10 rows)
+
+explain (verbose, costs off)
+select t1.q1, x from
+  int8_tbl t1 left join
+  (int8_tbl t2 left join
+   lateral (select t2.q1+t3.q1 as x, * from int8_tbl t3) t3 on t2.q2 = t3.q2)
+  on t1.q2 = t2.q2
+order by 1, 2;
+                                  QUERY PLAN                                  
+------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Output: t1.q1, ((t2.q1 + t3.q1))
+   Merge Key: t1.q1, ((t2.q1 + t3.q1))
+   ->  Sort
+         Output: t1.q1, ((t2.q1 + t3.q1))
+         Sort Key: t1.q1, ((t2.q1 + t3.q1))
+         ->  Hash Right Join
+               Output: t1.q1, (t2.q1 + t3.q1)
+               Hash Cond: (t2.q2 = t1.q2)
+               ->  Hash Left Join
+                     Output: t2.q1, t2.q2, t3.q1
+                     Hash Cond: (t2.q2 = t3.q2)
+                     ->  Redistribute Motion 3:3  (slice2; segments: 3)
+                           Output: t2.q1, t2.q2
+                           Hash Key: t2.q2
+                           ->  Seq Scan on public.int8_tbl t2
+                                 Output: t2.q1, t2.q2
+                     ->  Hash
+                           Output: t3.q1, t3.q2
+                           ->  Redistribute Motion 3:3  (slice3; segments: 3)
+                                 Output: t3.q1, t3.q2
+                                 Hash Key: t3.q2
+                                 ->  Seq Scan on public.int8_tbl t3
+                                       Output: t3.q1, t3.q2
+               ->  Hash
+                     Output: t1.q1, t1.q2
+                     ->  Redistribute Motion 3:3  (slice4; segments: 3)
+                           Output: t1.q1, t1.q2
+                           Hash Key: t1.q2
+                           ->  Seq Scan on public.int8_tbl t1
+                                 Output: t1.q1, t1.q2
+ Optimizer: Postgres query optimizer
+(32 rows)
+
+select t1.q1, x from
+  int8_tbl t1 left join
+  (int8_tbl t2 left join
+   lateral (select t2.q1+t3.q1 as x, * from int8_tbl t3) t3 on t2.q2 = t3.q2)
+  on t1.q2 = t2.q2
+order by 1, 2;
+        q1        |        x         
+------------------+------------------
+              123 |              246
+              123 |              246
+              123 | 4567890123456912
+              123 | 4567890123456912
+              123 | 9135780246913578
+ 4567890123456789 |              246
+ 4567890123456789 | 4567890123456912
+ 4567890123456789 | 4567890123456912
+ 4567890123456789 | 9135780246913578
+ 4567890123456789 | 9135780246913578
+ 4567890123456789 | 9135780246913578
+(11 rows)
+
 --
 -- Tests for CTE inlining behavior
 --
@@ -1663,10 +1939,8 @@ select * from x where f1 = 1;
 (7 rows)
 
 -- Volatile functions prevent inlining
--- GPDB_12_MERGE_FIXME: inlining happens on GPDB: But the plan seems OK
--- nevertheless. Is the GPDB planner smart, and notices that this is
--- ok to inline, or is it doing something that would be unsafe in more
--- complicated queries? Investigte
+-- Prevent inlining happens on GPDB, inlining may cause wrong results.
+-- For example, nextval() function.
 explain (verbose, costs off)
 with x as (select * from (select f1, random() from subselect_tbl) ss)
 select * from x where f1 = 1;
@@ -1681,10 +1955,32 @@ select * from x where f1 = 1;
                Output: share0_ref1.f1, share0_ref1.random
                ->  Seq Scan on public.subselect_tbl
                      Output: subselect_tbl.f1, random()
- Settings: optimizer = 'off'
  Optimizer: Postgres query optimizer
-(11 rows)
+(10 rows)
 
+create temporary sequence ts;
+create table vol_test(a int, b int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+explain (verbose, costs off)
+with x as (select * from (select a, nextval('ts') from vol_test) ss)
+select * from x where a = 1;
+                           QUERY PLAN                            
+-----------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Output: x.a, x.nextval
+   ->  Subquery Scan on x
+         Output: x.a, x.nextval
+         Filter: (x.a = 1)
+         ->  Shared Scan (share slice:id 1:0)
+               Output: share0_ref1.a, share0_ref1.nextval
+               ->  Seq Scan on public.vol_test
+                     Output: vol_test.a, nextval('ts'::regclass)
+ Optimizer: Postgres query optimizer
+(10 rows)
+
+drop sequence ts;
+drop table vol_test;
 -- SELECT FOR UPDATE cannot be inlined
 -- GPDB: select statement with locking clause is not easy to fully supported
 -- in greenplum. The following case even with GDD enabled greenplum will still
@@ -1762,11 +2058,6 @@ select * from x, x x2 where x.n = x2.n;
 (19 rows)
 
 -- Multiply-referenced CTEs can't be inlined if they contain outer self-refs
--- start_ignore
--- GPDB_12_MERGE_FIXME: This currenty produces incorrect results on GPDB.
--- It's not a new issue, but it was exposed by this new upstream test case
--- with the PostgreSQL v12 merge.
--- See https://github.com/greenplum-db/gpdb/issues/10014
 explain (verbose, costs off)
 with recursive x(a) as
   ((values ('a'), ('b'))
@@ -1775,25 +2066,21 @@ with recursive x(a) as
     select z.a || z1.a as a from z cross join z as z1
     where length(z.a || z1.a) < 5))
 select * from x;
-                        QUERY PLAN                        
-----------------------------------------------------------
- CTE Scan on x
-   Output: x.a
-   CTE x
-     ->  Recursive Union
-           ->  Values Scan on "*VALUES*"
-                 Output: "*VALUES*".column1
-           ->  Nested Loop
-                 Output: (z.a || z1.a)
-                 Join Filter: (length((z.a || z1.a)) < 5)
-                 CTE z
-                   ->  WorkTable Scan on x x_1
-                         Output: x_1.a
-                 ->  CTE Scan on z
-                       Output: z.a
-                 ->  CTE Scan on z z1
-                       Output: z1.a
-(16 rows)
+                    QUERY PLAN                     
+---------------------------------------------------
+ Recursive Union
+   ->  Values Scan on "*VALUES*"
+         Output: "*VALUES*".column1
+   ->  Nested Loop
+         Output: (x.a || x_1.a)
+         Join Filter: (length((x.a || x_1.a)) < 5)
+         ->  WorkTable Scan on x
+               Output: x.a
+         ->  WorkTable Scan on x x_1
+               Output: x_1.a
+ Settings: optimizer = 'off'
+ Optimizer: Postgres query optimizer
+(12 rows)
 
 with recursive x(a) as
   ((values ('a'), ('b'))
@@ -1828,7 +2115,6 @@ select * from x;
  bbbb
 (22 rows)
 
--- end_ignore
 explain (verbose, costs off)
 with recursive x(a) as
   ((values ('a'), ('b'))
@@ -1847,8 +2133,8 @@ select * from x;
          ->  WorkTable Scan on x
                Output: x.a
                Filter: (length((x.a || x.a)) < 5)
+ Settings: optimizer = 'off'
  Optimizer: Postgres query optimizer
- Settings: gp_cte_sharing=on, optimizer=off
 (10 rows)
 
 with recursive x(a) as
@@ -1921,3 +2207,120 @@ select * from x for update;
 (5 rows)
 
 set gp_cte_sharing to off;
+-- Ensure that both planners produce valid plans for the query with the nested
+-- SubLink, which contains attributes referenced in query's GROUP BY clause.
+-- Due to presence of non-grouping columns in targetList, ORCA performs query
+-- normalization, during which ORCA establishes a correspondence between vars
+-- from targetlist entries to grouping attributes. And this process should
+-- correctly handle nested structures. The inner part of SubPlan in the test
+-- should contain only t.j.
+-- start_ignore
+drop table if exists t;
+NOTICE:  table "t" does not exist, skipping
+-- end_ignore
+create table t (i int, j int) distributed by (i);
+insert into t values (1, 2);
+explain (verbose, costs off)
+select j,
+(select j from (select j) q2)
+from t
+group by i, j;
+                QUERY PLAN                
+------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Output: t.j, ((SubPlan 1)), t.i
+   ->  HashAggregate
+         Output: t.j, (SubPlan 1), t.i
+         Group Key: t.i, t.j
+         ->  Seq Scan on public.t
+               Output: t.i, t.j
+         SubPlan 1
+           ->  Result
+                 Output: t.j
+ Optimizer: Postgres-based planner
+(11 rows)
+
+select j,
+(select j from (select j) q2)
+from t
+group by i, j;
+ j | j 
+---+---
+ 2 | 2
+(1 row)
+
+-- Ensure that both planners produce valid plans for the query with the nested
+-- SubLink when this SubLink is inside the GROUP BY clause. Attribute, which is
+-- not grouping column (1 as c), is added to query targetList to make ORCA
+-- perform query normalization. During normalization ORCA modifies the vars of
+-- the grouping elements of targetList in order to produce a new Query tree.
+-- The modification of vars inside nested part of SubLinks should be handled
+-- correctly. ORCA shouldn't fall back due to missing variable entry as a result
+-- of incorrect query normalization.
+explain (verbose, costs off)
+select j, 1 as c,
+(select j from (select j) q2) q1
+from t
+group by j, q1;
+                         QUERY PLAN                         
+------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Output: t.j, 1, ((SubPlan 1))
+   ->  HashAggregate
+         Output: t.j, 1, ((SubPlan 1))
+         Group Key: t.j, ((SubPlan 1))
+         ->  Redistribute Motion 3:3  (slice2; segments: 3)
+               Output: t.j, ((SubPlan 1))
+               Hash Key: t.j, ((SubPlan 1))
+               ->  HashAggregate
+                     Output: t.j, ((SubPlan 1))
+                     Group Key: t.j, (SubPlan 1)
+                     ->  Seq Scan on public.t
+                           Output: t.j, (SubPlan 1)
+                           SubPlan 1
+                             ->  Result
+                                   Output: t.j
+ Optimizer: Postgres-based planner
+(17 rows)
+
+select j, 1 as c,
+(select j from (select j) q2) q1
+from t
+group by j, q1;
+ j | c | q1 
+---+---+----
+ 2 | 1 |  2
+(1 row)
+
+-- Ensure that both planners produce valid plans for the query with the nested
+-- SubLink, and this SubLink is under aggregation. ORCA shouldn't fall back due
+-- to missing variable entry as a result of incorrect query normalization. ORCA
+-- should correctly process args of the aggregation during normalization.
+explain (verbose, costs off)
+select (select max((select t.i))) from t;
+                   QUERY PLAN                   
+------------------------------------------------
+ Finalize Aggregate
+   Output: (SubPlan 2)
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         Output: (PARTIAL max((SubPlan 1)))
+         ->  Partial Aggregate
+               Output: PARTIAL max((SubPlan 1))
+               ->  Seq Scan on public.t
+                     Output: t.i, t.j
+               SubPlan 1
+                 ->  Result
+                       Output: t.i
+   SubPlan 2
+     ->  Result
+           Output: max((SubPlan 1))
+ Optimizer: Postgres-based planner
+(15 rows)
+
+select (select max((select t.i))) from t;
+ max 
+-----
+   1
+(1 row)
+
+drop table t;

@@ -1,6 +1,8 @@
 --
 -- ARRAYS
 --
+-- directory paths are passed to us in environment variables
+\getenv abs_srcdir PG_ABS_SRCDIR
 CREATE TABLE arrtest (
 	a 			int2[],
 	b 			int4[][][],
@@ -10,6 +12,14 @@ CREATE TABLE arrtest (
 	f			char(5)[],
 	g			varchar(5)[]
 ) DISTRIBUTED RANDOMLY;
+CREATE TABLE array_op_test (
+	seqno		int4,
+	i			int4[],
+	t			text[]
+);
+\set filename :abs_srcdir '/data/array.data'
+COPY array_op_test FROM :'filename';
+ANALYZE array_op_test;
 --
 -- only the 'e' array is 0-based, the others are 1-based.
 --
@@ -181,6 +191,31 @@ SELECT a,b,c FROM arrtest;
  [4:4]={NULL}  | {3,4}                 | {foo,new_word}
 (3 rows)
 
+-- test non-error-throwing API
+SELECT pg_input_is_valid('{1,2,3}', 'integer[]');
+ pg_input_is_valid 
+-------------------
+ t
+(1 row)
+
+SELECT pg_input_is_valid('{1,2', 'integer[]');
+ pg_input_is_valid 
+-------------------
+ f
+(1 row)
+
+SELECT pg_input_is_valid('{1,zed}', 'integer[]');
+ pg_input_is_valid 
+-------------------
+ f
+(1 row)
+
+SELECT * FROM pg_input_error_info('{1,zed}', 'integer[]');
+                   message                    | detail | hint | sql_error_code 
+----------------------------------------------+--------+------+----------------
+ invalid input syntax for type integer: "zed" |        |      | 22P02
+(1 row)
+
 -- test mixed slice/scalar subscripting
 select '{{1,2,3},{4,5,6},{7,8,9}}'::int[];
            int4            
@@ -316,6 +351,9 @@ INSERT INTO arrtest_s VALUES(NULL, NULL);
 UPDATE arrtest_s SET a[:] = '{11, 12, 13, 14, 15}';  -- fail, no good with null
 ERROR:  array slice subscript must provide both boundaries
 DETAIL:  When assigning to a slice of an empty array value, slice boundaries must be fully specified.
+-- we want to work with a point_tbl that includes a null
+CREATE TEMP TABLE point_tbl AS SELECT * FROM public.point_tbl;
+INSERT INTO POINT_TBL(f1) VALUES (NULL);
 -- check with fixed-length-array type, such as point
 SELECT f1[0:1] FROM POINT_TBL;
 ERROR:  slices of fixed-length arrays not implemented
@@ -1376,21 +1414,51 @@ select * from arr_tbl where f1 >= '{1,2,3}' and f1 < '{1,5,3}' ORDER BY 1;
 (2 rows)
 
 -- test ON CONFLICT DO UPDATE with arrays
--- Pax not support insert conflict
--- create temp table arr_pk_tbl (pk int4 primary key, f1 int[]);
--- insert into arr_pk_tbl values (1, '{1,2,3}');
--- insert into arr_pk_tbl values (1, '{3,4,5}') on conflict (pk)
---   do update set f1[1] = excluded.f1[1], f1[3] = excluded.f1[3]
---   returning pk, f1;
--- insert into arr_pk_tbl(pk, f1[1:2]) values (1, '{6,7,8}') on conflict (pk)
---   do update set f1[1] = excluded.f1[1],
---     f1[2] = excluded.f1[2],
---     f1[3] = excluded.f1[3]
---   returning pk, f1;
+create temp table arr_pk_tbl (pk int4 primary key, f1 int[]);
+insert into arr_pk_tbl values (1, '{1,2,3}');
+insert into arr_pk_tbl values (1, '{3,4,5}') on conflict (pk)
+  do update set f1[1] = excluded.f1[1], f1[3] = excluded.f1[3]
+  returning pk, f1;
+ pk |   f1    
+----+---------
+  1 | {3,2,5}
+(1 row)
+
+insert into arr_pk_tbl(pk, f1[1:2]) values (1, '{6,7,8}') on conflict (pk)
+  do update set f1[1] = excluded.f1[1],
+    f1[2] = excluded.f1[2],
+    f1[3] = excluded.f1[3]
+  returning pk, f1;
+ pk |     f1     
+----+------------
+  1 | {6,7,NULL}
+(1 row)
+
 -- note: if above selects don't produce the expected tuple order,
 -- then you didn't get an indexscan plan, and something is busted.
 reset enable_seqscan;
 reset enable_bitmapscan;
+-- test subscript overflow detection
+-- The normal error message includes a platform-dependent limit,
+-- so suppress it to avoid needing multiple expected-files.
+\set VERBOSITY sqlstate
+insert into arr_pk_tbl values(10, '[-2147483648:-2147483647]={1,2}');
+update arr_pk_tbl set f1[2147483647] = 42 where pk = 10;
+ERROR:  54000
+update arr_pk_tbl set f1[2147483646:2147483647] = array[4,2] where pk = 10;
+ERROR:  54000
+insert into arr_pk_tbl(pk, f1[0:2147483647]) values (2, '{}');
+ERROR:  54000
+insert into arr_pk_tbl(pk, f1[-2147483648:2147483647]) values (2, '{}');
+ERROR:  54000
+-- also exercise the expanded-array case
+do $$ declare a int[];
+begin
+  a := '[-2147483648:-2147483647]={1,2}'::int[];
+  a[2147483647] := 42;
+end $$;
+ERROR:  54000
+\set VERBOSITY default
 -- test [not] (like|ilike) (any|all) (...)
 select 'foo' like any (array['%a', '%o']); -- t
  ?column? 
@@ -2252,6 +2320,132 @@ select array(select array['Hello', i::text] from generate_series(9,11) i);
  {{Hello,9},{Hello,10},{Hello,11}}
 (1 row)
 
+-- int2vector and oidvector should be treated as scalar types for this purpose
+select pg_typeof(array(select '11 22 33'::int2vector from generate_series(1,5)));
+  pg_typeof   
+--------------
+ int2vector[]
+(1 row)
+
+select array(select '11 22 33'::int2vector from generate_series(1,5));
+                          array                           
+----------------------------------------------------------
+ {"11 22 33","11 22 33","11 22 33","11 22 33","11 22 33"}
+(1 row)
+
+select unnest(array(select '11 22 33'::int2vector from generate_series(1,5)));
+  unnest  
+----------
+ 11 22 33
+ 11 22 33
+ 11 22 33
+ 11 22 33
+ 11 22 33
+(5 rows)
+
+select pg_typeof(array(select '11 22 33'::oidvector from generate_series(1,5)));
+  pg_typeof  
+-------------
+ oidvector[]
+(1 row)
+
+select array(select '11 22 33'::oidvector from generate_series(1,5));
+                          array                           
+----------------------------------------------------------
+ {"11 22 33","11 22 33","11 22 33","11 22 33","11 22 33"}
+(1 row)
+
+select unnest(array(select '11 22 33'::oidvector from generate_series(1,5)));
+  unnest  
+----------
+ 11 22 33
+ 11 22 33
+ 11 22 33
+ 11 22 33
+ 11 22 33
+(5 rows)
+
+-- array[] should do the same
+select pg_typeof(array['11 22 33'::int2vector]);
+  pg_typeof   
+--------------
+ int2vector[]
+(1 row)
+
+select array['11 22 33'::int2vector];
+    array     
+--------------
+ {"11 22 33"}
+(1 row)
+
+select pg_typeof(unnest(array['11 22 33'::int2vector]));
+ pg_typeof  
+------------
+ int2vector
+(1 row)
+
+select unnest(array['11 22 33'::int2vector]);
+  unnest  
+----------
+ 11 22 33
+(1 row)
+
+select pg_typeof(unnest('11 22 33'::int2vector));
+ pg_typeof 
+-----------
+ smallint
+ smallint
+ smallint
+(3 rows)
+
+select unnest('11 22 33'::int2vector);
+ unnest 
+--------
+     11
+     22
+     33
+(3 rows)
+
+select pg_typeof(array['11 22 33'::oidvector]);
+  pg_typeof  
+-------------
+ oidvector[]
+(1 row)
+
+select array['11 22 33'::oidvector];
+    array     
+--------------
+ {"11 22 33"}
+(1 row)
+
+select pg_typeof(unnest(array['11 22 33'::oidvector]));
+ pg_typeof 
+-----------
+ oidvector
+(1 row)
+
+select unnest(array['11 22 33'::oidvector]);
+  unnest  
+----------
+ 11 22 33
+(1 row)
+
+select pg_typeof(unnest('11 22 33'::oidvector));
+ pg_typeof 
+-----------
+ oid
+ oid
+ oid
+(3 rows)
+
+select unnest('11 22 33'::oidvector);
+ unnest 
+--------
+     11
+     22
+     33
+(3 rows)
+
 -- Insert/update on a column that is array of composite
 create temp table t1 (f1 int8_tbl[], distkey int4) distributed by (distkey);
 insert into t1 (f1[5].q1) values(42);
@@ -2275,14 +2469,14 @@ insert into src
 create type textandtext as (c1 text, c2 text);
 create temp table dest (f1 textandtext[]);
 insert into dest select array[row(f1,f1)::textandtext] from src;
-select length(md5((f1[1]).c2)) from dest;
+select length(fipshash((f1[1]).c2)) from dest;
  length 
 --------
      32
 (1 row)
 
 delete from src;
-select length(md5((f1[1]).c2)) from dest;
+select length(fipshash((f1[1]).c2)) from dest;
  length 
 --------
      32
@@ -2290,7 +2484,7 @@ select length(md5((f1[1]).c2)) from dest;
 
 truncate table src;
 drop table src;
-select length(md5((f1[1]).c2)) from dest;
+select length(fipshash((f1[1]).c2)) from dest;
  length 
 --------
      32
@@ -2560,3 +2754,59 @@ SELECT trim_array(ARRAY[1, 2, 3], -1); -- fail
 ERROR:  number of elements to trim must be between 0 and 3
 SELECT trim_array(ARRAY[1, 2, 3], 10); -- fail
 ERROR:  number of elements to trim must be between 0 and 3
+SELECT trim_array(ARRAY[]::int[], 1); -- fail
+ERROR:  number of elements to trim must be between 0 and 0
+-- array_shuffle
+SELECT array_shuffle('{1,2,3,4,5,6}'::int[]) <@ '{1,2,3,4,5,6}';
+ ?column? 
+----------
+ t
+(1 row)
+
+SELECT array_shuffle('{1,2,3,4,5,6}'::int[]) @> '{1,2,3,4,5,6}';
+ ?column? 
+----------
+ t
+(1 row)
+
+SELECT array_dims(array_shuffle('[-1:2][2:3]={{1,2},{3,NULL},{5,6},{7,8}}'::int[]));
+ array_dims  
+-------------
+ [-1:2][2:3]
+(1 row)
+
+SELECT array_dims(array_shuffle('{{{1,2},{3,NULL}},{{5,6},{7,8}},{{9,10},{11,12}}}'::int[]));
+   array_dims    
+-----------------
+ [1:3][1:2][1:2]
+(1 row)
+
+-- array_sample
+SELECT array_sample('{1,2,3,4,5,6}'::int[], 3) <@ '{1,2,3,4,5,6}';
+ ?column? 
+----------
+ t
+(1 row)
+
+SELECT array_length(array_sample('{1,2,3,4,5,6}'::int[], 3), 1);
+ array_length 
+--------------
+            3
+(1 row)
+
+SELECT array_dims(array_sample('[-1:2][2:3]={{1,2},{3,NULL},{5,6},{7,8}}'::int[], 3));
+ array_dims 
+------------
+ [1:3][2:3]
+(1 row)
+
+SELECT array_dims(array_sample('{{{1,2},{3,NULL}},{{5,6},{7,8}},{{9,10},{11,12}}}'::int[], 2));
+   array_dims    
+-----------------
+ [1:2][1:2][1:2]
+(1 row)
+
+SELECT array_sample('{1,2,3,4,5,6}'::int[], -1); -- fail
+ERROR:  sample size must be between 0 and 6
+SELECT array_sample('{1,2,3,4,5,6}'::int[], 7); --fail
+ERROR:  sample size must be between 0 and 6

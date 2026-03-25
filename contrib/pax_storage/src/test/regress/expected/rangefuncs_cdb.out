@@ -30,10 +30,11 @@ name not in ('enable_parallel',
  enable_partitionwise_aggregate | off
  enable_partitionwise_join      | off
  enable_password_profile        | on
+ enable_presorted_aggregate     | on
  enable_seqscan                 | on
  enable_sort                    | on
  enable_tidscan                 | on
-(23 rows)
+(24 rows)
 
 -- start_ignore
 create schema rangefuncs_cdb;
@@ -197,7 +198,7 @@ $$  LANGUAGE plpgsql;
 -- function in select clause
 --   Fails: plpgsql does not support SFRM_Materialize
 select foor(1);
-ERROR:  set-valued function called in context that cannot accept a set
+ERROR:  materialize mode required, but it is not allowed in this context
 CONTEXT:  PL/pgSQL function foor(integer) line 6 at RETURN NEXT
 -- expanding columns in the select list
 --    Fails: record type not registered
@@ -220,7 +221,7 @@ select * from foor(1) as (fooid int, f2 int);
 -- function over function (executed on master) 
 --    Fails: plpgsql does not support SFRM_Materialize
 select foor(fooid), * from foor(3) as (fooid int, f2 int);
-ERROR:  set-valued function called in context that cannot accept a set
+ERROR:  materialize mode required, but it is not allowed in this context
 CONTEXT:  PL/pgSQL function foor(integer) line 6 at RETURN NEXT
 -- Joining with a table
 select * from foo2, foor(3) z(fooid int, f2 int) where foo2.f2 = z.f2;

@@ -28,114 +28,30 @@ subpartition by list (r_name) subpartition template
 );
 -- root and internal parent partitions should have relfrozenxid as 0
 select relname, relkind from pg_class where relkind in ('r', 'p') and relname like 'region%' and relfrozenxid=0;
-                relname                | relkind 
----------------------------------------+---------
- region_1_prt_region3                  | p
- region_1_prt_region3_2_prt_america    | r
- region_1_prt_region3_2_prt_asia       | r
- region_1_prt_region3_2_prt_europe     | r
- region_1_prt_region3_2_prt_mideast    | r
- region_1_prt_region2_2_prt_australia  | r
- region_1_prt_region2_2_prt_antarctica | r
- region_1_prt_region3_2_prt_africa     | r
- region_1_prt_region3_2_prt_australia  | r
- region_1_prt_region3_2_prt_antarctica | r
- region                                | p
- region_1_prt_region1_2_prt_africa     | r
- region_1_prt_region1                  | p
- region_1_prt_region1_2_prt_america    | r
- region_1_prt_region1_2_prt_asia       | r
- region_1_prt_region1_2_prt_europe     | r
- region_1_prt_region1_2_prt_mideast    | r
- region_1_prt_region1_2_prt_australia  | r
- region_1_prt_region1_2_prt_antarctica | r
- region_1_prt_region2_2_prt_africa     | r
- region_1_prt_region2                  | p
- region_1_prt_region2_2_prt_america    | r
- region_1_prt_region2_2_prt_asia       | r
- region_1_prt_region2_2_prt_europe     | r
- region_1_prt_region2_2_prt_mideast    | r
-(25 rows)
+       relname        | relkind 
+----------------------+---------
+ region               | p
+ region_1_prt_region1 | p
+ region_1_prt_region2 | p
+ region_1_prt_region3 | p
+(4 rows)
 
 select gp_segment_id, relname, relkind from gp_dist_random('pg_class') where relkind in ('r', 'p') and relname like 'region%' and relfrozenxid=0;
- gp_segment_id |                relname                | relkind 
----------------+---------------------------------------+---------
-             2 | region_1_prt_region3_2_prt_africa     | r
-             2 | region_1_prt_region3                  | p
-             2 | region_1_prt_region3_2_prt_america    | r
-             2 | region_1_prt_region3_2_prt_asia       | r
-             2 | region_1_prt_region3_2_prt_europe     | r
-             2 | region_1_prt_region3_2_prt_mideast    | r
-             2 | region_1_prt_region2_2_prt_australia  | r
-             2 | region_1_prt_region2_2_prt_antarctica | r
-             2 | region_1_prt_region3_2_prt_australia  | r
-             2 | region_1_prt_region3_2_prt_antarctica | r
-             2 | region                                | p
-             2 | region_1_prt_region1_2_prt_africa     | r
-             2 | region_1_prt_region1                  | p
-             2 | region_1_prt_region1_2_prt_america    | r
-             2 | region_1_prt_region1_2_prt_asia       | r
-             2 | region_1_prt_region1_2_prt_europe     | r
-             2 | region_1_prt_region1_2_prt_mideast    | r
-             2 | region_1_prt_region1_2_prt_australia  | r
-             2 | region_1_prt_region1_2_prt_antarctica | r
-             2 | region_1_prt_region2_2_prt_africa     | r
-             2 | region_1_prt_region2                  | p
-             2 | region_1_prt_region2_2_prt_america    | r
-             2 | region_1_prt_region2_2_prt_asia       | r
-             2 | region_1_prt_region2_2_prt_europe     | r
-             2 | region_1_prt_region2_2_prt_mideast    | r
-             0 | region_1_prt_region3_2_prt_africa     | r
-             0 | region_1_prt_region3                  | p
-             0 | region_1_prt_region3_2_prt_america    | r
-             0 | region_1_prt_region3_2_prt_asia       | r
-             0 | region_1_prt_region3_2_prt_europe     | r
-             0 | region_1_prt_region3_2_prt_mideast    | r
-             0 | region_1_prt_region2_2_prt_australia  | r
-             0 | region_1_prt_region2_2_prt_antarctica | r
-             0 | region_1_prt_region3_2_prt_australia  | r
-             0 | region_1_prt_region3_2_prt_antarctica | r
-             0 | region                                | p
-             0 | region_1_prt_region1_2_prt_africa     | r
-             0 | region_1_prt_region1                  | p
-             0 | region_1_prt_region1_2_prt_america    | r
-             0 | region_1_prt_region1_2_prt_asia       | r
-             0 | region_1_prt_region1_2_prt_europe     | r
-             0 | region_1_prt_region1_2_prt_mideast    | r
-             0 | region_1_prt_region1_2_prt_australia  | r
-             0 | region_1_prt_region1_2_prt_antarctica | r
-             0 | region_1_prt_region2_2_prt_africa     | r
-             0 | region_1_prt_region2                  | p
-             0 | region_1_prt_region2_2_prt_america    | r
-             0 | region_1_prt_region2_2_prt_asia       | r
-             0 | region_1_prt_region2_2_prt_europe     | r
-             0 | region_1_prt_region2_2_prt_mideast    | r
-             1 | region_1_prt_region3_2_prt_africa     | r
-             1 | region_1_prt_region3                  | p
-             1 | region_1_prt_region3_2_prt_america    | r
-             1 | region_1_prt_region3_2_prt_asia       | r
-             1 | region_1_prt_region3_2_prt_europe     | r
-             1 | region_1_prt_region3_2_prt_mideast    | r
-             1 | region_1_prt_region2_2_prt_australia  | r
-             1 | region_1_prt_region2_2_prt_antarctica | r
-             1 | region_1_prt_region3_2_prt_australia  | r
-             1 | region_1_prt_region3_2_prt_antarctica | r
-             1 | region                                | p
-             1 | region_1_prt_region1_2_prt_africa     | r
-             1 | region_1_prt_region1                  | p
-             1 | region_1_prt_region1_2_prt_america    | r
-             1 | region_1_prt_region1_2_prt_asia       | r
-             1 | region_1_prt_region1_2_prt_europe     | r
-             1 | region_1_prt_region1_2_prt_mideast    | r
-             1 | region_1_prt_region1_2_prt_australia  | r
-             1 | region_1_prt_region1_2_prt_antarctica | r
-             1 | region_1_prt_region2_2_prt_africa     | r
-             1 | region_1_prt_region2                  | p
-             1 | region_1_prt_region2_2_prt_america    | r
-             1 | region_1_prt_region2_2_prt_asia       | r
-             1 | region_1_prt_region2_2_prt_europe     | r
-             1 | region_1_prt_region2_2_prt_mideast    | r
-(75 rows)
+ gp_segment_id |       relname        | relkind 
+---------------+----------------------+---------
+             1 | region               | p
+             1 | region_1_prt_region1 | p
+             1 | region_1_prt_region2 | p
+             1 | region_1_prt_region3 | p
+             2 | region               | p
+             2 | region_1_prt_region1 | p
+             2 | region_1_prt_region2 | p
+             2 | region_1_prt_region3 | p
+             0 | region               | p
+             0 | region_1_prt_region1 | p
+             0 | region_1_prt_region2 | p
+             0 | region_1_prt_region3 | p
+(12 rows)
 
 create unique index region_pkey on region(r_regionkey, r_name);
 copy region from stdin with delimiter '|';
@@ -271,9 +187,9 @@ alter table foo_p split partition for (1) at (2) into (partition prt_11, partiti
  Schema |        Name        |       Type        |   Owner   | Storage 
 --------+--------------------+-------------------+-----------+---------
  public | foo_p              | partitioned table | part_role | 
- public | foo_p_1_prt_2      | table             | part_role | pax
- public | foo_p_1_prt_prt_11 | table             | part_role | pax
- public | foo_p_1_prt_prt_12 | table             | part_role | pax
+ public | foo_p_1_prt_2      | table             | part_role | heap
+ public | foo_p_1_prt_prt_11 | table             | part_role | heap
+ public | foo_p_1_prt_prt_12 | table             | part_role | heap
 (4 rows)
 
 drop table foo_p;
@@ -367,9 +283,98 @@ select has_table_privilege('part_role', 'bar_p'::regclass, 'select');
  t
 (1 row)
 
+-- the ONLY keyword will affect just the partition root for both grant/revoke
+create role part_role2;
+grant select on only foo_p to part_role2;
+select has_table_privilege('part_role2', 'foo_p'::regclass, 'select');
+ has_table_privilege 
+---------------------
+ t
+(1 row)
+
+select has_table_privilege('part_role2', 'foo_p_1_prt_6'::regclass, 'select');
+ has_table_privilege 
+---------------------
+ f
+(1 row)
+
+grant select on foo_p to part_role2;
+revoke select on only foo_p from part_role2;
+select has_table_privilege('part_role2', 'foo_p'::regclass, 'select');
+ has_table_privilege 
+---------------------
+ f
+(1 row)
+
+select has_table_privilege('part_role2', 'foo_p_1_prt_6'::regclass, 'select');
+ has_table_privilege 
+---------------------
+ t
+(1 row)
+
+revoke select on foo_p from part_role2;
+select has_table_privilege('part_role2', 'foo_p_1_prt_6'::regclass, 'select');
+ has_table_privilege 
+---------------------
+ f
+(1 row)
+
+create table foo_p2 (a int, b int) partition by range(a) (start(1) end(10) every(1));
+grant select on foo_p, only foo_p2 to part_role2; -- multiple tables in same statement
+select has_table_privilege('part_role2', 'foo_p'::regclass, 'select');
+ has_table_privilege 
+---------------------
+ t
+(1 row)
+
+select has_table_privilege('part_role2', 'foo_p_1_prt_6'::regclass, 'select');
+ has_table_privilege 
+---------------------
+ t
+(1 row)
+
+select has_table_privilege('part_role2', 'foo_p2'::regclass, 'select');
+ has_table_privilege 
+---------------------
+ t
+(1 row)
+
+select has_table_privilege('part_role2', 'foo_p2_1_prt_6'::regclass, 'select');
+ has_table_privilege 
+---------------------
+ f
+(1 row)
+
+-- more cases
+revoke all on foo_p from part_role2;
+revoke all on foo_p2 from part_role2;
+grant select on only public.foo_p to part_role2; -- with schema
+select has_table_privilege('part_role2', 'foo_p'::regclass, 'select');
+ has_table_privilege 
+---------------------
+ t
+(1 row)
+
+select has_table_privilege('part_role2', 'foo_p_1_prt_6'::regclass, 'select');
+ has_table_privilege 
+---------------------
+ f
+(1 row)
+
+grant update(b) on only foo_p2 to part_role2; -- column level priviledge
+select relname, has_column_privilege('part_role2', oid, 'b', 'update') from pg_class
+where relname = 'foo_p2' or relname = 'foo_p2_1_prt_6';
+    relname     | has_column_privilege 
+----------------+----------------------
+ foo_p2         | t
+ foo_p2_1_prt_6 | f
+(2 rows)
+
 drop table foo_p;
+drop table foo_p2;
 drop table bar_p;
 drop role part_role;
+drop role part_role2;
 -- validation
 create table foo_p (i int) partition by range(i)
 (start(1) end(10) every(1));
@@ -387,7 +392,7 @@ alter table foo_p exchange partition for(6) with table bar_p without
 validation;
 NOTICE:  specifying "WITHOUT VALIDATION" acts as no operation
 DETAIL:  If the new partition is a regular table, validation is performed to make sure all the rows obey partition constraint. If the new partition is external or foreign table, no validation is performed.
-ERROR:  partition constraint of relation "bar_p" is violated by some row  (seg2 10.13.9.100:7004 pid=17394)
+ERROR:  partition constraint of relation "bar_p" is violated by some row  (seg2 127.0.0.1:7004 pid=4189072)
 analyze foo_p;
 select * from foo_p;
  i 
@@ -1799,7 +1804,7 @@ CREATE TABLE partsupp (
 ,
           PARTITION p1 START (1::numeric) END (1001::numeric)
           );
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'ps_partkey' as the Apache Cloudberry data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'ps_partkey' as the Apache Cloudberryata distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 ERROR:  START EXCLUSIVE not supported for partition key data type: numeric
 HINT:  Specify an inclusive START value and remove the EXCLUSIVE keyword
@@ -1834,7 +1839,7 @@ ERROR:  AT clause cannot be used when splitting a default RANGE partition
 drop table k;
 create table j (i int) partition by list(i) (partition a values(1, 2, 3, 4),
 partition b values(5, 6, 7, 8));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Apache Cloudberry data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Apache Cloudberryata distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into j select i from generate_series(1, 8) i;
 alter table j split partition for(1) at (2, 3) into (partition fa, partition
@@ -4314,15 +4319,15 @@ where relname like ('mpp6979%');
    nspname    |       relname       | amname 
 --------------+---------------------+--------
  public       | mpp6979part         | 
- public       | mpp6979part_1_prt_1 | pax
- public       | mpp6979part_1_prt_2 | pax
- public       | mpp6979part_1_prt_3 | pax
- public       | mpp6979part_1_prt_4 | pax
- public       | mpp6979part_1_prt_5 | pax
- public       | mpp6979part_1_prt_6 | pax
- public       | mpp6979part_1_prt_7 | pax
- public       | mpp6979part_1_prt_8 | pax
- public       | mpp6979part_1_prt_9 | pax
+ public       | mpp6979part_1_prt_1 | heap
+ public       | mpp6979part_1_prt_2 | heap
+ public       | mpp6979part_1_prt_3 | heap
+ public       | mpp6979part_1_prt_4 | heap
+ public       | mpp6979part_1_prt_5 | heap
+ public       | mpp6979part_1_prt_6 | heap
+ public       | mpp6979part_1_prt_7 | heap
+ public       | mpp6979part_1_prt_8 | heap
+ public       | mpp6979part_1_prt_9 | heap
  mpp6979dummy | mpp6979tab          | ao_row
 (11 rows)
 
@@ -4358,15 +4363,15 @@ where relname like ('mpp6979%');
 ---------------------+--------------+----------------+--------
  mpp6979part         | public       | f              | 
  mpp6979part_1_prt_1 | public       | t              | ao_row
- mpp6979part_1_prt_2 | public       | t              | pax
- mpp6979part_1_prt_3 | public       | t              | pax
- mpp6979part_1_prt_4 | public       | t              | pax
- mpp6979part_1_prt_5 | public       | t              | pax
- mpp6979part_1_prt_6 | public       | t              | pax
- mpp6979part_1_prt_7 | public       | t              | pax
- mpp6979part_1_prt_8 | public       | t              | pax
- mpp6979part_1_prt_9 | public       | t              | pax
- mpp6979tab          | mpp6979dummy | f              | pax
+ mpp6979part_1_prt_2 | public       | t              | heap
+ mpp6979part_1_prt_3 | public       | t              | heap
+ mpp6979part_1_prt_4 | public       | t              | heap
+ mpp6979part_1_prt_5 | public       | t              | heap
+ mpp6979part_1_prt_6 | public       | t              | heap
+ mpp6979part_1_prt_7 | public       | t              | heap
+ mpp6979part_1_prt_8 | public       | t              | heap
+ mpp6979part_1_prt_9 | public       | t              | heap
+ mpp6979tab          | mpp6979dummy | f              | heap
 (11 rows)
 
 drop table mpp6979part;
@@ -4486,30 +4491,6 @@ group by relname;
 
 drop table s cascade;
 --   MPP-13750 )
--- MPP-13806 start
-drop table if exists mpp13806;
-NOTICE:  table "mpp13806" does not exist, skipping
- CREATE TABLE mpp13806 (id int, date date, amt decimal(10,2))
- DISTRIBUTED BY (id)
- PARTITION BY RANGE (date)
- ( START (date '2008-01-01') INCLUSIVE
-	END (date '2008-01-05') EXCLUSIVE
-	EVERY (INTERVAL '1 day') );
- 
--- Adding unbound partition right before the start  used to fail
-alter table mpp13806 add partition test end (date '2008-01-01') exclusive;
- 
-drop table if exists mpp13806;
- CREATE TABLE mpp13806 (id int, date date, amt decimal(10,2))
- DISTRIBUTED BY (id)
- PARTITION BY RANGE (date)
- ( START (date '2008-01-01') EXCLUSIVE
-	END (date '2008-01-05') EXCLUSIVE
-	EVERY (INTERVAL '1 day') );
--- For good measure, test the opposite case
-alter table mpp13806 add partition test end (date '2008-01-01') inclusive;
-drop table mpp13806;
--- MPP-13806 end
 -- MPP-14471 start
 -- No unenforceable PK/UK constraints!  (UNIQUE INDEXes still allowed; tested above)
 drop table if exists tc cascade;
@@ -4891,30 +4872,29 @@ analyze bar;
 set optimizer_segments = 3;
 set optimizer_nestloop_factor = 1.0;
 explain select foo_p.b, foo_p.t from foo_p left outer join bar on foo_p.a = bar.k  where foo_p.t is not null and foo_p.a = (array[1])[1];
-                                            QUERY PLAN                                            
---------------------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)  (cost=10.28..366.35 rows=13416 width=31)
-   ->  Hash Right Join  (cost=10.28..187.47 rows=4472 width=31)
-         Hash Cond: (bar.k = foo_p.a)
-         ->  Broadcast Motion 3:3  (slice2; segments: 3)  (cost=0.00..126.56 rows=2236 width=4)
-               ->  Seq Scan on bar  (cost=0.00..96.75 rows=745 width=4)
-                     Filter: (k = 1)
-         ->  Hash  (cost=10.21..10.21 rows=6 width=35)
-               ->  Append  (cost=0.00..10.21 rows=6 width=35)
-                     ->  Seq Scan on foo_p_1_prt_2 foo_p_1  (cost=0.00..1.83 rows=1 width=34)
-                           Filter: ((t IS NOT NULL) AND (a = 1))
-                     ->  Seq Scan on foo_p_1_prt_3 foo_p_2  (cost=0.00..1.83 rows=1 width=34)
-                           Filter: ((t IS NOT NULL) AND (a = 1))
-                     ->  Seq Scan on foo_p_1_prt_4 foo_p_3  (cost=0.00..1.83 rows=1 width=34)
-                           Filter: ((t IS NOT NULL) AND (a = 1))
-                     ->  Seq Scan on foo_p_1_prt_5 foo_p_4  (cost=0.00..1.83 rows=1 width=34)
-                           Filter: ((t IS NOT NULL) AND (a = 1))
-                     ->  Seq Scan on foo_p_1_prt_6 foo_p_5  (cost=0.00..1.83 rows=1 width=34)
-                           Filter: ((t IS NOT NULL) AND (a = 1))
-                     ->  Seq Scan on foo_p_1_prt_other foo_p_6  (cost=0.00..1.01 rows=1 width=40)
-                           Filter: ((t IS NOT NULL) AND (a = 1))
+                                              QUERY PLAN                                              
+------------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=10000000000.00..10000001082.63 rows=13416 width=31)
+   ->  Nested Loop Left Join  (cost=10000000000.00..10000000903.75 rows=4472 width=31)
+         ->  Append  (cost=0.00..10.21 rows=6 width=35)
+               ->  Seq Scan on foo_p_1_prt_2 foo_p_1  (cost=0.00..1.83 rows=1 width=34)
+                     Filter: ((t IS NOT NULL) AND (a = 1))
+               ->  Seq Scan on foo_p_1_prt_3 foo_p_2  (cost=0.00..1.83 rows=1 width=34)
+                     Filter: ((t IS NOT NULL) AND (a = 1))
+               ->  Seq Scan on foo_p_1_prt_4 foo_p_3  (cost=0.00..1.83 rows=1 width=34)
+                     Filter: ((t IS NOT NULL) AND (a = 1))
+               ->  Seq Scan on foo_p_1_prt_5 foo_p_4  (cost=0.00..1.83 rows=1 width=34)
+                     Filter: ((t IS NOT NULL) AND (a = 1))
+               ->  Seq Scan on foo_p_1_prt_6 foo_p_5  (cost=0.00..1.83 rows=1 width=34)
+                     Filter: ((t IS NOT NULL) AND (a = 1))
+               ->  Seq Scan on foo_p_1_prt_other foo_p_6  (cost=0.00..1.01 rows=1 width=40)
+                     Filter: ((t IS NOT NULL) AND (a = 1))
+         ->  Materialize  (cost=0.00..137.74 rows=2236 width=4)
+               ->  Broadcast Motion 3:3  (slice2; segments: 3)  (cost=0.00..126.56 rows=2236 width=4)
+                     ->  Seq Scan on bar  (cost=0.00..96.75 rows=745 width=4)
+                           Filter: (k = 1)
  Optimizer: Postgres query optimizer
-(21 rows)
+(20 rows)
 
 reset optimizer_segments;
 drop table if exists foo_p;
@@ -5682,58 +5662,34 @@ LINE 2:  ( subpartition opt1_1 VALUES (1),
            ^
 -- root partition (and only root) should have relfrozenxid as 0
 select relname, relkind from pg_class where relkind in ('r', 'p') and relname like 'sales%' and relfrozenxid=0;
-    relname     | relkind 
-----------------+---------
- sales          | p
- sales_1_prt_aa | r
- sales_1_prt_bb | r
- sales_1_prt_cc | r
-(4 rows)
+ relname | relkind 
+---------+---------
+ sales   | p
+(1 row)
 
 select gp_segment_id, relname, relkind from gp_dist_random('pg_class') where relkind in ('r', 'p') and relname like 'sales%' and relfrozenxid=0;
- gp_segment_id |    relname     | relkind 
----------------+----------------+---------
-             0 | sales_1_prt_aa | r
-             0 | sales          | p
-             0 | sales_1_prt_bb | r
-             0 | sales_1_prt_cc | r
-             1 | sales_1_prt_aa | r
-             1 | sales          | p
-             1 | sales_1_prt_bb | r
-             1 | sales_1_prt_cc | r
-             2 | sales_1_prt_aa | r
-             2 | sales          | p
-             2 | sales_1_prt_bb | r
-             2 | sales_1_prt_cc | r
-(12 rows)
+ gp_segment_id | relname | relkind 
+---------------+---------+---------
+             0 | sales   | p
+             2 | sales   | p
+             1 | sales   | p
+(3 rows)
 
 alter table sales add column tax float;
 -- root partition (and only root) continues to have relfrozenxid as 0
 select relname, relkind from pg_class where relkind in ('r', 'p') and relname like 'sales%' and relfrozenxid=0;
-    relname     | relkind 
-----------------+---------
- sales          | p
- sales_1_prt_aa | r
- sales_1_prt_bb | r
- sales_1_prt_cc | r
-(4 rows)
+ relname | relkind 
+---------+---------
+ sales   | p
+(1 row)
 
 select gp_segment_id, relname, relkind from gp_dist_random('pg_class') where relkind in ('r', 'p') and relname like 'sales%' and relfrozenxid=0;
- gp_segment_id |    relname     | relkind 
----------------+----------------+---------
-             0 | sales          | p
-             0 | sales_1_prt_aa | r
-             0 | sales_1_prt_bb | r
-             0 | sales_1_prt_cc | r
-             1 | sales          | p
-             1 | sales_1_prt_aa | r
-             1 | sales_1_prt_bb | r
-             1 | sales_1_prt_cc | r
-             2 | sales          | p
-             2 | sales_1_prt_aa | r
-             2 | sales_1_prt_bb | r
-             2 | sales_1_prt_cc | r
-(12 rows)
+ gp_segment_id | relname | relkind 
+---------------+---------+---------
+             0 | sales   | p
+             1 | sales   | p
+             2 | sales   | p
+(3 rows)
 
 alter table sales drop column tax;
 create table newpart(like sales);
@@ -5770,7 +5726,7 @@ select * from sales order by pkid;
 
 drop table sales cascade;
 NOTICE:  drop cascades to default value for column pkid of table newpart
--- Exchage partiton table with a table having dropped column
+-- Exchage partition table with a table having dropped column
 create table exchange_part(a int, b int) partition by range(b) (start (0) end (10) every (5));
 create table exchange1(a int, c int, b int);
 alter table exchange1 drop column c;
@@ -5823,38 +5779,38 @@ select relname, pg_get_expr(relpartbound, oid) from pg_class where relname like 
  pt_tab_encode_1_prt_s_xyz | FOR VALUES IN ('xyz')
 (3 rows)
 
-select gp_segment_id, attrelid::regclass, attnum, attoptions from pg_attribute_encoding where attrelid = 'pt_tab_encode_1_prt_s_abc'::regclass;
- gp_segment_id |         attrelid          | attnum |                     attoptions                      
----------------+---------------------------+--------+-----------------------------------------------------
-            -1 | pt_tab_encode_1_prt_s_abc |      1 | {compresstype=zlib,compresslevel=1,blocksize=32768}
-            -1 | pt_tab_encode_1_prt_s_abc |      2 | {compresstype=zlib,compresslevel=1,blocksize=32768}
+select gp_segment_id, attrelid::regclass, attnum, filenum, attoptions from pg_attribute_encoding where attrelid = 'pt_tab_encode_1_prt_s_abc'::regclass;
+ gp_segment_id |         attrelid          | attnum | filenum |                     attoptions                      
+---------------+---------------------------+--------+---------+-----------------------------------------------------
+            -1 | pt_tab_encode_1_prt_s_abc |      1 |       1 | {compresstype=zlib,compresslevel=1,blocksize=32768}
+            -1 | pt_tab_encode_1_prt_s_abc |      2 |       2 | {compresstype=zlib,compresslevel=1,blocksize=32768}
 (2 rows)
 
-select gp_segment_id, attrelid::regclass, attnum, attoptions from gp_dist_random('pg_attribute_encoding') where attrelid = 'pt_tab_encode_1_prt_s_abc'::regclass order by 1,3 limit 5;
- gp_segment_id |         attrelid          | attnum |                     attoptions                      
----------------+---------------------------+--------+-----------------------------------------------------
-             0 | pt_tab_encode_1_prt_s_abc |      1 | {compresstype=zlib,compresslevel=1,blocksize=32768}
-             0 | pt_tab_encode_1_prt_s_abc |      2 | {compresstype=zlib,compresslevel=1,blocksize=32768}
-             1 | pt_tab_encode_1_prt_s_abc |      1 | {compresstype=zlib,compresslevel=1,blocksize=32768}
-             1 | pt_tab_encode_1_prt_s_abc |      2 | {compresstype=zlib,compresslevel=1,blocksize=32768}
-             2 | pt_tab_encode_1_prt_s_abc |      1 | {compresstype=zlib,compresslevel=1,blocksize=32768}
+select gp_segment_id, attrelid::regclass, attnum, filenum, attoptions from gp_dist_random('pg_attribute_encoding') where attrelid = 'pt_tab_encode_1_prt_s_abc'::regclass order by 1,3 limit 5;
+ gp_segment_id |         attrelid          | attnum | filenum |                     attoptions                      
+---------------+---------------------------+--------+---------+-----------------------------------------------------
+             0 | pt_tab_encode_1_prt_s_abc |      1 |       1 | {compresstype=zlib,compresslevel=1,blocksize=32768}
+             0 | pt_tab_encode_1_prt_s_abc |      2 |       2 | {compresstype=zlib,compresslevel=1,blocksize=32768}
+             1 | pt_tab_encode_1_prt_s_abc |      1 |       1 | {compresstype=zlib,compresslevel=1,blocksize=32768}
+             1 | pt_tab_encode_1_prt_s_abc |      2 |       2 | {compresstype=zlib,compresslevel=1,blocksize=32768}
+             2 | pt_tab_encode_1_prt_s_abc |      1 |       1 | {compresstype=zlib,compresslevel=1,blocksize=32768}
 (5 rows)
 
-select gp_segment_id, attrelid::regclass, attnum, attoptions from pg_attribute_encoding where attrelid = 'pt_tab_encode_1_prt_s_xyz'::regclass;
- gp_segment_id |         attrelid          | attnum |                     attoptions                      
----------------+---------------------------+--------+-----------------------------------------------------
-            -1 | pt_tab_encode_1_prt_s_xyz |      1 | {compresstype=zlib,compresslevel=1,blocksize=32768}
-            -1 | pt_tab_encode_1_prt_s_xyz |      2 | {compresstype=zlib,compresslevel=1,blocksize=32768}
+select gp_segment_id, attrelid::regclass, attnum, filenum, attoptions from pg_attribute_encoding where attrelid = 'pt_tab_encode_1_prt_s_xyz'::regclass;
+ gp_segment_id |         attrelid          | attnum | filenum |                     attoptions                      
+---------------+---------------------------+--------+---------+-----------------------------------------------------
+            -1 | pt_tab_encode_1_prt_s_xyz |      1 |       1 | {compresstype=zlib,compresslevel=1,blocksize=32768}
+            -1 | pt_tab_encode_1_prt_s_xyz |      2 |       2 | {compresstype=zlib,compresslevel=1,blocksize=32768}
 (2 rows)
 
-select gp_segment_id, attrelid::regclass, attnum, attoptions from gp_dist_random('pg_attribute_encoding') where attrelid = 'pt_tab_encode_1_prt_s_xyz'::regclass order by 1,3 limit 5;
- gp_segment_id |         attrelid          | attnum |                     attoptions                      
----------------+---------------------------+--------+-----------------------------------------------------
-             0 | pt_tab_encode_1_prt_s_xyz |      1 | {compresstype=zlib,compresslevel=1,blocksize=32768}
-             0 | pt_tab_encode_1_prt_s_xyz |      2 | {compresstype=zlib,compresslevel=1,blocksize=32768}
-             1 | pt_tab_encode_1_prt_s_xyz |      1 | {compresstype=zlib,compresslevel=1,blocksize=32768}
-             1 | pt_tab_encode_1_prt_s_xyz |      2 | {compresstype=zlib,compresslevel=1,blocksize=32768}
-             2 | pt_tab_encode_1_prt_s_xyz |      1 | {compresstype=zlib,compresslevel=1,blocksize=32768}
+select gp_segment_id, attrelid::regclass, attnum, filenum, attoptions from gp_dist_random('pg_attribute_encoding') where attrelid = 'pt_tab_encode_1_prt_s_xyz'::regclass order by 1,3 limit 5;
+ gp_segment_id |         attrelid          | attnum | filenum |                     attoptions                      
+---------------+---------------------------+--------+---------+-----------------------------------------------------
+             0 | pt_tab_encode_1_prt_s_xyz |      1 |       1 | {compresstype=zlib,compresslevel=1,blocksize=32768}
+             0 | pt_tab_encode_1_prt_s_xyz |      2 |       2 | {compresstype=zlib,compresslevel=1,blocksize=32768}
+             1 | pt_tab_encode_1_prt_s_xyz |      1 |       1 | {compresstype=zlib,compresslevel=1,blocksize=32768}
+             1 | pt_tab_encode_1_prt_s_xyz |      2 |       2 | {compresstype=zlib,compresslevel=1,blocksize=32768}
+             2 | pt_tab_encode_1_prt_s_xyz |      1 |       1 | {compresstype=zlib,compresslevel=1,blocksize=32768}
 (5 rows)
 
 select c.oid::regclass, relkind, amname, reloptions from pg_class c left join pg_am am on am.oid = relam where c.oid = 'pt_tab_encode_1_prt_s_abc'::regclass;
@@ -5992,13 +5948,15 @@ ERROR:  operator class "employee_incomplete_op_class" of access method btree is 
 -- We grant default SELECT permission to a new user, this new user should be
 -- able to SELECT from any partition table we create later.
 -- (https://github.com/greenplum-db/gpdb/issues/9524)
-DROP TABLE IF EXISTS public.t_part_acl;
-NOTICE:  table "t_part_acl" does not exist, skipping
+DROP TABLE IF EXISTS user_prt_acl.t_part_acl;
+DROP SCHEMA IF EXISTS user_prt_acl;
 DROP ROLE IF EXISTS user_prt_acl;
 CREATE ROLE user_prt_acl;
 NOTICE:  resource queue required -- using default resource queue "pg_default"
-ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT ON TABLES TO user_prt_acl;
-CREATE TABLE public.t_part_acl (dt date)
+CREATE SCHEMA schema_part_acl;
+GRANT USAGE ON SCHEMA schema_part_acl TO user_prt_acl;
+ALTER DEFAULT PRIVILEGES IN SCHEMA schema_part_acl GRANT SELECT ON TABLES TO user_prt_acl;
+CREATE TABLE schema_part_acl.t_part_acl (dt date)
 PARTITION BY RANGE (dt)
 (
     START (date '2019-12-01') INCLUSIVE
@@ -6007,7 +5965,7 @@ PARTITION BY RANGE (dt)
 );
 NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'dt' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
-INSERT INTO public.t_part_acl VALUES (date '2019-12-01'), (date '2020-01-31');
+INSERT INTO schema_part_acl.t_part_acl VALUES (date '2019-12-01'), (date '2020-01-31');
 -- check if parent and child table have same relacl
 SELECT relname FROM pg_class
 WHERE relname LIKE 't_part_acl%'
@@ -6021,7 +5979,7 @@ WHERE relname LIKE 't_part_acl%'
 
 -- check if new user can SELECT all data
 SET ROLE user_prt_acl;
-SELECT * FROM public.t_part_acl;
+SELECT * FROM schema_part_acl.t_part_acl;
      dt     
 ------------
  12-01-2019
@@ -6029,6 +5987,694 @@ SELECT * FROM public.t_part_acl;
 (2 rows)
 
 RESET ROLE;
-DROP TABLE public.t_part_acl;
-ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE SELECT ON TABLES FROM user_prt_acl;
-DROP ROLE user_prt_acl;
+-- we don't drop the table, schema and role here in order to test upgrade
+--
+-- Github issue: https://github.com/apache/cloudberry/issues/547
+-- Test COPY FROM on partitions tables.
+--
+create table t_issue_547_aoco(a int, b int) partition by range(b) (start(1) end(34) every(1)) using ao_column distributed by (a);
+\copy t_issue_547_aoco from 'data/partition_copy.csv' (format csv);
+analyze t_issue_547_aoco;
+select count(*) from t_issue_547_aoco;
+ count 
+-------
+  1001
+(1 row)
+
+create table t_issue_547_ao(a int, b int) partition by range(b) (start(1) end(34) every(1)) using ao_row distributed by (a);
+\copy t_issue_547_ao from 'data/partition_copy.csv' (format csv);
+analyze t_issue_547_ao;
+select count(*) from t_issue_547_ao;
+ count 
+-------
+  1001
+(1 row)
+
+drop table t_issue_547_aoco;
+drop table t_issue_547_ao;
+-- test on commit behavior used on partition table
+-- test on commit delete rows
+begin;
+create temp table temp_parent (a int) partition by range(a) (start(1) end(10) every(10)) on commit delete rows;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+insert into temp_parent select i from generate_series(1, 5) i;
+select count(*) from temp_parent;
+ count 
+-------
+     5
+(1 row)
+
+commit;
+-- DELETE ROWS will not cascaded to its partitions when we use DELETE ROWS behavior
+select count(*) from temp_parent;
+ count 
+-------
+     5
+(1 row)
+
+drop table temp_parent;
+-- test on commit drop
+begin;
+create temp table temp_parent (a int) partition by range(a) (start(1) end(10) every(1)) on commit drop;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+insert into temp_parent select i from generate_series(1, 5) i;
+select count(*) from pg_class where relname like 'temp_parent_%';
+ count 
+-------
+     9
+(1 row)
+
+commit;
+-- no relations remain in this case.
+select count(*) from pg_class where relname like 'temp_parent_%';
+ count 
+-------
+     0
+(1 row)
+
+-- check ATTACH PARTITION on parent table with different distribution policy
+CREATE EXTENSION IF NOT EXISTS gp_debug_numsegments;
+SELECT gp_debug_set_create_table_default_numsegments(1);
+ gp_debug_set_create_table_default_numsegments 
+-----------------------------------------------
+ 1
+(1 row)
+
+CREATE TABLE expanded_parent(a int, b int) PARTITION BY RANGE(b) (START (0) END (6) EVERY (3));
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+CREATE TABLE expanded_parent2(a int, b int) PARTITION BY RANGE(b) (START (0) END (6) EVERY (3));
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+CREATE TABLE unexpanded_parent(a int, b int) PARTITION BY RANGE(b) (START (0) END (6) EVERY (3));
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+CREATE TABLE unexpanded_attach(a int, b int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+CREATE TABLE unexpanded_attach2(a int, b int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+CREATE TABLE expanded_attach(a int, b int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+CREATE TABLE expanded_attach2(a int, b int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+SELECT gp_debug_reset_create_table_default_numsegments();
+ gp_debug_reset_create_table_default_numsegments 
+-------------------------------------------------
+ 
+(1 row)
+
+-- attaching unexpanded partition to expanded table should fail
+ALTER TABLE expanded_parent EXPAND TABLE;
+ALTER TABLE expanded_parent ATTACH PARTITION unexpanded_attach FOR VALUES FROM (6) TO (9);
+ERROR:  distribution policy for "unexpanded_attach" must be the same as that for "expanded_parent"
+-- attaching unexpanded partition to expanded table with partition prepare should fail
+ALTER TABLE expanded_parent2 EXPAND PARTITION PREPARE;
+ALTER TABLE expanded_parent2 ATTACH PARTITION unexpanded_attach2 FOR VALUES FROM (6) TO (9);
+ERROR:  distribution policy for "unexpanded_attach2" must be the same as that for "expanded_parent2"
+-- attaching expanded partition to unexpanded table should fail
+ALTER TABLE expanded_attach EXPAND TABLE;
+ALTER TABLE unexpanded_parent ATTACH PARTITION expanded_attach FOR VALUES FROM (6) TO (9);
+ERROR:  distribution policy for "expanded_attach" must be the same as that for "unexpanded_parent"
+-- attaching expanded partition to expanded table should succeed
+ALTER TABLE expanded_attach2 EXPAND TABLE;
+ALTER TABLE expanded_parent2 ATTACH PARTITION expanded_attach2 FOR VALUES FROM (6) TO (9);
+ALTER TABLE expanded_parent ATTACH PARTITION expanded_attach FOR VALUES FROM (6) TO (9);
+-- cleanup
+DROP TABLE expanded_parent;
+DROP TABLE expanded_parent2;
+DROP TABLE unexpanded_parent;
+DROP TABLE unexpanded_attach;
+DROP TABLE unexpanded_attach2;
+--
+-- Verify inheritance behavior of new partition child using various syntax
+--
+-- set owner for partition root (should be inherited except for ATTACH, EXCHANGE)
+CREATE ROLE part_inherit_role CREATEROLE;
+NOTICE:  resource queue required -- using default resource queue "pg_default"
+CREATE ROLE part_inherit_other_role IN ROLE part_inherit_role;
+NOTICE:  resource queue required -- using default resource queue "pg_default"
+CREATE ROLE part_inherit_priv_role;
+NOTICE:  resource queue required -- using default resource queue "pg_default"
+CREATE ROLE part_inherit_attach_priv_role;
+NOTICE:  resource queue required -- using default resource queue "pg_default"
+CREATE ROLE part_inherit_exchange_out_priv_role;
+NOTICE:  resource queue required -- using default resource queue "pg_default"
+SET ROLE part_inherit_role;
+CREATE TABLE part_inherit (
+    a int,
+    b int,
+-- non-partition constraint should be inherited except for ATTACH, EXCHANGE
+    CONSTRAINT con1 CHECK (a >= 0)
+)
+PARTITION BY RANGE (a)
+SUBPARTITION BY RANGE (b)
+SUBPARTITION TEMPLATE
+(SUBPARTITION l2_child START(10100) END(10200))
+(DEFAULT PARTITION l1_default,
+       PARTITION l1_child1 START (0) END (100),
+       PARTITION l1_to_split START (100) END (200),
+       PARTITION l1_to_exchange START (200) END (300))
+--AM and reloption should be inherited except for ATTACH, EXCHANGE
+WITH (appendonly = TRUE, compresslevel = 7);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+-- Set more properties for the root.
+-- index are inherited 
+CREATE INDEX part_inherit_i on part_inherit(a);
+-- privileges are inherited except for ATTACH, EXCHANGE
+GRANT UPDATE ON part_inherit TO part_inherit_priv_role;
+-- triggers are inherited except for subpartitions 
+-- FIXME: In 6X we used to not inherit triggers at all, in 7X we start to inherit
+-- trigger like the upstream, but the subpartitions created from the subpartition 
+-- template still don't inherit the triggers. We should fix that.
+CREATE FUNCTION part_inherit_trig() RETURNS TRIGGER LANGUAGE plpgsql
+  AS $$ BEGIN RETURN NULL; END $$;
+CREATE TRIGGER part_inherit_tg AFTER INSERT ON part_inherit
+  FOR EACH ROW EXECUTE FUNCTION part_inherit_trig();
+-- rules are not inherited
+CREATE RULE part_inherit_rule AS ON UPDATE TO part_inherit DO INSERT INTO part_inherit values(1);
+-- row-level security policies are not inherited
+ALTER TABLE part_inherit ENABLE ROW LEVEL SECURITY;
+-- Check the current status 
+SELECT c.relname,
+        c.reloptions,
+        c.relkind,
+        a.amname as am,
+        c.relhasindex as hasindex,
+        r.rolname as owner,
+        c.relacl as acl,
+        c.relchecks as numchecks,
+        c.relhasrules as hasrules,
+        c.relhastriggers as hastriggers,
+        c.relrowsecurity as rowsecurity
+FROM pg_class c join pg_roles r on c.relowner = r.oid
+        join pg_am a on c.relam = a.oid
+WHERE c.relname LIKE 'part_inherit%' AND 
+        c.relkind NOT IN ('i', 'I');
+                     relname                      |    reloptions     | relkind |   am   | hasindex |       owner       |                                           acl                                            | numchecks | hasrules | hastriggers | rowsecurity 
+--------------------------------------------------+-------------------+---------+--------+----------+-------------------+------------------------------------------------------------------------------------------+-----------+----------+-------------+-------------
+ part_inherit                                     | {compresslevel=7} | p       | ao_row | t        | part_inherit_role | {part_inherit_role=arwdDxt/part_inherit_role,part_inherit_priv_role=w/part_inherit_role} |         1 | t        | t           | t
+ part_inherit_1_prt_l1_child1                     | {compresslevel=7} | p       | ao_row | t        | part_inherit_role | {part_inherit_role=arwdDxt/part_inherit_role,part_inherit_priv_role=w/part_inherit_role} |         1 | f        | t           | f
+ part_inherit_1_prt_l1_child1_2_prt_l2_child      | {compresslevel=7} | r       | ao_row | t        | part_inherit_role | {part_inherit_role=arwdDxt/part_inherit_role,part_inherit_priv_role=w/part_inherit_role} |         1 | f        | t           | f
+ part_inherit_1_prt_l1_default                    | {compresslevel=7} | p       | ao_row | t        | part_inherit_role | {part_inherit_role=arwdDxt/part_inherit_role,part_inherit_priv_role=w/part_inherit_role} |         1 | f        | t           | f
+ part_inherit_1_prt_l1_default_2_prt_l2_child     | {compresslevel=7} | r       | ao_row | t        | part_inherit_role | {part_inherit_role=arwdDxt/part_inherit_role,part_inherit_priv_role=w/part_inherit_role} |         1 | f        | t           | f
+ part_inherit_1_prt_l1_to_exchange                | {compresslevel=7} | p       | ao_row | t        | part_inherit_role | {part_inherit_role=arwdDxt/part_inherit_role,part_inherit_priv_role=w/part_inherit_role} |         1 | f        | t           | f
+ part_inherit_1_prt_l1_to_exchange_2_prt_l2_child | {compresslevel=7} | r       | ao_row | t        | part_inherit_role | {part_inherit_role=arwdDxt/part_inherit_role,part_inherit_priv_role=w/part_inherit_role} |         1 | f        | t           | f
+ part_inherit_1_prt_l1_to_split                   | {compresslevel=7} | p       | ao_row | t        | part_inherit_role | {part_inherit_role=arwdDxt/part_inherit_role,part_inherit_priv_role=w/part_inherit_role} |         1 | f        | t           | f
+ part_inherit_1_prt_l1_to_split_2_prt_l2_child    | {compresslevel=7} | r       | ao_row | t        | part_inherit_role | {part_inherit_role=arwdDxt/part_inherit_role,part_inherit_priv_role=w/part_inherit_role} |         1 | f        | t           | f
+(9 rows)
+
+-- Now create child partitions in various forms 
+-- set an alternative role
+SET ROLE part_inherit_other_role;
+-- CREATE TABLE PARTITION OF
+CREATE TABLE part_inherit_partof PARTITION OF part_inherit FOR VALUES FROM (300) TO (400);
+NOTICE:  table has parent, setting distribution columns to match parent table
+SELECT c.relname,
+        c.reloptions,
+        c.relkind,
+        a.amname as am,
+        c.relhasindex as hasindex,
+        r.rolname as owner,
+        c.relacl as acl,
+        c.relchecks as numchecks,
+        c.relhasrules as hasrules,
+        c.relhastriggers as hastriggers,
+        c.relrowsecurity as rowsecurity
+FROM pg_class c join pg_roles r on c.relowner = r.oid
+        join pg_am a on c.relam = a.oid
+WHERE c.relname = 'part_inherit_partof';
+       relname       |    reloptions     | relkind |   am   | hasindex |          owner          |                                           acl                                            | numchecks | hasrules | hastriggers | rowsecurity 
+---------------------+-------------------+---------+--------+----------+-------------------------+------------------------------------------------------------------------------------------+-----------+----------+-------------+-------------
+ part_inherit_partof | {compresslevel=7} | r       | ao_row | t        | part_inherit_other_role | {part_inherit_role=arwdDxt/part_inherit_role,part_inherit_priv_role=w/part_inherit_role} |         1 | f        | t           | f
+(1 row)
+
+-- Now create child partitions in various forms 
+-- ATTACH PARTITION
+-- error if the partition-to-be doesn't have the same constraint as the parent.
+CREATE TABLE part_inherit_attach(a int, b int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+ALTER TABLE part_inherit ATTACH PARTITION part_inherit_attach FOR VALUES FROM (400) TO (500);
+ERROR:  child table is missing constraint "con1"
+DROP TABLE part_inherit_attach;
+-- good case: have the same constraint as parent. Can have other constraint too.
+CREATE TABLE part_inherit_attach(a int, b int, CONSTRAINT con1 CHECK (a>=0), CONSTRAINT con2 CHECK (b>=0));
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+-- reloptions and AM ('heap' which is different than the future parent) will be kept
+ALTER TABLE part_inherit_attach SET (fillfactor=30);
+-- privilege will be kept
+GRANT UPDATE ON part_inherit_attach TO part_inherit_attach_priv_role;
+-- do the attach
+ALTER TABLE part_inherit ATTACH PARTITION part_inherit_attach FOR VALUES FROM (400) TO (500);
+SELECT c.relname,
+        c.reloptions,
+        c.relkind,
+        a.amname as am,
+        c.relhasindex as hasindex,
+        r.rolname as owner,
+        c.relacl as acl,
+        c.relchecks as numchecks,
+        c.relhasrules as hasrules,
+        c.relhastriggers as hastriggers,
+        c.relrowsecurity as rowsecurity
+FROM pg_class c join pg_roles r on c.relowner = r.oid
+        join pg_am a on c.relam = a.oid
+WHERE c.relname = 'part_inherit_attach';
+       relname       |   reloptions    | relkind |  am  | hasindex |          owner          |                                                        acl                                                        | numchecks | hasrules | hastriggers | rowsecurity 
+---------------------+-----------------+---------+------+----------+-------------------------+-------------------------------------------------------------------------------------------------------------------+-----------+----------+-------------+-------------
+ part_inherit_attach | {fillfactor=30} | r       | heap | t        | part_inherit_other_role | {part_inherit_other_role=arwdDxt/part_inherit_other_role,part_inherit_attach_priv_role=w/part_inherit_other_role} |         2 | f        | t           | f
+(1 row)
+
+-- ADD PARTITION
+ALTER TABLE part_inherit ADD PARTITION added START(500) END(600);
+SELECT c.relname,
+        c.reloptions,
+        c.relkind,
+        a.amname as am,
+        c.relhasindex as hasindex,
+        r.rolname as owner,
+        c.relacl as acl,
+        c.relchecks as numchecks,
+        c.relhasrules as hasrules,
+        c.relhastriggers as hastriggers,
+        c.relrowsecurity as rowsecurity
+FROM pg_class c join pg_roles r on c.relowner = r.oid
+        join pg_am a on c.relam = a.oid
+WHERE c.relname LIKE 'part_inherit_1_prt_added%' AND 
+        c.relkind NOT IN ('i', 'I');
+                 relname                 |    reloptions     | relkind |   am   | hasindex |       owner       |                                           acl                                            | numchecks | hasrules | hastriggers | rowsecurity 
+-----------------------------------------+-------------------+---------+--------+----------+-------------------+------------------------------------------------------------------------------------------+-----------+----------+-------------+-------------
+ part_inherit_1_prt_added                | {compresslevel=7} | p       | ao_row | t        | part_inherit_role | {part_inherit_role=arwdDxt/part_inherit_role,part_inherit_priv_role=w/part_inherit_role} |         1 | f        | t           | f
+ part_inherit_1_prt_added_2_prt_l2_child | {compresslevel=7} | r       | ao_row | t        | part_inherit_role | {part_inherit_role=arwdDxt/part_inherit_role,part_inherit_priv_role=w/part_inherit_role} |         1 | f        | t           | f
+(2 rows)
+
+-- EXCHANGE PARTITION - same behavior as ATTACH PARTITION
+-- error if the partition-to-be doesn't have the same constraint as the parent.
+CREATE TABLE part_inherit_exchange_out(a int, b int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+ALTER TABLE part_inherit_1_prt_l1_to_exchange EXCHANGE PARTITION l2_child WITH TABLE part_inherit_exchange_out;
+ERROR:  child table is missing constraint "con1"
+DROP TABLE part_inherit_exchange_out;
+-- good case: have the same constraint as parent. Can have other constraint too.
+CREATE TABLE part_inherit_exchange_out(a int, b int, CONSTRAINT con1 CHECK (a>=0), CONSTRAINT con2 CHECK (b>=0));
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+-- reloptions and AM ('heap' which is different than the future parent) will be kept
+ALTER TABLE part_inherit_exchange_out SET (fillfactor=30);
+-- privilege will be kept
+GRANT UPDATE ON part_inherit_exchange_out TO part_inherit_exchange_out_priv_role;
+-- do the exchange
+ALTER TABLE part_inherit_1_prt_l1_to_exchange EXCHANGE PARTITION l2_child WITH TABLE part_inherit_exchange_out;
+SELECT c.relname,
+        c.reloptions,
+        c.relkind,
+        a.amname as am,
+        c.relhasindex as hasindex,
+        r.rolname as owner,
+        c.relacl as acl,
+        c.relchecks as numchecks,
+        c.relhasrules as hasrules,
+        c.relhastriggers as hastriggers,
+        c.relrowsecurity as rowsecurity
+FROM pg_class c join pg_roles r on c.relowner = r.oid
+        join pg_am a on c.relam = a.oid
+WHERE (c.relname LIKE 'part_inherit_1_prt_l1_to_exchange%' OR c.relname = 'part_inherit_exchange_out')
+	AND c.relkind NOT IN ('i', 'I');
+                     relname                      |    reloptions     | relkind |   am   | hasindex |          owner          |                                                           acl                                                           | numchecks | hasrules | hastriggers | rowsecurity 
+--------------------------------------------------+-------------------+---------+--------+----------+-------------------------+-------------------------------------------------------------------------------------------------------------------------+-----------+----------+-------------+-------------
+ part_inherit_1_prt_l1_to_exchange                | {compresslevel=7} | p       | ao_row | t        | part_inherit_role       | {part_inherit_role=arwdDxt/part_inherit_role,part_inherit_priv_role=w/part_inherit_role}                                |         1 | f        | t           | f
+ part_inherit_1_prt_l1_to_exchange_2_prt_l2_child | {fillfactor=30}   | r       | heap   | t        | part_inherit_other_role | {part_inherit_other_role=arwdDxt/part_inherit_other_role,part_inherit_exchange_out_priv_role=w/part_inherit_other_role} |         2 | f        | t           | f
+ part_inherit_exchange_out                        | {compresslevel=7} | r       | ao_row | t        | part_inherit_role       | {part_inherit_role=arwdDxt/part_inherit_role,part_inherit_priv_role=w/part_inherit_role}                                |         1 | f        | t           | f
+(3 rows)
+
+-- SPLIT PARTITION
+ALTER TABLE part_inherit_1_prt_l1_to_split SPLIT PARTITION l2_child AT (10150) INTO (PARTITION split1, PARTITION split2);
+SELECT c.relname,
+        c.reloptions,
+        c.relkind,
+        a.amname as am,
+        c.relhasindex as hasindex,
+        r.rolname as owner,
+        c.relacl as acl,
+        c.relchecks as numchecks,
+        c.relhasrules as hasrules,
+        c.relhastriggers as hastriggers,
+        c.relrowsecurity as rowsecurity
+FROM pg_class c join pg_roles r on c.relowner = r.oid
+        join pg_am a on c.relam = a.oid
+WHERE c.relname LIKE 'part_inherit_1_prt_l1_to_split%' AND 
+        c.relkind NOT IN ('i', 'I');
+                   relname                   |    reloptions     | relkind |   am   | hasindex |       owner       |                                           acl                                            | numchecks | hasrules | hastriggers | rowsecurity 
+---------------------------------------------+-------------------+---------+--------+----------+-------------------+------------------------------------------------------------------------------------------+-----------+----------+-------------+-------------
+ part_inherit_1_prt_l1_to_split              | {compresslevel=7} | p       | ao_row | t        | part_inherit_role | {part_inherit_role=arwdDxt/part_inherit_role,part_inherit_priv_role=w/part_inherit_role} |         1 | f        | t           | f
+ part_inherit_1_prt_l1_to_split_2_prt_split1 | {compresslevel=7} | r       | ao_row | t        | part_inherit_role | {part_inherit_role=arwdDxt/part_inherit_role,part_inherit_priv_role=w/part_inherit_role} |         1 | f        | t           | f
+ part_inherit_1_prt_l1_to_split_2_prt_split2 | {compresslevel=7} | r       | ao_row | t        | part_inherit_role | {part_inherit_role=arwdDxt/part_inherit_role,part_inherit_priv_role=w/part_inherit_role} |         1 | f        | t           | f
+(3 rows)
+
+-- Now print everything for comparison
+SELECT c.relname,
+        c.reloptions,
+        c.relkind,
+        a.amname as am,
+        c.relhasindex as hasindex,
+        r.rolname as owner,
+        c.relacl as acl,
+        c.relchecks as numchecks,
+        c.relhasrules as hasrules,
+        c.relhastriggers as hastriggers,
+        c.relrowsecurity as rowsecurity
+FROM pg_class c join pg_roles r on c.relowner = r.oid
+        join pg_am a on c.relam = a.oid
+WHERE c.relname LIKE 'part_inherit%' AND 
+        c.relkind NOT IN ('i', 'I');
+                     relname                      |    reloptions     | relkind |   am   | hasindex |          owner          |                                                           acl                                                           | numchecks | hasrules | hastriggers | rowsecurity 
+--------------------------------------------------+-------------------+---------+--------+----------+-------------------------+-------------------------------------------------------------------------------------------------------------------------+-----------+----------+-------------+-------------
+ part_inherit_1_prt_l1_to_exchange_2_prt_l2_child | {fillfactor=30}   | r       | heap   | t        | part_inherit_other_role | {part_inherit_other_role=arwdDxt/part_inherit_other_role,part_inherit_exchange_out_priv_role=w/part_inherit_other_role} |         2 | f        | t           | f
+ part_inherit_attach                              | {fillfactor=30}   | r       | heap   | t        | part_inherit_other_role | {part_inherit_other_role=arwdDxt/part_inherit_other_role,part_inherit_attach_priv_role=w/part_inherit_other_role}       |         2 | f        | t           | f
+ part_inherit_partof                              | {compresslevel=7} | r       | ao_row | t        | part_inherit_other_role | {part_inherit_role=arwdDxt/part_inherit_role,part_inherit_priv_role=w/part_inherit_role}                                |         1 | f        | t           | f
+ part_inherit                                     | {compresslevel=7} | p       | ao_row | t        | part_inherit_role       | {part_inherit_role=arwdDxt/part_inherit_role,part_inherit_priv_role=w/part_inherit_role}                                |         1 | t        | t           | t
+ part_inherit_1_prt_added                         | {compresslevel=7} | p       | ao_row | t        | part_inherit_role       | {part_inherit_role=arwdDxt/part_inherit_role,part_inherit_priv_role=w/part_inherit_role}                                |         1 | f        | t           | f
+ part_inherit_1_prt_added_2_prt_l2_child          | {compresslevel=7} | r       | ao_row | t        | part_inherit_role       | {part_inherit_role=arwdDxt/part_inherit_role,part_inherit_priv_role=w/part_inherit_role}                                |         1 | f        | t           | f
+ part_inherit_1_prt_l1_child1                     | {compresslevel=7} | p       | ao_row | t        | part_inherit_role       | {part_inherit_role=arwdDxt/part_inherit_role,part_inherit_priv_role=w/part_inherit_role}                                |         1 | f        | t           | f
+ part_inherit_1_prt_l1_child1_2_prt_l2_child      | {compresslevel=7} | r       | ao_row | t        | part_inherit_role       | {part_inherit_role=arwdDxt/part_inherit_role,part_inherit_priv_role=w/part_inherit_role}                                |         1 | f        | t           | f
+ part_inherit_1_prt_l1_default                    | {compresslevel=7} | p       | ao_row | t        | part_inherit_role       | {part_inherit_role=arwdDxt/part_inherit_role,part_inherit_priv_role=w/part_inherit_role}                                |         1 | f        | t           | f
+ part_inherit_1_prt_l1_default_2_prt_l2_child     | {compresslevel=7} | r       | ao_row | t        | part_inherit_role       | {part_inherit_role=arwdDxt/part_inherit_role,part_inherit_priv_role=w/part_inherit_role}                                |         1 | f        | t           | f
+ part_inherit_1_prt_l1_to_exchange                | {compresslevel=7} | p       | ao_row | t        | part_inherit_role       | {part_inherit_role=arwdDxt/part_inherit_role,part_inherit_priv_role=w/part_inherit_role}                                |         1 | f        | t           | f
+ part_inherit_1_prt_l1_to_split                   | {compresslevel=7} | p       | ao_row | t        | part_inherit_role       | {part_inherit_role=arwdDxt/part_inherit_role,part_inherit_priv_role=w/part_inherit_role}                                |         1 | f        | t           | f
+ part_inherit_1_prt_l1_to_split_2_prt_split1      | {compresslevel=7} | r       | ao_row | t        | part_inherit_role       | {part_inherit_role=arwdDxt/part_inherit_role,part_inherit_priv_role=w/part_inherit_role}                                |         1 | f        | t           | f
+ part_inherit_1_prt_l1_to_split_2_prt_split2      | {compresslevel=7} | r       | ao_row | t        | part_inherit_role       | {part_inherit_role=arwdDxt/part_inherit_role,part_inherit_priv_role=w/part_inherit_role}                                |         1 | f        | t           | f
+ part_inherit_exchange_out                        | {compresslevel=7} | r       | ao_row | t        | part_inherit_role       | {part_inherit_role=arwdDxt/part_inherit_role,part_inherit_priv_role=w/part_inherit_role}                                |         1 | f        | t           | f
+(15 rows)
+
+RESET ROLE;
+DROP TABLE part_inherit;
+DROP FUNCTION part_inherit_trig CASCADE;
+DROP TABLE part_inherit_exchange_out;
+DROP ROLE part_inherit_role;
+DROP ROLE part_inherit_other_role;
+DROP ROLE part_inherit_priv_role;
+DROP ROLE part_inherit_attach_priv_role;
+DROP ROLE part_inherit_exchange_out_priv_role;
+--Test cases for data selection from range partitioned tables with predicate on date or timestamp type-------------
+drop table if exists test_rangePartition;
+NOTICE:  table "test_rangepartition" does not exist, skipping
+create table public.test_rangePartition
+(datedday date)
+    WITH (
+        appendonly=false
+        )
+    PARTITION BY RANGE(datedday)
+(
+    PARTITION pn_20221022 START ('2022-10-22'::date) END ('2022-10-23'::date),
+    PARTITION pn_20221023 START ('2022-10-23'::date) END ('2022-10-24'::date),
+    DEFAULT PARTITION pdefault
+    );
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'datedday' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+insert into public.test_rangePartition(datedday)
+select ('2022-10-22'::date)
+union
+select ('2022-10-23'::date);
+--Test case with condition on date and timestamp
+explain (costs off) select max(datedday) from public.test_rangePartition where datedday='2022-10-23' or datedday=('2022-10-23'::date -interval '1 day');
+                                                                 QUERY PLAN                                                                  
+---------------------------------------------------------------------------------------------------------------------------------------------
+ Finalize Aggregate
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         ->  Partial Aggregate
+               ->  Append
+                     ->  Seq Scan on test_rangepartition_1_prt_pn_20221022 test_rangepartition_1
+                           Filter: ((datedday = '10-23-2022'::date) OR (datedday = 'Sat Oct 22 00:00:00 2022'::timestamp without time zone))
+                     ->  Seq Scan on test_rangepartition_1_prt_pn_20221023 test_rangepartition_2
+                           Filter: ((datedday = '10-23-2022'::date) OR (datedday = 'Sat Oct 22 00:00:00 2022'::timestamp without time zone))
+ Optimizer: Postgres query optimizer
+(9 rows)
+
+select max(datedday) from public.test_rangePartition where datedday='2022-10-23' or datedday=('2022-10-23'::date -interval '1 day');
+    max     
+------------
+ 10-23-2022
+(1 row)
+
+--Test case with condition on date and timestamp
+explain (costs off) select max(datedday) from public.test_rangePartition where datedday='2022-10-23' or datedday='2022-10-22';
+                                               QUERY PLAN                                               
+--------------------------------------------------------------------------------------------------------
+ Finalize Aggregate
+   ->  Gather Motion 2:1  (slice1; segments: 2)
+         ->  Partial Aggregate
+               ->  Append
+                     ->  Seq Scan on test_rangepartition_1_prt_pn_20221022 test_rangepartition_1
+                           Filter: ((datedday = '10-23-2022'::date) OR (datedday = '10-22-2022'::date))
+                     ->  Seq Scan on test_rangepartition_1_prt_pn_20221023 test_rangepartition_2
+                           Filter: ((datedday = '10-23-2022'::date) OR (datedday = '10-22-2022'::date))
+ Optimizer: Postgres query optimizer
+(9 rows)
+
+select max(datedday) from public.test_rangePartition where datedday='2022-10-23' or datedday='2022-10-22';
+    max     
+------------
+ 10-23-2022
+(1 row)
+
+--Test case with condition on timestamp and timestamp
+explain (costs off) select max(datedday) from public.test_rangePartition where datedday=('2022-10-23'::date -interval '0 day') or datedday=('2022-10-23'::date -interval '1 day');
+                                                                                    QUERY PLAN                                                                                    
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Finalize Aggregate
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         ->  Partial Aggregate
+               ->  Append
+                     ->  Seq Scan on test_rangepartition_1_prt_pn_20221022 test_rangepartition_1
+                           Filter: ((datedday = 'Sun Oct 23 00:00:00 2022'::timestamp without time zone) OR (datedday = 'Sat Oct 22 00:00:00 2022'::timestamp without time zone))
+                     ->  Seq Scan on test_rangepartition_1_prt_pn_20221023 test_rangepartition_2
+                           Filter: ((datedday = 'Sun Oct 23 00:00:00 2022'::timestamp without time zone) OR (datedday = 'Sat Oct 22 00:00:00 2022'::timestamp without time zone))
+ Optimizer: Postgres query optimizer
+(9 rows)
+
+select max(datedday) from public.test_rangePartition where datedday=('2022-10-23'::date -interval '0 day') or datedday=('2022-10-23'::date -interval '1 day');
+    max     
+------------
+ 10-23-2022
+(1 row)
+
+--Test case with condition on date and timestamp
+explain (costs off) select datedday from public.test_rangePartition where datedday='2022-10-23' or datedday=('2022-10-23'::date -interval '1 day');
+                                                           QUERY PLAN                                                            
+---------------------------------------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Append
+         ->  Seq Scan on test_rangepartition_1_prt_pn_20221022 test_rangepartition_1
+               Filter: ((datedday = '10-23-2022'::date) OR (datedday = 'Sat Oct 22 00:00:00 2022'::timestamp without time zone))
+         ->  Seq Scan on test_rangepartition_1_prt_pn_20221023 test_rangepartition_2
+               Filter: ((datedday = '10-23-2022'::date) OR (datedday = 'Sat Oct 22 00:00:00 2022'::timestamp without time zone))
+ Optimizer: Postgres query optimizer
+(7 rows)
+
+select datedday from public.test_rangePartition where datedday='2022-10-23' or datedday=('2022-10-23'::date -interval '1 day');
+  datedday  
+------------
+ 10-22-2022
+ 10-23-2022
+(2 rows)
+
+drop table test_rangePartition;
+--Test cases for data selection from List partitioned tables with predicate on date or timestamp type-------------
+drop table if exists test_listPartition;
+NOTICE:  table "test_listpartition" does not exist, skipping
+create table test_listPartition (i int, d date)
+    partition by list(d)
+ (partition p1 values('2022-10-22'), partition p2 values('2022-10-23'),
+ default partition pdefault  );
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+insert into test_listPartition values(1,'2022-10-22');
+insert into test_listPartition values(2,'2022-10-23');
+insert into test_listPartition values(3,'2022-10-24');
+--Test case with condition on date and timestamp
+explain (costs off) select max(d) from test_listPartition where d='2022-10-23' or d=('2022-10-23'::date -interval '1 day');
+                                                          QUERY PLAN                                                           
+-------------------------------------------------------------------------------------------------------------------------------
+ Finalize Aggregate
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         ->  Partial Aggregate
+               ->  Append
+                     ->  Seq Scan on test_listpartition_1_prt_p1 test_listpartition_1
+                           Filter: ((d = '10-23-2022'::date) OR (d = 'Sat Oct 22 00:00:00 2022'::timestamp without time zone))
+                     ->  Seq Scan on test_listpartition_1_prt_p2 test_listpartition_2
+                           Filter: ((d = '10-23-2022'::date) OR (d = 'Sat Oct 22 00:00:00 2022'::timestamp without time zone))
+ Optimizer: Postgres query optimizer
+(9 rows)
+
+select max(d) from test_listPartition where d='2022-10-23' or d=('2022-10-23'::date -interval '1 day');
+    max     
+------------
+ 10-23-2022
+(1 row)
+
+--Test case with condition on date and date
+explain (costs off) select max(d) from test_listPartition where d='2022-10-23' or d='2022-10-22';
+                                        QUERY PLAN                                        
+------------------------------------------------------------------------------------------
+ Finalize Aggregate
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         ->  Partial Aggregate
+               ->  Append
+                     ->  Seq Scan on test_listpartition_1_prt_p1 test_listpartition_1
+                           Filter: ((d = '10-23-2022'::date) OR (d = '10-22-2022'::date))
+                     ->  Seq Scan on test_listpartition_1_prt_p2 test_listpartition_2
+                           Filter: ((d = '10-23-2022'::date) OR (d = '10-22-2022'::date))
+ Optimizer: Postgres query optimizer
+(9 rows)
+
+select max(d) from test_listPartition where d='2022-10-23' or d='2022-10-22';
+    max     
+------------
+ 10-23-2022
+(1 row)
+
+--Test case with condition on timestamp and timestamp
+explain (costs off) select max(d) from test_listPartition where d=('2022-10-23'::date -interval '0 day') or d=('2022-10-23'::date -interval '1 day');
+                                                                             QUERY PLAN                                                                             
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Finalize Aggregate
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         ->  Partial Aggregate
+               ->  Append
+                     ->  Seq Scan on test_listpartition_1_prt_p1 test_listpartition_1
+                           Filter: ((d = 'Sun Oct 23 00:00:00 2022'::timestamp without time zone) OR (d = 'Sat Oct 22 00:00:00 2022'::timestamp without time zone))
+                     ->  Seq Scan on test_listpartition_1_prt_p2 test_listpartition_2
+                           Filter: ((d = 'Sun Oct 23 00:00:00 2022'::timestamp without time zone) OR (d = 'Sat Oct 22 00:00:00 2022'::timestamp without time zone))
+ Optimizer: Postgres query optimizer
+(9 rows)
+
+select max(d) from test_listPartition where d=('2022-10-23'::date -interval '0 day') or d=('2022-10-23'::date -interval '1 day');
+    max     
+------------
+ 10-23-2022
+(1 row)
+
+--Test case with condition on timestamp and timestamp
+explain (costs off) select d from test_listPartition where d='2022-10-23' or d=('2022-10-23'::date -interval '1 day');
+                                                    QUERY PLAN                                                     
+-------------------------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Append
+         ->  Seq Scan on test_listpartition_1_prt_p1 test_listpartition_1
+               Filter: ((d = '10-23-2022'::date) OR (d = 'Sat Oct 22 00:00:00 2022'::timestamp without time zone))
+         ->  Seq Scan on test_listpartition_1_prt_p2 test_listpartition_2
+               Filter: ((d = '10-23-2022'::date) OR (d = 'Sat Oct 22 00:00:00 2022'::timestamp without time zone))
+ Optimizer: Postgres query optimizer
+(7 rows)
+
+select d from test_listPartition where d='2022-10-23' or d=('2022-10-23'::date -interval '1 day');
+     d      
+------------
+ 10-22-2022
+ 10-23-2022
+(2 rows)
+
+drop table test_listPartition;
+-- test guc gp_max_partition_level
+drop table p3_sales;
+ERROR:  table "p3_sales" does not exist
+set gp_max_partition_level = 2;
+CREATE TABLE p3_sales (id int, year int, month int, day int,
+region text)
+DISTRIBUTED BY (id)
+PARTITION BY RANGE (year)
+ SUBPARTITION BY RANGE (month)
+  SUBPARTITION TEMPLATE (
+    START (1) END (3) EVERY (1),
+    DEFAULT SUBPARTITION other_months )
+    SUBPARTITION BY LIST (region)
+      SUBPARTITION TEMPLATE (
+       SUBPARTITION usa VALUES ('usa'),
+       SUBPARTITION europe VALUES ('europe'),
+       DEFAULT SUBPARTITION other_regions )
+( START (2010) END (2012) EVERY (1),
+  DEFAULT PARTITION outlying_years );
+ERROR:  Exceeds maximum configured partitioning level of 2
+set gp_max_partition_level = 3;
+CREATE TABLE p3_sales (id int, year int, month int, day int,
+region text)
+DISTRIBUTED BY (id)
+PARTITION BY RANGE (year)
+ SUBPARTITION BY RANGE (month)
+  SUBPARTITION TEMPLATE (
+    START (1) END (3) EVERY (1),
+    DEFAULT SUBPARTITION other_months )
+    SUBPARTITION BY LIST (region)
+      SUBPARTITION TEMPLATE (
+       SUBPARTITION usa VALUES ('usa'),
+       SUBPARTITION europe VALUES ('europe'),
+       DEFAULT SUBPARTITION other_regions )
+( START (2010) END (2012) EVERY (1),
+  DEFAULT PARTITION outlying_years );
+drop table p3_sales;
+set gp_max_partition_level = 0;
+CREATE TABLE p3_sales (id int, year int, month int, day int,
+region text)
+DISTRIBUTED BY (id)
+PARTITION BY RANGE (year)
+ SUBPARTITION BY RANGE (month)
+  SUBPARTITION TEMPLATE (
+    START (1) END (3) EVERY (1),
+    DEFAULT SUBPARTITION other_months )
+    SUBPARTITION BY LIST (region)
+      SUBPARTITION TEMPLATE (
+       SUBPARTITION usa VALUES ('usa'),
+       SUBPARTITION europe VALUES ('europe'),
+       DEFAULT SUBPARTITION other_regions )
+( START (2010) END (2012) EVERY (1),
+  DEFAULT PARTITION outlying_years );
+drop table p3_sales;
+-- We should not allow subpartition by clause when creating empty partition hierarchy
+-- Should error out
+CREATE TABLE empty_partition_disallow_subpartition(i int, j int)
+PARTITION BY range(i) SUBPARTITION BY range(j);
+ERROR:  SUBPARTITION BY clause is not allowed when no partitions specified at depth 1
+-- Check with other Partition syntax
+CREATE TABLE empty_partition_disallow_subpartition_2(i int, j int)
+    DISTRIBUTED BY (i) PARTITION BY range(i) SUBPARTITION BY range(j);
+ERROR:  SUBPARTITION BY clause is not allowed when no partitions specified at depth 1
+-- Should work fine for empty hierarchy when subpartition is not specified
+CREATE TABLE empty_partition(i int, j int) PARTITION BY range(i);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+-- Check with other Partition syntax
+CREATE TABLE empty_partition2(i int, j int) DISTRIBUTED BY (i) PARTITION BY range(i);
+-- https://github.com/apache/cloudberry/issues/795
+CREATE TABLE t_issue_795_par (
+  name character varying,
+  last_modified_date timestamp without time zone
+)
+WITH (appendoptimized=true, orientation=column, compresslevel=1)
+DISTRIBUTED BY (name)
+PARTITION BY RANGE (last_modified_date)
+(
+    PARTITION partition_202411 START ('2024-11-01 00:00:00') INCLUSIVE END ('2024-12-01 00:00:00') EXCLUSIVE,
+    PARTITION partition_max START ('2024-12-01 00:00:00') INCLUSIVE END (MAXVALUE)
+);
+\d+ t_issue_795_par
+                                                                  Partitioned table "public.t_issue_795_par"
+       Column       |            Type             | Collation | Nullable | Default | Storage  | Stats target | Compression Type | Compression Level | Block Size | Description 
+--------------------+-----------------------------+-----------+----------+---------+----------+--------------+------------------+-------------------+------------+-------------
+ name               | character varying           |           |          |         | extended |              | zlib             | 1                 | 32768      | 
+ last_modified_date | timestamp without time zone |           |          |         | plain    |              | zlib             | 1                 | 32768      | 
+Partition key: RANGE (last_modified_date)
+Partitions: t_issue_795_par_1_prt_partition_202411 FOR VALUES FROM ('Fri Nov 01 00:00:00 2024') TO ('Sun Dec 01 00:00:00 2024'),
+            t_issue_795_par_1_prt_partition_max FOR VALUES FROM ('Sun Dec 01 00:00:00 2024') TO (MAXVALUE)
+Distributed by: (name)
+Options: compresslevel=1
+
+DROP TABLE t_issue_795_par;

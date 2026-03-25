@@ -58,6 +58,13 @@ select '{[a,a)}'::textmultirange;
 select '{(a,a]}'::textmultirange;
 select '{(a,a)}'::textmultirange;
 
+-- Also try it with non-error-throwing API
+select pg_input_is_valid('{[1,2], [4,5]}', 'int4multirange');
+select pg_input_is_valid('{[1,2], [4,5]', 'int4multirange');
+select * from pg_input_error_info('{[1,2], [4,5]', 'int4multirange');
+select pg_input_is_valid('{[1,2], [4,zed]}', 'int4multirange');
+select * from pg_input_error_info('{[1,2], [4,zed]}', 'int4multirange');
+
 --
 -- test the constructor
 ---
@@ -572,10 +579,31 @@ FROM    (VALUES
           ('[h,j)'::textrange)
         ) t(r);
 
+-- range_agg with multirange inputs
+select range_agg(nmr) from nummultirange_test;
+select range_agg(nmr) from nummultirange_test where false;
+select range_agg(null::nummultirange) from nummultirange_test;
+select range_agg(nmr) from (values ('{}'::nummultirange)) t(nmr);
+select range_agg(nmr) from (values ('{}'::nummultirange), ('{}'::nummultirange)) t(nmr);
+select range_agg(nmr) from (values ('{[1,2]}'::nummultirange)) t(nmr);
+select range_agg(nmr) from (values ('{[1,2], [5,6]}'::nummultirange)) t(nmr);
+select range_agg(nmr) from (values ('{[1,2], [2,3]}'::nummultirange)) t(nmr);
+select range_agg(nmr) from (values ('{[1,2]}'::nummultirange), ('{[5,6]}'::nummultirange)) t(nmr);
+select range_agg(nmr) from (values ('{[1,2]}'::nummultirange), ('{[2,3]}'::nummultirange)) t(nmr);
+
+--
+-- range_intersect_agg function
+--
 select range_intersect_agg(nmr) from nummultirange_test;
 select range_intersect_agg(nmr) from nummultirange_test where false;
+select range_intersect_agg(null::nummultirange) from nummultirange_test;
+select range_intersect_agg(nmr) from (values ('{[1,3]}'::nummultirange), ('{[6,12]}'::nummultirange)) t(nmr);
+select range_intersect_agg(nmr) from (values ('{[1,6]}'::nummultirange), ('{[3,12]}'::nummultirange)) t(nmr);
+select range_intersect_agg(nmr) from (values ('{[1,6], [10,12]}'::nummultirange), ('{[4,14]}'::nummultirange)) t(nmr);
 -- test with just one input:
+select range_intersect_agg(nmr) from (values ('{}'::nummultirange)) t(nmr);
 select range_intersect_agg(nmr) from (values ('{[1,2]}'::nummultirange)) t(nmr);
+select range_intersect_agg(nmr) from (values ('{[1,6], [10,12]}'::nummultirange)) t(nmr);
 select range_intersect_agg(nmr) from nummultirange_test where nmr @> 4.0;
 
 create table nummultirange_test2(nmr nummultirange);
@@ -761,7 +789,7 @@ select array[1,3] <@ arraymultirange(arrayrange(array[1,2], array[2,1]));
 create type two_ints as (a int, b int);
 create type two_ints_range as range (subtype = two_ints);
 
--- with force_parallel_mode on, this exercises tqueue.c's range remapping
+-- with debug_parallel_query on, this exercises tqueue.c's range remapping
 select *, row_to_json(upper(t)) as u from
   (values (two_ints_multirange(two_ints_range(row(1,2), row(3,4)))),
           (two_ints_multirange(two_ints_range(row(5,6), row(7,8))))) v(t);

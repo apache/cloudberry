@@ -2,6 +2,8 @@
 -- CREATE_INDEX
 -- Create ancillary data structures (i.e. indices)
 --
+-- directory paths are passed to us in environment variables
+\getenv abs_srcdir PG_ABS_SRCDIR
 --
 -- BTREE
 --
@@ -31,18 +33,6 @@ ERROR:  relation "six_wrong" does not exist
 COMMENT ON INDEX six IS 'good index';
 COMMENT ON INDEX six IS NULL;
 --
--- BTREE ascending/descending cases
---
--- we load int4/text from pure descending data (each key is a new
--- low key) and name/f8 from pure ascending data (each key is a new
--- high key).  we had a bug where new low keys would sometimes be
--- "lost".
---
-CREATE INDEX bt_i4_index ON bt_i4_heap USING btree (seqno int4_ops);
-CREATE INDEX bt_name_index ON bt_name_heap USING btree (seqno name_ops);
-CREATE INDEX bt_txt_index ON bt_txt_heap USING btree (seqno text_ops);
-CREATE INDEX bt_f8_index ON bt_f8_heap USING btree (seqno float8_ops);
---
 -- BTREE partial indices
 --
 CREATE INDEX onek2_u1_prtl ON onek2 USING btree(unique1 int4_ops)
@@ -54,16 +44,23 @@ CREATE INDEX onek2_stu1_prtl ON onek2 USING btree(stringu1 name_ops)
 --
 -- GiST (rtree-equivalent opclasses only)
 --
--- PAX not support gist/spgist/brin indexes
+CREATE TABLE slow_emp4000 (
+	home_base	 box
+);
+CREATE TABLE fast_emp4000 (
+	home_base	 box
+);
+\set filename :abs_srcdir '/data/rect.data'
+COPY slow_emp4000 FROM :'filename';
+INSERT INTO fast_emp4000 SELECT * FROM slow_emp4000;
+ANALYZE slow_emp4000;
+ANALYZE fast_emp4000;
 CREATE INDEX grect2ind ON fast_emp4000 USING gist (home_base);
-ERROR:  pax only support btree/hash/gin/bitmap indexes (pax_access_handle.cc:736)
-CREATE INDEX gpolygonind ON polygon_tbl USING gist (f1);
-ERROR:  pax only support btree/hash/gin/bitmap indexes (pax_access_handle.cc:736)
-CREATE INDEX gcircleind ON circle_tbl USING gist (f1);
-ERROR:  pax only support btree/hash/gin/bitmap indexes (pax_access_handle.cc:736)
+-- we want to work with a point_tbl that includes a null
+CREATE TEMP TABLE point_tbl AS SELECT * FROM public.point_tbl;
 INSERT INTO POINT_TBL(f1) VALUES (NULL);
+ANALYZE POINT_TBL;
 CREATE INDEX gpointind ON point_tbl USING gist (f1);
-ERROR:  pax only support btree/hash/gin/bitmap indexes (pax_access_handle.cc:736)
 CREATE TEMP TABLE gpolygon_tbl AS
     SELECT polygon(home_base) AS f1 FROM slow_emp4000;
 ANALYZE gpolygon_tbl;
@@ -73,9 +70,7 @@ CREATE TEMP TABLE gcircle_tbl AS
     SELECT circle(home_base) AS f1 FROM slow_emp4000;
 ANALYZE gcircle_tbl;
 CREATE INDEX ggpolygonind ON gpolygon_tbl USING gist (f1);
-ERROR:  pax only support btree/hash/gin/bitmap indexes (pax_access_handle.cc:736)
 CREATE INDEX ggcircleind ON gcircle_tbl USING gist (f1);
-ERROR:  pax only support btree/hash/gin/bitmap indexes (pax_access_handle.cc:736)
 SET optimizer_enable_tablescan = OFF;
 --
 -- Test GiST indexes
@@ -104,23 +99,6 @@ SELECT count(*) FROM fast_emp4000 WHERE home_base IS NULL;
 -------
    278
 (1 row)
-
-SELECT * FROM polygon_tbl WHERE f1 @> '((1,1),(2,2),(2,1))'::polygon
-    ORDER BY (poly_center(f1))[0];
-         f1          
----------------------
- ((2,0),(2,4),(0,0))
-(1 row)
-
-SELECT * FROM circle_tbl WHERE f1 && circle(point(1,-2), 1)
-    ORDER BY area(f1);
-      f1       
----------------
- <(1,2),3>
- <(1,3),5>
- <(1,2),100>
- <(100,1),115>
-(4 rows)
 
 SELECT count(*) FROM gpolygon_tbl WHERE f1 && '(1000,1000,0,0)'::polygon;
  count 
@@ -193,6 +171,7 @@ SELECT count(*) FROM point_tbl p WHERE p.f1 ~= '(-5, -12)';
 CREATE VIEW point_tblv AS
   SELECT * FROM point_tbl
   WHERE NOT f1 ~= '(1e-300, -1e-300)' AND (f1 <-> '(0,0)') != 'inf';
+NOTICE:  view "point_tblv" will be a temporary view
 -- In gpdb, we intentional filter out point (1e-300, -1e-300) and `inf` every order by related queries
 -- in this test case file. It is an underflow point, rank it cause randomly results( (0,0),
 -- (1e-300, -1e-300) are equal).
@@ -270,14 +249,14 @@ EXPLAIN (COSTS OFF)
 SELECT * FROM fast_emp4000
     WHERE home_base <@ '(200,200),(2000,1000)'::box
     ORDER BY (home_base[0])[0];
-                            QUERY PLAN                             
--------------------------------------------------------------------
+                              QUERY PLAN                              
+----------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    Merge Key: ((home_base[0])[0])
    ->  Sort
          Sort Key: ((home_base[0])[0])
-         ->  Seq Scan on fast_emp4000
-               Filter: (home_base <@ '(2000,1000),(200,200)'::box)
+         ->  Index Only Scan using grect2ind on fast_emp4000
+               Index Cond: (home_base <@ '(2000,1000),(200,200)'::box)
  Optimizer: Postgres query optimizer
 (7 rows)
 
@@ -292,14 +271,15 @@ SELECT * FROM fast_emp4000
 
 EXPLAIN (COSTS OFF)
 SELECT count(*) FROM fast_emp4000 WHERE home_base && '(1000,1000,0,0)'::box;
-                          QUERY PLAN                           
----------------------------------------------------------------
- Aggregate
+                               QUERY PLAN                                
+-------------------------------------------------------------------------
+ Finalize Aggregate
    ->  Gather Motion 3:1  (slice1; segments: 3)
-         ->  Seq Scan on fast_emp4000
-               Filter: (home_base && '(1000,1000),(0,0)'::box)
+         ->  Partial Aggregate
+               ->  Index Only Scan using grect2ind on fast_emp4000
+                     Index Cond: (home_base && '(1000,1000),(0,0)'::box)
  Optimizer: Postgres query optimizer
-(5 rows)
+(6 rows)
 
 SELECT count(*) FROM fast_emp4000 WHERE home_base && '(1000,1000,0,0)'::box;
  count 
@@ -309,13 +289,13 @@ SELECT count(*) FROM fast_emp4000 WHERE home_base && '(1000,1000,0,0)'::box;
 
 EXPLAIN (COSTS OFF)
 SELECT count(*) FROM fast_emp4000 WHERE home_base IS NULL;
-                   QUERY PLAN                    
--------------------------------------------------
+                            QUERY PLAN                             
+-------------------------------------------------------------------
  Finalize Aggregate
    ->  Gather Motion 3:1  (slice1; segments: 3)
          ->  Partial Aggregate
-               ->  Seq Scan on fast_emp4000
-                     Filter: (home_base IS NULL)
+               ->  Index Only Scan using grect2ind on fast_emp4000
+                     Index Cond: (home_base IS NULL)
  Optimizer: Postgres query optimizer
 (6 rows)
 
@@ -326,60 +306,16 @@ SELECT count(*) FROM fast_emp4000 WHERE home_base IS NULL;
 (1 row)
 
 EXPLAIN (COSTS OFF)
-SELECT * FROM polygon_tbl WHERE f1 @> '((1,1),(2,2),(2,1))'::polygon
-    ORDER BY (poly_center(f1))[0];
-                          QUERY PLAN                          
---------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)
-   Merge Key: ((poly_center(f1))[0])
-   ->  Sort
-         Sort Key: ((poly_center(f1))[0])
-         ->  Seq Scan on polygon_tbl
-               Filter: (f1 @> '((1,1),(2,2),(2,1))'::polygon)
- Optimizer: Postgres query optimizer
-(7 rows)
-
-SELECT * FROM polygon_tbl WHERE f1 @> '((1,1),(2,2),(2,1))'::polygon
-    ORDER BY (poly_center(f1))[0];
-         f1          
----------------------
- ((2,0),(2,4),(0,0))
-(1 row)
-
-EXPLAIN (COSTS OFF)
-SELECT * FROM circle_tbl WHERE f1 && circle(point(1,-2), 1)
-    ORDER BY area(f1);
-                     QUERY PLAN                     
-----------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)
-   Merge Key: (area(f1))
-   ->  Sort
-         Sort Key: (area(f1))
-         ->  Seq Scan on circle_tbl
-               Filter: (f1 && '<(1,-2),1>'::circle)
- Optimizer: Postgres query optimizer
-(7 rows)
-
-SELECT * FROM circle_tbl WHERE f1 && circle(point(1,-2), 1)
-    ORDER BY area(f1);
-      f1       
----------------
- <(1,2),3>
- <(1,3),5>
- <(1,2),100>
- <(100,1),115>
-(4 rows)
-
-EXPLAIN (COSTS OFF)
 SELECT count(*) FROM gpolygon_tbl WHERE f1 && '(1000,1000,0,0)'::polygon;
-                          QUERY PLAN                          
---------------------------------------------------------------
- Aggregate
+                               QUERY PLAN                               
+------------------------------------------------------------------------
+ Finalize Aggregate
    ->  Gather Motion 3:1  (slice1; segments: 3)
-         ->  Seq Scan on gpolygon_tbl
-               Filter: (f1 && '((1000,1000),(0,0))'::polygon)
+         ->  Partial Aggregate
+               ->  Index Scan using ggpolygonind on gpolygon_tbl
+                     Index Cond: (f1 && '((1000,1000),(0,0))'::polygon)
  Optimizer: Postgres query optimizer
-(5 rows)
+(6 rows)
 
 SELECT count(*) FROM gpolygon_tbl WHERE f1 && '(1000,1000,0,0)'::polygon;
  count 
@@ -389,14 +325,15 @@ SELECT count(*) FROM gpolygon_tbl WHERE f1 && '(1000,1000,0,0)'::polygon;
 
 EXPLAIN (COSTS OFF)
 SELECT count(*) FROM gcircle_tbl WHERE f1 && '<(500,500),500>'::circle;
-                       QUERY PLAN                        
----------------------------------------------------------
- Aggregate
+                            QUERY PLAN                             
+-------------------------------------------------------------------
+ Finalize Aggregate
    ->  Gather Motion 3:1  (slice1; segments: 3)
-         ->  Seq Scan on gcircle_tbl
-               Filter: (f1 && '<(500,500),500>'::circle)
+         ->  Partial Aggregate
+               ->  Index Scan using ggcircleind on gcircle_tbl
+                     Index Cond: (f1 && '<(500,500),500>'::circle)
  Optimizer: Postgres query optimizer
-(5 rows)
+(6 rows)
 
 SELECT count(*) FROM gcircle_tbl WHERE f1 && '<(500,500),500>'::circle;
  count 
@@ -406,12 +343,12 @@ SELECT count(*) FROM gcircle_tbl WHERE f1 && '<(500,500),500>'::circle;
 
 EXPLAIN (COSTS OFF)
 SELECT count(*) FROM point_tbl WHERE f1 <@ box '(0,0,100,100)';
-                      QUERY PLAN                      
-------------------------------------------------------
+                        QUERY PLAN                        
+----------------------------------------------------------
  Aggregate
    ->  Gather Motion 3:1  (slice1; segments: 3)
-         ->  Seq Scan on point_tbl
-               Filter: (f1 <@ '(100,100),(0,0)'::box)
+         ->  Index Only Scan using gpointind on point_tbl
+               Index Cond: (f1 <@ '(100,100),(0,0)'::box)
  Optimizer: Postgres query optimizer
 (5 rows)
 
@@ -423,12 +360,12 @@ SELECT count(*) FROM point_tbl WHERE f1 <@ box '(0,0,100,100)';
 
 EXPLAIN (COSTS OFF)
 SELECT count(*) FROM point_tbl WHERE box '(0,0,100,100)' @> f1;
-                      QUERY PLAN                      
-------------------------------------------------------
+                        QUERY PLAN                        
+----------------------------------------------------------
  Aggregate
    ->  Gather Motion 3:1  (slice1; segments: 3)
-         ->  Seq Scan on point_tbl
-               Filter: ('(100,100),(0,0)'::box @> f1)
+         ->  Index Only Scan using gpointind on point_tbl
+               Index Cond: (f1 <@ '(100,100),(0,0)'::box)
  Optimizer: Postgres query optimizer
 (5 rows)
 
@@ -440,29 +377,29 @@ SELECT count(*) FROM point_tbl WHERE box '(0,0,100,100)' @> f1;
 
 EXPLAIN (COSTS OFF)
 SELECT count(*) FROM point_tbl WHERE f1 <@ polygon '(0,0),(0,100),(100,100),(50,50),(100,0),(0,0)';
-                                        QUERY PLAN                                        
-------------------------------------------------------------------------------------------
+                                          QUERY PLAN                                          
+----------------------------------------------------------------------------------------------
  Aggregate
    ->  Gather Motion 3:1  (slice1; segments: 3)
-         ->  Seq Scan on point_tbl
-               Filter: (f1 <@ '((0,0),(0,100),(100,100),(50,50),(100,0),(0,0))'::polygon)
+         ->  Index Only Scan using gpointind on point_tbl
+               Index Cond: (f1 <@ '((0,0),(0,100),(100,100),(50,50),(100,0),(0,0))'::polygon)
  Optimizer: Postgres query optimizer
 (5 rows)
 
 SELECT count(*) FROM point_tbl WHERE f1 <@ polygon '(0,0),(0,100),(100,100),(50,50),(100,0),(0,0)';
  count 
 -------
-     5
+     4
 (1 row)
 
 EXPLAIN (COSTS OFF)
 SELECT count(*) FROM point_tbl WHERE f1 <@ circle '<(50,50),50>';
-                      QUERY PLAN                      
-------------------------------------------------------
+                        QUERY PLAN                        
+----------------------------------------------------------
  Aggregate
    ->  Gather Motion 3:1  (slice1; segments: 3)
-         ->  Seq Scan on point_tbl
-               Filter: (f1 <@ '<(50,50),50>'::circle)
+         ->  Index Only Scan using gpointind on point_tbl
+               Index Cond: (f1 <@ '<(50,50),50>'::circle)
  Optimizer: Postgres query optimizer
 (5 rows)
 
@@ -474,12 +411,12 @@ SELECT count(*) FROM point_tbl WHERE f1 <@ circle '<(50,50),50>';
 
 EXPLAIN (COSTS OFF)
 SELECT count(*) FROM point_tbl p WHERE p.f1 << '(0.0, 0.0)';
-                   QUERY PLAN                   
-------------------------------------------------
+                         QUERY PLAN                         
+------------------------------------------------------------
  Aggregate
    ->  Gather Motion 3:1  (slice1; segments: 3)
-         ->  Seq Scan on point_tbl p
-               Filter: (f1 << '(0,0)'::point)
+         ->  Index Only Scan using gpointind on point_tbl p
+               Index Cond: (f1 << '(0,0)'::point)
  Optimizer: Postgres query optimizer
 (5 rows)
 
@@ -491,12 +428,12 @@ SELECT count(*) FROM point_tbl p WHERE p.f1 << '(0.0, 0.0)';
 
 EXPLAIN (COSTS OFF)
 SELECT count(*) FROM point_tbl p WHERE p.f1 >> '(0.0, 0.0)';
-                   QUERY PLAN                   
-------------------------------------------------
+                         QUERY PLAN                         
+------------------------------------------------------------
  Aggregate
    ->  Gather Motion 3:1  (slice1; segments: 3)
-         ->  Seq Scan on point_tbl p
-               Filter: (f1 >> '(0,0)'::point)
+         ->  Index Only Scan using gpointind on point_tbl p
+               Index Cond: (f1 >> '(0,0)'::point)
  Optimizer: Postgres query optimizer
 (5 rows)
 
@@ -508,12 +445,12 @@ SELECT count(*) FROM point_tbl p WHERE p.f1 >> '(0.0, 0.0)';
 
 EXPLAIN (COSTS OFF)
 SELECT count(*) FROM point_tbl p WHERE p.f1 <<| '(0.0, 0.0)';
-                   QUERY PLAN                   
-------------------------------------------------
+                         QUERY PLAN                         
+------------------------------------------------------------
  Aggregate
    ->  Gather Motion 3:1  (slice1; segments: 3)
-         ->  Seq Scan on point_tbl p
-               Filter: (f1 <<| '(0,0)'::point)
+         ->  Index Only Scan using gpointind on point_tbl p
+               Index Cond: (f1 <<| '(0,0)'::point)
  Optimizer: Postgres query optimizer
 (5 rows)
 
@@ -525,12 +462,12 @@ SELECT count(*) FROM point_tbl p WHERE p.f1 <<| '(0.0, 0.0)';
 
 EXPLAIN (COSTS OFF)
 SELECT count(*) FROM point_tbl p WHERE p.f1 |>> '(0.0, 0.0)';
-                   QUERY PLAN                   
-------------------------------------------------
+                         QUERY PLAN                         
+------------------------------------------------------------
  Aggregate
    ->  Gather Motion 3:1  (slice1; segments: 3)
-         ->  Seq Scan on point_tbl p
-               Filter: (f1 |>> '(0,0)'::point)
+         ->  Index Only Scan using gpointind on point_tbl p
+               Index Cond: (f1 |>> '(0,0)'::point)
  Optimizer: Postgres query optimizer
 (5 rows)
 
@@ -542,12 +479,12 @@ SELECT count(*) FROM point_tbl p WHERE p.f1 |>> '(0.0, 0.0)';
 
 EXPLAIN (COSTS OFF)
 SELECT count(*) FROM point_tbl p WHERE p.f1 ~= '(-5, -12)';
-                   QUERY PLAN                    
--------------------------------------------------
+                         QUERY PLAN                         
+------------------------------------------------------------
  Aggregate
    ->  Gather Motion 3:1  (slice1; segments: 3)
-         ->  Seq Scan on point_tbl p
-               Filter: (f1 ~= '(-5,-12)'::point)
+         ->  Index Only Scan using gpointind on point_tbl p
+               Index Cond: (f1 ~= '(-5,-12)'::point)
  Optimizer: Postgres query optimizer
 (5 rows)
 
@@ -559,30 +496,27 @@ SELECT count(*) FROM point_tbl p WHERE p.f1 ~= '(-5, -12)';
 
 EXPLAIN (COSTS OFF)
 SELECT * FROM point_tbl ORDER BY f1 <-> '0,1';
-                 QUERY PLAN                  
----------------------------------------------
+                     QUERY PLAN                     
+----------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    Merge Key: ((f1 <-> '(0,1)'::point))
-   ->  Sort
-         Sort Key: ((f1 <-> '(0,1)'::point))
-         ->  Seq Scan on point_tbl
- Optimizer: Postgres query optimizer
-(6 rows)
+   ->  Index Only Scan using gpointind on point_tbl
+         Order By: (f1 <-> '(0,1)'::point)
+(5 rows)
 
 --Comment out unstable test.
 --SELECT * FROM point_tbl ORDER BY f1 <-> '0,1';
 EXPLAIN (COSTS OFF)
 SELECT * FROM point_tblv ORDER BY f1 <-> '0,1';
-                                                       QUERY PLAN                                                        
--------------------------------------------------------------------------------------------------------------------------
+                                                    QUERY PLAN                                                     
+-------------------------------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    Merge Key: ((point_tbl.f1 <-> '(0,1)'::point))
-   ->  Sort
-         Sort Key: ((point_tbl.f1 <-> '(0,1)'::point))
-         ->  Seq Scan on point_tbl
-               Filter: ((f1 <> '(1e-300,-1e-300)'::point) AND ((f1 <-> '(0,0)'::point) <> 'Infinity'::double precision))
+   ->  Index Only Scan using gpointind on point_tbl
+         Order By: (f1 <-> '(0,1)'::point)
+         Filter: ((f1 <> '(1e-300,-1e-300)'::point) AND ((f1 <-> '(0,0)'::point) <> 'Infinity'::double precision))
  Optimizer: Postgres query optimizer
-(7 rows)
+(6 rows)
 
 SELECT * FROM point_tblv ORDER BY f1 <-> '0,1';
      f1     
@@ -597,11 +531,11 @@ SELECT * FROM point_tblv ORDER BY f1 <-> '0,1';
 
 EXPLAIN (COSTS OFF)
 SELECT * FROM point_tbl WHERE f1 IS NULL;
-                QUERY PLAN                
-------------------------------------------
+                     QUERY PLAN                     
+----------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
-   ->  Seq Scan on point_tbl
-         Filter: (f1 IS NULL)
+   ->  Index Only Scan using gpointind on point_tbl
+         Index Cond: (f1 IS NULL)
  Optimizer: Postgres query optimizer
 (4 rows)
 
@@ -613,14 +547,14 @@ SELECT * FROM point_tbl WHERE f1 IS NULL;
 
 EXPLAIN (COSTS OFF)
 SELECT * FROM point_tblv WHERE f1 IS NOT NULL ORDER BY f1 <-> '0,1';
-                                                                  QUERY PLAN                                                                  
-----------------------------------------------------------------------------------------------------------------------------------------------
+                                                    QUERY PLAN                                                     
+-------------------------------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    Merge Key: ((point_tbl.f1 <-> '(0,1)'::point))
-   ->  Sort
-         Sort Key: ((point_tbl.f1 <-> '(0,1)'::point))
-         ->  Seq Scan on point_tbl
-               Filter: ((f1 IS NOT NULL) AND (f1 <> '(1e-300,-1e-300)'::point) AND ((f1 <-> '(0,0)'::point) <> 'Infinity'::double precision))
+   ->  Index Only Scan using gpointind on point_tbl
+         Index Cond: (f1 IS NOT NULL)
+         Order By: (f1 <-> '(0,1)'::point)
+         Filter: ((f1 <> '(1e-300,-1e-300)'::point) AND ((f1 <-> '(0,0)'::point) <> 'Infinity'::double precision))
  Optimizer: Postgres query optimizer
 (7 rows)
 
@@ -639,14 +573,14 @@ SELECT * FROM point_tblv WHERE f1 IS NOT NULL ORDER BY f1 <-> '0,1';
 --SELECT * FROM point_tbl WHERE f1 IS NOT NULL ORDER BY f1 <-> '0,1';
 EXPLAIN (COSTS OFF)
 SELECT * FROM point_tblv WHERE f1 <@ '(-10,-10),(10,10)':: box ORDER BY f1 <-> '0,1';
-                                                                          QUERY PLAN                                                                          
---------------------------------------------------------------------------------------------------------------------------------------------------------------
+                                                    QUERY PLAN                                                     
+-------------------------------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    Merge Key: ((point_tbl.f1 <-> '(0,1)'::point))
-   ->  Sort
-         Sort Key: ((point_tbl.f1 <-> '(0,1)'::point))
-         ->  Seq Scan on point_tbl
-               Filter: ((f1 <> '(1e-300,-1e-300)'::point) AND (f1 <@ '(10,10),(-10,-10)'::box) AND ((f1 <-> '(0,0)'::point) <> 'Infinity'::double precision))
+   ->  Index Only Scan using gpointind on point_tbl
+         Index Cond: (f1 <@ '(10,10),(-10,-10)'::box)
+         Order By: (f1 <-> '(0,1)'::point)
+         Filter: ((f1 <> '(1e-300,-1e-300)'::point) AND ((f1 <-> '(0,0)'::point) <> 'Infinity'::double precision))
  Optimizer: Postgres query optimizer
 (7 rows)
 
@@ -660,17 +594,16 @@ SELECT * FROM point_tblv WHERE f1 <@ '(-10,-10),(10,10)':: box ORDER BY f1 <-> '
 
 EXPLAIN (COSTS OFF)
 SELECT * FROM gpolygon_tbl ORDER BY f1 <-> '(0,0)'::point LIMIT 10;
-                       QUERY PLAN                        
----------------------------------------------------------
+                           QUERY PLAN                            
+-----------------------------------------------------------------
  Limit
    ->  Gather Motion 3:1  (slice1; segments: 3)
          Merge Key: ((f1 <-> '(0,0)'::point))
          ->  Limit
-               ->  Sort
-                     Sort Key: ((f1 <-> '(0,0)'::point))
-                     ->  Seq Scan on gpolygon_tbl
+               ->  Index Scan using ggpolygonind on gpolygon_tbl
+                     Order By: (f1 <-> '(0,0)'::point)
  Optimizer: Postgres query optimizer
-(8 rows)
+(7 rows)
 
 SELECT * FROM gpolygon_tbl ORDER BY f1 <-> '(0,0)'::point LIMIT 10;
                        f1                        
@@ -689,17 +622,16 @@ SELECT * FROM gpolygon_tbl ORDER BY f1 <-> '(0,0)'::point LIMIT 10;
 
 EXPLAIN (COSTS OFF)
 SELECT circle_center(f1), round(radius(f1)) as radius FROM gcircle_tbl ORDER BY f1 <-> '(200,300)'::point LIMIT 10;
-                         QUERY PLAN                          
--------------------------------------------------------------
+                          QUERY PLAN                           
+---------------------------------------------------------------
  Limit
    ->  Gather Motion 3:1  (slice1; segments: 3)
          Merge Key: ((f1 <-> '(200,300)'::point))
          ->  Limit
-               ->  Sort
-                     Sort Key: ((f1 <-> '(200,300)'::point))
-                     ->  Seq Scan on gcircle_tbl
+               ->  Index Scan using ggcircleind on gcircle_tbl
+                     Order By: (f1 <-> '(200,300)'::point)
  Optimizer: Postgres query optimizer
-(8 rows)
+(7 rows)
 
 SELECT circle_center(f1), round(radius(f1)) as radius FROM gcircle_tbl ORDER BY f1 <-> '(200,300)'::point LIMIT 10;
  circle_center  | radius 
@@ -754,16 +686,19 @@ SET enable_indexscan = OFF;
 SET enable_bitmapscan = ON;
 EXPLAIN (COSTS OFF)
 SELECT * FROM point_tblv WHERE f1 <@ '(-10,-10),(10,10)':: box ORDER BY f1 <-> '0,1';
-                                                                          QUERY PLAN                                                                          
---------------------------------------------------------------------------------------------------------------------------------------------------------------
+                                                       QUERY PLAN                                                        
+-------------------------------------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    Merge Key: ((point_tbl.f1 <-> '(0,1)'::point))
    ->  Sort
          Sort Key: ((point_tbl.f1 <-> '(0,1)'::point))
-         ->  Seq Scan on point_tbl
-               Filter: ((f1 <> '(1e-300,-1e-300)'::point) AND (f1 <@ '(10,10),(-10,-10)'::box) AND ((f1 <-> '(0,0)'::point) <> 'Infinity'::double precision))
+         ->  Bitmap Heap Scan on point_tbl
+               Recheck Cond: (f1 <@ '(10,10),(-10,-10)'::box)
+               Filter: ((f1 <> '(1e-300,-1e-300)'::point) AND ((f1 <-> '(0,0)'::point) <> 'Infinity'::double precision))
+               ->  Bitmap Index Scan on gpointind
+                     Index Cond: (f1 <@ '(10,10),(-10,-10)'::box)
  Optimizer: Postgres query optimizer
-(7 rows)
+(10 rows)
 
 SELECT * FROM point_tblv WHERE f1 <@ '(-10,-10),(10,10)':: box ORDER BY f1 <-> '0,1';
    f1    
@@ -781,6 +716,36 @@ RESET enable_bitmapscan;
 --
 -- Note: GIN currently supports only bitmap scans, not plain indexscans
 --
+CREATE TABLE array_index_op_test (
+	seqno		int4,
+	i			int4[],
+	t			text[]
+);
+\set filename :abs_srcdir '/data/array.data'
+COPY array_index_op_test FROM :'filename';
+ANALYZE array_index_op_test;
+SELECT * FROM array_index_op_test WHERE i = '{NULL}' ORDER BY seqno;
+ seqno |   i    |   t    
+-------+--------+--------
+   102 | {NULL} | {NULL}
+(1 row)
+
+SELECT * FROM array_index_op_test WHERE i @> '{NULL}' ORDER BY seqno;
+ seqno | i | t 
+-------+---+---
+(0 rows)
+
+SELECT * FROM array_index_op_test WHERE i && '{NULL}' ORDER BY seqno;
+ seqno | i | t 
+-------+---+---
+(0 rows)
+
+SELECT * FROM array_index_op_test WHERE i <@ '{NULL}' ORDER BY seqno;
+ seqno | i  | t  
+-------+----+----
+   101 | {} | {}
+(1 row)
+
 SET enable_seqscan = OFF;
 SET enable_indexscan = OFF;
 SET enable_bitmapscan = ON;
@@ -1006,28 +971,6 @@ SELECT * FROM array_index_op_test WHERE i && '{}' ORDER BY seqno;
 (0 rows)
 
 SELECT * FROM array_index_op_test WHERE i <@ '{}' ORDER BY seqno;
- seqno | i  | t  
--------+----+----
-   101 | {} | {}
-(1 row)
-
-SELECT * FROM array_op_test WHERE i = '{NULL}' ORDER BY seqno;
- seqno |   i    |   t    
--------+--------+--------
-   102 | {NULL} | {NULL}
-(1 row)
-
-SELECT * FROM array_op_test WHERE i @> '{NULL}' ORDER BY seqno;
- seqno | i | t 
--------+---+---
-(0 rows)
-
-SELECT * FROM array_op_test WHERE i && '{NULL}' ORDER BY seqno;
- seqno | i | t 
--------+---+---
-(0 rows)
-
-SELECT * FROM array_op_test WHERE i <@ '{NULL}' ORDER BY seqno;
  seqno | i  | t  
 -------+----+----
    101 | {} | {}
@@ -1305,18 +1248,6 @@ SELECT * FROM array_index_op_test WHERE t = '{}' ORDER BY seqno;
    101 | {} | {}
 (1 row)
 
-SELECT * FROM array_op_test WHERE i = '{NULL}' ORDER BY seqno;
- seqno |   i    |   t    
--------+--------+--------
-   102 | {NULL} | {NULL}
-(1 row)
-
-SELECT * FROM array_op_test WHERE i <@ '{NULL}' ORDER BY seqno;
- seqno | i  | t  
--------+----+----
-   101 | {} | {}
-(1 row)
-
 RESET enable_seqscan;
 RESET enable_indexscan;
 RESET enable_bitmapscan;
@@ -1350,10 +1281,6 @@ Options: fastupdate=on, gin_pending_list_limit=128
 --
 -- HASH
 --
-CREATE INDEX hash_i4_index ON hash_i4_heap USING hash (random int4_ops);
-CREATE INDEX hash_name_index ON hash_name_heap USING hash (random name_ops);
-CREATE INDEX hash_txt_index ON hash_txt_heap USING hash (random text_ops);
-CREATE INDEX hash_f8_index ON hash_f8_heap USING hash (random float8_ops) WITH (fillfactor=60);
 CREATE UNLOGGED TABLE unlogged_hash_table (id int4);
 CREATE INDEX unlogged_hash_index ON unlogged_hash_table USING hash (id int4_ops);
 DROP TABLE unlogged_hash_table;
@@ -1384,6 +1311,67 @@ SELECT count(*) FROM tenk1 WHERE stringu1 = 'TVAAAA';
 
 DROP INDEX hash_tuplesort_idx;
 RESET maintenance_work_mem;
+--
+-- Test unique null behavior
+--
+CREATE TABLE unique_tbl (i int, t text);
+CREATE UNIQUE INDEX unique_idx1 ON unique_tbl (i) NULLS DISTINCT;
+CREATE UNIQUE INDEX unique_idx2 ON unique_tbl (i) NULLS NOT DISTINCT;
+INSERT INTO unique_tbl VALUES (1, 'one');
+INSERT INTO unique_tbl VALUES (2, 'two');
+INSERT INTO unique_tbl VALUES (3, 'three');
+INSERT INTO unique_tbl VALUES (4, 'four');
+INSERT INTO unique_tbl VALUES (5, 'one');
+INSERT INTO unique_tbl (t) VALUES ('six');
+INSERT INTO unique_tbl (t) VALUES ('seven');  -- error from unique_idx2
+ERROR:  duplicate key value violates unique constraint "unique_idx2"
+DETAIL:  Key (i)=(null) already exists.
+DROP INDEX unique_idx1, unique_idx2;
+INSERT INTO unique_tbl (t) VALUES ('seven');
+-- build indexes on filled table
+CREATE UNIQUE INDEX unique_idx3 ON unique_tbl (i) NULLS DISTINCT;  -- ok
+CREATE UNIQUE INDEX unique_idx4 ON unique_tbl (i) NULLS NOT DISTINCT;  -- error
+ERROR:  could not create unique index "unique_idx4"
+DETAIL:  Key (i)=(null) is duplicated.
+DELETE FROM unique_tbl WHERE t = 'seven';
+CREATE UNIQUE INDEX unique_idx4 ON unique_tbl (i) NULLS NOT DISTINCT;  -- ok now
+\d unique_tbl
+             Table "public.unique_tbl"
+ Column |  Type   | Collation | Nullable | Default 
+--------+---------+-----------+----------+---------
+ i      | integer |           |          | 
+ t      | text    |           |          | 
+Indexes:
+    "unique_idx3" UNIQUE, btree (i)
+    "unique_idx4" UNIQUE, btree (i) NULLS NOT DISTINCT
+
+\d unique_idx3
+      Index "public.unique_idx3"
+ Column |  Type   | Key? | Definition 
+--------+---------+------+------------
+ i      | integer | yes  | i
+unique, btree, for table "public.unique_tbl"
+
+\d unique_idx4
+      Index "public.unique_idx4"
+ Column |  Type   | Key? | Definition 
+--------+---------+------+------------
+ i      | integer | yes  | i
+unique nulls not distinct, btree, for table "public.unique_tbl"
+
+SELECT pg_get_indexdef('unique_idx3'::regclass);
+                           pg_get_indexdef                            
+----------------------------------------------------------------------
+ CREATE UNIQUE INDEX unique_idx3 ON public.unique_tbl USING btree (i)
+(1 row)
+
+SELECT pg_get_indexdef('unique_idx4'::regclass);
+                                     pg_get_indexdef                                     
+-----------------------------------------------------------------------------------------
+ CREATE UNIQUE INDEX unique_idx4 ON public.unique_tbl USING btree (i) NULLS NOT DISTINCT
+(1 row)
+
+DROP TABLE unique_tbl;
 --
 -- Test functional index
 --
@@ -1465,13 +1453,6 @@ CREATE UNIQUE INDEX covering_pkey on covering_index_heap (f1,f2) INCLUDE(f3);
 ALTER TABLE covering_index_heap ADD CONSTRAINT covering_pkey PRIMARY KEY USING INDEX
 covering_pkey;
 DROP TABLE covering_index_heap;
---
--- Also try building functional, expressional, and partial indexes on
--- tables that already contain data.
---
-create index hash_f8_index_1 on hash_f8_heap(abs(random));
-create index hash_f8_index_2 on hash_f8_heap((seqno + 1), random);
-create index hash_f8_index_3 on hash_f8_heap(random) where seqno > 1000;
 --
 -- Try some concurrent index builds
 --
@@ -1692,6 +1673,12 @@ CREATE TABLE cwi_test(a int) PARTITION BY hash (a);
 create unique index on cwi_test (a);
 alter table cwi_test add primary key using index cwi_test_a_idx ;
 ERROR:  ALTER TABLE / ADD CONSTRAINT USING INDEX is not supported on partitioned tables
+DROP TABLE cwi_test;
+-- PRIMARY KEY constraint cannot be backed by a NULLS NOT DISTINCT index
+CREATE TABLE cwi_test(a int, b int);
+CREATE UNIQUE INDEX cwi_a_nnd ON cwi_test (a) NULLS NOT DISTINCT;
+ALTER TABLE cwi_test ADD PRIMARY KEY USING INDEX cwi_a_nnd;
+ERROR:  primary keys cannot use NULLS NOT DISTINCT indexes
 DROP TABLE cwi_test;
 --
 -- Check handling of indexes on system columns
@@ -1953,17 +1940,22 @@ SELECT * FROM tenk1
 EXPLAIN (COSTS OFF)
 SELECT count(*) FROM tenk1
   WHERE hundred = 42 AND (thousand = 42 OR thousand = 99);
-                         QUERY PLAN                         
-------------------------------------------------------------
+                                      QUERY PLAN                                       
+---------------------------------------------------------------------------------------
  Aggregate
    ->  Gather Motion 3:1  (slice1; segments: 3)
          ->  Bitmap Heap Scan on tenk1
-               Recheck Cond: (hundred = 42)
-               Filter: ((thousand = 42) OR (thousand = 99))
-               ->  Bitmap Index Scan on tenk1_hundred
-                     Index Cond: (hundred = 42)
+               Recheck Cond: ((hundred = 42) AND ((thousand = 42) OR (thousand = 99)))
+               ->  BitmapAnd
+                     ->  Bitmap Index Scan on tenk1_hundred
+                           Index Cond: (hundred = 42)
+                     ->  BitmapOr
+                           ->  Bitmap Index Scan on tenk1_thous_tenthous
+                                 Index Cond: (thousand = 42)
+                           ->  Bitmap Index Scan on tenk1_thous_tenthous
+                                 Index Cond: (thousand = 99)
  Optimizer: Postgres query optimizer
-(8 rows)
+(13 rows)
 
 SELECT count(*) FROM tenk1
   WHERE hundred = 42 AND (thousand = 42 OR thousand = 99);
@@ -1979,10 +1971,21 @@ CREATE TABLE dupindexcols AS
   SELECT unique1 as id, stringu2::text as f1 FROM tenk1;
 CREATE INDEX dupindexcols_i ON dupindexcols (f1, id, f1 text_pattern_ops);
 ANALYZE dupindexcols;
--- FIXME: It's a unstable case in PAX
--- EXPLAIN (COSTS OFF)
---   SELECT count(*) FROM dupindexcols
---     WHERE f1 BETWEEN 'WA' AND 'ZZZ' and id < 1000 and f1 ~<~ 'YX';
+EXPLAIN (COSTS OFF)
+  SELECT count(*) FROM dupindexcols
+    WHERE f1 BETWEEN 'WA' AND 'ZZZ' and id < 1000 and f1 ~<~ 'YX';
+                                                         QUERY PLAN                                                         
+----------------------------------------------------------------------------------------------------------------------------
+ Finalize Aggregate
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         ->  Partial Aggregate
+               ->  Bitmap Heap Scan on dupindexcols
+                     Recheck Cond: ((f1 >= 'WA'::text) AND (f1 <= 'ZZZ'::text) AND (id < 1000) AND (f1 ~<~ 'YX'::text))
+                     ->  Bitmap Index Scan on dupindexcols_i
+                           Index Cond: ((f1 >= 'WA'::text) AND (f1 <= 'ZZZ'::text) AND (id < 1000) AND (f1 ~<~ 'YX'::text))
+ Optimizer: Postgres query optimizer
+(8 rows)
+
 SELECT count(*) FROM dupindexcols
   WHERE f1 BETWEEN 'WA' AND 'ZZZ' and id < 1000 and f1 ~<~ 'YX';
  count 
@@ -1993,7 +1996,6 @@ SELECT count(*) FROM dupindexcols
 --
 -- Check ordering of =ANY indexqual results (bug in 9.2.0)
 --
-vacuum tenk1;		-- ensure we get consistent plans here
 explain (costs off)
 SELECT unique1 FROM tenk1
 WHERE unique1 IN (1,42,7)
@@ -2021,19 +2023,15 @@ explain (costs off)
 SELECT thousand, tenthous FROM tenk1
 WHERE thousand < 2 AND tenthous IN (1001,3000)
 ORDER BY thousand;
-                            QUERY PLAN                             
--------------------------------------------------------------------
+                         QUERY PLAN                          
+-------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    Merge Key: thousand
-   ->  Sort
-         Sort Key: thousand
-         ->  Bitmap Heap Scan on tenk1
-               Recheck Cond: (thousand < 2)
-               Filter: (tenthous = ANY ('{1001,3000}'::integer[]))
-               ->  Bitmap Index Scan on tenk1_thous_tenthous
-                     Index Cond: (thousand < 2)
+   ->  Index Only Scan using tenk1_thous_tenthous on tenk1
+         Index Cond: (thousand < 2)
+         Filter: (tenthous = ANY ('{1001,3000}'::integer[]))
  Optimizer: Postgres query optimizer
-(10 rows)
+(6 rows)
 
 SELECT thousand, tenthous FROM tenk1
 WHERE thousand < 2 AND tenthous IN (1001,3000)
@@ -2049,19 +2047,16 @@ explain (costs off)
 SELECT thousand, tenthous FROM tenk1
 WHERE thousand < 2 AND tenthous IN (1001,3000)
 ORDER BY thousand;
-                            QUERY PLAN                             
--------------------------------------------------------------------
+                                         QUERY PLAN                                         
+--------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    Merge Key: thousand
    ->  Sort
          Sort Key: thousand
-         ->  Bitmap Heap Scan on tenk1
-               Recheck Cond: (thousand < 2)
-               Filter: (tenthous = ANY ('{1001,3000}'::integer[]))
-               ->  Bitmap Index Scan on tenk1_thous_tenthous
-                     Index Cond: (thousand < 2)
+         ->  Index Scan using tenk1_thous_tenthous on tenk1
+               Index Cond: ((thousand < 2) AND (tenthous = ANY ('{1001,3000}'::integer[])))
  Optimizer: Postgres query optimizer
-(10 rows)
+(7 rows)
 
 SELECT thousand, tenthous FROM tenk1
 WHERE thousand < 2 AND tenthous IN (1001,3000)
@@ -2274,9 +2269,7 @@ WHERE classid = 'pg_class'::regclass AND
 
 REINDEX INDEX concur_reindex_ind1;
 REINDEX TABLE concur_reindex_tab;
--- FIXME: The materialized view create by PAX can't do REINDEX
 REINDEX TABLE concur_reindex_matview;
-NOTICE:  table "concur_reindex_matview" has no indexes to reindex
 SELECT pg_describe_object(classid, objid, objsubid) as obj,
        pg_describe_object(refclassid,refobjid,refobjsubid) as objref,
        deptype
@@ -2362,15 +2355,11 @@ SELECT indexrelid::regclass, indisreplident FROM pg_index
 DROP TABLE concur_replident;
 -- Check that opclass parameters are preserved
 CREATE TABLE concur_appclass_tab(i tsvector, j tsvector, k tsvector);
--- PAX not support gist/spgist/brin indexes
 CREATE INDEX concur_appclass_ind on concur_appclass_tab
   USING gist (i tsvector_ops (siglen='1000'), j tsvector_ops (siglen='500'));
-ERROR:  pax only support btree/hash/gin/bitmap indexes (pax_access_handle.cc:736)
 CREATE INDEX concur_appclass_ind_2 on concur_appclass_tab
   USING gist (k tsvector_ops (siglen='300'), j tsvector_ops);
-ERROR:  pax only support btree/hash/gin/bitmap indexes (pax_access_handle.cc:736)
 REINDEX TABLE concur_appclass_tab;
-NOTICE:  table "concur_appclass_tab" has no indexes to reindex
 \d concur_appclass_tab
          Table "public.concur_appclass_tab"
  Column |   Type   | Collation | Nullable | Default 
@@ -2378,6 +2367,9 @@ NOTICE:  table "concur_appclass_tab" has no indexes to reindex
  i      | tsvector |           |          | 
  j      | tsvector |           |          | 
  k      | tsvector |           |          | 
+Indexes:
+    "concur_appclass_ind" gist (i tsvector_ops (siglen='1000'), j tsvector_ops (siglen='500'))
+    "concur_appclass_ind_2" gist (k tsvector_ops (siglen='300'), j)
 
 DROP TABLE concur_appclass_tab;
 -- Partitions
@@ -2694,9 +2686,16 @@ REINDEX INDEX CONCURRENTLY pg_toast.pg_toast_1260_index; -- no catalog toast ind
 ERROR:  cannot reindex system catalogs concurrently
 REINDEX SYSTEM CONCURRENTLY postgres; -- not allowed for SYSTEM
 ERROR:  cannot reindex system catalogs concurrently
+REINDEX (CONCURRENTLY) SYSTEM postgres; -- ditto
+ERROR:  cannot reindex system catalogs concurrently
+REINDEX (CONCURRENTLY) SYSTEM;  -- ditto
+ERROR:  cannot reindex system catalogs concurrently
 -- Warns about catalog relations
 REINDEX SCHEMA CONCURRENTLY pg_catalog;
 WARNING:  cannot reindex system catalogs concurrently, skipping all
+-- Not the current database
+REINDEX DATABASE not_current_database;
+ERROR:  can only reindex the currently open database
 -- Check the relation status, there should not be invalid indexes
 \d concur_reindex_tab
          Table "public.concur_reindex_tab"
@@ -2929,7 +2928,6 @@ CREATE TABLE reindex_before AS
 SELECT oid, relname, relfilenode, relkind, reltoastrelid
 	FROM pg_class
 	where relnamespace = (SELECT oid FROM pg_namespace WHERE nspname = 'schema_to_reindex');
--- Pax won't insert anything, because no toast here
 INSERT INTO reindex_before
 SELECT oid, 'pg_toast_TABLE', relfilenode, relkind, reltoastrelid
 FROM pg_class WHERE oid IN
@@ -2949,19 +2947,21 @@ SELECT  b.relname,
         ELSE 'relfilenode has changed' END
   FROM reindex_before b JOIN pg_class a ON b.oid = a.oid
   ORDER BY 1;
-     relname      | relkind |           case           
-------------------+---------+--------------------------
- matview          | m       | relfilenode is unchanged
- matview_col1_idx | i       | relfilenode has changed
- table1           | r       | relfilenode is unchanged
- table1_col1_seq  | S       | relfilenode is unchanged
- table1_pkey      | i       | relfilenode has changed
- table2           | r       | relfilenode is unchanged
- table2_col1_seq  | S       | relfilenode is unchanged
- table2_col2_idx  | i       | relfilenode has changed
- table2_pkey      | i       | relfilenode has changed
- view             | v       | relfilenode is unchanged
-(10 rows)
+       relname        | relkind |           case           
+----------------------+---------+--------------------------
+ matview              | m       | relfilenode is unchanged
+ matview_col1_idx     | i       | relfilenode has changed
+ pg_toast_TABLE       | t       | relfilenode is unchanged
+ pg_toast_TABLE_index | i       | relfilenode has changed
+ table1               | r       | relfilenode is unchanged
+ table1_col1_seq      | S       | relfilenode is unchanged
+ table1_pkey          | i       | relfilenode has changed
+ table2               | r       | relfilenode is unchanged
+ table2_col1_seq      | S       | relfilenode is unchanged
+ table2_col2_idx      | i       | relfilenode has changed
+ table2_pkey          | i       | relfilenode has changed
+ view                 | v       | relfilenode is unchanged
+(12 rows)
 
 REINDEX SCHEMA schema_to_reindex;
 BEGIN;

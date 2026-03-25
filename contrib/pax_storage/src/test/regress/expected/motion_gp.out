@@ -33,12 +33,12 @@ SELECT id,
 FROM motiondata;
  id | plain_sz | main_sz | external_sz | extended_sz 
 ----+----------+---------+-------------+-------------
+  1 |        4 |       4 |           4 |           7
   2 |    10004 |         |             |            
-  3 |          |   10004 |             |            
-  4 |          |   20004 |             |            
-  5 |          |         |       10004 |            
-  6 |          |         |             |     1000004
-  1 |        7 |       7 |           7 |          10
+  3 |          |     135 |             |            
+  4 |          |     251 |             |            
+  5 |          |         |       10000 |            
+  6 |          |         |             |       11463
 (6 rows)
 
 CREATE TABLE motiondata_ao WITH (appendonly=true) AS SELECT * from motiondata;

@@ -30,6 +30,8 @@ CREATE TABLE apples(id int PRIMARY KEY, type text);
 INSERT INTO apples(id) SELECT generate_series(1, 100000);
 CREATE TABLE box_locations(id int PRIMARY KEY, address text);
 CREATE TABLE boxes(id int PRIMARY KEY, apple_id int REFERENCES apples(id), location_id int REFERENCES box_locations(id));
+WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Apache Cloudberry, will not be enforced
+WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Apache Cloudberry, will not be enforced
 --- Check Explain Text format output
 -- explain_processing_off
 EXPLAIN SELECT * from boxes LEFT JOIN apples ON apples.id = boxes.apple_id LEFT JOIN box_locations ON box_locations.id = boxes.location_id;
@@ -49,7 +51,7 @@ EXPLAIN SELECT * from boxes LEFT JOIN apples ON apples.id = boxes.apple_id LEFT 
                            ->  Seq Scan on apples  (cost=0.00..1111.00 rows=33334 width=36)
          ->  Hash  (cost=596.00..596.00 rows=16534 width=36)
                ->  Seq Scan on box_locations  (cost=0.00..596.00 rows=16534 width=36)
- Optimizer: Postgres query optimizer
+ Optimizer: Postgres-based planner
 (15 rows)
 
 -- explain_processing_on
@@ -58,31 +60,32 @@ EXPLAIN SELECT * from boxes LEFT JOIN apples ON apples.id = boxes.apple_id LEFT 
 EXPLAIN (ANALYZE) SELECT * from boxes LEFT JOIN apples ON apples.id = boxes.apple_id LEFT JOIN box_locations ON box_locations.id = boxes.location_id;
                                                                         QUERY PLAN                                                                         
 -----------------------------------------------------------------------------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)  (cost=812.00..3838.66 rows=77900 width=84) (actual time=51.162..51.171 rows=0 loops=1)
-   ->  Hash Left Join  (cost=812.00..2799.99 rows=25967 width=84) (actual time=50.992..50.999 rows=0 loops=1)
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=812.00..3838.66 rows=77900 width=84) (actual time=20.322..20.334 rows=0 loops=1)
+   ->  Hash Left Join  (cost=812.00..2799.99 rows=25967 width=84) (actual time=19.869..19.880 rows=0 loops=1)
          Hash Cond: (boxes.location_id = box_locations.id)
-         ->  Redistribute Motion 3:3  (slice2; segments: 3)  (cost=406.00..2066.16 rows=25967 width=48) (actual time=48.988..48.988 rows=0 loops=1)
+         ->  Redistribute Motion 3:3  (slice2; segments: 3)  (cost=406.00..2066.16 rows=25967 width=48) (actual time=16.097..16.097 rows=0 loops=1)
                Hash Key: boxes.location_id
-               ->  Hash Left Join  (cost=406.00..1546.83 rows=25967 width=48) (actual time=49.549..49.556 rows=0 loops=1)
+               ->  Hash Left Join  (cost=406.00..1546.83 rows=25967 width=48) (actual time=16.543..16.556 rows=0 loops=1)
                      Hash Cond: (boxes.apple_id = apples.id)
-                     ->  Redistribute Motion 3:3  (slice3; segments: 3)  (cost=0.00..813.00 rows=25967 width=12) (actual time=0.010..0.010 rows=0 loops=1)
+                     ->  Redistribute Motion 3:3  (slice3; segments: 3)  (cost=0.00..813.00 rows=25967 width=12) (actual time=0.020..0.020 rows=0 loops=1)
                            Hash Key: boxes.apple_id
-                           ->  Seq Scan on boxes  (cost=0.00..293.67 rows=25967 width=12) (actual time=0.514..0.514 rows=0 loops=1)
-                     ->  Hash  (cost=199.33..199.33 rows=16533 width=36) (actual time=46.915..46.918 rows=33462 loops=1)
-                           Buckets: 262144  Batches: 1  Memory Usage: 3225kB
-                           ->  Seq Scan on apples  (cost=0.00..199.33 rows=16533 width=36) (actual time=1.633..35.611 rows=33462 loops=1)
-         ->  Hash  (cost=199.33..199.33 rows=16533 width=36) (actual time=0.275..0.277 rows=0 loops=1)
-               Buckets: 262144  Batches: 1  Memory Usage: 2048kB
-               ->  Seq Scan on box_locations  (cost=0.00..199.33 rows=16533 width=36) (actual time=0.272..0.273 rows=0 loops=1)
- Planning Time: 0.987 ms
-   (slice0)    Executor memory: 126K bytes.
-   (slice1)    Executor memory: 2179K bytes avg x 3x(0) workers, 2179K bytes max (seg0).  Work_mem: 2048K bytes max.
-   (slice2)    Executor memory: 3390K bytes avg x 3x(0) workers, 3390K bytes max (seg0).  Work_mem: 3225K bytes max.
-   (slice3)    Executor memory: 116K bytes avg x 3x(0) workers, 116K bytes max (seg0).
- Memory used:  256000kB
+                           ->  Seq Scan on boxes  (cost=0.00..293.67 rows=25967 width=12) (actual time=0.021..0.023 rows=0 loops=1)
+                     ->  Hash  (cost=199.33..199.33 rows=16533 width=36) (actual time=12.444..12.450 rows=33462 loops=1)
+                           Buckets: 131072  Batches: 1  Memory Usage: 2201kB
+                           ->  Seq Scan on apples  (cost=0.00..199.33 rows=16533 width=36) (actual time=0.071..3.997 rows=33462 loops=1)
+         ->  Hash  (cost=199.33..199.33 rows=16533 width=36) (actual time=0.022..0.026 rows=0 loops=1)
+               Buckets: 131072  Batches: 1  Memory Usage: 1024kB
+               ->  Seq Scan on box_locations  (cost=0.00..199.33 rows=16533 width=36) (actual time=0.000..0.010 rows=0 loops=1)
+ Optimizer: Postgres-based planner
+ Planning Time: 0.893 ms
+   (slice0)    Executor memory: 64K bytes.
+   (slice1)    Executor memory: 1051K bytes avg x 3 workers, 1051K bytes max (seg0).  Work_mem: 1024K bytes max.
+   (slice2)    Executor memory: 2364K bytes avg x 3 workers, 2364K bytes max (seg0).  Work_mem: 2201K bytes max.
+   (slice3)    Executor memory: 41K bytes avg x 3 workers, 44K bytes max (seg1).
+ Memory used:  128000kB
  Optimizer: Postgres query optimizer
- Execution Time: 67.034 ms
-(24 rows)
+ Execution Time: 59.644 ms
+(22 rows)
 
 -- explain_processing_on
 -- Unaligned output format is better for the YAML / XML / JSON outputs.

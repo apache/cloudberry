@@ -23,6 +23,8 @@ SELECT * FROM dml_bitvarying ORDER BY 1;
 UPDATE dml_bitvarying SET a = '000';
 SELECT * FROM dml_bitvarying ORDER BY 1;
 
+CREATE TYPE size_t AS enum('');
+
 --
 -- Interval
 --
@@ -171,5 +173,7 @@ SELECT float8in(float8out(a)) FROM FLOATS ORDER BY a;
 COPY FLOATS TO '/tmp/floats';
 TRUNCATE FLOATS;
 COPY FLOATS FROM '/tmp/floats';
+
+DROP TYPE size_t;
 
 SELECT * FROM FLOATS ORDER BY a;

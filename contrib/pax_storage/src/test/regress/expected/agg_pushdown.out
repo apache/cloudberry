@@ -39,8 +39,8 @@ SET gp_enable_agg_pushdown TO off;
 EXPLAIN (VERBOSE on, COSTS off)
 SELECT p.x, avg(c1.v) FROM agg_pushdown_parent AS p JOIN agg_pushdown_child1
 AS c1 ON c1.parent = p.i GROUP BY p.i;
-                                                                           QUERY PLAN                                                                            
------------------------------------------------------------------------------------------------------------------------------------------------------------------
+                                                               QUERY PLAN                                                               
+----------------------------------------------------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    Output: p.x, (avg(c1.v)), p.i
    ->  HashAggregate
@@ -69,8 +69,8 @@ SET gp_enable_agg_pushdown TO on;
 EXPLAIN (VERBOSE on, COSTS off)
 SELECT p.x, avg(c1.v) FROM agg_pushdown_parent AS p JOIN agg_pushdown_child1
 AS c1 ON c1.parent = p.i GROUP BY p.i;
-                                                                           QUERY PLAN                                                                           
-----------------------------------------------------------------------------------------------------------------------------------------------------------------
+                                                              QUERY PLAN                                                               
+---------------------------------------------------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    Output: p.x, (avg(c1.v)), p.i
    ->  Finalize GroupAggregate
@@ -89,9 +89,9 @@ AS c1 ON c1.parent = p.i GROUP BY p.i;
                                  Output: c1.parent, PARTIAL avg(c1.v)
                                  Group Key: c1.parent
                                  ->  Seq Scan on public.agg_pushdown_child1 c1
-                                       Output: c1.v, c1.parent
+                                       Output: c1.j, c1.parent, c1.v
                      ->  Index Scan using agg_pushdown_parent_pkey on public.agg_pushdown_parent p
-                           Output: p.x, p.i
+                           Output: p.i, p.x
                            Index Cond: (p.i = c1.parent)
  Settings: enable_hashjoin = 'off', enable_mergejoin = 'off', enable_nestloop = 'on', gp_enable_agg_pushdown = 'on', optimizer = 'off'
  Optimizer: Postgres query optimizer
@@ -103,8 +103,8 @@ SET enable_hashjoin TO on;
 EXPLAIN (VERBOSE on, COSTS off)
 SELECT p.i, avg(c1.v) FROM agg_pushdown_parent AS p JOIN agg_pushdown_child1
 AS c1 ON c1.parent = p.i GROUP BY p.i;
-                                                                           QUERY PLAN                                                                           
-----------------------------------------------------------------------------------------------------------------------------------------------------------------
+                                                              QUERY PLAN                                                               
+---------------------------------------------------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    Output: p.i, (avg(c1.v))
    ->  Finalize GroupAggregate
@@ -129,7 +129,7 @@ AS c1 ON c1.parent = p.i GROUP BY p.i;
                                        Output: c1.parent, PARTIAL avg(c1.v)
                                        Group Key: c1.parent
                                        ->  Seq Scan on public.agg_pushdown_child1 c1
-                                             Output: c1.v, c1.parent
+                                             Output: c1.j, c1.parent, c1.v
  Settings: enable_hashjoin = 'on', enable_mergejoin = 'off', enable_nestloop = 'off', gp_enable_agg_pushdown = 'on', optimizer = 'off'
  Optimizer: Postgres query optimizer
 (27 rows)
@@ -140,8 +140,8 @@ SET enable_mergejoin TO on;
 EXPLAIN (VERBOSE on, COSTS off)
 SELECT p.i, avg(c1.v) FROM agg_pushdown_parent AS p JOIN agg_pushdown_child1
 AS c1 ON c1.parent = p.i GROUP BY p.i;
-                                                                           QUERY PLAN                                                                           
-----------------------------------------------------------------------------------------------------------------------------------------------------------------
+                                                              QUERY PLAN                                                               
+---------------------------------------------------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    Output: p.i, (avg(c1.v))
    ->  Finalize HashAggregate
@@ -167,7 +167,7 @@ AS c1 ON c1.parent = p.i GROUP BY p.i;
                                  Output: c1.parent, PARTIAL avg(c1.v)
                                  Group Key: c1.parent
                                  ->  Seq Scan on public.agg_pushdown_child1 c1
-                                       Output: c1.v, c1.parent
+                                       Output: c1.j, c1.parent, c1.v
  Settings: enable_hashjoin = 'off', enable_mergejoin = 'on', enable_nestloop = 'off', gp_enable_agg_pushdown = 'on', optimizer = 'off'
  Optimizer: Postgres query optimizer
 (28 rows)
@@ -182,8 +182,8 @@ SET enable_seqscan TO off;
 EXPLAIN (VERBOSE on, COSTS off)
 SELECT p.i, avg(c1.v) FROM agg_pushdown_parent AS p JOIN agg_pushdown_child1
 AS c1 ON c1.parent = p.i GROUP BY p.i;
-                                                                                      QUERY PLAN                                                                                       
----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+                                                                          QUERY PLAN                                                                          
+--------------------------------------------------------------------------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    Output: p.i, (avg(c1.v))
    ->  HashAggregate
@@ -212,8 +212,8 @@ SET gp_enable_agg_pushdown TO on;
 EXPLAIN (VERBOSE on, COSTS off)
 SELECT p.i, avg(c1.v) FROM agg_pushdown_parent AS p JOIN agg_pushdown_child1
 AS c1 ON c1.parent = p.i GROUP BY p.i;
-                                                                                      QUERY PLAN                                                                                      
---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+                                                                         QUERY PLAN                                                                          
+-------------------------------------------------------------------------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    Output: p.i, (avg(c1.v))
    ->  Finalize GroupAggregate
@@ -232,7 +232,7 @@ AS c1 ON c1.parent = p.i GROUP BY p.i;
                                  Output: c1.parent, PARTIAL avg(c1.v)
                                  Group Key: c1.parent
                                  ->  Index Scan using agg_pushdown_child1_parent_idx on public.agg_pushdown_child1 c1
-                                       Output: c1.v, c1.parent
+                                       Output: c1.j, c1.parent, c1.v
                      ->  Index Only Scan using agg_pushdown_parent_pkey on public.agg_pushdown_parent p
                            Output: p.i
                            Index Cond: (p.i = c1.parent)
@@ -251,8 +251,8 @@ SET gp_enable_agg_pushdown TO off;
 EXPLAIN (VERBOSE on, COSTS off)
 SELECT p.i, avg(c1.v) FROM agg_pushdown_parent AS p JOIN agg_pushdown_child1
 AS c1 ON c1.parent = p.x GROUP BY p.i;
-                                                                                      QUERY PLAN                                                                                      
---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+                                                                         QUERY PLAN                                                                          
+-------------------------------------------------------------------------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    Output: p.i, (avg(c1.v))
    ->  Finalize HashAggregate
@@ -268,7 +268,7 @@ AS c1 ON c1.parent = p.x GROUP BY p.i;
                            Output: p.i, c1.v
                            Hash Cond: (c1.parent = p.x)
                            ->  Seq Scan on public.agg_pushdown_child1 c1
-                                 Output: c1.v, c1.parent
+                                 Output: c1.j, c1.parent, c1.v
                            ->  Hash
                                  Output: p.i, p.x
                                  ->  Broadcast Motion 3:3  (slice3; segments: 3)
@@ -283,8 +283,8 @@ SET gp_enable_agg_pushdown TO on;
 EXPLAIN (VERBOSE on, COSTS off)
 SELECT p.i, avg(c1.v) FROM agg_pushdown_parent AS p JOIN agg_pushdown_child1
 AS c1 ON c1.parent = p.x GROUP BY p.i;
-                                                                                     QUERY PLAN                                                                                      
--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+                                                                         QUERY PLAN                                                                         
+------------------------------------------------------------------------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    Output: p.i, (avg(c1.v))
    ->  Finalize GroupAggregate
@@ -309,7 +309,7 @@ AS c1 ON c1.parent = p.x GROUP BY p.i;
                                        Output: c1.parent, PARTIAL avg(c1.v)
                                        Group Key: c1.parent
                                        ->  Seq Scan on public.agg_pushdown_child1 c1
-                                             Output: c1.v, c1.parent
+                                             Output: c1.j, c1.parent, c1.v
  Settings: enable_hashjoin = 'on', enable_mergejoin = 'on', enable_nestloop = 'on', enable_seqscan = 'on', gp_enable_agg_pushdown = 'on', optimizer = 'off'
  Optimizer: Postgres query optimizer
 (27 rows)
@@ -324,8 +324,8 @@ EXPLAIN (VERBOSE on, COSTS off)
 SELECT p.i, avg(c1.v + c2.v) FROM agg_pushdown_parent AS p JOIN
 agg_pushdown_child1 AS c1 ON c1.parent = p.i JOIN agg_pushdown_child2 AS c2 ON
 c2.parent = p.i WHERE c1.j = c2.k GROUP BY p.i;
-                                                                                       QUERY PLAN                                                                                       
-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+                                                                          QUERY PLAN                                                                           
+---------------------------------------------------------------------------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    Output: p.i, (avg((c1.v + c2.v)))
    ->  HashAggregate
@@ -341,9 +341,9 @@ c2.parent = p.i WHERE c1.j = c2.k GROUP BY p.i;
                            Output: c1.v, c1.parent, c2.v, c2.parent
                            Inner Unique: true
                            ->  Seq Scan on public.agg_pushdown_child1 c1
-                                 Output: c1.v, c1.parent, c1.j
+                                 Output: c1.j, c1.parent, c1.v
                            ->  Index Scan using agg_pushdown_child2_pkey on public.agg_pushdown_child2 c2
-                                 Output: c2.v, c2.parent, c2.k
+                                 Output: c2.k, c2.parent, c2.v
                                  Index Cond: ((c2.k = c1.j) AND (c2.parent = c1.parent))
                ->  Memoize
                      Output: p.i
@@ -361,8 +361,8 @@ EXPLAIN (VERBOSE on, COSTS off)
 SELECT p.i, avg(c1.v + c2.v) FROM agg_pushdown_parent AS p JOIN
 agg_pushdown_child1 AS c1 ON c1.parent = p.i JOIN agg_pushdown_child2 AS c2 ON
 c2.parent = p.i WHERE c1.j = c2.k GROUP BY p.i;
-                                                                                      QUERY PLAN                                                                                       
----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+                                                                          QUERY PLAN                                                                          
+--------------------------------------------------------------------------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    Output: p.i, (avg((c1.v + c2.v)))
    ->  Finalize GroupAggregate
@@ -384,9 +384,9 @@ c2.parent = p.i WHERE c1.j = c2.k GROUP BY p.i;
                                        Output: c1.v, c1.parent, c2.v, c2.parent
                                        Inner Unique: true
                                        ->  Seq Scan on public.agg_pushdown_child1 c1
-                                             Output: c1.v, c1.parent, c1.j
+                                             Output: c1.j, c1.parent, c1.v
                                        ->  Index Scan using agg_pushdown_child2_pkey on public.agg_pushdown_child2 c2
-                                             Output: c2.v, c2.parent, c2.k
+                                             Output: c2.k, c2.parent, c2.v
                                              Index Cond: ((c2.k = c1.j) AND (c2.parent = c1.parent))
                      ->  Index Only Scan using agg_pushdown_parent_pkey on public.agg_pushdown_parent p
                            Output: p.i
@@ -402,8 +402,8 @@ EXPLAIN (VERBOSE on, COSTS off)
 SELECT p.i, avg(c1.v + c2.v) FROM agg_pushdown_parent AS p JOIN
 agg_pushdown_child1 AS c1 ON c1.parent = p.i JOIN agg_pushdown_child2 AS c2 ON
 c2.parent = p.i WHERE c1.j = c2.k GROUP BY p.i;
-                                                                                      QUERY PLAN                                                                                       
----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+                                                                          QUERY PLAN                                                                          
+--------------------------------------------------------------------------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    Output: p.i, (avg((c1.v + c2.v)))
    ->  Finalize GroupAggregate
@@ -432,7 +432,7 @@ c2.parent = p.i WHERE c1.j = c2.k GROUP BY p.i;
                                              Inner Unique: true
                                              Hash Cond: ((c1.parent = c2.parent) AND (c1.j = c2.k))
                                              ->  Seq Scan on public.agg_pushdown_child1 c1
-                                                   Output: c1.v, c1.parent, c1.j
+                                                   Output: c1.j, c1.parent, c1.v
                                              ->  Hash
                                                    Output: c2.v, c2.parent, c2.k
                                                    ->  Seq Scan on public.agg_pushdown_child2 c2
@@ -449,8 +449,8 @@ EXPLAIN (VERBOSE on, COSTS off)
 SELECT p.i, avg(c1.v + c2.v) FROM agg_pushdown_parent AS p JOIN
 agg_pushdown_child1 AS c1 ON c1.parent = p.i JOIN agg_pushdown_child2 AS c2 ON
 c2.parent = p.i WHERE c1.j = c2.k GROUP BY p.i;
-                                                                                       QUERY PLAN                                                                                       
-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+                                                                          QUERY PLAN                                                                           
+---------------------------------------------------------------------------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    Output: p.i, (avg((c1.v + c2.v)))
    ->  Finalize GroupAggregate
@@ -474,9 +474,9 @@ c2.parent = p.i WHERE c1.j = c2.k GROUP BY p.i;
                                        Inner Unique: true
                                        Merge Cond: ((c1.j = c2.k) AND (c1.parent = c2.parent))
                                        ->  Index Scan using agg_pushdown_child1_pkey on public.agg_pushdown_child1 c1
-                                             Output: c1.v, c1.parent, c1.j
+                                             Output: c1.j, c1.parent, c1.v
                                        ->  Index Scan using agg_pushdown_child2_pkey on public.agg_pushdown_child2 c2
-                                             Output: c2.v, c2.parent, c2.k
+                                             Output: c2.k, c2.parent, c2.v
                ->  Index Only Scan using agg_pushdown_parent_pkey on public.agg_pushdown_parent p
                      Output: p.i
  Settings: enable_hashjoin = 'off', enable_mergejoin = 'on', enable_nestloop = 'off', enable_seqscan = 'off', gp_enable_agg_pushdown = 'on', optimizer = 'off'
@@ -505,8 +505,8 @@ SET gp_enable_agg_pushdown TO ON;
 -- Join key and group key are the same.
 EXPLAIN (VERBOSE on, COSTS off)
 SELECT t1.id, SUM(t1.val) FROM t1, t2 WHERE t1.id = t2.id GROUP BY t1.id;
-                                                                                      QUERY PLAN                                                                                       
----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+                                                                          QUERY PLAN                                                                          
+--------------------------------------------------------------------------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    Output: t1.id, (sum(t1.val))
    ->  Finalize HashAggregate
@@ -516,14 +516,14 @@ SELECT t1.id, SUM(t1.val) FROM t1, t2 WHERE t1.id = t2.id GROUP BY t1.id;
                Output: t1.id, (PARTIAL sum(t1.val))
                Hash Cond: (t2.id = t1.id)
                ->  Seq Scan on public.t2
-                     Output: t2.id
+                     Output: t2.id, t2.val
                ->  Hash
                      Output: t1.id, (PARTIAL sum(t1.val))
                      ->  Partial HashAggregate
                            Output: t1.id, PARTIAL sum(t1.val)
                            Group Key: t1.id
                            ->  Seq Scan on public.t1
-                                 Output: t1.id, t1.val
+                                 Output: t1.id, t1.val, t1.comment
  Settings: enable_hashjoin = 'on', enable_mergejoin = 'off', enable_nestloop = 'off', enable_seqscan = 'on', gp_enable_agg_pushdown = 'on', optimizer = 'off'
  Optimizer: Postgres query optimizer
 (19 rows)
@@ -531,8 +531,8 @@ SELECT t1.id, SUM(t1.val) FROM t1, t2 WHERE t1.id = t2.id GROUP BY t1.id;
 -- Join key and group key are different.
 EXPLAIN (VERBOSE on, COSTS off)
 SELECT t1.val, SUM(t1.id) FROM t1, t2 WHERE t1.id = t2.id GROUP BY t1.val;
-                                                                                      QUERY PLAN                                                                                       
----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+                                                                          QUERY PLAN                                                                          
+--------------------------------------------------------------------------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    Output: t1.val, (sum(t1.id))
    ->  Finalize HashAggregate
@@ -545,14 +545,14 @@ SELECT t1.val, SUM(t1.id) FROM t1, t2 WHERE t1.id = t2.id GROUP BY t1.val;
                      Output: t1.val, (PARTIAL sum(t1.id))
                      Hash Cond: (t2.id = t1.id)
                      ->  Seq Scan on public.t2
-                           Output: t2.id
+                           Output: t2.id, t2.val
                      ->  Hash
                            Output: t1.val, t1.id, (PARTIAL sum(t1.id))
                            ->  Partial HashAggregate
                                  Output: t1.val, t1.id, PARTIAL sum(t1.id)
                                  Group Key: t1.val, t1.id
                                  ->  Seq Scan on public.t1
-                                       Output: t1.val, t1.id
+                                       Output: t1.id, t1.val, t1.comment
  Settings: enable_hashjoin = 'on', enable_mergejoin = 'off', enable_nestloop = 'off', enable_seqscan = 'on', gp_enable_agg_pushdown = 'on', optimizer = 'off'
  Optimizer: Postgres query optimizer
 (22 rows)
@@ -560,8 +560,8 @@ SELECT t1.val, SUM(t1.id) FROM t1, t2 WHERE t1.id = t2.id GROUP BY t1.val;
 -- Pushdown with equivclass.
 EXPLAIN (VERBOSE on, COSTS off)
 SELECT t2.id, SUM(t1.val) FROM t1, t2 WHERE t1.id = t2.id GROUP BY t2.id;
-                                                                                      QUERY PLAN                                                                                       
----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+                                                                          QUERY PLAN                                                                          
+--------------------------------------------------------------------------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    Output: t2.id, (sum(t1.val))
    ->  Finalize HashAggregate
@@ -571,14 +571,14 @@ SELECT t2.id, SUM(t1.val) FROM t1, t2 WHERE t1.id = t2.id GROUP BY t2.id;
                Output: t2.id, (PARTIAL sum(t1.val))
                Hash Cond: (t2.id = t1.id)
                ->  Seq Scan on public.t2
-                     Output: t2.id
+                     Output: t2.id, t2.val
                ->  Hash
                      Output: t1.id, (PARTIAL sum(t1.val))
                      ->  Partial HashAggregate
                            Output: t1.id, PARTIAL sum(t1.val)
                            Group Key: t1.id
                            ->  Seq Scan on public.t1
-                                 Output: t1.val, t1.id
+                                 Output: t1.id, t1.val, t1.comment
  Settings: enable_hashjoin = 'on', enable_mergejoin = 'off', enable_nestloop = 'off', enable_seqscan = 'on', gp_enable_agg_pushdown = 'on', optimizer = 'off'
  Optimizer: Postgres query optimizer
 (19 rows)
@@ -586,8 +586,8 @@ SELECT t2.id, SUM(t1.val) FROM t1, t2 WHERE t1.id = t2.id GROUP BY t2.id;
 -- Group by column from t2 and aggregate column from t1. 
 EXPLAIN (VERBOSE on, COSTS off)
 SELECT t2.val, SUM(t1.val) FROM t1, t2 WHERE t1.id = t2.id GROUP BY t2.val;
-                                                                                      QUERY PLAN                                                                                       
----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+                                                                          QUERY PLAN                                                                          
+--------------------------------------------------------------------------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    Output: t2.val, (sum(t1.val))
    ->  Finalize HashAggregate
@@ -600,14 +600,14 @@ SELECT t2.val, SUM(t1.val) FROM t1, t2 WHERE t1.id = t2.id GROUP BY t2.val;
                      Output: t2.val, (PARTIAL sum(t1.val))
                      Hash Cond: (t2.id = t1.id)
                      ->  Seq Scan on public.t2
-                           Output: t2.val, t2.id
+                           Output: t2.id, t2.val
                      ->  Hash
                            Output: t1.id, (PARTIAL sum(t1.val))
                            ->  Partial HashAggregate
                                  Output: t1.id, PARTIAL sum(t1.val)
                                  Group Key: t1.id
                                  ->  Seq Scan on public.t1
-                                       Output: t1.val, t1.id
+                                       Output: t1.id, t1.val, t1.comment
  Settings: enable_hashjoin = 'on', enable_mergejoin = 'off', enable_nestloop = 'off', enable_seqscan = 'on', gp_enable_agg_pushdown = 'on', optimizer = 'off'
  Optimizer: Postgres query optimizer
 (22 rows)
@@ -615,8 +615,8 @@ SELECT t2.val, SUM(t1.val) FROM t1, t2 WHERE t1.id = t2.id GROUP BY t2.val;
 -- Pushdown with multiply group keys.
 EXPLAIN (VERBOSE on, COSTS off)
 SELECT t1.id, t1.comment, SUM(t1.val) FROM t1, t2 WHERE t1.id = t2.id GROUP BY t1.id, t1.comment;
-                                                                                      QUERY PLAN                                                                                       
----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+                                                                          QUERY PLAN                                                                          
+--------------------------------------------------------------------------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    Output: t1.id, t1.comment, (sum(t1.val))
    ->  Finalize HashAggregate
@@ -626,14 +626,14 @@ SELECT t1.id, t1.comment, SUM(t1.val) FROM t1, t2 WHERE t1.id = t2.id GROUP BY t
                Output: t1.id, t1.comment, (PARTIAL sum(t1.val))
                Hash Cond: (t2.id = t1.id)
                ->  Seq Scan on public.t2
-                     Output: t2.id
+                     Output: t2.id, t2.val
                ->  Hash
                      Output: t1.id, t1.comment, (PARTIAL sum(t1.val))
                      ->  Partial HashAggregate
                            Output: t1.id, t1.comment, PARTIAL sum(t1.val)
                            Group Key: t1.id, t1.comment
                            ->  Seq Scan on public.t1
-                                 Output: t1.id, t1.comment, t1.val
+                                 Output: t1.id, t1.val, t1.comment
  Settings: enable_hashjoin = 'on', enable_mergejoin = 'off', enable_nestloop = 'off', enable_seqscan = 'on', gp_enable_agg_pushdown = 'on', optimizer = 'off'
  Optimizer: Postgres query optimizer
 (19 rows)
@@ -641,8 +641,8 @@ SELECT t1.id, t1.comment, SUM(t1.val) FROM t1, t2 WHERE t1.id = t2.id GROUP BY t
 -- Pushdown with multiply join keys.
 EXPLAIN (VERBOSE on, COSTS off)
 SELECT t1.id, t1.comment, SUM(t1.val) FROM t1, t2 WHERE t1.id = t2.id and t1.val = t2.val GROUP BY t1.id, t1.comment;
-                                                                                      QUERY PLAN                                                                                       
----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+                                                                          QUERY PLAN                                                                          
+--------------------------------------------------------------------------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    Output: t1.id, t1.comment, (sum(t1.val))
    ->  Finalize GroupAggregate
@@ -662,7 +662,7 @@ SELECT t1.id, t1.comment, SUM(t1.val) FROM t1, t2 WHERE t1.id = t2.id and t1.val
                                  Output: t1.id, t1.comment, t1.val, PARTIAL sum(t1.val)
                                  Group Key: t1.id, t1.comment, t1.val
                                  ->  Seq Scan on public.t1
-                                       Output: t1.id, t1.comment, t1.val
+                                       Output: t1.id, t1.val, t1.comment
  Settings: enable_hashjoin = 'on', enable_mergejoin = 'off', enable_nestloop = 'off', enable_seqscan = 'on', gp_enable_agg_pushdown = 'on', optimizer = 'off'
  Optimizer: Postgres query optimizer
 (22 rows)
@@ -672,8 +672,8 @@ INSERT INTO t1 SELECT i, i, 'asd' FROM generate_series(1, 10000) s(i);
 ANALYZE t1;
 EXPLAIN (VERBOSE on, COSTS off)
 SELECT t1.id, t1.comment, SUM(t1.val) FROM t1, t2 WHERE t1.id = t2.id and t1.val = t2.val GROUP BY t1.id, t1.comment;
-                                                                                      QUERY PLAN                                                                                       
----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+                                                                          QUERY PLAN                                                                          
+--------------------------------------------------------------------------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    Output: t1.id, t1.comment, (sum(t1.val))
    ->  GroupAggregate
@@ -700,8 +700,8 @@ INSERT INTO t1 SELECT i % 10, 1, 'asd' FROM generate_series(1, 10000) s(i);
 ANALYZE t1;
 EXPLAIN (VERBOSE on, COSTS off)
 SELECT t1.id, t1.comment, SUM(t1.val) FROM t1, t2 WHERE t1.id = t2.id and t1.val = t2.val GROUP BY t1.id, t1.comment;
-                                                                                      QUERY PLAN                                                                                       
----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+                                                                          QUERY PLAN                                                                          
+--------------------------------------------------------------------------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    Output: t1.id, t1.comment, (sum(t1.val))
    ->  Finalize GroupAggregate
@@ -721,7 +721,7 @@ SELECT t1.id, t1.comment, SUM(t1.val) FROM t1, t2 WHERE t1.id = t2.id and t1.val
                                  Output: t1.id, t1.comment, t1.val, PARTIAL sum(t1.val)
                                  Group Key: t1.id, t1.comment, t1.val
                                  ->  Seq Scan on public.t1
-                                       Output: t1.id, t1.comment, t1.val
+                                       Output: t1.id, t1.val, t1.comment
  Settings: enable_hashjoin = 'on', enable_mergejoin = 'off', enable_nestloop = 'off', enable_seqscan = 'on', gp_enable_agg_pushdown = 'on', optimizer = 'off'
  Optimizer: Postgres query optimizer
 (22 rows)
@@ -731,6 +731,7 @@ DROP TABLE t1, t2;
 -- Test case group 3: Pushdown in subquery and group from subquery.
 DROP TABLE IF EXISTS part, lineitem;
 NOTICE:  table "part" does not exist, skipping
+NOTICE:  table "lineitem" does not exist, skipping
 CREATE TABLE part (p_partkey int, p_size int, p_price int);
 NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'p_partkey' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
@@ -750,8 +751,8 @@ SELECT SUM(slp) FROM
 		ORDER BY l_partkey
 		LIMIT 100) temp(lp, slp)
 	WHERE slp > 10;
-                                                                                      QUERY PLAN                                                                                       
----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+                                                                          QUERY PLAN                                                                          
+--------------------------------------------------------------------------------------------------------------------------------------------------------------
  Aggregate
    Output: sum(temp.slp)
    ->  Subquery Scan on temp
@@ -777,7 +778,7 @@ SELECT SUM(slp) FROM
                                                    Output: lineitem.l_partkey, (PARTIAL sum(part.p_price))
                                                    Hash Cond: (lineitem.l_partkey = part.p_partkey)
                                                    ->  Seq Scan on public.lineitem
-                                                         Output: lineitem.l_partkey
+                                                         Output: lineitem.l_orderkey, lineitem.l_partkey, lineitem.l_amount
                                                    ->  Hash
                                                          Output: part.p_partkey, (PARTIAL sum(part.p_price))
                                                          ->  Broadcast Motion 3:3  (slice3; segments: 3)
@@ -786,7 +787,7 @@ SELECT SUM(slp) FROM
                                                                      Output: part.p_partkey, PARTIAL sum(part.p_price)
                                                                      Group Key: part.p_partkey
                                                                      ->  Seq Scan on public.part
-                                                                           Output: part.p_price, part.p_partkey
+                                                                           Output: part.p_partkey, part.p_size, part.p_price
                                                                            Filter: (part.p_size < 40)
  Settings: enable_hashjoin = 'on', enable_mergejoin = 'off', enable_nestloop = 'off', enable_seqscan = 'on', gp_enable_agg_pushdown = 'on', optimizer = 'off'
  Optimizer: Postgres query optimizer
@@ -799,8 +800,8 @@ SELECT p_partkey, SUM(l_amount) FROM
 			FROM lineitem ORDER BY l_partkey LIMIT 10000) li(l_partkey, l_amount)
 	WHERE l_partkey = p_partkey
 	GROUP BY p_partkey;
-                                                                                      QUERY PLAN                                                                                       
----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+                                                                          QUERY PLAN                                                                          
+--------------------------------------------------------------------------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    Output: part.p_partkey, (sum(((lineitem.l_amount + 10))))
    ->  Finalize HashAggregate
@@ -810,7 +811,7 @@ SELECT p_partkey, SUM(l_amount) FROM
                Output: part.p_partkey, (PARTIAL sum(((lineitem.l_amount + 10))))
                Hash Cond: (part.p_partkey = lineitem.l_partkey)
                ->  Seq Scan on public.part
-                     Output: part.p_partkey
+                     Output: part.p_partkey, part.p_size, part.p_price
                ->  Hash
                      Output: lineitem.l_partkey, (PARTIAL sum(((lineitem.l_amount + 10))))
                      ->  Redistribute Motion 1:3  (slice2; segments: 1)
@@ -858,8 +859,8 @@ SELECT v_id, v_name, SUM(c_consumption)
 	FROM vendor_pd, customer_pd, nation_pd
 	WHERE v_id = c_v_id AND c_n_id = n_id AND c_id > n_population
 	GROUP BY v_id, v_name;
-                                                                                      QUERY PLAN                                                                                       
----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+                                                                          QUERY PLAN                                                                          
+--------------------------------------------------------------------------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    Output: vendor_pd.v_id, vendor_pd.v_name, (sum(customer_pd.c_consumption))
    ->  Finalize HashAggregate
@@ -883,7 +884,7 @@ SELECT v_id, v_name, SUM(c_consumption)
                                        Hash Cond: (customer_pd.c_n_id = nation_pd.n_id)
                                        Join Filter: (customer_pd.c_id > nation_pd.n_population)
                                        ->  Seq Scan on public.customer_pd
-                                             Output: customer_pd.c_consumption, customer_pd.c_v_id, customer_pd.c_n_id, customer_pd.c_id
+                                             Output: customer_pd.c_id, customer_pd.c_v_id, customer_pd.c_n_id, customer_pd.c_type, customer_pd.c_consumption
                                        ->  Hash
                                              Output: nation_pd.n_id, nation_pd.n_population
                                              ->  Broadcast Motion 3:3  (slice3; segments: 3)
@@ -900,8 +901,8 @@ SELECT v_id, c_type, n_type, SUM(c_consumption)
 	FROM vendor_pd, customer_pd, nation_pd
 	WHERE v_id = c_v_id AND c_n_id = n_id AND c_id > n_population
 	GROUP BY v_id, c_type, n_type;
-                                                                                      QUERY PLAN                                                                                       
----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+                                                                          QUERY PLAN                                                                          
+--------------------------------------------------------------------------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    Output: vendor_pd.v_id, customer_pd.c_type, nation_pd.n_type, (sum(customer_pd.c_consumption))
    ->  Finalize HashAggregate
@@ -925,7 +926,7 @@ SELECT v_id, c_type, n_type, SUM(c_consumption)
                                        Hash Cond: (customer_pd.c_n_id = nation_pd.n_id)
                                        Join Filter: (customer_pd.c_id > nation_pd.n_population)
                                        ->  Seq Scan on public.customer_pd
-                                             Output: customer_pd.c_type, customer_pd.c_consumption, customer_pd.c_v_id, customer_pd.c_n_id, customer_pd.c_id
+                                             Output: customer_pd.c_id, customer_pd.c_v_id, customer_pd.c_n_id, customer_pd.c_type, customer_pd.c_consumption
                                        ->  Hash
                                              Output: nation_pd.n_type, nation_pd.n_id, nation_pd.n_population
                                              ->  Broadcast Motion 3:3  (slice3; segments: 3)
@@ -942,8 +943,8 @@ SELECT v_id, v_name, n_type, SUM(c_consumption)
 	FROM vendor_pd, customer_pd, nation_pd
 	WHERE v_id = c_v_id AND c_n_id = n_id AND n_population > 100
 	GROUP BY v_id, v_name, n_type;
-                                                                                      QUERY PLAN                                                                                       
----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+                                                                          QUERY PLAN                                                                          
+--------------------------------------------------------------------------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    Output: vendor_pd.v_id, vendor_pd.v_name, nation_pd.n_type, (sum(customer_pd.c_consumption))
    ->  Finalize HashAggregate
@@ -966,7 +967,7 @@ SELECT v_id, v_name, n_type, SUM(c_consumption)
                                        Output: customer_pd.c_consumption, customer_pd.c_v_id, nation_pd.n_type
                                        Hash Cond: (customer_pd.c_n_id = nation_pd.n_id)
                                        ->  Seq Scan on public.customer_pd
-                                             Output: customer_pd.c_consumption, customer_pd.c_v_id, customer_pd.c_n_id
+                                             Output: customer_pd.c_id, customer_pd.c_v_id, customer_pd.c_n_id, customer_pd.c_type, customer_pd.c_consumption
                                        ->  Hash
                                              Output: nation_pd.n_type, nation_pd.n_id
                                              ->  Broadcast Motion 3:3  (slice3; segments: 3)
@@ -999,8 +1000,8 @@ SELECT dim.did, sum(val)
 	FROM fact JOIN dim ON fact.did = dim.did
 	WHERE fact_time > 10 AND fact_time < 2000
 	GROUP BY dim.did;
-                                                                                      QUERY PLAN                                                                                       
----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+                                                                          QUERY PLAN                                                                          
+--------------------------------------------------------------------------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    Output: dim.did, (sum(fact.val))
    ->  Finalize HashAggregate
@@ -1033,8 +1034,8 @@ SELECT dim.proj_name, sum(val)
 	FROM fact JOIN dim ON fact.did = dim.did
 	WHERE fact_time > 10 AND fact_time < 2000
 	GROUP BY dim.proj_name;
-                                                                                      QUERY PLAN                                                                                       
----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+                                                                          QUERY PLAN                                                                          
+--------------------------------------------------------------------------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    Output: dim.proj_name, (sum(fact.val))
    ->  Finalize HashAggregate
@@ -1084,8 +1085,8 @@ SELECT t1.c, sum(t1.a)
 	FROM pagg_pd t1 JOIN pagg_pd t2 ON t1.c < t2.c
 	GROUP BY t1.c
 	ORDER BY 1, 2;
-                                                                                                       QUERY PLAN                                                                                                       
-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+                                                                                          QUERY PLAN                                                                                           
+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    Output: t1.c, (sum(t1.a))
    Merge Key: t1.c, (sum(t1.a))
@@ -1176,8 +1177,8 @@ SELECT t1.c, sum(t1.a)
 	FROM pagg_pd t1 JOIN pagg_pd t2 ON t1.c < t2.c
 	GROUP BY t1.c
 	ORDER BY 1, 2;
-                                                                                                       QUERY PLAN                                                                                                       
-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+                                                                                          QUERY PLAN                                                                                           
+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    Output: t1.c, (sum(t1.a))
    Merge Key: t1.c, (sum(t1.a))
@@ -1202,7 +1203,7 @@ SELECT t1.c, sum(t1.a)
                                              Output: t1.c, PARTIAL sum(t1.a)
                                              Group Key: t1.c
                                              ->  Seq Scan on public.pagg_pd t1
-                                                   Output: t1.c, t1.a
+                                                   Output: t1.a, t1.b, t1.c, t1.d
                                  ->  Materialize
                                        Output: t2.c
                                        ->  Seq Scan on public.pagg_pd t2

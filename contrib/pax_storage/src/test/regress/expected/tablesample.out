@@ -1,4 +1,4 @@
-CREATE TABLE test_tablesample (dist int, id int, name text) DISTRIBUTED BY (dist);
+CREATE TABLE test_tablesample (dist int, id int, name text) WITH (fillfactor=10) DISTRIBUTED BY (dist);
 -- use fillfactor so we don't have to load too much data to get multiple pages
 -- Changed the column length in order to match the expected results based on relation's blocksz
 INSERT INTO test_tablesample SELECT 0, i, repeat(i::text, 875) FROM generate_series(0, 9) s(i) ORDER BY i;
@@ -16,6 +16,12 @@ SELECT gp_segment_id, count(dist) FROM test_tablesample GROUP BY 1 ORDER BY 1;
 SELECT t.id FROM test_tablesample AS t TABLESAMPLE SYSTEM (50) REPEATABLE (0);
  id 
 ----
+  3
+  4
+  5
+  6
+  7
+  8
  21
  22
  24
@@ -26,12 +32,7 @@ SELECT t.id FROM test_tablesample AS t TABLESAMPLE SYSTEM (50) REPEATABLE (0);
  14
  18
  19
-  1
-  2
-  4
-  8
-  9
-(15 rows)
+(16 rows)
 
 SELECT id FROM test_tablesample TABLESAMPLE SYSTEM (100.0/11) REPEATABLE (0);
  id 
@@ -46,34 +47,35 @@ SELECT id FROM test_tablesample TABLESAMPLE SYSTEM (50) REPEATABLE (0);
  14
  18
  19
-  1
-  2
+  3
   4
+  5
+  6
+  7
   8
-  9
  21
  22
  24
  28
  29
-(15 rows)
+(16 rows)
 
 SELECT id FROM test_tablesample TABLESAMPLE BERNOULLI (50) REPEATABLE (0);
  id 
 ----
- 11
  12
- 14
+ 16
+ 17
  18
  19
-  1
-  2
   4
+  5
+  6
+  7
   8
-  9
- 21
  22
- 24
+ 26
+ 27
  28
  29
 (15 rows)
@@ -81,7 +83,10 @@ SELECT id FROM test_tablesample TABLESAMPLE BERNOULLI (50) REPEATABLE (0);
 SELECT id FROM test_tablesample TABLESAMPLE BERNOULLI (5.5) REPEATABLE (0);
  id 
 ----
-(0 rows)
+ 18
+  7
+ 28
+(3 rows)
 
 -- 100% should give repeatable count results (ie, all rows) in any case
 SELECT count(*) FROM test_tablesample TABLESAMPLE SYSTEM (100);
@@ -126,62 +131,63 @@ View definition:
 
 -- check a sampled query doesn't affect cursor in progress
 BEGIN;
-DECLARE tablesample_cur CURSOR FOR
+DECLARE tablesample_cur SCROLL CURSOR FOR
   SELECT id FROM test_tablesample TABLESAMPLE SYSTEM (50) REPEATABLE (0) ORDER BY id;
 FETCH FIRST FROM tablesample_cur;
  id 
 ----
-  1
-(1 row)
-
-FETCH NEXT FROM tablesample_cur;
- id 
-----
-  2
+  3
 (1 row)
 
 FETCH NEXT FROM tablesample_cur;
  id 
 ----
   4
+(1 row)
+
+FETCH NEXT FROM tablesample_cur;
+ id 
+----
+  5
 (1 row)
 
 SELECT id FROM test_tablesample TABLESAMPLE SYSTEM (50) REPEATABLE (0);
  id 
 ----
- 21
- 22
- 24
- 28
- 29
  11
  12
  14
  18
  19
-  1
-  2
+  3
   4
+  5
+  6
+  7
   8
-  9
-(15 rows)
+ 21
+ 22
+ 24
+ 28
+ 29
+(16 rows)
 
 FETCH NEXT FROM tablesample_cur;
  id 
 ----
-  8
+  6
 (1 row)
 
 FETCH NEXT FROM tablesample_cur;
  id 
 ----
-  9
+  7
 (1 row)
 
 FETCH NEXT FROM tablesample_cur;
  id 
 ----
- 11
+  8
 (1 row)
 
 -- Cloudberry: Going backwards on cursors is not supported. By closing the
@@ -192,13 +198,7 @@ DECLARE tablesample_cur CURSOR FOR SELECT id FROM test_tablesample TABLESAMPLE S
 FETCH FIRST FROM tablesample_cur;
  id 
 ----
-  1
-(1 row)
-
-FETCH NEXT FROM tablesample_cur;
- id 
-----
-  2
+  3
 (1 row)
 
 FETCH NEXT FROM tablesample_cur;
@@ -210,19 +210,25 @@ FETCH NEXT FROM tablesample_cur;
 FETCH NEXT FROM tablesample_cur;
  id 
 ----
+  5
+(1 row)
+
+FETCH NEXT FROM tablesample_cur;
+ id 
+----
+  6
+(1 row)
+
+FETCH NEXT FROM tablesample_cur;
+ id 
+----
+  7
+(1 row)
+
+FETCH NEXT FROM tablesample_cur;
+ id 
+----
   8
-(1 row)
-
-FETCH NEXT FROM tablesample_cur;
- id 
-----
-  9
-(1 row)
-
-FETCH NEXT FROM tablesample_cur;
- id 
-----
- 11
 (1 row)
 
 CLOSE tablesample_cur;
@@ -310,10 +316,11 @@ EXPLAIN (COSTS OFF) SELECT * FROM ttr1 TABLESAMPLE BERNOULLI (50) REPEATABLE (1)
 (8 rows)
 
 SELECT * FROM ttr1 TABLESAMPLE BERNOULLI (50) REPEATABLE (1), ttr2 TABLESAMPLE BERNOULLI (50) REPEATABLE (1) WHERE ttr1.a = ttr2.a;
- a | b | a | b 
----+---+---+---
- 1 | 1 | 1 | 2
-(1 row)
+ a  | b | a  | b 
+----+---+----+---
+ 12 | 1 | 12 | 2
+ 31 | 1 | 31 | 2
+(2 rows)
 
 EXPLAIN (COSTS OFF) SELECT * FROM ttr1 TABLESAMPLE SYSTEM (50) REPEATABLE (1), ttr2 TABLESAMPLE SYSTEM (50) REPEATABLE (1) WHERE ttr1.a = ttr2.a;
                                    QUERY PLAN                                   
@@ -329,10 +336,12 @@ EXPLAIN (COSTS OFF) SELECT * FROM ttr1 TABLESAMPLE SYSTEM (50) REPEATABLE (1), t
 (8 rows)
 
 SELECT * FROM ttr1 TABLESAMPLE SYSTEM (50) REPEATABLE (1), ttr2 TABLESAMPLE SYSTEM (50) REPEATABLE (1) WHERE ttr1.a = ttr2.a;
- a | b | a | b 
----+---+---+---
- 1 | 1 | 1 | 2
-(1 row)
+ a  | b | a  | b 
+----+---+----+---
+  1 | 1 |  1 | 2
+ 12 | 1 | 12 | 2
+ 31 | 1 | 31 | 2
+(3 rows)
 
 RESET enable_hashjoin;
 RESET enable_mergejoin;
@@ -343,34 +352,35 @@ RESET enable_nestloop;
 select * from
   (values (0),(100)) v(pct),
   lateral (select count(*) from tenk1 tablesample bernoulli (pct)) ss;
-ERROR:  illegal rescan of motion node: invalid plan (nodeMotion.c:1275)
-HINT:  Likely caused by bad NL-join, try setting enable_nestloop to off
+ pct | count 
+-----+-------
+   0 |     0
+ 100 | 10000
+(2 rows)
+
 select * from
   (values (0),(100)) v(pct),
   lateral (select count(*) from tenk1 tablesample system (pct)) ss;
-ERROR:  illegal rescan of motion node: invalid plan (nodeMotion.c:1275)
-HINT:  Likely caused by bad NL-join, try setting enable_nestloop to off
+ pct | count 
+-----+-------
+   0 |     0
+ 100 | 10000
+(2 rows)
+
 explain (costs off)
 select pct, count(unique1) from
   (values (0),(100)) v(pct),
   lateral (select * from tenk1 tablesample bernoulli (pct)) ss
   group by pct;
-                                QUERY PLAN                                
---------------------------------------------------------------------------
- Finalize GroupAggregate
+                       QUERY PLAN                       
+--------------------------------------------------------
+ HashAggregate
    Group Key: "*VALUES*".column1
-   ->  Gather Motion 3:1  (slice1; segments: 3)
-         Merge Key: "*VALUES*".column1
-         ->  Partial GroupAggregate
-               Group Key: "*VALUES*".column1
-               ->  Sort
-                     Sort Key: "*VALUES*".column1
-                     ->  Nested Loop
-                           ->  Values Scan on "*VALUES*"
-                           ->  Sample Scan on tenk1
-                                 Sampling: bernoulli ("*VALUES*".column1)
- Optimizer: Postgres query optimizer
-(13 rows)
+   ->  Nested Loop
+         ->  Values Scan on "*VALUES*"
+         ->  Sample Scan on tenk1
+               Sampling: bernoulli ("*VALUES*".column1)
+(6 rows)
 
 select pct, count(unique1) from
   (values (0),(100)) v(pct),
@@ -378,7 +388,8 @@ select pct, count(unique1) from
   group by pct;
  pct | count 
 -----+-------
-(0 rows)
+ 100 | 10000
+(1 row)
 
 select pct, count(unique1) from
   (values (0),(100)) v(pct),
@@ -386,7 +397,8 @@ select pct, count(unique1) from
   group by pct;
  pct | count 
 -----+-------
-(0 rows)
+ 100 | 10000
+(1 row)
 
 -- end_ignore
 -- Cloudberry: we do have to test min/max pct tests though

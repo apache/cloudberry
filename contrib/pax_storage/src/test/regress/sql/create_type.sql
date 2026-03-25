@@ -2,11 +2,36 @@
 -- CREATE_TYPE
 --
 
+-- directory path and dlsuffix are passed to us in environment variables
+\getenv libdir PG_LIBDIR
+\getenv dlsuffix PG_DLSUFFIX
+
+\set regresslib :libdir '/regress' :dlsuffix
+
 --
--- Note: widget_in/out were created in create_function_1, without any
--- prior shell-type creation.  These commands therefore complete a test
--- of the "old style" approach of making the functions first.
+-- Test the "old style" approach of making the I/O functions first,
+-- with no explicit shell type creation.
 --
+CREATE FUNCTION widget_in(cstring)
+   RETURNS widget
+   AS :'regresslib'
+   LANGUAGE C STRICT IMMUTABLE;
+
+CREATE FUNCTION widget_out(widget)
+   RETURNS cstring
+   AS :'regresslib'
+   LANGUAGE C STRICT IMMUTABLE;
+
+CREATE FUNCTION int44in(cstring)
+   RETURNS city_budget
+   AS :'regresslib'
+   LANGUAGE C STRICT IMMUTABLE;
+
+CREATE FUNCTION int44out(city_budget)
+   RETURNS cstring
+   AS :'regresslib'
+   LANGUAGE C STRICT IMMUTABLE;
+
 CREATE TYPE widget (
    internallength = 24,
    input = widget_in,
@@ -167,6 +192,45 @@ select format_type('bpchar'::regtype, null);
 -- this behavior difference is intentional
 select format_type('bpchar'::regtype, -1);
 
+-- Test non-error-throwing APIs using widget, which still throws errors
+SELECT pg_input_is_valid('(1,2,3)', 'widget');
+SELECT pg_input_is_valid('(1,2)', 'widget');  -- hard error expected
+SELECT pg_input_is_valid('{"(1,2,3)"}', 'widget[]');
+SELECT pg_input_is_valid('{"(1,2)"}', 'widget[]');  -- hard error expected
+SELECT pg_input_is_valid('("(1,2,3)")', 'mytab');
+SELECT pg_input_is_valid('("(1,2)")', 'mytab');  -- hard error expected
+
+-- Test creation of an operator over a user-defined type
+
+CREATE FUNCTION pt_in_widget(point, widget)
+   RETURNS bool
+   AS :'regresslib'
+   LANGUAGE C STRICT;
+
+CREATE OPERATOR <% (
+   leftarg = point,
+   rightarg = widget,
+   procedure = pt_in_widget,
+   commutator = >% ,
+   negator = >=%
+);
+
+SELECT point '(1,2)' <% widget '(0,0,3)' AS t,
+       point '(1,2)' <% widget '(0,0,1)' AS f;
+
+-- exercise city_budget type
+CREATE TABLE city (
+	name		name,
+	location 	box,
+	budget 		city_budget
+);
+
+INSERT INTO city VALUES
+('Podunk', '(1,2),(3,4)', '100,127,1000'),
+('Gotham', '(1000,34),(1100,334)', '123456,127,-1000,6789');
+
+TABLE city;
+
 -- Create & Drop type as non-superuser
 CREATE USER user_bob;
 SET SESSION AUTHORIZATION user_bob;
@@ -175,7 +239,6 @@ CREATE TYPE compfoo as (f1 int, f2 text);
 DROP TYPE compfoo;
 RESET SESSION AUTHORIZATION;
 DROP USER user_bob;
-
 --
 -- Test CREATE/ALTER TYPE using a type that's compatible with varchar,
 -- so we can re-use those support functions

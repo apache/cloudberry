@@ -14,18 +14,28 @@ set enable_mergejoin to true;
 -- partitioned by a single column
 --
 CREATE TABLE prt1 (a int, b int, c varchar) PARTITION BY RANGE(a);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE prt1_p1 PARTITION OF prt1 FOR VALUES FROM (0) TO (250);
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE prt1_p3 PARTITION OF prt1 FOR VALUES FROM (500) TO (600);
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE prt1_p2 PARTITION OF prt1 FOR VALUES FROM (250) TO (500);
+NOTICE:  table has parent, setting distribution columns to match parent table
 INSERT INTO prt1 SELECT i, i % 25, to_char(i, 'FM0000') FROM generate_series(0, 599) i WHERE i % 2 = 0;
 CREATE INDEX iprt1_p1_a on prt1_p1(a);
 CREATE INDEX iprt1_p2_a on prt1_p2(a);
 CREATE INDEX iprt1_p3_a on prt1_p3(a);
 ANALYZE prt1;
 CREATE TABLE prt2 (a int, b int, c varchar) PARTITION BY RANGE(b);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE prt2_p1 PARTITION OF prt2 FOR VALUES FROM (0) TO (250);
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE prt2_p2 PARTITION OF prt2 FOR VALUES FROM (250) TO (500);
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE prt2_p3 PARTITION OF prt2 FOR VALUES FROM (500) TO (600);
+NOTICE:  table has parent, setting distribution columns to match parent table
 INSERT INTO prt2 SELECT i % 25, i, to_char(i, 'FM0000') FROM generate_series(0, 599) i WHERE i % 3 = 0;
 CREATE INDEX iprt2_p1_b on prt2_p1(b);
 CREATE INDEX iprt2_p2_b on prt2_p2(b);
@@ -73,6 +83,55 @@ SELECT t1.a, t1.c, t2.b, t2.c FROM prt1 t1, prt2 t2 WHERE t1.a = t2.b AND t1.b =
  300 | 0300 | 300 | 0300
  450 | 0450 | 450 | 0450
 (4 rows)
+
+-- left outer join, 3-way
+EXPLAIN (COSTS OFF)
+SELECT COUNT(*) FROM prt1 t1
+  LEFT JOIN prt1 t2 ON t1.a = t2.a
+  LEFT JOIN prt1 t3 ON t2.a = t3.a;
+                             QUERY PLAN                             
+--------------------------------------------------------------------
+ Finalize Aggregate
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         ->  Partial Aggregate
+               ->  Append
+                     ->  Hash Right Join
+                           Hash Cond: (t2_1.a = t1_1.a)
+                           ->  Hash Left Join
+                                 Hash Cond: (t2_1.a = t3_1.a)
+                                 ->  Seq Scan on prt1_p1 t2_1
+                                 ->  Hash
+                                       ->  Seq Scan on prt1_p1 t3_1
+                           ->  Hash
+                                 ->  Seq Scan on prt1_p1 t1_1
+                     ->  Hash Right Join
+                           Hash Cond: (t2_2.a = t1_2.a)
+                           ->  Hash Left Join
+                                 Hash Cond: (t2_2.a = t3_2.a)
+                                 ->  Seq Scan on prt1_p2 t2_2
+                                 ->  Hash
+                                       ->  Seq Scan on prt1_p2 t3_2
+                           ->  Hash
+                                 ->  Seq Scan on prt1_p2 t1_2
+                     ->  Hash Right Join
+                           Hash Cond: (t2_3.a = t1_3.a)
+                           ->  Hash Left Join
+                                 Hash Cond: (t2_3.a = t3_3.a)
+                                 ->  Seq Scan on prt1_p3 t2_3
+                                 ->  Hash
+                                       ->  Seq Scan on prt1_p3 t3_3
+                           ->  Hash
+                                 ->  Seq Scan on prt1_p3 t1_3
+ Optimizer: Postgres query optimizer
+(32 rows)
+
+SELECT COUNT(*) FROM prt1 t1
+  LEFT JOIN prt1 t2 ON t1.a = t2.a
+  LEFT JOIN prt1 t3 ON t2.a = t3.a;
+ count 
+-------
+   300
+(1 row)
 
 -- left outer join, with whole-row reference; partitionwise join does not apply
 EXPLAIN (COSTS OFF)
@@ -420,17 +479,20 @@ SELECT sum(t1.a), avg(t1.a), sum(t1.b), avg(t1.b) FROM prt1 t1 WHERE NOT EXISTS 
 (1 row)
 
 -- lateral reference
--- GPDB_12_MERGE_FIXME: this is failing in GPDB. Known issue, there were similar
--- failures in other LATERAL tests before the v12 merge.
+-- GPDB_12_MERGE_FEATURE_NOT_SUPPORTED
+-- If lateral_relids of RelOptInfo for a inner path is not null, the inner path needs
+-- params of outer path. So We can not add motion above inner path.
+-- however, in left join, outer path can not be replicated. We can not generate path for left join,
+-- So hit the error: could not devise a query plan for the given query.
 EXPLAIN (COSTS OFF)
 SELECT * FROM prt1 t1 LEFT JOIN LATERAL
 			  (SELECT t2.a AS t2a, t3.a AS t3a, least(t1.a,t2.a,t3.b) FROM prt1 t2 JOIN prt2 t3 ON (t2.a = t3.b)) ss
 			  ON t1.a = ss.t2a WHERE t1.b = 0 ORDER BY t1.a;
-ERROR:  could not devise a query plan for the given query
+ERROR:  could not devise a query plan for the given query (pathnode.c:285)
 SELECT * FROM prt1 t1 LEFT JOIN LATERAL
 			  (SELECT t2.a AS t2a, t3.a AS t3a, least(t1.a,t2.a,t3.b) FROM prt1 t2 JOIN prt2 t3 ON (t2.a = t3.b)) ss
 			  ON t1.a = ss.t2a WHERE t1.b = 0 ORDER BY t1.a;
-ERROR:  could not devise a query plan for the given query
+ERROR:  could not devise a query plan for the given query (pathnode.c:285)
 EXPLAIN (COSTS OFF)
 SELECT t1.a, ss.t2a, ss.t2c FROM prt1 t1 LEFT JOIN LATERAL
 			  (SELECT t2.a AS t2a, t3.a AS t3a, t2.b t2b, t2.c t2c, least(t1.a,t2.a,t3.b) FROM prt1 t2 JOIN prt2 t3 ON (t2.a = t3.b)) ss
@@ -497,6 +559,109 @@ SELECT t1.a, ss.t2a, ss.t2c FROM prt1 t1 LEFT JOIN LATERAL
  550 |     | 
 (12 rows)
 
+SET max_parallel_workers_per_gather = 0;
+-- If there are lateral references to the other relation in sample scan,
+-- we cannot generate a partitionwise join.
+EXPLAIN (COSTS OFF)
+SELECT * FROM prt1 t1 JOIN LATERAL
+			  (SELECT * FROM prt1 t2 TABLESAMPLE SYSTEM (t1.a) REPEATABLE(t1.b)) s
+			  ON t1.a = s.a;
+                          QUERY PLAN                           
+---------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Nested Loop
+         ->  Append
+               ->  Seq Scan on prt1_p1 t1_1
+               ->  Seq Scan on prt1_p2 t1_2
+               ->  Seq Scan on prt1_p3 t1_3
+         ->  Append
+               ->  Sample Scan on prt1_p1 t2_1
+                     Sampling: system (t1.a) REPEATABLE (t1.b)
+                     Filter: (t1.a = a)
+               ->  Sample Scan on prt1_p2 t2_2
+                     Sampling: system (t1.a) REPEATABLE (t1.b)
+                     Filter: (t1.a = a)
+               ->  Sample Scan on prt1_p3 t2_3
+                     Sampling: system (t1.a) REPEATABLE (t1.b)
+                     Filter: (t1.a = a)
+ Optimizer: Postgres query optimizer
+(17 rows)
+
+-- If there are lateral references to the other relation in scan's restriction
+-- clauses, we cannot generate a partitionwise join.
+EXPLAIN (COSTS OFF)
+SELECT count(*) FROM prt1 t1 LEFT JOIN LATERAL
+			  (SELECT t1.b AS t1b, t2.* FROM prt2 t2) s
+			  ON t1.a = s.b WHERE s.t1b = s.a;
+                                QUERY PLAN                                 
+---------------------------------------------------------------------------
+ Finalize Aggregate
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         ->  Partial Aggregate
+               ->  Nested Loop
+                     ->  Broadcast Motion 3:3  (slice2; segments: 3)
+                           ->  Append
+                                 ->  Seq Scan on prt1_p1 t1_1
+                                 ->  Seq Scan on prt1_p2 t1_2
+                                 ->  Seq Scan on prt1_p3 t1_3
+                     ->  Append
+                           ->  Index Scan using iprt2_p1_b on prt2_p1 t2_1
+                                 Index Cond: (b = t1.a)
+                                 Filter: (t1.b = a)
+                           ->  Index Scan using iprt2_p2_b on prt2_p2 t2_2
+                                 Index Cond: (b = t1.a)
+                                 Filter: (t1.b = a)
+                           ->  Index Scan using iprt2_p3_b on prt2_p3 t2_3
+                                 Index Cond: (b = t1.a)
+                                 Filter: (t1.b = a)
+ Optimizer: Postgres query optimizer
+(20 rows)
+
+SELECT count(*) FROM prt1 t1 LEFT JOIN LATERAL
+			  (SELECT t1.b AS t1b, t2.* FROM prt2 t2) s
+			  ON t1.a = s.b WHERE s.t1b = s.a;
+ count 
+-------
+   100
+(1 row)
+
+EXPLAIN (COSTS OFF)
+SELECT count(*) FROM prt1 t1 LEFT JOIN LATERAL
+			  (SELECT t1.b AS t1b, t2.* FROM prt2 t2) s
+			  ON t1.a = s.b WHERE s.t1b = s.b;
+                                   QUERY PLAN                                   
+--------------------------------------------------------------------------------
+ Finalize Aggregate
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         ->  Partial Aggregate
+               ->  Nested Loop
+                     ->  Broadcast Motion 3:3  (slice2; segments: 3)
+                           ->  Append
+                                 ->  Seq Scan on prt1_p1 t1_1
+                                 ->  Seq Scan on prt1_p2 t1_2
+                                 ->  Seq Scan on prt1_p3 t1_3
+                     ->  Append
+                           ->  Index Only Scan using iprt2_p1_b on prt2_p1 t2_1
+                                 Index Cond: (b = t1.a)
+                                 Filter: (b = t1.b)
+                           ->  Index Only Scan using iprt2_p2_b on prt2_p2 t2_2
+                                 Index Cond: (b = t1.a)
+                                 Filter: (b = t1.b)
+                           ->  Index Only Scan using iprt2_p3_b on prt2_p3 t2_3
+                                 Index Cond: (b = t1.a)
+                                 Filter: (b = t1.b)
+ Optimizer: Postgres query optimizer
+(20 rows)
+
+SELECT count(*) FROM prt1 t1 LEFT JOIN LATERAL
+			  (SELECT t1.b AS t1b, t2.* FROM prt2 t2) s
+			  ON t1.a = s.b WHERE s.t1b = s.b;
+ count 
+-------
+     5
+(1 row)
+
+RESET max_parallel_workers_per_gather;
 -- bug with inadequate sort key representation
 SET enable_partitionwise_aggregate TO true;
 SET enable_hashjoin TO false;
@@ -578,18 +743,28 @@ RESET enable_hashjoin;
 -- partitioned by expression
 --
 CREATE TABLE prt1_e (a int, b int, c int) PARTITION BY RANGE(((a + b)/2));
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE prt1_e_p1 PARTITION OF prt1_e FOR VALUES FROM (0) TO (250);
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE prt1_e_p2 PARTITION OF prt1_e FOR VALUES FROM (250) TO (500);
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE prt1_e_p3 PARTITION OF prt1_e FOR VALUES FROM (500) TO (600);
+NOTICE:  table has parent, setting distribution columns to match parent table
 INSERT INTO prt1_e SELECT i, i, i % 25 FROM generate_series(0, 599, 2) i;
 CREATE INDEX iprt1_e_p1_ab2 on prt1_e_p1(((a+b)/2));
 CREATE INDEX iprt1_e_p2_ab2 on prt1_e_p2(((a+b)/2));
 CREATE INDEX iprt1_e_p3_ab2 on prt1_e_p3(((a+b)/2));
 ANALYZE prt1_e;
 CREATE TABLE prt2_e (a int, b int, c int) PARTITION BY RANGE(((b + a)/2));
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE prt2_e_p1 PARTITION OF prt2_e FOR VALUES FROM (0) TO (250);
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE prt2_e_p2 PARTITION OF prt2_e FOR VALUES FROM (250) TO (500);
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE prt2_e_p3 PARTITION OF prt2_e FOR VALUES FROM (500) TO (600);
+NOTICE:  table has parent, setting distribution columns to match parent table
 INSERT INTO prt2_e SELECT i, i, i % 25 FROM generate_series(0, 599, 3) i;
 ANALYZE prt2_e;
 EXPLAIN (COSTS OFF)
@@ -1499,15 +1674,25 @@ RESET enable_nestloop;
 -- partitioned by multiple columns
 --
 CREATE TABLE prt1_m (a int, b int, c int) PARTITION BY RANGE(a, ((a + b)/2));
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE prt1_m_p1 PARTITION OF prt1_m FOR VALUES FROM (0, 0) TO (250, 250);
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE prt1_m_p2 PARTITION OF prt1_m FOR VALUES FROM (250, 250) TO (500, 500);
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE prt1_m_p3 PARTITION OF prt1_m FOR VALUES FROM (500, 500) TO (600, 600);
+NOTICE:  table has parent, setting distribution columns to match parent table
 INSERT INTO prt1_m SELECT i, i, i % 25 FROM generate_series(0, 599, 2) i;
 ANALYZE prt1_m;
 CREATE TABLE prt2_m (a int, b int, c int) PARTITION BY RANGE(((b + a)/2), b);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE prt2_m_p1 PARTITION OF prt2_m FOR VALUES FROM (0, 0) TO (250, 250);
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE prt2_m_p2 PARTITION OF prt2_m FOR VALUES FROM (250, 250) TO (500, 500);
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE prt2_m_p3 PARTITION OF prt2_m FOR VALUES FROM (500, 500) TO (600, 600);
+NOTICE:  table has parent, setting distribution columns to match parent table
 INSERT INTO prt2_m SELECT i, i, i % 25 FROM generate_series(0, 599, 3) i;
 ANALYZE prt2_m;
 EXPLAIN (COSTS OFF)
@@ -1574,24 +1759,39 @@ SELECT t1.a, t1.c, t2.b, t2.c FROM (SELECT * FROM prt1_m WHERE prt1_m.c = 0) t1 
 -- tests for list partitioned tables.
 --
 CREATE TABLE plt1 (a int, b int, c text) PARTITION BY LIST(c);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE plt1_p1 PARTITION OF plt1 FOR VALUES IN ('0000', '0003', '0004', '0010');
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE plt1_p2 PARTITION OF plt1 FOR VALUES IN ('0001', '0005', '0002', '0009');
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE plt1_p3 PARTITION OF plt1 FOR VALUES IN ('0006', '0007', '0008', '0011');
+NOTICE:  table has parent, setting distribution columns to match parent table
 INSERT INTO plt1 SELECT i, i, to_char(i/50, 'FM0000') FROM generate_series(0, 599, 2) i;
 ANALYZE plt1;
 CREATE TABLE plt2 (a int, b int, c text) PARTITION BY LIST(c);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE plt2_p1 PARTITION OF plt2 FOR VALUES IN ('0000', '0003', '0004', '0010');
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE plt2_p2 PARTITION OF plt2 FOR VALUES IN ('0001', '0005', '0002', '0009');
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE plt2_p3 PARTITION OF plt2 FOR VALUES IN ('0006', '0007', '0008', '0011');
+NOTICE:  table has parent, setting distribution columns to match parent table
 INSERT INTO plt2 SELECT i, i, to_char(i/50, 'FM0000') FROM generate_series(0, 599, 3) i;
 ANALYZE plt2;
 --
 -- list partitioned by expression
 --
 CREATE TABLE plt1_e (a int, b int, c text) PARTITION BY LIST(ltrim(c, 'A'));
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE plt1_e_p1 PARTITION OF plt1_e FOR VALUES IN ('0000', '0003', '0004', '0010');
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE plt1_e_p2 PARTITION OF plt1_e FOR VALUES IN ('0001', '0005', '0002', '0009');
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE plt1_e_p3 PARTITION OF plt1_e FOR VALUES IN ('0006', '0007', '0008', '0011');
+NOTICE:  table has parent, setting distribution columns to match parent table
 INSERT INTO plt1_e SELECT i, i, 'A' || to_char(i/50, 'FM0000') FROM generate_series(0, 599, 2) i;
 ANALYZE plt1_e;
 -- test partition matching with N-way join
@@ -1664,19 +1864,21 @@ SELECT avg(t1.a), avg(t2.b), avg(t3.a + t3.b), t1.c, t2.c, t3.c FROM plt1 t1, pl
 -- joins where one of the relations is proven empty
 EXPLAIN (COSTS OFF)
 SELECT t1.a, t1.c, t2.b, t2.c FROM prt1 t1, prt2 t2 WHERE t1.a = t2.b AND t1.a = 1 AND t1.a = 2;
-        QUERY PLAN        
---------------------------
+             QUERY PLAN              
+-------------------------------------
  Result
    One-Time Filter: false
-(2 rows)
+ Optimizer: Postgres query optimizer
+(3 rows)
 
 EXPLAIN (COSTS OFF)
 SELECT t1.a, t1.c, t2.b, t2.c FROM (SELECT * FROM prt1 WHERE a = 1 AND a = 2) t1 LEFT JOIN prt2 t2 ON t1.a = t2.b;
-        QUERY PLAN        
---------------------------
+             QUERY PLAN              
+-------------------------------------
  Result
    One-Time Filter: false
-(2 rows)
+ Optimizer: Postgres query optimizer
+(3 rows)
 
 EXPLAIN (COSTS OFF)
 SELECT t1.a, t1.c, t2.b, t2.c FROM (SELECT * FROM prt1 WHERE a = 1 AND a = 2) t1 RIGHT JOIN prt2 t2 ON t1.a = t2.b, prt1 t3 WHERE t2.b = t3.a;
@@ -1740,24 +1942,39 @@ SELECT t1.a, t1.c, t2.b, t2.c FROM (SELECT * FROM prt1 WHERE a = 1 AND a = 2) t1
 -- tests for hash partitioned tables.
 --
 CREATE TABLE pht1 (a int, b int, c text) PARTITION BY HASH(c);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE pht1_p1 PARTITION OF pht1 FOR VALUES WITH (MODULUS 3, REMAINDER 0);
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE pht1_p2 PARTITION OF pht1 FOR VALUES WITH (MODULUS 3, REMAINDER 1);
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE pht1_p3 PARTITION OF pht1 FOR VALUES WITH (MODULUS 3, REMAINDER 2);
+NOTICE:  table has parent, setting distribution columns to match parent table
 INSERT INTO pht1 SELECT i, i, to_char(i/50, 'FM0000') FROM generate_series(0, 599, 2) i;
 ANALYZE pht1;
 CREATE TABLE pht2 (a int, b int, c text) PARTITION BY HASH(c);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE pht2_p1 PARTITION OF pht2 FOR VALUES WITH (MODULUS 3, REMAINDER 0);
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE pht2_p2 PARTITION OF pht2 FOR VALUES WITH (MODULUS 3, REMAINDER 1);
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE pht2_p3 PARTITION OF pht2 FOR VALUES WITH (MODULUS 3, REMAINDER 2);
+NOTICE:  table has parent, setting distribution columns to match parent table
 INSERT INTO pht2 SELECT i, i, to_char(i/50, 'FM0000') FROM generate_series(0, 599, 3) i;
 ANALYZE pht2;
 --
 -- hash partitioned by expression
 --
 CREATE TABLE pht1_e (a int, b int, c text) PARTITION BY HASH(ltrim(c, 'A'));
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE pht1_e_p1 PARTITION OF pht1_e FOR VALUES WITH (MODULUS 3, REMAINDER 0);
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE pht1_e_p2 PARTITION OF pht1_e FOR VALUES WITH (MODULUS 3, REMAINDER 1);
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE pht1_e_p3 PARTITION OF pht1_e FOR VALUES WITH (MODULUS 3, REMAINDER 2);
+NOTICE:  table has parent, setting distribution columns to match parent table
 INSERT INTO pht1_e SELECT i, i, 'A' || to_char(i/50, 'FM0000') FROM generate_series(0, 299, 2) i;
 ANALYZE pht1_e;
 -- test partition matching with N-way join
@@ -1915,23 +2132,41 @@ SELECT avg(t1.a), avg(t2.b), t1.c, t2.c FROM plt1 t1 RIGHT JOIN plt2 t2 ON t1.c 
 -- multiple levels of partitioning
 --
 CREATE TABLE prt1_l (a int, b int, c varchar) PARTITION BY RANGE(a);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE prt1_l_p1 PARTITION OF prt1_l FOR VALUES FROM (0) TO (250);
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE prt1_l_p2 PARTITION OF prt1_l FOR VALUES FROM (250) TO (500) PARTITION BY LIST (c);
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE prt1_l_p2_p1 PARTITION OF prt1_l_p2 FOR VALUES IN ('0000', '0001');
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE prt1_l_p2_p2 PARTITION OF prt1_l_p2 FOR VALUES IN ('0002', '0003');
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE prt1_l_p3 PARTITION OF prt1_l FOR VALUES FROM (500) TO (600) PARTITION BY RANGE (b);
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE prt1_l_p3_p1 PARTITION OF prt1_l_p3 FOR VALUES FROM (0) TO (13);
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE prt1_l_p3_p2 PARTITION OF prt1_l_p3 FOR VALUES FROM (13) TO (25);
+NOTICE:  table has parent, setting distribution columns to match parent table
 INSERT INTO prt1_l SELECT i, i % 25, to_char(i % 4, 'FM0000') FROM generate_series(0, 599, 2) i;
 ANALYZE prt1_l;
 CREATE TABLE prt2_l (a int, b int, c varchar) PARTITION BY RANGE(b);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE prt2_l_p1 PARTITION OF prt2_l FOR VALUES FROM (0) TO (250);
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE prt2_l_p2 PARTITION OF prt2_l FOR VALUES FROM (250) TO (500) PARTITION BY LIST (c);
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE prt2_l_p2_p1 PARTITION OF prt2_l_p2 FOR VALUES IN ('0000', '0001');
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE prt2_l_p2_p2 PARTITION OF prt2_l_p2 FOR VALUES IN ('0002', '0003');
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE prt2_l_p3 PARTITION OF prt2_l FOR VALUES FROM (500) TO (600) PARTITION BY RANGE (a);
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE prt2_l_p3_p1 PARTITION OF prt2_l_p3 FOR VALUES FROM (0) TO (13);
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE prt2_l_p3_p2 PARTITION OF prt2_l_p3 FOR VALUES FROM (13) TO (25);
+NOTICE:  table has parent, setting distribution columns to match parent table
 INSERT INTO prt2_l SELECT i % 25, i, to_char(i % 4, 'FM0000') FROM generate_series(0, 599, 3) i;
 ANALYZE prt2_l;
 -- inner join, qual covering only top-level partitions
@@ -2181,17 +2416,70 @@ SELECT t1.a, t1.c, t2.b, t2.c FROM (SELECT * FROM prt1_l WHERE prt1_l.b = 0) t1 
 (16 rows)
 
 -- lateral partitionwise join
--- GPDB_12_MERGE_FIXME: this is failing in GPDB. Known issue, there were similar
--- failures in other LATERAL tests before the v12 merge.
+-- GPDB_12_MERGE_FEATURE_NOT_SUPPORTED
+-- If lateral_relids of RelOptInfo for a inner path is not null, the inner path needs
+-- params of outer path. So We can not add motion above inner path.
+-- however, in left join, outer path can not be replicated. We can not generate path for left join,
+-- So hit the error: could not devise a query plan for the given query.
 EXPLAIN (COSTS OFF)
 SELECT * FROM prt1_l t1 LEFT JOIN LATERAL
 			  (SELECT t2.a AS t2a, t2.c AS t2c, t2.b AS t2b, t3.b AS t3b, least(t1.a,t2.a,t3.b) FROM prt1_l t2 JOIN prt2_l t3 ON (t2.a = t3.b AND t2.c = t3.c)) ss
 			  ON t1.a = ss.t2a AND t1.c = ss.t2c WHERE t1.b = 0 ORDER BY t1.a;
-ERROR:  could not devise a query plan for the given query
+ERROR:  could not devise a query plan for the given query (pathnode.c:285)
 SELECT * FROM prt1_l t1 LEFT JOIN LATERAL
 			  (SELECT t2.a AS t2a, t2.c AS t2c, t2.b AS t2b, t3.b AS t3b, least(t1.a,t2.a,t3.b) FROM prt1_l t2 JOIN prt2_l t3 ON (t2.a = t3.b AND t2.c = t3.c)) ss
 			  ON t1.a = ss.t2a AND t1.c = ss.t2c WHERE t1.b = 0 ORDER BY t1.a;
-ERROR:  could not devise a query plan for the given query
+ERROR:  could not devise a query plan for the given query (pathnode.c:285)
+SET max_parallel_workers_per_gather = 0;
+-- If there are lateral references to the other relation in sample scan,
+-- we cannot generate a partitionwise join.
+EXPLAIN (COSTS OFF)
+SELECT * FROM prt1_l t1 JOIN LATERAL
+			  (SELECT * FROM prt1_l t2 TABLESAMPLE SYSTEM (t1.a) REPEATABLE(t1.b)) s
+			  ON t1.a = s.a AND t1.b = s.b AND t1.c = s.c;
+                                       QUERY PLAN                                       
+----------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Nested Loop
+         ->  Append
+               ->  Seq Scan on prt1_l_p1 t1_1
+               ->  Seq Scan on prt1_l_p2_p1 t1_2
+               ->  Seq Scan on prt1_l_p2_p2 t1_3
+               ->  Seq Scan on prt1_l_p3_p1 t1_4
+               ->  Seq Scan on prt1_l_p3_p2 t1_5
+         ->  Append
+               ->  Sample Scan on prt1_l_p1 t2_1
+                     Sampling: system (t1.a) REPEATABLE (t1.b)
+                     Filter: ((t1.a = a) AND (t1.b = b) AND ((t1.c)::text = (c)::text))
+               ->  Sample Scan on prt1_l_p2_p1 t2_2
+                     Sampling: system (t1.a) REPEATABLE (t1.b)
+                     Filter: ((t1.a = a) AND (t1.b = b) AND ((t1.c)::text = (c)::text))
+               ->  Sample Scan on prt1_l_p2_p2 t2_3
+                     Sampling: system (t1.a) REPEATABLE (t1.b)
+                     Filter: ((t1.a = a) AND (t1.b = b) AND ((t1.c)::text = (c)::text))
+               ->  Sample Scan on prt1_l_p3_p1 t2_4
+                     Sampling: system (t1.a) REPEATABLE (t1.b)
+                     Filter: ((t1.a = a) AND (t1.b = b) AND ((t1.c)::text = (c)::text))
+               ->  Sample Scan on prt1_l_p3_p2 t2_5
+                     Sampling: system (t1.a) REPEATABLE (t1.b)
+                     Filter: ((t1.a = a) AND (t1.b = b) AND ((t1.c)::text = (c)::text))
+ Optimizer: Postgres query optimizer
+(25 rows)
+
+-- If there are lateral references to the other relation in scan's restriction
+-- clauses, we cannot generate a partitionwise join.
+EXPLAIN (COSTS OFF)
+SELECT COUNT(*) FROM prt1_l t1 LEFT JOIN LATERAL
+			  (SELECT t1.b AS t1b, t2.* FROM prt2_l t2) s
+			  ON t1.a = s.b AND t1.b = s.a AND t1.c = s.c
+			  WHERE s.t1b = s.a;
+ERROR:  could not pull up equivalence class using projected target list (pathkeys.c:1610)
+SELECT COUNT(*) FROM prt1_l t1 LEFT JOIN LATERAL
+			  (SELECT t1.b AS t1b, t2.* FROM prt2_l t2) s
+			  ON t1.a = s.b AND t1.b = s.a AND t1.c = s.c
+			  WHERE s.t1b = s.a;
+ERROR:  could not pull up equivalence class using projected target list (pathkeys.c:1610)
+RESET max_parallel_workers_per_gather;
 -- join with one side empty
 EXPLAIN (COSTS OFF)
 SELECT t1.a, t1.c, t2.b, t2.c FROM (SELECT * FROM prt1_l WHERE a = 1 AND a = 2) t1 RIGHT JOIN prt2_l t2 ON t1.a = t2.b AND t1.b = t2.a AND t1.c = t2.c;
@@ -2257,25 +2545,43 @@ WHERE EXISTS (
 -- negative testcases
 --
 CREATE TABLE prt1_n (a int, b int, c varchar) PARTITION BY RANGE(c);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE prt1_n_p1 PARTITION OF prt1_n FOR VALUES FROM ('0000') TO ('0250');
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE prt1_n_p2 PARTITION OF prt1_n FOR VALUES FROM ('0250') TO ('0500');
+NOTICE:  table has parent, setting distribution columns to match parent table
 INSERT INTO prt1_n SELECT i, i, to_char(i, 'FM0000') FROM generate_series(0, 499, 2) i;
 ANALYZE prt1_n;
 CREATE TABLE prt2_n (a int, b int, c text) PARTITION BY LIST(c);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE prt2_n_p1 PARTITION OF prt2_n FOR VALUES IN ('0000', '0003', '0004', '0010', '0006', '0007');
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE prt2_n_p2 PARTITION OF prt2_n FOR VALUES IN ('0001', '0005', '0002', '0009', '0008', '0011');
+NOTICE:  table has parent, setting distribution columns to match parent table
 INSERT INTO prt2_n SELECT i, i, to_char(i/50, 'FM0000') FROM generate_series(0, 599, 2) i;
 ANALYZE prt2_n;
 CREATE TABLE prt3_n (a int, b int, c text) PARTITION BY LIST(c);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE prt3_n_p1 PARTITION OF prt3_n FOR VALUES IN ('0000', '0004', '0006', '0007');
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE prt3_n_p2 PARTITION OF prt3_n FOR VALUES IN ('0001', '0002', '0008', '0010');
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE prt3_n_p3 PARTITION OF prt3_n FOR VALUES IN ('0003', '0005', '0009', '0011');
+NOTICE:  table has parent, setting distribution columns to match parent table
 INSERT INTO prt2_n SELECT i, i, to_char(i/50, 'FM0000') FROM generate_series(0, 599, 2) i;
 ANALYZE prt3_n;
 CREATE TABLE prt4_n (a int, b int, c text) PARTITION BY RANGE(a);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE prt4_n_p1 PARTITION OF prt4_n FOR VALUES FROM (0) TO (300);
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE prt4_n_p2 PARTITION OF prt4_n FOR VALUES FROM (300) TO (500);
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE prt4_n_p3 PARTITION OF prt4_n FOR VALUES FROM (500) TO (600);
+NOTICE:  table has parent, setting distribution columns to match parent table
 INSERT INTO prt4_n SELECT i, i, to_char(i, 'FM0000') FROM generate_series(0, 599, 2) i;
 ANALYZE prt4_n;
 -- partitionwise join can not be applied if the partition ranges differ
@@ -2518,14 +2824,24 @@ SELECT t1.a, t1.c, t2.b, t2.c FROM prt1_n t1 FULL JOIN prt1 t2 ON (t1.c = t2.c);
 --
 create temp table prtx1 (a integer, b integer, c integer)
   partition by range (a);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create temp table prtx1_1 partition of prtx1 for values from (1) to (11);
+NOTICE:  table has parent, setting distribution columns to match parent table
 create temp table prtx1_2 partition of prtx1 for values from (11) to (21);
+NOTICE:  table has parent, setting distribution columns to match parent table
 create temp table prtx1_3 partition of prtx1 for values from (21) to (31);
+NOTICE:  table has parent, setting distribution columns to match parent table
 create temp table prtx2 (a integer, b integer, c integer)
   partition by range (a);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create temp table prtx2_1 partition of prtx2 for values from (1) to (11);
+NOTICE:  table has parent, setting distribution columns to match parent table
 create temp table prtx2_2 partition of prtx2 for values from (11) to (21);
+NOTICE:  table has parent, setting distribution columns to match parent table
 create temp table prtx2_3 partition of prtx2 for values from (21) to (31);
+NOTICE:  table has parent, setting distribution columns to match parent table
 insert into prtx1 select 1 + i%30, i, i
   from generate_series(1,1000) i;
 insert into prtx2 select 1 + i%30, i, i
@@ -2543,13 +2859,15 @@ where not exists (select 1 from prtx2
 --------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Append
-         ->  Hash Right Anti Join
-               Hash Cond: ((prtx2_1.a = prtx1_1.a) AND (prtx2_1.b = prtx1_1.b))
-               ->  Seq Scan on prtx2_1
-                     Filter: (c = 123)
+         ->  Hash Anti Join
+               Hash Cond: ((prtx1_1.a = prtx2_1.a) AND (prtx1_1.b = prtx2_1.b))
+               ->  Seq Scan on prtx1_1
+                     Filter: ((a < 20) AND (c = 120))
                ->  Hash
-                     ->  Seq Scan on prtx1_1
-                           Filter: ((a < 20) AND (c = 120))
+                     ->  Bitmap Heap Scan on prtx2_1
+                           Recheck Cond: (c = 123)
+                           ->  Bitmap Index Scan on prtx2_1_c_idx
+                                 Index Cond: (c = 123)
          ->  Hash Right Anti Join
                Hash Cond: ((prtx2_2.a = prtx1_2.a) AND (prtx2_2.b = prtx1_2.b))
                ->  Seq Scan on prtx2_2
@@ -2558,7 +2876,7 @@ where not exists (select 1 from prtx2
                      ->  Seq Scan on prtx1_2
                            Filter: ((a < 20) AND (c = 120))
  Optimizer: Postgres query optimizer
-(17 rows)
+(19 rows)
 
 select * from prtx1
 where not exists (select 1 from prtx2
@@ -2609,16 +2927,26 @@ where not exists (select 1 from prtx2
 --
 -- Tests for range-partitioned tables
 CREATE TABLE prt1_adv (a int, b int, c varchar) PARTITION BY RANGE (a);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE prt1_adv_p1 PARTITION OF prt1_adv FOR VALUES FROM (100) TO (200);
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE prt1_adv_p2 PARTITION OF prt1_adv FOR VALUES FROM (200) TO (300);
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE prt1_adv_p3 PARTITION OF prt1_adv FOR VALUES FROM (300) TO (400);
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE INDEX prt1_adv_a_idx ON prt1_adv (a);
 INSERT INTO prt1_adv SELECT i, i % 25, to_char(i, 'FM0000') FROM generate_series(100, 399) i;
 ANALYZE prt1_adv;
 CREATE TABLE prt2_adv (a int, b int, c varchar) PARTITION BY RANGE (b);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE prt2_adv_p1 PARTITION OF prt2_adv FOR VALUES FROM (100) TO (150);
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE prt2_adv_p2 PARTITION OF prt2_adv FOR VALUES FROM (200) TO (300);
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE prt2_adv_p3 PARTITION OF prt2_adv FOR VALUES FROM (350) TO (500);
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE INDEX prt2_adv_b_idx ON prt2_adv (b);
 INSERT INTO prt2_adv_p1 SELECT i % 25, i, to_char(i, 'FM0000') FROM generate_series(100, 149) i;
 INSERT INTO prt2_adv_p2 SELECT i % 25, i, to_char(i, 'FM0000') FROM generate_series(200, 299) i;
@@ -2897,6 +3225,7 @@ SELECT t1.a, t1.c, t2.b, t2.c FROM (SELECT 175 phv, * FROM prt1_adv WHERE prt1_a
 
 -- Test cases where one side has an extra partition
 CREATE TABLE prt2_adv_extra PARTITION OF prt2_adv FOR VALUES FROM (500) TO (MAXVALUE);
+NOTICE:  table has parent, setting distribution columns to match parent table
 INSERT INTO prt2_adv SELECT i % 25, i, to_char(i, 'FM0000') FROM generate_series(500, 599) i;
 ANALYZE prt2_adv;
 -- inner join
@@ -3281,7 +3610,9 @@ DROP TABLE prt2_adv_extra;
 ALTER TABLE prt2_adv DETACH PARTITION prt2_adv_p3;
 -- Split prt2_adv_p3 into two partitions so that prt1_adv_p3 matches both
 CREATE TABLE prt2_adv_p3_1 PARTITION OF prt2_adv FOR VALUES FROM (350) TO (375);
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE prt2_adv_p3_2 PARTITION OF prt2_adv FOR VALUES FROM (375) TO (500);
+NOTICE:  table has parent, setting distribution columns to match parent table
 INSERT INTO prt2_adv SELECT i % 25, i, to_char(i, 'FM0000') FROM generate_series(350, 499) i;
 ANALYZE prt2_adv;
 -- inner join
@@ -3564,8 +3895,12 @@ ANALYZE prt1_adv;
 DROP TABLE prt2_adv_p3;
 ANALYZE prt2_adv;
 CREATE TABLE prt3_adv (a int, b int, c varchar) PARTITION BY RANGE (a);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE prt3_adv_p1 PARTITION OF prt3_adv FOR VALUES FROM (200) TO (300);
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE prt3_adv_p2 PARTITION OF prt3_adv FOR VALUES FROM (300) TO (400);
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE INDEX prt3_adv_a_idx ON prt3_adv (a);
 INSERT INTO prt3_adv SELECT i, i % 25, to_char(i, 'FM0000') FROM generate_series(200, 399) i;
 ANALYZE prt3_adv;
@@ -3630,15 +3965,24 @@ DROP TABLE prt2_adv;
 DROP TABLE prt3_adv;
 -- Test interaction of partitioned join with partition pruning
 CREATE TABLE prt1_adv (a int, b int, c varchar) PARTITION BY RANGE (a);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE prt1_adv_p1 PARTITION OF prt1_adv FOR VALUES FROM (100) TO (200);
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE prt1_adv_p2 PARTITION OF prt1_adv FOR VALUES FROM (200) TO (300);
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE prt1_adv_p3 PARTITION OF prt1_adv FOR VALUES FROM (300) TO (400);
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE INDEX prt1_adv_a_idx ON prt1_adv (a);
 INSERT INTO prt1_adv SELECT i, i % 25, to_char(i, 'FM0000') FROM generate_series(100, 399) i;
 ANALYZE prt1_adv;
 CREATE TABLE prt2_adv (a int, b int, c varchar) PARTITION BY RANGE (b);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE prt2_adv_p1 PARTITION OF prt2_adv FOR VALUES FROM (100) TO (200);
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE prt2_adv_p2 PARTITION OF prt2_adv FOR VALUES FROM (200) TO (400);
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE INDEX prt2_adv_b_idx ON prt2_adv (b);
 INSERT INTO prt2_adv SELECT i % 25, i, to_char(i, 'FM0000') FROM generate_series(100, 399) i;
 ANALYZE prt2_adv;
@@ -3685,8 +4029,10 @@ SELECT t1.a, t1.c, t2.b, t2.c FROM prt1_adv t1 INNER JOIN prt2_adv t2 ON (t1.a =
 
 DROP TABLE prt1_adv_p3;
 CREATE TABLE prt1_adv_default PARTITION OF prt1_adv DEFAULT;
+NOTICE:  table has parent, setting distribution columns to match parent table
 ANALYZE prt1_adv;
 CREATE TABLE prt2_adv_default PARTITION OF prt2_adv DEFAULT;
+NOTICE:  table has parent, setting distribution columns to match parent table
 ANALYZE prt2_adv;
 EXPLAIN (COSTS OFF)
 SELECT t1.a, t1.c, t2.b, t2.c FROM prt1_adv t1 INNER JOIN prt2_adv t2 ON (t1.a = t2.b) WHERE t1.a >= 100 AND t1.a < 300 AND t1.b = 0 ORDER BY t1.a, t2.b;
@@ -3733,15 +4079,25 @@ DROP TABLE prt1_adv;
 DROP TABLE prt2_adv;
 -- Tests for list-partitioned tables
 CREATE TABLE plt1_adv (a int, b int, c text) PARTITION BY LIST (c);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE plt1_adv_p1 PARTITION OF plt1_adv FOR VALUES IN ('0001', '0003');
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE plt1_adv_p2 PARTITION OF plt1_adv FOR VALUES IN ('0004', '0006');
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE plt1_adv_p3 PARTITION OF plt1_adv FOR VALUES IN ('0008', '0009');
+NOTICE:  table has parent, setting distribution columns to match parent table
 INSERT INTO plt1_adv SELECT i, i, to_char(i % 10, 'FM0000') FROM generate_series(1, 299) i WHERE i % 10 IN (1, 3, 4, 6, 8, 9);
 ANALYZE plt1_adv;
 CREATE TABLE plt2_adv (a int, b int, c text) PARTITION BY LIST (c);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE plt2_adv_p1 PARTITION OF plt2_adv FOR VALUES IN ('0002', '0003');
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE plt2_adv_p2 PARTITION OF plt2_adv FOR VALUES IN ('0004', '0006');
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE plt2_adv_p3 PARTITION OF plt2_adv FOR VALUES IN ('0007', '0009');
+NOTICE:  table has parent, setting distribution columns to match parent table
 INSERT INTO plt2_adv SELECT i, i, to_char(i % 10, 'FM0000') FROM generate_series(1, 299) i WHERE i % 10 IN (2, 3, 4, 6, 7, 9);
 ANALYZE plt2_adv;
 -- inner join
@@ -3971,6 +4327,7 @@ SELECT t1.a, t1.c, t2.a, t2.c FROM plt1_adv t1 FULL JOIN plt2_adv t2 ON (t1.a = 
 
 -- Test cases where one side has an extra partition
 CREATE TABLE plt2_adv_extra PARTITION OF plt2_adv FOR VALUES IN ('0000');
+NOTICE:  table has parent, setting distribution columns to match parent table
 INSERT INTO plt2_adv_extra VALUES (0, 0, '0000');
 ANALYZE plt2_adv;
 -- inner join
@@ -4246,7 +4603,9 @@ DROP TABLE plt2_adv_extra;
 ALTER TABLE plt2_adv DETACH PARTITION plt2_adv_p2;
 -- Split plt2_adv_p2 into two partitions so that plt1_adv_p2 matches both
 CREATE TABLE plt2_adv_p2_1 PARTITION OF plt2_adv FOR VALUES IN ('0004');
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE plt2_adv_p2_2 PARTITION OF plt2_adv FOR VALUES IN ('0006');
+NOTICE:  table has parent, setting distribution columns to match parent table
 INSERT INTO plt2_adv SELECT i, i, to_char(i % 10, 'FM0000') FROM generate_series(1, 299) i WHERE i % 10 IN (4, 6);
 ANALYZE plt2_adv;
 -- inner join
@@ -4404,12 +4763,14 @@ ALTER TABLE plt2_adv ATTACH PARTITION plt2_adv_p2 FOR VALUES IN ('0004', '0006')
 ALTER TABLE plt1_adv DETACH PARTITION plt1_adv_p1;
 -- Change plt1_adv_p1 to the NULL partition
 CREATE TABLE plt1_adv_p1_null PARTITION OF plt1_adv FOR VALUES IN (NULL, '0001', '0003');
+NOTICE:  table has parent, setting distribution columns to match parent table
 INSERT INTO plt1_adv SELECT i, i, to_char(i % 10, 'FM0000') FROM generate_series(1, 299) i WHERE i % 10 IN (1, 3);
 INSERT INTO plt1_adv VALUES (-1, -1, NULL);
 ANALYZE plt1_adv;
 ALTER TABLE plt2_adv DETACH PARTITION plt2_adv_p3;
 -- Change plt2_adv_p3 to the NULL partition
 CREATE TABLE plt2_adv_p3_null PARTITION OF plt2_adv FOR VALUES IN (NULL, '0007', '0009');
+NOTICE:  table has parent, setting distribution columns to match parent table
 INSERT INTO plt2_adv SELECT i, i, to_char(i % 10, 'FM0000') FROM generate_series(1, 299) i WHERE i % 10 IN (7, 9);
 INSERT INTO plt2_adv VALUES (-1, -1, NULL);
 ANALYZE plt2_adv;
@@ -4648,6 +5009,7 @@ ALTER TABLE plt1_adv ATTACH PARTITION plt1_adv_p1 FOR VALUES IN ('0001', '0003')
 -- Add to plt1_adv the extra NULL partition containing only NULL values as the
 -- key values
 CREATE TABLE plt1_adv_extra PARTITION OF plt1_adv FOR VALUES IN (NULL);
+NOTICE:  table has parent, setting distribution columns to match parent table
 INSERT INTO plt1_adv VALUES (-1, -1, NULL);
 ANALYZE plt1_adv;
 DROP TABLE plt2_adv_p3_null;
@@ -4754,6 +5116,7 @@ SELECT t1.a, t1.c, t2.a, t2.c FROM plt1_adv t1 FULL JOIN plt2_adv t2 ON (t1.a = 
 -- Add to plt2_adv the extra NULL partition containing only NULL values as the
 -- key values
 CREATE TABLE plt2_adv_extra PARTITION OF plt2_adv FOR VALUES IN (NULL);
+NOTICE:  table has parent, setting distribution columns to match parent table
 INSERT INTO plt2_adv VALUES (-1, -1, NULL);
 ANALYZE plt2_adv;
 -- inner join
@@ -5010,6 +5373,7 @@ ALTER TABLE plt2_adv DETACH PARTITION plt2_adv_p2;
 -- Change plt2_adv_p2 to contain '0005' in addition to '0004' and '0006' as
 -- the key values
 CREATE TABLE plt2_adv_p2_ext PARTITION OF plt2_adv FOR VALUES IN ('0004', '0005', '0006');
+NOTICE:  table has parent, setting distribution columns to match parent table
 INSERT INTO plt2_adv SELECT i, i, to_char(i % 10, 'FM0000') FROM generate_series(1, 299) i WHERE i % 10 IN (4, 5, 6);
 ANALYZE plt2_adv;
 -- Partitioned join can't be applied because the default partition of plt1_adv
@@ -5073,8 +5437,12 @@ DROP TABLE plt2_adv_p2_ext;
 ALTER TABLE plt2_adv ATTACH PARTITION plt2_adv_p2 FOR VALUES IN ('0004', '0006');
 ANALYZE plt2_adv;
 CREATE TABLE plt3_adv (a int, b int, c text) PARTITION BY LIST (c);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE plt3_adv_p1 PARTITION OF plt3_adv FOR VALUES IN ('0004', '0006');
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE plt3_adv_p2 PARTITION OF plt3_adv FOR VALUES IN ('0007', '0009');
+NOTICE:  table has parent, setting distribution columns to match parent table
 INSERT INTO plt3_adv SELECT i, i, to_char(i % 10, 'FM0000') FROM generate_series(1, 299) i WHERE i % 10 IN (4, 6, 7, 9);
 ANALYZE plt3_adv;
 -- 3-way join to test the default partition of a join relation
@@ -5124,6 +5492,7 @@ SELECT t1.a, t1.c, t2.a, t2.c, t3.a, t3.c FROM plt1_adv t1 LEFT JOIN plt2_adv t2
 DROP TABLE plt2_adv_p1;
 -- Add the NULL partition to plt2_adv
 CREATE TABLE plt2_adv_p1_null PARTITION OF plt2_adv FOR VALUES IN (NULL, '0001', '0003');
+NOTICE:  table has parent, setting distribution columns to match parent table
 INSERT INTO plt2_adv SELECT i, i, to_char(i % 10, 'FM0000') FROM generate_series(1, 299) i WHERE i % 10 IN (1, 3);
 INSERT INTO plt2_adv VALUES (-1, -1, NULL);
 ANALYZE plt2_adv;
@@ -5163,6 +5532,7 @@ SELECT t1.a, t1.c, t2.a, t2.c FROM plt1_adv t1 INNER JOIN plt2_adv t2 ON (t1.a =
 DROP TABLE plt2_adv_p1_null;
 -- Add the NULL partition that contains only NULL values as the key values
 CREATE TABLE plt2_adv_p1_null PARTITION OF plt2_adv FOR VALUES IN (NULL);
+NOTICE:  table has parent, setting distribution columns to match parent table
 INSERT INTO plt2_adv VALUES (-1, -1, NULL);
 ANALYZE plt2_adv;
 EXPLAIN (COSTS OFF)
@@ -5194,18 +5564,30 @@ DROP TABLE plt2_adv;
 DROP TABLE plt3_adv;
 -- Test interaction of partitioned join with partition pruning
 CREATE TABLE plt1_adv (a int, b int, c text) PARTITION BY LIST (c);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE plt1_adv_p1 PARTITION OF plt1_adv FOR VALUES IN ('0001');
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE plt1_adv_p2 PARTITION OF plt1_adv FOR VALUES IN ('0002');
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE plt1_adv_p3 PARTITION OF plt1_adv FOR VALUES IN ('0003');
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE plt1_adv_p4 PARTITION OF plt1_adv FOR VALUES IN (NULL, '0004', '0005');
+NOTICE:  table has parent, setting distribution columns to match parent table
 INSERT INTO plt1_adv SELECT i, i, to_char(i % 10, 'FM0000') FROM generate_series(1, 299) i WHERE i % 10 IN (1, 2, 3, 4, 5);
 INSERT INTO plt1_adv VALUES (-1, -1, NULL);
 ANALYZE plt1_adv;
 CREATE TABLE plt2_adv (a int, b int, c text) PARTITION BY LIST (c);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE plt2_adv_p1 PARTITION OF plt2_adv FOR VALUES IN ('0001', '0002');
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE plt2_adv_p2 PARTITION OF plt2_adv FOR VALUES IN (NULL);
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE plt2_adv_p3 PARTITION OF plt2_adv FOR VALUES IN ('0003');
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE plt2_adv_p4 PARTITION OF plt2_adv FOR VALUES IN ('0004', '0005');
+NOTICE:  table has parent, setting distribution columns to match parent table
 INSERT INTO plt2_adv SELECT i, i, to_char(i % 10, 'FM0000') FROM generate_series(1, 299) i WHERE i % 10 IN (1, 2, 3, 4, 5);
 INSERT INTO plt2_adv VALUES (-1, -1, NULL);
 ANALYZE plt2_adv;
@@ -5267,8 +5649,10 @@ SELECT t1.a, t1.c, t2.a, t2.c FROM plt1_adv t1 LEFT JOIN plt2_adv t2 ON (t1.a = 
 (1 row)
 
 CREATE TABLE plt1_adv_default PARTITION OF plt1_adv DEFAULT;
+NOTICE:  table has parent, setting distribution columns to match parent table
 ANALYZE plt1_adv;
 CREATE TABLE plt2_adv_default PARTITION OF plt2_adv DEFAULT;
+NOTICE:  table has parent, setting distribution columns to match parent table
 ANALYZE plt2_adv;
 EXPLAIN (COSTS OFF)
 SELECT t1.a, t1.c, t2.a, t2.c FROM plt1_adv t1 INNER JOIN plt2_adv t2 ON (t1.a = t2.a AND t1.c = t2.c) WHERE t1.c IN ('0003', '0004', '0005') AND t1.b < 10 ORDER BY t1.a;
@@ -5331,18 +5715,30 @@ DROP TABLE plt1_adv;
 DROP TABLE plt2_adv;
 -- Test the process_outer_partition() code path
 CREATE TABLE plt1_adv (a int, b int, c text) PARTITION BY LIST (c);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE plt1_adv_p1 PARTITION OF plt1_adv FOR VALUES IN ('0000', '0001', '0002');
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE plt1_adv_p2 PARTITION OF plt1_adv FOR VALUES IN ('0003', '0004');
+NOTICE:  table has parent, setting distribution columns to match parent table
 INSERT INTO plt1_adv SELECT i, i, to_char(i % 5, 'FM0000') FROM generate_series(0, 24) i;
 ANALYZE plt1_adv;
 CREATE TABLE plt2_adv (a int, b int, c text) PARTITION BY LIST (c);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE plt2_adv_p1 PARTITION OF plt2_adv FOR VALUES IN ('0002');
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE plt2_adv_p2 PARTITION OF plt2_adv FOR VALUES IN ('0003', '0004');
+NOTICE:  table has parent, setting distribution columns to match parent table
 INSERT INTO plt2_adv SELECT i, i, to_char(i % 5, 'FM0000') FROM generate_series(0, 24) i WHERE i % 5 IN (2, 3, 4);
 ANALYZE plt2_adv;
 CREATE TABLE plt3_adv (a int, b int, c text) PARTITION BY LIST (c);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE plt3_adv_p1 PARTITION OF plt3_adv FOR VALUES IN ('0001');
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE plt3_adv_p2 PARTITION OF plt3_adv FOR VALUES IN ('0003', '0004');
+NOTICE:  table has parent, setting distribution columns to match parent table
 INSERT INTO plt3_adv SELECT i, i, to_char(i % 5, 'FM0000') FROM generate_series(0, 24) i WHERE i % 5 IN (1, 3, 4);
 ANALYZE plt3_adv;
 -- This tests that when merging partitions from plt1_adv and plt2_adv in
@@ -5462,26 +5858,46 @@ DROP TABLE plt2_adv;
 DROP TABLE plt3_adv;
 -- Tests for multi-level partitioned tables
 CREATE TABLE alpha (a double precision, b int, c text) PARTITION BY RANGE (a);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE alpha_neg PARTITION OF alpha FOR VALUES FROM ('-Infinity') TO (0) PARTITION BY RANGE (b);
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE alpha_pos PARTITION OF alpha FOR VALUES FROM (0) TO (10.0) PARTITION BY LIST (c);
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE alpha_neg_p1 PARTITION OF alpha_neg FOR VALUES FROM (100) TO (200);
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE alpha_neg_p2 PARTITION OF alpha_neg FOR VALUES FROM (200) TO (300);
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE alpha_neg_p3 PARTITION OF alpha_neg FOR VALUES FROM (300) TO (400);
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE alpha_pos_p1 PARTITION OF alpha_pos FOR VALUES IN ('0001', '0003');
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE alpha_pos_p2 PARTITION OF alpha_pos FOR VALUES IN ('0004', '0006');
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE alpha_pos_p3 PARTITION OF alpha_pos FOR VALUES IN ('0008', '0009');
+NOTICE:  table has parent, setting distribution columns to match parent table
 INSERT INTO alpha_neg SELECT -1.0, i, to_char(i % 10, 'FM0000') FROM generate_series(100, 399) i WHERE i % 10 IN (1, 3, 4, 6, 8, 9);
 INSERT INTO alpha_pos SELECT  1.0, i, to_char(i % 10, 'FM0000') FROM generate_series(100, 399) i WHERE i % 10 IN (1, 3, 4, 6, 8, 9);
 ANALYZE alpha;
 CREATE TABLE beta (a double precision, b int, c text) PARTITION BY RANGE (a);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE beta_neg PARTITION OF beta FOR VALUES FROM (-10.0) TO (0) PARTITION BY RANGE (b);
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE beta_pos PARTITION OF beta FOR VALUES FROM (0) TO ('Infinity') PARTITION BY LIST (c);
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE beta_neg_p1 PARTITION OF beta_neg FOR VALUES FROM (100) TO (150);
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE beta_neg_p2 PARTITION OF beta_neg FOR VALUES FROM (200) TO (300);
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE beta_neg_p3 PARTITION OF beta_neg FOR VALUES FROM (350) TO (500);
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE beta_pos_p1 PARTITION OF beta_pos FOR VALUES IN ('0002', '0003');
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE beta_pos_p2 PARTITION OF beta_pos FOR VALUES IN ('0004', '0006');
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE beta_pos_p3 PARTITION OF beta_pos FOR VALUES IN ('0007', '0009');
+NOTICE:  table has parent, setting distribution columns to match parent table
 INSERT INTO beta_neg SELECT -1.0, i, to_char(i % 10, 'FM0000') FROM generate_series(100, 149) i WHERE i % 10 IN (2, 3, 4, 6, 7, 9);
 INSERT INTO beta_neg SELECT -1.0, i, to_char(i % 10, 'FM0000') FROM generate_series(200, 299) i WHERE i % 10 IN (2, 3, 4, 6, 7, 9);
 INSERT INTO beta_neg SELECT -1.0, i, to_char(i % 10, 'FM0000') FROM generate_series(350, 499) i WHERE i % 10 IN (2, 3, 4, 6, 7, 9);
@@ -5698,3 +6114,65 @@ SELECT t1.*, t2.* FROM alpha t1 INNER JOIN beta t2 ON (t1.a = t2.a AND t1.b = t2
   1 | 209 | 0009 |  1 | 209 | 0009
 (8 rows)
 
+-- partitionwise join with fractional paths
+CREATE TABLE fract_t (id BIGINT, PRIMARY KEY (id)) PARTITION BY RANGE (id);
+CREATE TABLE fract_t0 PARTITION OF fract_t FOR VALUES FROM ('0') TO ('1000');
+NOTICE:  table has parent, setting distribution columns to match parent table
+CREATE TABLE fract_t1 PARTITION OF fract_t FOR VALUES FROM ('1000') TO ('2000');
+NOTICE:  table has parent, setting distribution columns to match parent table
+-- insert data
+INSERT INTO fract_t (id) (SELECT generate_series(0, 1999));
+ANALYZE fract_t;
+-- verify plan; nested index only scans
+SET max_parallel_workers_per_gather = 0;
+SET enable_partitionwise_join = on;
+EXPLAIN (COSTS OFF)
+SELECT x.id, y.id FROM fract_t x LEFT JOIN fract_t y USING (id) ORDER BY x.id ASC LIMIT 10;
+                                    QUERY PLAN                                     
+-----------------------------------------------------------------------------------
+ Limit
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         Merge Key: x.id
+         ->  Limit
+               ->  Merge Append
+                     Sort Key: x.id
+                     ->  Merge Left Join
+                           Merge Cond: (x_1.id = y_1.id)
+                           ->  Index Only Scan using fract_t0_pkey on fract_t0 x_1
+                           ->  Index Only Scan using fract_t0_pkey on fract_t0 y_1
+                     ->  Merge Left Join
+                           Merge Cond: (x_2.id = y_2.id)
+                           ->  Index Only Scan using fract_t1_pkey on fract_t1 x_2
+                           ->  Index Only Scan using fract_t1_pkey on fract_t1 y_2
+ Optimizer: Postgres query optimizer
+(15 rows)
+
+EXPLAIN (COSTS OFF)
+SELECT x.id, y.id FROM fract_t x LEFT JOIN fract_t y USING (id) ORDER BY x.id DESC LIMIT 10;
+                                         QUERY PLAN                                         
+--------------------------------------------------------------------------------------------
+ Limit
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         Merge Key: x.id
+         ->  Limit
+               ->  Merge Append
+                     Sort Key: x.id DESC
+                     ->  Merge Left Join
+                           Merge Cond: (x_1.id = y_1.id)
+                           ->  Index Only Scan Backward using fract_t0_pkey on fract_t0 x_1
+                           ->  Sort
+                                 Sort Key: y_1.id DESC
+                                 ->  Seq Scan on fract_t0 y_1
+                     ->  Merge Left Join
+                           Merge Cond: (x_2.id = y_2.id)
+                           ->  Index Only Scan Backward using fract_t1_pkey on fract_t1 x_2
+                           ->  Sort
+                                 Sort Key: y_2.id DESC
+                                 ->  Seq Scan on fract_t1 y_2
+ Optimizer: Postgres query optimizer
+(19 rows)
+
+-- cleanup
+DROP TABLE fract_t;
+RESET max_parallel_workers_per_gather;
+RESET enable_partitionwise_join;

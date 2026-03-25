@@ -49,6 +49,7 @@ insert into orca.s select i, i/2 from generate_series(1,30) i;
 
 set optimizer_log=on;
 set optimizer_enable_indexjoin=on;
+set optimizer_trace_fallback = on;
 -- expected fall back to the planner
 select sum(distinct a), count(distinct b) from orca.r;
 
@@ -1977,11 +1978,9 @@ create table foo(a int, b int) distributed by (a);
 -- and log_min_duration_statement, they are the most obvious ones.
 set log_statement='none';
 set log_min_duration_statement=-1;
-set pax_enable_debug to off;
 set client_min_messages='log';
 explain select count(*) from foo group by cube(a,b);
 reset client_min_messages;
-reset pax_enable_debug;
 reset log_statement;
 reset log_min_duration_statement;
 
@@ -2054,11 +2053,9 @@ explain select * from foo where b in ('1', '2');
 set optimizer_enable_ctas = off;
 set log_statement='none';
 set log_min_duration_statement=-1;
-set pax_enable_debug to off;
 set client_min_messages='log';
 create table foo_ctas(a) as (select generate_series(1,10)) distributed by (a);
 reset client_min_messages;
-reset pax_enable_debug;
 reset log_min_duration_statement;
 reset log_statement;
 reset optimizer_enable_ctas;
@@ -2548,7 +2545,6 @@ SELECT a, b FROM btab_old_hash LEFT OUTER JOIN atab_old_hash ON a |=| b;
 
 set optimizer_expand_fulljoin = on;
 select disable_xform('CXformFullOuterJoin2HashJoin');
--- fallback reason: Invalid system target list found for AO table
 EXPLAIN SELECT a, b FROM atab_old_hash FULL JOIN btab_old_hash ON a |=| b;
 SELECT a, b FROM atab_old_hash FULL JOIN btab_old_hash ON a |=| b;
 reset optimizer_expand_fulljoin;
@@ -2821,10 +2817,8 @@ select * from foo join tbtree on foo.a=tbtree.a where tbtree.a < 5000;
 select * from foo join tbtree on foo.a=tbtree.a where tbtree.a < 5000;
 
 -- 4 bitmap with select pred
--- start_ignore
 explain (costs off)
 select * from foo join tbitmap on foo.a=tbitmap.a where tbitmap.a < 5000;
--- end_ignore
 select * from foo join tbitmap on foo.a=tbitmap.a where tbitmap.a < 5000;
 
 -- 5 btree with project
@@ -2853,10 +2847,8 @@ select * from foo join (select a, count(*) + 5 as cnt from tbtree where tbtree.a
 select * from foo join (select a, count(*) + 5 as cnt from tbtree where tbtree.a < 5000 group by a having count(*) < 2) proj_sel_grby_sel on foo.a=proj_sel_grby_sel.a;
 
 -- 10 bitmap with proj select grby select
--- start_ignore
 explain (costs off)
 select * from foo join (select a, count(*) + 5 as cnt from tbitmap where tbitmap.a < 5000 group by a having count(*) < 2) proj_sel_grby_sel on foo.a=proj_sel_grby_sel.a;
--- end_ignore
 select * from foo join (select a, count(*) + 5 as cnt from tbitmap where tbitmap.a < 5000 group by a having count(*) < 2) proj_sel_grby_sel on foo.a=proj_sel_grby_sel.a;
 
 -- 11 bitmap with two groupbys
@@ -3536,8 +3528,7 @@ SELECT (
 -- heavy datasets. Sort node should be on it's place for both, Postgres
 -- optimizer and ORCA.
 create table window_agg_test(i int, j int) distributed randomly;
--- fallback reason: Attribute number 21 not found in project list
-explain (costs off)
+explain
 update window_agg_test t
 set i = tt.i 
 from (select (min(i) over (order by j)) as i, j from window_agg_test) tt

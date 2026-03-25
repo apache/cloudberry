@@ -29,7 +29,6 @@ test: copy_eol
 # vacuum from removing dead tuples. And run gp_toolkit early to make some log
 # file related tests (like gp_log_system, etc) faster.
 test: disable_autovacuum
-test: gp_toolkit
 test: python_processed64bit
 test: enable_autovacuum
 
@@ -54,7 +53,8 @@ test: leastsquares opr_sanity_gp decode_expr bitmapscan bitmapscan_ao case_gp li
 test: gpcopy
 
 test: orca_groupingsets_fallbacks orca_static_pruning
-test: filter gpctas gpdist gpdist_opclasses gpdist_legacy_opclasses matrix sublink table_functions olap_setup complex opclass_ddl explain_format information_schema guc_env_var gp_explain distributed_transactions olap_plans misc_jiras gp_copy_dtx
+test: filter gpctas gpdist gpdist_opclasses gpdist_legacy_opclasses matrix sublink table_functions olap_setup complex opclass_ddl explain_format information_schema guc_env_var gp_explain distributed_transactions olap_plans gp_copy_dtx
+test: misc_jiras
 # below test(s) inject faults so each of them need to be in a separate group
 test: guc_gp
 # ignore_reason: pax toast is different from heap, the test case is already included in pax_schudule
@@ -166,7 +166,7 @@ test: wrkloadadmin
 
 # expand_table tests may affect the result of 'gp_explain', keep them below that
 # portals_updatable
-test: partition_pruning gp_toolkit_ao_funcs trig auth_constraint role plpgsql_cache timeseries pg_stat_last_operation pg_stat_last_shoperation gp_numeric_agg partindex_test runtime_stats expand_table expand_table_ao expand_table_aoco expand_table_regression
+test: partition_pruning trig auth_constraint role plpgsql_cache timeseries pg_stat_last_operation pg_stat_last_shoperation gp_numeric_agg partindex_test runtime_stats expand_table expand_table_ao expand_table_aoco expand_table_regression
 
 # direct dispatch tests
 test: bfv_dd bfv_dd_multicolumn bfv_dd_types direct_dispatch
@@ -191,7 +191,9 @@ test: rpt_joins rpt_tpch rpt
 # other sessions. Therefore the other tests in this group mustn't create
 # temp tables
 # test: bfv_dml  [unsupport TupleFetchRowVersion/DELETE Trigger]
-test: bfv_cte bfv_joins bfv_legacy bfv_temp bfv_planner bfv_subquery
+test: bfv_joins bfv_legacy bfv_temp bfv_planner bfv_subquery
+
+test: bfv_cte
 
 test: qp_olap_mdqa qp_misc gp_recursive_cte qp_dml_joins
 

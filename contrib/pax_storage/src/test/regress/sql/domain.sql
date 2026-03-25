@@ -69,6 +69,25 @@ drop domain domainint4 restrict;
 drop domain domaintext;
 
 
+-- Test non-error-throwing input
+
+create domain positiveint int4 check(value > 0);
+create domain weirdfloat float8 check((1 / value) < 10);
+
+select pg_input_is_valid('1', 'positiveint');
+select pg_input_is_valid('junk', 'positiveint');
+select pg_input_is_valid('-1', 'positiveint');
+select * from pg_input_error_info('junk', 'positiveint');
+select * from pg_input_error_info('-1', 'positiveint');
+select * from pg_input_error_info('junk', 'weirdfloat');
+select * from pg_input_error_info('0.01', 'weirdfloat');
+-- We currently can't trap errors raised in the CHECK expression itself
+select * from pg_input_error_info('0', 'weirdfloat');
+
+drop domain positiveint;
+drop domain weirdfloat;
+
+
 -- Test domains over array types
 
 create domain domainint4arr int4[1];
@@ -814,3 +833,57 @@ from
          (select collname from pg_collation where oid = typcollation)
   from gp_dist_random('pg_type') where typname = 'testdomain_issue_12015'
 )x;
+
+--
+-- ORCA shouldn't fail for data corruption while translating query to DXL
+-- for a constant domain value of the following text related types:
+-- char, bpchar, name.
+-- github issue: https://github.com/greenplum-db/gpdb/issues/14155
+--
+
+create table test_table_14155(txtime timestamptz default now(), user_role text);
+
+create domain domainname as name;
+create function test_func_name(
+    i_msg text,
+    i_caller domainname = current_user
+) returns void language plpgsql as $$
+begin
+    insert into test_table_14155 (
+        txtime, user_role
+    )
+    select now(), i_caller;
+end
+$$;
+
+select * from test_func_name('test');
+
+create domain domainchar as char;
+create function test_func_char(
+    i_msg text,
+    i_caller domainchar = 'a'
+) returns void language plpgsql as $$
+begin
+    insert into test_table_14155 (
+        txtime, user_role
+    )
+    select now(), i_caller;
+end
+$$;
+
+select * from test_func_char('test');
+
+create domain domainbpchar as bpchar;
+create function test_func_bpchar(
+    i_msg text,
+    i_caller domainbpchar = 'test'
+) returns void language plpgsql as $$
+begin
+    insert into test_table_14155 (
+        txtime, user_role
+    )
+    select now(), i_caller;
+end
+$$;
+
+select * from test_func_bpchar('test');

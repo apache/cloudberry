@@ -1,5 +1,64 @@
 --
 -- BTREE_INDEX
+--
+
+-- directory paths are passed to us in environment variables
+\getenv abs_srcdir PG_ABS_SRCDIR
+
+CREATE TABLE bt_i4_heap (
+	seqno 		int4,
+	random 		int4
+);
+
+CREATE TABLE bt_name_heap (
+	seqno 		name,
+	random 		int4
+);
+
+CREATE TABLE bt_txt_heap (
+	seqno 		text,
+	random 		int4
+);
+
+CREATE TABLE bt_f8_heap (
+	seqno 		float8,
+	random 		int4
+);
+
+\set filename :abs_srcdir '/data/desc.data'
+COPY bt_i4_heap FROM :'filename';
+
+\set filename :abs_srcdir '/data/hash.data'
+COPY bt_name_heap FROM :'filename';
+
+\set filename :abs_srcdir '/data/desc.data'
+COPY bt_txt_heap FROM :'filename';
+
+\set filename :abs_srcdir '/data/hash.data'
+COPY bt_f8_heap FROM :'filename';
+
+ANALYZE bt_i4_heap;
+ANALYZE bt_name_heap;
+ANALYZE bt_txt_heap;
+ANALYZE bt_f8_heap;
+
+--
+-- BTREE ascending/descending cases
+--
+-- we load int4/text from pure descending data (each key is a new
+-- low key) and name/f8 from pure ascending data (each key is a new
+-- high key).  we had a bug where new low keys would sometimes be
+-- "lost".
+--
+CREATE INDEX bt_i4_index ON bt_i4_heap USING btree (seqno int4_ops);
+
+CREATE INDEX bt_name_index ON bt_name_heap USING btree (seqno name_ops);
+
+CREATE INDEX bt_txt_index ON bt_txt_heap USING btree (seqno text_ops);
+
+CREATE INDEX bt_f8_index ON bt_f8_heap USING btree (seqno float8_ops);
+
+--
 -- test retrieval of min/max keys for each index
 --
 
@@ -92,7 +151,7 @@ reset enable_sort;
 
 create temp table btree_bpchar (f1 text collate "C");
 create index on btree_bpchar(f1 bpchar_ops) WITH (deduplicate_items=on);
-insert into btree_bpchar values ('foo'), ('fool'), ('bar'), ('quux');
+insert into btree_bpchar values ('foo'), ('foo  '), ('fool'), ('bar'), ('quux');
 -- doesn't match index:
 explain (costs off)
 select * from btree_bpchar where f1 like 'foo';
@@ -108,13 +167,17 @@ explain (costs off)
 select * from btree_bpchar where f1::bpchar like 'foo%';
 select * from btree_bpchar where f1::bpchar like 'foo%';
 
+explain (costs off)
+select * from btree_bpchar where f1::bpchar ='foo';
+select * from btree_bpchar where f1::bpchar ='foo';
+
 -- get test coverage for "single value" deduplication strategy:
 insert into btree_bpchar select 'foo' from generate_series(1,1500);
 
 --
 -- Perform unique checking, with and without the use of deduplication
 --
-CREATE TABLE dedup_unique_test_table (a int);
+CREATE TABLE dedup_unique_test_table (a int) WITH (autovacuum_enabled=false);
 CREATE UNIQUE INDEX dedup_unique ON dedup_unique_test_table (a) WITH (deduplicate_items=on);
 CREATE UNIQUE INDEX plain_unique ON dedup_unique_test_table (a) WITH (deduplicate_items=off);
 -- Generate enough garbage tuples in index to ensure that even the unique index
@@ -122,7 +185,7 @@ CREATE UNIQUE INDEX plain_unique ON dedup_unique_test_table (a) WITH (deduplicat
 -- checking (at least with a BLCKSZ of 8192 or less)
 DO $$
 BEGIN
-    FOR r IN 1..50 LOOP
+    FOR r IN 1..1350 LOOP
         DELETE FROM dedup_unique_test_table;
         INSERT INTO dedup_unique_test_table SELECT 1;
     END LOOP;
@@ -173,8 +236,7 @@ VACUUM delete_test_table;
 --
 -- The vacuum above should've turned the leaf page into a fast root. We just
 -- need to insert some rows to cause the fast root page to split.
--- Pax not support IndexDeleteTuples
--- INSERT INTO delete_test_table SELECT i, 1, 2, 3 FROM generate_series(1,1000) i;
+INSERT INTO delete_test_table SELECT i, 1, 2, 3 FROM generate_series(1,1000) i;
 
 --
 -- GPDB: Test correctness of B-tree stats in consecutively VACUUM.
@@ -186,15 +248,14 @@ SELECT reltuples FROM pg_class WHERE relname='btree_stats_tbl';
 -- inspect the state of the stats on segments
 SELECT gp_segment_id, relname, reltuples FROM gp_dist_random('pg_class') WHERE relname = 'btree_stats_idx';
 SELECT reltuples FROM pg_class WHERE relname='btree_stats_idx';
--- 1st ANALYZE, expect reltuples = 2
--- Pax not support VACUUM yet, replace VACUUM with ANALYZE
-ANALYZE btree_stats_tbl;
+-- 1st VACUUM, expect reltuples = 2
+vacuum btree_stats_tbl;
 SELECT reltuples FROM pg_class WHERE relname='btree_stats_tbl';
 -- inspect the state of the stats on segments
 SELECT gp_segment_id, relname, reltuples FROM gp_dist_random('pg_class') WHERE relname = 'btree_stats_idx';
 SELECT reltuples FROM pg_class WHERE relname='btree_stats_idx';
--- 2nd ANALYZE, expect reltuples = 2
-ANALYZE btree_stats_tbl;
+-- 2nd VACUUM, expect reltuples = 2
+vacuum btree_stats_tbl;
 SELECT reltuples FROM pg_class WHERE relname='btree_stats_tbl';
 -- inspect the state of the stats on segments
 SELECT gp_segment_id, relname, reltuples FROM gp_dist_random('pg_class') WHERE relname = 'btree_stats_idx';
@@ -214,8 +275,22 @@ SELECT reltuples FROM pg_class WHERE relname='btree_stats_idx';
 -- from the 3rd time of consecutively VACUUM after fresh inserts due to above skipping index scan
 -- criteria.
 -- 3rd VACUUM, expect reltuples = 2
--- VACUUM btree_stats_tbl;
--- SELECT reltuples FROM pg_class WHERE relname='btree_stats_tbl';
+vacuum btree_stats_tbl;
+SELECT reltuples FROM pg_class WHERE relname='btree_stats_tbl';
 -- inspect the state of the stats on segments
--- SELECT gp_segment_id, relname, reltuples FROM gp_dist_random('pg_class') WHERE relname = 'btree_stats_idx';
--- SELECT reltuples FROM pg_class WHERE relname='btree_stats_idx';
+SELECT gp_segment_id, relname, reltuples FROM gp_dist_random('pg_class') WHERE relname = 'btree_stats_idx';
+SELECT reltuples FROM pg_class WHERE relname='btree_stats_idx';
+
+-- Test unsupported btree opclass parameters
+create index on btree_tall_tbl (id int4_ops(foo=1));
+
+-- Test case of ALTER INDEX with abuse of column names for indexes.
+-- This grammar is not officially supported, but the parser allows it.
+CREATE INDEX btree_tall_idx2 ON btree_tall_tbl (id);
+ALTER INDEX btree_tall_idx2 ALTER COLUMN id SET (n_distinct=100);
+DROP INDEX btree_tall_idx2;
+-- Partitioned index
+CREATE TABLE btree_part (id int4) PARTITION BY RANGE (id);
+CREATE INDEX btree_part_idx ON btree_part(id);
+ALTER INDEX btree_part_idx ALTER COLUMN id SET (n_distinct=100);
+DROP TABLE btree_part;

@@ -39,8 +39,14 @@ select pg_ext_aux.extaux_add1(7);
 -- Test 5: Check that these relations are protected
 -- fail: should not allowed to insert by user
 insert into pg_ext_aux.extaux_t values(1,'hello');
---- success: The pax table does not create toast table, different from the heap table.
+-- fail: should not allowed to refresh by user
+-- start_ignore
+set gp_enable_refresh_fast_path = off;
+-- end_ignore
 refresh materialized view pg_ext_aux.extaux_mv;
+-- start_ignore
+reset gp_enable_refresh_fast_path;
+-- end_ignore
 
 -- fail: should not allow to be dropped by user
 drop view pg_ext_aux.extaux_v;

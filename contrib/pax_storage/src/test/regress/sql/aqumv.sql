@@ -2,6 +2,8 @@
 -- Tests of Answer Query Using Materialized Views.
 --
 set optimizer = off;
+create schema aqumv;
+set search_path to aqumv;
 create table aqumv_t1(c1 int, c2 int, c3 int) distributed by (c1);
 insert into aqumv_t1 select i, i+1, i+2 from generate_series(1, 1000) i;
 insert into aqumv_t1 select * from aqumv_t1;
@@ -289,6 +291,39 @@ select count(c2), count(*) from aqumv_t2 where c1 > 90;
 select count(c2), count(*) from aqumv_t2 where c1 > 90;
 abort;
 
+-- Test use normal materialized views
+create table t1(c1 int, c2 int, c3 int) distributed by (c1);
+insert into t1 select i, i+1, i+2 from generate_series(1, 100) i;
+insert into t1 values (91, NULL, 95);
+analyze t1;
+
+create materialized view normal_mv_t1 as
+  select c3 as mc3, c1 as mc1
+  from t1 where c1 > 90;
+analyze normal_mv_t1;
+
+set enable_answer_query_using_materialized_views = off;
+explain(costs off, verbose)
+select count(c3) from t1 where c1 > 90;
+select count(c3) from t1 where c1 > 90;
+set enable_answer_query_using_materialized_views = on;
+explain(costs off, verbose)
+select count(c3) from t1 where c1 > 90;
+select count(c3) from t1 where c1 > 90;
+
+vacuum full t1;
+explain(costs off, verbose)
+select count(c3) from t1 where c1 > 90;
+
+explain(costs off, verbose)
+select c3 from t1 where c1 > 90;
+
+-- insert data after refresh
+insert into t1 values (91, NULL, 95);
+explain(costs off, verbose)
+select count(c3) from t1 where c1 > 90;
+select mvname, datastatus from gp_matview_aux where mvname = 'normal_mv_t1';
+
 -- Test Agg on IMMV who has less columns than origin table.
 begin;
 create table aqumv_t2(c1 int, c2 int, c3 int) distributed by (c1);
@@ -383,6 +418,11 @@ create incremental materialized view aqumv_mvt4_0 as
   from aqumv_t4 where c1 > 90;
 analyze aqumv_mvt4_0;
 
+create incremental materialized view aqumv_mvt4_1 as
+  select c2 as mc2, c1 as mc1
+  from aqumv_t4 where c1 > 95;
+analyze aqumv_mvt4_1;
+
 -- HAVING clause pushed down to where quals.
 set local enable_answer_query_using_materialized_views = off;
 explain(costs off, verbose)
@@ -407,6 +447,35 @@ select c1, c3, avg(c2) from aqumv_t4 where c1 > 90 group by (c1, c3) having avg(
 explain(costs off, verbose)
 select c1, c3, avg(c2) from aqumv_t4 where c1 > 90 group by (c1, c3) having c1 > 90;
 
+-- having quals without column reference.
+explain(costs off, verbose)
+select c1, c3, avg(c2) from aqumv_t4 where c1 > 90 group by (c1, c3) having 2 > 1;
+
+-- origin query have mutable functions can not use AQUMV.
+explain(costs off, verbose)
+select c1, c3, avg(c2) from aqumv_t4 where c1 > 90 group by (c1, c3) having random() > 0.5;
+explain(costs off, verbose)
+select c1, c3, avg(c2), random() from aqumv_t4 where c1 > 90 group by (c1, c3);
+
+-- Test having quals have aggs.
+-- Could not use AQUMV. 
+set local enable_answer_query_using_materialized_views = off;
+explain(costs off, verbose)
+select c1, avg(c2) from aqumv_t4 where c1 > 95 group by c1 having avg(c3) > 96;
+select c1, avg(c2) from aqumv_t4 where c1 > 95 group by c1 having avg(c3) > 96;
+set local enable_answer_query_using_materialized_views = on;
+explain(costs off, verbose)
+select c1, avg(c2) from aqumv_t4 where c1 > 95 group by c1 having avg(c3) > 96;
+select c1, avg(c2) from aqumv_t4 where c1 > 95 group by c1 having avg(c3) > 96;
+-- Can use AQUMV.
+set local enable_answer_query_using_materialized_views = off;
+explain(costs off, verbose)
+select c1, avg(c2) from aqumv_t4 where c1 > 90 group by c1 having avg(c3) > 96;
+select c1, avg(c2) from aqumv_t4 where c1 > 90 group by c1 having avg(c3) > 96;
+set local enable_answer_query_using_materialized_views = on;
+explain(costs off, verbose)
+select c1, avg(c2) from aqumv_t4 where c1 > 90 group by c1 having avg(c3) > 96;
+select c1, avg(c2) from aqumv_t4 where c1 > 90 group by c1 having avg(c3) > 96;
 abort;
 
 -- Test Order By of origin query.
@@ -462,6 +531,352 @@ select c1, sum(c3) as sum_c3 from aqumv_t5 where c1 > 90 group by c1 order by su
 select c1, sum(c3) as sum_c3 from aqumv_t5 where c1 > 90 group by c1 order by sum_c3 asc;
 abort;
 
+-- Test DISTINCT
+begin;
+create table aqumv_t6(c1 int, c2 int, c3 int, c4 int) distributed by (c1);
+insert into aqumv_t6 select i, i+1, i+2, i+3 from generate_series(1, 100) i;
+insert into aqumv_t6 select i, i+1, i+2, i+3 from generate_series(1, 100) i;
+insert into aqumv_t6 values (91, NULL, 97, 98);
+analyze aqumv_t6;
+
+create incremental materialized view aqumv_mvt6_0 as
+  select c1 as mc1, c2 as mc2
+  from aqumv_t6 where c1 > 90;
+analyze aqumv_mvt6_0;
+
+-- DISTINCT
+\pset null NULL
+set local enable_answer_query_using_materialized_views = off;
+explain(costs off, verbose)
+select distinct c2, c1 from aqumv_t6 where c1 > 90;
+select distinct c2, c1 from aqumv_t6 where c1 > 90 order by c2, c1;
+set local enable_answer_query_using_materialized_views = on;
+explain(costs off, verbose)
+select distinct c2, c1 from aqumv_t6 where c1 > 90;
+select distinct c2, c1 from aqumv_t6 where c1 > 90 order by c2, c1;
+
+-- Agg DISTINCT
+set local enable_answer_query_using_materialized_views = off;
+explain(costs off, verbose)
+select count(c1) as count_c1, count(distinct c1) as count_distinct_c1,
+sum(c2) as sum_c2, sum(distinct c2) as sum_distinct_c2 from aqumv_t6 where c1 > 90;
+select count(c1) as count_c1, count(distinct c1) as count_distinct_c1,
+sum(c2) as sum_c2, sum(distinct c2) as sum_distinct_c2 from aqumv_t6 where c1 > 90;
+set local enable_answer_query_using_materialized_views = on;
+explain(costs off, verbose)
+select count(c1) as count_c1, count(distinct c1) as count_distinct_c1,
+sum(c2) as sum_c2, sum(distinct c2) as sum_distinct_c2 from aqumv_t6 where c1 > 90;
+select count(c1) as count_c1, count(distinct c1) as count_distinct_c1,
+sum(c2) as sum_c2, sum(distinct c2) as sum_distinct_c2 from aqumv_t6 where c1 > 90;
+
+-- Group DISTINCT
+create incremental materialized view aqumv_mvt6_1 as
+  select c3 as mc3, c4 as mc4, c1 as mc1, c2 as mc2
+  from aqumv_t6 where c1 > 97;
+analyze aqumv_mvt6_1;
+set local enable_answer_query_using_materialized_views = off;
+explain(costs off, verbose)
+select c1, c2, c3, sum(c4) from aqumv_t6 where c1 > 97 group by distinct rollup(c1, c2), rollup(c1, c3);
+select c1, c2, c3, sum(c4) from aqumv_t6 where c1 > 97 group by distinct rollup(c1, c2), rollup(c1, c3);
+set local enable_answer_query_using_materialized_views = on;
+explain(costs off, verbose)
+select c1, c2, c3, sum(c4) from aqumv_t6 where c1 > 97 group by distinct rollup(c1, c2), rollup(c1, c3);
+select c1, c2, c3, sum(c4) from aqumv_t6 where c1 > 97 group by distinct rollup(c1, c2), rollup(c1, c3);
+
+-- DISTINCT ON
+set local enable_answer_query_using_materialized_views = off;
+explain(costs off, verbose)
+select distinct on(c1 - 1) c1, c2 from aqumv_t6 where c1 > 90 order by c1 - 1, c2 nulls first;
+select distinct on(c1 - 1) c1, c2 from aqumv_t6 where c1 > 90 order by c1 - 1, c2 nulls first;
+set local enable_answer_query_using_materialized_views = on;
+explain(costs off, verbose)
+select distinct on(c1 - 1) c1, c2 from aqumv_t6 where c1 > 90 order by c1 - 1, c2 nulls first;
+select distinct on(c1 - 1) c1, c2 from aqumv_t6 where c1 > 90 order by c1 - 1, c2 nulls first;
+
+\pset null ''
+abort;
+
+-- Test LIMIT
+begin;
+create table aqumv_t7(c1 int, c2 int, c3 int, c4 int) distributed by (c1);
+insert into aqumv_t7 select i, i+1, i+2, i+3 from generate_series(1, 100) i;
+insert into aqumv_t7 select i, i+1, i+2, i+3 from generate_series(1, 100) i;
+analyze aqumv_t7;
+
+create incremental materialized view aqumv_mvt7_0 as
+  select c3 as cm3, c1 as mc1, c2 as mc2
+  from aqumv_t7 where c1 > 90;
+analyze aqumv_mvt7_0;
+
+-- LIMIT
+set local enable_answer_query_using_materialized_views = off;
+explain(costs off, verbose)
+select c2, c3 from aqumv_t7 where c1 > 90 order by c2, c3 limit 3;
+select c2, c3 from aqumv_t7 where c1 > 90 order by c2, c3 limit 3;
+set local enable_answer_query_using_materialized_views = on;
+explain(costs off, verbose)
+select c2, c3 from aqumv_t7 where c1 > 90 order by c2, c3 limit 3;
+select c2, c3 from aqumv_t7 where c1 > 90 order by c2, c3 limit 3;
+
+-- OFFSET
+set local enable_answer_query_using_materialized_views = off;
+explain(costs off, verbose)
+select c2, c3 from aqumv_t7 where c1 > 90 order by c2, c3 limit 3 offset 4;
+select c2, c3 from aqumv_t7 where c1 > 90 order by c2, c3 limit 3 offset 4;
+set local enable_answer_query_using_materialized_views = on;
+explain(costs off, verbose)
+select c2, c3 from aqumv_t7 where c1 > 90 order by c2, c3 limit 3 offset 4;
+select c2, c3 from aqumv_t7 where c1 > 90 order by c2, c3 limit 3 offset 4;
+
+-- FETCH
+set local enable_answer_query_using_materialized_views = off;
+explain(costs off, verbose)
+select c2, c3 from aqumv_t7 where c1 > 90 order by c2, c3 fetch first 3 rows only;
+select c2, c3 from aqumv_t7 where c1 > 90 order by c2, c3 fetch first 3 rows only;
+set local enable_answer_query_using_materialized_views = on;
+explain(costs off, verbose)
+select c2, c3 from aqumv_t7 where c1 > 90 order by c2, c3 fetch first 3 rows only;
+select c2, c3 from aqumv_t7 where c1 > 90 order by c2, c3 fetch first 3 rows only;
+
+-- WITH TIES
+set local enable_answer_query_using_materialized_views = off;
+explain(costs off, verbose)
+select c2, c3 from aqumv_t7 where c1 > 90 order by c2, c3 fetch first 3 rows with ties;
+select c2, c3 from aqumv_t7 where c1 > 90 order by c2, c3 fetch first 3 rows with ties;
+set local enable_answer_query_using_materialized_views = on;
+explain(costs off, verbose)
+select c2, c3 from aqumv_t7 where c1 > 90 order by c2, c3 fetch first 3 rows with ties;
+select c2, c3 from aqumv_t7 where c1 > 90 order by c2, c3 fetch first 3 rows with ties;
+
+abort;
+
+--
+-- Test external table
+--
+begin;
+
+CREATE OR REPLACE FUNCTION write_to_file() RETURNS integer as '$libdir/gpextprotocol.so', 'demoprot_export' LANGUAGE C STABLE NO SQL;
+CREATE OR REPLACE FUNCTION read_from_file() RETURNS integer as '$libdir/gpextprotocol.so', 'demoprot_import' LANGUAGE C STABLE NO SQL;
+--start_ignore
+DROP PROTOCOL IF EXISTS demoprot;
+--end_ignore
+CREATE TRUSTED PROTOCOL demoprot (readfunc = 'read_from_file', writefunc = 'write_to_file'); -- should succeed
+
+CREATE WRITABLE EXTERNAL TABLE aqumv_ext_w(id int)
+    LOCATION('demoprot://aqumvtextfile.txt') 
+
+FORMAT 'text'
+DISTRIBUTED BY (id);
+
+INSERT INTO aqumv_ext_w SELECT * FROM generate_series(1, 10);
+
+CREATE READABLE EXTERNAL TABLE aqumv_ext_r(id int)
+    LOCATION('demoprot://aqumvtextfile.txt') 
+FORMAT 'text';
+
+create materialized view aqumv_ext_mv as
+  select * from aqumv_ext_r;
+analyze aqumv_ext_mv;
+
+explain (costs off, verbose)
+select * from aqumv_ext_r;
+select * from aqumv_ext_r;
+set local enable_answer_query_using_materialized_views = on;
+set local aqumv_allow_foreign_table = on;
+explain (costs off, verbose)
+select * from aqumv_ext_r;
+select * from aqumv_ext_r;
+
+create index on aqumv_ext_mv(id);
+set local enable_seqscan = off;
+explain (costs off, verbose)
+select * from aqumv_ext_r where id = 5;
+select * from aqumv_ext_r where id = 5;
+
+-- refresh matview has foreign tables should not go fast path. 
+select * from aqumv_ext_mv;
+INSERT INTO aqumv_ext_w SELECT * FROM generate_series(10, 15);
+set local gp_enable_refresh_fast_path = on;
+select datastatus from gp_matview_aux where mvoid = 'aqumv_ext_mv'::regclass::oid;
+refresh materialized view aqumv_ext_mv;
+select * from aqumv_ext_mv;
+abort;
+--
+-- End of test external table
+--
+-- Test view has aggs
+begin;
+create table t(c1 int, c2 int, c3 int, c4 int) distributed by (c1);
+insert into t select i, i+1, i+2, i+3 from generate_series(1, 100) i;
+insert into t select i, i+1, i+2, i+3 from generate_series(1, 100) i;
+analyze t;
+
+create materialized view mv as
+  select sum(c1) as mc1, count(c2) as mc2, avg(c3) as mc3, count(*) as mc4
+  from t where c1 > 90 order by 1, sum(c1 - 1) ASC;
+analyze mv;
+
+set local enable_answer_query_using_materialized_views = off;
+explain(verbose, costs off)
+select count(*), sum(c1), count(c2), avg(c3), abs(count(*) - 21) from t where c1 > 90;
+select count(*), sum(c1), count(c2), avg(c3), abs(count(*) - 21) from t where c1 > 90;
+set local enable_answer_query_using_materialized_views = on;
+explain(verbose, costs off)
+select count(*), sum(c1), count(c2), avg(c3), abs(count(*) - 21) from t where c1 > 90;
+select count(*), sum(c1), count(c2), avg(c3), abs(count(*) - 21) from t where c1 > 90;
+
+-- with HAVING quals
+set local enable_answer_query_using_materialized_views = off;
+explain(verbose, costs off)
+select count(*), sum(c1) from t where c1 > 90 having abs(count(*) - 21) > 0 and 2 > 1 and avg(c3) > 97;
+select count(*), sum(c1) from t where c1 > 90 having abs(count(*) - 21) > 0 and 2 > 1 and avg(c3) > 97;
+set local enable_answer_query_using_materialized_views = on;
+explain(verbose, costs off)
+select count(*), sum(c1) from t where c1 > 90 having abs(count(*) - 21) > 0 and 2 > 1 and avg(c3) > 97;
+select count(*), sum(c1) from t where c1 > 90 having abs(count(*) - 21) > 0 and 2 > 1 and avg(c3) > 97;
+
+-- Test Order By elimination.
+set local enable_answer_query_using_materialized_views = off;
+explain(verbose, costs off)
+select count(*), sum(c1) from t where c1 > 90 order by 1, sum(c1 - 1) ASC;
+select count(*), sum(c1) from t where c1 > 90 order by 1, sum(c1 - 1) ASC;
+set local enable_answer_query_using_materialized_views = on;
+explain(verbose, costs off)
+select count(*), sum(c1) from t where c1 > 90 order by 1, sum(c1 - 1) ASC;
+select count(*), sum(c1) from t where c1 > 90 order by 1, sum(c1 - 1) ASC;
+truncate t;
+set local enable_answer_query_using_materialized_views = off;
+select count(*), sum(c1) from t where c1 > 90 order by 1, sum(c1 - 1) ASC;
+set local enable_answer_query_using_materialized_views = on;
+select count(*), sum(c1) from t where c1 > 90 order by 1, sum(c1 - 1) ASC;
+
+abort;
+
+-- Test query has limit while view has aggs.
+begin;
+create table t(c1 int, c2 int, c3 int, c4 int) distributed by (c1);
+insert into t select i, i+1, i+2, i+3 from generate_series(1, 100) i;
+insert into t select i, i+1, i+2, i+3 from generate_series(1, 100) i;
+analyze t;
+
+create materialized view mv as
+  select sum(c1) as mc1, count(c2) as mc2, avg(c3) as mc3, count(*) as mc4
+  from t where c1 > 90;
+analyze mv;
+
+set local enable_answer_query_using_materialized_views = off;
+explain(verbose, costs off)
+select count(*), sum(c1) from t where c1 > 90 limit 2;
+select count(*), sum(c1) from t where c1 > 90 limit 2;
+set local enable_answer_query_using_materialized_views = on;
+explain(verbose, costs off)
+select count(*), sum(c1) from t where c1 > 90 limit 2;
+select count(*), sum(c1) from t where c1 > 90 limit 2;
+
+-- offset
+set local enable_answer_query_using_materialized_views = off;
+explain(verbose, costs off)
+select count(*), sum(c1) from t where c1 > 90 limit 1 offset 1 ;
+select count(*), sum(c1) from t where c1 > 90 limit 1 offset 1 ;
+set local enable_answer_query_using_materialized_views = on;
+explain(verbose, costs off)
+select count(*), sum(c1) from t where c1 > 90 limit 1 offset 1 ;
+select count(*), sum(c1) from t where c1 > 90 limit 1 offset 1 ;
+
+-- no real limit
+set local enable_answer_query_using_materialized_views = off;
+explain(verbose, costs off)
+select count(*), sum(c1) from t where c1 > 90 limit all;
+select count(*), sum(c1) from t where c1 > 90 limit all;
+set local enable_answer_query_using_materialized_views = on;
+explain(verbose, costs off)
+select count(*), sum(c1) from t where c1 > 90 limit all;
+select count(*), sum(c1) from t where c1 > 90 limit all;
+
+abort;
+
+--
+-- test partitioned tables
+--
+create table par(a int, b int, c int) partition by range(b)
+    subpartition by range(c) subpartition template (start (1) end (3) every (1))
+    (start(1) end(3) every(1));
+insert into par values(1, 1, 1), (1, 1, 2), (2, 2, 1), (2, 2, 2);
+insert into par values(1, 1, 1), (1, 1, 2), (2, 2, 1), (2, 2, 2);
+insert into par values(1, 1, 1), (1, 1, 2), (2, 2, 1), (2, 2, 2);
+create materialized view mv_par as select    count(*) from par;
+create materialized view mv_par1 as select   count(*) from par_1_prt_1;
+create materialized view mv_par1_1 as select count(*) from par_1_prt_1_2_prt_1;
+create materialized view mv_par1_2 as select count(*) from par_1_prt_1_2_prt_2;
+create materialized view mv_par2 as select   count(*) from par_1_prt_2;
+create materialized view mv_par2_1 as select count(*) from par_1_prt_2_2_prt_1;
+create materialized view mv_par_prune as select count(*) from par where b = 1;
+set enable_answer_query_using_materialized_views = on;
+
+explain(costs off, verbose)
+select count(*) from par;
+explain(costs off, verbose)
+select count(*) from par_1_prt_1;
+
+-- test partition_pruning
+set enable_partition_pruning = on;
+explain(costs off, verbose)
+select count(*) from par where b = 1;
+set enable_partition_pruning = off;
+explain(costs off, verbose)
+select count(*) from par where b = 1;
+reset enable_partition_pruning;
+--
+-- End of test partitioned tables
+--
+
+begin;
+insert into par values(1, 1, 1), (1, 1, 2);
+explain(costs off, verbose)
+select count(*) from par_1_prt_2;
+
+insert into par_1_prt_1_2_prt_1 values (1, 1, 1);
+explain(costs off, verbose)
+select count(*) from par_1_prt_2;
+
+delete from par_1_prt_1_2_prt_1;
+explain(costs off, verbose)
+select count(*) from par_1_prt_2;
+
+update par set c = 2 where b = 1 and c = 1;
+explain(costs off, verbose)
+select count(*) from par_1_prt_2;
+
+update par set c = 2, a = 2 where  b = 1 and c = 1;
+explain(costs off, verbose)
+select count(*) from par_1_prt_2;
+abort;
+
+-- Test INSERT SELECT
+begin; 
+create table t_insert(a int);
+create table t_select(a int);
+insert into t_select select i from generate_series(1, 1000) i;
+analyze t_insert;
+create materialized view mv_insert_select as
+select count(a) from t_select;
+analyze mv_insert_select;
+
+set local enable_answer_query_using_materialized_views = off;
+explain(costs off, verbose) insert into t_insert select count(a) from t_select;
+insert into t_insert select count(a) from t_select;
+select * from t_insert;
+truncate t_insert;
+
+set local enable_answer_query_using_materialized_views = on;
+explain(costs off, verbose) insert into t_insert select count(a) from t_select;
+insert into t_insert select count(a) from t_select;
+select * from t_insert;
+abort;
+
 reset optimizer;
 reset enable_answer_query_using_materialized_views;
-drop table aqumv_t1 cascade;
+-- start_ignore
+drop schema aqumv cascade;
+-- end_ignore
+reset search_path;

@@ -1,4 +1,5 @@
 set optimizer_print_missing_stats = off;
+set optimizer_trace_fallback = on;
 drop table if exists ctas_src;
 drop table if exists ctas_dst;
 
@@ -8,18 +9,26 @@ insert into ctas_src values(2, 1, 'A', 0);
 insert into ctas_src values(3, 0, 'B', 1);
 
 -- MPP-2859
+explain (costs off) create table ctas_dst as 
+SELECT attr, class, (select count(distinct class) from ctas_src) as dclass FROM ctas_src GROUP BY attr, class distributed by (attr);
 create table ctas_dst as 
 SELECT attr, class, (select count(distinct class) from ctas_src) as dclass FROM ctas_src GROUP BY attr, class distributed by (attr);
-
+select * from ctas_dst;
 drop table ctas_dst;
 
+explain (costs off) create table ctas_dst as 
+SELECT attr, class, (select max(class) from ctas_src) as maxclass FROM ctas_src GROUP BY attr, class distributed by (attr);
 create table ctas_dst as 
 SELECT attr, class, (select max(class) from ctas_src) as maxclass FROM ctas_src GROUP BY attr, class distributed by (attr);
+select * from ctas_dst;
 
 drop table ctas_dst;
 
+explain (costs off) create table ctas_dst as 
+SELECT attr, class, (select count(distinct class) from ctas_src) as dclass, (select max(class) from ctas_src) as maxclass, (select min(class) from ctas_src) as minclass FROM ctas_src GROUP BY attr, class distributed by (attr);
 create table ctas_dst as 
 SELECT attr, class, (select count(distinct class) from ctas_src) as dclass, (select max(class) from ctas_src) as maxclass, (select min(class) from ctas_src) as minclass FROM ctas_src GROUP BY attr, class distributed by (attr);
+select * from ctas_dst;
 
 -- MPP-4298: "unknown" datatypes.
 drop table if exists ctas_foo;
@@ -218,3 +227,4 @@ SELECT * FROM test_tmp2;
 DROP FUNCTION public.exception_func();
 DROP TABLE test_tmp1;
 DROP TABLE test_tmp2;
+reset optimizer_trace_fallback;

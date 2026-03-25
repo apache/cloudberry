@@ -42,6 +42,19 @@ LINE 1: SELECT '"\v"'::json;
                ^
 DETAIL:  Escape sequence "\v" is invalid.
 CONTEXT:  JSON data, line 1: "\v...
+-- Check fast path for longer strings (at least 16 bytes long)
+SELECT ('"'||repeat('.', 12)||'abc"')::json; -- OK
+       json        
+-------------------
+ "............abc"
+(1 row)
+
+SELECT ('"'||repeat('.', 12)||'abc\n"')::json; -- OK, legal escapes
+        json         
+---------------------
+ "............abc\n"
+(1 row)
+
 -- see json_encoding test for input with unicode escapes
 -- Numbers.
 SELECT '1'::json;				-- OK
@@ -307,6 +320,25 @@ LINE 1: SELECT '{
 DETAIL:  Expected JSON value, but found "}".
 CONTEXT:  JSON data, line 4: ...yveryveryveryveryveryveryveryverylongfieldname":}
 -- ERROR missing value for last field
+-- test non-error-throwing input
+select pg_input_is_valid('{"a":true}', 'json');
+ pg_input_is_valid 
+-------------------
+ t
+(1 row)
+
+select pg_input_is_valid('{"a":true', 'json');
+ pg_input_is_valid 
+-------------------
+ f
+(1 row)
+
+select * from pg_input_error_info('{"a":true', 'json');
+              message               |                detail                | hint | sql_error_code 
+------------------------------------+--------------------------------------+------+----------------
+ invalid input syntax for type json | The input string ended unexpectedly. |      | 22P02
+(1 row)
+
 --constructors
 -- array_to_json
 SELECT array_to_json(array(select 1 as a));
@@ -2250,6 +2282,9 @@ select json_object('{a,b,"","d e f"}','{1,2,3,"a b c"}');
  {"a" : "1", "b" : "2", "" : "3", "d e f" : "a b c"}
 (1 row)
 
+-- json_object_agg_unique requires unique keys
+select json_object_agg_unique(mod(i,100), i) from generate_series(0, 199) i;
+ERROR:  duplicate JSON object key value: "0"
 -- json_to_record and json_to_recordset
 select * from json_to_record('{"a":1,"b":"foo","c":"bar"}')
     as x(a int, b text, d text);

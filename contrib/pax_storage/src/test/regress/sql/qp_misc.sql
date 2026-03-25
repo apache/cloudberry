@@ -1,6 +1,6 @@
 -- start_ignore
 --
--- Cloudberry Database database dump
+-- Apache Cloudberry database dump
 --
 
 SET client_encoding = 'UTF8';
@@ -8,6 +8,7 @@ SET standard_conforming_strings = off;
 SET check_function_bodies = false;
 SET client_min_messages = warning;
 SET escape_string_warning = off;
+SET optimizer_trace_fallback = on;
 
 SET default_with_oids = false;
 
@@ -1153,7 +1154,7 @@ ALTER TABLE ONLY tclob
     ADD CONSTRAINT clobpk PRIMARY KEY (rnum);
 
 --
--- Cloudberry Database database dump complete
+-- Apache Cloudberry database dump complete
 --
 
 -- end_ignore
@@ -1379,7 +1380,7 @@ f1,f2,f3
 ) Q ) P;
 -- SubqueryInCase_p1
 -- test expected to fail until function supported in GPDB
--- GPDB Limitation ERROR:  Cloudberry Database does not yet support that query.  DETAIL:  The query contains a multi-row subquery.
+-- GPDB Limitation ERROR:  Apache Cloudberry does not yet support that query.  DETAIL:  The query contains a multi-row subquery.
 select 'SubqueryInCase_p1' test_name_part, case when c = 1 then 1 else 0 end pass_ind from (
 select count(distinct c) c from (
 select f1,f2,f3, count(*) c  from (
@@ -1452,7 +1453,7 @@ f1,f2,f3
 ) Q ) P;
 -- SubqueryPredicateNotIn_p1
 -- test expected to fail until function supported in GPDB
--- GPDB Limitation ERROR:  Cloudberry Database does not yet support that query.  DETAIL:  The query contains a multi-row subquery.
+-- GPDB Limitation ERROR:  Apache Cloudberry does not yet support that query.  DETAIL:  The query contains a multi-row subquery.
 select 'SubqueryPredicateNotIn_p1' test_name_part, case when c = 1 then 1 else 0 end pass_ind from (
 select count(distinct c) c from (
 select f1,f2,f3, count(*) c  from (
@@ -1507,7 +1508,7 @@ f1,f2,f3
 ) Q ) P;
 -- SubqueryQuantifiedPredicateEmpty_p1
 -- test expected to fail until GPDB support this function
--- GPDB Limitation ERROR:  Cloudberry Database does not yet support this query.  DETAIL:  The query contains a multi-row subquery.
+-- GPDB Limitation ERROR:  Apache Cloudberry does not yet support this query.  DETAIL:  The query contains a multi-row subquery.
 select 'SubqueryQuantifiedPredicateEmpty_p1' test_name_part, case when c = 1 then 1 else 0 end pass_ind from (
 select count(distinct c) c from (
 select f1,f2,f3, count(*) c  from (
@@ -1522,7 +1523,7 @@ f1,f2,f3
 ) Q ) P;
 -- SubqueryQuantifiedPredicateLarge_p1
 -- test expected to fail until GPDB supports this function
--- GPDB Limitation ERROR:  Cloudberry Database does not yet support that query.  DETAIL:  The query contains a multi-row subquery.
+-- GPDB Limitation ERROR:  Apache Cloudberry does not yet support that query.  DETAIL:  The query contains a multi-row subquery.
 select 'SubqueryQuantifiedPredicateLarge_p1' test_name_part, case when c = 1 then 1 else 0 end pass_ind from (
 select count(distinct c) c from (
 select f1,f2,f3, count(*) c  from (
@@ -2801,7 +2802,7 @@ f1
 ) Q ) P;
 -- SubqueryQuantifiedPredicateNull_gp_p1
 -- test expected to fail until GPDB support function
--- GPDB Limitation ERROR:  Cloudberry Database does not yet support this query.  DETAIL:  The query contains a multi-row subquery.
+-- GPDB Limitation ERROR:  Apache Cloudberry does not yet support this query.  DETAIL:  The query contains a multi-row subquery.
 select 'SubqueryQuantifiedPredicateNull_gp_p1' test_name_part, case when c = 1 then 1 else 0 end pass_ind from (
 select count(distinct c) c from (
 select f1, count(*) c  from (
@@ -2813,7 +2814,7 @@ f1
 ) Q ) P;
 -- SubqueryQuantifiedPredicateSmall_gp_p1
 -- test expected to fail until GPDB supports function
--- GPDB Limitation ERROR:  Cloudberry Database does not yet support this query.  DETAIL:  The query contains a multi-row subquery.
+-- GPDB Limitation ERROR:  Apache Cloudberry does not yet support this query.  DETAIL:  The query contains a multi-row subquery.
 select 'SubqueryQuantifiedPredicateSmall_gp_p1' test_name_part, case when c = 1 then 1 else 0 end pass_ind from (
 select count(distinct c) c from (
 select f1, count(*) c  from (
@@ -9364,6 +9365,8 @@ group by
 f1,f2,f3
 ) Q ) P;
 -- JoinCoreNonJoinNonEquiJoin_p1
+-- FIXME: ORCA CXformUtils.cpp:163: Failed assertion: !FJoinPredOnSingleChild(amp.Pmp(), exprhdl) && "join predicates are not pushed down"
+SET optimizer_trace_fallback = off;
 select 'JoinCoreNonJoinNonEquiJoin_p1' test_name_part, case when c = 1 then 1 else 0 end pass_ind from (
 select count(distinct c) c from (
 select f1,f2,f3, count(*) c  from (
@@ -9378,6 +9381,7 @@ select tjoin1.rnum, tjoin1.c1,tjoin2.c2 from tjoin1 left outer join tjoin2 on tj
 group by
 f1,f2,f3
 ) Q ) P;
+SET optimizer_trace_fallback = on;
 -- JoinCoreNotPredicate_p1
 select 'JoinCoreNotPredicate_p1' test_name_part, case when c = 1 then 1 else 0 end pass_ind from (
 select count(distinct c) c from (
@@ -15605,3 +15609,10 @@ WITH cte_coll AS
 SELECT *
 FROM   cte_coll
 WHERE  tkn_arr <> '{nullout}' ;
+-- Test paramcollid is correctly set
+SET optimizer_enable_hashjoin=false;
+CREATE TABLE tparam (a varchar(100) PRIMARY KEY);
+INSERT INTO tparam VALUES ('a_value');
+
+SELECT * FROM tparam t1 JOIN tparam t2 ON UPPER(t1.a) = t2.a;
+RESET optimizer_enable_hashjoin;

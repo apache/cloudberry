@@ -2,255 +2,13 @@
 -- CREATE_TABLE
 --
 
---
--- CLASS DEFINITIONS
---
-CREATE TABLE hobbies_r (
-	name		text,
-	person 		text
-);
-
-CREATE TABLE equipment_r (
-	name 		text,
-	hobby		text
-);
-
-CREATE TABLE onek (
-	unique1		int4,
-	unique2		int4,
-	two			int4,
-	four		int4,
-	ten			int4,
-	twenty		int4,
-	hundred		int4,
-	thousand	int4,
-	twothousand	int4,
-	fivethous	int4,
-	tenthous	int4,
-	odd			int4,
-	even		int4,
-	stringu1	name,
-	stringu2	name,
-	string4		name
-);
-
-CREATE TABLE tenk1 (
-	unique1		int4,
-	unique2		int4,
-	two			int4,
-	four		int4,
-	ten			int4,
-	twenty		int4,
-	hundred		int4,
-	thousand	int4,
-	twothousand	int4,
-	fivethous	int4,
-	tenthous	int4,
-	odd			int4,
-	even		int4,
-	stringu1	name,
-	stringu2	name,
-	string4		name
-);
-
-CREATE TABLE tenk2 (
-	unique1 	int4,
-	unique2 	int4,
-	two 	 	int4,
-	four 		int4,
-	ten			int4,
-	twenty 		int4,
-	hundred 	int4,
-	thousand 	int4,
-	twothousand int4,
-	fivethous 	int4,
-	tenthous	int4,
-	odd			int4,
-	even		int4,
-	stringu1	name,
-	stringu2	name,
-	string4		name
-);
-
-
-CREATE TABLE person (
-	name 		text,
-	age			int4,
-	location 	point
-);
-
-
-CREATE TABLE emp (
-	salary 		int4,
-	manager 	name
-) INHERITS (person);
-
-
-CREATE TABLE student (
-	gpa 		float8
-) INHERITS (person);
-
-
-CREATE TABLE stud_emp (
-	percent 	int4
-) INHERITS (emp, student);
-
-
-CREATE TABLE city (
-	name		name,
-	location 	box,
-	budget 		city_budget
-);
-
-CREATE TABLE dept (
-	dname		name,
-	mgrname 	text
-);
-
-CREATE TABLE slow_emp4000 (
-	home_base	 box
-);
-
-CREATE TABLE fast_emp4000 (
-	home_base	 box
-);
-
-CREATE TABLE road (
-	name		text,
-	thepath 	path
-);
-
-CREATE TABLE ihighway () INHERITS (road);
-
-CREATE TABLE shighway (
-	surface		text
-) INHERITS (road);
-
-CREATE TABLE real_city (
-	pop			int4,
-	cname		text,
-	outline 	path
-);
-
---
--- test the "star" operators a bit more thoroughly -- this time,
--- throw in lots of NULL fields...
---
--- a is the type root
--- b and c inherit from a (one-level single inheritance)
--- d inherits from b and c (two-level multiple inheritance)
--- e inherits from c (two-level single inheritance)
--- f inherits from e (three-level single inheritance)
---
-CREATE TABLE a_star (
-	class		char,
-	a 			int4
-);
-
-CREATE TABLE b_star (
-	b 			text
-) INHERITS (a_star);
-
-CREATE TABLE c_star (
-	c 			name
-) INHERITS (a_star);
-
-CREATE TABLE d_star (
-	d 			float8
-) INHERITS (b_star, c_star);
-
-CREATE TABLE e_star (
-	e 			int2
-) INHERITS (c_star);
-
-CREATE TABLE f_star (
-	f 			polygon
-) INHERITS (e_star);
-
-CREATE TABLE aggtest (
-	a 			int2,
-	b			float4
-);
-
-CREATE TABLE hash_i4_heap (
-	seqno 		int4,
-	random 		int4
-) distributed by (seqno);
-
-CREATE TABLE hash_name_heap (
-	seqno 		int4,
-	random 		name
-) distributed by (seqno);
-
-CREATE TABLE hash_txt_heap (
-	seqno 		int4,
-	random 		text
-) distributed by (seqno);
-
-CREATE TABLE hash_f8_heap (
-	seqno		int4,
-	random 		float8
-) distributed by (seqno);
-
--- don't include the hash_ovfl_heap stuff in the distribution
--- the data set is too large for what it's worth
---
--- CREATE TABLE hash_ovfl_heap (
---	x			int4,
---	y			int4
--- );
-
-CREATE TABLE bt_i4_heap (
-	seqno 		int4,
-	random 		int4
-);
-
-CREATE TABLE bt_name_heap (
-	seqno 		name,
-	random 		int4
-);
-
-CREATE TABLE bt_txt_heap (
-	seqno 		text,
-	random 		int4
-);
-
-CREATE TABLE bt_f8_heap (
-	seqno 		float8,
-	random 		int4
-);
-
-CREATE TABLE array_op_test (
-	seqno		int4,
-	i			int4[],
-	t			text[]
-);
-
-CREATE TABLE array_index_op_test (
-	seqno		int4,
-	i			int4[],
-	t			text[]
-);
-
-CREATE TABLE testjsonb (
-       j jsonb
-);
-
+-- Error cases
 CREATE TABLE unknowntab (
 	u unknown    -- fail
 );
 
 CREATE TYPE unknown_comptype AS (
 	u unknown    -- fail
-);
-
-CREATE TABLE IF NOT EXISTS test_tsvector(
-	t text,
-	a tsvector
-);
-
-CREATE TABLE IF NOT EXISTS test_tsvector(
-	t text
 );
 
 -- invalid: non-lowercase quoted reloptions identifiers
@@ -801,7 +559,7 @@ CREATE TABLE part_c_1_10 PARTITION OF part_c FOR VALUES FROM (1) TO (10);
 create table parted_notnull_inh_test (a int default 1, b int not null default 0) partition by list (a);
 create table parted_notnull_inh_test1 partition of parted_notnull_inh_test (a not null, b default 1) for values in (1);
 insert into parted_notnull_inh_test (b) values (null);
--- note that while b's default is overriden, a's default is preserved
+-- note that while b's default is overridden, a's default is preserved
 \d parted_notnull_inh_test1
 drop table parted_notnull_inh_test;
 
@@ -894,6 +652,9 @@ SELECT obj_description('parted_col_comment'::regclass);
 \d+ parted_col_comment
 DROP TABLE parted_col_comment;
 
+-- specifying storage parameters for partitioned tables is not supported
+CREATE TABLE parted_col_comment (a int, b text) PARTITION BY LIST (a) WITH (fillfactor=100);
+
 -- list partitioning on array type column
 CREATE TABLE arrlp (a int[]) PARTITION BY LIST (a);
 CREATE TABLE arrlp12 PARTITION OF arrlp FOR VALUES IN ('{1}', '{2}');
@@ -961,6 +722,11 @@ drop table defcheck;
 -- Leave the table on purpose for pg_dump and gp_replica_check tests.
 CREATE UNLOGGED TABLE unlogged_toast (a text);
 TRUNCATE unlogged_toast;
+
+-- test https://github.com/apache/cloudberry/issues/595
+CREATE TABLE t_issue_595(c0 DECIMAL UNIQUE DEFAULT (0.059636344153715326) PRIMARY KEY,
+	c1 money CHECK (((t_issue_595.c1)IS NOT DISTINCT FROM(CAST(0.6099821 AS MONEY)))) NULL, c2 TEXT );
+DROP TABLE t_issue_595;
 
 -- tests of column drop with partition tables and indexes using
 -- predicates and expressions.

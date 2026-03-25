@@ -236,3 +236,64 @@ explain (slicetable, costs off) SELECT * FROM explaintest;
 
 -- same in JSON format
 explain (slicetable, costs off, format json) SELECT * FROM explaintest;
+
+--
+-- The same slice may have different number of plan nodes on every qExec.
+-- Check if explain analyze can work in that case
+--
+create schema explain_subplan;
+set search_path = explain_subplan;
+CREATE TABLE mintab(c1 int);
+INSERT into mintab VALUES (120);
+
+CREATE TABLE range_parted (
+	a text,
+	b bigint,
+	c numeric
+) PARTITION BY RANGE (a, b);
+
+CREATE TABLE part_a_1_a_10 PARTITION OF range_parted FOR VALUES FROM ('a', 1) TO ('a', 10);
+CREATE TABLE part_a_10_a_20 PARTITION OF range_parted FOR VALUES FROM ('a', 10) TO ('a', 20);
+CREATE TABLE part_b_1_b_10 PARTITION OF range_parted FOR VALUES FROM ('b', 1) TO ('b', 10);
+CREATE TABLE part_b_10_b_20 PARTITION OF range_parted FOR VALUES FROM ('b', 10) TO ('b', 20);
+ALTER TABLE range_parted ENABLE ROW LEVEL SECURITY;
+INSERT INTO range_parted VALUES ('a', 1, 1), ('a', 12, 200);
+
+CREATE USER regress_range_parted_user;
+GRANT ALL ON SCHEMA explain_subplan TO regress_range_parted_user;
+GRANT ALL ON range_parted, mintab TO regress_range_parted_user;
+
+CREATE POLICY seeall ON range_parted AS PERMISSIVE FOR SELECT USING (true);
+CREATE POLICY policy_range_parted ON range_parted for UPDATE USING (true) WITH CHECK (c % 2 = 0);
+
+CREATE POLICY policy_range_parted_subplan on range_parted
+AS RESTRICTIVE for UPDATE USING (true)
+WITH CHECK ((SELECT range_parted.c <= c1 FROM mintab));
+
+SET SESSION AUTHORIZATION regress_range_parted_user;
+EXPLAIN (analyze,  costs off, timing off, summary off) UPDATE explain_subplan.range_parted set a = 'b', c = 120 WHERE a = 'a' AND c = '200';
+RESET SESSION AUTHORIZATION;
+
+DROP POLICY seeall ON range_parted;
+DROP POLICY policy_range_parted ON range_parted;
+DROP POLICY policy_range_parted_subplan ON range_parted;
+DROP TABLE mintab;
+DROP TABLE range_parted;
+RESET search_path;
+DROP SCHEMA explain_subplan;
+DROP USER regress_range_parted_user;
+-- Test if explain analyze will hang with materialize node
+CREATE TABLE recursive_table_ic (a INT) DISTRIBUTED BY (a);
+INSERT INTO recursive_table_ic SELECT * FROM generate_series(20, 30000);
+
+explain (analyze, costs off, timing off, summary off) WITH RECURSIVE
+r(i) AS (
+	SELECT 1
+),
+y(i) AS (
+	SELECT 1
+	UNION ALL
+	SELECT i + 1 FROM y, recursive_table_ic WHERE NOT EXISTS (SELECT * FROM r LIMIT 10)
+)
+SELECT * FROM y LIMIT 10;
+DROP TABLE recursive_table_ic;

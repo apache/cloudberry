@@ -194,7 +194,7 @@ SELECT c, sum(a) FROM pagg_tab WHERE c = 'x' GROUP BY c;
  GroupAggregate
    ->  Result
          One-Time Filter: false
-(4 rows)
+(3 rows)
 
 SELECT c, sum(a) FROM pagg_tab WHERE c = 'x' GROUP BY c;
  c | sum 
@@ -425,8 +425,8 @@ SELECT c, sum(a) FROM pagg_tab GROUP BY rollup(c) ORDER BY 1, 2;
 -- make any difference.
 EXPLAIN (COSTS OFF)
 SELECT c, sum(b order by a) FROM pagg_tab GROUP BY c ORDER BY 1, 2;
-                                  QUERY PLAN                                  
-------------------------------------------------------------------------------
+                             QUERY PLAN                              
+---------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    Merge Key: pagg_tab.c, (sum(pagg_tab.b ORDER BY pagg_tab.a))
    ->  Sort
@@ -1109,6 +1109,7 @@ INSERT INTO pagg_tab_ml SELECT i % 30, i % 10, to_char(i % 4, 'FM0000') FROM gen
 ANALYZE pagg_tab_ml;
 -- For Parallel Append
 SET max_parallel_workers_per_gather TO 2;
+SET parallel_setup_cost = 0;
 -- Full aggregation at level 1 as GROUP BY clause matches with PARTITION KEY
 -- for level 1 only. For subpartitions, GROUP BY clause does not match with
 -- PARTITION KEY, but still we do not see a partial aggregation as array_agg()
@@ -1193,6 +1194,7 @@ SELECT a, sum(b), array_agg(distinct c), count(*) FROM pagg_tab_ml GROUP BY a HA
  Optimizer: Postgres query optimizer
 (25 rows)
 
+RESET parallel_setup_cost;
 -- Full aggregation at level 1 as GROUP BY clause matches with PARTITION KEY
 -- for level 1 only. For subpartitions, GROUP BY clause does not match with
 -- PARTITION KEY, thus we will have a partial aggregation for them.
@@ -1591,8 +1593,8 @@ SELECT y, sum(x), avg(x), count(*) FROM pagg_tab_para GROUP BY y HAVING avg(x) <
 
 -- Test when parent can produce parallel paths but not any (or some) of its children
 -- (Use one more aggregate to tilt the cost estimates for the plan we want)
--- ALTER TABLE pagg_tab_para_p1 SET (parallel_workers = 0);
--- ALTER TABLE pagg_tab_para_p3 SET (parallel_workers = 0);
+ALTER TABLE pagg_tab_para_p1 SET (parallel_workers = 0);
+ALTER TABLE pagg_tab_para_p3 SET (parallel_workers = 0);
 ANALYZE pagg_tab_para;
 EXPLAIN (COSTS OFF)
 SELECT x, sum(y), avg(y), sum(x+y), count(*) FROM pagg_tab_para GROUP BY x HAVING avg(y) < 7 ORDER BY 1, 2, 3;
@@ -1629,7 +1631,7 @@ SELECT x, sum(y), avg(y), sum(x+y), count(*) FROM pagg_tab_para GROUP BY x HAVIN
  21 | 6000 | 6.0000000000000000 | 27000 |  1000
 (6 rows)
 
--- ALTER TABLE pagg_tab_para_p2 SET (parallel_workers = 0);
+ALTER TABLE pagg_tab_para_p2 SET (parallel_workers = 0);
 ANALYZE pagg_tab_para;
 EXPLAIN (COSTS OFF)
 SELECT x, sum(y), avg(y), sum(x+y), count(*) FROM pagg_tab_para GROUP BY x HAVING avg(y) < 7 ORDER BY 1, 2, 3;

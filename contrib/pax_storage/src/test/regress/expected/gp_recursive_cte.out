@@ -594,8 +594,8 @@ with recursive the_cte_here(n) as (
 select * from the_cte_here;
                                           QUERY PLAN                                          
 ----------------------------------------------------------------------------------------------
- Recursive Union  (cost=1.02..15.27 rows=34 width=4)
-   ->  Gather Motion 1:1  (slice1; segments: 1)  (cost=1.02..1.02 rows=1 width=4)
+ Recursive Union  (cost=1.01..14.93 rows=34 width=4)
+   ->  Gather Motion 1:1  (slice1; segments: 1)  (cost=1.01..1.01 rows=1 width=4)
          ->  Seq Scan on t_rep_test_rcte  (cost=0.00..1.01 rows=1 width=4)
    ->  Hash Join  (cost=1.09..1.36 rows=3 width=4)
          Hash Cond: (the_cte_here.n = t_rand_test_rcte.c)
@@ -770,4 +770,160 @@ select id,name from cte;
   4 | AAA>B1>C1_2
   5 | AAA>B1>C1_3
 (9 rows)
+
+-- WTIH RECURSIVE and subquery
+with recursive cte (n) as
+(
+  select 1
+  union all
+  select * from
+  (
+    with x(n) as (select n from cte)
+    select n + 1 from x where n < 10
+  ) q
+)
+select * from cte;
+ n  
+----
+  1
+  2
+  3
+  4
+  5
+  6
+  7
+  8
+  9
+ 10
+(10 rows)
+
+-- Test recursive CTE when the non-recursive term is a table scan with a
+-- predicate on the distribution key, and the recursive term joins the CTE with
+-- the same table on its non-distribution key
+create table recursive_table_6(a numeric(4), b int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+insert into recursive_table_6 values (0::numeric, 3);
+insert into recursive_table_6 values (2::numeric, 0);
+insert into recursive_table_6 values (5::numeric, 0);
+analyze recursive_table_6;
+SELECT $query$
+WITH RECURSIVE cte (i, j) AS (
+    SELECT a, b FROM recursive_table_6 WHERE a = 0::numeric::numeric
+    UNION ALL
+    SELECT a, b FROM recursive_table_6, cte WHERE cte.i = recursive_table_6.b
+)
+SELECT i, j FROM cte;
+$query$ AS qry \gset
+EXPLAIN (COSTS OFF)
+    :qry ;
+                                   QUERY PLAN                                    
+---------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Recursive Union
+         ->  Seq Scan on recursive_table_6
+               Filter: (a = '0'::numeric)
+         ->  Hash Join
+               Hash Cond: (cte.i = (recursive_table_6_1.b)::numeric)
+               ->  WorkTable Scan on cte
+               ->  Hash
+                     ->  Broadcast Motion 3:3  (slice2; segments: 3)
+                           ->  Seq Scan on recursive_table_6 recursive_table_6_1
+ Optimizer: Postgres query optimizer
+(11 rows)
+
+:qry ;
+ i | j 
+---+---
+ 0 | 3
+ 2 | 0
+ 5 | 0
+(3 rows)
+
+-- Test recursive CTE doesnt create a plan with motion on top of worktablescan
+CREATE TABLE t1 (a int, b int) DISTRIBUTED BY (a);
+SET enable_nestloop = off;
+SET enable_hashjoin = off;
+SET enable_mergejoin = on;
+explain (costs off) with recursive rcte as
+   (
+      ( select a, b, 1::integer recursion_level from t1 order by 1 )
+      union all
+      select parent_table.a, parent_table.b, rcte.recursion_level + 1
+      from
+      ( select a, b from t1 order by 1 ) parent_table
+      join rcte on rcte.b = parent_table.a
+   )
+select count(*) from rcte;
+                                   QUERY PLAN                                    
+---------------------------------------------------------------------------------
+ Finalize Aggregate
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         ->  Partial Aggregate
+               ->  Recursive Union
+                     ->  Sort
+                           Sort Key: t1.a
+                           ->  Seq Scan on t1
+                     ->  Nested Loop
+                           Join Filter: (t1_1.a = rcte.b)
+                           ->  WorkTable Scan on rcte
+                           ->  Materialize
+                                 ->  Broadcast Motion 3:3  (slice2; segments: 3)
+                                       ->  Sort
+                                             Sort Key: t1_1.a
+                                             ->  Seq Scan on t1 t1_1
+ Optimizer: Postgres query optimizer
+(16 rows)
+
+RESET enable_nestloop;
+RESET enable_hashjoin;
+RESET enable_mergejoin;
+-- using union rather than union all for recursive union
+CREATE TABLE tmp(a int, b int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+INSERT INTO tmp SELECT generate_series(1,5);
+INSERT INTO tmp SELECT * FROM tmp;
+EXPLAIN (costs off)
+WITH RECURSIVE x(a) as
+(
+    select a from tmp
+    union
+    select a+1 from x where a<10
+)
+select * from x ;
+                         QUERY PLAN                         
+------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  HashAggregate
+         Group Key: tmp.a
+         ->  Redistribute Motion 3:3  (slice2; segments: 3)
+               Hash Key: tmp.a
+               ->  Recursive Union
+                     ->  Seq Scan on tmp
+                     ->  WorkTable Scan on x
+                           Filter: (a < 10)
+ Optimizer: Postgres query optimizer
+(10 rows)
+
+WITH RECURSIVE x(a) as
+(
+    select a from tmp
+    union
+    select a+1 from x where a<10
+)
+select * from x ;
+ a  
+----
+  8
+  2
+  4
+  3
+  7
+  1
+  6
+  5
+  9
+ 10
+(10 rows)
 

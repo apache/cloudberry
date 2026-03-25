@@ -210,11 +210,10 @@ DROP TRIGGER IF EXISTS test_trigger_exists ON no_such_table;
 DROP TRIGGER test_trigger_exists ON no_such_schema.no_such_table;
 DROP TRIGGER IF EXISTS test_trigger_exists ON no_such_schema.no_such_table;
 
--- pax not support this trigger.
--- CREATE TRIGGER test_trigger_exists
---     BEFORE UPDATE ON test_exists
---     FOR EACH ROW EXECUTE PROCEDURE suppress_redundant_updates_trigger();
--- DROP TRIGGER test_trigger_exists ON test_exists;
+CREATE TRIGGER test_trigger_exists
+    BEFORE UPDATE ON test_exists
+    FOR EACH ROW EXECUTE PROCEDURE suppress_redundant_updates_trigger();
+DROP TRIGGER test_trigger_exists ON test_exists;
 
 -- rule
 DROP RULE test_rule_exists ON test_exists;

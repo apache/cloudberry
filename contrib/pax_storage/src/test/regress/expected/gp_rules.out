@@ -8,7 +8,8 @@ NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE rule "_RETURN" as on select to table_to_view_test1
         do instead select * from table_to_view_test2;
-ERROR:  cannot convert non-heap table "table_to_view_test1" to a view
+ERROR:  relation "table_to_view_test1" cannot have ON SELECT rules
+DETAIL:  This operation is not supported for tables.
 -- relkind has been changed to 'v'
 SELECT relkind FROM pg_class
     WHERE oid = 'table_to_view_test1'::regclass;
@@ -25,9 +26,7 @@ SELECT 1 FROM gp_distribution_policy
         1
 (1 row)
 
-DROP VIEW table_to_view_test1;
-ERROR:  "table_to_view_test1" is not a view
-HINT:  Use DROP TABLE to remove a table.
+DROP TABLE table_to_view_test1;
 DROP TABLE table_to_view_test2;
 -- Same for an Append-Only table. It is currently not supported.
 CREATE table aotable_to_view_test1 (a int) with (appendonly=true);
@@ -38,6 +37,7 @@ NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE rule "_RETURN" as on select to aotable_to_view_test1
         do instead select * from aotable_to_view_test2;
-ERROR:  cannot convert non-heap table "aotable_to_view_test1" to a view
+ERROR:  relation "aotable_to_view_test1" cannot have ON SELECT rules
+DETAIL:  This operation is not supported for tables.
 drop table aotable_to_view_test1;
 drop table aotable_to_view_test2;

@@ -1,3 +1,9 @@
+-- start_matchsubs
+-- m/Executing SQL: select pg_catalog.gp_acquire_sample_rows\(\d+, \d+, \'t\'\);/
+-- s/Executing SQL: select pg_catalog.gp_acquire_sample_rows\(\d+, \d+, \'t\'\);/Executing SQL: select pg_catalog.gp_acquire_sample_rows\(XXX, XXX, \'t\'\)/;
+-- m/Executing SQL: select pg_catalog.gp_acquire_sample_rows\(\d+, \d+, \'f\'\);/
+-- s/Executing SQL: select pg_catalog.gp_acquire_sample_rows\(\d+, \d+, \'f\'\);/Executing SQL: select pg_catalog.gp_acquire_sample_rows\(XXX, XXX, \'f\'\)/;
+-- end_matchsubs
 DROP DATABASE IF EXISTS testanalyze;
 CREATE DATABASE testanalyze;
 \c testanalyze
@@ -836,7 +842,7 @@ ANALYZE foo_stats;
 SELECT schemaname, tablename, attname, null_frac, avg_width, n_distinct, most_common_vals, most_common_freqs, histogram_bounds FROM pg_stats WHERE tablename='foo_stats' ORDER BY attname;
  schemaname | tablename | attname | null_frac | avg_width | n_distinct |  most_common_vals   | most_common_freqs | histogram_bounds 
 ------------+-----------+---------+-----------+-----------+------------+---------------------+-------------------+------------------
- public     | foo_stats | a       |         0 |    100004 |          0 |                     |                   | 
+ public     | foo_stats | a       |         0 |      1156 |          0 |                     |                   | 
  public     | foo_stats | b       |         0 |         7 |       -0.5 | {"\\x626262626232"} | {1}               | 
  public     | foo_stats | c       |         0 |         6 |       -0.5 | {cccc2}             | {1}               | 
  public     | foo_stats | d       |         0 |         4 |       -0.5 | {3}                 | {1}               | 
@@ -856,7 +862,7 @@ analyze twoseg_table;
 select relname, reltuples, relpages from pg_class where relname ='twoseg_table' order by relname;
    relname    | reltuples | relpages 
 --------------+-----------+----------
- twoseg_table |        50 |        1
+ twoseg_table |        50 |        2
 (1 row)
 
 select attname, null_frac, avg_width, n_distinct, most_common_vals, most_common_freqs, histogram_bounds FROM pg_stats WHERE tablename='twoseg_table' ORDER BY attname;
@@ -976,13 +982,13 @@ SELECT relpages, reltuples FROM pg_class WHERE relname = 'ana_parent';
 SELECT relpages, reltuples FROM pg_class WHERE relname = 'ana_c1';
  relpages | reltuples 
 ----------+-----------
-        1 |        10
+        3 |        10
 (1 row)
 
 SELECT relpages, reltuples FROM pg_class WHERE relname = 'ana_c2';
  relpages | reltuples 
 ----------+-----------
-        1 |        11
+        3 |        11
 (1 row)
 
 -- Check pg_stats entries
@@ -1230,3 +1236,84 @@ create table analyze_replicated(tc1 int,tc2 int) distributed replicated;
 insert into analyze_replicated select i, i from generate_series(1,1000) i;
 analyze analyze_replicated;
 drop table analyze_replicated;
+-- Issue 14644 keep catalog inconsistency of relhassubclass after analyze
+CREATE TYPE test_type_14644 AS (a int, b text);
+CREATE TABLE test_tb_14644 OF test_type_14644;
+CREATE TABLE test_tb_14644_subclass () INHERITS (test_tb_14644);
+DROP TABLE test_tb_14644_subclass;
+select relhassubclass from pg_class where relname = 'test_tb_14644';
+ relhassubclass 
+----------------
+ t
+(1 row)
+
+select relhassubclass from gp_dist_random('pg_class') where relname = 'test_tb_14644';
+ relhassubclass 
+----------------
+ t
+ t
+ t
+(3 rows)
+
+ANALYZE;
+select relhassubclass from pg_class where relname = 'test_tb_14644';
+ relhassubclass 
+----------------
+ f
+(1 row)
+
+select relhassubclass from gp_dist_random('pg_class') where relname = 'test_tb_14644';
+ relhassubclass 
+----------------
+ f
+ f
+ f
+(3 rows)
+
+--
+-- Analyzing a leaf partition should not sample midlevel partition unless
+-- optimizer_analyze_midlevel_partition is set to On.
+--
+create table multipart(a int)  partition by range(a);
+create table part2(a int) partition by range(a);
+create table part3(a int) partition by range(a);
+create table p1(a int);
+create table p2(a int);
+create table p3(a int);
+create table p4(a int);
+alter table multipart attach partition part2 for values from (0) to (10);
+alter table multipart attach partition part3 for values from (10) to (20);
+alter table part2 attach partition p1 for values from (0) to (5);
+alter table part2 attach partition p2 for values from (5) to (10);
+alter table part3 attach partition p3 for values from (10) to (15);
+alter table part3 attach partition p4 for values from (15) to (20);
+insert into multipart select i%20 from generate_series(1,20)i;
+set optimizer_analyze_root_partition=on;
+set optimizer_analyze_midlevel_partition=off;
+analyze verbose p1;
+INFO:  analyzing "public.p1"
+INFO:  skipping analyze of "public.p1" inheritance tree --- this inheritance tree contains no child tables
+INFO:  Executing SQL: select pg_catalog.gp_acquire_sample_rows(56435, 10000, 'f');
+analyze verbose p2;
+INFO:  analyzing "public.p2"
+INFO:  skipping analyze of "public.p2" inheritance tree --- this inheritance tree contains no child tables
+INFO:  Executing SQL: select pg_catalog.gp_acquire_sample_rows(56438, 10000, 'f');
+select * from pg_stats where tablename like 'part2';
+ schemaname | tablename | attname | inherited | null_frac | avg_width | n_distinct | most_common_vals | most_common_freqs | histogram_bounds | correlation | most_common_elems | most_common_elem_freqs | elem_count_histogram 
+------------+-----------+---------+-----------+-----------+-----------+------------+------------------+-------------------+------------------+-------------+-------------------+------------------------+----------------------
+(0 rows)
+
+set optimizer_analyze_midlevel_partition=on;
+analyze verbose p2;
+INFO:  analyzing "public.p2"
+INFO:  skipping analyze of "public.p2" inheritance tree --- this inheritance tree contains no child tables
+INFO:  Executing SQL: select pg_catalog.gp_acquire_sample_rows(56438, 10000, 'f');
+INFO:  analyzing "public.part2" inheritance tree
+INFO:  Executing SQL: select pg_catalog.gp_acquire_sample_rows(24975, 10000, 't');
+select * from pg_stats where tablename like 'part2';
+ schemaname | tablename | attname | inherited | null_frac | avg_width | n_distinct | most_common_vals | most_common_freqs |   histogram_bounds    | correlation | most_common_elems | most_common_elem_freqs | elem_count_histogram 
+------------+-----------+---------+-----------+-----------+-----------+------------+------------------+-------------------+-----------------------+-------------+-------------------+------------------------+----------------------
+ public     | part2     | a       | t         |         0 |         4 |         -1 |                  |                   | {0,1,2,3,4,5,6,7,8,9} |  0.33333334 |                   |                        | 
+(1 row)
+
+drop table multipart cascade;

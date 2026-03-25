@@ -147,8 +147,7 @@ ALTER TABLE abs_opclass_test SET DISTRIBUTED BY (i abs_int_hash_ops, j abs_int_h
 -- We can't use that exact example here, without the 'btree_gist' extension
 -- that would provide the = gist opclass for basic types. So we use a more
 -- contrived example using IP addresses rather than rooms.
--- start_ignore
--- ignore_reason: pax not support exclusion constraint
+
 CREATE TABLE ip_reservations (ip_addr inet, reserved tsrange) DISTRIBUTED BY (ip_addr);
 
 -- these are not allowed
@@ -169,11 +168,13 @@ ALTER TABLE ip_reservations SET DISTRIBUTED BY (reserved);
 -- difference is there is no direct =(tsrange, tsrange) operator, we rely on
 -- the implicit casts for it)
 ALTER TABLE ip_reservations ADD EXCLUDE USING gist (reserved WITH =);
---end_ignore
+
+
 --
 -- Test scenario, where a type has a hash operator class, but not a default
 -- one.
 --
+
 -- Doesn't work, because 'point' doesn't have a hash opclass
 CREATE TABLE dist_by_point1(p point) DISTRIBUTED BY (p);
 

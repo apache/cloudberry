@@ -105,7 +105,7 @@ begin
     exception
       when others then
         raise notice 'mirror may not be promoted yet: %', sqlerrm;
-        perform pg_sleep(1);
+        perform pg_sleep(0.5);
     end;
   end loop;
 end;

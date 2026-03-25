@@ -373,6 +373,58 @@ SELECT tableoid::regclass, * FROM update_gp_rangep ORDER BY orig_a;
 -- that direct dispatch is effective.
 SELECT tableoid::regclass, * FROM update_gp_rangep WHERE b = 1;
 
+-- Test for update with LASJ_NOTIN
+-- See Issue: https://github.com/greenplum-db/gpdb/issues/13265
+-- Actually master branch does not have the above issue even master
+-- does have the same problematic code (other parts of code are
+-- refactored). Also cherry-pick the case to master and keep it
+-- since more test cases do no harm.
+create table t1_13265(a int, b int, c int, d int) distributed by (a);
+create table t2_13265(a int, b int, c int, d int) distributed by (a);
+
+insert into t1_13265 values (1, null, 1, 1);
+insert into t2_13265 values (2, null, 2, 2);
+
+explain (verbose, costs off)
+update t1_13265 set b = 2 where
+(c, d) not in (select c, d from t2_13265 where a = 2);
+
+update t1_13265 set b = 2 where
+(c, d) not in (select c, d from t2_13265 where a = 2);
+
+select * from t1_13265;
+
+-- test for update on partition table
+CREATE TABLE into_table (
+  a numeric(10,0) NOT NULL,
+  b numeric(10,0) NOT NULL,
+  c numeric(10,0) NOT NULL,
+  d character varying(4),
+  e character varying(10),
+  f int
+) DISTRIBUTED BY (a, b, c) PARTITION BY RANGE(f) (start (1) end(5) every(1));
+
+CREATE TABLE from_table (
+  a numeric(10,0) NOT NULL,
+  b numeric(10,0) NOT NULL,
+  c numeric(10,0) NOT NULL,
+  d character varying(4),
+  e character varying(10),
+  f int
+) DISTRIBUTED BY (a);
+
+insert into into_table select i*1.5,i*2,i*3,'dd'||i,'ee'||i, i from generate_series(1,4) i;
+insert into from_table select i*1.5,i*2,i*3,'xx'||i,'yy'||i, i+1 from generate_series(1,3) i;
+
+explain (costs off)
+update into_table set d=from_table.d, e=from_table.e, f=from_table.f from from_table
+where into_table.a=from_table.a and into_table.b=from_table.b and into_table.c=from_table.c;
+
+update into_table set d=from_table.d, e=from_table.e, f=from_table.f from from_table
+where into_table.a=from_table.a and into_table.b=from_table.b and into_table.c=from_table.c;
+
+select * from into_table order by a;
+
 -- start_ignore
 drop table r;
 drop table s;
@@ -381,4 +433,8 @@ drop table update_ao_table;
 drop table update_aoco_table;
 drop table nosplitupdate;
 drop table tsplit_entry;
+drop table t1_13265;
+drop table t2_13265;
+drop table into_table;
+drop table from_table;
 -- end_ignore

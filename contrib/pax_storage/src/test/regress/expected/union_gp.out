@@ -1,4 +1,5 @@
 -- Additional GPDB-added tests for UNION
+SET optimizer_trace_fallback=on;
 create temp table t_union1 (a int, b int);
 NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
@@ -2210,6 +2211,104 @@ select * from union_schema.t3;
 (10 rows)
 
 reset allow_system_table_mods;
+-- The following tests demonstrate the plan alternative
+-- where ORCA requests union all's outer child to become
+-- a Non-Singleton. This alternative is at times costed
+-- lower than aligning the inner child's distribution spec
+-- with that delivered by the outer child. 
+-- 
+-- Replicated ∪ Hashed
+create table rep (a int) distributed replicated;
+insert into rep select i from generate_series (1, 10) i; 
+create table dist (a int);
+insert into dist select i from generate_series (1, 1000) i;
+analyze dist;
+analyze rep;
+-- It's more cost-effective to apply a duplicate-sensitive
+-- random motion (non-phyiscal) on a replicated table, 
+-- than a broadcast motion on a distributed table.
+explain select a from rep union all select a from dist;
+                                   QUERY PLAN                                   
+--------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..20.98 rows=1030 width=4)
+   ->  Append  (cost=0.00..7.25 rows=343 width=4)
+         ->  Result  (cost=0.00..1.20 rows=10 width=4)
+               One-Time Filter: (gp_execution_segment() = 0)
+               ->  Seq Scan on rep  (cost=0.00..1.10 rows=10 width=4)
+         ->  Seq Scan on dist  (cost=0.00..4.33 rows=333 width=4)
+ Optimizer: Postgres-based planner
+(7 rows)
+
+-- Universal ∪ Random
+create table rand (a int) distributed randomly;
+insert into rand select i from generate_series (1, 10000) i;
+analyze rand;
+-- It's more cost-effective to apply a duplicate-sensitive
+-- random motion (non-physical) on a universal TVF, than a
+-- gather motion on a randomly distributed table.
+explain select i from generate_series(1,1000) i union all select a from rand;
+                                         QUERY PLAN                                         
+--------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..252.34 rows=13000 width=4)
+   ->  Append  (cost=0.00..79.00 rows=4333 width=4)
+         ->  Result  (cost=0.00..20.00 rows=1000 width=4)
+               One-Time Filter: (gp_execution_segment() = 0)
+               ->  Function Scan on generate_series i  (cost=0.00..10.00 rows=1000 width=4)
+         ->  Seq Scan on rand  (cost=0.00..37.33 rows=3333 width=4)
+ Optimizer: Postgres-based planner
+(7 rows)
+
+-------------------------------------------------------------------------------
+--Test case to check parallel union all with 'json' type 1st column in project list
+-------------------------------------------------------------------------------
+set optimizer_parallel_union to on;
+drop table if exists my_table;
+NOTICE:  table "my_table" does not exist, skipping
+create table my_table ( id serial  primary key, json_data json);
+insert into my_table (json_data) values ('{"name": "Name1", "age": 10}');
+insert into my_table (json_data) values ('{"name": "Name2", "age": 20}');
+insert into my_table (json_data) values ('{"name": "Name3", "age": 30}');
+insert into my_table (json_data) values ('{"name": "Name4", "age": 40}');
+explain select json_data from my_table  where json_data->>'age' = '30' union all select json_data from my_table where json_data->>'age' = '40' ;
+                                    QUERY PLAN                                     
+-----------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..565.82 rows=99 width=32)
+   ->  Append  (cost=0.00..564.50 rows=33 width=32)
+         ->  Seq Scan on my_table  (cost=0.00..282.00 rows=17 width=32)
+               Filter: ((json_data ->> 'age'::text) = '30'::text)
+         ->  Seq Scan on my_table my_table_1  (cost=0.00..282.00 rows=17 width=32)
+               Filter: ((json_data ->> 'age'::text) = '40'::text)
+ Optimizer: Postgres-based planner
+(7 rows)
+
+select json_data from my_table  where json_data->>'age' = '30' union all select json_data from my_table where json_data->>'age' = '40' ;
+          json_data           
+------------------------------
+ {"name": "Name3", "age": 30}
+ {"name": "Name4", "age": 40}
+(2 rows)
+
+explain select json_data,id from my_table  where json_data->>'age' = '30' union all select json_data,id from my_table where json_data->>'age' = '40' ;
+                                    QUERY PLAN                                     
+-----------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..565.82 rows=99 width=36)
+   ->  Append  (cost=0.00..564.50 rows=33 width=36)
+         ->  Seq Scan on my_table  (cost=0.00..282.00 rows=17 width=36)
+               Filter: ((json_data ->> 'age'::text) = '30'::text)
+         ->  Seq Scan on my_table my_table_1  (cost=0.00..282.00 rows=17 width=36)
+               Filter: ((json_data ->> 'age'::text) = '40'::text)
+ Optimizer: Postgres-based planner
+(7 rows)
+
+select json_data,id from my_table  where json_data->>'age' = '30' union all select json_data,id from my_table where json_data->>'age' = '40' ;
+          json_data           | id 
+------------------------------+----
+ {"name": "Name3", "age": 30} |  3
+ {"name": "Name4", "age": 40} |  4
+(2 rows)
+
+set optimizer_parallel_union to off;
+drop table if exists my_table;
 --
 -- Clean up
 --

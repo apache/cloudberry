@@ -548,6 +548,17 @@ ERROR:  invalid configuration parameter name "special.weird name"
 DETAIL:  Custom parameter names must be two or more simple identifiers separated by dots.
 SHOW special."weird name";
 ERROR:  unrecognized configuration parameter "special.weird name"
+-- Check what happens when you try to set a "custom" GUC within the
+-- namespace of an extension.
+SET plpgsql.extra_foo_warnings = true;  -- allowed if plpgsql is not loaded yet
+LOAD 'plpgsql';  -- this will throw a warning and delete the variable
+WARNING:  invalid configuration parameter name "plpgsql.extra_foo_warnings", removing it
+DETAIL:  "plpgsql" is now a reserved prefix.
+SET plpgsql.extra_foo_warnings = true;  -- now, it's an error
+ERROR:  invalid configuration parameter name "plpgsql.extra_foo_warnings"
+DETAIL:  "plpgsql" is a reserved prefix.
+SHOW plpgsql.extra_foo_warnings;
+ERROR:  unrecognized configuration parameter "plpgsql.extra_foo_warnings"
 --
 -- Test DISCARD TEMP
 --
@@ -837,13 +848,6 @@ END;
 $$ LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = n1, pg_temp;
--- Destroy the QD-QE libpq connections.
-select cleanupAllGangs();
- cleanupallgangs 
------------------
- t
-(1 row)
-
 select n1.drop_table('public','t1');
 NOTICE:  table "t1" does not exist, skipping
  drop_table 
@@ -853,8 +857,134 @@ NOTICE:  table "t1" does not exist, skipping
 
 -- After funtion drop table, public schema is still in search_path
 create table public.t1(i ty1);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause, and no column type is suitable for a distribution key. Creating a NULL policy entry.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 drop table public.t1;
 drop type public.ty1;
 drop function n1.drop_table(v_schema character varying, v_table character varying);
 drop schema n1;
+-- Test GUC categories and flag patterns
+SELECT pg_settings_get_flags(NULL);
+ pg_settings_get_flags 
+-----------------------
+ 
+(1 row)
+
+SELECT pg_settings_get_flags('does_not_exist');
+ pg_settings_get_flags 
+-----------------------
+ 
+(1 row)
+
+CREATE TABLE tab_settings_flags AS SELECT name, category,
+    'EXPLAIN'          = ANY(flags) AS explain,
+    'NO_RESET'         = ANY(flags) AS no_reset,
+    'NO_RESET_ALL'     = ANY(flags) AS no_reset_all,
+    'NOT_IN_SAMPLE'    = ANY(flags) AS not_in_sample,
+    'RUNTIME_COMPUTED' = ANY(flags) AS runtime_computed
+  FROM pg_show_all_settings() AS psas,
+    pg_settings_get_flags(psas.name) AS flags;
+-- Developer GUCs should be flagged with GUC_NOT_IN_SAMPLE:
+SELECT name FROM tab_settings_flags
+  WHERE category = 'Developer Options' AND NOT not_in_sample
+  ORDER BY 1;
+                   name                    
+-------------------------------------------
+ allow_dml_directory_table
+ aqumv_allow_foreign_table
+ create_restartpoint_on_ckpt_record_replay
+ enable_parallel_dedup_semi_join
+ enable_parallel_dedup_semi_reverse_join
+ enable_parallel_semi_join
+ gp_appendonly_compaction_segfile_limit
+ gp_appendonly_insert_files
+ gp_appendonly_insert_files_tuples_range
+ gp_autostats_allow_nonowner
+ gp_autostats_lock_wait
+ gp_autostats_mode
+ gp_autostats_mode_in_functions
+ gp_autostats_on_change_threshold
+ gp_enable_runtime_filter_pushdown
+ gp_reraise_signal
+ optimizer_control
+ optimizer_enable_orderedagg
+(18 rows)
+
+-- Most query-tuning GUCs are flagged as valid for EXPLAIN.
+-- default_statistics_target is an exception.
+SELECT name FROM tab_settings_flags
+  WHERE category ~ '^Query Tuning' AND NOT explain
+  ORDER BY 1;
+                         name                         
+------------------------------------------------------
+ enable_groupagg
+ gp_adjust_selectivity_for_outerjoins
+ gp_dynamic_partition_pruning
+ gp_enable_agg_distinct
+ gp_enable_agg_distinct_pruning
+ gp_enable_agg_pushdown
+ gp_enable_ao_indexscan
+ gp_enable_direct_dispatch
+ gp_enable_fast_sri
+ gp_enable_minmax_optimization
+ gp_enable_multiphase_agg
+ gp_enable_multiphase_limit
+ gp_enable_predicate_propagation
+ gp_enable_preunique
+ gp_enable_refresh_fast_path
+ gp_enable_relsize_collection
+ gp_enable_runtime_filter
+ gp_enable_sort_limit
+ gp_motion_cost_per_row
+ gp_segments_for_planner
+ gp_statistics_pullup_from_child_partition
+ gp_statistics_use_fkeys
+ optimizer
+ optimizer_array_expansion_threshold
+ optimizer_cte_inlining_bound
+ optimizer_damping_factor_filter
+ optimizer_damping_factor_groupby
+ optimizer_damping_factor_join
+ optimizer_dpe_stats
+ optimizer_enable_associativity
+ optimizer_enable_dynamicbitmapscan
+ optimizer_enable_dynamicindexonlyscan
+ optimizer_enable_dynamicindexscan
+ optimizer_enable_right_outer_join
+ optimizer_force_three_stage_scalar_dqa
+ optimizer_join_arity_for_associativity_commutativity
+ optimizer_join_order
+ optimizer_join_order_threshold
+ optimizer_metadata_caching
+ optimizer_nestloop_factor
+ optimizer_penalize_broadcast_threshold
+ optimizer_push_group_by_below_setop_threshold
+ optimizer_sort_factor
+(43 rows)
+
+-- Runtime-computed GUCs should be part of the preset category.
+SELECT name FROM tab_settings_flags
+  WHERE NOT category = 'Preset Options' AND runtime_computed
+  ORDER BY 1;
+ name 
+------
+(0 rows)
+
+-- Preset GUCs are flagged as NOT_IN_SAMPLE.
+SELECT name FROM tab_settings_flags
+  WHERE category = 'Preset Options' AND NOT not_in_sample
+  ORDER BY 1;
+          name          
+------------------------
+ gp_max_partition_level
+(1 row)
+
+-- NO_RESET implies NO_RESET_ALL.
+SELECT name FROM tab_settings_flags
+  WHERE no_reset AND NOT no_reset_all
+  ORDER BY 1;
+ name 
+------
+(0 rows)
+
+DROP TABLE tab_settings_flags;

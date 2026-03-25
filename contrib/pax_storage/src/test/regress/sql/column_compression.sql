@@ -9,10 +9,10 @@ create database column_compression;
 \c column_compression
 
 prepare ccddlcheck as
-select attrelid::regclass as relname,
-attnum, attoptions from pg_class c, pg_attribute_encoding e
-where c.relname like 'ccddl%' and c.oid=e.attrelid
-order by relname, attnum;
+select e.attrelid::regclass as relname,
+a.attname, e.filenum, e.attoptions from pg_class c, pg_attribute_encoding e, pg_attribute a
+where c.relname like 'ccddl%' and c.oid=e.attrelid and e.attrelid=a.attrelid and e.attnum = a.attnum
+order by relname, e.attnum;
 
 -- default encoding clause
 create table ccddl (
@@ -143,7 +143,6 @@ drop table ccddl_co, ccddl;
 -- only support CO tables
 create table ccddl (i int encoding (compresstype=RLE_TYPE));
 create table ccddl (i int encoding (compresstype=zlib));
-drop table ccddl;
 create table ccddl (i int encoding (compresstype=zlib))
 	with (appendonly = true);
 

@@ -238,3 +238,95 @@ CREATE TABLE dropped_col_t2(i1 int, i2 int);
 CREATE VIEW dropped_col_v AS SELECT dropped_col_t1.i1 FROM dropped_col_t1 JOIN dropped_col_t2 ON dropped_col_t1.i1=dropped_col_t2.i1;
 ALTER TABLE dropped_col_t1 DROP COLUMN i2;
 SELECT * FROM dropped_col_v;
+
+-- alter indexed column to the same type shouldn't change the index' relfilenode on QD and QEs.
+
+-- helper utilities to check compare relfilenodes
+drop table if exists relfilenodecheck;
+create table relfilenodecheck(segid int, relname text, relfilenodebefore int, relfilenodeafter int, casename text);
+
+prepare capturerelfilenodebefore as
+insert into relfilenodecheck select -1 segid, relname, pg_relation_filenode(relname::text) as relfilenode, null::int, $1 as casename from pg_class where relname like $2
+union select gp_segment_id segid, relname, pg_relation_filenode(relname::text) as relfilenode, null::int, $1 as casename  from gp_dist_random('pg_class')
+where relname like $2 order by segid;
+
+prepare checkrelfilenodediff as
+select a.segid, b.casename, b.relname, (relfilenodebefore != a.relfilenode) rewritten
+from
+    (
+        select -1 segid, relname, pg_relation_filenode(relname::text) as relfilenode
+        from pg_class
+        where relname like $2
+        union
+        select gp_segment_id segid, relname, pg_relation_filenode(relname::text) as relfilenode
+        from gp_dist_random('pg_class')
+        where relname like $2 order by segid
+    )a, relfilenodecheck b
+where b.casename like $1 and b.relname like $2 and a.segid = b.segid;
+
+create table attype_indexed(a int, b int);
+create index attype_indexed_i on attype_indexed(b);
+
+insert into attype_indexed select i,i from generate_series(1, 100)i;
+
+-- alter to same type.
+-- check relfilenode before AT
+execute capturerelfilenodebefore('alter column type same', 'attype_indexed_i');
+alter table attype_indexed alter column b type int;
+-- relfilenode stay same as before
+execute checkrelfilenodediff('alter column type same', 'attype_indexed_i');
+
+-- insert works fine
+insert into attype_indexed select i,i from generate_series(1, 100)i;
+select count(*) from attype_indexed;
+
+-- alter to different type, relfilenode should change
+execute capturerelfilenodebefore('alter column diff type', 'attype_indexed_i');
+alter table attype_indexed alter column b type text;
+execute checkrelfilenodediff('alter column diff type', 'attype_indexed_i');
+
+--insert works fine
+insert into attype_indexed select i, 'abc'::text from generate_series(1, 100) i;
+select count(*) from attype_indexed;
+
+-- alter column with exclusion constraint
+create table attype_indexed_constr(
+    c circle,
+    dkey inet,
+    exclude using gist (dkey inet_ops with =, c with &&)
+);
+
+-- not change
+execute capturerelfilenodebefore('alter column diff type', 'attype_indexed_constr_dkey_c_excl');
+alter table attype_indexed_constr alter column c type circle;
+execute checkrelfilenodediff('alter column diff type', 'attype_indexed_constr_dkey_c_excl');
+
+drop table relfilenodecheck;
+
+-- Test that we are able to attach a newly created partition table when it has foreign key reference.
+CREATE TABLE issue_14279_fk_reference (col2 text unique not null);
+INSERT INTO issue_14279_fk_reference VALUES ('stuff');
+CREATE TABLE issue_14279_taptest_table (
+    col1 BIGINT,
+    col2 TEXT NOT NULL DEFAULT 'stuff', FOREIGN KEY (col2) REFERENCES issue_14279_fk_reference(col2))
+  PARTITION BY RANGE (col1);
+CREATE TABLE issue_14279_taptest_table_p3000000000 (
+    LIKE issue_14279_taptest_table
+    INCLUDING DEFAULTS INCLUDING CONSTRAINTS);
+ALTER TABLE issue_14279_taptest_table ATTACH PARTITION issue_14279_taptest_table_p3000000000 FOR VALUES FROM (3000000000) TO (3000000100);
+BEGIN;
+CREATE TABLE issue_14279_taptest_table_p3000000100 (
+    LIKE issue_14279_taptest_table
+    INCLUDING DEFAULTS INCLUDING CONSTRAINTS);
+ALTER TABLE issue_14279_taptest_table ATTACH PARTITION issue_14279_taptest_table_p3000000100 FOR VALUES FROM (3000000100) TO (3000000200);
+END;
+INSERT INTO issue_14279_taptest_table SELECT generate_series(3000000000, 3000000001);
+INSERT INTO issue_14279_taptest_table SELECT generate_series(3000000100, 3000000101);
+-- The parent table shouldn't have anything.
+SELECT * FROM ONLY issue_14279_taptest_table;
+-- The newly attached table should have 2 rows.
+SELECT * FROM issue_14279_taptest_table_p3000000000;
+-- The newly attached table should have 2 rows.
+SELECT * FROM issue_14279_taptest_table_p3000000100;
+DROP TABLE issue_14279_taptest_table;
+DROP TABLE issue_14279_fk_reference;

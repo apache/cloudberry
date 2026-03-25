@@ -97,6 +97,25 @@ SELECT relname, d.* FROM ONLY d, pg_class where d.tableoid = pg_class.oid;
 CREATE TEMP TABLE z (b TEXT, PRIMARY KEY(aa, b)) inherits (a);
 INSERT INTO z VALUES (NULL, 'text'); -- should fail
 
+-- Check inherited UPDATE with first child excluded
+create table some_tab (f1 int, f2 int, f3 int, check (f1 < 10) no inherit);
+create table some_tab_child () inherits(some_tab);
+insert into some_tab_child select i, i+1, 0 from generate_series(1,1000) i;
+create index on some_tab_child(f1, f2);
+-- while at it, also check that statement-level triggers fire
+create function some_tab_stmt_trig_func() returns trigger as
+$$begin raise notice 'updating some_tab'; return NULL; end;$$
+language plpgsql;
+create trigger some_tab_stmt_trig
+  before update on some_tab execute function some_tab_stmt_trig_func();
+
+explain (costs off)
+update some_tab set f3 = 11 where f1 = 12 and f2 = 13;
+update some_tab set f3 = 11 where f1 = 12 and f2 = 13;
+
+drop table some_tab cascade;
+drop function some_tab_stmt_trig_func();
+
 -- Check inherited UPDATE with all children excluded
 create table some_tab (a int, b int) distributed randomly;
 create table some_tab_child () inherits (some_tab);
@@ -354,6 +373,16 @@ ALTER TABLE inhts RENAME d TO dd;
 
 DROP TABLE inhts;
 
+-- Test for adding a column to a parent table with complex inheritance
+CREATE TABLE inhta ();
+CREATE TABLE inhtb () INHERITS (inhta);
+CREATE TABLE inhtc () INHERITS (inhtb);
+CREATE TABLE inhtd () INHERITS (inhta, inhtb, inhtc);
+ALTER TABLE inhta ADD COLUMN i int, ADD COLUMN j bigint DEFAULT 1;
+\d+ inhta
+\d+ inhtd
+DROP TABLE inhta, inhtb, inhtc, inhtd;
+
 -- Test for renaming in diamond inheritance
 CREATE TABLE inht2 (x int) INHERITS (inht1);
 CREATE TABLE inht3 (y int) INHERITS (inht1);
@@ -391,20 +420,19 @@ ALTER TABLE ONLY test_constraints DROP CONSTRAINT test_constraints_val1_val2_key
 DROP TABLE test_constraints_inh;
 DROP TABLE test_constraints;
 
--- PAX not support gist/spgist/brin indexes
--- CREATE TABLE test_ex_constraints (
---     c circle,
---     dkey inet,
---     EXCLUDE USING gist (dkey inet_ops WITH =, c WITH &&)
--- );
+CREATE TABLE test_ex_constraints (
+    c circle,
+    dkey inet,
+    EXCLUDE USING gist (dkey inet_ops WITH =, c WITH &&)
+);
 
--- CREATE TABLE test_ex_constraints_inh () INHERITS (test_ex_constraints);
--- \d+ test_ex_constraints
--- ALTER TABLE test_ex_constraints DROP CONSTRAINT test_ex_constraints_dkey_c_excl;
--- \d+ test_ex_constraints
--- \d+ test_ex_constraints_inh
--- DROP TABLE test_ex_constraints_inh;
--- DROP TABLE test_ex_constraints;
+CREATE TABLE test_ex_constraints_inh () INHERITS (test_ex_constraints);
+\d+ test_ex_constraints
+ALTER TABLE test_ex_constraints DROP CONSTRAINT test_ex_constraints_dkey_c_excl;
+\d+ test_ex_constraints
+\d+ test_ex_constraints_inh
+DROP TABLE test_ex_constraints_inh;
+DROP TABLE test_ex_constraints;
 
 -- Test non-inheritable foreign key constraints
 CREATE TABLE test_primary_constraints(id int PRIMARY KEY);
@@ -550,6 +578,14 @@ reset enable_seqscan;
 reset enable_parallel_append;
 reset enable_bitmapscan;
 
+explain (verbose, costs off)  -- bug #18652
+select 1 - id as c from
+(select id from matest3 t1 union all select id * 2 from matest3 t2) ss
+order by c;
+select 1 - id as c from
+(select id from matest3 t1 union all select id * 2 from matest3 t2) ss
+order by c;
+
 drop table matest0 cascade;
 
 --
@@ -656,6 +692,44 @@ reset enable_indexscan;
 reset enable_bitmapscan;
 
 rollback;
+
+--
+-- Check handling of MULTIEXPR SubPlans in inherited updates
+--
+create table inhpar(f1 int, f2 name);
+create table inhcld(f2 name, f1 int);
+alter table inhcld inherit inhpar;
+insert into inhpar select x, x::text from generate_series(1,5) x;
+insert into inhcld select x::text, x from generate_series(6,10) x;
+
+explain (verbose, costs off)
+update inhpar i set (f1, f2) = (select i.f1, i.f2 || '-' from int4_tbl limit 1);
+update inhpar i set (f1, f2) = (select i.f1, i.f2 || '-' from int4_tbl limit 1);
+select * from inhpar order by f1;
+
+drop table inhpar cascade;
+
+--
+-- And the same for partitioned cases
+--
+create table inhpar(f1 int primary key, f2 name) partition by range (f1);
+create table inhcld1(f2 name, f1 int primary key);
+create table inhcld2(f1 int primary key, f2 name);
+alter table inhpar attach partition inhcld1 for values from (1) to (5);
+alter table inhpar attach partition inhcld2 for values from (5) to (100);
+insert into inhpar select x, x::text from generate_series(1,10) x;
+
+explain (verbose, costs off)
+update inhpar i set (f1, f2) = (select i.f1, i.f2 || '-' from int4_tbl limit 1);
+update inhpar i set (f1, f2) = (select i.f1, i.f2 || '-' from int4_tbl limit 1);
+select * from inhpar;
+
+-- Also check ON CONFLICT
+insert into inhpar as i values (3), (7) on conflict (f1)
+  do update set (f1, f2) = (select i.f1, i.f2 || '+');
+select * from inhpar order by f1;  -- tuple order might be unstable here
+
+drop table inhpar cascade;
 
 --
 -- Check handling of a constant-null CHECK constraint
@@ -803,6 +877,8 @@ explain (costs off) select a, abs(b) from mcrparted order by a, abs(b), c;
 -- during planning.
 explain (costs off) select * from mcrparted where a < 20 order by a, abs(b), c;
 
+set enable_bitmapscan to off;
+set enable_sort to off;
 create table mclparted (a int) partition by list(a);
 create table mclparted1 partition of mclparted for values in(1);
 create table mclparted2 partition of mclparted for values in(2);
@@ -817,8 +893,33 @@ create table mclparted3_5 partition of mclparted for values in(3,5);
 create table mclparted4 partition of mclparted for values in(4);
 
 explain (costs off) select * from mclparted order by a;
+explain (costs off) select * from mclparted where a in(3,4,5) order by a;
+
+-- Introduce a NULL and DEFAULT partition so we can test more complex cases
+create table mclparted_null partition of mclparted for values in(null);
+create table mclparted_def partition of mclparted default;
+
+-- Append can be used providing we don't scan the interleaved partition
+explain (costs off) select * from mclparted where a in(1,2,4) order by a;
+explain (costs off) select * from mclparted where a in(1,2,4) or a is null order by a;
+
+-- Test a more complex case where the NULL partition allows some other value
+drop table mclparted_null;
+create table mclparted_0_null partition of mclparted for values in(0,null);
+
+-- Ensure MergeAppend is used since 0 and NULLs are in the same partition.
+explain (costs off) select * from mclparted where a in(1,2,4) or a is null order by a;
+explain (costs off) select * from mclparted where a in(0,1,2,4) order by a;
+
+-- Ensure Append is used when the null partition is pruned
+explain (costs off) select * from mclparted where a in(1,2,4) order by a;
+
+-- Ensure MergeAppend is used when the default partition is not pruned
+explain (costs off) select * from mclparted where a in(1,2,4,100) order by a;
 
 drop table mclparted;
+reset enable_sort;
+reset enable_bitmapscan;
 
 -- Ensure subplans which don't have a path with the correct pathkeys get
 -- sorted correctly.
@@ -888,7 +989,7 @@ alter table permtest_child attach partition permtest_grandchild for values in ('
 alter table permtest_parent attach partition permtest_child for values in (1);
 create index on permtest_parent (left(c, 3));
 insert into permtest_parent
-  select 1, 'a', left(md5(i::text), 5) from generate_series(0, 100) i;
+  select 1, 'a', left(fipshash(i::text), 5) from generate_series(0, 100) i;
 analyze permtest_parent;
 create role regress_no_child_access;
 revoke all on permtest_grandchild from regress_no_child_access;

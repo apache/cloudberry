@@ -3,21 +3,370 @@
 -- Test various combinations of numeric types and functions.
 --
 --
+-- numeric literals
+--
+SELECT 0b100101;
+ ?column? 
+----------
+       37
+(1 row)
+
+SELECT 0o273;
+ ?column? 
+----------
+      187
+(1 row)
+
+SELECT 0x42F;
+ ?column? 
+----------
+     1071
+(1 row)
+
+-- cases near int4 overflow
+SELECT 0b1111111111111111111111111111111;
+  ?column?  
+------------
+ 2147483647
+(1 row)
+
+SELECT 0b10000000000000000000000000000000;
+  ?column?  
+------------
+ 2147483648
+(1 row)
+
+SELECT 0o17777777777;
+  ?column?  
+------------
+ 2147483647
+(1 row)
+
+SELECT 0o20000000000;
+  ?column?  
+------------
+ 2147483648
+(1 row)
+
+SELECT 0x7FFFFFFF;
+  ?column?  
+------------
+ 2147483647
+(1 row)
+
+SELECT 0x80000000;
+  ?column?  
+------------
+ 2147483648
+(1 row)
+
+SELECT -0b10000000000000000000000000000000;
+  ?column?   
+-------------
+ -2147483648
+(1 row)
+
+SELECT -0b10000000000000000000000000000001;
+  ?column?   
+-------------
+ -2147483649
+(1 row)
+
+SELECT -0o20000000000;
+  ?column?   
+-------------
+ -2147483648
+(1 row)
+
+SELECT -0o20000000001;
+  ?column?   
+-------------
+ -2147483649
+(1 row)
+
+SELECT -0x80000000;
+  ?column?   
+-------------
+ -2147483648
+(1 row)
+
+SELECT -0x80000001;
+  ?column?   
+-------------
+ -2147483649
+(1 row)
+
+-- cases near int8 overflow
+SELECT 0b111111111111111111111111111111111111111111111111111111111111111;
+      ?column?       
+---------------------
+ 9223372036854775807
+(1 row)
+
+SELECT 0b1000000000000000000000000000000000000000000000000000000000000000;
+      ?column?       
+---------------------
+ 9223372036854775808
+(1 row)
+
+SELECT 0o777777777777777777777;
+      ?column?       
+---------------------
+ 9223372036854775807
+(1 row)
+
+SELECT 0o1000000000000000000000;
+      ?column?       
+---------------------
+ 9223372036854775808
+(1 row)
+
+SELECT 0x7FFFFFFFFFFFFFFF;
+      ?column?       
+---------------------
+ 9223372036854775807
+(1 row)
+
+SELECT 0x8000000000000000;
+      ?column?       
+---------------------
+ 9223372036854775808
+(1 row)
+
+SELECT -0b1000000000000000000000000000000000000000000000000000000000000000;
+       ?column?       
+----------------------
+ -9223372036854775808
+(1 row)
+
+SELECT -0b1000000000000000000000000000000000000000000000000000000000000001;
+       ?column?       
+----------------------
+ -9223372036854775809
+(1 row)
+
+SELECT -0o1000000000000000000000;
+       ?column?       
+----------------------
+ -9223372036854775808
+(1 row)
+
+SELECT -0o1000000000000000000001;
+       ?column?       
+----------------------
+ -9223372036854775809
+(1 row)
+
+SELECT -0x8000000000000000;
+       ?column?       
+----------------------
+ -9223372036854775808
+(1 row)
+
+SELECT -0x8000000000000001;
+       ?column?       
+----------------------
+ -9223372036854775809
+(1 row)
+
+-- error cases
+SELECT 123abc;
+ERROR:  trailing junk after numeric literal at or near "123abc"
+LINE 1: SELECT 123abc;
+               ^
+SELECT 0x0o;
+ERROR:  trailing junk after numeric literal at or near "0x0o"
+LINE 1: SELECT 0x0o;
+               ^
+SELECT 0.a;
+ERROR:  trailing junk after numeric literal at or near "0.a"
+LINE 1: SELECT 0.a;
+               ^
+SELECT 0.0a;
+ERROR:  trailing junk after numeric literal at or near "0.0a"
+LINE 1: SELECT 0.0a;
+               ^
+SELECT .0a;
+ERROR:  trailing junk after numeric literal at or near ".0a"
+LINE 1: SELECT .0a;
+               ^
+SELECT 0.0e1a;
+ERROR:  trailing junk after numeric literal at or near "0.0e1a"
+LINE 1: SELECT 0.0e1a;
+               ^
+SELECT 0.0e;
+ERROR:  trailing junk after numeric literal at or near "0.0e"
+LINE 1: SELECT 0.0e;
+               ^
+SELECT 0.0e+a;
+ERROR:  trailing junk after numeric literal at or near "0.0e+"
+LINE 1: SELECT 0.0e+a;
+               ^
+PREPARE p1 AS SELECT $1a;
+ERROR:  trailing junk after parameter at or near "$1a"
+LINE 1: PREPARE p1 AS SELECT $1a;
+                             ^
+SELECT 0b;
+ERROR:  invalid binary integer at or near "0b"
+LINE 1: SELECT 0b;
+               ^
+SELECT 1b;
+ERROR:  trailing junk after numeric literal at or near "1b"
+LINE 1: SELECT 1b;
+               ^
+SELECT 0b0x;
+ERROR:  trailing junk after numeric literal at or near "0b0x"
+LINE 1: SELECT 0b0x;
+               ^
+SELECT 0o;
+ERROR:  invalid octal integer at or near "0o"
+LINE 1: SELECT 0o;
+               ^
+SELECT 1o;
+ERROR:  trailing junk after numeric literal at or near "1o"
+LINE 1: SELECT 1o;
+               ^
+SELECT 0o0x;
+ERROR:  trailing junk after numeric literal at or near "0o0x"
+LINE 1: SELECT 0o0x;
+               ^
+SELECT 0x;
+ERROR:  invalid hexadecimal integer at or near "0x"
+LINE 1: SELECT 0x;
+               ^
+SELECT 1x;
+ERROR:  trailing junk after numeric literal at or near "1x"
+LINE 1: SELECT 1x;
+               ^
+SELECT 0x0y;
+ERROR:  trailing junk after numeric literal at or near "0x0y"
+LINE 1: SELECT 0x0y;
+               ^
+-- underscores
+SELECT 1_000_000;
+ ?column? 
+----------
+  1000000
+(1 row)
+
+SELECT 1_2_3;
+ ?column? 
+----------
+      123
+(1 row)
+
+SELECT 0x1EEE_FFFF;
+ ?column?  
+-----------
+ 518979583
+(1 row)
+
+SELECT 0o2_73;
+ ?column? 
+----------
+      187
+(1 row)
+
+SELECT 0b_10_0101;
+ ?column? 
+----------
+       37
+(1 row)
+
+SELECT 1_000.000_005;
+  ?column?   
+-------------
+ 1000.000005
+(1 row)
+
+SELECT 1_000.;
+ ?column? 
+----------
+     1000
+(1 row)
+
+SELECT .000_005;
+ ?column? 
+----------
+ 0.000005
+(1 row)
+
+SELECT 1_000.5e0_1;
+ ?column? 
+----------
+    10005
+(1 row)
+
+DO $$
+DECLARE
+  i int;
+BEGIN
+  FOR i IN 1_001..1_003 LOOP
+    RAISE NOTICE 'i = %', i;
+  END LOOP;
+END $$;
+NOTICE:  i = 1001
+NOTICE:  i = 1002
+NOTICE:  i = 1003
+-- error cases
+SELECT _100;
+ERROR:  column "_100" does not exist
+LINE 1: SELECT _100;
+               ^
+SELECT 100_;
+ERROR:  trailing junk after numeric literal at or near "100_"
+LINE 1: SELECT 100_;
+               ^
+SELECT 100__000;
+ERROR:  trailing junk after numeric literal at or near "100__000"
+LINE 1: SELECT 100__000;
+               ^
+SELECT _1_000.5;
+ERROR:  syntax error at or near ".5"
+LINE 1: SELECT _1_000.5;
+                     ^
+SELECT 1_000_.5;
+ERROR:  trailing junk after numeric literal at or near "1_000_"
+LINE 1: SELECT 1_000_.5;
+               ^
+SELECT 1_000._5;
+ERROR:  trailing junk after numeric literal at or near "1_000._5"
+LINE 1: SELECT 1_000._5;
+               ^
+SELECT 1_000.5_;
+ERROR:  trailing junk after numeric literal at or near "1_000.5_"
+LINE 1: SELECT 1_000.5_;
+               ^
+SELECT 1_000.5e_1;
+ERROR:  trailing junk after numeric literal at or near "1_000.5e_1"
+LINE 1: SELECT 1_000.5e_1;
+               ^
+PREPARE p1 AS SELECT $0_1;
+ERROR:  trailing junk after parameter at or near "$0_1"
+LINE 1: PREPARE p1 AS SELECT $0_1;
+                             ^
+--
 -- create required tables
 --
 CREATE TABLE FLOAT8_NUMER_TBL(i INT DEFAULT 1, f1 float8);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO FLOAT8_NUMER_TBL(f1) VALUES ('0.0');
 INSERT INTO FLOAT8_NUMER_TBL(f1) VALUES ('-34.84');
 INSERT INTO FLOAT8_NUMER_TBL(f1) VALUES ('-1004.30');
 INSERT INTO FLOAT8_NUMER_TBL(f1) VALUES ('-1.2345678901234e+200');
 INSERT INTO FLOAT8_NUMER_TBL(f1) VALUES ('-1.2345678901234e-200');
 CREATE TABLE INT2_NUMER_TBL(f1 int2);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO INT2_NUMER_TBL(f1) VALUES ('0   ');
 INSERT INTO INT2_NUMER_TBL(f1) VALUES ('  1234 ');
 INSERT INTO INT2_NUMER_TBL(f1) VALUES ('    -1234');
 INSERT INTO INT2_NUMER_TBL(f1) VALUES ('32767');
 INSERT INTO INT2_NUMER_TBL(f1) VALUES ('-32767');
 CREATE TABLE INT4_NUMER_TBL(f1 int4);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO INT4_NUMER_TBL(f1) VALUES ('   0  ');
 INSERT INTO INT4_NUMER_TBL(f1) VALUES ('123456     ');
 INSERT INTO INT4_NUMER_TBL(f1) VALUES ('    -123456');

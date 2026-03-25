@@ -199,11 +199,10 @@ DROP TRIGGER test_trigger_exists ON no_such_schema.no_such_table;
 ERROR:  schema "no_such_schema" does not exist
 DROP TRIGGER IF EXISTS test_trigger_exists ON no_such_schema.no_such_table;
 NOTICE:  schema "no_such_schema" does not exist, skipping
--- pax not support this trigger.
--- CREATE TRIGGER test_trigger_exists
---     BEFORE UPDATE ON test_exists
---     FOR EACH ROW EXECUTE PROCEDURE suppress_redundant_updates_trigger();
--- DROP TRIGGER test_trigger_exists ON test_exists;
+CREATE TRIGGER test_trigger_exists
+    BEFORE UPDATE ON test_exists
+    FOR EACH ROW EXECUTE PROCEDURE suppress_redundant_updates_trigger();
+DROP TRIGGER test_trigger_exists ON test_exists;
 -- rule
 DROP RULE test_rule_exists ON test_exists;
 ERROR:  rule "test_rule_exists" for relation "test_exists" does not exist

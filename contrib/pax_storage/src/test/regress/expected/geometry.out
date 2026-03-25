@@ -1468,17 +1468,6 @@ SELECT l1.s, l2.s, l1.s <-> l2.s FROM LINE_TBL l1, LINE_TBL l2;
  {-1,0,3}                              | {-1,0,3}                              |        0
 (100 rows)
 
--- Distance to box
-SELECT l.s, b.f1, l.s <-> b.f1 FROM LINE_TBL l, BOX_TBL b;
-ERROR:  operator does not exist: line <-> box
-LINE 1: SELECT l.s, b.f1, l.s <-> b.f1 FROM LINE_TBL l, BOX_TBL b;
-                              ^
-HINT:  No operator matches the given name and argument types. You might need to add explicit type casts.
-SELECT l.s, b.f1, b.f1 <-> l.s FROM LINE_TBL l, BOX_TBL b;
-ERROR:  operator does not exist: box <-> line
-LINE 1: SELECT l.s, b.f1, b.f1 <-> l.s FROM LINE_TBL l, BOX_TBL b;
-                               ^
-HINT:  No operator matches the given name and argument types. You might need to add explicit type casts.
 -- Intersect with line
 SELECT l1.s, l2.s FROM LINE_TBL l1, LINE_TBL l2 WHERE l1.s ?# l2.s;
                    s                   |                   s                   
@@ -1780,12 +1769,6 @@ SELECT l.s, l1.s, l.s ## l1.s FROM LINE_TBL l, LSEG_TBL l1;
  {-1,0,3}                              | [(NaN,1),(NaN,90)]            | 
 (80 rows)
 
--- Closest point to box
-SELECT l.s, b.f1, l.s ## b.f1 FROM LINE_TBL l, BOX_TBL b;
-ERROR:  operator does not exist: line ## box
-LINE 1: SELECT l.s, b.f1, l.s ## b.f1 FROM LINE_TBL l, BOX_TBL b;
-                              ^
-HINT:  No operator matches the given name and argument types. You might need to add explicit type casts.
 --
 -- Line segments
 --
@@ -2386,12 +2369,6 @@ SELECT l1.s, l2.s, l1.s # l2.s FROM LSEG_TBL l1, LSEG_TBL l2;
  [(NaN,1),(NaN,90)]            | [(NaN,1),(NaN,90)]            | 
 (64 rows)
 
--- Closest point to line
-SELECT l.s, l1.s, l.s ## l1.s FROM LSEG_TBL l, LINE_TBL l1;
-ERROR:  operator does not exist: lseg ## line
-LINE 1: SELECT l.s, l1.s, l.s ## l1.s FROM LSEG_TBL l, LINE_TBL l1;
-                              ^
-HINT:  No operator matches the given name and argument types. You might need to add explicit type casts.
 -- Closest point to line segment
 SELECT l1.s, l2.s, l1.s ## l2.s FROM LSEG_TBL l1, LSEG_TBL l2;
                s               |               s               |            ?column?             
@@ -2935,12 +2912,6 @@ SELECT f1, @-@ f1 FROM PATH_TBL;
  ((11,12),(13,14))         | 5.65685424949
 (9 rows)
 
--- Center
-SELECT f1, @@ f1 FROM PATH_TBL;
-ERROR:  operator does not exist: @@ path
-LINE 1: SELECT f1, @@ f1 FROM PATH_TBL;
-                   ^
-HINT:  No operator matches the given name and argument type. You might need to add an explicit type cast.
 -- To polygon
 SELECT f1, f1::polygon FROM PATH_TBL WHERE isclosed(f1);
         f1         |        f1         
@@ -4209,53 +4180,53 @@ SELECT p1.f1, p2.f1, p1.f1 <-> p2.f1 FROM POLYGON_TBL p1, POLYGON_TBL p2;
              f1             |             f1             |    ?column?    
 ----------------------------+----------------------------+----------------
  ((2,0),(2,4),(0,0))        | ((2,0),(2,4),(0,0))        |              0
+ ((2,0),(2,4),(0,0))        | ((3,1),(3,3),(1,0))        |              0
+ ((2,0),(2,4),(0,0))        | ((1,2),(3,4),(5,6),(7,8))  |              0
  ((2,0),(2,4),(0,0))        | ((7,8),(5,6),(3,4),(1,2))  |              0
  ((2,0),(2,4),(0,0))        | ((1,2),(7,8),(5,6),(3,-4)) |              0
  ((2,0),(2,4),(0,0))        | ((0,0))                    |              0
- ((2,0),(2,4),(0,0))        | ((3,1),(3,3),(1,0))        |              0
- ((2,0),(2,4),(0,0))        | ((1,2),(3,4),(5,6),(7,8))  |              0
  ((2,0),(2,4),(0,0))        | ((0,1),(0,1))              |   0.4472135955
- ((7,8),(5,6),(3,4),(1,2))  | ((2,0),(2,4),(0,0))        |              0
- ((7,8),(5,6),(3,4),(1,2))  | ((7,8),(5,6),(3,4),(1,2))  |              0
- ((7,8),(5,6),(3,4),(1,2))  | ((1,2),(7,8),(5,6),(3,-4)) |              0
- ((7,8),(5,6),(3,4),(1,2))  | ((0,0))                    |   2.2360679775
- ((7,8),(5,6),(3,4),(1,2))  | ((3,1),(3,3),(1,0))        | 0.707106781187
- ((7,8),(5,6),(3,4),(1,2))  | ((1,2),(3,4),(5,6),(7,8))  |              0
- ((7,8),(5,6),(3,4),(1,2))  | ((0,1),(0,1))              |  1.41421356237
- ((1,2),(7,8),(5,6),(3,-4)) | ((2,0),(2,4),(0,0))        |              0
- ((1,2),(7,8),(5,6),(3,-4)) | ((7,8),(5,6),(3,4),(1,2))  |              0
- ((1,2),(7,8),(5,6),(3,-4)) | ((1,2),(7,8),(5,6),(3,-4)) |              0
- ((1,2),(7,8),(5,6),(3,-4)) | ((0,0))                    |  1.58113883008
- ((1,2),(7,8),(5,6),(3,-4)) | ((3,1),(3,3),(1,0))        |              0
- ((1,2),(7,8),(5,6),(3,-4)) | ((1,2),(3,4),(5,6),(7,8))  |              0
- ((1,2),(7,8),(5,6),(3,-4)) | ((0,1),(0,1))              |  1.26491106407
- ((0,0))                    | ((2,0),(2,4),(0,0))        |              0
- ((0,0))                    | ((7,8),(5,6),(3,4),(1,2))  |   2.2360679775
- ((0,0))                    | ((1,2),(7,8),(5,6),(3,-4)) |  1.58113883008
- ((0,0))                    | ((0,0))                    |              0
- ((0,0))                    | ((3,1),(3,3),(1,0))        |              1
- ((0,0))                    | ((1,2),(3,4),(5,6),(7,8))  |   2.2360679775
- ((0,0))                    | ((0,1),(0,1))              |              1
  ((3,1),(3,3),(1,0))        | ((2,0),(2,4),(0,0))        |              0
+ ((3,1),(3,3),(1,0))        | ((3,1),(3,3),(1,0))        |              0
+ ((3,1),(3,3),(1,0))        | ((1,2),(3,4),(5,6),(7,8))  | 0.707106781187
  ((3,1),(3,3),(1,0))        | ((7,8),(5,6),(3,4),(1,2))  | 0.707106781187
  ((3,1),(3,3),(1,0))        | ((1,2),(7,8),(5,6),(3,-4)) |              0
  ((3,1),(3,3),(1,0))        | ((0,0))                    |              1
- ((3,1),(3,3),(1,0))        | ((3,1),(3,3),(1,0))        |              0
- ((3,1),(3,3),(1,0))        | ((1,2),(3,4),(5,6),(7,8))  | 0.707106781187
  ((3,1),(3,3),(1,0))        | ((0,1),(0,1))              |  1.38675049056
  ((1,2),(3,4),(5,6),(7,8))  | ((2,0),(2,4),(0,0))        |              0
+ ((1,2),(3,4),(5,6),(7,8))  | ((3,1),(3,3),(1,0))        | 0.707106781187
+ ((1,2),(3,4),(5,6),(7,8))  | ((1,2),(3,4),(5,6),(7,8))  |              0
  ((1,2),(3,4),(5,6),(7,8))  | ((7,8),(5,6),(3,4),(1,2))  |              0
  ((1,2),(3,4),(5,6),(7,8))  | ((1,2),(7,8),(5,6),(3,-4)) |              0
  ((1,2),(3,4),(5,6),(7,8))  | ((0,0))                    |   2.2360679775
- ((1,2),(3,4),(5,6),(7,8))  | ((3,1),(3,3),(1,0))        | 0.707106781187
- ((1,2),(3,4),(5,6),(7,8))  | ((1,2),(3,4),(5,6),(7,8))  |              0
  ((1,2),(3,4),(5,6),(7,8))  | ((0,1),(0,1))              |  1.41421356237
+ ((7,8),(5,6),(3,4),(1,2))  | ((2,0),(2,4),(0,0))        |              0
+ ((7,8),(5,6),(3,4),(1,2))  | ((3,1),(3,3),(1,0))        | 0.707106781187
+ ((7,8),(5,6),(3,4),(1,2))  | ((1,2),(3,4),(5,6),(7,8))  |              0
+ ((7,8),(5,6),(3,4),(1,2))  | ((7,8),(5,6),(3,4),(1,2))  |              0
+ ((7,8),(5,6),(3,4),(1,2))  | ((1,2),(7,8),(5,6),(3,-4)) |              0
+ ((7,8),(5,6),(3,4),(1,2))  | ((0,0))                    |   2.2360679775
+ ((7,8),(5,6),(3,4),(1,2))  | ((0,1),(0,1))              |  1.41421356237
+ ((1,2),(7,8),(5,6),(3,-4)) | ((2,0),(2,4),(0,0))        |              0
+ ((1,2),(7,8),(5,6),(3,-4)) | ((3,1),(3,3),(1,0))        |              0
+ ((1,2),(7,8),(5,6),(3,-4)) | ((1,2),(3,4),(5,6),(7,8))  |              0
+ ((1,2),(7,8),(5,6),(3,-4)) | ((7,8),(5,6),(3,4),(1,2))  |              0
+ ((1,2),(7,8),(5,6),(3,-4)) | ((1,2),(7,8),(5,6),(3,-4)) |              0
+ ((1,2),(7,8),(5,6),(3,-4)) | ((0,0))                    |  1.58113883008
+ ((1,2),(7,8),(5,6),(3,-4)) | ((0,1),(0,1))              |  1.26491106407
+ ((0,0))                    | ((2,0),(2,4),(0,0))        |              0
+ ((0,0))                    | ((3,1),(3,3),(1,0))        |              1
+ ((0,0))                    | ((1,2),(3,4),(5,6),(7,8))  |   2.2360679775
+ ((0,0))                    | ((7,8),(5,6),(3,4),(1,2))  |   2.2360679775
+ ((0,0))                    | ((1,2),(7,8),(5,6),(3,-4)) |  1.58113883008
+ ((0,0))                    | ((0,0))                    |              0
+ ((0,0))                    | ((0,1),(0,1))              |              1
  ((0,1),(0,1))              | ((2,0),(2,4),(0,0))        |   0.4472135955
+ ((0,1),(0,1))              | ((3,1),(3,3),(1,0))        |  1.38675049056
+ ((0,1),(0,1))              | ((1,2),(3,4),(5,6),(7,8))  |  1.41421356237
  ((0,1),(0,1))              | ((7,8),(5,6),(3,4),(1,2))  |  1.41421356237
  ((0,1),(0,1))              | ((1,2),(7,8),(5,6),(3,-4)) |  1.26491106407
  ((0,1),(0,1))              | ((0,0))                    |              1
- ((0,1),(0,1))              | ((3,1),(3,3),(1,0))        |  1.38675049056
- ((0,1),(0,1))              | ((1,2),(3,4),(5,6),(7,8))  |  1.41421356237
  ((0,1),(0,1))              | ((0,1),(0,1))              |              0
 (49 rows)
 
@@ -4404,14 +4375,14 @@ ERROR:  cannot convert circle with radius zero to polygon
 SELECT c1.f1, c2.f1 FROM CIRCLE_TBL c1, CIRCLE_TBL c2 WHERE c1.f1 ~= c2.f1;
        f1       |       f1       
 ----------------+----------------
+ <(5,1),3>      | <(5,1),3>
+ <(1,2),100>    | <(1,2),100>
  <(1,3),5>      | <(1,3),5>
  <(1,2),3>      | <(1,2),3>
- <(3,5),NaN>    | <(3,5),NaN>
- <(5,1),3>      | <(5,1),3>
  <(100,200),10> | <(100,200),10>
  <(100,1),115>  | <(100,1),115>
  <(3,5),0>      | <(3,5),0>
- <(1,2),100>    | <(1,2),100>
+ <(3,5),NaN>    | <(3,5),NaN>
 (8 rows)
 
 -- Overlap with circle
@@ -5266,4 +5237,95 @@ SELECT c.f1, p.f1, c.f1 <-> p.f1 FROM CIRCLE_TBL c, POLYGON_TBL p;
  <(3,5),NaN>    | ((0,0))                    |            NaN
  <(3,5),NaN>    | ((0,1),(0,1))              |            NaN
 (56 rows)
+
+-- Check index behavior for circles
+CREATE INDEX gcircleind ON circle_tbl USING gist (f1);
+SELECT * FROM circle_tbl WHERE f1 && circle(point(1,-2), 1)
+    ORDER BY area(f1);
+      f1       
+---------------
+ <(1,2),3>
+ <(1,3),5>
+ <(1,2),100>
+ <(100,1),115>
+(4 rows)
+
+EXPLAIN (COSTS OFF)
+SELECT * FROM circle_tbl WHERE f1 && circle(point(1,-2), 1)
+    ORDER BY area(f1);
+                     QUERY PLAN                     
+----------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Merge Key: (area(f1))
+   ->  Sort
+         Sort Key: (area(f1))
+         ->  Seq Scan on circle_tbl
+               Filter: (f1 && '<(1,-2),1>'::circle)
+ Optimizer: Postgres query optimizer
+(7 rows)
+
+SELECT * FROM circle_tbl WHERE f1 && circle(point(1,-2), 1)
+    ORDER BY area(f1);
+      f1       
+---------------
+ <(1,2),3>
+ <(1,3),5>
+ <(1,2),100>
+ <(100,1),115>
+(4 rows)
+
+-- Check index behavior for polygons
+CREATE INDEX gpolygonind ON polygon_tbl USING gist (f1);
+SELECT * FROM polygon_tbl WHERE f1 @> '((1,1),(2,2),(2,1))'::polygon
+    ORDER BY (poly_center(f1))[0];
+         f1          
+---------------------
+ ((2,0),(2,4),(0,0))
+(1 row)
+
+EXPLAIN (COSTS OFF)
+SELECT * FROM polygon_tbl WHERE f1 @> '((1,1),(2,2),(2,1))'::polygon
+    ORDER BY (poly_center(f1))[0];
+                          QUERY PLAN                          
+--------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Merge Key: ((poly_center(f1))[0])
+   ->  Sort
+         Sort Key: ((poly_center(f1))[0])
+         ->  Seq Scan on polygon_tbl
+               Filter: (f1 @> '((1,1),(2,2),(2,1))'::polygon)
+ Optimizer: Postgres query optimizer
+(7 rows)
+
+SELECT * FROM polygon_tbl WHERE f1 @> '((1,1),(2,2),(2,1))'::polygon
+    ORDER BY (poly_center(f1))[0];
+         f1          
+---------------------
+ ((2,0),(2,4),(0,0))
+(1 row)
+
+-- test non-error-throwing API for some core types
+SELECT pg_input_is_valid('(1', 'circle');
+ pg_input_is_valid 
+-------------------
+ f
+(1 row)
+
+SELECT * FROM pg_input_error_info('1,', 'circle');
+                  message                   | detail | hint | sql_error_code 
+--------------------------------------------+--------+------+----------------
+ invalid input syntax for type circle: "1," |        |      | 22P02
+(1 row)
+
+SELECT pg_input_is_valid('(1,2),-1', 'circle');
+ pg_input_is_valid 
+-------------------
+ f
+(1 row)
+
+SELECT * FROM pg_input_error_info('(1,2),-1', 'circle');
+                     message                      | detail | hint | sql_error_code 
+--------------------------------------------------+--------+------+----------------
+ invalid input syntax for type circle: "(1,2),-1" |        |      | 22P02
+(1 row)
 

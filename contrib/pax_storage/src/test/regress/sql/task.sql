@@ -54,6 +54,28 @@ create task valid_task_2 schedule ' 30 sEcOnDs ' as 'select 1';
 create task valid_task_3 schedule '59 seconds' as 'select 1';
 create task valid_task_4 schedule '17  seconds ' as 'select 1';
 
+-- task in function
+DO $$
+BEGIN
+	create task fn_task schedule '5 * * * * ' as 'select 1';
+END $$;
+select jobname from pg_task where jobname = 'fn_task';
+
+DO $$
+BEGIN
+	alter task fn_task schedule '6 * * * *';
+END $$;
+select schedule from pg_task where jobname = 'fn_task';
+
+DO $$
+DECLARE
+	jn text;
+BEGIN
+	SELECT jobname from pg_task where jobname = 'fn_task' into jn;
+	EXECUTE FORMAT('DROP TASK %I', jn);
+END $$;
+select jobname from pg_task where jobname = 'fn_task';
+
 -- clean up
 drop database task_dbno;
 drop user task_cron;

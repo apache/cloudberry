@@ -25,12 +25,7 @@ FOR EACH ROW EXECUTE PROCEDURE fn_x_after();
 
 CREATE TRIGGER trg_x_before BEFORE INSERT ON x
 FOR EACH ROW EXECUTE PROCEDURE fn_x_before();
--- The origin expert is follow error
--- ERROR:  function cannot execute on a QE slice because it issues a non-SELECT statement
--- CONTEXT:  SQL statement "UPDATE x set e='after trigger fired' where c='stuff'"
--- PL/pgSQL function fn_x_after() line 3 at SQL statement
--- But pax have not implement tuple_fetch_row_version
--- We hope to continue the test, so directly change the error return
+
 COPY x (a, b, c, d, e) from stdin;
 9999	\N	\\N	\NN	\N
 10000	21	31	41	51
@@ -71,6 +66,16 @@ COPY x from stdin (force_not_null (a), force_not_null (b));
 COPY x from stdin (force_null (a), force_null (b));
 COPY x from stdin (convert_selectively (a), convert_selectively (b));
 COPY x from stdin (encoding 'sql_ascii', encoding 'sql_ascii');
+
+-- incorrect options
+COPY x from stdin (format BINARY, delimiter ',');
+COPY x from stdin (format BINARY, null 'x');
+COPY x from stdin (format TEXT, force_quote(a));
+COPY x from stdin (format CSV, force_quote(a));
+COPY x from stdin (format TEXT, force_not_null(a));
+COPY x to stdout (format CSV, force_not_null(a));
+COPY x from stdin (format TEXT, force_null(a));
+COPY x to stdout (format CSV, force_null(a));
 
 -- too many columns in column list: should fail
 COPY x (a, b, c, d, e, d, c) from stdin;
@@ -488,3 +493,104 @@ COPY copy_eoc_marker FROM stdin LOG ERRORS SEGMENT REJECT LIMIT 5;
 \.
 SELECT * FROM copy_eoc_marker;
 DROP TABLE copy_eoc_marker;
+
+--
+-- COPY FROM ... DEFAULT
+--
+
+create temp table copy_default (
+	id integer primary key,
+	text_value text not null default 'test',
+	ts_value timestamp without time zone not null default '2022-07-05'
+);
+
+-- if DEFAULT is not specified, then the marker will be regular data
+copy copy_default from stdin;
+1	value	'2022-07-04'
+2	\D	'2022-07-05'
+\.
+
+select id, text_value, ts_value from copy_default;
+
+truncate copy_default;
+
+copy copy_default from stdin with (format csv);
+1,value,2022-07-04
+2,\D,2022-07-05
+\.
+
+select id, text_value, ts_value from copy_default;
+
+truncate copy_default;
+
+-- DEFAULT cannot be used in binary mode
+copy copy_default from stdin with (format binary, default '\D');
+
+-- DEFAULT cannot be new line nor carriage return
+copy copy_default from stdin with (default E'\n');
+copy copy_default from stdin with (default E'\r');
+
+-- DELIMITER cannot appear in DEFAULT spec
+copy copy_default from stdin with (delimiter ';', default 'test;test');
+
+-- CSV quote cannot appear in DEFAULT spec
+copy copy_default from stdin with (format csv, quote '"', default 'test"test');
+
+-- NULL and DEFAULT spec must be different
+copy copy_default from stdin with (default '\N');
+
+-- cannot use DEFAULT marker in column that has no DEFAULT value
+copy copy_default from stdin with (default '\D');
+\D	value	'2022-07-04'
+2	\D	'2022-07-05'
+\.
+
+copy copy_default from stdin with (format csv, default '\D');
+\D,value,2022-07-04
+2,\D,2022-07-05
+\.
+
+-- The DEFAULT marker must be unquoted and unescaped or it's not recognized
+copy copy_default from stdin with (default '\D');
+1	\D	'2022-07-04'
+2	\\D	'2022-07-04'
+3	"\D"	'2022-07-04'
+\.
+
+select id, text_value, ts_value from copy_default;
+
+truncate copy_default;
+
+copy copy_default from stdin with (format csv, default '\D');
+1,\D,2022-07-04
+2,\\D,2022-07-04
+3,"\D",2022-07-04
+\.
+
+select id, text_value, ts_value from copy_default;
+
+truncate copy_default;
+
+-- successful usage of DEFAULT option in COPY
+copy copy_default from stdin with (default '\D');
+1	value	'2022-07-04'
+2	\D	'2022-07-03'
+3	\D	\D
+\.
+
+select id, text_value, ts_value from copy_default;
+
+truncate copy_default;
+
+copy copy_default from stdin with (format csv, default '\D');
+1,value,2022-07-04
+2,\D,2022-07-03
+3,\D,\D
+\.
+
+select id, text_value, ts_value from copy_default;
+
+truncate copy_default;
+
+-- DEFAULT cannot be used in COPY TO
+copy (select 1 as test) TO stdout with (default '\D');

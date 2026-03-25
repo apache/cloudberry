@@ -64,9 +64,9 @@ vacuum mytab2;
 SELECT gp_segment_id, relname, reltuples FROM gp_dist_random('pg_class') WHERE relname = 'mytab2_int_idx1';
  gp_segment_id |     relname     | reltuples 
 ---------------+-----------------+-----------
-             0 | mytab2_int_idx1 |         0
-             1 | mytab2_int_idx1 |         0
-             2 | mytab2_int_idx1 |         0
+             0 | mytab2_int_idx1 |        -1
+             1 | mytab2_int_idx1 |        -1
+             2 | mytab2_int_idx1 |        -1
 (3 rows)
 
 -- second vacuum update index stat with table stat
@@ -98,7 +98,7 @@ insert into mytab3 values(1,'aa',1001,101),(2,'bb',1002,102);
 select reltuples from pg_class where relname='mytab3';
  reltuples 
 -----------
-         0
+        -1
 (1 row)
 
 -- inspect the state of the stats on segments

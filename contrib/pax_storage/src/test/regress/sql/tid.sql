@@ -1,3 +1,21 @@
+-- basic tests for the TID data type
+
+SELECT
+  '(0,0)'::tid as tid00,
+  '(0,1)'::tid as tid01,
+  '(-1,0)'::tid as tidm10,
+  '(4294967295,65535)'::tid as tidmax;
+
+SELECT '(4294967296,1)'::tid;  -- error
+SELECT '(1,65536)'::tid;  -- error
+
+-- Also try it with non-error-throwing API
+SELECT pg_input_is_valid('(0)', 'tid');
+SELECT * FROM pg_input_error_info('(0)', 'tid');
+SELECT pg_input_is_valid('(0,-1)', 'tid');
+SELECT * FROM pg_input_error_info('(0,-1)', 'tid');
+
+
 -- tests for functions related to TID handling
 
 CREATE TABLE tid_tab (a int);

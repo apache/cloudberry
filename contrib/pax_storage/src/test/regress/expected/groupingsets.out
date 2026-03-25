@@ -82,6 +82,13 @@ values (1,1,b'0000','1'), (2,2,b'0001','1'),
        (3,4,b'0010','2'), (4,8,b'0011','2'),
        (5,16,b'0000','2'), (6,32,b'0001','2'),
        (7,64,b'0010','1'), (8,128,b'0011','1');
+create temp table gstest5(id integer, v integer,
+                          unsortable_col1 xid, unsortable_col2 xid);
+insert into gstest5
+values (1,1,'3','1'), (2,2,'3','1'),
+       (3,4,'4','2'), (4,8,'4','2'),
+       (5,16,'4','2'), (6,32,'4','2'),
+       (7,64,'3','1'), (8,128,'3','1');
 create temp table gstest_empty (a integer, b integer, v integer);
 create function gstest_data(v integer, out a integer, out b integer)
   returns setof record
@@ -530,7 +537,7 @@ where x = 1 and q1 = 123;
                                        Output: 1, i1.q1, i1.q2
  Settings: enable_hashagg = 'off', optimizer = 'off'
  Optimizer: Postgres query optimizer
-(24 rows)
+(23 rows)
 
 select * from (
   select 1 as x, q1, sum(q2)
@@ -1032,7 +1039,6 @@ group by rollup(ten);
 (11 rows)
 
 -- More rescan tests
--- start_ignore
 select * from (values (1),(2)) v(a) left join lateral (select v.a, four, ten, count(*) from onek group by cube(four,ten)) s on true order by v.a,four,ten;
  a | a | four | ten | count 
 ---+---+------+-----+-------
@@ -1107,7 +1113,7 @@ select * from (values (1),(2)) v(a) left join lateral (select v.a, four, ten, co
  2 | 2 |      |   9 |   100
  2 | 2 |      |     |  1000
 (70 rows)
--- end_ignore
+
 select array(select row(v.a,s1.*) from (select two,four, count(*) from onek group by cube(two,four) order by two,four) s1) from (values (1),(2)) v(a);
                                                                         array                                                                         
 ------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -1323,6 +1329,80 @@ explain (costs off)
                            ->  Seq Scan on gstest4
  Optimizer: Postgres query optimizer
 (13 rows)
+
+select unsortable_col1, unsortable_col2,
+       grouping(unsortable_col1, unsortable_col2),
+       count(*), sum(v)
+  from gstest5 group by grouping sets ((unsortable_col1),(unsortable_col2))
+ order by 3,5;
+ unsortable_col1 | unsortable_col2 | grouping | count | sum 
+-----------------+-----------------+----------+-------+-----
+               4 |                 |        1 |     4 |  60
+               3 |                 |        1 |     4 | 195
+                 |               2 |        2 |     4 |  60
+                 |               1 |        2 |     4 | 195
+(4 rows)
+
+explain (costs off)
+  select unsortable_col1, unsortable_col2,
+       grouping(unsortable_col1, unsortable_col2),
+       count(*), sum(v)
+  from gstest5 group by grouping sets ((unsortable_col1),(unsortable_col2))
+ order by 3,5;
+                                  QUERY PLAN                                   
+-------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Merge Key: (GROUPING(unsortable_col1, unsortable_col2)), (sum(v))
+   ->  Sort
+         Sort Key: (GROUPING(unsortable_col1, unsortable_col2)), (sum(v))
+         ->  Finalize HashAggregate
+               Group Key: unsortable_col1, unsortable_col2, (GROUPINGSET_ID())
+               ->  Redistribute Motion 3:3  (slice2; segments: 3)
+                     Hash Key: (GROUPINGSET_ID())
+                     ->  Partial HashAggregate
+                           Hash Key: unsortable_col1
+                           Hash Key: unsortable_col2
+                           ->  Seq Scan on gstest5
+ Optimizer: Postgres query optimizer
+(13 rows)
+
+select unsortable_col1, unsortable_col2,
+       grouping(unsortable_col1, unsortable_col2),
+       count(*), sum(v)
+  from gstest5 group by grouping sets ((unsortable_col1),(unsortable_col2),())
+ order by 3,5;
+ unsortable_col1 | unsortable_col2 | grouping | count | sum 
+-----------------+-----------------+----------+-------+-----
+               4 |                 |        1 |     4 |  60
+               3 |                 |        1 |     4 | 195
+                 |               2 |        2 |     4 |  60
+                 |               1 |        2 |     4 | 195
+                 |                 |        3 |     8 | 255
+(5 rows)
+
+explain (costs off)
+  select unsortable_col1, unsortable_col2,
+       grouping(unsortable_col1, unsortable_col2),
+       count(*), sum(v)
+  from gstest5 group by grouping sets ((unsortable_col1),(unsortable_col2),())
+ order by 3,5;
+                                  QUERY PLAN                                   
+-------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Merge Key: (GROUPING(unsortable_col1, unsortable_col2)), (sum(v))
+   ->  Sort
+         Sort Key: (GROUPING(unsortable_col1, unsortable_col2)), (sum(v))
+         ->  Finalize HashAggregate
+               Group Key: unsortable_col1, unsortable_col2, (GROUPINGSET_ID())
+               ->  Redistribute Motion 3:3  (slice2; segments: 3)
+                     Hash Key: (GROUPINGSET_ID())
+                     ->  Partial MixedAggregate
+                           Hash Key: unsortable_col1
+                           Hash Key: unsortable_col2
+                           Group Key: ()
+                           ->  Seq Scan on gstest5
+ Optimizer: Postgres query optimizer
+(14 rows)
 
 -- empty input: first is 0 rows, second 1, third 3 etc.
 select a, b, sum(v), count(*) from gstest_empty group by grouping sets ((a,b),a);
@@ -1656,8 +1736,6 @@ SELECT a, b, count(*), max(a), max(b) FROM gstest3 GROUP BY GROUPING SETS(a, b,(
 
 COMMIT;
 -- More rescan tests
--- start_ignore
--- GPDB_95_MERGE_FIXME: the lateral query with grouping sets do not make right plans
 select * from (values (1),(2)) v(a) left join lateral (select v.a, four, ten, count(*) from onek group by cube(four,ten)) s on true order by v.a,four,ten;
  a | a | four | ten | count 
 ---+---+------+-----+-------
@@ -1733,7 +1811,6 @@ select * from (values (1),(2)) v(a) left join lateral (select v.a, four, ten, co
  2 | 2 |      |     |  1000
 (70 rows)
 
--- end_ignore
 select array(select row(v.a,s1.*) from (select two,four, count(*) from onek group by cube(two,four) order by two,four) s1) from (values (1),(2)) v(a);
                                                                         array                                                                         
 ------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -1785,6 +1862,7 @@ select array(select row(v.a,s1.*) from (select two,four, count(*) from onek grou
 
 -- test the knapsack
 set enable_indexscan = false;
+set hash_mem_multiplier = 1.0;
 set work_mem = '64kB';
 explain (costs off)
   select unique1,
@@ -1891,7 +1969,8 @@ select v||'a', case when grouping(v||'a') = 1 then 1 else 0 end, count(*)
 -- Bug #16784
 create table bug_16784(i int, j int);
 analyze bug_16784;
--- alter table bug_16784 set (autovacuum_enabled = 'false');
+alter table bug_16784 set (autovacuum_enabled = 'false');
+WARNING:  autovacuum is not supported in Cloudberry
 update pg_class set reltuples = 10 where relname='bug_16784';
 ERROR:  permission denied: "pg_class" is a system catalog
 insert into bug_16784 select g/10, g from generate_series(1,40) g;
@@ -2087,7 +2166,8 @@ create table gs_data_1 as
 select g%1000 as g1000, g%100 as g100, g%10 as g10, g
    from generate_series(0,1999) g;
 analyze gs_data_1;
--- alter table gs_data_1 set (autovacuum_enabled = 'false');
+alter table gs_data_1 set (autovacuum_enabled = 'false');
+WARNING:  autovacuum is not supported in Cloudberry
 update pg_class set reltuples = 10 where relname='gs_data_1';
 ERROR:  permission denied: "pg_class" is a system catalog
 set work_mem='64kB';
@@ -2159,6 +2239,7 @@ group by cube (g1000,g100,g10) distributed by (g1000);
 set jit_above_cost to default;
 set enable_sort = true;
 set work_mem to default;
+set hash_mem_multiplier to default;
 -- Compare results of ORCA plan that relies on "IS NOT DISTINCT FROM" HASH Join
 (select * from gs_hash_1 except select * from gs_group_1)
   union all
@@ -2284,7 +2365,7 @@ order by a, b, c;
 -- test handling of outer GroupingFunc within subqueries
 explain (costs off)
 select (select grouping(v1)) from (values ((select 1))) v(v1) group by cube(v1);
-             QUERY PLAN
+             QUERY PLAN              
 -------------------------------------
  MixedAggregate
    Hash Key: $2
@@ -2306,8 +2387,8 @@ select (select grouping(v1)) from (values ((select 1))) v(v1) group by cube(v1);
 
 explain (costs off)
 select (select grouping(v1)) from (values ((select 1))) v(v1) group by v1;
-        QUERY PLAN         
----------------------------
+             QUERY PLAN              
+-------------------------------------
  GroupAggregate
    InitPlan 1 (returns $1)
      ->  Result
@@ -2316,6 +2397,7 @@ select (select grouping(v1)) from (values ((select 1))) v(v1) group by v1;
    ->  Result
    SubPlan 2
      ->  Result
+ Optimizer: Postgres query optimizer
 (9 rows)
 
 select (select grouping(v1)) from (values ((select 1))) v(v1) group by v1;

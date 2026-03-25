@@ -316,6 +316,21 @@ SELECT date '1999 08 01';
  1999-08-01
 (1 row)
 
+-- Test guc gp_allow_date_field_width_5digits
+-- should error out
+SELECT date '2020516';
+ERROR:  invalid input syntax for type date: "2020516"
+LINE 1: SELECT date '2020516';
+                    ^
+SET gp_allow_date_field_width_5digits=on;
+-- should parsed to 0202-05-16 ( non-standard YYYMMDD )
+SELECT date '2020516';
+    date    
+------------
+ 0202-05-16
+(1 row)
+
+RESET gp_allow_date_field_width_5digits;
 SET datestyle TO dmy;
 SELECT date 'January 8, 1999';
     date    
@@ -568,6 +583,21 @@ SELECT date '1999 08 01';
  1999-08-01
 (1 row)
 
+-- Test guc gp_allow_date_field_width_5digits
+-- should error out
+SELECT date '2020516';
+ERROR:  invalid input syntax for type date: "2020516"
+LINE 1: SELECT date '2020516';
+                    ^
+SET gp_allow_date_field_width_5digits=on;
+-- should parsed to 0202-05-16 ( non-standard YYYMMDD )
+SELECT date '2020516';
+    date    
+------------
+ 0202-05-16
+(1 row)
+
+RESET gp_allow_date_field_width_5digits;
 SET datestyle TO mdy;
 SELECT date 'January 8, 1999';
     date    
@@ -840,6 +870,52 @@ SELECT date '5874898-01-01';  -- out of range
 ERROR:  date out of range: "5874898-01-01"
 LINE 1: SELECT date '5874898-01-01';
                     ^
+-- Test non-error-throwing API
+SELECT pg_input_is_valid('now', 'date');
+ pg_input_is_valid 
+-------------------
+ t
+(1 row)
+
+SELECT pg_input_is_valid('garbage', 'date');
+ pg_input_is_valid 
+-------------------
+ f
+(1 row)
+
+SELECT pg_input_is_valid('6874898-01-01', 'date');
+ pg_input_is_valid 
+-------------------
+ f
+(1 row)
+
+SELECT * FROM pg_input_error_info('garbage', 'date');
+                    message                    | detail | hint | sql_error_code 
+-----------------------------------------------+--------+------+----------------
+ invalid input syntax for type date: "garbage" |        |      | 22007
+(1 row)
+
+SELECT * FROM pg_input_error_info('6874898-01-01', 'date');
+              message               | detail | hint | sql_error_code 
+------------------------------------+--------+------+----------------
+ date out of range: "6874898-01-01" |        |      | 22008
+(1 row)
+
+-- Test guc gp_allow_date_field_width_5digits
+-- should error out
+SELECT date '2020516';
+ERROR:  invalid input syntax for type date: "2020516"
+LINE 1: SELECT date '2020516';
+                    ^
+SET gp_allow_date_field_width_5digits=on;
+-- should parsed to 0202-05-16 ( non-standard YYYMMDD )
+SELECT date '2020516';
+    date    
+------------
+ 0202-05-16
+(1 row)
+
+RESET gp_allow_date_field_width_5digits;
 RESET datestyle;
 --
 -- Simple math
@@ -1340,6 +1416,12 @@ select isfinite('infinity'::date), isfinite('-infinity'::date), isfinite('today'
  isfinite | isfinite | isfinite 
 ----------+----------+----------
  f        | f        | t
+(1 row)
+
+select 'infinity'::date = '+infinity'::date as t;
+ t 
+---
+ t
 (1 row)
 
 --

@@ -1,7 +1,3 @@
--- start_matchsubs
--- m/cluster.c:\d+/
--- s/cluster.c:\d+/cluster.c:###/
--- end_matchsubs
 -- ALTER TABLE ... SET DISTRIBUTED BY
 -- This is the main interface for system expansion
 \set DATA values(1, 2), (2, 3), (3, 4)
@@ -93,10 +89,10 @@ set enable_seqscan to off;
 explain select * from atsdb where i = 1;
                                    QUERY PLAN                                    
 ---------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)  (cost=0.13..140.17 rows=1 width=6)
-   ->  Index Scan using atsdb_i_idx on atsdb  (cost=0.13..140.15 rows=1 width=6)
-         Index Cond: (i = 1)
- Optimizer: Postgres query optimizer
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..200.27 rows=1 width=6)
+   ->  Index Scan using atsdb_i_idx on atsdb  (cost=0.00..200.27 rows=1 width=6)
+         Index Cond: i = 1
+ Settings:  enable_seqscan=off
 (4 rows)
 
 select * from atsdb where i = 1;
@@ -109,10 +105,10 @@ alter table atsdb set distributed by (i);
 explain select * from atsdb where i = 1;
                                    QUERY PLAN                                    
 ---------------------------------------------------------------------------------
- Gather Motion 1:1  (slice1; segments: 1)  (cost=0.13..140.17 rows=1 width=6)
-   ->  Index Scan using atsdb_i_idx on atsdb  (cost=0.13..140.15 rows=1 width=6)
-         Index Cond: (i = 1)
- Optimizer: Postgres query optimizer
+ Gather Motion 1:1  (slice1; segments: 1)  (cost=0.00..200.27 rows=1 width=6)
+   ->  Index Scan using atsdb_i_idx on atsdb  (cost=0.00..200.27 rows=1 width=6)
+         Index Cond: i = 1
+ Settings:  enable_seqscan=off
 (4 rows)
 
 select * from atsdb where i = 1;
@@ -175,12 +171,12 @@ ERROR:  permission denied: "pg_class" is a system catalog
 create table atsdb (i int, j text) distributed by (j);
 insert into atsdb select i, i::text from generate_series(1, 10) i;
 alter table atsdb set with(appendonly = true);
-ERROR:  PAX not allow swap relation files for different AM (cluster.c:1487)
 select relname, segrelid != 0, reloptions from pg_class, pg_appendonly where pg_class.oid =
 'atsdb'::regclass and relid = pg_class.oid;
  relname | ?column? | reloptions 
 ---------+----------+------------
-(0 rows)
+ atsdb   | t        | 
+(1 row)
 
 select * from atsdb;
  i  | j  
@@ -320,12 +316,12 @@ select * from distcheck where rel = 'atsdb';
 
 alter table atsdb drop column n;
 alter table atsdb set with(appendonly = true, compresslevel = 3);
-ERROR:  PAX not allow swap relation files for different AM (cluster.c:1487)
 select relname, segrelid != 0, reloptions from pg_class, pg_appendonly where pg_class.oid =
 'atsdb'::regclass and relid = pg_class.oid;
- relname | ?column? | reloptions 
----------+----------+------------
-(0 rows)
+ relname | ?column? |    reloptions     
+---------+----------+-------------------
+ atsdb   | t        | {compresslevel=3}
+(1 row)
 
 select * from distcheck where rel = 'atsdb';
   rel  | attname 
@@ -447,9 +443,10 @@ select * from distcheck where rel = 'atsdb';
 
 select relname, segrelid != 0, reloptions from pg_class, pg_appendonly where pg_class.oid =
 'atsdb'::regclass and relid = pg_class.oid;
- relname | ?column? | reloptions 
----------+----------+------------
-(0 rows)
+ relname | ?column? |    reloptions     
+---------+----------+-------------------
+ atsdb   | t        | {compresslevel=3}
+(1 row)
 
 select * from atsdb;
   j  |  t  
@@ -1326,7 +1323,6 @@ drop table mpp5754;
 -- MPP-5918
 create role atsdb;
 NOTICE:  resource queue required -- using default resource queue "pg_default"
--- pax table won't create toast table
 create table owner_test(i int, toast text) distributed randomly;
 alter table owner_test owner to atsdb;
 alter table owner_test set with (reorganize = true) distributed by (i);
@@ -1344,9 +1340,10 @@ where a.relname='owner_test'
   and x.oid = a.relowner
   and y.oid = b.relowner
   and z.oid = c.relowner;
- relname | relowner | toastowner | toastidxowner 
----------+----------+------------+---------------
-(0 rows)
+  relname   | relowner | toastowner | toastidxowner 
+------------+----------+------------+---------------
+ owner_test | atsdb    | atsdb      | atsdb
+(1 row)
 
 -- MPP-9663 - Check that the ownership is consistent on the segments as well
 select a.relname,
@@ -1365,9 +1362,10 @@ where a.relname='owner_test'
   and a.gp_segment_id = 0
   and b.gp_segment_id = 0
   and c.gp_segment_id = 0;
- relname | relowner | toastowner | toastidxowner 
----------+----------+------------+---------------
-(0 rows)
+  relname   | relowner | toastowner | toastidxowner 
+------------+----------+------------+---------------
+ owner_test | atsdb    | atsdb      | atsdb
+(1 row)
 
 -- MPP-9663 - The code path is different when the table has dropped columns
 alter table owner_test add column d text;
@@ -1389,9 +1387,10 @@ where a.relname='owner_test'
   and a.gp_segment_id = 0
   and b.gp_segment_id = 0
   and c.gp_segment_id = 0;
- relname | relowner | toastowner | toastidxowner 
----------+----------+------------+---------------
-(0 rows)
+  relname   | relowner | toastowner | toastidxowner 
+------------+----------+------------+---------------
+ owner_test | atsdb    | atsdb      | atsdb
+(1 row)
 
 drop table owner_test;
 drop role atsdb;

@@ -15,6 +15,14 @@
 -- but 'g' (the 2nd rule is needed to include the 'postgresql' FDW used in the
 -- test).
 \set NO_BUILTINS ([a-fh-z]?*)|(g[a-oq-z]?*)
+-- directory paths and dlsuffix are passed to us in environment variables
+\getenv libdir PG_LIBDIR
+\getenv dlsuffix PG_DLSUFFIX
+\set regresslib :libdir '/regress' :dlsuffix
+CREATE FUNCTION test_fdw_handler()
+    RETURNS fdw_handler
+    AS :'regresslib', 'test_fdw_handler'
+    LANGUAGE C;
 -- Clean up in case a prior regression run failed
 -- Suppress NOTICE messages when roles don't exist
 SET client_min_messages TO 'warning';
@@ -114,6 +122,9 @@ LINE 1: ...GN DATA WRAPPER test_fdw HANDLER test_fdw_handler HANDLER in...
 CREATE FOREIGN DATA WRAPPER test_fdw HANDLER test_fdw_handler;
 DROP FOREIGN DATA WRAPPER test_fdw;
 -- ALTER FOREIGN DATA WRAPPER
+ALTER FOREIGN DATA WRAPPER foo OPTIONS (nonexistent 'fdw');         -- ERROR
+ERROR:  invalid option "nonexistent"
+HINT:  There are no valid options in this context.
 ALTER FOREIGN DATA WRAPPER foo;                             -- ERROR
 ERROR:  syntax error at or near ";"
 LINE 1: ALTER FOREIGN DATA WRAPPER foo;
@@ -895,27 +906,28 @@ ERROR:  column "no_column" of relation "ft1" does not exist
 ALTER FOREIGN TABLE ft1 DROP COLUMN IF EXISTS no_column;
 NOTICE:  column "no_column" of relation "ft1" does not exist, skipping
 ALTER FOREIGN TABLE ft1 DROP COLUMN c9;
+ALTER FOREIGN TABLE ft1 ADD COLUMN c11 serial;
 ALTER FOREIGN TABLE ft1 SET SCHEMA foreign_schema;
 ALTER FOREIGN TABLE ft1 SET TABLESPACE ts;                      -- ERROR
 ERROR:  relation "ft1" does not exist
-ALTER FOREIGN TABLE foreign_schema.ft1 SET TABLESPACE ts;       -- ERROR
-ERROR:  ALTER action SET TABLESPACE cannot be performed on relation "ft1"
-DETAIL:  This operation is not supported for foreign tables.
+ALTER SEQUENCE foreign_schema.ft1_c11_seq SET SCHEMA public;    -- ERROR
+ERROR:  relation "foreign_schema.ft1_c11_seq" does not exist
 ALTER FOREIGN TABLE foreign_schema.ft1 RENAME c1 TO foreign_column_1;
 ALTER FOREIGN TABLE foreign_schema.ft1 RENAME TO foreign_table_1;
 \d foreign_schema.foreign_table_1
-                        Foreign table "foreign_schema.foreign_table_1"
-      Column      |  Type   | Collation | Nullable | Default |          FDW options           
-------------------+---------+-----------+----------+---------+--------------------------------
- foreign_column_1 | integer |           | not null |         | ("param 1" 'val1')
- c2               | text    |           |          |         | (param2 'val2', param3 'val3')
- c3               | date    |           |          |         | 
- c4               | integer |           |          | 0       | 
- c5               | integer |           |          |         | 
- c6               | integer |           | not null |         | 
- c7               | integer |           |          |         | (p1 'v1', p2 'v2')
- c8               | text    |           |          |         | (p2 'V2')
- c10              | integer |           |          |         | (p1 'v1')
+                                    Foreign table "foreign_schema.foreign_table_1"
+      Column      |  Type   | Collation | Nullable |             Default              |          FDW options           
+------------------+---------+-----------+----------+----------------------------------+--------------------------------
+ foreign_column_1 | integer |           | not null |                                  | ("param 1" 'val1')
+ c2               | text    |           |          |                                  | (param2 'val2', param3 'val3')
+ c3               | date    |           |          |                                  | 
+ c4               | integer |           |          | 0                                | 
+ c5               | integer |           |          |                                  | 
+ c6               | integer |           | not null |                                  | 
+ c7               | integer |           |          |                                  | (p1 'v1', p2 'v2')
+ c8               | text    |           |          |                                  | (p2 'V2')
+ c10              | integer |           |          |                                  | (p1 'v1')
+ c11              | integer |           | not null | nextval('ft1_c11_seq'::regclass) | 
 Check constraints:
     "ft1_c2_check" CHECK (c2 <> ''::text)
     "ft1_c3_check" CHECK (c3 >= '01-01-1994'::date AND c3 <= '01-31-1994'::date)
@@ -1532,7 +1544,6 @@ ALTER TABLE fd_pt1 ADD COLUMN c8 integer;
  c7     | integer |           | not null |         | plain    |              | 
  c8     | integer |           |          |         | plain    |              | 
 Child tables: ft2, FOREIGN
-Distributed by: (c1)
 
 \d+ ft2
                                        Foreign table "public.ft2"
@@ -1596,7 +1607,6 @@ ALTER TABLE fd_pt1 ALTER COLUMN c8 SET STORAGE EXTERNAL;
  c7     | integer |           |          |         | plain    |              | 
  c8     | text    |           |          |         | external |              | 
 Child tables: ft2, FOREIGN
-Distributed by: (c1)
 
 \d+ ft2
                                        Foreign table "public.ft2"
@@ -1629,7 +1639,6 @@ ALTER TABLE fd_pt1 DROP COLUMN c8;
  c2     | text    |           |          |         | extended |              | 
  c3     | date    |           |          |         | plain    |              | 
 Child tables: ft2, FOREIGN
-Distributed by: (c1)
 
 \d+ ft2
                                        Foreign table "public.ft2"
@@ -1669,7 +1678,6 @@ Check constraints:
     "fd_pt1chk1" CHECK (c1 > 0) NO INHERIT
     "fd_pt1chk2" CHECK (c2 <> ''::text)
 Child tables: ft2, FOREIGN
-Distributed by: (c1)
 
 \d+ ft2
                                        Foreign table "public.ft2"
@@ -1713,7 +1721,6 @@ Check constraints:
     "fd_pt1chk1" CHECK (c1 > 0) NO INHERIT
     "fd_pt1chk2" CHECK (c2 <> ''::text)
 Child tables: ft2, FOREIGN
-Distributed by: (c1)
 
 \d+ ft2
                                        Foreign table "public.ft2"
@@ -1745,7 +1752,6 @@ ALTER TABLE fd_pt1 ADD CONSTRAINT fd_pt1chk3 CHECK (c2 <> '') NOT VALID;
 Check constraints:
     "fd_pt1chk3" CHECK (c2 <> ''::text) NOT VALID
 Child tables: ft2, FOREIGN
-Distributed by: (c1)
 
 \d+ ft2
                                        Foreign table "public.ft2"
@@ -1773,7 +1779,6 @@ ALTER TABLE fd_pt1 VALIDATE CONSTRAINT fd_pt1chk3;
 Check constraints:
     "fd_pt1chk3" CHECK (c2 <> ''::text)
 Child tables: ft2, FOREIGN
-Distributed by: (c1)
 
 \d+ ft2
                                        Foreign table "public.ft2"
@@ -1805,7 +1810,6 @@ ALTER TABLE fd_pt1 RENAME CONSTRAINT fd_pt1chk3 TO f2_check;
 Check constraints:
     "f2_check" CHECK (f2 <> ''::text)
 Child tables: ft2, FOREIGN
-Distributed by: (f1)
 
 \d+ ft2
                                        Foreign table "public.ft2"
@@ -1821,11 +1825,6 @@ Server: s0
 FDW options: (delimiter ',', quote '"', "be quoted" 'value')
 Inherits: fd_pt1
 
--- TRUNCATE doesn't work on foreign tables, either directly or recursively
-TRUNCATE ft2;  -- ERROR
-ERROR:  foreign-data wrapper "dummy" has no handler
-TRUNCATE fd_pt1;  -- ERROR
-ERROR:  foreign-data wrapper "dummy" has no handler
 DROP TABLE fd_pt1 CASCADE;
 NOTICE:  drop cascades to foreign table ft2
 -- IMPORT FOREIGN SCHEMA
@@ -1868,7 +1867,6 @@ CREATE FOREIGN TABLE fd_pt2_1 PARTITION OF fd_pt2 FOR VALUES IN (1)
  c3     | date    |           |          |         | plain    |              | 
 Partition key: LIST (c1)
 Partitions: fd_pt2_1 FOR VALUES IN (1), FOREIGN
-Distributed by: (c1)
 
 \d+ fd_pt2_1
                                      Foreign table "public.fd_pt2_1"
@@ -1941,7 +1939,6 @@ ALTER TABLE fd_pt2 ATTACH PARTITION fd_pt2_1 FOR VALUES IN (1);
  c3     | date    |           |          |         | plain    |              | 
 Partition key: LIST (c1)
 Partitions: fd_pt2_1 FOR VALUES IN (1), FOREIGN
-Distributed by: (c1)
 
 \d+ fd_pt2_1
                                      Foreign table "public.fd_pt2_1"
@@ -1970,7 +1967,6 @@ ALTER TABLE fd_pt2_1 ADD CONSTRAINT p21chk CHECK (c2 <> '');
  c3     | date    |           |          |         | plain    |              | 
 Partition key: LIST (c1)
 Partitions: fd_pt2_1 FOR VALUES IN (1), FOREIGN
-Distributed by: (c1)
 
 \d+ fd_pt2_1
                                      Foreign table "public.fd_pt2_1"
@@ -2048,11 +2044,6 @@ ALTER TABLE fd_pt2 ATTACH PARTITION fd_pt2_1 FOR VALUES IN (1);       -- ERROR
 ERROR:  child table is missing constraint "fd_pt2chk1"
 ALTER FOREIGN TABLE fd_pt2_1 ADD CONSTRAINT fd_pt2chk1 CHECK (c1 > 0);
 ALTER TABLE fd_pt2 ATTACH PARTITION fd_pt2_1 FOR VALUES IN (1);
--- TRUNCATE doesn't work on foreign tables, either directly or recursively
-TRUNCATE fd_pt2_1;  -- ERROR
-ERROR:  foreign-data wrapper "dummy" has no handler
-TRUNCATE fd_pt2;  -- ERROR
-ERROR:  foreign-data wrapper "dummy" has no handler
 DROP FOREIGN TABLE fd_pt2_1;
 DROP TABLE fd_pt2;
 -- foreign table cannot be part of partition tree made of temporary

@@ -1,4 +1,5 @@
 set optimizer_print_missing_stats = off;
+set optimizer_trace_fallback = on;
 drop table if exists ctas_src;
 NOTICE:  table "ctas_src" does not exist, skipping
 drop table if exists ctas_dst;
@@ -8,14 +9,114 @@ insert into ctas_src values(1, 1, 'A', 1);
 insert into ctas_src values(2, 1, 'A', 0);
 insert into ctas_src values(3, 0, 'B', 1);
 -- MPP-2859
+explain (costs off) create table ctas_dst as 
+SELECT attr, class, (select count(distinct class) from ctas_src) as dclass FROM ctas_src GROUP BY attr, class distributed by (attr);
+                                   QUERY PLAN                                   
+--------------------------------------------------------------------------------
+ HashAggregate
+   Group Key: ctas_src.attr, ctas_src.class
+   InitPlan 1 (returns $0)  (slice2)
+     ->  Finalize Aggregate
+           ->  Gather Motion 3:1  (slice3; segments: 3)
+                 ->  Partial Aggregate
+                       ->  HashAggregate
+                             Group Key: ctas_src_1.class
+                             ->  Redistribute Motion 3:3  (slice4; segments: 3)
+                                   Hash Key: ctas_src_1.class
+                                   ->  Streaming HashAggregate
+                                         Group Key: ctas_src_1.class
+                                         ->  Seq Scan on ctas_src ctas_src_1
+   ->  Redistribute Motion 3:3  (slice1; segments: 3)
+         Hash Key: ctas_src.attr
+         ->  HashAggregate
+               Group Key: ctas_src.attr, ctas_src.class
+               ->  Seq Scan on ctas_src
+ Optimizer: Postgres query optimizer
+(19 rows)
+
 create table ctas_dst as 
 SELECT attr, class, (select count(distinct class) from ctas_src) as dclass FROM ctas_src GROUP BY attr, class distributed by (attr);
+select * from ctas_dst;
+ attr | class | dclass 
+------+-------+--------
+ B    |     0 |      2
+ A    |     1 |      2
+(2 rows)
+
 drop table ctas_dst;
+explain (costs off) create table ctas_dst as 
+SELECT attr, class, (select max(class) from ctas_src) as maxclass FROM ctas_src GROUP BY attr, class distributed by (attr);
+                        QUERY PLAN                         
+-----------------------------------------------------------
+ HashAggregate
+   Group Key: ctas_src.attr, ctas_src.class
+   InitPlan 1 (returns $0)  (slice2)
+     ->  Finalize Aggregate
+           ->  Gather Motion 3:1  (slice3; segments: 3)
+                 ->  Partial Aggregate
+                       ->  Seq Scan on ctas_src ctas_src_1
+   ->  Redistribute Motion 3:3  (slice1; segments: 3)
+         Hash Key: ctas_src.attr
+         ->  HashAggregate
+               Group Key: ctas_src.attr, ctas_src.class
+               ->  Seq Scan on ctas_src
+ Optimizer: Postgres query optimizer
+(13 rows)
+
 create table ctas_dst as 
 SELECT attr, class, (select max(class) from ctas_src) as maxclass FROM ctas_src GROUP BY attr, class distributed by (attr);
+select * from ctas_dst;
+ attr | class | maxclass 
+------+-------+----------
+ B    |     0 |        1
+ A    |     1 |        1
+(2 rows)
+
 drop table ctas_dst;
+explain (costs off) create table ctas_dst as 
+SELECT attr, class, (select count(distinct class) from ctas_src) as dclass, (select max(class) from ctas_src) as maxclass, (select min(class) from ctas_src) as minclass FROM ctas_src GROUP BY attr, class distributed by (attr);
+                                   QUERY PLAN                                   
+--------------------------------------------------------------------------------
+ HashAggregate
+   Group Key: ctas_src.attr, ctas_src.class
+   InitPlan 1 (returns $0)  (slice2)
+     ->  Finalize Aggregate
+           ->  Gather Motion 3:1  (slice3; segments: 3)
+                 ->  Partial Aggregate
+                       ->  HashAggregate
+                             Group Key: ctas_src_1.class
+                             ->  Redistribute Motion 3:3  (slice4; segments: 3)
+                                   Hash Key: ctas_src_1.class
+                                   ->  Streaming HashAggregate
+                                         Group Key: ctas_src_1.class
+                                         ->  Seq Scan on ctas_src ctas_src_1
+   InitPlan 2 (returns $1)  (slice5)
+     ->  Finalize Aggregate
+           ->  Gather Motion 3:1  (slice6; segments: 3)
+                 ->  Partial Aggregate
+                       ->  Seq Scan on ctas_src ctas_src_2
+   InitPlan 3 (returns $2)  (slice7)
+     ->  Finalize Aggregate
+           ->  Gather Motion 3:1  (slice8; segments: 3)
+                 ->  Partial Aggregate
+                       ->  Seq Scan on ctas_src ctas_src_3
+   ->  Redistribute Motion 3:3  (slice1; segments: 3)
+         Hash Key: ctas_src.attr
+         ->  HashAggregate
+               Group Key: ctas_src.attr, ctas_src.class
+               ->  Seq Scan on ctas_src
+ Optimizer: Postgres query optimizer
+(29 rows)
+
 create table ctas_dst as 
 SELECT attr, class, (select count(distinct class) from ctas_src) as dclass, (select max(class) from ctas_src) as maxclass, (select min(class) from ctas_src) as minclass FROM ctas_src GROUP BY attr, class distributed by (attr);
+select * from ctas_dst;
+ attr | class | dclass | maxclass | minclass 
+------+-------+--------+----------+----------
+ A    |     1 |      2 |        1 |        0
+ B    |     0 |      2 |        1 |        0
+(2 rows)
+
 -- MPP-4298: "unknown" datatypes.
 drop table if exists ctas_foo;
 NOTICE:  table "ctas_foo" does not exist, skipping
@@ -327,3 +428,4 @@ SELECT * FROM test_tmp2;
 DROP FUNCTION public.exception_func();
 DROP TABLE test_tmp1;
 DROP TABLE test_tmp2;
+reset optimizer_trace_fallback;

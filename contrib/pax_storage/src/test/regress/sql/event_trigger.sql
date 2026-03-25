@@ -274,8 +274,7 @@ DROP SCHEMA schema_one, schema_two CASCADE;
 DELETE FROM undroppable_objs WHERE object_identity = 'schema_one.table_three';
 DROP SCHEMA schema_one, schema_two CASCADE;
 
--- pax table/fastseq name is diffect with heap, just ignore it
--- SELECT * FROM dropped_objects WHERE schema IS NULL OR schema <> 'pg_toast';
+SELECT * FROM dropped_objects WHERE schema IS NULL OR schema <> 'pg_toast';
 
 DROP OWNED BY regress_evt_user;
 SELECT * FROM dropped_objects WHERE type = 'schema';
@@ -390,6 +389,11 @@ alter table rewriteme
  add column onemore int default 0,
  add column another int default -1,
  alter column foo type numeric(10,4);
+
+-- matview rewrite when changing access method
+CREATE MATERIALIZED VIEW heapmv USING heap AS SELECT 1 AS a;
+ALTER MATERIALIZED VIEW heapmv SET ACCESS METHOD heap2;
+DROP MATERIALIZED VIEW heapmv;
 
 -- shouldn't trigger a table_rewrite event
 alter table rewriteme alter column foo type numeric(12,4);

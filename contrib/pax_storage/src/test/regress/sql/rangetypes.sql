@@ -1,15 +1,8 @@
 -- Tests for range data types.
 
--- start_matchsubs
--- m/NOTICE:  One or more columns in the following table\(s\) do not have statistics: /
--- s/.//gs
--- m/HINT:  For non-partitioned tables, run analyze .+\. For partitioned tables, run analyze rootpartition .+\. See log for columns missing statistics\./
--- s/.//gs
--- end_matchsubs
-create type textrange as range (subtype=text, collation="C");
-
 --
 -- test input parser
+-- (type textrange was already made in test_setup.sql)
 --
 
 -- negative tests; should fail
@@ -46,6 +39,19 @@ select '[a,a]'::textrange;
 select '[a,a)'::textrange;
 select '(a,a]'::textrange;
 select '(a,a)'::textrange;
+
+-- Also try it with non-error-throwing API
+select pg_input_is_valid('(1,4)', 'int4range');
+select pg_input_is_valid('(1,4', 'int4range');
+select * from pg_input_error_info('(1,4', 'int4range');
+select pg_input_is_valid('(4,1)', 'int4range');
+select * from pg_input_error_info('(4,1)', 'int4range');
+select pg_input_is_valid('(4,zed)', 'int4range');
+select * from pg_input_error_info('(4,zed)', 'int4range');
+select pg_input_is_valid('[1,2147483647]', 'int4range');
+select * from pg_input_error_info('[1,2147483647]', 'int4range');
+select pg_input_is_valid('[2000-01-01,5874897-12-31]', 'daterange');
+select * from pg_input_error_info('[2000-01-01,5874897-12-31]', 'daterange');
 
 --
 -- create some test data and test the operators
@@ -211,7 +217,6 @@ select daterange('2000-01-01'::date, 'infinity'::date, '[]');
 
 -- test GiST index that's been built incrementally
 create table test_range_gist(ir int4range);
--- PAX not support gist/spgist/brin indexes
 create index test_range_gist_idx on test_range_gist using gist (ir);
 
 insert into test_range_gist select int4range(g, g+10) from generate_series(1,2000) g;
@@ -282,7 +287,6 @@ select count(*) from test_range_gist where ir -|- int4multirange(int4range(100,2
 
 -- now check same queries using a bulk-loaded index
 drop index test_range_gist_idx;
--- PAX not support gist/spgist/brin indexes
 create index test_range_gist_idx on test_range_gist using gist (ir);
 
 select count(*) from test_range_gist where ir @> 'empty'::int4range;
@@ -396,6 +400,32 @@ RESET enable_seqscan;
 
 drop table test_range_elem;
 
+--
+-- Btree_gist is not included by default, so to test exclusion
+-- constraints with range types, use singleton int ranges for the "="
+-- portion of the constraint.
+--
+
+create table test_range_excl(
+  id int4,
+  room int4range,
+  speaker int4range,
+  during tsrange,
+  exclude using gist (room with =, during with &&),
+  exclude using gist (speaker with =, during with &&)
+) DISTRIBUTED REPLICATED;
+
+insert into test_range_excl
+  values(1, int4range(123, 123, '[]'), int4range(1, 1, '[]'), '[2010-01-02 10:00, 2010-01-02 11:00)');
+insert into test_range_excl
+  values(1, int4range(123, 123, '[]'), int4range(2, 2, '[]'), '[2010-01-02 11:00, 2010-01-02 12:00)');
+insert into test_range_excl
+  values(1, int4range(123, 123, '[]'), int4range(3, 3, '[]'), '[2010-01-02 10:10, 2010-01-02 11:00)');
+insert into test_range_excl
+  values(1, int4range(124, 124, '[]'), int4range(3, 3, '[]'), '[2010-01-02 10:10, 2010-01-02 11:10)');
+insert into test_range_excl
+  values(1, int4range(125, 125, '[]'), int4range(1, 1, '[]'), '[2010-01-02 10:10, 2010-01-02 11:00)');
+
 -- test bigint ranges
 select int8range(10000000000::int8, 20000000000::int8,'(]');
 -- test tstz ranges
@@ -407,13 +437,12 @@ set timezone to default;
 
 --
 -- Test user-defined range of floats
+-- (type float8range was already made in test_setup.sql)
 --
 
 --should fail
-create type float8range as range (subtype=float8, subtype_diff=float4mi);
+create type bogus_float8range as range (subtype=float8, subtype_diff=float4mi);
 
---should succeed
-create type float8range as range (subtype=float8, subtype_diff=float8mi);
 select '[123.001, 5.e9)'::float8range @> 888.882::float8;
 create table float8range_test(f8r float8range, i int);
 insert into float8range_test values(float8range(-100.00007, '1.111113e9'), 42);
@@ -526,9 +555,6 @@ select arrayrange(ARRAY[2,1], ARRAY[1,2]);  -- fail
 select array[1,1] <@ arrayrange(array[1,2], array[2,1]);
 select array[1,3] <@ arrayrange(array[1,2], array[2,1]);
 
--- start_ignore
--- GPDB_94_MERGE_FIXME: orca can not run the test green.
-
 --
 -- Check behavior when subtype lacks a hash function
 --
@@ -541,8 +567,6 @@ select '(2,5)'::cashrange except select '(5,6)'::cashrange;
 
 reset enable_sort;
 
--- end_ignore
-
 --
 -- Ranges of composites
 --
@@ -550,7 +574,7 @@ reset enable_sort;
 create type two_ints as (a int, b int);
 create type two_ints_range as range (subtype = two_ints);
 
--- with force_parallel_mode on, this exercises tqueue.c's range remapping
+-- with debug_parallel_query on, this exercises tqueue.c's range remapping
 select *, row_to_json(upper(t)) as u from
   (values (two_ints_range(row(1,2), row(3,4))),
           (two_ints_range(row(5,6), row(7,8)))) v(t);

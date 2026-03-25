@@ -2,7 +2,12 @@
 -- FLOAT8
 --
 
-CREATE TABLE FLOAT8_TBL(i INT DEFAULT 1, f1 float8);
+--
+-- Build a table for testing
+-- (This temporarily hides the table created in test_setup.sql)
+--
+
+CREATE TEMP TABLE FLOAT8_TBL(i INT DEFAULT 1, f1 float8);
 
 INSERT INTO FLOAT8_TBL(f1) VALUES ('    0.0   ');
 INSERT INTO FLOAT8_TBL(f1) VALUES ('1004.30  ');
@@ -33,6 +38,12 @@ INSERT INTO FLOAT8_TBL(f1) VALUES ('5 . 0');
 INSERT INTO FLOAT8_TBL(f1) VALUES ('5.   0');
 INSERT INTO FLOAT8_TBL(f1) VALUES ('    - 3');
 INSERT INTO FLOAT8_TBL(f1) VALUES ('123           5');
+
+-- Also try it with non-error-throwing API
+SELECT pg_input_is_valid('34.5', 'float8');
+SELECT pg_input_is_valid('xyz', 'float8');
+SELECT pg_input_is_valid('1e4000', 'float8');
+SELECT * FROM pg_input_error_info('1e4000', 'float8');
 
 -- special inputs
 SELECT 'NaN'::float8;
@@ -229,6 +240,20 @@ SELECT atanh(float8 'infinity');
 SELECT atanh(float8 '-infinity');
 SELECT atanh(float8 'nan');
 
+-- error functions
+-- we run these with extra_float_digits = -1, to get consistently rounded
+-- results on all platforms.
+SET extra_float_digits = -1;
+SELECT x,
+       erf(x),
+       erfc(x)
+FROM (VALUES (float8 '-infinity'),
+      (-28), (-6), (-3.4), (-2.1), (-1.1), (-0.45),
+      (-1.2e-9), (-2.3e-13), (-1.2e-17), (0),
+      (1.2e-17), (2.3e-13), (1.2e-9),
+      (0.45), (1.1), (2.1), (3.4), (6), (28),
+      (float8 'infinity'), (float8 'nan')) AS t(x);
+
 RESET extra_float_digits;
 
 -- test for over- and underflow
@@ -322,18 +347,9 @@ DELETE FROM FLOAT8_TBL WHERE f1='NaN'::float8;
 
 -- maintain external table consistency across platforms
 -- delete all values and reinsert well-behaved ones
+DROP TABLE FLOAT8_TBL;
 
-DELETE FROM FLOAT8_TBL;
-
-INSERT INTO FLOAT8_TBL(f1) VALUES ('0.0');
-
-INSERT INTO FLOAT8_TBL(f1) VALUES ('-34.84');
-
-INSERT INTO FLOAT8_TBL(f1) VALUES ('-1004.30');
-
-INSERT INTO FLOAT8_TBL(f1) VALUES ('-1.2345678901234e+200');
-
-INSERT INTO FLOAT8_TBL(f1) VALUES ('-1.2345678901234e-200');
+-- Check the float8 values exported for use by other tests
 
 SELECT f1 FROM FLOAT8_TBL;
 

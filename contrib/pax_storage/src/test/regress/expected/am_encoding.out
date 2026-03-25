@@ -576,10 +576,11 @@ select attnum, attoptions from pg_attribute_encoding where attrelid='t1_type_int
 drop table t1_type_int33_heap;
 drop table t1_type_int33_aoco;
 -- test no implement am encoding callback table still can use relation WITH option
--- start_ignore
-# ignore_reason: pax not support relation WITH theses options
 CREATE TABLE t1_heap (a int) WITH (autovacuum_enabled=true, autovacuum_analyze_scale_factor=0.3, fillfactor=32);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE t2_heap (a int) WITH (autovacuum_enabled=true, autovacuum_analyze_scale_factor=0.3, fillfactor=32);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 drop table t1_heap;
 drop table t2_heap;
--- end_ignore

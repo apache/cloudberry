@@ -29,6 +29,11 @@ INSERT INTO VARBIT_TABLE VALUES (B'101011111010'); -- too long
 --INSERT INTO VARBIT_TABLE VALUES ('X555');
 SELECT * FROM VARBIT_TABLE;
 
+-- Literals with syntax errors
+SELECT b' 0';
+SELECT b'0 ';
+SELECT x' 0';
+SELECT x'0 ';
 
 -- Concatenation
 SELECT v, b, (v || b) AS concat
@@ -229,3 +234,16 @@ CREATE TABLE bit_defaults(
 \d bit_defaults
 INSERT INTO bit_defaults DEFAULT VALUES;
 TABLE bit_defaults;
+
+-- test non-error-throwing API for some core types
+SELECT pg_input_is_valid('01010001', 'bit(10)');
+SELECT * FROM pg_input_error_info('01010001', 'bit(10)');
+SELECT pg_input_is_valid('01010Z01', 'bit(8)');
+SELECT * FROM pg_input_error_info('01010Z01', 'bit(8)');
+SELECT pg_input_is_valid('x01010Z01', 'bit(32)');
+SELECT * FROM pg_input_error_info('x01010Z01', 'bit(32)');
+
+SELECT pg_input_is_valid('01010Z01', 'varbit');
+SELECT * FROM pg_input_error_info('01010Z01', 'varbit');
+SELECT pg_input_is_valid('x01010Z01', 'varbit');
+SELECT * FROM pg_input_error_info('x01010Z01', 'varbit');
