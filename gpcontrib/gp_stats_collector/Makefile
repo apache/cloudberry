@@ -1,9 +1,9 @@
-MODULE_big = yagp_hooks_collector
-EXTENSION  = yagp_hooks_collector
+MODULE_big = gp_stats_collector
+EXTENSION  = gp_stats_collector
 DATA       = $(wildcard *--*.sql)
-REGRESS    = yagp_cursors yagp_dist yagp_select yagp_utf8_trim yagp_utility yagp_guc_cache yagp_uds yagp_locale
+REGRESS    = gpsc_cursors gpsc_dist gpsc_select gpsc_utf8_trim gpsc_utility gpsc_guc_cache gpsc_uds gpsc_locale
 
-PROTO_BASES = yagpcc_plan yagpcc_metrics yagpcc_set_service
+PROTO_BASES = gpsc_plan gpsc_metrics gpsc_set_service
 PROTO_OBJS  = $(patsubst %,src/protos/%.pb.o,$(PROTO_BASES))
 
 C_OBJS   = $(patsubst %.c,%.o,$(wildcard src/*.c src/*/*.c))
@@ -24,7 +24,7 @@ PG_CONFIG = pg_config
 PGXS := $(shell $(PG_CONFIG) --pgxs)
 include $(PGXS)
 else
-subdir = gpcontrib/yagp_hooks_collector
+subdir = gpcontrib/gp_stats_collector
 top_builddir = ../..
 include $(top_builddir)/src/Makefile.global
 include $(top_srcdir)/contrib/contrib-global.mk
@@ -32,10 +32,8 @@ endif
 
 src/protos/%.pb.cpp src/protos/%.pb.h: protos/%.proto
 	@mkdir -p src/protos
-	sed -i 's/optional //g' $^
-	sed -i 's|cloud/mdb/yagpcc/api/proto/common/|protos/|g' $^
 	protoc -I /usr/include -I /usr/local/include -I . --cpp_out=src $^
 	mv src/protos/$*.pb.cc src/protos/$*.pb.cpp
 
-$(CPP_OBJS): src/protos/yagpcc_metrics.pb.h src/protos/yagpcc_plan.pb.h src/protos/yagpcc_set_service.pb.h
-src/protos/yagpcc_set_service.pb.o: src/protos/yagpcc_metrics.pb.h
+$(CPP_OBJS): src/protos/gpsc_metrics.pb.h src/protos/gpsc_plan.pb.h src/protos/gpsc_set_service.pb.h
+src/protos/gpsc_set_service.pb.o: src/protos/gpsc_metrics.pb.h

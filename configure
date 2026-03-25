@@ -940,7 +940,7 @@ with_zlib
 with_lz4
 with_zstd
 with_libbz2
-with_yagp_hooks_collector
+with_gp_stats_collector
 with_rt
 with_libcurl
 with_apr_config
@@ -11540,14 +11540,15 @@ else
 
 fi
 
-
 #
-# yagp_hooks_collector
+# gp_stats_collector
 #
 
-# Check whether --with-yagp-hooks-collector was given.
-if test "${with_yagp_hooks_collector+set}" = set; then :
-  withval=$with_yagp_hooks_collector;
+
+
+# Check whether --with-gp-stats-collector was given.
+if test "${with_gp_stats_collector+set}" = set; then :
+  withval=$with_gp_stats_collector;
   case $withval in
     yes)
       :
@@ -11556,12 +11557,12 @@ if test "${with_yagp_hooks_collector+set}" = set; then :
       :
       ;;
     *)
-      as_fn_error $? "no argument expected for --with-yagp-hooks-collector option" "$LINENO" 5
+      as_fn_error $? "no argument expected for --with-gp-stats-collector option" "$LINENO" 5
       ;;
   esac
 
 else
-  with_yagp_hooks_collector=no
+  with_gp_stats_collector=no
 
 fi
 
