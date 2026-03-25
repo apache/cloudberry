@@ -1,0 +1,3732 @@
+--
+-- external tables - short and simple functional tests.
+--
+-- start_matchsubs
+--
+-- # replace return code in error message (platform specific)
+--
+-- m/ERROR\:\s+external table .* command ended with .* not found/
+-- s/nosuchcommand\:\s*(command)? not found/nosuchcommand\: NOT FOUND/
+--
+-- m/ERROR\:\s+external table .* command ended with .*No such file.*/
+-- s/nosuchfile\.txt\:\s*No such file (or directory)?/nosuchfile\.txt\: NO SUCH FILE/
+-- m/ERROR\:\s+external table .* command ended with .*No such file.*/i
+-- s/cat\: (cannot open)? nosuchfile\.txt/cat\: nosuchfile\.txt/
+--
+-- # remove line number - redhat
+-- m/ERROR\:\s+external table .* command ended with .*NOT FOUND.*/i
+-- s/\s+line \d+\://
+-- # remove line number - Debian
+-- m/ERROR\:\s+external table .* command ended with .*sh: 1: .*NOT FOUND.*/i
+-- s/ sh: 1: / sh: /
+--
+-- m/DETAIL:  Found \d+ URLs and \d+ primary segments./
+-- s/Found.+//
+--
+-- # normalize absolute source paths across environments (also handles file:// URIs)
+-- m|/.+/src/test/regress/|
+-- s|/.+/src/test/regress/|/ABSPATH/src/test/regress/|
+--
+-- end_matchsubs
+\getenv abs_srcdir PG_ABS_SRCDIR
+\getenv hostname PG_HOSTNAME
+\set nation_tbl 'file://' :hostname :abs_srcdir '/data/nation.tbl'
+CREATE TABLE REG_REGION (R_REGIONKEY INT, R_NAME CHAR(25), R_COMMENT VARCHAR(152)) DISTRIBUTED BY (R_REGIONKEY);
+
+-- --------------------------------------
+-- 'file' protocol - (only CREATE, don't SELECT - won't work on distributed installation)
+-- --------------------------------------
+CREATE EXTERNAL TABLE EXT_NATION  ( N_NATIONKEY  INTEGER ,
+                            N_NAME       CHAR(25) ,
+                            N_REGIONKEY  INTEGER ,
+                            N_COMMENT    VARCHAR(152))
+location (:'nation_tbl' )
+FORMAT 'text' (delimiter '|');
+
+CREATE EXTERNAL TABLE EXT_REGION  (LIKE REG_REGION)
+location (:'nation_tbl' )
+FORMAT 'text' (delimiter '|');
+
+-- Only tables with custom protocol should create dependency, due to a bug there
+-- used to be entries created for non custom protocol tables with refobjid=0.
+SELECT * FROM pg_depend WHERE refclassid = 'pg_extprotocol'::regclass and refobjid = 0;
+
+-- drop tables
+
+DROP EXTERNAL TABLE EXT_NATION;
+DROP EXTERNAL TABLE EXT_REGION;
+-- start_ignore
+-- --------------------------------------
+-- check platform
+-- --------------------------------------
+DROP TABLE IF EXISTS REG_REGION;
+DROP TABLE IF EXISTS tableless_heap;
+DROP TABLE IF EXISTS errlog_save;
+DROP TABLE IF EXISTS exttab_insert_1;
+DROP TABLE IF EXISTS exttab_ctas_1;
+DROP TABLE IF EXISTS exttab_constraints_insert_1;
+
+DROP EXTERNAL TABLE IF EXISTS tableless_ext;
+DROP EXTERNAL TABLE IF EXISTS ret_too_many_uris;
+DROP EXTERNAL TABLE IF EXISTS wet_too_many_uris;
+DROP EXTERNAL TABLE IF EXISTS exttab_basic_1;
+DROP EXTERNAL TABLE IF EXISTS exttab_basic_error_1;
+DROP EXTERNAL TABLE IF EXISTS exttab_basic_2;
+DROP EXTERNAL TABLE IF EXISTS exttab_basic_3;
+DROP EXTERNAL TABLE IF EXISTS exttab_basic_4;
+DROP EXTERNAL TABLE IF EXISTS exttab_basic_5;
+DROP EXTERNAL TABLE IF EXISTS exttab_basic_6;
+DROP EXTERNAL TABLE IF EXISTS exttab_basic_7;
+DROP EXTERNAL TABLE IF EXISTS exttab_constraints_1;
+DROP EXTERNAL TABLE IF EXISTS exttab_cte_1;
+DROP EXTERNAL TABLE IF EXISTS exttab_cte_2;
+DROP EXTERNAL TABLE IF EXISTS exttab_permissions_1;
+DROP EXTERNAL TABLE IF EXISTS exttab_permissions_2;
+DROP EXTERNAL TABLE IF EXISTS exttab_permissions_3;
+DROP EXTERNAL TABLE IF EXISTS exttab_subq_1;
+DROP EXTERNAL TABLE IF EXISTS exttab_subq_2;
+DROP EXTERNAL TABLE IF EXISTS exttab_subtxs_1;
+DROP EXTERNAL TABLE IF EXISTS exttab_subtxs_2;
+DROP EXTERNAL TABLE IF EXISTS exttab_txs_1;
+DROP EXTERNAL TABLE IF EXISTS exttab_txs_2;
+DROP EXTERNAL TABLE IF EXISTS exttab_udfs_1;
+DROP EXTERNAL TABLE IF EXISTS exttab_udfs_2;
+DROP EXTERNAL TABLE IF EXISTS exttab_views_3;
+DROP EXTERNAL WEB TABLE IF EXISTS table_env;
+DROP EXTERNAL WEB TABLE IF EXISTS table_master;
+DROP EXTERNAL WEB TABLE IF EXISTS table_qry;
+
+DROP VIEW IF EXISTS exttab_views_3;
+
+DROP PROTOCOL IF EXISTS demoprot_untrusted;
+DROP PROTOCOL IF EXISTS demoprot_untrusted2;
+
+drop external web table if exists check_ps;
+CREATE EXTERNAL WEB TABLE check_ps (x text)
+execute E'( (ps -ef || ps -aux) | grep gpfdist | grep -v grep)'
+on SEGMENT 0
+format 'text';
+drop external web table if exists check_env;
+CREATE EXTERNAL WEB TABLE check_env (x text)
+execute E'( env | sort)'
+on SEGMENT 0
+format 'text';
+select * from check_ps;
+select * from check_env;
+
+drop external table check_ps;
+drop external table check_env;
+
+-- end_ignore
+-- table to get shell command "env" output which list all environment variable
+CREATE EXTERNAL WEB TABLE table_env (val TEXT)
+  EXECUTE E'env' ON SEGMENT 0
+  FORMAT 'TEXT' (ESCAPE 'OFF');
+SELECT * FROM table_env WHERE val LIKE 'GP_QUERY%' ORDER BY val ASC;
+SELECT * FROM table_env WHERE val LIKE 'GP_QUERY%\%' ESCAPE '&' ORDER BY val ASC;
+
+-- ensure squelching on master
+\set lineitem 'cat ' :abs_srcdir '/data/lineitem.csv'
+CREATE EXTERNAL WEB TABLE table_master (val TEXT)
+  EXECUTE E:'lineitem' ON MASTER
+  FORMAT 'TEXT' (ESCAPE 'OFF');
+BEGIN;
+DECLARE _psql_cursor NO SCROLL CURSOR FOR SELECT 1 FROM table_master;
+FETCH FORWARD 1 FROM _psql_cursor;
+CLOSE _psql_cursor;
+COMMIT;
+
+-- echo will behave differently on different platforms, force to use bash with -E option
+CREATE EXTERNAL WEB TABLE table_qry (val TEXT)
+  EXECUTE E'/usr/bin/env bash -c ''echo -E "$GP_QUERY_STRING"''' ON SEGMENT 0
+  FORMAT 'TEXT' (ESCAPE 'OFF');
+SELECT * FROM table_qry WHERE val LIKE '%\\%' ORDER BY val ASC;
+SELECT * FROM table_qry WHERE val LIKE '%\%' ESCAPE '&' ORDER BY val ASC;
+-- --------------------------------------
+-- some negative tests
+-- --------------------------------------
+--
+-- test for exec child process stderr showing in error message
+--
+create external web table ext_stderr1(a text) execute 'nosuchcommand' format 'text';
+create external web table ext_stderr2(a text) execute 'cat nosuchfile.txt' format 'text';
+select * from ext_stderr1;
+select * from ext_stderr2;
+drop external web table ext_stderr1;
+drop external web table ext_stderr2;
+--
+-- bad csv (quote must be a single char)
+--
+\set whois_file 'gpfdist://' :hostname ':7070/exttab1/whois.csv'
+create external table bad_whois (
+source_lineno			int,
+domain_name			varchar(350)
+)
+location (:'whois_file' )
+format 'csv' ( header quote as 'ggg');
+select count(*) from bad_whois;
+drop external table bad_whois;
+--
+-- try a bad location
+--
+\set badt1_file 'file://' :hostname :abs_srcdir '/data/no/such/place/badt1.tbl'
+create external table badt1 (x text)
+location (:'badt1_file' )
+format 'text' (delimiter '|');
+select * from badt1;
+drop external table badt1;
+
+--
+-- try a bad protocol
+--
+\set baadt2_file 'bad_protocol://' :hostname :abs_srcdir '/data/no/such/place/badt2.tbl'
+create external table badt2 (x text)
+location (:'baadt2_file' )
+format 'text' (delimiter '|');
+
+--
+-- ALTER (partial support)
+--
+create external table ext (a int, x text)
+location (:'badt1_file' )
+format 'text';
+alter table ext drop column a; -- should pass
+alter external table ext add column a int; -- pass
+alter external table ext drop column a; -- pass
+alter external table ext add column extnewcol int not null; -- pass
+alter external table ext alter column extnewcol set default 1; -- pass
+
+alter external table ext alter column x type integer using 123; -- should fail (USING doesn't make sense on external table)
+alter external table ext alter column x type integer; -- pass
+
+--
+-- TRUNCATE/UPDATE/DELETE/INSERT (INTO RET)
+--
+truncate ext;
+delete from ext;
+update ext set x='1' where x='2';
+insert into ext(x) values(123);
+create index ext_index on ext(x); -- should fail
+drop table ext; -- should fail (wrong object)
+drop external table ext;
+
+----------------------------------------------------------------------
+-- CUSTOM PROTOCOLS
+----------------------------------------------------------------------
+DROP EXTERNAL TABLE IF EXISTS ext_w;
+DROP EXTERNAL TABLE IF EXISTS ext_r;
+DROP ROLE IF EXISTS extprotu;
+CREATE OR REPLACE FUNCTION write_to_file() RETURNS integer as '$libdir/gpextprotocol.so', 'demoprot_export' LANGUAGE C STABLE NO SQL;
+CREATE OR REPLACE FUNCTION read_from_file() RETURNS integer as '$libdir/gpextprotocol.so', 'demoprot_import' LANGUAGE C STABLE NO SQL;
+
+DROP PROTOCOL IF EXISTS demoprot;
+CREATE TRUSTED PROTOCOL demoprot (readfunc = 'nosuchfunc'); -- should fail
+CREATE TRUSTED PROTOCOL demoprot (readfunc = 'boolin'); -- should fail
+CREATE TRUSTED PROTOCOL demoprot (readfunc = 'read_from_file', writefunc = 'write_to_file'); -- should succeed
+CREATE PROTOCOL demoprot_untrusted (readfunc = 'read_from_file', writefunc = 'write_to_file'); -- should succeed
+ALTER PROTOCOL demoprot_untrusted RENAME TO demoprot_untrusted2;
+ALTER PROTOCOL demoprot_untrusted2 RENAME TO demoprot_untrusted;
+CREATE PROTOCOL demoprot_untrusted2 (readfunc = 'read_from_file', writefunc = 'write_to_file'); -- should succeed
+ALTER PROTOCOL demoprot_untrusted RENAME TO demoprot_untrusted2; -- should failed
+ALTER PROTOCOL demoprot_untrustedx RENAME TO demoprot_untrusted2; --should failed
+
+CREATE ROLE extprotu NOSUPERUSER;
+SET SESSION AUTHORIZATION extprotu;
+
+CREATE WRITABLE EXTERNAL TABLE ext_w(a int) location('demoprot://demoprotfile.txt') format 'text'; -- should fail
+CREATE READABLE EXTERNAL TABLE ext_r(a int) location('demoprot://demoprotfile.txt') format 'text'; -- should fail
+
+RESET SESSION AUTHORIZATION;
+ALTER PROTOCOL demoprot_untrusted OWNER TO extprotu; -- should fail. protocol is not trusted
+GRANT SELECT ON PROTOCOL demoprot_untrusted TO extprotu; -- should fail. protocol is not trusted
+GRANT SELECT ON PROTOCOL demoprot TO extprotu;
+GRANT INSERT ON PROTOCOL demoprot TO extprotu;
+\t on
+-- print with tuples-only mode : suppress diff related to user string length.
+SELECT ptcname, ptcacl FROM PG_EXTPROTOCOL WHERE ptcname = 'demoprot';
+\t off
+SET SESSION AUTHORIZATION extprotu;
+
+CREATE WRITABLE EXTERNAL TABLE ext_w(a int) location('demoprot://demoprotfile.txt') format 'text'; -- should succeed
+-- For tables using custom protocol should have dependency
+SELECT count(*) FROM pg_depend WHERE refclassid = 'pg_extprotocol'::regclass and objid = 'ext_w'::regclass;
+
+CREATE READABLE EXTERNAL TABLE ext_r(a int) location('demoprot://demoprotfile.txt') format 'text'; -- should succeed
+-- For tables using custom protocol should have dependency
+SELECT count(*) FROM pg_depend WHERE refclassid = 'pg_extprotocol'::regclass and objid = 'ext_r'::regclass;
+
+DROP EXTERNAL TABLE IF EXISTS ext_w;
+DROP EXTERNAL TABLE IF EXISTS ext_r;
+
+RESET SESSION AUTHORIZATION;
+REVOKE INSERT ON PROTOCOL demoprot FROM extprotu;
+SET SESSION AUTHORIZATION extprotu;
+
+CREATE WRITABLE EXTERNAL TABLE ext_w(a int) location('demoprot://demoprotfile.txt') format 'text'; -- should fail
+CREATE READABLE EXTERNAL TABLE ext_r(a int) location('demoprot://demoprotfile.txt') format 'text'; -- should succeed
+DROP EXTERNAL TABLE ext_r;
+RESET SESSION AUTHORIZATION;
+REVOKE ALL PRIVILEGES ON PROTOCOL demoprot FROM extprotu;
+DROP ROLE IF EXISTS extprotu;
+
+-- Test multi-object DROP
+CREATE PROTOCOL demoprot_droptest1 (readfunc = 'read_from_file', writefunc = 'write_to_file');
+CREATE PROTOCOL demoprot_droptest2 (readfunc = 'read_from_file', writefunc = 'write_to_file');
+DROP PROTOCOL demoprot_droptest1, demoprot_droptest2;
+
+-- Test non-superuser CREATE PROTOCOL, should fail
+DROP ROLE IF EXISTS extprot_non_superuser;
+CREATE ROLE extprot_non_superuser WITH NOSUPERUSER LOGIN CREATEDB;
+SET ROLE extprot_non_superuser;
+CREATE PROTOCOL demoprot_non_superuser (readfunc = 'read_from_file', writefunc = 'write_to_file');
+CREATE TRUSTED PROTOCOL demoprot_non_superuser (readfunc = 'read_from_file', writefunc = 'write_to_file');
+RESET ROLE;
+
+-- Test "DROP OWNED BY" when everything of the protocol is granted to some user.
+-- GitHub Issue #12748: https://github.com/greenplum-db/gpdb/issues/12748
+CREATE TRUSTED PROTOCOL dummy_protocol_issue_12748 (readfunc = 'read_from_file', writefunc = 'write_to_file');
+CREATE ROLE test_role_issue_12748;
+GRANT ALL ON PROTOCOL dummy_protocol_issue_12748 TO test_role_issue_12748;
+DROP OWNED BY test_role_issue_12748;
+-- Clean up.
+DROP ROLE test_role_issue_12748;
+DROP PROTOCOL dummy_protocol_issue_12748;
+
+-- Test pg_exttable's encoding: QE's encoding should be consistent with QD
+-- GitHub Issue #9727: https://github.com/greenplum-db/gpdb/issues/9727
+SET client_encoding = 'ISO-8859-1';
+CREATE EXTERNAL TABLE issue_9727 (d varchar(20)) location ('gpfdist://9727/d.dat') format 'csv' (DELIMITER '|');
+SELECT encoding from pg_exttable where urilocation='{gpfdist://9727:8080/d.dat}';
+SELECT encoding from gp_dist_random('pg_exttable') where urilocation='{gpfdist://9727:8080/d.dat}';
+DROP FOREIGN TABLE issue_9727;
+RESET client_encoding;
+
+-- Test external table location escape
+-- GitHub Issue #17179: https://github.com/greenplum-db/gpdb/issues/17179
+CREATE READABLE EXTERNAL TABLE public.test_ext
+(
+  id integer
+)
+LOCATION(
+  'file://gpdev/tmp/test1|.|tx||t|||',
+  'file://gpdev/tmp/test2|.|tx||t||||'
+)
+FORMAT 'TEXT' (
+  delimiter 'off' null E'\\N' escape E'\\'
+)
+ENCODING 'UTF8'
+LOG ERRORS PERSISTENTLY SEGMENT REJECT LIMIT 10 PERCENT;
+SELECT urilocation FROM pg_exttable WHERE reloid = 'public.test_ext'::regclass;
+DROP EXTERNAL TABLE public.test_ext;
+--
+-- WET tests
+--
+
+--
+-- CREATE (including LIKE, DISTRIBUTED BY)
+--
+-- positive
+create writable external web table wet_pos4(a text, b text) execute 'some command' format 'text';
+
+-- negative
+\set badt1_file2 'file://' :hostname :abs_srcdir '/badt1.tbl'
+create writable external table wet_neg1(a text, b text) location(:'badt1_file2') format 'text';
+create writable external table wet_neg1(a text, b text) location('gpfdist://foo:7070/wet.out', 'gpfdist://foo:7070/wet.out') format 'text';
+create writable external web table wet_pos5(a text, b text) execute 'some command' on segment 0 format 'text';
+
+-- cannot read from a WRITABLE external table.
+select * from wet_pos4;
+
+-- Test selecting the CTID system column on an external table. In the past,
+-- it was necessary that we generated artificial CTIDs for external table
+-- scans, because the planner generated plans that used the CTID attribute
+-- to implement certain semi-joins. Nowadays, we use generated row IDs in
+-- such plans, and don't need CTID for that purpose anymore.
+
+\set mpp17980_file2 'file://' :hostname :abs_srcdir '/data/mpp17980.data'
+CREATE EXTERNAL TABLE ext_mpp17980 ( id int , id1 int , id2 int)
+LOCATION (:'mpp17980_file2')
+FORMAT 'CSV' ( DELIMITER ',' NULL ' ');
+
+CREATE TABLE mpp17980 (id int, date date, amt decimal(10,2))
+DISTRIBUTED randomly PARTITION BY RANGE (date)
+( START (date '2008-01-01') INCLUSIVE  END (date '2009-01-01') EXCLUSIVE
+EVERY (INTERVAL '1 month') );
+
+INSERT INTO mpp17980 VALUES ( 1,'2008-02-20',122.11);
+
+SELECT COUNT(*) FROM ext_mpp17980 WHERE id IN ( 1 ) ;  -- This returns 18 tuples
+
+SELECT COUNT(*) FROM ext_mpp17980 WHERE id IN ( SELECT id FROM mpp17980 ) ; -- This should return 18 tuples but returns only 1
+
+SELECT ctid, * FROM ext_mpp17980;
+
+DROP EXTERNAL TABLE ext_mpp17980;
+DROP TABLE mpp17980;
+
+\set tableless_file :abs_srcdir '/data/tableless.csv'
+COPY (VALUES('1,2'),('1,2,3'),('1,'),('1')) TO :'tableless_file';
+CREATE TABLE tableless_heap(a int, b int);
+COPY tableless_heap FROM :'tableless_file' CSV LOG ERRORS SEGMENT REJECT LIMIT 10;
+SELECT relname, linenum, errmsg FROM gp_read_error_log('tableless_heap');
+create table errlog_save as select * from gp_read_error_log('tableless_heap');
+select count(*) from errlog_save;
+SELECT gp_truncate_error_log('tableless_heap');
+SELECT relname, linenum, errmsg FROM gp_read_error_log('tableless_heap');
+
+\set tableless_file2 'file://' :hostname :abs_srcdir '/data/tableless.csv'
+create external table tableless_ext(a int, b int)
+location (:'tableless_file2')
+format 'csv'
+log errors segment reject limit 10;
+select * from tableless_ext;
+SELECT relname, linenum, errmsg FROM gp_read_error_log('tableless_ext');
+SELECT (gp_read_error_log('tableless_ext')).errmsg;
+SELECT gp_truncate_error_log('tableless_ext');
+SELECT relname, linenum, errmsg FROM gp_read_error_log('tableless_ext');
+select * from tableless_ext;
+SELECT gp_truncate_error_log('*');
+select * from tableless_ext;
+SELECT gp_truncate_error_log('*.*');
+SELECT relname, linenum, errmsg FROM gp_read_error_log('tableless_ext');
+
+
+--
+-- These fail because there are more locations than there are segments.
+--
+-- As written, if you have a large enough cluster, with more than 20
+-- segments, this will fail to test what's intended. But we don't currently
+-- run automated tests like that, and you'll get a different error message,
+-- so it won't fail silently.
+--
+create external table ret_too_many_uris(a text, b text) location(
+  'gpfdist://foo.invalid:7070/ret.tbl1',  'gpfdist://foo.invalid:7070/ret.tbl2',
+  'gpfdist://foo.invalid:7070/ret.tbl3',  'gpfdist://foo.invalid:7070/ret.tbl4',
+  'gpfdist://foo.invalid:7070/ret.tbl5',  'gpfdist://foo.invalid:7070/ret.tbl6',
+  'gpfdist://foo.invalid:7070/ret.tbl7',  'gpfdist://foo.invalid:7070/ret.tbl8',
+  'gpfdist://foo.invalid:7070/ret.tbl9',  'gpfdist://foo.invalid:7070/ret.tbl10',
+  'gpfdist://foo.invalid:7070/ret.tbl11', 'gpfdist://foo.invalid:7070/ret.tbl12',
+  'gpfdist://foo.invalid:7070/ret.tbl13', 'gpfdist://foo.invalid:7070/ret.tbl14',
+  'gpfdist://foo.invalid:7070/ret.tbl15', 'gpfdist://foo.invalid:7070/ret.tbl16',
+  'gpfdist://foo.invalid:7070/ret.tbl17', 'gpfdist://foo.invalid:7070/ret.tbl18',
+  'gpfdist://foo.invalid:7070/ret.tbl19', 'gpfdist://foo.invalid:7070/ret.tbl20'
+) format 'text';
+\d ret_too_many_uris
+select * from ret_too_many_uris;
+
+create writable external table wet_too_many_uris(a text, b text) location(
+  'gpfdist://foo.invalid:7070/wet.out1',  'gpfdist://foo.invalid:7070/wet.out2',
+  'gpfdist://foo.invalid:7070/wet.out3',  'gpfdist://foo.invalid:7070/wet.out4',
+  'gpfdist://foo.invalid:7070/wet.out5',  'gpfdist://foo.invalid:7070/wet.out6',
+  'gpfdist://foo.invalid:7070/wet.out7',  'gpfdist://foo.invalid:7070/wet.out8',
+  'gpfdist://foo.invalid:7070/wet.out9',  'gpfdist://foo.invalid:7070/wet.out10',
+  'gpfdist://foo.invalid:7070/wet.out11', 'gpfdist://foo.invalid:7070/wet.out12',
+  'gpfdist://foo.invalid:7070/wet.out13', 'gpfdist://foo.invalid:7070/wet.out14',
+  'gpfdist://foo.invalid:7070/wet.out15', 'gpfdist://foo.invalid:7070/wet.out16',
+  'gpfdist://foo.invalid:7070/wet.out17', 'gpfdist://foo.invalid:7070/wet.out18',
+  'gpfdist://foo.invalid:7070/wet.out19', 'gpfdist://foo.invalid:7070/wet.out20'
+) format 'text';
+insert into wet_too_many_uris values ('foo', 'bar');
+
+
+-- Test for error log functionality
+
+-- Scan with no errors
+\set exttab_file 'file://' :hostname :abs_srcdir '/data/exttab.data'
+CREATE EXTERNAL TABLE exttab_basic_1( i int, j text )
+LOCATION (:'exttab_file') FORMAT 'TEXT' (DELIMITER '|')
+LOG ERRORS SEGMENT REJECT LIMIT 2;
+-- Empty error log
+SELECT * FROM gp_read_error_log('exttab_basic_1');
+SELECT COUNT(*) FROM exttab_basic_1;
+-- Error log should still be empty
+SELECT * FROM gp_read_error_log('exttab_basic_1');
+
+-- test ON COORDINATOR without LOG ERRORS, return empty results for all rows error out
+\set cat_exttab 'cat ' :abs_srcdir '/data/exttab.data'
+CREATE EXTERNAL WEB TABLE exttab_basic_error_1( i int )
+EXECUTE E:'cat_exttab' ON COORDINATOR
+FORMAT 'TEXT' (DELIMITER '|')
+SEGMENT REJECT LIMIT 20;
+SELECT * FROM exttab_basic_error_1;
+DROP EXTERNAL TABLE IF EXISTS exttab_basic_error_1;
+
+-- test ON MASTER still works (this syntax will be removed in GPDB8 and forward)
+CREATE EXTERNAL WEB TABLE exttab_basic_error_1( i int )
+EXECUTE E:'cat_exttab' ON MASTER
+FORMAT 'TEXT' (DELIMITER '|')
+SEGMENT REJECT LIMIT 20;
+SELECT * FROM exttab_basic_error_1;
+
+-- Some errors without exceeding reject limit
+\set exttab_few_errors_file 'file://' :hostname :abs_srcdir '/data/exttab_few_errors.data'
+CREATE EXTERNAL TABLE exttab_basic_2( i int, j text )
+LOCATION (:'exttab_few_errors_file') FORMAT 'TEXT' (DELIMITER '|')
+LOG ERRORS SEGMENT REJECT LIMIT 10;
+-- should not error out as segment reject limit will not be reached
+SELECT * FROM exttab_basic_2 order by i;
+-- Error rows logged
+select count(*) from gp_read_error_log('exttab_basic_2');
+
+-- Errors with exceeding reject limit
+\set exttab_more_errors_file 'file://' :hostname :abs_srcdir '/data/exttab_more_errors.data'
+CREATE EXTERNAL TABLE exttab_basic_3( i int, j text )
+LOCATION (:'exttab_more_errors_file') FORMAT 'TEXT' (DELIMITER '|')
+LOG ERRORS SEGMENT REJECT LIMIT 2;
+-- should error out as segment reject limit will be reached
+SELECT * FROM exttab_basic_3;
+-- Error log should be populated
+select count(*) > 0 from gp_read_error_log('exttab_basic_3');
+
+-- Insert into another table
+CREATE EXTERNAL TABLE exttab_basic_4( i int, j text )
+LOCATION (:'exttab_more_errors_file') FORMAT 'TEXT' (DELIMITER '|')
+LOG ERRORS SEGMENT REJECT LIMIT 100;
+CREATE TABLE exttab_insert_1 (LIKE exttab_basic_4);
+-- Insert should go through fine
+INSERT INTO exttab_insert_1 SELECT * FROM exttab_basic_4;
+-- Error log should be populated
+select count(*) > 0 from gp_read_error_log('exttab_basic_4');
+-- Use the same error log above
+CREATE EXTERNAL TABLE exttab_basic_5( i int, j text )
+LOCATION (:'exttab_more_errors_file') FORMAT 'TEXT' (DELIMITER '|')
+LOG ERRORS SEGMENT REJECT LIMIT 5;
+-- Insert should fail
+INSERT INTO exttab_insert_1 select * from exttab_basic_5;
+SELECT * from exttab_insert_1 order by i;
+-- Error log should have additional rows that were rejected by the above query
+SELECT count(*) from gp_read_error_log('exttab_basic_5');
+
+-- CTAS
+CREATE EXTERNAL TABLE exttab_basic_6( i int, j text )
+LOCATION (:'exttab_more_errors_file') FORMAT 'TEXT' (DELIMITER '|')
+LOG ERRORS SEGMENT REJECT LIMIT 100;
+CREATE TABLE exttab_ctas_1 as SELECT * FROM exttab_basic_6;
+-- CTAS should go through fine
+SELECT * FROM exttab_ctas_1 order by i;
+-- Error log should have six rows that were rejected
+select count(*) from gp_read_error_log('exttab_basic_6');
+CREATE EXTERNAL TABLE exttab_basic_7( i int, j text )
+LOCATION (:'exttab_more_errors_file') FORMAT 'TEXT' (DELIMITER '|')
+LOG ERRORS SEGMENT REJECT LIMIT 5;
+-- CTAS should fail
+CREATE TABLE exttab_ctas_2 AS select * from exttab_basic_7;
+-- Table should not exist
+SELECT * from exttab_ctas_2 order by i;
+-- Error table should have additional rows that were rejected by the above query
+SELECT count(*) from gp_read_error_log('exttab_basic_7');
+-- Drop external table gets rid off error logs
+DROP EXTERNAL TABLE IF EXISTS exttab_error_log;
+CREATE EXTERNAL TABLE exttab_error_log( i int, j text )
+LOCATION (:'exttab_file') FORMAT 'TEXT' (DELIMITER '|')
+LOG ERRORS SEGMENT REJECT LIMIT 2;
+SELECT COUNT(*) FROM exttab_error_log;
+SELECT COUNT(*) FROM gp_read_error_log('exttab_error_log');
+DROP EXTERNAL TABLE exttab_error_log;
+SELECT COUNT(*) FROM gp_read_error_log('exttab_error_log');
+
+-- Insert into another table with unique constraints
+CREATE EXTERNAL TABLE exttab_constraints_1( i int, j text )
+LOCATION (:'exttab_file') FORMAT 'TEXT' (DELIMITER '|')
+LOG ERRORS SEGMENT REJECT LIMIT 10;
+-- Should not error out
+SELECT COUNT(*) FROM exttab_constraints_1;
+-- Error log should have a couple of rows
+SELECT COUNT(*) from gp_read_error_log('exttab_constraints_1');
+CREATE TABLE exttab_constraints_insert_1 (LIKE exttab_constraints_1) distributed by (i);
+ALTER TABLE exttab_constraints_insert_1 SET DISTRIBUTED BY(j);
+ALTER TABLE exttab_constraints_insert_1 ADD CONSTRAINT exttab_uniq_constraint_1 UNIQUE (j);
+-- This should fail
+select gp_truncate_error_log('exttab_constraints_1');
+INSERT INTO exttab_constraints_insert_1 SELECT * FROM exttab_constraints_1;
+SELECT COUNT(*) FROM gp_read_error_log('exttab_constraints_1');
+
+-- CTE with segment reject limit reached
+-- does not reach reject limit
+CREATE EXTERNAL TABLE exttab_cte_1( i int, j text )
+LOCATION (:'exttab_few_errors_file') FORMAT 'TEXT' (DELIMITER '|')
+LOG ERRORS SEGMENT REJECT LIMIT 10;
+-- reaches reject limit, use the same err table
+CREATE EXTERNAL TABLE exttab_cte_2( i int, j text )
+LOCATION (:'exttab_more_errors_file') FORMAT 'TEXT' (DELIMITER '|')
+LOG ERRORS SEGMENT REJECT LIMIT 2;
+with cte1 as
+(
+SELECT e1.i, e2.j FROM exttab_cte_2 e1, exttab_cte_1 e2
+WHERE e1.i = e2.i ORDER BY e1.i
+)
+SELECT * FROM cte1 ORDER BY cte1.i;
+select count(*) from gp_read_error_log('exttab_cte_2');
+-- start_ignore
+select gp_read_error_log('exttab_cte_2');
+-- end_ignore
+
+-- CTE without segment reject limit exceeded
+select gp_truncate_error_log('exttab_cte_1');
+select gp_truncate_error_log('exttab_cte_2');
+with cte1 as
+(
+SELECT e1.i, e2.j FROM exttab_cte_1 e1, exttab_cte_1 e2 WHERE e1.i = e2.i AND e1.i > 5 ORDER BY e1.i
+)
+SELECT  cte1.i , cte1.j FROM cte1 ORDER BY cte1.i;
+
+-- Check permissions with gp_truncate_error_log and gp_read_error_log
+-- does not reach reject limit
+CREATE EXTERNAL TABLE exttab_permissions_1( i int, j text )
+LOCATION (:'exttab_few_errors_file') FORMAT 'TEXT' (DELIMITER '|')
+LOG ERRORS SEGMENT REJECT LIMIT 10;
+-- reaches reject limit
+CREATE EXTERNAL TABLE exttab_permissions_2( i int, j text )
+LOCATION (:'exttab_more_errors_file') FORMAT 'TEXT' (DELIMITER '|')
+LOG ERRORS SEGMENT REJECT LIMIT 2;
+-- generate some error logs
+SELECT COUNT(*) FROM exttab_permissions_1;
+SELECT COUNT(*) FROM exttab_permissions_2;
+
+-- Only superuser can do gp_truncate_error_log('*.*')
+DROP ROLE IF EXISTS exttab_non_superuser;
+CREATE ROLE exttab_non_superuser WITH NOSUPERUSER LOGIN CREATEDB;
+SET ROLE exttab_non_superuser;
+SELECT COUNT(*) FROM gp_read_error_log('exttab_permissions_1');
+SELECT COUNT(*) FROM gp_read_error_log('exttab_permissions_2');
+SELECT gp_truncate_error_log('exttab_permissions_1');
+SELECT gp_truncate_error_log('exttab_permissions_2');
+SELECT gp_truncate_error_log('*');
+SELECT gp_truncate_error_log('*.*');
+RESET ROLE;
+DROP ROLE IF EXISTS exttab_superuser;
+CREATE ROLE exttab_superuser WITH SUPERUSER LOGIN;
+SET ROLE exttab_superuser;
+SELECT COUNT(*) FROM gp_read_error_log('exttab_permissions_2');
+SELECT gp_truncate_error_log('*');
+SELECT gp_truncate_error_log('*.*');
+SELECT gp_truncate_error_log('exttab_permissions_1');
+SELECT gp_truncate_error_log('exttab_permissions_2');
+RESET ROLE;
+SELECT * FROM gp_read_error_log('exttab_permissions_1');
+SELECT * FROM gp_read_error_log('exttab_permissions_2');
+
+-- Only database owner can do gp_truncate_error_log('*')
+DROP DATABASE IF EXISTS exttab_db;
+DROP ROLE IF EXISTS exttab_user1;
+DROP ROLE IF EXISTS exttab_user2;
+CREATE ROLE exttab_user1 WITH NOSUPERUSER LOGIN;
+CREATE ROLE exttab_user2 WITH NOSUPERUSER LOGIN;
+CREATE DATABASE exttab_db WITH OWNER=exttab_user1;
+\c exttab_db
+-- generate some error logs in this db
+CREATE EXTERNAL TABLE exttab_permissions_1( i int, j text )
+LOCATION (:'exttab_few_errors_file') FORMAT 'TEXT' (DELIMITER '|')
+LOG ERRORS SEGMENT REJECT LIMIT 10;
+SELECT COUNT(*) FROM exttab_permissions_1 e1, exttab_permissions_1 e2;
+SELECT COUNT(*) FROM gp_read_error_log('exttab_permissions_1');
+SET ROLE exttab_user2;
+SELECT COUNT(*) FROM gp_read_error_log('exttab_permissions_1');
+SELECT gp_truncate_error_log('*');
+SELECT gp_truncate_error_log('*.*');
+SELECT gp_truncate_error_log('exttab_permissions_1');
+SET ROLE exttab_user1;
+-- Database owner can still not perform read / truncate on specific tables. This follows the same mechanism as TRUNCATE table.
+SELECT COUNT(*) FROM gp_read_error_log('exttab_permissions_1');
+SELECT gp_truncate_error_log('exttab_permissions_1');
+SELECT gp_truncate_error_log('*');
+-- should fail
+SELECT gp_truncate_error_log('*.*');
+RESET ROLE;
+SELECT * FROM gp_read_error_log('exttab_permissions_1');
+\c regression
+DROP ROLE IF EXISTS errlog_exttab_user3;
+DROP ROLE IF EXISTS errlog_exttab_user4;
+CREATE ROLE errlog_exttab_user3 WITH NOSUPERUSER LOGIN;
+CREATE ROLE errlog_exttab_user4 WITH NOSUPERUSER LOGIN;
+-- generate some error logs in this db
+CREATE EXTERNAL TABLE exttab_permissions_3( i int, j text )
+LOCATION (:'exttab_few_errors_file') FORMAT 'TEXT' (DELIMITER '|')
+LOG ERRORS SEGMENT REJECT LIMIT 10;
+SELECT COUNT(*) FROM exttab_permissions_3 e1, exttab_permissions_3 e2;
+SELECT COUNT(*) FROM gp_read_error_log('exttab_permissions_3');
+ALTER EXTERNAL TABLE exttab_permissions_3 OWNER TO errlog_exttab_user3;
+-- This should fail with non table owner
+SET ROLE errlog_exttab_user4;
+SELECT COUNT(*) FROM gp_read_error_log('exttab_permissions_3');
+SELECT gp_truncate_error_log('exttab_permissions_3');
+-- should go through fine with table owner
+SET ROLE errlog_exttab_user3;
+SELECT gp_truncate_error_log('exttab_permissions_3');
+RESET ROLE;
+SELECT * FROM gp_read_error_log('exttab_permissions_3');
+
+-- Grant TRUNCATE permission on table to a non table owner and make sure he is able to do gp_truncate_error_log
+GRANT TRUNCATE on exttab_permissions_3 to errlog_exttab_user4;
+SELECT COUNT(*) FROM exttab_permissions_3 e1, exttab_permissions_3 e2;
+SELECT COUNT(*) FROM gp_read_error_log('exttab_permissions_3');
+SET ROLE errlog_exttab_user4;
+SELECT gp_truncate_error_log('exttab_permissions_3');
+RESET ROLE;
+SELECT * FROM gp_read_error_log('exttab_permissions_3');
+
+-- Subqueries reaching segment reject limit
+-- does not reach reject limit
+CREATE EXTERNAL TABLE exttab_subq_1( i int, j text )
+LOCATION (:'exttab_few_errors_file') FORMAT 'TEXT' (DELIMITER '|')
+LOG ERRORS SEGMENT REJECT LIMIT 10;
+-- reaches reject limit, use the same err table
+CREATE EXTERNAL TABLE exttab_subq_2( i int, j text )
+LOCATION (:'exttab_more_errors_file') FORMAT 'TEXT' (DELIMITER '|')
+LOG ERRORS SEGMENT REJECT LIMIT 2;
+SELECT sum(distinct e1.i), sum(distinct e2.i), e1.j FROM
+(SELECT i, j FROM exttab_subq_1 WHERE i < 5 ) e1,
+(SELECT i, j FROM exttab_subq_2 WHERE i < 10) e2
+group by e1.j;
+SELECT COUNT(*) > 0 FROM
+(
+SELECT * FROM gp_read_error_log('exttab_subq_1')
+UNION ALL
+SELECT * FROM gp_read_error_log('exttab_subq_2')
+) FOO;
+SELECT gp_truncate_error_log('exttab_subq_1');
+SELECT gp_truncate_error_log('exttab_subq_2');
+SELECT sum(distinct e1.i), sum(distinct e2.i), e1.j FROM
+(SELECT i, j FROM exttab_subq_1 WHERE i < 5 ) e1,
+(SELECT i, j FROM exttab_subq_1 WHERE i < 10) e2
+group by e1.j
+HAVING sum(distinct e1.i) > (SELECT max(i) FROM exttab_subq_2);
+SELECT COUNT(*) > 0 FROM
+(
+SELECT * FROM gp_read_error_log('exttab_subq_1')
+UNION ALL
+SELECT * FROM gp_read_error_log('exttab_subq_2')
+) FOO;
+
+-- Subqueries without reaching segment reject limit
+SELECT gp_truncate_error_log('exttab_subq_1');
+SELECT gp_truncate_error_log('exttab_subq_2');
+SELECT sum(distinct e1.i), sum(distinct e2.i), e1.j FROM
+(SELECT i, j FROM exttab_subq_1 WHERE i < 5 ) e1,
+(SELECT i, j FROM exttab_subq_1 WHERE i < 10) e2
+group by e1.j order by 3,2,1;
+SELECT gp_truncate_error_log('exttab_subq_1');
+SELECT gp_truncate_error_log('exttab_subq_2');
+SELECT sum(distinct e1.i), sum(distinct e2.i), e1.j FROM
+(SELECT i, j FROM exttab_subq_1 WHERE i < 5 ) e1,
+(SELECT i, j FROM exttab_subq_1 WHERE i < 10) e2
+group by e1.j
+HAVING sum(distinct e1.i) > (SELECT max(i) FROM exttab_subq_1);
+SELECT gp_truncate_error_log('exttab_subq_1');
+SELECT gp_truncate_error_log('exttab_subq_2');
+SELECT e1.i , e1.j FROM
+exttab_subq_1 e1, exttab_subq_1 e2
+WHERE e1.j = e2.j and
+e1.i + 1 IN ( SELECT i from exttab_subq_1 WHERE i <= e1.i);
+SELECT gp_truncate_error_log('exttab_subq_1');
+SELECT gp_truncate_error_log('exttab_subq_2');
+SELECT ( SELECT i FROM exttab_subq_2 WHERE i <= e1.i) as i, e1.j
+FROM exttab_subq_2 e1, exttab_subq_1 e2
+WHERE e1.i = e2.i;
+
+-- CSQ
+SELECT gp_truncate_error_log('exttab_subq_1');
+SELECT gp_truncate_error_log('exttab_subq_2');
+SELECT e1.i , e1.j FROM
+exttab_subq_1 e1, exttab_subq_1 e2
+WHERE e1.j = e2.j and
+e1.i + 1 IN ( SELECT i from exttab_subq_2 WHERE i <= e1.i);
+SELECT COUNT(*) > 0 FROM
+(
+SELECT * FROM gp_read_error_log('exttab_subq_1')
+UNION ALL
+SELECT * FROM gp_read_error_log('exttab_subq_2')
+) FOO;
+SELECT gp_truncate_error_log('exttab_subq_1');
+SELECT gp_truncate_error_log('exttab_subq_2');
+SELECT ( SELECT i FROM exttab_subq_2 WHERE i <= e1.i) as i, e1.j
+FROM exttab_subq_2 e1, exttab_subq_1 e2
+WHERE e1.i = e2.i;
+SELECT COUNT(*) > 0 FROM
+(
+SELECT * FROM gp_read_error_log('exttab_subq_1')
+UNION ALL
+SELECT * FROM gp_read_error_log('exttab_subq_2')
+) FOO;
+
+-- TRUNCATE / delete / write to error logs within subtransactions
+-- does not reach reject limit
+CREATE EXTERNAL TABLE exttab_subtxs_1( i int, j text )
+LOCATION (:'exttab_few_errors_file') FORMAT 'TEXT' (DELIMITER '|')
+LOG ERRORS SEGMENT REJECT LIMIT 10;
+-- reaches reject limit, use the same err table
+\set exttab_more_errors_file2 'file://' :hostname ':' :abs_srcdir '/data/exttab_more_errors.data'
+CREATE EXTERNAL TABLE exttab_subtxs_2( i int, j text )
+LOCATION (:'exttab_more_errors_file2') FORMAT 'TEXT' (DELIMITER '|')
+LOG ERRORS SEGMENT REJECT LIMIT 2;
+-- Populate error logs before transaction
+SELECT e1.i, e2.j FROM
+(SELECT i, j FROM exttab_subtxs_1 WHERE i < 5 ) e1,
+(SELECT i, j FROM exttab_subtxs_1 WHERE i < 10) e2
+WHERE e1.i = e2.i;
+SELECT COUNT(*)
+FROM (
+SELECT * FROM gp_read_error_log('exttab_subtxs_1')
+UNION ALL
+SELECT * FROM gp_read_error_log('exttab_subtxs_2')
+) FOO;
+BEGIN;
+savepoint s1;
+SELECT gp_truncate_error_log('exttab_subtxs_1');
+SELECT gp_truncate_error_log('exttab_subtxs_2');
+SELECT e1.i, e2.j FROM
+(SELECT i, j FROM exttab_subtxs_1 WHERE i < 5 ) e1,
+(SELECT i, j FROM exttab_subtxs_1 WHERE i < 10) e2
+WHERE e1.i = e2.i;
+-- should have written rows into error log
+SELECT count(*) FROM
+(
+SELECT * FROM gp_read_error_log('exttab_subtxs_1')
+UNION ALL
+SELECT * FROM gp_read_error_log('exttab_subtxs_2')
+) FOO;
+savepoint s2;
+SELECT e1.i, e2.j FROM
+(SELECT i, j FROM exttab_subtxs_1 WHERE i < 5 ) e1,
+(SELECT i, j FROM exttab_subtxs_1 WHERE i < 10) e2
+WHERE e1.i = e2.i;
+savepoint s3;
+SELECT e1.i, e2.j FROM
+(SELECT i, j FROM exttab_subtxs_1 WHERE i < 5 ) e1,
+(SELECT i, j FROM exttab_subtxs_1 WHERE i < 10) e2
+WHERE e1.i = e2.i;
+ROLLBACK TO s2;
+-- rollback should not rollback the error rows written from within the transaction
+SELECT count(*) FROM
+(
+SELECT * FROM gp_read_error_log('exttab_subtxs_1')
+UNION ALL
+SELECT * FROM gp_read_error_log('exttab_subtxs_2')
+) FOO;
+-- Make the tx fail, segment reject limit reaches here
+SELECT e1.i, e2.j FROM
+(SELECT i, j FROM exttab_subtxs_2 WHERE i < 5 ) e1,
+(SELECT i, j FROM exttab_subtxs_2 WHERE i < 10) e2
+WHERE e1.i = e2.i;
+COMMIT;
+-- Error logs should not have been rolled back.
+-- Check that number of errors is greater than 12 instead of checking for
+-- actual number of errors, since the transaction might get aborted even before
+-- rows are scanned on other segments if one of the segments hits the segment
+-- reject limit. The 12 errors are from previous scans of the external table.
+SELECT count(*) > 12 FROM
+(
+SELECT * FROM gp_read_error_log('exttab_subtxs_1')
+UNION ALL
+SELECT * FROM gp_read_error_log('exttab_subtxs_2')
+) FOO;
+
+-- TRUNCATE error logs within tx , abort transaction
+-- does not reach reject limit
+CREATE EXTERNAL TABLE exttab_txs_1( i int, j text )
+LOCATION (:'exttab_few_errors_file') FORMAT 'TEXT' (DELIMITER '|')
+LOG ERRORS SEGMENT REJECT LIMIT 10;
+-- reaches reject limit, use the same err table
+CREATE EXTERNAL TABLE exttab_txs_2( i int, j text )
+LOCATION (:'exttab_more_errors_file') FORMAT 'TEXT' (DELIMITER '|')
+LOG ERRORS SEGMENT REJECT LIMIT 2;
+-- Populate error log before transaction
+SELECT e1.i, e2.j FROM
+(SELECT i, j FROM exttab_txs_1 WHERE i < 5 ) e1,
+(SELECT i, j FROM exttab_txs_1 WHERE i < 10) e2
+WHERE e1.i = e2.i;
+SELECT count(*) FROM
+(
+SELECT * FROM gp_read_error_log('exttab_txs_1')
+UNION ALL
+SELECT * FROM gp_read_error_log('exttab_txs_2')
+) FOO;
+BEGIN;
+SELECT gp_truncate_error_log('exttab_txs_1');
+SELECT gp_truncate_error_log('exttab_txs_2');
+SELECT e1.i, e2.j FROM
+(SELECT i, j FROM exttab_txs_1 WHERE i < 5 ) e1,
+(SELECT i, j FROM exttab_txs_1 WHERE i < 10) e2
+WHERE e1.i = e2.i;
+ABORT;
+-- Check that number of errors is greater than zero instead of checking the
+-- actual number of errors since the transaction might get aborted even before
+-- rows are scanned on other segments if one of the segments hits the segment
+-- reject limit.
+SELECT count(*) > 0 FROM
+(
+SELECT * FROM gp_read_error_log('exttab_txs_1')
+UNION ALL
+SELECT * FROM gp_read_error_log('exttab_txs_2')
+) FOO;
+
+-- TRUNCATE error logs within txs , with segment reject limit reached
+-- Populate error log before transaction
+SELECT e1.i, e2.j FROM
+(SELECT i, j FROM exttab_txs_1 WHERE i < 5 ) e1,
+(SELECT i, j FROM exttab_txs_1 WHERE i < 10) e2
+WHERE e1.i = e2.i;
+SELECT count(*) FROM
+(
+SELECT * FROM gp_read_error_log('exttab_txs_1')
+UNION ALL
+SELECT * FROM gp_read_error_log('exttab_txs_2')
+) FOO;
+BEGIN;
+SELECT gp_truncate_error_log('exttab_txs_1');
+SELECT gp_truncate_error_log('exttab_txs_2');
+-- This should abort the transaction
+SELECT e1.i, e2.j FROM
+(SELECT i, j FROM exttab_txs_1 WHERE i < 5 ) e1,
+(SELECT i, j FROM exttab_txs_2 WHERE i < 10) e2
+WHERE e1.i = e2.i;
+COMMIT;
+-- Additional error rows should have been inserted into the error logs even if the tx is aborted.
+-- Truncate of error logs should not be rolled back even if the transaction is aborted. All operation on error logs are persisted.
+-- Check that number of errors is greater than zero instead of checking for
+-- actual number of errors, since the transaction might get aborted even before
+-- rows are scanned on other segments if one of the segments hits the segment
+-- reject limit.
+SELECT count(*) > 0 FROM
+(
+SELECT * FROM gp_read_error_log('exttab_txs_1')
+UNION ALL
+SELECT * FROM gp_read_error_log('exttab_txs_2')
+) FOO;
+
+-- Creating external table with error log within txs with segment reject limits reached
+SELECT gp_truncate_error_log('exttab_txs_1');
+SELECT gp_truncate_error_log('exttab_txs_2');
+DROP EXTERNAL TABLE IF EXISTS exttab_txs_3;
+DROP EXTERNAL TABLE IF EXISTS exttab_txs_4;
+BEGIN;
+-- create an external table that will reach segment reject limit
+-- reaches reject limit
+CREATE EXTERNAL TABLE exttab_txs_3( i int, j text )
+LOCATION (:'exttab_more_errors_file') FORMAT 'TEXT' (DELIMITER '|')
+LOG ERRORS SEGMENT REJECT LIMIT 2;
+-- new error log, within segment reject limit
+CREATE EXTERNAL TABLE exttab_txs_4( i int, j text )
+LOCATION (:'exttab_few_errors_file') FORMAT 'TEXT' (DELIMITER '|')
+LOG ERRORS SEGMENT REJECT LIMIT 10;
+SELECT e1.i, e2.j FROM
+(SELECT i, j FROM exttab_txs_4 WHERE i < 5 ) e1,
+(SELECT i, j FROM exttab_txs_4 WHERE i < 10) e2
+WHERE e1.i = e2.i order by e1.i;
+-- should be populated correctly
+SELECT count(*) FROM gp_read_error_log('exttab_txs_4');
+-- should error out and abort the transaction
+SELECT e1.i, e2.j FROM
+(SELECT i, j FROM exttab_txs_3 WHERE i < 5 ) e1,
+(SELECT i, j FROM exttab_txs_4 WHERE i < 10) e2
+WHERE e1.i = e2.i order by e1.i;
+COMMIT;
+-- Error logs should not exist for these tables that would have been rolled back
+SELECT count(*) FROM gp_read_error_log('exttab_txs_3');
+SELECT count(*) FROM gp_read_error_log('exttab_txs_4');
+-- external tables created within aborted transactions should not exist
+SELECT count(*) FROM exttab_txs_3;
+SELECT count(*) FROM exttab_txs_4;
+
+-- UDFS with segment reject limit reached
+-- does not reach reject limit
+CREATE EXTERNAL TABLE exttab_udfs_1( i int, j text )
+LOCATION (:'exttab_few_errors_file') FORMAT 'TEXT' (DELIMITER '|')
+LOG ERRORS SEGMENT REJECT LIMIT 10;
+-- reaches reject limit, use the same err table
+CREATE EXTERNAL TABLE exttab_udfs_2( i int, j text )
+LOCATION (:'exttab_more_errors_file') FORMAT 'TEXT' (DELIMITER '|')
+LOG ERRORS SEGMENT REJECT LIMIT 2;
+CREATE OR REPLACE FUNCTION exttab_udfs_func1 ()
+RETURNS boolean
+AS $$
+BEGIN
+  EXECUTE 'SELECT sum(distinct e1.i) as sum_i, sum(distinct e2.i) as sum_j, e1.j as j FROM
+	   (SELECT i, j FROM exttab_udfs_1 WHERE i < 5 ) e1,
+	   (SELECT i, j FROM exttab_udfs_2 WHERE i < 10) e2
+	   group by e1.j';
+  RETURN 1;
+END;
+$$
+LANGUAGE plpgsql volatile;
+-- Should fail
+SELECT * FROM exttab_udfs_func1();
+-- Should be populated
+SELECT COUNT(*) > 0 FROM
+(
+SELECT * FROM gp_read_error_log('exttab_udfs_1')
+UNION ALL
+SELECT * FROM gp_read_error_log('exttab_udfs_2')
+) FOO;
+
+-- INSERT INTO from a udf
+DROP TABLE IF EXISTS exttab_udfs_insert_1;
+CREATE TABLE exttab_udfs_insert_1(a boolean);
+SELECT gp_truncate_error_log('exttab_udfs_1');
+SELECT gp_truncate_error_log('exttab_udfs_2');
+-- Should fail
+INSERT INTO exttab_udfs_insert_1 SELECT * FROM exttab_udfs_func1();
+SELECT * FROM exttab_udfs_insert_1;
+-- Error table should be populated correctly
+SELECT COUNT(*) > 0 FROM
+(
+SELECT * FROM gp_read_error_log('exttab_udfs_1')
+UNION ALL
+SELECT * FROM gp_read_error_log('exttab_udfs_2')
+) FOO;
+
+-- UDFs with INSERT INTO with segment reject limit reached
+DROP TABLE IF EXISTS exttab_udfs_insert_2;
+CREATE TABLE exttab_udfs_insert_2 (LIKE exttab_udfs_1);
+CREATE OR REPLACE FUNCTION exttab_udfs_func2 ()
+RETURNS boolean
+AS $$
+DECLARE
+ r RECORD;
+ cnt integer;
+ result boolean;
+BEGIN
+  SELECT INTO result gp_truncate_error_log('exttab_udfs_1');
+  SELECT INTO result gp_truncate_error_log('exttab_udfs_2');
+  INSERT INTO exttab_udfs_insert_2
+  SELECT i, j from exttab_udfs_1;
+  cnt := 0;
+  FOR r in SELECT * FROM gp_read_error_log('exttab_udfs_1') LOOP
+      -- just looping through the error log
+      cnt := cnt + 1;
+  END LOOP;
+  IF cnt <= 0 THEN
+      RAISE EXCEPTION 'Error log should not be empty';
+  END IF;
+  SELECT count(*) INTO cnt FROM exttab_udfs_insert_2;
+  -- should be 8
+  IF cnt <> 8 THEN
+      RAISE EXCEPTION 'Unexpected number of rows inserted';
+  END IF;
+  -- Now make insert into fail
+  INSERT INTO exttab_udfs_insert_2
+  SELECT i, j from exttab_udfs_2;
+  -- Should not reach here
+  cnt := 0;
+  FOR r in SELECT * FROM gp_read_error_log('exttab_udfs_2') LOOP
+      -- just looping through the error log
+      cnt := cnt + 1;
+  END LOOP;
+  IF cnt <= 0 THEN
+      RAISE EXCEPTION 'Error table should not be empty';
+  END IF;
+  RETURN 1;
+END;
+$$
+LANGUAGE plpgsql volatile;
+SELECT gp_truncate_error_log('exttab_udfs_1');
+SELECT gp_truncate_error_log('exttab_udfs_2');
+-- All this should fail, error logs should be populated even if the UDF gets aborted as we persist error rows written within aborted txs.
+SELECT * FROM exttab_udfs_func2();
+SELECT COUNT(*) > 0 FROM
+(
+SELECT * FROM gp_read_error_log('exttab_udfs_1')
+UNION ALL
+SELECT * FROM gp_read_error_log('exttab_udfs_2')
+) FOO;
+SELECT gp_truncate_error_log('exttab_udfs_1');
+SELECT gp_truncate_error_log('exttab_udfs_2');
+SELECT exttab_udfs_func2();
+SELECT COUNT(*) > 0 FROM
+(
+SELECT * FROM gp_read_error_log('exttab_udfs_1')
+UNION ALL
+SELECT * FROM gp_read_error_log('exttab_udfs_2')
+) FOO;
+SELECT gp_truncate_error_log('exttab_udfs_1');
+SELECT gp_truncate_error_log('exttab_udfs_2');
+INSERT INTO exttab_udfs_insert_1 SELECT * FROM exttab_udfs_func2();
+SELECT COUNT(*) > 0 FROM
+(
+SELECT * FROM gp_read_error_log('exttab_udfs_1')
+UNION ALL
+SELECT * FROM gp_read_error_log('exttab_udfs_2')
+) FOO;
+SELECT gp_truncate_error_log('exttab_udfs_1');
+SELECT gp_truncate_error_log('exttab_udfs_2');
+CREATE TABLE exttab_udfs_ctas_2 AS SELECT * FROM exttab_udfs_func2();
+SELECT COUNT(*) > 0 FROM
+(
+SELECT * FROM gp_read_error_log('exttab_udfs_1')
+UNION ALL
+SELECT * FROM gp_read_error_log('exttab_udfs_2')
+) FOO;
+-- No rows should be inserted into exttab_udfs_insert_2
+SELECT * FROM exttab_udfs_insert_2;
+
+-- Scans in union queries with seg reject limit reached
+-- does not reach reject limit
+DROP EXTERNAL TABLE IF EXISTS exttab_union_1;
+DROP EXTERNAL TABLE IF EXISTS exttab_union_2;
+CREATE EXTERNAL TABLE exttab_union_1( i int, j text )
+LOCATION (:'exttab_few_errors_file') FORMAT 'TEXT' (DELIMITER '|')
+LOG ERRORS SEGMENT REJECT LIMIT 10;
+-- reaches reject limit
+CREATE EXTERNAL TABLE exttab_union_2( i int, j text )
+LOCATION (:'exttab_more_errors_file') FORMAT 'TEXT' (DELIMITER '|')
+LOG ERRORS SEGMENT REJECT LIMIT 2;
+
+-- Should error out as exttab_union_2 would reach it's reject limit
+SELECT * FROM
+(
+SELECT * FROM exttab_union_1
+UNION
+SELECT * FROM exttab_union_2
+) FOO
+order by FOO.i;
+
+-- Error table count
+select count(*) > 0 from
+(
+SELECT * FROM gp_read_error_log('exttab_union_1')
+UNION ALL
+SELECT * FROM gp_read_error_log('exttab_union_2')
+) FOO;
+
+-- Insert into another table, with and without segment reject limits being reached
+DROP TABLE IF EXISTS exttab_union_insert_1;
+CREATE TABLE exttab_union_insert_1 (LIKE exttab_union_1);
+SELECT gp_truncate_error_log('exttab_union_1');
+SELECT gp_truncate_error_log('exttab_union_2');
+insert into exttab_union_insert_1
+SELECT e1.i, e2.j from exttab_union_2 e1 INNER JOIN exttab_union_2 e2 ON e1.i = e2.i
+UNION ALL
+SELECT e1.i, e2.j from exttab_union_2 e1 INNER JOIN exttab_union_2 e2 ON e1.i = e2.i;
+-- should return 0 rows
+SELECT * from exttab_union_insert_1;
+-- Error table count, should have more than 0 rows, the total number is non-deterministic
+select count(*) > 0 from
+(
+SELECT * FROM gp_read_error_log('exttab_union_1')
+UNION ALL
+SELECT * FROM gp_read_error_log('exttab_union_2')
+) FOO;
+SELECT gp_truncate_error_log('exttab_union_1');
+SELECT gp_truncate_error_log('exttab_union_2');
+-- should not error out as exttab_union_1 will not reach segment reject limit
+insert into exttab_union_insert_1
+SELECT e1.i, e2.j from exttab_union_1 e1 INNER JOIN exttab_union_1 e2 ON e1.i = e2.i
+UNION
+SELECT e1.i, e2.j from exttab_union_1 e1 INNER JOIN exttab_union_1 e2 ON e1.i = e2.i;
+-- should return the right result
+SELECT * from exttab_union_insert_1 order by i;
+
+-- Views reaching segment reject limit
+DROP EXTERNAL TABLE IF EXISTS exttab_views_1 CASCADE;
+DROP EXTERNAL TABLE IF EXISTS exttab_views_2 CASCADE;
+-- does not reach reject limit
+CREATE EXTERNAL TABLE exttab_views_1( i int, j text )
+LOCATION (:'exttab_few_errors_file') FORMAT 'TEXT' (DELIMITER '|')
+LOG ERRORS SEGMENT REJECT LIMIT 10;
+-- reaches reject limit, use the same err table
+CREATE EXTERNAL TABLE exttab_views_2( i int, j text )
+LOCATION (:'exttab_more_errors_file') FORMAT 'TEXT' (DELIMITER '|')
+LOG ERRORS SEGMENT REJECT LIMIT 2;
+DROP VIEW IF EXISTS exttab_views_3;
+CREATE VIEW exttab_views_3 as
+SELECT sum(distinct e1.i) as sum_i, sum(distinct e2.i) as sum_j, e1.j as j FROM
+(SELECT i, j FROM exttab_views_1 WHERE i < 5 ) e1,
+(SELECT i, j FROM exttab_views_2 WHERE i < 10) e2
+group by e1.j;
+SELECT gp_truncate_error_log('exttab_views_1');
+SELECT gp_truncate_error_log('exttab_views_2');
+-- This should error out
+SELECT * FROM exttab_views_3;
+-- Error table should be populated
+SELECT count(*) > 0 FROM
+(
+SELECT * FROM gp_read_error_log('exttab_views_1')
+UNION ALL
+SELECT * FROM gp_read_error_log('exttab_views_2')
+) FOO;
+
+-- INSERT INTO FROM a view
+DROP TABLE IF EXISTS exttab_views_insert_1;
+CREATE TABLE exttab_views_insert_1 (i int, j int, k text);
+SELECT gp_truncate_error_log('exttab_views_1');
+SELECT gp_truncate_error_log('exttab_views_2');
+-- Should fail
+INSERT INTO exttab_views_insert_1 SELECT * FROM exttab_views_3;
+-- should not have any rows
+SELECT * FROM exttab_views_insert_1;
+-- Error table should be populated
+SELECT count(*) > 0 FROM
+(
+SELECT * FROM gp_read_error_log('exttab_views_1')
+UNION ALL
+SELECT * FROM gp_read_error_log('exttab_views_2')
+) FOO;
+
+-- CTAS from a view with segment reject limit reached
+DROP TABLE IF EXISTS exttab_views_ctas_1;
+SELECT gp_truncate_error_log('exttab_views_1');
+SELECT gp_truncate_error_log('exttab_views_2');
+-- Should fail
+CREATE TABLE exttab_views_ctas_1 AS SELECT * FROM exttab_views_3 where length(j) < 100;
+SELECT * FROM exttab_views_ctas_1;
+-- Error table should be populated
+SELECT count(*) > 0 FROM
+(
+SELECT * FROM gp_read_error_log('exttab_views_1')
+UNION ALL
+SELECT * FROM gp_read_error_log('exttab_views_2')
+) FOO;
+
+-- CTAS FROM view with segment reject limits reached
+DROP TABLE IF EXISTS exttab_views_ctas_1;
+SELECT gp_truncate_error_log('exttab_views_1');
+SELECT gp_truncate_error_log('exttab_views_2');
+-- Should fail here
+CREATE TABLE exttab_views_ctas_1 AS SELECT * FROM exttab_views_3;
+-- Relation should not exist
+SELECT * FROM exttab_views_ctas_1;
+-- Error table should be populated
+SELECT count(*) > 0 FROM
+(
+SELECT * FROM gp_read_error_log('exttab_views_1')
+UNION ALL
+SELECT * FROM gp_read_error_log('exttab_views_2')
+) FOO;
+
+-- Scans in window queries with and without seg reject limit reached
+DROP EXTERNAL TABLE IF EXISTS exttab_windows_1;
+DROP EXTERNAL TABLE IF EXISTS exttab_windows_2;
+-- does not reach reject limit
+CREATE EXTERNAL TABLE exttab_windows_1( i int, j text )
+LOCATION (:'exttab_few_errors_file') FORMAT 'TEXT' (DELIMITER '|')
+LOG ERRORS SEGMENT REJECT LIMIT 10;
+-- reaches reject limit
+CREATE EXTERNAL TABLE exttab_windows_2( i int, j text )
+LOCATION (:'exttab_more_errors_file') FORMAT 'TEXT' (DELIMITER '|')
+LOG ERRORS SEGMENT REJECT LIMIT 2;
+-- without reaching segment reject limit
+with cte1 as(
+ select t1.i as i,
+        sum(t2.i) sum_i,
+        avg(sum(t2.i)) over
+          (partition by t2.j)
+          avg_j,
+        rank() over
+          (partition by t2.j order by t1.j) rnk_j
+ from exttab_windows_1 t1, exttab_windows_1 t2
+ where t1.i = t2.i
+ group by t1.i,t2.j,t1.j
+),
+cte2 as
+(
+ select t1.i as i,
+        sum(t2.i) sum_i,
+        avg(sum(t2.i)) over
+          (partition by t2.j)
+          avg_j,
+        rank() over
+          (partition by t2.j order by t1.j) rnk_j
+ from exttab_windows_1 t1, exttab_windows_1 t2
+ where t1.i = t2.i
+ group by t1.i, t2.j, t1.j
+)
+SELECT * FROM cte1 c1, cte2 c2
+WHERE c1.i = c2.i
+ORDER BY c1.i
+limit 5;
+
+-- with reaching segment reject limit
+SELECT gp_truncate_error_log('exttab_windows_1');
+SELECT gp_truncate_error_log('exttab_windows_2');
+with cte1 as(
+ select t1.i as i,
+        sum(t2.i) sum_i,
+        avg(sum(t2.i)) over
+          (partition by t2.j)
+          avg_j,
+        rank() over
+          (partition by t2.j order by t1.j) rnk_j
+ from exttab_windows_1 t1, exttab_windows_2 t2
+ where t1.i = t2.i
+ group by t1.i,t2.j,t1.j
+),
+cte2 as
+(
+ select t1.i as i,
+        sum(t2.i) sum_i,
+        avg(sum(t2.i)) over
+          (partition by t2.j)
+          avg_j,
+        rank() over
+          (partition by t2.j order by t1.j) rnk_j
+ from exttab_windows_1 t1, exttab_windows_2 t2
+ where t1.i = t2.i
+ group by t1.i, t2.j, t1.j
+)
+SELECT * FROM cte1 c1, cte2 c2
+WHERE c1.i = c2.i
+ORDER BY c1.i
+limit 5;
+SELECT COUNT(*) > 0
+FROM
+(
+SELECT * FROM gp_read_error_log('exttab_windows_1')
+UNION ALL
+SELECT * FROM gp_read_error_log('exttab_windows_2')
+) FOO;
+
+-- LIMIT queries without segment reject limit reached
+DROP EXTERNAL TABLE IF EXISTS exttab_limit_1 cascade;
+DROP EXTERNAL TABLE IF EXISTS exttab_limit_2 cascade;
+-- does not reach reject limit
+CREATE EXTERNAL TABLE exttab_limit_1( i int, j text )
+LOCATION (:'exttab_few_errors_file') FORMAT 'TEXT' (DELIMITER '|')
+LOG ERRORS SEGMENT REJECT LIMIT 10;
+-- reaches reject limit, use the same err table
+CREATE EXTERNAL TABLE exttab_limit_2( i int, j text )
+LOCATION (:'exttab_more_errors_file') FORMAT 'TEXT' (DELIMITER '|')
+LOG ERRORS SEGMENT REJECT LIMIT 2;
+
+-- Note that even though we use exttab_limit_2 here , the LIMIT 3 will not throw a segment reject limit error
+with cte1 as
+(
+SELECT e1.i, e2.j FROM exttab_limit_1 e1, exttab_limit_1 e2
+WHERE e1.i = e2.i LIMIT 5
+)
+SELECT * FROM cte1, exttab_limit_2 e3 where cte1.i = e3.i ORDER BY cte1.i LIMIT 3;
+SELECT count(*) FROM gp_read_error_log('exttab_limit_2');
+SELECT gp_truncate_error_log('exttab_limit_1');
+SELECT gp_truncate_error_log('exttab_limit_2');
+-- Note that even though we use exttab_limit_2 here , the LIMIT 3 will not throw a segment reject limit error
+SELECT * FROM
+(
+(SELECT * FROM exttab_limit_1 LIMIT 3)
+UNION
+(SELECT * FROM exttab_limit_1 LIMIT 3)
+UNION
+(SELECT * FROM exttab_limit_1 LIMIT 3)
+UNION
+(SELECT * FROM exttab_limit_1 LIMIT 3)
+UNION
+(SELECT * FROM exttab_limit_1 LIMIT 5)
+UNION
+(SELECT * FROM exttab_limit_2 LIMIT 3)
+UNION
+(SELECT * FROM exttab_limit_2 LIMIT 3)
+UNION
+(SELECT * FROM exttab_limit_2 LIMIT 3)
+) FOO
+ORDER BY i LIMIT 5;
+SELECT COUNT(*) > 0 FROM gp_read_error_log('exttab_limit_2');
+
+-- LIMIT queries with segment reject limit reached
+SELECT gp_truncate_error_log('exttab_limit_1');
+SELECT gp_truncate_error_log('exttab_limit_2');
+with cte1 as
+(
+SELECT e1.i, e2.j FROM exttab_limit_1 e1, exttab_limit_1 e2
+WHERE e1.i = e2.i LIMIT 3
+)
+SELECT * FROM cte1, exttab_limit_2 e3 where cte1.i = e3.i ORDER BY cte1.i LIMIT 5;
+SELECT count(*) > 0 FROM gp_read_error_log('exttab_limit_2');
+SELECT gp_truncate_error_log('exttab_limit_1');
+SELECT gp_truncate_error_log('exttab_limit_2');
+SELECT * FROM
+(
+(SELECT * FROM exttab_limit_1 LIMIT 3)
+UNION
+(SELECT * FROM exttab_limit_1 LIMIT 3)
+UNION
+(SELECT * FROM exttab_limit_1 LIMIT 3)
+UNION
+(SELECT * FROM exttab_limit_1 LIMIT 3)
+UNION
+(SELECT * FROM exttab_limit_2 LIMIT 5)
+UNION
+(SELECT * FROM exttab_limit_2 LIMIT 5)
+UNION
+(SELECT * FROM exttab_limit_2 LIMIT 5)
+UNION
+(SELECT * FROM exttab_limit_2 LIMIT 5)
+) FOO
+ORDER BY i LIMIT 5;
+SELECT count(*) > 0 FROM
+(
+SELECT * FROM gp_read_error_log('exttab_limit_1')
+UNION ALL
+SELECT * FROM gp_read_error_log('exttab_limit_2')
+) FOO;
+-- This query will materialize exttab_limit_2 completely even if LIMIT is just 3 and hence will throw segment reject limit reached
+SELECT gp_truncate_error_log('exttab_limit_1');
+SELECT gp_truncate_error_log('exttab_limit_2');
+SELECT * FROM exttab_limit_1 e1, exttab_limit_2 e2 where e1.i = e2.i LIMIT 3;
+SELECT count(*) > 0 FROM
+(
+SELECT * FROM gp_read_error_log('exttab_limit_1')
+UNION ALL
+SELECT * FROM gp_read_error_log('exttab_limit_2')
+) FOO;
+
+-- gp_initial_bad_row_limit guc test. This guc allows user to set the initial
+-- number of rows which can contain errors before the database stops loading
+-- the data. If there is a valid row within the first 'n' rows specified by
+-- this guc, the database continues to load the data.
+
+-- default should be 1000
+\set exttab_first_errors_file 'file://' :hostname :abs_srcdir '/data/exttab_first_errors.data'
+SHOW gp_initial_bad_row_limit;
+DROP EXTERNAL TABLE IF EXISTS exttab_first_reject_limit_1 cascade;
+CREATE EXTERNAL TABLE exttab_first_reject_limit_1( i int, j text )
+LOCATION (:'exttab_first_errors_file') FORMAT 'TEXT' (DELIMITER '|')
+LOG ERRORS SEGMENT REJECT LIMIT 20000;
+-- should fail with an appropriate error message
+SELECT COUNT(*) FROM exttab_first_reject_limit_1;
+SELECT COUNT(*) > 0 FROM gp_read_error_log('exttab_first_reject_limit_1');
+-- should work now
+SET gp_initial_bad_row_limit = 6000;
+SELECT gp_truncate_error_log('exttab_first_reject_limit_1');
+SELECT COUNT(*) FROM exttab_first_reject_limit_1;
+SELECT COUNT(*) FROM gp_read_error_log('exttab_first_reject_limit_1');
+-- first segment reject limit should be checked before segment reject limit
+DROP EXTERNAL TABLE IF EXISTS exttab_first_reject_limit_2;
+CREATE EXTERNAL TABLE exttab_first_reject_limit_2( i int, j text )
+LOCATION (:'exttab_first_errors_file') FORMAT 'TEXT' (DELIMITER '|')
+LOG ERRORS SEGMENT REJECT LIMIT 500;
+-- should report an error saying first rows were rejected
+SET gp_initial_bad_row_limit = 2;
+SELECT COUNT(*) FROM exttab_first_reject_limit_2;
+SELECT COUNT(*) > 0 from gp_read_error_log('exttab_first_reject_limit_2');
+-- should report an error saying segment reject limit reached
+set gp_initial_bad_row_limit = 600;
+SELECT gp_truncate_error_log('exttab_first_reject_limit_2');
+SELECT COUNT(*) FROM exttab_first_reject_limit_2;
+SELECT COUNT(*) > 0 from gp_read_error_log('exttab_first_reject_limit_2');
+-- set unlimited first error rows, should fail only because of segment reject limits
+set gp_initial_bad_row_limit = 0;
+SELECT gp_truncate_error_log('exttab_first_reject_limit_2');
+SELECT COUNT(*) FROM exttab_first_reject_limit_2;
+SELECT COUNT(*) > 0 from gp_read_error_log('exttab_first_reject_limit_2');
+
+DROP EXTERNAL TABLE IF EXISTS exttab_heap_join_1;
+-- does not reach reject limit
+CREATE EXTERNAL TABLE exttab_heap_join_1( i int, j text )
+LOCATION (:'exttab_few_errors_file') FORMAT 'TEXT' (DELIMITER '|')
+LOG ERRORS SEGMENT REJECT LIMIT 10;
+DROP TABLE IF EXISTS test_ext_heap_join;
+CREATE TABLE test_ext_heap_join( i int, j text);
+-- Turn off stats
+SET gp_autostats_mode = 'NONE';
+INSERT INTO test_ext_heap_join SELECT i, i || '_number' FROM generate_series(1, 10) i;
+SELECT COUNT(*) FROM test_ext_heap_join, exttab_heap_join_1;
+SELECT COUNT(*) FROM gp_read_error_log('exttab_heap_join_1');
+
+\! rm $PG_ABS_SRCDIR/data/tableless.csv
+
+-- start_ignore
+DROP EXTERNAL TABLE IF EXISTS exttab_with_on_coordinator;
+-- end_ignore
+
+-- Create external table with on clause
+CREATE EXTERNAL TABLE exttab_with_on_coordinator( i int, j text )
+LOCATION (:'exttab_few_errors_file') ON COORDINATOR FORMAT 'TEXT' (DELIMITER '|');
+
+SELECT * FROM exttab_with_on_coordinator;
+
+DROP EXTERNAL TABLE IF EXISTS exttab_with_on_coordinator;
+
+-- start_ignore
+DROP EXTERNAL TABLE IF EXISTS exttab_with_option_empty;
+DROP EXTERNAL TABLE IF EXISTS exttab_with_option_1;
+DROP EXTERNAL TABLE IF EXISTS exttab_with_options;
+-- end_ignore
+
+-- Create external table with 'OPTIONS'
+CREATE EXTERNAL TABLE exttab_with_option_empty( i int, j text )
+LOCATION (:'exttab_few_errors_file') FORMAT 'TEXT' (DELIMITER '|')
+OPTIONS ();
+
+CREATE EXTERNAL TABLE exttab_with_option_1( i int, j text )
+LOCATION (:'exttab_few_errors_file') FORMAT 'TEXT' (DELIMITER '|')
+OPTIONS (hello 'world');
+
+CREATE EXTERNAL TABLE exttab_with_options( i int, j text )
+LOCATION (:'exttab_few_errors_file') FORMAT 'TEXT' (DELIMITER '|')
+OPTIONS (hello 'world', bonjour 'again', nihao 'again and again' );
+
+\d exttab_with_options
+
+\d exttab_with_option_empty
+
+DROP EXTERNAL TABLE IF EXISTS exttab_with_option_empty;
+DROP EXTERNAL TABLE IF EXISTS exttab_with_option_1;
+DROP EXTERNAL TABLE IF EXISTS exttab_with_options;
+
+-- start_ignore
+DROP EXTERNAL TABLE IF EXISTS tbl_wet_csv1;
+DROP EXTERNAL TABLE IF EXISTS tbl_wet_csv2;
+DROP EXTERNAL TABLE IF EXISTS tbl_wet_csv3;
+DROP EXTERNAL TABLE IF EXISTS tbl_wet_csv4;
+DROP EXTERNAL TABLE IF EXISTS tbl_wet_csv5;
+-- end_ignore
+
+-- Create writable external table with AS for DELIMITER , NULL, ESCAPE
+\set wet_csv1_file 'cat > ' :abs_srcdir '/data/wet_csv1.tbl'
+CREATE WRITABLE EXTERNAL WEB TABLE tbl_wet_csv1 (a int, b text) EXECUTE :'wet_csv1_file' FORMAT 'CSV' (DELIMITER AS '|' NULL AS 'null' ESCAPE AS ' ');
+
+-- Create writable external table without AS for DELIMITER , NULL, ESCAPE
+\set wet_csv2_file 'cat > ' :abs_srcdir '/data/wet_csv2.tbl'
+CREATE WRITABLE EXTERNAL WEB TABLE tbl_wet_csv2 (a int, b text) EXECUTE :'wet_csv2_file' FORMAT 'CSV' (DELIMITER AS ',' NULL 'null' ESCAPE ' ');
+
+-- Create writable external table with double quotes
+\set wet_csv3_file 'cat > ' :abs_srcdir '/data/wet_csv3.tbl'
+CREATE WRITABLE EXTERNAL WEB TABLE tbl_wet_csv3 (a int, b text) EXECUTE :'wet_csv3_file' FORMAT 'CSV' (DELIMITER AS '|' NULL AS 'null' ESCAPE AS ' '  QUOTE AS '"');
+
+-- Create writable external table with single quotes
+\set wet_csv4_file 'cat > ' :abs_srcdir '/data/wet_csv4.tbl'
+CREATE WRITABLE EXTERNAL WEB TABLE tbl_wet_csv4 (a int, b text) EXECUTE :'wet_csv4_file' FORMAT 'CSV' (DELIMITER AS '|' NULL AS 'null' ESCAPE AS ' '  QUOTE AS '''');
+
+-- Create writable external table with force quote
+\set wet_csv5_file 'cat > ' :abs_srcdir '/data/wet_csv5.tbl'
+CREATE WRITABLE EXTERNAL WEB TABLE tbl_wet_csv5 (a int, b text) EXECUTE :'wet_csv5_file' FORMAT 'CSV' (DELIMITER AS '|' NULL AS 'null' ESCAPE AS ' '  QUOTE AS '"' FORCE QUOTE b);
+
+\set wet_csv6_file 'cat > ' :abs_srcdir '/data/wet_csv6.tbl'   
+CREATE WRITABLE EXTERNAL WEB TABLE tbl_wet_csv6 (a int, b text, c text) EXECUTE :'wet_csv6_file' FORMAT 'CSV' (DELIMITER AS '|' NULL AS 'null' ESCAPE AS ' ' QUOTE AS '"' FORCE QUOTE *);
+
+INSERT INTO tbl_wet_csv1 VALUES (generate_series(1,256), 'test_1');
+INSERT INTO tbl_wet_csv2 VALUES (generate_series(1,256), 'test_2');
+INSERT INTO tbl_wet_csv3 VALUES (generate_series(1,256), 'test_3');
+INSERT INTO tbl_wet_csv4 VALUES (generate_series(1,256), 'test_4');
+INSERT INTO tbl_wet_csv5 VALUES (generate_series(1,256), 'test_5');
+INSERT INTO tbl_wet_csv6 VALUES (generate_series(1,256), 'test_6', 'test_6_1');
+
+DROP EXTERNAL TABLE IF EXISTS tbl_wet_csv1;
+DROP EXTERNAL TABLE IF EXISTS tbl_wet_csv2;
+DROP EXTERNAL TABLE IF EXISTS tbl_wet_csv3;
+DROP EXTERNAL TABLE IF EXISTS tbl_wet_csv4;
+DROP EXTERNAL TABLE IF EXISTS tbl_wet_csv5;
+DROP EXTERNAL TABLE IF EXISTS tbl_wet_csv6;
+
+-- start_ignore
+DROP EXTERNAL TABLE IF EXISTS tbl_wet_text1;
+DROP EXTERNAL TABLE IF EXISTS tbl_wet_text2;
+DROP EXTERNAL TABLE IF EXISTS tbl_wet_text3;
+-- end_ignore
+
+-- Create writable external table with AS for DELIMITER , NULL, ESCAPE
+\set wet_text1_file 'cat > ' :abs_srcdir '/data/wet_text1.tbl'
+CREATE WRITABLE EXTERNAL WEB TABLE tbl_wet_text1 (a int, b text) EXECUTE :'wet_text1_file' FORMAT 'TEXT' (DELIMITER AS '|' NULL AS 'null' ESCAPE AS ' ');
+
+-- Create writable external table without AS for DELIMITER , NULL, ESCAPE
+\set wet_text2_file 'cat > ' :abs_srcdir '/data/wet_text2.tbl'
+CREATE WRITABLE EXTERNAL WEB TABLE tbl_wet_text2 (a int, b text) EXECUTE :'wet_text2_file' FORMAT 'TEXT' (DELIMITER AS ',' NULL 'null' ESCAPE ' ');
+
+-- Create writable external table with ESCAPE OFF
+\set wet_text3_file 'cat > ' :abs_srcdir '/data/wet_text3.tbl'
+CREATE WRITABLE EXTERNAL WEB TABLE tbl_wet_text3 (a int, b text) EXECUTE :'wet_text3_file' FORMAT 'TEXT' (DELIMITER AS '|' NULL AS 'null' ESCAPE 'OFF');
+
+INSERT INTO tbl_wet_text1 VALUES (generate_series(1,256), 'test_1');
+INSERT INTO tbl_wet_text2 VALUES (generate_series(1,256), 'test_2');
+INSERT INTO tbl_wet_text3 VALUES (generate_series(1,256), 'test_3');
+
+DROP EXTERNAL TABLE IF EXISTS tbl_wet_text1;
+DROP EXTERNAL TABLE IF EXISTS tbl_wet_text2;
+DROP EXTERNAL TABLE IF EXISTS tbl_wet_text3;
+
+-- start_ignore
+DROP TABLE IF EXISTS test_dp1;
+DROP TABLE IF EXISTS test_dp2;
+DROP EXTERNAL TABLE IF EXISTS tbl_wet_syntax1;
+DROP EXTERNAL TABLE IF EXISTS tbl_wet_syntax2;
+DROP EXTERNAL TABLE IF EXISTS tbl_wet_syntax3;
+-- end_ignore
+
+CREATE TABLE test_dp1 (a int, b text) DISTRIBUTED RANDOMLY;
+CREATE TABLE test_dp2 (a int, b text) DISTRIBUTED BY (b);
+
+\set wet_syntax1_file 'cat > ' :abs_srcdir '/data/wet_syntax1.tbl'
+CREATE WRITABLE EXTERNAL WEB TABLE tbl_wet_syntax1 (like test_dp1) EXECUTE :'wet_syntax1_file' FORMAT 'TEXT' (DELIMITER '|' ) DISTRIBUTED BY (a);
+\set wet_syntax2_file 'cat > ' :abs_srcdir '/data/wet_syntax2.tbl'
+CREATE WRITABLE EXTERNAL WEB TABLE tbl_wet_syntax2 (like test_dp2) EXECUTE :'wet_syntax2_file' FORMAT 'TEXT' (DELIMITER '|' ) DISTRIBUTED BY (a);
+\set wet_syntax3_file 'cat > ' :abs_srcdir '/data/wet_syntax3.tbl'
+CREATE WRITABLE EXTERNAL WEB TABLE tbl_wet_syntax3 (like test_dp2) EXECUTE :'wet_syntax3_file' FORMAT 'TEXT' (DELIMITER '|' ) DISTRIBUTED RANDOMLY;
+
+INSERT INTO tbl_wet_syntax1 VALUES (generate_series(1,256), 'test_1');
+INSERT INTO tbl_wet_syntax2 VALUES (generate_series(1,256), 'test_2');
+INSERT INTO tbl_wet_syntax3 VALUES (generate_series(1,256), 'test_3');
+
+DROP TABLE IF EXISTS test_dp1;
+DROP TABLE IF EXISTS test_dp2;
+DROP EXTERNAL TABLE IF EXISTS tbl_wet_syntax1;
+DROP EXTERNAL TABLE IF EXISTS tbl_wet_syntax2;
+DROP EXTERNAL TABLE IF EXISTS tbl_wet_syntax3;
+
+-- start_ignore
+DROP TABLE IF EXISTS table_execute;
+DROP EXTERNAL TABLE IF EXISTS tbl_wet_execute;
+-- end_ignore
+
+CREATE TABLE table_execute (id integer, name varchar(40)) DISTRIBUTED RANDOMLY;
+
+INSERT INTO table_execute VALUES (100, 'name_1');
+INSERT INTO table_execute VALUES (200, 'name_2');
+INSERT INTO table_execute VALUES (300, 'name_3');
+
+\set wet_execute_file 'cat > ' :abs_srcdir '/data/wet_execute.tbl'
+CREATE WRITABLE EXTERNAL WEB TABLE tbl_wet_execute (like table_execute) EXECUTE :'wet_execute_file' FORMAT 'TEXT' (DELIMITER '|' );
+
+INSERT INTO tbl_wet_execute SELECT * from table_execute ;
+
+DROP TABLE IF EXISTS table_execute;
+DROP EXTERNAL TABLE IF EXISTS tbl_wet_execute;
+
+-- start_ignore
+-- drop temp external protocols
+DROP PROTOCOL if exists demoprot;
+DROP PROTOCOL if exists demoprot2;
+-- end_ignore
+
+-- create external protocol
+CREATE OR REPLACE FUNCTION write_to_file() RETURNS integer as '$libdir/gpextprotocol.so', 'demoprot_export' LANGUAGE C STABLE NO SQL;
+CREATE OR REPLACE FUNCTION read_from_file() RETURNS integer as '$libdir/gpextprotocol.so', 'demoprot_import' LANGUAGE C STABLE NO SQL;
+CREATE TRUSTED PROTOCOL demoprot (readfunc = 'read_from_file', writefunc = 'write_to_file');
+
+-- alter external protocol's name
+ALTER PROTOCOL demoprot RENAME TO demoprot2;
+
+-- type name is a fixed-length string padded by '\0', normal(wrong)
+-- renaming will make cdbhash() getting different values, select
+-- displaying more than oneline here
+select distinct ptcname from (
+        select ptcname AS ptcname from gp_dist_random('pg_extprotocol')
+) all_segments where ptcname = 'demoprot2';
+
+-- drop temp external protocols
+DROP PROTOCOL if exists demoprot;
+DROP PROTOCOL if exists demoprot2;
+
+-- create external protocol with a serial type column
+\set serial_file 'file://' :hostname :abs_srcdir '/data/no/such/place/serial.tbl'
+CREATE EXTERNAL TABLE SERIAL (a serial, x text)
+LOCATION (:'serial_file')
+FORMAT 'csv';
+
+-- drop temp external table
+DROP EXTERNAL TABLE IF EXISTS serial;
+
+-- External table query within plpgSQL function get error
+CREATE EXTERNAL TABLE exttab_error_context_callback(c1 int, c2 int)
+LOCATION (:'exttab_file') FORMAT 'TEXT';
+
+CREATE or REPLACE FUNCTION exttab_error_context_callback_func()
+RETURNS SETOF INTEGER
+AS
+$$
+DECLARE
+    ret INTEGER;
+BEGIN
+    FOR ret IN
+        SELECT c2 from exttab_error_context_callback
+    LOOP
+        RETURN NEXT ret;
+    END LOOP;
+END
+$$
+LANGUAGE plpgSQL READS SQL DATA;
+
+SET gp_log_gang TO DEBUG;
+
+SELECT * FROM exttab_error_context_callback_func();
+
+SET gp_log_gang TO DEFAULT;
+
+DROP FUNCTION exttab_error_context_callback_func();
+DROP EXTERNAL TABLE exttab_error_context_callback;
+
+-- --------------------------------------
+-- Encoding
+-- --------------------------------------
+\set latin1_encoding_file 'file://' :hostname :abs_srcdir '/data/latin1_encoding.csv'
+CREATE EXTERNAL TABLE encoding_issue (num int, word text)
+LOCATION (:'latin1_encoding_file')
+FORMAT 'CSV' ENCODING 'LATIN1';
+
+SELECT * FROM encoding_issue WHERE num = 4;
+
+COPY (SELECT * FROM encoding_issue) TO '/tmp/latin1_encoding.csv' WITH (FORMAT 'csv', ENCODING 'LATIN1');
+
+\set latin1_encoding_file2 'file://' :hostname '/tmp/latin1_encoding.csv'
+CREATE EXTERNAL TABLE encoding_issue2 (num int, word text)
+LOCATION (:'latin1_encoding_file2')
+FORMAT 'CSV' ENCODING 'LATIN1';
+
+SELECT * FROM encoding_issue2 WHERE num = 5;
+
+DROP EXTERNAL TABLE encoding_issue;
+DROP EXTERNAL TABLE encoding_issue2;
+
+-- --------------------------------------
+-- Formatting
+-- --------------------------------------
+-- Illegal formatter option on CSV format
+CREATE EXTERNAL TABLE illegal_formatter (a integer, b integer)
+LOCATION ('file://localhost/data')
+FORMAT 'csv' (formatter='fixedwidth_in', address='46');
+
+-- large custom format table definitions
+create readable external table large_custom_format_definitions (
+    address varchar(46),
+    state varchar(2),
+    zipcode int,
+    id int,
+    id_last_two int,
+    id_last_three int,
+    hhid int,
+    efxid int,
+    riskscore int,
+    cid varchar(18),
+    flag varchar(1),
+    census_tract int,
+    census_block int,
+    census_code int,
+    address_flag varchar(1),
+    cust_attr1 int,
+    cust_attr2 int,
+    cust_attr3 int,
+    cust_attr4 int,
+    cust_attr5 varchar(1),
+    cust_attr6 varchar(1),
+    cust_attr7 int,
+    cust_attr8 int,
+    cust_attr9 int,
+    cust_attr10 int,
+    cust_attr11 varchar(2),
+    cust_attr12 varchar(1),
+    cust_attr13 int,
+    cust_attr14 int,
+    cust_attr15 int,
+    cust_attr16 int,
+    cust_attr17 varchar(1),
+    cust_attr18 varchar(1),
+    cust_attr19 int,
+    cust_attr20 int,
+    cust_attr21 int,
+    cust_attr22 int,
+    cust_attr23 varchar(2),
+    cust_attr24 varchar(1),
+    cust_attr25 int,
+    cust_attr26 int,
+    cust_attr27 int,
+    cust_attr28 int,
+    cust_attr29 varchar(1),
+    cust_attr30 varchar(1),
+    cust_attr31 int,
+    cust_attr32 int,
+    cust_attr33 int,
+    cust_attr34 int,
+    cust_attr35 varchar(2),
+    cust_attr36 varchar(1),
+    cust_attr37 int,
+    cust_attr38 int,
+    cust_attr39 int,
+    cust_attr40 int,
+    cust_attr41 varchar(1),
+    cust_attr42 varchar(1),
+    cust_attr43 int,
+    cust_attr44 int,
+    cust_attr45 int,
+    cust_attr46 int,
+    cust_attr47 varchar(2),
+    cust_attr48 varchar(1),
+    cust_attr49 int,
+    cust_attr50 int,
+    cust_attr51 int,
+    cust_attr52 int,
+    cust_attr53 varchar(1),
+    cust_attr54 varchar(1),
+    cust_attr55 int,
+    cust_attr56 int,
+    cust_attr57 int,
+    cust_attr58 int,
+    cust_attr59 varchar(2),
+    cust_attr60 varchar(1),
+    cust_attr61 int,
+    cust_attr62 int,
+    cust_attr63 int,
+    cust_attr64 int,
+    cust_attr65 varchar(1),
+    cust_attr66 varchar(1),
+    cust_attr67 int,
+    cust_attr68 int,
+    cust_attr69 int,
+    cust_attr70 int,
+    cust_attr71 varchar(2),
+    cust_attr72 varchar(1),
+    cust_attr73 int,
+    cust_attr74 int,
+    cust_attr75 int,
+    cust_attr76 int,
+    cust_attr77 varchar(1),
+    cust_attr78 varchar(1),
+    cust_attr79 int,
+    cust_attr80 int,
+    cust_attr81 int,
+    cust_attr82 int,
+    cust_attr83 varchar(2),
+    cust_attr84 varchar(1),
+    cust_attr85 int,
+    cust_attr86 int,
+    cust_attr87 int,
+    cust_attr88 int,
+    cust_attr89 varchar(1),
+    cust_attr90 varchar(1),
+    cust_attr91 int,
+    cust_attr92 int,
+    cust_attr93 int,
+    cust_attr94 int,
+    cust_attr95 varchar(2),
+    cust_attr96 varchar(1),
+    cust_attr97 int,
+    cust_attr98 int,
+    cust_attr99 int,
+    cust_attr100 int,
+    cust_attr101 varchar(1),
+    cust_attr102 varchar(1),
+    cust_attr103 int,
+    cust_attr104 int,
+    cust_attr105 int,
+    cust_attr106 int,
+    cust_attr107 varchar(2),
+    cust_attr108 varchar(1),
+    cust_attr109 int,
+    cust_attr110 int,
+    cust_attr111 int,
+    cust_attr112 int,
+    cust_attr113 varchar(1),
+    cust_attr114 varchar(1),
+    cust_attr115 int,
+    cust_attr116 int,
+    cust_attr117 int,
+    cust_attr118 int,
+    cust_attr119 varchar(2),
+    cust_attr120 varchar(1),
+    cust_attr121 int,
+    cust_attr122 int,
+    cust_attr123 int,
+    cust_attr124 int,
+    cust_attr125 varchar(1),
+    cust_attr126 varchar(1),
+    cust_attr127 int,
+    cust_attr128 int,
+    cust_attr129 int,
+    cust_attr130 int,
+    cust_attr131 varchar(2),
+    cust_attr132 varchar(1),
+    cust_attr133 int,
+    cust_attr134 int,
+    cust_attr135 int,
+    cust_attr136 int,
+    cust_attr137 varchar(1),
+    cust_attr138 varchar(1),
+    cust_attr139 int,
+    cust_attr140 int,
+    cust_attr141 int,
+    cust_attr142 int,
+    cust_attr143 varchar(2),
+    cust_attr144 varchar(1),
+    cust_attr145 int,
+    cust_attr146 int,
+    cust_attr147 int,
+    cust_attr148 int,
+    cust_attr149 varchar(1),
+    cust_attr150 varchar(1),
+    cust_attr151 int,
+    cust_attr152 int,
+    cust_attr153 int,
+    cust_attr154 int,
+    cust_attr155 varchar(2),
+    cust_attr156 varchar(1),
+    cust_attr157 int,
+    cust_attr158 int,
+    cust_attr159 int,
+    cust_attr160 int,
+    cust_attr161 varchar(1),
+    cust_attr162 varchar(1),
+    cust_attr163 int,
+    cust_attr164 int,
+    cust_attr165 int,
+    cust_attr166 int,
+    cust_attr167 varchar(2),
+    cust_attr168 varchar(1),
+    cust_attr169 int,
+    cust_attr170 int,
+    cust_attr171 int,
+    cust_attr172 int,
+    cust_attr173 varchar(1),
+    cust_attr174 varchar(1),
+    cust_attr175 int,
+    cust_attr176 int,
+    cust_attr177 int,
+    cust_attr178 int,
+    cust_attr179 varchar(2),
+    cust_attr180 varchar(1),
+    cust_attr181 int,
+    cust_attr182 int,
+    cust_attr183 int,
+    cust_attr184 int,
+    cust_attr185 varchar(1),
+    cust_attr186 varchar(1),
+    cust_attr187 int,
+    cust_attr188 int,
+    cust_attr189 int,
+    cust_attr190 int,
+    cust_attr191 varchar(2),
+    cust_attr192 varchar(1),
+    cust_attr193 int,
+    cust_attr194 int,
+    cust_attr195 int,
+    cust_attr196 int,
+    cust_attr197 varchar(1),
+    cust_attr198 varchar(1),
+    cust_attr199 int,
+    cust_attr200 int,
+    cust_attr201 int,
+    cust_attr202 int,
+    cust_attr203 varchar(2),
+    cust_attr204 varchar(1),
+    cust_attr205 int,
+    cust_attr206 int,
+    cust_attr207 int,
+    cust_attr208 int,
+    cust_attr209 varchar(1),
+    cust_attr210 varchar(1),
+    cust_attr211 int,
+    cust_attr212 int,
+    cust_attr213 int,
+    cust_attr214 int,
+    cust_attr215 varchar(2),
+    cust_attr216 varchar(1),
+    cust_attr217 int,
+    cust_attr218 int,
+    cust_attr219 int,
+    cust_attr220 int,
+    cust_attr221 varchar(1),
+    cust_attr222 varchar(1),
+    cust_attr223 int,
+    cust_attr224 int,
+    cust_attr225 int,
+    cust_attr226 int,
+    cust_attr227 varchar(2),
+    cust_attr228 varchar(1),
+    cust_attr229 int,
+    cust_attr230 int,
+    cust_attr231 int,
+    cust_attr232 int,
+    cust_attr233 varchar(1),
+    cust_attr234 varchar(1),
+    cust_attr235 int,
+    cust_attr236 int,
+    cust_attr237 int,
+    cust_attr238 int,
+    cust_attr239 varchar(2),
+    cust_attr240 varchar(1),
+    cust_attr241 int,
+    cust_attr242 int,
+    cust_attr243 int,
+    cust_attr244 int,
+    cust_attr245 varchar(1),
+    cust_attr246 varchar(1),
+    cust_attr247 int,
+    cust_attr248 int,
+    cust_attr249 int,
+    cust_attr250 int,
+    cust_attr251 varchar(2),
+    cust_attr252 varchar(1),
+    cust_attr253 int,
+    cust_attr254 int,
+    cust_attr255 int,
+    cust_attr256 int,
+    cust_attr257 varchar(1),
+    cust_attr258 varchar(1),
+    cust_attr259 int,
+    cust_attr260 int,
+    cust_attr261 int,
+    cust_attr262 int,
+    cust_attr263 varchar(2),
+    cust_attr264 varchar(1),
+    cust_attr265 int,
+    cust_attr266 int,
+    cust_attr267 int,
+    cust_attr268 int,
+    cust_attr269 varchar(1),
+    cust_attr270 varchar(1),
+    cust_attr271 int,
+    cust_attr272 int,
+    cust_attr273 int,
+    cust_attr274 int,
+    cust_attr275 varchar(2),
+    cust_attr276 varchar(1),
+    cust_attr277 int,
+    cust_attr278 int,
+    cust_attr279 int,
+    cust_attr280 int,
+    cust_attr281 varchar(1),
+    cust_attr282 varchar(1),
+    cust_attr283 int,
+    cust_attr284 int,
+    cust_attr285 int,
+    cust_attr286 int,
+    cust_attr287 varchar(2),
+    cust_attr288 varchar(1),
+    cust_attr289 int,
+    cust_attr290 varchar(1),
+    cust_attr291 varchar(1),
+    cust_attr292 varchar(1),
+    cust_attr293 int,
+    cust_attr294 int,
+    cust_attr295 int,
+    cust_attr296 int,
+    cust_attr297 int,
+    cust_attr298 int,
+    cust_attr299 int,
+    cust_attr300 int,
+    cust_attr301 int,
+    cust_attr302 int,
+    cust_attr303 int,
+    cust_attr304 int,
+    cust_attr305 int,
+    cust_attr306 int,
+    cust_attr307 int,
+    cust_attr308 int,
+    cust_attr309 int,
+    cust_attr310 int,
+    cust_attr311 int,
+    cust_attr312 int,
+    cust_attr313 int,
+    cust_attr314 int,
+    cust_attr315 int,
+    cust_attr316 int,
+    cust_attr317 int,
+    cust_attr318 int,
+    cust_attr319 int,
+    cust_attr320 int,
+    cust_attr321 int,
+    cust_attr322 int,
+    cust_attr323 int,
+    cust_attr324 int,
+    cust_attr325 int,
+    cust_attr326 int,
+    cust_attr327 int,
+    cust_attr328 int,
+    cust_attr329 int,
+    cust_attr330 int,
+    cust_attr331 int,
+    cust_attr332 int,
+    cust_attr333 int,
+    cust_attr334 int,
+    cust_attr335 int,
+    cust_attr336 int,
+    cust_attr337 int,
+    cust_attr338 int,
+    cust_attr339 int,
+    cust_attr340 int,
+    cust_attr341 varchar(1),
+    crtr_attr1 int,
+    crtr_attr2 int,
+    crtr_attr3 int,
+    crtr_attr4 int,
+    crtr_attr5 int,
+    crtr_attr6 int,
+    crtr_attr7 int,
+    crtr_attr8 int,
+    crtr_attr9 int,
+    crtr_attr10 int,
+    crtr_attr11 int,
+    crtr_attr12 int,
+    crtr_attr13 int,
+    crtr_attr14 int,
+    crtr_attr15 int,
+    crtr_attr16 int,
+    crtr_attr17 int,
+    crtr_attr18 int,
+    crtr_attr19 int,
+    crtr_attr20 int,
+    crtr_attr21 int,
+    crtr_attr22 int,
+    crtr_attr23 int,
+    crtr_attr24 int,
+    crtr_attr25 int,
+    crtr_attr26 int,
+    crtr_attr27 int,
+    crtr_attr28 int,
+    crtr_attr29 int,
+    crtr_attr30 int,
+    crtr_attr31 int,
+    crtr_attr32 int,
+    crtr_attr33 int,
+    crtr_attr34 int,
+    crtr_attr35 int,
+    crtr_attr36 int,
+    crtr_attr37 int,
+    crtr_attr38 int,
+    crtr_attr39 int,
+    crtr_attr40 int,
+    crtr_attr41 int,
+    crtr_attr42 int,
+    crtr_attr43 int,
+    crtr_attr44 int,
+    crtr_attr45 int,
+    crtr_attr46 int,
+    crtr_attr47 int,
+    crtr_attr48 int,
+    crtr_attr49 int,
+    crtr_attr50 int,
+    crtr_attr51 int,
+    crtr_attr52 int,
+    crtr_attr53 int,
+    crtr_attr54 int,
+    crtr_attr55 int,
+    crtr_attr56 int,
+    crtr_attr57 int,
+    crtr_attr58 int,
+    crtr_attr59 int,
+    crtr_attr60 int,
+    crtr_attr61 int,
+    crtr_attr62 int,
+    crtr_attr63 int,
+    crtr_attr64 int,
+    crtr_attr65 int,
+    crtr_attr66 int,
+    crtr_attr67 int,
+    crtr_attr68 int,
+    crtr_attr69 int,
+    crtr_attr70 int,
+    crtr_attr71 int,
+    crtr_attr72 int,
+    crtr_attr73 int,
+    crtr_attr74 int,
+    crtr_attr75 int,
+    crtr_attr76 int,
+    crtr_attr77 int,
+    crtr_attr78 int,
+    crtr_attr79 int,
+    crtr_attr80 int,
+    crtr_attr81 int,
+    crtr_attr82 int,
+    crtr_attr83 int,
+    crtr_attr84 int,
+    crtr_attr85 int,
+    crtr_attr86 int,
+    crtr_attr87 int,
+    crtr_attr88 int,
+    crtr_attr89 int,
+    crtr_attr90 int,
+    crtr_attr91 int,
+    crtr_attr92 int,
+    crtr_attr93 int,
+    crtr_attr94 int,
+    crtr_attr95 int,
+    crtr_attr96 int,
+    crtr_attr97 int,
+    crtr_attr98 int,
+    crtr_attr99 int,
+    crtr_attr100 int,
+    crtr_attr101 int,
+    crtr_attr102 int,
+    crtr_attr103 int,
+    crtr_attr104 int,
+    crtr_attr105 int,
+    crtr_attr106 int,
+    crtr_attr107 int,
+    crtr_attr108 int,
+    crtr_attr109 int,
+    crtr_attr110 int,
+    crtr_attr111 int,
+    crtr_attr112 int,
+    crtr_attr113 int,
+    crtr_attr114 int,
+    crtr_attr115 int,
+    crtr_attr116 int,
+    crtr_attr117 int,
+    crtr_attr118 int,
+    crtr_attr119 int,
+    crtr_attr120 int,
+    crtr_attr121 int,
+    crtr_attr122 int,
+    crtr_attr123 int,
+    crtr_attr124 int,
+    crtr_attr125 int,
+    crtr_attr126 int,
+    crtr_attr127 int,
+    crtr_attr128 int,
+    crtr_attr129 int,
+    crtr_attr130 int,
+    crtr_attr131 int,
+    crtr_attr132 int,
+    crtr_attr133 int,
+    crtr_attr134 int,
+    crtr_attr135 int,
+    crtr_attr136 int,
+    crtr_attr137 int,
+    crtr_attr138 int,
+    crtr_attr139 int,
+    crtr_attr140 int,
+    crtr_attr141 int,
+    crtr_attr142 int,
+    crtr_attr143 int,
+    crtr_attr144 int,
+    crtr_attr145 int,
+    crtr_attr146 int,
+    crtr_attr147 int,
+    crtr_attr148 int,
+    crtr_attr149 int,
+    crtr_attr150 int,
+    crtr_attr151 int,
+    crtr_attr152 int,
+    crtr_attr153 int,
+    crtr_attr154 int,
+    crtr_attr155 int,
+    crtr_attr156 int,
+    crtr_attr157 int,
+    crtr_attr158 int,
+    crtr_attr159 int,
+    crtr_attr160 int,
+    crtr_attr161 int,
+    crtr_attr162 int,
+    crtr_attr163 int,
+    crtr_attr164 int,
+    crtr_attr165 int,
+    crtr_attr166 int,
+    crtr_attr167 int,
+    crtr_attr168 int,
+    crtr_attr169 int,
+    crtr_attr170 int,
+    crtr_attr171 int,
+    crtr_attr172 int,
+    crtr_attr173 int,
+    crtr_attr174 int,
+    crtr_attr175 int,
+    crtr_attr176 int,
+    crtr_attr177 int,
+    crtr_attr178 int,
+    crtr_attr179 int,
+    crtr_attr180 int,
+    crtr_attr181 int,
+    crtr_attr182 int,
+    crtr_attr183 int,
+    crtr_attr184 int,
+    crtr_attr185 int,
+    crtr_attr186 int,
+    crtr_attr187 int,
+    cma_attr3746 int,
+    cma_attr3000 int,
+    cma_attr3001 int,
+    cma_attr3002 int,
+    cma_attr3100 int,
+    cma_attr3102 int,
+    cma_attr3104 int,
+    cma_attr3105 int,
+    cma_attr3109 int,
+    cma_attr3111 int,
+    cma_attr3113 int,
+    cma_attr3116 int,
+    cma_attr3117 int,
+    cma_attr3119 int,
+    cma_attr3120 int,
+    cma_attr3122 int,
+    cma_attr3123 int,
+    cma_attr3124 int,
+    cma_attr3126 int,
+    cma_attr3127 int,
+    cma_attr3131 int,
+    cma_attr3132 int,
+    cma_attr3133 int,
+    cma_attr3134 int,
+    cma_attr3135 int,
+    cma_attr3136 int,
+    cma_attr3137 int,
+    cma_attr3138 int,
+    cma_attr3139 int,
+    cma_attr3140 int,
+    cma_attr3141 int,
+    cma_attr3142 int,
+    cma_attr3143 int,
+    cma_attr3144 int,
+    cma_attr3145 int,
+    cma_attr3146 int,
+    cma_attr3147 int,
+    cma_attr3148 int,
+    cma_attr3150 int,
+    cma_attr3152 int,
+    cma_attr3153 int,
+    cma_attr3157 int,
+    cma_attr3159 int,
+    cma_attr3160 int,
+    cma_attr3161 int,
+    cma_attr3162 int,
+    cma_attr3163 int,
+    cma_attr3164 int,
+    cma_attr3165 int,
+    cma_attr3166 int,
+    cma_attr3167 int,
+    cma_attr3168 int,
+    cma_attr3169 int,
+    cma_attr3203 int,
+    cma_attr3204 int,
+    cma_attr3205 int,
+    cma_attr3206 int,
+    cma_attr3207 int,
+    cma_attr3208 int,
+    cma_attr3215 int,
+    cma_attr3217 int,
+    cma_attr3219 int,
+    cma_attr3223 int,
+    cma_attr3224 int,
+    cma_attr3228 int,
+    cma_attr3231 int,
+    cma_attr3234 int,
+    cma_attr3235 int,
+    cma_attr3236 int,
+    cma_attr3237 int,
+    cma_attr3239 int,
+    cma_attr3242 int,
+    cma_attr3245 int,
+    cma_attr3246 int,
+    cma_attr3257 int,
+    cma_attr3266 int,
+    cma_attr3268 int,
+    cma_attr3270 int,
+    cma_attr3272 int,
+    cma_attr3273 int,
+    cma_attr3276 int,
+    cma_attr3277 int,
+    cma_attr3285 int,
+    cma_attr3286 int,
+    cma_attr3288 int,
+    cma_attr3290 int,
+    cma_attr3292 int,
+    cma_attr3293 int,
+    cma_attr3296 int,
+    cma_attr3297 int,
+    cma_attr3307 int,
+    cma_attr3309 int,
+    cma_attr3311 int,
+    cma_attr3312 int,
+    cma_attr3315 int,
+    cma_attr3316 int,
+    cma_attr3318 int,
+    cma_attr3320 int,
+    cma_attr3322 int,
+    cma_attr3323 int,
+    cma_attr3326 int,
+    cma_attr3327 int,
+    cma_attr3329 int,
+    cma_attr3330 int,
+    cma_attr3332 int,
+    cma_attr3333 int,
+    cma_attr3335 int,
+    cma_attr3336 int,
+    cma_attr3338 int,
+    cma_attr3340 int,
+    cma_attr3347 int,
+    cma_attr3368 int,
+    cma_attr3370 int,
+    cma_attr3376 int,
+    cma_attr3379 int,
+    cma_attr3380 int,
+    cma_attr3382 int,
+    cma_attr3383 int,
+    cma_attr3385 int,
+    cma_attr3386 int,
+    cma_attr3387 int,
+    cma_attr3388 int,
+    cma_attr3389 int,
+    cma_attr3391 int,
+    cma_attr3392 int,
+    cma_attr3394 int,
+    cma_attr3395 int,
+    cma_attr3396 int,
+    cma_attr3397 int,
+    cma_attr3398 int,
+    cma_attr3400 int,
+    cma_attr3401 int,
+    cma_attr3403 int,
+    cma_attr3404 int,
+    cma_attr3405 int,
+    cma_attr3406 int,
+    cma_attr3407 int,
+    cma_attr3409 int,
+    cma_attr3410 int,
+    cma_attr3412 int,
+    cma_attr3413 int,
+    cma_attr3414 int,
+    cma_attr3415 int,
+    cma_attr3417 int,
+    cma_attr3419 int,
+    cma_attr3420 int,
+    cma_attr3422 int,
+    cma_attr3423 int,
+    cma_attr3424 int,
+    cma_attr3425 int,
+    cma_attr3426 int,
+    cma_attr3428 int,
+    cma_attr3430 int,
+    cma_attr3431 int,
+    cma_attr3433 int,
+    cma_attr3434 int,
+    cma_attr3435 int,
+    cma_attr3436 int,
+    cma_attr3437 int,
+    cma_attr3439 int,
+    cma_attr3441 int,
+    cma_attr3442 int,
+    cma_attr3444 int,
+    cma_attr3445 int,
+    cma_attr3446 int,
+    cma_attr3447 int,
+    cma_attr3448 int,
+    cma_attr3450 int,
+    cma_attr3452 int,
+    cma_attr3453 int,
+    cma_attr3455 int,
+    cma_attr3456 int,
+    cma_attr3457 int,
+    cma_attr3458 int,
+    cma_attr3535 int,
+    cma_attr3536 int,
+    cma_attr3537 int,
+    cma_attr3539 int,
+    cma_attr3540 int,
+    cma_attr3544 int,
+    cma_attr3546 int,
+    cma_attr3547 int,
+    cma_attr3548 int,
+    cma_attr3550 int,
+    cma_attr3551 int,
+    cma_attr3555 int,
+    cma_attr3557 int,
+    cma_attr3558 int,
+    cma_attr3559 int,
+    cma_attr3561 int,
+    cma_attr3562 int,
+    cma_attr3566 int,
+    cma_attr3568 int,
+    cma_attr3569 int,
+    cma_attr3570 int,
+    cma_attr3572 int,
+    cma_attr3573 int,
+    cma_attr3577 int,
+    cma_attr3579 int,
+    cma_attr3580 int,
+    cma_attr3592 int,
+    cma_attr3593 int,
+    cma_attr3594 int,
+    cma_attr3596 int,
+    cma_attr3597 int,
+    cma_attr3598 int,
+    cma_attr3600 int,
+    cma_attr3601 int,
+    cma_attr3602 int,
+    cma_attr3603 int,
+    cma_attr3605 int,
+    cma_attr3607 int,
+    cma_attr3608 int,
+    cma_attr3611 int,
+    cma_attr3612 int,
+    cma_attr3723 int,
+    cma_attr3724 int,
+    cma_attr3725 int,
+    cma_attr3726 int,
+    cma_attr3727 int,
+    cma_attr3728 int,
+    cma_attr3729 int,
+    cma_attr3900 int,
+    cma_attr3901 int,
+    cma_attr3902 varchar(1),
+    cma_attr3903 varchar(1),
+    cma_attr3904 varchar(1),
+    cma_attr3905 varchar(1),
+    cma_attr3907 int,
+    cma_attr3908 int,
+    cma_attr3909 int,
+    cma_attr3911 int,
+    cma_attr3912 int,
+    cma_attr3913 int,
+    cma_attr3747 int,
+    cma_attr3748 int,
+    cma_attr3749 int,
+    cma_attr3750 int,
+    cma_attr3751 int,
+    cma_attr3752 int,
+    cma_attr3753 int,
+    cma_attr3754 int,
+    cma_attr3812 int,
+    cma_attr3813 int,
+    cma_attr3993 int,
+    cma_attr3994 int,
+    cma_attr3995 int,
+    cma_attr3825 int,
+    cma_attr3826 int,
+    cma_attr3827 int,
+    cma_attr3828 int,
+    cma_attr3829 int,
+    cma_attr3830 int,
+    cma_attr3831 int,
+    cma_attr3832 int,
+    cma_attr3833 int,
+    cma_attr3834 int,
+    cma_attr3835 int,
+    cma_attr3836 int,
+    cma_attr3837 int,
+    cma_attr3838 int,
+    cma_attr3839 int,
+    cma_attr3840 int,
+    cma_attr3841 int,
+    cma_attr3842 int,
+    cma_attr3843 int,
+    cma_attr3844 int,
+    cma_attr3845 int,
+    cma_attr3854 int,
+    cma_attr3855 int,
+    cma_attr3856 int,
+    cma_attr3857 int,
+    cma_attr3858 int,
+    cma_attr3859 int,
+    cma_attr3860 int,
+    cma_attr3861 int,
+    cma_attr3862 int,
+    cma_attr3863 int,
+    cma_attr3864 int,
+    cma_attr3865 int,
+    cma_attr3866 int,
+    cma_attr3867 int,
+    cma_attr3868 int,
+    cma_attr3869 int,
+    cma_attr3938 int,
+    cma_attr3939 int,
+    cma_attr3940 int,
+    cma_attr3870 int,
+    cma_attr3871 int,
+    cma_attr3872 int,
+    cma_attr3873 int,
+    cma_attr3874 int,
+    cma_attr3875 int,
+    cma_attr3876 int,
+    cma_attr3877 int,
+    cma_attr3878 int,
+    cma_attr3879 int,
+    cma_attr3880 int,
+    cma_attr3881 int,
+    cma_attr3882 int,
+    cma_attr3883 int,
+    cma_attr3884 int,
+    cma_attr3885 int,
+    cma_attr3917 int,
+    cma_attr3918 int,
+    cma_attr3919 int,
+    cma_attr3920 int,
+    cma_attr3921 int,
+    cma_attr3922 int,
+    cma_attr3923 int,
+    cma_attr3924 int,
+    cma_attr3925 int,
+    cma_attr3926 int,
+    cma_attr3927 int,
+    cma_attr3928 int,
+    cma_attr3929 int,
+    cma_attr3930 int,
+    cma_attr3931 int,
+    cma_attr3932 int,
+    cma_attr3933 int,
+    cma_attr3886 int,
+    cma_attr3934 int,
+    cma_attr3887 int,
+    cma_attr3894 int,
+    cma_attr3895 int,
+    cma_attr3896 int,
+    cma_attr3897 int,
+    cma_attr3898 int,
+    cma_attr3899 int,
+    cma_attr3914 int,
+    cma_attr3915 int,
+    cma_attr3916 int,
+    cma_attr3941 int,
+    cma_attr3942 int,
+    cma_attr3943 int,
+    cma_attr3944 int,
+    cma_attr3945 int,
+    cma_attr3946 int,
+    cma_attr3947 int,
+    cma_attr3948 int,
+    cma_attr3949 int,
+    cma_attr3950 int,
+    cma_attr3951 int,
+    cma_attr3952 int,
+    cma_attr3953 int,
+    cma_attr3954 int,
+    cma_attr3955 int,
+    cma_attr3956 int,
+    cma_attr3957 int,
+    cma_attr3958 int,
+    cma_attr3959 int,
+    cma_attr3960 int,
+    cma_attr3961 int,
+    cma_attr3962 int,
+    cma_attr3963 int,
+    cma_attr3964 int,
+    cma_attr3968 int,
+    cma_attr3969 int,
+    cma_attr3970 int,
+    cma_attr3971 int,
+    cma_attr3973 int,
+    cma_attr3974 int,
+    cma_attr3975 int,
+    cma_attr3976 int,
+    cma_attr3978 int,
+    cma_attr3979 int,
+    cma_attr3980 int,
+    cma_attr3981 int,
+    cma_attr3983 int,
+    cma_attr3984 int,
+    cma_attr3985 int,
+    cma_attr3986 int,
+    cma_attr3987 int,
+    census_tract_2010 int,
+    census_block_2010 int,
+    county_code_2010 int
+)
+LOCATION ('file://localhost/data')
+FORMAT 'CUSTOM' (formatter=fixedwidth_in,
+address='46',
+unused='1',
+state='2',
+unused1='1',
+zipcode='5',
+unused2='1',
+id='9',
+unused3='1',
+hhid='11',
+unused4='1',
+efxid='11',
+unused5='1',
+riskscore='3',
+unused6='1',
+cid='18',
+unused7='1',
+flag='1',
+unused8='1',
+census_tract='6',
+unused9='1',
+census_block='4',
+unused10='1',
+census_code='3',
+unused11='1',
+address_flag='1',
+unused12='1',
+cust_attr1='4',
+cust_attr2='6',
+cust_attr3='7',
+cust_attr4='7',
+cust_attr5='1',
+cust_attr6='1',
+cust_attr7='3',
+cust_attr8='7',
+cust_attr9='3',
+cust_attr10='3',
+cust_attr11='2',
+cust_attr12='1',
+cust_attr13='6',
+cust_attr14='6',
+cust_attr15='7',
+cust_attr16='7',
+cust_attr17='1',
+cust_attr18='1',
+cust_attr19='3',
+cust_attr20='7',
+cust_attr21='3',
+cust_attr22='3',
+cust_attr23='2',
+cust_attr24='1',
+cust_attr25='6',
+cust_attr26='6',
+cust_attr27='7',
+cust_attr28='7',
+cust_attr29='1',
+cust_attr30='1',
+cust_attr31='3',
+cust_attr32='7',
+cust_attr33='3',
+cust_attr34='3',
+cust_attr35='2',
+cust_attr36='1',
+cust_attr37='6',
+cust_attr38='6',
+cust_attr39='7',
+cust_attr40='7',
+cust_attr41='1',
+cust_attr42='1',
+cust_attr43='3',
+cust_attr44='7',
+cust_attr45='3',
+cust_attr46='3',
+cust_attr47='2',
+cust_attr48='1',
+cust_attr49='6',
+cust_attr50='6',
+cust_attr51='7',
+cust_attr52='7',
+cust_attr53='1',
+cust_attr54='1',
+cust_attr55='3',
+cust_attr56='7',
+cust_attr57='3',
+cust_attr58='3',
+cust_attr59='2',
+cust_attr60='1',
+cust_attr61='6',
+cust_attr62='6',
+cust_attr63='7',
+cust_attr64='7',
+cust_attr65='1',
+cust_attr66='1',
+cust_attr67='3',
+cust_attr68='7',
+cust_attr69='3',
+cust_attr70='3',
+cust_attr71='2',
+cust_attr72='1',
+cust_attr73='6',
+cust_attr74='6',
+cust_attr75='7',
+cust_attr76='7',
+cust_attr77='1',
+cust_attr78='1',
+cust_attr79='3',
+cust_attr80='7',
+cust_attr81='3',
+cust_attr82='3',
+cust_attr83='2',
+cust_attr84='1',
+cust_attr85='6',
+cust_attr86='6',
+cust_attr87='7',
+cust_attr88='7',
+cust_attr89='1',
+cust_attr90='1',
+cust_attr91='3',
+cust_attr92='7',
+cust_attr93='3',
+cust_attr94='3',
+cust_attr95='2',
+cust_attr96='1',
+cust_attr97='6',
+cust_attr98='6',
+cust_attr99='7',
+cust_attr100='7',
+cust_attr101='1',
+cust_attr102='1',
+cust_attr103='3',
+cust_attr104='7',
+cust_attr105='3',
+cust_attr106='3',
+cust_attr107='2',
+cust_attr108='1',
+cust_attr109='6',
+cust_attr110='6',
+cust_attr111='7',
+cust_attr112='7',
+cust_attr113='1',
+cust_attr114='1',
+cust_attr115='3',
+cust_attr116='7',
+cust_attr117='3',
+cust_attr118='3',
+cust_attr119='2',
+cust_attr120='1',
+cust_attr121='6',
+cust_attr122='6',
+cust_attr123='7',
+cust_attr124='7',
+cust_attr125='1',
+cust_attr126='1',
+cust_attr127='3',
+cust_attr128='7',
+cust_attr129='3',
+cust_attr130='3',
+cust_attr131='2',
+cust_attr132='1',
+cust_attr133='6',
+cust_attr134='6',
+cust_attr135='7',
+cust_attr136='7',
+cust_attr137='1',
+cust_attr138='1',
+cust_attr139='3',
+cust_attr140='7',
+cust_attr141='3',
+cust_attr142='3',
+cust_attr143='2',
+cust_attr144='1',
+cust_attr145='6',
+cust_attr146='6',
+cust_attr147='7',
+cust_attr148='7',
+cust_attr149='1',
+cust_attr150='1',
+cust_attr151='3',
+cust_attr152='7',
+cust_attr153='3',
+cust_attr154='3',
+cust_attr155='2',
+cust_attr156='1',
+cust_attr157='6',
+cust_attr158='6',
+cust_attr159='7',
+cust_attr160='7',
+cust_attr161='1',
+cust_attr162='1',
+cust_attr163='3',
+cust_attr164='7',
+cust_attr165='3',
+cust_attr166='3',
+cust_attr167='2',
+cust_attr168='1',
+cust_attr169='6',
+cust_attr170='6',
+cust_attr171='7',
+cust_attr172='7',
+cust_attr173='1',
+cust_attr174='1',
+cust_attr175='3',
+cust_attr176='7',
+cust_attr177='3',
+cust_attr178='3',
+cust_attr179='2',
+cust_attr180='1',
+cust_attr181='6',
+cust_attr182='6',
+cust_attr183='7',
+cust_attr184='7',
+cust_attr185='1',
+cust_attr186='1',
+cust_attr187='3',
+cust_attr188='7',
+cust_attr189='3',
+cust_attr190='3',
+cust_attr191='2',
+cust_attr192='1',
+cust_attr193='6',
+cust_attr194='6',
+cust_attr195='7',
+cust_attr196='7',
+cust_attr197='1',
+cust_attr198='1',
+cust_attr199='3',
+cust_attr200='7',
+cust_attr201='3',
+cust_attr202='3',
+cust_attr203='2',
+cust_attr204='1',
+cust_attr205='6',
+cust_attr206='6',
+cust_attr207='7',
+cust_attr208='7',
+cust_attr209='1',
+cust_attr210='1',
+cust_attr211='3',
+cust_attr212='7',
+cust_attr213='3',
+cust_attr214='3',
+cust_attr215='2',
+cust_attr216='1',
+cust_attr217='6',
+cust_attr218='6',
+cust_attr219='7',
+cust_attr220='7',
+cust_attr221='1',
+cust_attr222='1',
+cust_attr223='3',
+cust_attr224='7',
+cust_attr225='3',
+cust_attr226='3',
+cust_attr227='2',
+cust_attr228='1',
+cust_attr229='6',
+cust_attr230='6',
+cust_attr231='7',
+cust_attr232='7',
+cust_attr233='1',
+cust_attr234='1',
+cust_attr235='3',
+cust_attr236='7',
+cust_attr237='3',
+cust_attr238='3',
+cust_attr239='2',
+cust_attr240='1',
+cust_attr241='6',
+cust_attr242='6',
+cust_attr243='7',
+cust_attr244='7',
+cust_attr245='1',
+cust_attr246='1',
+cust_attr247='3',
+cust_attr248='7',
+cust_attr249='3',
+cust_attr250='3',
+cust_attr251='2',
+cust_attr252='1',
+cust_attr253='6',
+cust_attr254='6',
+cust_attr255='7',
+cust_attr256='7',
+cust_attr257='1',
+cust_attr258='1',
+cust_attr259='3',
+cust_attr260='7',
+cust_attr261='3',
+cust_attr262='3',
+cust_attr263='2',
+cust_attr264='1',
+cust_attr265='6',
+cust_attr266='6',
+cust_attr267='7',
+cust_attr268='7',
+cust_attr269='1',
+cust_attr270='1',
+cust_attr271='3',
+cust_attr272='7',
+cust_attr273='3',
+cust_attr274='3',
+cust_attr275='2',
+cust_attr276='1',
+cust_attr277='6',
+cust_attr278='6',
+cust_attr279='7',
+cust_attr280='7',
+cust_attr281='1',
+cust_attr282='1',
+cust_attr283='3',
+cust_attr284='7',
+cust_attr285='3',
+cust_attr286='3',
+cust_attr287='2',
+cust_attr288='1',
+cust_attr289='6',
+cust_attr290='1',
+cust_attr291='1',
+cust_attr292='1',
+cust_attr293='7',
+cust_attr294='7',
+cust_attr295='7',
+cust_attr296='7',
+cust_attr297='7',
+cust_attr298='7',
+cust_attr299='7',
+cust_attr300='7',
+cust_attr301='7',
+cust_attr302='7',
+cust_attr303='7',
+cust_attr304='7',
+cust_attr305='7',
+cust_attr306='7',
+cust_attr307='7',
+cust_attr308='7',
+cust_attr309='7',
+cust_attr310='7',
+cust_attr311='7',
+cust_attr312='7',
+cust_attr313='7',
+cust_attr314='7',
+cust_attr315='7',
+cust_attr316='7',
+cust_attr317='7',
+cust_attr318='7',
+cust_attr319='7',
+cust_attr320='7',
+cust_attr321='7',
+cust_attr322='7',
+cust_attr323='7',
+cust_attr324='7',
+cust_attr325='7',
+cust_attr326='7',
+cust_attr327='7',
+cust_attr328='7',
+cust_attr329='7',
+cust_attr330='7',
+cust_attr331='7',
+cust_attr332='7',
+cust_attr333='7',
+cust_attr334='7',
+cust_attr335='7',
+cust_attr336='7',
+cust_attr337='7',
+cust_attr338='7',
+cust_attr339='7',
+cust_attr340='7',
+cust_attr341='1',
+crtr_attr1='2',
+crtr_attr2='2',
+crtr_attr3='2',
+crtr_attr4='2',
+crtr_attr5='2',
+crtr_attr6='2',
+crtr_attr7='2',
+crtr_attr8='2',
+crtr_attr9='2',
+crtr_attr10='2',
+crtr_attr11='2',
+crtr_attr12='2',
+crtr_attr13='2',
+crtr_attr14='2',
+crtr_attr15='2',
+crtr_attr16='2',
+crtr_attr17='2',
+crtr_attr18='2',
+crtr_attr19='2',
+crtr_attr20='2',
+crtr_attr21='2',
+crtr_attr22='2',
+crtr_attr23='2',
+crtr_attr24='2',
+crtr_attr25='2',
+crtr_attr26='2',
+crtr_attr27='2',
+crtr_attr28='2',
+crtr_attr29='2',
+crtr_attr30='2',
+crtr_attr31='2',
+crtr_attr32='2',
+crtr_attr33='2',
+crtr_attr34='2',
+crtr_attr35='2',
+crtr_attr36='2',
+crtr_attr37='2',
+crtr_attr38='2',
+crtr_attr39='2',
+crtr_attr40='2',
+crtr_attr41='2',
+crtr_attr42='2',
+crtr_attr43='2',
+crtr_attr44='2',
+crtr_attr45='2',
+crtr_attr46='2',
+crtr_attr47='2',
+crtr_attr48='2',
+crtr_attr49='2',
+crtr_attr50='2',
+crtr_attr51='2',
+crtr_attr52='2',
+crtr_attr53='2',
+crtr_attr54='2',
+crtr_attr55='2',
+crtr_attr56='2',
+crtr_attr57='2',
+crtr_attr58='2',
+crtr_attr59='2',
+crtr_attr60='2',
+crtr_attr61='2',
+crtr_attr62='2',
+crtr_attr63='2',
+crtr_attr64='2',
+crtr_attr65='2',
+crtr_attr66='2',
+crtr_attr67='2',
+crtr_attr68='2',
+crtr_attr69='2',
+crtr_attr70='2',
+crtr_attr71='2',
+crtr_attr72='2',
+crtr_attr73='2',
+crtr_attr74='2',
+crtr_attr75='2',
+crtr_attr76='2',
+crtr_attr77='2',
+crtr_attr78='2',
+crtr_attr79='2',
+crtr_attr80='2',
+crtr_attr81='2',
+crtr_attr82='2',
+crtr_attr83='2',
+crtr_attr84='2',
+crtr_attr85='2',
+crtr_attr86='2',
+crtr_attr87='2',
+crtr_attr88='2',
+crtr_attr89='7',
+crtr_attr90='7',
+crtr_attr91='7',
+crtr_attr92='7',
+crtr_attr93='7',
+crtr_attr94='7',
+crtr_attr95='7',
+crtr_attr96='7',
+crtr_attr97='7',
+crtr_attr98='7',
+crtr_attr99='7',
+crtr_attr100='7',
+crtr_attr101='7',
+crtr_attr102='7',
+crtr_attr103='7',
+crtr_attr104='7',
+crtr_attr105='7',
+crtr_attr106='7',
+crtr_attr107='7',
+crtr_attr108='7',
+crtr_attr109='7',
+crtr_attr110='7',
+crtr_attr111='7',
+crtr_attr112='7',
+crtr_attr113='7',
+crtr_attr114='7',
+crtr_attr115='7',
+crtr_attr116='7',
+crtr_attr117='7',
+crtr_attr118='7',
+crtr_attr119='7',
+crtr_attr120='7',
+crtr_attr121='7',
+crtr_attr122='7',
+crtr_attr123='7',
+crtr_attr124='7',
+crtr_attr125='7',
+crtr_attr126='7',
+crtr_attr127='7',
+crtr_attr128='7',
+crtr_attr129='7',
+crtr_attr130='7',
+crtr_attr131='7',
+crtr_attr132='7',
+crtr_attr133='7',
+crtr_attr134='7',
+crtr_attr135='7',
+crtr_attr136='7',
+crtr_attr137='7',
+crtr_attr138='7',
+crtr_attr139='7',
+crtr_attr140='7',
+crtr_attr141='7',
+crtr_attr142='7',
+crtr_attr143='7',
+crtr_attr144='7',
+crtr_attr145='7',
+crtr_attr146='7',
+crtr_attr147='7',
+crtr_attr148='7',
+crtr_attr149='7',
+crtr_attr150='7',
+crtr_attr151='7',
+crtr_attr152='7',
+crtr_attr153='7',
+crtr_attr154='7',
+crtr_attr155='7',
+crtr_attr156='7',
+crtr_attr157='7',
+crtr_attr158='7',
+crtr_attr159='7',
+crtr_attr160='7',
+crtr_attr161='7',
+crtr_attr162='7',
+crtr_attr163='7',
+crtr_attr164='7',
+crtr_attr165='7',
+crtr_attr166='7',
+crtr_attr167='7',
+crtr_attr168='7',
+crtr_attr169='7',
+crtr_attr170='7',
+crtr_attr171='7',
+crtr_attr172='7',
+crtr_attr173='7',
+crtr_attr174='7',
+crtr_attr175='7',
+crtr_attr176='7',
+crtr_attr177='7',
+crtr_attr178='7',
+crtr_attr179='7',
+ctr_attr180='7',
+crtr_attr181='7',
+crtr_attr182='7',
+crtr_attr183='7',
+crtr_attr184='7',
+crtr_attr185='7',
+crtr_attr186='7',
+crtr_attr187='7',unused13='43',
+cma_attr3746='2',unused14='51',
+cma_attr3000='2',
+cma_attr3001='2',
+cma_attr3002='2',
+cma_attr3100='2',
+cma_attr3102='2',
+cma_attr3104='2',
+cma_attr3105='2',
+cma_attr3109='2',
+cma_attr3111='4',
+cma_attr3113='4',
+cma_attr3116='4',
+cma_attr3117='4',
+cma_attr3119='4',
+cma_attr3120='4',
+cma_attr3122='4',
+cma_attr3123='4',
+cma_attr3124='4',
+cma_attr3126='4',
+cma_attr3127='4',
+cma_attr3131='4',
+cma_attr3132='4',
+cma_attr3133='2',
+cma_attr3134='2',
+cma_attr3135='2',
+cma_attr3136='2',
+cma_attr3137='2',
+cma_attr3138='2',
+cma_attr3139='2',
+cma_attr3140='2',
+cma_attr3141='2',
+cma_attr3142='2',
+cma_attr3143='2',
+cma_attr3144='2',
+cma_attr3145='2',
+cma_attr3146='2',
+cma_attr3147='2',
+cma_attr3148='2',
+cma_attr3150='2',
+cma_attr3152='2',
+cma_attr3153='2',
+cma_attr3157='2',
+cma_attr3159='7',
+cma_attr3160='7',
+cma_attr3161='7',
+cma_attr3162='7',
+cma_attr3163='7',
+cma_attr3164='7',
+cma_attr3165='7',
+cma_attr3166='7',
+cma_attr3167='7',
+cma_attr3168='7',
+cma_attr3169='7',
+cma_attr3203='7',
+cma_attr3204='7',
+cma_attr3205='7',
+cma_attr3206='7',
+cma_attr3207='7',
+cma_attr3208='7',
+cma_attr3215='2',
+cma_attr3217='2',
+cma_attr3219='2',
+cma_attr3223='2',
+cma_attr3224='2',
+cma_attr3228='7',
+cma_attr3231='7',
+cma_attr3234='7',
+cma_attr3235='7',
+cma_attr3236='7',
+cma_attr3237='7',
+cma_attr3239='7',
+cma_attr3242='7',
+cma_attr3245='7',
+cma_attr3246='7',
+cma_attr3257='2',
+cma_attr3266='2',
+cma_attr3268='2',
+cma_attr3270='2',
+cma_attr3272='2',
+cma_attr3273='2',
+cma_attr3276='2',
+cma_attr3277='2',
+cma_attr3285='2',
+cma_attr3286='2',
+cma_attr3288='2',
+cma_attr3290='2',
+cma_attr3292='2',
+cma_attr3293='2',
+cma_attr3296='2',
+cma_attr3297='2',
+cma_attr3307='2',
+cma_attr3309='2',
+cma_attr3311='2',
+cma_attr3312='2',
+cma_attr3315='2',
+cma_attr3316='2',
+cma_attr3318='2',
+cma_attr3320='2',
+cma_attr3322='2',
+cma_attr3323='2',
+cma_attr3326='2',
+cma_attr3327='2',
+cma_attr3329='2',
+cma_attr3330='2',
+cma_attr3332='2',
+cma_attr3333='2',
+cma_attr3335='2',
+cma_attr3336='2',
+cma_attr3338='2',
+cma_attr3340='2',
+cma_attr3347='2',
+cma_attr3368='2',
+cma_attr3370='2',
+cma_attr3376='2',
+cma_attr3379='2',
+cma_attr3380='2',
+cma_attr3382='2',
+cma_attr3383='2',
+cma_attr3385='2',
+cma_attr3386='2',
+cma_attr3387='2',
+cma_attr3388='2',
+cma_attr3389='2',
+cma_attr3391='2',
+cma_attr3392='2',
+cma_attr3394='2',
+cma_attr3395='2',
+cma_attr3396='2',
+cma_attr3397='2',
+cma_attr3398='2',
+cma_attr3400='2',
+cma_attr3401='2',
+cma_attr3403='2',
+cma_attr3404='2',
+cma_attr3405='2',
+cma_attr3406='2',
+cma_attr3407='2',
+cma_attr3409='2',
+cma_attr3410='2',
+cma_attr3412='2',
+cma_attr3413='2',
+cma_attr3414='2',
+cma_attr3415='2',
+cma_attr3417='2',
+cma_attr3419='2',
+cma_attr3420='2',
+cma_attr3422='2',
+cma_attr3423='2',
+cma_attr3424='2',
+cma_attr3425='2',
+cma_attr3426='2',
+cma_attr3428='2',
+cma_attr3430='2',
+cma_attr3431='2',
+cma_attr3433='2',
+cma_attr3434='2',
+cma_attr3435='2',
+cma_attr3436='2',
+cma_attr3437='2',
+cma_attr3439='2',
+cma_attr3441='2',
+cma_attr3442='2',
+cma_attr3444='2',
+cma_attr3445='2',
+cma_attr3446='2',
+cma_attr3447='2',
+cma_attr3448='2',
+cma_attr3450='2',
+cma_attr3452='2',
+cma_attr3453='2',
+cma_attr3455='2',
+cma_attr3456='2',
+cma_attr3457='2',
+cma_attr3458='2',
+cma_attr3535='2',
+cma_attr3536='2',
+cma_attr3537='2',
+cma_attr3539='2',
+cma_attr3540='2',
+cma_attr3544='2',
+cma_attr3546='2',
+cma_attr3547='2',
+cma_attr3548='2',
+cma_attr3550='2',
+cma_attr3551='2',
+cma_attr3555='2',
+cma_attr3557='2',
+cma_attr3558='2',
+cma_attr3559='2',
+cma_attr3561='2',
+cma_attr3562='2',
+cma_attr3566='2',
+cma_attr3568='2',
+cma_attr3569='2',
+cma_attr3570='2',
+cma_attr3572='2',
+cma_attr3573='2',
+cma_attr3577='2',
+cma_attr3579='2',
+cma_attr3580='2',
+cma_attr3592='2',
+cma_attr3593='2',
+cma_attr3594='2',
+cma_attr3596='2',
+cma_attr3597='2',
+cma_attr3598='2',
+cma_attr3600='2',
+cma_attr3601='2',
+cma_attr3602='2',
+cma_attr3603='2',
+cma_attr3605='2',
+cma_attr3607='2',
+cma_attr3608='2',
+cma_attr3611='2',
+cma_attr3612='2',
+cma_attr3723='2',
+cma_attr3724='2',
+cma_attr3725='2',
+cma_attr3726='2',
+cma_attr3727='2',
+cma_attr3728='2',
+cma_attr3729='2',
+cma_attr3900='5',
+cma_attr3901='5',
+cma_attr3902='1',
+cma_attr3903='1',
+cma_attr3904='1',
+cma_attr3905='1',
+cma_attr3907='2',
+cma_attr3908='2',
+cma_attr3909='2',
+cma_attr3911='7',
+cma_attr3912='7',
+cma_attr3913='7',
+cma_attr3747='2',
+cma_attr3748='2',
+cma_attr3749='2',
+cma_attr3750='2',
+cma_attr3751='2',
+cma_attr3752='2',
+cma_attr3753='2',
+cma_attr3754='2',
+cma_attr3812='4',
+cma_attr3813='4',
+cma_attr3993='5',
+cma_attr3994='5',
+cma_attr3995='5',
+cma_attr3825='5',
+cma_attr3826='5',
+cma_attr3827='5',
+cma_attr3828='5',
+cma_attr3829='5',
+cma_attr3830='5',
+cma_attr3831='5',
+cma_attr3832='5',
+cma_attr3833='5',
+cma_attr3834='5',
+cma_attr3835='5',
+cma_attr3836='5',
+cma_attr3837='5',
+cma_attr3838='5',
+cma_attr3839='5',
+cma_attr3840='5',
+cma_attr3841='5',
+cma_attr3842='5',
+cma_attr3843='5',
+cma_attr3844='5',
+cma_attr3845='5',
+cma_attr3854='5',
+cma_attr3855='5',
+cma_attr3856='5',
+cma_attr3857='5',
+cma_attr3858='5',
+cma_attr3859='5',
+cma_attr3860='5',
+cma_attr3861='5',
+cma_attr3862='5',
+cma_attr3863='5',
+cma_attr3864='5',
+cma_attr3865='5',
+cma_attr3866='5',
+cma_attr3867='5',
+cma_attr3868='5',
+cma_attr3869='5',
+cma_attr3938='5',
+cma_attr3939='5',
+cma_attr3940='5',
+cma_attr3870='2',
+cma_attr3871='2',
+cma_attr3872='2',
+cma_attr3873='2',
+cma_attr3874='2',
+cma_attr3875='2',
+cma_attr3876='2',
+cma_attr3877='2',
+cma_attr3878='2',
+cma_attr3879='2',
+cma_attr3880='2',
+cma_attr3881='2',
+cma_attr3882='2',
+cma_attr3883='2',
+cma_attr3884='2',
+cma_attr3885='2',
+cma_attr3917='2',
+cma_attr3918='2',
+cma_attr3919='2',
+cma_attr3920='2',
+cma_attr3921='2',
+cma_attr3922='2',
+cma_attr3923='2',
+cma_attr3924='2',
+cma_attr3925='2',
+cma_attr3926='2',
+cma_attr3927='2',
+cma_attr3928='2',
+cma_attr3929='2',
+cma_attr3930='2',
+cma_attr3931='2',
+cma_attr3932='2',
+cma_attr3933='2',
+cma_attr3886='2',
+cma_attr3934='2',
+cma_attr3887='2',
+cma_attr3894='5',
+cma_attr3895='5',
+cma_attr3896='5',
+cma_attr3897='5',
+cma_attr3898='5',
+cma_attr3899='5',
+cma_attr3914='5',
+cma_attr3915='5',
+cma_attr3916='5',
+cma_attr3941='5',
+cma_attr3942='5',
+cma_attr3943='5',
+cma_attr3944='5',
+cma_attr3945='5',
+cma_attr3946='5',
+cma_attr3947='5',
+cma_attr3948='5',
+cma_attr3949='5',
+cma_attr3950='2',
+cma_attr3951='2',
+cma_attr3952='2',
+cma_attr3953='2',
+cma_attr3954='2',
+cma_attr3955='2',
+cma_attr3956='2',
+cma_attr3957='2',
+cma_attr3958='2',
+cma_attr3959='2',
+cma_attr3960='2',
+cma_attr3961='2',
+cma_attr3962='2',
+cma_attr3963='2',
+cma_attr3964='2',
+cma_attr3968='5',
+cma_attr3969='5',
+cma_attr3970='5',
+cma_attr3971='5',
+cma_attr3973='5',
+cma_attr3974='5',
+cma_attr3975='5',
+cma_attr3976='5',
+cma_attr3978='5',
+cma_attr3979='5',
+cma_attr3980='5',
+cma_attr3981='5',
+cma_attr3983='5',
+cma_attr3984='5',
+cma_attr3985='5',
+cma_attr3986='5',
+cma_attr3987='5',
+unused15='1',
+census_tract_2010='6',
+unused16='1',
+census_block_2010='4',
+unused17='1',
+county_code_2010='3',
+unused18='1',
+preserve_blanks=on,
+NULL=' ',
+line_delim=E'\n'
+)
+;
+drop external table large_custom_format_definitions;
+
+-- Incomplete external data file
+\set incomplete_formatter_data 'file://' :hostname :abs_srcdir '/data/incomplete_formatter_data.tbl'
+CREATE OR REPLACE FUNCTION gpformatter() RETURNS record
+AS '$libdir/gpformatter.so', 'formatter_import'
+LANGUAGE C STABLE;
+DROP EXTERNAL TABLE IF EXISTS tbl_ext_gpformatter;
+CREATE READABLE EXTERNAL TABLE tbl_ext_gpformatter (
+d1 text
+)
+LOCATION (
+  :'incomplete_formatter_data'
+)
+FORMAT 'CUSTOM' (formatter='gpformatter');
+
+SELECT * FROM tbl_ext_gpformatter;
+
+
+--
+-- Test information_schema views for external tables
+--
+SELECT * FROM information_schema.tables WHERE table_name IN ('wet_pos4', 'exttab_basic_1');
+
+--
+-- Test external table can be safely expanded
+--
+
+-- start_ignore
+create extension if not exists gp_debug_numsegments;
+-- end_ignore
+
+select gp_debug_set_create_table_default_numsegments(2);
+
+create writable external table ext_w_expand(a text, b text) location('gpfdist://foo:7070/ext_w_expand.out') format 'text';
+
+select numsegments from gp_distribution_policy where localoid = 'ext_w_expand'::regclass;
+
+alter external table ext_w_expand expand table;
+
+select numsegments from gp_distribution_policy where localoid = 'ext_w_expand'::regclass;
+
+drop external table ext_w_expand;
+
+select gp_debug_reset_create_table_default_numsegments();
+
+--
+-- Test host name cannot be resolved
+--
+CREATE READABLE EXTERNAL TABLE ext_invalid_host() LOCATION ('gpfdist://not-exist-host/data.csv') FORMAT 'CSV' ( DELIMITER AS ',');
+
+SELECT * from ext_invalid_host;
+
+-- Test delimiter off
+
+CREATE EXTERNAL TABLE test_delimiter(data text) LOCATION('gpfdist://127.0.0.1/test_delimiter.txt') FORMAT 'text' (DELIMITER 'off');
+
+DROP EXTERNAL TABLE test_delimiter;
+
+-- Test multiple character delimiter
+
+CREATE EXTERNAL TABLE test_delimiter(data text) LOCATION('gpfdist://127.0.0.1/test_delimiter.txt') FORMAT 'csv' (DELIMITER 'ab');
+
+-- Test notice reject message when execute on coordinator
+
+CREATE EXTERNAL WEB TABLE web_exec_on_coordinator_with_err_limit (c1 int) EXECUTE 'for i in `seq 1 2`; do echo 1 3;done; echo 22' ON COORDINATOR FORMAT 'TEXT' SEGMENT REJECT LIMIT 3;
+
+SELECT * FROM web_exec_on_coordinator_with_err_limit;
+
+DROP EXTERNAL TABLE web_exec_on_coordinator_with_err_limit;
+
+-- Test notice reject message when execute on coordinator with multiple commands
+
+CREATE EXTERNAL WEB TABLE web_exec_on_coordinator_with_multiple_commands (c1 int) EXECUTE 'for i in `seq 1 `; do echo 2 1;
+done; echo 2 ; echo 1 2; echo 2;  echo 3 4' ON COORDINATOR FORMAT 'TEXT' SEGMENT REJECT LIMIT 6;
+
+SELECT * FROM  web_exec_on_coordinator_with_multiple_commands;
+
+DROP EXTERNAL TABLE web_exec_on_coordinator_with_multiple_commands;
+
+-- Test notice reject message when execute on segments with multiple commands
+
+CREATE EXTERNAL WEB TABLE web_exec_on_segments_with_multiple_commands (c1 int) EXECUTE 'for i in `seq 1 `; do echo 2 1;
+done; echo 2 ; echo 1 2; echo 2;  echo 3 4' FORMAT 'TEXT' SEGMENT REJECT LIMIT 6;
+
+SELECT * FROM  web_exec_on_segments_with_multiple_commands;
+
+DROP EXTERNAL TABLE web_exec_on_segments_with_multiple_commands;
+
+-- Test reject number reached when execute on coordinator
+
+CREATE EXTERNAL WEB TABLE web_exec_on_coordinator_with_err_limit_reached (c1 int) EXECUTE 'for i in `seq 1 3`; do echo 1 3;done; echo 22' ON COORDINATOR FORMAT 'TEXT' SEGMENT REJECT LIMIT 3;
+
+SELECT * FROM web_exec_on_coordinator_with_err_limit_reached;
+
+DROP EXTERNAL TABLE web_exec_on_coordinator_with_err_limit_reached;
+
+-- Test re-scan the external tables in a subplan
+
+CREATE EXTERNAL WEB TABLE ext_subplan_t1(c1 int) EXECUTE'seq 1 5' ON MASTER FORMAT 'text';
+CREATE EXTERNAL WEB TABLE ext_subplan_t2(c1 int) EXECUTE'seq 1 10' ON MASTER FORMAT 'text';
+
+EXPLAIN SELECT
+     c1,
+     (
+         SELECT c1
+         FROM ext_subplan_t2
+         WHERE ext_subplan_t2.c1 = ext_subplan_t1.c1
+         LIMIT 1
+     )
+FROM ext_subplan_t1;
+
+SELECT
+     c1,
+     (
+         SELECT c1
+         FROM ext_subplan_t2
+         WHERE ext_subplan_t2.c1 = ext_subplan_t1.c1
+         LIMIT 1
+     )
+FROM ext_subplan_t1;
+
+DROP EXTERNAL TABLE ext_subplan_t1;
+DROP EXTERNAL TABLE ext_subplan_t2;
+
+-- Test external tables as partitions, and gpcheckcat
+CREATE TABLE test_part_integrity(a int, b int) PARTITION BY LIST (a) DISTRIBUTED BY (a);
+CREATE TABLE test_part_integrity_p1(a int, b int) DISTRIBUTED BY (a);
+INSERT INTO test_part_integrity_p1 VALUES (1,2),(1,3);
+CREATE EXTERNAL WEB TABLE test_part_integrity_p2 (LIKE test_part_integrity_p1) EXECUTE 'echo 2,2;echo 2,3' ON MASTER FORMAT 'CSV';
+ALTER TABLE test_part_integrity ATTACH PARTITION test_part_integrity_p1 FOR VALUES IN (1);
+ALTER TABLE test_part_integrity ATTACH PARTITION test_part_integrity_p2 FOR VALUES IN (2);
+SELECT * FROM test_part_integrity;
+
+DROP TABLE test_part_integrity;
+
+-- Testing creating external table with replicated distribution
+-- Should report error
+CREATE WRITABLE EXTERNAL WEB TABLE ext_dist_repl(a int, b int) EXECUTE 'some command' FORMAT 'TEXT' DISTRIBUTED REPLICATED;
+
+-- Testing altering the distribution policy of external tables.
+\set ext_w_dist_file 'cat > ' :abs_srcdir '/data/ext_w_dist.tbl'
+CREATE WRITABLE EXTERNAL WEB TABLE ext_w_dist(a int, b int) EXECUTE :'ext_w_dist_file' FORMAT 'TEXT' (DELIMITER AS '|' NULL AS 'null' ESCAPE AS ' ') DISTRIBUTED BY (a);
+ALTER TABLE ext_w_dist SET WITH (reorganize=true); -- should error out if forcing reorganize
+SELECT policytype, distkey FROM gp_distribution_policy WHERE localoid = 'ext_w_dist'::regclass;
+ALTER TABLE ext_w_dist SET DISTRIBUTED BY (b);
+SELECT policytype, distkey FROM gp_distribution_policy WHERE localoid = 'ext_w_dist'::regclass;
+ALTER TABLE ext_w_dist SET DISTRIBUTED RANDOMLY;
+SELECT policytype, distkey FROM gp_distribution_policy WHERE localoid = 'ext_w_dist'::regclass;
+ALTER TABLE ext_w_dist SET DISTRIBUTED REPLICATED; -- ERROR
+CREATE EXTERNAL WEB TABLE ext_r_dist(a int) EXECUTE 'printf ${GP_SEGMENT_ID}' FORMAT 'TEXT' DISTRIBUTED BY (a);
+CREATE EXTERNAL WEB TABLE ext_r_dist(a int) EXECUTE 'printf ${GP_SEGMENT_ID}' FORMAT 'TEXT';
+ALTER TABLE ext_r_dist SET DISTRIBUTED BY (a); -- should error out altering readable external tables' distribution policy
+
+-- Testing external table as the partition child.
+CREATE TABLE part_root(a int) PARTITION BY RANGE(a);
+CREATE TABLE part_child (LIKE part_root);
+\set part_ext_file 'cat > ' :abs_srcdir '/data/part_ext.tbl'
+CREATE EXTERNAL WEB TABLE part_ext_r(a int) EXECUTE :'part_ext_file' FORMAT 'TEXT' (DELIMITER AS '|' NULL AS 'null' ESCAPE AS ' ');
+CREATE WRITABLE EXTERNAL WEB TABLE part_ext_w(a int, b int) EXECUTE :'part_ext_file' FORMAT 'TEXT' (DELIMITER AS '|' NULL AS 'null' ESCAPE AS ' ') DISTRIBUTED BY (a);
+ALTER TABLE part_root ATTACH PARTITION part_child FOR VALUES FROM (0) TO (10);
+ALTER TABLE part_root ATTACH PARTITION part_ext_r FOR VALUES FROM (10) TO (20);
+
+-- Adding column on readable external table should work fine
+ALTER TABLE part_root ADD COLUMN b int;
+
+-- altering distribution policy on writable external table should work fine
+SELECT policytype, distkey FROM gp_distribution_policy WHERE localoid = 'part_ext_w'::regclass;
+ALTER TABLE part_ext_w SET DISTRIBUTED BY (b);
+SELECT policytype, distkey FROM gp_distribution_policy WHERE localoid = 'part_ext_w'::regclass;
+
+DROP TABLE part_root;
+
+-- check logerrors value of pg_exttable
+\set ext_fasle_file 'file://' :hostname :abs_srcdir '/data/ext_fasle.tbl'
+\set ext_true_file 'file://' :hostname :abs_srcdir '/data/ext_true.tbl'
+\set ext_persistently_file 'file://' :hostname :abs_srcdir '/data/ext_persistently.tbl'
+CREATE EXTERNAL TABLE ext_false (c INT)
+location (:'ext_fasle_file' )
+FORMAT 'text' (delimiter '|');
+CREATE EXTERNAL TABLE ext_true (c INT)
+location (:'ext_true_file' )
+FORMAT 'text' (delimiter '|') LOG ERRORS SEGMENT REJECT LIMIT 100;
+CREATE EXTERNAL TABLE ext_persistently (c INT)
+location (:'ext_persistently_file' )
+FORMAT 'text' (delimiter '|') LOG ERRORS PERSISTENTLY SEGMENT REJECT LIMIT 100;
+
+SELECT logerrors, options from pg_exttable a, pg_class b where a.reloid = b.oid and b.relname = 'ext_false';
+SELECT logerrors, options from pg_exttable a, pg_class b where a.reloid = b.oid and b.relname = 'ext_true';
+SELECT logerrors, options from pg_exttable a, pg_class b where a.reloid = b.oid and b.relname = 'ext_persistently';
+
+-- drop tables
+DROP EXTERNAL TABLE ext_false;
+DROP EXTERNAL TABLE ext_true;
+DROP EXTERNAL TABLE ext_persistently;

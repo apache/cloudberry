@@ -1,0 +1,180 @@
+-- Create a new database to be certain that we'll be able to create objects with
+-- the Oids specified in this test. We have tighter control when we don't have
+-- to deal with leftover objects in the regression database.
+DROP DATABASE IF EXISTS oid_wraparound;
+CREATE DATABASE oid_wraparound;
+\c oid_wraparound
+-- start_ignore
+select xmin, xmax, oid, relname, reltype from pg_class where oid>=16384 and oid < 16400;
+ xmin | xmax |  oid  |       relname        | reltype 
+------+------+-------+----------------------+---------
+  858 |    0 | 16386 | __gp_is_append_only  |   16388
+  858 |    0 | 16390 | __gp_fullname        |   16392
+  858 |    0 | 16394 | __gp_user_namespaces |   16396
+  858 |    0 | 16398 | __gp_user_tables     |   16400
+(4 rows)
+
+select xmin, xmax, oid, typname from pg_type where oid>=16384 and oid < 16400;
+ xmin | xmax |  oid  |        typname        
+------+------+-------+-----------------------
+  858 |    0 | 16387 | ___gp_is_append_only
+  858 |    0 | 16388 | __gp_is_append_only
+  858 |    0 | 16391 | ___gp_fullname
+  858 |    0 | 16392 | __gp_fullname
+  858 |    0 | 16395 | ___gp_user_namespaces
+  858 |    0 | 16396 | __gp_user_namespaces
+  858 |    0 | 16399 | ___gp_user_tables
+(7 rows)
+
+-- end_ignore
+-- Create the functions that we will be using to set and observe the Oid counter
+-- on the master and the segments.
+CREATE OR REPLACE FUNCTION gp_set_next_oid_master(new_oid Oid)
+	RETURNS VOID
+	AS '/home/gpadmin/cloudberry/contrib/pax_storage/src/test/regress/regress.so', 'gp_set_next_oid'
+	LANGUAGE C EXECUTE ON COORDINATOR;
+CREATE OR REPLACE FUNCTION gp_set_next_oid_segments(new_oid Oid)
+	RETURNS VOID
+	AS '/home/gpadmin/cloudberry/contrib/pax_storage/src/test/regress/regress.so', 'gp_set_next_oid'
+	LANGUAGE C EXECUTE ON ALL SEGMENTS;
+CREATE OR REPLACE FUNCTION gp_get_next_oid_master()
+	RETURNS OID
+	AS '/home/gpadmin/cloudberry/contrib/pax_storage/src/test/regress/regress.so', 'gp_get_next_oid'
+	LANGUAGE C EXECUTE ON COORDINATOR;
+CREATE OR REPLACE FUNCTION gp_get_next_oid_segments()
+	RETURNS SETOF OID
+	AS '/home/gpadmin/cloudberry/contrib/pax_storage/src/test/regress/regress.so', 'gp_get_next_oid'
+	LANGUAGE C EXECUTE ON ALL SEGMENTS;
+-- Scenario 1: QD is at 16384 while QE is at 4 billion
+SELECT gp_set_next_oid_master(16384);
+ gp_set_next_oid_master 
+------------------------
+ 
+(1 row)
+
+SELECT gp_set_next_oid_segments(4290000000);
+ gp_set_next_oid_segments 
+--------------------------
+ 
+ 
+ 
+(3 rows)
+
+-- We expect the QE to fast-forward to 16384
+SELECT gp_get_next_oid_master();
+ gp_get_next_oid_master 
+------------------------
+                  16384
+(1 row)
+
+SELECT gp_get_next_oid_segments();
+ gp_get_next_oid_segments 
+--------------------------
+               4290000000
+               4290000000
+               4290000000
+(3 rows)
+
+CREATE TABLE oid_wraparound_table (a int);
+-- start_ignore
+select xmin, xmax, oid, relname, reltype from pg_class where xmin=(select xmin from pg_class where relname='oid_wraparound_table');
+ xmin  | xmax |  oid  |       relname        | reltype 
+-------+------+-------+----------------------+---------
+ 35056 |    0 | 16385 | pg_manifest_16384    |       0
+ 35056 |    0 | 16384 | oid_wraparound_table |   16389
+(2 rows)
+
+select xmin, xmax, oid, typname from pg_type where xmin=(select xmin from pg_class where relname='oid_wraparound_table');
+ xmin  | xmax |  oid  |        typname        
+-------+------+-------+-----------------------
+ 35056 |    0 | 16389 | oid_wraparound_table
+ 35056 |    0 | 16386 | _oid_wraparound_table
+(2 rows)
+
+-- end_ignore
+DROP TABLE oid_wraparound_table;
+SELECT gp_get_next_oid_master();
+ gp_get_next_oid_master 
+------------------------
+                  16390
+(1 row)
+
+SELECT gp_get_next_oid_segments();
+ gp_get_next_oid_segments 
+--------------------------
+                    16385
+                    16385
+                    16385
+(3 rows)
+
+-- Scenario 2: QD is at 4 billion while QE is at 16384
+SELECT gp_set_next_oid_master(4290000000);
+ gp_set_next_oid_master 
+------------------------
+ 
+(1 row)
+
+SELECT gp_set_next_oid_segments(16384);
+ gp_set_next_oid_segments 
+--------------------------
+ 
+ 
+ 
+(3 rows)
+
+-- We expect the QE to increment once to 16385 and the QD should
+-- fast-forward to 16388. The QD could possibly fast-forward to 16389
+-- if the pg_type heap page was not pruned for dead pg_type entry for
+-- oid_wraparound_table relation which will result in Oid 16386
+-- collision.
+SELECT gp_get_next_oid_master();
+ gp_get_next_oid_master 
+------------------------
+             4290000000
+(1 row)
+
+SELECT gp_get_next_oid_segments();
+ gp_get_next_oid_segments 
+--------------------------
+                    16384
+                    16384
+                    16384
+(3 rows)
+
+CREATE TABLE oid_wraparound_table_other AS SELECT 1 AS a;
+-- start_ignore
+select xmin, xmax, oid, relname, reltype from pg_class where xmin=(select xmin from pg_class where relname='oid_wraparound_table_other');
+ xmin  | xmax |  oid  |          relname           | reltype 
+-------+------+-------+----------------------------+---------
+ 35058 |    0 | 16388 | pg_manifest_16387          |       0
+ 35058 |    0 | 16387 | oid_wraparound_table_other |   16393
+(2 rows)
+
+select xmin, xmax, oid, typname from pg_type where xmin=(select xmin from pg_class where relname='oid_wraparound_table_other');
+ xmin  | xmax |  oid  |           typname           
+-------+------+-------+-----------------------------
+ 35058 |    0 | 16393 | oid_wraparound_table_other
+ 35058 |    0 | 16390 | _oid_wraparound_table_other
+(2 rows)
+
+SELECT gp_get_next_oid_master();
+ gp_get_next_oid_master 
+------------------------
+                  16394
+(1 row)
+
+-- end_ignore
+SELECT gp_get_next_oid_master() in (16394, 16398, 16399);
+ ?column? 
+----------
+ t
+(1 row)
+
+SELECT gp_get_next_oid_segments();
+ gp_get_next_oid_segments 
+--------------------------
+                    16388
+                    16388
+                    16388
+(3 rows)
+
