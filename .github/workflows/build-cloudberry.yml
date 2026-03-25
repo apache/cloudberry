@@ -338,6 +338,10 @@ jobs:
               },
               {"test":"ic-cbdb-parallel",
                "make_configs":["src/test/regress:installcheck-cbdb-parallel"]
+              },
+              {"test":"ic-behave",
+               "make_configs":["gpMgmt/:behave"],
+               "enable_core_check":false
               }
             ]
           }'
@@ -1447,6 +1451,22 @@ jobs:
           for ((i=0; i<${#configs[@]}; i++)); do
             config="${configs[$i]}"
             IFS=':' read -r dir target <<< "$config"
+
+            if [ "${{ matrix.test }}" == "ic-behave" ]; then
+              echo "=== Executing Behave test ==="
+              config_log="build-logs/details/make-${{ matrix.test }}-config$i.log"
+              
+              echo "Installing Python dependencies for Behave..."
+              su - gpadmin -c "pip3 install --user -r ${SRC_DIR}/gpMgmt/requirements-dev.txt || pip install --user -r ${SRC_DIR}/gpMgmt/requirements-dev.txt"
+              
+              if ! time su - gpadmin -c "cd ${SRC_DIR}/gpMgmt && source /usr/local/cloudberry-db/cloudberry-env.sh && source ${SRC_DIR}/gpAux/gpdemo/gpdemo-env.sh && make -f Makefile.behave behave" \
+                   2>&1 | tee -a "$config_log"; then
+                echo "::warning::Test execution failed for Behave"
+                overall_status=1
+              fi
+              echo "=== End configuration $((i+1)) execution ==="
+              continue
+            fi
 
             echo "=== Executing configuration $((i+1))/${#configs[@]} ==="
             echo "Make command: make -C $dir $target"
