@@ -1366,11 +1366,22 @@ AC_MSG_RESULT([$with_zstd])
 AC_SUBST(with_zstd)
 
 #
-# yagp_hooks_collector
+# gp_stats_collector
 #
-PGAC_ARG_BOOL(with, yagp_hooks_collector, no,
-              [build with YAGP hooks collector extension])
-AC_SUBST(with_yagp_hooks_collector)
+PGAC_ARG_BOOL(with, gp_stats_collector, no,
+              [build with stats collector extension])
+AC_SUBST(with_gp_stats_collector)
+
+if test "$with_gp_stats_collector" = yes; then
+  PKG_CHECK_MODULES([PROTOBUF], [protobuf >= 3.0.0],
+    [],
+    [AC_MSG_ERROR([protobuf >= 3.0.0 is required for gp_stats_collector])]
+  )
+  AC_PATH_PROG([PROTOC], [protoc], [no])
+  if test "$PROTOC" = no; then
+    AC_MSG_ERROR([protoc is required for gp_stats_collector but was not found in PATH])
+  fi
+fi
 
 if test "$with_zstd" = yes; then
   dnl zstd_errors.h was renamed from error_public.h in v1.4.0

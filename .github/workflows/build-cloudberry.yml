@@ -271,9 +271,9 @@ jobs:
                 },
                 "enable_core_check":false
               },
-              {"test":"gpcontrib-yagp-hooks-collector",
-               "make_configs":["gpcontrib/yagp_hooks_collector:installcheck"],
-               "extension":"yagp_hooks_collector"
+              {"test":"gpcontrib-gp-stats-collector",
+               "make_configs":["gpcontrib/gp_stats_collector:installcheck"],
+               "extension":"gp_stats_collector"
               },
               {"test":"ic-expandshrink",
                "make_configs":["src/test/isolation2:installcheck-expandshrink"]
@@ -539,7 +539,7 @@ jobs:
         if: needs.check-skip.outputs.should_skip != 'true'
         env:
           SRC_DIR: ${{ github.workspace }}
-          CONFIGURE_EXTRA_OPTS: --with-yagp-hooks-collector
+          CONFIGURE_EXTRA_OPTS: --with-gp-stats-collector
         run: |
           set -eo pipefail
           chmod +x "${SRC_DIR}"/devops/build/automation/cloudberry/scripts/configure-cloudberry.sh
@@ -1441,17 +1441,17 @@ jobs:
           # Create extension if required
           if [[ "${{ matrix.extension != '' }}" == "true" ]]; then
             case "${{ matrix.extension }}" in
-              yagp_hooks_collector)
+              gp_stats_collector)
                 if ! su - gpadmin -c "source ${BUILD_DESTINATION}/cloudberry-env.sh && \
                   source ${SRC_DIR}/gpAux/gpdemo/gpdemo-env.sh && \
-                  gpconfig -c shared_preload_libraries -v 'yagp_hooks_collector' && \
+                  gpconfig -c shared_preload_libraries -v 'gp_stats_collector' && \
                   gpstop -ra && \
-                  echo 'CREATE EXTENSION IF NOT EXISTS yagp_hooks_collector; \
+                  echo 'CREATE EXTENSION IF NOT EXISTS gp_stats_collector; \
                         SHOW shared_preload_libraries; \
                         TABLE pg_extension;' | \
                     psql postgres"
                 then
-                    echo "Error creating yagp_hooks_collector extension"
+                    echo "Error creating gp_stats_collector extension"
                     exit 1
                 fi
                 ;;

@@ -154,12 +154,6 @@ code or new licensing patterns.
             <exclude>gpcontrib/gp_exttable_fdw/gp_exttable_fdw.control</exclude>
 
             <exclude>gpcontrib/diskquota/**</exclude>
-            <exclude>gpcontrib/yagp_hooks_collector/yagp_hooks_collector.control</exclude>
-            <exclude>gpcontrib/yagp_hooks_collector/protos/yagpcc_set_service.proto</exclude>
-            <exclude>gpcontrib/yagp_hooks_collector/protos/yagpcc_plan.proto</exclude>
-            <exclude>gpcontrib/yagp_hooks_collector/protos/yagpcc_metrics.proto</exclude>
-            <exclude>gpcontrib/yagp_hooks_collector/.clang-format</exclude>
-            <exclude>gpcontrib/yagp_hooks_collector/Makefile</exclude>
 
             <exclude>getversion</exclude>
             <exclude>.git-blame-ignore-revs</exclude>
@@ -1274,6 +1268,16 @@ code or new licensing patterns.
             <exclude>src/include/task/pg_cron.h</exclude>
             <exclude>src/include/task/task_states.h</exclude>
             <exclude>src/include/task/job_metadata.h</exclude>
+
+            <!-- The following files are from extension's ecosystem,
+                 introduced by Cloudberry.
+            -->
+            <exclude>gpcontrib/gp_stats_collector/gp_stats_collector.control</exclude>
+            <exclude>gpcontrib/gp_stats_collector/protos/gpsc_set_service.proto</exclude>
+            <exclude>gpcontrib/gp_stats_collector/protos/gpsc_plan.proto</exclude>
+            <exclude>gpcontrib/gp_stats_collector/protos/gpsc_metrics.proto</exclude>
+            <exclude>gpcontrib/gp_stats_collector/.clang-format</exclude>
+            <exclude>gpcontrib/gp_stats_collector/Makefile</exclude>
 
             <!-- The following files are used by PAX as the 
                  submodules or created originally by Cloudberry.
