@@ -223,6 +223,7 @@ jobs:
           DEFAULT_ENABLE_CGROUPS=false
           DEFAULT_ENABLE_CORE_CHECK=true
           DEFAULT_PG_SETTINGS_OPTIMIZER=""
+          DEFAULT_TEST_KIND="installcheck"
 
           # Define base test configurations
           ALL_TESTS='{
@@ -341,6 +342,7 @@ jobs:
               },
               {"test":"ic-behave",
                "make_configs":["gpMgmt/:behave"],
+               "test_kind":"behave",
                "enable_core_check":false
               }
             ]
@@ -352,11 +354,13 @@ jobs:
                            --argjson ec  "$DEFAULT_ENABLE_CGROUPS" \
                            --argjson ecc "$DEFAULT_ENABLE_CORE_CHECK" \
                            --arg     opt "$DEFAULT_PG_SETTINGS_OPTIMIZER" \
+                           --arg     tk  "$DEFAULT_TEST_KIND" \
               'def get_defaults:
                 {
                   num_primary_mirror_pairs: ($npm|tonumber),
                   enable_cgroups: $ec,
                   enable_core_check: $ecc,
+                  test_kind: $tk,
                   pg_settings: {
                     optimizer: $opt
                   }
@@ -1452,7 +1456,7 @@ jobs:
             config="${configs[$i]}"
             IFS=':' read -r dir target <<< "$config"
 
-            if [ "${{ matrix.test }}" == "ic-behave" ]; then
+            if [ "${{ matrix.test_kind }}" == "behave" ]; then
               echo "=== Executing Behave test ==="
               config_log="build-logs/details/make-${{ matrix.test }}-config$i.log"
               
@@ -1462,7 +1466,7 @@ jobs:
               echo "Installing Python dependencies for Behave..."
               su - gpadmin -c "pip3 install --user -r ${SRC_DIR}/gpMgmt/requirements-dev.txt || pip install --user -r ${SRC_DIR}/gpMgmt/requirements-dev.txt"
               
-              if ! time su - gpadmin -c "cd ${SRC_DIR}/gpMgmt && source /usr/local/cloudberry-db/cloudberry-env.sh && source ${SRC_DIR}/gpAux/gpdemo/gpdemo-env.sh && make -f Makefile.behave behave" \
+              if ! time su - gpadmin -c "cd ${SRC_DIR}/gpMgmt && source /usr/local/cloudberry-db/cloudberry-env.sh && source ${SRC_DIR}/gpAux/gpdemo/gpdemo-env.sh && PYTHONPATH=${SRC_DIR}/gpMgmt:\$PYTHONPATH behave test/behave/mgmt_utils/" \
                    2>&1 | tee -a "$config_log"; then
                 echo "::warning::Test execution failed for Behave"
                 overall_status=1
@@ -1597,16 +1601,53 @@ jobs:
             fi
 
             # Parse this configuration's results
+            if [ "${{ matrix.test_kind }}" == "behave" ]; then
+              scenarios_line=$(grep -E '^[0-9]+ scenarios passed, [0-9]+ failed, [0-9]+ skipped, [0-9]+ untested$' "$config_log" | tail -n 1)
+              features_line=$(grep -E '^[0-9]+ features passed, [0-9]+ failed, [0-9]+ skipped$' "$config_log" | tail -n 1)
+              steps_line=$(grep -E '^[0-9]+ steps passed, [0-9]+ failed, [0-9]+ skipped, [0-9]+ undefined, [0-9]+ untested$' "$config_log" | tail -n 1)
 
-            MAKE_NAME="${{ matrix.test }}-config$i" \
-            "${SRC_DIR}"/devops/build/automation/cloudberry/scripts/parse-test-results.sh "$config_log"
-            status_code=$?
+              if [[ -z "$scenarios_line" ]]; then
+                status_code=2
+              else
+                read -r scenarios_passed scenarios_failed scenarios_skipped scenarios_untested <<< "$(echo "$scenarios_line" | sed -E 's/^([0-9]+) scenarios passed, ([0-9]+) failed, ([0-9]+) skipped, ([0-9]+) untested$/\1 \2 \3 \4/')"
+                total_scenarios=$((scenarios_passed + scenarios_failed + scenarios_skipped))
 
-            {
-                echo "SUITE_NAME=${{ matrix.test }}"
-                echo "DIR=${dir}"
-                echo "TARGET=${target}"
-            } >> test_results.txt
+                {
+                  if [[ "$scenarios_failed" -eq 0 ]]; then
+                    echo "STATUS=passed"
+                  else
+                    echo "STATUS=failed"
+                  fi
+                  echo "TOTAL_TESTS=${total_scenarios}"
+                  echo "FAILED_TESTS=${scenarios_failed}"
+                  echo "PASSED_TESTS=${scenarios_passed}"
+                  echo "IGNORED_TESTS=${scenarios_skipped}"
+                  echo "BEHAVE_UNTESTED_SCENARIOS=${scenarios_untested}"
+                  echo "BEHAVE_FEATURES_SUMMARY=\"${features_line:-unavailable}\""
+                  echo "BEHAVE_SCENARIOS_SUMMARY=\"${scenarios_line}\""
+                  echo "BEHAVE_STEPS_SUMMARY=\"${steps_line:-unavailable}\""
+                  echo "SUITE_NAME=${{ matrix.test }}"
+                  echo "DIR=${dir}"
+                  echo "TARGET=${target}"
+                } > test_results.txt
+
+                if [[ "$scenarios_failed" -eq 0 ]]; then
+                  status_code=0
+                else
+                  status_code=1
+                fi
+              fi
+            else
+              MAKE_NAME="${{ matrix.test }}-config$i" \
+              "${SRC_DIR}"/devops/build/automation/cloudberry/scripts/parse-test-results.sh "$config_log"
+              status_code=$?
+
+              {
+                  echo "SUITE_NAME=${{ matrix.test }}"
+                  echo "DIR=${dir}"
+                  echo "TARGET=${target}"
+              } >> test_results.txt
+            fi
 
             # Process return code
             case $status_code in
@@ -1809,6 +1850,17 @@ jobs:
               echo "| Passed Tests | ${PASSED_TESTS:-0} |"
               echo "| Failed Tests | ${FAILED_TESTS:-0} |"
               echo "| Ignored Tests | ${IGNORED_TESTS:-0} |"
+
+              if [[ -n "${BEHAVE_SCENARIOS_SUMMARY:-}" ]]; then
+                echo ""
+                echo "#### Behave Summary"
+                echo "| Metric | Summary |"
+                echo "|--------|---------|"
+                echo "| Features | ${BEHAVE_FEATURES_SUMMARY:-unavailable} |"
+                echo "| Scenarios | ${BEHAVE_SCENARIOS_SUMMARY} |"
+                echo "| Steps | ${BEHAVE_STEPS_SUMMARY:-unavailable} |"
+                echo "| Untested Scenarios | ${BEHAVE_UNTESTED_SCENARIOS:-0} |"
+              fi
 
               # Add failed tests if any
               if [[ -n "${FAILED_TEST_NAMES:-}" && "${FAILED_TESTS:-0}" != "0" ]]; then

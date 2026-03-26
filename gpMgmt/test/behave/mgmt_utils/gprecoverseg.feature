@@ -1,7 +1,7 @@
 @gprecoverseg
 Feature: gprecoverseg tests
 
-    Scenario: incremental recovery works with tablespaces
+    Scenario Outline: incremental recovery works with tablespaces
         Given the database is running
           And a tablespace is created with data
           And user stops all primary processes

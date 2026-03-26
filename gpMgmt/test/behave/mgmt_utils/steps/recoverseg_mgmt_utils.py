@@ -4,14 +4,17 @@ import tempfile
 from time import sleep
 
 from contextlib import closing
+from gppylib import gplog
 from gppylib.commands.base import Command, ExecutionError, REMOTE, WorkerPool
+from gppylib.commands.gp import RECOVERY_REWIND_APPNAME
 from gppylib.db import dbconn
+from gppylib.db.catalog import RemoteQueryCommand
 from gppylib.gparray import GpArray, ROLE_PRIMARY, ROLE_MIRROR
-from gppylib.programs.clsRecoverSegment_triples import get_segments_with_running_basebackup, is_pg_rewind_running
-from gppylib.operations.get_segments_in_recovery import is_seg_in_backup_mode
 from test.behave_utils.utils import *
 import platform, shutil
 from behave import given, when, then
+
+logger = gplog.get_default_logger()
 
 #TODO remove duplication of these functions
 def _get_gpAdminLogs_directory():
@@ -21,6 +24,56 @@ def _get_gpAdminLogs_directory():
 def lines_matching_both(in_str, str_1, str_2):
     lines = [x.strip() for x in in_str.split('\n')]
     return [line for line in lines if line.count(str_1) and line.count(str_2)]
+
+
+def get_segments_with_running_basebackup():
+    sql = "select gp_segment_id from gp_stat_replication where application_name = 'pg_basebackup'"
+
+    try:
+        with closing(dbconn.connect(dbconn.DbURL())) as conn:
+            rows = dbconn.query(conn, sql).fetchall()
+    except Exception as e:
+        raise Exception("Failed to query gp_stat_replication: %s" % str(e))
+
+    return {row[0] for row in rows}
+
+
+def is_pg_rewind_running(hostname, port):
+    sql = "SELECT count(*) FROM pg_stat_activity WHERE application_name = '{}'".format(
+        RECOVERY_REWIND_APPNAME
+    )
+
+    try:
+        url = dbconn.DbURL(hostname=hostname, port=port, dbname='template1')
+        with closing(dbconn.connect(url, utility=True)) as conn:
+            return dbconn.querySingleton(conn, sql) > 0
+    except Exception as e:
+        raise Exception(
+            "Failed to query pg_stat_activity for segment hostname: {}, port: {}, error: {}".format(
+                hostname, str(port), str(e)
+            )
+        )
+
+
+def is_seg_in_backup_mode(hostname, port):
+    logger.debug(
+        "Checking if backup is already in progress for the source server with host {} and port {}".format(
+            hostname, port
+        )
+    )
+
+    try:
+        query_cmd = RemoteQueryCommand("pg_is_in_backup", "SELECT pg_is_in_backup()", hostname, port)
+        query_cmd.run()
+        res = query_cmd.get_results()
+    except Exception as e:
+        raise Exception(
+            "Failed to query pg_is_in_backup() for segment with hostname {}, port {}, error: {}".format(
+                hostname, str(port), str(e)
+            )
+        )
+
+    return res[0][0]
 
 
 @given('the information of contents {contents} is saved')
