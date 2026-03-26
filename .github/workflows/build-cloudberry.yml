@@ -340,9 +340,67 @@ jobs:
               {"test":"ic-cbdb-parallel",
                "make_configs":["src/test/regress:installcheck-cbdb-parallel"]
               },
-              {"test":"ic-behave",
+              {"test":"ic-behave-state",
                "make_configs":["gpMgmt/:behave"],
                "test_kind":"behave",
+               "behave_features":[
+                 "test/behave/mgmt_utils/analyzedb.feature",
+                 "test/behave/mgmt_utils/gp_bash_functions.feature",
+                 "test/behave/mgmt_utils/gpcheckcat.feature",
+                 "test/behave/mgmt_utils/gpcheckperf.feature",
+                 "test/behave/mgmt_utils/gpconfig.feature",
+                 "test/behave/mgmt_utils/minirepro.feature",
+                 "test/behave/mgmt_utils/gpstart.feature",
+                 "test/behave/mgmt_utils/gpstate.feature",
+                 "test/behave/mgmt_utils/gpstop.feature"
+               ],
+               "enable_core_check":false
+              },
+              {"test":"ic-behave-init",
+               "make_configs":["gpMgmt/:behave"],
+               "test_kind":"behave",
+               "behave_features":[
+                 "test/behave/mgmt_utils/gpactivatestandby.feature",
+                 "test/behave/mgmt_utils/gpinitsystem.feature",
+                 "test/behave/mgmt_utils/gpinitstandby.feature"
+               ],
+               "enable_core_check":false
+              },
+              {"test":"ic-behave-mirror",
+               "make_configs":["gpMgmt/:behave"],
+               "test_kind":"behave",
+               "behave_features":[
+                 "test/behave/mgmt_utils/gpaddmirrors.feature",
+                 "test/behave/mgmt_utils/gpmovemirrors.feature",
+                 "test/behave/mgmt_utils/gprecoverseg.feature",
+                 "test/behave/mgmt_utils/gpreload.feature",
+                 "test/behave/mgmt_utils/replication_slots.feature"
+               ],
+               "enable_core_check":false
+              },
+              {"test":"ic-behave-expand",
+               "make_configs":["gpMgmt/:behave"],
+               "test_kind":"behave",
+               "behave_features":[
+                 "test/behave/mgmt_utils/gpexpand.feature"
+               ],
+               "enable_core_check":false
+              },
+              {"test":"ic-behave-package",
+               "make_configs":["gpMgmt/:behave"],
+               "test_kind":"behave",
+               "behave_features":[
+                 "test/behave/mgmt_utils/gppkg.feature"
+               ],
+               "enable_core_check":false
+              },
+              {"test":"ic-behave-ssh",
+               "make_configs":["gpMgmt/:behave"],
+               "test_kind":"behave",
+               "behave_features":[
+                 "test/behave/mgmt_utils/gpssh.feature",
+                 "test/behave/mgmt_utils/gpssh_exkeys.feature"
+               ],
                "enable_core_check":false
               }
             ]
@@ -1459,14 +1517,20 @@ jobs:
             if [ "${{ matrix.test_kind }}" == "behave" ]; then
               echo "=== Executing Behave test ==="
               config_log="build-logs/details/make-${{ matrix.test }}-config$i.log"
+              behave_targets="${{ join(matrix.behave_features, ' ') }}"
               
               echo "Installing OS dependencies for Behave..."
               dnf install -y libffi-devel || echo "Warning: failed to install libffi-devel"
               
               echo "Installing Python dependencies for Behave..."
               su - gpadmin -c "pip3 install --user -r ${SRC_DIR}/gpMgmt/requirements-dev.txt || pip install --user -r ${SRC_DIR}/gpMgmt/requirements-dev.txt"
+
+              echo "Behave feature group:"
+              for feature in $behave_targets; do
+                echo "- $feature"
+              done
               
-              if ! time su - gpadmin -c "cd ${SRC_DIR}/gpMgmt && source /usr/local/cloudberry-db/cloudberry-env.sh && source ${SRC_DIR}/gpAux/gpdemo/gpdemo-env.sh && PYTHONPATH=${SRC_DIR}/gpMgmt:\$PYTHONPATH behave test/behave/mgmt_utils/" \
+              if ! time su - gpadmin -c "cd ${SRC_DIR}/gpMgmt && source /usr/local/cloudberry-db/cloudberry-env.sh && source ${SRC_DIR}/gpAux/gpdemo/gpdemo-env.sh && PYTHONPATH=${SRC_DIR}/gpMgmt:\$PYTHONPATH behave $behave_targets" \
                    2>&1 | tee -a "$config_log"; then
                 echo "::warning::Test execution failed for Behave"
                 overall_status=1
