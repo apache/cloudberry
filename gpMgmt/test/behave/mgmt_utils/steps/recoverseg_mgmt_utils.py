@@ -8,7 +8,6 @@ from gppylib import gplog
 from gppylib.commands.base import Command, ExecutionError, REMOTE, WorkerPool
 from gppylib.commands.gp import RECOVERY_REWIND_APPNAME
 from gppylib.db import dbconn
-from gppylib.db.catalog import RemoteQueryCommand
 from gppylib.gparray import GpArray, ROLE_PRIMARY, ROLE_MIRROR
 from test.behave_utils.utils import *
 import platform, shutil
@@ -27,6 +26,10 @@ def lines_matching_both(in_str, str_1, str_2):
 
 
 def get_segments_with_running_basebackup():
+    """
+    Returns a set of content ids whose source segments currently have
+    a running pg_basebackup.
+    """
     sql = "select gp_segment_id from gp_stat_replication where application_name = 'pg_basebackup'"
 
     try:
@@ -35,10 +38,18 @@ def get_segments_with_running_basebackup():
     except Exception as e:
         raise Exception("Failed to query gp_stat_replication: %s" % str(e))
 
-    return {row[0] for row in rows}
+    segments_with_running_basebackup = {row[0] for row in rows}
+
+    if len(segments_with_running_basebackup) == 0:
+        logger.debug("No basebackup running")
+
+    return segments_with_running_basebackup
 
 
 def is_pg_rewind_running(hostname, port):
+    """
+    Returns true if a pg_rewind process is running for the given segment.
+    """
     sql = "SELECT count(*) FROM pg_stat_activity WHERE application_name = '{}'".format(
         RECOVERY_REWIND_APPNAME
     )
@@ -56,16 +67,24 @@ def is_pg_rewind_running(hostname, port):
 
 
 def is_seg_in_backup_mode(hostname, port):
+    """
+    Returns true if the source segment is already in backup mode.
+
+    Differential recovery uses pg_start_backup() on the source segment, so
+    a source that is already in backup mode indicates differential recovery
+    may already be in progress.
+    """
     logger.debug(
         "Checking if backup is already in progress for the source server with host {} and port {}".format(
             hostname, port
         )
     )
 
+    sql = "SELECT pg_is_in_backup()"
     try:
-        query_cmd = RemoteQueryCommand("pg_is_in_backup", "SELECT pg_is_in_backup()", hostname, port)
-        query_cmd.run()
-        res = query_cmd.get_results()
+        url = dbconn.DbURL(hostname=hostname, port=port, dbname='template1')
+        with closing(dbconn.connect(url, utility=True)) as conn:
+            res = dbconn.querySingleton(conn, sql)
     except Exception as e:
         raise Exception(
             "Failed to query pg_is_in_backup() for segment with hostname {}, port {}, error: {}".format(
@@ -73,7 +92,7 @@ def is_seg_in_backup_mode(hostname, port):
             )
         )
 
-    return res[0][0]
+    return res
 
 
 @given('the information of contents {contents} is saved')
