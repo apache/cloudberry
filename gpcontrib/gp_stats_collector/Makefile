@@ -10,13 +10,8 @@ C_OBJS   = $(patsubst %.c,%.o,$(wildcard src/*.c src/*/*.c))
 CPP_OBJS = $(patsubst %.cpp,%.o,$(wildcard src/*.cpp src/*/*.cpp))
 OBJS     = $(C_OBJS) $(CPP_OBJS) $(PROTO_OBJS)
 
-override CXXFLAGS = -Werror -fPIC -g3 -Wall -Wpointer-arith -Wendif-labels \
-	-Wmissing-format-attribute -Wformat-security -fno-strict-aliasing -fwrapv \
-	-Wno-unused-but-set-variable -Wno-address -Wno-format-truncation \
-	-Wno-stringop-truncation -g -ggdb -std=c++17 -Iinclude -Isrc/protos -Isrc -DGPBUILD
-
-PG_CXXFLAGS += -Isrc -Iinclude
-SHLIB_LINK += -lprotobuf -lpthread -lstdc++
+PG_CXXFLAGS += -Werror -Wall -Wno-unused-but-set-variable -std=c++17 -Isrc/protos -Isrc -Iinclude -DGPBUILD
+SHLIB_LINK += -lprotobuf -lstdc++
 EXTRA_CLEAN = src/protos
 
 ifdef USE_PGXS
@@ -30,10 +25,11 @@ include $(top_builddir)/src/Makefile.global
 include $(top_srcdir)/contrib/contrib-global.mk
 endif
 
-src/protos/%.pb.cpp src/protos/%.pb.h: protos/%.proto
+src/protos/.done: $(wildcard protos/*.proto)
 	@mkdir -p src/protos
 	protoc -I /usr/include -I /usr/local/include -I . --cpp_out=src $^
-	mv src/protos/$*.pb.cc src/protos/$*.pb.cpp
+	for f in src/protos/*.pb.cc; do mv "$$f" "$${f%.cc}.cpp"; done
+	touch $@
 
-$(CPP_OBJS): src/protos/gpsc_metrics.pb.h src/protos/gpsc_plan.pb.h src/protos/gpsc_set_service.pb.h
-src/protos/gpsc_set_service.pb.o: src/protos/gpsc_metrics.pb.h
+src/protos/%.pb.cpp src/protos/%.pb.h: src/protos/.done ;
+$(CPP_OBJS): src/protos/.done
