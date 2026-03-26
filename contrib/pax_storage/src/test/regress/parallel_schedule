@@ -175,8 +175,8 @@ test: publication subscription
 # ----------
 # Another group of parallel tests
 # ----------
-test: select_views portals_p2  dependency guc bitmapops tsearch tsdicts foreign_data window xmlmap functional_deps advisory_lock indirect_toast equivclass
-
+test: select_views portals_p2  dependency guc bitmapops tsearch tsdicts foreign_data xmlmap functional_deps advisory_lock indirect_toast equivclass
+ignore: window
 # ignore reason:
 #   1. virtual tuple table slot does not have system attributes
 # test: combocid

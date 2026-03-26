@@ -18,7 +18,7 @@ create trigger tg_bu before update
 
 update test set a=200 where a=10;
 
-drop trigger tg_bu on test;
+-- drop trigger tg_bu on test;
 drop function bu();
 drop table test;
 create table test (a integer, b integer, c integer);

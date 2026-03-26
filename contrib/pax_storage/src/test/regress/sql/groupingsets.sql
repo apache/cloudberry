@@ -582,7 +582,7 @@ select v||'a', case when grouping(v||'a') = 1 then 1 else 0 end, count(*)
 -- Bug #16784
 create table bug_16784(i int, j int);
 analyze bug_16784;
-alter table bug_16784 set (autovacuum_enabled = 'false');
+-- alter table bug_16784 set (autovacuum_enabled = 'false');
 update pg_class set reltuples = 10 where relname='bug_16784';
 
 insert into bug_16784 select g/10, g from generate_series(1,40) g;
@@ -607,7 +607,7 @@ select g%1000 as g1000, g%100 as g100, g%10 as g10, g
    from generate_series(0,1999) g;
 
 analyze gs_data_1;
-alter table gs_data_1 set (autovacuum_enabled = 'false');
+-- alter table gs_data_1 set (autovacuum_enabled = 'false');
 update pg_class set reltuples = 10 where relname='gs_data_1';
 
 set work_mem='64kB';

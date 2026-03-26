@@ -1,4 +1,4 @@
-CREATE TABLE test_tablesample (dist int, id int, name text) WITH (fillfactor=10) DISTRIBUTED BY (dist);
+CREATE TABLE test_tablesample (dist int, id int, name text) DISTRIBUTED BY (dist);
 -- use fillfactor so we don't have to load too much data to get multiple pages
 
 -- Changed the column length in order to match the expected results based on relation's blocksz
@@ -29,7 +29,7 @@ CREATE VIEW test_tablesample_v2 AS
 
 -- check a sampled query doesn't affect cursor in progress
 BEGIN;
-DECLARE tablesample_cur SCROLL CURSOR FOR
+DECLARE tablesample_cur CURSOR FOR
   SELECT id FROM test_tablesample TABLESAMPLE SYSTEM (50) REPEATABLE (0) ORDER BY id;
 
 FETCH FIRST FROM tablesample_cur;

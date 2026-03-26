@@ -155,7 +155,7 @@ CREATE INDEX wowidx2 ON test_tsvector USING gist (a tsvector_ops(siglen=1));
 
 \d test_tsvector
 
-DROP INDEX wowidx;
+-- DROP INDEX wowidx;
 
 EXPLAIN (costs off) SELECT count(*) FROM test_tsvector WHERE a @@ 'wr|qh';
 
@@ -184,7 +184,7 @@ SELECT count(*) FROM test_tsvector WHERE a @@ 'wd:D';
 SELECT count(*) FROM test_tsvector WHERE a @@ '!wd:A';
 SELECT count(*) FROM test_tsvector WHERE a @@ '!wd:D';
 
-DROP INDEX wowidx2;
+-- DROP INDEX wowidx2;
 
 CREATE INDEX wowidx ON test_tsvector USING gist (a tsvector_ops(siglen=484));
 
@@ -221,7 +221,7 @@ RESET enable_seqscan;
 RESET enable_indexscan;
 RESET enable_bitmapscan;
 
-DROP INDEX wowidx;
+-- DROP INDEX wowidx;
 
 CREATE INDEX wowidx ON test_tsvector USING gin (a);
 
@@ -269,8 +269,6 @@ RESET enable_seqscan;
 INSERT INTO test_tsvector VALUES ('???', 'DFG:1A,2B,6C,10 FGH');
 SELECT * FROM ts_stat('SELECT a FROM test_tsvector') ORDER BY ndoc DESC, nentry DESC, word LIMIT 10;
 SELECT * FROM ts_stat('SELECT a FROM test_tsvector', 'AB') ORDER BY ndoc DESC, nentry DESC, word;
-
-DROP INDEX wowidx;
 
 --dictionaries and to_tsvector
 

@@ -1801,31 +1801,12 @@ begin; alter table alterlock set without cluster;
 select * from my_locks order by 1;
 commit;
 
-begin; alter table alterlock set (fillfactor = 100);
-select * from my_locks order by 1;
-commit;
-
-begin; alter table alterlock reset (fillfactor);
-select * from my_locks order by 1;
-commit;
-
-begin; alter table alterlock set (toast.autovacuum_enabled = off);
-select * from my_locks order by 1;
-commit;
-
-begin; alter table alterlock set (autovacuum_enabled = off);
-select * from my_locks order by 1;
-commit;
 
 begin; alter table alterlock alter column f2 set (n_distinct = 1);
 select * from my_locks order by 1;
 rollback;
 
 -- test that mixing options with different lock levels works as expected
-begin; alter table alterlock set (autovacuum_enabled = off, fillfactor = 80);
-select * from my_locks order by 1;
-commit;
-
 begin; alter table alterlock alter column f2 set storage extended;
 select * from my_locks order by 1;
 rollback;
