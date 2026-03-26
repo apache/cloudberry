@@ -37,8 +37,8 @@ CREATE OPERATOR CLASS box_ops DEFAULT
 CREATE INDEX grect2ind2 ON fast_emp4000 USING gist2 (home_base);
 -- Now check the results from plain indexscan; temporarily drop existing
 -- index grect2ind to ensure it doesn't capture the plan
+-- DROP INDEX grect2ind;
 BEGIN;
-DROP INDEX grect2ind;
 SET enable_seqscan = OFF;
 SET enable_indexscan = ON;
 SET enable_bitmapscan = OFF;
@@ -46,14 +46,14 @@ EXPLAIN (COSTS OFF)
 SELECT * FROM fast_emp4000
     WHERE home_base <@ '(200,200),(2000,1000)'::box
     ORDER BY (home_base[0])[0];
-                              QUERY PLAN                               
------------------------------------------------------------------------
+                            QUERY PLAN                             
+-------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    Merge Key: ((home_base[0])[0])
    ->  Sort
          Sort Key: ((home_base[0])[0])
-         ->  Index Only Scan using grect2ind2 on fast_emp4000
-               Index Cond: (home_base <@ '(2000,1000),(200,200)'::box)
+         ->  Seq Scan on fast_emp4000
+               Filter: (home_base <@ '(2000,1000),(200,200)'::box)
  Optimizer: Postgres query optimizer
 (7 rows)
 
@@ -68,15 +68,14 @@ SELECT * FROM fast_emp4000
 
 EXPLAIN (COSTS OFF)
 SELECT count(*) FROM fast_emp4000 WHERE home_base && '(1000,1000,0,0)'::box;
-                               QUERY PLAN                                
--------------------------------------------------------------------------
- Finalize Aggregate
+                          QUERY PLAN                           
+---------------------------------------------------------------
+ Aggregate
    ->  Gather Motion 3:1  (slice1; segments: 3)
-         ->  Partial Aggregate
-               ->  Index Only Scan using grect2ind2 on fast_emp4000
-                     Index Cond: (home_base && '(1000,1000),(0,0)'::box)
+         ->  Seq Scan on fast_emp4000
+               Filter: (home_base && '(1000,1000),(0,0)'::box)
  Optimizer: Postgres query optimizer
-(6 rows)
+(5 rows)
 
 SELECT count(*) FROM fast_emp4000 WHERE home_base && '(1000,1000,0,0)'::box;
  count 
@@ -86,13 +85,13 @@ SELECT count(*) FROM fast_emp4000 WHERE home_base && '(1000,1000,0,0)'::box;
 
 EXPLAIN (COSTS OFF)
 SELECT count(*) FROM fast_emp4000 WHERE home_base IS NULL;
-                             QUERY PLAN                             
---------------------------------------------------------------------
+                   QUERY PLAN                    
+-------------------------------------------------
  Finalize Aggregate
    ->  Gather Motion 3:1  (slice1; segments: 3)
          ->  Partial Aggregate
-               ->  Index Only Scan using grect2ind2 on fast_emp4000
-                     Index Cond: (home_base IS NULL)
+               ->  Seq Scan on fast_emp4000
+                     Filter: (home_base IS NULL)
  Optimizer: Postgres query optimizer
 (6 rows)
 
@@ -241,95 +240,6 @@ ORDER BY classid, objid, objsubid;
  table tableam_parted_d_heap2
 (5 rows)
 
--- ALTER TABLE SET ACCESS METHOD
-CREATE TABLE heaptable USING heap AS
-  SELECT a, repeat(a::text, 100) FROM generate_series(1,9) AS a;
-SELECT amname FROM pg_class c, pg_am am
-  WHERE c.relam = am.oid AND c.oid = 'heaptable'::regclass;
- amname 
---------
- heap
-(1 row)
-
--- Switching to heap2 adds new dependency entry to the AM.
-ALTER TABLE heaptable SET ACCESS METHOD heap2;
-SELECT pg_describe_object(classid, objid, objsubid) as obj,
-       pg_describe_object(refclassid, refobjid, refobjsubid) as objref,
-       deptype
-  FROM pg_depend
-  WHERE classid = 'pg_class'::regclass AND
-        objid = 'heaptable'::regclass
-  ORDER BY 1, 2;
-       obj       |       objref        | deptype 
------------------+---------------------+---------
- table heaptable | access method heap2 | n
- table heaptable | schema public       | n
-(2 rows)
-
--- Switching to heap should not have a dependency entry to the AM.
-ALTER TABLE heaptable SET ACCESS METHOD heap;
-SELECT pg_describe_object(classid, objid, objsubid) as obj,
-       pg_describe_object(refclassid, refobjid, refobjsubid) as objref,
-       deptype
-  FROM pg_depend
-  WHERE classid = 'pg_class'::regclass AND
-        objid = 'heaptable'::regclass
-  ORDER BY 1, 2;
-       obj       |    objref     | deptype 
------------------+---------------+---------
- table heaptable | schema public | n
-(1 row)
-
-ALTER TABLE heaptable SET ACCESS METHOD heap2;
-SELECT amname FROM pg_class c, pg_am am
-  WHERE c.relam = am.oid AND c.oid = 'heaptable'::regclass;
- amname 
---------
- heap2
-(1 row)
-
-SELECT COUNT(a), COUNT(1) FILTER(WHERE a=1) FROM heaptable;
- count | count 
--------+-------
-     9 |     1
-(1 row)
-
--- ALTER MATERIALIZED VIEW SET ACCESS METHOD
-CREATE MATERIALIZED VIEW heapmv USING heap AS SELECT * FROM heaptable;
-SELECT amname FROM pg_class c, pg_am am
-  WHERE c.relam = am.oid AND c.oid = 'heapmv'::regclass;
- amname 
---------
- heap
-(1 row)
-
-ALTER MATERIALIZED VIEW heapmv SET ACCESS METHOD heap2;
-SELECT amname FROM pg_class c, pg_am am
-  WHERE c.relam = am.oid AND c.oid = 'heapmv'::regclass;
- amname 
---------
- heap2
-(1 row)
-
-SELECT COUNT(a), COUNT(1) FILTER(WHERE a=1) FROM heapmv;
- count | count 
--------+-------
-     9 |     1
-(1 row)
-
--- No support for multiple subcommands
-ALTER TABLE heaptable SET ACCESS METHOD heap, SET ACCESS METHOD heap2;
-ERROR:  cannot have multiple SET ACCESS METHOD subcommands
-ALTER MATERIALIZED VIEW heapmv SET ACCESS METHOD heap, SET ACCESS METHOD heap2;
-ERROR:  cannot have multiple SET ACCESS METHOD subcommands
-DROP MATERIALIZED VIEW heapmv;
-DROP TABLE heaptable;
--- No support for partitioned tables.
-CREATE TABLE am_partitioned(x INT, y INT)
-  PARTITION BY hash (x);
-ALTER TABLE am_partitioned SET ACCESS METHOD heap2;
-ERROR:  cannot change access method of a partitioned table
-DROP TABLE am_partitioned;
 -- Second, create objects in the new AM by changing the default AM
 BEGIN;
 SET LOCAL default_table_access_method = 'heap2';

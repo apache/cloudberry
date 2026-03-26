@@ -423,8 +423,8 @@ SELECT relname, reltoastrelid <> 0 AS has_toast_table
    ORDER BY 1;
  relname | has_toast_table 
 ---------+-----------------
- a_star  | t
- c_star  | t
+ a_star  | f
+ c_star  | f
 (2 rows)
 
 --UPDATE b_star*

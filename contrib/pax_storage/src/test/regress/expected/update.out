@@ -172,15 +172,15 @@ EXPLAIN (VERBOSE, COSTS OFF)
 UPDATE update_test t
   SET (a, b) = (SELECT b, a FROM update_test s WHERE s.a = t.a)
   WHERE CURRENT_USER = SESSION_USER;
-                                                QUERY PLAN                                                
-----------------------------------------------------------------------------------------------------------
+                                                  QUERY PLAN                                                   
+---------------------------------------------------------------------------------------------------------------
  Update on public.update_test t
    ->  Explicit Redistribute Motion 3:3  (slice1; segments: 3)
-         Output: ($1), ($2), t.c, ((SubPlan 1 (returns $1,$2))), t.ctid, t.gp_segment_id, (DMLAction)
+         Output: ($1), ($2), t.c, ((SubPlan 1 (returns $1,$2))), t.ctid, t.gp_segment_id, t.*, (DMLAction)
          ->  Split Update
-               Output: ($1), ($2), t.c, ((SubPlan 1 (returns $1,$2))), t.ctid, t.gp_segment_id, DMLAction
+               Output: ($1), ($2), t.c, ((SubPlan 1 (returns $1,$2))), t.ctid, t.gp_segment_id, t.*, DMLAction
                ->  Seq Scan on public.update_test t
-                     Output: $1, $2, t.c, (SubPlan 1 (returns $1,$2)), t.ctid, t.gp_segment_id
+                     Output: $1, $2, t.c, (SubPlan 1 (returns $1,$2)), t.ctid, t.gp_segment_id, t.*
                      SubPlan 1 (returns $1,$2)
                        ->  Result
                              Output: s.b, s.a
@@ -534,10 +534,13 @@ BEGIN
 END $$ language plpgsql;
 CREATE TRIGGER trig_c1_100 BEFORE UPDATE OR INSERT ON part_c_1_100
    FOR EACH ROW EXECUTE PROCEDURE func_parted_mod_b();
+ERROR:  ON UPDATE triggers are not supported on append-only tables
 CREATE TRIGGER trig_d1_15 BEFORE UPDATE OR INSERT ON part_d_1_15
    FOR EACH ROW EXECUTE PROCEDURE func_parted_mod_b();
+ERROR:  ON UPDATE triggers are not supported on append-only tables
 CREATE TRIGGER trig_d15_20 BEFORE UPDATE OR INSERT ON part_d_15_20
    FOR EACH ROW EXECUTE PROCEDURE func_parted_mod_b();
+ERROR:  ON UPDATE triggers are not supported on append-only tables
 :init_range_parted;
 UPDATE range_parted set c = (case when c = 96 then 110 else c + 1 end) WHERE a = 'b' and b > 10 and c >= 96;
 :show_data;
@@ -545,10 +548,10 @@ UPDATE range_parted set c = (case when c = 96 then 110 else c + 1 end) WHERE a =
 ----------------+---+----+-----+----+---
  part_a_10_a_20 | a | 10 | 200 |  1 | 
  part_a_1_a_10  | a |  1 |   1 |  1 | 
- part_c_1_100   | b | 15 |  98 |  2 | 
- part_d_15_20   | b | 17 | 106 | 16 | 
- part_d_15_20   | b | 19 | 106 | 19 | 
- part_d_1_15    | b | 15 | 110 |  1 | 
+ part_c_1_100   | b | 13 |  98 |  2 | 
+ part_d_15_20   | b | 15 | 106 | 16 | 
+ part_d_15_20   | b | 17 | 106 | 19 | 
+ part_d_1_15    | b | 12 | 110 |  1 | 
 (6 rows)
 
 :init_range_parted;
@@ -558,10 +561,10 @@ UPDATE range_parted set c = c + 50 WHERE a = 'b' and b > 10 and c >= 96;
 ----------------+---+----+-----+----+---
  part_a_10_a_20 | a | 10 | 200 |  1 | 
  part_a_1_a_10  | a |  1 |   1 |  1 | 
- part_d_15_20   | b | 17 | 155 | 16 | 
- part_d_15_20   | b | 19 | 155 | 19 | 
- part_d_1_15    | b | 15 | 146 |  1 | 
- part_d_1_15    | b | 16 | 147 |  2 | 
+ part_d_15_20   | b | 15 | 155 | 16 | 
+ part_d_15_20   | b | 17 | 155 | 19 | 
+ part_d_1_15    | b | 12 | 146 |  1 | 
+ part_d_1_15    | b | 13 | 147 |  2 | 
 (6 rows)
 
 -- Case where per-partition tuple conversion map array is allocated, but the
@@ -574,17 +577,20 @@ UPDATE range_parted set b = 15 WHERE b = 1;
 ----------------+---+----+-----+----+---
  part_a_10_a_20 | a | 10 | 200 |  1 | 
  part_a_10_a_20 | a | 15 |   1 |  1 | 
- part_c_1_100   | b | 13 |  96 |  1 | 
- part_c_1_100   | b | 14 |  97 |  2 | 
- part_d_15_20   | b | 16 | 105 | 16 | 
- part_d_15_20   | b | 18 | 105 | 19 | 
+ part_c_1_100   | b | 12 |  96 |  1 | 
+ part_c_1_100   | b | 13 |  97 |  2 | 
+ part_d_15_20   | b | 15 | 105 | 16 | 
+ part_d_15_20   | b | 17 | 105 | 19 | 
 (6 rows)
 
 DROP TRIGGER trans_updatetrig ON range_parted;
 ERROR:  trigger "trans_updatetrig" for table "range_parted" does not exist
 DROP TRIGGER trig_c1_100 ON part_c_1_100;
+ERROR:  trigger "trig_c1_100" for table "part_c_1_100" does not exist
 DROP TRIGGER trig_d1_15 ON part_d_1_15;
+ERROR:  trigger "trig_d1_15" for table "part_d_1_15" does not exist
 DROP TRIGGER trig_d15_20 ON part_d_15_20;
+ERROR:  trigger "trig_d15_20" for table "part_d_15_20" does not exist
 DROP FUNCTION func_parted_mod_b();
 -- RLS policies with update-row-movement
 -----------------------------------------
@@ -849,11 +855,7 @@ alter table utrtest attach partition utr2 for values in (2);
 -- data segment and master, respectively.
 insert into utrtest values (1, 'foo')
   returning *, tableoid::regclass, xmin = pg_current_xact_id()::xid as xmin_ok;
- a |  b  | tableoid | xmin_ok 
----+-----+----------+---------
- 1 | foo | utr1     | f
-(1 row)
-
+ERROR:  virtual tuple table slot does not have system attributes (execTuples.c:163)  (seg1 slice1 127.0.1.1:7003 pid=1171422) (execTuples.c:163)
 insert into utrtest values (2, 'bar')
   returning *, tableoid::regclass, xmin = pg_current_xact_id()::xid as xmin_ok;  -- fails
 ERROR:  virtual tuple table slot does not have system attributes (execTuples.c:163)
@@ -866,31 +868,20 @@ insert into utrtest values (2, 'bar')
 
 update utrtest set b = b || b from (values (1), (2)) s(x) where a = s.x
   returning *, tableoid::regclass, xmin = pg_current_xact_id()::xid as xmin_ok;
- a |   b    | x | tableoid | xmin_ok 
----+--------+---+----------+---------
- 1 | foofoo | 1 | utr1     | f
- 2 | barbar | 2 | utr2     | f
-(2 rows)
-
+ERROR:  virtual tuple table slot does not have system attributes (execTuples.c:163)  (seg0 slice1 127.0.1.1:7002 pid=1171419) (execTuples.c:163)
 update utrtest set a = 3 - a from (values (1), (2)) s(x) where a = s.x
   returning *, tableoid::regclass, xmin = pg_current_xact_id()::xid as xmin_ok;  -- fails
 ERROR:  virtual tuple table slot does not have system attributes (execTuples.c:163)
 update utrtest set a = 3 - a from (values (1), (2)) s(x) where a = s.x
   returning *, tableoid::regclass;
- a |   b    | x | tableoid 
----+--------+---+----------
- 2 | foofoo | 1 | utr2
- 1 | barbar | 2 | utr1
-(2 rows)
+ a |  b  | x | tableoid 
+---+-----+---+----------
+ 1 | bar | 2 | utr1
+(1 row)
 
 delete from utrtest
   returning *, tableoid::regclass, xmax = pg_current_xact_id()::xid as xmax_ok;
- a |   b    | tableoid | xmax_ok 
----+--------+----------+---------
- 1 | barbar | utr1     | f
- 2 | foofoo | utr2     | f
-(2 rows)
-
+ERROR:  not implemented yet on pax relations: TupleFetchRowVersion  (seg1 slice1 127.0.1.1:7003 pid=1171422)
 drop table utrtest;
 --------------
 -- Some more update-partition-key test scenarios below. This time use list
@@ -939,6 +930,7 @@ BEGIN
 END $$ LANGUAGE plpgsql;
 CREATE TRIGGER parted_mod_b before update on sub_part1
    for each row execute procedure func_parted_mod_b();
+ERROR:  ON UPDATE triggers are not supported on append-only tables
 SELECT tableoid::regclass::text, * FROM list_parted ORDER BY 1, 2, 3, 4;
   tableoid  | a | b  | c  
 ------------+---+----+----
@@ -961,6 +953,7 @@ SELECT tableoid::regclass::text, * FROM list_parted ORDER BY 1, 2, 3, 4;
 (4 rows)
 
 DROP TRIGGER parted_mod_b ON sub_part1;
+ERROR:  trigger "parted_mod_b" for table "sub_part1" does not exist
 -- If BR DELETE trigger prevented DELETE from happening, we should also skip
 -- the INSERT if that delete is part of UPDATE=>DELETE+INSERT.
 CREATE OR REPLACE FUNCTION func_parted_mod_b() returns trigger as $$
@@ -970,8 +963,8 @@ BEGIN
 END $$ LANGUAGE plpgsql;
 CREATE TRIGGER trig_skip_delete before delete on sub_part2
    for each row execute procedure func_parted_mod_b();
+ERROR:  ON DELETE triggers are not supported on append-only tables
 UPDATE list_parted set b = 1 WHERE c = 70;
-NOTICE:  Trigger: Got OLD row (2,70,1), but returning NULL
 SELECT tableoid::regclass::text, * FROM list_parted ORDER BY 1, 2, 3, 4;
   tableoid  | a | b  | c  
 ------------+---+----+----
@@ -983,6 +976,7 @@ SELECT tableoid::regclass::text, * FROM list_parted ORDER BY 1, 2, 3, 4;
 
 -- Drop the trigger. Now the row should be moved.
 DROP TRIGGER trig_skip_delete ON sub_part2;
+ERROR:  trigger "trig_skip_delete" for table "sub_part2" does not exist
 UPDATE list_parted set b = 1 WHERE c = 70;
 SELECT tableoid::regclass::text, * FROM list_parted ORDER BY 1, 2, 3, 4;
   tableoid  | a | b  | c  

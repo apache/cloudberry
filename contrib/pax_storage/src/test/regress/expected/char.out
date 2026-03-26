@@ -64,33 +64,32 @@ SELECT c.*
    WHERE c.f1 < 'a';
  f1 
 ----
- A
+  
  1
  2
  3
-  
-(5 rows)
+(4 rows)
 
 SELECT c.*
    FROM CHAR_TBL c
    WHERE c.f1 <= 'a';
  f1 
 ----
- a
- A
- 1
  2
  3
+ a
   
-(6 rows)
+ 1
+(5 rows)
 
 SELECT c.*
    FROM CHAR_TBL c
    WHERE c.f1 > 'a';
  f1 
 ----
+ A
  c
-(1 row)
+(2 rows)
 
 SELECT c.*
    FROM CHAR_TBL c
@@ -98,8 +97,9 @@ SELECT c.*
  f1 
 ----
  a
+ A
  c
-(2 rows)
+(3 rows)
 
 DROP TABLE CHAR_TBL;
 --

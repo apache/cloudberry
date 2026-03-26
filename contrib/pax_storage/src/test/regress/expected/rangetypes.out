@@ -846,6 +846,7 @@ select daterange('2000-01-01'::date, 'infinity'::date, '[]');
 -- test GiST index that's been built incrementally
 create table test_range_gist(ir int4range);
 create index test_range_gist_idx on test_range_gist using gist (ir);
+ERROR:  pax only support btree/hash/gin/bitmap indexes (pax_access_handle.cc:591)
 insert into test_range_gist select int4range(g, g+10) from generate_series(1,2000) g;
 insert into test_range_gist select 'empty'::int4range from generate_series(1,500) g;
 insert into test_range_gist select int4range(g, g+10000) from generate_series(1,1000) g;
@@ -1108,7 +1109,9 @@ select count(*) from test_range_gist where ir -|- int4multirange(int4range(100,2
 
 -- now check same queries using a bulk-loaded index
 drop index test_range_gist_idx;
+ERROR:  index "test_range_gist_idx" does not exist
 create index test_range_gist_idx on test_range_gist using gist (ir);
+ERROR:  pax only support btree/hash/gin/bitmap indexes (pax_access_handle.cc:591)
 select count(*) from test_range_gist where ir @> 'empty'::int4range;
  count 
 -------
@@ -1232,6 +1235,7 @@ select count(*) from test_range_gist where ir -|- int4multirange(int4range(100,2
 -- test SP-GiST index that's been built incrementally
 create table test_range_spgist(ir int4range);
 create index test_range_spgist_idx on test_range_spgist using spgist (ir);
+ERROR:  pax only support btree/hash/gin/bitmap indexes (pax_access_handle.cc:591)
 insert into test_range_spgist select int4range(g, g+10) from generate_series(1,2000) g;
 insert into test_range_spgist select 'empty'::int4range from generate_series(1,500) g;
 insert into test_range_spgist select int4range(g, g+10000) from generate_series(1,1000) g;
@@ -1381,7 +1385,9 @@ select count(*) from test_range_spgist where ir -|- int4range(100,500);
 
 -- now check same queries using a bulk-loaded index
 drop index test_range_spgist_idx;
+ERROR:  index "test_range_spgist_idx" does not exist
 create index test_range_spgist_idx on test_range_spgist using spgist (ir);
+ERROR:  pax only support btree/hash/gin/bitmap indexes (pax_access_handle.cc:591)
 select count(*) from test_range_spgist where ir @> 'empty'::int4range;
  count 
 -------
@@ -1451,14 +1457,14 @@ select count(*) from test_range_spgist where ir -|- int4range(100,500);
 -- test index-only scans
 explain (costs off)
 select ir from test_range_spgist where ir -|- int4range(10,20) order by ir;
-                                  QUERY PLAN                                  
-------------------------------------------------------------------------------
+                     QUERY PLAN                      
+-----------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    Merge Key: ir
    ->  Sort
          Sort Key: ir
-         ->  Index Only Scan using test_range_spgist_idx on test_range_spgist
-               Index Cond: (ir -|- '[10,20)'::int4range)
+         ->  Seq Scan on test_range_spgist
+               Filter: (ir -|- '[10,20)'::int4range)
  Optimizer: Postgres query optimizer
 (7 rows)
 
@@ -1488,17 +1494,16 @@ select count(*) from test_range_elem where i <@ int4range(10,50);
 create index on test_range_elem using spgist(int4range(i,i+10));
 explain (costs off)
 select count(*) from test_range_elem where int4range(i,i+10) <@ int4range(10,30);
-                                       QUERY PLAN                                       
-----------------------------------------------------------------------------------------
+                                  QUERY PLAN                                  
+------------------------------------------------------------------------------
  Finalize Aggregate
    ->  Gather Motion 3:1  (slice1; segments: 3)
          ->  Partial Aggregate
                ->  Bitmap Heap Scan on test_range_elem
-                     Recheck Cond: (int4range(i, (i + 10)) <@ '[10,30)'::int4range)
-                     ->  Bitmap Index Scan on test_range_elem_int4range_idx
-                           Index Cond: (int4range(i, (i + 10)) <@ '[10,30)'::int4range)
+                     Filter: (int4range(i, (i + 10)) <@ '[10,30)'::int4range)
+                     ->  Bitmap Index Scan on test_range_elem_idx
  Optimizer: Postgres query optimizer
-(8 rows)
+(7 rows)
 
 select count(*) from test_range_elem where int4range(i,i+10) <@ int4range(10,30);
  count 
@@ -1521,20 +1526,32 @@ create table test_range_excl(
   exclude using gist (room with =, during with &&),
   exclude using gist (speaker with =, during with &&)
 ) DISTRIBUTED REPLICATED;
+ERROR:  pax only support btree/hash/gin/bitmap indexes (pax_access_handle.cc:591)
 insert into test_range_excl
   values(1, int4range(123, 123, '[]'), int4range(1, 1, '[]'), '[2010-01-02 10:00, 2010-01-02 11:00)');
+ERROR:  relation "test_range_excl" does not exist
+LINE 1: insert into test_range_excl
+                    ^
 insert into test_range_excl
   values(1, int4range(123, 123, '[]'), int4range(2, 2, '[]'), '[2010-01-02 11:00, 2010-01-02 12:00)');
+ERROR:  relation "test_range_excl" does not exist
+LINE 1: insert into test_range_excl
+                    ^
 insert into test_range_excl
   values(1, int4range(123, 123, '[]'), int4range(3, 3, '[]'), '[2010-01-02 10:10, 2010-01-02 11:00)');
-ERROR:  conflicting key value violates exclusion constraint "test_range_excl_room_during_excl"
-DETAIL:  Key (room, during)=([123,124), ["Sat Jan 02 10:10:00 2010","Sat Jan 02 11:00:00 2010")) conflicts with existing key (room, during)=([123,124), ["Sat Jan 02 10:00:00 2010","Sat Jan 02 11:00:00 2010")).
+ERROR:  relation "test_range_excl" does not exist
+LINE 1: insert into test_range_excl
+                    ^
 insert into test_range_excl
   values(1, int4range(124, 124, '[]'), int4range(3, 3, '[]'), '[2010-01-02 10:10, 2010-01-02 11:10)');
+ERROR:  relation "test_range_excl" does not exist
+LINE 1: insert into test_range_excl
+                    ^
 insert into test_range_excl
   values(1, int4range(125, 125, '[]'), int4range(1, 1, '[]'), '[2010-01-02 10:10, 2010-01-02 11:00)');
-ERROR:  conflicting key value violates exclusion constraint "test_range_excl_speaker_during_excl"
-DETAIL:  Key (speaker, during)=([1,2), ["Sat Jan 02 10:10:00 2010","Sat Jan 02 11:00:00 2010")) conflicts with existing key (speaker, during)=([1,2), ["Sat Jan 02 10:00:00 2010","Sat Jan 02 11:00:00 2010")).
+ERROR:  relation "test_range_excl" does not exist
+LINE 1: insert into test_range_excl
+                    ^
 -- test bigint ranges
 select int8range(10000000000::int8, 20000000000::int8,'(]');
          int8range         

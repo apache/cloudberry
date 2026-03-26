@@ -707,8 +707,8 @@ insert into t_distinct_sort select i, i+1, i+2  from generate_series(1, 10)i;
 analyze t_distinct_sort;
 explain(verbose, costs off)
 select distinct count(a), sum(b) from t_distinct_sort order by sum(b), count(a);
-                                                        QUERY PLAN                                                         
----------------------------------------------------------------------------------------------------------------------------
+                                               QUERY PLAN                                               
+--------------------------------------------------------------------------------------------------------
  Finalize Aggregate
    Output: count(a), sum(b)
    ->  Gather Motion 3:1  (slice1; segments: 3)
@@ -716,8 +716,8 @@ select distinct count(a), sum(b) from t_distinct_sort order by sum(b), count(a);
          ->  Partial Aggregate
                Output: PARTIAL count(a), PARTIAL sum(b)
                ->  Seq Scan on public.t_distinct_sort
-                     Output: a, b, c
- Settings: enable_hashagg = 'on', enable_sort = 'on', gp_statistics_pullup_from_child_partition = 'off', optimizer = 'off'
+                     Output: a, b
+ Settings: enable_hashagg = 'on', enable_sort = 'on', gp_statistics_pullup_from_child_partition = 'off'
  Optimizer: Postgres query optimizer
 (10 rows)
 
@@ -729,8 +729,8 @@ select distinct count(a), sum(b) from t_distinct_sort order by sum(b), count(a);
 
 explain(verbose, costs off)
 select distinct on(count(b), count(c)) count(a), sum(b) from t_distinct_sort order by count(c);
-                                                        QUERY PLAN                                                         
----------------------------------------------------------------------------------------------------------------------------
+                                               QUERY PLAN                                               
+--------------------------------------------------------------------------------------------------------
  Finalize Aggregate
    Output: count(a), sum(b)
    ->  Gather Motion 3:1  (slice1; segments: 3)
@@ -738,8 +738,8 @@ select distinct on(count(b), count(c)) count(a), sum(b) from t_distinct_sort ord
          ->  Partial Aggregate
                Output: PARTIAL count(a), PARTIAL sum(b)
                ->  Seq Scan on public.t_distinct_sort
-                     Output: a, b, c
- Settings: enable_hashagg = 'on', enable_sort = 'on', gp_statistics_pullup_from_child_partition = 'off', optimizer = 'off'
+                     Output: a, b
+ Settings: enable_hashagg = 'on', enable_sort = 'on', gp_statistics_pullup_from_child_partition = 'off'
  Optimizer: Postgres query optimizer
 (10 rows)
 
@@ -751,8 +751,8 @@ select distinct on(count(b), count(c)) count(a), sum(b) from t_distinct_sort ord
 
 explain(verbose, costs off)
 select count(a), sum(b) from t_distinct_sort order by sum(a), count(c);
-                                                        QUERY PLAN                                                         
----------------------------------------------------------------------------------------------------------------------------
+                                               QUERY PLAN                                               
+--------------------------------------------------------------------------------------------------------
  Finalize Aggregate
    Output: count(a), sum(b)
    ->  Gather Motion 3:1  (slice1; segments: 3)
@@ -760,8 +760,8 @@ select count(a), sum(b) from t_distinct_sort order by sum(a), count(c);
          ->  Partial Aggregate
                Output: PARTIAL count(a), PARTIAL sum(b)
                ->  Seq Scan on public.t_distinct_sort
-                     Output: a, b, c
- Settings: enable_hashagg = 'on', enable_sort = 'on', gp_statistics_pullup_from_child_partition = 'off', optimizer = 'off'
+                     Output: a, b
+ Settings: enable_hashagg = 'on', enable_sort = 'on', gp_statistics_pullup_from_child_partition = 'off'
  Optimizer: Postgres query optimizer
 (10 rows)
 
@@ -773,8 +773,8 @@ select count(a), sum(b) from t_distinct_sort order by sum(a), count(c);
 
 explain(verbose, costs off)
 select distinct count(a), sum(b) from t_distinct_sort ;
-                                                        QUERY PLAN                                                         
----------------------------------------------------------------------------------------------------------------------------
+                                               QUERY PLAN                                               
+--------------------------------------------------------------------------------------------------------
  Finalize Aggregate
    Output: count(a), sum(b)
    ->  Gather Motion 3:1  (slice1; segments: 3)
@@ -782,8 +782,8 @@ select distinct count(a), sum(b) from t_distinct_sort ;
          ->  Partial Aggregate
                Output: PARTIAL count(a), PARTIAL sum(b)
                ->  Seq Scan on public.t_distinct_sort
-                     Output: a, b, c
- Settings: enable_hashagg = 'on', enable_sort = 'on', gp_statistics_pullup_from_child_partition = 'off', optimizer = 'off'
+                     Output: a, b
+ Settings: enable_hashagg = 'on', enable_sort = 'on', gp_statistics_pullup_from_child_partition = 'off'
  Optimizer: Postgres query optimizer
 (10 rows)
 
@@ -796,8 +796,8 @@ select distinct count(a), sum(b) from t_distinct_sort ;
 -- should keep distinct clause
 explain(verbose, costs off) 
 select distinct on(count(random())) count(a), sum(b) from t_distinct_sort;
-                                                        QUERY PLAN                                                         
----------------------------------------------------------------------------------------------------------------------------
+                                               QUERY PLAN                                               
+--------------------------------------------------------------------------------------------------------
  Unique
    Output: (count(a)), (sum(b)), (count(random()))
    Group Key: (count(random()))
@@ -811,8 +811,8 @@ select distinct on(count(random())) count(a), sum(b) from t_distinct_sort;
                      ->  Partial Aggregate
                            Output: PARTIAL count(a), PARTIAL sum(b), PARTIAL count(random())
                            ->  Seq Scan on public.t_distinct_sort
-                                 Output: a, b, c
- Settings: enable_hashagg = 'on', enable_sort = 'on', gp_statistics_pullup_from_child_partition = 'off', optimizer = 'off'
+                                 Output: a, b
+ Settings: enable_hashagg = 'on', enable_sort = 'on', gp_statistics_pullup_from_child_partition = 'off'
  Optimizer: Postgres query optimizer
 (16 rows)
 
@@ -825,8 +825,8 @@ select distinct on(count(random())) count(a), sum(b) from t_distinct_sort;
 explain(verbose, costs off)
 select distinct(count(a)) from t_distinct_sort, (select distinct(count(*)), generate_series(
 0, 2) from t_distinct_sort)as xx;
-                                                                   QUERY PLAN                                                                    
--------------------------------------------------------------------------------------------------------------------------------------------------
+                                                          QUERY PLAN                                                          
+------------------------------------------------------------------------------------------------------------------------------
  Finalize Aggregate
    Output: count(t_distinct_sort.a)
    ->  Gather Motion 3:1  (slice1; segments: 3)
@@ -852,14 +852,13 @@ select distinct(count(a)) from t_distinct_sort, (select distinct(count(*)), gene
                                                                ->  Partial Aggregate
                                                                      Output: PARTIAL count(*)
                                                                      ->  Seq Scan on public.t_distinct_sort t_distinct_sort_1
-                                                                           Output: t_distinct_sort_1.a, t_distinct_sort_1.b, t_distinct_sort_1.c
                      ->  Materialize
                            Output: t_distinct_sort.a
                            ->  Seq Scan on public.t_distinct_sort
                                  Output: t_distinct_sort.a
- Settings: enable_hashagg = 'on', enable_sort = 'on', gp_statistics_pullup_from_child_partition = 'off', optimizer = 'off'
+ Settings: enable_hashagg = 'on', enable_sort = 'on', gp_statistics_pullup_from_child_partition = 'off'
  Optimizer: Postgres query optimizer
-(32 rows)
+(31 rows)
 
 select distinct(count(a)) from t_distinct_sort, (select distinct(count(*)), generate_series(
 0, 2) from t_distinct_sort)as xx;
@@ -922,8 +921,8 @@ SELECT * FROM t1_issue_15033;
 (1 row)
 
 INSERT INTO t2_issue_15033 VALUES(10);
+ERROR:  new row for relation "t2_issue_15033" violates check constraint "t2_issue_15033_check"  (seg2 127.0.1.1:7004 pid=1171459)
 DETAIL:  Failing row contains (10).
-ERROR:  new row for relation "t2_issue_15033" violates check constraint "t2_issue_15033_check"
 SELECT * FROM t2_issue_15033;
  c 
 ---

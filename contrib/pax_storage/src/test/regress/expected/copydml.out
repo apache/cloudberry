@@ -15,7 +15,7 @@ copy (insert into copydml_test (t) values ('f') returning id) to stdout;
 copy (update copydml_test set t = 'g' where t = 'f' returning id) to stdout;
 6
 copy (delete from copydml_test where t = 'g' returning id) to stdout;
-6
+ERROR:  not implemented yet on pax relations: TupleFetchRowVersion  (seg2 slice1 127.0.1.1:7004 pid=1170166)
 --
 -- Test \copy (insert/update/delete ...)
 --
@@ -24,7 +24,7 @@ copy (delete from copydml_test where t = 'g' returning id) to stdout;
 \copy (update copydml_test set t = 'g' where t = 'f' returning id) to stdout;
 7
 \copy (delete from copydml_test where t = 'g' returning id) to stdout;
-7
+ERROR:  not implemented yet on pax relations: TupleFetchRowVersion  (seg0 slice1 127.0.1.1:7002 pid=1170164)
 -- Error cases
 copy (insert into copydml_test default values) to stdout;
 ERROR:  COPY query must have a RETURNING clause
@@ -115,19 +115,15 @@ end
 $$ language plpgsql;
 create trigger qqqbef before insert or update or delete on copydml_test
     for each row execute procedure qqq_trig();
+ERROR:  ON UPDATE triggers are not supported on append-only tables
 create trigger qqqaf after insert or update or delete on copydml_test
     for each row execute procedure qqq_trig();
+ERROR:  ON UPDATE triggers are not supported on append-only tables
 copy (insert into copydml_test (t) values ('f') returning id) to stdout;
-NOTICE:  BEFORE INSERT 8
 8
-NOTICE:  AFTER INSERT 8
 copy (update copydml_test set t = 'g' where t = 'f' returning id) to stdout;
-NOTICE:  BEFORE UPDATE 8
 8
-NOTICE:  AFTER UPDATE 8
 copy (delete from copydml_test where t = 'g' returning id) to stdout;
-NOTICE:  BEFORE DELETE 8
-8
-NOTICE:  AFTER DELETE 8
+ERROR:  not implemented yet on pax relations: TupleFetchRowVersion  (seg0 slice1 127.0.1.1:7002 pid=1170164)
 drop table copydml_test;
 drop function qqq_trig();

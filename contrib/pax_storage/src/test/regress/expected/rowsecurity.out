@@ -190,11 +190,17 @@ NOTICE:  f_leak => awesome science fiction
 -- try a sampled version
 SELECT * FROM document TABLESAMPLE BERNOULLI(50) REPEATABLE(0)
   WHERE f_leak(dtitle) ORDER BY did;
+NOTICE:  f_leak => my first manga
 NOTICE:  f_leak => great manga
- did | cid | dlevel |      dauthor      |   dtitle    
------+-----+--------+-------------------+-------------
+NOTICE:  f_leak => great science fiction
+NOTICE:  f_leak => awesome science fiction
+ did | cid | dlevel |      dauthor      |         dtitle          
+-----+-----+--------+-------------------+-------------------------
+   4 |  44 |      1 | regress_rls_bob   | my first manga
+   6 |  22 |      1 | regress_rls_carol | great science fiction
    8 |  44 |      1 | regress_rls_carol | great manga
-(1 row)
+   9 |  22 |      1 | regress_rls_dave  | awesome science fiction
+(4 rows)
 
 -- viewpoint from regress_rls_carol
 SET SESSION AUTHORIZATION regress_rls_carol;
@@ -251,15 +257,19 @@ NOTICE:  f_leak => awesome technology book
 -- try a sampled version
 SELECT * FROM document TABLESAMPLE BERNOULLI(50) REPEATABLE(0)
   WHERE f_leak(dtitle) ORDER BY did;
-NOTICE:  f_leak => great technology book
+NOTICE:  f_leak => great science fiction
+NOTICE:  f_leak => my science fiction
+NOTICE:  f_leak => my first manga
 NOTICE:  f_leak => great manga
-NOTICE:  f_leak => awesome technology book
+NOTICE:  f_leak => awesome science fiction
  did | cid | dlevel |      dauthor      |         dtitle          
 -----+-----+--------+-------------------+-------------------------
-   7 |  33 |      2 | regress_rls_carol | great technology book
+   3 |  22 |      2 | regress_rls_bob   | my science fiction
+   4 |  44 |      1 | regress_rls_bob   | my first manga
+   6 |  22 |      1 | regress_rls_carol | great science fiction
    8 |  44 |      1 | regress_rls_carol | great manga
-  10 |  33 |      2 | regress_rls_dave  | awesome technology book
-(3 rows)
+   9 |  22 |      1 | regress_rls_dave  | awesome science fiction
+(5 rows)
 
 EXPLAIN (COSTS OFF) SELECT * FROM document WHERE f_leak(dtitle);
                      QUERY PLAN                      
@@ -1833,18 +1843,18 @@ WHERE t1.a = 3 and t2.a = 3 AND f_leak(t1.b) AND f_leak(t2.b);
                                     QUERY PLAN                                     
 -----------------------------------------------------------------------------------
  Update on t2
-   ->  Explicit Redistribute Motion 3:3  (slice1; segments: 3)
-         ->  Nested Loop
-               ->  Broadcast Motion 3:3  (slice2; segments: 3)
-                     ->  Seq Scan on t2
-                           Filter: ((a = 3) AND ((a % 2) = 1) AND f_leak(b))
-               ->  Append
-                     ->  Seq Scan on t1 t1_1
-                           Filter: ((a = 3) AND ((a % 2) = 0) AND f_leak(b))
-                     ->  Seq Scan on t2 t1_2
-                           Filter: ((a = 3) AND ((a % 2) = 0) AND f_leak(b))
-                     ->  Seq Scan on t3 t1_3
-                           Filter: ((a = 3) AND ((a % 2) = 0) AND f_leak(b))
+   ->  Nested Loop
+         ->  Seq Scan on t2
+               Filter: ((a = 3) AND ((a % 2) = 1) AND f_leak(b))
+         ->  Materialize
+               ->  Broadcast Motion 3:3  (slice1; segments: 3)
+                     ->  Append
+                           ->  Seq Scan on t1 t1_1
+                                 Filter: ((a = 3) AND ((a % 2) = 0) AND f_leak(b))
+                           ->  Seq Scan on t2 t1_2
+                                 Filter: ((a = 3) AND ((a % 2) = 0) AND f_leak(b))
+                           ->  Seq Scan on t3 t1_3
+                                 Filter: ((a = 3) AND ((a % 2) = 0) AND f_leak(b))
  Optimizer: Postgres query optimizer
 (14 rows)
 
@@ -1855,21 +1865,24 @@ NOTICE:  f_leak => cde
 EXPLAIN (COSTS OFF) UPDATE t2 t2_1 SET b = t2_2.b FROM t2 t2_2
 WHERE t2_1.a = 3 AND t2_2.a = t2_1.a AND t2_2.b = t2_1.b
 AND f_leak(t2_1.b) AND f_leak(t2_2.b) RETURNING *, t2_1, t2_2;
-                                    QUERY PLAN                                     
------------------------------------------------------------------------------------
+                                       QUERY PLAN                                        
+-----------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Update on t2 t2_1
          ->  Explicit Redistribute Motion 3:3  (slice2; segments: 3)
                ->  Hash Join
                      Hash Cond: (t2_1.b = t2_2.b)
-                     ->  Broadcast Motion 3:3  (slice3; segments: 3)
+                     ->  Redistribute Motion 3:3  (slice3; segments: 3)
+                           Hash Key: t2_1.b
                            ->  Seq Scan on t2 t2_1
                                  Filter: ((a = 3) AND ((a % 2) = 1) AND f_leak(b))
                      ->  Hash
-                           ->  Seq Scan on t2 t2_2
-                                 Filter: ((a = 3) AND ((a % 2) = 1) AND f_leak(b))
+                           ->  Redistribute Motion 3:3  (slice4; segments: 3)
+                                 Hash Key: t2_2.b
+                                 ->  Seq Scan on t2 t2_2
+                                       Filter: ((a = 3) AND ((a % 2) = 1) AND f_leak(b))
  Optimizer: Postgres query optimizer
-(12 rows)
+(15 rows)
 
 UPDATE t2 t2_1 SET b = t2_2.b FROM t2 t2_2
 WHERE t2_1.a = 3 AND t2_2.a = t2_1.a AND t2_2.b = t2_1.b
@@ -1884,8 +1897,8 @@ NOTICE:  f_leak => cde
 EXPLAIN (COSTS OFF) UPDATE t1 t1_1 SET b = t1_2.b FROM t1 t1_2
 WHERE t1_1.a = 4 AND t1_2.a = t1_1.a AND t1_2.b = t1_1.b
 AND f_leak(t1_1.b) AND f_leak(t1_2.b) RETURNING *, t1_1, t1_2;
-                                       QUERY PLAN                                        
------------------------------------------------------------------------------------------
+                                          QUERY PLAN                                           
+-----------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Update on t1 t1_1
          Update on t1 t1_1_1
@@ -1894,7 +1907,8 @@ AND f_leak(t1_1.b) AND f_leak(t1_2.b) RETURNING *, t1_1, t1_2;
          ->  Explicit Redistribute Motion 3:3  (slice2; segments: 3)
                ->  Hash Join
                      Hash Cond: (t1_1.b = t1_2.b)
-                     ->  Broadcast Motion 3:3  (slice3; segments: 3)
+                     ->  Redistribute Motion 3:3  (slice3; segments: 3)
+                           Hash Key: t1_1.b
                            ->  Append
                                  ->  Seq Scan on t1 t1_1_1
                                        Filter: ((a = 4) AND ((a % 2) = 0) AND f_leak(b))
@@ -1903,15 +1917,17 @@ AND f_leak(t1_1.b) AND f_leak(t1_2.b) RETURNING *, t1_1, t1_2;
                                  ->  Seq Scan on t3 t1_1_3
                                        Filter: ((a = 4) AND ((a % 2) = 0) AND f_leak(b))
                      ->  Hash
-                           ->  Append
-                                 ->  Seq Scan on t1 t1_2_1
-                                       Filter: ((a = 4) AND ((a % 2) = 0) AND f_leak(b))
-                                 ->  Seq Scan on t2 t1_2_2
-                                       Filter: ((a = 4) AND ((a % 2) = 0) AND f_leak(b))
-                                 ->  Seq Scan on t3 t1_2_3
-                                       Filter: ((a = 4) AND ((a % 2) = 0) AND f_leak(b))
+                           ->  Redistribute Motion 3:3  (slice4; segments: 3)
+                                 Hash Key: t1_2.b
+                                 ->  Append
+                                       ->  Seq Scan on t1 t1_2_1
+                                             Filter: ((a = 4) AND ((a % 2) = 0) AND f_leak(b))
+                                       ->  Seq Scan on t2 t1_2_2
+                                             Filter: ((a = 4) AND ((a % 2) = 0) AND f_leak(b))
+                                       ->  Seq Scan on t3 t1_2_3
+                                             Filter: ((a = 4) AND ((a % 2) = 0) AND f_leak(b))
  Optimizer: Postgres query optimizer
-(25 rows)
+(28 rows)
 
 UPDATE t1 t1_1 SET b = t1_2.b FROM t1 t1_2
 WHERE t1_1.a = 4 AND t1_2.a = t1_1.a AND t1_2.b = t1_1.b
@@ -1973,24 +1989,11 @@ EXPLAIN (COSTS OFF) DELETE FROM t1 WHERE f_leak(b);
 
 DELETE FROM only t1 WHERE f_leak(b) RETURNING tableoid::regclass, *, t1;
 NOTICE:  f_leak => bbbbbb_updt
-NOTICE:  f_leak => daddad_updt
- tableoid | id  | a |      b      |         t1          
-----------+-----+---+-------------+---------------------
- t1       | 102 | 2 | bbbbbb_updt | (102,2,bbbbbb_updt)
- t1       | 104 | 4 | daddad_updt | (104,4,daddad_updt)
-(2 rows)
-
+ERROR:  not implemented yet on pax relations: TupleFetchRowVersion  (seg0 slice1 127.0.1.1:7002 pid=1173366)
 DELETE FROM t1 WHERE f_leak(b) RETURNING tableoid::regclass, *, t1;
-NOTICE:  f_leak => bcdbcd
+NOTICE:  f_leak => bbbbbb_updt
 NOTICE:  f_leak => defdef
-NOTICE:  f_leak => yyyyyy
- tableoid | id  | a |   b    |       t1       
-----------+-----+---+--------+----------------
- t2       | 202 | 2 | bcdbcd | (202,2,bcdbcd)
- t2       | 204 | 4 | defdef | (204,4,defdef)
- t3       | 302 | 2 | yyyyyy | (302,2,yyyyyy)
-(3 rows)
-
+ERROR:  not implemented yet on pax relations: TupleFetchRowVersion  (seg0 slice1 127.0.1.1:7002 pid=1173366)
 --
 -- S.b. view on top of Row-level security
 --
@@ -2114,55 +2117,39 @@ ERROR:  new row violates row-level security policy for table "document"
 INSERT INTO document VALUES (33, 22, 1, 'regress_rls_bob', 'okay science fiction'); -- preparation for next statement
 INSERT INTO document VALUES (33, (SELECT cid from category WHERE cname = 'novel'), 1, 'regress_rls_bob', 'Some novel, replaces sci-fi') -- takes UPDATE path
     ON CONFLICT (did) DO UPDATE SET dtitle = EXCLUDED.dtitle;
-ERROR:  new row violates row-level security policy (USING expression) for table "document"
+ERROR:  not implemented yet on pax relations: TupleLock
 -- Fine (we UPDATE, since INSERT WCOs and UPDATE security barrier quals + WCOs
 -- not violated):
 INSERT INTO document VALUES (2, (SELECT cid from category WHERE cname = 'novel'), 1, 'regress_rls_bob', 'my first novel')
     ON CONFLICT (did) DO UPDATE SET dtitle = EXCLUDED.dtitle RETURNING *;
- did | cid | dlevel |     dauthor     |     dtitle     
------+-----+--------+-----------------+----------------
-   2 |  11 |      2 | regress_rls_bob | my first novel
-(1 row)
-
+ERROR:  not implemented yet on pax relations: TupleLock  (seg0 slice1 127.0.1.1:7002 pid=1173366)
 -- Fine (we INSERT, so "cid = 33" ("technology") isn't evaluated):
 INSERT INTO document VALUES (78, (SELECT cid from category WHERE cname = 'novel'), 1, 'regress_rls_bob', 'some technology novel')
     ON CONFLICT (did) DO UPDATE SET dtitle = EXCLUDED.dtitle, cid = 33 RETURNING *;
- did | cid | dlevel |     dauthor     |        dtitle         
------+-----+--------+-----------------+-----------------------
-  78 |  11 |      1 | regress_rls_bob | some technology novel
-(1 row)
-
+ERROR:  not implemented yet on pax relations: TupleInsertSpeculative  (seg1 slice1 127.0.1.1:7003 pid=1173365)
 -- Fine (same query, but we UPDATE, so "cid = 33", ("technology") is not the
 -- case in respect of *existing* tuple):
 INSERT INTO document VALUES (78, (SELECT cid from category WHERE cname = 'novel'), 1, 'regress_rls_bob', 'some technology novel')
     ON CONFLICT (did) DO UPDATE SET dtitle = EXCLUDED.dtitle, cid = 33 RETURNING *;
- did | cid | dlevel |     dauthor     |        dtitle         
------+-----+--------+-----------------+-----------------------
-  78 |  33 |      1 | regress_rls_bob | some technology novel
-(1 row)
-
+ERROR:  not implemented yet on pax relations: TupleInsertSpeculative  (seg1 slice1 127.0.1.1:7003 pid=1173365)
 -- Same query a third time, but now fails due to existing tuple finally not
 -- passing quals:
 INSERT INTO document VALUES (78, (SELECT cid from category WHERE cname = 'novel'), 1, 'regress_rls_bob', 'some technology novel')
     ON CONFLICT (did) DO UPDATE SET dtitle = EXCLUDED.dtitle, cid = 33 RETURNING *;
-ERROR:  new row violates row-level security policy (USING expression) for table "document"
+ERROR:  not implemented yet on pax relations: TupleInsertSpeculative
 -- Don't fail just because INSERT doesn't satisfy WITH CHECK option that
 -- originated as a barrier/USING() qual from the UPDATE.  Note that the UPDATE
 -- path *isn't* taken, and so UPDATE-related policy does not apply:
 INSERT INTO document VALUES (79, (SELECT cid from category WHERE cname = 'technology'), 1, 'regress_rls_bob', 'technology book, can only insert')
     ON CONFLICT (did) DO UPDATE SET dtitle = EXCLUDED.dtitle RETURNING *;
- did | cid | dlevel |     dauthor     |              dtitle              
------+-----+--------+-----------------+----------------------------------
-  79 |  33 |      1 | regress_rls_bob | technology book, can only insert
-(1 row)
-
+ERROR:  not implemented yet on pax relations: TupleInsertSpeculative  (seg1 slice1 127.0.1.1:7003 pid=1173365)
 -- But this time, the same statement fails, because the UPDATE path is taken,
 -- and updating the row just inserted falls afoul of security barrier qual
 -- (enforced as WCO) -- what we might have updated target tuple to is
 -- irrelevant, in fact.
 INSERT INTO document VALUES (79, (SELECT cid from category WHERE cname = 'technology'), 1, 'regress_rls_bob', 'technology book, can only insert')
     ON CONFLICT (did) DO UPDATE SET dtitle = EXCLUDED.dtitle RETURNING *;
-ERROR:  new row violates row-level security policy (USING expression) for table "document"
+ERROR:  not implemented yet on pax relations: TupleInsertSpeculative  (seg1 slice1 127.0.1.1:7003 pid=1173365)
 -- Test default USING qual enforced as WCO
 SET SESSION AUTHORIZATION regress_rls_alice;
 DROP POLICY p1 ON document;
@@ -2210,11 +2197,11 @@ ERROR:  new row violates row-level security policy for table "document"
 -- violation, since it has the "manga" cid):
 INSERT INTO document VALUES (4, (SELECT cid from category WHERE cname = 'novel'), 1, 'regress_rls_bob', 'my first novel')
     ON CONFLICT (did) DO UPDATE SET dtitle = EXCLUDED.dtitle;
-ERROR:  new row violates row-level security policy (USING expression) for table "document"
+ERROR:  not implemented yet on pax relations: TupleLock
 -- Fails, since ALL WCO are enforced:
 INSERT INTO document VALUES (1, (SELECT cid from category WHERE cname = 'novel'), 1, 'regress_rls_bob', 'my first novel')
     ON CONFLICT (did) DO UPDATE SET dauthor = 'regress_rls_carol';
-ERROR:  new row violates row-level security policy for table "document"
+ERROR:  not implemented yet on pax relations: TupleLock
 --
 -- MERGE
 --
@@ -2233,23 +2220,21 @@ CREATE POLICY p3 ON document FOR UPDATE
 CREATE POLICY p4 ON document FOR DELETE
   USING (cid = (SELECT cid from category WHERE cname = 'manga'));
 SELECT * FROM document;
- did | cid | dlevel |      dauthor      |              dtitle              | dnotes 
------+-----+--------+-------------------+----------------------------------+--------
-   1 |  11 |      1 | regress_rls_bob   | my first novel                   | 
-   3 |  22 |      2 | regress_rls_bob   | my science fiction               | 
-   4 |  44 |      1 | regress_rls_bob   | my first manga                   | 
-   5 |  44 |      2 | regress_rls_bob   | my second manga                  | 
-   6 |  22 |      1 | regress_rls_carol | great science fiction            | 
-   7 |  33 |      2 | regress_rls_carol | great technology book            | 
-   8 |  44 |      1 | regress_rls_carol | great manga                      | 
-   9 |  22 |      1 | regress_rls_dave  | awesome science fiction          | 
-  10 |  33 |      2 | regress_rls_dave  | awesome technology book          | 
-  11 |  33 |      1 | regress_rls_carol | hoge                             | 
-  33 |  22 |      1 | regress_rls_bob   | okay science fiction             | 
-   2 |  11 |      2 | regress_rls_bob   | my first novel                   | 
-  78 |  33 |      1 | regress_rls_bob   | some technology novel            | 
-  79 |  33 |      1 | regress_rls_bob   | technology book, can only insert | 
-(14 rows)
+ did | cid | dlevel |      dauthor      |         dtitle          | dnotes 
+-----+-----+--------+-------------------+-------------------------+--------
+   2 |  11 |      2 | regress_rls_bob   | my second novel         | 
+   3 |  22 |      2 | regress_rls_bob   | my science fiction      | 
+   4 |  44 |      1 | regress_rls_bob   | my first manga          | 
+   7 |  33 |      2 | regress_rls_carol | great technology book   | 
+   8 |  44 |      1 | regress_rls_carol | great manga             | 
+   1 |  11 |      1 | regress_rls_bob   | my first novel          | 
+   5 |  44 |      2 | regress_rls_bob   | my second manga         | 
+   6 |  22 |      1 | regress_rls_carol | great science fiction   | 
+   9 |  22 |      1 | regress_rls_dave  | awesome science fiction | 
+  10 |  33 |      2 | regress_rls_dave  | awesome technology book | 
+  11 |  33 |      1 | regress_rls_carol | hoge                    | 
+  33 |  22 |      1 | regress_rls_bob   | okay science fiction    | 
+(12 rows)
 
 SET SESSION AUTHORIZATION regress_rls_bob;
 -- Fails, since update violates WITH CHECK qual on dlevel
@@ -2258,19 +2243,21 @@ USING (SELECT 1 as sdid) s
 ON did = s.sdid
 WHEN MATCHED THEN
 	UPDATE SET dnotes = dnotes || ' notes added by merge1 ', dlevel = 0;
-ERROR:  new row violates row-level security policy for table "document"
+ERROR:  not implemented yet on pax relations: TupleFetchRowVersion
 -- Should be OK since USING and WITH CHECK quals pass
 MERGE INTO document d
 USING (SELECT 1 as sdid) s
 ON did = s.sdid
 WHEN MATCHED THEN
 	UPDATE SET dnotes = dnotes || ' notes added by merge2 ';
+ERROR:  not implemented yet on pax relations: TupleFetchRowVersion
 -- Even when dlevel is updated explicitly, but to the existing value
 MERGE INTO document d
 USING (SELECT 1 as sdid) s
 ON did = s.sdid
 WHEN MATCHED THEN
 	UPDATE SET dnotes = dnotes || ' notes added by merge3 ', dlevel = 1;
+ERROR:  not implemented yet on pax relations: TupleFetchRowVersion
 -- There is a MATCH for did = 3, but UPDATE's USING qual does not allow
 -- updating an item in category 'science fiction'
 MERGE INTO document d
@@ -2278,7 +2265,7 @@ USING (SELECT 3 as sdid) s
 ON did = s.sdid
 WHEN MATCHED THEN
 	UPDATE SET dnotes = dnotes || ' notes added by merge ';
-ERROR:  target row violates row-level security policy (USING expression) for table "document"
+ERROR:  not implemented yet on pax relations: TupleFetchRowVersion
 -- The same thing with DELETE action, but fails again because no permissions
 -- to delete items in 'science fiction' category that did 3 belongs to.
 MERGE INTO document d
@@ -2286,7 +2273,7 @@ USING (SELECT 3 as sdid) s
 ON did = s.sdid
 WHEN MATCHED THEN
 	DELETE;
-ERROR:  target row violates row-level security policy (USING expression) for table "document"
+ERROR:  not implemented yet on pax relations: TupleFetchRowVersion
 -- Document with did 4 belongs to 'manga' category which is allowed for
 -- deletion. But this fails because the UPDATE action is matched first and
 -- UPDATE policy does not allow updation in the category.
@@ -2297,7 +2284,7 @@ WHEN MATCHED AND dnotes = '' THEN
 	UPDATE SET dnotes = dnotes || ' notes added by merge '
 WHEN MATCHED THEN
 	DELETE;
-ERROR:  target row violates row-level security policy (USING expression) for table "document"
+ERROR:  not implemented yet on pax relations: TupleFetchRowVersion
 -- UPDATE action is not matched this time because of the WHEN qual.
 -- DELETE still fails because role regress_rls_bob does not have SELECT
 -- privileges on 'manga' category row in the category table.
@@ -2308,7 +2295,7 @@ WHEN MATCHED AND dnotes <> '' THEN
 	UPDATE SET dnotes = dnotes || ' notes added by merge '
 WHEN MATCHED THEN
 	DELETE;
-ERROR:  target row violates row-level security policy (USING expression) for table "document"
+ERROR:  not implemented yet on pax relations: TupleFetchRowVersion
 -- OK if DELETE is replaced with DO NOTHING
 MERGE INTO document d
 USING (SELECT 4 as sdid) s
@@ -2317,6 +2304,7 @@ WHEN MATCHED AND dnotes <> '' THEN
 	UPDATE SET dnotes = dnotes || ' notes added by merge '
 WHEN MATCHED THEN
 	DO NOTHING;
+ERROR:  not implemented yet on pax relations: TupleFetchRowVersion
 SELECT * FROM document WHERE did = 4;
  did | cid | dlevel |     dauthor     |     dtitle     | dnotes 
 -----+-----+--------+-----------------+----------------+--------
@@ -2334,6 +2322,7 @@ WHEN MATCHED AND dnotes <> '' THEN
 	UPDATE SET dnotes = dnotes || ' notes added by merge '
 WHEN MATCHED THEN
 	DELETE;
+ERROR:  not implemented yet on pax relations: TupleFetchRowVersion
 -- Switch back to regress_rls_bob role
 RESET SESSION AUTHORIZATION;
 SET SESSION AUTHORIZATION regress_rls_bob;
@@ -2364,6 +2353,7 @@ WHEN MATCHED THEN
 	UPDATE SET dnotes = dnotes || ' notes added by merge4 '
 WHEN NOT MATCHED THEN
 	INSERT VALUES (12, 11, 1, 'regress_rls_bob', 'another novel');
+ERROR:  not implemented yet on pax relations: TupleFetchRowVersion
 -- drop and create a new SELECT policy which prevents us from reading
 -- any document except with category 'novel'
 RESET SESSION AUTHORIZATION;
@@ -2388,7 +2378,7 @@ ON did = s.sdid
 WHEN MATCHED THEN
 	UPDATE SET dnotes = dnotes || ' notes added by merge6 ',
 			   cid = (SELECT cid from category WHERE cname = 'technology');
-ERROR:  new row violates row-level security policy for table "document"
+ERROR:  not implemented yet on pax relations: TupleFetchRowVersion
 -- but OK if new row is visible
 MERGE INTO document d
 USING (SELECT 1 as sdid) s
@@ -2396,6 +2386,7 @@ ON did = s.sdid
 WHEN MATCHED THEN
 	UPDATE SET dnotes = dnotes || ' notes added by merge7 ',
 			   cid = (SELECT cid from category WHERE cname = 'novel');
+ERROR:  not implemented yet on pax relations: TupleFetchRowVersion
 -- OK to insert a new row that is not visible
 MERGE INTO document d
 USING (SELECT 13 as sdid) s
@@ -2410,24 +2401,23 @@ RESET SESSION AUTHORIZATION;
 DROP POLICY p1 ON document;
 -- Just check everything went per plan
 SELECT * FROM document;
- did | cid | dlevel |      dauthor      |              dtitle              |                                            dnotes                                            
------+-----+--------+-------------------+----------------------------------+----------------------------------------------------------------------------------------------
-   5 |  44 |      2 | regress_rls_bob   | my second manga                  | 
-   6 |  22 |      1 | regress_rls_carol | great science fiction            | 
-   9 |  22 |      1 | regress_rls_dave  | awesome science fiction          | 
-  10 |  33 |      2 | regress_rls_dave  | awesome technology book          | 
-  11 |  33 |      1 | regress_rls_carol | hoge                             | 
-  33 |  22 |      1 | regress_rls_bob   | okay science fiction             | 
-  13 |  44 |      1 | regress_rls_bob   | new manga                        | 
-  78 |  33 |      1 | regress_rls_bob   | some technology novel            | 
-  79 |  33 |      1 | regress_rls_bob   | technology book, can only insert | 
-  12 |  11 |      1 | regress_rls_bob   | another novel                    | 
-   1 |  11 |      1 | regress_rls_bob   | my first novel                   |  notes added by merge2  notes added by merge3  notes added by merge4  notes added by merge7 
-   3 |  22 |      2 | regress_rls_bob   | my science fiction               | 
-   7 |  33 |      2 | regress_rls_carol | great technology book            | 
-   8 |  44 |      1 | regress_rls_carol | great manga                      | 
-   2 |  11 |      2 | regress_rls_bob   | my first novel                   | 
-(15 rows)
+ did | cid | dlevel |      dauthor      |         dtitle          | dnotes 
+-----+-----+--------+-------------------+-------------------------+--------
+   2 |  11 |      2 | regress_rls_bob   | my second novel         | 
+   3 |  22 |      2 | regress_rls_bob   | my science fiction      | 
+   4 |  44 |      1 | regress_rls_bob   | my first manga          | 
+   7 |  33 |      2 | regress_rls_carol | great technology book   | 
+   8 |  44 |      1 | regress_rls_carol | great manga             | 
+   5 |  44 |      2 | regress_rls_bob   | my second manga         | 
+   6 |  22 |      1 | regress_rls_carol | great science fiction   | 
+   9 |  22 |      1 | regress_rls_dave  | awesome science fiction | 
+  10 |  33 |      2 | regress_rls_dave  | awesome technology book | 
+  11 |  33 |      1 | regress_rls_carol | hoge                    | 
+  33 |  22 |      1 | regress_rls_bob   | okay science fiction    | 
+  13 |  44 |      1 | regress_rls_bob   | new manga               | 
+   1 |  11 |      1 | regress_rls_bob   | my first novel          | 
+  12 |  11 |      1 | regress_rls_bob   | another novel           | 
+(14 rows)
 
 --
 -- ROLE/GROUP

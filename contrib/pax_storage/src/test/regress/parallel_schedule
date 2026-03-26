@@ -62,9 +62,6 @@ test: create_index create_view index_including
 # ignore reason: Pax not support gist
 # test: index_including_gist
 
-# Depends on things setup for create_index
-test: gp_gin_index
-
 # ----------
 # Another group of parallel tests
 # ----------
@@ -194,6 +191,9 @@ test: cluster
 # Another group of parallel tests (JSON related)
 # ----------
 test: json jsonb json_encoding jsonpath jsonpath_encoding jsonb_jsonpath
+
+# Depends on things setup for jsonb
+test: gp_gin_index
 
 # ----------
 # Another group of parallel tests
