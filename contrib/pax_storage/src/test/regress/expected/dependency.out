@@ -120,7 +120,7 @@ REASSIGN OWNED BY regress_dep_user1 TO regress_dep_user2;
                    List of relations
  Schema |  Name   | Type  |       Owner       | Storage 
 --------+---------+-------+-------------------+---------
- public | deptest | table | regress_dep_user2 | heap
+ public | deptest | table | regress_dep_user2 | pax
 (1 row)
 
 SELECT typowner = relowner

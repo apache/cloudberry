@@ -16,14 +16,12 @@ Indexes:
 CREATE TABLE cmdata1(f1 TEXT COMPRESSION lz4);
 ERROR:  compression method lz4 not supported
 DETAIL:  This functionality requires the server to be built with lz4 support.
-HINT:  You need to rebuild PostgreSQL using --with-lz4.
 INSERT INTO cmdata1 VALUES(repeat('1234567890', 1004));
 ERROR:  relation "cmdata1" does not exist
 LINE 1: INSERT INTO cmdata1 VALUES(repeat('1234567890', 1004));
                     ^
 \d+ cmdata1
 -- verify stored compression method in the data
--- Pax not support toast, so all of pg_column_compression will return NULL
 SELECT pg_column_compression(f1) FROM cmdata;
  pg_column_compression 
 -----------------------
@@ -104,7 +102,7 @@ SELECT pg_column_compression(f1) FROM cmmove2;
 
 -- test externally stored compressed data
 CREATE OR REPLACE FUNCTION large_val() RETURNS TEXT LANGUAGE SQL AS
-'select array_agg(md5(g::text))::text from generate_series(1, 256) g';
+'select array_agg(fipshash(g::text))::text from generate_series(1, 256) g';
 CREATE TABLE cmdata2 (f1 text COMPRESSION pglz);
 INSERT INTO cmdata2 SELECT large_val() || repeat('a', 4000);
 SELECT pg_column_compression(f1) FROM cmdata2;
@@ -128,7 +126,7 @@ LINE 1: SELECT SUBSTR(f1, 200, 5) FROM cmdata1;
 SELECT SUBSTR(f1, 200, 5) FROM cmdata2;
  substr 
 --------
- 8f14e
+ 79026
 (1 row)
 
 DROP TABLE cmdata2;

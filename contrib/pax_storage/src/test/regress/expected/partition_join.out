@@ -2859,15 +2859,13 @@ where not exists (select 1 from prtx2
 --------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Append
-         ->  Hash Anti Join
-               Hash Cond: ((prtx1_1.a = prtx2_1.a) AND (prtx1_1.b = prtx2_1.b))
-               ->  Seq Scan on prtx1_1
-                     Filter: ((a < 20) AND (c = 120))
+         ->  Hash Right Anti Join
+               Hash Cond: ((prtx2_1.a = prtx1_1.a) AND (prtx2_1.b = prtx1_1.b))
+               ->  Seq Scan on prtx2_1
+                     Filter: (c = 123)
                ->  Hash
-                     ->  Bitmap Heap Scan on prtx2_1
-                           Recheck Cond: (c = 123)
-                           ->  Bitmap Index Scan on prtx2_1_c_idx
-                                 Index Cond: (c = 123)
+                     ->  Seq Scan on prtx1_1
+                           Filter: ((a < 20) AND (c = 120))
          ->  Hash Right Anti Join
                Hash Cond: ((prtx2_2.a = prtx1_2.a) AND (prtx2_2.b = prtx1_2.b))
                ->  Seq Scan on prtx2_2
@@ -2876,7 +2874,7 @@ where not exists (select 1 from prtx2
                      ->  Seq Scan on prtx1_2
                            Filter: ((a < 20) AND (c = 120))
  Optimizer: Postgres query optimizer
-(19 rows)
+(17 rows)
 
 select * from prtx1
 where not exists (select 1 from prtx2

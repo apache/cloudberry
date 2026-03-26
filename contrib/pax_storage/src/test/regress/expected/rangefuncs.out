@@ -1724,13 +1724,8 @@ end $$ language plpgsql;
 create trigger tnoticetrigger after insert on tt for each row
 execute procedure noticetrigger();
 select insert_tt2('foolme','barme') limit 1;
-NOTICE:  noticetrigger 11 foolme
-NOTICE:  noticetrigger 12 barme
- insert_tt2 
-------------
-         11
-(1 row)
-
+ERROR:  not implemented yet on pax relations: TupleFetchRowVersion  (seg0 slice1 127.0.1.1:7002 pid=1296456)
+CONTEXT:  SQL function "insert_tt2" statement 1
 select * from tt;
  f1 |   data   
 ----+----------
@@ -1753,31 +1748,22 @@ create temp table tt_log(f1 int, data text);
 create rule insert_tt_rule as on insert to tt do also
   insert into tt_log values(new.*);
 select insert_tt2('foollog','barlog') limit 1;
-NOTICE:  noticetrigger 13 foollog
-NOTICE:  noticetrigger 14 barlog
- insert_tt2 
-------------
-         13
-(1 row)
-
+ERROR:  not implemented yet on pax relations: TupleFetchRowVersion  (seg0 slice1 127.0.1.1:7002 pid=1296456)
+CONTEXT:  SQL function "insert_tt2" statement 1
 select * from tt;
  f1 |   data   
 ----+----------
   1 | foo
   2 | bar
-  3 | fool
-  4 | foolfool
-  5 | foolish
-  6 | barrish
   7 | baz
   8 | quux
   9 | foolish
  10 | barrish
- 11 | foolme
- 12 | barme
- 13 | foollog
- 14 | barlog
-(14 rows)
+  3 | fool
+  6 | barrish
+  4 | foolfool
+  5 | foolish
+(10 rows)
 
 -- note that nextval() gets executed a second time in the rule expansion,
 -- which is expected.
@@ -1786,11 +1772,9 @@ select * from tt;
 -- sequence number to be different. Therefore, we only select the data here to
 -- ensure consistency in the tests
 select data from tt_log;
-  data   
----------
- barlog
- foollog
-(2 rows)
+ data 
+------
+(0 rows)
 
 -- test case for a whole-row-variable bug
 create function rngfunc1(n integer, out a text, out b text)

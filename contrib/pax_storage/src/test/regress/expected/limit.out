@@ -407,8 +407,8 @@ select unique1, unique2, nextval('testseq')
 explain (verbose, costs off)
 select unique1, unique2, generate_series(1,10)
   from tenk1 order by unique2 limit 7;
-                                                                               QUERY PLAN                                                                                
--------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+                               QUERY PLAN                               
+------------------------------------------------------------------------
  Limit
    Output: unique1, unique2, (generate_series(1, 10))
    ->  Gather Motion 3:1  (slice1; segments: 3)
@@ -419,7 +419,7 @@ select unique1, unique2, generate_series(1,10)
                ->  ProjectSet
                      Output: unique1, unique2, generate_series(1, 10)
                      ->  Index Scan using tenk1_unique2 on public.tenk1
-                           Output: unique1, unique2, two, four, ten, twenty, hundred, thousand, twothousand, fivethous, tenthous, odd, even, stringu1, stringu2, string4
+                           Output: unique1, unique2
  Optimizer: Postgres query optimizer
  Settings: optimizer=off
 (13 rows)

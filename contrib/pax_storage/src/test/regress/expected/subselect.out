@@ -2227,7 +2227,7 @@ group by i, j;
          Output: t.j, (SubPlan 1), t.i
          Group Key: t.i, t.j
          ->  Seq Scan on public.t
-               Output: t.i, t.j
+               Output: t.j, t.i
          SubPlan 1
            ->  Result
                  Output: t.j
@@ -2301,7 +2301,7 @@ select (select max((select t.i))) from t;
          ->  Partial Aggregate
                Output: PARTIAL max((SubPlan 1))
                ->  Seq Scan on public.t
-                     Output: t.i, t.j
+                     Output: t.i
                SubPlan 1
                  ->  Result
                        Output: t.i

@@ -2246,28 +2246,25 @@ select * from
    from int4_tbl touter) ss,
   asptab
 where asptab.id > ss.b::int;
-                                    QUERY PLAN                                     
------------------------------------------------------------------------------------
+                                QUERY PLAN                                
+--------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Nested Loop
          ->  Broadcast Motion 3:3  (slice3; segments: 3)
                ->  Seq Scan on int4_tbl touter
-                     SubPlan 3
-                       ->  Result
-                             Filter: (tinner_1.f1 = touter.f1)
-                             ->  Materialize
-                                   ->  Broadcast Motion 3:3  (slice4; segments: 3)
-                                         ->  Seq Scan on int4_tbl tinner_1
+                     SubPlan 4
+                       ->  Broadcast Motion 3:3  (slice4; segments: 3)
+                             ->  Seq Scan on int4_tbl tinner_1
          ->  Append
                ->  Index Only Scan using asptab0_pkey on asptab0 asptab_1
-                     Index Cond: (id > (((SubPlan 3)))::integer)
+                     Index Cond: (id > (((hashed SubPlan 4)))::integer)
                ->  Index Only Scan using asptab1_pkey on asptab1 asptab_2
-                     Index Cond: (id > (((SubPlan 3)))::integer)
+                     Index Cond: (id > (((hashed SubPlan 4)))::integer)
          SubPlan 2
            ->  Broadcast Motion 3:3  (slice2; segments: 3)
                  ->  Seq Scan on int4_tbl tinner
  Optimizer: Postgres query optimizer
-(19 rows)
+(16 rows)
 
 drop table asptab;
 --

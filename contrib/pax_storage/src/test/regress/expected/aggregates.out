@@ -1679,13 +1679,20 @@ from varchar_tbl;
 explain (costs off)
 select string_agg(distinct f1::varchar(2), ',') filter (where length(f1) > 1)
 from varchar_tbl;
-                   QUERY PLAN                   
-------------------------------------------------
- Aggregate
+                                        QUERY PLAN                                        
+------------------------------------------------------------------------------------------
+ Finalize Aggregate
    ->  Gather Motion 3:1  (slice1; segments: 3)
-         ->  Seq Scan on varchar_tbl
+         ->  Partial Aggregate
+               ->  HashAggregate
+                     Group Key: (((f1)::character varying(2))::text), ','::text
+                     ->  Redistribute Motion 3:3  (slice2; segments: 3)
+                           Hash Key: (((f1)::character varying(2))::text), ','::text
+                           ->  Streaming HashAggregate
+                                 Group Key: ((f1)::character varying(2))::text, ','::text
+                                 ->  Seq Scan on varchar_tbl
  Optimizer: Postgres query optimizer
-(4 rows)
+(11 rows)
 
 --
 -- Test combinations of DISTINCT and/or ORDER BY

@@ -6551,12 +6551,11 @@ SELECT q2 FROM
          Join Filter: NULL::boolean
          Filter: (('constant'::text) >= ('constant'::text))
          ->  Seq Scan on public.int4_tbl
-               Output: int4_tbl.f1
          ->  Result
                Output: q2, 'constant'::text
                One-Time Filter: false
  Optimizer: Postgres query optimizer
-(12 rows)
+(11 rows)
 
 -- join removal bug #17786: check that OR conditions are cleaned up
 EXPLAIN (COSTS OFF)
@@ -6570,14 +6569,14 @@ FROM int4_tbl
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Nested Loop
          ->  Broadcast Motion 3:3  (slice2; segments: 3)
-               ->  Seq Scan on int4_tbl
-         ->  Materialize
                ->  Nested Loop Left Join
                      Join Filter: NULL::boolean
                      Filter: ((tenk1.unique1 = (42)) OR (tenk1.unique2 = (42)))
                      ->  Seq Scan on tenk1
                      ->  Result
                            One-Time Filter: false
+         ->  Materialize
+               ->  Seq Scan on int4_tbl
  Optimizer: Postgres query optimizer
 (12 rows)
 

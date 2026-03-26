@@ -516,21 +516,7 @@ SELECT * FROM T WHERE c_bigint > -1 ORDER BY c_bigint, c_text, pk LIMIT 10;
 
 --  DELETE with RETURNING
 DELETE FROM T WHERE pk BETWEEN 10 AND 20 RETURNING *;
- pk | c_bigint | c_text 
-----+----------+--------
- 10 |       -1 | hello
- 11 |        1 | hello
- 12 |        2 | hello
- 13 |        3 | hello
- 14 |        4 | hello
- 15 |        5 | hello
- 16 |        6 | hello
- 17 |        7 | hello
- 18 |        8 | hello
- 19 |        9 | hello
- 20 |       10 | hello
-(11 rows)
-
+ERROR:  not implemented yet on pax relations: TupleFetchRowVersion  (seg0 slice1 127.0.1.1:7002 pid=1299519)
 EXPLAIN (VERBOSE TRUE, COSTS FALSE)
 DELETE FROM T WHERE pk BETWEEN 10 AND 20 RETURNING *;
                       QUERY PLAN                       
@@ -676,6 +662,7 @@ INSERT INTO t (a,b,c) VALUES (1,2,3);
 ALTER TABLE t ADD COLUMN x int NOT NULL DEFAULT 4;
 ALTER TABLE t ADD COLUMN y int NOT NULL DEFAULT 5;
 CREATE TRIGGER a BEFORE UPDATE ON t FOR EACH ROW EXECUTE PROCEDURE test_trigger();
+ERROR:  ON UPDATE triggers are not supported on append-only tables
 SELECT * FROM t;
  id | a | b | c | x | y 
 ----+---+---+---+---+---
@@ -683,7 +670,6 @@ SELECT * FROM t;
 (1 row)
 
 UPDATE t SET y = 2;
-NOTICE:  old tuple: {"id":1,"a":1,"b":2,"c":3,"x":4,"y":5}
 SELECT * FROM t;
  id | a | b | c | x | y 
 ----+---+---+---+---+---
@@ -697,6 +683,7 @@ INSERT INTO t (a,b,c) VALUES (1,2,3);
 ALTER TABLE t ADD COLUMN x int NOT NULL DEFAULT 4;
 ALTER TABLE t ADD COLUMN y int;
 CREATE TRIGGER a BEFORE UPDATE ON t FOR EACH ROW EXECUTE PROCEDURE test_trigger();
+ERROR:  ON UPDATE triggers are not supported on append-only tables
 SELECT * FROM t;
  id | a | b | c | x | y 
 ----+---+---+---+---+---
@@ -704,7 +691,6 @@ SELECT * FROM t;
 (1 row)
 
 UPDATE t SET y = 2;
-NOTICE:  old tuple: {"id":1,"a":1,"b":2,"c":3,"x":4,"y":null}
 SELECT * FROM t;
  id | a | b | c | x | y 
 ----+---+---+---+---+---
@@ -718,6 +704,7 @@ INSERT INTO t (a,b,c) VALUES (1,2,3);
 ALTER TABLE t ADD COLUMN x int;
 ALTER TABLE t ADD COLUMN y int NOT NULL DEFAULT 5;
 CREATE TRIGGER a BEFORE UPDATE ON t FOR EACH ROW EXECUTE PROCEDURE test_trigger();
+ERROR:  ON UPDATE triggers are not supported on append-only tables
 SELECT * FROM t;
  id | a | b | c | x | y 
 ----+---+---+---+---+---
@@ -725,7 +712,6 @@ SELECT * FROM t;
 (1 row)
 
 UPDATE t SET y = 2;
-NOTICE:  old tuple: {"id":1,"a":1,"b":2,"c":3,"x":null,"y":5}
 SELECT * FROM t;
  id | a | b | c | x | y 
 ----+---+---+---+---+---
@@ -739,6 +725,7 @@ INSERT INTO t (a,b,c) VALUES (1,2,3);
 ALTER TABLE t ADD COLUMN x int;
 ALTER TABLE t ADD COLUMN y int;
 CREATE TRIGGER a BEFORE UPDATE ON t FOR EACH ROW EXECUTE PROCEDURE test_trigger();
+ERROR:  ON UPDATE triggers are not supported on append-only tables
 SELECT * FROM t;
  id | a | b | c | x | y 
 ----+---+---+---+---+---
@@ -746,7 +733,6 @@ SELECT * FROM t;
 (1 row)
 
 UPDATE t SET y = 2;
-NOTICE:  old tuple: {"id":1,"a":1,"b":2,"c":3,"x":null,"y":null}
 SELECT * FROM t;
  id | a | b | c | x | y 
 ----+---+---+---+---+---
@@ -761,6 +747,7 @@ INSERT INTO t (a,b,c) VALUES (1,2,NULL);
 ALTER TABLE t ADD COLUMN x int NOT NULL DEFAULT 4;
 ALTER TABLE t ADD COLUMN y int NOT NULL DEFAULT 5;
 CREATE TRIGGER a BEFORE UPDATE ON t FOR EACH ROW EXECUTE PROCEDURE test_trigger();
+ERROR:  ON UPDATE triggers are not supported on append-only tables
 SELECT * FROM t;
  id | a | b | c | x | y 
 ----+---+---+---+---+---
@@ -768,7 +755,6 @@ SELECT * FROM t;
 (1 row)
 
 UPDATE t SET y = 2;
-NOTICE:  old tuple: {"id":1,"a":1,"b":2,"c":null,"x":4,"y":5}
 SELECT * FROM t;
  id | a | b | c | x | y 
 ----+---+---+---+---+---
@@ -782,6 +768,7 @@ INSERT INTO t (a,b,c) VALUES (1,2,NULL);
 ALTER TABLE t ADD COLUMN x int NOT NULL DEFAULT 4;
 ALTER TABLE t ADD COLUMN y int;
 CREATE TRIGGER a BEFORE UPDATE ON t FOR EACH ROW EXECUTE PROCEDURE test_trigger();
+ERROR:  ON UPDATE triggers are not supported on append-only tables
 SELECT * FROM t;
  id | a | b | c | x | y 
 ----+---+---+---+---+---
@@ -789,7 +776,6 @@ SELECT * FROM t;
 (1 row)
 
 UPDATE t SET y = 2;
-NOTICE:  old tuple: {"id":1,"a":1,"b":2,"c":null,"x":4,"y":null}
 SELECT * FROM t;
  id | a | b | c | x | y 
 ----+---+---+---+---+---
@@ -803,6 +789,7 @@ INSERT INTO t (a,b,c) VALUES (1,2,NULL);
 ALTER TABLE t ADD COLUMN x int;
 ALTER TABLE t ADD COLUMN y int NOT NULL DEFAULT 5;
 CREATE TRIGGER a BEFORE UPDATE ON t FOR EACH ROW EXECUTE PROCEDURE test_trigger();
+ERROR:  ON UPDATE triggers are not supported on append-only tables
 SELECT * FROM t;
  id | a | b | c | x | y 
 ----+---+---+---+---+---
@@ -810,7 +797,6 @@ SELECT * FROM t;
 (1 row)
 
 UPDATE t SET y = 2;
-NOTICE:  old tuple: {"id":1,"a":1,"b":2,"c":null,"x":null,"y":5}
 SELECT * FROM t;
  id | a | b | c | x | y 
 ----+---+---+---+---+---
@@ -824,6 +810,7 @@ INSERT INTO t (a,b,c) VALUES (1,2,NULL);
 ALTER TABLE t ADD COLUMN x int;
 ALTER TABLE t ADD COLUMN y int;
 CREATE TRIGGER a BEFORE UPDATE ON t FOR EACH ROW EXECUTE PROCEDURE test_trigger();
+ERROR:  ON UPDATE triggers are not supported on append-only tables
 SELECT * FROM t;
  id | a | b | c | x | y 
 ----+---+---+---+---+---
@@ -831,7 +818,6 @@ SELECT * FROM t;
 (1 row)
 
 UPDATE t SET y = 2;
-NOTICE:  old tuple: {"id":1,"a":1,"b":2,"c":null,"x":null,"y":null}
 SELECT * FROM t;
  id | a | b | c | x | y 
 ----+---+---+---+---+---

@@ -337,32 +337,68 @@ NOTICE:  table "schema_one_table_one" does not exist, skipping
 NOTICE:  table "schema_one_table two" does not exist, skipping
 NOTICE:  table "schema_one_table_three" does not exist, skipping
 SELECT * FROM dropped_objects WHERE schema IS NULL OR schema <> 'pg_toast';
-     type     |   schema   |               object                
---------------+------------+-------------------------------------
- table column | schema_one | schema_one.table_one.a
- schema       |            | schema_two
- table        | schema_two | schema_two.table_two
- type         | schema_two | schema_two.table_two
- type         | schema_two | schema_two.table_two[]
- table        | audit_tbls | audit_tbls.schema_two_table_three
- type         | audit_tbls | audit_tbls.schema_two_table_three
- type         | audit_tbls | audit_tbls.schema_two_table_three[]
- table        | schema_two | schema_two.table_three
- type         | schema_two | schema_two.table_three
- type         | schema_two | schema_two.table_three[]
- function     | schema_two | schema_two.add(integer,integer)
- aggregate    | schema_two | schema_two.newton(integer)
- schema       |            | schema_one
- table        | schema_one | schema_one.table_one
- type         | schema_one | schema_one.table_one
- type         | schema_one | schema_one.table_one[]
- table        | schema_one | schema_one."table two"
- type         | schema_one | schema_one."table two"
- type         | schema_one | schema_one."table two"[]
- table        | schema_one | schema_one.table_three
- type         | schema_one | schema_one.table_three
- type         | schema_one | schema_one.table_three[]
-(23 rows)
+       type        |   schema   |                         object                         
+-------------------+------------+--------------------------------------------------------
+ schema            |            | schema_two
+ schema            |            | schema_one
+ table column      | schema_one | schema_one.table_one.a
+ table             | schema_two | schema_two.table_two
+ pax table         |            | pax table identity pax_table_41281: 
+ table             | pg_ext_aux | pg_ext_aux.pg_pax_blocks_41281
+ toast table       | pg_ext_aux | pg_ext_aux.pg_toast_41282
+ table             | audit_tbls | audit_tbls.schema_two_table_three
+ pax table         |            | pax table identity pax_table_41295: 
+ table             | pg_ext_aux | pg_ext_aux.pg_pax_blocks_41295
+ toast table       | pg_ext_aux | pg_ext_aux.pg_toast_41296
+ table             | schema_two | schema_two.table_three
+ pax table         |            | pax table identity pax_table_41288: 
+ table             | pg_ext_aux | pg_ext_aux.pg_pax_blocks_41288
+ toast table       | pg_ext_aux | pg_ext_aux.pg_toast_41289
+ aggregate         | schema_two | schema_two.newton(integer)
+ table             | schema_one | schema_one.table_one
+ pax table         |            | pax table identity pax_table_41253: 
+ table             | pg_ext_aux | pg_ext_aux.pg_pax_blocks_41253
+ toast table       | pg_ext_aux | pg_ext_aux.pg_toast_41254
+ table             | schema_one | schema_one."table two"
+ pax table         |            | pax table identity pax_table_41260: 
+ table             | pg_ext_aux | pg_ext_aux.pg_pax_blocks_41260
+ toast table       | pg_ext_aux | pg_ext_aux.pg_toast_41261
+ table             | schema_one | schema_one.table_three
+ pax table         |            | pax table identity pax_table_41267: 
+ table             | pg_ext_aux | pg_ext_aux.pg_pax_blocks_41267
+ toast table       | pg_ext_aux | pg_ext_aux.pg_toast_41268
+ pax fast sequence |            | pax fast sequences identity pax_fast_sequences_41281: 
+ index             | pg_ext_aux | pg_ext_aux.pg_toast_41282_index
+ index             | pg_ext_aux | pg_ext_aux.pg_pax_blocks_41281_idx
+ type              | schema_two | schema_two.table_two
+ type              | schema_two | schema_two.table_two[]
+ pax fast sequence |            | pax fast sequences identity pax_fast_sequences_41295: 
+ index             | pg_ext_aux | pg_ext_aux.pg_toast_41296_index
+ index             | pg_ext_aux | pg_ext_aux.pg_pax_blocks_41295_idx
+ type              | audit_tbls | audit_tbls.schema_two_table_three
+ type              | audit_tbls | audit_tbls.schema_two_table_three[]
+ pax fast sequence |            | pax fast sequences identity pax_fast_sequences_41288: 
+ index             | pg_ext_aux | pg_ext_aux.pg_toast_41289_index
+ index             | pg_ext_aux | pg_ext_aux.pg_pax_blocks_41288_idx
+ type              | schema_two | schema_two.table_three
+ type              | schema_two | schema_two.table_three[]
+ function          | schema_two | schema_two.add(integer,integer)
+ pax fast sequence |            | pax fast sequences identity pax_fast_sequences_41253: 
+ index             | pg_ext_aux | pg_ext_aux.pg_toast_41254_index
+ index             | pg_ext_aux | pg_ext_aux.pg_pax_blocks_41253_idx
+ type              | schema_one | schema_one.table_one
+ type              | schema_one | schema_one.table_one[]
+ pax fast sequence |            | pax fast sequences identity pax_fast_sequences_41260: 
+ index             | pg_ext_aux | pg_ext_aux.pg_toast_41261_index
+ index             | pg_ext_aux | pg_ext_aux.pg_pax_blocks_41260_idx
+ type              | schema_one | schema_one."table two"
+ type              | schema_one | schema_one."table two"[]
+ pax fast sequence |            | pax fast sequences identity pax_fast_sequences_41267: 
+ index             | pg_ext_aux | pg_ext_aux.pg_toast_41268_index
+ index             | pg_ext_aux | pg_ext_aux.pg_pax_blocks_41267_idx
+ type              | schema_one | schema_one.table_three
+ type              | schema_one | schema_one.table_three[]
+(59 rows)
 
 DROP OWNED BY regress_evt_user;
 NOTICE:  schema "audit_tbls" does not exist, skipping

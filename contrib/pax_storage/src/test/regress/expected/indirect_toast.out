@@ -99,6 +99,7 @@ CREATE TRIGGER indtoasttest_update_indirect
         ON indtoasttest
         FOR EACH ROW
         EXECUTE PROCEDURE update_using_indirect();
+ERROR:  ON UPDATE triggers are not supported on append-only tables
 -- modification without changing varlenas
 UPDATE indtoasttest SET cnt = cnt +1 RETURNING substring(indtoasttest::text, 1, 200);
                                                                                                 substring                                                                                                 

@@ -35,6 +35,7 @@ CREATE OPERATOR CLASS box_ops DEFAULT
 	FUNCTION 7	gist_box_same(box, box, internal);
 -- Create gist2 index on fast_emp4000
 CREATE INDEX grect2ind2 ON fast_emp4000 USING gist2 (home_base);
+ERROR:  pax only support btree/hash/gin/bitmap indexes (pax_access_handle.cc:591)
 -- Now check the results from plain indexscan; temporarily drop existing
 -- index grect2ind to ensure it doesn't capture the plan
 -- DROP INDEX grect2ind;
@@ -104,16 +105,13 @@ SELECT count(*) FROM fast_emp4000 WHERE home_base IS NULL;
 ROLLBACK;
 -- Try to drop access method: fail because of dependent objects
 DROP ACCESS METHOD gist2;
-ERROR:  cannot drop access method gist2 because other objects depend on it
-DETAIL:  index grect2ind2 depends on operator class box_ops for access method gist2
-HINT:  Use DROP ... CASCADE to drop the dependent objects too.
 -- Drop access method cascade
 -- To prevent a (rare) deadlock against autovacuum,
 -- we must lock the table that owns the index that will be dropped
 BEGIN;
 LOCK TABLE fast_emp4000;
 DROP ACCESS METHOD gist2 CASCADE;
-NOTICE:  drop cascades to index grect2ind2
+ERROR:  access method "gist2" does not exist
 COMMIT;
 --
 -- Test table access methods

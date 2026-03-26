@@ -633,10 +633,11 @@ SELECT circle_center(f1), round(radius(f1)) as radius FROM gcircle_tbl ORDER BY 
    ->  Gather Motion 3:1  (slice1; segments: 3)
          Merge Key: ((f1 <-> '(200,300)'::point))
          ->  Limit
-               ->  Index Scan using ggcircleind on gcircle_tbl
-                     Order By: (f1 <-> '(200,300)'::point)
+               ->  Sort
+                     Sort Key: ((f1 <-> '(200,300)'::point))
+                     ->  Seq Scan on gcircle_tbl
  Optimizer: Postgres query optimizer
-(7 rows)
+(8 rows)
 
 SELECT circle_center(f1), round(radius(f1)) as radius FROM gcircle_tbl ORDER BY f1 <-> '(200,300)'::point LIMIT 10;
  circle_center  | radius 
@@ -2272,6 +2273,7 @@ WHERE classid = 'pg_class'::regclass AND
 REINDEX INDEX concur_reindex_ind1;
 REINDEX TABLE concur_reindex_tab;
 REINDEX TABLE concur_reindex_matview;
+NOTICE:  table "concur_reindex_matview" has no indexes to reindex
 SELECT pg_describe_object(classid, objid, objsubid) as obj,
        pg_describe_object(refclassid,refobjid,refobjsubid) as objref,
        deptype
@@ -2364,6 +2366,7 @@ CREATE INDEX concur_appclass_ind_2 on concur_appclass_tab
   USING gist (k tsvector_ops (siglen='300'), j tsvector_ops);
 ERROR:  pax only support btree/hash/gin/bitmap indexes (pax_access_handle.cc:591)
 REINDEX TABLE concur_appclass_tab;
+NOTICE:  table "concur_appclass_tab" has no indexes to reindex
 \d concur_appclass_tab
          Table "public.concur_appclass_tab"
  Column |   Type   | Collation | Nullable | Default 

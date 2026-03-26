@@ -259,13 +259,13 @@ SELECT relname, relkind,
 FROM pg_class c WHERE relname LIKE 'clstr_tst%' ORDER BY relname;
        relname        | relkind | hastoast 
 ----------------------+---------+----------
- clstr_tst            | r       | t
+ clstr_tst            | r       | f
  clstr_tst_a_seq      | S       | f
  clstr_tst_b          | i       | f
  clstr_tst_b_c        | i       | f
  clstr_tst_c          | i       | f
  clstr_tst_c_b        | i       | f
- clstr_tst_inh        | r       | t
+ clstr_tst_inh        | r       | f
  clstr_tst_pkey       | i       | f
  clstr_tst_s          | r       | f
  clstr_tst_s_pkey     | i       | f
@@ -324,7 +324,7 @@ INSERT INTO clstr_3 VALUES (2);
 INSERT INTO clstr_3 VALUES (1);
 -- "CLUSTER <tablename>" on a table that hasn't been clustered
 CLUSTER clstr_2;
-ERROR:  there is no previously clustered index for table "clstr_2"
+ERROR:  there is no previously clustered index or cluster_columns reloptions for table "clstr_2"
 CLUSTER clstr_1_pkey ON clstr_1;
 CLUSTER clstr_2 USING clstr_2_pkey;
 SELECT * FROM clstr_1 UNION ALL

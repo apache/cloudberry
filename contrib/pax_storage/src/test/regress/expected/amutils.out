@@ -40,92 +40,94 @@ select prop,
  bogus              |    |       | 
 (19 rows)
 
-select prop,
-       pg_indexam_has_property(a.oid, prop) as "AM",
-       pg_index_has_property('gcircleind'::regclass, prop) as "Index",
-       pg_index_column_has_property('gcircleind'::regclass, 1, prop) as "Column"
-  from pg_am a,
-       unnest(array['asc', 'desc', 'nulls_first', 'nulls_last',
-                    'orderable', 'distance_orderable', 'returnable',
-                    'search_array', 'search_nulls',
-                    'clusterable', 'index_scan', 'bitmap_scan',
-                    'backward_scan',
-                    'can_order', 'can_unique', 'can_multi_col',
-                    'can_exclude', 'can_include',
-                    'bogus']::text[])
-         with ordinality as u(prop,ord)
- where a.amname = 'gist'
- order by ord;
-        prop        | AM | Index | Column 
---------------------+----+-------+--------
- asc                |    |       | f
- desc               |    |       | f
- nulls_first        |    |       | f
- nulls_last         |    |       | f
- orderable          |    |       | f
- distance_orderable |    |       | t
- returnable         |    |       | f
- search_array       |    |       | f
- search_nulls       |    |       | t
- clusterable        |    | t     | 
- index_scan         |    | t     | 
- bitmap_scan        |    | t     | 
- backward_scan      |    | f     | 
- can_order          | f  |       | 
- can_unique         | f  |       | 
- can_multi_col      | t  |       | 
- can_exclude        | t  |       | 
- can_include        | t  |       | 
- bogus              |    |       | 
-(19 rows)
-
+-- select prop,
+--        pg_indexam_has_property(a.oid, prop) as "AM",
+--        pg_index_has_property('gcircleind'::regclass, prop) as "Index",
+--        pg_index_column_has_property('gcircleind'::regclass, 1, prop) as "Column"
+--   from pg_am a,
+--        unnest(array['asc', 'desc', 'nulls_first', 'nulls_last',
+--                     'orderable', 'distance_orderable', 'returnable',
+--                     'search_array', 'search_nulls',
+--                     'clusterable', 'index_scan', 'bitmap_scan',
+--                     'backward_scan',
+--                     'can_order', 'can_unique', 'can_multi_col',
+--                     'can_exclude', 'can_include',
+--                     'bogus']::text[])
+--          with ordinality as u(prop,ord)
+--  where a.amname = 'gist'
+--  order by ord;
+-- pax not support brin index yet
+-- select prop,
+--        pg_index_column_has_property('onek_hundred'::regclass, 1, prop) as btree,
+--        pg_index_column_has_property('hash_i4_index'::regclass, 1, prop) as hash,
+--        pg_index_column_has_property('gcircleind'::regclass, 1, prop) as gist,
+--        pg_index_column_has_property('sp_radix_ind'::regclass, 1, prop) as spgist_radix,
+--        pg_index_column_has_property('sp_quad_ind'::regclass, 1, prop) as spgist_quad,
+--        pg_index_column_has_property('botharrayidx'::regclass, 1, prop) as gin,
+--        pg_index_column_has_property('brinidx'::regclass, 1, prop) as brin
+--   from unnest(array['asc', 'desc', 'nulls_first', 'nulls_last',
+--                     'orderable', 'distance_orderable', 'returnable',
+--                     'search_array', 'search_nulls',
+--                     'bogus']::text[])
+--          with ordinality as u(prop,ord)
+--  order by ord;
 select prop,
        pg_index_column_has_property('onek_hundred'::regclass, 1, prop) as btree,
        pg_index_column_has_property('hash_i4_index'::regclass, 1, prop) as hash,
-       pg_index_column_has_property('gcircleind'::regclass, 1, prop) as gist,
-       pg_index_column_has_property('sp_radix_ind'::regclass, 1, prop) as spgist_radix,
-       pg_index_column_has_property('sp_quad_ind'::regclass, 1, prop) as spgist_quad,
-       pg_index_column_has_property('botharrayidx'::regclass, 1, prop) as gin,
-       pg_index_column_has_property('brinidx'::regclass, 1, prop) as brin
+--        pg_index_column_has_property('gcircleind'::regclass, 1, prop) as gist,
+--        pg_index_column_has_property('sp_radix_ind'::regclass, 1, prop) as spgist_radix,
+--        pg_index_column_has_property('sp_quad_ind'::regclass, 1, prop) as spgist_quad,
+       pg_index_column_has_property('botharrayidx'::regclass, 1, prop) as gin
   from unnest(array['asc', 'desc', 'nulls_first', 'nulls_last',
                     'orderable', 'distance_orderable', 'returnable',
                     'search_array', 'search_nulls',
                     'bogus']::text[])
          with ordinality as u(prop,ord)
  order by ord;
-        prop        | btree | hash | gist | spgist_radix | spgist_quad | gin | brin 
---------------------+-------+------+------+--------------+-------------+-----+------
- asc                | t     | f    | f    | f            | f           | f   | f
- desc               | f     | f    | f    | f            | f           | f   | f
- nulls_first        | f     | f    | f    | f            | f           | f   | f
- nulls_last         | t     | f    | f    | f            | f           | f   | f
- orderable          | t     | f    | f    | f            | f           | f   | f
- distance_orderable | f     | f    | t    | f            | t           | f   | f
- returnable         | t     | f    | f    | t            | t           | f   | f
- search_array       | t     | f    | f    | f            | f           | f   | f
- search_nulls       | t     | f    | t    | t            | t           | f   | t
- bogus              |       |      |      |              |             |     | 
+        prop        | btree | hash | gin 
+--------------------+-------+------+-----
+ asc                | t     | f    | f
+ desc               | f     | f    | f
+ nulls_first        | f     | f    | f
+ nulls_last         | t     | f    | f
+ orderable          | t     | f    | f
+ distance_orderable | f     | f    | f
+ returnable         | t     | f    | f
+ search_array       | t     | f    | f
+ search_nulls       | t     | f    | f
+ bogus              |       |      | 
 (10 rows)
 
+-- select prop,
+--        pg_index_has_property('onek_hundred'::regclass, prop) as btree,
+--        pg_index_has_property('hash_i4_index'::regclass, prop) as hash,
+--        pg_index_has_property('gcircleind'::regclass, prop) as gist,
+--        pg_index_has_property('sp_radix_ind'::regclass, prop) as spgist,
+--        pg_index_has_property('botharrayidx'::regclass, prop) as gin,
+--        pg_index_has_property('brinidx'::regclass, prop) as brin
+--   from unnest(array['clusterable', 'index_scan', 'bitmap_scan',
+--                     'backward_scan',
+--                     'bogus']::text[])
+--          with ordinality as u(prop,ord)
+--  order by ord;
 select prop,
        pg_index_has_property('onek_hundred'::regclass, prop) as btree,
        pg_index_has_property('hash_i4_index'::regclass, prop) as hash,
-       pg_index_has_property('gcircleind'::regclass, prop) as gist,
-       pg_index_has_property('sp_radix_ind'::regclass, prop) as spgist,
-       pg_index_has_property('botharrayidx'::regclass, prop) as gin,
-       pg_index_has_property('brinidx'::regclass, prop) as brin
+--        pg_index_has_property('gcircleind'::regclass, prop) as gist,
+--        pg_index_has_property('sp_radix_ind'::regclass, prop) as spgist,
+       pg_index_has_property('botharrayidx'::regclass, prop) as gin
   from unnest(array['clusterable', 'index_scan', 'bitmap_scan',
                     'backward_scan',
                     'bogus']::text[])
          with ordinality as u(prop,ord)
  order by ord;
-     prop      | btree | hash | gist | spgist | gin | brin 
----------------+-------+------+------+--------+-----+------
- clusterable   | t     | f    | t    | f      | f   | f
- index_scan    | t     | t    | t    | t      | f   | f
- bitmap_scan   | t     | t    | t    | t      | t   | t
- backward_scan | t     | t    | f    | f      | f   | f
- bogus         |       |      |      |        |     | 
+     prop      | btree | hash | gin 
+---------------+-------+------+-----
+ clusterable   | t     | f    | f
+ index_scan    | t     | t    | f
+ bitmap_scan   | t     | t    | t
+ backward_scan | t     | t    | f
+ bogus         |       |      | 
 (5 rows)
 
 select amname, prop, pg_indexam_has_property(a.oid, prop) as p
