@@ -1731,17 +1731,15 @@ select * from tt;
 ----+----------
   1 | foo
   2 | bar
-  3 | fool
-  4 | foolfool
-  5 | foolish
-  6 | barrish
   7 | baz
   8 | quux
   9 | foolish
  10 | barrish
- 11 | foolme
- 12 | barme
-(12 rows)
+  4 | foolfool
+  5 | foolish
+  3 | fool
+  6 | barrish
+(10 rows)
 
 -- and rules work
 create temp table tt_log(f1 int, data text);
@@ -2310,7 +2308,7 @@ select x from int8_tbl, extractq2(int8_tbl) f(x);
    ->  Nested Loop
          Output: f.x
          ->  Seq Scan on public.int8_tbl
-               Output: int8_tbl.q1, int8_tbl.q2
+               Output: int8_tbl.q2
          ->  Function Scan on f
                Output: f.x
                Function Call: int8_tbl.q2

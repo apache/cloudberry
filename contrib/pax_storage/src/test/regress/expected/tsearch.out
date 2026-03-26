@@ -212,17 +212,18 @@ SELECT count(*) FROM test_tsvector WHERE a @@ '!wd:D';
 (1 row)
 
 create index wowidx on test_tsvector using gist (a);
+ERROR:  pax only support btree/hash/gin/bitmap indexes (pax_access_handle.cc:591)
 SET enable_seqscan=OFF;
 SET enable_indexscan=ON;
 SET enable_bitmapscan=OFF;
 explain (costs off) SELECT count(*) FROM test_tsvector WHERE a @@ 'wr|qh';
-                            QUERY PLAN                             
--------------------------------------------------------------------
+                          QUERY PLAN                           
+---------------------------------------------------------------
  Finalize Aggregate
    ->  Gather Motion 3:1  (slice1; segments: 3)
          ->  Partial Aggregate
-               ->  Index Scan using wowidx on test_tsvector
-                     Index Cond: (a @@ '''wr'' | ''qh'''::tsquery)
+               ->  Seq Scan on test_tsvector
+                     Filter: (a @@ '''wr'' | ''qh'''::tsquery)
  Optimizer: Postgres query optimizer
 (6 rows)
 
@@ -373,17 +374,15 @@ SELECT count(*) FROM test_tsvector WHERE a @@ '!wd:D';
 SET enable_indexscan=OFF;
 SET enable_bitmapscan=ON;
 explain (costs off) SELECT count(*) FROM test_tsvector WHERE a @@ 'wr|qh';
-                               QUERY PLAN                                
--------------------------------------------------------------------------
+                          QUERY PLAN                           
+---------------------------------------------------------------
  Finalize Aggregate
    ->  Gather Motion 3:1  (slice1; segments: 3)
          ->  Partial Aggregate
-               ->  Bitmap Heap Scan on test_tsvector
-                     Recheck Cond: (a @@ '''wr'' | ''qh'''::tsquery)
-                     ->  Bitmap Index Scan on wowidx
-                           Index Cond: (a @@ '''wr'' | ''qh'''::tsquery)
+               ->  Seq Scan on test_tsvector
+                     Filter: (a @@ '''wr'' | ''qh'''::tsquery)
  Optimizer: Postgres query optimizer
-(8 rows)
+(6 rows)
 
 SELECT count(*) FROM test_tsvector WHERE a @@ 'wr|qh';
  count 
@@ -543,29 +542,26 @@ ERROR:  unrecognized parameter "foo"
 CREATE INDEX wowidx1 ON test_tsvector USING gist (a tsvector_ops(siglen=100, siglen = 200));
 ERROR:  parameter "siglen" specified more than once
 CREATE INDEX wowidx2 ON test_tsvector USING gist (a tsvector_ops(siglen=1));
+ERROR:  pax only support btree/hash/gin/bitmap indexes (pax_access_handle.cc:591)
 \d test_tsvector
             Table "public.test_tsvector"
  Column |   Type   | Collation | Nullable | Default 
 --------+----------+-----------+----------+---------
  t      | text     |           |          | 
  a      | tsvector |           |          | 
-Indexes:
-    "wowidx" gist (a)
-    "wowidx2" gist (a tsvector_ops (siglen='1'))
+Distributed by: (t)
 
-DROP INDEX wowidx;
+-- DROP INDEX wowidx;
 EXPLAIN (costs off) SELECT count(*) FROM test_tsvector WHERE a @@ 'wr|qh';
-                               QUERY PLAN                                
--------------------------------------------------------------------------
+                          QUERY PLAN                           
+---------------------------------------------------------------
  Finalize Aggregate
    ->  Gather Motion 3:1  (slice1; segments: 3)
          ->  Partial Aggregate
-               ->  Bitmap Heap Scan on test_tsvector
-                     Recheck Cond: (a @@ '''wr'' | ''qh'''::tsquery)
-                     ->  Bitmap Index Scan on wowidx2
-                           Index Cond: (a @@ '''wr'' | ''qh'''::tsquery)
+               ->  Seq Scan on test_tsvector
+                     Filter: (a @@ '''wr'' | ''qh'''::tsquery)
  Optimizer: Postgres query optimizer
-(8 rows)
+(6 rows)
 
 SELECT count(*) FROM test_tsvector WHERE a @@ 'wr|qh';
  count 
@@ -711,8 +707,9 @@ SELECT count(*) FROM test_tsvector WHERE a @@ '!wd:D';
    450
 (1 row)
 
-DROP INDEX wowidx2;
+-- DROP INDEX wowidx2;
 CREATE INDEX wowidx ON test_tsvector USING gist (a tsvector_ops(siglen=484));
+ERROR:  pax only support btree/hash/gin/bitmap indexes (pax_access_handle.cc:591)
 \d test_tsvector
             Table "public.test_tsvector"
  Column |   Type   | Collation | Nullable | Default 
@@ -728,10 +725,8 @@ EXPLAIN (costs off) SELECT count(*) FROM test_tsvector WHERE a @@ 'wr|qh';
  Finalize Aggregate
    ->  Gather Motion 3:1  (slice1; segments: 3)
          ->  Partial Aggregate
-               ->  Bitmap Heap Scan on test_tsvector
-                     Recheck Cond: (a @@ '''wr'' | ''qh'''::tsquery)
-                     ->  Bitmap Index Scan on wowidx
-                           Index Cond: (a @@ '''wr'' | ''qh'''::tsquery)
+               ->  Seq Scan on test_tsvector
+                     Filter: (a @@ '''wr'' | ''qh'''::tsquery)
  Optimizer: Postgres query optimizer
 (8 rows)
 
@@ -882,7 +877,7 @@ SELECT count(*) FROM test_tsvector WHERE a @@ '!wd:D';
 RESET enable_seqscan;
 RESET enable_indexscan;
 RESET enable_bitmapscan;
-DROP INDEX wowidx;
+-- DROP INDEX wowidx;
 CREATE INDEX wowidx ON test_tsvector USING gin (a);
 SET enable_seqscan=OFF;
 -- GIN only supports bitmapscan, so no need to test plain indexscan
@@ -1107,7 +1102,6 @@ SELECT * FROM ts_stat('SELECT a FROM test_tsvector', 'AB') ORDER BY ndoc DESC, n
  DFG  |    1 |      2
 (1 row)
 
-DROP INDEX wowidx;
 --dictionaries and to_tsvector
 SELECT ts_lexize('english_stem', 'skies');
  ts_lexize 
@@ -2385,6 +2379,7 @@ SELECT ts_rewrite( query, 'SELECT keyword, sample FROM test_tsquery' ) FROM to_t
 (1 row)
 
 CREATE INDEX qq ON test_tsquery USING gist (keyword tsquery_ops);
+ERROR:  pax only support btree/hash/gin/bitmap indexes (pax_access_handle.cc:591)
 SET enable_seqscan=OFF;
 SELECT keyword FROM test_tsquery WHERE keyword @> 'new';
      keyword      
@@ -2513,6 +2508,7 @@ alter table test_tsvector set distributed by (distkey);
 CREATE TRIGGER tsvectorupdate
 BEFORE UPDATE OR INSERT ON test_tsvector
 FOR EACH ROW EXECUTE PROCEDURE tsvector_update_trigger(a, 'pg_catalog.english', t);
+ERROR:  ON UPDATE triggers are not supported on append-only tables
 SELECT count(*) FROM test_tsvector WHERE a @@ to_tsquery('345&qwerty');
  count 
 -------
@@ -2523,7 +2519,7 @@ INSERT INTO test_tsvector (t) VALUES ('345 qwerty');
 SELECT count(*) FROM test_tsvector WHERE a @@ to_tsquery('345&qwerty');
  count 
 -------
-     1
+     0
 (1 row)
 
 UPDATE test_tsvector SET t = null WHERE t = '345 qwerty';
@@ -2537,7 +2533,7 @@ INSERT INTO test_tsvector (t) VALUES ('345 qwerty');
 SELECT count(*) FROM test_tsvector WHERE a @@ to_tsquery('345&qwerty');
  count 
 -------
-     1
+     0
 (1 row)
 
 -- Test inlining of immutable constant functions

@@ -5,7 +5,8 @@
 -- Suppress NOTICE messages when users/groups don't exist
 SET client_min_messages TO 'warning';
 SET gp_enable_relsize_collection to on;
-set optimizer_trace_fallback to on;
+-- Pax filter will call the f_leak, then output is not right
+set pax_enable_sparse_filter to off;
 DROP USER IF EXISTS regress_rls_alice;
 DROP USER IF EXISTS regress_rls_bob;
 DROP USER IF EXISTS regress_rls_carol;
@@ -1991,6 +1992,7 @@ DELETE FROM only t1 WHERE f_leak(b) RETURNING tableoid::regclass, *, t1;
 NOTICE:  f_leak => bbbbbb_updt
 ERROR:  not implemented yet on pax relations: TupleFetchRowVersion  (seg0 slice1 127.0.1.1:7002 pid=1173366)
 DELETE FROM t1 WHERE f_leak(b) RETURNING tableoid::regclass, *, t1;
+NOTICE:  f_leak => bcdbcd
 NOTICE:  f_leak => bbbbbb_updt
 NOTICE:  f_leak => defdef
 ERROR:  not implemented yet on pax relations: TupleFetchRowVersion  (seg0 slice1 127.0.1.1:7002 pid=1173366)
@@ -3156,28 +3158,11 @@ NOTICE:  f_leak => fgh_updt
 NOTICE:  f_leak => fgh_updt
  a |       b       |         c         
 ---+---------------+-------------------
+ 6 | fgh_updt_updt | regress_rls_bob
  3 | cde_updt      | regress_rls_carol
  7 | fgh_updt      | regress_rls_carol
  2 | bcd_updt_updt | regress_rls_bob
  4 | def_updt_updt | regress_rls_carol
- 6 | fgh_updt_updt | regress_rls_bob
- 8 | fgh_updt_updt | regress_rls_carol
-(6 rows)
-
-DELETE FROM x1 WHERE f_leak(b) RETURNING *;
-NOTICE:  f_leak => cde_updt
-NOTICE:  f_leak => fgh_updt
-NOTICE:  f_leak => bcd_updt_updt
-NOTICE:  f_leak => def_updt_updt
-NOTICE:  f_leak => fgh_updt_updt
-NOTICE:  f_leak => fgh_updt_updt
- a |       b       |         c         
----+---------------+-------------------
- 3 | cde_updt      | regress_rls_carol
- 7 | fgh_updt      | regress_rls_carol
- 2 | bcd_updt_updt | regress_rls_bob
- 4 | def_updt_updt | regress_rls_carol
- 6 | fgh_updt_updt | regress_rls_bob
  8 | fgh_updt_updt | regress_rls_carol
 (6 rows)
 

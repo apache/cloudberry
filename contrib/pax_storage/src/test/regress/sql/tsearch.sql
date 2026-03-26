@@ -270,6 +270,7 @@ INSERT INTO test_tsvector VALUES ('???', 'DFG:1A,2B,6C,10 FGH');
 SELECT * FROM ts_stat('SELECT a FROM test_tsvector') ORDER BY ndoc DESC, nentry DESC, word LIMIT 10;
 SELECT * FROM ts_stat('SELECT a FROM test_tsvector', 'AB') ORDER BY ndoc DESC, nentry DESC, word;
 
+DROP INDEX wowidx;
 --dictionaries and to_tsvector
 
 SELECT ts_lexize('english_stem', 'skies');

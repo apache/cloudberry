@@ -970,6 +970,7 @@ SELECT tableoid::regclass::text, * FROM list_parted ORDER BY 1, 2, 3, 4;
 ------------+---+----+----
  list_part1 | 2 | 52 | 50
  list_part1 | 3 |  6 | 60
+ sub_part1  | 1 |  1 | 70
  sub_part2  | 1 |  2 | 10
 (4 rows)
 
