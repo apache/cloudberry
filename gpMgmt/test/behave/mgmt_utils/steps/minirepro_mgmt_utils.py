@@ -1,4 +1,4 @@
-import os, mmap
+import os
 import re
 from test.behave_utils.utils import drop_database_if_exists, drop_table_if_exists
 
@@ -41,7 +41,7 @@ def impl(context, output_file):
 @then('the output file "{output_file}" should contain "{str_before}" before "{str_after}"')
 def impl(context, output_file, str_before, str_after):
     with open(output_file, 'r') as output_f:
-        s = mmap.mmap(output_f.fileno(), 0, access=mmap.ACCESS_READ)
+        s = output_f.read()
         pos_before = s.find(str_before)
         pos_after = s.find(str_after)
         if pos_before == -1:
@@ -54,14 +54,14 @@ def impl(context, output_file, str_before, str_after):
 @then('the output file "{output_file}" should contain "{search_str}"')
 def impl(context, output_file, search_str):
     with open(output_file, 'r') as output_f:
-        s = mmap.mmap(output_f.fileno(), 0, access=mmap.ACCESS_READ)
+        s = output_f.read()
         if s.find(search_str) == -1:
             raise Exception('%s not found.' % search_str)
 
 @then('the output file "{output_file}" should not contain "{search_str}"')
 def impl(context, output_file, search_str):
     with open(output_file, 'r') as output_f:
-        s = mmap.mmap(output_f.fileno(), 0, access=mmap.ACCESS_READ)
+        s = output_f.read()
         if s.find(search_str) != -1:
             raise Exception('%s should not exist.' % search_str)
 

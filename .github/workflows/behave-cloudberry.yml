@@ -103,21 +103,48 @@ jobs:
               {"test":"ic-behave-analyzedb","behave_features":["test/behave/mgmt_utils/analyzedb.feature"]},
               {"test":"ic-behave-gp-bash-functions","behave_features":["test/behave/mgmt_utils/gp_bash_functions.feature"]},
               {"test":"ic-behave-gpactivatestandby","behave_features":["test/behave/mgmt_utils/gpactivatestandby.feature"]},
-              {"test":"ic-behave-gpaddmirrors","behave_features":["test/behave/mgmt_utils/gpaddmirrors.feature"]},
+              {"test":"ic-behave-gpaddmirrors",
+               "behave_features":["test/behave/mgmt_utils/gpaddmirrors.feature"],
+               "behave_args":"--tags ~@concourse_cluster"
+              },
               {"test":"ic-behave-gpcheckcat","behave_features":["test/behave/mgmt_utils/gpcheckcat.feature"]},
-              {"test":"ic-behave-gpcheckperf","behave_features":["test/behave/mgmt_utils/gpcheckperf.feature"]},
+              {"test":"ic-behave-gpcheckperf",
+               "behave_features":["test/behave/mgmt_utils/gpcheckperf.feature"],
+               "behave_args":"--tags ~@concourse_cluster"
+              },
               {"test":"ic-behave-gpconfig","behave_features":["test/behave/mgmt_utils/gpconfig.feature"]},
-              {"test":"ic-behave-gpinitstandby","behave_features":["test/behave/mgmt_utils/gpinitstandby.feature"]},
+              {"test":"ic-behave-gpinitstandby",
+               "behave_features":["test/behave/mgmt_utils/gpinitstandby.feature"],
+               "behave_args":"--tags ~@concourse_cluster"
+              },
               {"test":"ic-behave-gpinitsystem","behave_features":["test/behave/mgmt_utils/gpinitsystem.feature"]},
-              {"test":"ic-behave-gpmovemirrors","behave_features":["test/behave/mgmt_utils/gpmovemirrors.feature"]},
-              {"test":"ic-behave-gprecoverseg","behave_features":["test/behave/mgmt_utils/gprecoverseg.feature"]},
+              {"test":"ic-behave-gpmovemirrors",
+               "behave_features":["test/behave/mgmt_utils/gpmovemirrors.feature"],
+               "behave_args":"--tags ~@concourse_cluster"
+              },
+              {"test":"ic-behave-gprecoverseg",
+               "behave_features":["test/behave/mgmt_utils/gprecoverseg.feature"],
+               "behave_args":"--tags ~@concourse_cluster"
+              },
               {"test":"ic-behave-gpreload","behave_features":["test/behave/mgmt_utils/gpreload.feature"]},
-              {"test":"ic-behave-gpstart","behave_features":["test/behave/mgmt_utils/gpstart.feature"]},
-              {"test":"ic-behave-gpstate","behave_features":["test/behave/mgmt_utils/gpstate.feature"]},
+              {"test":"ic-behave-gpstart",
+               "behave_features":["test/behave/mgmt_utils/gpstart.feature"],
+               "behave_args":"--tags ~@concourse_cluster"
+              },
+              {"test":"ic-behave-gpstate",
+               "behave_features":["test/behave/mgmt_utils/gpstate.feature"],
+               "behave_args":"--tags ~@concourse_cluster"
+              },
               {"test":"ic-behave-gpstop","behave_features":["test/behave/mgmt_utils/gpstop.feature"]},
-              {"test":"ic-behave-gpssh","behave_features":["test/behave/mgmt_utils/gpssh.feature"]},
+              {"test":"ic-behave-gpssh",
+               "behave_features":["test/behave/mgmt_utils/gpssh.feature"],
+               "behave_args":"--tags ~@requires_netem"
+              },
               {"test":"ic-behave-minirepro","behave_features":["test/behave/mgmt_utils/minirepro.feature"]},
-              {"test":"ic-behave-replication-slots","behave_features":["test/behave/mgmt_utils/replication_slots.feature"]}
+              {"test":"ic-behave-replication-slots",
+               "behave_features":["test/behave/mgmt_utils/replication_slots.feature"],
+               "behave_args":"--tags ~@extended"
+              }
             ]
           }'
 
@@ -508,6 +535,7 @@ jobs:
           mkdir -p build-logs/details
           config_log="build-logs/details/make-${{ matrix.test }}-config0.log"
           behave_targets="${{ join(matrix.behave_features, ' ') }}"
+          behave_args="${{ matrix.behave_args || '' }}"
 
           mkdir -p "/tmp/cloudberry-cores"
           chmod 1777 "/tmp/cloudberry-cores"
@@ -520,8 +548,11 @@ jobs:
           for feature in $behave_targets; do
             echo "- $feature"
           done
+          if [[ -n "$behave_args" ]]; then
+            echo "Behave args: $behave_args"
+          fi
 
-          if ! time su - gpadmin -c "cd ${SRC_DIR}/gpMgmt && source /usr/local/cloudberry-db/cloudberry-env.sh && source ${SRC_DIR}/gpAux/gpdemo/gpdemo-env.sh && PYTHONPATH=${SRC_DIR}/gpMgmt:\$PYTHONPATH behave $behave_targets" \
+          if ! time su - gpadmin -c "cd ${SRC_DIR}/gpMgmt && source /usr/local/cloudberry-db/cloudberry-env.sh && source ${SRC_DIR}/gpAux/gpdemo/gpdemo-env.sh && PYTHONPATH=${SRC_DIR}/gpMgmt:\$PYTHONPATH behave $behave_args $behave_targets" \
                2>&1 | tee -a "$config_log"; then
             echo "::warning::Behave execution reported failures"
             exit 1
@@ -534,9 +565,10 @@ jobs:
           set -o pipefail
 
           config_log="build-logs/details/make-${{ matrix.test }}-config0.log"
+          behave_cmd="behave ${{ matrix.behave_args || '' }} ${{ join(matrix.behave_features, ' ') }}"
           if [ ! -f "$config_log" ]; then
             {
-              echo "MAKE_COMMAND=\"behave ${{ join(matrix.behave_features, ' ') }}\""
+              echo "MAKE_COMMAND=\"${behave_cmd}\""
               echo "STATUS=missing_log"
               echo "TOTAL_TESTS=0"
               echo "FAILED_TESTS=0"
@@ -546,13 +578,13 @@ jobs:
             exit 1
           fi
 
-          features_line=$(grep -E '^[0-9]+ features passed, [0-9]+ failed, [0-9]+ skipped$' "$config_log" | tail -n 1)
-          scenarios_line=$(grep -E '^[0-9]+ scenarios passed, [0-9]+ failed, [0-9]+ skipped(, [0-9]+ untested)?$' "$config_log" | tail -n 1)
-          steps_line=$(grep -E '^[0-9]+ steps passed, [0-9]+ failed, [0-9]+ skipped, [0-9]+ undefined(, [0-9]+ untested)?$' "$config_log" | tail -n 1)
+          features_line=$(grep -E '^[0-9]+ feature(s)? passed, [0-9]+ failed, [0-9]+ skipped$' "$config_log" | tail -n 1)
+          scenarios_line=$(grep -E '^[0-9]+ scenario(s)? passed, [0-9]+ failed, [0-9]+ skipped(, [0-9]+ untested)?$' "$config_log" | tail -n 1)
+          steps_line=$(grep -E '^[0-9]+ step(s)? passed, [0-9]+ failed, [0-9]+ skipped, [0-9]+ undefined(, [0-9]+ untested)?$' "$config_log" | tail -n 1)
 
           if [[ -z "$scenarios_line" ]]; then
             {
-              echo "MAKE_COMMAND=\"behave ${{ join(matrix.behave_features, ' ') }}\""
+              echo "MAKE_COMMAND=\"${behave_cmd}\""
               echo "STATUS=parse_error"
               echo "TOTAL_TESTS=0"
               echo "FAILED_TESTS=0"
@@ -562,13 +594,13 @@ jobs:
             exit 1
           fi
 
-          scenario_counts=$(echo "$scenarios_line" | sed -E 's/^([0-9]+) scenarios passed, ([0-9]+) failed, ([0-9]+) skipped(, ([0-9]+) untested)?$/\1 \2 \3 \5/')
+          scenario_counts=$(echo "$scenarios_line" | sed -E 's/^([0-9]+) scenario(s)? passed, ([0-9]+) failed, ([0-9]+) skipped(, ([0-9]+) untested)?$/\1 \3 \4 \6/')
           read -r scenarios_passed scenarios_failed scenarios_skipped scenarios_untested <<< "$scenario_counts"
           scenarios_untested=${scenarios_untested:-0}
           total_scenarios=$((scenarios_passed + scenarios_failed + scenarios_skipped))
 
           {
-            echo "MAKE_COMMAND=\"behave ${{ join(matrix.behave_features, ' ') }}\""
+            echo "MAKE_COMMAND=\"${behave_cmd}\""
             if [[ "$scenarios_failed" -eq 0 ]]; then
               echo "STATUS=passed"
             else

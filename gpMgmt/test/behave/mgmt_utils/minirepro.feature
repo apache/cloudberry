@@ -28,6 +28,7 @@ Feature: Dump minimum database objects that is related to the query
     @minirepro_UI
     Scenario: Database does not exist
       Given database "nonedb000" does not exist
+      And the file "/home/gpadmin/test/in.sql" exists and contains "select 1;"
       When the user runs "minirepro nonedb000 -q ~/test/in.sql -f ~/out.sql"
       Then minirepro error should contain database "nonedb000" does not exist
 

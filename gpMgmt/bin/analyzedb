@@ -951,7 +951,10 @@ class AnalyzeDb(Operation):
 # Create a Command object that executes a query using psql.
 def create_psql_command(dbname, query):
     psql_cmd = """psql %s -c %s""" % (pipes.quote(dbname), pipes.quote(query))
-    return Command(query, psql_cmd)
+    # Keep the command text intact for execution, but make the display name
+    # ASCII-safe so logger/output paths do not choke on UTF-8 identifiers.
+    safe_query_display = query.encode('ascii', 'backslashreplace').decode('ascii')
+    return Command(safe_query_display, psql_cmd)
 
 
 def run_sql(conn, query):
