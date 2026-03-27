@@ -48,7 +48,7 @@
 # - **Primary Test Scope**: `gpMgmt/test/behave/mgmt_utils`
 #
 # Notes:
-# - Trigger mode: manual `workflow_dispatch` only.
+# - Trigger mode: push, pull_request, and manual `workflow_dispatch`.
 # - Behave tests are split by command to reduce cross-feature environment
 #   pollution.
 # - This workflow currently focuses on single-host CI-compatible Behave tests.
@@ -58,6 +58,11 @@
 name: Apache Cloudberry Behave
 
 on:
+  push:
+    branches: [main, REL_2_STABLE]
+  pull_request:
+    branches: [main, REL_2_STABLE]
+    types: [opened, synchronize, reopened, edited]
   workflow_dispatch:
     inputs:
       test_selection:
@@ -91,7 +96,7 @@ jobs:
         run: |
           echo "=== Behave Matrix Preparation Diagnostics ==="
           echo "Event type: ${{ github.event_name }}"
-          echo "Test selection input: '${{ github.event.inputs.test_selection }}'"
+          echo "Test selection input: '${{ github.event.inputs.test_selection || 'all' }}'"
 
           ALL_BEHAVE_TESTS='{
             "include": [
@@ -117,7 +122,7 @@ jobs:
           }'
 
           VALID_TESTS=$(echo "$ALL_BEHAVE_TESTS" | jq -r '.include[].test')
-          IFS=',' read -ra SELECTED_TESTS <<< "${{ github.event.inputs.test_selection }}"
+          IFS=',' read -ra SELECTED_TESTS <<< "${{ github.event.inputs.test_selection || 'all' }}"
 
           if [[ "${SELECTED_TESTS[*]}" == "all" || -z "${SELECTED_TESTS[*]}" ]]; then
             mapfile -t SELECTED_TESTS <<< "$VALID_TESTS"
@@ -508,7 +513,7 @@ jobs:
           chmod 1777 "/tmp/cloudberry-cores"
           sysctl -w kernel.core_pattern="/tmp/cloudberry-cores/core-%e-%s-%u-%g-%p-%t"
 
-          sudo dnf install -y libffi-devel || echo "Warning: failed to install libffi-devel"
+          dnf install -y libffi-devel || echo "Warning: failed to install libffi-devel"
           su - gpadmin -c "pip3 install --user -r ${SRC_DIR}/gpMgmt/requirements-dev.txt || pip install --user -r ${SRC_DIR}/gpMgmt/requirements-dev.txt"
 
           echo "Running features:"
