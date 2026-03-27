@@ -404,9 +404,9 @@ SELECT pg_get_viewdef('vsubdepartment'::regclass);
              subdepartment sd                 +
            WHERE (d.parent_department = sd.id)+
          )                                    +
-  SELECT subdepartment.id,                    +
-     subdepartment.parent_department,         +
-     subdepartment.name                       +
+  SELECT id,                                  +
+     parent_department,                       +
+     name                                     +
     FROM subdepartment;
 (1 row)
 
@@ -427,9 +427,9 @@ SELECT pg_get_viewdef('vsubdepartment'::regclass, true);
              subdepartment sd               +
            WHERE d.parent_department = sd.id+
          )                                  +
-  SELECT subdepartment.id,                  +
-     subdepartment.parent_department,       +
-     subdepartment.name                     +
+  SELECT id,                                +
+     parent_department,                     +
+     name                                   +
     FROM subdepartment;
 (1 row)
 
@@ -454,7 +454,7 @@ View definition:
            FROM t t_1
           WHERE t_1.n < 100
         )
- SELECT sum(t.n) AS sum
+ SELECT sum(n) AS sum
    FROM t;
 
 -- corner case in which sub-WITH gets initialized first
@@ -645,6 +645,21 @@ SELECT t1.id, t2.path, t2 FROM t AS t1 JOIN t AS t2 ON
  14 | {2,4,9,14}  | (14,"{2,4,9,14}")
 (16 rows)
 
+CREATE TEMP TABLE duplicates (a INT NOT NULL);
+INSERT INTO duplicates VALUES(1), (1);
+-- Try out a recursive UNION case where the non-recursive part's table slot
+-- uses TTSOpsBufferHeapTuple and contains duplicate rows.
+WITH RECURSIVE cte (a) as (
+	SELECT a FROM duplicates
+	UNION
+	SELECT a FROM cte
+)
+SELECT a FROM cte;
+ a 
+---
+ 1
+(1 row)
+
 -- SEARCH clause
 create table graph0( f int, t int, label text );
 NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f' as the Apache Cloudberry data distribution key for this table.
@@ -799,6 +814,81 @@ select * from search_graph order by seq;
  4 | 5 | arc 4 -> 5 | (1,4,5)
 (7 rows)
 
+-- a constant initial value causes issues for EXPLAIN
+explain (verbose, costs off)
+with recursive test as (
+  select 1 as x
+  union all
+  select x + 1
+  from test
+) search depth first by x set y
+select * from test limit 5;
+                                   QUERY PLAN                                    
+---------------------------------------------------------------------------------
+ Limit
+   Output: (1), (ARRAY[ROW(1)])
+   ->  Recursive Union
+         ->  Result
+               Output: 1, ARRAY[ROW(1)]
+         ->  WorkTable Scan on test
+               Output: (test.x + 1), array_cat(test.y, ARRAY[ROW((test.x + 1))])
+ Settings: gp_cte_sharing = 'on'
+ Optimizer: Postgres query optimizer
+(9 rows)
+
+with recursive test as (
+  select 1 as x
+  union all
+  select x + 1
+  from test
+) search depth first by x set y
+select * from test limit 5;
+ x |           y           
+---+-----------------------
+ 1 | {(1)}
+ 2 | {(1),(2)}
+ 3 | {(1),(2),(3)}
+ 4 | {(1),(2),(3),(4)}
+ 5 | {(1),(2),(3),(4),(5)}
+(5 rows)
+
+explain (verbose, costs off)
+with recursive test as (
+  select 1 as x
+  union all
+  select x + 1
+  from test
+) search breadth first by x set y
+select * from test limit 5;
+                                     QUERY PLAN                                     
+------------------------------------------------------------------------------------
+ Limit
+   Output: (1), (ROW('0'::bigint, 1))
+   ->  Recursive Union
+         ->  Result
+               Output: 1, ROW('0'::bigint, 1)
+         ->  WorkTable Scan on test
+               Output: (test.x + 1), ROW(int8inc((test.y)."*DEPTH*"), (test.x + 1))
+ Settings: gp_cte_sharing = 'on'
+ Optimizer: Postgres query optimizer
+(9 rows)
+
+with recursive test as (
+  select 1 as x
+  union all
+  select x + 1
+  from test
+) search breadth first by x set y
+select * from test limit 5;
+ x |   y   
+---+-------
+ 1 | (0,1)
+ 2 | (1,2)
+ 3 | (2,3)
+ 4 | (3,4)
+ 5 | (4,5)
+(5 rows)
+
 -- various syntax errors
 with recursive search_graph(f, t, label) as (
 	select * from graph0 g
@@ -891,9 +981,9 @@ select pg_get_viewdef('v_search');
              search_graph sg                   +
            WHERE (g.f = sg.t)                  +
          ) SEARCH DEPTH FIRST BY f, t SET seq  +
-  SELECT search_graph.f,                       +
-     search_graph.t,                           +
-     search_graph.label                        +
+  SELECT f,                                    +
+     t,                                        +
+     label                                     +
     FROM search_graph;
 (1 row)
 
@@ -972,31 +1062,31 @@ with recursive search_graph(f, t, label, is_cycle, path) as (
 select * from search_graph;
  f | t |   label    | is_cycle |                   path                    
 ---+---+------------+----------+-------------------------------------------
- 2 | 3 | arc 2 -> 3 | f        | {"(2,3)"}
- 4 | 5 | arc 4 -> 5 | f        | {"(4,5)"}
- 5 | 1 | arc 5 -> 1 | f        | {"(4,5)","(5,1)"}
- 1 | 4 | arc 1 -> 4 | f        | {"(4,5)","(5,1)","(1,4)"}
- 1 | 3 | arc 1 -> 3 | f        | {"(4,5)","(5,1)","(1,3)"}
- 1 | 2 | arc 1 -> 2 | f        | {"(4,5)","(5,1)","(1,2)"}
- 4 | 5 | arc 4 -> 5 | t        | {"(4,5)","(5,1)","(1,4)","(4,5)"}
- 2 | 3 | arc 2 -> 3 | f        | {"(4,5)","(5,1)","(1,2)","(2,3)"}
- 1 | 2 | arc 1 -> 2 | f        | {"(1,2)"}
- 1 | 3 | arc 1 -> 3 | f        | {"(1,3)"}
  1 | 4 | arc 1 -> 4 | f        | {"(1,4)"}
- 2 | 3 | arc 2 -> 3 | f        | {"(1,2)","(2,3)"}
- 4 | 5 | arc 4 -> 5 | f        | {"(1,4)","(4,5)"}
- 5 | 1 | arc 5 -> 1 | f        | {"(1,4)","(4,5)","(5,1)"}
- 1 | 4 | arc 1 -> 4 | t        | {"(1,4)","(4,5)","(5,1)","(1,4)"}
- 1 | 3 | arc 1 -> 3 | f        | {"(1,4)","(4,5)","(5,1)","(1,3)"}
- 1 | 2 | arc 1 -> 2 | f        | {"(1,4)","(4,5)","(5,1)","(1,2)"}
- 2 | 3 | arc 2 -> 3 | f        | {"(1,4)","(4,5)","(5,1)","(1,2)","(2,3)"}
- 5 | 1 | arc 5 -> 1 | f        | {"(5,1)"}
+ 1 | 4 | arc 1 -> 4 | f        | {"(4,5)","(5,1)","(1,4)"}
  1 | 4 | arc 1 -> 4 | f        | {"(5,1)","(1,4)"}
- 1 | 3 | arc 1 -> 3 | f        | {"(5,1)","(1,3)"}
- 1 | 2 | arc 1 -> 2 | f        | {"(5,1)","(1,2)"}
- 4 | 5 | arc 4 -> 5 | f        | {"(5,1)","(1,4)","(4,5)"}
+ 2 | 3 | arc 2 -> 3 | f        | {"(1,2)","(2,3)"}
+ 2 | 3 | arc 2 -> 3 | f        | {"(1,4)","(4,5)","(5,1)","(1,2)","(2,3)"}
+ 2 | 3 | arc 2 -> 3 | f        | {"(2,3)"}
+ 2 | 3 | arc 2 -> 3 | f        | {"(4,5)","(5,1)","(1,2)","(2,3)"}
  2 | 3 | arc 2 -> 3 | f        | {"(5,1)","(1,2)","(2,3)"}
+ 4 | 5 | arc 4 -> 5 | f        | {"(1,4)","(4,5)"}
+ 4 | 5 | arc 4 -> 5 | f        | {"(4,5)"}
+ 4 | 5 | arc 4 -> 5 | f        | {"(5,1)","(1,4)","(4,5)"}
+ 4 | 5 | arc 4 -> 5 | t        | {"(4,5)","(5,1)","(1,4)","(4,5)"}
+ 5 | 1 | arc 5 -> 1 | f        | {"(1,4)","(4,5)","(5,1)"}
+ 5 | 1 | arc 5 -> 1 | f        | {"(4,5)","(5,1)"}
+ 5 | 1 | arc 5 -> 1 | f        | {"(5,1)"}
  5 | 1 | arc 5 -> 1 | t        | {"(5,1)","(1,4)","(4,5)","(5,1)"}
+ 1 | 2 | arc 1 -> 2 | f        | {"(1,2)"}
+ 1 | 2 | arc 1 -> 2 | f        | {"(1,4)","(4,5)","(5,1)","(1,2)"}
+ 1 | 2 | arc 1 -> 2 | f        | {"(4,5)","(5,1)","(1,2)"}
+ 1 | 2 | arc 1 -> 2 | f        | {"(5,1)","(1,2)"}
+ 1 | 3 | arc 1 -> 3 | f        | {"(1,3)"}
+ 1 | 3 | arc 1 -> 3 | f        | {"(1,4)","(4,5)","(5,1)","(1,3)"}
+ 1 | 3 | arc 1 -> 3 | f        | {"(4,5)","(5,1)","(1,3)"}
+ 1 | 3 | arc 1 -> 3 | f        | {"(5,1)","(1,3)"}
+ 1 | 4 | arc 1 -> 4 | t        | {"(1,4)","(4,5)","(5,1)","(1,4)"}
 (25 rows)
 
 -- ordering by the path column has same effect as SEARCH DEPTH FIRST
@@ -1038,6 +1128,38 @@ select * from search_graph order by path;
 (25 rows)
 
 -- CYCLE clause
+explain (verbose, costs off)
+with recursive search_graph(f, t, label) as (
+	select * from graph g
+	union all
+	select g.*
+	from graph g, search_graph sg
+	where g.f = sg.t
+) cycle f, t set is_cycle using path
+select * from search_graph;
+                                                                             QUERY PLAN                                                                              
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Output: g.f, g.t, g.label, (false), (ARRAY[ROW(g.f, g.t)])
+   ->  Recursive Union
+         ->  Seq Scan on pg_temp.graph g
+               Output: g.f, g.t, g.label, false, ARRAY[ROW(g.f, g.t)]
+         ->  Hash Join
+               Output: g_1.f, g_1.t, g_1.label, CASE WHEN (ROW(g_1.f, g_1.t) = ANY (sg.path)) THEN true ELSE false END, array_cat(sg.path, ARRAY[ROW(g_1.f, g_1.t)])
+               Hash Cond: (sg.t = g_1.f)
+               ->  WorkTable Scan on search_graph sg
+                     Output: sg.f, sg.t, sg.label, sg.is_cycle, sg.path
+                     Filter: (NOT sg.is_cycle)
+               ->  Hash
+                     Output: g_1.f, g_1.t, g_1.label
+                     ->  Broadcast Motion 3:3  (slice2; segments: 3)
+                           Output: g_1.f, g_1.t, g_1.label
+                           ->  Seq Scan on pg_temp.graph g_1
+                                 Output: g_1.f, g_1.t, g_1.label
+ Settings: gp_cte_sharing = 'on'
+ Optimizer: Postgres query optimizer
+(19 rows)
+
 with recursive search_graph(f, t, label) as (
 	select * from graph g
 	union all
@@ -1111,6 +1233,70 @@ select * from search_graph;
  1 | 2 | arc 1 -> 2 | N        | {"(1,4)","(4,5)","(5,1)","(1,2)"}
  2 | 3 | arc 2 -> 3 | N        | {"(1,4)","(4,5)","(5,1)","(1,2)","(2,3)"}
 (25 rows)
+
+explain (verbose, costs off)
+with recursive test as (
+  select 0 as x
+  union all
+  select (x + 1) % 10
+  from test
+) cycle x set is_cycle using path
+select * from test;
+                                                          QUERY PLAN
+------------------------------------------------------------------------------------------------------------------------------
+ Recursive Union
+   ->  Result
+         Output: 0, false, ARRAY[ROW(0)]
+   ->  WorkTable Scan on test
+         Output: ((test.x + 1) % 10), CASE WHEN (ROW(((test.x + 1) % 10)) = ANY (test.path)) THEN true ELSE false END, array_cat(test.path, ARRAY[ROW(((test.x + 1) % 10))])
+         Filter: (NOT test.is_cycle)
+ Optimizer: Postgres query optimizer
+(8 rows)
+
+with recursive test as (
+  select 0 as x
+  union all
+  select (x + 1) % 10
+  from test
+) cycle x set is_cycle using path
+select * from test;
+ x | is_cycle |                     path                      
+---+----------+-----------------------------------------------
+ 0 | f        | {(0)}
+ 0 | t        | {(0),(1),(2),(3),(4),(5),(6),(7),(8),(9),(0)}
+ 1 | f        | {(0),(1)}
+ 2 | f        | {(0),(1),(2)}
+ 3 | f        | {(0),(1),(2),(3)}
+ 4 | f        | {(0),(1),(2),(3),(4)}
+ 5 | f        | {(0),(1),(2),(3),(4),(5)}
+ 6 | f        | {(0),(1),(2),(3),(4),(5),(6)}
+ 7 | f        | {(0),(1),(2),(3),(4),(5),(6),(7)}
+ 8 | f        | {(0),(1),(2),(3),(4),(5),(6),(7),(8)}
+ 9 | f        | {(0),(1),(2),(3),(4),(5),(6),(7),(8),(9)}
+(11 rows)
+
+with recursive test as (
+  select 0 as x
+  union all
+  select (x + 1) % 10
+  from test
+    where not is_cycle  -- redundant, but legal
+) cycle x set is_cycle using path
+select * from test;
+ x | is_cycle |                     path                      
+---+----------+-----------------------------------------------
+ 0 | f        | {(0)}
+ 0 | t        | {(0),(1),(2),(3),(4),(5),(6),(7),(8),(9),(0)}
+ 1 | f        | {(0),(1)}
+ 2 | f        | {(0),(1),(2)}
+ 3 | f        | {(0),(1),(2),(3)}
+ 4 | f        | {(0),(1),(2),(3),(4)}
+ 5 | f        | {(0),(1),(2),(3),(4),(5)}
+ 6 | f        | {(0),(1),(2),(3),(4),(5),(6)}
+ 7 | f        | {(0),(1),(2),(3),(4),(5),(6),(7)}
+ 8 | f        | {(0),(1),(2),(3),(4),(5),(6),(7),(8)}
+ 9 | f        | {(0),(1),(2),(3),(4),(5),(6),(7),(8),(9)}
+(11 rows)
 
 -- multiple CTEs
 with recursive
@@ -1384,9 +1570,9 @@ select pg_get_viewdef('v_cycle1');
              search_graph sg                   +
            WHERE (g.f = sg.t)                  +
          ) CYCLE f, t SET is_cycle USING path  +
-  SELECT search_graph.f,                       +
-     search_graph.t,                           +
-     search_graph.label                        +
+  SELECT f,                                    +
+     t,                                        +
+     label                                     +
     FROM search_graph;
 (1 row)
 
@@ -1406,9 +1592,9 @@ select pg_get_viewdef('v_cycle2');
              search_graph sg                                                +
            WHERE (g.f = sg.t)                                               +
          ) CYCLE f, t SET is_cycle TO 'Y'::text DEFAULT 'N'::text USING path+
-  SELECT search_graph.f,                                                    +
-     search_graph.t,                                                        +
-     search_graph.label                                                     +
+  SELECT f,                                                                 +
+     t,                                                                     +
+     label                                                                  +
     FROM search_graph;
 (1 row)
 
@@ -1869,6 +2055,54 @@ WITH RECURSIVE x(n) AS (
 ERROR:  window functions in the target list of a recursive query is not supported
 LINE 4:  SELECT level+1, row_number() over() FROM x, bar)
                          ^
+-- allow this, because we historically have
+WITH RECURSIVE x(n) AS (
+  WITH x1 AS (SELECT 1 AS n)
+    SELECT 0
+    UNION
+    SELECT * FROM x1)
+	SELECT * FROM x;
+ n 
+---
+ 0
+ 1
+(2 rows)
+
+-- but this should be rejected
+WITH RECURSIVE x(n) AS (
+  WITH x1 AS (SELECT 1 FROM x)
+    SELECT 0
+    UNION
+    SELECT * FROM x1)
+	SELECT * FROM x;
+ERROR:  recursive reference to query "x" must not appear within a subquery
+LINE 2:   WITH x1 AS (SELECT 1 FROM x)
+                                    ^
+-- and this too
+WITH RECURSIVE x(n) AS (
+  (WITH x1 AS (SELECT 1 FROM x) SELECT * FROM x1)
+  UNION
+  SELECT 0)
+	SELECT * FROM x;
+ERROR:  recursive reference to query "x" must not appear within its non-recursive term
+LINE 2:   (WITH x1 AS (SELECT 1 FROM x) SELECT * FROM x1)
+                                     ^
+-- and this
+WITH RECURSIVE x(n) AS (
+  SELECT 0 UNION SELECT 1
+  ORDER BY (SELECT n FROM x))
+	SELECT * FROM x;
+ERROR:  ORDER BY in a recursive query is not implemented
+LINE 3:   ORDER BY (SELECT n FROM x))
+                   ^
+-- and this
+WITH RECURSIVE x(n) AS (
+  WITH sub_cte AS (SELECT * FROM x)
+  DELETE FROM graph RETURNING f)
+	SELECT * FROM x;
+ERROR:  recursive query "x" must not contain data-modifying statements
+LINE 1: WITH RECURSIVE x(n) AS (
+                       ^
 CREATE TEMPORARY TABLE y (a INTEGER) DISTRIBUTED RANDOMLY;
 INSERT INTO y SELECT generate_series(1, 10);
 -- LEFT JOIN
@@ -2170,7 +2404,7 @@ WITH outermost(x) AS (
 )
 SELECT * FROM outermost ORDER BY 1;
 ERROR:  relation "outermost" does not exist
-LINE 4:          SELECT * FROM outermost  
+LINE 4:          SELECT * FROM outermost  -- fail
                                ^
 DETAIL:  There is a WITH item named "outermost", but it cannot be referenced from this part of the query.
 HINT:  Use WITH RECURSIVE, or re-order the WITH items to remove forward references.
@@ -2194,7 +2428,7 @@ WITH RECURSIVE outermost(x) AS (
 )
 SELECT * FROM outermost ORDER BY 1;
 ERROR:  recursive reference to query "outermost" must not appear within a subquery
-LINE 2:   WITH innermost as (SELECT 2 FROM outermost) 
+LINE 2:   WITH innermost as (SELECT 2 FROM outermost) -- fail
                                            ^
 --
 -- This test will fail with the old implementation of PARAM_EXEC parameter
@@ -2581,14 +2815,6 @@ INSERT INTO bug6051 SELECT * FROM t1;
 ERROR:  writable CTE queries cannot be themselves writable
 DETAIL:  Apache Cloudberry currently only support CTEs with one writable clause, called in a non-writable context.
 HINT:  Rewrite the query to only include one writable clause.
-SELECT * FROM bug6051;
- i 
----
- 1
- 2
- 3
-(3 rows)
-
 CREATE TEMP TABLE bug6051_2 (i int);
 NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
@@ -2608,12 +2834,7 @@ SELECT * FROM bug6051;
  3
 (3 rows)
 
-SELECT * FROM bug6051_2;
- i 
----
-(0 rows)
-
--- check INSERT...SELECT rule actions are disallowed on commands
+-- check INSERT ... SELECT rule actions are disallowed on commands
 -- that have modifyingCTEs
 CREATE OR REPLACE RULE bug6051_ins AS ON INSERT TO bug6051 DO INSTEAD
  INSERT INTO bug6051_2
@@ -2629,7 +2850,7 @@ CREATE TEMP TABLE bug6051_3 AS
 NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause. Creating a NULL policy entry.
 CREATE RULE bug6051_3_ins AS ON INSERT TO bug6051_3 DO INSTEAD
   SELECT i FROM bug6051_2;
-BEGIN; SET LOCAL force_parallel_mode = on;
+BEGIN; SET LOCAL debug_parallel_query = on;
 WITH t1 AS ( DELETE FROM bug6051_3 RETURNING * )
   INSERT INTO bug6051_3 SELECT * FROM t1;
 ERROR:  writable CTE queries cannot be themselves writable
@@ -2899,6 +3120,187 @@ UPDATE SET (k, v) = (SELECT k, v FROM upsert_cte WHERE upsert_cte.k = withz.k)
 RETURNING k, v;
 ERROR:  modification of distribution columns in OnConflictUpdate is not supported
 DROP TABLE withz;
+-- WITH referenced by MERGE statement
+CREATE TABLE m AS SELECT i AS k, (i || ' v')::text v FROM generate_series(1, 16, 3) i;
+ALTER TABLE m ADD UNIQUE (k);
+ERROR:  UNIQUE and DISTRIBUTED RANDOMLY are incompatible
+WITH RECURSIVE cte_basic AS (SELECT 1 a, 'cte_basic val' b)
+MERGE INTO m USING (select 0 k, 'merge source SubPlan' v) o ON m.k=o.k
+WHEN MATCHED THEN UPDATE SET v = (SELECT b || ' merge update' FROM cte_basic WHERE cte_basic.a = m.k LIMIT 1)
+WHEN NOT MATCHED THEN INSERT VALUES(o.k, o.v);
+ERROR:  WITH RECURSIVE is not supported for MERGE statement
+-- Basic:
+WITH cte_basic AS MATERIALIZED (SELECT 1 a, 'cte_basic val' b)
+MERGE INTO m USING (select 0 k, 'merge source SubPlan' v offset 0) o ON m.k=o.k
+WHEN MATCHED THEN UPDATE SET v = (SELECT b || ' merge update' FROM cte_basic WHERE cte_basic.a = m.k LIMIT 1)
+WHEN NOT MATCHED THEN INSERT VALUES(o.k, o.v);
+-- Examine
+SELECT * FROM m where k = 0;
+ k |          v           
+---+----------------------
+ 0 | merge source SubPlan
+(1 row)
+
+-- See EXPLAIN output for same query:
+EXPLAIN (VERBOSE, COSTS OFF)
+WITH cte_basic AS MATERIALIZED (SELECT 1 a, 'cte_basic val' b)
+MERGE INTO m USING (select 0 k, 'merge source SubPlan' v offset 0) o ON m.k=o.k
+WHEN MATCHED THEN UPDATE SET v = (SELECT b || ' merge update' FROM cte_basic WHERE cte_basic.a = m.k LIMIT 1)
+WHEN NOT MATCHED THEN INSERT VALUES(o.k, o.v);
+                                     QUERY PLAN                                      
+-------------------------------------------------------------------------------------
+ Merge on public.m
+   ->  Explicit Redistribute Motion 3:3  (slice1; segments: 3)
+         Output: m.ctid, m.gp_segment_id, o.k, o.v, o.*
+         ->  Split Merge
+               Output: m.ctid, m.gp_segment_id, o.k, o.v, o.*
+               ->  Hash Right Join
+                     Output: m.ctid, m.gp_segment_id, o.k, o.v, o.*
+                     Hash Cond: (m.k = o.k)
+                     ->  Redistribute Motion 3:3  (slice2; segments: 3)
+                           Output: m.ctid, m.gp_segment_id, m.k
+                           Hash Key: m.k
+                           ->  Seq Scan on public.m
+                                 Output: m.ctid, m.gp_segment_id, m.k
+                     ->  Hash
+                           Output: o.k, o.v, o.*
+                           ->  Redistribute Motion 1:3  (slice3; segments: 1)
+                                 Output: o.k, o.v, o.*
+                                 Hash Key: o.k
+                                 ->  Subquery Scan on o
+                                       Output: o.k, o.v, o.*
+                                       ->  Result
+                                             Output: 0, 'merge source SubPlan'::text
+   SubPlan 1
+     ->  Limit
+           Output: ((share0_ref1.b || ' merge update'::text))
+           ->  Result
+                 Output: (share0_ref1.b || ' merge update'::text)
+                 Filter: (share0_ref1.a = m.k)
+                 ->  Shared Scan (share slice:id 0:0)
+                       Output: share0_ref1.a, share0_ref1.b
+                       ->  Result
+                             Output: 1, 'cte_basic val'::text
+ Settings: gp_cte_sharing = 'on'
+ Optimizer: Postgres query optimizer
+(34 rows)
+
+-- InitPlan
+WITH cte_init AS MATERIALIZED (SELECT 1 a, 'cte_init val' b)
+MERGE INTO m USING (select 1 k, 'merge source InitPlan' v offset 0) o ON m.k=o.k
+WHEN MATCHED THEN UPDATE SET v = (SELECT b || ' merge update' FROM cte_init WHERE a = 1 LIMIT 1)
+WHEN NOT MATCHED THEN INSERT VALUES(o.k, o.v);
+-- Examine
+SELECT * FROM m where k = 1;
+ k |             v             
+---+---------------------------
+ 1 | cte_init val merge update
+(1 row)
+
+-- See EXPLAIN output for same query:
+EXPLAIN (VERBOSE, COSTS OFF)
+WITH cte_init AS MATERIALIZED (SELECT 1 a, 'cte_init val' b)
+MERGE INTO m USING (select 1 k, 'merge source InitPlan' v offset 0) o ON m.k=o.k
+WHEN MATCHED THEN UPDATE SET v = (SELECT b || ' merge update' FROM cte_init WHERE a = 1 LIMIT 1)
+WHEN NOT MATCHED THEN INSERT VALUES(o.k, o.v);
+                                      QUERY PLAN                                      
+--------------------------------------------------------------------------------------
+ Merge on public.m
+   InitPlan 1 (returns $0)  (slice4)
+     ->  Limit
+           Output: ((cte_init.b || ' merge update'::text))
+           ->  Subquery Scan on cte_init
+                 Output: (cte_init.b || ' merge update'::text)
+                 Filter: (cte_init.a = 1)
+                 ->  Shared Scan (share slice:id 4:0)
+                       Output: share0_ref1.a, share0_ref1.b
+                       ->  Result
+                             Output: 1, 'cte_init val'::text
+   ->  Explicit Redistribute Motion 3:3  (slice1; segments: 3)
+         Output: m.ctid, m.gp_segment_id, o.k, o.v, o.*
+         ->  Split Merge
+               Output: m.ctid, m.gp_segment_id, o.k, o.v, o.*
+               ->  Hash Right Join
+                     Output: m.ctid, m.gp_segment_id, o.k, o.v, o.*
+                     Hash Cond: (m.k = o.k)
+                     ->  Redistribute Motion 3:3  (slice2; segments: 3)
+                           Output: m.ctid, m.gp_segment_id, m.k
+                           Hash Key: m.k
+                           ->  Seq Scan on public.m
+                                 Output: m.ctid, m.gp_segment_id, m.k
+                     ->  Hash
+                           Output: o.k, o.v, o.*
+                           ->  Redistribute Motion 1:3  (slice3; segments: 1)
+                                 Output: o.k, o.v, o.*
+                                 Hash Key: o.k
+                                 ->  Subquery Scan on o
+                                       Output: o.k, o.v, o.*
+                                       ->  Result
+                                             Output: 1, 'merge source InitPlan'::text
+ Settings: gp_cte_sharing = 'on'
+ Optimizer: Postgres query optimizer
+(34 rows)
+
+-- MERGE source comes from CTE:
+WITH merge_source_cte AS MATERIALIZED (SELECT 15 a, 'merge_source_cte val' b)
+MERGE INTO m USING (select * from merge_source_cte) o ON m.k=o.a
+WHEN MATCHED THEN UPDATE SET v = (SELECT b || merge_source_cte.*::text || ' merge update' FROM merge_source_cte WHERE a = 15)
+WHEN NOT MATCHED THEN INSERT VALUES(o.a, o.b || (SELECT merge_source_cte.*::text || ' merge insert' FROM merge_source_cte));
+-- Examine
+SELECT * FROM m where k = 15;
+ k  |                              v                               
+----+--------------------------------------------------------------
+ 15 | merge_source_cte val(15,"merge_source_cte val") merge insert
+(1 row)
+
+-- See EXPLAIN output for same query:
+EXPLAIN (VERBOSE, COSTS OFF)
+WITH merge_source_cte AS MATERIALIZED (SELECT 15 a, 'merge_source_cte val' b)
+MERGE INTO m USING (select * from merge_source_cte) o ON m.k=o.a
+WHEN MATCHED THEN UPDATE SET v = (SELECT b || merge_source_cte.*::text || ' merge update' FROM merge_source_cte WHERE a = 15)
+WHEN NOT MATCHED THEN INSERT VALUES(o.a, o.b || (SELECT merge_source_cte.*::text || ' merge insert' FROM merge_source_cte));
+                                           QUERY PLAN                                            
+-------------------------------------------------------------------------------------------------
+ Merge on public.m
+   InitPlan 1 (returns $0)  (slice4)
+     ->  Subquery Scan on merge_source_cte
+           Output: ((merge_source_cte.b || (merge_source_cte.*)::text) || ' merge update'::text)
+           Filter: (merge_source_cte.a = 15)
+           ->  Shared Scan (share slice:id 4:0)
+                 Output: share0_ref1.a, share0_ref1.b
+                 ->  Result
+                       Output: 15, 'merge_source_cte val'::text
+   InitPlan 2 (returns $1)  (slice5)
+     ->  Subquery Scan on merge_source_cte_1
+           Output: ((merge_source_cte_1.*)::text || ' merge insert'::text)
+           ->  Shared Scan (share slice:id 5:0)
+                 Output: share0_ref2.a, share0_ref2.b
+   ->  Explicit Redistribute Motion 3:3  (slice1; segments: 3)
+         Output: m.ctid, m.gp_segment_id, o.a, o.b, o.*
+         ->  Split Merge
+               Output: m.ctid, m.gp_segment_id, o.a, o.b, o.*
+               ->  Hash Right Join
+                     Output: m.ctid, m.gp_segment_id, o.a, o.b, o.*
+                     Hash Cond: (m.k = o.a)
+                     ->  Redistribute Motion 3:3  (slice2; segments: 3)
+                           Output: m.ctid, m.gp_segment_id, m.k
+                           Hash Key: m.k
+                           ->  Seq Scan on public.m
+                                 Output: m.ctid, m.gp_segment_id, m.k
+                     ->  Hash
+                           Output: o.a, o.b, o.*
+                           ->  Redistribute Motion 1:3  (slice3)
+                                 Output: o.a, o.b, o.*
+                                 Hash Key: o.a
+                                 ->  Subquery Scan on o
+                                       Output: o.a, o.b, o.*
+                                       ->  Shared Scan (share slice:id 3:0)
+                                             Output: share0_ref3.a, share0_ref3.b
+ Settings: gp_cte_sharing = 'on'
+ Optimizer: Postgres query optimizer
+(37 rows)
+
+DROP TABLE m;
 -- check that run to completion happens in proper ordering
 TRUNCATE TABLE y;
 INSERT INTO y SELECT generate_series(1, 3);
@@ -2918,8 +3320,8 @@ SELECT * FROM y;
  a 
 ---
  1
- 3
  2
+ 3
 (3 rows)
 
 SELECT * FROM yy;
@@ -2940,8 +3342,8 @@ SELECT * FROM y;
  a 
 ---
  1
- 3
  2
+ 3
 (3 rows)
 
 SELECT * FROM yy;
@@ -3162,7 +3564,7 @@ SELECT * FROM parent;
 -- check EXPLAIN VERBOSE for a wCTE with RETURNING
 EXPLAIN (VERBOSE, COSTS OFF)
 WITH wcte AS ( INSERT INTO int8_tbl VALUES ( 42, 47 ) RETURNING q2 )
-DELETE FROM a USING wcte WHERE aa = q2;
+DELETE FROM a_star USING wcte WHERE aa = q2;
 ERROR:  writable CTE queries cannot be themselves writable
 DETAIL:  Apache Cloudberry currently only support CTEs with one writable clause, called in a non-writable context.
 HINT:  Rewrite the query to only include one writable clause.

@@ -34,6 +34,7 @@
 #include "catalog/pg_collation.h"
 extern "C" {
 #include "access/amapi.h"
+#include "commands/defrem.h"
 #include "access/external.h"
 #include "access/genam.h"
 #include "catalog/pg_aggregate.h"
@@ -1867,8 +1868,8 @@ gpdb::GetMVNDistinct(Oid stat_oid)
 {
 	GP_WRAP_START;
 	{
-		/* CBDB_16_MERGE: xxx: do we need ihn = true in any case? */
-		return statext_ndistinct_load(stat_oid, false);
+		bool inh = has_subclass(StatisticsGetRelation(stat_oid, false));
+		return statext_ndistinct_load(stat_oid, inh);
 	}
 	GP_WRAP_END;
 }
@@ -1878,7 +1879,8 @@ gpdb::GetMVDependencies(Oid stat_oid)
 {
 	GP_WRAP_START;
 	{
-		return statext_dependencies_load(stat_oid, false, true);
+		bool inh = has_subclass(StatisticsGetRelation(stat_oid, false));
+		return statext_dependencies_load(stat_oid, inh, true);
 	}
 	GP_WRAP_END;
 }
@@ -2736,11 +2738,12 @@ gpdb::TestexprIsHashable(Node *testexpr, List *param_ids)
 }
 
 RTEPermissionInfo *
-gpdb::GetRTEPermissionInfo(List *rteperminfos,
-											   const RangeTblEntry *rte)
+gpdb::GetRTEPermissionInfo(List *rteperminfos, const RangeTblEntry *rte)
 {
 	GP_WRAP_START;
 	{
+		// Cast away const: upstream getRTEPermissionInfo() only reads
+		// rte->perminfoindex and rte->relid but its signature lacks const.
 		return getRTEPermissionInfo(rteperminfos, (RangeTblEntry *) rte);
 	}
 	GP_WRAP_END;

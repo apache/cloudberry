@@ -1291,15 +1291,15 @@ select * from boolpart where a is not true;
 (2 rows)
 
 select * from boolpart where a is not true and a is not false;
- a
+ a 
 ---
-
+ 
 (1 row)
 
 select * from boolpart where a is unknown;
- a
+ a 
 ---
-
+ 
 (1 row)
 
 select * from boolpart where a is not unknown;
@@ -1351,13 +1351,13 @@ select * from boolpart where a is not true;
 (2 rows)
 
 select * from boolpart where a is not true and a is not false;
- a
+ a 
 ---
-
+ 
 (1 row)
 
 select * from boolpart where a is not false;
- a
+ a 
 ---
 
  t
@@ -1507,15 +1507,15 @@ select * from iboolpart where a is not true;
 (2 rows)
 
 select * from iboolpart where a is not true and a is not false;
- a
+ a 
 ---
-
+ 
 (1 row)
 
 select * from iboolpart where a is unknown;
- a
+ a 
 ---
-
+ 
 (1 row)
 
 select * from iboolpart where a is not unknown;
@@ -1538,13 +1538,13 @@ select * from iboolpart where a is not true;
 (2 rows)
 
 select * from iboolpart where a is not true and a is not false;
- a
+ a 
 ---
-
+ 
 (1 row)
 
 select * from iboolpart where a is not false;
- a
+ a 
 ---
 
  t

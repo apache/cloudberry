@@ -86,9 +86,9 @@ SELECT p1.f1
    WHERE p1.f1 ?- point '(0,0)';
         f1        
 ------------------
+ (0,0)
  (-10,0)
  (1e-300,-1e-300)
- (0,0)
 (3 rows)
 
 -- "is vertical" function
@@ -5253,16 +5253,18 @@ SELECT * FROM circle_tbl WHERE f1 && circle(point(1,-2), 1)
 EXPLAIN (COSTS OFF)
 SELECT * FROM circle_tbl WHERE f1 && circle(point(1,-2), 1)
     ORDER BY area(f1);
-                     QUERY PLAN                     
-----------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)
-   Merge Key: (area(f1))
-   ->  Sort
-         Sort Key: (area(f1))
-         ->  Seq Scan on circle_tbl
-               Filter: (f1 && '<(1,-2),1>'::circle)
+                          QUERY PLAN
+--------------------------------------------------------------
+ Result
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         Merge Key: (area(f1))
+         ->  Sort
+               Sort Key: (area(f1))
+               ->  Index Scan using gcircleind on circle_tbl
+                     Index Cond: (f1 && '<(1,-2),1>'::circle)
+                     Filter: (f1 && '<(1,-2),1>'::circle)
  Optimizer: Postgres query optimizer
-(7 rows)
+(9 rows)
 
 SELECT * FROM circle_tbl WHERE f1 && circle(point(1,-2), 1)
     ORDER BY area(f1);
@@ -5286,16 +5288,18 @@ SELECT * FROM polygon_tbl WHERE f1 @> '((1,1),(2,2),(2,1))'::polygon
 EXPLAIN (COSTS OFF)
 SELECT * FROM polygon_tbl WHERE f1 @> '((1,1),(2,2),(2,1))'::polygon
     ORDER BY (poly_center(f1))[0];
-                          QUERY PLAN                          
---------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)
-   Merge Key: ((poly_center(f1))[0])
-   ->  Sort
-         Sort Key: ((poly_center(f1))[0])
-         ->  Seq Scan on polygon_tbl
-               Filter: (f1 @> '((1,1),(2,2),(2,1))'::polygon)
+                             QUERY PLAN
+---------------------------------------------------------------------
+ Result
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         Merge Key: ((poly_center(f1))[0])
+         ->  Sort
+               Sort Key: ((poly_center(f1))[0])
+               ->  Index Scan using gpolygonind on polygon_tbl
+                     Index Cond: (f1 @> '((1,1),(2,2),(2,1))'::polygon)
+                     Filter: (f1 @> '((1,1),(2,2),(2,1))'::polygon)
  Optimizer: Postgres query optimizer
-(7 rows)
+(9 rows)
 
 SELECT * FROM polygon_tbl WHERE f1 @> '((1,1),(2,2),(2,1))'::polygon
     ORDER BY (poly_center(f1))[0];

@@ -146,7 +146,10 @@ MergeTupleTableSlot(TupleTableSlot *slot, SplitMerge *plannode, SplitMergeState 
 		/* Compute segment ID for the new row */
 		int32		target_seg;
 
-		target_seg = evalHashKey(node, newslot->tts_values, newslot->tts_isnull);
+		if (node->cdbhash)
+			target_seg = evalHashKey(node, newslot->tts_values, newslot->tts_isnull);
+		else
+			target_seg = cdbhashrandomseg(plannode->numHashSegments);
 
 		slot->tts_values[node->segid_attno - 1] = Int32GetDatum(target_seg);
 		slot->tts_isnull[node->segid_attno - 1] = false;

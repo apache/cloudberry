@@ -219,9 +219,11 @@ select count(*) from bmscantest where a>1;
 -- test accumulation of stats for parallel nodes
 reset enable_seqscan;
 alter table tenk2 set (parallel_workers = 0);
+--start_ignore
 explain (analyze, timing off, summary off, costs off)
    select count(*) from tenk1, tenk2 where tenk1.hundred > 1
         and tenk2.thousand=0;
+--end_ignore
 alter table tenk2 reset (parallel_workers);
 
 reset work_mem;
@@ -259,8 +261,10 @@ analyze tenk2;
 set enable_hashjoin to off;
 set enable_nestloop to off;
 
+--start_ignore
 explain (costs off)
 	select  count(*) from tenk1, tenk2 where tenk1.unique1 = tenk2.unique1;
+--end_ignore
 select  count(*) from tenk1, tenk2 where tenk1.unique1 = tenk2.unique1;
 
 reset enable_hashjoin;

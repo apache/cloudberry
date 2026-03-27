@@ -44,7 +44,7 @@ SELECT any_value(v) FROM (VALUES (NULL)) AS v (v);
 (1 row)
 
 SELECT any_value(v) FROM (VALUES (NULL), (1), (2)) AS v (v);
- any_value
+ any_value 
 -----------
          1
 (1 row)
