@@ -518,7 +518,6 @@ transformGroupedWindows(Node *node, void *context)
 
 		Query	   *subq;
 		RangeTblEntry *rte;
-		RTEPermissionInfo *perminfo;
 		RangeTblRef *ref;
 		Alias	   *alias;
 		bool		hadSubLinks = qry->hasSubLinks;
@@ -545,6 +544,7 @@ transformGroupedWindows(Node *node, void *context)
 
 		/* Core of subquery input table expression: */
 		subq->rtable = qry->rtable; /* before windowing */
+		subq->rteperminfos = qry->rteperminfos; /* before windowing */
 		subq->jointree = qry->jointree; /* before windowing */
 		subq->targetList = NIL;		/* fill in later */
 
@@ -578,11 +578,9 @@ transformGroupedWindows(Node *node, void *context)
 		rte->eref = NULL;			/* fill in later */
 		rte->inFromCl = true;
 
-		perminfo = makeNode(RTEPermissionInfo);
-		perminfo->requiredPerms = ACL_SELECT;
-
 		/*
-		 * Default? rte->inh = 0; rte->checkAsUser = 0;
+		 * Subquery RTEs do not need RTEPermissionInfo.  Permission checks
+		 * are performed on the base tables within the subquery itself.
 		 */
 
 		/*
@@ -605,7 +603,7 @@ transformGroupedWindows(Node *node, void *context)
 
 		/* Core of outer query input table expression: */
 		qry->rtable = list_make1(rte);
-		qry->rteperminfos = list_make1(perminfo);
+		qry->rteperminfos = NIL;
 		qry->jointree = (FromExpr *) makeNode(FromExpr);
 		qry->jointree->fromlist = list_make1(ref);
 		qry->jointree->quals = NULL;

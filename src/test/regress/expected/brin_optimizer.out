@@ -589,7 +589,7 @@ NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 -- long random strings (~2000 chars each, so ~6kB for min/max on two
 -- columns) to trigger toasting
-WITH rand_value AS (SELECT string_agg(md5(i::text),'') AS val FROM generate_series(1,60) s(i))
+WITH rand_value AS (SELECT string_agg(fipshash(i::text),'') AS val FROM generate_series(1,60) s(i))
 INSERT INTO brintest_3
 SELECT val, val, val, val FROM rand_value;
 CREATE INDEX brin_test_toast_idx ON brintest_3 USING brin (b, c);
@@ -609,7 +609,7 @@ VACUUM brintest_3;
 -- retry insert with a different random-looking (but deterministic) value
 -- the value is different, and so should replace either min or max in the
 -- brin summary
-WITH rand_value AS (SELECT string_agg(md5((-i)::text),'') AS val FROM generate_series(1,60) s(i))
+WITH rand_value AS (SELECT string_agg(fipshash((-i)::text),'') AS val FROM generate_series(1,60) s(i))
 INSERT INTO brintest_3
 SELECT val, val, val, val FROM rand_value;
 -- now try some queries, accessing the brin index
@@ -633,3 +633,8 @@ SELECT * FROM brintest_3 WHERE b < '0';
 
 DROP TABLE brintest_3;
 RESET enable_seqscan;
+-- test an unlogged table, mostly to get coverage of brinbuildempty
+CREATE UNLOGGED TABLE brintest_unlogged (n numrange);
+CREATE INDEX brinidx_unlogged ON brintest_unlogged USING brin (n);
+INSERT INTO brintest_unlogged VALUES (numrange(0, 2^1000::numeric));
+DROP TABLE brintest_unlogged;

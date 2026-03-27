@@ -2340,6 +2340,7 @@ get_prestate_rte(RangeTblEntry *rte, MV_TriggerTable *table,
 	rte->relkind = 0;
 	rte->rellockmode = 0;
 	rte->tablesample = NULL;
+	rte->perminfoindex = 0;		/* subquery RTE does not need permission check */
 	rte->inh = false;			/* must not be set for a subquery */
 
 	return rte;
@@ -2403,6 +2404,7 @@ replace_rte_with_delta(RangeTblEntry *rte, MV_TriggerTable *table, bool is_new,
 	rte->relkind = 0;
 	rte->rellockmode = 0;
 	rte->tablesample = NULL;
+	rte->perminfoindex = 0;		/* subquery RTE does not need permission check */
 	rte->inh = false;			/* must not be set for a subquery */
 
 	return rte;

@@ -8,6 +8,7 @@
 -- m/^LOG: .*Feature not supported: Queries on master-only tables./
 -- m/^LOG: .*Falling back to Postgres-based planner because GPORCA does not support the following feature: Queries on master-only tables./
 -- m/^LOG:.*ERROR,"PG exception raised"/
+-- m/^LOG:  An exception was encountered during the execution of statement:/
 -- end_matchignore
 set gp_autostats_mode=on_change;
 set gp_autostats_on_change_threshold=9;
@@ -45,7 +46,6 @@ set role=autostats_nonowner;
 LOG:  statement: set role=autostats_nonowner;
 insert into autostats_test select generate_series(1, 10);
 LOG:  statement: insert into autostats_test select generate_series(1, 10);
-LOG:  An exception was encountered during the execution of statement: insert into autostats_test select generate_series(1, 10);
 ERROR:  permission denied for table autostats_test
 select relname, reltuples from pg_class where relname='autostats_test';
 LOG:  statement: select relname, reltuples from pg_class where relname='autostats_test';
@@ -87,7 +87,6 @@ LOG:  statement: select relname, reltuples from pg_class where relname='autostat
 -- Try to disable allow_nonowner GUC as ordinary user, should fail
 set gp_autostats_allow_nonowner=off;
 LOG:  statement: set gp_autostats_allow_nonowner=off;
-LOG:  An exception was encountered during the execution of statement: set gp_autostats_allow_nonowner=off;
 ERROR:  permission denied to set parameter "gp_autostats_allow_nonowner"
 show gp_autostats_allow_nonowner;
 LOG:  statement: show gp_autostats_allow_nonowner;

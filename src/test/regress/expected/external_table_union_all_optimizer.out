@@ -1,10 +1,15 @@
 SET optimizer_trace_fallback=on;
 -- Test external table as left child of union all with replicated table
+\getenv abs_srcdir PG_ABS_SRCDIR
+\getenv hostname PG_HOSTNAME
+\set location1_file 'file://' :hostname :abs_srcdir '/data/location1.csv'
+\set location2_file 'file://' :hostname :abs_srcdir '/data/location2.csv'
+\set location3_file 'file://' :hostname :abs_srcdir '/data/location3.csv'
 CREATE EXTERNAL TABLE multilocation_external_table(a INTEGER)
-location ('file://@hostname@@abs_srcdir@/data/location1.csv', 'file://@hostname@@abs_srcdir@/data/location2.csv', 'file://@hostname@@abs_srcdir@/data/location3.csv')
+location (:'location1_file', :'location2_file', :'location3_file')
 ON ALL FORMAT 'text';
 CREATE EXTERNAL TABLE one_external_table(a INTEGER)
-location ('file://@hostname@@abs_srcdir@/data/location2.csv')
+location (:'location2_file')
 ON SEGMENT 2 FORMAT 'text';
 CREATE TABLE simple_replicated_table(a integer) DISTRIBUTED REPLICATED;
 INSERT INTO simple_replicated_table VALUES (1);

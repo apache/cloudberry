@@ -1,13 +1,7 @@
 -- Tests for range data types.
--- start_matchsubs
--- m/NOTICE:  One or more columns in the following table\(s\) do not have statistics: /
--- s/.//gs
--- m/HINT:  For non-partitioned tables, run analyze .+\. For partitioned tables, run analyze rootpartition .+\. See log for columns missing statistics\./
--- s/.//gs
--- end_matchsubs
-create type textrange as range (subtype=text, collation="C");
 --
 -- test input parser
+-- (type textrange was already made in test_setup.sql)
 --
 -- negative tests; should fail
 select ''::textrange;
@@ -179,6 +173,73 @@ select '(a,a)'::textrange;
  textrange 
 -----------
  empty
+(1 row)
+
+-- Also try it with non-error-throwing API
+select pg_input_is_valid('(1,4)', 'int4range');
+ pg_input_is_valid 
+-------------------
+ t
+(1 row)
+
+select pg_input_is_valid('(1,4', 'int4range');
+ pg_input_is_valid 
+-------------------
+ f
+(1 row)
+
+select * from pg_input_error_info('(1,4', 'int4range');
+             message             |          detail          | hint | sql_error_code 
+---------------------------------+--------------------------+------+----------------
+ malformed range literal: "(1,4" | Unexpected end of input. |      | 22P02
+(1 row)
+
+select pg_input_is_valid('(4,1)', 'int4range');
+ pg_input_is_valid 
+-------------------
+ f
+(1 row)
+
+select * from pg_input_error_info('(4,1)', 'int4range');
+                              message                              | detail | hint | sql_error_code 
+-------------------------------------------------------------------+--------+------+----------------
+ range lower bound must be less than or equal to range upper bound |        |      | 22000
+(1 row)
+
+select pg_input_is_valid('(4,zed)', 'int4range');
+ pg_input_is_valid 
+-------------------
+ f
+(1 row)
+
+select * from pg_input_error_info('(4,zed)', 'int4range');
+                   message                    | detail | hint | sql_error_code 
+----------------------------------------------+--------+------+----------------
+ invalid input syntax for type integer: "zed" |        |      | 22P02
+(1 row)
+
+select pg_input_is_valid('[1,2147483647]', 'int4range');
+ pg_input_is_valid 
+-------------------
+ f
+(1 row)
+
+select * from pg_input_error_info('[1,2147483647]', 'int4range');
+       message        | detail | hint | sql_error_code 
+----------------------+--------+------+----------------
+ integer out of range |        |      | 22003
+(1 row)
+
+select pg_input_is_valid('[2000-01-01,5874897-12-31]', 'daterange');
+ pg_input_is_valid 
+-------------------
+ f
+(1 row)
+
+select * from pg_input_error_info('[2000-01-01,5874897-12-31]', 'daterange');
+      message      | detail | hint | sql_error_code 
+-------------------+--------+------+----------------
+ date out of range |        |      | 22008
 (1 row)
 
 --
@@ -1494,12 +1555,11 @@ LINE 1: select '[2010-01-01 01:00:00 -08, 2010-01-01 02:00:00 -05)':...
 set timezone to default;
 --
 -- Test user-defined range of floats
+-- (type float8range was already made in test_setup.sql)
 --
 --should fail
-create type float8range as range (subtype=float8, subtype_diff=float4mi);
+create type bogus_float8range as range (subtype=float8, subtype_diff=float4mi);
 ERROR:  function float4mi(double precision, double precision) does not exist
---should succeed
-create type float8range as range (subtype=float8, subtype_diff=float8mi);
 select '[123.001, 5.e9)'::float8range @> 888.882::float8;
  ?column? 
 ----------
@@ -1701,7 +1761,7 @@ reset enable_sort;
 --
 create type two_ints as (a int, b int);
 create type two_ints_range as range (subtype = two_ints);
--- with force_parallel_mode on, this exercises tqueue.c's range remapping
+-- with debug_parallel_query on, this exercises tqueue.c's range remapping
 select *, row_to_json(upper(t)) as u from
   (values (two_ints_range(row(1,2), row(3,4))),
           (two_ints_range(row(5,6), row(7,8)))) v(t);

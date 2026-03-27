@@ -522,7 +522,7 @@ select * from (
   group by grouping sets(1, 2)
 ) ss
 where x = 1 and q1 = 123;
-                      QUERY PLAN
+                      QUERY PLAN                    
 ------------------------------------------------------
  Result
    Output: NULL::integer, NULL::bigint, NULL::numeric
@@ -662,16 +662,16 @@ CREATE VIEW gstest_view AS select a, b, grouping(a,b), sum(c), count(*), max(c)
   from gstest2 group by rollup ((a,b,c),(c,d));
 NOTICE:  view "gstest_view" will be a temporary view
 select pg_get_viewdef('gstest_view'::regclass, true);
-                                pg_get_viewdef                                 
--------------------------------------------------------------------------------
-  SELECT gstest2.a,                                                           +
-     gstest2.b,                                                               +
-     GROUPING(gstest2.a, gstest2.b) AS "grouping",                            +
-     sum(gstest2.c) AS sum,                                                   +
-     count(*) AS count,                                                       +
-     max(gstest2.c) AS max                                                    +
-    FROM gstest2                                                              +
-   GROUP BY ROLLUP((gstest2.a, gstest2.b, gstest2.c), (gstest2.c, gstest2.d));
+            pg_get_viewdef             
+---------------------------------------
+  SELECT a,                           +
+     b,                               +
+     GROUPING(a, b) AS "grouping",    +
+     sum(c) AS sum,                   +
+     count(*) AS count,               +
+     max(c) AS max                    +
+    FROM gstest2                      +
+   GROUP BY ROLLUP((a, b, c), (c, d));
 (1 row)
 
 -- Nested queries with 3 or more levels of nesting
@@ -1925,6 +1925,7 @@ select array(select row(v.a,s1.*) from (select two,four, count(*) from onek grou
 
 -- test the knapsack
 set enable_indexscan = false;
+set hash_mem_multiplier = 1.0;
 set work_mem = '64kB';
 explain (costs off)
   select unique1,
@@ -2418,6 +2419,7 @@ group by cube (g1000,g100,g10) distributed by (g1000);
 set jit_above_cost to default;
 set enable_sort = true;
 set work_mem to default;
+set hash_mem_multiplier to default;
 -- Compare results of ORCA plan that relies on "IS NOT DISTINCT FROM" HASH Join
 (select * from gs_hash_1 except select * from gs_group_1)
   union all
@@ -2568,7 +2570,6 @@ select (select grouping(v1)) from (values ((select 1))) v(v1) group by v1;
         QUERY PLAN         
 ---------------------------
  GroupAggregate
-   Group Key: $2
    InitPlan 1 (returns $1)
      ->  Result
    InitPlan 3 (returns $2)
@@ -2576,7 +2577,7 @@ select (select grouping(v1)) from (values ((select 1))) v(v1) group by v1;
    ->  Result
    SubPlan 2
      ->  Result
-(9 rows)
+(8 rows)
 
 select (select grouping(v1)) from (values ((select 1))) v(v1) group by v1;
  grouping 

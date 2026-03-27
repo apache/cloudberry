@@ -149,9 +149,9 @@ select * from vw_ord;
 select definition from pg_views where viewname='vw_ord';
                                        definition                                       
 ----------------------------------------------------------------------------------------
-  SELECT z.a,                                                                          +
-     z.b,                                                                              +
-     z.c                                                                               +
+  SELECT a,                                                                            +
+     b,                                                                                +
+     c                                                                                 +
     FROM UNNEST(ARRAY[10, 20], ARRAY['foo'::text, 'bar'::text], ARRAY[1.0]) z(a, b, c);
 (1 row)
 
@@ -167,9 +167,9 @@ select * from vw_ord;
 select definition from pg_views where viewname='vw_ord';
                                        definition                                       
 ----------------------------------------------------------------------------------------
-  SELECT z.a,                                                                          +
-     z.b,                                                                              +
-     z.c                                                                               +
+  SELECT a,                                                                            +
+     b,                                                                                +
+     c                                                                                 +
     FROM UNNEST(ARRAY[10, 20], ARRAY['foo'::text, 'bar'::text], ARRAY[1.0]) z(a, b, c);
 (1 row)
 
@@ -185,9 +185,9 @@ select * from vw_ord;
 select definition from pg_views where viewname='vw_ord';
                                                       definition                                                      
 ----------------------------------------------------------------------------------------------------------------------
-  SELECT z.a,                                                                                                        +
-     z.b,                                                                                                            +
-     z.c                                                                                                             +
+  SELECT a,                                                                                                          +
+     b,                                                                                                              +
+     c                                                                                                               +
     FROM ROWS FROM(unnest(ARRAY[10, 20]), unnest(ARRAY['foo'::text, 'bar'::text]), generate_series(1, 2)) z(a, b, c);
 (1 row)
 
@@ -610,14 +610,14 @@ select * from vw_rngfunc;
 select pg_get_viewdef('vw_rngfunc');
                                                                                 pg_get_viewdef                                                                                
 ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-  SELECT t1.a,                                                                                                                                                               +
-     t1.b,                                                                                                                                                                   +
-     t1.c,                                                                                                                                                                   +
-     t1.d,                                                                                                                                                                   +
-     t1.e,                                                                                                                                                                   +
-     t1.f,                                                                                                                                                                   +
-     t1.g,                                                                                                                                                                   +
-     t1.n                                                                                                                                                                    +
+  SELECT a,                                                                                                                                                                  +
+     b,                                                                                                                                                                      +
+     c,                                                                                                                                                                      +
+     d,                                                                                                                                                                      +
+     e,                                                                                                                                                                      +
+     f,                                                                                                                                                                      +
+     g,                                                                                                                                                                      +
+     n                                                                                                                                                                       +
     FROM ROWS FROM(getrngfunc9(1), getrngfunc7(1) AS (rngfuncid integer, rngfuncsubid integer, rngfuncname text), getrngfunc1(1)) WITH ORDINALITY t1(a, b, c, d, e, f, g, n);
 (1 row)
 
@@ -2234,15 +2234,47 @@ select * from usersview;
  id2    |   2 | email2 |       12 | t       |              11 |          2
 (2 rows)
 
+alter table users drop column moredrop;  -- fail, view has reference
+DETAIL:  view usersview depends on column moredrop of table users
+ERROR:  cannot drop column moredrop of table users because other objects depend on it
+HINT:  Use DROP ... CASCADE to drop the dependent objects too.
+-- We used to have a bug that would allow the above to succeed, posing
+-- hazards for later execution of the view.  Check that the internal
+-- defenses for those hazards haven't bit-rotted, in case some other
+-- bug with similar symptoms emerges.
 begin;
-alter table users drop column moredrop;
+-- destroy the dependency entry that prevents the DROP:
+delete from pg_depend where
+  objid = (select oid from pg_rewrite
+           where ev_class = 'usersview'::regclass and rulename = '_RETURN')
+  and refobjsubid = 5
+returning pg_describe_object(classid, objid, objsubid) as obj,
+          pg_describe_object(refclassid, refobjid, refobjsubid) as ref,
+          deptype;
+ERROR:  permission denied: "pg_depend" is a system catalog
+alter table users drop column moredrop cascade;
+ERROR:  current transaction is aborted, commands ignored until end of transaction block
 select * from usersview;  -- expect clean failure
-ERROR:  attribute 5 of type record has been dropped
+ERROR:  current transaction is aborted, commands ignored until end of transaction block
 rollback;
-alter table users alter column seq type numeric;
+alter table users alter column seq type numeric;  -- fail, view has reference
+DETAIL:  rule _RETURN on view usersview depends on column "seq"
+ERROR:  cannot alter type of a column used by a view or rule
+-- likewise, check we don't crash if the dependency goes wrong
+begin;
+-- destroy the dependency entry that prevents the ALTER:
+delete from pg_depend where
+  objid = (select oid from pg_rewrite
+           where ev_class = 'usersview'::regclass and rulename = '_RETURN')
+  and refobjsubid = 2
+returning pg_describe_object(classid, objid, objsubid) as obj,
+          pg_describe_object(refclassid, refobjid, refobjsubid) as ref,
+          deptype;
+ERROR:  permission denied: "pg_depend" is a system catalog
+-- alter table users alter column seq type numeric;
 select * from usersview;  -- expect clean failure
-ERROR:  attribute 2 of type record has wrong type
-DETAIL:  Table has type numeric, but query expects integer.
+ERROR:  current transaction is aborted, commands ignored until end of transaction block
+rollback;
 drop view usersview;
 drop function get_first_user();
 drop function get_users();
@@ -2515,3 +2547,19 @@ select * from
  [{"id": "1"}] | 1
 (1 row)
 
+-- check detection of mismatching record types with a const-folded expression
+with a(b) as (values (row(1,2,3)))
+select * from a, coalesce(b) as c(d int, e int);  -- fail
+DETAIL:  Returned row contains 3 attributes, but query expects 2.
+ERROR:  function return row and query-specified return row do not match
+with a(b) as (values (row(1,2,3)))
+select * from a, coalesce(b) as c(d int, e int, f int, g int);  -- fail
+DETAIL:  Returned row contains 3 attributes, but query expects 4.
+ERROR:  function return row and query-specified return row do not match
+with a(b) as (values (row(1,2,3)))
+select * from a, coalesce(b) as c(d int, e int, f float);  -- fail
+DETAIL:  Returned type integer at ordinal position 3, but query expects double precision.
+ERROR:  function return row and query-specified return row do not match
+select * from int8_tbl, coalesce(row(1)) as (a int, b int);  -- fail
+DETAIL:  Returned row contains 1 attribute, but query expects 2.
+ERROR:  function return row and query-specified return row do not match

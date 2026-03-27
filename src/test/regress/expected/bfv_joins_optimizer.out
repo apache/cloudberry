@@ -3526,6 +3526,7 @@ explain (costs off) select * from b, lateral (select * from a, c where b.i = a.i
 ---------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Nested Loop
+         Join Filter: ((a.i + b.i) = c.j)
          ->  Broadcast Motion 3:3  (slice2; segments: 3)
                ->  Seq Scan on b
          ->  Materialize
@@ -3537,7 +3538,7 @@ explain (costs off) select * from b, lateral (select * from a, c where b.i = a.i
                      ->  Index Only Scan using c_j_i_idx on c
                            Index Cond: (j = (a.i + b.i))
  Optimizer: Postgres query optimizer
-(13 rows)
+(14 rows)
 
 select * from b, lateral (select * from a, c where b.i = a.i and (a.i + b.i) = c.j) as ac;
  i | i | i | j 
