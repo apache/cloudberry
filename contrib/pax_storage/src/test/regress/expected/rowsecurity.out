@@ -3166,6 +3166,10 @@ NOTICE:  f_leak => fgh_updt
  8 | fgh_updt_updt | regress_rls_carol
 (6 rows)
 
+DELETE FROM x1 WHERE f_leak(b) RETURNING *;
+NOTICE:  f_leak => cde_updt
+NOTICE:  f_leak => fgh_updt_updt
+ERROR:  not implemented yet on pax relations: TupleFetchRowVersion
 --
 -- Duplicate Policy Names
 --

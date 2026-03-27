@@ -799,14 +799,14 @@ insert into t2_13265 values (2, null, 2, 2);
 explain (verbose, costs off)
 update t1_13265 set b = 2 where
 (c, d) not in (select c, d from t2_13265 where a = 2);
-                                     QUERY PLAN                                      
--------------------------------------------------------------------------------------
+                                           QUERY PLAN                                            
+-------------------------------------------------------------------------------------------------
  Update on public.t1_13265
    ->  Nested Loop Left Anti Semi (Not-In) Join
-         Output: 2, t1_13265.ctid, t1_13265.gp_segment_id, t2_13265.ctid
+         Output: 2, t1_13265.ctid, t1_13265.gp_segment_id, t1_13265.*, t2_13265.ctid
          Join Filter: ((t1_13265.c = t2_13265.c) AND (t1_13265.d = t2_13265.d))
          ->  Seq Scan on public.t1_13265
-               Output: t1_13265.ctid, t1_13265.gp_segment_id, t1_13265.c, t1_13265.d
+               Output: t1_13265.ctid, t1_13265.gp_segment_id, t1_13265.*, t1_13265.c, t1_13265.d
          ->  Materialize
                Output: t2_13265.ctid, t2_13265.c, t2_13265.d
                ->  Broadcast Motion 1:3  (slice1; segments: 1)

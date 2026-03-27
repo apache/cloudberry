@@ -458,8 +458,6 @@ CREATE TABLE atest12 as
 CREATE INDEX ON atest12 (a);
 CREATE INDEX ON atest12 (abs(a));
 -- results below depend on having quite accurate stats for atest12, so...
-ALTER TABLE atest12 SET (autovacuum_enabled = off);
-WARNING:  autovacuum is not supported in Cloudberry
 SET default_statistics_target = 10000;
 VACUUM ANALYZE atest12;
 RESET default_statistics_target;

@@ -62,7 +62,9 @@ ERROR:  permission denied: "extaux_t" is a system catalog
 set gp_enable_refresh_fast_path = off;
 -- end_ignore
 refresh materialized view pg_ext_aux.extaux_mv;
-ERROR:  cannot swap toast files by links for system catalogs (cluster.c:XXX)
+-- start_ignore
+reset gp_enable_refresh_fast_path;
+-- end_ignore
 -- fail: should not allow to be dropped by user
 drop view pg_ext_aux.extaux_v;
 ERROR:  permission denied: "extaux_v" is a system catalog

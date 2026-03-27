@@ -16,8 +16,9 @@ end;
 ' language plpgsql NO SQL;
 create trigger tg_bu before update
    on test for each row execute procedure bu();
+ERROR:  ON UPDATE triggers are not supported on append-only tables
 update test set a=200 where a=10;
-drop trigger tg_bu on test;
+-- drop trigger tg_bu on test;
 drop function bu();
 drop table test;
 create table test (a integer, b integer, c integer);

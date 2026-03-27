@@ -2,7 +2,11 @@
 \set default_tablespace :abs_builddir '/testtablespace_default_tablespace'
 \set database_tablespace :abs_builddir '/testtablespace_database_tablespace'
 create tablespace some_default_tablespace location :'default_tablespace';
+WARNING:  tablespace location "/home/gpadmin/cloudberry/contrib/pax_storage/src/test/regress/testtablespace_default_tablespace" is too long for TAR
+DETAIL:  The location is used to create a symlink target from pg_tblspc. Symlink targets are truncated to 100 characters when sending a TAR (e.g the BASE_BACKUP protocol response).
 create tablespace some_database_tablespace location :'database_tablespace';
+WARNING:  tablespace location "/home/gpadmin/cloudberry/contrib/pax_storage/src/test/regress/testtablespace_database_tablespace" is too long for TAR
+DETAIL:  The location is used to create a symlink target from pg_tblspc. Symlink targets are truncated to 100 characters when sending a TAR (e.g the BASE_BACKUP protocol response).
 create database database_for_default_tablespace;
 \c database_for_default_tablespace;
 set default_tablespace to some_default_tablespace;

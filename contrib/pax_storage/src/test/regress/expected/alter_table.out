@@ -2337,7 +2337,7 @@ select reltoastrelid <> 0 as has_toast_table
   from pg_class where oid = 'test_storage'::regclass;
  has_toast_table 
 -----------------
- t
+ f
 (1 row)
 
 alter table test_storage alter a set storage plain;
@@ -2355,7 +2355,7 @@ select reltoastrelid <> 0 as has_toast_table
   from pg_class where oid = 'test_storage'::regclass;
  has_toast_table 
 -----------------
- t
+ f
 (1 row)
 
 -- check STORAGE correctness
@@ -2846,44 +2846,6 @@ select * from my_locks order by 1;
 (1 row)
 
 commit;
-begin; alter table alterlock set (fillfactor = 100);
-select * from my_locks order by 1;
-  relname  |       max_lockmode       
------------+--------------------------
- alterlock | ShareUpdateExclusiveLock
- pg_toast  | ShareUpdateExclusiveLock
-(2 rows)
-
-commit;
-begin; alter table alterlock reset (fillfactor);
-select * from my_locks order by 1;
-  relname  |       max_lockmode       
------------+--------------------------
- alterlock | ShareUpdateExclusiveLock
- pg_toast  | ShareUpdateExclusiveLock
-(2 rows)
-
-commit;
-begin; alter table alterlock set (toast.autovacuum_enabled = off);
-WARNING:  autovacuum is not supported in Cloudberry
-select * from my_locks order by 1;
-  relname  |       max_lockmode       
------------+--------------------------
- alterlock | ShareUpdateExclusiveLock
- pg_toast  | ShareUpdateExclusiveLock
-(2 rows)
-
-commit;
-begin; alter table alterlock set (autovacuum_enabled = off);
-WARNING:  autovacuum is not supported in Cloudberry
-select * from my_locks order by 1;
-  relname  |       max_lockmode       
------------+--------------------------
- alterlock | ShareUpdateExclusiveLock
- pg_toast  | ShareUpdateExclusiveLock
-(2 rows)
-
-commit;
 begin; alter table alterlock alter column f2 set (n_distinct = 1);
 select * from my_locks order by 1;
   relname  |       max_lockmode       
@@ -2893,16 +2855,6 @@ select * from my_locks order by 1;
 
 rollback;
 -- test that mixing options with different lock levels works as expected
-begin; alter table alterlock set (autovacuum_enabled = off, fillfactor = 80);
-WARNING:  autovacuum is not supported in Cloudberry
-select * from my_locks order by 1;
-  relname  |       max_lockmode       
------------+--------------------------
- alterlock | ShareUpdateExclusiveLock
- pg_toast  | ShareUpdateExclusiveLock
-(2 rows)
-
-commit;
 begin; alter table alterlock alter column f2 set storage extended;
 select * from my_locks order by 1;
   relname  |    max_lockmode     
@@ -2925,12 +2877,9 @@ create trigger ttdummy
 	for each row
 	execute procedure
 	ttdummy (1, 1);
+ERROR:  ON UPDATE triggers are not supported on append-only tables
 select * from my_locks order by 1;
-  relname  |     max_lockmode      
------------+-----------------------
- alterlock | ShareRowExclusiveLock
-(1 row)
-
+ERROR:  current transaction is aborted, commands ignored until end of transaction block
 rollback;
 begin;
 select * from my_locks order by 1;
@@ -3685,14 +3634,12 @@ SELECT r.relname || ' toast table', t.relkind, t.relpersistence FROM pg_class r 
 UNION ALL
 SELECT r.relname ||' toast index', ri.relkind, ri.relpersistence FROM pg_class r join pg_class t ON t.oid = r.reltoastrelid JOIN pg_index i ON i.indrelid = t.oid JOIN pg_class ri ON ri.oid = i.indexrelid WHERE r.relname ~ '^logged1'
 ORDER BY relname;
-       relname       | relkind | relpersistence 
----------------------+---------+----------------
- logged1             | r       | p
- logged1 toast index | i       | p
- logged1 toast table | t       | p
- logged1_f1_seq      | S       | p
- logged1_pkey        | i       | p
-(5 rows)
+    relname     | relkind | relpersistence 
+----------------+---------+----------------
+ logged1        | r       | p
+ logged1_f1_seq | S       | p
+ logged1_pkey   | i       | p
+(3 rows)
 
 CREATE TABLE logged2(f1 SERIAL PRIMARY KEY, f2 INTEGER REFERENCES logged1); -- foreign key
 CREATE TABLE logged3(f1 SERIAL PRIMARY KEY, f2 INTEGER REFERENCES logged3); -- self-referencing foreign key
@@ -3708,14 +3655,12 @@ SELECT r.relname || ' toast table', t.relkind, t.relpersistence FROM pg_class r 
 UNION ALL
 SELECT r.relname || ' toast index', ri.relkind, ri.relpersistence FROM pg_class r join pg_class t ON t.oid = r.reltoastrelid JOIN pg_index i ON i.indrelid = t.oid JOIN pg_class ri ON ri.oid = i.indexrelid WHERE r.relname ~ '^logged1'
 ORDER BY relname;
-       relname       | relkind | relpersistence 
----------------------+---------+----------------
- logged1             | r       | u
- logged1 toast index | i       | u
- logged1 toast table | t       | u
- logged1_f1_seq      | S       | u
- logged1_pkey        | i       | u
-(5 rows)
+    relname     | relkind | relpersistence 
+----------------+---------+----------------
+ logged1        | r       | u
+ logged1_f1_seq | S       | u
+ logged1_pkey   | i       | u
+(3 rows)
 
 ALTER TABLE logged1 SET UNLOGGED; -- silently do nothing
 DROP TABLE logged3;

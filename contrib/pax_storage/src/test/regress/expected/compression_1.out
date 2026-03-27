@@ -194,7 +194,6 @@ LINE 1: SELECT pg_column_compression(x) FROM compressmv;
 CREATE TABLE cmpart(f1 text COMPRESSION lz4) PARTITION BY HASH(f1);
 ERROR:  compression method lz4 not supported
 DETAIL:  This functionality requires the server to be built with lz4 support.
-HINT:  You need to rebuild PostgreSQL using --with-lz4.
 CREATE TABLE cmpart1 PARTITION OF cmpart FOR VALUES WITH (MODULUS 2, REMAINDER 0);
 ERROR:  relation "cmpart" does not exist
 CREATE TABLE cmpart2(f1 text COMPRESSION pglz);
@@ -316,10 +315,10 @@ DETAIL:  This functionality requires the server to be built with lz4 support.
 HINT:  You need to rebuild PostgreSQL using --with-lz4.
 CREATE UNIQUE INDEX idx1 ON cmdata2 ((f1 || f2));
 ERROR:  relation "cmdata2" does not exist
-INSERT INTO cmdata2 VALUES((SELECT array_agg(md5(g::TEXT))::TEXT FROM
+INSERT INTO cmdata2 VALUES((SELECT array_agg(fipshash(g::TEXT))::TEXT FROM
 generate_series(1, 50) g), VERSION());
 ERROR:  relation "cmdata2" does not exist
-LINE 1: INSERT INTO cmdata2 VALUES((SELECT array_agg(md5(g::TEXT))::...
+LINE 1: INSERT INTO cmdata2 VALUES((SELECT array_agg(fipshash(g::TEX...
                     ^
 -- check data is ok
 SELECT length(f1) FROM cmdata;

@@ -387,6 +387,8 @@ FROM gp_tablespace_location((SELECT oid FROM pg_tablespace WHERE spcname='testsp
 -- another version of GPDB.
 \set testtablespace_existing_version_dir :testtablespace '_existing_version_dir'
 CREATE TABLESPACE testspace_existing_version_dir LOCATION :'testtablespace_existing_version_dir';
+WARNING:  tablespace location "/home/gpadmin/cloudberry/contrib/pax_storage/src/test/regress/testtablespace_existing_version_dir" is too long for TAR
+DETAIL:  The location is used to create a symlink target from pg_tblspc. Symlink targets are truncated to 100 characters when sending a TAR (e.g the BASE_BACKUP protocol response).
 SELECT * FROM
   (SELECT pg_ls_dir('pg_tblspc/' || oid) AS versiondirs
     FROM pg_tablespace

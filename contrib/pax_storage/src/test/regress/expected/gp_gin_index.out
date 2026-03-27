@@ -623,50 +623,50 @@ EXPLAIN SELECT count(*) FROM test_tsvector WHERE a @@ '!no_such_lexeme';
 SELECT count(*) FROM test_tsvector WHERE a @@ 'wr|qh';
  count 
 -------
-   158
+   316
 (1 row)
 
 SELECT count(*) FROM test_tsvector WHERE a @@ 'wr&qh';
  count 
 -------
-    17
+    34
 (1 row)
 
 SELECT count(*) FROM test_tsvector WHERE a @@ 'eq&yt';
  count 
 -------
-     6
+    12
 (1 row)
 
 SELECT count(*) FROM test_tsvector WHERE a @@ 'eq|yt';
  count 
 -------
-    98
+   196
 (1 row)
 
 SELECT count(*) FROM test_tsvector WHERE a @@ '(eq&yt)|(wr&qh)';
  count 
 -------
-    23
+    46
 (1 row)
 
 SELECT count(*) FROM test_tsvector WHERE a @@ '(eq|yt)&(wr|qh)';
  count 
 -------
-    39
+    78
 (1 row)
 
 SELECT count(*) FROM test_tsvector WHERE a @@ 'w:*|q:*';
  count 
 -------
-   496
+   988
 (1 row)
 
 -- For orca, ScalarArrayOpExpr condition on index scan not supported
 SELECT count(*) FROM test_tsvector WHERE a @@ any ('{wr,qh}');
  count 
 -------
-   158
+   316
 (1 row)
 
 SELECT count(*) FROM test_tsvector WHERE a @@ 'no_such_lexeme';
@@ -678,7 +678,7 @@ SELECT count(*) FROM test_tsvector WHERE a @@ 'no_such_lexeme';
 SELECT count(*) FROM test_tsvector WHERE a @@ '!no_such_lexeme';
  count 
 -------
-  1022
+  1018
 (1 row)
 
 DROP INDEX wowidx;

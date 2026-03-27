@@ -716,19 +716,18 @@ ERROR:  pax only support btree/hash/gin/bitmap indexes (pax_access_handle.cc:591
 --------+----------+-----------+----------+---------
  t      | text     |           |          | 
  a      | tsvector |           |          | 
-Indexes:
-    "wowidx" gist (a tsvector_ops (siglen='484'))
+Distributed by: (t)
 
 EXPLAIN (costs off) SELECT count(*) FROM test_tsvector WHERE a @@ 'wr|qh';
-                               QUERY PLAN                                
--------------------------------------------------------------------------
+                          QUERY PLAN                           
+---------------------------------------------------------------
  Finalize Aggregate
    ->  Gather Motion 3:1  (slice1; segments: 3)
          ->  Partial Aggregate
                ->  Seq Scan on test_tsvector
                      Filter: (a @@ '''wr'' | ''qh'''::tsquery)
  Optimizer: Postgres query optimizer
-(8 rows)
+(6 rows)
 
 SELECT count(*) FROM test_tsvector WHERE a @@ 'wr|qh';
  count 
@@ -1102,6 +1101,7 @@ SELECT * FROM ts_stat('SELECT a FROM test_tsvector', 'AB') ORDER BY ndoc DESC, n
  DFG  |    1 |      2
 (1 row)
 
+DROP INDEX wowidx;
 --dictionaries and to_tsvector
 SELECT ts_lexize('english_stem', 'skies');
  ts_lexize 

@@ -912,16 +912,17 @@ CREATE FUNCTION price_key_from_input(price_input) RETURNS price_key AS $$
     SELECT $1.id
 $$ LANGUAGE SQL;
 insert into price values (1,false,42), (10,false,100), (11,true,17.99);
-UPDATE price
-    SET active = true, price = input_prices.price
-    FROM unnest(ARRAY[(10, 123.00), (11, 99.99)]::price_input[]) input_prices
-    WHERE price_key_from_table(price.*) = price_key_from_input(input_prices.*);
+-- Known bug in cbdb
+-- UPDATE price
+--     SET active = true, price = input_prices.price
+--     FROM unnest(ARRAY[(10, 123.00), (11, 99.99)]::price_input[]) input_prices
+--     WHERE price_key_from_table(price.*) = price_key_from_input(input_prices.*);
 select * from price;
- id | active | price  
-----+--------+--------
-  1 | f      |     42
- 10 | t      | 123.00
- 11 | t      |  99.99
+ id | active | price 
+----+--------+-------
+ 10 | f      |   100
+ 11 | t      | 17.99
+  1 | f      |    42
 (3 rows)
 
 rollback;

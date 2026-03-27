@@ -44,22 +44,21 @@ create trigger trig_ins_after after insert on trigtest
   for each row execute procedure insert_notice_trig();
 create trigger trig_upd_after after update on trigtest
   for each row execute procedure update_notice_trig();
+ERROR:  ON UPDATE triggers are not supported on append-only tables
 create trigger trig_del_after after delete on trigtest
   for each row execute procedure delete_notice_trig();
+ERROR:  ON DELETE triggers are not supported on append-only tables
 -- Inserts. Should fire the INSERT trigger.
 insert into trigtest values (1, 1);
-NOTICE:  insert trigger fired on trigtest for INSERT  (seg1 127.0.0.1:40001 pid=10560)
+ERROR:  not implemented yet on pax relations: TupleFetchRowVersion
 insert into trigtest values (2, 2);
-NOTICE:  insert trigger fired on trigtest for INSERT  (seg0 127.0.0.1:40000 pid=10559)
+ERROR:  not implemented yet on pax relations: TupleFetchRowVersion
 -- Update non-key column. Should fire the UPDATE trigger.
 update trigtest set nonkey = 3 where nonkey = 1;
-NOTICE:  update trigger fired on trigtest for UPDATE  (seg1 127.0.0.1:40001 pid=10560)
 -- Update distribution key column. Throws an error, currently.
 update trigtest set distkey = 3 where distkey = 1;
-ERROR:  UPDATE on distributed key column not allowed on relation with update triggers
 -- Should fire the DELETE trigger.
 delete from trigtest where nonkey = 2;
-NOTICE:  delete trigger fired on trigtest for DELETE  (seg0 127.0.0.1:40000 pid=10559)
 --
 -- Triggers on a partitioned table
 --
@@ -86,65 +85,59 @@ create trigger trig_ins_after after insert on parted_trig
   for each row execute procedure insert_notice_trig();
 create trigger trig_del_after after delete on parted_trig
   for each row execute procedure delete_notice_trig();
+ERROR:  ON DELETE triggers are not supported on append-only tables
 -- Inserts. Should fire the INSERT trigger.
 insert into parted_trig values (1, 1, 1);
-NOTICE:  insert trigger fired on parted_trig1 for INSERT  (seg1 127.0.0.1:40001 pid=10560)
+ERROR:  not implemented yet on pax relations: TupleFetchRowVersion
 insert into parted_trig values (2, 2, 2);
-NOTICE:  insert trigger fired on parted_trig2 for INSERT  (seg0 127.0.0.1:40000 pid=10559)
+ERROR:  not implemented yet on pax relations: TupleFetchRowVersion
 insert into parted_trig values (5, 5, 5);
-NOTICE:  insert trigger fired on parted_trig4_2 for INSERT  (seg2 127.0.0.1:40002 pid=250082)
+ERROR:  not implemented yet on pax relations: TupleFetchRowVersion
 -- Have an UPDATE trigger on the middle level partition.
 create trigger trig_upd_after after update on parted_trig4
   for each row execute procedure update_notice_trig();
+ERROR:  ON UPDATE triggers are not supported on append-only tables
 -- Update distribution key column on each level partition. Throws an error, currently.
 update parted_trig set distkey = 4 where distkey = 5;
 update parted_trig4 set distkey = 4 where distkey = 5;
-ERROR:  UPDATE on distributed key column not allowed on relation with update triggers
 update parted_trig4_1 set distkey = 4 where distkey = 5;
-ERROR:  UPDATE on distributed key column not allowed on relation with update triggers
 drop trigger trig_upd_after on parted_trig4;
+ERROR:  trigger "trig_upd_after" for table "parted_trig4" does not exist
 -- Have an UPDATE trigger on a leaf partition.
 create trigger trig_upd_after after update on parted_trig4_1
   for each row execute procedure update_notice_trig();
+ERROR:  ON UPDATE triggers are not supported on append-only tables
 -- Update distribution key column on each level partition. Throws an error, currently.
 update parted_trig set distkey = 3 where distkey = 4;
 update parted_trig4 set distkey = 3 where distkey = 4;
-ERROR:  UPDATE on distributed key column not allowed on relation with update triggers
 update parted_trig4_1 set distkey = 3 where distkey = 4;
-ERROR:  UPDATE on distributed key column not allowed on relation with update triggers
 drop trigger trig_upd_after on parted_trig4_1;
+ERROR:  trigger "trig_upd_after" for table "parted_trig4_1" does not exist
 -- Have an UPDATE trigger on the top level partition.
 create trigger trig_upd_after after update on parted_trig
   for each row execute procedure update_notice_trig();
+ERROR:  ON UPDATE triggers are not supported on append-only tables
 -- Update non-key column. Should fire the UPDATE trigger.
 update parted_trig set nonkey = 3 where nonkey = 1;
-NOTICE:  update trigger fired on parted_trig1 for UPDATE  (seg1 127.0.0.1:40001 pid=10560)
 -- Update distribution key column on each level partition. Throws an error, currently.
 update parted_trig set distkey = 3 where distkey = 1;
-ERROR:  UPDATE on distributed key column not allowed on relation with update triggers
 update parted_trig4 set distkey = 3 where distkey = 1;
-ERROR:  UPDATE on distributed key column not allowed on relation with update triggers
 update parted_trig4_1 set distkey = 3 where distkey = 1;
-ERROR:  UPDATE on distributed key column not allowed on relation with update triggers
 -- Update partitioning key column. Should fire the DELETE+INSERT triggers,
 -- like in PostgreSQL.
 update parted_trig set partkey = 3 where partkey = 1;
-NOTICE:  delete trigger fired on parted_trig1 for DELETE  (seg1 127.0.0.1:40001 pid=10560)
-NOTICE:  insert trigger fired on parted_trig3 for INSERT  (seg1 127.0.0.1:40001 pid=10560)
 -- Update everything in one statement. Throws an error, currently, because
 -- updating the distribution key is not allowed.
 update parted_trig set partkey = partkey + 1, distkey = distkey + 1;
-ERROR:  UPDATE on distributed key column not allowed on relation with update triggers
 -- Should fire the DELETE trigger.
 delete from parted_trig where nonkey = 2;
-NOTICE:  delete trigger fired on parted_trig2 for DELETE  (seg0 127.0.0.1:40000 pid=10559)
 --
 -- Add GUC test to enable statement trigger
 -- default GUC value is off
 --
 SET gp_enable_statement_trigger = on;
 CREATE TABLE main_table_gp (a int, b int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE FUNCTION trigger_func_gp() RETURNS trigger LANGUAGE plpgsql AS '
 BEGIN
