@@ -553,40 +553,50 @@ CREATE index stats_test_idx1 on stats_test_tab1(a);
 SELECT 'stats_test_idx1'::regclass::oid AS stats_test_idx1_oid \gset
 SET enable_seqscan TO off;
 select a from stats_test_tab1 where a = 3;
-SELECT pg_stat_have_stats('relation', :dboid, :stats_test_idx1_oid);
+SELECT gp_stat_force_next_flush();
+SELECT exists(SELECT * FROM gp_stat_user_indexes_summary WHERE indexrelname = 'stats_test_idx1') AS pg_stat_have_stats;
 
 -- pg_stat_have_stats returns false for dropped index with stats
-SELECT pg_stat_have_stats('relation', :dboid, :stats_test_idx1_oid);
+SELECT gp_stat_force_next_flush();
+SELECT exists(SELECT * FROM gp_stat_user_indexes_summary WHERE indexrelname = 'stats_test_idx1') AS pg_stat_have_stats;
 DROP index stats_test_idx1;
-SELECT pg_stat_have_stats('relation', :dboid, :stats_test_idx1_oid);
+SELECT gp_stat_force_next_flush();
+SELECT exists(SELECT * FROM gp_stat_user_indexes_summary WHERE indexrelname = 'stats_test_idx1') AS pg_stat_have_stats;
 
 -- pg_stat_have_stats returns false for rolled back index creation
 BEGIN;
 CREATE index stats_test_idx1 on stats_test_tab1(a);
 SELECT 'stats_test_idx1'::regclass::oid AS stats_test_idx1_oid \gset
 select a from stats_test_tab1 where a = 3;
-SELECT pg_stat_have_stats('relation', :dboid, :stats_test_idx1_oid);
+SELECT gp_stat_force_next_flush();
+SELECT exists(SELECT * FROM gp_stat_user_indexes_summary WHERE indexrelname = 'stats_test_idx1') AS pg_stat_have_stats;
 ROLLBACK;
-SELECT pg_stat_have_stats('relation', :dboid, :stats_test_idx1_oid);
+SELECT gp_stat_force_next_flush();
+SELECT exists(SELECT * FROM gp_stat_user_indexes_summary WHERE indexrelname = 'stats_test_idx1') AS pg_stat_have_stats;
 
 -- pg_stat_have_stats returns true for reindex CONCURRENTLY
 CREATE index stats_test_idx1 on stats_test_tab1(a);
 SELECT 'stats_test_idx1'::regclass::oid AS stats_test_idx1_oid \gset
 select a from stats_test_tab1 where a = 3;
-SELECT pg_stat_have_stats('relation', :dboid, :stats_test_idx1_oid);
+SELECT gp_stat_force_next_flush();
+SELECT exists(SELECT * FROM gp_stat_user_indexes_summary WHERE indexrelname = 'stats_test_idx1') AS pg_stat_have_stats;
 REINDEX index CONCURRENTLY stats_test_idx1;
 -- false for previous oid
-SELECT pg_stat_have_stats('relation', :dboid, :stats_test_idx1_oid);
+SELECT gp_stat_force_next_flush();
+SELECT exists(SELECT * FROM gp_stat_user_indexes_summary WHERE indexrelname = 'stats_test_idx1') AS pg_stat_have_stats;
 -- true for new oid
 SELECT 'stats_test_idx1'::regclass::oid AS stats_test_idx1_oid \gset
-SELECT pg_stat_have_stats('relation', :dboid, :stats_test_idx1_oid);
+SELECT gp_stat_force_next_flush();
+SELECT exists(SELECT * FROM gp_stat_user_indexes_summary WHERE indexrelname = 'stats_test_idx1') AS pg_stat_have_stats;
 
 -- pg_stat_have_stats returns true for a rolled back drop index with stats
 BEGIN;
-SELECT pg_stat_have_stats('relation', :dboid, :stats_test_idx1_oid);
+SELECT gp_stat_force_next_flush();
+SELECT exists(SELECT * FROM gp_stat_user_indexes_summary WHERE indexrelname = 'stats_test_idx1') AS pg_stat_have_stats;
 DROP index stats_test_idx1;
 ROLLBACK;
-SELECT pg_stat_have_stats('relation', :dboid, :stats_test_idx1_oid);
+SELECT gp_stat_force_next_flush();
+SELECT exists(SELECT * FROM gp_stat_user_indexes_summary WHERE indexrelname = 'stats_test_idx1') AS pg_stat_have_stats;
 
 -- put enable_seqscan back to on
 SET enable_seqscan TO on;

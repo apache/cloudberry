@@ -30,6 +30,12 @@ SELECT * FROM ((SELECT 1 AS x)) ss;
  1
 (1 row)
 
+SELECT * FROM ((SELECT 1 AS x)), ((SELECT * FROM ((SELECT 2 AS y))));
+ x | y 
+---+---
+ 1 | 2
+(1 row)
+
 (SELECT 2) UNION SELECT 2;
  ?column? 
 ----------
@@ -196,6 +202,69 @@ SELECT f1 AS "Correlated Field"
                 3
 (5 rows)
 
+-- Subselects without aliases
+SELECT count FROM (SELECT COUNT(DISTINCT name) FROM road);
+ count 
+-------
+  2911
+(1 row)
+
+SELECT COUNT(*) FROM (SELECT DISTINCT name FROM road);
+ count 
+-------
+  2911
+(1 row)
+
+SELECT * FROM (SELECT * FROM int4_tbl), (VALUES (123456)) WHERE f1 = column1;
+   f1   | column1 
+--------+---------
+ 123456 |  123456
+(1 row)
+
+CREATE VIEW view_unnamed_ss AS
+SELECT * FROM (SELECT * FROM (SELECT abs(f1) AS a1 FROM int4_tbl)),
+              (SELECT * FROM int8_tbl)
+  WHERE a1 < 10 AND q1 > a1 ORDER BY q1, q2;
+SELECT * FROM view_unnamed_ss;
+ a1 |        q1        |        q2         
+----+------------------+-------------------
+  0 |              123 |               456
+  0 |              123 |  4567890123456789
+  0 | 4567890123456789 |               123
+  0 | 4567890123456789 |  4567890123456789
+  0 | 4567890123456789 | -4567890123456789
+(5 rows)
+
+\sv view_unnamed_ss
+CREATE OR REPLACE VIEW public.view_unnamed_ss AS
+ SELECT unnamed_subquery.a1,
+    unnamed_subquery_1.q1,
+    unnamed_subquery_1.q2
+   FROM ( SELECT unnamed_subquery_2.a1
+           FROM ( SELECT abs(int4_tbl.f1) AS a1
+                   FROM int4_tbl) unnamed_subquery_2) unnamed_subquery,
+    ( SELECT int8_tbl.q1,
+            int8_tbl.q2
+           FROM int8_tbl) unnamed_subquery_1
+  WHERE unnamed_subquery.a1 < 10 AND unnamed_subquery_1.q1 > unnamed_subquery.a1
+  ORDER BY unnamed_subquery_1.q1, unnamed_subquery_1.q2
+DROP VIEW view_unnamed_ss;
+-- Test matching of locking clause to correct alias
+CREATE VIEW view_unnamed_ss_locking AS
+SELECT * FROM (SELECT * FROM int4_tbl), int8_tbl AS unnamed_subquery
+  WHERE f1 = q1
+  FOR UPDATE OF unnamed_subquery;
+\sv view_unnamed_ss_locking
+CREATE OR REPLACE VIEW public.view_unnamed_ss_locking AS
+ SELECT unnamed_subquery.f1,
+    unnamed_subquery_1.q1,
+    unnamed_subquery_1.q2
+   FROM ( SELECT int4_tbl.f1
+           FROM int4_tbl) unnamed_subquery,
+    int8_tbl unnamed_subquery_1
+  WHERE unnamed_subquery.f1 = unnamed_subquery_1.q1
+ FOR UPDATE OF unnamed_subquery_1
+DROP VIEW view_unnamed_ss_locking;
 --
 -- Use some existing tables in the regression test
 --
@@ -987,8 +1056,8 @@ explain (costs off)
 select count(*) from tenk1 t
 where (exists(select 1 from tenk1 k where k.unique1 = t.unique2) or ten < 0)
   and thousand = 1;
-                                                                 QUERY PLAN
---------------------------------------------------------------------------------------------------------------------------------------------
+                                                  QUERY PLAN                                                  
+--------------------------------------------------------------------------------------------------------------
  Aggregate
    ->  Gather Motion 3:1  (slice1; segments: 3)
          ->  GroupAggregate
@@ -1727,6 +1796,159 @@ fetch backward all in c1;
 ERROR:  backward scan is not supported in this version of Apache Cloudberry
 commit;
 --end_ignore
+--
+-- Verify that we correctly flatten cases involving a subquery output
+-- expression that doesn't need to be wrapped in a PlaceHolderVar
+--
+explain (costs off)
+select tname, attname from (
+select relname::information_schema.sql_identifier as tname, * from
+  (select * from pg_class c) ss1) ss2
+  right join pg_attribute a on a.attrelid = ss2.oid
+where tname = 'tenk1' and attnum = 1;
+                                  QUERY PLAN
+------------------------------------------------------------------------------
+ Hash Join
+   Hash Cond: (a.attrelid = c.oid)
+   ->  Seq Scan on pg_attribute a
+         Filter: (attnum = 1)
+   ->  Hash
+         ->  Index Scan using pg_class_relname_nsp_index on pg_class c
+               Index Cond: (relname = 'tenk1'::name)
+(8 rows)
+
+select tname, attname from (
+select relname::information_schema.sql_identifier as tname, * from
+  (select * from pg_class c) ss1) ss2
+  right join pg_attribute a on a.attrelid = ss2.oid
+where tname = 'tenk1' and attnum = 1;
+ tname | attname 
+-------+---------
+ tenk1 | unique1
+(1 row)
+
+-- Check behavior when there's a lateral reference in the output expression
+explain (verbose, costs off)
+select t1.ten, sum(x) from
+  tenk1 t1 left join lateral (
+    select t1.ten + t2.ten as x, t2.fivethous from tenk1 t2
+  ) ss on t1.unique1 = ss.fivethous
+group by t1.ten
+order by t1.ten;
+                                    QUERY PLAN
+----------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Output: t1.ten, (sum((t1.ten + t2.ten)))
+   Merge Key: t1.ten
+   ->  Sort
+         Output: t1.ten, (sum((t1.ten + t2.ten)))
+         Sort Key: t1.ten
+         ->  Finalize HashAggregate
+               Output: t1.ten, sum((t1.ten + t2.ten))
+               Group Key: t1.ten
+               ->  Redistribute Motion 3:3  (slice2; segments: 3)
+                     Output: t1.ten, (PARTIAL sum((t1.ten + t2.ten)))
+                     Hash Key: t1.ten
+                     ->  Partial HashAggregate
+                           Output: t1.ten, PARTIAL sum((t1.ten + t2.ten))
+                           Group Key: t1.ten
+                           ->  Hash Right Join
+                                 Output: t1.ten, t2.ten
+                                 Hash Cond: (t2.fivethous = t1.unique1)
+                                 ->  Redistribute Motion 3:3  (slice3; segments: 3)
+                                       Output: t2.ten, t2.fivethous
+                                       Hash Key: t2.fivethous
+                                       ->  Seq Scan on public.tenk1 t2
+                                             Output: t2.ten, t2.fivethous
+                                 ->  Hash
+                                       Output: t1.ten, t1.unique1
+                                       ->  Seq Scan on public.tenk1 t1
+                                             Output: t1.ten, t1.unique1
+(29 rows)
+
+select t1.ten, sum(x) from
+  tenk1 t1 left join lateral (
+    select t1.ten + t2.ten as x, t2.fivethous from tenk1 t2
+  ) ss on t1.unique1 = ss.fivethous
+group by t1.ten
+order by t1.ten;
+ ten |  sum  
+-----+-------
+   0 |     0
+   1 |  2000
+   2 |  4000
+   3 |  6000
+   4 |  8000
+   5 | 10000
+   6 | 12000
+   7 | 14000
+   8 | 16000
+   9 | 18000
+(10 rows)
+
+explain (verbose, costs off)
+select t1.q1, x from
+  int8_tbl t1 left join
+  (int8_tbl t2 left join
+   lateral (select t2.q1+t3.q1 as x, * from int8_tbl t3) t3 on t2.q2 = t3.q2)
+  on t1.q2 = t2.q2
+order by 1, 2;
+                                QUERY PLAN
+--------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Output: t1.q1, ((t2.q1 + t3.q1))
+   Merge Key: t1.q1, ((t2.q1 + t3.q1))
+   ->  Sort
+         Output: t1.q1, ((t2.q1 + t3.q1))
+         Sort Key: t1.q1, ((t2.q1 + t3.q1))
+         ->  Hash Right Join
+               Output: t1.q1, (t2.q1 + t3.q1)
+               Hash Cond: (t2.q2 = t1.q2)
+               ->  Hash Left Join
+                     Output: t2.q1, t2.q2, t3.q1
+                     Hash Cond: (t2.q2 = t3.q2)
+                     ->  Redistribute Motion 3:3  (slice2; segments: 3)
+                           Output: t2.q1, t2.q2
+                           Hash Key: t2.q2
+                           ->  Seq Scan on public.int8_tbl t2
+                                 Output: t2.q1, t2.q2
+                     ->  Hash
+                           Output: t3.q1, t3.q2
+                           ->  Redistribute Motion 3:3  (slice3; segments: 3)
+                                 Output: t3.q1, t3.q2
+                                 Hash Key: t3.q2
+                                 ->  Seq Scan on public.int8_tbl t3
+                                       Output: t3.q1, t3.q2
+               ->  Hash
+                     Output: t1.q1, t1.q2
+                     ->  Redistribute Motion 3:3  (slice4; segments: 3)
+                           Output: t1.q1, t1.q2
+                           Hash Key: t1.q2
+                           ->  Seq Scan on public.int8_tbl t1
+                                 Output: t1.q1, t1.q2
+(33 rows)
+
+select t1.q1, x from
+  int8_tbl t1 left join
+  (int8_tbl t2 left join
+   lateral (select t2.q1+t3.q1 as x, * from int8_tbl t3) t3 on t2.q2 = t3.q2)
+  on t1.q2 = t2.q2
+order by 1, 2;
+        q1        |        x         
+------------------+------------------
+              123 |              246
+              123 |              246
+              123 | 4567890123456912
+              123 | 4567890123456912
+              123 | 9135780246913578
+ 4567890123456789 |              246
+ 4567890123456789 | 4567890123456912
+ 4567890123456789 | 4567890123456912
+ 4567890123456789 | 9135780246913578
+ 4567890123456789 | 9135780246913578
+ 4567890123456789 | 9135780246913578
+(11 rows)
+
 --
 -- Tests for CTE inlining behavior
 --

@@ -1,3 +1,7 @@
+-- start_matchsubs
+-- m/Seq Scan on recursive_table_ic \(actual rows=\d+ loops=\d+\)/
+-- s/Seq Scan on recursive_table_ic \(actual rows=\d+ loops=\d+\)/Seq Scan on recursive_table_ic (actual rows=XXXX loops=1)/
+-- end_matchsubs
 create schema gpexplain;
 set search_path = gpexplain;
 

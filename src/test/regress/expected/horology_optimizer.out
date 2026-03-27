@@ -2436,13 +2436,12 @@ select count(*) from date_tbl
   where f1 between '1997-01-01' and '1998-01-01';
                                        QUERY PLAN                                        
 -----------------------------------------------------------------------------------------
- Finalize Aggregate
+ Aggregate
    ->  Gather Motion 3:1  (slice1; segments: 3)
-         ->  Partial Aggregate
-               ->  Seq Scan on date_tbl
-                     Filter: ((f1 >= '01-01-1997'::date) AND (f1 <= '01-01-1998'::date))
+         ->  Seq Scan on date_tbl
+               Filter: ((f1 >= '01-01-1997'::date) AND (f1 <= '01-01-1998'::date))
  Optimizer: Postgres query optimizer
-(6 rows)
+(5 rows)
 
 select count(*) from date_tbl
   where f1 between '1997-01-01' and '1998-01-01';
@@ -2456,13 +2455,12 @@ select count(*) from date_tbl
   where f1 not between '1997-01-01' and '1998-01-01';
                                       QUERY PLAN                                      
 --------------------------------------------------------------------------------------
- Finalize Aggregate
+ Aggregate
    ->  Gather Motion 3:1  (slice1; segments: 3)
-         ->  Partial Aggregate
-               ->  Seq Scan on date_tbl
-                     Filter: ((f1 < '01-01-1997'::date) OR (f1 > '01-01-1998'::date))
+         ->  Seq Scan on date_tbl
+               Filter: ((f1 < '01-01-1997'::date) OR (f1 > '01-01-1998'::date))
  Optimizer: Postgres query optimizer
-(6 rows)
+(5 rows)
 
 select count(*) from date_tbl
   where f1 not between '1997-01-01' and '1998-01-01';
@@ -2476,13 +2474,12 @@ select count(*) from date_tbl
   where f1 between symmetric '1997-01-01' and '1998-01-01';
                                                                         QUERY PLAN                                                                        
 ----------------------------------------------------------------------------------------------------------------------------------------------------------
- Finalize Aggregate
+ Aggregate
    ->  Gather Motion 3:1  (slice1; segments: 3)
-         ->  Partial Aggregate
-               ->  Seq Scan on date_tbl
-                     Filter: (((f1 >= '01-01-1997'::date) AND (f1 <= '01-01-1998'::date)) OR ((f1 >= '01-01-1998'::date) AND (f1 <= '01-01-1997'::date)))
+         ->  Seq Scan on date_tbl
+               Filter: (((f1 >= '01-01-1997'::date) AND (f1 <= '01-01-1998'::date)) OR ((f1 >= '01-01-1998'::date) AND (f1 <= '01-01-1997'::date)))
  Optimizer: Postgres query optimizer
-(6 rows)
+(5 rows)
 
 select count(*) from date_tbl
   where f1 between symmetric '1997-01-01' and '1998-01-01';
@@ -2494,15 +2491,14 @@ select count(*) from date_tbl
 explain (costs off)
 select count(*) from date_tbl
   where f1 not between symmetric '1997-01-01' and '1998-01-01';
-                                                                        QUERY PLAN                                                                        
-----------------------------------------------------------------------------------------------------------------------------------------------------------
- Finalize Aggregate
+                                                                     QUERY PLAN                                                                      
+-----------------------------------------------------------------------------------------------------------------------------------------------------
+ Aggregate
    ->  Gather Motion 3:1  (slice1; segments: 3)
-         ->  Partial Aggregate
-               ->  Seq Scan on date_tbl
-                     Filter: (((f1 < '01-01-1997'::date) OR (f1 > '01-01-1998'::date)) AND ((f1 < '01-01-1998'::date) OR (f1 > '01-01-1997'::date)))
+         ->  Seq Scan on date_tbl
+               Filter: (((f1 < '01-01-1997'::date) OR (f1 > '01-01-1998'::date)) AND ((f1 < '01-01-1998'::date) OR (f1 > '01-01-1997'::date)))
  Optimizer: Postgres query optimizer
-(6 rows)
+(5 rows)
 
 select count(*) from date_tbl
   where f1 not between symmetric '1997-01-01' and '1998-01-01';

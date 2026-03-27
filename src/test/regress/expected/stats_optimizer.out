@@ -607,13 +607,12 @@ SET LOCAL enable_bitmapscan TO off;
 EXPLAIN (COSTS off) SELECT count(*) FROM test_last_scan WHERE noidx_col = 1;
                    QUERY PLAN                   
 ------------------------------------------------
- Finalize Aggregate
+ Aggregate
    ->  Gather Motion 3:1  (slice1; segments: 3)
-         ->  Partial Aggregate
-               ->  Seq Scan on test_last_scan
-                     Filter: (noidx_col = 1)
- Optimizer: Postgres query optimizer
-(6 rows)
+         ->  Seq Scan on test_last_scan
+               Filter: (noidx_col = 1)
+ Optimizer: GPORCA
+(5 rows)
 
 SELECT count(*) FROM test_last_scan WHERE noidx_col = 1;
  count 
@@ -629,7 +628,7 @@ EXPLAIN (COSTS off) SELECT count(*) FROM test_last_scan WHERE idx_col = 1;
    ->  Gather Motion 1:1  (slice1; segments: 1)
          ->  Index Scan using test_last_scan_pkey on test_last_scan
                Index Cond: (idx_col = 1)
- Optimizer: Postgres query optimizer
+ Optimizer: GPORCA
 (5 rows)
 
 SELECT count(*) FROM test_last_scan WHERE idx_col = 1;
@@ -662,13 +661,12 @@ SET LOCAL enable_bitmapscan TO off;
 EXPLAIN (COSTS off) SELECT count(*) FROM test_last_scan WHERE noidx_col = 1;
                    QUERY PLAN                   
 ------------------------------------------------
- Finalize Aggregate
+ Aggregate
    ->  Gather Motion 3:1  (slice1; segments: 3)
-         ->  Partial Aggregate
-               ->  Seq Scan on test_last_scan
-                     Filter: (noidx_col = 1)
- Optimizer: Postgres query optimizer
-(6 rows)
+         ->  Seq Scan on test_last_scan
+               Filter: (noidx_col = 1)
+ Optimizer: GPORCA
+(5 rows)
 
 SELECT count(*) FROM test_last_scan WHERE noidx_col = 1;
  count 
@@ -712,7 +710,7 @@ EXPLAIN (COSTS off) SELECT count(*) FROM test_last_scan WHERE idx_col = 1;
    ->  Gather Motion 1:1  (slice1; segments: 1)
          ->  Index Scan using test_last_scan_pkey on test_last_scan
                Index Cond: (idx_col = 1)
- Optimizer: Postgres query optimizer
+ Optimizer: GPORCA
 (5 rows)
 
 SELECT count(*) FROM test_last_scan WHERE idx_col = 1;
@@ -751,16 +749,14 @@ SET LOCAL enable_seqscan TO off;
 SET LOCAL enable_indexscan TO off;
 SET LOCAL enable_bitmapscan TO on;
 EXPLAIN (COSTS off) SELECT count(*) FROM test_last_scan WHERE idx_col = 1;
-                         QUERY PLAN                         
-------------------------------------------------------------
+                             QUERY PLAN                             
+--------------------------------------------------------------------
  Aggregate
    ->  Gather Motion 1:1  (slice1; segments: 1)
-         ->  Bitmap Heap Scan on test_last_scan
-               Recheck Cond: (idx_col = 1)
-               ->  Bitmap Index Scan on test_last_scan_pkey
-                     Index Cond: (idx_col = 1)
- Optimizer: Postgres query optimizer
-(7 rows)
+         ->  Index Scan using test_last_scan_pkey on test_last_scan
+               Index Cond: (idx_col = 1)
+ Optimizer: GPORCA
+(5 rows)
 
 SELECT count(*) FROM test_last_scan WHERE idx_col = 1;
  count 
@@ -1402,14 +1398,14 @@ SET LOCAL enable_hashjoin TO off; SET LOCAL enable_material TO off;
 EXPLAIN (COSTS OFF) SELECT COUNT(*) FROM test_io_shared t1 INNER JOIN test_io_shared t2 USING (a);
                       QUERY PLAN                       
 -------------------------------------------------------
- Finalize Aggregate
+ Aggregate
    ->  Gather Motion 3:1  (slice1; segments: 3)
-         ->  Partial Aggregate
-               ->  Nested Loop
-                     Join Filter: (t1.a = t2.a)
-                     ->  Seq Scan on test_io_shared t1
+         ->  Hash Join
+               Hash Cond: (t1.a = t2.a)
+               ->  Seq Scan on test_io_shared t1
+               ->  Hash
                      ->  Seq Scan on test_io_shared t2
- Optimizer: Postgres query optimizer
+ Optimizer: GPORCA
 (8 rows)
 
 SELECT COUNT(*) FROM test_io_shared t1 INNER JOIN test_io_shared t2 USING (a);
@@ -1660,7 +1656,7 @@ EXPLAIN (COSTS OFF) SELECT * FROM brin_hot_2 WHERE a = 2 AND b = 100;
  Gather Motion 1:1  (slice1; segments: 1)
    ->  Seq Scan on brin_hot_2
          Filter: ((a = 2) AND (b = 100))
- Optimizer: Postgres query optimizer
+ Optimizer: GPORCA
 (4 rows)
 
 SELECT COUNT(*) FROM brin_hot_2 WHERE a = 2 AND b = 100;
@@ -1671,15 +1667,13 @@ SELECT COUNT(*) FROM brin_hot_2 WHERE a = 2 AND b = 100;
 
 SET enable_seqscan = off;
 EXPLAIN (COSTS OFF) SELECT * FROM brin_hot_2 WHERE a = 2 AND b = 100;
-                    QUERY PLAN                     
----------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)
-   ->  Bitmap Heap Scan on brin_hot_2
-         Recheck Cond: ((b = 100) AND (a = 2))
-         ->  Bitmap Index Scan on brin_hot_2_b_idx
-               Index Cond: (b = 100)
- Optimizer: Postgres query optimizer
-(6 rows)
+                QUERY PLAN                
+------------------------------------------
+ Gather Motion 1:1  (slice1; segments: 1)
+   ->  Seq Scan on brin_hot_2
+         Filter: ((a = 2) AND (b = 100))
+ Optimizer: GPORCA
+(4 rows)
 
 SELECT COUNT(*) FROM brin_hot_2 WHERE a = 2 AND b = 100;
  count 
@@ -1703,7 +1697,7 @@ EXPLAIN (COSTS OFF) SELECT * FROM brin_hot_3 WHERE a = 2;
          Recheck Cond: (a = 2)
          ->  Bitmap Index Scan on brin_hot_3_a_idx
                Index Cond: (a = 2)
- Optimizer: Postgres query optimizer
+ Optimizer: GPORCA
 (6 rows)
 
 SELECT COUNT(*) FROM brin_hot_3 WHERE a = 2;

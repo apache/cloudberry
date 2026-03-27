@@ -4,8 +4,18 @@
 -- start_ignore
 SET optimizer_trace_fallback to on;
 -- end_ignore
+-- directory paths are passed to us in environment variables
+\getenv abs_srcdir PG_ABS_SRCDIR
 -- avoid bit-exact output here because operations may not be bit-exact.
 SET extra_float_digits = 0;
+-- prepare some test data
+CREATE TABLE aggtest (
+	a 			int2,
+	b			float4
+);
+\set filename :abs_srcdir '/data/agg.data'
+COPY aggtest FROM :'filename';
+ANALYZE aggtest;
 SELECT avg(four) AS avg_1 FROM onek;
        avg_1        
 --------------------
@@ -16,6 +26,30 @@ SELECT avg(a) AS avg_32 FROM aggtest WHERE a < 100;
        avg_32        
 ---------------------
  32.6666666666666667
+(1 row)
+
+SELECT any_value(v) FROM (VALUES (1), (2), (3)) AS v (v);
+ any_value 
+-----------
+         1
+(1 row)
+
+SELECT any_value(v) FROM (VALUES (NULL)) AS v (v);
+ any_value 
+-----------
+ 
+(1 row)
+
+SELECT any_value(v) FROM (VALUES (NULL), (1), (2)) AS v (v);
+ any_value 
+-----------
+         1
+(1 row)
+
+SELECT any_value(v) FROM (VALUES (array['hello', 'world'])) AS v (v);
+   any_value   
+---------------
+ {hello,world}
 (1 row)
 
 -- In 7.1, avg(float4) is computed using float8 arithmetic.
@@ -1305,6 +1339,40 @@ NOTICE:  drop cascades to 3 other objects
 DETAIL:  drop cascades to table minmaxtest1
 drop cascades to table minmaxtest2
 drop cascades to table minmaxtest3
+-- DISTINCT can also trigger wrong answers with hash aggregation (bug #18465)
+begin;
+set local enable_sort = off;
+explain (costs off)
+  select f1, (select distinct min(t1.f1) from int4_tbl t1 where t1.f1 = t0.f1)
+  from int4_tbl t0;
+                                    QUERY PLAN                                     
+-----------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Seq Scan on int4_tbl t0
+         SubPlan 1
+           ->  GroupAggregate
+                 Group Key: min(t1.f1)
+                 ->  Aggregate
+                       ->  Result
+                             Filter: (t1.f1 = t0.f1)
+                             ->  Materialize
+                                   ->  Broadcast Motion 3:3  (slice2; segments: 3)
+                                         ->  Seq Scan on int4_tbl t1
+ Optimizer: GPORCA
+(12 rows)
+
+select f1, (select distinct min(t1.f1) from int4_tbl t1 where t1.f1 = t0.f1)
+from int4_tbl t0;
+     f1      |     min     
+-------------+-------------
+           0 |           0
+      123456 |      123456
+     -123456 |     -123456
+  2147483647 |  2147483647
+ -2147483647 | -2147483647
+(5 rows)
+
+rollback;
 -- check for correct detection of nested-aggregate errors
 select max(min(unique1)) from tenk1;
 ERROR:  aggregate function calls cannot be nested
@@ -1452,8 +1520,8 @@ drop table p_t1;
 --
 -- Test GROUP BY matching of join columns that are type-coerced due to USING
 --
-create temp table t1(f1 int, f2 bigint);
-create temp table t2(f1 bigint, f22 bigint);
+create temp table t1(f1 int, f2 int);
+create temp table t2(f1 bigint, f2 oid);
 select f1 from t1 left join t2 using (f1) group by f1;
  f1 
 ----
@@ -1474,7 +1542,198 @@ select t1.f1 from t1 left join t2 using (f1) group by f1;
 ERROR:  column "t1.f1" must appear in the GROUP BY clause or be used in an aggregate function
 LINE 1: select t1.f1 from t1 left join t2 using (f1) group by f1;
                ^
+-- check case where we have to inject nullingrels into coerced join alias
+select f1, count(*) from
+t1 x(x0,x1) left join (t1 left join t2 using(f1)) on (x0 = 0)
+group by f1;
+ f1 | count 
+----+-------
+(0 rows)
+
+-- same, for a RelabelType coercion
+select f2, count(*) from
+t1 x(x0,x1) left join (t1 left join t2 using(f2)) on (x0 = 0)
+group by f2;
+INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
+DETAIL:  CTranslatorQueryToDXL.cpp:4130: Failed assertion: ((((const Node*)(join_alias_node))->type) == T_Var) || ((((const Node*)(join_alias_node))->type) == T_FuncExpr) || ((((const Node*)(join_alias_node))->type) == T_CoalesceExpr)
+ f2 | count 
+----+-------
+(0 rows)
+
 drop table t1, t2;
+--
+-- Test planner's selection of pathkeys for ORDER BY aggregates
+--
+-- Ensure we order by four.  This suits the most aggregate functions.
+explain (costs off)
+select sum(two order by two),max(four order by four), min(four order by four)
+from tenk1;
+QUERY PLAN
+___________
+ Finalize Aggregate
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         ->  Partial Aggregate
+               ->  Seq Scan on tenk1
+ Optimizer: Pivotal Optimizer (GPORCA)
+
+-- Ensure we order by two.  It's a tie between ordering by two and four but
+-- we tiebreak on the aggregate's position.
+explain (costs off)
+select
+  sum(two order by two), max(four order by four),
+  min(four order by four), max(two order by two)
+from tenk1;
+QUERY PLAN
+___________
+ Finalize Aggregate
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         ->  Partial Aggregate
+               ->  Seq Scan on tenk1
+ Optimizer: Pivotal Optimizer (GPORCA)
+
+-- Similar to above, but tiebreak on ordering by four
+explain (costs off)
+select
+  max(four order by four), sum(two order by two),
+  min(four order by four), max(two order by two)
+from tenk1;
+QUERY PLAN
+___________
+ Finalize Aggregate
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         ->  Partial Aggregate
+               ->  Seq Scan on tenk1
+ Optimizer: Pivotal Optimizer (GPORCA)
+
+-- Ensure this one orders by ten since there are 3 aggregates that require ten
+-- vs two that suit two and four.
+explain (costs off)
+select
+  max(four order by four), sum(two order by two),
+  min(four order by four), max(two order by two),
+  sum(ten order by ten), min(ten order by ten), max(ten order by ten)
+from tenk1;
+QUERY PLAN
+___________
+ Finalize Aggregate
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         ->  Partial Aggregate
+               ->  Seq Scan on tenk1
+ Optimizer: Pivotal Optimizer (GPORCA)
+
+-- Try a case involving a GROUP BY clause where the GROUP BY column is also
+-- part of an aggregate's ORDER BY clause.  We want a sort order that works
+-- for the GROUP BY along with the first and the last aggregate.
+explain (costs off)
+select
+  sum(unique1 order by ten, two), sum(unique1 order by four),
+  sum(unique1 order by two, four)
+from tenk1
+group by ten;
+INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
+DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: Hash aggregation with ORDER BY
+QUERY PLAN
+___________
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  GroupAggregate
+         Group Key: ten
+         ->  Sort
+               Sort Key: ten, two, four
+               ->  Redistribute Motion 3:3  (slice2; segments: 3)
+                     Hash Key: ten
+                     ->  Seq Scan on tenk1
+ Optimizer: Pivotal Optimizer (GPORCA)
+
+-- Ensure that we never choose to provide presorted input to an Aggref with
+-- a volatile function in the ORDER BY / DISTINCT clause.  We want to ensure
+-- these sorts are performed individually rather than at the query level.
+explain (costs off)
+select
+  sum(unique1 order by two), sum(unique1 order by four),
+  sum(unique1 order by four, two), sum(unique1 order by two, random()),
+  sum(unique1 order by two, random(), random() + 1)
+from tenk1
+group by ten;
+INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
+DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: Hash aggregation with ORDER BY
+                            QUERY PLAN                            
+------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  GroupAggregate
+         Group Key: ten
+         ->  Sort
+               Sort Key: ten, four, two
+               ->  Redistribute Motion 3:3  (slice2; segments: 3)
+                     Hash Key: ten
+                     ->  Seq Scan on tenk1
+ Optimizer: Postgres query optimizer
+(9 rows)
+
+-- Ensure consecutive NULLs are properly treated as distinct from each other
+select array_agg(distinct val)
+from (select null as val from generate_series(1, 2));
+ array_agg 
+-----------
+ {NULL}
+(1 row)
+
+-- Ensure no ordering is requested when enable_presorted_aggregate is off
+set enable_presorted_aggregate to off;
+explain (costs off)
+select sum(two order by two) from tenk1;
+QUERY PLAN
+___________
+ Finalize Aggregate
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         ->  Partial Aggregate
+               ->  Seq Scan on tenk1
+ Optimizer: Pivotal Optimizer (GPORCA)
+
+reset enable_presorted_aggregate;
+--
+-- Test cases with FILTER clause
+--
+-- Ensure we presort when the aggregate contains plain Vars
+explain (costs off)
+select sum(two order by two) filter (where two > 1) from tenk1;
+INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
+DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: Aggregate functions with FILTER
+QUERY PLAN
+___________
+ Aggregate
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         ->  Seq Scan on tenk1
+ Optimizer: Pivotal Optimizer (GPORCA)
+
+-- Ensure we presort for RelabelType'd Vars
+explain (costs off)
+select string_agg(distinct f1, ',') filter (where length(f1) > 1)
+from varchar_tbl;
+INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
+DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: Aggregate functions with FILTER
+QUERY PLAN
+___________
+ Finalize Aggregate
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         ->  Partial Aggregate
+               ->  Seq Scan on varchar_tbl
+ Optimizer: Pivotal Optimizer (GPORCA)
+
+-- Ensure we don't presort when the aggregate's argument contains an
+-- explicit cast.
+explain (costs off)
+select string_agg(distinct f1::varchar(2), ',') filter (where length(f1) > 1)
+from varchar_tbl;
+INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
+DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: Aggregate functions with FILTER
+                   QUERY PLAN                   
+------------------------------------------------
+ Aggregate
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         ->  Seq Scan on varchar_tbl
+ Optimizer: Postgres query optimizer
+(4 rows)
+
 --
 -- Test combinations of DISTINCT and/or ORDER BY
 --
@@ -1638,10 +1897,22 @@ select aggfns(distinct a,b,c order by a,c using ~<~,b)
        generate_series(1,2) i;
 INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
 DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: ROW EXPRESSION
-CONTEXT:  SQL function "aggfns_trans" during startup
                     aggfns                     
 -----------------------------------------------
  {"(0,,)","(1,3,foo)","(2,2,bar)","(3,1,baz)"}
+(1 row)
+
+-- test a more complex permutation that has previous caused issues
+select
+    string_agg(distinct 'a', ','),
+    sum((
+        select sum(1)
+        from (values(1)) b(id)
+        where a.id = b.id
+)) from unnest(array[1]) a(id);
+ string_agg | sum 
+------------+-----
+ a          |   1
 (1 row)
 
 -- check node I/O via view creation and usage, also deparsing logic
@@ -1662,7 +1933,7 @@ select * from agg_view1;
 select pg_get_viewdef('agg_view1'::regclass);
                                                    pg_get_viewdef                                                    
 ---------------------------------------------------------------------------------------------------------------------
-  SELECT aggfns(v.a, v.b, v.c) AS aggfns                                                                            +
+  SELECT aggfns(a, b, c) AS aggfns                                                                                  +
     FROM ( VALUES (1,3,'foo'::text), (0,NULL::integer,NULL::text), (2,2,'bar'::text), (3,1,'baz'::text)) v(a, b, c);
 (1 row)
 
@@ -1714,7 +1985,7 @@ select * from agg_view1;
 select pg_get_viewdef('agg_view1'::regclass);
                                                    pg_get_viewdef                                                    
 ---------------------------------------------------------------------------------------------------------------------
-  SELECT aggfns(v.a, v.b, v.c ORDER BY (v.b + 1)) AS aggfns                                                         +
+  SELECT aggfns(a, b, c ORDER BY (b + 1)) AS aggfns                                                                 +
     FROM ( VALUES (1,3,'foo'::text), (0,NULL::integer,NULL::text), (2,2,'bar'::text), (3,1,'baz'::text)) v(a, b, c);
 (1 row)
 
@@ -1730,7 +2001,7 @@ select * from agg_view1;
 select pg_get_viewdef('agg_view1'::regclass);
                                                    pg_get_viewdef                                                    
 ---------------------------------------------------------------------------------------------------------------------
-  SELECT aggfns(v.a, v.a, v.c ORDER BY v.b) AS aggfns                                                               +
+  SELECT aggfns(a, a, c ORDER BY b) AS aggfns                                                                       +
     FROM ( VALUES (1,3,'foo'::text), (0,NULL::integer,NULL::text), (2,2,'bar'::text), (3,1,'baz'::text)) v(a, b, c);
 (1 row)
 
@@ -1746,7 +2017,7 @@ select * from agg_view1;
 select pg_get_viewdef('agg_view1'::regclass);
                                                    pg_get_viewdef                                                    
 ---------------------------------------------------------------------------------------------------------------------
-  SELECT aggfns(v.a, v.b, v.c ORDER BY v.c USING ~<~ NULLS LAST) AS aggfns                                          +
+  SELECT aggfns(a, b, c ORDER BY c USING ~<~ NULLS LAST) AS aggfns                                                  +
     FROM ( VALUES (1,3,'foo'::text), (0,NULL::integer,NULL::text), (2,2,'bar'::text), (3,1,'baz'::text)) v(a, b, c);
 (1 row)
 
@@ -1985,14 +2256,14 @@ from generate_series(1,5) x,
      (values (0::float8),(0.1),(0.25),(0.4),(0.5),(0.6),(0.75),(0.9),(1)) v(p)
 group by p order by p;
 ERROR:  sum is not an ordered-set aggregate, so it cannot have WITHIN GROUP
-LINE 1: select p, sum() within group (order by x::float8)  
+LINE 1: select p, sum() within group (order by x::float8)  -- error
                   ^
 select p, percentile_cont(p,p)  -- error
 from generate_series(1,5) x,
      (values (0::float8),(0.1),(0.25),(0.4),(0.5),(0.6),(0.75),(0.9),(1)) v(p)
 group by p order by p;
 ERROR:  WITHIN GROUP is required for ordered-set aggregate percentile_cont
-LINE 1: select p, percentile_cont(p,p)  
+LINE 1: select p, percentile_cont(p,p)  -- error
                   ^
 select percentile_cont(0.5) within group (order by b) from aggtest;
  percentile_cont  
@@ -2193,15 +2464,15 @@ select ten,
 reset optimizer_trace_fallback;
 -- end_ignore
 select pg_get_viewdef('aggordview1');
-                                                        pg_get_viewdef                                                         
--------------------------------------------------------------------------------------------------------------------------------
-  SELECT tenk1.ten,                                                                                                           +
-     percentile_disc((0.5)::double precision) WITHIN GROUP (ORDER BY tenk1.thousand) AS p50,                                  +
-     percentile_disc((0.5)::double precision) WITHIN GROUP (ORDER BY tenk1.thousand) FILTER (WHERE (tenk1.hundred = 1)) AS px,+
-     rank(5, 'AZZZZ'::name, 50) WITHIN GROUP (ORDER BY tenk1.hundred, tenk1.string4 DESC, tenk1.hundred) AS rank              +
-    FROM tenk1                                                                                                                +
-   GROUP BY tenk1.ten                                                                                                         +
-   ORDER BY tenk1.ten;
+                                                  pg_get_viewdef                                                   
+-------------------------------------------------------------------------------------------------------------------
+  SELECT ten,                                                                                                     +
+     percentile_disc((0.5)::double precision) WITHIN GROUP (ORDER BY thousand) AS p50,                            +
+     percentile_disc((0.5)::double precision) WITHIN GROUP (ORDER BY thousand) FILTER (WHERE (hundred = 1)) AS px,+
+     rank(5, 'AZZZZ'::name, 50) WITHIN GROUP (ORDER BY hundred, string4 DESC, hundred) AS rank                    +
+    FROM tenk1                                                                                                    +
+   GROUP BY ten                                                                                                   +
+   ORDER BY ten;
 (1 row)
 
 -- start_ignore
@@ -2276,6 +2547,76 @@ select string_agg(v, decode('ee', 'hex')) from bytea_test_table;
 (1 row)
 
 drop table bytea_test_table;
+-- Test parallel string_agg and array_agg
+create table pagg_test (x int, y int) with (autovacuum_enabled = off);
+insert into pagg_test
+select (case x % 4 when 1 then null else x end), x % 10
+from generate_series(1,5000) x;
+set parallel_setup_cost TO 0;
+set parallel_tuple_cost TO 0;
+set parallel_leader_participation TO 0;
+set min_parallel_table_scan_size = 0;
+set bytea_output = 'escape';
+set max_parallel_workers_per_gather = 2;
+-- create a view as we otherwise have to repeat this query a few times.
+create view v_pagg_test AS
+select
+	y,
+	min(t) AS tmin,max(t) AS tmax,count(distinct t) AS tndistinct,
+	min(b) AS bmin,max(b) AS bmax,count(distinct b) AS bndistinct,
+	min(a) AS amin,max(a) AS amax,count(distinct a) AS andistinct,
+	min(aa) AS aamin,max(aa) AS aamax,count(distinct aa) AS aandistinct
+from (
+	select
+		y,
+		unnest(regexp_split_to_array(a1.t, ','))::int AS t,
+		unnest(regexp_split_to_array(a1.b::text, ',')) AS b,
+		unnest(a1.a) AS a,
+		unnest(a1.aa) AS aa
+	from (
+		select
+			y,
+			string_agg(x::text, ',') AS t,
+			string_agg(x::text::bytea, ',') AS b,
+			array_agg(x) AS a,
+			array_agg(ARRAY[x]) AS aa
+		from pagg_test
+		group by y
+	) a1
+) a2
+group by y;
+-- Ensure results are correct.
+-- Check that we don't fail on anonymous record types.
+set max_parallel_workers_per_gather = 2;
+explain (costs off)
+select array_dims(array_agg(s)) from (select * from pagg_test) s;
+INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
+DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: Whole-row variable
+                   QUERY PLAN                   
+------------------------------------------------
+ Aggregate
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         ->  Seq Scan on pagg_test
+ Optimizer: Postgres query optimizer
+(4 rows)
+
+select array_dims(array_agg(s)) from (select * from pagg_test) s;
+INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
+DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: Whole-row variable
+ array_dims 
+------------
+ [1:5000]
+(1 row)
+
+-- Clean up
+reset max_parallel_workers_per_gather;
+reset bytea_output;
+reset min_parallel_table_scan_size;
+reset parallel_leader_participation;
+reset parallel_tuple_cost;
+reset parallel_setup_cost;
+drop view v_pagg_test;
+drop table pagg_test;
 -- FILTER tests
 select min(unique1) filter (where unique1 > 100) from tenk1;
 INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
@@ -2332,6 +2673,14 @@ DETAIL:  Falling back to Postgres-based planner because GPORCA does not support 
  max 
 -----
  a
+(1 row)
+
+select any_value(v) filter (where v > 2) from (values (1), (2), (3)) as v (v);
+INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
+DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: Aggregate functions with FILTER
+ any_value 
+-----------
+         3
 (1 row)
 
 -- outer reference in FILTER (PostgreSQL extension)
@@ -2464,14 +2813,14 @@ from generate_series(1,5) x,
      (values (0::float8),(0.1),(0.25),(0.4),(0.5),(0.6),(0.75),(0.9),(1)) v(p)
 group by p order by p;
 ERROR:  sum is not an ordered-set aggregate, so it cannot have WITHIN GROUP
-LINE 1: select p, sum() within group (order by x::float8)  
+LINE 1: select p, sum() within group (order by x::float8)  -- error
                   ^
 select p, percentile_cont(p,p)  -- error
 from generate_series(1,5) x,
      (values (0::float8),(0.1),(0.25),(0.4),(0.5),(0.6),(0.75),(0.9),(1)) v(p)
 group by p order by p;
 ERROR:  WITHIN GROUP is required for ordered-set aggregate percentile_cont
-LINE 1: select p, percentile_cont(p,p)  
+LINE 1: select p, percentile_cont(p,p)  -- error
                   ^
 select percentile_cont(0.5) within group (order by b) from aggtest;
  percentile_cont  
@@ -2672,15 +3021,15 @@ select ten,
 reset optimizer_trace_fallback;
 -- end_ignore
 select pg_get_viewdef('aggordview1');
-                                                        pg_get_viewdef                                                         
--------------------------------------------------------------------------------------------------------------------------------
-  SELECT tenk1.ten,                                                                                                           +
-     percentile_disc((0.5)::double precision) WITHIN GROUP (ORDER BY tenk1.thousand) AS p50,                                  +
-     percentile_disc((0.5)::double precision) WITHIN GROUP (ORDER BY tenk1.thousand) FILTER (WHERE (tenk1.hundred = 1)) AS px,+
-     rank(5, 'AZZZZ'::name, 50) WITHIN GROUP (ORDER BY tenk1.hundred, tenk1.string4 DESC, tenk1.hundred) AS rank              +
-    FROM tenk1                                                                                                                +
-   GROUP BY tenk1.ten                                                                                                         +
-   ORDER BY tenk1.ten;
+                                                  pg_get_viewdef                                                   
+-------------------------------------------------------------------------------------------------------------------
+  SELECT ten,                                                                                                     +
+     percentile_disc((0.5)::double precision) WITHIN GROUP (ORDER BY thousand) AS p50,                            +
+     percentile_disc((0.5)::double precision) WITHIN GROUP (ORDER BY thousand) FILTER (WHERE (hundred = 1)) AS px,+
+     rank(5, 'AZZZZ'::name, 50) WITHIN GROUP (ORDER BY hundred, string4 DESC, hundred) AS rank                    +
+    FROM tenk1                                                                                                    +
+   GROUP BY ten                                                                                                   +
+   ORDER BY ten;
 (1 row)
 
 -- start_ignore
@@ -3065,6 +3414,43 @@ SELECT balk(hundred) FROM tenk1;
  balk 
 ------
      
+(1 row)
+
+ROLLBACK;
+-- test multiple usage of an aggregate whose finalfn returns a R/W datum
+BEGIN;
+CREATE FUNCTION rwagg_sfunc(x anyarray, y anyarray) RETURNS anyarray
+LANGUAGE plpgsql IMMUTABLE AS $$
+BEGIN
+    RETURN array_fill(y[1], ARRAY[4]);
+END;
+$$;
+CREATE FUNCTION rwagg_finalfunc(x anyarray) RETURNS anyarray
+LANGUAGE plpgsql STRICT IMMUTABLE AS $$
+DECLARE
+    res x%TYPE;
+BEGIN
+    -- assignment is essential for this test, it expands the array to R/W
+    res := array_fill(x[1], ARRAY[4]);
+    RETURN res;
+END;
+$$;
+CREATE AGGREGATE rwagg(anyarray) (
+    STYPE = anyarray,
+    SFUNC = rwagg_sfunc,
+    FINALFUNC = rwagg_finalfunc
+);
+CREATE FUNCTION eatarray(x real[]) RETURNS real[]
+LANGUAGE plpgsql STRICT IMMUTABLE AS $$
+BEGIN
+    x[1] := x[1] + 1;
+    RETURN x;
+END;
+$$;
+SELECT eatarray(rwagg(ARRAY[1.0::real])), eatarray(rwagg(ARRAY[1.0::real]));
+ eatarray  | eatarray  
+-----------+-----------
+ {2,1,1,1} | {2,1,1,1}
 (1 row)
 
 ROLLBACK;

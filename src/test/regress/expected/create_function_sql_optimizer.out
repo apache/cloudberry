@@ -5,7 +5,6 @@
 --
 -- All objects made in this test are in temp_func_test schema
 CREATE USER regress_unpriv_user;
-NOTICE:  resource queue required -- using default resource queue "pg_default"
 CREATE SCHEMA temp_func_test;
 GRANT ALL ON SCHEMA temp_func_test TO public;
 SET search_path TO temp_func_test, public;
@@ -282,8 +281,6 @@ CREATE FUNCTION functest_S_13() RETURNS boolean
     END;
 -- check display of function arguments in sub-SELECT
 CREATE TABLE functest1 (i int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Apache Cloudberry data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE FUNCTION functest_S_16(a int, b int) RETURNS void
     LANGUAGE SQL
     BEGIN ATOMIC
@@ -443,8 +440,6 @@ DROP TABLE functest1 CASCADE;
 NOTICE:  drop cascades to function functest_s_16(integer,integer)
 -- test with views
 CREATE TABLE functest3 (a int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO functest3 VALUES (1), (2);
 CREATE VIEW functestv3 AS SELECT * FROM functest3;
 CREATE FUNCTION functest_S_14() RETURNS bigint
@@ -501,8 +496,6 @@ CREATE FUNCTION functest_IS_6()
     LANGUAGE SQL
     RETURN nextval('functest1');
 CREATE TABLE functest2 (a int, b int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE FUNCTION functest_IS_7()
     RETURNS int
     LANGUAGE SQL
@@ -572,8 +565,6 @@ DETAIL:  "functest1" is a function.
 DROP FUNCTION functest1(a int);
 -- inlining of set-returning functions
 CREATE TABLE functest3 (a int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO functest3 VALUES (1), (2), (3);
 CREATE FUNCTION functest_sri1() RETURNS SETOF int
 LANGUAGE SQL
@@ -590,15 +581,13 @@ SELECT * FROM functest_sri1();
 (3 rows)
 
 EXPLAIN (verbose, costs off) SELECT * FROM functest_sri1();
-                 QUERY PLAN                 
---------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)
-   Output: functest3.a
-   ->  Seq Scan on temp_func_test.functest3
-         Output: functest3.a
- Settings: optimizer = 'off'
- Optimizer: Postgres query optimizer
-(6 rows)
+                  QUERY PLAN                   
+-----------------------------------------------
+ Function Scan on temp_func_test.functest_sri1
+   Output: functest_sri1
+   Function Call: functest_sri1()
+ Optimizer: GPORCA
+(4 rows)
 
 CREATE FUNCTION functest_sri2() RETURNS SETOF int
 LANGUAGE SQL
@@ -615,15 +604,13 @@ SELECT * FROM functest_sri2();
 (3 rows)
 
 EXPLAIN (verbose, costs off) SELECT * FROM functest_sri2();
-                 QUERY PLAN                 
---------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)
-   Output: functest3.a
-   ->  Seq Scan on temp_func_test.functest3
-         Output: functest3.a
- Settings: optimizer = 'off'
- Optimizer: Postgres query optimizer
-(6 rows)
+                  QUERY PLAN                   
+-----------------------------------------------
+ Function Scan on temp_func_test.functest_sri2
+   Output: functest_sri2
+   Function Call: functest_sri2()
+ Optimizer: GPORCA
+(4 rows)
 
 DROP TABLE functest3 CASCADE;
 NOTICE:  drop cascades to function functest_sri2()
@@ -646,17 +633,13 @@ SELECT voidtest2(11,22);
 
 -- currently, we can inline voidtest2 but not voidtest1
 EXPLAIN (verbose, costs off) SELECT voidtest2(11,22);
-             QUERY PLAN              
--------------------------------------
+       QUERY PLAN        
+-------------------------
  Result
    Output: voidtest1(33)
- Settings: optimizer = 'off'
- Optimizer: Postgres query optimizer
-(4 rows)
+(2 rows)
 
 CREATE TEMP TABLE sometable(f1 int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Apache Cloudberry data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE FUNCTION voidtest3(a int) RETURNS VOID LANGUAGE SQL AS
 $$ INSERT INTO sometable VALUES(a + 1) $$;
 SELECT voidtest3(17);
@@ -676,8 +659,8 @@ SELECT voidtest4(39);
 TABLE sometable;
  f1 
 ----
- 38
  18
+ 38
 (2 rows)
 
 CREATE FUNCTION voidtest5(a int) RETURNS SETOF VOID LANGUAGE SQL AS

@@ -594,16 +594,16 @@ CContextDXLToPlStmt::GetRTEIndexByAssignedQueryId(
 
 //---------------------------------------------------------------------------
 //	@function:
-//		CContextDXLToPlStmt::AddPerfmInfo
+//		CContextDXLToPlStmt::AddPermInfo
 //
 //	@doc:
-//		Add a Perfission Info list entry
+//		Add a Permission Info list entry
 //
 //---------------------------------------------------------------------------
 void
-CContextDXLToPlStmt::AddPerfmInfo(RTEPermissionInfo *pi)
+CContextDXLToPlStmt::AddPermInfo(RTEPermissionInfo *pi)
 {
-	// add rte to rtable entries list
+	// add permission info to list
 	m_perminfo_list = gpdb::LAppend(m_perminfo_list, pi);
 }
 

@@ -659,9 +659,24 @@ CTranslatorDXLToPlStmt::TranslateDXLTblScan(
 
 		// The postgres_fdw wrapper does not support row level security. So
 		// passing only the query_quals while creating the foreign scan node.
+		//
+		// BuildForeignScan internally calls build_simple_rel which looks up
+		// RTEPermissionInfo via root->parse->rteperminfos.  The RTE here was
+		// newly created by ORCA with its own perminfoindex numbering, which
+		// may not match m_orig_query->rteperminfos (e.g. after the rewriter
+		// expands external-table ON SELECT rules into subqueries the outer
+		// query's rteperminfos shrinks).  Temporarily swap in ORCA's own
+		// perminfos list so the indices are consistent.
+		Query *orig_query = m_dxl_to_plstmt_context->m_orig_query;
+		List *saved_perminfos = orig_query->rteperminfos;
+		orig_query->rteperminfos =
+			m_dxl_to_plstmt_context->GetPermInfosList();
+
 		ForeignScan *foreign_scan =
 			gpdb::CreateForeignScan(oidRel, index, query_quals, targetlist,
-									m_dxl_to_plstmt_context->m_orig_query, rte);
+									orig_query, rte);
+
+		orig_query->rteperminfos = saved_perminfos;
 		foreign_scan->scan.scanrelid = index;
 		plan = &(foreign_scan->scan.plan);
 		plan_return = (Plan *) foreign_scan;
@@ -4611,9 +4626,15 @@ CTranslatorDXLToPlStmt::TranslateDXLDynForeignScan(
 											   RelationGetDescr(childRel),
 											   index, qual, targetlist);
 
+	// Same perminfos swap as in the non-dynamic foreign scan path above.
+	Query *orig_query = m_dxl_to_plstmt_context->m_orig_query;
+	List *saved_perminfos = orig_query->rteperminfos;
+	orig_query->rteperminfos =
+		m_dxl_to_plstmt_context->GetPermInfosList();
+
 	ForeignScan *foreign_scan_first_part =
 		gpdb::CreateForeignScan(oid_first_child, index, qual, targetlist,
-								m_dxl_to_plstmt_context->m_orig_query, rte);
+								orig_query, rte);
 
 	// Set the plan fields to the first partition. We still want the plan type to be
 	// a dynamic foreign scan
@@ -4645,11 +4666,14 @@ CTranslatorDXLToPlStmt::TranslateDXLDynForeignScan(
 
 		ForeignScan *foreign_scan =
 			gpdb::CreateForeignScan(rte->relid, index, qual, targetlist,
-									m_dxl_to_plstmt_context->m_orig_query, rte);
+									orig_query, rte);
 
 		dyn_foreign_scan->fdw_private_list = gpdb::LAppend(
 			dyn_foreign_scan->fdw_private_list, foreign_scan->fdw_private);
 	}
+
+	orig_query->rteperminfos = saved_perminfos;
+
 	// convert qual and targetlist back to root relation. This is used by the
 	// executor node to remap to the children
 	gpdb::RelationWrapper prevRel = gpdb::GetRelation(rte->relid);
@@ -5336,7 +5360,7 @@ CTranslatorDXLToPlStmt::ProcessDXLTblDescr(
 	rte->eref = alias;
 	rte->alias = alias;
 
-	m_dxl_to_plstmt_context->AddPerfmInfo(pi);
+	m_dxl_to_plstmt_context->AddPermInfo(pi);
 
 	// set up rte <> perm info link.
 	rte->perminfoindex = gpdb::ListLength(

@@ -1,3 +1,7 @@
+-- start_matchsubs
+-- m/Seq Scan on recursive_table_ic \(actual rows=\d+ loops=\d+\)/
+-- s/Seq Scan on recursive_table_ic \(actual rows=\d+ loops=\d+\)/Seq Scan on recursive_table_ic (actual rows=XXXX loops=1)/
+-- end_matchsubs
 create schema gpexplain;
 set search_path = gpexplain;
 -- Helper function, to return the EXPLAIN output of a query as a normal
@@ -567,7 +571,7 @@ EXPLAIN (analyze,  costs off, timing off, summary off) UPDATE explain_subplan.ra
    Update on part_a_1_a_10 range_parted_1
    Update on part_a_10_a_20 range_parted_2
    ->  Explicit Redistribute Motion 1:3  (slice1; segments: 1) (actual rows=1 loops=1)
-         ->  Split (actual rows=2 loops=1)
+         ->  Split Update (actual rows=2 loops=1)
                ->  Append (actual rows=1 loops=1)
                      ->  Seq Scan on part_a_1_a_10 range_parted_1 (actual rows=0 loops=1)
                            Filter: ((a = 'a'::text) AND (c = '200'::numeric))
@@ -622,7 +626,7 @@ SELECT * FROM y LIMIT 10;
                      ->  WorkTable Scan on y (never executed)
                      ->  Materialize (never executed)
                            ->  Gather Motion 3:1  (slice1; segments: 3) (never executed)
-                                 ->  Seq Scan on recursive_table_ic (actual rows=4061 loops=1)
+                                 ->  Seq Scan on recursive_table_ic (actual rows=XXXX loops=1)
  Optimizer: Postgres query optimizer
 (13 rows)
 

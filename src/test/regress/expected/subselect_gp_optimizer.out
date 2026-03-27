@@ -1916,20 +1916,22 @@ EXPLAIN select count(distinct ss.ten) from
 -- we should see 2 subplans in the explain
 --
 EXPLAIN SELECT EXISTS(SELECT * FROM tenk1 WHERE tenk1.unique1 = tenk2.unique1) FROM tenk2 LIMIT 1;
-                                          QUERY PLAN                                          
-----------------------------------------------------------------------------------------------
- Limit  (cost=0.00..865.45 rows=1 width=1)
-   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..865.45 rows=1 width=1)
-         ->  Limit  (cost=0.00..865.45 rows=1 width=1)
-               ->  Hash Left Join  (cost=0.00..865.42 rows=3334 width=8)
+                                                  QUERY PLAN                                                   
+---------------------------------------------------------------------------------------------------------------
+ Limit  (cost=0.00..865.49 rows=1 width=1)
+   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..865.49 rows=1 width=1)
+         ->  Limit  (cost=0.00..865.49 rows=1 width=1)
+               ->  Hash Left Join  (cost=0.00..865.46 rows=3334 width=8)
                      Hash Cond: (tenk2.unique1 = tenk1.unique1)
-                     ->  Seq Scan on tenk2  (cost=0.00..431.51 rows=3334 width=4)
+                     ->  Redistribute Motion 3:3  (slice2; segments: 3)  (cost=0.00..431.58 rows=3334 width=4)
+                           Hash Key: tenk2.unique1
+                           ->  Seq Scan on tenk2  (cost=0.00..431.51 rows=3334 width=4)
                      ->  Hash  (cost=431.96..431.96 rows=3334 width=12)
                            ->  HashAggregate  (cost=0.00..431.96 rows=3334 width=12)
                                  Group Key: tenk1.unique1
                                  ->  Seq Scan on tenk1  (cost=0.00..431.51 rows=3334 width=4)
- Optimizer: Pivotal Optimizer (GPORCA)
-(11 rows)
+ Optimizer: GPORCA
+(13 rows)
 
 SELECT EXISTS(SELECT * FROM tenk1 WHERE tenk1.unique1 = tenk2.unique1) FROM tenk2 LIMIT 1;
  exists 

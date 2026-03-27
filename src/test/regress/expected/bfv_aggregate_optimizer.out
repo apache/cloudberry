@@ -1588,18 +1588,16 @@ select array_agg(a order by b desc nulls last) from aggordertest;
 create temp table mpp14125 as select repeat('a', a) a, a % 10 b from generate_series(1, 100)a;
 NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause. Creating a NULL policy entry.
 explain select string_agg(a, '') from mpp14125 group by b;
-                                               QUERY PLAN                                               
---------------------------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice2; segments: 3)  (cost=0.00..431.07 rows=10 width=8)
-   ->  GroupAggregate  (cost=0.00..431.07 rows=4 width=8)
+                                           QUERY PLAN                                            
+-------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..431.00 rows=1 width=8)
+   ->  HashAggregate  (cost=0.00..431.00 rows=1 width=8)
          Group Key: b
-         ->  Sort  (cost=0.00..431.06 rows=34 width=55)
-               Sort Key: b
-               ->  Redistribute Motion 3:3  (slice1; segments: 3)  (cost=0.00..431.01 rows=34 width=55)
-                     Hash Key: b
-                     ->  Seq Scan on mpp14125  (cost=0.00..431.00 rows=34 width=55)
- Optimizer: Pivotal Optimizer (GPORCA) version 3.83.0
-(9 rows)
+         ->  Redistribute Motion 3:3  (slice2; segments: 3)  (cost=0.00..431.00 rows=1 width=12)
+               Hash Key: b
+               ->  Seq Scan on mpp14125  (cost=0.00..431.00 rows=1 width=12)
+ Optimizer: GPORCA
+(7 rows)
 
 -- end MPP-14125
 -- Test that integer AVG() aggregate is accurate with large values. We used to

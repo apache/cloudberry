@@ -25,9 +25,13 @@
 --
 -- end_matchsubs
 SET optimizer_trace_fallback=on;
-COPY (VALUES('1,2'),('1,2,3'),('1,'),('1')) TO '@abs_srcdir@/data/tableerr.csv';
+\getenv abs_srcdir PG_ABS_SRCDIR
+\getenv hostname PG_HOSTNAME
+\set tableerr_file :abs_srcdir '/data/tableerr.csv'
+COPY (VALUES('1,2'),('1,2,3'),('1,'),('1')) TO :'tableerr_file';
+\set tableerr_file2 'file://' :hostname :abs_srcdir '/data/tableerr.csv'
 create external table ext_error_persistent(a int, b int)
-location ('file://@hostname@@abs_srcdir@/data/tableerr.csv')
+location (:'tableerr_file2')
 format 'csv'
 log errors persistently segment reject limit 10;
 select * from ext_error_persistent;
@@ -196,7 +200,7 @@ DETAIL:  Falling back to Postgres-based planner because GPORCA does not support 
 
 -- with out the error_log_persistent option, which will use normal error log.
 create external table ext_error_persistent(a int, b int)
-location ('file://@hostname@@abs_srcdir@/data/tableerr.csv')
+location (:'tableerr_file2')
 format 'csv'
 log errors segment reject limit 10;
 select * from ext_error_persistent;
@@ -258,9 +262,10 @@ DETAIL:  Falling back to Postgres-based planner because GPORCA does not support 
 ---------+---------+--------
 (0 rows)
 
+\set bytea_file 'file://' :hostname :abs_srcdir '/data/bytea.data'
 CREATE EXTERNAL TABLE ext_bytea (id int, content bytea)
 LOCATION (
-    'file://@hostname@@abs_srcdir@/data/bytea.data'
+    :'bytea_file'
 ) FORMAT 'CSV'
 OPTIONS (error_log_persistent 'true')
 LOG ERRORS SEGMENT REJECT LIMIT 5;
@@ -296,4 +301,4 @@ DETAIL:  Falling back to Postgres-based planner because GPORCA does not support 
 ---------+---------+--------
 (0 rows)
 
-\! rm @abs_srcdir@/data/tableerr.csv
+\! rm $PG_ABS_SRCDIR/data/tableerr.csv

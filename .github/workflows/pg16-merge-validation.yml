@@ -423,7 +423,7 @@ jobs:
             if ! su - gpadmin -c "
               cd ${SRC_DIR}
               export LD_LIBRARY_PATH=${INSTALL_PREFIX}/lib:${LD_LIBRARY_PATH}
-              CFLAGS='-O0 -g3' ./configure \
+              CFLAGS='-g3' ./configure \
                 --prefix=${INSTALL_PREFIX} \
                 --with-pgport=5432 \
                 --enable-cassert \

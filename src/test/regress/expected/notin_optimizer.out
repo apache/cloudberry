@@ -1459,15 +1459,15 @@ select * from t1_12930 where (a, b) not in (select a, b from t2_12930);
 (0 rows)
 
 explain select * from t1_12930 where (a, b) not in (select a, b from t2_12930) and b is not null;
-                                     QUERY PLAN                                     
-------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)  (cost=751.50..206932.71 rows=16 width=8)
-   ->  Hash Left Anti Semi (Not-In) Join  (cost=751.50..206932.49 rows=5 width=8)
-         Hash Cond: ((t1_12930.a = t2_12930.a) AND (t1_12930.b = t2_12930.b))
-         ->  Seq Scan on t1_12930  (cost=0.00..321.00 rows=28671 width=8)
-               Filter: (b IS NOT NULL)
-         ->  Hash  (cost=321.00..321.00 rows=28700 width=8)
-               ->  Seq Scan on t2_12930  (cost=0.00..321.00 rows=28700 width=8)
+                                      QUERY PLAN                                       
+---------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=751.07..208007.32 rows=64510 width=8)
+   ->  Hash Right Anti Join  (cost=751.07..207147.18 rows=21503 width=8)
+         Hash Cond: ((t2_12930.a = t1_12930.a) AND (t2_12930.b = t1_12930.b))
+         ->  Seq Scan on t2_12930  (cost=0.00..321.00 rows=28700 width=8)
+         ->  Hash  (cost=321.00..321.00 rows=28671 width=8)
+               ->  Seq Scan on t1_12930  (cost=0.00..321.00 rows=28671 width=8)
+                     Filter: (b IS NOT NULL)
  Optimizer: Postgres query optimizer
 (8 rows)
 
