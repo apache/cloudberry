@@ -1,6 +1,6 @@
 import os
 import re
-from test.behave_utils.utils import create_database_if_not_exists, drop_database_if_exists, drop_table_if_exists
+from test.behave_utils.utils import create_database_if_not_exists, drop_database_if_exists, drop_table_if_exists, run_gpcommand
 
 
 def _find_expected_position(contents, expected):
