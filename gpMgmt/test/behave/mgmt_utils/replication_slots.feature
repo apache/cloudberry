@@ -6,7 +6,8 @@ Feature: Replication Slots
     When I create a cluster
     Then the primaries and mirrors should be replicating using replication slots
 
-  Scenario: Replication slots remain correct after failover and rebalance
+@extended
+Scenario: Replication slots remain correct after failover and rebalance
     Given I have a machine with no cluster
     And I create a cluster
 

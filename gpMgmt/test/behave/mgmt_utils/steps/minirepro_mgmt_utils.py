@@ -1,6 +1,23 @@
 import os
 import re
-from test.behave_utils.utils import drop_database_if_exists, drop_table_if_exists
+from test.behave_utils.utils import create_database_if_not_exists, drop_database_if_exists, drop_table_if_exists
+
+
+def _find_expected_position(contents, expected):
+    pos = contents.find(expected)
+    if pos != -1:
+        return pos
+
+    ddl_match = re.match(r'CREATE (TABLE|VIEW) (.+)$', expected)
+    if ddl_match:
+        object_type, object_name = ddl_match.groups()
+        quoted_name = re.escape(object_name)
+        pattern = r'CREATE %s (?:(?:"[^"]+"|[A-Za-z_][A-Za-z0-9_$]*)\.)?"?%s"?' % (object_type, quoted_name)
+        regex_match = re.search(pattern, contents)
+        if regex_match:
+            return regex_match.start()
+
+    return -1
 
 @given('database "{dbname}" does not exist')
 def impl(context, dbname):
@@ -42,8 +59,8 @@ def impl(context, output_file):
 def impl(context, output_file, str_before, str_after):
     with open(output_file, 'r') as output_f:
         s = output_f.read()
-        pos_before = s.find(str_before)
-        pos_after = s.find(str_after)
+        pos_before = _find_expected_position(s, str_before)
+        pos_after = _find_expected_position(s, str_after)
         if pos_before == -1:
             raise Exception('%s not found.' % str_before)
         if pos_after == -1:
@@ -55,14 +72,14 @@ def impl(context, output_file, str_before, str_after):
 def impl(context, output_file, search_str):
     with open(output_file, 'r') as output_f:
         s = output_f.read()
-        if s.find(search_str) == -1:
+        if _find_expected_position(s, search_str) == -1:
             raise Exception('%s not found.' % search_str)
 
 @then('the output file "{output_file}" should not contain "{search_str}"')
 def impl(context, output_file, search_str):
     with open(output_file, 'r') as output_f:
         s = output_f.read()
-        if s.find(search_str) != -1:
+        if _find_expected_position(s, search_str) != -1:
             raise Exception('%s should not exist.' % search_str)
 
 @then('the output file "{output_file}" should be loaded to database "{db_name}" without error')

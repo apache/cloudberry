@@ -117,6 +117,7 @@ Feature: gprecoverseg tests
         And all the segments are running
         And the segments are synchronized
 
+    @extended
     Scenario: gprecoverseg full recovery displays pg_controldata success info
         Given the database is running
         And all the segments are running
@@ -129,6 +130,7 @@ Feature: gprecoverseg tests
         And the segments are synchronized
         And check segment conf: postgresql.conf
 
+    @extended
     Scenario: gprecoverseg incremental recovery displays pg_controldata success info
         Given the database is running
         And all the segments are running
@@ -141,6 +143,7 @@ Feature: gprecoverseg tests
         And the segments are synchronized
         And check segment conf: postgresql.conf
 
+    @extended
     Scenario: gprecoverseg full recovery displays pg_controldata success info
         Given the database is running
         And all the segments are running
@@ -153,6 +156,7 @@ Feature: gprecoverseg tests
         And the segments are synchronized
         And check segment conf: postgresql.conf
 
+    @extended
     Scenario: gprecoverseg incremental recovery displays pg_controldata success info
         Given the database is running
         And all the segments are running
@@ -256,6 +260,7 @@ Feature: gprecoverseg tests
           And all the segments are running
           And the segments are synchronized
 
+    @extended
     Scenario: gprecoverseg differential recovery displays rsync progress to the user
         Given the database is running
         And all the segments are running
@@ -278,6 +283,7 @@ Feature: gprecoverseg tests
         And verify replication slot internal_wal_replication_slot is available on all the segments
         And check segment conf: postgresql.conf
 
+    @extended
     Scenario: gprecoverseg does not display rsync progress to the user when --no-progress option is specified
         Given the database is running
         And all the segments are running
@@ -299,6 +305,7 @@ Feature: gprecoverseg tests
         And the segments are synchronized
         And check segment conf: postgresql.conf
 
+    @extended
     Scenario: When gprecoverseg incremental recovery uses pg_rewind to recover and an existing postmaster.pid on the killed primary segment corresponds to a non postgres process
         Given the database is running
         And all the segments are running
@@ -323,6 +330,7 @@ Feature: gprecoverseg tests
         And the backup pid file is deleted on "primary" segment
         And the background pid is killed on "primary" segment
 
+    @extended
     Scenario: Pid does not correspond to any running process
         Given the database is running
         And all the segments are running
@@ -345,6 +353,7 @@ Feature: gprecoverseg tests
         And the segments are synchronized
         And the backup pid file is deleted on "primary" segment
 
+    @extended
     Scenario: pg_isready functions on recovered segments
         Given the database is running
           And all the segments are running
@@ -362,6 +371,7 @@ Feature: gprecoverseg tests
           And the segments are synchronized
           And pg_isready reports all primaries are accepting connections
 
+    @extended
     Scenario: gprecoverseg incremental recovery displays status for mirrors after pg_rewind call
         Given the database is running
         And all the segments are running
@@ -376,6 +386,7 @@ Feature: gprecoverseg tests
         And the segments are synchronized
         And the cluster is rebalanced
 
+    @extended
     @backup_restore_bashrc
     Scenario: gprecoverseg should not return error when banner configured on host
         Given the database is running
@@ -718,6 +729,7 @@ Feature: gprecoverseg tests
     And the cluster is recovered in full and rebalanced
     And the row count from table "test_recoverseg" in "postgres" is verified against the saved data
 
+  @extended
   @demo_cluster
   Scenario Outline: gprecoverseg differential recovery segments come up even if recovery for one segment fails
     Given the database is running
@@ -1813,6 +1825,7 @@ Feature: gprecoverseg tests
           And gprecoverseg should return a return code of 0
           And the cluster is rebalanced
 
+  @extended
   @demo_cluster
   Scenario: gprecoverseg recovers segment when config file contains hostname on demo cluster
     Given the database is running
@@ -1831,6 +1844,7 @@ Feature: gprecoverseg tests
     And the cluster configuration has no segments where "content=0 and status='d'"
     Then the cluster is rebalanced
 
+  @extended
   @demo_cluster
   Scenario: gprecoverseg skips recovery when config file contains invalid hostname on demo cluster
     Given the database is running

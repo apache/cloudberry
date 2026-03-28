@@ -311,6 +311,7 @@ Feature: gpcheckcat tests
         Then gpcheckcat should return a return code of 3
         And the user runs "dropdb fkey_ta"
 
+    @extended
     Scenario: gpcheckcat should report and repair extra entries with non-oid primary keys
         Given database "extra_pk_db" is dropped and recreated
         And the path "gpcheckcat.repair.*" is removed from current working directory
@@ -736,5 +737,4 @@ Feature: gpcheckcat tests
           And the user runs "gpstop -ma"
           And "gpstop -m" should return a return code of 0
           And the user runs "gpstart -a"
-
 

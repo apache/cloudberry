@@ -4078,7 +4078,13 @@ def impl(context):
 
     for host in host_to_pid_map:
         for pid in host_to_pid_map[host]:
-            if unix.check_pid_on_remotehost(pid, host):
+            # gpstop/gpstart can return before every saved pid fully exits.
+            # Poll briefly to avoid flaking on processes that are already shutting down.
+            for _ in range(10):
+                if not unix.check_pid_on_remotehost(pid, host):
+                    break
+                time.sleep(1)
+            else:
                 raise Exception("Postgres process {0} not killed on {1}.".format(pid, host))
 
 

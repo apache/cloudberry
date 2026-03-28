@@ -107,7 +107,10 @@ jobs:
                "behave_features":["test/behave/mgmt_utils/gpaddmirrors.feature"],
                "behave_args":"--tags ~@concourse_cluster"
               },
-              {"test":"ic-behave-gpcheckcat","behave_features":["test/behave/mgmt_utils/gpcheckcat.feature"]},
+              {"test":"ic-behave-gpcheckcat",
+               "behave_features":["test/behave/mgmt_utils/gpcheckcat.feature"],
+               "behave_args":"--tags ~@extended"
+              },
               {"test":"ic-behave-gpcheckperf",
                "behave_features":["test/behave/mgmt_utils/gpcheckperf.feature"],
                "behave_args":"--tags ~@concourse_cluster"
@@ -117,14 +120,17 @@ jobs:
                "behave_features":["test/behave/mgmt_utils/gpinitstandby.feature"],
                "behave_args":"--tags ~@concourse_cluster"
               },
-              {"test":"ic-behave-gpinitsystem","behave_features":["test/behave/mgmt_utils/gpinitsystem.feature"]},
+              {"test":"ic-behave-gpinitsystem",
+               "behave_features":["test/behave/mgmt_utils/gpinitsystem.feature"],
+               "behave_args":"--tags ~@extended"
+              },
               {"test":"ic-behave-gpmovemirrors",
                "behave_features":["test/behave/mgmt_utils/gpmovemirrors.feature"],
-               "behave_args":"--tags ~@concourse_cluster"
+               "behave_args":"--tags ~@concourse_cluster --tags ~@extended"
               },
               {"test":"ic-behave-gprecoverseg",
                "behave_features":["test/behave/mgmt_utils/gprecoverseg.feature"],
-               "behave_args":"--tags ~@concourse_cluster"
+               "behave_args":"--tags ~@concourse_cluster --tags ~@extended"
               },
               {"test":"ic-behave-gpreload","behave_features":["test/behave/mgmt_utils/gpreload.feature"]},
               {"test":"ic-behave-gpstart",
