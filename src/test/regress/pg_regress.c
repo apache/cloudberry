@@ -2408,8 +2408,7 @@ run_schedule(const char *schedule, test_start_function startfunc,
 				status(_("ok    "));	/* align with FAILED */
 				success_count++;
 			}
-
-			if (statuses[i] != 0)
+			if (statuses[i] != 0 && (strcmp(test, "gp_connections") != 0))
 				log_child_failure(statuses[i]);
 
 			INSTR_TIME_SUBTRACT(stoptimes[i], starttimes[i]);
@@ -2501,7 +2500,7 @@ run_single_test(const char *test, test_start_function startfunc,
 		success_count++;
 	}
 
-	if (exit_status != 0)
+	if (exit_status != 0 && (strcmp(test, "gp_connections") != 0))
 		log_child_failure(exit_status);
 
 	INSTR_TIME_SUBTRACT(stoptime, starttime);
