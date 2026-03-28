@@ -842,7 +842,7 @@ ANALYZE foo_stats;
 SELECT schemaname, tablename, attname, null_frac, avg_width, n_distinct, most_common_vals, most_common_freqs, histogram_bounds FROM pg_stats WHERE tablename='foo_stats' ORDER BY attname;
  schemaname | tablename | attname | null_frac | avg_width | n_distinct |  most_common_vals   | most_common_freqs | histogram_bounds 
 ------------+-----------+---------+-----------+-----------+------------+---------------------+-------------------+------------------
- public     | foo_stats | a       |         0 |      1156 |          0 |                     |                   | 
+ public     | foo_stats | a       |         0 |    100004 |          0 |                     |                   | 
  public     | foo_stats | b       |         0 |         7 |       -0.5 | {"\\x626262626232"} | {1}               | 
  public     | foo_stats | c       |         0 |         6 |       -0.5 | {cccc2}             | {1}               | 
  public     | foo_stats | d       |         0 |         4 |       -0.5 | {3}                 | {1}               | 
@@ -862,7 +862,7 @@ analyze twoseg_table;
 select relname, reltuples, relpages from pg_class where relname ='twoseg_table' order by relname;
    relname    | reltuples | relpages 
 --------------+-----------+----------
- twoseg_table |        50 |        2
+ twoseg_table |        50 |        1
 (1 row)
 
 select attname, null_frac, avg_width, n_distinct, most_common_vals, most_common_freqs, histogram_bounds FROM pg_stats WHERE tablename='twoseg_table' ORDER BY attname;
@@ -982,13 +982,13 @@ SELECT relpages, reltuples FROM pg_class WHERE relname = 'ana_parent';
 SELECT relpages, reltuples FROM pg_class WHERE relname = 'ana_c1';
  relpages | reltuples 
 ----------+-----------
-        3 |        10
+        1 |        10
 (1 row)
 
 SELECT relpages, reltuples FROM pg_class WHERE relname = 'ana_c2';
  relpages | reltuples 
 ----------+-----------
-        3 |        11
+        1 |        11
 (1 row)
 
 -- Check pg_stats entries

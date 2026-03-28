@@ -309,7 +309,7 @@ explain (verbose, costs off) select array_dims(gp_array_agg(distinct arr)) from 
                                  Output: arr
                                  Group Key: int_array_table.arr
                                  ->  Seq Scan on test_gp_array_agg.int_array_table
-                                       Output: a, arr
+                                       Output: arr
  Optimizer: Postgres query optimizer
  Settings: optimizer=off
 (19 rows)

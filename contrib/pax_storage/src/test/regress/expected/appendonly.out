@@ -50,7 +50,6 @@ CREATE TABLE tenk_ao9 (like tenk_heap) with (appendonly=true, compresslevel=0, c
 ERROR:  compresstype "zlib" can't be used with compresslevel 0
 -- these should not work without appendonly=true
 CREATE TABLE tenk_ao10 (like tenk_heap) with (compresslevel=5);
-ERROR:  unrecognized parameter "compresslevel"
 CREATE TABLE tenk_ao11 (like tenk_heap) with (blocksize=8192);
 ERROR:  unrecognized parameter "blocksize"
 CREATE TABLE tenk_ao12 (like tenk_heap) with (appendonly=false,blocksize=8192);

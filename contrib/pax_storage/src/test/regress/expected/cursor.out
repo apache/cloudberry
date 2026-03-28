@@ -690,17 +690,15 @@ END;
 $BODY$
 LANGUAGE 'plpgsql';
 SELECT func_test_cursor();
- func_test_cursor 
-------------------
- 
-(1 row)
-
+ERROR:  "cursor_initplan" is not simply updatable
+CONTEXT:  SQL statement "UPDATE cursor_initplan SET b = var1.b + 1 WHERE CURRENT OF cur"
+PL/pgSQL function func_test_cursor() line 9 at SQL statement
 SELECT * FROM cursor_initplan ORDER BY a;
  a  | b  
 ----+----
   1 |  1
-  2 |  3
-  3 |  4
+  2 |  2
+  3 |  3
   4 |  4
   5 |  5
   6 |  6

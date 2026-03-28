@@ -158,7 +158,7 @@ EXPLAIN (COSTS OFF, VERBOSE) :qry;
                      Output: b, PARTIAL sum(a) FILTER (WHERE false), PARTIAL max(c)
                      Group Key: test_combinefn_null.b
                      ->  Seq Scan on public.test_combinefn_null
-                           Output: a, b, c
+                           Output: b, a, c
  Optimizer: Postgres query optimizer
  Settings: enable_indexscan=off, enable_seqscan=on, enable_sort=off, optimizer=off
 (13 rows)
@@ -193,7 +193,7 @@ EXPLAIN (COSTS OFF, VERBOSE) :qry;
                      Output: b, PARTIAL var_pop((a)::integer) FILTER (WHERE false), PARTIAL max(c)
                      Group Key: test_combinefn_null.b
                      ->  Seq Scan on public.test_combinefn_null
-                           Output: a, b, c
+                           Output: b, a, c
  Optimizer: Postgres query optimizer
  Settings: enable_indexscan=off, enable_seqscan=on, enable_sort=off, optimizer=off
 (13 rows)
@@ -228,7 +228,7 @@ EXPLAIN (COSTS OFF, VERBOSE) :qry;
                      Output: b, PARTIAL sum((a)::numeric) FILTER (WHERE false), PARTIAL max(c)
                      Group Key: test_combinefn_null.b
                      ->  Seq Scan on public.test_combinefn_null
-                           Output: a, b, c
+                           Output: b, a, c
  Optimizer: Postgres query optimizer
  Settings: enable_indexscan=off, enable_seqscan=on, enable_sort=off, optimizer=off
 (13 rows)
@@ -263,7 +263,7 @@ EXPLAIN (COSTS OFF, VERBOSE) :qry;
                      Output: b, PARTIAL var_pop((a)::numeric) FILTER (WHERE false), PARTIAL max(c)
                      Group Key: test_combinefn_null.b
                      ->  Seq Scan on public.test_combinefn_null
-                           Output: a, b, c
+                           Output: b, a, c
  Optimizer: Postgres query optimizer
  Settings: enable_indexscan=off, enable_seqscan=on, enable_sort=off, optimizer=off
 (13 rows)

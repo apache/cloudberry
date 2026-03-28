@@ -847,16 +847,16 @@ set enable_material = 0;
 set enable_seqscan = 0;
 set enable_bitmapscan = 0;
 explain select tenk1.unique2 >= 0 from tenk1 left join tenk2 on true limit 1;
-                                                        QUERY PLAN                                                         
----------------------------------------------------------------------------------------------------------------------------
- Limit  (cost=0.32..0.38 rows=1 width=4)
-   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.32..0.38 rows=1 width=4)
-         ->  Limit  (cost=0.32..0.36 rows=1 width=4)
-               ->  Nested Loop Left Join  (cost=0.32..3520104.27 rows=33333334 width=4)
-                     ->  Index Only Scan using tenk1_unique2 on tenk1  (cost=0.16..1650.16 rows=3334 width=4)
-                     ->  Materialize  (cost=0.16..18479.11 rows=10000 width=0)
-                           ->  Broadcast Motion 3:3  (slice2; segments: 3)  (cost=0.16..18329.11 rows=10000 width=0)
-                                 ->  Index Only Scan using tenk2_hundred on tenk2  (cost=0.16..223.47 rows=3333 width=0)
+                                                       QUERY PLAN                                                        
+-------------------------------------------------------------------------------------------------------------------------
+ Limit  (cost=0.32..0.36 rows=1 width=1)
+   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.32..0.44 rows=3 width=1)
+         ->  Limit  (cost=0.32..0.40 rows=1 width=1)
+               ->  Nested Loop Left Join  (cost=0.32..2507776.74 rows=33333333 width=1)
+                     ->  Index Only Scan using tenk1_unique2 on tenk1  (cost=0.16..493.85 rows=3333 width=4)
+                     ->  Materialize  (cost=0.16..677.18 rows=10000 width=0)
+                           ->  Broadcast Motion 3:3  (slice2; segments: 3)  (cost=0.16..627.18 rows=10000 width=0)
+                                 ->  Index Only Scan using tenk2_unique2 on tenk2  (cost=0.16..493.85 rows=3333 width=0)
  Optimizer: Postgres query optimizer
 (9 rows)
 
@@ -1427,6 +1427,7 @@ select box(point(0.05*i, 0.05*i), point(0.05*i, 0.05*i)),
 from generate_series(0,10000) as i;
 vacuum analyze gist_tbl_github9733;
 create index gist_tbl_point_index_github9733 on gist_tbl_github9733 using gist (p);
+ERROR:  pax only support btree/hash/gin/bitmap indexes (pax_access_handle.cc:591)
 set enable_seqscan=off;
 set enable_bitmapscan=off;
 explain (costs off)

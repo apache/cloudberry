@@ -34,10 +34,10 @@ WHERE
 ------------+-----------+-------------+--------------+---------------
  t_ao       | ao_column | t           |              |             0
  t_ao_enc   | ao_column | t           |              |             0
- t_ao_a     | heap      |             |              |              
- t_ao_b     | heap      |             |              |              
- t_ao_c     | heap      |             |              |              
- t_ao_enc_a | heap      |             |              |              
+ t_ao_a     | pax       |             |              |              
+ t_ao_b     | pax       |             |              |              
+ t_ao_c     | pax       |             |              |              
+ t_ao_enc_a | pax       |             |              |              
  t_ao_d     | ao_row    | f           |              |             0
 (7 rows)
 

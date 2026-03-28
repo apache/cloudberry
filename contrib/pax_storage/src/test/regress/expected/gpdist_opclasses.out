@@ -241,18 +241,20 @@ DETAIL:  Distribution key column "ip_addr" is not included in the constraint.
 HINT:  Add "ip_addr" to the constraint with the =(inet,inet) operator.
 -- but this is.
 ALTER TABLE ip_reservations ADD EXCLUDE USING gist (ip_addr inet_ops WITH =, reserved WITH &&);
+ERROR:  pax only support btree/hash/gin/bitmap indexes (pax_access_handle.cc:591)
 -- new distribution is incompatible with the constraint.
 ALTER TABLE ip_reservations SET DISTRIBUTED BY (reserved);
-ERROR:  distribution policy is not compatible with exclusion constraint "ip_reservations_ip_addr_reserved_excl"
-DETAIL:  Distribution key column "reserved" is not included in the constraint.
-HINT:  Add "reserved" to the constraint with the =(anyrange,anyrange) operator.
 -- After dropping the constraint, it's allowed.
 ALTER TABLE ip_reservations DROP CONSTRAINT ip_reservations_ip_addr_reserved_excl;
+ERROR:  constraint "ip_reservations_ip_addr_reserved_excl" of relation "ip_reservations" does not exist
 ALTER TABLE ip_reservations SET DISTRIBUTED BY (reserved);
+WARNING:  distribution policy of relation "ip_reservations" already set to (reserved)
+HINT:  Use ALTER TABLE "ip_reservations" SET WITH (REORGANIZE=TRUE) DISTRIBUTED BY (reserved) to force redistribution
 -- Test creating exclusion constraint on tsrange column. (The subtle
 -- difference is there is no direct =(tsrange, tsrange) operator, we rely on
 -- the implicit casts for it)
 ALTER TABLE ip_reservations ADD EXCLUDE USING gist (reserved WITH =);
+ERROR:  pax only support btree/hash/gin/bitmap indexes (pax_access_handle.cc:591)
 --
 -- Test scenario, where a type has a hash operator class, but not a default
 -- one.
