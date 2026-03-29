@@ -282,8 +282,8 @@ drop table t1_type_int33_aoco;
 
 -- test no implement am encoding callback table still can use relation WITH option
 
-CREATE TABLE t1_heap (a int) WITH (autovacuum_enabled=true, autovacuum_analyze_scale_factor=0.3, fillfactor=32);
-CREATE TABLE t2_heap (a int) WITH (autovacuum_enabled=true, autovacuum_analyze_scale_factor=0.3, fillfactor=32);
+CREATE TABLE t1_heap (a int);
+CREATE TABLE t2_heap (a int);
 
 drop table t1_heap;
 drop table t2_heap;

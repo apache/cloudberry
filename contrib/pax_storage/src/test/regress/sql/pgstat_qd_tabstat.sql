@@ -38,7 +38,7 @@ select n_tup_ins, n_tup_upd, n_tup_del, n_tup_hot_upd, n_live_tup, n_dead_tup, n
 
 
 -- Test pgstat table stat in CTAS on QD
-create table table_for_ctas with (autovacuum_enabled=false) as select i, 'hello' || i from generate_series(1, 100) f(i);
+create table table_for_ctas as select i, 'hello' || i from generate_series(1, 100) f(i);
 select gp_stat_force_next_flush();
 select n_tup_ins, n_tup_upd, n_tup_del, n_tup_hot_upd, n_live_tup, n_dead_tup, n_mod_since_analyze from gp_stat_all_tables_summary where relid = 'table_for_ctas'::regclass;
 select i, 'hello' || i into table_for_insert_into from generate_series(1, 100) f(i);

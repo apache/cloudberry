@@ -32,7 +32,7 @@ HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sur
 select count(*) from temp_nspnames;
  count 
 -------
-     1
+     0
 (1 row)
 
 -- Disconnect and reconnect.

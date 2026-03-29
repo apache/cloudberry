@@ -1990,12 +1990,11 @@ EXPLAIN (COSTS OFF) DELETE FROM t1 WHERE f_leak(b);
 
 DELETE FROM only t1 WHERE f_leak(b) RETURNING tableoid::regclass, *, t1;
 NOTICE:  f_leak => bbbbbb_updt
-ERROR:  not implemented yet on pax relations: TupleFetchRowVersion  (seg0 slice1 127.0.1.1:7002 pid=1173366)
+ERROR:  not implemented yet on pax relations: TupleFetchRowVersion
 DELETE FROM t1 WHERE f_leak(b) RETURNING tableoid::regclass, *, t1;
-NOTICE:  f_leak => bcdbcd
 NOTICE:  f_leak => bbbbbb_updt
 NOTICE:  f_leak => defdef
-ERROR:  not implemented yet on pax relations: TupleFetchRowVersion  (seg0 slice1 127.0.1.1:7002 pid=1173366)
+ERROR:  not implemented yet on pax relations: TupleFetchRowVersion
 --
 -- S.b. view on top of Row-level security
 --

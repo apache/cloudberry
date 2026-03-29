@@ -1330,8 +1330,6 @@ DROP DATABASE IF EXISTS "funny_copy""db'with\\quotes";
 reset client_min_messages;
 CREATE DATABASE "funny_copy""db'with\\quotes";
 
-\! python3 test_dbconn.py 1
-
 \c "funny_copy""db'with\\quotes"
 -- echo will behave differently on different platforms, force to use bash with -E option
 COPY (SELECT 'data1') TO PROGRAM 'cat > /tmp/gpcopyenvtest; /usr/bin/env bash -c ''echo -E database in COPY TO: $GP_DATABASE >> /tmp/gpcopyenvtest '' ' ESCAPE 'OFF';

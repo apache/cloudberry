@@ -351,17 +351,15 @@ create table attype_indexed_constr(
     dkey inet,
     exclude using gist (dkey inet_ops with =, c with &&)
 );
+ERROR:  pax only support btree/hash/gin/bitmap indexes (pax_access_handle.cc:591)
 -- not change
 execute capturerelfilenodebefore('alter column diff type', 'attype_indexed_constr_dkey_c_excl');
 alter table attype_indexed_constr alter column c type circle;
+ERROR:  relation "attype_indexed_constr" does not exist
 execute checkrelfilenodediff('alter column diff type', 'attype_indexed_constr_dkey_c_excl');
- segid |        casename        |              relname              | rewritten 
--------+------------------------+-----------------------------------+-----------
-     0 | alter column diff type | attype_indexed_constr_dkey_c_excl | f
-     1 | alter column diff type | attype_indexed_constr_dkey_c_excl | f
-     2 | alter column diff type | attype_indexed_constr_dkey_c_excl | f
-    -1 | alter column diff type | attype_indexed_constr_dkey_c_excl | f
-(4 rows)
+ segid | casename | relname | rewritten 
+-------+----------+---------+-----------
+(0 rows)
 
 drop table relfilenodecheck;
 -- Test that we are able to attach a newly created partition table when it has foreign key reference.

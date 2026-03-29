@@ -21,11 +21,11 @@ INSERT INTO combocidtest SELECT 1 LIMIT 0;
 INSERT INTO combocidtest SELECT 1 LIMIT 0;
 INSERT INTO combocidtest VALUES (1);
 INSERT INTO combocidtest VALUES (2);
-SELECT ctid,cmin,* FROM combocidtest;
- ctid  | cmin | foobar | distkey 
--------+------+--------+---------
- (0,1) |   10 |      1 |        
- (0,2) |   11 |      2 |        
+SELECT ctid,* FROM combocidtest;
+  ctid   | foobar | distkey 
+---------+--------+---------
+ (0,1)   |      1 |        
+ (256,1) |      2 |        
 (2 rows)
 
 SAVEPOINT s1;

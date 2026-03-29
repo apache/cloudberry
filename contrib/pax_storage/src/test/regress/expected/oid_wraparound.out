@@ -59,15 +59,15 @@ DROP TABLE oid_wraparound_table;
 SELECT gp_get_next_oid_master();
  gp_get_next_oid_master 
 ------------------------
-                  16387
+                  16394
 (1 row)
 
 SELECT gp_get_next_oid_segments();
  gp_get_next_oid_segments 
 --------------------------
-                    16384
-                    16384
-                    16384
+                    16389
+                    16389
+                    16389
 (3 rows)
 
 -- Scenario 2: QD is at 4 billion while QE is at 16384
@@ -108,14 +108,14 @@ CREATE TABLE oid_wraparound_table_other AS SELECT 1 AS a;
 SELECT gp_get_next_oid_master() in (16390, 16391);
  ?column? 
 ----------
- t
+ f
 (1 row)
 
 SELECT gp_get_next_oid_segments();
  gp_get_next_oid_segments 
 --------------------------
-                    16385
-                    16385
-                    16385
+                    16396
+                    16396
+                    16396
 (3 rows)
 

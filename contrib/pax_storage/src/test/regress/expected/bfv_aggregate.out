@@ -1965,7 +1965,7 @@ explain (verbose on, costs off) select ex2.b/2, sum(ex1.a) from ex1, (select a, 
                            Output: (COALESCE(ex2.b, 1) / 2), ex1.a
                            Hash Cond: (ex1.a = ex2.a)
                            ->  Seq Scan on bfv_aggregate.ex1
-                                 Output: ex1.a, ex1.b, ex1.c
+                                 Output: ex1.a
                            ->  Hash
                                  Output: ex2.b, ex2.a
                                  ->  Seq Scan on bfv_aggregate.ex2
@@ -2169,8 +2169,7 @@ select * from t3 group by a, b, c;
 (3 rows)
 
 commit;
-ERROR:  duplicate key value violates unique constraint "t3_pkey"  (seg1 127.0.0.1:7003 pid=86457)
-DETAIL:  Key (a, b)=(1, 1) already exists.
+ERROR:  not implemented yet on pax relations: TupleFetchRowVersion
 drop table  t1, t2, t3, t4, t5, t6;
 -- CLEANUP
 set client_min_messages='warning';

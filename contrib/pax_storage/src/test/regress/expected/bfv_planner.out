@@ -245,6 +245,7 @@ select * from booltest a, booltest b where (a.b = b.b) is not false;
 create table tstest (t tsvector);
 NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause, and no column type is suitable for a distribution key. Creating a NULL policy entry.
 create index i_tstest on tstest using gist (t) WHERE t @@ 'bar';
+ERROR:  pax only support btree/hash/gin/bitmap indexes (pax_access_handle.cc:591)
 insert into tstest values ('foo');
 insert into tstest values ('bar');
 set enable_bitmapscan =off;

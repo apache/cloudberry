@@ -171,12 +171,12 @@ ERROR:  permission denied: "pg_class" is a system catalog
 create table atsdb (i int, j text) distributed by (j);
 insert into atsdb select i, i::text from generate_series(1, 10) i;
 alter table atsdb set with(appendonly = true);
+ERROR:  PAX not allow swap relation files for different AM (cluster.c:1535)
 select relname, segrelid != 0, reloptions from pg_class, pg_appendonly where pg_class.oid =
 'atsdb'::regclass and relid = pg_class.oid;
  relname | ?column? | reloptions 
 ---------+----------+------------
- atsdb   | t        | 
-(1 row)
+(0 rows)
 
 select * from atsdb;
  i  | j  
@@ -316,12 +316,12 @@ select * from distcheck where rel = 'atsdb';
 
 alter table atsdb drop column n;
 alter table atsdb set with(appendonly = true, compresslevel = 3);
+ERROR:  PAX not allow swap relation files for different AM (cluster.c:1535)
 select relname, segrelid != 0, reloptions from pg_class, pg_appendonly where pg_class.oid =
 'atsdb'::regclass and relid = pg_class.oid;
- relname | ?column? |    reloptions     
----------+----------+-------------------
- atsdb   | t        | {compresslevel=3}
-(1 row)
+ relname | ?column? | reloptions 
+---------+----------+------------
+(0 rows)
 
 select * from distcheck where rel = 'atsdb';
   rel  | attname 
@@ -443,10 +443,9 @@ select * from distcheck where rel = 'atsdb';
 
 select relname, segrelid != 0, reloptions from pg_class, pg_appendonly where pg_class.oid =
 'atsdb'::regclass and relid = pg_class.oid;
- relname | ?column? |    reloptions     
----------+----------+-------------------
- atsdb   | t        | {compresslevel=3}
-(1 row)
+ relname | ?column? | reloptions 
+---------+----------+------------
+(0 rows)
 
 select * from atsdb;
   j  |  t  
@@ -1340,10 +1339,9 @@ where a.relname='owner_test'
   and x.oid = a.relowner
   and y.oid = b.relowner
   and z.oid = c.relowner;
-  relname   | relowner | toastowner | toastidxowner 
-------------+----------+------------+---------------
- owner_test | atsdb    | atsdb      | atsdb
-(1 row)
+ relname | relowner | toastowner | toastidxowner 
+---------+----------+------------+---------------
+(0 rows)
 
 -- MPP-9663 - Check that the ownership is consistent on the segments as well
 select a.relname,
@@ -1362,10 +1360,9 @@ where a.relname='owner_test'
   and a.gp_segment_id = 0
   and b.gp_segment_id = 0
   and c.gp_segment_id = 0;
-  relname   | relowner | toastowner | toastidxowner 
-------------+----------+------------+---------------
- owner_test | atsdb    | atsdb      | atsdb
-(1 row)
+ relname | relowner | toastowner | toastidxowner 
+---------+----------+------------+---------------
+(0 rows)
 
 -- MPP-9663 - The code path is different when the table has dropped columns
 alter table owner_test add column d text;
@@ -1387,10 +1384,9 @@ where a.relname='owner_test'
   and a.gp_segment_id = 0
   and b.gp_segment_id = 0
   and c.gp_segment_id = 0;
-  relname   | relowner | toastowner | toastidxowner 
-------------+----------+------------+---------------
- owner_test | atsdb    | atsdb      | atsdb
-(1 row)
+ relname | relowner | toastowner | toastidxowner 
+---------+----------+------------+---------------
+(0 rows)
 
 drop table owner_test;
 drop role atsdb;

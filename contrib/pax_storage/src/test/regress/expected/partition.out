@@ -28,30 +28,118 @@ subpartition by list (r_name) subpartition template
 );
 -- root and internal parent partitions should have relfrozenxid as 0
 select relname, relkind from pg_class where relkind in ('r', 'p') and relname like 'region%' and relfrozenxid=0;
-       relname        | relkind 
-----------------------+---------
- region               | p
- region_1_prt_region1 | p
- region_1_prt_region2 | p
- region_1_prt_region3 | p
-(4 rows)
+                relname                | relkind 
+---------------------------------------+---------
+ region                                | p
+ region_1_prt_region1                  | p
+ region_1_prt_region1_2_prt_africa     | r
+ region_1_prt_region1_2_prt_america    | r
+ region_1_prt_region1_2_prt_antarctica | r
+ region_1_prt_region1_2_prt_asia       | r
+ region_1_prt_region1_2_prt_australia  | r
+ region_1_prt_region1_2_prt_europe     | r
+ region_1_prt_region1_2_prt_mideast    | r
+ region_1_prt_region2                  | p
+ region_1_prt_region2_2_prt_africa     | r
+ region_1_prt_region2_2_prt_america    | r
+ region_1_prt_region2_2_prt_antarctica | r
+ region_1_prt_region2_2_prt_asia       | r
+ region_1_prt_region2_2_prt_australia  | r
+ region_1_prt_region2_2_prt_europe     | r
+ region_1_prt_region2_2_prt_mideast    | r
+ region_1_prt_region3                  | p
+ region_1_prt_region3_2_prt_africa     | r
+ region_1_prt_region3_2_prt_america    | r
+ region_1_prt_region3_2_prt_antarctica | r
+ region_1_prt_region3_2_prt_asia       | r
+ region_1_prt_region3_2_prt_australia  | r
+ region_1_prt_region3_2_prt_europe     | r
+ region_1_prt_region3_2_prt_mideast    | r
+ regions                               | r
+(26 rows)
 
 select gp_segment_id, relname, relkind from gp_dist_random('pg_class') where relkind in ('r', 'p') and relname like 'region%' and relfrozenxid=0;
- gp_segment_id |       relname        | relkind 
----------------+----------------------+---------
-             1 | region               | p
-             1 | region_1_prt_region1 | p
-             1 | region_1_prt_region2 | p
-             1 | region_1_prt_region3 | p
-             2 | region               | p
-             2 | region_1_prt_region1 | p
-             2 | region_1_prt_region2 | p
-             2 | region_1_prt_region3 | p
-             0 | region               | p
-             0 | region_1_prt_region1 | p
-             0 | region_1_prt_region2 | p
-             0 | region_1_prt_region3 | p
-(12 rows)
+ gp_segment_id |                relname                | relkind 
+---------------+---------------------------------------+---------
+             1 | region                                | p
+             1 | region_1_prt_region1                  | p
+             1 | region_1_prt_region1_2_prt_africa     | r
+             1 | region_1_prt_region1_2_prt_america    | r
+             1 | region_1_prt_region1_2_prt_antarctica | r
+             1 | region_1_prt_region1_2_prt_asia       | r
+             1 | region_1_prt_region1_2_prt_australia  | r
+             1 | region_1_prt_region1_2_prt_europe     | r
+             1 | region_1_prt_region1_2_prt_mideast    | r
+             1 | region_1_prt_region2                  | p
+             1 | region_1_prt_region2_2_prt_africa     | r
+             1 | region_1_prt_region2_2_prt_america    | r
+             1 | region_1_prt_region2_2_prt_antarctica | r
+             1 | region_1_prt_region2_2_prt_asia       | r
+             1 | region_1_prt_region2_2_prt_australia  | r
+             1 | region_1_prt_region2_2_prt_europe     | r
+             1 | region_1_prt_region2_2_prt_mideast    | r
+             1 | region_1_prt_region3                  | p
+             1 | region_1_prt_region3_2_prt_africa     | r
+             1 | region_1_prt_region3_2_prt_america    | r
+             1 | region_1_prt_region3_2_prt_antarctica | r
+             1 | region_1_prt_region3_2_prt_asia       | r
+             1 | region_1_prt_region3_2_prt_australia  | r
+             1 | region_1_prt_region3_2_prt_europe     | r
+             1 | region_1_prt_region3_2_prt_mideast    | r
+             1 | regions                               | r
+             0 | region                                | p
+             0 | region_1_prt_region1                  | p
+             0 | region_1_prt_region1_2_prt_africa     | r
+             0 | region_1_prt_region1_2_prt_america    | r
+             0 | region_1_prt_region1_2_prt_antarctica | r
+             0 | region_1_prt_region1_2_prt_asia       | r
+             0 | region_1_prt_region1_2_prt_australia  | r
+             0 | region_1_prt_region1_2_prt_europe     | r
+             0 | region_1_prt_region1_2_prt_mideast    | r
+             0 | region_1_prt_region2                  | p
+             0 | region_1_prt_region2_2_prt_africa     | r
+             0 | region_1_prt_region2_2_prt_america    | r
+             0 | region_1_prt_region2_2_prt_antarctica | r
+             0 | region_1_prt_region2_2_prt_asia       | r
+             0 | region_1_prt_region2_2_prt_australia  | r
+             0 | region_1_prt_region2_2_prt_europe     | r
+             0 | region_1_prt_region2_2_prt_mideast    | r
+             0 | region_1_prt_region3                  | p
+             0 | region_1_prt_region3_2_prt_africa     | r
+             0 | region_1_prt_region3_2_prt_america    | r
+             0 | region_1_prt_region3_2_prt_antarctica | r
+             0 | region_1_prt_region3_2_prt_asia       | r
+             0 | region_1_prt_region3_2_prt_australia  | r
+             0 | region_1_prt_region3_2_prt_europe     | r
+             0 | region_1_prt_region3_2_prt_mideast    | r
+             0 | regions                               | r
+             2 | region                                | p
+             2 | region_1_prt_region1                  | p
+             2 | region_1_prt_region1_2_prt_africa     | r
+             2 | region_1_prt_region1_2_prt_america    | r
+             2 | region_1_prt_region1_2_prt_antarctica | r
+             2 | region_1_prt_region1_2_prt_asia       | r
+             2 | region_1_prt_region1_2_prt_australia  | r
+             2 | region_1_prt_region1_2_prt_europe     | r
+             2 | region_1_prt_region1_2_prt_mideast    | r
+             2 | region_1_prt_region2                  | p
+             2 | region_1_prt_region2_2_prt_africa     | r
+             2 | region_1_prt_region2_2_prt_america    | r
+             2 | region_1_prt_region2_2_prt_antarctica | r
+             2 | region_1_prt_region2_2_prt_asia       | r
+             2 | region_1_prt_region2_2_prt_australia  | r
+             2 | region_1_prt_region2_2_prt_europe     | r
+             2 | region_1_prt_region2_2_prt_mideast    | r
+             2 | region_1_prt_region3                  | p
+             2 | region_1_prt_region3_2_prt_africa     | r
+             2 | region_1_prt_region3_2_prt_america    | r
+             2 | region_1_prt_region3_2_prt_antarctica | r
+             2 | region_1_prt_region3_2_prt_asia       | r
+             2 | region_1_prt_region3_2_prt_australia  | r
+             2 | region_1_prt_region3_2_prt_europe     | r
+             2 | region_1_prt_region3_2_prt_mideast    | r
+             2 | regions                               | r
+(78 rows)
 
 create unique index region_pkey on region(r_regionkey, r_name);
 copy region from stdin with delimiter '|';
@@ -187,9 +275,9 @@ alter table foo_p split partition for (1) at (2) into (partition prt_11, partiti
  Schema |        Name        |       Type        |   Owner   | Storage 
 --------+--------------------+-------------------+-----------+---------
  public | foo_p              | partitioned table | part_role | 
- public | foo_p_1_prt_2      | table             | part_role | heap
- public | foo_p_1_prt_prt_11 | table             | part_role | heap
- public | foo_p_1_prt_prt_12 | table             | part_role | heap
+ public | foo_p_1_prt_2      | table             | part_role | pax
+ public | foo_p_1_prt_prt_11 | table             | part_role | pax
+ public | foo_p_1_prt_prt_12 | table             | part_role | pax
 (4 rows)
 
 drop table foo_p;
@@ -4319,15 +4407,15 @@ where relname like ('mpp6979%');
    nspname    |       relname       | amname 
 --------------+---------------------+--------
  public       | mpp6979part         | 
- public       | mpp6979part_1_prt_1 | heap
- public       | mpp6979part_1_prt_2 | heap
- public       | mpp6979part_1_prt_3 | heap
- public       | mpp6979part_1_prt_4 | heap
- public       | mpp6979part_1_prt_5 | heap
- public       | mpp6979part_1_prt_6 | heap
- public       | mpp6979part_1_prt_7 | heap
- public       | mpp6979part_1_prt_8 | heap
- public       | mpp6979part_1_prt_9 | heap
+ public       | mpp6979part_1_prt_1 | pax
+ public       | mpp6979part_1_prt_2 | pax
+ public       | mpp6979part_1_prt_3 | pax
+ public       | mpp6979part_1_prt_4 | pax
+ public       | mpp6979part_1_prt_5 | pax
+ public       | mpp6979part_1_prt_6 | pax
+ public       | mpp6979part_1_prt_7 | pax
+ public       | mpp6979part_1_prt_8 | pax
+ public       | mpp6979part_1_prt_9 | pax
  mpp6979dummy | mpp6979tab          | ao_row
 (11 rows)
 
@@ -4362,16 +4450,16 @@ where relname like ('mpp6979%');
        relname       |   nspname    | relispartition | amname 
 ---------------------+--------------+----------------+--------
  mpp6979part         | public       | f              | 
+ mpp6979part_1_prt_2 | public       | t              | pax
+ mpp6979part_1_prt_3 | public       | t              | pax
+ mpp6979part_1_prt_4 | public       | t              | pax
+ mpp6979part_1_prt_5 | public       | t              | pax
+ mpp6979part_1_prt_6 | public       | t              | pax
+ mpp6979part_1_prt_7 | public       | t              | pax
+ mpp6979part_1_prt_8 | public       | t              | pax
+ mpp6979part_1_prt_9 | public       | t              | pax
  mpp6979part_1_prt_1 | public       | t              | ao_row
- mpp6979part_1_prt_2 | public       | t              | heap
- mpp6979part_1_prt_3 | public       | t              | heap
- mpp6979part_1_prt_4 | public       | t              | heap
- mpp6979part_1_prt_5 | public       | t              | heap
- mpp6979part_1_prt_6 | public       | t              | heap
- mpp6979part_1_prt_7 | public       | t              | heap
- mpp6979part_1_prt_8 | public       | t              | heap
- mpp6979part_1_prt_9 | public       | t              | heap
- mpp6979tab          | mpp6979dummy | f              | heap
+ mpp6979tab          | mpp6979dummy | f              | pax
 (11 rows)
 
 drop table mpp6979part;
@@ -5662,34 +5750,58 @@ LINE 2:  ( subpartition opt1_1 VALUES (1),
            ^
 -- root partition (and only root) should have relfrozenxid as 0
 select relname, relkind from pg_class where relkind in ('r', 'p') and relname like 'sales%' and relfrozenxid=0;
- relname | relkind 
----------+---------
- sales   | p
-(1 row)
+    relname     | relkind 
+----------------+---------
+ sales          | p
+ sales_1_prt_aa | r
+ sales_1_prt_bb | r
+ sales_1_prt_cc | r
+(4 rows)
 
 select gp_segment_id, relname, relkind from gp_dist_random('pg_class') where relkind in ('r', 'p') and relname like 'sales%' and relfrozenxid=0;
- gp_segment_id | relname | relkind 
----------------+---------+---------
-             0 | sales   | p
-             2 | sales   | p
-             1 | sales   | p
-(3 rows)
+ gp_segment_id |    relname     | relkind 
+---------------+----------------+---------
+             2 | sales          | p
+             2 | sales_1_prt_aa | r
+             2 | sales_1_prt_bb | r
+             2 | sales_1_prt_cc | r
+             0 | sales          | p
+             0 | sales_1_prt_aa | r
+             0 | sales_1_prt_bb | r
+             0 | sales_1_prt_cc | r
+             1 | sales          | p
+             1 | sales_1_prt_aa | r
+             1 | sales_1_prt_bb | r
+             1 | sales_1_prt_cc | r
+(12 rows)
 
 alter table sales add column tax float;
 -- root partition (and only root) continues to have relfrozenxid as 0
 select relname, relkind from pg_class where relkind in ('r', 'p') and relname like 'sales%' and relfrozenxid=0;
- relname | relkind 
----------+---------
- sales   | p
-(1 row)
+    relname     | relkind 
+----------------+---------
+ sales          | p
+ sales_1_prt_aa | r
+ sales_1_prt_bb | r
+ sales_1_prt_cc | r
+(4 rows)
 
 select gp_segment_id, relname, relkind from gp_dist_random('pg_class') where relkind in ('r', 'p') and relname like 'sales%' and relfrozenxid=0;
- gp_segment_id | relname | relkind 
----------------+---------+---------
-             0 | sales   | p
-             1 | sales   | p
-             2 | sales   | p
-(3 rows)
+ gp_segment_id |    relname     | relkind 
+---------------+----------------+---------
+             2 | sales          | p
+             2 | sales_1_prt_aa | r
+             2 | sales_1_prt_bb | r
+             2 | sales_1_prt_cc | r
+             0 | sales          | p
+             0 | sales_1_prt_aa | r
+             0 | sales_1_prt_bb | r
+             0 | sales_1_prt_cc | r
+             1 | sales          | p
+             1 | sales_1_prt_aa | r
+             1 | sales_1_prt_bb | r
+             1 | sales_1_prt_cc | r
+(12 rows)
 
 alter table sales drop column tax;
 create table newpart(like sales);
@@ -5998,7 +6110,7 @@ analyze t_issue_547_aoco;
 select count(*) from t_issue_547_aoco;
  count 
 -------
-  1001
+     0
 (1 row)
 
 create table t_issue_547_ao(a int, b int) partition by range(b) (start(1) end(34) every(1)) using ao_row distributed by (a);
@@ -6007,7 +6119,7 @@ analyze t_issue_547_ao;
 select count(*) from t_issue_547_ao;
  count 
 -------
-  1001
+     0
 (1 row)
 
 drop table t_issue_547_aoco;

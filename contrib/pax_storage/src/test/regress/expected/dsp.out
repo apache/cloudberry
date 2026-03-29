@@ -37,7 +37,7 @@ alter database dsp2 set gp_default_storage_options = "checksum=true";
 show default_table_access_method;
  default_table_access_method 
 -----------------------------
- ao_column
+ pax
 (1 row)
 
 show gp_default_storage_options;
@@ -48,18 +48,17 @@ show gp_default_storage_options;
 
 create table t1 (a int, b int) distributed by (a);
 \d+ t1
-                                                              Table "public.t1"
- Column |  Type   | Collation | Nullable | Default | Storage | Stats target | Compression Type | Compression Level | Block Size | Description 
---------+---------+-----------+----------+---------+---------+--------------+------------------+-------------------+------------+-------------
- a      | integer |           |          |         | plain   |              | none             | 0                 | 32768      | 
- b      | integer |           |          |         | plain   |              | none             | 0                 | 32768      | 
-Checksum: t
+                                    Table "public.t1"
+ Column |  Type   | Collation | Nullable | Default | Storage | Stats target | Description 
+--------+---------+-----------+----------+---------+---------+--------------+-------------
+ a      | integer |           |          |         | plain   |              | 
+ b      | integer |           |          |         | plain   |              | 
 Distributed by: (a)
 
 SELECT am.amname FROM pg_class c LEFT JOIN pg_am am ON (c.relam = am.oid) WHERE c.relname = 't1';
-  amname   
------------
- ao_column
+ amname 
+--------
+ pax
 (1 row)
 
 insert into t1 select i, i from generate_series(1,5)i;
@@ -147,7 +146,7 @@ select c.relname, am.amname, c.relkind, c.reloptions
  relname |  amname   | relkind |    reloptions    
 ---------+-----------+---------+------------------
  h1      | heap      | r       | 
- t1      | ao_column | r       | 
+ t1      | pax       | r       | 
  t2      | ao_column | r       | {blocksize=8192}
  t3      | heap      | r       | 
  t4      | ao_row    | r       | {blocksize=8192}
@@ -157,10 +156,9 @@ select relid::regclass, blocksize, compresstype,
 	compresslevel, columnstore, checksum from pg_appendonly order by 1;
  relid | blocksize | compresstype | compresslevel | columnstore | checksum 
 -------+-----------+--------------+---------------+-------------+----------
- t1    |     32768 |              |             0 | t           | t
  t2    |      8192 |              |             0 | t           | t
  t4    |      8192 |              |             0 | f           | t
-(3 rows)
+(2 rows)
 
 \c dsp2
 set default_table_access_method = ao_row;
@@ -505,7 +503,7 @@ alter database dsp1 set default_table_access_method = "heap";
 show default_table_access_method;
  default_table_access_method 
 -----------------------------
- heap
+ pax
 (1 row)
 
 show gp_default_storage_options;

@@ -932,10 +932,10 @@ SELECT * FROM subpartition_aoco_leaf;
  segno |                         rel                          |  amname   |     aoco_add_col_optimized     
 -------+------------------------------------------------------+-----------+--------------------------------
     -1 | subpartition_aoco_leaf                               |           | ADD COLUMN optimized for table
-    -1 | subpartition_aoco_leaf_1_prt_intermediate            | heap      | ADD COLUMN optimized for table
+    -1 | subpartition_aoco_leaf_1_prt_intermediate            | pax       | ADD COLUMN optimized for table
     -1 | subpartition_aoco_leaf_1_prt_intermediate_2_prt_leaf | ao_column | ADD COLUMN optimized for table
      0 | subpartition_aoco_leaf                               |           | ADD COLUMN optimized for table
-     0 | subpartition_aoco_leaf_1_prt_intermediate            | heap      | ADD COLUMN optimized for table
+     0 | subpartition_aoco_leaf_1_prt_intermediate            | pax       | ADD COLUMN optimized for table
      0 | subpartition_aoco_leaf_1_prt_intermediate_2_prt_leaf | ao_column | ADD COLUMN optimized for table
 (6 rows)
 
@@ -962,10 +962,10 @@ SELECT * FROM subpartition_aoco_leaf;
  segno |                         rel                          |  amname   |     aoco_add_col_optimized     
 -------+------------------------------------------------------+-----------+--------------------------------
     -1 | subpartition_aoco_leaf                               |           | ADD COLUMN optimized for table
-    -1 | subpartition_aoco_leaf_1_prt_intermediate            | heap      | ADD COLUMN optimized for table
+    -1 | subpartition_aoco_leaf_1_prt_intermediate            | pax       | ADD COLUMN optimized for table
     -1 | subpartition_aoco_leaf_1_prt_intermediate_2_prt_leaf | ao_column | full table rewritten
      0 | subpartition_aoco_leaf                               |           | ADD COLUMN optimized for table
-     0 | subpartition_aoco_leaf_1_prt_intermediate            | heap      | ADD COLUMN optimized for table
+     0 | subpartition_aoco_leaf_1_prt_intermediate            | pax       | ADD COLUMN optimized for table
      0 | subpartition_aoco_leaf_1_prt_intermediate_2_prt_leaf | ao_column | full table rewritten
 (6 rows)
 
