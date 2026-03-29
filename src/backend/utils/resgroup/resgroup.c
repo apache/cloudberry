@@ -3699,7 +3699,6 @@ check_and_unassign_from_resgroup(PlannedStmt* stmt)
 
 	bypassedGroup = groupInfo.group;
 	bypassedGroup->totalExecuted++;
-//	pgstat_report_resgroup(bypassedGroup->groupId);
 	bypassedSlot.group = groupInfo.group;
 	bypassedSlot.groupId = groupInfo.groupId;
 
