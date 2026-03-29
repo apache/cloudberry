@@ -133,6 +133,15 @@ SELECT gp_inject_fault('func_init_plan_end', 'reset', 1);
 1q:
 2q:
 
+-- verify the increment of num_executed in gp_toolkit.gp_resgroup_status
+1: SET ROLE role_bypass;
+1: SELECT num_executed INTO temporary temp_num1 FROM gp_toolkit.gp_resgroup_status WHERE groupname='rg_bypass';
+1: SELECT num_executed INTO temporary temp_num2 FROM gp_toolkit.gp_resgroup_status WHERE groupname='rg_bypass';
+1: SELECT temp_num2.num_executed - temp_num1.num_executed AS delta FROM temp_num1, temp_num2;
+1: DROP TABLE temp_num1;
+1: DROP TABLE temp_num2;
+1q:
+
 -- cleanup
 -- start_ignore
 DROP TABLE t_bypass;
