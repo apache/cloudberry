@@ -1135,19 +1135,70 @@ check_collation_walker(Node *node, check_collation_context *context)
 }
 
 /*
+ * is_ordering_op
+ *
+ * Return true if the operator is registered as an ordering operator
+ * (amoppurpose = AMOP_ORDER) in any opfamily in pg_amop.
+ */
+static bool
+is_ordering_op(Oid opno)
+{
+	CatCList   *catlist = SearchSysCacheList1(AMOPOPID,
+											  ObjectIdGetDatum(opno));
+
+	for (int i = 0; i < catlist->n_members; i++)
+	{
+		HeapTuple	tp = &catlist->members[i]->tuple;
+		Form_pg_amop amop = (Form_pg_amop) GETSTRUCT(tp);
+
+		if (amop->amoppurpose == AMOP_ORDER)
+		{
+			ReleaseSysCacheList(catlist);
+			return true;
+		}
+	}
+	ReleaseSysCacheList(catlist);
+	return false;
+}
+
+/*
+ * has_plain_var_arg
+ *
+ * Return true if the OpExpr has at least one direct Var argument
+ * (not wrapped in a function or other expression).
+ */
+static bool
+has_plain_var_arg(OpExpr *op)
+{
+	ListCell   *arg_lc;
+
+	foreach(arg_lc, op->args)
+	{
+		if (IsA(lfirst(arg_lc), Var))
+			return true;
+	}
+	return false;
+}
+
+/*
  * has_orderby_ordering_op
  *
- * Check if any ORDER BY expression in the query uses an ordering operator
- * (amoppurpose = AMOP_ORDER in pg_amop).  These operators (e.g., <-> for
- * trigram distance or point distance) require amcanorderbyop index support
- * (KNN-GiST) which ORCA does not implement.  Return true if such an
- * operator is found, signaling that the query should fall back to the
- * PostgreSQL planner.
+ * Check if the query's ORDER BY uses ordering operators (amoppurpose =
+ * AMOP_ORDER in pg_amop) that the PostgreSQL planner can safely optimize
+ * with KNN-GiST index scans but ORCA cannot.
+ *
+ * Return true only when ALL ordering-operator expressions in ORDER BY
+ * have at least one direct Var (column reference) argument.  Expressions
+ * like "circle(p,1) <-> point(0,0)" wrap the column in a function,
+ * which can cause "lossy distance functions are not supported in
+ * index-only scans" errors in the planner.  In such cases we leave the
+ * query for ORCA to handle via Seq Scan + Sort.
  */
 bool
 has_orderby_ordering_op(Query *query)
 {
 	ListCell   *lc;
+	bool		found_ordering_op = false;
 
 	if (query->sortClause == NIL)
 		return false;
@@ -1161,24 +1212,24 @@ has_orderby_ordering_op(Query *query)
 		if (!IsA(expr, OpExpr))
 			continue;
 
-		Oid			opno = ((OpExpr *) expr)->opno;
-		CatCList   *catlist = SearchSysCacheList1(AMOPOPID,
-												  ObjectIdGetDatum(opno));
+		OpExpr	   *opexpr = (OpExpr *) expr;
 
-		for (int i = 0; i < catlist->n_members; i++)
-		{
-			HeapTuple	tp = &catlist->members[i]->tuple;
-			Form_pg_amop amop = (Form_pg_amop) GETSTRUCT(tp);
+		if (!is_ordering_op(opexpr->opno))
+			continue;
 
-			if (amop->amoppurpose == AMOP_ORDER)
-			{
-				ReleaseSysCacheList(catlist);
-				return true;
-			}
-		}
-		ReleaseSysCacheList(catlist);
+		/*
+		 * Found an ordering operator.  Check that at least one argument is
+		 * a plain Var.  If any ordering operator has only computed arguments
+		 * (e.g., function calls wrapping columns), bail out immediately —
+		 * falling back to the planner could produce lossy distance errors
+		 * in index-only scans.
+		 */
+		found_ordering_op = true;
+
+		if (!has_plain_var_arg(opexpr))
+			return false;
 	}
 
-	return false;
+	return found_ordering_op;
 }
 
