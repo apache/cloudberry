@@ -60,7 +60,8 @@ SUBDIRS += \
 		formatter \
 		formatter_fixedwidth \
 		extprotocol \
-		indexscan
+		indexscan \
+		fixeddecimal
 
 ifeq ($(with_ssl),openssl)
 SUBDIRS += sslinfo
