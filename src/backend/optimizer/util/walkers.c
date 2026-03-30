@@ -8,12 +8,17 @@
 
 #include "postgres.h"
 
+#include "access/htup_details.h"
+#include "catalog/pg_amop.h"
 #include "catalog/pg_collation.h"
 #include "catalog/pg_type.h"
 #include "miscadmin.h"
 #include "nodes/nodeFuncs.h"
+#include "optimizer/optimizer.h"
 #include "optimizer/walkers.h"
+#include "utils/catcache.h"
 #include "utils/lsyscache.h"
+#include "utils/syscache.h"
 
 /**
  * Plan node walker related methods.
@@ -1127,5 +1132,53 @@ check_collation_walker(Node *node, check_collation_context *context)
 	{
 		return expression_tree_walker(node, check_collation_walker, (void *) context);
 	}
+}
+
+/*
+ * has_orderby_ordering_op
+ *
+ * Check if any ORDER BY expression in the query uses an ordering operator
+ * (amoppurpose = AMOP_ORDER in pg_amop).  These operators (e.g., <-> for
+ * trigram distance or point distance) require amcanorderbyop index support
+ * (KNN-GiST) which ORCA does not implement.  Return true if such an
+ * operator is found, signaling that the query should fall back to the
+ * PostgreSQL planner.
+ */
+bool
+has_orderby_ordering_op(Query *query)
+{
+	ListCell   *lc;
+
+	if (query->sortClause == NIL)
+		return false;
+
+	foreach(lc, query->sortClause)
+	{
+		SortGroupClause *sgc = (SortGroupClause *) lfirst(lc);
+		TargetEntry *tle = get_sortgroupclause_tle(sgc, query->targetList);
+		Node	   *expr = (Node *) tle->expr;
+
+		if (!IsA(expr, OpExpr))
+			continue;
+
+		Oid			opno = ((OpExpr *) expr)->opno;
+		CatCList   *catlist = SearchSysCacheList1(AMOPOPID,
+												  ObjectIdGetDatum(opno));
+
+		for (int i = 0; i < catlist->n_members; i++)
+		{
+			HeapTuple	tp = &catlist->members[i]->tuple;
+			Form_pg_amop amop = (Form_pg_amop) GETSTRUCT(tp);
+
+			if (amop->amoppurpose == AMOP_ORDER)
+			{
+				ReleaseSysCacheList(catlist);
+				return true;
+			}
+		}
+		ReleaseSysCacheList(catlist);
+	}
+
+	return false;
 }
 
