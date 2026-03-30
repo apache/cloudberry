@@ -154,13 +154,13 @@ typedef struct MotionLayerState
 	/*
 	 * GLOBAL MOTION-LAYER STATISTICS
 	 */
-	uint32		stat_total_chunks_sent; /* Tuple-chunks sent. */
-	uint32		stat_total_bytes_sent;	/* Bytes sent, including headers. */
-	uint32		stat_tuple_bytes_sent;	/* Bytes of pure tuple-data sent. */
+	uint64		stat_total_chunks_sent; /* Tuple-chunks sent. */
+	uint64		stat_total_bytes_sent;	/* Bytes sent, including headers. */
+	uint64		stat_tuple_bytes_sent;	/* Bytes of pure tuple-data sent. */
 
-	uint32		stat_total_chunks_recvd;/* Tuple-chunks received. */
-	uint32		stat_total_bytes_recvd; /* Bytes received, including headers. */
-	uint32		stat_tuple_bytes_recvd; /* Bytes of pure tuple-data received. */
+	uint64		stat_total_chunks_recvd;/* Tuple-chunks received. */
+	uint64		stat_total_bytes_recvd; /* Bytes received, including headers. */
+	uint64		stat_tuple_bytes_recvd; /* Bytes of pure tuple-data received. */
 
 	uint32		stat_total_chunkproc_calls;		/* Calls to processIncomingChunks() */
 
