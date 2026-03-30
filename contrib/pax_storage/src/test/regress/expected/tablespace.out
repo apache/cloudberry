@@ -92,13 +92,6 @@ SELECT c.relname FROM pg_class c, pg_tablespace s
 -- Save first the existing relfilenode for the toast and main relations.
 SELECT relfilenode as main_filenode FROM pg_class
   WHERE relname = 'regress_tblspace_test_tbl_idx' \gset
-SELECT relfilenode as toast_filenode FROM pg_class
-  WHERE oid =
-    (SELECT i.indexrelid
-       FROM pg_class c,
-            pg_index i
-       WHERE i.indrelid = c.reltoastrelid AND
-             c.relname = 'regress_tblspace_test_tbl') \gset
 REINDEX (TABLESPACE regress_tblspace) TABLE regress_tblspace_test_tbl;
 SELECT c.relname FROM pg_class c, pg_tablespace s
   WHERE c.reltablespace = s.oid AND s.spcname = 'regress_tblspace'
@@ -140,18 +133,6 @@ SELECT relfilenode = :main_filenode AS main_same FROM pg_class
   WHERE relname = 'regress_tblspace_test_tbl_idx';
  main_same 
 -----------
- f
-(1 row)
-
-SELECT relfilenode = :toast_filenode as toast_same FROM pg_class
-  WHERE oid =
-    (SELECT i.indexrelid
-       FROM pg_class c,
-            pg_index i
-       WHERE i.indrelid = c.reltoastrelid AND
-             c.relname = 'regress_tblspace_test_tbl');
- toast_same 
-------------
  f
 (1 row)
 

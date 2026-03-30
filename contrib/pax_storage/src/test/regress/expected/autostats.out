@@ -11,6 +11,7 @@
 -- end_matchignore
 set gp_autostats_mode=on_change;
 set gp_autostats_on_change_threshold=9;
+set pax_enable_debug = false;
 set log_autostats=on;
 set client_min_messages=log;
 reset optimizer_trace_fallback;
@@ -87,8 +88,8 @@ LOG:  statement: select relname, reltuples from pg_class where relname='autostat
 -- Try to disable allow_nonowner GUC as ordinary user, should fail
 set gp_autostats_allow_nonowner=off;
 LOG:  statement: set gp_autostats_allow_nonowner=off;
-ERROR:  permission denied to set parameter "gp_autostats_allow_nonowner"
 LOG:  An exception was encountered during the execution of statement: set gp_autostats_allow_nonowner=off;
+ERROR:  permission denied to set parameter "gp_autostats_allow_nonowner"
 show gp_autostats_allow_nonowner;
 LOG:  statement: show gp_autostats_allow_nonowner;
  gp_autostats_allow_nonowner 

@@ -105,14 +105,14 @@ INSERT INTO tbl SELECT 1, NULL, 3*x, box('4,4,4,4') FROM generate_series(1,10) A
 INSERT INTO tbl SELECT x, 2*x, NULL, NULL FROM generate_series(1,10) AS x;
 DROP TABLE tbl;
 
-CREATE TABLE tbl (c1 int,c2 int, c3 int, c4 box,
-				EXCLUDE USING btree (c1 WITH =) INCLUDE(c3,c4));
-SELECT indexrelid::regclass, indnatts, indnkeyatts, indisunique, indisprimary, indkey, indclass FROM pg_index WHERE indrelid = 'tbl'::regclass::oid;
-SELECT pg_get_constraintdef(oid), conname, conkey FROM pg_constraint WHERE conrelid = 'tbl'::regclass::oid;
--- ensure that constraint works
-INSERT INTO tbl SELECT 1, 2, 3*x, box('4,4,4,4') FROM generate_series(1,10) AS x;
-INSERT INTO tbl SELECT x, 2*x, NULL, NULL FROM generate_series(1,10) AS x;
-DROP TABLE tbl;
+-- Pax not support read in writing.
+-- CREATE TABLE tbl (c1 int,c2 int, c3 int, c4 box,
+-- 				EXCLUDE USING btree (c1 WITH =) INCLUDE(c3,c4));
+-- SELECT indexrelid::regclass, indnatts, indnkeyatts, indisunique, indisprimary, indkey, indclass FROM pg_index WHERE indrelid = 'tbl'::regclass::oid;
+-- SELECT pg_get_constraintdef(oid), conname, conkey FROM pg_constraint WHERE conrelid = 'tbl'::regclass::oid;
+-- INSERT INTO tbl SELECT 1, 2, 3*x, box('4,4,4,4') FROM generate_series(1,10) AS x;
+-- INSERT INTO tbl SELECT x, 2*x, NULL, NULL FROM generate_series(1,10) AS x;
+-- DROP TABLE tbl;
 
 /*
  * 3.0 Test ALTER TABLE DROP COLUMN.

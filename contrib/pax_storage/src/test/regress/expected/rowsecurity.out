@@ -1993,6 +1993,7 @@ NOTICE:  f_leak => bbbbbb_updt
 ERROR:  not implemented yet on pax relations: TupleFetchRowVersion
 DELETE FROM t1 WHERE f_leak(b) RETURNING tableoid::regclass, *, t1;
 NOTICE:  f_leak => bbbbbb_updt
+NOTICE:  f_leak => bcdbcd
 NOTICE:  f_leak => defdef
 ERROR:  not implemented yet on pax relations: TupleFetchRowVersion
 --
