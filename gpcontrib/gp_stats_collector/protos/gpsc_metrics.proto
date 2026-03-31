@@ -113,9 +113,9 @@ message SystemStat {
 }
 
 message NetworkStat {
-    uint32 total_bytes  = 1;
-    uint32 tuple_bytes = 2;
-    uint32 chunks = 3;
+    uint64 total_bytes  = 1;
+    uint64 tuple_bytes = 2;
+    uint64 chunks = 3;
 }
 
 message InterconnectStat {
