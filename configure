@@ -1697,7 +1697,7 @@ Optional Packages:
   --without-libcurl       do not use libcurl
   --with-apr-config=PATH  path to apr-1-config utility
   --with-gnu-ld           assume the C compiler uses GNU ld [default=no]
-  --without-mdblocales    build without MDB locales
+  --with-mdblocales       build with MDB locales
   --with-ssl=LIB          use LIB for SSL/TLS support (openssl)
   --with-openssl          obsolete spelling of --with-ssl=openssl
 
@@ -2911,6 +2911,7 @@ ac_compiler_gnu=$ac_cv_c_compiler_gnu
 
 
 PG_PACKAGE_VERSION=14.4
+
 
 
 
@@ -12908,56 +12909,6 @@ $as_echo "${python_libspec} ${python_additional_libs}" >&6; }
 
 fi
 
-if test "$with_mdblocales" = yes; then
-  { $as_echo "$as_me:${as_lineno-$LINENO}: checking for mdb_setlocale in -lmdblocales" >&5
-$as_echo_n "checking for mdb_setlocale in -lmdblocales... " >&6; }
-if ${ac_cv_lib_mdblocales_mdb_setlocale+:} false; then :
-  $as_echo_n "(cached) " >&6
-else
-  ac_check_lib_save_LIBS=$LIBS
-LIBS="-lmdblocales  $LIBS"
-cat confdefs.h - <<_ACEOF >conftest.$ac_ext
-/* end confdefs.h.  */
-
-/* Override any GCC internal prototype to avoid an error.
-   Use char because int might match the return type of a GCC
-   builtin and then its argument prototype would still apply.  */
-#ifdef __cplusplus
-extern "C"
-#endif
-char mdb_setlocale ();
-int
-main ()
-{
-return mdb_setlocale ();
-  ;
-  return 0;
-}
-_ACEOF
-if ac_fn_c_try_link "$LINENO"; then :
-  ac_cv_lib_mdblocales_mdb_setlocale=yes
-else
-  ac_cv_lib_mdblocales_mdb_setlocale=no
-fi
-rm -f core conftest.err conftest.$ac_objext \
-    conftest$ac_exeext conftest.$ac_ext
-LIBS=$ac_check_lib_save_LIBS
-fi
-{ $as_echo "$as_me:${as_lineno-$LINENO}: result: $ac_cv_lib_mdblocales_mdb_setlocale" >&5
-$as_echo "$ac_cv_lib_mdblocales_mdb_setlocale" >&6; }
-if test "x$ac_cv_lib_mdblocales_mdb_setlocale" = xyes; then :
-  cat >>confdefs.h <<_ACEOF
-#define HAVE_LIBMDBLOCALES 1
-_ACEOF
-
-  LIBS="-lmdblocales $LIBS"
-
-else
-  as_fn_error $? "mdblocales library not found" "$LINENO" 5
-fi
-
-fi
-
 if test x"$cross_compiling" = x"yes" && test -z "$with_system_tzdata"; then
   if test -z "$ZIC"; then
   for ac_prog in zic
@@ -14876,6 +14827,56 @@ else
 If you have zlib already installed, see config.log for details on the
 failure.  It is possible the compiler isn't looking in the proper directory.
 Use --without-zlib to disable zlib support." "$LINENO" 5
+fi
+
+fi
+
+if test "$with_mdblocales" = yes; then
+  { $as_echo "$as_me:${as_lineno-$LINENO}: checking for mdb_setlocale in -lmdblocales" >&5
+$as_echo_n "checking for mdb_setlocale in -lmdblocales... " >&6; }
+if ${ac_cv_lib_mdblocales_mdb_setlocale+:} false; then :
+  $as_echo_n "(cached) " >&6
+else
+  ac_check_lib_save_LIBS=$LIBS
+LIBS="-lmdblocales  $LIBS"
+cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+/* end confdefs.h.  */
+
+/* Override any GCC internal prototype to avoid an error.
+   Use char because int might match the return type of a GCC
+   builtin and then its argument prototype would still apply.  */
+#ifdef __cplusplus
+extern "C"
+#endif
+char mdb_setlocale ();
+int
+main ()
+{
+return mdb_setlocale ();
+  ;
+  return 0;
+}
+_ACEOF
+if ac_fn_c_try_link "$LINENO"; then :
+  ac_cv_lib_mdblocales_mdb_setlocale=yes
+else
+  ac_cv_lib_mdblocales_mdb_setlocale=no
+fi
+rm -f core conftest.err conftest.$ac_objext \
+    conftest$ac_exeext conftest.$ac_ext
+LIBS=$ac_check_lib_save_LIBS
+fi
+{ $as_echo "$as_me:${as_lineno-$LINENO}: result: $ac_cv_lib_mdblocales_mdb_setlocale" >&5
+$as_echo "$ac_cv_lib_mdblocales_mdb_setlocale" >&6; }
+if test "x$ac_cv_lib_mdblocales_mdb_setlocale" = xyes; then :
+  cat >>confdefs.h <<_ACEOF
+#define HAVE_LIBMDBLOCALES 1
+_ACEOF
+
+  LIBS="-lmdblocales $LIBS"
+
+else
+  as_fn_error $? "mdblocales library not found" "$LINENO" 5
 fi
 
 fi
