@@ -50,12 +50,14 @@ void PaxSparseFilter::Initialize(List *quals, ScanKey key, int nkeys) {
 
   // walk scan key and only support min/max filter now
   for (int i = 0; i < nkeys; i++) {
-    // TODO: support bloom filter in PaxFilter
-    // but now just skip it, SeqNext() will check bloom filter in PassByBloomFilter()
+    // Now just skip bloom filter here, it will be handled in PaxRowFilter.
     if (key[i].sk_flags & SK_BLOOM_FILTER) {
       continue;
     }
 
+    // PushdownRuntimeFilter only support BTGreaterEqualStrategyNumber and
+    // BTLessEqualStrategyNumber. If the strategy is not supported, skip orther
+    // strategies.
     if (key[i].sk_strategy != BTGreaterEqualStrategyNumber &&
         key[i].sk_strategy != BTLessEqualStrategyNumber) {
       continue;
