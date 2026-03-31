@@ -38,81 +38,117 @@ extern "C" {
 #include "storage/spin.h"
 }
 
-namespace {
-struct ProtectedData {
-  slock_t mutex;
-  GpscStat::Data data;
+namespace
+{
+struct ProtectedData
+{
+	slock_t mutex;
+	GpscStat::Data data;
 };
 shmem_startup_hook_type prev_shmem_startup_hook = NULL;
 ProtectedData *data = nullptr;
 
-void gpsc_shmem_startup() {
-  if (prev_shmem_startup_hook)
-    prev_shmem_startup_hook();
-  LWLockAcquire(AddinShmemInitLock, LW_EXCLUSIVE);
-  bool found;
-  data = reinterpret_cast<ProtectedData *>(
-      ShmemInitStruct("gpsc_stat_messages", sizeof(ProtectedData), &found));
-  if (!found) {
-    SpinLockInit(&data->mutex);
-    data->data = GpscStat::Data();
-  }
-  LWLockRelease(AddinShmemInitLock);
+void
+gpsc_shmem_startup()
+{
+	if (prev_shmem_startup_hook)
+		prev_shmem_startup_hook();
+	LWLockAcquire(AddinShmemInitLock, LW_EXCLUSIVE);
+	bool found;
+	data = reinterpret_cast<ProtectedData *>(
+		ShmemInitStruct("gpsc_stat_messages", sizeof(ProtectedData), &found));
+	if (!found)
+	{
+		SpinLockInit(&data->mutex);
+		data->data = GpscStat::Data();
+	}
+	LWLockRelease(AddinShmemInitLock);
 }
 
-class LockGuard {
+class LockGuard
+{
 public:
-  LockGuard(slock_t *mutex) : mutex_(mutex) { SpinLockAcquire(mutex_); }
-  ~LockGuard() { SpinLockRelease(mutex_); }
+	LockGuard(slock_t *mutex) : mutex_(mutex)
+	{
+		SpinLockAcquire(mutex_);
+	}
+	~LockGuard()
+	{
+		SpinLockRelease(mutex_);
+	}
 
 private:
-  slock_t *mutex_;
+	slock_t *mutex_;
 };
-} // namespace
+}  // namespace
 
-void GpscStat::init() {
-  if (!process_shared_preload_libraries_in_progress)
-    return;
-  RequestAddinShmemSpace(sizeof(ProtectedData));
-  prev_shmem_startup_hook = shmem_startup_hook;
-  shmem_startup_hook = gpsc_shmem_startup;
+void
+GpscStat::init()
+{
+	if (!process_shared_preload_libraries_in_progress)
+		return;
+	RequestAddinShmemSpace(sizeof(ProtectedData));
+	prev_shmem_startup_hook = shmem_startup_hook;
+	shmem_startup_hook = gpsc_shmem_startup;
 }
 
-void GpscStat::deinit() { shmem_startup_hook = prev_shmem_startup_hook; }
-
-void GpscStat::reset() {
-  LockGuard lg(&data->mutex);
-  data->data = GpscStat::Data();
+void
+GpscStat::deinit()
+{
+	shmem_startup_hook = prev_shmem_startup_hook;
 }
 
-void GpscStat::report_send(int32_t msg_size) {
-  LockGuard lg(&data->mutex);
-  data->data.total++;
-  data->data.max_message_size = std::max(msg_size, data->data.max_message_size);
+void
+GpscStat::reset()
+{
+	LockGuard lg(&data->mutex);
+	data->data = GpscStat::Data();
 }
 
-void GpscStat::report_bad_connection() {
-  LockGuard lg(&data->mutex);
-  data->data.total++;
-  data->data.failed_connects++;
+void
+GpscStat::report_send(int32_t msg_size)
+{
+	LockGuard lg(&data->mutex);
+	data->data.total++;
+	data->data.max_message_size =
+		std::max(msg_size, data->data.max_message_size);
 }
 
-void GpscStat::report_bad_send(int32_t msg_size) {
-  LockGuard lg(&data->mutex);
-  data->data.total++;
-  data->data.failed_sends++;
-  data->data.max_message_size = std::max(msg_size, data->data.max_message_size);
+void
+GpscStat::report_bad_connection()
+{
+	LockGuard lg(&data->mutex);
+	data->data.total++;
+	data->data.failed_connects++;
 }
 
-void GpscStat::report_error() {
-  LockGuard lg(&data->mutex);
-  data->data.total++;
-  data->data.failed_other++;
+void
+GpscStat::report_bad_send(int32_t msg_size)
+{
+	LockGuard lg(&data->mutex);
+	data->data.total++;
+	data->data.failed_sends++;
+	data->data.max_message_size =
+		std::max(msg_size, data->data.max_message_size);
 }
 
-GpscStat::Data GpscStat::get_stats() {
-  LockGuard lg(&data->mutex);
-  return data->data;
+void
+GpscStat::report_error()
+{
+	LockGuard lg(&data->mutex);
+	data->data.total++;
+	data->data.failed_other++;
 }
 
-bool GpscStat::loaded() { return data != nullptr; }
+GpscStat::Data
+GpscStat::get_stats()
+{
+	LockGuard lg(&data->mutex);
+	return data->data;
+}
+
+bool
+GpscStat::loaded()
+{
+	return data != nullptr;
+}

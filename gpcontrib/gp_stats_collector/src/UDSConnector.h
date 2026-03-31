@@ -25,14 +25,18 @@
  *-------------------------------------------------------------------------
  */
 
-#pragma once
+#ifndef UDSCONNECTOR_H
+#define UDSCONNECTOR_H
 
 #include "protos/gpsc_set_service.pb.h"
 
 class Config;
 
-class UDSConnector {
+class UDSConnector
+{
 public:
-  bool static report_query(const gpsc::SetQueryReq &req,
-                           const std::string &event, const Config &config);
+	bool static report_query(const gpsc::SetQueryReq &req,
+							 const std::string &event, const Config &config);
 };
+
+#endif /* UDSCONNECTOR_H */
