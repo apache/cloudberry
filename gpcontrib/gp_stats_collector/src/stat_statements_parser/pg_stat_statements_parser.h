@@ -17,19 +17,19 @@
  * specific language governing permissions and limitations
  * under the License.
  *
- * pg_stat_statements_ya_parser.h
+ * pg_stat_statements_parser.h
  *
  * IDENTIFICATION
- *	  gpcontrib/gp_stats_collector/src/stat_statements_parser/pg_stat_statements_ya_parser.h
+ *	  gpcontrib/gp_stats_collector/src/stat_statements_parser/pg_stat_statements_parser.h
  *
  *-------------------------------------------------------------------------
  */
 
-#pragma once
+#ifndef PG_STAT_STATEMENTS_PARSER_H
+#define PG_STAT_STATEMENTS_PARSER_H
 
 #ifdef __cplusplus
-extern "C"
-{
+extern "C" {
 #endif
 
 extern void stat_statements_parser_init(void);
@@ -41,3 +41,5 @@ char *gen_normquery(const char *query);
 #ifdef __cplusplus
 }
 #endif
+
+#endif /* PG_STAT_STATEMENTS_PARSER_H */

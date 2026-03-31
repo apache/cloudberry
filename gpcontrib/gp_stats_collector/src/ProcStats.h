@@ -25,10 +25,13 @@
  *-------------------------------------------------------------------------
  */
 
-#pragma once
+#ifndef PROCSTATS_H
+#define PROCSTATS_H
 
-namespace gpsc {
+namespace gpsc
+{
 class SystemStat;
 }
 
 void fill_self_stats(gpsc::SystemStat *stats);
+#endif /* PROCSTATS_H */

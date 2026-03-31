@@ -25,7 +25,8 @@
  *-------------------------------------------------------------------------
  */
 
-#pragma once
+#ifndef LOGOPS_H
+#define LOGOPS_H
 
 #include <string>
 
@@ -44,3 +45,5 @@ void truncate_log();
 
 /* INSERT INTO gpsc.__log VALUES (...) */
 void insert_log(const gpsc::SetQueryReq &req, bool utility);
+
+#endif /* LOGOPS_H */

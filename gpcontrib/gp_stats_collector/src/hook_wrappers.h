@@ -25,7 +25,8 @@
  *-------------------------------------------------------------------------
  */
 
-#pragma once
+#ifndef HOOK_WRAPPERS_H
+#define HOOK_WRAPPERS_H
 
 #ifdef __cplusplus
 extern "C" {
@@ -46,3 +47,4 @@ extern void test_uds_stop_server();
 #ifdef __cplusplus
 }
 #endif
+#endif /* HOOK_WRAPPERS_H */

@@ -25,29 +25,32 @@
  *-------------------------------------------------------------------------
  */
 
-#pragma once
+#ifndef GPDBWRAPPERS_H
+#define GPDBWRAPPERS_H
 
 extern "C" {
 #include "postgres.h"
-#include "nodes/pg_list.h"
+#include "access/htup.h"
 #include "commands/explain.h"
 #include "executor/instrument.h"
-#include "access/htup.h"
+#include "nodes/pg_list.h"
 #include "utils/elog.h"
 #include "utils/memutils.h"
 }
 
-#include <type_traits>
-#include <stdexcept>
 #include <optional>
-#include <utility>
+#include <stdexcept>
 #include <string>
+#include <type_traits>
+#include <utility>
 
-namespace gpsc {
+namespace gpsc
+{
 class SetQueryReq;
-} // namespace gpsc
+}  // namespace gpsc
 
-namespace gpdb {
+namespace gpdb
+{
 
 // Functions that call palloc().
 // Make sure correct memory context is set.
@@ -56,14 +59,14 @@ void *palloc0(Size size);
 char *pstrdup(const char *str);
 char *get_database_name(Oid dbid) noexcept;
 bool split_identifier_string(char *rawstring, char separator,
-                             List **namelist) noexcept;
+							 List **namelist) noexcept;
 ExplainState get_explain_state(QueryDesc *query_desc, bool costs) noexcept;
 ExplainState get_analyze_state(QueryDesc *query_desc, bool analyze) noexcept;
 Instrumentation *instr_alloc(size_t n, int instrument_options, bool async_mode);
 HeapTuple heap_form_tuple(TupleDesc tupleDescriptor, Datum *values,
-                          bool *isnull);
+						  bool *isnull);
 CdbExplain_ShowStatCtx *cdbexplain_showExecStatsBegin(QueryDesc *query_desc,
-                                                      instr_time starttime);
+													  instr_time starttime);
 void instr_end_loop(Instrumentation *instr);
 char *gen_normquery(const char *query) noexcept;
 StringInfo gen_normplan(const char *executionPlan) noexcept;
@@ -74,8 +77,10 @@ void insert_log(const gpsc::SetQueryReq &req, bool utility);
 void pfree(void *pointer) noexcept;
 MemoryContext mem_ctx_switch_to(MemoryContext context) noexcept;
 const char *get_config_option(const char *name, bool missing_ok,
-                              bool restrict_superuser) noexcept;
+							  bool restrict_superuser) noexcept;
 void list_free(List *list) noexcept;
 Oid get_rg_id_by_session_id(int session_id);
 
-} // namespace gpdb
+}  // namespace gpdb
+
+#endif /* GPDBWRAPPERS_H */

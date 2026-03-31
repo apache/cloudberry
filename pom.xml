@@ -1273,9 +1273,6 @@ code or new licensing patterns.
                  introduced by Cloudberry.
             -->
             <exclude>gpcontrib/gp_stats_collector/gp_stats_collector.control</exclude>
-            <exclude>gpcontrib/gp_stats_collector/protos/gpsc_set_service.proto</exclude>
-            <exclude>gpcontrib/gp_stats_collector/protos/gpsc_plan.proto</exclude>
-            <exclude>gpcontrib/gp_stats_collector/protos/gpsc_metrics.proto</exclude>
             <exclude>gpcontrib/gp_stats_collector/.clang-format</exclude>
             <exclude>gpcontrib/gp_stats_collector/Makefile</exclude>
 
