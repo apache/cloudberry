@@ -68,6 +68,10 @@ bool EventSender::verify_query(QueryDesc *query_desc, QueryState state,
     // not executed yet, causing DONE to be skipped/added.
     config.sync();
 
+    if (!config.enable_collector()) {
+      return false;
+    }
+
     if (utility && !config.enable_utility()) {
       return false;
     }
@@ -409,13 +413,11 @@ EventSender::EventSender() {
   // Perform initial sync to get default GUC values
   config.sync();
 
-  if (config.enable_collector()) {
-    try {
-      GOOGLE_PROTOBUF_VERIFY_VERSION;
-      proto_verified = true;
-    } catch (const std::exception &e) {
-      ereport(INFO, (errmsg("Unable to start query tracing %s", e.what())));
-    }
+  try {
+    GOOGLE_PROTOBUF_VERIFY_VERSION;
+    proto_verified = true;
+  } catch (const std::exception &e) {
+    ereport(INFO, (errmsg("GPSC protobuf version mismatch is detected %s", e.what())));
   }
 #ifdef IC_TEARDOWN_HOOK
   memset(&ic_statistics, 0, sizeof(ICStatistics));
