@@ -1545,7 +1545,7 @@ AC_SUBST(install_bin)
 # MDB locales
 #
 
-PGAC_ARG_BOOL(with, mdblocales, yes, [build without MDB locales],
+PGAC_ARG_BOOL(with, mdblocales, no, [build with MDB locales],
               [AC_DEFINE([USE_MDBLOCALES], 1, [Define to 1 to build with MDB locales. (--with-mdblocales)])])
 AC_SUBST(USE_MDBLOCALES)
 
