@@ -1,5 +1,0 @@
-*.o
-*.so
-src/protos/
-.vscode
-compile_commands.json
