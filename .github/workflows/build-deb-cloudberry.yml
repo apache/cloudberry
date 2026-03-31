@@ -452,14 +452,13 @@ jobs:
         shell: bash
         env:
           SRC_DIR: ${{ github.workspace }}
-          CONFIGURE_EXTRA_OPTS: --with-gp-stats-collector
         run: |
           set -eo pipefail
 
           export BUILD_DESTINATION=${SRC_DIR}/debian/build
 
           chmod +x "${SRC_DIR}"/devops/build/automation/cloudberry/scripts/configure-cloudberry.sh
-          if ! time su - gpadmin -c "cd ${SRC_DIR} && SRC_DIR=${SRC_DIR} ENABLE_DEBUG=${{ env.ENABLE_DEBUG }} CONFIGURE_EXTRA_OPTS=${{ env.CONFIGURE_EXTRA_OPTS }} BUILD_DESTINATION=${BUILD_DESTINATION} ${SRC_DIR}/devops/build/automation/cloudberry/scripts/configure-cloudberry.sh"; then
+          if ! time su - gpadmin -c "cd ${SRC_DIR} && SRC_DIR=${SRC_DIR} ENABLE_DEBUG=${{ env.ENABLE_DEBUG }} BUILD_DESTINATION=${BUILD_DESTINATION} ${SRC_DIR}/devops/build/automation/cloudberry/scripts/configure-cloudberry.sh"; then
             echo "::error::Configure script failed"
             exit 1
           fi

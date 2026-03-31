@@ -40,7 +40,7 @@ extern "C" {
 static char *guc_uds_path = nullptr;
 static bool guc_enable_analyze = true;
 static bool guc_enable_cdbstats = true;
-static bool guc_enable_collector = true;
+static bool guc_enable_collector = false;
 static bool guc_report_nested_queries = true;
 static char *guc_ignored_users = nullptr;
 static int guc_max_text_size = 1 << 20;  // in bytes (1MB)
@@ -68,7 +68,7 @@ void Config::init_gucs() {
 
   DefineCustomBoolVariable(
       "gpsc.enable", "Enable metrics collector", 0LL, &guc_enable_collector,
-      true, PGC_SUSET, GUC_NOT_IN_SAMPLE | GUC_GPDB_NEED_SYNC, 0LL, 0LL, 0LL);
+      false, PGC_SUSET, GUC_NOT_IN_SAMPLE | GUC_GPDB_NEED_SYNC, 0LL, 0LL, 0LL);
 
   DefineCustomBoolVariable(
       "gpsc.enable_analyze", "Collect analyze metrics in gpsc", 0LL,
@@ -88,7 +88,7 @@ void Config::init_gucs() {
   DefineCustomStringVariable("gpsc.ignored_users_list",
                              "Make gpsc ignore queries issued by given users",
                              0LL, &guc_ignored_users,
-                             "gpadmin,repl,gpperfmon,monitor", PGC_SUSET,
+                             "", PGC_SUSET,
                              GUC_NOT_IN_SAMPLE | GUC_GPDB_NEED_SYNC, 0LL,
                              assign_ignored_users_hook, 0LL);
 
