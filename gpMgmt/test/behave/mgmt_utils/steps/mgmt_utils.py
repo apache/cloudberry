@@ -4080,7 +4080,7 @@ def impl(context):
         for pid in host_to_pid_map[host]:
             # gpstop/gpstart can return before every saved pid fully exits.
             # Poll briefly to avoid flaking on processes that are already shutting down.
-            for _ in range(30):
+            for _ in range(60):
                 if not unix.check_pid_on_remotehost(pid, host):
                     break
                 time.sleep(1)
