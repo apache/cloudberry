@@ -79,10 +79,9 @@ SELECT a, a <-> '-179.0' FROM float4tmp ORDER BY a <-> '-179.0' LIMIT 3;
  Limit
    ->  Gather Motion 3:1  (slice1; segments: 3)
          Merge Key: ((a <-> '-179'::real))
-         ->  Sort
-               Sort Key: ((a <-> '-179'::real))
-               ->  Seq Scan on float4tmp
- Optimizer: GPORCA
+         ->  Limit
+               ->  Index Only Scan using float4idx on float4tmp
+                     Order By: (a <-> '-179'::real)
 (7 rows)
 
 SELECT a, a <-> '-179.0' FROM float4tmp ORDER BY a <-> '-179.0' LIMIT 3;

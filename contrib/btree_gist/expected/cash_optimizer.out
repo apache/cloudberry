@@ -77,12 +77,11 @@ SELECT a, a <-> '21472.79' FROM moneytmp ORDER BY a <-> '21472.79' LIMIT 3;
                          QUERY PLAN                         
 ------------------------------------------------------------
  Limit
-   ->  Sort
-         Sort Key: ((a <-> '$21,472.79'::money))
-         ->  Result
-               ->  Gather Motion 3:1  (slice1; segments: 3)
-                     ->  Seq Scan on moneytmp
- Optimizer: GPORCA
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         Merge Key: ((a <-> '$21,472.79'::money))
+         ->  Limit
+               ->  Index Only Scan using moneyidx on moneytmp
+                     Order By: (a <-> '$21,472.79'::money)
 (7 rows)
 
 SELECT a, a <-> '21472.79' FROM moneytmp ORDER BY a <-> '21472.79' LIMIT 3;
