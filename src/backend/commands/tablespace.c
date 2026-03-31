@@ -204,7 +204,7 @@ TablespaceCreateDbspace(Oid spcOid, Oid dbOid, bool isRedo)
 			else
 			{
 				/* Directory creation failed? */
-				if (pg_mkdir_p(dir, S_IRWXU) < 0)
+				if (MakePGDirectory(dir) < 0)
 				{
 					/* Failure other than not exists or not in WAL replay? */
 					if (errno != ENOENT || !isRedo)
@@ -845,8 +845,8 @@ create_tablespace_directories(const char *location, const Oid tablespaceoid)
 	struct stat st;
 	bool		in_place;
 
-	elog(DEBUG5, "creating tablespace directories for tablespaceoid %d on dbid %d",
-		tablespaceoid, GpIdentity.dbid);
+	elog(LOG, "creating tablespace directories for tablespaceoid %d on dbid %d location: '%s'",
+		tablespaceoid, GpIdentity.dbid, location);
 
 	linkloc = psprintf("pg_tblspc/%u", tablespaceoid);
 

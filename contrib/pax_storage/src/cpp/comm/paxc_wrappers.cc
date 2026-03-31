@@ -483,7 +483,7 @@ SMgrRelation PaxRelationCreateStorage(RelFileLocator rnode, Relation rel)
       rel->rd_rel->relpersistence == RELPERSISTENCE_UNLOGGED) {
     paxc::XLogPaxCreateDirectory(rnode);
   }
-  return RelationCreateStorage(rnode, rel->rd_rel->relpersistence, false,
+  return RelationCreateStorage(rnode, rel->rd_rel->relpersistence, true,
 							   SMGR_PAX, rel);
 }
 

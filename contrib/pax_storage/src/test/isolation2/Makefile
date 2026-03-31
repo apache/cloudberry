@@ -15,6 +15,9 @@ PG_ISOLATION2_DIR = $(top_builddir)/src/test/isolation2
 installcheck: isolation2_link
 	PGOPTIONS="$(PGOPTIONS)" ./pg_isolation2_regress --init-file=./init_file --init-file=./init_file_isolation2 --schedule=isolation2_schedule
 
+installcheck-small: isolation2_link
+	PGOPTIONS="$(PGOPTIONS)" ./pg_isolation2_regress --init-file=./init_file --init-file=./init_file_isolation2 --schedule=small_schedule
+
 # Add a new rule for running installcheck with parallel mode enabled.
 installcheck-cbdb-parallel: install
 	(\

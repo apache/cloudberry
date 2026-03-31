@@ -8,7 +8,7 @@
 !\retcode gpconfig -c max_prepared_transactions -v 3 --skipvalidation;
 -- Enable gp_autostats_mode to make sure the single value insert triger 2pc
 !\retcode gpconfig -c gp_autostats_mode -v 'on_no_stats' --skipvalidation;
-!\retcode gpstop -ari;
+!\retcode gpstop -arf;
 
 5: create table prepare_limit1 (a int);
 5: create table prepare_limit2 (a int);
@@ -62,4 +62,4 @@
 -- to 250 which is the default value when demo cluster is created.
 !\retcode gpconfig -c max_prepared_transactions -v 250 --skipvalidation;
 !\retcode gpconfig -c gp_autostats_mode -v 'none' --skipvalidation;
-!\retcode gpstop -ari;
+!\retcode gpstop -arf;
