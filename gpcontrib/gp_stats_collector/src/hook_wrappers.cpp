@@ -116,6 +116,7 @@ cpp_call(T *obj, R (T::*func)(Args...), Args... args)
 	catch (const std::exception &e)
 	{
 		ereport(ERROR, (errmsg("Unexpected exception in gpsc %s", e.what())));
+		pg_unreachable();
 	}
 }
 

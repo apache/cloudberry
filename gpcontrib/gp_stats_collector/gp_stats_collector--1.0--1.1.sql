@@ -25,7 +25,7 @@ DROP FUNCTION __gpsc_stat_messages_reset_f_on_master();
 CREATE FUNCTION gpsc.__stat_messages_reset_f_on_master()
 RETURNS SETOF void
 AS 'MODULE_PATHNAME', 'gpsc_stat_messages_reset'
-LANGUAGE C EXECUTE ON MASTER;
+LANGUAGE C EXECUTE ON COORDINATOR;
 
 CREATE FUNCTION gpsc.__stat_messages_reset_f_on_segments()
 RETURNS SETOF void
@@ -39,12 +39,12 @@ $$
   SELECT gpsc.__stat_messages_reset_f_on_master();
   SELECT gpsc.__stat_messages_reset_f_on_segments();
 $$
-LANGUAGE SQL EXECUTE ON MASTER;
+LANGUAGE SQL EXECUTE ON COORDINATOR;
 
 CREATE FUNCTION gpsc.__stat_messages_f_on_master()
 RETURNS SETOF record
 AS 'MODULE_PATHNAME', 'gpsc_stat_messages'
-LANGUAGE C STRICT VOLATILE EXECUTE ON MASTER;
+LANGUAGE C STRICT VOLATILE EXECUTE ON COORDINATOR;
 
 CREATE FUNCTION gpsc.__stat_messages_f_on_segments()
 RETURNS SETOF record
@@ -77,7 +77,7 @@ ORDER BY segid;
 CREATE FUNCTION gpsc.__init_log_on_master()
 RETURNS SETOF void
 AS 'MODULE_PATHNAME', 'gpsc_init_log'
-LANGUAGE C STRICT VOLATILE EXECUTE ON MASTER;
+LANGUAGE C STRICT VOLATILE EXECUTE ON COORDINATOR;
 
 CREATE FUNCTION gpsc.__init_log_on_segments()
 RETURNS SETOF void
@@ -97,7 +97,7 @@ CREATE VIEW gpsc.log AS
 CREATE FUNCTION gpsc.__truncate_log_on_master()
 RETURNS SETOF void
 AS 'MODULE_PATHNAME', 'gpsc_truncate_log'
-LANGUAGE C STRICT VOLATILE EXECUTE ON MASTER;
+LANGUAGE C STRICT VOLATILE EXECUTE ON COORDINATOR;
 
 CREATE FUNCTION gpsc.__truncate_log_on_segments()
 RETURNS SETOF void

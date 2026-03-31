@@ -8,7 +8,7 @@ CREATE SCHEMA gpsc;
 CREATE FUNCTION gpsc.__stat_messages_reset_f_on_master()
 RETURNS SETOF void
 AS 'MODULE_PATHNAME', 'gpsc_stat_messages_reset'
-LANGUAGE C EXECUTE ON MASTER;
+LANGUAGE C EXECUTE ON COORDINATOR;
 
 CREATE FUNCTION gpsc.__stat_messages_reset_f_on_segments()
 RETURNS SETOF void
@@ -22,12 +22,12 @@ $$
   SELECT gpsc.__stat_messages_reset_f_on_master();
   SELECT gpsc.__stat_messages_reset_f_on_segments();
 $$
-LANGUAGE SQL EXECUTE ON MASTER;
+LANGUAGE SQL EXECUTE ON COORDINATOR;
 
 CREATE FUNCTION gpsc.__stat_messages_f_on_master()
 RETURNS SETOF record
 AS 'MODULE_PATHNAME', 'gpsc_stat_messages'
-LANGUAGE C STRICT VOLATILE EXECUTE ON MASTER;
+LANGUAGE C STRICT VOLATILE EXECUTE ON COORDINATOR;
 
 CREATE FUNCTION gpsc.__stat_messages_f_on_segments()
 RETURNS SETOF record
@@ -59,7 +59,7 @@ ORDER BY segid;
 CREATE FUNCTION gpsc.__init_log_on_master()
 RETURNS SETOF void
 AS 'MODULE_PATHNAME', 'gpsc_init_log'
-LANGUAGE C STRICT VOLATILE EXECUTE ON MASTER;
+LANGUAGE C STRICT VOLATILE EXECUTE ON COORDINATOR;
 
 CREATE FUNCTION gpsc.__init_log_on_segments()
 RETURNS SETOF void
@@ -79,7 +79,7 @@ ORDER BY tmid, ssid, ccnt;
 CREATE FUNCTION gpsc.__truncate_log_on_master()
 RETURNS SETOF void
 AS 'MODULE_PATHNAME', 'gpsc_truncate_log'
-LANGUAGE C STRICT VOLATILE EXECUTE ON MASTER;
+LANGUAGE C STRICT VOLATILE EXECUTE ON COORDINATOR;
 
 CREATE FUNCTION gpsc.__truncate_log_on_segments()
 RETURNS SETOF void
@@ -97,14 +97,14 @@ $$ LANGUAGE plpgsql VOLATILE;
 CREATE FUNCTION gpsc.__test_uds_start_server(path text)
 RETURNS SETOF void
 AS 'MODULE_PATHNAME', 'gpsc_test_uds_start_server'
-LANGUAGE C STRICT EXECUTE ON MASTER;
+LANGUAGE C STRICT EXECUTE ON COORDINATOR;
 
 CREATE FUNCTION gpsc.__test_uds_receive(timeout_ms int DEFAULT 2000)
 RETURNS SETOF bigint
 AS 'MODULE_PATHNAME', 'gpsc_test_uds_receive'
-LANGUAGE C STRICT EXECUTE ON MASTER;
+LANGUAGE C STRICT EXECUTE ON COORDINATOR;
 
 CREATE FUNCTION gpsc.__test_uds_stop_server()
 RETURNS SETOF void
 AS 'MODULE_PATHNAME', 'gpsc_test_uds_stop_server'
-LANGUAGE C EXECUTE ON MASTER;
+LANGUAGE C EXECUTE ON COORDINATOR;

@@ -6,7 +6,7 @@
 CREATE FUNCTION __gpsc_stat_messages_reset_f_on_master()
 RETURNS SETOF void
 AS 'MODULE_PATHNAME', 'gpsc_stat_messages_reset'
-LANGUAGE C EXECUTE ON MASTER;
+LANGUAGE C EXECUTE ON COORDINATOR;
 
 CREATE FUNCTION __gpsc_stat_messages_reset_f_on_segments()
 RETURNS SETOF void
@@ -20,12 +20,12 @@ $$
   SELECT __gpsc_stat_messages_reset_f_on_master();
   SELECT __gpsc_stat_messages_reset_f_on_segments();
 $$
-LANGUAGE SQL EXECUTE ON MASTER;
+LANGUAGE SQL EXECUTE ON COORDINATOR;
 
 CREATE FUNCTION __gpsc_stat_messages_f_on_master()
 RETURNS SETOF record
 AS 'MODULE_PATHNAME', 'gpsc_stat_messages'
-LANGUAGE C STRICT VOLATILE EXECUTE ON MASTER;
+LANGUAGE C STRICT VOLATILE EXECUTE ON COORDINATOR;
 
 CREATE FUNCTION __gpsc_stat_messages_f_on_segments()
 RETURNS SETOF record
