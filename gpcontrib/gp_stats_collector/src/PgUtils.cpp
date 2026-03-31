@@ -30,39 +30,46 @@
 #include "memory/gpdbwrappers.h"
 
 extern "C" {
-#include "commands/resgroupcmds.h"
 #include "cdb/cdbvars.h"
+#include "commands/resgroupcmds.h"
 }
 
-std::string get_user_name() {
-  // username is allocated on stack, we don't need to pfree it.
-  const char *username =
-      gpdb::get_config_option("session_authorization", false, false);
-  return username ? std::string(username) : "";
+std::string
+get_user_name()
+{
+	// username is allocated on stack, we don't need to pfree it.
+	const char *username =
+		gpdb::get_config_option("session_authorization", false, false);
+	return username ? std::string(username) : "";
 }
 
-std::string get_db_name() {
-  char *dbname = gpdb::get_database_name(MyDatabaseId);
-  if (dbname) {
-    std::string result(dbname);
-    gpdb::pfree(dbname);
-    return result;
-  }
-  return "";
+std::string
+get_db_name()
+{
+	char *dbname = gpdb::get_database_name(MyDatabaseId);
+	if (dbname)
+	{
+		std::string result(dbname);
+		gpdb::pfree(dbname);
+		return result;
+	}
+	return "";
 }
 
-std::string get_rg_name() {
-  auto groupId = gpdb::get_rg_id_by_session_id(MySessionState->sessionId);
-  if (!OidIsValid(groupId))
-    return "";
+std::string
+get_rg_name()
+{
+	auto groupId = gpdb::get_rg_id_by_session_id(MySessionState->sessionId);
+	if (!OidIsValid(groupId))
+		return "";
 
-  char *rgname = gpdb::get_rg_name_for_id(groupId);
-  if (rgname == nullptr)
-    return "";
+	char *rgname = gpdb::get_rg_name_for_id(groupId);
+	if (rgname == nullptr)
+		return "";
 
-  std::string result(rgname);
-  gpdb::pfree(rgname);
-  return result;
+	std::string result(rgname);
+	gpdb::pfree(rgname);
+	return result;
 }
 
 /**
@@ -86,9 +93,12 @@ std::string get_rg_name() {
  * segment sees those as top-level.
  */
 
-bool is_top_level_query(QueryDesc *query_desc, int nesting_level) {
-  if (query_desc->gpsc_query_key == NULL) {
-    return nesting_level == 0;
-  }
-  return query_desc->gpsc_query_key->nesting_level == 0;
+bool
+is_top_level_query(QueryDesc *query_desc, int nesting_level)
+{
+	if (query_desc->gpsc_query_key == NULL)
+	{
+		return nesting_level == 0;
+	}
+	return query_desc->gpsc_query_key->nesting_level == 0;
 }

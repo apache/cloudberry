@@ -17,10 +17,10 @@
  * specific language governing permissions and limitations
  * under the License.
  *
- * pg_stat_statements_ya_parser.c
+ * pg_stat_statements_parser.c
  *
  * IDENTIFICATION
- *	  gpcontrib/gp_stats_collector/src/stat_statements_parser/pg_stat_statements_ya_parser.c
+ *	  gpcontrib/gp_stats_collector/src/stat_statements_parser/pg_stat_statements_parser.c
  *
  *-------------------------------------------------------------------------
  */
@@ -42,7 +42,7 @@
 #include "utils/memutils.h"
 #include "utils/queryjumble.h"
 
-#include "pg_stat_statements_ya_parser.h"
+#include "pg_stat_statements_parser.h"
 
 #ifndef FCONST
 #define FCONST 260
@@ -67,12 +67,14 @@ static bool need_replace(int token);
 static char *generate_normalized_query(JumbleState *jstate, const char *query,
 									   int *query_len_p, int encoding);
 
-void stat_statements_parser_init(void)
+void
+stat_statements_parser_init(void)
 {
 	EnableQueryId();
 }
 
-void stat_statements_parser_deinit(void)
+void
+stat_statements_parser_deinit(void)
 {
 	/* NO-OP */
 }
@@ -81,7 +83,8 @@ void stat_statements_parser_deinit(void)
 static bool
 need_replace(int token)
 {
-	return (token == FCONST) || (token == ICONST) || (token == SCONST) || (token == BCONST) || (token == XCONST);
+	return (token == FCONST) || (token == ICONST) || (token == SCONST) ||
+		   (token == BCONST) || (token == XCONST);
 }
 
 /*
@@ -103,14 +106,11 @@ gen_normplan(const char *execution_plan)
 	StringInfo plan_out = makeStringInfo();
 	;
 
-	yyscanner = scanner_init(execution_plan,
-							 &yyextra,
+	yyscanner = scanner_init(execution_plan, &yyextra,
 #if PG_VERSION_NUM >= 120000
-							 &ScanKeywords,
-							 ScanKeywordTokens
+							 &ScanKeywords, ScanKeywordTokens
 #else
-							 ScanKeywords,
-							 NumScanKeywords
+							 ScanKeywords, NumScanKeywords
 #endif
 	);
 
@@ -137,7 +137,8 @@ gen_normplan(const char *execution_plan)
 		else
 		{
 			/* do not change - just copy as-is */
-			tmp_str = strndup((char *)execution_plan + last_yylloc, yylloc - last_yylloc);
+			tmp_str = strndup((char *) execution_plan + last_yylloc,
+							  yylloc - last_yylloc);
 			appendStringInfoString(plan_out, tmp_str);
 			free(tmp_str);
 		}
@@ -159,8 +160,8 @@ gen_normplan(const char *execution_plan)
 static int
 comp_location(const void *a, const void *b)
 {
-	int			l = ((const LocationLen *) a)->location;
-	int			r = ((const LocationLen *) b)->location;
+	int l = ((const LocationLen *) a)->location;
+	int r = ((const LocationLen *) b)->location;
 
 	if (l < r)
 		return -1;
@@ -199,35 +200,32 @@ fill_in_constant_lengths(JumbleState *jstate, const char *query)
 	core_yyscan_t yyscanner;
 	core_yy_extra_type yyextra;
 	core_YYSTYPE yylval;
-	YYLTYPE		yylloc;
-	int			last_loc = -1;
-	int			i;
+	YYLTYPE yylloc;
+	int last_loc = -1;
+	int i;
 
 	/*
 	 * Sort the records by location so that we can process them in order while
 	 * scanning the query text.
 	 */
 	if (jstate->clocations_count > 1)
-		qsort(jstate->clocations, jstate->clocations_count,
-			  sizeof(LocationLen), comp_location);
+		qsort(jstate->clocations, jstate->clocations_count, sizeof(LocationLen),
+			  comp_location);
 	locs = jstate->clocations;
 
 	/* initialize the flex scanner --- should match raw_parser() */
-	yyscanner = scanner_init(query,
-							 &yyextra,
-							 &ScanKeywords,
-							 ScanKeywordTokens);
+	yyscanner = scanner_init(query, &yyextra, &ScanKeywords, ScanKeywordTokens);
 
 	/* Search for each constant, in sequence */
 	for (i = 0; i < jstate->clocations_count; i++)
 	{
-		int			loc = locs[i].location;
-		int			tok;
+		int loc = locs[i].location;
+		int tok;
 
 		Assert(loc >= 0);
 
 		if (loc <= last_loc)
-			continue;			/* Duplicate constant, ignore */
+			continue; /* Duplicate constant, ignore */
 
 		/* Lex tokens until we find the desired constant */
 		for (;;)
@@ -236,7 +234,7 @@ fill_in_constant_lengths(JumbleState *jstate, const char *query)
 
 			/* We should not hit end-of-string, but if we do, behave sanely */
 			if (tok == 0)
-				break;			/* out of inner for-loop */
+				break; /* out of inner for-loop */
 
 			/*
 			 * We should find the token position exactly, but if we somehow
@@ -260,7 +258,7 @@ fill_in_constant_lengths(JumbleState *jstate, const char *query)
 					 */
 					tok = core_yylex(&yylval, &yylloc, yyscanner);
 					if (tok == 0)
-						break;	/* out of inner for-loop */
+						break; /* out of inner for-loop */
 				}
 
 				/*
@@ -268,7 +266,7 @@ fill_in_constant_lengths(JumbleState *jstate, const char *query)
 				 * byte after the text of the current token in scanbuf.
 				 */
 				locs[i].length = strlen(yyextra.scanbuf + loc);
-				break;			/* out of inner for-loop */
+				break; /* out of inner for-loop */
 			}
 		}
 
@@ -299,14 +297,13 @@ static char *
 generate_normalized_query(JumbleState *jstate, const char *query,
 						  int *query_len_p, int encoding)
 {
-	char	   *norm_query;
-	int			query_len = *query_len_p;
-	int			i,
-				len_to_wrt,		/* Length (in bytes) to write */
-				quer_loc = 0,	/* Source query byte location */
-				n_quer_loc = 0, /* Normalized query byte location */
-				last_off = 0,	/* Offset from start for previous tok */
-				last_tok_len = 0;		/* Length (in bytes) of that tok */
+	char *norm_query;
+	int query_len = *query_len_p;
+	int i, len_to_wrt,	  /* Length (in bytes) to write */
+		quer_loc = 0,	  /* Source query byte location */
+		n_quer_loc = 0,	  /* Normalized query byte location */
+		last_off = 0,	  /* Offset from start for previous tok */
+		last_tok_len = 0; /* Length (in bytes) of that tok */
 
 	/*
 	 * Get constants' lengths (core system only gives us locations).  Note
@@ -319,14 +316,14 @@ generate_normalized_query(JumbleState *jstate, const char *query,
 
 	for (i = 0; i < jstate->clocations_count; i++)
 	{
-		int			off,		/* Offset from start for cur tok */
-					tok_len;	/* Length (in bytes) of that tok */
+		int off,	 /* Offset from start for cur tok */
+			tok_len; /* Length (in bytes) of that tok */
 
 		off = jstate->clocations[i].location;
 		tok_len = jstate->clocations[i].length;
 
 		if (tok_len < 0)
-			continue;			/* ignore any duplicates */
+			continue; /* ignore any duplicates */
 
 		/* Copy next chunk (what precedes the next constant) */
 		len_to_wrt = off - last_off;
@@ -361,18 +358,21 @@ generate_normalized_query(JumbleState *jstate, const char *query,
 	return norm_query;
 }
 
-char *gen_normquery(const char *query)
+char *
+gen_normquery(const char *query)
 {
-	if (!query) {
+	if (!query)
+	{
 		return NULL;
 	}
 	JumbleState jstate;
-	jstate.jumble = (unsigned char *)palloc(JUMBLE_SIZE);
+	jstate.jumble = (unsigned char *) palloc(JUMBLE_SIZE);
 	jstate.jumble_len = 0;
 	jstate.clocations_buf_size = 32;
-	jstate.clocations = (LocationLen *)
-		palloc(jstate.clocations_buf_size * sizeof(LocationLen));
+	jstate.clocations = (LocationLen *) palloc(jstate.clocations_buf_size *
+											   sizeof(LocationLen));
 	jstate.clocations_count = 0;
 	int query_len = strlen(query);
-	return generate_normalized_query(&jstate, query, &query_len, GetDatabaseEncoding());
+	return generate_normalized_query(&jstate, query, &query_len,
+									 GetDatabaseEncoding());
 }
