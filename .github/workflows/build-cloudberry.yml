@@ -539,11 +539,10 @@ jobs:
         if: needs.check-skip.outputs.should_skip != 'true'
         env:
           SRC_DIR: ${{ github.workspace }}
-          CONFIGURE_EXTRA_OPTS: --with-gp-stats-collector
         run: |
           set -eo pipefail
           chmod +x "${SRC_DIR}"/devops/build/automation/cloudberry/scripts/configure-cloudberry.sh
-          if ! time su - gpadmin -c "cd ${SRC_DIR} && SRC_DIR=${SRC_DIR} ENABLE_DEBUG=${{ env.ENABLE_DEBUG }} CONFIGURE_EXTRA_OPTS=${{ env.CONFIGURE_EXTRA_OPTS }} ${SRC_DIR}/devops/build/automation/cloudberry/scripts/configure-cloudberry.sh"; then
+          if ! time su - gpadmin -c "cd ${SRC_DIR} && SRC_DIR=${SRC_DIR} ENABLE_DEBUG=${{ env.ENABLE_DEBUG }} ${SRC_DIR}/devops/build/automation/cloudberry/scripts/configure-cloudberry.sh"; then
             echo "::error::Configure script failed"
             exit 1
           fi
