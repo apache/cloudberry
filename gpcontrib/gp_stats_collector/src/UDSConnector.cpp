@@ -31,13 +31,11 @@
 #include "log/LogOps.h"
 #include "memory/gpdbwrappers.h"
 
-#include <chrono>
 #include <string>
 #include <sys/fcntl.h>
 #include <sys/socket.h>
 #include <sys/types.h>
 #include <sys/un.h>
-#include <thread>
 #include <unistd.h>
 
 extern "C" {
@@ -132,7 +130,7 @@ UDSConnector::report_query(const gpsc::SetQueryReq &req,
 			 // if a message does not fit a single packet, we take a nap
 			 // before sending the next one.
 			 // Otherwise, MSG_DONTWAIT send might overflow the UDS
-			 (std::this_thread::sleep_for(std::chrono::milliseconds(1)), true));
+			 (pg_usleep(1000), true));
 
 	if (sent < 0)
 	{
