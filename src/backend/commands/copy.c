@@ -58,7 +58,6 @@
 #include "catalog/catalog.h"
 #include "catalog/gp_matview_aux.h"
 #include "catalog/namespace.h"
-#include "catalog/pg_inherits.h"
 #include "catalog/pg_extprotocol.h"
 #include "cdb/cdbappendonlyam.h"
 #include "cdb/cdbaocsam.h"
@@ -137,37 +136,6 @@ DoCopy(ParseState *pstate, const CopyStmt *stmt,
 	{
 		/* Open and lock the relation, using the appropriate lock type. */
 		rel = table_openrv(stmt->relation, lockmode);
-
-		/*
-		 * For COPY TO, refresh the active snapshot after acquiring the lock.
-		 *
-		 * The snapshot was originally pushed by PortalRunUtility() before
-		 * DoCopy() was called, which means it was taken before we acquired
-		 * the lock on the relation. If we had to wait for a conflicting lock
-		 * (e.g., AccessExclusiveLock held by a concurrent ALTER TABLE ...
-		 * SET WITH (reorganize=true)), the snapshot may predate the
-		 * concurrent transaction's commit. After the lock is granted, scanning
-		 * with such a stale snapshot would miss all tuples written by the
-		 * concurrent transaction, resulting in COPY returning zero rows.
-		 *
-		 * This mirrors the approach used by exec_simple_query() for SELECT
-		 * statements, which pops the parse/analyze snapshot and takes a fresh
-		 * one in PortalStart() after locks have been acquired (see the comment
-		 * at postgres.c:1859-1867). It is also consistent with how VACUUM and
-		 * CLUSTER manage their own snapshots internally.
-		 *
-		 * In REPEATABLE READ or SERIALIZABLE mode, GetTransactionSnapshot()
-		 * returns the same transaction-level snapshot regardless, making this
-		 * a harmless no-op.
-		 *
-		 * We only do this for COPY TO (!is_from) because COPY FROM inserts
-		 * data and does not scan existing tuples with a snapshot.
-		 */
-		if (!is_from && ActiveSnapshotSet())
-		{
-			PopActiveSnapshot();
-			PushActiveSnapshot(GetTransactionSnapshot());
-		}
 	}
 	
 	/*
@@ -303,55 +271,6 @@ DoCopy(ParseState *pstate, const CopyStmt *stmt,
 						(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 						 errmsg("COPY FROM not supported with row-level security"),
 						 errhint("Use INSERT statements instead.")));
-
-			/*
-			 * For partitioned table COPY TO: eagerly acquire AccessShareLock
-			 * on all child partitions before refreshing the snapshot.
-			 *
-			 * When COPY is performed on a partitioned table, the parent
-			 * relation's AccessShareLock is acquired above (via table_openrv)
-			 * and Method A already refreshed the snapshot.  However, the
-			 * parent's AccessShareLock does NOT conflict with an
-			 * AccessExclusiveLock held on a child partition by a concurrent
-			 * reorganize.  As a result, Method A's snapshot may still predate
-			 * the child's reorganize commit.
-			 *
-			 * Child partition locks are acquired later, deep inside
-			 * ExecutorStart() via ExecInitAppend(), by which time the snapshot
-			 * has already been embedded in the QueryDesc via
-			 * PushCopiedSnapshot() in BeginCopy().  Even a second snapshot
-			 * refresh in BeginCopy() (after AcquireRewriteLocks) would not
-			 * help, because AcquireRewriteLocks only locks the parent (child
-			 * partitions are not in the initial range table of
-			 * "SELECT * FROM parent").
-			 *
-			 * The fix: call find_all_inheritors() with AccessShareLock to
-			 * acquire locks on every child partition NOW, before building the
-			 * query.  If a child partition's reorganize holds
-			 * AccessExclusiveLock, this call blocks until that transaction
-			 * commits.  Once it returns, all child-level reorganize operations
-			 * have committed, and a fresh snapshot taken here will see all
-			 * reorganized child data.
-			 *
-			 * find_all_inheritors() acquires locks that persist to end of
-			 * transaction.  The executor will re-acquire them during scan
-			 * initialization, which is a lock-manager no-op.
-			 */
-			if (!is_from && rel->rd_rel->relkind == RELKIND_PARTITIONED_TABLE)
-			{
-				List	   *part_oids;
-
-				part_oids = find_all_inheritors(RelationGetRelid(rel),
-												AccessShareLock, NULL);
-				list_free(part_oids);
-
-				/* Refresh snapshot: all child partition locks now held */
-				if (ActiveSnapshotSet())
-				{
-					PopActiveSnapshot();
-					PushActiveSnapshot(GetTransactionSnapshot());
-				}
-			}
 
 			/*
 			 * Build target list
