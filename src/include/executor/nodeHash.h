@@ -64,9 +64,12 @@ extern bool ExecScanHashBucket(HashState *hashState, HashJoinState *hjstate,
 extern bool ExecParallelScanHashBucket(HashState *hashState, HashJoinState *hjstate,
 									   ExprContext *econtext);
 extern void ExecPrepHashTableForUnmatched(HashJoinState *hjstate);
+extern bool ExecParallelPrepHashTableForUnmatched(HashJoinState *hjstate);
 extern bool ExecScanHashTableForUnmatched(HashJoinState *hjstate,
 										  ExprContext *econtext);
 extern void ExecHashTableReset(HashState *hashState, HashJoinTable hashtable);
+extern bool ExecParallelScanHashTableForUnmatched(HashJoinState *hjstate,
+												  ExprContext *econtext);
 extern void ExecHashTableResetMatchFlags(HashJoinTable hashtable);
 extern void ExecChooseHashTableSize(double ntuples, int tupwidth, bool useskew,
                                     uint64 operatorMemKB,
