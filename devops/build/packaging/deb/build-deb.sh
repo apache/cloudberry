@@ -109,7 +109,7 @@ export CBDB_FULL_VERSION=$VERSION
 
 # Set version if not provided
 if [ -z "${VERSION}" ]; then
-  export CBDB_FULL_VERSION=$(./getversion | cut -d'-' -f 1 | cut -d'+' -f 1)
+  export CBDB_FULL_VERSION=$(./getversion 2>/dev/null | cut -d'-' -f 1 | cut -d'+' -f 1 || echo "unknown")
 fi
 
 if [[ ! $CBDB_FULL_VERSION =~ ^[0-9] ]]; then
@@ -127,12 +127,19 @@ fi
 # Detect OS distribution (e.g., ubuntu22.04, debian12)
 if [ -z ${OS_DISTRO+x} ]; then
   if [ -f /etc/os-release ]; then
+    # Temporarily disable unbound variable check for sourcing os-release
+    set +u
     . /etc/os-release
-    OS_DISTRO=$(echo "${ID}${VERSION_ID}" | tr '[:upper:]' '[:lower:]')
+    set -u
+    # Ensure ID and VERSION_ID are set before using them
+    OS_DISTRO=$(echo "${ID:-unknown}${VERSION_ID:-}" | tr '[:upper:]' '[:lower:]')
   else
     OS_DISTRO="unknown"
   fi
 fi
+
+# Ensure OS_DISTRO is exported and not empty
+export OS_DISTRO=${OS_DISTRO:-unknown}
 
 export CBDB_PKG_VERSION=${CBDB_FULL_VERSION}-${BUILD_NUMBER}-${OS_DISTRO}
 
