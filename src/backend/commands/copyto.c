@@ -1226,43 +1226,6 @@ BeginCopy(ParseState *pstate,
 					 errmsg("COPY query must not be a utility command")));
 
 		/*
-		 * Refresh the active snapshot after pg_analyze_and_rewrite() has
-		 * acquired all necessary relation locks via AcquireRewriteLocks().
-		 *
-		 * The snapshot in use was pushed by PortalRunUtility() before DoCopy()
-		 * was called -- before any table locks were acquired.  If
-		 * AcquireRewriteLocks() had to wait for a conflicting
-		 * AccessExclusiveLock (e.g., held by a concurrent ALTER TABLE ...
-		 * SET WITH (reorganize=true)), the lock wait is now over and the
-		 * reorganize transaction has committed.  The snapshot taken before the
-		 * wait does not reflect that commit: after reorganize completes,
-		 * swap_relation_files() has replaced the physical storage, so old
-		 * tuples no longer exist and the new tuples have xmin = reorganize_xid
-		 * which is not yet visible in the pre-wait snapshot.  Scanning with
-		 * the stale snapshot returns 0 rows -- a violation of transaction
-		 * atomicity (the reader must see either all old rows or all new rows).
-		 *
-		 * By refreshing the snapshot here -- after all locks are acquired --
-		 * we guarantee that the query will see the committed post-reorganize
-		 * data.
-		 *
-		 * This applies to:
-		 *   - Pure query-based COPY TO: COPY (SELECT ...) TO
-		 *   - RLS table COPY TO: converted to query-based in DoCopy(); the
-		 *     RLS policy references an external lookup table whose lock is
-		 *     acquired by AcquireRewriteLocks().
-		 *
-		 * In REPEATABLE READ or SERIALIZABLE isolation,
-		 * GetTransactionSnapshot() returns the same transaction-level
-		 * snapshot, making this a harmless no-op.
-		 */
-		if (ActiveSnapshotSet())
-		{
-			PopActiveSnapshot();
-			PushActiveSnapshot(GetTransactionSnapshot());
-		}
-
-		/*
 		 * Similarly the grammar doesn't enforce the presence of a RETURNING
 		 * clause, but this is required here.
 		 */
