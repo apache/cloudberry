@@ -79,10 +79,9 @@ SELECT a, a <-> '10:57:11' FROM timetmp ORDER BY a <-> '10:57:11' LIMIT 3;
  Limit
    ->  Gather Motion 3:1  (slice1; segments: 3)
          Merge Key: ((a <-> '10:57:11'::time without time zone))
-         ->  Sort
-               Sort Key: ((a <-> '10:57:11'::time without time zone))
-               ->  Seq Scan on timetmp
- Optimizer: GPORCA
+         ->  Limit
+               ->  Index Only Scan using timeidx on timetmp
+                     Order By: (a <-> '10:57:11'::time without time zone)
 (7 rows)
 
 SELECT a, a <-> '10:57:11' FROM timetmp ORDER BY a <-> '10:57:11' LIMIT 3;
