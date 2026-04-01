@@ -545,6 +545,10 @@ push_down_expr_mutator(Node *node, List *child_tlist)
 			{
 				((Const *) child_tle->expr)->consttypmod = ((Var *) node)->vartypmod;
 			}
+			else if (IsA(child_tle->expr, Var))
+			{
+				((Var *) child_tle->expr)->vartypmod = ((Var *) node)->vartypmod;
+			}
 
 			return (Node *) child_tle->expr;
 		}
