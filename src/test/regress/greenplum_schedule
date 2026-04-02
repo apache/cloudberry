@@ -168,6 +168,7 @@ test: instr_in_shmem_verify
 test: partition_locking
 test: vacuum_gp
 # test: resource_queue_stat
+test: vacuum_fsm_nondefault_tablespace
 # background analyze may affect pgstat
 test: pg_stat
 test: bfv_partition qp_misc_rio
