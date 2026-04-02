@@ -46,6 +46,8 @@ Provides: apache-cloudberry-db
 Architecture: amd64
 Depends: curl,
     cgroup-tools,
+    debianutils,
+    hostname,
     iputils-ping,
     iproute2,
     keyutils,
