@@ -70,3 +70,4 @@
 /ao_unique_index_partition.out
 /bfv_copy.out
 /copy_encoding_error.out
+/vacuum_fsm_nondefault_tablespace.out
