@@ -52,12 +52,15 @@ Prefix:         %{cloudberry_install_dir}
 # List runtime dependencies
 
 Requires:       bash
+Requires:       hostname
 Requires:       iproute
 Requires:       iputils
+Requires:       less
 Requires:       openssh
 Requires:       openssh-clients
 Requires:       openssh-server
 Requires:       rsync
+Requires:       which
 
 %if 0%{?rhel} == 8
 Requires:       apr
