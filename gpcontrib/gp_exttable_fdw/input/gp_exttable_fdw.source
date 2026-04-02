@@ -72,7 +72,7 @@ SELECT * FROM tableless_ext_fdw;
 -- When using CREATE FOREIGN TABLE syntax, '|' and '\' need to be escaped as '|' --> '\|' and '|' --> '\\'.
 CREATE FOREIGN TABLE ext_special_uri(a int, b int)
 SERVER gp_exttable_server
-OPTIONS (format 'csv', delimiter ',',
+OPTIONS (format_type 'c', delimiter ',',
          location_uris 'file://@hostname@@abs_srcdir@/data/spe\\cial1\||file://@hostname@@abs_srcdir@/data/\|special2\\');
 \a
 SELECT urilocation FROM pg_exttable WHERE reloid = 'public.ext_special_uri'::regclass;
