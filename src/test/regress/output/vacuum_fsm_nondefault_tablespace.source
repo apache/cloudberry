@@ -1,0 +1,70 @@
+-- Test: VACUUM on a table in a non-default tablespace does not crash on first run.
+--
+-- Bug: SIGSEGV in fsm_extend() (freespace.c:637) when vacuuming a heap table
+-- (or an AO table's aoseg auxiliary table) that resides in a non-default
+-- tablespace for the very first time.
+--
+-- Root cause: commit "Prevent CREATE TABLE from using dangling tablespace"
+-- added TablespaceLockTuple() in TablespaceCreateDbspace() for non-default
+-- tablespaces. That call reaches AcceptInvalidationMessages() via
+-- LockSharedObject(), which processes a pending SHAREDINVALSMGR_ID message
+-- that vm_extend() had queued via CacheInvalidateSmgr(), nullifying
+-- rel->rd_smgr before fsm_extend() dereferences it at freespace.c:637.
+--
+-- Fix: added RelationOpenSmgr(rel) after smgrcreate() in both fsm_extend()
+-- (freespace.c) and vm_extend() (visibilitymap.c) so that rd_smgr is
+-- re-opened if the sinval handler closed it.
+CREATE TABLESPACE fsm_ts_test LOCATION '@testtablespace@';
+-- Case 1: plain heap table in non-default tablespace, first VACUUM.
+-- Before the fix this crashed with SIGSEGV at freespace.c:637:
+--   vm_extend()  -> CacheInvalidateSmgr  (queues SHAREDINVALSMGR_ID)
+--   fsm_extend() -> smgrcreate -> TablespaceCreateDbspace
+--                -> TablespaceLockTuple  -> AcceptInvalidationMessages
+--                -> processes SHAREDINVALSMGR_ID -> rel->rd_smgr = NULL
+--                -> rel->rd_smgr->smgr_cached_nblocks[...] = ...  SIGSEGV
+CREATE TABLE fsm_ts_heap (id int, val text)
+    TABLESPACE fsm_ts_test
+    DISTRIBUTED BY (id);
+INSERT INTO fsm_ts_heap SELECT i, repeat('x', 80) FROM generate_series(1, 500) i;
+VACUUM ANALYZE fsm_ts_heap;
+SELECT count(*) FROM fsm_ts_heap;
+ count 
+-------
+   500
+(1 row)
+
+-- Second VACUUM must also succeed (FSM/VM now exist, different code path).
+VACUUM ANALYZE fsm_ts_heap;
+SELECT count(*) FROM fsm_ts_heap;
+ count 
+-------
+   500
+(1 row)
+
+DROP TABLE fsm_ts_heap;
+-- Case 2: AO table in non-default tablespace.
+-- The crash occurs inside the recursive vacuum of the aoseg auxiliary table
+-- (which is also a heap table stored in the same non-default tablespace).
+CREATE TABLE fsm_ts_ao (id int, val text)
+    USING ao_row
+    TABLESPACE fsm_ts_test
+    DISTRIBUTED BY (id);
+INSERT INTO fsm_ts_ao SELECT i, repeat('y', 80) FROM generate_series(1, 500) i;
+VACUUM ANALYZE fsm_ts_ao;
+SELECT count(*) FROM fsm_ts_ao;
+ count 
+-------
+   500
+(1 row)
+
+-- Second VACUUM must also succeed.
+VACUUM ANALYZE fsm_ts_ao;
+SELECT count(*) FROM fsm_ts_ao;
+ count 
+-------
+   500
+(1 row)
+
+DROP TABLE fsm_ts_ao;
+-- Cleanup.
+DROP TABLESPACE fsm_ts_test;
