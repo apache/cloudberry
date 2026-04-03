@@ -59,7 +59,7 @@ static bool validateSQLNamePattern(PQExpBuffer buf, const char *pattern,
 								   const char *visibilityrule,
 								   bool *added_clause, int maxparts);
 
-static bool isGPDB(void);
+static bool isMPP(void);
 static bool isGPDB4200OrLater(void);
 static bool isGPDB5000OrLater(void);
 static bool isGPDB6000OrLater(void);
@@ -71,7 +71,7 @@ static bool validateSQLNamePattern(PQExpBuffer buf, const char *pattern,
 								   const char *visibilityrule,
 								   bool *added_clause, int maxparts);
 
-static bool isGPDB(void)
+static bool isMPP(void)
 {
 	static enum
 	{
@@ -93,7 +93,7 @@ static bool isGPDB(void)
 		return false;
 
 	ver = PQgetvalue(res, 0, 0);
-	if (strstr(ver, "Cloudberry") != NULL)
+	if (strstr(ver, "Cloudberry") != NULL || strstr(ver, "Greenplum") != NULL)
 	{
 		PQclear(res);
 		talking_to_gpdb = gpdb_yes;
@@ -120,7 +120,7 @@ static bool isGPDB4200OrLater(void)
 {
 	bool       retValue = false;
 
-	if (isGPDB() == true)
+	if (isMPP() == true)
 	{
 		PGresult  *result;
 
@@ -141,7 +141,7 @@ isGPDB4300OrLater(void)
 {
 	bool       retValue = false;
 
-	if (isGPDB() == true)
+	if (isMPP() == true)
 	{
 		PGresult  *result;
 
@@ -164,7 +164,7 @@ static bool isGPDB5000OrLater(void)
 {
 	bool	retValue = false;
 
-	if (isGPDB() == true)
+	if (isMPP() == true)
 	{
 		PGresult   *res;
 
@@ -178,8 +178,8 @@ static bool isGPDB5000OrLater(void)
 static bool
 isGPDB6000OrLater(void)
 {
-	if (!isGPDB())
-		return false;		/* Not Cloudberry at all. */
+	if (!isMPP())
+		return false;		/* Not GP-based at all. */
 
 	/* GPDB 6 is based on PostgreSQL 9.4 */
 	return pset.sversion >= 90400;
@@ -188,8 +188,8 @@ isGPDB6000OrLater(void)
 static bool
 isGPDB6000OrBelow(void)
 {
-	if (!isGPDB())
-		return false;		/* Not Cloudberry at all. */
+	if (!isMPP())
+		return false;		/* Not GP-based at all. */
 
 	/* GPDB 6 is based on PostgreSQL 9.4 */
 	return pset.sversion <= 90400;
@@ -198,8 +198,8 @@ isGPDB6000OrBelow(void)
 static bool
 isGPDB7000OrLater(void)
 {
-	if (!isGPDB())
-		return false;		/* Not Cloudberry at all. */
+	if (!isMPP())
+		return false;		/* Not GP-based at all. */
 
 	/* GPDB 7 is based on PostgreSQL v12 */
 	return pset.sversion >= 120000;
@@ -1885,7 +1885,7 @@ describeOneTableDetails(const char *schemaname,
 						   "array(select 'toast.' || x from pg_catalog.unnest(tc.reloptions) x), ', ')\n"
 						   : "''"),
 						  /* GPDB Only:  relstorage  */
-						  (isGPDB() ? "c.relstorage" : "'h'"),
+						  (isMPP() ? "c.relstorage" : "'h'"),
 						  oid);
 	}
 	else if (pset.sversion >= 90400)
@@ -1905,7 +1905,7 @@ describeOneTableDetails(const char *schemaname,
 						   "array(select 'toast.' || x from pg_catalog.unnest(tc.reloptions) x), ', ')\n"
 						   : "''"),
 						  /* GPDB Only:  relstorage  */
-						  (isGPDB() ? "c.relstorage" : "'h'"),
+						  (isMPP() ? "c.relstorage" : "'h'"),
 						  oid);
 	}
 	else
@@ -1925,7 +1925,7 @@ describeOneTableDetails(const char *schemaname,
 						   "array(select 'toast.' || x from pg_catalog.unnest(tc.reloptions) x), ', ')\n"
 						   : "''"),
 						  /* GPDB Only:  relstorage  */
-						  (isGPDB() ? "c.relstorage" : "'h'"),
+						  (isMPP() ? "c.relstorage" : "'h'"),
 						  oid);
 	}
 	res = PSQLexec(buf.data);
@@ -1965,7 +1965,7 @@ describeOneTableDetails(const char *schemaname,
 	tableinfo.isdynamic = strcmp(PQgetvalue(res, 0, 16), "t") == 0;
 
 	/* GPDB Only:  relstorage  */
-	if (pset.sversion < 120000 && isGPDB())
+	if (pset.sversion < 120000 && isMPP())
 		tableinfo.relstorage = *(PQgetvalue(res, 0, PQfnumber(res, "relstorage")));
 	else
 		tableinfo.relstorage = 'h';
@@ -3655,7 +3655,7 @@ describeOneTableDetails(const char *schemaname,
 							 * listing them.
 							 */
 							tgdef = PQgetvalue(result, i, 1);
-							if (isGPDB() && strstr(tgdef, "RI_FKey_") != NULL)
+							if (isMPP() && strstr(tgdef, "RI_FKey_") != NULL)
 								list_trigger = false;
 
 							break;
@@ -4975,7 +4975,7 @@ listTables(const char *tabtypes, const char *pattern, bool verbose, bool showSys
 	cols_so_far = 4;
 
 	/* Show Storage type for tables */
-	if (showTables && isGPDB())
+	if (showTables && isMPP())
 	{
 		if (isGPDB7000OrLater())
 		{
