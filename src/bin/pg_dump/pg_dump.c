@@ -385,17 +385,17 @@ static char *nextToken(register char **stringp, register const char *delim);
 static void addDistributedBy(Archive *fout, PQExpBuffer q, const TableInfo *tbinfo, int actual_atts);
 static void addDistributedByOld(Archive *fout, PQExpBuffer q, const TableInfo *tbinfo, int actual_atts);
 static void addSchedule(Archive *fout, PQExpBuffer q, const TableInfo *tbinfo);
-static bool isGPDB(Archive *fout);
+static bool isMPP(Archive *fout);
 static bool isGPDB5000OrLater(Archive *fout);
 static bool isGPDB6000OrLater(Archive *fout);
 
 /* END MPP ADDITION */
 
 /*
- * Check if we are talking to GPDB
+ * Check if we are talking to Greenplum or Cloudberry
  */
 static bool
-isGPDB(Archive *fout)
+isMPP(Archive *fout)
 {
 	static int	value = -1;		/* -1 = not known yet, 0 = no, 1 = yes */
 
@@ -409,7 +409,7 @@ isGPDB(Archive *fout)
 		res = ExecuteSqlQuery(fout, query, PGRES_TUPLES_OK);
 
 		ver = (PQgetvalue(res, 0, 0));
-		if (strstr(ver, "Cloudberry") != NULL)
+		if (strstr(ver, "Cloudberry") != NULL || strstr(ver, "Greenplum") != NULL)
 			value = 1;
 		else
 			value = 0;
@@ -423,8 +423,8 @@ isGPDB(Archive *fout)
 static bool
 isGPDB5000OrLater(Archive *fout)
 {
-	if (!isGPDB(fout))
-		return false;		/* Not Cloudberry at all. */
+	if (!isMPP(fout))
+		return false;		/* Not GP-based at all. */
 
 	/* GPDB 5 is based on PostgreSQL 8.3 */
 	return fout->remoteVersion >= 80300;
@@ -434,8 +434,8 @@ isGPDB5000OrLater(Archive *fout)
 static bool
 isGPDB6000OrLater(Archive *fout)
 {
-	if (!isGPDB(fout))
-		return false;		/* Not Cloudberry at all. */
+	if (!isMPP(fout))
+		return false;		/* Not GP-based at all. */
 
 	/* GPDB 6 is based on PostgreSQL 9.4 */
 	return fout->remoteVersion >= 90400;
