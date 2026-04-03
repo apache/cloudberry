@@ -19,7 +19,22 @@ include /usr/share/dpkg/default.mk
 	dh $@ --parallel
 
 gpinstall:
-	make install DESTDIR=${DEBIAN_DESTINATION} prefix=
+	# If the build staging directory is empty, copy from the pre-installed location.
+	# In CI, BUILD_DESTINATION already points here so it will be populated.
+	# For local manual packaging, copy from the installed Cloudberry path.
+	@mkdir -p ${DEBIAN_DESTINATION}
+	@if [ -z "$$(ls -A ${DEBIAN_DESTINATION} 2>/dev/null)" ]; then \
+		echo "Copying pre-built binaries from ${CBDB_BIN_PATH} to ${DEBIAN_DESTINATION}..."; \
+		cp -a ${CBDB_BIN_PATH}/* ${DEBIAN_DESTINATION}/; \
+	else \
+		echo "Build staging directory already populated, skipping copy."; \
+	fi
+	# Copy Apache compliance files into the build staging directory
+	cp -a LICENSE NOTICE DISCLAIMER ${DEBIAN_DESTINATION}/
+	cp -a licenses ${DEBIAN_DESTINATION}/
+	# Create debian/copyright for Debian policy compliance
+	mkdir -p $(shell pwd)/debian
+	cat LICENSE NOTICE > $(shell pwd)/debian/copyright
 
 override_dh_auto_install: gpinstall
 	# the staging directory for creating a debian is NOT the right GPHOME.
