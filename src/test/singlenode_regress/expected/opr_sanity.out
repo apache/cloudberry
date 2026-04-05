@@ -131,10 +131,10 @@ WHERE p1.oid < p2.oid AND
  oid  |            proname             | oid  |            proname             
 ------+--------------------------------+------+--------------------------------
  7203 | gp_log_backend_memory_contexts | 7204 | gp_log_backend_memory_contexts
- 6212 | int2_matrix_accum              | 6215 | float8_matrix_accum
- 6212 | int2_matrix_accum              | 6214 | int8_matrix_accum
- 6213 | int4_matrix_accum              | 6215 | float8_matrix_accum
- 6213 | int4_matrix_accum              | 6214 | int8_matrix_accum
+ 6405 | int2_matrix_accum              | 6414 | float8_matrix_accum
+ 6405 | int2_matrix_accum              | 6406 | int8_matrix_accum
+ 6407 | int4_matrix_accum              | 6414 | float8_matrix_accum
+ 6406 | int8_matrix_accum              | 6407 | int4_matrix_accum
 (5 rows)
 
 -- Look for uses of different type OIDs in the argument/result type fields
@@ -217,7 +217,8 @@ ORDER BY 1, 2;
  timestamp without time zone | timestamp with time zone
  bit                         | bit varying
  txid_snapshot               | pg_snapshot
-(4 rows)
+ anyrange                    | anymultirange
+(5 rows)
 
 SELECT DISTINCT p1.proargtypes[2]::regtype, p2.proargtypes[2]::regtype
 FROM pg_proc AS p1, pg_proc AS p2
@@ -2231,6 +2232,7 @@ ORDER BY 1, 2, 3;
                     | complex_ops      | complex_ops      | complex
                     | float_ops        | float4_ops       | real
                     | float_ops        | float8_ops       | double precision
+                    | interval_ops     | interval_ops     | interval
                     | jsonb_ops        | jsonb_ops        | jsonb
                     | multirange_ops   | multirange_ops   | anymultirange
                     | numeric_ops      | numeric_ops      | numeric
@@ -2239,7 +2241,7 @@ ORDER BY 1, 2, 3;
                     | record_ops       | record_ops       | record
                     | tsquery_ops      | tsquery_ops      | tsquery
                     | tsvector_ops     | tsvector_ops     | tsvector
-(16 rows)
+(17 rows)
 
 -- **************** pg_index ****************
 -- Look for illegal values in pg_index fields.

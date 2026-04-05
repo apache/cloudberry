@@ -8,13 +8,14 @@ explain (costs off)
 select * from (select * from tenk1 order by four) t order by four, ten;
              QUERY PLAN              
 -------------------------------------
- Sort
+ Incremental Sort
    Sort Key: tenk1.four, tenk1.ten
+   Presorted Key: tenk1.four
    ->  Sort
          Sort Key: tenk1.four
          ->  Seq Scan on tenk1
  Optimizer: Postgres query optimizer
-(6 rows)
+(7 rows)
 
 -- When there is a LIMIT clause, incremental sort is beneficial because
 -- it only has to sort some of the groups, and not the entire table.
@@ -40,13 +41,14 @@ explain (costs off)
 select * from (select * from tenk1 order by four) t order by four, ten;
              QUERY PLAN              
 -------------------------------------
- Sort
+ Incremental Sort
    Sort Key: tenk1.four, tenk1.ten
+   Presorted Key: tenk1.four
    ->  Sort
          Sort Key: tenk1.four
          ->  Seq Scan on tenk1
  Optimizer: Postgres query optimizer
-(6 rows)
+(7 rows)
 
 reset work_mem;
 create table t(a integer, b integer);
@@ -1485,20 +1487,16 @@ explain (costs off) select a,b,sum(c) from t group by 1,2 order by 1,2,3 limit 1
 
 set enable_incremental_sort = on;
 explain (costs off) select a,b,sum(c) from t group by 1,2 order by 1,2,3 limit 1;
-                      QUERY PLAN                       
--------------------------------------------------------
+             QUERY PLAN              
+-------------------------------------
  Limit
-   ->  Incremental Sort
+   ->  Sort
          Sort Key: a, b, (sum(c))
-         Presorted Key: a, b
-         ->  GroupAggregate
+         ->  HashAggregate
                Group Key: a, b
-               ->  Incremental Sort
-                     Sort Key: a, b
-                     Presorted Key: a
-                     ->  Index Scan using t_a_idx on t
+               ->  Seq Scan on t
  Optimizer: Postgres query optimizer
-(11 rows)
+(7 rows)
 
 -- Incremental sort vs. set operations with varno 0
 set enable_hashagg to off;

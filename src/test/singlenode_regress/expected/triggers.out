@@ -1187,8 +1187,8 @@ ERROR:  trigger "instead_of_delete_trig" for table "main_view" does not exist
  a      | integer |           |          |         | plain   | 
  b      | integer |           |          |         | plain   | 
 View definition:
- SELECT main_table.a,
-    main_table.b
+ SELECT a,
+    b
    FROM main_table;
 
 DROP VIEW main_view;
@@ -1913,7 +1913,7 @@ create trigger failed after update on parted_trig
   referencing old table as old_table
   for each row execute procedure trigger_nothing();
 ERROR:  "parted_trig" is a partitioned table
-DETAIL:  Triggers on partitioned tables cannot have transition tables.
+DETAIL:  ROW triggers with transition tables are not supported on partitioned tables.
 drop table parted_trig;
 --
 -- Verify trigger creation for partitioned tables, and drop behavior
@@ -1998,7 +1998,7 @@ select tgrelid::regclass::text, tgname, tgfoid::regproc, tgenabled, tgisinternal
   tgrelid  | tgname |     tgfoid      | tgenabled | tgisinternal 
 -----------+--------+-----------------+-----------+--------------
  trigpart  | trg1   | trigger_nothing | O         | f
- trigpart1 | trg1   | trigger_nothing | O         | t
+ trigpart1 | trg1   | trigger_nothing | O         | f
 (2 rows)
 
 create table trigpart3 (like trigpart);
@@ -2798,7 +2798,7 @@ create trigger child_row_trig
 -- but now we're not allowed to reattach it
 alter table parent attach partition child for values in ('AAA');
 ERROR:  trigger "child_row_trig" prevents table "child" from becoming a partition
-DETAIL:  ROW triggers with transition tables are not supported on partitions
+DETAIL:  ROW triggers with transition tables are not supported on partitions.
 -- drop the trigger, and now we're allowed to attach it again
 drop trigger child_row_trig on child;
 alter table parent attach partition child for values in ('AAA');

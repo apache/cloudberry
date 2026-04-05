@@ -15,29 +15,21 @@ select '010'::xid,
 
 -- garbage values are not yet rejected (perhaps they should be)
 select ''::xid;
- xid 
------
-   0
-(1 row)
-
+ERROR:  invalid input syntax for type xid: ""
+LINE 1: select ''::xid;
+               ^
 select 'asdf'::xid;
- xid 
------
-   0
-(1 row)
-
+ERROR:  invalid input syntax for type xid: "asdf"
+LINE 1: select 'asdf'::xid;
+               ^
 select ''::xid8;
- xid8 
-------
-    0
-(1 row)
-
+ERROR:  invalid input syntax for type xid8: ""
+LINE 1: select ''::xid8;
+               ^
 select 'asdf'::xid8;
- xid8 
-------
-    0
-(1 row)
-
+ERROR:  invalid input syntax for type xid8: "asdf"
+LINE 1: select 'asdf'::xid8;
+               ^
 -- equality
 select '1'::xid = '1'::xid;
  ?column? 

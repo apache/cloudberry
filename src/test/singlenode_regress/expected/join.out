@@ -1638,7 +1638,7 @@ SELECT * FROM (J1_TBL JOIN J2_TBL USING (i)) AS x WHERE J1_TBL.t = 'one';  -- er
 ERROR:  invalid reference to FROM-clause entry for table "j1_tbl"
 LINE 1: ... * FROM (J1_TBL JOIN J2_TBL USING (i)) AS x WHERE J1_TBL.t =...
                                                              ^
-HINT:  There is an entry for table "j1_tbl", but it cannot be referenced from this part of the query.
+DETAIL:  There is an entry for table "j1_tbl", but it cannot be referenced from this part of the query.
 SELECT * FROM J1_TBL JOIN J2_TBL USING (i) AS x WHERE x.i = 1;  -- ok
  i | j |  t  | k  
 ---+---+-----+----
@@ -3051,7 +3051,7 @@ order by 1,2;
    Sort Key: t1.q1, t1.q2
    ->  Hash Left Join
          Hash Cond: (t1.q2 = t2.q1)
-         Filter: ((SubPlan 1) = 1)
+         Filter: (1 = (SubPlan 1))
          ->  Seq Scan on int8_tbl t1
          ->  Hash
                ->  Seq Scan on int8_tbl t2
@@ -3103,7 +3103,7 @@ where i41.f1 > 0;
          ->  Seq Scan on int4_tbl i41
                Filter: (f1 > 0)
          ->  Nested Loop
-               Join Filter: (i41.f1 = i42.f1)
+               Join Filter: (i42.f1 = i41.f1)
                ->  Seq Scan on int8_tbl i81
                ->  Materialize
                      ->  Seq Scan on int4_tbl i42
@@ -3921,11 +3921,11 @@ explain (costs off)
 select q1, unique2, thousand, hundred
   from int8_tbl a left join tenk1 b on q1 = unique2
   where coalesce(thousand,123) = q1 and q1 = coalesce(hundred,123);
-                                      QUERY PLAN                                      
---------------------------------------------------------------------------------------
+                                                QUERY PLAN                                                
+----------------------------------------------------------------------------------------------------------
  Hash Right Join
    Hash Cond: (b.unique2 = a.q1)
-   Filter: ((COALESCE(b.thousand, 123) = a.q1) AND (a.q1 = COALESCE(b.hundred, 123)))
+   Filter: ((COALESCE(b.thousand, 123) = COALESCE(b.hundred, 123)) AND (a.q1 = COALESCE(b.hundred, 123)))
    ->  Seq Scan on tenk1 b
    ->  Hash
          ->  Seq Scan on int8_tbl a
@@ -3969,10 +3969,9 @@ explain (costs off)
 select a.unique1, b.unique1, c.unique1, coalesce(b.twothousand, a.twothousand)
   from tenk1 a left join tenk1 b on b.thousand = a.unique1                        left join tenk1 c on c.unique2 = coalesce(b.twothousand, a.twothousand)
   where a.unique2 < 10 and coalesce(b.twothousand, a.twothousand) = 44;
-                            QUERY PLAN                             
--------------------------------------------------------------------
- Hash Left Join
-   Hash Cond: (COALESCE(b.twothousand, a.twothousand) = c.unique2)
+                          QUERY PLAN                           
+---------------------------------------------------------------
+ Nested Loop Left Join
    ->  Hash Right Join
          Hash Cond: (b.thousand = a.unique1)
          Filter: (COALESCE(b.twothousand, a.twothousand) = 44)
@@ -3980,11 +3979,11 @@ select a.unique1, b.unique1, c.unique1, coalesce(b.twothousand, a.twothousand)
          ->  Hash
                ->  Index Scan using tenk1_unique2 on tenk1 a
                      Index Cond: (unique2 < 10)
-   ->  Hash
+   ->  Materialize
          ->  Index Scan using tenk1_unique2 on tenk1 c
                Index Cond: (unique2 = 44)
  Optimizer: Postgres query optimizer
-(13 rows)
+(12 rows)
 
 select a.unique1, b.unique1, c.unique1, coalesce(b.twothousand, a.twothousand)
   from tenk1 a left join tenk1 b on b.thousand = a.unique1                        left join tenk1 c on c.unique2 = coalesce(b.twothousand, a.twothousand)
@@ -4554,29 +4553,25 @@ explain (costs off)
   select * from int4_tbl a left join tenk1 b on f1 = unique2 where f1 = 0;
                    QUERY PLAN                    
 -------------------------------------------------
- Hash Right Join
-   Hash Cond: (b.unique2 = a.f1)
+ Nested Loop Left Join
+   ->  Seq Scan on int4_tbl a
+         Filter: (f1 = 0)
    ->  Index Scan using tenk1_unique2 on tenk1 b
          Index Cond: (unique2 = 0)
-   ->  Hash
-         ->  Seq Scan on int4_tbl a
-               Filter: (f1 = 0)
  Optimizer: Postgres query optimizer
-(8 rows)
+(6 rows)
 
 explain (costs off)
   select * from tenk1 a full join tenk1 b using(unique2) where unique2 = 42;
-                      QUERY PLAN                       
--------------------------------------------------------
- Hash Full Join
-   Hash Cond: (a.unique2 = b.unique2)
+                   QUERY PLAN                    
+-------------------------------------------------
+ Merge Full Join
    ->  Index Scan using tenk1_unique2 on tenk1 a
          Index Cond: (unique2 = 42)
-   ->  Hash
-         ->  Index Scan using tenk1_unique2 on tenk1 b
-               Index Cond: (unique2 = 42)
+   ->  Index Scan using tenk1_unique2 on tenk1 b
+         Index Cond: (unique2 = 42)
  Optimizer: Postgres query optimizer
-(8 rows)
+(6 rows)
 
 --
 -- test that quals attached to an outer join have correct semantics,
@@ -4589,8 +4584,8 @@ explain (verbose, costs off)
   select a.q2, b.q1
     from int8_tbl a left join int8_tbl b on a.q2 = coalesce(b.q1, 1)
     where coalesce(b.q1, 1) > 0;
-                         QUERY PLAN                         
-------------------------------------------------------------
+                                  QUERY PLAN                                   
+-------------------------------------------------------------------------------
  Nested Loop Left Join
    Output: a.q2, b.q1
    Join Filter: (a.q2 = COALESCE(b.q1, '1'::bigint))
@@ -4703,13 +4698,13 @@ select d.* from d left join (select distinct * from b) s
 explain (costs off)
 select d.* from d left join (select * from b group by b.id, b.c_id) s
   on d.a = s.id;
-                QUERY PLAN                
-------------------------------------------
+             QUERY PLAN              
+-------------------------------------
  Hash Right Join
    Hash Cond: (b.id = d.a)
-   ->  GroupAggregate
+   ->  HashAggregate
          Group Key: b.id
-         ->  Index Scan using b_pkey on b
+         ->  Seq Scan on b
    ->  Hash
          ->  Seq Scan on d
  Optimizer: Postgres query optimizer
@@ -5028,7 +5023,7 @@ select * from
 ERROR:  invalid reference to FROM-clause entry for table "y"
 LINE 2: ...bl x join (int4_tbl x cross join int4_tbl y) j on q1 = y.f1;
                                                                   ^
-HINT:  There is an entry for table "y", but it cannot be referenced from this part of the query.
+DETAIL:  There is an entry for table "y", but it cannot be referenced from this part of the query.
 select * from
   int8_tbl x join (int4_tbl x cross join int4_tbl y(ff)) j on q1 = f1; -- ok
  q1 | q2 | f1 | ff 
@@ -5306,11 +5301,11 @@ explain (costs off)
    ->  Nested Loop
          ->  Seq Scan on int8_tbl a
          ->  Materialize
-               ->  Hash Right Join
-                     Hash Cond: ((a.q1) = x.q2)
-                     ->  Seq Scan on int4_tbl y
+               ->  Hash Left Join
+                     Hash Cond: (x.q2 = (a.q1))
+                     ->  Seq Scan on int8_tbl x
                      ->  Hash
-                           ->  Seq Scan on int8_tbl x
+                           ->  Seq Scan on int4_tbl y
  Optimizer: Postgres query optimizer
 (11 rows)
 
@@ -5870,10 +5865,10 @@ select * from
  Nested Loop
    Output: c.q1, c.q2, a.q1, a.q2, b.q1, (COALESCE(b.q2, '42'::bigint)), d.q1, (COALESCE((COALESCE(b.q2, '42'::bigint)), d.q2)), ((COALESCE((COALESCE(b.q2, '42'::bigint)), d.q2)))
    ->  Hash Right Join
-         Output: c.q1, c.q2, a.q1, a.q2, b.q1, d.q1, (COALESCE(b.q2, '42'::bigint)), (COALESCE((COALESCE(b.q2, '42'::bigint)), d.q2))
+         Output: c.q1, c.q2, a.q1, a.q2, b.q1, (COALESCE(b.q2, '42'::bigint)), d.q1, (COALESCE((COALESCE(b.q2, '42'::bigint)), d.q2))
          Hash Cond: (d.q1 = c.q2)
          ->  Nested Loop
-               Output: a.q1, a.q2, b.q1, d.q1, (COALESCE(b.q2, '42'::bigint)), (COALESCE((COALESCE(b.q2, '42'::bigint)), d.q2))
+               Output: a.q1, a.q2, b.q1, (COALESCE(b.q2, '42'::bigint)), d.q1, (COALESCE((COALESCE(b.q2, '42'::bigint)), d.q2))
                ->  Hash Left Join
                      Output: a.q1, a.q2, b.q1, (COALESCE(b.q2, '42'::bigint))
                      Hash Cond: (a.q2 = b.q1)
@@ -5982,13 +5977,14 @@ select * from int8_tbl i8 left join lateral
 --------------------------------------
  Nested Loop Left Join
    Output: i8.q1, i8.q2, f1, (i8.q2)
+   Join Filter: false
    ->  Seq Scan on public.int8_tbl i8
          Output: i8.q1, i8.q2
    ->  Result
          Output: f1, i8.q2
          One-Time Filter: false
  Optimizer: Postgres query optimizer
-(8 rows)
+(10 rows)
 
 explain (verbose, costs off)
 select * from int8_tbl i8 left join lateral
@@ -6071,8 +6067,8 @@ lateral (select * from int8_tbl t1,
                                      where q2 = (select greatest(t1.q1,t2.q2))
                                        and (select v.id=0)) offset 0) ss2) ss
          where t1.q1 = ss.q2) ss0;
-                              QUERY PLAN                               
------------------------------------------------------------------------
+                                 QUERY PLAN                                 
+----------------------------------------------------------------------------
  Nested Loop
    Output: "*VALUES*".column1, t1.q1, t1.q2, ss2.q1, ss2.q2
    ->  Values Scan on "*VALUES*"
@@ -6095,10 +6091,10 @@ lateral (select * from int8_tbl t1,
                                    One-Time Filter: $4
                                    InitPlan 1 (returns $2)
                                      ->  Result
-                                           Output: GREATEST($0, t2.q2)
+                                           Output: GREATEST(t1.q1, t2.q2)
                                    InitPlan 2 (returns $4)
                                      ->  Result
-                                           Output: ($3 = 0)
+                                           Output: ("*VALUES*".column1 = 0)
                                    ->  Seq Scan on public.int8_tbl t3
                                          Output: t3.q1, t3.q2
                                          Filter: (t3.q2 = $2)
@@ -6125,22 +6121,26 @@ select f1,g from int4_tbl a, (select f1 as g) ss;
 ERROR:  column "f1" does not exist
 LINE 1: select f1,g from int4_tbl a, (select f1 as g) ss;
                                              ^
-HINT:  There is a column named "f1" in table "a", but it cannot be referenced from this part of the query.
+DETAIL:  There is a column named "f1" in table "a", but it cannot be referenced from this part of the query.
+HINT:  To reference that column, you must mark this subquery with LATERAL.
 select f1,g from int4_tbl a, (select a.f1 as g) ss;
 ERROR:  invalid reference to FROM-clause entry for table "a"
 LINE 1: select f1,g from int4_tbl a, (select a.f1 as g) ss;
                                              ^
-HINT:  There is an entry for table "a", but it cannot be referenced from this part of the query.
+DETAIL:  There is an entry for table "a", but it cannot be referenced from this part of the query.
+HINT:  To reference that table, you must mark this subquery with LATERAL.
 select f1,g from int4_tbl a cross join (select f1 as g) ss;
 ERROR:  column "f1" does not exist
 LINE 1: select f1,g from int4_tbl a cross join (select f1 as g) ss;
                                                        ^
-HINT:  There is a column named "f1" in table "a", but it cannot be referenced from this part of the query.
+DETAIL:  There is a column named "f1" in table "a", but it cannot be referenced from this part of the query.
+HINT:  To reference that column, you must mark this subquery with LATERAL.
 select f1,g from int4_tbl a cross join (select a.f1 as g) ss;
 ERROR:  invalid reference to FROM-clause entry for table "a"
 LINE 1: select f1,g from int4_tbl a cross join (select a.f1 as g) ss...
                                                        ^
-HINT:  There is an entry for table "a", but it cannot be referenced from this part of the query.
+DETAIL:  There is an entry for table "a", but it cannot be referenced from this part of the query.
+HINT:  To reference that table, you must mark this subquery with LATERAL.
 -- SQL:2008 says the left table is in scope but illegal to access here
 select f1,g from int4_tbl a right join lateral generate_series(0, a.f1) g on true;
 ERROR:  invalid reference to FROM-clause entry for table "a"
@@ -6170,12 +6170,12 @@ update xx1 set x2 = f1 from (select * from int4_tbl where f1 = x1) ss;
 ERROR:  column "x1" does not exist
 LINE 1: ... set x2 = f1 from (select * from int4_tbl where f1 = x1) ss;
                                                                 ^
-HINT:  There is a column named "x1" in table "xx1", but it cannot be referenced from this part of the query.
+DETAIL:  There is a column named "x1" in table "xx1", but it cannot be referenced from this part of the query.
 update xx1 set x2 = f1 from (select * from int4_tbl where f1 = xx1.x1) ss;
 ERROR:  invalid reference to FROM-clause entry for table "xx1"
 LINE 1: ...t x2 = f1 from (select * from int4_tbl where f1 = xx1.x1) ss...
                                                              ^
-HINT:  There is an entry for table "xx1", but it cannot be referenced from this part of the query.
+DETAIL:  There is an entry for table "xx1", but it cannot be referenced from this part of the query.
 -- can't do it even with LATERAL:
 update xx1 set x2 = f1 from lateral (select * from int4_tbl where f1 = x1) ss;
 ERROR:  invalid reference to FROM-clause entry for table "xx1"
@@ -6190,12 +6190,12 @@ delete from xx1 using (select * from int4_tbl where f1 = x1) ss;
 ERROR:  column "x1" does not exist
 LINE 1: ...te from xx1 using (select * from int4_tbl where f1 = x1) ss;
                                                                 ^
-HINT:  There is a column named "x1" in table "xx1", but it cannot be referenced from this part of the query.
+DETAIL:  There is a column named "x1" in table "xx1", but it cannot be referenced from this part of the query.
 delete from xx1 using (select * from int4_tbl where f1 = xx1.x1) ss;
 ERROR:  invalid reference to FROM-clause entry for table "xx1"
 LINE 1: ...from xx1 using (select * from int4_tbl where f1 = xx1.x1) ss...
                                                              ^
-HINT:  There is an entry for table "xx1", but it cannot be referenced from this part of the query.
+DETAIL:  There is an entry for table "xx1", but it cannot be referenced from this part of the query.
 delete from xx1 using lateral (select * from int4_tbl where f1 = x1) ss;
 ERROR:  invalid reference to FROM-clause entry for table "xx1"
 LINE 1: ...xx1 using lateral (select * from int4_tbl where f1 = x1) ss;
@@ -6656,7 +6656,7 @@ where j1.id1 % 1000 = 1 and j2.id1 % 1000 = 1;
                         QUERY PLAN                        
 ----------------------------------------------------------
  Nested Loop
-   Join Filter: ((j1.id1 = j2.id1) AND (j1.id2 = j2.id2))
+   Join Filter: ((j2.id1 = j1.id1) AND (j2.id2 = j1.id2))
    ->  Seq Scan on j1
          Filter: ((id1 % 1000) = 1)
    ->  Seq Scan on j2
@@ -6680,7 +6680,7 @@ where j1.id1 % 1000 = 1 and j2.id1 % 1000 = 1 and j2.id1 = any (array[1]);
                                QUERY PLAN                                
 -------------------------------------------------------------------------
  Nested Loop
-   Join Filter: ((j1.id1 = j2.id1) AND (j1.id2 = j2.id2))
+   Join Filter: ((j2.id1 = j1.id1) AND (j2.id2 = j1.id2))
    ->  Seq Scan on j1
          Filter: ((id1 = ANY ('{1}'::integer[])) AND ((id1 % 1000) = 1))
    ->  Seq Scan on j2
@@ -6704,7 +6704,7 @@ where j1.id1 % 1000 = 1 and j2.id1 % 1000 = 1 and j2.id1 >= any (array[1,5]);
                                  QUERY PLAN                                 
 ----------------------------------------------------------------------------
  Nested Loop
-   Join Filter: ((j1.id1 = j2.id1) AND (j1.id2 = j2.id2))
+   Join Filter: ((j2.id1 = j1.id1) AND (j2.id2 = j1.id2))
    ->  Seq Scan on j1
          Filter: ((id1 >= ANY ('{1,5}'::integer[])) AND ((id1 % 1000) = 1))
    ->  Seq Scan on j2
