@@ -1,11 +1,10 @@
 --
 -- PARALLEL
+-- We have CBDB style parallel now, open this file in parallel mode.
 --
 
--- GPDB_96_MERGE_FIXME: We don't support parallel query. These tests won't actually
--- generate any parallel plans. Should we pay attention to the parallel restrictions
--- when creating MPP plans? For example, should we force parallel restricted functions
--- to run in the QD?
+set enable_parallel = on;
+set optimizer = off;
 
 create function sp_parallel_restricted(int) returns int as
   $$begin return $1; end$$ language plpgsql parallel restricted;
@@ -242,7 +241,10 @@ begin
     end loop;
 end;
 $$;
+-- test sort stats plan, disable parallel
+set max_parallel_workers_per_gather = 0;
 select * from explain_parallel_sort_stats();
+reset max_parallel_workers_per_gather;
 
 reset enable_indexscan;
 reset enable_hashjoin;
@@ -350,7 +352,7 @@ reset parallel_leader_participation;
 reset max_parallel_workers;
 
 SAVEPOINT settings;
-SET LOCAL force_parallel_mode = 1;
+SET LOCAL debug_parallel_query = 1;
 explain (costs off)
   select stringu1::int2 from tenk1 where unique1 = 1;
 ROLLBACK TO SAVEPOINT settings;
@@ -370,7 +372,7 @@ BEGIN
 END;
 $$;
 SAVEPOINT settings;
-SET LOCAL force_parallel_mode = 1;
+SET LOCAL debug_parallel_query = 1;
 SELECT make_record(x) FROM (SELECT generate_series(1, 5) x) ss ORDER BY x;
 ROLLBACK TO SAVEPOINT settings;
 DROP function make_record(n int);
@@ -381,9 +383,9 @@ create role regress_parallel_worker;
 set role regress_parallel_worker;
 reset session authorization;
 drop role regress_parallel_worker;
-set force_parallel_mode = 1;
+set debug_parallel_query = 1;
 select count(*) from tenk1;
-reset force_parallel_mode;
+reset debug_parallel_query;
 reset role;
 
 -- Window function calculation can't be pushed to workers.
@@ -399,14 +401,15 @@ explain (costs off)
 
 -- to increase the parallel query test coverage
 SAVEPOINT settings;
-SET LOCAL force_parallel_mode = 1;
-EXPLAIN (analyze, timing off, summary off, costs off) SELECT * FROM tenk1;
+SET LOCAL debug_parallel_query = 1;
+-- CBDB_PARALLEL_FIXME: analyze actual rows may be different by running multiple times.
+EXPLAIN (timing off, summary off, costs off) SELECT * FROM tenk1;
 ROLLBACK TO SAVEPOINT settings;
 
 -- provoke error in worker
 -- (make the error message long enough to require multiple bufferloads)
 SAVEPOINT settings;
-SET LOCAL force_parallel_mode = 1;
+SET LOCAL debug_parallel_query = 1;
 select (stringu1 || repeat('abcd', 5000))::int2 from tenk1 where unique1 = 1;
 ROLLBACK TO SAVEPOINT settings;
 
@@ -439,6 +442,12 @@ EXPLAIN (VERBOSE, COSTS OFF)
 SELECT generate_series(1, two), array(select generate_series(1, two))
   FROM tenk1 ORDER BY tenthous;
 
+-- must disallow pushing sort below gather when pathkey contains an SRF
+EXPLAIN (VERBOSE, COSTS OFF)
+SELECT unnest(ARRAY[]::integer[]) + 1 AS pathkey
+  FROM tenk1 t1 JOIN tenk1 t2 ON TRUE
+  ORDER BY pathkey;
+
 -- test passing expanded-value representations to workers
 CREATE FUNCTION make_some_array(int,int) returns int[] as
 $$declare x int[];
@@ -463,3 +472,59 @@ SELECT 1 FROM tenk1_vw_sec
 
 rollback;
 
+-- test that function option SET ROLE works in parallel workers.
+create role regress_parallel_worker;
+
+create function set_and_report_role() returns text as
+  $$ select current_setting('role') $$ language sql parallel safe
+  set role = regress_parallel_worker;
+
+create function set_role_and_error(int) returns int as
+  $$ select 1 / $1 $$ language sql parallel safe
+  set role = regress_parallel_worker;
+
+set debug_parallel_query = 0;
+select set_and_report_role();
+select set_role_and_error(0);
+set debug_parallel_query = 1;
+select set_and_report_role();
+select set_role_and_error(0);
+reset debug_parallel_query;
+
+drop function set_and_report_role();
+drop function set_role_and_error(int);
+drop role regress_parallel_worker;
+
+-- don't freeze in ParallelFinish while holding an LWLock
+BEGIN;
+
+CREATE FUNCTION my_cmp (int4, int4)
+RETURNS int LANGUAGE sql AS
+$$
+	SELECT
+		CASE WHEN $1 < $2 THEN -1
+				WHEN $1 > $2 THEN  1
+				ELSE 0
+		END;
+$$;
+
+CREATE TABLE parallel_hang (i int4);
+INSERT INTO parallel_hang
+	(SELECT * FROM generate_series(1, 400) gs);
+
+CREATE OPERATOR CLASS int4_custom_ops FOR TYPE int4 USING btree AS
+	OPERATOR 1 < (int4, int4), OPERATOR 2 <= (int4, int4),
+	OPERATOR 3 = (int4, int4), OPERATOR 4 >= (int4, int4),
+	OPERATOR 5 > (int4, int4), FUNCTION 1 my_cmp(int4, int4);
+
+CREATE UNIQUE INDEX parallel_hang_idx
+					ON parallel_hang
+					USING btree (i int4_custom_ops);
+
+SET debug_parallel_query = on;
+DELETE FROM parallel_hang WHERE 380 <= i AND i <= 420;
+
+ROLLBACK;
+
+reset enable_parallel;
+reset optimizer;

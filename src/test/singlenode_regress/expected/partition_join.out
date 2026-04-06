@@ -480,33 +480,45 @@ EXPLAIN (COSTS OFF)
 SELECT a, b FROM prt1 FULL JOIN prt2 p2(b,a,c) USING(a,b)
   WHERE a BETWEEN 490 AND 510
   GROUP BY 1, 2 ORDER BY 1, 2;
-                                                QUERY PLAN                                                 
------------------------------------------------------------------------------------------------------------
- GroupAggregate
+                                                      QUERY PLAN                                                       
+-----------------------------------------------------------------------------------------------------------------------
+ Finalize GroupAggregate
    Group Key: (COALESCE(prt1.a, p2.a)), (COALESCE(prt1.b, p2.b))
    ->  Sort
          Sort Key: (COALESCE(prt1.a, p2.a)), (COALESCE(prt1.b, p2.b))
          ->  Append
-               ->  Hash Full Join
-                     Hash Cond: ((prt1_1.a = p2_1.a) AND (prt1_1.b = p2_1.b))
-                     Filter: ((COALESCE(prt1_1.a, p2_1.a) >= 490) AND (COALESCE(prt1_1.a, p2_1.a) <= 510))
-                     ->  Seq Scan on prt1_p1 prt1_1
-                     ->  Hash
-                           ->  Seq Scan on prt2_p1 p2_1
-               ->  Hash Full Join
-                     Hash Cond: ((prt1_2.a = p2_2.a) AND (prt1_2.b = p2_2.b))
-                     Filter: ((COALESCE(prt1_2.a, p2_2.a) >= 490) AND (COALESCE(prt1_2.a, p2_2.a) <= 510))
-                     ->  Seq Scan on prt1_p2 prt1_2
-                     ->  Hash
-                           ->  Seq Scan on prt2_p2 p2_2
-               ->  Hash Full Join
-                     Hash Cond: ((prt1_3.a = p2_3.a) AND (prt1_3.b = p2_3.b))
-                     Filter: ((COALESCE(prt1_3.a, p2_3.a) >= 490) AND (COALESCE(prt1_3.a, p2_3.a) <= 510))
-                     ->  Seq Scan on prt1_p3 prt1_3
-                     ->  Hash
-                           ->  Seq Scan on prt2_p3 p2_3
+               ->  Partial GroupAggregate
+                     Group Key: (COALESCE(prt1.a, p2.a)), (COALESCE(prt1.b, p2.b))
+                     ->  Sort
+                           Sort Key: (COALESCE(prt1.a, p2.a)), (COALESCE(prt1.b, p2.b))
+                           ->  Hash Full Join
+                                 Hash Cond: ((prt1.a = p2.a) AND (prt1.b = p2.b))
+                                 Filter: ((COALESCE(prt1.a, p2.a) >= 490) AND (COALESCE(prt1.a, p2.a) <= 510))
+                                 ->  Seq Scan on prt1_p1 prt1
+                                 ->  Hash
+                                       ->  Seq Scan on prt2_p1 p2
+               ->  Partial GroupAggregate
+                     Group Key: (COALESCE(prt1_1.a, p2_1.a)), (COALESCE(prt1_1.b, p2_1.b))
+                     ->  Sort
+                           Sort Key: (COALESCE(prt1_1.a, p2_1.a)), (COALESCE(prt1_1.b, p2_1.b))
+                           ->  Hash Full Join
+                                 Hash Cond: ((prt1_1.a = p2_1.a) AND (prt1_1.b = p2_1.b))
+                                 Filter: ((COALESCE(prt1_1.a, p2_1.a) >= 490) AND (COALESCE(prt1_1.a, p2_1.a) <= 510))
+                                 ->  Seq Scan on prt1_p2 prt1_1
+                                 ->  Hash
+                                       ->  Seq Scan on prt2_p2 p2_1
+               ->  Partial GroupAggregate
+                     Group Key: (COALESCE(prt1_2.a, p2_2.a)), (COALESCE(prt1_2.b, p2_2.b))
+                     ->  Sort
+                           Sort Key: (COALESCE(prt1_2.a, p2_2.a)), (COALESCE(prt1_2.b, p2_2.b))
+                           ->  Hash Full Join
+                                 Hash Cond: ((prt1_2.a = p2_2.a) AND (prt1_2.b = p2_2.b))
+                                 Filter: ((COALESCE(prt1_2.a, p2_2.a) >= 490) AND (COALESCE(prt1_2.a, p2_2.a) <= 510))
+                                 ->  Seq Scan on prt1_p3 prt1_2
+                                 ->  Hash
+                                       ->  Seq Scan on prt2_p3 p2_2
  Optimizer: Postgres query optimizer
-(24 rows)
+(36 rows)
 
 SELECT a, b FROM prt1 FULL JOIN prt2 p2(b,a,c) USING(a,b)
   WHERE a BETWEEN 490 AND 510
@@ -1336,7 +1348,7 @@ SELECT avg(t1.a), avg(t2.b), avg(t3.a + t3.b), t1.c, t2.c, t3.c FROM plt1 t1, pl
                                       QUERY PLAN                                      
 --------------------------------------------------------------------------------------
  GroupAggregate
-   Group Key: t1.c, t2.c, t3.c
+   Group Key: t1.c, t3.c
    ->  Sort
          Sort Key: t1.c, t3.c
          ->  Append
@@ -1485,7 +1497,7 @@ SELECT avg(t1.a), avg(t2.b), avg(t3.a + t3.b), t1.c, t2.c, t3.c FROM pht1 t1, ph
                                       QUERY PLAN                                      
 --------------------------------------------------------------------------------------
  GroupAggregate
-   Group Key: t1.c, t2.c, t3.c
+   Group Key: t1.c, t3.c
    ->  Sort
          Sort Key: t1.c, t3.c
          ->  Append
@@ -1579,7 +1591,7 @@ SELECT avg(t1.a), avg(t2.b), t1.c, t2.c FROM plt1 t1 RIGHT JOIN plt2 t2 ON t1.c 
  Sort
    Sort Key: t1.c
    ->  HashAggregate
-         Group Key: t1.c, t2.c
+         Group Key: t1.c
          ->  Append
                ->  Hash Join
                      Hash Cond: (t2_1.c = t1_1.c)
@@ -2245,20 +2257,20 @@ where not exists (select 1 from prtx2
                                 QUERY PLAN                                
 --------------------------------------------------------------------------
  Append
-   ->  Hash Anti Join
-         Hash Cond: (prtx1_1.a = prtx2_1.a)
+   ->  Hash Right Anti Join
+         Hash Cond: (prtx2_1.a = prtx1_1.a)
          Join Filter: ((prtx2_1.b = (prtx1_1.b + 1)) OR (prtx2_1.c = 99))
-         ->  Seq Scan on prtx1_1
-               Filter: ((a < 20) AND (c = 91))
+         ->  Seq Scan on prtx2_1
          ->  Hash
-               ->  Seq Scan on prtx2_1
-   ->  Hash Anti Join
-         Hash Cond: (prtx1_2.a = prtx2_2.a)
+               ->  Seq Scan on prtx1_1
+                     Filter: ((a < 20) AND (c = 91))
+   ->  Hash Right Anti Join
+         Hash Cond: (prtx2_2.a = prtx1_2.a)
          Join Filter: ((prtx2_2.b = (prtx1_2.b + 1)) OR (prtx2_2.c = 99))
-         ->  Seq Scan on prtx1_2
-               Filter: ((a < 20) AND (c = 91))
+         ->  Seq Scan on prtx2_2
          ->  Hash
-               ->  Seq Scan on prtx2_2
+               ->  Seq Scan on prtx1_2
+                     Filter: ((a < 20) AND (c = 91))
  Optimizer: Postgres query optimizer
 (16 rows)
 
@@ -2670,24 +2682,24 @@ SELECT t1.* FROM prt1_adv t1 WHERE NOT EXISTS (SELECT 1 FROM prt2_adv t2 WHERE t
  Sort
    Sort Key: t1.a
    ->  Append
-         ->  Hash Anti Join
-               Hash Cond: (t1_1.a = t2_1.b)
-               ->  Seq Scan on prt1_adv_p1 t1_1
-                     Filter: (b = 0)
+         ->  Hash Right Anti Join
+               Hash Cond: (t2_1.b = t1_1.a)
+               ->  Seq Scan on prt2_adv_p1 t2_1
                ->  Hash
-                     ->  Seq Scan on prt2_adv_p1 t2_1
-         ->  Hash Anti Join
-               Hash Cond: (t1_2.a = t2_2.b)
-               ->  Seq Scan on prt1_adv_p2 t1_2
-                     Filter: (b = 0)
+                     ->  Seq Scan on prt1_adv_p1 t1_1
+                           Filter: (b = 0)
+         ->  Hash Right Anti Join
+               Hash Cond: (t2_2.b = t1_2.a)
+               ->  Seq Scan on prt2_adv_p2 t2_2
                ->  Hash
-                     ->  Seq Scan on prt2_adv_p2 t2_2
-         ->  Hash Anti Join
-               Hash Cond: (t1_3.a = t2_3.b)
-               ->  Seq Scan on prt1_adv_p3 t1_3
-                     Filter: (b = 0)
+                     ->  Seq Scan on prt1_adv_p2 t1_2
+                           Filter: (b = 0)
+         ->  Hash Right Anti Join
+               Hash Cond: (t2_3.b = t1_3.a)
+               ->  Seq Scan on prt2_adv_p3 t2_3
                ->  Hash
-                     ->  Seq Scan on prt2_adv_p3 t2_3
+                     ->  Seq Scan on prt1_adv_p3 t1_3
+                           Filter: (b = 0)
  Optimizer: Postgres query optimizer
 (22 rows)
 
@@ -2704,26 +2716,26 @@ SELECT t1.* FROM prt1_adv t1 WHERE NOT EXISTS (SELECT 1 FROM prt2_adv t2 WHERE t
 -- partitions on the nullable side
 EXPLAIN (COSTS OFF)
 SELECT t1.* FROM prt2_adv t1 WHERE NOT EXISTS (SELECT 1 FROM prt1_adv t2 WHERE t1.b = t2.a) AND t1.a = 0 ORDER BY t1.b;
-                      QUERY PLAN                      
-------------------------------------------------------
+                       QUERY PLAN                        
+---------------------------------------------------------
  Sort
    Sort Key: t1.b
-   ->  Hash Anti Join
-         Hash Cond: (t1.b = t2.a)
+   ->  Hash Right Anti Join
+         Hash Cond: (t2.a = t1.b)
          ->  Append
-               ->  Seq Scan on prt2_adv_p1 t1_1
-                     Filter: (a = 0)
-               ->  Seq Scan on prt2_adv_p2 t1_2
-                     Filter: (a = 0)
-               ->  Seq Scan on prt2_adv_p3 t1_3
-                     Filter: (a = 0)
-               ->  Seq Scan on prt2_adv_extra t1_4
-                     Filter: (a = 0)
+               ->  Seq Scan on prt1_adv_p1 t2_1
+               ->  Seq Scan on prt1_adv_p2 t2_2
+               ->  Seq Scan on prt1_adv_p3 t2_3
          ->  Hash
                ->  Append
-                     ->  Seq Scan on prt1_adv_p1 t2_1
-                     ->  Seq Scan on prt1_adv_p2 t2_2
-                     ->  Seq Scan on prt1_adv_p3 t2_3
+                     ->  Seq Scan on prt2_adv_p1 t1_1
+                           Filter: (a = 0)
+                     ->  Seq Scan on prt2_adv_p2 t1_2
+                           Filter: (a = 0)
+                     ->  Seq Scan on prt2_adv_p3 t1_3
+                           Filter: (a = 0)
+                     ->  Seq Scan on prt2_adv_extra t1_4
+                           Filter: (a = 0)
  Optimizer: Postgres query optimizer
 (19 rows)
 
@@ -2899,25 +2911,25 @@ SELECT t1.a, t1.c, t2.b, t2.c FROM prt1_adv t1 LEFT JOIN prt2_adv t2 ON (t1.a = 
 -- anti join
 EXPLAIN (COSTS OFF)
 SELECT t1.* FROM prt1_adv t1 WHERE NOT EXISTS (SELECT 1 FROM prt2_adv t2 WHERE t1.a = t2.b) AND t1.b = 0 ORDER BY t1.a;
-                       QUERY PLAN                       
---------------------------------------------------------
+                      QUERY PLAN                      
+------------------------------------------------------
  Sort
    Sort Key: t1.a
-   ->  Hash Anti Join
-         Hash Cond: (t1.a = t2.b)
+   ->  Hash Right Anti Join
+         Hash Cond: (t2.b = t1.a)
          ->  Append
-               ->  Seq Scan on prt1_adv_p1 t1_1
-                     Filter: (b = 0)
-               ->  Seq Scan on prt1_adv_p2 t1_2
-                     Filter: (b = 0)
-               ->  Seq Scan on prt1_adv_p3 t1_3
-                     Filter: (b = 0)
+               ->  Seq Scan on prt2_adv_p1 t2_1
+               ->  Seq Scan on prt2_adv_p2 t2_2
+               ->  Seq Scan on prt2_adv_p3_1 t2_3
+               ->  Seq Scan on prt2_adv_p3_2 t2_4
          ->  Hash
                ->  Append
-                     ->  Seq Scan on prt2_adv_p1 t2_1
-                     ->  Seq Scan on prt2_adv_p2 t2_2
-                     ->  Seq Scan on prt2_adv_p3_1 t2_3
-                     ->  Seq Scan on prt2_adv_p3_2 t2_4
+                     ->  Seq Scan on prt1_adv_p1 t1_1
+                           Filter: (b = 0)
+                     ->  Seq Scan on prt1_adv_p2 t1_2
+                           Filter: (b = 0)
+                     ->  Seq Scan on prt1_adv_p3 t1_3
+                           Filter: (b = 0)
  Optimizer: Postgres query optimizer
 (18 rows)
 
@@ -3344,24 +3356,24 @@ SELECT t1.* FROM plt1_adv t1 WHERE NOT EXISTS (SELECT 1 FROM plt2_adv t2 WHERE t
  Sort
    Sort Key: t1.a
    ->  Append
-         ->  Hash Anti Join
-               Hash Cond: ((t1_1.a = t2_1.a) AND (t1_1.c = t2_1.c))
-               ->  Seq Scan on plt1_adv_p1 t1_1
-                     Filter: (b < 10)
+         ->  Hash Right Anti Join
+               Hash Cond: ((t2_1.a = t1_1.a) AND (t2_1.c = t1_1.c))
+               ->  Seq Scan on plt2_adv_p1 t2_1
                ->  Hash
-                     ->  Seq Scan on plt2_adv_p1 t2_1
-         ->  Hash Anti Join
-               Hash Cond: ((t1_2.a = t2_2.a) AND (t1_2.c = t2_2.c))
-               ->  Seq Scan on plt1_adv_p2 t1_2
-                     Filter: (b < 10)
+                     ->  Seq Scan on plt1_adv_p1 t1_1
+                           Filter: (b < 10)
+         ->  Hash Right Anti Join
+               Hash Cond: ((t2_2.a = t1_2.a) AND (t2_2.c = t1_2.c))
+               ->  Seq Scan on plt2_adv_p2 t2_2
                ->  Hash
-                     ->  Seq Scan on plt2_adv_p2 t2_2
-         ->  Hash Anti Join
-               Hash Cond: ((t1_3.a = t2_3.a) AND (t1_3.c = t2_3.c))
-               ->  Seq Scan on plt1_adv_p3 t1_3
-                     Filter: (b < 10)
+                     ->  Seq Scan on plt1_adv_p2 t1_2
+                           Filter: (b < 10)
+         ->  Hash Right Anti Join
+               Hash Cond: ((t2_3.a = t1_3.a) AND (t2_3.c = t1_3.c))
+               ->  Seq Scan on plt2_adv_p3 t2_3
                ->  Hash
-                     ->  Seq Scan on plt2_adv_p3 t2_3
+                     ->  Seq Scan on plt1_adv_p3 t1_3
+                           Filter: (b < 10)
  Optimizer: Postgres query optimizer
 (22 rows)
 
@@ -3569,24 +3581,24 @@ SELECT t1.* FROM plt1_adv t1 WHERE NOT EXISTS (SELECT 1 FROM plt2_adv t2 WHERE t
  Sort
    Sort Key: t1.a
    ->  Append
-         ->  Hash Anti Join
-               Hash Cond: ((t1_1.a = t2_1.a) AND (t1_1.c = t2_1.c))
-               ->  Seq Scan on plt1_adv_p1 t1_1
-                     Filter: (b < 10)
+         ->  Hash Right Anti Join
+               Hash Cond: ((t2_1.a = t1_1.a) AND (t2_1.c = t1_1.c))
+               ->  Seq Scan on plt2_adv_p1 t2_1
                ->  Hash
-                     ->  Seq Scan on plt2_adv_p1 t2_1
-         ->  Hash Anti Join
-               Hash Cond: ((t1_2.a = t2_2.a) AND (t1_2.c = t2_2.c))
-               ->  Seq Scan on plt1_adv_p2 t1_2
-                     Filter: (b < 10)
+                     ->  Seq Scan on plt1_adv_p1 t1_1
+                           Filter: (b < 10)
+         ->  Hash Right Anti Join
+               Hash Cond: ((t2_2.a = t1_2.a) AND (t2_2.c = t1_2.c))
+               ->  Seq Scan on plt2_adv_p2 t2_2
                ->  Hash
-                     ->  Seq Scan on plt2_adv_p2 t2_2
-         ->  Hash Anti Join
-               Hash Cond: ((t1_3.a = t2_3.a) AND (t1_3.c = t2_3.c))
-               ->  Seq Scan on plt1_adv_p3 t1_3
-                     Filter: (b < 10)
+                     ->  Seq Scan on plt1_adv_p2 t1_2
+                           Filter: (b < 10)
+         ->  Hash Right Anti Join
+               Hash Cond: ((t2_3.a = t1_3.a) AND (t2_3.c = t1_3.c))
+               ->  Seq Scan on plt2_adv_p3 t2_3
                ->  Hash
-                     ->  Seq Scan on plt2_adv_p3 t2_3
+                     ->  Seq Scan on plt1_adv_p3 t1_3
+                           Filter: (b < 10)
  Optimizer: Postgres query optimizer
 (22 rows)
 
@@ -3601,26 +3613,26 @@ SELECT t1.* FROM plt1_adv t1 WHERE NOT EXISTS (SELECT 1 FROM plt2_adv t2 WHERE t
 -- partitions on the nullable side
 EXPLAIN (COSTS OFF)
 SELECT t1.* FROM plt2_adv t1 WHERE NOT EXISTS (SELECT 1 FROM plt1_adv t2 WHERE t1.a = t2.a AND t1.c = t2.c) AND t1.b < 10 ORDER BY t1.a;
-                      QUERY PLAN                      
-------------------------------------------------------
+                       QUERY PLAN                        
+---------------------------------------------------------
  Sort
    Sort Key: t1.a
-   ->  Hash Anti Join
-         Hash Cond: ((t1.a = t2.a) AND (t1.c = t2.c))
+   ->  Hash Right Anti Join
+         Hash Cond: ((t2.a = t1.a) AND (t2.c = t1.c))
          ->  Append
-               ->  Seq Scan on plt2_adv_extra t1_1
-                     Filter: (b < 10)
-               ->  Seq Scan on plt2_adv_p1 t1_2
-                     Filter: (b < 10)
-               ->  Seq Scan on plt2_adv_p2 t1_3
-                     Filter: (b < 10)
-               ->  Seq Scan on plt2_adv_p3 t1_4
-                     Filter: (b < 10)
+               ->  Seq Scan on plt1_adv_p1 t2_1
+               ->  Seq Scan on plt1_adv_p2 t2_2
+               ->  Seq Scan on plt1_adv_p3 t2_3
          ->  Hash
                ->  Append
-                     ->  Seq Scan on plt1_adv_p1 t2_1
-                     ->  Seq Scan on plt1_adv_p2 t2_2
-                     ->  Seq Scan on plt1_adv_p3 t2_3
+                     ->  Seq Scan on plt2_adv_extra t1_1
+                           Filter: (b < 10)
+                     ->  Seq Scan on plt2_adv_p1 t1_2
+                           Filter: (b < 10)
+                     ->  Seq Scan on plt2_adv_p2 t1_3
+                           Filter: (b < 10)
+                     ->  Seq Scan on plt2_adv_p3 t1_4
+                           Filter: (b < 10)
  Optimizer: Postgres query optimizer
 (19 rows)
 
@@ -3735,25 +3747,25 @@ SELECT t1.a, t1.c, t2.a, t2.c FROM plt1_adv t1 LEFT JOIN plt2_adv t2 ON (t1.a = 
 -- anti join
 EXPLAIN (COSTS OFF)
 SELECT t1.* FROM plt1_adv t1 WHERE NOT EXISTS (SELECT 1 FROM plt2_adv t2 WHERE t1.a = t2.a AND t1.c = t2.c) AND t1.b < 10 ORDER BY t1.a;
-                       QUERY PLAN                       
---------------------------------------------------------
+                      QUERY PLAN                      
+------------------------------------------------------
  Sort
    Sort Key: t1.a
-   ->  Hash Anti Join
-         Hash Cond: ((t1.a = t2.a) AND (t1.c = t2.c))
+   ->  Hash Right Anti Join
+         Hash Cond: ((t2.a = t1.a) AND (t2.c = t1.c))
          ->  Append
-               ->  Seq Scan on plt1_adv_p1 t1_1
-                     Filter: (b < 10)
-               ->  Seq Scan on plt1_adv_p2 t1_2
-                     Filter: (b < 10)
-               ->  Seq Scan on plt1_adv_p3 t1_3
-                     Filter: (b < 10)
+               ->  Seq Scan on plt2_adv_p1 t2_1
+               ->  Seq Scan on plt2_adv_p2_1 t2_2
+               ->  Seq Scan on plt2_adv_p2_2 t2_3
+               ->  Seq Scan on plt2_adv_p3 t2_4
          ->  Hash
                ->  Append
-                     ->  Seq Scan on plt2_adv_p1 t2_1
-                     ->  Seq Scan on plt2_adv_p2_1 t2_2
-                     ->  Seq Scan on plt2_adv_p2_2 t2_3
-                     ->  Seq Scan on plt2_adv_p3 t2_4
+                     ->  Seq Scan on plt1_adv_p1 t1_1
+                           Filter: (b < 10)
+                     ->  Seq Scan on plt1_adv_p2 t1_2
+                           Filter: (b < 10)
+                     ->  Seq Scan on plt1_adv_p3 t1_3
+                           Filter: (b < 10)
  Optimizer: Postgres query optimizer
 (18 rows)
 
@@ -3922,24 +3934,24 @@ SELECT t1.* FROM plt1_adv t1 WHERE NOT EXISTS (SELECT 1 FROM plt2_adv t2 WHERE t
  Sort
    Sort Key: t1.a
    ->  Append
-         ->  Hash Anti Join
-               Hash Cond: ((t1_1.a = t2_1.a) AND (t1_1.c = t2_1.c))
-               ->  Seq Scan on plt1_adv_p1_null t1_1
-                     Filter: (b < 10)
+         ->  Hash Right Anti Join
+               Hash Cond: ((t2_1.a = t1_1.a) AND (t2_1.c = t1_1.c))
+               ->  Seq Scan on plt2_adv_p1 t2_1
                ->  Hash
-                     ->  Seq Scan on plt2_adv_p1 t2_1
-         ->  Hash Anti Join
-               Hash Cond: ((t1_2.a = t2_2.a) AND (t1_2.c = t2_2.c))
-               ->  Seq Scan on plt1_adv_p2 t1_2
-                     Filter: (b < 10)
+                     ->  Seq Scan on plt1_adv_p1_null t1_1
+                           Filter: (b < 10)
+         ->  Hash Right Anti Join
+               Hash Cond: ((t2_2.a = t1_2.a) AND (t2_2.c = t1_2.c))
+               ->  Seq Scan on plt2_adv_p2 t2_2
                ->  Hash
-                     ->  Seq Scan on plt2_adv_p2 t2_2
-         ->  Hash Anti Join
-               Hash Cond: ((t1_3.a = t2_3.a) AND (t1_3.c = t2_3.c))
-               ->  Seq Scan on plt1_adv_p3 t1_3
-                     Filter: (b < 10)
+                     ->  Seq Scan on plt1_adv_p2 t1_2
+                           Filter: (b < 10)
+         ->  Hash Right Anti Join
+               Hash Cond: ((t2_3.a = t1_3.a) AND (t2_3.c = t1_3.c))
+               ->  Seq Scan on plt2_adv_p3_null t2_3
                ->  Hash
-                     ->  Seq Scan on plt2_adv_p3_null t2_3
+                     ->  Seq Scan on plt1_adv_p3 t1_3
+                           Filter: (b < 10)
  Optimizer: Postgres query optimizer
 (22 rows)
 

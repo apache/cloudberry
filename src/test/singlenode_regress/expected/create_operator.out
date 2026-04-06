@@ -214,7 +214,7 @@ CREATE OPERATOR #*# (
    rightarg = int8,
    procedure = fn_op3
 );
-ERROR:  permission denied for schema public
+ERROR:  permission denied for type type_op3
 ROLLBACK;
 -- Should fail. CREATE OPERATOR requires USAGE on TYPE (need to check separately for rightarg)
 BEGIN TRANSACTION;
@@ -233,7 +233,7 @@ CREATE OPERATOR #*# (
    rightarg = type_op4,
    procedure = fn_op4
 );
-ERROR:  permission denied for schema public
+ERROR:  permission denied for type type_op4
 ROLLBACK;
 -- Should fail. CREATE OPERATOR requires EXECUTE on function
 BEGIN TRANSACTION;
@@ -252,7 +252,7 @@ CREATE OPERATOR #*# (
    rightarg = int8,
    procedure = fn_op5
 );
-ERROR:  permission denied for schema public
+ERROR:  permission denied for function fn_op5
 ROLLBACK;
 -- Should fail. CREATE OPERATOR requires USAGE on return TYPE
 BEGIN TRANSACTION;
@@ -271,7 +271,7 @@ CREATE OPERATOR #*# (
    rightarg = int8,
    procedure = fn_op6
 );
-ERROR:  permission denied for schema public
+ERROR:  permission denied for type type_op6
 ROLLBACK;
 -- invalid: non-lowercase quoted identifiers
 CREATE OPERATOR ===
