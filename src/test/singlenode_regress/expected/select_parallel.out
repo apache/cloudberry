@@ -15,20 +15,18 @@ set max_parallel_workers_per_gather=4;
 -- Parallel Append with partial-subplans
 explain (costs off)
   select round(avg(aa)), sum(aa) from a_star;
-                     QUERY PLAN                      
------------------------------------------------------
- Finalize Aggregate
-   ->  Gather Motion 9:1  (slice1; segments: 9)
-         ->  Partial Aggregate
-               ->  Parallel Append
-                     ->  Seq Scan on d_star a_star_4
-                     ->  Seq Scan on f_star a_star_6
-                     ->  Seq Scan on e_star a_star_5
-                     ->  Seq Scan on b_star a_star_2
-                     ->  Seq Scan on c_star a_star_3
-                     ->  Seq Scan on a_star a_star_1
+               QUERY PLAN                
+-----------------------------------------
+ Aggregate
+   ->  Append
+         ->  Seq Scan on a_star a_star_1
+         ->  Seq Scan on b_star a_star_2
+         ->  Seq Scan on c_star a_star_3
+         ->  Seq Scan on d_star a_star_4
+         ->  Seq Scan on e_star a_star_5
+         ->  Seq Scan on f_star a_star_6
  Optimizer: Postgres query optimizer
-(11 rows)
+(9 rows)
 
 select round(avg(aa)), sum(aa) from a_star a1;
  round | sum 
@@ -41,20 +39,18 @@ alter table c_star set (parallel_workers = 0);
 alter table d_star set (parallel_workers = 0);
 explain (costs off)
   select round(avg(aa)), sum(aa) from a_star;
-                     QUERY PLAN                      
------------------------------------------------------
- Finalize Aggregate
-   ->  Gather Motion 9:1  (slice1; segments: 9)
-         ->  Partial Aggregate
-               ->  Parallel Append
-                     ->  Seq Scan on d_star a_star_4
-                     ->  Seq Scan on f_star a_star_6
-                     ->  Seq Scan on e_star a_star_5
-                     ->  Seq Scan on b_star a_star_2
-                     ->  Seq Scan on c_star a_star_3
-                     ->  Seq Scan on a_star a_star_1
+               QUERY PLAN                
+-----------------------------------------
+ Aggregate
+   ->  Append
+         ->  Seq Scan on a_star a_star_1
+         ->  Seq Scan on b_star a_star_2
+         ->  Seq Scan on c_star a_star_3
+         ->  Seq Scan on d_star a_star_4
+         ->  Seq Scan on e_star a_star_5
+         ->  Seq Scan on f_star a_star_6
  Optimizer: Postgres query optimizer
-(11 rows)
+(9 rows)
 
 select round(avg(aa)), sum(aa) from a_star a2;
  round | sum 
@@ -69,20 +65,18 @@ alter table e_star set (parallel_workers = 0);
 alter table f_star set (parallel_workers = 0);
 explain (costs off)
   select round(avg(aa)), sum(aa) from a_star;
-                     QUERY PLAN                      
------------------------------------------------------
- Finalize Aggregate
-   ->  Gather Motion 9:1  (slice1; segments: 9)
-         ->  Partial Aggregate
-               ->  Parallel Append
-                     ->  Seq Scan on d_star a_star_4
-                     ->  Seq Scan on f_star a_star_6
-                     ->  Seq Scan on e_star a_star_5
-                     ->  Seq Scan on b_star a_star_2
-                     ->  Seq Scan on c_star a_star_3
-                     ->  Seq Scan on a_star a_star_1
+               QUERY PLAN                
+-----------------------------------------
+ Aggregate
+   ->  Append
+         ->  Seq Scan on a_star a_star_1
+         ->  Seq Scan on b_star a_star_2
+         ->  Seq Scan on c_star a_star_3
+         ->  Seq Scan on d_star a_star_4
+         ->  Seq Scan on e_star a_star_5
+         ->  Seq Scan on f_star a_star_6
  Optimizer: Postgres query optimizer
-(11 rows)
+(9 rows)
 
 select round(avg(aa)), sum(aa) from a_star a3;
  round | sum 
@@ -100,20 +94,18 @@ alter table f_star reset (parallel_workers);
 set enable_parallel_append to off;
 explain (costs off)
   select round(avg(aa)), sum(aa) from a_star;
-                     QUERY PLAN                      
------------------------------------------------------
- Finalize Aggregate
-   ->  Gather Motion 3:1  (slice1; segments: 3)
-         ->  Partial Aggregate
-               ->  Append
-                     ->  Seq Scan on a_star a_star_1
-                     ->  Seq Scan on b_star a_star_2
-                     ->  Seq Scan on c_star a_star_3
-                     ->  Seq Scan on d_star a_star_4
-                     ->  Seq Scan on e_star a_star_5
-                     ->  Seq Scan on f_star a_star_6
+               QUERY PLAN                
+-----------------------------------------
+ Aggregate
+   ->  Append
+         ->  Seq Scan on a_star a_star_1
+         ->  Seq Scan on b_star a_star_2
+         ->  Seq Scan on c_star a_star_3
+         ->  Seq Scan on d_star a_star_4
+         ->  Seq Scan on e_star a_star_5
+         ->  Seq Scan on f_star a_star_6
  Optimizer: Postgres query optimizer
-(11 rows)
+(9 rows)
 
 select round(avg(aa)), sum(aa) from a_star a4;
  round | sum 
@@ -135,50 +127,41 @@ select sp_test_func() order by 1;
 
 -- Parallel Append is not to be used when the subpath depends on the outer param
 create table part_pa_test(a int, b int) partition by range(a);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table part_pa_test_p1 partition of part_pa_test for values from (minvalue) to (0);
-NOTICE:  table has parent, setting distribution columns to match parent table
 create table part_pa_test_p2 partition of part_pa_test for values from (0) to (maxvalue);
 NOTICE:  table has parent, setting distribution columns to match parent table
 explain (costs off)
 	select (select max((select pa1.b from part_pa_test pa1 where pa1.a = pa2.a)))
 	from part_pa_test pa2;
-                                  QUERY PLAN                                   
--------------------------------------------------------------------------------
- Finalize Aggregate
-   ->  Gather Motion 3:1  (slice1; segments: 3)
-         ->  Partial Aggregate
-               ->  Append
-                     ->  Seq Scan on part_pa_test_p1 pa2_1
-                     ->  Seq Scan on part_pa_test_p2 pa2_2
-               SubPlan 1
-                 ->  Result
-                       Filter: (pa1.a = pa2.a)
-                       ->  Materialize
-                             ->  Broadcast Motion 3:3  (slice2; segments: 3)
-                                   ->  Append
-                                         ->  Seq Scan on part_pa_test_p1 pa1_1
-                                         ->  Seq Scan on part_pa_test_p2 pa1_2
+                   QUERY PLAN                    
+-------------------------------------------------
+ Aggregate
+   ->  Append
+         ->  Seq Scan on part_pa_test_p1 pa2_1
+         ->  Seq Scan on part_pa_test_p2 pa2_2
    SubPlan 2
      ->  Result
+   SubPlan 1
+     ->  Append
+           ->  Seq Scan on part_pa_test_p1 pa1_1
+                 Filter: (a = pa2.a)
+           ->  Seq Scan on part_pa_test_p2 pa1_2
+                 Filter: (a = pa2.a)
  Optimizer: Postgres query optimizer
-(17 rows)
+(13 rows)
 
 drop table part_pa_test;
 -- test with leader participation disabled
 set parallel_leader_participation = off;
 explain (costs off)
   select count(*) from tenk1 where stringu1 = 'GRAAAA';
-                       QUERY PLAN                        
----------------------------------------------------------
- Finalize Aggregate
-   ->  Gather Motion 12:1  (slice1; segments: 12)
-         ->  Partial Aggregate
-               ->  Parallel Seq Scan on tenk1
-                     Filter: (stringu1 = 'GRAAAA'::name)
+                 QUERY PLAN                  
+---------------------------------------------
+ Aggregate
+   ->  Seq Scan on tenk1
+         Filter: (stringu1 = 'GRAAAA'::name)
  Optimizer: Postgres query optimizer
-(6 rows)
+(4 rows)
 
 select count(*) from tenk1 where stringu1 = 'GRAAAA';
  count 
@@ -191,15 +174,13 @@ select count(*) from tenk1 where stringu1 = 'GRAAAA';
 set max_parallel_workers = 0;
 explain (costs off)
   select count(*) from tenk1 where stringu1 = 'GRAAAA';
-                       QUERY PLAN                        
----------------------------------------------------------
- Finalize Aggregate
-   ->  Gather Motion 12:1  (slice1; segments: 12)
-         ->  Partial Aggregate
-               ->  Parallel Seq Scan on tenk1
-                     Filter: (stringu1 = 'GRAAAA'::name)
+                 QUERY PLAN                  
+---------------------------------------------
+ Aggregate
+   ->  Seq Scan on tenk1
+         Filter: (stringu1 = 'GRAAAA'::name)
  Optimizer: Postgres query optimizer
-(6 rows)
+(4 rows)
 
 select count(*) from tenk1 where stringu1 = 'GRAAAA';
  count 
@@ -216,33 +197,26 @@ select sp_parallel_restricted(unique1) from tenk1
   where stringu1 = 'GRAAAA' order by 1;
                                                                   QUERY PLAN                                                                   
 -----------------------------------------------------------------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)
+ Sort
    Output: (sp_parallel_restricted(unique1))
-   Merge Key: (sp_parallel_restricted(unique1))
-   ->  Sort
-         Output: (sp_parallel_restricted(unique1))
-         Sort Key: (sp_parallel_restricted(tenk1.unique1))
-         ->  Seq Scan on public.tenk1
-               Output: sp_parallel_restricted(unique1)
-               Filter: (tenk1.stringu1 = 'GRAAAA'::name)
- Settings: enable_parallel = 'on', min_parallel_table_scan_size = '0', optimizer = 'off', parallel_setup_cost = '0', parallel_tuple_cost = '0'
+   Sort Key: (sp_parallel_restricted(tenk1.unique1))
+   ->  Seq Scan on public.tenk1
+         Output: sp_parallel_restricted(unique1)
+         Filter: (tenk1.stringu1 = 'GRAAAA'::name)
+ Settings: optimizer = 'off', enable_parallel = 'on', parallel_setup_cost = '0', parallel_tuple_cost = '0', min_parallel_table_scan_size = '0'
  Optimizer: Postgres query optimizer
-(11 rows)
+(8 rows)
 
 -- test parallel plan when group by expression is in target list.
 explain (costs off)
 	select length(stringu1) from tenk1 group by length(stringu1);
-                          QUERY PLAN                           
----------------------------------------------------------------
- Gather Motion 12:1  (slice1; segments: 12)
-   ->  HashAggregate
-         Group Key: (length((stringu1)::text))
-         ->  Redistribute Motion 12:12  (slice2; segments: 12)
-               Hash Key: (length((stringu1)::text))
-               Hash Module: 3
-               ->  Parallel Seq Scan on tenk1
+              QUERY PLAN               
+---------------------------------------
+ HashAggregate
+   Group Key: length((stringu1)::text)
+   ->  Seq Scan on tenk1
  Optimizer: Postgres query optimizer
-(8 rows)
+(4 rows)
 
 select length(stringu1) from tenk1 group by length(stringu1);
  length 
@@ -252,49 +226,39 @@ select length(stringu1) from tenk1 group by length(stringu1);
 
 explain (costs off)
 	select stringu1, count(*) from tenk1 group by stringu1 order by stringu1;
-                             QUERY PLAN                              
----------------------------------------------------------------------
- Gather Motion 12:1  (slice1; segments: 12)
-   Merge Key: stringu1
-   ->  Sort
-         Sort Key: stringu1
-         ->  HashAggregate
-               Group Key: stringu1
-               ->  Redistribute Motion 12:12  (slice2; segments: 12)
-                     Hash Key: stringu1
-                     Hash Module: 3
-                     ->  Parallel Seq Scan on tenk1
+             QUERY PLAN              
+-------------------------------------
+ Sort
+   Sort Key: stringu1
+   ->  HashAggregate
+         Group Key: stringu1
+         ->  Seq Scan on tenk1
  Optimizer: Postgres query optimizer
-(11 rows)
+(6 rows)
 
 -- test that parallel plan for aggregates is not selected when
 -- target list contains parallel restricted clause.
 explain (costs off)
 	select  sum(sp_parallel_restricted(unique1)) from tenk1
 	group by(sp_parallel_restricted(unique1));
-                         QUERY PLAN                         
-------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)
-   ->  HashAggregate
-         Group Key: (sp_parallel_restricted(unique1))
-         ->  Redistribute Motion 3:3  (slice2; segments: 3)
-               Hash Key: (sp_parallel_restricted(unique1))
-               ->  Seq Scan on tenk1
+                  QUERY PLAN                  
+----------------------------------------------
+ HashAggregate
+   Group Key: sp_parallel_restricted(unique1)
+   ->  Seq Scan on tenk1
  Optimizer: Postgres query optimizer
-(7 rows)
+(4 rows)
 
 -- test prepared statement
 prepare tenk1_count(integer) As select  count((unique1)) from tenk1 where hundred > $1;
 explain (costs off) execute tenk1_count(1);
-                    QUERY PLAN                    
---------------------------------------------------
- Finalize Aggregate
-   ->  Gather Motion 12:1  (slice1; segments: 12)
-         ->  Partial Aggregate
-               ->  Parallel Seq Scan on tenk1
-                     Filter: (hundred > 1)
+             QUERY PLAN              
+-------------------------------------
+ Aggregate
+   ->  Seq Scan on tenk1
+         Filter: (hundred > 1)
  Optimizer: Postgres query optimizer
-(6 rows)
+(4 rows)
 
 execute tenk1_count(1);
  count 
@@ -308,19 +272,17 @@ alter table tenk2 set (parallel_workers = 0);
 explain (costs off)
 	select count(*) from tenk1 where (two, four) not in
 	(select hundred, thousand from tenk2 where thousand > 100);
-                                         QUERY PLAN                                         
---------------------------------------------------------------------------------------------
+                                      QUERY PLAN                                      
+--------------------------------------------------------------------------------------
  Aggregate
-   ->  Gather Motion 12:1  (slice1; segments: 12)
-         ->  Nested Loop Left Anti Semi (Not-In) Join
-               Join Filter: ((tenk1.two = tenk2.hundred) AND (tenk1.four = tenk2.thousand))
-               ->  Parallel Seq Scan on tenk1
-               ->  Materialize
-                     ->  Broadcast Motion 3:12  (slice2; segments: 3)
-                           ->  Seq Scan on tenk2
-                                 Filter: (thousand > 100)
+   ->  Nested Loop Left Anti Semi (Not-In) Join
+         Join Filter: ((tenk1.two = tenk2.hundred) AND (tenk1.four = tenk2.thousand))
+         ->  Seq Scan on tenk1
+         ->  Materialize
+               ->  Seq Scan on tenk2
+                     Filter: (thousand > 100)
  Optimizer: Postgres query optimizer
-(10 rows)
+(8 rows)
 
 select count(*) from tenk1 where (two, four) not in
 	(select hundred, thousand from tenk2 where thousand > 100);
@@ -333,17 +295,15 @@ select count(*) from tenk1 where (two, four) not in
 explain (costs off)
 	select * from tenk1 where (unique1 + random())::integer not in
 	(select ten from tenk2);
-                           QUERY PLAN                            
------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)
-   ->  Seq Scan on tenk1
-         Filter: (SubPlan 1)
-         SubPlan 1
-           ->  Materialize
-                 ->  Broadcast Motion 3:3  (slice2; segments: 3)
-                       ->  Seq Scan on tenk2
+             QUERY PLAN              
+-------------------------------------
+ Seq Scan on tenk1
+   Filter: (SubPlan 1)
+   SubPlan 1
+     ->  Materialize
+           ->  Seq Scan on tenk2
  Optimizer: Postgres query optimizer
-(8 rows)
+(6 rows)
 
 alter table tenk2 reset (parallel_workers);
 -- test parallel plan for a query containing initplan.
@@ -354,19 +314,16 @@ alter table tenk2 set (parallel_workers = 2);
 explain (costs off)
 	select count(*) from tenk1
         where tenk1.unique1 = (Select max(tenk2.unique1) from tenk2);
-                       QUERY PLAN                       
---------------------------------------------------------
+             QUERY PLAN              
+-------------------------------------
  Aggregate
-   InitPlan 1 (returns $1)  (slice2)
-     ->  Finalize Aggregate
-           ->  Gather Motion 6:1  (slice3; segments: 6)
-                 ->  Partial Aggregate
-                       ->  Parallel Seq Scan on tenk2
-   ->  Gather Motion 12:1  (slice1; segments: 12)
-         ->  Parallel Seq Scan on tenk1
-               Filter: (unique1 = $1)
+   InitPlan 1 (returns $1)
+     ->  Aggregate
+           ->  Seq Scan on tenk2
+   ->  Seq Scan on tenk1
+         Filter: (unique1 = $1)
  Optimizer: Postgres query optimizer
-(10 rows)
+(7 rows)
 
 select count(*) from tenk1
     where tenk1.unique1 = (Select max(tenk2.unique1) from tenk2);
@@ -384,15 +341,13 @@ set enable_seqscan to off;
 set enable_bitmapscan to off;
 explain (costs off)
 	select  count((unique1)) from tenk1 where hundred > 1;
-                             QUERY PLAN                             
---------------------------------------------------------------------
- Finalize Aggregate
-   ->  Gather Motion 12:1  (slice1; segments: 12)
-         ->  Partial Aggregate
-               ->  Parallel Index Scan using tenk1_hundred on tenk1
-                     Index Cond: (hundred > 1)
+                  QUERY PLAN                   
+-----------------------------------------------
+ Aggregate
+   ->  Index Scan using tenk1_hundred on tenk1
+         Index Cond: (hundred > 1)
  Optimizer: Postgres query optimizer
-(6 rows)
+(4 rows)
 
 select  count((unique1)) from tenk1 where hundred > 1;
  count 
@@ -403,15 +358,13 @@ select  count((unique1)) from tenk1 where hundred > 1;
 -- test parallel index-only scans.
 explain (costs off)
 	select  count(*) from tenk1 where thousand > 95;
-                                   QUERY PLAN                                   
---------------------------------------------------------------------------------
- Finalize Aggregate
-   ->  Gather Motion 12:1  (slice1; segments: 12)
-         ->  Partial Aggregate
-               ->  Parallel Index Only Scan using tenk1_thous_tenthous on tenk1
-                     Index Cond: (thousand > 95)
+                        QUERY PLAN                         
+-----------------------------------------------------------
+ Aggregate
+   ->  Index Only Scan using tenk1_thous_tenthous on tenk1
+         Index Cond: (thousand > 95)
  Optimizer: Postgres query optimizer
-(6 rows)
+(4 rows)
 
 select  count(*) from tenk1 where thousand > 95;
  count 
@@ -425,18 +378,16 @@ explain (costs off)
 select * from
   (select count(unique1) from tenk1 where hundred > 10) ss
   right join (values (1),(2),(3)) v(x) on true;
-                              QUERY PLAN                               
------------------------------------------------------------------------
+                        QUERY PLAN                         
+-----------------------------------------------------------
  Nested Loop Left Join
    ->  Values Scan on "*VALUES*"
    ->  Materialize
-         ->  Finalize Aggregate
-               ->  Gather Motion 3:1  (slice1; segments: 3)
-                     ->  Partial Aggregate
-                           ->  Index Scan using tenk1_hundred on tenk1
-                                 Index Cond: (hundred > 10)
+         ->  Aggregate
+               ->  Index Scan using tenk1_hundred on tenk1
+                     Index Cond: (hundred > 10)
  Optimizer: Postgres query optimizer
-(9 rows)
+(7 rows)
 
 select * from
   (select count(unique1) from tenk1 where hundred > 10) ss
@@ -452,18 +403,16 @@ explain (costs off)
 select * from
   (select count(*) from tenk1 where thousand > 99) ss
   right join (values (1),(2),(3)) v(x) on true;
-                                    QUERY PLAN                                     
------------------------------------------------------------------------------------
+                              QUERY PLAN                               
+-----------------------------------------------------------------------
  Nested Loop Left Join
    ->  Values Scan on "*VALUES*"
    ->  Materialize
-         ->  Finalize Aggregate
-               ->  Gather Motion 3:1  (slice1; segments: 3)
-                     ->  Partial Aggregate
-                           ->  Index Only Scan using tenk1_thous_tenthous on tenk1
-                                 Index Cond: (thousand > 99)
+         ->  Aggregate
+               ->  Index Only Scan using tenk1_thous_tenthous on tenk1
+                     Index Cond: (thousand > 99)
  Optimizer: Postgres query optimizer
-(9 rows)
+(7 rows)
 
 select * from
   (select count(*) from tenk1 where thousand > 99) ss
@@ -486,24 +435,20 @@ select count(*) from tenk1
   left join (select tenk2.unique1 from tenk2 order by 1 limit 1000) ss
   on tenk1.unique1 < ss.unique1 + 1
   where tenk1.unique1 < 2;
-                            QUERY PLAN                            
-------------------------------------------------------------------
+                         QUERY PLAN                         
+------------------------------------------------------------
  Aggregate
    ->  Nested Loop Left Join
          Join Filter: (tenk1.unique1 < (tenk2.unique1 + 1))
-         ->  Gather Motion 3:1  (slice1; segments: 3)
-               ->  Seq Scan on tenk1
-                     Filter: (unique1 < 2)
+         ->  Seq Scan on tenk1
+               Filter: (unique1 < 2)
          ->  Materialize
                ->  Limit
-                     ->  Gather Motion 3:1  (slice2; segments: 3)
-                           Merge Key: tenk2.unique1
-                           ->  Limit
-                                 ->  Sort
-                                       Sort Key: tenk2.unique1
-                                       ->  Seq Scan on tenk2
+                     ->  Sort
+                           Sort Key: tenk2.unique1
+                           ->  Seq Scan on tenk2
  Optimizer: Postgres query optimizer
-(15 rows)
+(11 rows)
 
 select count(*) from tenk1
   left join (select tenk2.unique1 from tenk2 order by 1 limit 1000) ss
@@ -536,22 +481,18 @@ END $$;
 set work_mem='64kB';  --set small work mem to force lossy pages
 explain (costs off)
 	select count(*) from tenk1, tenk2 where tenk1.hundred > 1 and tenk2.thousand=0;
-                                  QUERY PLAN                                  
-------------------------------------------------------------------------------
- Finalize Aggregate
-   ->  Gather Motion 12:1  (slice1; segments: 12)
-         ->  Partial Aggregate
-               ->  Nested Loop
-                     ->  Parallel Seq Scan on tenk2
-                           Filter: (thousand = 0)
-                     ->  Materialize
-                           ->  Broadcast Motion 3:12  (slice2; segments: 3)
-                                 ->  Bitmap Heap Scan on tenk1
-                                       Recheck Cond: (hundred > 1)
-                                       ->  Bitmap Index Scan on tenk1_hundred
-                                             Index Cond: (hundred > 1)
+                      QUERY PLAN                      
+------------------------------------------------------
+ Aggregate
+   ->  Nested Loop
+         ->  Seq Scan on tenk2
+               Filter: (thousand = 0)
+         ->  Bitmap Heap Scan on tenk1
+               Recheck Cond: (hundred > 1)
+               ->  Bitmap Index Scan on tenk1_hundred
+                     Index Cond: (hundred > 1)
  Optimizer: Postgres query optimizer
-(13 rows)
+(9 rows)
 
 select count(*) from tenk1, tenk2 where tenk1.hundred > 1 and tenk2.thousand=0;
  count 
@@ -560,8 +501,6 @@ select count(*) from tenk1, tenk2 where tenk1.hundred > 1 and tenk2.thousand=0;
 (1 row)
 
 create table bmscantest (a int, t text);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into bmscantest select r, 'fooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooo' FROM generate_series(1,100000) r;
 create index i_bmtest ON bmscantest(a);
 select count(*) from bmscantest where a>1;
@@ -576,22 +515,18 @@ alter table tenk2 set (parallel_workers = 0);
 explain (analyze, timing off, summary off, costs off)
    select count(*) from tenk1, tenk2 where tenk1.hundred > 1
         and tenk2.thousand=0;
-                                              QUERY PLAN                                              
-------------------------------------------------------------------------------------------------------
- Finalize Aggregate (actual rows=1 loops=1)
-   ->  Gather Motion 3:1  (slice1; segments: 3) (actual rows=3 loops=1)
-         ->  Partial Aggregate (actual rows=1 loops=1)
-               ->  Nested Loop (actual rows=49000 loops=1)
-                     ->  Seq Scan on tenk2 (actual rows=5 loops=1)
-                           Filter: (thousand = 0)
-                           Rows Removed by Filter: 3363
-                     ->  Materialize (actual rows=9800 loops=5)
-                           ->  Broadcast Motion 3:3  (slice2; segments: 3) (actual rows=9800 loops=1)
-                                 ->  Seq Scan on tenk1 (actual rows=3320 loops=1)
-                                       Filter: (hundred > 1)
-                                       Rows Removed by Filter: 66
+                        QUERY PLAN                         
+-----------------------------------------------------------
+ Aggregate (actual rows=1 loops=1)
+   ->  Nested Loop (actual rows=98000 loops=1)
+         ->  Seq Scan on tenk2 (actual rows=10 loops=1)
+               Filter: (thousand = 0)
+               Rows Removed by Filter: 9990
+         ->  Seq Scan on tenk1 (actual rows=9800 loops=10)
+               Filter: (hundred > 1)
+               Rows Removed by Filter: 200
  Optimizer: Postgres query optimizer
-(13 rows)
+(9 rows)
 
 alter table tenk2 reset (parallel_workers);
 reset work_mem;
@@ -614,20 +549,18 @@ $$;
 -- test sort stats plan, disable parallel
 set max_parallel_workers_per_gather = 0;
 select * from explain_parallel_sort_stats();
-                           explain_parallel_sort_stats                            
-----------------------------------------------------------------------------------
+                   explain_parallel_sort_stats                   
+-----------------------------------------------------------------
  Nested Loop Left Join (actual rows=30000 loops=1)
    ->  Values Scan on "*VALUES*" (actual rows=3 loops=1)
    ->  Materialize (actual rows=10000 loops=3)
-         ->  Gather Motion 3:1  (slice1; segments: 3) (actual rows=10000 loops=1)
-               Merge Key: tenk1.ten
-               ->  Sort (actual rows=3386 loops=1)
-                     Sort Key: tenk1.ten
-                     Sort Method:  quicksort  Memory: xxx
-                     ->  Seq Scan on tenk1 (actual rows=3386 loops=1)
-                           Filter: (ten < 100)
+         ->  Sort (actual rows=10000 loops=1)
+               Sort Key: tenk1.ten
+               Sort Method:  quicksort  Memory: xxx
+               ->  Seq Scan on tenk1 (actual rows=10000 loops=1)
+                     Filter: (ten < 100)
  Optimizer: Postgres query optimizer
-(11 rows)
+(9 rows)
 
 reset max_parallel_workers_per_gather;
 reset enable_indexscan;
@@ -643,17 +576,15 @@ set enable_hashjoin to off;
 set enable_nestloop to off;
 explain (costs off)
 	select  count(*) from tenk1, tenk2 where tenk1.unique1 = tenk2.unique1;
-                              QUERY PLAN                              
-----------------------------------------------------------------------
- Finalize Aggregate
-   ->  Gather Motion 3:1  (slice1; segments: 3)
-         ->  Partial Aggregate
-               ->  Merge Join
-                     Merge Cond: (tenk1.unique1 = tenk2.unique1)
-                     ->  Index Only Scan using tenk1_unique1 on tenk1
-                     ->  Index Only Scan using tenk2_unique1 on tenk2
+                        QUERY PLAN                        
+----------------------------------------------------------
+ Aggregate
+   ->  Merge Join
+         Merge Cond: (tenk1.unique1 = tenk2.unique1)
+         ->  Index Only Scan using tenk1_unique1 on tenk1
+         ->  Index Only Scan using tenk2_unique1 on tenk2
  Optimizer: Postgres query optimizer
-(10 rows)
+(6 rows)
 
 select  count(*) from tenk1, tenk2 where tenk1.unique1 = tenk2.unique1;
  count 
@@ -667,23 +598,15 @@ reset enable_nestloop;
 set enable_hashagg = false;
 explain (costs off)
    select count(*) from tenk1 group by twenty;
-                            QUERY PLAN                            
-------------------------------------------------------------------
- Gather Motion 6:1  (slice1; segments: 6)
-   ->  Finalize GroupAggregate
-         Group Key: twenty
-         ->  Sort
-               Sort Key: twenty
-               ->  Redistribute Motion 6:6  (slice2; segments: 6)
-                     Hash Key: twenty
-                     Hash Module: 3
-                     ->  Partial GroupAggregate
-                           Group Key: twenty
-                           ->  Sort
-                                 Sort Key: twenty
-                                 ->  Parallel Seq Scan on tenk1
+             QUERY PLAN              
+-------------------------------------
+ GroupAggregate
+   Group Key: twenty
+   ->  Sort
+         Sort Key: twenty
+         ->  Seq Scan on tenk1
  Optimizer: Postgres query optimizer
-(14 rows)
+(6 rows)
 
 select count(*) from tenk1 group by twenty;
  count 
@@ -721,43 +644,32 @@ explain (costs off, verbose)
     select ten, sp_simple_func(ten) from tenk1 where ten < 100 order by ten;
                                                                               QUERY PLAN                                                                               
 -----------------------------------------------------------------------------------------------------------------------------------------------------------------------
- Gather Motion 6:1  (slice1; segments: 6)
-   Output: ten, (sp_simple_func(ten))
-   Merge Key: ten
-   ->  Result
-         Output: ten, sp_simple_func(ten)
-         ->  Sort
+ Result
+   Output: ten, sp_simple_func(ten)
+   ->  Sort
+         Output: ten
+         Sort Key: tenk1.ten
+         ->  Seq Scan on public.tenk1
                Output: ten
-               Sort Key: tenk1.ten
-               ->  Parallel Seq Scan on public.tenk1
-                     Output: ten
-                     Filter: (tenk1.ten < 100)
- Settings: enable_hashagg = 'off', enable_parallel = 'on', min_parallel_table_scan_size = '0', optimizer = 'off', parallel_setup_cost = '0', parallel_tuple_cost = '0'
+               Filter: (tenk1.ten < 100)
+ Settings: optimizer = 'off', enable_parallel = 'on', parallel_setup_cost = '0', parallel_tuple_cost = '0', min_parallel_table_scan_size = '0', enable_hashagg = 'off'
  Optimizer: Postgres query optimizer
-(13 rows)
+(10 rows)
 
 drop function sp_simple_func(integer);
 -- test handling of SRFs in targetlist (bug in 10.0)
 explain (costs off)
    select count(*), generate_series(1,2) from tenk1 group by twenty;
-                               QUERY PLAN                               
-------------------------------------------------------------------------
- Gather Motion 6:1  (slice1; segments: 6)
-   ->  ProjectSet
-         ->  Finalize GroupAggregate
-               Group Key: twenty
-               ->  Sort
-                     Sort Key: twenty
-                     ->  Redistribute Motion 6:6  (slice2; segments: 6)
-                           Hash Key: twenty
-                           Hash Module: 3
-                           ->  Partial GroupAggregate
-                                 Group Key: twenty
-                                 ->  Sort
-                                       Sort Key: twenty
-                                       ->  Parallel Seq Scan on tenk1
+             QUERY PLAN              
+-------------------------------------
+ ProjectSet
+   ->  GroupAggregate
+         Group Key: twenty
+         ->  Sort
+               Sort Key: twenty
+               ->  Seq Scan on tenk1
  Optimizer: Postgres query optimizer
-(15 rows)
+(7 rows)
 
 select count(*), generate_series(1,2) from tenk1 group by twenty;
  count | generate_series 
@@ -808,23 +720,15 @@ select count(*), generate_series(1,2) from tenk1 group by twenty;
 set parallel_leader_participation = off;
 explain (costs off)
    select count(*) from tenk1 group by twenty;
-                            QUERY PLAN                            
-------------------------------------------------------------------
- Gather Motion 6:1  (slice1; segments: 6)
-   ->  Finalize GroupAggregate
-         Group Key: twenty
-         ->  Sort
-               Sort Key: twenty
-               ->  Redistribute Motion 6:6  (slice2; segments: 6)
-                     Hash Key: twenty
-                     Hash Module: 3
-                     ->  Partial GroupAggregate
-                           Group Key: twenty
-                           ->  Sort
-                                 Sort Key: twenty
-                                 ->  Parallel Seq Scan on tenk1
+             QUERY PLAN              
+-------------------------------------
+ GroupAggregate
+   Group Key: twenty
+   ->  Sort
+         Sort Key: twenty
+         ->  Seq Scan on tenk1
  Optimizer: Postgres query optimizer
-(14 rows)
+(6 rows)
 
 select count(*) from tenk1 group by twenty;
  count 
@@ -859,22 +763,18 @@ select * from
   (select string4, count(unique2)
    from tenk1 group by string4 order by string4) ss
   right join (values (1),(2),(3)) v(x) on true;
-                         QUERY PLAN                         
-------------------------------------------------------------
+                 QUERY PLAN                  
+---------------------------------------------
  Nested Loop Left Join
    ->  Values Scan on "*VALUES*"
    ->  Materialize
-         ->  Finalize GroupAggregate
+         ->  GroupAggregate
                Group Key: tenk1.string4
-               ->  Gather Motion 3:1  (slice1; segments: 3)
-                     Merge Key: tenk1.string4
-                     ->  Partial GroupAggregate
-                           Group Key: tenk1.string4
-                           ->  Sort
-                                 Sort Key: tenk1.string4
-                                 ->  Seq Scan on tenk1
+               ->  Sort
+                     Sort Key: tenk1.string4
+                     ->  Seq Scan on tenk1
  Optimizer: Postgres query optimizer
-(13 rows)
+(9 rows)
 
 select * from
   (select string4, count(unique2)
@@ -901,14 +801,12 @@ reset enable_hashagg;
 -- check parallelized int8 aggregate (bug #14897)
 explain (costs off)
 select avg(unique1::int8) from tenk1;
-                   QUERY PLAN                   
-------------------------------------------------
- Finalize Aggregate
-   ->  Gather Motion 6:1  (slice1; segments: 6)
-         ->  Partial Aggregate
-               ->  Parallel Seq Scan on tenk1
+             QUERY PLAN              
+-------------------------------------
+ Aggregate
+   ->  Seq Scan on tenk1
  Optimizer: Postgres query optimizer
-(5 rows)
+(3 rows)
 
 select avg(unique1::int8) from tenk1;
           avg          
@@ -919,17 +817,14 @@ select avg(unique1::int8) from tenk1;
 -- gather merge test with a LIMIT
 explain (costs off)
   select fivethous from tenk1 order by fivethous limit 4;
-                     QUERY PLAN                     
-----------------------------------------------------
+             QUERY PLAN              
+-------------------------------------
  Limit
-   ->  Gather Motion 6:1  (slice1; segments: 6)
-         Merge Key: fivethous
-         ->  Limit
-               ->  Sort
-                     Sort Key: fivethous
-                     ->  Parallel Seq Scan on tenk1
+   ->  Sort
+         Sort Key: fivethous
+         ->  Seq Scan on tenk1
  Optimizer: Postgres query optimizer
-(8 rows)
+(5 rows)
 
 select fivethous from tenk1 order by fivethous limit 4;
  fivethous 
@@ -944,17 +839,14 @@ select fivethous from tenk1 order by fivethous limit 4;
 set max_parallel_workers = 0;
 explain (costs off)
    select string4 from tenk1 order by string4 limit 5;
-                     QUERY PLAN                     
-----------------------------------------------------
+             QUERY PLAN              
+-------------------------------------
  Limit
-   ->  Gather Motion 6:1  (slice1; segments: 6)
-         Merge Key: string4
-         ->  Limit
-               ->  Sort
-                     Sort Key: string4
-                     ->  Parallel Seq Scan on tenk1
+   ->  Sort
+         Sort Key: string4
+         ->  Seq Scan on tenk1
  Optimizer: Postgres query optimizer
-(8 rows)
+(5 rows)
 
 select string4 from tenk1 order by string4 limit 5;
  string4 
@@ -972,17 +864,14 @@ select string4 from tenk1 order by string4 limit 5;
 set parallel_leader_participation = off;
 explain (costs off)
    select string4 from tenk1 order by string4 limit 5;
-                     QUERY PLAN                     
-----------------------------------------------------
+             QUERY PLAN              
+-------------------------------------
  Limit
-   ->  Gather Motion 6:1  (slice1; segments: 6)
-         Merge Key: string4
-         ->  Limit
-               ->  Sort
-                     Sort Key: string4
-                     ->  Parallel Seq Scan on tenk1
+   ->  Sort
+         Sort Key: string4
+         ->  Seq Scan on tenk1
  Optimizer: Postgres query optimizer
-(8 rows)
+(5 rows)
 
 select string4 from tenk1 order by string4 limit 5;
  string4 
@@ -1000,13 +889,12 @@ SAVEPOINT settings;
 SET LOCAL debug_parallel_query = 1;
 explain (costs off)
   select stringu1::int2 from tenk1 where unique1 = 1;
-                       QUERY PLAN                       
---------------------------------------------------------
- Gather Motion 2:1  (slice1; segments: 2)
-   ->  Parallel Index Scan using tenk1_unique1 on tenk1
-         Index Cond: (unique1 = 1)
+               QUERY PLAN                
+-----------------------------------------
+ Index Scan using tenk1_unique1 on tenk1
+   Index Cond: (unique1 = 1)
  Optimizer: Postgres query optimizer
-(4 rows)
+(3 rows)
 
 ROLLBACK TO SAVEPOINT settings;
 -- exercise record typmod remapping between backends
@@ -1039,6 +927,7 @@ ROLLBACK TO SAVEPOINT settings;
 DROP function make_record(n int);
 -- test the sanity of parallel query after the active role is dropped.
 drop role if exists regress_parallel_worker;
+NOTICE:  role "regress_parallel_worker" does not exist, skipping
 create role regress_parallel_worker;
 set role regress_parallel_worker;
 reset session authorization;
@@ -1056,66 +945,50 @@ reset role;
 explain (costs off, verbose)
   select count(*) from tenk1 a where (unique1, two) in
     (select unique1, row_number() over() from tenk1 b);
-                                                                                               QUERY PLAN                                                                                                
----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
- Finalize Aggregate
+                                                                                         QUERY PLAN                                                                                          
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Aggregate
    Output: count(*)
-   ->  Gather Motion 3:1  (slice1; segments: 3)
-         Output: (PARTIAL count(*))
-         ->  Partial Aggregate
-               Output: PARTIAL count(*)
-               ->  Hash Semi Join
-                     Hash Cond: ((a.unique1 = b.unique1) AND (a.two = (row_number() OVER (?))))
-                     ->  Seq Scan on public.tenk1 a
-                           Output: a.unique1, a.unique2, a.two, a.four, a.ten, a.twenty, a.hundred, a.thousand, a.twothousand, a.fivethous, a.tenthous, a.odd, a.even, a.stringu1, a.stringu2, a.string4
-                     ->  Hash
-                           Output: b.unique1, (row_number() OVER (?))
-                           ->  Redistribute Motion 1:3  (slice2; segments: 1)
-                                 Output: b.unique1, (row_number() OVER (?))
-                                 Hash Key: b.unique1
-                                 ->  WindowAgg
-                                       Output: b.unique1, row_number() OVER (?)
-                                       ->  Gather Motion 3:1  (slice3; segments: 3)
-                                             Output: b.unique1
-                                             ->  Seq Scan on public.tenk1 b
-                                                   Output: b.unique1
- Settings: enable_parallel = 'on', min_parallel_table_scan_size = '0', optimizer = 'off', parallel_setup_cost = '0', parallel_tuple_cost = '0'
+   ->  Hash Semi Join
+         Hash Cond: ((a.unique1 = b.unique1) AND (a.two = (row_number() OVER (?))))
+         ->  Seq Scan on public.tenk1 a
+               Output: a.unique1, a.unique2, a.two, a.four, a.ten, a.twenty, a.hundred, a.thousand, a.twothousand, a.fivethous, a.tenthous, a.odd, a.even, a.stringu1, a.stringu2, a.string4
+         ->  Hash
+               Output: b.unique1, (row_number() OVER (?))
+               ->  WindowAgg
+                     Output: b.unique1, row_number() OVER (?)
+                     ->  Seq Scan on public.tenk1 b
+                           Output: b.unique1
+ Settings: optimizer = 'off', enable_parallel = 'on', parallel_setup_cost = '0', parallel_tuple_cost = '0', min_parallel_table_scan_size = '0'
  Optimizer: Postgres query optimizer
-(23 rows)
+(14 rows)
 
 -- LIMIT/OFFSET within sub-selects can't be pushed to workers.
 explain (costs off)
   select * from tenk1 a where two in
     (select two from tenk1 b where stringu1 like '%AAAA' limit 3);
-                                      QUERY PLAN                                       
----------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)
-   ->  Hash Join
-         Hash Cond: (a.two = b.two)
-         ->  Seq Scan on tenk1 a
-         ->  Hash
-               ->  Broadcast Motion 1:3  (slice2; segments: 1)
-                     ->  HashAggregate
-                           Group Key: b.two
-                           ->  Limit
-                                 ->  Gather Motion 3:1  (slice3; segments: 3)
-                                       ->  Limit
-                                             ->  Seq Scan on tenk1 b
-                                                   Filter: (stringu1 ~~ '%AAAA'::text)
+                       QUERY PLAN                        
+---------------------------------------------------------
+ Hash Semi Join
+   Hash Cond: (a.two = b.two)
+   ->  Seq Scan on tenk1 a
+   ->  Hash
+         ->  Limit
+               ->  Seq Scan on tenk1 b
+                     Filter: (stringu1 ~~ '%AAAA'::text)
  Optimizer: Postgres query optimizer
-(14 rows)
+(8 rows)
 
 -- to increase the parallel query test coverage
 SAVEPOINT settings;
 SET LOCAL debug_parallel_query = 1;
 -- CBDB_PARALLEL_FIXME: analyze actual rows may be different by running multiple times.
 EXPLAIN (timing off, summary off, costs off) SELECT * FROM tenk1;
-                QUERY PLAN                
-------------------------------------------
- Gather Motion 6:1  (slice1; segments: 6)
-   ->  Parallel Seq Scan on tenk1
+             QUERY PLAN              
+-------------------------------------
+ Seq Scan on tenk1
  Optimizer: Postgres query optimizer
-(3 rows)
+(2 rows)
 
 ROLLBACK TO SAVEPOINT settings;
 -- provoke error in worker
@@ -1123,7 +996,7 @@ ROLLBACK TO SAVEPOINT settings;
 SAVEPOINT settings;
 SET LOCAL debug_parallel_query = 1;
 select (stringu1 || repeat('abcd', 5000))::int2 from tenk1 where unique1 = 1;
-ERROR:  invalid input syntax for type smallint: "BAAAAAabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcd"  (seg1 slice1 127.0.1.1:9003 pid=1200934)
+ERROR:  invalid input syntax for type smallint: "BAAAAAabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcdabcd"
 ROLLBACK TO SAVEPOINT settings;
 -- test interaction with set-returning functions
 SAVEPOINT settings;
@@ -1134,16 +1007,15 @@ EXPLAIN (COSTS OFF)
 SELECT unique1 FROM tenk1 WHERE fivethous = tenthous + 1
 UNION ALL
 SELECT unique1 FROM tenk1 WHERE fivethous = tenthous + 1;
-                     QUERY PLAN                     
-----------------------------------------------------
- Gather Motion 6:1  (slice1; segments: 6)
-   ->  Parallel Append
-         ->  Parallel Seq Scan on tenk1
-               Filter: (fivethous = (tenthous + 1))
-         ->  Parallel Seq Scan on tenk1 tenk1_1
-               Filter: (fivethous = (tenthous + 1))
+                  QUERY PLAN                  
+----------------------------------------------
+ Append
+   ->  Seq Scan on tenk1
+         Filter: (fivethous = (tenthous + 1))
+   ->  Seq Scan on tenk1 tenk1_1
+         Filter: (fivethous = (tenthous + 1))
  Optimizer: Postgres query optimizer
-(7 rows)
+(6 rows)
 
 ROLLBACK TO SAVEPOINT settings;
 -- can't use multiple subqueries under a single Gather node due to initPlans
@@ -1154,31 +1026,25 @@ UNION ALL
 SELECT unique1 FROM tenk1 WHERE fivethous =
 	(SELECT unique2 FROM tenk1 WHERE fivethous = 1 LIMIT 1)
 ORDER BY 1;
-                                QUERY PLAN                                
---------------------------------------------------------------------------
- Gather Motion 6:1  (slice1; segments: 6)
-   Merge Key: tenk1.unique1
-   ->  Sort
-         Sort Key: tenk1.unique1
-         ->  Parallel Append
-               ->  Parallel Seq Scan on tenk1
-                     Filter: (fivethous = $1)
-                     InitPlan 2 (returns $1)  (slice2)
-                       ->  Limit
-                             ->  Gather Motion 6:1  (slice3; segments: 6)
-                                   ->  Limit
-                                         ->  Parallel Seq Scan on tenk1 tenk1_3
-                                               Filter: (fivethous = 1)
-               ->  Parallel Seq Scan on tenk1 tenk1_1
-                     Filter: (fivethous = $0)
-                     InitPlan 1 (returns $0)  (slice4)
-                       ->  Limit
-                             ->  Gather Motion 6:1  (slice5; segments: 6)
-                                   ->  Limit
-                                         ->  Parallel Seq Scan on tenk1 tenk1_2
-                                               Filter: (fivethous = 1)
+                     QUERY PLAN                      
+-----------------------------------------------------
+ Sort
+   Sort Key: tenk1.unique1
+   ->  Append
+         ->  Seq Scan on tenk1
+               Filter: (fivethous = $0)
+               InitPlan 1 (returns $0)
+                 ->  Limit
+                       ->  Seq Scan on tenk1 tenk1_2
+                             Filter: (fivethous = 1)
+         ->  Seq Scan on tenk1 tenk1_1
+               Filter: (fivethous = $1)
+               InitPlan 2 (returns $1)
+                 ->  Limit
+                       ->  Seq Scan on tenk1 tenk1_3
+                             Filter: (fivethous = 1)
  Optimizer: Postgres query optimizer
-(22 rows)
+(16 rows)
 
 -- test interaction with SRFs
 SELECT * FROM information_schema.foreign_data_wrapper_options
@@ -1192,52 +1058,45 @@ SELECT generate_series(1, two), array(select generate_series(1, two))
   FROM tenk1 ORDER BY tenthous;
                                                                   QUERY PLAN                                                                   
 -----------------------------------------------------------------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)
-   Output: (generate_series(1, tenk1.two)), ((SubPlan 1)), tenk1.tenthous
-   Merge Key: tenk1.tenthous
-   ->  ProjectSet
-         Output: generate_series(1, tenk1.two), (SubPlan 1), tenk1.tenthous
-         ->  Result
-               Output: tenk1.two, tenk1.tenthous
-               ->  Sort
+ ProjectSet
+   Output: generate_series(1, tenk1.two), (SubPlan 1), tenk1.tenthous
+   ->  Result
+         Output: tenk1.two, tenk1.tenthous
+         ->  Sort
+               Output: tenk1.tenthous, tenk1.two
+               Sort Key: tenk1.tenthous
+               ->  Seq Scan on public.tenk1
                      Output: tenk1.tenthous, tenk1.two
-                     Sort Key: tenk1.tenthous
-                     ->  Seq Scan on public.tenk1
-                           Output: tenk1.tenthous, tenk1.two
-         SubPlan 1
-           ->  ProjectSet
-                 Output: generate_series(1, tenk1.two)
-                 ->  Result
- Settings: enable_parallel = 'on', min_parallel_table_scan_size = '0', optimizer = 'off', parallel_setup_cost = '0', parallel_tuple_cost = '0'
+   SubPlan 1
+     ->  ProjectSet
+           Output: generate_series(1, tenk1.two)
+           ->  Result
+ Settings: optimizer = 'off', enable_parallel = 'on', parallel_setup_cost = '0', parallel_tuple_cost = '0', min_parallel_table_scan_size = '0'
  Optimizer: Postgres query optimizer
-(18 rows)
+(15 rows)
 
 -- must disallow pushing sort below gather when pathkey contains an SRF
 EXPLAIN (VERBOSE, COSTS OFF)
 SELECT unnest(ARRAY[]::integer[]) + 1 AS pathkey
   FROM tenk1 t1 JOIN tenk1 t2 ON TRUE
   ORDER BY pathkey;
-                                                                                                          QUERY PLAN                                                                                                           
--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
- Gather Motion 6:1  (slice1; segments: 6)
+                                                                  QUERY PLAN                                                                   
+-----------------------------------------------------------------------------------------------------------------------------------------------
+ Sort
    Output: (((unnest('{}'::integer[])) + 1))
-   Merge Key: (((unnest('{}'::integer[])) + 1))
-   ->  Sort
-         Output: (((unnest('{}'::integer[])) + 1))
-         Sort Key: (((unnest('{}'::integer[])) + 1))
-         ->  Result
-               Output: ((unnest('{}'::integer[])) + 1)
-               ->  ProjectSet
-                     Output: unnest('{}'::integer[])
-                     ->  Nested Loop
-                           ->  Parallel Seq Scan on public.tenk1 t1
-                                 Output: t1.unique1, t1.unique2, t1.two, t1.four, t1.ten, t1.twenty, t1.hundred, t1.thousand, t1.twothousand, t1.fivethous, t1.tenthous, t1.odd, t1.even, t1.stringu1, t1.stringu2, t1.string4
-                           ->  Materialize
-                                 ->  Broadcast Motion 3:6  (slice2; segments: 3)
-                                       ->  Seq Scan on public.tenk1 t2
- Settings: enable_parallel = 'on', optimizer = 'off', parallel_setup_cost = '0', parallel_tuple_cost = '0', min_parallel_table_scan_size = '0'
+   Sort Key: (((unnest('{}'::integer[])) + 1))
+   ->  Result
+         Output: ((unnest('{}'::integer[])) + 1)
+         ->  ProjectSet
+               Output: unnest('{}'::integer[])
+               ->  Nested Loop
+                     ->  Index Only Scan using tenk1_hundred on public.tenk1 t1
+                           Output: t1.hundred
+                     ->  Materialize
+                           ->  Index Only Scan using tenk1_hundred on public.tenk1 t2
+ Settings: optimizer = 'off', enable_parallel = 'on', parallel_setup_cost = '0', parallel_tuple_cost = '0', min_parallel_table_scan_size = '0'
  Optimizer: Postgres query optimizer
-(18 rows)
+(14 rows)
 
 -- test passing expanded-value representations to workers
 CREATE FUNCTION make_some_array(int,int) returns int[] as
@@ -1248,18 +1107,15 @@ $$declare x int[];
     return x;
   end$$ language plpgsql parallel safe;
 CREATE TABLE fooarr(f1 text, f2 int[], f3 text);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO fooarr VALUES('1', ARRAY[1,2], 'one');
 PREPARE pstmt(text, int[]) AS SELECT * FROM fooarr WHERE f1 = $1 AND f2 = $2;
 EXPLAIN (COSTS OFF) EXECUTE pstmt('1', make_some_array(1,2));
-                            QUERY PLAN                            
-------------------------------------------------------------------
- Gather Motion 2:1  (slice1; segments: 2)
-   ->  Parallel Seq Scan on fooarr
-         Filter: ((f1 = '1'::text) AND (f2 = '{1,2}'::integer[]))
+                         QUERY PLAN                         
+------------------------------------------------------------
+ Seq Scan on fooarr
+   Filter: ((f1 = '1'::text) AND (f2 = '{1,2}'::integer[]))
  Optimizer: Postgres query optimizer
-(4 rows)
+(3 rows)
 
 EXECUTE pstmt('1', make_some_array(1,2));
  f1 |  f2   | f3  
@@ -1273,21 +1129,17 @@ CREATE VIEW tenk1_vw_sec WITH (security_barrier) AS SELECT * FROM tenk1;
 EXPLAIN (COSTS OFF)
 SELECT 1 FROM tenk1_vw_sec
   WHERE (SELECT sum(f1) FROM int4_tbl WHERE f1 < unique1) < 100;
-                                 QUERY PLAN                                  
------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)
-   ->  Subquery Scan on tenk1_vw_sec
-         Filter: ((SubPlan 1) < 100)
-         ->  Seq Scan on tenk1
-         SubPlan 1
-           ->  Aggregate
-                 ->  Result
-                       Filter: (int4_tbl.f1 < tenk1_vw_sec.unique1)
-                       ->  Materialize
-                             ->  Broadcast Motion 3:3  (slice2; segments: 3)
-                                   ->  Seq Scan on int4_tbl
+                     QUERY PLAN                      
+-----------------------------------------------------
+ Subquery Scan on tenk1_vw_sec
+   Filter: ((SubPlan 1) < 100)
+   ->  Seq Scan on tenk1
+   SubPlan 1
+     ->  Aggregate
+           ->  Seq Scan on int4_tbl
+                 Filter: (f1 < tenk1_vw_sec.unique1)
  Optimizer: Postgres query optimizer
-(12 rows)
+(8 rows)
 
 rollback;
 -- test that function option SET ROLE works in parallel workers.

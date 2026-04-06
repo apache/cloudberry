@@ -17,14 +17,14 @@ $$;
 --
 --CASE 0: createdb do well
 --
-create database dowell;
+create database dowell STRATEGY = file_copy;
 select force_mirrors_to_catch_up();
 select count(*)=0 as result from
   (select db_dirs(oid) from pg_database where datname = 'dowell') as foo;
 
-\! psql -d dowell -c "create table test1(a int, b text)"
-\! psql -d dowell -c "insert into test1 values (1, '111'), (2, '222'), (3, '333')"
-\! psql -d dowell -c "select * from test1" 
+\! psql -d dowell -Xc "create table test1(a int, b text)"
+\! psql -d dowell -Xc "insert into test1 values (1, '111'), (2, '222'), (3, '333')"
+\! psql -d dowell -Xc "select * from test1" 
 
 drop database dowell;
 
@@ -35,7 +35,7 @@ select gp_inject_fault('all', 'reset', dbid) from gp_segment_configuration;
 select gp_inject_fault('after_xlog_create_database', 'error', dbid)
 from gp_segment_configuration where content=-1 and role='p';
 -- should fail
-create database db2;
+create database db2 STRATEGY = file_copy;
 
 select force_mirrors_to_catch_up();
 

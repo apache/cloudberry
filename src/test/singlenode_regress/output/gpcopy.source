@@ -480,8 +480,9 @@ CONTEXT:  COPY copy_regression_newline, line 1: "1|1
 -- negative: csv
 COPY copy_regression_newline from stdin with delimiter '|' newline 'cr' csv;
 ERROR:  extra data after last expected column
-CONTEXT:  COPY xxxxx line x: xxx
+CONTEXT:  COPY copy_regression_newline, line 1: "1|1
 2|2
+\.
 "
 -- negative: invalid newline
 COPY copy_regression_newline from stdin with delimiter '|' newline 'blah';
