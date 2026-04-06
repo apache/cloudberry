@@ -3260,6 +3260,10 @@ regression_main(int argc, char *argv[],
 		}
 	}
 
+	is_singlenode_mode = check_feature_status("gp_internal_is_singlenode", "on",
+											  "Single node (no segments) mode enabled. Replace '@hostname@' by hostname of contentid = -1",
+											  "Normal cluster detected. Replace '@hostname@' by hostname of contentid = 0");
+
 	initialize_environment();
 
 #if defined(HAVE_GETRLIMIT)
@@ -3526,9 +3530,6 @@ regression_main(int argc, char *argv[],
 	resgroup_enabled = check_feature_status("gp_resource_manager", "group",
 			"Resource group enabled. Using resource group answer files whenever possible",
 			"Resource group disabled. Using default answer files");
-	is_singlenode_mode = check_feature_status("gp_internal_is_singlenode", "on",
-            "Single node (no segments) mode enabled. Replace '@hostname@' by hostname of contentid = -1",
-            "Normal cluster detected. Replace '@hostname@' by hostname of contentid = 0");
 
 //	force_parallel_enabled = check_feature_status("force_parallel_mode", "on",
 //			"Force parallel mode enabled. Result diffs will ignore plans.",
