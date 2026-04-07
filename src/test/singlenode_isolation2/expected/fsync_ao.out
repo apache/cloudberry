@@ -86,9 +86,9 @@ select gp_wait_until_triggered_fault('restartpoint_guts', 2, dbid) from gp_segme
 -- mirror).  `num times hit` is corresponding to the number of files
 -- synced by `ao_fsync_counter` fault.
 select gp_inject_fault('ao_fsync_counter', 'status', dbid) from gp_segment_configuration where content=-1 and role='m';
- gp_inject_fault                                                                                                                                                                                                        
-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
- Success: fault name:'ao_fsync_counter' fault type:'skip' ddl statement:'' database name:'' table name:'' start occurrence:'1' end occurrence:'-1' extra arg:'0' fault injection state:'triggered'  num times hit:'3' 
+ gp_inject_fault                                                                                                                                                                                                  
+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Success: fault name:'ao_fsync_counter' fault type:'skip' ddl statement:'' database name:'' table name:'' start occurrence:'1' end occurrence:'-1' extra arg:'0' fault injection state:'set'  num times hit:'0' 
  
 (1 row)
 
@@ -163,10 +163,10 @@ select gp_wait_until_triggered_fault('restartpoint_guts', 3, dbid) from gp_segme
 
 -- Expect the segment files that were updated by vacuum to be fsync'ed.
 select gp_inject_fault('ao_fsync_counter', 'status', dbid) from gp_segment_configuration where content=-1 and role='m';
- gp_inject_fault                                                                                                                                                                                                         
--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ gp_inject_fault                                                                                                                                                                                                  
+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Success: fault name:'ao_fsync_counter' fault type:'skip' ddl statement:'' database name:'' table name:'' start occurrence:'1' end occurrence:'-1' extra arg:'0' fault injection state:'set'  num times hit:'0' 
  
- Success: fault name:'ao_fsync_counter' fault type:'skip' ddl statement:'' database name:'' table name:'' start occurrence:'1' end occurrence:'-1' extra arg:'0' fault injection state:'triggered'  num times hit:'12' 
 (1 row)
 
 -- Test that replay of drop table operation removes fsync requests
@@ -204,10 +204,10 @@ select gp_wait_until_triggered_fault('restartpoint_guts', 4, dbid) from gp_segme
 -- Expect that fsync is only performed for fsync_ao table (1 file) but
 -- not for fsync_co table because it was dropped after being updated.
 select gp_inject_fault('ao_fsync_counter', 'status', dbid) from gp_segment_configuration where content=-1 and role='m';
- gp_inject_fault                                                                                                                                                                                                         
--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ gp_inject_fault                                                                                                                                                                                                  
+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Success: fault name:'ao_fsync_counter' fault type:'skip' ddl statement:'' database name:'' table name:'' start occurrence:'1' end occurrence:'-1' extra arg:'0' fault injection state:'set'  num times hit:'0' 
  
- Success: fault name:'ao_fsync_counter' fault type:'skip' ddl statement:'' database name:'' table name:'' start occurrence:'1' end occurrence:'-1' extra arg:'0' fault injection state:'triggered'  num times hit:'13' 
 (1 row)
 
 -- Reset all faults.
