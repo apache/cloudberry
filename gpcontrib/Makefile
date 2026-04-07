@@ -24,8 +24,7 @@ ifeq "$(enable_debug_extensions)" "yes"
                gp_legacy_string_agg \
                gp_replica_check \
                gp_toolkit \
-               pg_hint_plan \
-               diskquota
+               pg_hint_plan
 else
 	recurse_targets = gp_sparse_vector \
 	       gp_distribution_policy \
@@ -33,8 +32,11 @@ else
                gp_legacy_string_agg \
                gp_exttable_fdw \
                gp_toolkit \
-               pg_hint_plan \
-               diskquota
+               pg_hint_plan
+endif
+
+ifeq "$(with_diskquota)" "yes"
+	recurse_targets += diskquota
 endif
 
 ifeq "$(with_zstd)" "yes"
@@ -101,4 +103,4 @@ installcheck:
 	$(MAKE) -C gp_sparse_vector installcheck
 	$(MAKE) -C gp_toolkit installcheck
 	$(MAKE) -C gp_exttable_fdw installcheck
-	$(MAKE) -C diskquota installcheck
+	if [ "$(with_diskquota)" = "yes" ]; then $(MAKE) -C diskquota installcheck; fi
