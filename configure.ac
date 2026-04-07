@@ -1457,6 +1457,13 @@ AC_MSG_RESULT([$with_zstd])
 AC_SUBST(with_zstd)
 
 #
+# diskquota
+#
+PGAC_ARG_BOOL(with, diskquota, no,
+              [build with diskquota extension])
+AC_SUBST(with_diskquota)
+
+#
 # gp_stats_collector
 #
 PGAC_ARG_BOOL(with, gp_stats_collector, no,
