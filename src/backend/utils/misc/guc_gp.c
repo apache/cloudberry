@@ -4936,7 +4936,7 @@ struct config_string ConfigureNamesString_gp[] =
 	{
 		{"gp_resource_manager", PGC_POSTMASTER, RESOURCES,
 			gettext_noop("Sets the type of resource manager."),
-			gettext_noop("Only support \"queue\" and \"group\" for now.")
+			gettext_noop("Only support \"queue\", \"group\" and \"group-v2\" for now.")
 		},
 		&gp_resource_manager_str,
 		"queue",

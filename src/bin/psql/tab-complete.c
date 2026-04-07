@@ -1614,6 +1614,12 @@ psql_completion(const char *text, int start, int end)
 		NULL
 	};
 
+	static const char *const list_resource_group_type[] = {
+		"CONCURRENCY", "CPU_MAX_PERCENT", "CPUSET", "CPU_WEIGHT",
+		"MEMORY_QUOTA", "MIN_COST", "IO_LIMIT",
+		NULL
+	};
+
 	/*
 	 * Temporary workaround for a bug in recent (2019) libedit: it incorrectly
 	 * de-escapes the input "text", causing us to fail to recognize backslash
@@ -3115,8 +3121,8 @@ psql_completion(const char *text, int start, int end)
 	else if (Matches("CREATE", "ROLE|USER|GROUP", MatchAny, "IN"))
 		COMPLETE_WITH("GROUP", "ROLE");
 
-/* CREATE/DROP RESOURCE GROUP/QUEUE */
-	else if (Matches("CREATE|DROP", "RESOURCE"))
+/* CREATE/DROP/ALTER RESOURCE GROUP/QUEUE */
+	else if (Matches("CREATE|DROP|ALTER", "RESOURCE"))
 	 {
 		static const char *const list_CREATERESOURCEGROUP[] =
 		{"GROUP", "QUEUE", NULL};
@@ -3130,19 +3136,19 @@ psql_completion(const char *text, int start, int end)
 	else if (Matches("CREATE", "PROFILE", MatchAny, "LIMIT"))
 		COMPLETE_WITH("FAILED_LOGIN_ATTEMPTS", "PASSWORD_REUSE_MAX", "PASSWORD_LOCK_TIME");
 
-	/* CREATE/DROP RESOURCE GROUP */
-	else if (TailMatches("CREATE|DROP", "RESOURCE", "GROUP"))
+	/* CREATE/DROP/ALTER RESOURCE GROUP */
+	else if (TailMatches("CREATE|DROP|ALTER", "RESOURCE", "GROUP"))
 		COMPLETE_WITH_QUERY(Query_for_list_of_resgroups);
 	/* CREATE RESOURCE GROUP <name> */
 	else if (TailMatches("CREATE|DROP", "RESOURCE", "GROUP", MatchAny))
 		COMPLETE_WITH("WITH (");
+	/* ALTER RESOURCE GROUP <name> */
+	else if (TailMatches("ALTER", "RESOURCE", "GROUP", MatchAny))
+		COMPLETE_WITH("SET");
+	else if (TailMatches("ALTER", "RESOURCE", "GROUP", MatchAny, "SET"))
+		COMPLETE_WITH_LIST(list_resource_group_type);
 	else if (TailMatches("RESOURCE", "GROUP", MatchAny, "WITH", "("))
-	{
-		static const char *const list_CREATERESOURCEGROUP[] =
-		{"CONCURRENCY", "CPU_MAX_PERCENT", "CPUSET", "CPU_WEIGHT", "MEMORY_QUOTA", "MIN_COST", "IO_LIMIT", NULL};
-
-		COMPLETE_WITH_LIST(list_CREATERESOURCEGROUP);
-	}
+		COMPLETE_WITH_LIST(list_resource_group_type);
 
 /* CREATE TYPE */
 	else if (Matches("CREATE", "TYPE", MatchAny))
