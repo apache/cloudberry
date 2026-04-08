@@ -2044,15 +2044,25 @@ static uint64
 aoco_relation_size(Relation rel, ForkNumber forkNumber)
 {
 	AOCSFileSegInfo	  **allseg;
-	Snapshot			snapshot;
 	uint64				totalbytes	= 0;
 	int					totalseg;
 
 	if (forkNumber != MAIN_FORKNUM)
 		return totalbytes;
 
-	snapshot = RegisterSnapshot(GetLatestSnapshot());
-	allseg = GetAllAOCSFileSegInfo(rel, snapshot, &totalseg, NULL);
+	/*
+	 * Pass NULL as snapshot so that GetAllAOCSFileSegInfo -> systable_beginscan
+	 * uses GetCatalogSnapshot() internally.  This is consistent with
+	 * appendonly_relation_size() for AO row tables and ensures pg_aocsseg
+	 * entries are visible even when called within the same transaction that
+	 * populated them (e.g. ALTER TABLE SET DISTRIBUTED BY).
+	 *
+	 * Using GetLatestSnapshot() here previously caused the metadata to be
+	 * invisible on QE segments during in-transaction redistribution, leading
+	 * to a zero return value and a subsequent assertion failure in
+	 * vac_update_relstats().
+	 */
+	allseg = GetAllAOCSFileSegInfo(rel, NULL, &totalseg, NULL);
 	for (int seg = 0; seg < totalseg; seg++)
 	{
 		for (int attr = 0; attr < RelationGetNumberOfAttributes(rel); attr++)
@@ -2079,7 +2089,6 @@ aoco_relation_size(Relation rel, ForkNumber forkNumber)
 		FreeAllAOCSSegFileInfo(allseg, totalseg);
 		pfree(allseg);
 	}
-	UnregisterSnapshot(snapshot);
 
 	return totalbytes;
 }
