@@ -723,6 +723,7 @@ with_libcurl
 with_rt
 PROTOC
 with_gp_stats_collector
+with_diskquota
 with_zstd
 with_libbz2
 LZ4_LIBS
@@ -944,6 +945,7 @@ with_zlib
 with_lz4
 with_libbz2
 with_zstd
+with_diskquota
 with_gp_stats_collector
 with_rt
 with_libcurl
@@ -1694,6 +1696,7 @@ Optional Packages:
   --with-lz4              build with LZ4 support
   --without-libbz2        do not use bzip2
   --without-zstd          do not build with Zstandard
+  --with-diskquota        build with diskquota extension
   --with-gp_stats_collector
                           build with stats collector extension
   --without-rt            do not use Realtime Library
@@ -11060,6 +11063,35 @@ fi
 
 { $as_echo "$as_me:${as_lineno-$LINENO}: result: $with_zstd" >&5
 $as_echo "$with_zstd" >&6; }
+
+
+#
+# diskquota
+#
+
+
+
+# Check whether --with-diskquota was given.
+if test "${with_diskquota+set}" = set; then :
+  withval=$with_diskquota;
+  case $withval in
+    yes)
+      :
+      ;;
+    no)
+      :
+      ;;
+    *)
+      as_fn_error $? "no argument expected for --with-diskquota option" "$LINENO" 5
+      ;;
+  esac
+
+else
+  with_diskquota=no
+
+fi
+
+
 
 
 #
