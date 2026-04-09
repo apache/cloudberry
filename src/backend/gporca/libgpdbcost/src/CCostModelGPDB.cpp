@@ -832,7 +832,34 @@ CCostModelGPDB::CostHashAgg(CMemoryPool *mp, CExpressionHandle &exprhdl,
 	if ((COperator::EgbaggtypeLocal == popAgg->Egbaggtype()) &&
 		popAgg->FGeneratesDuplicates())
 	{
-		num_output_rows = num_output_rows * pcmgpdb->UlHosts();
+		// Use NDV of grouping columns from child statistics to estimate the
+		// actual output rows of local partial aggregation, rather than relying
+		// solely on GPORCA's cardinality estimate (which can be inflated after
+		// multi-table joins).
+		//
+		// The local partial agg's output is bounded by the NDV of its grouping
+		// key. GetNDVs() returns the global NDV (total across all segments),
+		// so num_output_rows = global NDV, capped at global input rows.
+		//
+		// This lets the optimizer distinguish:
+		//   - High NDV (≈ input rows): partial agg streams nearly as many rows
+		//     as input → little benefit, cost approaches 1-phase.
+		//   - Low NDV (<<< input rows): partial agg significantly reduces data
+		//     before redistribution → 2-phase preferred.
+		const CColRefArray *pdrgpcrGrpCols = popAgg->PdrgpcrGroupingCols();
+		if (pci->Pcstats(0) != nullptr && pdrgpcrGrpCols->Size() == 1)
+		{
+			CColRef *colref = (*pdrgpcrGrpCols)[0];
+			CDouble ndv = pci->Pcstats(0)->GetNDVs(colref);
+
+			num_output_rows =
+				std::max(1.0, std::min(ndv.Get() * pcmgpdb->UlHosts(),
+								  num_output_rows * pcmgpdb->UlHosts()));
+		}
+		else
+		{
+			num_output_rows = num_output_rows * pcmgpdb->UlHosts();
+		}
 	}
 
 	// get the number of grouping columns
@@ -852,9 +879,32 @@ CCostModelGPDB::CostHashAgg(CMemoryPool *mp, CExpressionHandle &exprhdl,
 		pcmgpdb->GetCostModelParams()
 			->PcpLookup(CCostModelParamsGPDB::EcpHashAggOutputTupWidthCostUnit)
 			->Get();
+	const CDouble dHashAggSpillingMemThreshold =
+		pcmgpdb->GetCostModelParams()
+			->PcpLookup(CCostModelParamsGPDB::EcpHJSpillingMemThreshold)
+			->Get();
+	const CDouble dHashAggInputTupColumnSpillingCostUnit =
+		pcmgpdb->GetCostModelParams()
+			->PcpLookup(
+				CCostModelParamsGPDB::EcpHJFeedingTupColumnSpillingCostUnit)
+			->Get();
+	const CDouble dHashAggInputTupWidthSpillingCostUnit =
+		pcmgpdb->GetCostModelParams()
+			->PcpLookup(
+				CCostModelParamsGPDB::EcpHJFeedingTupWidthSpillingCostUnit)
+			->Get();
+	const CDouble dHashAggOutputTupWidthSpillingCostUnit =
+		pcmgpdb->GetCostModelParams()
+			->PcpLookup(
+				CCostModelParamsGPDB::EcpHJHashingTupWidthSpillingCostUnit)
+			->Get();
 	GPOS_ASSERT(0 < dHashAggInputTupColumnCostUnit);
 	GPOS_ASSERT(0 < dHashAggInputTupWidthCostUnit);
 	GPOS_ASSERT(0 < dHashAggOutputTupWidthCostUnit);
+	GPOS_ASSERT(0 < dHashAggSpillingMemThreshold);
+	GPOS_ASSERT(0 < dHashAggInputTupColumnSpillingCostUnit);
+	GPOS_ASSERT(0 < dHashAggInputTupWidthSpillingCostUnit);
+	GPOS_ASSERT(0 < dHashAggOutputTupWidthSpillingCostUnit);
 
 	// hashAgg cost contains three parts: build hash table, aggregate tuples, and output tuples.
 	// 1. build hash table is correlated with the number of num_input_rows
@@ -863,12 +913,34 @@ CCostModelGPDB::CostHashAgg(CMemoryPool *mp, CExpressionHandle &exprhdl,
 	// algorithm and thus is ignored.
 	// 3. cost of output tuples is correlated with num_output_rows and
 	// width of returning tuples.
-	CCost costLocal = CCost(
-		pci->NumRebinds() *
-		(num_input_rows * ulGrpCols * dHashAggInputTupColumnCostUnit +
-		 num_input_rows * ulGrpCols * pci->Width() *
-			 dHashAggInputTupWidthCostUnit +
-		 num_output_rows * pci->Width() * dHashAggOutputTupWidthCostUnit));
+	//
+	// The hash table holds one entry per distinct group, so its memory
+	// footprint is approximately num_output_rows * width.  When this
+	// exceeds the spilling threshold the aggregator writes batches to disk
+	// and re-reads them, which is reflected by higher cost unit values.
+	CCost costLocal(0);
+	if (num_output_rows * pci->Width() <= dHashAggSpillingMemThreshold)
+	{
+		// groups fit in memory
+		costLocal = CCost(
+			pci->NumRebinds() *
+			(num_input_rows * ulGrpCols * dHashAggInputTupColumnCostUnit +
+			 num_input_rows * ulGrpCols * pci->Width() *
+				 dHashAggInputTupWidthCostUnit +
+			 num_output_rows * pci->Width() * dHashAggOutputTupWidthCostUnit));
+	}
+	else
+	{
+		// groups spill to disk
+		costLocal = CCost(
+			pci->NumRebinds() *
+			(num_input_rows * ulGrpCols *
+				 dHashAggInputTupColumnSpillingCostUnit +
+			 num_input_rows * ulGrpCols * pci->Width() *
+				 dHashAggInputTupWidthSpillingCostUnit +
+			 num_output_rows * pci->Width() *
+				 dHashAggOutputTupWidthSpillingCostUnit));
+	}
 	CCost costChild =
 		CostChildren(mp, exprhdl, pci, pcmgpdb->GetCostModelParams());
 
