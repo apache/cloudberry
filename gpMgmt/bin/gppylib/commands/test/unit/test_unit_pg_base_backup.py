@@ -63,12 +63,14 @@ class TestUnitPgBaseBackup(unittest.TestCase):
         self.assertIn("FROM pg_catalog.pg_replication_slots", mock_query_singleton.call_args[0][1])
         mock_conn.close.assert_called_once_with()
 
-    @patch('gppylib.commands.pg.dbconn.querySingleton', side_effect=[0, 'slot_name'])
+    @patch('gppylib.commands.pg.dbconn.execSQL')
+    @patch('gppylib.commands.pg.dbconn.querySingleton', return_value=0)
     @patch('gppylib.commands.pg.dbconn.connect')
     @patch('gppylib.commands.pg.dbconn.DbURL')
     def test_ensure_replication_slot_exists_creates_missing_slot(self, mock_dburl,
                                                                  mock_connect,
-                                                                 mock_query_singleton):
+                                                                 mock_query_singleton,
+                                                                 mock_exec_sql):
         mock_conn = Mock()
         mock_connect.return_value = mock_conn
 
@@ -77,10 +79,11 @@ class TestUnitPgBaseBackup(unittest.TestCase):
         self.assertTrue(created)
         mock_dburl.assert_called_once_with(hostname='source-host', port=5432, dbname='template1')
         mock_connect.assert_called_once_with(mock_dburl.return_value, utility=True)
-        self.assertEqual(2, mock_query_singleton.call_count)
-        self.assertIn("FROM pg_catalog.pg_replication_slots", mock_query_singleton.call_args_list[0][0][1])
+        self.assertEqual(1, mock_query_singleton.call_count)
+        self.assertIn("FROM pg_catalog.pg_replication_slots", mock_query_singleton.call_args[0][1])
+        mock_exec_sql.assert_called_once()
         self.assertIn("pg_create_physical_replication_slot('slot_name')",
-                      mock_query_singleton.call_args_list[1][0][1])
+                      mock_exec_sql.call_args[0][1])
         mock_conn.close.assert_called_once_with()
 
     @patch('gppylib.commands.pg.dbconn.querySingleton')

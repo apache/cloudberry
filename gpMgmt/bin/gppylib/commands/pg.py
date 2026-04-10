@@ -36,10 +36,9 @@ def ensure_replication_slot_exists(source_host, source_port,
         if slot_exists > 0:
             return False
 
-        dbconn.querySingleton(
+        dbconn.execSQL(
             conn,
-            "SELECT slot_name "
-            "FROM pg_catalog.pg_create_physical_replication_slot('{}')"
+            "SELECT pg_catalog.pg_create_physical_replication_slot('{}')"
             .format(escaped_slot_name))
 
     return True
