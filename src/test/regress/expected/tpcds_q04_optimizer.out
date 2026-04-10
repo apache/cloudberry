@@ -5437,67 +5437,61 @@ INSERT INTO pg_statistic VALUES (
                      ->  Append
                            ->  Result
                                  Filter: (((('s'::text) = 's'::text) AND (date_dim.d_year = 2001) AND ((sum(((((store_sales.ss_ext_list_price - store_sales.ss_ext_wholesale_cost) - store_sales.ss_ext_discount_amt) + store_sales.ss_ext_sales_price) / '2'::numeric))) > '0'::numeric)) OR ((('s'::text) = 's'::text) AND (date_dim.d_year = 2002)) OR ((('s'::text) = 'c'::text) AND (date_dim.d_year = 2001) AND ((sum(((((store_sales.ss_ext_list_price - store_sales.ss_ext_wholesale_cost) - store_sales.ss_ext_discount_amt) + store_sales.ss_ext_sales_price) / '2'::numeric))) > '0'::numeric)) OR ((('s'::text) = 'c'::text) AND (date_dim.d_year = 2002)) OR ((('s'::text) = 'w'::text) AND (date_dim.d_year = 2001) AND ((sum(((((store_sales.ss_ext_list_price - store_sales.ss_ext_wholesale_cost) - store_sales.ss_ext_discount_amt) + store_sales.ss_ext_sales_price) / '2'::numeric))) > '0'::numeric)) OR ((('s'::text) = 'w'::text) AND (date_dim.d_year = 2002)))
-                                 ->  Finalize HashAggregate
+                                 ->  HashAggregate
                                        Group Key: customer.c_customer_id, customer.c_first_name, customer.c_last_name, customer.c_preferred_cust_flag, customer.c_birth_country, customer.c_login, customer.c_email_address, date_dim.d_year
                                        ->  Redistribute Motion 3:3  (slice2; segments: 3)
                                              Hash Key: customer.c_customer_id, customer.c_first_name, customer.c_last_name, customer.c_preferred_cust_flag, customer.c_birth_country, customer.c_login, customer.c_email_address, date_dim.d_year
-                                             ->  Streaming Partial HashAggregate
-                                                   Group Key: customer.c_customer_id, customer.c_first_name, customer.c_last_name, customer.c_preferred_cust_flag, customer.c_birth_country, customer.c_login, customer.c_email_address, date_dim.d_year
-                                                   ->  Hash Join
-                                                         Hash Cond: (store_sales.ss_customer_sk = customer.c_customer_sk)
-                                                         ->  Redistribute Motion 3:3  (slice3; segments: 3)
-                                                               Hash Key: store_sales.ss_customer_sk
-                                                               ->  Hash Join
-                                                                     Hash Cond: (store_sales.ss_sold_date_sk = date_dim.d_date_sk)
-                                                                     ->  Seq Scan on store_sales
-                                                                     ->  Hash
-                                                                           ->  Broadcast Motion 3:3  (slice4; segments: 3)
-                                                                                 ->  Seq Scan on date_dim
-                                                                                       Filter: ((d_year = 2001) OR (d_year = 2002))
-                                                         ->  Hash
-                                                               ->  Seq Scan on customer
+                                             ->  Hash Join
+                                                   Hash Cond: (store_sales.ss_customer_sk = customer.c_customer_sk)
+                                                   ->  Redistribute Motion 3:3  (slice3; segments: 3)
+                                                         Hash Key: store_sales.ss_customer_sk
+                                                         ->  Hash Join
+                                                               Hash Cond: (store_sales.ss_sold_date_sk = date_dim.d_date_sk)
+                                                               ->  Seq Scan on store_sales
+                                                               ->  Hash
+                                                                     ->  Broadcast Motion 3:3  (slice4; segments: 3)
+                                                                           ->  Seq Scan on date_dim
+                                                                                 Filter: ((d_year = 2001) OR (d_year = 2002))
+                                                   ->  Hash
+                                                         ->  Seq Scan on customer
                            ->  Result
                                  Filter: (((('c'::text) = 's'::text) AND (date_dim_1.d_year = 2001) AND ((sum(((((catalog_sales.cs_ext_list_price - catalog_sales.cs_ext_wholesale_cost) - catalog_sales.cs_ext_discount_amt) + catalog_sales.cs_ext_sales_price) / '2'::numeric))) > '0'::numeric)) OR ((('c'::text) = 's'::text) AND (date_dim_1.d_year = 2002)) OR ((('c'::text) = 'c'::text) AND (date_dim_1.d_year = 2001) AND ((sum(((((catalog_sales.cs_ext_list_price - catalog_sales.cs_ext_wholesale_cost) - catalog_sales.cs_ext_discount_amt) + catalog_sales.cs_ext_sales_price) / '2'::numeric))) > '0'::numeric)) OR ((('c'::text) = 'c'::text) AND (date_dim_1.d_year = 2002)) OR ((('c'::text) = 'w'::text) AND (date_dim_1.d_year = 2001) AND ((sum(((((catalog_sales.cs_ext_list_price - catalog_sales.cs_ext_wholesale_cost) - catalog_sales.cs_ext_discount_amt) + catalog_sales.cs_ext_sales_price) / '2'::numeric))) > '0'::numeric)) OR ((('c'::text) = 'w'::text) AND (date_dim_1.d_year = 2002)))
-                                 ->  Finalize HashAggregate
+                                 ->  HashAggregate
                                        Group Key: customer_1.c_customer_id, customer_1.c_first_name, customer_1.c_last_name, customer_1.c_preferred_cust_flag, customer_1.c_birth_country, customer_1.c_login, customer_1.c_email_address, date_dim_1.d_year
                                        ->  Redistribute Motion 3:3  (slice5; segments: 3)
                                              Hash Key: customer_1.c_customer_id, customer_1.c_first_name, customer_1.c_last_name, customer_1.c_preferred_cust_flag, customer_1.c_birth_country, customer_1.c_login, customer_1.c_email_address, date_dim_1.d_year
-                                             ->  Streaming Partial HashAggregate
-                                                   Group Key: customer_1.c_customer_id, customer_1.c_first_name, customer_1.c_last_name, customer_1.c_preferred_cust_flag, customer_1.c_birth_country, customer_1.c_login, customer_1.c_email_address, date_dim_1.d_year
-                                                   ->  Hash Join
-                                                         Hash Cond: (catalog_sales.cs_bill_customer_sk = customer_1.c_customer_sk)
-                                                         ->  Redistribute Motion 3:3  (slice6; segments: 3)
-                                                               Hash Key: catalog_sales.cs_bill_customer_sk
-                                                               ->  Hash Join
-                                                                     Hash Cond: (catalog_sales.cs_sold_date_sk = date_dim_1.d_date_sk)
-                                                                     ->  Seq Scan on catalog_sales
-                                                                     ->  Hash
-                                                                           ->  Broadcast Motion 3:3  (slice7; segments: 3)
-                                                                                 ->  Seq Scan on date_dim date_dim_1
-                                                                                       Filter: ((d_year = 2001) OR (d_year = 2002))
-                                                         ->  Hash
-                                                               ->  Seq Scan on customer customer_1
+                                             ->  Hash Join
+                                                   Hash Cond: (catalog_sales.cs_bill_customer_sk = customer_1.c_customer_sk)
+                                                   ->  Redistribute Motion 3:3  (slice6; segments: 3)
+                                                         Hash Key: catalog_sales.cs_bill_customer_sk
+                                                         ->  Hash Join
+                                                               Hash Cond: (catalog_sales.cs_sold_date_sk = date_dim_1.d_date_sk)
+                                                               ->  Seq Scan on catalog_sales
+                                                               ->  Hash
+                                                                     ->  Broadcast Motion 3:3  (slice7; segments: 3)
+                                                                           ->  Seq Scan on date_dim date_dim_1
+                                                                                 Filter: ((d_year = 2001) OR (d_year = 2002))
+                                                   ->  Hash
+                                                         ->  Seq Scan on customer customer_1
                            ->  Result
                                  Filter: (((('w'::text) = 's'::text) AND (date_dim_2.d_year = 2001) AND ((sum(((((web_sales.ws_ext_list_price - web_sales.ws_ext_wholesale_cost) - web_sales.ws_ext_discount_amt) + web_sales.ws_ext_sales_price) / '2'::numeric))) > '0'::numeric)) OR ((('w'::text) = 's'::text) AND (date_dim_2.d_year = 2002)) OR ((('w'::text) = 'c'::text) AND (date_dim_2.d_year = 2001) AND ((sum(((((web_sales.ws_ext_list_price - web_sales.ws_ext_wholesale_cost) - web_sales.ws_ext_discount_amt) + web_sales.ws_ext_sales_price) / '2'::numeric))) > '0'::numeric)) OR ((('w'::text) = 'c'::text) AND (date_dim_2.d_year = 2002)) OR ((('w'::text) = 'w'::text) AND (date_dim_2.d_year = 2001) AND ((sum(((((web_sales.ws_ext_list_price - web_sales.ws_ext_wholesale_cost) - web_sales.ws_ext_discount_amt) + web_sales.ws_ext_sales_price) / '2'::numeric))) > '0'::numeric)) OR ((('w'::text) = 'w'::text) AND (date_dim_2.d_year = 2002)))
-                                 ->  Finalize HashAggregate
+                                 ->  HashAggregate
                                        Group Key: customer_2.c_customer_id, customer_2.c_first_name, customer_2.c_last_name, customer_2.c_preferred_cust_flag, customer_2.c_birth_country, customer_2.c_login, customer_2.c_email_address, date_dim_2.d_year
                                        ->  Redistribute Motion 3:3  (slice8; segments: 3)
                                              Hash Key: customer_2.c_customer_id, customer_2.c_first_name, customer_2.c_last_name, customer_2.c_preferred_cust_flag, customer_2.c_birth_country, customer_2.c_login, customer_2.c_email_address, date_dim_2.d_year
-                                             ->  Streaming Partial HashAggregate
-                                                   Group Key: customer_2.c_customer_id, customer_2.c_first_name, customer_2.c_last_name, customer_2.c_preferred_cust_flag, customer_2.c_birth_country, customer_2.c_login, customer_2.c_email_address, date_dim_2.d_year
-                                                   ->  Hash Join
-                                                         Hash Cond: (web_sales.ws_bill_customer_sk = customer_2.c_customer_sk)
-                                                         ->  Redistribute Motion 3:3  (slice9; segments: 3)
-                                                               Hash Key: web_sales.ws_bill_customer_sk
-                                                               ->  Hash Join
-                                                                     Hash Cond: (web_sales.ws_sold_date_sk = date_dim_2.d_date_sk)
-                                                                     ->  Seq Scan on web_sales
-                                                                     ->  Hash
-                                                                           ->  Broadcast Motion 3:3  (slice10; segments: 3)
-                                                                                 ->  Seq Scan on date_dim date_dim_2
-                                                                                       Filter: ((d_year = 2001) OR (d_year = 2002))
-                                                         ->  Hash
-                                                               ->  Seq Scan on customer customer_2
+                                             ->  Hash Join
+                                                   Hash Cond: (web_sales.ws_bill_customer_sk = customer_2.c_customer_sk)
+                                                   ->  Redistribute Motion 3:3  (slice9; segments: 3)
+                                                         Hash Key: web_sales.ws_bill_customer_sk
+                                                         ->  Hash Join
+                                                               Hash Cond: (web_sales.ws_sold_date_sk = date_dim_2.d_date_sk)
+                                                               ->  Seq Scan on web_sales
+                                                               ->  Hash
+                                                                     ->  Broadcast Motion 3:3  (slice10; segments: 3)
+                                                                           ->  Seq Scan on date_dim date_dim_2
+                                                                                 Filter: ((d_year = 2001) OR (d_year = 2002))
+                                                   ->  Hash
+                                                         ->  Seq Scan on customer customer_2
                ->  Redistribute Motion 1:3  (slice11)
                      ->  Limit
                            ->  Gather Motion 3:1  (slice12; segments: 3)
@@ -5553,5 +5547,5 @@ INSERT INTO pg_statistic VALUES (
                                                                      Filter: ((share0_ref2.sale_type = 's'::text) AND (share0_ref2.d_year = 2001) AND (share0_ref2.sum > '0'::numeric))
                                                                      ->  Shared Scan (share slice:id 18:0)
  Optimizer: GPORCA
-(125 rows)
+(119 rows)
 
