@@ -455,18 +455,19 @@ EXPLAIN (COSTS OFF) SELECT * FROM document WHERE f_leak(dtitle);
 (4 rows)
 
 EXPLAIN (COSTS OFF) SELECT * FROM document NATURAL JOIN category WHERE f_leak(dtitle);
-                                QUERY PLAN                                 
----------------------------------------------------------------------------
+                                       QUERY PLAN                                       
+----------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Hash Join
-         Hash Cond: (category.cid = document.cid)
-         ->  Broadcast Motion 3:3  (slice2; segments: 3)
-               ->  Seq Scan on category
-         ->  Hash
+         Hash Cond: (document.cid = category.cid)
+         ->  Redistribute Motion 3:3  (slice2; segments: 3)
+               Hash Key: document.cid
                ->  Seq Scan on document
                      Filter: ((dauthor = 'regress_rls_carol'::name) AND f_leak(dtitle))
- Optimizer: Postgres query optimizer
-(9 rows)
+         ->  Hash
+               ->  Seq Scan on category
+ Optimizer: GPORCA
+(10 rows)
 
 -- interaction of FK/PK constraints
 SET SESSION AUTHORIZATION regress_rls_alice;
@@ -1294,18 +1295,14 @@ NOTICE:  f_leak => great technology book
 (3 rows)
 
 EXPLAIN (COSTS OFF) SELECT * FROM part_document WHERE f_leak(dtitle);
-                             QUERY PLAN                              
----------------------------------------------------------------------
+                                 QUERY PLAN                                 
+----------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
-   ->  Append
-         ->  Seq Scan on part_document_fiction part_document_1
-               Filter: ((dauthor = 'regress_rls_carol'::name) AND f_leak(dtitle))
-         ->  Seq Scan on part_document_satire part_document_2
-               Filter: ((dauthor = 'regress_rls_carol'::name) AND f_leak(dtitle))
-         ->  Seq Scan on part_document_nonfiction part_document_3
-               Filter: ((dauthor = 'regress_rls_carol'::name) AND f_leak(dtitle))
- Optimizer: Postgres query optimizer
-(9 rows)
+   ->  Dynamic Seq Scan on part_document
+         Number of partitions to scan: 3 (out of 3)
+         Filter: ((dauthor = 'regress_rls_carol'::name) AND f_leak(dtitle))
+ Optimizer: GPORCA
+(5 rows)
 
 -- database superuser does bypass RLS policy when enabled
 RESET SESSION AUTHORIZATION;

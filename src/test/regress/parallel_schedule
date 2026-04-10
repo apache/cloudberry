@@ -196,3 +196,4 @@ test: stats
 
 # test of tag
 test: tag
+test: collation_orca

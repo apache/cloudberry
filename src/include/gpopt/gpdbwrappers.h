@@ -529,7 +529,7 @@ TargetEntry *MakeTargetEntry(Expr *expr, AttrNumber resno, char *resname,
 
 // create a new var node
 Var *MakeVar(Index varno, AttrNumber varattno, Oid vartype, int32 vartypmod,
-			 Index varlevelsup);
+			 Oid varcollid, Index varlevelsup);
 
 // memory allocation functions
 void *MemCtxtAllocZeroAligned(MemoryContext context, Size size);
@@ -672,6 +672,9 @@ int FindNodes(Node *node, List *nodeTags);
 // GPDB_91_MERGE_FIXME: collation
 // look for nodes with non-default collation; returns 1 if any exist, -1 otherwise
 int CheckCollation(Node *node);
+
+// check if ORDER BY uses an ordering operator (amcanorderbyop) unsupported by ORCA
+bool HasOrderByOrderingOp(Query *query);
 
 Node *CoerceToCommonType(ParseState *pstate, Node *node, Oid target_type,
 						 const char *context);

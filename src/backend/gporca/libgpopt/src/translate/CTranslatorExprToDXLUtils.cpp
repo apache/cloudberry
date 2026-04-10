@@ -40,6 +40,7 @@
 #include "naucrates/dxl/operators/CDXLScalarProjList.h"
 #include "naucrates/dxl/operators/CDXLScalarValuesList.h"
 #include "naucrates/exception.h"
+#include "naucrates/md/CMDIdGPDB.h"
 #include "naucrates/md/IMDCast.h"
 #include "naucrates/md/IMDScalarOp.h"
 #include "naucrates/md/IMDTypeBool.h"
@@ -418,8 +419,15 @@ CTranslatorExprToDXLUtils::PdxlnIdent(CMemoryPool *mp,
 	IMDId *mdid = colref->RetrieveType()->MDId();
 	mdid->AddRef();
 
-	CDXLColRef *dxl_colref =
-		GPOS_NEW(mp) CDXLColRef(mdname, colid, mdid, colref->TypeModifier());
+	IMDId *mdid_collation = nullptr;
+	if (0 != colref->Collation())
+	{
+		mdid_collation =
+			GPOS_NEW(mp) CMDIdGPDB(IMDId::EmdidGeneral, colref->Collation());
+	}
+
+	CDXLColRef *dxl_colref = GPOS_NEW(mp)
+		CDXLColRef(mdname, colid, mdid, colref->TypeModifier(), mdid_collation);
 
 	CDXLScalarIdent *dxl_op = GPOS_NEW(mp) CDXLScalarIdent(mp, dxl_colref);
 	return GPOS_NEW(mp) CDXLNode(mp, dxl_op);

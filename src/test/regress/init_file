@@ -23,6 +23,8 @@ m/^ Optimizer: GPORCA/
 m/^ Optimizer: Postgres-based planner/
 m/^ Settings:.*/
 
+m/^DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature:.*/
+
 # There are a number of NOTICE and HINT messages around table distribution,
 # for example to inform the user that the database will pick a particular
 # column in order to distribute the data. Merging tests from postgres will

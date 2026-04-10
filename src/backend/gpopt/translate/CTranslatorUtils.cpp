@@ -175,11 +175,17 @@ CTranslatorUtils::GetTableDescr(CMemoryPool *mp, CMDAccessor *md_accessor,
 		col_type->AddRef();
 
 		// create a column descriptor for the column
+		IMDId *mdid_collation = nullptr;
+		if (0 != md_col->Collation())
+		{
+			mdid_collation = GPOS_NEW(mp)
+				CMDIdGPDB(IMDId::EmdidGeneral, md_col->Collation());
+		}
 		CDXLColDescr *dxl_col_descr = GPOS_NEW(mp)
 			CDXLColDescr(col, id_generator->next_id(), md_col->AttrNum(),
 						 col_type, md_col->TypeModifier(), /* type_modifier */
 						 false,							   /* fColDropped */
-						 md_col->Length());
+						 md_col->Length(), mdid_collation);
 		table_descr->AddColumnDescr(dxl_col_descr);
 	}
 
@@ -1612,7 +1618,7 @@ CTranslatorUtils::GetColId(ULONG query_level, INT varno, INT var_attno,
 						   IMDId *mdid, CMappingVarColId *var_colid_mapping)
 {
 	OID oid = CMDIdGPDB::CastMdid(mdid)->Oid();
-	Var *var = gpdb::MakeVar(varno, var_attno, oid, -1, 0);
+	Var *var = gpdb::MakeVar(varno, var_attno, oid, -1, InvalidOid, 0);
 	ULONG colid = var_colid_mapping->GetColId(query_level, var, EpspotNone);
 	gpdb::GPDBFree(var);
 

@@ -51,8 +51,6 @@ select 1 a, row_number() over (partition by 'a') union all (select 1 a , 2 b);
 -- This should preserve domain types
 select pg_typeof(a) from (select 'a'::information_schema.sql_identifier a union all
 select 'b'::information_schema.sql_identifier)a;
-INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
-DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: Non-default collation
              pg_typeof             
 -----------------------------------
  information_schema.sql_identifier
@@ -78,8 +76,6 @@ DETAIL:  Falling back to Postgres-based planner because GPORCA does not support 
 
 -- Yet, we keep behaviors on text-like columns
 select pg_typeof(a) from(select 'foo' a union select 'foo'::name)s;
-INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
-DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: Non-default collation
  pg_typeof 
 -----------
  name
@@ -87,8 +83,6 @@ DETAIL:  Falling back to Postgres-based planner because GPORCA does not support 
 
 select pg_typeof(a) from(select 1 x, 'foo' a union
     select 1, 'foo' union select 1, 'foo'::name)s;
-INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
-DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: Non-default collation
  pg_typeof 
 -----------
  text
@@ -96,8 +90,6 @@ DETAIL:  Falling back to Postgres-based planner because GPORCA does not support 
 
 select pg_typeof(a) from(select 1 x, 'foo' a union
     (select 1, 'foo' union select 1, 'foo'::name))s;
-INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
-DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: Non-default collation
  pg_typeof 
 -----------
  name

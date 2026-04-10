@@ -333,18 +333,17 @@ from arrtest;
 $query$ AS qry \gset
 EXPLAIN (COSTS OFF, VERBOSE)
 :qry ;
-                                                                                       QUERY PLAN                                                                                       
-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
- Finalize Aggregate
+                                                                   QUERY PLAN                                                                   
+------------------------------------------------------------------------------------------------------------------------------------------------
+ Aggregate
    Output: array_agg(a), array_dims(array_agg(b)), array_dims(array_agg(c)), array_agg(d), array_dims(array_agg(e)), array_agg(f), array_agg(g)
    ->  Gather Motion 3:1  (slice1; segments: 3)
-         Output: (PARTIAL array_agg(a)), (PARTIAL array_agg(b)), (PARTIAL array_agg(c)), (PARTIAL array_agg(d)), (PARTIAL array_agg(e)), (PARTIAL array_agg(f)), (PARTIAL array_agg(g))
-         ->  Partial Aggregate
-               Output: PARTIAL array_agg(a), PARTIAL array_agg(b), PARTIAL array_agg(c), PARTIAL array_agg(d), PARTIAL array_agg(e), PARTIAL array_agg(f), PARTIAL array_agg(g)
-               ->  Seq Scan on test_gp_array_agg.arrtest
-                     Output: a, b, c, d, e, f, g
- Optimizer: Postgres query optimizer
-(9 rows)
+         Output: a, b, c, d, e, f, g
+         ->  Seq Scan on test_gp_array_agg.arrtest
+               Output: a, b, c, d, e, f, g
+ Settings: enable_parallel = 'off', optimizer = 'on'
+ Optimizer: GPORCA
+(8 rows)
 
 :qry ;
      agg_a     |        dims_b        |   dims_c   |             agg_d             |   dims_e   |               agg_f               |           agg_g           

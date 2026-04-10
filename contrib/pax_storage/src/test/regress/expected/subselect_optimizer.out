@@ -790,17 +790,33 @@ select * from outer_text where (f1, f2) not in (select * from inner_text);
 --
 explain (verbose, costs off)
 select 'foo'::text in (select 'bar'::name union all select 'bar'::name);
-             QUERY PLAN              
--------------------------------------
- Result
-   Output: (hashed SubPlan 1)
-   SubPlan 1
-     ->  Append
-           ->  Result
-                 Output: 'bar'::name
-           ->  Result
-                 Output: 'bar'::name
-(8 rows)
+                                                                                            QUERY PLAN                                                                                            
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Nested Loop Left Join
+   Output: ((CASE WHEN (count(*) = '0'::bigint) THEN '0'::bigint WHEN (count(*) = sum((CASE WHEN (('bar'::name) IS NULL) THEN 1 ELSE 0 END))) THEN '-1'::bigint ELSE count(*) END) > '0'::bigint)
+   Join Filter: true
+   ->  Result
+         Output: true
+   ->  Materialize
+         Output: (CASE WHEN (count(*) = '0'::bigint) THEN '0'::bigint WHEN (count(*) = sum((CASE WHEN (('bar'::name) IS NULL) THEN 1 ELSE 0 END))) THEN '-1'::bigint ELSE count(*) END)
+         ->  Aggregate
+               Output: CASE WHEN (count(*) = '0'::bigint) THEN '0'::bigint WHEN (count(*) = sum((CASE WHEN (('bar'::name) IS NULL) THEN 1 ELSE 0 END))) THEN '-1'::bigint ELSE count(*) END
+               ->  Result
+                     Output: CASE WHEN (('bar'::name) IS NULL) THEN 1 ELSE 0 END
+                     ->  Append
+                           ->  Result
+                                 Output: ('bar'::name)
+                                 Filter: (('foo'::text = ('bar'::name)) OR (('bar'::name) IS NULL))
+                                 ->  Result
+                                       Output: 'bar'::name
+                           ->  Result
+                                 Output: ('bar'::name)
+                                 Filter: (('foo'::text = ('bar'::name)) OR (('bar'::name) IS NULL))
+                                 ->  Result
+                                       Output: 'bar'::name
+ Settings: enable_parallel = 'off', optimizer = 'on'
+ Optimizer: GPORCA
+(24 rows)
 
 select 'foo'::text in (select 'bar'::name union all select 'bar'::name);
  ?column? 
@@ -1007,19 +1023,20 @@ reset optimizer;
 explain (verbose, costs off)
   select x, x from
     (select (select current_database()) as x from (values(1),(2)) v(y)) ss;
-              QUERY PLAN              
---------------------------------------
- Values Scan on "*VALUES*"
-   Output: $0, $1
-   InitPlan 1 (returns $0)
-     ->  Result
-           Output: 'regression'::name
-   InitPlan 2 (returns $1)
-     ->  Result
-           Output: 'regression'::name
- Optimizer: Postgres query optimizer
- Settings: optimizer=on
-(9 rows)
+                      QUERY PLAN                      
+------------------------------------------------------
+ Nested Loop Left Join
+   Output: ('regression'::name), ('regression'::name)
+   Join Filter: true
+   ->  Values Scan on "Values"
+         Output: column1
+   ->  Materialize
+         Output: ('regression'::name)
+         ->  Result
+               Output: 'regression'::name
+ Settings: enable_parallel = 'off', optimizer = 'on'
+ Optimizer: GPORCA
+(11 rows)
 
 explain (verbose, costs off)
   select x, x from
@@ -1039,21 +1056,20 @@ explain (verbose, costs off)
 explain (verbose, costs off)
   select x, x from
     (select (select current_database() where y=y) as x from (values(1),(2)) v(y)) ss;
-                              QUERY PLAN                              
-----------------------------------------------------------------------
- Values Scan on "*VALUES*"
-   Output: (SubPlan 1), (SubPlan 2)
-   SubPlan 1
-     ->  Result
-           Output: 'regression'::name
-           One-Time Filter: ("*VALUES*".column1 = "*VALUES*".column1)
-   SubPlan 2
-     ->  Result
-           Output: 'regression'::name
-           One-Time Filter: ("*VALUES*".column1 = "*VALUES*".column1)
- Optimizer: Postgres query optimizer
- Settings: optimizer=on
-(9 rows)
+                      QUERY PLAN                      
+------------------------------------------------------
+ Nested Loop Left Join
+   Output: ('regression'::name), ('regression'::name)
+   Join Filter: ("Values".column1 = "Values".column1)
+   ->  Values Scan on "Values"
+         Output: column1
+   ->  Materialize
+         Output: ('regression'::name)
+         ->  Result
+               Output: 'regression'::name
+ Settings: enable_parallel = 'off', optimizer = 'on'
+ Optimizer: GPORCA
+(11 rows)
 
 explain (verbose, costs off)
   select x, x from
@@ -1069,7 +1085,7 @@ explain (verbose, costs off)
                  Output: random()
                  One-Time Filter: ("*VALUES*".column1 = "*VALUES*".column1)
  Optimizer: Postgres query optimizer
-(9 rows)
+(10 rows)
 
 --
 -- Test rescan of a hashed subplan (the use of random() is to prevent the
@@ -1701,15 +1717,15 @@ select * from x where f1 = 1;
 explain (verbose, costs off)
 with x as (select * from (select f1, current_database() from subselect_tbl) ss)
 select * from x where f1 = 1;
-                      QUERY PLAN                      
-------------------------------------------------------
+                                 QUERY PLAN                                 
+----------------------------------------------------------------------------
  Gather Motion 1:1  (slice1; segments: 1)
-   Output: subselect_tbl.f1, ('regression'::name)
+   Output: f1, ('regression'::name)
    ->  Seq Scan on public.subselect_tbl
-         Output: subselect_tbl.f1, 'regression'::name
+         Output: f1, 'regression'::name
          Filter: (subselect_tbl.f1 = 1)
- Optimizer: Postgres query optimizer
- Settings: optimizer=off
+ Settings: enable_parallel = 'off', gp_cte_sharing = 'on', optimizer = 'on'
+ Optimizer: GPORCA
 (7 rows)
 
 -- Volatile functions prevent inlining
@@ -1763,56 +1779,84 @@ select * from x where f1 = 1;
 explain (verbose, costs off)
 with x as (select * from (select f1, current_database() as n from subselect_tbl) ss)
 select * from x, x x2 where x.n = x2.n;
-                                  QUERY PLAN                                  
-------------------------------------------------------------------------------
+                                     QUERY PLAN                                     
+------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
-   Output: share0_ref2.f1, share0_ref2.n, share0_ref1.f1, share0_ref1.n
-   ->  Hash Join
-         Output: share0_ref2.f1, share0_ref2.n, share0_ref1.f1, share0_ref1.n
-         Hash Cond: (share0_ref2.n = share0_ref1.n)
-         ->  Redistribute Motion 3:3  (slice2; segments: 3)
-               Output: share0_ref2.f1, share0_ref2.n
-               Hash Key: share0_ref2.n
-               ->  Shared Scan (share slice:id 2:0)
-                     Output: share0_ref2.f1, share0_ref2.n
-         ->  Hash
+   Output: share0_ref3.f1, share0_ref3.n, share0_ref2.f1, share0_ref2.n
+   ->  Sequence
+         Output: share0_ref3.f1, share0_ref3.n, share0_ref2.f1, share0_ref2.n
+         ->  Shared Scan (share slice:id 1:0)
                Output: share0_ref1.f1, share0_ref1.n
-               ->  Redistribute Motion 3:3  (slice3; segments: 3)
-                     Output: share0_ref1.f1, share0_ref1.n
-                     Hash Key: share0_ref1.n
-                     ->  Shared Scan (share slice:id 3:0)
-                           Output: share0_ref1.f1, share0_ref1.n
-                           ->  Seq Scan on public.subselect_tbl
-                                 Output: subselect_tbl.f1, 'regression'::name
- Settings: gp_cte_sharing=on, optimizer=on
- Optimizer: Postgres query optimizer
-(21 rows)
+               ->  Result
+                     Output: subselect_tbl.f1, ('regression'::name)
+                     Filter: (('regression'::name) = 'regression'::name)
+                     ->  Seq Scan on public.subselect_tbl
+                           Output: 'regression'::name, subselect_tbl.f1
+         ->  Hash Join
+               Output: share0_ref3.f1, share0_ref3.n, share0_ref2.f1, share0_ref2.n
+               Hash Cond: (share0_ref3.n = share0_ref2.n)
+               ->  Redistribute Motion 3:3  (slice2; segments: 3)
+                     Output: share0_ref3.f1, share0_ref3.n
+                     Hash Key: share0_ref3.n
+                     ->  Result
+                           Output: share0_ref3.f1, share0_ref3.n
+                           Filter: (share0_ref3.n = 'regression'::name)
+                           ->  Shared Scan (share slice:id 2:0)
+                                 Output: share0_ref3.f1, share0_ref3.n
+               ->  Hash
+                     Output: share0_ref2.f1, share0_ref2.n
+                     ->  Redistribute Motion 3:3  (slice3; segments: 3)
+                           Output: share0_ref2.f1, share0_ref2.n
+                           Hash Key: share0_ref2.n
+                           ->  Result
+                                 Output: share0_ref2.f1, share0_ref2.n
+                                 Filter: (share0_ref2.n = 'regression'::name)
+                                 ->  Shared Scan (share slice:id 3:0)
+                                       Output: share0_ref2.f1, share0_ref2.n
+ Settings: enable_parallel = 'off', gp_cte_sharing = 'on', optimizer = 'on'
+ Optimizer: GPORCA
+(34 rows)
 
 explain (verbose, costs off)
 with x as not materialized (select * from (select f1, current_database() as n from subselect_tbl) ss)
 select * from x, x x2 where x.n = x2.n;
-                                            QUERY PLAN                                            
---------------------------------------------------------------------------------------------------
+                                     QUERY PLAN                                     
+------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
-   Output: subselect_tbl.f1, ('regression'::name), subselect_tbl_1.f1, ('regression'::name)
-   ->  Hash Join
-         Output: subselect_tbl.f1, ('regression'::name), subselect_tbl_1.f1, ('regression'::name)
-         Hash Cond: (('regression'::name) = ('regression'::name))
-         ->  Redistribute Motion 3:3  (slice2; segments: 3)
-               Output: subselect_tbl.f1, ('regression'::name)
-               Hash Key: ('regression'::name)
-               ->  Seq Scan on public.subselect_tbl
-                     Output: subselect_tbl.f1, 'regression'::name
-         ->  Hash
-               Output: subselect_tbl_1.f1, ('regression'::name)
-               ->  Redistribute Motion 3:3  (slice3; segments: 3)
-                     Output: subselect_tbl_1.f1, ('regression'::name)
-                     Hash Key: ('regression'::name)
-                     ->  Seq Scan on public.subselect_tbl subselect_tbl_1
-                           Output: subselect_tbl_1.f1, 'regression'::name
- Optimizer: Postgres query optimizer
- Settings: gp_cte_sharing=on, optimizer=on
-(19 rows)
+   Output: share0_ref3.f1, share0_ref3.n, share0_ref2.f1, share0_ref2.n
+   ->  Sequence
+         Output: share0_ref3.f1, share0_ref3.n, share0_ref2.f1, share0_ref2.n
+         ->  Shared Scan (share slice:id 1:0)
+               Output: share0_ref1.f1, share0_ref1.n
+               ->  Result
+                     Output: subselect_tbl.f1, ('regression'::name)
+                     Filter: (('regression'::name) = 'regression'::name)
+                     ->  Seq Scan on public.subselect_tbl
+                           Output: 'regression'::name, subselect_tbl.f1
+         ->  Hash Join
+               Output: share0_ref3.f1, share0_ref3.n, share0_ref2.f1, share0_ref2.n
+               Hash Cond: (share0_ref3.n = share0_ref2.n)
+               ->  Redistribute Motion 3:3  (slice2; segments: 3)
+                     Output: share0_ref3.f1, share0_ref3.n
+                     Hash Key: share0_ref3.n
+                     ->  Result
+                           Output: share0_ref3.f1, share0_ref3.n
+                           Filter: (share0_ref3.n = 'regression'::name)
+                           ->  Shared Scan (share slice:id 2:0)
+                                 Output: share0_ref3.f1, share0_ref3.n
+               ->  Hash
+                     Output: share0_ref2.f1, share0_ref2.n
+                     ->  Redistribute Motion 3:3  (slice3; segments: 3)
+                           Output: share0_ref2.f1, share0_ref2.n
+                           Hash Key: share0_ref2.n
+                           ->  Result
+                                 Output: share0_ref2.f1, share0_ref2.n
+                                 Filter: (share0_ref2.n = 'regression'::name)
+                                 ->  Shared Scan (share slice:id 3:0)
+                                       Output: share0_ref2.f1, share0_ref2.n
+ Settings: enable_parallel = 'off', gp_cte_sharing = 'on', optimizer = 'on'
+ Optimizer: GPORCA
+(34 rows)
 
 -- Multiply-referenced CTEs can't be inlined if they contain outer self-refs
 -- start_ignore
@@ -1828,8 +1872,8 @@ with recursive x(a) as
     select z.a || z1.a as a from z cross join z as z1
     where length(z.a || z1.a) < 5))
 select * from x;
-                    QUERY PLAN                     
----------------------------------------------------
+                                 QUERY PLAN                                 
+----------------------------------------------------------------------------
  Recursive Union
    ->  Values Scan on "*VALUES*"
          Output: "*VALUES*".column1
@@ -1838,13 +1882,11 @@ select * from x;
          Join Filter: (length((x.a || x_1.a)) < 5)
          ->  WorkTable Scan on x
                Output: x.a
-         ->  Materialize
+         ->  WorkTable Scan on x x_1
                Output: x_1.a
-               ->  WorkTable Scan on x x_1
-                     Output: x_1.a
+ Settings: enable_parallel = 'off', gp_cte_sharing = 'on', optimizer = 'on'
  Optimizer: Postgres query optimizer
- Settings: gp_cte_sharing=on, optimizer=on
-(14 rows)
+(12 rows)
 
 with recursive x(a) as
   ((values ('a'), ('b'))
