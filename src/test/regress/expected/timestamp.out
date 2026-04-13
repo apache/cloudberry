@@ -2007,13 +2007,13 @@ SELECT i,
 SELECT '' AS to_timestamp_1, to_timestamp('0097/Feb/16 --> 08:14:30', 'YYYY/Mon/DD --> HH:MI:SS');
  to_timestamp_1 |         to_timestamp         
 ----------------+------------------------------
-                | Sat Feb 16 08:14:30 0097 PST
+                | Sat Feb 16 08:14:30 0097 LMT
 (1 row)
 
 SELECT '' AS to_timestamp_2, to_timestamp('97/2/16 8:14:30', 'FMYYYY/FMMM/FMDD FMHH:FMMI:FMSS');
  to_timestamp_2 |         to_timestamp         
 ----------------+------------------------------
-                | Sat Feb 16 08:14:30 0097 PST
+                | Sat Feb 16 08:14:30 0097 LMT
 (1 row)
 
 SELECT '' AS to_timestamp_3, to_timestamp('1985 January 12', 'YYYY FMMonth DD');
@@ -2032,7 +2032,7 @@ SELECT '' AS to_timestamp_4, to_timestamp('My birthday-> Year: 1976, Month: May,
 SELECT '' AS to_timestamp_5, to_timestamp('1,582nd VIII 21', 'Y,YYYth FMRM DD');
  to_timestamp_5 |         to_timestamp         
 ----------------+------------------------------
-                | Sat Aug 21 00:00:00 1582 PST
+                | Sat Aug 21 00:00:00 1582 LMT
 (1 row)
 
 SELECT '' AS to_timestamp_6, to_timestamp('15 "text between quote marks" 98 54 45', 
