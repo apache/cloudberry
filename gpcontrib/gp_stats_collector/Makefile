@@ -7,7 +7,7 @@ PROTO_BASES = gpsc_plan gpsc_metrics gpsc_set_service
 PROTO_OBJS  = $(patsubst %,src/protos/%.pb.o,$(PROTO_BASES))
 
 C_OBJS   = $(patsubst %.c,%.o,$(wildcard src/*.c src/*/*.c))
-CPP_OBJS = $(patsubst %.cpp,%.o,$(wildcard src/*.cpp src/*/*.cpp))
+CPP_OBJS = $(patsubst %.cpp,%.o,$(wildcard src/*.cpp src/log/*.cpp src/memory/*.cpp))
 OBJS     = $(C_OBJS) $(CPP_OBJS) $(PROTO_OBJS)
 
 PG_CXXFLAGS += -Werror -Wall -Wno-unused-but-set-variable -std=c++17 -Isrc/protos -Isrc -Iinclude -DGPBUILD
