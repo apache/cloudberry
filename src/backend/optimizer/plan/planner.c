@@ -125,21 +125,6 @@ create_upper_paths_hook_type create_upper_paths_hook = NULL;
 /* standard_qp_extra is defined in optimizer/planner.h */
 
 /*
- * Data specific to grouping sets
- */
-typedef struct
-{
-	List	   *rollups;
-	List	   *hash_sets_idx;
-	double		dNumHashGroups;
-	bool		any_hashable;
-	Bitmapset  *unsortable_refs;
-	Bitmapset  *unhashable_refs;
-	List	   *unsortable_sets;
-	int		   *tleref_to_colnum_map;
-} grouping_sets_data;
-
-/*
  * Temporary structure for use during WindowClause reordering in order to be
  * able to sort WindowClauses on partitioning/ordering prefix.
  */
@@ -163,12 +148,6 @@ typedef struct
 	List *grps_tlist;
 } deconstruct_expr_context;
 
-/* Passthrough data for standard_qp_callback */
-typedef struct
-{
-	List	   *activeWindows;	/* active windows, if any */
-	grouping_sets_data *gset_data;	/* grouping sets data, if any */
-} standard_qp_extra;
 
 /* Local functions */
 static Node *preprocess_expression(PlannerInfo *root, Node *expr, int kind);
@@ -9945,7 +9924,7 @@ create_partial_window_path(PlannerInfo *root,
 		path = (Path *)
 			create_windowagg_path(root, window_rel, path, window_target,
 								  wflists->windowFuncs[wc->winref],
-								  wc);
+								  wc, NULL, false);
 	}
 
 	add_partial_path(window_rel, path);

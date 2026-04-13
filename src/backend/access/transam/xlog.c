@@ -67,6 +67,7 @@
 #include "catalog/catversion.h"
 #include "catalog/pg_control.h"
 #include "catalog/pg_database.h"
+#include "commands/tablespace.h"
 #include "common/controldata_utils.h"
 #include "common/file_utils.h"
 #include "crypto/kmgr.h"
@@ -169,7 +170,6 @@ char *gp_pause_on_restore_point_replay = "";
  * true if WAL replay has found a restore point matching the GPDB-specific GUC
  * gp_pause_on_restore_point_replay and a promotion has been requested.
  */
-static bool reachedContinuousRecoveryTarget = false;
 
 #ifdef WAL_DEBUG
 bool		XLOG_DEBUG = false;

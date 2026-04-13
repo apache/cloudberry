@@ -26,7 +26,7 @@ typedef struct DiskQuotaRelationCacheEntry
 	Oid                namespaceoid;
 	char               relstorage;
 	Oid                relam;
-	RelFileNodeBackend rnode;
+	RelFileLocatorBackend rnode;
 } DiskQuotaRelationCacheEntry;
 
 typedef struct DiskQuotaRelidCacheEntry

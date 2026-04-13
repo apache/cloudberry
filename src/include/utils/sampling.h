@@ -48,7 +48,7 @@ typedef struct
 	int64			n;				/* desired sample size */
 	int64           t;				/* current object number */
 	int64			m;				/* objects selected so far */
-	SamplerRandomState randstate;	/* random generator state */
+	pg_prng_state	randstate;	/* random generator state */
 } RowSamplerData;
 
 typedef RowSamplerData *RowSampler;

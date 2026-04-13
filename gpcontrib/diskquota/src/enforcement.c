@@ -22,7 +22,7 @@
 
 #define CHECKED_OID_LIST_NUM 64
 
-static bool quota_check_ExecCheckRTPerms(List *rangeTable, bool ereport_on_violation);
+static bool quota_check_ExecCheckRTPerms(List *rangeTable,  List *rtePermInfos, bool ereport_on_violation);
 
 static ExecutorCheckPerms_hook_type prev_ExecutorCheckPerms_hook;
 
@@ -42,7 +42,7 @@ init_disk_quota_enforcement(void)
  * you try to INSERT, UPDATE or COPY into a table, and the quota has been exceeded.
  */
 static bool
-quota_check_ExecCheckRTPerms(List *rangeTable, bool ereport_on_violation)
+quota_check_ExecCheckRTPerms(List *rangeTable,  List *rtePermInfos, bool ereport_on_violation)
 {
 	ListCell *l;
 
@@ -51,15 +51,22 @@ quota_check_ExecCheckRTPerms(List *rangeTable, bool ereport_on_violation)
 		List          *indexIds;
 		ListCell      *oid;
 		RangeTblEntry *rte = (RangeTblEntry *)lfirst(l);
+		RTEPermissionInfo *perminfo;
 
 		/* see ExecCheckRTEPerms() */
 		if (rte->rtekind != RTE_RELATION) continue;
 
+		if (rte->perminfoindex == 0 ||
+			rte->perminfoindex > list_length(rtePermInfos))
+			elog(ERROR, "invalid perminfoindex %u in RTE with relid %u",
+				 rte->perminfoindex, rte->relid);
+		perminfo = list_nth_node(RTEPermissionInfo, rtePermInfos,
+								 rte->perminfoindex - 1);
 		/*
 		 * Only check quota on inserts. UPDATEs may well increase space usage
 		 * too, but we ignore that for now.
 		 */
-		if ((rte->requiredPerms & ACL_INSERT) == 0 && (rte->requiredPerms & ACL_UPDATE) == 0) continue;
+		if ((perminfo->requiredPerms & ACL_INSERT) == 0 && (perminfo->requiredPerms & ACL_UPDATE) == 0) continue;
 
 		/*
 		 * Given table oid, check whether the quota limit of table's schema or

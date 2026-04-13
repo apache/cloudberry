@@ -20,7 +20,7 @@
 #include "nodes/parsenodes.h"
 #include "storage/dbdirnode.h"
 
-extern PGDLLIMPORT bool allow_in_place_tablespaces;
+extern bool allow_in_place_tablespaces;
 extern Oid			binary_upgrade_next_pg_tablespace_oid;
 
 /* XLOG stuff */

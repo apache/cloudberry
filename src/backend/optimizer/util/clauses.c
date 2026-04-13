@@ -5802,7 +5802,7 @@ flatten_join_alias_var_optimizer(Query *query, int queryLevel)
 	Node *limitCount = queryNew->limitCount;
 	if (NULL != limitCount)
 	{
-		queryNew->limitCount = flatten_join_alias_vars(queryNew, limitCount);
+		queryNew->limitCount = flatten_join_alias_vars(NULL, queryNew, limitCount);
 		if (limitCount != queryNew->limitCount)
 			pfree(limitCount);
 	}

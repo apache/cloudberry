@@ -601,7 +601,7 @@ AlterSchemaOwner_internal(HeapTuple tup, Relation rel, Oid newOwnerId)
 
 		/* Otherwise, must be owner of the existing object */
 		if (!mdb_admin_allow_bypass_owner_checks(GetUserId(), nspForm->nspowner)
-		 && !pg_namespace_ownercheck(nspForm->oid, GetUserId()))
+		 && !object_ownercheck(NamespaceRelationId, nspForm->oid, GetUserId()))
 			aclcheck_error(ACLCHECK_NOT_OWNER, OBJECT_SCHEMA,
 						   NameStr(nspForm->nspname));
 

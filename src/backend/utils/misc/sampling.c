@@ -143,7 +143,7 @@ RowSampler_Init(RowSampler rs, int64 nobjects, int64 samplesize,
 	rs->t = 0;					/* objects scanned so far */
 	rs->m = 0;					/* objects selected so far */
 
-	sampler_random_init_state(randseed, rs->randstate);
+	sampler_random_init_state(randseed, &rs->randstate);
 }
 
 bool
@@ -173,7 +173,7 @@ RowSampler_Next(RowSampler rs)
      * It is not obvious that this code matches Knuth's Algorithm S.
      * Refer to BlockSampler_Next() for detail.
      */
-	V = sampler_random_fract(rs->randstate);
+	V = sampler_random_fract(&rs->randstate);
     /*
 	 * Don't bother overflow of conversion from int64 K (N) as it was
 	 * already converted to "double" range value when initialized.

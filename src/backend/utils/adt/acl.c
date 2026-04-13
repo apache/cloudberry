@@ -5327,20 +5327,6 @@ is_member_of_role(Oid member, Oid role)
 						   role);
 }
 
-/*
- * check_is_member_of_role
- *		is_member_of_role with a standard permission-violation error if not
- */
-void
-check_is_member_of_role(Oid member, Oid role)
-{
-	if (!is_member_of_role(member, role))
-		ereport(ERROR,
-				(errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
-				 errmsg("must be member of role \"%s\"",
-						GetUserNameFromId(role, false))));
-}
-
 // -- mdb admin patch 
 /*
  * check_mdb_admin_is_member_of_role

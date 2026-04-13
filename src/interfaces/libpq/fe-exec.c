@@ -2241,7 +2241,7 @@ PQgetResult(PGconn *conn)
 		}
 		else
 			/* we won't ever see the Close */
-			pqCommandQueueAdvance(conn);
+			pqCommandQueueAdvance(conn, false, false);
 	}
 
 

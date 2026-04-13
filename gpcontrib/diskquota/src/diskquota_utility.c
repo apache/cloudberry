@@ -211,7 +211,7 @@ calculate_all_table_size()
 	Oid                        relid;
 	Oid                        prelid;
 	Size                       tablesize;
-	RelFileNodeBackend         rnode;
+	RelFileLocatorBackend      rnode;
 	TableEntryKey              keyitem;
 	HTAB                      *local_table_size_map;
 	HASHCTL                    hashctl;
@@ -242,9 +242,9 @@ calculate_all_table_size()
 		/* ignore system table */
 		if (relid < FirstNormalObjectId) continue;
 
-		rnode.node.dbNode  = MyDatabaseId;
-		rnode.node.relNode = classForm->relfilenode;
-		rnode.node.spcNode = OidIsValid(classForm->reltablespace) ? classForm->reltablespace : MyDatabaseTableSpace;
+		rnode.locator.dbOid  = MyDatabaseId;
+		rnode.locator.relNumber = classForm->relfilenode;
+		rnode.locator.spcOid = OidIsValid(classForm->reltablespace) ? classForm->reltablespace : MyDatabaseTableSpace;
 		rnode.backend      = classForm->relpersistence == RELPERSISTENCE_TEMP ? TempRelBackendId : InvalidBackendId;
 		relstorage         = DiskquotaGetRelstorage(classForm);
 
@@ -1377,7 +1377,7 @@ relation_file_stat(int segno, void *ctx)
  * This function is following calculate_relation_size()
  */
 int64
-calculate_relation_size_all_forks(RelFileNodeBackend *rnode, char relstorage, Oid relam)
+calculate_relation_size_all_forks(RelFileLocatorBackend *rnode, char relstorage, Oid relam)
 {
 	int64        totalsize = 0;
 	ForkNumber   forkNum;
@@ -1388,7 +1388,7 @@ calculate_relation_size_all_forks(RelFileNodeBackend *rnode, char relstorage, Oi
 		for (forkNum = 0; forkNum <= MAX_FORKNUM; forkNum++)
 		{
 			RelationFileStatCtx ctx = {0};
-			ctx.relation_path       = relpathbackend(rnode->node, rnode->backend, forkNum);
+			ctx.relation_path       = relpathbackend(rnode->locator, rnode->backend, forkNum);
 			ctx.size                = 0;
 			for (segno = 0;; segno++)
 			{
@@ -1401,7 +1401,7 @@ calculate_relation_size_all_forks(RelFileNodeBackend *rnode, char relstorage, Oi
 	else if (TableIsAoRows(relstorage, relam) || TableIsAoCols(relstorage, relam))
 	{
 		RelationFileStatCtx ctx = {0};
-		ctx.relation_path       = relpathbackend(rnode->node, rnode->backend, MAIN_FORKNUM);
+		ctx.relation_path       = relpathbackend(rnode->locator, rnode->backend, MAIN_FORKNUM);
 		ctx.size                = 0;
 		/*
 		 * Since the extension file with (segno=0, column=1) is not traversed by
@@ -1426,12 +1426,12 @@ relation_size_local(PG_FUNCTION_ARGS)
 	char               relpersistence = PG_GETARG_CHAR(2);
 	char               relstorage     = PG_GETARG_CHAR(3);
 	Oid                relam          = PG_GETARG_OID(4);
-	RelFileNodeBackend rnode          = {0};
+	RelFileLocatorBackend rnode          = {0};
 	int64              size           = 0;
 
-	rnode.node.dbNode  = MyDatabaseId;
-	rnode.node.relNode = relfilenode;
-	rnode.node.spcNode = OidIsValid(reltablespace) ? reltablespace : MyDatabaseTableSpace;
+	rnode.locator.dbOid  = MyDatabaseId;
+	rnode.locator.relNumber = relfilenode;
+	rnode.locator.spcOid = OidIsValid(reltablespace) ? reltablespace : MyDatabaseTableSpace;
 	rnode.backend      = relpersistence == RELPERSISTENCE_TEMP ? TempRelBackendId : InvalidBackendId;
 
 	size = calculate_relation_size_all_forks(&rnode, relstorage, relam);

@@ -216,6 +216,8 @@ copyObjectImpl(const void *from)
 
 	switch (nodeTag(from))
 	{
+#include "copyfuncs.switch.c"
+
 		case T_List:
 			retval = list_copy_deep(from);
 			break;

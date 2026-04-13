@@ -1300,7 +1300,7 @@ answer_query_using_materialized_views_for_join(PlannerInfo *root, AqumvContext a
 		{
 			standard_qp_extra *qp = (standard_qp_extra *) aqumv_context->qp_extra;
 			qp->activeWindows = NIL;
-			qp->groupClause = NIL;
+			qp->gset_data = NULL;
 		}
 		mv_final_rel = query_planner(subroot, qp_callback, aqumv_context->qp_extra);
 

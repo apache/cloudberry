@@ -6991,12 +6991,6 @@ main(int argc, char **argv)
 			default:
 				fprintf(stderr, _("Try \"%s --help\" for more information.\n"), progname);
 				exit(1);
->>>>>>> 8bde32cc2d4 (Fix and rename --use-unique-keys option and add TAP test (#1508))
-				break;
-			default:
-				/* getopt_long already emitted a complaint */
-				pg_log_error_hint("Try \"%s --help\" for more information.", progname);
-				exit(1);
 		}
 	}
 

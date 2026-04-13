@@ -2410,7 +2410,7 @@ ExecParallelPrepHashTableForUnmatched(HashJoinState *hjstate)
 	int			curbatch = hashtable->curbatch;
 	ParallelHashJoinBatch *batch = hashtable->batches[curbatch].shared;
 
-	Assert(BarrierPhase(&batch->batch_barrier) == PHJ_BATCH_PROBING);
+	Assert(BarrierPhase(&batch->batch_barrier) == PHJ_BATCH_PROBE);
 
 	/*
 	 * It would not be deadlock-free to wait on the batch barrier, because it
@@ -3987,7 +3987,7 @@ ExecHashTableDetachBatch(HashJoinTable hashtable)
 		sts_end_parallel_scan(hashtable->batches[curbatch].outer_tuples);
 
 		/* After attaching we always get at least to PHJ_BATCH_PROBING. */
-		Assert(BarrierPhase(&batch->batch_barrier) == PHJ_BATCH_PROBING ||
+		Assert(BarrierPhase(&batch->batch_barrier) == PHJ_BATCH_PROBE ||
 			   BarrierPhase(&batch->batch_barrier) == PHJ_BATCH_SCAN);
 
 		/*
@@ -4006,7 +4006,7 @@ ExecHashTableDetachBatch(HashJoinTable hashtable)
 		 * If phs_lasj_has_null is true, that means we have found null when building hash table,
 		 * there were no batches to detach.
 		 */
-		if (BarrierPhase(&batch->batch_barrier) == PHJ_BATCH_PROBING &&
+		if (BarrierPhase(&batch->batch_barrier) == PHJ_BATCH_PROBE &&
 			!hashtable->parallel_state->phs_lasj_has_null && /* CBDB_PARALLEL */
 			!hashtable->batches[curbatch].outer_eof)
 		{
@@ -4023,7 +4023,7 @@ ExecHashTableDetachBatch(HashJoinTable hashtable)
 		 * the PHJ_BATCH_SCAN phase just to maintain the invariant that
 		 * freeing happens in PHJ_BATCH_FREE, but that'll be wait-free.
 		 */
-		if (BarrierPhase(&batch->batch_barrier) == PHJ_BATCH_PROBING &&
+		if (BarrierPhase(&batch->batch_barrier) == PHJ_BATCH_PROBE &&
 			!hashtable->parallel_state->phs_lasj_has_null /* CBDB_PARALLEL */)
 			attached = BarrierArriveAndDetachExceptLast(&batch->batch_barrier);
 		if (attached && !hashtable->parallel_state->phs_lasj_has_null /* CBDB_PARALLEL */ &&
