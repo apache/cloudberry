@@ -1610,6 +1610,9 @@ PostmasterMain(int argc, char *argv[])
 		pfree(rawstring);
 	}
 
+	InitializeKmgr();
+	InitializeBufferEncryption();
+
 	if (terminal_fd != -1)
 		close(terminal_fd);
 
