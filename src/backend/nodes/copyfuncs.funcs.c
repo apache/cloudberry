@@ -6836,3 +6836,73 @@ _copyCookedConstraint(const CookedConstraint *from)
 
 	return newnode;
 }
+
+/*
+ * CopyPlanFields
+ *
+ *		This function copies the fields of the Plan node.  It is used by
+ *		all the copy functions for classes which inherit from Plan.
+ */
+static void
+CopyPlanFields(const Plan *from, Plan *newnode)
+{
+	COPY_SCALAR_FIELD(plan_node_id);
+
+	COPY_SCALAR_FIELD(startup_cost);
+	COPY_SCALAR_FIELD(total_cost);
+	COPY_SCALAR_FIELD(plan_rows);
+	COPY_SCALAR_FIELD(plan_width);
+	COPY_SCALAR_FIELD(parallel_aware);
+	COPY_SCALAR_FIELD(parallel_safe);
+	COPY_SCALAR_FIELD(async_capable);
+	COPY_SCALAR_FIELD(plan_node_id);
+	COPY_NODE_FIELD(targetlist);
+	COPY_NODE_FIELD(qual);
+	COPY_NODE_FIELD(lefttree);
+	COPY_NODE_FIELD(righttree);
+	COPY_NODE_FIELD(initPlan);
+	COPY_BITMAPSET_FIELD(extParam);
+	COPY_BITMAPSET_FIELD(allParam);
+	COPY_NODE_FIELD(flow);
+	COPY_SCALAR_FIELD(locustype);
+	COPY_SCALAR_FIELD(parallel);
+
+	COPY_SCALAR_FIELD(operatorMemKB);
+}
+
+/*
+ * _copyWindowHashAgg
+ */
+static WindowHashAgg *
+_copyWindowHashAgg(const WindowHashAgg *from)
+{
+	WindowHashAgg  *newnode = makeNode(WindowHashAgg);
+
+	CopyPlanFields((const Plan *) from, (Plan *) newnode);
+
+	COPY_SCALAR_FIELD(winref);
+	COPY_SCALAR_FIELD(partNumCols);
+	COPY_POINTER_FIELD(partColIdx, from->partNumCols * sizeof(AttrNumber));
+	COPY_POINTER_FIELD(partOperators, from->partNumCols * sizeof(Oid));
+	COPY_POINTER_FIELD(partCollations, from->partNumCols * sizeof(Oid));
+	COPY_SCALAR_FIELD(ordNumCols);
+
+	if (from->ordNumCols > 0)
+	{
+		COPY_POINTER_FIELD(ordColIdx, from->ordNumCols * sizeof(AttrNumber));
+		COPY_POINTER_FIELD(ordOperators, from->ordNumCols * sizeof(Oid));
+		COPY_POINTER_FIELD(ordCollations, from->ordNumCols * sizeof(Oid));
+		COPY_POINTER_FIELD(ordNullsFirst, from->ordNumCols * sizeof(bool));
+	}
+
+	COPY_SCALAR_FIELD(frameOptions);
+	COPY_NODE_FIELD(startOffset);
+	COPY_NODE_FIELD(endOffset);
+	COPY_SCALAR_FIELD(startInRangeFunc);
+	COPY_SCALAR_FIELD(endInRangeFunc);
+	COPY_SCALAR_FIELD(inRangeColl);
+	COPY_SCALAR_FIELD(inRangeAsc);
+	COPY_SCALAR_FIELD(inRangeNullsFirst);
+
+	return newnode;
+}

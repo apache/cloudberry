@@ -11169,6 +11169,9 @@ dumpDumpableObject(Archive *fout, DumpableObject *dobj)
 		case DO_TYPE:
 			dumpType(fout, (const TypeInfo *) dobj);
 			break;
+		case DO_TYPE_STORAGE_OPTIONS:
+			dumpTypeStorageOptions(fout, (const TypeInfo *) dobj);
+			break;
 		case DO_SHELL_TYPE:
 			dumpShellType(fout, (const ShellTypeInfo *) dobj);
 			break;
@@ -20431,6 +20434,7 @@ addBoundaryDependencies(DumpableObject **dobjs, int numObjs,
 			case DO_FOREIGN_SERVER:
 			case DO_TRANSFORM:
 			case DO_EXTPROTOCOL:
+			case DO_TYPE_STORAGE_OPTIONS:
 			case DO_BINARY_UPGRADE:
 			case DO_LARGE_OBJECT:
 				/* Pre-data objects: must come before the pre-data boundary */

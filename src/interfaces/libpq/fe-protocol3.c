@@ -322,7 +322,7 @@ pqParseInput3(PGconn *conn)
 					if (conn->cmd_queue_head &&
 						conn->cmd_queue_head->queryclass == PGQUERY_CLOSE)
 					{
-						pqCommandQueueAdvance(conn);
+						pqCommandQueueAdvance(conn, false, false);
 					}
 
 					break;

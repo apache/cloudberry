@@ -9924,7 +9924,7 @@ create_partial_window_path(PlannerInfo *root,
 		path = (Path *)
 			create_windowagg_path(root, window_rel, path, window_target,
 								  wflists->windowFuncs[wc->winref],
-								  wc);
+								  wc, NULL, false);
 	}
 
 	add_partial_path(window_rel, path);

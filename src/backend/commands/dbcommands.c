@@ -3413,46 +3413,6 @@ recovery_create_dbdir(char *path, bool only_tblspc)
 				errmsg("could not create missing directory \"%s\": %m", path));
 }
 
-
-/*
- * recovery_create_dbdir()
- *
- * During recovery, there's a case where we validly need to recover a missing
- * tablespace directory so that recovery can continue.  This happens when
- * recovery wants to create a database but the holding tablespace has been
- * removed before the server stopped.  Since we expect that the directory will
- * be gone before reaching recovery consistency, and we have no knowledge about
- * the tablespace other than its OID here, we create a real directory under
- * pg_tblspc here instead of restoring the symlink.
- *
- * If only_tblspc is true, then the requested directory must be in pg_tblspc/
- */
-static void
-recovery_create_dbdir(char *path, bool only_tblspc)
-{
-	struct stat st;
-
-	Assert(RecoveryInProgress());
-
-	if (stat(path, &st) == 0)
-		return;
-
-	if (only_tblspc && strstr(path, "pg_tblspc/") == NULL)
-		elog(PANIC, "requested to create invalid directory: %s", path);
-
-	if (reachedConsistency && !allow_in_place_tablespaces)
-		ereport(PANIC,
-				errmsg("missing directory \"%s\"", path));
-
-	elog(reachedConsistency ? WARNING : DEBUG1,
-		 "creating missing directory: %s", path);
-
-	if (pg_mkdir_p(path, pg_dir_create_mode) != 0)
-		ereport(PANIC,
-				errmsg("could not create missing directory \"%s\": %m", path));
-}
-
-
 /*
  * DATABASE resource manager's routines
  */

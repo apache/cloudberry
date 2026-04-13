@@ -158,7 +158,7 @@ struct RejectMapEntry
 	 * QD index the rejectmap by (targetoid, databaseoid, tablespaceoid, targettype).
 	 * QE index the rejectmap by (relfilenode).
 	 */
-	RelFileNode relfilenode;
+	RelFileLocator relfilenode;
 };
 
 struct GlobalRejectMapEntry
@@ -866,7 +866,7 @@ merge_uncommitted_table_to_oidlist(List *oidlist)
 	while ((entry = hash_seq_search(&iter)) != NULL)
 	{
 		/* The session of db1 should not see the table inside db2. */
-		if (entry->primary_table_relid == entry->relid && entry->rnode.node.dbNode == MyDatabaseId)
+		if (entry->primary_table_relid == entry->relid && entry->rnode.locator.dbOid == MyDatabaseId)
 		{
 			oidlist = lappend_oid(oidlist, entry->relid);
 		}
@@ -975,7 +975,7 @@ calculate_table_disk_usage(bool is_init, HTAB *local_active_table_stat_map)
 			}
 			relnamespace  = relation_entry->namespaceoid;
 			relowner      = relation_entry->owneroid;
-			reltablespace = relation_entry->rnode.node.spcNode;
+			reltablespace = relation_entry->rnode.locator.spcOid;
 			LWLockRelease(diskquota_locks.relation_cache_lock);
 		}
 
@@ -1611,7 +1611,7 @@ get_rel_name_namespace(Oid relid, Oid *nsOid, char *relname)
 }
 
 static bool
-check_rejectmap_by_relfilenode(RelFileNode relfilenode)
+check_rejectmap_by_relfilenode(RelFileLocator relfilenode)
 {
 	bool                  found;
 	RejectMapEntry        keyitem;
@@ -1711,7 +1711,7 @@ check_rejectmap_by_reloid(Oid reloid)
  * if the quota exceeds.
  */
 bool
-quota_check_common(Oid reloid, RelFileNode *relfilenode)
+quota_check_common(Oid reloid, RelFileLocator *relfilenode)
 {
 	bool enable_hardlimit;
 
@@ -1744,7 +1744,7 @@ invalidate_database_rejectmap(Oid dbid)
 	hash_seq_init(&iter, disk_quota_reject_map);
 	while ((entry = hash_seq_search(&iter)) != NULL)
 	{
-		if (entry->databaseoid == dbid || entry->relfilenode.dbNode == dbid)
+		if (entry->databaseoid == dbid || entry->relfilenode.dbOid == dbid)
 		{
 			hash_search(disk_quota_reject_map, entry, HASH_REMOVE, NULL);
 		}
@@ -2050,10 +2050,10 @@ refresh_rejectmap(PG_FUNCTION_ARGS)
 			LWLockAcquire(diskquota_locks.relation_cache_lock, LW_SHARED);
 			relation_cache_entry = hash_search(relation_cache, &active_oid, HASH_FIND, &found);
 			/* The session of db1 should not see the table inside db2. */
-			if (found && relation_cache_entry && relation_cache_entry->rnode.node.dbNode == MyDatabaseId)
+			if (found && relation_cache_entry && relation_cache_entry->rnode.locator.dbOid == MyDatabaseId)
 			{
 				Oid            relnamespace  = relation_cache_entry->namespaceoid;
-				Oid            reltablespace = relation_cache_entry->rnode.node.spcNode;
+				Oid            reltablespace = relation_cache_entry->rnode.locator.spcOid;
 				Oid            relowner      = relation_cache_entry->owneroid;
 				RejectMapEntry keyitem;
 				for (QuotaType type = 0; type < NUM_QUOTA_TYPES; ++type)
@@ -2083,7 +2083,7 @@ refresh_rejectmap(PG_FUNCTION_ARGS)
 							if (found && relation_cache_entry)
 							{
 								memset(&blocked_filenode_keyitem, 0, sizeof(RejectMapEntry));
-								memcpy(&blocked_filenode_keyitem.relfilenode, &relation_cache_entry->rnode.node,
+								memcpy(&blocked_filenode_keyitem.relfilenode, &relation_cache_entry->rnode.locator,
 								       sizeof(RelFileNode));
 
 								blocked_filenode_entry = hash_search(local_rejectmap, &blocked_filenode_keyitem,
@@ -2108,7 +2108,7 @@ refresh_rejectmap(PG_FUNCTION_ARGS)
 	hash_seq_init(&hash_seq, disk_quota_reject_map);
 	while ((rejectmapentry = hash_seq_search(&hash_seq)) != NULL)
 	{
-		if (rejectmapentry->keyitem.relfilenode.dbNode != MyDatabaseId &&
+		if (rejectmapentry->keyitem.relfilenode.dbOid != MyDatabaseId &&
 		    rejectmapentry->keyitem.databaseoid != MyDatabaseId)
 			continue;
 		hash_search(disk_quota_reject_map, &rejectmapentry->keyitem, HASH_REMOVE, NULL);
