@@ -5028,9 +5028,15 @@ CTranslatorDXLToPlStmt::TranslateDXLDynForeignScan(
 											   RelationGetDescr(childRel),
 											   index, qual, targetlist);
 
+	// Same perminfos swap as in the non-dynamic foreign scan path above.
+	Query *orig_query = m_dxl_to_plstmt_context->m_orig_query;
+	List *saved_perminfos = orig_query->rteperminfos;
+	orig_query->rteperminfos =
+		m_dxl_to_plstmt_context->GetPermInfosList();
+
 	ForeignScan *foreign_scan_first_part =
 		gpdb::CreateForeignScan(oid_first_child, index, qual, targetlist,
-								m_dxl_to_plstmt_context->m_orig_query, rte);
+								orig_query, rte);
 
 	// Set the plan fields to the first partition. We still want the plan type to be
 	// a dynamic foreign scan
@@ -5062,11 +5068,14 @@ CTranslatorDXLToPlStmt::TranslateDXLDynForeignScan(
 
 		ForeignScan *foreign_scan =
 			gpdb::CreateForeignScan(rte->relid, index, qual, targetlist,
-									m_dxl_to_plstmt_context->m_orig_query, rte);
+									orig_query, rte);
 
 		dyn_foreign_scan->fdw_private_list = gpdb::LAppend(
 			dyn_foreign_scan->fdw_private_list, foreign_scan->fdw_private);
 	}
+
+	orig_query->rteperminfos = saved_perminfos;
+
 	// convert qual and targetlist back to root relation. This is used by the
 	// executor node to remap to the children
 	gpdb::RelationWrapper prevRel = gpdb::GetRelation(rte->relid);
@@ -5753,7 +5762,7 @@ CTranslatorDXLToPlStmt::ProcessDXLTblDescr(
 	rte->eref = alias;
 	rte->alias = alias;
 
-	m_dxl_to_plstmt_context->AddPerfmInfo(pi);
+	m_dxl_to_plstmt_context->AddPermInfo(pi);
 
 	// set up rte <> perm info link.
 	rte->perminfoindex = gpdb::ListLength(

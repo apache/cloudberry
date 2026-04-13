@@ -500,7 +500,7 @@ bool		Debug_print_parse = false;
 bool		Debug_print_rewritten = false;
 bool		Debug_pretty_print = true;
 bool 		Debug_print_ivm = false;
-
+bool		Debug_print_aggref_in_explain = false;
 bool		log_parser_stats = false;
 bool		log_planner_stats = false;
 bool		log_executor_stats = false;
@@ -1399,6 +1399,15 @@ struct config_bool ConfigureNamesBool[] =
 			NULL
 		},
 		&Debug_print_ivm,
+		false,
+		NULL, NULL, NULL
+	},
+	{
+		{"debug_print_aggref_in_explain", PGC_USERSET, LOGGING_WHAT,
+			gettext_noop("Logs the aggnos/aggtransno in explain."),
+			NULL
+		},
+		&Debug_print_aggref_in_explain,
 		false,
 		NULL, NULL, NULL
 	},
@@ -2561,6 +2570,16 @@ struct config_int ConfigureNamesInt[] =
 		},
 		&max_prepared_xacts,
 		50, 1, MAX_BACKENDS,
+		NULL, NULL, NULL
+	},
+
+	{
+		{"find_writer_proc_retry_time", PGC_USERSET, DEVELOPER_OPTIONS,
+			gettext_noop("Sets the retry time of find writer proc entry."),
+			NULL
+		},
+		&find_writer_proc_retry_time,
+		5, 1, 5000,
 		NULL, NULL, NULL
 	},
 
@@ -4147,17 +4166,6 @@ struct config_string ConfigureNamesString[] =
 		NULL, NULL, NULL
 	},
 
-	{
-			{"lc_ctype", PGC_INTERNAL, PRESET_OPTIONS,
-					gettext_noop("Shows the character classification and case conversion locale."),
-					NULL,
-					GUC_NOT_IN_SAMPLE | GUC_DISALLOW_IN_FILE
-			},
-			&locale_ctype,
-			"C",
-			NULL, NULL, NULL
-	},
-	
 	/* See main.c about why defaults for LC_foo are not all alike */
 
 	{

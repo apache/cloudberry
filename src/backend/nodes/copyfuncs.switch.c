@@ -1196,3 +1196,6 @@
 		case T_CookedConstraint:
 			retval = _copyCookedConstraint(from);
 			break;
+		case T_WindowHashAgg:
+			retval = _copyWindowHashAgg(from);
+			break;

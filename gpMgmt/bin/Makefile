@@ -128,18 +128,22 @@ download-python-deps:
 #
 # PyGreSQL
 #
+PYGRESQL_VERSION=5.2
 PYGRESQL_DIR=PyGreSQL-$(PYGRESQL_VERSION)
-pygresql: download-python-deps
+pygresql:
 	@echo "--- PyGreSQL"
 	cd $(PYLIB_SRC_EXT)/ && $(TAR) xzf $(PYGRESQL_DIR).tar.gz
 	cd $(PYLIB_SRC_EXT)/$(PYGRESQL_DIR)/ && PATH=$(DESTDIR)$(bindir):$$PATH LDFLAGS='$(LDFLAGS) $(PYGRESQL_LDFLAGS)' python3 setup.py build
 	cp -r $(PYLIB_SRC_EXT)/$(PYGRESQL_DIR)/build/lib*-3*/* $(PYLIB_DIR)/
 
+
 #
 # PSUTIL
 #
+PSUTIL_VERSION=5.7.0
 PSUTIL_DIR=psutil-$(PSUTIL_VERSION)
-psutil: download-python-deps
+
+psutil:
 	@echo "--- psutil"
 ifeq "$(findstring $(BLD_ARCH),aix7_ppc_64 )" ""
 	cd $(PYLIB_SRC_EXT)/ && $(TAR) xzf $(PSUTIL_DIR).tar.gz
@@ -150,18 +154,24 @@ endif
 #
 # PYYAML
 #
+PYYAML_VERSION=5.4.1
 PYYAML_DIR=PyYAML-$(PYYAML_VERSION)
 
-pyyaml: download-python-deps
+pyyaml:
 	@echo "--- pyyaml"
 	cd $(PYLIB_SRC_EXT)/ && $(TAR) xzf $(PYYAML_DIR).tar.gz
-	cd $(PYLIB_SRC_EXT)/$(PYYAML_DIR)/ && env -u CC CFLAGS="-w" python3 setup.py build
+	cd $(PYLIB_SRC_EXT)/$(PYYAML_DIR)/ && env -u CC python3 setup.py build
 	cp -r $(PYLIB_SRC_EXT)/$(PYYAML_DIR)/build/lib*-3*/* $(PYLIB_DIR)/
 
 #
 # MOCK SETUP
 #
+MOCK_VERSION=1.0.1
 MOCK_DIR=mock-$(MOCK_VERSION)
+SETUP_TOOLS_VERSION=36.6.0
+PARSE_VERSION=1.8.2
+SETUP_TOOLS_DIR=setuptools-$(SETUP_TOOLS_VERSION)
+PARSE_DIR=parse-$(PARSE_VERSION)
 PYTHONSRC_INSTALL=$(PYLIB_SRC_EXT)/install
 PYTHON_VERSION=$(shell python3 -c "import sys; print ('%s.%s' % (sys.version_info[0:2]))")
 PYTHONSRC_INSTALL_SITE=$(PYLIB_SRC_EXT)/install/lib/python$(PYTHON_VERSION)/site-packages
@@ -174,19 +184,12 @@ $(MOCK_BIN):
 	@echo "--- mock for platform $(UBUNTU_PLATFORM)"
 	@if [ "$(UBUNTU_PLATFORM)" = "Ubuntu" ]; then\
        pip3 install mock;\
-    else\
-       mkdir -p $(PYLIB_SRC_EXT) && \
-       if [ ! -f $(PYLIB_SRC_EXT)/mock-$(MOCK_VERSION).zip ]; then \
-           echo "Downloading mock-$(MOCK_VERSION).zip..."; \
-           curl -sSL https://files.pythonhosted.org/packages/source/m/mock/mock-$(MOCK_VERSION).zip -o $(PYLIB_SRC_EXT)/mock-$(MOCK_VERSION).zip; \
-       else \
-           echo "mock-$(MOCK_VERSION).zip already exists, skipping download"; \
-       fi && \
+     else\
        mkdir -p $(PYTHONSRC_INSTALL_SITE) && \
-       cd $(PYLIB_SRC_EXT)/ && unzip -q $(MOCK_DIR).zip && \
-       cd $(PYLIB_SRC_EXT)/$(MOCK_DIR)/ && \
-       PYTHONPATH=$(PYTHONSRC_INSTALL_PYTHON_PATH) python3 setup.py install --prefix $(PYTHONSRC_INSTALL) ; \
-    fi;
+	   cd $(PYLIB_SRC_EXT)/ && $(TAR) xzf $(MOCK_DIR).tar.gz && \
+	   cd $(PYLIB_SRC_EXT)/$(MOCK_DIR)/ && \
+	   PYTHONPATH=$(PYTHONSRC_INSTALL_PYTHON_PATH) python3 setup.py install --prefix $(PYTHONSRC_INSTALL) ; \
+	 fi;
 
 # -----------------------------------------------------------------------------
 #
@@ -249,8 +252,8 @@ installcheck: installcheck-bash
 
 clean distclean:
 	rm -rf $(RUFF_BIN) $(SRC)/ruff.txt $(SRC)/.ruff_cache
-	rm -rf $(PYLIB_SRC_EXT)/*.tar.gz $(PYLIB_SRC_EXT)/*.zip $(PYLIB_SRC_EXT)/*.whl
-	rm -rf $(PYLIB_SRC_EXT)/*/
+	rm -rf $(PYLIB_SRC_EXT)/$(PYGRESQL_DIR)/build
+	rm -rf $(PYLIB_SRC)/$(PYGRESQL_DIR)/build
 	rm -rf *.pyc
 	rm -f analyzedbc gpactivatestandbyc gpaddmirrorsc gpcheckcatc \
 		  gpcheckperfc gpcheckresgroupimplc gpchecksubnetcfgc gpconfigc \
