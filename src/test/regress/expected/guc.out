@@ -896,6 +896,7 @@ SELECT name FROM tab_settings_flags
  enable_parallel_dedup_semi_join
  enable_parallel_dedup_semi_reverse_join
  enable_parallel_semi_join
+ find_writer_proc_retry_time
  gp_appendonly_compaction_segfile_limit
  gp_appendonly_insert_files
  gp_appendonly_insert_files_tuples_range
@@ -908,7 +909,7 @@ SELECT name FROM tab_settings_flags
  gp_reraise_signal
  optimizer_control
  optimizer_enable_orderedagg
-(18 rows)
+(19 rows)
 
 -- Most query-tuning GUCs are flagged as valid for EXPLAIN.
 -- default_statistics_target is an exception.
@@ -919,6 +920,7 @@ SELECT name FROM tab_settings_flags
 ------------------------------------------------------
  enable_groupagg
  gp_adjust_selectivity_for_outerjoins
+ gp_cte_sharing
  gp_dynamic_partition_pruning
  gp_enable_agg_distinct
  gp_enable_agg_distinct_pruning
@@ -960,7 +962,7 @@ SELECT name FROM tab_settings_flags
  optimizer_penalize_broadcast_threshold
  optimizer_push_group_by_below_setop_threshold
  optimizer_sort_factor
-(43 rows)
+(44 rows)
 
 -- Runtime-computed GUCs should be part of the preset category.
 SELECT name FROM tab_settings_flags
