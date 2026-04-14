@@ -587,8 +587,9 @@ EXPLAIN (verbose, costs off) SELECT * FROM functest_sri1();
    Output: functest3.a
    ->  Seq Scan on temp_func_test.functest3
          Output: functest3.a
+ Settings: optimizer = 'off'
  Optimizer: Postgres query optimizer
-(5 rows)
+(6 rows)
 
 CREATE FUNCTION functest_sri2() RETURNS SETOF int
 LANGUAGE SQL
@@ -611,8 +612,9 @@ EXPLAIN (verbose, costs off) SELECT * FROM functest_sri2();
    Output: functest3.a
    ->  Seq Scan on temp_func_test.functest3
          Output: functest3.a
+ Settings: optimizer = 'off'
  Optimizer: Postgres query optimizer
-(5 rows)
+(6 rows)
 
 DROP TABLE functest3 CASCADE;
 NOTICE:  drop cascades to function functest_sri2()

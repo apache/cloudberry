@@ -87,6 +87,56 @@ drop domain domainvarchar restrict;
 drop domain domainnumeric restrict;
 drop domain domainint4 restrict;
 drop domain domaintext;
+-- Test non-error-throwing input
+create domain positiveint int4 check(value > 0);
+create domain weirdfloat float8 check((1 / value) < 10);
+select pg_input_is_valid('1', 'positiveint');
+ pg_input_is_valid 
+-------------------
+ t
+(1 row)
+
+select pg_input_is_valid('junk', 'positiveint');
+ pg_input_is_valid 
+-------------------
+ f
+(1 row)
+
+select pg_input_is_valid('-1', 'positiveint');
+ pg_input_is_valid 
+-------------------
+ f
+(1 row)
+
+select * from pg_input_error_info('junk', 'positiveint');
+                    message                    | detail | hint | sql_error_code 
+-----------------------------------------------+--------+------+----------------
+ invalid input syntax for type integer: "junk" |        |      | 22P02
+(1 row)
+
+select * from pg_input_error_info('-1', 'positiveint');
+                                  message                                   | detail | hint | sql_error_code 
+----------------------------------------------------------------------------+--------+------+----------------
+ value for domain positiveint violates check constraint "positiveint_check" |        |      | 23514
+(1 row)
+
+select * from pg_input_error_info('junk', 'weirdfloat');
+                        message                         | detail | hint | sql_error_code 
+--------------------------------------------------------+--------+------+----------------
+ invalid input syntax for type double precision: "junk" |        |      | 22P02
+(1 row)
+
+select * from pg_input_error_info('0.01', 'weirdfloat');
+                                 message                                  | detail | hint | sql_error_code 
+--------------------------------------------------------------------------+--------+------+----------------
+ value for domain weirdfloat violates check constraint "weirdfloat_check" |        |      | 23514
+(1 row)
+
+-- We currently can't trap errors raised in the CHECK expression itself
+select * from pg_input_error_info('0', 'weirdfloat');
+ERROR:  division by zero
+drop domain positiveint;
+drop domain weirdfloat;
 -- Test domains over array types
 create domain domainint4arr int4[1];
 create domain domainchar4arr varchar(4)[2][3];
@@ -426,7 +476,7 @@ explain (verbose, costs off)
  Update on public.dcomptable
    ->  Explicit Redistribute Motion 3:3  (slice1; segments: 3)
          Output: (((d1[1].r := (d1[1].r - '1'::double precision))[1].i := (d1[1].i + '1'::double precision))::dcomptypea), ctid, gp_segment_id, dcomptable.*, (DMLAction)
-         ->  Split
+         ->  Split Update
                Output: (((d1[1].r := (d1[1].r - '1'::double precision))[1].i := (d1[1].i + '1'::double precision))::dcomptypea), ctid, gp_segment_id, dcomptable.*, DMLAction
                ->  Seq Scan on public.dcomptable
                      Output: (d1[1].r := (d1[1].r - '1'::double precision))[1].i := (d1[1].i + '1'::double precision), ctid, gp_segment_id, dcomptable.*
@@ -1200,5 +1250,66 @@ from
  count 
 -------
      1
+(1 row)
+
+--
+-- ORCA shouldn't fail for data corruption while translating query to DXL
+-- for a constant domain value of the following text related types:
+-- char, bpchar, name.
+-- github issue: https://github.com/greenplum-db/gpdb/issues/14155
+--
+create table test_table_14155(txtime timestamptz default now(), user_role text);
+create domain domainname as name;
+create function test_func_name(
+    i_msg text,
+    i_caller domainname = current_user
+) returns void language plpgsql as $$
+begin
+    insert into test_table_14155 (
+        txtime, user_role
+    )
+    select now(), i_caller;
+end
+$$;
+select * from test_func_name('test');
+ test_func_name 
+----------------
+ 
+(1 row)
+
+create domain domainchar as char;
+create function test_func_char(
+    i_msg text,
+    i_caller domainchar = 'a'
+) returns void language plpgsql as $$
+begin
+    insert into test_table_14155 (
+        txtime, user_role
+    )
+    select now(), i_caller;
+end
+$$;
+select * from test_func_char('test');
+ test_func_char 
+----------------
+ 
+(1 row)
+
+create domain domainbpchar as bpchar;
+create function test_func_bpchar(
+    i_msg text,
+    i_caller domainbpchar = 'test'
+) returns void language plpgsql as $$
+begin
+    insert into test_table_14155 (
+        txtime, user_role
+    )
+    select now(), i_caller;
+end
+$$;
+select * from test_func_bpchar('test');
+ test_func_bpchar 
+------------------
+ 
 (1 row)
 

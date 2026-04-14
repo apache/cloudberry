@@ -3,6 +3,7 @@
 --
 create schema test_gp_array_agg;
 set search_path=test_gp_array_agg;
+set optimizer_trace_fallback = on;
 -- Test array_agg(anynonarray)
 create table perct as select a, a / 10 as b from generate_series(1, 100)a distributed by (a);
 drop table if exists t1;
@@ -126,6 +127,8 @@ select a, b, array_dims(gp_array_agg(x)) from mergeappend_test r group by a, b
 union all
 select null, null, array_dims(gp_array_agg(x)) from mergeappend_test r, pg_sleep(0)
 order by 1,2;
+INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
+DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: SIRV functions
  a | b | array_dims 
 ---+---+------------
  0 | 0 | [1:99]
@@ -191,6 +194,8 @@ from (
 group by y;
 -- ensure results are correct.
 select * from v_pagg_test order by y;
+INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
+DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: Multiple Distinct Qualified Aggregates are disabled in the optimizer
  y | tmin | tmax | tndistinct | amin | amax | andistinct 
 ---+------+------+------------+------+------+------------
  0 |   10 | 5000 |        500 |   10 | 5000 |        500
@@ -206,6 +211,8 @@ select * from v_pagg_test order by y;
 (10 rows)
 
 explain (costs off) select * from v_pagg_test order by y;
+INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
+DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: Multiple Distinct Qualified Aggregates are disabled in the optimizer
                                      QUERY PLAN                                     
 ------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
@@ -213,16 +220,18 @@ explain (costs off) select * from v_pagg_test order by y;
    ->  GroupAggregate
          Group Key: pagg_test.y
          ->  Sort
-               Sort Key: pagg_test.y
+               Sort Key: pagg_test.y, (((unnest(regexp_split_to_array((string_agg((pagg_test.x)::text, ','::text)), ','::text))))::integer)
                ->  Result
                      ->  ProjectSet
-                           ->  HashAggregate
+                           ->  Finalize HashAggregate
                                  Group Key: pagg_test.y
                                  ->  Redistribute Motion 3:3  (slice2; segments: 3)
                                        Hash Key: pagg_test.y
-                                       ->  Seq Scan on pagg_test
+                                       ->  Partial HashAggregate
+                                             Group Key: pagg_test.y
+                                             ->  Seq Scan on pagg_test
  Optimizer: Postgres query optimizer
-(14 rows)
+(16 rows)
 
 -- Test array_agg(anyarray)
 create table int_array_table (a int, arr int[]);
@@ -333,6 +342,8 @@ from arrtest;
 $query$ AS qry \gset
 EXPLAIN (COSTS OFF, VERBOSE)
 :qry ;
+INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
+DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: Non-default collation
                                                                                        QUERY PLAN                                                                                       
 ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
  Finalize Aggregate
@@ -344,9 +355,11 @@ EXPLAIN (COSTS OFF, VERBOSE)
                ->  Seq Scan on test_gp_array_agg.arrtest
                      Output: a, b, c, d, e, f, g
  Optimizer: Postgres query optimizer
-(9 rows)
+(10 rows)
 
 :qry ;
+INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
+DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: Non-default collation
      agg_a     |        dims_b        |   dims_c   |             agg_d             |   dims_e   |               agg_f               |           agg_g           
 ---------------+----------------------+------------+-------------------------------+------------+-----------------------------------+---------------------------
  {{1,2},{1,2}} | [1:2][1:2][1:2][1:2] | [1:2][1:1] | {{{elt1,elt2}},{{elt1,elt2}}} | [1:2][1:2] | {{"abc  ",abcde},{"abc  ",abcde}} | {{abc,abcde},{abc,abcde}}
@@ -362,3 +375,4 @@ drop cascades to table pagg_test
 drop cascades to view v_pagg_test
 drop cascades to table int_array_table
 drop cascades to table arrtest
+reset optimizer_trace_fallback;
