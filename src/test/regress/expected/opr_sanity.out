@@ -128,14 +128,15 @@ WHERE p1.oid < p2.oid AND
      p1.proretset != p2.proretset OR
      p1.provolatile != p2.provolatile OR
      p1.pronargs != p2.pronargs);
- oid  |            proname             | oid  |            proname             
-------+--------------------------------+------+--------------------------------
- 7203 | gp_log_backend_memory_contexts | 7204 | gp_log_backend_memory_contexts
- 6405 | int2_matrix_accum              | 6414 | float8_matrix_accum
- 6405 | int2_matrix_accum              | 6406 | int8_matrix_accum
- 6407 | int4_matrix_accum              | 6414 | float8_matrix_accum
- 6406 | int8_matrix_accum              | 6407 | int4_matrix_accum
-(5 rows)
+ oid  |                  proname                  | oid  |                  proname                  
+------+-------------------------------------------+------+-------------------------------------------
+ 7203 | gp_log_backend_memory_contexts            | 7204 | gp_log_backend_memory_contexts
+ 4548 | binary_upgrade_set_next_pg_tablespace_oid | 4549 | binary_upgrade_set_next_pg_tablespace_oid
+ 6405 | int2_matrix_accum                         | 6414 | float8_matrix_accum
+ 6405 | int2_matrix_accum                         | 6406 | int8_matrix_accum
+ 6407 | int4_matrix_accum                         | 6414 | float8_matrix_accum
+ 6406 | int8_matrix_accum                         | 6407 | int4_matrix_accum
+(6 rows)
 
 -- Look for uses of different type OIDs in the argument/result type fields
 -- for different aliases of the same built-in function.

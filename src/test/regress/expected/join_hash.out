@@ -1307,6 +1307,6 @@ select i8.q2, ss.* from
 int8_tbl i8,
 lateral (select t1.fivethous, i4.f1 from tenk1 t1 join int4_tbl i4
          on t1.fivethous = i4.f1+i8.q2 order by 1,2) ss;
-ERROR:  illegal rescan of motion node: invalid plan (nodeMotion.c:1367)  (seg2 slice1 127.0.1.1:7004 pid=1946889) (nodeMotion.c:1367)
+ERROR:  illegal rescan of motion node: invalid plan (nodeMotion.c:1368)
 HINT:  Likely caused by bad NL-join, try setting enable_nestloop to off
 rollback;

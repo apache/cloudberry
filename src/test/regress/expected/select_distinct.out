@@ -259,7 +259,7 @@ SELECT DISTINCT four FROM tenk1;
          Group Key: four
          ->  Redistribute Motion 3:3  (slice2; segments: 3)
                Hash Key: four
-               ->  HashAggregate
+               ->  Streaming HashAggregate
                      Group Key: four
                      ->  Seq Scan on tenk1
  Optimizer: Postgres query optimizer

@@ -4,9 +4,13 @@ set search_path = cte_prune;
 SET optimizer_trace_fallback = on;
 -- end_ignore
 create table t1(v1 int, v2 int, v3 int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'v1' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into t1 values(generate_series(1, 10), generate_series(11, 20), generate_series(21, 30));
 analyze t1;
 create table t2(v1 int, v2 int, v3 int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'v1' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into t2 values(generate_series(0, 100), generate_series(100, 200), generate_series(200, 300));
 analyze t2;
 -- should pruned both seq scan and shared scan
@@ -27,17 +31,16 @@ explain verbose with c1 as (select v1, v2, v3 from t1) select c11.v1 from c1 as 
                      ->  Seq Scan on cte_prune.t1 t1_1  (cost=0.00..1.04 rows=1 width=12)
                            Output: t1_1.v1, t1_1.v2, t1_1.v3
                            Filter: (t1_1.v1 < 5)
- Settings: enable_parallel = 'off', optimizer = 'off'
  Optimizer: Postgres query optimizer
-(16 rows)
+(15 rows)
 
 with c1 as (select v1, v2, v3 from t1) select c11.v1 from c1 as c11 left join c1 as c22 on c11.v1=c22.v1 where c11.v1 < 5;
  v1 
 ----
-  1
   2
   3
   4
+  1
 (4 rows)
 
 explain verbose with c1 as (select v1, v2, v3 from t1) select c11.v2 from c1 as c11 left join c1 as c22 on c11.v1=c22.v1 where c11.v1 < 5;
@@ -57,9 +60,8 @@ explain verbose with c1 as (select v1, v2, v3 from t1) select c11.v2 from c1 as 
                      ->  Seq Scan on cte_prune.t1 t1_1  (cost=0.00..1.04 rows=1 width=12)
                            Output: t1_1.v1, t1_1.v2, t1_1.v3
                            Filter: (t1_1.v1 < 5)
- Settings: enable_parallel = 'off', optimizer = 'off'
  Optimizer: Postgres query optimizer
-(16 rows)
+(15 rows)
 
 with c1 as (select v1, v2, v3 from t1) select c11.v2 from c1 as c11 left join c1 as c22 on c11.v1=c22.v1 where c11.v1 < 5;
  v2 
@@ -87,9 +89,8 @@ explain verbose with c1 as (select v1, v2, v3 from t1) select c11.v3 from c1 as 
                      ->  Seq Scan on cte_prune.t1 t1_1  (cost=0.00..1.04 rows=1 width=12)
                            Output: t1_1.v1, t1_1.v2, t1_1.v3
                            Filter: (t1_1.v1 < 5)
- Settings: enable_parallel = 'off', optimizer = 'off'
  Optimizer: Postgres query optimizer
-(16 rows)
+(15 rows)
 
 with c1 as (select v1, v2, v3 from t1) select c11.v3 from c1 as c11 left join c1 as c22 on c11.v1=c22.v1 where c11.v1 < 5;
  v3 
@@ -118,17 +119,16 @@ explain verbose with c1 as (select * from t1) select c11.v1 from c1 as c11 left 
                      ->  Seq Scan on cte_prune.t1 t1_1  (cost=0.00..1.04 rows=1 width=12)
                            Output: t1_1.v1, t1_1.v2, t1_1.v3
                            Filter: (t1_1.v1 < 5)
- Settings: enable_parallel = 'off', optimizer = 'off'
  Optimizer: Postgres query optimizer
-(16 rows)
+(15 rows)
 
 with c1 as (select * from t1) select c11.v1 from c1 as c11 left join c1 as c22 on c11.v1=c22.v1 where c11.v1 < 5;
  v1 
 ----
-  1
   2
   3
   4
+  1
 (4 rows)
 
 -- no push filter
@@ -153,23 +153,22 @@ explain verbose with c1 as (select v1, v2, v3 from t1) select c11.v3 from c1 as 
                      Output: c11.v3, c11.v1
                      ->  Seq Scan on cte_prune.t1 t1_1  (cost=0.00..1.03 rows=3 width=12)
                            Output: t1_1.v1, t1_1.v2, t1_1.v3
- Settings: enable_parallel = 'off', optimizer = 'off'
  Optimizer: Postgres query optimizer
-(20 rows)
+(19 rows)
 
 with c1 as (select v1, v2, v3 from t1) select c11.v3 from c1 as c11 left join c1 as c22 on c11.v1=c22.v2;
  v3 
 ----
- 26
- 25
- 30
- 29
- 21
  27
  23
  28
  24
  22
+ 21
+ 26
+ 25
+ 30
+ 29
 (10 rows)
 
 explain verbose with c1 as (select v1, v2, v3 from t1) select c11.v2 from c1 as c11 left join c1 as c22 on c11.v1=c22.v2;
@@ -193,23 +192,22 @@ explain verbose with c1 as (select v1, v2, v3 from t1) select c11.v2 from c1 as 
                      Output: c11.v2, c11.v1
                      ->  Seq Scan on cte_prune.t1 t1_1  (cost=0.00..1.03 rows=3 width=12)
                            Output: t1_1.v1, t1_1.v2, t1_1.v3
- Settings: enable_parallel = 'off', optimizer = 'off'
  Optimizer: Postgres query optimizer
-(20 rows)
+(19 rows)
 
 with c1 as (select v1, v2, v3 from t1) select c11.v2 from c1 as c11 left join c1 as c22 on c11.v1=c22.v2;
  v2 
 ----
+ 11
+ 16
+ 15
+ 20
+ 19
  17
  13
  18
  14
  12
- 16
- 15
- 20
- 19
- 11
 (10 rows)
 
 -- distribution col can be pruned which is better than do redistribute in CTE consumer
@@ -237,20 +235,19 @@ explain verbose with c1 as (select v1, v2, v3 from t1) select c11.v2 from c1 as 
                            Output: c22.v2
                            ->  Seq Scan on cte_prune.t1 t1_1  (cost=0.00..1.03 rows=3 width=12)
                                  Output: t1_1.v1, t1_1.v2, t1_1.v3
- Settings: enable_parallel = 'off', optimizer = 'off'
  Optimizer: Postgres query optimizer
-(23 rows)
+(22 rows)
 
 with c1 as (select v1, v2, v3 from t1) select c11.v2 from c1 as c11 left join c1 as c22 on c11.v2=c22.v2;
  v2 
 ----
- 18
- 16
- 19
  13
  14
  17
  11
+ 18
+ 16
+ 19
  12
  15
  20
@@ -280,9 +277,8 @@ explain verbose with c1 as (select v1, v2, v3 from t1) select c11.v3 from c1 as 
                            Output: c22.v3
                            ->  Seq Scan on cte_prune.t1 t1_1  (cost=0.00..1.03 rows=3 width=12)
                                  Output: t1_1.v1, t1_1.v2, t1_1.v3
- Settings: enable_parallel = 'off', optimizer = 'off'
  Optimizer: Postgres query optimizer
-(23 rows)
+(22 rows)
 
 with c1 as (select v1, v2, v3 from t1) select c11.v3 from c1 as c11 left join c1 as c22 on c11.v3=c22.v3;
  v3 
@@ -320,23 +316,22 @@ explain verbose with c1 as (select v1, v2, v3 from t1) select sum(c11.v1) from c
                            Output: c22.v1
                            ->  Seq Scan on cte_prune.t1 t1_1  (cost=0.00..1.03 rows=3 width=12)
                                  Output: t1_1.v1, t1_1.v2, t1_1.v3
- Settings: enable_parallel = 'off', optimizer = 'off'
  Optimizer: Postgres query optimizer
-(18 rows)
+(17 rows)
 
 with c1 as (select v1, v2, v3 from t1) select sum(c11.v1) from c1 as c11 left join c1 as c22 on c11.v1=c22.v1 group by c11.v1;
  sum 
 -----
-   4
-   2
-   8
-   7
-   3
   10
    9
    6
    5
    1
+   4
+   2
+   8
+   7
+   3
 (10 rows)
 
 explain verbose with c1 as (select v1, v2, v3 from t1) select sum(c11.v1) from c1 as c11 left join c1 as c22 on c11.v1=c22.v1 group by c11.v2;
@@ -361,23 +356,22 @@ explain verbose with c1 as (select v1, v2, v3 from t1) select sum(c11.v1) from c
                                  Output: c22.v1
                                  ->  Seq Scan on cte_prune.t1 t1_1  (cost=0.00..1.03 rows=3 width=12)
                                        Output: t1_1.v1, t1_1.v2, t1_1.v3
- Settings: enable_parallel = 'off', optimizer = 'off'
  Optimizer: Postgres query optimizer
-(21 rows)
+(20 rows)
 
 with c1 as (select v1, v2, v3 from t1) select sum(c11.v1) from c1 as c11 left join c1 as c22 on c11.v1=c22.v1 group by c11.v2;
  sum 
 -----
+   1
+   3
+   4
+   7
    6
    9
    8
   10
    2
    5
-   1
-   3
-   4
-   7
 (10 rows)
 
 explain verbose with c1 as (select v1, v2, v3 from t1) select sum(c11.v3) from c1 as c11 left join c1 as c22 on c11.v1=c22.v1 group by c11.v2;
@@ -402,23 +396,22 @@ explain verbose with c1 as (select v1, v2, v3 from t1) select sum(c11.v3) from c
                                  Output: c22.v1
                                  ->  Seq Scan on cte_prune.t1 t1_1  (cost=0.00..1.03 rows=3 width=12)
                                        Output: t1_1.v1, t1_1.v2, t1_1.v3
- Settings: enable_parallel = 'off', optimizer = 'off'
  Optimizer: Postgres query optimizer
-(21 rows)
+(20 rows)
 
 with c1 as (select v1, v2, v3 from t1) select sum(c11.v3) from c1 as c11 left join c1 as c22 on c11.v1=c22.v1 group by c11.v2;
  sum 
 -----
-  26
-  29
-  28
-  30
-  22
-  25
   21
   23
   24
   27
+  30
+  22
+  25
+  26
+  29
+  28
 (10 rows)
 
 -- order by 
@@ -442,9 +435,8 @@ explain verbose with c1 as (select v1, v2, v3 from t1) select c11.v1 from c1 as 
                            Output: c22.v1
                            ->  Seq Scan on cte_prune.t1 t1_1  (cost=0.00..1.03 rows=3 width=12)
                                  Output: t1_1.v1, t1_1.v2, t1_1.v3
- Settings: enable_parallel = 'off', optimizer = 'off'
  Optimizer: Postgres query optimizer
-(19 rows)
+(18 rows)
 
 with c1 as (select v1, v2, v3 from t1) select c11.v1 from c1 as c11 left join c1 as c22 on c11.v1=c22.v1 order by c22.v1;
  v1 
@@ -481,9 +473,8 @@ explain verbose with c1 as (select v1, v2, v3 from t1) select c11.v1 from c1 as 
                            Output: c22.v3, c22.v1
                            ->  Seq Scan on cte_prune.t1 t1_1  (cost=0.00..1.03 rows=3 width=12)
                                  Output: t1_1.v1, t1_1.v2, t1_1.v3
- Settings: enable_parallel = 'off', optimizer = 'off'
  Optimizer: Postgres query optimizer
-(19 rows)
+(18 rows)
 
 with c1 as (select v1, v2, v3 from t1) select c11.v1 from c1 as c11 left join c1 as c22 on c11.v1=c22.v1 order by c22.v3;
  v1 
@@ -524,9 +515,8 @@ explain verbose with c1 as (select v1, v2, v3 from t1) select sum(c11.v1) OVER (
                                  Output: c22.v1
                                  ->  Seq Scan on cte_prune.t1 t1_1  (cost=0.00..1.03 rows=3 width=12)
                                        Output: t1_1.v1, t1_1.v2, t1_1.v3
- Settings: enable_parallel = 'off', optimizer = 'off'
  Optimizer: Postgres query optimizer
-(22 rows)
+(21 rows)
 
 with c1 as (select v1, v2, v3 from t1) select sum(c11.v1) OVER (ORDER BY c11.v2) from c1 as c11 left join c1 as c22 on c11.v1=c22.v1;
  sum 
@@ -566,9 +556,8 @@ explain verbose with c1 as (select v1, v2, v3 from t1) select sum(c11.v2) OVER (
                                  Output: c22.v1
                                  ->  Seq Scan on cte_prune.t1 t1_1  (cost=0.00..1.03 rows=3 width=12)
                                        Output: t1_1.v1, t1_1.v2, t1_1.v3
- Settings: enable_parallel = 'off', optimizer = 'off'
  Optimizer: Postgres query optimizer
-(22 rows)
+(21 rows)
 
 with c1 as (select v1, v2, v3 from t1) select sum(c11.v2) OVER (ORDER BY c11.v3) from c1 as c11 left join c1 as c22 on c11.v1=c22.v1;
  sum 
@@ -587,8 +576,8 @@ with c1 as (select v1, v2, v3 from t1) select sum(c11.v2) OVER (ORDER BY c11.v3)
 
 -- grouping set 
 explain verbose with c1 as (select v1, v2, v3 from t1) select sum(c11.v2) from c1 as c11 left join c1 as c22 on c11.v1=c22.v1 group by ROLLUP(c11.v1,c11.v2);
-                                            QUERY PLAN                                             
----------------------------------------------------------------------------------------------------
+                                              QUERY PLAN                                              
+------------------------------------------------------------------------------------------------------
  GroupAggregate  (cost=2.18..2.61 rows=21 width=16)
    Output: sum(t1.v2), t1.v1, t1.v2
    Group Key: t1.v1, t1.v2
@@ -611,9 +600,8 @@ explain verbose with c1 as (select v1, v2, v3 from t1) select sum(c11.v2) from c
                                  Output: c22.v1
                                  ->  Seq Scan on cte_prune.t1 t1_1  (cost=0.00..1.03 rows=3 width=12)
                                        Output: t1_1.v1, t1_1.v2, t1_1.v3
- Settings: enable_parallel = 'off', optimizer = 'off'
  Optimizer: Postgres query optimizer
-(24 rows)
+(23 rows)
 
 with c1 as (select v1, v2, v3 from t1) select sum(c11.v2) from c1 as c11 left join c1 as c22 on c11.v1=c22.v1 group by ROLLUP(c11.v1,c11.v2);
  sum 
@@ -642,8 +630,8 @@ with c1 as (select v1, v2, v3 from t1) select sum(c11.v2) from c1 as c11 left jo
 (21 rows)
 
 explain verbose with c1 as (select v1, v2, v3 from t1) select sum(c11.v2) from c1 as c11 left join c1 as c22 on c11.v1=c22.v1 group by ROLLUP(c11.v2,c11.v3);
-                                            QUERY PLAN                                             
----------------------------------------------------------------------------------------------------
+                                              QUERY PLAN                                              
+------------------------------------------------------------------------------------------------------
  GroupAggregate  (cost=2.18..2.61 rows=21 width=16)
    Output: sum(t1.v2), t1.v2, t1.v3
    Group Key: t1.v2, t1.v3
@@ -666,9 +654,8 @@ explain verbose with c1 as (select v1, v2, v3 from t1) select sum(c11.v2) from c
                                  Output: c22.v1
                                  ->  Seq Scan on cte_prune.t1 t1_1  (cost=0.00..1.03 rows=3 width=12)
                                        Output: t1_1.v1, t1_1.v2, t1_1.v3
- Settings: enable_parallel = 'off', optimizer = 'off'
  Optimizer: Postgres query optimizer
-(24 rows)
+(23 rows)
 
 with c1 as (select v1, v2, v3 from t1) select sum(c11.v2) OVER (ORDER BY c11.v3) from c1 as c11 left join c1 as c22 on c11.v1=c22.v1;
  sum 
@@ -688,53 +675,52 @@ with c1 as (select v1, v2, v3 from t1) select sum(c11.v2) OVER (ORDER BY c11.v3)
 -- CTE producer should have right output
 explain verbose with c1 as (select t1.v1 as v1, t2.v1 as t21, t2.v2 as t22, t2.v3 as t23 from t1 join t2 on t1.v1 = t2.v1) 
 select c11.v1 from c1 as c11 left join c1 as c22 on c11.v1=c22.v1;
-                                            QUERY PLAN                                             
----------------------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)  (cost=366.90..742.37 rows=779 width=4)
+                                             QUERY PLAN                                              
+-----------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=3.65..5.29 rows=10 width=4)
    Output: t1.v1
-   ->  Hash Left Join  (cost=366.90..731.98 rows=260 width=4)
+   ->  Hash Left Join  (cost=3.65..5.15 rows=3 width=4)
          Output: t1.v1
          Hash Cond: (t1.v1 = c22.v1)
-         ->  Hash Join  (cost=1.08..362.58 rows=260 width=16)
+         ->  Hash Join  (cost=1.08..2.53 rows=3 width=16)
                Output: t1.v1, t2.v1, t2.v2, t2.v3
                Hash Cond: (t2.v1 = t1.v1)
-               ->  Seq Scan on cte_prune.t2  (cost=0.00..293.67 rows=25967 width=12)
+               ->  Seq Scan on cte_prune.t2  (cost=0.00..1.34 rows=34 width=12)
                      Output: t2.v1, t2.v2, t2.v3
                ->  Hash  (cost=1.03..1.03 rows=3 width=4)
                      Output: t1.v1
                      ->  Seq Scan on cte_prune.t1  (cost=0.00..1.03 rows=3 width=4)
                            Output: t1.v1
-         ->  Hash  (cost=362.58..362.58 rows=260 width=4)
+         ->  Hash  (cost=2.53..2.53 rows=3 width=4)
                Output: c22.v1
-               ->  Subquery Scan on c22  (cost=1.08..362.58 rows=260 width=4)
+               ->  Subquery Scan on c22  (cost=1.08..2.53 rows=3 width=4)
                      Output: c22.v1
-                     ->  Hash Join  (cost=1.08..362.58 rows=260 width=16)
+                     ->  Hash Join  (cost=1.08..2.53 rows=3 width=16)
                            Output: t1_1.v1, t2_1.v1, t2_1.v2, t2_1.v3
                            Hash Cond: (t2_1.v1 = t1_1.v1)
-                           ->  Seq Scan on cte_prune.t2 t2_1  (cost=0.00..293.67 rows=25967 width=12)
+                           ->  Seq Scan on cte_prune.t2 t2_1  (cost=0.00..1.34 rows=34 width=12)
                                  Output: t2_1.v1, t2_1.v2, t2_1.v3
                            ->  Hash  (cost=1.03..1.03 rows=3 width=4)
                                  Output: t1_1.v1
                                  ->  Seq Scan on cte_prune.t1 t1_1  (cost=0.00..1.03 rows=3 width=4)
                                        Output: t1_1.v1
- Settings: enable_parallel = 'off', optimizer = 'off'
  Optimizer: Postgres query optimizer
-(29 rows)
+(28 rows)
 
 with c1 as (select t1.v1 as v1, t2.v1 as t21, t2.v2 as t22, t2.v3 as t23 from t1 join t2 on t1.v1 = t2.v1) 
 select c11.v1 from c1 as c11 left join c1 as c22 on c11.v1=c22.v1;
  v1 
 ----
-  5
-  6
-  9
- 10
+  1
   2
   3
   4
   7
   8
-  1
+  5
+  6
+  9
+ 10
 (10 rows)
 
 explain verbose with c1 as (select sum(v1) as v1, sum(v2) as v2, v3 from t1 group by v3) 
@@ -774,9 +760,8 @@ select c11.v1 from c1 as c11 left join c1 as c22 on c11.v1=c22.v1;
                                        Hash Key: t1_1.v3
                                        ->  Seq Scan on cte_prune.t1 t1_1  (cost=0.00..1.03 rows=3 width=12)
                                              Output: t1_1.v3, t1_1.v1, t1_1.v2
- Settings: enable_parallel = 'off', optimizer = 'off'
  Optimizer: Postgres query optimizer
-(35 rows)
+(34 rows)
 
 with c1 as (select lt1.v3 as v3, lt1.v1 as lo1, rt1.v1 as ro1 from t1 lt1, t1 rt1 where lt1.v2 = rt1.v2 and lt1.v1 = rt1.v1)  
 select * from t1 where  t1.v1 in (select v3 from c1) and t1.v1 in (select v3 from c1 where v3 > 0);
@@ -923,15 +908,15 @@ select t1.v1 from t1 where t1.v1 in (select item_sk from frequent_ss_items where
     and t1.v1 in (select item_sk from frequent_ss_items where item_sk > 0);
                                                                                                                                                                                                                                                                                                                                                                                                                                                                     QUERY PLAN                                                                                                                                                                                                                                                                                                                                                                                                                                                                    
 --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)  (cost=452.38..452.44 rows=3 width=4)
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=452.31..452.37 rows=3 width=4)
    Output: t1.v1
-   ->  HashAggregate  (cost=452.38..452.39 rows=1 width=4)
+   ->  HashAggregate  (cost=452.31..452.32 rows=1 width=4)
          Output: t1.v1
          Group Key: (RowIdExpr)
-         ->  Redistribute Motion 3:3  (slice2; segments: 3)  (cost=451.80..452.38 rows=1 width=4)
+         ->  Redistribute Motion 3:3  (slice2; segments: 3)  (cost=451.79..452.31 rows=1 width=4)
                Output: t1.v1, (RowIdExpr)
                Hash Key: (RowIdExpr)
-               ->  Hash Join  (cost=451.80..452.36 rows=1 width=4)
+               ->  Hash Join  (cost=451.79..452.29 rows=1 width=4)
                      Output: t1.v1, (RowIdExpr)
                      Hash Cond: (frequent_ss_items.item_sk = t1.v1)
                      ->  Subquery Scan on frequent_ss_items  (cost=223.67..224.14 rows=6 width=4)
@@ -966,14 +951,14 @@ select t1.v1 from t1 where t1.v1 in (select item_sk from frequent_ss_items where
                                                                            ->  Seq Scan on cte_prune.tpcds_date_dim  (cost=0.00..88.50 rows=15 width=8)
                                                                                  Output: tpcds_date_dim.d_date, tpcds_date_dim.d_date_sk
                                                                                  Filter: (tpcds_date_dim.d_year = ANY ('{1999,2000,2001,2002}'::integer[]))
-                     ->  Hash  (cost=228.11..228.11 rows=1 width=8)
+                     ->  Hash  (cost=228.10..228.10 rows=1 width=8)
                            Output: t1.v1, frequent_ss_items_1.item_sk, (RowIdExpr)
-                           ->  Hash Semi Join  (cost=227.06..228.11 rows=1 width=8)
+                           ->  Hash Semi Join  (cost=227.05..228.10 rows=1 width=8)
                                  Output: t1.v1, frequent_ss_items_1.item_sk, RowIdExpr
                                  Hash Cond: (t1.v1 = frequent_ss_items_1.item_sk)
                                  ->  Seq Scan on cte_prune.t1  (cost=0.00..1.03 rows=3 width=4)
                                        Output: t1.v1, t1.v2, t1.v3
-                                 ->  Hash  (cost=227.05..227.05 rows=1 width=4)
+                                 ->  Hash  (cost=227.04..227.04 rows=1 width=4)
                                        Output: frequent_ss_items_1.item_sk
                                        ->  Subquery Scan on frequent_ss_items_1  (cost=226.96..227.04 rows=1 width=4)
                                              Output: frequent_ss_items_1.item_sk
@@ -1010,9 +995,8 @@ select t1.v1 from t1 where t1.v1 in (select item_sk from frequent_ss_items where
                                                                      ->  Seq Scan on cte_prune.tpcds_item tpcds_item_1  (cost=0.00..40.67 rows=178 width=422)
                                                                            Output: tpcds_item_1.i_item_desc, tpcds_item_1.i_item_sk
                                                                            Filter: (tpcds_item_1.i_item_sk > 0)
- Settings: enable_parallel = 'off', optimizer = 'off'
  Optimizer: Postgres query optimizer
-(89 rows)
+(88 rows)
 
 -- sql 95
 explain verbose with ws_wh as
@@ -1023,15 +1007,15 @@ explain verbose with ws_wh as
 select * from t1 where t1.v1 in (select ws_order_number from ws_wh where true) and t1.v1 in (select ws_order_number from ws_wh where ws_order_number > 0);
                                                                               QUERY PLAN                                                                               
 -----------------------------------------------------------------------------------------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)  (cost=2952.11..2952.33 rows=14 width=12)
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=2559.45..2559.67 rows=14 width=12)
    Output: t1.v1, t1.v2, t1.v3
-   ->  HashAggregate  (cost=2952.11..2952.15 rows=5 width=12)
+   ->  HashAggregate  (cost=2559.45..2559.49 rows=5 width=12)
          Output: t1.v1, t1.v2, t1.v3
          Group Key: (RowIdExpr)
-         ->  Redistribute Motion 3:3  (slice2; segments: 3)  (cost=508.11..2952.10 rows=5 width=12)
+         ->  Redistribute Motion 3:3  (slice2; segments: 3)  (cost=468.73..2559.44 rows=5 width=12)
                Output: t1.v1, t1.v2, t1.v3, (RowIdExpr)
                Hash Key: (RowIdExpr)
-               ->  Hash Join  (cost=508.11..2952.01 rows=5 width=12)
+               ->  Hash Join  (cost=468.73..2559.35 rows=5 width=12)
                      Output: t1.v1, t1.v2, t1.v3, (RowIdExpr)
                      Hash Cond: (ws_wh.ws_order_number = t1.v1)
                      ->  Subquery Scan on ws_wh  (cost=179.92..2181.72 rows=35328 width=4)
@@ -1052,25 +1036,25 @@ select * from t1 where t1.v1 in (select ws_order_number from ws_wh where true) a
                                              Hash Key: ws2.ws_order_number
                                              ->  Seq Scan on cte_prune.tpcds_web_sales ws2  (cost=0.00..68.33 rows=3433 width=8)
                                                    Output: ws2.ws_warehouse_sk, ws2.ws_order_number
-                     ->  Hash  (cost=328.14..328.14 rows=5 width=16)
+                     ->  Hash  (cost=288.76..288.76 rows=5 width=16)
                            Output: t1.v1, t1.v2, t1.v3, ws_wh_1.ws_order_number, (RowIdExpr)
-                           ->  Redistribute Motion 3:3  (slice5; segments: 3)  (cost=327.96..328.14 rows=5 width=16)
+                           ->  Redistribute Motion 3:3  (slice5; segments: 3)  (cost=288.58..288.76 rows=5 width=16)
                                  Output: t1.v1, t1.v2, t1.v3, ws_wh_1.ws_order_number, (RowIdExpr)
                                  Hash Key: t1.v1
-                                 ->  Result  (cost=327.96..328.05 rows=5 width=16)
+                                 ->  Result  (cost=288.58..288.67 rows=5 width=16)
                                        Output: t1.v1, t1.v2, t1.v3, ws_wh_1.ws_order_number, RowIdExpr
-                                       ->  HashAggregate  (cost=327.96..328.00 rows=5 width=16)
+                                       ->  HashAggregate  (cost=288.58..288.63 rows=5 width=16)
                                              Output: t1.v1, t1.v2, t1.v3, ws_wh_1.ws_order_number
                                              Group Key: (RowIdExpr)
-                                             ->  Redistribute Motion 3:3  (slice6; segments: 3)  (cost=115.19..327.95 rows=5 width=16)
+                                             ->  Redistribute Motion 3:3  (slice6; segments: 3)  (cost=115.19..288.57 rows=5 width=16)
                                                    Output: t1.v1, t1.v2, t1.v3, ws_wh_1.ws_order_number, (RowIdExpr)
                                                    Hash Key: (RowIdExpr)
-                                                   ->  Hash Join  (cost=115.19..327.86 rows=5 width=16)
+                                                   ->  Hash Join  (cost=115.19..288.48 rows=5 width=16)
                                                          Output: t1.v1, t1.v2, t1.v3, ws_wh_1.ws_order_number, (RowIdExpr)
                                                          Hash Cond: (ws_wh_1.ws_order_number = t1.v1)
-                                                         ->  Subquery Scan on ws_wh_1  (cost=114.11..277.62 rows=3925 width=4)
+                                                         ->  Subquery Scan on ws_wh_1  (cost=114.11..277.50 rows=3925 width=4)
                                                                Output: ws_wh_1.ws_order_number
-                                                               ->  Hash Join  (cost=114.11..277.62 rows=3925 width=12)
+                                                               ->  Hash Join  (cost=114.11..277.50 rows=3925 width=12)
                                                                      Output: ws1_1.ws_order_number, ws1_1.ws_warehouse_sk, ws2_1.ws_warehouse_sk
                                                                      Hash Cond: (ws1_1.ws_order_number = ws2_1.ws_order_number)
                                                                      Join Filter: (ws1_1.ws_warehouse_sk <> ws2_1.ws_warehouse_sk)
@@ -1092,9 +1076,8 @@ select * from t1 where t1.v1 in (select ws_order_number from ws_wh where true) a
                                                                Output: t1.v1, t1.v2, t1.v3, (RowIdExpr)
                                                                ->  Seq Scan on cte_prune.t1  (cost=0.00..1.03 rows=3 width=12)
                                                                      Output: t1.v1, t1.v2, t1.v3, RowIdExpr
- Settings: enable_parallel = 'off', optimizer = 'off'
  Optimizer: Postgres query optimizer
-(71 rows)
+(70 rows)
 
 explain verbose with ws_wh as
 (select ws1.ws_order_number,ws1.ws_warehouse_sk wh1,ws2.ws_warehouse_sk wh2
@@ -1104,15 +1087,15 @@ explain verbose with ws_wh as
 select * from t1 where t1.v1 in (select wh1 from ws_wh where true) and t1.v1 in (select wh1 from ws_wh where ws_order_number > 0);
                                                                               QUERY PLAN                                                                               
 -----------------------------------------------------------------------------------------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)  (cost=2952.68..2952.91 rows=14 width=12)
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=2560.02..2560.25 rows=14 width=12)
    Output: t1.v1, t1.v2, t1.v3
-   ->  HashAggregate  (cost=2952.68..2952.73 rows=5 width=12)
+   ->  HashAggregate  (cost=2560.02..2560.07 rows=5 width=12)
          Output: t1.v1, t1.v2, t1.v3
          Group Key: (RowIdExpr)
-         ->  Redistribute Motion 3:3  (slice2; segments: 3)  (cost=508.53..2952.67 rows=5 width=12)
+         ->  Redistribute Motion 3:3  (slice2; segments: 3)  (cost=469.15..2560.01 rows=5 width=12)
                Output: t1.v1, t1.v2, t1.v3, (RowIdExpr)
                Hash Key: (RowIdExpr)
-               ->  Hash Join  (cost=508.53..2952.58 rows=5 width=12)
+               ->  Hash Join  (cost=469.15..2559.92 rows=5 width=12)
                      Output: t1.v1, t1.v2, t1.v3, (RowIdExpr)
                      Hash Cond: (ws_wh.wh1 = t1.v1)
                      ->  Subquery Scan on ws_wh  (cost=179.92..2181.72 rows=35328 width=4)
@@ -1133,24 +1116,24 @@ select * from t1 where t1.v1 in (select wh1 from ws_wh where true) and t1.v1 in 
                                              Hash Key: ws2.ws_order_number
                                              ->  Seq Scan on cte_prune.tpcds_web_sales ws2  (cost=0.00..68.33 rows=3433 width=8)
                                                    Output: ws2.ws_warehouse_sk, ws2.ws_order_number
-                     ->  Hash  (cost=328.44..328.44 rows=14 width=16)
+                     ->  Hash  (cost=289.07..289.07 rows=14 width=16)
                            Output: t1.v1, t1.v2, t1.v3, ws_wh_1.wh1, (RowIdExpr)
-                           ->  Broadcast Motion 3:3  (slice5; segments: 3)  (cost=328.17..328.44 rows=14 width=16)
+                           ->  Broadcast Motion 3:3  (slice5; segments: 3)  (cost=288.80..289.07 rows=14 width=16)
                                  Output: t1.v1, t1.v2, t1.v3, ws_wh_1.wh1, (RowIdExpr)
-                                 ->  Result  (cost=328.17..328.26 rows=5 width=16)
+                                 ->  Result  (cost=288.80..288.89 rows=5 width=16)
                                        Output: t1.v1, t1.v2, t1.v3, ws_wh_1.wh1, RowIdExpr
-                                       ->  HashAggregate  (cost=328.17..328.22 rows=5 width=16)
+                                       ->  HashAggregate  (cost=288.80..288.84 rows=5 width=16)
                                              Output: t1.v1, t1.v2, t1.v3, ws_wh_1.wh1
                                              Group Key: (RowIdExpr)
-                                             ->  Redistribute Motion 3:3  (slice6; segments: 3)  (cost=115.40..328.16 rows=5 width=16)
+                                             ->  Redistribute Motion 3:3  (slice6; segments: 3)  (cost=115.40..288.79 rows=5 width=16)
                                                    Output: t1.v1, t1.v2, t1.v3, ws_wh_1.wh1, (RowIdExpr)
                                                    Hash Key: (RowIdExpr)
-                                                   ->  Hash Join  (cost=115.40..328.07 rows=5 width=16)
+                                                   ->  Hash Join  (cost=115.40..288.70 rows=5 width=16)
                                                          Output: t1.v1, t1.v2, t1.v3, ws_wh_1.wh1, (RowIdExpr)
                                                          Hash Cond: (ws_wh_1.wh1 = t1.v1)
-                                                         ->  Subquery Scan on ws_wh_1  (cost=114.11..277.62 rows=3925 width=4)
+                                                         ->  Subquery Scan on ws_wh_1  (cost=114.11..277.50 rows=3925 width=4)
                                                                Output: ws_wh_1.wh1
-                                                               ->  Hash Join  (cost=114.11..277.62 rows=3925 width=12)
+                                                               ->  Hash Join  (cost=114.11..277.50 rows=3925 width=12)
                                                                      Output: ws1_1.ws_order_number, ws1_1.ws_warehouse_sk, ws2_1.ws_warehouse_sk
                                                                      Hash Cond: (ws1_1.ws_order_number = ws2_1.ws_order_number)
                                                                      Join Filter: (ws1_1.ws_warehouse_sk <> ws2_1.ws_warehouse_sk)
@@ -1174,9 +1157,8 @@ select * from t1 where t1.v1 in (select wh1 from ws_wh where true) and t1.v1 in 
                                                                      Output: t1.v1, t1.v2, t1.v3, (RowIdExpr)
                                                                      ->  Seq Scan on cte_prune.t1  (cost=0.00..1.03 rows=3 width=12)
                                                                            Output: t1.v1, t1.v2, t1.v3, RowIdExpr
- Settings: enable_parallel = 'off', optimizer = 'off'
  Optimizer: Postgres query optimizer
-(72 rows)
+(71 rows)
 
 -- start_ignore
 drop table tpcds_store_sales;
@@ -1209,88 +1191,85 @@ t WHERE cup.e < 10
 GROUP BY cup.c,cup.d, cup.e ,t.d, t.b
 ORDER BY 1,2,3,4
 LIMIT 10;
-                                                                                       QUERY PLAN                                                                                       
-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
- Limit  (cost=20000000031.26..20000000031.40 rows=10 width=56)
+                                                                                    QUERY PLAN                                                                                    
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Limit  (cost=20000000026.93..20000000027.07 rows=10 width=56)
    Output: cup.c, cup.d, cup.e, (sum(t.d) OVER (?)), t.d, t.b
-   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=20000000031.26..20000000031.68 rows=30 width=56)
+   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=20000000026.93..20000000027.35 rows=30 width=56)
          Output: cup.c, cup.d, cup.e, (sum(t.d) OVER (?)), t.d, t.b
          Merge Key: cup.c, cup.d, cup.e, (sum(t.d) OVER (?))
-         ->  Limit  (cost=20000000031.26..20000000031.28 rows=10 width=56)
+         ->  Limit  (cost=20000000026.93..20000000026.95 rows=10 width=56)
                Output: cup.c, cup.d, cup.e, (sum(t.d) OVER (?)), t.d, t.b
-               ->  Sort  (cost=20000000031.26..20000000031.54 rows=111 width=56)
+               ->  Sort  (cost=20000000026.93..20000000027.21 rows=111 width=56)
                      Output: cup.c, cup.d, cup.e, (sum(t.d) OVER (?)), t.d, t.b
                      Sort Key: cup.c, cup.d, cup.e, (sum(t.d) OVER (?))
-                     ->  WindowAgg  (cost=20000000026.91..20000000028.86 rows=111 width=56)
+                     ->  WindowAgg  (cost=20000000022.58..20000000024.53 rows=111 width=56)
                            Output: cup.c, cup.d, cup.e, sum(t.d) OVER (?), t.d, t.b
                            Partition By: t.b
-                           ->  Sort  (cost=20000000026.91..20000000027.19 rows=111 width=48)
+                           ->  Sort  (cost=20000000022.58..20000000022.86 rows=111 width=48)
                                  Output: cup.c, cup.d, cup.e, t.d, t.b
                                  Sort Key: t.b
-                                 ->  Redistribute Motion 3:3  (slice2; segments: 3)  (cost=20000000018.14..20000000023.14 rows=111 width=48)
+                                 ->  Redistribute Motion 3:3  (slice2; segments: 3)  (cost=20000000015.47..20000000018.81 rows=111 width=48)
                                        Output: cup.c, cup.d, cup.e, t.d, t.b
                                        Hash Key: t.b
-                                       ->  GroupAggregate  (cost=20000000018.14..20000000020.92 rows=111 width=48)
+                                       ->  HashAggregate  (cost=20000000015.47..20000000016.58 rows=111 width=48)
                                              Output: cup.c, cup.d, cup.e, t.d, t.b
                                              Group Key: cup.c, cup.d, cup.e, t.d, t.b
-                                             ->  Sort  (cost=20000000018.14..20000000018.42 rows=111 width=48)
+                                             ->  Redistribute Motion 3:3  (slice3; segments: 3)  (cost=20000000008.36..20000000014.08 rows=111 width=48)
                                                    Output: cup.c, cup.d, cup.e, t.d, t.b
-                                                   Sort Key: cup.c, cup.d, cup.e, t.d, t.b
-                                                   ->  Redistribute Motion 3:3  (slice3; segments: 3)  (cost=20000000008.36..20000000014.36 rows=111 width=48)
+                                                   Hash Key: cup.c, cup.d, cup.e, t.d, t.b
+                                                   ->  Nested Loop  (cost=20000000008.36..20000000011.86 rows=111 width=48)
                                                          Output: cup.c, cup.d, cup.e, t.d, t.b
-                                                         Hash Key: cup.c, cup.d, cup.e, t.d, t.b
-                                                         ->  Nested Loop  (cost=20000000008.36..20000000012.14 rows=111 width=48)
-                                                               Output: cup.c, cup.d, cup.e, t.d, t.b
-                                                               ->  Broadcast Motion 3:3  (slice4; segments: 3)  (cost=1.08..2.35 rows=10 width=8)
+                                                         ->  Broadcast Motion 3:3  (slice4; segments: 3)  (cost=1.08..2.35 rows=10 width=8)
+                                                               Output: t.d, t.b
+                                                               ->  Subquery Scan on t  (cost=1.08..2.22 rows=3 width=8)
                                                                      Output: t.d, t.b
-                                                                     ->  Subquery Scan on t  (cost=1.08..2.22 rows=3 width=8)
-                                                                           Output: t.d, t.b
-                                                                           ->  Hash Join  (cost=1.08..2.22 rows=3 width=12)
-                                                                                 Output: t3.a, t3.b, t4.d
-                                                                                 Hash Cond: (t4.d = t3.a)
-                                                                                 ->  Redistribute Motion 3:3  (slice5; segments: 3)  (cost=0.00..1.10 rows=3 width=4)
+                                                                     ->  Hash Join  (cost=1.08..2.22 rows=3 width=12)
+                                                                           Output: t3.a, t3.b, t4.d
+                                                                           Hash Cond: (t4.d = t3.a)
+                                                                           ->  Redistribute Motion 3:3  (slice5; segments: 3)  (cost=0.00..1.10 rows=3 width=4)
+                                                                                 Output: t4.d
+                                                                                 Hash Key: t4.d
+                                                                                 ->  Seq Scan on cte_prune.t4  (cost=0.00..1.03 rows=3 width=4)
                                                                                        Output: t4.d
-                                                                                       Hash Key: t4.d
-                                                                                       ->  Seq Scan on cte_prune.t4  (cost=0.00..1.03 rows=3 width=4)
-                                                                                             Output: t4.d
-                                                                                 ->  Hash  (cost=1.03..1.03 rows=3 width=8)
+                                                                           ->  Hash  (cost=1.03..1.03 rows=3 width=8)
+                                                                                 Output: t3.a, t3.b
+                                                                                 ->  Seq Scan on cte_prune.t3  (cost=0.00..1.03 rows=3 width=8)
                                                                                        Output: t3.a, t3.b
-                                                                                       ->  Seq Scan on cte_prune.t3  (cost=0.00..1.03 rows=3 width=8)
-                                                                                             Output: t3.a, t3.b
-                                                               ->  Materialize  (cost=10000000007.29..10000000008.43 rows=11 width=40)
+                                                         ->  Materialize  (cost=10000000007.29..10000000008.15 rows=11 width=40)
+                                                               Output: cup.c, cup.d, cup.e
+                                                               ->  Subquery Scan on cup  (cost=10000000007.29..10000000008.09 rows=11 width=40)
                                                                      Output: cup.c, cup.d, cup.e
-                                                                     ->  Subquery Scan on cup  (cost=10000000007.29..10000000008.37 rows=11 width=40)
-                                                                           Output: cup.c, cup.d, cup.e
-                                                                           Filter: (cup.e < '10'::numeric)
-                                                                           ->  WindowAgg  (cost=10000000007.29..10000000007.95 rows=33 width=48)
-                                                                                 Output: t4_1.c, t4_1.d, avg(t3_1.b) OVER (?), t3_1.b, t3_1.a
-                                                                                 Partition By: t3_1.a
-                                                                                 Order By: t3_1.b
-                                                                                 ->  Sort  (cost=10000000007.29..10000000007.37 rows=33 width=16)
+                                                                     Filter: (cup.e < '10'::numeric)
+                                                                     ->  WindowAgg  (cost=10000000007.29..10000000007.95 rows=33 width=48)
+                                                                           Output: t4_1.c, t4_1.d, avg(t3_1.b) OVER (?), t3_1.b, t3_1.a
+                                                                           Partition By: t3_1.a
+                                                                           Order By: t3_1.b
+                                                                           ->  Sort  (cost=10000000007.29..10000000007.37 rows=33 width=16)
+                                                                                 Output: t3_1.b, t3_1.a, t4_1.c, t4_1.d
+                                                                                 Sort Key: t3_1.a, t3_1.b DESC
+                                                                                 ->  Nested Loop  (cost=10000000001.08..10000000006.44 rows=33 width=16)
                                                                                        Output: t3_1.b, t3_1.a, t4_1.c, t4_1.d
-                                                                                       Sort Key: t3_1.a, t3_1.b DESC
-                                                                                       ->  Nested Loop  (cost=10000000001.08..10000000006.44 rows=33 width=16)
-                                                                                             Output: t3_1.b, t3_1.a, t4_1.c, t4_1.d
-                                                                                             ->  Hash Join  (cost=1.08..2.22 rows=3 width=12)
-                                                                                                   Output: t3_1.a, t3_1.b, t4_2.d
-                                                                                                   Hash Cond: (t4_2.d = t3_1.a)
-                                                                                                   ->  Redistribute Motion 3:3  (slice6; segments: 3)  (cost=0.00..1.10 rows=3 width=4)
+                                                                                       ->  Hash Join  (cost=1.08..2.22 rows=3 width=12)
+                                                                                             Output: t3_1.a, t3_1.b, t4_2.d
+                                                                                             Hash Cond: (t4_2.d = t3_1.a)
+                                                                                             ->  Redistribute Motion 3:3  (slice6; segments: 3)  (cost=0.00..1.10 rows=3 width=4)
+                                                                                                   Output: t4_2.d
+                                                                                                   Hash Key: t4_2.d
+                                                                                                   ->  Seq Scan on cte_prune.t4 t4_2  (cost=0.00..1.03 rows=3 width=4)
                                                                                                          Output: t4_2.d
-                                                                                                         Hash Key: t4_2.d
-                                                                                                         ->  Seq Scan on cte_prune.t4 t4_2  (cost=0.00..1.03 rows=3 width=4)
-                                                                                                               Output: t4_2.d
-                                                                                                   ->  Hash  (cost=1.03..1.03 rows=3 width=8)
+                                                                                             ->  Hash  (cost=1.03..1.03 rows=3 width=8)
+                                                                                                   Output: t3_1.a, t3_1.b
+                                                                                                   ->  Seq Scan on cte_prune.t3 t3_1  (cost=0.00..1.03 rows=3 width=8)
                                                                                                          Output: t3_1.a, t3_1.b
-                                                                                                         ->  Seq Scan on cte_prune.t3 t3_1  (cost=0.00..1.03 rows=3 width=8)
-                                                                                                               Output: t3_1.a, t3_1.b
-                                                                                             ->  Materialize  (cost=0.00..1.22 rows=10 width=8)
+                                                                                       ->  Materialize  (cost=0.00..1.22 rows=10 width=8)
+                                                                                             Output: t4_1.c, t4_1.d
+                                                                                             ->  Broadcast Motion 3:3  (slice7; segments: 3)  (cost=0.00..1.17 rows=10 width=8)
                                                                                                    Output: t4_1.c, t4_1.d
-                                                                                                   ->  Broadcast Motion 3:3  (slice7; segments: 3)  (cost=0.00..1.17 rows=10 width=8)
+                                                                                                   ->  Seq Scan on cte_prune.t4 t4_1  (cost=0.00..1.03 rows=3 width=8)
                                                                                                          Output: t4_1.c, t4_1.d
-                                                                                                         ->  Seq Scan on cte_prune.t4 t4_1  (cost=0.00..1.03 rows=3 width=8)
-                                                                                                               Output: t4_1.c, t4_1.d
  Optimizer: Postgres query optimizer
-(80 rows)
+(76 rows)
 
 WITH t(a,b,d) AS
 (
@@ -1367,9 +1346,8 @@ explain verbose select four, x
                      Hash Key: 'foo'::text
                      ->  Seq Scan on cte_prune.cte_prune_tenk1  (cost=0.00..73.67 rows=3967 width=36)
                            Output: cte_prune_tenk1.four, 'foo'::text
- Settings: enable_parallel = 'off', optimizer = 'off'
  Optimizer: Postgres query optimizer
-(17 rows)
+(16 rows)
 
 select four, x
   from (select four, ten, 'foo'::text as x from cte_prune_tenk1) as t
@@ -1443,17 +1421,17 @@ select * from
 where country.percentage = countrylanguage.percentage order by countrylanguage.COUNTRY,country.language LIMIT 40;
                                                                                                                            QUERY PLAN                                                                                                                           
 ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
- Limit  (cost=1051.23..1051.62 rows=28 width=202)
+ Limit  (cost=1048.68..1049.08 rows=28 width=202)
    Output: country_2.code, country_2.name, city_1.name, countrylanguage_2.language, countrylanguage_2.isofficial, countrylanguage_2.percentage, country.code, country.country, country.language, country.isofficial, country.percentage
-   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=1051.23..1051.62 rows=28 width=202)
+   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=1048.68..1049.08 rows=28 width=202)
          Output: country_2.code, country_2.name, city_1.name, countrylanguage_2.language, countrylanguage_2.isofficial, countrylanguage_2.percentage, country.code, country.country, country.language, country.isofficial, country.percentage
          Merge Key: country.country, countrylanguage_2.language
-         ->  Limit  (cost=1051.23..1051.25 rows=9 width=202)
+         ->  Limit  (cost=1048.68..1048.70 rows=9 width=202)
                Output: country_2.code, country_2.name, city_1.name, countrylanguage_2.language, countrylanguage_2.isofficial, countrylanguage_2.percentage, country.code, country.country, country.language, country.isofficial, country.percentage
-               ->  Sort  (cost=1051.23..1051.25 rows=9 width=202)
+               ->  Sort  (cost=1048.68..1048.70 rows=9 width=202)
                      Output: country_2.code, country_2.name, city_1.name, countrylanguage_2.language, countrylanguage_2.isofficial, countrylanguage_2.percentage, country.code, country.country, country.language, country.isofficial, country.percentage
                      Sort Key: country.country, countrylanguage_2.language
-                     ->  Hash Join  (cost=846.99..1051.08 rows=9 width=202)
+                     ->  Hash Join  (cost=846.89..1048.53 rows=9 width=202)
                            Output: country_2.code, country_2.name, city_1.name, countrylanguage_2.language, countrylanguage_2.isofficial, countrylanguage_2.percentage, country.code, country.country, country.language, country.isofficial, country.percentage
                            Hash Cond: (country.percentage = countrylanguage_2.percentage)
                            ->  Hash Join  (cost=436.98..637.90 rows=245 width=85)
@@ -1490,9 +1468,9 @@ where country.percentage = countrylanguage.percentage order by countrylanguage.C
                                                                                        ->  Seq Scan on cte_prune.country country_1  (cost=0.00..77.33 rows=3 width=52)
                                                                                              Output: country_1.code, country_1.name, country_1.capital
                                                                                              Filter: (country_1.continent = 'Europe'::text)
-                           ->  Hash  (cost=409.66..409.66 rows=28 width=117)
+                           ->  Hash  (cost=409.57..409.57 rows=28 width=117)
                                  Output: country_2.code, country_2.name, city_1.name, countrylanguage_2.language, countrylanguage_2.isofficial, countrylanguage_2.percentage
-                                 ->  Broadcast Motion 3:3  (slice5; segments: 3)  (cost=227.29..409.66 rows=28 width=117)
+                                 ->  Broadcast Motion 3:3  (slice5; segments: 3)  (cost=227.29..409.57 rows=28 width=117)
                                        Output: country_2.code, country_2.name, city_1.name, countrylanguage_2.language, countrylanguage_2.isofficial, countrylanguage_2.percentage
                                        ->  Hash Join  (cost=227.29..409.20 rows=9 width=117)
                                              Output: country_2.code, country_2.name, city_1.name, countrylanguage_2.language, countrylanguage_2.isofficial, countrylanguage_2.percentage
@@ -1517,9 +1495,8 @@ where country.percentage = countrylanguage.percentage order by countrylanguage.C
                                                                            ->  Seq Scan on cte_prune.country country_2  (cost=0.00..77.33 rows=3 width=52)
                                                                                  Output: country_2.code, country_2.name, country_2.capital
                                                                                  Filter: (country_2.continent = 'Europe'::text)
- Settings: enable_parallel = 'off', optimizer = 'off'
  Optimizer: Postgres query optimizer
-(76 rows)
+(75 rows)
 
 -- CTE in the main query and subqueries within the main query
 explain verbose with bad_headofstates as 
@@ -1543,17 +1520,17 @@ where country.code = bad_headofstates.code and country.region = OUTERMOST_FOO.re
 order by OUTERMOST_FOO.region,bad_headofstates.headofstate LIMIT 40;
                                                                                            QUERY PLAN                                                                                            
 -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
- Limit  (cost=3473.37..3473.94 rows=40 width=96)
+ Limit  (cost=3470.04..3470.61 rows=40 width=96)
    Output: (avg(country_2.population)), country_2.region, country_1.headofstate
-   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=3473.37..3475.07 rows=120 width=96)
+   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=3470.04..3471.74 rows=120 width=96)
          Output: (avg(country_2.population)), country_2.region, country_1.headofstate
          Merge Key: country_2.region, country_1.headofstate
-         ->  Limit  (cost=3473.37..3473.47 rows=40 width=96)
+         ->  Limit  (cost=3470.04..3470.14 rows=40 width=96)
                Output: (avg(country_2.population)), country_2.region, country_1.headofstate
-               ->  Sort  (cost=3473.37..3482.49 rows=3648 width=96)
+               ->  Sort  (cost=3470.04..3479.16 rows=3648 width=96)
                      Output: (avg(country_2.population)), country_2.region, country_1.headofstate
                      Sort Key: country_2.region, country_1.headofstate
-                     ->  Hash Join  (cost=2915.55..3358.06 rows=3648 width=96)
+                     ->  Hash Join  (cost=2912.21..3354.72 rows=3648 width=96)
                            Output: (avg(country_2.population)), country_2.region, country_1.headofstate
                            Inner Unique: true
                            Hash Cond: (country.region = country_2.region)
@@ -1580,9 +1557,9 @@ order by OUTERMOST_FOO.region,bad_headofstates.headofstate LIMIT 40;
                                        Output: country.code, country.region
                                        ->  Seq Scan on cte_prune.country  (cost=0.00..68.67 rows=3467 width=48)
                                              Output: country.code, country.region
-                           ->  Hash  (cost=2680.97..2680.97 rows=1000 width=64)
+                           ->  Hash  (cost=2677.64..2677.64 rows=1000 width=64)
                                  Output: (avg(country_2.population)), country_2.region
-                                 ->  Broadcast Motion 3:3  (slice3; segments: 3)  (cost=2660.14..2680.97 rows=1000 width=64)
+                                 ->  Broadcast Motion 3:3  (slice3; segments: 3)  (cost=2660.14..2677.64 rows=1000 width=64)
                                        Output: (avg(country_2.population)), country_2.region
                                        ->  Finalize HashAggregate  (cost=2660.14..2664.31 rows=333 width=64)
                                              Output: avg(country_2.population), country_2.region
@@ -1646,9 +1623,8 @@ order by OUTERMOST_FOO.region,bad_headofstates.headofstate LIMIT 40;
                                                                                        Output: city.id
                                                                                        ->  Seq Scan on cte_prune.city  (cost=0.00..126.33 rows=9233 width=4)
                                                                                              Output: city.id
- Settings: enable_parallel = 'off', optimizer = 'off'
  Optimizer: Postgres query optimizer
-(105 rows)
+(104 rows)
 
 -- start_ignore
 drop table city;
@@ -1672,19 +1648,19 @@ FROM t6,
 WHERE t6.a = x.c ORDER BY 1;
                                                       QUERY PLAN                                                      
 ----------------------------------------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)  (cost=824331921.87..983595523.10 rows=11242136557 width=16)
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=823896670.55..983160271.77 rows=11242136557 width=16)
    Output: t6.a, t6.b, t5_1.c, t5_1.d
    Merge Key: t6.a
-   ->  Sort  (cost=824331921.87..833700369.00 rows=3747378852 width=16)
+   ->  Sort  (cost=823896670.55..833265117.68 rows=3747378852 width=16)
          Output: t6.a, t6.b, t5_1.c, t5_1.d
          Sort Key: t6.a
-         ->  Hash Join  (cost=5001.56..196417010.27 rows=3747378852 width=16)
+         ->  Hash Join  (cost=4997.05..195981758.94 rows=3747378852 width=16)
                Output: t6.a, t6.b, t5_1.c, t5_1.d
                Hash Cond: (t5_1.c = t6.a)
-               ->  Hash Join  (cost=4321.81..2257711.94 rows=43523564 width=8)
+               ->  Hash Join  (cost=4317.30..2257696.25 rows=43523564 width=8)
                      Output: t5_1.c, t5_1.d
                      Hash Cond: (t5.c = t5_1.c)
-                     ->  Hash Join  (cost=512.33..4788.69 rows=158519 width=8)
+                     ->  Hash Join  (cost=512.33..4777.51 rows=158519 width=8)
                            Output: t5.c, t5.d
                            Hash Cond: (t6_1.a = t5.c)
                            ->  Seq Scan on cte_prune.t6 t6_1  (cost=0.00..464.50 rows=5523 width=8)
@@ -1695,9 +1671,9 @@ WHERE t6.a = x.c ORDER BY 1;
                                  ->  Seq Scan on cte_prune.t5  (cost=0.00..392.75 rows=9567 width=8)
                                        Output: t5.c, t5.d
                                        Filter: (t5.c < 2)
-                     ->  Hash  (cost=2665.47..2665.47 rows=91521 width=8)
+                     ->  Hash  (cost=2660.95..2660.95 rows=91521 width=8)
                            Output: t5_1.c, t5_1.d
-                           ->  Hash Join  (cost=533.54..2665.47 rows=91521 width=8)
+                           ->  Hash Join  (cost=533.54..2660.95 rows=91521 width=8)
                                  Output: t5_1.c, t5_1.d
                                  Hash Cond: (t5_1.c = w.a)
                                  ->  Seq Scan on cte_prune.t5 t5_1  (cost=0.00..464.50 rows=5523 width=8)
@@ -1714,9 +1690,8 @@ WHERE t6.a = x.c ORDER BY 1;
                      Output: t6.a, t6.b
                      ->  Seq Scan on cte_prune.t6  (cost=0.00..321.00 rows=28700 width=8)
                            Output: t6.a, t6.b
- Settings: enable_parallel = 'off', optimizer = 'off'
  Optimizer: Postgres query optimizer
-(44 rows)
+(43 rows)
 
 WITH w AS (SELECT a, b from t6 where b < 5)
 SELECT *
@@ -1745,16 +1720,15 @@ INSERT INTO t7 VALUES (8, 9, NULL);
 explain (verbose, costs off)
 with x as (select * from (select f1 from t7) ss)
 select * from x where f1 = 1;
-                      QUERY PLAN                      
-------------------------------------------------------
+                QUERY PLAN                
+------------------------------------------
  Gather Motion 1:1  (slice1; segments: 1)
    Output: t7.f1
    ->  Seq Scan on cte_prune.t7
          Output: t7.f1
          Filter: (t7.f1 = 1)
- Settings: enable_parallel = 'off', optimizer = 'off'
  Optimizer: Postgres query optimizer
-(7 rows)
+(6 rows)
 
 with x as (select * from (select f1 from t7) ss)
 select * from x where f1 = 1;
@@ -1769,7 +1743,8 @@ drop table t5;
 drop table t6;
 drop table t7;
 drop schema cte_prune cascade;
-NOTICE:  drop cascades to 2 other objects
+NOTICE:  drop cascades to 3 other objects
 DETAIL:  drop cascades to table t3
 drop cascades to table t4
+drop cascades to table cte_prune_tenk1
 -- end_ignore

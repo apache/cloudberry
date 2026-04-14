@@ -1783,7 +1783,7 @@ order by t1.ten;
                ->  Redistribute Motion 3:3  (slice2; segments: 3)
                      Output: t1.ten, (PARTIAL sum((t1.ten + t2.ten)))
                      Hash Key: t1.ten
-                     ->  Partial HashAggregate
+                     ->  Streaming Partial HashAggregate
                            Output: t1.ten, PARTIAL sum((t1.ten + t2.ten))
                            Group Key: t1.ten
                            ->  Hash Right Join

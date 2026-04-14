@@ -2100,9 +2100,9 @@ SELECT avg(t1.a), avg(t2.b), t1.c, t2.c FROM plt1 t1 RIGHT JOIN plt2 t2 ON t1.c 
          ->  Finalize HashAggregate
                Group Key: t1.c
                ->  Redistribute Motion 3:3  (slice2; segments: 3)
-                     Hash Key: t1.c, t1.c
+                     Hash Key: t1.c
                      ->  Streaming Partial HashAggregate
-                           Group Key: t1.c, t2.c
+                           Group Key: t1.c
                            ->  Append
                                  ->  Hash Join
                                        Hash Cond: (t2_1.c = t1_1.c)
@@ -2473,12 +2473,12 @@ SELECT COUNT(*) FROM prt1_l t1 LEFT JOIN LATERAL
 			  (SELECT t1.b AS t1b, t2.* FROM prt2_l t2) s
 			  ON t1.a = s.b AND t1.b = s.a AND t1.c = s.c
 			  WHERE s.t1b = s.a;
-ERROR:  could not pull up equivalence class using projected target list (pathkeys.c:1610)
+ERROR:  could not pull up equivalence class using projected target list (pathkeys.c:1615)
 SELECT COUNT(*) FROM prt1_l t1 LEFT JOIN LATERAL
 			  (SELECT t1.b AS t1b, t2.* FROM prt2_l t2) s
 			  ON t1.a = s.b AND t1.b = s.a AND t1.c = s.c
 			  WHERE s.t1b = s.a;
-ERROR:  could not pull up equivalence class using projected target list (pathkeys.c:1610)
+ERROR:  could not pull up equivalence class using projected target list (pathkeys.c:1615)
 RESET max_parallel_workers_per_gather;
 -- join with one side empty
 EXPLAIN (COSTS OFF)
@@ -6176,7 +6176,6 @@ SELECT x.id, y.id FROM fract_t x LEFT JOIN fract_t y USING (id) ORDER BY x.id DE
 DROP TABLE fract_t;
 RESET max_parallel_workers_per_gather;
 RESET enable_partitionwise_join;
-
 --
 -- test issue https://github.com/apache/cloudberry/issues/1301
 --

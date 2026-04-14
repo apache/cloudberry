@@ -323,7 +323,6 @@ values
   ('{}',    null),
   ('{1}',   '{2,3}');
 drop table t_gin_test_tbl;
-
 --
 -- Github issue: https://github.com/apache/cloudberry/issues/1222
 --
