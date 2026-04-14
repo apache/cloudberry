@@ -1,3 +1,8 @@
+-- start_matchignore
+-- m/^INFO:  GPORCA failed to produce a plan/
+-- m/^DETAIL:  Falling back to Postgres-based planner/
+-- m/^DETAIL:  DXL-to-PlStmt Translation/
+-- end_matchignore
 --
 -- PostgreSQL port of the MySQL "World" database.
 --

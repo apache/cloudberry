@@ -14932,6 +14932,146 @@ SELECT * FROM leaf_with_dropped_cols_index_part2 WHERE a>42 and z<42;
 ---+---+---
 (0 rows)
 
+-- Exchange partitions with dropped columns and check subplan with attribute remapping into dynamicSeqscan
+-- start_ignore
+DROP TABLE if exists ds_main;
+NOTICE:  table "ds_main" does not exist, skipping
+DROP TABLE if exists ds_part1;
+NOTICE:  table "ds_part1" does not exist, skipping
+DROP TABLE if exists non_part1;
+NOTICE:  table "non_part1" does not exist, skipping
+DROP TABLE if exists non_part2;
+NOTICE:  table "non_part2" does not exist, skipping
+-- end_ignore
+CREATE TABLE ds_main ( a INT, b INT, c INT) PARTITION BY RANGE(c)( START(1) END (10) EVERY (2), DEFAULT PARTITION deflt);
+CREATE TABLE ds_part1 (a int, a1 int, b int, c int);
+CREATE TABLE non_part1 (c INT);
+CREATE TABLE non_part2 (e INT, f INT);
+SET optimizer_enforce_subplans TO ON;
+-- drop columns to get attribute remapping
+ALTER TABLE ds_part1 drop column a1;
+ALTER TABLE ds_main exchange partition for (1) with table ds_part1;
+INSERT INTO non_part1 SELECT i FROM generate_series(1, 1)i;
+INSERT INTO non_part2 SELECT i, i + 1 FROM generate_series(1, 10)i;
+INSERT INTO ds_main SELECT i, i + 1, i + 2 FROM generate_series (1, 1000)i;
+analyze ds_main;
+analyze non_part1;
+analyze non_part2;
+EXPLAIN (costs off) SELECT * FROM ds_main, non_part2 WHERE ds_main.c = non_part2.e AND a IN ( SELECT a FROM non_part1) order by a;
+                                      QUERY PLAN                                      
+--------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Merge Key: ds_main.a
+   ->  Sort
+         Sort Key: ds_main.a
+         ->  Hash Join
+               Hash Cond: (ds_main.c = non_part2.e)
+               ->  Dynamic Seq Scan on ds_main
+                     Number of partitions to scan: 6 (out of 6)
+                     Filter: ((a = a) AND (SubPlan 1))
+                     SubPlan 1
+                       ->  Materialize
+                             ->  Broadcast Motion 1:3  (slice2)
+                                   ->  Limit
+                                         ->  Gather Motion 3:1  (slice3; segments: 3)
+                                               ->  Seq Scan on non_part1
+               ->  Hash
+                     ->  Partition Selector (selector id: $0)
+                           ->  Broadcast Motion 3:3  (slice4; segments: 3)
+                                 ->  Seq Scan on non_part2
+(20 rows)
+
+SELECT * FROM ds_main, non_part2 WHERE ds_main.c = non_part2.e AND a IN ( SELECT a FROM non_part1) order by a;
+ a | b | c  | e  | f  
+---+---+----+----+----
+ 1 | 2 |  3 |  3 |  4
+ 2 | 3 |  4 |  4 |  5
+ 3 | 4 |  5 |  5 |  6
+ 4 | 5 |  6 |  6 |  7
+ 5 | 6 |  7 |  7 |  8
+ 6 | 7 |  8 |  8 |  9
+ 7 | 8 |  9 |  9 | 10
+ 8 | 9 | 10 | 10 | 11
+(8 rows)
+
+-- Test for dropping distribution column via DROP TYPE..CASCADE
+-- ensure the distribution policy for the table is updated
+-- and the DML queries on the table work as expected for both
+-- partitioned and non-partitioned tables 
+CREATE DOMAIN int_new AS int;
+CREATE TABLE dist_key_dropped (a int_new, b int) DISTRIBUTED BY(a);
+CREATE TABLE dist_key_dropped_pt (a int_new, b int) DISTRIBUTED BY(a)
+PARTITION BY RANGE(b)
+  (PARTITION p1 START(0) END(5),
+   PARTITION p2 START(6) END(10));
+INSERT INTO dist_key_dropped VALUES(1, 1);
+INSERT INTO dist_key_dropped VALUES(2, 2);
+INSERT INTO dist_key_dropped_pt VALUES(1, 1);
+INSERT INTO dist_key_dropped_pt VALUES(2, 6);
+DROP TYPE int_new CASCADE;
+NOTICE:  drop cascades to 4 other objects
+DETAIL:  drop cascades to column a of table dist_key_dropped
+drop cascades to column a of table dist_key_dropped_pt
+drop cascades to column a of table dist_key_dropped_pt_1_prt_p1
+drop cascades to column a of table dist_key_dropped_pt_1_prt_p2
+NOTICE:  dropping a column that is part of the distribution policy forces a NULL distribution policy
+NOTICE:  dropping a column that is part of the distribution policy forces a NULL distribution policy
+NOTICE:  dropping a column that is part of the distribution policy forces a NULL distribution policy
+NOTICE:  dropping a column that is part of the distribution policy forces a NULL distribution policy
+\d dist_key_dropped
+     Table "qp_dropped_cols.dist_key_dropped"
+ Column |  Type   | Collation | Nullable | Default 
+--------+---------+-----------+----------+---------
+ b      | integer |           |          | 
+Distributed randomly
+
+\d dist_key_dropped_pt
+Partitioned table "qp_dropped_cols.dist_key_dropped_pt"
+ Column |  Type   | Collation | Nullable | Default 
+--------+---------+-----------+----------+---------
+ b      | integer |           |          | 
+Partition key: RANGE (b)
+Number of partitions: 2 (Use \d+ to list them.)
+Distributed randomly
+
+\d dist_key_dropped_pt_1_prt_p1
+Table "qp_dropped_cols.dist_key_dropped_pt_1_prt_p1"
+ Column |  Type   | Collation | Nullable | Default 
+--------+---------+-----------+----------+---------
+ b      | integer |           |          | 
+Partition of: dist_key_dropped_pt FOR VALUES FROM (0) TO (5)
+Distributed randomly
+
+\d dist_key_dropped_pt_1_prt_p2
+Table "qp_dropped_cols.dist_key_dropped_pt_1_prt_p2"
+ Column |  Type   | Collation | Nullable | Default 
+--------+---------+-----------+----------+---------
+ b      | integer |           |          | 
+Partition of: dist_key_dropped_pt FOR VALUES FROM (6) TO (10)
+Distributed randomly
+
+INSERT INTO dist_key_dropped VALUES(10);
+INSERT INTO dist_key_dropped_pt VALUES(7);
+UPDATE dist_key_dropped SET b=11 where b=1;
+UPDATE dist_key_dropped_pt SET b=2 where b=1;
+SELECT * FROM dist_key_dropped;
+ b  
+----
+  2
+ 10
+ 11
+(3 rows)
+
+SELECT * FROM dist_key_dropped_pt;
+ b 
+---
+ 6
+ 2
+ 7
+(3 rows)
+
+DELETE FROM dist_key_dropped WHERE b=2;
+DELETE FROM dist_key_dropped_pt WHERE b=6;
 -- As of this writing, pg_dump creates an invalid dump for some of the tables
 -- here. See https://github.com/greenplum-db/gpdb/issues/3598. So we must drop
 -- the tables, or the pg_upgrade test fails.

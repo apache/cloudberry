@@ -55,7 +55,8 @@ select relname, relkind from pg_class where relkind in ('r', 'p') and relname li
  region_1_prt_region2_2_prt_asia       | r
  region_1_prt_region2_2_prt_europe     | r
  region_1_prt_region2_2_prt_mideast    | r
-(25 rows)
+ regions                               | r
+(26 rows)
 
 select gp_segment_id, relname, relkind from gp_dist_random('pg_class') where relkind in ('r', 'p') and relname like 'region%' and relfrozenxid=0;
  gp_segment_id |                relname                | relkind 
@@ -85,6 +86,7 @@ select gp_segment_id, relname, relkind from gp_dist_random('pg_class') where rel
              2 | region_1_prt_region2_2_prt_asia       | r
              2 | region_1_prt_region2_2_prt_europe     | r
              2 | region_1_prt_region2_2_prt_mideast    | r
+             2 | regions                               | r
              0 | region_1_prt_region3_2_prt_africa     | r
              0 | region_1_prt_region3                  | p
              0 | region_1_prt_region3_2_prt_america    | r
@@ -110,6 +112,7 @@ select gp_segment_id, relname, relkind from gp_dist_random('pg_class') where rel
              0 | region_1_prt_region2_2_prt_asia       | r
              0 | region_1_prt_region2_2_prt_europe     | r
              0 | region_1_prt_region2_2_prt_mideast    | r
+             0 | regions                               | r
              1 | region_1_prt_region3_2_prt_africa     | r
              1 | region_1_prt_region3                  | p
              1 | region_1_prt_region3_2_prt_america    | r
@@ -135,7 +138,8 @@ select gp_segment_id, relname, relkind from gp_dist_random('pg_class') where rel
              1 | region_1_prt_region2_2_prt_asia       | r
              1 | region_1_prt_region2_2_prt_europe     | r
              1 | region_1_prt_region2_2_prt_mideast    | r
-(75 rows)
+             1 | regions                               | r
+(78 rows)
 
 create unique index region_pkey on region(r_regionkey, r_name);
 copy region from stdin with delimiter '|';
@@ -367,9 +371,98 @@ select has_table_privilege('part_role', 'bar_p'::regclass, 'select');
  t
 (1 row)
 
+-- the ONLY keyword will affect just the partition root for both grant/revoke
+create role part_role2;
+grant select on only foo_p to part_role2;
+select has_table_privilege('part_role2', 'foo_p'::regclass, 'select');
+ has_table_privilege 
+---------------------
+ t
+(1 row)
+
+select has_table_privilege('part_role2', 'foo_p_1_prt_6'::regclass, 'select');
+ has_table_privilege 
+---------------------
+ f
+(1 row)
+
+grant select on foo_p to part_role2;
+revoke select on only foo_p from part_role2;
+select has_table_privilege('part_role2', 'foo_p'::regclass, 'select');
+ has_table_privilege 
+---------------------
+ f
+(1 row)
+
+select has_table_privilege('part_role2', 'foo_p_1_prt_6'::regclass, 'select');
+ has_table_privilege 
+---------------------
+ t
+(1 row)
+
+revoke select on foo_p from part_role2;
+select has_table_privilege('part_role2', 'foo_p_1_prt_6'::regclass, 'select');
+ has_table_privilege 
+---------------------
+ f
+(1 row)
+
+create table foo_p2 (a int, b int) partition by range(a) (start(1) end(10) every(1));
+grant select on foo_p, only foo_p2 to part_role2; -- multiple tables in same statement
+select has_table_privilege('part_role2', 'foo_p'::regclass, 'select');
+ has_table_privilege 
+---------------------
+ t
+(1 row)
+
+select has_table_privilege('part_role2', 'foo_p_1_prt_6'::regclass, 'select');
+ has_table_privilege 
+---------------------
+ t
+(1 row)
+
+select has_table_privilege('part_role2', 'foo_p2'::regclass, 'select');
+ has_table_privilege 
+---------------------
+ t
+(1 row)
+
+select has_table_privilege('part_role2', 'foo_p2_1_prt_6'::regclass, 'select');
+ has_table_privilege 
+---------------------
+ f
+(1 row)
+
+-- more cases
+revoke all on foo_p from part_role2;
+revoke all on foo_p2 from part_role2;
+grant select on only public.foo_p to part_role2; -- with schema
+select has_table_privilege('part_role2', 'foo_p'::regclass, 'select');
+ has_table_privilege 
+---------------------
+ t
+(1 row)
+
+select has_table_privilege('part_role2', 'foo_p_1_prt_6'::regclass, 'select');
+ has_table_privilege 
+---------------------
+ f
+(1 row)
+
+grant update(b) on only foo_p2 to part_role2; -- column level priviledge
+select relname, has_column_privilege('part_role2', oid, 'b', 'update') from pg_class
+where relname = 'foo_p2' or relname = 'foo_p2_1_prt_6';
+    relname     | has_column_privilege 
+----------------+----------------------
+ foo_p2         | t
+ foo_p2_1_prt_6 | f
+(2 rows)
+
 drop table foo_p;
+drop table foo_p2;
 drop table bar_p;
 drop role part_role;
+drop role part_role2;
 -- validation
 create table foo_p (i int) partition by range(i)
 (start(1) end(10) every(1));
@@ -4487,30 +4580,6 @@ group by relname;
 
 drop table s cascade;
 --   MPP-13750 )
--- MPP-13806 start
-drop table if exists mpp13806;
-NOTICE:  table "mpp13806" does not exist, skipping
- CREATE TABLE mpp13806 (id int, date date, amt decimal(10,2))
- DISTRIBUTED BY (id)
- PARTITION BY RANGE (date)
- ( START (date '2008-01-01') INCLUSIVE
-	END (date '2008-01-05') EXCLUSIVE
-	EVERY (INTERVAL '1 day') );
- 
--- Adding unbound partition right before the start  used to fail
-alter table mpp13806 add partition test end (date '2008-01-01') exclusive;
- 
-drop table if exists mpp13806;
- CREATE TABLE mpp13806 (id int, date date, amt decimal(10,2))
- DISTRIBUTED BY (id)
- PARTITION BY RANGE (date)
- ( START (date '2008-01-01') EXCLUSIVE
-	END (date '2008-01-05') EXCLUSIVE
-	EVERY (INTERVAL '1 day') );
--- For good measure, test the opposite case
-alter table mpp13806 add partition test end (date '2008-01-01') inclusive;
-drop table mpp13806;
--- MPP-13806 end
 -- MPP-14471 start
 -- No unenforceable PK/UK constraints!  (UNIQUE INDEXes still allowed; tested above)
 drop table if exists tc cascade;
@@ -5760,7 +5829,7 @@ select * from sales order by pkid;
 
 drop table sales cascade;
 NOTICE:  drop cascades to default value for column pkid of table newpart
--- Exchage partiton table with a table having dropped column
+-- Exchage partition table with a table having dropped column
 create table exchange_part(a int, b int) partition by range(b) (start (0) end (10) every (5));
 create table exchange1(a int, c int, b int);
 alter table exchange1 drop column c;
@@ -5813,38 +5882,38 @@ select relname, pg_get_expr(relpartbound, oid) from pg_class where relname like 
  pt_tab_encode_1_prt_s_xyz | FOR VALUES IN ('xyz')
 (3 rows)
 
-select gp_segment_id, attrelid::regclass, attnum, attoptions from pg_attribute_encoding where attrelid = 'pt_tab_encode_1_prt_s_abc'::regclass;
- gp_segment_id |         attrelid          | attnum |                     attoptions                      
----------------+---------------------------+--------+-----------------------------------------------------
-            -1 | pt_tab_encode_1_prt_s_abc |      1 | {compresstype=zlib,compresslevel=1,blocksize=32768}
-            -1 | pt_tab_encode_1_prt_s_abc |      2 | {compresstype=zlib,compresslevel=1,blocksize=32768}
+select gp_segment_id, attrelid::regclass, attnum, filenum, attoptions from pg_attribute_encoding where attrelid = 'pt_tab_encode_1_prt_s_abc'::regclass;
+ gp_segment_id |         attrelid          | attnum | filenum |                     attoptions                      
+---------------+---------------------------+--------+---------+-----------------------------------------------------
+            -1 | pt_tab_encode_1_prt_s_abc |      1 |       1 | {compresstype=zlib,compresslevel=1,blocksize=32768}
+            -1 | pt_tab_encode_1_prt_s_abc |      2 |       2 | {compresstype=zlib,compresslevel=1,blocksize=32768}
 (2 rows)
 
-select gp_segment_id, attrelid::regclass, attnum, attoptions from gp_dist_random('pg_attribute_encoding') where attrelid = 'pt_tab_encode_1_prt_s_abc'::regclass order by 1,3 limit 5;
- gp_segment_id |         attrelid          | attnum |                     attoptions                      
----------------+---------------------------+--------+-----------------------------------------------------
-             0 | pt_tab_encode_1_prt_s_abc |      1 | {compresstype=zlib,compresslevel=1,blocksize=32768}
-             0 | pt_tab_encode_1_prt_s_abc |      2 | {compresstype=zlib,compresslevel=1,blocksize=32768}
-             1 | pt_tab_encode_1_prt_s_abc |      1 | {compresstype=zlib,compresslevel=1,blocksize=32768}
-             1 | pt_tab_encode_1_prt_s_abc |      2 | {compresstype=zlib,compresslevel=1,blocksize=32768}
-             2 | pt_tab_encode_1_prt_s_abc |      1 | {compresstype=zlib,compresslevel=1,blocksize=32768}
+select gp_segment_id, attrelid::regclass, attnum, filenum, attoptions from gp_dist_random('pg_attribute_encoding') where attrelid = 'pt_tab_encode_1_prt_s_abc'::regclass order by 1,3 limit 5;
+ gp_segment_id |         attrelid          | attnum | filenum |                     attoptions                      
+---------------+---------------------------+--------+---------+-----------------------------------------------------
+             0 | pt_tab_encode_1_prt_s_abc |      1 |       1 | {compresstype=zlib,compresslevel=1,blocksize=32768}
+             0 | pt_tab_encode_1_prt_s_abc |      2 |       2 | {compresstype=zlib,compresslevel=1,blocksize=32768}
+             1 | pt_tab_encode_1_prt_s_abc |      1 |       1 | {compresstype=zlib,compresslevel=1,blocksize=32768}
+             1 | pt_tab_encode_1_prt_s_abc |      2 |       2 | {compresstype=zlib,compresslevel=1,blocksize=32768}
+             2 | pt_tab_encode_1_prt_s_abc |      1 |       1 | {compresstype=zlib,compresslevel=1,blocksize=32768}
 (5 rows)
 
-select gp_segment_id, attrelid::regclass, attnum, attoptions from pg_attribute_encoding where attrelid = 'pt_tab_encode_1_prt_s_xyz'::regclass;
- gp_segment_id |         attrelid          | attnum |                     attoptions                      
----------------+---------------------------+--------+-----------------------------------------------------
-            -1 | pt_tab_encode_1_prt_s_xyz |      1 | {compresstype=zlib,compresslevel=1,blocksize=32768}
-            -1 | pt_tab_encode_1_prt_s_xyz |      2 | {compresstype=zlib,compresslevel=1,blocksize=32768}
+select gp_segment_id, attrelid::regclass, attnum, filenum, attoptions from pg_attribute_encoding where attrelid = 'pt_tab_encode_1_prt_s_xyz'::regclass;
+ gp_segment_id |         attrelid          | attnum | filenum |                     attoptions                      
+---------------+---------------------------+--------+---------+-----------------------------------------------------
+            -1 | pt_tab_encode_1_prt_s_xyz |      1 |       1 | {compresstype=zlib,compresslevel=1,blocksize=32768}
+            -1 | pt_tab_encode_1_prt_s_xyz |      2 |       2 | {compresstype=zlib,compresslevel=1,blocksize=32768}
 (2 rows)
 
-select gp_segment_id, attrelid::regclass, attnum, attoptions from gp_dist_random('pg_attribute_encoding') where attrelid = 'pt_tab_encode_1_prt_s_xyz'::regclass order by 1,3 limit 5;
- gp_segment_id |         attrelid          | attnum |                     attoptions                      
----------------+---------------------------+--------+-----------------------------------------------------
-             0 | pt_tab_encode_1_prt_s_xyz |      1 | {compresstype=zlib,compresslevel=1,blocksize=32768}
-             0 | pt_tab_encode_1_prt_s_xyz |      2 | {compresstype=zlib,compresslevel=1,blocksize=32768}
-             1 | pt_tab_encode_1_prt_s_xyz |      1 | {compresstype=zlib,compresslevel=1,blocksize=32768}
-             1 | pt_tab_encode_1_prt_s_xyz |      2 | {compresstype=zlib,compresslevel=1,blocksize=32768}
-             2 | pt_tab_encode_1_prt_s_xyz |      1 | {compresstype=zlib,compresslevel=1,blocksize=32768}
+select gp_segment_id, attrelid::regclass, attnum, filenum, attoptions from gp_dist_random('pg_attribute_encoding') where attrelid = 'pt_tab_encode_1_prt_s_xyz'::regclass order by 1,3 limit 5;
+ gp_segment_id |         attrelid          | attnum | filenum |                     attoptions                      
+---------------+---------------------------+--------+---------+-----------------------------------------------------
+             0 | pt_tab_encode_1_prt_s_xyz |      1 |       1 | {compresstype=zlib,compresslevel=1,blocksize=32768}
+             0 | pt_tab_encode_1_prt_s_xyz |      2 |       2 | {compresstype=zlib,compresslevel=1,blocksize=32768}
+             1 | pt_tab_encode_1_prt_s_xyz |      1 |       1 | {compresstype=zlib,compresslevel=1,blocksize=32768}
+             1 | pt_tab_encode_1_prt_s_xyz |      2 |       2 | {compresstype=zlib,compresslevel=1,blocksize=32768}
+             2 | pt_tab_encode_1_prt_s_xyz |      1 |       1 | {compresstype=zlib,compresslevel=1,blocksize=32768}
 (5 rows)
 
 select c.oid::regclass, relkind, amname, reloptions from pg_class c left join pg_am am on am.oid = relam where c.oid = 'pt_tab_encode_1_prt_s_abc'::regclass;

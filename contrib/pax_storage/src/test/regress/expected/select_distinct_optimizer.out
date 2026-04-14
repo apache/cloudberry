@@ -187,6 +187,27 @@ SET jit_above_cost TO DEFAULT;
 CREATE TABLE distinct_group_2 AS
 SELECT DISTINCT (g%1000)::text FROM generate_series(0,9999) g;
 NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause. Creating a NULL policy entry.
+SET enable_seqscan = 0;
+-- Check to see we get an incremental sort plan
+EXPLAIN (costs off)
+SELECT DISTINCT hundred, two FROM tenk1;
+                        QUERY PLAN
+-----------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  GroupAggregate
+         Group Key: hundred, two
+         ->  Sort
+               Sort Key: hundred, two
+               ->  Redistribute Motion 3:3  (slice2; segments: 3)
+                     Hash Key: hundred, two
+                     ->  GroupAggregate
+                           Group Key: hundred, two
+                           ->  Sort
+                                 Sort Key: hundred, two
+                                 ->  Seq Scan on tenk1
+(13 rows)
+
+RESET enable_seqscan;
 SET enable_hashagg=TRUE;
 SET optimizer_enable_hashagg=TRUE;
 -- Produce results with hash aggregation.
@@ -230,6 +251,157 @@ DROP TABLE distinct_hash_1;
 DROP TABLE distinct_hash_2;
 DROP TABLE distinct_group_1;
 DROP TABLE distinct_group_2;
+-- Test parallel DISTINCT
+SET parallel_tuple_cost=0;
+SET parallel_setup_cost=0;
+SET min_parallel_table_scan_size=0;
+SET max_parallel_workers_per_gather=2;
+-- Ensure we get a parallel plan
+EXPLAIN (costs off)
+SELECT DISTINCT four FROM tenk1;
+                        QUERY PLAN
+-----------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  GroupAggregate
+         Group Key: four
+         ->  Sort
+               Sort Key: four
+               ->  Redistribute Motion 3:3  (slice2; segments: 3)
+                     Hash Key: four
+                     ->  Streaming HashAggregate
+                           Group Key: four
+                           ->  Seq Scan on tenk1
+(11 rows)
+
+-- Ensure the parallel plan produces the correct results
+SELECT DISTINCT four FROM tenk1;
+ four 
+------
+    0
+    1
+    2
+    3
+(4 rows)
+
+CREATE OR REPLACE FUNCTION distinct_func(a INT) RETURNS INT AS $$
+  BEGIN
+    RETURN a;
+  END;
+$$ LANGUAGE plpgsql PARALLEL UNSAFE;
+-- Ensure we don't do parallel distinct with a parallel unsafe function
+EXPLAIN (COSTS OFF)
+SELECT DISTINCT distinct_func(1) FROM tenk1;
+                       QUERY PLAN
+---------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  HashAggregate
+         Group Key: (distinct_func(1))
+         ->  Redistribute Motion 3:3  (slice2; segments: 3)
+               Hash Key: (distinct_func(1))
+               ->  Seq Scan on tenk1
+(7 rows)
+
+-- make the function parallel safe
+CREATE OR REPLACE FUNCTION distinct_func(a INT) RETURNS INT AS $$
+  BEGIN
+    RETURN a;
+  END;
+$$ LANGUAGE plpgsql PARALLEL SAFE;
+-- Ensure we do parallel distinct now that the function is parallel safe
+EXPLAIN (COSTS OFF)
+SELECT DISTINCT distinct_func(1) FROM tenk1;
+                       QUERY PLAN
+---------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  HashAggregate
+         Group Key: (distinct_func(1))
+         ->  Redistribute Motion 3:3  (slice2; segments: 3)
+               Hash Key: (distinct_func(1))
+               ->  Seq Scan on tenk1
+(7 rows)
+
+RESET max_parallel_workers_per_gather;
+RESET min_parallel_table_scan_size;
+RESET parallel_setup_cost;
+RESET parallel_tuple_cost;
+--
+-- Test the planner's ability to use a LIMIT 1 instead of a Unique node when
+-- all of the distinct_pathkeys have been marked as redundant
+--
+-- Ensure we get a plan with a Limit 1
+EXPLAIN (COSTS OFF)
+SELECT DISTINCT four FROM tenk1 WHERE four = 0;
+                           QUERY PLAN
+-----------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  GroupAggregate
+         Group Key: four
+         ->  Sort
+               Sort Key: four
+               ->  Redistribute Motion 3:3  (slice2; segments: 3)
+                     Hash Key: four
+                     ->  Streaming HashAggregate
+                           Group Key: four
+                           ->  Seq Scan on tenk1
+                                 Filter: (four = 0)
+(12 rows)
+
+-- Ensure the above gives us the correct result
+SELECT DISTINCT four FROM tenk1 WHERE four = 0;
+ four 
+------
+    0
+(1 row)
+
+-- Ensure we get a plan with a Limit 1
+EXPLAIN (COSTS OFF)
+SELECT DISTINCT four FROM tenk1 WHERE four = 0 AND two <> 0;
+                            QUERY PLAN
+------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  GroupAggregate
+         Group Key: four
+         ->  Sort
+               Sort Key: four
+               ->  Redistribute Motion 3:3  (slice2; segments: 3)
+                     Hash Key: four
+                     ->  Streaming HashAggregate
+                           Group Key: four
+                           ->  Seq Scan on tenk1
+                                 Filter: ((four = 0) AND (two <> 0))
+(12 rows)
+
+-- Ensure no rows are returned
+SELECT DISTINCT four FROM tenk1 WHERE four = 0 AND two <> 0;
+ four 
+------
+(0 rows)
+
+-- Ensure we get a plan with a Limit 1 when the SELECT list contains constants
+EXPLAIN (COSTS OFF)
+SELECT DISTINCT four,1,2,3 FROM tenk1 WHERE four = 0;
+                           QUERY PLAN
+-----------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  GroupAggregate
+         Group Key: four, (1), (2), (3)
+         ->  Sort
+               Sort Key: four, (1), (2), (3)
+               ->  Redistribute Motion 3:3  (slice2; segments: 3)
+                     Hash Key: four, (1), (2), (3)
+                     ->  Streaming HashAggregate
+                           Group Key: four, 1, 2, 3
+                           ->  Seq Scan on tenk1
+                                 Filter: (four = 0)
+(12 rows)
+
+-- Ensure we only get 1 row
+SELECT DISTINCT four,1,2,3 FROM tenk1 WHERE four = 0;
+ four | ?column? | ?column? | ?column? 
+------+----------+----------+----------
+    0 |        1 |        2 |        3
+(1 row)
+
 --
 -- Also, some tests of IS DISTINCT FROM, which doesn't quite deserve its
 -- very own regression file.
@@ -535,3 +707,218 @@ DROP TABLE capitals;
 DROP TABLE cities;
 set gp_statistics_pullup_from_child_partition to off;
 -- gpdb end: test inherit/partition table distinct when gp_statistics_pullup_from_child_partition is on
+create table t_distinct_sort(a int, b int, c int);
+insert into t_distinct_sort select i, i+1, i+2 from generate_series(1, 10)i;
+insert into t_distinct_sort select i, i+1, i+2  from generate_series(1, 10)i;
+insert into t_distinct_sort select i, i+1, i+2  from generate_series(1, 10)i;
+analyze t_distinct_sort;
+explain(verbose, costs off)
+select distinct count(a), sum(b) from t_distinct_sort order by sum(b), count(a);
+                                                        QUERY PLAN                                                        
+--------------------------------------------------------------------------------------------------------------------------
+ Sort
+   Output: (count(a)), (sum(b))
+   Sort Key: (sum(t_distinct_sort.b)), (count(t_distinct_sort.a))
+   ->  Finalize Aggregate
+         Output: count(a), sum(b)
+         ->  Gather Motion 3:1  (slice1; segments: 3)
+               Output: (PARTIAL count(a)), (PARTIAL sum(b))
+               ->  Partial Aggregate
+                     Output: PARTIAL count(a), PARTIAL sum(b)
+                     ->  Seq Scan on public.t_distinct_sort
+                           Output: a, b
+(13 rows)
+
+select distinct count(a), sum(b) from t_distinct_sort order by sum(b), count(a);
+ count | sum 
+-------+-----
+    30 | 195
+(1 row)
+
+explain(verbose, costs off)
+select distinct on(count(b), count(c)) count(a), sum(b) from t_distinct_sort order by count(c);
+                                                        QUERY PLAN                                                        
+--------------------------------------------------------------------------------------------------------------------------
+ Finalize Aggregate
+   Output: count(a), sum(b)
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         Output: (PARTIAL count(a)), (PARTIAL sum(b))
+         ->  Partial Aggregate
+               Output: PARTIAL count(a), PARTIAL sum(b)
+               ->  Seq Scan on public.t_distinct_sort
+                     Output: a, b
+(10 rows)
+
+select distinct on(count(b), count(c)) count(a), sum(b) from t_distinct_sort order by count(c);
+ count | sum 
+-------+-----
+    30 | 195
+(1 row)
+
+explain(verbose, costs off)
+select count(a), sum(b) from t_distinct_sort order by sum(a), count(c);
+                                                        QUERY PLAN                                                        
+--------------------------------------------------------------------------------------------------------------------------
+ Result
+   Output: (count(a)), (sum(b))
+   ->  Sort
+         Output: (count(a)), (sum(b)), (sum(a)), (count(c))
+         Sort Key: (sum(t_distinct_sort.a)), (count(t_distinct_sort.c))
+         ->  Finalize Aggregate
+               Output: count(a), sum(b), sum(a), count(c)
+               ->  Gather Motion 3:1  (slice1; segments: 3)
+                     Output: (PARTIAL count(a)), (PARTIAL sum(b)), (PARTIAL sum(a)), (PARTIAL count(c))
+                     ->  Partial Aggregate
+                           Output: PARTIAL count(a), PARTIAL sum(b), PARTIAL sum(a), PARTIAL count(c)
+                           ->  Seq Scan on public.t_distinct_sort
+                                 Output: a, b, c
+(15 rows)
+
+select count(a), sum(b) from t_distinct_sort order by sum(a), count(c);
+ count | sum 
+-------+-----
+    30 | 195
+(1 row)
+
+explain(verbose, costs off)
+select distinct count(a), sum(b) from t_distinct_sort ;
+                                                        QUERY PLAN                                                        
+--------------------------------------------------------------------------------------------------------------------------
+ Finalize Aggregate
+   Output: count(a), sum(b)
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         Output: (PARTIAL count(a)), (PARTIAL sum(b))
+         ->  Partial Aggregate
+               Output: PARTIAL count(a), PARTIAL sum(b)
+               ->  Seq Scan on public.t_distinct_sort
+                     Output: a, b
+(10 rows)
+
+select distinct count(a), sum(b) from t_distinct_sort ;
+ count | sum 
+-------+-----
+    30 | 195
+(1 row)
+
+-- should keep distinct clause
+explain(verbose, costs off) 
+select distinct on(count(random())) count(a), sum(b) from t_distinct_sort;
+                                                        QUERY PLAN                                                        
+--------------------------------------------------------------------------------------------------------------------------
+ Unique
+   Output: (count(a)), (sum(b)), (count(random()))
+   Group Key: (count(random()))
+   ->  Sort
+         Output: (count(a)), (sum(b)), (count(random()))
+         Sort Key: (count(random()))
+         ->  Finalize Aggregate
+               Output: count(a), sum(b), count(random())
+               ->  Gather Motion 3:1  (slice1; segments: 3)
+                     Output: (PARTIAL count(a)), (PARTIAL sum(b)), (PARTIAL count(random()))
+                     ->  Partial Aggregate
+                           Output: PARTIAL count(a), PARTIAL sum(b), PARTIAL count(random())
+                           ->  Seq Scan on public.t_distinct_sort
+                                 Output: a, b
+(16 rows)
+
+select distinct on(count(random())) count(a), sum(b) from t_distinct_sort;
+ count | sum 
+-------+-----
+    30 | 195
+(1 row)
+
+explain(verbose, costs off)
+select distinct(count(a)) from t_distinct_sort, (select distinct(count(*)), generate_series(
+0, 2) from t_distinct_sort)as xx;
+                                                        QUERY PLAN                                                        
+--------------------------------------------------------------------------------------------------------------------------
+ Finalize Aggregate
+   Output: count(t_distinct_sort_1.a)
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         Output: (PARTIAL count(t_distinct_sort_1.a))
+         ->  Partial Aggregate
+               Output: PARTIAL count(t_distinct_sort_1.a)
+               ->  Nested Loop
+                     Output: t_distinct_sort_1.a
+                     Join Filter: true
+                     ->  Seq Scan on public.t_distinct_sort t_distinct_sort_1
+                           Output: t_distinct_sort_1.a
+                     ->  Materialize
+                           ->  Broadcast Motion 1:3  (slice2)
+                                 ->  Result
+                                       ->  ProjectSet
+                                             Output: generate_series(0, 2)
+                                             ->  Finalize Aggregate
+                                                   Output: count(*)
+                                                   ->  Gather Motion 3:1  (slice3; segments: 3)
+                                                         Output: (PARTIAL count(*))
+                                                         ->  Partial Aggregate
+                                                               Output: PARTIAL count(*)
+                                                               ->  Seq Scan on public.t_distinct_sort
+(25 rows)
+
+select distinct(count(a)) from t_distinct_sort, (select distinct(count(*)), generate_series(
+0, 2) from t_distinct_sort)as xx;
+ count 
+-------
+    90
+(1 row)
+
+drop table t_distinct_sort;
+explain(verbose, costs off)
+select distinct(count(a)) from generate_series(0, 1) as a;
+                                                        QUERY PLAN                                                        
+--------------------------------------------------------------------------------------------------------------------------
+ Aggregate
+   Output: count(generate_series)
+   ->  Function Scan on pg_catalog.generate_series
+         Output: generate_series
+         Function Call: generate_series(0, 1)
+(7 rows)
+
+select distinct(count(a)) from generate_series(0, 1) as a;
+ count 
+-------
+     2
+(1 row)
+
+explain(verbose, costs off)
+select distinct(count(*)) from generate_series(0, 1) a join generate_series(0, 2) b on true;
+                                                        QUERY PLAN                                                        
+--------------------------------------------------------------------------------------------------------------------------
+ Aggregate
+   Output: count(*)
+   ->  Nested Loop
+         Join Filter: true
+         ->  Function Scan on pg_catalog.generate_series generate_series_1
+               Output: generate_series_1.generate_series
+               Function Call: generate_series(0, 1)
+         ->  Function Scan on pg_catalog.generate_series
+               Output: generate_series.generate_series
+               Function Call: generate_series(0, 2)
+(12 rows)
+
+select distinct(count(*)) from generate_series(0, 1) a join generate_series(0, 2) b on true;
+ count 
+-------
+     6
+(1 row)
+
+-- please refer to https://github.com/greenplum-db/gpdb/issues/15033
+CREATE TABLE t1_issue_15033(c DECIMAL CHECK (0.4 IS DISTINCT FROM 0.3));
+CREATE TABLE t2_issue_15033(c DECIMAL CHECK (0.4 IS NOT DISTINCT FROM 0.3));
+INSERT INTO t1_issue_15033 VALUES(10);
+SELECT * FROM t1_issue_15033;
+ c  
+----
+ 10
+(1 row)
+
+INSERT INTO t2_issue_15033 VALUES(10);
+DETAIL:  Failing row contains (10).
+ERROR:  new row for relation "t2_issue_15033" violates check constraint "t2_issue_15033_check"
+SELECT * FROM t2_issue_15033;
+ c 
+---
+(0 rows)
+

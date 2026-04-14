@@ -229,32 +229,32 @@ ALTER TABLE abs_opclass_test SET DISTRIBUTED BY (i abs_int_hash_ops, j abs_int_h
 -- We can't use that exact example here, without the 'btree_gist' extension
 -- that would provide the = gist opclass for basic types. So we use a more
 -- contrived example using IP addresses rather than rooms.
--- start_ignore
 CREATE TABLE ip_reservations (ip_addr inet, reserved tsrange) DISTRIBUTED BY (ip_addr);
 -- these are not allowed
 ALTER TABLE ip_reservations ADD EXCLUDE USING gist (reserved WITH &&);
-ERROR:  exclusion constraint is not compatible with the table's distribution policy
 DETAIL:  Distribution key column "ip_addr" is not included in the constraint.
+ERROR:  exclusion constraint is not compatible with the table's distribution policy
 HINT:  Add "ip_addr" to the constraint with the =(inet,inet) operator.
 ALTER TABLE ip_reservations ADD EXCLUDE USING gist (ip_addr inet_ops WITH &&);
-ERROR:  exclusion constraint is not compatible with the table's distribution policy
 DETAIL:  Distribution key column "ip_addr" is not included in the constraint.
+ERROR:  exclusion constraint is not compatible with the table's distribution policy
 HINT:  Add "ip_addr" to the constraint with the =(inet,inet) operator.
 -- but this is.
 ALTER TABLE ip_reservations ADD EXCLUDE USING gist (ip_addr inet_ops WITH =, reserved WITH &&);
+ERROR:  pax only support btree/hash/gin/bitmap indexes (pax_access_handle.cc:###)
 -- new distribution is incompatible with the constraint.
 ALTER TABLE ip_reservations SET DISTRIBUTED BY (reserved);
-ERROR:  distribution policy is not compatible with exclusion constraint "ip_reservations_ip_addr_reserved_excl"
-DETAIL:  Distribution key column "reserved" is not included in the constraint.
-HINT:  Add "reserved" to the constraint with the =(anyrange,anyrange) operator.
 -- After dropping the constraint, it's allowed.
 ALTER TABLE ip_reservations DROP CONSTRAINT ip_reservations_ip_addr_reserved_excl;
+ERROR:  constraint "ip_reservations_ip_addr_reserved_excl" of relation "ip_reservations" does not exist
 ALTER TABLE ip_reservations SET DISTRIBUTED BY (reserved);
+HINT:  Use ALTER TABLE "ip_reservations" SET WITH (REORGANIZE=TRUE) DISTRIBUTED BY (reserved) to force redistribution
+WARNING:  distribution policy of relation "ip_reservations" already set to (reserved)
 -- Test creating exclusion constraint on tsrange column. (The subtle
 -- difference is there is no direct =(tsrange, tsrange) operator, we rely on
 -- the implicit casts for it)
 ALTER TABLE ip_reservations ADD EXCLUDE USING gist (reserved WITH =);
--- end_ignore
+ERROR:  pax only support btree/hash/gin/bitmap indexes (pax_access_handle.cc:###)
 --
 -- Test scenario, where a type has a hash operator class, but not a default
 -- one.

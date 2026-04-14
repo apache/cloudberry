@@ -85,10 +85,10 @@ ERROR:  can't split update for inherit table: base_tbl (preptlist.c:138)
    Update on child_a base_tbl_1
    Update on child_b base_tbl_2
    ->  Explicit Redistribute Motion 3:3  (slice1; segments: 3)
-         ->  Split
+         ->  Split Update
                ->  Seq Scan on base_tbl
    ->  Explicit Redistribute Motion 3:3  (slice2; segments: 3)
-         ->  Split
+         ->  Split Update
                ->  Seq Scan on child_a base_tbl_1
    ->  Seq Scan on child_b base_tbl_2
  Optimizer: Postgres query optimizer
@@ -435,7 +435,7 @@ EXPLAIN (COSTS OFF ) UPDATE tab3 SET C1 = C1 + 1, C5 = C5+1;
          ->  Result
                ->  Redistribute Motion 3:3  (slice1; segments: 3)
                      Hash Key: c1, c2, c3
-                     ->  Split
+                     ->  Split Update
                            ->  Seq Scan on tab3
  Optimizer: GPORCA
 (9 rows)
@@ -690,7 +690,7 @@ explain update nosplitupdate set a=0 where a=1 and a<1;
          One-Time Filter: true
          ->  Result  (cost=0.00..0.00 rows=0 width=22)
                ->  Result  (cost=0.00..0.00 rows=0 width=18)
-                     ->  Split  (cost=0.00..0.00 rows=0 width=18)
+                     ->  Split Update  (cost=0.00..0.00 rows=0 width=18)
                            ->  Result  (cost=0.00..0.00 rows=0 width=18)
                                  One-Time Filter: false
  Optimizer: Pivotal Optimizer (GPORCA)
@@ -713,7 +713,7 @@ explain update tsplit_entry set c = s.a from (select count(*) as a from gp_segme
                ->  Redistribute Motion 1:3  (slice1)  (cost=0.00..882689.42 rows=4 width=22)
                      Hash Key: tsplit_entry_1.c
                      ->  Result  (cost=0.00..882689.42 rows=4 width=22)
-                           ->  Split  (cost=0.00..882689.42 rows=4 width=18)
+                           ->  Split Update  (cost=0.00..882689.42 rows=4 width=18)
                                  ->  Nested Loop  (cost=0.00..882689.42 rows=2 width=22)
                                        Join Filter: true
                                        ->  Aggregate  (cost=0.00..0.00 rows=1 width=8)
@@ -812,6 +812,97 @@ SELECT tableoid::regclass, * FROM update_gp_rangep WHERE b = 1;
  update_gp_rangep_1_to_10  |  2 | 1 |      2
  update_gp_rangep_10_to_20 | 11 | 1 |      4
 (3 rows)
+
+-- Test for update with LASJ_NOTIN
+-- See Issue: https://github.com/greenplum-db/gpdb/issues/13265
+-- Actually master branch does not have the above issue even master
+-- does have the same problematic code (other parts of code are
+-- refactored). Also cherry-pick the case to master and keep it
+-- since more test cases do no harm.
+create table t1_13265(a int, b int, c int, d int) distributed by (a);
+create table t2_13265(a int, b int, c int, d int) distributed by (a);
+insert into t1_13265 values (1, null, 1, 1);
+insert into t2_13265 values (2, null, 2, 2);
+explain (verbose, costs off)
+update t1_13265 set b = 2 where
+(c, d) not in (select c, d from t2_13265 where a = 2);
+                                           QUERY PLAN
+-------------------------------------------------------------------------------------------------
+ Update on public.t1_13265
+   ->  Nested Loop Left Anti Semi (Not-In) Join
+         Output: 2, t1_13265.ctid, t1_13265.gp_segment_id, t1_13265.*, t2_13265.ctid
+         Join Filter: ((t1_13265.c = t2_13265.c) AND (t1_13265.d = t2_13265.d))
+         ->  Seq Scan on public.t1_13265
+               Output: t1_13265.ctid, t1_13265.gp_segment_id, t1_13265.*, t1_13265.c, t1_13265.d
+         ->  Materialize
+               Output: t2_13265.ctid, t2_13265.c, t2_13265.d
+               ->  Broadcast Motion 1:3  (slice1; segments: 1)
+                     Output: t2_13265.ctid, t2_13265.c, t2_13265.d
+                     ->  Seq Scan on public.t2_13265
+                           Output: t2_13265.ctid, t2_13265.c, t2_13265.d
+                           Filter: (t2_13265.a = 2)
+(15 rows)
+
+update t1_13265 set b = 2 where
+(c, d) not in (select c, d from t2_13265 where a = 2);
+select * from t1_13265;
+ a | b | c | d 
+---+---+---+---
+ 1 | 2 | 1 | 1
+(1 row)
+
+-- test for update on partition table
+CREATE TABLE into_table (
+  a numeric(10,0) NOT NULL,
+  b numeric(10,0) NOT NULL,
+  c numeric(10,0) NOT NULL,
+  d character varying(4),
+  e character varying(10),
+  f int
+) DISTRIBUTED BY (a, b, c) PARTITION BY RANGE(f) (start (1) end(5) every(1));
+CREATE TABLE from_table (
+  a numeric(10,0) NOT NULL,
+  b numeric(10,0) NOT NULL,
+  c numeric(10,0) NOT NULL,
+  d character varying(4),
+  e character varying(10),
+  f int
+) DISTRIBUTED BY (a);
+insert into into_table select i*1.5,i*2,i*3,'dd'||i,'ee'||i, i from generate_series(1,4) i;
+insert into from_table select i*1.5,i*2,i*3,'xx'||i,'yy'||i, i+1 from generate_series(1,3) i;
+explain (costs off)
+update into_table set d=from_table.d, e=from_table.e, f=from_table.f from from_table
+where into_table.a=from_table.a and into_table.b=from_table.b and into_table.c=from_table.c;
+                                                       QUERY PLAN
+------------------------------------------------------------------------------------------------------------------------
+ Update on into_table
+   Update on into_table_1_prt_1 into_table_1
+   Update on into_table_1_prt_2 into_table_2
+   Update on into_table_1_prt_3 into_table_3
+   Update on into_table_1_prt_4 into_table_4
+   ->  Hash Join
+         Hash Cond: ((into_table.a = from_table.a) AND (into_table.b = from_table.b) AND (into_table.c = from_table.c))
+         ->  Append
+               ->  Seq Scan on into_table_1_prt_1 into_table_1
+               ->  Seq Scan on into_table_1_prt_2 into_table_2
+               ->  Seq Scan on into_table_1_prt_3 into_table_3
+               ->  Seq Scan on into_table_1_prt_4 into_table_4
+         ->  Hash
+               ->  Redistribute Motion 3:3  (slice1; segments: 3)
+                     Hash Key: from_table.a, from_table.b, from_table.c
+                     ->  Seq Scan on from_table
+(17 rows)
+
+update into_table set d=from_table.d, e=from_table.e, f=from_table.f from from_table
+where into_table.a=from_table.a and into_table.b=from_table.b and into_table.c=from_table.c;
+select * from into_table order by a;
+ a | b | c  |  d  |  e  | f 
+---+---+----+-----+-----+---
+ 2 | 2 |  3 | xx1 | yy1 | 2
+ 3 | 4 |  6 | xx2 | yy2 | 3
+ 5 | 6 |  9 | xx3 | yy3 | 4
+ 6 | 8 | 12 | dd4 | ee4 | 4
+(4 rows)
 
 -- start_ignore
 drop table r;

@@ -1,6 +1,10 @@
 -- Regression tests for prepareable statements. We query the content
 -- of the pg_prepared_statements view as prepared statements are
 -- created and removed.
+-- start_matchignore
+-- m/^INFO:  GPORCA failed to produce a plan/
+-- m/^DETAIL:  Falling back to Postgres-based planner/
+-- end_matchignore
 SET optimizer_trace_fallback to on;
 SELECT name, statement, parameter_types, result_types FROM pg_prepared_statements;
  name | statement | parameter_types | result_types 

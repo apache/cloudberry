@@ -1346,18 +1346,22 @@ select (ss.a).x, (ss.a).n from
    ->  ProjectSet
          Output: information_schema._pg_expandarray('{1,2}'::integer[])
          ->  Result
-(5 rows)
+ Settings: optimizer = 'off'
+ Optimizer: Postgres query optimizer
+(7 rows)
 
 explain (verbose, costs off)
 select (ss.a).x, (ss.a).n from
   (select information_schema._pg_expandarray(array[1,2]) AS a) ss
 where false;
-        QUERY PLAN        
---------------------------
+             QUERY PLAN              
+-------------------------------------
  Result
    Output: (a).f1, (a).f2
    One-Time Filter: false
-(3 rows)
+ Settings: optimizer = 'off'
+ Optimizer: Postgres query optimizer
+(5 rows)
 
 explain (verbose, costs off)
 with cte(c) as materialized (select row(1, 2)),

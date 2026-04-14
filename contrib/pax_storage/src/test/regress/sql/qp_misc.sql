@@ -1,3 +1,7 @@
+-- start_matchignore
+-- m/^INFO:  GPORCA failed to produce a plan/
+-- m/^DETAIL:  Falling back to Postgres-based planner/
+-- end_matchignore
 -- start_ignore
 --
 -- Apache Cloudberry database dump

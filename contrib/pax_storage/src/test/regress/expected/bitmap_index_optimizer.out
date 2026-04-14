@@ -1,3 +1,5 @@
+create extension if not exists gp_inject_fault;
+NOTICE:  extension "gp_inject_fault" already exists, skipping
 SET enable_seqscan = OFF;
 SET enable_indexscan = ON;
 SET enable_bitmapscan = ON;
@@ -65,24 +67,24 @@ select * from bm_test where i=5 or t='6';
  i | t 
 ---+---
  5 | 5
- 5 | 5
- 5 | 5
- 5 | 5
- 5 | 5
- 5 | 5
- 5 | 5
- 5 | 5
- 5 | 5
+ 6 | 6
  5 | 5
  6 | 6
+ 5 | 5
  6 | 6
+ 5 | 5
  6 | 6
+ 5 | 5
  6 | 6
+ 5 | 5
  6 | 6
+ 5 | 5
  6 | 6
+ 5 | 5
  6 | 6
+ 5 | 5
  6 | 6
- 6 | 6
+ 5 | 5
  6 | 6
 (20 rows)
 
@@ -97,16 +99,6 @@ select * from bm_test where i=5 or t='6';
 select * from bm_test where i=5 or t='1';
  i | t 
 ---+---
- 1 | 1
- 1 | 1
- 1 | 1
- 1 | 1
- 1 | 1
- 1 | 1
- 1 | 1
- 1 | 1
- 1 | 1
- 1 | 1
  5 | 5
  5 | 5
  5 | 5
@@ -117,101 +109,111 @@ select * from bm_test where i=5 or t='1';
  5 | 5
  5 | 5
  5 | 5
+ 1 | 1
+ 1 | 1
+ 1 | 1
+ 1 | 1
+ 1 | 1
+ 1 | 1
+ 1 | 1
+ 1 | 1
+ 1 | 1
+ 1 | 1
 (20 rows)
 
 select * from bm_test where i between 1 and 10 and i::text = t;
  i | t 
 ---+---
- 2 | 2
- 4 | 4
+ 1 | 1
+ 1 | 1
+ 1 | 1
+ 1 | 1
+ 1 | 1
+ 1 | 1
+ 1 | 1
+ 1 | 1
+ 1 | 1
+ 1 | 1
+ 5 | 5
  6 | 6
+ 9 | 9
+ 5 | 5
+ 6 | 6
+ 9 | 9
+ 5 | 5
+ 6 | 6
+ 9 | 9
+ 5 | 5
+ 6 | 6
+ 9 | 9
+ 5 | 5
+ 6 | 6
+ 9 | 9
+ 5 | 5
+ 6 | 6
+ 9 | 9
+ 5 | 5
+ 6 | 6
+ 9 | 9
+ 5 | 5
+ 6 | 6
+ 9 | 9
+ 5 | 5
+ 6 | 6
+ 9 | 9
+ 5 | 5
+ 6 | 6
+ 9 | 9
+ 2 | 2
+ 3 | 3
+ 4 | 4
+ 7 | 7
  8 | 8
  2 | 2
+ 3 | 3
  4 | 4
- 6 | 6
+ 7 | 7
  8 | 8
  2 | 2
+ 3 | 3
  4 | 4
- 6 | 6
+ 7 | 7
  8 | 8
  2 | 2
+ 3 | 3
  4 | 4
- 6 | 6
+ 7 | 7
  8 | 8
  2 | 2
+ 3 | 3
  4 | 4
- 6 | 6
+ 7 | 7
  8 | 8
  2 | 2
+ 3 | 3
  4 | 4
- 6 | 6
+ 7 | 7
  8 | 8
  2 | 2
+ 3 | 3
  4 | 4
- 6 | 6
+ 7 | 7
  8 | 8
  2 | 2
+ 3 | 3
  4 | 4
- 6 | 6
+ 7 | 7
  8 | 8
  2 | 2
+ 3 | 3
  4 | 4
- 6 | 6
+ 7 | 7
  8 | 8
  2 | 2
+ 3 | 3
  4 | 4
- 6 | 6
+ 7 | 7
  8 | 8
- 1 | 1
- 3 | 3
- 5 | 5
- 7 | 7
- 9 | 9
- 1 | 1
- 3 | 3
- 5 | 5
- 7 | 7
- 9 | 9
- 1 | 1
- 3 | 3
- 5 | 5
- 7 | 7
- 9 | 9
- 1 | 1
- 3 | 3
- 5 | 5
- 7 | 7
- 9 | 9
- 1 | 1
- 3 | 3
- 5 | 5
- 7 | 7
- 9 | 9
- 1 | 1
- 3 | 3
- 5 | 5
- 7 | 7
- 9 | 9
- 1 | 1
- 3 | 3
- 5 | 5
- 7 | 7
- 9 | 9
- 1 | 1
- 3 | 3
- 5 | 5
- 7 | 7
- 9 | 9
- 1 | 1
- 3 | 3
- 5 | 5
- 7 | 7
- 9 | 9
- 1 | 1
- 3 | 3
- 5 | 5
- 7 | 7
- 9 | 9
 (90 rows)
 
 drop table bm_test;
@@ -249,22 +251,22 @@ create index bm_n_null_idx on bm_test using bitmap(n) WHERE n ISNULL;
 select a.t from bm_test a, bm_test b where a.i2 = b.i2;
             t             
 --------------------------
- Tue Jan 02 01:01:01 2007
  Mon Jan 01 01:01:01 2007
+ Tue Jan 02 01:01:01 2007
 (2 rows)
 
 select a.t from bm_test a, bm_test b where a.i2 = b.i4;
             t             
 --------------------------
- Mon Jan 01 01:01:01 2007
  Tue Jan 02 01:01:01 2007
+ Mon Jan 01 01:01:01 2007
 (2 rows)
 
 select a.t from bm_test a, bm_test b where a.i2 = b.i8;
             t             
 --------------------------
- Mon Jan 01 01:01:01 2007
  Tue Jan 02 01:01:01 2007
+ Mon Jan 01 01:01:01 2007
 (2 rows)
 
 select a.t from bm_test a, bm_test b where b.f4 = a.f8 and a.f8 = '2.0';
@@ -290,8 +292,8 @@ select a.t from bm_test a, bm_test b where a.ip < b.ip;
 select a.t from bm_test a, bm_test b where a.ip=b.ip OR a.b = b.b;
             t             
 --------------------------
- Mon Jan 01 01:01:01 2007
  Tue Jan 02 01:01:01 2007
+ Mon Jan 01 01:01:01 2007
 (2 rows)
 
 -- and
@@ -335,8 +337,8 @@ select * from bm_test where i4=3;
  i2 | i4 | i8 | f4 | f8 |    n     | t1 | t2  | t3  |   a   |    ip     |  b   |            t             |     d      | g 
 ----+----+----+----+----+----------+----+-----+-----+-------+-----------+------+--------------------------+------------+---
   1 |  3 |  1 |  1 |  1 | 1000.333 | 1  | 1   | 1   | {1,3} | 127.0.0.1 | \x01 | Mon Jan 01 01:01:01 2007 | 01-01-2007 | t
-    |  3 |    |    |    |          |    |     |     |       |           |      |                          |            | 
   2 |  3 |  2 |  2 |  2 | 2000.333 | 2  | 2   | foo | {2,6} | 127.0.0.2 | \x02 | Tue Jan 02 01:01:01 2007 | 01-02-2007 | f
+    |  3 |    |    |    |          |    |     |     |       |           |      |                          |            | 
 (3 rows)
 
 -- should return one row
@@ -479,12 +481,12 @@ set optimizer_enable_bitmapscan=off;
 -- Known_opt_diff: MPP-19808
 -- end_ignore
 explain select * from bm_test where j = 1;
-                                   QUERY PLAN                                    
------------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..2.03 rows=1 width=8)
-   ->  Seq Scan on bm_test  (cost=0.00..1.03 rows=1 width=8)
-         Filter: j = 1
- Settings:  enable_bitmapscan=off; enable_indexscan=on; enable_seqscan=off; optimizer=on
+                                  QUERY PLAN                                  
+------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..431.00 rows=2 width=8)
+   ->  Seq Scan on bm_test  (cost=0.00..431.00 rows=1 width=8)
+         Filter: (j = 1)
+ Optimizer: GPORCA
 (4 rows)
 
 select * from bm_test where j = 1;
@@ -514,10 +516,10 @@ insert into ijk values (1, NULL, NULL);
 insert into ijk values (1, NULL, NULL);
 -- should fail.
 create unique index ijk_i on ijk(i);
-ERROR:  could not create unique index "ijk_i"
+ERROR:  could not create unique index "ijk_i"  (seg1 127.0.0.1:7003 pid=1478588)
 DETAIL:  Key (i)=(1) is duplicated.
 create unique index ijk_ij on ijk(i,j);
-ERROR:  could not create unique index "ijk_ij"
+ERROR:  could not create unique index "ijk_ij"  (seg1 127.0.0.1:7003 pid=1478588)
 DETAIL:  Key (i, j)=(1, 3) is duplicated.
 -- should OK.
 create unique index ijk_ijk on ijk(i,j,k);
@@ -531,10 +533,10 @@ insert into ijk values (1, NULL, NULL);
 insert into ijk values (1, NULL, NULL);
 -- should fail.
 create unique index ijk_i on ijk(i);
-ERROR:  could not create unique index "ijk_i"
+ERROR:  could not create unique index "ijk_i"  (seg1 127.0.0.1:7003 pid=1478588)
 DETAIL:  Key (i)=(1) is duplicated.
 create unique index ijk_ij on ijk(i,j);
-ERROR:  could not create unique index "ijk_ij"
+ERROR:  could not create unique index "ijk_ij"  (seg1 127.0.0.1:7003 pid=1478588)
 DETAIL:  Key (i, j)=(1, 3) is duplicated.
 -- should OK.
 create unique index ijk_ijk on ijk(i,j,k);
@@ -571,6 +573,8 @@ drop table bmap_test;
 -- Test over-sized values
 --
 create table oversize_test (c1 text);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c1' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE INDEX oversize_test_idx ON oversize_test USING BITMAP (c1);
 insert into oversize_test values ('a');
 select * from oversize_test;
@@ -581,7 +585,7 @@ select * from oversize_test;
 
 -- this fails, because the value is too large
 insert into oversize_test values (array_to_string(array(select generate_series(1, 10000)), '123456789'));
-ERROR:  row is too big: size 33256, maximum size 32736  (seg2 127.0.0.1:40002 pid=5270)
+ERROR:  row is too big: size 33256, maximum size 32736  (seg2 127.0.0.1:7004 pid=1478589)
 set enable_seqscan=off;
 select * from oversize_test where c1 < 'z';
  c1 
@@ -594,7 +598,7 @@ select * from oversize_test where c1 < 'z';
 drop index oversize_test_idx;
 insert into oversize_test values (array_to_string(array(select generate_series(1, 10000)), '123456789'));
 CREATE INDEX oversize_test_idx ON oversize_test USING BITMAP (c1);
-ERROR:  row is too big: size 33256, maximum size 32736  (seg2 172.17.0.2:25434 pid=391078)
+ERROR:  row is too big: size 33256, maximum size 32736  (seg2 127.0.0.1:7004 pid=1478589)
 --
 -- Test Index Only Scans.
 --
@@ -617,7 +621,7 @@ explain (costs off) select i, t from bm_indexonly_test where i = 1;
  Gather Motion 1:1  (slice1; segments: 1)
    ->  Seq Scan on bm_indexonly_test
          Filter: (i = 1)
- Optimizer: Pivotal Optimizer (GPORCA)
+ Optimizer: GPORCA
 (4 rows)
 
 select i, t from bm_indexonly_test where i = 1;
@@ -633,7 +637,7 @@ explain (costs off) select 'foobar' from bm_indexonly_test;
  Result
    ->  Gather Motion 3:1  (slice1; segments: 3)
          ->  Seq Scan on bm_indexonly_test
- Optimizer: Pivotal Optimizer (GPORCA)
+ Optimizer: GPORCA
 (4 rows)
 
 select 'foobar' from bm_indexonly_test;
@@ -661,12 +665,12 @@ analyze unlogged_test;
 explain select * from unlogged_test where c1 = 100;
                                       QUERY PLAN                                      
 --------------------------------------------------------------------------------------
- Gather Motion 1:1  (slice1; segments: 1)  (cost=0.00..204.38 rows=1 width=4)
-   ->  Bitmap Heap Scan on unlogged_test  (cost=0.00..204.38 rows=1 width=4)
-         Recheck Cond: c1 = 100
+ Gather Motion 1:1  (slice1; segments: 1)  (cost=0.00..391.30 rows=1 width=4)
+   ->  Bitmap Heap Scan on unlogged_test  (cost=0.00..391.30 rows=1 width=4)
+         Recheck Cond: (c1 = 100)
          ->  Bitmap Index Scan on unlogged_test_idx  (cost=0.00..0.00 rows=0 width=0)
-               Index Cond: c1 = 100
- Optimizer: Pivotal Optimizer (GPORCA) version 2.70.0
+               Index Cond: (c1 = 100)
+ Optimizer: GPORCA
 (6 rows)
 
 select * from unlogged_test where c1 = 100;
@@ -709,8 +713,12 @@ INSERT INTO bm_test_insert SELECT generate_series (1, 10000);
 UPDATE bm_test_update SET b=b+1;
 -- trigger recovery on primaries 
 SELECT gp_inject_fault_infinite('finish_prepared_after_record_commit_prepared', 'panic', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content > -1;
+WARNING:  consider disabling FTS probes while injecting a panic.  (seg0 127.0.0.1:7002 pid=1486134)
 HINT:  Inject an infinite 'skip' into the 'fts_probe' fault to disable FTS probing.
-WARNING:  consider disabling FTS probes while injecting a panic.
+WARNING:  consider disabling FTS probes while injecting a panic.  (seg1 127.0.0.1:7003 pid=1486135)
+HINT:  Inject an infinite 'skip' into the 'fts_probe' fault to disable FTS probing.
+WARNING:  consider disabling FTS probes while injecting a panic.  (seg2 127.0.0.1:7004 pid=1486136)
+HINT:  Inject an infinite 'skip' into the 'fts_probe' fault to disable FTS probing.
  gp_inject_fault_infinite 
 --------------------------
  Success:
@@ -721,6 +729,12 @@ WARNING:  consider disabling FTS probes while injecting a panic.
 SET client_min_messages='ERROR';
 CREATE TABLE trigger_recovery_on_primaries(c int);
 RESET client_min_messages;
+SELECT pg_sleep(2);
+ pg_sleep 
+----------
+ 
+(1 row)
+
 -- reconnect to the database after restart
 \c
 SELECT gp_inject_fault('checkpoint', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content > -1;
@@ -730,6 +744,12 @@ SELECT gp_inject_fault('checkpoint', 'reset', dbid) FROM gp_segment_configuratio
  Success:
  Success:
 (3 rows)
+
+SELECT pg_sleep(2);
+ pg_sleep 
+----------
+ 
+(1 row)
 
 SELECT gp_inject_fault('finish_prepared_after_record_commit_prepared', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content > -1;
  gp_inject_fault 
@@ -813,42 +833,42 @@ CREATE INDEX ON test_bmselec USING bitmap(type);
 ANALYZE test_bmselec;
 -- it used to choose bitmap index over seq scan, which not right.
 explain (analyze, verbose) select * from test_bmselec where type < 500;
-                                                          QUERY PLAN                                                           
--------------------------------------------------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..434.28 rows=4943 width=41) (actual time=0.435..7.910 rows=5000 loops=1)
+                                                           QUERY PLAN                                                           
+--------------------------------------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..434.37 rows=5036 width=41) (actual time=5.213..47.845 rows=5000 loops=1)
    Output: id, type, msg
-   ->  Seq Scan on public.test_bmselec  (cost=0.00..433.52 rows=1648 width=41) (actual time=0.030..5.213 rows=1693 loops=1)
+   ->  Seq Scan on public.test_bmselec  (cost=0.00..433.60 rows=1679 width=41) (actual time=4.161..44.551 rows=1693 loops=1)
          Output: id, type, msg
          Filter: (test_bmselec.type < 500)
          Rows Removed by Filter: 31769
- Planning Time: 49.134 ms
-   (slice0)    Executor memory: 36K bytes.
-   (slice1)    Executor memory: 36K bytes avg x 3 workers, 36K bytes max (seg0).
+ Settings: optimizer = 'on', enable_seqscan = 'on', enable_indexscan = 'on', enable_bitmapscan = 'on'
+ Planning Time: 22.078 ms
+   (slice0)    Executor memory: 111K bytes.
+   (slice1)    Executor memory: 116K bytes avg x 3x(0) workers, 116K bytes max (seg0).
  Memory used:  128000kB
- Optimizer: Pivotal Optimizer (GPORCA)
- Settings: enable_bitmapscan=on, enable_indexscan=on, enable_seqscan=on
- Execution Time: 8.972 ms
+ Optimizer: GPORCA
+ Execution Time: 49.359 ms
 (13 rows)
 
 SET enable_seqscan = OFF;
 SET enable_bitmapscan = OFF;
 -- we can see the bitmap index scan is much more slower
 explain (analyze, verbose) select * from test_bmselec where type < 500;
-                                                          QUERY PLAN                                                           
--------------------------------------------------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..434.28 rows=4943 width=41) (actual time=0.439..8.396 rows=5000 loops=1)
+                                                           QUERY PLAN                                                           
+--------------------------------------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..434.37 rows=5036 width=41) (actual time=4.827..78.146 rows=5000 loops=1)
    Output: id, type, msg
-   ->  Seq Scan on public.test_bmselec  (cost=0.00..433.52 rows=1648 width=41) (actual time=0.032..6.750 rows=1693 loops=1)
+   ->  Seq Scan on public.test_bmselec  (cost=0.00..433.60 rows=1679 width=41) (actual time=3.813..75.796 rows=1693 loops=1)
          Output: id, type, msg
          Filter: (test_bmselec.type < 500)
          Rows Removed by Filter: 31769
- Planning Time: 4.239 ms
-   (slice0)    Executor memory: 36K bytes.
-   (slice1)    Executor memory: 36K bytes avg x 3 workers, 36K bytes max (seg0).
+ Settings: optimizer = 'on', enable_seqscan = 'off', enable_indexscan = 'on', enable_bitmapscan = 'off'
+ Planning Time: 16.935 ms
+   (slice0)    Executor memory: 111K bytes.
+   (slice1)    Executor memory: 115K bytes avg x 3x(0) workers, 115K bytes max (seg0).
  Memory used:  128000kB
- Optimizer: Pivotal Optimizer (GPORCA)
- Settings: enable_bitmapscan=off, enable_indexscan=on, enable_seqscan=off
- Execution Time: 9.222 ms
+ Optimizer: GPORCA
+ Execution Time: 79.766 ms
 (13 rows)
 
 DROP TABLE test_bmselec;
@@ -865,19 +885,19 @@ ANALYZE test_bmsparse;
 explain (analyze, verbose) select * from test_bmsparse where type < 200;
                                                             QUERY PLAN                                                            
 ----------------------------------------------------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..447.65 rows=79956 width=41) (actual time=0.888..24.753 rows=80400 loops=1)
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..447.70 rows=79847 width=41) (actual time=8.800..74.413 rows=80400 loops=1)
    Output: id, type, msg
-   ->  Seq Scan on public.test_bmsparse  (cost=0.00..435.43 rows=26652 width=41) (actual time=0.037..7.395 rows=26975 loops=1)
+   ->  Seq Scan on public.test_bmsparse  (cost=0.00..435.50 rows=26616 width=41) (actual time=1.257..56.639 rows=26975 loops=1)
          Output: id, type, msg
          Filter: (test_bmsparse.type < 200)
          Rows Removed by Filter: 6596
- Planning Time: 161.423 ms
-   (slice0)    Executor memory: 36K bytes.
-   (slice1)    Executor memory: 36K bytes avg x 3 workers, 36K bytes max (seg0).
+ Settings: optimizer = 'on', enable_seqscan = 'on', enable_indexscan = 'on', enable_bitmapscan = 'on'
+ Planning Time: 26.760 ms
+   (slice0)    Executor memory: 111K bytes.
+   (slice1)    Executor memory: 115K bytes avg x 3x(0) workers, 115K bytes max (seg0).
  Memory used:  128000kB
- Optimizer: Pivotal Optimizer (GPORCA)
- Settings: enable_bitmapscan=on, enable_indexscan=on, enable_seqscan=on
- Execution Time: 29.185 ms
+ Optimizer: GPORCA
+ Execution Time: 80.297 ms
 (13 rows)
 
 SET enable_seqscan = OFF;
@@ -885,19 +905,19 @@ SET enable_bitmapscan = OFF;
 explain (analyze, verbose) select * from test_bmsparse where type < 200;
                                                             QUERY PLAN                                                            
 ----------------------------------------------------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..447.65 rows=79956 width=41) (actual time=0.866..24.050 rows=80400 loops=1)
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..447.70 rows=79847 width=41) (actual time=8.511..69.632 rows=80400 loops=1)
    Output: id, type, msg
-   ->  Seq Scan on public.test_bmsparse  (cost=0.00..435.43 rows=26652 width=41) (actual time=0.029..7.666 rows=26975 loops=1)
+   ->  Seq Scan on public.test_bmsparse  (cost=0.00..435.50 rows=26616 width=41) (actual time=1.173..55.815 rows=26975 loops=1)
          Output: id, type, msg
          Filter: (test_bmsparse.type < 200)
          Rows Removed by Filter: 6596
- Planning Time: 5.059 ms
-   (slice0)    Executor memory: 36K bytes.
-   (slice1)    Executor memory: 36K bytes avg x 3 workers, 36K bytes max (seg0).
+ Settings: optimizer = 'on', enable_seqscan = 'off', enable_indexscan = 'on', enable_bitmapscan = 'off'
+ Planning Time: 20.083 ms
+   (slice0)    Executor memory: 111K bytes.
+   (slice1)    Executor memory: 115K bytes avg x 3x(0) workers, 115K bytes max (seg0).
  Memory used:  128000kB
- Optimizer: Pivotal Optimizer (GPORCA)
- Settings: enable_bitmapscan=off, enable_indexscan=on, enable_seqscan=off
- Execution Time: 28.480 ms
+ Optimizer: GPORCA
+ Execution Time: 75.324 ms
 (13 rows)
 
 SET enable_seqscan = ON;
@@ -906,39 +926,216 @@ SET enable_bitmapscan = ON;
 explain (analyze, verbose) select * from test_bmsparse where type > 500;
                                                             QUERY PLAN                                                            
 ----------------------------------------------------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..436.80 rows=19101 width=41) (actual time=0.391..12.640 rows=18998 loops=1)
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..436.87 rows=19087 width=41) (actual time=2.558..48.182 rows=18998 loops=1)
    Output: id, type, msg
-   ->  Seq Scan on public.test_bmsparse  (cost=0.00..433.88 rows=6367 width=41) (actual time=0.049..5.123 rows=6448 loops=1)
+   ->  Seq Scan on public.test_bmsparse  (cost=0.00..433.96 rows=6363 width=41) (actual time=1.589..44.886 rows=6448 loops=1)
          Output: id, type, msg
          Filter: (test_bmsparse.type > 500)
          Rows Removed by Filter: 26979
- Planning Time: 5.442 ms
-   (slice0)    Executor memory: 36K bytes.
-   (slice1)    Executor memory: 36K bytes avg x 3 workers, 36K bytes max (seg0).
+ Settings: optimizer = 'on', enable_seqscan = 'on', enable_indexscan = 'on', enable_bitmapscan = 'on'
+ Planning Time: 20.730 ms
+   (slice0)    Executor memory: 111K bytes.
+   (slice1)    Executor memory: 116K bytes avg x 3x(0) workers, 116K bytes max (seg0).
  Memory used:  128000kB
- Optimizer: Pivotal Optimizer (GPORCA)
- Settings: enable_bitmapscan=on, enable_indexscan=on, enable_seqscan=on
- Execution Time: 14.206 ms
+ Optimizer: GPORCA
+ Execution Time: 50.704 ms
 (13 rows)
 
 SET enable_seqscan = OFF;
 SET enable_bitmapscan = OFF;
 explain (analyze, verbose) select * from test_bmsparse where type > 500;
-                                                           QUERY PLAN                                                            
----------------------------------------------------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..436.80 rows=19101 width=41) (actual time=0.352..9.098 rows=18998 loops=1)
+                                                            QUERY PLAN                                                            
+----------------------------------------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..436.87 rows=19087 width=41) (actual time=5.822..55.071 rows=18998 loops=1)
    Output: id, type, msg
-   ->  Seq Scan on public.test_bmsparse  (cost=0.00..433.88 rows=6367 width=41) (actual time=0.049..5.299 rows=6448 loops=1)
+   ->  Seq Scan on public.test_bmsparse  (cost=0.00..433.96 rows=6363 width=41) (actual time=1.981..47.771 rows=6448 loops=1)
          Output: id, type, msg
          Filter: (test_bmsparse.type > 500)
          Rows Removed by Filter: 26979
- Planning Time: 5.703 ms
-   (slice0)    Executor memory: 36K bytes.
-   (slice1)    Executor memory: 36K bytes avg x 3 workers, 36K bytes max (seg0).
+ Settings: optimizer = 'on', enable_seqscan = 'off', enable_indexscan = 'on', enable_bitmapscan = 'off'
+ Planning Time: 28.948 ms
+   (slice0)    Executor memory: 111K bytes.
+   (slice1)    Executor memory: 115K bytes avg x 3x(0) workers, 115K bytes max (seg0).
  Memory used:  128000kB
- Optimizer: Pivotal Optimizer (GPORCA)
- Settings: enable_bitmapscan=off, enable_indexscan=on, enable_seqscan=off
- Execution Time: 10.390 ms
+ Optimizer: GPORCA
+ Execution Time: 57.684 ms
 (13 rows)
 
 DROP TABLE test_bmsparse;
+-- test bitmap index scan when using NULL array-condition as index key
+create table foo(a int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+create index foo_i on foo using bitmap(a);
+explain (verbose on, costs off) select * from foo where a = any(null::int[]);
+                                               QUERY PLAN                                               
+--------------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Output: a
+   ->  Bitmap Heap Scan on public.foo
+         Output: a
+         Recheck Cond: (foo.a = ANY (NULL::integer[]))
+         ->  Bitmap Index Scan on foo_i
+               Index Cond: (foo.a = ANY (NULL::integer[]))
+ Settings: optimizer = 'on', enable_seqscan = 'off', enable_indexscan = 'on', enable_bitmapscan = 'off'
+ Optimizer: GPORCA
+(9 rows)
+
+select * from foo where a = any(null::int[]);
+ a 
+---
+(0 rows)
+
+insert into foo values(1);
+select * from foo where a = 1 and a = any(null::int[]);
+ a 
+---
+(0 rows)
+
+select * from foo where a = 1 or a = any(null::int[]);
+ a 
+---
+ 1
+(1 row)
+
+drop table foo;
+-- test for compressed bitmap index ; see https://github.com/apache/cloudberry/pull/679
+SET enable_seqscan = OFF;
+SET enable_indexscan = ON;
+SET enable_bitmapscan = OFF;
+create table bm_test_ao (i int, j int, k int) WITH (appendonly=true) distributed by (k) ;
+create index bm_test_ao_i_idx on bm_test_ao using bitmap(i);
+insert into bm_test_ao select i, 1, 1 from
+generate_series(1, 65535) g, generate_series(1, 4) i;
+explain select count(*) from bm_test_ao where i =2;
+                                        QUERY PLAN                                         
+-------------------------------------------------------------------------------------------
+ Aggregate  (cost=0.00..391.30 rows=1 width=8)
+   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..391.30 rows=1 width=1)
+         ->  Bitmap Heap Scan on bm_test_ao  (cost=0.00..391.30 rows=1 width=1)
+               Recheck Cond: (i = 2)
+               ->  Bitmap Index Scan on bm_test_ao_i_idx  (cost=0.00..0.00 rows=0 width=0)
+                     Index Cond: (i = 2)
+ Optimizer: GPORCA
+(7 rows)
+
+select count(*) from bm_test_ao where i = 2;
+ count 
+-------
+ 65535
+(1 row)
+
+DROP TABLE bm_test_ao;
+--
+-- test union bitmap batch words for multivalues index scan like where x in (x1, x2) or x > v
+-- which creates bitmapand plan on two bitmap indexs that match multiple keys by using in in where clause
+--
+create table bmunion (a int, b int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+insert into bmunion
+  select (r%53), (r%59)
+  from generate_series(1,70000) r;
+create index bmu_i_bmtest2_a on bmunion using bitmap(a);
+create index bmu_i_bmtest2_b on bmunion using bitmap(b);
+insert into bmunion select 53, 1 from generate_series(1, 1000);
+analyze bmunion;
+set optimizer_enable_tablescan=off;
+set optimizer_enable_dynamictablescan=off;
+-- inject fault for planner so that it could produce bitmapand plan node.
+select gp_inject_fault('simulate_bitmap_and', 'skip', dbid) from gp_segment_configuration where role = 'p' and content = -1;
+ gp_inject_fault 
+-----------------
+ Success:
+(1 row)
+
+explain (costs off) select count(*) from bmunion where a = 53 and b < 3;
+                             QUERY PLAN                             
+--------------------------------------------------------------------
+ Finalize Aggregate
+   ->  Gather Motion 1:1  (slice1; segments: 1)
+         ->  Partial Aggregate
+               ->  Bitmap Heap Scan on bmunion
+                     Recheck Cond: ((a = 53) AND (b < 3))
+                     ->  BitmapAnd
+                           ->  Bitmap Index Scan on bmu_i_bmtest2_a
+                                 Index Cond: (a = 53)
+                           ->  Bitmap Index Scan on bmu_i_bmtest2_b
+                                 Index Cond: (b < 3)
+ Optimizer: GPORCA
+(11 rows)
+
+select gp_inject_fault('simulate_bitmap_and', 'reset', dbid) from gp_segment_configuration where role = 'p' and content = -1;
+ gp_inject_fault 
+-----------------
+ Success:
+(1 row)
+
+select gp_inject_fault('simulate_bitmap_and', 'skip', dbid) from gp_segment_configuration where role = 'p' and content = -1;
+ gp_inject_fault 
+-----------------
+ Success:
+(1 row)
+
+select count(*) from bmunion where a = 53 and b < 3;
+ count 
+-------
+  1000
+(1 row)
+
+select gp_inject_fault('simulate_bitmap_and', 'reset', dbid) from gp_segment_configuration where role = 'p' and content = -1;
+ gp_inject_fault 
+-----------------
+ Success:
+(1 row)
+
+reset optimizer_enable_tablescan;
+reset optimizer_enable_dynamictablescan;
+drop table bmunion;
+-- test create bitmap index and there have HOT chains.
+drop table if exists bm_test;
+NOTICE:  table "bm_test" does not exist, skipping
+create table bm_test(a int, b int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+-- insert some data into a one segment
+insert into bm_test values (1, 1); 
+insert into bm_test values (1, 2); 
+insert into bm_test values (1, 3); 
+insert into bm_test values (12, 1); 
+-- update the first tuple using HOT, since this page
+-- just have 4 tuples, there have full free space to
+-- use HOT update.
+update bm_test set b = 1 where a = 1 and b = 1;
+-- After the update, the tids that the value of b is equal to 1
+-- we scanned will not be in order, due to HOT.
+create index idx_bm_test on bm_test using bitmap(b);
+select * from bm_test where b = 1;
+ a  | b 
+----+---
+ 12 | 1
+  1 | 1
+(2 rows)
+
+-- clean up
+drop table bm_test;
+-- test the scenario that we need read the same batch words many times
+-- more detials can be found at https://github.com/greenplum-db/gpdb/issues/13446
+SET enable_seqscan = OFF;
+SET enable_bitmapscan = OFF;
+create table foo_13446(a int, b int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+create index idx_13446 on foo_13446 using bitmap(b);
+insert into foo_13446 select 1, 1 from generate_series(0, 16384);
+-- At current implementation, BMIterateResult can only store 16*1024=16384 TIDs,
+-- if we have 13685 TIDs to read, it must scan same batch words twice, that's what we want
+select count(*) from foo_13446 where b = 1;
+ count 
+-------
+ 16385
+(1 row)
+
+drop table foo_13446;
+SET enable_seqscan = ON;
+SET enable_bitmapscan = ON;

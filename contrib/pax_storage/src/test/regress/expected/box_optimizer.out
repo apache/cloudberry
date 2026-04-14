@@ -16,6 +16,7 @@
 --
 -- boxes are specified by two points, given by four floats x1,y1,x2,y2
 CREATE TABLE BOX_TBL (f1 box);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause, and no column type is suitable for a distribution key. Creating a NULL policy entry.
 INSERT INTO BOX_TBL (f1) VALUES ('(2.0,2.0,0.0,0.0)');
 INSERT INTO BOX_TBL (f1) VALUES ('(1.0,1.0,3.0,3.0)');
 INSERT INTO BOX_TBL (f1) VALUES ('((-8, 2), (-2, -10))');
@@ -47,22 +48,22 @@ LINE 1: INSERT INTO BOX_TBL (f1) VALUES ('asdfasdf(ad');
 SELECT * FROM BOX_TBL;
          f1          
 ---------------------
- (2,2),(0,0)
  (3,3),(1,1)
+ (3,3),(3,3)
+ (2,2),(0,0)
  (-2,2),(-8,-10)
  (2.5,3.5),(2.5,2.5)
- (3,3),(3,3)
 (5 rows)
 
 SELECT b.*, area(b.f1) as barea
    FROM BOX_TBL b;
          f1          | barea 
 ---------------------+-------
- (2,2),(0,0)         |     4
  (3,3),(1,1)         |     4
+ (3,3),(3,3)         |     0
+ (2,2),(0,0)         |     4
  (-2,2),(-8,-10)     |    72
  (2.5,3.5),(2.5,2.5) |     0
- (3,3),(3,3)         |     0
 (5 rows)
 
 -- overlap
@@ -71,8 +72,8 @@ SELECT b.f1
    WHERE b.f1 && box '(2.5,2.5,1.0,1.0)';
          f1          
 ---------------------
- (2,2),(0,0)
  (3,3),(1,1)
+ (2,2),(0,0)
  (2.5,3.5),(2.5,2.5)
 (3 rows)
 
@@ -115,8 +116,8 @@ SELECT b.f1
          f1          
 ---------------------
  (2,2),(0,0)
- (3,3),(1,1)
  (2.5,3.5),(2.5,2.5)
+ (3,3),(1,1)
  (3,3),(3,3)
 (4 rows)
 
@@ -136,8 +137,8 @@ SELECT b.f1
    WHERE b.f1 = box '(3.0,3.0,5.0,5.0)';
      f1      
 -------------
- (2,2),(0,0)
  (3,3),(1,1)
+ (2,2),(0,0)
 (2 rows)
 
 -- area >
@@ -146,8 +147,8 @@ SELECT b.f1
    WHERE b.f1 > box '(3.5,3.0,4.5,3.0)';
        f1        
 -----------------
- (2,2),(0,0)
  (3,3),(1,1)
+ (2,2),(0,0)
  (-2,2),(-8,-10)
 (3 rows)
 
@@ -158,9 +159,9 @@ SELECT b.f1
          f1          
 ---------------------
  (2,2),(0,0)
- (3,3),(1,1)
  (-2,2),(-8,-10)
  (2.5,3.5),(2.5,2.5)
+ (3,3),(1,1)
  (3,3),(3,3)
 (5 rows)
 
@@ -181,9 +182,9 @@ SELECT b.f1
    WHERE b.f1 <@ box '(0,0,3,3)';
      f1      
 -------------
- (2,2),(0,0)
  (3,3),(1,1)
  (3,3),(3,3)
+ (2,2),(0,0)
 (3 rows)
 
 -- contains
@@ -192,9 +193,9 @@ SELECT b.f1
    WHERE box '(0,0,3,3)' @> b.f1;
      f1      
 -------------
- (2,2),(0,0)
  (3,3),(1,1)
  (3,3),(3,3)
+ (2,2),(0,0)
 (3 rows)
 
 -- box equality
@@ -211,11 +212,11 @@ SELECT @@(b1.f1) AS p
    FROM BOX_TBL b1;
     p    
 ---------
- (1,1)
  (2,2)
+ (3,3)
+ (1,1)
  (-5,-4)
  (2.5,3)
- (3,3)
 (5 rows)
 
 -- wholly-contained
@@ -231,22 +232,22 @@ SELECT height(f1), width(f1) FROM BOX_TBL;
  height | width 
 --------+-------
       2 |     2
+      0 |     0
       2 |     2
      12 |     6
       1 |     0
-      0 |     0
 (5 rows)
 
 --
 -- Test the SP-GiST index
 --
 CREATE TEMPORARY TABLE box_temp (f1 box);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause, and no column type is suitable for a distribution key. Creating a NULL policy entry.
 INSERT INTO box_temp
 	SELECT box(point(i, i), point(i * 2, i * 2))
 	FROM generate_series(1, 50) AS i;
--- PAX not support gist/spgist/brin indexes
 CREATE INDEX box_spgist ON box_temp USING spgist (f1);
-ERROR:  pax only support btree/hash/gin/bitmap indexes (pax_access_handle.cc:736)
+ERROR:  pax only support btree/hash/gin/bitmap indexes (pax_access_handle.cc:591)
 INSERT INTO box_temp
 	VALUES (NULL),
 		   ('(0,0)(0,100)'),
@@ -259,34 +260,35 @@ SET enable_seqscan = false;
 SELECT * FROM box_temp WHERE f1 << '(10,20),(30,40)';
              f1             
 ----------------------------
- (0,Infinity),(0,100)
- (2,2),(1,1)
- (4,4),(2,2)
- (8,8),(4,4)
  (0,100),(0,0)
+ (0,Infinity),(0,100)
  (0,Infinity),(-Infinity,0)
  (6,6),(3,3)
+ (8,8),(4,4)
+ (2,2),(1,1)
+ (4,4),(2,2)
 (7 rows)
 
 EXPLAIN (COSTS OFF) SELECT * FROM box_temp WHERE f1 << '(10,20),(30,40)';
-                      QUERY PLAN                      
-------------------------------------------------------
+                   QUERY PLAN                   
+------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Seq Scan on box_temp
          Filter: (f1 << '(30,40),(10,20)'::box)
+ Optimizer: GPORCA
 (4 rows)
 
 SELECT * FROM box_temp WHERE f1 &< '(10,4.333334),(5,100)';
              f1             
 ----------------------------
- (6,6),(3,3)
- (10,10),(5,5)
+ (0,100),(0,0)
  (0,Infinity),(0,100)
+ (0,Infinity),(-Infinity,0)
  (2,2),(1,1)
  (4,4),(2,2)
+ (10,10),(5,5)
+ (6,6),(3,3)
  (8,8),(4,4)
- (0,100),(0,0)
- (0,Infinity),(-Infinity,0)
 (8 rows)
 
 EXPLAIN (COSTS OFF) SELECT * FROM box_temp WHERE f1 &< '(10,4.333334),(5,100)';
@@ -295,36 +297,38 @@ EXPLAIN (COSTS OFF) SELECT * FROM box_temp WHERE f1 &< '(10,4.333334),(5,100)';
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Seq Scan on box_temp
          Filter: (f1 &< '(10,100),(5,4.333334)'::box)
+ Optimizer: GPORCA
 (4 rows)
 
 SELECT * FROM box_temp WHERE f1 && '(15,20),(25,30)';
                     f1                     
 -------------------------------------------
- (24,24),(12,12)
- (28,28),(14,14)
  (34,34),(17,17)
+ (36,36),(18,18)
  (40,40),(20,20)
  (50,50),(25,25)
- (20,20),(10,10)
+ (24,24),(12,12)
  (26,26),(13,13)
+ (28,28),(14,14)
  (30,30),(15,15)
- (32,32),(16,16)
- (36,36),(18,18)
  (42,42),(21,21)
- (22,22),(11,11)
- (38,38),(19,19)
  (44,44),(22,22)
  (46,46),(23,23)
  (48,48),(24,24)
  (Infinity,Infinity),(-Infinity,-Infinity)
+ (20,20),(10,10)
+ (22,22),(11,11)
+ (32,32),(16,16)
+ (38,38),(19,19)
 (17 rows)
 
 EXPLAIN (COSTS OFF) SELECT * FROM box_temp WHERE f1 && '(15,20),(25,30)';
-                      QUERY PLAN                      
-------------------------------------------------------
+                   QUERY PLAN                   
+------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Seq Scan on box_temp
          Filter: (f1 && '(25,30),(15,20)'::box)
+ Optimizer: GPORCA
 (4 rows)
 
 SELECT * FROM box_temp WHERE f1 &> '(40,30),(45,50)';
@@ -333,45 +337,47 @@ SELECT * FROM box_temp WHERE f1 &> '(40,30),(45,50)';
  (80,80),(40,40)
  (82,82),(41,41)
  (86,86),(43,43)
- (90,90),(45,45)
- (92,92),(46,46)
+ (88,88),(44,44)
  (94,94),(47,47)
  (96,96),(48,48)
- (88,88),(44,44)
  (100,100),(50,50)
  (84,84),(42,42)
+ (92,92),(46,46)
+ (90,90),(45,45)
  (98,98),(49,49)
 (11 rows)
 
 EXPLAIN (COSTS OFF) SELECT * FROM box_temp WHERE f1 &> '(40,30),(45,50)';
-                      QUERY PLAN                      
-------------------------------------------------------
+                   QUERY PLAN                   
+------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Seq Scan on box_temp
          Filter: (f1 &> '(45,50),(40,30)'::box)
+ Optimizer: GPORCA
 (4 rows)
 
 SELECT * FROM box_temp WHERE f1 >> '(30,40),(40,30)';
         f1         
 -------------------
- (88,88),(44,44)
- (100,100),(50,50)
  (84,84),(42,42)
- (98,98),(49,49)
+ (92,92),(46,46)
  (82,82),(41,41)
  (86,86),(43,43)
- (90,90),(45,45)
- (92,92),(46,46)
+ (88,88),(44,44)
  (94,94),(47,47)
  (96,96),(48,48)
+ (100,100),(50,50)
+ (90,90),(45,45)
+ (98,98),(49,49)
 (10 rows)
 
 EXPLAIN (COSTS OFF) SELECT * FROM box_temp WHERE f1 >> '(30,40),(40,30)';
-                      QUERY PLAN                      
-------------------------------------------------------
+                   QUERY PLAN                   
+------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Seq Scan on box_temp
          Filter: (f1 >> '(40,40),(30,30)'::box)
+ Optimizer: GPORCA
 (4 rows)
 
 SELECT * FROM box_temp WHERE f1 <<| '(10,4.33334),(5,100)';
@@ -388,6 +394,7 @@ EXPLAIN (COSTS OFF) SELECT * FROM box_temp WHERE f1 <<| '(10,4.33334),(5,100)';
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Seq Scan on box_temp
          Filter: (f1 <<| '(10,100),(5,4.33334)'::box)
+ Optimizer: GPORCA
 (4 rows)
 
 SELECT * FROM box_temp WHERE f1 &<| '(10,4.3333334),(5,1)';
@@ -404,13 +411,14 @@ EXPLAIN (COSTS OFF) SELECT * FROM box_temp WHERE f1 &<| '(10,4.3333334),(5,1)';
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Seq Scan on box_temp
          Filter: (f1 &<| '(10,4.3333334),(5,1)'::box)
+ Optimizer: GPORCA
 (4 rows)
 
 SELECT * FROM box_temp WHERE f1 |&> '(49.99,49.99),(49.99,49.99)';
           f1          
 ----------------------
- (100,100),(50,50)
  (0,Infinity),(0,100)
+ (100,100),(50,50)
 (2 rows)
 
 EXPLAIN (COSTS OFF) SELECT * FROM box_temp WHERE f1 |&> '(49.99,49.99),(49.99,49.99)';
@@ -419,47 +427,50 @@ EXPLAIN (COSTS OFF) SELECT * FROM box_temp WHERE f1 |&> '(49.99,49.99),(49.99,49
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Seq Scan on box_temp
          Filter: (f1 |&> '(49.99,49.99),(49.99,49.99)'::box)
+ Optimizer: GPORCA
 (4 rows)
 
 SELECT * FROM box_temp WHERE f1 |>> '(37,38),(39,40)';
           f1          
 ----------------------
- (88,88),(44,44)
- (100,100),(50,50)
- (0,Infinity),(0,100)
- (84,84),(42,42)
- (98,98),(49,49)
  (82,82),(41,41)
  (86,86),(43,43)
- (90,90),(45,45)
- (92,92),(46,46)
+ (88,88),(44,44)
  (94,94),(47,47)
  (96,96),(48,48)
+ (100,100),(50,50)
+ (84,84),(42,42)
+ (92,92),(46,46)
+ (0,Infinity),(0,100)
+ (90,90),(45,45)
+ (98,98),(49,49)
 (11 rows)
 
 EXPLAIN (COSTS OFF) SELECT * FROM box_temp WHERE f1 |>> '(37,38),(39,40)';
-                      QUERY PLAN                      
-------------------------------------------------------
+                   QUERY PLAN                    
+-------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Seq Scan on box_temp
          Filter: (f1 |>> '(39,40),(37,38)'::box)
+ Optimizer: GPORCA
 (4 rows)
 
 SELECT * FROM box_temp WHERE f1 @> '(10,11),(15,16)';
                     f1                     
 -------------------------------------------
+ (18,18),(9,9)
  (16,16),(8,8)
  (20,20),(10,10)
  (Infinity,Infinity),(-Infinity,-Infinity)
- (18,18),(9,9)
 (4 rows)
 
 EXPLAIN (COSTS OFF) SELECT * FROM box_temp WHERE f1 @> '(10,11),(15,15)';
-                      QUERY PLAN                      
-------------------------------------------------------
+                   QUERY PLAN                   
+------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Seq Scan on box_temp
          Filter: (f1 @> '(15,15),(10,11)'::box)
+ Optimizer: GPORCA
 (4 rows)
 
 SELECT * FROM box_temp WHERE f1 <@ '(10,15),(30,35)';
@@ -469,11 +480,12 @@ SELECT * FROM box_temp WHERE f1 <@ '(10,15),(30,35)';
 (1 row)
 
 EXPLAIN (COSTS OFF) SELECT * FROM box_temp WHERE f1 <@ '(10,15),(30,35)';
-                      QUERY PLAN                      
-------------------------------------------------------
+                   QUERY PLAN                   
+------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Seq Scan on box_temp
          Filter: (f1 <@ '(30,35),(10,15)'::box)
+ Optimizer: GPORCA
 (4 rows)
 
 SELECT * FROM box_temp WHERE f1 ~= '(20,20),(40,40)';
@@ -483,11 +495,12 @@ SELECT * FROM box_temp WHERE f1 ~= '(20,20),(40,40)';
 (1 row)
 
 EXPLAIN (COSTS OFF) SELECT * FROM box_temp WHERE f1 ~= '(20,20),(40,40)';
-                      QUERY PLAN                      
-------------------------------------------------------
+                   QUERY PLAN                   
+------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Seq Scan on box_temp
          Filter: (f1 ~= '(40,40),(20,20)'::box)
+ Optimizer: GPORCA
 (4 rows)
 
 RESET enable_seqscan;
@@ -498,6 +511,7 @@ ERROR:  index "box_spgist" does not exist
 --
 CREATE TABLE quad_box_tbl (id int, b box);
 NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'id' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO quad_box_tbl
   SELECT (x - 1) * 100 + y, box(point(x * 10, y * 10), point(x * 10 + 5, y * 10 + 5))
   FROM generate_series(1, 100) x,
@@ -513,9 +527,8 @@ VALUES
   (11003, '((-infinity,-infinity),(infinity,infinity))'),
   (11004, '((-infinity,100),(-infinity,500))'),
   (11005, '((-infinity,-infinity),(700,infinity))');
--- PAX not support gist/spgist/brin indexes
 CREATE INDEX quad_box_tbl_idx ON quad_box_tbl USING spgist(b);
-ERROR:  pax only support btree/hash/gin/bitmap indexes (pax_access_handle.cc:736)
+ERROR:  pax only support btree/hash/gin/bitmap indexes (pax_access_handle.cc:591)
 ANALYZE quad_box_tbl;
 -- get reference results for ORDER BY distance from seq scan
 SET enable_seqscan = ON;
@@ -613,11 +626,6 @@ SELECT count(*) FROM quad_box_tbl WHERE b ~=  box '((200,300),(205,305))';
 -- test ORDER BY distance
 SET enable_indexscan = ON;
 SET enable_bitmapscan = OFF;
--- start_ignore
--- GPDB_13_MERGE_FIXME:
--- The ORCA sorts the result of seqscan, while the postgres planner uses index scan
--- to keep order. Is it better to also use index scan for ORCA?
--- end_ignore
 EXPLAIN (COSTS OFF)
 SELECT rank() OVER (ORDER BY b <-> point '123,456') n, b <-> point '123,456' dist, id
 FROM quad_box_tbl;
@@ -631,7 +639,7 @@ FROM quad_box_tbl;
                ->  Sort
                      Sort Key: ((b <-> '(123,456)'::point))
                      ->  Seq Scan on quad_box_tbl
- Optimizer: Pivotal Optimizer (GPORCA)
+ Optimizer: GPORCA
 (9 rows)
 
 CREATE TEMP TABLE quad_box_tbl_ord_idx1 AS
@@ -661,7 +669,7 @@ FROM quad_box_tbl WHERE b <@ box '((200,300),(500,600))';
                      Sort Key: ((b <-> '(123,456)'::point))
                      ->  Seq Scan on quad_box_tbl
                            Filter: (b <@ '(500,600),(200,300)'::box)
- Optimizer: Pivotal Optimizer (GPORCA)
+ Optimizer: GPORCA
 (10 rows)
 
 CREATE TEMP TABLE quad_box_tbl_ord_idx2 AS
@@ -680,3 +688,28 @@ WHERE seq.id IS NULL OR idx.id IS NULL;
 RESET enable_seqscan;
 RESET enable_indexscan;
 RESET enable_bitmapscan;
+-- test non-error-throwing API for some core types
+SELECT pg_input_is_valid('200', 'box');
+ pg_input_is_valid 
+-------------------
+ f
+(1 row)
+
+SELECT * FROM pg_input_error_info('200', 'box');
+                 message                  | detail | hint | sql_error_code 
+------------------------------------------+--------+------+----------------
+ invalid input syntax for type box: "200" |        |      | 22P02
+(1 row)
+
+SELECT pg_input_is_valid('((200,300),(500, xyz))', 'box');
+ pg_input_is_valid 
+-------------------
+ f
+(1 row)
+
+SELECT * FROM pg_input_error_info('((200,300),(500, xyz))', 'box');
+                           message                           | detail | hint | sql_error_code 
+-------------------------------------------------------------+--------+------+----------------
+ invalid input syntax for type box: "((200,300),(500, xyz))" |        |      | 22P02
+(1 row)
+
