@@ -52,12 +52,15 @@ Prefix:         %{cloudberry_install_dir}
 # List runtime dependencies
 
 Requires:       bash
+Requires:       hostname
 Requires:       iproute
 Requires:       iputils
+Requires:       less
 Requires:       openssh
 Requires:       openssh-clients
 Requires:       openssh-server
 Requires:       rsync
+Requires:       which
 
 %if 0%{?rhel} == 8
 Requires:       apr
@@ -152,14 +155,18 @@ mkdir -p %{buildroot}%{cloudberry_install_dir}-%{version}
 
 cp -R %{cloudberry_install_dir}/* %{buildroot}%{cloudberry_install_dir}-%{version}
 
+# Copy Apache mandatory compliance files from the SOURCES directory into the installation directory
+cp %{_sourcedir}/LICENSE %{buildroot}%{cloudberry_install_dir}-%{version}/
+cp %{_sourcedir}/NOTICE %{buildroot}%{cloudberry_install_dir}-%{version}/
+cp %{_sourcedir}/DISCLAIMER %{buildroot}%{cloudberry_install_dir}-%{version}/
+cp -R %{_sourcedir}/licenses %{buildroot}%{cloudberry_install_dir}-%{version}/
+
 # Create the symbolic link
 ln -sfn %{cloudberry_install_dir}-%{version} %{buildroot}%{cloudberry_install_dir}
 
 %files
 %{prefix}-%{version}
 %{prefix}
-
-%license %{cloudberry_install_dir}-%{version}/LICENSE
 
 %debug_package
 

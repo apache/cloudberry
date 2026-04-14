@@ -633,6 +633,14 @@ fsm_extend(Relation rel, BlockNumber fsm_nblocks)
 		!smgrexists(rel->rd_smgr, FSM_FORKNUM))
 		smgrcreate(rel->rd_smgr, FSM_FORKNUM, false);
 
+	/*
+	 * Might have to re-open if smgrcreate triggered AcceptInvalidationMessages
+	 * (via TablespaceCreateDbspace -> LockSharedObject for non-default
+	 * tablespaces), which may have processed a pending SHAREDINVALSMGR_ID
+	 * message and closed our smgr entry.
+	 */
+	RelationOpenSmgr(rel);
+
 	/* Invalidate cache so that smgrnblocks() asks the kernel. */
 	rel->rd_smgr->smgr_cached_nblocks[FSM_FORKNUM] = InvalidBlockNumber;
 	fsm_nblocks_now = smgrnblocks(rel->rd_smgr, FSM_FORKNUM);

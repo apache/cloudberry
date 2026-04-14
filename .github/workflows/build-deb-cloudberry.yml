@@ -252,6 +252,10 @@ jobs:
                                "gpcontrib/gp_sparse_vector:installcheck",
                                "gpcontrib/gp_toolkit:installcheck"]
               },
+              {"test":"gpcontrib-gp-stats-collector",
+               "make_configs":["gpcontrib/gp_stats_collector:installcheck"],
+               "extension":"gp_stats_collector"
+              },
               {"test":"ic-cbdb-parallel",
                "make_configs":["src/test/regress:installcheck-cbdb-parallel"]
               }
@@ -1341,6 +1345,7 @@ jobs:
         if: success() && needs.check-skip.outputs.should_skip != 'true'
         env:
           SRC_DIR: ${{ github.workspace }}
+          BUILD_DESTINATION: ${{ github.workspace }}/debian/build
         shell: bash {0}
         run: |
           set -o pipefail
@@ -1364,6 +1369,30 @@ jobs:
           # 2. Follow the same pattern as optimizer
           # 3. Update matrix entries to include the new setting
 
+
+          # Create extension if required
+          if [[ "${{ matrix.extension != '' }}" == "true" ]]; then
+            case "${{ matrix.extension }}" in
+              gp_stats_collector)
+                if ! su - gpadmin -c "source ${BUILD_DESTINATION}/cloudberry-env.sh && \
+                  source ${SRC_DIR}/gpAux/gpdemo/gpdemo-env.sh && \
+                  gpconfig -c shared_preload_libraries -v 'gp_stats_collector' && \
+                  gpstop -ra && \
+                  echo 'CREATE EXTENSION IF NOT EXISTS gp_stats_collector; \
+                        SHOW shared_preload_libraries; \
+                        TABLE pg_extension;' | \
+                    psql postgres"
+                then
+                    echo "Error creating gp_stats_collector extension"
+                    exit 1
+                fi
+                ;;
+              *)
+                echo "Unknown extension: ${{ matrix.extension }}"
+                exit 1
+                ;;
+            esac
+          fi
 
           # Set PostgreSQL options if defined
           PG_OPTS=""
@@ -1589,6 +1618,7 @@ jobs:
 
       - name: Check and Display Regression Diffs
         if: always()
+        shell: bash {0}
         run: |
           # Search for regression.diffs recursively
           found_file=$(find . -type f -name "regression.diffs" | head -n 1)

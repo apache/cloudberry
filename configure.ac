@@ -1365,6 +1365,31 @@ PGAC_ARG_BOOL(with, zstd, yes, [do not build with Zstandard],
 AC_MSG_RESULT([$with_zstd])
 AC_SUBST(with_zstd)
 
+#
+# diskquota
+#
+PGAC_ARG_BOOL(with, diskquota, no,
+              [build with diskquota extension])
+AC_SUBST(with_diskquota)
+
+#
+# gp_stats_collector
+#
+PGAC_ARG_BOOL(with, gp_stats_collector, no,
+              [build with stats collector extension])
+AC_SUBST(with_gp_stats_collector)
+
+if test "$with_gp_stats_collector" = yes; then
+  PKG_CHECK_MODULES([PROTOBUF], [protobuf >= 3.0.0],
+    [],
+    [AC_MSG_ERROR([protobuf >= 3.0.0 is required for gp_stats_collector])]
+  )
+  AC_PATH_PROG([PROTOC], [protoc], [no])
+  if test "$PROTOC" = no; then
+    AC_MSG_ERROR([protoc is required for gp_stats_collector but was not found in PATH])
+  fi
+fi
+
 if test "$with_zstd" = yes; then
   dnl zstd_errors.h was renamed from error_public.h in v1.4.0
   PKG_CHECK_MODULES([ZSTD], [libzstd >= 1.4.0])
@@ -1466,7 +1491,7 @@ AC_SUBST(install_bin)
 # MDB locales
 #
 
-PGAC_ARG_BOOL(with, mdblocales, yes, [build without MDB locales],
+PGAC_ARG_BOOL(with, mdblocales, no, [build with MDB locales],
               [AC_DEFINE([USE_MDBLOCALES], 1, [Define to 1 to build with MDB locales. (--with-mdblocales)])])
 AC_SUBST(USE_MDBLOCALES)
 
@@ -3186,4 +3211,11 @@ AC_OUTPUT
 # The configure args contain '-Wl,-rpath,\$$ORIGIN`, when it falls
 # as a C literal string, it's invalid, so converting `\` to `\\`
 # to be correct for C program.
-sed -i '/define CONFIGURE_ARGS/s,\([[^\\]]\)\\\$\$,\1\\\\$$,g' src/include/pg_config.h
+case $build_os in
+darwin*)
+  sed -i '' '/define CONFIGURE_ARGS/s,\([[^\\]]\)\\\$\$,\1\\\\$$,g' src/include/pg_config.h
+  ;;
+*)
+  sed -i '/define CONFIGURE_ARGS/s,\([[^\\]]\)\\\$\$,\1\\\\$$,g' src/include/pg_config.h
+  ;;
+esac

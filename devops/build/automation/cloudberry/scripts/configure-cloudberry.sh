@@ -162,6 +162,8 @@ execute_cmd ./configure --prefix=${BUILD_DESTINATION} \
             --disable-pxf \
             --enable-tap-tests \
             ${CONFIGURE_DEBUG_OPTS} \
+            --with-diskquota \
+            --with-gp-stats-collector \
             --with-gssapi \
             --with-ldap \
             --with-libxml \

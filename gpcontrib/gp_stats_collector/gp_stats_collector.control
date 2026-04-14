@@ -1,0 +1,5 @@
+# gp_stats_collector extension
+comment = 'Intercept query and plan execution hooks and report them to Cloudberry monitor agents'
+default_version = '1.1'
+module_pathname = '$libdir/gp_stats_collector'
+superuser = true

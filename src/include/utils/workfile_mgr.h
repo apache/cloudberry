@@ -74,4 +74,8 @@ extern workfile_set *workfile_mgr_cache_entries_get_copy(int* num_actives);
 extern uint64 WorkfileSegspace_GetSize(void);
 extern bool workfile_is_active(workfile_set *workfile);
 
+extern uint64 WorkfileTotalBytesWritten(void);
+extern uint64 WorkfileTotalFilesCreated(void);
+extern void WorkfileResetBackendStats(void);
+
 #endif /* __WORKFILE_MGR_H__ */

@@ -127,6 +127,9 @@ CreateQueryDesc(PlannedStmt *plannedstmt,
 	if (Gp_role != GP_ROLE_EXECUTE)
 		increment_command_count();
 
+	/* null this field until set by GP Stats Collector */
+	qd->gpsc_query_key = NULL;
+
 	return qd;
 }
 

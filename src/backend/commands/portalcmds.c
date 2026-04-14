@@ -35,6 +35,7 @@
 #include "tcop/pquery.h"
 #include "tcop/tcopprot.h"
 #include "utils/memutils.h"
+#include "utils/metrics_utils.h"
 #include "utils/snapmgr.h"
 
 #include "cdb/cdbendpoint.h"
@@ -373,6 +374,22 @@ PortalCleanup(Portal portal)
 			FreeQueryDesc(queryDesc);
 
 			CurrentResourceOwner = saveResourceOwner;
+		}
+		else
+		{
+			/* GPDB hook for collecting query info */
+			if (queryDesc->gpsc_query_key && query_info_collect_hook)
+			{
+				PG_TRY();
+				{
+					(*query_info_collect_hook)(METRICS_QUERY_ERROR, queryDesc);
+				}
+				PG_CATCH();
+				{
+					FlushErrorState();
+				}
+				PG_END_TRY();
+			}
 		}
 	}
 
