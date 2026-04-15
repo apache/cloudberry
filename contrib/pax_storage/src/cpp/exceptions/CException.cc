@@ -206,7 +206,7 @@ void ErrorMessage::AppendV(const char *format, va_list ap) noexcept {
 const char *ErrorMessage::Message() const noexcept { return &message_[0]; }
 int ErrorMessage::Length() const noexcept { return index_; }
 
-void CException::Raise(CException ex, bool reraise) {
+void CException::Raise(CException &ex, bool reraise) {
 #ifdef __GNUC__
   if (!reraise) {
     StackTrace(&ex.stack_[0]);
@@ -258,20 +258,23 @@ void CException::AppendDetailMessage(const std::string &message) {
 const char *CException::Stack() const { return stack_; }
 
 void CException::Raise(const char *filename, int lineno, ExType extype) {
-  Raise(CException(filename, lineno, extype, ""), false);
+  CException ex(filename, lineno, extype, "");
+  Raise(ex, false);
 }
 
 void CException::Raise(const char *filename, int lineno, ExType extype,
                        const char *message) {
-  Raise(CException(filename, lineno, extype, message), false);
+  CException ex(filename, lineno, extype, message);
+  Raise(ex, false);
 }
 
 void CException::Raise(const char *filename, int lineno, ExType extype,
                        const std::string &message) {
-  Raise(CException(filename, lineno, extype, message.c_str()), false);
+  CException ex(filename, lineno, extype, message.c_str());
+  Raise(ex, false);
 }
 
-void CException::ReRaise(CException ex) { Raise(ex, true); }
+void CException::ReRaise(CException &ex) { Raise(ex, true); }
 
 static const char *exception_names[] = {
     "Invalid ExType",
