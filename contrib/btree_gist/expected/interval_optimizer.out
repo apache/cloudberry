@@ -74,15 +74,15 @@ SELECT count(*) FROM intervaltmp WHERE a >  '199 days 21:21:23'::interval;
 
 EXPLAIN (COSTS OFF)
 SELECT a, a <-> '199 days 21:21:23' FROM intervaltmp ORDER BY a <-> '199 days 21:21:23' LIMIT 3;
-                                    QUERY PLAN                                     
------------------------------------------------------------------------------------
+                                      QUERY PLAN                                       
+---------------------------------------------------------------------------------------
  Limit
    ->  Gather Motion 3:1  (slice1; segments: 3)
          Merge Key: ((a <-> '@ 199 days 21 hours 21 mins 23 secs'::interval))
-         ->  Sort
-               Sort Key: ((a <-> '@ 199 days 21 hours 21 mins 23 secs'::interval))
-               ->  Seq Scan on intervaltmp
- Optimizer: GPORCA
+         ->  Limit
+               ->  Index Only Scan using intervalidx on intervaltmp
+                     Order By: (a <-> '@ 199 days 21 hours 21 mins 23 secs'::interval)
+ Optimizer: Postgres query optimizer
 (7 rows)
 
 SELECT a, a <-> '199 days 21:21:23' FROM intervaltmp ORDER BY a <-> '199 days 21:21:23' LIMIT 3;
@@ -96,15 +96,15 @@ SELECT a, a <-> '199 days 21:21:23' FROM intervaltmp ORDER BY a <-> '199 days 21
 SET enable_indexonlyscan=off;
 EXPLAIN (COSTS OFF)
 SELECT a, a <-> '199 days 21:21:23' FROM intervaltmp ORDER BY a <-> '199 days 21:21:23' LIMIT 3;
-                                    QUERY PLAN                                     
------------------------------------------------------------------------------------
+                                      QUERY PLAN                                       
+---------------------------------------------------------------------------------------
  Limit
    ->  Gather Motion 3:1  (slice1; segments: 3)
          Merge Key: ((a <-> '@ 199 days 21 hours 21 mins 23 secs'::interval))
-         ->  Sort
-               Sort Key: ((a <-> '@ 199 days 21 hours 21 mins 23 secs'::interval))
-               ->  Seq Scan on intervaltmp
- Optimizer: GPORCA
+         ->  Limit
+               ->  Index Scan using intervalidx on intervaltmp
+                     Order By: (a <-> '@ 199 days 21 hours 21 mins 23 secs'::interval)
+ Optimizer: Postgres query optimizer
 (7 rows)
 
 SELECT a, a <-> '199 days 21:21:23' FROM intervaltmp ORDER BY a <-> '199 days 21:21:23' LIMIT 3;

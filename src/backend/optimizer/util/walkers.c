@@ -8,11 +8,17 @@
 
 #include "postgres.h"
 
+#include "access/htup_details.h"
+#include "catalog/pg_amop.h"
 #include "catalog/pg_collation.h"
 #include "catalog/pg_type.h"
 #include "miscadmin.h"
 #include "nodes/nodeFuncs.h"
+#include "optimizer/optimizer.h"
 #include "optimizer/walkers.h"
+#include "utils/catcache.h"
+#include "utils/lsyscache.h"
+#include "utils/syscache.h"
 
 /**
  * Plan node walker related methods.
@@ -1009,5 +1015,111 @@ check_collation_walker(Node *node, check_collation_context *context)
 	{
 		return expression_tree_walker(node, check_collation_walker, (void *) context);
 	}
+}
+
+/*
+ * is_ordering_op
+ *
+ * Return true if the operator is registered as an ordering operator
+ * (amoppurpose = AMOP_ORDER) in any opfamily in pg_amop.
+ */
+static bool
+is_ordering_op(Oid opno)
+{
+	CatCList   *catlist = SearchSysCacheList1(AMOPOPID,
+											  ObjectIdGetDatum(opno));
+
+	for (int i = 0; i < catlist->n_members; i++)
+	{
+		HeapTuple	tp = &catlist->members[i]->tuple;
+		Form_pg_amop amop = (Form_pg_amop) GETSTRUCT(tp);
+
+		if (amop->amoppurpose == AMOP_ORDER)
+		{
+			ReleaseSysCacheList(catlist);
+			return true;
+		}
+	}
+	ReleaseSysCacheList(catlist);
+	return false;
+}
+
+/*
+ * has_plain_var_arg
+ *
+ * Return true if the OpExpr has at least one direct Var argument
+ * (not wrapped in a function or other expression).
+ *
+ * Implicit coercions such as RelabelType (binary-compatible casts, e.g.
+ * varchar -> text) are stripped before the check so that a column
+ * reference that was implicitly cast to match the operator's input type
+ * is still recognised as a plain Var.
+ */
+static bool
+has_plain_var_arg(OpExpr *op)
+{
+	ListCell   *arg_lc;
+
+	foreach(arg_lc, op->args)
+	{
+		Node	   *arg = strip_implicit_coercions(lfirst(arg_lc));
+
+		if (IsA(arg, Var))
+			return true;
+	}
+	return false;
+}
+
+/*
+ * has_orderby_ordering_op
+ *
+ * Check if the query's ORDER BY uses ordering operators (amoppurpose =
+ * AMOP_ORDER in pg_amop) that the PostgreSQL planner can safely optimize
+ * with KNN-GiST index scans but ORCA cannot.
+ *
+ * Return true only when ALL ordering-operator expressions in ORDER BY
+ * have at least one direct Var (column reference) argument.  Expressions
+ * like "circle(p,1) <-> point(0,0)" wrap the column in a function,
+ * which can cause "lossy distance functions are not supported in
+ * index-only scans" errors in the planner.  In such cases we leave the
+ * query for ORCA to handle via Seq Scan + Sort.
+ */
+bool
+has_orderby_ordering_op(Query *query)
+{
+	ListCell   *lc;
+	bool		found_ordering_op = false;
+
+	if (query->sortClause == NIL)
+		return false;
+
+	foreach(lc, query->sortClause)
+	{
+		SortGroupClause *sgc = (SortGroupClause *) lfirst(lc);
+		TargetEntry *tle = get_sortgroupclause_tle(sgc, query->targetList);
+		Node	   *expr = (Node *) tle->expr;
+
+		if (!IsA(expr, OpExpr))
+			continue;
+
+		OpExpr	   *opexpr = (OpExpr *) expr;
+
+		if (!is_ordering_op(opexpr->opno))
+			continue;
+
+		/*
+		 * Found an ordering operator.  Check that at least one argument is
+		 * a plain Var.  If any ordering operator has only computed arguments
+		 * (e.g., function calls wrapping columns), bail out immediately —
+		 * falling back to the planner could produce lossy distance errors
+		 * in index-only scans.
+		 */
+		found_ordering_op = true;
+
+		if (!has_plain_var_arg(opexpr))
+			return false;
+	}
+
+	return found_ordering_op;
 }
 

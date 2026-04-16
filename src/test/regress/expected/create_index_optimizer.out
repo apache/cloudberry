@@ -652,18 +652,16 @@ SELECT * FROM point_tblv WHERE f1 IS NOT NULL ORDER BY f1 <-> '0,1';
 --SELECT * FROM point_tbl WHERE f1 IS NOT NULL ORDER BY f1 <-> '0,1';
 EXPLAIN (COSTS OFF)
 SELECT * FROM point_tblv WHERE f1 <@ '(-10,-10),(10,10)':: box ORDER BY f1 <-> '0,1';
-                                                                                QUERY PLAN                                                                                
---------------------------------------------------------------------------------------------------------------------------------------------------------------------------
- Result
-   ->  Sort
-         Sort Key: ((f1 <-> '(0,1)'::point))
-         ->  Result
-               ->  Gather Motion 3:1  (slice1; segments: 3)
-                     ->  Index Scan using gpointind on point_tbl
-                           Index Cond: (f1 <@ '(10,10),(-10,-10)'::box)
-                           Filter: ((f1 <> '(1e-300,-1e-300)'::point) AND ((f1 <-> '(0,0)'::point) <> 'Infinity'::double precision) AND (f1 <@ '(10,10),(-10,-10)'::box))
- Optimizer: Pivotal Optimizer (GPORCA)
-(9 rows)
+                                                    QUERY PLAN                                                     
+-------------------------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Merge Key: ((point_tbl.f1 <-> '(0,1)'::point))
+   ->  Index Only Scan using gpointind on point_tbl
+         Index Cond: (f1 <@ '(10,10),(-10,-10)'::box)
+         Order By: (f1 <-> '(0,1)'::point)
+         Filter: ((f1 <> '(1e-300,-1e-300)'::point) AND ((f1 <-> '(0,0)'::point) <> 'Infinity'::double precision))
+ Optimizer: Postgres query optimizer
+(7 rows)
 
 SELECT * FROM point_tblv WHERE f1 <@ '(-10,-10),(10,10)':: box ORDER BY f1 <-> '0,1';
    f1    
@@ -767,18 +765,19 @@ SET enable_indexscan = OFF;
 SET enable_bitmapscan = ON;
 EXPLAIN (COSTS OFF)
 SELECT * FROM point_tblv WHERE f1 <@ '(-10,-10),(10,10)':: box ORDER BY f1 <-> '0,1';
-                                                                                QUERY PLAN                                                                                
---------------------------------------------------------------------------------------------------------------------------------------------------------------------------
- Result
+                                                       QUERY PLAN                                                        
+-------------------------------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Merge Key: ((point_tbl.f1 <-> '(0,1)'::point))
    ->  Sort
-         Sort Key: ((f1 <-> '(0,1)'::point))
-         ->  Result
-               ->  Gather Motion 3:1  (slice1; segments: 3)
-                     ->  Index Scan using gpointind on point_tbl
-                           Index Cond: (f1 <@ '(10,10),(-10,-10)'::box)
-                           Filter: ((f1 <> '(1e-300,-1e-300)'::point) AND ((f1 <-> '(0,0)'::point) <> 'Infinity'::double precision) AND (f1 <@ '(10,10),(-10,-10)'::box))
- Optimizer: Pivotal Optimizer (GPORCA)
-(9 rows)
+         Sort Key: ((point_tbl.f1 <-> '(0,1)'::point))
+         ->  Bitmap Heap Scan on point_tbl
+               Recheck Cond: (f1 <@ '(10,10),(-10,-10)'::box)
+               Filter: ((f1 <> '(1e-300,-1e-300)'::point) AND ((f1 <-> '(0,0)'::point) <> 'Infinity'::double precision))
+               ->  Bitmap Index Scan on gpointind
+                     Index Cond: (f1 <@ '(10,10),(-10,-10)'::box)
+ Optimizer: Postgres query optimizer
+(10 rows)
 
 SELECT * FROM point_tblv WHERE f1 <@ '(-10,-10),(10,10)':: box ORDER BY f1 <-> '0,1';
    f1    
