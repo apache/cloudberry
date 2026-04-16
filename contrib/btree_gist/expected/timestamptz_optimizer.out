@@ -199,10 +199,9 @@ SELECT a, a <-> '2018-12-18 10:59:54 GMT+2' FROM timestamptztmp ORDER BY a <-> '
  Limit
    ->  Gather Motion 3:1  (slice1; segments: 3)
          Merge Key: ((a <-> 'Tue Dec 18 04:59:54 2018 PST'::timestamp with time zone))
-         ->  Sort
-               Sort Key: ((a <-> 'Tue Dec 18 04:59:54 2018 PST'::timestamp with time zone))
-               ->  Seq Scan on timestamptztmp
- Optimizer: GPORCA
+         ->  Limit
+               ->  Index Only Scan using timestamptzidx on timestamptztmp
+                     Order By: (a <-> 'Tue Dec 18 04:59:54 2018 PST'::timestamp with time zone)
 (7 rows)
 
 SELECT a, a <-> '2018-12-18 10:59:54 GMT+2' FROM timestamptztmp ORDER BY a <-> '2018-12-18 10:59:54 GMT+2' LIMIT 3;

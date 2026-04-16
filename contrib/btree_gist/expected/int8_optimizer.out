@@ -79,10 +79,9 @@ SELECT a, a <-> '464571291354841' FROM int8tmp ORDER BY a <-> '464571291354841' 
  Limit
    ->  Gather Motion 3:1  (slice1; segments: 3)
          Merge Key: ((a <-> '464571291354841'::bigint))
-         ->  Sort
-               Sort Key: ((a <-> '464571291354841'::bigint))
-               ->  Seq Scan on int8tmp
- Optimizer: GPORCA
+         ->  Limit
+               ->  Index Only Scan using int8idx on int8tmp
+                     Order By: (a <-> '464571291354841'::bigint)
 (7 rows)
 
 SELECT a, a <-> '464571291354841' FROM int8tmp ORDER BY a <-> '464571291354841' LIMIT 3;

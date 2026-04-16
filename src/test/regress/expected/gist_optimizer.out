@@ -98,18 +98,15 @@ select p from gist_tbl where p <@ box(point(0,0), point(0.5, 0.5));
 explain (costs off)
 select p from gist_tbl where p <@ box(point(0,0), point(0.5, 0.5))
 order by p <-> point(0.201, 0.201);
-                             QUERY PLAN                              
----------------------------------------------------------------------
- Result
-   ->  Gather Motion 3:1  (slice1; segments: 3)
-         Merge Key: ((p <-> '(0.201,0.201)'::point))
-         ->  Sort
-               Sort Key: ((p <-> '(0.201,0.201)'::point))
-               ->  Index Scan using gist_tbl_point_index on gist_tbl
-                     Index Cond: (p <@ '(0.5,0.5),(0,0)'::box)
-                     Filter: (p <@ '(0.5,0.5),(0,0)'::box)
- Optimizer: Pivotal Optimizer (GPORCA) version 3.83.0
-(9 rows)
+                          QUERY PLAN                          
+--------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Merge Key: ((p <-> '(0.201,0.201)'::point))
+   ->  Index Only Scan using gist_tbl_point_index on gist_tbl
+         Index Cond: (p <@ '(0.5,0.5),(0,0)'::box)
+         Order By: (p <-> '(0.201,0.201)'::point)
+ Optimizer: Postgres query optimizer
+(6 rows)
 
 select p from gist_tbl where p <@ box(point(0,0), point(0.5, 0.5))
 order by p <-> point(0.201, 0.201);
@@ -132,18 +129,15 @@ order by p <-> point(0.201, 0.201);
 explain (costs off)
 select p from gist_tbl where p <@ box(point(0,0), point(0.5, 0.5))
 order by point(0.101, 0.101) <-> p;
-                             QUERY PLAN                              
----------------------------------------------------------------------
- Result
-   ->  Gather Motion 3:1  (slice1; segments: 3)
-         Merge Key: (('(0.101,0.101)'::point <-> p))
-         ->  Sort
-               Sort Key: (('(0.101,0.101)'::point <-> p))
-               ->  Index Scan using gist_tbl_point_index on gist_tbl
-                     Index Cond: (p <@ '(0.5,0.5),(0,0)'::box)
-                     Filter: (p <@ '(0.5,0.5),(0,0)'::box)
- Optimizer: Pivotal Optimizer (GPORCA) version 3.83.0
-(9 rows)
+                          QUERY PLAN                          
+--------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Merge Key: (('(0.101,0.101)'::point <-> p))
+   ->  Index Only Scan using gist_tbl_point_index on gist_tbl
+         Index Cond: (p <@ '(0.5,0.5),(0,0)'::box)
+         Order By: (p <-> '(0.101,0.101)'::point)
+ Optimizer: Postgres query optimizer
+(6 rows)
 
 select p from gist_tbl where p <@ box(point(0,0), point(0.5, 0.5))
 order by point(0.101, 0.101) <-> p;
@@ -248,18 +242,15 @@ select b from gist_tbl where b <@ box(point(5,5), point(6,6));
 explain (costs off)
 select b from gist_tbl where b <@ box(point(5,5), point(6,6))
 order by b <-> point(5.2, 5.91);
-                            QUERY PLAN                             
--------------------------------------------------------------------
- Result
-   ->  Gather Motion 3:1  (slice1; segments: 3)
-         Merge Key: ((b <-> '(5.2,5.91)'::point))
-         ->  Sort
-               Sort Key: ((b <-> '(5.2,5.91)'::point))
-               ->  Index Scan using gist_tbl_box_index on gist_tbl
-                     Index Cond: (b <@ '(6,6),(5,5)'::box)
-                     Filter: (b <@ '(6,6),(5,5)'::box)
- Optimizer: Pivotal Optimizer (GPORCA)
-(9 rows)
+                         QUERY PLAN                         
+------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Merge Key: ((b <-> '(5.2,5.91)'::point))
+   ->  Index Only Scan using gist_tbl_box_index on gist_tbl
+         Index Cond: (b <@ '(6,6),(5,5)'::box)
+         Order By: (b <-> '(5.2,5.91)'::point)
+ Optimizer: Postgres query optimizer
+(6 rows)
 
 select b from gist_tbl where b <@ box(point(5,5), point(6,6))
 order by b <-> point(5.2, 5.91);
