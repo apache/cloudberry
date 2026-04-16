@@ -79,10 +79,9 @@ SELECT a, a <-> '-1890.0' FROM float8tmp ORDER BY a <-> '-1890.0' LIMIT 3;
  Limit
    ->  Gather Motion 3:1  (slice1; segments: 3)
          Merge Key: ((a <-> '-1890'::double precision))
-         ->  Sort
-               Sort Key: ((a <-> '-1890'::double precision))
-               ->  Seq Scan on float8tmp
- Optimizer: GPORCA
+         ->  Limit
+               ->  Index Only Scan using float8idx on float8tmp
+                     Order By: (a <-> '-1890'::double precision)
 (7 rows)
 
 SELECT a, a <-> '-1890.0' FROM float8tmp ORDER BY a <-> '-1890.0' LIMIT 3;

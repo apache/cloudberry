@@ -2012,6 +2012,17 @@ gpdb::CheckCollation(Node *node)
 	return -1;
 }
 
+bool
+gpdb::HasOrderByOrderingOp(Query *query)
+{
+	GP_WRAP_START;
+	{
+		return has_orderby_ordering_op(query);
+	}
+	GP_WRAP_END;
+	return false;
+}
+
 Node *
 gpdb::CoerceToCommonType(ParseState *pstate, Node *node, Oid target_type,
 						 const char *context)
