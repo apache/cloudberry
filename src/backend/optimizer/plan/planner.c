@@ -5745,7 +5745,7 @@ create_partial_distinct_paths(PlannerInfo *root, RelOptInfo *input_rel,
 	if (create_upper_paths_hook)
 		(*create_upper_paths_hook) (root, UPPERREL_PARTIAL_DISTINCT,
 									input_rel, partial_distinct_rel, NULL);
-
+#if 0
 	if (partial_distinct_rel->partial_pathlist != NIL)
 	{
 		generate_gather_paths(root, partial_distinct_rel, true);
@@ -5759,6 +5759,7 @@ create_partial_distinct_paths(PlannerInfo *root, RelOptInfo *input_rel,
 		create_final_distinct_paths(root, partial_distinct_rel,
 									final_distinct_rel);
 	}
+#endif
 }
 
 /*

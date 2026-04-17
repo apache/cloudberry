@@ -217,7 +217,7 @@ explain (costs off) select * from v_pagg_test order by y;
                                  Group Key: pagg_test.y
                                  ->  Redistribute Motion 3:3  (slice2; segments: 3)
                                        Hash Key: pagg_test.y
-                                       ->  Partial HashAggregate
+                                       ->  Streaming Partial HashAggregate
                                              Group Key: pagg_test.y
                                              ->  Seq Scan on pagg_test
  Optimizer: Postgres query optimizer

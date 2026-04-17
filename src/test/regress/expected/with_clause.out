@@ -2381,13 +2381,13 @@ SELECT EXISTS(
                  ->  GroupAggregate
                        Group Key: share0_ref1.a, share0_ref1.b, share0_ref1.c
                        ->  Sort
-                             Sort Key: share0_ref1.a, share0_ref1.b, share0_ref1.c
+                             Sort Key: share0_ref1.a, share0_ref1.b, share0_ref1.c, share0_ref1.d
                              ->  Shared Scan (share slice:id 2:0)
                                    ->  Seq Scan on foo_issue_1204_test
                  ->  GroupAggregate
                        Group Key: foo_issue_1204_test_1.a, foo_issue_1204_test_1.b, foo_issue_1204_test_1.c
                        ->  Sort
-                             Sort Key: foo_issue_1204_test_1.a, foo_issue_1204_test_1.b, foo_issue_1204_test_1.c
+                             Sort Key: foo_issue_1204_test_1.a, foo_issue_1204_test_1.b, foo_issue_1204_test_1.c, foo_issue_1204_test_1.d
                              ->  Seq Scan on foo_issue_1204_test foo_issue_1204_test_1
  Optimizer: Postgres query optimizer
 (17 rows)
