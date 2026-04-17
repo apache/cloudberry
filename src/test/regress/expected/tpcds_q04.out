@@ -5435,51 +5435,51 @@ INSERT INTO pg_statistic VALUES (
                ->  Sort
                      Sort Key: t_s_secyear.customer_id, t_s_secyear.customer_first_name, t_s_secyear.customer_last_name, t_s_secyear.customer_login
                      ->  Hash Join
-                           Hash Cond: ((t_c_secyear.customer_id)::text = (t_s_secyear.customer_id)::text)
-                           Join Filter: (CASE WHEN (t_c_firstyear.year_total > '0'::numeric) THEN (t_c_secyear.year_total / t_c_firstyear.year_total) ELSE NULL::numeric END > CASE WHEN (t_s_firstyear.year_total > '0'::numeric) THEN (t_s_secyear.year_total / t_s_firstyear.year_total) ELSE NULL::numeric END)
+                           Hash Cond: ((t_s_secyear.customer_id)::text = (t_w_firstyear.customer_id)::text)
+                           Join Filter: (CASE WHEN (t_c_firstyear.year_total > '0'::numeric) THEN (t_c_secyear.year_total / t_c_firstyear.year_total) ELSE NULL::numeric END > CASE WHEN (t_w_firstyear.year_total > '0'::numeric) THEN (t_w_secyear.year_total / t_w_firstyear.year_total) ELSE NULL::numeric END)
                            ->  Hash Join
-                                 Hash Cond: ((t_c_secyear.customer_id)::text = (t_w_firstyear.customer_id)::text)
-                                 Join Filter: (CASE WHEN (t_c_firstyear.year_total > '0'::numeric) THEN (t_c_secyear.year_total / t_c_firstyear.year_total) ELSE NULL::numeric END > CASE WHEN (t_w_firstyear.year_total > '0'::numeric) THEN (t_w_secyear.year_total / t_w_firstyear.year_total) ELSE NULL::numeric END)
-                                 ->  Hash Join
-                                       Hash Cond: ((t_c_firstyear.customer_id)::text = (t_c_secyear.customer_id)::text)
-                                       ->  Redistribute Motion 3:3  (slice2; segments: 3)
-                                             Hash Key: t_c_firstyear.customer_id
-                                             ->  Subquery Scan on t_c_firstyear
-                                                   Filter: ((t_c_firstyear.year_total > '0'::numeric) AND (t_c_firstyear.sale_type = 'c'::text) AND (t_c_firstyear.dyear = 2001))
-                                                   ->  Shared Scan (share slice:id 2:0)
-                                       ->  Hash
-                                             ->  Redistribute Motion 3:3  (slice3; segments: 3)
-                                                   Hash Key: t_c_secyear.customer_id
-                                                   ->  Subquery Scan on t_c_secyear
-                                                         Filter: ((t_c_secyear.sale_type = 'c'::text) AND (t_c_secyear.dyear = 2002))
-                                                         ->  Shared Scan (share slice:id 3:0)
-                                 ->  Hash
-                                       ->  Hash Join
-                                             Hash Cond: ((t_w_firstyear.customer_id)::text = (t_w_secyear.customer_id)::text)
-                                             ->  Redistribute Motion 3:3  (slice4; segments: 3)
-                                                   Hash Key: t_w_firstyear.customer_id
-                                                   ->  Subquery Scan on t_w_firstyear
-                                                         Filter: ((t_w_firstyear.year_total > '0'::numeric) AND (t_w_firstyear.sale_type = 'w'::text) AND (t_w_firstyear.dyear = 2001))
-                                                         ->  Shared Scan (share slice:id 4:0)
-                                             ->  Hash
-                                                   ->  Redistribute Motion 3:3  (slice5; segments: 3)
-                                                         Hash Key: t_w_secyear.customer_id
-                                                         ->  Subquery Scan on t_w_secyear
-                                                               Filter: ((t_w_secyear.sale_type = 'w'::text) AND (t_w_secyear.dyear = 2002))
-                                                               ->  Shared Scan (share slice:id 5:0)
-                           ->  Hash
-                                 ->  Redistribute Motion 3:3  (slice6; segments: 3)
+                                 Hash Cond: ((t_s_secyear.customer_id)::text = (t_c_secyear.customer_id)::text)
+                                 Join Filter: (CASE WHEN (t_c_firstyear.year_total > '0'::numeric) THEN (t_c_secyear.year_total / t_c_firstyear.year_total) ELSE NULL::numeric END > CASE WHEN (t_s_firstyear.year_total > '0'::numeric) THEN (t_s_secyear.year_total / t_s_firstyear.year_total) ELSE NULL::numeric END)
+                                 ->  Redistribute Motion 3:3  (slice2; segments: 3)
                                        Hash Key: t_s_secyear.customer_id
                                        ->  Hash Join
                                              Hash Cond: ((t_s_firstyear.customer_id)::text = (t_s_secyear.customer_id)::text)
-                                             ->  Broadcast Motion 3:3  (slice7; segments: 3)
+                                             ->  Broadcast Motion 3:3  (slice3; segments: 3)
                                                    ->  Subquery Scan on t_s_firstyear
                                                          Filter: ((t_s_firstyear.year_total > '0'::numeric) AND (t_s_firstyear.sale_type = 's'::text) AND (t_s_firstyear.dyear = 2001))
-                                                         ->  Shared Scan (share slice:id 7:0)
+                                                         ->  Shared Scan (share slice:id 3:0)
                                              ->  Hash
                                                    ->  Subquery Scan on t_s_secyear
                                                          Filter: ((t_s_secyear.sale_type = 's'::text) AND (t_s_secyear.dyear = 2002))
-                                                         ->  Shared Scan (share slice:id 6:0)
+                                                         ->  Shared Scan (share slice:id 2:0)
+                                 ->  Hash
+                                       ->  Hash Join
+                                             Hash Cond: ((t_c_firstyear.customer_id)::text = (t_c_secyear.customer_id)::text)
+                                             ->  Redistribute Motion 3:3  (slice4; segments: 3)
+                                                   Hash Key: t_c_firstyear.customer_id
+                                                   ->  Subquery Scan on t_c_firstyear
+                                                         Filter: ((t_c_firstyear.year_total > '0'::numeric) AND (t_c_firstyear.sale_type = 'c'::text) AND (t_c_firstyear.dyear = 2001))
+                                                         ->  Shared Scan (share slice:id 4:0)
+                                             ->  Hash
+                                                   ->  Redistribute Motion 3:3  (slice5; segments: 3)
+                                                         Hash Key: t_c_secyear.customer_id
+                                                         ->  Subquery Scan on t_c_secyear
+                                                               Filter: ((t_c_secyear.sale_type = 'c'::text) AND (t_c_secyear.dyear = 2002))
+                                                               ->  Shared Scan (share slice:id 5:0)
+                           ->  Hash
+                                 ->  Hash Join
+                                       Hash Cond: ((t_w_firstyear.customer_id)::text = (t_w_secyear.customer_id)::text)
+                                       ->  Redistribute Motion 3:3  (slice6; segments: 3)
+                                             Hash Key: t_w_firstyear.customer_id
+                                             ->  Subquery Scan on t_w_firstyear
+                                                   Filter: ((t_w_firstyear.year_total > '0'::numeric) AND (t_w_firstyear.sale_type = 'w'::text) AND (t_w_firstyear.dyear = 2001))
+                                                   ->  Shared Scan (share slice:id 6:0)
+                                       ->  Hash
+                                             ->  Redistribute Motion 3:3  (slice7; segments: 3)
+                                                   Hash Key: t_w_secyear.customer_id
+                                                   ->  Subquery Scan on t_w_secyear
+                                                         Filter: ((t_w_secyear.sale_type = 'w'::text) AND (t_w_secyear.dyear = 2002))
+                                                         ->  Shared Scan (share slice:id 7:0)
                                                                ->  Append
                                                                      ->  HashAggregate
                                                                            Group Key: customer.c_customer_id, customer.c_first_name, customer.c_last_name, customer.c_preferred_cust_flag, customer.c_birth_country, customer.c_login, customer.c_email_address, date_dim.d_year

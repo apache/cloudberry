@@ -2656,6 +2656,8 @@ expression_tree_walker_impl(Node *node,
 					return true;
 			}
 			break;
+		case T_GpPartitionDefinition:
+			break;
 		default:
 			elog(ERROR, "unrecognized node type: %d",
 				 (int) nodeTag(node));

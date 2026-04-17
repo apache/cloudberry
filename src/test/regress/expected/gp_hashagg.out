@@ -400,28 +400,16 @@ OPERATOR 1 =,
 FUNCTION 1 my_comp_func(int42, int42);
 ERROR:  hash function 1 must have one argument
 select * from atable group by a,k;
- k | a  
----+----
- 1 | 21
- 2 | 22
- 3 | 23
- 4 | 24
-(4 rows)
-
+ERROR:  could not implement GROUP BY
+DETAIL:  Some of the datatypes only support hashing, while others only support sorting.
 -- Before fix: This would fail at runtime with:
 --   ERROR: could not find hash function for hash operator XXXXX (execGrouping.c:118)
 -- After fix: ORCA should detect missing hash function at planning time
 --   and either use GroupAgg or report a clear planning error
 SET optimizer_enable_groupagg=off;
 select * from atable group by a,k;
- k | a  
----+----
- 1 | 21
- 2 | 22
- 3 | 23
- 4 | 24
-(4 rows)
-
+ERROR:  could not implement GROUP BY
+DETAIL:  Some of the datatypes only support hashing, while others only support sorting.
 drop schema if exists tinc_base_types cascade;
 NOTICE:  drop cascades to 16 other objects
 DETAIL:  drop cascades to function int42_out(int42)

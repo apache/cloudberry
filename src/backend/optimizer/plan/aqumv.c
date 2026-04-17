@@ -56,6 +56,7 @@
 #include "nodes/nodeFuncs.h"
 #include "nodes/pathnodes.h"
 #include "nodes/pg_list.h"
+#include "parser/parse_relation.h"
 
 static bool aqumv_process_from_quals(Node *query_quals, Node *mv_quals, List** post_quals);
 
@@ -1241,6 +1242,7 @@ answer_query_using_materialized_views_for_join(PlannerInfo *root, AqumvContext a
 		}
 
 		viewQuery->rtable = list_make1(mvrte);
+		addRTEPermissionInfo(&viewQuery->rteperminfos, mvrte);
 		viewQuery->jointree = makeFromExpr(list_make1(makeNode(RangeTblRef)), NULL);
 		((RangeTblRef *) linitial(viewQuery->jointree->fromlist))->rtindex = 1;
 

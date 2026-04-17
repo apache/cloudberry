@@ -3313,7 +3313,7 @@ select distinct a from t_distinct_0 union select distinct b from t_distinct_0;
          ->  Redistribute Motion 6:6  (slice2; segments: 6)
                Hash Key: t_distinct_0.a
                Hash Module: 3
-               ->  Append
+               ->  Parallel Append
                      ->  HashAggregate
                            Group Key: t_distinct_0.a
                            ->  Redistribute Motion 6:6  (slice3; segments: 6)
@@ -3348,7 +3348,7 @@ select distinct a from t_distinct_0 union select distinct b from t_distinct_0;
                ->  Redistribute Motion 6:6  (slice2; segments: 6)
                      Hash Key: t_distinct_0.a
                      Hash Module: 3
-                     ->  Append
+                     ->  Parallel Append
                            ->  GroupAggregate
                                  Group Key: t_distinct_0.a
                                  ->  Sort
@@ -3388,7 +3388,7 @@ select distinct a from t_distinct_0 union select distinct b from t_distinct_0;
          ->  Redistribute Motion 6:6  (slice2; segments: 6)
                Hash Key: t_distinct_0.a
                Hash Module: 3
-               ->  Append
+               ->  Parallel Append
                      ->  GroupAggregate
                            Group Key: t_distinct_0.a
                            ->  Sort

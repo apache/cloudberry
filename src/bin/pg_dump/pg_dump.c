@@ -6285,7 +6285,8 @@ getTypes(Archive *fout, int *numTypes)
 						 "ELSE (SELECT relkind FROM pg_class WHERE oid = typrelid) END AS typrelkind, "
 						 "typtype, typisdefined, "
 						 "typname[0] = '_' AND typelem != 0 AND "
-						 "(SELECT typarray FROM pg_type te WHERE oid = pg_type.typelem) = oid AS isarray "
+						 "(SELECT typarray FROM pg_type te WHERE oid = pg_type.typelem) = oid AS isarray, "
+						 "typstorage "
 						 "FROM pg_type");
 
 	res = ExecuteSqlQuery(fout, query->data, PGRES_TUPLES_OK);

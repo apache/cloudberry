@@ -1597,7 +1597,7 @@ explain select string_agg(a, '') from mpp14125 group by b;
          Group Key: b
          ->  Redistribute Motion 3:3  (slice2; segments: 3)  (cost=282.00..314.50 rows=1000 width=36)
                Hash Key: b
-               ->  Partial HashAggregate  (cost=282.00..294.50 rows=1000 width=36)
+               ->  Streaming Partial HashAggregate  (cost=282.00..294.50 rows=1000 width=36)
                      Group Key: b
                      ->  Seq Scan on mpp14125  (cost=0.00..199.33 rows=16533 width=36)
  Optimizer: Postgres query optimizer

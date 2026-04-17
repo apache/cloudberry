@@ -311,11 +311,11 @@ localFormatPathName(Oid relid, RelFileLocator *relFileNode)
 {
 	if (relFileNode->spcOid == DEFAULTTABLESPACE_OID)
 		return psprintf("base/%u/%u_dirtable",
-				  		relFileNode->dbOid, relFileNode->relNumber);
+				  		relFileNode->dbOid, relid);
 	else
 		return psprintf("pg_tblspc/%u/%s/%u/%u_dirtable",
 						relFileNode->spcOid, GP_TABLESPACE_VERSION_DIRECTORY,
-						relFileNode->dbOid, relFileNode->relNumber);
+						relFileNode->dbOid, relid);
 }
 
 bool
