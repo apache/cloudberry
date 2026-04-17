@@ -232,15 +232,7 @@ SELECT relpages, reltuples, relallvisible FROM pg_class where relname = 'vacuum_
 ----------+-----------+---------------
  13       | 50000     | 0             
 (1 row)
-<<<<<<< HEAD
 -- SELECT n_live_tup, n_dead_tup, last_vacuum is not null as has_last_vacuum, vacuum_count FROM gp_stat_all_tables WHERE relname = 'vacuum_progress_ao_column' and gp_segment_id = 1;
-=======
-SELECT n_live_tup, n_dead_tup, last_vacuum is not null as has_last_vacuum, vacuum_count FROM gp_stat_all_tables WHERE relname = 'vacuum_progress_ao_column' and gp_segment_id = 1;
- n_live_tup | n_dead_tup | has_last_vacuum | vacuum_count 
-------------+------------+-----------------+--------------
- 50000      | 0          | t               | 2            
-(1 row)
->>>>>>> 05869c862a5 (Fix: Adapt system view after cherry-pick)
 
 1q: ... <quitting>
 -- Test vacuum worker process is changed at post-cleanup phase due to mirror down.

@@ -594,13 +594,8 @@ select relpages, reltuples from pg_class where oid = 'autostatstbl'::regclass;
 ----------+-----------
  3        | 2000      
 (1 row)
-<<<<<<< HEAD
--- expect analyze_count = 2, autoanalyze_count = 2, and n_mod_since_analyze = 1000 since ANALYZE
--- executed in same transaction for the insert statement.
-=======
 -- expect analyze_count = 2, autoanalyze_count = 2, and n_mod_since_analyze = 1000 since ANALYZE executed
 -- in same transaction for the insert statement.
->>>>>>> 05869c862a5 (Fix: Adapt system view after cherry-pick)
 select analyze_count, autoanalyze_count, n_mod_since_analyze from pg_stat_all_tables where relname = 'autostatstbl';
  analyze_count | autoanalyze_count | n_mod_since_analyze 
 ---------------+-------------------+---------------------
