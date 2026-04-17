@@ -884,7 +884,7 @@ do_analyze_rel(Relation onerel, VacuumParams *params,
 
 			if (Gp_role == GP_ROLE_DISPATCH && GpPolicyIsPartitioned(onerel->rd_cdbpolicy))
 			{
-				stats->stadistinctbyseg = colNDVBySeg[i];
+				stats->stadistinctbyseg = colNDVBySeg[stats->attr->attnum - 1];
 			}
 
 			stats->tupDesc = onerel->rd_att;
@@ -1008,7 +1008,7 @@ do_analyze_rel(Relation onerel, VacuumParams *params,
 
 			if (Gp_role == GP_ROLE_EXECUTE) {
 				Assert(ctx->stadistincts);
-				ctx->stadistincts[i] = Float8GetDatum(stats->stadistinct);
+				ctx->stadistincts[stats->attr->attnum - 1] = Float8GetDatum(stats->stadistinct);
 			}
 
 			MemoryContextResetAndDeleteChildren(col_context);
