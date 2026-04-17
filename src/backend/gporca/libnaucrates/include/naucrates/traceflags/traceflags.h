@@ -250,6 +250,9 @@ enum EOptTraceFlag
 	// Use the all key exclude the non-fixed key in AGG pds
 	EopttraceAggRRSExcludeNonFixedKey = 103053,
 
+	// Disable streaming hash agg in ORCA-generated local partial aggregations
+	EopttraceDisableStreamingHashAgg = 103054,
+
 	///////////////////////////////////////////////////////
 	///////////////////// statistics flags ////////////////
 	//////////////////////////////////////////////////////

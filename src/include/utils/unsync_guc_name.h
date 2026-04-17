@@ -501,6 +501,7 @@
 		"optimizer_skew_factor",
 		"optimizer_use_external_constant_expression_evaluation_for_ints",
 		"optimizer_use_gpdb_allocators",
+		"optimizer_use_streaming_hashagg",
 		"optimizer_xform_bind_threshold",
 		"parallel_leader_participation",
 		"parallel_query_use_streaming_hashagg",
