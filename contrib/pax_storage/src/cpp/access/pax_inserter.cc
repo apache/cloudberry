@@ -45,6 +45,7 @@ CPaxInserter::CPaxInserter(Relation rel)
 
   writer_->SetWriteSummaryCallback(&cbdb::InsertOrUpdateMicroPartitionEntry)
       ->SetFileSplitStrategy(std::make_unique<PaxDefaultSplitStrategy>())
+      ->SetEnableStats(pax::pax_enable_sync_collect_stats)
       ->Open();
 }
 

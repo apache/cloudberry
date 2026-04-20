@@ -21,4 +21,8 @@ test: dictionary_encoding
 test: cluster
 test: db_size_functions
 
+test: disable_autovacuum
+test: pax_vacuum
+test: enable_autovacuum
+
 test: teardown

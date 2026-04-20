@@ -31,6 +31,7 @@ namespace pax {
 extern bool pax_enable_debug;
 extern bool pax_enable_sparse_filter;
 extern bool pax_enable_row_filter;
+extern bool pax_enable_sync_collect_stats;
 extern int pax_scan_reuse_buffer_size;
 extern int pax_max_tuples_per_group;
 

@@ -57,6 +57,7 @@ class MicroPartitionWriter {
     Oid rel_oid = InvalidOid;
     RelFileNode node;
     bool need_wal = false;
+    bool enable_stats = false;
     std::vector<std::tuple<ColumnEncoding_Kind, int>> encoding_opts;
     std::vector<int> enable_min_max_col_idxs;
     std::vector<int> enable_bf_col_idxs;
