@@ -87,6 +87,7 @@
 #include "storage/proc.h"
 #include "tcop/tcopprot.h"
 #include "utils/guc.h"
+#include "utils/json.h"
 #include "utils/memutils.h"
 #include "utils/ps_status.h"
 
@@ -220,15 +221,10 @@ static const char *err_gettext(const char *str) pg_attribute_format_arg(1);
 static pg_noinline void set_backtrace(ErrorData *edata, int num_skip);
 static void set_errdata_field(MemoryContextData *cxt, char **ptr, const char *str);
 static void write_console(const char *line, int len);
-static void setup_formatted_log_time(void);
-static void setup_formatted_start_time(void);
 static const char *process_log_prefix_padding(const char *p, int *padding);
 static void log_line_prefix(StringInfo buf, ErrorData *edata);
-static void write_csvlog(ErrorData *edata);
 static void send_message_to_server_log(ErrorData *edata);
-static void write_pipe_chunks(char *data, int len, int dest);
 static void send_message_to_frontend(ErrorData *edata);
-static const char *error_severity(int elevel);
 static void append_with_tabs(StringInfo buf, const char *str);
 static bool is_log_level_output(int elevel, int log_min_level);
 static void elog_debug_linger(ErrorData *edata);
@@ -239,10 +235,6 @@ ignore_returned_result(long long int result)
 {
 	(void) result;
 }
-
-static void setup_formatted_log_time(void);
-static void setup_formatted_start_time(void);
-
 
 /*
  * is_log_level_output -- is elevel logically >= log_min_level?
@@ -2830,13 +2822,22 @@ write_console(const char *line, int len)
 }
 
 /*
- * setup formatted_log_time, for consistent times between CSV and regular logs
+ * get_formatted_log_time -- compute and get the log timestamp.
+ *
+ * The timestamp is computed if not set yet, so as it is kept consistent
+ * among all the log destinations that require it to be consistent.  Note
+ * that the computed timestamp is returned in a static buffer, not
+ * palloc()'d.
  */
-static void
-setup_formatted_log_time(void)
+char *
+get_formatted_log_time(void)
 {
 	pg_time_t	stamp_time;
 	char		msbuf[13];
+
+	/* leave if already computed */
+	if (formatted_log_time[0] != '\0')
+		return formatted_log_time;
 
 	if (!saved_timeval_set)
 	{
@@ -2858,16 +2859,34 @@ setup_formatted_log_time(void)
 
 	/* 'paste' microseconds into place... */
 	sprintf(msbuf, ".%06d", (int) (saved_timeval.tv_usec));
-	memcpy(formatted_log_time + 19, msbuf, 4);
+	memcpy(formatted_log_time + 19, msbuf, 7);
+
+	return formatted_log_time;
 }
 
 /*
- * setup formatted_start_time
+ * reset_formatted_start_time -- reset the start timestamp
  */
-static void
-setup_formatted_start_time(void)
+void
+reset_formatted_start_time(void)
+{
+	formatted_start_time[0] = '\0';
+}
+
+/*
+ * get_formatted_start_time -- compute and get the start timestamp.
+ *
+ * The timestamp is computed if not set yet.  Note that the computed
+ * timestamp is returned in a static buffer, not palloc()'d.
+ */
+char *
+get_formatted_start_time(void)
 {
 	pg_time_t	stamp_time = (pg_time_t) MyStartTime;
+
+	/* leave if already computed */
+	if (formatted_start_time[0] != '\0')
+		return formatted_start_time;
 
 	/*
 	 * Note: we expect that guc.c will ensure that log_timezone is set up (at
@@ -2877,6 +2896,49 @@ setup_formatted_start_time(void)
 	pg_strftime(formatted_start_time, FORMATTED_TS_LEN,
 				"%Y-%m-%d %H:%M:%S %Z",
 				pg_localtime(&stamp_time, log_timezone));
+
+	return formatted_start_time;
+}
+
+/*
+ * check_log_of_query -- check if a query can be logged
+ */
+bool
+check_log_of_query(ErrorData *edata)
+{
+	/* log required? */
+	if (!is_log_level_output(edata->elevel, log_min_error_statement))
+		return false;
+
+	/* query log wanted? */
+	if (edata->hide_stmt)
+		return false;
+
+	/* query string available? */
+	if (debug_query_string == NULL)
+		return false;
+
+	return true;
+}
+
+/*
+ * get_backend_type_for_log -- backend type for log entries
+ *
+ * Returns a pointer to a static buffer, not palloc()'d.
+ */
+const char *
+get_backend_type_for_log(void)
+{
+	const char *backend_type_str;
+
+	if (MyProcPid == PostmasterPid)
+		backend_type_str = "postmaster";
+	else if (MyBackendType == B_BG_WORKER)
+		backend_type_str = MyBgworkerEntry->bgw_type;
+	else
+		backend_type_str = GetBackendTypeDesc(MyBackendType);
+
+	return backend_type_str;
 }
 
 /*
@@ -2938,7 +3000,7 @@ log_line_prefix(StringInfo buf, ErrorData *edata)
 	{
 		log_line_number = 0;
 		log_my_pid = MyProcPid;
-		formatted_start_time[0] = '\0';
+		reset_formatted_start_time();
 	}
 	log_line_number++;
 
@@ -3007,14 +3069,7 @@ log_line_prefix(StringInfo buf, ErrorData *edata)
 				break;
 			case 'b':
 				{
-					const char *backend_type_str;
-
-					if (MyProcPid == PostmasterPid)
-						backend_type_str = "postmaster";
-					else if (MyBackendType == B_BG_WORKER)
-						backend_type_str = MyBgworkerEntry->bgw_type;
-					else
-						backend_type_str = GetBackendTypeDesc(MyBackendType);
+					const char *backend_type_str = get_backend_type_for_log();
 
 					if (padding != 0)
 						appendStringInfo(buf, "%*s", padding, backend_type_str);
@@ -3102,7 +3157,10 @@ log_line_prefix(StringInfo buf, ErrorData *edata)
 					appendStringInfo(buf, "%ld", log_line_number);
 				break;
 			case 'm':
-				setup_formatted_log_time();
+				/* force a log timestamp reset */
+				formatted_log_time[0] = '\0';
+				(void) get_formatted_log_time();
+
 				if (padding != 0)
 					appendStringInfo(buf, "%*s", padding, formatted_log_time);
 				else
@@ -3143,12 +3201,14 @@ log_line_prefix(StringInfo buf, ErrorData *edata)
 				}
 				break;
 			case 's':
-				if (formatted_start_time[0] == '\0')
-					setup_formatted_start_time();
-				if (padding != 0)
-					appendStringInfo(buf, "%*s", padding, formatted_start_time);
-				else
-					appendStringInfoString(buf, formatted_start_time);
+				{
+					char	 *start_time = get_formatted_start_time();
+
+					if (padding != 0)
+						appendStringInfo(buf, "%*s", padding, start_time);
+					else
+						appendStringInfoString(buf, start_time);
+				}
 				break;
 			case 'i':
 				if (MyProcPort)
@@ -3362,257 +3422,6 @@ log_line_prefix(StringInfo buf, ErrorData *edata)
 }
 
 /*
- * append a CSV'd version of a string to a StringInfo
- * We use the PostgreSQL defaults for CSV, i.e. quote = escape = '"'
- * If it's NULL, append nothing.
- */
-static inline void
-appendCSVLiteral(StringInfo buf, const char *data)
-{
-	const char *p = data;
-	char		c;
-
-	/* avoid confusing an empty string with NULL */
-	if (p == NULL)
-		return;
-
-	appendStringInfoCharMacro(buf, '"');
-	while ((c = *p++) != '\0')
-	{
-		if (c == '"')
-			appendStringInfoCharMacro(buf, '"');
-		appendStringInfoCharMacro(buf, c);
-	}
-	appendStringInfoCharMacro(buf, '"');
-}
-
-/*
- * Constructs the error message, depending on the Errordata it gets, in a CSV
- * format which is described in doc/src/sgml/config.sgml.
- */
-static void
-write_csvlog(ErrorData *edata)
-{
-	StringInfoData buf;
-	bool		print_stmt = false;
-
-	/* static counter for line numbers */
-	static long log_line_number = 0;
-
-	/* has counter been reset in current process? */
-	static int	log_my_pid = 0;
-
-	/*
-	 * This is one of the few places where we'd rather not inherit a static
-	 * variable's value from the postmaster.  But since we will, reset it when
-	 * MyProcPid changes.
-	 */
-	if (log_my_pid != MyProcPid)
-	{
-		log_line_number = 0;
-		log_my_pid = MyProcPid;
-		formatted_start_time[0] = '\0';
-	}
-	log_line_number++;
-
-	initStringInfo(&buf);
-
-	/*
-	 * timestamp with milliseconds
-	 *
-	 * Check if the timestamp is already calculated for the syslog message,
-	 * and use it if so.  Otherwise, get the current timestamp.  This is done
-	 * to put same timestamp in both syslog and csvlog messages.
-	 */
-	if (formatted_log_time[0] == '\0')
-		setup_formatted_log_time();
-
-	appendStringInfoString(&buf, formatted_log_time);
-	appendStringInfoChar(&buf, ',');
-
-	/* username */
-	if (MyProcPort)
-		appendCSVLiteral(&buf, MyProcPort->user_name);
-	appendStringInfoChar(&buf, ',');
-
-	/* database name */
-	if (MyProcPort)
-		appendCSVLiteral(&buf, MyProcPort->database_name);
-	appendStringInfoChar(&buf, ',');
-
-	/* Process id  */
-	if (MyProcPid != 0)
-		appendStringInfo(&buf, "%d", MyProcPid);
-	appendStringInfoChar(&buf, ',');
-
-	/* Remote host and port */
-	if (MyProcPort && MyProcPort->remote_host)
-	{
-		appendStringInfoChar(&buf, '"');
-		appendStringInfoString(&buf, MyProcPort->remote_host);
-		if (MyProcPort->remote_port && MyProcPort->remote_port[0] != '\0')
-		{
-			appendStringInfoChar(&buf, ':');
-			appendStringInfoString(&buf, MyProcPort->remote_port);
-		}
-		appendStringInfoChar(&buf, '"');
-	}
-	appendStringInfoChar(&buf, ',');
-
-	/* session id */
-	appendStringInfo(&buf, "%lx.%x", (long) MyStartTime, MyProcPid);
-	appendStringInfoChar(&buf, ',');
-
-	/* Line number */
-	appendStringInfo(&buf, "%ld", log_line_number);
-	appendStringInfoChar(&buf, ',');
-
-	/* PS display */
-	if (MyProcPort)
-	{
-		StringInfoData msgbuf;
-		const char *psdisp;
-		int			displen;
-
-		initStringInfo(&msgbuf);
-
-		psdisp = get_ps_display(&displen);
-		appendBinaryStringInfo(&msgbuf, psdisp, displen);
-		appendCSVLiteral(&buf, msgbuf.data);
-
-		pfree(msgbuf.data);
-	}
-	appendStringInfoChar(&buf, ',');
-
-	/* session start timestamp */
-	if (formatted_start_time[0] == '\0')
-		setup_formatted_start_time();
-	appendStringInfoString(&buf, formatted_start_time);
-	appendStringInfoChar(&buf, ',');
-
-	/* Virtual transaction id */
-	/* keep VXID format in sync with lockfuncs.c */
-	if (MyProc != NULL && MyProc->backendId != InvalidBackendId)
-		appendStringInfo(&buf, "%d/%u", MyProc->backendId, MyProc->lxid);
-	appendStringInfoChar(&buf, ',');
-
-	/* Transaction id */
-	appendStringInfo(&buf, "%u", GetTopTransactionIdIfAny());
-	appendStringInfoChar(&buf, ',');
-
-	/* Error severity */
-	appendStringInfoString(&buf, _(error_severity(edata->elevel)));
-	appendStringInfoChar(&buf, ',');
-
-	/* SQL state code */
-	appendStringInfoString(&buf, unpack_sql_state(edata->sqlerrcode));
-	appendStringInfoChar(&buf, ',');
-
-	/* errmessage */
-	appendCSVLiteral(&buf, edata->message);
-	appendStringInfoChar(&buf, ',');
-
-	/* errdetail or errdetail_log */
-	if (edata->detail_log)
-		appendCSVLiteral(&buf, edata->detail_log);
-	else
-		appendCSVLiteral(&buf, edata->detail);
-	appendStringInfoChar(&buf, ',');
-
-	/* errhint */
-	appendCSVLiteral(&buf, edata->hint);
-	appendStringInfoChar(&buf, ',');
-
-	/* internal query */
-	appendCSVLiteral(&buf, edata->internalquery);
-	appendStringInfoChar(&buf, ',');
-
-	/* if printed internal query, print internal pos too */
-	if (edata->internalpos > 0 && edata->internalquery != NULL)
-		appendStringInfo(&buf, "%d", edata->internalpos);
-	appendStringInfoChar(&buf, ',');
-
-	/* errcontext */
-	if (!edata->hide_ctx)
-		appendCSVLiteral(&buf, edata->context);
-	appendStringInfoChar(&buf, ',');
-
-	/* user query --- only reported if not disabled by the caller */
-	if (is_log_level_output(edata->elevel, log_min_error_statement) &&
-		debug_query_string != NULL &&
-		!edata->hide_stmt)
-		print_stmt = true;
-	if (print_stmt)
-		appendCSVLiteral(&buf, debug_query_string);
-	appendStringInfoChar(&buf, ',');
-	if (print_stmt && edata->cursorpos > 0)
-		appendStringInfo(&buf, "%d", edata->cursorpos);
-	appendStringInfoChar(&buf, ',');
-
-	/* file error location */
-	if (Log_error_verbosity >= PGERROR_VERBOSE)
-	{
-		StringInfoData msgbuf;
-
-		initStringInfo(&msgbuf);
-
-		if (edata->funcname && edata->filename)
-			appendStringInfo(&msgbuf, "%s, %s:%d",
-							 edata->funcname, edata->filename,
-							 edata->lineno);
-		else if (edata->filename)
-			appendStringInfo(&msgbuf, "%s:%d",
-							 edata->filename, edata->lineno);
-		appendCSVLiteral(&buf, msgbuf.data);
-		pfree(msgbuf.data);
-	}
-	appendStringInfoChar(&buf, ',');
-
-	/* application name */
-	if (application_name)
-		appendCSVLiteral(&buf, application_name);
-
-	appendStringInfoChar(&buf, ',');
-
-	/* backend type */
-	if (MyProcPid == PostmasterPid)
-		appendCSVLiteral(&buf, "postmaster");
-	else if (MyBackendType == B_BG_WORKER)
-		appendCSVLiteral(&buf, MyBgworkerEntry->bgw_type);
-	else
-		appendCSVLiteral(&buf, GetBackendTypeDesc(MyBackendType));
-
-	appendStringInfoChar(&buf, ',');
-
-	/* leader PID */
-	if (MyProc)
-	{
-		PGPROC	   *leader = MyProc->lockGroupLeader;
-
-		/*
-		 * Show the leader only for active parallel workers.  This leaves out
-		 * the leader of a parallel group.
-		 */
-		if (leader && leader->pid != MyProcPid)
-			appendStringInfo(&buf, "%d", leader->pid);
-	}
-	appendStringInfoChar(&buf, ',');
-
-	/* query id */
-	appendStringInfo(&buf, "%lld", (long long) pgstat_get_my_query_id());
-
-	appendStringInfoChar(&buf, '\n');
-
-	/* If in the syslogger process, try to write messages direct to file */
-	if (MyBackendType == B_LOGGER)
-		write_syslogger_file(buf.data, buf.len, LOG_DESTINATION_CSVLOG);
-	else
-		write_pipe_chunks(buf.data, buf.len, LOG_DESTINATION_CSVLOG);
-
-	pfree(buf.data);
-}
-
-/*
  * Unpack MAKE_SQLSTATE code. Note that this returns a pointer to a
  * static buffer.
  */
@@ -3778,7 +3587,7 @@ append_string_to_pipe_chunk(PipeProtoChunk *buffer, const char* input)
  * If buffer is NULL, the stack is written to the syslogger file if amsyslogger is true.
  * Otherwise, write to stderr.
  */
-static void
+void
 append_stacktrace(PipeProtoChunk *buffer, StringInfo append, void *const *stackarray,
 				  int stacksize, bool amsyslogger)
 {
@@ -3822,7 +3631,7 @@ append_stacktrace(PipeProtoChunk *buffer, StringInfo append, void *const *stacka
 		{
 			cmdresult[stack_no][0] = '\0';   /* clear this array for later */
 			snprintf(addrtxt, sizeof(addrtxt),"%p ",stackarray[stack_no]);
-			
+
 			Assert(sizeof(cmd) > strlen(cmd));
 			strncat(cmd, addrtxt, sizeof(cmd) - strlen(cmd) - 1);
 		}
@@ -4014,7 +3823,6 @@ write_syslogger_file_string(const char *str, bool amsyslogger, bool append_comma
 	}
 }
 
-
 /*
  * Directly write the message in CSV format to the syslogger file or stderr.
  */
@@ -4185,8 +3993,8 @@ write_message_to_server_log(int elevel,
 	buffer.hdr.thid = mythread();
 	buffer.hdr.main_thid = mainthread();
 	buffer.hdr.chunk_no = 0;
-	buffer.hdr.is_last = 'f';
-	buffer.hdr.log_format = 'c';
+	buffer.hdr.flags = 0;
+	buffer.hdr.flags |= PIPE_PROTO_DEST_CSVLOG;
 	buffer.hdr.log_line_number = log_line_number++;
 	buffer.hdr.is_segv_msg = 'f';
 	buffer.hdr.next = -1;
@@ -4294,7 +4102,7 @@ write_message_to_server_log(int elevel,
 	}
 
 	/* Send the last chunk */
-	buffer.hdr.is_last = 't';
+	buffer.hdr.flags |= PIPE_PROTO_IS_LAST;
 	gp_write_pipe_chunk((char *) &buffer, buffer.hdr.len + PIPE_HEADER_SIZE);
 }
 
@@ -4305,14 +4113,29 @@ static void
 send_message_to_server_log(ErrorData *edata)
 {
 	StringInfoData buf;
+	bool		fallback_to_json = false;
 	StringInfoData prefix;
 	int			nc;
 
 	AssertImply(mainthread() != 0, mythread() == mainthread());
 
-	if (Log_destination & LOG_DESTINATION_STDERR)
+	/* Write to JSON log, if enabled */
+    if (Logging_collector && ((Log_destination & LOG_DESTINATION_JSONLOG) || gp_log_format == 2))
+    {
+		if (redirection_done || MyBackendType == B_LOGGER)
+    	{
+    		/* force a log timestamp reset */
+        	saved_timeval_set = false;
+        	formatted_log_time[0] = '\0';
+
+			write_jsonlog(edata);
+			fallback_to_json = true;
+		}
+    }
+
+	if (Logging_collector)
 	{
-		if (Logging_collector && gp_log_format == 1)
+		if ((Log_destination & LOG_DESTINATION_CSVLOG) || gp_log_format == 1)
 		{
 			if (redirection_done)
 			{
@@ -4342,11 +4165,16 @@ send_message_to_server_log(ErrorData *edata)
 			{
 				write_syslogger_in_csv(edata, false);
 			}
-
 			return;
 		}
 	}
 
+	if (fallback_to_json)
+	{
+		return;
+	}
+
+	/* Fall back to stderr */
 	/* Format message prefix. */
 	initStringInfo(&buf);
 
@@ -4473,9 +4301,7 @@ send_message_to_server_log(ErrorData *edata)
 	/*
 	 * If the user wants the query that generated this error logged, do it.
 	 */
-	if (is_log_level_output(edata->elevel, log_min_error_statement) &&
-		debug_query_string != NULL &&
-		!edata->hide_stmt)
+	if (check_log_of_query(edata))
 	{
 		log_line_prefix(&buf, edata);
 		appendStringInfoString(&buf, _("STATEMENT:  "));
@@ -4592,34 +4418,7 @@ send_message_to_server_log(ErrorData *edata)
 		write_syslogger_file(buf.data, buf.len, LOG_DESTINATION_STDERR);
 	pfree(prefix.data);
 
-	/* Write to CSV log if enabled */
-	if (Log_destination & LOG_DESTINATION_CSVLOG)
-	{
-		if (redirection_done || MyBackendType == B_LOGGER)
-		{
-			/*
-			 * send CSV data if it's safe to do so (syslogger doesn't need the
-			 * pipe). First get back the space in the message buffer.
-			 */
-			pfree(buf.data);
-			write_csvlog(edata);
-		}
-		else
-		{
-			/*
-			 * syslogger not up (yet), so just dump the message to stderr,
-			 * unless we already did so above.
-			 */
-			if (!(Log_destination & LOG_DESTINATION_STDERR) &&
-				whereToSendOutput != DestDebug)
-				write_console(buf.data, buf.len);
-			pfree(buf.data);
-		}
-	}
-	else
-	{
-		pfree(buf.data);
-	}
+	pfree(buf.data);
 }
 
 /*
@@ -4642,7 +4441,7 @@ send_message_to_server_log(ErrorData *edata)
  * warning from ignoring write()'s result, so do a little dance with casting
  * rc to void to shut up the compiler.
  */
-static void
+void
 write_pipe_chunks(char *data, int len, int dest)
 {
 	PipeProtoChunk p;
@@ -4655,14 +4454,19 @@ write_pipe_chunks(char *data, int len, int dest)
 	p.hdr.thid = mythread();
 	p.hdr.main_thid = mainthread();
 	p.hdr.chunk_no = 0;
-	p.hdr.log_format = (dest == LOG_DESTINATION_CSVLOG ? 'c' : 't');
 	p.hdr.is_segv_msg = 'f';
 	p.hdr.next = -1;
+	p.hdr.flags = 0;
+	if (dest == LOG_DESTINATION_STDERR)
+		p.hdr.flags |= PIPE_PROTO_DEST_STDERR;
+	else if (dest == LOG_DESTINATION_CSVLOG)
+		p.hdr.flags |= PIPE_PROTO_DEST_CSVLOG;
+	else if (dest == LOG_DESTINATION_JSONLOG)
+		p.hdr.flags |= PIPE_PROTO_DEST_JSONLOG;
 
 	/* write all but the last chunk */
 	while (len > PIPE_MAX_PAYLOAD)
 	{
-		p.hdr.is_last = 'f';
 		p.hdr.len = PIPE_MAX_PAYLOAD;
 		memcpy(p.data, data, PIPE_MAX_PAYLOAD);
 
@@ -4679,7 +4483,7 @@ write_pipe_chunks(char *data, int len, int dest)
 	}
 
 	/* write the last chunk */
-	p.hdr.is_last = 't';
+	p.hdr.flags |= PIPE_PROTO_IS_LAST;
 	p.hdr.len = len;
 
 #ifdef USE_ASSERT_CHECKING
@@ -4902,7 +4706,7 @@ send_message_to_frontend(ErrorData *edata)
  * The string is not localized here, but we mark the strings for translation
  * so that callers can invoke _() on the result.
  */
-static const char *
+const char *
 error_severity(int elevel)
 {
 	const char *prefix;
@@ -5251,7 +5055,7 @@ SegvBusIllName(int signal)
 	Assert(signal == SIGILL ||
 		   signal == SIGSEGV ||
 		   signal == SIGBUS);
-	
+
 	switch (signal)
 	{
 #ifdef SIGILL
@@ -5308,8 +5112,9 @@ StandardHandlerForSigillSigsegvSigbus_OnMainThread(char *processName, SIGNAL_ARG
 	buffer.hdr.thid = FIXED_THREAD_ID;
 	buffer.hdr.main_thid = mainthread();
 	buffer.hdr.chunk_no = 0;
-	buffer.hdr.is_last = 't';
-	buffer.hdr.log_format = 'c';
+	buffer.hdr.flags = 0;
+	buffer.hdr.flags |= PIPE_PROTO_IS_LAST;
+	buffer.hdr.flags |= PIPE_PROTO_DEST_CSVLOG;
 	buffer.hdr.is_segv_msg = 't';
 	buffer.hdr.log_line_number = 0;
 	buffer.hdr.next = -1;

@@ -63,13 +63,13 @@
  * FIXME: After we follow the upstream way which is using dynamic lists
  * to buffer the log chunks. We can remove some of these fields to reduce
  * overhead.
- * 
+ *
  * Also, when we are accumulating the chunk messages, we need to call `appendBinaryStringInfo`.
  * It will cause the reallocation of memory. Since the elog knows about the log messages' size,
  * we can also use total logsize to indicate the last chunk so that we can allocate the log buffer
  * memory at the very beginning. The reallocation cost might be reduced.
  */
-typedef struct 
+typedef struct
 {
 	int32		zero;			/* leading zero */
 	int32		len;			/* len, not including hdr */
@@ -77,11 +77,10 @@ typedef struct
 	int32       thid;			/* thread id */
 	int32		main_thid;		/* main thread id */
 	int32		chunk_no;		/* chunk number */
-	char		is_last;		/* last chunk of message? 't' or 'f' */
-	char		log_format;		/* 'c' for csv, 't' for text */
 	char		is_segv_msg;	/* indicate whether this is a message sent in SEGV/BUS/ILL handler */
 	int64		log_line_number;	/* indicate the order of the message */
 	int64		next;			/* next chained chunk.  also force an 8 bytes align */
+	bits8		flags;			/* bitmask of PIPE_PROTO_* */
 } PipeProtoHeader;
 
 #define PIPE_HEADER_UNALIGNED_SIZE  sizeof(PipeProtoHeader)
@@ -89,13 +88,20 @@ typedef struct
 
 #define CHUNK_SLOTS 400
 
-typedef struct 
+typedef struct
 {
-	PipeProtoHeader hdr; 
+	PipeProtoHeader hdr;
 	char		data[PIPE_MAX_PAYLOAD];
 } PipeProtoChunk;
 
 #define PIPE_HEADER_SIZE offsetof(PipeProtoChunk, data)
+
+/* flag bits for PipeProtoHeader->flags */
+#define PIPE_PROTO_IS_LAST	0x01	/* last chunk of message? */
+/* log destinations */
+#define PIPE_PROTO_DEST_STDERR	0x10
+#define PIPE_PROTO_DEST_CSVLOG	0x20
+#define PIPE_PROTO_DEST_JSONLOG	0x40
 
 typedef struct CSVChunkStr
 {
