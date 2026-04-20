@@ -36,6 +36,22 @@ static bool interconnect_resowner_callback_registered;
  * VISIBLE FUNCTIONS
  */
 
+
+void
+InterconnectShmemInit(void)
+{
+	if (Gp_interconnect_type == INTERCONNECT_TYPE_UDPIFC)
+		InterconnectShmemInitUDPIFC();
+}
+
+Size
+InterconnectShmemSize(void)
+{
+	if (Gp_interconnect_type == INTERCONNECT_TYPE_UDPIFC)
+		return InterconnectShmemSizeUDPIFC();
+	return 0;
+}
+
 /* See ml_ipc.h */
 bool
 SendTupleChunkToAMS(ChunkTransportState * transportStates,
