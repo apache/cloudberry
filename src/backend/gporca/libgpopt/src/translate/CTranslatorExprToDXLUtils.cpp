@@ -1296,7 +1296,8 @@ CTranslatorExprToDXLUtils::FLocalHashAggStreamSafe(CExpression *pexprAgg)
 
 	// is a local hash aggregate and it generates duplicates (therefore safe to stream)
 	return (COperator::EgbaggtypeLocal == popAgg->Egbaggtype()) &&
-		   popAgg->FGeneratesDuplicates();
+		   popAgg->FGeneratesDuplicates() &&
+		   !GPOS_FTRACE(EopttraceDisableStreamingHashAgg);
 }
 
 //---------------------------------------------------------------------------
