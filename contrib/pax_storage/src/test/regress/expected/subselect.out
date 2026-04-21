@@ -1777,7 +1777,7 @@ order by t1.ten;
                ->  Redistribute Motion 3:3  (slice2; segments: 3)
                      Output: t1.ten, (PARTIAL sum((t1.ten + t2.ten)))
                      Hash Key: t1.ten
-                     ->  Partial HashAggregate
+                     ->  Streaming Partial HashAggregate
                            Output: t1.ten, PARTIAL sum((t1.ten + t2.ten))
                            Group Key: t1.ten
                            ->  Hash Right Join
@@ -2266,7 +2266,7 @@ group by j, q1;
          ->  Redistribute Motion 3:3  (slice2; segments: 3)
                Output: t.j, ((SubPlan 1))
                Hash Key: t.j, ((SubPlan 1))
-               ->  HashAggregate
+               ->  Streaming HashAggregate
                      Output: t.j, ((SubPlan 1))
                      Group Key: t.j, (SubPlan 1)
                      ->  Seq Scan on public.t
