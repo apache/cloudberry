@@ -23,13 +23,13 @@ Optimizer: Postgres query optimizer
 
 step enableseq: SET enable_seqscan = true;
 step explains: EXPLAIN (COSTS OFF) EXECUTE getrow_seqscan;
-QUERY PLAN                 
----------------------------
-Sort                       
-  Sort Key: id             
-  ->  Seq Scan on test_dc  
-        Filter: (data = 34)
-Optimizer: Postgres query optimizer           
+QUERY PLAN                         
+-----------------------------------
+Sort                               
+  Sort Key: id                     
+  ->  Seq Scan on test_dc          
+        Filter: (data = 34)        
+Optimizer: Postgres query optimizer
 (5 rows)
 
 step select2: SELECT * FROM test_dc WHERE data = 34 ORDER BY id,data;
