@@ -118,12 +118,20 @@ CREATE TABLE prt_p1 PARTITION OF prt FOR VALUES FROM (0) TO (10);
 CREATE TABLE prt_p2 PARTITION OF prt FOR VALUES FROM (10) TO (20);
 INSERT INTO prt VALUES (0), (0), (0), (0);
 INSERT INTO prt VALUES (10), (10), (10), (10);
+-- CBDB addon. We need more tuples to trigger Memoize
+INSERT INTO prt VALUES (0), (0), (0), (0);
+INSERT INTO prt VALUES (10), (10), (10), (10);
+--
 CREATE INDEX iprt_p1_a ON prt_p1 (a);
 CREATE INDEX iprt_p2_a ON prt_p2 (a);
 ANALYZE prt;
 
+SET enable_parallel TO off;
+
 SELECT explain_memoize('
 SELECT * FROM prt t1 INNER JOIN prt t2 ON t1.a = t2.a;', false);
+
+RESET enable_parallel;
 
 DROP TABLE prt;
 

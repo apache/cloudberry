@@ -1425,7 +1425,7 @@ select length(id), test_json[id] from test_jsonb_subscript;
 update test_jsonb_subscript set test_json[id] = '"baz"';
 select length(id), test_json[id] from test_jsonb_subscript;
 \x
-table test_jsonb_subscript;
+SELECT * from test_jsonb_subscript order by LENGTH(id);
 \x
 
 -- jsonb to tsvector

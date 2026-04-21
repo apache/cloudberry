@@ -1819,8 +1819,8 @@ select pg_get_viewdef('tt201v', true);
 -----------------------------------------------------------------------------------------------
   SELECT EXTRACT(day FROM now()) AS extr,                                                     +
      ((now(), '@ 1 day'::interval) OVERLAPS (CURRENT_TIMESTAMP(2), '@ 1 day'::interval)) AS o,+
-     (('foo'::text) IS NORMALIZED) AS isn,                                                    +
-     (('foo'::text) IS NFKC NORMALIZED) AS isnn,                                              +
+     ('foo'::text IS NORMALIZED) AS isn,                                                      +
+     ('foo'::text IS NFKC NORMALIZED) AS isnn,                                                +
      NORMALIZE('foo'::text) AS n,                                                             +
      NORMALIZE('foo'::text, NFKD) AS nfkd,                                                    +
      OVERLAY('foo'::text PLACING 'bar'::text FROM 2) AS ovl,                                  +

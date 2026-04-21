@@ -207,6 +207,44 @@ SELECT * FROM strtest s1 INNER JOIN strtest s2 ON s1.t >= s2.t;', false);
 (8 rows)
 
 DROP TABLE strtest;
+-- Ensure memoize works with partitionwise join
+SET enable_partitionwise_join TO on;
+CREATE TABLE prt (a int) PARTITION BY RANGE(a);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+CREATE TABLE prt_p1 PARTITION OF prt FOR VALUES FROM (0) TO (10);
+NOTICE:  table has parent, setting distribution columns to match parent table
+CREATE TABLE prt_p2 PARTITION OF prt FOR VALUES FROM (10) TO (20);
+NOTICE:  table has parent, setting distribution columns to match parent table
+INSERT INTO prt VALUES (0), (0), (0), (0);
+INSERT INTO prt VALUES (10), (10), (10), (10);
+-- CBDB addon. We need more tuples to trigger Memoize
+INSERT INTO prt VALUES (0), (0), (0), (0);
+INSERT INTO prt VALUES (10), (10), (10), (10);
+--
+CREATE INDEX iprt_p1_a ON prt_p1 (a);
+CREATE INDEX iprt_p2_a ON prt_p2 (a);
+ANALYZE prt;
+SET enable_parallel TO off;
+SELECT explain_memoize('
+SELECT * FROM prt t1 INNER JOIN prt t2 ON t1.a = t2.a;', false);
+                                     explain_memoize                                     
+-----------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3) (actual rows=128 loops=N)
+   ->  Nested Loop (actual rows=64 loops=N)
+         Join Filter: (t1.a = t2.a)
+         ->  Dynamic Seq Scan on prt t1 (actual rows=8 loops=N)
+               Number of partitions to scan: 2 (out of 2)
+               Partitions scanned:  Avg 2.0 x 3 workers.  Max 2 parts (seg0).
+         ->  Dynamic Seq Scan on prt t2 (actual rows=7 loops=N)
+               Number of partitions to scan: 2 (out of 2)
+               Partitions scanned:  Avg 1.4 x 3 workers of 9 scans.  Max 2 parts (seg2).
+ Optimizer: GPORCA
+(10 rows)
+
+RESET enable_parallel;
+DROP TABLE prt;
+RESET enable_partitionwise_join;
 -- Exercise Memoize code that flushes the cache when a parameter changes which
 -- is not part of the cache key.
 -- Ensure we get a Memoize plan
