@@ -28,7 +28,7 @@ SELECT attr, class, (select count(distinct class) from ctas_src) as dclass FROM 
                                          ->  Seq Scan on ctas_src ctas_src_1
    ->  Redistribute Motion 3:3  (slice1; segments: 3)
          Hash Key: ctas_src.attr
-         ->  HashAggregate
+         ->  Streaming HashAggregate
                Group Key: ctas_src.attr, ctas_src.class
                ->  Seq Scan on ctas_src
  Optimizer: Postgres query optimizer
@@ -57,7 +57,7 @@ SELECT attr, class, (select max(class) from ctas_src) as maxclass FROM ctas_src 
                        ->  Seq Scan on ctas_src ctas_src_1
    ->  Redistribute Motion 3:3  (slice1; segments: 3)
          Hash Key: ctas_src.attr
-         ->  HashAggregate
+         ->  Streaming HashAggregate
                Group Key: ctas_src.attr, ctas_src.class
                ->  Seq Scan on ctas_src
  Optimizer: Postgres query optimizer
@@ -102,7 +102,7 @@ SELECT attr, class, (select count(distinct class) from ctas_src) as dclass, (sel
                        ->  Seq Scan on ctas_src ctas_src_3
    ->  Redistribute Motion 3:3  (slice1; segments: 3)
          Hash Key: ctas_src.attr
-         ->  HashAggregate
+         ->  Streaming HashAggregate
                Group Key: ctas_src.attr, ctas_src.class
                ->  Seq Scan on ctas_src
  Optimizer: Postgres query optimizer

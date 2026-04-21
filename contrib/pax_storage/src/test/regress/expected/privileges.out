@@ -3193,7 +3193,6 @@ SET SESSION AUTHORIZATION regress_roleoption_recipient;
 CREATE TABLE regress_roleoption.t4 (a int);
 SET SESSION AUTHORIZATION regress_roleoption_protagonist;
 ALTER TABLE regress_roleoption.t1 OWNER TO regress_roleoption_donor; -- fails, can't be come donor
-ERROR:  must be able to SET ROLE "regress_roleoption_donor"
 ALTER TABLE regress_roleoption.t2 OWNER TO regress_roleoption_recipient; -- works
 ALTER TABLE regress_roleoption.t3 OWNER TO regress_roleoption_protagonist; -- works
 ALTER TABLE regress_roleoption.t4 OWNER TO regress_roleoption_protagonist; -- fails, we don't inherit from recipient

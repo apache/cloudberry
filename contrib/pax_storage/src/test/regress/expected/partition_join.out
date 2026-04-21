@@ -2473,12 +2473,12 @@ SELECT COUNT(*) FROM prt1_l t1 LEFT JOIN LATERAL
 			  (SELECT t1.b AS t1b, t2.* FROM prt2_l t2) s
 			  ON t1.a = s.b AND t1.b = s.a AND t1.c = s.c
 			  WHERE s.t1b = s.a;
-ERROR:  could not pull up equivalence class using projected target list (pathkeys.c:1610)
+ERROR:  could not pull up equivalence class using projected target list (pathkeys.c:1615)
 SELECT COUNT(*) FROM prt1_l t1 LEFT JOIN LATERAL
 			  (SELECT t1.b AS t1b, t2.* FROM prt2_l t2) s
 			  ON t1.a = s.b AND t1.b = s.a AND t1.c = s.c
 			  WHERE s.t1b = s.a;
-ERROR:  could not pull up equivalence class using projected target list (pathkeys.c:1610)
+ERROR:  could not pull up equivalence class using projected target list (pathkeys.c:1615)
 RESET max_parallel_workers_per_gather;
 -- join with one side empty
 EXPLAIN (COSTS OFF)

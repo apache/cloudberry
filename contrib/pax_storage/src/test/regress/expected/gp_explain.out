@@ -600,7 +600,7 @@ SELECT * FROM y LIMIT 10;
                      ->  WorkTable Scan on y (never executed)
                      ->  Materialize (never executed)
                            ->  Gather Motion 3:1  (slice1; segments: 3) (never executed)
-                                 ->  Seq Scan on recursive_table_ic (actual rows=4061 loops=1)
+                                 ->  Seq Scan on recursive_table_ic (actual rows=4049 loops=1)
  Optimizer: Postgres query optimizer
 (13 rows)
 

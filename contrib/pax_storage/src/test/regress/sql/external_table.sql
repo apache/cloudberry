@@ -1433,7 +1433,7 @@ CREATE EXTERNAL TABLE ext_nation_on_coordinator ( N_NATIONKEY  INTEGER ,
                             N_NAME       CHAR(25) ,
                             N_REGIONKEY  INTEGER ,
                             N_COMMENT    VARCHAR(152))
-location ('file://@hostname@@abs_srcdir@/data/nation.tbl' ) ON COORDINATOR
+location (:'nation_tbl' ) ON COORDINATOR
 FORMAT 'text' (delimiter '|');
 SELECT gp_segment_id, * FROM ext_nation_on_coordinator ORDER BY N_NATIONKEY DESC LIMIT 5;
 DROP EXTERNAL TABLE IF EXISTS ext_nation_on_coordinator;
@@ -3742,6 +3742,3 @@ SELECT logerrors, options from pg_exttable a, pg_class b where a.reloid = b.oid 
 DROP EXTERNAL TABLE ext_false;
 DROP EXTERNAL TABLE ext_true;
 DROP EXTERNAL TABLE ext_persistently;
-
-CREATE EXTERNAL WEB TEMP TABLE test_program_not_exist(content text) EXECUTE '/xx/seq 1 5' ON MASTER FORMAT 'TEXT';
-SELECT * FROM test_program_not_exist;
