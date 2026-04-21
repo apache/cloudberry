@@ -565,9 +565,10 @@ section "Staging release: $TAG"
   # NOTE: For RC tags like "X.Y.Z-incubating-rcN", keep the tag as-is but
   # generate the tarball name and top-level directory using BASE_VERSION
   # (without "-rcN"). This allows promoting the voted bits without rebuilding.
-  # Keep -rcN in the artifact filename for RC voting, but keep the extracted
-  # top-level directory name as BASE_VERSION (without -rcN).
-  TAR_NAME="apache-cloudberry-${TAG}-src.tar.gz"
+  # Use BASE_VERSION for both tarball filename and extracted directory name
+  # to align with Apache incubator release conventions. This enables direct
+  # 'svn mv' to release repository after voting without renaming artifacts.
+  TAR_NAME="apache-cloudberry-${BASE_VERSION}-src.tar.gz"
   TMP_DIR=$(mktemp -d)
   trap 'rm -rf "$TMP_DIR"' EXIT
 
