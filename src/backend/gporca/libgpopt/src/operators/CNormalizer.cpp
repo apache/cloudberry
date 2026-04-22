@@ -18,6 +18,7 @@
 #include "gpopt/base/CUtils.h"
 #include "gpopt/operators/CLogical.h"
 #include "gpopt/operators/CLogicalConstTableGet.h"
+#include "gpopt/operators/CLogicalGbAgg.h"
 #include "gpopt/operators/CLogicalInnerJoin.h"
 #include "gpopt/operators/CLogicalLeftOuterCorrelatedApply.h"
 #include "gpopt/operators/CLogicalLeftOuterJoin.h"
@@ -122,6 +123,18 @@ CNormalizer::FPushable(CExpression *pexprLogical, CExpression *pexprPred)
 	// while it processes each row
 	if (COperator::EopLogicalGbAgg == pexprLogical->Pop()->Eopid() &&
 		(CPredicateUtils::FContainsVolatileFunction(pexprPred)))
+	{
+		return false;
+	}
+
+	// do not push predicates below a scalar (plain) aggregate, i.e. one with
+	// no grouping columns. A scalar aggregate produces exactly one output row
+	// regardless of input cardinality, so a predicate above it (HAVING clause)
+	// must be evaluated against that output row, not the aggregate's input.
+	// Pushing e.g. "HAVING false" below would leave the agg emitting one row
+	// (e.g. count = 0) instead of zero rows.
+	if (COperator::EopLogicalGbAgg == pexprLogical->Pop()->Eopid() &&
+		0 == CLogicalGbAgg::PopConvert(pexprLogical->Pop())->Pdrgpcr()->Size())
 	{
 		return false;
 	}

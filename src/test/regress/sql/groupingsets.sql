@@ -353,6 +353,12 @@ explain (costs off)
   select v.c, (select count(*) from gstest2 group by () having v.c)
     from (values (false),(true)) v(c) order by v.c;
 
+-- HAVING with constant-false predicate on an empty grouping set must emit
+-- zero rows, not the default scalar-aggregate row.
+select count(*) from gstest2 group by grouping sets (()) having false;
+explain (costs off)
+  select count(*) from gstest2 group by grouping sets (()) having false;
+
 -- HAVING with GROUPING queries
 select ten, grouping(ten) from onek
 group by grouping sets(ten) having grouping(ten) >= 0
