@@ -958,6 +958,25 @@ explain (costs off)
  Optimizer: Postgres query optimizer
 (13 rows)
 
+-- HAVING with constant-false predicate on an empty grouping set must emit
+-- zero rows, not the default scalar-aggregate row.
+select count(*) from gstest2 group by grouping sets (()) having false;
+ count 
+-------
+(0 rows)
+
+explain (costs off)
+  select count(*) from gstest2 group by grouping sets (()) having false;
+             QUERY PLAN
+-------------------------------------
+ Aggregate
+   Group Key: ()
+   Filter: false
+   ->  Result
+         One-Time Filter: false
+ Optimizer: Postgres query optimizer
+(6 rows)
+
 -- HAVING with GROUPING queries
 select ten, grouping(ten) from onek
 group by grouping sets(ten) having grouping(ten) >= 0
