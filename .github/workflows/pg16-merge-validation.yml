@@ -547,7 +547,7 @@ jobs:
             # Source greenplum_path and create demo cluster
             if ! su - gpadmin -c "
               cd ${SRC_DIR}
-              source ${INSTALL_PREFIX}/greenplum_path.sh
+              source ${INSTALL_PREFIX}/cloudberry-env.sh
               make create-demo-cluster
             "; then
               echo "::error::Demo cluster creation failed"
@@ -731,7 +731,7 @@ jobs:
           # Create demo cluster with specified number of segments
           su - gpadmin -c "
             cd ${SRC_DIR}
-            source ${INSTALL_PREFIX}/greenplum_path.sh
+            source ${INSTALL_PREFIX}/cloudberry-env.sh
             NUM_PRIMARY_MIRROR_PAIRS=${{ matrix.num_primary_mirror_pairs }} make create-demo-cluster
           " 2>&1 | tee -a ${LOGS_DIR}/details/cluster-creation.log
 
@@ -770,7 +770,7 @@ jobs:
             config_log="${LOGS_DIR}/details/make-${{ matrix.test }}-config$i.log"
 
             if ! su - gpadmin -c "
-              source ${INSTALL_PREFIX}/greenplum_path.sh
+              source ${INSTALL_PREFIX}/cloudberry-env.sh
               source ${SRC_DIR}/gpAux/gpdemo/gpdemo-env.sh
               make -C ${SRC_DIR}/src/test/regress
               cd ${SRC_DIR}
