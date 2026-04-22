@@ -2856,10 +2856,10 @@ CTranslatorDXLToPlStmt::TranslateAggFillInfo(CContextDXLToPlStmt *ctx,
 	}
 	else
 	{
-		AggInfo *agginfo = (AggInfo *) gpdb::GPDBAlloc(sizeof(AggInfo));
+		AggInfo *agginfo = makeNode(AggInfo);
 
 		agginfo->finalfn_oid = aggfinalfn;
-		agginfo->representative_aggref = aggref;
+		agginfo->aggrefs = list_make1(aggref);
 		agginfo->shareable = shareable;
 
 		aggno = gpdb::ListLength(ctx->GetAggInfos());
