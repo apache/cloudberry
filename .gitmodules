@@ -12,6 +12,6 @@
 	path = contrib/pax_storage/src/cpp/contrib/googlebench
 	url = https://github.com/google/benchmark.git
 [submodule "dependency/yyjson"]
-	path = dependency/yyjson
+	path = contrib/pax_storage/src/cpp/contrib/yyjson
 	url = https://github.com/ibireme/yyjson.git
 
