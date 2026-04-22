@@ -94,6 +94,7 @@ RUN dnf makecache && \
         readline-devel \
         zlib-devel && \
     dnf install -y --enablerepo=crb \
+        liburing-devel \
         libuv-devel \
         libyaml-devel \
         perl-IPC-Run \
@@ -120,10 +121,12 @@ USER gpadmin
 WORKDIR /home/gpadmin
 
 # Release version to build (Apache official tarball)
-ARG CB_RELEASE_VERSION=2.0.0-incubating
+ARG CB_RELEASE_VERSION=2.1.0-incubating
 
 # Download and extract the specified release version from Apache
-RUN wget -nv "https://downloads.apache.org/incubator/cloudberry/${CB_RELEASE_VERSION}/apache-cloudberry-${CB_RELEASE_VERSION}-src.tar.gz" -O /home/gpadmin/apache-cloudberry-${CB_RELEASE_VERSION}-src.tar.gz && \
+# Using Apache mirror system for better download reliability and speed
+RUN curl -L -o /home/gpadmin/apache-cloudberry-${CB_RELEASE_VERSION}-src.tar.gz \
+    "https://www.apache.org/dyn/closer.lua/incubator/cloudberry/${CB_RELEASE_VERSION}/apache-cloudberry-${CB_RELEASE_VERSION}-src.tar.gz?action=download" && \
     tar -xzf /home/gpadmin/apache-cloudberry-${CB_RELEASE_VERSION}-src.tar.gz -C /home/gpadmin && \
     rm -f /home/gpadmin/apache-cloudberry-${CB_RELEASE_VERSION}-src.tar.gz && \
     mv /home/gpadmin/apache-cloudberry-${CB_RELEASE_VERSION} /home/gpadmin/cloudberry
@@ -131,47 +134,9 @@ RUN wget -nv "https://downloads.apache.org/incubator/cloudberry/${CB_RELEASE_VER
 # Build Cloudberry using the official build scripts
 RUN cd /home/gpadmin/cloudberry && \
     export SRC_DIR=/home/gpadmin/cloudberry && \
-    mkdir -p "${SRC_DIR}/build-logs" && \
-    # Ensure Cloudberry lib dir exists and has Xerces libs available
-    sudo rm -rf /usr/local/cloudberry-db && \
-    sudo mkdir -p /usr/local/cloudberry-db/lib && \
-    sudo cp -v /usr/local/xerces-c/lib/libxerces-c.so \
-              /usr/local/xerces-c/lib/libxerces-c-3.*.so \
-              /usr/local/cloudberry-db/lib/ && \
-    sudo chown -R gpadmin:gpadmin /usr/local/cloudberry-db && \
-    # Configure with required features and paths
-    export LD_LIBRARY_PATH=/usr/local/cloudberry-db/lib:$LD_LIBRARY_PATH && \
-    ./configure --prefix=/usr/local/cloudberry-db \
-                --disable-external-fts \
-                --enable-debug \
-                --enable-cassert \
-                --enable-debug-extensions \
-                --enable-gpcloud \
-                --enable-ic-proxy \
-                --enable-mapreduce \
-                --enable-orafce \
-                --enable-orca \
-                --enable-pax \
-                --disable-pxf \
-                --enable-tap-tests \
-                --with-gssapi \
-                --with-ldap \
-                --with-libxml \
-                --with-lz4 \
-                --with-pam \
-                --with-perl \
-                --with-pgport=5432 \
-                --with-python \
-                --with-pythonsrc-ext \
-                --with-ssl=openssl \
-                --with-uuid=e2fs \
-                --with-includes=/usr/local/xerces-c/include \
-                --with-libraries=/usr/local/cloudberry-db/lib && \
-    # Build and install
-    make -j$(nproc) --directory ${SRC_DIR} && \
-    make -j$(nproc) --directory ${SRC_DIR}/contrib && \
-    make install --directory ${SRC_DIR} && \
-    make install --directory "${SRC_DIR}/contrib"
+    mkdir -p ${SRC_DIR}/build-logs && \
+    ./devops/build/automation/cloudberry/scripts/configure-cloudberry.sh && \
+    ./devops/build/automation/cloudberry/scripts/build-cloudberry.sh
 
 # --------------------------------------------------------------------
 # Runtime stage: Rocky Linux 9 runtime with required dependencies
@@ -192,6 +157,7 @@ RUN dnf -y update && \
       krb5-libs \
       libevent \
       libicu \
+      liburing \
       libuuid \
       libxml2 \
       libyaml \
