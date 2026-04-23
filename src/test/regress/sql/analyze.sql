@@ -677,3 +677,26 @@ analyze verbose p2;
 select * from pg_stats where tablename like 'part2';
 
 drop table multipart cascade;
+
+--
+-- Test column-specific ANALYZE correctly uses attnum-based NDV index (not loop index).
+-- When ANALYZE t(b) is run, the QD loop has i=0 for column b (attnum=2),
+-- so attnum-1=1 != i=0. Without the fix, colNDVBySeg[i=0] reads column a's NDV
+-- instead of column b's NDV.
+--
+CREATE TABLE analyze_col_ndv_drop (a int, b int, c int) DISTRIBUTED BY (a);
+INSERT INTO analyze_col_ndv_drop SELECT i%5, i, i%50 FROM generate_series(1, 100) i;
+-- ANALYZE specific column b: QD loop has i=0, b.attnum=2, so attnum-1=1 != i=0
+ANALYZE analyze_col_ndv_drop (b);
+-- stadistinctbyseg for b should be 100 (all distinct), not ~5 (NDV of column a at index 0)
+SELECT a.attname,
+       CASE WHEN s.stakind1 = 8 THEN array_to_string(s.stavalues1, ',')
+            WHEN s.stakind2 = 8 THEN array_to_string(s.stavalues2, ',')
+            WHEN s.stakind3 = 8 THEN array_to_string(s.stavalues3, ',')
+            WHEN s.stakind4 = 8 THEN array_to_string(s.stavalues4, ',')
+            WHEN s.stakind5 = 8 THEN array_to_string(s.stavalues5, ',')
+       END AS stadistinctbyseg
+FROM pg_statistic s
+JOIN pg_attribute a ON a.attrelid = s.starelid AND a.attnum = s.staattnum
+WHERE s.starelid = 'analyze_col_ndv_drop'::regclass AND a.attname = 'b';
+DROP TABLE analyze_col_ndv_drop;
