@@ -1,0 +1,12 @@
+pg_type
+pg_proc
+pg_class
+pg_attribute
+pg_user
+pg_statistic
+pg_class_oid_index
+pg_views
+pg_timezone_names
+pg_stat_database
+pg_tables
+pg_roles
