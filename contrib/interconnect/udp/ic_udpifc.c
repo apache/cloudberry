@@ -127,6 +127,11 @@ WSAPoll(
 #define RTO_MAX (100000) /* MAX RTO(ms) */
 #define UDP_INFINITE_SSTHRESH   0x7fffffff
 
+/* Clock ticks per second (used for timing calculations) */
+#ifndef HZ
+#define HZ 100
+#endif
+
 #define SEC_TO_USEC(t)                  ((t) * 1000000)
 #define SEC_TO_MSEC(t)                  ((t) * 1000)
 #define MSEC_TO_USEC(t)                 ((t) * 1000)
