@@ -121,7 +121,7 @@ log_section "Initial Setup"
 execute_cmd sudo rm -rf ${BUILD_DESTINATION} || exit 2
 execute_cmd sudo chmod a+w /usr/local || exit 2
 execute_cmd sudo mkdir -p ${BUILD_DESTINATION}/lib || exit 2
-if [[ "$OS_ID" == "rocky" && "$OS_VERSION" =~ ^(8|9) ]]; then
+if [[ "$OS_ID" == "rocky" && "$OS_VERSION" =~ ^(8|9|10) ]]; then
     execute_cmd sudo cp /usr/local/xerces-c/lib/libxerces-c.so \
                 /usr/local/xerces-c/lib/libxerces-c-3.3.so \
                 ${BUILD_DESTINATION}/lib || exit 3
