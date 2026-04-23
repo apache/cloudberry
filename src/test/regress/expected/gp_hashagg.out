@@ -414,8 +414,14 @@ select * from atable group by a,k;
 --   and either use GroupAgg or report a clear planning error
 SET optimizer_enable_groupagg=off;
 select * from atable group by a,k;
-ERROR:  could not implement GROUP BY
-DETAIL:  Some of the datatypes only support hashing, while others only support sorting.
+ k | a  
+---+----
+ 1 | 21
+ 2 | 22
+ 3 | 23
+ 4 | 24
+(4 rows)
+
 drop schema if exists tinc_base_types cascade;
 NOTICE:  drop cascades to 16 other objects
 DETAIL:  drop cascades to function int42_out(int42)
