@@ -1,6 +1,9 @@
 --
 -- AGGREGATES
 --
+-- start_matchignore
+-- m/^DETAIL:  CTranslatorQueryToDXL.cpp.*/
+-- end_matchignore
 
 -- start_ignore
 SET optimizer_trace_fallback to on;

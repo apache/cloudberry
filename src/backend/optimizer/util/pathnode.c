@@ -2180,14 +2180,28 @@ set_append_path_locus(PlannerInfo *root, Path *pathnode, RelOptInfo *rel,
 	 */
 	pathnode->parallel_workers = targetlocus.parallel_workers;
 
+	/*
+	 * set_append_path_locus may change parallel_workers (via targetlocus),
+	 * which can make it inconsistent with parallel_aware set by the caller.
+	 *
+	 * If parallel_workers was reduced to <= 1, force parallel_aware to false
+	 * to prevent inconsistent state (e.g., parallel_aware=true with
+	 * parallel_workers=0 causes cost_append to take the parallel branch
+	 * incorrectly, leading to memory corruption).
+	 *
+	 * Do NOT force parallel_aware to true when parallel_workers > 1, as that
+	 * would override the caller's setting (e.g., enable_parallel_append GUC),
+	 * causing barrier deadlocks in partitionwise join plans where Parallel
+	 * Append distributes Parallel Hash Join children across different workers.
+	 */
+	if (pathnode->parallel_workers <= 1)
+		pathnode->parallel_aware = false;
+
 	AssertImply(pathnode->parallel_workers > 1 &&
 				!CdbPathLocus_IsEntry(targetlocus) &&
 				!CdbPathLocus_IsOuterQuery(targetlocus) &&
 				!CdbPathLocus_IsGeneral(targetlocus) &&
 				!CdbPathLocus_IsSingleQE(targetlocus), targetlocus.parallel_workers > 1);
-	pathnode->parallel_workers = targetlocus.parallel_workers;
-	pathnode->parallel_aware = pathnode->parallel_workers > 1 ? true : false;
-
 	*subpaths_out = new_subpaths;
 
 	return true;

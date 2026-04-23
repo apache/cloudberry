@@ -191,8 +191,8 @@ SET enable_seqscan = 0;
 -- Check to see we get an incremental sort plan
 EXPLAIN (costs off)
 SELECT DISTINCT hundred, two FROM tenk1;
-                        QUERY PLAN
------------------------------------------------------------
+                            QUERY PLAN                            
+------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  GroupAggregate
          Group Key: hundred, two
@@ -200,12 +200,9 @@ SELECT DISTINCT hundred, two FROM tenk1;
                Sort Key: hundred, two
                ->  Redistribute Motion 3:3  (slice2; segments: 3)
                      Hash Key: hundred, two
-                     ->  GroupAggregate
-                           Group Key: hundred, two
-                           ->  Sort
-                                 Sort Key: hundred, two
-                                 ->  Seq Scan on tenk1
-(13 rows)
+                     ->  Seq Scan on tenk1
+ Optimizer: GPORCA
+(9 rows)
 
 RESET enable_seqscan;
 SET enable_hashagg=TRUE;

@@ -15,7 +15,7 @@
 
 GP_IGNORE: formatted by atmsort.pm
 -- start_matchignore
--- m/pg_waldump: fatal: error in WAL record at */
+-- m/pg_waldump: error: error in WAL record at */
 -- m/.*The 'DISTRIBUTED BY' clause determines the distribution of data*/
 -- m/.*Table doesn't have 'DISTRIBUTED BY' clause*/
 -- end_matchignore
@@ -29,9 +29,9 @@ CREATE
 
 -- Switch WAL file
 -1U: SELECT true FROM pg_switch_wal();
- bool 
-------
- t    
+ ?column? 
+----------
+ t        
 (1 row)
 -- Insert data (AO)
 -1U: INSERT INTO ao_foo SELECT generate_series(1,10);
@@ -87,9 +87,9 @@ rmgr: Appendonly  len (rec/tot):     50/    50, tx: ##, lsn: #/########, prev #/
 
 -- Switch WAL file
 -1U: SELECT true FROM pg_switch_wal();
- bool 
-------
- t    
+ ?column? 
+----------
+ t        
 (1 row)
 -- Insert data (AO)
 -1U: INSERT INTO ao_foo SELECT generate_series(1,10);

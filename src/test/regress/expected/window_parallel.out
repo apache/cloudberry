@@ -885,7 +885,7 @@ select b, count(*) from t1 group by b union all select b, count(*) from t2 group
 ------------------------------------------------------------------------------------------------------------------------
  Gather Motion 6:1  (slice1; segments: 6)
    Output: t1.b, (count(*))
-   ->  Parallel Append
+   ->  Append
          ->  HashAggregate
                Output: t1.b, count(*)
                Group Key: t1.b
@@ -916,7 +916,7 @@ select b, count(*) from t1 group by b union all select b, count(*) from t2 group
 -------------------------------------------------------------------------------------------------------------------------
  Gather Motion 6:1  (slice1; segments: 6)
    Output: t1.b, (count(*))
-   ->  Parallel Append
+   ->  Append
          ->  HashAggregate
                Output: t1.b, count(*)
                Group Key: t1.b
@@ -949,7 +949,7 @@ select b, count(*) from t1 group by b union all select b, count(*) from t2 group
 ------------------------------------------------------------------------------------------------------------------------
  Gather Motion 9:1  (slice1; segments: 9)
    Output: t1.b, (count(*))
-   ->  Parallel Append
+   ->  Append
          ->  HashAggregate
                Output: t1.b, count(*)
                Group Key: t1.b

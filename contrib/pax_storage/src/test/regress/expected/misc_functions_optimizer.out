@@ -594,16 +594,17 @@ SELECT * FROM tenk1 a JOIN my_gen_series(1,1000) g ON a.unique1 = g;
 (7 rows)
 
 EXPLAIN (COSTS OFF)
-SELECT * FROM tenk1 a JOIN my_gen_series(1,5) g ON a.unique1 = g;
-                      QUERY PLAN                       
--------------------------------------------------------
+SELECT * FROM tenk1 a JOIN my_gen_series(1,10) g ON a.unique1 = g;
+                     QUERY PLAN                     
+----------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
-   ->  Nested Loop
-         ->  Function Scan on my_gen_series g
-         ->  Index Scan using tenk1_unique1 on tenk1 a
-               Index Cond: (unique1 = g.g)
+   ->  Hash Join
+         Hash Cond: (a.unique1 = g.g)
+         ->  Seq Scan on tenk1 a
+         ->  Hash
+               ->  Function Scan on my_gen_series g
  Optimizer: Postgres query optimizer
-(6 rows)
+(7 rows)
 
 -- Test functions for control data
 SELECT count(*) > 0 AS ok FROM pg_control_checkpoint();

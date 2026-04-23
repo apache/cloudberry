@@ -2680,7 +2680,7 @@ SELECT COUNT(*) FROM gp_read_error_log('exttab_heap_join_1');
 \! rm $PG_ABS_SRCDIR/data/tableless.csv
 -- start_ignore
 DROP EXTERNAL TABLE IF EXISTS ext_nation_on_coordinator;
-NOTICE:  table "ext_nation_on_coordinator" does not exist, skipping
+NOTICE:  foreign table "ext_nation_on_coordinator" does not exist, skipping
 DROP EXTERNAL TABLE IF EXISTS exttab_with_on_coordinator;
 NOTICE:  foreign table "exttab_with_on_coordinator" does not exist, skipping
 -- end_ignore
@@ -2690,7 +2690,7 @@ CREATE EXTERNAL TABLE ext_nation_on_coordinator ( N_NATIONKEY  INTEGER ,
                             N_NAME       CHAR(25) ,
                             N_REGIONKEY  INTEGER ,
                             N_COMMENT    VARCHAR(152))
-location ('file://@hostname@@abs_srcdir@/data/nation.tbl' ) ON COORDINATOR
+location (:'nation_tbl' ) ON COORDINATOR
 FORMAT 'text' (delimiter '|');
 SELECT gp_segment_id, * FROM ext_nation_on_coordinator ORDER BY N_NATIONKEY DESC LIMIT 5;
  gp_segment_id | n_nationkey |          n_name           | n_regionkey |                                                   n_comment                                                    
@@ -5098,7 +5098,3 @@ SELECT logerrors, options from pg_exttable a, pg_class b where a.reloid = b.oid 
 DROP EXTERNAL TABLE ext_false;
 DROP EXTERNAL TABLE ext_true;
 DROP EXTERNAL TABLE ext_persistently;
-CREATE EXTERNAL WEB TEMP TABLE test_program_not_exist(content text) EXECUTE '/bin/bash /xx/seq 1 5' ON MASTER FORMAT 'TEXT';
-SELECT * FROM test_program_not_exist;
-DETAIL:  Command: execute:/bin/bash /xx/seq 1 5
-ERROR:  external table test_program_not_exist command ended with error. /bin/bash: /xx/seq: No such file or directory

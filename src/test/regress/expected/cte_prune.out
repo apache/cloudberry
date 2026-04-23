@@ -1191,85 +1191,88 @@ t WHERE cup.e < 10
 GROUP BY cup.c,cup.d, cup.e ,t.d, t.b
 ORDER BY 1,2,3,4
 LIMIT 10;
-                                                                                    QUERY PLAN                                                                                    
-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
- Limit  (cost=20000000026.93..20000000027.07 rows=10 width=56)
+                                                                                       QUERY PLAN                                                                                       
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Limit  (cost=20000000030.98..20000000031.12 rows=10 width=56)
    Output: cup.c, cup.d, cup.e, (sum(t.d) OVER (?)), t.d, t.b
-   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=20000000026.93..20000000027.35 rows=30 width=56)
+   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=20000000030.98..20000000031.41 rows=30 width=56)
          Output: cup.c, cup.d, cup.e, (sum(t.d) OVER (?)), t.d, t.b
          Merge Key: cup.c, cup.d, cup.e, (sum(t.d) OVER (?))
-         ->  Limit  (cost=20000000026.93..20000000026.95 rows=10 width=56)
+         ->  Limit  (cost=20000000030.98..20000000031.01 rows=10 width=56)
                Output: cup.c, cup.d, cup.e, (sum(t.d) OVER (?)), t.d, t.b
-               ->  Sort  (cost=20000000026.93..20000000027.21 rows=111 width=56)
+               ->  Sort  (cost=20000000030.98..20000000031.26 rows=111 width=56)
                      Output: cup.c, cup.d, cup.e, (sum(t.d) OVER (?)), t.d, t.b
                      Sort Key: cup.c, cup.d, cup.e, (sum(t.d) OVER (?))
-                     ->  WindowAgg  (cost=20000000022.58..20000000024.53 rows=111 width=56)
+                     ->  WindowAgg  (cost=20000000026.64..20000000028.58 rows=111 width=56)
                            Output: cup.c, cup.d, cup.e, sum(t.d) OVER (?), t.d, t.b
                            Partition By: t.b
-                           ->  Sort  (cost=20000000022.58..20000000022.86 rows=111 width=48)
+                           ->  Sort  (cost=20000000026.64..20000000026.91 rows=111 width=48)
                                  Output: cup.c, cup.d, cup.e, t.d, t.b
                                  Sort Key: t.b
-                                 ->  Redistribute Motion 3:3  (slice2; segments: 3)  (cost=20000000015.47..20000000018.81 rows=111 width=48)
+                                 ->  Redistribute Motion 3:3  (slice2; segments: 3)  (cost=20000000017.86..20000000022.86 rows=111 width=48)
                                        Output: cup.c, cup.d, cup.e, t.d, t.b
                                        Hash Key: t.b
-                                       ->  HashAggregate  (cost=20000000015.47..20000000016.58 rows=111 width=48)
+                                       ->  GroupAggregate  (cost=20000000017.86..20000000020.64 rows=111 width=48)
                                              Output: cup.c, cup.d, cup.e, t.d, t.b
                                              Group Key: cup.c, cup.d, cup.e, t.d, t.b
-                                             ->  Redistribute Motion 3:3  (slice3; segments: 3)  (cost=20000000008.36..20000000014.08 rows=111 width=48)
+                                             ->  Sort  (cost=20000000017.86..20000000018.14 rows=111 width=48)
                                                    Output: cup.c, cup.d, cup.e, t.d, t.b
-                                                   Hash Key: cup.c, cup.d, cup.e, t.d, t.b
-                                                   ->  Nested Loop  (cost=20000000008.36..20000000011.86 rows=111 width=48)
+                                                   Sort Key: cup.c, cup.d, cup.e, t.d, t.b
+                                                   ->  Redistribute Motion 3:3  (slice3; segments: 3)  (cost=20000000008.36..20000000014.08 rows=111 width=48)
                                                          Output: cup.c, cup.d, cup.e, t.d, t.b
-                                                         ->  Broadcast Motion 3:3  (slice4; segments: 3)  (cost=1.08..2.35 rows=10 width=8)
-                                                               Output: t.d, t.b
-                                                               ->  Subquery Scan on t  (cost=1.08..2.22 rows=3 width=8)
+                                                         Hash Key: cup.c, cup.d, cup.e, t.d, t.b
+                                                         ->  Nested Loop  (cost=20000000008.36..20000000011.86 rows=111 width=48)
+                                                               Output: cup.c, cup.d, cup.e, t.d, t.b
+                                                               ->  Broadcast Motion 3:3  (slice4; segments: 3)  (cost=1.08..2.35 rows=10 width=8)
                                                                      Output: t.d, t.b
-                                                                     ->  Hash Join  (cost=1.08..2.22 rows=3 width=12)
-                                                                           Output: t3.a, t3.b, t4.d
-                                                                           Hash Cond: (t4.d = t3.a)
-                                                                           ->  Redistribute Motion 3:3  (slice5; segments: 3)  (cost=0.00..1.10 rows=3 width=4)
-                                                                                 Output: t4.d
-                                                                                 Hash Key: t4.d
-                                                                                 ->  Seq Scan on cte_prune.t4  (cost=0.00..1.03 rows=3 width=4)
+                                                                     ->  Subquery Scan on t  (cost=1.08..2.22 rows=3 width=8)
+                                                                           Output: t.d, t.b
+                                                                           ->  Hash Join  (cost=1.08..2.22 rows=3 width=12)
+                                                                                 Output: t3.a, t3.b, t4.d
+                                                                                 Hash Cond: (t4.d = t3.a)
+                                                                                 ->  Redistribute Motion 3:3  (slice5; segments: 3)  (cost=0.00..1.10 rows=3 width=4)
                                                                                        Output: t4.d
-                                                                           ->  Hash  (cost=1.03..1.03 rows=3 width=8)
-                                                                                 Output: t3.a, t3.b
-                                                                                 ->  Seq Scan on cte_prune.t3  (cost=0.00..1.03 rows=3 width=8)
+                                                                                       Hash Key: t4.d
+                                                                                       ->  Seq Scan on cte_prune.t4  (cost=0.00..1.03 rows=3 width=4)
+                                                                                             Output: t4.d
+                                                                                 ->  Hash  (cost=1.03..1.03 rows=3 width=8)
                                                                                        Output: t3.a, t3.b
-                                                         ->  Materialize  (cost=10000000007.29..10000000008.15 rows=11 width=40)
-                                                               Output: cup.c, cup.d, cup.e
-                                                               ->  Subquery Scan on cup  (cost=10000000007.29..10000000008.09 rows=11 width=40)
+                                                                                       ->  Seq Scan on cte_prune.t3  (cost=0.00..1.03 rows=3 width=8)
+                                                                                             Output: t3.a, t3.b
+                                                               ->  Materialize  (cost=10000000007.29..10000000008.15 rows=11 width=40)
                                                                      Output: cup.c, cup.d, cup.e
-                                                                     Filter: (cup.e < '10'::numeric)
-                                                                     ->  WindowAgg  (cost=10000000007.29..10000000007.95 rows=33 width=48)
-                                                                           Output: t4_1.c, t4_1.d, avg(t3_1.b) OVER (?), t3_1.b, t3_1.a
-                                                                           Partition By: t3_1.a
-                                                                           Order By: t3_1.b
-                                                                           ->  Sort  (cost=10000000007.29..10000000007.37 rows=33 width=16)
-                                                                                 Output: t3_1.b, t3_1.a, t4_1.c, t4_1.d
-                                                                                 Sort Key: t3_1.a, t3_1.b DESC
-                                                                                 ->  Nested Loop  (cost=10000000001.08..10000000006.44 rows=33 width=16)
+                                                                     ->  Subquery Scan on cup  (cost=10000000007.29..10000000008.09 rows=11 width=40)
+                                                                           Output: cup.c, cup.d, cup.e
+                                                                           Filter: (cup.e < '10'::numeric)
+                                                                           ->  WindowAgg  (cost=10000000007.29..10000000007.95 rows=33 width=48)
+                                                                                 Output: t4_1.c, t4_1.d, avg(t3_1.b) OVER (?), t3_1.b, t3_1.a
+                                                                                 Partition By: t3_1.a
+                                                                                 Order By: t3_1.b
+                                                                                 ->  Sort  (cost=10000000007.29..10000000007.37 rows=33 width=16)
                                                                                        Output: t3_1.b, t3_1.a, t4_1.c, t4_1.d
-                                                                                       ->  Hash Join  (cost=1.08..2.22 rows=3 width=12)
-                                                                                             Output: t3_1.a, t3_1.b, t4_2.d
-                                                                                             Hash Cond: (t4_2.d = t3_1.a)
-                                                                                             ->  Redistribute Motion 3:3  (slice6; segments: 3)  (cost=0.00..1.10 rows=3 width=4)
-                                                                                                   Output: t4_2.d
-                                                                                                   Hash Key: t4_2.d
-                                                                                                   ->  Seq Scan on cte_prune.t4 t4_2  (cost=0.00..1.03 rows=3 width=4)
+                                                                                       Sort Key: t3_1.a, t3_1.b DESC
+                                                                                       ->  Nested Loop  (cost=10000000001.08..10000000006.44 rows=33 width=16)
+                                                                                             Output: t3_1.b, t3_1.a, t4_1.c, t4_1.d
+                                                                                             ->  Hash Join  (cost=1.08..2.22 rows=3 width=12)
+                                                                                                   Output: t3_1.a, t3_1.b, t4_2.d
+                                                                                                   Hash Cond: (t4_2.d = t3_1.a)
+                                                                                                   ->  Redistribute Motion 3:3  (slice6; segments: 3)  (cost=0.00..1.10 rows=3 width=4)
                                                                                                          Output: t4_2.d
-                                                                                             ->  Hash  (cost=1.03..1.03 rows=3 width=8)
-                                                                                                   Output: t3_1.a, t3_1.b
-                                                                                                   ->  Seq Scan on cte_prune.t3 t3_1  (cost=0.00..1.03 rows=3 width=8)
+                                                                                                         Hash Key: t4_2.d
+                                                                                                         ->  Seq Scan on cte_prune.t4 t4_2  (cost=0.00..1.03 rows=3 width=4)
+                                                                                                               Output: t4_2.d
+                                                                                                   ->  Hash  (cost=1.03..1.03 rows=3 width=8)
                                                                                                          Output: t3_1.a, t3_1.b
-                                                                                       ->  Materialize  (cost=0.00..1.22 rows=10 width=8)
-                                                                                             Output: t4_1.c, t4_1.d
-                                                                                             ->  Broadcast Motion 3:3  (slice7; segments: 3)  (cost=0.00..1.17 rows=10 width=8)
+                                                                                                         ->  Seq Scan on cte_prune.t3 t3_1  (cost=0.00..1.03 rows=3 width=8)
+                                                                                                               Output: t3_1.a, t3_1.b
+                                                                                             ->  Materialize  (cost=0.00..1.22 rows=10 width=8)
                                                                                                    Output: t4_1.c, t4_1.d
-                                                                                                   ->  Seq Scan on cte_prune.t4 t4_1  (cost=0.00..1.03 rows=3 width=8)
+                                                                                                   ->  Broadcast Motion 3:3  (slice7; segments: 3)  (cost=0.00..1.17 rows=10 width=8)
                                                                                                          Output: t4_1.c, t4_1.d
+                                                                                                         ->  Seq Scan on cte_prune.t4 t4_1  (cost=0.00..1.03 rows=3 width=8)
+                                                                                                               Output: t4_1.c, t4_1.d
  Optimizer: Postgres query optimizer
-(77 rows)
+(80 rows)
 
 WITH t(a,b,d) AS
 (

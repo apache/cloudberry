@@ -673,10 +673,10 @@ SELECT a, b FROM prt1 FULL JOIN prt2 p2(b,a,c) USING(a,b)
 -----------------------------------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    Merge Key: (COALESCE(prt1.a, p2.a)), (COALESCE(prt1.b, p2.b))
-   ->  Sort
-         Sort Key: (COALESCE(prt1.a, p2.a)), (COALESCE(prt1.b, p2.b))
-         ->  HashAggregate
-               Group Key: (COALESCE(prt1.a, p2.a)), (COALESCE(prt1.b, p2.b))
+   ->  GroupAggregate
+         Group Key: (COALESCE(prt1.a, p2.a)), (COALESCE(prt1.b, p2.b))
+         ->  Sort
+               Sort Key: (COALESCE(prt1.a, p2.a)), (COALESCE(prt1.b, p2.b))
                ->  Redistribute Motion 3:3  (slice2; segments: 3)
                      Hash Key: (COALESCE(prt1.a, p2.a)), (COALESCE(prt1.b, p2.b))
                      ->  Append

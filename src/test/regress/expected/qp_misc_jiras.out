@@ -4463,20 +4463,22 @@ from (
 	group by 1,2
      ) as t1 
 group by 1, 2;
-                                                     QUERY PLAN                                                     
---------------------------------------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)  (cost=34678876.67..34680543.33 rows=100000 width=36)
-   ->  HashAggregate  (cost=34678876.67..34679210.00 rows=33333 width=36)
+                                                        QUERY PLAN                                                        
+--------------------------------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=34707787.68..34711954.34 rows=100000 width=36)
+   ->  GroupAggregate  (cost=34707787.68..34710621.01 rows=33333 width=36)
          Group Key: ((c.bar_6325_attr)::integer), a.foo_6325_attr
-         ->  HashAggregate  (cost=34672210.00..34677210.00 rows=333333 width=36)
-               Group Key: (c.bar_6325_attr)::integer, a.foo_6325_attr
-               ->  Nested Loop  (cost=0.00..30025810.00 rows=929280000 width=36)
-                     ->  Seq Scan on foo_6325 a  (cost=0.00..210.00 rows=17600 width=32)
-                     ->  Materialize  (cost=0.00..1178.00 rows=52800 width=32)
-                           ->  Broadcast Motion 3:3  (slice2; segments: 3)  (cost=0.00..914.00 rows=52800 width=32)
-                                 ->  Seq Scan on bar_6325 c  (cost=0.00..210.00 rows=17600 width=32)
+         ->  Sort  (cost=34707787.68..34708621.01 rows=333333 width=36)
+               Sort Key: ((c.bar_6325_attr)::integer), a.foo_6325_attr
+               ->  HashAggregate  (cost=34672210.00..34677210.00 rows=333333 width=36)
+                     Group Key: (c.bar_6325_attr)::integer, a.foo_6325_attr
+                     ->  Nested Loop  (cost=0.00..30025810.00 rows=929280000 width=36)
+                           ->  Seq Scan on foo_6325 a  (cost=0.00..210.00 rows=17600 width=32)
+                           ->  Materialize  (cost=0.00..1178.00 rows=52800 width=32)
+                                 ->  Broadcast Motion 3:3  (slice2; segments: 3)  (cost=0.00..914.00 rows=52800 width=32)
+                                       ->  Seq Scan on bar_6325 c  (cost=0.00..210.00 rows=17600 width=32)
  Optimizer: Postgres query optimizer
-(11 rows)
+(13 rows)
 
 -- start_ignore
 drop table qp_misc_jiras.foo_6325;
