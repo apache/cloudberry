@@ -84,6 +84,8 @@ select test_protocol_allseg(1, 2,'f');
 ERROR:  PANIC for debug_dtm_action = 4, debug_dtm_action_protocol = Begin Internal Subtransaction (postgres.c:1490)  (seg1 127.0.1.1:25433 pid=27784)
 CONTEXT:  PL/pgSQL function test_protocol_allseg(integer,integer,character) line 9 during statement block entry
 -- make sure segment recovery is complete after panic.
+!\retcode bash -c 'for i in $(seq 1 120); do pg_isready -q -p 7002 && exit 0; sleep 0.5; done; exit 1';
+(exited with code 0)
 0U: select 1;
  ?column? 
 ----------
@@ -112,6 +114,8 @@ select test_protocol_allseg(1, 2,'f');
 ERROR:  DTX RollbackAndReleaseCurrentSubTransaction dispatch failed
 CONTEXT:  PL/pgSQL function test_protocol_allseg(integer,integer,character) line 19 during exception cleanup
 -- make sure segment recovery is complete after panic.
+!\retcode bash -c 'for i in $(seq 1 120); do pg_isready -q -p 7002 && exit 0; sleep 0.5; done; exit 1';
+(exited with code 0)
 0U: select 1;
  ?column? 
 ----------
@@ -140,6 +144,8 @@ select test_protocol_allseg(1, 2,'f');
 ERROR:  DTX RollbackAndReleaseCurrentSubTransaction dispatch failed
 CONTEXT:  PL/pgSQL function test_protocol_allseg(integer,integer,character) line 19 during exception cleanup
 -- make sure segment recovery is complete after panic.
+!\retcode bash -c 'for i in $(seq 1 120); do pg_isready -q -p 7002 && exit 0; sleep 0.5; done; exit 1';
+(exited with code 0)
 0U: select 1;
  ?column? 
 ----------
@@ -168,6 +174,8 @@ select test_protocol_allseg(1, 2,'f');
 ERROR:  DTX RollbackAndReleaseCurrentSubTransaction dispatch failed
 CONTEXT:  PL/pgSQL function test_protocol_allseg(integer,integer,character) line 18 during exception cleanup
 -- make sure segment recovery is complete after panic.
+!\retcode bash -c 'for i in $(seq 1 120); do pg_isready -q -p 7002 && exit 0; sleep 0.5; done; exit 1';
+(exited with code 0)
 0U: select 1;
  ?column? 
 ----------
@@ -196,6 +204,8 @@ select test_protocol_allseg(1, 2,'f');
 ERROR:  DTX RollbackAndReleaseCurrentSubTransaction dispatch failed
 CONTEXT:  PL/pgSQL function test_protocol_allseg(integer,integer,character) line 18 during exception cleanup
 -- make sure segment recovery is complete after panic.
+!\retcode bash -c 'for i in $(seq 1 120); do pg_isready -q -p 7002 && exit 0; sleep 0.5; done; exit 1';
+(exited with code 0)
 0U: select 1;
  ?column? 
 ----------
@@ -224,6 +234,8 @@ select test_protocol_allseg(1, 2,'f');
 ERROR:  DTX RollbackAndReleaseCurrentSubTransaction dispatch failed
 CONTEXT:  PL/pgSQL function test_protocol_allseg(integer,integer,character) line 18 during exception cleanup
 -- make sure segment recovery is complete after panic.
+!\retcode bash -c 'for i in $(seq 1 120); do pg_isready -q -p 7002 && exit 0; sleep 0.5; done; exit 1';
+(exited with code 0)
 0U: select 1;
  ?column? 
 ----------

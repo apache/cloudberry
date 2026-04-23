@@ -2622,7 +2622,9 @@ cdb_prepare_path_for_sorted_agg(PlannerInfo *root,
 {
 	CdbPathLocus locus;
 	bool		need_redistribute;
-	bool 		use_incremental_sort =  (presorted_keys != 0 && enable_incremental_sort);
+	bool 		use_incremental_sort =  (presorted_keys != 0 &&
+										 presorted_keys < list_length(group_pathkeys) &&
+										 enable_incremental_sort);
 
 	/*
 	 * If the input is already collected to a single segment, just add a Sort

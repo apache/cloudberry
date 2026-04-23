@@ -435,6 +435,8 @@ jobs:
                 --with-zstd \
                 --enable-debug-extensions \
                 --disable-gpcloud \
+                --enable-orafce \
+                --disable-pxf \
                 --with-pythonsrc-ext \
                 --with-gssapi \
                 --without-icu \
@@ -598,6 +600,11 @@ jobs:
         --hostname cdw
         --shm-size=2gb
         --ulimit core=-1
+        --cgroupns=host
+        -v /sys/fs/cgroup:/sys/fs/cgroup:rw
+        -v /usr/share:/host_usr_share
+        -v /usr/local:/host_usr_local
+        -v /opt:/host_opt
 
     steps:
       - name: Checkout Apache Cloudberry (cbdb-postgres-merge branch)
@@ -643,6 +650,150 @@ jobs:
 
           echo "SRC_DIR=${GITHUB_WORKSPACE}" | tee -a "$GITHUB_ENV"
           echo "LOGS_DIR=${LOGS_DIR}" | tee -a "$GITHUB_ENV"
+
+      - name: Setup cgroups
+        if: needs.check-skip.outputs.should_skip != 'true'
+        shell: bash
+        run: |
+          set -uxo pipefail
+
+          if [ "${{ matrix.enable_cgroups }}" = "true" ]; then
+
+            echo "Current mounts:"
+            mount | grep cgroup
+
+            CGROUP_BASEDIR=/sys/fs/cgroup
+
+            # 1. Basic setup with permissions
+            sudo chmod -R 777 ${CGROUP_BASEDIR}/
+            sudo mkdir -p ${CGROUP_BASEDIR}/gpdb
+            sudo chmod -R 777 ${CGROUP_BASEDIR}/gpdb
+            sudo chown -R gpadmin:gpadmin ${CGROUP_BASEDIR}/gpdb
+
+            # 2. Enable controllers
+            sudo bash -c "echo '+cpu +cpuset +memory +io' > ${CGROUP_BASEDIR}/cgroup.subtree_control" || true
+            sudo bash -c "echo '+cpu +cpuset +memory +io' > ${CGROUP_BASEDIR}/gpdb/cgroup.subtree_control" || true
+
+            # 3. CPU settings
+            sudo bash -c "echo 'max 100000' > ${CGROUP_BASEDIR}/gpdb/cpu.max" || true
+            sudo bash -c "echo '100' > ${CGROUP_BASEDIR}/gpdb/cpu.weight" || true
+            sudo bash -c "echo '0' > ${CGROUP_BASEDIR}/gpdb/cpu.weight.nice" || true
+            sudo bash -c "echo 0-$(( $(nproc) - 1 )) > ${CGROUP_BASEDIR}/gpdb/cpuset.cpus" || true
+            sudo bash -c "echo '0' > ${CGROUP_BASEDIR}/gpdb/cpuset.mems" || true
+
+            # 4. Memory settings
+            sudo bash -c "echo 'max' > ${CGROUP_BASEDIR}/gpdb/memory.max" || true
+            sudo bash -c "echo '0' > ${CGROUP_BASEDIR}/gpdb/memory.min" || true
+            sudo bash -c "echo 'max' > ${CGROUP_BASEDIR}/gpdb/memory.high" || true
+
+            # 5. IO settings
+            echo "Available block devices:"
+            lsblk
+
+            sudo bash -c "
+              if [ -f \${CGROUP_BASEDIR}/gpdb/io.stat ]; then
+                echo 'Detected IO devices:'
+                cat \${CGROUP_BASEDIR}/gpdb/io.stat
+              fi
+              echo '' > \${CGROUP_BASEDIR}/gpdb/io.max || true
+            "
+
+            # 6. Fix permissions again after all writes
+            sudo chmod -R 777 ${CGROUP_BASEDIR}/gpdb
+            sudo chown -R gpadmin:gpadmin ${CGROUP_BASEDIR}/gpdb
+
+            # 7. Check required files
+            echo "Checking required files:"
+            required_files=(
+                "cgroup.procs"
+                "cpu.max"
+                "cpu.pressure"
+                "cpu.weight"
+                "cpu.weight.nice"
+                "cpu.stat"
+                "cpuset.cpus"
+                "cpuset.mems"
+                "cpuset.cpus.effective"
+                "cpuset.mems.effective"
+                "memory.current"
+                "io.max"
+            )
+
+            for file in "${required_files[@]}"; do
+                if [ -f "${CGROUP_BASEDIR}/gpdb/$file" ]; then
+                    echo "✓ $file exists"
+                    ls -l "${CGROUP_BASEDIR}/gpdb/$file"
+                else
+                    echo "✗ $file missing"
+                fi
+            done
+
+            # 8. Test subdirectory creation
+            echo "Testing subdirectory creation..."
+            sudo -u gpadmin bash -c "
+              TEST_DIR=\${CGROUP_BASEDIR}/gpdb/test6448
+              if mkdir -p \$TEST_DIR; then
+                echo 'Created test directory'
+                sudo chmod -R 777 \$TEST_DIR
+                if echo \$\$ > \$TEST_DIR/cgroup.procs; then
+                  echo 'Successfully wrote to cgroup.procs'
+                  cat \$TEST_DIR/cgroup.procs
+                  # Move processes back to parent before cleanup
+                  echo \$\$ > \${CGROUP_BASEDIR}/gpdb/cgroup.procs
+                else
+                  echo 'Failed to write to cgroup.procs'
+                  ls -la \$TEST_DIR/cgroup.procs
+                fi
+                ls -la \$TEST_DIR/
+                rmdir \$TEST_DIR || {
+                  echo 'Moving all processes to parent before cleanup'
+                  cat \$TEST_DIR/cgroup.procs | while read pid; do
+                    echo \$pid > \${CGROUP_BASEDIR}/gpdb/cgroup.procs 2>/dev/null || true
+                  done
+                  rmdir \$TEST_DIR
+                }
+              else
+                echo 'Failed to create test directory'
+              fi
+            "
+
+            # 9. Verify setup as gpadmin user
+            echo "Testing cgroup access as gpadmin..."
+            sudo -u gpadmin bash -c "
+              echo 'Checking mounts...'
+              mount | grep cgroup
+
+              echo 'Checking /proc/self/mounts...'
+              cat /proc/self/mounts | grep cgroup
+
+              if ! grep -q cgroup2 /proc/self/mounts; then
+                  echo 'ERROR: cgroup2 mount NOT visible to gpadmin'
+                  exit 1
+              fi
+              echo 'SUCCESS: cgroup2 mount visible to gpadmin'
+
+              if ! [ -w ${CGROUP_BASEDIR}/gpdb ]; then
+                  echo 'ERROR: gpadmin cannot write to gpdb cgroup'
+                  exit 1
+              fi
+              echo 'SUCCESS: gpadmin can write to gpdb cgroup'
+
+              echo 'Verifying key files content:'
+              echo 'cpu.max:'
+              cat ${CGROUP_BASEDIR}/gpdb/cpu.max || echo 'Failed to read cpu.max'
+              echo 'cpuset.cpus:'
+              cat ${CGROUP_BASEDIR}/gpdb/cpuset.cpus || echo 'Failed to read cpuset.cpus'
+              echo 'cgroup.subtree_control:'
+              cat ${CGROUP_BASEDIR}/gpdb/cgroup.subtree_control || echo 'Failed to read cgroup.subtree_control'
+            "
+
+            # 10. Show final state
+            echo "Final cgroup state:"
+            ls -la ${CGROUP_BASEDIR}/gpdb/
+            echo "Cgroup setup completed successfully"
+          else
+            echo "Cgroup setup skipped"
+          fi
 
       - name: "Generate Test Job Summary Start: ${{ matrix.test }}"
         run: |

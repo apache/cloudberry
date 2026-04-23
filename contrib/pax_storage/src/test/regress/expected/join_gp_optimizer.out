@@ -2124,20 +2124,22 @@ union select foo.a, bar.b from foo join bar on foo.a = bar.a;
 --------------------------------------------------------------------------------
 explain (costs off) select foo.b,foo.c from foo left join bar on foo.a=bar.a union
 select bar.b,bar.c from bar left join foo on foo.a=bar.a;
-                            QUERY PLAN                            
-------------------------------------------------------------------
+                               QUERY PLAN                               
+------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  GroupAggregate
          Group Key: foo.b, foo.c
          ->  Sort
                Sort Key: foo.b, foo.c
-               ->  Redistribute Motion 3:3  (slice2; segments: 3)
-                     Hash Key: foo.b, foo.c
-                     ->  Append
+               ->  Append
+                     ->  Redistribute Motion 3:3  (slice2; segments: 3)
+                           Hash Key: foo.b, foo.c
                            ->  Seq Scan on foo
+                     ->  Redistribute Motion 3:3  (slice3; segments: 3)
+                           Hash Key: bar.b, bar.c
                            ->  Seq Scan on bar
  Optimizer: GPORCA
-(11 rows)
+(13 rows)
 
 select foo.b,foo.c from foo left join bar on foo.a=bar.a union
 select bar.b,bar.c from bar left join foo on foo.a=bar.a;

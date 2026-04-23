@@ -3104,19 +3104,18 @@ where not exists (select 1 from tbl_ra t2 where t2.b = t1.a) and t1.b < 2;
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Result
          Filter: (COALESCE((count(*)), '0'::bigint) = '0'::bigint)
-         ->  Hash Left Join
-               Hash Cond: (t1.a = t2.b)
-               ->  Bitmap Heap Scan on tbl_ra t1
-                     Recheck Cond: (b < 2)
-                     ->  Bitmap Index Scan on tbl_ra_b_idx
- Optimizer: GPORCA
-                           Index Cond: (b < 2)
+         ->  Hash Right Join
+               Hash Cond: (t2.b = t1.a)
+               ->  HashAggregate
+                     Group Key: t2.b
+                     ->  Redistribute Motion 3:3  (slice2; segments: 3)
+                           Hash Key: t2.b
+                           ->  Seq Scan on tbl_ra t2
                ->  Hash
-                     ->  HashAggregate
-                           Group Key: t2.b
-                           ->  Redistribute Motion 3:3  (slice2; segments: 3)
-                                 Hash Key: t2.b
-                                 ->  Seq Scan on tbl_ra t2
+                     ->  Bitmap Heap Scan on tbl_ra t1
+                           Recheck Cond: (b < 2)
+                           ->  Bitmap Index Scan on tbl_ra_b_idx
+                                 Index Cond: (b < 2)
  Optimizer: GPORCA
 (16 rows)
 

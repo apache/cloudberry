@@ -14,6 +14,9 @@ SHOW track_counts;  -- must be on
 -- ensure that both seqscan and indexscan plans are allowed
 SET enable_seqscan TO on;
 SET enable_indexscan TO on;
+-- disable parallel to avoid MPP parallel worker QEs whose stats flush
+-- is not covered by gp_stat_force_next_flush()
+SET enable_parallel TO off;
 -- for the moment, we don't want index-only scans here
 SET enable_indexonlyscan TO off;
 -- not enabled by default, but we want to test it...

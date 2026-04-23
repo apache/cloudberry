@@ -1010,9 +1010,7 @@ create_external_scan_uri_list(ExtTableEntry *ext, bool *ismasteronly)
 		else
 		{
 			/* no file for this segdb. add a null entry */
-			String 	   *n = makeNode(String);
-
-			filenames = lappend(filenames, n);
+			filenames = lappend(filenames, makeString(""));
 		}
 	}
 

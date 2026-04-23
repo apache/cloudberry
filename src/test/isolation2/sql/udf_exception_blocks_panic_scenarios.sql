@@ -103,6 +103,7 @@ SET debug_dtm_action_nestinglevel=0;
 DROP TABLE IF EXISTS employees;
 select test_protocol_allseg(1, 2,'f');
 -- make sure segment recovery is complete after panic.
+!\retcode bash -c 'for i in $(seq 1 120); do pg_isready -q -p 7002 && exit 0; sleep 0.5; done; exit 1';
 0U: select 1;
 0Uq:
 select * from employees;
@@ -116,6 +117,7 @@ SET debug_dtm_action_nestinglevel=0;
 DROP TABLE IF EXISTS employees;
 select test_protocol_allseg(1, 2,'f');
 -- make sure segment recovery is complete after panic.
+!\retcode bash -c 'for i in $(seq 1 120); do pg_isready -q -p 7002 && exit 0; sleep 0.5; done; exit 1';
 0U: select 1;
 0Uq:
 select * from employees;
@@ -129,6 +131,7 @@ SET debug_dtm_action_nestinglevel=4;
 DROP TABLE IF EXISTS employees;
 select test_protocol_allseg(1, 2,'f');
 -- make sure segment recovery is complete after panic.
+!\retcode bash -c 'for i in $(seq 1 120); do pg_isready -q -p 7002 && exit 0; sleep 0.5; done; exit 1';
 0U: select 1;
 0Uq:
 select * from employees;
@@ -142,6 +145,7 @@ SET debug_dtm_action_nestinglevel=3;
 DROP TABLE IF EXISTS employees;
 select test_protocol_allseg(1, 2,'f');
 -- make sure segment recovery is complete after panic.
+!\retcode bash -c 'for i in $(seq 1 120); do pg_isready -q -p 7002 && exit 0; sleep 0.5; done; exit 1';
 0U: select 1;
 0Uq:
 select * from employees;
@@ -155,6 +159,7 @@ SET debug_dtm_action_nestinglevel=0;
 DROP TABLE IF EXISTS employees;
 select test_protocol_allseg(1, 2,'f');
 -- make sure segment recovery is complete after panic.
+!\retcode bash -c 'for i in $(seq 1 120); do pg_isready -q -p 7002 && exit 0; sleep 0.5; done; exit 1';
 0U: select 1;
 0Uq:
 select * from employees;
@@ -168,6 +173,7 @@ SET debug_dtm_action_nestinglevel=3;
 DROP TABLE IF EXISTS employees;
 select test_protocol_allseg(1, 2,'f');
 -- make sure segment recovery is complete after panic.
+!\retcode bash -c 'for i in $(seq 1 120); do pg_isready -q -p 7002 && exit 0; sleep 0.5; done; exit 1';
 0U: select 1;
 0Uq:
 select * from employees;

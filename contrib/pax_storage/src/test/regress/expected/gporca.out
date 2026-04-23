@@ -13337,32 +13337,34 @@ from asset_records left join coverage
         and asset_records.active
 where  upper(coalesce(vendor, 'none')::text) <> 'some_vendor' and vendor_sla is not null
 group by asset_records.uid, asset_records.hostname, asset_records.asset_type, asset_records.os, asset_records.create_ts;
-                                                                                                            QUERY PLAN                                                                                                             
------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+                                                                                                               QUERY PLAN                                                                                                                
+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
-   ->  HashAggregate
+   ->  GroupAggregate
          Group Key: asset_records.uid, asset_records.hostname, asset_records.asset_type, asset_records.os, asset_records.create_ts
-         ->  Redistribute Motion 3:3  (slice2; segments: 3)
-               Hash Key: asset_records.uid, asset_records.hostname, asset_records.asset_type, asset_records.os, asset_records.create_ts
-               ->  Hash Join
-                     Hash Cond: ((upper((coverage.hostname)::text) = upper((asset_records.hostname)::text)) AND (coverage.date = asset_records.create_ts))
-                     ->  Seq Scan on coverage
-                           Filter: (vendor_sla IS NOT NULL)
-                     ->  Hash
-                           ->  Broadcast Motion 3:3  (slice3; segments: 3)
-                                 ->  Append
-                                       ->  Seq Scan on asset_records_1_prt_1 asset_records_1
-                                             Filter: (active AND (((asset_type)::text = 'xx'::text) OR ((asset_type)::text = 'yy'::text)) AND (upper((COALESCE(vendor, 'none'::character varying))::text) <> 'some_vendor'::text))
-                                       ->  Seq Scan on asset_records_1_prt_2 asset_records_2
-                                             Filter: (active AND (((asset_type)::text = 'xx'::text) OR ((asset_type)::text = 'yy'::text)) AND (upper((COALESCE(vendor, 'none'::character varying))::text) <> 'some_vendor'::text))
-                                       ->  Seq Scan on asset_records_1_prt_3 asset_records_3
-                                             Filter: (active AND (((asset_type)::text = 'xx'::text) OR ((asset_type)::text = 'yy'::text)) AND (upper((COALESCE(vendor, 'none'::character varying))::text) <> 'some_vendor'::text))
-                                       ->  Seq Scan on asset_records_1_prt_4 asset_records_4
-                                             Filter: (active AND (((asset_type)::text = 'xx'::text) OR ((asset_type)::text = 'yy'::text)) AND (upper((COALESCE(vendor, 'none'::character varying))::text) <> 'some_vendor'::text))
-                                       ->  Seq Scan on asset_records_1_prt_5 asset_records_5
-                                             Filter: (active AND (((asset_type)::text = 'xx'::text) OR ((asset_type)::text = 'yy'::text)) AND (upper((COALESCE(vendor, 'none'::character varying))::text) <> 'some_vendor'::text))
+         ->  Sort
+               Sort Key: asset_records.uid, asset_records.hostname, asset_records.asset_type, asset_records.os, asset_records.create_ts
+               ->  Redistribute Motion 3:3  (slice2; segments: 3)
+                     Hash Key: asset_records.uid, asset_records.hostname, asset_records.asset_type, asset_records.os, asset_records.create_ts
+                     ->  Hash Join
+                           Hash Cond: ((upper((coverage.hostname)::text) = upper((asset_records.hostname)::text)) AND (coverage.date = asset_records.create_ts))
+                           ->  Seq Scan on coverage
+                                 Filter: (vendor_sla IS NOT NULL)
+                           ->  Hash
+                                 ->  Broadcast Motion 3:3  (slice3; segments: 3)
+                                       ->  Append
+                                             ->  Seq Scan on asset_records_1_prt_1 asset_records_1
+                                                   Filter: (active AND (((asset_type)::text = 'xx'::text) OR ((asset_type)::text = 'yy'::text)) AND (upper((COALESCE(vendor, 'none'::character varying))::text) <> 'some_vendor'::text))
+                                             ->  Seq Scan on asset_records_1_prt_2 asset_records_2
+                                                   Filter: (active AND (((asset_type)::text = 'xx'::text) OR ((asset_type)::text = 'yy'::text)) AND (upper((COALESCE(vendor, 'none'::character varying))::text) <> 'some_vendor'::text))
+                                             ->  Seq Scan on asset_records_1_prt_3 asset_records_3
+                                                   Filter: (active AND (((asset_type)::text = 'xx'::text) OR ((asset_type)::text = 'yy'::text)) AND (upper((COALESCE(vendor, 'none'::character varying))::text) <> 'some_vendor'::text))
+                                             ->  Seq Scan on asset_records_1_prt_4 asset_records_4
+                                                   Filter: (active AND (((asset_type)::text = 'xx'::text) OR ((asset_type)::text = 'yy'::text)) AND (upper((COALESCE(vendor, 'none'::character varying))::text) <> 'some_vendor'::text))
+                                             ->  Seq Scan on asset_records_1_prt_5 asset_records_5
+                                                   Filter: (active AND (((asset_type)::text = 'xx'::text) OR ((asset_type)::text = 'yy'::text)) AND (upper((COALESCE(vendor, 'none'::character varying))::text) <> 'some_vendor'::text))
  Optimizer: Postgres query optimizer
-(23 rows)
+(25 rows)
 
 -- IndexApply-PartResolverExpand.mdp
 -- from comment

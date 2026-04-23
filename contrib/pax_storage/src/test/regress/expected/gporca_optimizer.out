@@ -10074,6 +10074,8 @@ create index bm_multi_test_idx_part on orca.bm_dyn_test_multilvl_part using bitm
 analyze orca.bm_dyn_test_multilvl_part;
 -- print name of parent index
 explain select * from orca.bm_dyn_test_multilvl_part where year = 2019;
+INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
+DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: Multi-level partitioned tables
                                                                       QUERY PLAN                                                                      
 ------------------------------------------------------------------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..5.13 rows=59 width=18)
@@ -10859,14 +10861,12 @@ explain select * from foo where b in ('1', '2');
 set optimizer_enable_ctas = off;
 set log_statement='none';
 set log_min_duration_statement=-1;
-set pax.enable_debug to off;
 set client_min_messages='log';
 create table foo_ctas(a) as (select generate_series(1,10)) distributed by (a);
 "Falling back to Postgres-based planner because GPORCA does not support the following feature: CTAS. Set optimizer_enable_ctas to on to enable CTAS with GPORCA",
 INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
 DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: CTAS. Set optimizer_enable_ctas to on to enable CTAS with GPORCA
 reset client_min_messages;
-reset pax.enable_debug;
 reset log_min_duration_statement;
 reset log_statement;
 reset optimizer_enable_ctas;
@@ -11660,6 +11660,8 @@ update gp_distribution_policy set numsegments = numsegments-1 where localoid = '
 reset allow_system_table_mods;
 -- populate the tables on this smaller cluster
 explain insert into gpexp_hash select i, i from generate_series(1,50) i;
+INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
+DETAIL:  Unknown error: Partially Distributed Data
                                        QUERY PLAN                                        
 -----------------------------------------------------------------------------------------
  Insert on gpexp_hash  (cost=0.00..1.25 rows=0 width=0)
@@ -12063,8 +12065,6 @@ EXPLAIN SELECT a, b FROM atab_old_hash FULL JOIN btab_old_hash ON a |=| b;
 (28 rows)
 
 SELECT a, b FROM atab_old_hash FULL JOIN btab_old_hash ON a |=| b;
-INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
-DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: Invalid system target list found for AO table
  a  | b  
 ----+----
     |  2

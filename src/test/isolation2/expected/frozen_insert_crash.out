@@ -141,8 +141,8 @@ CREATE
 -- If this test failed due to WAL size, please check to see if the xl_heap_freeze_tuple struct
 -- has changed, and if we should initialize any new field in heap_freeze_tuple_no_cutoff().
 ! seg0_datadir=$(psql -At -c "select datadir from gp_segment_configuration where content = 0 and role = 'p'" postgres) && seg0_last_wal_file=$(psql -At -c "SELECT pg_walfile_name(pg_current_wal_lsn()) from gp_dist_random('gp_id') where gp_segment_id = 0" postgres) && pg_waldump ${seg0_last_wal_file} -p ${seg0_datadir}/pg_wal | grep FREEZE_PAGE;
-rmgr: Heap2       len (rec/tot):     64/    64, tx:       3751, lsn: 0/C00000A0, prev 0/C0000028, desc: FREEZE_PAGE cutoff xid 0 ntuples 1, blkref #0: rel 1663/197077/212994 blk 0
-rmgr: Heap2       len (rec/tot):     64/    64, tx:       3751, lsn: 0/C0000210, prev 0/C00001C0, desc: FREEZE_PAGE cutoff xid 0 ntuples 1, blkref #0: rel 1663/197077/7023 blk 0
+rmgr: Heap2       len (rec/tot):     67/    67, tx:       3751, lsn: 0/C00000A0, prev 0/C0000028, desc: FREEZE_PAGE snapshotConflictHorizon: 0, nplans: 1, plans: [{ xmax: 0, infomask: 2816, infomask2: 8, ntuples: 1, offsets: [1] }], blkref #0: rel 1663/197077/212994 blk 0
+rmgr: Heap2       len (rec/tot):     67/    67, tx:       3751, lsn: 0/C0000210, prev 0/C00001C0, desc: FREEZE_PAGE snapshotConflictHorizon: 0, nplans: 1, plans: [{ xmax: 0, infomask: 2816, infomask2: 3, ntuples: 1, offsets: [28] }], blkref #0: rel 1663/197077/7023 blk 0
 
 
 -- inject a panic and resume in same way as Case 1. But this time we will be able to replay the frozen insert.
@@ -313,6 +313,9 @@ INSERT 1
 2<:  <... completed>
 ERROR:  fault triggered, fault name:'qe_exec_finished' fault type:'panic'
 1q: ... <quitting>
+-- wait for segment to complete recovering
+!\retcode bash -c 'for i in $(seq 1 120); do pg_isready -q -p 7002 && exit 0; sleep 0.5; done; exit 1';
+(exited with code 0)
 -- check the lov table content w/ table vs index scan, neither should see the
 -- new inserted row (b=2)
 0U: set enable_indexscan = on;
@@ -381,7 +384,7 @@ INSERT 1
 (1 row)
 -- While we are on it, check the wal record for the freeze operation.
 ! seg0_datadir=$(psql -At -c "select datadir from gp_segment_configuration where content = 0 and role = 'p'" postgres) && seg0_last_wal_file=$(psql -At -c "SELECT pg_walfile_name(pg_current_wal_lsn()) from gp_dist_random('gp_id') where gp_segment_id = 0" postgres) && pg_waldump ${seg0_last_wal_file} -p ${seg0_datadir}/pg_wal | grep FREEZE_PAGE;
-rmgr: Heap2       len (rec/tot):     64/    64, tx:        950, lsn: 0/280001E0, prev 0/28000198, desc: FREEZE_PAGE cutoff xid 0 ntuples 1, blkref #0: rel 1663/17018/98313 blk 0
+rmgr: Heap2       len (rec/tot):     67/    67, tx:        950, lsn: 0/280001E0, prev 0/28000198, desc: FREEZE_PAGE snapshotConflictHorizon: 0, nplans: 1, plans: [{ xmax: 0, infomask: 2816, infomask2: 3, ntuples: 1, offsets: [2] }], blkref #0: rel 1663/17018/98313 blk 0
 
 -- inject a panic and resume in same way as Case 1. But this time we will be able to replay the frozen insert.
 -- skip FTS probe to prevent unexpected mirror promotion
@@ -408,6 +411,9 @@ rmgr: Heap2       len (rec/tot):     64/    64, tx:        950, lsn: 0/280001E0,
 2<:  <... completed>
 ERROR:  fault triggered, fault name:'qe_exec_finished' fault type:'panic'
 1q: ... <quitting>
+-- wait for segment to complete recovering
+!\retcode bash -c 'for i in $(seq 1 120); do pg_isready -q -p 7002 && exit 0; sleep 0.5; done; exit 1';
+(exited with code 0)
 -- check the lov table content w/ table vs index scan, both should see the
 -- new inserted row (b=2)
 0U: set enable_indexscan = on;
