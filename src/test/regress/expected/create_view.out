@@ -1655,7 +1655,7 @@ ERROR:  cannot drop column f3 of table tt14t because other objects depend on it
 DETAIL:  view tt14v depends on column f3 of table tt14t
 HINT:  Use DROP ... CASCADE to drop the dependent objects too.
 -- MERGE16_FIXME: delete command can only delete tuples from master, But we
--- need to delete them from both master and segments.
+-- need to delete them from both master and segments
     
 -- We used to have a bug that would allow the above to succeed, posing
 -- hazards for later execution of the view.  Check that the internal
