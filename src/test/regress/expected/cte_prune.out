@@ -996,7 +996,7 @@ select t1.v1 from t1 where t1.v1 in (select item_sk from frequent_ss_items where
                                                                            Output: tpcds_item_1.i_item_desc, tpcds_item_1.i_item_sk
                                                                            Filter: (tpcds_item_1.i_item_sk > 0)
  Optimizer: Postgres query optimizer
-(88 rows)
+(89 rows)
 
 -- sql 95
 explain verbose with ws_wh as
@@ -1077,7 +1077,7 @@ select * from t1 where t1.v1 in (select ws_order_number from ws_wh where true) a
                                                                ->  Seq Scan on cte_prune.t1  (cost=0.00..1.03 rows=3 width=12)
                                                                      Output: t1.v1, t1.v2, t1.v3, RowIdExpr
  Optimizer: Postgres query optimizer
-(70 rows)
+(71 rows)
 
 explain verbose with ws_wh as
 (select ws1.ws_order_number,ws1.ws_warehouse_sk wh1,ws2.ws_warehouse_sk wh2
@@ -1158,7 +1158,7 @@ select * from t1 where t1.v1 in (select wh1 from ws_wh where true) and t1.v1 in 
                                                                      ->  Seq Scan on cte_prune.t1  (cost=0.00..1.03 rows=3 width=12)
                                                                            Output: t1.v1, t1.v2, t1.v3, RowIdExpr
  Optimizer: Postgres query optimizer
-(71 rows)
+(72 rows)
 
 -- start_ignore
 drop table tpcds_store_sales;
@@ -1269,7 +1269,7 @@ LIMIT 10;
                                                                                                    ->  Seq Scan on cte_prune.t4 t4_1  (cost=0.00..1.03 rows=3 width=8)
                                                                                                          Output: t4_1.c, t4_1.d
  Optimizer: Postgres query optimizer
-(76 rows)
+(77 rows)
 
 WITH t(a,b,d) AS
 (
@@ -1496,7 +1496,7 @@ where country.percentage = countrylanguage.percentage order by countrylanguage.C
                                                                                  Output: country_2.code, country_2.name, country_2.capital
                                                                                  Filter: (country_2.continent = 'Europe'::text)
  Optimizer: Postgres query optimizer
-(75 rows)
+(76 rows)
 
 -- CTE in the main query and subqueries within the main query
 explain verbose with bad_headofstates as 
@@ -1624,7 +1624,7 @@ order by OUTERMOST_FOO.region,bad_headofstates.headofstate LIMIT 40;
                                                                                        ->  Seq Scan on cte_prune.city  (cost=0.00..126.33 rows=9233 width=4)
                                                                                              Output: city.id
  Optimizer: Postgres query optimizer
-(104 rows)
+(105 rows)
 
 -- start_ignore
 drop table city;
