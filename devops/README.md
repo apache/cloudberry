@@ -17,6 +17,7 @@
   under the License.
 -->
 
+
 # Auto-Build Apache Cloudberry from Source Code
 
 You can build Apache Cloudberry from source code in two ways: manually or automatically.
@@ -24,6 +25,94 @@ You can build Apache Cloudberry from source code in two ways: manually or automa
 For the manual build, you need to manually set up many system configurations and download third-party dependencies, which is quite cumbersome and error-prone.
 
 To make the job easier, it is recommended that you use the automated deployment method and scripts provided here. The automation method simplifies the deployment process, reduces time costs, and allows developers to focus more on business code development.
+
+## Local test container with a mounted checkout
+
+You can run tests against a local checkout without installing build
+dependencies on the host by using the published Cloudberry build image and a
+bind mount. The source tree remains on the host, so edits made on the host or
+inside the container affect the same files.
+
+From the repository root, start a long-running container:
+
+```bash
+docker run -dit \
+    --privileged \
+    --user root \
+    --hostname cdw \
+    --name cloudberry-devtest \
+    --shm-size=2gb \
+    --ulimit core=-1 \
+    --cgroupns=host \
+    -e SRC_DIR=/workspace/cloudberry \
+    -e BUILD_DESTINATION=/usr/local/cloudberry-db \
+    -v /sys/fs/cgroup:/sys/fs/cgroup:rw \
+    -v "$PWD":/workspace/cloudberry \
+    -w /workspace/cloudberry \
+    apache/incubator-cloudberry:cbdb-build-rocky9-latest \
+    bash -lc "sleep infinity"
+```
+
+Enter the container as `gpadmin`:
+
+```bash
+docker exec -it --user gpadmin -w /workspace/cloudberry cloudberry-devtest bash
+```
+
+Configure new interactive shells to source the installed and demo cluster
+environments automatically after those files exist:
+
+```bash
+grep -q "Cloudberry devtest environment" ~/.bashrc || cat >> ~/.bashrc <<'EOF'
+# Cloudberry devtest environment
+if [ -r "$BUILD_DESTINATION/cloudberry-env.sh" ]; then
+    source "$BUILD_DESTINATION/cloudberry-env.sh"
+fi
+if [ -r "$SRC_DIR/gpAux/gpdemo/gpdemo-env.sh" ]; then
+    source "$SRC_DIR/gpAux/gpdemo/gpdemo-env.sh"
+fi
+EOF
+```
+
+After the build and demo cluster are created, run `exec bash` in the current
+shell to reload `~/.bashrc` and pick up those environments immediately.
+
+Prepare the build and demo cluster inside the container:
+
+```bash
+/tmp/init_system.sh
+cd "$SRC_DIR"
+
+./devops/build/automation/cloudberry/scripts/configure-cloudberry.sh
+./devops/build/automation/cloudberry/scripts/build-cloudberry.sh
+./devops/build/automation/cloudberry/scripts/create-cloudberry-demo-cluster.sh
+
+exec bash
+```
+
+After changing code, rebuild the relevant parts or rerun the build script, then
+run the tests you need. For example:
+
+```bash
+PGOPTIONS="-c optimizer=off" make -C src/test/regress installcheck-small
+PGOPTIONS="-c optimizer=off" make -C src/test/regress installcheck-tests TESTS="insert"
+make -C src/test/isolation2 installcheck-isolation2
+```
+
+If `psql`, `pg_config`, or the Python `pg` module is missing, run `exec bash`
+to reload `~/.bashrc`. You can also source the environments explicitly:
+
+```bash
+source "$BUILD_DESTINATION/cloudberry-env.sh"
+source "$SRC_DIR/gpAux/gpdemo/gpdemo-env.sh"
+```
+
+Stop and remove the container when it is no longer needed:
+
+```bash
+docker stop cloudberry-devtest
+docker rm cloudberry-devtest
+```
 
 ## 1. Setup Docker environment
 
