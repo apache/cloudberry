@@ -17,7 +17,6 @@
   under the License.
 -->
 
-
 # Auto-Build Apache Cloudberry from Source Code
 
 You can build Apache Cloudberry from source code in two ways: manually or automatically.
