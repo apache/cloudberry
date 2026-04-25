@@ -788,7 +788,7 @@ ERROR:  duplicate key value violates unique constraint "dir_table1_pkey"
 DETAIL:  Key (relative_path)=(nation1) already exists.
 COPY BINARY dir_table1 FROM :'nation_file' 'nation2' 'nation2'; -- fail
 ERROR:  syntax error at or near "'nation2'"
-LINE 1: ...rrydb/src/test/regress/data/nation.csv' 'nation2' 'nation2';
+LINE 1: ...berry/src/test/regress/data/nation.csv' 'nation2' 'nation2';
                                                              ^
 COPY BINARY dir_table1 FROM :'nation_file' 'nation2';
 NOTICE:  dir_table1 INSERT AFTER ROW  (seg2 127.0.1.1:7004 pid=900444)
