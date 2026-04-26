@@ -223,7 +223,6 @@ jobs:
           DEFAULT_ENABLE_CGROUPS=false
           DEFAULT_ENABLE_CORE_CHECK=true
           DEFAULT_PG_SETTINGS_OPTIMIZER=""
-
           # Define base test configurations
           ALL_TESTS='{
             "include": [
@@ -1601,8 +1600,6 @@ jobs:
               overall_status=1
               continue
             fi
-
-            # Parse this configuration's results
 
             MAKE_NAME="${{ matrix.test }}-config$i" \
             "${SRC_DIR}"/devops/build/automation/cloudberry/scripts/parse-test-results.sh "$config_log"

@@ -49,6 +49,12 @@ ANALYZE_ROOT_SQL = """analyze rootpartition %s"""
 REPORTS_ARE_STALE_AFTER_N_DAYS = 8
 NUM_REPORTS_TO_SAVE = 3
 
+
+def safe_log_string(value):
+    if isinstance(value, str):
+        return value.encode('ascii', 'backslashreplace').decode('ascii')
+    return str(value)
+
 GET_ALL_DATA_TABLES_SQL = """
 select n.nspname as schemaname, c.relname as tablename
 from pg_class c, pg_namespace n
@@ -430,7 +436,7 @@ class AnalyzeDb(Operation):
                     target = self._get_tablename_with_cols(can_schema, can_table, input_col_dict)
                 else:  # can in root_partition_col_dict
                     target = self._get_tablename_with_cols(can_schema, can_table, root_partition_col_dict)
-                logger.info(target)
+                logger.info(safe_log_string(target))
                 target_list.append(target)
             logger.info("---------------------------------------------------")
 
@@ -951,7 +957,10 @@ class AnalyzeDb(Operation):
 # Create a Command object that executes a query using psql.
 def create_psql_command(dbname, query):
     psql_cmd = """psql %s -c %s""" % (pipes.quote(dbname), pipes.quote(query))
-    return Command(query, psql_cmd)
+    # Keep the command text intact for execution, but make the display name
+    # ASCII-safe so logger/output paths do not choke on UTF-8 identifiers.
+    safe_query_display = query.encode('ascii', 'backslashreplace').decode('ascii')
+    return Command(safe_query_display, psql_cmd)
 
 
 def run_sql(conn, query):
@@ -1402,13 +1411,13 @@ class AnalyzeWorker(Worker):
                     self.cmd = None
                     return
                 elif self.pool.should_stop:
-                    self.logger.debug("[%s] got cmd and pool is stopped: %s" % (self.name, self.cmd))
+                    self.logger.debug("[%s] got cmd and pool is stopped: %s" % (self.name, safe_log_string(self.cmd)))
                     self.pool.markTaskDone()
                     self.cmd = None
                 else:
                     # run the command
                     # get rid of the gucs for displaying in the log
-                    cmd_display = re.sub(r'set .*;\s*', '', self.cmd.name)
+                    cmd_display = safe_log_string(re.sub(r'set .*;\s*', '', self.cmd.name))
                     self.logger.info("[%s] started  %s" % (self.name, cmd_display))
                     start_time = time.time()
                     self.cmd.run()
@@ -1425,7 +1434,7 @@ class AnalyzeWorker(Worker):
             except Exception as e:
                 self.logger.exception(e)
                 if self.cmd:
-                    self.logger.debug("[%s] finished cmd with exception: %s" % (self.name, self.cmd))
+                    self.logger.debug("[%s] finished cmd with exception: %s" % (self.name, safe_log_string(self.cmd)))
                     self.pool.addFinishedWorkItem(self.cmd)
                     self.cmd = None
 

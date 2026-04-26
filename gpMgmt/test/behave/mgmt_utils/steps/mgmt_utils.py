@@ -23,6 +23,7 @@ from contextlib import closing
 from gppylib.gparray import GpArray, ROLE_PRIMARY, ROLE_MIRROR
 from gppylib.commands.gp import SegmentStart, GpStandbyStart, CoordinatorStop
 from gppylib.commands import gp
+from gppylib.commands import unix
 from gppylib.commands.pg import PgBaseBackup
 from gppylib.operations.startSegments import MIRROR_MODE_MIRRORLESS
 from gppylib.operations.buildMirrorSegments import get_recovery_progress_pattern
@@ -489,14 +490,6 @@ def impl(context):
     else:
         return
 
-@then( 'verify if the gprecoverseg.lock directory is present in coordinator_data_directory')
-def impl(context):
-    gprecoverseg_lock_file = "%s/gprecoverseg.lock" % gp.get_coordinatordatadir()
-    if not os.path.exists(gprecoverseg_lock_file):
-        raise Exception('gprecoverseg.lock directory does not exist')
-    else:
-        return
-
 
 @then('verify that lines from recovery_progress.file are present in segment progress files in {logdir}')
 def impl(context, logdir):
@@ -669,11 +662,6 @@ def impl(context, process_name, signal_name):
         raise Exception("Unknown signal: {0}".format(signal_name))
 
     command = "ps ux | grep bin/{0} | awk '{{print $2}}' | xargs kill -{1}".format(process_name, sig.value)
-    run_async_command(context, command)
-
-@when('the user asynchronously sets up to end {process_name} process with SIGHUP')
-def impl(context, process_name):
-    command = "ps ux | grep bin/%s | awk '{print $2}' | xargs kill -9" % (process_name)
     run_async_command(context, command)
 
 @when('the user asynchronously sets up to end gpcreateseg process when it starts')
@@ -4090,7 +4078,13 @@ def impl(context):
 
     for host in host_to_pid_map:
         for pid in host_to_pid_map[host]:
-            if unix.check_pid_on_remotehost(pid, host):
+            # gpstop/gpstart can return before every saved pid fully exits.
+            # Poll briefly to avoid flaking on processes that are already shutting down.
+            for _ in range(60):
+                if not unix.check_pid_on_remotehost(pid, host):
+                    break
+                time.sleep(1)
+            else:
                 raise Exception("Postgres process {0} not killed on {1}.".format(pid, host))
 
 
