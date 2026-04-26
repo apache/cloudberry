@@ -68,12 +68,14 @@ SELECT count(*) FROM booltmp WHERE a >  true;
 SET enable_bitmapscan=off;
 EXPLAIN (COSTS OFF)
 SELECT * FROM booltmp WHERE a;
-                QUERY PLAN                
-------------------------------------------
- Gather Motion 1:1  (slice1; segments: 1)
-   ->  Index Only Scan using boolidx on booltmp
+                QUERY PLAN                 
+-------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Index Scan using boolidx on booltmp
          Index Cond: (a = true)
-(3 rows)
+         Filter: (a = true)
+ Optimizer: GPORCA
+(5 rows)
 
 SELECT * FROM booltmp WHERE a;
  a 
@@ -83,12 +85,14 @@ SELECT * FROM booltmp WHERE a;
 
 EXPLAIN (COSTS OFF)
 SELECT * FROM booltmp WHERE NOT a;
-                QUERY PLAN                
-------------------------------------------
- Gather Motion 1:1  (slice1; segments: 1)
-   ->  Index Only Scan using boolidx on booltmp
+                QUERY PLAN                 
+-------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Index Scan using boolidx on booltmp
          Index Cond: (a = false)
-(3 rows)
+         Filter: (a = false)
+ Optimizer: GPORCA
+(5 rows)
 
 SELECT * FROM booltmp WHERE NOT a;
  a 

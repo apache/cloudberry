@@ -1137,7 +1137,7 @@ select t1.v1 from t1 where t1.v1 in (select item_sk from frequent_ss_items where
                            Output: share0_ref2.i_item_sk
  Settings: enable_parallel = 'off', optimizer = 'on'
  Optimizer: GPORCA
-(55 rows)
+(54 rows)
 
 -- sql 95
 explain verbose with ws_wh as
@@ -1192,7 +1192,7 @@ select * from t1 where t1.v1 in (select ws_order_number from ws_wh where true) a
                                  Output: share0_ref2.ws_order_number
  Settings: enable_parallel = 'off', optimizer = 'on'
  Optimizer: GPORCA
-(44 rows)
+(43 rows)
 
 explain verbose with ws_wh as
 (select ws1.ws_order_number,ws1.ws_warehouse_sk wh1,ws2.ws_warehouse_sk wh2
@@ -1248,7 +1248,7 @@ select * from t1 where t1.v1 in (select wh1 from ws_wh where true) and t1.v1 in 
                                        Output: share0_ref2.ws_order_number, share0_ref2.ws_warehouse_sk
  Settings: enable_parallel = 'off', optimizer = 'on'
  Optimizer: GPORCA
-(46 rows)
+(45 rows)
 
 -- start_ignore
 drop table tpcds_store_sales;
@@ -1372,7 +1372,7 @@ LIMIT 10;
                                                                                                                Output: share0_ref2.a, share0_ref2.b, share0_ref2.d
  Settings: optimizer = 'on'
  Optimizer: GPORCA
-(93 rows)
+(92 rows)
 
 WITH t(a,b,d) AS
 (
@@ -1615,7 +1615,7 @@ where country.percentage = countrylanguage.percentage order by countrylanguage.C
                                                                            Index Cond: (countrylanguage_1.countrycode = share0_ref2.code)
  Settings: enable_parallel = 'off', optimizer = 'on'
  Optimizer: GPORCA
-(74 rows)
+(73 rows)
 
 -- CTE in the main query and subqueries within the main query
 explain verbose with bad_headofstates as 
@@ -1716,7 +1716,7 @@ order by OUTERMOST_FOO.region,bad_headofstates.headofstate LIMIT 40;
                                              Index Cond: (country_2.code = share0_ref2.code)
  Settings: enable_parallel = 'off', optimizer = 'on'
  Optimizer: GPORCA
-(77 rows)
+(76 rows)
 
 -- start_ignore
 drop table city;
