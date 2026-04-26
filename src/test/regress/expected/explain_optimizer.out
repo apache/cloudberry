@@ -750,7 +750,6 @@ select jsonb_pretty(
          "Settings": {                                      +
              "jit": "off",                                  +
              "Optimizer": "GPORCA",                         +
-             "optimizer": "on",                             +
              "enable_parallel": "off",                      +
              "parallel_setup_cost": "0",                    +
              "parallel_tuple_cost": "0",                    +

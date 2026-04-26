@@ -296,8 +296,8 @@ explain (costs off) select * from modern_int a inner join legacy_domain_over_int
 (9 rows)
 
 create type colors as enum ('red', 'green', 'blue');
-create table legacy_enum(col1 int, color colors) distributed by(col1);
-insert into legacy_enum values (1, 'red'), (2, 'green'), (3, 'blue');
+create table legacy_enum(color colors) distributed by(color cdbhash_enum_ops);
+insert into legacy_enum values ('red'), ('green'), ('blue');
 explain (costs off) select * from legacy_enum a inner join legacy_enum b on a.color = b.color;
                           QUERY PLAN                          
 --------------------------------------------------------------
@@ -306,17 +306,16 @@ explain (costs off) select * from legacy_enum a inner join legacy_enum b on a.co
          Hash Cond: ((a.color)::anyenum = (b.color)::anyenum)
          ->  Seq Scan on legacy_enum a
          ->  Hash
-               ->  Broadcast Motion 3:3  (slice2; segments: 3)
-                     ->  Seq Scan on legacy_enum b
+               ->  Seq Scan on legacy_enum b
  Optimizer: GPORCA
-(8 rows)
+(7 rows)
 
 select * from legacy_enum a inner join legacy_enum b on a.color = b.color;
- col1 | color | col1 | color 
-------+-------+------+-------
-    1 | red   |    1 | red
-    2 | green |    2 | green
-    3 | blue  |    3 | blue
+ color | color 
+-------+-------
+ green | green
+ red   | red
+ blue  | blue
 (3 rows)
 
 --

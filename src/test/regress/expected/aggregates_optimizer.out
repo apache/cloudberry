@@ -1555,7 +1555,7 @@ select f2, count(*) from
 t1 x(x0,x1) left join (t1 left join t2 using(f2)) on (x0 = 0)
 group by f2;
 INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
-DETAIL:  CTranslatorQueryToDXL.cpp:4130: Failed assertion: ((((const Node*)(join_alias_node))->type) == T_Var) || ((((const Node*)(join_alias_node))->type) == T_FuncExpr) || ((((const Node*)(join_alias_node))->type) == T_CoalesceExpr)
+DETAIL:  CTranslatorQueryToDXL.cpp:4136: Failed assertion: ((((const Node*)(join_alias_node))->type) == T_Var) || ((((const Node*)(join_alias_node))->type) == T_FuncExpr) || ((((const Node*)(join_alias_node))->type) == T_CoalesceExpr)
  f2 | count 
 ----+-------
 (0 rows)
