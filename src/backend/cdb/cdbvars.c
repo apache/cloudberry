@@ -13,7 +13,7 @@
  *
  *
  * NOTES
- *	  See src/backend/utils/misc/guc.c for variable external specification.
+ *	  See src/backend/utils/misc/guc.c for variable external specification
  *
  *-------------------------------------------------------------------------
  */

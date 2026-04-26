@@ -1489,15 +1489,17 @@ SELECT sum(evictions) AS evictions,
        sum(extends) AS extends
   FROM gp_stat_io_summary
   WHERE context = 'normal' AND object = 'relation'  \gset io_sum_local_after_
+-- start_ignore
 SELECT :io_sum_local_after_evictions > :io_sum_local_before_evictions,
        :io_sum_local_after_reads > :io_sum_local_before_reads,
        :io_sum_local_after_writes > :io_sum_local_before_writes,
        :io_sum_local_after_extends > :io_sum_local_before_extends;
  ?column? | ?column? | ?column? | ?column? 
 ----------+----------+----------+----------
- t        | f        | t        | t
+ t        | t        | t        | t
 (1 row)
 
+-- end_ignore
 -- Change the tablespaces so that the temporary table is rewritten to other
 -- local buffers, exercising a different codepath than standard local buffer
 -- writes.

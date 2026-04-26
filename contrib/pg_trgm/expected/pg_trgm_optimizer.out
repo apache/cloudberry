@@ -2375,6 +2375,9 @@ ERROR:  value 8169 out of bounds for option "siglen"
 DETAIL:  Valid values are between "1" and "8168".
 create index trgm_idx on test_trgm using gist (t gist_trgm_ops(siglen=8168));
 set enable_seqscan=off;
+-- check index compatibility handling when opclass option is specified
+alter table test_trgm alter column t type varchar(768);
+alter table test_trgm alter column t type text;
 select t,similarity(t,'qwertyu0988') as sml from test_trgm where t % 'qwertyu0988' order by sml desc, t;
       t      |   sml    
 -------------+----------
@@ -3503,15 +3506,15 @@ select t,similarity(t,'gwertyu1988') as sml from test_trgm where t % 'gwertyu198
 
 explain (costs off)
 select t <-> 'q0987wertyu0988', t from test_trgm order by t <-> 'q0987wertyu0988' limit 2;
-                          QUERY PLAN                           
----------------------------------------------------------------
+                        QUERY PLAN                         
+-----------------------------------------------------------
  Limit
    ->  Gather Motion 3:1  (slice1; segments: 3)
          Merge Key: ((t <-> 'q0987wertyu0988'::text))
-         ->  Limit
-               ->  Index Scan using trgm_idx on test_trgm
-                     Order By: (t <-> 'q0987wertyu0988'::text)
- Optimizer: Postgres query optimizer
+         ->  Sort
+               Sort Key: ((t <-> 'q0987wertyu0988'::text))
+               ->  Seq Scan on test_trgm
+ Optimizer: GPORCA
 (7 rows)
 
 select t <-> 'q0987wertyu0988', t from test_trgm order by t <-> 'q0987wertyu0988' limit 2;
@@ -4665,17 +4668,16 @@ select count(*) from test_trgm where t ~ '[qwerty]{2}-?[qwerty]{2}';
 -- check handling of indexquals that generate no searchable conditions
 explain (costs off)
 select count(*) from test_trgm where t like '%99%' and t like '%qwerty%';
-                                       QUERY PLAN                                        
------------------------------------------------------------------------------------------
- Finalize Aggregate
+                                    QUERY PLAN                                     
+-----------------------------------------------------------------------------------
+ Aggregate
    ->  Gather Motion 3:1  (slice1; segments: 3)
-         ->  Partial Aggregate
-               ->  Bitmap Heap Scan on test_trgm
-                     Recheck Cond: ((t ~~ '%99%'::text) AND (t ~~ '%qwerty%'::text))
-                     ->  Bitmap Index Scan on trgm_idx
-                           Index Cond: ((t ~~ '%99%'::text) AND (t ~~ '%qwerty%'::text))
- Optimizer: Postgres query optimizer
-(8 rows)
+         ->  Bitmap Heap Scan on test_trgm
+               Recheck Cond: ((t ~~ '%99%'::text) AND (t ~~ '%qwerty%'::text))
+               ->  Bitmap Index Scan on trgm_idx
+                     Index Cond: ((t ~~ '%99%'::text) AND (t ~~ '%qwerty%'::text))
+ Optimizer: GPORCA
+(7 rows)
 
 select count(*) from test_trgm where t like '%99%' and t like '%qwerty%';
  count 
@@ -4685,17 +4687,16 @@ select count(*) from test_trgm where t like '%99%' and t like '%qwerty%';
 
 explain (costs off)
 select count(*) from test_trgm where t like '%99%' and t like '%qw%';
-                                     QUERY PLAN                                      
--------------------------------------------------------------------------------------
- Finalize Aggregate
+                                  QUERY PLAN                                   
+-------------------------------------------------------------------------------
+ Aggregate
    ->  Gather Motion 3:1  (slice1; segments: 3)
-         ->  Partial Aggregate
-               ->  Bitmap Heap Scan on test_trgm
-                     Recheck Cond: ((t ~~ '%99%'::text) AND (t ~~ '%qw%'::text))
-                     ->  Bitmap Index Scan on trgm_idx
-                           Index Cond: ((t ~~ '%99%'::text) AND (t ~~ '%qw%'::text))
- Optimizer: Postgres query optimizer
-(8 rows)
+         ->  Bitmap Heap Scan on test_trgm
+               Recheck Cond: ((t ~~ '%99%'::text) AND (t ~~ '%qw%'::text))
+               ->  Bitmap Index Scan on trgm_idx
+                     Index Cond: ((t ~~ '%99%'::text) AND (t ~~ '%qw%'::text))
+ Optimizer: GPORCA
+(7 rows)
 
 select count(*) from test_trgm where t like '%99%' and t like '%qw%';
  count 

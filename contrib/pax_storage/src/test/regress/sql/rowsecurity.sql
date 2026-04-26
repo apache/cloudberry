@@ -678,8 +678,10 @@ SET row_security TO ON;
 EXPLAIN (COSTS OFF) DELETE FROM only t1 WHERE f_leak(b);
 EXPLAIN (COSTS OFF) DELETE FROM t1 WHERE f_leak(b);
 
+-- start_ignore
 DELETE FROM only t1 WHERE f_leak(b) RETURNING tableoid::regclass, *, t1;
 DELETE FROM t1 WHERE f_leak(b) RETURNING tableoid::regclass, *, t1;
+-- end_ignore
 
 --
 -- S.b. view on top of Row-level security

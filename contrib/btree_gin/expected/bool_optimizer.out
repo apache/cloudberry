@@ -131,6 +131,21 @@ EXPLAIN (COSTS OFF) SELECT * FROM test_bool WHERE i>true ORDER BY i;
                Recheck Cond: (i > true)
                ->  Bitmap Index Scan on idx_bool
                      Index Cond: (i > true)
- Optimizer: Pivotal Optimizer (GPORCA)
+ Optimizer: GPORCA
+(9 rows)
+
+-- probably sufficient to check just this one:
+EXPLAIN (COSTS OFF) SELECT * FROM test_bool WHERE i=false ORDER BY i;
+                   QUERY PLAN                    
+-------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Merge Key: i
+   ->  Sort
+         Sort Key: i
+         ->  Bitmap Heap Scan on test_bool
+               Recheck Cond: (i = false)
+               ->  Bitmap Index Scan on idx_bool
+                     Index Cond: (i = false)
+ Optimizer: GPORCA
 (9 rows)
 

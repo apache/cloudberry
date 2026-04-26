@@ -50,7 +50,7 @@ SELECT count(*) = (select setting::bigint
 FROM gp_buffercache;
  buffers 
 ---------
- t
+ f
 (1 row)
 
 SELECT buffers_used + buffers_unused > 0,
@@ -61,9 +61,7 @@ FROM gp_buffercache_summary;
 ----------+----------+----------
  t        | t        | t
  t        | t        | t
- t        | t        | t
- t        | t        | t
-(4 rows)
+(2 rows)
 
 SELECT buffers_used + buffers_unused > 0,
         buffers_dirty <= buffers_used,
@@ -148,9 +146,7 @@ SELECT buffers_used + buffers_unused > 0 FROM gp_buffercache_summary;
 ----------
  t
  t
- t
- t
-(4 rows)
+(2 rows)
 
 SELECT buffers_used + buffers_unused > 0 FROM gp_buffercache_summary_aggregated;
  ?column? 

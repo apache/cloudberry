@@ -1,6 +1,8 @@
 --
 -- Test foreign-data wrapper file_fdw. Apache Cloudberry MPP specific
 --
+-- directory paths are passed to us in environment variables
+\getenv abs_srcdir PG_ABS_SRCDIR
 -- Clean up in case a prior regression run failed
 SET client_min_messages TO 'error';
 SET optimizer_trace_fallback = on;
@@ -19,16 +21,18 @@ ERROR:  invalid option "mpp_execute"
 HINT:  There are no valid options in this context.
 CREATE USER MAPPING FOR file_fdw_superuser SERVER file_server;
 -- MPP tests
+\set filename :abs_srcdir '/data/text.csv'
 CREATE FOREIGN TABLE text_csv_any (
     word1 text, word2 text
 ) SERVER file_server
-OPTIONS (format 'csv', filename '@abs_srcdir@/data/text.csv', mpp_execute 'any');
+OPTIONS (format 'csv', filename :'filename', mpp_execute 'any');
 SELECT * FROM text_csv_any;
 ERROR:  file_fdw does not support mpp_execute option 'any'
+\set filename_segid :abs_srcdir '/data/text<SEGID>.csv'
 CREATE FOREIGN TABLE text_csv_all (
     word1 text, word2 text
 ) SERVER file_server
-OPTIONS (format 'csv', filename '@abs_srcdir@/data/text<SEGID>.csv', mpp_execute 'all segments');
+OPTIONS (format 'csv', filename :'filename_segid', mpp_execute 'all segments');
 EXPLAIN SELECT * FROM text_csv_all ORDER BY word1;
                                            QUERY PLAN                                           
 ------------------------------------------------------------------------------------------------
@@ -37,7 +41,7 @@ EXPLAIN SELECT * FROM text_csv_all ORDER BY word1;
    ->  Sort  (cost=0.00..431.00 rows=1 width=16)
          Sort Key: word1
          ->  Foreign Scan on text_csv_all  (cost=0.00..431.00 rows=1 width=16)
-               Foreign File: @abs_srcdir@/data/text<SEGID>.csv
+               Foreign File: /home/gpadmin/cloudberrydb/contrib/file_fdw/data/text<SEGID>.csv
  Optimizer: GPORCA
 (7 rows)
 
@@ -49,16 +53,18 @@ SELECT * FROM text_csv_all ORDER BY word1;
  FOO   | bar
 (3 rows)
 
+\set filename :abs_srcdir '/data/text.csv'
 CREATE FOREIGN TABLE text_csv_any_from_server (
     word1 text, word2 text
 ) SERVER file_server
-OPTIONS (format 'csv', filename '@abs_srcdir@/data/text.csv');
+OPTIONS (format 'csv', filename :'filename');
 SELECT * FROM text_csv_any_from_server;
 ERROR:  file_fdw does not support mpp_execute option 'any'
+\set filename :abs_srcdir '/data/text.csv'
 CREATE FOREIGN TABLE text_csv_coordinator (
     word1 text, word2 text, a int, b int
 ) SERVER file_server
-OPTIONS (format 'csv', filename '@abs_srcdir@/data/text.csv', mpp_execute 'coordinator');
+OPTIONS (format 'csv', filename :'filename', mpp_execute 'coordinator');
 -- Test append works both ways and generates valid plans. Should be able to execute
 -- coordinator fdw on coordinator under redistribute
 explain select word1 from text_csv_coordinator union all select word1 from text_csv_all;
