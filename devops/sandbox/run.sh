@@ -38,7 +38,7 @@ PIP_INDEX_URL_VAR="${PIP_INDEX_URL_VAR:-$DEFAULT_PIP_INDEX_URL_VAR}"
 # Function to display help message
 function usage() {
     echo "Usage: $0 [-o <os_version>] [-c <codebase_version>] [-b] [-m]"
-    echo "  -c  Codebase version (valid values: main, local, or other available version like 2.0.0)"
+    echo "  -c  Codebase version (valid values: main, local, or other available version like 2.1.0)"
     echo "  -t  Timezone (default: America/Los_Angeles, or set via TIMEZONE_VAR environment variable)"
     echo "  -p  Python Package Index (PyPI) (default: https://pypi.org/simple, or set via PIP_INDEX_URL_VAR environment variable)"
     echo "  -b  Build only, do not run the container (default: false, or set via BUILD_ONLY environment variable)"
