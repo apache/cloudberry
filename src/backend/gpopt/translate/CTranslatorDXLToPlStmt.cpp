@@ -3323,7 +3323,7 @@ CTranslatorDXLToPlStmt::TranslateDXLWindowAgg(
 		// translate the window frame specified in the window key
 		if (nullptr != window_key->GetWindowFrame())
 		{
-			window->frameOptions = FRAMEOPTION_NONDEFAULT;
+			window->frameOptions = FRAMEOPTION_NONDEFAULT | FRAMEOPTION_BETWEEN;
 			window->frameOptions |= WindowFrameSpecToOptions(window_frame->ParseDXLFrameSpec());
 			window->frameOptions |= WindowFrameExclusionStrategyToOptions(
 				window_frame->ParseFrameExclusionStrategy());
@@ -3527,7 +3527,7 @@ CTranslatorDXLToPlStmt::TranslateDXLWindowHashAgg(
 		// translate the window frame specified in the window key
 		if (nullptr != window_key->GetWindowFrame())
 		{
-			window->frameOptions = FRAMEOPTION_NONDEFAULT;
+			window->frameOptions = FRAMEOPTION_NONDEFAULT | FRAMEOPTION_BETWEEN;
 			window->frameOptions |= WindowFrameSpecToOptions(window_frame->ParseDXLFrameSpec());
 			window->frameOptions |= WindowFrameExclusionStrategyToOptions(
 				window_frame->ParseFrameExclusionStrategy());
