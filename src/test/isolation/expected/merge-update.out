@@ -239,7 +239,7 @@ step pa_merge2a:
  <waiting ...>
 step c1: COMMIT;
 step pa_merge2a: <... completed>
-ERROR:  tuple to be locked was already moved to another partition due to concurrent update
+ERROR:  tuple to be locked was already moved to another partition or segment due to concurrent update
 step pa_select2: SELECT * FROM pa_target;
 ERROR:  current transaction is aborted, commands ignored until end of transaction block
 step c2: COMMIT;

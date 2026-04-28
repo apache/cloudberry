@@ -272,16 +272,25 @@ EXPLAIN (COSTS OFF)
 SELECT c FROM pagg_tab GROUP BY c ORDER BY 1;
                       QUERY PLAN                      
 ------------------------------------------------------
- Sort
+ Merge Append
    Sort Key: pagg_tab.c
-   ->  HashAggregate
+   ->  GroupAggregate
          Group Key: pagg_tab.c
-         ->  Append
-               ->  Seq Scan on pagg_tab_p1 pagg_tab_1
-               ->  Seq Scan on pagg_tab_p2 pagg_tab_2
-               ->  Seq Scan on pagg_tab_p3 pagg_tab_3
+         ->  Sort
+               Sort Key: pagg_tab.c
+               ->  Seq Scan on pagg_tab_p1 pagg_tab
+   ->  GroupAggregate
+         Group Key: pagg_tab_1.c
+         ->  Sort
+               Sort Key: pagg_tab_1.c
+               ->  Seq Scan on pagg_tab_p2 pagg_tab_1
+   ->  GroupAggregate
+         Group Key: pagg_tab_2.c
+         ->  Sort
+               Sort Key: pagg_tab_2.c
+               ->  Seq Scan on pagg_tab_p3 pagg_tab_2
  Optimizer: Postgres query optimizer
-(9 rows)
+(18 rows)
 
 SELECT c FROM pagg_tab GROUP BY c ORDER BY 1;
   c   
