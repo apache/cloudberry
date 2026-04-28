@@ -477,6 +477,10 @@ pg_lock_status(PG_FUNCTION_ARGS)
 					TransactionIdGetDatum(instance->locktag.locktag_field1);
 				values[8] = ObjectIdGetDatum(instance->locktag.locktag_field2);
 				nulls[1] = true;
+				nulls[2] = true;
+				nulls[3] = true;
+				nulls[4] = true;
+				nulls[5] = true;
 				nulls[7] = true;
 				nulls[9] = true;
 				break;

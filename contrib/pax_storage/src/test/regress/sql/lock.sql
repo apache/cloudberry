@@ -52,42 +52,42 @@ BEGIN TRANSACTION;
 LOCK TABLE lock_view1 IN EXCLUSIVE MODE;
 -- lock_view1 and lock_tbl1 are locked.
 select l.gp_segment_id, relname from pg_locks l, pg_class c
- where l.relation = c.oid and relname like '%lock_%' and mode = 'ExclusiveLock'
+ where l.relation = c.oid and relname like 'lock_%' and mode = 'ExclusiveLock'
  order by relname;
 ROLLBACK;
 BEGIN TRANSACTION;
 LOCK TABLE lock_view2 IN EXCLUSIVE MODE;
 -- lock_view1, lock_tbl1, and lock_tbl1a are locked.
 select l.gp_segment_id, relname from pg_locks l, pg_class c
- where l.relation = c.oid and relname like '%lock_%' and mode = 'ExclusiveLock'
+ where l.relation = c.oid and relname like 'lock_%' and mode = 'ExclusiveLock'
  order by relname;
 ROLLBACK;
 BEGIN TRANSACTION;
 LOCK TABLE lock_view3 IN EXCLUSIVE MODE;
 -- lock_view3, lock_view2, lock_tbl1, and lock_tbl1a are locked recursively.
 select l.gp_segment_id, relname from pg_locks l, pg_class c
- where l.relation = c.oid and relname like '%lock_%' and mode = 'ExclusiveLock'
+ where l.relation = c.oid and relname like 'lock_%' and mode = 'ExclusiveLock'
  order by relname;
 ROLLBACK;
 BEGIN TRANSACTION;
 LOCK TABLE lock_view4 IN EXCLUSIVE MODE;
 -- lock_view4, lock_tbl1, and lock_tbl1a are locked.
 select l.gp_segment_id, relname from pg_locks l, pg_class c
- where l.relation = c.oid and relname like '%lock_%' and mode = 'ExclusiveLock'
+ where l.relation = c.oid and relname like 'lock_%' and mode = 'ExclusiveLock'
  order by relname;
 ROLLBACK;
 BEGIN TRANSACTION;
 LOCK TABLE lock_view5 IN EXCLUSIVE MODE;
 -- lock_view5, lock_tbl1, and lock_tbl1a are locked.
 select l.gp_segment_id, relname from pg_locks l, pg_class c
- where l.relation = c.oid and relname like '%lock_%' and mode = 'ExclusiveLock'
+ where l.relation = c.oid and relname like 'lock_%' and mode = 'ExclusiveLock'
  order by relname;
 ROLLBACK;
 BEGIN TRANSACTION;
 LOCK TABLE lock_view6 IN EXCLUSIVE MODE;
 -- lock_view6 an lock_tbl1 are locked.
 select l.gp_segment_id, relname from pg_locks l, pg_class c
- where l.relation = c.oid and relname like '%lock_%' and mode = 'ExclusiveLock'
+ where l.relation = c.oid and relname like 'lock_%' and mode = 'ExclusiveLock'
  order by relname;
 ROLLBACK;
 -- Verify that we cope with infinite recursion in view definitions.
@@ -138,7 +138,7 @@ BEGIN;
 LOCK TABLE lock_view1 IN ACCESS EXCLUSIVE MODE;
 -- lock_view1 and lock_tbl1 (plus children lock_tbl2 and lock_tbl3) are locked.
 select relname from pg_locks l, pg_class c
- where l.relation = c.oid and relname like '%lock_%' and mode = 'AccessExclusiveLock'
+ where l.relation = c.oid and relname like 'lock_%' and mode = 'AccessExclusiveLock'
  order by relname;
 ROLLBACK;
 RESET ROLE;
@@ -165,7 +165,7 @@ BEGIN;
 LOCK TABLE lock_view8 IN ACCESS EXCLUSIVE MODE;
 -- lock_view8 and lock_tbl1 (plus children lock_tbl2 and lock_tbl3) are locked.
 select relname from pg_locks l, pg_class c
- where l.relation = c.oid and relname like '%lock_%' and mode = 'AccessExclusiveLock'
+ where l.relation = c.oid and relname like 'lock_%' and mode = 'AccessExclusiveLock'
  order by relname;
 ROLLBACK;
 RESET ROLE;

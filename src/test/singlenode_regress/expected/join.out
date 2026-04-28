@@ -4698,13 +4698,13 @@ select d.* from d left join (select distinct * from b) s
 explain (costs off)
 select d.* from d left join (select * from b group by b.id, b.c_id) s
   on d.a = s.id;
-             QUERY PLAN              
--------------------------------------
+                QUERY PLAN                
+------------------------------------------
  Hash Right Join
    Hash Cond: (b.id = d.a)
-   ->  HashAggregate
+   ->  GroupAggregate
          Group Key: b.id
-         ->  Seq Scan on b
+         ->  Index Scan using b_pkey on b
    ->  Hash
          ->  Seq Scan on d
  Optimizer: Postgres query optimizer

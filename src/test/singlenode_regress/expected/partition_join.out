@@ -480,45 +480,33 @@ EXPLAIN (COSTS OFF)
 SELECT a, b FROM prt1 FULL JOIN prt2 p2(b,a,c) USING(a,b)
   WHERE a BETWEEN 490 AND 510
   GROUP BY 1, 2 ORDER BY 1, 2;
-                                                      QUERY PLAN                                                       
------------------------------------------------------------------------------------------------------------------------
- Finalize GroupAggregate
+                                                QUERY PLAN                                                 
+-----------------------------------------------------------------------------------------------------------
+ GroupAggregate
    Group Key: (COALESCE(prt1.a, p2.a)), (COALESCE(prt1.b, p2.b))
    ->  Sort
          Sort Key: (COALESCE(prt1.a, p2.a)), (COALESCE(prt1.b, p2.b))
          ->  Append
-               ->  Partial GroupAggregate
-                     Group Key: (COALESCE(prt1.a, p2.a)), (COALESCE(prt1.b, p2.b))
-                     ->  Sort
-                           Sort Key: (COALESCE(prt1.a, p2.a)), (COALESCE(prt1.b, p2.b))
-                           ->  Hash Full Join
-                                 Hash Cond: ((prt1.a = p2.a) AND (prt1.b = p2.b))
-                                 Filter: ((COALESCE(prt1.a, p2.a) >= 490) AND (COALESCE(prt1.a, p2.a) <= 510))
-                                 ->  Seq Scan on prt1_p1 prt1
-                                 ->  Hash
-                                       ->  Seq Scan on prt2_p1 p2
-               ->  Partial GroupAggregate
-                     Group Key: (COALESCE(prt1_1.a, p2_1.a)), (COALESCE(prt1_1.b, p2_1.b))
-                     ->  Sort
-                           Sort Key: (COALESCE(prt1_1.a, p2_1.a)), (COALESCE(prt1_1.b, p2_1.b))
-                           ->  Hash Full Join
-                                 Hash Cond: ((prt1_1.a = p2_1.a) AND (prt1_1.b = p2_1.b))
-                                 Filter: ((COALESCE(prt1_1.a, p2_1.a) >= 490) AND (COALESCE(prt1_1.a, p2_1.a) <= 510))
-                                 ->  Seq Scan on prt1_p2 prt1_1
-                                 ->  Hash
-                                       ->  Seq Scan on prt2_p2 p2_1
-               ->  Partial GroupAggregate
-                     Group Key: (COALESCE(prt1_2.a, p2_2.a)), (COALESCE(prt1_2.b, p2_2.b))
-                     ->  Sort
-                           Sort Key: (COALESCE(prt1_2.a, p2_2.a)), (COALESCE(prt1_2.b, p2_2.b))
-                           ->  Hash Full Join
-                                 Hash Cond: ((prt1_2.a = p2_2.a) AND (prt1_2.b = p2_2.b))
-                                 Filter: ((COALESCE(prt1_2.a, p2_2.a) >= 490) AND (COALESCE(prt1_2.a, p2_2.a) <= 510))
-                                 ->  Seq Scan on prt1_p3 prt1_2
-                                 ->  Hash
-                                       ->  Seq Scan on prt2_p3 p2_2
+               ->  Hash Full Join
+                     Hash Cond: ((prt1_1.a = p2_1.a) AND (prt1_1.b = p2_1.b))
+                     Filter: ((COALESCE(prt1_1.a, p2_1.a) >= 490) AND (COALESCE(prt1_1.a, p2_1.a) <= 510))
+                     ->  Seq Scan on prt1_p1 prt1_1
+                     ->  Hash
+                           ->  Seq Scan on prt2_p1 p2_1
+               ->  Hash Full Join
+                     Hash Cond: ((prt1_2.a = p2_2.a) AND (prt1_2.b = p2_2.b))
+                     Filter: ((COALESCE(prt1_2.a, p2_2.a) >= 490) AND (COALESCE(prt1_2.a, p2_2.a) <= 510))
+                     ->  Seq Scan on prt1_p2 prt1_2
+                     ->  Hash
+                           ->  Seq Scan on prt2_p2 p2_2
+               ->  Hash Full Join
+                     Hash Cond: ((prt1_3.a = p2_3.a) AND (prt1_3.b = p2_3.b))
+                     Filter: ((COALESCE(prt1_3.a, p2_3.a) >= 490) AND (COALESCE(prt1_3.a, p2_3.a) <= 510))
+                     ->  Seq Scan on prt1_p3 prt1_3
+                     ->  Hash
+                           ->  Seq Scan on prt2_p3 p2_3
  Optimizer: Postgres query optimizer
-(36 rows)
+(24 rows)
 
 SELECT a, b FROM prt1 FULL JOIN prt2 p2(b,a,c) USING(a,b)
   WHERE a BETWEEN 490 AND 510

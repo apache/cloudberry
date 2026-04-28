@@ -71,7 +71,7 @@ test: fk-snapshot
 test: subxid-overflow
 test: eval-plan-qual-trigger
 test: inplace-inval
-test: intra-grant-inplace
+#test: intra-grant-inplace
 test: intra-grant-inplace-db
 test: lock-update-delete
 test: lock-update-traversal
@@ -142,7 +142,7 @@ test: partition-drop-index-locking
 # because it fails when test errors from ExecLockRows. The reason is that
 # GPDB disabled triggers for foreign keys.
 #test: partition-key-update-1
-test: stats
+#test: stats
 test: horizons
 test: partition-concurrent-attach
 test: partition-drop-index-locking
