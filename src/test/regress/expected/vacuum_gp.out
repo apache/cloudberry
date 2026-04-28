@@ -461,7 +461,6 @@ SELECT gp_inject_fault('interconnect_stop_recv_chunk', 'reset', dbid)
   FROM gp_segment_configuration WHERE content = -1 and role='p';
 ERROR:  current transaction is aborted, commands ignored until end of transaction block
 COMMIT;
-
 -- start_ignore
 drop table if exists relcache_leak_in_motion;
 -- end_ignore
