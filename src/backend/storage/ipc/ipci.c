@@ -77,6 +77,8 @@
 #include "cdb/cdbendpoint.h"
 #include "replication/gp_replication.h"
 
+#include "cdb/ml_ipc.h"
+
 /* GUCs */
 int			shared_memory_type = DEFAULT_SHARED_MEMORY_TYPE;
 
@@ -236,6 +238,9 @@ CreateSharedMemoryAndSemaphores(void)
 
 		/* size of token and endpoint shared memory */
 		size = add_size(size, EndpointShmemSize());
+
+		
+		size = add_size(size, InterconnectShmemSize());
 #ifndef USE_INTERNAL_FTS
 		/* size of cdb etcd result cache */
 		if (Gp_role != GP_ROLE_EXECUTE)
@@ -402,6 +407,7 @@ CreateSharedMemoryAndSemaphores(void)
 	GpExpandVersionShmemInit();
 	KmgrShmemInit();
 
+	InterconnectShmemInit();
 #ifdef EXEC_BACKEND
 
 	/*

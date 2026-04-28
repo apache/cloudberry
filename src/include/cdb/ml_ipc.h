@@ -311,4 +311,11 @@ extern bool CheckGpInterconnectTypeStr(char **type_name);
  */
 extern void InitializeCurrentMotionIPCLayer(void);
 
+
+extern Size InterconnectShmemSize(void);
+extern Size InterconnectShmemSizeUDPIFC(void);
+extern void InterconnectShmemInit(void);
+extern void InterconnectShmemInitUDPIFC(void);
+extern Datum GpInterconnectGetStatsUDPIFC(PG_FUNCTION_ARGS);
+
 #endif   /* ML_IPC_H */
