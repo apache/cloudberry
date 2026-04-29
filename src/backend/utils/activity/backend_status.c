@@ -730,6 +730,27 @@ pgstat_report_xact_timestamp(TimestampTz tstamp)
 }
 
 /* ----------
+ * pgstat_report_resgroup() -
+ *
+ *	Called to update the resource group id in MyBEEntry.
+ * ----------
+ */
+void
+pgstat_report_resgroup(Oid groupId)
+{
+	volatile PgBackendStatus *beentry = MyBEEntry;
+
+	if (!beentry)
+		return;
+
+	PGSTAT_BEGIN_WRITE_ACTIVITY(beentry);
+
+	beentry->st_rsgid = groupId;
+
+	PGSTAT_END_WRITE_ACTIVITY(beentry);
+}
+
+/* ----------
  * pgstat_read_current_status() -
  *
  *	Copy the current contents of the PgBackendStatus array to local memory,
