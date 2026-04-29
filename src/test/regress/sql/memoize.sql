@@ -146,8 +146,10 @@ CREATE INDEX iprt_p1_a ON prt_p1 (a);
 CREATE INDEX iprt_p2_a ON prt_p2 (a);
 ANALYZE prt;
 
+SET enable_parallel = false;
 SELECT explain_memoize('
 SELECT * FROM prt t1 INNER JOIN prt t2 ON t1.a = t2.a;', false);
+RESET enable_parallel;
 
 -- Ensure memoize works with parameterized union-all Append path
 SET enable_partitionwise_join TO off;
