@@ -166,3 +166,6 @@ CREATE
 -- sequences start/end based on the concurrency level (see AOSegmentGet_startHeapBlock())
 CREATE OR REPLACE FUNCTION populate_pages(relname text, value int, upto tid) RETURNS VOID AS $$ /* in func */ DECLARE curtid tid; /* in func */ BEGIN /* in func */ LOOP /* in func */ EXECUTE format('INSERT INTO %I VALUES($1) RETURNING ctid', relname) INTO curtid USING value; /* in func */ EXIT WHEN curtid > upto; /* in func */ END LOOP; /* in func */ END; $$ /* in func */ LANGUAGE PLPGSQL;
 CREATE
+
+GRANT ALL ON SCHEMA public TO public;
+GRANT
