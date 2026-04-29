@@ -131,12 +131,12 @@ CREATE
 
 
 0: CREATE OR REPLACE FUNCTION is_session_in_group(pid integer, groupname text) RETURNS BOOL AS $$ import subprocess 
-sql = "select sess_id from pg_stat_activity where pid = '%d'" % pid result = plpy.execute(sql) session_id = result[0]['sess_id'] 
+sql = "select sess_id from pg_stat_activity where pid = '%d'" % pid result = plpy.execute(sql) session_id = result[0]['sess_id']
 sql = "select groupid from gp_toolkit.gp_resgroup_config where groupname='%s'" % groupname result = plpy.execute(sql) groupid = result[0]['groupid']
 sql = """select sc.hostname, array_agg(pa.pid::text) as pids from gp_stat_activity pa join gp_segment_configuration sc on pa.gp_segment_id = sc.content and sc.role = 'p' where pa.sess_id = %d group by sc.hostname""" % session_id result = plpy.execute(sql) 
 for row in result: host = row['hostname'] session_pids = set(row['pids']) 
 if not session_pids: continue 
-path = "/sys/fs/cgroup/gpdb/{}/queries/cgroup.procs".format(groupid) stdout = subprocess.run(["ssh", "{}".format(host), "cat {}".format(path)], stdout=subprocess.PIPE, check=True).stdout cgroups_pids = set(stdout.decode().splitlines()) 
+path = "/sys/fs/cgroup/gpdb/{}/queries/cgroup.procs".format(groupid) stdout = subprocess.run(["ssh", "{}".format(host), "cat {}".format(path)], stdout=subprocess.PIPE, check=True).stdout cgroups_pids = set(stdout.decode().splitlines())
 if not session_pids.issubset(cgroups_pids): return False return True
 $$ LANGUAGE plpython3u;
 CREATE
