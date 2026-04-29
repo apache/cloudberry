@@ -53,6 +53,7 @@
 #include "utils/memutils.h"
 #include "utils/ps_status.h"
 #include "utils/cgroup.h"
+#include "utils/backend_status.h"
 #include "utils/resgroup.h"
 #include "utils/resource_manager.h"
 #include "utils/session_state.h"
@@ -1290,8 +1291,7 @@ groupAcquireSlot(ResGroupInfo *pGroupInfo, bool isMoveQuery)
 			/* got one, lucky */
 			group->totalExecuted++;
 			LWLockRelease(ResGroupLock);
-			/* MERGE16_FIXME report data to pastat */
-			//pgstat_report_resgroup(group->groupId);
+			pgstat_report_resgroup(group->groupId);
 			return slot;
 		}
 	}
@@ -1328,7 +1328,7 @@ groupAcquireSlot(ResGroupInfo *pGroupInfo, bool isMoveQuery)
 	group->totalExecuted++;
 	LWLockRelease(ResGroupLock);
 
-//	pgstat_report_resgroup(group->groupId);
+	pgstat_report_resgroup(group->groupId);
 	return slot;
 }
 
@@ -1567,7 +1567,7 @@ AssignResGroupOnMaster(void)
 
 		/* Update pg_stat_activity statistics */
 		bypassedGroup->totalExecuted++;
-//		pgstat_report_resgroup(bypassedGroup->groupId);
+		pgstat_report_resgroup(bypassedGroup->groupId);
 
 		/* Initialize the fake slot */
 		bypassedSlot.group = groupInfo.group;
@@ -1633,7 +1633,7 @@ UnassignResGroup(void)
 		bypassedGroup = NULL;
 
 		/* Update pg_stat_activity statistics */
-//		pgstat_report_resgroup(InvalidOid);
+		pgstat_report_resgroup(InvalidOid);
 		return;
 	}
 
@@ -1668,7 +1668,7 @@ UnassignResGroup(void)
 	if (Gp_role == GP_ROLE_DISPATCH)
 		SIMPLE_FAULT_INJECTOR("unassign_resgroup_end_qd");
 
-//	pgstat_report_resgroup(InvalidOid);
+	pgstat_report_resgroup(InvalidOid);
 }
 
 /*
@@ -1812,7 +1812,7 @@ waitOnGroup(ResGroupData *group, bool isMoveQuery)
 	 * not enough to store a full Oid, so we set groupId out-of-band,
 	 * via the backend entry.
 	 */
-//	pgstat_report_resgroup(group->groupId);
+	pgstat_report_resgroup(group->groupId);
 
 	/*
 	 * Mark that we are waiting on resource group
@@ -2448,7 +2448,6 @@ static void
 groupWaitQueuePush(ResGroupData *group, PGPROC *proc)
 {
 	dclist_head 			*waitQueue;
-	PGPROC				*headProc;
 
 	Assert(LWLockHeldByMeInMode(ResGroupLock, LW_EXCLUSIVE));
 	Assert(!procIsWaiting(proc));
@@ -2457,12 +2456,9 @@ groupWaitQueuePush(ResGroupData *group, PGPROC *proc)
 	groupWaitQueueValidate(group);
 
 	waitQueue = &group->waitProcs;
-	headProc = (PGPROC *) &waitQueue->dlist.head;
 
-	dclist_insert_before(waitQueue, &headProc->links, &proc->links);
+	dclist_push_tail(waitQueue, &proc->links);
 	groupWaitProcValidate(proc, waitQueue);
-
-	waitQueue->count++;
 
 	Assert(groupWaitQueueFind(group, proc));
 }
@@ -2483,14 +2479,12 @@ groupWaitQueuePop(ResGroupData *group)
 
 	waitQueue = &group->waitProcs;
 
-	proc = (PGPROC *) waitQueue->dlist.head.next;
+	proc = dclist_head_element(PGPROC, links, waitQueue);
 	groupWaitProcValidate(proc, waitQueue);
 	Assert(groupWaitQueueFind(group, proc));
 	Assert(proc->resSlot == NULL);
 
-	dclist_delete_from(waitQueue, &proc->links);
-
-	waitQueue->count--;
+	dclist_delete_from_thoroughly(waitQueue, &proc->links);
 
 	return proc;
 }
@@ -2513,9 +2507,7 @@ groupWaitQueueErase(ResGroupData *group, PGPROC *proc)
 	waitQueue = &group->waitProcs;
 
 	groupWaitProcValidate(proc, waitQueue);
-	dclist_delete_from(waitQueue, &proc->links);
-
-	waitQueue->count--;
+	dclist_delete_from_thoroughly(waitQueue, &proc->links);
 }
 
 /*
@@ -2772,31 +2764,27 @@ resgroupDumpGroup(StringInfo str, ResGroupData *group)
 static void
 resgroupDumpWaitQueue(StringInfo str, dclist_head *queue)
 {
-	PGPROC *proc;
+	dlist_iter	iter;
+	bool		first = true;
 
 	appendStringInfo(str, "\"wait_queue\":{");
 	appendStringInfo(str, "\"wait_queue_size\":%d,", queue->count);
 	appendStringInfo(str, "\"wait_queue_content\":[");
 
-	proc = (PGPROC *)dclist_next_node(queue, &queue->dlist.head);
-
-	if (!ShmemAddrIsValid(&proc->links))
+	dclist_foreach(iter, queue)
 	{
-		appendStringInfo(str, "]},");
-		return;
-	}
+		PGPROC *proc = dlist_container(PGPROC, links, iter.cur);
 
-	while (proc)
-	{
+		if (!first)
+			appendStringInfo(str, ",");
+		first = false;
+
 		appendStringInfo(str, "{");
 		appendStringInfo(str, "\"pid\":%d,", proc->pid);
 		appendStringInfo(str, "\"resWaiting\":%s,",
 						 procIsWaiting(proc) ? "true" : "false");
 		appendStringInfo(str, "\"resSlot\":%d", slotGetId(proc->resSlot));
 		appendStringInfo(str, "}");
-		proc = (PGPROC *)dclist_next_node(queue, &queue->dlist.head);
-		if (proc)
-			appendStringInfo(str, ",");
 	}
 	appendStringInfo(str, "]},");
 }
@@ -3329,7 +3317,7 @@ HandleMoveResourceGroup(void)
 		cgroupOpsRoutine->attachcgroup(self->groupId, MyProcPid,
 									   self->caps.cpuMaxPercent == CPU_MAX_PERCENT_DISABLED);
 
-//		pgstat_report_resgroup(self->groupId);
+		pgstat_report_resgroup(self->groupId);
 	}
 
 	/*
@@ -3698,7 +3686,7 @@ check_and_unassign_from_resgroup(PlannedStmt* stmt)
 	} while (!groupIncBypassedRef(&groupInfo));
 
 	bypassedGroup = groupInfo.group;
-	bypassedGroup->totalExecuted++;
+	pgstat_report_resgroup(bypassedGroup->groupId);
 	bypassedSlot.group = groupInfo.group;
 	bypassedSlot.groupId = groupInfo.groupId;
 
