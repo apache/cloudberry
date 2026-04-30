@@ -32,6 +32,9 @@
 #include "parser/parsetree.h"
 #include "partitioning/partdesc.h"
 #include "partitioning/partprune.h"
+#include "nodes/nodeFuncs.h"
+#include "optimizer/cost.h"
+#include "utils/lsyscache.h"
 #include "utils/rel.h"
 
 
@@ -49,6 +52,47 @@ static Bitmapset *translate_col_privs(const Bitmapset *parent_privs,
 									  List *translated_vars);
 static void expand_appendrel_subquery(PlannerInfo *root, RelOptInfo *rel,
 									  RangeTblEntry *rte, Index rti);
+static bool contain_param_walker(Node *node, void *context);
+static bool restrictinfo_has_param(List *restrictinfos);
+
+
+/*
+ * contain_param_walker
+ *		Return true if expression tree contains any Param node.
+ *		Covers PARAM_EXTERN (prepared statements) and PARAM_EXEC (subqueries).
+ */
+static bool
+contain_param_walker(Node *node, void *context)
+{
+	if (node == NULL)
+		return false;
+	if (IsA(node, Param))
+		return true;
+	return expression_tree_walker(node, contain_param_walker, context);
+}
+
+/*
+ * restrictinfo_has_param
+ *		Check if any RestrictInfo in the list contains Param nodes.
+ *
+ * Queries with parameterized conditions (e.g., prepared statements with $1)
+ * cannot prune partitions at plan time, but execution-time pruning may still
+ * reduce the partition set.  We should not reject such queries.
+ */
+static bool
+restrictinfo_has_param(List *restrictinfos)
+{
+	ListCell   *lc;
+
+	foreach(lc, restrictinfos)
+	{
+		RestrictInfo *rinfo = lfirst_node(RestrictInfo, lc);
+
+		if (contain_param_walker((Node *) rinfo->clause, NULL))
+			return true;
+	}
+	return false;
+}
 
 
 /*
@@ -352,6 +396,47 @@ expand_partitioned_rtentry(PlannerInfo *root, RelOptInfo *relinfo,
 
 	/* Expand simple_rel_array and friends to hold child objects. */
 	num_live_parts = bms_num_members(live_parts);
+
+	/*
+	 * If reject_partition_fullscan is enabled, reject queries where
+	 * partition pruning did not effectively reduce the partition set.
+	 *
+	 * Exemptions:
+	 *  - enable_partition_pruning is off (user explicitly disabled pruning)
+	 *  - Table has only 1 partition (nothing meaningful to prune)
+	 *  - Restriction clauses contain Param nodes (execution-time pruning
+	 *    may still reduce partitions at runtime)
+	 */
+	if (reject_partition_fullscan &&
+		enable_partition_pruning &&
+		relinfo->nparts > 1 &&
+		!restrictinfo_has_param(relinfo->baserestrictinfo))
+	{
+		int		threshold = partition_fullscan_threshold;
+		bool	do_reject = false;
+
+		if (threshold == 0)
+			do_reject = (num_live_parts == relinfo->nparts);
+		else
+			do_reject = (num_live_parts > threshold);
+
+		if (do_reject)
+		{
+			char   *relname = get_rel_name(parentrte->relid);
+			char   *nspname = get_namespace_name(
+									get_rel_namespace(parentrte->relid));
+
+			ereport(ERROR,
+					(errcode(ERRCODE_STATEMENT_TOO_COMPLEX),
+					 errmsg("partitioned table \"%s.%s\" full partition "
+							"scan is not allowed, %d partitions would "
+							"be scanned",
+							nspname, relname, num_live_parts),
+					 errhint("Add a WHERE clause on the partition key "
+							 "to enable partition pruning.")));
+		}
+	}
+
 	if (num_live_parts > 0)
 		expand_planner_arrays(root, num_live_parts);
 

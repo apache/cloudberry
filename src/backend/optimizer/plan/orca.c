@@ -21,6 +21,7 @@
 
 #include "postgres.h"
 
+#include "cdb/cdbllize.h"
 #include "cdb/cdbmutate.h"		/* apply_shareinput */
 #include "cdb/cdbplan.h"
 #include "cdb/cdbvars.h"
@@ -45,6 +46,8 @@
 #include "utils/syscache.h"
 #include "catalog/pg_proc.h"
 #include "catalog/pg_namespace.h"
+#include "optimizer/cost.h"
+#include "optimizer/walkers.h"
 
 /* GPORCA entry point */
 extern PlannedStmt * GPOPTOptimizedPlan(Query *parse, bool *had_unexpected_failure, OptimizerOptions *opts);
@@ -53,6 +56,7 @@ static Plan *remove_redundant_results(PlannerInfo *root, Plan *plan);
 static Node *remove_redundant_results_mutator(Node *node, void *);
 static bool can_replace_tlist(Plan *plan);
 static Node *push_down_expr_mutator(Node *node, List *child_tlist);
+static void check_partition_fullscan(PlannedStmt *stmt);
 
 /*
  * Logging of optimization outcome
@@ -193,6 +197,163 @@ query_contains_support_functions(Query *query)
 }
 
 /*
+ * get_part_prune_info
+ *		Extract part_prune_info from a plan node, if present.
+ *		Returns NULL for node types without partition pruning info.
+ *		PartitionSelector is always skipped (JOIN-based dynamic pruning).
+ */
+static PartitionPruneInfo *
+get_part_prune_info(Plan *plan)
+{
+	switch (nodeTag(plan))
+	{
+		case T_Append:
+			return ((Append *) plan)->part_prune_info;
+		case T_MergeAppend:
+			return ((MergeAppend *) plan)->part_prune_info;
+		case T_DynamicSeqScan:
+			return ((DynamicSeqScan *) plan)->part_prune_info;
+		case T_DynamicIndexScan:
+			return ((DynamicIndexScan *) plan)->part_prune_info;
+		case T_DynamicIndexOnlyScan:
+			return ((DynamicIndexOnlyScan *) plan)->part_prune_info;
+		case T_DynamicBitmapHeapScan:
+			return ((DynamicBitmapHeapScan *) plan)->part_prune_info;
+		case T_DynamicForeignScan:
+			return ((DynamicForeignScan *) plan)->part_prune_info;
+		case T_PartitionSelector:
+			/* Skip: JOIN dynamic pruning, present_parts is always full */
+			return NULL;
+		default:
+			return NULL;
+	}
+}
+
+/*
+ * check_partition_fullscan_in_node
+ *		Check a single plan node's partition pruning info against the
+ *		rejection policy.  Raises ERROR if the query would scan too many
+ *		partitions without effective pruning.
+ */
+static void
+check_partition_fullscan_in_node(PartitionPruneInfo *ppi, List *rtable)
+{
+	ListCell   *lc1;
+
+	if (ppi == NULL)
+		return;
+
+	foreach(lc1, ppi->prune_infos)
+	{
+		List	   *prune_info_list = (List *) lfirst(lc1);
+		ListCell   *lc2;
+
+		foreach(lc2, prune_info_list)
+		{
+			PartitionedRelPruneInfo *pinfo =
+				(PartitionedRelPruneInfo *) lfirst(lc2);
+			int			total = pinfo->nparts;
+			int			present = bms_num_members(pinfo->present_parts);
+			int			threshold = partition_fullscan_threshold;
+			bool		do_reject = false;
+
+			/* Skip single-partition tables */
+			if (total <= 1)
+				continue;
+
+			/*
+			 * If initial_pruning_steps or exec_pruning_steps is not empty,
+			 * the executor can still prune partitions at startup or runtime
+			 * (e.g., parameterized queries).  Do not reject.
+			 */
+			if (pinfo->initial_pruning_steps != NIL ||
+				pinfo->exec_pruning_steps != NIL)
+				continue;
+
+			if (threshold == 0)
+				do_reject = (present == total);
+			else
+				do_reject = (present > threshold);
+
+			if (do_reject)
+			{
+				RangeTblEntry *rte = rt_fetch(pinfo->rtindex, rtable);
+				char   *relname = get_rel_name(rte->relid);
+				char   *nspname = get_namespace_name(
+										get_rel_namespace(rte->relid));
+
+				ereport(ERROR,
+						(errcode(ERRCODE_STATEMENT_TOO_COMPLEX),
+						 errmsg("partitioned table \"%s.%s\" full partition "
+								"scan is not allowed, %d partitions would "
+								"be scanned",
+								nspname, relname, present),
+						 errhint("Add a WHERE clause on the partition key "
+								 "to enable partition pruning.")));
+			}
+		}
+	}
+}
+
+/*
+ * Context for check_partition_fullscan_walker.
+ * Must begin with plan_tree_base_prefix as required by plan_tree_walker.
+ */
+typedef struct check_partition_fullscan_context
+{
+	plan_tree_base_prefix base;		/* Required prefix */
+	List	   *rtable;
+} check_partition_fullscan_context;
+
+/*
+ * check_partition_fullscan_walker
+ *		plan_tree_walker callback that visits each plan node and checks
+ *		for partition fullscan violations.
+ */
+static bool
+check_partition_fullscan_walker(Node *node, void *context)
+{
+	check_partition_fullscan_context *ctx =
+		(check_partition_fullscan_context *) context;
+
+	if (node == NULL)
+		return false;
+
+	if (is_plan_node(node))
+	{
+		PartitionPruneInfo *ppi = get_part_prune_info((Plan *) node);
+
+		check_partition_fullscan_in_node(ppi, ctx->rtable);
+	}
+
+	return plan_tree_walker(node, check_partition_fullscan_walker,
+							context, true);
+}
+
+/*
+ * check_partition_fullscan
+ *		Entry point: check all partition scan nodes in a PlannedStmt
+ *		for fullscan violations.
+ */
+static void
+check_partition_fullscan(PlannedStmt *stmt)
+{
+	check_partition_fullscan_context ctx;
+
+	if (!reject_partition_fullscan || !enable_partition_pruning)
+		return;
+
+	if (stmt->planTree == NULL)
+		return;
+
+	exec_init_plan_tree_base(&ctx.base, stmt);
+	ctx.rtable = stmt->rtable;
+
+	/* Walk main plan tree (recurse_into_subplans handles SubPlan nodes) */
+	check_partition_fullscan_walker((Node *) stmt->planTree, &ctx);
+}
+
+/*
  * optimize_query
  *		Plan the query using the GPORCA planner
  *
@@ -292,6 +453,9 @@ optimize_query(Query *parse, int cursorOptions, ParamListInfo boundParams, Optim
 	 */
 	if (!result)
 		return NULL;
+
+	/* Check for partition fullscan violations in ORCA-generated plan */
+	check_partition_fullscan(result);
 
 	/*
 	 * Post-process the plan.

@@ -1212,6 +1212,19 @@ static struct config_bool ConfigureNamesBool[] =
 		NULL, NULL, NULL
 	},
 	{
+		{"reject_partition_fullscan", PGC_USERSET, QUERY_TUNING_METHOD,
+			gettext_noop("Rejects queries that scan all partitions without pruning."),
+			gettext_noop("When enabled, queries on partitioned tables that "
+						 "cannot prune any partition will be rejected with "
+						 "an error, requiring a WHERE clause on the "
+						 "partition key."),
+			GUC_EXPLAIN
+		},
+		&reject_partition_fullscan,
+		true,
+		NULL, NULL, NULL
+	},
+	{
 		{"enable_async_append", PGC_USERSET, QUERY_TUNING_METHOD,
 			gettext_noop("Enables the planner's use of async append plans."),
 			NULL,
@@ -2305,6 +2318,20 @@ static struct config_int ConfigureNamesInt[] =
 		},
 		&join_collapse_limit,
 		13, 1, INT_MAX,
+		NULL, NULL, NULL
+	},
+	{
+		{"partition_fullscan_threshold", PGC_USERSET, QUERY_TUNING_METHOD,
+			gettext_noop("Maximum partitions allowed after pruning before "
+						 "rejecting a query."),
+			gettext_noop("When reject_partition_fullscan is on, queries are "
+						 "rejected if remaining partitions after pruning "
+						 "exceed this threshold. 0 means reject only when "
+						 "no pruning occurs at all."),
+			GUC_EXPLAIN
+		},
+		&partition_fullscan_threshold,
+		0, 0, INT_MAX,
 		NULL, NULL, NULL
 	},
 	{

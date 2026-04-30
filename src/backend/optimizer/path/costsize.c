@@ -160,6 +160,8 @@ bool		enable_parallel_append = true;
 bool		enable_parallel_hash = true;
 bool		enable_partition_pruning = true;
 bool		enable_async_append = true;
+bool		reject_partition_fullscan = true;
+int			partition_fullscan_threshold = 0;
 
 typedef struct
 {
