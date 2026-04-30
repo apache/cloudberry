@@ -678,7 +678,7 @@ extern bool     gp_eager_two_phase_agg;
 
 extern bool     gp_eager_distinct_dedup;
 
-/* Force redistribution of insert into randomly-distributed table */
+/* Force redistribution of insert into randomly-distributed table. */
 extern bool     gp_force_random_redistribution;
 
 /* Analyze tools */
