@@ -1,0 +1,4 @@
+comment = 'reject queries that scan all partitions without pruning'
+default_version = '1.0'
+module_pathname = '$libdir/reject_partition_fullscan'
+relocatable = true
