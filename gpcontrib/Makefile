@@ -31,8 +31,7 @@ else
                gp_legacy_string_agg \
                gp_exttable_fdw \
                gp_toolkit \
-               pg_hint_plan \
-               reject_partition_fullscan
+               pg_hint_plan
 endif
 
 ifeq "$(with_diskquota)" "yes"
