@@ -20,12 +20,15 @@ extern "C" {
 #include "access/sysattr.h"
 #include "catalog/heap.h"
 #include "catalog/pg_class.h"
+#include "catalog/pg_language.h"
+#include "catalog/pg_proc.h"
 #include "nodes/makefuncs.h"
 #include "nodes/parsenodes.h"
 #include "nodes/plannodes.h"
 #include "optimizer/walkers.h"
 #include "utils/guc.h"
 #include "utils/rel.h"
+#include "utils/syscache.h"
 }
 
 #include "gpos/base.h"
@@ -213,8 +216,8 @@ CTranslatorQueryToDXL::CTranslatorQueryToDXL(
 	// check if the query has any unsupported node types
 	CheckUnsupportedNodeTypes(query);
 
-	// check if the query has SIRV functions in the targetlist without a FROM clause
-	CheckSirvFuncsWithoutFromClause(query);
+	// check if the query has SIRV functions in the targetlist
+	CheckSirvFuncsInTargetList(query);
 
 	// first normalize the query
 	m_query =
@@ -254,6 +257,37 @@ CTranslatorQueryToDXL::QueryToDXLInstance(CMemoryPool *mp,
 							  false,   // is_top_query_dml
 							  nullptr  // query_level_to_cte_map
 		);
+}
+
+static BOOL
+HasUnsafeCoordinatorFunc(Oid funcid)
+{
+	HeapTuple	proctup;
+	HeapTuple	langtup;
+	Form_pg_proc procform;
+	Form_pg_language langform;
+	BOOL		is_unsafe;
+
+	proctup = SearchSysCache1(PROCOID, ObjectIdGetDatum(funcid));
+	if (!HeapTupleIsValid(proctup))
+		elog(ERROR, "cache lookup failed for function %u", funcid);
+
+	procform = (Form_pg_proc) GETSTRUCT(proctup);
+	langtup = SearchSysCache1(LANGOID, ObjectIdGetDatum(procform->prolang));
+	if (!HeapTupleIsValid(langtup))
+	{
+		ReleaseSysCache(proctup);
+		elog(ERROR, "cache lookup failed for language %u", procform->prolang);
+	}
+
+	langform = (Form_pg_language) GETSTRUCT(langtup);
+	is_unsafe = (strcmp(NameStr(langform->lanname), "internal") != 0 &&
+				 strcmp(NameStr(langform->lanname), "c") != 0);
+
+	ReleaseSysCache(langtup);
+	ReleaseSysCache(proctup);
+
+	return is_unsafe;
 }
 
 //---------------------------------------------------------------------------
@@ -337,20 +371,23 @@ CTranslatorQueryToDXL::CheckUnsupportedNodeTypes(Query *query)
 
 //---------------------------------------------------------------------------
 //	@function:
-//		CTranslatorQueryToDXL::CheckSirvFuncsWithoutFromClause
+//		CTranslatorQueryToDXL::CheckSirvFuncsInTargetList
 //
 //	@doc:
-//		Check for SIRV functions in the target list without a FROM clause, and
-//		throw an exception when found
+//		Check for SIRV functions in the target list, and throw an exception
+//		when found.
+//
+//		ORCA can place target list projections above a Motion and execute
+//		them on the coordinator. That is unsafe for SIRV functions because
+//		they may perform SPI, dispatch, or other volatile work that must not
+//		be moved to the coordinator in a distributed query.
 //
 //---------------------------------------------------------------------------
 void
-CTranslatorQueryToDXL::CheckSirvFuncsWithoutFromClause(Query *query)
+CTranslatorQueryToDXL::CheckSirvFuncsInTargetList(Query *query)
 {
-	// if there is a FROM clause or if target list is empty, look no further
-	if ((nullptr != query->jointree &&
-		 0 < gpdb::ListLength(query->jointree->fromlist)) ||
-		NIL == query->targetList)
+	// if target list is empty, look no further
+	if (NIL == query->targetList)
 	{
 		return;
 	}
@@ -368,7 +405,11 @@ CTranslatorQueryToDXL::CheckSirvFuncsWithoutFromClause(Query *query)
 //		CTranslatorQueryToDXL::HasSirvFunctions
 //
 //	@doc:
-//		Check for SIRV functions in the tree rooted at the given node
+//		Check for SIRV functions in the tree rooted at the given node that
+//		might be unsafe to execute on the coordinator. ORCA already handles
+//		volatile built-in/internal functions like random(), but procedural
+//		or SQL-language functions can execute SPI and must not be moved above
+//		a Motion.
 //
 //---------------------------------------------------------------------------
 BOOL
@@ -385,7 +426,8 @@ CTranslatorQueryToDXL::HasSirvFunctions(Node *node) const
 	{
 		FuncExpr *func_expr = (FuncExpr *) lfirst(lc);
 		if (CTranslatorUtils::IsSirvFunc(m_mp, m_md_accessor,
-										 func_expr->funcid))
+										 func_expr->funcid) &&
+			HasUnsafeCoordinatorFunc(func_expr->funcid))
 		{
 			has_sirv = true;
 			break;
