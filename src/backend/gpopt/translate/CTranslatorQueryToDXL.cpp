@@ -216,8 +216,18 @@ CTranslatorQueryToDXL::CTranslatorQueryToDXL(
 	// check if the query has any unsupported node types
 	CheckUnsupportedNodeTypes(query);
 
-	// check if the query has SIRV functions in the targetlist
-	CheckSirvFuncsInTargetList(query);
+	// Preserve the historical fallback for SIRV functions in targetlists
+	// without a FROM clause for statement-level and derived-table queries.
+	// Scalar subqueries use a copied outer var mapping and should retain
+	// ORCA's existing handling for expressions such as nested random().
+	if (nullptr == var_colid_mapping)
+	{
+		CheckSirvFuncsWithoutFromClause(query);
+	}
+
+	// Add a separate guard for targetlist functions that are unsafe to
+	// execute on the coordinator.
+	CheckUnsafeSirvFuncsInTargetList(query);
 
 	// first normalize the query
 	m_query =
@@ -371,20 +381,76 @@ CTranslatorQueryToDXL::CheckUnsupportedNodeTypes(Query *query)
 
 //---------------------------------------------------------------------------
 //	@function:
-//		CTranslatorQueryToDXL::CheckSirvFuncsInTargetList
+//		CTranslatorQueryToDXL::CheckSirvFuncsWithoutFromClause
 //
 //	@doc:
-//		Check for SIRV functions in the target list, and throw an exception
-//		when found.
-//
-//		ORCA can place target list projections above a Motion and execute
-//		them on the coordinator. That is unsafe for SIRV functions because
-//		they may perform SPI, dispatch, or other volatile work that must not
-//		be moved to the coordinator in a distributed query.
+//		Check for SIRV functions in the target list without a FROM clause, and
+//		throw an exception when found
 //
 //---------------------------------------------------------------------------
 void
-CTranslatorQueryToDXL::CheckSirvFuncsInTargetList(Query *query)
+CTranslatorQueryToDXL::CheckSirvFuncsWithoutFromClause(Query *query)
+{
+	ListCell *lc = nullptr;
+
+	// if there is a FROM clause or if target list is empty, look no further
+	if (!((nullptr != query->jointree &&
+		   0 < gpdb::ListLength(query->jointree->fromlist)) ||
+		  NIL == query->targetList))
+	{
+		// see if we have SIRV functions in the immediate target list
+		if (HasSirvFunctions((Node *) query->targetList,
+							 false /*descend_into_subqueries*/,
+							 false /*check_coordinator_safety*/))
+		{
+			GPOS_RAISE(gpdxl::ExmaDXL, gpdxl::ExmiQuery2DXLUnsupportedFeature,
+					   GPOS_WSZ_LIT("SIRV functions"));
+		}
+	}
+
+	// Derived tables should keep the legacy fallback behavior, but scalar
+	// subqueries in targetlist expressions are handled separately and must
+	// not force an outer-query fallback.
+	ForEach(lc, query->rtable)
+	{
+		RangeTblEntry *rte = (RangeTblEntry *) lfirst(lc);
+
+		if (RTE_SUBQUERY == rte->rtekind && nullptr != rte->subquery)
+		{
+			CheckSirvFuncsWithoutFromClause(rte->subquery);
+		}
+	}
+
+	ForEach(lc, query->cteList)
+	{
+		CommonTableExpr *cte = (CommonTableExpr *) lfirst(lc);
+
+		if (nullptr != cte->ctequery)
+		{
+			CheckSirvFuncsWithoutFromClause((Query *) cte->ctequery);
+		}
+	}
+}
+
+//---------------------------------------------------------------------------
+//	@function:
+//		CTranslatorQueryToDXL::CheckUnsafeSirvFuncsInTargetList
+//
+//	@doc:
+//		Check for SIRV functions in the target list that may be unsafe to
+//		execute on the coordinator and throw an exception when found.
+//
+//		ORCA can place target list projections above a Motion and execute
+//		them on the coordinator. That is unsafe for procedural or SQL-language
+//		SIRV functions because they may perform SPI, dispatch, or other
+//		volatile work that must not be moved to the coordinator in a
+//		distributed query. Only inspect the immediate target list expression
+//		tree here; functions inside nested subqueries are planned within their
+//		own query context and should not force a fallback for the outer query.
+//
+//---------------------------------------------------------------------------
+void
+CTranslatorQueryToDXL::CheckUnsafeSirvFuncsInTargetList(Query *query)
 {
 	// if target list is empty, look no further
 	if (NIL == query->targetList)
@@ -392,8 +458,10 @@ CTranslatorQueryToDXL::CheckSirvFuncsInTargetList(Query *query)
 		return;
 	}
 
-	// see if we have SIRV functions in the target list
-	if (HasSirvFunctions((Node *) query->targetList))
+	// see if we have unsafe coordinator functions in the target list
+	if (HasSirvFunctions((Node *) query->targetList,
+						 false /*descend_into_subqueries*/,
+						 true /*check_coordinator_safety*/))
 	{
 		GPOS_RAISE(gpdxl::ExmaDXL, gpdxl::ExmiQuery2DXLUnsupportedFeature,
 				   GPOS_WSZ_LIT("SIRV functions"));
@@ -405,20 +473,18 @@ CTranslatorQueryToDXL::CheckSirvFuncsInTargetList(Query *query)
 //		CTranslatorQueryToDXL::HasSirvFunctions
 //
 //	@doc:
-//		Check for SIRV functions in the tree rooted at the given node that
-//		might be unsafe to execute on the coordinator. ORCA already handles
-//		volatile built-in/internal functions like random(), but procedural
-//		or SQL-language functions can execute SPI and must not be moved above
-//		a Motion.
+//		Check for SIRV functions in the tree rooted at the given node
 //
 //---------------------------------------------------------------------------
 BOOL
-CTranslatorQueryToDXL::HasSirvFunctions(Node *node) const
+CTranslatorQueryToDXL::HasSirvFunctions(Node *node,
+										bool descend_into_subqueries,
+										bool check_coordinator_safety) const
 {
 	GPOS_ASSERT(nullptr != node);
 
 	List *function_list = gpdb::ExtractNodesExpression(
-		node, T_FuncExpr, true /*descendIntoSubqueries*/);
+		node, T_FuncExpr, descend_into_subqueries);
 	ListCell *lc = nullptr;
 
 	BOOL has_sirv = false;
@@ -427,7 +493,8 @@ CTranslatorQueryToDXL::HasSirvFunctions(Node *node) const
 		FuncExpr *func_expr = (FuncExpr *) lfirst(lc);
 		if (CTranslatorUtils::IsSirvFunc(m_mp, m_md_accessor,
 										 func_expr->funcid) &&
-			HasUnsafeCoordinatorFunc(func_expr->funcid))
+			(!check_coordinator_safety ||
+			 HasUnsafeCoordinatorFunc(func_expr->funcid)))
 		{
 			has_sirv = true;
 			break;
@@ -3949,7 +4016,10 @@ CTranslatorQueryToDXL::TranslateTVFToDXL(const RangeTblEntry *rte,
 	FuncExpr *funcexpr = (FuncExpr *) rtfunc->funcexpr;
 
 	// check if arguments contain SIRV functions
-	if (NIL != funcexpr->args && HasSirvFunctions((Node *) funcexpr->args))
+	if (NIL != funcexpr->args &&
+		HasSirvFunctions((Node *) funcexpr->args,
+						 true /*descend_into_subqueries*/,
+						 false /*check_coordinator_safety*/))
 	{
 		GPOS_RAISE(gpdxl::ExmaDXL, gpdxl::ExmiQuery2DXLUnsupportedFeature,
 				   GPOS_WSZ_LIT("SIRV functions"));

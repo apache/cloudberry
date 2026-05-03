@@ -150,12 +150,17 @@ private:
 	// walker to check if SUBLINK node is present in the security quals
 	static BOOL CheckSublinkInSecurityQuals(Node *node, void *context);
 
-	// check for SIRV functions in the targetlist and throw an exception
-	// when found
-	void CheckSirvFuncsInTargetList(Query *query);
+	// check for SIRV functions in the targetlist without a FROM clause and
+	// throw an exception when found
+	void CheckSirvFuncsWithoutFromClause(Query *query);
+
+	// check for targetlist SIRV functions that may be unsafe to execute on the
+	// coordinator, and throw an exception when found
+	void CheckUnsafeSirvFuncsInTargetList(Query *query);
 
 	// check for SIRV functions in the tree rooted at the given node
-	BOOL HasSirvFunctions(Node *node) const;
+	BOOL HasSirvFunctions(Node *node, bool descend_into_subqueries,
+						  bool check_coordinator_safety) const;
 
 	// translate FromExpr (in the GPDB query) into a CDXLLogicalJoin or CDXLLogicalGet
 	CDXLNode *TranslateFromExprToDXL(FromExpr *from_expr);
