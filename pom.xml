@@ -1276,7 +1276,10 @@ code or new licensing patterns.
             <exclude>gpcontrib/gp_stats_collector/.clang-format</exclude>
             <exclude>gpcontrib/gp_stats_collector/Makefile</exclude>
 
-            <!-- The following files are used by PAX as the 
+            <exclude>gpcontrib/reject_partition_fullscan/Makefile</exclude>
+            <exclude>gpcontrib/reject_partition_fullscan/reject_partition_fullscan.control</exclude>
+
+            <!-- The following files are used by PAX as the
                  submodules or created originally by Cloudberry.
             -->
             <exclude>contrib/pax_storage/src/test/**</exclude>
