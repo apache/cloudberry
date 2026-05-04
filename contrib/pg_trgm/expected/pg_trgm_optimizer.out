@@ -3507,15 +3507,15 @@ select t,similarity(t,'gwertyu1988') as sml from test_trgm where t % 'gwertyu198
 
 explain (costs off)
 select t <-> 'q0987wertyu0988', t from test_trgm order by t <-> 'q0987wertyu0988' limit 2;
-                        QUERY PLAN                         
------------------------------------------------------------
+                          QUERY PLAN                           
+---------------------------------------------------------------
  Limit
    ->  Gather Motion 3:1  (slice1; segments: 3)
          Merge Key: ((t <-> 'q0987wertyu0988'::text))
-         ->  Sort
-               Sort Key: ((t <-> 'q0987wertyu0988'::text))
-               ->  Seq Scan on test_trgm
- Optimizer: GPORCA
+         ->  Limit
+               ->  Index Scan using trgm_idx on test_trgm
+                     Order By: (t <-> 'q0987wertyu0988'::text)
+ Optimizer: Postgres query optimizer
 (7 rows)
 
 select t <-> 'q0987wertyu0988', t from test_trgm order by t <-> 'q0987wertyu0988' limit 2;
