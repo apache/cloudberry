@@ -265,7 +265,7 @@ DROP TABLESPACE testspace_otherloc;
 
 CREATE TABLESPACE testspace_dir_empty LOCATION :'testtablespace';
 CREATE TABLE t_dir_empty(a int);
-\! rm -rf $PG_ABS_SRCDIR/testtablespace
+\! rm -rf $PG_ABS_SRCDIR/testtablespace/*
 DROP TABLE IF EXISTS t_dir_empty;
 DROP TABLESPACE testspace_dir_empty;
 
