@@ -410,9 +410,7 @@ static char *nextToken(register char **stringp, register const char *delim);
 static void addDistributedBy(Archive *fout, PQExpBuffer q, const TableInfo *tbinfo, int actual_atts);
 static void addDistributedByOld(Archive *fout, PQExpBuffer q, const TableInfo *tbinfo, int actual_atts);
 static void addSchedule(Archive *fout, PQExpBuffer q, const TableInfo *tbinfo);
-static bool isGPDB(Archive *fout);
 static bool isMPP(Archive *fout);
-static bool isGPDB5000OrLater(Archive *fout);
 static bool isGPDB6000OrLater(Archive *fout);
 
 /* END MPP ADDITION */
@@ -443,16 +441,6 @@ isMPP(Archive *fout)
 		PQclear(res);
 	}
 	return (value == 1) ? true : false;
-}
-
-static bool
-isGPDB5000OrLater(Archive *fout)
-{
-	if (!isMPP(fout))
-		return false;		/* Not GP-based at all. */
-
-	/* GPDB 5 is based on PostgreSQL 8.3 */
-	return fout->remoteVersion >= 80300;
 }
 
 static bool
