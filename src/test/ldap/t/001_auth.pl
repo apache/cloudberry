@@ -113,7 +113,8 @@ system_or_bail "openssl", "x509", "-req", "-in", "$slapd_certs/server.csr",
   "-CA", "$slapd_certs/ca.crt", "-CAkey", "$slapd_certs/ca.key",
   "-CAcreateserial", "-out", "$slapd_certs/server.crt";
 
-system_or_bail $slapd, '-f', $slapd_conf, '-h', "$ldap_url $ldaps_url";
+# -s0 prevents log messages ending up in syslog
+system_or_bail $slapd, '-f', $slapd_conf,'-s0', '-h', "$ldap_url $ldaps_url";
 
 END
 {

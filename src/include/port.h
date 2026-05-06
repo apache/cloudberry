@@ -141,6 +141,11 @@ extern char *pipe_read_line(char *cmd, char *line, int maxsize);
 #define PG_VERSIONSTR "postgres (Apache Cloudberry) " PG_VERSION "\n"
 #define PG_BACKEND_VERSIONSTR "postgres (Apache Cloudberry) " PG_VERSION "\n"
 
+#ifdef EXEC_BACKEND
+/* Disable ASLR before exec, for developer builds only (in exec.c) */
+extern int pg_disable_aslr(void);
+#endif
+
 
 #if defined(WIN32) || defined(__CYGWIN__)
 #define EXE ".exe"

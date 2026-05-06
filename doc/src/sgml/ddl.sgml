@@ -2457,7 +2457,7 @@ postgres=&gt; table passwd;
 postgres=&gt; set role alice;
 SET
 postgres=&gt; table passwd;
-ERROR:  permission denied for relation passwd
+ERROR:  permission denied for table passwd
 postgres=&gt; select user_name,real_name,home_phone,extra_info,home_dir,shell from passwd;
  user_name | real_name |  home_phone  | extra_info | home_dir    |   shell
 -----------+-----------+--------------+------------+-------------+-----------
@@ -2467,7 +2467,7 @@ postgres=&gt; select user_name,real_name,home_phone,extra_info,home_dir,shell fr
 (3 rows)
 
 postgres=&gt; update passwd set user_name = 'joe';
-ERROR:  permission denied for relation passwd
+ERROR:  permission denied for table passwd
 -- Alice is allowed to change her own real_name, but no others
 postgres=&gt; update passwd set real_name = 'Alice Doe';
 UPDATE 1
@@ -2476,9 +2476,9 @@ UPDATE 0
 postgres=&gt; update passwd set shell = '/bin/xx';
 ERROR:  new row violates WITH CHECK OPTION for "passwd"
 postgres=&gt; delete from passwd;
-ERROR:  permission denied for relation passwd
+ERROR:  permission denied for table passwd
 postgres=&gt; insert into passwd (user_name) values ('xxx');
-ERROR:  permission denied for relation passwd
+ERROR:  permission denied for table passwd
 -- Alice can change her own password; RLS silently prevents updating other rows
 postgres=&gt; update passwd set pwhash = 'abc';
 UPDATE 1
@@ -3951,9 +3951,15 @@ CREATE TABLE measurement_y2008m02 PARTITION OF measurement
 </programlisting>
 
      As an alternative, it is sometimes more convenient to create the
-     new table outside the partition structure, and make it a proper
+     new table outside the partition structure, and attach it as a
      partition later. This allows new data to be loaded, checked, and
      transformed prior to it appearing in the partitioned table.
+     Moreover, the <literal>ATTACH PARTITION</literal> operation requires
+     only <literal>SHARE UPDATE EXCLUSIVE</literal> lock on the
+     partitioned table, as opposed to the <literal>ACCESS
+     EXCLUSIVE</literal> lock that is required by <command>CREATE TABLE
+     ... PARTITION OF</command>, so it is more friendly to concurrent
+     operations on the partitioned table.
      The <literal>CREATE TABLE ... LIKE</literal> option is helpful
      to avoid tediously repeating the parent table's definition:
 
@@ -3971,11 +3977,6 @@ ALTER TABLE measurement_y2008m02 ADD CONSTRAINT y2008m02
 ALTER TABLE measurement ATTACH PARTITION measurement_y2008m02
     FOR VALUES FROM ('2008-02-01') TO ('2008-03-01' );
 </programlisting>
-    </para>
-
-    <para>
-     The <command>ATTACH PARTITION</command> command requires taking a
-     <literal>SHARE UPDATE EXCLUSIVE</literal> lock on the partitioned table.
     </para>
 
     <para>
