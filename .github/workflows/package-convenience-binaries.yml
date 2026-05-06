@@ -1,0 +1,651 @@
+# --------------------------------------------------------------------
+#
+# Licensed to the Apache Software Foundation (ASF) under one or more
+# contributor license agreements. See the NOTICE file distributed
+# with this work for additional information regarding copyright
+# ownership. The ASF licenses this file to You under the Apache
+# License, Version 2.0 (the "License"); you may not use this file
+# except in compliance with the License. You may obtain a copy of the
+# License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
+# implied. See the License for the specific language governing
+# permissions and limitations under the License.
+#
+# --------------------------------------------------------------------
+# GitHub Actions Workflow: Apache Cloudberry Convenience Package Build
+# --------------------------------------------------------------------
+# Description:
+#
+#   This workflow manually builds convenience DEB/RPM packages from an
+#   ASF-approved Apache Cloudberry source release tarball.
+#
+# Workflow Overview:
+# 1. **Verify Source Release Job**:
+#    - Validates version and Apache download URLs.
+#    - Downloads source tarball, .asc, and .sha512.
+#    - Imports the project KEYS file and verifies signature and checksum.
+#    - Publishes the verified source release as an internal workflow artifact.
+#
+# 2. **Build Package Job (Matrix)**:
+#    - Downloads the verified source release artifact.
+#    - Builds Cloudberry inside the target Cloudberry Docker build image.
+#    - Produces DEB/RPM packages and matching .sha512 checksum files.
+#    - Uploads per-platform package artifacts.
+#
+# Scope:
+# - Intended for official Apache Cloudberry source releases managed by the
+#   release manager.
+# - Supports an official source release mode and a temporary git ref test mode.
+# - Produces convenience binaries only; detached .asc signatures for DEB/RPM
+#   remain a release manager local step.
+# --------------------------------------------------------------------
+
+name: Apache Cloudberry Convenience Package Build
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_mode:
+        description: 'Source mode: official release validation or git ref test'
+        required: true
+        default: official_source_release
+        type: choice
+        options:
+          - official_source_release
+          - git_ref_test
+
+      # ============================================================
+      # Fields for official_source_release mode
+      # ============================================================
+      version:
+        description: '[Required for all modes] Release version, e.g. 2.2.0-incubating'
+        required: true
+        type: string
+      source_url:
+        description: '[official_source_release only] Apache source tarball URL from downloads.apache.org'
+        required: false
+        type: string
+      source_asc_url:
+        description: '[official_source_release only] Detached GPG signature URL for the source tarball (.asc)'
+        required: false
+        type: string
+      source_sha512_url:
+        description: '[official_source_release only] SHA-512 checksum URL for the source tarball (.sha512)'
+        required: false
+        type: string
+
+      # ============================================================
+      # Fields for git_ref_test mode
+      # ============================================================
+      git_ref:
+        description: '[git_ref_test only] Git tag or commit SHA to archive as source input'
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: package-build-${{ github.ref }}-${{ inputs.version }}
+  cancel-in-progress: true
+
+env:
+  LOG_RETENTION_DAYS: 14
+  KEYS_URL: https://downloads.apache.org/incubator/cloudberry/KEYS
+  # Shared platform matrix for build-packages and package-install-test jobs
+  # Each entry includes: target_os, target_arch, package_type, runner,
+  # build_container_image, test_container_image, and label (for test job)
+  PLATFORMS: |-
+    [
+      {"target_os": "rocky8", "target_arch": "x86_64", "package_type": "rpm", "runner": "ubuntu-24.04", "build_container_image": "apache/incubator-cloudberry:cbdb-build-rocky8-latest", "test_container_image": "apache/incubator-cloudberry:cbdb-test-rocky8-latest", "label": "rocky8-x86_64-rpm"},
+      {"target_os": "rocky8", "target_arch": "arm64", "package_type": "rpm", "runner": "ubuntu-24.04-arm", "build_container_image": "apache/incubator-cloudberry:cbdb-build-rocky8-latest", "test_container_image": "apache/incubator-cloudberry:cbdb-test-rocky8-latest", "label": "rocky8-arm64-rpm"},
+      {"target_os": "rocky9", "target_arch": "x86_64", "package_type": "rpm", "runner": "ubuntu-24.04", "build_container_image": "apache/incubator-cloudberry:cbdb-build-rocky9-latest", "test_container_image": "apache/incubator-cloudberry:cbdb-test-rocky9-latest", "label": "rocky9-x86_64-rpm"},
+      {"target_os": "rocky9", "target_arch": "arm64", "package_type": "rpm", "runner": "ubuntu-24.04-arm", "build_container_image": "apache/incubator-cloudberry:cbdb-build-rocky9-latest", "test_container_image": "apache/incubator-cloudberry:cbdb-test-rocky9-latest", "label": "rocky9-arm64-rpm"},
+      {"target_os": "ubuntu22.04", "target_arch": "x86_64", "package_type": "deb", "runner": "ubuntu-24.04", "build_container_image": "apache/incubator-cloudberry:cbdb-build-ubuntu22.04-latest", "test_container_image": "apache/incubator-cloudberry:cbdb-test-ubuntu22.04-latest", "label": "ubuntu22.04-x86_64-deb"},
+      {"target_os": "ubuntu22.04", "target_arch": "arm64", "package_type": "deb", "runner": "ubuntu-24.04-arm", "build_container_image": "apache/incubator-cloudberry:cbdb-build-ubuntu22.04-latest", "test_container_image": "apache/incubator-cloudberry:cbdb-test-ubuntu22.04-latest", "label": "ubuntu22.04-arm64-deb"},
+      {"target_os": "ubuntu24.04", "target_arch": "x86_64", "package_type": "deb", "runner": "ubuntu-24.04", "build_container_image": "apache/incubator-cloudberry:cbdb-build-ubuntu24.04-latest", "test_container_image": "apache/incubator-cloudberry:cbdb-test-ubuntu24.04-latest", "label": "ubuntu24.04-x86_64-deb"},
+      {"target_os": "ubuntu24.04", "target_arch": "arm64", "package_type": "deb", "runner": "ubuntu-24.04-arm", "build_container_image": "apache/incubator-cloudberry:cbdb-build-ubuntu24.04-latest", "test_container_image": "apache/incubator-cloudberry:cbdb-test-ubuntu24.04-latest", "label": "ubuntu24.04-arm64-deb"}
+    ]
+
+jobs:
+  verify-source-release:
+    name: Verify source release
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    outputs:
+      source_tarball_name: ${{ steps.validate.outputs.source_tarball_name }}
+      artifact_name: ${{ steps.validate.outputs.artifact_name }}
+      packaging_version: ${{ steps.validate.outputs.packaging_version }}
+    container:
+      image: apache/incubator-cloudberry:cbdb-build-ubuntu24.04-latest
+      options: >-
+        --user root
+        --hostname cdw
+
+    steps:
+      - name: Initialize verification container
+        shell: bash
+        run: |
+          set -euo pipefail
+          su - gpadmin -c "/tmp/init_system.sh"
+
+      - name: Validate manual inputs
+        id: validate
+        shell: bash
+        env:
+          SOURCE_MODE: ${{ github.event.inputs.source_mode }}
+          VERSION: ${{ github.event.inputs.version }}
+          SOURCE_URL: ${{ github.event.inputs.source_url }}
+          SOURCE_ASC_URL: ${{ github.event.inputs.source_asc_url }}
+          SOURCE_SHA512_URL: ${{ github.event.inputs.source_sha512_url }}
+          GIT_REF: ${{ github.event.inputs.git_ref }}
+        run: |
+          set -euo pipefail
+
+          if [[ -z "$VERSION" ]]; then
+            echo "::error::version must not be empty"
+            exit 1
+          fi
+
+          source_tarball_name="apache-cloudberry-${VERSION}-src.tar.gz"
+          artifact_name="verified-source-release-${VERSION}"
+          packaging_version="${VERSION%-incubating}"
+
+          if [[ -z "$packaging_version" ]]; then
+            echo "::error::Unable to derive packaging version from version=${VERSION}"
+            exit 1
+          fi
+
+          if [[ "$SOURCE_MODE" == "official_source_release" ]]; then
+            validate_apache_url() {
+              local value="$1"
+              local label="$2"
+              local prefix="https://downloads.apache.org/incubator/cloudberry/"
+              if [[ -z "$value" ]]; then
+                echo "::error::${label} must not be empty in official_source_release mode"
+                exit 1
+              fi
+              if [[ "$value" != "$prefix"* ]]; then
+                echo "::error::${label} must use downloads.apache.org"
+                exit 1
+              fi
+            }
+
+            validate_apache_url "$SOURCE_URL" "source_url"
+            validate_apache_url "$SOURCE_ASC_URL" "source_asc_url"
+            validate_apache_url "$SOURCE_SHA512_URL" "source_sha512_url"
+
+            if [[ "$SOURCE_URL" != *"/${source_tarball_name}" ]]; then
+              echo "::error::source_url must end with /${source_tarball_name}"
+              exit 1
+            fi
+            if [[ "$SOURCE_ASC_URL" != *"/${source_tarball_name}.asc" ]]; then
+              echo "::error::source_asc_url must end with /${source_tarball_name}.asc"
+              exit 1
+            fi
+            if [[ "$SOURCE_SHA512_URL" != *"/${source_tarball_name}.sha512" ]]; then
+              echo "::error::source_sha512_url must end with /${source_tarball_name}.sha512"
+              exit 1
+            fi
+          elif [[ "$SOURCE_MODE" == "git_ref_test" ]]; then
+            if [[ -z "$GIT_REF" ]]; then
+              echo "::error::git_ref must not be empty in git_ref_test mode"
+              exit 1
+            fi
+            artifact_name="git-ref-source-${VERSION}"
+          else
+            echo "::error::Unsupported source_mode: $SOURCE_MODE"
+            exit 1
+          fi
+
+          echo "source_tarball_name=${source_tarball_name}" >> "$GITHUB_OUTPUT"
+          echo "artifact_name=${artifact_name}" >> "$GITHUB_OUTPUT"
+          echo "packaging_version=${packaging_version}" >> "$GITHUB_OUTPUT"
+
+      - name: Download source release and verification files
+        if: github.event.inputs.source_mode == 'official_source_release'
+        shell: bash
+        env:
+          SOURCE_URL: ${{ github.event.inputs.source_url }}
+          SOURCE_ASC_URL: ${{ github.event.inputs.source_asc_url }}
+          SOURCE_SHA512_URL: ${{ github.event.inputs.source_sha512_url }}
+          SOURCE_TARBALL_NAME: ${{ steps.validate.outputs.source_tarball_name }}
+        run: |
+          set -euo pipefail
+          mkdir -p verified-source
+          curl --fail --location --silent --show-error \
+            --output "verified-source/${SOURCE_TARBALL_NAME}" \
+            "$SOURCE_URL"
+          curl --fail --location --silent --show-error \
+            --output "verified-source/${SOURCE_TARBALL_NAME}.asc" \
+            "$SOURCE_ASC_URL"
+          curl --fail --location --silent --show-error \
+            --output "verified-source/${SOURCE_TARBALL_NAME}.sha512" \
+            "$SOURCE_SHA512_URL"
+          curl --fail --location --silent --show-error \
+            --output "verified-source/KEYS" \
+            "${KEYS_URL}"
+
+      - name: Verify source release signature and checksum
+        if: github.event.inputs.source_mode == 'official_source_release'
+        shell: bash
+        env:
+          SOURCE_TARBALL_NAME: ${{ steps.validate.outputs.source_tarball_name }}
+        run: |
+          set -euo pipefail
+          export GNUPGHOME="${RUNNER_TEMP}/gnupg"
+          mkdir -p "${GNUPGHOME}"
+          chmod 700 "${GNUPGHOME}"
+
+          gpg --import verified-source/KEYS
+          gpg --verify \
+            "verified-source/${SOURCE_TARBALL_NAME}.asc" \
+            "verified-source/${SOURCE_TARBALL_NAME}"
+
+          (
+            cd verified-source
+            sha512sum -c "${SOURCE_TARBALL_NAME}.sha512"
+          )
+
+          tar -tzf "verified-source/${SOURCE_TARBALL_NAME}" >/dev/null
+
+      - name: Checkout git ref for test packaging
+        if: github.event.inputs.source_mode == 'git_ref_test'
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.git_ref }}
+          fetch-depth: 1
+          submodules: recursive
+          path: repo
+
+      - name: Prepare git ref source artifact
+        if: github.event.inputs.source_mode == 'git_ref_test'
+        shell: bash
+        env:
+          SOURCE_TARBALL_NAME: ${{ steps.validate.outputs.source_tarball_name }}
+          VERSION: ${{ github.event.inputs.version }}
+          GIT_REF: ${{ github.event.inputs.git_ref }}
+        run: |
+          set -euo pipefail
+          mkdir -p verified-source
+          source_root_name="apache-cloudberry-${VERSION}"
+          tmp_dir="$(mktemp -d)"
+          trap 'rm -rf "$tmp_dir"' EXIT
+
+          git -C repo archive --format=tar --prefix="${source_root_name}/" HEAD | tar -x -C "${tmp_dir}"
+
+          if [[ -s repo/.gitmodules ]]; then
+            git -C repo submodule foreach --recursive --quiet "
+              fullpath=\"\$toplevel/\$sm_path\"
+              destpath=\"${tmp_dir}/${source_root_name}/\$sm_path\"
+              mkdir -p \"\$destpath\"
+              git -C \"\$fullpath\" archive --format=tar --prefix=\"\$sm_path/\" HEAD | tar -x -C \"${tmp_dir}/${source_root_name}\"
+            "
+          fi
+
+          tar -C "${tmp_dir}" -czf "verified-source/${SOURCE_TARBALL_NAME}" "${source_root_name}"
+          tar -tzf "verified-source/${SOURCE_TARBALL_NAME}" >/dev/null
+
+      - name: Summarize verified source release
+        if: github.event.inputs.source_mode == 'official_source_release'
+        shell: bash
+        env:
+          VERSION: ${{ github.event.inputs.version }}
+          SOURCE_URL: ${{ github.event.inputs.source_url }}
+          SOURCE_ASC_URL: ${{ github.event.inputs.source_asc_url }}
+          SOURCE_SHA512_URL: ${{ github.event.inputs.source_sha512_url }}
+        run: |
+          {
+            echo "# Verified source release"
+            echo "- Version: ${VERSION}"
+            echo "- Packaging version: ${{ steps.validate.outputs.packaging_version }}"
+            echo "- Source URL: ${SOURCE_URL}"
+            echo "- Signature URL: ${SOURCE_ASC_URL}"
+            echo "- Checksum URL: ${SOURCE_SHA512_URL}"
+            echo "- KEYS URL: ${KEYS_URL}"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Summarize git ref test source
+        if: github.event.inputs.source_mode == 'git_ref_test'
+        shell: bash
+        env:
+          VERSION: ${{ github.event.inputs.version }}
+          GIT_REF: ${{ github.event.inputs.git_ref }}
+        run: |
+          {
+            echo "# Git ref test source"
+            echo "- Version: ${VERSION}"
+            echo "- Packaging version: ${{ steps.validate.outputs.packaging_version }}"
+            echo "- Git ref: ${GIT_REF}"
+            echo "- Mode: git_ref_test"
+            echo "- Archive source: git archive (recursive with submodules)"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload verified source release
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.validate.outputs.artifact_name }}
+          retention-days: ${{ env.LOG_RETENTION_DAYS }}
+          if-no-files-found: error
+          path: verified-source/*
+
+  build-packages:
+    name: ${{ matrix.platform.target_os }}-${{ matrix.platform.target_arch }}-${{ matrix.platform.package_type }}
+    needs: verify-source-release
+    runs-on: ${{ matrix.platform.runner }}
+    timeout-minutes: 30
+    container:
+      image: ${{ matrix.platform.build_container_image }}
+      options: >-
+        --user root
+        --hostname cdw
+        --shm-size=2gb
+        -v /usr/share:/host_usr_share
+        -v /usr/local:/host_usr_local
+        -v /opt:/host_opt
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: ${{ fromJSON(env.PLATFORMS) }}
+
+    steps:
+      - name: Free disk space
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf /host_opt/hostedtoolcache || true
+          rm -rf /host_usr_local/lib/android || true
+          rm -rf /host_usr_share/dotnet || true
+          rm -rf /host_opt/ghc || true
+          rm -rf /host_usr_local/.ghcup || true
+          rm -rf /host_usr_share/swift || true
+          rm -rf /host_usr_local/share/powershell || true
+          rm -rf /host_usr_local/share/chromium || true
+          rm -rf /host_usr_share/miniconda || true
+          rm -rf /host_opt/az || true
+          rm -rf /host_usr_share/sbt || true
+          df -h /
+
+      - name: Initialize build container
+        shell: bash
+        run: |
+          set -euo pipefail
+          su - gpadmin -c "/tmp/init_system.sh"
+
+      - name: Download verified source release
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ needs.verify-source-release.outputs.artifact_name }}
+          path: ${{ github.workspace }}/verified-source
+
+      - name: Extract source release
+        id: extract
+        shell: bash
+        env:
+          SOURCE_TARBALL_NAME: ${{ needs.verify-source-release.outputs.source_tarball_name }}
+        run: |
+          set -euo pipefail
+          tarball_path="${GITHUB_WORKSPACE}/verified-source/${SOURCE_TARBALL_NAME}"
+          source_root_name="$(tar -tzf "${tarball_path}" | awk -F/ 'NR == 1 { first = $1 } END { if (NR == 0) exit 1; print first }')"
+          
+          # Extract to a temporary location first
+          tar -xzf "${tarball_path}" -C "${GITHUB_WORKSPACE}"
+          
+          # Create cloudberry directory and move extracted content there
+          # This ensures the unittest script can find ${SRC_DIR}/../cloudberry
+          mkdir -p "${GITHUB_WORKSPACE}/cloudberry"
+          mv "${GITHUB_WORKSPACE}/${source_root_name}"/* "${GITHUB_WORKSPACE}/cloudberry/"
+          mv "${GITHUB_WORKSPACE}/${source_root_name}"/.[!.]* "${GITHUB_WORKSPACE}/cloudberry/" 2>/dev/null || true
+          rmdir "${GITHUB_WORKSPACE}/${source_root_name}"
+          
+          source_dir="${GITHUB_WORKSPACE}/cloudberry"
+          chown gpadmin:gpadmin "${GITHUB_WORKSPACE}"
+          chown -R gpadmin:gpadmin "${source_dir}"
+          echo "source_dir=${source_dir}" >> "$GITHUB_OUTPUT"
+
+      - name: Build Cloudberry from verified source release
+        shell: bash
+        env:
+          SOURCE_DIR: ${{ steps.extract.outputs.source_dir }}
+        run: |
+          set -euo pipefail
+          
+          # Create build-logs directory and set ownership
+          mkdir -p "${SOURCE_DIR}/build-logs"
+          chown -R gpadmin:gpadmin "${SOURCE_DIR}/build-logs"
+          
+          # Use /usr/local/cloudberry-db for all platforms
+          export BUILD_DESTINATION="/usr/local/cloudberry-db"
+          
+          chmod +x "${SOURCE_DIR}"/devops/build/automation/cloudberry/scripts/configure-cloudberry.sh
+          chmod +x "${SOURCE_DIR}"/devops/build/automation/cloudberry/scripts/build-cloudberry.sh
+          
+          if ! su - gpadmin -c "cd ${SOURCE_DIR} && SRC_DIR=${SOURCE_DIR} BUILD_USER=github-actions BUILD_DESTINATION=${BUILD_DESTINATION} ${SOURCE_DIR}/devops/build/automation/cloudberry/scripts/configure-cloudberry.sh"; then
+            echo "::error::Configure script failed"
+            exit 1
+          fi
+          
+          if ! su - gpadmin -c "cd ${SOURCE_DIR} && SRC_DIR=${SOURCE_DIR} BUILD_DESTINATION=${BUILD_DESTINATION} ${SOURCE_DIR}/devops/build/automation/cloudberry/scripts/build-cloudberry.sh"; then
+            echo "::error::Build script failed"
+            exit 1
+          fi
+
+      - name: Run Apache Cloudberry unit tests
+        shell: bash
+        env:
+          SOURCE_DIR: ${{ steps.extract.outputs.source_dir }}
+        run: |
+          set -euo pipefail
+          
+          # Use /usr/local/cloudberry-db for all platforms
+          export BUILD_DESTINATION="/usr/local/cloudberry-db"
+          
+          chmod +x "${SOURCE_DIR}"/devops/build/automation/cloudberry/scripts/unittest-cloudberry.sh
+          if ! su - gpadmin -c "cd ${SOURCE_DIR} && SRC_DIR=${SOURCE_DIR} BUILD_DESTINATION=${BUILD_DESTINATION} ${SOURCE_DIR}/devops/build/automation/cloudberry/scripts/unittest-cloudberry.sh"; then
+            echo "::error::Unittest script failed"
+            exit 1
+          fi
+
+      - name: Build convenience package
+        shell: bash
+        env:
+          RELEASE_VERSION: ${{ github.event.inputs.version }}
+          PACKAGING_VERSION: ${{ needs.verify-source-release.outputs.packaging_version }}
+          SOURCE_DIR: ${{ steps.extract.outputs.source_dir }}
+          PACKAGE_TYPE: ${{ matrix.platform.package_type }}
+          TARGET_OS: ${{ matrix.platform.target_os }}
+          TARGET_ARCH: ${{ matrix.platform.target_arch }}
+        run: |
+          set -euo pipefail
+          artifact_dir="${GITHUB_WORKSPACE}/package-artifacts"
+          mkdir -p "${artifact_dir}"
+
+          # For DEB: Clean debian directory and let build-deb.sh copy from /usr/local/cloudberry-db
+          if [[ "${PACKAGE_TYPE}" == "deb" ]]; then
+            rm -rf "${SOURCE_DIR}/debian"
+          fi
+
+          su - gpadmin -c "
+            set -euo pipefail
+            cd '${SOURCE_DIR}'
+            export BUILD_DESTINATION='/usr/local/cloudberry-db'
+            if [[ '${PACKAGE_TYPE}' == 'deb' ]]; then
+              '${SOURCE_DIR}/devops/build/packaging/deb/build-deb.sh' -v '${PACKAGING_VERSION}'
+            else
+              '${SOURCE_DIR}/devops/build/packaging/rpm/build-rpm.sh' -v '${PACKAGING_VERSION}' -r '1'
+            fi
+          "
+
+          if [[ "${PACKAGE_TYPE}" == "deb" ]]; then
+            find "$(dirname "${SOURCE_DIR}")" -maxdepth 1 -type f -name '*.deb' \
+              -exec cp -f {} "${artifact_dir}/" \;
+            primary_pattern='*.deb'
+          else
+            # Copy RPM packages excluding debuginfo and debugsource packages
+            find /home/gpadmin/rpmbuild/RPMS -type f -name '*.rpm' \
+              ! -name '*-debuginfo-*.rpm' \
+              ! -name '*-debugsource-*.rpm' \
+              -exec cp -f {} "${artifact_dir}/" \;
+            primary_pattern='*.rpm'
+          fi
+
+          shopt -s nullglob
+          packages=("${artifact_dir}"/${primary_pattern})
+          if (( ${#packages[@]} == 0 )); then
+            echo "::error::No ${PACKAGE_TYPE} packages were collected for ${TARGET_OS}/${TARGET_ARCH}"
+            exit 1
+          fi
+
+          # Generate SHA512 checksums for all packages
+          for package in "${packages[@]}"; do
+            (
+              cd "${artifact_dir}"
+              sha512sum "$(basename "${package}")" > "$(basename "${package}").sha512"
+            )
+          done
+
+          {
+            echo "# ${TARGET_OS}/${TARGET_ARCH}"
+            echo "- Package type: ${PACKAGE_TYPE}"
+            echo "- Release version: ${RELEASE_VERSION}"
+            echo "- Packaging version: ${PACKAGING_VERSION}"
+            echo "- Container image: ${{ matrix.platform.build_container_image }}"
+            echo "- Packages and checksums:"
+            for package in "${packages[@]}"; do
+              pkg_name="$(basename "${package}")"
+              echo "  - ${pkg_name}"
+              echo "  - ${pkg_name}.sha512"
+            done
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload convenience package artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: packages-${{ matrix.platform.target_os }}-${{ matrix.platform.target_arch }}-${{ matrix.platform.package_type }}
+          retention-days: ${{ env.LOG_RETENTION_DAYS }}
+          if-no-files-found: error
+          path: package-artifacts/
+
+  package-install-test:
+    name: ${{ matrix.platform.label }}-install-test
+    needs: [build-packages]
+    runs-on: ${{ matrix.platform.runner }}
+    timeout-minutes: 30
+    container:
+      image: ${{ matrix.platform.test_container_image }}
+      options: >-
+        --user root
+        --hostname cdw
+        --shm-size=2gb
+        -v /usr/share:/host_usr_share
+        -v /usr/local:/host_usr_local
+        -v /opt:/host_opt
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: ${{ fromJSON(env.PLATFORMS) }}
+
+    steps:
+      - name: Initialize test container
+        shell: bash
+        run: |
+          set -euo pipefail
+          su - gpadmin -c "/tmp/init_system.sh"
+
+      - name: Download package artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: packages-${{ matrix.platform.target_os }}-${{ matrix.platform.target_arch }}-${{ matrix.platform.package_type }}
+          path: ${{ github.workspace }}/package-artifacts
+
+      - name: Verify package checksum
+        id: verify-package
+        shell: bash
+        env:
+          PACKAGE_TYPE: ${{ matrix.platform.package_type }}
+        run: |
+          set -euo pipefail
+          artifact_dir="${GITHUB_WORKSPACE}/package-artifacts"
+          
+          # Find package file using ls
+          if [[ "${PACKAGE_TYPE}" == "deb" ]]; then
+            package_file=$(ls "${artifact_dir}"/*.deb 2>/dev/null | head -n 1)
+          else
+            package_file=$(ls "${artifact_dir}"/*.rpm 2>/dev/null | head -n 1)
+          fi
+
+          if [[ -z "${package_file}" || ! -f "${package_file}" ]]; then
+            echo "::error::No ${PACKAGE_TYPE} package found in ${artifact_dir}"
+            ls -la "${artifact_dir}" || true
+            exit 1
+          fi
+
+          checksum_file="${package_file}.sha512"
+          
+          if [[ ! -f "${checksum_file}" ]]; then
+            echo "::error::Checksum file not found: ${checksum_file}"
+            exit 1
+          fi
+
+          (
+            cd "${artifact_dir}"
+            sha512sum -c "$(basename "${checksum_file}")"
+          )
+
+          echo "package_file=${package_file}" >> "$GITHUB_OUTPUT"
+
+      - name: Install package
+        shell: bash
+        env:
+          PACKAGE_FILE: ${{ steps.verify-package.outputs.package_file }}
+          PACKAGE_TYPE: ${{ matrix.platform.package_type }}
+          TARGET_OS: ${{ matrix.platform.target_os }}
+        run: |
+          set -euo pipefail
+
+          if [[ "${PACKAGE_TYPE}" == "deb" ]]; then
+            apt update
+            apt --fix-broken install -y "${PACKAGE_FILE}"
+          else
+            releasever="${TARGET_OS#rocky}"
+            dnf clean all
+            dnf makecache --refresh || dnf makecache
+            dnf install -y --setopt=retries=10 --releasever="${releasever}" "${PACKAGE_FILE}"
+          fi
+
+          chown -R gpadmin:gpadmin /usr/local/cloudberry-db* || true
+
+      - name: Run gpdemo smoke test
+        shell: bash
+        env:
+          TARGET_OS: ${{ matrix.platform.target_os }}
+          TARGET_ARCH: ${{ matrix.platform.target_arch }}
+        run: |
+          set -euo pipefail
+          smoke_dir="${GITHUB_WORKSPACE}/smoke-test"
+          mkdir -p "${smoke_dir}"
+          chown -R gpadmin:gpadmin "${GITHUB_WORKSPACE}"
+
+          su - gpadmin -c "
+            set -euo pipefail
+            cd '${smoke_dir}'
+            source /usr/local/cloudberry-db/cloudberry-env.sh
+            trap 'gpdemo -d >/dev/null 2>&1 || true' EXIT
+            gpdemo
+            source ./gpdemo-env.sh
+            echo "====Run SELECT 1===" && psql -d postgres -c 'SELECT 1;'
+            echo "====Run SELECT version()===" && psql -d postgres -c 'SELECT version();'
+            echo "====Run gpstop -ar===" && gpstop -ar
+            echo "====Run gpstate===" && gpstate
+          "
+
+          {
+            echo '# Package install smoke test'
+            echo '- Target: ${{ matrix.platform.target_os }}/${{ matrix.platform.target_arch }}'
+            echo '- Package: ${{ steps.verify-package.outputs.package_file }}'
+          } >> "$GITHUB_STEP_SUMMARY"
