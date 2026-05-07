@@ -426,6 +426,7 @@ SELECT (n_tup_ins + n_tup_upd) > 0 AS has_data FROM gp_stat_all_tables_summary
 -- Test that sessions is incremented when a new session is started in pg_stat_database
 SELECT sessions AS db_stat_sessions FROM pg_stat_database WHERE datname = (SELECT current_database()) \gset
 \c
+SET enable_parallel TO off;
 SELECT gp_stat_force_next_flush();
 SELECT sessions > :db_stat_sessions FROM pg_stat_database WHERE datname = (SELECT current_database());
 
@@ -694,6 +695,7 @@ DROP TABLE test_io_shared;
 -- CBDB: CBDB use share buffer not local buffer.So extends with object = 'relation' not 'temp relation'.
 -- read/write will not count directly, result is false
 \c
+SET enable_parallel TO off;
 SET temp_buffers TO 100;
 CREATE TEMPORARY TABLE test_io_local(a int, b TEXT);
 SELECT sum(extends) AS extends, sum(evictions) AS evictions, sum(writes) AS writes
@@ -826,6 +828,7 @@ UPDATE brin_hot SET val = -3 WHERE id = 42;
 -- timeout to elapse, let's just start a new session.  The old one will
 -- then send its stats before dying.
 \c -
+SET enable_parallel TO off;
 
 SELECT wait_for_hot_stats();
 select n_tup_upd from gp_stat_user_tables_summary where relid = ('brin_hot'::regclass::oid);
