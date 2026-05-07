@@ -152,6 +152,8 @@ cancel_pending_hook_type cancel_pending_hook = NULL;
  * Hook for query execution.
  */
 exec_simple_query_hook_type exec_simple_query_hook = NULL;
+/* flags for non-system relation kinds to restrict use */
+int			restrict_nonsystem_relation_kind;
 
 /* ----------------
  *		private typedefs etc

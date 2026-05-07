@@ -56,6 +56,9 @@
 static bool extract_base_relids_from_jointree(Node *jtnode, List *rtable,
 											   List **relids, bool *has_foreign);
 
+static bool extract_base_relids_from_jointree(Node *jtnode, List *rtable,
+											   List **relids, bool *has_foreign);
+
 static void InsertMatviewTablesEntries(Oid mvoid, List *relids);
 
 static void RemoveMatviewTablesEntries(Oid mvoid);

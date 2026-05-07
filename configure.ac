@@ -2080,6 +2080,10 @@ if test "$with_mdblocales" = yes; then
   AC_CHECK_HEADER(mdblocales.h, [], [AC_MSG_ERROR([mdblocales header not found.])])
 fi
 
+if test "$with_mdblocales" = yes; then
+  AC_CHECK_HEADER(mdblocales.h, [], [AC_MSG_ERROR([mdblocales header not found.])])
+fi
+
 if test "$with_gssapi" = yes ; then
   AC_CHECK_HEADERS(gssapi/gssapi.h, [],
 	[AC_CHECK_HEADERS(gssapi.h, [], [AC_MSG_ERROR([gssapi.h header file is required for GSSAPI])])])

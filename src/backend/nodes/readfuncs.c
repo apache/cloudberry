@@ -2570,6 +2570,35 @@ _readWindowHashAgg(void)
 	READ_DONE();
 }
 
+static WindowHashAgg *
+_readWindowHashAgg(void)
+{
+	READ_LOCALS(WindowHashAgg);
+
+	ReadCommonPlan(&local_node->plan);
+
+	READ_UINT_FIELD(winref);
+	READ_INT_FIELD(partNumCols);
+	READ_ATTRNUMBER_ARRAY(partColIdx, local_node->partNumCols);
+	READ_OID_ARRAY(partOperators, local_node->partNumCols);
+	READ_OID_ARRAY(partCollations, local_node->partNumCols);
+	READ_INT_FIELD(ordNumCols);
+	READ_ATTRNUMBER_ARRAY(ordColIdx, local_node->ordNumCols);
+	READ_OID_ARRAY(ordOperators, local_node->ordNumCols);
+	READ_OID_ARRAY(ordCollations, local_node->ordNumCols);
+	READ_BOOL_ARRAY(ordNullsFirst, local_node->ordNumCols);
+	READ_INT_FIELD(frameOptions);
+	READ_NODE_FIELD(startOffset);
+	READ_NODE_FIELD(endOffset);
+	READ_OID_FIELD(startInRangeFunc);
+	READ_OID_FIELD(endInRangeFunc);
+	READ_OID_FIELD(inRangeColl);
+	READ_BOOL_FIELD(inRangeAsc);
+	READ_BOOL_FIELD(inRangeNullsFirst);
+
+	READ_DONE();
+}
+
 /*
  * _readUnique
  */

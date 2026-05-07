@@ -17350,6 +17350,17 @@ fi
 
 fi
 
+if test "$with_mdblocales" = yes; then
+  ac_fn_c_check_header_mongrel "$LINENO" "mdblocales.h" "ac_cv_header_mdblocales_h" "$ac_includes_default"
+if test "x$ac_cv_header_mdblocales_h" = xyes; then :
+
+else
+  as_fn_error $? "mdblocales header not found." "$LINENO" 5
+fi
+
+
+fi
+
 if test "$with_gssapi" = yes ; then
   for ac_header in gssapi/gssapi.h
 do :
