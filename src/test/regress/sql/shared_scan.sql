@@ -126,6 +126,9 @@ where
 -- ss_t1 needs enough rows (40000) to push ORCA to the cross-slice plan;
 -- with fewer rows the bug does not manifest and the test would silently
 -- pass even without the fix.
+-- start_ignore
+DROP TABLE IF EXISTS ss_t1, ss_t2;
+-- end_ignore
 CREATE TABLE ss_t1 AS
   SELECT generate_series(1, 40000) id
   DISTRIBUTED BY (id);

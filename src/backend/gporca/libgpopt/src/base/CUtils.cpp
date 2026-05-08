@@ -978,62 +978,6 @@ CUtils::FHasCTEAnchor(CExpression *pexpr)
 	return false;
 }
 
-// return CTEConsumers' and a set of CTEProducers' CTE ids in the given subtree
-void
-CUtils::CollectConsumersAndProducers(CMemoryPool *mp, CExpression *pexpr,
-									 ULongPtrArray *cteConsumers,
-									 UlongCteIdHashSet *cteProducerSet)
-{
-	COperator *pop = pexpr->Pop();
-
-	if (COperator::EopPhysicalCTEConsumer == pop->Eopid())
-	{
-		cteConsumers->Append(GPOS_NEW(mp) ULONG(
-			CPhysicalCTEConsumer::PopConvert(pop)->UlCTEId()));
-	}
-	else if (COperator::EopPhysicalCTEProducer == pop->Eopid())
-	{
-		cteProducerSet->Insert(GPOS_NEW(mp) ULONG(
-			CPhysicalCTEProducer::PopConvert(pop)->UlCTEId()));
-	}
-
-	for (ULONG ul = 0; ul < pexpr->Arity(); ul++)
-	{
-		CExpression *pexprChild = (*pexpr)[ul];
-
-		if (!pexprChild->Pop()->FScalar())
-		{
-			CollectConsumersAndProducers(mp, pexprChild, cteConsumers,
-										 cteProducerSet);
-		}
-	}
-}
-
-BOOL
-CUtils::hasUnpairedCTEConsumer(CMemoryPool *mp, CExpression *pexpr)
-{
-	BOOL hasUnpairedConsumer = false;
-
-	ULongPtrArray *cteConsumers = GPOS_NEW(mp) ULongPtrArray(mp);
-	UlongCteIdHashSet *cteProducerSet = GPOS_NEW(mp) UlongCteIdHashSet(mp);
-
-	CollectConsumersAndProducers(mp, pexpr, cteConsumers, cteProducerSet);
-
-	// check if every consumer's producer is in ProducerSet
-	for (ULONG ul = 0; ul < cteConsumers->Size(); ul++)
-	{
-		if (!cteProducerSet->Contains((*cteConsumers)[ul]))
-		{
-			hasUnpairedConsumer = true;
-			break;
-		}
-	}
-	cteConsumers->Release();
-	cteProducerSet->Release();
-
-	return hasUnpairedConsumer;
-}
-
 // True if the distribution is replicated-like.
 static BOOL
 FReplicatedLikeDistribution(CDistributionSpec::EDistributionType edt)
@@ -1064,6 +1008,9 @@ CollectCTESlices(CMemoryPool *mp, CExpression *pexpr, ULONG curSlice,
 				 ULONG *pNextSlice, CTEInfoArray *prodInfos,
 				 CTEInfoArray *consInfos)
 {
+	GPOS_CHECK_STACK_SIZE;
+	GPOS_ASSERT(nullptr != pexpr);
+
 	COperator *pop = pexpr->Pop();
 
 	if (COperator::EopPhysicalCTEProducer == pop->Eopid())
@@ -1113,6 +1060,25 @@ CollectCTESlices(CMemoryPool *mp, CExpression *pexpr, ULONG curSlice,
 	}
 }
 
+static BOOL
+FFoundCrossSlice(const CTEInfoArray *consInfos, const CTEInfoArray *prodInfos)
+{
+	for (ULONG ic = 0; ic < consInfos->Size(); ic++)
+	{
+		SCTEInfo *cons = (*consInfos)[ic];
+
+		for (ULONG ip = 0; ip < prodInfos->Size(); ip++)
+		{
+			SCTEInfo *prod = (*prodInfos)[ip];
+			if (prod->cteId == cons->cteId && prod->sliceId != cons->sliceId)
+			{
+				return true;
+			}
+		}
+	}
+	return false;
+}
+
 BOOL
 CUtils::FHasCrossSliceReplicatedCTEConsumer(CMemoryPool *mp, CExpression *pexpr)
 {
@@ -1128,23 +1094,7 @@ CUtils::FHasCrossSliceReplicatedCTEConsumer(CMemoryPool *mp, CExpression *pexpr)
 	CollectCTESlices(mp, pexpr, 0 /*curSlice*/, &nextSlice, prodInfos,
 					 consInfos);
 
-	BOOL cross = false;
-
-	for (ULONG ic = 0; ic < consInfos->Size(); ic++)
-	{
-		SCTEInfo *cons = (*consInfos)[ic];
-
-		for (ULONG ip = 0; ip < prodInfos->Size(); ip++)
-		{
-			SCTEInfo *prod = (*prodInfos)[ip];
-			if (prod->cteId == cons->cteId && prod->sliceId != cons->sliceId)
-			{
-				cross = true;
-				goto lExit;
-			}
-		}
-	}
-lExit:
+	BOOL cross = FFoundCrossSlice(consInfos, prodInfos);
 
 	prodInfos->Release();
 	consInfos->Release();

@@ -274,7 +274,7 @@ CTranslatorExprToDXL::PdxlnTranslate(CExpression *pexpr,
 	if (CUtils::FHasCrossSliceReplicatedCTEConsumer(m_mp, pexpr))
 	{
 		GPOS_RAISE(
-			gpdxl::ExmaDXL, gpdxl::ExmiExpr2DXLUnsupportedFeature,
+			gpopt::ExmaDXL, gpopt::ExmiExpr2DXLUnsupportedFeature,
 			GPOS_WSZ_LIT(
 				"CTE Consumer placed on a different slice than its replicated Producer"));
 	}
@@ -4265,9 +4265,17 @@ CTranslatorExprToDXL::BuildScalarSubplans(
 	const ULONG size = pdrgpcrInner->Size();
 
 	// Fallback to Postgres optimizer if the SubPlan's inner expression contains a
-	// CTE Consumer whose Producer lives outside this subtree. Such a Consumer
-	// would become a cross-slice Shared Scan reader without a local Producer,
-	// which can hang the query or fail at execution time.
+	// CTE Consumer placed on a different slice than its replicated Producer.
+	// Such a Consumer becomes a cross-slice Shared Scan reader without a local
+	// Producer, which can hang the query or fail at execution time.
+	if (CUtils::FHasCrossSliceReplicatedCTEConsumer(m_mp, pexprInner))
+	{
+		GPOS_RAISE(
+			gpopt::ExmaDXL, gpopt::ExmiExpr2DXLUnsupportedFeature,
+			GPOS_WSZ_LIT(
+				"CTE Consumer placed on a different slice than its replicated Producer"));
+	}
+
 	CDXLNodeArray *pdrgpdxlnInner = GPOS_NEW(m_mp) CDXLNodeArray(m_mp);
 	for (ULONG ul = 0; ul < size; ul++)
 	{
