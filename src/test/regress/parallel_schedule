@@ -8,24 +8,13 @@
 # this limits the number of connections needed to run the tests.
 # ----------
 
-<<<<<<< HEAD
 # required setup steps
 test: test_setup
-
-=======
-# mdb admin simple checks
-test: test_setup
-
-# run tablespace by itself, and first, because it forces a checkpoint;
-# we'd prefer not to have checkpoints later in the tests because that
-# interferes with crash-recovery testing.
-test: tablespace
 
 test: mdb_admin
 
 test: mdb_superuser
 
->>>>>>> main
 # ----------
 # The first group of parallel tests
 # ----------
@@ -58,7 +47,8 @@ test: copy copyselect copydml insert insert_conflict
 # Note: many of the tests in later groups depend on create_index
 # ----------
 test: create_function_c create_misc create_operator create_procedure create_table create_type create_schema
-test: create_index create_index_spgist create_view index_including index_including_gist
+test: create_index create_index_spgist create_view index_including_gist
+test: index_including
 # Depends on things setup for create_index
 
 # ----------
@@ -192,16 +182,12 @@ test: gp_foreign_data
 # ----------
 test: partition_join partition_prune reloptions hash_part indexing partition_aggregate partition_info tuplesort explain compression memoize stats
 
-<<<<<<< HEAD
-# event_trigger cannot run concurrently with any test that runs DDL
-=======
-# tese the partition table with append
+# test the partition table with append
 test: partition_append_setup
 test: partition_append partition_prune_append partition_prune_opfamily_append partition_pruning_append
 test: partition_append_teardown
 
 # event triggers cannot run concurrently with any test that runs DDL
->>>>>>> main
 # oidjoins is read-only, though, and should run late for best coverage
 test: event_trigger oidjoins
 

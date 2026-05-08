@@ -132,13 +132,8 @@
  *  PHJ_BATCH_ELECT          -- initial state
  *  PHJ_BATCH_ALLOCATE*      -- one allocates buckets
  *  PHJ_BATCH_LOAD           -- all load the hash table from disk
-<<<<<<< HEAD
  *  PHJ_BATCH_PROBE          -- all probe
  *  PHJ_BATCH_SCAN*          -- one does right/right-anti/full unmatched scan
-=======
- *  PHJ_BATCH_PROBING          -- all probe
- *  PHJ_BATCH_SCAN*          -- one does full/right unmatched scan
->>>>>>> main
  *  PHJ_BATCH_FREE*          -- one frees memory
  *
  * Batch 0 is a special case, because it starts out in phase
@@ -156,11 +151,7 @@
  * to a barrier, unless the barrier has reached a phase that means that no
  * process will wait on it again.  We emit tuples while attached to the build
  * barrier in phase PHJ_BUILD_RUN, and to a per-batch barrier in phase
-<<<<<<< HEAD
- * PHJ_BATCH_PROBE.  These are advanced to PHJ_BUILD_FREE and PHJ_BATCH_SCAN
-=======
  * PHJ_BATCH_PROBING.  These are advanced to PHJ_BUILD_FREE and PHJ_BATCH_SCAN
->>>>>>> main
  * respectively without waiting, using BarrierArriveAndDetach() and
  * BarrierArriveAndDetachExceptLast() respectively.  The last to detach
  * receives a different return value so that it knows that it's safe to
@@ -1639,11 +1630,7 @@ ExecParallelHashJoinNewBatch(HashJoinState *hjstate)
 					 * since that phase is already underway (the thing we
 					 * can't do under current deadlock-avoidance rules is wait
 					 * for others to arrive at PHJ_BATCH_SCAN, because
-<<<<<<< HEAD
-					 * PHJ_BATCH_PROBE emits tuples, but in this case we just
-=======
 					 * PHJ_BATCH_PROBING emits tuples, but in this case we just
->>>>>>> main
 					 * got here without waiting).  That is not yet done.  For
 					 * now, we just detach and go around again.  We have to
 					 * use ExecHashTableDetachBatch() because there's a small
@@ -2364,13 +2351,8 @@ CreateRuntimeFilter(HashJoinState* hjstate)
 
 		foreach(lc2, targets)
 		{
-<<<<<<< HEAD
 			PlanState *target = lfirst(lc2);
-			Assert(IsA(target, SeqScanState));
-=======
-			PlanState *target = lfirst(lc);
 			Assert(IsA(target, SeqScanState) || IsA(target, DynamicSeqScanState));
->>>>>>> main
 
 			attr_filter = CreateAttrFilter(target, lattno, rattno,
 					hstate->ps.plan->plan_rows);

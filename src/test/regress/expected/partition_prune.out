@@ -4363,15 +4363,9 @@ NOTICE:  table has parent, setting distribution columns to match parent table
 create table pp_enumpart_blue partition of pp_enumpart for values in ('blue');
 NOTICE:  table has parent, setting distribution columns to match parent table
 explain (costs off) select * from pp_enumpart where a = 'blue';
-<<<<<<< HEAD
                    QUERY PLAN                   
 ------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)
-=======
-                QUERY PLAN                
-------------------------------------------
  Gather Motion 1:1  (slice1; segments: 1)
->>>>>>> main
    ->  Seq Scan on pp_enumpart_blue pp_enumpart
          Filter: (a = 'blue'::pp_colors)
  Optimizer: Postgres query optimizer

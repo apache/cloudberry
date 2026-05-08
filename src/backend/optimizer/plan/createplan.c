@@ -8638,13 +8638,8 @@ make_modifytable(PlannerInfo *root, Plan *subplan,
 		{
 			RangeTblEntry *rte = planner_rt_fetch(rti, root);
 
-<<<<<<< HEAD
 			if (rte->rtekind == RTE_RELATION &&
 				rte->relkind == RELKIND_FOREIGN_TABLE)
-=======
-			Assert(rte->rtekind == RTE_RELATION);
-			if (rte->relkind == RELKIND_FOREIGN_TABLE)
->>>>>>> main
 			{
 				/* Check if the access to foreign tables is restricted */
 				if (unlikely((restrict_nonsystem_relation_kind & RESTRICT_RELKIND_FOREIGN_TABLE) != 0))

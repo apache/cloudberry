@@ -3070,14 +3070,9 @@ select t1_anti.a, t1_anti.b from t1_anti left join t2_anti on t1_anti.a = t2_ant
  a | b 
 ---+---
  3 |  
- 4 |  
-<<<<<<< HEAD
- 2 |
- 1 |
-=======
+ 4 |
  2 |  
- 1 |  
->>>>>>> main
+ 1 |
 (4 rows)
 
 abort;

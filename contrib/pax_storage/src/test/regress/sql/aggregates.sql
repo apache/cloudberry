@@ -1,12 +1,9 @@
 --
 -- AGGREGATES
 --
-<<<<<<< HEAD
 -- start_matchignore
 -- m/^DETAIL:  CTranslatorQueryToDXL.cpp.*/
 -- end_matchignore
-=======
->>>>>>> main
 -- start_ignore
 set gp_use_streaming_hashagg = off;
 -- end_ignore

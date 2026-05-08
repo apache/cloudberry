@@ -10,11 +10,7 @@ select gp_stat_force_next_flush();
  
 (1 row)
 
-<<<<<<< HEAD:contrib/pax_storage/src/test/regress/expected/pgstat_qd_tabstat.out
 select n_tup_ins, n_tup_upd, n_tup_del, n_tup_hot_upd, n_live_tup, n_dead_tup, n_mod_since_analyze from gp_stat_all_tables_summary where relid = 'table_for_docopy'::regclass;
-=======
-select n_tup_ins, n_tup_upd, n_tup_del, n_tup_hot_upd, n_live_tup, n_dead_tup, n_mod_since_analyze from pg_stat_all_tables where relid = 'table_for_docopy'::regclass;
->>>>>>> main:contrib/pax_storage/src/test/regress/output/pgstat_qd_tabstat.source
  n_tup_ins | n_tup_upd | n_tup_del | n_tup_hot_upd | n_live_tup | n_dead_tup | n_mod_since_analyze 
 -----------+-----------+-----------+---------------+------------+------------+---------------------
          3 |         0 |         0 |             0 |          3 |          0 |                   3
@@ -36,11 +32,7 @@ select gp_stat_force_next_flush();
  
 (1 row)
 
-<<<<<<< HEAD:contrib/pax_storage/src/test/regress/expected/pgstat_qd_tabstat.out
 select n_tup_ins, n_tup_upd, n_tup_del, n_tup_hot_upd, n_live_tup, n_dead_tup, n_mod_since_analyze from gp_stat_all_tables_summary where relid = 'copy_on_segment'::regclass;
-=======
-select n_tup_ins, n_tup_upd, n_tup_del, n_tup_hot_upd, n_live_tup, n_dead_tup, n_mod_since_analyze from pg_stat_all_tables where relid = 'copy_on_segment'::regclass;
->>>>>>> main:contrib/pax_storage/src/test/regress/output/pgstat_qd_tabstat.source
  n_tup_ins | n_tup_upd | n_tup_del | n_tup_hot_upd | n_live_tup | n_dead_tup | n_mod_since_analyze 
 -----------+-----------+-----------+---------------+------------+------------+---------------------
          4 |         0 |         0 |             0 |          4 |          0 |                   4
@@ -78,11 +70,7 @@ select gp_stat_force_next_flush();
  
 (1 row)
 
-<<<<<<< HEAD:contrib/pax_storage/src/test/regress/expected/pgstat_qd_tabstat.out
 select n_tup_ins, n_tup_upd, n_tup_del, n_tup_hot_upd, n_live_tup, n_dead_tup, n_mod_since_analyze from gp_stat_all_tables_summary where relid = 'table_for_initplan'::regclass;
-=======
-select n_tup_ins, n_tup_upd, n_tup_del, n_tup_hot_upd, n_live_tup, n_dead_tup, n_mod_since_analyze from pg_stat_all_tables where relid = 'table_for_initplan'::regclass;
->>>>>>> main:contrib/pax_storage/src/test/regress/output/pgstat_qd_tabstat.source
  n_tup_ins | n_tup_upd | n_tup_del | n_tup_hot_upd | n_live_tup | n_dead_tup | n_mod_since_analyze 
 -----------+-----------+-----------+---------------+------------+------------+---------------------
          3 |         1 |         0 |             0 |          3 |          1 |                   4
@@ -98,11 +86,7 @@ select gp_stat_force_next_flush();
  
 (1 row)
 
-<<<<<<< HEAD:contrib/pax_storage/src/test/regress/expected/pgstat_qd_tabstat.out
 select n_tup_ins, n_tup_upd, n_tup_del, n_tup_hot_upd, n_live_tup, n_dead_tup, n_mod_since_analyze from gp_stat_all_tables_summary where relid = 'table_for_ctas'::regclass;
-=======
-select n_tup_ins, n_tup_upd, n_tup_del, n_tup_hot_upd, n_live_tup, n_dead_tup, n_mod_since_analyze from pg_stat_all_tables where relid = 'table_for_ctas'::regclass;
->>>>>>> main:contrib/pax_storage/src/test/regress/output/pgstat_qd_tabstat.source
  n_tup_ins | n_tup_upd | n_tup_del | n_tup_hot_upd | n_live_tup | n_dead_tup | n_mod_since_analyze 
 -----------+-----------+-----------+---------------+------------+------------+---------------------
        100 |         0 |         0 |             0 |        100 |          0 |                 100
@@ -117,11 +101,7 @@ select gp_stat_force_next_flush();
  
 (1 row)
 
-<<<<<<< HEAD:contrib/pax_storage/src/test/regress/expected/pgstat_qd_tabstat.out
 select n_tup_ins, n_tup_upd, n_tup_del, n_tup_hot_upd, n_live_tup, n_dead_tup, n_mod_since_analyze from gp_stat_all_tables_summary where relid = 'table_for_insert_into'::regclass;
-=======
-select n_tup_ins, n_tup_upd, n_tup_del, n_tup_hot_upd, n_live_tup, n_dead_tup, n_mod_since_analyze from pg_stat_all_tables where relid = 'table_for_insert_into'::regclass;
->>>>>>> main:contrib/pax_storage/src/test/regress/output/pgstat_qd_tabstat.source
  n_tup_ins | n_tup_upd | n_tup_del | n_tup_hot_upd | n_live_tup | n_dead_tup | n_mod_since_analyze 
 -----------+-----------+-----------+---------------+------------+------------+---------------------
        100 |         0 |         0 |             0 |        100 |          0 |                 100
@@ -136,11 +116,7 @@ select gp_stat_force_next_flush();
  
 (1 row)
 
-<<<<<<< HEAD:contrib/pax_storage/src/test/regress/expected/pgstat_qd_tabstat.out
 select n_tup_ins, n_tup_upd, n_tup_del, n_tup_hot_upd, n_live_tup, n_dead_tup, n_mod_since_analyze from gp_stat_all_tables_summary where relid = 'table_for_set_distributed_by'::regclass;
-=======
-select n_tup_ins, n_tup_upd, n_tup_del, n_tup_hot_upd, n_live_tup, n_dead_tup, n_mod_since_analyze from pg_stat_all_tables where relid = 'table_for_set_distributed_by'::regclass;
->>>>>>> main:contrib/pax_storage/src/test/regress/output/pgstat_qd_tabstat.source
  n_tup_ins | n_tup_upd | n_tup_del | n_tup_hot_upd | n_live_tup | n_dead_tup | n_mod_since_analyze 
 -----------+-----------+-----------+---------------+------------+------------+---------------------
        333 |         0 |         0 |             0 |        333 |          0 |                 333
@@ -153,11 +129,7 @@ select gp_stat_force_next_flush();
  
 (1 row)
 
-<<<<<<< HEAD:contrib/pax_storage/src/test/regress/expected/pgstat_qd_tabstat.out
 select n_tup_ins, n_tup_upd, n_tup_del, n_tup_hot_upd, n_live_tup, n_dead_tup, n_mod_since_analyze from gp_stat_all_tables_summary where relid = 'table_for_set_distributed_by'::regclass;
-=======
-select n_tup_ins, n_tup_upd, n_tup_del, n_tup_hot_upd, n_live_tup, n_dead_tup, n_mod_since_analyze from pg_stat_all_tables where relid = 'table_for_set_distributed_by'::regclass;
->>>>>>> main:contrib/pax_storage/src/test/regress/output/pgstat_qd_tabstat.source
  n_tup_ins | n_tup_upd | n_tup_del | n_tup_hot_upd | n_live_tup | n_dead_tup | n_mod_since_analyze 
 -----------+-----------+-----------+---------------+------------+------------+---------------------
        333 |         0 |         0 |             0 |        333 |          0 |                 333
@@ -185,11 +157,7 @@ select gp_stat_force_next_flush();
  
 (1 row)
 
-<<<<<<< HEAD:contrib/pax_storage/src/test/regress/expected/pgstat_qd_tabstat.out
 select n_tup_ins, n_tup_upd, n_tup_del, n_tup_hot_upd, n_live_tup, n_dead_tup, n_mod_since_analyze from gp_stat_all_tables_summary where relid = 'table_for_function'::regclass;
-=======
-select n_tup_ins, n_tup_upd, n_tup_del, n_tup_hot_upd, n_live_tup, n_dead_tup, n_mod_since_analyze from pg_stat_all_tables where relid = 'table_for_function'::regclass;
->>>>>>> main:contrib/pax_storage/src/test/regress/output/pgstat_qd_tabstat.source
  n_tup_ins | n_tup_upd | n_tup_del | n_tup_hot_upd | n_live_tup | n_dead_tup | n_mod_since_analyze 
 -----------+-----------+-----------+---------------+------------+------------+---------------------
        333 |         0 |       200 |             0 |        133 |        200 |                 533
@@ -217,11 +185,7 @@ select gp_stat_force_next_flush();
  
 (1 row)
 
-<<<<<<< HEAD:contrib/pax_storage/src/test/regress/expected/pgstat_qd_tabstat.out
 select n_tup_ins, n_tup_upd, n_tup_del, n_tup_hot_upd, n_live_tup, n_dead_tup, n_mod_since_analyze from gp_stat_all_tables_summary where relid = 'table_for_expand'::regclass;
-=======
-select n_tup_ins, n_tup_upd, n_tup_del, n_tup_hot_upd, n_live_tup, n_dead_tup, n_mod_since_analyze from pg_stat_all_tables where relid = 'table_for_expand'::regclass;
->>>>>>> main:contrib/pax_storage/src/test/regress/output/pgstat_qd_tabstat.source
  n_tup_ins | n_tup_upd | n_tup_del | n_tup_hot_upd | n_live_tup | n_dead_tup | n_mod_since_analyze 
 -----------+-----------+-----------+---------------+------------+------------+---------------------
        333 |         0 |         0 |             0 |        333 |          0 |                 333
@@ -240,11 +204,7 @@ select gp_stat_force_next_flush();
  
 (1 row)
 
-<<<<<<< HEAD:contrib/pax_storage/src/test/regress/expected/pgstat_qd_tabstat.out
 select n_tup_ins, n_tup_upd, n_tup_del, n_tup_hot_upd, n_live_tup, n_dead_tup, n_mod_since_analyze from gp_stat_all_tables_summary where relid = 'table_for_expand'::regclass;
-=======
-select n_tup_ins, n_tup_upd, n_tup_del, n_tup_hot_upd, n_live_tup, n_dead_tup, n_mod_since_analyze from pg_stat_all_tables where relid = 'table_for_expand'::regclass;
->>>>>>> main:contrib/pax_storage/src/test/regress/output/pgstat_qd_tabstat.source
  n_tup_ins | n_tup_upd | n_tup_del | n_tup_hot_upd | n_live_tup | n_dead_tup | n_mod_since_analyze 
 -----------+-----------+-----------+---------------+------------+------------+---------------------
        333 |         0 |         0 |             0 |        333 |          0 |                 333
@@ -278,11 +238,7 @@ select gp_stat_force_next_flush();
  
 (1 row)
 
-<<<<<<< HEAD:contrib/pax_storage/src/test/regress/expected/pgstat_qd_tabstat.out
 select n_live_tup, n_dead_tup from gp_stat_all_tables_summary where relid = 'table_for_iud'::regclass;
-=======
-select n_live_tup, n_dead_tup from pg_stat_all_tables where relid = 'table_for_iud'::regclass;
->>>>>>> main:contrib/pax_storage/src/test/regress/output/pgstat_qd_tabstat.source
  n_live_tup | n_dead_tup 
 ------------+------------
         333 |         34
@@ -308,11 +264,7 @@ select gp_stat_force_next_flush();
  
 (1 row)
 
-<<<<<<< HEAD:contrib/pax_storage/src/test/regress/expected/pgstat_qd_tabstat.out
 select n_live_tup, n_dead_tup from gp_stat_all_tables_summary where relid = 'table_for_iud'::regclass;
-=======
-select n_live_tup, n_dead_tup from pg_stat_all_tables where relid = 'table_for_iud'::regclass;
->>>>>>> main:contrib/pax_storage/src/test/regress/output/pgstat_qd_tabstat.source
  n_live_tup | n_dead_tup 
 ------------+------------
         133 |        713
@@ -327,11 +279,7 @@ select gp_stat_force_next_flush();
  
 (1 row)
 
-<<<<<<< HEAD:contrib/pax_storage/src/test/regress/expected/pgstat_qd_tabstat.out
 select n_tup_ins, n_tup_upd, n_tup_del, n_tup_hot_upd, n_live_tup, n_dead_tup, n_mod_since_analyze from gp_stat_all_tables_summary where relid = 'table_for_truncate'::regclass;
-=======
-select n_tup_ins, n_tup_upd, n_tup_del, n_tup_hot_upd, n_live_tup, n_dead_tup, n_mod_since_analyze from pg_stat_all_tables where relid = 'table_for_truncate'::regclass;
->>>>>>> main:contrib/pax_storage/src/test/regress/output/pgstat_qd_tabstat.source
  n_tup_ins | n_tup_upd | n_tup_del | n_tup_hot_upd | n_live_tup | n_dead_tup | n_mod_since_analyze 
 -----------+-----------+-----------+---------------+------------+------------+---------------------
        777 |         0 |         0 |             0 |        777 |          0 |                 777
@@ -355,11 +303,7 @@ select gp_stat_force_next_flush();
  
 (1 row)
 
-<<<<<<< HEAD:contrib/pax_storage/src/test/regress/expected/pgstat_qd_tabstat.out
 select n_live_tup, n_dead_tup from gp_stat_all_tables_summary where relid = 'table_for_truncate'::regclass;
-=======
-select n_live_tup, n_dead_tup from pg_stat_all_tables where relid = 'table_for_truncate'::regclass;
->>>>>>> main:contrib/pax_storage/src/test/regress/output/pgstat_qd_tabstat.source
  n_live_tup | n_dead_tup 
 ------------+------------
         699 |        301
@@ -373,11 +317,7 @@ select gp_stat_force_next_flush();
  
 (1 row)
 
-<<<<<<< HEAD:contrib/pax_storage/src/test/regress/expected/pgstat_qd_tabstat.out
 select n_live_tup, n_dead_tup from gp_stat_all_tables_summary where relid = 'table_for_truncate_abort'::regclass;
-=======
-select n_live_tup, n_dead_tup from pg_stat_all_tables where relid = 'table_for_truncate_abort'::regclass;
->>>>>>> main:contrib/pax_storage/src/test/regress/output/pgstat_qd_tabstat.source
  n_live_tup | n_dead_tup 
 ------------+------------
         777 |          0
@@ -401,11 +341,7 @@ select gp_stat_force_next_flush();
  
 (1 row)
 
-<<<<<<< HEAD:contrib/pax_storage/src/test/regress/expected/pgstat_qd_tabstat.out
 select n_live_tup, n_dead_tup from gp_stat_all_tables_summary where relid = 'table_for_truncate_abort'::regclass;
-=======
-select n_live_tup, n_dead_tup from pg_stat_all_tables where relid = 'table_for_truncate_abort'::regclass;
->>>>>>> main:contrib/pax_storage/src/test/regress/output/pgstat_qd_tabstat.source
  n_live_tup | n_dead_tup 
 ------------+------------
         777 |        223
@@ -424,31 +360,19 @@ select gp_stat_force_next_flush();
  
 (1 row)
 
-<<<<<<< HEAD:contrib/pax_storage/src/test/regress/expected/pgstat_qd_tabstat.out
 select n_tup_ins, n_tup_upd, n_tup_del, n_tup_hot_upd, n_live_tup, n_dead_tup, n_mod_since_analyze from gp_stat_all_tables_summary where relid = 'rankpart_1_prt_2'::regclass;
-=======
-select n_tup_ins, n_tup_upd, n_tup_del, n_tup_hot_upd, n_live_tup, n_dead_tup, n_mod_since_analyze from pg_stat_all_tables where relid = 'rankpart_1_prt_2'::regclass;
->>>>>>> main:contrib/pax_storage/src/test/regress/output/pgstat_qd_tabstat.source
  n_tup_ins | n_tup_upd | n_tup_del | n_tup_hot_upd | n_live_tup | n_dead_tup | n_mod_since_analyze 
 -----------+-----------+-----------+---------------+------------+------------+---------------------
        500 |         0 |         0 |             0 |        500 |          0 |                 500
 (1 row)
 
-<<<<<<< HEAD:contrib/pax_storage/src/test/regress/expected/pgstat_qd_tabstat.out
 select n_tup_ins, n_tup_upd, n_tup_del, n_tup_hot_upd, n_live_tup, n_dead_tup, n_mod_since_analyze from gp_stat_all_tables_summary where relid = 'rankpart_1_prt_3'::regclass;
-=======
-select n_tup_ins, n_tup_upd, n_tup_del, n_tup_hot_upd, n_live_tup, n_dead_tup, n_mod_since_analyze from pg_stat_all_tables where relid = 'rankpart_1_prt_3'::regclass;
->>>>>>> main:contrib/pax_storage/src/test/regress/output/pgstat_qd_tabstat.source
  n_tup_ins | n_tup_upd | n_tup_del | n_tup_hot_upd | n_live_tup | n_dead_tup | n_mod_since_analyze 
 -----------+-----------+-----------+---------------+------------+------------+---------------------
        400 |         0 |         0 |             0 |        400 |          0 |                 400
 (1 row)
 
-<<<<<<< HEAD:contrib/pax_storage/src/test/regress/expected/pgstat_qd_tabstat.out
 select n_tup_ins, n_tup_upd, n_tup_del, n_tup_hot_upd, n_live_tup, n_dead_tup, n_mod_since_analyze from gp_stat_all_tables_summary where relid = 'rankpart_1_prt_extra'::regclass;
-=======
-select n_tup_ins, n_tup_upd, n_tup_del, n_tup_hot_upd, n_live_tup, n_dead_tup, n_mod_since_analyze from pg_stat_all_tables where relid = 'rankpart_1_prt_extra'::regclass;
->>>>>>> main:contrib/pax_storage/src/test/regress/output/pgstat_qd_tabstat.source
  n_tup_ins | n_tup_upd | n_tup_del | n_tup_hot_upd | n_live_tup | n_dead_tup | n_mod_since_analyze 
 -----------+-----------+-----------+---------------+------------+------------+---------------------
        100 |         0 |         0 |             0 |        100 |          0 |                 100
@@ -463,31 +387,19 @@ select gp_stat_force_next_flush();
  
 (1 row)
 
-<<<<<<< HEAD:contrib/pax_storage/src/test/regress/expected/pgstat_qd_tabstat.out
 select n_tup_ins, n_tup_upd, n_tup_del, n_tup_hot_upd, n_live_tup, n_dead_tup, n_mod_since_analyze from gp_stat_all_tables_summary where relid = 'rankpart_1_prt_2'::regclass;
-=======
-select n_tup_ins, n_tup_upd, n_tup_del, n_tup_hot_upd, n_live_tup, n_dead_tup, n_mod_since_analyze from pg_stat_all_tables where relid = 'rankpart_1_prt_2'::regclass;
->>>>>>> main:contrib/pax_storage/src/test/regress/output/pgstat_qd_tabstat.source
  n_tup_ins | n_tup_upd | n_tup_del | n_tup_hot_upd | n_live_tup | n_dead_tup | n_mod_since_analyze 
 -----------+-----------+-----------+---------------+------------+------------+---------------------
        500 |         0 |        50 |             0 |        500 |          0 |                 500
 (1 row)
 
-<<<<<<< HEAD:contrib/pax_storage/src/test/regress/expected/pgstat_qd_tabstat.out
 select n_tup_ins, n_tup_upd, n_tup_del, n_tup_hot_upd, n_live_tup, n_dead_tup, n_mod_since_analyze from gp_stat_all_tables_summary where relid = 'rankpart_1_prt_3'::regclass;
-=======
-select n_tup_ins, n_tup_upd, n_tup_del, n_tup_hot_upd, n_live_tup, n_dead_tup, n_mod_since_analyze from pg_stat_all_tables where relid = 'rankpart_1_prt_3'::regclass;
->>>>>>> main:contrib/pax_storage/src/test/regress/output/pgstat_qd_tabstat.source
  n_tup_ins | n_tup_upd | n_tup_del | n_tup_hot_upd | n_live_tup | n_dead_tup | n_mod_since_analyze 
 -----------+-----------+-----------+---------------+------------+------------+---------------------
        400 |         0 |        40 |             0 |        400 |          0 |                 400
 (1 row)
 
-<<<<<<< HEAD:contrib/pax_storage/src/test/regress/expected/pgstat_qd_tabstat.out
 select n_tup_ins, n_tup_upd, n_tup_del, n_tup_hot_upd, n_live_tup, n_dead_tup, n_mod_since_analyze from gp_stat_all_tables_summary where relid = 'rankpart_1_prt_extra'::regclass;
-=======
-select n_tup_ins, n_tup_upd, n_tup_del, n_tup_hot_upd, n_live_tup, n_dead_tup, n_mod_since_analyze from pg_stat_all_tables where relid = 'rankpart_1_prt_extra'::regclass;
->>>>>>> main:contrib/pax_storage/src/test/regress/output/pgstat_qd_tabstat.source
  n_tup_ins | n_tup_upd | n_tup_del | n_tup_hot_upd | n_live_tup | n_dead_tup | n_mod_since_analyze 
 -----------+-----------+-----------+---------------+------------+------------+---------------------
        100 |         0 |        10 |             0 |        100 |          0 |                 100
@@ -500,21 +412,13 @@ select gp_stat_force_next_flush();
  
 (1 row)
 
-<<<<<<< HEAD:contrib/pax_storage/src/test/regress/expected/pgstat_qd_tabstat.out
 select n_tup_ins, n_tup_upd, n_tup_del, n_tup_hot_upd, n_live_tup, n_dead_tup, n_mod_since_analyze from gp_stat_all_tables_summary where relid = 'rankpart_1_prt_2'::regclass;
-=======
-select n_tup_ins, n_tup_upd, n_tup_del, n_tup_hot_upd, n_live_tup, n_dead_tup, n_mod_since_analyze from pg_stat_all_tables where relid = 'rankpart_1_prt_2'::regclass;
->>>>>>> main:contrib/pax_storage/src/test/regress/output/pgstat_qd_tabstat.source
  n_tup_ins | n_tup_upd | n_tup_del | n_tup_hot_upd | n_live_tup | n_dead_tup | n_mod_since_analyze 
 -----------+-----------+-----------+---------------+------------+------------+---------------------
        505 |         0 |        50 |             0 |        505 |          0 |                 505
 (1 row)
 
-<<<<<<< HEAD:contrib/pax_storage/src/test/regress/expected/pgstat_qd_tabstat.out
 select n_tup_ins, n_tup_upd, n_tup_del, n_tup_hot_upd, n_live_tup, n_dead_tup, n_mod_since_analyze from gp_stat_all_tables_summary where relid = 'rankpart_1_prt_3'::regclass;
-=======
-select n_tup_ins, n_tup_upd, n_tup_del, n_tup_hot_upd, n_live_tup, n_dead_tup, n_mod_since_analyze from pg_stat_all_tables where relid = 'rankpart_1_prt_3'::regclass;
->>>>>>> main:contrib/pax_storage/src/test/regress/output/pgstat_qd_tabstat.source
  n_tup_ins | n_tup_upd | n_tup_del | n_tup_hot_upd | n_live_tup | n_dead_tup | n_mod_since_analyze 
 -----------+-----------+-----------+---------------+------------+------------+---------------------
        405 |         0 |        40 |             0 |        405 |          0 |                 405
@@ -535,31 +439,19 @@ select gp_stat_force_next_flush();
  
 (1 row)
 
-<<<<<<< HEAD:contrib/pax_storage/src/test/regress/expected/pgstat_qd_tabstat.out
 select n_tup_ins, n_tup_upd, n_tup_del, n_tup_hot_upd, n_live_tup, n_dead_tup, n_mod_since_analyze from gp_stat_all_tables_summary where relid = 'rankpart_1_prt_2'::regclass;
-=======
-select n_tup_ins, n_tup_upd, n_tup_del, n_tup_hot_upd, n_live_tup, n_dead_tup, n_mod_since_analyze from pg_stat_all_tables where relid = 'rankpart_1_prt_2'::regclass;
->>>>>>> main:contrib/pax_storage/src/test/regress/output/pgstat_qd_tabstat.source
  n_tup_ins | n_tup_upd | n_tup_del | n_tup_hot_upd | n_live_tup | n_dead_tup | n_mod_since_analyze 
 -----------+-----------+-----------+---------------+------------+------------+---------------------
        510 |         0 |        55 |             0 |        510 |          0 |                 510
 (1 row)
 
-<<<<<<< HEAD:contrib/pax_storage/src/test/regress/expected/pgstat_qd_tabstat.out
 select n_tup_ins, n_tup_upd, n_tup_del, n_tup_hot_upd, n_live_tup, n_dead_tup, n_mod_since_analyze from gp_stat_all_tables_summary where relid = 'rankpart_1_prt_3'::regclass;
-=======
-select n_tup_ins, n_tup_upd, n_tup_del, n_tup_hot_upd, n_live_tup, n_dead_tup, n_mod_since_analyze from pg_stat_all_tables where relid = 'rankpart_1_prt_3'::regclass;
->>>>>>> main:contrib/pax_storage/src/test/regress/output/pgstat_qd_tabstat.source
  n_tup_ins | n_tup_upd | n_tup_del | n_tup_hot_upd | n_live_tup | n_dead_tup | n_mod_since_analyze 
 -----------+-----------+-----------+---------------+------------+------------+---------------------
        410 |         0 |        50 |             0 |        400 |         10 |                 410
 (1 row)
 
-<<<<<<< HEAD:contrib/pax_storage/src/test/regress/expected/pgstat_qd_tabstat.out
 select n_tup_ins, n_tup_upd, n_tup_del, n_tup_hot_upd, n_live_tup, n_dead_tup, n_mod_since_analyze from gp_stat_all_tables_summary where relid = 'rankpart_1_prt_extra'::regclass;
-=======
-select n_tup_ins, n_tup_upd, n_tup_del, n_tup_hot_upd, n_live_tup, n_dead_tup, n_mod_since_analyze from pg_stat_all_tables where relid = 'rankpart_1_prt_extra'::regclass;
->>>>>>> main:contrib/pax_storage/src/test/regress/output/pgstat_qd_tabstat.source
  n_tup_ins | n_tup_upd | n_tup_del | n_tup_hot_upd | n_live_tup | n_dead_tup | n_mod_since_analyze 
 -----------+-----------+-----------+---------------+------------+------------+---------------------
        100 |         0 |        10 |             0 |        100 |          0 |                 100
@@ -576,31 +468,19 @@ select gp_stat_force_next_flush();
  
 (1 row)
 
-<<<<<<< HEAD:contrib/pax_storage/src/test/regress/expected/pgstat_qd_tabstat.out
 select n_tup_ins, n_tup_upd, n_tup_del, n_tup_hot_upd, n_live_tup, n_dead_tup, n_mod_since_analyze from gp_stat_all_tables_summary where relid = 'rankpart_1_prt_2'::regclass;
-=======
-select n_tup_ins, n_tup_upd, n_tup_del, n_tup_hot_upd, n_live_tup, n_dead_tup, n_mod_since_analyze from pg_stat_all_tables where relid = 'rankpart_1_prt_2'::regclass;
->>>>>>> main:contrib/pax_storage/src/test/regress/output/pgstat_qd_tabstat.source
  n_tup_ins | n_tup_upd | n_tup_del | n_tup_hot_upd | n_live_tup | n_dead_tup | n_mod_since_analyze 
 -----------+-----------+-----------+---------------+------------+------------+---------------------
       1510 |         0 |        55 |             0 |       1510 |          0 |                1510
 (1 row)
 
-<<<<<<< HEAD:contrib/pax_storage/src/test/regress/expected/pgstat_qd_tabstat.out
 select n_tup_ins, n_tup_upd, n_tup_del, n_tup_hot_upd, n_live_tup, n_dead_tup, n_mod_since_analyze from gp_stat_all_tables_summary where relid = 'rankpart_1_prt_3'::regclass;
-=======
-select n_tup_ins, n_tup_upd, n_tup_del, n_tup_hot_upd, n_live_tup, n_dead_tup, n_mod_since_analyze from pg_stat_all_tables where relid = 'rankpart_1_prt_3'::regclass;
->>>>>>> main:contrib/pax_storage/src/test/regress/output/pgstat_qd_tabstat.source
  n_tup_ins | n_tup_upd | n_tup_del | n_tup_hot_upd | n_live_tup | n_dead_tup | n_mod_since_analyze 
 -----------+-----------+-----------+---------------+------------+------------+---------------------
       1210 |         0 |        50 |             0 |       1200 |         10 |                1210
 (1 row)
 
-<<<<<<< HEAD:contrib/pax_storage/src/test/regress/expected/pgstat_qd_tabstat.out
 select n_tup_ins, n_tup_upd, n_tup_del, n_tup_hot_upd, n_live_tup, n_dead_tup, n_mod_since_analyze from gp_stat_all_tables_summary where relid = 'rankpart_1_prt_extra'::regclass;
-=======
-select n_tup_ins, n_tup_upd, n_tup_del, n_tup_hot_upd, n_live_tup, n_dead_tup, n_mod_since_analyze from pg_stat_all_tables where relid = 'rankpart_1_prt_extra'::regclass;
->>>>>>> main:contrib/pax_storage/src/test/regress/output/pgstat_qd_tabstat.source
  n_tup_ins | n_tup_upd | n_tup_del | n_tup_hot_upd | n_live_tup | n_dead_tup | n_mod_since_analyze 
 -----------+-----------+-----------+---------------+------------+------------+---------------------
        300 |         0 |        10 |             0 |        300 |          0 |                 300
@@ -618,11 +498,7 @@ select gp_stat_force_next_flush();
  
 (1 row)
 
-<<<<<<< HEAD:contrib/pax_storage/src/test/regress/expected/pgstat_qd_tabstat.out
 select n_tup_ins, n_tup_upd, n_tup_del, n_tup_hot_upd, n_live_tup, n_dead_tup, n_mod_since_analyze from gp_stat_all_tables_summary where relid = 'mt'::regclass;
-=======
-select n_tup_ins, n_tup_upd, n_tup_del, n_tup_hot_upd, n_live_tup, n_dead_tup, n_mod_since_analyze from pg_stat_all_tables where relid = 'mt'::regclass;
->>>>>>> main:contrib/pax_storage/src/test/regress/output/pgstat_qd_tabstat.source
  n_tup_ins | n_tup_upd | n_tup_del | n_tup_hot_upd | n_live_tup | n_dead_tup | n_mod_since_analyze 
 -----------+-----------+-----------+---------------+------------+------------+---------------------
         51 |         0 |         0 |             0 |         51 |          0 |                  51
@@ -636,11 +512,7 @@ select gp_stat_force_next_flush();
  
 (1 row)
 
-<<<<<<< HEAD:contrib/pax_storage/src/test/regress/expected/pgstat_qd_tabstat.out
 select n_tup_ins, n_tup_upd, n_tup_del, n_tup_hot_upd, n_live_tup, n_dead_tup, n_mod_since_analyze from gp_stat_all_tables_summary where relid = 'mt'::regclass;
-=======
-select n_tup_ins, n_tup_upd, n_tup_del, n_tup_hot_upd, n_live_tup, n_dead_tup, n_mod_since_analyze from pg_stat_all_tables where relid = 'mt'::regclass;
->>>>>>> main:contrib/pax_storage/src/test/regress/output/pgstat_qd_tabstat.source
  n_tup_ins | n_tup_upd | n_tup_del | n_tup_hot_upd | n_live_tup | n_dead_tup | n_mod_since_analyze 
 -----------+-----------+-----------+---------------+------------+------------+---------------------
        153 |         0 |         0 |             0 |        102 |          0 |                 153
@@ -665,11 +537,7 @@ select gp_stat_force_next_flush();
  
 (1 row)
 
-<<<<<<< HEAD:contrib/pax_storage/src/test/regress/expected/pgstat_qd_tabstat.out
 select n_tup_ins, n_tup_upd, n_tup_del, n_tup_hot_upd, n_live_tup, n_dead_tup, n_mod_since_analyze from gp_stat_all_tables_summary where relid = 'mt'::regclass;
-=======
-select n_tup_ins, n_tup_upd, n_tup_del, n_tup_hot_upd, n_live_tup, n_dead_tup, n_mod_since_analyze from pg_stat_all_tables where relid = 'mt'::regclass;
->>>>>>> main:contrib/pax_storage/src/test/regress/output/pgstat_qd_tabstat.source
  n_tup_ins | n_tup_upd | n_tup_del | n_tup_hot_upd | n_live_tup | n_dead_tup | n_mod_since_analyze 
 -----------+-----------+-----------+---------------+------------+------------+---------------------
         51 |         0 |         0 |             0 |         51 |          0 |                  51
@@ -683,11 +551,7 @@ select gp_stat_force_next_flush();
  
 (1 row)
 
-<<<<<<< HEAD:contrib/pax_storage/src/test/regress/expected/pgstat_qd_tabstat.out
 select n_tup_ins, n_tup_upd, n_tup_del, n_tup_hot_upd, n_live_tup, n_dead_tup, n_mod_since_analyze from gp_stat_all_tables_summary where relid = 'mt'::regclass;
-=======
-select n_tup_ins, n_tup_upd, n_tup_del, n_tup_hot_upd, n_live_tup, n_dead_tup, n_mod_since_analyze from pg_stat_all_tables where relid = 'mt'::regclass;
->>>>>>> main:contrib/pax_storage/src/test/regress/output/pgstat_qd_tabstat.source
  n_tup_ins | n_tup_upd | n_tup_del | n_tup_hot_upd | n_live_tup | n_dead_tup | n_mod_since_analyze 
 -----------+-----------+-----------+---------------+------------+------------+---------------------
        153 |         0 |         0 |             0 |        102 |          0 |                 153

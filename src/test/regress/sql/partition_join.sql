@@ -1231,7 +1231,6 @@ EXPLAIN (COSTS OFF)
 SELECT t1.*, t2.* FROM alpha t1 INNER JOIN beta t2 ON (t1.a = t2.a AND t1.b = t2.b AND t1.c = t2.c) WHERE ((t1.b >= 100 AND t1.b < 110) OR (t1.b >= 200 AND t1.b < 210)) AND ((t2.b >= 100 AND t2.b < 110) OR (t2.b >= 200 AND t2.b < 210)) AND t1.c IN ('0004', '0009') ORDER BY t1.a, t1.b;
 SELECT t1.*, t2.* FROM alpha t1 INNER JOIN beta t2 ON (t1.a = t2.a AND t1.b = t2.b AND t1.c = t2.c) WHERE ((t1.b >= 100 AND t1.b < 110) OR (t1.b >= 200 AND t1.b < 210)) AND ((t2.b >= 100 AND t2.b < 110) OR (t2.b >= 200 AND t2.b < 210)) AND t1.c IN ('0004', '0009') ORDER BY t1.a, t1.b;
 
-<<<<<<< HEAD
 -- partitionwise join with fractional paths
 CREATE TABLE fract_t (id BIGINT, PRIMARY KEY (id)) PARTITION BY RANGE (id);
 CREATE TABLE fract_t0 PARTITION OF fract_t FOR VALUES FROM ('0') TO ('1000');
@@ -1256,7 +1255,7 @@ DROP TABLE fract_t;
 
 RESET max_parallel_workers_per_gather;
 RESET enable_partitionwise_join;
-=======
+
 --
 -- test issue https://github.com/apache/cloudberry/issues/1301
 --
@@ -1296,4 +1295,3 @@ analyze t2;
 EXPLAIN(COSTS OFF) SELECT COUNT(*) FROM t1_1_prt_1 JOIN t2 USING(id);
 EXPLAIN(COSTS OFF) SELECT COUNT(*) FROM t1 JOIN t2 USING(id);
 ABORT;
->>>>>>> main

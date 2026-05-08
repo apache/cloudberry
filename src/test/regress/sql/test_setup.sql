@@ -2,7 +2,6 @@
 -- TEST_SETUP --- prepare environment expected by regression test scripts
 --
 
-<<<<<<< HEAD
 -- directory paths and dlsuffix are passed to us in environment variables
 \getenv abs_srcdir PG_ABS_SRCDIR
 \getenv libdir PG_LIBDIR
@@ -300,7 +299,6 @@ create function fipshash(text)
     returns text
     strict immutable parallel safe leakproof
     return substr(encode(sha256($1::bytea), 'hex'), 1, 32);
-=======
+
 CREATE ROLE mdb_admin;
 CREATE ROLE mdb_superuser;
->>>>>>> main

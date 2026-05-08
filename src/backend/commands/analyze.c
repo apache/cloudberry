@@ -187,23 +187,18 @@ static int acquire_sample_rows(Relation onerel, int elevel,
 static int acquire_sample_rows_dispatcher(Relation onerel, bool inh, int elevel,
 										  HeapTuple *rows, int targrows,
 										  double *totalrows, double *totaldeadrows);
-<<<<<<< HEAD
 static int	compare_rows(const void *a, const void *b, void *arg);
 static BlockNumber acquire_index_number_of_blocks(Relation indexrel, Relation tablerel);
 
 static void gp_acquire_correlations_dispatcher(Oid relOid, bool inh, float4 *correlations, bool *correlationsIsNull);
-=======
+
 static int gp_acquire_sample_rows_func(Relation onerel, int elevel,
 									   HeapTuple *rows, int targrows,
 									   double *totalrows, double *totaldeadrows);
-static BlockNumber acquire_index_number_of_blocks(Relation indexrel, Relation tablerel);
 
-static void gp_acquire_correlations_dispatcher(Oid relOid, bool inh, float4 *correlations, bool *correlationsIsNull);
-static int	compare_rows(const void *a, const void *b, void *arg);
 static int	acquire_inherited_sample_rows(Relation onerel, int elevel,
 										  HeapTuple *rows, int targrows,
 										  double *totalrows, double *totaldeadrows);
->>>>>>> main
 static void update_attstats(Oid relid, bool inh,
 							int natts, VacAttrStats **vacattrstats);
 static Datum std_fetch_func(VacAttrStatsP stats, int rownum, bool *isNull);
@@ -1934,11 +1929,7 @@ acquire_sample_rows(Relation onerel, int elevel,
 	 * tuples are already sorted.
 	 */
 	if (numrows == targrows)
-<<<<<<< HEAD
 		qsort_interruptible(rows, numrows, sizeof(HeapTuple),
-=======
-		qsort_interruptible((void *) rows, numrows, sizeof(HeapTuple),
->>>>>>> main
 							compare_rows, NULL);
 
 	/*
@@ -4026,13 +4017,8 @@ compute_scalar_stats(VacAttrStatsP stats,
 		/* Sort the collected values */
 		cxt.ssup = &ssup;
 		cxt.tupnoLink = tupnoLink;
-<<<<<<< HEAD
 		qsort_interruptible(values, values_cnt, sizeof(ScalarItem),
 							compare_scalars, &cxt);
-=======
-		qsort_interruptible((void *) values, values_cnt, sizeof(ScalarItem),
-							compare_scalars, (void *) &cxt);
->>>>>>> main
 
 		/*
 		 * Now scan the values in order, find the most common ones, and also
@@ -4299,11 +4285,7 @@ compute_scalar_stats(VacAttrStatsP stats,
 						deltafrac;
 
 			/* Sort the MCV items into position order to speed next loop */
-<<<<<<< HEAD
 			qsort_interruptible(track, num_mcv, sizeof(ScalarMCVItem),
-=======
-			qsort_interruptible((void *) track, num_mcv, sizeof(ScalarMCVItem),
->>>>>>> main
 								compare_mcvs, NULL);
 
 			/*

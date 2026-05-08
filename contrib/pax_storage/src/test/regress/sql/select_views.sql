@@ -2,11 +2,7 @@
 -- SELECT_VIEWS
 -- test the views defined in CREATE_VIEWS
 --
-<<<<<<< HEAD
-
-=======
 set pax.enable_sparse_filter to off;
->>>>>>> main
 SELECT * FROM street;
 
 SELECT name, #thepath FROM iexit ORDER BY name COLLATE "C", 2;
@@ -171,7 +167,4 @@ EXECUTE p2;		-- To be perform as a view without security-barrier
 -- Cleanup.
 RESET SESSION AUTHORIZATION;
 DROP ROLE regress_alice;
-<<<<<<< HEAD
-=======
 reset pax.enable_sparse_filter;
->>>>>>> main

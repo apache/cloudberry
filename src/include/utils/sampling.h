@@ -41,8 +41,6 @@ extern BlockNumber BlockSampler_Init(BlockSampler bs, BlockNumber nblocks,
 extern bool BlockSampler_HasMore(BlockSampler bs);
 extern BlockNumber BlockSampler_Next(BlockSampler bs);
 
-<<<<<<< HEAD
-=======
 /* 64 bit version of BlockSampler (used for sampling AO/CO table rows) */
 typedef struct
 {
@@ -50,7 +48,7 @@ typedef struct
 	int64			n;				/* desired sample size */
 	int64           t;				/* current object number */
 	int64			m;				/* objects selected so far */
-	SamplerRandomState randstate;	/* random generator state */
+	pg_prng_state	randstate;	/* random generator state */
 } RowSamplerData;
 
 typedef RowSamplerData *RowSampler;
@@ -60,7 +58,6 @@ extern void RowSampler_Init(RowSampler rs, int64 nobjects,
 extern bool RowSampler_HasMore(RowSampler rs);
 extern int64 RowSampler_Next(RowSampler rs);
 
->>>>>>> main
 /* Reservoir sampling methods */
 
 typedef struct

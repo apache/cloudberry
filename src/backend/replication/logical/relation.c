@@ -443,7 +443,6 @@ logicalrep_rel_open(LogicalRepRelId remoteid, LOCKMODE lockmode)
 		 * update/delete.
 		 */
 		logicalrep_rel_mark_updatable(entry);
-<<<<<<< HEAD
 
 		/*
 		 * Finding a usable index is an infrequent task. It occurs when an
@@ -453,8 +452,6 @@ logicalrep_rel_open(LogicalRepRelId remoteid, LOCKMODE lockmode)
 		 */
 		entry->localindexoid = FindLogicalRepLocalIndex(entry->localrel, remoterel,
 														entry->attrmap);
-=======
->>>>>>> main
 
 		entry->localrelvalid = true;
 	}
@@ -713,11 +710,8 @@ logicalrep_partition_open(LogicalRepRelMapEntry *root,
 
 	/* Set if the table's replica identity is enough to apply update/delete. */
 	logicalrep_rel_mark_updatable(entry);
-<<<<<<< HEAD
-=======
 
 	entry->localrelvalid = true;
->>>>>>> main
 
 	/* state and statelsn are left set to 0. */
 	MemoryContextSwitchTo(oldctx);

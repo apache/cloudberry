@@ -2180,7 +2180,6 @@ set_append_path_locus(PlannerInfo *root, Path *pathnode, RelOptInfo *rel,
 	 */
 	pathnode->parallel_workers = targetlocus.parallel_workers;
 
-<<<<<<< HEAD
 	/*
 	 * set_append_path_locus may change parallel_workers (via targetlocus),
 	 * which can make it inconsistent with parallel_aware set by the caller.
@@ -2198,17 +2197,11 @@ set_append_path_locus(PlannerInfo *root, Path *pathnode, RelOptInfo *rel,
 	if (pathnode->parallel_workers <= 1)
 		pathnode->parallel_aware = false;
 
-=======
->>>>>>> main
 	AssertImply(pathnode->parallel_workers > 1 &&
 				!CdbPathLocus_IsEntry(targetlocus) &&
 				!CdbPathLocus_IsOuterQuery(targetlocus) &&
 				!CdbPathLocus_IsGeneral(targetlocus) &&
 				!CdbPathLocus_IsSingleQE(targetlocus), targetlocus.parallel_workers > 1);
-<<<<<<< HEAD
-=======
-
->>>>>>> main
 	*subpaths_out = new_subpaths;
 
 	return true;

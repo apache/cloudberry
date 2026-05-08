@@ -70,8 +70,4 @@ SELECT buffers_used + buffers_unused > 0 FROM gp_buffercache_summary;
 SELECT buffers_used + buffers_unused > 0 FROM gp_buffercache_summary_aggregated;
 SELECT count(*) > 0 FROM gp_buffercache_usage_counts;
 SELECT count(*) > 0 FROM gp_buffercache_usage_counts_aggregated;
-<<<<<<< HEAD
 RESET ROLE;
-=======
-RESET ROLE;
->>>>>>> main

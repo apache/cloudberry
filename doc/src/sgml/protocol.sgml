@@ -1597,7 +1597,6 @@ SELCT 1/0;<!-- this typo is intentional -->
     In this case the connection must be closed, but the frontend might choose
     to open a fresh connection and proceed without requesting
     <acronym>GSSAPI</acronym> encryption.
-<<<<<<< HEAD
    </para>
 
    <para>
@@ -1612,8 +1611,6 @@ SELCT 1/0;<!-- this typo is intentional -->
     socket before turning the socket over to their GSSAPI library, or to
     treat it as a protocol violation if they find they have read additional
     bytes.
-=======
->>>>>>> main
    </para>
 
    <para>

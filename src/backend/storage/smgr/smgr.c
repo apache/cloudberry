@@ -533,13 +533,9 @@ smgrcreate(SMgrRelation reln, ForkNumber forknum, bool isRedo)
  *		already because we are in a WAL replay sequence.
  */
 void
-<<<<<<< HEAD
-smgrcreate_ao(RelFileLocatorBackend rnode, int32 segmentFileNum, bool isRedo)
-=======
 smgrcreate_ao(const struct f_smgr_ao *smgr,
-				RelFileNodeBackend rnode,
-				int32 segmentFileNum, bool isRedo)
->>>>>>> main
+			  RelFileLocatorBackend rnode,
+			  int32 segmentFileNum, bool isRedo)
 {
 	/* If we get there, check that provided smgr structure is sane.
 	 * First off all, outer Appendonly IO utilities should

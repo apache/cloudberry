@@ -4595,7 +4595,6 @@ assign_max_stack_depth(int newval, void *extra)
 }
 
 /*
-<<<<<<< HEAD
  * GUC check_hook for client_connection_check_interval
  */
 bool
@@ -4648,8 +4647,6 @@ check_log_stats(bool *newval, void **extra, GucSource source)
 }
 
 /*
-=======
->>>>>>> main
  * GUC check_hook for restrict_nonsystem_relation_kind
  */
 bool
@@ -4693,11 +4690,7 @@ check_restrict_nonsystem_relation_kind(char **newval, void **extra, GucSource so
 	list_free(elemlist);
 
 	/* Save the flags in *extra, for use by the assign function */
-<<<<<<< HEAD
 	*extra = guc_malloc(ERROR, sizeof(int));
-=======
-	*extra = malloc(sizeof(int));
->>>>>>> main
 	*((int *) *extra) = flags;
 
 	return true;

@@ -664,9 +664,24 @@ CTranslatorDXLToPlStmt::TranslateDXLTblScan(
 
 		// The postgres_fdw wrapper does not support row level security. So
 		// passing only the query_quals while creating the foreign scan node.
+		//
+		// BuildForeignScan internally calls build_simple_rel which looks up
+		// RTEPermissionInfo via root->parse->rteperminfos.  The RTE here was
+		// newly created by ORCA with its own perminfoindex numbering, which
+		// may not match m_orig_query->rteperminfos (e.g. after the rewriter
+		// expands external-table ON SELECT rules into subqueries the outer
+		// query's rteperminfos shrinks).  Temporarily swap in ORCA's own
+		// perminfos list so the indices are consistent.
+		Query *orig_query = m_dxl_to_plstmt_context->m_orig_query;
+		List *saved_perminfos = orig_query->rteperminfos;
+		orig_query->rteperminfos =
+			m_dxl_to_plstmt_context->GetPermInfosList();
+
 		ForeignScan *foreign_scan =
 			gpdb::CreateForeignScan(oidRel, index, query_quals, targetlist,
-									m_dxl_to_plstmt_context->m_orig_query, rte);
+									orig_query, rte);
+
+		orig_query->rteperminfos = saved_perminfos;
 		foreign_scan->scan.scanrelid = index;
 		plan = &(foreign_scan->scan.plan);
 		plan_return = (Plan *) foreign_scan;
@@ -2841,17 +2856,10 @@ CTranslatorDXLToPlStmt::TranslateAggFillInfo(CContextDXLToPlStmt *ctx,
 	}
 	else
 	{
-<<<<<<< HEAD
 		AggInfo *agginfo = makeNode(AggInfo);
 
 		agginfo->finalfn_oid = aggfinalfn;
 		agginfo->aggrefs = list_make1(aggref);
-=======
-		AggInfo *agginfo = (AggInfo *) gpdb::GPDBAlloc(sizeof(AggInfo));
-
-		agginfo->finalfn_oid = aggfinalfn;
-		agginfo->representative_aggref = aggref;
->>>>>>> main
 		agginfo->shareable = shareable;
 
 		aggno = gpdb::ListLength(ctx->GetAggInfos());

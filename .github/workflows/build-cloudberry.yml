@@ -102,15 +102,9 @@ name: Apache Cloudberry Build
 
 on:
   push:
-<<<<<<< HEAD
     branches: [main, cbdb-postgres-merge]
   pull_request:
     branches: [main, cbdb-postgres-merge]
-=======
-    branches: [main, REL_2_STABLE]
-  pull_request:
-    branches: [main, REL_2_STABLE]
->>>>>>> main
     types: [opened, synchronize, reopened, edited]
   workflow_dispatch:
     inputs:
@@ -496,7 +490,6 @@ jobs:
           fetch-depth: 1
           submodules: true
 
-<<<<<<< HEAD
       - name: Checkout DevOps Scripts from Main Branch
         if: needs.check-skip.outputs.should_skip != 'true'
         uses: actions/checkout@v4
@@ -536,8 +529,6 @@ jobs:
           echo "ICU libraries installed successfully"
           rpm -qa | grep libicu
 
-=======
->>>>>>> main
       - name: Cloudberry Environment Initialization
         if: needs.check-skip.outputs.should_skip != 'true'
         env:
@@ -1436,9 +1427,6 @@ jobs:
 
           {
             chmod +x "${SRC_DIR}"/devops/build/automation/cloudberry/scripts/create-cloudberry-demo-cluster.sh
-<<<<<<< HEAD
-            if ! time su - gpadmin -c "cd ${SRC_DIR} && NUM_PRIMARY_MIRROR_PAIRS='${{ matrix.num_primary_mirror_pairs }}' SRC_DIR=${SRC_DIR} ${SRC_DIR}/devops/build/automation/cloudberry/scripts/create-cloudberry-demo-cluster.sh"; then
-=======
 
             # Build BLDWRAP_POSTGRES_CONF_ADDONS for shared_preload_libraries if specified
             EXTRA_CONF=""
@@ -1448,7 +1436,6 @@ jobs:
             fi
 
             if ! time su - gpadmin -c "cd ${SRC_DIR} && NUM_PRIMARY_MIRROR_PAIRS='${{ matrix.num_primary_mirror_pairs }}' BLDWRAP_POSTGRES_CONF_ADDONS=\"${EXTRA_CONF}\" SRC_DIR=${SRC_DIR} ${SRC_DIR}/devops/build/automation/cloudberry/scripts/create-cloudberry-demo-cluster.sh"; then
->>>>>>> main
               echo "::error::Demo cluster creation failed"
               exit 1
             fi

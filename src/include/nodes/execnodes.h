@@ -1445,7 +1445,6 @@ typedef struct ModifyTableState
 	struct TransitionCaptureState *mt_oc_transition_capture;
 
 	/* Record modified leaf relation(s) */
-<<<<<<< HEAD
 	bool		has_leaf_changed;
 	Bitmapset	*mt_leaf_relids_inserted;
 	Bitmapset	*mt_leaf_relids_updated;
@@ -1458,10 +1457,9 @@ typedef struct ModifyTableState
 	double		mt_merge_inserted;
 	double		mt_merge_updated;
 	double		mt_merge_deleted;
-=======
+
 	HTAB	*modified_leaf_relids;
 
->>>>>>> main
 } ModifyTableState;
 
 /* ----------------

@@ -9688,8 +9688,6 @@ SCRAM-SHA-256$<replaceable>&lt;iteration count&gt;</replaceable>:<replaceable>&l
    </tgroup>
   </table>
  </sect1>
-<<<<<<< HEAD
-=======
 
 
  <sect1 id="views-overview">
@@ -14264,5 +14262,4 @@ SELECT * FROM pg_locks pl LEFT JOIN pg_prepared_xacts ppx
 
  </sect1>
 
->>>>>>> main
 </chapter>

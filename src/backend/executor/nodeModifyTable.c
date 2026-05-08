@@ -1919,8 +1919,6 @@ ldelete:
 	if (canSetTag)
 		(estate->es_processed)++;
 
-<<<<<<< HEAD
-=======
 	if (resultRelationDesc->rd_rel->relispartition)
 	{
 		ModifiedLeafRelidsKey	key;
@@ -1929,10 +1927,9 @@ ldelete:
 		key.cmd = CMD_DELETE;
 		key.relid = RelationGetRelid(resultRelationDesc);
 
-		(void) hash_search(mtstate->modified_leaf_relids, &key, HASH_ENTER, NULL);
+		(void) hash_search(context->mtstate->modified_leaf_relids, &key, HASH_ENTER, NULL);
 	}
 
->>>>>>> main
 	/* Tell caller that the delete actually happened. */
 	if (tupleDeleted)
 		*tupleDeleted = true;
@@ -2801,44 +2798,8 @@ redo_act:
 	if (canSetTag)
 		(estate->es_processed)++;
 
-<<<<<<< HEAD
 	ExecUpdateEpilogue(context, &updateCxt, resultRelInfo, tupleid, oldtuple,
 					   slot);
-=======
-	if (resultRelationDesc->rd_rel->relispartition)
-	{
-		ModifiedLeafRelidsKey	key;
-
-		MemSet(&key, 0, sizeof(key));
-		key.cmd = CMD_UPDATE;
-		key.relid = RelationGetRelid(resultRelationDesc);
-
-		(void) hash_search(mtstate->modified_leaf_relids, &key, HASH_ENTER, NULL);
-	}
-
-	/* AFTER ROW UPDATE Triggers */
-	/* GPDB: AO and AOCO tables don't support triggers */
-	if (!RelationIsNonblockRelation(resultRelationDesc))
-		ExecARUpdateTriggers(estate, resultRelInfo, tupleid, oldtuple, slot,
-						 recheckIndexes,
-						 mtstate->operation == CMD_INSERT ?
-						 mtstate->mt_oc_transition_capture :
-						 mtstate->mt_transition_capture);
-
-	list_free(recheckIndexes);
-
-	/*
-	 * Check any WITH CHECK OPTION constraints from parent views.  We are
-	 * required to do this after testing all constraints and uniqueness
-	 * violations per the SQL spec, so we do it after actually updating the
-	 * record in the heap and all indexes.
-	 *
-	 * ExecWithCheckOptions() will skip any WCOs which are not of the kind we
-	 * are looking for at this point.
-	 */
-	if (resultRelInfo->ri_WithCheckOptions != NIL)
-		ExecWithCheckOptions(WCO_VIEW_CHECK, resultRelInfo, slot, estate);
->>>>>>> main
 
 	/* Process RETURNING if present */
 	if (resultRelInfo->ri_projectReturning)

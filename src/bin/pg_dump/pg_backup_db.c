@@ -64,20 +64,9 @@ _check_database_version(ArchiveHandle *AH)
 	 * Check if server is in recovery mode, which means we are on a hot
 	 * standby.
 	 */
-<<<<<<< HEAD
 	res = ExecuteSqlQueryForSingleRow((Archive *) AH,
 									  "SELECT pg_catalog.pg_is_in_recovery()");
 	AH->public.isStandby = (strcmp(PQgetvalue(res, 0, 0), "t") == 0);
-=======
-	if (remoteversion >= 90000)
-	{
-		res = ExecuteSqlQueryForSingleRow((Archive *) AH, "SELECT pg_catalog.pg_is_in_recovery()");
-
-		AH->public.isStandby = (strcmp(PQgetvalue(res, 0, 0), "t") == 0);
-		PQclear(res);
-	}
-	else
-		AH->public.isStandby = false;
 
 	res = ExecuteSqlQueryForSingleRow((Archive *) AH, "SELECT version()");
 
@@ -100,7 +89,6 @@ _check_database_version(ArchiveHandle *AH)
 	else
 		pg_log_error("could not upgrade from non Greenplum/Cloudberry version: %s %s\n", dbstring, dbstring2);
 
->>>>>>> main
 	PQclear(res);
 }
 

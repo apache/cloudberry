@@ -2,7 +2,6 @@
 
 =pod
 
-<<<<<<< HEAD
 =head1 NAME
 
 PostgreSQL::Test::Cluster - class representing PostgreSQL server instance
@@ -94,8 +93,6 @@ The IPC::Run module is required.
 
 =cut
 
-package PostgreSQL::Test::Cluster;
-
 use strict;
 use warnings;
 
@@ -116,16 +113,6 @@ use PostgreSQL::Test::Utils          ();
 use PostgreSQL::Test::BackgroundPsql ();
 use Time::HiRes                      qw(usleep);
 use Scalar::Util                     qw(blessed);
-=======
-# Allow use of release 15+ Perl package name in older branches, by giving that
-# package the same symbol table as the older package.  See PostgresNode::new
-# for supporting heuristics.
-
-use strict;
-use warnings;
-BEGIN { *PostgreSQL::Test::Cluster:: = \*PostgresNode::; }
-use PostgresNode ();
->>>>>>> main
 
 our ($use_tcp, $test_localhost, $test_pghost, $last_host_assigned,
 	$last_port_assigned, @all_nodes, $died, $portdir);

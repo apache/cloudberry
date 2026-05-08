@@ -2985,9 +2985,6 @@ LookupExplicitNamespace(const char *nspname, bool missing_ok)
 	if (missing_ok && !OidIsValid(namespaceId))
 		return InvalidOid;
 
-<<<<<<< HEAD
-	aclresult = object_aclcheck(NamespaceRelationId, namespaceId, GetUserId(), ACL_USAGE);
-=======
 	HeapTuple tuple;
 	Oid ownerId;
 
@@ -3002,11 +2999,10 @@ LookupExplicitNamespace(const char *nspname, bool missing_ok)
 	ReleaseSysCache(tuple);
 
 	if (!mdb_admin_allow_bypass_owner_checks(GetUserId(), ownerId)) {
-		aclresult = pg_namespace_aclcheck(namespaceId, GetUserId(), ACL_USAGE);
+		aclresult = object_aclcheck(NamespaceRelationId, namespaceId, GetUserId(), ACL_USAGE);
 	} else {
 		aclresult = ACLCHECK_OK;
 	}
->>>>>>> main
 	if (aclresult != ACLCHECK_OK)
 		aclcheck_error(aclresult, OBJECT_SCHEMA,
 					   nspname);

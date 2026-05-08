@@ -314,17 +314,10 @@ typedef struct ParallelHashJoinState
 #define PHJ_BUILD_FREE					5
 
 /* The phases for probing each batch, used by for batch_barrier. */
-<<<<<<< HEAD
 #define PHJ_BATCH_ELECT					0
 #define PHJ_BATCH_ALLOCATE				1
 #define PHJ_BATCH_LOAD					2
 #define PHJ_BATCH_PROBE					3
-=======
-#define PHJ_BATCH_ELECTING				0
-#define PHJ_BATCH_ALLOCATING			1
-#define PHJ_BATCH_LOADING				2
-#define PHJ_BATCH_PROBING				3
->>>>>>> main
 #define PHJ_BATCH_SCAN					4
 #define PHJ_BATCH_FREE					5
 

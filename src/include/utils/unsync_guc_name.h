@@ -7,10 +7,7 @@
 *--------------------------------------------------------------------------
 */
 /* items in this file should be ordered */
-<<<<<<< HEAD
 		"allow_in_place_tablespaces",
-=======
->>>>>>> main
 		"application_name",
 		"aqumv_allow_foreign_table",
 		"archive_cleanup_command",

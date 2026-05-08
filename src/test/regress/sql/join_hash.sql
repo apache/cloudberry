@@ -558,19 +558,16 @@ analyze join_hash_t_big;
 explain (costs off) select * from join_hash_t_small, join_hash_t_big where a = b;
 rollback to settings;
 
+rollback;
 
 -- Hash join reuses the HOT status bit to indicate match status. This can only
 -- be guaranteed to produce correct results if all the hash join tuple match
 -- bits are reset before reuse. This is done upon loading them into the
 -- hashtable.
-<<<<<<< HEAD
-SAVEPOINT settings;
-=======
 begin;
 SAVEPOINT settings;
 -- CBDB: disable CBDB parallel; the serial full join match-bit test is what matters here.
 SET enable_parallel = off;
->>>>>>> main
 SET enable_parallel_hash = on;
 SET min_parallel_table_scan_size = 0;
 SET parallel_setup_cost = 0;

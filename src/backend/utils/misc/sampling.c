@@ -116,8 +116,6 @@ BlockSampler_Next(BlockSampler bs)
 }
 
 /*
-<<<<<<< HEAD
-=======
  * This is used for sampling AO/CO row numbers, in the flattened
  * row number space, across all segfile tuple counts. 64 bits is
  * used for simplicity and is sufficient to hold a maximum tuple
@@ -145,7 +143,7 @@ RowSampler_Init(RowSampler rs, int64 nobjects, int64 samplesize,
 	rs->t = 0;					/* objects scanned so far */
 	rs->m = 0;					/* objects selected so far */
 
-	sampler_random_init_state(randseed, rs->randstate);
+	sampler_random_init_state(randseed, &rs->randstate);
 }
 
 bool
@@ -175,7 +173,7 @@ RowSampler_Next(RowSampler rs)
      * It is not obvious that this code matches Knuth's Algorithm S.
      * Refer to BlockSampler_Next() for detail.
      */
-	V = sampler_random_fract(rs->randstate);
+	V = sampler_random_fract(&rs->randstate);
     /*
 	 * Don't bother overflow of conversion from int64 K (N) as it was
 	 * already converted to "double" range value when initialized.
@@ -197,7 +195,6 @@ RowSampler_Next(RowSampler rs)
 }
 
 /*
->>>>>>> main
  * These two routines embody Algorithm Z from "Random sampling with a
  * reservoir" by Jeffrey S. Vitter, in ACM Trans. Math. Softw. 11, 1
  * (Mar. 1985), Pages 37-57.  Vitter describes his algorithm in terms

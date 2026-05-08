@@ -716,17 +716,11 @@ LDFLAGS_EX
 with_apr_config
 with_libcurl
 with_rt
-<<<<<<< HEAD
-with_quicklz
-with_libbz2
-ZSTD_LIBS
-ZSTD_CFLAGS
-=======
 PROTOC
 with_gp_stats_collector
 with_diskquota
->>>>>>> main
 with_zstd
+with_libbz2
 LZ4_LIBS
 LZ4_CFLAGS
 with_lz4
@@ -949,13 +943,7 @@ with_system_tzdata
 with_zlib
 with_lz4
 with_zstd
-<<<<<<< HEAD
 with_libbz2
-with_quicklz
-with_rt
-with_libcurl
-with_apr_config
-=======
 with_diskquota
 with_gp_stats_collector
 with_rt
@@ -963,7 +951,6 @@ with_libcurl
 with_apr_config
 with_gnu_ld
 with_mdblocales
->>>>>>> main
 with_ssl
 with_openssl
 enable_openssl_redirect
@@ -1710,13 +1697,8 @@ Optional Packages:
   --with-lz4              build with LZ4 support
   --with-zstd             build with ZSTD support
   --without-libbz2        do not use bzip2
-<<<<<<< HEAD
   --with-quicklz          build with QuickLZ support (requires quicklz
                           library)
-  --without-rt            do not use Realtime Library
-  --without-libcurl       do not use libcurl
-  --with-apr-config=PATH  path to apr-1-config utility
-=======
   --without-zstd          do not build with Zstandard
   --with-diskquota        build with diskquota extension
   --with-gp_stats_collector
@@ -1726,7 +1708,6 @@ Optional Packages:
   --with-apr-config=PATH  path to apr-1-config utility
   --with-gnu-ld           assume the C compiler uses GNU ld [default=no]
   --with-mdblocales       build with MDB locales
->>>>>>> main
   --with-ssl=LIB          use LIB for SSL/TLS support (openssl)
   --with-openssl          obsolete spelling of --with-ssl=openssl
 
@@ -11721,7 +11702,6 @@ fi
 fi
 
 #
-<<<<<<< HEAD
 # bzip2
 #
 
@@ -11747,14 +11727,35 @@ else
 
 fi
 
+#
+# gp_stats_collector
+#
 
 
+
+# Check whether --with-gp-stats-collector was given.
+if test "${with_gp_stats_collector+set}" = set; then :
+  withval=$with_gp_stats_collector;
+  case $withval in
+    yes)
+      :
+      ;;
+    no)
+      :
+      ;;
+    *)
+      as_fn_error $? "no argument expected for --with-gp-stats-collector option" "$LINENO" 5
+      ;;
+  esac
+
+else
+  with_gp_stats_collector=no
+
+fi
 
 #
 # quicklz
 #
-
-
 
 # Check whether --with-quicklz was given.
 if test "${with_quicklz+set}" = set; then :
@@ -11776,12 +11777,7 @@ else
 
 fi
 
-
-
-
 #
-=======
->>>>>>> main
 # Realtime library
 #
 

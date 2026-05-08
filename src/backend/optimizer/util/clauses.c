@@ -5737,38 +5737,23 @@ flatten_join_alias_var_optimizer(Query *query, int queryLevel)
 	List *targetList = queryNew->targetList;
 	if (NIL != targetList)
 	{
-<<<<<<< HEAD
-		/*.MERGE16_FIXME: We should not use null here */
 		queryNew->targetList = (List *) flatten_join_alias_vars(NULL, queryNew, (Node *) targetList);
-		list_free(targetList);
-=======
-		queryNew->targetList = (List *) flatten_join_alias_vars(queryNew, (Node *) targetList);
 		if (targetList != queryNew->targetList)
 			list_free(targetList);
->>>>>>> main
 	}
 
 	List *returningList = queryNew->returningList;
 	if (NIL != returningList)
 	{
-<<<<<<< HEAD
 		queryNew->returningList = (List *) flatten_join_alias_vars(NULL, queryNew, (Node *) returningList);
-		list_free(returningList);
-=======
-		queryNew->returningList = (List *) flatten_join_alias_vars(queryNew, (Node *) returningList);
 		if (returningList != queryNew->returningList)
 			list_free(returningList);
->>>>>>> main
 	}
 
 	Node *havingQual = queryNew->havingQual;
 	if (NULL != havingQual)
 	{
-<<<<<<< HEAD
 		queryNew->havingQual = flatten_join_alias_vars(NULL, queryNew, havingQual);
-		pfree(havingQual);
-=======
-		queryNew->havingQual = flatten_join_alias_vars(queryNew, havingQual);
 		if (havingQual != queryNew->havingQual)
 		{
 			if (IsA(havingQual, List))
@@ -5776,33 +5761,22 @@ flatten_join_alias_var_optimizer(Query *query, int queryLevel)
 			else
 				pfree(havingQual);
 		}
->>>>>>> main
 	}
 
 	List *scatterClause = queryNew->scatterClause;
 	if (NIL != scatterClause)
 	{
-<<<<<<< HEAD
 		queryNew->scatterClause = (List *) flatten_join_alias_vars(NULL, queryNew, (Node *) scatterClause);
-		list_free(scatterClause);
-=======
-		queryNew->scatterClause = (List *) flatten_join_alias_vars(queryNew, (Node *) scatterClause);
 		if (scatterClause != queryNew->scatterClause)
 			list_free(scatterClause);
->>>>>>> main
 	}
 
 	Node *limitOffset = queryNew->limitOffset;
 	if (NULL != limitOffset)
 	{
-<<<<<<< HEAD
 		queryNew->limitOffset = flatten_join_alias_vars(NULL, queryNew, limitOffset);
-		pfree(limitOffset);
-=======
-		queryNew->limitOffset = flatten_join_alias_vars(queryNew, limitOffset);
 		if (limitOffset != queryNew->limitOffset)
 			pfree(limitOffset);
->>>>>>> main
 	}
 
 	List *windowClause = queryNew->windowClause;
@@ -5828,14 +5802,9 @@ flatten_join_alias_var_optimizer(Query *query, int queryLevel)
 	Node *limitCount = queryNew->limitCount;
 	if (NULL != limitCount)
 	{
-<<<<<<< HEAD
 		queryNew->limitCount = flatten_join_alias_vars(NULL, queryNew, limitCount);
-		pfree(limitCount);
-=======
-		queryNew->limitCount = flatten_join_alias_vars(queryNew, limitCount);
 		if (limitCount != queryNew->limitCount)
 			pfree(limitCount);
->>>>>>> main
 	}
 
     return queryNew;

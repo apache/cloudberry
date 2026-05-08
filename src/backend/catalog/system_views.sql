@@ -828,10 +828,6 @@ CREATE VIEW pg_stat_all_indexes AS
             LEFT JOIN pg_namespace N ON (N.oid = C.relnamespace)
     WHERE C.relkind IN ('r', 't', 'm', 'o', 'b', 'M');
 
-<<<<<<< HEAD
-
-=======
->>>>>>> main
 CREATE VIEW pg_stat_sys_indexes AS
     SELECT * FROM pg_stat_all_indexes
     WHERE schemaname IN ('pg_catalog', 'information_schema', 'pg_aoseg') OR
@@ -1209,22 +1205,6 @@ CREATE VIEW pg_stat_database AS
         UNION ALL
         SELECT oid, datname FROM pg_database
     ) D;
-
-<<<<<<< HEAD
-=======
-CREATE VIEW pg_stat_resqueues AS
-    SELECT
-        Q.oid AS queueid,
-        Q.rsqname AS queuename,
-        pg_stat_get_queue_num_exec(Q.oid) AS n_queries_exec,
-        pg_stat_get_queue_num_wait(Q.oid) AS n_queries_wait,
-        pg_stat_get_queue_elapsed_exec(Q.oid) AS elapsed_exec,
-        pg_stat_get_queue_elapsed_wait(Q.oid) AS elapsed_wait
-    FROM pg_resqueue AS Q;
-
--- Resource queue views
-
->>>>>>> main
 CREATE VIEW pg_resqueue_status AS
     SELECT
             q.rsqname,

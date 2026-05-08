@@ -20,12 +20,9 @@
 #include "access/twophase.h"
 #include "access/xact.h"
 #include "access/xloginsert.h"
-<<<<<<< HEAD
 #include "access/xlogrecovery.h"
 #include "access/xlogutils.h"
-=======
 #include "cdb/cdbvars.h"
->>>>>>> main
 #include "miscadmin.h"
 #include "pgstat.h"
 #include "replication/slot.h"

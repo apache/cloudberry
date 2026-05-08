@@ -1,6 +1,5 @@
 # Copyright (c) 2021-2023, PostgreSQL Global Development Group
 
-<<<<<<< HEAD
 =pod
 
 =head1 NAME
@@ -38,8 +37,6 @@ aimed at controlling command execution, logging and test functions.
 
 # This module should never depend on any other PostgreSQL regression test
 # modules.
-
-package PostgreSQL::Test::Utils;
 
 use strict;
 use warnings;
@@ -93,15 +90,6 @@ our @EXPORT = qw(
   $is_msys2
   $use_unix_sockets
 );
-=======
-# Allow use of release 15+ Perl package name in older branches, by giving that
-# package the same symbol table as the older package.
-
-use strict;
-use warnings;
-BEGIN { *PostgreSQL::Test::Utils:: = \*TestLib::; }
-use TestLib ();
->>>>>>> main
 
 our ($windows_os, $is_msys2, $use_unix_sockets, $timeout_default,
 	$tmp_check, $log_path, $test_logfile);

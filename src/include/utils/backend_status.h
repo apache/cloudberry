@@ -338,17 +338,12 @@ extern uint64 pgstat_get_my_query_id(void);
  * ----------
  */
 extern int	pgstat_fetch_stat_numbackends(void);
-<<<<<<< HEAD
 extern PgBackendStatus *pgstat_get_beentry_by_backend_id(BackendId beid);
 extern LocalPgBackendStatus *pgstat_get_local_beentry_by_backend_id(BackendId beid);
 extern LocalPgBackendStatus *pgstat_get_local_beentry_by_index(int idx);
-=======
-extern PgBackendStatus *pgstat_fetch_stat_beentry(int beid);
-extern LocalPgBackendStatus *pgstat_fetch_stat_local_beentry(int beid);
 /* -- mdb admin patch -- */
 extern LocalPgBackendStatus *pgstat_fetch_stat_local_beentry_by_pid(int pid);
 /* -- mdb admin patch end -- */
->>>>>>> main
 extern char *pgstat_clip_activity(const char *raw_activity);
 
 

@@ -9,13 +9,8 @@ copy table_for_docopy (i, j) from stdin;
 1	hello1
 3	hello3
 \.
-<<<<<<< HEAD:contrib/pax_storage/src/test/regress/sql/pgstat_qd_tabstat.sql
 select gp_stat_force_next_flush();
 select n_tup_ins, n_tup_upd, n_tup_del, n_tup_hot_upd, n_live_tup, n_dead_tup, n_mod_since_analyze from gp_stat_all_tables_summary where relid = 'table_for_docopy'::regclass;
-=======
-select pg_sleep(0.77); -- Force pgstat_report_stat() to send tabstat.
-select n_tup_ins, n_tup_upd, n_tup_del, n_tup_hot_upd, n_live_tup, n_dead_tup, n_mod_since_analyze from pg_stat_all_tables where relid = 'table_for_docopy'::regclass;
->>>>>>> main:contrib/pax_storage/src/test/regress/input/pgstat_qd_tabstat.source
 
 CREATE TABLE data_tbl (a int,b char) distributed by (a);
 INSERT INTO data_tbl values(1,'1');
@@ -25,13 +20,8 @@ INSERT INTO data_tbl values(1,'b');
 COPY data_tbl TO '/tmp/data_tbl<SEGID>.csv' on segment;
 create table copy_on_segment (a int,b char);
 COPY copy_on_segment from '/tmp/data_tbl<SEGID>.csv' on segment log errors segment reject limit 3 rows;
-<<<<<<< HEAD:contrib/pax_storage/src/test/regress/sql/pgstat_qd_tabstat.sql
 select gp_stat_force_next_flush();
 select n_tup_ins, n_tup_upd, n_tup_del, n_tup_hot_upd, n_live_tup, n_dead_tup, n_mod_since_analyze from gp_stat_all_tables_summary where relid = 'copy_on_segment'::regclass;
-=======
-select pg_sleep(0.77); -- Force pgstat_report_stat() to send tabstat.
-select n_tup_ins, n_tup_upd, n_tup_del, n_tup_hot_upd, n_live_tup, n_dead_tup, n_mod_since_analyze from pg_stat_all_tables where relid = 'copy_on_segment'::regclass;
->>>>>>> main:contrib/pax_storage/src/test/regress/input/pgstat_qd_tabstat.source
 
 
 -- Test pgstat table stat in initplan on QD
@@ -43,48 +33,27 @@ copy table_for_initplan (i, j, k) from stdin;
 \.
 explain (costs off) with updated AS (update table_for_initplan set k = 33 where i = 3 returning k) select table_for_initplan.*, (select sum(k) from updated) from table_for_initplan;
 with updated AS (update table_for_initplan set k = 33 where i = 3 returning k) select table_for_initplan.*, (select sum(k) from updated) from table_for_initplan;
-<<<<<<< HEAD:contrib/pax_storage/src/test/regress/sql/pgstat_qd_tabstat.sql
 select gp_stat_force_next_flush();
 select n_tup_ins, n_tup_upd, n_tup_del, n_tup_hot_upd, n_live_tup, n_dead_tup, n_mod_since_analyze from gp_stat_all_tables_summary where relid = 'table_for_initplan'::regclass;
-=======
-select pg_sleep(0.77); -- Force pgstat_report_stat() to send tabstat.
-select n_tup_ins, n_tup_upd, n_tup_del, n_tup_hot_upd, n_live_tup, n_dead_tup, n_mod_since_analyze from pg_stat_all_tables where relid = 'table_for_initplan'::regclass;
->>>>>>> main:contrib/pax_storage/src/test/regress/input/pgstat_qd_tabstat.source
 
 
 -- Test pgstat table stat in CTAS on QD
 create table table_for_ctas as select i, 'hello' || i from generate_series(1, 100) f(i);
-<<<<<<< HEAD:contrib/pax_storage/src/test/regress/sql/pgstat_qd_tabstat.sql
 select gp_stat_force_next_flush();
 select n_tup_ins, n_tup_upd, n_tup_del, n_tup_hot_upd, n_live_tup, n_dead_tup, n_mod_since_analyze from gp_stat_all_tables_summary where relid = 'table_for_ctas'::regclass;
 select i, 'hello' || i into table_for_insert_into from generate_series(1, 100) f(i);
 select gp_stat_force_next_flush();
 select n_tup_ins, n_tup_upd, n_tup_del, n_tup_hot_upd, n_live_tup, n_dead_tup, n_mod_since_analyze from gp_stat_all_tables_summary where relid = 'table_for_insert_into'::regclass;
-=======
-select pg_sleep(0.77); -- Force pgstat_report_stat() to send tabstat.
-select n_tup_ins, n_tup_upd, n_tup_del, n_tup_hot_upd, n_live_tup, n_dead_tup, n_mod_since_analyze from pg_stat_all_tables where relid = 'table_for_ctas'::regclass;
-select i, 'hello' || i into table_for_insert_into from generate_series(1, 100) f(i);
-select pg_sleep(0.77); -- Force pgstat_report_stat() to send tabstat.
-select n_tup_ins, n_tup_upd, n_tup_del, n_tup_hot_upd, n_live_tup, n_dead_tup, n_mod_since_analyze from pg_stat_all_tables where relid = 'table_for_insert_into'::regclass;
->>>>>>> main:contrib/pax_storage/src/test/regress/input/pgstat_qd_tabstat.source
 
 
 -- Test pgstat table stat in ALTER TABLE SET DISTRIBUTED BY on QD
 create table table_for_set_distributed_by(i int, j varchar) distributed by (i);
 insert into table_for_set_distributed_by select i, 'hello' || i from generate_series(1, 333) f(i);
-<<<<<<< HEAD:contrib/pax_storage/src/test/regress/sql/pgstat_qd_tabstat.sql
 select gp_stat_force_next_flush();
 select n_tup_ins, n_tup_upd, n_tup_del, n_tup_hot_upd, n_live_tup, n_dead_tup, n_mod_since_analyze from gp_stat_all_tables_summary where relid = 'table_for_set_distributed_by'::regclass;
 alter table table_for_set_distributed_by set distributed by (j);
 select gp_stat_force_next_flush();
 select n_tup_ins, n_tup_upd, n_tup_del, n_tup_hot_upd, n_live_tup, n_dead_tup, n_mod_since_analyze from gp_stat_all_tables_summary where relid = 'table_for_set_distributed_by'::regclass;
-=======
-select pg_sleep(0.77); -- Force pgstat_report_stat() to send tabstat.
-select n_tup_ins, n_tup_upd, n_tup_del, n_tup_hot_upd, n_live_tup, n_dead_tup, n_mod_since_analyze from pg_stat_all_tables where relid = 'table_for_set_distributed_by'::regclass;
-alter table table_for_set_distributed_by set distributed by (j);
-select pg_sleep(0.77); -- Force pgstat_report_stat() to send tabstat.
-select n_tup_ins, n_tup_upd, n_tup_del, n_tup_hot_upd, n_live_tup, n_dead_tup, n_mod_since_analyze from pg_stat_all_tables where relid = 'table_for_set_distributed_by'::regclass;
->>>>>>> main:contrib/pax_storage/src/test/regress/input/pgstat_qd_tabstat.source
 
 
 -- Test pgstat table stat in execution of funciton on QD
@@ -98,13 +67,8 @@ $$
 $$
 language plpgsql volatile;
 select update_table_for_function();
-<<<<<<< HEAD:contrib/pax_storage/src/test/regress/sql/pgstat_qd_tabstat.sql
 select gp_stat_force_next_flush();
 select n_tup_ins, n_tup_upd, n_tup_del, n_tup_hot_upd, n_live_tup, n_dead_tup, n_mod_since_analyze from gp_stat_all_tables_summary where relid = 'table_for_function'::regclass;
-=======
-select pg_sleep(0.77); -- Force pgstat_report_stat() to send tabstat.
-select n_tup_ins, n_tup_upd, n_tup_del, n_tup_hot_upd, n_live_tup, n_dead_tup, n_mod_since_analyze from pg_stat_all_tables where relid = 'table_for_function'::regclass;
->>>>>>> main:contrib/pax_storage/src/test/regress/input/pgstat_qd_tabstat.source
 
 
 -- Test pgstat table stat in ALTER TABLE EXPAND TABLE on QD;
@@ -113,21 +77,12 @@ select gp_debug_set_create_table_default_numsegments(1);
 create table table_for_expand(i int, j varchar) distributed by (i);
 insert into table_for_expand select i, 'hello' || i from generate_series(1, 333) f(i);
 select count(distinct gp_segment_id) from table_for_expand;
-<<<<<<< HEAD:contrib/pax_storage/src/test/regress/sql/pgstat_qd_tabstat.sql
 select gp_stat_force_next_flush();
 select n_tup_ins, n_tup_upd, n_tup_del, n_tup_hot_upd, n_live_tup, n_dead_tup, n_mod_since_analyze from gp_stat_all_tables_summary where relid = 'table_for_expand'::regclass;
 alter table table_for_expand expand table;
 select count(distinct gp_segment_id) from table_for_expand;
 select gp_stat_force_next_flush();
 select n_tup_ins, n_tup_upd, n_tup_del, n_tup_hot_upd, n_live_tup, n_dead_tup, n_mod_since_analyze from gp_stat_all_tables_summary where relid = 'table_for_expand'::regclass;
-=======
-select pg_sleep(0.77); -- Force pgstat_report_stat() to send tabstat.
-select n_tup_ins, n_tup_upd, n_tup_del, n_tup_hot_upd, n_live_tup, n_dead_tup, n_mod_since_analyze from pg_stat_all_tables where relid = 'table_for_expand'::regclass;
-alter table table_for_expand expand table;
-select count(distinct gp_segment_id) from table_for_expand;
-select pg_sleep(0.77); -- Force pgstat_report_stat() to send tabstat.
-select n_tup_ins, n_tup_upd, n_tup_del, n_tup_hot_upd, n_live_tup, n_dead_tup, n_mod_since_analyze from pg_stat_all_tables where relid = 'table_for_expand'::regclass;
->>>>>>> main:contrib/pax_storage/src/test/regress/input/pgstat_qd_tabstat.source
 select gp_debug_reset_create_table_default_numsegments();
 
 
@@ -147,13 +102,8 @@ rollback to savepoint level5;
 update table_for_iud set j = 'heroes never die' where i >= 300;
 release savepoint level3;
 commit;
-<<<<<<< HEAD:contrib/pax_storage/src/test/regress/sql/pgstat_qd_tabstat.sql
 select gp_stat_force_next_flush();
 select n_live_tup, n_dead_tup from gp_stat_all_tables_summary where relid = 'table_for_iud'::regclass;
-=======
-select pg_sleep(0.77); -- Force pgstat_report_stat() to send tabstat.
-select n_live_tup, n_dead_tup from pg_stat_all_tables where relid = 'table_for_iud'::regclass;
->>>>>>> main:contrib/pax_storage/src/test/regress/input/pgstat_qd_tabstat.source
 
 begin;
 savepoint level1;
@@ -169,25 +119,15 @@ update table_for_iud set j = 'are you ok' where i >= 300;
 rollback to savepoint level3;
 delete from table_for_iud where i <= 200;
 commit;
-<<<<<<< HEAD:contrib/pax_storage/src/test/regress/sql/pgstat_qd_tabstat.sql
 select gp_stat_force_next_flush();
 select n_live_tup, n_dead_tup from gp_stat_all_tables_summary where relid = 'table_for_iud'::regclass;
-=======
-select pg_sleep(0.77); -- Force pgstat_report_stat() to send tabstat.
-select n_live_tup, n_dead_tup from pg_stat_all_tables where relid = 'table_for_iud'::regclass;
->>>>>>> main:contrib/pax_storage/src/test/regress/input/pgstat_qd_tabstat.source
 
 
 -- Test pgstat table stat in TRUNCATE on QD
 create table table_for_truncate(i int, j varchar) distributed by (i);
 insert into table_for_truncate select i, 'hello' || i from generate_series(1, 777) f(i);
-<<<<<<< HEAD:contrib/pax_storage/src/test/regress/sql/pgstat_qd_tabstat.sql
 select gp_stat_force_next_flush();
 select n_tup_ins, n_tup_upd, n_tup_del, n_tup_hot_upd, n_live_tup, n_dead_tup, n_mod_since_analyze from gp_stat_all_tables_summary where relid = 'table_for_truncate'::regclass;
-=======
-select pg_sleep(0.77); -- Force pgstat_report_stat() to send tabstat.
-select n_tup_ins, n_tup_upd, n_tup_del, n_tup_hot_upd, n_live_tup, n_dead_tup, n_mod_since_analyze from pg_stat_all_tables where relid = 'table_for_truncate'::regclass;
->>>>>>> main:contrib/pax_storage/src/test/regress/input/pgstat_qd_tabstat.source
 begin;
 savepoint level1;
 savepoint level2;
@@ -200,7 +140,6 @@ insert into table_for_truncate select i, 'hello' || i from generate_series(1, 80
 delete from table_for_truncate where i >= 700;
 update table_for_truncate set j = 'D' where i <= 200;
 commit;
-<<<<<<< HEAD:contrib/pax_storage/src/test/regress/sql/pgstat_qd_tabstat.sql
 select gp_stat_force_next_flush();
 select n_live_tup, n_dead_tup from gp_stat_all_tables_summary where relid = 'table_for_truncate'::regclass;
 
@@ -208,15 +147,6 @@ create table table_for_truncate_abort(i int, j varchar) distributed by (i);
 insert into table_for_truncate_abort select i, 'hello' || i from generate_series(1, 777) f(i);
 select gp_stat_force_next_flush();
 select n_live_tup, n_dead_tup from gp_stat_all_tables_summary where relid = 'table_for_truncate_abort'::regclass;
-=======
-select pg_sleep(0.77); -- Force pgstat_report_stat() to send tabstat.
-select n_live_tup, n_dead_tup from pg_stat_all_tables where relid = 'table_for_truncate'::regclass;
-
-create table table_for_truncate_abort(i int, j varchar) distributed by (i);
-insert into table_for_truncate_abort select i, 'hello' || i from generate_series(1, 777) f(i);
-select pg_sleep(0.77); -- Force pgstat_report_stat() to send tabstat.
-select n_live_tup, n_dead_tup from pg_stat_all_tables where relid = 'table_for_truncate_abort'::regclass;
->>>>>>> main:contrib/pax_storage/src/test/regress/input/pgstat_qd_tabstat.source
 begin;
 savepoint level1;
 savepoint level2;
@@ -229,13 +159,8 @@ insert into table_for_truncate_abort select i, 'hello' || i from generate_series
 delete from table_for_truncate_abort where i < 700;
 update table_for_truncate_abort set j = 'D' where i >= 200;
 rollback;
-<<<<<<< HEAD:contrib/pax_storage/src/test/regress/sql/pgstat_qd_tabstat.sql
 select gp_stat_force_next_flush();
 select n_live_tup, n_dead_tup from gp_stat_all_tables_summary where relid = 'table_for_truncate_abort'::regclass;
-=======
-select pg_sleep(0.77); -- Force pgstat_report_stat() to send tabstat.
-select n_live_tup, n_dead_tup from pg_stat_all_tables where relid = 'table_for_truncate_abort'::regclass;
->>>>>>> main:contrib/pax_storage/src/test/regress/input/pgstat_qd_tabstat.source
 
 
 -- Test pgstat table stat for partition table on QD
@@ -245,32 +170,18 @@ PARTITION BY RANGE (rank)
 ( START (1) END (10) EVERY (5),
   DEFAULT PARTITION extra );
 insert into rankpart select i, i % 10, i from generate_series(1, 1000)i;
-<<<<<<< HEAD:contrib/pax_storage/src/test/regress/sql/pgstat_qd_tabstat.sql
 select gp_stat_force_next_flush();
 select n_tup_ins, n_tup_upd, n_tup_del, n_tup_hot_upd, n_live_tup, n_dead_tup, n_mod_since_analyze from gp_stat_all_tables_summary where relid = 'rankpart_1_prt_2'::regclass;
 select n_tup_ins, n_tup_upd, n_tup_del, n_tup_hot_upd, n_live_tup, n_dead_tup, n_mod_since_analyze from gp_stat_all_tables_summary where relid = 'rankpart_1_prt_3'::regclass;
 select n_tup_ins, n_tup_upd, n_tup_del, n_tup_hot_upd, n_live_tup, n_dead_tup, n_mod_since_analyze from gp_stat_all_tables_summary where relid = 'rankpart_1_prt_extra'::regclass;
-=======
-select pg_sleep(0.77); -- Force pgstat_report_stat() to send tabstat.
-select n_tup_ins, n_tup_upd, n_tup_del, n_tup_hot_upd, n_live_tup, n_dead_tup, n_mod_since_analyze from pg_stat_all_tables where relid = 'rankpart_1_prt_2'::regclass;
-select n_tup_ins, n_tup_upd, n_tup_del, n_tup_hot_upd, n_live_tup, n_dead_tup, n_mod_since_analyze from pg_stat_all_tables where relid = 'rankpart_1_prt_3'::regclass;
-select n_tup_ins, n_tup_upd, n_tup_del, n_tup_hot_upd, n_live_tup, n_dead_tup, n_mod_since_analyze from pg_stat_all_tables where relid = 'rankpart_1_prt_extra'::regclass;
->>>>>>> main:contrib/pax_storage/src/test/regress/input/pgstat_qd_tabstat.source
 
 begin;
 delete from rankpart where id <= 100;
 rollback;
-<<<<<<< HEAD:contrib/pax_storage/src/test/regress/sql/pgstat_qd_tabstat.sql
 select gp_stat_force_next_flush();
 select n_tup_ins, n_tup_upd, n_tup_del, n_tup_hot_upd, n_live_tup, n_dead_tup, n_mod_since_analyze from gp_stat_all_tables_summary where relid = 'rankpart_1_prt_2'::regclass;
 select n_tup_ins, n_tup_upd, n_tup_del, n_tup_hot_upd, n_live_tup, n_dead_tup, n_mod_since_analyze from gp_stat_all_tables_summary where relid = 'rankpart_1_prt_3'::regclass;
 select n_tup_ins, n_tup_upd, n_tup_del, n_tup_hot_upd, n_live_tup, n_dead_tup, n_mod_since_analyze from gp_stat_all_tables_summary where relid = 'rankpart_1_prt_extra'::regclass;
-=======
-select pg_sleep(0.77); -- Force pgstat_report_stat() to send tabstat.
-select n_tup_ins, n_tup_upd, n_tup_del, n_tup_hot_upd, n_live_tup, n_dead_tup, n_mod_since_analyze from pg_stat_all_tables where relid = 'rankpart_1_prt_2'::regclass;
-select n_tup_ins, n_tup_upd, n_tup_del, n_tup_hot_upd, n_live_tup, n_dead_tup, n_mod_since_analyze from pg_stat_all_tables where relid = 'rankpart_1_prt_3'::regclass;
-select n_tup_ins, n_tup_upd, n_tup_del, n_tup_hot_upd, n_live_tup, n_dead_tup, n_mod_since_analyze from pg_stat_all_tables where relid = 'rankpart_1_prt_extra'::regclass;
->>>>>>> main:contrib/pax_storage/src/test/regress/input/pgstat_qd_tabstat.source
 
 copy rankpart (id, rank, product) from stdin;
 1001	1	1001
@@ -284,15 +195,9 @@ copy rankpart (id, rank, product) from stdin;
 1009	6	1009
 1010	6	1010
 \.
-<<<<<<< HEAD:contrib/pax_storage/src/test/regress/sql/pgstat_qd_tabstat.sql
 select gp_stat_force_next_flush();
 select n_tup_ins, n_tup_upd, n_tup_del, n_tup_hot_upd, n_live_tup, n_dead_tup, n_mod_since_analyze from gp_stat_all_tables_summary where relid = 'rankpart_1_prt_2'::regclass;
 select n_tup_ins, n_tup_upd, n_tup_del, n_tup_hot_upd, n_live_tup, n_dead_tup, n_mod_since_analyze from gp_stat_all_tables_summary where relid = 'rankpart_1_prt_3'::regclass;
-=======
-select pg_sleep(0.77); -- Force pgstat_report_stat() to send tabstat.
-select n_tup_ins, n_tup_upd, n_tup_del, n_tup_hot_upd, n_live_tup, n_dead_tup, n_mod_since_analyze from pg_stat_all_tables where relid = 'rankpart_1_prt_2'::regclass;
-select n_tup_ins, n_tup_upd, n_tup_del, n_tup_hot_upd, n_live_tup, n_dead_tup, n_mod_since_analyze from pg_stat_all_tables where relid = 'rankpart_1_prt_3'::regclass;
->>>>>>> main:contrib/pax_storage/src/test/regress/input/pgstat_qd_tabstat.source
 
 begin;
 update rankpart set rank = 1 where id > 1005;
@@ -303,55 +208,32 @@ delete from rankpart where id > 1005;
 release savepoint level2;
 rollback to savepoint level1;
 commit;
-<<<<<<< HEAD:contrib/pax_storage/src/test/regress/sql/pgstat_qd_tabstat.sql
 select gp_stat_force_next_flush();
 select n_tup_ins, n_tup_upd, n_tup_del, n_tup_hot_upd, n_live_tup, n_dead_tup, n_mod_since_analyze from gp_stat_all_tables_summary where relid = 'rankpart_1_prt_2'::regclass;
 select n_tup_ins, n_tup_upd, n_tup_del, n_tup_hot_upd, n_live_tup, n_dead_tup, n_mod_since_analyze from gp_stat_all_tables_summary where relid = 'rankpart_1_prt_3'::regclass;
 select n_tup_ins, n_tup_upd, n_tup_del, n_tup_hot_upd, n_live_tup, n_dead_tup, n_mod_since_analyze from gp_stat_all_tables_summary where relid = 'rankpart_1_prt_extra'::regclass;
-=======
-select pg_sleep(0.77); -- Force pgstat_report_stat() to send tabstat.
-select n_tup_ins, n_tup_upd, n_tup_del, n_tup_hot_upd, n_live_tup, n_dead_tup, n_mod_since_analyze from pg_stat_all_tables where relid = 'rankpart_1_prt_2'::regclass;
-select n_tup_ins, n_tup_upd, n_tup_del, n_tup_hot_upd, n_live_tup, n_dead_tup, n_mod_since_analyze from pg_stat_all_tables where relid = 'rankpart_1_prt_3'::regclass;
-select n_tup_ins, n_tup_upd, n_tup_del, n_tup_hot_upd, n_live_tup, n_dead_tup, n_mod_since_analyze from pg_stat_all_tables where relid = 'rankpart_1_prt_extra'::regclass;
->>>>>>> main:contrib/pax_storage/src/test/regress/input/pgstat_qd_tabstat.source
 
 begin;
 savepoint level1_1;
 insert into rankpart select i, i % 10, i from generate_series(2001, 3000)i;
 insert into rankpart select i, i % 10, i from generate_series(3001, 4000)i;
 commit;
-<<<<<<< HEAD:contrib/pax_storage/src/test/regress/sql/pgstat_qd_tabstat.sql
 select gp_stat_force_next_flush();
 select n_tup_ins, n_tup_upd, n_tup_del, n_tup_hot_upd, n_live_tup, n_dead_tup, n_mod_since_analyze from gp_stat_all_tables_summary where relid = 'rankpart_1_prt_2'::regclass;
 select n_tup_ins, n_tup_upd, n_tup_del, n_tup_hot_upd, n_live_tup, n_dead_tup, n_mod_since_analyze from gp_stat_all_tables_summary where relid = 'rankpart_1_prt_3'::regclass;
 select n_tup_ins, n_tup_upd, n_tup_del, n_tup_hot_upd, n_live_tup, n_dead_tup, n_mod_since_analyze from gp_stat_all_tables_summary where relid = 'rankpart_1_prt_extra'::regclass;
-=======
-select pg_sleep(0.77); -- Force pgstat_report_stat() to send tabstat.
-select n_tup_ins, n_tup_upd, n_tup_del, n_tup_hot_upd, n_live_tup, n_dead_tup, n_mod_since_analyze from pg_stat_all_tables where relid = 'rankpart_1_prt_2'::regclass;
-select n_tup_ins, n_tup_upd, n_tup_del, n_tup_hot_upd, n_live_tup, n_dead_tup, n_mod_since_analyze from pg_stat_all_tables where relid = 'rankpart_1_prt_3'::regclass;
-select n_tup_ins, n_tup_upd, n_tup_del, n_tup_hot_upd, n_live_tup, n_dead_tup, n_mod_since_analyze from pg_stat_all_tables where relid = 'rankpart_1_prt_extra'::regclass;
->>>>>>> main:contrib/pax_storage/src/test/regress/input/pgstat_qd_tabstat.source
 
 
 -- Test pgstat matview stat with distributed policy.
 create table base_table(i int, j int, z int ) distributed by (i);
 insert into base_table select i,i,i from generate_series(1, 100) i;
 create materialized view mt as select * from base_table where z>=50;
-<<<<<<< HEAD:contrib/pax_storage/src/test/regress/sql/pgstat_qd_tabstat.sql
 select gp_stat_force_next_flush();
 select n_tup_ins, n_tup_upd, n_tup_del, n_tup_hot_upd, n_live_tup, n_dead_tup, n_mod_since_analyze from gp_stat_all_tables_summary where relid = 'mt'::regclass;
 insert into base_table select i,i,i from generate_series(1, 100) i;
 refresh materialized view mt;
 select gp_stat_force_next_flush();
 select n_tup_ins, n_tup_upd, n_tup_del, n_tup_hot_upd, n_live_tup, n_dead_tup, n_mod_since_analyze from gp_stat_all_tables_summary where relid = 'mt'::regclass;
-=======
-select pg_sleep(0.77); -- Force pgstat_report_stat() to send tabstat.
-select n_tup_ins, n_tup_upd, n_tup_del, n_tup_hot_upd, n_live_tup, n_dead_tup, n_mod_since_analyze from pg_stat_all_tables where relid = 'mt'::regclass;
-insert into base_table select i,i,i from generate_series(1, 100) i;
-refresh materialized view mt;
-select pg_sleep(0.77) from gp_dist_random('gp_id'); -- Force pgstat_report_stat() to send tabstat.
-select n_tup_ins, n_tup_upd, n_tup_del, n_tup_hot_upd, n_live_tup, n_dead_tup, n_mod_since_analyze from pg_stat_all_tables where relid = 'mt'::regclass;
->>>>>>> main:contrib/pax_storage/src/test/regress/input/pgstat_qd_tabstat.source
 -- gp_stat_all_tables_summary collects gpstats across segments
 select n_tup_ins, n_tup_upd, n_tup_del, n_tup_hot_upd, n_live_tup, n_dead_tup, n_mod_since_analyze from gp_stat_all_tables_summary where relid = 'mt'::regclass;
 
@@ -362,21 +244,12 @@ drop table base_table;
 create table base_table(i int, j int, z int ) distributed replicated;
 insert into base_table select i,i,i from generate_series(1, 100) i;
 create materialized view mt as select * from base_table where z>=50 distributed replicated;
-<<<<<<< HEAD:contrib/pax_storage/src/test/regress/sql/pgstat_qd_tabstat.sql
 select gp_stat_force_next_flush();
 select n_tup_ins, n_tup_upd, n_tup_del, n_tup_hot_upd, n_live_tup, n_dead_tup, n_mod_since_analyze from gp_stat_all_tables_summary where relid = 'mt'::regclass;
 insert into base_table select i,i,i from generate_series(1, 100) i;
 refresh materialized view mt;
 select gp_stat_force_next_flush();
 select n_tup_ins, n_tup_upd, n_tup_del, n_tup_hot_upd, n_live_tup, n_dead_tup, n_mod_since_analyze from gp_stat_all_tables_summary where relid = 'mt'::regclass;
-=======
-select pg_sleep(0.77); -- Force pgstat_report_stat() to send tabstat.
-select n_tup_ins, n_tup_upd, n_tup_del, n_tup_hot_upd, n_live_tup, n_dead_tup, n_mod_since_analyze from pg_stat_all_tables where relid = 'mt'::regclass;
-insert into base_table select i,i,i from generate_series(1, 100) i;
-refresh materialized view mt;
-select pg_sleep(0.77) from gp_dist_random('gp_id'); -- Force pgstat_report_stat() to send tabstat.
-select n_tup_ins, n_tup_upd, n_tup_del, n_tup_hot_upd, n_live_tup, n_dead_tup, n_mod_since_analyze from pg_stat_all_tables where relid = 'mt'::regclass;
->>>>>>> main:contrib/pax_storage/src/test/regress/input/pgstat_qd_tabstat.source
 -- gp_stat_all_tables_summary collects gpstats across segments
 select n_tup_ins, n_tup_upd, n_tup_del, n_tup_hot_upd, n_live_tup, n_dead_tup, n_mod_since_analyze from gp_stat_all_tables_summary where relid = 'mt'::regclass;
 
@@ -396,11 +269,7 @@ where
     OR relid = (select blkdirrelid from pg_appendonly where relid = 'tabstat_ao'::regclass)
     OR relid = (select visimaprelid from pg_appendonly where relid = 'tabstat_ao'::regclass);
 
-<<<<<<< HEAD:contrib/pax_storage/src/test/regress/sql/pgstat_qd_tabstat.sql
 select gp_stat_force_next_flush();
-=======
-select pg_sleep(0.77); -- Force pgstat_report_stat() to send tabstat.
->>>>>>> main:contrib/pax_storage/src/test/regress/input/pgstat_qd_tabstat.source
 select n_tup_ins from gp_stat_all_tables_summary where relid = (select segrelid from pg_appendonly where relid = 'tabstat_ao'::regclass);
 select n_tup_ins from gp_stat_all_tables_summary where relid = (select blkdirrelid from pg_appendonly where relid = 'tabstat_ao'::regclass);
 select n_tup_ins from gp_stat_all_tables_summary where relid = (select visimaprelid from pg_appendonly where relid = 'tabstat_ao'::regclass);

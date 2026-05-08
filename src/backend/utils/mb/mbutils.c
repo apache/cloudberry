@@ -40,11 +40,8 @@
 #include "utils/builtins.h"
 #include "utils/memutils.h"
 #include "utils/syscache.h"
-<<<<<<< HEAD
 #include "varatt.h"
-=======
 #include "common/mdb_locale.h"
->>>>>>> main
 
 /*
  * We maintain a simple linked list caching the fmgr lookup info for the

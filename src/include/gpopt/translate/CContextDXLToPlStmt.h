@@ -104,7 +104,7 @@ private:
 	// list of all rtable entries
 	List *m_rtable_entries_list;
 
-	// list of all rtable entries
+	// list of all RTEPermissionInfo entries
 	List *m_perminfo_list;
 
 	// list of all subplan entries
@@ -246,14 +246,13 @@ public:
 
 	Index GetRTEIndexByAssignedQueryId(ULONG assigned_query_id_for_target_rel,
 									   BOOL *is_rte_exists);
-<<<<<<< HEAD
 
-	// add a perm info.
-	void AddPerfmInfo(RTEPermissionInfo *pi);
+	// add a permission info entry
+	void AddPermInfo(RTEPermissionInfo *pi);
 
 	// get perm info from m_perminfo_list by given index
 	RTEPermissionInfo *GetPermInfoByIndex(Index index);
-=======
+
 	// List of AggInfo and AggTransInfo
 	inline List *GetAggInfos() const 
 	{
@@ -268,7 +267,6 @@ public:
 	void AppendAggInfos(AggInfo *agginfo);
 	void AppendAggTransInfos(AggTransInfo *transinfo);
 	void ResetAggInfosAndTransInfos();
->>>>>>> main
 };
 
 }  // namespace gpdxl

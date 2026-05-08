@@ -301,11 +301,8 @@ static void
 flagInhTables(Archive *fout, TableInfo *tblinfo, int numTables,
 			  InhInfo *inhinfo, int numInherits)
 {
-<<<<<<< HEAD
 	TableInfo  *child = NULL;
 	TableInfo  *parent = NULL;
-=======
->>>>>>> main
 	int			i,
 				j;
 
@@ -362,38 +359,6 @@ flagInhTables(Archive *fout, TableInfo *tblinfo, int numTables,
 	 */
 	for (i = 0; i < numTables; i++)
 	{
-<<<<<<< HEAD
-=======
-		bool		find_parents = true;
-		bool		mark_parents = true;
-
-		/* Some kinds never have parents */
-		if (tblinfo[i].relkind == RELKIND_SEQUENCE ||
-			tblinfo[i].relkind == RELKIND_VIEW ||
-			tblinfo[i].relkind == RELKIND_MATVIEW)
-			continue;
-
-		/*
-		 * Normally, we don't bother computing anything for non-target tables.
-		 * However, we must find the parents of non-root partitioned tables in
-		 * any case, so that we can trace from leaf partitions up to the root
-		 * (in case a leaf is to be dumped but its parents are not).  We need
-		 * not mark such parents interesting for getTableAttrs, though.
-		 */
-		if (!tblinfo[i].dobj.dump)
-		{
-			mark_parents = false;
-
-			if (!(tblinfo[i].relkind == RELKIND_PARTITIONED_TABLE &&
-				  tblinfo[i].ispartition))
-				find_parents = false;
-		}
-
-		/* If needed, find all the immediate parent tables. */
-		if (find_parents)
-			findParentsByOid(&tblinfo[i], inhinfo, numInherits);
-
->>>>>>> main
 		/*
 		 * If needed, mark the parents as interesting for getTableAttrs and
 		 * getIndexes.  We only need this for direct parents of dumpable

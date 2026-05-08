@@ -133,16 +133,10 @@ struct PgXmlErrorContext
 
 static xmlParserInputPtr xmlPgEntityLoader(const char *URL, const char *ID,
 										   xmlParserCtxtPtr ctxt);
-<<<<<<< HEAD
 static void xml_errsave(Node *escontext, PgXmlErrorContext *errcxt,
 						int sqlcode, const char *msg);
 static void xml_errorHandler(void *data, PgXmlErrorPtr error);
 static int	errdetail_for_xml_code(int code);
-=======
-static void xml_errorHandler(void *data, PgXmlErrorPtr error);
-static void xml_ereport_by_code(int level, int sqlcode,
-								const char *msg, int errcode);
->>>>>>> main
 static void chopStringInfoNewlines(StringInfo str);
 static void appendStringInfoLineSeparator(StringInfo str);
 

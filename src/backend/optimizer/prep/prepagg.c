@@ -474,13 +474,7 @@ find_compatible_trans(List *aggtransinfos, bool shareable,
 	foreach(lc, transnos)
 	{
 		int			transno = lfirst_int(lc);
-<<<<<<< HEAD
-		AggTransInfo *pertrans = list_nth_node(AggTransInfo,
-											   root->aggtransinfos,
-											   transno);
-=======
 		AggTransInfo *pertrans = (AggTransInfo *) list_nth(aggtransinfos, transno);
->>>>>>> main
 
 		/*
 		 * if the transfns or transition state types are not the same then the

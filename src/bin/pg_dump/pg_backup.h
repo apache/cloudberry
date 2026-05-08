@@ -248,12 +248,10 @@ typedef struct Archive
 	bool		exit_on_error;	/* whether to exit on SQL errors... */
 	int			n_errors;		/* number of errors (if no die) */
 
-<<<<<<< HEAD
 	/* prepared-query status */
 	bool	   *is_prepared;	/* indexed by enum _dumpPreparedQueries */
-=======
+
 	DatabaseVersion version;
->>>>>>> main
 
 	/* The rest is private */
 } Archive;

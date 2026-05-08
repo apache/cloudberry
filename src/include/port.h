@@ -483,11 +483,7 @@ extern void qsort_arg(void *base, size_t nel, size_t elsize,
 extern void qsort_interruptible(void *base, size_t nel, size_t elsize,
 								qsort_arg_comparator cmp, void *arg);
 
-<<<<<<< HEAD
 extern void *bsearch_arg(const void *key, const void *base0,
-=======
-extern void *bsearch_arg(const void *key, const void *base,
->>>>>>> main
 						 size_t nmemb, size_t size,
 						 int (*compar) (const void *, const void *, void *),
 						 void *arg);

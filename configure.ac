@@ -20,13 +20,8 @@ m4_pattern_forbid(^PGAC_)dnl to catch undefined macros
 dnl The PACKAGE_VERSION from upstream PostgreSQL is maintained in the
 dnl PG_PACKAGE_VERSION variable, when merging make sure to update this
 dnl variable with the merge conflict from the AC_INIT() statement.
-<<<<<<< HEAD
-AC_INIT([Apache Cloudberry], [2.0.0-devel], [dev@cloudberry.apache.org], [], [https://cloudberry.apache.org/])
-[PG_PACKAGE_VERSION=16.9]
-=======
 AC_INIT([Apache Cloudberry], [3.0.0-devel], [dev@cloudberry.apache.org], [], [https://cloudberry.apache.org/])
-[PG_PACKAGE_VERSION=14.4]
->>>>>>> main
+[PG_PACKAGE_VERSION=16.9]
 AC_SUBST(PG_PACKAGE_VERSION)
 
 m4_if(m4_defn([m4_PACKAGE_VERSION]), [2.69], [], [m4_fatal([Autoconf version 2.69 is required.
@@ -1453,13 +1448,6 @@ PGAC_ARG_BOOL(with, libbz2, yes,
 AC_SUBST(with_libbz2)
 
 #
-<<<<<<< HEAD
-# quicklz
-#
-PGAC_ARG_BOOL(with, quicklz, no,
-              [build with QuickLZ support (requires quicklz library)])
-AC_SUBST(with_quicklz)
-=======
 # zstd
 #
 AC_MSG_CHECKING([whether to build with ZSTD support])
@@ -1497,7 +1485,6 @@ if test "$with_zstd" = yes; then
   dnl zstd_errors.h was renamed from error_public.h in v1.4.0
   PKG_CHECK_MODULES([ZSTD], [libzstd >= 1.4.0])
 fi
->>>>>>> main
 
 #
 # Realtime library

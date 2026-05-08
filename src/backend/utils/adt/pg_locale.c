@@ -1184,9 +1184,6 @@ IsoLocaleName(const char *winlocname)
 static char *
 IsoLocaleName(const char *winlocname)
 {
-<<<<<<< HEAD
-	return NULL;				/* Not supported on MinGW */
-=======
 	char		buf[32];
 	const int	canary = 0x7F;
 	bool		ok = true;
@@ -1227,7 +1224,6 @@ IsoLocaleName(const char *winlocname)
 				 errmsg_internal("strxfrm(), in locale \"%s\", writes past the specified array length",
 					SETLOCALE(LC_COLLATE, NULL)),
 				 errhint("Apply system library package updates.")));
->>>>>>> main
 }
 
 #endif							/* defined(_MSC_VER) */
@@ -1762,11 +1758,7 @@ get_collation_actual_version(char collprovider, const char *collcollate)
 		locale_t	loc;
 
 		/* Look up FreeBSD collation version. */
-<<<<<<< HEAD
-		loc = newlocale(LC_COLLATE_MASK, collcollate, NULL);
-=======
 		loc = NEWLOCALE(LC_COLLATE, collcollate, NULL);
->>>>>>> main
 		if (loc)
 		{
 			collversion =

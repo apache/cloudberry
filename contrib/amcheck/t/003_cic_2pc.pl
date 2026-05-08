@@ -8,15 +8,11 @@ use warnings;
 use PostgreSQL::Test::Cluster;
 use PostgreSQL::Test::Utils;
 
-<<<<<<< HEAD
-use Test::More;
-=======
 use Test::More tests => 0 + 1;#5;
 
 SKIP:
 {
 	skip "TWO PHASE transactions are not supported in Cloudberry, skip test", 1;
->>>>>>> main
 
 Test::More->builder->todo_start('filesystem bug')
   if PostgreSQL::Test::Utils::has_wal_read_bug;

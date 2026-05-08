@@ -2680,11 +2680,7 @@ SELECT COUNT(*) FROM gp_read_error_log('exttab_heap_join_1');
 \! rm $PG_ABS_SRCDIR/data/tableless.csv
 -- start_ignore
 DROP EXTERNAL TABLE IF EXISTS ext_nation_on_coordinator;
-<<<<<<< HEAD:contrib/pax_storage/src/test/regress/expected/external_table_optimizer.out
 NOTICE:  foreign table "ext_nation_on_coordinator" does not exist, skipping
-=======
-NOTICE:  table "ext_nation_on_coordinator" does not exist, skipping
->>>>>>> main:src/test/regress/output/external_table.source
 DROP EXTERNAL TABLE IF EXISTS exttab_with_on_coordinator;
 NOTICE:  foreign table "exttab_with_on_coordinator" does not exist, skipping
 -- end_ignore
@@ -2694,11 +2690,7 @@ CREATE EXTERNAL TABLE ext_nation_on_coordinator ( N_NATIONKEY  INTEGER ,
                             N_NAME       CHAR(25) ,
                             N_REGIONKEY  INTEGER ,
                             N_COMMENT    VARCHAR(152))
-<<<<<<< HEAD:contrib/pax_storage/src/test/regress/expected/external_table_optimizer.out
 location (:'nation_tbl' ) ON COORDINATOR
-=======
-location ('file://@hostname@@abs_srcdir@/data/nation.tbl' ) ON COORDINATOR
->>>>>>> main:src/test/regress/output/external_table.source
 FORMAT 'text' (delimiter '|');
 SELECT gp_segment_id, * FROM ext_nation_on_coordinator ORDER BY N_NATIONKEY DESC LIMIT 5;
  gp_segment_id | n_nationkey |          n_name           | n_regionkey |                                                   n_comment                                                    

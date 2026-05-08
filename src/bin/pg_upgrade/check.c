@@ -1104,12 +1104,8 @@ check_for_incompatible_polymorphics(ClusterInfo *cluster)
 
 	prep_status("Checking for incompatible polymorphic functions");
 
-<<<<<<< HEAD
 	snprintf(output_path, sizeof(output_path), "%s/%s",
 			 log_opts.basedir,
-=======
-	snprintf(output_path, sizeof(output_path),
->>>>>>> main
 			 "incompatible_polymorphics.txt");
 
 	/* The set of problematic functions varies a bit in different versions */
@@ -1187,11 +1183,7 @@ check_for_incompatible_polymorphics(ClusterInfo *cluster)
 		{
 			if (script == NULL &&
 				(script = fopen_priv(output_path, "w")) == NULL)
-<<<<<<< HEAD
 				pg_fatal("could not open file \"%s\": %s",
-=======
-				pg_fatal("could not open file \"%s\": %s\n",
->>>>>>> main
 						 output_path, strerror(errno));
 			if (!db_used)
 			{
@@ -1211,22 +1203,14 @@ check_for_incompatible_polymorphics(ClusterInfo *cluster)
 	if (script)
 	{
 		fclose(script);
-<<<<<<< HEAD
 		pg_log(PG_REPORT, "fatal");
-=======
-		pg_log(PG_REPORT, "fatal\n");
->>>>>>> main
 		pg_fatal("Your installation contains user-defined objects that refer to internal\n"
 				 "polymorphic functions with arguments of type \"anyarray\" or \"anyelement\".\n"
 				 "These user-defined objects must be dropped before upgrading and restored\n"
 				 "afterwards, changing them to refer to the new corresponding functions with\n"
 				 "arguments of type \"anycompatiblearray\" and \"anycompatible\".\n"
 				 "A list of the problematic objects is in the file:\n"
-<<<<<<< HEAD
 				 "    %s", output_path);
-=======
-				 "    %s\n\n", output_path);
->>>>>>> main
 	}
 	else
 		check_ok();
@@ -1692,45 +1676,3 @@ check_for_cluster_key_failure(ClusterInfo *cluster)
 
 	check_ok();
 }
-
-<<<<<<< HEAD
-=======
-
-/*
- * get_canonical_locale_name
- *
- * Send the locale name to the system, and hope we get back a canonical
- * version.  This should match the backend's check_locale() function.
- */
-static char *
-get_canonical_locale_name(int category, const char *locale)
-{
-	char	   *save;
-	char	   *res;
-
-	/* get the current setting, so we can restore it. */
-
-	save = SETLOCALE(category, NULL);
-	if (!save)
-		pg_fatal("failed to get the current locale\n");
-
-	/* 'save' may be pointing at a modifiable scratch variable, so copy it. */
-	save = (char *) pg_strdup(save);
-
-	/* set the locale with setlocale, to see if it accepts it. */
-	res = SETLOCALE(category, locale);
-
-	if (!res)
-		pg_fatal("failed to get system locale name for \"%s\"\n", locale);
-
-	res = pg_strdup(res);
-
-	/* restore old value. */
-	if (!SETLOCALE(category, save))
-		pg_fatal("failed to restore old locale \"%s\"\n", save);
-
-	pg_free(save);
-
-	return res;
-}
->>>>>>> main

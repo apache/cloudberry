@@ -262,13 +262,8 @@ void TableWriter::InitOptionsCaches() {
 }
 
 void TableWriter::Open() {
-<<<<<<< HEAD
   rel_path_ = cbdb::BuildPaxDirectoryPath(
       relation_->rd_locator, relation_->rd_backend);
-=======
-  rel_path_ =
-      cbdb::BuildPaxDirectoryPath(relation_->rd_node, relation_->rd_backend);
->>>>>>> main
 
   InitOptionsCaches();
 
@@ -605,12 +600,8 @@ void TableDeleter::DeleteWithVisibilityMap(
 
   std::unique_ptr<Bitmap8> visi_bitmap;
   auto catalog_update = pax::PaxCatalogUpdater::Begin(rel_);
-<<<<<<< HEAD
   auto rel_path = cbdb::BuildPaxDirectoryPath(
       rel_->rd_locator, rel_->rd_backend);
-=======
-  auto rel_path = cbdb::BuildPaxDirectoryPath(rel_->rd_node, rel_->rd_backend);
->>>>>>> main
 
   min_max_col_idxs = cbdb::GetMinMaxColumnIndexes(rel_);
   stats_updater_projection->SetColumnProjection(min_max_col_idxs,

@@ -167,12 +167,8 @@ test: instr_in_shmem_verify
 # hold locks.
 test: partition_locking
 test: vacuum_gp
-<<<<<<< HEAD
 # test: resource_queue_stat
-=======
 test: vacuum_fsm_nondefault_tablespace
-test: resource_queue_stat
->>>>>>> main
 # background analyze may affect pgstat
 test: pg_stat
 test: bfv_partition qp_misc_rio
@@ -390,10 +386,6 @@ test: dynamic_table
 # DML tests for AO/CO unique indexes.
 test: uao_dml/uao_dml_unique_index_delete_row uao_dml/uao_dml_unique_index_delete_column uao_dml/uao_dml_unique_index_update_row uao_dml/uao_dml_unique_index_update_column
 
-<<<<<<< HEAD
-=======
-
->>>>>>> main
 # run pg_hba raleted testing
 test: hba_conf
 test: dboptions

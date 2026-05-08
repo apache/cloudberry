@@ -76,15 +76,6 @@ extern List *pg_plan_queries(List *querytrees, const char *query_string,
 							 int cursorOptions,
 							 ParamListInfo boundParams);
 
-<<<<<<< HEAD
-=======
-extern bool check_max_stack_depth(int *newval, void **extra, GucSource source);
-extern void assign_max_stack_depth(int newval, void *extra);
-extern bool check_restrict_nonsystem_relation_kind(char **newval, void **extra,
-												   GucSource source);
-extern void assign_restrict_nonsystem_relation_kind(const char *newval, void *extra);
-
->>>>>>> main
 extern void die(SIGNAL_ARGS);
 extern void quickdie(SIGNAL_ARGS) pg_attribute_noreturn();
 extern void StatementCancelHandler(SIGNAL_ARGS);

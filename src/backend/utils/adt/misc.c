@@ -307,13 +307,7 @@ pg_tablespace_location(PG_FUNCTION_ARGS)
 	char		sourcepath[MAXPGPATH];
 	char		targetpath[MAXPGPATH];
 	int			rllen;
-<<<<<<< HEAD
 	struct stat st;
-=======
-#ifndef WIN32
-	struct stat st;
-#endif
->>>>>>> main
 
 	/*
 	 * It's useful to apply this function to pg_class.reltablespace, wherein
@@ -342,13 +336,6 @@ pg_tablespace_location(PG_FUNCTION_ARGS)
 	 * created with allow_in_place_tablespaces enabled.  If a directory is
 	 * found, a relative path to the data directory is returned.
 	 */
-<<<<<<< HEAD
-=======
-#ifdef WIN32
-	if (!pgwin32_is_junction(sourcepath))
-		PG_RETURN_TEXT_P(cstring_to_text(sourcepath));
-#else
->>>>>>> main
 	if (lstat(sourcepath, &st) < 0)
 	{
 		ereport(ERROR,
@@ -359,10 +346,6 @@ pg_tablespace_location(PG_FUNCTION_ARGS)
 
 	if (!S_ISLNK(st.st_mode))
 		PG_RETURN_TEXT_P(cstring_to_text(sourcepath));
-<<<<<<< HEAD
-=======
-#endif
->>>>>>> main
 
 	/*
 	 * In presence of a link or a junction point, return the path pointing to.

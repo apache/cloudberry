@@ -32,15 +32,9 @@ name: Apache Rat License Check
 
 on:
   push:
-<<<<<<< HEAD
     branches: [main, cbdb-postgres-merge]
   pull_request:
     branches: [main, cbdb-postgres-merge]
-=======
-    branches: [main, REL_2_STABLE]
-  pull_request:
-    branches: [main, REL_2_STABLE]
->>>>>>> main
     types: [opened, synchronize, reopened, edited]
   workflow_dispatch:
 
@@ -350,8 +344,4 @@ jobs:
           else
             echo "FAILURE: One or more checks failed"
             exit 1
-<<<<<<< HEAD
           fi
-=======
-          fi
->>>>>>> main

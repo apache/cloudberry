@@ -2338,15 +2338,7 @@ locale_date_order(const char *locale)
 
 	result = DATEORDER_MDY;		/* default */
 
-<<<<<<< HEAD
 	save = save_global_locale(LC_TIME);
-=======
-	save = SETLOCALE(LC_TIME, NULL);
-
-	if (!save)
-		return result;
-	save = pg_strdup(save);
->>>>>>> main
 
 	SETLOCALE(LC_TIME, locale);
 
@@ -2357,12 +2349,7 @@ locale_date_order(const char *locale)
 
 	res = my_strftime(buf, sizeof(buf), "%x", &testtime);
 
-<<<<<<< HEAD
 	restore_global_locale(LC_TIME, save);
-=======
-	SETLOCALE(LC_TIME, save);
-	free(save);
->>>>>>> main
 
 	if (res == 0)
 		return result;
@@ -2409,19 +2396,7 @@ check_locale_name(int category, const char *locale, char **canonname)
 	if (canonname)
 		*canonname = NULL;		/* in case of failure */
 
-<<<<<<< HEAD
 	save = save_global_locale(category);
-=======
-	save = SETLOCALE(category, NULL);
-	if (!save)
-	{
-		pg_log_error("setlocale() failed");
-		exit(1);
-	}
-
-	/* save may be pointing at a modifiable scratch variable, so copy it. */
-	save = pg_strdup(save);
->>>>>>> main
 
 	/* for setlocale() call */
 	if (!locale)
@@ -2435,16 +2410,7 @@ check_locale_name(int category, const char *locale, char **canonname)
 		*canonname = pg_strdup(res);
 
 	/* restore old value. */
-<<<<<<< HEAD
 	restore_global_locale(category, save);
-=======
-	if (!SETLOCALE(category, save))
-	{
-		pg_log_error("failed to restore old locale \"%s\"", save);
-		exit(1);
-	}
-	free(save);
->>>>>>> main
 
 	/* complain if locale wasn't valid */
 	if (res == NULL)

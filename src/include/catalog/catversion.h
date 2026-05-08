@@ -60,10 +60,6 @@
  */
 
 /*							3yyymmddN */
-<<<<<<< HEAD
 #define CATALOG_VERSION_NO	302512051
-=======
-#define CATALOG_VERSION_NO	302509031
->>>>>>> main
 
 #endif

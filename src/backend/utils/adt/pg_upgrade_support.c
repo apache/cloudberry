@@ -43,19 +43,12 @@ do {															\
 Datum
 binary_upgrade_set_next_pg_tablespace_oid(PG_FUNCTION_ARGS)
 {
-<<<<<<< HEAD
-	Oid			tbspoid = PG_GETARG_OID(0);
-
-	CHECK_IS_BINARY_UPGRADE;
-	binary_upgrade_next_pg_tablespace_oid = tbspoid;
-=======
 	Oid			tablespaceoid = PG_GETARG_OID(0);
 	char	   *tablespacename = GET_STR(PG_GETARG_TEXT_P(1));
 
 	CHECK_IS_BINARY_UPGRADE;
 	AddPreassignedOidFromBinaryUpgrade(tablespaceoid, TableSpaceRelationId, tablespacename,
 						InvalidOid, InvalidOid, InvalidOid);
->>>>>>> main
 
 	PG_RETURN_VOID();
 }

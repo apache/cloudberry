@@ -1175,6 +1175,7 @@ create table boolpart (a bool) partition by list (a);
 create table boolpart_default partition of boolpart default;
 create table boolpart_t partition of boolpart for values in ('true');
 create table boolpart_f partition of boolpart for values in ('false');
+insert into boolpart values (true), (false), (null);
 explain (costs off) select * from boolpart where a in (true, false);
                       QUERY PLAN                      
 ------------------------------------------------
@@ -3605,11 +3606,7 @@ create table pp_enumpart_blue partition of pp_enumpart for values in ('blue');
 explain (costs off) select * from pp_enumpart where a = 'blue';
                 QUERY PLAN                
 ------------------------------------------
-<<<<<<< HEAD
  Gather Motion XXX
-=======
- Gather Motion 1:1  (slice1; segments: 1)
->>>>>>> main
    ->  Dynamic Seq Scan on pp_enumpart
          Number of partitions to scan: 1 (out of 2)
          Filter: (a = 'blue'::pp_colors)

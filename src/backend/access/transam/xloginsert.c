@@ -975,7 +975,6 @@ XLogCompressBackupBlock(char *page, uint16 hole_offset, uint16 hole_length,
 
 	switch ((WalCompression) wal_compression)
 	{
-<<<<<<< HEAD
 		case WAL_COMPRESSION_PGLZ:
 			len = pglz_compress(source, orig_len, dest, PGLZ_strategy_default);
 			break;
@@ -1008,28 +1007,6 @@ XLogCompressBackupBlock(char *page, uint16 hole_offset, uint16 hole_length,
 			/* no default case, so that compiler will warn */
 	}
 
-=======
-		cxt = ZSTD_createCCtx();
-		if (!cxt)
-		{
-			elog(LOG, "out of memory");
-			return false;
-		}
-	}
-
-	len = ZSTD_compressCCtx(cxt,
-							dest, BLCKSZ,
-							source, orig_len,
-							COMPRESS_LEVEL);
-
-	if (ZSTD_isError(len))
-	{
-		elog(LOG, "compression failed: %s uncompressed len %d",
-			 ZSTD_getErrorName(len), orig_len);
-		len = -1;		/* failure */
-	}
-
->>>>>>> main
 	/*
 	 * We recheck the actual size even if compression reports success and see
 	 * if the number of bytes saved by compression is larger than the length

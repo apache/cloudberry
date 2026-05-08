@@ -3204,21 +3204,9 @@ InitProcessGlobals(void)
 	 * Also make sure that we've set a good seed for random(3).  Use of that
 	 * is deprecated in core Postgres, but extensions might use it.
 	 */
-<<<<<<< HEAD
 #ifndef WIN32
 	srandom(pg_prng_uint32(&pg_global_prng_state));
 #endif
-=======
-	CreateSharedMemoryAndSemaphores();
-
-	/*
-	 * When backend process crashes, postmaster restart database,
-	 * we need to init kmgr share memory.
-	 */
-	InitializeKmgr();
-	InitializeBufferEncryption();
-
->>>>>>> main
 }
 
 /*

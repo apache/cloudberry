@@ -59,11 +59,7 @@ static int localFileRead(UFile *file, char *buffer, int amount);
 static int localFileWrite(UFile *file, char *buffer, int amount);
 static off_t localFileSize(UFile *file);
 static void localFileUnlink(Oid spcId, const char *fileName);
-<<<<<<< HEAD
-static char *localFormatPathName(RelFileLocator *relFileNode);
-=======
-static char *localFormatPathName(Oid relid, RelFileNode *relFileNode);
->>>>>>> main
+static char *localFormatPathName(Oid relid, RelFileLocator *relFileNode);
 static bool localEnsurePath(Oid spcId, const char *PathName);
 static bool localFileExists(Oid spcId, const char *fileName);
 static const char *localFileName(UFile *file);
@@ -311,27 +307,15 @@ localFileUnlink(Oid spcId, const char *fileName)
 }
 
 static char *
-<<<<<<< HEAD
-localFormatPathName(RelFileLocator *relFileNode)
-=======
-localFormatPathName(Oid relid, RelFileNode *relFileNode)
->>>>>>> main
+localFormatPathName(Oid relid, RelFileLocator *relFileNode)
 {
 	if (relFileNode->spcOid == DEFAULTTABLESPACE_OID)
 		return psprintf("base/%u/%u_dirtable",
-<<<<<<< HEAD
-				  		relFileNode->dbOid, relFileNode->relNumber);
+				  		relFileNode->dbOid, relid);
 	else
 		return psprintf("pg_tblspc/%u/%s/%u/%u_dirtable",
 						relFileNode->spcOid, GP_TABLESPACE_VERSION_DIRECTORY,
-						relFileNode->dbOid, relFileNode->relNumber);
-=======
-				  		relFileNode->dbNode, relid);
-	else
-		return psprintf("pg_tblspc/%u/%s/%u/%u_dirtable",
-						relFileNode->spcNode, GP_TABLESPACE_VERSION_DIRECTORY,
-						relFileNode->dbNode, relid);
->>>>>>> main
+						relFileNode->dbOid, relid);
 }
 
 bool
@@ -456,11 +440,7 @@ UFileUnlink(Oid spcId, const char *fileName)
 }
 
 char *
-<<<<<<< HEAD
-UFileFormatPathName(RelFileLocator *relFileNode)
-=======
-UFileFormatPathName(Oid relid, RelFileNode *relFileNode)
->>>>>>> main
+UFileFormatPathName(Oid relid, RelFileLocator *relFileNode)
 {
 	FileAm *fileAm;
 

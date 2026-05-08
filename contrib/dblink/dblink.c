@@ -202,9 +202,6 @@ dblink_get_conn(char *conname_or_str,
 		if (connstr == NULL)
 			connstr = conname_or_str;
 		connstr = dblink_connstr_check(connstr);
-<<<<<<< HEAD
-=======
-
 		/*
 		 * We must obey fd.c's limit on non-virtual file descriptors.  Assume
 		 * that a PGconn represents one long-lived FD.  (Doing this here also
@@ -226,7 +223,6 @@ dblink_get_conn(char *conname_or_str,
 					 errhint("Raise the server's max_files_per_process setting.")));
 #endif
 		}
->>>>>>> main
 
 		/* OK to make connection */
 		conn = libpqsrv_connect(connstr, PG_WAIT_EXTENSION);
@@ -317,8 +313,6 @@ dblink_connect(PG_FUNCTION_ARGS)
 
 	/* check password in connection string if not superuser */
 	connstr = dblink_connstr_check(connstr);
-<<<<<<< HEAD
-=======
 
 	/*
 	 * We must obey fd.c's limit on non-virtual file descriptors.  Assume that
@@ -341,7 +335,6 @@ dblink_connect(PG_FUNCTION_ARGS)
 				 errhint("Raise the server's max_files_per_process setting.")));
 #endif
 	}
->>>>>>> main
 
 	/* OK to make connection */
 	conn = libpqsrv_connect(connstr, PG_WAIT_EXTENSION);

@@ -1130,11 +1130,7 @@ build_sorted_items(StatsBuildData *data, int *nitems,
 	}
 
 	/* do the sort, using the multi-sort */
-<<<<<<< HEAD
 	qsort_interruptible(items, nrows, sizeof(SortItem),
-=======
-	qsort_interruptible((void *) items, nrows, sizeof(SortItem),
->>>>>>> main
 						multi_sort_compare, mss);
 
 	return items;
@@ -1336,13 +1332,8 @@ choose_best_statistics(List *stats, char requiredkind, bool inh,
  *
  * (c) combinations using AND/OR/NOT
  *
-<<<<<<< HEAD
- * (d) ScalarArrayOpExprs of the form (Var/Expr op ANY (Const)) or
- * (Var/Expr op ALL (Const))
-=======
  * (d) ScalarArrayOpExprs of the form (Var/Expr op ANY (array)) or (Var/Expr
  * op ALL (array))
->>>>>>> main
  *
  * In the future, the range of supported clauses may be expanded to more
  * complex cases, for example (Var op Var).
@@ -1608,10 +1599,7 @@ statext_is_compatible_clause(PlannerInfo *root, Node *clause, Index relid,
 							 Bitmapset **attnums, List **exprs)
 {
 	RangeTblEntry *rte = root->simple_rte_array[relid];
-<<<<<<< HEAD
 	RelOptInfo *rel = root->simple_rel_array[relid];
-=======
->>>>>>> main
 	RestrictInfo *rinfo;
 	int			clause_relid;
 	Oid			userid;

@@ -74,15 +74,9 @@ name: Apache Cloudberry Debian Build
 
 on:
   push:
-<<<<<<< HEAD
     branches: [main, cbdb-postgres-merge]
   pull_request:
     branches: [main, cbdb-postgres-merge]
-=======
-    branches: [main, REL_2_STABLE]
-  pull_request:
-    branches: [main, REL_2_STABLE]
->>>>>>> main
     types: [opened, synchronize, reopened, edited]
   workflow_dispatch:  # Manual trigger
     inputs:
@@ -254,21 +248,14 @@ jobs:
               },
               {"test":"ic-deb-gpcontrib",
                "make_configs":["gpcontrib/orafce:installcheck",
-<<<<<<< HEAD
-                               "gpcontrib/pxf_fdw:installcheck",
-=======
->>>>>>> main
                                "gpcontrib/zstd:installcheck",
                                "gpcontrib/gp_sparse_vector:installcheck",
                                "gpcontrib/gp_toolkit:installcheck"]
               },
-<<<<<<< HEAD
-=======
               {"test":"gpcontrib-gp-stats-collector",
                "make_configs":["gpcontrib/gp_stats_collector:installcheck"],
                "extension":"gp_stats_collector"
               },
->>>>>>> main
               {"test":"ic-cbdb-parallel",
                "make_configs":["src/test/regress:installcheck-cbdb-parallel"]
               }
@@ -417,7 +404,6 @@ jobs:
           fetch-depth: 1
           submodules: true
 
-<<<<<<< HEAD
       - name: Checkout DevOps Scripts from Main Branch
         uses: actions/checkout@v4
         with:
@@ -444,8 +430,6 @@ jobs:
           # Clean up temporary directory
           rm -rf main-devops
 
-=======
->>>>>>> main
       - name: Cloudberry Environment Initialization
         shell: bash
         env:
@@ -600,10 +584,6 @@ jobs:
               exit 1
             fi
 
-<<<<<<< HEAD
-            ARCH="amd64"
-            CBDB_PKG_VERSION=${CBDB_VERSION}-${BUILD_NUMBER}-$(git --git-dir=.git rev-list HEAD --count).$(git --git-dir=.git rev-parse --short HEAD)
-=======
             ARCH=$(dpkg --print-architecture)
             # Detect OS distribution (e.g., ubuntu22.04, debian12)
             if [ -f /etc/os-release ]; then
@@ -613,7 +593,6 @@ jobs:
               OS_DISTRO="unknown"
             fi
             CBDB_PKG_VERSION=${CBDB_VERSION}-${BUILD_NUMBER}-${OS_DISTRO}
->>>>>>> main
 
             echo "Produced artifacts"
             ls -l ../
@@ -1373,9 +1352,6 @@ jobs:
 
           {
             chmod +x "${SRC_DIR}"/devops/build/automation/cloudberry/scripts/create-cloudberry-demo-cluster.sh
-<<<<<<< HEAD
-            if ! time su - gpadmin -c "cd ${SRC_DIR} && NUM_PRIMARY_MIRROR_PAIRS='${{ matrix.num_primary_mirror_pairs }}' SRC_DIR=${SRC_DIR} ${SRC_DIR}/devops/build/automation/cloudberry/scripts/create-cloudberry-demo-cluster.sh"; then
-=======
 
             # Build BLDWRAP_POSTGRES_CONF_ADDONS for shared_preload_libraries if specified
             EXTRA_CONF=""
@@ -1385,7 +1361,6 @@ jobs:
             fi
 
             if ! time su - gpadmin -c "cd ${SRC_DIR} && NUM_PRIMARY_MIRROR_PAIRS='${{ matrix.num_primary_mirror_pairs }}' BLDWRAP_POSTGRES_CONF_ADDONS=\"${EXTRA_CONF}\" SRC_DIR=${SRC_DIR} ${SRC_DIR}/devops/build/automation/cloudberry/scripts/create-cloudberry-demo-cluster.sh"; then
->>>>>>> main
               echo "::error::Demo cluster creation failed"
               exit 1
             fi
@@ -1396,10 +1371,7 @@ jobs:
         if: success() && needs.check-skip.outputs.should_skip != 'true'
         env:
           SRC_DIR: ${{ github.workspace }}
-<<<<<<< HEAD
-=======
           BUILD_DESTINATION: ${{ github.workspace }}/debian/build
->>>>>>> main
         shell: bash {0}
         run: |
           set -o pipefail
@@ -1424,8 +1396,6 @@ jobs:
           # 3. Update matrix entries to include the new setting
 
 
-<<<<<<< HEAD
-=======
           # Create extension if required
           if [[ "${{ matrix.extension != '' }}" == "true" ]]; then
             case "${{ matrix.extension }}" in
@@ -1450,7 +1420,6 @@ jobs:
             esac
           fi
 
->>>>>>> main
           # Set PostgreSQL options if defined
           PG_OPTS=""
           if [[ "${{ matrix.pg_settings.optimizer != '' }}" == "true" ]]; then
@@ -1675,10 +1644,7 @@ jobs:
 
       - name: Check and Display Regression Diffs
         if: always()
-<<<<<<< HEAD
-=======
         shell: bash {0}
->>>>>>> main
         run: |
           # Search for regression.diffs recursively
           found_file=$(find . -type f -name "regression.diffs" | head -n 1)

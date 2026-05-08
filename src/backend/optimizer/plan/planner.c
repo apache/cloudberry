@@ -122,25 +122,7 @@ create_upper_paths_hook_type create_upper_paths_hook = NULL;
 #define EXPRKIND_TABLEFUNC_LATERAL	12
 #define EXPRKIND_WINDOW_BOUND		13
 
-<<<<<<< HEAD
-=======
 /* standard_qp_extra is defined in optimizer/planner.h */
-
->>>>>>> main
-/*
- * Data specific to grouping sets
- */
-typedef struct
-{
-	List	   *rollups;
-	List	   *hash_sets_idx;
-	double		dNumHashGroups;
-	bool		any_hashable;
-	Bitmapset  *unsortable_refs;
-	Bitmapset  *unhashable_refs;
-	List	   *unsortable_sets;
-	int		   *tleref_to_colnum_map;
-} grouping_sets_data;
 
 /*
  * Temporary structure for use during WindowClause reordering in order to be
@@ -166,12 +148,6 @@ typedef struct
 	List *grps_tlist;
 } deconstruct_expr_context;
 
-/* Passthrough data for standard_qp_callback */
-typedef struct
-{
-	List	   *activeWindows;	/* active windows, if any */
-	grouping_sets_data *gset_data;	/* grouping sets data, if any */
-} standard_qp_extra;
 
 /* Local functions */
 static Node *preprocess_expression(PlannerInfo *root, Node *expr, int kind);
@@ -976,13 +952,13 @@ subquery_planner(PlannerGlobal *glob, Query *parse,
 	root->is_correlated_subplan = false;
 
 	/*
-<<<<<<< HEAD
 	 * Create the top-level join domain.  This won't have valid contents until
 	 * deconstruct_jointree fills it in, but the node needs to exist before
 	 * that so we can build EquivalenceClasses referencing it.
 	 */
 	root->join_domains = list_make1(makeNode(JoinDomain));
-=======
+
+	/*
 	 * Save a copy of the raw parse tree for AQUMV join exact-match.
 	 * This must be done before any preprocessing modifies the parse tree.
 	 */
@@ -992,7 +968,6 @@ subquery_planner(PlannerGlobal *glob, Query *parse,
 		root->aqumv_raw_parse = copyObject(parse);
 	else
 		root->aqumv_raw_parse = NULL;
->>>>>>> main
 
 	/*
 	 * If there is a WITH list, process each WITH query and either convert it

@@ -125,13 +125,8 @@ postgres: $(OBJS) $(SYMBOL_MAP_FILE)
 endif
 
 else
-<<<<<<< HEAD
-postgres: $(OBJS)
-	$(CXX) $(CXXFLAGS) $(call expand_subsys,$^) $(LDFLAGS) $(LIBS) -o $@
-=======
 postgres: $(OBJS) $(SYMBOL_MAP_FILE)
 	$(CXX) $(CXXFLAGS) $(call expand_subsys,$(OBJS)) $(LDFLAGS) $(LDFLAGS_EX) $(export_dynamic) $(LIBS) $(SYMBOL_MAPPING_FLAGS) -o $@
->>>>>>> main
 endif
 
 endif

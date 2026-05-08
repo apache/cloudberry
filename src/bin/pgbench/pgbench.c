@@ -278,6 +278,7 @@ bool		report_per_command = false; /* report per-command latencies,
 										 * retries after errors and failures
 										 * (errors without retrying) */
 int			main_pid;			/* main process id used in log filename */
+int			use_unique_key=1;	/* indexes will be primary key if set, otherwise non-unique indexes */
 
 /*
  * There are different types of restrictions for deciding that the current
@@ -887,11 +888,8 @@ usage(void)
 		   "  -q, --quiet              quiet logging (one message each 5 seconds)\n"
 		   "  -s, --scale=NUM          scaling factor\n"
 		   "  --foreign-keys           create foreign key constraints between tables\n"
-<<<<<<< HEAD
-=======
 		   "  --use-non-unique-keys        make the indexes that are created non-unique indexes\n"
 		   "                           (default: unique)\n"
->>>>>>> main
 		   "  --index-tablespace=TABLESPACE\n"
 		   "                           create indexes in the specified tablespace\n"
 		   "  --partition-method=(range|hash)\n"
@@ -6645,14 +6643,11 @@ main(int argc, char **argv)
 		{"show-script", required_argument, NULL, 10},
 		{"partitions", required_argument, NULL, 11},
 		{"partition-method", required_argument, NULL, 12},
-<<<<<<< HEAD
 		{"failures-detailed", no_argument, NULL, 13},
 		{"max-tries", required_argument, NULL, 14},
 		{"verbose-errors", no_argument, NULL, 15},
-=======
 		/* Cloudberry-specific */
 		{"use-non-unique-keys", no_argument, NULL, 13},
->>>>>>> main
 		{NULL, 0, NULL, 0}
 	};
 
@@ -6986,22 +6981,15 @@ main(int argc, char **argv)
 					max_tries = (uint32) max_tries_arg;
 				}
 				break;
-<<<<<<< HEAD
 			case 15:			/* verbose-errors */
 				benchmarking_option_set = true;
 				verbose_errors = true;
-=======
-			case 13:
+				break;
+			case 16:
 				use_unique_key = 0;
 				break;
 			default:
 				fprintf(stderr, _("Try \"%s --help\" for more information.\n"), progname);
-				exit(1);
->>>>>>> main
-				break;
-			default:
-				/* getopt_long already emitted a complaint */
-				pg_log_error_hint("Try \"%s --help\" for more information.", progname);
 				exit(1);
 		}
 	}

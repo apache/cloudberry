@@ -5203,7 +5203,6 @@ has_privs_of_role(Oid member, Oid role)
 						   role);
 }
 
-<<<<<<< HEAD
 /*
  * Can member use SET ROLE to this role?
  *
@@ -5250,7 +5249,7 @@ check_can_set_role(Oid member, Oid role)
 				 errmsg("must be able to SET ROLE \"%s\"",
 						GetUserNameFromId(role, false))));
 }
-=======
+
 // -- mdb_superuser patch
 
 // -- non-upstream patch begin
@@ -5294,7 +5293,6 @@ mdb_admin_allow_bypass_owner_checks(Oid userId,  Oid ownerId)
 }
 
 // -- non-upstream patch end
->>>>>>> main
 
 /*
  * Is member a member of role (directly or indirectly)?
@@ -5327,22 +5325,6 @@ is_member_of_role(Oid member, Oid role)
 	return list_member_oid(roles_is_member_of(member, ROLERECURSE_MEMBERS,
 											  InvalidOid, NULL),
 						   role);
-}
-
-/*
-<<<<<<< HEAD
-=======
- * check_is_member_of_role
- *		is_member_of_role with a standard permission-violation error if not
- */
-void
-check_is_member_of_role(Oid member, Oid role)
-{
-	if (!is_member_of_role(member, role))
-		ereport(ERROR,
-				(errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
-				 errmsg("must be member of role \"%s\"",
-						GetUserNameFromId(role, false))));
 }
 
 // -- mdb admin patch 
@@ -5393,7 +5375,6 @@ check_mdb_admin_is_member_of_role(Oid member, Oid role)
 // -- mdb admin patch 
 
 /*
->>>>>>> main
  * Is member a member of role, not considering superuserness?
  *
  * This is identical to is_member_of_role except we ignore superuser

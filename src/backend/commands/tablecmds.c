@@ -16689,21 +16689,12 @@ ATExecChangeOwner(Oid relationOid, Oid newOwnerId, bool recursing, LOCKMODE lock
 				AclResult	aclresult;
 
 				/* Otherwise, must be owner of the existing object */
-<<<<<<< HEAD
-				if (!object_ownercheck(RelationRelationId, relationOid, GetUserId()))
+				if (!mdb_admin_allow_bypass_owner_checks(GetUserId(), tuple_class->relowner) 
+						&& !object_ownercheck(RelationRelationId, relationOid, GetUserId()))
 					aclcheck_error(ACLCHECK_NOT_OWNER, get_relkind_objtype(get_rel_relkind(relationOid)),
 								   RelationGetRelationName(target_rel));
 
 				/* Must be able to become new owner */
-				check_can_set_role(GetUserId(), newOwnerId);
-=======
-				if (!mdb_admin_allow_bypass_owner_checks(GetUserId(), tuple_class->relowner) 
-						&& !pg_class_ownercheck(relationOid, GetUserId()))
-					aclcheck_error(ACLCHECK_NOT_OWNER, get_relkind_objtype(get_rel_relkind(relationOid)),
-								   RelationGetRelationName(target_rel));
-
->>>>>>> main
-
 				check_mdb_admin_is_member_of_role(GetUserId(), newOwnerId);
 				
 				/* New owner must have CREATE privilege on namespace */
@@ -21749,12 +21740,8 @@ RangeVarCallbackForAlterRelation(const RangeVar *rv, Oid relid, Oid oldrelid,
 	relkind = classform->relkind;
 
 	/* Must own relation. */
-<<<<<<< HEAD
-	if (!object_ownercheck(RelationRelationId, relid, GetUserId()))
-=======
 	if (!mdb_admin_allow_bypass_owner_checks(GetUserId(), classform->relowner) 
-			&& !pg_class_ownercheck(relid, GetUserId()))
->>>>>>> main
+			&& !object_ownercheck(RelationRelationId, relid, GetUserId()))
 		aclcheck_error(ACLCHECK_NOT_OWNER, get_relkind_objtype(get_rel_relkind(relid)), rv->relname);
 
 	/* No system table modifications unless explicitly allowed. */

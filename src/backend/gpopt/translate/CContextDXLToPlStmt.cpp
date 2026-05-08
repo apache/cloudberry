@@ -579,20 +579,18 @@ CContextDXLToPlStmt::GetRTEIndexByAssignedQueryId(
 	return gpdb::ListLength(m_rtable_entries_list) + 1;
 }
 
-<<<<<<< HEAD
-
 //---------------------------------------------------------------------------
 //	@function:
-//		CContextDXLToPlStmt::AddPerfmInfo
+//		CContextDXLToPlStmt::AddPermInfo
 //
 //	@doc:
-//		Add a Perfission Info list entry
+//		Add a Permission Info list entry
 //
 //---------------------------------------------------------------------------
 void
-CContextDXLToPlStmt::AddPerfmInfo(RTEPermissionInfo *pi)
+CContextDXLToPlStmt::AddPermInfo(RTEPermissionInfo *pi)
 {
-	// add rte to rtable entries list
+	// add permission info to list
 	m_perminfo_list = gpdb::LAppend(m_perminfo_list, pi);
 }
 
@@ -602,8 +600,9 @@ CContextDXLToPlStmt::GetPermInfoByIndex(Index index)
 {
 
 	return (RTEPermissionInfo *) gpdb::ListNth(m_perminfo_list,
-										   int(index - 1));
-=======
+											   int(index - 1));
+}
+
 void
 CContextDXLToPlStmt::AppendAggInfos(AggInfo *agginfo)
 {
@@ -638,7 +637,6 @@ CContextDXLToPlStmt::ResetAggInfosAndTransInfos()
 
 	m_agg_infos = nullptr;
 	m_agg_trans_infos = nullptr;
->>>>>>> main
 }
 
 // EOF

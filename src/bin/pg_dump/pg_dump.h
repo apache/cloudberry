@@ -75,12 +75,9 @@ typedef enum
 	DO_DEFAULT_ACL,
 	DO_TRANSFORM,
 	DO_EXTPROTOCOL,
-<<<<<<< HEAD
 	DO_TYPE_STORAGE_OPTIONS,
 	DO_LARGE_OBJECT,
 	DO_LARGE_OBJECT_DATA,
-=======
->>>>>>> main
 	DO_PRE_DATA_BOUNDARY,
 	DO_POST_DATA_BOUNDARY,
 	DO_EVENT_TRIGGER,
@@ -216,17 +213,8 @@ typedef struct _typeInfo
 	 * result of format_type(), which will be quoted if needed, and might be
 	 * schema-qualified too.
 	 */
-<<<<<<< HEAD
 	char	   *ftypname;
 	const char *rolname;
-=======
-	char		*ftypname;
-	char		*rolname;		/* name of owner, or empty string */
-	char		*typacl;
-	char		*rtypacl;
-	char		*inittypacl;
-	char		*initrtypacl;
->>>>>>> main
 	Oid			typelem;
 	Oid			typrelid;
 	char		typrelkind;		/* 'r', 'v', 'c', etc */
@@ -366,12 +354,9 @@ typedef struct _tableInfo
 	bool		postponed_def;	/* matview must be postponed into post-data */
 	bool		ispartition;	/* is table a partition? */
 	bool		unsafe_partitions;	/* is it an unsafe partitioned table? */
-<<<<<<< HEAD
 
 	int			numParents;		/* number of (immediate) parent tables */
 	struct _tableInfo **parents;	/* TableInfos of immediate parents */
-=======
->>>>>>> main
 
 	/*
 	 * These fields are computed only if we decide the table is interesting

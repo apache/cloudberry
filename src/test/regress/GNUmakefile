@@ -237,8 +237,6 @@ installcheck-icudp: all tablespace-setup
 	$(pg_regress_installcheck) $(REGRESS_OPTS) --schedule=$(srcdir)/icudp_schedule --dbname=regression_icudp $(EXTRA_TESTS)
 endif
 
-<<<<<<< HEAD
-=======
 standbycheck: all
 	$(pg_regress_installcheck) $(REGRESS_OPTS) --schedule=$(srcdir)/standby_schedule  $(EXTRA_TESTS)
 
@@ -252,7 +250,6 @@ installcheck-hot-standby: all
 	$(pg_regress_installcheck) $(REGRESS_OPTS) hs_primary_setup
 	$(pg_regress_installcheck) $(REGRESS_OPTS) --port=$(STANDBY_PGPORT) --use-existing --schedule=$(srcdir)/standby_schedule  $(EXTRA_TESTS)
 
->>>>>>> main
 # old interfaces follow...
 
 runcheck: check
