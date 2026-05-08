@@ -173,7 +173,6 @@ static bool PrepareStatisticsInfoCombine(
 
     auto attr = TupleDescAttr(desc, i);
     auto collation = attr->attcollation;
-    FmgrInfo finfo;
     bool get_pg_oper_succ = false;
 
     funcs.emplace_back(std::make_pair(nullptr, nullptr));
@@ -207,7 +206,6 @@ static bool PrepareStatisticsInfoCombine(
 
       GetStrategyProcinfo(attr->atttypid, attr->atttypid, funcs[i]);
       if (allow_fallback_to_pg) {
-        finfos[i] = {finfo, finfo};
         get_pg_oper_succ =
             GetStrategyProcinfo(attr->atttypid, attr->atttypid, finfos[i]);
       }

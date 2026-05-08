@@ -2,3 +2,5 @@
 /postgres.def
 /postgres.imp
 /catalog-extension/
+/postgres_symbols.map
+/hide_symbols.list

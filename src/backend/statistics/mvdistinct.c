@@ -489,7 +489,11 @@ ndistinct_for_combination(double totalrows, StatsBuildData *data,
 	}
 
 	/* We can sort the array now ... */
+<<<<<<< HEAD
 	qsort_interruptible(items, numrows, sizeof(SortItem),
+=======
+	qsort_interruptible((void *) items, numrows, sizeof(SortItem),
+>>>>>>> main
 						multi_sort_compare, mss);
 
 	/* ... and count the number of distinct combinations */

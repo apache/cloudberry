@@ -1,0 +1,43 @@
+--
+-- Hot Standby tests
+--
+-- hs_standby_functions.sql
+--
+-- should fail
+select pg_current_xact_id();
+ERROR:  cannot execute pg_current_xact_id() during recovery
+select length(pg_current_snapshot()::text) >= 4;
+ ?column? 
+----------
+ t
+(1 row)
+
+select pg_start_backup('should fail');
+ERROR:  recovery is in progress
+HINT:  WAL control functions cannot be executed during recovery.
+select pg_switch_wal();
+ERROR:  recovery is in progress
+HINT:  WAL control functions cannot be executed during recovery.
+select pg_stop_backup();
+ERROR:  recovery is in progress
+HINT:  WAL control functions cannot be executed during recovery.
+-- should return no rows
+select * from pg_prepared_xacts;
+ transaction | gid | prepared | owner | database 
+-------------+-----+----------+-------+----------
+(0 rows)
+
+-- just the startup processes of all standby coordinator and segments, since pg_locks show cluster-wide view
+select gp_segment_id, locktype, virtualxid, virtualtransaction, mode, granted
+from pg_locks where virtualxid = '1/1';
+ gp_segment_id |  locktype  | virtualxid | virtualtransaction |     mode      | granted 
+---------------+------------+------------+--------------------+---------------+---------
+            -1 | virtualxid | 1/1        | 1/0                | ExclusiveLock | t
+             0 | virtualxid | 1/1        | 1/0                | ExclusiveLock | t
+             1 | virtualxid | 1/1        | 1/0                | ExclusiveLock | t
+             2 | virtualxid | 1/1        | 1/0                | ExclusiveLock | t
+(4 rows)
+
+-- suicide is painless
+select pg_cancel_backend(pg_backend_pid());
+ERROR:  canceling statement due to user request

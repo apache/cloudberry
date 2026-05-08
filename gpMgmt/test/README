@@ -5,7 +5,7 @@ if they are not already installed on your machine.
 
 To run behave:
 
-source greenplum_path.sh
+source cloudberry-env.sh
 cd gpMgmt
 
 "make -f Makefile.behave behave" will run all the integration tests.
@@ -29,7 +29,7 @@ make -f Makefile.behave behave flags="--tags smoke --tags mirrors"
 WARNING: The tag boolean logic syntax is different in this version versus
 the version documented online.
 
-From gpdb/gpMgmt/bin/pythonSrc/ext/behave-1.2.4/docs/behave.rst:
+From behave documentation (behave is now installed via pip):
 
 | Tag Expression
 | --------------

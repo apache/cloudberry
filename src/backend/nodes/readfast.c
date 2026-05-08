@@ -1086,6 +1086,7 @@ _readShareInputScan(void)
 	READ_INT_FIELD(this_slice_id);
 	READ_INT_FIELD(nconsumers);
 	READ_BOOL_FIELD(discard_output);
+	READ_BOOL_FIELD(ref_set);
 
 	ReadCommonPlan(&local_node->scan.plan);
 
@@ -2117,6 +2118,9 @@ readNodeBinary(void)
 				break;
 			case T_WindowAgg:
 				return_value = _readWindowAgg();
+				break;
+			case T_WindowHashAgg:
+				return_value = _readWindowHashAgg();
 				break;
 			case T_TableFunctionScan:
 				return_value = _readTableFunctionScan();

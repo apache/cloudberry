@@ -75,7 +75,7 @@ SELECT count(*) FROM inettmp WHERE a  = '89.225.196.191'::inet;
          ->  Index Scan using inetidx on inettmp
                Index Cond: (a = '89.225.196.191'::inet)
                Filter: (a = '89.225.196.191'::inet)
- Optimizer: Pivotal Optimizer (GPORCA)
+ Optimizer: GPORCA
 (6 rows)
 
 SELECT count(*) FROM inettmp WHERE a  = '89.225.196.191'::inet;
@@ -96,7 +96,7 @@ SELECT count(*) FROM inettmp WHERE a  = '89.225.196.191'::inet;
          ->  Index Scan using inettmp_a_a1_idx on inettmp
                Index Cond: (a = '89.225.196.191'::inet)
                Filter: (a = '89.225.196.191'::inet)
- Optimizer: Pivotal Optimizer (GPORCA)
+ Optimizer: GPORCA
 (6 rows)
 
 SELECT count(*) FROM inettmp WHERE a  = '89.225.196.191'::inet;

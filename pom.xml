@@ -36,8 +36,8 @@ code or new licensing patterns.
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
   <modelVersion>4.0.0</modelVersion>
   <groupId>org.apache.cloudberry</groupId>
-  <artifactId>rat-test</artifactId>
-  <version>1.0.0</version>
+  <artifactId>apache-cloudberry-incubating</artifactId>
+  <version>2.0.0</version>
   <packaging>pom</packaging>
 
   <build>
@@ -131,9 +131,7 @@ code or new licensing patterns.
 
             <exclude>gpcontrib/zstd/zstd_compression.c</exclude>
             <exclude>gpcontrib/zstd/Makefile</exclude>
-
-            <exclude>gpcontrib/quicklz/Makefile</exclude>
-
+            
             <exclude>gpcontrib/gp_toolkit/**</exclude>
 
             <exclude>gpcontrib/pg_hint_plan/**/*.source</exclude>
@@ -155,20 +153,16 @@ code or new licensing patterns.
             <exclude>gpcontrib/gp_exttable_fdw/data/**</exclude>
             <exclude>gpcontrib/gp_exttable_fdw/gp_exttable_fdw.control</exclude>
 
+            <exclude>gpcontrib/diskquota/**</exclude>
+
             <exclude>getversion</exclude>
             <exclude>.git-blame-ignore-revs</exclude>
             <exclude>.dir-locals.el</exclude>
             <exclude>GNUmakefile.in</exclude>
-            <exclude>.github/DISCUSSION_TEMPLATE/ideas-feature-requests.yml</exclude>
-            <exclude>.github/DISCUSSION_TEMPLATE/proposal.yml</exclude>
-            <exclude>.github/full_color_black.svg</exclude>
-            <exclude>.github/ISSUE_TEMPLATE/bug-report.yml</exclude>
-            <exclude>.github/ISSUE_TEMPLATE/config.yml</exclude>
-            <exclude>.github/full_color_white.svg</exclude>
             <exclude>.gitattributes</exclude>
 
             <exclude>gpMgmt/demo/gpfdist_transform/**</exclude>
-
+            <exclude>gpMgmt/demo/gppkg/sample-sources.tar.gz</exclude>
             <exclude>gpMgmt/demo/gppkg/sample.control</exclude>
             <exclude>gpMgmt/demo/gppkg/sample.spec</exclude>
             <exclude>gpMgmt/demo/gppkg/gppkg_spec.yml.in</exclude>
@@ -181,7 +175,6 @@ code or new licensing patterns.
             <exclude>gpMgmt/bin/gpload_test/gpload2/*.ans</exclude>
             <exclude>gpMgmt/bin/gpload_test/gpload2/data/**</exclude>
 
-            <exclude>gpMgmt/bin/gpdemo</exclude>
             <exclude>gpMgmt/bin/gpcheckperf</exclude>
             <exclude>gpMgmt/bin/test/gpinitsystem_test.bash</exclude>
             <exclude>gpMgmt/bin/test/suite.bash</exclude>
@@ -301,7 +294,7 @@ code or new licensing patterns.
             <exclude>gpMgmt/bin/gpsync</exclude>
             <exclude>gpMgmt/bin/gpssh-exkeys</exclude>
 
-            <exclude>gpMgmt/bin/generate-greenplum-path.sh</exclude>
+            <exclude>gpMgmt/bin/generate-cloudberry-env.sh</exclude>
             <exclude>gpMgmt/bin/ifaddrs/Makefile</exclude>
             <exclude>gpMgmt/bin/ifaddrs/main.c</exclude>
             <exclude>gpMgmt/Makefile</exclude>
@@ -314,6 +307,7 @@ code or new licensing patterns.
             <exclude>gpMgmt/sbin/gpsegrecovery.py</exclude>
             <exclude>gpMgmt/Makefile.behave</exclude>
             <exclude>gpMgmt/requirements-dev.txt</exclude>
+            <exclude>gpMgmt/bin/pyproject.toml</exclude>
 
             <exclude>config/Makefile</exclude>
             <exclude>config/ac_func_accept_argtypes.m4</exclude>
@@ -339,14 +333,11 @@ code or new licensing patterns.
 
             <exclude>.abi-check/**</exclude>
 
-            <exclude>deploy/**</exclude>
-
             <exclude>.clang-tidy</exclude>
             <exclude>putversion</exclude>
             <exclude>.gitmodules</exclude>
             <exclude>.editorconfig</exclude>
-            <exclude>sonar-project.properties</exclude>
-
+            
             <exclude>contrib/**/Makefile</exclude>
             <exclude>contrib/**/*.control</exclude>
             <exclude>contrib/**/*.source</exclude>
@@ -382,37 +373,6 @@ code or new licensing patterns.
 
             <exclude>contrib/unaccent/unaccent.rules</exclude>
             <exclude>contrib/unaccent/generate_unaccent_rules.py</exclude>
-
-            <exclude>contrib/pax_storage/src/test/**</exclude>
-
-            <exclude>contrib/pax_storage/init_file</exclude>
-            <exclude>contrib/pax_storage/tools/gen_sql.c</exclude>
-            <exclude>contrib/pax_storage/CMakeLists.txt</exclude>
-            <exclude>contrib/pax_storage/hd-ci/clang_tidy_pax.bash</exclude>
-            <exclude>contrib/pax_storage/hd-ci/compile_pax.bash</exclude>
-            <exclude>contrib/pax_storage/.clang-tidy</exclude>
-            <exclude>contrib/pax_storage/pax_schedule</exclude>
-            <exclude>contrib/pax_storage/FindDependencies.cmake</exclude>
-            <exclude>contrib/pax_storage/.clang-format</exclude>
-            <exclude>contrib/pax_storage/src/cpp/CMakeLists.txt</exclude>
-            <exclude>contrib/pax_storage/src/cpp/cmake/pax_format.cmake</exclude>
-            <exclude>contrib/pax_storage/src/cpp/cmake/pax.cmake</exclude>
-            <exclude>contrib/pax_storage/src/cpp/contrib/CPPLINT.cfg</exclude>
-            <exclude>contrib/pax_storage/src/cpp/storage/proto/micro_partition_stats.proto</exclude>
-            <exclude>contrib/pax_storage/src/cpp/storage/proto/pax.proto</exclude>
-            <exclude>contrib/pax_storage/src/cpp/storage/proto/CPPLINT.cfg</exclude>
-            <exclude>contrib/pax_storage/src/api/python3/paxfile_type.cc</exclude>
-            <exclude>contrib/pax_storage/src/api/python3/CMakeLists.txt</exclude>
-            <exclude>contrib/pax_storage/src/api/python3/test/paxpy_test.py</exclude>
-            <exclude>contrib/pax_storage/src/api/python3/paxpy_modules.cc</exclude>
-            <exclude>contrib/pax_storage/src/api/python3/paxpy_comm.h</exclude>
-            <exclude>contrib/pax_storage/src/api/python3/setup-debug.py</exclude>
-            <exclude>contrib/pax_storage/src/api/python3/MANIFEST.in</exclude>
-            <exclude>contrib/pax_storage/src/api/python3/paxfilereader_type.cc</exclude>
-            <exclude>contrib/pax_storage/src/api/python3/setup.py</exclude>
-            <exclude>contrib/pax_storage/src/api/python3/paxtype_cast.cc</exclude>
-            <exclude>contrib/pax_storage/src/api/python3/setup.cfg</exclude>
-            <exclude>contrib/pax_storage/src/api/python3/paxpy_types.h</exclude>
 
             <exclude>contrib/cube/cubeparse.y</exclude>
             <exclude>contrib/cube/CHANGES</exclude>
@@ -511,7 +471,6 @@ code or new licensing patterns.
             <exclude>contrib/pgcrypto/rijndael.tbl</exclude>
             <exclude>contrib/pgcrypto/rijndael.h</exclude>
             <exclude>contrib/pgcrypto/crypt-blowfish.c</exclude>
-            <exclude>contrib/pgcrypto/sm4.h</exclude>
             <exclude>contrib/pgcrypto/package/gppkg_spec.yml.in</exclude>
             <exclude>contrib/pgcrypto/package/pgcrypto.spec</exclude>
 
@@ -582,7 +541,6 @@ code or new licensing patterns.
 
             <exclude>contrib/formatter_fixedwidth/fixedwidth.c</exclude>
 
-            <exclude>gpAux/gpdemo/gpdemo-defaults.sh</exclude>
             <exclude>gpAux/gpdemo/Makefile</exclude>
             <exclude>gpAux/gpdemo/demo_cluster.sh</exclude>
             <exclude>gpAux/gpdemo/lalshell</exclude>
@@ -600,8 +558,8 @@ code or new licensing patterns.
             <exclude>gpAux/client/install/src/windows/CreatePackage.bat</exclude>
             <exclude>gpAux/client/install/src/windows/CopyDependencies.bat</exclude>
             <exclude>gpAux/client/install/src/windows/license.rtf</exclude>
-            <exclude>gpAux/client/scripts/greenplum_clients_path.sh</exclude>
-            <exclude>gpAux/client/scripts/greenplum_clients_path.bat</exclude>
+            <exclude>gpAux/client/scripts/cloudberry_clients_path.sh</exclude>
+            <exclude>gpAux/client/scripts/cloudberry_clients_path.bat</exclude>
 
             <exclude>doc/**</exclude>
 
@@ -613,9 +571,6 @@ code or new licensing patterns.
             <include>src/backend/gporca/**/Makefile</include>
 
             <exclude>src/backend/gporca/cmake/FindXerces.cmake</exclude>
-            <exclude>src/backend/gporca/concourse/build_and_test.py</exclude>
-            <exclude>src/backend/gporca/concourse/xerces-c/build_xerces.py</exclude>
-            <exclude>src/backend/gporca/concourse/xerces-c/xerces-c-3.1.2.tar.gz.sha256</exclude>
             <exclude>src/backend/gporca/server/fixdxl.sh</exclude>
             <exclude>src/backend/gporca/server/include/unittest/gpopt/operators/CScalarIsDistinctFromTest.h</exclude>
             <exclude>src/backend/gporca/server/dxl.xsd</exclude>
@@ -707,7 +662,6 @@ code or new licensing patterns.
             <exclude>src/tools/make_mkid</exclude>
             <exclude>src/tools/tidy</exclude>
             <exclude>src/tools/find_typedef</exclude>
-            <exclude>src/tools/hooks/pre-push</exclude>
             <exclude>src/tools/valgrind.supp</exclude>
             <exclude>src/tools/pgindent/perltidyrc</exclude>
             <exclude>src/tools/pgindent/README.gpdb</exclude>
@@ -999,11 +953,6 @@ code or new licensing patterns.
             <exclude>src/include/gpopt/utils/COptTasks.h</exclude>
             <exclude>src/include/gpopt/.clang-format</exclude>
             <exclude>src/include/pg_config.h.win32</exclude>
-            <exclude>src/include/task/bitstring.h</exclude>
-            <exclude>src/include/task/cron.h</exclude>
-            <exclude>src/include/task/pg_cron.h</exclude>
-            <exclude>src/include/task/task_states.h</exclude>
-            <exclude>src/include/task/job_metadata.h</exclude>
             <exclude>src/include/libpq/hba.h</exclude>
             <exclude>src/include/gppc/gppc_config.h</exclude>
             <exclude>src/include/commands/extprotocolcmds.h</exclude>
@@ -1046,6 +995,7 @@ code or new licensing patterns.
             <exclude>src/template/win32</exclude>
             <exclude>src/template/cygwin</exclude>
             <exclude>src/template/aix</exclude>
+            <exclude>src/backend/cdb/dispatcher/test/cdbdisp_query_test.c</exclude>
             <exclude>src/backend/cdb/cdbdistributedxid.c</exclude>
             <exclude>src/backend/cdb/test/cdbdistributedsnapshot_test.c</exclude>
             <exclude>src/backend/cdb/test/cdbbufferedread_test.c</exclude>
@@ -1096,6 +1046,7 @@ code or new licensing patterns.
             <exclude>src/backend/postmaster/test/checkpointer_test.c</exclude>
             <exclude>src/backend/postmaster/README.auto-ANALYZE</exclude>
             <exclude>src/backend/mock.mk</exclude>
+            <exclude>src/backend/catalog/system_views_gp.in</exclude>
             <exclude>src/backend/catalog/storage_tablespace.c</exclude>
             <exclude>src/backend/catalog/test/storage_tablespace_test.c</exclude>
             <exclude>src/backend/catalog/sql_features.txt</exclude>
@@ -1266,7 +1217,6 @@ code or new licensing patterns.
             <exclude>src/makefiles/Makefile.netbsd</exclude>
             <exclude>src/fe_utils/log.c</exclude>
             <exclude>src/fe_utils/test/print_test.c</exclude>
-            <exclude>src/common/sm3.c</exclude>
             <exclude>src/common/digit_table.h</exclude>
             <exclude>src/common/etcdutils.c</exclude>
             <exclude>src/nls-global.mk</exclude>
@@ -1285,8 +1235,8 @@ code or new licensing patterns.
             <exclude>src/interfaces/gppc/test/tabfunc_gppc_demo.c</exclude>
             <exclude>src/DEVELOPERS</exclude>
 
+            <exclude>BUILD_NUMBER</exclude>
             <exclude>Makefile</exclude>
-            <exclude>.gitmessage</exclude>
             <exclude>aclocal.m4</exclude>
             <exclude>python-dependencies.txt</exclude>
 
@@ -1305,9 +1255,511 @@ code or new licensing patterns.
             <exclude>**/*.sql</exclude>
             <exclude>**/*.out</exclude>
             <exclude>**/Thumbs.db</exclude>
+            <exclude>.github/full_color_black.svg</exclude>
+            <exclude>.github/full_color_white.svg</exclude>
+            <exclude>sonar-project.properties</exclude>
+            <exclude>.gitmessage</exclude>
+           
+            <!-- The following files are from pg_cron under PostgreSQL 
+                 license, introduced by Cloudberry.
+            -->
+            <exclude>src/include/task/bitstring.h</exclude>
+            <exclude>src/include/task/cron.h</exclude>
+            <exclude>src/include/task/pg_cron.h</exclude>
+            <exclude>src/include/task/task_states.h</exclude>
+            <exclude>src/include/task/job_metadata.h</exclude>
 
-            <!-- Exclude GPL-licensed archive that will be removed -->
-            <exclude>gpMgmt/bin/pythonSrc/ext/pylint-0.21.0.tar.gz</exclude>
+            <!-- The following files are from extension's ecosystem,
+                 introduced by Cloudberry.
+            -->
+            <exclude>gpcontrib/gp_stats_collector/gp_stats_collector.control</exclude>
+            <exclude>gpcontrib/gp_stats_collector/.clang-format</exclude>
+            <exclude>gpcontrib/gp_stats_collector/Makefile</exclude>
+
+            <!-- The following files are used by PAX as the 
+                 submodules or created originally by Cloudberry.
+            -->
+            <exclude>contrib/pax_storage/src/test/**</exclude>
+            <exclude>contrib/pax_storage/init_file</exclude>
+            <exclude>contrib/pax_storage/.clang-tidy</exclude>
+            <exclude>contrib/pax_storage/pax_schedule</exclude>
+            <exclude>contrib/pax_storage/.clang-format</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/CPPLINT.cfg</exclude>
+            <exclude>contrib/pax_storage/src/cpp/storage/proto/CPPLINT.cfg</exclude>
+            <exclude>contrib/pax_storage/src/api/python3/MANIFEST.in</exclude>
+            <exclude>contrib/pax_storage/src/api/python3/setup.cfg</exclude>
+
+            <exclude>dependency/yyjson/.gitattributes</exclude>
+            <exclude>dependency/yyjson/.github/codecov.yml</exclude>
+            <exclude>dependency/yyjson/.github/workflows/cmake.yml</exclude>
+            <exclude>dependency/yyjson/CMakeLists.txt</exclude>
+            <exclude>dependency/yyjson/Package.swift</exclude>
+            <exclude>dependency/yyjson/cmake/FindGMP.cmake</exclude>
+            <exclude>dependency/yyjson/cmake/FindMPFR.cmake</exclude>
+            <exclude>dependency/yyjson/cmake/XcodeProperty.cmake</exclude>
+            <exclude>dependency/yyjson/doc/doxygen/DoxyLayout.xml</exclude>
+            <exclude>dependency/yyjson/doc/doxygen/Doxyfile.in</exclude>
+            <exclude>dependency/yyjson/doc/doxygen/html/annotated.html</exclude>
+            <exclude>dependency/yyjson/doc/doxygen/html/annotated_dup.js</exclude>
+            <exclude>dependency/yyjson/doc/doxygen/html/api.html</exclude>
+            <exclude>dependency/yyjson/doc/doxygen/html/building-and-testing.html</exclude>
+            <exclude>dependency/yyjson/doc/doxygen/html/classes.html</exclude>
+            <exclude>dependency/yyjson/doc/doxygen/html/cookie.js</exclude>
+            <exclude>dependency/yyjson/doc/doxygen/html/data-structures.html</exclude>
+            <exclude>dependency/yyjson/doc/doxygen/html/deprecated.html</exclude>
+            <exclude>dependency/yyjson/doc/doxygen/html/dir_68267d1309a1af8e8297ef4c3efbcdba.html</exclude>
+            <exclude>dependency/yyjson/doc/doxygen/html/dir_68267d1309a1af8e8297ef4c3efbcdba.js</exclude>
+            <exclude>dependency/yyjson/doc/doxygen/html/dir_e68e8157741866f444e17edd764ebbae.html</exclude>
+            <exclude>dependency/yyjson/doc/doxygen/html/doc.svg</exclude>
+            <exclude>dependency/yyjson/doc/doxygen/html/docd.svg</exclude>
+            <exclude>dependency/yyjson/doc/doxygen/html/doxygen.css</exclude>
+            <exclude>dependency/yyjson/doc/doxygen/html/doxygen.svg</exclude>
+            <exclude>dependency/yyjson/doc/doxygen/html/doxygen_crawl.html</exclude>
+            <exclude>dependency/yyjson/doc/doxygen/html/files.html</exclude>
+            <exclude>dependency/yyjson/doc/doxygen/html/files_dup.js</exclude>
+            <exclude>dependency/yyjson/doc/doxygen/html/folderclosed.svg</exclude>
+            <exclude>dependency/yyjson/doc/doxygen/html/folderclosedd.svg</exclude>
+            <exclude>dependency/yyjson/doc/doxygen/html/folderopen.svg</exclude>
+            <exclude>dependency/yyjson/doc/doxygen/html/folderopend.svg</exclude>
+            <exclude>dependency/yyjson/doc/doxygen/html/functions.html</exclude>
+            <exclude>dependency/yyjson/doc/doxygen/html/functions_vars.html</exclude>
+            <exclude>dependency/yyjson/doc/doxygen/html/globals.html</exclude>
+            <exclude>dependency/yyjson/doc/doxygen/html/globals_defs.html</exclude>
+            <exclude>dependency/yyjson/doc/doxygen/html/globals_dup.js</exclude>
+            <exclude>dependency/yyjson/doc/doxygen/html/globals_func.html</exclude>
+            <exclude>dependency/yyjson/doc/doxygen/html/globals_func.js</exclude>
+            <exclude>dependency/yyjson/doc/doxygen/html/globals_type.html</exclude>
+            <exclude>dependency/yyjson/doc/doxygen/html/globals_vars.html</exclude>
+            <exclude>dependency/yyjson/doc/doxygen/html/globals_y.html</exclude>
+            <exclude>dependency/yyjson/doc/doxygen/html/index.html</exclude>
+            <exclude>dependency/yyjson/doc/doxygen/html/index.js</exclude>
+            <exclude>dependency/yyjson/doc/doxygen/html/jquery.js</exclude>
+            <exclude>dependency/yyjson/doc/doxygen/html/md__c_h_a_n_g_e_l_o_g.html</exclude>
+            <exclude>dependency/yyjson/doc/doxygen/html/md_doc__a_p_i.html</exclude>
+            <exclude>dependency/yyjson/doc/doxygen/html/md_doc__build_and_test.html</exclude>
+            <exclude>dependency/yyjson/doc/doxygen/html/md_doc__data_structure.html</exclude>
+            <exclude>dependency/yyjson/doc/doxygen/html/minus.svg</exclude>
+            <exclude>dependency/yyjson/doc/doxygen/html/minusd.svg</exclude>
+            <exclude>dependency/yyjson/doc/doxygen/html/navtree.css</exclude>
+            <exclude>dependency/yyjson/doc/doxygen/html/navtreeindex0.js</exclude>
+            <exclude>dependency/yyjson/doc/doxygen/html/navtreeindex1.js</exclude>
+            <exclude>dependency/yyjson/doc/doxygen/html/navtreeindex2.js</exclude>
+            <exclude>dependency/yyjson/doc/doxygen/html/pages.html</exclude>
+            <exclude>dependency/yyjson/doc/doxygen/html/perf_reader_a14.svg</exclude>
+            <exclude>dependency/yyjson/doc/doxygen/html/perf_reader_ec2.svg</exclude>
+            <exclude>dependency/yyjson/doc/doxygen/html/plus.svg</exclude>
+            <exclude>dependency/yyjson/doc/doxygen/html/plusd.svg</exclude>
+            <exclude>dependency/yyjson/doc/doxygen/html/search/all_0.html</exclude>
+            <exclude>dependency/yyjson/doc/doxygen/html/search/all_0.js</exclude>
+            <exclude>dependency/yyjson/doc/doxygen/html/search/all_1.html</exclude>
+            <exclude>dependency/yyjson/doc/doxygen/html/search/all_1.js</exclude>
+            <exclude>dependency/yyjson/doc/doxygen/html/search/all_10.html</exclude>
+            <exclude>dependency/yyjson/doc/doxygen/html/search/all_10.js</exclude>
+            <exclude>dependency/yyjson/doc/doxygen/html/search/all_11.js</exclude>
+            <exclude>dependency/yyjson/doc/doxygen/html/search/all_12.js</exclude>
+            <exclude>dependency/yyjson/doc/doxygen/html/search/all_13.js</exclude>
+            <exclude>dependency/yyjson/doc/doxygen/html/search/all_14.js</exclude>
+            <exclude>dependency/yyjson/doc/doxygen/html/search/all_15.js</exclude>
+            <exclude>dependency/yyjson/doc/doxygen/html/search/all_16.js</exclude>
+            <exclude>dependency/yyjson/doc/doxygen/html/search/all_17.js</exclude>
+            <exclude>dependency/yyjson/doc/doxygen/html/search/all_18.js</exclude>
+            <exclude>dependency/yyjson/doc/doxygen/html/search/all_19.js</exclude>
+            <exclude>dependency/yyjson/doc/doxygen/html/search/all_1a.js</exclude>
+            <exclude>dependency/yyjson/doc/doxygen/html/search/all_1b.js</exclude>
+            <exclude>dependency/yyjson/doc/doxygen/html/search/all_1c.js</exclude>
+            <exclude>dependency/yyjson/doc/doxygen/html/search/all_1d.js</exclude>
+            <exclude>dependency/yyjson/doc/doxygen/html/search/all_1e.js</exclude>
+            <exclude>dependency/yyjson/doc/doxygen/html/search/all_1f.js</exclude>
+            <exclude>dependency/yyjson/doc/doxygen/html/search/all_2.html</exclude>
+            <exclude>dependency/yyjson/doc/doxygen/html/search/all_2.js</exclude>
+            <exclude>dependency/yyjson/doc/doxygen/html/search/all_20.js</exclude>
+            <exclude>dependency/yyjson/doc/doxygen/html/search/all_3.html</exclude>
+            <exclude>dependency/yyjson/doc/doxygen/html/search/all_3.js</exclude>
+            <exclude>dependency/yyjson/doc/doxygen/html/search/all_4.html</exclude>
+            <exclude>dependency/yyjson/doc/doxygen/html/search/all_4.js</exclude>
+            <exclude>dependency/yyjson/doc/doxygen/html/search/all_5.html</exclude>
+            <exclude>dependency/yyjson/doc/doxygen/html/search/all_5.js</exclude>
+            <exclude>dependency/yyjson/doc/doxygen/html/search/all_6.html</exclude>
+            <exclude>dependency/yyjson/doc/doxygen/html/search/all_6.js</exclude>
+            <exclude>dependency/yyjson/doc/doxygen/html/search/all_7.html</exclude>
+            <exclude>dependency/yyjson/doc/doxygen/html/search/all_7.js</exclude>
+            <exclude>dependency/yyjson/doc/doxygen/html/search/all_8.html</exclude>
+            <exclude>dependency/yyjson/doc/doxygen/html/search/all_8.js</exclude>
+            <exclude>dependency/yyjson/doc/doxygen/html/search/all_9.html</exclude>
+            <exclude>dependency/yyjson/doc/doxygen/html/search/all_9.js</exclude>
+            <exclude>dependency/yyjson/doc/doxygen/html/search/all_a.html</exclude>
+            <exclude>dependency/yyjson/doc/doxygen/html/search/all_a.js</exclude>
+            <exclude>dependency/yyjson/doc/doxygen/html/search/all_b.html</exclude>
+            <exclude>dependency/yyjson/doc/doxygen/html/search/all_b.js</exclude>
+            <exclude>dependency/yyjson/doc/doxygen/html/search/all_c.html</exclude>
+            <exclude>dependency/yyjson/doc/doxygen/html/search/all_c.js</exclude>
+            <exclude>dependency/yyjson/doc/doxygen/html/search/all_d.html</exclude>
+            <exclude>dependency/yyjson/doc/doxygen/html/search/all_d.js</exclude>
+            <exclude>dependency/yyjson/doc/doxygen/html/search/all_e.html</exclude>
+            <exclude>dependency/yyjson/doc/doxygen/html/search/all_e.js</exclude>
+            <exclude>dependency/yyjson/doc/doxygen/html/search/all_f.html</exclude>
+            <exclude>dependency/yyjson/doc/doxygen/html/search/all_f.js</exclude>
+            <exclude>dependency/yyjson/doc/doxygen/html/search/classes_0.html</exclude>
+            <exclude>dependency/yyjson/doc/doxygen/html/search/classes_0.js</exclude>
+            <exclude>dependency/yyjson/doc/doxygen/html/search/close.svg</exclude>
+            <exclude>dependency/yyjson/doc/doxygen/html/search/defines_0.html</exclude>
+            <exclude>dependency/yyjson/doc/doxygen/html/search/defines_0.js</exclude>
+            <exclude>dependency/yyjson/doc/doxygen/html/search/defines_1.html</exclude>
+            <exclude>dependency/yyjson/doc/doxygen/html/search/defines_1.js</exclude>
+            <exclude>dependency/yyjson/doc/doxygen/html/search/files_0.html</exclude>
+            <exclude>dependency/yyjson/doc/doxygen/html/search/files_0.js</exclude>
+            <exclude>dependency/yyjson/doc/doxygen/html/search/functions_0.html</exclude>
+            <exclude>dependency/yyjson/doc/doxygen/html/search/functions_0.js</exclude>
+            <exclude>dependency/yyjson/doc/doxygen/html/search/mag.svg</exclude>
+            <exclude>dependency/yyjson/doc/doxygen/html/search/mag_d.svg</exclude>
+            <exclude>dependency/yyjson/doc/doxygen/html/search/mag_sel.svg</exclude>
+            <exclude>dependency/yyjson/doc/doxygen/html/search/mag_seld.svg</exclude>
+            <exclude>dependency/yyjson/doc/doxygen/html/search/nomatches.html</exclude>
+            <exclude>dependency/yyjson/doc/doxygen/html/search/pages_0.html</exclude>
+            <exclude>dependency/yyjson/doc/doxygen/html/search/pages_0.js</exclude>
+            <exclude>dependency/yyjson/doc/doxygen/html/search/pages_1.html</exclude>
+            <exclude>dependency/yyjson/doc/doxygen/html/search/pages_1.js</exclude>
+            <exclude>dependency/yyjson/doc/doxygen/html/search/pages_2.html</exclude>
+            <exclude>dependency/yyjson/doc/doxygen/html/search/pages_2.js</exclude>
+            <exclude>dependency/yyjson/doc/doxygen/html/search/pages_3.html</exclude>
+            <exclude>dependency/yyjson/doc/doxygen/html/search/pages_3.js</exclude>
+            <exclude>dependency/yyjson/doc/doxygen/html/search/pages_4.html</exclude>
+            <exclude>dependency/yyjson/doc/doxygen/html/search/pages_4.js</exclude>
+            <exclude>dependency/yyjson/doc/doxygen/html/search/pages_5.js</exclude>
+            <exclude>dependency/yyjson/doc/doxygen/html/search/pages_6.js</exclude>
+            <exclude>dependency/yyjson/doc/doxygen/html/search/pages_7.js</exclude>
+            <exclude>dependency/yyjson/doc/doxygen/html/search/search.css</exclude>
+            <exclude>dependency/yyjson/doc/doxygen/html/search/searchdata.js</exclude>
+            <exclude>dependency/yyjson/doc/doxygen/html/search/typedefs_0.html</exclude>
+            <exclude>dependency/yyjson/doc/doxygen/html/search/typedefs_0.js</exclude>
+            <exclude>dependency/yyjson/doc/doxygen/html/search/variables_0.html</exclude>
+            <exclude>dependency/yyjson/doc/doxygen/html/search/variables_0.js</exclude>
+            <exclude>dependency/yyjson/doc/doxygen/html/search/variables_1.html</exclude>
+            <exclude>dependency/yyjson/doc/doxygen/html/search/variables_1.js</exclude>
+            <exclude>dependency/yyjson/doc/doxygen/html/search/variables_2.html</exclude>
+            <exclude>dependency/yyjson/doc/doxygen/html/search/variables_2.js</exclude>
+            <exclude>dependency/yyjson/doc/doxygen/html/search/variables_3.html</exclude>
+            <exclude>dependency/yyjson/doc/doxygen/html/search/variables_3.js</exclude>
+            <exclude>dependency/yyjson/doc/doxygen/html/search/variables_4.html</exclude>
+            <exclude>dependency/yyjson/doc/doxygen/html/search/variables_4.js</exclude>
+            <exclude>dependency/yyjson/doc/doxygen/html/search/variables_5.html</exclude>
+            <exclude>dependency/yyjson/doc/doxygen/html/search/variables_5.js</exclude>
+            <exclude>dependency/yyjson/doc/doxygen/html/search/variables_6.html</exclude>
+            <exclude>dependency/yyjson/doc/doxygen/html/search/variables_6.js</exclude>
+            <exclude>dependency/yyjson/doc/doxygen/html/search/variables_7.html</exclude>
+            <exclude>dependency/yyjson/doc/doxygen/html/search/variables_7.js</exclude>
+            <exclude>dependency/yyjson/doc/doxygen/html/search/variables_8.html</exclude>
+            <exclude>dependency/yyjson/doc/doxygen/html/search/variables_8.js</exclude>
+            <exclude>dependency/yyjson/doc/doxygen/html/search/variables_9.html</exclude>
+            <exclude>dependency/yyjson/doc/doxygen/html/search/variables_9.js</exclude>
+            <exclude>dependency/yyjson/doc/doxygen/html/search/variables_a.html</exclude>
+            <exclude>dependency/yyjson/doc/doxygen/html/search/variables_a.js</exclude>
+            <exclude>dependency/yyjson/doc/doxygen/html/search/variables_b.html</exclude>
+            <exclude>dependency/yyjson/doc/doxygen/html/search/variables_b.js</exclude>
+            <exclude>dependency/yyjson/doc/doxygen/html/search/variables_c.html</exclude>
+            <exclude>dependency/yyjson/doc/doxygen/html/search/variables_c.js</exclude>
+            <exclude>dependency/yyjson/doc/doxygen/html/search/variables_d.html</exclude>
+            <exclude>dependency/yyjson/doc/doxygen/html/search/variables_d.js</exclude>
+            <exclude>dependency/yyjson/doc/doxygen/html/search/variables_e.html</exclude>
+            <exclude>dependency/yyjson/doc/doxygen/html/search/variables_e.js</exclude>
+            <exclude>dependency/yyjson/doc/doxygen/html/struct_idoc1.svg</exclude>
+            <exclude>dependency/yyjson/doc/doxygen/html/struct_idoc2.svg</exclude>
+            <exclude>dependency/yyjson/doc/doxygen/html/struct_ival.svg</exclude>
+            <exclude>dependency/yyjson/doc/doxygen/html/struct_mdoc.svg</exclude>
+            <exclude>dependency/yyjson/doc/doxygen/html/struct_mval.svg</exclude>
+            <exclude>dependency/yyjson/doc/doxygen/html/structyyjson__alc.html</exclude>
+            <exclude>dependency/yyjson/doc/doxygen/html/structyyjson__alc.js</exclude>
+            <exclude>dependency/yyjson/doc/doxygen/html/tabs.css</exclude>
+            <exclude>dependency/yyjson/doc/doxygen/html/yyjson-style.css</exclude>
+            <exclude>dependency/yyjson/doc/doxygen/html/yyjson_8h.html</exclude>
+            <exclude>dependency/yyjson/doc/doxygen/html/yyjson_8h.js</exclude>
+            <exclude>dependency/yyjson/doc/doxygen/html/yyjson_8h_structyyjson__alc.js</exclude>
+            <exclude>dependency/yyjson/doc/doxygen/html/yyjson_8h_structyyjson__arr__iter.js</exclude>
+            <exclude>dependency/yyjson/doc/doxygen/html/yyjson_8h_structyyjson__doc.js</exclude>
+            <exclude>dependency/yyjson/doc/doxygen/html/yyjson_8h_structyyjson__mut__arr__iter.js</exclude>
+            <exclude>dependency/yyjson/doc/doxygen/html/yyjson_8h_structyyjson__mut__doc.js</exclude>
+            <exclude>dependency/yyjson/doc/doxygen/html/yyjson_8h_structyyjson__mut__obj__iter.js</exclude>
+            <exclude>dependency/yyjson/doc/doxygen/html/yyjson_8h_structyyjson__mut__val.js</exclude>
+            <exclude>dependency/yyjson/doc/doxygen/html/yyjson_8h_structyyjson__obj__iter.js</exclude>
+            <exclude>dependency/yyjson/doc/doxygen/html/yyjson_8h_structyyjson__patch__err.js</exclude>
+            <exclude>dependency/yyjson/doc/doxygen/html/yyjson_8h_structyyjson__ptr__ctx.js</exclude>
+            <exclude>dependency/yyjson/doc/doxygen/html/yyjson_8h_structyyjson__ptr__err.js</exclude>
+            <exclude>dependency/yyjson/doc/doxygen/html/yyjson_8h_structyyjson__read__err.js</exclude>
+            <exclude>dependency/yyjson/doc/doxygen/html/yyjson_8h_structyyjson__val.js</exclude>
+            <exclude>dependency/yyjson/doc/doxygen/html/yyjson_8h_structyyjson__write__err.js</exclude>
+            <exclude>dependency/yyjson/doc/doxygen/theme/yyjson-footer.html</exclude>
+            <exclude>dependency/yyjson/doc/doxygen/theme/yyjson-header.html</exclude>
+            <exclude>dependency/yyjson/doc/doxygen/theme/yyjson-style.css</exclude>
+            <exclude>dependency/yyjson/doc/images/perf_reader_a14.svg</exclude>
+            <exclude>dependency/yyjson/doc/images/perf_reader_ec2.svg</exclude>
+            <exclude>dependency/yyjson/doc/images/struct_idoc1.svg</exclude>
+            <exclude>dependency/yyjson/doc/images/struct_idoc2.svg</exclude>
+            <exclude>dependency/yyjson/doc/images/struct_ival.svg</exclude>
+            <exclude>dependency/yyjson/doc/images/struct_mdoc.svg</exclude>
+            <exclude>dependency/yyjson/doc/images/struct_mval.svg</exclude>
+            <exclude>dependency/yyjson/fuzz/fuzzer.c</exclude>
+            <exclude>dependency/yyjson/fuzz/fuzzer.dict</exclude>
+            <exclude>dependency/yyjson/misc/jsoninfo.c</exclude>
+            <exclude>dependency/yyjson/misc/make_tables.c</exclude>
+            <exclude>dependency/yyjson/test/compile_ansi.c</exclude>
+            <exclude>dependency/yyjson/test/compile_ansi.cpp</exclude>
+            <exclude>dependency/yyjson/test/data/num/literal_fail.txt</exclude>
+            <exclude>dependency/yyjson/test/data/num/literal_pass.txt</exclude>
+            <exclude>dependency/yyjson/test/data/num/num_fail.txt</exclude>
+            <exclude>dependency/yyjson/test/data/num/num_overflow.txt</exclude>
+            <exclude>dependency/yyjson/test/data/num/real_pass_1.txt</exclude>
+            <exclude>dependency/yyjson/test/data/num/real_pass_2.txt</exclude>
+            <exclude>dependency/yyjson/test/data/num/real_pass_3.txt</exclude>
+            <exclude>dependency/yyjson/test/data/num/real_pass_4.txt</exclude>
+            <exclude>dependency/yyjson/test/data/num/real_pass_5.txt</exclude>
+            <exclude>dependency/yyjson/test/data/num/real_pass_6.txt</exclude>
+            <exclude>dependency/yyjson/test/data/num/real_pass_7.txt</exclude>
+            <exclude>dependency/yyjson/test/data/num/sint_bignum.txt</exclude>
+            <exclude>dependency/yyjson/test/data/num/sint_pass.txt</exclude>
+            <exclude>dependency/yyjson/test/data/num/uint_bignum.txt</exclude>
+            <exclude>dependency/yyjson/test/data/num/uint_pass.txt</exclude>
+            <exclude>dependency/yyjson/test/test_allocator.c</exclude>
+            <exclude>dependency/yyjson/test/test_err_code.c</exclude>
+            <exclude>dependency/yyjson/test/test_json_merge_patch.c</exclude>
+            <exclude>dependency/yyjson/test/test_json_mut_val.c</exclude>
+            <exclude>dependency/yyjson/test/test_json_patch.c</exclude>
+            <exclude>dependency/yyjson/test/test_json_pointer.c</exclude>
+            <exclude>dependency/yyjson/test/test_json_reader.c</exclude>
+            <exclude>dependency/yyjson/test/test_json_val.c</exclude>
+            <exclude>dependency/yyjson/test/test_json_writer.c</exclude>
+            <exclude>dependency/yyjson/test/test_number.c</exclude>
+            <exclude>dependency/yyjson/test/test_roundtrip.c</exclude>
+            <exclude>dependency/yyjson/test/test_string.c</exclude>
+            <exclude>dependency/yyjson/test/util/goo_double_conv.h</exclude>
+            <exclude>dependency/yyjson/test/util/yy_test_utils.c</exclude>
+            <exclude>dependency/yyjson/test/util/yy_test_utils.h</exclude>
+            <exclude>dependency/yyjson/test/xctest/Info.plist</exclude>
+            <exclude>dependency/yyjson/test/xctest/yy_xctest.h</exclude>
+            <exclude>dependency/yyjson/test/xctest/yy_xctest.m.in</exclude>
+            <exclude>dependency/yyjson/test/xctest/yy_xctest.m</exclude>
+            <exclude>dependency/yyjson/yyjson.pc.in</exclude>
+
+            <exclude>contrib/pax_storage/src/cpp/contrib/googlebench/tools/requirements.txt</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/googlebench/tools/strip_asm.py</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/googlebench/tools/libpfm.BUILD.bazel</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/googlebench/tools/BUILD.bazel</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/googlebench/tools/gbench/util.py</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/googlebench/tools/gbench/__init__.py</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/googlebench/tools/gbench/report.py</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/googlebench/tools/compare.py</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/googlebench/CMakeLists.txt</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/googlebench/test/user_counters_test.cc</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/googlebench/test/benchmark_min_time_flag_iters_test.cc</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/googlebench/test/diagnostics_test.cc</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/googlebench/test/AssemblyTests.cmake</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/googlebench/test/benchmark_test.cc</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/googlebench/test/donotoptimize_assembly_test.cc</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/googlebench/test/CMakeLists.txt</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/googlebench/test/basic_test.cc</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/googlebench/test/memory_manager_test.cc</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/googlebench/test/string_util_gtest.cc</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/googlebench/test/output_test.h</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/googlebench/test/skip_with_error_test.cc</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/googlebench/test/perf_counters_test.cc</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/googlebench/test/repetitions_test.cc</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/googlebench/test/map_test.cc</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/googlebench/test/state_assembly_test.cc</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/googlebench/test/benchmark_setup_teardown_test.cc</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/googlebench/test/manual_threading_test.cc</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/googlebench/test/user_counters_thousands_test.cc</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/googlebench/test/benchmark_name_gtest.cc</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/googlebench/test/clobber_memory_assembly_test.cc</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/googlebench/test/output_test_helper.cc</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/googlebench/test/perf_counters_gtest.cc</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/googlebench/test/templated_fixture_method_test.cc</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/googlebench/test/profiler_manager_iterations_test.cc</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/googlebench/test/options_test.cc</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/googlebench/test/spec_arg_test.cc</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/googlebench/test/display_aggregates_only_test.cc</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/googlebench/test/memory_results_gtest.cc</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/googlebench/test/benchmark_gtest.cc</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/googlebench/test/link_main_test.cc</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/googlebench/test/complexity_test.cc</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/googlebench/test/fixture_test.cc</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/googlebench/test/min_time_parse_gtest.cc</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/googlebench/test/spec_arg_verbosity_test.cc</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/googlebench/test/profiler_manager_gtest.cc</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/googlebench/test/statistics_gtest.cc</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/googlebench/test/internal_threading_test.cc</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/googlebench/test/commandlineflags_gtest.cc</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/googlebench/test/time_unit_gtest.cc</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/googlebench/test/donotoptimize_test.cc</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/googlebench/test/user_counters_tabular_test.cc</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/googlebench/test/cxx11_test.cc</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/googlebench/test/benchmark_random_interleaving_gtest.cc</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/googlebench/test/report_aggregates_only_test.cc</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/googlebench/test/benchmark_min_time_flag_time_test.cc</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/googlebench/test/multiple_ranges_test.cc</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/googlebench/test/reporter_output_test.cc</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/googlebench/test/filter_test.cc</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/googlebench/test/register_benchmark_test.cc</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/googlebench/test/args_product_test.cc</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/googlebench/test/benchmark_setup_teardown_cb_types_gtest.cc</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/googlebench/test/profiler_manager_test.cc</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/googlebench/test/templated_fixture_test.cc</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/googlebench/cmake/posix_regex.cpp</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/googlebench/cmake/split_list.cmake</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/googlebench/cmake/GoogleTest.cmake.in</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/googlebench/cmake/AddCXXCompilerFlag.cmake</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/googlebench/cmake/thread_safety_attributes.cpp</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/googlebench/cmake/std_regex.cpp</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/googlebench/cmake/GoogleTest.cmake</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/googlebench/cmake/steady_clock.cpp</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/googlebench/cmake/Config.cmake.in</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/googlebench/cmake/llvm-toolchain.cmake</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/googlebench/cmake/benchmark.pc.in</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/googlebench/cmake/gnu_posix_regex.cpp</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/googlebench/cmake/benchmark_main.pc.in</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/googlebench/cmake/Modules/FindPFM.cmake</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/googlebench/cmake/Modules/FindLLVMAr.cmake</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/googlebench/cmake/Modules/FindLLVMRanLib.cmake</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/googlebench/cmake/Modules/FindLLVMNm.cmake</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/googlebench/cmake/GetGitVersion.cmake</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/googlebench/cmake/pthread_affinity.cpp</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/googlebench/cmake/CXXFeatureCheck.cmake</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/googlebench/.pre-commit-config.yaml</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/googlebench/include/benchmark/export.h</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/googlebench/WORKSPACE</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/googlebench/pyproject.toml</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/googlebench/.clang-tidy</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/googlebench/WORKSPACE.bzlmod</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/googlebench/docs/_config.yml</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/googlebench/.clang-tidy.ignore</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/googlebench/CONTRIBUTORS</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/googlebench/appveyor.yml</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/googlebench/setup.py</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/googlebench/bazel/benchmark_deps.bzl</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/googlebench/_config.yml</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/googlebench/.clang-format</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/googlebench/.github/install_bazel.sh</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/googlebench/.github/workflows/wheels.yml</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/googlebench/.github/workflows/build-and-test.yml</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/googlebench/.github/workflows/sanitizer.yml</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/googlebench/.github/workflows/bazel.yml</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/googlebench/.github/workflows/test_bindings.yml</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/googlebench/.github/workflows/clang-tidy-lint.yml</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/googlebench/.github/workflows/pre-commit.yml</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/googlebench/.github/workflows/doxygen.yml</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/googlebench/.github/workflows/build-and-test-min-cmake.yml</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/googlebench/.github/workflows/clang-format-lint.yml</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/googlebench/.github/workflows/build-and-test-perfcounters.yml</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/googlebench/.github/libcxx-setup.sh</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/googlebench/BUILD.bazel</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/googlebench/.ycm_extra_conf.py</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/googlebench/MODULE.bazel</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/googlebench/bindings/python/google_benchmark/benchmark.cc</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/googlebench/src/timers.h</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/googlebench/src/benchmark_register.h</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/googlebench/src/thread_timer.h</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/googlebench/src/colorprint.h</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/googlebench/src/CMakeLists.txt</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/googlebench/src/thread_manager.h</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/googlebench/src/string_util.h</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/googlebench/src/arraysize.h</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/googlebench/src/commandlineflags.h</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/googlebench/src/benchmark_api_internal.cc</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/googlebench/src/internal_macros.h</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/googlebench/src/cycleclock.h</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/googlebench/src/log.h</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/googlebench/src/check.h</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/googlebench/src/benchmark_api_internal.h</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/googlebench/src/string_util.cc</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/googlebench/src/mutex.h</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/googlebench/src/check.cc</exclude>
+
+            <exclude>contrib/pax_storage/src/cpp/contrib/googletest/CMakeLists.txt</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/googletest/ci/windows-presubmit.bat</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/googletest/WORKSPACE</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/googletest/docs/_layouts/default.html</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/googletest/docs/_config.yml</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/googletest/docs/_data/navigation.yml</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/googletest/docs/_sass/main.scss</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/googletest/docs/assets/css/style.scss</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/googletest/CONTRIBUTORS</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/googletest/fake_fuchsia_sdk.bzl</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/googletest/.clang-format</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/googletest/.github/ISSUE_TEMPLATE/10-feature_request.yml</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/googletest/.github/ISSUE_TEMPLATE/config.yml</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/googletest/.github/ISSUE_TEMPLATE/00-bug_report.yml</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/googletest/googletest/CMakeLists.txt</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/googletest/googletest/test/gtest_dirs_test.cc</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/googletest/googletest/test/googletest-output-test-golden-lin.txt</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/googletest/googletest/cmake/internal_utils.cmake</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/googletest/googletest/cmake/gtest.pc.in</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/googletest/googletest/cmake/gtest_main.pc.in</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/googletest/googletest/cmake/Config.cmake.in</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/googletest/googletest/cmake/libgtest.la.in</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/googletest/googlemock/CMakeLists.txt</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/googletest/googlemock/test/gmock_output_test_golden.txt</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/googletest/googlemock/test/gmock-pp_test.cc</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/googletest/googlemock/cmake/gmock_main.pc.in</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/googletest/googlemock/cmake/gmock.pc.in</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/googletest/googlemock/include/gmock/internal/gmock-pp.h</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/googletest/googlemock/include/gmock/internal/custom/gmock-generated-actions.h</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/googletest/googletest_deps.bzl</exclude>
+
+            <exclude>contrib/pax_storage/src/cpp/cpp-stub/src_linux/addr_any.h</exclude>
+            <exclude>contrib/pax_storage/src/cpp/cpp-stub/src_darwin/addr_any.h</exclude>
+            <exclude>contrib/pax_storage/src/cpp/cpp-stub/src_win/addr_any.h</exclude>
+            <exclude>contrib/pax_storage/src/cpp/cpp-stub/src/addr_pri.h</exclude>
+            <exclude>contrib/pax_storage/src/cpp/cpp-stub/src/stub.h</exclude>
+
+            <exclude>contrib/pax_storage/src/cpp/contrib/tabulate/tabulateConfig.cmake.in</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/tabulate/tabulate.pri</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/tabulate/clang-format.bash</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/tabulate/CMakeLists.txt</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/tabulate/LICENSE.termcolor</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/tabulate/include/tabulate/variant_lite.hpp</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/tabulate/include/tabulate/string_view_lite.hpp</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/tabulate/include/tabulate/optional_lite.hpp</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/tabulate/include/tabulate/termcolor.hpp</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/tabulate/generate-single-include.bash</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/tabulate/samples/summary.cpp</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/tabulate/samples/refresh_table.cpp</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/tabulate/samples/font_styles.cpp</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/tabulate/samples/CMakeLists.txt</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/tabulate/samples/mario.cpp</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/tabulate/samples/universal_constants.cpp</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/tabulate/samples/string_view_in_row.cpp</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/tabulate/samples/word_wrapping.cpp</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/tabulate/samples/asciidoc_export.cpp</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/tabulate/samples/iterators.cpp</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/tabulate/samples/shape.cpp</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/tabulate/samples/latex_export.cpp</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/tabulate/samples/padding.cpp</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/tabulate/samples/colors.cpp</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/tabulate/samples/employees.cpp</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/tabulate/samples/markdown_export.cpp</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/tabulate/samples/movies.cpp</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/tabulate/samples/runic.cpp</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/tabulate/samples/class_diagram.cpp</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/tabulate/samples/no_trim.cpp</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/tabulate/samples/unicode.cpp</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/tabulate/.clang-format</exclude>
+            <exclude>contrib/pax_storage/src/cpp/contrib/tabulate/.travis.yml</exclude>
+
+            <!-- Exclude python requirements files, since they are just a list of packages and do not support any comments
+            -->
+
+            <exclude>devops/deploy/docker/build/rocky8/tests/requirements.txt</exclude>
+            <exclude>devops/deploy/docker/build/rocky9/tests/requirements.txt</exclude>
+            <exclude>devops/deploy/docker/build/rocky10/tests/requirements.txt</exclude>
+            <exclude>devops/deploy/docker/build/ubuntu22.04/tests/requirements.txt</exclude>
+            <exclude>devops/deploy/docker/build/ubuntu24.04/tests/requirements.txt</exclude>
+
+	    <!-- Exclude ubuntu debian packaging files since they do not support comments
+            -->
+            <exclude>devops/build/packaging/deb/ubuntu22.04/**</exclude>
+            <exclude>devops/build/packaging/deb/ubuntu24.04/**</exclude>
+
+            <!-- Exclude the multinode hosts configuration file for Cloudberry sandbox
+            -->
+            <exclude>devops/sandbox/configs/multinode-gpinit-hosts</exclude>
 
           </excludes>
 
@@ -1572,12 +2024,22 @@ code or new licensing patterns.
             </license>
 
             <license implementation="org.apache.rat.analysis.license.SimplePatternBasedLicense">
-              <licenseFamilyName>MIT/X11 License (X Consortium)</licenseFamilyName>
-              <licenseFamilyCategory>MIT-INSTALL</licenseFamilyCategory>
+              <licenseFamilyName>MIT/X11 License (X Consortium) - Variant 2</licenseFamilyName>
+              <licenseFamilyCategory>MIT-2</licenseFamilyCategory>
               <patterns>
                 <pattern># Permission is hereby granted, free of charge, to any person obtaining a copy</pattern>
                 <pattern># THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND</pattern>
                 <pattern># Except as contained in this notice, the name of the X Consortium</pattern>
+              </patterns>
+            </license>
+
+            <license implementation="org.apache.rat.analysis.license.SimplePatternBasedLicense">
+              <licenseFamilyName>MIT/X11 License (X Consortium) - Variant 3</licenseFamilyName>
+              <licenseFamilyCategory>MIT-3</licenseFamilyCategory>
+              <patterns>
+                <pattern>Permission is hereby granted, free of charge, to any person obtaining a copy</pattern>
+                <pattern>of this software and associated documentation files (the "Software"), to deal</pattern>
+                <pattern>in the Software without restriction, including without limitation the rights</pattern>
               </patterns>
             </license>
 

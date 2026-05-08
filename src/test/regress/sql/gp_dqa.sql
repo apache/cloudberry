@@ -604,6 +604,15 @@ select count(distinct a), count(distinct b) from dqa_f4 group by c;
 set optimizer_enable_multiple_distinct_aggs=on;
 explain (verbose on, costs off) select count(distinct a), count(distinct b) from dqa_f4 group by c;
 select count(distinct a), count(distinct b) from dqa_f4 group by c;
-reset optimizer_enable_multiple_distinct_aggs;
 
+-- Test AO table dqa with multiple distinct aggs
+create table dqa_f5(a int, b int, c int) using ao_column;
+insert into dqa_f5 values(null, null, null);
+insert into dqa_f5 values(1, 1, 1);
+insert into dqa_f5 values(2, 2, 2);
+explain (verbose on, costs off) select count(distinct a), count(distinct b) from dqa_f5 group by c;
+select count(distinct a), count(distinct b) from dqa_f5 group by c;
+
+reset optimizer_enable_multiple_distinct_aggs;
 drop table dqa_f4;
+drop table dqa_f5;

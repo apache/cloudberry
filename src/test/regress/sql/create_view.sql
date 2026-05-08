@@ -661,7 +661,16 @@ drop view tt14v;
 
 create view tt14v as select t.f1, t.f4 from tt14f() t;
 
+<<<<<<< HEAD
 select pg_get_viewdef('tt14v', true);
+=======
+-- column f3 is still in the view, sort of ...
+select pg_get_viewdef('tt14v', true);
+-- ... and you can even EXPLAIN it ...
+explain (verbose, costs off) select * from tt14v;
+-- but it will fail at execution
+select f1, f4 from tt14v;
+>>>>>>> main
 select * from tt14v;
 
 alter table tt14t drop column f3;  -- ok
@@ -839,6 +848,32 @@ select x + y + z as c1,
 from (values(1,2,3)) v(x,y,z);
 select pg_get_viewdef('tt26v', true);
 
+<<<<<<< HEAD
+=======
+
+-- Test that changing the relkind of a relcache entry doesn't cause
+-- trouble. Prior instances of where it did:
+-- CALDaNm2yXz+zOtv7y5zBd5WKT8O0Ld3YxikuU3dcyCvxF7gypA@mail.gmail.com
+-- CALDaNm3oZA-8Wbps2Jd1g5_Gjrr-x3YWrJPek-mF5Asrrvz2Dg@mail.gmail.com
+CREATE TABLE tt26(c int);
+
+BEGIN;
+CREATE TABLE tt27(c int);
+SAVEPOINT q;
+CREATE RULE "_RETURN" AS ON SELECT TO tt27 DO INSTEAD SELECT * FROM tt26;
+SELECT * FROM tt27;
+ROLLBACK TO q;
+CREATE RULE "_RETURN" AS ON SELECT TO tt27 DO INSTEAD SELECT * FROM tt26;
+ROLLBACK;
+
+BEGIN;
+CREATE TABLE tt28(c int);
+CREATE RULE "_RETURN" AS ON SELECT TO tt28 DO INSTEAD SELECT * FROM tt26;
+CREATE RULE "_RETURN" AS ON SELECT TO tt28 DO INSTEAD SELECT * FROM tt26;
+ROLLBACK;
+
+
+>>>>>>> main
 -- test restriction on non-system view expansion.
 create table tt27v_tbl (a int);
 create view tt27v as select a from tt27v_tbl;
@@ -847,6 +882,14 @@ select a from tt27v where a > 0; -- Error
 insert into tt27v values (1); -- Error
 select viewname from pg_views where viewname = 'tt27v'; -- Ok to access a system view.
 reset restrict_nonsystem_relation_kind;
+<<<<<<< HEAD
+=======
+
+-- test display negative operator of const-folder expression
+create table tdis(a int, b int, c int);
+create view tdis_v1 as select a,b,c, -1::int from tdis group by 1,2,3,4;
+select pg_get_viewdef('tdis_v1', true);
+>>>>>>> main
 
 -- clean up all the random objects we made above
 DROP SCHEMA temp_view_test CASCADE;

@@ -33,7 +33,7 @@ using namespace gpmd;
 CDXLColStats::CDXLColStats(CMemoryPool *mp, CMDIdColStats *mdid_col_stats,
 						   CMDName *mdname, CDouble width, CDouble null_freq,
 						   CDouble distinct_remaining, CDouble freq_remaining,
-						   CDXLBucketArray *dxl_stats_bucket_array,
+						   CDouble distinct_by_segs, CDXLBucketArray *dxl_stats_bucket_array,
 						   BOOL is_col_stats_missing)
 	: m_mp(mp),
 	  m_mdid_col_stats(mdid_col_stats),
@@ -43,7 +43,8 @@ CDXLColStats::CDXLColStats(CMemoryPool *mp, CMDIdColStats *mdid_col_stats,
 	  m_distinct_remaining(distinct_remaining),
 	  m_freq_remaining(freq_remaining),
 	  m_dxl_stats_bucket_array(dxl_stats_bucket_array),
-	  m_is_col_stats_missing(is_col_stats_missing)
+	  m_is_col_stats_missing(is_col_stats_missing),
+	  m_distinct_by_segs(distinct_by_segs)
 {
 	GPOS_ASSERT(mdid_col_stats->IsValid());
 	GPOS_ASSERT(nullptr != dxl_stats_bucket_array);
@@ -167,6 +168,9 @@ CDXLColStats::Serialize(CXMLSerializer *xml_serializer) const
 	xml_serializer->AddAttribute(
 		CDXLTokens::GetDXLTokenStr(EdxltokenColStatsMissing),
 		m_is_col_stats_missing);
+	xml_serializer->AddAttribute(
+		CDXLTokens::GetDXLTokenStr(EdxltokenColNdvBySeg),
+		m_distinct_by_segs);
 
 	GPOS_CHECK_ABORT;
 
@@ -233,8 +237,8 @@ CDXLColStats::CreateDXLDummyColStats(CMemoryPool *mp, IMDId *mdid,
 	dxl_col_stats = GPOS_NEW(mp) CDXLColStats(
 		mp, mdid_col_stats, mdname, width, CHistogram::DefaultNullFreq,
 		CHistogram::DefaultNDVRemain, CHistogram::DefaultNDVFreqRemain,
-		dxl_bucket_array.Value(), true /* is_col_stats_missing */
-	);
+		CHistogram::DefaultNDVBySegments, dxl_bucket_array.Value(),
+		true /* is_col_stats_missing */);
 	dxl_bucket_array.Reset();
 	return dxl_col_stats.Reset();
 }

@@ -143,8 +143,7 @@ bool TestVisimap(Relation rel, const char *visimap_name, int offset) {
   fs = Singleton<LocalFileSystem>::GetInstance();
 
   auto visimap = LoadVisimap(fs, options, file_path);
-  auto bm = Bitmap8(BitmapRaw<uint8>(visimap->data(), visimap->size()),
-                    Bitmap8::ReadOnlyOwnBitmap);
+  auto bm = Bitmap8(BitmapRaw<uint8>(visimap->data(), visimap->size()));
   auto is_set = bm.Test(offset);
   return !is_set;
 }

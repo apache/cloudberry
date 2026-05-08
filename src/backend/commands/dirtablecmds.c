@@ -136,6 +136,7 @@ CreateDirectoryTable(CreateDirectoryTableStmt *stmt, Oid relId)
 	}
 	else
 	{
+<<<<<<< HEAD
 		Form_pg_class pg_class_tuple = NULL;
 		HeapTuple	class_tuple = NULL;
 		RelFileLocator relFileNode = {0};
@@ -148,9 +149,14 @@ CreateDirectoryTable(CreateDirectoryTableStmt *stmt, Oid relId)
 		relFileNode.spcOid = spcId;
 		relFileNode.dbOid = MyDatabaseId;
 		relFileNode.relNumber = pg_class_tuple->relfilenode;
+=======
+		RelFileNode relFileNode = {0};
 
-		dirTablePath = UFileFormatPathName(&relFileNode);
-		ReleaseSysCache(class_tuple);
+		relFileNode.spcNode = spcId;
+		relFileNode.dbNode = MyDatabaseId;
+>>>>>>> main
+
+		dirTablePath = UFileFormatPathName(relId, &relFileNode);
 	}
 
 	/*

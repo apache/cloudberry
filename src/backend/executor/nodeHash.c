@@ -2410,11 +2410,19 @@ ExecParallelPrepHashTableForUnmatched(HashJoinState *hjstate)
 	int			curbatch = hashtable->curbatch;
 	ParallelHashJoinBatch *batch = hashtable->batches[curbatch].shared;
 
+<<<<<<< HEAD
 	Assert(BarrierPhase(&batch->batch_barrier) == PHJ_BATCH_PROBE);
 
 	/*
 	 * It would not be deadlock-free to wait on the batch barrier, because it
 	 * is in PHJ_BATCH_PROBE phase, and thus processes attached to it have
+=======
+	Assert(BarrierPhase(&batch->batch_barrier) == PHJ_BATCH_PROBING);
+
+	/*
+	 * It would not be deadlock-free to wait on the batch barrier, because it
+	 * is in PHJ_BATCH_PROBING phase, and thus processes attached to it have
+>>>>>>> main
 	 * already emitted tuples.  Therefore, we'll hold a wait-free election:
 	 * only one process can continue to the next phase, and all others detach
 	 * from this batch.  They can still go any work on other batches, if there
@@ -2442,6 +2450,10 @@ ExecParallelPrepHashTableForUnmatched(HashJoinState *hjstate)
 
 	/* Now we are alone with this batch. */
 	Assert(BarrierPhase(&batch->batch_barrier) == PHJ_BATCH_SCAN);
+<<<<<<< HEAD
+=======
+	Assert(BarrierParticipants(&batch->batch_barrier) == 1);
+>>>>>>> main
 
 	/*
 	 * Has another process decided to give up early and command all processes
@@ -3986,12 +3998,21 @@ ExecHashTableDetachBatch(HashJoinTable hashtable)
 		sts_end_parallel_scan(hashtable->batches[curbatch].inner_tuples);
 		sts_end_parallel_scan(hashtable->batches[curbatch].outer_tuples);
 
+<<<<<<< HEAD
 		/* After attaching we always get at least to PHJ_BATCH_PROBE. */
 		Assert(BarrierPhase(&batch->batch_barrier) == PHJ_BATCH_PROBE ||
 			   BarrierPhase(&batch->batch_barrier) == PHJ_BATCH_SCAN);
 
 		/*
 		 * If we're abandoning the PHJ_BATCH_PROBE phase early without having
+=======
+		/* After attaching we always get at least to PHJ_BATCH_PROBING. */
+		Assert(BarrierPhase(&batch->batch_barrier) == PHJ_BATCH_PROBING ||
+			   BarrierPhase(&batch->batch_barrier) == PHJ_BATCH_SCAN);
+
+		/*
+		 * If we're abandoning the PHJ_BATCH_PROBING phase early without having
+>>>>>>> main
 		 * reached the end of it, it means the plan doesn't want any more
 		 * tuples, and it is happy to abandon any tuples buffered in this
 		 * process's subplans.  For correctness, we can't allow any process to
@@ -4001,6 +4022,7 @@ ExecHashTableDetachBatch(HashJoinTable hashtable)
 		 * tuples were all due to be emitted by this process and it has
 		 * abandoned them too.
 		 */
+<<<<<<< HEAD
 		if (BarrierPhase(&batch->batch_barrier) == PHJ_BATCH_PROBE &&
 			!hashtable->batches[curbatch].outer_eof)
 		{
@@ -4020,11 +4042,14 @@ ExecHashTableDetachBatch(HashJoinTable hashtable)
 		if (BarrierPhase(&batch->batch_barrier) == PHJ_BATCH_PROBE)
 			attached = BarrierArriveAndDetachExceptLast(&batch->batch_barrier);
 
+=======
+>>>>>>> main
 		/*
 		 * CBDB_PARALLEL: Parallel Hash Left Anti Semi (Not-In) Join(parallel-aware)
 		 * If phs_lasj_has_null is true, that means we have found null when building hash table,
 		 * there were no batches to detach.
 		 */
+<<<<<<< HEAD
 		if (!hashtable->parallel_state->phs_lasj_has_null && attached && BarrierArriveAndDetach(&batch->batch_barrier))
 		{
 			/*
@@ -4034,6 +4059,38 @@ ExecHashTableDetachBatch(HashJoinTable hashtable)
 			 * away underneath us while we are attached to the build barrier,
 			 * making this access safe.
 			 */
+=======
+		if (BarrierPhase(&batch->batch_barrier) == PHJ_BATCH_PROBING &&
+			!hashtable->parallel_state->phs_lasj_has_null && /* CBDB_PARALLEL */
+			!hashtable->batches[curbatch].outer_eof)
+		{
+			/*
+			 * This flag may be written to by multiple backends during
+			 * PHJ_BATCH_PROBING phase, but will only be read in PHJ_BATCH_SCAN
+			 * phase so requires no extra locking.
+			 */
+			batch->skip_unmatched = true;
+		}
+
+		/*
+		 * Even if we aren't doing a full/right outer join, we'll step through
+		 * the PHJ_BATCH_SCAN phase just to maintain the invariant that
+		 * freeing happens in PHJ_BATCH_FREE, but that'll be wait-free.
+		 */
+		if (BarrierPhase(&batch->batch_barrier) == PHJ_BATCH_PROBING &&
+			!hashtable->parallel_state->phs_lasj_has_null /* CBDB_PARALLEL */)
+			attached = BarrierArriveAndDetachExceptLast(&batch->batch_barrier);
+		if (attached && !hashtable->parallel_state->phs_lasj_has_null /* CBDB_PARALLEL */ &&
+			BarrierArriveAndDetach(&batch->batch_barrier))
+		{
+			/*
+			 * We are not longer attached to the batch barrier, but we're the
+			 * process that was chosen to free resources and it's safe to
+			 * assert the current phase.  The ParallelHashJoinBatch can't go
+			 * away underneath us while we are attached to the build barrier,
+			 * making this access safe.
+			 */
+>>>>>>> main
 			Assert(BarrierPhase(&batch->batch_barrier) == PHJ_BATCH_FREE);
 
 			/* Free shared chunks and buckets. */
@@ -4323,7 +4380,9 @@ PushdownRuntimeFilter(HashState *node)
 		scankeys = NIL;
 
 		attr_filter = lfirst(lc);
-		if (!IsA(attr_filter->target, SeqScanState) || attr_filter->empty)
+		if (attr_filter->empty ||
+			(!IsA(attr_filter->target, SeqScanState) &&
+			 !IsA(attr_filter->target, DynamicSeqScanState)))
 			continue;
 
 		/* bloom filter */
@@ -4352,8 +4411,21 @@ PushdownRuntimeFilter(HashState *node)
 		scankeys = lappend(scankeys, sk);
 
 		/* append new runtime filters to target node */
-		SeqScanState *sss = castNode(SeqScanState, attr_filter->target);
-		sss->filters = list_concat(sss->filters, scankeys);
+		if (IsA(attr_filter->target, SeqScanState))
+		{
+			SeqScanState *sss = castNode(SeqScanState, attr_filter->target);
+			sss->filters = list_concat(sss->filters, scankeys);
+		}
+		else if (IsA(attr_filter->target, DynamicSeqScanState))
+		{
+			DynamicSeqScanState *dsss = castNode(DynamicSeqScanState, attr_filter->target);
+			dsss->filters = list_concat(dsss->filters, scankeys);
+		}
+		else
+		{
+			/* never reach here */
+			pg_unreachable();
+		}
 	}
 }
 
@@ -4412,6 +4484,7 @@ ResetRuntimeFilter(HashState *node)
 	ListCell		*lc;
 	AttrFilter		*attr_filter;
 	SeqScanState	*sss;
+	DynamicSeqScanState *dsss;
 
 	if (!node->filters)
 		return;
@@ -4429,6 +4502,20 @@ ResetRuntimeFilter(HashState *node)
 				list_free_deep(sss->filters);
 				sss->filters = NIL;
 			}
+		}
+		else if (IsA(attr_filter->target, DynamicSeqScanState))
+		{
+			dsss = castNode(DynamicSeqScanState, attr_filter->target);
+			if (dsss->filters)
+			{
+				list_free_deep(dsss->filters);
+				dsss->filters = NIL;
+			}
+		}
+		else
+		{
+			/* never reach here */
+			pg_unreachable();
 		}
 
 		if (attr_filter->blm_filter)

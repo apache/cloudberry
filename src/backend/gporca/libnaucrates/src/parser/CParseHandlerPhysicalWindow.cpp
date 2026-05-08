@@ -155,7 +155,7 @@ CParseHandlerPhysicalWindow::EndElement(const XMLCh *const,	 // element_uri,
 	CDXLWindowKeyArray *window_key_array_dxlnode =
 		window_key_list_parse_handler->GetDxlWindowKeyArray();
 	CDXLPhysicalWindow *window_op_dxlnode = GPOS_NEW(m_mp) CDXLPhysicalWindow(
-		m_mp, m_part_by_colid_array, window_key_array_dxlnode);
+		m_mp, m_part_by_colid_array, window_key_array_dxlnode, false);
 	m_dxl_node = GPOS_NEW(m_mp) CDXLNode(m_mp, window_op_dxlnode);
 
 	// set statistics and physical properties

@@ -20,8 +20,12 @@
 #include "access/twophase.h"
 #include "access/xact.h"
 #include "access/xloginsert.h"
+<<<<<<< HEAD
 #include "access/xlogrecovery.h"
 #include "access/xlogutils.h"
+=======
+#include "cdb/cdbvars.h"
+>>>>>>> main
 #include "miscadmin.h"
 #include "pgstat.h"
 #include "replication/slot.h"
@@ -31,6 +35,7 @@
 #include "storage/procarray.h"
 #include "storage/sinvaladt.h"
 #include "storage/standby.h"
+#include "utils/faultinjector.h"
 #include "utils/hsearch.h"
 #include "utils/memutils.h"
 #include "utils/ps_status.h"
@@ -886,6 +891,8 @@ SendRecoveryConflictWithBufferPin(ProcSignalReason reason)
 	 * SIGUSR1 handling in each backend decide their own fate.
 	 */
 	CancelDBBackends(InvalidOid, reason, false);
+
+	SIMPLE_FAULT_INJECTOR("recovery_conflict_bufferpin_signal_sent");
 }
 
 /*
@@ -1213,6 +1220,23 @@ standby_redo(XLogReaderState *record)
 											 xlrec->dbId,
 											 xlrec->tsId);
 	}
+	else if (info == XLOG_LATESTCOMPLETED_GXID)
+	{
+		/*
+		 * This record is only logged by coordinator. But the segment in
+		 * some situation might see it too (e.g. gpexpand), but segment
+		 * doesn't need to update latestCompletedGxid.
+		 */
+		if (IS_QUERY_DISPATCHER())
+		{
+			DistributedTransactionId gxid;
+
+			gxid = *((DistributedTransactionId *) XLogRecGetData(record));
+			LWLockAcquire(ProcArrayLock, LW_EXCLUSIVE);
+			ShmemVariableCache->latestCompletedGxid = gxid;
+			LWLockRelease(ProcArrayLock);
+		}
+	}
 	else
 		elog(PANIC, "standby_redo: unknown op code %u", info);
 }
@@ -1330,6 +1354,21 @@ LogStandbySnapshot(void)
 
 	/* GetRunningTransactionData() acquired XidGenLock, we must release it */
 	LWLockRelease(XidGenLock);
+	if (IS_QUERY_DISPATCHER())
+	{
+		/*
+		 * GPDB: write latestCompletedGxid too, because the standby needs this 
+		 * value for creating distributed snapshot. The standby cannot rely on
+		 * the nextGxid value to set latestCompletedGxid during restart (which 
+		 * the primary does) because nextGxid was bumped in the checkpoint.
+		 */
+		LWLockAcquire(ProcArrayLock, LW_SHARED);
+		DistributedTransactionId lcgxid = ShmemVariableCache->latestCompletedGxid;
+		LWLockRelease(ProcArrayLock);
+		XLogBeginInsert();
+		XLogRegisterData((char *) (&lcgxid), sizeof(lcgxid));
+		recptr = XLogInsert(RM_STANDBY_ID, XLOG_LATESTCOMPLETED_GXID);
+	}
 
 	return recptr;
 }

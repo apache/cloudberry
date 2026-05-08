@@ -202,6 +202,11 @@ recoverInDoubtTransactions(void)
 
 	for (i = 0; i < *shmNumCommittedGxacts; i++)
 	{
+		/*
+		 * No need to acquire CommittedGxidArrayLock since dtx recovery
+		 * only happens on primary, but not hot standby where concurrent 
+		 * access to this array is possible from CreateDistributedSnapshot.
+		 */
 		DistributedTransactionId gxid = shmCommittedGxidArray[i];
 		char gid[TMGIDSIZE];
 
@@ -486,7 +491,12 @@ void
 redoDistributedCommitRecord(DistributedTransactionId gxid)
 {
 	int			i;
+	bool 			is_hot_standby_qd = IS_HOT_STANDBY_QD();
 
+	/* 
+	 * Only the startup process can be modifying shmNumCommittedGxacts
+	 * and shmCommittedGxidArray. So should be OK reading the value w/o lock.
+	 */
 	for (i = 0; i < *shmNumCommittedGxacts; i++)
 	{
 		if (gxid == shmCommittedGxidArray[i])
@@ -526,7 +536,18 @@ redoDistributedCommitRecord(DistributedTransactionId gxid)
 							   "around this issue and then report a bug")));
 		}
 
+		/*
+		 * only on hot standby there might be backends that call CreateDistributedSnapshot()
+		 * to access the committed gxid array concurrently.
+		 */
+		if (is_hot_standby_qd)
+			LWLockAcquire(CommittedGxidArrayLock, LW_EXCLUSIVE);
+
 		shmCommittedGxidArray[(*shmNumCommittedGxacts)++] = gxid;
+
+		if (is_hot_standby_qd)
+			LWLockRelease(CommittedGxidArrayLock);
+
 		elog((Debug_print_full_dtm ? LOG : DEBUG5),
 			 "Crash recovery redo added committed distributed transaction gid = "UINT64_FORMAT, gxid);
 	}
@@ -539,7 +560,13 @@ void
 redoDistributedForgetCommitRecord(DistributedTransactionId gxid)
 {
 	int			i;
-
+	bool 			is_hot_standby_qd = IS_HOT_STANDBY_QD();
+	
+	SIMPLE_FAULT_INJECTOR("redoDistributedForgetCommitRecord");
+	/* 
+	 * Only the startup process can be modifying shmNumCommittedGxacts
+	 * and shmCommittedGxidArray. So should be OK reading the value w/o lock.
+	 */
 	for (i = 0; i < *shmNumCommittedGxacts; i++)
 	{
 		if (gxid == shmCommittedGxidArray[i])
@@ -550,13 +577,27 @@ redoDistributedForgetCommitRecord(DistributedTransactionId gxid)
 				 gxid);
 
 			/*
-			 * there's no concurrent access to shmCommittedGxidArray during
-			 * recovery
+			 * only on hot standby there might be backends that call CreateDistributedSnapshot()
+			 * to access the committed gxid array concurrently.
 			 */
+			if (is_hot_standby_qd)
+				LWLockAcquire(CommittedGxidArrayLock, LW_EXCLUSIVE);
+
 			(*shmNumCommittedGxacts)--;
 			if (i != *shmNumCommittedGxacts)
 				shmCommittedGxidArray[i] = shmCommittedGxidArray[*shmNumCommittedGxacts];
 
+			if (is_hot_standby_qd)
+				LWLockRelease(CommittedGxidArrayLock);
+
+			/* on the hot standby, we rely on the forget record to advance latestCompletedGxid */
+			if (is_hot_standby_qd)
+			{
+				LWLockAcquire(ProcArrayLock, LW_EXCLUSIVE);
+				if (gxid > ShmemVariableCache->latestCompletedGxid)
+					ShmemVariableCache->latestCompletedGxid = gxid;
+				LWLockRelease(ProcArrayLock);
+			}
 			return;
 		}
 	}

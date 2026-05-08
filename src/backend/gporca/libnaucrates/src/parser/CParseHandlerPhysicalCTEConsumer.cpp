@@ -74,7 +74,7 @@ CParseHandlerPhysicalCTEConsumer::StartElement(
 
 	m_dxl_node = GPOS_NEW(m_mp) CDXLNode(
 		m_mp,
-		GPOS_NEW(m_mp) CDXLPhysicalCTEConsumer(m_mp, id, output_colids_array));
+		GPOS_NEW(m_mp) CDXLPhysicalCTEConsumer(m_mp, id, output_colids_array, nullptr));
 
 	// parse handler for the proj list
 	CParseHandlerBase *proj_list_parse_handler =

@@ -103,12 +103,20 @@ name: Apache Cloudberry Build (Rocky 8)
 
 on:
   push:
+<<<<<<< HEAD
     branches: [main, cbdb-postgres-merge]
+=======
+    branches: [main, REL_2_STABLE]
+>>>>>>> main
   pull_request:
     paths:
       - '.github/workflows/build-cloudberry-rocky8.yml'
     # We can enable the PR test when needed
+<<<<<<< HEAD
     # branches: [main, cbdb-postgres-merge]
+=======
+    # branches: [main, REL_2_STABLE]
+>>>>>>> main
     # types: [opened, synchronize, reopened, edited]
   schedule:
     # Run every Monday at 02:00 UTC
@@ -320,6 +328,13 @@ jobs:
                                "gpcontrib/gp_sparse_vector:installcheck",
                                "gpcontrib/gp_toolkit:installcheck"]
               },
+<<<<<<< HEAD
+=======
+              {"test":"gpcontrib-gp-stats-collector",
+               "make_configs":["gpcontrib/gp_stats_collector:installcheck"],
+               "extension":"gp_stats_collector"
+              },
+>>>>>>> main
               {"test":"ic-fixme",
                "make_configs":["src/test/regress:installcheck-fixme"],
                "enable_core_check":false
@@ -339,6 +354,13 @@ jobs:
               },
               {"test":"ic-cbdb-parallel",
                "make_configs":["src/test/regress:installcheck-cbdb-parallel"]
+<<<<<<< HEAD
+=======
+              },
+              {"test":"ic-recovery",
+               "make_configs":["src/test/recovery:installcheck"],
+               "enable_core_check":false
+>>>>>>> main
               }
             ]
           }'
@@ -487,6 +509,7 @@ jobs:
           fetch-depth: 1
           submodules: true
 
+<<<<<<< HEAD
       - name: Checkout DevOps Scripts from Main Branch
         if: needs.check-skip.outputs.should_skip != 'true'
         uses: actions/checkout@v4
@@ -526,6 +549,8 @@ jobs:
           echo "ICU libraries installed successfully"
           rpm -qa | grep libicu
 
+=======
+>>>>>>> main
       - name: Cloudberry Environment Initialization
         if: needs.check-skip.outputs.should_skip != 'true'
         env:
@@ -1435,6 +1460,10 @@ jobs:
         if: success() && needs.check-skip.outputs.should_skip != 'true'
         env:
           SRC_DIR: ${{ github.workspace }}
+<<<<<<< HEAD
+=======
+          BUILD_DESTINATION: /usr/local/cloudberry-db
+>>>>>>> main
         shell: bash {0}
         run: |
           set -o pipefail
@@ -1458,6 +1487,33 @@ jobs:
           # 2. Follow the same pattern as optimizer
           # 3. Update matrix entries to include the new setting
 
+<<<<<<< HEAD
+=======
+          # Create extension if required
+          if [[ "${{ matrix.extension != '' }}" == "true" ]]; then
+            case "${{ matrix.extension }}" in
+              gp_stats_collector)
+                if ! su - gpadmin -c "source ${BUILD_DESTINATION}/cloudberry-env.sh && \
+                  source ${SRC_DIR}/gpAux/gpdemo/gpdemo-env.sh && \
+                  gpconfig -c shared_preload_libraries -v 'gp_stats_collector' && \
+                  gpstop -ra && \
+                  echo 'CREATE EXTENSION IF NOT EXISTS gp_stats_collector; \
+                        SHOW shared_preload_libraries; \
+                        TABLE pg_extension;' | \
+                    psql postgres"
+                then
+                    echo "Error creating gp_stats_collector extension"
+                    exit 1
+                fi
+                ;;
+              *)
+                echo "Unknown extension: ${{ matrix.extension }}"
+                exit 1
+                ;;
+            esac
+          fi
+
+>>>>>>> main
           # Set PostgreSQL options if defined
           PG_OPTS=""
           if [[ "${{ matrix.pg_settings.optimizer != '' }}" == "true" ]]; then
@@ -1682,6 +1738,10 @@ jobs:
 
       - name: Check and Display Regression Diffs
         if: always()
+<<<<<<< HEAD
+=======
+        shell: bash {0}
+>>>>>>> main
         run: |
           # Search for regression.diffs recursively
           found_file=$(find . -type f -name "regression.diffs" | head -n 1)

@@ -11400,6 +11400,10 @@
   proname => 'binary_upgrade_set_next_array_pg_type_oid', provolatile => 'v',
   proparallel => 'r', prorettype => 'void', proargtypes => 'oid oid text',
   prosrc => 'binary_upgrade_set_next_array_pg_type_oid' },
+{ oid => '4545', descr => 'for use by pg_upgrade',
+  proname => 'binary_upgrade_set_next_pg_tablespace_oid', provolatile => 'v',
+  proparallel => 'r', prorettype => 'void', proargtypes => 'oid text',
+  prosrc => 'binary_upgrade_set_next_pg_tablespace_oid' },
 { oid => '4390', descr => 'for use by pg_upgrade',
   proname => 'binary_upgrade_set_next_multirange_pg_type_oid',
   provolatile => 'v', proparallel => 'r', prorettype => 'void',
@@ -12146,7 +12150,9 @@
 #
 # GPDB ADDITIONS START HERE
 #
-
+{ oid => '16383', descr => 'contains',
+  proname => 'mdb_locale_enabled', prorettype => 'bool',
+  proargtypes => '', prosrc => 'mdb_locale_enabled' },
 { oid => '7178', descr => 'for use by pg_upgrade',
   proname => 'binary_upgrade_set_preassigned_oids', provolatile => 'v',
   proparallel => 'u', prorettype => 'void', proargtypes => '_oid',

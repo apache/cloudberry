@@ -130,6 +130,7 @@ OBJS        = CExpression.o \
               CPhysicalScan.o \
               CPhysicalSequence.o \
               CPhysicalSequenceProject.o \
+              CPhysicalHashSequenceProject.o \
               CPhysicalSerialUnionAll.o \
               CPhysicalSort.o \
               CPhysicalSplit.o \
@@ -189,7 +190,8 @@ OBJS        = CExpression.o \
               CStrictHashedDistributions.o \
               COrderedAggPreprocessor.o \
               CLeftJoinPruningPreprocessor.o \
-              CJoinOrderHintsPreprocessor.o
+              CJoinOrderHintsPreprocessor.o \
+              CDedupSupersetPreprocessor.o
 
 include $(top_srcdir)/src/backend/common.mk
 

@@ -949,6 +949,7 @@ InitializeSessionUserIdStandalone(void)
 	AuthenticatedUserId = BOOTSTRAP_SUPERUSERID;
 	AuthenticatedUserIsSuperuser = true;
 
+<<<<<<< HEAD
 	/*
 	 * XXX Ideally we'd do this via SetConfigOption("session_authorization"),
 	 * but we lack the role name needed to do that, and we can't fetch it
@@ -961,6 +962,17 @@ InitializeSessionUserIdStandalone(void)
 
 	/* We could do SetConfigOption("role"), but let's be consistent */
 	SetCurrentRoleId(InvalidOid, false);
+=======
+	SetSessionUserId(BOOTSTRAP_SUPERUSERID, true);
+
+	/*
+	 * XXX This should set SetConfigOption("session_authorization"), too.
+	 * Since we don't, C code will get NULL, and current_setting() will get an
+	 * empty string.
+	 */
+	SetConfigOption("is_superuser", "on",
+					PGC_INTERNAL, PGC_S_DYNAMIC_DEFAULT);
+>>>>>>> main
 }
 
 /*

@@ -40,9 +40,15 @@ PostgreSQL documentation
   <application>pg_upgrade</application> (formerly called <application>pg_migrator</application>) allows data
   stored in <productname>PostgreSQL</productname> data files to be upgraded to a later <productname>PostgreSQL</productname>
   major version without the data dump/restore typically required for
+<<<<<<< HEAD
   major version upgrades, e.g., from 12.14 to 13.10 or from 14.9 to 15.5.
   It is not required for minor version upgrades, e.g., from 12.7 to 12.8
   or from 14.1 to 14.5.
+=======
+  major version upgrades, e.g., from 9.5.8 to 9.6.4 or from 10.7 to 11.2.
+  It is not required for minor version upgrades, e.g., from 9.6.2 to 9.6.3
+  or from 10.1 to 10.2.
+>>>>>>> main
  </para>
 
  <para>

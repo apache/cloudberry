@@ -903,7 +903,13 @@ max_parallel_hazard_walker(Node *node, max_parallel_hazard_context *context)
 	 */
 	else if (IsA(node, WindowFunc))
 	{
-		if (max_parallel_hazard_test(PROPARALLEL_RESTRICTED, context))
+		/*
+		 * In Cloudberry, we proess window fuctions by redistributeing the tuples
+		 * if there is Partition By clause.
+		 * Each partition is processed individually, whether in a single process
+		 * or distributed parallel workers setup.
+		 */
+		if (max_parallel_hazard_test(PROPARALLEL_SAFE, context))
 			return true;
 	}
 
@@ -4373,29 +4379,23 @@ simplify_function(Oid funcid, Oid result_type, int32 result_typmod,
 		 * function is actually being invoked.
 		 */
 		SupportRequestSimplify req;
-		FuncExpr	fexpr;
+		FuncExpr *fexpr = makeFuncExpr(funcid, result_type, args,
+									   result_collid, input_collid,
+									   COERCE_EXPLICIT_CALL);
 
-		fexpr.xpr.type = T_FuncExpr;
-		fexpr.funcid = funcid;
-		fexpr.funcresulttype = result_type;
-		fexpr.funcretset = func_form->proretset;
-		fexpr.funcvariadic = funcvariadic;
-		fexpr.funcformat = COERCE_EXPLICIT_CALL;
-		fexpr.funccollid = result_collid;
-		fexpr.inputcollid = input_collid;
-		fexpr.args = args;
-		fexpr.location = -1;
+		fexpr->funcvariadic = funcvariadic;
+		fexpr->funcretset = func_form->proretset;
 
 		req.type = T_SupportRequestSimplify;
 		req.root = context->root;
-		req.fcall = &fexpr;
+		req.fcall = fexpr;
 
 		newexpr = (Expr *)
 			DatumGetPointer(OidFunctionCall1(func_form->prosupport,
 											 PointerGetDatum(&req)));
 
 		/* catch a possible API misunderstanding */
-		Assert(newexpr != (Expr *) &fexpr);
+		Assert(newexpr != (Expr *) fexpr);
 	}
 
 	if (!newexpr && allow_non_const)
@@ -5737,37 +5737,72 @@ flatten_join_alias_var_optimizer(Query *query, int queryLevel)
 	List *targetList = queryNew->targetList;
 	if (NIL != targetList)
 	{
+<<<<<<< HEAD
 		/*.MERGE16_FIXME: We should not use null here */
 		queryNew->targetList = (List *) flatten_join_alias_vars(NULL, queryNew, (Node *) targetList);
 		list_free(targetList);
+=======
+		queryNew->targetList = (List *) flatten_join_alias_vars(queryNew, (Node *) targetList);
+		if (targetList != queryNew->targetList)
+			list_free(targetList);
+>>>>>>> main
 	}
 
-	List * returningList = queryNew->returningList;
+	List *returningList = queryNew->returningList;
 	if (NIL != returningList)
 	{
+<<<<<<< HEAD
 		queryNew->returningList = (List *) flatten_join_alias_vars(NULL, queryNew, (Node *) returningList);
 		list_free(returningList);
+=======
+		queryNew->returningList = (List *) flatten_join_alias_vars(queryNew, (Node *) returningList);
+		if (returningList != queryNew->returningList)
+			list_free(returningList);
+>>>>>>> main
 	}
 
 	Node *havingQual = queryNew->havingQual;
 	if (NULL != havingQual)
 	{
+<<<<<<< HEAD
 		queryNew->havingQual = flatten_join_alias_vars(NULL, queryNew, havingQual);
 		pfree(havingQual);
+=======
+		queryNew->havingQual = flatten_join_alias_vars(queryNew, havingQual);
+		if (havingQual != queryNew->havingQual)
+		{
+			if (IsA(havingQual, List))
+				list_free((List *) havingQual);
+			else
+				pfree(havingQual);
+		}
+>>>>>>> main
 	}
 
 	List *scatterClause = queryNew->scatterClause;
 	if (NIL != scatterClause)
 	{
+<<<<<<< HEAD
 		queryNew->scatterClause = (List *) flatten_join_alias_vars(NULL, queryNew, (Node *) scatterClause);
 		list_free(scatterClause);
+=======
+		queryNew->scatterClause = (List *) flatten_join_alias_vars(queryNew, (Node *) scatterClause);
+		if (scatterClause != queryNew->scatterClause)
+			list_free(scatterClause);
+>>>>>>> main
 	}
 
 	Node *limitOffset = queryNew->limitOffset;
 	if (NULL != limitOffset)
 	{
+<<<<<<< HEAD
 		queryNew->limitOffset = flatten_join_alias_vars(NULL, queryNew, limitOffset);
 		pfree(limitOffset);
+=======
+		queryNew->limitOffset = flatten_join_alias_vars(queryNew, limitOffset);
+		if (limitOffset != queryNew->limitOffset)
+			pfree(limitOffset);
+>>>>>>> main
 	}
 
 	List *windowClause = queryNew->windowClause;
@@ -5793,8 +5828,14 @@ flatten_join_alias_var_optimizer(Query *query, int queryLevel)
 	Node *limitCount = queryNew->limitCount;
 	if (NULL != limitCount)
 	{
+<<<<<<< HEAD
 		queryNew->limitCount = flatten_join_alias_vars(NULL, queryNew, limitCount);
 		pfree(limitCount);
+=======
+		queryNew->limitCount = flatten_join_alias_vars(queryNew, limitCount);
+		if (limitCount != queryNew->limitCount)
+			pfree(limitCount);
+>>>>>>> main
 	}
 
     return queryNew;

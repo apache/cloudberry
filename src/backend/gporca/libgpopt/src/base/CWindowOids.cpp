@@ -18,6 +18,13 @@ CWindowOids::CWindowOids(CMemoryPool *mp, OID row_number_oid, OID rank_oid,
 	m_MDDenseRank = GPOS_NEW(mp) CMDIdGPDB(IMDId::EmdidGeneral, m_oidDenseRank);
 }
 
+CWindowOids::~CWindowOids()
+{
+	CRefCount::SafeRelease(m_MDIdRowNumber);
+	CRefCount::SafeRelease(m_MDIdRank);
+	CRefCount::SafeRelease(m_MDDenseRank);
+}
+
 OID
 CWindowOids::OidRowNumber() const
 {

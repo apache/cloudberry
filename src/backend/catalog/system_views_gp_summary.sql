@@ -101,10 +101,15 @@ SELECT
     s.schemaname,
     s.relname,
     m.seq_scan,
+<<<<<<< HEAD
     m.last_seq_scan,
     m.seq_tup_read,
     m.idx_scan,
     m.last_idx_scan,
+=======
+    m.seq_tup_read,
+    m.idx_scan,
+>>>>>>> main
     m.idx_tup_fetch,
     m.n_tup_ins,
     m.n_tup_upd,
@@ -127,16 +132,24 @@ FROM
          allt.schemaname,
          allt.relname,
          case when d.policytype = 'r' then (sum(seq_scan)/d.numsegments)::bigint else sum(seq_scan) end seq_scan,
+<<<<<<< HEAD
          max(last_seq_scan) as last_seq_scan,
          case when d.policytype = 'r' then (sum(seq_tup_read)/d.numsegments)::bigint else sum(seq_tup_read) end seq_tup_read,
          case when d.policytype = 'r' then (sum(idx_scan)/d.numsegments)::bigint else sum(idx_scan) end idx_scan,
          max(last_idx_scan) as last_idx_scan,
+=======
+         case when d.policytype = 'r' then (sum(seq_tup_read)/d.numsegments)::bigint else sum(seq_tup_read) end seq_tup_read,
+         case when d.policytype = 'r' then (sum(idx_scan)/d.numsegments)::bigint else sum(idx_scan) end idx_scan,
+>>>>>>> main
          case when d.policytype = 'r' then (sum(idx_tup_fetch)/d.numsegments)::bigint else sum(idx_tup_fetch) end idx_tup_fetch,
          case when d.policytype = 'r' then (sum(n_tup_ins)/d.numsegments)::bigint else sum(n_tup_ins) end n_tup_ins,
          case when d.policytype = 'r' then (sum(n_tup_upd)/d.numsegments)::bigint else sum(n_tup_upd) end n_tup_upd,
          case when d.policytype = 'r' then (sum(n_tup_del)/d.numsegments)::bigint else sum(n_tup_del) end n_tup_del,
          case when d.policytype = 'r' then (sum(n_tup_hot_upd)/d.numsegments)::bigint else sum(n_tup_hot_upd) end n_tup_hot_upd,
+<<<<<<< HEAD
          case when d.policytype = 'r' then (sum(n_tup_newpage_upd)/d.numsegments)::bigint else sum(n_tup_newpage_upd) end n_tup_newpage_upd,
+=======
+>>>>>>> main
          case when d.policytype = 'r' then (sum(n_live_tup)/d.numsegments)::bigint else sum(n_live_tup) end n_live_tup,
          case when d.policytype = 'r' then (sum(n_dead_tup)/d.numsegments)::bigint else sum(n_dead_tup) end n_dead_tup,
          case when d.policytype = 'r' then (sum(n_mod_since_analyze)/d.numsegments)::bigint else sum(n_mod_since_analyze) end n_mod_since_analyze,
@@ -195,8 +208,12 @@ SELECT
     CASE WHEN dst.policytype = 'r' THEN (sum(sxa.n_tup_ins)/dst.numsegments)::bigint ELSE sum(sxa.n_tup_ins) END AS n_tup_ins,
     CASE WHEN dst.policytype = 'r' THEN (sum(sxa.n_tup_upd)/dst.numsegments)::bigint ELSE sum(sxa.n_tup_upd) END AS n_tup_upd,
     CASE WHEN dst.policytype = 'r' THEN (sum(sxa.n_tup_del)/dst.numsegments)::bigint ELSE sum(sxa.n_tup_del) END AS n_tup_del,
+<<<<<<< HEAD
     CASE WHEN dst.policytype = 'r' THEN (sum(sxa.n_tup_hot_upd)/dst.numsegments)::bigint ELSE sum(sxa.n_tup_hot_upd) END AS n_tup_hot_upd,
     CASE WHEN dst.policytype = 'r' THEN (sum(sxa.n_tup_newpage_upd)/dst.numsegments)::bigint ELSE sum(sxa.n_tup_newpage_upd) END AS n_tup_newpage_upd
+=======
+    CASE WHEN dst.policytype = 'r' THEN (sum(sxa.n_tup_hot_upd)/dst.numsegments)::bigint ELSE sum(sxa.n_tup_hot_upd) END AS n_tup_hot_upd
+>>>>>>> main
 FROM
     gp_stat_xact_all_tables sxa
     LEFT OUTER JOIN gp_distribution_policy dst
@@ -227,7 +244,10 @@ SELECT
     s.relname,
     s.indexrelname,
     m.idx_scan,
+<<<<<<< HEAD
     m.last_idx_scan,
+=======
+>>>>>>> main
     m.idx_tup_read,
     m.idx_tup_fetch
 FROM
@@ -238,7 +258,10 @@ FROM
          alli.relname,
          alli.indexrelname,
          case when d.policytype = 'r' then (sum(alli.idx_scan)/d.numsegments)::bigint else sum(alli.idx_scan) end idx_scan,
+<<<<<<< HEAD
          max(last_idx_scan) as last_idx_scan,
+=======
+>>>>>>> main
          case when d.policytype = 'r' then (sum(alli.idx_tup_read)/d.numsegments)::bigint else sum(alli.idx_tup_read) end idx_tup_read,
          case when d.policytype = 'r' then (sum(alli.idx_tup_fetch)/d.numsegments)::bigint else sum(alli.idx_tup_fetch) end idx_tup_fetch
      FROM
@@ -497,6 +520,7 @@ FROM gp_stat_progress_create_index a
     LEFT JOIN gp_stat_progress_create_index a1 ON a.pid = a1.pid AND a1.gp_segment_id = -1
 WHERE a.gp_segment_id > -1
 GROUP BY a.datid, a.datname, a.relid, a.index_relid, a.command, a.phase, d.policytype, d.numsegments;
+<<<<<<< HEAD
 
 CREATE OR REPLACE VIEW gp_stat_io_summary AS
 SELECT
@@ -520,3 +544,5 @@ SELECT
     max(stats_reset) as stats_reset
 FROM gp_stat_io
 GROUP BY backend_type, object, context;
+=======
+>>>>>>> main

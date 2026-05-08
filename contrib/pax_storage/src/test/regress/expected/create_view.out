@@ -1650,6 +1650,7 @@ select * from tt14v;
  foo | baz | 42
 (1 row)
 
+<<<<<<< HEAD
 alter table tt14t drop column f3;  -- fail, view has explicit reference to f3
 ERROR:  cannot drop column f3 of table tt14t because other objects depend on it
 DETAIL:  view tt14v depends on column f3 of table tt14t
@@ -1721,6 +1722,32 @@ select pg_get_viewdef('tt14v', true);
 (1 row)
 
 select * from tt14v;
+=======
+begin;
+-- this perhaps should be rejected, but it isn't:
+alter table tt14t drop column f3;
+-- column f3 is still in the view, sort of ...
+select pg_get_viewdef('tt14v', true);
+         pg_get_viewdef          
+---------------------------------
+  SELECT t.f1,                  +
+     t."?dropped?column?" AS f3,+
+     t.f4                       +
+    FROM tt14f() t(f1, f4);
+(1 row)
+
+-- ... and you can even EXPLAIN it ...
+explain (verbose, costs off) select * from tt14v;
+               QUERY PLAN               
+----------------------------------------
+ Function Scan on testviewschm2.tt14f t
+   Output: t.f1, t.f3, t.f4
+   Function Call: tt14f()
+(3 rows)
+
+-- but will fail at execution
+select f1, f4 from tt14v;
+>>>>>>> main
  f1  | f4 
 -----+----
  foo | 42

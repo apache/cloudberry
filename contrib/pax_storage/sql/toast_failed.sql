@@ -1,6 +1,6 @@
 set default_table_access_method = pax;
 
-set pax_enable_toast to true;
+set pax.enable_toast to true;
 
 -- test compress failed
 -- random varchar always make compress toast failed

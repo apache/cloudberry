@@ -1,4 +1,8 @@
+<<<<<<< HEAD
 set debug_parallel_query = 0;
+=======
+set force_parallel_mode = 0;
+>>>>>>> main
 set optimizer = off;
 create schema window_parallel;
 set search_path to window_parallel;
@@ -1037,13 +1041,21 @@ abort;
 --
 -- start_ignore
 drop schema window_parallel cascade;
+<<<<<<< HEAD
 NOTICE:  drop cascades to 3 other objects
 DETAIL:  drop cascades to table empsalary
 drop cascades to table t1
 drop cascades to table t2
+=======
+NOTICE:  drop cascades to table empsalary
+>>>>>>> main
 -- end_ignore
 reset min_parallel_table_scan_size;
 reset enable_parallel;
 reset gp_appendonly_insert_files;
+<<<<<<< HEAD
 reset debug_parallel_query;
+=======
+reset force_parallel_mode;
+>>>>>>> main
 reset optimizer;

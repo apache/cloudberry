@@ -60,4 +60,8 @@ extern void DeleteTestTupleTableSlot(TupleTableSlot *tuple_slot);
 
 extern void GenTextBuffer(char *buffer, size_t length);
 extern std::vector<pax::porc::proto::Type_Kind> CreateTestSchemaTypes();
+
+extern void InitAttribute_text(Form_pg_attribute attr);
+extern void InitAttribute_int4(Form_pg_attribute attr);
+extern void InitAttribute_int8(Form_pg_attribute attr);
 }  // namespace pax::tests

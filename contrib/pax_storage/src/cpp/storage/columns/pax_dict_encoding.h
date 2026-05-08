@@ -53,6 +53,10 @@ class PaxDictEncoder final : public PaxEncoder {
 
   void Flush() override;
 
+  size_t GetBoundSize(size_t src_len) const override {
+    CBDB_RAISE(cbdb::CException::kExTypeUnImplements);
+  }
+
  private:
   size_t AppendInternal(char *data, size_t len);
 
@@ -89,7 +93,8 @@ class PaxDictDecoder final : public PaxDecoder {
 
   PaxDecoder *SetSrcBuffer(char *data, size_t data_len) override;
 
-  PaxDecoder *SetDataBuffer(std::shared_ptr<DataBuffer<char>> result_buffer) override;
+  PaxDecoder *SetDataBuffer(
+      std::shared_ptr<DataBuffer<char>> result_buffer) override;
 
   const char *GetBuffer() const override;
 
@@ -121,8 +126,8 @@ class PaxDictDecoder final : public PaxDecoder {
 
     buffer = src_buff->GetBuffer();
 
-    index_buffer =
-        std::make_shared<DataBuffer<int32>>((int32 *)buffer, head.indexsz, false, false);
+    index_buffer = std::make_shared<DataBuffer<int32>>(
+        (int32 *)buffer, head.indexsz, false, false);
     index_buffer->BrushAll();
 
     desc_buffer = std::make_shared<DataBuffer<int32>>(
@@ -130,8 +135,8 @@ class PaxDictDecoder final : public PaxDecoder {
         false);
     desc_buffer->BrushAll();
 
-    entry_buffer = std::make_shared<DataBuffer<char>>(buffer + head.indexsz, head.dictsz,
-                                             false, false);
+    entry_buffer = std::make_shared<DataBuffer<char>>(
+        buffer + head.indexsz, head.dictsz, false, false);
     entry_buffer->BrushAll();
 
     return std::make_tuple(index_buffer, entry_buffer, desc_buffer);

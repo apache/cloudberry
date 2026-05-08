@@ -81,6 +81,7 @@
 #include "getopt_long.h"
 #include "mb/pg_wchar.h"
 #include "miscadmin.h"
+#include "common/mdb_locale.h"
 
 #include "catalog/catalog.h"
 
@@ -2076,7 +2077,7 @@ setup_cdb_schema(FILE *cmdfd)
 
 	/* Collect all files with .sql suffix in array. */
 	nscripts = 0;
-	while ((file = readdir(dir)) != NULL)
+	while (errno = 0, (file = readdir(dir)) != NULL)
 	{
 		int			namelen = strlen(file->d_name);
 
@@ -2106,12 +2107,16 @@ setup_cdb_schema(FILE *cmdfd)
 		errno = 0;
 #endif
 
-	closedir(dir);
-
 	if (errno != 0)
 	{
-		/* some kind of I/O error? */
 		pg_log_error("error while reading cdb_init.d directory: %m");
+		closedir(dir);
+		exit(1);
+	}
+
+	if (closedir(dir))
+	{
+		pg_log_error("error while closing cdb_init.d directory: %m");
 		exit(1);
 	}
 
@@ -2333,9 +2338,17 @@ locale_date_order(const char *locale)
 
 	result = DATEORDER_MDY;		/* default */
 
+<<<<<<< HEAD
 	save = save_global_locale(LC_TIME);
+=======
+	save = SETLOCALE(LC_TIME, NULL);
 
-	setlocale(LC_TIME, locale);
+	if (!save)
+		return result;
+	save = pg_strdup(save);
+>>>>>>> main
+
+	SETLOCALE(LC_TIME, locale);
 
 	memset(&testtime, 0, sizeof(testtime));
 	testtime.tm_mday = 22;
@@ -2344,7 +2357,12 @@ locale_date_order(const char *locale)
 
 	res = my_strftime(buf, sizeof(buf), "%x", &testtime);
 
+<<<<<<< HEAD
 	restore_global_locale(LC_TIME, save);
+=======
+	SETLOCALE(LC_TIME, save);
+	free(save);
+>>>>>>> main
 
 	if (res == 0)
 		return result;
@@ -2391,21 +2409,42 @@ check_locale_name(int category, const char *locale, char **canonname)
 	if (canonname)
 		*canonname = NULL;		/* in case of failure */
 
+<<<<<<< HEAD
 	save = save_global_locale(category);
+=======
+	save = SETLOCALE(category, NULL);
+	if (!save)
+	{
+		pg_log_error("setlocale() failed");
+		exit(1);
+	}
+
+	/* save may be pointing at a modifiable scratch variable, so copy it. */
+	save = pg_strdup(save);
+>>>>>>> main
 
 	/* for setlocale() call */
 	if (!locale)
 		locale = "";
 
 	/* set the locale with setlocale, to see if it accepts it. */
-	res = setlocale(category, locale);
+	res = SETLOCALE(category, locale);
 
 	/* save canonical name if requested. */
 	if (res && canonname)
 		*canonname = pg_strdup(res);
 
 	/* restore old value. */
+<<<<<<< HEAD
 	restore_global_locale(category, save);
+=======
+	if (!SETLOCALE(category, save))
+	{
+		pg_log_error("failed to restore old locale \"%s\"", save);
+		exit(1);
+	}
+	free(save);
+>>>>>>> main
 
 	/* complain if locale wasn't valid */
 	if (res == NULL)
@@ -3588,6 +3627,11 @@ main(int argc, char *argv[])
 				pwprompt = true;
 				break;
 			case 'U':
+				if (optarg[0] == '\0')
+				{
+					pg_log_error("superuser name must not be empty.");
+					exit(1);
+				}
 				username = pg_strdup(optarg);
 				break;
 			case 'd':

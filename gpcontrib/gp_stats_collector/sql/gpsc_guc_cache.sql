@@ -1,0 +1,43 @@
+--
+-- Test GUC caching for query lifecycle consistency.
+--
+-- The extension logs SUBMIT and DONE events for each query.
+-- GUC values that control logging (enable_utility, ignored_users_list, ...)
+-- must be cached at SUBMIT time to ensure DONE uses the same filtering
+-- criteria. Otherwise, a SET command that modifies these GUCs would
+-- have its DONE event rejected, creating orphaned SUBMIT entries.
+-- This is due to query being actually executed between SUBMIT and DONE.
+-- start_ignore
+CREATE EXTENSION IF NOT EXISTS gp_stats_collector;
+SELECT gpsc.truncate_log();
+-- end_ignore
+
+CREATE OR REPLACE FUNCTION print_last_query(query text)
+RETURNS TABLE(query_status text) AS $$
+    SELECT query_status
+    FROM gpsc.log
+    WHERE segid = -1 AND query_text = query
+    ORDER BY ccnt DESC
+$$ LANGUAGE sql;
+
+SET gpsc.ignored_users_list TO '';
+SET gpsc.enable TO TRUE;
+SET gpsc.enable_utility TO TRUE;
+SET gpsc.logging_mode TO 'TBL';
+
+-- SET below disables utility logging and DONE must still be logged.
+SET gpsc.enable_utility TO FALSE;
+SELECT * FROM print_last_query('SET gpsc.enable_utility TO FALSE;');
+
+-- SELECT below adds current user to ignore list and DONE must still be logged.
+-- start_ignore
+SELECT set_config('gpsc.ignored_users_list', current_user, false);
+-- end_ignore
+SELECT * FROM print_last_query('SELECT set_config(''gpsc.ignored_users_list'', current_user, false);');
+
+DROP FUNCTION print_last_query(text);
+DROP EXTENSION gp_stats_collector;
+RESET gpsc.enable;
+RESET gpsc.enable_utility;
+RESET gpsc.ignored_users_list;
+RESET gpsc.logging_mode;

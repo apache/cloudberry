@@ -29,7 +29,7 @@
 
 #include "comm/singleton.h"
 #include "storage/local_file_system.h"
-#include "stub.h"
+#include "cpp-stub/src/stub.h"
 
 namespace pax::tests {
 #define PAX_TEST_CMD_LENGTH 2048

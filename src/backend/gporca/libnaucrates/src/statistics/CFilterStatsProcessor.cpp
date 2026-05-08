@@ -904,8 +904,10 @@ CFilterStatsProcessor::MakeHistArrayCmpAnyFilter(CMemoryPool *mp,
 	}
 	CHistogram *dummy_histogram = GPOS_NEW(mp)
 		CHistogram(mp, dummy_histogram_buckets, true /* is_well_defined */,
-				   CDouble(0.0) /* null_freq */,
-				   CDouble(ndv_remain) /* distinct_remain */, freq_remain);
+				   CHistogram::DefaultNullFreq /* null_freq */,
+				   CDouble(ndv_remain) /* distinct_remain */,
+				   freq_remain,
+				   CHistogram::DefaultNDVBySegments);
 	// dummy histogram should already be normalized since each bucket's frequency
 	// is already adjusted by a scale factor of 1/dummy_rows to avoid unnecessarily
 	// deep-copying the histogram buckets

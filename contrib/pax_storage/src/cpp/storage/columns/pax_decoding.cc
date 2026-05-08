@@ -31,6 +31,7 @@
 #include "comm/pax_memory.h"
 #include "storage/columns/pax_dict_encoding.h"
 #include "storage/columns/pax_rlev2_decoding.h"
+#include "storage/columns/pax_delta_encoding.h"
 
 namespace pax {
 
@@ -47,7 +48,7 @@ std::shared_ptr<PaxDecoder> PaxDecoder::CreateDecoder(const DecodingOption &deco
       break;
     }
     case ColumnEncoding_Kind::ColumnEncoding_Kind_DIRECT_DELTA: {
-      /// TODO(jiaqizho) support it
+      decoder = std::make_shared<PaxDeltaDecoder<T>>(decoder_options);
       break;
     }
     case ColumnEncoding_Kind::ColumnEncoding_Kind_DICTIONARY: {

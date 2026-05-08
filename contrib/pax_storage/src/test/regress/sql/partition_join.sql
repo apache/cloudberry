@@ -2,6 +2,9 @@
 -- PARTITION_JOIN
 -- Test partitionwise join between partitioned tables
 --
+-- start_ignore
+set gp_use_streaming_hashagg = off;
+-- end_ignore
 
 -- Disable ORCA since it does support partition-wise joins
 set optimizer to off;

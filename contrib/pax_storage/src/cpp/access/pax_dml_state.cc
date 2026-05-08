@@ -104,7 +104,7 @@ void CPaxDmlStateLocal::Reset() { cbdb::pax_memory_context = nullptr; }
 CPaxDmlStateLocal::CPaxDmlStateLocal()
     : last_oid_(InvalidOid), cb_{.func = DmlStateResetCallback, .arg = NULL} {}
 
-std::shared_ptr<CPaxDmlStateLocal::DmlStateValue>
+pg_attribute_always_inline std::shared_ptr<CPaxDmlStateLocal::DmlStateValue>
 CPaxDmlStateLocal::RemoveDmlState(const Oid &oid) {
   std::shared_ptr<CPaxDmlStateLocal::DmlStateValue> value;
 
@@ -121,7 +121,7 @@ CPaxDmlStateLocal::RemoveDmlState(const Oid &oid) {
   return value;
 }
 
-std::shared_ptr<CPaxDmlStateLocal::DmlStateValue>
+pg_attribute_always_inline std::shared_ptr<CPaxDmlStateLocal::DmlStateValue>
 CPaxDmlStateLocal::FindDmlState(const Oid &oid) {
   Assert(OidIsValid(oid));
 

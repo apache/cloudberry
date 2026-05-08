@@ -1,3 +1,22 @@
+<!--
+  Licensed to the Apache Software Foundation (ASF) under one
+  or more contributor license agreements.  See the NOTICE file
+  distributed with this work for additional information
+  regarding copyright ownership.  The ASF licenses this file
+  to you under the Apache License, Version 2.0 (the
+  "License"); you may not use this file except in compliance
+  with the License.  You may obtain a copy of the License at
+
+   http://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing,
+  software distributed under the License is distributed on an
+  "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+  KIND, either express or implied.  See the License for the
+  specific language governing permissions and limitations
+  under the License.
+-->
+
 # Apache Cloudberry (Incubating)
 
 <p align="center">
@@ -26,6 +45,8 @@
 <a href="https://sonarcloud.io/summary/new_code?id=apache_cloudberry">
   <img alt="SonarQube Cloud" src="https://sonarcloud.io/images/project_badges/sonarcloud-highlight.svg" width="100px">
 </a>
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/apache/cloudberry)
+[![Apache Rat Audit](https://github.com/apache/cloudberry/actions/workflows/apache-rat-audit.yml/badge.svg)](https://github.com/apache/cloudberry/actions/workflows/apache-rat-audit.yml)
 ---------
 
 ## Introduction
@@ -41,15 +62,14 @@ also be used for large-scale analytics and AI/ML workloads.
 
 ### Build from source
 
-You can follow [these guides](./deploy/build) to build Cloudberry on
+You can follow [these guides](https://cloudberry.apache.org/docs/deployment/) to build Cloudberry on
 Linux OS (including RHEL/Rocky Linux, and Ubuntu) and macOS.
 
 ### Try out quickly
 
 Welcome to try out Cloudberry via building [one Docker-based
-Sandbox](https://github.com/apache/cloudberry-bootcamp), which is tailored to
-help you gain a basic understanding of Cloudberry's capabilities and features
-a range of materials, including tutorials, sample code, and crash courses.
+Sandbox](./devops/sandbox), which is tailored to help you gain a basic
+understanding of Cloudberry's capabilities and features.
 
 ## Repositories
 
@@ -58,10 +78,8 @@ this, there are several ecosystem repositories for Cloudberry, including the
 website, extensions, connectors, adapters, and other utilities.
 
 * [apache/cloudberry-site](https://github.com/apache/cloudberry-site): website and documentation sources.
-* [apache/cloudberry-bootcamp](https://github.com/apache/cloudberry-bootcamp): help you quickly try out Cloudberry via one Docker-based Sandbox.
-* [apache/cloudberry-gpbackup](https://github.com/apache/cloudberry-gpbackup): backup utility for Cloudberry.
+* [apache/cloudberry-backup](https://github.com/apache/cloudberry-backup): backup utility for Cloudberry.
 * [apache/cloudberry-go-libs](https://github.com/apache/cloudberry-go-libs): go-libs for Cloudberry.
-* [apache/cloudberry-gpbackup-s3-plugin](https://github.com/apache/cloudberry-gpbackup-s3-plugin): S3 plugin for use with Cloudberry backup utility.
 * [apache/cloudberry-pxf](https://github.com/apache/cloudberry-pxf): Platform Extension Framework (PXF) for Cloudberry.
 
 ## Community & Support
@@ -76,7 +94,7 @@ feedback, and chat:
 | New ideas / Feature Requests | Share ideas for new features, visit [GitHub Discussions - Ideas](https://github.com/apache/cloudberry/discussions/categories/ideas-feature-requests).  |
 | Report bugs | Problems and issues in Apache Cloudberry core. If you find bugs, welcome to submit them [here](https://github.com/apache/cloudberry/issues).  |
 | Report a security vulnerability | View our [security policy](https://github.com/apache/cloudberry/security/policy) to learn how to report and contact us.  |
-| Community events | Including meetups, webinars, conferences, and more events, visit the [Events page](https://cloudberry.apache.org/community/events) and subscribe events calendar.  |
+| Community events | Including meetups, webinars, conferences, and more events, visit the [Events page](https://cloudberry.apache.org/community/events) and subscribe to the events calendar.  |
 | Documentation | [Official documentation](https://cloudberry.apache.org/docs/) for Cloudberry. You can explore it to discover more details about us. |
 
 ## Contribution

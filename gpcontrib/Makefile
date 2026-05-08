@@ -35,11 +35,15 @@ else
                pg_hint_plan
 endif
 
+ifeq "$(with_diskquota)" "yes"
+	recurse_targets += diskquota
+endif
+
+ifeq "$(with_gp_stats_collector)" "yes"
+	recurse_targets += gp_stats_collector
+endif
 ifeq "$(with_zstd)" "yes"
 	recurse_targets += zstd
-endif
-ifeq "$(with_quicklz)" "yes"
-	recurse_targets += quicklz
 endif
 $(call recurse,all install clean distclean, $(recurse_targets))
 
@@ -99,7 +103,7 @@ installcheck:
 	if [ "$(enable_orafce)" = "yes" ]; then $(MAKE) -C orafce installcheck; fi
 	if [ "$(enable_pxf)" = "yes" ]; then $(MAKE) -C pxf_fdw installcheck; fi
 	if [ "$(with_zstd)" = "yes" ]; then $(MAKE) -C zstd installcheck; fi
-	if [ "$(with_quicklz)" = "yes" ]; then $(MAKE) -C quicklz installcheck; fi
 	$(MAKE) -C gp_sparse_vector installcheck
 	$(MAKE) -C gp_toolkit installcheck
 	$(MAKE) -C gp_exttable_fdw installcheck
+	if [ "$(with_diskquota)" = "yes" ]; then $(MAKE) -C diskquota installcheck; fi

@@ -204,6 +204,18 @@ typedef struct _dumpOptions
 	int			do_nothing;
 } DumpOptions;
 
+
+typedef enum
+{
+	Greenplum,
+	Cloudberry
+} DatabaseType;
+
+typedef struct
+{
+	DatabaseType type;
+	int version;
+} DatabaseVersion;
 /*
  *	We may want to have some more user-readable data, but in the mean
  *	time this gives us some abstraction and type checking.
@@ -236,8 +248,12 @@ typedef struct Archive
 	bool		exit_on_error;	/* whether to exit on SQL errors... */
 	int			n_errors;		/* number of errors (if no die) */
 
+<<<<<<< HEAD
 	/* prepared-query status */
 	bool	   *is_prepared;	/* indexed by enum _dumpPreparedQueries */
+=======
+	DatabaseVersion version;
+>>>>>>> main
 
 	/* The rest is private */
 } Archive;

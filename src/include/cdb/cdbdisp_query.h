@@ -140,9 +140,9 @@ extern ExtendProtocolData epd;
 extern List* ConsumeExtendProtocolData(ExtendProtocolSubTag subtag);
 
 extern void
-ConsumeAndProcessExtendProtocolData_IUD(Bitmapset **inserted,
-										Bitmapset **updated,
-										Bitmapset **deleted);
+ConsumeAndProcessExtendProtocolData_IUD(List **inserted,
+										List **updated,
+										List **deleted);
 
 extern void
 AtEOXact_ExtendProtocolData(void);

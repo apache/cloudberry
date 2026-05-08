@@ -34,12 +34,14 @@ private:
 	// output column ids
 	ULongPtrArray *m_output_colids_array;
 
+	BOOL m_could_be_pruned;
+
 public:
 	CDXLLogicalCTEProducer(CDXLLogicalCTEProducer &) = delete;
 
 	// ctor
 	CDXLLogicalCTEProducer(CMemoryPool *mp, ULONG id,
-						   ULongPtrArray *output_colids_array);
+						   ULongPtrArray *output_colids_array, BOOL could_be_pruned);
 
 	// dtor
 	~CDXLLogicalCTEProducer() override;
@@ -61,6 +63,12 @@ public:
 	GetOutputColIdsArray() const
 	{
 		return m_output_colids_array;
+	}
+
+	BOOL
+	CouldBePruned() const
+	{
+		return m_could_be_pruned;
 	}
 
 	// serialize operator in DXL format

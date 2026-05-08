@@ -11,7 +11,13 @@
 #ifndef XLOG_H
 #define XLOG_H
 
+<<<<<<< HEAD
 #include "access/xlogbackup.h"
+=======
+#include "postgres.h" /* for Datum */
+
+#include "access/rmgr.h"
+>>>>>>> main
 #include "access/xlogdefs.h"
 #include "access/xloginsert.h"
 #include "access/xlogreader.h"
@@ -41,6 +47,7 @@ extern PGDLLIMPORT XLogRecPtr XactLastRecEnd;
 extern PGDLLIMPORT XLogRecPtr XactLastCommitEnd;
 
 /* these variables are GUC parameters related to XLOG */
+<<<<<<< HEAD
 extern PGDLLIMPORT int	wal_segment_size;
 extern PGDLLIMPORT int	min_wal_size_mb;
 extern PGDLLIMPORT int	max_wal_size_mb;
@@ -51,6 +58,19 @@ extern PGDLLIMPORT int	XLogArchiveTimeout;
 extern PGDLLIMPORT int	wal_retrieve_retry_interval;
 extern PGDLLIMPORT char *XLogArchiveCommand;
 extern PGDLLIMPORT bool EnableHotStandby;
+=======
+extern int	wal_segment_size;
+extern int	min_wal_size_mb;
+extern int	max_wal_size_mb;
+extern int	wal_keep_size_mb;
+extern int	max_slot_wal_keep_size_mb;
+extern int	XLOGbuffers;
+extern int	XLogArchiveTimeout;
+extern int	wal_retrieve_retry_interval;
+extern char *XLogArchiveCommand;
+extern bool EnableHotStandby;
+extern bool EnableHotDR;
+>>>>>>> main
 
 extern PGDLLIMPORT bool fullPageWrites;
 extern PGDLLIMPORT bool wal_log_hints;

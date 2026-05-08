@@ -130,7 +130,7 @@ select gp_segment_id, get_rel_toast_count('toastable_heap') from gp_dist_random(
 select gp_segment_id, get_rel_toast_count('toastable_ao') from gp_dist_random('gp_id') order by gp_segment_id;
  gp_segment_id | get_rel_toast_count 
 ---------------+---------------------
-             0 |                  14
+             0 |                  13
              1 |                   0
              2 |                   0
 (3 rows)

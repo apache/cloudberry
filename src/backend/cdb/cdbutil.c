@@ -93,6 +93,7 @@ static int	CdbComponentDatabaseInfoCompare(const void *p1, const void *p2);
 
 static GpSegConfigEntry * readGpSegConfigFromCatalog(int *total_dbs);
 static GpSegConfigEntry * readGpSegConfigFromFTSFiles(int *total_dbs);
+static GpSegConfigEntry * readGpSegConfigFromFiles(int *total_dbs);
 
 static void getAddressesForDBid(GpSegConfigEntry *c, int elevel);
 static HTAB *hostPrimaryCountHashTableInit(void);
@@ -123,7 +124,7 @@ typedef struct HostPrimaryCountEntry
  *
  * In phase 2 of 2PC, current xact has been marked to TRANS_COMMIT/ABORT,
  * COMMIT_PREPARED or ABORT_PREPARED DTM are performed, if they failed,
- * dispather disconnect and destroy all gangs and fetch the latest segment
+ * dispatcher disconnect and destroy all gangs and fetch the latest segment
  * configurations to do RETRY_COMMIT_PREPARED or RETRY_ABORT_PREPARED,
  * however, postgres disallow catalog lookups outside of xacts.
  *
@@ -132,6 +133,15 @@ typedef struct HostPrimaryCountEntry
  */
 static GpSegConfigEntry *
 readGpSegConfigFromFTSFiles(int *total_dbs)
+{
+	Assert(!IsTransactionState() && !IS_HOT_DR_CLUSTER());
+	/* notify and wait FTS to finish a probe and update the dump file */
+	FtsNotifyProber();
+	return readGpSegConfigFromFiles(total_dbs);
+}
+
+static GpSegConfigEntry *
+readGpSegConfigFromFiles(int *total_dbs)
 {
 	FILE	*fd;
 	int		idx = 0;
@@ -142,11 +152,6 @@ readGpSegConfigFromFTSFiles(int *total_dbs)
 	char	hostname[MAXHOSTNAMELEN];
 	char	address[MAXHOSTNAMELEN];
 	char	buf[MAXHOSTNAMELEN * 2 + 32];
-
-	Assert(!IsTransactionState());
-
-	/* notify and wait FTS to finish a probe and update the dump file */
-	FtsNotifyProber();	
 
 	fd = AllocateFile(GPSEGCONFIGDUMPFILE, "r");
 
@@ -187,6 +192,18 @@ readGpSegConfigFromFTSFiles(int *total_dbs)
 
 	*total_dbs = idx;
 	return configs;
+}
+
+bool
+checkGpSegConfigFtsFiles()
+{
+	FILE *fd = AllocateFile(GPSEGCONFIGDUMPFILE, "r");
+
+	if (!fd)
+		return false;
+
+	FreeFile(fd);
+	return true;
 }
 
 /*
@@ -373,10 +390,17 @@ getCdbComponentInfo(void)
 
 	HTAB	   *hostPrimaryCountHash = hostPrimaryCountHashTableInit();
 
-	if (IsTransactionState())
-		configs = readGpSegConfigFromCatalog(&total_dbs);
+	if (EnableHotDR)
+	{
+		configs = readGpSegConfigFromFiles(&total_dbs);
+	}
 	else
-		configs = readGpSegConfigFromFTSFiles(&total_dbs);
+	{
+		if (IsTransactionState())
+			configs = readGpSegConfigFromCatalog(&total_dbs);
+		else
+			configs = readGpSegConfigFromFTSFiles(&total_dbs);
+	}
 
 	component_databases = palloc0(sizeof(CdbComponentDatabases));
 
@@ -566,24 +590,34 @@ getCdbComponentInfo(void)
 	{
 		cdbInfo = &component_databases->segment_db_info[i];
 
-		if (cdbInfo->config->role != GP_SEGMENT_CONFIGURATION_ROLE_PRIMARY)
+		if (!IS_HOT_STANDBY_QD() && cdbInfo->config->role != GP_SEGMENT_CONFIGURATION_ROLE_PRIMARY)
 			continue;
 
 		hsEntry = (HostPrimaryCountEntry *) hash_search(hostPrimaryCountHash, cdbInfo->config->hostname, HASH_FIND, &found);
-		Assert(found);
-		cdbInfo->hostPrimaryCount = hsEntry->segmentCount;
+		Assert(found || IS_HOT_STANDBY_QD());
+		/*
+		 * Standby and mirror entries can legitimately live on hosts that do not
+		 * own any primary segments. In that case the lookup is absent and the
+		 * count should be treated as zero instead of dereferencing a NULL entry.
+		 */
+		cdbInfo->hostPrimaryCount = found ? hsEntry->segmentCount : 0;
 	}
 
 	for (i = 0; i < component_databases->total_entry_dbs; i++)
 	{
 		cdbInfo = &component_databases->entry_db_info[i];
 
-		if (cdbInfo->config->role != GP_SEGMENT_CONFIGURATION_ROLE_PRIMARY)
+		if (!IS_HOT_STANDBY_QD() && cdbInfo->config->role != GP_SEGMENT_CONFIGURATION_ROLE_PRIMARY)
 			continue;
 
 		hsEntry = (HostPrimaryCountEntry *) hash_search(hostPrimaryCountHash, cdbInfo->config->hostname, HASH_FIND, &found);
-		Assert(found);
-		cdbInfo->hostPrimaryCount = hsEntry->segmentCount;
+		Assert(found || IS_HOT_STANDBY_QD());
+		/*
+		 * Standby and mirror entries can legitimately live on hosts that do not
+		 * own any primary segments. In that case the lookup is absent and the
+		 * count should be treated as zero instead of dereferencing a NULL entry.
+		 */
+		cdbInfo->hostPrimaryCount = found ? hsEntry->segmentCount : 0;
 	}
 
 	hash_destroy(hostPrimaryCountHash);
@@ -1006,7 +1040,16 @@ cdbcomponent_getComponentInfo(int contentId)
 	/* entry db */
 	if (contentId == -1)
 	{
-		cdbInfo = &cdbs->entry_db_info[0];	
+		Assert(cdbs->total_entry_dbs == 1 || cdbs->total_entry_dbs == 2);
+		/*
+		 * For a standby QD, get the last entry db which can be the first (on
+		 * a replica cluster) or the second (on a mirrored cluster) entry.
+		 */
+		if (IS_HOT_STANDBY_QD())
+			cdbInfo = &cdbs->entry_db_info[cdbs->total_entry_dbs - 1];
+		else
+			cdbInfo = &cdbs->entry_db_info[0];	
+
 		return cdbInfo;
 	}
 
@@ -1023,10 +1066,10 @@ cdbcomponent_getComponentInfo(int contentId)
 		Assert(cdbs->total_segment_dbs == cdbs->total_segments * 2);
 		cdbInfo = &cdbs->segment_db_info[2 * contentId];
 
-		if (!SEGMENT_IS_ACTIVE_PRIMARY(cdbInfo))
-		{
+		/* use the other segment if it is not what the QD wants */
+		if ((IS_HOT_STANDBY_QD() && SEGMENT_IS_ACTIVE_PRIMARY(cdbInfo)) 
+						|| (!IS_HOT_STANDBY_QD() && !SEGMENT_IS_ACTIVE_PRIMARY(cdbInfo)))
 			cdbInfo = &cdbs->segment_db_info[2 * contentId + 1];
-		}
 
 		return cdbInfo;
 	}
@@ -1125,10 +1168,21 @@ cdb_setup(void)
 	 *
 	 * Ignore background worker because bgworker_should_start_mpp() already did
 	 * the check.
+	 *
+	 * Ignore if we are the standby coordinator started in hot standby mode.
+	 * We don't expect dtx recovery to have finished, as dtx recovery is
+	 * performed at the end of startup. In hot standby, we are recovering
+	 * continuously and should allow queries much earlier. Since a hot standby
+	 * won't proceed dtx, it is not required to wait for recovery of the dtx
+	 * that has been prepared but not committed (i.e. to commit them); on the
+	 * other hand, the recovery of any in-doubt transactions (i.e. not prepared)
+	 * won't bother a hot standby either, just like they can be recovered in the 
+	 * background when a primary instance is running.
 	 */
 	if (!IsBackgroundWorker &&
 		Gp_role == GP_ROLE_DISPATCH &&
-		!*shmDtmStarted)
+		!*shmDtmStarted &&
+		!IS_HOT_STANDBY_QD())
 	{
 		ereport(FATAL,
 				(errcode(ERRCODE_CANNOT_CONNECT_NOW),

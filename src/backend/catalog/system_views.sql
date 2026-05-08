@@ -761,6 +761,7 @@ CREATE VIEW pg_stat_user_tables_single_node AS
     WHERE schemaname NOT IN ('pg_catalog', 'information_schema') AND
           schemaname !~ '^pg_toast';
 
+
 CREATE VIEW pg_stat_xact_user_tables AS
     SELECT * FROM pg_stat_xact_all_tables
     WHERE schemaname NOT IN ('pg_catalog', 'information_schema') AND
@@ -827,7 +828,10 @@ CREATE VIEW pg_stat_all_indexes AS
             LEFT JOIN pg_namespace N ON (N.oid = C.relnamespace)
     WHERE C.relkind IN ('r', 't', 'm', 'o', 'b', 'M');
 
+<<<<<<< HEAD
 
+=======
+>>>>>>> main
 CREATE VIEW pg_stat_sys_indexes AS
     SELECT * FROM pg_stat_all_indexes
     WHERE schemaname IN ('pg_catalog', 'information_schema', 'pg_aoseg') OR
@@ -1206,6 +1210,21 @@ CREATE VIEW pg_stat_database AS
         SELECT oid, datname FROM pg_database
     ) D;
 
+<<<<<<< HEAD
+=======
+CREATE VIEW pg_stat_resqueues AS
+    SELECT
+        Q.oid AS queueid,
+        Q.rsqname AS queuename,
+        pg_stat_get_queue_num_exec(Q.oid) AS n_queries_exec,
+        pg_stat_get_queue_num_wait(Q.oid) AS n_queries_wait,
+        pg_stat_get_queue_elapsed_exec(Q.oid) AS elapsed_exec,
+        pg_stat_get_queue_elapsed_wait(Q.oid) AS elapsed_wait
+    FROM pg_resqueue AS Q;
+
+-- Resource queue views
+
+>>>>>>> main
 CREATE VIEW pg_resqueue_status AS
     SELECT
             q.rsqname,
@@ -1426,6 +1445,10 @@ rq.oid=rc.resqueueid AND rc.restypid = rt.restypid
 ORDER BY rsqname, restypid
 ;
 
+-- FIXME: we have a cluster-wide view gp_stat_database_conflicts, but that is 
+-- only showing conflicts of every segment. Some conflict might be encountered
+-- on just part of the segments. Ideally we should have a view like
+-- gp_stat_database_conflicts_summary that prints the overall conflicts and types.
 CREATE VIEW pg_stat_database_conflicts AS
     SELECT
             D.oid AS datid,

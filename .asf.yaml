@@ -85,6 +85,7 @@ github:
         # Actions workflows. They do not include the workflow name as a
         # prefix
         contexts:
+          - rat-check
           - check-skip
           - Build Apache Cloudberry RPM
           - RPM Install Test Apache Cloudberry
@@ -117,6 +118,18 @@ github:
 
       # Don't require commits to be signed
       required_signatures: false
+
+      # Require conversation threads to be resolved
+      required_conversation_resolution: true
+
+    # Branch protection for REL_2_STABLE release branch
+    REL_2_STABLE:
+      # Pull request review requirements
+      required_pull_request_reviews:
+        # Require new reviews when new commits are pushed
+        dismiss_stale_reviews: false
+        # Require at least 2 approving reviews
+        required_approving_review_count: 2
 
       # Require conversation threads to be resolved
       required_conversation_resolution: true

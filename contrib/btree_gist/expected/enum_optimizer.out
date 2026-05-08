@@ -87,6 +87,6 @@ SELECT count(*) FROM enumtmp WHERE a >= 'g'::rainbow;
          ->  Index Scan using enumidx on enumtmp
                Index Cond: (a >= 'g'::rainbow)
                Filter: (a >= 'g'::rainbow)
- Optimizer: Pivotal Optimizer (GPORCA)
+ Optimizer: GPORCA
 (6 rows)
 

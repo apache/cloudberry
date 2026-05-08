@@ -98,8 +98,10 @@
 #include "utils/lsyscache.h"
 #include "utils/memutils.h"
 #include "utils/rel.h"
+#include "utils/resource_manager.h"
 #include "utils/tarrable.h"
 #include "utils/varlena.h"
+#include "utils/resgroup.h"
 
 #include "catalog/heap.h"
 #include "catalog/oid_dispatch.h"
@@ -328,12 +330,16 @@ CreateTableSpace(CreateTableSpaceStmt *stmt)
 	}
 
 	if (!location)
+<<<<<<< HEAD
 	{
 		if (stmt->location == NULL)
 			stmt->location = "";
 
 		location = pstrdup(stmt->location);
 	}
+=======
+		location = pstrdup(stmt->location ? stmt->location : "");
+>>>>>>> main
 
 	if (stmt->filehandler)
 		fileHandler = pstrdup(stmt->filehandler);
@@ -729,6 +735,9 @@ DropTableSpace(DropTableSpaceStmt *stmt)
 				 errdetail_internal("%s", detail),
 				 errdetail_log("%s", detail_log)));
 
+	if (IsResGroupEnabled() && Gp_resource_manager_policy == RESOURCE_MANAGER_POLICY_GROUP_V2)
+		checkTablespaceInIOlimit(tablespaceoid, true);
+
 	/* DROP hook for the tablespace being removed */
 	InvokeObjectDropHook(TableSpaceRelationId, tablespaceoid, 0);
 
@@ -856,12 +865,27 @@ create_tablespace_directories(const char *location, const Oid tablespaceoid)
 	 * option for now, to facilitate regression testing.
 	 */
 	in_place = strlen(location) == 0;
+<<<<<<< HEAD
 	if (in_place)
 		location_with_dbid_dir = psprintf("%s", linkloc);
 	else
 		location_with_dbid_dir = psprintf("%s/%d", location, GpIdentity.dbid);
 
 	location_with_version_dir = psprintf("%s/%s", location_with_dbid_dir,
+=======
+
+	if (in_place)
+	{
+		if (MakePGDirectory(linkloc) < 0 && errno != EEXIST)
+			ereport(ERROR,
+					(errcode_for_file_access(),
+					 errmsg("could not create directory \"%s\": %m",
+							linkloc)));
+	}
+
+	location_with_dbid_dir = psprintf("%s/%d", location, GpIdentity.dbid);
+	location_with_version_dir = psprintf("%s/%s", in_place ? linkloc : location_with_dbid_dir,
+>>>>>>> main
 										 GP_TABLESPACE_VERSION_DIRECTORY);
 
 	/*
@@ -1221,6 +1245,51 @@ remove_symlink:
 	linkloc = pstrdup(linkloc_with_version_dir);
 	get_parent_directory(linkloc);
 
+<<<<<<< HEAD
+=======
+	/*
+	 * Remove the symlink target directory if it exists or is valid.
+	 * If linkloc is a directory (e.g. in-place tablespace), readlink()
+	 * will fail with EINVAL, which we can safely skip.
+	 */
+	rllen = readlink(linkloc, link_target_dir, sizeof(link_target_dir));
+	if(rllen < 0)
+	{
+		if (errno != EINVAL)
+			ereport(redo ? LOG : ERROR,
+					(errcode_for_file_access(),
+						errmsg("could not read symbolic link \"%s\": %m",
+							   linkloc)));
+	}
+	else if(rllen >= sizeof(link_target_dir))
+	{
+		ereport(redo ? LOG : ERROR,
+				(errcode_for_file_access(),
+					errmsg("symbolic link \"%s\" target is too long",
+						   linkloc)));
+	}
+	else
+	{
+		link_target_dir[rllen] = '\0';
+		if (access(link_target_dir, F_OK) != 0)
+		{
+			ereport(redo? LOG : ERROR,
+					(errcode_for_file_access(),
+							errmsg("could not open directory \"%s\": %m",
+								   link_target_dir)));
+		}
+		else
+		{
+			if(directory_is_empty(link_target_dir) && rmdir(link_target_dir) < 0)
+				ereport(redo ? LOG : ERROR,
+						(errcode_for_file_access(),
+								errmsg("could not remove directory \"%s\": %m",
+									   link_target_dir)));
+		}
+	}
+
+
+>>>>>>> main
 	if (lstat(linkloc, &st) < 0)
 	{
 		int			saved_errno = errno;

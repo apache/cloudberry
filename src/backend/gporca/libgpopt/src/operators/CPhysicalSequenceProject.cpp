@@ -563,13 +563,12 @@ CPhysicalSequenceProject::OsPrint(IOstream &os) const
 {
 	os << SzId() << " (";
 	CLogicalSequenceProject::OsPrintWindowType(os, m_sptype);
-	os << ") (";
-	(void) m_pds->OsPrint(os);
+	os << ", non-hashed) (";
+	(void) m_pds->OsPrintNoWrap(os);
 	os << ", ";
 	(void) COrderSpec::OsPrint(os, m_pdrgpos);
 	os << ", ";
 	(void) CWindowFrame::OsPrint(os, m_pdrgpwf);
-
 	return os << ")";
 }
 

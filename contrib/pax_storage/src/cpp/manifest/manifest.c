@@ -245,8 +245,6 @@ static void manifestvalue_to_json(yyjson_mut_doc *doc, yyjson_mut_val *obj,
 }
 
 Datum json_to_manifestvalue(yyjson_val *type_val, MetaFieldType typ) {
-  Datum value;
-
   switch (typ) {
   case Meta_Field_Type_Int:
     return Int32GetDatum(yyjson_get_int(type_val));
@@ -312,8 +310,7 @@ static const char *manifest_to_json(ManifestHeap *m, size_t *len) {
 
 static bool json_to_manifestheap(ManifestHeap *m, char *buf, int len) {
   size_t idx, max;
-  yyjson_val *datameta, *add, *remove;
-  const char *summary;
+  yyjson_val *datameta;
   yyjson_read_err err;
 
   yyjson_doc *doc =
@@ -411,7 +408,6 @@ void serialize_manifest(Relation rel, ManifestHeap *manifest, char *manifest_pax
  * we need refresh the new manifest file path in the top entrance table
  */
 void update_manifest_top_entrance(Relation rel, const char *manifest_path) {
-  Oid aux_oid;
   Relation aux_rel;
   TupleDesc desc;
   SysScanDesc scan;
@@ -562,7 +558,6 @@ Oid create_manifest_auxiliary_heap(Relation parentrel) {
  */
 void manifest_create(Relation rel, RelFileNode relnode) {
   char aux_relname[NAMEDATALEN];
-  ReindexParams reindex_params = {0};
   Relation aux_rel;
   Oid aux_oid;
   bool exists;

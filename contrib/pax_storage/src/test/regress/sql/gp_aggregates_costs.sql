@@ -5,6 +5,9 @@ insert into cost_agg_t2 select i, random() * 99999, i % 300000 from generate_ser
 analyze cost_agg_t1;
 analyze cost_agg_t2;
 
+-- start_ignore
+set gp_use_streaming_hashagg = off;
+-- end_ignore
 --
 -- Test planner's decisions on aggregates when only little memory is available.
 --

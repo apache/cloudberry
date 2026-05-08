@@ -18,8 +18,17 @@
 #include "postgres.h"
 #include "nodes/pg_list.h"
 
+extern char *gp_resource_group_cgroup_parent;
+
 #define MAX_CGROUP_PATHLEN 256
 #define MAX_CGROUP_CONTENTLEN 1024  
+
+#define CGROUP_CONFIG_WARNING(msg, ...) \
+	ereport(WARNING, \
+			(errmsg("cgroup is not properly configured: " msg, ##__VA_ARGS__), \
+			 errhint("Please check whether the directory '/sys/fs/cgroup/%s' exists when gp_resource_manager = 'group-v2' and gp_resource_group_cgroup_parent = '%s'.", \
+			 gp_resource_group_cgroup_parent ? gp_resource_group_cgroup_parent : "", \
+			 gp_resource_group_cgroup_parent ? gp_resource_group_cgroup_parent : "")))
 
 #define CGROUP_ERROR(...) elog(ERROR, __VA_ARGS__)
 #define CGROUP_CONFIG_ERROR(...) \
@@ -47,6 +56,8 @@
 /* This is the default value about Linux Control Group */
 #define DEFAULT_CPU_PERIOD_US 100000LL
 
+/* The name of leaf cgroup when use cgroup v2 */
+#define CGROUPV2_LEAF_INDENTIFIER "queries"
 
 /*
  * Resource Group underlying component types.
@@ -168,7 +179,7 @@ extern void setComponentDir(CGroupComponentType component, const char *dir);
 extern int lockDir(const char *path, bool block);
 
 /* Create cgroup dir. */
-extern bool createDir(Oid group, CGroupComponentType comp);
+extern bool createDir(Oid group, CGroupComponentType comp, char *filename);
 /* Delete cgroup dir. */
 extern bool deleteDir(Oid group, CGroupComponentType component, const char *filename, bool unassign,
 					  void (*detachcgroup) (Oid group, CGroupComponentType component, int fd_dir));
@@ -233,6 +244,7 @@ typedef void (*setio_function) (Oid group, List *limit_list);
 typedef void (*freeio_function) (List *limit_list);
 typedef List* (*getiostat_function) (Oid groupid, List *io_limit);
 typedef char* (*dumpio_function) (List *limit_list);
+typedef void  (*cleario_function) (Oid groupid);
 
 
 typedef struct CGroupOpsRoutine
@@ -272,6 +284,7 @@ typedef struct CGroupOpsRoutine
 	freeio_function			freeio;
 	getiostat_function		getiostat;
 	dumpio_function			dumpio;
+	cleario_function		cleario;
 } CGroupOpsRoutine;
 
 /* The global function handler. */

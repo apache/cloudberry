@@ -85,6 +85,7 @@ reset optimizer_force_multistage_agg;
 CREATE TABLE hashagg_spill(col1 numeric, col2 int);
 INSERT INTO hashagg_spill SELECT id, 1 FROM generate_series(1,20000) id;
 ANALYZE hashagg_spill;
+set hash_mem_multiplier = 1;
 SET statement_mem='1000kB';
 SET gp_workfile_compression = OFF;
 select * from hashagg_spill.is_workfile_created('explain (analyze, verbose) SELECT avg(col2) col2 FROM hashagg_spill GROUP BY col1 HAVING(sum(col1)) < 0;');
@@ -95,6 +96,7 @@ select * from hashagg_spill.is_workfile_created('explain (analyze, verbose) SELE
 CREATE TABLE spill_temptblspace (a numeric);
 SET temp_tablespaces=pg_default;
 INSERT INTO spill_temptblspace SELECT avg(col2) col2 FROM hashagg_spill GROUP BY col1 HAVING(sum(col1)) < 0;
+reset hash_mem_multiplier;
 RESET temp_tablespaces;
 RESET statement_mem;
 RESET gp_workfile_compression;

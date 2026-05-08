@@ -71,7 +71,7 @@
 #include <openssl/err.h>
 #endif
 
-#define DEFAULT_COMPRESS_LEVEL 1
+#define DEFAULT_COMPRESS_LEVEL 3
 #define MAX_FRAME_SIZE 65536
 
 /*  A data block */
@@ -198,7 +198,8 @@ static struct
 	const char* ssl; /* path to certificates in case we use gpfdist with ssl */
 	int			w; /* The time used for session timeout in seconds */
 	int			compress; /* The flag to indicate whether comopression transmission is open */
-} opt = { 8080, 8080, 0, 0, 0, ".", 0, 0, -1, 5, 0, 32768, 0, 256, 0, 0, 0, 0, 0};
+	int			compress_level; /* ZSTD compression level (1-9) */
+} opt = { 8080, 8080, 0, 0, 0, ".", 0, 0, -1, 5, 0, 32768, 0, 256, 0, 0, 0, 0, 0, DEFAULT_COMPRESS_LEVEL};
 
 
 typedef union address
@@ -232,6 +233,7 @@ static struct
 	SSL_CTX 		*server_ctx;/* for SSL */
 #endif
 	int 			wdtimer; /* Kill gpfdist after k seconds of inactivity. 0 to disable. */
+	struct event_base *event_base; /* for libevent 2.0+ */
 } gcb;
 
 /*  A session */
@@ -577,9 +579,9 @@ static void usage_error(const char* msg, int print_usage)
 		}
 		else
 		{
-			fprintf(stderr,
+							fprintf(stderr,
 					"gpfdist -- file distribution web server\n\n"
-						"usage: gpfdist [--ssl <certificates_directory>] [-d <directory>] [-p <http(s)_port>] [-l <log_file>] [-t <timeout>] [-v | -V | -s] [-m <maxlen>] [-w <timeout>]"
+						"usage: gpfdist [--ssl <certificates_directory>] [-d <directory>] [-p <http(s)_port>] [-l <log_file>] [-t <timeout>] [-v | -V | -s] [-m <maxlen>] [-w <timeout>] [--compress] [--compress-level <level>]"
 #ifdef GPFXDIST
 					    "[-c file]"
 #endif
@@ -605,7 +607,12 @@ static void usage_error(const char* msg, int print_usage)
 					    "        -c file    : configuration file for transformations\n"
 #endif
 						"        --version  : print version information\n"
-						"        -w timeout : timeout in seconds before close target file\n\n");
+						"        -w timeout : timeout in seconds before close target file\n"
+#ifdef USE_ZSTD
+						"        --compress : enable ZSTD compression\n"
+						"        --compress-level : ZSTD compression level (1-9, default=1)\n"
+#endif
+						"\n");
 		}
 	}
 
@@ -669,6 +676,7 @@ static void parse_command_line(int argc, const char* const argv[],
 	{ "version", 256, 0, "print version number" },
 	{ NULL, 'w', 1, "wait for session timeout in seconds" },
 	{"compress", 258, 0, "turn on compressed transmission"},
+	{"compress-level", 259, 1, "ZSTD compression level (1-9, default=1)"},
 	{ 0 } };
 
 	status = apr_getopt_init(&os, pool, argc, argv);
@@ -757,9 +765,18 @@ static void parse_command_line(int argc, const char* const argv[],
 		case 258:
 			opt.compress = 1;
 			break;
+		case 259:
+			opt.compress_level = atoi(arg);
+			if (opt.compress_level < 1 || opt.compress_level > 9) {
+				usage_error("Error: compression level must be between 1 and 9", 0);
+			}
+			break;
 #else
 		case 258:
 			usage_error("ZSTD is not supported by this build", 0);
+			break;
+		case 259:
+			usage_error("ZSTD compression level option is not supported by this build", 0);
 			break;
 #endif
 		}
@@ -1584,7 +1601,7 @@ static void session_detach(request_t* r)
 			}
 
 			event_del(&session->ev);
-			evtimer_set(&session->ev, free_session_cb, session);
+			evtimer_assign(&session->ev, gcb.event_base, free_session_cb, session);
 			session->tm.tv_sec  = opt.w;
 			session->tm.tv_usec = 0;
 			(void)evtimer_add(&session->ev, &session->tm);
@@ -1795,7 +1812,7 @@ static int session_attach(request_t* r)
 		session->active_segids[r->segid] = 1; /* mark this segid as active */
 		session->maxsegs = r->totalsegs;
 		session->requests = apr_hash_make(pool);
-		event_set(&session->ev, 0, 0, 0, 0);
+		event_assign(&session->ev, gcb.event_base, -1, 0, NULL, NULL);
 
 		if (session->tid == 0 || session->path == 0 || session->key == 0)
 			gfatal(r, "out of memory in session_attach");
@@ -2309,6 +2326,22 @@ static void do_accept(int fd, short event, void* arg)
 		closesocket(sock);
 		goto failure;
 	}
+
+	if (opt.compress)
+	{
+		int recv_buf_size = 128 * 1024;  /* 128KB receive buffer */
+		int send_buf_size = 128 * 1024;  /* 128KB send buffer */
+
+		if (setsockopt(sock, SOL_SOCKET, SO_RCVBUF, (void*)&recv_buf_size, sizeof(recv_buf_size)) == -1)
+		{
+			gwarning(NULL, "Setting SO_RCVBUF to 128KB failed, using system default");
+		}
+
+		if (setsockopt(sock, SOL_SOCKET, SO_SNDBUF, (void*)&send_buf_size, sizeof(send_buf_size)) == -1)
+		{
+			gwarning(NULL, "Setting SO_SNDBUF to 128KB failed, using system default");
+		}
+	}
 	if (setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, (void*) &on, sizeof(on)) == -1)
 	{
 		gwarning(NULL, "Setting SO_REUSEADDR on socket failed");
@@ -2336,7 +2369,7 @@ static void do_accept(int fd, short event, void* arg)
 	r->pool = pool;
 	r->sock = sock;
 
-	event_set(&r->ev, 0, 0, 0, 0);
+	event_assign(&r->ev, gcb.event_base, -1, 0, NULL, NULL);
 
 	/* use the block size specified by -m option */
 	r->outblock.data = palloc_safe(r, pool, opt.m, "out of memory when allocating buffer: %d bytes", opt.m);
@@ -2389,7 +2422,7 @@ static int setup_write(request_t* r)
 	if (r->sock < 0)
 		gwarning(r, "internal error in setup_write - no socket to use");
 	event_del(&r->ev);
-	event_set(&r->ev, r->sock, EV_WRITE, do_write, r);
+	event_assign(&r->ev, gcb.event_base, r->sock, EV_WRITE, do_write, r);
 	return (event_add(&r->ev, 0));
 }
 
@@ -2413,7 +2446,7 @@ static int setup_read(request_t* r)
 		gwarning(r, "internal error in setup_read - no socket to use");
 
 	event_del(&r->ev);
-	event_set(&r->ev, r->sock, EV_READ, do_read_request, r);
+	event_assign(&r->ev, gcb.event_base, r->sock, EV_READ, do_read_request, r);
 
 	if(opt.t == 0)
 	{
@@ -2520,16 +2553,30 @@ static void
 signal_register()
 {
     /* when SIGTERM raised invoke process_term_signal */
-    signal_set(&gcb.signal_event,SIGTERM,process_term_signal,0);
+    evsignal_assign(&gcb.signal_event, gcb.event_base, SIGTERM, process_term_signal, 0);
 
     /* high priority so we accept as fast as possible */
     if(event_priority_set(&gcb.signal_event, 0))
         gwarning(NULL,"signal event priority set failed");
 
     /* start watching this event */
-	if(signal_add(&gcb.signal_event, 0))
+	if(evsignal_add(&gcb.signal_event, 0))
         gfatal(NULL,"cannot set up event on signal register");
 
+}
+
+/*
+ * gpfdist_cleanup
+ *
+ * Clean up all resources before exiting
+ */
+static void gpfdist_cleanup(void)
+{
+	/* Clean up event_base if initialized */
+	if (gcb.event_base) {
+		event_base_free(gcb.event_base);
+		gcb.event_base = NULL;
+	}
 }
 
 static void clear_listen_sock(void)
@@ -2584,9 +2631,8 @@ http_setup(void)
 		hostaddr = opt.b;
 
 	/* setup event priority */
-	if (event_priority_init(10))
-		gwarning(NULL, "event_priority_init failed");
-
+	if (event_base_priority_init(gcb.event_base, 10))
+		gwarning(NULL, "event_base_priority_init failed");
 
 	/* Try each possible port from opt.p to opt.last_port */
 	for (;;)
@@ -2779,8 +2825,8 @@ http_setup(void)
 	for (i = 0; i < gcb.listen_sock_count; i++)
 	{
 		/* when this socket is ready, do accept */
-		event_set(&gcb.listen_events[i], gcb.listen_socks[i], EV_READ | EV_PERSIST,
-				  do_accept, 0);
+		event_assign(&gcb.listen_events[i], gcb.event_base, gcb.listen_socks[i], 
+		            EV_READ | EV_PERSIST, do_accept, 0);
 
         /* only signal process function priority higher than socket handler */
 		if (event_priority_set(&gcb.listen_events[i], 1))
@@ -2806,6 +2852,9 @@ process_term_signal(int sig,short event,void* arg)
 			{
 				closesocket(gcb.listen_socks[i]);
 			}
+		
+		/* Clean up resources before exiting */
+		gpfdist_cleanup();
 		_exit(1);
 }
 
@@ -3881,7 +3930,10 @@ int gpfdist_init(int argc, const char* const argv[])
 		putenv("EVENT_SHOW_METHOD=1");
 	putenv("EVENT_NOKQUEUE=1");
 
-	event_init();
+	/* libevent 2.0+ */
+	gcb.event_base = event_base_new();
+	if (!gcb.event_base)
+		gfatal(NULL, "event_base_new failed");
 
     signal_register();
 	http_setup();
@@ -3959,16 +4011,19 @@ int gpfdist_init(int argc, const char* const argv[])
 
 int gpfdist_run()
 {
-	return event_dispatch();
+	return event_base_dispatch(gcb.event_base);
 }
 
 #ifndef WIN32
 
 int main(int argc, const char* const argv[])
 {
+	int ret;
 	if (gpfdist_init(argc, argv) == -1)
 		gfatal(NULL, "Initialization failed");
-	return gpfdist_run();
+	ret = gpfdist_run();
+	gpfdist_cleanup();
+	return ret;
 }
 
 
@@ -4143,6 +4198,7 @@ int main(int argc, const char* const argv[])
 		if (gpfdist_init(argc, argv) == -1)
 			gfatal(NULL, "Initialization failed");
 		main_ret = gpfdist_run();
+		gpfdist_cleanup();
 	}
 
 
@@ -4232,6 +4288,7 @@ void ServiceMain(int argc, char** argv)
 	 * actual service work
 	 */
 	gpfdist_run();
+	gpfdist_cleanup();
 }
 
 void ControlHandler(DWORD request)
@@ -4534,7 +4591,7 @@ static void flush_ssl_buffer(int fd, short event, void* arg)
 static void setup_flush_ssl_buffer(request_t* r)
 {
 	event_del(&r->ev);
-	event_set(&r->ev, r->sock, EV_WRITE, flush_ssl_buffer, r);
+	event_assign(&r->ev, gcb.event_base, r->sock, EV_WRITE, flush_ssl_buffer, r);
 	r->tm.tv_sec  = 5;
 	r->tm.tv_usec = 0;
 	(void)event_add(&r->ev, &r->tm);
@@ -4646,7 +4703,7 @@ static void request_cleanup(request_t *r)
 static void setup_do_close(request_t* r)
 {
 	event_del(&r->ev);
-	event_set(&r->ev, r->sock, EV_READ, do_close, r);
+	event_assign(&r->ev, gcb.event_base, r->sock, EV_READ, do_close, r);
 
 	r->tm.tv_sec = 60;
 	r->tm.tv_usec = 0;
@@ -4867,7 +4924,8 @@ static int compress_zstd(const request_t *r, block_t *blk, int buflen)
 		return -1;
 	}
 
-	size_t init_result = ZSTD_initCStream(r->zstd_cctx, DEFAULT_COMPRESS_LEVEL);
+	/* Use configurable compression level */
+	size_t init_result = ZSTD_initCStream(r->zstd_cctx, opt.compress_level);
 	if (ZSTD_isError(init_result)) 
 	{
 		snprintf(r->zstd_error, r->zstd_err_len, "Creating compression context initialization failed, error is %s.", ZSTD_getErrorName(init_result));
@@ -4905,7 +4963,7 @@ static int compress_zstd(const request_t *r, block_t *blk, int buflen)
 	}
 	offset += output.pos;
 
-	gdebug(NULL, "compress_zstd finished, input size = %d, output size = %d.", buflen, offset);
+	gdebug(NULL, "compress_zstd finished, input size = %d, output size = %d, compression level = %d.", buflen, offset, opt.compress_level);
 
 	return offset;
 }

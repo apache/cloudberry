@@ -457,7 +457,11 @@ build_distinct_groups(int numrows, SortItem *items, MultiSortSupport mss,
 	Assert(j + 1 == ngroups);
 
 	/* Sort the distinct groups by frequency (in descending order). */
+<<<<<<< HEAD
 	qsort_interruptible(groups, ngroups, sizeof(SortItem),
+=======
+	qsort_interruptible((void *) groups, ngroups, sizeof(SortItem),
+>>>>>>> main
 						compare_sort_item_count, NULL);
 
 	*ndistinct = ngroups;
@@ -528,7 +532,11 @@ build_column_frequencies(SortItem *groups, int ngroups,
 		}
 
 		/* sort the values, deduplicate */
+<<<<<<< HEAD
 		qsort_interruptible(result[dim], ngroups, sizeof(SortItem),
+=======
+		qsort_interruptible((void *) result[dim], ngroups, sizeof(SortItem),
+>>>>>>> main
 							sort_item_compare, ssup);
 
 		/*

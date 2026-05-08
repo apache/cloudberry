@@ -9,9 +9,15 @@ use strict;
 use warnings;
 use Fcntl ':mode';
 use File::stat qw{lstat};
+<<<<<<< HEAD
 use PostgreSQL::Test::Cluster;
 use PostgreSQL::Test::Utils;
 use Test::More;
+=======
+use PostgresNode;
+use TestLib;
+use Test::More tests => 22 + 2;
+>>>>>>> main
 
 my $tempdir = PostgreSQL::Test::Utils::tempdir;
 my $xlogdir = "$tempdir/pgxlog";
@@ -37,6 +43,11 @@ command_fails(
 command_fails(
 	[ 'initdb', '-U', 'pg_test', $datadir ],
 	'role names cannot begin with "pg_"');
+
+command_fails_like(
+	[ 'initdb', '--username' => '', $datadir ],
+	qr/superuser name must not be empty./,
+	'empty username not allowed');
 
 mkdir $datadir;
 

@@ -44,7 +44,7 @@ class PaxEncodingColumn : public PaxCommColumn<T> {
 
   ~PaxEncodingColumn() override;
 
-  void Set(std::shared_ptr<DataBuffer<T>> data) override;
+  void Set(std::unique_ptr<DataBuffer<T>> data) override;
 
   std::pair<char *, size_t> GetBuffer() override;
 

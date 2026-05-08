@@ -18,10 +18,11 @@
 #define ORCA_H
 
 #include "pg_config.h"
+#include "optimizer/orcaopt.h"
 
 #ifdef USE_ORCA
 
-extern PlannedStmt * optimize_query(Query *parse, int cursorOptions, ParamListInfo boundParams);
+extern PlannedStmt * optimize_query(Query *parse, int cursorOptions, ParamListInfo boundParams, OptimizerOptions *options);
 extern Node *transformGroupedWindows(Node *node, void *context);
 
 // plan_hint_hook generates HintState by parsing a Query.

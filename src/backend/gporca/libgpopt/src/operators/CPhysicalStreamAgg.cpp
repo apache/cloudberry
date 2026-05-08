@@ -36,10 +36,12 @@ CPhysicalStreamAgg::CPhysicalStreamAgg(
 	CMemoryPool *mp, CColRefArray *colref_array, CColRefArray *pdrgpcrMinimal,
 	COperator::EGbAggType egbaggtype, BOOL fGeneratesDuplicates,
 	CColRefArray *pdrgpcrArgDQA, BOOL fMultiStage, BOOL isAggFromSplitDQA,
-	CLogicalGbAgg::EAggStage aggStage, BOOL should_enforce_distribution)
+	CLogicalGbAgg::EAggStage aggStage, BOOL isAggPushdown,
+	BOOL should_enforce_distribution)
 	: CPhysicalAgg(mp, colref_array, pdrgpcrMinimal, egbaggtype,
 				   fGeneratesDuplicates, pdrgpcrArgDQA, fMultiStage,
-				   isAggFromSplitDQA, aggStage, should_enforce_distribution),
+				   isAggFromSplitDQA, aggStage, isAggPushdown,
+				   should_enforce_distribution),
 	  m_pos(nullptr)
 {
 	GPOS_ASSERT(nullptr != m_pdrgpcrMinimal);

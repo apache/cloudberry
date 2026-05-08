@@ -751,7 +751,9 @@ CCostContext::DRowsPerHost() const
 		CStatisticsConfig *stats_config =
 			poptctxt->GetOptimizerConfig()->GetStatsConf();
 		CDouble dNDVs = CStatisticsUtils::Groups(m_mp, Pstats(), stats_config,
-												 pdrgpul, nullptr /*keys*/);
+												 pdrgpul, nullptr /*keys*/, 
+												 false /* is_partial, current distinct key is the distribution key */ 
+												 );
 		pdrgpul->Release();
 
 		if (dNDVs < ulHosts)

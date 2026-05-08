@@ -1648,11 +1648,16 @@ DefineIndex(Oid relationId,
 
 	/*
 	 * Roll back any GUC changes executed by index functions, and keep
+<<<<<<< HEAD
 	 * subsequent changes local to this command.  It's barely possible that
 	 * some index function changed a behavior-affecting GUC, e.g. xmloption,
 	 * that affects subsequent steps.  This improves bug-compatibility with
 	 * older PostgreSQL versions.  They did the AtEOXact_GUC() here for the
 	 * purpose of clearing the above default_tablespace change
+=======
+	 * subsequent changes local to this command.  This is essential if some
+	 * index function changed a behavior-affecting GUC, e.g. search_path.
+>>>>>>> main
 	 */
 	AtEOXact_GUC(false, root_save_nestlevel);
 	root_save_nestlevel = NewGUCNestLevel();
@@ -1974,6 +1979,10 @@ DefineIndex(Oid relationId,
 		}
 
 		stmt->idxname = indexRelationName;
+
+		AtEOXact_GUC(false, root_save_nestlevel);
+		SetUserIdAndSecContext(root_save_userid, root_save_sec_context);
+		
 		if (shouldDispatch)
 		{
 			/* make sure the QE uses the same index name that we chose */
@@ -1994,8 +2003,6 @@ DefineIndex(Oid relationId,
 		 * Indexes on partitioned tables are not themselves built, so we're
 		 * done here.
 		 */
-		AtEOXact_GUC(false, root_save_nestlevel);
-		SetUserIdAndSecContext(root_save_userid, root_save_sec_context);
 		table_close(rel, NoLock);
 		if (!OidIsValid(parentIndexId))
 			pgstat_progress_end_command();
@@ -2009,6 +2016,10 @@ DefineIndex(Oid relationId,
 	}
 
 	stmt->idxname = indexRelationName;
+
+	AtEOXact_GUC(false, root_save_nestlevel);
+	SetUserIdAndSecContext(root_save_userid, root_save_sec_context);
+
 	if (shouldDispatch)
 	{
 		int flags = DF_CANCEL_ON_ERROR | DF_WITH_SNAPSHOT;
@@ -2018,6 +2029,7 @@ DefineIndex(Oid relationId,
 		/* make sure the QE uses the same index name that we chose */
 		stmt->oldNumber = InvalidOid;
 		Assert(stmt->relation != NULL);
+
 		CdbDispatchUtilityStatement((Node *) stmt, flags,
 									GetAssignedOidsForDispatch(),
 									NULL);
@@ -2026,9 +2038,6 @@ DefineIndex(Oid relationId,
 		if (!indexInfo->ii_BrokenHotChain)
 			cdb_sync_indcheckxmin_with_segments(indexRelationId);
 	}
-
-	AtEOXact_GUC(false, root_save_nestlevel);
-	SetUserIdAndSecContext(root_save_userid, root_save_sec_context);
 
 	if (!concurrent || Gp_role == GP_ROLE_EXECUTE)
 	{

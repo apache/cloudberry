@@ -100,7 +100,10 @@ CPhysicalTableScan::OsPrint(IOstream &os) const
 	// actual name of table in catalog and columns
 	os << " (";
 	m_ptabdesc->Name().OsPrint(os);
-	os << ")";
+	os << "), Columns: [";
+
+	CUtils::OsPrintDrgPcr(os, m_pdrgpcrOutput);
+	os << "]";
 
 	return os;
 }

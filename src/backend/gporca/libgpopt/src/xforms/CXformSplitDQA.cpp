@@ -62,9 +62,11 @@ CXformSplitDQA::CXformSplitDQA(CMemoryPool *mp)
 CXform::EXformPromise
 CXformSplitDQA::Exfp(CExpressionHandle &exprhdl) const
 {
+	CLogicalGbAgg *popGbAgg = CLogicalGbAgg::PopConvert(exprhdl.Pop());
 	// do not split aggregate if it is not a global aggregate,  has no distinct aggs, has MDQAs, has outer references,
 	// or return types of Agg functions are ambiguous
-	if (!CLogicalGbAgg::PopConvert(exprhdl.Pop())->FGlobal() ||
+	if (!popGbAgg->FGlobal() ||
+		popGbAgg->FAggPushdown() ||
 		0 == exprhdl.DeriveTotalDistinctAggs(1) ||
 		exprhdl.DeriveHasMultipleDistinctAggs(1) ||
 		0 < exprhdl.DeriveOuterReferences()->Size() ||

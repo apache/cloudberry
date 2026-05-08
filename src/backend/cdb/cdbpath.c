@@ -2626,7 +2626,15 @@ create_motion_path_for_insert(PlannerInfo *root, GpPolicy *policy,
 			}
 
 		}
-		subpath = cdbpath_create_broadcast_motion_path(root, subpath, policy->numsegments);
+
+		/*
+		 * planner may have add a top Motion eariler.
+		 * Create table t1(id int) distributed randomly;
+		 * Create table t2 as select random() from t1 distributed replicated;
+		 * Avoid Motion if there was already one.
+		 */
+		if (!CdbPathLocus_IsReplicated(subpath->locus))
+			subpath = cdbpath_create_broadcast_motion_path(root, subpath, policy->numsegments);
 	}
 	else
 		elog(ERROR, "unrecognized policy type %u", policyType);
@@ -3065,7 +3073,6 @@ can_elide_explicit_motion(PlannerInfo *root, Index rti, Path *subpath,
  *  There was once an idea reseting path's parallel_works to avoid
  * 	Motion if inner and outer's parallel_workers doesn't match.
  * 	But there are a lot of issues we don't have a clear answer.
- *  See https://code.hashdata.xyz/cloudberry/cbdb-postgres-merge/-/issues/43.
  *
  * We couldn't expect the parallel_workers of outer or inner path.
  * Partial path may generate locus(parallel_workers=0) if needed, ex:
@@ -3215,8 +3222,9 @@ cdbpath_motion_for_parallel_join(PlannerInfo *root,
 		case JOIN_RIGHT:
 		case JOIN_RIGHT_ANTI:
 		case JOIN_FULL:
-			/* Join types are not supported in parallel yet. */
-			goto fail;
+			outer.ok_to_replicate = false;
+			inner.ok_to_replicate = false;
+			break;
 		case JOIN_DEDUP_SEMI:
 			if (!enable_parallel_dedup_semi_join)
 				goto fail;
@@ -3763,7 +3771,7 @@ cdbpath_motion_for_parallel_join(PlannerInfo *root,
 		int sp; /* small rel parallel workers */
 		
 		/* Consider locus when parallel_ware. */
-		if(parallel_aware)
+		if (parallel_aware)
 		{
 			/* can't parallel join if both are Hashed, it should be in non-parallel path */
 			if (CdbPathLocus_IsHashed(outer.locus) &&

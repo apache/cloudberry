@@ -31,7 +31,7 @@ class CDistributionSpec;
 //---------------------------------------------------------------------------
 class CPhysicalSequenceProject : public CPhysical
 {
-private:
+protected:
 	// window type
 	ESPType m_sptype;
 

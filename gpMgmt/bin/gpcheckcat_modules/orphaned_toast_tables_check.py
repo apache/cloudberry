@@ -25,7 +25,7 @@ class OrphanedToastTablesCheck:
         # pg_depend back to pg_class, and if the table oids don't match and/or
         # one is missing, the TOAST table is considered to be an orphan.
         # Note: Handles toast tables <pg_toast_temp_*> which is created/used by InitTempTableNamespace().
-        self.orphaned_toast_tables_query = """
+        self.orphaned_toast_tables_query = r"""
 SELECT
     gp_segment_id AS content_id,
     toast_table_oid,

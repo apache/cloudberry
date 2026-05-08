@@ -661,7 +661,16 @@ drop view tt14v;
 
 create view tt14v as select t.f1, t.f4 from tt14f() t;
 
+<<<<<<< HEAD
 select pg_get_viewdef('tt14v', true);
+=======
+-- column f3 is still in the view, sort of ...
+select pg_get_viewdef('tt14v', true);
+-- ... and you can even EXPLAIN it ...
+explain (verbose, costs off) select * from tt14v;
+-- but will fail at execution
+select f1, f4 from tt14v;
+>>>>>>> main
 select * from tt14v;
 
 alter table tt14t drop column f3;  -- ok

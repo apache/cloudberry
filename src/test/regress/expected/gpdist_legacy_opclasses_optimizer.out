@@ -299,7 +299,11 @@ create type colors as enum ('red', 'green', 'blue');
 create table legacy_enum(color colors) distributed by(color cdbhash_enum_ops);
 insert into legacy_enum values ('red'), ('green'), ('blue');
 explain (costs off) select * from legacy_enum a inner join legacy_enum b on a.color = b.color;
+<<<<<<< HEAD
                           QUERY PLAN
+=======
+                          QUERY PLAN                          
+>>>>>>> main
 --------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Hash Join
@@ -314,8 +318,13 @@ select * from legacy_enum a inner join legacy_enum b on a.color = b.color;
  color | color 
 -------+-------
  blue  | blue
+<<<<<<< HEAD
  green | green
  red   | red
+=======
+ red   | red
+ green | green
+>>>>>>> main
 (3 rows)
 
 --

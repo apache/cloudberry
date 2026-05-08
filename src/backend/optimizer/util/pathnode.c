@@ -2110,7 +2110,7 @@ set_append_path_locus(PlannerInfo *root, Path *pathnode, RelOptInfo *rel,
 				 * gp_execution_segment() = <segid> here, so we should update
 				 * direct dispatch info when creating plan.
 				 */
-				((ProjectionPath *) subpath)->direct_dispath_contentIds = list_make1_int(gp_session_id % numsegments);
+				((ProjectionPath *) subpath)->direct_dispatch_contentIds = list_make1_int(gp_session_id % numsegments);
 
 				CdbPathLocus_MakeStrewn(&(subpath->locus),
 				                        numsegments,
@@ -2180,6 +2180,7 @@ set_append_path_locus(PlannerInfo *root, Path *pathnode, RelOptInfo *rel,
 	 */
 	pathnode->parallel_workers = targetlocus.parallel_workers;
 
+<<<<<<< HEAD
 	/*
 	 * set_append_path_locus may change parallel_workers (via targetlocus),
 	 * which can make it inconsistent with parallel_aware set by the caller.
@@ -2197,11 +2198,17 @@ set_append_path_locus(PlannerInfo *root, Path *pathnode, RelOptInfo *rel,
 	if (pathnode->parallel_workers <= 1)
 		pathnode->parallel_aware = false;
 
+=======
+>>>>>>> main
 	AssertImply(pathnode->parallel_workers > 1 &&
 				!CdbPathLocus_IsEntry(targetlocus) &&
 				!CdbPathLocus_IsOuterQuery(targetlocus) &&
 				!CdbPathLocus_IsGeneral(targetlocus) &&
 				!CdbPathLocus_IsSingleQE(targetlocus), targetlocus.parallel_workers > 1);
+<<<<<<< HEAD
+=======
+
+>>>>>>> main
 	*subpaths_out = new_subpaths;
 
 	return true;
@@ -3662,19 +3669,13 @@ make_cdbpathlocus_for_foreign_relations(struct PlannerInfo   *root,
                           struct RelOptInfo    *rel,
 						  ForeignPath *pathnode)
 {
-	ForeignServer *server = NULL;
-	
 	switch (rel->exec_location)
 	{
 		case FTEXECLOCATION_ANY:
 			CdbPathLocus_MakeGeneral(&(pathnode->path.locus));
 			break;
 		case FTEXECLOCATION_ALL_SEGMENTS:
-			server = GetForeignServer(rel->serverid);
-			if (server)
-				CdbPathLocus_MakeStrewn(&(pathnode->path.locus), server->num_segments, 0);
-			else
-				CdbPathLocus_MakeStrewn(&(pathnode->path.locus), getgpsegmentCount(), 0);
+			CdbPathLocus_MakeStrewn(&(pathnode->path.locus), rel->num_segments, 0);
 			break;
 		case FTEXECLOCATION_COORDINATOR:
 			CdbPathLocus_MakeEntry(&(pathnode->path.locus));

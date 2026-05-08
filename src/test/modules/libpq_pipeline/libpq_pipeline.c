@@ -985,7 +985,11 @@ test_prepared(PGconn *conn)
 static void
 notice_processor(void *arg, const char *message)
 {
+<<<<<<< HEAD
 	int		   *n_notices = (int *) arg;
+=======
+	int	   *n_notices = (int *) arg;
+>>>>>>> main
 
 	(*n_notices)++;
 	fprintf(stderr, "NOTICE %d: %s", *n_notices, message);
@@ -1002,10 +1006,140 @@ test_pipeline_idle(PGconn *conn)
 
 	PQsetNoticeProcessor(conn, notice_processor, &n_notices);
 
+<<<<<<< HEAD
 	/* Try to exit pipeline mode in pipeline-idle state */
 	if (PQenterPipelineMode(conn) != 1)
 		pg_fatal("failed to enter pipeline mode: %s", PQerrorMessage(conn));
 	if (PQsendQueryParams(conn, "SELECT 1", 0, NULL, NULL, NULL, NULL, 0) != 1)
+=======
+	/*
+	 * Cause a Close message to be sent to the server, and watch libpq's
+	 * reaction to the resulting CloseComplete.  libpq must not get in IDLE
+	 * state until that has been received.
+	 */
+	if (PQenterPipelineMode(conn) != 1)
+		pg_fatal("failed to enter pipeline mode: %s", PQerrorMessage(conn));
+
+	if (PQsendQuery(conn, "SELECT 1") != 1)
+		pg_fatal("failed to send query: %s", PQerrorMessage(conn));
+	PQsendFlushRequest(conn);
+	res = PQgetResult(conn);
+	if (res == NULL)
+		pg_fatal("PQgetResult returned null when there's a pipeline item: %s",
+				 PQerrorMessage(conn));
+	if (PQresultStatus(res) != PGRES_TUPLES_OK)
+		pg_fatal("Unexpected result code %s from first pipeline item",
+				 PQresStatus(PQresultStatus(res)));
+	PQclear(res);
+
+	res = PQgetResult(conn);
+	if (res != NULL)
+		pg_fatal("expected NULL result");
+
+	if (PQpipelineSync(conn) != 1)
+		pg_fatal("pipeline sync failed: %s", PQerrorMessage(conn));
+	res = PQgetResult(conn);
+	if (res == NULL)
+		pg_fatal("PQgetResult returned null when there's a pipeline item: %s",
+				 PQerrorMessage(conn));
+	if (PQresultStatus(res) != PGRES_PIPELINE_SYNC)
+		pg_fatal("Unexpected result code %s instead of PGRES_PIPELINE_SYNC, error: %s",
+				 PQresStatus(PQresultStatus(res)), PQerrorMessage(conn));
+	PQclear(res);
+	res = NULL;
+
+	if (PQexitPipelineMode(conn) != 1)
+		pg_fatal("attempt to exit pipeline mode failed when it should've succeeded: %s",
+				 PQerrorMessage(conn));
+
+	/*
+	 * Must not have got any notices here; note bug as described in
+	 * https://postgr.es/m/CA+mi_8bvD0_CW3sumgwPvWdNzXY32itoG_16tDYRu_1S2gV2iw@mail.gmail.com
+	 */
+	if (n_notices > 0)
+		pg_fatal("got %d notice(s)", n_notices);
+	fprintf(stderr, "ok - 1\n");
+
+	/*
+	 * Verify that we can send a query using simple query protocol after one
+	 * in pipeline mode.
+	 */
+	if (PQenterPipelineMode(conn) != 1)
+		pg_fatal("failed to enter pipeline mode: %s", PQerrorMessage(conn));
+	if (PQsendQuery(conn, "SELECT 1") != 1)
+		pg_fatal("failed to send query: %s", PQerrorMessage(conn));
+	PQsendFlushRequest(conn);
+	res = PQgetResult(conn);
+	if (res == NULL)
+		pg_fatal("PQgetResult returned null when there's a pipeline item: %s",
+				 PQerrorMessage(conn));
+	if (PQresultStatus(res) != PGRES_TUPLES_OK)
+		pg_fatal("unexpected result code %s from first pipeline item",
+				 PQresStatus(PQresultStatus(res)));
+	res = PQgetResult(conn);
+	if (res != NULL)
+		pg_fatal("got unexpected non-null result");
+	/* We can exit pipeline mode now */
+	if (PQexitPipelineMode(conn) != 1)
+		pg_fatal("attempt to exit pipeline mode failed when it should've succeeded: %s",
+				 PQerrorMessage(conn));
+	res = PQexec(conn, "SELECT 2");
+	if (n_notices > 0)
+		pg_fatal("got %d notice(s)", n_notices);
+	if (res == NULL)
+		pg_fatal("PQexec returned NULL");
+	if (PQresultStatus(res) != PGRES_TUPLES_OK)
+		pg_fatal("unexpected result code %s from non-pipeline query",
+				 PQresStatus(PQresultStatus(res)));
+	res = PQgetResult(conn);
+	if (res != NULL)
+		pg_fatal("did not receive terminating NULL");
+	if (n_notices > 0)
+		pg_fatal("got %d notice(s)", n_notices);
+	fprintf(stderr, "ok - 2\n");
+
+	/*
+	 * Case 2: exiting pipeline mode is not OK if a second command is sent.
+	 */
+
+	if (PQenterPipelineMode(conn) != 1)
+		pg_fatal("failed to enter pipeline mode: %s", PQerrorMessage(conn));
+	if (PQsendQuery(conn, "SELECT 1") != 1)
+		pg_fatal("failed to send query: %s", PQerrorMessage(conn));
+	PQsendFlushRequest(conn);
+	res = PQgetResult(conn);
+	if (res == NULL)
+		pg_fatal("PQgetResult returned null when there's a pipeline item: %s",
+				 PQerrorMessage(conn));
+	if (PQresultStatus(res) != PGRES_TUPLES_OK)
+		pg_fatal("unexpected result code %s from first pipeline item",
+				 PQresStatus(PQresultStatus(res)));
+	if (PQsendQuery(conn, "SELECT 2") != 1)
+		pg_fatal("failed to send query: %s", PQerrorMessage(conn));
+	PQsendFlushRequest(conn);
+	/* read terminating null from first query */
+	res = PQgetResult(conn);
+	if (res != NULL)
+		pg_fatal("did not receive terminating NULL");
+	res = PQgetResult(conn);
+	if (res == NULL)
+		pg_fatal("PQgetResult returned null when there's a pipeline item: %s",
+				 PQerrorMessage(conn));
+	if (PQresultStatus(res) != PGRES_TUPLES_OK)
+		pg_fatal("unexpected result code %s from first pipeline item",
+				 PQresStatus(PQresultStatus(res)));
+	res = PQgetResult(conn);
+	if (res != NULL)
+		pg_fatal("did not receive terminating NULL");
+	if (PQexitPipelineMode(conn) != 1)
+		pg_fatal("attempt to exit pipeline mode failed when it should've succeeded: %s",
+				 PQerrorMessage(conn));
+
+	/* Try to exit pipeline mode in pipeline-idle state */
+	if (PQenterPipelineMode(conn) != 1)
+		pg_fatal("failed to enter pipeline mode: %s", PQerrorMessage(conn));
+	if (PQsendQuery(conn, "SELECT 1") != 1)
+>>>>>>> main
 		pg_fatal("failed to send query: %s", PQerrorMessage(conn));
 	PQsendFlushRequest(conn);
 	res = PQgetResult(conn);
@@ -1019,7 +1153,11 @@ test_pipeline_idle(PGconn *conn)
 	res = PQgetResult(conn);
 	if (res != NULL)
 		pg_fatal("did not receive terminating NULL");
+<<<<<<< HEAD
 	if (PQsendQueryParams(conn, "SELECT 2", 0, NULL, NULL, NULL, NULL, 0) != 1)
+=======
+	if (PQsendQuery(conn, "SELECT 2") != 1)
+>>>>>>> main
 		pg_fatal("failed to send query: %s", PQerrorMessage(conn));
 	if (PQexitPipelineMode(conn) == 1)
 		pg_fatal("exiting pipeline succeeded when it shouldn't");
@@ -1041,12 +1179,20 @@ test_pipeline_idle(PGconn *conn)
 
 	if (n_notices > 0)
 		pg_fatal("got %d notice(s)", n_notices);
+<<<<<<< HEAD
 	fprintf(stderr, "ok - 1\n");
+=======
+	fprintf(stderr, "ok - 3\n");
+>>>>>>> main
 
 	/* Have a WARNING in the middle of a resultset */
 	if (PQenterPipelineMode(conn) != 1)
 		pg_fatal("entering pipeline mode failed: %s", PQerrorMessage(conn));
+<<<<<<< HEAD
 	if (PQsendQueryParams(conn, "SELECT pg_catalog.pg_advisory_unlock(1,1)", 0, NULL, NULL, NULL, NULL, 0) != 1)
+=======
+	if (PQsendQuery(conn, "SELECT pg_catalog.pg_advisory_unlock(1,1)") != 1)
+>>>>>>> main
 		pg_fatal("failed to send query: %s", PQerrorMessage(conn));
 	PQsendFlushRequest(conn);
 	res = PQgetResult(conn);
@@ -1056,7 +1202,11 @@ test_pipeline_idle(PGconn *conn)
 		pg_fatal("unexpected result code %s", PQresStatus(PQresultStatus(res)));
 	if (PQexitPipelineMode(conn) != 1)
 		pg_fatal("failed to exit pipeline mode: %s", PQerrorMessage(conn));
+<<<<<<< HEAD
 	fprintf(stderr, "ok - 2\n");
+=======
+	fprintf(stderr, "ok - 4\n");
+>>>>>>> main
 }
 
 static void

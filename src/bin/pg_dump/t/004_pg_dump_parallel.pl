@@ -56,16 +56,27 @@ $node->command_ok(
 $node->command_ok(
 	[
 		'pg_restore', '-v',
+<<<<<<< HEAD
 		'-d', $node->connstr($dbname2),
 		'-j3', "$backupdir/dump1"
+=======
+		'-d',         $node->connstr($dbname2),
+		'-j3',        "$backupdir/dump1"
+>>>>>>> main
 	],
 	'parallel restore');
 
 $node->command_ok(
 	[
+<<<<<<< HEAD
 		'pg_dump', '-Fd',
 		'--no-sync', '-j2',
 		'-f', "$backupdir/dump2",
+=======
+		'pg_dump',   '-Fd',
+		'--no-sync', '-j2',
+		'-f',        "$backupdir/dump2",
+>>>>>>> main
 		'--inserts', $node->connstr($dbname1)
 	],
 	'parallel dump as inserts');
@@ -73,8 +84,13 @@ $node->command_ok(
 $node->command_ok(
 	[
 		'pg_restore', '-v',
+<<<<<<< HEAD
 		'-d', $node->connstr($dbname3),
 		'-j3', "$backupdir/dump2"
+=======
+		'-d',         $node->connstr($dbname3),
+		'-j3',        "$backupdir/dump2"
+>>>>>>> main
 	],
 	'parallel restore as inserts');
 

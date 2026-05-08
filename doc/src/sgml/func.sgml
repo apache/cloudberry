@@ -1906,7 +1906,10 @@ repeat('Pg', 4) <returnvalue>PgPgPgPg</returnvalue>
    Without any prior <function>setseed()</function> call in the same
    session, the first <function>random()</function> call obtains a seed
    from a platform-dependent source of random bits.
+<<<<<<< HEAD
    These remarks hold equally for <function>random_normal()</function>.
+=======
+>>>>>>> main
   </para>
 
   <para>

@@ -21,13 +21,14 @@
 #include "nodes/pathnodes.h"
 #include "nodes/plannerconfig.h"
 #include "nodes/plannodes.h"
-
+#include "optimizer/orcaopt.h"
 
 /* Hook for plugins to get control in planner() */
 typedef PlannedStmt *(*planner_hook_type) (Query *parse,
 										   const char *query_string,
 										   int cursorOptions,
-										   ParamListInfo boundParams);
+										   ParamListInfo boundParams,
+										   OptimizerOptions *optimizer_options);
 extern PGDLLIMPORT planner_hook_type planner_hook;
 
 /* Hook for plugins to get control when grouping_planner() plans upper rels */
@@ -41,7 +42,8 @@ extern PGDLLIMPORT create_upper_paths_hook_type create_upper_paths_hook;
 
 extern PlannedStmt *standard_planner(Query *parse, const char *query_string,
 									 int cursorOptions,
-									 ParamListInfo boundParams);
+									 ParamListInfo boundParams,
+									 OptimizerOptions *optimizer_options);
 
 extern PlannerInfo *subquery_planner(PlannerGlobal *glob, Query *parse,
 									 PlannerInfo *parent_root,
@@ -63,5 +65,12 @@ extern Expr *preprocess_phv_expression(PlannerInfo *root, Expr *expr);
 extern bool optimizer_init;
 
 extern void preprocess_qual_conditions(PlannerInfo *root, Node *jtnode);
+
+/* Passthrough data for standard_qp_callback */
+typedef struct
+{
+	List	   *activeWindows;	/* active windows, if any */
+	List	   *groupClause;	/* overrides parse->groupClause */
+} standard_qp_extra;
 
 #endif							/* PLANNER_H */

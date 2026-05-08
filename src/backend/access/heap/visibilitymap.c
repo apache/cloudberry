@@ -628,11 +628,61 @@ vm_extend(Relation rel, BlockNumber vm_nblocks)
 {
 	Buffer		buf;
 
+<<<<<<< HEAD
 	buf = ExtendBufferedRelTo(BMR_REL(rel), VISIBILITYMAP_FORKNUM, NULL,
 							  EB_CREATE_FORK_IF_NEEDED |
 							  EB_CLEAR_SIZE_CACHE,
 							  vm_nblocks,
 							  RBM_ZERO_ON_ERROR);
+=======
+	PageInit((Page) pg.data, BLCKSZ, 0);
+
+	/*
+	 * We use the relation extension lock to lock out other backends trying to
+	 * extend the visibility map at the same time. It also locks out extension
+	 * of the main fork, unnecessarily, but extending the visibility map
+	 * happens seldom enough that it doesn't seem worthwhile to have a
+	 * separate lock tag type for it.
+	 *
+	 * Note that another backend might have extended or created the relation
+	 * by the time we get the lock.
+	 */
+	LockRelationForExtension(rel, ExclusiveLock);
+
+	/* Might have to re-open if a cache flush happened */
+	RelationOpenSmgr(rel);
+
+	/*
+	 * Create the file first if it doesn't exist.  If smgr_vm_nblocks is
+	 * positive then it must exist, no need for an smgrexists call.
+	 */
+	if ((rel->rd_smgr->smgr_cached_nblocks[VISIBILITYMAP_FORKNUM] == 0 ||
+		 rel->rd_smgr->smgr_cached_nblocks[VISIBILITYMAP_FORKNUM] == InvalidBlockNumber) &&
+		!smgrexists(rel->rd_smgr, VISIBILITYMAP_FORKNUM))
+		smgrcreate(rel->rd_smgr, VISIBILITYMAP_FORKNUM, false);
+
+	/*
+	 * Might have to re-open if smgrcreate triggered AcceptInvalidationMessages
+	 * (via TablespaceCreateDbspace -> LockSharedObject for non-default
+	 * tablespaces), which may have processed a pending SHAREDINVALSMGR_ID
+	 * message and closed our smgr entry.
+	 */
+	RelationOpenSmgr(rel);
+
+	/* Invalidate cache so that smgrnblocks() asks the kernel. */
+	rel->rd_smgr->smgr_cached_nblocks[VISIBILITYMAP_FORKNUM] = InvalidBlockNumber;
+	vm_nblocks_now = smgrnblocks(rel->rd_smgr, VISIBILITYMAP_FORKNUM);
+
+	/* Now extend the file */
+	while (vm_nblocks_now < vm_nblocks)
+	{
+		PageSetChecksumInplace((Page) pg.data, vm_nblocks_now);
+
+		smgrextend(rel->rd_smgr, VISIBILITYMAP_FORKNUM, vm_nblocks_now,
+				   pg.data, false);
+		vm_nblocks_now++;
+	}
+>>>>>>> main
 
 	/*
 	 * Send a shared-inval message to force other backends to close any smgr

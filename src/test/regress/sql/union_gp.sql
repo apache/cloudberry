@@ -709,9 +709,44 @@ set optimizer_parallel_union to off;
 drop table if exists my_table;
 
 --
+-- test Github issue https://github.com/apache/cloudberry/issues/1240
+--
+create table r_1240(a int) distributed replicated;
+insert into r_1240 select generate_series(1,10);
+create table p1_1240(a int) distributed by (a);
+insert into p1_1240 select generate_series(1,3);
+explain(costs off) with result as (update r_1240 set a = a +1 where a < 5 returning *) select * from result except select * from p1_1240;
+with result as (update r_1240 set a = a +1 where a < 5 returning *) select * from result except select * from p1_1240;
+drop table r_1240;
+drop table p1_1240;
+
+--
+-- Test CTAS with UNION ALL when branches have different typmods (issue #1431).
+-- ORCA should resolve the output column type to character varying (no length),
+-- same as the Postgres planner, instead of picking the first branch's typmod.
+--
+create table union_ctas_t1(id int, name varchar(1));
+create table union_ctas_t2(id int, name varchar(2));
+insert into union_ctas_t1 values (1, 'a');
+insert into union_ctas_t2 values (1, 'ab');
+
+create table union_ctas_result as
+  (select id, name from union_ctas_t1)
+  union all
+  (select id, name from union_ctas_t2);
+
+-- name column should be "character varying" without length, not varchar(1)
+select atttypmod from pg_attribute
+where attrelid = 'union_ctas_result'::regclass and attname = 'name';
+
+-- data should not be truncated
+select * from union_ctas_result order by name;
+
+drop table union_ctas_t1, union_ctas_t2, union_ctas_result;
+
+--
 -- Clean up
 --
-
 DROP TABLE IF EXISTS T_a1 CASCADE;
 DROP TABLE IF EXISTS T_b2 CASCADE;
 DROP TABLE IF EXISTS T_random CASCADE;

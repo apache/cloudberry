@@ -358,32 +358,31 @@ order by s2 desc;
 explain (verbose, costs off)
 select sum(tenthous) as s1, sum(tenthous) + random()*0 as s2
   from tenk1 group by thousand order by thousand limit 3;
-                                                             QUERY PLAN                                                              
--------------------------------------------------------------------------------------------------------------------------------------
+                                                               QUERY PLAN                                                                
+-----------------------------------------------------------------------------------------------------------------------------------------
  Result
-   Output: (sum(tenthous)), (((sum(tenthous))::double precision + (random() * '0'::double precision)))
+   Output: (sum(tenthous)), ((((sum(tenthous)))::double precision + (random() * '0'::double precision)))
    ->  Limit
-         Output: (sum(tenthous)), (((sum(tenthous))::double precision + (random() * '0'::double precision))), thousand
+         Output: (sum(tenthous)), ((((sum(tenthous)))::double precision + (random() * '0'::double precision))), thousand
          ->  Gather Motion 3:1  (slice1; segments: 3)
-               Output: (sum(tenthous)), (((sum(tenthous))::double precision + (random() * '0'::double precision))), thousand
+               Output: (sum(tenthous)), ((((sum(tenthous)))::double precision + (random() * '0'::double precision))), thousand
                Merge Key: thousand
                ->  Limit
-                     Output: (sum(tenthous)), (((sum(tenthous))::double precision + (random() * '0'::double precision))), thousand
-                     ->  Finalize GroupAggregate
-                           Output: sum(tenthous), ((sum(tenthous))::double precision + (random() * '0'::double precision)), thousand
-                           Group Key: tenk1.thousand
+                     Output: (sum(tenthous)), ((((sum(tenthous)))::double precision + (random() * '0'::double precision))), thousand
+                     ->  Result
+                           Output: (sum(tenthous)), (((sum(tenthous)))::double precision + (random() * '0'::double precision)), thousand
                            ->  Sort
-                                 Output: thousand, (PARTIAL sum(tenthous)), (PARTIAL sum(tenthous))
+                                 Output: (sum(tenthous)), (sum(tenthous)), thousand
                                  Sort Key: tenk1.thousand
-                                 ->  Redistribute Motion 3:3  (slice2; segments: 3)
-                                       Output: thousand, (PARTIAL sum(tenthous)), (PARTIAL sum(tenthous))
-                                       Hash Key: thousand
-                                       ->  Streaming Partial HashAggregate
-                                             Output: thousand, PARTIAL sum(tenthous), PARTIAL sum(tenthous)
-                                             Group Key: tenk1.thousand
+                                 ->  HashAggregate
+                                       Output: sum(tenthous), sum(tenthous), thousand
+                                       Group Key: tenk1.thousand
+                                       ->  Redistribute Motion 3:3  (slice2; segments: 3)
+                                             Output: thousand, tenthous
+                                             Hash Key: thousand
                                              ->  Seq Scan on public.tenk1
                                                    Output: thousand, tenthous
- Optimizer: Pivotal Optimizer (GPORCA)
+ Optimizer: GPORCA
 (24 rows)
 
 select sum(tenthous) as s1, sum(tenthous) + random()*0 as s2

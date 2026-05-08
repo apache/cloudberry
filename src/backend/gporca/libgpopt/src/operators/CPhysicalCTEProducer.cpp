@@ -30,11 +30,49 @@ using namespace gpopt;
 //
 //---------------------------------------------------------------------------
 CPhysicalCTEProducer::CPhysicalCTEProducer(CMemoryPool *mp, ULONG id,
-										   CColRefArray *colref_array)
-	: CPhysical(mp), m_id(id), m_pdrgpcr(colref_array), m_pcrs(nullptr)
+										   CColRefArray *colref_array,
+										   BOOL *umask)
+	: CPhysical(mp), m_id(id), m_pdrgpcr(nullptr), m_pcrs(nullptr), m_pdrgpcr_unused(nullptr), m_pidxmap(nullptr)
 {
 	GPOS_ASSERT(nullptr != colref_array);
-	m_pcrs = GPOS_NEW(mp) CColRefSet(mp, m_pdrgpcr);
+
+#ifdef GPOS_DEBUG
+	if (umask) {
+		ULONG colref_size = colref_array->Size();
+		for (ULONG ul = 0; ul < colref_size; ul++) {
+			CColRef *col_ref = (*colref_array)[ul];
+			if (col_ref->GetUsage(true, true) != CColRef::EUsed) {
+				GPOS_ASSERT(!umask[ul]);
+			}
+		}
+	}
+#endif 
+
+	if (umask) {
+		ULONG colref_size = colref_array->Size();
+		ULONG unused_inc = 0;
+		m_pcrs = GPOS_NEW(mp) CColRefSet(mp);
+		m_pdrgpcr = GPOS_NEW(mp) CColRefArray(mp);
+		m_pdrgpcr_unused = GPOS_NEW(mp) ULongPtrArray(mp, colref_size);
+		m_pidxmap = GPOS_NEW(mp) ULongPtrArray(mp, colref_size);
+
+		for (ULONG ul = 0; ul < colref_size; ul++) {
+			CColRef *col_ref = (*colref_array)[ul];
+			m_pdrgpcr_unused->Append(GPOS_NEW(m_mp) ULONG(unused_inc));
+			if (umask[ul]) {
+				m_pidxmap->Append(GPOS_NEW(m_mp) ULONG(m_pdrgpcr->Size()));
+				m_pdrgpcr->Append(col_ref);
+				m_pcrs->Include(col_ref);
+			} else {
+				m_pidxmap->Append(GPOS_NEW(m_mp) ULONG(gpos::ulong_max));
+				unused_inc++;
+			}
+		}
+		
+	} else {
+		m_pdrgpcr = colref_array;
+		m_pcrs = GPOS_NEW(mp) CColRefSet(mp, m_pdrgpcr);
+	}
 }
 
 //---------------------------------------------------------------------------
@@ -49,6 +87,8 @@ CPhysicalCTEProducer::~CPhysicalCTEProducer()
 {
 	m_pdrgpcr->Release();
 	m_pcrs->Release();
+	CRefCount::SafeRelease(m_pdrgpcr_unused);
+	CRefCount::SafeRelease(m_pidxmap);
 }
 
 //---------------------------------------------------------------------------
@@ -69,12 +109,20 @@ CPhysicalCTEProducer::PcrsRequired(CMemoryPool *mp, CExpressionHandle &exprhdl,
 	GPOS_ASSERT(0 == child_index);
 	GPOS_ASSERT(0 == pcrsRequired->Size());
 
-	CColRefSet *pcrs = GPOS_NEW(mp) CColRefSet(mp, *m_pcrs);
+	CColRefSet *pcrs = GPOS_NEW(mp) CColRefSet(mp);
+	ULONG ccr_size = m_pdrgpcr->Size();
+	for (ULONG index = 0; index < ccr_size; index++) {
+		CColRef *col_ref = (*m_pdrgpcr)[index];
+		GPOS_ASSERT(col_ref->GetUsage() != CColRef::EUnknown);
+		if (col_ref->GetUsage() == CColRef::EUsed) {
+			pcrs->Include(col_ref);
+		}
+	}
+
 	pcrs->Union(pcrsRequired);
 	CColRefSet *pcrsChildReqd =
 		PcrsChildReqd(mp, exprhdl, pcrs, child_index, gpos::ulong_max);
 
-	GPOS_ASSERT(pcrsChildReqd->Size() == m_pdrgpcr->Size());
 	pcrs->Release();
 
 	return pcrsChildReqd;

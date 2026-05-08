@@ -27,3 +27,5 @@
 # ignore anything in ext but keep folder
 ext/*
 !ext/.gitkeep
+# Python sources and temporary install dirs
+pythonSrc/ext/*

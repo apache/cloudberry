@@ -88,6 +88,7 @@ choose_setop_type(List *pathlist, List *tlist_list)
 				break;
 
 			case CdbLocusType_Replicated:
+				ok_partitioned = false;
 				break;
 
 			case CdbLocusType_ReplicatedWorkers:
@@ -231,6 +232,7 @@ adjust_setop_arguments(PlannerInfo *root, List *pathlist, List *tlist_list, GpSe
 					case CdbLocusType_HashedWorkers:
 					case CdbLocusType_HashedOJ:
 					case CdbLocusType_Strewn:
+					case CdbLocusType_Replicated:
 						/* Gather to QE.  No need to keep ordering. */
 						CdbPathLocus_MakeSingleQE(&locus, getgpsegmentCount());
 						adjusted_path = cdbpath_create_motion_path(root, subpath, NULL, false,
@@ -254,7 +256,6 @@ adjust_setop_arguments(PlannerInfo *root, List *pathlist, List *tlist_list, GpSe
 
 					case CdbLocusType_Entry:
 					case CdbLocusType_Null:
-					case CdbLocusType_Replicated:
 					case CdbLocusType_ReplicatedWorkers:
 					case CdbLocusType_End:
 						ereport(ERROR, (errcode(ERRCODE_INTERNAL_ERROR),

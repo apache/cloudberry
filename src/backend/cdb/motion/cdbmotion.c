@@ -134,8 +134,8 @@ RemoveMotionLayer(MotionLayerState *mlStates)
 	/* Emit statistics to log */
 	if (gp_log_interconnect >= GPVARS_VERBOSITY_VERBOSE)
 		elog(LOG, "RemoveMotionLayer(): dumping stats\n"
-			 "      Sent: %9u chunks %9u total bytes %9u tuple bytes\n"
-			 "  Received: %9u chunks %9u total bytes %9u tuple bytes; "
+			 "      Sent: %9" INT64_MODIFIER "u chunks %9" INT64_MODIFIER "u total bytes %9" INT64_MODIFIER "u tuple bytes\n"
+			 "  Received: %9" INT64_MODIFIER "u chunks %9" INT64_MODIFIER "u total bytes %9" INT64_MODIFIER "u tuple bytes; "
 			 "%9u chunkproc calls\n",
 			 mlStates->stat_total_chunks_sent,
 			 mlStates->stat_total_bytes_sent,

@@ -63,6 +63,7 @@
 #include "tcop/tcopprot.h"
 #include "utils/builtins.h"
 #include "utils/lsyscache.h"
+#include "utils/metrics_utils.h"
 #include "utils/rel.h"
 #include "utils/snapmgr.h"
 #include "utils/syscache.h"
@@ -463,7 +464,8 @@ ExecRefreshMatView(RefreshMatViewStmt *stmt, const char *queryString,
 	if (!stmt->skipData && RelationIsIVM(matviewRel))
 		dataQuery = rewriteQueryForIMMV(viewQuery,NIL);
 	else
-		dataQuery = viewQuery;
+		/* viewQuery maybe released in make_new_heap_with_colname. */
+		dataQuery = copyObject(viewQuery);
 
 	/*
 	 * Check that there is a unique index with no WHERE clause on one or more
@@ -842,6 +844,10 @@ refresh_matview_datafill(DestReceiver *dest, Query *query,
 								GetActiveSnapshot(), InvalidSnapshot,
 								dest, NULL, NULL, 0);
 
+	/* GPDB hook for collecting query info */
+	if (query_info_collect_hook)
+		(*query_info_collect_hook)(METRICS_QUERY_SUBMIT, queryDesc);
+
 	RestoreOidAssignments(saved_dispatch_oids);
 
 	/* call ExecutorStart to prepare the plan for execution */
@@ -966,12 +972,7 @@ transientrel_startup(DestReceiver *self, int operation, TupleDesc typeinfo)
 	myState->bistate = GetBulkInsertState();
 	myState->processed = 0;
 
-	if (RelationIsAoRows(myState->transientrel))
-		appendonly_dml_init(myState->transientrel, CMD_INSERT);
-	else if (RelationIsAoCols(myState->transientrel))
-		aoco_dml_init(myState->transientrel, CMD_INSERT);
-	else if (ext_dml_init_hook)
-		ext_dml_init_hook(myState->transientrel, CMD_INSERT);
+	table_dml_init(myState->transientrel, CMD_INSERT);
 
 	/*
 	 * Valid smgr_targblock implies something already wrote to the relation.

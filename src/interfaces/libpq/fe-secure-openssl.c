@@ -1271,7 +1271,11 @@ initialize_SSL(PGconn *conn)
 			/* Colon, but not in second character, treat as engine:key */
 			char	   *engine_str = strdup(conn->sslkey);
 			char	   *engine_colon;
+<<<<<<< HEAD
 			EVP_PKEY   *pkey;
+=======
+			EVP_PKEY   *pkey = NULL;
+>>>>>>> main
 
 			if (engine_str == NULL)
 			{

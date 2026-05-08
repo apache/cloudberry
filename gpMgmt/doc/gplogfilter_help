@@ -32,7 +32,7 @@ once by running it through the gpssh utility. For example, to display
 the last three lines of each segment log file: 
 
  gpssh -f seg_host_file 
- => source /usr/local/greenplum-db/greenplum_path.sh 
+ => source /usr/local/greenplum-db/cloudberry-env.sh 
  => gplogfilter -n 3 /gpdata/*/log/gpdb*.csv 
 
 By default, the output of gplogfilter is sent to standard output. Use 
@@ -217,7 +217,7 @@ messages in the segment log files containing the string 'con6' and save
 output to a file. 
 
  gpssh -f seg_hosts_file -e 'source 
- /usr/local/greenplum-db/greenplum_path.sh ; gplogfilter -f con6 
+ /usr/local/greenplum-db/cloudberry-env.sh ; gplogfilter -f con6 
  /gpdata/*/log/gpdb*.csv' > seglog.out 
 
  

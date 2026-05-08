@@ -478,10 +478,6 @@ ExecCreateTableAs(ParseState *pstate, CreateTableAsStmt *stmt,
 									dest, params, queryEnv, 0);
 	}
 
-	/* GPDB hook for collecting query info */
-	if (query_info_collect_hook)
-		(*query_info_collect_hook)(METRICS_QUERY_SUBMIT, queryDesc);
-
 	if (into->skipData)
 	{
 		/*
@@ -495,6 +491,10 @@ ExecCreateTableAs(ParseState *pstate, CreateTableAsStmt *stmt,
 	}
 	else
 	{
+		/* GPDB hook for collecting query info */
+		if (query_info_collect_hook)
+			(*query_info_collect_hook)(METRICS_QUERY_SUBMIT, queryDesc);
+
 		check_and_unassign_from_resgroup(queryDesc->plannedstmt);
 		queryDesc->plannedstmt->query_mem = ResourceManagerGetQueryMemoryLimit(queryDesc->plannedstmt);
 
@@ -850,21 +850,8 @@ CreateIntoRelDestReceiver(IntoClause *intoClause)
 static void
 intorel_startup_dummy(DestReceiver *self, int operation, TupleDesc typeinfo)
 {
-	/*
-	 * In PostgreSQL, this is a no-op, but in GPDB, AO relations do need some
-	 * initialization of state, because the tableam API does not provide a
-	 * good enough interface for handling with this later, we need to
-	 * specifically all the init at start up.
-	 */
-
 	/* See intorel_initplan() for explanation */
-
-	if (RelationIsAoRows(((DR_intorel *)self)->rel))
-		appendonly_dml_init(((DR_intorel *)self)->rel, CMD_INSERT);
-	else if (RelationIsAoCols(((DR_intorel *)self)->rel))
-		aoco_dml_init(((DR_intorel *)self)->rel, CMD_INSERT);
-	else if (ext_dml_init_hook)
-		ext_dml_init_hook(((DR_intorel *)self)->rel, CMD_INSERT);
+	table_dml_init(((DR_intorel *)self)->rel, CMD_INSERT);
 }
 
 /*

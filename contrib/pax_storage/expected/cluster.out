@@ -1,4 +1,4 @@
-set pax_max_tuples_per_file to 131072;
+set pax.max_tuples_per_file to 131072;
 -- cluster table using index
 -- start_ignore
 drop table if EXISTS t_index_cluster;
@@ -135,7 +135,7 @@ select ptblockname,ptstatistics,ptisclustered from get_pax_aux_table('t_zorder_c
 
 drop table t_zorder_cluster;
 -- test cluster index
-set pax_max_tuples_per_file to 131072;
+set pax.max_tuples_per_file to 131072;
 drop table if EXISTS t_index_cluster;
 create table t_index_cluster(c1 int, c2 int) with (minmax_columns='c1,c2');
 \d+ t_index_cluster;

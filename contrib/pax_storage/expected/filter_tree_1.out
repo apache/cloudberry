@@ -5,8 +5,8 @@
 -- m/No sparse filter/
 -- end_matchignore
 set default_table_access_method to pax;
-set pax_enable_debug to on;
-set pax_enable_sparse_filter to on;
+set pax.enable_debug to on;
+set pax.enable_sparse_filter to on;
 create  or replace function intrc(iint int)
  returns int as $$ 
  begin return iint; end;
@@ -530,8 +530,8 @@ LOG:  statement: select count(*) from t1 where intrc(v1) + 10 > v2;
 (1 row)
 
 -- simply the filter tree
-set pax_log_filter_tree to on;
-LOG:  statement: set pax_log_filter_tree to on;
+set pax.log_filter_tree to on;
+LOG:  statement: set pax.log_filter_tree to on;
 select count(*) from t1 where v1 > 10 or intrc(v2) < 120;
 LOG:  statement: select count(*) from t1 where v1 > 10 or intrc(v2) < 120;
 LOG:  Origin filter tree: 
@@ -660,8 +660,8 @@ NullTestNode(flags=129)
    200
 (1 row)
 
-reset pax_log_filter_tree;
-LOG:  statement: reset pax_log_filter_tree;
+reset pax.log_filter_tree;
+LOG:  statement: reset pax.log_filter_tree;
 reset client_min_messages;
 LOG:  statement: reset client_min_messages;
 -- IN && bloom filter

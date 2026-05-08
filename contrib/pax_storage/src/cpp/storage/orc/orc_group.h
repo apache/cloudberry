@@ -40,7 +40,7 @@ class OrcDumpReader;
 class OrcGroup : public MicroPartitionReader::Group {
  public:
   OrcGroup(
-      std::unique_ptr<PaxColumns> &&pax_column, size_t row_offset,
+      std::unique_ptr<PaxColumns> pax_column, size_t row_offset,
       const std::vector<int> *proj_col_index,
       std::shared_ptr<Bitmap8> micro_partition_visibility_bitmap = nullptr);
 
@@ -50,7 +50,7 @@ class OrcGroup : public MicroPartitionReader::Group {
 
   size_t GetRowOffset() const override;
 
-  const std::shared_ptr<PaxColumns> &GetAllColumns() const override;
+  const std::unique_ptr<PaxColumns> &GetAllColumns() const override;
 
   virtual std::pair<bool, size_t> ReadTuple(TupleTableSlot *slot) override;
 
@@ -74,7 +74,7 @@ class OrcGroup : public MicroPartitionReader::Group {
                                                  size_t row_index);
 
  protected:
-  std::shared_ptr<PaxColumns> pax_columns_;
+  std::unique_ptr<PaxColumns> pax_columns_;
   std::shared_ptr<Bitmap8> micro_partition_visibility_bitmap_;
   size_t row_offset_;
   size_t current_row_index_;

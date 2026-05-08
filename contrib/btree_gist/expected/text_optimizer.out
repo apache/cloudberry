@@ -81,7 +81,7 @@ SELECT * FROM texttmp WHERE a BETWEEN '31a' AND '31c';
    ->  Index Scan using textidx on texttmp
          Index Cond: ((a >= '31a'::text) AND (a <= '31c'::text))
          Filter: ((a >= '31a'::text) AND (a <= '31c'::text))
- Optimizer: Pivotal Optimizer (GPORCA)
+ Optimizer: GPORCA
 (5 rows)
 
 SELECT * FROM texttmp WHERE a BETWEEN '31a' AND '31c';

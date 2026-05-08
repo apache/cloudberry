@@ -10331,7 +10331,7 @@ WHERE  e.deptno = dc1.deptno AND
        m.deptno = dmc1.dept_mgr_no
 ORDER BY 1, 2, 3, 4 DESC LIMIT 25;
 
--- Test that SharedInputScan within the same slice is always executed 
+-- Test that ShareInputScan within the same slice is always executed 
 set gp_cte_sharing=on;
 
 -- start_ignore

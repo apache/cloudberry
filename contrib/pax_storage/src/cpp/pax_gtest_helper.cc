@@ -63,35 +63,53 @@ void ReleaseTestResourceOwner() {
   ResourceOwnerDelete(tmp_resource_owner);
 }
 
+void InitAttribute_text(Form_pg_attribute attr)
+{
+  memset(attr, 0, sizeof(*attr));
+  attr->atttypid = TEXTOID;
+  attr->attlen = -1;
+  attr->attbyval = false;
+  attr->attalign = TYPALIGN_DOUBLE;
+  attr->attstorage = TYPSTORAGE_PLAIN;
+  attr->attisdropped = false;
+  attr->attcollation = DEFAULT_COLLATION_OID;
+}
+
+void InitAttribute_int4(Form_pg_attribute attr)
+{
+  memset(attr, 0, sizeof(*attr));
+  attr->atttypid = INT4OID;
+  attr->attlen = 4;
+  attr->attbyval = true;
+  attr->attalign = TYPALIGN_INT;
+  attr->attstorage = TYPSTORAGE_PLAIN;
+  attr->attisdropped = false;
+  attr->attcollation = InvalidOid;
+}
+
+void InitAttribute_int8(Form_pg_attribute attr)
+{
+  memset(attr, 0, sizeof(*attr));
+  attr->atttypid = INT8OID;
+  attr->attlen = 8;
+  attr->attbyval = true;
+  attr->attalign = TYPALIGN_DOUBLE;
+  attr->attstorage = TYPSTORAGE_PLAIN;
+  attr->attisdropped = false;
+  attr->attcollation = InvalidOid;
+}
+
 static TupleDesc CreateTestTupleDesc(int ncols) {
   Assert(ncols >= COLUMN_NUMS);
   auto tuple_desc = reinterpret_cast<TupleDescData *>(cbdb::Palloc0(
       sizeof(TupleDescData) + sizeof(FormData_pg_attribute) * ncols));
 
   tuple_desc->natts = COLUMN_NUMS;
-  tuple_desc->attrs[0] = {.atttypid = TEXTOID,
-                          .attlen = -1,
-                          .attbyval = false,
-                          .attalign = TYPALIGN_DOUBLE,
-                          .attstorage = TYPSTORAGE_PLAIN,
-                          .attisdropped = false,
-                          .attcollation = DEFAULT_COLLATION_OID};
 
-  tuple_desc->attrs[1] = {.atttypid = TEXTOID,
-                          .attlen = -1,
-                          .attbyval = false,
-                          .attalign = TYPALIGN_DOUBLE,
-                          .attstorage = TYPSTORAGE_PLAIN,
-                          .attisdropped = false,
-                          .attcollation = DEFAULT_COLLATION_OID};
+  InitAttribute_text(&tuple_desc->attrs[0]);
+  InitAttribute_text(&tuple_desc->attrs[1]);
+  InitAttribute_int4(&tuple_desc->attrs[2]);
 
-  tuple_desc->attrs[2] = {.atttypid = INT4OID,
-                          .attlen = 4,
-                          .attbyval = true,
-                          .attalign = TYPALIGN_INT,
-                          .attstorage = TYPSTORAGE_PLAIN,
-                          .attisdropped = false,
-                          .attcollation = InvalidOid};
   return tuple_desc;
 }
 

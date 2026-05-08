@@ -6794,6 +6794,184 @@ FROM pg_stat_get_backend_idset() AS backendid;
   </table>
  </sect2>
 
+<<<<<<< HEAD
+=======
+ <sect2 id="basebackup-progress-reporting">
+  <title>Base Backup Progress Reporting</title>
+
+  <indexterm>
+   <primary>pg_stat_progress_basebackup</primary>
+  </indexterm>
+
+  <para>
+   Whenever an application like <application>pg_basebackup</application>
+   is taking a base backup, the
+   <structname>pg_stat_progress_basebackup</structname>
+   view will contain a row for each WAL sender process that is currently
+   running the <command>BASE_BACKUP</command> replication command
+   and streaming the backup. The tables below describe the information
+   that will be reported and provide information about how to interpret it.
+  </para>
+
+  <table id="pg-stat-progress-basebackup-view" xreflabel="pg_stat_progress_basebackup">
+   <title><structname>pg_stat_progress_basebackup</structname> View</title>
+   <tgroup cols="1">
+    <thead>
+     <row>
+      <entry role="catalog_table_entry"><para role="column_definition">
+       Column Type
+      </para>
+      <para>
+       Description
+      </para></entry>
+     </row>
+    </thead>
+
+    <tbody>
+     <row>
+      <entry role="catalog_table_entry"><para role="column_definition">
+       <structfield>pid</structfield> <type>integer</type>
+      </para>
+      <para>
+       Process ID of a WAL sender process.
+      </para></entry>
+     </row>
+
+     <row>
+      <entry role="catalog_table_entry"><para role="column_definition">
+       <structfield>phase</structfield> <type>text</type>
+      </para>
+      <para>
+       Current processing phase. See <xref linkend="basebackup-phases"/>.
+      </para></entry>
+     </row>
+
+     <row>
+      <entry role="catalog_table_entry"><para role="column_definition">
+       <structfield>backup_total</structfield> <type>bigint</type>
+      </para>
+      <para>
+       Total amount of data that will be streamed. This is estimated and
+       reported as of the beginning of
+       <literal>streaming database files</literal> phase. Note that
+       this is only an approximation since the database
+       may change during <literal>streaming database files</literal> phase
+       and WAL log may be included in the backup later. This is always
+       the same value as <structfield>backup_streamed</structfield>
+       once the amount of data streamed exceeds the estimated
+       total size. If the estimation is disabled in
+       <application>pg_basebackup</application>
+       (i.e., <literal>--no-estimate-size</literal> option is specified),
+       this is <literal>NULL</literal>.
+      </para></entry>
+     </row>
+
+     <row>
+      <entry role="catalog_table_entry"><para role="column_definition">
+       <structfield>backup_streamed</structfield> <type>bigint</type>
+      </para>
+      <para>
+       Amount of data streamed. This counter only advances
+       when the phase is <literal>streaming database files</literal> or
+       <literal>transferring wal files</literal>.
+      </para></entry>
+     </row>
+
+     <row>
+      <entry role="catalog_table_entry"><para role="column_definition">
+       <structfield>tablespaces_total</structfield> <type>bigint</type>
+      </para>
+      <para>
+       Total number of tablespaces that will be streamed.
+      </para></entry>
+     </row>
+
+     <row>
+      <entry role="catalog_table_entry"><para role="column_definition">
+       <structfield>tablespaces_streamed</structfield> <type>bigint</type>
+      </para>
+      <para>
+       Number of tablespaces streamed. This counter only
+       advances when the phase is <literal>streaming database files</literal>.
+      </para></entry>
+     </row>
+    </tbody>
+   </tgroup>
+  </table>
+
+  <table id="basebackup-phases">
+   <title>Base Backup Phases</title>
+   <tgroup cols="2">
+    <colspec colname="col1" colwidth="1*"/>
+    <colspec colname="col2" colwidth="2*"/>
+    <thead>
+     <row>
+      <entry>Phase</entry>
+      <entry>Description</entry>
+     </row>
+    </thead>
+    <tbody>
+     <row>
+      <entry><literal>initializing</literal></entry>
+      <entry>
+       The WAL sender process is preparing to begin the backup.
+       This phase is expected to be very brief.
+      </entry>
+     </row>
+     <row>
+      <entry><literal>waiting for checkpoint to finish</literal></entry>
+      <entry>
+       The WAL sender process is currently performing
+       <function>pg_start_backup</function> to prepare to
+       take a base backup, and waiting for the start-of-backup
+       checkpoint to finish.
+      </entry>
+     </row>
+     <row>
+      <entry><literal>estimating backup size</literal></entry>
+      <entry>
+       The WAL sender process is currently estimating the total amount
+       of database files that will be streamed as a base backup.
+      </entry>
+     </row>
+     <row>
+      <entry><literal>streaming database files</literal></entry>
+      <entry>
+       The WAL sender process is currently streaming database files
+       as a base backup.
+      </entry>
+     </row>
+     <row>
+      <entry><literal>waiting for wal archiving to finish</literal></entry>
+      <entry>
+       The WAL sender process is currently performing
+       <function>pg_stop_backup</function> to finish the backup,
+       and waiting for all the WAL files required for the base backup
+       to be successfully archived.
+       If either <literal>--wal-method=none</literal> or
+       <literal>--wal-method=stream</literal> is specified in
+       <application>pg_basebackup</application>, the backup will end
+       when this phase is completed.
+      </entry>
+     </row>
+     <row>
+      <entry><literal>transferring wal files</literal></entry>
+      <entry>
+       The WAL sender process is currently transferring all WAL logs
+       generated during the backup. This phase occurs after
+       <literal>waiting for wal archiving to finish</literal> phase if
+       <literal>--wal-method=fetch</literal> is specified in
+       <application>pg_basebackup</application>. The backup will end
+       when this phase is completed.
+      </entry>
+     </row>
+    </tbody>
+   </tgroup>
+  </table>
+
+ </sect2>
+
+>>>>>>> main
  <sect2 id="copy-progress-reporting">
   <title>COPY Progress Reporting</title>
 

@@ -60,6 +60,8 @@ public:
 	CWindowOids(CMemoryPool *mp, OID row_number_oid, OID rank_oid,
 				OID dense_rank_oid);
 
+	~CWindowOids() override;
+
 	// accessor of oid value of "row_number" function
 	OID OidRowNumber() const;
 	IMDId *MDIdRowNumber() const;

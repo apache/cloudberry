@@ -887,6 +887,11 @@ usage(void)
 		   "  -q, --quiet              quiet logging (one message each 5 seconds)\n"
 		   "  -s, --scale=NUM          scaling factor\n"
 		   "  --foreign-keys           create foreign key constraints between tables\n"
+<<<<<<< HEAD
+=======
+		   "  --use-non-unique-keys        make the indexes that are created non-unique indexes\n"
+		   "                           (default: unique)\n"
+>>>>>>> main
 		   "  --index-tablespace=TABLESPACE\n"
 		   "                           create indexes in the specified tablespace\n"
 		   "  --partition-method=(range|hash)\n"
@@ -5123,7 +5128,11 @@ initCreatePKeys(PGconn *con)
 	int			i;
 	PQExpBufferData query;
 
-	fprintf(stderr, "creating primary keys...\n");
+	if (use_unique_key)
+		fprintf(stderr, "creating primary keys...\n");
+	else
+		fprintf(stderr, "creating non-unique keys...\n");
+
 	initPQExpBuffer(&query);
 
 	for (i = 0; i < lengthof(DDLINDEXes); i++)
@@ -6636,9 +6645,14 @@ main(int argc, char **argv)
 		{"show-script", required_argument, NULL, 10},
 		{"partitions", required_argument, NULL, 11},
 		{"partition-method", required_argument, NULL, 12},
+<<<<<<< HEAD
 		{"failures-detailed", no_argument, NULL, 13},
 		{"max-tries", required_argument, NULL, 14},
 		{"verbose-errors", no_argument, NULL, 15},
+=======
+		/* Cloudberry-specific */
+		{"use-non-unique-keys", no_argument, NULL, 13},
+>>>>>>> main
 		{NULL, 0, NULL, 0}
 	};
 
@@ -6972,9 +6986,18 @@ main(int argc, char **argv)
 					max_tries = (uint32) max_tries_arg;
 				}
 				break;
+<<<<<<< HEAD
 			case 15:			/* verbose-errors */
 				benchmarking_option_set = true;
 				verbose_errors = true;
+=======
+			case 13:
+				use_unique_key = 0;
+				break;
+			default:
+				fprintf(stderr, _("Try \"%s --help\" for more information.\n"), progname);
+				exit(1);
+>>>>>>> main
 				break;
 			default:
 				/* getopt_long already emitted a complaint */

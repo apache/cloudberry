@@ -274,8 +274,12 @@ HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sur
 SELECT * FROM verify_heapam('test_partitioned',
 							startblock := NULL,
 							endblock := NULL);
+<<<<<<< HEAD
 ERROR:  cannot check relation "test_partitioned"  (seg0 slice1 127.0.1.1:7002 pid=2559521)
 DETAIL:  This operation is not supported for partitioned tables.
+=======
+ERROR:  "test_partitioned" is not a table, directory table, materialized view, or TOAST table
+>>>>>>> main
 CONTEXT:  SQL statement "SELECT t.blkno, t.offnum, t.attnum, t.msg
 	FROM verify_heapam_internal(relation,
 							 on_error_stop,
@@ -317,8 +321,12 @@ CREATE INDEX test_index ON test_partition (a);
 SELECT * FROM verify_heapam('test_index',
 							startblock := NULL,
 							endblock := NULL);
+<<<<<<< HEAD
 ERROR:  cannot check relation "test_index"  (seg1 slice1 127.0.1.1:7003 pid=2559522)
 DETAIL:  This operation is not supported for indexes.
+=======
+ERROR:  "test_index" is not a table, directory table, materialized view, or TOAST table
+>>>>>>> main
 CONTEXT:  SQL statement "SELECT t.blkno, t.offnum, t.attnum, t.msg
 	FROM verify_heapam_internal(relation,
 							 on_error_stop,
@@ -333,8 +341,12 @@ CREATE VIEW test_view AS SELECT 1;
 SELECT * FROM verify_heapam('test_view',
 							startblock := NULL,
 							endblock := NULL);
+<<<<<<< HEAD
 ERROR:  cannot check relation "test_view"  (seg0 slice1 127.0.1.1:7002 pid=2559521)
 DETAIL:  This operation is not supported for views.
+=======
+ERROR:  "test_view" is not a table, directory table, materialized view, or TOAST table
+>>>>>>> main
 CONTEXT:  SQL statement "SELECT t.blkno, t.offnum, t.attnum, t.msg
 	FROM verify_heapam_internal(relation,
 							 on_error_stop,
@@ -349,6 +361,7 @@ CREATE SEQUENCE test_sequence;
 SELECT * FROM verify_heapam('test_sequence',
 							startblock := NULL,
 							endblock := NULL);
+<<<<<<< HEAD
  blkno | offnum | attnum | msg 
 -------+--------+--------+-----
        |        |        | 
@@ -356,6 +369,18 @@ SELECT * FROM verify_heapam('test_sequence',
        |        |        | 
 (3 rows)
 
+=======
+ERROR:  "test_sequence" is not a table, directory table, materialized view, or TOAST table
+CONTEXT:  SQL statement "SELECT t.blkno, t.offnum, t.attnum, t.msg
+	FROM verify_heapam_internal(relation,
+							 on_error_stop,
+							 check_toast,
+							 skip,
+							 startblock,
+							 endblock
+							 )t"
+PL/pgSQL function verify_heapam(regclass,boolean,boolean,text,bigint,bigint) line 3 at RETURN QUERY
+>>>>>>> main
 -- Check that foreign tables are rejected
 CREATE FOREIGN DATA WRAPPER dummy;
 CREATE SERVER dummy_server FOREIGN DATA WRAPPER dummy;
@@ -363,8 +388,12 @@ CREATE FOREIGN TABLE test_foreign_table () SERVER dummy_server;
 SELECT * FROM verify_heapam('test_foreign_table',
 							startblock := NULL,
 							endblock := NULL);
+<<<<<<< HEAD
 ERROR:  cannot check relation "test_foreign_table"  (seg0 slice1 127.0.1.1:7002 pid=2559521)
 DETAIL:  This operation is not supported for foreign tables.
+=======
+ERROR:  "test_foreign_table" is not a table, directory table, materialized view, or TOAST table
+>>>>>>> main
 CONTEXT:  SQL statement "SELECT t.blkno, t.offnum, t.attnum, t.msg
 	FROM verify_heapam_internal(relation,
 							 on_error_stop,

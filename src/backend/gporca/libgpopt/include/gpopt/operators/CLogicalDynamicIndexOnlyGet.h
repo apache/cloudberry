@@ -87,9 +87,11 @@ public:
 	{
 		CXformSet *xform_set = GPOS_NEW(mp) CXformSet(mp);
 
-		(void) xform_set->ExchangeSet(
-			CXform::ExfDynamicIndexOnlyGet2DynamicIndexOnlyScan);
-
+		// Append node have not implements the index only scan
+		if (!GPOS_FTRACE(EopttraceDisableDynamicTableScan)) {
+			(void) xform_set->ExchangeSet(
+				CXform::ExfDynamicIndexOnlyGet2DynamicIndexOnlyScan);
+		}
 		return xform_set;
 	}
 

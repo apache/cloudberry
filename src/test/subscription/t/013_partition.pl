@@ -4,9 +4,15 @@
 # Test logical replication with partitioned tables
 use strict;
 use warnings;
+<<<<<<< HEAD
 use PostgreSQL::Test::Cluster;
 use PostgreSQL::Test::Utils;
 use Test::More;
+=======
+use PostgresNode;
+use TestLib;
+use Test::More tests => 71;
+>>>>>>> main
 
 # setup
 
@@ -852,9 +858,13 @@ $node_publisher->wait_for_catchup('sub2');
 
 $result = $node_subscriber2->safe_psql('postgres',
 	"SELECT a, b, c FROM tab5 ORDER BY 1");
+<<<<<<< HEAD
 is($result, qq(3|1|),
 	'updates of tab5 replicated correctly after altering table on subscriber'
 );
+=======
+is($result, qq(3|1|), 'updates of tab5 replicated correctly after altering table on subscriber');
+>>>>>>> main
 
 # Test that replication into the partitioned target table continues to
 # work correctly when the published table is altered.
@@ -869,8 +879,12 @@ $node_publisher->wait_for_catchup('sub2');
 
 $result = $node_subscriber2->safe_psql('postgres',
 	"SELECT a, b, c FROM tab5 ORDER BY 1");
+<<<<<<< HEAD
 is($result, qq(3||1),
 	'updates of tab5 replicated correctly after altering table on publisher');
+=======
+is($result, qq(3||1), 'updates of tab5 replicated correctly after altering table on publisher');
+>>>>>>> main
 
 # Test that replication works correctly as long as the leaf partition
 # has the necessary REPLICA IDENTITY, even though the actual target
@@ -885,5 +899,8 @@ $node_publisher->wait_for_catchup('sub2');
 $result = $node_subscriber2->safe_psql('postgres',
 	"SELECT a, b, c FROM tab5_1 ORDER BY 1");
 is($result, qq(4||1), 'updates of tab5 replicated correctly');
+<<<<<<< HEAD
 
 done_testing();
+=======
+>>>>>>> main

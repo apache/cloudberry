@@ -49,7 +49,7 @@ inline static std::pair<Datum, bool> GetColumnDatum(PaxColumn *column,
   Datum rc;
 
   if (column->HasNull()) {
-    auto bm = column->GetBitmap();
+    const auto &bm = column->GetBitmap();
     Assert(bm);
     if (!bm->Test(row_index)) {
       *null_counts += 1;
@@ -64,7 +64,7 @@ inline static std::pair<Datum, bool> GetColumnDatum(PaxColumn *column,
   return {rc, false};
 }
 
-OrcGroup::OrcGroup(std::unique_ptr<PaxColumns> &&pax_column, size_t row_offset,
+OrcGroup::OrcGroup(std::unique_ptr<PaxColumns> pax_column, size_t row_offset,
                    const std::vector<int> *proj_col_index,
                    std::shared_ptr<Bitmap8> micro_partition_visibility_bitmap)
     : pax_columns_(std::move(pax_column)),
@@ -88,7 +88,7 @@ size_t OrcGroup::GetRows() const { return pax_columns_->GetRows(); }
 
 size_t OrcGroup::GetRowOffset() const { return row_offset_; }
 
-const std::shared_ptr<PaxColumns> &OrcGroup::GetAllColumns() const {
+const std::unique_ptr<PaxColumns> &OrcGroup::GetAllColumns() const {
   return pax_columns_;
 }
 
@@ -123,7 +123,7 @@ std::pair<bool, size_t> OrcGroup::ReadTuple(TupleTableSlot *slot) {
         }
 
         if (column->HasNull()) {
-          auto bm = column->GetBitmap();
+          const auto &bm = column->GetBitmap();
           Assert(bm);
           if (!bm->Test(current_row_index_)) {
             current_nulls_[index]++;
@@ -307,7 +307,7 @@ std::pair<Datum, bool> OrcGroup::GetColumnValueNoMissing(size_t column_index,
 void OrcGroup::CalcNullShuffle(PaxColumn *column, size_t column_index) {
   auto rows = column->GetRows();
   uint32 n_counts = 0;
-  auto bm = column->GetBitmap();
+  const auto &bm = column->GetBitmap();
 
   Assert(bm);
   Assert(column->HasNull() && !nulls_shuffle_[column_index]);

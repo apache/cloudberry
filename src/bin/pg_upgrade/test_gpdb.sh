@@ -368,7 +368,7 @@ main() {
 	
 	########################## START: OLD cluster checks
 	
-	. ${OLD_BINDIR}/../greenplum_path.sh
+	. ${OLD_BINDIR}/../cloudberry-env.sh
 
 	# The cluster should be running by now, but in case it isn't, issue a restart.
 	# Since we expect the testcluster to be a stock standard gpdemo, we test for
@@ -419,7 +419,7 @@ main() {
 	########################## START: NEW cluster creation
 	
 	echo "Switching to gpdb-6 env..."
-	. ${NEW_BINDIR}/../greenplum_path.sh
+	. ${NEW_BINDIR}/../cloudberry-env.sh
 	
 	# Create a new gpdemo cluster in the NEW_DATADIR. Using the new datadir for the
 	# path to demo_cluster.sh is a bit of a hack, but since this test relies on
@@ -492,7 +492,7 @@ main() {
 	
 	print_delta_seconds $epoch_for_perf_start 'number_of_seconds_for_upgrade'
 	
-	. ${NEW_BINDIR}/../greenplum_path.sh
+	. ${NEW_BINDIR}/../cloudberry-env.sh
 	
 	if (( !$perf_test )) ; then
 		diff_and_exit

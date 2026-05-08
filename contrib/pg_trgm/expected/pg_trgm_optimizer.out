@@ -2351,6 +2351,7 @@ select t <-> 'q0987wertyu0988', t from test_trgm order by t <-> 'q0987wertyu0988
          ->  Limit
                ->  Index Scan using trgm_idx on test_trgm
                      Order By: (t <-> 'q0987wertyu0988'::text)
+ Optimizer: Postgres query optimizer
 (7 rows)
 
 select t <-> 'q0987wertyu0988', t from test_trgm order by t <-> 'q0987wertyu0988' limit 2;
@@ -5003,8 +5004,8 @@ select * from test2 where t ~ '/\d+/-\d';
 -- test = operator
 explain (costs off)
   select * from test2 where t = 'abcdef';
-                QUERY PLAN                
-------------------------------------------
+                   QUERY PLAN                   
+------------------------------------------------
  Gather Motion 1:1  (slice1; segments: 1)
    ->  Bitmap Heap Scan on test2
          Recheck Cond: (t = 'abcdef'::text)
@@ -5020,8 +5021,8 @@ select * from test2 where t = 'abcdef';
 
 explain (costs off)
   select * from test2 where t = '%line%';
-                QUERY PLAN                
-------------------------------------------
+                   QUERY PLAN                   
+------------------------------------------------
  Gather Motion 1:1  (slice1; segments: 1)
    ->  Bitmap Heap Scan on test2
          Recheck Cond: (t = '%line%'::text)
@@ -5311,14 +5312,15 @@ select * from test2 where t ~ '/\d+/-\d';
 -- test = operator
 explain (costs off)
   select * from test2 where t = 'abcdef';
-                QUERY PLAN                
-------------------------------------------
+                   QUERY PLAN                    
+-------------------------------------------------
  Gather Motion 1:1  (slice1; segments: 1)
    ->  Bitmap Heap Scan on test2
          Recheck Cond: (t = 'abcdef'::text)
          ->  Bitmap Index Scan on test2_idx_gist
                Index Cond: (t = 'abcdef'::text)
-(2 rows)
+ Optimizer: Postgres query optimizer
+(6 rows)
 
 select * from test2 where t = 'abcdef';
    t    
@@ -5328,13 +5330,14 @@ select * from test2 where t = 'abcdef';
 
 explain (costs off)
   select * from test2 where t = '%line%';
-                QUERY PLAN                
-------------------------------------------
+                   QUERY PLAN                    
+-------------------------------------------------
  Gather Motion 1:1  (slice1; segments: 1)
    ->  Bitmap Heap Scan on test2
          Recheck Cond: (t = '%line%'::text)
          ->  Bitmap Index Scan on test2_idx_gist
                Index Cond: (t = '%line%'::text)
+ Optimizer: Postgres query optimizer
 (6 rows)
 
 select * from test2 where t = '%line%';
@@ -5423,7 +5426,7 @@ SELECT DISTINCT city, similarity(city, 'Warsaw'), show_limit()
                ->  Index Scan using restaurants_city_idx on restaurants
                      Index Cond: (city % 'Warsaw'::text)
                      Filter: (city % 'Warsaw'::text)
- Optimizer: Pivotal Optimizer (GPORCA)
+ Optimizer: GPORCA
 (9 rows)
 
 SELECT set_limit(0.3);

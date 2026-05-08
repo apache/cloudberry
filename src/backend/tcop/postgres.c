@@ -152,6 +152,8 @@ cancel_pending_hook_type cancel_pending_hook = NULL;
  * Hook for query execution.
  */
 exec_simple_query_hook_type exec_simple_query_hook = NULL;
+/* flags for non-system relation kinds to restrict use */
+int			restrict_nonsystem_relation_kind;
 
 /* ----------------
  *		private typedefs etc
@@ -1598,6 +1600,8 @@ exec_mpp_dtx_protocol_command(DtxProtocolCommand dtxProtocolCommand,
 	CommandDest dest = whereToSendOutput;
 	qc.commandTag = GetCommandTagEnum(loggingStr);
 	qc.nprocessed = 1;
+
+	SIMPLE_FAULT_INJECTOR("exec_dtx_protocol_start");
 
 	if (log_statement == LOGSTMT_ALL)
 		elog(LOG,"DTM protocol command '%s' for gid = %s", loggingStr, gid);
@@ -4591,6 +4595,7 @@ assign_max_stack_depth(int newval, void *extra)
 }
 
 /*
+<<<<<<< HEAD
  * GUC check_hook for client_connection_check_interval
  */
 bool
@@ -4643,6 +4648,8 @@ check_log_stats(bool *newval, void **extra, GucSource source)
 }
 
 /*
+=======
+>>>>>>> main
  * GUC check_hook for restrict_nonsystem_relation_kind
  */
 bool
@@ -4686,7 +4693,11 @@ check_restrict_nonsystem_relation_kind(char **newval, void **extra, GucSource so
 	list_free(elemlist);
 
 	/* Save the flags in *extra, for use by the assign function */
+<<<<<<< HEAD
 	*extra = guc_malloc(ERROR, sizeof(int));
+=======
+	*extra = malloc(sizeof(int));
+>>>>>>> main
 	*((int *) *extra) = flags;
 
 	return true;
@@ -5948,6 +5959,7 @@ PostgresMain(const char *dbname, const char *username)
 					const char *serializedQueryDispatchDesc = NULL;
 					const char *resgroupInfoBuf = NULL;
 
+					int is_hs_dispatch;
 					int query_string_len = 0;
 					int serializedDtxContextInfolen = 0;
 					int serializedPlantreelen = 0;
@@ -5984,6 +5996,20 @@ PostgresMain(const char *dbname, const char *username)
 					cuid = pq_getmsgint(&input_message, 4);
 
 					statementStart = pq_getmsgint64(&input_message);
+
+					/* check if the message is from standby QD and is expected */
+					is_hs_dispatch = pq_getmsgint(&input_message, 4);
+					if (is_hs_dispatch == 0 && IS_HOT_STANDBY_QE())
+						ereport(ERROR,
+								(errcode(ERRCODE_PROTOCOL_VIOLATION),
+								 errmsg("mirror segments can only process MPP protocol messages from standby QD"),
+								 errhint("Exit the current session and re-connect.")));
+					else if (is_hs_dispatch != 0 && !IS_HOT_STANDBY_QE())
+						ereport(ERROR,
+								(errcode(ERRCODE_PROTOCOL_VIOLATION),
+								 errmsg("primary segments can only process MPP protocol messages from primary QD"),
+								 errhint("Exit the current session and re-connect.")));
+
 					query_string_len = pq_getmsgint(&input_message, 4);
 					serializedPlantreelen = pq_getmsgint(&input_message, 4);
 					serializedQueryDispatchDesclen = pq_getmsgint(&input_message, 4);

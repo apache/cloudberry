@@ -1052,6 +1052,9 @@ _outNode(StringInfo str, void *obj)
 			case T_WindowAgg:
 				_outWindowAgg(str, obj);
 				break;
+			case T_WindowHashAgg:
+				_outWindowHashAgg(str, obj);
+				break;
 			case T_Group:
 				_outGroup(str, obj);
 				break;

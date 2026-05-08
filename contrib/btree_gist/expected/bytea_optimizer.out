@@ -81,7 +81,7 @@ SELECT a FROM byteatmp where a > 'ffa'::bytea;
    ->  Index Scan using byteaidx on byteatmp
          Index Cond: (a > '\x666661'::bytea)
          Filter: (a > '\x666661'::bytea)
- Optimizer: Pivotal Optimizer (GPORCA)
+ Optimizer: GPORCA
 (5 rows)
 
 SELECT a FROM byteatmp where a > 'ffa'::bytea;

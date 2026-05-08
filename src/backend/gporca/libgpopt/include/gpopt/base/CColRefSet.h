@@ -133,6 +133,10 @@ public:
 	// extract all column ids
 	void ExtractColIds(CMemoryPool *mp, ULongPtrArray *colids) const;
 
+	// extract the index(relative position) in current CColRefSet
+	// notice that: Whenever the current CColRefSet changes, the index will also change.
+	void ExtractIndex(const CColRef *querycr, ULONG *colidx) const;
+
 	// are the columns in the column reference set covered by the array of column ref sets
 	static BOOL FCovered(CColRefSetArray *pdrgpcrs, CColRefSet *pcrs);
 

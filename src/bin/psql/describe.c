@@ -59,7 +59,7 @@ static bool validateSQLNamePattern(PQExpBuffer buf, const char *pattern,
 								   const char *visibilityrule,
 								   bool *added_clause, int maxparts);
 
-static bool isGPDB(void);
+static bool isMPP(void);
 static bool isGPDB4200OrLater(void);
 static bool isGPDB5000OrLater(void);
 static bool isGPDB6000OrLater(void);
@@ -71,7 +71,7 @@ static bool validateSQLNamePattern(PQExpBuffer buf, const char *pattern,
 								   const char *visibilityrule,
 								   bool *added_clause, int maxparts);
 
-static bool isGPDB(void)
+static bool isMPP(void)
 {
 	static enum
 	{
@@ -93,7 +93,7 @@ static bool isGPDB(void)
 		return false;
 
 	ver = PQgetvalue(res, 0, 0);
-	if (strstr(ver, "Cloudberry") != NULL)
+	if (strstr(ver, "Cloudberry") != NULL || strstr(ver, "Greenplum") != NULL)
 	{
 		PQclear(res);
 		talking_to_gpdb = gpdb_yes;
@@ -120,7 +120,7 @@ static bool isGPDB4200OrLater(void)
 {
 	bool       retValue = false;
 
-	if (isGPDB() == true)
+	if (isMPP() == true)
 	{
 		PGresult  *result;
 
@@ -141,7 +141,7 @@ isGPDB4300OrLater(void)
 {
 	bool       retValue = false;
 
-	if (isGPDB() == true)
+	if (isMPP() == true)
 	{
 		PGresult  *result;
 
@@ -164,7 +164,7 @@ static bool isGPDB5000OrLater(void)
 {
 	bool	retValue = false;
 
-	if (isGPDB() == true)
+	if (isMPP() == true)
 	{
 		PGresult   *res;
 
@@ -178,8 +178,8 @@ static bool isGPDB5000OrLater(void)
 static bool
 isGPDB6000OrLater(void)
 {
-	if (!isGPDB())
-		return false;		/* Not Cloudberry at all. */
+	if (!isMPP())
+		return false;		/* Not GP-based at all. */
 
 	/* GPDB 6 is based on PostgreSQL 9.4 */
 	return pset.sversion >= 90400;
@@ -188,8 +188,8 @@ isGPDB6000OrLater(void)
 static bool
 isGPDB6000OrBelow(void)
 {
-	if (!isGPDB())
-		return false;		/* Not Cloudberry at all. */
+	if (!isMPP())
+		return false;		/* Not GP-based at all. */
 
 	/* GPDB 6 is based on PostgreSQL 9.4 */
 	return pset.sversion <= 90400;
@@ -198,8 +198,8 @@ isGPDB6000OrBelow(void)
 static bool
 isGPDB7000OrLater(void)
 {
-	if (!isGPDB())
-		return false;		/* Not Cloudberry at all. */
+	if (!isMPP())
+		return false;		/* Not GP-based at all. */
 
 	/* GPDB 7 is based on PostgreSQL v12 */
 	return pset.sversion >= 120000;
@@ -1885,7 +1885,7 @@ describeOneTableDetails(const char *schemaname,
 						   "array(select 'toast.' || x from pg_catalog.unnest(tc.reloptions) x), ', ')\n"
 						   : "''"),
 						  /* GPDB Only:  relstorage  */
-						  (isGPDB() ? "c.relstorage" : "'h'"),
+						  (isMPP() ? "c.relstorage" : "'h'"),
 						  oid);
 	}
 	else if (pset.sversion >= 90400)
@@ -1905,7 +1905,7 @@ describeOneTableDetails(const char *schemaname,
 						   "array(select 'toast.' || x from pg_catalog.unnest(tc.reloptions) x), ', ')\n"
 						   : "''"),
 						  /* GPDB Only:  relstorage  */
-						  (isGPDB() ? "c.relstorage" : "'h'"),
+						  (isMPP() ? "c.relstorage" : "'h'"),
 						  oid);
 	}
 	else
@@ -1925,9 +1925,82 @@ describeOneTableDetails(const char *schemaname,
 						   "array(select 'toast.' || x from pg_catalog.unnest(tc.reloptions) x), ', ')\n"
 						   : "''"),
 						  /* GPDB Only:  relstorage  */
-						  (isGPDB() ? "c.relstorage" : "'h'"),
+						  (isMPP() ? "c.relstorage" : "'h'"),
 						  oid);
 	}
+<<<<<<< HEAD
+=======
+	else if (pset.sversion >= 90000)
+	{
+		printfPQExpBuffer(&buf,
+						  "SELECT c.relchecks, c.relkind, c.relhasindex, c.relhasrules, "
+						  "c.relhastriggers, false, false, c.relhasoids, "
+						  "false as relispartition, %s, c.reltablespace, "
+						  "CASE WHEN c.reloftype = 0 THEN '' ELSE c.reloftype::pg_catalog.regtype::pg_catalog.text END\n"
+						  ", %s as relstorage "
+						  "FROM pg_catalog.pg_class c\n "
+						  "LEFT JOIN pg_catalog.pg_class tc ON (c.reltoastrelid = tc.oid)\n"
+						  "WHERE c.oid = '%s';",
+						  (verbose ?
+						   "pg_catalog.array_to_string(c.reloptions || "
+						   "array(select 'toast.' || x from pg_catalog.unnest(tc.reloptions) x), ', ')\n"
+						   : "''"),
+						  /* GPDB Only:  relstorage  */
+						  (isMPP() ? "c.relstorage" : "'h'"),
+						  oid);
+	}
+	else if (pset.sversion >= 80400)
+	{
+		printfPQExpBuffer(&buf,
+						  "SELECT c.relchecks, c.relkind, c.relhasindex, c.relhasrules, "
+						  "c.relhastriggers, false, false, c.relhasoids, "
+						  "false as relispartition, %s, c.reltablespace\n"
+						  ", %s as relstorage "
+						  "FROM pg_catalog.pg_class c\n "
+						  "LEFT JOIN pg_catalog.pg_class tc ON (c.reltoastrelid = tc.oid)\n"
+						  "WHERE c.oid = '%s';",
+						  (verbose ?
+						   "pg_catalog.array_to_string(c.reloptions || "
+						   "array(select 'toast.' || x from pg_catalog.unnest(tc.reloptions) x), ', ')\n"
+						   : "''"),
+						  /* GPDB Only:  relstorage  */
+						  (isMPP() ? "c.relstorage" : "'h'"),
+						  oid);
+	}
+	else if (pset.sversion >= 80200)
+	{
+		printfPQExpBuffer(&buf,
+						  "SELECT relchecks, relkind, relhasindex, relhasrules, "
+						  "reltriggers <> 0, false, false, relhasoids, "
+						  "false as relispartition, %s, reltablespace\n"
+						  ", %s as relstorage "
+						  "FROM pg_catalog.pg_class WHERE oid = '%s';",
+						  (verbose ?
+						   "pg_catalog.array_to_string(reloptions, E', ')" : "''"),
+						  /* GPDB Only:  relstorage  */
+						  (isMPP() ? "relstorage" : "'h'"),
+						  oid);
+	}
+	else if (pset.sversion >= 80000)
+	{
+		printfPQExpBuffer(&buf,
+						  "SELECT relchecks, relkind, relhasindex, relhasrules, "
+						  "reltriggers <> 0, false, false, relhasoids, "
+						  "false as relispartition, '', reltablespace\n"
+						  "FROM pg_catalog.pg_class WHERE oid = '%s';",
+						  oid);
+	}
+	else
+	{
+		printfPQExpBuffer(&buf,
+						  "SELECT relchecks, relkind, relhasindex, relhasrules, "
+						  "reltriggers <> 0, false, false, relhasoids, "
+						  "false as relispartition, '', ''\n"
+						  "FROM pg_catalog.pg_class WHERE oid = '%s';",
+						  oid);
+	}
+
+>>>>>>> main
 	res = PSQLexec(buf.data);
 	if (!res)
 		goto error_return;
@@ -1965,7 +2038,7 @@ describeOneTableDetails(const char *schemaname,
 	tableinfo.isdynamic = strcmp(PQgetvalue(res, 0, 16), "t") == 0;
 
 	/* GPDB Only:  relstorage  */
-	if (pset.sversion < 120000 && isGPDB())
+	if (pset.sversion < 120000 && isMPP())
 		tableinfo.relstorage = *(PQgetvalue(res, 0, PQfnumber(res, "relstorage")));
 	else
 		tableinfo.relstorage = 'h';
@@ -3655,7 +3728,7 @@ describeOneTableDetails(const char *schemaname,
 							 * listing them.
 							 */
 							tgdef = PQgetvalue(result, i, 1);
-							if (isGPDB() && strstr(tgdef, "RI_FKey_") != NULL)
+							if (isMPP() && strstr(tgdef, "RI_FKey_") != NULL)
 								list_trigger = false;
 
 							break;
@@ -4925,7 +4998,7 @@ listTables(const char *tabtypes, const char *pattern, bool verbose, bool showSys
 	PGresult   *res;
 	printQueryOpt myopt = pset.popt;
 	int			cols_so_far;
-	bool		translate_columns[] = {false, false, true, false, false, false, false, false, false};
+	bool		translate_columns[] = {false, false, true, false, false, false, false, false, false, false};
 
 	/* If tabtypes is empty, we default to \dtvmsE (but see also command.c) */
 	if (!(showTables || showIndexes || showViews || showMatViews || showSeq || showForeign || showDirectory))
@@ -4975,7 +5048,7 @@ listTables(const char *tabtypes, const char *pattern, bool verbose, bool showSys
 	cols_so_far = 4;
 
 	/* Show Storage type for tables */
-	if (showTables && isGPDB())
+	if (showTables && isMPP())
 	{
 		if (isGPDB7000OrLater())
 		{
@@ -4994,6 +5067,8 @@ listTables(const char *tabtypes, const char *pattern, bool verbose, bool showSys
 			appendPQExpBuffer(&buf, " WHEN 'f' THEN '%s'", gettext_noop("foreign"));
 			appendPQExpBuffer(&buf, " END as \"%s\"\n", gettext_noop("Storage"));
 		}
+		translate_columns[cols_so_far] = true;
+		cols_so_far++;
 	}
 
 	if (showIndexes)

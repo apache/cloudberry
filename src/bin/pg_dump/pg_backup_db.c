@@ -35,6 +35,10 @@ _check_database_version(ArchiveHandle *AH)
 	const char *remoteversion_str;
 	int			remoteversion;
 	PGresult   *res;
+	char	   *version;
+	char		dbstring[1024];
+	char		dbstring2[1024];
+	int			v1;
 
 	remoteversion_str = PQparameterStatus(AH->connection, "server_version");
 	remoteversion = PQserverVersion(AH->connection);
@@ -60,9 +64,43 @@ _check_database_version(ArchiveHandle *AH)
 	 * Check if server is in recovery mode, which means we are on a hot
 	 * standby.
 	 */
+<<<<<<< HEAD
 	res = ExecuteSqlQueryForSingleRow((Archive *) AH,
 									  "SELECT pg_catalog.pg_is_in_recovery()");
 	AH->public.isStandby = (strcmp(PQgetvalue(res, 0, 0), "t") == 0);
+=======
+	if (remoteversion >= 90000)
+	{
+		res = ExecuteSqlQueryForSingleRow((Archive *) AH, "SELECT pg_catalog.pg_is_in_recovery()");
+
+		AH->public.isStandby = (strcmp(PQgetvalue(res, 0, 0), "t") == 0);
+		PQclear(res);
+	}
+	else
+		AH->public.isStandby = false;
+
+	res = ExecuteSqlQueryForSingleRow((Archive *) AH, "SELECT version()");
+
+	version = PQgetvalue(res, 0, 0);
+
+	if(sscanf(version, "%*[^(](%s %s %d.%*d.%*d-%*[^)])", dbstring, dbstring2, &v1) != 3)
+		pg_log_error("could not get version output from select version();\n");
+
+	if (strcasecmp("Greenplum", dbstring) == 0 && strcasecmp("Database", dbstring2) == 0)
+	{
+		AH->public.version.type = Greenplum;
+		AH->public.version.version = v1;
+
+	} else if((strcasecmp("Cloudberry", dbstring) == 0 && strcasecmp("Database", dbstring2) == 0)
+				|| (strcasecmp("Apache", dbstring) == 0 && strcasecmp("Cloudberry", dbstring2) == 0))
+	{
+		AH->public.version.type = Cloudberry;
+		AH->public.version.version = v1;
+	}
+	else
+		pg_log_error("could not upgrade from non Greenplum/Cloudberry version: %s %s\n", dbstring, dbstring2);
+
+>>>>>>> main
 	PQclear(res);
 }
 

@@ -3480,7 +3480,12 @@ keep_going:						/* We will come back to here until there is
 						 * the error message; we should not trust it as the
 						 * server has not been authenticated yet.
 						 */
+<<<<<<< HEAD
 						libpq_append_conn_error(conn, "server sent an error response during SSL exchange");
+=======
+						appendPQExpBuffer(&conn->errorMessage,
+										  libpq_gettext("server sent an error response during SSL exchange\n"));
+>>>>>>> main
 						goto error_return;
 					}
 					else

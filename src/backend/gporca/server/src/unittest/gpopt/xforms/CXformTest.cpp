@@ -172,6 +172,7 @@ CXformTest::EresUnittest_ApplyXforms_CTE()
 
 	pdrgpexpr->Append(pexprConsumer);
 	COptCtxt::PoctxtFromTLS()->Pcteinfo()->IncrementConsumers(ulCTEId);
+	COptCtxt::PoctxtFromTLS()->Pcteinfo()->AddCTEConsumer(pexprNewConsumer);
 
 	pexprConsumer->AddRef();
 	CExpression *pexprSelect =

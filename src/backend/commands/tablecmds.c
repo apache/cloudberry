@@ -7769,12 +7769,8 @@ ATRewriteTable(AlteredTableInfo *tab, Oid OIDNewHeap, LOCKMODE lockmode)
 		snapshot = RegisterSnapshot(GetLatestSnapshot());
 		scan = table_beginscan(oldrel, snapshot, 0, NULL);
 
-		if (newrel && RelationIsAoRows(newrel))
-			appendonly_dml_init(newrel, CMD_INSERT);
-		else if (newrel && RelationIsAoCols(newrel))
-			aoco_dml_init(newrel, CMD_INSERT);
-		else if (newrel && ext_dml_init_hook)
-			ext_dml_init_hook(newrel, CMD_INSERT);
+		if (newrel)
+			table_dml_init(newrel, CMD_INSERT);
 
 		/*
 		 * Switch to per-tuple memory context and reset it for each tuple
@@ -16693,13 +16689,23 @@ ATExecChangeOwner(Oid relationOid, Oid newOwnerId, bool recursing, LOCKMODE lock
 				AclResult	aclresult;
 
 				/* Otherwise, must be owner of the existing object */
+<<<<<<< HEAD
 				if (!object_ownercheck(RelationRelationId, relationOid, GetUserId()))
 					aclcheck_error(ACLCHECK_NOT_OWNER, get_relkind_objtype(get_rel_relkind(relationOid)),
 								   RelationGetRelationName(target_rel));
 
 				/* Must be able to become new owner */
 				check_can_set_role(GetUserId(), newOwnerId);
+=======
+				if (!mdb_admin_allow_bypass_owner_checks(GetUserId(), tuple_class->relowner) 
+						&& !pg_class_ownercheck(relationOid, GetUserId()))
+					aclcheck_error(ACLCHECK_NOT_OWNER, get_relkind_objtype(get_rel_relkind(relationOid)),
+								   RelationGetRelationName(target_rel));
 
+>>>>>>> main
+
+				check_mdb_admin_is_member_of_role(GetUserId(), newOwnerId);
+				
 				/* New owner must have CREATE privilege on namespace */
 				aclresult = object_aclcheck(NamespaceRelationId, namespaceOid, newOwnerId,
 											ACL_CREATE);
@@ -21735,7 +21741,7 @@ RangeVarCallbackForAlterRelation(const RangeVar *rv, Oid relid, Oid oldrelid,
 	Form_pg_class classform;
 	AclResult	aclresult;
 	char		relkind;
-
+	
 	tuple = SearchSysCache1(RELOID, ObjectIdGetDatum(relid));
 	if (!HeapTupleIsValid(tuple))
 		return;					/* concurrently dropped */
@@ -21743,7 +21749,12 @@ RangeVarCallbackForAlterRelation(const RangeVar *rv, Oid relid, Oid oldrelid,
 	relkind = classform->relkind;
 
 	/* Must own relation. */
+<<<<<<< HEAD
 	if (!object_ownercheck(RelationRelationId, relid, GetUserId()))
+=======
+	if (!mdb_admin_allow_bypass_owner_checks(GetUserId(), classform->relowner) 
+			&& !pg_class_ownercheck(relid, GetUserId()))
+>>>>>>> main
 		aclcheck_error(ACLCHECK_NOT_OWNER, get_relkind_objtype(get_rel_relkind(relid)), rv->relname);
 
 	/* No system table modifications unless explicitly allowed. */

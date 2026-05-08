@@ -149,9 +149,6 @@
  */
 #define GP_HLL_ERROR_MARGIN  0.003
 
-/* Fix attr number of return record of function gp_acquire_sample_rows */
-#define FIX_ATTR_NUM  3
-
 /* Per-index data for ANALYZE */
 typedef struct AnlIndexData
 {
@@ -171,7 +168,7 @@ static BufferAccessStrategy vac_strategy;
 
 Bitmapset	**acquire_func_colLargeRowIndexes;
 double		 *acquire_func_colLargeRowLength;
-
+double		 *acquire_func_colNDVBySeg;
 
 static void do_analyze_rel(Relation onerel,
 						   VacuumParams *params, List *va_cols,
@@ -184,13 +181,29 @@ static void compute_index_stats(Relation onerel, double totalrows,
 								MemoryContext col_context);
 static VacAttrStats *examine_attribute(Relation onerel, int attnum,
 									   Node *index_expr, int elevel);
+static int acquire_sample_rows(Relation onerel, int elevel,
+							   HeapTuple *rows, int targrows,
+							   double *totalrows, double *totaldeadrows);
 static int acquire_sample_rows_dispatcher(Relation onerel, bool inh, int elevel,
 										  HeapTuple *rows, int targrows,
 										  double *totalrows, double *totaldeadrows);
+<<<<<<< HEAD
 static int	compare_rows(const void *a, const void *b, void *arg);
 static BlockNumber acquire_index_number_of_blocks(Relation indexrel, Relation tablerel);
 
 static void gp_acquire_correlations_dispatcher(Oid relOid, bool inh, float4 *correlations, bool *correlationsIsNull);
+=======
+static int gp_acquire_sample_rows_func(Relation onerel, int elevel,
+									   HeapTuple *rows, int targrows,
+									   double *totalrows, double *totaldeadrows);
+static BlockNumber acquire_index_number_of_blocks(Relation indexrel, Relation tablerel);
+
+static void gp_acquire_correlations_dispatcher(Oid relOid, bool inh, float4 *correlations, bool *correlationsIsNull);
+static int	compare_rows(const void *a, const void *b, void *arg);
+static int	acquire_inherited_sample_rows(Relation onerel, int elevel,
+										  HeapTuple *rows, int targrows,
+										  double *totalrows, double *totaldeadrows);
+>>>>>>> main
 static void update_attstats(Oid relid, bool inh,
 							int natts, VacAttrStats **vacattrstats);
 static Datum std_fetch_func(VacAttrStatsP stats, int rownum, bool *isNull);
@@ -350,16 +363,11 @@ analyze_rel_internal(Oid relid, RangeVar *relation,
 		onerel->rd_rel->relkind == RELKIND_MATVIEW ||
 		onerel->rd_rel->relkind == RELKIND_DIRECTORY_TABLE)
 	{
-		/* Regular table, so we'll use the regular row acquisition function */
-		if (onerel->rd_tableam)
-			acquirefunc = onerel->rd_tableam->acquire_sample_rows;
-
 		/*
-		 * If the TableAmRoutine's acquire_sample_rows if NULL, we use
-		 * acquire_sample_rows as default.
+		 * If the TableAmRoutine's gp_acquire_sample_rows_func if NULL, we use
+		 * gp_acquire_sample_rows_func as default.
 		 */
-		if (acquirefunc == NULL)
-			acquirefunc = acquire_sample_rows;
+		acquirefunc = gp_acquire_sample_rows_func;
 
 		/* Also get regular table's size */
 		relpages = AcquireNumberOfBlocks(onerel);
@@ -497,6 +505,7 @@ do_analyze_rel(Relation onerel, VacuumParams *params,
 
 	Bitmapset **colLargeRowIndexes;
 	double     *colLargeRowLength;
+	double     *colNDVBySeg;
 	bool		sample_needed;
 
 	int64		AnalyzePageHit = VacuumPageHit;
@@ -713,8 +722,10 @@ do_analyze_rel(Relation onerel, VacuumParams *params,
 	 * statistics target. So we may need to sample more rows and then build
 	 * the statistics with enough detail.
 	 */
-	minrows = ComputeExtStatisticsRows(onerel, attr_cnt, vacattrstats);
-	
+	if (IS_QD_OR_SINGLENODE())
+		minrows = ComputeExtStatisticsRows(onerel, attr_cnt, vacattrstats);
+	else
+		minrows = 0;
 
 	if (targrows < minrows)
 		targrows = minrows;
@@ -736,7 +747,7 @@ do_analyze_rel(Relation onerel, VacuumParams *params,
 	}
 	colLargeRowIndexes = (Bitmapset **) palloc0(sizeof(Bitmapset *) * max_natts);
 	colLargeRowLength = (double *)palloc0(sizeof(double) * max_natts);
-
+	colNDVBySeg = (double *)palloc0(sizeof(double) * max_natts);
 
 	if ((params->options & VACOPT_FULLSCAN) != 0)
 	{
@@ -799,6 +810,7 @@ do_analyze_rel(Relation onerel, VacuumParams *params,
 		 */
 		acquire_func_colLargeRowIndexes = colLargeRowIndexes;
 		acquire_func_colLargeRowLength = colLargeRowLength;
+		acquire_func_colNDVBySeg = colNDVBySeg;
 		pgstat_progress_update_param(PROGRESS_ANALYZE_PHASE,
 									 inh ? PROGRESS_ANALYZE_PHASE_ACQUIRE_SAMPLE_ROWS_INH :
 									 PROGRESS_ANALYZE_PHASE_ACQUIRE_SAMPLE_ROWS);
@@ -812,6 +824,7 @@ do_analyze_rel(Relation onerel, VacuumParams *params,
 									  &totalrows, &totaldeadrows);
 		acquire_func_colLargeRowIndexes = NULL;
 		acquire_func_colLargeRowLength = NULL;
+		acquire_func_colNDVBySeg = NULL;
 		if (ctx)
 			MemoryContextSwitchTo(anl_context);
 	}
@@ -903,6 +916,12 @@ do_analyze_rel(Relation onerel, VacuumParams *params,
 		for (i = 0; i < attr_cnt; i++)
 		{
 			VacAttrStats *stats = vacattrstats[i];
+
+			if (Gp_role == GP_ROLE_DISPATCH && GpPolicyIsPartitioned(onerel->rd_cdbpolicy))
+			{
+				stats->stadistinctbyseg = colNDVBySeg[stats->attr->attnum - 1];
+			}
+
 			stats->tupDesc = onerel->rd_att;
 			/*
 			 * utilize hyperloglog and merge utilities to derive
@@ -1022,6 +1041,11 @@ do_analyze_rel(Relation onerel, VacuumParams *params,
 					stats->stadistinct = n_distinct;
 			}
 
+			if (Gp_role == GP_ROLE_EXECUTE) {
+				Assert(ctx->stadistincts);
+				ctx->stadistincts[stats->attr->attnum - 1] = Float8GetDatum(stats->stadistinct);
+			}
+
 			MemoryContextResetAndDeleteChildren(col_context);
 		}
 
@@ -1086,7 +1110,7 @@ do_analyze_rel(Relation onerel, VacuumParams *params,
 		if (RelationStorageIsAO(onerel))
 			relallvisible = 0;
 		else
-            		relallvisible = AcquireNumberOfAllVisibleBlocks(onerel);
+			relallvisible = AcquireNumberOfAllVisibleBlocks(onerel);
 
 		/*
 		 * Update pg_class for table relation.  CCI first, in case acquirefunc
@@ -1625,6 +1649,36 @@ examine_attribute(Relation onerel, int attnum, Node *index_expr, int elevel)
 }
 
 /*
+ * GPDB: If we are the dispatcher, then issue analyze on the segments and
+ * collect the statistics from them.
+ */
+int
+gp_acquire_sample_rows_func(Relation onerel, int elevel,
+							   HeapTuple *rows, int targrows,
+							   double *totalrows, double *totaldeadrows)
+{
+	if (Gp_role == GP_ROLE_DISPATCH &&
+		onerel->rd_cdbpolicy && !GpPolicyIsEntry(onerel->rd_cdbpolicy))
+	{
+		/* Fetch sample from the segments. */
+		return acquire_sample_rows_dispatcher(onerel, false, elevel,
+											  rows, targrows,
+											  totalrows, totaldeadrows);
+	}
+
+	/* 
+	 * if relation_acquire_sample_rows exist, we use it directly.
+	 * Otherwise, use the acquire_sample_rows by default.
+	 */
+	if (onerel->rd_tableam->relation_acquire_sample_rows)
+		return table_relation_acquire_sample_rows(onerel, elevel, rows,
+												  targrows, totalrows, totaldeadrows);
+    
+	return acquire_sample_rows(onerel, elevel, rows,
+							   targrows, totalrows, totaldeadrows);
+}
+
+/*
  * acquire_sample_rows -- acquire a random sample of rows from the table
  *
  * Selected rows are returned in the caller-allocated array rows[], which
@@ -1656,14 +1710,8 @@ examine_attribute(Relation onerel, int attnum, Node *index_expr, int elevel)
  * unbiased estimates of the average numbers of live and dead rows per
  * block.  The previous sampling method put too much credence in the row
  * density near the start of the table.
- *
- * The returned list of tuples is in order by physical position in the table.
- * (We will rely on this later to derive correlation estimates.)
- *
- * GPDB: If we are the dispatcher, then issue analyze on the segments and
- * collect the statistics from them.
  */
-int
+static int
 acquire_sample_rows(Relation onerel, int elevel,
 					HeapTuple *rows, int targrows,
 					double *totalrows, double *totaldeadrows)
@@ -1689,27 +1737,23 @@ acquire_sample_rows(Relation onerel, int elevel,
 
 	Assert(targrows > 0);
 
-	if (Gp_role == GP_ROLE_DISPATCH &&
-		onerel->rd_cdbpolicy && !GpPolicyIsEntry(onerel->rd_cdbpolicy))
-	{
-		/* Fetch sample from the segments. */
-		return acquire_sample_rows_dispatcher(onerel, false, elevel,
-											  rows, targrows,
-											  totalrows, totaldeadrows);
-	}
-
 	/*
-	 * GPDB: Analyze does make a lot of assumptions regarding the file layout of a
-	 * relation. These assumptions are heap specific and do not hold for AO/AOCO
-	 * relations. In the case of AO/AOCO, what is actually needed and used instead
-	 * of number of blocks, is number of tuples.
-	 *
-	 * GPDB_12_MERGE_FIXME: BlockNumber is uint32 and Number of tuples is uint64.
-	 * That means that after row number UINT_MAX we will never analyze the table.
+	 * GPDB: Legacy analyze does make a lot of assumptions regarding the file
+	 * layout of a relation. These assumptions are heap specific and do not hold
+	 * for AO/AOCO relations. In the case of AO/AOCO, what is actually needed and
+	 * used instead of number of blocks, is number of tuples. Moreover, BlockNumber
+	 * is uint32 and Number of tuples is uint64. That means that after row number
+	 * UINT_MAX we will never analyze the table.
+	 * 
+	 * We introduced a tuple based sampling approach for AO/CO tables to address
+	 * above problems, all corresponding logics were moved out of here and enclosed
+	 * in table_relation_acquire_sample_rows(). So leave here an assertion to ensure
+	 * the relation should not be an AO/CO table.
 	 */
-	if (RelationIsNonblockRelation(onerel))
+	Assert(!RelationIsAppendOptimized(onerel));
+	if (RelationIsPax(onerel))
 	{
-		/* AO/CO/PAX use non-fixed block layout */
+		/* PAX use non-fixed block layout */
 		BlockNumber pages;
 		double		tuples;
 		double		allvisfrac;
@@ -1890,7 +1934,11 @@ acquire_sample_rows(Relation onerel, int elevel,
 	 * tuples are already sorted.
 	 */
 	if (numrows == targrows)
+<<<<<<< HEAD
 		qsort_interruptible(rows, numrows, sizeof(HeapTuple),
+=======
+		qsort_interruptible((void *) rows, numrows, sizeof(HeapTuple),
+>>>>>>> main
 							compare_rows, NULL);
 
 	/*
@@ -1915,13 +1963,13 @@ acquire_sample_rows(Relation onerel, int elevel,
 	 * Emit some interesting relation info
 	 */
 	ereport(elevel,
-		(errmsg("\"%s\": scanned %d of %u pages, "
-				"containing %.0f live rows and %.0f dead rows; "
-				"%d rows in sample, %.0f estimated total rows",
-				RelationGetRelationName(onerel),
-				bs.m, totalblocks,
-				liverows, deadrows,
-				numrows, *totalrows)));
+			(errmsg("\"%s\": scanned %d of %u pages, "
+					"containing %.0f live rows and %.0f dead rows; "
+					"%d rows in sample, %.0f estimated total rows",
+					RelationGetRelationName(onerel),
+					bs.m, totalblocks,
+					liverows, deadrows,
+					numrows, *totalrows)));
 
 	return numrows;
 }
@@ -1936,17 +1984,12 @@ compare_rows(const void *a, const void *b, void *arg)
 	HeapTuple	hb = *(const HeapTuple *) b;
 
 	/*
-	 * GPDB_12_MERGE_FIXME: For AO/AOCO tables, blocknumber does not have a
-	 * meaning and is not set. The current implementation of analyze makes
-	 * assumptions about the file layout which do not hold for these two cases.
-	 * The compare function should maintain the row order as consrtucted, hence
-	 * return 0;
-	 *
+	 * For AO/AOCO tables, blocknumber does not have a meaning and is not set.
+	 * We leave this workaround here for legacy AO/CO analyze still working.
 	 * There should be no apparent and measurable perfomance hit from calling
 	 * this function.
-	 *
-	 * One possible proper fix is to refactor analyze to use the tableam api and
-	 * this sorting should move to the specific implementation.
+	 * 
+	 * The AO/CO Fast Analyze won't reach here anymore.
 	 */
 	if (!BlockNumberIsValid(ItemPointerGetBlockNumberNoCheck(&ha->t_self)))
 		return 0;
@@ -2070,16 +2113,8 @@ acquire_inherited_sample_rows(Relation onerel, int elevel,
 			childrel->rd_rel->relkind == RELKIND_MATVIEW ||
 			childrel->rd_rel->relkind == RELKIND_DIRECTORY_TABLE)
 		{
-			/* Regular table, so use the regular row acquisition function */
-			if (childrel->rd_tableam)
-				acquirefunc = childrel->rd_tableam->acquire_sample_rows;
-
-			/*
-			 * If the TableAmRoutine's acquire_sample_rows if NULL, we use
-			 * acquire_sample_rows as default.
-			 */
-			if (acquirefunc == NULL)
-				acquirefunc = acquire_sample_rows;
+			/* use relation_acquire_sample_rows as default. */
+			acquirefunc = gp_acquire_sample_rows_func;
 
 			relpages = AcquireNumberOfBlocks(childrel);
 		}
@@ -2709,6 +2744,7 @@ process_sample_rows(Portal portal,
 	 */
 	Bitmapset **colLargeRowIndexes = acquire_func_colLargeRowIndexes;
 	double     *colLargeRowLength = acquire_func_colLargeRowLength;
+	double     *colNDVBySeg = acquire_func_colNDVBySeg;
 	TupleDesc	relDesc = RelationGetDescr(onerel);
 	TupleDesc	funcTupleDesc;
 	TupleDesc	sampleTupleDesc;
@@ -2748,12 +2784,13 @@ process_sample_rows(Portal portal,
 	 * Also create tupledesc of return record of function gp_acquire_sample_rows.
 	 */
 	sampleTupleDesc = CreateTupleDescCopy(relDesc);
-	ncolumns = numLiveColumns + FIX_ATTR_NUM;
+	ncolumns = NUM_SAMPLE_FIXED_COLS + numLiveColumns;
 	
 	funcTupleDesc = CreateTemplateTupleDesc(ncolumns);
 	TupleDescInitEntry(funcTupleDesc, (AttrNumber) 1, "", FLOAT8OID, -1, 0);
 	TupleDescInitEntry(funcTupleDesc, (AttrNumber) 2, "", FLOAT8OID, -1, 0);
 	TupleDescInitEntry(funcTupleDesc, (AttrNumber) 3, "", FLOAT8ARRAYOID, -1, 0);
+	TupleDescInitEntry(funcTupleDesc, (AttrNumber) 4, "", FLOAT8ARRAYOID, -1, 0);
 	
 	for (i = 0; i < relDesc->natts; i++)
 	{
@@ -2765,7 +2802,7 @@ process_sample_rows(Portal portal,
 
 		if (!attr->attisdropped)
 		{
-			TupleDescInitEntry(funcTupleDesc, (AttrNumber) 4 + index, "",
+			TupleDescInitEntry(funcTupleDesc, (AttrNumber) NUM_SAMPLE_FIXED_COLS + 1 + index, "",
 							   typid, attr->atttypmod, attr->attndims);
 
 			index++;
@@ -2863,10 +2900,35 @@ process_sample_rows(Portal portal,
 			if (!funcRetNulls[0])
 			{
 				/* This is a summary row. */
+				ArrayType  *arrayVal;
+				Datum	   *colndv;
+				bool	   *nulls;
+				int	    numelems;
+
+				Assert(!funcRetNulls[1] && !funcRetNulls[3]);
+
 				this_totalrows = DatumGetFloat8(funcRetValues[0]);
 				this_totaldeadrows = DatumGetFloat8(funcRetValues[1]);
 				(*totalrows) += this_totalrows;
 				(*totaldeadrows) += this_totaldeadrows;
+
+				arrayVal = DatumGetArrayTypeP(funcRetValues[3]);
+				deconstruct_array(arrayVal, FLOAT8OID, 8, true, 'd',
+								&colndv, &nulls, &numelems);
+				Assert(numelems == relDesc->natts);
+				for (i = 0; i < numelems; i++)
+				{
+					double this_colndv = DatumGetFloat8(colndv[i]);
+					if (this_colndv < 0) {
+						Assert(this_colndv >= -1);
+						colNDVBySeg[i] += fabs(this_colndv) * this_totalrows;
+					} else {
+						/* if current segment have any data, then ndv won't be 0.
+						 * if current segment have no rows, ndv is 0.
+						 */
+						colNDVBySeg[i] += DatumGetFloat8(colndv[i]);
+					}
+				}
 			}
 			else
 			{
@@ -2912,8 +2974,8 @@ process_sample_rows(Portal portal,
 						continue;
 					}
 
-					dnulls[i] = funcRetNulls[FIX_ATTR_NUM + index];
-					dvalues[i] = funcRetValues[FIX_ATTR_NUM + index];
+					dnulls[i] = funcRetNulls[NUM_SAMPLE_FIXED_COLS + index];
+					dvalues[i] = funcRetValues[NUM_SAMPLE_FIXED_COLS + index];
 					index++;	/* Move index to the next result set attribute */
 				}
 
@@ -3964,8 +4026,13 @@ compute_scalar_stats(VacAttrStatsP stats,
 		/* Sort the collected values */
 		cxt.ssup = &ssup;
 		cxt.tupnoLink = tupnoLink;
+<<<<<<< HEAD
 		qsort_interruptible(values, values_cnt, sizeof(ScalarItem),
 							compare_scalars, &cxt);
+=======
+		qsort_interruptible((void *) values, values_cnt, sizeof(ScalarItem),
+							compare_scalars, (void *) &cxt);
+>>>>>>> main
 
 		/*
 		 * Now scan the values in order, find the most common ones, and also
@@ -4232,7 +4299,11 @@ compute_scalar_stats(VacAttrStatsP stats,
 						deltafrac;
 
 			/* Sort the MCV items into position order to speed next loop */
+<<<<<<< HEAD
 			qsort_interruptible(track, num_mcv, sizeof(ScalarMCVItem),
+=======
+			qsort_interruptible((void *) track, num_mcv, sizeof(ScalarMCVItem),
+>>>>>>> main
 								compare_mcvs, NULL);
 
 			/*
@@ -4378,6 +4449,33 @@ compute_scalar_stats(VacAttrStatsP stats,
 				stats->numnumbers[slot_idx] = 1;
 				slot_idx++;
 			}
+		}
+
+		/* set the ndv from segments */
+		if (stats->stadistinctbyseg != 0 && slot_idx < STATISTIC_NUM_SLOTS - 1
+			&& !OidIsValid(stats->attrtype->typanalyze))  // should not be the array
+		{
+			MemoryContext old_context;
+			Datum	   *ndvbs;
+
+			/* Must copy the target values into anl_context */
+			old_context = MemoryContextSwitchTo(stats->anl_context);
+			ndvbs = (Datum *) palloc(sizeof(Datum));
+			ndvbs[0] = Float8GetDatum(stats->stadistinctbyseg);
+			MemoryContextSwitchTo(old_context);
+
+			stats->stakind[slot_idx] = STATISTIC_KIND_NDV_BY_SEGMENTS;
+			stats->staop[slot_idx] = mystats->ltopr;
+			stats->stacoll[slot_idx] = stats->attrcollid;
+
+			stats->statypid[slot_idx] = FLOAT8OID;
+			stats->statyplen[slot_idx] = 8;
+			stats->statypbyval[slot_idx] = true;
+			stats->statypalign[slot_idx] = TYPALIGN_DOUBLE;
+
+			stats->stavalues[slot_idx] = ndvbs;
+			stats->numvalues[slot_idx] = 1;
+			slot_idx++;
 		}
 	}
 	else if (nonnull_cnt > 0)
@@ -4921,6 +5019,37 @@ merge_leaf_stats(VacAttrStatsP stats,
 			slot_idx++;
 		}
 	}
+
+	// ndistinct by segments calculation
+	{
+		old_context = MemoryContextSwitchTo(stats->anl_context);
+		bool valid;
+		double ndinstinct_by_segs = 0;
+		Datum *ndvbs;
+
+		valid = aggregate_leaf_partition_ndvbs(
+			numPartitions, heaptupleStats, relTuples, &ndinstinct_by_segs);
+
+		if (valid)
+		{
+			ndvbs = (Datum *) palloc(sizeof(Datum));
+			ndvbs[0] = Float8GetDatum(ndinstinct_by_segs);
+
+			stats->stakind[slot_idx] = STATISTIC_KIND_NDV_BY_SEGMENTS;
+			stats->staop[slot_idx] = mystats->ltopr;
+
+			stats->statypid[slot_idx] = FLOAT8OID;
+			stats->statyplen[slot_idx] = 8;
+			stats->statypbyval[slot_idx] = true;
+			stats->statypalign[slot_idx] = TYPALIGN_DOUBLE;
+
+			stats->stavalues[slot_idx] = ndvbs;
+			stats->numvalues[slot_idx] = 1;
+			slot_idx++;
+		}
+		MemoryContextSwitchTo(old_context);
+	}
+
 	for (i = 0; i < numPartitions; i++)
 	{
 		if (HeapTupleIsValid(heaptupleStats[i]))
@@ -4933,7 +5062,7 @@ merge_leaf_stats(VacAttrStatsP stats,
 }
 
 /*
- * qsort_arg comparator for sorting ScalarItems
+ * Comparator for sorting ScalarItems
  *
  * Aside from sorting the items, we update the tupnoLink[] array
  * whenever two ScalarItems are found to contain equal datums.  The array

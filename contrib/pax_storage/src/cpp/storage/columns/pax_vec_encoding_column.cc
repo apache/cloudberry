@@ -348,7 +348,7 @@ void PaxVecNonFixedEncodingColumn::Set(
     PaxVecNonFixedColumn::estimated_size_ = total_size;
     PaxVecNonFixedColumn::next_offsets_ = -1;
   } else {  // (!compressor_ && !offsets_compressor_)
-    PaxVecNonFixedColumn::Set(data, offsets_, total_size, non_null_rows);
+    PaxVecNonFixedColumn::Set(data, offsets, total_size, non_null_rows);
   }
 }
 

@@ -1,0 +1,116 @@
+-- Ensure diskquota does not save information about dropped table during restart cluster by invalidates it at startup
+
+!\retcode gpconfig -c diskquota.naptime -v 5 --skipvalidation;
+-- start_ignore
+20251211:00:09:08:074039 gpconfig:cdw:gpadmin-[INFO]:-completed successfully with parameters '-c diskquota.naptime -v 5 --skipvalidation'
+
+-- end_ignore
+(exited with code 0)
+!\retcode gpstop -u;
+-- start_ignore
+20251211:00:09:08:074086 gpstop:cdw:gpadmin-[INFO]:-Starting gpstop with args: -u
+20251211:00:09:08:074086 gpstop:cdw:gpadmin-[INFO]:-Gathering information and validating the environment...
+20251211:00:09:08:074086 gpstop:cdw:gpadmin-[INFO]:-Obtaining Cloudberry Coordinator catalog information
+20251211:00:09:08:074086 gpstop:cdw:gpadmin-[INFO]:-Obtaining Segment details from coordinator...
+20251211:00:09:08:074086 gpstop:cdw:gpadmin-[INFO]:-Cloudberry Version: 'postgres (Apache Cloudberry) 3.0.0-devel build dev'
+20251211:00:09:08:074086 gpstop:cdw:gpadmin-[INFO]:-Signalling all postmaster processes to reload
+
+-- end_ignore
+(exited with code 0)
+
+1: CREATE SCHEMA dropped_schema;
+CREATE
+1: SET search_path TO dropped_schema;
+SET
+1: SELECT diskquota.set_schema_quota('dropped_schema', '1 MB');
+ set_schema_quota 
+------------------
+                  
+(1 row)
+1: SELECT diskquota.wait_for_worker_new_epoch();
+ wait_for_worker_new_epoch 
+---------------------------
+ t                         
+(1 row)
+1: CREATE TABLE dropped_table(id int) DISTRIBUTED BY (id);
+CREATE
+1: INSERT INTO dropped_table SELECT generate_series(1, 10000);
+INSERT 10000
+-- Wait for the diskquota bgworker refreshing the size of 'dropped_table'.
+1: SELECT diskquota.wait_for_worker_new_epoch();
+ wait_for_worker_new_epoch 
+---------------------------
+ t                         
+(1 row)
+1: DROP TABLE dropped_table;
+DROP
+1q: ... <quitting>
+
+-- Restart cluster fastly
+!\retcode gpstop -afr;
+-- start_ignore
+20251211:00:09:28:074151 gpstop:cdw:gpadmin-[INFO]:-Starting gpstop with args: -afr
+20251211:00:09:28:074151 gpstop:cdw:gpadmin-[INFO]:-Gathering information and validating the environment...
+20251211:00:09:28:074151 gpstop:cdw:gpadmin-[INFO]:-Obtaining Cloudberry Coordinator catalog information
+20251211:00:09:28:074151 gpstop:cdw:gpadmin-[INFO]:-Obtaining Segment details from coordinator...
+20251211:00:09:28:074151 gpstop:cdw:gpadmin-[INFO]:-Cloudberry Version: 'postgres (Apache Cloudberry) 3.0.0-devel build dev'
+20251211:00:09:28:074151 gpstop:cdw:gpadmin-[INFO]:-Commencing Coordinator instance shutdown with mode='fast'
+20251211:00:09:28:074151 gpstop:cdw:gpadmin-[INFO]:-Coordinator segment instance directory=/home/gpadmin/cloudberry/gpAux/gpdemo/datadirs/qddir/demoDataDir-1
+20251211:00:09:28:074151 gpstop:cdw:gpadmin-[INFO]:-Attempting forceful termination of any leftover coordinator process
+20251211:00:09:28:074151 gpstop:cdw:gpadmin-[INFO]:-Terminating processes for segment /home/gpadmin/cloudberry/gpAux/gpdemo/datadirs/qddir/demoDataDir-1
+20251211:00:09:28:074151 gpstop:cdw:gpadmin-[INFO]:-Stopping coordinator standby host cdw mode=fast
+20251211:00:09:28:074151 gpstop:cdw:gpadmin-[INFO]:-Successfully shutdown standby process on cdw
+20251211:00:09:28:074151 gpstop:cdw:gpadmin-[INFO]:-Targeting dbid [2, 5, 3, 6, 4, 7] for shutdown
+20251211:00:09:28:074151 gpstop:cdw:gpadmin-[INFO]:-Commencing parallel primary segment instance shutdown, please wait...
+20251211:00:09:28:074151 gpstop:cdw:gpadmin-[INFO]:-0.00% of jobs completed
+20251211:00:09:31:074151 gpstop:cdw:gpadmin-[INFO]:-100.00% of jobs completed
+20251211:00:09:31:074151 gpstop:cdw:gpadmin-[INFO]:-Commencing parallel mirror segment instance shutdown, please wait...
+20251211:00:09:31:074151 gpstop:cdw:gpadmin-[INFO]:-0.00% of jobs completed
+20251211:00:09:33:074151 gpstop:cdw:gpadmin-[INFO]:-100.00% of jobs completed
+20251211:00:09:33:074151 gpstop:cdw:gpadmin-[INFO]:-----------------------------------------------------
+20251211:00:09:33:074151 gpstop:cdw:gpadmin-[INFO]:-   Segments stopped successfully      = 6
+20251211:00:09:33:074151 gpstop:cdw:gpadmin-[INFO]:-   Segments with errors during stop   = 0
+20251211:00:09:33:074151 gpstop:cdw:gpadmin-[INFO]:-----------------------------------------------------
+20251211:00:09:33:074151 gpstop:cdw:gpadmin-[INFO]:-Successfully shutdown 6 of 6 segment instances 
+20251211:00:09:33:074151 gpstop:cdw:gpadmin-[INFO]:-Database successfully shutdown with no errors reported
+20251211:00:09:33:074151 gpstop:cdw:gpadmin-[INFO]:-Restarting System...
+
+-- end_ignore
+(exited with code 0)
+
+-- Indicates that there is no dropped table in pg_catalog.pg_class
+1: SELECT oid FROM pg_catalog.pg_class WHERE relname = 'dropped_table';
+ oid 
+-----
+(0 rows)
+-- Indicates that there are no entries in diskquota.table_size that are not present in pg_catalog.pg_class
+1: SELECT diskquota.wait_for_worker_new_epoch();
+ wait_for_worker_new_epoch 
+---------------------------
+ t                         
+(1 row)
+1: SELECT tableid FROM diskquota.table_size WHERE NOT EXISTS (SELECT 1 FROM pg_catalog.pg_class WHERE tableid = oid) AND segid = -1;
+ tableid 
+---------
+(0 rows)
+1: DROP SCHEMA dropped_schema CASCADE;
+DROP
+1q: ... <quitting>
+
+!\retcode gpconfig -c diskquota.naptime -v 0 --skipvalidation;
+-- start_ignore
+20251211:00:09:45:077146 gpconfig:cdw:gpadmin-[INFO]:-completed successfully with parameters '-c diskquota.naptime -v 0 --skipvalidation'
+
+-- end_ignore
+(exited with code 0)
+!\retcode gpstop -u;
+-- start_ignore
+20251211:00:09:45:077193 gpstop:cdw:gpadmin-[INFO]:-Starting gpstop with args: -u
+20251211:00:09:45:077193 gpstop:cdw:gpadmin-[INFO]:-Gathering information and validating the environment...
+20251211:00:09:45:077193 gpstop:cdw:gpadmin-[INFO]:-Obtaining Cloudberry Coordinator catalog information
+20251211:00:09:45:077193 gpstop:cdw:gpadmin-[INFO]:-Obtaining Segment details from coordinator...
+20251211:00:09:45:077193 gpstop:cdw:gpadmin-[INFO]:-Cloudberry Version: 'postgres (Apache Cloudberry) 3.0.0-devel build dev'
+20251211:00:09:45:077193 gpstop:cdw:gpadmin-[INFO]:-Signalling all postmaster processes to reload
+
+-- end_ignore
+(exited with code 0)

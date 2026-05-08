@@ -154,7 +154,7 @@ EXPLAIN (COSTS OFF, VERBOSE) :qry;
          ->  Redistribute Motion 3:3  (slice2; segments: 3)
                Output: b, (PARTIAL sum(a) FILTER (WHERE false)), (PARTIAL max(c))
                Hash Key: b
-               ->  Partial HashAggregate
+               ->  Streaming Partial HashAggregate
                      Output: b, PARTIAL sum(a) FILTER (WHERE false), PARTIAL max(c)
                      Group Key: test_combinefn_null.b
                      ->  Seq Scan on public.test_combinefn_null
@@ -189,7 +189,7 @@ EXPLAIN (COSTS OFF, VERBOSE) :qry;
          ->  Redistribute Motion 3:3  (slice2; segments: 3)
                Output: b, (PARTIAL var_pop((a)::integer) FILTER (WHERE false)), (PARTIAL max(c))
                Hash Key: b
-               ->  Partial HashAggregate
+               ->  Streaming Partial HashAggregate
                      Output: b, PARTIAL var_pop((a)::integer) FILTER (WHERE false), PARTIAL max(c)
                      Group Key: test_combinefn_null.b
                      ->  Seq Scan on public.test_combinefn_null
@@ -224,7 +224,7 @@ EXPLAIN (COSTS OFF, VERBOSE) :qry;
          ->  Redistribute Motion 3:3  (slice2; segments: 3)
                Output: b, (PARTIAL sum((a)::numeric) FILTER (WHERE false)), (PARTIAL max(c))
                Hash Key: b
-               ->  Partial HashAggregate
+               ->  Streaming Partial HashAggregate
                      Output: b, PARTIAL sum((a)::numeric) FILTER (WHERE false), PARTIAL max(c)
                      Group Key: test_combinefn_null.b
                      ->  Seq Scan on public.test_combinefn_null
@@ -259,7 +259,7 @@ EXPLAIN (COSTS OFF, VERBOSE) :qry;
          ->  Redistribute Motion 3:3  (slice2; segments: 3)
                Output: b, (PARTIAL var_pop((a)::numeric) FILTER (WHERE false)), (PARTIAL max(c))
                Hash Key: b
-               ->  Partial HashAggregate
+               ->  Streaming Partial HashAggregate
                      Output: b, PARTIAL var_pop((a)::numeric) FILTER (WHERE false), PARTIAL max(c)
                      Group Key: test_combinefn_null.b
                      ->  Seq Scan on public.test_combinefn_null

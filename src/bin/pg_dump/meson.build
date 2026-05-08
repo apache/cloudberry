@@ -5,7 +5,10 @@ pg_dump_common_sources = files(
   'compress_io.c',
   'compress_lz4.c',
   'compress_none.c',
+<<<<<<< HEAD
   'compress_zstd.c',
+=======
+>>>>>>> main
   'dumputils.c',
   'parallel.c',
   'pg_backup_archiver.c',
@@ -20,7 +23,11 @@ pg_dump_common_sources = files(
 pg_dump_common = static_library('libpgdump_common',
   pg_dump_common_sources,
   c_pch: pch_postgres_fe_h,
+<<<<<<< HEAD
   dependencies: [frontend_code, libpq, lz4, zlib, zstd],
+=======
+  dependencies: [frontend_code, libpq, lz4, zlib],
+>>>>>>> main
   kwargs: internal_lib_args,
 )
 
@@ -91,7 +98,10 @@ tests += {
     'env': {
       'GZIP_PROGRAM': gzip.path(),
       'LZ4': program_lz4.found() ? program_lz4.path() : '',
+<<<<<<< HEAD
       'ZSTD': program_zstd.found() ? program_zstd.path() : '',
+=======
+>>>>>>> main
       'with_icu': icu.found() ? 'yes' : 'no',
     },
     'tests': [

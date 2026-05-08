@@ -132,6 +132,7 @@ extern char *getDnsAddress(char *name, int port, int elevel);
 
 #ifdef USE_INTERNAL_FTS
 extern void writeGpSegConfigToFTSFiles(void);
+extern bool checkGpSegConfigFtsFiles(void);
 #else
 
 GpSegConfigEntry * readGpSegConfig(char * buff, int *total_dbs);

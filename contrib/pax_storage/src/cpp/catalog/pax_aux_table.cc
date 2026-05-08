@@ -700,7 +700,7 @@ pax::MicroPartitionMetadata PaxGetMicroPartitionMetadata(Relation rel,
     paxc::FetchMicroPartitionAuxRow(rel, snapshot, block_id,
                                     FetchMicroPartitionAuxRowCallbackWrapper,
                                     &ctx);
-    return std::move(ctx.info);
+    return ctx.info;
   }
   CBDB_WRAP_END;
 }

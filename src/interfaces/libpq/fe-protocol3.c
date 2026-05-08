@@ -307,8 +307,24 @@ pqParseInput3(PGconn *conn)
 					}
 					break;
 				case '2':		/* Bind Complete */
+					/* Nothing to do for this message type */
+					break;
 				case '3':		/* Close Complete */
-					/* Nothing to do for these message types */
+					/*
+					 * If we get CloseComplete when waiting for it, consume
+					 * the queue element and keep going.  A result is not
+					 * expected from this message; it is just there so that
+					 * we know to wait for it when PQsendQuery is used in
+					 * pipeline mode, before going in IDLE state.  Failing to
+					 * do this makes us receive CloseComplete when IDLE, which
+					 * creates problems.
+					 */
+					if (conn->cmd_queue_head &&
+						conn->cmd_queue_head->queryclass == PGQUERY_CLOSE)
+					{
+						pqCommandQueueAdvance(conn);
+					}
+
 					break;
 				case 'S':		/* parameter status */
 					if (getParameterStatus(conn))
