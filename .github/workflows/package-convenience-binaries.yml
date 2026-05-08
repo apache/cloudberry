@@ -644,10 +644,10 @@ jobs:
             trap 'gpdemo -d >/dev/null 2>&1 || true' EXIT
             gpdemo
             source ./gpdemo-env.sh
-            echo "====Run SELECT 1===" && psql -d postgres -c 'SELECT 1;'
-            echo "====Run SELECT version()===" && psql -d postgres -c 'SELECT version();'
-            echo "====Run gpstop -ar===" && gpstop -ar
-            echo "====Run gpstate===" && gpstate
+            echo '====Run SELECT 1===' && psql -d postgres -c 'SELECT 1;'
+            echo '====Run SELECT version()===' && psql -d postgres -c 'SELECT version();'
+            echo '====Run gpstop -ar===' && gpstop -ar
+            echo '====Run gpstate===' && gpstate
           "
 
           {
