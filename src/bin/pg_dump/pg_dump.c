@@ -2822,10 +2822,6 @@ dumpTableData_insert(Archive *fout, const void *dcontext)
 	if (tbinfo->relkind == RELKIND_FOREIGN_TABLE)
 		set_restrict_relation_kind(fout, "view, foreign-table");
 
-	/* Revert back the setting */
-	if (tbinfo->relkind == RELKIND_FOREIGN_TABLE)
-		set_restrict_relation_kind(fout, "view, foreign-table");
-
 	return 1;
 }
 
@@ -20434,6 +20430,7 @@ addBoundaryDependencies(DumpableObject **dobjs, int numObjs,
 			case DO_FOREIGN_SERVER:
 			case DO_TRANSFORM:
 			case DO_EXTPROTOCOL:
+			case DO_TYPE_STORAGE_OPTIONS:
 			case DO_BINARY_UPGRADE:
 			case DO_LARGE_OBJECT:
 				/* Pre-data objects: must come before the pre-data boundary */
