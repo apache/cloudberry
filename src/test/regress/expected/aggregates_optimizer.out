@@ -32,15 +32,15 @@ SELECT avg(a) AS avg_32 FROM aggtest WHERE a < 100;
 (1 row)
 
 SELECT any_value(v) FROM (VALUES (1), (2), (3)) AS v (v);
- any_value
+ any_value 
 -----------
          1
 (1 row)
 
 SELECT any_value(v) FROM (VALUES (NULL)) AS v (v);
- any_value
+ any_value 
 -----------
-
+ 
 (1 row)
 
 SELECT any_value(v) FROM (VALUES (NULL), (1), (2)) AS v (v);
@@ -50,7 +50,7 @@ SELECT any_value(v) FROM (VALUES (NULL), (1), (2)) AS v (v);
 (1 row)
 
 SELECT any_value(v) FROM (VALUES (array['hello', 'world'])) AS v (v);
-   any_value
+   any_value   
 ---------------
  {hello,world}
 (1 row)
@@ -1348,7 +1348,7 @@ set local enable_sort = off;
 explain (costs off)
   select f1, (select distinct min(t1.f1) from int4_tbl t1 where t1.f1 = t0.f1)
   from int4_tbl t0;
-                                    QUERY PLAN
+                                    QUERY PLAN                                     
 -----------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Seq Scan on int4_tbl t0
@@ -1366,7 +1366,7 @@ explain (costs off)
 
 select f1, (select distinct min(t1.f1) from int4_tbl t1 where t1.f1 = t0.f1)
 from int4_tbl t0;
-     f1      |     min
+     f1      |     min     
 -------------+-------------
            0 |           0
       123456 |      123456
@@ -1659,7 +1659,7 @@ from tenk1
 group by ten;
 INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
 DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: Hash aggregation with ORDER BY
-                            QUERY PLAN
+                            QUERY PLAN                            
 ------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  GroupAggregate
@@ -1675,7 +1675,7 @@ DETAIL:  Falling back to Postgres-based planner because GPORCA does not support 
 -- Ensure consecutive NULLs are properly treated as distinct from each other
 select array_agg(distinct val)
 from (select null as val from generate_series(1, 2));
- array_agg
+ array_agg 
 -----------
  {NULL}
 (1 row)
@@ -1729,7 +1729,7 @@ select string_agg(distinct f1::varchar(2), ',') filter (where length(f1) > 1)
 from varchar_tbl;
 INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
 DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: Aggregate functions with FILTER
-                   QUERY PLAN
+                   QUERY PLAN                   
 ------------------------------------------------
  Aggregate
    ->  Gather Motion 3:1  (slice1; segments: 3)
@@ -1913,7 +1913,7 @@ select
         from (values(1)) b(id)
         where a.id = b.id
 )) from unnest(array[1]) a(id);
- string_agg | sum
+ string_agg | sum 
 ------------+-----
  a          |   1
 (1 row)
@@ -2467,7 +2467,7 @@ select ten,
 reset optimizer_trace_fallback;
 -- end_ignore
 select pg_get_viewdef('aggordview1');
-                                                  pg_get_viewdef
+                                                  pg_get_viewdef                                                   
 -------------------------------------------------------------------------------------------------------------------
   SELECT ten,                                                                                                     +
      percentile_disc((0.5)::double precision) WITHIN GROUP (ORDER BY thousand) AS p50,                            +
@@ -2595,7 +2595,7 @@ explain (costs off)
 select array_dims(array_agg(s)) from (select * from pagg_test) s;
 INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
 DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: Whole-row variable
-                   QUERY PLAN
+                   QUERY PLAN                   
 ------------------------------------------------
  Aggregate
    ->  Gather Motion 3:1  (slice1; segments: 3)
@@ -2606,7 +2606,7 @@ DETAIL:  Falling back to Postgres-based planner because GPORCA does not support 
 select array_dims(array_agg(s)) from (select * from pagg_test) s;
 INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
 DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: Whole-row variable
- array_dims
+ array_dims 
 ------------
  [1:5000]
 (1 row)
@@ -2681,7 +2681,7 @@ DETAIL:  Falling back to Postgres-based planner because GPORCA does not support 
 select any_value(v) filter (where v > 2) from (values (1), (2), (3)) as v (v);
 INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
 DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: Aggregate functions with FILTER
- any_value
+ any_value 
 -----------
          3
 (1 row)
@@ -3024,7 +3024,7 @@ select ten,
 reset optimizer_trace_fallback;
 -- end_ignore
 select pg_get_viewdef('aggordview1');
-                                                  pg_get_viewdef
+                                                  pg_get_viewdef                                                   
 -------------------------------------------------------------------------------------------------------------------
   SELECT ten,                                                                                                     +
      percentile_disc((0.5)::double precision) WITHIN GROUP (ORDER BY thousand) AS p50,                            +
@@ -3451,7 +3451,7 @@ BEGIN
 END;
 $$;
 SELECT eatarray(rwagg(ARRAY[1.0::real])), eatarray(rwagg(ARRAY[1.0::real]));
- eatarray  | eatarray
+ eatarray  | eatarray  
 -----------+-----------
  {2,1,1,1} | {2,1,1,1}
 (1 row)

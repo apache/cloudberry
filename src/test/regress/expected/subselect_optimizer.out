@@ -31,7 +31,7 @@ SELECT * FROM ((SELECT 1 AS x)) ss;
 (1 row)
 
 SELECT * FROM ((SELECT 1 AS x)), ((SELECT * FROM ((SELECT 2 AS y))));
- x | y
+ x | y 
 ---+---
  1 | 2
 (1 row)
@@ -204,19 +204,19 @@ SELECT f1 AS "Correlated Field"
 
 -- Subselects without aliases
 SELECT count FROM (SELECT COUNT(DISTINCT name) FROM road);
- count
+ count 
 -------
   2911
 (1 row)
 
 SELECT COUNT(*) FROM (SELECT DISTINCT name FROM road);
- count
+ count 
 -------
   2911
 (1 row)
 
 SELECT * FROM (SELECT * FROM int4_tbl), (VALUES (123456)) WHERE f1 = column1;
-   f1   | column1
+   f1   | column1 
 --------+---------
  123456 |  123456
 (1 row)
@@ -226,7 +226,7 @@ SELECT * FROM (SELECT * FROM (SELECT abs(f1) AS a1 FROM int4_tbl)),
               (SELECT * FROM int8_tbl)
   WHERE a1 < 10 AND q1 > a1 ORDER BY q1, q2;
 SELECT * FROM view_unnamed_ss;
- a1 |        q1        |        q2
+ a1 |        q1        |        q2         
 ----+------------------+-------------------
   0 |              123 |               456
   0 |              123 |  4567890123456789
@@ -1056,7 +1056,7 @@ explain (costs off)
 select count(*) from tenk1 t
 where (exists(select 1 from tenk1 k where k.unique1 = t.unique2) or ten < 0)
   and thousand = 1;
-                                                  QUERY PLAN
+                                                  QUERY PLAN                                                  
 --------------------------------------------------------------------------------------------------------------
  Aggregate
    ->  Gather Motion 3:1  (slice1; segments: 3)

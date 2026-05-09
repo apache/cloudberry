@@ -271,7 +271,7 @@ SELECT DISTINCT four FROM tenk1;
 
 -- Ensure the parallel plan produces the correct results
 SELECT DISTINCT four FROM tenk1;
- four
+ four 
 ------
     0
     1
@@ -344,7 +344,7 @@ SELECT DISTINCT four FROM tenk1 WHERE four = 0;
 
 -- Ensure the above gives us the correct result
 SELECT DISTINCT four FROM tenk1 WHERE four = 0;
- four
+ four 
 ------
     0
 (1 row)
@@ -369,7 +369,7 @@ SELECT DISTINCT four FROM tenk1 WHERE four = 0 AND two <> 0;
 
 -- Ensure no rows are returned
 SELECT DISTINCT four FROM tenk1 WHERE four = 0 AND two <> 0;
- four
+ four 
 ------
 (0 rows)
 
@@ -393,7 +393,7 @@ SELECT DISTINCT four,1,2,3 FROM tenk1 WHERE four = 0;
 
 -- Ensure we only get 1 row
 SELECT DISTINCT four,1,2,3 FROM tenk1 WHERE four = 0;
- four | ?column? | ?column? | ?column?
+ four | ?column? | ?column? | ?column? 
 ------+----------+----------+----------
     0 |        1 |        2 |        3
 (1 row)

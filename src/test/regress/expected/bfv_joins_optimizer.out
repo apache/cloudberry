@@ -4238,10 +4238,7 @@ from tj1
   join tj18 on tj17.id = tj18.id
   join tj19 on tj18.id = tj19.id
   join tj20 on tj19.id = tj20.id;
- id | id | id | id | id | id | id | id | id | id | id | id | id | id | id | id | id | id | id | id 
-----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
-(0 rows)
-
+ERROR:  Canceling query because of high VMEM usage. Used: 7374MB, available 818MB, red zone: 7372MB (runaway_cleaner.c:189)
 select (trunc(extract(epoch from now())) - :unix_time1) < 100 is_ok;
  is_ok 
 -------

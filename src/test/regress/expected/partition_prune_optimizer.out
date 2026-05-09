@@ -1257,36 +1257,36 @@ explain (costs off) select * from boolpart where a is not unknown;
 (5 rows)
 
 select * from boolpart where a in (true, false);
- a
+ a 
 ---
  f
  t
 (2 rows)
 
 select * from boolpart where a = false;
- a
+ a 
 ---
  f
 (1 row)
 
 select * from boolpart where not a = false;
- a
+ a 
 ---
  t
 (1 row)
 
 select * from boolpart where a is true or a is not true;
- a
+ a 
 ---
-
+ 
  f
  t
 (3 rows)
 
 select * from boolpart where a is not true;
- a
+ a 
 ---
-
+ 
  f
 (2 rows)
 
@@ -1303,7 +1303,7 @@ select * from boolpart where a is unknown;
 (1 row)
 
 select * from boolpart where a is not unknown;
- a
+ a 
 ---
  f
  t
@@ -1314,7 +1314,7 @@ delete from boolpart where a is null;
 create table boolpart_null partition of boolpart for values in (null);
 insert into boolpart values(null);
 explain (costs off) select * from boolpart where a is not true;
-                     QUERY PLAN
+                     QUERY PLAN                     
 ----------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Dynamic Seq Scan on boolpart
@@ -1324,7 +1324,7 @@ explain (costs off) select * from boolpart where a is not true;
 (5 rows)
 
 explain (costs off) select * from boolpart where a is not true and a is not false;
-                       QUERY PLAN
+                       QUERY PLAN                       
 --------------------------------------------------------
  Gather Motion 1:1  (slice1; segments: 1)
    ->  Dynamic Seq Scan on boolpart
@@ -1334,7 +1334,7 @@ explain (costs off) select * from boolpart where a is not true and a is not fals
 (5 rows)
 
 explain (costs off) select * from boolpart where a is not false;
-                     QUERY PLAN
+                     QUERY PLAN                     
 ----------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Dynamic Seq Scan on boolpart
@@ -1344,9 +1344,9 @@ explain (costs off) select * from boolpart where a is not false;
 (5 rows)
 
 select * from boolpart where a is not true;
- a
+ a 
 ---
-
+ 
  f
 (2 rows)
 
@@ -1359,7 +1359,7 @@ select * from boolpart where a is not true and a is not false;
 select * from boolpart where a is not false;
  a 
 ---
-
+ 
  t
 (2 rows)
 
@@ -1371,7 +1371,7 @@ create table iboolpart_f partition of iboolpart for values in ('true');
 create table iboolpart_t partition of iboolpart for values in ('false');
 insert into iboolpart values (true), (false), (null);
 explain (costs off) select * from iboolpart where a in (true, false);
-                      QUERY PLAN
+                      QUERY PLAN                       
 -------------------------------------------------------
  Gather Motion 1:1  (slice1; segments: 1)
    ->  Append
@@ -1385,7 +1385,7 @@ explain (costs off) select * from iboolpart where a in (true, false);
 (9 rows)
 
 explain (costs off) select * from iboolpart where a = false;
-                QUERY PLAN
+                QUERY PLAN                
 ------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Seq Scan on iboolpart_f iboolpart
@@ -1394,7 +1394,7 @@ explain (costs off) select * from iboolpart where a = false;
 (4 rows)
 
 explain (costs off) select * from iboolpart where not a = false;
-                QUERY PLAN
+                QUERY PLAN                
 ------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Seq Scan on iboolpart_t iboolpart
@@ -1403,7 +1403,7 @@ explain (costs off) select * from iboolpart where not a = false;
 (4 rows)
 
 explain (costs off) select * from iboolpart where a is true or a is not true;
-                       QUERY PLAN
+                       QUERY PLAN                       
 --------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Append
@@ -1417,7 +1417,7 @@ explain (costs off) select * from iboolpart where a is true or a is not true;
 (9 rows)
 
 explain (costs off) select * from iboolpart where a is not true;
-                      QUERY PLAN
+                      QUERY PLAN                       
 -------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Append
@@ -1431,7 +1431,7 @@ explain (costs off) select * from iboolpart where a is not true;
 (9 rows)
 
 explain (costs off) select * from iboolpart where a is not true and a is not false;
-                          QUERY PLAN
+                          QUERY PLAN                          
 --------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Append
@@ -1445,7 +1445,7 @@ explain (costs off) select * from iboolpart where a is not true and a is not fal
 (9 rows)
 
 explain (costs off) select * from iboolpart where a is unknown;
-                      QUERY PLAN
+                      QUERY PLAN                       
 -------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Append
@@ -1459,7 +1459,7 @@ explain (costs off) select * from iboolpart where a is unknown;
 (9 rows)
 
 explain (costs off) select * from iboolpart where a is not unknown;
-                      QUERY PLAN
+                      QUERY PLAN                       
 -------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Append
@@ -1473,36 +1473,36 @@ explain (costs off) select * from iboolpart where a is not unknown;
 (9 rows)
 
 select * from iboolpart where a in (true, false);
- a
+ a 
 ---
  f
  t
 (2 rows)
 
 select * from iboolpart where a = false;
- a
+ a 
 ---
  f
 (1 row)
 
 select * from iboolpart where not a = false;
- a
+ a 
 ---
  t
 (1 row)
 
 select * from iboolpart where a is true or a is not true;
- a
+ a 
 ---
-
+ 
  f
  t
 (3 rows)
 
 select * from iboolpart where a is not true;
- a
+ a 
 ---
-
+ 
  f
 (2 rows)
 
@@ -1519,7 +1519,7 @@ select * from iboolpart where a is unknown;
 (1 row)
 
 select * from iboolpart where a is not unknown;
- a
+ a 
 ---
  f
  t
@@ -1531,9 +1531,9 @@ create table iboolpart_null partition of iboolpart for values in (null);
 insert into iboolpart values(null);
 -- Pruning shouldn't take place for these.  Just check the result is correct
 select * from iboolpart where a is not true;
- a
+ a 
 ---
-
+ 
  f
 (2 rows)
 
@@ -1546,7 +1546,7 @@ select * from iboolpart where a is not true and a is not false;
 select * from iboolpart where a is not false;
  a 
 ---
-
+ 
  t
 (2 rows)
 
@@ -2051,7 +2051,7 @@ select * from
    from int4_tbl touter) ss,
   asptab
 where asptab.id > ss.b::int;
-                                               QUERY PLAN
+                                               QUERY PLAN                                                
 ---------------------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Nested Loop
@@ -4593,7 +4593,7 @@ create table hp_prefix_test (a int, b int, c int, d int)
 -- create 8 partitions
 select 'create table hp_prefix_test_p' || x::text || ' partition of hp_prefix_test for values with (modulus 8, remainder ' || x::text || ');'
 from generate_Series(0,7) x;
-                                               ?column?
+                                               ?column?                                               
 ------------------------------------------------------------------------------------------------------
  create table hp_prefix_test_p0 partition of hp_prefix_test for values with (modulus 8, remainder 0);
  create table hp_prefix_test_p1 partition of hp_prefix_test for values with (modulus 8, remainder 1);
@@ -4761,28 +4761,28 @@ order by g.s;
 
 \gexec
 select tableoid::regclass,* from hp_prefix_test where a is null and b is null and c is null and d is null
- hp_prefix_test_p0 |   |   |   |
+ hp_prefix_test_p0 |   |   |   |  
 
 select tableoid::regclass,* from hp_prefix_test where a = 1 and b is null and c is null and d is null
- hp_prefix_test_p1 | 1 |   |   |
+ hp_prefix_test_p1 | 1 |   |   |  
 
 select tableoid::regclass,* from hp_prefix_test where a is null and b = 2 and c is null and d is null
- hp_prefix_test_p2 |   | 2 |   |
+ hp_prefix_test_p2 |   | 2 |   |  
 
 select tableoid::regclass,* from hp_prefix_test where a = 1 and b = 2 and c is null and d is null
- hp_prefix_test_p4 | 1 | 2 |   |
+ hp_prefix_test_p4 | 1 | 2 |   |  
 
 select tableoid::regclass,* from hp_prefix_test where a is null and b is null and c = 3 and d is null
- hp_prefix_test_p3 |   |   | 3 |
+ hp_prefix_test_p3 |   |   | 3 |  
 
 select tableoid::regclass,* from hp_prefix_test where a = 1 and b is null and c = 3 and d is null
- hp_prefix_test_p7 | 1 |   | 3 |
+ hp_prefix_test_p7 | 1 |   | 3 |  
 
 select tableoid::regclass,* from hp_prefix_test where a is null and b = 2 and c = 3 and d is null
- hp_prefix_test_p4 |   | 2 | 3 |
+ hp_prefix_test_p4 |   | 2 | 3 |  
 
 select tableoid::regclass,* from hp_prefix_test where a = 1 and b = 2 and c = 3 and d is null
- hp_prefix_test_p5 | 1 | 2 | 3 |
+ hp_prefix_test_p5 | 1 | 2 | 3 |  
 
 select tableoid::regclass,* from hp_prefix_test where a is null and b is null and c is null and d = 4
  hp_prefix_test_p4 |   |   |   | 4
