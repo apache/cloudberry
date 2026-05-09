@@ -95,7 +95,7 @@ ftoptions
 (1 row)
 \a
 SELECT * FROM ext_special_uri ORDER BY a;
- a | b
+ a | b 
 ---+---
  1 | 1
  2 | 2
@@ -114,7 +114,7 @@ OPTIONS (format_type 'c', delimiter ',',
          encoding '6');
 SELECT pg_encoding_to_char(encoding) FROM pg_exttable
 WHERE  reloid = 'ext_enc_num'::regclass;
- pg_encoding_to_char
+ pg_encoding_to_char 
 ---------------------
  UTF8
 (1 row)
@@ -126,7 +126,7 @@ OPTIONS (format_type 'c', delimiter ',',
          encoding 'UTF8');
 SELECT pg_encoding_to_char(encoding) FROM pg_exttable
 WHERE  reloid = 'ext_enc_utf8'::regclass;
- pg_encoding_to_char
+ pg_encoding_to_char 
 ---------------------
  UTF8
 (1 row)
@@ -138,7 +138,7 @@ OPTIONS (format_type 'c', delimiter ',',
          encoding 'utf-8');
 SELECT pg_encoding_to_char(encoding) FROM pg_exttable
 WHERE  reloid = 'ext_enc_utf8_dash'::regclass;
- pg_encoding_to_char
+ pg_encoding_to_char 
 ---------------------
  UTF8
 (1 row)
@@ -150,7 +150,7 @@ OPTIONS (format_type 'c', delimiter ',',
          encoding 'GBK');
 SELECT pg_encoding_to_char(encoding) FROM pg_exttable
 WHERE  reloid = 'ext_enc_gbk'::regclass;
- pg_encoding_to_char
+ pg_encoding_to_char 
 ---------------------
  GBK
 (1 row)
@@ -163,7 +163,7 @@ OPTIONS (format_type 'c', delimiter ',',
          encoding '0');
 SELECT pg_encoding_to_char(encoding) FROM pg_exttable
 WHERE  reloid = 'ext_enc_alter'::regclass;
- pg_encoding_to_char
+ pg_encoding_to_char 
 ---------------------
  SQL_ASCII
 (1 row)
@@ -171,7 +171,7 @@ WHERE  reloid = 'ext_enc_alter'::regclass;
 ALTER FOREIGN TABLE ext_enc_alter OPTIONS (SET encoding 'UTF8');
 SELECT pg_encoding_to_char(encoding) FROM pg_exttable
 WHERE  reloid = 'ext_enc_alter'::regclass;
- pg_encoding_to_char
+ pg_encoding_to_char 
 ---------------------
  UTF8
 (1 row)
