@@ -225,9 +225,10 @@ CTranslatorQueryToDXL::CTranslatorQueryToDXL(
 		CheckSirvFuncsWithoutFromClause(query);
 	}
 
-	// Add a separate guard for targetlist functions that are unsafe to
-	// execute on the coordinator.
-	CheckUnsafeSirvFuncsInTargetList(query);
+	// Add a separate guard for targetlist expressions that mix SIRV
+	// functions with current-level Vars from the FROM clause. Those
+	// expressions are row-dependent and must stay on the QEs.
+	CheckSirvFuncsWithCurrentLevelVarsInTargetList(query);
 
 	// first normalize the query
 	m_query =
@@ -267,37 +268,6 @@ CTranslatorQueryToDXL::QueryToDXLInstance(CMemoryPool *mp,
 							  false,   // is_top_query_dml
 							  nullptr  // query_level_to_cte_map
 		);
-}
-
-static BOOL
-HasUnsafeCoordinatorFunc(Oid funcid)
-{
-	HeapTuple	proctup;
-	HeapTuple	langtup;
-	Form_pg_proc procform;
-	Form_pg_language langform;
-	BOOL		is_unsafe;
-
-	proctup = SearchSysCache1(PROCOID, ObjectIdGetDatum(funcid));
-	if (!HeapTupleIsValid(proctup))
-		elog(ERROR, "cache lookup failed for function %u", funcid);
-
-	procform = (Form_pg_proc) GETSTRUCT(proctup);
-	langtup = SearchSysCache1(LANGOID, ObjectIdGetDatum(procform->prolang));
-	if (!HeapTupleIsValid(langtup))
-	{
-		ReleaseSysCache(proctup);
-		elog(ERROR, "cache lookup failed for language %u", procform->prolang);
-	}
-
-	langform = (Form_pg_language) GETSTRUCT(langtup);
-	is_unsafe = (strcmp(NameStr(langform->lanname), "internal") != 0 &&
-				 strcmp(NameStr(langform->lanname), "c") != 0);
-
-	ReleaseSysCache(langtup);
-	ReleaseSysCache(proctup);
-
-	return is_unsafe;
 }
 
 //---------------------------------------------------------------------------
@@ -400,8 +370,7 @@ CTranslatorQueryToDXL::CheckSirvFuncsWithoutFromClause(Query *query)
 	{
 		// see if we have SIRV functions in the immediate target list
 		if (HasSirvFunctions((Node *) query->targetList,
-							 false /*descend_into_subqueries*/,
-							 false /*check_coordinator_safety*/))
+							 false /*descend_into_subqueries*/))
 		{
 			GPOS_RAISE(gpdxl::ExmaDXL, gpdxl::ExmiQuery2DXLUnsupportedFeature,
 					   GPOS_WSZ_LIT("SIRV functions"));
@@ -434,37 +403,46 @@ CTranslatorQueryToDXL::CheckSirvFuncsWithoutFromClause(Query *query)
 
 //---------------------------------------------------------------------------
 //	@function:
-//		CTranslatorQueryToDXL::CheckUnsafeSirvFuncsInTargetList
+//		CTranslatorQueryToDXL::CheckSirvFuncsWithCurrentLevelVarsInTargetList
 //
 //	@doc:
-//		Check for SIRV functions in the target list that may be unsafe to
-//		execute on the coordinator and throw an exception when found.
+//		Check for target list expressions that contain both SIRV functions and
+//		current-level Vars from the FROM clause, and throw an exception when
+//		found.
 //
 //		ORCA can place target list projections above a Motion and execute
-//		them on the coordinator. That is unsafe for procedural or SQL-language
-//		SIRV functions because they may perform SPI, dispatch, or other
-//		volatile work that must not be moved to the coordinator in a
-//		distributed query. Only inspect the immediate target list expression
-//		tree here; functions inside nested subqueries are planned within their
-//		own query context and should not force a fallback for the outer query.
+//		them on the coordinator. If a SIRV expression also depends on columns
+//		produced by the current query's FROM clause, it is row-dependent and
+//		must stay on the segment workers alongside those rows. Only inspect
+//		the immediate target list expression tree here; functions or Vars
+//		inside nested subqueries are planned within their own query context
+//		and should not force a fallback for the outer query.
 //
 //---------------------------------------------------------------------------
 void
-CTranslatorQueryToDXL::CheckUnsafeSirvFuncsInTargetList(Query *query)
+CTranslatorQueryToDXL::CheckSirvFuncsWithCurrentLevelVarsInTargetList(
+	Query *query)
 {
+	ListCell *lc = nullptr;
+
 	// if target list is empty, look no further
 	if (NIL == query->targetList)
 	{
 		return;
 	}
 
-	// see if we have unsafe coordinator functions in the target list
-	if (HasSirvFunctions((Node *) query->targetList,
-						 false /*descend_into_subqueries*/,
-						 true /*check_coordinator_safety*/))
+	ForEach(lc, query->targetList)
 	{
-		GPOS_RAISE(gpdxl::ExmaDXL, gpdxl::ExmiQuery2DXLUnsupportedFeature,
-				   GPOS_WSZ_LIT("SIRV functions"));
+		TargetEntry *target_entry = (TargetEntry *) lfirst(lc);
+
+		if (HasSirvFunctions((Node *) target_entry->expr,
+							 false /*descend_into_subqueries*/) &&
+			HasCurrentLevelVars((Node *) target_entry->expr,
+								false /*descend_into_subqueries*/))
+		{
+			GPOS_RAISE(gpdxl::ExmaDXL, gpdxl::ExmiQuery2DXLUnsupportedFeature,
+					   GPOS_WSZ_LIT("SIRV functions"));
+		}
 	}
 }
 
@@ -478,8 +456,7 @@ CTranslatorQueryToDXL::CheckUnsafeSirvFuncsInTargetList(Query *query)
 //---------------------------------------------------------------------------
 BOOL
 CTranslatorQueryToDXL::HasSirvFunctions(Node *node,
-										bool descend_into_subqueries,
-										bool check_coordinator_safety) const
+										bool descend_into_subqueries) const
 {
 	GPOS_ASSERT(nullptr != node);
 
@@ -492,9 +469,7 @@ CTranslatorQueryToDXL::HasSirvFunctions(Node *node,
 	{
 		FuncExpr *func_expr = (FuncExpr *) lfirst(lc);
 		if (CTranslatorUtils::IsSirvFunc(m_mp, m_md_accessor,
-										 func_expr->funcid) &&
-			(!check_coordinator_safety ||
-			 HasUnsafeCoordinatorFunc(func_expr->funcid)))
+										 func_expr->funcid))
 		{
 			has_sirv = true;
 			break;
@@ -503,6 +478,41 @@ CTranslatorQueryToDXL::HasSirvFunctions(Node *node,
 	gpdb::ListFree(function_list);
 
 	return has_sirv;
+}
+
+//---------------------------------------------------------------------------
+//	@function:
+//		CTranslatorQueryToDXL::HasCurrentLevelVars
+//
+//	@doc:
+//		Check for Vars from the current query level in the tree rooted at the
+//		given node
+//
+//---------------------------------------------------------------------------
+BOOL
+CTranslatorQueryToDXL::HasCurrentLevelVars(Node *node,
+										   bool descend_into_subqueries) const
+{
+	GPOS_ASSERT(nullptr != node);
+
+	List *var_list = gpdb::ExtractNodesExpression(node, T_Var,
+												  descend_into_subqueries);
+	ListCell *lc = nullptr;
+
+	BOOL has_current_level_var = false;
+	ForEach(lc, var_list)
+	{
+		Var *var = (Var *) lfirst(lc);
+
+		if (0 == var->varlevelsup)
+		{
+			has_current_level_var = true;
+			break;
+		}
+	}
+	gpdb::ListFree(var_list);
+
+	return has_current_level_var;
 }
 
 //---------------------------------------------------------------------------
@@ -4018,8 +4028,7 @@ CTranslatorQueryToDXL::TranslateTVFToDXL(const RangeTblEntry *rte,
 	// check if arguments contain SIRV functions
 	if (NIL != funcexpr->args &&
 		HasSirvFunctions((Node *) funcexpr->args,
-						 true /*descend_into_subqueries*/,
-						 false /*check_coordinator_safety*/))
+						 true /*descend_into_subqueries*/))
 	{
 		GPOS_RAISE(gpdxl::ExmaDXL, gpdxl::ExmiQuery2DXLUnsupportedFeature,
 				   GPOS_WSZ_LIT("SIRV functions"));

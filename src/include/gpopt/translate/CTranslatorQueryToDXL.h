@@ -154,13 +154,16 @@ private:
 	// throw an exception when found
 	void CheckSirvFuncsWithoutFromClause(Query *query);
 
-	// check for targetlist SIRV functions that may be unsafe to execute on the
-	// coordinator, and throw an exception when found
-	void CheckUnsafeSirvFuncsInTargetList(Query *query);
+	// check for targetlist expressions that contain both SIRV functions and
+	// current-level Vars from the query's FROM clause, and throw an exception
+	// when found
+	void CheckSirvFuncsWithCurrentLevelVarsInTargetList(Query *query);
 
 	// check for SIRV functions in the tree rooted at the given node
-	BOOL HasSirvFunctions(Node *node, bool descend_into_subqueries,
-						  bool check_coordinator_safety) const;
+	BOOL HasSirvFunctions(Node *node, bool descend_into_subqueries) const;
+
+	// check for Vars from the current query level in the given tree
+	BOOL HasCurrentLevelVars(Node *node, bool descend_into_subqueries) const;
 
 	// translate FromExpr (in the GPDB query) into a CDXLLogicalJoin or CDXLLogicalGet
 	CDXLNode *TranslateFromExprToDXL(FromExpr *from_expr);
