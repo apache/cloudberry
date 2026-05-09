@@ -52,12 +52,18 @@ OPTIONS (format_type 'c', delimiter ',',
          location_uris 'file://@hostname@@abs_srcdir@/data/tableless.csv',
          reject_limit_type 'p', reject_limit '120');
 ERROR:  segment reject limit in PERCENT must be between 1 and 100 (got 120)  (seg1 127.0.0.1:7003 pid=5173)
--- Error, invalid encoding
+-- Error, invalid encoding (negative numeric ID)
 CREATE FOREIGN TABLE tableless_ext_fdw(a int, b int)
 SERVER gp_exttable_server
 OPTIONS (format_type 'c', delimiter ',', encoding '-1',
          location_uris 'file://@hostname@@abs_srcdir@/data/tableless.csv');
-ERROR:  -1 is not a valid encoding code  (seg0 127.0.0.1:7002 pid=8289)
+ERROR:  "-1" is not a valid encoding name or code
+-- Error, invalid encoding (unknown name)
+CREATE FOREIGN TABLE tableless_ext_fdw(a int, b int)
+SERVER gp_exttable_server
+OPTIONS (format_type 'c', delimiter ',', encoding 'bogus',
+         location_uris 'file://@hostname@@abs_srcdir@/data/tableless.csv');
+ERROR:  "bogus" is not a valid encoding name or code
 -- OK, no execute_on | log_errors | encoding | is_writable option
 CREATE FOREIGN TABLE tableless_ext_fdw(a int, b int)
 SERVER gp_exttable_server
@@ -89,10 +95,90 @@ ftoptions
 (1 row)
 \a
 SELECT * FROM ext_special_uri ORDER BY a;
- a | b 
+ a | b
 ---+---
  1 | 1
  2 | 2
  3 | 3
 (3 rows)
+
+-- ===================================================================
+-- Tests for issue #1726: FDW OPTIONS encoding accepts both numeric IDs
+-- and symbolic names (UTF8, utf-8, GBK, ...). Names previously parsed
+-- via atoi() and silently degraded to SQL_ASCII.
+-- ===================================================================
+-- Numeric form (baseline; worked before the fix as well).
+CREATE FOREIGN TABLE ext_enc_num (a int) SERVER gp_exttable_server
+OPTIONS (format_type 'c', delimiter ',',
+         location_uris 'file:///tmp/ext_enc_ignored.csv',
+         encoding '6');
+SELECT pg_encoding_to_char(encoding) FROM pg_exttable
+WHERE  reloid = 'ext_enc_num'::regclass;
+ pg_encoding_to_char
+---------------------
+ UTF8
+(1 row)
+
+-- Symbolic name 'UTF8' — used to be silently SQL_ASCII (the bug).
+CREATE FOREIGN TABLE ext_enc_utf8 (a int) SERVER gp_exttable_server
+OPTIONS (format_type 'c', delimiter ',',
+         location_uris 'file:///tmp/ext_enc_ignored.csv',
+         encoding 'UTF8');
+SELECT pg_encoding_to_char(encoding) FROM pg_exttable
+WHERE  reloid = 'ext_enc_utf8'::regclass;
+ pg_encoding_to_char
+---------------------
+ UTF8
+(1 row)
+
+-- Case + dash variant resolved by pg_char_to_encoding().
+CREATE FOREIGN TABLE ext_enc_utf8_dash (a int) SERVER gp_exttable_server
+OPTIONS (format_type 'c', delimiter ',',
+         location_uris 'file:///tmp/ext_enc_ignored.csv',
+         encoding 'utf-8');
+SELECT pg_encoding_to_char(encoding) FROM pg_exttable
+WHERE  reloid = 'ext_enc_utf8_dash'::regclass;
+ pg_encoding_to_char
+---------------------
+ UTF8
+(1 row)
+
+-- Non-UTF8 symbolic name.
+CREATE FOREIGN TABLE ext_enc_gbk (a int) SERVER gp_exttable_server
+OPTIONS (format_type 'c', delimiter ',',
+         location_uris 'file:///tmp/ext_enc_ignored.csv',
+         encoding 'GBK');
+SELECT pg_encoding_to_char(encoding) FROM pg_exttable
+WHERE  reloid = 'ext_enc_gbk'::regclass;
+ pg_encoding_to_char
+---------------------
+ GBK
+(1 row)
+
+-- ALTER FOREIGN TABLE ... OPTIONS (SET encoding 'UTF8') — same code
+-- path, this proves the read-side resolution works after an ALTER too.
+CREATE FOREIGN TABLE ext_enc_alter (a int) SERVER gp_exttable_server
+OPTIONS (format_type 'c', delimiter ',',
+         location_uris 'file:///tmp/ext_enc_ignored.csv',
+         encoding '0');
+SELECT pg_encoding_to_char(encoding) FROM pg_exttable
+WHERE  reloid = 'ext_enc_alter'::regclass;
+ pg_encoding_to_char
+---------------------
+ SQL_ASCII
+(1 row)
+
+ALTER FOREIGN TABLE ext_enc_alter OPTIONS (SET encoding 'UTF8');
+SELECT pg_encoding_to_char(encoding) FROM pg_exttable
+WHERE  reloid = 'ext_enc_alter'::regclass;
+ pg_encoding_to_char
+---------------------
+ UTF8
+(1 row)
+
+DROP FOREIGN TABLE ext_enc_num;
+DROP FOREIGN TABLE ext_enc_utf8;
+DROP FOREIGN TABLE ext_enc_utf8_dash;
+DROP FOREIGN TABLE ext_enc_gbk;
+DROP FOREIGN TABLE ext_enc_alter;
 

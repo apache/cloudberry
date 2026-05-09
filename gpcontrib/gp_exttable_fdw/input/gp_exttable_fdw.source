@@ -53,10 +53,16 @@ OPTIONS (format_type 'c', delimiter ',',
          location_uris 'file://@hostname@@abs_srcdir@/data/tableless.csv',
          reject_limit_type 'p', reject_limit '120');
 
--- Error, invalid encoding
+-- Error, invalid encoding (negative numeric ID)
 CREATE FOREIGN TABLE tableless_ext_fdw(a int, b int)
 SERVER gp_exttable_server
 OPTIONS (format_type 'c', delimiter ',', encoding '-1',
+         location_uris 'file://@hostname@@abs_srcdir@/data/tableless.csv');
+
+-- Error, invalid encoding (unknown name)
+CREATE FOREIGN TABLE tableless_ext_fdw(a int, b int)
+SERVER gp_exttable_server
+OPTIONS (format_type 'c', delimiter ',', encoding 'bogus',
          location_uris 'file://@hostname@@abs_srcdir@/data/tableless.csv');
 
 -- OK, no execute_on | log_errors | encoding | is_writable option
@@ -79,3 +85,59 @@ SELECT urilocation FROM pg_exttable WHERE reloid = 'public.ext_special_uri'::reg
 SELECT ftoptions FROM pg_foreign_table WHERE ftrelid='public.ext_special_uri'::regclass;
 \a
 SELECT * FROM ext_special_uri ORDER BY a;
+
+-- ===================================================================
+-- Tests for issue #1726: FDW OPTIONS encoding accepts both numeric IDs
+-- and symbolic names (UTF8, utf-8, GBK, ...). Names previously parsed
+-- via atoi() and silently degraded to SQL_ASCII.
+-- ===================================================================
+
+-- Numeric form (baseline; worked before the fix as well).
+CREATE FOREIGN TABLE ext_enc_num (a int) SERVER gp_exttable_server
+OPTIONS (format_type 'c', delimiter ',',
+         location_uris 'file:///tmp/ext_enc_ignored.csv',
+         encoding '6');
+SELECT pg_encoding_to_char(encoding) FROM pg_exttable
+WHERE  reloid = 'ext_enc_num'::regclass;
+
+-- Symbolic name 'UTF8' — used to be silently SQL_ASCII (the bug).
+CREATE FOREIGN TABLE ext_enc_utf8 (a int) SERVER gp_exttable_server
+OPTIONS (format_type 'c', delimiter ',',
+         location_uris 'file:///tmp/ext_enc_ignored.csv',
+         encoding 'UTF8');
+SELECT pg_encoding_to_char(encoding) FROM pg_exttable
+WHERE  reloid = 'ext_enc_utf8'::regclass;
+
+-- Case + dash variant resolved by pg_char_to_encoding().
+CREATE FOREIGN TABLE ext_enc_utf8_dash (a int) SERVER gp_exttable_server
+OPTIONS (format_type 'c', delimiter ',',
+         location_uris 'file:///tmp/ext_enc_ignored.csv',
+         encoding 'utf-8');
+SELECT pg_encoding_to_char(encoding) FROM pg_exttable
+WHERE  reloid = 'ext_enc_utf8_dash'::regclass;
+
+-- Non-UTF8 symbolic name.
+CREATE FOREIGN TABLE ext_enc_gbk (a int) SERVER gp_exttable_server
+OPTIONS (format_type 'c', delimiter ',',
+         location_uris 'file:///tmp/ext_enc_ignored.csv',
+         encoding 'GBK');
+SELECT pg_encoding_to_char(encoding) FROM pg_exttable
+WHERE  reloid = 'ext_enc_gbk'::regclass;
+
+-- ALTER FOREIGN TABLE ... OPTIONS (SET encoding 'UTF8') — same code
+-- path, this proves the read-side resolution works after an ALTER too.
+CREATE FOREIGN TABLE ext_enc_alter (a int) SERVER gp_exttable_server
+OPTIONS (format_type 'c', delimiter ',',
+         location_uris 'file:///tmp/ext_enc_ignored.csv',
+         encoding '0');
+SELECT pg_encoding_to_char(encoding) FROM pg_exttable
+WHERE  reloid = 'ext_enc_alter'::regclass;
+ALTER FOREIGN TABLE ext_enc_alter OPTIONS (SET encoding 'UTF8');
+SELECT pg_encoding_to_char(encoding) FROM pg_exttable
+WHERE  reloid = 'ext_enc_alter'::regclass;
+
+DROP FOREIGN TABLE ext_enc_num;
+DROP FOREIGN TABLE ext_enc_utf8;
+DROP FOREIGN TABLE ext_enc_utf8_dash;
+DROP FOREIGN TABLE ext_enc_gbk;
+DROP FOREIGN TABLE ext_enc_alter;

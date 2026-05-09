@@ -48,5 +48,10 @@ extern ExtTableEntry *GetExtFromForeignTableOptions(List *ftoptons, Oid relid);
 
 extern ExternalScanInfo *MakeExternalScanInfo(ExtTableEntry *extEntry);
 
+/*
+ * Parse an "encoding" FDW OPTIONS value (symbolic name or numeric string)
+ * into a numeric encoding ID. ereports on invalid input.
+ */
+extern int parse_fdw_encoding_option(const char *value);
 
 #endif   /* EXTERNAL_H */
