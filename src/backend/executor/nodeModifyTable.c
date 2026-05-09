@@ -2442,6 +2442,14 @@ ExecUpdateEpilogue(ModifyTableContext *context, UpdateContext *updateCxt,
 
 	if (resultRelationDesc->rd_rel->relispartition)
 	{
+		ModifiedLeafRelidsKey	key;
+
+		MemSet(&key, 0, sizeof(key));
+		key.cmd = CMD_UPDATE;
+		key.relid = RelationGetRelid(resultRelationDesc);
+
+		(void) hash_search(mtstate->modified_leaf_relids, &key, HASH_ENTER, NULL);
+
 		context->mtstate->mt_leaf_relids_updated =
 			bms_add_member(context->mtstate->mt_leaf_relids_updated, RelationGetRelid(resultRelationDesc));
 		context->mtstate->has_leaf_changed = true;

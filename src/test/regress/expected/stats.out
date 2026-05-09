@@ -37,7 +37,7 @@ NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'se
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 -- start_ignore
 SELECT seq_scan FROM gp_stat_user_tables_summary WHERE relname='tenk2';
- seq_scan
+ seq_scan 
 ----------
        84
 (1 row)
@@ -1152,39 +1152,21 @@ select a from stats_test_tab1 where a = 3;
  3
 (1 row)
 
-SELECT gp_stat_force_next_flush();
- gp_stat_force_next_flush
---------------------------
-
-(1 row)
-
-SELECT exists(SELECT * FROM gp_stat_user_indexes_summary WHERE indexrelname = 'stats_test_idx1') AS pg_stat_have_stats;
+SELECT pg_stat_have_stats('relation', :dboid, :stats_test_idx1_oid);
  pg_stat_have_stats 
 --------------------
  t
 (1 row)
 
 -- pg_stat_have_stats returns false for dropped index with stats
-SELECT gp_stat_force_next_flush();
- gp_stat_force_next_flush
---------------------------
-
-(1 row)
-
-SELECT exists(SELECT * FROM gp_stat_user_indexes_summary WHERE indexrelname = 'stats_test_idx1') AS pg_stat_have_stats;
+SELECT pg_stat_have_stats('relation', :dboid, :stats_test_idx1_oid);
  pg_stat_have_stats 
 --------------------
  t
 (1 row)
 
 DROP index stats_test_idx1;
-SELECT gp_stat_force_next_flush();
- gp_stat_force_next_flush
---------------------------
-
-(1 row)
-
-SELECT exists(SELECT * FROM gp_stat_user_indexes_summary WHERE indexrelname = 'stats_test_idx1') AS pg_stat_have_stats;
+SELECT pg_stat_have_stats('relation', :dboid, :stats_test_idx1_oid);
  pg_stat_have_stats 
 --------------------
  f
@@ -1200,26 +1182,14 @@ select a from stats_test_tab1 where a = 3;
  3
 (1 row)
 
-SELECT gp_stat_force_next_flush();
- gp_stat_force_next_flush
---------------------------
-
-(1 row)
-
-SELECT exists(SELECT * FROM gp_stat_user_indexes_summary WHERE indexrelname = 'stats_test_idx1') AS pg_stat_have_stats;
+SELECT pg_stat_have_stats('relation', :dboid, :stats_test_idx1_oid);
  pg_stat_have_stats 
 --------------------
  t
 (1 row)
 
 ROLLBACK;
-SELECT gp_stat_force_next_flush();
- gp_stat_force_next_flush
---------------------------
-
-(1 row)
-
-SELECT exists(SELECT * FROM gp_stat_user_indexes_summary WHERE indexrelname = 'stats_test_idx1') AS pg_stat_have_stats;
+SELECT pg_stat_have_stats('relation', :dboid, :stats_test_idx1_oid);
  pg_stat_have_stats 
 --------------------
  f
@@ -1234,13 +1204,7 @@ select a from stats_test_tab1 where a = 3;
  3
 (1 row)
 
-SELECT gp_stat_force_next_flush();
- gp_stat_force_next_flush
---------------------------
-
-(1 row)
-
-SELECT exists(SELECT * FROM gp_stat_user_indexes_summary WHERE indexrelname = 'stats_test_idx1') AS pg_stat_have_stats;
+SELECT pg_stat_have_stats('relation', :dboid, :stats_test_idx1_oid);
  pg_stat_have_stats 
 --------------------
  t
@@ -1248,27 +1212,15 @@ SELECT exists(SELECT * FROM gp_stat_user_indexes_summary WHERE indexrelname = 's
 
 REINDEX index CONCURRENTLY stats_test_idx1;
 -- false for previous oid
-SELECT gp_stat_force_next_flush();
- gp_stat_force_next_flush
---------------------------
-
-(1 row)
-
-SELECT exists(SELECT * FROM gp_stat_user_indexes_summary WHERE indexrelname = 'stats_test_idx1') AS pg_stat_have_stats;
+SELECT pg_stat_have_stats('relation', :dboid, :stats_test_idx1_oid);
  pg_stat_have_stats 
 --------------------
- t
+ f
 (1 row)
 
 -- true for new oid
 SELECT 'stats_test_idx1'::regclass::oid AS stats_test_idx1_oid \gset
-SELECT gp_stat_force_next_flush();
- gp_stat_force_next_flush
---------------------------
-
-(1 row)
-
-SELECT exists(SELECT * FROM gp_stat_user_indexes_summary WHERE indexrelname = 'stats_test_idx1') AS pg_stat_have_stats;
+SELECT pg_stat_have_stats('relation', :dboid, :stats_test_idx1_oid);
  pg_stat_have_stats 
 --------------------
  t
@@ -1276,13 +1228,7 @@ SELECT exists(SELECT * FROM gp_stat_user_indexes_summary WHERE indexrelname = 's
 
 -- pg_stat_have_stats returns true for a rolled back drop index with stats
 BEGIN;
-SELECT gp_stat_force_next_flush();
- gp_stat_force_next_flush
---------------------------
-
-(1 row)
-
-SELECT exists(SELECT * FROM gp_stat_user_indexes_summary WHERE indexrelname = 'stats_test_idx1') AS pg_stat_have_stats;
+SELECT pg_stat_have_stats('relation', :dboid, :stats_test_idx1_oid);
  pg_stat_have_stats 
 --------------------
  t
@@ -1290,13 +1236,7 @@ SELECT exists(SELECT * FROM gp_stat_user_indexes_summary WHERE indexrelname = 's
 
 DROP index stats_test_idx1;
 ROLLBACK;
-SELECT gp_stat_force_next_flush();
- gp_stat_force_next_flush
---------------------------
-
-(1 row)
-
-SELECT exists(SELECT * FROM gp_stat_user_indexes_summary WHERE indexrelname = 'stats_test_idx1') AS pg_stat_have_stats;
+SELECT pg_stat_have_stats('relation', :dboid, :stats_test_idx1_oid);
  pg_stat_have_stats 
 --------------------
  t
@@ -1501,7 +1441,7 @@ SELECT :io_sum_local_after_evictions > :io_sum_local_before_evictions,
        :io_sum_local_after_extends > :io_sum_local_before_extends;
  ?column? | ?column? | ?column? | ?column? 
 ----------+----------+----------+----------
- t        | t        | t        | t
+ t        | f        | t        | t
 (1 row)
 
 -- end_ignore
