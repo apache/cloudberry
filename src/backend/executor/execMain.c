@@ -981,10 +981,6 @@ standard_ExecutorRun(QueryDesc *queryDesc,
 			 * root.
 			 */
 
-			MotionState *motionState = getMotionState(queryDesc->planstate, LocallyExecutingSliceIndex(estate));
-
-			Assert(motionState);
-
 			ExecutePlan(queryDesc,
 						amIParallel,
 						CMD_SELECT,

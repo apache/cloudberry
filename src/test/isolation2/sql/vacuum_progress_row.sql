@@ -173,7 +173,6 @@ select relid::regclass as relname, phase, heap_blks_total, heap_blks_scanned, he
 2: SELECT wait_until_all_segments_synchronized();
 
 SELECT n_live_tup, n_dead_tup, last_vacuum is not null as has_last_vacuum, vacuum_count FROM gp_stat_all_tables WHERE relname = 'vacuum_progress_ao_row' and gp_segment_id = 1;
->>>>>>> main
 SELECT n_live_tup, n_dead_tup, last_vacuum is not null as has_last_vacuum, vacuum_count FROM gp_stat_all_tables_summary WHERE relname = 'vacuum_progress_ao_row';
 
 1q:
