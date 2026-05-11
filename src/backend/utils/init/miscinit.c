@@ -1096,7 +1096,7 @@ SetCurrentRoleId(Oid roleid, bool is_superuser)
 
 /*
  * Get user name from user oid, returns NULL for nonexistent roleid if noerr
- * is true.
+ * is true
  */
 char *
 GetUserNameFromId(Oid roleid, bool noerr)
