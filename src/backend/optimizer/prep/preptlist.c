@@ -60,7 +60,7 @@ static List *supplement_simply_updatable_targetlist(PlannerInfo *root,
 													List *range_table,
 													List *tlist);
 
-static List *expand_insert_targetlist(PlannerInfo *root, List *tlist, Relation rel, Index split_update_result_relation);
+List *expand_insert_targetlist(PlannerInfo *root, List *tlist, Relation rel, Index split_update_result_relation);
 
 
 
@@ -143,15 +143,48 @@ preprocess_targetlist(PlannerInfo *root)
 	}
 	else if (command_type == CMD_MERGE)
 	{
-		/* update distributed column in merge is not supported now */
+		/* Check if any MERGE UPDATE action modifies distribution key columns */
 		foreach(lc, parse->mergeActionList)
 		{
 			MergeAction *action = lfirst(lc);
-		 	if(action->commandType == CMD_UPDATE)
+			if (action->commandType == CMD_UPDATE &&
+				check_splitupdate(action->targetList, result_relation, target_relation))
 			{
-				if(check_splitupdate(action->targetList, result_relation, target_relation))
-						ereport(ERROR, (errcode(ERRCODE_GP_FEATURE_NOT_YET),
-										errmsg("cannot update column in merge with distributed column")));
+				root->merge_need_split_update = true;
+				break;
+			}
+		}
+
+		/*
+		 * When merge_need_split_update, the SplitMerge node needs all target
+		 * table columns in the subplan output so that the UPDATE projection
+		 * can read unchanged columns from the old row.  Add all non-dropped
+		 * user columns of the target table to the subplan targetlist.
+		 */
+		if (root->merge_need_split_update)
+		{
+			int		natts = RelationGetNumberOfAttributes(target_relation);
+
+			for (int attno = 1; attno <= natts; attno++)
+			{
+				Form_pg_attribute att = TupleDescAttr(target_relation->rd_att,
+													  attno - 1);
+				Var		   *var;
+
+				if (att->attisdropped)
+					continue;
+
+				var = makeVar(result_relation, attno,
+							  att->atttypid, att->atttypmod,
+							  att->attcollation, 0);
+
+				if (tlist_member((Expr *) var, tlist))
+					continue;	/* already present */
+
+				tlist = lappend(tlist,
+								makeTargetEntry((Expr *) var,
+												list_length(tlist) + 1,
+												NULL, true));
 			}
 		}
 	}
@@ -225,8 +258,9 @@ preprocess_targetlist(PlannerInfo *root)
 				Var		   *var = (Var *) lfirst(l2);
 				TargetEntry *tle;
 
-				if (IsA(var, Var) && var->varno == result_relation)
-					continue;	/* don't need it */
+				if (IsA(var, Var) && var->varno == result_relation &&
+				    !root->merge_need_split_update)
+					continue;	/* don't need it unless split update */
 
 				if (tlist_member((Expr *) var, tlist))
 					continue;	/* already got it */
@@ -411,7 +445,7 @@ extract_update_targetlist_colnos(List *tlist, bool reorder_resno)
  * Once upon a time we also did more or less this with UPDATE targetlists,
  * but now this code is only applied to INSERT targetlists.
  */
-static List *
+List *
 expand_insert_targetlist(PlannerInfo *root, List *tlist, Relation rel, Index split_update_result_relation)
 {
 	List	   *new_tlist = NIL;

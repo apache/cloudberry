@@ -663,6 +663,8 @@ struct PlannerInfo
 	int			upd_del_replicated_table;
 	bool		is_split_update;	/* true if UPDATE that modifies
 									 * distribution key columns */
+	bool		merge_need_split_update;	/* true if MERGE has UPDATE that
+											 * modifies distribution key columns */
 	bool		is_correlated_subplan; /* true for correlated subqueries nested within subplans */
 
 	int			numPureOrderedAggs; /* CDB: number that use ORDER BY/WITHIN GROUP, not counting DISTINCT */
@@ -2808,6 +2810,7 @@ typedef struct SplitMergePath
 	List 	   *resultRelations;
 	List	   *mergeActionLists;	/* per-target-table lists of actions for
 									 * MERGE */
+	bool		hasSplitUpdate;		/* true if UPDATE modifies distribution key */
 } SplitMergePath;
 
 /*

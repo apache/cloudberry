@@ -24,8 +24,14 @@
 #include "executor/instrument.h"
 #include "executor/nodeSplitMerge.h"
 
+#include "nodes/nodeFuncs.h"
 #include "utils/memutils.h"
 
+/*
+ * Action value for rows that should be processed by ModifyTable's
+ * normal ExecMerge path (NOT MATCHED or MATCHED pass-through).
+ */
+#define SPLITMERGE_ACTION_PASSTHROUGH	(-1)
 
 typedef struct MTTargetRelLookup
 {
@@ -68,122 +74,142 @@ evalHashKey(SplitMergeState *node, Datum *values, bool *isnulls)
 	return target_seg;
 }
 
+/*
+ * Compute target segment ID from the given slot's values.
+ * Returns 0 if no hash is configured (DISTRIBUTED RANDOMLY).
+ */
+static int32
+computeTargetSegment(SplitMergeState *node, TupleTableSlot *slot)
+{
+	SplitMerge *plannode = (SplitMerge *) node->ps.plan;
 
+	if (node->cdbhash)
+		return evalHashKey(node, slot->tts_values, slot->tts_isnull);
+	else
+		return cdbhashrandomseg(plannode->numHashSegments);
+}
 
+/*
+ * Build a tuple in the N+M+1 format for hasSplitUpdate.
+ *
+ * The output slot layout is:
+ *   [0..N-1]     target table columns (from projSlot, or NULL)
+ *   [N..N+M-1]   subplan columns (from inputSlot)
+ *   [N+M]        DMLAction
+ *
+ * N = node->subplan_offset, M = inputSlot column count.
+ */
+static void
+BuildSplitMergeTuple(SplitMergeState *node, TupleTableSlot *outSlot,
+					 TupleTableSlot *inputSlot, TupleTableSlot *projSlot,
+					 int dmlAction, int32 segid)
+{
+	int			offset = node->subplan_offset;
+	int			natts_input = inputSlot->tts_tupleDescriptor->natts;
+	int			natts_out = outSlot->tts_tupleDescriptor->natts;
+
+	ExecClearTuple(outSlot);
+
+	memset(outSlot->tts_values, 0, natts_out * sizeof(Datum));
+	memset(outSlot->tts_isnull, true, natts_out * sizeof(bool));
+
+	/* Positions 0..N-1: projected target table values (if provided) */
+	if (projSlot)
+	{
+		int natts_proj = projSlot->tts_tupleDescriptor->natts;
+		slot_getallattrs(projSlot);
+		memcpy(outSlot->tts_values, projSlot->tts_values,
+			   natts_proj * sizeof(Datum));
+		memcpy(outSlot->tts_isnull, projSlot->tts_isnull,
+			   natts_proj * sizeof(bool));
+	}
+
+	/* Positions N..N+M-1: subplan columns */
+	slot_getallattrs(inputSlot);
+	memcpy(outSlot->tts_values + offset, inputSlot->tts_values,
+		   natts_input * sizeof(Datum));
+	memcpy(outSlot->tts_isnull + offset, inputSlot->tts_isnull,
+		   natts_input * sizeof(bool));
+
+	/* gp_segment_id within subplan region */
+	outSlot->tts_values[offset + node->segid_attno - 1] = Int32GetDatum(segid);
+	outSlot->tts_isnull[offset + node->segid_attno - 1] = false;
+
+	/* DMLAction at the end */
+	outSlot->tts_values[node->action_attno - 1] = Int32GetDatum(dmlAction);
+	outSlot->tts_isnull[node->action_attno - 1] = false;
+
+	ExecStoreVirtualTuple(outSlot);
+}
+
+/*
+ * MergeTupleTableSlot
+ *
+ * Handle a NOT MATCHED row: evaluate WHEN NOT MATCHED actions,
+ * project INSERT values, and compute target segment for routing.
+ */
 static TupleTableSlot *
-MergeTupleTableSlot(TupleTableSlot *slot, SplitMerge *plannode, SplitMergeState *node, ResultRelInfo *resultRelInfo)
+MergeTupleTableSlot(TupleTableSlot *slot, SplitMerge *plannode,
+					SplitMergeState *node, ResultRelInfo *resultRelInfo)
 {
 	ExprContext *econtext = node->ps.ps_ExprContext;
-
-	List	   *actionStates = NIL;
 	ListCell   *l;
 	TupleTableSlot *newslot = NULL;
+	int32		target_seg = 0;
 
-	/*
-	 * For INSERT actions, the root relation's merge action is OK since the
-	 * INSERT's targetlist and the WHEN conditions can only refer to the
-	 * source relation and hence it does not matter which result relation we
-	 * work with.
-	 *
-	 * XXX does this mean that we can avoid creating copies of actionStates on
-	 * partitioned tables, for not-matched actions?
-	 */
-	actionStates = resultRelInfo->ri_notMatchedMergeAction;
-
-	/*
-	 * Make source tuple available to ExecQual and ExecProject. We don't need
-	 * the target tuple, since the WHEN quals and targetlist can't refer to
-	 * the target columns.
-	 */
 	econtext->ecxt_scantuple = NULL;
 	econtext->ecxt_innertuple = slot;
 	econtext->ecxt_outertuple = NULL;
 
-	foreach(l, actionStates)
+	/* Evaluate NOT MATCHED actions to find INSERT projection */
+	foreach(l, resultRelInfo->ri_notMatchedMergeAction)
 	{
 		MergeActionState *action = (MergeActionState *) lfirst(l);
-		CmdType		commandType = action->mas_action->commandType;
 
-		/*
-		 * Test condition, if any.
-		 *
-		 * In the absence of any condition, we perform the action
-		 * unconditionally (no need to check separately since ExecQual() will
-		 * return true if there are no conditions to evaluate).
-		 */
 		if (!ExecQual(action->mas_whenqual, econtext))
 			continue;
 
-		/* Perform stated action */
-		switch (commandType)
-		{
-			case CMD_INSERT:
+		if (action->mas_action->commandType == CMD_INSERT)
+			newslot = ExecProject(action->mas_proj);
+		/* else CMD_NOTHING: do nothing */
 
-				/*
-				 * Project the tuple.  In case of a partitioned table, the
-				 * projection was already built to use the root's descriptor,
-				 * so we don't need to map the tuple here.
-				 */
-				newslot = ExecProject(action->mas_proj);
-
-				break;
-			case CMD_NOTHING:
-				/* Do nothing */
-				break;
-			default:
-				elog(ERROR, "unknown action in MERGE WHEN NOT MATCHED clause");
-		}
-
-		/*
-		 * We've activated one of the WHEN clauses, so we don't search
-		 * further. This is required behaviour, not an optimization.
-		 */
-		break;
+		break;	/* only first matching action */
 	}
 
+	/* Compute target segment for INSERT, or 0 for DO NOTHING */
 	if (newslot)
-	{
-		/* Compute segment ID for the new row */
-		int32		target_seg;
+		target_seg = computeTargetSegment(node, newslot);
 
-		if (node->cdbhash)
-			target_seg = evalHashKey(node, newslot->tts_values, newslot->tts_isnull);
-		else
-			target_seg = cdbhashrandomseg(plannode->numHashSegments);
-
-		slot->tts_values[node->segid_attno - 1] = Int32GetDatum(target_seg);
-		slot->tts_isnull[node->segid_attno - 1] = false;
-	}
-	else
+	/* Build output in the appropriate format */
+	if (plannode->hasSplitUpdate)
 	{
-		/* 
-		 * No newslot generated means that insert action will not be triggered.
-		 * So we just redistributed tuple to any segment, like segment 0.
-		 */
-		slot->tts_values[node->segid_attno - 1] = Int32GetDatum(0);
-		slot->tts_isnull[node->segid_attno - 1] = false;
+		BuildSplitMergeTuple(node, node->ps.ps_ResultTupleSlot,
+							 slot, NULL, SPLITMERGE_ACTION_PASSTHROUGH,
+							 target_seg);
+		return node->ps.ps_ResultTupleSlot;
 	}
 
+	/* Non-hasSplitUpdate: modify slot in-place */
+	slot->tts_values[node->segid_attno - 1] = Int32GetDatum(target_seg);
+	slot->tts_isnull[node->segid_attno - 1] = false;
 	return slot;
 }
 
 /*
  * ExecLookupResultRelByOid
- * 		If the table with given OID is among the result relations to be
- * 		updated by the given ModifyTable node, return its ResultRelInfo.
+ *		If the table with given OID is among the result relations to be
+ *		updated by the given SplitMerge node, return its ResultRelInfo.
  *
  * If not found, return NULL if missing_ok, else raise error.
  *
- * If update_cache is true, then upon successful lookup, update the node's
- * one-element cache.  ONLY ExecModifyTable may pass true for this.
+ * If update_cache is true, update the node's one-element cache.
  */
 static ResultRelInfo *
 MergeExecLookupResultRelByOid(SplitMergeState *node, Oid resultoid,
-						 bool missing_ok, bool update_cache)
+							  bool missing_ok, bool update_cache)
 {
 	if (node->mt_resultOidHash)
 	{
-		/* Use the pre-built hash table to locate the rel */
 		MTTargetRelLookup *mtlookup;
 
 		mtlookup = (MTTargetRelLookup *)
@@ -200,7 +226,6 @@ MergeExecLookupResultRelByOid(SplitMergeState *node, Oid resultoid,
 	}
 	else
 	{
-		/* With few target rels, just search the ResultRelInfo array */
 		for (int ndx = 0; ndx < node->nrel; ndx++)
 		{
 			ResultRelInfo *rInfo = node->resultRelInfo + ndx;
@@ -222,64 +247,163 @@ MergeExecLookupResultRelByOid(SplitMergeState *node, Oid resultoid,
 	return NULL;
 }
 
-/**
- * Splits every TupleTableSlot into two TupleTableSlots: DELETE and INSERT.
+/*
+ * SwitchResultRelForPartition
+ *
+ * For partitioned tables, look up the correct ResultRelInfo based on tableoid
+ * from the slot. Updates the cached result relation if it changes.
+ */
+static ResultRelInfo *
+SwitchResultRelForPartition(SplitMergeState *node, TupleTableSlot *slot,
+							ResultRelInfo *resultRelInfo)
+{
+	bool		isNull;
+	Datum		d;
+	Oid			resultoid;
+
+	if (!AttributeNumberIsValid(node->mt_resultOidAttno))
+		return resultRelInfo;
+
+	d = ExecGetJunkAttribute(slot, node->mt_resultOidAttno, &isNull);
+	Assert(!isNull);
+	resultoid = DatumGetObjectId(d);
+
+	if (resultoid != node->mt_lastResultOid)
+		resultRelInfo = MergeExecLookupResultRelByOid(node, resultoid,
+													  false, true);
+	return resultRelInfo;
+}
+
+/*
+ * MergeMatchedSplitUpdate
+ *
+ * Handle a MATCHED row when hasSplitUpdate is true.
+ *
+ * For UPDATE: splits into DELETE + INSERT tuples with DMLAction markers.
+ *             Returns DELETE first; INSERT is saved for the next call.
+ * For DELETE: emits a single DELETE tuple.
+ * For DO NOTHING / no match: emits a pass-through tuple.
+ */
+static TupleTableSlot *
+MergeMatchedSplitUpdate(TupleTableSlot *slot, SplitMerge *plannode,
+						SplitMergeState *node, ResultRelInfo *resultRelInfo)
+{
+	ExprContext *econtext = node->ps.ps_ExprContext;
+	ListCell   *l;
+	int32		old_segid;
+
+	econtext->ecxt_scantuple = slot;
+	econtext->ecxt_innertuple = slot;
+	econtext->ecxt_outertuple = NULL;
+
+	old_segid = DatumGetInt32(slot->tts_values[node->segid_attno - 1]);
+
+	foreach(l, resultRelInfo->ri_matchedMergeAction)
+	{
+		MergeActionState *action = (MergeActionState *) lfirst(l);
+		CmdType		commandType = action->mas_action->commandType;
+
+		if (!ExecQual(action->mas_whenqual, econtext))
+			continue;
+
+		switch (commandType)
+		{
+			case CMD_UPDATE:
+			{
+				TupleTableSlot *newslot;
+				int32		new_segid;
+
+				newslot = ExecProject(action->mas_proj);
+				new_segid = computeTargetSegment(node, newslot);
+
+				/* DELETE tuple: routed to old segment */
+				BuildSplitMergeTuple(node, node->deleteTuple, slot, NULL,
+									 (int) DML_DELETE, old_segid);
+
+				/* INSERT tuple: projected new values, routed to new segment */
+				BuildSplitMergeTuple(node, node->insertTuple, slot, newslot,
+									 (int) DML_INSERT, new_segid);
+
+				/* Return DELETE first, INSERT on next call */
+				node->processInsert = true;
+				return node->deleteTuple;
+			}
+
+			case CMD_DELETE:
+				BuildSplitMergeTuple(node, node->ps.ps_ResultTupleSlot,
+									 slot, NULL, (int) DML_DELETE, old_segid);
+				return node->ps.ps_ResultTupleSlot;
+
+			case CMD_NOTHING:
+				break;	/* fall through to pass-through below */
+
+			default:
+				elog(ERROR, "unknown action in MERGE WHEN MATCHED clause");
+		}
+
+		break;	/* only first matching action */
+	}
+
+	/* No UPDATE/DELETE action matched - pass-through */
+	BuildSplitMergeTuple(node, node->ps.ps_ResultTupleSlot, slot, NULL,
+						 SPLITMERGE_ACTION_PASSTHROUGH, old_segid);
+	return node->ps.ps_ResultTupleSlot;
+}
+
+/*
+ * ExecSplitMerge
+ *
+ * Main entry point. For each input tuple from the JOIN:
+ * - NOT MATCHED: compute target segment for INSERT routing
+ * - MATCHED + hasSplitUpdate: split UPDATE into DELETE + INSERT
+ * - MATCHED (no split): pass through
  */
 static TupleTableSlot *
 ExecSplitMerge(PlanState *pstate)
 {
 	SplitMergeState *node = castNode(SplitMergeState, pstate);
-	PlanState *outerNode = outerPlanState(node);
+	PlanState  *outerNode = outerPlanState(node);
 	SplitMerge *plannode = (SplitMerge *) node->ps.plan;
 	ResultRelInfo *resultRelInfo = node->resultRelInfo + node->mt_lastResultIndex;
 	Datum		datum;
 	bool		isNull;
-	Oid			resultoid;
-	
 
-	TupleTableSlot *slot = NULL;
-	TupleTableSlot *result = NULL;
+	TupleTableSlot *slot;
 
 	Assert(outerNode != NULL);
 
-	slot = ExecProcNode(outerNode);
-
-	if (TupIsNull(slot))
+	/* Return pending INSERT tuple from a previous split UPDATE */
+	if (node->processInsert)
 	{
-		return NULL;
+		node->processInsert = false;
+		return node->insertTuple;
 	}
+
+	slot = ExecProcNode(outerNode);
+	if (TupIsNull(slot))
+		return NULL;
 
 	datum = ExecGetJunkAttribute(slot, resultRelInfo->ri_RowIdAttNo, &isNull);
 
-	/* ctid is NULL means that not matched, then check the insert action */
 	if (isNull)
-		result = MergeTupleTableSlot(slot, plannode, node, resultRelInfo);
-	else
 	{
-		/* if partion table must switch resultRelInfo */
-		if (AttributeNumberIsValid(node->mt_resultOidAttno))
-		{
-			datum = ExecGetJunkAttribute(slot, node->mt_resultOidAttno, &isNull);
-			Assert(!isNull);
-			resultoid = DatumGetObjectId(datum);
-			if (resultoid != node->mt_lastResultOid)
-				resultRelInfo = MergeExecLookupResultRelByOid(node, resultoid,
-															false, true);
-		}
-		result = slot;
+		/* NOT MATCHED: compute target segment for INSERT routing */
+		return MergeTupleTableSlot(slot, plannode, node, resultRelInfo);
 	}
 
-	return result;
+	/* MATCHED: switch to correct partition if needed */
+	resultRelInfo = SwitchResultRelForPartition(node, slot, resultRelInfo);
+
+	if (plannode->hasSplitUpdate)
+		return MergeMatchedSplitUpdate(slot, plannode, node, resultRelInfo);
+
+	/* No split update: pass through */
+	return slot;
 }
-
-
 
 
 /*
  * Initializes the tuple slots in a ResultRelInfo for any MERGE action.
- *
- * We mark 'projectNewInfoValid' even though the projections themselves
- * are not initialized here.
  */
 static void
 ExecInitMergeTupleSlots(SplitMergeState *mtstate,
@@ -297,9 +421,51 @@ ExecInitMergeTupleSlots(SplitMergeState *mtstate,
 						  &estate->es_tupleTable);
 	resultRelInfo->ri_projectNewInfoValid = true;
 }
+
 /*
- * Init SplitMerge Node. A memory context is created to hold Split Tuples.
- * */
+ * Build a TupleDesc for the root table's column layout from the plan's
+ * non-junk target list entries. Used for UPDATE projections so the result
+ * matches the SplitMerge output's first N columns regardless of which
+ * child partition is being updated.
+ */
+static TupleDesc
+BuildRootUpdateTupleDesc(List *targetlist)
+{
+	TupleDesc	desc;
+	ListCell   *lc;
+	int			nnonjunk = 0;
+	int			col = 0;
+
+	foreach(lc, targetlist)
+	{
+		TargetEntry *tle = (TargetEntry *) lfirst(lc);
+		if (!tle->resjunk)
+			nnonjunk++;
+	}
+
+	if (nnonjunk == 0)
+		return NULL;
+
+	desc = CreateTemplateTupleDesc(nnonjunk);
+	foreach(lc, targetlist)
+	{
+		TargetEntry *tle = (TargetEntry *) lfirst(lc);
+		if (!tle->resjunk)
+		{
+			col++;
+			TupleDescInitEntry(desc, col, tle->resname,
+							   exprType((Node *) tle->expr),
+							   exprTypmod((Node *) tle->expr), 0);
+			TupleDescInitEntryCollation(desc, col,
+										exprCollation((Node *) tle->expr));
+		}
+	}
+	return desc;
+}
+
+/*
+ * ExecInitSplitMerge
+ */
 SplitMergeState*
 ExecInitSplitMerge(SplitMerge *node, EState *estate, int eflags)
 {
@@ -307,62 +473,64 @@ ExecInitSplitMerge(SplitMerge *node, EState *estate, int eflags)
 	ResultRelInfo *resultRelInfo;
 	ExprContext *econtext;
 	ListCell   *lc;
-	int i;
+	int			i;
+	Plan	   *outerPlan = outerPlan(node);
 
-
-	/* Check for unsupported flags */
 	Assert(!(eflags & (EXEC_FLAG_BACKWARD | EXEC_FLAG_MARK | EXEC_FLAG_REWIND)));
 
 	splitmergestate = makeNode(SplitMergeState);
-	splitmergestate->ps.plan = (Plan *)node;
+	splitmergestate->ps.plan = (Plan *) node;
 	splitmergestate->ps.state = estate;
 	splitmergestate->ps.ExecProcNode = ExecSplitMerge;
+	splitmergestate->processInsert = false;
 
-	/*
-	 * then initialize outer plan
-	 */
-	Plan *outerPlan = outerPlan(node);
 	outerPlanState(splitmergestate) = ExecInitNode(outerPlan, estate, eflags);
 
-	
 	ExecAssignExprContext(estate, &splitmergestate->ps);
 	econtext = splitmergestate->ps.ps_ExprContext;
 
+	/* Initialize result relations */
 	splitmergestate->nrel = list_length(node->resultRelations);
-	splitmergestate->resultRelInfo = (ResultRelInfo *)palloc(splitmergestate->nrel * sizeof(ResultRelInfo));
+	splitmergestate->resultRelInfo = (ResultRelInfo *)
+		palloc(splitmergestate->nrel * sizeof(ResultRelInfo));
 
 	resultRelInfo = splitmergestate->resultRelInfo;
-	i = 0;
 	foreach(lc, node->resultRelations)
 	{
 		Index		resultRelation = lfirst_int(lc);
-		
-		ExecInitResultRelation(estate, resultRelInfo, resultRelation);
 
-		resultRelInfo->ri_RowIdAttNo = ExecFindJunkAttributeInTlist(outerPlan->targetlist, "ctid");
+		ExecInitResultRelation(estate, resultRelInfo, resultRelation);
+		resultRelInfo->ri_RowIdAttNo =
+			ExecFindJunkAttributeInTlist(outerPlan->targetlist, "ctid");
 		if (!AttributeNumberIsValid(resultRelInfo->ri_RowIdAttNo))
 			elog(ERROR, "could not find junk ctid column");
-		
 		resultRelInfo++;
-		i++;
 	}
 
 	splitmergestate->mt_lastResultIndex = 0;
 	splitmergestate->mt_lastResultOid = InvalidOid;
 
+	/* Build root-table-format slot for UPDATE projections (hasSplitUpdate only) */
+	TupleTableSlot *rootUpdateSlot = NULL;
+	TupleDesc	rootUpdateDesc = NULL;
+	if (node->hasSplitUpdate)
+	{
+		rootUpdateDesc = BuildRootUpdateTupleDesc(node->plan.targetlist);
+		if (rootUpdateDesc)
+			rootUpdateSlot = ExecInitExtraTupleSlot(estate, rootUpdateDesc,
+													&TTSOpsVirtual);
+	}
 
+	/* Initialize merge action states and projections */
 	i = 0;
 	foreach(lc, node->mergeActionLists)
 	{
 		List	   *mergeActionList = lfirst(lc);
-		TupleDesc	relationDesc;
 		ListCell   *l;
 
 		resultRelInfo = splitmergestate->resultRelInfo + i;
 		i++;
-		relationDesc = RelationGetDescr(resultRelInfo->ri_RelationDesc);
 
-		/* initialize slots for MERGE fetches from this rel */
 		if (unlikely(!resultRelInfo->ri_projectNewInfoValid))
 			ExecInitMergeTupleSlots(splitmergestate, resultRelInfo);
 
@@ -370,24 +538,13 @@ ExecInitSplitMerge(SplitMerge *node, EState *estate, int eflags)
 		{
 			MergeAction *action = (MergeAction *) lfirst(l);
 			MergeActionState *action_state;
-			TupleTableSlot *tgtslot;
-			TupleDesc	tgtdesc;
 			List	  **list;
 
-			/*
-			 * Build action merge state for this rel.  (For partitions,
-			 * equivalent code exists in ExecInitPartitionInfo.)
-			 */
 			action_state = makeNode(MergeActionState);
 			action_state->mas_action = action;
 			action_state->mas_whenqual = ExecInitQual((List *) action->qual,
 													  &splitmergestate->ps);
 
-			/*
-			 * We create two lists - one for WHEN MATCHED actions and one for
-			 * WHEN NOT MATCHED actions - and stick the MergeActionState into
-			 * the appropriate list.
-			 */
 			if (action_state->mas_action->matched)
 				list = &resultRelInfo->ri_matchedMergeAction;
 			else
@@ -397,29 +554,22 @@ ExecInitSplitMerge(SplitMerge *node, EState *estate, int eflags)
 			switch (action->commandType)
 			{
 				case CMD_INSERT:
-
-					/*
-					 * If the MERGE targets a partitioned table, any INSERT
-					 * actions must be routed through it, not the child
-					 * relations. Initialize the routing struct and the root
-					 * table's "new" tuple slot for that, if not already done.
-					 * The projection we prepare, for all relations, uses the
-					 * root relation descriptor, and targets the plan's root
-					 * slot.  (This is consistent with the fact that we
-					 * checked the plan output to match the root relation,
-					 * above.)
-					 */
-					/* not partitioned? use the stock relation and slot */
-					tgtslot = resultRelInfo->ri_newTupleSlot;
-					tgtdesc = RelationGetDescr(resultRelInfo->ri_RelationDesc);
-
 					action_state->mas_proj =
 						ExecBuildProjectionInfo(action->targetList, econtext,
-												tgtslot,
+												resultRelInfo->ri_newTupleSlot,
 												&splitmergestate->ps,
-												tgtdesc);
+												RelationGetDescr(resultRelInfo->ri_RelationDesc));
 					break;
 				case CMD_UPDATE:
+					if (node->hasSplitUpdate && rootUpdateSlot != NULL)
+					{
+						action_state->mas_proj =
+							ExecBuildProjectionInfo(action->targetList, econtext,
+													rootUpdateSlot,
+													&splitmergestate->ps,
+													rootUpdateDesc);
+					}
+					break;
 				case CMD_DELETE:
 				case CMD_NOTHING:
 					break;
@@ -430,55 +580,68 @@ ExecInitSplitMerge(SplitMerge *node, EState *estate, int eflags)
 		}
 	}
 
-	/*
-	 * Look up the positions of the gp_segment_id in the subplan's target
-	 * list, and in the result.
-	 */
+	/* Look up junk attribute positions in subplan output */
 	splitmergestate->segid_attno =
 		ExecFindJunkAttributeInTlist(outerPlan->targetlist, "gp_segment_id");
-	
 	splitmergestate->mt_resultOidAttno =
 		ExecFindJunkAttributeInTlist(outerPlan->targetlist, "tableoid");
-	
-	Assert(AttributeNumberIsValid(splitmergestate->mt_resultOidAttno) || splitmergestate->nrel == 1);
 
-	/*
-	 * DML nodes do not project.
-	 */
+	Assert(AttributeNumberIsValid(splitmergestate->mt_resultOidAttno) ||
+		   splitmergestate->nrel == 1);
+
+	/* Initialize hasSplitUpdate-specific state */
+	if (node->hasSplitUpdate)
+	{
+		splitmergestate->action_attno =
+			ExecFindJunkAttributeInTlist(node->plan.targetlist, "DMLAction");
+		Assert(AttributeNumberIsValid(splitmergestate->action_attno));
+
+		/* subplan_offset = N = total output columns - subplan columns - DMLAction */
+		splitmergestate->subplan_offset =
+			list_length(node->plan.targetlist) -
+			list_length(outerPlan->targetlist) - 1;
+		Assert(splitmergestate->subplan_offset > 0);
+
+		/* Dedicated slots for split DELETE + INSERT tuple pair */
+		{
+			TupleDesc tupDesc = ExecTypeFromTL(node->plan.targetlist);
+			splitmergestate->deleteTuple =
+				ExecInitExtraTupleSlot(estate, tupDesc, &TTSOpsVirtual);
+			splitmergestate->insertTuple =
+				ExecInitExtraTupleSlot(estate, tupDesc, &TTSOpsVirtual);
+		}
+	}
+	else
+	{
+		splitmergestate->action_attno = InvalidAttrNumber;
+		splitmergestate->subplan_offset = 0;
+	}
+
 	ExecInitResultTupleSlotTL(&splitmergestate->ps, &TTSOpsVirtual);
 	splitmergestate->ps.ps_ProjInfo = NULL;
 
-	/*
-	 * Initialize for computing hash key
-	 */
+	/* Initialize hash for computing target segment */
 	if (node->numHashAttrs > 0)
 	{
 		splitmergestate->cdbhash = makeCdbHash(node->numHashSegments,
-												node->numHashAttrs,
-												node->hashFuncs);
+											   node->numHashAttrs,
+											   node->hashFuncs);
 	}
 
 	if (estate->es_instrument && (estate->es_instrument & INSTRUMENT_CDB))
-	{
 		splitmergestate->ps.cdbexplainbuf = makeStringInfo();
-	}
 
 	return splitmergestate;
 }
 
-/* Release Resources Requested by SplitMerge node. */
+/* Release resources requested by SplitMerge node. */
 void
 ExecEndSplitMerge(SplitMergeState *node)
 {
-	
 	for (int i = 0; i < node->nrel; i++)
 	{
 		ResultRelInfo *resultRelInfo = node->resultRelInfo + i;
-		/*
-		 * Cleanup the initialized batch slots. This only matters for FDWs
-		 * with batching, but the other cases will have ri_NumSlotsInitialized
-		 * == 0.
-		 */
+
 		for (int j = 0; j < resultRelInfo->ri_NumSlotsInitialized; j++)
 		{
 			ExecDropSingleTupleTableSlot(resultRelInfo->ri_Slots[j]);
@@ -486,17 +649,14 @@ ExecEndSplitMerge(SplitMergeState *node)
 		}
 	}
 
-	/*
-	 * Free the exprcontext
-	 */
 	ExecFreeExprContext(&node->ps);
-	
-	
-	/*
-	 * clean out the tuple table
-	 */
+
 	if (node->ps.ps_ResultTupleSlot)
 		ExecClearTuple(node->ps.ps_ResultTupleSlot);
+	if (node->insertTuple)
+		ExecClearTuple(node->insertTuple);
+	if (node->deleteTuple)
+		ExecClearTuple(node->deleteTuple);
+
 	ExecEndNode(outerPlanState(node));
 }
-

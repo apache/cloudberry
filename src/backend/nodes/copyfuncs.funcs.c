@@ -6475,6 +6475,8 @@ _copySplitMerge(const SplitMerge *from)
 	COPY_SCALAR_FIELD(numHashSegments);
 	COPY_NODE_FIELD(resultRelations);
 	COPY_NODE_FIELD(mergeActionLists);
+	COPY_SCALAR_FIELD(hasSplitUpdate);
+	COPY_SCALAR_FIELD(rootResultRelation);
 
 	return newnode;
 }

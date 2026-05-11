@@ -3188,7 +3188,7 @@ create_modifytable_plan(PlannerInfo *root, ModifyTablePath *best_path)
 		 * root->processed_tlist. The code to create the Split Update node
 		 * takes care to label junk columns correctly, instead.
 		 */
-		if (!best_path->splitUpdate)
+		if (!best_path->splitUpdate && !root->merge_need_split_update)
 			apply_tlist_labeling(subplan->targetlist, root->processed_tlist);
 	}
 
@@ -3669,6 +3669,7 @@ create_splitmerge_plan(PlannerInfo *root, SplitMergePath *path)
 	int			lastresno;
 	Oid		   *hashFuncs;
 	int			i;
+	int			nrels;
 
 	//
 	RelOptInfo *relOptInfo = root->simple_rel_array[linitial_int(path->resultRelations)];
@@ -3703,20 +3704,92 @@ create_splitmerge_plan(PlannerInfo *root, SplitMergePath *path)
 
 	copy_generic_path_info(&splitmerge->plan, (Path *) path);
 
-	lc = list_head(subplan->targetlist);
 	lastresno = 0;
 
-	/* Copy all attributes. */
-	for (; lc != NULL; lc = lnext(subplan->targetlist, lc))
+	if (path->hasSplitUpdate)
 	{
-		TargetEntry *tle = (TargetEntry *) lfirst(lc);
-		TargetEntry *newtle;
+		/*
+		 * When hasSplitUpdate, build a targetlist with target table columns
+		 * as non-junk entries (positions 1..N), followed by all subplan
+		 * entries as junk, plus a DMLAction junk column.
+		 *
+		 * This allows ModifyTable to use ExecGetInsertNewTuple to extract
+		 * the target table columns for DML_INSERT tuples.
+		 */
+		int			natts = resultDesc->natts;
 
-		newtle = makeTargetEntry(tle->expr,
-								 ++lastresno,
-								 tle->resname,
-								 tle->resjunk);
-		splitmerge->plan.targetlist = lappend(splitmerge->plan.targetlist, newtle);
+		/*
+		 * First: target table columns as non-junk.
+		 * Use Var nodes (not Const) so that ExecInitInsertProjection
+		 * on the Motion output can extract actual values at runtime.
+		 * These Vars use a dummy varno (0) that set_splitmerge_tlist_references
+		 * will convert to OUTER_VAR with varattno = tle->resno.
+		 */
+		for (i = 0; i < natts; i++)
+		{
+			Form_pg_attribute attr = &resultDesc->attrs[i];
+			TargetEntry *tle;
+
+			if (attr->attisdropped)
+			{
+				Const *nullConst = makeConst(INT4OID, -1, InvalidOid,
+											  sizeof(int32), (Datum) 0,
+											  true, true);
+				tle = makeTargetEntry((Expr *) nullConst,
+									  ++lastresno,
+									  pstrdup(NameStr(attr->attname)),
+									  false);
+			}
+			else
+			{
+				Var *var = makeVar(0, /* dummy varno, fixed in setrefs */
+								  (AttrNumber) (i + 1),
+								  attr->atttypid,
+								  attr->atttypmod,
+								  attr->attcollation,
+								  0);
+				tle = makeTargetEntry((Expr *) var,
+									  ++lastresno,
+									  pstrdup(NameStr(attr->attname)),
+									  false);
+			}
+			splitmerge->plan.targetlist = lappend(splitmerge->plan.targetlist, tle);
+		}
+
+		/* Then: all subplan entries as junk */
+		foreach(lc, subplan->targetlist)
+		{
+			TargetEntry *tle = (TargetEntry *) lfirst(lc);
+			TargetEntry *newtle;
+
+			newtle = makeTargetEntry(tle->expr,
+									 ++lastresno,
+									 tle->resname,
+									 true);	/* mark as junk */
+			splitmerge->plan.targetlist = lappend(splitmerge->plan.targetlist, newtle);
+		}
+
+		/* Finally: DMLAction junk column */
+		splitmerge->plan.targetlist = lappend(splitmerge->plan.targetlist,
+											  makeTargetEntry((Expr *) makeNode(DMLActionExpr),
+															  ++lastresno,
+															  "DMLAction",
+															  true));
+	}
+	else
+	{
+		/* Without hasSplitUpdate: copy subplan targetlist as-is */
+		foreach(lc, subplan->targetlist)
+		{
+			TargetEntry *tle = (TargetEntry *) lfirst(lc);
+			TargetEntry *newtle;
+
+			newtle = makeTargetEntry(tle->expr,
+									 ++lastresno,
+									 tle->resname,
+									 tle->resjunk);
+			splitmerge->plan.targetlist = lappend(splitmerge->plan.targetlist, newtle);
+		}
 	}
 
 	/* Look up the right hash functions for the hash expressions */
@@ -3737,6 +3810,50 @@ create_splitmerge_plan(PlannerInfo *root, SplitMergePath *path)
 	splitmerge->hashFuncs = hashFuncs;
 	splitmerge->numHashSegments = cdbpolicy->numsegments;
 
+	splitmerge->resultRelations = path->resultRelations;
+	splitmerge->hasSplitUpdate = path->hasSplitUpdate;
+	splitmerge->rootResultRelation = relOptInfo->relid;
+
+	/*
+	 * Always use the root table's action lists (not per-partition adjusted
+	 * lists). SplitMerge's hashAttnos use root table attribute numbers
+	 * (from cdbpolicy->attrs), so the INSERT projection must produce values
+	 * in root table column order for evalHashKey to read the correct columns.
+	 * Per-partition lists from adjust_appendrel_attrs_multilevel reorder
+	 * resnos to match child partition layout, which would cause hash
+	 * computation on wrong columns for partitions with reordered columns.
+	 */
+	nrels = list_length(path->resultRelations);
+	splitmerge->mergeActionLists = NIL;
+	for (i = 0; i < nrels; i++)
+		splitmerge->mergeActionLists = lappend(splitmerge->mergeActionLists,
+											   copyObject(root->parse->mergeActionList));
+
+	/*
+	 * For split-update MERGE, expand UPDATE action targetlists to include
+	 * all target table columns (not just the SET columns). SplitMerge needs
+	 * complete rows to project INSERT tuples. Uses root table RTI for Vars
+	 * so they match the subplan output.
+	 */
+	if (path->hasSplitUpdate)
+	{
+		ListCell *lca;
+		foreach(lca, splitmerge->mergeActionLists)
+		{
+			List *actionList = lfirst(lca);
+			ListCell *lc2;
+			foreach(lc2, actionList)
+			{
+				MergeAction *action = (MergeAction *) lfirst(lc2);
+				if (action->commandType == CMD_UPDATE)
+					action->targetList = expand_insert_targetlist(root,
+																  action->targetList,
+																  resultRel,
+																  relOptInfo->relid);
+			}
+		}
+	}
+
 	relation_close(resultRel, NoLock);
 
 	/*
@@ -3744,9 +3861,6 @@ create_splitmerge_plan(PlannerInfo *root, SplitMergePath *path)
 	 * so we treat it the same as a Motion node for this purpose.
 	 */
 	root->numMotions++;
-
-	splitmerge->mergeActionLists = path->mergeActionLists;
-	splitmerge->resultRelations = path->resultRelations;
 
 	return (Plan *) splitmerge;
 }
@@ -8908,7 +9022,7 @@ cdbpathtoplan_create_motion_plan(PlannerInfo *root,
 		 * the DMLActionExpr column, so we cannot apply the
 		 * labeling here even if we wanted.
 		 */
-		if (!IsA(subplan, SplitUpdate))
+		if (!IsA(subplan, SplitUpdate) && !IsA(subplan, SplitMerge))
 			apply_tlist_labeling(subplan->targetlist, root->processed_tlist);
 
 		segmentid_tle = find_junk_tle(subplan->targetlist, "gp_segment_id");

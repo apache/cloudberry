@@ -1956,6 +1956,8 @@ typedef struct SplitMerge
 
 	List	   *mergeActionLists;	/* per-target-table lists of actions for
 									 * MERGE */
+	bool		hasSplitUpdate;		/* true if UPDATE modifies distribution key */
+	Index		rootResultRelation;	/* root table RTI for partitioned tables */
 } SplitMerge;
 
 /*
