@@ -1555,6 +1555,158 @@ DROP TABLE test1;
 DROP TABLE target, target2;
 DROP TABLE source, source2;
 DROP FUNCTION merge_trigfunc();
+
+-- Test MERGE with distribution key updates (split-update)
+-- These tests verify that MERGE ... WHEN MATCHED THEN UPDATE SET dist_col = ...
+-- works correctly by using the SplitMerge mechanism (DELETE old + INSERT new).
+
+-- Basic: update distribution key with constant
+CREATE TABLE merge_dist_t (id int, val text) DISTRIBUTED BY (id);
+CREATE TABLE merge_dist_s (id int, val text) DISTRIBUTED BY (id);
+INSERT INTO merge_dist_t VALUES (1, 'old');
+INSERT INTO merge_dist_s VALUES (1, 'new');
+-- Check segment before merge
+SELECT gp_segment_id, * FROM merge_dist_t ORDER BY id;
+MERGE INTO merge_dist_t t USING merge_dist_s s ON t.id = s.id
+WHEN MATCHED THEN UPDATE SET id = 101, val = s.val;
+-- Check segment after merge: should match direct INSERT of 101
+SELECT gp_segment_id, * FROM merge_dist_t ORDER BY id;
+INSERT INTO merge_dist_t VALUES (101, 'direct');
+SELECT gp_segment_id, * FROM merge_dist_t WHERE id = 101 ORDER BY val;
+DELETE FROM merge_dist_t WHERE val = 'direct';
+
+-- EXPLAIN VERBOSE: SplitMerge plan for simple table dist key update
+EXPLAIN (VERBOSE, COSTS OFF)
+MERGE INTO merge_dist_t t USING merge_dist_s s ON t.id = s.id
+WHEN MATCHED THEN UPDATE SET id = t.id + 100, val = s.val
+WHEN NOT MATCHED THEN INSERT VALUES (s.id, s.val);
+
+-- Update distribution key with expression referencing old row
+TRUNCATE merge_dist_t, merge_dist_s;
+INSERT INTO merge_dist_t VALUES (1, 'a'), (2, 'b');
+INSERT INTO merge_dist_s VALUES (1, 'x'), (2, 'y');
+MERGE INTO merge_dist_t t USING merge_dist_s s ON t.id = s.id
+WHEN MATCHED THEN UPDATE SET id = t.id + 100, val = s.val;
+SELECT * FROM merge_dist_t ORDER BY id;
+
+-- Mixed: MATCHED update dist key + NOT MATCHED insert
+TRUNCATE merge_dist_t, merge_dist_s;
+INSERT INTO merge_dist_t VALUES (1, 'old');
+INSERT INTO merge_dist_s VALUES (1, 'new'), (2, 'two');
+MERGE INTO merge_dist_t t USING merge_dist_s s ON t.id = s.id
+WHEN MATCHED THEN UPDATE SET id = t.id + 100, val = s.val
+WHEN NOT MATCHED THEN INSERT VALUES (s.id, s.val);
+SELECT * FROM merge_dist_t ORDER BY id;
+
+-- Multi-column distribution key: only update one dist column
+CREATE TABLE merge_dist_mc (a int, b int, val text) DISTRIBUTED BY (a, b);
+CREATE TABLE merge_dist_mc_s (a int, b int, val text) DISTRIBUTED BY (a);
+INSERT INTO merge_dist_mc VALUES (1, 1, 'old');
+INSERT INTO merge_dist_mc_s VALUES (1, 1, 'new');
+MERGE INTO merge_dist_mc t USING merge_dist_mc_s s ON t.a = s.a AND t.b = s.b
+WHEN MATCHED THEN UPDATE SET a = t.a + 100, val = s.val;
+SELECT * FROM merge_dist_mc ORDER BY a;
+
+-- Conditional WHEN: first clause updates dist key, second does not
+TRUNCATE merge_dist_t, merge_dist_s;
+INSERT INTO merge_dist_t VALUES (1, 'one'), (2, 'two');
+INSERT INTO merge_dist_s VALUES (1, 'new1'), (2, 'new2');
+MERGE INTO merge_dist_t t USING merge_dist_s s ON t.id = s.id
+WHEN MATCHED AND t.id = 1 THEN UPDATE SET id = t.id + 100, val = s.val
+WHEN MATCHED THEN UPDATE SET val = s.val;
+SELECT * FROM merge_dist_t ORDER BY id;
+
+-- Normal MERGE still works alongside split-update tests
+TRUNCATE merge_dist_t, merge_dist_s;
+INSERT INTO merge_dist_t VALUES (1, 'old');
+INSERT INTO merge_dist_s VALUES (1, 'updated'), (2, 'inserted');
+MERGE INTO merge_dist_t t USING merge_dist_s s ON t.id = s.id
+WHEN MATCHED THEN UPDATE SET val = s.val
+WHEN NOT MATCHED THEN INSERT VALUES (s.id, s.val);
+SELECT * FROM merge_dist_t ORDER BY id;
+
+DROP TABLE merge_dist_t, merge_dist_s;
+DROP TABLE merge_dist_mc, merge_dist_mc_s;
+
+-- Partitioned table: MERGE with distribution key update
+CREATE TABLE merge_dist_pa_s (sid integer, delta float) DISTRIBUTED BY (sid);
+INSERT INTO merge_dist_pa_s VALUES (1, 5), (2, 10), (4, 30);
+
+CREATE TABLE merge_dist_pa_t (tid integer, balance float, val text)
+  PARTITION BY LIST (tid) DISTRIBUTED BY (tid);
+CREATE TABLE merge_dist_pa_p1 (tid integer, balance float, val text) DISTRIBUTED BY (tid);
+CREATE TABLE merge_dist_pa_p2 (balance float, tid integer, val text) DISTRIBUTED BY (tid);
+CREATE TABLE merge_dist_pa_p4 (extraid text, tid integer, balance float, val text) DISTRIBUTED BY (tid);
+ALTER TABLE merge_dist_pa_p4 DROP COLUMN extraid;
+
+ALTER TABLE merge_dist_pa_t ATTACH PARTITION merge_dist_pa_p1 FOR VALUES IN (0, 1);
+ALTER TABLE merge_dist_pa_t ATTACH PARTITION merge_dist_pa_p2 FOR VALUES IN (2, 3);
+ALTER TABLE merge_dist_pa_t ATTACH PARTITION merge_dist_pa_p4 FOR VALUES IN (4, 5);
+
+INSERT INTO merge_dist_pa_t VALUES (1, 100, 'p1'), (2, 200, 'p2'), (4, 400, 'p4');
+
+-- EXPLAIN VERBOSE: SplitMerge plan for partitioned table dist key update
+EXPLAIN (VERBOSE, COSTS OFF)
+MERGE INTO merge_dist_pa_t t USING merge_dist_pa_s s ON t.tid = s.sid
+WHEN MATCHED THEN UPDATE SET tid = tid - 1
+WHEN NOT MATCHED THEN INSERT VALUES (s.sid, s.delta, 'new');
+
+-- Update distribution key on partitioned table with reordered/dropped columns
+MERGE INTO merge_dist_pa_t t USING merge_dist_pa_s s ON t.tid = s.sid
+WHEN MATCHED THEN UPDATE SET tid = tid - 1;
+SELECT gp_segment_id, tableoid::regclass, * FROM merge_dist_pa_t ORDER BY tid;
+-- Verify segment placement matches direct INSERT
+CREATE TABLE merge_dist_pa_verify (tid integer, balance float, val text) DISTRIBUTED BY (tid);
+INSERT INTO merge_dist_pa_verify VALUES (0, 100, 'p1'), (1, 200, 'p2'), (3, 400, 'p4');
+SELECT gp_segment_id, * FROM merge_dist_pa_verify ORDER BY tid;
+DROP TABLE merge_dist_pa_verify;
+
+-- Mixed: dist key update + insert on partitioned table
+TRUNCATE merge_dist_pa_t;
+INSERT INTO merge_dist_pa_t VALUES (1, 100, 'p1'), (2, 200, 'p2');
+MERGE INTO merge_dist_pa_t t USING merge_dist_pa_s s ON t.tid = s.sid
+WHEN MATCHED THEN UPDATE SET tid = tid - 1
+WHEN NOT MATCHED THEN INSERT VALUES (s.sid, s.delta, 'new');
+SELECT * FROM merge_dist_pa_t ORDER BY tid;
+
+DROP TABLE merge_dist_pa_t CASCADE;
+DROP TABLE merge_dist_pa_s;
+
+-- MERGE with dist key update + INSERT trigger (not UPDATE trigger)
+-- INSERT triggers should fire; UPDATE triggers would block split merge
+CREATE TABLE merge_trig_dist (id int, val text) DISTRIBUTED BY (id);
+CREATE TABLE merge_trig_dist_s (id int, val text) DISTRIBUTED BY (id);
+CREATE OR REPLACE FUNCTION merge_trig_dist_fn() RETURNS trigger AS $$
+BEGIN
+  RAISE NOTICE '% trigger on %, id=%, val=%', TG_OP, TG_TABLE_NAME, NEW.id, NEW.val;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Only INSERT trigger, no UPDATE trigger — split merge is allowed
+CREATE TRIGGER merge_trig_bi BEFORE INSERT ON merge_trig_dist
+  FOR EACH ROW EXECUTE FUNCTION merge_trig_dist_fn();
+
+INSERT INTO merge_trig_dist VALUES (1, 'old');
+INSERT INTO merge_trig_dist_s VALUES (1, 'new'), (2, 'two');
+
+-- dist key update + insert, INSERT trigger should fire for new rows
+MERGE INTO merge_trig_dist t USING merge_trig_dist_s s ON t.id = s.id
+WHEN MATCHED THEN UPDATE SET id = t.id + 100, val = s.val
+WHEN NOT MATCHED THEN INSERT VALUES (s.id, s.val);
+SELECT * FROM merge_trig_dist ORDER BY id;
+
+-- Now add UPDATE trigger — split merge should be blocked
+CREATE TRIGGER merge_trig_bu BEFORE UPDATE ON merge_trig_dist
+  FOR EACH ROW EXECUTE FUNCTION merge_trig_dist_fn();
+
+MERGE INTO merge_trig_dist t USING merge_trig_dist_s s ON t.id = s.id
+WHEN MATCHED THEN UPDATE SET id = t.id + 100, val = s.val
+WHEN NOT MATCHED THEN INSERT VALUES (s.id, s.val);
+
+DROP TABLE merge_trig_dist, merge_trig_dist_s;
+DROP FUNCTION merge_trig_dist_fn;
+
 REVOKE ALL ON SCHEMA public FROM regress_merge_privs;
 DROP USER regress_merge_privs;
 DROP USER regress_merge_no_privs;

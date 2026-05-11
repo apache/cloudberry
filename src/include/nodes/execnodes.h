@@ -3413,6 +3413,13 @@ typedef struct SplitMergeState
 
 	AttrNumber mt_resultOidAttno;
 
+	/* Fields for split update in MERGE */
+	TupleTableSlot *insertTuple;	/* pending INSERT tuple for split update */
+	TupleTableSlot *deleteTuple;	/* DELETE tuple for split update */
+	bool		processInsert;		/* true = next call returns insertTuple */
+	AttrNumber	action_attno;		/* attribute number of DMLAction column in output */
+	int			subplan_offset;		/* number of target table columns prepended to output */
+
 } SplitMergeState;
 
 /*

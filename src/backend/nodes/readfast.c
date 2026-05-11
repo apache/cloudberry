@@ -1167,6 +1167,8 @@ _readSplitMerge(void)
 
 	READ_NODE_FIELD(resultRelations);
 	READ_NODE_FIELD(mergeActionLists);
+	READ_BOOL_FIELD(hasSplitUpdate);
+	READ_UINT_FIELD(rootResultRelation);
 
 	ReadCommonPlan(&local_node->plan);
 

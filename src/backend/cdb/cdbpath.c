@@ -75,7 +75,7 @@ static bool try_redistribute(PlannerInfo *root, CdbpathMfjRel *g,
 
 static SplitUpdatePath *make_splitupdate_path(PlannerInfo *root, Path *subpath, Index rti);
 
-static SplitMergePath *make_split_merge_path(PlannerInfo *root, Path *subpath, List* resultRelations, List *mergeActionLists);
+static SplitMergePath *make_split_merge_path(PlannerInfo *root, Path *subpath, List* resultRelations, List *mergeActionLists, bool hasSplitUpdate);
 
 static bool can_elide_explicit_motion(PlannerInfo *root, Index rti, Path *subpath, GpPolicy *policy);
 /*
@@ -2798,19 +2798,22 @@ create_motion_path_for_merge(PlannerInfo *root, List *resultRelations, GpPolicy 
 	{
 		/*
 		 * If merge contain CMD_INSERT, we need split merge to let new
-		 * insert tuple redistributed to correct segment. otherwise, we
-		 * create motion as the same as update/delete in create_motion_path_for_upddel
+		 * insert tuple redistributed to correct segment. If merge has
+		 * UPDATE that modifies distribution key, we also need split merge
+		 * to handle the DELETE+INSERT split.
 		 */
 		foreach(l, mergeActionLists)
 		{
 			List *mergeActionList = lfirst(l);
-			foreach(lc, mergeActionList) 
+			foreach(lc, mergeActionList)
 			{
 				MergeAction *action = lfirst(lc);
 				if (action->commandType == CMD_INSERT)
 					need_split_merge = true;
 			}
 		}
+		if (root->merge_need_split_update)
+			need_split_merge = true;
 
 		if (need_split_merge)
 		{
@@ -2820,7 +2823,7 @@ create_motion_path_for_merge(PlannerInfo *root, List *resultRelations, GpPolicy 
 				rel = build_simple_rel(root, linitial_int(resultRelations), NULL /*parent*/);
 			targetLocus = cdbpathlocus_from_baserel(root, rel, 0);
 
-			subpath = (Path *) make_split_merge_path(root, subpath, resultRelations, mergeActionLists);
+			subpath = (Path *) make_split_merge_path(root, subpath, resultRelations, mergeActionLists, root->merge_need_split_update);
 			subpath = cdbpath_create_explicit_motion_path(root,
 														subpath,
 														targetLocus);
@@ -2923,14 +2926,35 @@ turn_volatile_seggen_to_singleqe(PlannerInfo *root, Path *path, Node *node)
 }
 
 static SplitMergePath *
-make_split_merge_path(PlannerInfo *root, Path *subpath, List *resultRelations, List *mergeActionLists)
+make_split_merge_path(PlannerInfo *root, Path *subpath, List *resultRelations, List *mergeActionLists, bool hasSplitUpdate)
 {
 	PathTarget		*splitMergePathTarget;
 	SplitMergePath	*splitmergepath;
 
 	splitMergePathTarget = copy_pathtarget(subpath->pathtarget);
 
-	/* populate information generated above into splitupdate node */
+	/*
+	 * Same restriction as SplitUpdate: updating a distribution key
+	 * is not allowed when the target relation has update triggers.
+	 */
+	if (hasSplitUpdate)
+	{
+		RangeTblEntry *rte = rt_fetch(root->parse->resultRelation,
+									  root->parse->rtable);
+		if (has_update_triggers(rte->relid, true))
+			ereport(ERROR,
+					(errcode(ERRCODE_GP_FEATURE_NOT_YET),
+					 errmsg("UPDATE on distributed key column not allowed on relation with update triggers")));
+	}
+
+	/* When hasSplitUpdate, add DMLAction column for split UPDATE handling */
+	if (hasSplitUpdate)
+	{
+		DMLActionExpr *actionExpr = makeNode(DMLActionExpr);
+		add_column_to_pathtarget(splitMergePathTarget, (Expr *) actionExpr, 0);
+	}
+
+	/* populate information generated above into splitmerge node */
 	splitmergepath = makeNode(SplitMergePath);
 	splitmergepath->path.pathtype = T_SplitMerge;
 	splitmergepath->path.parent = subpath->parent;
@@ -2947,6 +2971,7 @@ make_split_merge_path(PlannerInfo *root, Path *subpath, List *resultRelations, L
 	splitmergepath->subpath = subpath;
 	splitmergepath->resultRelations = resultRelations;
 	splitmergepath->mergeActionLists = mergeActionLists;
+	splitmergepath->hasSplitUpdate = hasSplitUpdate;
 
 	return splitmergepath;
 }
