@@ -19,7 +19,7 @@ void
 ExceptionalCondition(const char *conditionName, const char *fileName, int lineNumber)
 {
 	fprintf(stderr,
-			"\n\nassertion failed: %s, %s, %s, line number: %d\n\n",
+			"\n\nassertion failed: %s, %s, line number: %d\n\n",
 			conditionName,
 			fileName,
 			lineNumber);
