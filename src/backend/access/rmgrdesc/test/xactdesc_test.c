@@ -16,75 +16,72 @@ static void
 test_xactdescprepareCommit(void **state)
 {
 	StringInfo buf = makeStringInfo();
+	const char *gid = "4242424242-0000000042";
+	Size		gidlen = strlen(gid) + 1;
+	Size		datalen = MAXALIGN(sizeof(xl_xact_prepare)) + MAXALIGN(gidlen);
 
-	XLogReaderState *record = palloc(sizeof(XLogReaderState));
-	XLogRecGetData(record) = palloc(sizeof(TwoPhaseFileHeader));
-	record->record = palloc(sizeof(TwoPhaseFileHeader));
+	XLogReaderState *record = palloc0(sizeof(XLogReaderState));
+	record->record = palloc0(sizeof(DecodedXLogRecord));
+	XLogRecGetData(record) = palloc0(datalen);
 
 	XLogRecGetInfo(record) = XLOG_XACT_PREPARE;
-	TwoPhaseFileHeader* tpfh = (TwoPhaseFileHeader*) XLogRecGetData(record);
+	xl_xact_prepare *xlrec = (xl_xact_prepare *) XLogRecGetData(record);
 
-	tpfh->prepared_at = 617826371830030;
-	tpfh->tablespace_oid_to_delete_on_commit = 42;
-	tpfh->tablespace_oid_to_delete_on_abort = InvalidOid;
-
-	/* Can not use save_state() here, so emulate it */
-	tpfh->gidlen = strlen("4242424242-0000000042") + 1;
-	strcpy((char *)tpfh + sizeof(*tpfh), "4242424242-0000000042");
+	xlrec->prepared_at = 617826371830030;
+	xlrec->gidlen = gidlen;
+	memcpy((char *) xlrec + MAXALIGN(sizeof(xl_xact_prepare)), gid, gidlen);
 
 	xact_desc(buf, record);
 
-	assert_string_equal("at = 2019-07-30 18:26:11.83003+00; gid = 4242424242-0000000042; tablespace_oid_to_delete_on_commit = 42", buf->data);
+	assert_string_equal("gid 4242424242-0000000042: 2019-07-30 18:26:11.83003+00", buf->data);
 }
 
 static void
 test_xactdescprepareAbort(void **state)
 {
 	StringInfo buf = makeStringInfo();
+	const char *gid = "1111111111-0000000001";
+	Size		gidlen = strlen(gid) + 1;
+	Size		datalen = MAXALIGN(sizeof(xl_xact_prepare)) + MAXALIGN(gidlen);
 
-	XLogReaderState *record = palloc(sizeof(XLogReaderState));
-	XLogRecGetData(record) = palloc(sizeof(TwoPhaseFileHeader));
-	record->record = palloc(sizeof(TwoPhaseFileHeader));
+	XLogReaderState *record = palloc0(sizeof(XLogReaderState));
+	record->record = palloc0(sizeof(DecodedXLogRecord));
+	XLogRecGetData(record) = palloc0(datalen);
 
 	XLogRecGetInfo(record) = XLOG_XACT_PREPARE;
-	TwoPhaseFileHeader* tpfh = (TwoPhaseFileHeader*) XLogRecGetData(record);
+	xl_xact_prepare *xlrec = (xl_xact_prepare *) XLogRecGetData(record);
 
-	tpfh->prepared_at = 617826371830030;
-	tpfh->tablespace_oid_to_delete_on_commit = InvalidOid;
-	tpfh->tablespace_oid_to_delete_on_abort = 42;
-
-	/* Can not use save_state() here, so emulate it */
-	tpfh->gidlen = strlen("4242424242-0000000042") + 1;
-	strcpy((char *)tpfh + sizeof(*tpfh), "4242424242-0000000042");
+	xlrec->prepared_at = 617826371830030;
+	xlrec->gidlen = gidlen;
+	memcpy((char *) xlrec + MAXALIGN(sizeof(xl_xact_prepare)), gid, gidlen);
 
 	xact_desc(buf, record);
 
-	assert_string_equal("at = 2019-07-30 18:26:11.83003+00; gid = 4242424242-0000000042; tablespace_oid_to_delete_on_abort = 42", buf->data);
+	assert_string_equal("gid 1111111111-0000000001: 2019-07-30 18:26:11.83003+00", buf->data);
 }
 
 static void
 test_xactdescprepareNone(void **state)
 {
 	StringInfo buf = makeStringInfo();
+	const char *gid = "9999999999-0000000099";
+	Size		gidlen = strlen(gid) + 1;
+	Size		datalen = MAXALIGN(sizeof(xl_xact_prepare)) + MAXALIGN(gidlen);
 
-	XLogReaderState *record = palloc(sizeof(XLogReaderState));
-	XLogRecGetData(record) = palloc(sizeof(TwoPhaseFileHeader));
-	record->record = palloc(sizeof(TwoPhaseFileHeader));
+	XLogReaderState *record = palloc0(sizeof(XLogReaderState));
+	record->record = palloc0(sizeof(DecodedXLogRecord));
+	XLogRecGetData(record) = palloc0(datalen);
 
 	XLogRecGetInfo(record) = XLOG_XACT_PREPARE;
-	TwoPhaseFileHeader* tpfh = (TwoPhaseFileHeader*) XLogRecGetData(record);
+	xl_xact_prepare *xlrec = (xl_xact_prepare *) XLogRecGetData(record);
 
-	tpfh->prepared_at = 617826371830030;
-	tpfh->tablespace_oid_to_delete_on_commit = InvalidOid;
-	tpfh->tablespace_oid_to_delete_on_abort = InvalidOid;
-
-	/* Can not use save_state() here, so emulate it */
-	tpfh->gidlen = strlen("4242424242-0000000042") + 1;
-	strcpy((char *)tpfh + sizeof(*tpfh), "4242424242-0000000042");
+	xlrec->prepared_at = 0;
+	xlrec->gidlen = gidlen;
+	memcpy((char *) xlrec + MAXALIGN(sizeof(xl_xact_prepare)), gid, gidlen);
 
 	xact_desc(buf, record);
 
-	assert_string_equal("at = 2019-07-30 18:26:11.83003+00; gid = 4242424242-0000000042", buf->data);
+	assert_string_equal("gid 9999999999-0000000099: 2000-01-01 00:00:00+00", buf->data);
 }
 
 int

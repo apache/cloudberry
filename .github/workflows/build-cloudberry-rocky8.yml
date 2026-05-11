@@ -722,17 +722,17 @@ jobs:
 
           } 2>&1 | tee -a build-logs/details/artifact-creation.log
 
-#      - name: Run Apache Cloudberry unittest script
-#        if: needs.check-skip.outputs.should_skip != 'true'
-#        env:
-#          SRC_DIR: ${{ github.workspace }}
-#        run: |
-#          set -eo pipefail
-#          chmod +x "${SRC_DIR}"/devops/build/automation/cloudberry/scripts/unittest-cloudberry.sh
-#          if ! time su - gpadmin -c "cd ${SRC_DIR} && SRC_DIR=${SRC_DIR} ${SRC_DIR}/devops/build/automation/cloudberry/scripts/unittest-cloudberry.sh"; then
-#            echo "::error::Unittest script failed"
-#            exit 1
-#          fi
+      - name: Run Apache Cloudberry unittest script
+        if: needs.check-skip.outputs.should_skip != 'true'
+        env:
+          SRC_DIR: ${{ github.workspace }}
+        run: |
+          set -eo pipefail
+          chmod +x "${SRC_DIR}"/devops/build/automation/cloudberry/scripts/unittest-cloudberry.sh
+          if ! time su - gpadmin -c "cd ${SRC_DIR} && SRC_DIR=${SRC_DIR} ${SRC_DIR}/devops/build/automation/cloudberry/scripts/unittest-cloudberry.sh"; then
+            echo "::error::Unittest script failed"
+            exit 1
+          fi
 
       - name: Generate Build Job Summary End
         if: always()
