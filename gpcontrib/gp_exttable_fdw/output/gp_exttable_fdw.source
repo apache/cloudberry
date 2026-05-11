@@ -181,4 +181,3 @@ DROP FOREIGN TABLE ext_enc_utf8;
 DROP FOREIGN TABLE ext_enc_utf8_dash;
 DROP FOREIGN TABLE ext_enc_gbk;
 DROP FOREIGN TABLE ext_enc_alter;
-
