@@ -104,7 +104,8 @@ uninstall-data:
 
 # fmgroids.h, fmgrprotos.h, fmgrtab.c, fmgr-stamp, and errcodes.h are in the
 # distribution tarball, so they are not cleaned here.
-clean:
+clean-local: clean-utils-local
+clean-utils-local:
 	rm -f probes.h probes.h.tmp
 
 maintainer-clean: clean

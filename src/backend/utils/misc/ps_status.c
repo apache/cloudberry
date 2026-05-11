@@ -470,6 +470,9 @@ set_ps_display_with_len(const char *activity, size_t len)
 	Assert(strlen(activity) == len);
 
 #ifndef PS_USE_NONE
+	char	   *cp = ps_buffer + ps_buffer_fixed_size;
+	char	   *ep = ps_buffer + ps_buffer_size;
+
 	/* first, check if we need to update the process title */
 	if (!update_ps_display_precheck())
 		return;
@@ -477,21 +480,45 @@ set_ps_display_with_len(const char *activity, size_t len)
 	/* wipe out any suffix when the title is completely changed */
 	ps_buffer_nosuffix_len = 0;
 
-	/* Update ps_buffer to contain both fixed part and activity */
-	if (ps_buffer_fixed_size + len >= ps_buffer_size)
+	Assert(cp >= ps_buffer);
+
+	/* Add client session's global id. */
+	if (gp_session_id > 0 && ep - cp > 0 &&
+		strstr(ps_buffer, "dtx recovery process") == NULL &&
+		strstr(ps_buffer, "ftsprobe process") == NULL)
 	{
-		/* handle the case where ps_buffer doesn't have enough space */
-		memcpy(ps_buffer + ps_buffer_fixed_size, activity,
-			   ps_buffer_size - ps_buffer_fixed_size - 1);
-		ps_buffer[ps_buffer_size - 1] = '\0';
-		ps_buffer_cur_len = ps_buffer_size - 1;
+		cp += snprintf(cp, ep - cp, "con%d ", gp_session_id);
+
+		/* Which segment is accessed by this qExec? */
+		if (Gp_role == GP_ROLE_EXECUTE && GpIdentity.segindex >= -1)
+			cp += snprintf(cp, ep - cp, "seg%d ", GpIdentity.segindex);
 	}
-	else
-	{
-		memcpy(ps_buffer + ps_buffer_fixed_size, activity, len + 1);
-		ps_buffer_cur_len = ps_buffer_fixed_size + len;
-	}
-	Assert(strlen(ps_buffer) == ps_buffer_cur_len);
+
+	/* Add count of commands received from client session. */
+	if (gp_command_count > 0 && ep - cp > 0)
+		cp += snprintf(cp, ep - cp, "cmd%d ", gp_command_count);
+
+	/* Add slice number information */
+	if (currentSliceId > 0 && ep - cp > 0)
+		cp += snprintf(cp, ep - cp, "slice%d ", currentSliceId);
+
+	/*
+	 * Calculate the size preceding the actual activity string start.
+	 * snprintf returns the number of bytes that *would* have been written if
+	 * enough space had been available. This means cp might go beyond, if
+	 * truncation happened. Hence need below check for Min. (ep - 1) is
+	 * performed because in normal case when no truncation happens, snprintf
+	 * doesn't count null, so in truncation case as well it shouldn't be
+	 * counted. End result simply intended here is really real_act_prefix_size
+	 * = strlen(ps_buffer), for performance reasons kept this way.
+	 */
+	real_act_prefix_size = Min(cp, (ep - 1)) - ps_buffer;
+
+	/* Append caller's activity string. */
+	strlcpy(ps_buffer + real_act_prefix_size, activity,
+			ps_buffer_size - real_act_prefix_size);
+
+	ps_buffer_cur_len = strlen(ps_buffer);
 
 	/* Transmit new setting to kernel, if necessary */
 	flush_ps_display();

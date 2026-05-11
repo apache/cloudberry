@@ -1031,22 +1031,22 @@ HandleFaultMessage(const char* msg)
 
 	StringInfoData buf;
 	pq_beginmessage(&buf, 'T');
-	pq_sendint(&buf, Natts_fault_message_response, 2);
+	pq_sendint16(&buf, Natts_fault_message_response);
 
 	pq_sendstring(&buf, "status");
-	pq_sendint(&buf, 0, 4);		/* table oid */
-	pq_sendint(&buf, Anum_fault_message_response_status, 2);		/* attnum */
-	pq_sendint(&buf, TEXTOID, 4);		/* type oid */
-	pq_sendint(&buf, -1, 2);	/* typlen */
-	pq_sendint(&buf, -1, 4);		/* typmod */
-	pq_sendint(&buf, 0, 2);		/* format code */
+	pq_sendint32(&buf, 0);		/* table oid */
+	pq_sendint16(&buf, Anum_fault_message_response_status);		/* attnum */
+	pq_sendint32(&buf, TEXTOID);		/* type oid */
+	pq_sendint16(&buf, -1);	/* typlen */
+	pq_sendint32(&buf, -1);		/* typmod */
+	pq_sendint16(&buf, 0);		/* format code */
 	pq_endmessage(&buf);
 
 	/* Send a DataRow message */
 	pq_beginmessage(&buf, 'D');
-	pq_sendint(&buf, Natts_fault_message_response, 2);		/* # of columns */
+	pq_sendint16(&buf, Natts_fault_message_response);		/* # of columns */
 
-	pq_sendint(&buf, len, 4);
+	pq_sendint32(&buf, len);
 	pq_sendbytes(&buf, result, len);
 	pq_endmessage(&buf);
 	EndCommand(&qc, DestRemote, false);
