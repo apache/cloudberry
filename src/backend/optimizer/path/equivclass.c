@@ -749,7 +749,7 @@ get_eclass_for_sort_expr(PlannerInfo *root,
  *		Locate an EquivalenceClass member matching the given expr, if any;
  *		return NULL if no match.
  *
- * "Matching" is defined as "equal after stripping RelabelTypes".
+ * "Matching" is defined as "equal after stripping RelabelTypes"
  * This is used for identifying sort expressions, and we need to allow
  * binary-compatible relabeling for some cases involving binary-compatible
  * sort operators.
