@@ -19,7 +19,7 @@ test_xactdescprepareCommit(void **state)
 
 	XLogReaderState *record = palloc(sizeof(XLogReaderState));
 	XLogRecGetData(record) = palloc(sizeof(TwoPhaseFileHeader));
-	record->decoded_record = palloc(sizeof(TwoPhaseFileHeader));
+	record->record = palloc(sizeof(TwoPhaseFileHeader));
 
 	XLogRecGetInfo(record) = XLOG_XACT_PREPARE;
 	TwoPhaseFileHeader* tpfh = (TwoPhaseFileHeader*) XLogRecGetData(record);
@@ -44,7 +44,7 @@ test_xactdescprepareAbort(void **state)
 
 	XLogReaderState *record = palloc(sizeof(XLogReaderState));
 	XLogRecGetData(record) = palloc(sizeof(TwoPhaseFileHeader));
-	record->decoded_record = palloc(sizeof(TwoPhaseFileHeader));
+	record->record = palloc(sizeof(TwoPhaseFileHeader));
 
 	XLogRecGetInfo(record) = XLOG_XACT_PREPARE;
 	TwoPhaseFileHeader* tpfh = (TwoPhaseFileHeader*) XLogRecGetData(record);
@@ -69,7 +69,7 @@ test_xactdescprepareNone(void **state)
 
 	XLogReaderState *record = palloc(sizeof(XLogReaderState));
 	XLogRecGetData(record) = palloc(sizeof(TwoPhaseFileHeader));
-	record->decoded_record = palloc(sizeof(TwoPhaseFileHeader));
+	record->record = palloc(sizeof(TwoPhaseFileHeader));
 
 	XLogRecGetInfo(record) = XLOG_XACT_PREPARE;
 	TwoPhaseFileHeader* tpfh = (TwoPhaseFileHeader*) XLogRecGetData(record);
