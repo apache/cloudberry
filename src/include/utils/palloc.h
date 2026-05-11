@@ -175,6 +175,7 @@ pg_nodiscard extern void *repalloc_mul_extended(void *p, Size s1, Size s2,
  * objects of type "type"
  */
 #define repalloc_array(pointer, type, count) ((type *) repalloc_mul(pointer, sizeof(type), count))
+#define repalloc0_array(pointer, type, oldcount, count) ((type *) repalloc0(pointer, mul_size(sizeof(type), oldcount), mul_size(sizeof(type), count)))
 #define repalloc_array_extended(pointer, type, count, flags) ((type *) repalloc_mul_extended(pointer, sizeof(type), count, flags))
 
 /*
