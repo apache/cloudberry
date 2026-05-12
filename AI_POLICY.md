@@ -1,3 +1,22 @@
+<!--
+  Licensed to the Apache Software Foundation (ASF) under one
+  or more contributor license agreements.  See the NOTICE file
+  distributed with this work for additional information
+  regarding copyright ownership.  The ASF licenses this file
+  to you under the Apache License, Version 2.0 (the
+  "License"); you may not use this file except in compliance
+  with the License.  You may obtain a copy of the License at
+
+   http://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing,
+  software distributed under the License is distributed on an
+  "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+  KIND, either express or implied.  See the License for the
+  specific language governing permissions and limitations
+  under the License.
+-->
+
 # AI Policy
 
 We welcome AI tools in Apache Cloudberry development — code assistants, LLMs, AI code review, and beyond. AI is a normal developer tool, like an IDE or a debugger. This document sets simple ground rules so everyone can use AI responsibly.
@@ -34,13 +53,13 @@ When your PR includes significant AI-generated code, check the AI disclosure box
 
 Our core is PostgreSQL, and refactoring work has already been done here. Rewriting code significantly complicates rebase. Also, refactoring changes the code in a way that forces people to relearn the code they already know. Keep changes as simple as possible.
 
-**Example:** The point of LLM is to spend your tokens. One day, you will be asked: "This code is not very good. Do you want to improve it?" Of course! It could happens several times. Tokens are spent, but what is the point of such refactoring? (Rhetorical question)
+**Example:** The point of LLM is to spend your tokens. One day, you will be asked: "This code is not very good. Do you want to improve it?" Of course! It could happen several times. Tokens are spent, but what is the point of such refactoring? (Rhetorical question)
 
 ### 6. LLM code review
 
 So far, it is not possible to use paid LLM models for code review in open source ASF projects. However, one could use personal licenses for LLMs to do the same. 
 
-**Example:** We primarily use GitHub Copilot for automated AI code review on pull requests. Here are some important points:
+**Example:** One could use GitHub Copilot for automated AI code review on pull requests. Here are some important points:
 
 - Copilot suggestions are **non-binding hints**, not requirements.
 - If a suggestion is irrelevant or wrong, skip it — you know your code best.
@@ -66,5 +85,5 @@ Do not use AI to auto-generate responses to review feedback. Maintainers invest 
 ## Resources
 
 - [ASF Generative Tooling Guidance](https://www.apache.org/legal/generative-tooling.html) - Official Apache guidance on AI tool usage
-- [GitHub Copilot](https://github.com/features/copilot) - AI pair programmer and code reviewer we use
+- [GitHub Copilot](https://github.com/features/copilot) - AI pair programmer and code reviewer
 - [LLM Leaderboard](https://llm-stats.com/) - LLM Stats Score, it's better to use high-ranked models
