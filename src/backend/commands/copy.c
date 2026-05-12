@@ -432,11 +432,6 @@ DoCopy(ParseState *pstate, const CopyStmt *stmt,
 			else
 				*processed = CopyFrom(cstate);	/* copy from file to database */
 
-			/* Handle copy to replicated table returns processed number */
-			if (Gp_role == GP_ROLE_DISPATCH &&
-				GpPolicyIsReplicated(cstate->rel->rd_cdbpolicy))
-				*processed = *processed / cstate->rel->rd_cdbpolicy->numsegments;
-
 			/*
 			 * Update view info if we actualy copy data from other place.
 			 */
