@@ -293,15 +293,20 @@ std::pair<Datum, bool> OrcGroup::GetColumnValueNoMissing(size_t column_index,
     return {0, true};
   }
 
-  if (column->HasNull() && !nulls_shuffle_[column_index]) {
-    CalcNullShuffle(column, column_index);
-  }
+  if (column->HasNull()) {
+    const auto &bm = column->GetBitmap();
+    Assert(bm);
+    if (!bm->Test(row_index)) {
+      return {0, true};
+    }
 
-  if (nulls_shuffle_[column_index]) {
+    // if not null value, calculate the null offsets array for each row
+    if (!nulls_shuffle_[column_index]) {
+      CalcNullShuffle(column, column_index);
+    }
     null_counts = nulls_shuffle_[column_index][row_index];
   }
-
-  return GetColumnDatum(column, row_index, &null_counts);
+  return {column->GetDatum(row_index - null_counts), false};
 }
 
 void OrcGroup::CalcNullShuffle(PaxColumn *column, size_t column_index) {

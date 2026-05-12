@@ -26,6 +26,7 @@
  */
 
 #include "storage/filter/pax_row_filter.h"
+
 #include "comm/cbdb_wrappers.h"
 
 namespace paxc {
@@ -45,7 +46,8 @@ static inline void FindAttrsInQual(Node *qual, bool *proj, int ncol,
 }
 
 static bool BuildExecutionFilterForColumns(Relation rel, PlanState *ps,
-                                    pax::ExecutionFilterContext *ctx) {
+                                           pax::ExecutionFilterContext *ctx,
+                                           ScanKey key, int nkeys) {
   List *qual = ps->plan->qual;
   List **qual_list;
   ListCell *lc;
@@ -53,11 +55,48 @@ static bool BuildExecutionFilterForColumns(Relation rel, PlanState *ps,
   int *qual_atts;
   int natts = RelationGetNumberOfAttributes(rel);
 
-  if (!qual || !IsA(qual, List)) return false;
+  int ret = false;
+
+  if (key && nkeys > 0) {
+    // We don't need to support DynamicSeqScanState here. Even if the plan uses
+    // DynamicSeqScanNode for partitioned tables, it's always a regular SeqScan
+    // on a single table. So this will always be a SeqScanState.
+    if (nodeTag(ps) != T_SeqScanState) {
+      elog(ERROR, "runtime filter only support seqscan state, but got %d",
+           nodeTag(ps));
+    }
+
+    for (int i = 0; i < nkeys; i++) {
+      if (key[i].sk_flags & SK_BLOOM_FILTER) {
+        ctx->runtime_bloom_keys.emplace_back(key[i]);
+        ret = true;
+      }
+    }
+
+    // register bloom filters
+    for (int i = 0; i < (int)ctx->runtime_bloom_keys.size(); ++i) {
+      pax::ExecutionFilterContext::FilterNode node;
+      node.kind = pax::ExecutionFilterContext::FilterKind::kBloom;
+      node.index = i;
+      ctx->filter_nodes.emplace_back(node);
+    }
+
+    if (ps->instrument) {
+      ps->instrument->prf_work = true;
+    }
+    ctx->ps = ps;
+
+    // set filter_in_seqscan to false, so that the filter will not be executed
+    // in SeqNext(), but will be executed in pax_row_filter
+    auto seqscan = (SeqScanState *)ps;
+    seqscan->filter_in_seqscan = false;
+  }
+
+  if (!qual || !IsA(qual, List)) return ret;
 
   if (list_length(qual) == 1 && IsA(linitial(qual), BoolExpr)) {
     auto boolexpr = (BoolExpr *)linitial(qual);
-    if (boolexpr->boolop != AND_EXPR) return false;
+    if (boolexpr->boolop != AND_EXPR) return ret;
     qual = boolexpr->args;
   }
   Assert(IsA(qual, List));
@@ -98,6 +137,11 @@ static bool BuildExecutionFilterForColumns(Relation rel, PlanState *ps,
       if (!qual_list[i]) continue;
       ctx->estates[k] = ExecInitQual(qual_list[i], ps);
       ctx->attnos[k] = i;
+      // register expr filter node (by index k)
+      pax::ExecutionFilterContext::FilterNode node;
+      node.kind = pax::ExecutionFilterContext::FilterKind::kExpr;
+      node.index = k;
+      ctx->filter_nodes.emplace_back(node);
       list_free(qual_list[i]);
       k++;
     }
@@ -108,7 +152,11 @@ static bool BuildExecutionFilterForColumns(Relation rel, PlanState *ps,
     list_free(qual_list[0]);
   }
 
-  Assert(ctx->size > 0 || ctx->estate_final);
+  Assert(ctx->size > 0 || ctx->estate_final ||
+         ctx->runtime_bloom_keys.size() > 0);
+
+  // remove qual from plan state, so that the qual will not be executed in
+  // executor, but will be executed in pax_row_filter
   ps->qual = nullptr;
 
   pfree(proj);
@@ -117,20 +165,19 @@ static bool BuildExecutionFilterForColumns(Relation rel, PlanState *ps,
   return true;
 }
 
-} // namespace paxc
-
+}  // namespace paxc
 
 namespace pax {
 
 PaxRowFilter::PaxRowFilter() {}
 
-bool PaxRowFilter::Initialize(Relation rel, PlanState *ps, const std::vector<bool> &projection) {
+bool PaxRowFilter::Initialize(Relation rel, PlanState *ps,
+                              const std::vector<bool> &projection, ScanKey key,
+                              int nkeys) {
   bool ok = false;
-  
+
   CBDB_WRAP_START;
-  { 
-    ok = paxc::BuildExecutionFilterForColumns(rel, ps, &efctx_); 
-  }
+  { ok = paxc::BuildExecutionFilterForColumns(rel, ps, &efctx_, key, nkeys); }
   CBDB_WRAP_END;
 
   if (ok) {
@@ -140,7 +187,8 @@ bool PaxRowFilter::Initialize(Relation rel, PlanState *ps, const std::vector<boo
   return ok;
 }
 
-void PaxRowFilter::FillRemainingColumns(Relation rel, const std::vector<bool> &projection) {
+void PaxRowFilter::FillRemainingColumns(Relation rel,
+                                        const std::vector<bool> &projection) {
   int natts = RelationGetNumberOfAttributes(rel);
   auto proj_len = projection.size();
   std::vector<bool> atts(natts);
@@ -161,6 +209,5 @@ void PaxRowFilter::FillRemainingColumns(Relation rel, const std::vector<bool> &p
     if (atts[attno - 1]) remaining_attnos_.emplace_back(attno);
   }
 }
-
 
 }  // namespace pax
