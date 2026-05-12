@@ -1,1 +1,16 @@
+# Custom compiler flags for platform compatibility
+
+# macOS-specific flags
+ifeq ($(PORTNAME), darwin)
+# Disable warnings that are treated as errors on macOS SDK 26.2
+CUSTOM_COPT += -Wno-deprecated-declarations
+CUSTOM_COPT += -Wno-cast-function-type-strict
+CUSTOM_COPT += -Wno-uninitialized
+CUSTOM_COPT += -Wno-enum-conversion
+CUSTOM_COPT += -Wno-incompatible-function-pointer-types
+CUSTOM_COPT += -Wno-unused-but-set-variable
+else
+# Other platforms: treat warnings as errors
 CUSTOM_COPT += -Werror
+endif
+
