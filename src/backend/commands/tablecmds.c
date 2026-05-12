@@ -10599,7 +10599,7 @@ ATExecAddStatistics(AlteredTableInfo *tab, Relation rel,
 	Assert(stmt->transformed);
 
 	HOLD_DISPATCH();
-	address = CreateStatistics(stmt);
+	address = CreateStatistics(stmt, !is_rebuild);
 	RESUME_DISPATCH();
 
 	return address;
