@@ -287,19 +287,13 @@ CStatsPredUtils::GetPredStats(CMemoryPool *mp, CExpression *expr)
 		CScalarConst::PopExtractFromConstOrCastConst(expr_right);
 	GPOS_ASSERT(nullptr != scalar_const_op);
 
-	CMDAccessor *md_accessor = COptCtxt::PoctxtFromTLS()->Pmda();
 	IDatum *datum = scalar_const_op->GetDatum();
-	const IMDType *datum_type = md_accessor->RetrieveType(datum->MDId());
 
-	BOOL is_text_related =
-		datum_type->IsTextRelated() && col_ref->RetrieveType()->IsTextRelated();
-	if (is_text_related &&
-		!CHistogram::IsOpSupportedForTextFilter(stats_cmp_type))
-	{
-		return GPOS_NEW(mp)
-			CStatsPredUnsupported(col_ref->Id(), stats_cmp_type);
-	}
-
+	// Text range predicates (`<`, `<=`, `>`, `>=`) used to be downgraded to
+	// Unsupported here because the hash-based LINT mapping made ordering
+	// meaningless. The LINT mapping is now a locale sort-key prefix
+	// (CTranslatorScalarToDXL::ExtractLintValueFromDatum), so text ranges
+	// can use the generic filter path uniformly.
 
 	if (!CHistogram::IsOpSupportedForFilter(stats_cmp_type) ||
 		!IMDType::StatsAreComparable(col_ref->RetrieveType(), datum))

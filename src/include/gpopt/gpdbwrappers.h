@@ -312,6 +312,12 @@ Oid GetArrayType(Oid typid);
 bool GetAttrStatsSlot(AttStatsSlot *sslot, HeapTuple statstuple, int reqkind,
 					  Oid reqop, int flags);
 
+// Compute a sort key into dest such that memcmp on the output preserves
+// varstr_cmp(src, collation). Returns bytes written (<= destsize), or 0
+// for non-deterministic collations or any failure (caller falls back).
+size_t ComputeLocaleSortKey(char *dest, size_t destsize, const char *src,
+							size_t srclen, Oid collation);
+
 // free attribute stats slot
 void FreeAttrStatsSlot(AttStatsSlot *sslot);
 
