@@ -102,9 +102,9 @@ name: Apache Cloudberry Build
 
 on:
   push:
-    branches: [main, REL_2_STABLE]
+    branches: [main, cbdb-postgres-merge]
   pull_request:
-    branches: [main, REL_2_STABLE]
+    branches: [main, cbdb-postgres-merge]
     types: [opened, synchronize, reopened, edited]
   workflow_dispatch:
     inputs:
@@ -489,6 +489,45 @@ jobs:
         with:
           fetch-depth: 1
           submodules: true
+
+      - name: Checkout DevOps Scripts from Main Branch
+        if: needs.check-skip.outputs.should_skip != 'true'
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository }}
+          ref: main
+          sparse-checkout: |
+            devops/
+          sparse-checkout-cone-mode: false
+          path: main-devops
+
+      - name: Setup DevOps Scripts
+        if: needs.check-skip.outputs.should_skip != 'true'
+        run: |
+          # Copy devops directory from main branch checkout
+          if [ -d "main-devops/devops" ]; then
+            cp -r main-devops/devops ./
+            chmod +x devops/build/automation/cloudberry/scripts/*.sh
+            chmod +x devops/build/packaging/rpm/*.sh
+            chmod +x devops/build/packaging/deb/*.sh
+            echo "DevOps scripts copied from main branch"
+          else
+            echo "::error::DevOps directory not found in main branch"
+            exit 1
+          fi
+          # Clean up temporary directory
+          rm -rf main-devops
+
+      - name: Install ICU Development Libraries
+        if: needs.check-skip.outputs.should_skip != 'true'
+        run: |
+          set -eo pipefail
+          
+          echo "Installing ICU development libraries..."
+          sudo dnf install -y libicu-devel
+          
+          echo "ICU libraries installed successfully"
+          rpm -qa | grep libicu
 
       - name: Cloudberry Environment Initialization
         if: needs.check-skip.outputs.should_skip != 'true'

@@ -489,3 +489,5 @@ EXIT WHEN curtid > upto; /* in func */
 END LOOP; /* in func */
 END; $$ /* in func */
     LANGUAGE PLPGSQL;
+
+GRANT ALL ON SCHEMA public TO public;

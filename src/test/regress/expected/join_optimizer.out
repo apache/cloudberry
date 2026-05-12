@@ -1643,7 +1643,7 @@ SELECT * FROM (J1_TBL JOIN J2_TBL USING (i)) AS x WHERE J1_TBL.t = 'one';  -- er
 ERROR:  invalid reference to FROM-clause entry for table "j1_tbl"
 LINE 1: ... * FROM (J1_TBL JOIN J2_TBL USING (i)) AS x WHERE J1_TBL.t =...
                                                              ^
-HINT:  There is an entry for table "j1_tbl", but it cannot be referenced from this part of the query.
+DETAIL:  There is an entry for table "j1_tbl", but it cannot be referenced from this part of the query.
 SELECT * FROM J1_TBL JOIN J2_TBL USING (i) AS x WHERE x.i = 1;  -- ok
  i | j |  t  | k  
 ---+---+-----+----
@@ -1914,28 +1914,27 @@ select * from int4_tbl i4, tenk1 a
 where exists(select * from tenk1 b
              where a.twothousand = b.twothousand and a.fivethous <> b.fivethous)
       and i4.f1 = a.tenthous;
-                                                                                                                     QUERY PLAN                                                                                                                      
------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+                               QUERY PLAN                                
+-------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
-   ->  HashAggregate
-         Group Key: i4.f1, i4.ctid, i4.gp_segment_id, a.unique1, a.unique2, a.two, a.four, a.ten, a.twenty, a.hundred, a.thousand, a.twothousand, a.fivethous, a.tenthous, a.odd, a.even, a.stringu1, a.stringu2, a.string4, a.ctid, a.gp_segment_id
+   ->  Hash Semi Join
+         Hash Cond: (a.twothousand = b.twothousand)
+         Join Filter: (a.fivethous <> b.fivethous)
          ->  Redistribute Motion 3:3  (slice2; segments: 3)
-               Hash Key: i4.ctid, i4.gp_segment_id, a.ctid, a.gp_segment_id
-               ->  Hash Join
-                     Hash Cond: (b.twothousand = a.twothousand)
-                     Join Filter: (a.fivethous <> b.fivethous)
+               Hash Key: a.twothousand
+               ->  Nested Loop
+                     Join Filter: true
+                     ->  Broadcast Motion 3:3  (slice3; segments: 3)
+                           ->  Seq Scan on int4_tbl i4
+                     ->  Index Scan using tenk1_thous_tenthous on tenk1 a
+                           Index Cond: (tenthous = i4.f1)
+                           Filter: (NOT (twothousand IS NULL))
+         ->  Hash
+               ->  Redistribute Motion 3:3  (slice4; segments: 3)
+                     Hash Key: b.twothousand
                      ->  Seq Scan on tenk1 b
-                     ->  Hash
-                           ->  Broadcast Motion 3:3  (slice3; segments: 3)
-                                 ->  Nested Loop
-                                       Join Filter: true
-                                       ->  Broadcast Motion 3:3  (slice4; segments: 3)
-                                             ->  Seq Scan on int4_tbl i4
-                                       ->  Index Scan using tenk1_thous_tenthous on tenk1 a
-                                             Index Cond: (tenthous = i4.f1)
-                                             Filter: (NOT (twothousand IS NULL))
  Optimizer: GPORCA
-(19 rows)
+(18 rows)
 
 --
 -- More complicated constructs
@@ -2287,17 +2286,16 @@ rollback;
 --
 explain (costs off)
 select aa, bb, unique1, unique1
-  from tenk1 right join b on aa = unique1
+  from tenk1 right join b_star on aa = unique1
   where bb < bb and bb is null;
              QUERY PLAN              
 -------------------------------------
  Result
    One-Time Filter: false
- Optimizer: Postgres query optimizer
 (3 rows)
 
 select aa, bb, unique1, unique1
-  from tenk1 right join b on aa = unique1
+  from tenk1 right join b_star on aa = unique1
   where bb < bb and bb is null;
  aa | bb | unique1 | unique1 
 ----+----+---------+---------
@@ -2348,8 +2346,8 @@ order by 1, 2;
 (5 rows)
 
 --
--- regression test: check a case where join_clause_is_movable_into() gives
--- an imprecise result, causing an assertion failure
+-- regression test: check a case where join_clause_is_movable_into()
+-- used to give an imprecise result, causing an assertion failure
 --
 select count(*)
 from
@@ -2413,6 +2411,407 @@ where b.f1 = t.thousand and a.f1 = b.f1 and (a.f1+b.f1+999) = t.tenthous;
 
 reset enable_hashjoin;
 reset enable_nestloop;
+--
+-- checks for correct handling of quals in multiway outer joins
+--
+explain (costs off)
+select t1.f1
+from int4_tbl t1, int4_tbl t2
+  left join int4_tbl t3 on t3.f1 > 0
+  left join int4_tbl t4 on t3.f1 > 1
+where t4.f1 is null;
+                                      QUERY PLAN                                      
+--------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Nested Loop
+         Join Filter: true
+         ->  Broadcast Motion 3:3  (slice4; segments: 3)
+               ->  Seq Scan on int4_tbl t1
+         ->  Materialize
+               ->  Result
+                     Filter: (t4.f1 IS NULL)
+                     ->  Nested Loop Left Join
+                           Join Filter: (t3.f1 > 1)
+                           ->  Nested Loop Left Join
+                                 Join Filter: true
+                                 ->  Seq Scan on int4_tbl t2
+                                 ->  Materialize
+                                       ->  Broadcast Motion 3:3  (slice3; segments: 3)
+                                             ->  Seq Scan on int4_tbl t3
+                                                   Filter: (f1 > 0)
+                           ->  Materialize
+                                 ->  Broadcast Motion 3:3  (slice2; segments: 3)
+                                       ->  Seq Scan on int4_tbl t4
+ Optimizer: GPORCA
+(21 rows)
+
+select t1.f1
+from int4_tbl t1, int4_tbl t2
+  left join int4_tbl t3 on t3.f1 > 0
+  left join int4_tbl t4 on t3.f1 > 1
+where t4.f1 is null;
+ f1 
+----
+(0 rows)
+
+explain (costs off)
+select *
+from int4_tbl t1 left join int4_tbl t2 on true
+  left join int4_tbl t3 on t2.f1 > 0
+  left join int4_tbl t4 on t3.f1 > 0;
+                                QUERY PLAN                                
+--------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Nested Loop Left Join
+         Join Filter: (t3.f1 > 0)
+         ->  Nested Loop Left Join
+               Join Filter: (t2.f1 > 0)
+               ->  Nested Loop Left Join
+                     Join Filter: true
+                     ->  Seq Scan on int4_tbl t1
+                     ->  Materialize
+                           ->  Broadcast Motion 3:3  (slice4; segments: 3)
+                                 ->  Seq Scan on int4_tbl t2
+               ->  Materialize
+                     ->  Broadcast Motion 3:3  (slice3; segments: 3)
+                           ->  Seq Scan on int4_tbl t3
+         ->  Materialize
+               ->  Broadcast Motion 3:3  (slice2; segments: 3)
+                     ->  Seq Scan on int4_tbl t4
+ Optimizer: GPORCA
+(18 rows)
+
+explain (costs off)
+select * from onek t1
+  left join onek t2 on t1.unique1 = t2.unique1
+  left join onek t3 on t2.unique1 != t3.unique1
+  left join onek t4 on t3.unique1 = t4.unique1;
+                             QUERY PLAN                             
+--------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Hash Left Join
+         Hash Cond: (t3.unique1 = t4.unique1)
+         ->  Nested Loop Left Join
+               Join Filter: (t2.unique1 <> t3.unique1)
+               ->  Hash Left Join
+                     Hash Cond: (t1.unique1 = t2.unique1)
+                     ->  Seq Scan on onek t1
+                     ->  Hash
+                           ->  Seq Scan on onek t2
+               ->  Materialize
+                     ->  Broadcast Motion 3:3  (slice2; segments: 3)
+                           ->  Seq Scan on onek t3
+         ->  Hash
+               ->  Broadcast Motion 3:3  (slice3; segments: 3)
+                     ->  Seq Scan on onek t4
+ Optimizer: GPORCA
+(17 rows)
+
+explain (costs off)
+select * from int4_tbl t1
+  left join (select now() from int4_tbl t2
+             left join int4_tbl t3 on t2.f1 = t3.f1
+             left join int4_tbl t4 on t3.f1 = t4.f1) s on true
+  inner join int4_tbl t5 on true;
+                               QUERY PLAN                               
+------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Nested Loop Left Join
+         Join Filter: true
+         ->  Nested Loop
+               Join Filter: true
+               ->  Broadcast Motion 3:3  (slice3; segments: 3)
+                     ->  Seq Scan on int4_tbl t1
+               ->  Seq Scan on int4_tbl t5
+         ->  Materialize
+               ->  Result
+                     ->  Broadcast Motion 3:3  (slice2; segments: 3)
+                           ->  Hash Left Join
+                                 Hash Cond: (t3.f1 = t4.f1)
+                                 ->  Hash Left Join
+                                       Hash Cond: (t2.f1 = t3.f1)
+                                       ->  Seq Scan on int4_tbl t2
+                                       ->  Hash
+                                             ->  Seq Scan on int4_tbl t3
+                                 ->  Hash
+                                       ->  Seq Scan on int4_tbl t4
+ Optimizer: GPORCA
+(21 rows)
+
+explain (costs off)
+select * from int4_tbl t1
+  left join int4_tbl t2 on true
+  left join int4_tbl t3 on true
+  left join int4_tbl t4 on t2.f1 = t3.f1;
+                                QUERY PLAN                                
+--------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Nested Loop Left Join
+         Join Filter: (t2.f1 = t3.f1)
+         ->  Nested Loop Left Join
+               Join Filter: true
+               ->  Nested Loop Left Join
+                     Join Filter: true
+                     ->  Seq Scan on int4_tbl t1
+                     ->  Materialize
+                           ->  Broadcast Motion 3:3  (slice4; segments: 3)
+                                 ->  Seq Scan on int4_tbl t2
+               ->  Materialize
+                     ->  Broadcast Motion 3:3  (slice3; segments: 3)
+                           ->  Seq Scan on int4_tbl t3
+         ->  Materialize
+               ->  Broadcast Motion 3:3  (slice2; segments: 3)
+                     ->  Seq Scan on int4_tbl t4
+ Optimizer: GPORCA
+(18 rows)
+
+explain (costs off)
+select * from int4_tbl t1
+  left join int4_tbl t2 on true
+  left join int4_tbl t3 on t2.f1 = t3.f1
+  left join int4_tbl t4 on t3.f1 != t4.f1;
+                                QUERY PLAN                                
+--------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Nested Loop Left Join
+         Join Filter: (t3.f1 <> t4.f1)
+         ->  Hash Left Join
+               Hash Cond: (t2.f1 = t3.f1)
+               ->  Nested Loop Left Join
+                     Join Filter: true
+                     ->  Seq Scan on int4_tbl t1
+                     ->  Materialize
+                           ->  Broadcast Motion 3:3  (slice3; segments: 3)
+                                 ->  Seq Scan on int4_tbl t2
+               ->  Hash
+                     ->  Broadcast Motion 3:3  (slice4; segments: 3)
+                           ->  Seq Scan on int4_tbl t3
+         ->  Materialize
+               ->  Broadcast Motion 3:3  (slice2; segments: 3)
+                     ->  Seq Scan on int4_tbl t4
+ Optimizer: GPORCA
+(18 rows)
+
+explain (costs off)
+select * from int4_tbl t1
+  left join (int4_tbl t2 left join int4_tbl t3 on t2.f1 > 0) on t2.f1 > 1
+  left join int4_tbl t4 on t2.f1 > 2 and t3.f1 > 3
+where t1.f1 = coalesce(t2.f1, 1);
+                                         QUERY PLAN                                         
+--------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Nested Loop Left Join
+         Join Filter: ((t2.f1 > 2) AND (t3.f1 > 3))
+         ->  Result
+               Filter: (t1.f1 = COALESCE(t2.f1, 1))
+               ->  Nested Loop Left Join
+                     Join Filter: true
+                     ->  Seq Scan on int4_tbl t1
+                     ->  Materialize
+                           ->  Broadcast Motion 3:3  (slice3; segments: 3)
+                                 ->  Nested Loop Left Join
+                                       Join Filter: (t2.f1 > 0)
+                                       ->  Seq Scan on int4_tbl t2
+                                             Filter: (f1 > 1)
+                                       ->  Materialize
+                                             ->  Broadcast Motion 3:3  (slice4; segments: 3)
+                                                   ->  Seq Scan on int4_tbl t3
+         ->  Materialize
+               ->  Broadcast Motion 3:3  (slice2; segments: 3)
+                     ->  Seq Scan on int4_tbl t4
+ Optimizer: GPORCA
+(21 rows)
+
+explain (costs off)
+select * from int4_tbl t1
+  left join ((select t2.f1 from int4_tbl t2
+                left join int4_tbl t3 on t2.f1 > 0
+                where t3.f1 is null) s
+             left join tenk1 t4 on s.f1 > 1)
+    on s.f1 = t1.f1;
+                                   QUERY PLAN                                   
+--------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Hash Right Join
+         Hash Cond: (t2.f1 = t1.f1)
+         ->  Nested Loop Left Join
+               Join Filter: (t2.f1 > 1)
+               ->  Result
+                     Filter: (t3.f1 IS NULL)
+                     ->  Nested Loop Left Join
+                           Join Filter: (t2.f1 > 0)
+                           ->  Seq Scan on int4_tbl t2
+                           ->  Materialize
+                                 ->  Broadcast Motion 3:3  (slice3; segments: 3)
+                                       ->  Seq Scan on int4_tbl t3
+               ->  Materialize
+                     ->  Broadcast Motion 3:3  (slice2; segments: 3)
+                           ->  Seq Scan on tenk1 t4
+         ->  Hash
+               ->  Seq Scan on int4_tbl t1
+ Optimizer: GPORCA
+(19 rows)
+
+explain (costs off)
+select * from int4_tbl t1
+  left join ((select t2.f1 from int4_tbl t2
+                left join int4_tbl t3 on t2.f1 > 0
+                where t2.f1 <> coalesce(t3.f1, -1)) s
+             left join tenk1 t4 on s.f1 > 1)
+    on s.f1 = t1.f1;
+                                   QUERY PLAN                                   
+--------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Hash Right Join
+         Hash Cond: (t2.f1 = t1.f1)
+         ->  Nested Loop Left Join
+               Join Filter: (t2.f1 > 1)
+               ->  Result
+                     Filter: (t2.f1 <> COALESCE(t3.f1, '-1'::integer))
+                     ->  Nested Loop Left Join
+                           Join Filter: (t2.f1 > 0)
+                           ->  Seq Scan on int4_tbl t2
+                           ->  Materialize
+                                 ->  Broadcast Motion 3:3  (slice3; segments: 3)
+                                       ->  Seq Scan on int4_tbl t3
+               ->  Materialize
+                     ->  Broadcast Motion 3:3  (slice2; segments: 3)
+                           ->  Seq Scan on tenk1 t4
+         ->  Hash
+               ->  Seq Scan on int4_tbl t1
+ Optimizer: GPORCA
+(19 rows)
+
+explain (costs off)
+select * from onek t1
+    left join onek t2 on t1.unique1 = t2.unique1
+    left join onek t3 on t2.unique1 = t3.unique1
+    left join onek t4 on t3.unique1 = t4.unique1 and t2.unique2 = t4.unique2;
+                                 QUERY PLAN                                  
+-----------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Hash Left Join
+         Hash Cond: ((t3.unique1 = t4.unique1) AND (t2.unique2 = t4.unique2))
+         ->  Hash Left Join
+               Hash Cond: (t2.unique1 = t3.unique1)
+               ->  Hash Left Join
+                     Hash Cond: (t1.unique1 = t2.unique1)
+                     ->  Seq Scan on onek t1
+                     ->  Hash
+                           ->  Seq Scan on onek t2
+               ->  Hash
+                     ->  Seq Scan on onek t3
+         ->  Hash
+               ->  Seq Scan on onek t4
+ Optimizer: GPORCA
+(15 rows)
+
+explain (costs off)
+select * from int8_tbl t1 left join
+    (int8_tbl t2 left join int8_tbl t3 full join int8_tbl t4 on false on false)
+    left join int8_tbl t5 on t2.q1 = t5.q1
+on t2.q2 = 123;
+                          QUERY PLAN                          
+--------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Nested Loop Left Join
+         Join Filter: true
+         ->  Seq Scan on int8_tbl t1
+         ->  Materialize
+               ->  Broadcast Motion 3:3  (slice2; segments: 3)
+                     ->  Hash Left Join
+                           Hash Cond: (t2.q1 = t5.q1)
+                           ->  Nested Loop Left Join
+                                 Join Filter: true
+                                 ->  Seq Scan on int8_tbl t2
+                                       Filter: (q2 = 123)
+                                 ->  Result
+                                       One-Time Filter: false
+                           ->  Hash
+                                 ->  Seq Scan on int8_tbl t5
+ Optimizer: GPORCA
+(17 rows)
+
+explain (costs off)
+select * from int8_tbl t1
+    left join int8_tbl t2 on true
+    left join lateral
+      (select * from int8_tbl t3 where t3.q1 = t2.q1 offset 0) s
+      on t2.q1 = 1;
+                                 QUERY PLAN                                  
+-----------------------------------------------------------------------------
+ Nested Loop Left Join
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         ->  Seq Scan on int8_tbl t1
+   ->  Materialize
+         ->  Nested Loop Left Join
+               Join Filter: (t2.q1 = 1)
+               ->  Gather Motion 3:1  (slice2; segments: 3)
+                     ->  Seq Scan on int8_tbl t2
+               ->  Materialize
+                     ->  Result
+                           Filter: (t3.q1 = t2.q1)
+                           ->  Materialize
+                                 ->  Gather Motion 3:1  (slice3; segments: 3)
+                                       ->  Seq Scan on int8_tbl t3
+ Optimizer: GPORCA
+(15 rows)
+
+explain (costs off)
+select * from int8_tbl t1
+    left join int8_tbl t2 on true
+    left join lateral
+      (select * from generate_series(t2.q1, 100)) s
+      on t2.q1 = 1;
+                          QUERY PLAN                           
+---------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Nested Loop Left Join
+         ->  Seq Scan on int8_tbl t1
+         ->  Materialize
+               ->  Broadcast Motion 3:3  (slice2; segments: 3)
+                     ->  Nested Loop Left Join
+                           Join Filter: (t2.q1 = 1)
+                           ->  Seq Scan on int8_tbl t2
+                           ->  Function Scan on generate_series
+ Optimizer: GPORCA
+(10 rows)
+
+explain (costs off)
+select * from int8_tbl t1
+    left join int8_tbl t2 on true
+    left join lateral
+      (select t2.q1 from int8_tbl t3) s
+      on t2.q1 = 1;
+ERROR:  could not devise a query plan for the given query
+explain (costs off)
+select * from onek t1
+    left join onek t2 on true
+    left join lateral
+      (select * from onek t3 where t3.two = t2.two offset 0) s
+      on t2.unique1 = 1;
+                                    QUERY PLAN                                     
+-----------------------------------------------------------------------------------
+ Nested Loop Left Join
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         ->  Seq Scan on onek t1
+   ->  Materialize
+         ->  Nested Loop Left Join
+               Join Filter: (t2.unique1 = 1)
+               ->  Gather Motion 3:1  (slice2; segments: 3)
+                     ->  Seq Scan on onek t2
+               ->  Materialize
+                     ->  Memoize
+                           Cache Key: t2.two
+                           Cache Mode: binary
+                           ->  Result
+                                 Filter: (t3.two = t2.two)
+                                 ->  Materialize
+                                       ->  Gather Motion 3:1  (slice3; segments: 3)
+                                             ->  Seq Scan on onek t3
+ Optimizer: GPORCA
+(18 rows)
+
 --
 -- check a case where we formerly got confused by conflicting sort orders
 -- in redundant merge join path keys
@@ -2504,6 +2903,42 @@ select count(*) from
 
 reset enable_mergejoin;
 reset enable_hashjoin;
+set enable_hashjoin = 0;
+set enable_nestloop = 0;
+set enable_hashagg = 0;
+--
+-- Check that we use the pathkeys from a prefix of the group by / order by
+-- clause for the join pathkeys when that prefix covers all join quals.  We
+-- expect this to lead to an incremental sort for the group by / order by.
+--
+explain (costs off)
+select x.thousand, x.twothousand, count(*)
+from tenk1 x inner join tenk1 y on x.thousand = y.thousand
+group by x.thousand, x.twothousand
+order by x.thousand desc, x.twothousand;
+                                 QUERY PLAN                                  
+-----------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Merge Key: x.thousand, x.twothousand
+   ->  Sort
+         Sort Key: x.thousand DESC, x.twothousand
+         ->  HashAggregate
+               Group Key: x.thousand, x.twothousand
+               ->  Hash Join
+                     Hash Cond: (x.thousand = y.thousand)
+                     ->  Redistribute Motion 3:3  (slice2; segments: 3)
+                           Hash Key: x.thousand
+                           ->  Seq Scan on tenk1 x
+                     ->  Hash
+                           ->  Redistribute Motion 3:3  (slice3; segments: 3)
+                                 Hash Key: y.thousand
+                                 ->  Seq Scan on tenk1 y
+ Optimizer: GPORCA
+(16 rows)
+
+reset enable_hashagg;
+reset enable_nestloop;
+reset enable_hashjoin;
 --
 -- Clean up
 --
@@ -2588,6 +3023,31 @@ select t1.*, t2.*, unnamed_join.* from
 ---+---+---+---+---+---
 (0 rows)
 
+select foo.*, unnamed_join.* from
+  t1 join t2 using (a) as foo, t3 as unnamed_join
+  for update of unnamed_join;
+ a | x | y 
+---+---+---
+(0 rows)
+
+select foo.*, unnamed_join.* from
+  t1 join t2 using (a) as foo, t3 as unnamed_join
+  for update of foo;
+ERROR:  FOR UPDATE cannot be applied to a join
+LINE 3:   for update of foo;
+                        ^
+select bar.*, unnamed_join.* from
+  (t1 join t2 using (a) as foo) as bar, t3 as unnamed_join
+  for update of foo;
+ERROR:  relation "foo" in FOR UPDATE clause not found in FROM clause
+LINE 3:   for update of foo;
+                        ^
+select bar.*, unnamed_join.* from
+  (t1 join t2 using (a) as foo) as bar, t3 as unnamed_join
+  for update of bar;
+ERROR:  FOR UPDATE cannot be applied to a join
+LINE 3:   for update of bar;
+                        ^
 --
 -- regression test for 8.1 merge right join bug
 --
@@ -2619,6 +3079,65 @@ select tt1.*, tt2.* from tt2 right join tt1 on tt1.joincol = tt2.joincol;
       1 |      11 |     21 |      11
       1 |      11 |     22 |      11
 (3 rows)
+
+reset enable_hashjoin;
+reset enable_nestloop;
+--
+-- regression test for bug #18522 (merge-right-anti-join in inner_unique cases)
+--
+create temp table tbl_ra(a int unique, b int);
+insert into tbl_ra select i, i%100 from generate_series(1,1000)i;
+create index on tbl_ra (b);
+analyze tbl_ra;
+set enable_hashjoin to off;
+set enable_nestloop to off;
+-- ensure we get a merge right anti join
+explain (costs off)
+select * from tbl_ra t1
+where not exists (select 1 from tbl_ra t2 where t2.b = t1.a) and t1.b < 2;
+                                 QUERY PLAN                                  
+-----------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Result
+         Filter: (COALESCE((count(*)), '0'::bigint) = '0'::bigint)
+         ->  Hash Left Join
+               Hash Cond: (t1.a = t2.b)
+               ->  Index Scan using tbl_ra_b_idx on tbl_ra t1
+                     Index Cond: (b < 2)
+               ->  Hash
+                     ->  HashAggregate
+                           Group Key: t2.b
+                           ->  Redistribute Motion 3:3  (slice2; segments: 3)
+                                 Hash Key: t2.b
+                                 ->  Seq Scan on tbl_ra t2
+ Optimizer: GPORCA
+(14 rows)
+
+-- and check we get the expected results
+select * from tbl_ra t1
+where not exists (select 1 from tbl_ra t2 where t2.b = t1.a) and t1.b < 2;
+  a   | b 
+------+---
+  100 | 0
+  101 | 1
+  200 | 0
+  201 | 1
+  300 | 0
+  301 | 1
+  400 | 0
+  401 | 1
+  500 | 0
+  501 | 1
+  600 | 0
+  601 | 1
+  700 | 0
+  701 | 1
+  800 | 0
+  801 | 1
+  900 | 0
+  901 | 1
+ 1000 | 0
+(19 rows)
 
 reset enable_hashjoin;
 reset enable_nestloop;
@@ -2666,27 +3185,149 @@ create temp table tt3(f1 int, f2 text);
 NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into tt3 select x, repeat('xyzzy', 100) from generate_series(1,10000) x;
-create index tt3i on tt3(f1);
 analyze tt3;
 create temp table tt4(f1 int);
 NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into tt4 values (0),(1),(9999);
 analyze tt4;
+set enable_nestloop to off;
+EXPLAIN (COSTS OFF)
 SELECT a.f1
 FROM tt4 a
 LEFT JOIN (
         SELECT b.f1
         FROM tt3 b LEFT JOIN tt3 c ON (b.f1 = c.f1)
-        WHERE c.f1 IS NULL
+        WHERE COALESCE(c.f1, 0) = 0
 ) AS d ON (a.f1 = d.f1)
-WHERE d.f1 IS NULL;
+WHERE COALESCE(d.f1, 0) = 0
+ORDER BY 1;
+                    QUERY PLAN                    
+--------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Merge Key: a.f1
+   ->  Sort
+         Sort Key: a.f1
+         ->  Result
+               Filter: (COALESCE(b.f1, 0) = 0)
+               ->  Hash Right Join
+                     Hash Cond: (b.f1 = a.f1)
+                     ->  Result
+                           Filter: (COALESCE(c.f1, 0) = 0)
+                           ->  Hash Left Join
+                                 Hash Cond: (b.f1 = c.f1)
+                                 ->  Seq Scan on tt3 b
+                                 ->  Hash
+                                       ->  Seq Scan on tt3 c
+                     ->  Hash
+                           ->  Seq Scan on tt4 a
+ Optimizer: GPORCA
+(18 rows)
+
+SELECT a.f1
+FROM tt4 a
+LEFT JOIN (
+        SELECT b.f1
+        FROM tt3 b LEFT JOIN tt3 c ON (b.f1 = c.f1)
+        WHERE COALESCE(c.f1, 0) = 0
+) AS d ON (a.f1 = d.f1)
+WHERE COALESCE(d.f1, 0) = 0
+ORDER BY 1;
   f1  
 ------
- 9999
     0
     1
+ 9999
 (3 rows)
+
+reset enable_nestloop;
+--
+-- basic semijoin and antijoin recognition tests
+--
+explain (costs off)
+select a.* from tenk1 a
+where unique1 in (select unique2 from tenk1 b);
+                              QUERY PLAN                              
+----------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Hash Semi Join
+         Hash Cond: (a.unique1 = b.unique2)
+         ->  Seq Scan on tenk1 a
+         ->  Hash
+               ->  Redistribute Motion 3:3  (slice2; segments: 3)
+                     Hash Key: b.unique2
+                     ->  Seq Scan on tenk1 b
+ Optimizer: GPORCA
+(9 rows)
+
+-- sadly, this is not an antijoin
+explain (costs off)
+select a.* from tenk1 a
+where unique1 not in (select unique2 from tenk1 b);
+                          QUERY PLAN                          
+--------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Hash Left Anti Semi (Not-In) Join
+         Hash Cond: (a.unique1 = b.unique2)
+         ->  Seq Scan on tenk1 a
+         ->  Hash
+               ->  Broadcast Motion 3:3  (slice2; segments: 3)
+                     ->  Seq Scan on tenk1 b
+ Optimizer: GPORCA
+(8 rows)
+
+explain (costs off)
+select a.* from tenk1 a
+where exists (select 1 from tenk1 b where a.unique1 = b.unique2);
+                                QUERY PLAN                                
+--------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Hash Semi Join
+         Hash Cond: (a.unique1 = b.unique2)
+         ->  Index Scan using tenk1_unique1 on tenk1 a
+               Index Cond: (unique1 IS NOT NULL)
+         ->  Hash
+               ->  Result
+                     ->  Redistribute Motion 3:3  (slice2; segments: 3)
+                           Hash Key: b.unique2
+                           ->  Seq Scan on tenk1 b
+ Optimizer: GPORCA
+(11 rows)
+
+explain (costs off)
+select a.* from tenk1 a
+where not exists (select 1 from tenk1 b where a.unique1 = b.unique2);
+                            QUERY PLAN                            
+------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Hash Anti Join
+         Hash Cond: (a.unique1 = b.unique2)
+         ->  Seq Scan on tenk1 a
+         ->  Hash
+               ->  Result
+                     ->  Redistribute Motion 3:3  (slice2; segments: 3)
+                           Hash Key: b.unique2
+                           ->  Seq Scan on tenk1 b
+ Optimizer: GPORCA
+(10 rows)
+
+explain (costs off)
+select a.* from tenk1 a left join tenk1 b on a.unique1 = b.unique2
+where b.unique2 is null;
+                            QUERY PLAN                            
+------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Result
+         Filter: (b.unique2 IS NULL)
+         ->  Hash Left Join
+               Hash Cond: (a.unique1 = b.unique2)
+               ->  Seq Scan on tenk1 a
+               ->  Hash
+                     ->  Redistribute Motion 3:3  (slice2; segments: 3)
+                           Hash Key: b.unique2
+                           ->  Seq Scan on tenk1 b
+ Optimizer: GPORCA
+(11 rows)
 
 --
 -- regression test for proper handling of outer joins within antijoins
@@ -3393,11 +4034,11 @@ select * from
   tenk1 join int4_tbl on f1 = twothousand,
   q1, q2
 where thousand = (q1 + q2);
-                                QUERY PLAN                                 
----------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)
-   ->  Hash Join
-         Hash Cond: (tenk1.twothousand = int4_tbl.f1)
+                          QUERY PLAN                          
+--------------------------------------------------------------
+ Hash Join
+   Hash Cond: (tenk1.twothousand = int4_tbl.f1)
+   ->  Gather Motion 3:1  (slice1; segments: 3)
          ->  Nested Loop
                Join Filter: true
                ->  Broadcast Motion 3:3  (slice2; segments: 3)
@@ -3408,10 +4049,10 @@ where thousand = (q1 + q2);
                            ->  Seq Scan on q2
                ->  Index Scan using tenk1_thous_tenthous on tenk1
                      Index Cond: (thousand = (q1.q1 + q2.q2))
-         ->  Hash
-               ->  Broadcast Motion 3:3  (slice4; segments: 3)
-                     ->  Seq Scan on int4_tbl
- Optimizer: Pivotal Optimizer (GPORCA)
+   ->  Hash
+         ->  Gather Motion 3:1  (slice4; segments: 3)
+               ->  Seq Scan on int4_tbl
+ Optimizer: GPORCA
 (17 rows)
 
 --
@@ -3664,6 +4305,84 @@ where b;
  0 | t | t
 (2 rows)
 
+-- Test PHV in a semijoin qual, which confused useless-RTE removal (bug #17700)
+explain (verbose, costs off)
+with ctetable as not materialized ( select 1 as f1 )
+select * from ctetable c1
+where f1 in ( select c3.f1 from ctetable c2 full join ctetable c3 on true );
+             QUERY PLAN             
+------------------------------------
+ Hash Semi Join
+   Output: (1)
+   Hash Cond: ((1) = (1))
+   ->  Result
+         Output: 1
+   ->  Hash
+         Output: (1)
+         ->  Merge Full Join
+               Output: (1)
+               ->  Result
+                     Output: 1
+               ->  Materialize
+                     Output: (1)
+                     ->  Result
+                           Output: 1
+ Optimizer: GPORCA
+(17 rows)
+
+with ctetable as not materialized ( select 1 as f1 )
+select * from ctetable c1
+where f1 in ( select c3.f1 from ctetable c2 full join ctetable c3 on true );
+ f1 
+----
+  1
+(1 row)
+
+-- Test PHV that winds up in a Result node, despite having nonempty nullingrels
+explain (verbose, costs off)
+select table_catalog, table_name
+from int4_tbl t1
+  inner join (int8_tbl t2
+              left join information_schema.column_udt_usage on null)
+  on null;
+                                                QUERY PLAN                                                
+----------------------------------------------------------------------------------------------------------
+ Result
+   Output: 'regression'::information_schema.sql_identifier, (c.relname)::information_schema.sql_identifier
+   One-Time Filter: false
+ Optimizer: GPORCA
+(5 rows)
+
+-- Test handling of qual pushdown to appendrel members with non-Var outputs
+explain (verbose, costs off)
+select * from int4_tbl left join (
+  select text 'foo' union all select text 'bar'
+) ss(x) on true
+where ss.x is null;
+                     QUERY PLAN                     
+----------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Output: f1, ('foo'::text)
+   ->  Result
+         Output: f1, ('foo'::text)
+         Filter: (('foo'::text) IS NULL)
+         ->  Nested Loop Left Join
+               Output: f1, ('foo'::text)
+               Join Filter: true
+               ->  Seq Scan on public.int4_tbl
+                     Output: f1
+               ->  Append
+                     ->  Materialize
+                           Output: ('foo'::text)
+                           ->  Result
+                                 Output: 'foo'::text
+                     ->  Materialize
+                           Output: ('bar'::text)
+                           ->  Result
+                                 Output: 'bar'::text
+ Optimizer: GPORCA
+(21 rows)
+
 --
 -- test inlining of immutable functions
 --
@@ -3894,6 +4613,37 @@ select * from mki4(42);
 
 drop function mki8(bigint, bigint);
 drop function mki4(int);
+-- test const-folding of a whole-row Var into a per-field Var
+-- (need to inline a function to reach this case, else parser does it)
+create function f_field_select(t onek) returns int4 as
+$$ select t.unique2; $$ language sql immutable;
+explain (verbose, costs off)
+select (t2.*).unique1, f_field_select(t2) from tenk1 t1
+    left join onek t2 on t1.unique1 = t2.unique1
+    left join int8_tbl t3 on true;
+                             QUERY PLAN                             
+--------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Output: t2.unique1, t2.unique2
+   ->  Hash Left Join
+         Output: t2.unique1, t2.unique2
+         Hash Cond: (t1.unique1 = t2.unique1)
+         ->  Nested Loop Left Join
+               Output: t1.unique1
+               Join Filter: true
+               ->  Seq Scan on public.tenk1 t1
+                     Output: t1.unique1
+               ->  Materialize
+                     ->  Broadcast Motion 3:3  (slice2; segments: 3)
+                           ->  Seq Scan on public.int8_tbl t3
+         ->  Hash
+               Output: t2.unique1, t2.unique2
+               ->  Seq Scan on public.onek t2
+                     Output: t2.unique1, t2.unique2
+ Optimizer: GPORCA
+(19 rows)
+
+drop function f_field_select(t onek);
 --
 -- test extraction of restriction OR clauses from join OR clause
 -- (we used to only do this for indexable clauses)
@@ -4071,18 +4821,18 @@ select count(*) from
                      Join Filter: (a.unique2 = b.unique1)
                      ->  Redistribute Motion 3:3  (slice2; segments: 3)
                            Hash Key: a.thousand
-                           ->  Nested Loop
-                                 Join Filter: true
-                                 ->  Redistribute Motion 3:3  (slice3; segments: 3)
-                                       Hash Key: b.unique2
-                                       ->  Nested Loop
-                                             Join Filter: true
-                                             ->  Broadcast Motion 3:3  (slice4; segments: 3)
-                                                   ->  Seq Scan on int4_tbl
-                                             ->  Index Scan using tenk1_thous_tenthous on tenk1 b
-                                                   Index Cond: (thousand = int4_tbl.f1)
-                                 ->  Index Scan using tenk1_unique1 on tenk1 a
-                                       Index Cond: (unique1 = b.unique2)
+                           ->  Hash Join
+                                 Hash Cond: (b.thousand = int4_tbl.f1)
+                                 ->  Hash Join
+                                       Hash Cond: (a.unique1 = b.unique2)
+                                       ->  Seq Scan on tenk1 a
+                                       ->  Hash
+                                             ->  Redistribute Motion 3:3  (slice3; segments: 3)
+                                                   Hash Key: b.unique2
+                                                   ->  Seq Scan on tenk1 b
+                                 ->  Hash
+                                       ->  Broadcast Motion 3:3  (slice4; segments: 3)
+                                             ->  Seq Scan on int4_tbl
                      ->  Hash
                            ->  Redistribute Motion 3:3  (slice5; segments: 3)
                                  Hash Key: c.thousand
@@ -4121,18 +4871,18 @@ select b.unique1 from
                            Join Filter: (b.unique1 = 42)
                            ->  Redistribute Motion 3:3  (slice3; segments: 3)
                                  Hash Key: a.thousand
-                                 ->  Nested Loop
-                                       Join Filter: true
-                                       ->  Redistribute Motion 3:3  (slice4; segments: 3)
-                                             Hash Key: b.unique2
-                                             ->  Nested Loop
-                                                   Join Filter: true
-                                                   ->  Broadcast Motion 3:3  (slice5; segments: 3)
-                                                         ->  Seq Scan on int4_tbl i1
-                                                   ->  Index Scan using tenk1_thous_tenthous on tenk1 b
-                                                         Index Cond: (thousand = i1.f1)
-                                       ->  Index Scan using tenk1_unique1 on tenk1 a
-                                             Index Cond: (unique1 = b.unique2)
+                                 ->  Hash Join
+                                       Hash Cond: (b.thousand = i1.f1)
+                                       ->  Hash Join
+                                             Hash Cond: (b.unique2 = a.unique1)
+                                             ->  Redistribute Motion 3:3  (slice4; segments: 3)
+                                                   Hash Key: b.unique2
+                                                   ->  Seq Scan on tenk1 b
+                                             ->  Hash
+                                                   ->  Seq Scan on tenk1 a
+                                       ->  Hash
+                                             ->  Broadcast Motion 3:3  (slice5; segments: 3)
+                                                   ->  Seq Scan on int4_tbl i1
                            ->  Hash
                                  ->  Redistribute Motion 3:3  (slice6; segments: 3)
                                        Hash Key: c.thousand
@@ -4320,6 +5070,44 @@ select a.unique1, b.unique1, c.unique1, coalesce(b.twothousand, a.twothousand)
 ---------+---------+---------+----------
 (0 rows)
 
+-- related case
+explain (costs off)
+select * from int8_tbl t1 left join int8_tbl t2 on t1.q2 = t2.q1,
+  lateral (select * from int8_tbl t3 where t2.q1 = t2.q2) ss;
+                           QUERY PLAN                            
+-----------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Nested Loop
+         ->  Hash Left Join
+               Hash Cond: (t1.q2 = t2.q1)
+               Filter: (t2.q1 = t2.q2)
+               ->  Redistribute Motion 3:3  (slice2; segments: 3)
+                     Hash Key: t1.q2
+                     ->  Seq Scan on int8_tbl t1
+               ->  Hash
+                     ->  Seq Scan on int8_tbl t2
+         ->  Materialize
+               ->  Broadcast Motion 3:3  (slice3; segments: 3)
+                     ->  Seq Scan on int8_tbl t3
+ Optimizer: GPORCA
+(14 rows)
+
+select * from int8_tbl t1 left join int8_tbl t2 on t1.q2 = t2.q1,
+  lateral (select * from int8_tbl t3 where t2.q1 = t2.q2) ss;
+        q1        |        q2        |        q1        |        q2        |        q1        |        q2         
+------------------+------------------+------------------+------------------+------------------+-------------------
+              123 | 4567890123456789 | 4567890123456789 | 4567890123456789 |              123 |               456
+              123 | 4567890123456789 | 4567890123456789 | 4567890123456789 |              123 |  4567890123456789
+              123 | 4567890123456789 | 4567890123456789 | 4567890123456789 | 4567890123456789 |               123
+              123 | 4567890123456789 | 4567890123456789 | 4567890123456789 | 4567890123456789 |  4567890123456789
+              123 | 4567890123456789 | 4567890123456789 | 4567890123456789 | 4567890123456789 | -4567890123456789
+ 4567890123456789 | 4567890123456789 | 4567890123456789 | 4567890123456789 |              123 |               456
+ 4567890123456789 | 4567890123456789 | 4567890123456789 | 4567890123456789 |              123 |  4567890123456789
+ 4567890123456789 | 4567890123456789 | 4567890123456789 | 4567890123456789 | 4567890123456789 |               123
+ 4567890123456789 | 4567890123456789 | 4567890123456789 | 4567890123456789 | 4567890123456789 |  4567890123456789
+ 4567890123456789 | 4567890123456789 | 4567890123456789 | 4567890123456789 | 4567890123456789 | -4567890123456789
+(10 rows)
+
 --
 -- check handling of join aliases when flattening multiple levels of subquery
 --
@@ -4381,6 +5169,67 @@ using (join_key);
        0 |       0 |       666
        1 |         |          
 (2 rows)
+
+--
+-- check handling of a variable-free join alias
+--
+explain (verbose, costs off)
+select * from
+int4_tbl i0 left join
+( (select *, 123 as x from int4_tbl i1) ss1
+  left join
+  (select *, q2 as x from int8_tbl i2) ss2
+  using (x)
+) ss0
+on (i0.f1 = ss0.f1)
+order by i0.f1, x;
+                                   QUERY PLAN                                   
+--------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Output: i0.f1, (((123))::bigint), i1.f1, i2.q1, i2.q2
+   Merge Key: i0.f1, (((123))::bigint)
+   ->  Sort
+         Output: i0.f1, (((123))::bigint), i1.f1, i2.q1, i2.q2
+         Sort Key: i0.f1, (((123))::bigint)
+         ->  Hash Left Join
+               Output: i0.f1, (123), i1.f1, i2.q1, i2.q2
+               Hash Cond: (i0.f1 = i1.f1)
+               ->  Seq Scan on public.int4_tbl i0
+                     Output: i0.f1
+               ->  Hash
+                     Output: i1.f1, (123), i2.q1, i2.q2
+                     ->  Hash Left Join
+                           Output: i1.f1, (123), i2.q1, i2.q2
+                           Hash Cond: (((123))::bigint = i2.q2)
+                           ->  Seq Scan on public.int4_tbl i1
+                                 Output: 123, i1.f1
+                           ->  Hash
+                                 Output: i2.q1, i2.q2
+                                 ->  Broadcast Motion 3:3  (slice2; segments: 3)
+                                       Output: i2.q1, i2.q2
+                                       ->  Seq Scan on public.int8_tbl i2
+                                             Output: i2.q1, i2.q2
+                                             Filter: (i2.q2 = 123)
+ Optimizer: GPORCA
+(27 rows)
+
+select * from
+int4_tbl i0 left join
+( (select *, 123 as x from int4_tbl i1) ss1
+  left join
+  (select *, q2 as x from int8_tbl i2) ss2
+  using (x)
+) ss0
+on (i0.f1 = ss0.f1)
+order by i0.f1, x;
+     f1      |  x  |     f1      |        q1        | q2  
+-------------+-----+-------------+------------------+-----
+           0 | 123 |           0 | 4567890123456789 | 123
+      123456 | 123 |      123456 | 4567890123456789 | 123
+     -123456 | 123 |     -123456 | 4567890123456789 | 123
+  2147483647 | 123 |  2147483647 | 4567890123456789 | 123
+ -2147483647 | 123 | -2147483647 | 4567890123456789 | 123
+(5 rows)
 
 --
 -- test successful handling of nested outer joins with degenerate join quals
@@ -4692,6 +5541,62 @@ select * from
  doh! | 123 | 456 | hi de ho neighbor |   
 (2 rows)
 
+-- check handling of a variable-free qual for a non-commutable outer join
+explain (costs off)
+select nspname
+from (select 1 as x) ss1
+left join
+( select n.nspname, c.relname
+  from pg_class c left join pg_namespace n on n.oid = c.relnamespace
+  where c.relkind = 'r'
+) ss2 on false;
+          QUERY PLAN           
+-------------------------------
+ Nested Loop Left Join
+   Join Filter: false
+   ->  Result
+   ->  Result
+         One-Time Filter: false
+ Optimizer: GPORCA
+(6 rows)
+
+-- check handling of apparently-commutable outer joins with non-commutable
+-- joins between them
+explain (costs off)
+select 1 from
+  int4_tbl i4
+  left join int8_tbl i8 on i4.f1 is not null
+  left join (select 1 as a) ss1 on null
+  join int4_tbl i42 on ss1.a is null or i8.q1 <> i8.q2
+  right join (select 2 as b) ss2
+  on ss2.b < i4.f1;
+                                      QUERY PLAN                                      
+--------------------------------------------------------------------------------------
+ Nested Loop Left Join
+   Join Filter: ((2) < i4.f1)
+   ->  Result
+   ->  Materialize
+         ->  Gather Motion 3:1  (slice1; segments: 3)
+               ->  Nested Loop
+                     Join Filter: true
+                     ->  Result
+                           Filter: (((NULL::integer) IS NULL) OR (i8.q1 <> i8.q2))
+                           ->  Nested Loop Left Join
+                                 Join Filter: (NOT (i4.f1 IS NULL))
+                                 ->  Nested Loop Left Join
+                                       Join Filter: true
+                                       ->  Seq Scan on int4_tbl i4
+                                       ->  Result
+                                             One-Time Filter: false
+                                 ->  Materialize
+                                       ->  Broadcast Motion 3:3  (slice3; segments: 3)
+                                             ->  Seq Scan on int8_tbl i8
+                     ->  Materialize
+                           ->  Broadcast Motion 3:3  (slice2; segments: 3)
+                                 ->  Seq Scan on int4_tbl i42
+ Optimizer: GPORCA
+(23 rows)
+
 --
 -- test for appropriate join order in the presence of lateral references
 --
@@ -4750,6 +5655,57 @@ select 1 from
 where tt1.f1 = ss1.c0;
 */
 --end_ignore
+explain (verbose, costs off)
+select 1 from
+  int4_tbl as i4
+  inner join
+    ((select 42 as n from int4_tbl x1 left join int8_tbl x2 on f1 = q1) as ss1
+     right join (select 1 as z) as ss2 on true)
+  on false,
+  lateral (select i4.f1, ss1.n from int8_tbl as i8 limit 1) as ss3;
+       QUERY PLAN        
+-------------------------
+ Result
+   Output: 1
+   One-Time Filter: false
+ Optimizer: GPORCA
+(5 rows)
+
+select 1 from
+  int4_tbl as i4
+  inner join
+    ((select 42 as n from int4_tbl x1 left join int8_tbl x2 on f1 = q1) as ss1
+     right join (select 1 as z) as ss2 on true)
+  on false,
+  lateral (select i4.f1, ss1.n from int8_tbl as i8 limit 1) as ss3;
+ ?column? 
+----------
+(0 rows)
+
+--
+-- check a case where we formerly generated invalid parameterized paths
+--
+begin;
+create temp table t (a int unique);
+explain (costs off)
+select 1 from t t1
+  join lateral (select t1.a from (select 1) foo offset 0) as s1 on true
+  join
+    (select 1 from t t2
+       inner join (t t3
+                   left join (t t4 left join t t5 on t4.a = 1)
+                   on t3.a = t4.a)
+       on false
+     where t3.a = coalesce(t5.a,1)) as s2
+  on true;
+       QUERY PLAN        
+-------------------------
+ Result
+   One-Time Filter: false
+ Optimizer: GPORCA
+(3 rows)
+
+rollback;
 --
 -- check a case in which a PlaceHolderVar forces join order
 --
@@ -4953,6 +5909,154 @@ reset enable_hashjoin;
 reset enable_nestloop;
 reset enable_mergejoin;
 --
+-- test join strength reduction with a SubPlan providing the proof
+--
+explain (costs off)
+select a.unique1, b.unique2
+  from onek a left join onek b on a.unique1 = b.unique2
+  where b.unique2 = any (select q1 from int8_tbl c where c.q1 < b.unique1);
+                              QUERY PLAN                               
+-----------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Hash Semi Join
+         Hash Cond: ((b.unique2)::bigint = c.q1)
+         Join Filter: (c.q1 < b.unique1)
+         ->  Hash Left Join
+               Hash Cond: (a.unique1 = b.unique2)
+               ->  Seq Scan on onek a
+               ->  Hash
+                     ->  Redistribute Motion 3:3  (slice2; segments: 3)
+                           Hash Key: b.unique2
+                           ->  Seq Scan on onek b
+         ->  Hash
+               ->  Broadcast Motion 3:3  (slice3; segments: 3)
+                     ->  Seq Scan on int8_tbl c
+ Optimizer: GPORCA
+(15 rows)
+
+select a.unique1, b.unique2
+  from onek a left join onek b on a.unique1 = b.unique2
+  where b.unique2 = any (select q1 from int8_tbl c where c.q1 < b.unique1);
+ unique1 | unique2 
+---------+---------
+     123 |     123
+(1 row)
+
+--
+-- test full-join strength reduction
+--
+explain (costs off)
+select a.unique1, b.unique2
+  from onek a full join onek b on a.unique1 = b.unique2
+  where a.unique1 = 42;
+                          QUERY PLAN                           
+---------------------------------------------------------------
+ Hash Left Join
+   Hash Cond: (a.unique1 = b.unique2)
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         ->  Index Only Scan using onek_unique1 on onek a
+               Index Cond: (unique1 = 42)
+   ->  Hash
+         ->  Gather Motion 3:1  (slice2; segments: 3)
+               ->  Index Only Scan using onek_unique2 on onek b
+                     Index Cond: (unique2 = 42)
+ Optimizer: GPORCA
+(10 rows)
+
+select a.unique1, b.unique2
+  from onek a full join onek b on a.unique1 = b.unique2
+  where a.unique1 = 42;
+ unique1 | unique2 
+---------+---------
+      42 |      42
+(1 row)
+
+explain (costs off)
+select a.unique1, b.unique2
+  from onek a full join onek b on a.unique1 = b.unique2
+  where b.unique2 = 43;
+                              QUERY PLAN                               
+-----------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Result
+         Filter: (b.unique2 = 43)
+         ->  Hash Full Join
+               Hash Cond: (a.unique1 = b.unique2)
+               ->  Seq Scan on onek a
+               ->  Hash
+                     ->  Redistribute Motion 3:3  (slice2; segments: 3)
+                           Hash Key: b.unique2
+                           ->  Seq Scan on onek b
+ Optimizer: GPORCA
+(11 rows)
+
+select a.unique1, b.unique2
+  from onek a full join onek b on a.unique1 = b.unique2
+  where b.unique2 = 43;
+ unique1 | unique2 
+---------+---------
+      43 |      43
+(1 row)
+
+explain (costs off)
+select a.unique1, b.unique2
+  from onek a full join onek b on a.unique1 = b.unique2
+  where a.unique1 = 42 and b.unique2 = 42;
+                             QUERY PLAN                              
+---------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Nested Loop
+         Join Filter: true
+         ->  Redistribute Motion 3:3  (slice2; segments: 3)
+               Hash Key: b.unique2
+               ->  Index Only Scan using onek_unique2 on onek b
+                     Index Cond: (unique2 = 42)
+         ->  Index Only Scan using onek_unique1 on onek a
+               Index Cond: ((unique1 = b.unique2) AND (unique1 = 42))
+ Optimizer: GPORCA
+(10 rows)
+
+select a.unique1, b.unique2
+  from onek a full join onek b on a.unique1 = b.unique2
+  where a.unique1 = 42 and b.unique2 = 42;
+ unique1 | unique2 
+---------+---------
+      42 |      42
+(1 row)
+
+--
+-- test result-RTE removal underneath a full join
+--
+explain (costs off)
+select * from
+  (select * from int8_tbl i81 join (values(123,2)) v(v1,v2) on q2=v1) ss1
+full join
+  (select * from (values(456,2)) w(v1,v2) join int8_tbl i82 on q2=v1) ss2
+on true;
+                     QUERY PLAN                      
+-----------------------------------------------------
+ Merge Full Join
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         ->  Seq Scan on int8_tbl i81
+               Filter: (q2 = 123)
+   ->  Materialize
+         ->  Gather Motion 3:1  (slice2; segments: 3)
+               ->  Seq Scan on int8_tbl i82
+                     Filter: (q2 = 456)
+ Optimizer: GPORCA
+(9 rows)
+
+select * from
+  (select * from int8_tbl i81 join (values(123,2)) v(v1,v2) on q2=v1) ss1
+full join
+  (select * from (values(456,2)) w(v1,v2) join int8_tbl i82 on q2=v1) ss2
+on true;
+        q1        | q2  | v1  | v2 | v1  | v2 | q1  | q2  
+------------------+-----+-----+----+-----+----+-----+-----
+ 4567890123456789 | 123 | 123 |  2 | 456 |  2 | 123 | 456
+(1 row)
+
+--
 -- test join removal
 --
 begin;
@@ -5010,8 +6114,266 @@ select id from a where id in (
          ->  Seq Scan on a
          ->  Index Scan using b_pkey on b
                Index Cond: (id = a.id)
- Optimizer: Pivotal Optimizer (GPORCA)
+ Optimizer: GPORCA
 (7 rows)
+
+-- check optimization with oddly-nested outer joins
+explain (costs off)
+select a1.id from
+  (a a1 left join a a2 on true)
+  left join
+  (a a3 left join a a4 on a3.id = a4.id)
+  on a2.id = a3.id;
+                          QUERY PLAN                          
+--------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Nested Loop Left Join
+         Join Filter: true
+         ->  Seq Scan on a a1
+         ->  Materialize
+               ->  Broadcast Motion 3:3  (slice2; segments: 3)
+                     ->  Seq Scan on a a2
+ Optimizer: GPORCA
+(8 rows)
+
+explain (costs off)
+select a1.id from
+  (a a1 left join a a2 on a1.id = a2.id)
+  left join
+  (a a3 left join a a4 on a3.id = a4.id)
+  on a2.id = a3.id;
+                 QUERY PLAN                 
+--------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Nested Loop Left Join
+         Join Filter: true
+         ->  Seq Scan on a a1
+         ->  Index Scan using a_pkey on a a2
+               Index Cond: (id = a1.id)
+ Optimizer: GPORCA
+(7 rows)
+
+explain (costs off)
+select 1 from a t1
+    left join a t2 on true
+   inner join a t3 on true
+    left join a t4 on t2.id = t4.id and t2.id = t3.id;
+                                      QUERY PLAN                                      
+--------------------------------------------------------------------------------------
+ Result
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         ->  Nested Loop Left Join
+               Join Filter: true
+               ->  Redistribute Motion 3:3  (slice2; segments: 3)
+                     Hash Key: t2.id
+                     ->  Nested Loop Left Join
+                           Join Filter: true
+                           ->  Nested Loop
+                                 Join Filter: true
+                                 ->  Seq Scan on a t3
+                                 ->  Materialize
+                                       ->  Broadcast Motion 3:3  (slice4; segments: 3)
+                                             ->  Seq Scan on a t1
+                           ->  Materialize
+                                 ->  Broadcast Motion 3:3  (slice3; segments: 3)
+                                       ->  Seq Scan on a t2
+               ->  Index Only Scan using a_pkey on a t4
+                     Index Cond: (id = t2.id)
+                     Filter: (t2.id = t3.id)
+ Optimizer: GPORCA
+(21 rows)
+
+-- another example (bug #17781)
+explain (costs off)
+select ss1.f1
+from int4_tbl as t1
+  left join (int4_tbl as t2
+             right join int4_tbl as t3 on null
+             left join (int4_tbl as t4
+                        right join int8_tbl as t5 on null)
+               on t2.f1 = t4.f1
+             left join ((select null as f1 from int4_tbl as t6) as ss1
+                        inner join int8_tbl as t7 on null)
+               on t5.q1 = t7.q2)
+    on false;
+               QUERY PLAN                
+-----------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Nested Loop Left Join
+         Join Filter: true
+         ->  Seq Scan on int4_tbl t1
+         ->  Result
+               One-Time Filter: false
+ Optimizer: GPORCA
+(7 rows)
+
+-- variant with Var rather than PHV coming from t6
+explain (costs off)
+select ss1.f1
+from int4_tbl as t1
+  left join (int4_tbl as t2
+             right join int4_tbl as t3 on null
+             left join (int4_tbl as t4
+                        right join int8_tbl as t5 on null)
+               on t2.f1 = t4.f1
+             left join ((select f1 from int4_tbl as t6) as ss1
+                        inner join int8_tbl as t7 on null)
+               on t5.q1 = t7.q2)
+    on false;
+               QUERY PLAN                
+-----------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Nested Loop Left Join
+         Join Filter: true
+         ->  Seq Scan on int4_tbl t1
+         ->  Result
+               One-Time Filter: false
+ Optimizer: GPORCA
+(7 rows)
+
+-- per further discussion of bug #17781
+explain (costs off)
+select ss1.x
+from (select f1/2 as x from int4_tbl i4 left join a on a.id = i4.f1) ss1
+     right join int8_tbl i8 on true
+where current_user is not null;  -- this is to add a Result node
+                          QUERY PLAN                          
+--------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Nested Loop Left Join
+         Join Filter: true
+         ->  Seq Scan on int8_tbl i8
+         ->  Materialize
+               ->  Broadcast Motion 3:3  (slice2; segments: 3)
+                     ->  Seq Scan on int4_tbl i4
+ Optimizer: GPORCA
+(8 rows)
+
+-- and further discussion of bug #17781
+explain (costs off)
+select *
+from int8_tbl t1
+  left join (int8_tbl t2 left join onek t3 on t2.q1 > t3.unique1)
+    on t1.q2 = t2.q2
+  left join onek t4
+    on t2.q2 < t3.unique2;
+                                   QUERY PLAN                                   
+--------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Nested Loop Left Join
+         Join Filter: (t2.q2 < t3.unique2)
+         ->  Hash Right Join
+               Hash Cond: (t2.q2 = t1.q2)
+               ->  Redistribute Motion 3:3  (slice3; segments: 3)
+                     Hash Key: t2.q2
+                     ->  Nested Loop Left Join
+                           Join Filter: (t2.q1 > t3.unique1)
+                           ->  Seq Scan on int8_tbl t2
+                           ->  Materialize
+                                 ->  Broadcast Motion 3:3  (slice4; segments: 3)
+                                       ->  Seq Scan on onek t3
+               ->  Hash
+                     ->  Redistribute Motion 3:3  (slice5; segments: 3)
+                           Hash Key: t1.q2
+                           ->  Seq Scan on int8_tbl t1
+         ->  Materialize
+               ->  Broadcast Motion 3:3  (slice2; segments: 3)
+                     ->  Seq Scan on onek t4
+ Optimizer: GPORCA
+(21 rows)
+
+-- More tests of correct placement of pseudoconstant quals
+-- simple constant-false condition
+explain (costs off)
+select * from int8_tbl t1 left join
+  (int8_tbl t2 inner join int8_tbl t3 on false
+   left join int8_tbl t4 on t2.q2 = t4.q2)
+on t1.q1 = t2.q1;
+                QUERY PLAN                 
+-------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Hash Left Join
+         Hash Cond: (q1 = (NULL::bigint))
+         ->  Seq Scan on int8_tbl t1
+         ->  Hash
+               ->  Result
+                     One-Time Filter: false
+ Optimizer: GPORCA
+(8 rows)
+
+-- deduce constant-false from an EquivalenceClass
+explain (costs off)
+select * from int8_tbl t1 left join
+  (int8_tbl t2 inner join int8_tbl t3 on (t2.q1-t3.q2) = 0 and (t2.q1-t3.q2) = 1
+   left join int8_tbl t4 on t2.q2 = t4.q2)
+on t1.q1 = t2.q1;
+                                          QUERY PLAN                                           
+-----------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Hash Right Join
+         Hash Cond: (t2.q1 = t1.q1)
+         ->  Redistribute Motion 3:3  (slice2; segments: 3)
+               Hash Key: t2.q1
+               ->  Hash Left Join
+                     Hash Cond: (t2.q2 = t4.q2)
+                     ->  Redistribute Motion 3:3  (slice3; segments: 3)
+                           Hash Key: t2.q2
+                           ->  Nested Loop
+                                 Join Filter: (((t2.q1 - t3.q2) = 0) AND ((t2.q1 - t3.q2) = 1))
+                                 ->  Seq Scan on int8_tbl t2
+                                 ->  Materialize
+                                       ->  Broadcast Motion 3:3  (slice4; segments: 3)
+                                             ->  Seq Scan on int8_tbl t3
+                     ->  Hash
+                           ->  Redistribute Motion 3:3  (slice5; segments: 3)
+                                 Hash Key: t4.q2
+                                 ->  Seq Scan on int8_tbl t4
+         ->  Hash
+               ->  Seq Scan on int8_tbl t1
+ Optimizer: GPORCA
+(22 rows)
+
+-- pseudoconstant based on an outer-level Param
+explain (costs off)
+select exists(
+  select * from int8_tbl t1 left join
+    (int8_tbl t2 inner join int8_tbl t3 on x0.f1 = 1
+     left join int8_tbl t4 on t2.q2 = t4.q2)
+  on t1.q1 = t2.q1
+) from int4_tbl x0;
+                                                   QUERY PLAN                                                   
+----------------------------------------------------------------------------------------------------------------
+ Result
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         ->  Seq Scan on int4_tbl x0
+   SubPlan 1
+     ->  Aggregate
+           ->  Nested Loop Left Join
+                 Join Filter: (t1.q1 = t2.q1)
+                 ->  Materialize
+                       ->  Gather Motion 3:1  (slice6; segments: 3)
+                             ->  Seq Scan on int8_tbl t1
+                 ->  Materialize
+                       ->  Result
+                             One-Time Filter: (x0.f1 = 1)
+                             ->  Materialize
+                                   ->  Gather Motion 3:1  (slice2; segments: 3)
+                                         ->  Hash Left Join
+                                               Hash Cond: (t2.q2 = t4.q2)
+                                               ->  Redistribute Motion 3:3  (slice3; segments: 3)
+                                                     Hash Key: t2.q2
+                                                     ->  Nested Loop
+                                                           Join Filter: true
+                                                           ->  Seq Scan on int8_tbl t2
+                                                           ->  Materialize
+                                                                 ->  Broadcast Motion 3:3  (slice4; segments: 3)
+                                                                       ->  Seq Scan on int8_tbl t3
+                                               ->  Hash
+                                                     ->  Redistribute Motion 3:3  (slice5; segments: 3)
+                                                           Hash Key: t4.q2
+                                                           ->  Seq Scan on int8_tbl t4
+ Optimizer: GPORCA
+(30 rows)
 
 -- check that join removal works for a left join when joining a subquery
 -- that is guaranteed to be unique by its GROUP BY clause
@@ -5066,8 +6428,31 @@ select d.* from d left join (select distinct * from b) s
          ->  Seq Scan on d
          ->  Index Scan using b_pkey on b
                Index Cond: (id = d.a)
- Optimizer: Pivotal Optimizer (GPORCA)
+ Optimizer: GPORCA
 (7 rows)
+
+-- join removal is not possible here
+explain (costs off)
+select 1 from a t1
+  left join (a t2 left join a t3 on t2.id = 1) on t2.id = 1;
+                                      QUERY PLAN                                      
+--------------------------------------------------------------------------------------
+ Result
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         ->  Nested Loop Left Join
+               Join Filter: true
+               ->  Seq Scan on a t1
+               ->  Materialize
+                     ->  Broadcast Motion 3:3  (slice2; segments: 3)
+                           ->  Nested Loop Left Join
+                                 Join Filter: (t2.id = 1)
+                                 ->  Index Scan using a_pkey on a t2
+                                       Index Cond: (id = 1)
+                                 ->  Materialize
+                                       ->  Broadcast Motion 3:3  (slice3; segments: 3)
+                                             ->  Seq Scan on a t3
+ Optimizer: GPORCA
+(15 rows)
 
 -- check join removal works when uniqueness of the join condition is enforced
 -- by a UNION
@@ -5103,8 +6488,41 @@ select 1 from (select a.id FROM a left join b on a.b_id = b.id) q,
          ->  Seq Scan on a
          ->  Function Scan on generate_series gs
                Filter: (a.id = i)
- Optimizer: Postgres query optimizer
+ Optimizer: GPORCA
 (6 rows)
+
+-- check join removal within RHS of an outer join
+explain (costs off)
+select c.id, ss.a from c
+  left join (select d.a from onerow, d left join b on d.a = b.id) ss
+  on c.id = ss.a;
+                                QUERY PLAN                                
+--------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Hash Left Join
+         Hash Cond: (c.id = d.a)
+         ->  Seq Scan on c
+         ->  Hash
+               ->  Nested Loop
+                     Join Filter: true
+                     ->  Seq Scan on d
+                     ->  Materialize
+                           ->  Broadcast Motion 3:3  (slice2; segments: 3)
+                                 ->  Seq Scan on onerow
+ Optimizer: GPORCA
+(12 rows)
+
+CREATE TEMP TABLE parted_b (id int PRIMARY KEY) partition by range(id);
+CREATE TEMP TABLE parted_b1 partition of parted_b for values from (0) to (10);
+-- test join removals on a partitioned table
+explain (costs off)
+select a.* from a left join parted_b pb on a.b_id = pb.id;
+               QUERY PLAN                
+-----------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Seq Scan on a
+ Optimizer: GPORCA
+(3 rows)
 
 rollback;
 create temp table parent (k int primary key, pd int);
@@ -5230,6 +6648,56 @@ SELECT * FROM
  1 | 4567890123456789 | -4567890123456789 | 4567890123456789
 (5 rows)
 
+-- join removal bug #17769: can't remove if there's a pushed-down reference
+EXPLAIN (COSTS OFF)
+SELECT q2 FROM
+  (SELECT *
+   FROM int8_tbl LEFT JOIN innertab ON q2 = id) ss
+ WHERE COALESCE(dat1, 0) = q1;
+                             QUERY PLAN                              
+---------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Result
+         Filter: (COALESCE(innertab.dat1, '0'::bigint) = int8_tbl.q1)
+         ->  Nested Loop Left Join
+               Join Filter: true
+               ->  Redistribute Motion 3:3  (slice2; segments: 3)
+                     Hash Key: int8_tbl.q2
+                     ->  Seq Scan on int8_tbl
+               ->  Index Scan using innertab_pkey on innertab
+                     Index Cond: (id = int8_tbl.q2)
+ Optimizer: GPORCA
+(11 rows)
+
+-- join removal bug #17773: otherwise-removable PHV appears in a qual condition
+EXPLAIN (VERBOSE, COSTS OFF)
+SELECT q2 FROM
+  (SELECT q2, 'constant'::text AS x
+   FROM int8_tbl LEFT JOIN innertab ON q2 = id) ss
+  RIGHT JOIN int4_tbl ON NULL
+ WHERE x >= x;
+       QUERY PLAN        
+-------------------------
+ Result
+   Output: NULL::bigint
+   One-Time Filter: false
+ Optimizer: GPORCA
+(5 rows)
+
+-- join removal bug #17786: check that OR conditions are cleaned up
+EXPLAIN (COSTS OFF)
+SELECT f1, x
+FROM int4_tbl
+     JOIN ((SELECT 42 AS x FROM int8_tbl LEFT JOIN innertab ON q1 = id) AS ss1
+           RIGHT JOIN tenk1 ON NULL)
+        ON tenk1.unique1 = ss1.x OR tenk1.unique2 = ss1.x;
+       QUERY PLAN        
+-------------------------
+ Result
+   One-Time Filter: false
+ Optimizer: GPORCA
+(3 rows)
+
 rollback;
 -- another join removal bug: we must clean up correctly when removing a PHV
 begin;
@@ -5269,19 +6737,18 @@ where ss.stringu2 !~* ss.case1;
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Hash Join
          Hash Cond: ((CASE t1.ten WHEN 0 THEN 'doh!'::text ELSE NULL::text END) = t0.f1)
-         ->  Redistribute Motion 3:3  (slice2; segments: 3)
-               Hash Key: (CASE t1.ten WHEN 0 THEN 'doh!'::text ELSE NULL::text END)
-               ->  Nested Loop
-                     Join Filter: true
-                     ->  Broadcast Motion 3:3  (slice3; segments: 3)
-                           ->  Seq Scan on int4_tbl i4
-                     ->  Index Scan using tenk1_unique2 on tenk1 t1
-                           Index Cond: (unique2 = i4.f1)
-                           Filter: (stringu2 !~* CASE ten WHEN 0 THEN 'doh!'::text ELSE NULL::text END)
+         ->  Nested Loop
+               Join Filter: true
+               ->  Broadcast Motion 3:3  (slice2; segments: 3)
+                     ->  Seq Scan on int4_tbl i4
+               ->  Index Scan using tenk1_unique2 on tenk1 t1
+                     Index Cond: (unique2 = i4.f1)
+                     Filter: (stringu2 !~* CASE ten WHEN 0 THEN 'doh!'::text ELSE NULL::text END)
          ->  Hash
-               ->  Seq Scan on text_tbl t0
- Optimizer: Pivotal Optimizer (GPORCA)
-(15 rows)
+               ->  Broadcast Motion 3:3  (slice3; segments: 3)
+                     ->  Seq Scan on text_tbl t0
+ Optimizer: GPORCA
+(14 rows)
 
 select t0.*
 from
@@ -5298,6 +6765,115 @@ where ss.stringu2 !~* ss.case1;
 ------
  doh!
 (1 row)
+
+rollback;
+-- another join removal bug: we must clean up EquivalenceClasses too
+begin;
+create temp table t (a int unique);
+insert into t values (1);
+explain (costs off)
+select 1
+from t t1
+  left join (select 2 as c
+             from t t2 left join t t3 on t2.a = t3.a) s
+    on true
+where t1.a = s.c;
+                             QUERY PLAN                             
+--------------------------------------------------------------------
+ Result
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         ->  Hash Join
+               Hash Cond: ((2) = t1.a)
+               ->  Nested Loop Left Join
+                     Join Filter: true
+                     ->  Seq Scan on t t2
+                           Filter: (2 = 2)
+                     ->  Index Scan using t_a_key on t t3
+                           Index Cond: (a = t2.a)
+               ->  Hash
+                     ->  Broadcast Motion 3:3  (slice2; segments: 3)
+                           ->  Index Scan using t_a_key on t t1
+                                 Index Cond: (a = 2)
+ Optimizer: GPORCA
+(15 rows)
+
+select 1
+from t t1
+  left join (select 2 as c
+             from t t2 left join t t3 on t2.a = t3.a) s
+    on true
+where t1.a = s.c;
+ ?column? 
+----------
+(0 rows)
+
+rollback;
+-- test cases where we can remove a join, but not a PHV computed at it
+begin;
+create temp table t (a int unique, b int);
+insert into t values (1,1), (2,2);
+explain (costs off)
+select 1
+from t t1
+  left join (select t2.a, 1 as c
+             from t t2 left join t t3 on t2.a = t3.a) s
+  on true
+  left join t t4 on true
+where s.a < s.c;
+                                QUERY PLAN                                
+--------------------------------------------------------------------------
+ Result
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         ->  Nested Loop
+               Join Filter: true
+               ->  Broadcast Motion 3:3  (slice3; segments: 3)
+                     ->  Result
+                           Filter: (t2.a < (1))
+                           ->  Seq Scan on t t2
+               ->  Nested Loop Left Join
+                     Join Filter: true
+                     ->  Seq Scan on t t1
+                     ->  Materialize
+                           ->  Broadcast Motion 3:3  (slice2; segments: 3)
+                                 ->  Seq Scan on t t4
+ Optimizer: GPORCA
+(15 rows)
+
+explain (costs off)
+select t1.a, s.*
+from t t1
+  left join lateral (select t2.a, coalesce(t1.a, 1) as c
+                     from t t2 left join t t3 on t2.a = t3.a) s
+  on true
+  left join t t4 on true
+where s.a < s.c;
+                          QUERY PLAN                          
+--------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Nested Loop Left Join
+         ->  Nested Loop
+               ->  Broadcast Motion 3:3  (slice2; segments: 3)
+                     ->  Seq Scan on t t1
+               ->  Seq Scan on t t2
+                     Filter: (a < COALESCE(t1.a, 1))
+         ->  Materialize
+               ->  Broadcast Motion 3:3  (slice3; segments: 3)
+                     ->  Seq Scan on t t4
+ Optimizer: GPORCA
+(11 rows)
+
+select t1.a, s.*
+from t t1
+  left join lateral (select t2.a, coalesce(t1.a, 1) as c
+                     from t t2 left join t t3 on t2.a = t3.a) s
+  on true
+  left join t t4 on true
+where s.a < s.c;
+ a | a | c 
+---+---+---
+ 2 | 1 | 2
+ 2 | 1 | 2
+(2 rows)
 
 rollback;
 -- test case to expose miscomputation of required relid set for a PHV
@@ -5367,16 +6943,16 @@ where ss.a = ss.phv and f1 = 0;
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Nested Loop
          Join Filter: true
-         ->  Result
-               Filter: (((12) = 12) AND (parttbl.a = (12)))
-               ->  Dynamic Index Scan on parttbl_pkey on parttbl
-                     Index Cond: (a = 12)
-                     Number of partitions to scan: 1 (out of 1)
+         ->  Broadcast Motion 3:3  (slice2; segments: 3)
+               ->  Result
+                     Filter: (((12) = 12) AND (parttbl.a = (12)))
+                     ->  Dynamic Index Scan on parttbl_pkey on parttbl
+                           Index Cond: (a = 12)
+                           Number of partitions to scan: 1 (out of 1)
          ->  Materialize
-               ->  Broadcast Motion 3:3  (slice2; segments: 3)
-                     ->  Seq Scan on int4_tbl
-                           Filter: (f1 = 0)
- Optimizer: Pivotal Optimizer (GPORCA)
+               ->  Seq Scan on int4_tbl
+                     Filter: (f1 = 0)
+ Optimizer: GPORCA
 (13 rows)
 
 reset optimizer_enable_dynamicindexonlyscan;
@@ -5400,7 +6976,7 @@ select * from
 ERROR:  invalid reference to FROM-clause entry for table "y"
 LINE 2: ...bl x join (int4_tbl x cross join int4_tbl y) j on q1 = y.f1;
                                                                   ^
-HINT:  There is an entry for table "y", but it cannot be referenced from this part of the query.
+DETAIL:  There is an entry for table "y", but it cannot be referenced from this part of the query.
 select * from
   int8_tbl x join (int4_tbl x cross join int4_tbl y(ff)) j on q1 = f1; -- ok
  q1 | q2 | f1 | ff 
@@ -5428,6 +7004,13 @@ ERROR:  column "uunique1" does not exist
 LINE 1: select uunique1 from
                ^
 HINT:  Perhaps you meant to reference the column "t1.unique1" or the column "t2.unique1".
+select ctid from
+  tenk1 t1 join tenk2 t2 on t1.two = t2.two; -- error, need qualification
+ERROR:  column "ctid" does not exist
+LINE 1: select ctid from
+               ^
+DETAIL:  There are columns named "ctid", but they are in tables that cannot be referenced from this part of the query.
+HINT:  Try using a table-qualified name.
 --
 -- Take care to reference the correct RTE
 --
@@ -5439,6 +7022,19 @@ select atts.relid::regclass, s.* from pg_stats s join
 ERROR:  column atts.relid does not exist
 LINE 1: select atts.relid::regclass, s.* from pg_stats s join
                ^
+-- Test bug in rangetable flattening
+explain (verbose, costs off)
+select 1 from
+  (select * from int8_tbl where q1 <> (select 42) offset 0) ss
+where false;
+       QUERY PLAN        
+-------------------------
+ Result
+   Output: NULL::integer
+   One-Time Filter: false
+ Optimizer: GPORCA
+(5 rows)
+
 --
 -- Test LATERAL
 --
@@ -6175,10 +7771,10 @@ select * from
    ->  Nested Loop
          Output: c.q1, c.q2, a.q1, a.q2, b.q1, (COALESCE(b.q2, '42'::bigint)), d.q1, (COALESCE((COALESCE(b.q2, '42'::bigint)), d.q2)), ((COALESCE((COALESCE(b.q2, '42'::bigint)), d.q2)))
          ->  Hash Right Join
-               Output: c.q1, c.q2, a.q1, a.q2, b.q1, d.q1, (COALESCE(b.q2, '42'::bigint)), (COALESCE((COALESCE(b.q2, '42'::bigint)), d.q2))
+               Output: c.q1, c.q2, a.q1, a.q2, b.q1, (COALESCE(b.q2, '42'::bigint)), d.q1, (COALESCE((COALESCE(b.q2, '42'::bigint)), d.q2))
                Hash Cond: (d.q1 = c.q2)
                ->  Nested Loop
-                     Output: a.q1, a.q2, b.q1, d.q1, (COALESCE(b.q2, '42'::bigint)), (COALESCE((COALESCE(b.q2, '42'::bigint)), d.q2))
+                     Output: a.q1, a.q2, b.q1, (COALESCE(b.q2, '42'::bigint)), d.q1, (COALESCE((COALESCE(b.q2, '42'::bigint)), d.q2))
                      ->  Broadcast Motion 3:3  (slice2; segments: 3)
                            Output: a.q1, a.q2, b.q1, (COALESCE(b.q2, '42'::bigint))
                            ->  Hash Left Join
@@ -6206,8 +7802,36 @@ select * from
                Output: ((COALESCE((COALESCE(b.q2, '42'::bigint)), d.q2)))
                ->  Result
                      Output: (COALESCE((COALESCE(b.q2, '42'::bigint)), d.q2))
- Optimizer: Postgres query optimizer
-(37 rows)
+ Optimizer: GPORCA
+(38 rows)
+
+-- another case requiring nested PlaceHolderVars
+explain (verbose, costs off)
+select * from
+  (select 0 as val0) as ss0
+  left join (select 1 as val) as ss1 on true
+  left join lateral (select ss1.val as val_filtered where false) as ss2 on true;
+          QUERY PLAN           
+-------------------------------
+ Nested Loop Left Join
+   Output: 0, (1), ((1))
+   Join Filter: false
+   ->  Result
+         Output: 1
+   ->  Result
+         Output: (1)
+         One-Time Filter: false
+ Optimizer: GPORCA
+(10 rows)
+
+select * from
+  (select 0 as val0) as ss0
+  left join (select 1 as val) as ss1 on true
+  left join lateral (select ss1.val as val_filtered where false) as ss2 on true;
+ val0 | val | val_filtered 
+------+-----+--------------
+    0 |   1 |             
+(1 row)
 
 -- case that breaks the old ph_may_need optimization
 explain (verbose, costs off)
@@ -6298,8 +7922,41 @@ select * from
          Output: (3)
          ->  Result
                Output: 3
- Optimizer: Postgres query optimizer
-(16 rows)
+ Optimizer: GPORCA
+(17 rows)
+
+-- a new postponed-quals issue (bug #17768)
+explain (costs off)
+select * from int4_tbl t1,
+  lateral (select * from int4_tbl t2 inner join int4_tbl t3 on t1.f1 = 1
+           inner join (int4_tbl t4 left join int4_tbl t5 on true) on true) ss;
+                                          QUERY PLAN                                           
+-----------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Nested Loop
+         ->  Redistribute Motion 3:3  (slice2; segments: 3)
+               Hash Key: 1
+               ->  Seq Scan on int4_tbl t3
+         ->  Materialize
+               ->  Nested Loop
+                     ->  Redistribute Motion 3:3  (slice3; segments: 3)
+                           Hash Key: 1
+                           ->  Seq Scan on int4_tbl t2
+                     ->  Materialize
+                           ->  Nested Loop Left Join
+                                 ->  Nested Loop
+                                       ->  Seq Scan on int4_tbl t1
+                                             Filter: (f1 = 1)
+                                       ->  Materialize
+                                             ->  Redistribute Motion 3:3  (slice4; segments: 3)
+                                                   Hash Key: 1
+                                                   ->  Seq Scan on int4_tbl t4
+                                 ->  Materialize
+                                       ->  Redistribute Motion 3:3  (slice5; segments: 3)
+                                             Hash Key: 1
+                                             ->  Seq Scan on int4_tbl t5
+ Optimizer: GPORCA
+(24 rows)
 
 -- check dummy rels with lateral references (bug #15694)
 explain (verbose, costs off)
@@ -6311,6 +7968,7 @@ select * from int8_tbl i8 left join lateral
    Output: i8.q1, i8.q2, f1, (i8.q2)
    ->  Nested Loop Left Join
          Output: i8.q1, i8.q2, f1, (i8.q2)
+         Join Filter: false
          ->  Seq Scan on public.int8_tbl i8
                Output: i8.q1, i8.q2
          ->  Result
@@ -6425,22 +8083,26 @@ select f1,g from int4_tbl a, (select f1 as g) ss;
 ERROR:  column "f1" does not exist
 LINE 1: select f1,g from int4_tbl a, (select f1 as g) ss;
                                              ^
-HINT:  There is a column named "f1" in table "a", but it cannot be referenced from this part of the query.
+DETAIL:  There is a column named "f1" in table "a", but it cannot be referenced from this part of the query.
+HINT:  To reference that column, you must mark this subquery with LATERAL.
 select f1,g from int4_tbl a, (select a.f1 as g) ss;
 ERROR:  invalid reference to FROM-clause entry for table "a"
 LINE 1: select f1,g from int4_tbl a, (select a.f1 as g) ss;
                                              ^
-HINT:  There is an entry for table "a", but it cannot be referenced from this part of the query.
+DETAIL:  There is an entry for table "a", but it cannot be referenced from this part of the query.
+HINT:  To reference that table, you must mark this subquery with LATERAL.
 select f1,g from int4_tbl a cross join (select f1 as g) ss;
 ERROR:  column "f1" does not exist
 LINE 1: select f1,g from int4_tbl a cross join (select f1 as g) ss;
                                                        ^
-HINT:  There is a column named "f1" in table "a", but it cannot be referenced from this part of the query.
+DETAIL:  There is a column named "f1" in table "a", but it cannot be referenced from this part of the query.
+HINT:  To reference that column, you must mark this subquery with LATERAL.
 select f1,g from int4_tbl a cross join (select a.f1 as g) ss;
 ERROR:  invalid reference to FROM-clause entry for table "a"
 LINE 1: select f1,g from int4_tbl a cross join (select a.f1 as g) ss...
                                                        ^
-HINT:  There is an entry for table "a", but it cannot be referenced from this part of the query.
+DETAIL:  There is an entry for table "a", but it cannot be referenced from this part of the query.
+HINT:  To reference that table, you must mark this subquery with LATERAL.
 -- SQL:2008 says the left table is in scope but illegal to access here
 select f1,g from int4_tbl a right join lateral generate_series(0, a.f1) g on true;
 ERROR:  invalid reference to FROM-clause entry for table "a"
@@ -6471,12 +8133,12 @@ update xx1 set x2 = f1 from (select * from int4_tbl where f1 = x1) ss;
 ERROR:  column "x1" does not exist
 LINE 1: ... set x2 = f1 from (select * from int4_tbl where f1 = x1) ss;
                                                                 ^
-HINT:  There is a column named "x1" in table "xx1", but it cannot be referenced from this part of the query.
+DETAIL:  There is a column named "x1" in table "xx1", but it cannot be referenced from this part of the query.
 update xx1 set x2 = f1 from (select * from int4_tbl where f1 = xx1.x1) ss;
 ERROR:  invalid reference to FROM-clause entry for table "xx1"
 LINE 1: ...t x2 = f1 from (select * from int4_tbl where f1 = xx1.x1) ss...
                                                              ^
-HINT:  There is an entry for table "xx1", but it cannot be referenced from this part of the query.
+DETAIL:  There is an entry for table "xx1", but it cannot be referenced from this part of the query.
 -- can't do it even with LATERAL:
 update xx1 set x2 = f1 from lateral (select * from int4_tbl where f1 = x1) ss;
 ERROR:  invalid reference to FROM-clause entry for table "xx1"
@@ -6491,12 +8153,12 @@ delete from xx1 using (select * from int4_tbl where f1 = x1) ss;
 ERROR:  column "x1" does not exist
 LINE 1: ...te from xx1 using (select * from int4_tbl where f1 = x1) ss;
                                                                 ^
-HINT:  There is a column named "x1" in table "xx1", but it cannot be referenced from this part of the query.
+DETAIL:  There is a column named "x1" in table "xx1", but it cannot be referenced from this part of the query.
 delete from xx1 using (select * from int4_tbl where f1 = xx1.x1) ss;
 ERROR:  invalid reference to FROM-clause entry for table "xx1"
 LINE 1: ...from xx1 using (select * from int4_tbl where f1 = xx1.x1) ss...
                                                              ^
-HINT:  There is an entry for table "xx1", but it cannot be referenced from this part of the query.
+DETAIL:  There is an entry for table "xx1", but it cannot be referenced from this part of the query.
 delete from xx1 using lateral (select * from int4_tbl where f1 = x1) ss;
 ERROR:  invalid reference to FROM-clause entry for table "xx1"
 LINE 1: ...xx1 using lateral (select * from int4_tbl where f1 = x1) ss;
@@ -6998,6 +8660,32 @@ left join j2 on j1.id1 = j2.id1 where j1.id2 = 1;
  Settings: enable_nestloop=on
 (16 rows)
 
+create unique index j1_id2_idx on j1(id2) where id2 is not null;
+DETAIL:  Distribution key column "id1" is not included in the constraint.
+ERROR:  UNIQUE index must contain all columns in the table's distribution key
+-- ensure we don't use a partial unique index as unique proofs
+explain (verbose, costs off)
+select * from j1
+inner join j2 on j1.id2 = j2.id2;
+                          QUERY PLAN                          
+--------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Output: j1.id1, j1.id2, j2.id1, j2.id2
+   ->  Nested Loop
+         Output: j1.id1, j1.id2, j2.id1, j2.id2
+         Join Filter: true
+         ->  Broadcast Motion 3:3  (slice2; segments: 3)
+               Output: j2.id1, j2.id2
+               ->  Seq Scan on public.j2
+                     Output: j2.id1, j2.id2
+         ->  Index Scan using j1_pkey on public.j1
+               Output: j1.id1, j1.id2
+               Index Cond: (j1.id2 = j2.id2)
+ Optimizer: GPORCA
+(14 rows)
+
+drop index j1_id2_idx;
+ERROR:  index "j1_id2_idx" does not exist
 -- validate logic in merge joins which skips mark and restore.
 -- it should only do this if all quals which were used to detect the unique
 -- are present as join quals, and not plain quals.
@@ -7178,6 +8866,36 @@ where exists (select 1 from j3
 (24 rows)
 
 drop table j3;
+-- Test that we do not account for nullingrels when looking up statistics
+CREATE TABLE group_tbl (a INT, b INT);
+INSERT INTO group_tbl SELECT 1, 1;
+CREATE STATISTICS group_tbl_stat (ndistinct) ON a, b FROM group_tbl;
+ANALYZE group_tbl;
+EXPLAIN (COSTS OFF)
+SELECT 1 FROM group_tbl t1
+                  LEFT JOIN (SELECT a c1, COALESCE(a) c2 FROM group_tbl t2) s ON TRUE
+GROUP BY s.c1, s.c2;
+                                         QUERY PLAN                                         
+--------------------------------------------------------------------------------------------
+ Result
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         ->  GroupAggregate
+               Group Key: t2.a, (COALESCE(t2.a))
+               ->  Sort
+                     Sort Key: t2.a, (COALESCE(t2.a))
+                     ->  Redistribute Motion 3:3  (slice2; segments: 3)
+                           Hash Key: t2.a, (COALESCE(t2.a))
+                           ->  Nested Loop Left Join
+                                 Join Filter: true
+                                 ->  Seq Scan on group_tbl t1
+                                 ->  Materialize
+                                       ->  Result
+                                             ->  Broadcast Motion 3:3  (slice3; segments: 3)
+                                                   ->  Seq Scan on group_tbl t2
+ Optimizer: GPORCA
+(16 rows)
+
+DROP TABLE group_tbl;
 reset enable_hashjoin;
 reset enable_nestloop;
 reset enable_seqscan;

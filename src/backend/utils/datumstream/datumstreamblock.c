@@ -158,7 +158,7 @@ DatumStreamBlockRead_GetReadyOrig(
 								  int32 rowCount,
 								  bool *hadToAdjustRowCount,
 								  int32 * adjustedRowCount,
-								  RelFileNode *node)
+								  RelFileLocator *node)
 {
 	uint8	   *p;
 
@@ -632,7 +632,7 @@ DatumStreamBlockRead_GetReadyDense(
 								   int32 rowCount,
 								   bool *hadToAdjustRowCount,
 								   int32 * adjustedRowCount,
-								   RelFileNode *node)
+								   RelFileLocator *node)
 {
 	uint8	   *p;
 
@@ -3669,7 +3669,7 @@ static int64
 DatumStreamBlockWrite_BlockOrig(
 								DatumStreamBlockWrite * dsw,
 								uint8 * buffer,
-								RelFileNode *node)
+								RelFileLocator *node)
 {
 	uint8	   *p;
 	DatumStreamBlock_Orig block;
@@ -3803,7 +3803,7 @@ static int64
 DatumStreamBlockWrite_BlockDense(
 								 DatumStreamBlockWrite * dsw,
 								 uint8 * buffer,
-								 RelFileNode *node)
+								 RelFileLocator *node)
 {
 	int64		writesz = 0;
 	uint8	   *p = NULL;
@@ -4249,7 +4249,7 @@ int64
 DatumStreamBlockWrite_Block(
 							DatumStreamBlockWrite * dsw,
 							uint8 * buffer,
-							RelFileNode *node)
+							RelFileLocator *node)
 {
 	if (strncmp(dsw->eyecatcher, DatumStreamBlockWrite_Eyecatcher, DatumStreamBlockWrite_EyecatcherLen) != 0)
 		elog(FATAL, "DatumStreamBlockWrite data structure not valid (eyecatcher)");
@@ -4288,7 +4288,7 @@ DatumStreamBlockWrite_Init(
 						   void *errdetailArg,
 						   int (*errcontextCallback) (void *errcontextArg),
 						   void *errcontextArg,
-						   RelFileNode *relFileNode)
+						   RelFileLocator *relFileNode)
 {
 	memcpy(dsw->eyecatcher, DatumStreamBlockWrite_Eyecatcher, DatumStreamBlockWrite_EyecatcherLen);
 
@@ -5238,8 +5238,6 @@ DatumStreamBlock_IntegrityCheckDense(
 	}
 	else
 	{
-		DatumStreamBlock_Rle_Extension *rleExtension;
-
 		int32		actualNullOnCount;
 
 		int32		compressBitMapSize;

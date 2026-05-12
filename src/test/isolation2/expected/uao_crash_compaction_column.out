@@ -96,6 +96,8 @@ ERROR:  Error on receive from seg0 127.0.0.1:7002 pid=18463: server closed the c
 	before or while processing the request.
 
 -- wait for segment to complete recovering
+!\retcode bash -c 'for i in $(seq 1 120); do pg_isready -q -p 7002 && exit 0; sleep 0.5; done; exit 1';
+(exited with code 0)
 0U: SELECT 1;
  ?column? 
 ----------
@@ -316,6 +318,12 @@ PANIC:  fault triggered, fault name:'compaction_before_cleanup_phase' fault type
 server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
+-- wait until master is ready to accept connections after postmaster reset
+!\retcode bash -c 'for i in $(seq 1 120); do pg_isready -q -p 7000 && exit 0; sleep 0.5; done; exit 1';
+-- start_ignore
+
+-- end_ignore
+(exited with code 0)
 
 -- reset faults as protection incase tests failed and panic didn't happen
 4:SELECT gp_inject_fault('compaction_before_cleanup_phase', 'reset', 1);

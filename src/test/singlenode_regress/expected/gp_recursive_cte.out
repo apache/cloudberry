@@ -592,7 +592,7 @@ with recursive the_cte_here(n) as (
 select * from the_cte_here;
                                     QUERY PLAN                                    
 ----------------------------------------------------------------------------------
- Recursive Union  (cost=0.00..15.07 rows=34 width=4)
+ Recursive Union  (cost=0.00..14.73 rows=34 width=4)
    ->  Seq Scan on t_rep_test_rcte  (cost=0.00..1.01 rows=1 width=4)
    ->  Hash Join  (cost=1.07..1.34 rows=3 width=4)
          Hash Cond: (the_cte_here.n = t_rand_test_rcte.c)

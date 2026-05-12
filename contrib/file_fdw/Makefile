@@ -8,8 +8,6 @@ PGFILEDESC = "file_fdw - foreign data wrapper for files"
 
 REGRESS = file_fdw gp_file_fdw
 
-EXTRA_CLEAN = sql/file_fdw.sql expected/file_fdw.out sql/gp_file_fdw.sql expected/gp_file_fdw.out
-
 REGRESS_OPTS = --init-file=init_file
 
 ifdef USE_PGXS

@@ -5,7 +5,7 @@
  *	  commands.  At one time acted as an interface between the Lisp and C
  *	  systems.
  *
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -24,6 +24,7 @@
 #include "catalog/catalog.h"
 #include "catalog/index.h"
 #include "catalog/namespace.h"
+#include "catalog/pg_authid.h"
 #include "catalog/pg_inherits.h"
 #include "catalog/toasting.h"
 #include "commands/alter.h"
@@ -141,6 +142,7 @@ CommandIsReadOnly(PlannedStmt *pstmt)
 		case CMD_UPDATE:
 		case CMD_INSERT:
 		case CMD_DELETE:
+		case CMD_MERGE:
 			return false;
 		case CMD_UTILITY:
 			/* For now, treat all utility commands as read/write */
@@ -164,6 +166,7 @@ ClassifyUtilityCommandAsReadOnly(Node *parsetree)
 	switch (nodeTag(parsetree))
 	{
 		case T_AlterCollationStmt:
+		case T_AlterDatabaseRefreshCollStmt:
 		case T_AlterDatabaseSetStmt:
 		case T_AlterDatabaseStmt:
 		case T_AlterDefaultPrivilegesStmt:
@@ -828,7 +831,7 @@ standard_ProcessUtility(PlannedStmt *pstmt,
 			break;
 
 		case T_DoStmt:
-			ExecuteDoStmt((DoStmt *) parsetree, isAtomicContext);
+			ExecuteDoStmt(pstate, (DoStmt *) parsetree, isAtomicContext);
 			break;
 
 		case T_CreateTableSpaceStmt:
@@ -898,7 +901,7 @@ standard_ProcessUtility(PlannedStmt *pstmt,
 
 		case T_GrantRoleStmt:
 			/* no event triggers for global objects */
-			GrantRole((GrantRoleStmt *) parsetree);
+			GrantRole(pstate, (GrantRoleStmt *) parsetree);
 			break;
 
 		case T_CreatedbStmt:
@@ -917,6 +920,11 @@ standard_ProcessUtility(PlannedStmt *pstmt,
 		case T_AlterDatabaseStmt:
 			/* no event triggers for global objects */
 			AlterDatabase(pstate, (AlterDatabaseStmt *) parsetree, isTopLevel);
+			break;
+
+		case T_AlterDatabaseRefreshCollStmt:
+			/* no event triggers for global objects */
+			AlterDatabaseRefreshColl((AlterDatabaseRefreshCollStmt *) parsetree);
 			break;
 
 		case T_AlterDatabaseSetStmt:
@@ -1160,7 +1168,7 @@ standard_ProcessUtility(PlannedStmt *pstmt,
 
 		case T_AlterRoleStmt:
 			/* no event triggers for global objects */
-			AlterRole((AlterRoleStmt *) parsetree);
+			AlterRole(pstate, (AlterRoleStmt *) parsetree);
 			break;
 
 		case T_AlterRoleSetStmt:
@@ -1206,10 +1214,14 @@ standard_ProcessUtility(PlannedStmt *pstmt,
 			break;
 
 		case T_CheckPointStmt:
-			if (!superuser())
+			if (!has_privs_of_role(GetUserId(), ROLE_PG_CHECKPOINT))
 				ereport(ERROR,
 						(errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
-						 errmsg("must be superuser to do CHECKPOINT")));
+				/* translator: %s is name of a SQL command, eg CHECKPOINT */
+						 errmsg("permission denied to execute %s command",
+								"CHECKPOINT"),
+						 errdetail("Only roles with privileges of the \"%s\" role may execute this command.",
+								   "pg_checkpoint")));
 
 			/*
 			 * You might think we should have a PreventCommandDuringRecovery()
@@ -2029,6 +2041,7 @@ ProcessUtilitySlow(ParseState *pstate,
 					IndexStmt  *stmt = (IndexStmt *) parsetree;
 					Oid			relid;
 					LOCKMODE	lockmode;
+					int			nparts = -1;
 					bool		is_alter_table;
 
 					if (stmt->concurrent)
@@ -2067,7 +2080,9 @@ ProcessUtilitySlow(ParseState *pstate,
 					 *
 					 * We also take the opportunity to verify that all
 					 * partitions are something we can put an index on, to
-					 * avoid building some indexes only to fail later.
+					 * avoid building some indexes only to fail later.  While
+					 * at it, also count the partitions, so that DefineIndex
+					 * needn't do a duplicative find_all_inheritors search.
 					 */
 					if (stmt->relation->inh &&
 						get_rel_relkind(relid) == RELKIND_PARTITIONED_TABLE)
@@ -2078,7 +2093,8 @@ ProcessUtilitySlow(ParseState *pstate,
 						inheritors = find_all_inheritors(relid, lockmode, NULL);
 						foreach(lc, inheritors)
 						{
-							char		relkind = get_rel_relkind(lfirst_oid(lc));
+							Oid			partrelid = lfirst_oid(lc);
+							char		relkind = get_rel_relkind(partrelid);
 
 							if (relkind != RELKIND_RELATION &&
 								relkind != RELKIND_MATVIEW &&
@@ -2096,6 +2112,8 @@ ProcessUtilitySlow(ParseState *pstate,
 										 errdetail("Table \"%s\" contains partitions that are foreign tables.",
 												   stmt->relation->relname)));
 						}
+						/* count direct and indirect children, but not rel */
+						nparts = list_length(inheritors) - 1;
 						list_free(inheritors);
 					}
 
@@ -2121,6 +2139,7 @@ ProcessUtilitySlow(ParseState *pstate,
 									InvalidOid, /* no predefined OID */
 									InvalidOid, /* no parent index */
 									InvalidOid, /* no parent constraint */
+									nparts, /* # of partitions, or -1 */
 									is_alter_table,
 									true,	/* check_rights */
 									true,	/* check_not_in_use */
@@ -2153,11 +2172,11 @@ ProcessUtilitySlow(ParseState *pstate,
 				break;
 
 			case T_CreateFdwStmt:
-				address = CreateForeignDataWrapper((CreateFdwStmt *) parsetree);
+				address = CreateForeignDataWrapper(pstate, (CreateFdwStmt *) parsetree);
 				break;
 
 			case T_AlterFdwStmt:
-				address = AlterForeignDataWrapper((AlterFdwStmt *) parsetree);
+				address = AlterForeignDataWrapper(pstate, (AlterFdwStmt *) parsetree);
 				break;
 
 			case T_CreateForeignServerStmt:
@@ -2228,7 +2247,7 @@ ProcessUtilitySlow(ParseState *pstate,
 				break;
 
 			case T_CreateRangeStmt: /* CREATE TYPE AS RANGE */
-				address = DefineRange((CreateRangeStmt *) parsetree);
+				address = DefineRange(pstate, (CreateRangeStmt *) parsetree);
 				break;
 
 			case T_AlterEnumStmt:	/* ALTER TYPE (enum) */
@@ -2280,16 +2299,16 @@ ProcessUtilitySlow(ParseState *pstate,
 				 * command itself is queued, which is enough.
 				 */
 				EventTriggerInhibitCommandCollection();
-				PG_TRY();
+				PG_TRY(2);
 				{
 					address = ExecRefreshMatView((RefreshMatViewStmt *) parsetree,
 												 queryString, params, qc);
 				}
-				PG_FINALLY();
+				PG_FINALLY(2);
 				{
 					EventTriggerUndoInhibitCommandCollection();
 				}
-				PG_END_TRY();
+				PG_END_TRY(2);
 				break;
 
 			case T_CreateTrigStmt:
@@ -2461,11 +2480,11 @@ ProcessUtilitySlow(ParseState *pstate,
 				break;
 
 			case T_CreatePublicationStmt:
-				address = CreatePublication((CreatePublicationStmt *) parsetree);
+				address = CreatePublication(pstate, (CreatePublicationStmt *) parsetree);
 				break;
 
 			case T_AlterPublicationStmt:
-				AlterPublication((AlterPublicationStmt *) parsetree);
+				AlterPublication(pstate, (AlterPublicationStmt *) parsetree);
 
 				/*
 				 * AlterPublication calls EventTriggerCollectSimpleCommand
@@ -2475,12 +2494,14 @@ ProcessUtilitySlow(ParseState *pstate,
 				break;
 
 			case T_CreateSubscriptionStmt:
-				address = CreateSubscription((CreateSubscriptionStmt *) parsetree,
+				address = CreateSubscription(pstate,
+											 (CreateSubscriptionStmt *) parsetree,
 											 isTopLevel);
 				break;
 
 			case T_AlterSubscriptionStmt:
-				address = AlterSubscription((AlterSubscriptionStmt *) parsetree,
+				address = AlterSubscription(pstate,
+											(AlterSubscriptionStmt *) parsetree,
 											isTopLevel);
 				break;
 
@@ -2821,6 +2842,8 @@ QueryReturnsTuples(Query *parsetree)
 		case CMD_SELECT:
 			/* returns tuples */
 			return true;
+		case CMD_MERGE:
+			return false;
 		case CMD_INSERT:
 		case CMD_UPDATE:
 		case CMD_DELETE:
@@ -3069,6 +3092,10 @@ CreateCommandTag(Node *parsetree)
 
 		case T_UpdateStmt:
 			tag = CMDTAG_UPDATE;
+			break;
+
+		case T_MergeStmt:
+			tag = CMDTAG_MERGE;
 			break;
 
 		case T_SelectStmt:
@@ -3616,9 +3643,7 @@ CreateCommandTag(Node *parsetree)
 			break;
 
 		case T_AlterDatabaseStmt:
-			tag = CMDTAG_ALTER_DATABASE;
-			break;
-
+		case T_AlterDatabaseRefreshCollStmt:
 		case T_AlterDatabaseSetStmt:
 			tag = CMDTAG_ALTER_DATABASE;
 			break;
@@ -3983,6 +4008,9 @@ CreateCommandTag(Node *parsetree)
 					case CMD_DELETE:
 						tag = CMDTAG_DELETE;
 						break;
+					case CMD_MERGE:
+						tag = CMDTAG_MERGE;
+						break;
 					case CMD_UTILITY:
 						tag = CreateCommandTag(stmt->utilityStmt);
 						break;
@@ -4042,6 +4070,9 @@ CreateCommandTag(Node *parsetree)
 						break;
 					case CMD_DELETE:
 						tag = CMDTAG_DELETE;
+						break;
+					case CMD_MERGE:
+						tag = CMDTAG_MERGE;
 						break;
 					case CMD_UTILITY:
 						tag = CreateCommandTag(stmt->utilityStmt);
@@ -4103,6 +4134,7 @@ GetCommandLogLevel(Node *parsetree)
 		case T_InsertStmt:
 		case T_DeleteStmt:
 		case T_UpdateStmt:
+		case T_MergeStmt:
 			lev = LOGSTMT_MOD;
 			break;
 
@@ -4336,9 +4368,7 @@ GetCommandLogLevel(Node *parsetree)
 			break;
 
 		case T_AlterDatabaseStmt:
-			lev = LOGSTMT_DDL;
-			break;
-
+		case T_AlterDatabaseRefreshCollStmt:
 		case T_AlterDatabaseSetStmt:
 			lev = LOGSTMT_DDL;
 			break;
@@ -4592,6 +4622,7 @@ GetCommandLogLevel(Node *parsetree)
 					case CMD_UPDATE:
 					case CMD_INSERT:
 					case CMD_DELETE:
+					case CMD_MERGE:
 						lev = LOGSTMT_MOD;
 						break;
 
@@ -4622,6 +4653,7 @@ GetCommandLogLevel(Node *parsetree)
 					case CMD_UPDATE:
 					case CMD_INSERT:
 					case CMD_DELETE:
+					case CMD_MERGE:
 						lev = LOGSTMT_MOD;
 						break;
 
@@ -4635,7 +4667,6 @@ GetCommandLogLevel(Node *parsetree)
 						lev = LOGSTMT_ALL;
 						break;
 				}
-
 			}
 			break;
 

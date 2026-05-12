@@ -23,7 +23,6 @@
 #include "cdb/cdbdispatchresult.h"
 #include "libpq-fe.h"
 #include "lib/stringinfo.h"
-#include "utils/int8.h"
 #include "utils/lsyscache.h"
 #include "utils/builtins.h"
 #include "utils/rel.h"
@@ -66,7 +65,7 @@ cdbRelMaxSegSize(Relation rel)
 			Assert(PQntuples(pgresult) == 1);
 			int64		tempsize = 0;
 
-			(void) scanint8(PQgetvalue(pgresult, 0, 0), false, &tempsize);
+			tempsize = pg_strtoint64(PQgetvalue(pgresult, 0, 0));
 			if (tempsize > size)
 				size = tempsize;
 		}

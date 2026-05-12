@@ -38,6 +38,7 @@
 1<:
 
 -- wait for segment to complete recovering
+!\retcode bash -c 'for i in $(seq 1 120); do pg_isready -q -p 7002 && exit 0; sleep 0.5; done; exit 1';
 0U: SELECT 1;
 
 -- reset faults as protection incase tests failed and panic didn't happen
@@ -87,9 +88,11 @@
 2:INSERT INTO crash_master_before_cleanup_phase SELECT i AS a, 1 AS b, 'hello world' AS c FROM generate_series(1, 10) AS i;
 2:DELETE FROM crash_master_before_cleanup_phase WHERE a < 4;
 
--- suspend at intended points
+-- inject panic fault
 2:SELECT gp_inject_fault('compaction_before_cleanup_phase', 'panic', '', '', 'crash_master_before_cleanup_phase', 1, -1, 0, 1);
 2:VACUUM crash_master_before_cleanup_phase;
+-- wait until master is ready to accept connections after postmaster reset
+!\retcode bash -c 'for i in $(seq 1 120); do pg_isready -q -p 7000 && exit 0; sleep 0.5; done; exit 1';
 
 -- reset faults as protection incase tests failed and panic didn't happen
 4:SELECT gp_inject_fault('compaction_before_cleanup_phase', 'reset', 1);

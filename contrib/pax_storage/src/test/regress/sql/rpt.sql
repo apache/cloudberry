@@ -515,8 +515,19 @@ explain (costs off) select * from t1_13532 x, t2_13532 y where y.a < random() an
 -- test for optimizer_enable_replicated_table
 explain (costs off) select * from rep_tab;
 set optimizer_enable_replicated_table=off;
+set optimizer_trace_fallback=on;
 explain (costs off) select * from rep_tab;
+reset optimizer_trace_fallback;
 reset optimizer_enable_replicated_table;
+
+-- Ensure plan with Gather Motion node is generated.
+drop table if exists t;
+create table t (i int, j int) distributed replicated;
+insert into t values (1, 2);
+explain (costs off) select j, (select j) AS "Correlated Field" from t;
+select j, (select j) AS "Correlated Field" from t;
+explain (costs off) select j, (select 5) AS "Uncorrelated Field" from t;
+select j, (select 5) AS "Uncorrelated Field" from t;
 
 -- start_ignore
 drop schema rpt cascade;

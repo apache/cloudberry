@@ -18,11 +18,12 @@ OBJS = \
 	pg_waldump.o \
 	rmgrdesc.o \
 	$(PAX_OBJS) \
-	xlogreader.o
+	xlogreader.o \
+	xlogstats.o
 
 override CPPFLAGS := -DFRONTEND $(CPPFLAGS)
 
-RMGRDESCSOURCES = $(sort $(notdir $(wildcard $(top_srcdir)/src/backend/access/rmgrdesc/*desc.c)))
+RMGRDESCSOURCES = $(sort $(notdir $(wildcard $(top_srcdir)/src/backend/access/rmgrdesc/*desc*.c)))
 RMGRDESCOBJS = $(patsubst %.c,%.o,$(RMGRDESCSOURCES))
 
 
@@ -45,6 +46,8 @@ rmgrdesc.o: paxc_desc.h
 
 paxc_desc.o: paxc_desc.h
 endif
+xlogstats.c: % : $(top_srcdir)/src/backend/access/transam/%
+	rm -f $@ && $(LN_S) $< .
 
 $(RMGRDESCSOURCES): % : $(top_srcdir)/src/backend/access/rmgrdesc/%
 	rm -f $@ && $(LN_S) $< .
@@ -59,7 +62,7 @@ uninstall:
 	rm -f '$(DESTDIR)$(bindir)/pg_waldump$(X)'
 
 clean distclean maintainer-clean:
-	rm -f pg_waldump$(X) $(OBJS) $(RMGRDESCSOURCES) xlogreader.c paxc_desc.c paxc_desc.h
+	rm -f pg_waldump$(X) $(OBJS) $(RMGRDESCSOURCES) xlogreader.c paxc_desc.c paxc_desc.h xlogstats.c
 	rm -rf tmp_check
 
 check:

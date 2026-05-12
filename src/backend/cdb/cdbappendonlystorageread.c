@@ -65,7 +65,7 @@ AppendOnlyStorageRead_Init(AppendOnlyStorageRead *storageRead,
 						   Oid reloid,
 						   char *title,
 						   AppendOnlyStorageAttributes *storageAttributes,
-						   RelFileNode *relFileNode,
+						   RelFileLocator *relFileNode,
 						   const struct f_smgr_ao *smgrAO)
 {
 	uint8	   *memory;

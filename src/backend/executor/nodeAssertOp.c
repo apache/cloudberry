@@ -45,7 +45,7 @@ CheckForAssertViolations(AssertOpState* node, TupleTableSlot* slot)
 
 	if (!isNull && !DatumGetBool(expr_value))
 	{
-		Value *valErrorMessage = (Value*) list_nth(plannode->errmessage, 0);
+		String *valErrorMessage = list_nth(plannode->errmessage, 0);
 
 		Assert(NULL != valErrorMessage && IsA(valErrorMessage, String) &&
 				0 < strlen(strVal(valErrorMessage)));

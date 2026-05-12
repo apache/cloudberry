@@ -29,7 +29,7 @@
  *
  * Portions Copyright (c) 2007-2008, Greenplum inc
  * Portions Copyright (c) 2012-Present VMware, Inc. or its affiliates.
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -61,6 +61,7 @@ IsCTIDVar(Var *var, RelOptInfo *rel)
 	if (var->varattno == SelfItemPointerAttributeNumber &&
 		var->vartype == TIDOID &&
 		var->varno == rel->relid &&
+		var->varnullingrels == NULL &&
 		var->varlevelsup == 0)
 		return true;
 	return false;
@@ -307,10 +308,10 @@ TidQualFromRestrictInfoList(PlannerInfo *root, List *rlist, RelOptInfo *rel)
 				}
 				else
 				{
-					RestrictInfo *rinfo = castNode(RestrictInfo, orarg);
+					RestrictInfo *ri = castNode(RestrictInfo, orarg);
 
-					Assert(!restriction_is_or_clause(rinfo));
-					sublist = TidQualFromRestrictInfo(root, rinfo, rel);
+					Assert(!restriction_is_or_clause(ri));
+					sublist = TidQualFromRestrictInfo(root, ri, rel);
 				}
 
 				/*

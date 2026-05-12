@@ -5,6 +5,7 @@ set search_path to qp_derived_table;
 -- optimization time is higher. Hence disable exhaustive join order search for
 -- faster run. Also catch any fallbacks to planner.
 set optimizer_join_order=query;
+set optimizer_trace_fallback=on;
 -- end_ignore
 
 create table T0(

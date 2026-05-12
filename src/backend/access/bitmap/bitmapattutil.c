@@ -122,14 +122,14 @@ _bitmap_create_lov_heapandindex(Relation rel,
 		lovHeap = heap_open(heapid, AccessExclusiveLock);
 		lovIndex = index_open(idxid, AccessExclusiveLock);
 
-		RelationSetNewRelfilenode(lovHeap, lovHeap->rd_rel->relpersistence);
-		RelationSetNewRelfilenode(lovIndex, lovIndex->rd_rel->relpersistence);
+		RelationSetNewRelfilenumber(lovHeap, lovHeap->rd_rel->relpersistence);
+		RelationSetNewRelfilenumber(lovIndex, lovIndex->rd_rel->relpersistence);
 
 		/*
 		 * After creating the new relfilenode for a btee index, this is not
 		 * a btree anymore. We create the new metapage for this btree.
 		 */
-		btree_metabuf = _bt_getbuf(lovIndex, P_NEW, BT_WRITE);
+		btree_metabuf = _bt_allocbuf(lovIndex, lovHeap);
 		Assert (BTREE_METAPAGE == BufferGetBlockNumber(btree_metabuf));
 		btree_metapage = BufferGetPage(btree_metabuf);
 		_bt_initmetapage(btree_metapage, P_NONE, 0, _bt_allequalimage(lovIndex, true));
@@ -348,7 +348,7 @@ _bitmap_insert_lov(Relation lovHeap, Relation lovIndex, Datum *datum,
 	memcpy(indexDatum, datum, (tupDesc->natts - 2) * sizeof(Datum));
 	memcpy(indexNulls, nulls, (tupDesc->natts - 2) * sizeof(bool));
 	result = index_insert(lovIndex, indexDatum, indexNulls,
-					 	  &(tuple->t_self), lovHeap, true, false, NULL);
+						  &(tuple->t_self), lovHeap, UNIQUE_CHECK_YES, false, NULL);
 
 #ifdef FAULT_INJECTOR
 	FaultInjector_InjectFaultIfSet(

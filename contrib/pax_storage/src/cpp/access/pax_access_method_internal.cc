@@ -189,7 +189,7 @@ void PaxAccessMethod::SwapRelationFiles(Oid relid1, Oid relid2,
 namespace pax {
 
 void CCPaxAccessMethod::RelationSetNewFilenode(Relation rel,
-                                               const RelFileNode *newrnode,
+                                               const RelFileLocator *newrlocator,
                                                char persistence,
                                                TransactionId *freeze_xid,
                                                MultiXactId *minmulti) {
@@ -241,22 +241,22 @@ void CCPaxAccessMethod::RelationSetNewFilenode(Relation rel,
   table_close(pax_tables_rel, NoLock);
 
   // create relfilenode file for pax table
-  auto srel = paxc::PaxRelationCreateStorage(*newrnode, rel);
+  auto srel = paxc::PaxRelationCreateStorage(*newrlocator, rel);
   smgrclose(srel);
 
   // create data directory
   CBDB_TRY();
   {
     FileSystem *fs = pax::Singleton<LocalFileSystem>::GetInstance();
-    auto path = cbdb::BuildPaxDirectoryPath(*newrnode, rel->rd_backend);
+    auto path = cbdb::BuildPaxDirectoryPath(*newrlocator, rel->rd_backend);
     Assert(!path.empty());
     CBDB_CHECK(
         (fs->CreateDirectory(path) == 0),
         cbdb::CException::ExType::kExTypeIOError,
         fmt("Create directory failed [path=%s, errno=%d], "
             "relfilenode [spcNode=%u, dbNode=%u, relNode=%u, backend=%d]",
-            path.c_str(), errno, newrnode->spcNode, newrnode->dbNode,
-            newrnode->relNode, rel->rd_backend));
+			path.c_str(), errno, newrlocator->spcOid, newrlocator->dbOid,
+			newrlocator->relNumber, rel->rd_backend));
   }
   CBDB_CATCH_DEFAULT();
   CBDB_FINALLY({});
@@ -277,7 +277,7 @@ void CCPaxAccessMethod::RelationNontransactionalTruncate(Relation rel) {
 }
 
 void CCPaxAccessMethod::RelationCopyData(Relation rel,
-                                         const RelFileNode *newrnode) {
+                                         const RelFileLocator *newrnode) {
   CBDB_TRY();
   {
     cbdb::RelOpenSmgr(rel);

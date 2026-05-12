@@ -483,7 +483,7 @@ TRRemapRange(TupleRemapper *remapper, RangeRemapInfo *remapinfo,
 	{
 		/* Reserialize.  */
 		*changed = true;
-		range = range_serialize(remapinfo->typcache, &lower, &upper, empty);
+		range = range_serialize(remapinfo->typcache, &lower, &upper, empty, NULL);
 		return RangeTypePGetDatum(range);
 	}
 

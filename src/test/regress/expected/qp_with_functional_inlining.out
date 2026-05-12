@@ -542,7 +542,7 @@ View definition:
            FROM foo
  LIMIT 10
         )
- SELECT cte.e
+ SELECT e
    FROM cte;
 
 SELECT * FROM cte_view ORDER BY 1;

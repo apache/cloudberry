@@ -3,7 +3,7 @@
  * tableam.c
  *		Table access method routines too big to be inline functions.
  *
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -115,7 +115,7 @@ TableScanDesc
 table_beginscan_catalog(Relation relation, int nkeys, struct ScanKeyData *key)
 {
 	uint32		flags = SO_TYPE_SEQSCAN |
-	SO_ALLOW_STRAT | SO_ALLOW_SYNC | SO_ALLOW_PAGEMODE | SO_TEMP_SNAPSHOT;
+		SO_ALLOW_STRAT | SO_ALLOW_SYNC | SO_ALLOW_PAGEMODE | SO_TEMP_SNAPSHOT;
 	Oid			relid = RelationGetRelid(relation);
 	Snapshot	snapshot = RegisterSnapshot(GetCatalogSnapshot(relid));
 
@@ -229,19 +229,18 @@ table_parallelscan_initialize(Relation rel, ParallelTableScanDesc pscan,
 }
 
 TableScanDesc
-table_beginscan_parallel(Relation relation, ParallelTableScanDesc parallel_scan)
+table_beginscan_parallel(Relation relation, ParallelTableScanDesc pscan)
 {
 	Snapshot	snapshot;
 	uint32		flags = SO_TYPE_SEQSCAN |
-	SO_ALLOW_STRAT | SO_ALLOW_SYNC | SO_ALLOW_PAGEMODE;
+		SO_ALLOW_STRAT | SO_ALLOW_SYNC | SO_ALLOW_PAGEMODE;
 
-	Assert(RelationGetRelid(relation) == parallel_scan->phs_relid);
+	Assert(RelationGetRelid(relation) == pscan->phs_relid);
 
-	if (!parallel_scan->phs_snapshot_any)
+	if (!pscan->phs_snapshot_any)
 	{
 		/* Snapshot was serialized -- restore it */
-		snapshot = RestoreSnapshot((char *) parallel_scan +
-								   parallel_scan->phs_snapshot_off);
+		snapshot = RestoreSnapshot((char *) pscan + pscan->phs_snapshot_off);
 		RegisterSnapshot(snapshot);
 		flags |= SO_TEMP_SNAPSHOT;
 	}
@@ -252,7 +251,7 @@ table_beginscan_parallel(Relation relation, ParallelTableScanDesc parallel_scan)
 	}
 
 	return relation->rd_tableam->scan_begin(relation, snapshot, 0, NULL,
-											parallel_scan, flags);
+											pscan, flags);
 }
 
 
@@ -411,7 +410,7 @@ void
 simple_table_tuple_update(Relation rel, ItemPointer otid,
 						  TupleTableSlot *slot,
 						  Snapshot snapshot,
-						  bool *update_indexes)
+						  TU_UpdateIndexes *update_indexes)
 {
 	TM_Result	result;
 	TM_FailureData tmfd;
@@ -446,7 +445,6 @@ simple_table_tuple_update(Relation rel, ItemPointer otid,
 			elog(ERROR, "unrecognized table_tuple_update status: %u", result);
 			break;
 	}
-
 }
 
 
@@ -694,17 +692,14 @@ table_block_relation_size(Relation rel, ForkNumber forkNumber)
 {
 	uint64		nblocks = 0;
 
-	/* Open it at the smgr level if not already done */
-	RelationOpenSmgr(rel);
-
 	/* InvalidForkNumber indicates returning the size for all forks */
 	if (forkNumber == InvalidForkNumber)
 	{
 		for (int i = 0; i < MAX_FORKNUM; i++)
-			nblocks += smgrnblocks(rel->rd_smgr, i);
+			nblocks += smgrnblocks(RelationGetSmgr(rel), i);
 	}
 	else
-		nblocks = smgrnblocks(rel->rd_smgr, forkNumber);
+		nblocks = smgrnblocks(RelationGetSmgr(rel), forkNumber);
 
 	return nblocks * BLCKSZ;
 }

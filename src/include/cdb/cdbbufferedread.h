@@ -19,7 +19,8 @@
 #define CDBBUFFEREDREAD_H
 
 #include "storage/fd.h"
-#include "storage/relfilenode.h"
+#include "storage/relfilelocator.h"
+
 typedef struct BufferedRead
 {
 	/*
@@ -73,7 +74,7 @@ typedef struct BufferedRead
 	/* current read position */
 	off_t				 fileOff;
 
-	RelFileNode 		relFileNode;
+	RelFileLocator		relFileNode;
 	/*
 	 * Temporary limit support for random reading.
 	 */
@@ -105,7 +106,7 @@ extern void BufferedReadInit(
     int32                maxBufferLen,
     int32                maxLargeReadLen,
     char				 *relationName,
-	RelFileNode 		 *file_node,
+	RelFileLocator 		 *file_node,
 	const struct f_smgr_ao       *smgr);
 
 /*

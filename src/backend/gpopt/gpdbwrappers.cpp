@@ -34,6 +34,7 @@
 #include "catalog/pg_collation.h"
 extern "C" {
 #include "access/amapi.h"
+#include "commands/defrem.h"
 #include "access/external.h"
 #include "access/genam.h"
 #include "catalog/pg_aggregate.h"
@@ -1373,7 +1374,7 @@ gpdb::LookupTypeCache(Oid type_id, int flags)
 	return nullptr;
 }
 
-Value *
+String *
 gpdb::MakeStringValue(char *str)
 {
 	GP_WRAP_START;
@@ -1384,7 +1385,7 @@ gpdb::MakeStringValue(char *str)
 	return nullptr;
 }
 
-Value *
+Integer *
 gpdb::MakeIntegerValue(long i)
 {
 	GP_WRAP_START;
@@ -1867,7 +1868,8 @@ gpdb::GetMVNDistinct(Oid stat_oid)
 {
 	GP_WRAP_START;
 	{
-		return statext_ndistinct_load(stat_oid);
+		bool inh = has_subclass(StatisticsGetRelation(stat_oid, false));
+		return statext_ndistinct_load(stat_oid, inh);
 	}
 	GP_WRAP_END;
 }
@@ -1877,7 +1879,8 @@ gpdb::GetMVDependencies(Oid stat_oid)
 {
 	GP_WRAP_START;
 	{
-		return statext_dependencies_load(stat_oid, true);
+		bool inh = has_subclass(StatisticsGetRelation(stat_oid, false));
+		return statext_dependencies_load(stat_oid, inh, true);
 	}
 	GP_WRAP_END;
 }
@@ -2075,11 +2078,11 @@ gpdb::CdbHashRandomSeg(int num_segments)
 
 // check permissions on range table
 void
-gpdb::CheckRTPermissions(List *rtable)
+gpdb::CheckRTPermissions(List *rtable, List *rteperminfos)
 {
 	GP_WRAP_START;
 	{
-		ExecCheckRTPerms(rtable, true);
+		ExecCheckPermissions(rtable, rteperminfos, true);
 		return;
 	}
 	GP_WRAP_END;
@@ -2732,6 +2735,18 @@ gpdb::TestexprIsHashable(Node *testexpr, List *param_ids)
 	}
 	GP_WRAP_END;
 	return false;
+}
+
+RTEPermissionInfo *
+gpdb::GetRTEPermissionInfo(List *rteperminfos, const RangeTblEntry *rte)
+{
+	GP_WRAP_START;
+	{
+		// Cast away const: upstream getRTEPermissionInfo() only reads
+		// rte->perminfoindex and rte->relid but its signature lacks const.
+		return getRTEPermissionInfo(rteperminfos, (RangeTblEntry *) rte);
+	}
+	GP_WRAP_END;
 }
 
 // EOF

@@ -162,7 +162,7 @@ initNextTableToScan(DynamicBitmapHeapScanState *node)
 	 * FIXME: should we use execute_attr_map_tuple instead? Seems like a
 	 * higher level abstraction that fits the bill
 	 */
-	attMap = build_attrmap_by_name_if_req(partTupDesc, lastTupDesc);
+	attMap = build_attrmap_by_name_if_req(partTupDesc, lastTupDesc, false);
 	table_close(lastScannedRel, AccessShareLock);
 
 	/* If attribute remapping is not necessary, then do not change the varattno */
@@ -204,6 +204,7 @@ ExecDynamicBitmapHeapScan(PlanState *pstate)
 		node->did_pruning = true;
 		node->as_valid_subplans =
 				ExecFindMatchingSubPlans(node->as_prune_state,
+										 false,
 										 node->ss.ps.state,
 										 list_length(plan->partOids),
 										 plan->join_prune_paramids);

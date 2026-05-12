@@ -4,7 +4,7 @@
  *	  POSTGRES define and remove utility definitions.
  *
  *
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * src/include/commands/defrem.h
@@ -31,6 +31,7 @@ extern ObjectAddress DefineIndex(Oid relationId,
 								 Oid indexRelationId,
 								 Oid parentIndexId,
 								 Oid parentConstraintId,
+								 int total_parts,
 								 bool is_alter_table,
 								 bool check_rights,
 								 bool check_not_in_use,
@@ -62,7 +63,7 @@ extern ObjectAddress CreateCast(CreateCastStmt *stmt);
 extern ObjectAddress CreateTransform(CreateTransformStmt *stmt);
 extern void IsThereFunctionInNamespace(const char *proname, int pronargs,
 									   oidvector *proargtypes, Oid nspOid);
-extern void ExecuteDoStmt(DoStmt *stmt, bool atomic);
+extern void ExecuteDoStmt(ParseState *pstate, DoStmt *stmt, bool atomic);
 extern void ExecuteCallStmt(CallStmt *stmt, ParamListInfo params, bool atomic, DestReceiver *dest);
 extern TupleDesc CallStmtResultDesc(CallStmt *stmt);
 extern Oid	get_transform_oid(Oid type_id, Oid lang_id, bool missing_ok);
@@ -89,6 +90,7 @@ extern ObjectAddress AlterOperator(AlterOperatorStmt *stmt);
 extern ObjectAddress CreateStatistics(CreateStatsStmt *stmt);
 extern ObjectAddress AlterStatistics(AlterStatsStmt *stmt);
 extern void RemoveStatisticsById(Oid statsOid);
+extern void RemoveStatisticsDataById(Oid statsOid, bool inh);
 extern Oid	StatisticsGetRelation(Oid statId, bool missing_ok);
 
 /* commands/aggregatecmds.c */
@@ -127,8 +129,8 @@ extern ObjectAddress AlterForeignServerOwner(const char *name, Oid newOwnerId);
 extern void AlterForeignServerOwner_oid(Oid, Oid newOwnerId);
 extern ObjectAddress AlterForeignDataWrapperOwner(const char *name, Oid newOwnerId);
 extern void AlterForeignDataWrapperOwner_oid(Oid fwdId, Oid newOwnerId);
-extern ObjectAddress CreateForeignDataWrapper(CreateFdwStmt *stmt);
-extern ObjectAddress AlterForeignDataWrapper(AlterFdwStmt *stmt);
+extern ObjectAddress CreateForeignDataWrapper(ParseState *pstate, CreateFdwStmt *stmt);
+extern ObjectAddress AlterForeignDataWrapper(ParseState *pstate, AlterFdwStmt *stmt);
 extern ObjectAddress CreateForeignServer(CreateForeignServerStmt *stmt);
 extern ObjectAddress AlterForeignServer(AlterForeignServerStmt *stmt);
 extern ObjectAddress CreateStorageServer(CreateStorageServerStmt *stmt);
@@ -166,9 +168,11 @@ extern double defGetNumeric(DefElem *def);
 extern bool defGetBoolean(DefElem *def);
 extern int32 defGetInt32(DefElem *def);
 extern int64 defGetInt64(DefElem *def);
+extern Oid	defGetObjectId(DefElem *def);
 extern List *defGetQualifiedName(DefElem *def);
 extern TypeName *defGetTypeName(DefElem *def);
 extern int	defGetTypeLength(DefElem *def);
 extern List *defGetStringList(DefElem *def);
+extern void errorConflictingDefElem(DefElem *defel, ParseState *pstate) pg_attribute_noreturn();
 
 #endif							/* DEFREM_H */

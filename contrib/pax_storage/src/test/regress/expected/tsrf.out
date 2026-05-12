@@ -466,9 +466,8 @@ select 'foo' as f, generate_series(1,2) as g from few order by 1;
          Output: ('foo'::text), generate_series(1, 2)
          ->  Seq Scan on public.few
                Output: 'foo'::text
- Settings: enable_parallel = 'off', optimizer = 'off'
  Optimizer: Postgres query optimizer
-(8 rows)
+(7 rows)
 
 select 'foo' as f, generate_series(1,2) as g from few order by 1;
   f  | g 

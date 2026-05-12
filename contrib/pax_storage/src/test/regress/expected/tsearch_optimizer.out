@@ -1,4 +1,6 @@
 set optimizer_print_missing_stats = off;
+-- directory paths are passed to us in environment variables
+\getenv abs_srcdir PG_ABS_SRCDIR
 --
 -- Sanity checks for text search catalogs
 --
@@ -56,6 +58,14 @@ WHERE
 -------+-------+--------+--------------+----------+---------
 (0 rows)
 
+-- Load some test data
+CREATE TABLE test_tsvector(
+	t text,
+	a tsvector
+);
+\set filename :abs_srcdir '/data/tsearch.data'
+COPY test_tsvector FROM :'filename';
+ANALYZE test_tsvector;
 -- test basic text search behavior without indexes, then with
 SELECT count(*) FROM test_tsvector WHERE a @@ 'wr|qh';
  count 
@@ -201,7 +211,6 @@ SELECT count(*) FROM test_tsvector WHERE a @@ '!wd:D';
    450
 (1 row)
 
--- PAX not support gist/spgist/brin indexes
 create index wowidx on test_tsvector using gist (a);
 ERROR:  pax only support btree/hash/gin/bitmap indexes (pax_access_handle.cc:736)
 SET enable_seqscan=OFF;
@@ -520,7 +529,6 @@ SELECT count(*) FROM test_tsvector WHERE a @@ '!wd:D';
 (1 row)
 
 -- Test siglen parameter of GiST tsvector_ops
--- PAX not support gist/spgist/brin indexes
 CREATE INDEX wowidx1 ON test_tsvector USING gist (a tsvector_ops(foo=1));
 ERROR:  unrecognized parameter "foo"
 CREATE INDEX wowidx1 ON test_tsvector USING gist (a tsvector_ops(siglen=0));
@@ -542,8 +550,7 @@ ERROR:  pax only support btree/hash/gin/bitmap indexes (pax_access_handle.cc:736
  t      | text     |           |          | 
  a      | tsvector |           |          | 
 
-DROP INDEX wowidx;
-ERROR:  index "wowidx" does not exist
+-- DROP INDEX wowidx;
 EXPLAIN (costs off) SELECT count(*) FROM test_tsvector WHERE a @@ 'wr|qh';
                           QUERY PLAN                           
 ---------------------------------------------------------------
@@ -699,10 +706,9 @@ SELECT count(*) FROM test_tsvector WHERE a @@ '!wd:D';
    450
 (1 row)
 
-DROP INDEX wowidx2;
-ERROR:  index "wowidx2" does not exist
+-- DROP INDEX wowidx2;
 CREATE INDEX wowidx ON test_tsvector USING gist (a tsvector_ops(siglen=484));
-ERROR:  pax only support btree/hash/gin/bitmap indexes (pax_access_handle.cc:736)
+ERROR:  pax only support btree/hash/gin/bitmap indexes (pax_access_handle.cc:###)
 \d test_tsvector
             Table "public.test_tsvector"
  Column |   Type   | Collation | Nullable | Default 
@@ -868,8 +874,7 @@ SELECT count(*) FROM test_tsvector WHERE a @@ '!wd:D';
 RESET enable_seqscan;
 RESET enable_indexscan;
 RESET enable_bitmapscan;
-DROP INDEX wowidx;
-ERROR:  index "wowidx" does not exist
+-- DROP INDEX wowidx;
 CREATE INDEX wowidx ON test_tsvector USING gin (a);
 SET enable_seqscan=OFF;
 -- GIN only supports bitmapscan, so no need to test plain indexscan
@@ -1088,6 +1093,7 @@ SELECT * FROM ts_stat('SELECT a FROM test_tsvector', 'AB') ORDER BY ndoc DESC, n
  DFG  |    1 |      2
 (1 row)
 
+DROP INDEX wowidx;
 --dictionaries and to_tsvector
 SELECT ts_lexize('english_stem', 'skies');
  ts_lexize 
@@ -1817,13 +1823,131 @@ Water, water, every where
 Water, water, every where,
   Nor any drop to drink.
 S. T. Coleridge (1772-1834)
-', phraseto_tsquery('english', 'painted Ocean'));
-              ts_headline              
----------------------------------------
- <b>painted</b> Ship                  +
-   Upon a <b>painted</b> <b>Ocean</b>.+
- Water, water, every where            +
+', to_tsquery('english', 'day & drink'));
+            ts_headline             
+------------------------------------
+   And all the boards did shrink;  +
+   Nor any drop
+   Upon a painted Ocean.           +
+   We stuck, nor breath nor motion,+
+ <b>day</b>,                       +
+ As idle as a painted Ship         +
+ Water, water, every where         +
+ Water, water, every where,        +
+(1 row)
+
+SELECT ts_headline('english', '
+Day after day, day after day,
+  We stuck, nor breath nor motion,
+As idle as a painted Ship
+  Upon a painted Ocean.
+Water, water, every where
+  And all the boards did shrink;
+Water, water, every where,
+  Nor any drop to drink.
+S. T. Coleridge (1772-1834)
+', to_tsquery('english', 'day | drink'));
+                        ts_headline                        
+-----------------------------------------------------------
+   We stuck, nor breath nor motion,                       +
+ <b>Day</b> after <b>day</b>, <b>day</b> after <b>day</b>,+
+ As idle as a painted
+(1 row)
+
+SELECT ts_headline('english', '
+Day after day, day after day,
+  We stuck, nor breath nor motion,
+As idle as a painted Ship
+  Upon a painted Ocean.
+Water, water, every where
+  And all the boards did shrink;
+Water, water, every where,
+  Nor any drop to drink.
+S. T. Coleridge (1772-1834)
+', to_tsquery('english', 'day | !drink'));
+                        ts_headline                        
+-----------------------------------------------------------
+   We stuck, nor breath nor motion,                       +
+ <b>Day</b> after <b>day</b>, <b>day</b> after <b>day</b>,+
+ As idle as a painted
+(1 row)
+
+SELECT ts_headline('english', '
+Day after day, day after day,
+  We stuck, nor breath nor motion,
+As idle as a painted Ship
+  Upon a painted Ocean.
+Water, water, every where
+  And all the boards did shrink;
+Water, water, every where,
+  Nor any drop to drink.
+S. T. Coleridge (1772-1834)
+', to_tsquery('english', 'painted <-> Ship & drink'));
+           ts_headline            
+----------------------------------
+   And all the boards did shrink;+
+   Nor any drop to <b>drink</b>
+   Upon a <b>painted</b> Ocean.  +
+ <b>painted</b> <b>Ship</b>      +
+ Water, water, every where       +
+ Water, water, every where,      +
+(1 row)
+
+SELECT ts_headline('english', '
+Day after day, day after day,
+  We stuck, nor breath nor motion,
+As idle as a painted Ship
+  Upon a painted Ocean.
+Water, water, every where
+  And all the boards did shrink;
+Water, water, every where,
+  Nor any drop to drink.
+S. T. Coleridge (1772-1834)
+', to_tsquery('english', 'painted <-> Ship | drink'));
+           ts_headline           
+---------------------------------
    And all the boards did shrink
+   Upon a <b>painted</b> Ocean. +
+ <b>painted</b> <b>Ship</b>     +
+ Water, water, every where      +
+(1 row)
+
+SELECT ts_headline('english', '
+Day after day, day after day,
+  We stuck, nor breath nor motion,
+As idle as a painted Ship
+  Upon a painted Ocean.
+Water, water, every where
+  And all the boards did shrink;
+Water, water, every where,
+  Nor any drop to drink.
+S. T. Coleridge (1772-1834)
+', to_tsquery('english', 'painted <-> Ship | !drink'));
+           ts_headline           
+---------------------------------
+ <b>painted</b> <b>Ship</b>     +
+   Upon a <b>painted</b> Ocean. +
+ Water, water, every where      +
+   And all the boards did shrink
+(1 row)
+
+SELECT ts_headline('english', '
+Day after day, day after day,
+  We stuck, nor breath nor motion,
+As idle as a painted Ship
+  Upon a painted Ocean.
+Water, water, every where
+  And all the boards did shrink;
+Water, water, every where,
+  Nor any drop to drink.
+S. T. Coleridge (1772-1834)
+', phraseto_tsquery('english', 'painted Ocean'));
+           ts_headline            
+----------------------------------
+ <b>painted</b> <b>Ocean</b>.    +
+ Water, water, every where       +
+   And all the boards did shrink;+
+ Water, water, every
 (1 row)
 
 SELECT ts_headline('english', '
@@ -1852,6 +1976,15 @@ to_tsquery('english','Lorem') && phraseto_tsquery('english','ullamcorper urna'),
                                   ts_headline                                  
 -------------------------------------------------------------------------------
  <b>Lorem</b> ipsum <b>urna</b>.  Nullam nullam <b>ullamcorper</b> <b>urna</b>
+(1 row)
+
+SELECT ts_headline('english',
+'Lorem ipsum urna.  Nullam nullam ullamcorper urna.',
+phraseto_tsquery('english','ullamcorper urna'),
+'MaxWords=100, MinWords=5');
+                         ts_headline                         
+-------------------------------------------------------------
+ <b>urna</b>.  Nullam nullam <b>ullamcorper</b> <b>urna</b>.
 (1 row)
 
 SELECT ts_headline('english', '
@@ -1896,9 +2029,9 @@ SELECT ts_headline('simple', '1 2 3 1 3'::text, '1 & 3', 'MaxWords=4, MinWords=1
 (1 row)
 
 SELECT ts_headline('simple', '1 2 3 1 3'::text, '1 <-> 3', 'MaxWords=4, MinWords=1');
-        ts_headline         
-----------------------------
- <b>3</b> <b>1</b> <b>3</b>
+    ts_headline    
+-------------------
+ <b>1</b> <b>3</b>
 (1 row)
 
 --Check if headline fragments work
@@ -2001,6 +2134,23 @@ to_tsquery('english','Lorem') && phraseto_tsquery('english','ullamcorper urna'),
                                   ts_headline                                  
 -------------------------------------------------------------------------------
  <b>Lorem</b> ipsum <b>urna</b>.  Nullam nullam <b>ullamcorper</b> <b>urna</b>
+(1 row)
+
+-- Edge cases with empty query
+SELECT ts_headline('english',
+'', to_tsquery('english', ''));
+NOTICE:  text-search query doesn't contain lexemes: ""
+ ts_headline 
+-------------
+ 
+(1 row)
+
+SELECT ts_headline('english',
+'foo bar', to_tsquery('english', ''));
+NOTICE:  text-search query doesn't contain lexemes: ""
+ ts_headline 
+-------------
+ foo bar
 (1 row)
 
 --Rewrite sub system
@@ -2347,10 +2497,10 @@ SELECT to_tsquery('SKIES & My | booKs');
 -- distribution key column.
 alter table test_tsvector add column distkey int4;
 alter table test_tsvector set distributed by (distkey);
--- Pax not support current TRIGGER
--- CREATE TRIGGER tsvectorupdate
--- BEFORE UPDATE OR INSERT ON test_tsvector
--- FOR EACH ROW EXECUTE PROCEDURE tsvector_update_trigger(a, 'pg_catalog.english', t);
+CREATE TRIGGER tsvectorupdate
+BEFORE UPDATE OR INSERT ON test_tsvector
+FOR EACH ROW EXECUTE PROCEDURE tsvector_update_trigger(a, 'pg_catalog.english', t);
+ERROR:  ON UPDATE triggers are not supported on append-only tables
 SELECT count(*) FROM test_tsvector WHERE a @@ to_tsquery('345&qwerty');
  count 
 -------
@@ -2549,10 +2699,17 @@ select websearch_to_tsquery('simple', 'abc <-> def');
  'abc' & 'def'
 (1 row)
 
+-- parens are ignored, too
 select websearch_to_tsquery('simple', 'abc (pg or class)');
   websearch_to_tsquery  
 ------------------------
  'abc' & 'pg' | 'class'
+(1 row)
+
+select websearch_to_tsquery('simple', '(foo bar) or (ding dong)');
+      websearch_to_tsquery       
+---------------------------------
+ 'foo' & 'bar' | 'ding' & 'dong'
 (1 row)
 
 -- NOT is ignored in quotes

@@ -5,7 +5,7 @@
  *	  externs for functions used by frontend postgres applications.
  *
  * Portions Copyright (c) 2012-Present VMware, Inc. or its affiliates.
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * src/interfaces/libpq/libpq-fe.h
@@ -37,6 +37,8 @@ extern "C"
 #define LIBPQ_HAS_PIPELINING 1
 /* Indicates presence of PQsetTraceFlags; also new PQtrace output format */
 #define LIBPQ_HAS_TRACE_FLAGS 1
+/* Indicates that PQsslAttribute(NULL, "library") is useful */
+#define LIBPQ_HAS_SSL_LIBRARY_DETECTION 1
 
 /*
  * Option flags for PQcopyResult
@@ -365,6 +367,7 @@ extern int	PQbackendPID(const PGconn *conn);
 extern PGpipelineStatus PQpipelineStatus(const PGconn *conn);
 extern int	PQconnectionNeedsPassword(const PGconn *conn);
 extern int	PQconnectionUsedPassword(const PGconn *conn);
+extern int	PQconnectionUsedGSSAPI(const PGconn *conn);
 extern int	PQclientEncoding(const PGconn *conn);
 extern int	PQsetClientEncoding(PGconn *conn, const char *encoding);
 
@@ -494,7 +497,7 @@ extern int	PQputCopyEnd(PGconn *conn, const char *errormsg);
 extern int	PQgetCopyData(PGconn *conn, char **buffer, int async);
 
 /* Deprecated routines for copy in/out */
-extern int	PQgetline(PGconn *conn, char *string, int length);
+extern int	PQgetline(PGconn *conn, char *buffer, int length);
 extern int	PQputline(PGconn *conn, const char *string);
 extern int	PQgetlineAsync(PGconn *conn, char *buffer, int bufsize);
 extern int	PQputnbytes(PGconn *conn, const char *buffer, int nbytes);
@@ -602,7 +605,7 @@ extern unsigned char *PQescapeBytea(const unsigned char *from, size_t from_lengt
 
 extern void PQprint(FILE *fout, /* output stream */
 					const PGresult *res,
-					const PQprintOpt *ps);	/* option structure */
+					const PQprintOpt *po);	/* option structure */
 
 /*
  * really old printing routines

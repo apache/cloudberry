@@ -989,6 +989,17 @@ plan_tree_mutator(Node *node,
 			}
 			break;
 
+		case T_SplitMerge:
+			{
+				SplitMerge	*splitMerge = (SplitMerge *) node;
+				SplitMerge	*newSplitMerge;
+
+				FLATCOPY(newSplitMerge, splitMerge, SplitMerge);
+				PLANMUTATE(newSplitMerge, splitMerge);
+				return (Node *) newSplitMerge;
+			}
+			break;
+
 		case T_IncrementalSort:
 			{
 				IncrementalSort	*incrementalSort = (IncrementalSort *) node;
@@ -1172,7 +1183,7 @@ get_function_name(Oid proid, const char *dflt)
 }
 
 /* Utility to get a name for a tle to use as an eref. */
-Value *
+String *
 get_tle_name(TargetEntry *tle, List *rtable, const char *default_name)
 {
 	char *name = NULL;

@@ -1,5 +1,5 @@
 
-# Copyright (c) 2021, PostgreSQL Global Development Group
+# Copyright (c) 2021-2023, PostgreSQL Global Development Group
 
 #
 # Test situation where a target data directory contains
@@ -32,15 +32,15 @@
 
 use strict;
 use warnings;
-use PostgresNode;
-use TestLib;
-use Test::More tests => 3;
+use PostgreSQL::Test::Cluster;
+use PostgreSQL::Test::Utils;
+use Test::More;
 
 use File::Copy;
 
-my $tmp_folder = TestLib::tempdir;
+my $tmp_folder = PostgreSQL::Test::Utils::tempdir;
 
-my $node_1 = get_new_node('node_1');
+my $node_1 = PostgreSQL::Test::Cluster->new('node_1');
 $node_1->init(allows_streaming => 1);
 $node_1->append_conf(
 	'postgresql.conf', qq(
@@ -60,30 +60,22 @@ $node_1->safe_psql('postgres', "INSERT INTO public.bar VALUES ('in both')");
 my $backup_name = 'my_backup';
 $node_1->backup($backup_name);
 
-my $node_2 = get_new_node('node_2');
+my $node_2 = PostgreSQL::Test::Cluster->new('node_2');
 $node_2->init_from_backup($node_1, $backup_name, has_streaming => 1);
 $node_2->start;
 
-my $node_3 = get_new_node('node_3');
+my $node_3 = PostgreSQL::Test::Cluster->new('node_3');
 $node_3->init_from_backup($node_1, $backup_name, has_streaming => 1);
 $node_3->start;
 
 # Wait until node 3 has connected and caught up
-my $lsn = $node_1->lsn('insert');
-$node_1->wait_for_catchup('node_3', 'replay', $lsn);
+$node_1->wait_for_catchup('node_3');
 
 #
 # Swap the roles of node_1 and node_3, so that node_1 follows node_3.
 #
 $node_1->stop('fast');
 $node_3->promote;
-# Force a checkpoint after the promotion. pg_rewind looks at the control
-# file to determine what timeline the server is on, and that isn't updated
-# immediately at promotion, but only at the next checkpoint. When running
-# pg_rewind in remote mode, it's possible that we complete the test steps
-# after promotion so quickly that when pg_rewind runs, the standby has not
-# performed a checkpoint after promotion yet.
-$node_3->safe_psql('postgres', "checkpoint");
 
 # reconfigure node_1 as a standby following node_3
 my $node_3_connstr = $node_3->connstr;
@@ -106,12 +98,9 @@ $node_2->restart();
 #
 
 # make sure node_1 is full caught up with node_3 first
-$lsn = $node_3->lsn('insert');
-$node_3->wait_for_catchup('node_1', 'replay', $lsn);
+$node_3->wait_for_catchup('node_1');
 
 $node_1->promote;
-# Force a checkpoint after promotion, like earlier.
-$node_1->safe_psql('postgres', "checkpoint");
 
 #
 # We now have a split-brain with two primaries. Insert a row on both to
@@ -143,7 +132,7 @@ $node_2->poll_query_until('postgres',
 $node_2->stop('fast');
 $node_3->stop('fast');
 
-my $node_2_pgdata  = $node_2->data_dir;
+my $node_2_pgdata = $node_2->data_dir;
 my $node_1_connstr = $node_1->connstr;
 
 # Keep a temporary postgresql.conf or it would be overwritten during the rewind.
@@ -153,7 +142,7 @@ copy(
 
 command_ok(
 	[
-		'pg_rewind',                      "--source-server=$node_1_connstr",
+		'pg_rewind', "--source-server=$node_1_connstr",
 		"--target-pgdata=$node_2_pgdata", "--debug"
 	],
 	'run pg_rewind');
@@ -175,3 +164,5 @@ and this too), 'table foo after rewind');
 
 $result = $node_2->safe_psql('postgres', 'SELECT * FROM public.bar');
 is($result, qq(in both), 'table bar after rewind');
+
+done_testing();

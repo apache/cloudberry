@@ -111,7 +111,7 @@ select count(*) from test_bitmap where type = 520;
 (1 row)
 
 -- start_ignore
-! gpstop -rai;
+! gpstop -raf;
 -- end_ignore
 
 0: select count(*) from test_bitmap where type = 520;

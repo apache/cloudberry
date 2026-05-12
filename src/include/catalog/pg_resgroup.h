@@ -33,7 +33,8 @@ CATALOG(pg_resgroup,6436,ResGroupRelationId) BKI_SHARED_RELATION
 } FormData_pg_resgroup;
 
 /* no foreign keys */
-
+DECLARE_UNIQUE_INDEX(pg_resgroup_oid_index, 6447, ResGroupOidIndexId, on pg_resgroup using btree(oid oid_ops));
+DECLARE_UNIQUE_INDEX(pg_resgroup_rsgname_index, 6444, ResGroupRsgnameIndexId, on pg_resgroup using btree(rsgname name_ops));
 /* ----------------
  *	Form_pg_resgroup corresponds to a pointer to a tuple with
  *	the format of pg_resgroup relation.

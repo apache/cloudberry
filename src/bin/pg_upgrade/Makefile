@@ -19,7 +19,7 @@ OBJS = \
 	option.o \
 	parallel.o \
 	pg_upgrade.o \
-	relfilenode.o \
+	relfilenumber.o \
 	server.o \
 	tablespace.o \
 	util.o \
@@ -30,8 +30,12 @@ OBJS += greenplum/aotable.o greenplum/version_gp.o \
 		greenplum/aomd_filehandler.o greenplum/option_gp.o \
 		greenplum/controldata_gp.o greenplum/util.o
 
-override CPPFLAGS := -DDLSUFFIX=\"$(DLSUFFIX)\" -I$(srcdir) -I$(libpq_srcdir) $(CPPFLAGS)
+override CPPFLAGS := -I$(srcdir) -I$(libpq_srcdir) $(CPPFLAGS)
 LDFLAGS_INTERNAL += -L$(top_builddir)/src/fe_utils -lpgfeutils $(libpq_pgport)
+
+# required for 002_pg_upgrade.pl
+REGRESS_SHLIB=$(abs_top_builddir)/src/test/regress/regress$(DLSUFFIX)
+export REGRESS_SHLIB
 
 all: pg_upgrade
 
@@ -57,23 +61,14 @@ clean distclean maintainer-clean:
 greenplum/aomd_filehandler.c: $(top_srcdir)/src/backend/access/appendonly/aomd_filehandler.c
 	rm -f $@ && cd greenplum && $(LN_S) ../$< aomd_filehandler.c
 
-# When $(MAKE) is present, make automatically infers that this is a
-# recursive make. which is not actually what we want here, as that
-# e.g. prevents output synchronization from working (as make thinks
-# that the subsidiary make knows how to deal with that itself, but
-# we're invoking a shell script that doesn't know). Referencing
-# $(MAKE) indirectly avoids that behaviour.
-# See https://www.gnu.org/software/make/manual/html_node/MAKE-Variable.html#MAKE-Variable
-NOTSUBMAKEMAKE=$(MAKE)
+export with_icu
 
 check:
+#	$(prove_check)
 	# ignore pg_upgarde to make CI happy, issue: https://github.com/apache/cloudberry/issues/262
-
-#check: test_gpdb.sh all
-#	bash $< -C -r -s -o $(top_builddir)/gpAux/gpdemo/datadirs/ -b $(DESTDIR)$(bindir)
 
 perfcheck: test_gpdb.sh all
 	bash $< -p -r -o $(top_builddir)/gpAux/gpdemo/datadirs/ -b $(DESTDIR)$(bindir)
 
-# installcheck is not supported because there's no meaningful way to test
-# pg_upgrade against a single already-running server
+installcheck:
+	$(prove_installcheck)

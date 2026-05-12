@@ -11,8 +11,8 @@
   PostgreSQL can be extended to run user-supplied code in separate processes.
   Such processes are started, stopped and monitored by <command>postgres</command>,
   which permits them to have a lifetime closely linked to the server's status.
-  These processes have the option to attach to <productname>PostgreSQL</productname>'s
-  shared memory area and to connect to databases internally; they can also run
+  These processes are attached to <productname>PostgreSQL</productname>'s
+  shared memory area and have the option to connect to databases internally; they can also run
   multiple transactions serially, just like a regular client-connected server
   process.  Also, by linking to <application>libpq</application> they can connect to the
   server and behave like a regular client application.
@@ -63,7 +63,7 @@ typedef struct BackgroundWorker
     char        bgw_function_name[BGW_MAXLEN];
     Datum       bgw_main_arg;
     char        bgw_extra[BGW_EXTRALEN];
-    int         bgw_notify_pid;
+    pid_t       bgw_notify_pid;
 } BackgroundWorker;
 </programlisting>
   </para>
@@ -89,11 +89,7 @@ typedef struct BackgroundWorker
      <listitem>
       <para>
        <indexterm><primary>BGWORKER_SHMEM_ACCESS</primary></indexterm>
-       Requests shared memory access.  Workers without shared memory access
-       cannot access any of <productname>PostgreSQL's</productname> shared
-       data structures, such as heavyweight or lightweight locks, shared
-       buffers, or any custom data structures which the worker itself may
-       wish to create and use.
+       Requests shared memory access.  This flag is required.
       </para>
      </listitem>
     </varlistentry>
@@ -145,14 +141,15 @@ typedef struct BackgroundWorker
    which the initial entry point for the background worker should be sought.
    The named library will be dynamically loaded by the worker process and
    <structfield>bgw_function_name</structfield> will be used to identify the
-   function to be called.  If loading a function from the core code, this must
-   be set to "postgres".
+   function to be called.  If calling a function in the core code, this must
+   be set to <literal>"postgres"</literal>.
   </para>
 
   <para>
-   <structfield>bgw_function_name</structfield> is the name of a function in
-   a dynamically loaded library which should be used as the initial entry point
-   for a new background worker.
+   <structfield>bgw_function_name</structfield> is the name of the function
+   to use as the initial entry point for the new background worker.  If
+   this function is in a dynamically loaded library, it must be marked
+   <literal>PGDLLEXPORT</literal> (and not <literal>static</literal>).
   </para>
 
   <para>

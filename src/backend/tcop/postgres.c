@@ -3,7 +3,7 @@
  * postgres.c
  *	  POSTGRES C Backend Interface
  *
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -23,17 +23,12 @@
 #include <limits.h>
 #include <signal.h>
 #include <unistd.h>
-#include <sys/socket.h>
-#ifdef HAVE_SYS_SELECT_H
-#include <sys/select.h>
-#endif
-#ifdef HAVE_SYS_RESOURCE_H
-#include <sys/time.h>
 #include <sys/resource.h>
-#endif
+#include <sys/socket.h>
+#include <sys/time.h>
 
-#ifndef HAVE_GETRUSAGE
-#include "rusagestub.h"
+#ifdef USE_VALGRIND
+#include <valgrind/valgrind.h>
 #endif
 
 #include <pthread.h>
@@ -46,6 +41,7 @@
 #include "catalog/namespace.h"
 #include "commands/async.h"
 #include "commands/prepare.h"
+#include "common/pg_prng.h"
 #include "crypto/bufenc.h"
 #include "crypto/kmgr.h"
 #include "jit/jit.h"
@@ -83,6 +79,7 @@
 #include "tcop/utility.h"
 #include "utils/backend_cancel.h"
 #include "utils/faultinjector.h"
+#include "utils/guc_hooks.h"
 #include "utils/lsyscache.h"
 #include "utils/memutils.h"
 #include "utils/ps_status.h"
@@ -134,6 +131,9 @@ int			PostAuthDelay = 0;
 /* Time between checks that the client is still connected. */
 int			client_connection_check_interval = 0;
 
+/* flags for non-system relation kinds to restrict use */
+int			restrict_nonsystem_relation_kind;
+
 /*
  * Hook for extensions, to get notified when query cancel or DIE signal is
  * received. This allows the extension to stop whatever it's doing as
@@ -181,18 +181,9 @@ static long max_stack_depth_bytes = 100 * 1024L;
 
 /*
  * Stack base pointer -- initialized by PostmasterMain and inherited by
- * subprocesses. This is not static because old versions of PL/Java modify
- * it directly. Newer versions use set_stack_base(), but we want to stay
- * binary-compatible for the time being.
+ * subprocesses (but see also InitPostmasterChild).
  */
-char	   *stack_base_ptr = NULL;
-
-/*
- * On IA64 we also have to remember the register stack base.
- */
-#if defined(__ia64__) || defined(__ia64)
-char	   *register_stack_base_ptr = NULL;
-#endif
+char *stack_base_ptr = NULL;
 
 /*
  * Flag to keep track of whether we have started a transaction.
@@ -316,6 +307,36 @@ static bool renice_current_process(int nice_level)
 	return true;
 #endif
 }
+
+/* ----------------------------------------------------------------
+ *		infrastructure for valgrind debugging
+ * ----------------------------------------------------------------
+ */
+#ifdef USE_VALGRIND
+/* This variable should be set at the top of the main loop. */
+static unsigned int old_valgrind_error_count;
+
+/*
+ * If Valgrind detected any errors since old_valgrind_error_count was updated,
+ * report the current query as the cause.  This should be called at the end
+ * of message processing.
+ */
+static void
+valgrind_report_error_query(const char *query)
+{
+	unsigned int valgrind_error_count = VALGRIND_COUNT_ERRORS;
+
+	if (unlikely(valgrind_error_count != old_valgrind_error_count) &&
+		query != NULL)
+		VALGRIND_PRINTF("Valgrind detected %u error(s) during execution of \"%s\"\n",
+						valgrind_error_count - old_valgrind_error_count,
+						query);
+}
+
+#else							/* !USE_VALGRIND */
+#define valgrind_report_error_query(query) ((void) 0)
+#endif							/* USE_VALGRIND */
+
 
 /* ----------------------------------------------------------------
  *		routines to obtain user input
@@ -770,10 +791,22 @@ pg_parse_query(const char *query_string)
 #endif
 
 	/*
-	 * Currently, outfuncs/readfuncs support is missing for many raw parse
-	 * tree nodes, so we don't try to implement WRITE_READ_PARSE_PLAN_TREES
-	 * here.
+	 * Optional debugging check: pass raw parsetrees through
+	 * outfuncs/readfuncs
 	 */
+#ifdef WRITE_READ_PARSE_PLAN_TREES
+	{
+		char	   *str = nodeToString(raw_parsetree_list);
+		List	   *new_list = stringToNodeWithLocations(str);
+
+		pfree(str);
+		/* This checks both outfuncs/readfuncs and the equal() routines... */
+		if (!equal(new_list, raw_parsetree_list))
+			elog(WARNING, "outfuncs/readfuncs failed to produce an equal raw parse tree");
+		else
+			raw_parsetree_list = new_list;
+	}
+#endif
 
 	TRACE_POSTGRESQL_QUERY_PARSE_DONE(query_string);
 
@@ -790,9 +823,11 @@ pg_parse_query(const char *query_string)
  * NOTE: for reasons mentioned above, this must be separate from raw parsing.
  */
 List *
-pg_analyze_and_rewrite(RawStmt *parsetree, const char *query_string,
-					   Oid *paramTypes, int numParams,
-					   QueryEnvironment *queryEnv)
+pg_analyze_and_rewrite_fixedparams(RawStmt *parsetree,
+								   const char *query_string,
+								   const Oid *paramTypes,
+								   int numParams,
+								   QueryEnvironment *queryEnv)
 {
 	Query	   *query;
 	List	   *querytree_list;
@@ -805,8 +840,8 @@ pg_analyze_and_rewrite(RawStmt *parsetree, const char *query_string,
 	if (log_parser_stats)
 		ResetUsage();
 
-	query = parse_analyze(parsetree, query_string, paramTypes, numParams,
-						  queryEnv);
+	query = parse_analyze_fixedparams(parsetree, query_string, paramTypes, numParams,
+									  queryEnv);
 
 	if (log_parser_stats)
 		ShowUsage("PARSE ANALYSIS STATISTICS");
@@ -822,23 +857,19 @@ pg_analyze_and_rewrite(RawStmt *parsetree, const char *query_string,
 }
 
 /*
- * Do parse analysis and rewriting.  This is the same as pg_analyze_and_rewrite
- * except that external-parameter resolution is determined by parser callback
- * hooks instead of a fixed list of parameter datatypes.
+ * Do parse analysis and rewriting.  This is the same as
+ * pg_analyze_and_rewrite_fixedparams except that it's okay to deduce
+ * information about $n symbol datatypes from context.
  */
 List *
-pg_analyze_and_rewrite_params(RawStmt *parsetree,
-							  const char *query_string,
-							  ParserSetupHook parserSetup,
-							  void *parserSetupArg,
-							  QueryEnvironment *queryEnv)
+pg_analyze_and_rewrite_varparams(RawStmt *parsetree,
+								 const char *query_string,
+								 Oid **paramTypes,
+								 int *numParams,
+								 QueryEnvironment *queryEnv)
 {
-	ParseState *pstate;
 	Query	   *query;
 	List	   *querytree_list;
-	JumbleState *jstate = NULL;
-
-	Assert(query_string != NULL);	/* required as of 8.4 */
 
 	TRACE_POSTGRESQL_QUERY_REWRITE_START(query_string);
 
@@ -848,22 +879,62 @@ pg_analyze_and_rewrite_params(RawStmt *parsetree,
 	if (log_parser_stats)
 		ResetUsage();
 
-	pstate = make_parsestate(NULL);
-	pstate->p_sourcetext = query_string;
-	pstate->p_queryEnv = queryEnv;
-	(*parserSetup) (pstate, parserSetupArg);
+	query = parse_analyze_varparams(parsetree, query_string, paramTypes, numParams,
+									queryEnv);
 
-	query = transformTopLevelStmt(pstate, parsetree);
+	/*
+	 * Check all parameter types got determined.
+	 */
+	for (int i = 0; i < *numParams; i++)
+	{
+		Oid			ptype = (*paramTypes)[i];
 
-	if (IsQueryIdEnabled())
-		jstate = JumbleQuery(query, query_string);
+		if (ptype == InvalidOid || ptype == UNKNOWNOID)
+			ereport(ERROR,
+					(errcode(ERRCODE_INDETERMINATE_DATATYPE),
+					 errmsg("could not determine data type of parameter $%d",
+							i + 1)));
+	}
 
-	if (post_parse_analyze_hook)
-		(*post_parse_analyze_hook) (pstate, query, jstate);
+	if (log_parser_stats)
+		ShowUsage("PARSE ANALYSIS STATISTICS");
 
-	free_parsestate(pstate);
+	/*
+	 * (2) Rewrite the queries, as necessary
+	 */
+	querytree_list = pg_rewrite_query(query);
 
-	pgstat_report_query_id(query->queryId, false);
+	TRACE_POSTGRESQL_QUERY_REWRITE_DONE(query_string);
+
+	return querytree_list;
+}
+
+/*
+ * Do parse analysis and rewriting.  This is the same as
+ * pg_analyze_and_rewrite_fixedparams except that, instead of a fixed list of
+ * parameter datatypes, a parser callback is supplied that can do
+ * external-parameter resolution and possibly other things.
+ */
+List *
+pg_analyze_and_rewrite_withcb(RawStmt *parsetree,
+							  const char *query_string,
+							  ParserSetupHook parserSetup,
+							  void *parserSetupArg,
+							  QueryEnvironment *queryEnv)
+{
+	Query	   *query;
+	List	   *querytree_list;
+
+	TRACE_POSTGRESQL_QUERY_REWRITE_START(query_string);
+
+	/*
+	 * (1) Perform parse analysis.
+	 */
+	if (log_parser_stats)
+		ResetUsage();
+
+	query = parse_analyze_withcb(parsetree, query_string, parserSetup, parserSetupArg,
+								 queryEnv);
 
 	if (log_parser_stats)
 		ShowUsage("PARSE ANALYSIS STATISTICS");
@@ -918,7 +989,7 @@ pg_rewrite_query(Query *query)
 		new_list = copyObject(querytree_list);
 		/* This checks both copyObject() and the equal() routines... */
 		if (!equal(new_list, querytree_list))
-			elog(WARNING, "copyObject() failed to produce equal parse tree");
+			elog(WARNING, "copyObject() failed to produce an equal rewritten parse tree");
 		else
 			querytree_list = new_list;
 	}
@@ -930,35 +1001,25 @@ pg_rewrite_query(Query *query)
 		List	   *new_list = NIL;
 		ListCell   *lc;
 
-		/*
-		 * We currently lack outfuncs/readfuncs support for most utility
-		 * statement types, so only attempt to write/read non-utility queries.
-		 */
 		foreach(lc, querytree_list)
 		{
-			Query	   *query = castNode(Query, lfirst(lc));
+			Query	   *curr_query = lfirst_node(Query, lc);
+			char	   *str = nodeToString(curr_query);
+			Query	   *new_query = stringToNodeWithLocations(str);
 
-			if (query->commandType != CMD_UTILITY)
-			{
-				char	   *str = nodeToString(query);
-				Query	   *new_query = stringToNodeWithLocations(str);
+			/*
+			 * queryId is not saved in stored rules, but we must preserve it
+			 * here to avoid breaking pg_stat_statements.
+			 */
+			new_query->queryId = curr_query->queryId;
 
-				/*
-				 * queryId is not saved in stored rules, but we must preserve
-				 * it here to avoid breaking pg_stat_statements.
-				 */
-				new_query->queryId = query->queryId;
-
-				new_list = lappend(new_list, new_query);
-				pfree(str);
-			}
-			else
-				new_list = lappend(new_list, query);
+			new_list = lappend(new_list, new_query);
+			pfree(str);
 		}
 
 		/* This checks both outfuncs/readfuncs and the equal() routines... */
 		if (!equal(new_list, querytree_list))
-			elog(WARNING, "outfuncs/readfuncs failed to produce equal parse tree");
+			elog(WARNING, "outfuncs/readfuncs failed to produce an equal rewritten parse tree");
 		else
 			querytree_list = new_list;
 	}
@@ -1234,29 +1295,32 @@ exec_mpp_query(const char *query_string,
 		plan->commandType != CMD_INSERT &&
 		plan->commandType != CMD_UPDATE &&
 		plan->commandType != CMD_DELETE &&
+		plan->commandType != CMD_MERGE &&
 		plan->commandType != CMD_UTILITY)
 		elog(ERROR, "MPPEXEC: received non-DML Plan");
 	commandType = plan->commandType;
 
-	if ( slice )
-	{
-		/* Non root slices don't need update privileges. */
-		if (sliceTable->localSlice != slice->rootIndex)
-		{
-			ListCell       *rtcell;
-			RangeTblEntry  *rte;
-			AclMode         removeperms = ACL_INSERT | ACL_UPDATE | ACL_DELETE | ACL_SELECT_FOR_UPDATE;
-
-			/* Just reading, so don't check INS/DEL/UPD permissions. */
-			foreach(rtcell, plan->rtable)
-			{
-				rte = (RangeTblEntry *)lfirst(rtcell);
-				if (rte->rtekind == RTE_RELATION &&
-					0 != (rte->requiredPerms & removeperms))
-					rte->requiredPerms &= ~removeperms;
-			}
-		}
-	}
+	// MERGE16_FIXME: Check if wo should remove requiredPerms in Query
+//	if ( slice )
+//	{
+//		/* Non root slices don't need update privileges. */
+//		if (sliceTable->localSlice != slice->rootIndex)
+//		{
+//			ListCell       *rtcell;
+//			RangeTblEntry  *rte;
+//			RTEPermissionInfo  *rte_permission;
+//			AclMode         removeperms = ACL_INSERT | ACL_UPDATE | ACL_DELETE | ACL_SELECT_FOR_UPDATE;
+//
+//			/* Just reading, so don't check INS/DEL/UPD permissions. */
+//			foreach(rtcell, plan->rtable)
+//			{
+//				rte = (RangeTblEntry *)lfirst(rtcell);
+//				if (rte->rtekind == RTE_RELATION &&
+//					0 != (rte->requiredPerms & removeperms))
+//					rte->requiredPerms &= ~removeperms;
+//			}
+//		}
+//	}
 
 	if (log_statement != LOGSTMT_NONE)
 	{
@@ -1319,6 +1383,8 @@ exec_mpp_query(const char *query_string,
 			commandName = "MPPEXEC UPDATE";
 		else if (commandType == CMD_DELETE)
 			commandName = "MPPEXEC DELETE";
+		else if (commandType == CMD_MERGE)
+			commandName = "MPPEXEC MERGE";
 		else
 			elog(ERROR, "MPPEXEC: received non-DML Plan");
 
@@ -1430,13 +1496,16 @@ exec_mpp_query(const char *query_string,
 						 receiver,
 						 &qc);
 
-		/*
-		 * If writer QE, sent current pgstat for tables to QD.
-		 */
-		if (Gp_role == GP_ROLE_EXECUTE && Gp_is_writer)
-			pgstat_send_qd_tabstats();
-
 		(*receiver->rDestroy) (receiver);
+
+		/*
+		 * GPDB: Send pending relation stats to QD before PortalDrop and
+		 * finish_xact_command().  The stats are in pgStatXactStack
+		 * (transaction-level counts); finish_xact_command() calls
+		 * AtEOXact_PgStat() which NULLs pgStatXactStack.  We also send
+		 * before PortalDrop to avoid any subtransaction cleanup side effects.
+		 */
+		pgstat_send_qd_tabstats();
 
 		PortalDrop(portal, false);
 
@@ -1853,8 +1922,8 @@ exec_simple_query(const char *query_string)
 		else
 			oldcontext = MemoryContextSwitchTo(MessageContext);
 
-		querytree_list = pg_analyze_and_rewrite(parsetree, query_string,
-												NULL, 0, NULL);
+		querytree_list = pg_analyze_and_rewrite_fixedparams(parsetree, query_string,
+															NULL, 0, NULL);
 
 		plantree_list = pg_plan_queries(querytree_list, query_string,
 										CURSOR_OPT_PARALLEL_OK, NULL);
@@ -1941,7 +2010,7 @@ exec_simple_query(const char *query_string)
 		(void) PortalRun(portal,
 						 FETCH_ALL,
 						 true,	/* always top level */
-						 true,
+						 true,	/* ignored */
 						 receiver,
 						 receiver,
 						 &qc);
@@ -2154,7 +2223,6 @@ exec_parse_message(const char *query_string,	/* string to execute */
 
 	if (parsetree_list != NIL)
 	{
-		Query	   *query;
 		bool		snapshot_set = false;
 
 		raw_parse_tree = linitial_node(RawStmt, parsetree_list);
@@ -2231,34 +2299,13 @@ exec_parse_message(const char *query_string,	/* string to execute */
 		/*
 		 * Analyze and rewrite the query.  Note that the originally specified
 		 * parameter set is not required to be complete, so we have to use
-		 * parse_analyze_varparams().
+		 * pg_analyze_and_rewrite_varparams().
 		 */
-		if (log_parser_stats)
-			ResetUsage();
-
-		query = parse_analyze_varparams(raw_parse_tree,
-										query_string,
-										&paramTypes,
-										&numParams);
-
-		/*
-		 * Check all parameter types got determined.
-		 */
-		for (int i = 0; i < numParams; i++)
-		{
-			Oid			ptype = paramTypes[i];
-
-			if (ptype == InvalidOid || ptype == UNKNOWNOID)
-				ereport(ERROR,
-						(errcode(ERRCODE_INDETERMINATE_DATATYPE),
-						 errmsg("could not determine data type of parameter $%d",
-								i + 1)));
-		}
-
-		if (log_parser_stats)
-			ShowUsage("PARSE ANALYSIS STATISTICS");
-
-		querytree_list = pg_rewrite_query(query);
+		querytree_list = pg_analyze_and_rewrite_varparams(raw_parse_tree,
+														  query_string,
+														  &paramTypes,
+														  &numParams,
+														  NULL);
 
 		if (parsetree_list)
 		{
@@ -2387,6 +2434,7 @@ exec_bind_message(StringInfo input_message)
 	char		msec_str[32];
 	ParamsErrorCbData params_data;
 	ErrorContextCallback params_errcxt;
+	ListCell   *lc;
 
 	/* Get the fixed part of the message */
 	portal_name = pq_getmsgstring(input_message);
@@ -2424,6 +2472,17 @@ exec_bind_message(StringInfo input_message)
 
 	pgstat_report_activity(STATE_RUNNING, psrc->query_string);
 
+	foreach(lc, psrc->query_list)
+	{
+		Query	   *query = lfirst_node(Query, lc);
+
+		if (query->queryId != UINT64CONST(0))
+		{
+			pgstat_report_query_id(query->queryId, false);
+			break;
+		}
+	}
+
 	set_ps_display("BIND");
 
 	if (save_log_statement_stats)
@@ -2444,7 +2503,7 @@ exec_bind_message(StringInfo input_message)
 	numPFormats = pq_getmsgint(input_message, 2);
 	if (numPFormats > 0)
 	{
-		pformats = (int16 *) palloc(numPFormats * sizeof(int16));
+		pformats = palloc_array(int16, numPFormats);
 		for (int i = 0; i < numPFormats; i++)
 			pformats[i] = pq_getmsgint(input_message, 2);
 	}
@@ -2654,8 +2713,7 @@ exec_bind_message(StringInfo input_message)
 						oldcxt = MemoryContextSwitchTo(MessageContext);
 
 						if (knownTextValues == NULL)
-							knownTextValues =
-								palloc0(numParams * sizeof(char *));
+							knownTextValues = palloc0_array(char *, numParams);
 
 						if (log_parameter_max_length_on_error < 0)
 							knownTextValues[paramno] = pstrdup(pstring);
@@ -2764,7 +2822,7 @@ exec_bind_message(StringInfo input_message)
 	numRFormats = pq_getmsgint(input_message, 2);
 	if (numRFormats > 0)
 	{
-		rformats = (int16 *) palloc(numRFormats * sizeof(int16));
+		rformats = palloc_array(int16, numRFormats);
 		for (int i = 0; i < numRFormats; i++)
 			rformats[i] = pq_getmsgint(input_message, 2);
 	}
@@ -2844,6 +2902,8 @@ exec_bind_message(StringInfo input_message)
 	if (save_log_statement_stats)
 		ShowUsage("BIND MESSAGE STATISTICS");
 
+	valgrind_report_error_query(debug_query_string);
+
 	debug_query_string = NULL;
 }
 
@@ -2870,6 +2930,9 @@ exec_execute_message(const char *portal_name, int64 max_rows)
 	char		msec_str[32];
 	ParamsErrorCbData params_data;
 	ErrorContextCallback params_errcxt;
+	const char *cmdtagname;
+	size_t		cmdtaglen;
+	ListCell   *lc;
 
 	/* Adjust destination to tell printtup.c what to do */
 	dest = whereToSendOutput;
@@ -2939,7 +3002,20 @@ exec_execute_message(const char *portal_name, int64 max_rows)
 
 	pgstat_report_activity(STATE_RUNNING, sourceText);
 
-	set_ps_display(GetCommandTagName(portal->commandTag));
+	foreach(lc, portal->stmts)
+	{
+		PlannedStmt *stmt = lfirst_node(PlannedStmt, lc);
+
+		if (stmt->queryId != UINT64CONST(0))
+		{
+			pgstat_report_query_id(stmt->queryId, false);
+			break;
+		}
+	}
+
+	cmdtagname = GetCommandTagNameAndLen(portal->commandTag, &cmdtaglen);
+
+	set_ps_display_with_len(cmdtagname, cmdtaglen);
 
 	if (save_log_statement_stats)
 		ResetUsage();
@@ -3056,7 +3132,7 @@ exec_execute_message(const char *portal_name, int64 max_rows)
 	completed = PortalRun(portal,
 						  max_rows,
 						  true, /* always top level */
-						  !execute_is_fetch && max_rows == FETCH_ALL,
+						  true, /* ignored */
 						  receiver,
 						  receiver,
 						  &qc);
@@ -3096,6 +3172,12 @@ exec_execute_message(const char *portal_name, int64 max_rows)
 			CommandCounterIncrement();
 
 			/*
+			 * Set XACT_FLAGS_PIPELINING whenever we complete an Execute
+			 * message without immediately committing the transaction.
+			 */
+			MyXactFlags |= XACT_FLAGS_PIPELINING;
+
+			/*
 			 * Disable statement timeout whenever we complete an Execute
 			 * message.  The next protocol message will start a fresh timeout.
 			 */
@@ -3110,6 +3192,12 @@ exec_execute_message(const char *portal_name, int64 max_rows)
 		/* Portal run not complete, so send PortalSuspended */
 		if (whereToSendOutput == DestRemote)
 			pq_putemptymessage('s');
+
+		/*
+		 * Set XACT_FLAGS_PIPELINING whenever we suspend an Execute message,
+		 * too.
+		 */
+		MyXactFlags |= XACT_FLAGS_PIPELINING;
 	}
 
 	/*
@@ -3140,6 +3228,8 @@ exec_execute_message(const char *portal_name, int64 max_rows)
 
 	if (save_log_statement_stats)
 		ShowUsage("EXECUTE MESSAGE STATISTICS");
+
+	valgrind_report_error_query(debug_query_string);
 
 	debug_query_string = NULL;
 }
@@ -3225,13 +3315,13 @@ check_log_duration(char *msec_str, bool was_logged)
 
 		/*
 		 * Do not log if log_statement_sample_rate = 0. Log a sample if
-		 * log_statement_sample_rate <= 1 and avoid unnecessary random() call
-		 * if log_statement_sample_rate = 1.
+		 * log_statement_sample_rate <= 1 and avoid unnecessary PRNG call if
+		 * log_statement_sample_rate = 1.
 		 */
 		if (exceeded_sample_duration)
 			in_sample = log_statement_sample_rate != 0 &&
 				(log_statement_sample_rate == 1 ||
-				 random() <= log_statement_sample_rate * MAX_RANDOM_VALUE);
+				 pg_prng_double(&pg_global_prng_state) <= log_statement_sample_rate);
 
 		if (exceeded_duration || in_sample || log_duration || xact_is_sampled)
 		{
@@ -3336,6 +3426,9 @@ errdetail_recovery_conflict(void)
 			break;
 		case PROCSIG_RECOVERY_CONFLICT_SNAPSHOT:
 			errdetail("User query might have needed to see row versions that must be removed.");
+			break;
+		case PROCSIG_RECOVERY_CONFLICT_LOGICALSLOT:
+			errdetail("User was using a logical replication slot that must be invalidated.");
 			break;
 		case PROCSIG_RECOVERY_CONFLICT_STARTUP_DEADLOCK:
 			errdetail("User transaction caused buffer deadlock with recovery.");
@@ -3492,7 +3585,6 @@ exec_describe_statement_message(const char *stmt_name)
 	}
 	else
 		pq_putemptymessage('n');	/* NoData */
-
 }
 
 /*
@@ -3697,7 +3789,7 @@ void
 quickdie(SIGNAL_ARGS)
 {
 	sigaddset(&BlockSig, SIGQUIT);	/* prevent nested calls */
-	PG_SETMASK(&BlockSig);
+	sigprocmask(SIG_SETMASK, &BlockSig, NULL);
 
 	in_quickdie=true;
 
@@ -3804,7 +3896,7 @@ die(SIGNAL_ARGS)
 		ProcDiePending = true;
 	}
 
-	/* for the statistics collector */
+	/* for the cumulative stats system */
 	pgStatSessionEndCause = DISCONNECT_KILLED;
 
 	/* If we're still here, waken anything waiting on the process latch */
@@ -4017,6 +4109,12 @@ RecoveryConflictInterrupt(ProcSignalReason reason)
 			case PROCSIG_RECOVERY_CONFLICT_DATABASE:
 				RecoveryConflictPending = true;
 				ProcDiePending = true;
+				InterruptPending = true;
+				break;
+
+			case PROCSIG_RECOVERY_CONFLICT_LOGICALSLOT:
+				RecoveryConflictPending = true;
+				QueryCancelPending = true;
 				InterruptPending = true;
 				break;
 
@@ -4345,6 +4443,17 @@ ProcessInterrupts(const char* filename, int lineno)
 			IdleSessionTimeoutPending = false;
 	}
 
+	/*
+	 * If there are pending stats updates and we currently are truly idle
+	 * (matching the conditions in PostgresMain(), report stats now.
+	 */
+	if (IdleStatsUpdateTimeoutPending &&
+		DoingCommandRead && !IsTransactionOrTransactionBlock())
+	{
+		IdleStatsUpdateTimeoutPending = false;
+		pgstat_report_stat(true);
+	}
+
 	if (ProcSignalBarrierPending)
 		ProcessProcSignalBarrier();
 
@@ -4353,45 +4462,10 @@ ProcessInterrupts(const char* filename, int lineno)
 
 	if (LogMemoryContextPending)
 		ProcessLogMemoryContextInterrupt();
+
+	if (ParallelApplyMessagePending)
+		HandleParallelApplyMessages();
 }
-
-/*
- * IA64-specific code to fetch the AR.BSP register for stack depth checks.
- *
- * We currently support gcc, icc, and HP-UX's native compiler here.
- *
- * Note: while icc accepts gcc asm blocks on x86[_64], this is not true on
- * ia64 (at least not in icc versions before 12.x).  So we have to carry a
- * separate implementation for it.
- */
-#if defined(__ia64__) || defined(__ia64)
-
-#if defined(__hpux) && !defined(__GNUC__) && !defined(__INTEL_COMPILER)
-/* Assume it's HP-UX native compiler */
-#include <ia64/sys/inline.h>
-#define ia64_get_bsp() ((char *) (_Asm_mov_from_ar(_AREG_BSP, _NO_FENCE)))
-#elif defined(__INTEL_COMPILER)
-/* icc */
-#include <asm/ia64regs.h>
-#define ia64_get_bsp() ((char *) __getReg(_IA64_REG_AR_BSP))
-#else
-/* gcc */
-static __inline__ char *
-ia64_get_bsp(void)
-{
-	char	   *ret;
-
-	/* the ;; is a "stop", seems to be required before fetching BSP */
-	__asm__ __volatile__(
-						 ";;\n"
-						 "	mov	%0=ar.bsp	\n"
-:						 "=r"(ret));
-
-	return ret;
-}
-#endif
-#endif							/* IA64 */
-
 
 /*
  * set_stack_base: set up reference point for stack depth checking
@@ -4406,12 +4480,7 @@ set_stack_base(void)
 #endif
 	pg_stack_base_t old;
 
-#if defined(__ia64__) || defined(__ia64)
-	old.stack_base_ptr = stack_base_ptr;
-	old.register_stack_base_ptr = register_stack_base_ptr;
-#else
 	old = stack_base_ptr;
-#endif
 
 	/*
 	 * Set up reference point for stack depth checking.  On recent gcc we use
@@ -4422,9 +4491,6 @@ set_stack_base(void)
 	stack_base_ptr = __builtin_frame_address(0);
 #else
 	stack_base_ptr = &stack_base;
-#endif
-#if defined(__ia64__) || defined(__ia64)
-	register_stack_base_ptr = ia64_get_bsp();
 #endif
 
 	return old;
@@ -4442,12 +4508,7 @@ set_stack_base(void)
 void
 restore_stack_base(pg_stack_base_t base)
 {
-#if defined(__ia64__) || defined(__ia64)
-	stack_base_ptr = base.stack_base_ptr;
-	register_stack_base_ptr = base.register_stack_base_ptr;
-#else
 	stack_base_ptr = base;
-#endif
 }
 
 /*
@@ -4504,22 +4565,6 @@ stack_is_too_deep(void)
 		stack_base_ptr != NULL)
 		return true;
 
-	/*
-	 * On IA64 there is a separate "register" stack that requires its own
-	 * independent check.  For this, we have to measure the change in the
-	 * "BSP" pointer from PostgresMain to here.  Logic is just as above,
-	 * except that we know IA64's register stack grows up.
-	 *
-	 * Note we assume that the same max_stack_depth applies to both stacks.
-	 */
-#if defined(__ia64__) || defined(__ia64)
-	stack_depth = (long) (ia64_get_bsp() - register_stack_base_ptr);
-
-	if (stack_depth > max_stack_depth_bytes &&
-		register_stack_base_ptr != NULL)
-		return true;
-#endif							/* IA64 */
-
 	return false;
 }
 
@@ -4547,6 +4592,58 @@ assign_max_stack_depth(int newval, void *extra)
 	long		newval_bytes = newval * 1024L;
 
 	max_stack_depth_bytes = newval_bytes;
+}
+
+/*
+ * GUC check_hook for client_connection_check_interval
+ */
+bool
+check_client_connection_check_interval(int *newval, void **extra, GucSource source)
+{
+	if (!WaitEventSetCanReportClosed() && *newval != 0)
+	{
+		GUC_check_errdetail("client_connection_check_interval must be set to 0 on this platform.");
+		return false;
+	}
+	return true;
+}
+
+/*
+ * GUC check_hook for log_parser_stats, log_planner_stats, log_executor_stats
+ *
+ * This function and check_log_stats interact to prevent their variables from
+ * being set in a disallowed combination.  This is a hack that doesn't really
+ * work right; for example it might fail while applying pg_db_role_setting
+ * values even though the final state would have been acceptable.  However,
+ * since these variables are legacy settings with little production usage,
+ * we tolerate that.
+ */
+bool
+check_stage_log_stats(bool *newval, void **extra, GucSource source)
+{
+	if (*newval && log_statement_stats)
+	{
+		GUC_check_errdetail("Cannot enable parameter when \"log_statement_stats\" is true.");
+		return false;
+	}
+	return true;
+}
+
+/*
+ * GUC check_hook for log_statement_stats
+ */
+bool
+check_log_stats(bool *newval, void **extra, GucSource source)
+{
+	if (*newval &&
+		(log_parser_stats || log_planner_stats || log_executor_stats))
+	{
+		GUC_check_errdetail("Cannot enable \"log_statement_stats\" when "
+							"\"log_parser_stats\", \"log_planner_stats\", "
+							"or \"log_executor_stats\" is true.");
+		return false;
+	}
+	return true;
 }
 
 /*
@@ -4593,7 +4690,7 @@ check_restrict_nonsystem_relation_kind(char **newval, void **extra, GucSource so
 	list_free(elemlist);
 
 	/* Save the flags in *extra, for use by the assign function */
-	*extra = malloc(sizeof(int));
+	*extra = guc_malloc(ERROR, sizeof(int));
 	*((int *) *extra) = flags;
 
 	return true;
@@ -4709,7 +4806,7 @@ get_stats_option_name(const char *arg)
 
 /* ----------------------------------------------------------------
  * process_postgres_switches
- *	   Parse command line arguments for PostgresMain
+ *	   Parse command line arguments for backends
  *
  * This is called twice, once for the "secure" options coming from the
  * postmaster or command line, and once for the "insecure" options coming
@@ -4783,6 +4880,32 @@ process_postgres_switches(int argc, char *argv[], GucContext ctx,
 			case 'C':
 				/* ignored for consistency with the postmaster */
 				break;
+
+			case 'c':
+			case '-':
+				{
+					char	   *name,
+							   *value;
+
+					ParseLongOption(optarg, &name, &value);
+					if (!value)
+					{
+						if (flag == '-')
+							ereport(ERROR,
+									(errcode(ERRCODE_SYNTAX_ERROR),
+									 errmsg("--%s requires a value",
+											optarg)));
+						else
+							ereport(ERROR,
+									(errcode(ERRCODE_SYNTAX_ERROR),
+									 errmsg("-c %s requires a value",
+											optarg)));
+					}
+					SetConfigOption(name, value, ctx, gucsource);
+					pfree(name);
+					pfree(value);
+					break;
+				}
 
 			case 'D':
 				if (secure)
@@ -4934,33 +5057,6 @@ process_postgres_switches(int argc, char *argv[], GucContext ctx,
 				SetConfigOption("post_auth_delay", optarg, ctx, gucsource);
 				break;
 
-			case 'c':
-			case '-':
-				{
-					char	   *name,
-							   *value;
-
-					ParseLongOption(optarg, &name, &value);
-					if (!value)
-					{
-						if (flag == '-')
-							ereport(ERROR,
-									(errcode(ERRCODE_SYNTAX_ERROR),
-									 errmsg("--%s requires a value",
-											optarg)));
-						else
-							ereport(ERROR,
-									(errcode(ERRCODE_SYNTAX_ERROR),
-									 errmsg("-c %s requires a value",
-											optarg)));
-					}
-					SetConfigOption(name, value, ctx, gucsource);
-					free(name);
-					if (value)
-						free(value);
-					break;
-				}
-
 			default:
 				errs++;
 				break;
@@ -5043,55 +5139,30 @@ forbidden_in_retrieve_handler(int firstchar)
 						firstchar)));
 }
 
-/* ----------------------------------------------------------------
- * PostgresMain
- *	   postgres main loop -- all backends, interactive or otherwise start here
+/*
+ * PostgresSingleUserMain
+ *     Entry point for single user mode. argc/argv are the command line
+ *     arguments to be used.
  *
- * argc/argv are the command line arguments to be used.  (When being forked
- * by the postmaster, these are not the original argv array of the process.)
- * dbname is the name of the database to connect to, or NULL if the database
- * name should be extracted from the command line arguments or defaulted.
- * username is the PostgreSQL user name to be used for the session.
- * ----------------------------------------------------------------
+ * Performs single user specific setup then calls PostgresMain() to actually
+ * process queries. Single user mode specific setup should go here, rather
+ * than PostgresMain() or InitPostgres() when reasonably possible.
  */
 void
-PostgresMain(int argc, char *argv[],
-			 const char *dbname,
-			 const char *username)
+PostgresSingleUserMain(int argc, char *argv[],
+					   const char *username)
 {
-	int			firstchar;
-	StringInfoData input_message;
-	sigjmp_buf	local_sigjmp_buf;
-	volatile bool send_ready_for_query = true;
-	bool		idle_in_transaction_timeout_enabled = false;
-	bool		idle_session_timeout_enabled = false;
+	const char *dbname = NULL;
 
-	/*
-	 * CDB: Catch program error signals.
-	 *
-	 * Save our main thread-id for comparison during signals.
-	 */
-	main_tid = pthread_self();
+	Assert(!IsUnderPostmaster);
 
-	/* Initialize startup process environment if necessary. */
-	if (!IsUnderPostmaster)
-		InitStandaloneProcess(argv[0]);
-
-#ifndef WIN32
-	PostmasterPriority = getpriority(PRIO_PROCESS, 0);
-#endif
-
-	set_ps_display("startup");
-
-	SetProcessingMode(InitProcessing);
+	/* Initialize startup process environment. */
+	InitStandaloneProcess(argv[0]);
 
 	/*
 	 * Set default values for command-line options.
 	 */
-	EchoQuery = false;
-
-	if (!IsUnderPostmaster)
-		InitializeGUCOptions();
+	InitializeGUCOptions();
 
 	/*
 	 * Parse command-line options.
@@ -5109,18 +5180,124 @@ PostgresMain(int argc, char *argv[],
 							progname)));
 	}
 
-	/* Acquire configuration parameters, unless inherited from postmaster */
-	if (!IsUnderPostmaster)
-	{
-		if (!SelectConfigFiles(userDoption, progname))
-			proc_exit(1);
+	/* Acquire configuration parameters */
+	if (!SelectConfigFiles(userDoption, progname))
+		proc_exit(1);
 
-        /*
-	     * Remember stand-alone backend startup time.
-         * CDB: Moved this up from below for use in error message headers.
-         */
-	    PgStartTime = GetCurrentTimestamp();
-	}
+	/*
+	 * Validate we have been given a reasonable-looking DataDir and change
+	 * into it.
+	 */
+	checkDataDir();
+	ChangeToDataDir();
+
+	/*
+	 * Create lockfile for data directory.
+	 */
+	CreateDataDirLockFile(false);
+
+	/* read control file (error checking and contains config ) */
+	LocalProcessControlFile(false);
+
+	/*
+	 * process any libraries that should be preloaded at postmaster start
+	 */
+	process_shared_preload_libraries();
+
+	/*
+	 * process any libraries that should be preloaded at postmaster start
+	 */
+	process_shared_preload_libraries();
+
+	/* Initialize MaxBackends */
+	InitializeMaxBackends();
+
+	/*
+	 * Now that modules have been loaded, we can process any custom resource
+	 * managers specified in the wal_consistency_checking GUC.
+	 */
+	InitializeWalConsistencyChecking();
+
+	/*
+	 * Give preloaded libraries a chance to request additional shared memory.
+	 */
+	process_shmem_requests();
+
+	/*
+	 * Now that loadable modules have had their chance to request additional
+	 * shared memory, determine the value of any runtime-computed GUCs that
+	 * depend on the amount of shared memory required.
+	 */
+	InitializeShmemGUCs();
+
+	/*
+	 * Now that modules have been loaded, we can process any custom resource
+	 * managers specified in the wal_consistency_checking GUC.
+	 */
+	InitializeWalConsistencyChecking();
+
+	CreateSharedMemoryAndSemaphores();
+
+	/*
+	 * Remember stand-alone backend startup time,roughly at the same point
+	 * during startup that postmaster does so.
+	 */
+	PgStartTime = GetCurrentTimestamp();
+
+	/*
+	 * Create a per-backend PGPROC struct in shared memory. We must do this
+	 * before we can use LWLocks.
+	 */
+	InitProcess();
+
+	/*
+	 * Now that sufficient infrastructure has been initialized, PostgresMain()
+	 * can do the rest.
+	 */
+	PostgresMain(dbname, username);
+}
+
+
+/* ----------------------------------------------------------------
+ * PostgresMain
+ *	   postgres main loop -- all backends, interactive or otherwise loop here
+ *
+ * dbname is the name of the database to connect to, username is the
+ * PostgreSQL user name to be used for the session.
+ *
+ * NB: Single user mode specific setup should go to PostgresSingleUserMain()
+ * if reasonably possible.
+ * ----------------------------------------------------------------
+ */
+void
+PostgresMain(const char *dbname, const char *username)
+{
+	sigjmp_buf	local_sigjmp_buf;
+
+	/* these must be volatile to ensure state is preserved across longjmp: */
+	volatile bool send_ready_for_query = true;
+	volatile bool idle_in_transaction_timeout_enabled = false;
+	volatile bool idle_session_timeout_enabled = false;
+
+	Assert(dbname != NULL);
+	Assert(username != NULL);
+
+	/*
+	 * CDB: Catch program error signals.
+	 *
+	 * Save our main thread-id for comparison during signals.
+	 */
+	main_tid = pthread_self();
+
+#ifndef WIN32
+	PostmasterPriority = getpriority(PRIO_PROCESS, 0);
+#endif
+
+	set_ps_display("startup");
+
+	SetProcessingMode(InitProcessing);
+
+	EchoQuery = false;
 
 	/*
 	 * Set up signal handlers.  (InitPostmasterChild or InitStandaloneProcess
@@ -5189,40 +5366,6 @@ PostgresMain(int argc, char *argv[],
 #endif
 	}
 
-	if (!IsUnderPostmaster)
-	{
-		/*
-		 * Validate we have been given a reasonable-looking DataDir (if under
-		 * postmaster, assume postmaster did this already).
-		 */
-		checkDataDir();
-
-		/* Change into DataDir (if under postmaster, was done already) */
-		ChangeToDataDir();
-
-		/*
-		 * Create lockfile for data directory.
-		 */
-		CreateDataDirLockFile(false);
-
-		/* read control file (error checking and contains config ) */
-		LocalProcessControlFile(false);
-
-		/*
-		 * process any libraries that should be preloaded at postmaster start
-		 */
-		process_shared_preload_libraries();
-
-		/* Initialize MaxBackends (if under postmaster, was done already) */
-		InitializeMaxBackends();
-
-		/*
-		 * Now that modules have been loaded, we can process any custom resource
-		 * managers specified in the wal_consistency_checking GUC.
-		 */
-		InitializeWalConsistencyChecking();
-	}
-
 	/* Early initialization */
 	BaseInit();
 
@@ -5231,7 +5374,7 @@ PostgresMain(int argc, char *argv[],
 		/*
 		* Initialize kmgr for cluster encryption. Since kmgr needs to attach to
 		* shared memory the initialization must be called after BaseInit().
-		* we need some information from the controlFile, 
+		* we need some information from the controlFile,
 		* so must call the InitializeKmgr after LocalProcessControlFile.
 		*/
 		InitializeKmgr();
@@ -5241,21 +5384,9 @@ PostgresMain(int argc, char *argv[],
 			close(terminal_fd);
 	}
 
-	/*
-	 * Create a per-backend PGPROC struct in shared memory, except in the
-	 * EXEC_BACKEND case where this was done in SubPostmasterMain. We must do
-	 * this before we can use LWLocks (and in the EXEC_BACKEND case we already
-	 * had to do some stuff with LWLocks).
-	 */
-#ifdef EXEC_BACKEND
-	if (!IsUnderPostmaster)
-		InitProcess();
-#else
-	InitProcess();
-#endif
 
 	/* We need to allow SIGINT, etc during the initial transaction */
-	PG_SETMASK(&UnBlockSig);
+	sigprocmask(SIG_SETMASK, &UnBlockSig, NULL);
 
 	/*
 	 * General initialization.
@@ -5264,7 +5395,11 @@ PostgresMain(int argc, char *argv[],
 	 * it inside InitPostgres() instead.  In particular, anything that
 	 * involves database access should be there, not here.
 	 */
-	InitPostgres(dbname, InvalidOid, username, InvalidOid, NULL, false);
+	InitPostgres(dbname, InvalidOid,	/* database to connect to */
+				 username, InvalidOid,	/* role to connect as */
+				 !am_walsender, /* honor session_preload_libraries? */
+				 false,			/* don't ignore datallowconn */
+				 NULL);			/* no out_dbname */
 
 	/*
 	 * If the PostmasterContext is still around, recycle the space; we don't
@@ -5299,12 +5434,6 @@ PostgresMain(int argc, char *argv[],
 	/* Perform initialization specific to a WAL sender process. */
 	if (am_walsender)
 		InitWalSender();
-
-	/*
-	 * process any libraries that should be preloaded at backend start (this
-	 * likewise can't be done until GUC settings are complete)
-	 */
-	process_session_preload_libraries();
 
 	/*
 	 * DA requires these be cleared at start
@@ -5360,7 +5489,6 @@ PostgresMain(int argc, char *argv[],
 	MemoryContextSwitchTo(row_description_context);
 	initStringInfo(&row_description_buf);
 	MemoryContextSwitchTo(TopMemoryContext);
-
 
 	/*
 	 * POSTGRES main processing loop begins here
@@ -5425,6 +5553,12 @@ PostgresMain(int argc, char *argv[],
 		EmitErrorReport();
 
 		/*
+		 * If Valgrind noticed something during the erroneous query, print the
+		 * query string, assuming we have one.
+		 */
+		valgrind_report_error_query(debug_query_string);
+
+		/*
 		 * Make sure debug_query_string gets reset before we possibly clobber
 		 * the storage it points at.
 		 */
@@ -5448,8 +5582,8 @@ PostgresMain(int argc, char *argv[],
 		 * We can't release replication slots inside AbortTransaction() as we
 		 * need to be able to start and abort transactions while having a slot
 		 * acquired. But we never need to hold them across top level errors,
-		 * so releasing here is fine. There's another cleanup in ProcKill()
-		 * ensuring we'll correctly cleanup on FATAL errors as well.
+		 * so releasing here is fine. There also is a before_shmem_exit()
+		 * callback ensuring correct cleanup on FATAL errors.
 		 */
 		if (MyReplicationSlot != NULL)
 			ReplicationSlotRelease();
@@ -5510,11 +5644,21 @@ PostgresMain(int argc, char *argv[],
 
 	for (;;)
 	{
+		int			firstchar;
+		StringInfoData input_message;
+
 		/*
 		 * At top of loop, reset extended-query-message flag, so that any
 		 * errors encountered in "idle" state don't provoke skip.
 		 */
 		doing_extended_query_message = false;
+
+		/*
+		 * For valgrind reporting purposes, the "current query" begins here.
+		 */
+#ifdef USE_VALGRIND
+		old_valgrind_error_count = VALGRIND_COUNT_ERRORS;
+#endif
 
 		/*
 		 * Release storage left over from prior query cycle, and create a new
@@ -5551,12 +5695,13 @@ PostgresMain(int argc, char *argv[],
 		 *
 		 * Note: this includes fflush()'ing the last of the prior output.
 		 *
-		 * This is also a good time to send collected statistics to the
-		 * collector, and to update the PS stats display.  We avoid doing
-		 * those every time through the message loop because it'd slow down
-		 * processing of batched messages, and because we don't want to report
-		 * uncommitted updates (that confuses autovacuum).  The notification
-		 * processor wants a call too, if we are not in a transaction block.
+		 * This is also a good time to flush out collected statistics to the
+		 * cumulative stats system, and to update the PS stats display.  We
+		 * avoid doing those every time through the message loop because it'd
+		 * slow down processing of batched messages, and because we don't want
+		 * to report uncommitted updates (that confuses autovacuum).  The
+		 * notification processor wants a call too, if we are not in a
+		 * transaction block.
 		 *
 		 * Also, if an idle timeout is enabled, start the timer for that.
 		 */
@@ -5601,6 +5746,8 @@ PostgresMain(int argc, char *argv[],
 			}
 			else
 			{
+				long		stats_timeout;
+
 				/*
 				 * Process incoming notifies (including self-notifies), if
 				 * any, and send relevant messages to the client.  Doing it
@@ -5611,8 +5758,32 @@ PostgresMain(int argc, char *argv[],
 				if (notifyInterruptPending)
 					ProcessNotifyInterrupt(false);
 
-				pgstat_report_stat(false);
-				pgstat_report_queuestat();
+				/*
+				 * Check if we need to report stats. If pgstat_report_stat()
+				 * decides it's too soon to flush out pending stats / lock
+				 * contention prevented reporting, it'll tell us when we
+				 * should try to report stats again (so that stats updates
+				 * aren't unduly delayed if the connection goes idle for a
+				 * long time). We only enable the timeout if we don't already
+				 * have a timeout in progress, because we don't disable the
+				 * timeout below. enable_timeout_after() needs to determine
+				 * the current timestamp, which can have a negative
+				 * performance impact. That's OK because pgstat_report_stat()
+				 * won't have us wake up sooner than a prior call.
+				 */
+				stats_timeout = pgstat_report_stat(false);
+				if (stats_timeout > 0)
+				{
+					if (!get_timeout_active(IDLE_STATS_UPDATE_TIMEOUT))
+						enable_timeout_after(IDLE_STATS_UPDATE_TIMEOUT,
+											 stats_timeout);
+				}
+				else
+				{
+					/* all stats flushed, no need for the timeout */
+					if (get_timeout_active(IDLE_STATS_UPDATE_TIMEOUT))
+						disable_timeout(IDLE_STATS_UPDATE_TIMEOUT, false);
+				}
 
 				strncat(activity, "idle", remain);
 				set_ps_display(activity);
@@ -5671,7 +5842,7 @@ PostgresMain(int argc, char *argv[],
 		IdleTracker_ActivateProcess();
 
 		/*
-		 * (4) turn off the idle-in-transaction and idle-session timeouts, if
+		 * (4) turn off the idle-in-transaction and idle-session timeouts if
 		 * active.  We do this before step (5) so that any last-moment timeout
 		 * is certain to be detected in step (5).
 		 *
@@ -5762,6 +5933,8 @@ PostgresMain(int argc, char *argv[],
 						exec_simple_query_hook(query_string);
 					else
 						exec_simple_query(query_string);
+
+					valgrind_report_error_query(query_string);
 
 					send_ready_for_query = true;
 				}
@@ -6026,7 +6199,7 @@ PostgresMain(int argc, char *argv[],
 					numParams = pq_getmsgint(&input_message, 2);
 					if (numParams > 0)
 					{
-						paramTypes = (Oid *) palloc(numParams * sizeof(Oid));
+						paramTypes = palloc_array(Oid, numParams);
 						for (int i = 0; i < numParams; i++)
 							paramTypes[i] = pq_getmsgint(&input_message, 4);
 					}
@@ -6036,6 +6209,8 @@ PostgresMain(int argc, char *argv[],
 
 					exec_parse_message(query_string, stmt_name,
 									   paramTypes, numParams);
+
+					valgrind_report_error_query(query_string);
 				}
 				break;
 
@@ -6050,6 +6225,8 @@ PostgresMain(int argc, char *argv[],
 				 * the field extraction out-of-line
 				 */
 				exec_bind_message(&input_message);
+
+				/* exec_bind_message does valgrind_report_error_query */
 				break;
 
 			case 'E':			/* execute */
@@ -6071,6 +6248,8 @@ PostgresMain(int argc, char *argv[],
 					elog((Debug_print_full_dtm ? LOG : DEBUG5), "Execute: %s.",portal_name);
 
 					exec_execute_message(portal_name, max_rows);
+
+					/* exec_execute_message does valgrind_report_error_query */
 				}
 				break;
 
@@ -6106,6 +6285,8 @@ PostgresMain(int argc, char *argv[],
 
 				/* commit the function-invocation transaction */
 				finish_xact_command();
+
+				valgrind_report_error_query("fastpath function call");
 
 				send_ready_for_query = true;
 				break;
@@ -6151,6 +6332,8 @@ PostgresMain(int argc, char *argv[],
 
 					if (whereToSendOutput == DestRemote)
 						pq_putemptymessage('3');	/* CloseComplete */
+
+					valgrind_report_error_query("CLOSE message");
 				}
 				break;
 
@@ -6185,6 +6368,8 @@ PostgresMain(int argc, char *argv[],
 											describe_type)));
 							break;
 					}
+
+					valgrind_report_error_query("DESCRIBE message");
 				}
 				break;
 
@@ -6197,6 +6382,7 @@ PostgresMain(int argc, char *argv[],
 			case 'S':			/* sync */
 				pq_getmsgend(&input_message);
 				finish_xact_command();
+				valgrind_report_error_query("SYNC message");
 				send_ready_for_query = true;
 				break;
 
@@ -6207,7 +6393,7 @@ PostgresMain(int argc, char *argv[],
 				 */
 			case EOF:
 
-				/* for the statistics collector */
+				/* for the cumulative statistics system */
 				pgStatSessionEndCause = DISCONNECT_CLIENT_EOF;
 
 				/* FALLTHROUGH */
@@ -6294,7 +6480,7 @@ forbidden_in_wal_sender(int firstchar)
 long
 get_stack_depth_rlimit(void)
 {
-#if defined(HAVE_GETRLIMIT) && defined(RLIMIT_STACK)
+#if defined(HAVE_GETRLIMIT)
 	static long val = 0;
 
 	/* This won't change after process launch, so check just once */
@@ -6313,13 +6499,9 @@ get_stack_depth_rlimit(void)
 			val = rlim.rlim_cur;
 	}
 	return val;
-#else							/* no getrlimit */
-#if defined(WIN32) || defined(__CYGWIN__)
+#else
 	/* On Windows we set the backend stack size in src/backend/Makefile */
 	return WIN32_STACK_RLIMIT;
-#else							/* not windows ... give up */
-	return -1;
-#endif
 #endif
 }
 
@@ -6384,7 +6566,14 @@ ShowUsage(const char *title)
 					 (long) user.tv_usec,
 					 (long) sys.tv_sec,
 					 (long) sys.tv_usec);
-#if defined(HAVE_GETRUSAGE)
+#ifndef WIN32
+
+	/*
+	 * The following rusage fields are not defined by POSIX, but they're
+	 * present on all current Unix-like systems so we use them without any
+	 * special checks.  Some of these could be provided in our Windows
+	 * emulation in src/port/win32getrusage.c with more work.
+	 */
 	appendStringInfo(&str,
 					 "!\t%ld kB max resident size\n",
 #if defined(__darwin__)
@@ -6420,7 +6609,7 @@ ShowUsage(const char *title)
 					 r.ru_nvcsw - Save_r.ru_nvcsw,
 					 r.ru_nivcsw - Save_r.ru_nivcsw,
 					 r.ru_nvcsw, r.ru_nivcsw);
-#endif							/* HAVE_GETRUSAGE */
+#endif							/* !WIN32 */
 
 	/* remove trailing newline */
 	if (str.data[str.len - 1] == '\n')

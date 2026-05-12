@@ -206,8 +206,8 @@ static void
 is_valid_locationuris(List *location_list, bool is_writable)
 {
 	ListCell	*first_uri = list_head(location_list);
-	Value		*v = lfirst(first_uri);
-	char		*uri_str = pstrdup(v->val.str);
+	String 		*v = lfirst(first_uri);
+	char		*uri_str = pstrdup(v->sval);
 	Uri		*uri = ParseExternalTableUri(uri_str);
 
 	if (uri->protocol == URI_FILE)

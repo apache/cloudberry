@@ -31,6 +31,7 @@
 #endif
 
 #include "common/string.h"
+#include "compress_io.h"
 #include "dumputils.h"
 #include "fe_utils/string_utils.h"
 #include "lib/stringinfo.h"
@@ -44,13 +45,6 @@
 #define TEXT_DUMPALL_HEADER "--\n-- PostgreSQL database cluster dump\n--\n\n"
 #define GP_TEXT_DUMP_HEADER "--\n-- Apache Cloudberry database dump\n--\n\n"
 #define GP_TEXT_DUMPALL_HEADER "--\n-- Apache Cloudberry cluster dump\n--\n\n"
-
-/* state needed to save/restore an archive's output target */
-typedef struct _outputContext
-{
-	void	   *OF;
-	int			gzOut;
-} OutputContext;
 
 /*
  * State for tracking TocEntrys that are ready to process during a parallel
@@ -72,9 +66,10 @@ typedef struct _parallelReadyList
 
 
 static ArchiveHandle *_allocAH(const char *FileSpec, const ArchiveFormat fmt,
-							   const int compression, bool dosync, ArchiveMode mode,
+							   const pg_compress_specification compression_spec,
+							   bool dosync, ArchiveMode mode,
 							   SetupWorkerPtrType setupWorkerPtr);
-static void _getObjectDescription(PQExpBuffer buf, TocEntry *te);
+static void _getObjectDescription(PQExpBuffer buf, const TocEntry *te);
 static void _printTocEntry(ArchiveHandle *AH, TocEntry *te, bool isData);
 static char *sanitize_line(const char *str, bool want_hyphen);
 static void _doSetFixedOutputState(ArchiveHandle *AH);
@@ -101,9 +96,10 @@ static int	_discoverArchiveFormat(ArchiveHandle *AH);
 static int	RestoringToDB(ArchiveHandle *AH);
 static void dump_lo_buf(ArchiveHandle *AH);
 static void dumpTimestamp(ArchiveHandle *AH, const char *msg, time_t tim);
-static void SetOutput(ArchiveHandle *AH, const char *filename, int compression);
-static OutputContext SaveOutput(ArchiveHandle *AH);
-static void RestoreOutput(ArchiveHandle *AH, OutputContext savedContext);
+static void SetOutput(ArchiveHandle *AH, const char *filename,
+					  const pg_compress_specification compression_spec);
+static CompressFileHandle *SaveOutput(ArchiveHandle *AH);
+static void RestoreOutput(ArchiveHandle *AH, CompressFileHandle *savedOutput);
 
 static int	restore_toc_entry(ArchiveHandle *AH, TocEntry *te, bool is_parallel);
 static void restore_toc_entries_prefork(ArchiveHandle *AH,
@@ -197,6 +193,7 @@ dumpOptionsFromRestoreOptions(RestoreOptions *ropt)
 	dopt->outputSuperuser = ropt->superuser;
 	dopt->outputCreateDB = ropt->createDB;
 	dopt->outputNoOwner = ropt->noOwner;
+	dopt->outputNoTableAm = ropt->noTableAm;
 	dopt->outputNoTablespaces = ropt->noTablespace;
 	dopt->disable_triggers = ropt->disable_triggers;
 	dopt->use_setsessauth = ropt->use_setsessauth;
@@ -241,12 +238,13 @@ setupRestoreWorker(Archive *AHX)
 /* Public */
 Archive *
 CreateArchive(const char *FileSpec, const ArchiveFormat fmt,
-			  const int compression, bool dosync, ArchiveMode mode,
+			  const pg_compress_specification compression_spec,
+			  bool dosync, ArchiveMode mode,
 			  SetupWorkerPtrType setupDumpWorker)
 
 {
-	ArchiveHandle *AH = _allocAH(FileSpec, fmt, compression, dosync,
-								 mode, setupDumpWorker);
+	ArchiveHandle *AH = _allocAH(FileSpec, fmt, compression_spec,
+								 dosync, mode, setupDumpWorker);
 
 	return (Archive *) AH;
 }
@@ -256,7 +254,12 @@ CreateArchive(const char *FileSpec, const ArchiveFormat fmt,
 Archive *
 OpenArchive(const char *FileSpec, const ArchiveFormat fmt)
 {
-	ArchiveHandle *AH = _allocAH(FileSpec, fmt, 0, true, archModeRead, setupRestoreWorker);
+	ArchiveHandle *AH;
+	pg_compress_specification compression_spec = {0};
+
+	compression_spec.algorithm = PG_COMPRESSION_NONE;
+	AH = _allocAH(FileSpec, fmt, compression_spec, true,
+				  archModeRead, setupRestoreWorker);
 
 	return (Archive *) AH;
 }
@@ -265,20 +268,14 @@ OpenArchive(const char *FileSpec, const ArchiveFormat fmt)
 void
 CloseArchive(Archive *AHX)
 {
-	int			res = 0;
 	ArchiveHandle *AH = (ArchiveHandle *) AHX;
 
 	AH->ClosePtr(AH);
 
 	/* Close the output */
-	errno = 0;					/* in case gzclose() doesn't set it */
-	if (AH->gzOut)
-		res = GZCLOSE(AH->OF);
-	else if (AH->OF != stdout)
-		res = fclose(AH->OF);
-
-	if (res != 0)
-		fatal("could not close output file: %m");
+	errno = 0;
+	if (!EndCompressFileHandle(AH->OF))
+		pg_fatal("could not close output file: %m");
 }
 
 /* Public */
@@ -332,8 +329,8 @@ ProcessArchiveRestoreOptions(Archive *AHX)
 					/* ok no matter which section we were in */
 					break;
 				default:
-					fatal("unexpected section code %d",
-						  (int) te->section);
+					pg_fatal("unexpected section code %d",
+							 (int) te->section);
 					break;
 			}
 		}
@@ -357,7 +354,7 @@ RestoreArchive(Archive *AHX)
 	RestoreOptions *ropt = AH->public.ropt;
 	bool		parallel_mode;
 	TocEntry   *te;
-	OutputContext sav;
+	CompressFileHandle *sav;
 
 	AH->stage = STAGE_INITIALIZING;
 
@@ -369,11 +366,11 @@ RestoreArchive(Archive *AHX)
 	{
 		/* We haven't got round to making this work for all archive formats */
 		if (AH->ClonePtr == NULL || AH->ReopenPtr == NULL)
-			fatal("parallel restore is not supported with this archive file format");
+			pg_fatal("parallel restore is not supported with this archive file format");
 
 		/* Doesn't work if the archive represents dependencies as OIDs */
 		if (AH->version < K_VERS_1_8)
-			fatal("parallel restore is not supported with archives made by pre-8.0 pg_dump");
+			pg_fatal("parallel restore is not supported with archives made by pre-8.0 pg_dump");
 
 		/*
 		 * It's also not gonna work if we can't reopen the input file, so
@@ -385,16 +382,22 @@ RestoreArchive(Archive *AHX)
 	/*
 	 * Make sure we won't need (de)compression we haven't got
 	 */
-#ifndef HAVE_LIBZ
-	if (AH->compression != 0 && AH->PrintTocDataPtr != NULL)
+	if (AH->PrintTocDataPtr != NULL)
 	{
 		for (te = AH->toc->next; te != AH->toc; te = te->next)
 		{
 			if (te->hadDumper && (te->reqs & REQ_DATA) != 0)
-				fatal("cannot restore from compressed archive (compression not supported in this installation)");
+			{
+				char	   *errmsg = supports_compression(AH->compression_spec);
+
+				if (errmsg)
+					pg_fatal("cannot restore from compressed archive (%s)",
+							 errmsg);
+				else
+					break;
+			}
 		}
 	}
-#endif
 
 	/*
 	 * Prepare index arrays, so we can assume we have them throughout restore.
@@ -410,7 +413,7 @@ RestoreArchive(Archive *AHX)
 	{
 		pg_log_info("connecting to database for restore");
 		if (AH->version < K_VERS_1_3)
-			fatal("direct database connections are not supported in pre-1.3 archives");
+			pg_fatal("direct database connections are not supported in pre-1.3 archives");
 
 		/*
 		 * We don't want to guess at whether the dump will successfully
@@ -461,8 +464,8 @@ RestoreArchive(Archive *AHX)
 	 * Setup the output file if necessary.
 	 */
 	sav = SaveOutput(AH);
-	if (ropt->filename || ropt->compression)
-		SetOutput(AH, ropt->filename, ropt->compression);
+	if (ropt->filename || ropt->compression_spec.algorithm != PG_COMPRESSION_NONE)
+		SetOutput(AH, ropt->filename, ropt->compression_spec);
 
 	ahprintf(AH, "--\n-- Apache Cloudberry database dump\n--\n\n");
 
@@ -541,9 +544,14 @@ RestoreArchive(Archive *AHX)
 				 */
 				if (*te->dropStmt != '\0')
 				{
-					if (!ropt->if_exists)
+					if (!ropt->if_exists ||
+						strncmp(te->dropStmt, "--", 2) == 0)
 					{
-						/* No --if-exists?	Then just use the original */
+						/*
+						 * Without --if-exists, or if it's just a comment (as
+						 * happens for the public schema), print the dropStmt
+						 * as-is.
+						 */
 						ahprintf(AH, "%s", te->dropStmt);
 					}
 					else
@@ -557,7 +565,7 @@ RestoreArchive(Archive *AHX)
 						 */
 						if (strncmp(te->desc, "BLOB", 4) == 0)
 						{
-							DropBlobIfExists(AH, te->catalogId.oid);
+							DropLOIfExists(AH, te->catalogId.oid);
 						}
 						else
 						{
@@ -652,8 +660,7 @@ RestoreArchive(Archive *AHX)
 		 * If we treated users as pg_dump'able objects then we'd need to reset
 		 * currUser here too.
 		 */
-		if (AH->currSchema)
-			free(AH->currSchema);
+		free(AH->currSchema);
 		AH->currSchema = NULL;
 	}
 
@@ -752,7 +759,7 @@ RestoreArchive(Archive *AHX)
 	 */
 	AH->stage = STAGE_FINALIZING;
 
-	if (ropt->filename || ropt->compression)
+	if (ropt->filename || ropt->compression_spec.algorithm != PG_COMPRESSION_NONE)
 		RestoreOutput(AH, sav);
 
 	if (ropt->useDB)
@@ -932,13 +939,10 @@ restore_toc_entry(ArchiveHandle *AH, TocEntry *te, bool is_parallel)
 						StartTransaction(&AH->public);
 
 						/*
-						 * If the server version is >= 8.4, make sure we issue
-						 * TRUNCATE with ONLY so that child tables are not
-						 * wiped.
+						 * Issue TRUNCATE with ONLY so that child tables are
+						 * not wiped.
 						 */
-						ahprintf(AH, "TRUNCATE TABLE %s%s;\n\n",
-								 (PQserverVersion(AH->connection) >= 80400 ?
-								  "ONLY " : ""),
+						ahprintf(AH, "TRUNCATE TABLE ONLY %s;\n\n",
 								 fmtQualifiedId(te->namespace, te->tag));
 					}
 
@@ -1000,6 +1004,8 @@ NewRestoreOptions(void)
 	opts->format = archUnknown;
 	opts->cparams.promptPassword = TRI_DEFAULT;
 	opts->dumpSections = DUMP_UNSECTIONED;
+	opts->compression_spec.algorithm = PG_COMPRESSION_NONE;
+	opts->compression_spec.level = 0;
 
 	/* GPDB_92_MERGE_FIXEME: do we need the following two lines? */
 	opts->suppressDumpWarnings = false;
@@ -1110,7 +1116,7 @@ WriteData(Archive *AHX, const void *data, size_t dLen)
 	ArchiveHandle *AH = (ArchiveHandle *) AHX;
 
 	if (!AH->currToc)
-		fatal("internal error -- WriteData cannot be called outside the context of a DataDumper routine");
+		pg_fatal("internal error -- WriteData cannot be called outside the context of a DataDumper routine");
 
 	AH->WriteDataPtr(AH, data, dLen);
 }
@@ -1220,23 +1226,28 @@ PrintTOCSummary(Archive *AHX)
 	ArchiveHandle *AH = (ArchiveHandle *) AHX;
 	RestoreOptions *ropt = AH->public.ropt;
 	TocEntry   *te;
+	pg_compress_specification out_compression_spec = {0};
 	teSection	curSection;
-	OutputContext sav;
+	CompressFileHandle *sav;
 	const char *fmtName;
 	char		stamp_str[64];
 
+	/* TOC is always uncompressed */
+	out_compression_spec.algorithm = PG_COMPRESSION_NONE;
+
 	sav = SaveOutput(AH);
 	if (ropt->filename)
-		SetOutput(AH, ropt->filename, 0 /* no compression */ );
+		SetOutput(AH, ropt->filename, out_compression_spec);
 
 	if (strftime(stamp_str, sizeof(stamp_str), PGDUMP_STRFTIME_FMT,
 				 localtime(&AH->createDate)) == 0)
 		strcpy(stamp_str, "[unknown]");
 
 	ahprintf(AH, ";\n; Archive created at %s\n", stamp_str);
-	ahprintf(AH, ";     dbname: %s\n;     TOC Entries: %d\n;     Compression: %d\n",
+	ahprintf(AH, ";     dbname: %s\n;     TOC Entries: %d\n;     Compression: %s\n",
 			 sanitize_line(AH->archdbname, false),
-			 AH->tocCount, AH->compression);
+			 AH->tocCount,
+			 get_compress_algorithm_name(AH->compression_spec.algorithm));
 
 	switch (AH->format)
 	{
@@ -1270,10 +1281,13 @@ PrintTOCSummary(Archive *AHX)
 	curSection = SECTION_PRE_DATA;
 	for (te = AH->toc->next; te != AH->toc; te = te->next)
 	{
+		/* This bit must match ProcessArchiveRestoreOptions' marking logic */
 		if (te->section != SECTION_NONE)
 			curSection = te->section;
+		te->reqs = _tocEntryRequired(te, curSection, AH);
+		/* Now, should we print it? */
 		if (ropt->verbose ||
-			(_tocEntryRequired(te, curSection, AH) & (REQ_SCHEMA | REQ_DATA)) != 0)
+			(te->reqs & (REQ_SCHEMA | REQ_DATA)) != 0)
 		{
 			char	   *sanitized_name;
 			char	   *sanitized_schema;
@@ -1314,44 +1328,44 @@ PrintTOCSummary(Archive *AHX)
 }
 
 /***********
- * BLOB Archival
+ * Large Object Archival
  ***********/
 
-/* Called by a dumper to signal start of a BLOB */
+/* Called by a dumper to signal start of a LO */
 int
-StartBlob(Archive *AHX, Oid oid)
+StartLO(Archive *AHX, Oid oid)
 {
 	ArchiveHandle *AH = (ArchiveHandle *) AHX;
 
-	if (!AH->StartBlobPtr)
-		fatal("large-object output not supported in chosen format");
+	if (!AH->StartLOPtr)
+		pg_fatal("large-object output not supported in chosen format");
 
-	AH->StartBlobPtr(AH, AH->currToc, oid);
+	AH->StartLOPtr(AH, AH->currToc, oid);
 
 	return 1;
 }
 
-/* Called by a dumper to signal end of a BLOB */
+/* Called by a dumper to signal end of a LO */
 int
-EndBlob(Archive *AHX, Oid oid)
+EndLO(Archive *AHX, Oid oid)
 {
 	ArchiveHandle *AH = (ArchiveHandle *) AHX;
 
-	if (AH->EndBlobPtr)
-		AH->EndBlobPtr(AH, AH->currToc, oid);
+	if (AH->EndLOPtr)
+		AH->EndLOPtr(AH, AH->currToc, oid);
 
 	return 1;
 }
 
 /**********
- * BLOB Restoration
+ * Large Object Restoration
  **********/
 
 /*
- * Called by a format handler before any blobs are restored
+ * Called by a format handler before any LOs are restored
  */
 void
-StartRestoreBlobs(ArchiveHandle *AH)
+StartRestoreLOs(ArchiveHandle *AH)
 {
 	RestoreOptions *ropt = AH->public.ropt;
 
@@ -1363,14 +1377,14 @@ StartRestoreBlobs(ArchiveHandle *AH)
 			ahprintf(AH, "BEGIN;\n\n");
 	}
 
-	AH->blobCount = 0;
+	AH->loCount = 0;
 }
 
 /*
- * Called by a format handler after all blobs are restored
+ * Called by a format handler after all LOs are restored
  */
 void
-EndRestoreBlobs(ArchiveHandle *AH)
+EndRestoreLOs(ArchiveHandle *AH)
 {
 	RestoreOptions *ropt = AH->public.ropt;
 
@@ -1384,21 +1398,21 @@ EndRestoreBlobs(ArchiveHandle *AH)
 
 	pg_log_info(ngettext("restored %d large object",
 						 "restored %d large objects",
-						 AH->blobCount),
-				AH->blobCount);
+						 AH->loCount),
+				AH->loCount);
 }
 
 
 /*
- * Called by a format handler to initiate restoration of a blob
+ * Called by a format handler to initiate restoration of a LO
  */
 void
-StartRestoreBlob(ArchiveHandle *AH, Oid oid, bool drop)
+StartRestoreLO(ArchiveHandle *AH, Oid oid, bool drop)
 {
-	bool		old_blob_style = (AH->version < K_VERS_1_12);
+	bool		old_lo_style = (AH->version < K_VERS_1_12);
 	Oid			loOid;
 
-	AH->blobCount++;
+	AH->loCount++;
 
 	/* Initialize the LO Buffer */
 	AH->lo_buf_used = 0;
@@ -1406,26 +1420,26 @@ StartRestoreBlob(ArchiveHandle *AH, Oid oid, bool drop)
 	pg_log_info("restoring large object with OID %u", oid);
 
 	/* With an old archive we must do drop and create logic here */
-	if (old_blob_style && drop)
-		DropBlobIfExists(AH, oid);
+	if (old_lo_style && drop)
+		DropLOIfExists(AH, oid);
 
 	if (AH->connection)
 	{
-		if (old_blob_style)
+		if (old_lo_style)
 		{
 			loOid = lo_create(AH->connection, oid);
 			if (loOid == 0 || loOid != oid)
-				fatal("could not create large object %u: %s",
-					  oid, PQerrorMessage(AH->connection));
+				pg_fatal("could not create large object %u: %s",
+						 oid, PQerrorMessage(AH->connection));
 		}
 		AH->loFd = lo_open(AH->connection, oid, INV_WRITE);
 		if (AH->loFd == -1)
-			fatal("could not open large object %u: %s",
-				  oid, PQerrorMessage(AH->connection));
+			pg_fatal("could not open large object %u: %s",
+					 oid, PQerrorMessage(AH->connection));
 	}
 	else
 	{
-		if (old_blob_style)
+		if (old_lo_style)
 			ahprintf(AH, "SELECT pg_catalog.lo_open(pg_catalog.lo_create('%u'), %d);\n",
 					 oid, INV_WRITE);
 		else
@@ -1433,11 +1447,11 @@ StartRestoreBlob(ArchiveHandle *AH, Oid oid, bool drop)
 					 oid, INV_WRITE);
 	}
 
-	AH->writingBlob = 1;
+	AH->writingLO = true;
 }
 
 void
-EndRestoreBlob(ArchiveHandle *AH, Oid oid)
+EndRestoreLO(ArchiveHandle *AH, Oid oid)
 {
 	if (AH->lo_buf_used > 0)
 	{
@@ -1445,7 +1459,7 @@ EndRestoreBlob(ArchiveHandle *AH, Oid oid)
 		dump_lo_buf(AH);
 	}
 
-	AH->writingBlob = 0;
+	AH->writingLO = false;
 
 	if (AH->connection)
 	{
@@ -1476,7 +1490,7 @@ SortTocFromFile(Archive *AHX)
 	/* Setup the file */
 	fh = fopen(ropt->tocFile, PG_BINARY_R);
 	if (!fh)
-		fatal("could not open TOC file \"%s\": %m", ropt->tocFile);
+		pg_fatal("could not open TOC file \"%s\": %m", ropt->tocFile);
 
 	initStringInfo(&linebuf);
 
@@ -1511,8 +1525,8 @@ SortTocFromFile(Archive *AHX)
 		/* Find TOC entry */
 		te = getTocEntryByDumpId(AH, id);
 		if (!te)
-			fatal("could not find entry for ID %d",
-				  id);
+			pg_fatal("could not find entry for ID %d",
+					 id);
 
 		/* Mark it wanted */
 		ropt->idWanted[id - 1] = true;
@@ -1534,7 +1548,7 @@ SortTocFromFile(Archive *AHX)
 	pg_free(linebuf.data);
 
 	if (fclose(fh) != 0)
-		fatal("could not close TOC file: %m");
+		pg_fatal("could not close TOC file: %m");
 }
 
 /**********************
@@ -1590,97 +1604,59 @@ archprintf(Archive *AH, const char *fmt,...)
  *******************************/
 
 static void
-SetOutput(ArchiveHandle *AH, const char *filename, int compression)
+SetOutput(ArchiveHandle *AH, const char *filename,
+		  const pg_compress_specification compression_spec)
 {
-	int			fn;
+	CompressFileHandle *CFH;
+	const char *mode;
+	int			fn = -1;
 
 	if (filename)
 	{
 		if (strcmp(filename, "-") == 0)
 			fn = fileno(stdout);
-		else
-			fn = -1;
 	}
 	else if (AH->FH)
 		fn = fileno(AH->FH);
 	else if (AH->fSpec)
 	{
-		fn = -1;
 		filename = AH->fSpec;
 	}
 	else
 		fn = fileno(stdout);
 
-	/* If compression explicitly requested, use gzopen */
-#ifdef HAVE_LIBZ
-	if (compression != 0)
-	{
-		char		fmode[14];
-
-		/* Don't use PG_BINARY_x since this is zlib */
-		sprintf(fmode, "wb%d", compression);
-		if (fn >= 0)
-			AH->OF = gzdopen(dup(fn), fmode);
-		else
-			AH->OF = gzopen(filename, fmode);
-		AH->gzOut = 1;
-	}
+	if (AH->mode == archModeAppend)
+		mode = PG_BINARY_A;
 	else
-#endif
-	{							/* Use fopen */
-		if (AH->mode == archModeAppend)
-		{
-			if (fn >= 0)
-				AH->OF = fdopen(dup(fn), PG_BINARY_A);
-			else
-				AH->OF = fopen(filename, PG_BINARY_A);
-		}
-		else
-		{
-			if (fn >= 0)
-				AH->OF = fdopen(dup(fn), PG_BINARY_W);
-			else
-				AH->OF = fopen(filename, PG_BINARY_W);
-		}
-		AH->gzOut = 0;
-	}
+		mode = PG_BINARY_W;
 
-	if (!AH->OF)
+	CFH = InitCompressFileHandle(compression_spec);
+
+	if (!CFH->open_func(filename, fn, mode, CFH))
 	{
 		if (filename)
-			fatal("could not open output file \"%s\": %m", filename);
+			pg_fatal("could not open output file \"%s\": %m", filename);
 		else
-			fatal("could not open output file: %m");
+			pg_fatal("could not open output file: %m");
 	}
+
+	AH->OF = CFH;
 }
 
-static OutputContext
+static CompressFileHandle *
 SaveOutput(ArchiveHandle *AH)
 {
-	OutputContext sav;
-
-	sav.OF = AH->OF;
-	sav.gzOut = AH->gzOut;
-
-	return sav;
+	return (CompressFileHandle *) AH->OF;
 }
 
 static void
-RestoreOutput(ArchiveHandle *AH, OutputContext savedContext)
+RestoreOutput(ArchiveHandle *AH, CompressFileHandle *savedOutput)
 {
-	int			res;
+	errno = 0;
+	if (!EndCompressFileHandle(AH->OF))
+		pg_fatal("could not close output file: %m");
 
-	errno = 0;					/* in case gzclose() doesn't set it */
-	if (AH->gzOut)
-		res = GZCLOSE(AH->OF);
-	else
-		res = fclose(AH->OF);
-
-	if (res != 0)
-		fatal("could not close output file: %m");
-
-	AH->gzOut = savedContext.gzOut;
-	AH->OF = savedContext.OF;
+	AH->OF = savedOutput;
 }
 
 
@@ -1734,7 +1710,7 @@ RestoringToDB(ArchiveHandle *AH)
 }
 
 /*
- * Dump the current contents of the LO data buffer while writing a BLOB
+ * Dump the current contents of the LO data buffer while writing a LO
  */
 static void
 dump_lo_buf(ArchiveHandle *AH)
@@ -1762,10 +1738,10 @@ dump_lo_buf(ArchiveHandle *AH)
 							  AH->lo_buf_used,
 							  AH);
 
-		/* Hack: turn off writingBlob so ahwrite doesn't recurse to here */
-		AH->writingBlob = 0;
+		/* Hack: turn off writingLO so ahwrite doesn't recurse to here */
+		AH->writingLO = false;
 		ahprintf(AH, "SELECT pg_catalog.lowrite(0, %s);\n", buf->data);
-		AH->writingBlob = 1;
+		AH->writingLO = true;
 
 		destroyPQExpBuffer(buf);
 	}
@@ -1784,7 +1760,7 @@ ahwrite(const void *ptr, size_t size, size_t nmemb, ArchiveHandle *AH)
 {
 	int			bytes_written = 0;
 
-	if (AH->writingBlob)
+	if (AH->writingLO)
 	{
 		size_t		remaining = size * nmemb;
 
@@ -1804,21 +1780,21 @@ ahwrite(const void *ptr, size_t size, size_t nmemb, ArchiveHandle *AH)
 
 		bytes_written = size * nmemb;
 	}
-	else if (AH->gzOut)
-		bytes_written = GZWRITE(ptr, size, nmemb, AH->OF);
 	else if (AH->CustomOutPtr)
 		bytes_written = AH->CustomOutPtr(AH, ptr, size * nmemb);
 
+	/*
+	 * If we're doing a restore, and it's direct to DB, and we're connected
+	 * then send it to the DB.
+	 */
+	else if (RestoringToDB(AH))
+		bytes_written = ExecuteSqlCommandBuf(&AH->public, (const char *) ptr, size * nmemb);
 	else
 	{
-		/*
-		 * If we're doing a restore, and it's direct to DB, and we're
-		 * connected then send it to the DB.
-		 */
-		if (RestoringToDB(AH))
-			bytes_written = ExecuteSqlCommandBuf(&AH->public, (const char *) ptr, size * nmemb);
-		else
-			bytes_written = fwrite(ptr, size, nmemb, AH->OF) * size;
+		CompressFileHandle *CFH = (CompressFileHandle *) AH->OF;
+
+		if (CFH->write_func(ptr, size * nmemb, CFH))
+			bytes_written = size * nmemb;
 	}
 
 	if (bytes_written != size * nmemb)
@@ -1840,34 +1816,34 @@ warn_or_exit_horribly(ArchiveHandle *AH, const char *fmt,...)
 
 		case STAGE_INITIALIZING:
 			if (AH->stage != AH->lastErrorStage)
-				pg_log_generic(PG_LOG_INFO, "while INITIALIZING:");
+				pg_log_info("while INITIALIZING:");
 			break;
 
 		case STAGE_PROCESSING:
 			if (AH->stage != AH->lastErrorStage)
-				pg_log_generic(PG_LOG_INFO, "while PROCESSING TOC:");
+				pg_log_info("while PROCESSING TOC:");
 			break;
 
 		case STAGE_FINALIZING:
 			if (AH->stage != AH->lastErrorStage)
-				pg_log_generic(PG_LOG_INFO, "while FINALIZING:");
+				pg_log_info("while FINALIZING:");
 			break;
 	}
 	if (AH->currentTE != NULL && AH->currentTE != AH->lastErrorTE)
 	{
-		pg_log_generic(PG_LOG_INFO, "from TOC entry %d; %u %u %s %s %s",
-					   AH->currentTE->dumpId,
-					   AH->currentTE->catalogId.tableoid,
-					   AH->currentTE->catalogId.oid,
-					   AH->currentTE->desc ? AH->currentTE->desc : "(no desc)",
-					   AH->currentTE->tag ? AH->currentTE->tag : "(no tag)",
-					   AH->currentTE->owner ? AH->currentTE->owner : "(no owner)");
+		pg_log_info("from TOC entry %d; %u %u %s %s %s",
+					AH->currentTE->dumpId,
+					AH->currentTE->catalogId.tableoid,
+					AH->currentTE->catalogId.oid,
+					AH->currentTE->desc ? AH->currentTE->desc : "(no desc)",
+					AH->currentTE->tag ? AH->currentTE->tag : "(no tag)",
+					AH->currentTE->owner ? AH->currentTE->owner : "(no owner)");
 	}
 	AH->lastErrorStage = AH->stage;
 	AH->lastErrorTE = AH->currentTE;
 
 	va_start(ap, fmt);
-	pg_log_generic_v(PG_LOG_ERROR, fmt, ap);
+	pg_log_generic_v(PG_LOG_ERROR, PG_LOG_PRIMARY, fmt, ap);
 	va_end(ap);
 
 	if (AH->public.exit_on_error)
@@ -1931,7 +1907,7 @@ buildTocEntryArrays(ArchiveHandle *AH)
 	{
 		/* this check is purely paranoia, maxDumpId should be correct */
 		if (te->dumpId <= 0 || te->dumpId > maxDumpId)
-			fatal("bad dumpId");
+			pg_fatal("bad dumpId");
 
 		/* tocsByDumpId indexes all TOCs by their dump ID */
 		AH->tocsByDumpId[te->dumpId] = te;
@@ -1952,7 +1928,7 @@ buildTocEntryArrays(ArchiveHandle *AH)
 			 * item's dump ID, so there should be a place for it in the array.
 			 */
 			if (tableId <= 0 || tableId > maxDumpId)
-				fatal("bad table dumpId for TABLE DATA item");
+				pg_fatal("bad table dumpId for TABLE DATA item");
 
 			AH->tableDataId[tableId] = te->dumpId;
 		}
@@ -2044,7 +2020,7 @@ ReadOffset(ArchiveHandle *AH, pgoff_t * o)
 			break;
 
 		default:
-			fatal("unexpected data offset flag %d", offsetFlg);
+			pg_fatal("unexpected data offset flag %d", offsetFlg);
 	}
 
 	/*
@@ -2057,7 +2033,7 @@ ReadOffset(ArchiveHandle *AH, pgoff_t * o)
 		else
 		{
 			if (AH->ReadBytePtr(AH) != 0)
-				fatal("file offset in dump file is too large");
+				pg_fatal("file offset in dump file is too large");
 		}
 	}
 
@@ -2161,6 +2137,18 @@ ReadStr(ArchiveHandle *AH)
 	return buf;
 }
 
+static bool
+_fileExistsInDirectory(const char *dir, const char *filename)
+{
+	struct stat st;
+	char		buf[MAXPGPATH];
+
+	if (snprintf(buf, MAXPGPATH, "%s/%s", dir, filename) >= MAXPGPATH)
+		pg_fatal("directory name too long: \"%s\"", dir);
+
+	return (stat(buf, &st) == 0 && S_ISREG(st.st_mode));
+}
+
 static int
 _discoverArchiveFormat(ArchiveHandle *AH)
 {
@@ -2171,8 +2159,7 @@ _discoverArchiveFormat(ArchiveHandle *AH)
 
 	pg_log_debug("attempting to ascertain archive format");
 
-	if (AH->lookahead)
-		free(AH->lookahead);
+	free(AH->lookahead);
 
 	AH->readHeader = 0;
 	AH->lookaheadSize = 512;
@@ -2188,56 +2175,50 @@ _discoverArchiveFormat(ArchiveHandle *AH)
 
 		/*
 		 * Check if the specified archive is a directory. If so, check if
-		 * there's a "toc.dat" (or "toc.dat.gz") file in it.
+		 * there's a "toc.dat" (or "toc.dat.{gz,lz4,zst}") file in it.
 		 */
 		if (stat(AH->fSpec, &st) == 0 && S_ISDIR(st.st_mode))
 		{
-			char		buf[MAXPGPATH];
-
-			if (snprintf(buf, MAXPGPATH, "%s/toc.dat", AH->fSpec) >= MAXPGPATH)
-				fatal("directory name too long: \"%s\"",
-					  AH->fSpec);
-			if (stat(buf, &st) == 0 && S_ISREG(st.st_mode))
-			{
-				AH->format = archDirectory;
+			AH->format = archDirectory;
+			if (_fileExistsInDirectory(AH->fSpec, "toc.dat"))
 				return AH->format;
-			}
-
 #ifdef HAVE_LIBZ
-			if (snprintf(buf, MAXPGPATH, "%s/toc.dat.gz", AH->fSpec) >= MAXPGPATH)
-				fatal("directory name too long: \"%s\"",
-					  AH->fSpec);
-			if (stat(buf, &st) == 0 && S_ISREG(st.st_mode))
-			{
-				AH->format = archDirectory;
+			if (_fileExistsInDirectory(AH->fSpec, "toc.dat.gz"))
 				return AH->format;
-			}
 #endif
-			fatal("directory \"%s\" does not appear to be a valid archive (\"toc.dat\" does not exist)",
-				  AH->fSpec);
+#ifdef USE_LZ4
+			if (_fileExistsInDirectory(AH->fSpec, "toc.dat.lz4"))
+				return AH->format;
+#endif
+#ifdef USE_ZSTD
+			if (_fileExistsInDirectory(AH->fSpec, "toc.dat.zst"))
+				return AH->format;
+#endif
+			pg_fatal("directory \"%s\" does not appear to be a valid archive (\"toc.dat\" does not exist)",
+					 AH->fSpec);
 			fh = NULL;			/* keep compiler quiet */
 		}
 		else
 		{
 			fh = fopen(AH->fSpec, PG_BINARY_R);
 			if (!fh)
-				fatal("could not open input file \"%s\": %m", AH->fSpec);
+				pg_fatal("could not open input file \"%s\": %m", AH->fSpec);
 		}
 	}
 	else
 	{
 		fh = stdin;
 		if (!fh)
-			fatal("could not open input file: %m");
+			pg_fatal("could not open input file: %m");
 	}
 
 	if ((cnt = fread(sig, 1, 5, fh)) != 5)
 	{
 		if (ferror(fh))
-			fatal("could not read input file: %m");
+			pg_fatal("could not read input file: %m");
 		else
-			fatal("input file is too short (read %lu, expected 5)",
-				  (unsigned long) cnt);
+			pg_fatal("input file is too short (read %lu, expected 5)",
+					 (unsigned long) cnt);
 	}
 
 	/* Save it, just in case we need it later */
@@ -2268,7 +2249,7 @@ _discoverArchiveFormat(ArchiveHandle *AH)
 			 * looks like it's probably a text format dump. so suggest they
 			 * try psql
 			 */
-			fatal("input file appears to be a text format dump. Please use psql.");
+			pg_fatal("input file appears to be a text format dump. Please use psql.");
 		}
 		else if (AH->lookaheadLen >= strlen(GP_TEXT_DUMPALL_HEADER) &&
 		         (strncmp(AH->lookahead, GP_TEXT_DUMP_HEADER, strlen(GP_TEXT_DUMP_HEADER)) == 0 ||
@@ -2278,19 +2259,19 @@ _discoverArchiveFormat(ArchiveHandle *AH)
 			 * looks like it's probably a text format dump for Cloudberry. so suggest they
 			 * try psql
 			 */
-			fatal("input file appears to be a text format dump. Please use psql.");
+			pg_fatal("input file appears to be a text format dump. Please use psql.");
 		}
 
 		if (AH->lookaheadLen != 512)
 		{
 			if (feof(fh))
-				fatal("input file does not appear to be a valid archive (too short?)");
+				pg_fatal("input file does not appear to be a valid archive (too short?)");
 			else
 				READ_ERROR_EXIT(fh);
 		}
 
 		if (!isValidTarHeader(AH->lookahead))
-			fatal("input file does not appear to be a valid archive");
+			pg_fatal("input file does not appear to be a valid archive");
 
 		AH->format = archTar;
 	}
@@ -2299,7 +2280,7 @@ _discoverArchiveFormat(ArchiveHandle *AH)
 	if (wantClose)
 	{
 		if (fclose(fh) != 0)
-			fatal("could not close input file: %m");
+			pg_fatal("could not close input file: %m");
 		/* Forget lookahead, since we'll re-read header after re-opening */
 		AH->readHeader = 0;
 		AH->lookaheadLen = 0;
@@ -2314,10 +2295,13 @@ _discoverArchiveFormat(ArchiveHandle *AH)
  */
 static ArchiveHandle *
 _allocAH(const char *FileSpec, const ArchiveFormat fmt,
-		 const int compression, bool dosync, ArchiveMode mode,
+		 const pg_compress_specification compression_spec,
+		 bool dosync, ArchiveMode mode,
 		 SetupWorkerPtrType setupWorkerPtr)
 {
 	ArchiveHandle *AH;
+	CompressFileHandle *CFH;
+	pg_compress_specification out_compress_spec = {0};
 
 	pg_log_debug("allocating AH for %s, format %d",
 				 FileSpec ? FileSpec : "(stdio)", fmt);
@@ -2365,14 +2349,17 @@ _allocAH(const char *FileSpec, const ArchiveFormat fmt,
 	AH->toc->prev = AH->toc;
 
 	AH->mode = mode;
-	AH->compression = compression;
+	AH->compression_spec = compression_spec;
 	AH->dosync = dosync;
 
 	memset(&(AH->sqlparse), 0, sizeof(AH->sqlparse));
 
 	/* Open stdout with no compression for AH output handle */
-	AH->gzOut = 0;
-	AH->OF = stdout;
+	out_compress_spec.algorithm = PG_COMPRESSION_NONE;
+	CFH = InitCompressFileHandle(out_compress_spec);
+	if (!CFH->open_func(NULL, fileno(stdout), PG_BINARY_A, CFH))
+		pg_fatal("could not open stdout for appending: %m");
+	AH->OF = CFH;
 
 	/*
 	 * On Windows, we need to use binary mode to read/write non-text files,
@@ -2380,7 +2367,7 @@ _allocAH(const char *FileSpec, const ArchiveFormat fmt,
 	 * Force stdin/stdout into binary mode if that is what we are using.
 	 */
 #ifdef WIN32
-	if ((fmt != archNull || compression != 0) &&
+	if ((fmt != archNull || compression_spec.algorithm != PG_COMPRESSION_NONE) &&
 		(AH->fSpec == NULL || strcmp(AH->fSpec, "") == 0))
 	{
 		if (mode == archModeWrite)
@@ -2416,14 +2403,14 @@ _allocAH(const char *FileSpec, const ArchiveFormat fmt,
 			break;
 
 		default:
-			fatal("unrecognized file format \"%d\"", fmt);
+			pg_fatal("unrecognized file format \"%d\"", fmt);
 	}
 
 	return AH;
 }
 
 /*
- * Write out all data (tables & blobs)
+ * Write out all data (tables & LOs)
  */
 void
 WriteDataChunks(ArchiveHandle *AH, ParallelState *pstate)
@@ -2457,8 +2444,7 @@ WriteDataChunks(ArchiveHandle *AH, ParallelState *pstate)
 		}
 
 		if (ntes > 1)
-			qsort((void *) tes, ntes, sizeof(TocEntry *),
-				  TocEntrySizeCompare);
+			qsort(tes, ntes, sizeof(TocEntry *), TocEntrySizeCompare);
 
 		for (int i = 0; i < ntes; i++)
 			DispatchJobForTocEntry(AH, pstate, tes[i], ACT_DUMP,
@@ -2502,8 +2488,8 @@ mark_dump_job_done(ArchiveHandle *AH,
 				te->dumpId, te->desc, te->tag);
 
 	if (status != 0)
-		fatal("worker process failed: exit code %d",
-			  status);
+		pg_fatal("worker process failed: exit code %d",
+				 status);
 }
 
 
@@ -2517,8 +2503,8 @@ WriteDataChunksForTocEntry(ArchiveHandle *AH, TocEntry *te)
 
 	if (strcmp(te->desc, "BLOBS") == 0)
 	{
-		startPtr = AH->StartBlobsPtr;
-		endPtr = AH->EndBlobsPtr;
+		startPtr = AH->StartLOsPtr;
+		endPtr = AH->EndLOsPtr;
 	}
 	else
 	{
@@ -2608,6 +2594,7 @@ ReadToc(ArchiveHandle *AH)
 	int			depIdx;
 	int			depSize;
 	TocEntry   *te;
+	bool		is_supported;
 
 	AH->tocCount = ReadInt(AH);
 	AH->maxDumpId = 0;
@@ -2622,8 +2609,8 @@ ReadToc(ArchiveHandle *AH)
 
 		/* Sanity check */
 		if (te->dumpId <= 0)
-			fatal("entry ID %d out of range -- perhaps a corrupt TOC",
-				  te->dumpId);
+			pg_fatal("entry ID %d out of range -- perhaps a corrupt TOC",
+					 te->dumpId);
 
 		te->hadDumper = ReadInt(AH);
 
@@ -2688,7 +2675,20 @@ ReadToc(ArchiveHandle *AH)
 			te->tableam = ReadStr(AH);
 
 		te->owner = ReadStr(AH);
-		if (AH->version < K_VERS_1_9 || strcmp(ReadStr(AH), "true") == 0)
+		is_supported = true;
+		if (AH->version < K_VERS_1_9)
+			is_supported = false;
+		else
+		{
+			tmp = ReadStr(AH);
+
+			if (strcmp(tmp, "true") == 0)
+				is_supported = false;
+
+			free(tmp);
+		}
+
+		if (!is_supported)
 			pg_log_warning("restoring tables WITH OIDS is not supported anymore");
 
 		/* Read TOC entry dependencies */
@@ -2771,14 +2771,14 @@ processEncodingEntry(ArchiveHandle *AH, TocEntry *te)
 		*ptr2 = '\0';
 		encoding = pg_char_to_encoding(ptr1);
 		if (encoding < 0)
-			fatal("unrecognized encoding \"%s\"",
-				  ptr1);
+			pg_fatal("unrecognized encoding \"%s\"",
+					 ptr1);
 		AH->public.encoding = encoding;
 		setFmtEncoding(encoding);
 	}
 	else
-		fatal("invalid ENCODING item: %s",
-			  te->defn);
+		pg_fatal("invalid ENCODING item: %s",
+				 te->defn);
 
 	free(defn);
 }
@@ -2795,8 +2795,8 @@ processStdStringsEntry(ArchiveHandle *AH, TocEntry *te)
 	else if (ptr1 && strncmp(ptr1, "'off'", 5) == 0)
 		AH->public.std_strings = false;
 	else
-		fatal("invalid STDSTRINGS item: %s",
-			  te->defn);
+		pg_fatal("invalid STDSTRINGS item: %s",
+				 te->defn);
 }
 
 static void
@@ -2820,35 +2820,35 @@ StrictNamesCheck(RestoreOptions *ropt)
 	{
 		missing_name = simple_string_list_not_touched(&ropt->schemaNames);
 		if (missing_name != NULL)
-			fatal("schema \"%s\" not found", missing_name);
+			pg_fatal("schema \"%s\" not found", missing_name);
 	}
 
 	if (ropt->tableNames.head != NULL)
 	{
 		missing_name = simple_string_list_not_touched(&ropt->tableNames);
 		if (missing_name != NULL)
-			fatal("table \"%s\" not found", missing_name);
+			pg_fatal("table \"%s\" not found", missing_name);
 	}
 
 	if (ropt->indexNames.head != NULL)
 	{
 		missing_name = simple_string_list_not_touched(&ropt->indexNames);
 		if (missing_name != NULL)
-			fatal("index \"%s\" not found", missing_name);
+			pg_fatal("index \"%s\" not found", missing_name);
 	}
 
 	if (ropt->functionNames.head != NULL)
 	{
 		missing_name = simple_string_list_not_touched(&ropt->functionNames);
 		if (missing_name != NULL)
-			fatal("function \"%s\" not found", missing_name);
+			pg_fatal("function \"%s\" not found", missing_name);
 	}
 
 	if (ropt->triggerNames.head != NULL)
 	{
 		missing_name = simple_string_list_not_touched(&ropt->triggerNames);
 		if (missing_name != NULL)
-			fatal("trigger \"%s\" not found", missing_name);
+			pg_fatal("trigger \"%s\" not found", missing_name);
 	}
 }
 
@@ -2903,7 +2903,8 @@ _tocEntryRequired(TocEntry *te, teSection curSection, ArchiveHandle *AH)
 	 */
 	if (ropt->no_publications &&
 		(strcmp(te->desc, "PUBLICATION") == 0 ||
-		 strcmp(te->desc, "PUBLICATION TABLE") == 0))
+		 strcmp(te->desc, "PUBLICATION TABLE") == 0 ||
+		 strcmp(te->desc, "PUBLICATION TABLES IN SCHEMA") == 0))
 		return 0;
 
 	/* If it's a security label, maybe ignore it */
@@ -2960,7 +2961,10 @@ _tocEntryRequired(TocEntry *te, teSection curSection, ArchiveHandle *AH)
 			 * TOC entry types only if their parent object is being restored.
 			 * Without selectivity options, we let through everything in the
 			 * archive.  Note there may be such entries with no parent, eg
-			 * non-default ACLs for built-in objects.
+			 * non-default ACLs for built-in objects.  Also, we make
+			 * per-column ACLs additionally depend on the table's ACL if any
+			 * to ensure correct restore order, so those dependencies should
+			 * be ignored in this check.
 			 *
 			 * This code depends on the parent having been marked already,
 			 * which should be the case; if it isn't, perhaps due to
@@ -2971,8 +2975,23 @@ _tocEntryRequired(TocEntry *te, teSection curSection, ArchiveHandle *AH)
 			 * But it's hard to tell which of their dependencies is the one to
 			 * consult.
 			 */
-			if (te->nDeps != 1 ||
-				TocIDRequired(AH, te->dependencies[0]) == 0)
+			bool		dumpthis = false;
+
+			for (int i = 0; i < te->nDeps; i++)
+			{
+				TocEntry   *pte = getTocEntryByDumpId(AH, te->dependencies[i]);
+
+				if (!pte)
+					continue;	/* probably shouldn't happen */
+				if (strcmp(pte->desc, "ACL") == 0)
+					continue;	/* ignore dependency on another ACL */
+				if (pte->reqs == 0)
+					continue;	/* this object isn't marked, so ignore it */
+				/* Found a parent to be dumped, so we want to dump this too */
+				dumpthis = true;
+				break;
+			}
+			if (!dumpthis)
 				return 0;
 		}
 	}
@@ -3052,11 +3071,11 @@ _tocEntryRequired(TocEntry *te, teSection curSection, ArchiveHandle *AH)
 	if (!te->hadDumper)
 	{
 		/*
-		 * Special Case: If 'SEQUENCE SET' or anything to do with BLOBs, then
-		 * it is considered a data entry.  We don't need to check for the
-		 * BLOBS entry or old-style BLOB COMMENTS, because they will have
-		 * hadDumper = true ... but we do need to check new-style BLOB ACLs,
-		 * comments, etc.
+		 * Special Case: If 'SEQUENCE SET' or anything to do with LOs, then it
+		 * is considered a data entry.  We don't need to check for the BLOBS
+		 * entry or old-style BLOB COMMENTS, because they will have hadDumper
+		 * = true ... but we do need to check new-style BLOB ACLs, comments,
+		 * etc.
 		 */
 		if (strcmp(te->desc, "SEQUENCE SET") == 0 ||
 			strcmp(te->desc, "BLOB") == 0 ||
@@ -3256,8 +3275,8 @@ _doSetSessionAuth(ArchiveHandle *AH, const char *user)
 
 		if (!res || PQresultStatus(res) != PGRES_COMMAND_OK)
 			/* NOT warn_or_exit_horribly... use -O instead to skip this. */
-			fatal("could not set session user to \"%s\": %s",
-				  user, PQerrorMessage(AH->connection));
+			pg_fatal("could not set session user to \"%s\": %s",
+					 user, PQerrorMessage(AH->connection));
 
 		PQclear(res);
 	}
@@ -3294,16 +3313,17 @@ _reconnectToDB(ArchiveHandle *AH, const char *dbname)
 	 * NOTE: currUser keeps track of what the imaginary session user in our
 	 * script is.  It's now effectively reset to the original userID.
 	 */
-	if (AH->currUser)
-		free(AH->currUser);
+	free(AH->currUser);
 	AH->currUser = NULL;
 
 	/* don't assume we still know the output schema, tablespace, etc either */
-	if (AH->currSchema)
-		free(AH->currSchema);
+	free(AH->currSchema);
 	AH->currSchema = NULL;
-	if (AH->currTablespace)
-		free(AH->currTablespace);
+
+	free(AH->currTableAm);
+	AH->currTableAm = NULL;
+
+	free(AH->currTablespace);
 	AH->currTablespace = NULL;
 
 	/* re-establish fixed state */
@@ -3330,8 +3350,7 @@ _becomeUser(ArchiveHandle *AH, const char *user)
 	 * NOTE: currUser keeps track of what the imaginary session user in our
 	 * script is
 	 */
-	if (AH->currUser)
-		free(AH->currUser);
+	free(AH->currUser);
 	AH->currUser = pg_strdup(user);
 }
 
@@ -3396,8 +3415,7 @@ _selectOutputSchema(ArchiveHandle *AH, const char *schemaName)
 	else
 		ahprintf(AH, "%s;\n\n", qry->data);
 
-	if (AH->currSchema)
-		free(AH->currSchema);
+	free(AH->currSchema);
 	AH->currSchema = pg_strdup(schemaName);
 
 	destroyPQExpBuffer(qry);
@@ -3458,8 +3476,7 @@ _selectTablespace(ArchiveHandle *AH, const char *tablespace)
 	else
 		ahprintf(AH, "%s;\n\n", qry->data);
 
-	if (AH->currTablespace)
-		free(AH->currTablespace);
+	free(AH->currTablespace);
 	AH->currTablespace = pg_strdup(want);
 
 	destroyPQExpBuffer(qry);
@@ -3471,9 +3488,14 @@ _selectTablespace(ArchiveHandle *AH, const char *tablespace)
 static void
 _selectTableAccessMethod(ArchiveHandle *AH, const char *tableam)
 {
+	RestoreOptions *ropt = AH->public.ropt;
 	PQExpBuffer cmd;
 	const char *want,
 			   *have;
+
+	/* do nothing in --no-table-access-method mode */
+	if (ropt->noTableAm)
+		return;
 
 	have = AH->currTableAm;
 	want = tableam;
@@ -3514,29 +3536,29 @@ _selectTableAccessMethod(ArchiveHandle *AH, const char *tableam)
  * Extract an object description for a TOC entry, and append it to buf.
  *
  * This is used for ALTER ... OWNER TO.
+ *
+ * If the object type has no owner, do nothing.
  */
 static void
-_getObjectDescription(PQExpBuffer buf, TocEntry *te)
+_getObjectDescription(PQExpBuffer buf, const TocEntry *te)
 {
 	const char *type = te->desc;
-
-	/* Use ALTER TABLE for views and sequences */
-	if (strcmp(type, "VIEW") == 0 || strcmp(type, "SEQUENCE") == 0 ||
-		strcmp(type, "MATERIALIZED VIEW") == 0)
-		type = "TABLE";
 
 	/* objects that don't require special decoration */
 	if (strcmp(type, "COLLATION") == 0 ||
 		strcmp(type, "CONVERSION") == 0 ||
 		strcmp(type, "DOMAIN") == 0 ||
-		strcmp(type, "TABLE") == 0 ||
 		strcmp(type, "EXTERNAL TABLE") == 0 ||
 		strcmp(type, "FOREIGN TABLE") == 0 ||
-		strcmp(type, "TYPE") == 0 ||
 		strcmp(type, "FOREIGN TABLE") == 0 ||
+		strcmp(type, "MATERIALIZED VIEW") == 0 ||
+		strcmp(type, "SEQUENCE") == 0 ||
+		strcmp(type, "STATISTICS") == 0 ||
+		strcmp(type, "TABLE") == 0 ||
 		strcmp(type, "TEXT SEARCH DICTIONARY") == 0 ||
 		strcmp(type, "TEXT SEARCH CONFIGURATION") == 0 ||
-		strcmp(type, "STATISTICS") == 0 ||
+		strcmp(type, "TYPE") == 0 ||
+		strcmp(type, "VIEW") == 0 ||
 	/* non-schema-specified objects */
 		strcmp(type, "DATABASE") == 0 ||
 		strcmp(type, "PROCEDURAL LANGUAGE") == 0 ||
@@ -3545,35 +3567,30 @@ _getObjectDescription(PQExpBuffer buf, TocEntry *te)
 		strcmp(type, "FOREIGN DATA WRAPPER") == 0 ||
 		strcmp(type, "SERVER") == 0 ||
 		strcmp(type, "PUBLICATION") == 0 ||
-		strcmp(type, "SUBSCRIPTION") == 0 ||
-		strcmp(type, "USER MAPPING") == 0)
+		strcmp(type, "SUBSCRIPTION") == 0)
 	{
 		appendPQExpBuffer(buf, "%s ", type);
 		if (te->namespace && *te->namespace)
 			appendPQExpBuffer(buf, "%s.", fmtId(te->namespace));
 		appendPQExpBufferStr(buf, fmtId(te->tag));
-		return;
 	}
-
-	/* BLOBs just have a name, but it's numeric so must not use fmtId */
-	if (strcmp(type, "BLOB") == 0)
+	/* LOs just have a name, but it's numeric so must not use fmtId */
+	else if (strcmp(type, "BLOB") == 0)
 	{
 		appendPQExpBuffer(buf, "LARGE OBJECT %s", te->tag);
-		return;
 	}
 
 	/*
 	 * These object types require additional decoration.  Fortunately, the
 	 * information needed is exactly what's in the DROP command.
 	 */
-	if (strcmp(type, "AGGREGATE") == 0 ||
-		strcmp(type, "FUNCTION") == 0 ||
-		strcmp(type, "OPERATOR") == 0 ||
-		strcmp(type, "OPERATOR CLASS") == 0 ||
-		strcmp(type, "OPERATOR FAMILY") == 0 ||
-		strcmp(type, "PROCEDURE") == 0 ||
-		/* Cloudberry Additions */
-		strcmp(type, "PROTOCOL") == 0)
+	else if (strcmp(type, "AGGREGATE") == 0 ||
+			 strcmp(type, "FUNCTION") == 0 ||
+			 strcmp(type, "OPERATOR") == 0 ||
+			 strcmp(type, "OPERATOR CLASS") == 0 ||
+			 strcmp(type, "OPERATOR FAMILY") == 0 ||
+			 strcmp(type, "PROCEDURE") == 0 ||
+			 strcmp(type, "PROTOCOL") == 0)
 	{
 		/* Chop "DROP " off the front and make a modifiable copy */
 		char	   *first = pg_strdup(te->dropStmt + 5);
@@ -3592,9 +3609,24 @@ _getObjectDescription(PQExpBuffer buf, TocEntry *te)
 		free(first);
 		return;
 	}
-
-	pg_log_warning("don't know how to set owner for object type \"%s\"",
-				   type);
+	/* these object types don't have separate owners */
+	else if (strcmp(type, "CAST") == 0 ||
+			 strcmp(type, "CHECK CONSTRAINT") == 0 ||
+			 strcmp(type, "CONSTRAINT") == 0 ||
+			 strcmp(type, "DATABASE PROPERTIES") == 0 ||
+			 strcmp(type, "DEFAULT") == 0 ||
+			 strcmp(type, "FK CONSTRAINT") == 0 ||
+			 strcmp(type, "INDEX") == 0 ||
+			 strcmp(type, "RULE") == 0 ||
+			 strcmp(type, "TRIGGER") == 0 ||
+			 strcmp(type, "ROW SECURITY") == 0 ||
+			 strcmp(type, "POLICY") == 0 ||
+			 strcmp(type, "USER MAPPING") == 0)
+	{
+		/* do nothing */
+	}
+	else
+		pg_fatal("don't know how to set owner for object type \"%s\"", type);
 }
 
 /*
@@ -3675,10 +3707,12 @@ _printTocEntry(ArchiveHandle *AH, TocEntry *te, bool isData)
 	 * Actually print the definition.
 	 *
 	 * Really crude hack for suppressing AUTHORIZATION clause that old pg_dump
-	 * versions put into CREATE SCHEMA.  We have to do this when --no-owner
-	 * mode is selected.  This is ugly, but I see no other good way ...
+	 * versions put into CREATE SCHEMA.  Don't mutate the variant for schema
+	 * "public" that is a comment.  We have to do this when --no-owner mode is
+	 * selected.  This is ugly, but I see no other good way ...
 	 */
-	if (ropt->noOwner && strcmp(te->desc, "SCHEMA") == 0)
+	if (ropt->noOwner &&
+		strcmp(te->desc, "SCHEMA") == 0 && strncmp(te->defn, "--", 2) != 0)
 	{
 		ahprintf(AH, "CREATE SCHEMA %s;\n\n\n", fmtId(te->tag));
 	}
@@ -3690,74 +3724,30 @@ _printTocEntry(ArchiveHandle *AH, TocEntry *te, bool isData)
 
 	/*
 	 * If we aren't using SET SESSION AUTH to determine ownership, we must
-	 * instead issue an ALTER OWNER command.  We assume that anything without
-	 * a DROP command is not a separately ownable object.  All the categories
-	 * with DROP commands must appear in one list or the other.
+	 * instead issue an ALTER OWNER command.  Schema "public" is special; when
+	 * a dump emits a comment in lieu of creating it, we use ALTER OWNER even
+	 * when using SET SESSION for all other objects.  We assume that anything
+	 * without a DROP command is not a separately ownable object.
 	 */
-	if (!ropt->noOwner && !ropt->use_setsessauth &&
+	if (!ropt->noOwner &&
+		(!ropt->use_setsessauth ||
+		 (strcmp(te->desc, "SCHEMA") == 0 &&
+		  strncmp(te->defn, "--", 2) == 0)) &&
 		te->owner && strlen(te->owner) > 0 &&
 		te->dropStmt && strlen(te->dropStmt) > 0)
 	{
-		if (strcmp(te->desc, "AGGREGATE") == 0 ||
-			strcmp(te->desc, "BLOB") == 0 ||
-			strcmp(te->desc, "COLLATION") == 0 ||
-			strcmp(te->desc, "CONVERSION") == 0 ||
-			strcmp(te->desc, "DATABASE") == 0 ||
-			strcmp(te->desc, "DOMAIN") == 0 ||
-			strcmp(te->desc, "FUNCTION") == 0 ||
-			strcmp(te->desc, "OPERATOR") == 0 ||
-			strcmp(te->desc, "OPERATOR CLASS") == 0 ||
-			strcmp(te->desc, "OPERATOR FAMILY") == 0 ||
-			strcmp(te->desc, "PROCEDURE") == 0 ||
-			strcmp(te->desc, "PROCEDURAL LANGUAGE") == 0 ||
-			strcmp(te->desc, "SCHEMA") == 0 ||
-			strcmp(te->desc, "EVENT TRIGGER") == 0 ||
-			strcmp(te->desc, "TABLE") == 0 ||
-			strcmp(te->desc, "EXTERNAL TABLE") == 0 ||
-			strcmp(te->desc, "FOREIGN TABLE") == 0 ||
-			strcmp(te->desc, "TYPE") == 0 ||
-			strcmp(te->desc, "VIEW") == 0 ||
-			strcmp(te->desc, "MATERIALIZED VIEW") == 0 ||
-			strcmp(te->desc, "SEQUENCE") == 0 ||
-			strcmp(te->desc, "FOREIGN TABLE") == 0 ||
-			strcmp(te->desc, "TEXT SEARCH DICTIONARY") == 0 ||
-			strcmp(te->desc, "TEXT SEARCH CONFIGURATION") == 0 ||
-			strcmp(te->desc, "FOREIGN DATA WRAPPER") == 0 ||
-			strcmp(te->desc, "SERVER") == 0 ||
-			strcmp(te->desc, "PROTOCOL") == 0 ||
-			strcmp(te->desc, "STATISTICS") == 0 ||
-			strcmp(te->desc, "PUBLICATION") == 0 ||
-			strcmp(te->desc, "SUBSCRIPTION") == 0)
-		{
-			PQExpBuffer temp = createPQExpBuffer();
+		PQExpBufferData temp;
 
-			appendPQExpBufferStr(temp, "ALTER ");
-			_getObjectDescription(temp, te);
-			appendPQExpBuffer(temp, " OWNER TO %s;", fmtId(te->owner));
-			ahprintf(AH, "%s\n\n", temp->data);
-			destroyPQExpBuffer(temp);
-		}
-		else if (strcmp(te->desc, "CAST") == 0 ||
-				 strcmp(te->desc, "CHECK CONSTRAINT") == 0 ||
-				 strcmp(te->desc, "CONSTRAINT") == 0 ||
-				 strcmp(te->desc, "DATABASE PROPERTIES") == 0 ||
-				 strcmp(te->desc, "DEFAULT") == 0 ||
-				 strcmp(te->desc, "FK CONSTRAINT") == 0 ||
-				 strcmp(te->desc, "INDEX") == 0 ||
-				 strcmp(te->desc, "RULE") == 0 ||
-				 strcmp(te->desc, "TRIGGER") == 0 ||
-				 strcmp(te->desc, "ROW SECURITY") == 0 ||
-				 strcmp(te->desc, "POLICY") == 0 ||
-				 strcmp(te->desc, "USER MAPPING") == 0 ||
-				 strcmp(te->desc, "BINARY UPGRADE"))
-		{
-			/* these object types don't have separate owners */
-		}
-		else
-		{
-			pg_log_warning("don't know how to set owner for object type \"%s\"",
-						   te->desc);
-		}
+		initPQExpBuffer(&temp);
+		_getObjectDescription(&temp, te);
+
+		/*
+		 * If _getObjectDescription() didn't fill the buffer, then there is no
+		 * owner.
+		 */
+		if (temp.data[0])
+			ahprintf(AH, "ALTER %s OWNER TO %s;\n\n", temp.data, fmtId(te->owner));
+		termPQExpBuffer(&temp);
 	}
 
 	/*
@@ -3766,8 +3756,7 @@ _printTocEntry(ArchiveHandle *AH, TocEntry *te, bool isData)
 	 */
 	if (_tocEntryIsACL(te))
 	{
-		if (AH->currUser)
-			free(AH->currUser);
+		free(AH->currUser);
 		AH->currUser = NULL;
 	}
 }
@@ -3823,7 +3812,7 @@ WriteHead(ArchiveHandle *AH)
 	AH->WriteBytePtr(AH, AH->intSize);
 	AH->WriteBytePtr(AH, AH->offSize);
 	AH->WriteBytePtr(AH, AH->format);
-	WriteInt(AH, AH->compression);
+	AH->WriteBytePtr(AH, AH->compression_spec.algorithm);
 	crtm = *localtime(&AH->createDate);
 	WriteInt(AH, crtm.tm_sec);
 	WriteInt(AH, crtm.tm_min);
@@ -3840,6 +3829,7 @@ WriteHead(ArchiveHandle *AH)
 void
 ReadHead(ArchiveHandle *AH)
 {
+	char	   *errmsg;
 	char		vmaj,
 				vmin,
 				vrev;
@@ -3858,7 +3848,7 @@ ReadHead(ArchiveHandle *AH)
 		AH->ReadBufPtr(AH, tmpMag, 5);
 
 		if (strncmp(tmpMag, "PGDMP", 5) != 0)
-			fatal("did not find magic string in file header");
+			pg_fatal("did not find magic string in file header");
 	}
 
 	vmaj = AH->ReadBytePtr(AH);
@@ -3872,13 +3862,13 @@ ReadHead(ArchiveHandle *AH)
 	AH->version = MAKE_ARCHIVE_VERSION(vmaj, vmin, vrev);
 
 	if (AH->version < K_VERS_1_0 || AH->version > K_VERS_MAX)
-		fatal("unsupported version (%d.%d) in file header",
-			  vmaj, vmin);
+		pg_fatal("unsupported version (%d.%d) in file header",
+				 vmaj, vmin);
 
 	AH->intSize = AH->ReadBytePtr(AH);
 	if (AH->intSize > 32)
-		fatal("sanity check on integer size (%lu) failed",
-			  (unsigned long) AH->intSize);
+		pg_fatal("sanity check on integer size (%lu) failed",
+				 (unsigned long) AH->intSize);
 
 	if (AH->intSize > sizeof(int))
 		pg_log_warning("archive was made on a machine with larger integers, some operations might fail");
@@ -3891,23 +3881,32 @@ ReadHead(ArchiveHandle *AH)
 	fmt = AH->ReadBytePtr(AH);
 
 	if (AH->format != fmt)
-		fatal("expected format (%d) differs from format found in file (%d)",
-			  AH->format, fmt);
+		pg_fatal("expected format (%d) differs from format found in file (%d)",
+				 AH->format, fmt);
 
-	if (AH->version >= K_VERS_1_2)
+	if (AH->version >= K_VERS_1_15)
+		AH->compression_spec.algorithm = AH->ReadBytePtr(AH);
+	else if (AH->version >= K_VERS_1_2)
 	{
+		/* Guess the compression method based on the level */
 		if (AH->version < K_VERS_1_4)
-			AH->compression = AH->ReadBytePtr(AH);
+			AH->compression_spec.level = AH->ReadBytePtr(AH);
 		else
-			AH->compression = ReadInt(AH);
+			AH->compression_spec.level = ReadInt(AH);
+
+		if (AH->compression_spec.level != 0)
+			AH->compression_spec.algorithm = PG_COMPRESSION_GZIP;
 	}
 	else
-		AH->compression = Z_DEFAULT_COMPRESSION;
+		AH->compression_spec.algorithm = PG_COMPRESSION_GZIP;
 
-#ifndef HAVE_LIBZ
-	if (AH->compression != 0)
-		pg_log_warning("archive is compressed, but this installation does not support compression -- no data will be available");
-#endif
+	errmsg = supports_compression(AH->compression_spec);
+	if (errmsg)
+	{
+		pg_log_warning("archive is compressed, but this installation does not support compression (%s) -- no data will be available",
+					   errmsg);
+		pg_free(errmsg);
+	}
 
 	if (AH->version >= K_VERS_1_4)
 	{
@@ -4098,17 +4097,13 @@ restore_toc_entries_prefork(ArchiveHandle *AH, TocEntry *pending_list)
 	DisconnectDatabase(&AH->public);
 
 	/* blow away any transient state from the old connection */
-	if (AH->currUser)
-		free(AH->currUser);
+	free(AH->currUser);
 	AH->currUser = NULL;
-	if (AH->currSchema)
-		free(AH->currSchema);
+	free(AH->currSchema);
 	AH->currSchema = NULL;
-	if (AH->currTablespace)
-		free(AH->currTablespace);
+	free(AH->currTablespace);
 	AH->currTablespace = NULL;
-	if (AH->currTableAm)
-		free(AH->currTableAm);
+	free(AH->currTableAm);
 	AH->currTableAm = NULL;
 }
 
@@ -4578,8 +4573,8 @@ mark_restore_job_done(ArchiveHandle *AH,
 	else if (status == WORKER_IGNORED_ERRORS)
 		AH->public.n_errors++;
 	else if (status != 0)
-		fatal("worker process failed: exit code %d",
-			  status);
+		pg_fatal("worker process failed: exit code %d",
+				 status);
 
 	reduce_dependencies(AH, te, ready_list);
 }
@@ -4918,6 +4913,7 @@ CloneArchive(ArchiveHandle *AH)
 	clone->connCancel = NULL;
 	clone->currUser = NULL;
 	clone->currSchema = NULL;
+	clone->currTableAm = NULL;
 	clone->currTablespace = NULL;
 
 	/* savedPassword must be local in case we change it while connecting */
@@ -4964,16 +4960,11 @@ DeCloneArchive(ArchiveHandle *AH)
 		destroyPQExpBuffer(AH->sqlparse.curCmd);
 
 	/* Clear any connection-local state */
-	if (AH->currUser)
-		free(AH->currUser);
-	if (AH->currSchema)
-		free(AH->currSchema);
-	if (AH->currTablespace)
-		free(AH->currTablespace);
-	if (AH->currTableAm)
-		free(AH->currTableAm);
-	if (AH->savedPassword)
-		free(AH->savedPassword);
+	free(AH->currUser);
+	free(AH->currSchema);
+	free(AH->currTablespace);
+	free(AH->currTableAm);
+	free(AH->savedPassword);
 
 	free(AH);
 }

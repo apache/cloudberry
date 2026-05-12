@@ -244,9 +244,8 @@ CREATE TEMPORARY TABLE box_temp (f1 box);
 INSERT INTO box_temp
 	SELECT box(point(i, i), point(i * 2, i * 2))
 	FROM generate_series(1, 50) AS i;
--- PAX not support gist/spgist/brin indexes
 CREATE INDEX box_spgist ON box_temp USING spgist (f1);
-ERROR:  pax only support btree/hash/gin/bitmap indexes (pax_access_handle.cc:735)
+ERROR:  pax only support btree/hash/gin/bitmap indexes (pax_access_handle.cc:591)
 INSERT INTO box_temp
 	VALUES (NULL),
 		   ('(0,0)(0,100)'),
@@ -524,9 +523,8 @@ VALUES
   (11003, '((-infinity,-infinity),(infinity,infinity))'),
   (11004, '((-infinity,100),(-infinity,500))'),
   (11005, '((-infinity,-infinity),(700,infinity))');
--- PAX not support gist/spgist/brin indexes
 CREATE INDEX quad_box_tbl_idx ON quad_box_tbl USING spgist(b);
-ERROR:  pax only support btree/hash/gin/bitmap indexes (pax_access_handle.cc:735)
+ERROR:  pax only support btree/hash/gin/bitmap indexes (pax_access_handle.cc:591)
 ANALYZE quad_box_tbl;
 -- get reference results for ORDER BY distance from seq scan
 SET enable_seqscan = ON;
@@ -680,3 +678,28 @@ WHERE seq.id IS NULL OR idx.id IS NULL;
 RESET enable_seqscan;
 RESET enable_indexscan;
 RESET enable_bitmapscan;
+-- test non-error-throwing API for some core types
+SELECT pg_input_is_valid('200', 'box');
+ pg_input_is_valid 
+-------------------
+ f
+(1 row)
+
+SELECT * FROM pg_input_error_info('200', 'box');
+                 message                  | detail | hint | sql_error_code 
+------------------------------------------+--------+------+----------------
+ invalid input syntax for type box: "200" |        |      | 22P02
+(1 row)
+
+SELECT pg_input_is_valid('((200,300),(500, xyz))', 'box');
+ pg_input_is_valid 
+-------------------
+ f
+(1 row)
+
+SELECT * FROM pg_input_error_info('((200,300),(500, xyz))', 'box');
+                           message                           | detail | hint | sql_error_code 
+-------------------------------------------------------------+--------+------+----------------
+ invalid input syntax for type box: "((200,300),(500, xyz))" |        |      | 22P02
+(1 row)
+

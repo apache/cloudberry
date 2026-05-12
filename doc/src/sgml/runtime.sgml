@@ -74,10 +74,10 @@
    which is meant as a default database for use by utilities, users and third
    party applications.  The database server itself does not require the
    <literal>postgres</literal> database to exist, but many external utility
-   programs assume it exists.  Another database created within each cluster
-   during initialization is called
-   <literal>template1</literal>.  As the name suggests, this will be used
-   as a template for subsequently created databases; it should not be
+   programs assume it exists.  There are two more databases created within
+   each cluster during initialization, named <literal>template1</literal>
+   and <literal>template0</literal>.  As the names suggest, these will be
+   used as templates for subsequently-created databases; they should not be
    used for actual work.  (See <xref linkend="managing-databases"/> for
    information about creating new databases within a cluster.)
   </para>
@@ -480,6 +480,8 @@ fi
 [Unit]
 Description=PostgreSQL database server
 Documentation=man:postgres(1)
+After=network-online.target
+Wants=network-online.target
 
 [Service]
 Type=notify
@@ -779,13 +781,13 @@ psql: error: connection to server on socket "/tmp/.s.PGSQL.5432" failed: No such
        <row>
         <entry><varname>SEMMNI</varname></entry>
         <entry>Maximum number of semaphore identifiers (i.e., sets)</entry>
-        <entry>at least <literal>ceil((max_connections + autovacuum_max_workers + max_wal_senders + max_worker_processes + 5) / 16)</literal> plus room for other applications</entry>
+        <entry>at least <literal>ceil((max_connections + autovacuum_max_workers + max_wal_senders + max_worker_processes + 6) / 16)</literal> plus room for other applications</entry>
        </row>
 
        <row>
         <entry><varname>SEMMNS</varname></entry>
         <entry>Maximum number of semaphores system-wide</entry>
-        <entry><literal>ceil((max_connections + autovacuum_max_workers + max_wal_senders + max_worker_processes + 5) / 16) * 17</literal> plus room for other applications</entry>
+        <entry><literal>ceil((max_connections + autovacuum_max_workers + max_wal_senders + max_worker_processes + 6) / 16) * 17</literal> plus room for other applications</entry>
        </row>
 
        <row>
@@ -836,7 +838,8 @@ psql: error: connection to server on socket "/tmp/.s.PGSQL.5432" failed: No such
     When using System V semaphores,
     <productname>PostgreSQL</productname> uses one semaphore per allowed connection
     (<xref linkend="guc-max-connections"/>), allowed autovacuum worker process
-    (<xref linkend="guc-autovacuum-max-workers"/>) and allowed background
+    (<xref linkend="guc-autovacuum-max-workers"/>), allowed WAL sender process
+    (<xref linkend="guc-max-wal-senders"/>), and allowed background
     process (<xref linkend="guc-max-worker-processes"/>), in sets of 16.
     Each such set will
     also contain a 17th semaphore which contains a <quote>magic
@@ -850,7 +853,7 @@ psql: error: connection to server on socket "/tmp/.s.PGSQL.5432" failed: No such
     linkend="sysvipc-parameters"/>).  The parameter <varname>SEMMNI</varname>
     determines the limit on the number of semaphore sets that can
     exist on the system at one time.  Hence this parameter must be at
-    least <literal>ceil((max_connections + autovacuum_max_workers + max_wal_senders + max_worker_processes + 5) / 16)</literal>.
+    least <literal>ceil((max_connections + autovacuum_max_workers + max_wal_senders + max_worker_processes + 6) / 16)</literal>.
     Lowering the number
     of allowed connections is a temporary workaround for failures,
     which are usually confusingly worded <quote>No space
@@ -881,7 +884,8 @@ psql: error: connection to server on socket "/tmp/.s.PGSQL.5432" failed: No such
     When using POSIX semaphores, the number of semaphores needed is the
     same as for System V, that is one semaphore per allowed connection
     (<xref linkend="guc-max-connections"/>), allowed autovacuum worker process
-    (<xref linkend="guc-autovacuum-max-workers"/>) and allowed background
+    (<xref linkend="guc-autovacuum-max-workers"/>), allowed WAL sender process
+    (<xref linkend="guc-max-wal-senders"/>), and allowed background
     process (<xref linkend="guc-max-worker-processes"/>).
     On the platforms where this option is preferred, there is no specific
     kernel limit on the number of POSIX semaphores.
@@ -1017,25 +1021,6 @@ psql: error: connection to server on socket "/tmp/.s.PGSQL.5432" failed: No such
 
       </listitem>
      </varlistentry>
-
-     <varlistentry>
-      <term><systemitem class="osname">HP-UX</systemitem>
-      <indexterm><primary>HP-UX</primary><secondary>IPC configuration</secondary></indexterm>
-      </term>
-      <listitem>
-       <para>
-        The default settings tend to suffice for normal installations.
-       </para>
-       <para>
-        <acronym>IPC</acronym> parameters can be set in the <application>System
-        Administration Manager</application> (<acronym>SAM</acronym>) under
-        <menuchoice><guimenu>Kernel
-        Configuration</guimenu><guimenuitem>Configurable Parameters</guimenuitem></menuchoice>. Choose
-        <guibutton>Create A New Kernel</guibutton> when you're done.
-       </para>
-      </listitem>
-     </varlistentry>
-
 
      <varlistentry>
       <term><systemitem class="osname">Linux</systemitem>
@@ -1237,7 +1222,7 @@ RemoveIPC=no
    </caution>
   </sect2>
 
-  <sect2>
+  <sect2 id="kernel-resources-limits">
    <title>Resource Limits</title>
 
    <para>
@@ -1277,11 +1262,12 @@ default:\
     <itemizedlist>
      <listitem>
       <para>
-      On <productname>Linux</productname>
-      <filename>/proc/sys/fs/file-max</filename> determines the
-      maximum number of open files that the kernel will support.  It can
-      be changed by writing a different number into the file or by
-      adding an assignment in <filename>/etc/sysctl.conf</filename>.
+      On <productname>Linux</productname> the kernel parameter
+      <varname>fs.file-max</varname> determines the maximum number of open
+      files that the kernel will support.  It can be changed with
+      <literal>sysctl -w fs.file-max=<replaceable>N</replaceable></literal>.
+      To make the setting persist across reboots, add an assignment
+      in <filename>/etc/sysctl.conf</filename>.
       The maximum limit of files per process is fixed at the time the
       kernel is compiled; see
       <filename>/usr/src/linux/Documentation/proc.txt</filename> for
@@ -1316,6 +1302,22 @@ default:\
     system-wide limit, you can set <productname>PostgreSQL</productname>'s <xref
     linkend="guc-max-files-per-process"/> configuration parameter to
     limit the consumption of open files.
+   </para>
+
+   <para>
+    Another kernel limit that may be of concern when supporting large
+    numbers of client connections is the maximum socket connection queue
+    length.  If more than that many connection requests arrive within a very
+    short period, some may get rejected before the <productname>PostgreSQL</productname> server can service
+    the requests, with those clients receiving unhelpful connection failure
+    errors such as <quote>Resource temporarily unavailable</quote> or
+    <quote>Connection refused</quote>.  The default queue length limit is 128
+    on many platforms.  To raise it, adjust the appropriate kernel parameter
+    via <application>sysctl</application>, then restart the <productname>PostgreSQL</productname> server.
+    The parameter is variously named <varname>net.core.somaxconn</varname>
+    on Linux, <varname>kern.ipc.soacceptqueue</varname> on newer FreeBSD,
+    and <varname>kern.ipc.somaxconn</varname> on macOS and other BSD
+    variants.
    </para>
   </sect2>
 
@@ -1409,11 +1411,12 @@ sysctl -w vm.overcommit_memory=2
 <programlisting>
 echo -1000 > /proc/self/oom_score_adj
 </programlisting>
-    in the postmaster's startup script just before invoking the postmaster.
+    in the <productname>PostgreSQL</productname> startup script just before
+    invoking <filename>postgres</filename>.
     Note that this action must be done as root, or it will have no effect;
     so a root-owned startup script is the easiest place to do it.  If you
     do this, you should also set these environment variables in the startup
-    script before invoking the postmaster:
+    script before invoking <filename>postgres</filename>:
 <programlisting>
 export PG_OOM_ADJUST_FILE=/proc/self/oom_score_adj
 export PG_OOM_ADJUST_VALUE=0
@@ -1442,17 +1445,13 @@ export PG_OOM_ADJUST_VALUE=0
     with <varname>CONFIG_HUGETLBFS=y</varname> and
     <varname>CONFIG_HUGETLB_PAGE=y</varname>. You will also have to configure
     the operating system to provide enough huge pages of the desired size.
-    To estimate the number of huge pages needed, start
-    <productname>PostgreSQL</productname> without huge pages enabled and check
-    the postmaster's anonymous shared memory segment size, as well as the
-    system's default and supported huge page sizes, using the
-    <filename>/proc</filename> and <filename>/sys</filename> file systems.
-    This might look like:
+    The runtime-computed parameter
+    <xref linkend="guc-shared-memory-size-in-huge-pages"/> reports the number
+    of huge pages required.  This parameter can be viewed before starting the
+    server with a <command>postgres</command> command like:
 <programlisting>
-$ <userinput>head -1 $PGDATA/postmaster.pid</userinput>
-4170
-$ <userinput>pmap 4170 | awk '/rw-s/ &amp;&amp; /zero/ {print $2}'</userinput>
-6490428K
+$ <userinput>postgres -D $PGDATA -C shared_memory_size_in_huge_pages</userinput>
+3170
 $ <userinput>grep ^Hugepagesize /proc/meminfo</userinput>
 Hugepagesize:       2048 kB
 $ <userinput>ls /sys/kernel/mm/hugepages</userinput>
@@ -1460,13 +1459,13 @@ hugepages-1048576kB  hugepages-2048kB
 </programlisting>
 
      In this example the default is 2MB, but you can also explicitly request
-     either 2MB or 1GB with <xref linkend="guc-huge-page-size"/>.
+     either 2MB or 1GB with <xref linkend="guc-huge-page-size"/> to adapt
+     the number of pages calculated by
+     <varname>shared_memory_size_in_huge_pages</varname>.
 
-     Assuming <literal>2MB</literal> huge pages,
-     <literal>6490428</literal> / <literal>2048</literal> gives approximately
-     <literal>3169.154</literal>, so in this example we need at
-     least <literal>3170</literal> huge pages.  A larger setting would be
-     appropriate if other programs on the machine also need huge pages.
+     While we need at least <literal>3170</literal> huge pages in this example,
+     a larger setting would be appropriate if other programs on the machine
+     also need huge pages.
      We can set this with:
 <programlisting>
 # <userinput>sysctl -w vm.nr_hugepages=3170</userinput>
@@ -1555,11 +1554,7 @@ $ <userinput>cat /sys/kernel/mm/hugepages/hugepages-2048kB/nr_hugepages</userinp
        After receiving <systemitem>SIGTERM</systemitem>, the server
        disallows new connections, but lets existing sessions end their
        work normally. It shuts down only after all of the sessions terminate.
-       If the server is in online backup mode, it additionally waits
-       until online backup mode is no longer active.  While backup mode is
-       active, new connections will still be allowed, but only to superusers
-       (this exception allows a superuser to connect to terminate
-       online backup mode).  If the server is in recovery when a smart
+       If the server is in recovery when a smart
        shutdown is requested, recovery and streaming replication will be
        stopped only after all regular sessions have terminated.
       </para>
@@ -1575,8 +1570,6 @@ $ <userinput>cat /sys/kernel/mm/hugepages/hugepages-2048kB/nr_hugepages</userinp
        server processes <systemitem>SIGTERM</systemitem>, which will cause them
        to abort their current transactions and exit promptly. It then
        waits for all server processes to exit and finally shuts down.
-       If the server is in online backup mode, backup mode will be
-       terminated, rendering the backup useless.
       </para>
      </listitem>
     </varlistentry>
@@ -1779,7 +1772,7 @@ $ <userinput>kill -INT `head -1 /usr/local/pgsql/data/postmaster.pid`</userinput
     version of
     <productname>PostgreSQL</productname>, to take advantage of enhancements
     that might have been made in these programs.  Current releases of the
-    dump programs can read data from any server version back to 8.0.
+    dump programs can read data from any server version back to 9.2.
    </para>
 
    <para>
@@ -1866,7 +1859,7 @@ $ <userinput>kill -INT `head -1 /usr/local/pgsql/data/postmaster.pid`</userinput
     <step>
      <para>
       Install the new version of <productname>PostgreSQL</productname> as
-      outlined in <xref linkend="install-procedure"/>.
+      outlined in <xref linkend="installation"/>.
      </para>
     </step>
 
@@ -2015,7 +2008,25 @@ pg_dumpall -p 5432 | psql -d postgres -p 5433
    (<xref linkend="ssl-tcp"/>). The TCP client must connect using
    <literal>sslmode=verify-ca</literal> or
    <literal>verify-full</literal> and have the appropriate root certificate
-   file installed (<xref linkend="libq-ssl-certificates"/>).
+   file installed (<xref linkend="libq-ssl-certificates"/>). Alternatively the
+   <link linkend="libpq-connect-sslrootcert">system CA pool</link>, as defined
+   by the SSL implementation, can be used using <literal>sslrootcert=system</literal>; in
+   this case, <literal>sslmode=verify-full</literal> is forced for safety, since
+   it is generally trivial to obtain certificates which are signed by a public
+   CA.
+  </para>
+
+  <para>
+   To prevent server spoofing from occurring when using
+   <link linkend="auth-password">scram-sha-256</link> password authentication
+   over a network, you should ensure that you connect to the server using SSL
+   and with one of the anti-spoofing methods described in the previous
+   paragraph. Additionally, the SCRAM implementation in
+   <application>libpq</application> cannot protect the entire authentication
+   exchange, but using the <literal>channel_binding=require</literal> connection
+   parameter provides a mitigation against server spoofing. An attacker that
+   uses a rogue server to intercept a SCRAM exchange can use offline analysis to
+   potentially determine the hashed password from the client.
   </para>
 
   <para>
@@ -2185,6 +2196,7 @@ pg_dumpall -p 5432 | psql -d postgres -p 5433
 
   <indexterm zone="ssl-tcp">
    <primary>SSL</primary>
+   <secondary>TLS</secondary>
   </indexterm>
 
   <para>
@@ -2196,13 +2208,25 @@ pg_dumpall -p 5432 | psql -d postgres -p 5433
    enabled at build time (see <xref linkend="installation"/>).
   </para>
 
+  <para>
+   The terms <acronym>SSL</acronym> and <acronym>TLS</acronym> are often used
+   interchangeably to mean a secure encrypted connection using a
+   <acronym>TLS</acronym> protocol. <acronym>SSL</acronym> protocols are the
+   precursors to <acronym>TLS</acronym> protocols, and the term
+   <acronym>SSL</acronym> is still used for encrypted connections even though
+   <acronym>SSL</acronym> protocols are no longer supported.
+   <acronym>SSL</acronym> is used interchangeably with <acronym>TLS</acronym>
+   in <productname>PostgreSQL</productname>.
+
+  </para>
   <sect2 id="ssl-setup">
    <title>Basic Setup</title>
 
   <para>
    With <acronym>SSL</acronym> support compiled in, the
    <productname>PostgreSQL</productname> server can be started with
-   <acronym>SSL</acronym> enabled by setting the parameter
+   support for encrypted connections using <acronym>TLS</acronym> protocols
+   enabled by setting the parameter
    <xref linkend="guc-ssl"/> to <literal>on</literal> in
    <filename>postgresql.conf</filename>.  The server will listen for both normal
    and <acronym>SSL</acronym> connections on the same TCP port, and will negotiate

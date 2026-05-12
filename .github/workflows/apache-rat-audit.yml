@@ -32,9 +32,9 @@ name: Apache Rat License Check
 
 on:
   push:
-    branches: [main, REL_2_STABLE]
+    branches: [main, cbdb-postgres-merge]
   pull_request:
-    branches: [main, REL_2_STABLE]
+    branches: [main, cbdb-postgres-merge]
     types: [opened, synchronize, reopened, edited]
   workflow_dispatch:
 

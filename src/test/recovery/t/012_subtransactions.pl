@@ -1,23 +1,16 @@
 
-# Copyright (c) 2021, PostgreSQL Global Development Group
+# Copyright (c) 2021-2023, PostgreSQL Global Development Group
 
 # Tests dedicated to subtransactions in recovery
 use strict;
 use warnings;
 
-use PostgresNode;
-use TestLib;
-
-# GPDB: Effectively disable this TAP test. We cannot run PREPARE
-# TRANSACTION in utility-mode. We need at least 1 test so create a
-# dummy one.
-#use Test::More tests => 12;
-use Test::More tests => 1;
-is(-1, -1, "Disable this TAP test");
-exit;
+use PostgreSQL::Test::Cluster;
+use PostgreSQL::Test::Utils;
+use Test::More;
 
 # Setup primary node
-my $node_primary = get_new_node("primary");
+my $node_primary = PostgreSQL::Test::Cluster->new("primary");
 $node_primary->init(allows_streaming => 1);
 $node_primary->append_conf(
 	'postgresql.conf', qq(
@@ -29,7 +22,7 @@ $node_primary->backup('primary_backup');
 $node_primary->psql('postgres', "CREATE TABLE t_012_tbl (id int)");
 
 # Setup standby node
-my $node_standby = get_new_node('standby');
+my $node_standby = PostgreSQL::Test::Cluster->new('standby');
 $node_standby->init_from_backup($node_primary, 'primary_backup',
 	has_streaming => 1);
 $node_standby->start;
@@ -42,7 +35,7 @@ $node_primary->append_conf(
 $node_primary->psql('postgres', "SELECT pg_reload_conf()");
 
 my $psql_out = '';
-my $psql_rc  = '';
+my $psql_rc = '';
 
 ###############################################################################
 # Check that replay will correctly set SUBTRANS and properly advance nextXid
@@ -110,8 +103,7 @@ $node_primary->psql(
 	BEGIN;
 	SELECT hs_subxids(127);
 	COMMIT;");
-$node_primary->wait_for_catchup($node_standby, 'replay',
-	$node_primary->lsn('insert'));
+$node_primary->wait_for_catchup($node_standby);
 $node_standby->psql(
 	'postgres',
 	"SELECT coalesce(sum(id),-1) FROM t_012_tbl",
@@ -157,8 +149,7 @@ $node_primary->psql(
 	BEGIN;
 	SELECT hs_subxids(127);
 	PREPARE TRANSACTION 'xact_012_1';");
-$node_primary->wait_for_catchup($node_standby, 'replay',
-	$node_primary->lsn('insert'));
+$node_primary->wait_for_catchup($node_standby);
 $node_standby->psql(
 	'postgres',
 	"SELECT coalesce(sum(id),-1) FROM t_012_tbl",
@@ -194,8 +185,7 @@ $node_primary->psql(
 	BEGIN;
 	SELECT hs_subxids(201);
 	PREPARE TRANSACTION 'xact_012_1';");
-$node_primary->wait_for_catchup($node_standby, 'replay',
-	$node_primary->lsn('insert'));
+$node_primary->wait_for_catchup($node_standby);
 $node_standby->psql(
 	'postgres',
 	"SELECT coalesce(sum(id),-1) FROM t_012_tbl",
@@ -224,3 +214,5 @@ $node_primary->psql(
 	"SELECT coalesce(sum(id),-1) FROM t_012_tbl",
 	stdout => \$psql_out);
 is($psql_out, '-1', "Not visible");
+
+done_testing();

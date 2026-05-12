@@ -1,7 +1,7 @@
 <!-- doc/src/sgml/dblink.sgml -->
 
 <sect1 id="dblink" xreflabel="dblink">
- <title>dblink</title>
+ <title>dblink &mdash; connect to other PostgreSQL databases</title>
 
  <indexterm zone="dblink">
   <primary>dblink</primary>
@@ -117,8 +117,9 @@ dblink_connect(text connname, text connstr) returns text
 
    <para>
     Only superusers may use <function>dblink_connect</function> to create
-    non-password-authenticated connections.  If non-superusers need this
-    capability, use <function>dblink_connect_u</function> instead.
+    non-password-authenticated and non-GSSAPI-authenticated connections.
+    If non-superusers need this capability, use
+    <function>dblink_connect_u</function> instead.
    </para>
 
    <para>
@@ -161,13 +162,13 @@ GRANT SELECT ON TABLE foo TO regress_dblink_user;
 \set ORIGINAL_USER :USER
 \c - regress_dblink_user
 SELECT dblink_connect('myconn', 'fdtest');
- dblink_connect 
+ dblink_connect
 ----------------
  OK
 (1 row)
 
 SELECT * FROM dblink('myconn', 'SELECT * FROM foo') AS t(a int, b text, c text[]);
- a  | b |       c       
+ a  | b |       c
 ----+---+---------------
   0 | a | {a0,b0,c0}
   1 | b | {a1,b1,c1}
@@ -1397,7 +1398,7 @@ dblink_get_notify(text connname) returns setof (notify_name text, be_pid int, ex
 
 <screen>
 SELECT dblink_exec('LISTEN virtual');
- dblink_exec 
+ dblink_exec
 -------------
  LISTEN
 (1 row)

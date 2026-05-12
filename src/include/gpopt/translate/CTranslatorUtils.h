@@ -154,6 +154,7 @@ public:
 										 CMDAccessor *md_accessor,
 										 CIdGenerator *id_generator,
 										 const RangeTblEntry *rte,
+										 const RTEPermissionInfo *perminfo,
 										 ULONG assigned_query_id_for_target_rel,
 										 BOOL *is_distributed_table = nullptr);
 
@@ -340,7 +341,7 @@ public:
 												const IMDColumn *col);
 
 	// check required permissions for the range table
-	static void CheckRTEPermissions(List *range_table_list);
+	static void CheckRTEPermissions(List *range_table_list, List *rteperminfos);
 
 	// check if given column ids are outer references in the tree rooted by given node
 	static void MarkOuterRefs(ULONG *colid, BOOL *is_outer_ref,

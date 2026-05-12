@@ -30,112 +30,116 @@ subpartition by list (r_name) subpartition template
 select relname, relkind from pg_class where relkind in ('r', 'p') and relname like 'region%' and relfrozenxid=0;
                 relname                | relkind 
 ---------------------------------------+---------
- region_1_prt_region3                  | p
- region_1_prt_region3_2_prt_america    | r
- region_1_prt_region3_2_prt_asia       | r
- region_1_prt_region3_2_prt_europe     | r
- region_1_prt_region3_2_prt_mideast    | r
- region_1_prt_region2_2_prt_australia  | r
- region_1_prt_region2_2_prt_antarctica | r
- region_1_prt_region3_2_prt_africa     | r
- region_1_prt_region3_2_prt_australia  | r
- region_1_prt_region3_2_prt_antarctica | r
  region                                | p
- region_1_prt_region1_2_prt_africa     | r
  region_1_prt_region1                  | p
+ region_1_prt_region1_2_prt_africa     | r
  region_1_prt_region1_2_prt_america    | r
+ region_1_prt_region1_2_prt_antarctica | r
  region_1_prt_region1_2_prt_asia       | r
+ region_1_prt_region1_2_prt_australia  | r
  region_1_prt_region1_2_prt_europe     | r
  region_1_prt_region1_2_prt_mideast    | r
- region_1_prt_region1_2_prt_australia  | r
- region_1_prt_region1_2_prt_antarctica | r
- region_1_prt_region2_2_prt_africa     | r
  region_1_prt_region2                  | p
+ region_1_prt_region2_2_prt_africa     | r
  region_1_prt_region2_2_prt_america    | r
+ region_1_prt_region2_2_prt_antarctica | r
  region_1_prt_region2_2_prt_asia       | r
+ region_1_prt_region2_2_prt_australia  | r
  region_1_prt_region2_2_prt_europe     | r
  region_1_prt_region2_2_prt_mideast    | r
-(25 rows)
+ region_1_prt_region3                  | p
+ region_1_prt_region3_2_prt_africa     | r
+ region_1_prt_region3_2_prt_america    | r
+ region_1_prt_region3_2_prt_antarctica | r
+ region_1_prt_region3_2_prt_asia       | r
+ region_1_prt_region3_2_prt_australia  | r
+ region_1_prt_region3_2_prt_europe     | r
+ region_1_prt_region3_2_prt_mideast    | r
+ regions                               | r
+(26 rows)
 
 select gp_segment_id, relname, relkind from gp_dist_random('pg_class') where relkind in ('r', 'p') and relname like 'region%' and relfrozenxid=0;
  gp_segment_id |                relname                | relkind 
 ---------------+---------------------------------------+---------
-             2 | region_1_prt_region3_2_prt_africa     | r
-             2 | region_1_prt_region3                  | p
-             2 | region_1_prt_region3_2_prt_america    | r
-             2 | region_1_prt_region3_2_prt_asia       | r
-             2 | region_1_prt_region3_2_prt_europe     | r
-             2 | region_1_prt_region3_2_prt_mideast    | r
-             2 | region_1_prt_region2_2_prt_australia  | r
-             2 | region_1_prt_region2_2_prt_antarctica | r
-             2 | region_1_prt_region3_2_prt_australia  | r
-             2 | region_1_prt_region3_2_prt_antarctica | r
-             2 | region                                | p
-             2 | region_1_prt_region1_2_prt_africa     | r
-             2 | region_1_prt_region1                  | p
-             2 | region_1_prt_region1_2_prt_america    | r
-             2 | region_1_prt_region1_2_prt_asia       | r
-             2 | region_1_prt_region1_2_prt_europe     | r
-             2 | region_1_prt_region1_2_prt_mideast    | r
-             2 | region_1_prt_region1_2_prt_australia  | r
-             2 | region_1_prt_region1_2_prt_antarctica | r
-             2 | region_1_prt_region2_2_prt_africa     | r
-             2 | region_1_prt_region2                  | p
-             2 | region_1_prt_region2_2_prt_america    | r
-             2 | region_1_prt_region2_2_prt_asia       | r
-             2 | region_1_prt_region2_2_prt_europe     | r
-             2 | region_1_prt_region2_2_prt_mideast    | r
-             0 | region_1_prt_region3_2_prt_africa     | r
-             0 | region_1_prt_region3                  | p
-             0 | region_1_prt_region3_2_prt_america    | r
-             0 | region_1_prt_region3_2_prt_asia       | r
-             0 | region_1_prt_region3_2_prt_europe     | r
-             0 | region_1_prt_region3_2_prt_mideast    | r
-             0 | region_1_prt_region2_2_prt_australia  | r
-             0 | region_1_prt_region2_2_prt_antarctica | r
-             0 | region_1_prt_region3_2_prt_australia  | r
-             0 | region_1_prt_region3_2_prt_antarctica | r
-             0 | region                                | p
-             0 | region_1_prt_region1_2_prt_africa     | r
-             0 | region_1_prt_region1                  | p
-             0 | region_1_prt_region1_2_prt_america    | r
-             0 | region_1_prt_region1_2_prt_asia       | r
-             0 | region_1_prt_region1_2_prt_europe     | r
-             0 | region_1_prt_region1_2_prt_mideast    | r
-             0 | region_1_prt_region1_2_prt_australia  | r
-             0 | region_1_prt_region1_2_prt_antarctica | r
-             0 | region_1_prt_region2_2_prt_africa     | r
-             0 | region_1_prt_region2                  | p
-             0 | region_1_prt_region2_2_prt_america    | r
-             0 | region_1_prt_region2_2_prt_asia       | r
-             0 | region_1_prt_region2_2_prt_europe     | r
-             0 | region_1_prt_region2_2_prt_mideast    | r
-             1 | region_1_prt_region3_2_prt_africa     | r
-             1 | region_1_prt_region3                  | p
-             1 | region_1_prt_region3_2_prt_america    | r
-             1 | region_1_prt_region3_2_prt_asia       | r
-             1 | region_1_prt_region3_2_prt_europe     | r
-             1 | region_1_prt_region3_2_prt_mideast    | r
-             1 | region_1_prt_region2_2_prt_australia  | r
-             1 | region_1_prt_region2_2_prt_antarctica | r
-             1 | region_1_prt_region3_2_prt_australia  | r
-             1 | region_1_prt_region3_2_prt_antarctica | r
              1 | region                                | p
-             1 | region_1_prt_region1_2_prt_africa     | r
              1 | region_1_prt_region1                  | p
+             1 | region_1_prt_region1_2_prt_africa     | r
              1 | region_1_prt_region1_2_prt_america    | r
+             1 | region_1_prt_region1_2_prt_antarctica | r
              1 | region_1_prt_region1_2_prt_asia       | r
+             1 | region_1_prt_region1_2_prt_australia  | r
              1 | region_1_prt_region1_2_prt_europe     | r
              1 | region_1_prt_region1_2_prt_mideast    | r
-             1 | region_1_prt_region1_2_prt_australia  | r
-             1 | region_1_prt_region1_2_prt_antarctica | r
-             1 | region_1_prt_region2_2_prt_africa     | r
              1 | region_1_prt_region2                  | p
+             1 | region_1_prt_region2_2_prt_africa     | r
              1 | region_1_prt_region2_2_prt_america    | r
+             1 | region_1_prt_region2_2_prt_antarctica | r
              1 | region_1_prt_region2_2_prt_asia       | r
+             1 | region_1_prt_region2_2_prt_australia  | r
              1 | region_1_prt_region2_2_prt_europe     | r
              1 | region_1_prt_region2_2_prt_mideast    | r
-(75 rows)
+             1 | region_1_prt_region3                  | p
+             1 | region_1_prt_region3_2_prt_africa     | r
+             1 | region_1_prt_region3_2_prt_america    | r
+             1 | region_1_prt_region3_2_prt_antarctica | r
+             1 | region_1_prt_region3_2_prt_asia       | r
+             1 | region_1_prt_region3_2_prt_australia  | r
+             1 | region_1_prt_region3_2_prt_europe     | r
+             1 | region_1_prt_region3_2_prt_mideast    | r
+             1 | regions                               | r
+             0 | region                                | p
+             0 | region_1_prt_region1                  | p
+             0 | region_1_prt_region1_2_prt_africa     | r
+             0 | region_1_prt_region1_2_prt_america    | r
+             0 | region_1_prt_region1_2_prt_antarctica | r
+             0 | region_1_prt_region1_2_prt_asia       | r
+             0 | region_1_prt_region1_2_prt_australia  | r
+             0 | region_1_prt_region1_2_prt_europe     | r
+             0 | region_1_prt_region1_2_prt_mideast    | r
+             0 | region_1_prt_region2                  | p
+             0 | region_1_prt_region2_2_prt_africa     | r
+             0 | region_1_prt_region2_2_prt_america    | r
+             0 | region_1_prt_region2_2_prt_antarctica | r
+             0 | region_1_prt_region2_2_prt_asia       | r
+             0 | region_1_prt_region2_2_prt_australia  | r
+             0 | region_1_prt_region2_2_prt_europe     | r
+             0 | region_1_prt_region2_2_prt_mideast    | r
+             0 | region_1_prt_region3                  | p
+             0 | region_1_prt_region3_2_prt_africa     | r
+             0 | region_1_prt_region3_2_prt_america    | r
+             0 | region_1_prt_region3_2_prt_antarctica | r
+             0 | region_1_prt_region3_2_prt_asia       | r
+             0 | region_1_prt_region3_2_prt_australia  | r
+             0 | region_1_prt_region3_2_prt_europe     | r
+             0 | region_1_prt_region3_2_prt_mideast    | r
+             0 | regions                               | r
+             2 | region                                | p
+             2 | region_1_prt_region1                  | p
+             2 | region_1_prt_region1_2_prt_africa     | r
+             2 | region_1_prt_region1_2_prt_america    | r
+             2 | region_1_prt_region1_2_prt_antarctica | r
+             2 | region_1_prt_region1_2_prt_asia       | r
+             2 | region_1_prt_region1_2_prt_australia  | r
+             2 | region_1_prt_region1_2_prt_europe     | r
+             2 | region_1_prt_region1_2_prt_mideast    | r
+             2 | region_1_prt_region2                  | p
+             2 | region_1_prt_region2_2_prt_africa     | r
+             2 | region_1_prt_region2_2_prt_america    | r
+             2 | region_1_prt_region2_2_prt_antarctica | r
+             2 | region_1_prt_region2_2_prt_asia       | r
+             2 | region_1_prt_region2_2_prt_australia  | r
+             2 | region_1_prt_region2_2_prt_europe     | r
+             2 | region_1_prt_region2_2_prt_mideast    | r
+             2 | region_1_prt_region3                  | p
+             2 | region_1_prt_region3_2_prt_africa     | r
+             2 | region_1_prt_region3_2_prt_america    | r
+             2 | region_1_prt_region3_2_prt_antarctica | r
+             2 | region_1_prt_region3_2_prt_asia       | r
+             2 | region_1_prt_region3_2_prt_australia  | r
+             2 | region_1_prt_region3_2_prt_europe     | r
+             2 | region_1_prt_region3_2_prt_mideast    | r
+             2 | regions                               | r
+(78 rows)
 
 create unique index region_pkey on region(r_regionkey, r_name);
 copy region from stdin with delimiter '|';
@@ -367,9 +371,98 @@ select has_table_privilege('part_role', 'bar_p'::regclass, 'select');
  t
 (1 row)
 
+-- the ONLY keyword will affect just the partition root for both grant/revoke
+create role part_role2;
+grant select on only foo_p to part_role2;
+select has_table_privilege('part_role2', 'foo_p'::regclass, 'select');
+ has_table_privilege 
+---------------------
+ t
+(1 row)
+
+select has_table_privilege('part_role2', 'foo_p_1_prt_6'::regclass, 'select');
+ has_table_privilege 
+---------------------
+ f
+(1 row)
+
+grant select on foo_p to part_role2;
+revoke select on only foo_p from part_role2;
+select has_table_privilege('part_role2', 'foo_p'::regclass, 'select');
+ has_table_privilege 
+---------------------
+ f
+(1 row)
+
+select has_table_privilege('part_role2', 'foo_p_1_prt_6'::regclass, 'select');
+ has_table_privilege 
+---------------------
+ t
+(1 row)
+
+revoke select on foo_p from part_role2;
+select has_table_privilege('part_role2', 'foo_p_1_prt_6'::regclass, 'select');
+ has_table_privilege 
+---------------------
+ f
+(1 row)
+
+create table foo_p2 (a int, b int) partition by range(a) (start(1) end(10) every(1));
+grant select on foo_p, only foo_p2 to part_role2; -- multiple tables in same statement
+select has_table_privilege('part_role2', 'foo_p'::regclass, 'select');
+ has_table_privilege 
+---------------------
+ t
+(1 row)
+
+select has_table_privilege('part_role2', 'foo_p_1_prt_6'::regclass, 'select');
+ has_table_privilege 
+---------------------
+ t
+(1 row)
+
+select has_table_privilege('part_role2', 'foo_p2'::regclass, 'select');
+ has_table_privilege 
+---------------------
+ t
+(1 row)
+
+select has_table_privilege('part_role2', 'foo_p2_1_prt_6'::regclass, 'select');
+ has_table_privilege 
+---------------------
+ f
+(1 row)
+
+-- more cases
+revoke all on foo_p from part_role2;
+revoke all on foo_p2 from part_role2;
+grant select on only public.foo_p to part_role2; -- with schema
+select has_table_privilege('part_role2', 'foo_p'::regclass, 'select');
+ has_table_privilege 
+---------------------
+ t
+(1 row)
+
+select has_table_privilege('part_role2', 'foo_p_1_prt_6'::regclass, 'select');
+ has_table_privilege 
+---------------------
+ f
+(1 row)
+
+grant update(b) on only foo_p2 to part_role2; -- column level priviledge
+select relname, has_column_privilege('part_role2', oid, 'b', 'update') from pg_class
+where relname = 'foo_p2' or relname = 'foo_p2_1_prt_6';
+    relname     | has_column_privilege 
+----------------+----------------------
+ foo_p2         | t
+ foo_p2_1_prt_6 | f
+(2 rows)
+
 drop table foo_p;
+drop table foo_p2;
 drop table bar_p;
 drop role part_role;
+drop role part_role2;
 -- validation
 create table foo_p (i int) partition by range(i)
 (start(1) end(10) every(1));
@@ -387,7 +480,7 @@ alter table foo_p exchange partition for(6) with table bar_p without
 validation;
 NOTICE:  specifying "WITHOUT VALIDATION" acts as no operation
 DETAIL:  If the new partition is a regular table, validation is performed to make sure all the rows obey partition constraint. If the new partition is external or foreign table, no validation is performed.
-ERROR:  partition constraint of relation "bar_p" is violated by some row  (seg2 10.13.9.100:7004 pid=17394)
+ERROR:  partition constraint of relation "bar_p" is violated by some row  (seg2 127.0.0.1:7004 pid=4189072)
 analyze foo_p;
 select * from foo_p;
  i 
@@ -1799,7 +1892,7 @@ CREATE TABLE partsupp (
 ,
           PARTITION p1 START (1::numeric) END (1001::numeric)
           );
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'ps_partkey' as the Apache Cloudberry data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'ps_partkey' as the Apache Cloudberryata distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 ERROR:  START EXCLUSIVE not supported for partition key data type: numeric
 HINT:  Specify an inclusive START value and remove the EXCLUSIVE keyword
@@ -1834,7 +1927,7 @@ ERROR:  AT clause cannot be used when splitting a default RANGE partition
 drop table k;
 create table j (i int) partition by list(i) (partition a values(1, 2, 3, 4),
 partition b values(5, 6, 7, 8));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Apache Cloudberry data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Apache Cloudberryata distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into j select i from generate_series(1, 8) i;
 alter table j split partition for(1) at (2, 3) into (partition fa, partition
@@ -4357,7 +4450,6 @@ where relname like ('mpp6979%');
        relname       |   nspname    | relispartition | amname 
 ---------------------+--------------+----------------+--------
  mpp6979part         | public       | f              | 
- mpp6979part_1_prt_1 | public       | t              | ao_row
  mpp6979part_1_prt_2 | public       | t              | pax
  mpp6979part_1_prt_3 | public       | t              | pax
  mpp6979part_1_prt_4 | public       | t              | pax
@@ -4366,6 +4458,7 @@ where relname like ('mpp6979%');
  mpp6979part_1_prt_7 | public       | t              | pax
  mpp6979part_1_prt_8 | public       | t              | pax
  mpp6979part_1_prt_9 | public       | t              | pax
+ mpp6979part_1_prt_1 | public       | t              | ao_row
  mpp6979tab          | mpp6979dummy | f              | pax
 (11 rows)
 
@@ -4486,30 +4579,6 @@ group by relname;
 
 drop table s cascade;
 --   MPP-13750 )
--- MPP-13806 start
-drop table if exists mpp13806;
-NOTICE:  table "mpp13806" does not exist, skipping
- CREATE TABLE mpp13806 (id int, date date, amt decimal(10,2))
- DISTRIBUTED BY (id)
- PARTITION BY RANGE (date)
- ( START (date '2008-01-01') INCLUSIVE
-	END (date '2008-01-05') EXCLUSIVE
-	EVERY (INTERVAL '1 day') );
- 
--- Adding unbound partition right before the start  used to fail
-alter table mpp13806 add partition test end (date '2008-01-01') exclusive;
- 
-drop table if exists mpp13806;
- CREATE TABLE mpp13806 (id int, date date, amt decimal(10,2))
- DISTRIBUTED BY (id)
- PARTITION BY RANGE (date)
- ( START (date '2008-01-01') EXCLUSIVE
-	END (date '2008-01-05') EXCLUSIVE
-	EVERY (INTERVAL '1 day') );
--- For good measure, test the opposite case
-alter table mpp13806 add partition test end (date '2008-01-01') inclusive;
-drop table mpp13806;
--- MPP-13806 end
 -- MPP-14471 start
 -- No unenforceable PK/UK constraints!  (UNIQUE INDEXes still allowed; tested above)
 drop table if exists tc cascade;
@@ -4891,30 +4960,29 @@ analyze bar;
 set optimizer_segments = 3;
 set optimizer_nestloop_factor = 1.0;
 explain select foo_p.b, foo_p.t from foo_p left outer join bar on foo_p.a = bar.k  where foo_p.t is not null and foo_p.a = (array[1])[1];
-                                            QUERY PLAN                                            
---------------------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)  (cost=10.28..366.35 rows=13416 width=31)
-   ->  Hash Right Join  (cost=10.28..187.47 rows=4472 width=31)
-         Hash Cond: (bar.k = foo_p.a)
-         ->  Broadcast Motion 3:3  (slice2; segments: 3)  (cost=0.00..126.56 rows=2236 width=4)
-               ->  Seq Scan on bar  (cost=0.00..96.75 rows=745 width=4)
-                     Filter: (k = 1)
-         ->  Hash  (cost=10.21..10.21 rows=6 width=35)
-               ->  Append  (cost=0.00..10.21 rows=6 width=35)
-                     ->  Seq Scan on foo_p_1_prt_2 foo_p_1  (cost=0.00..1.83 rows=1 width=34)
-                           Filter: ((t IS NOT NULL) AND (a = 1))
-                     ->  Seq Scan on foo_p_1_prt_3 foo_p_2  (cost=0.00..1.83 rows=1 width=34)
-                           Filter: ((t IS NOT NULL) AND (a = 1))
-                     ->  Seq Scan on foo_p_1_prt_4 foo_p_3  (cost=0.00..1.83 rows=1 width=34)
-                           Filter: ((t IS NOT NULL) AND (a = 1))
-                     ->  Seq Scan on foo_p_1_prt_5 foo_p_4  (cost=0.00..1.83 rows=1 width=34)
-                           Filter: ((t IS NOT NULL) AND (a = 1))
-                     ->  Seq Scan on foo_p_1_prt_6 foo_p_5  (cost=0.00..1.83 rows=1 width=34)
-                           Filter: ((t IS NOT NULL) AND (a = 1))
-                     ->  Seq Scan on foo_p_1_prt_other foo_p_6  (cost=0.00..1.01 rows=1 width=40)
-                           Filter: ((t IS NOT NULL) AND (a = 1))
+                                              QUERY PLAN                                              
+------------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=10000000000.00..10000001082.63 rows=13416 width=31)
+   ->  Nested Loop Left Join  (cost=10000000000.00..10000000903.75 rows=4472 width=31)
+         ->  Append  (cost=0.00..10.21 rows=6 width=35)
+               ->  Seq Scan on foo_p_1_prt_2 foo_p_1  (cost=0.00..1.83 rows=1 width=34)
+                     Filter: ((t IS NOT NULL) AND (a = 1))
+               ->  Seq Scan on foo_p_1_prt_3 foo_p_2  (cost=0.00..1.83 rows=1 width=34)
+                     Filter: ((t IS NOT NULL) AND (a = 1))
+               ->  Seq Scan on foo_p_1_prt_4 foo_p_3  (cost=0.00..1.83 rows=1 width=34)
+                     Filter: ((t IS NOT NULL) AND (a = 1))
+               ->  Seq Scan on foo_p_1_prt_5 foo_p_4  (cost=0.00..1.83 rows=1 width=34)
+                     Filter: ((t IS NOT NULL) AND (a = 1))
+               ->  Seq Scan on foo_p_1_prt_6 foo_p_5  (cost=0.00..1.83 rows=1 width=34)
+                     Filter: ((t IS NOT NULL) AND (a = 1))
+               ->  Seq Scan on foo_p_1_prt_other foo_p_6  (cost=0.00..1.01 rows=1 width=40)
+                     Filter: ((t IS NOT NULL) AND (a = 1))
+         ->  Materialize  (cost=0.00..137.74 rows=2236 width=4)
+               ->  Broadcast Motion 3:3  (slice2; segments: 3)  (cost=0.00..126.56 rows=2236 width=4)
+                     ->  Seq Scan on bar  (cost=0.00..96.75 rows=745 width=4)
+                           Filter: (k = 1)
  Optimizer: Postgres query optimizer
-(21 rows)
+(20 rows)
 
 reset optimizer_segments;
 drop table if exists foo_p;
@@ -5693,18 +5761,18 @@ select relname, relkind from pg_class where relkind in ('r', 'p') and relname li
 select gp_segment_id, relname, relkind from gp_dist_random('pg_class') where relkind in ('r', 'p') and relname like 'sales%' and relfrozenxid=0;
  gp_segment_id |    relname     | relkind 
 ---------------+----------------+---------
-             0 | sales_1_prt_aa | r
-             0 | sales          | p
-             0 | sales_1_prt_bb | r
-             0 | sales_1_prt_cc | r
-             1 | sales_1_prt_aa | r
-             1 | sales          | p
-             1 | sales_1_prt_bb | r
-             1 | sales_1_prt_cc | r
-             2 | sales_1_prt_aa | r
              2 | sales          | p
+             2 | sales_1_prt_aa | r
              2 | sales_1_prt_bb | r
              2 | sales_1_prt_cc | r
+             0 | sales          | p
+             0 | sales_1_prt_aa | r
+             0 | sales_1_prt_bb | r
+             0 | sales_1_prt_cc | r
+             1 | sales          | p
+             1 | sales_1_prt_aa | r
+             1 | sales_1_prt_bb | r
+             1 | sales_1_prt_cc | r
 (12 rows)
 
 alter table sales add column tax float;
@@ -5721,6 +5789,10 @@ select relname, relkind from pg_class where relkind in ('r', 'p') and relname li
 select gp_segment_id, relname, relkind from gp_dist_random('pg_class') where relkind in ('r', 'p') and relname like 'sales%' and relfrozenxid=0;
  gp_segment_id |    relname     | relkind 
 ---------------+----------------+---------
+             2 | sales          | p
+             2 | sales_1_prt_aa | r
+             2 | sales_1_prt_bb | r
+             2 | sales_1_prt_cc | r
              0 | sales          | p
              0 | sales_1_prt_aa | r
              0 | sales_1_prt_bb | r
@@ -5729,10 +5801,6 @@ select gp_segment_id, relname, relkind from gp_dist_random('pg_class') where rel
              1 | sales_1_prt_aa | r
              1 | sales_1_prt_bb | r
              1 | sales_1_prt_cc | r
-             2 | sales          | p
-             2 | sales_1_prt_aa | r
-             2 | sales_1_prt_bb | r
-             2 | sales_1_prt_cc | r
 (12 rows)
 
 alter table sales drop column tax;
@@ -5770,7 +5838,7 @@ select * from sales order by pkid;
 
 drop table sales cascade;
 NOTICE:  drop cascades to default value for column pkid of table newpart
--- Exchage partiton table with a table having dropped column
+-- Exchage partition table with a table having dropped column
 create table exchange_part(a int, b int) partition by range(b) (start (0) end (10) every (5));
 create table exchange1(a int, c int, b int);
 alter table exchange1 drop column c;
@@ -5823,38 +5891,38 @@ select relname, pg_get_expr(relpartbound, oid) from pg_class where relname like 
  pt_tab_encode_1_prt_s_xyz | FOR VALUES IN ('xyz')
 (3 rows)
 
-select gp_segment_id, attrelid::regclass, attnum, attoptions from pg_attribute_encoding where attrelid = 'pt_tab_encode_1_prt_s_abc'::regclass;
- gp_segment_id |         attrelid          | attnum |                     attoptions                      
----------------+---------------------------+--------+-----------------------------------------------------
-            -1 | pt_tab_encode_1_prt_s_abc |      1 | {compresstype=zlib,compresslevel=1,blocksize=32768}
-            -1 | pt_tab_encode_1_prt_s_abc |      2 | {compresstype=zlib,compresslevel=1,blocksize=32768}
+select gp_segment_id, attrelid::regclass, attnum, filenum, attoptions from pg_attribute_encoding where attrelid = 'pt_tab_encode_1_prt_s_abc'::regclass;
+ gp_segment_id |         attrelid          | attnum | filenum |                     attoptions                      
+---------------+---------------------------+--------+---------+-----------------------------------------------------
+            -1 | pt_tab_encode_1_prt_s_abc |      1 |       1 | {compresstype=zlib,compresslevel=1,blocksize=32768}
+            -1 | pt_tab_encode_1_prt_s_abc |      2 |       2 | {compresstype=zlib,compresslevel=1,blocksize=32768}
 (2 rows)
 
-select gp_segment_id, attrelid::regclass, attnum, attoptions from gp_dist_random('pg_attribute_encoding') where attrelid = 'pt_tab_encode_1_prt_s_abc'::regclass order by 1,3 limit 5;
- gp_segment_id |         attrelid          | attnum |                     attoptions                      
----------------+---------------------------+--------+-----------------------------------------------------
-             0 | pt_tab_encode_1_prt_s_abc |      1 | {compresstype=zlib,compresslevel=1,blocksize=32768}
-             0 | pt_tab_encode_1_prt_s_abc |      2 | {compresstype=zlib,compresslevel=1,blocksize=32768}
-             1 | pt_tab_encode_1_prt_s_abc |      1 | {compresstype=zlib,compresslevel=1,blocksize=32768}
-             1 | pt_tab_encode_1_prt_s_abc |      2 | {compresstype=zlib,compresslevel=1,blocksize=32768}
-             2 | pt_tab_encode_1_prt_s_abc |      1 | {compresstype=zlib,compresslevel=1,blocksize=32768}
+select gp_segment_id, attrelid::regclass, attnum, filenum, attoptions from gp_dist_random('pg_attribute_encoding') where attrelid = 'pt_tab_encode_1_prt_s_abc'::regclass order by 1,3 limit 5;
+ gp_segment_id |         attrelid          | attnum | filenum |                     attoptions                      
+---------------+---------------------------+--------+---------+-----------------------------------------------------
+             0 | pt_tab_encode_1_prt_s_abc |      1 |       1 | {compresstype=zlib,compresslevel=1,blocksize=32768}
+             0 | pt_tab_encode_1_prt_s_abc |      2 |       2 | {compresstype=zlib,compresslevel=1,blocksize=32768}
+             1 | pt_tab_encode_1_prt_s_abc |      1 |       1 | {compresstype=zlib,compresslevel=1,blocksize=32768}
+             1 | pt_tab_encode_1_prt_s_abc |      2 |       2 | {compresstype=zlib,compresslevel=1,blocksize=32768}
+             2 | pt_tab_encode_1_prt_s_abc |      1 |       1 | {compresstype=zlib,compresslevel=1,blocksize=32768}
 (5 rows)
 
-select gp_segment_id, attrelid::regclass, attnum, attoptions from pg_attribute_encoding where attrelid = 'pt_tab_encode_1_prt_s_xyz'::regclass;
- gp_segment_id |         attrelid          | attnum |                     attoptions                      
----------------+---------------------------+--------+-----------------------------------------------------
-            -1 | pt_tab_encode_1_prt_s_xyz |      1 | {compresstype=zlib,compresslevel=1,blocksize=32768}
-            -1 | pt_tab_encode_1_prt_s_xyz |      2 | {compresstype=zlib,compresslevel=1,blocksize=32768}
+select gp_segment_id, attrelid::regclass, attnum, filenum, attoptions from pg_attribute_encoding where attrelid = 'pt_tab_encode_1_prt_s_xyz'::regclass;
+ gp_segment_id |         attrelid          | attnum | filenum |                     attoptions                      
+---------------+---------------------------+--------+---------+-----------------------------------------------------
+            -1 | pt_tab_encode_1_prt_s_xyz |      1 |       1 | {compresstype=zlib,compresslevel=1,blocksize=32768}
+            -1 | pt_tab_encode_1_prt_s_xyz |      2 |       2 | {compresstype=zlib,compresslevel=1,blocksize=32768}
 (2 rows)
 
-select gp_segment_id, attrelid::regclass, attnum, attoptions from gp_dist_random('pg_attribute_encoding') where attrelid = 'pt_tab_encode_1_prt_s_xyz'::regclass order by 1,3 limit 5;
- gp_segment_id |         attrelid          | attnum |                     attoptions                      
----------------+---------------------------+--------+-----------------------------------------------------
-             0 | pt_tab_encode_1_prt_s_xyz |      1 | {compresstype=zlib,compresslevel=1,blocksize=32768}
-             0 | pt_tab_encode_1_prt_s_xyz |      2 | {compresstype=zlib,compresslevel=1,blocksize=32768}
-             1 | pt_tab_encode_1_prt_s_xyz |      1 | {compresstype=zlib,compresslevel=1,blocksize=32768}
-             1 | pt_tab_encode_1_prt_s_xyz |      2 | {compresstype=zlib,compresslevel=1,blocksize=32768}
-             2 | pt_tab_encode_1_prt_s_xyz |      1 | {compresstype=zlib,compresslevel=1,blocksize=32768}
+select gp_segment_id, attrelid::regclass, attnum, filenum, attoptions from gp_dist_random('pg_attribute_encoding') where attrelid = 'pt_tab_encode_1_prt_s_xyz'::regclass order by 1,3 limit 5;
+ gp_segment_id |         attrelid          | attnum | filenum |                     attoptions                      
+---------------+---------------------------+--------+---------+-----------------------------------------------------
+             0 | pt_tab_encode_1_prt_s_xyz |      1 |       1 | {compresstype=zlib,compresslevel=1,blocksize=32768}
+             0 | pt_tab_encode_1_prt_s_xyz |      2 |       2 | {compresstype=zlib,compresslevel=1,blocksize=32768}
+             1 | pt_tab_encode_1_prt_s_xyz |      1 |       1 | {compresstype=zlib,compresslevel=1,blocksize=32768}
+             1 | pt_tab_encode_1_prt_s_xyz |      2 |       2 | {compresstype=zlib,compresslevel=1,blocksize=32768}
+             2 | pt_tab_encode_1_prt_s_xyz |      1 |       1 | {compresstype=zlib,compresslevel=1,blocksize=32768}
 (5 rows)
 
 select c.oid::regclass, relkind, amname, reloptions from pg_class c left join pg_am am on am.oid = relam where c.oid = 'pt_tab_encode_1_prt_s_abc'::regclass;
@@ -5993,7 +6061,6 @@ ERROR:  operator class "employee_incomplete_op_class" of access method btree is 
 -- able to SELECT from any partition table we create later.
 -- (https://github.com/greenplum-db/gpdb/issues/9524)
 DROP TABLE IF EXISTS public.t_part_acl;
-NOTICE:  table "t_part_acl" does not exist, skipping
 DROP ROLE IF EXISTS user_prt_acl;
 CREATE ROLE user_prt_acl;
 NOTICE:  resource queue required -- using default resource queue "pg_default"

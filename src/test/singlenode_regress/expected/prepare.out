@@ -61,7 +61,7 @@ PREPARE q2(text) AS
 EXECUTE q2('postgres');
  datname  | datistemplate | datallowconn 
 ----------+---------------+--------------
- postgres | t             | t
+ postgres | f             | t
 (1 row)
 
 PREPARE q3(text, int, float, boolean, smallint) AS

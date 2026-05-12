@@ -1045,9 +1045,9 @@ order by locid, country_code;
  country_code | character(2) |           |          |         | extended | 
  region       | text         |           |          |         | extended | 
 View definition:
- SELECT locations.bus_name,
-    locations.country_code,
-        CASE locations.country_code
+ SELECT bus_name,
+    country_code,
+        CASE country_code
             WHEN IS NOT DISTINCT FROM 'US'::bpchar THEN 'Americas'::text
             WHEN IS NOT DISTINCT FROM 'CA'::bpchar THEN 'Americas'::text
             WHEN IS NOT DISTINCT FROM 'MX'::bpchar THEN 'Americas'::text
@@ -1062,7 +1062,7 @@ View definition:
             ELSE NULL::text
         END AS region
    FROM locations
-  ORDER BY locations.locid, locations.country_code;
+  ORDER BY locid, country_code;
 
 select * from decode_view order by region, country_code;
       bus_name       | country_code |  region  

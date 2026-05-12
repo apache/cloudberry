@@ -3,7 +3,7 @@
 # GNUmakefile--
 #    Makefile for src/test/regress (the regression tests)
 #
-# Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
+# Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
 # Portions Copyright (c) 1994, Regents of the University of California
 #
 # src/test/regress/GNUmakefile
@@ -31,8 +31,7 @@ endif
 
 # stuff to pass into build of pg_regress
 EXTRADEFS = '-DHOST_TUPLE="$(host_tuple)"' \
-	'-DSHELLPROG="$(SHELL)"' \
-	'-DDLSUFFIX="$(DLSUFFIX)"'
+	'-DSHELLPROG="$(SHELL)"'
 
 ##
 ## Prepare for tests
@@ -191,7 +190,7 @@ query_info_hook_test:
 ## Run tests
 ##
 
-REGRESS_OPTS = --dlpath=. --max-concurrent-tests=24 --init-file=$(srcdir)/init_file --make-testtablespace-dir \
+REGRESS_OPTS = --dlpath=. --max-concurrent-tests=24 --init-file=$(srcdir)/init_file \
 	$(EXTRA_REGRESS_OPTS)
 
 check: all
@@ -205,7 +204,7 @@ check-tests: all | temp-install
 installcheck: installcheck-good
 
 installcheck-small: all tablespace-setup
-	$(pg_regress_installcheck) $(REGRESS_OPTS) --schedule=$(srcdir)/parallel_schedule $(EXTRA_TESTS)
+	$(pg_regress_installcheck) $(REGRESS_OPTS) --schedule=$(srcdir)/serial_schedule $(EXTRA_TESTS)
 
 installcheck-cbdb: all tablespace-setup twophase_pqexecparams hooktest query_info_hook_test
 	$(pg_regress_installcheck) $(REGRESS_OPTS) --schedule=$(srcdir)/greenplum_schedule $(EXTRA_TESTS)
@@ -219,8 +218,8 @@ installcheck-parallel: all
 # cbdb parallel plan tests, ignore the incompatible cases, should run with 5 GUCs like below:
 installcheck-cbdb-parallel: all tablespace-setup twophase_pqexecparams
 	( \
-	export PGOPTIONS='-c optimizer=off -c enable_parallel=true -c min_parallel_table_scan_size=0 -c min_parallel_index_scan_size=0 -c force_parallel_mode=1'; \
-	$(pg_regress_installcheck) $(REGRESS_OPTS) --schedule=$(srcdir)/parallel_schedule --schedule=$(srcdir)/greenplum_schedule --max-connections=5 $(EXTRA_TESTS) --exclude-tests explain \
+	export PGOPTIONS='-c optimizer=off -c enable_parallel=true -c min_parallel_table_scan_size=0 -c min_parallel_index_scan_size=0'; \
+	$(pg_regress_installcheck) $(REGRESS_OPTS) --schedule=$(srcdir)/parallel_schedule --schedule=$(srcdir)/greenplum_schedule --max-connections=5 $(EXTRA_TESTS) --ignore-plans --exclude-tests explain \
 	)
 
 installcheck-tests: all

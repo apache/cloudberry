@@ -68,10 +68,10 @@ static file_truncate_hook_type prev_file_truncate_hook = NULL;
 static file_unlink_hook_type   prev_file_unlink_hook   = NULL;
 static object_access_hook_type prev_object_access_hook = NULL;
 
-static void active_table_hook_smgrcreate(RelFileNodeBackend rnode);
-static void active_table_hook_smgrextend(RelFileNodeBackend rnode);
-static void active_table_hook_smgrtruncate(RelFileNodeBackend rnode);
-static void active_table_hook_smgrunlink(RelFileNodeBackend rnode);
+static void active_table_hook_smgrcreate(RelFileLocatorBackend rnode);
+static void active_table_hook_smgrextend(RelFileLocatorBackend rnode);
+static void active_table_hook_smgrtruncate(RelFileLocatorBackend rnode);
+static void active_table_hook_smgrunlink(RelFileLocatorBackend rnode);
 static void object_access_hook_QuotaStmt(ObjectAccessType access, Oid classId, Oid objectId, int subId, void *arg);
 
 static HTAB          *get_active_tables_stats(ArrayType *array);
@@ -80,8 +80,8 @@ static HTAB          *pull_active_list_from_seg(void);
 static void           pull_active_table_size_from_seg(HTAB *local_table_stats_map, char *active_oid_array);
 static StringInfoData convert_map_to_string(HTAB *active_list);
 static void           load_table_size(HTAB *local_table_stats_map);
-static void           report_active_table_helper(const RelFileNodeBackend *relFileNode);
-static void           remove_from_active_table_map(const RelFileNodeBackend *relFileNode);
+static void           report_active_table_helper(const RelFileLocatorBackend *relFileNode);
+static void           remove_from_active_table_map(const RelFileLocatorBackend *relFileNode);
 static void           report_relation_cache_helper(Oid relid);
 static void           report_altered_reloid(Oid reloid);
 static Oid            get_dbid(ArrayType *array);
@@ -138,7 +138,7 @@ init_active_table_hook(void)
  * File create hook is used to monitor a new file create event
  */
 static void
-active_table_hook_smgrcreate(RelFileNodeBackend rnode)
+active_table_hook_smgrcreate(RelFileLocatorBackend rnode)
 {
 	if (prev_file_create_hook) (*prev_file_create_hook)(rnode);
 
@@ -152,19 +152,19 @@ active_table_hook_smgrcreate(RelFileNodeBackend rnode)
  * file write for an append-optimize table.
  */
 static void
-active_table_hook_smgrextend(RelFileNodeBackend rnode)
+active_table_hook_smgrextend(RelFileLocatorBackend rnode)
 {
 	if (prev_file_extend_hook) (*prev_file_extend_hook)(rnode);
 
 	report_active_table_helper(&rnode);
-	quota_check_common(InvalidOid /*reloid*/, &rnode.node);
+	quota_check_common(InvalidOid /*reloid*/, &rnode.locator);
 }
 
 /*
  * File truncate hook is used to monitor a new file truncate event
  */
 static void
-active_table_hook_smgrtruncate(RelFileNodeBackend rnode)
+active_table_hook_smgrtruncate(RelFileLocatorBackend rnode)
 {
 	if (prev_file_truncate_hook) (*prev_file_truncate_hook)(rnode);
 
@@ -172,7 +172,7 @@ active_table_hook_smgrtruncate(RelFileNodeBackend rnode)
 }
 
 static void
-active_table_hook_smgrunlink(RelFileNodeBackend rnode)
+active_table_hook_smgrunlink(RelFileLocatorBackend rnode)
 {
 	if (prev_file_unlink_hook) (*prev_file_unlink_hook)(rnode);
 
@@ -181,7 +181,7 @@ active_table_hook_smgrunlink(RelFileNodeBackend rnode)
 	 * relation oid, we need to do the cleaning here to avoid memory leak
 	 */
 	remove_from_active_table_map(&rnode);
-	remove_cache_entry(InvalidOid, rnode.node.relNode);
+	remove_cache_entry(InvalidOid, rnode.locator.relNumber);
 }
 
 static void
@@ -286,12 +286,12 @@ report_relation_cache_helper(Oid relid)
  * the corresponding relFileNode into the active_tables_map
  */
 static void
-report_active_table_helper(const RelFileNodeBackend *relFileNode)
+report_active_table_helper(const RelFileLocatorBackend *relFileNode)
 {
 	DiskQuotaActiveTableFileEntry *entry;
 	DiskQuotaActiveTableFileEntry  item;
 	bool                           found = false;
-	Oid                            dbid  = relFileNode->node.dbNode;
+	Oid                            dbid  = relFileNode->locator.dbOid;
 
 	/* We do not collect the active table in mirror segments  */
 	if (IsRoleMirror())
@@ -312,9 +312,9 @@ report_active_table_helper(const RelFileNodeBackend *relFileNode)
 	found = false;
 
 	MemSet(&item, 0, sizeof(DiskQuotaActiveTableFileEntry));
-	item.dbid          = relFileNode->node.dbNode;
-	item.relfilenode   = relFileNode->node.relNode;
-	item.tablespaceoid = relFileNode->node.spcNode;
+	item.dbid          = relFileNode->locator.dbOid;
+	item.relfilenode   = relFileNode->locator.relNumber;
+	item.tablespaceoid = relFileNode->locator.spcOid;
 
 	LWLockAcquire(diskquota_locks.active_table_lock, LW_EXCLUSIVE);
 	entry = hash_search(active_tables_map, &item, HASH_ENTER_NULL, &found);
@@ -335,13 +335,13 @@ report_active_table_helper(const RelFileNodeBackend *relFileNode)
  * Remove relfilenode from the active table map if exists.
  */
 static void
-remove_from_active_table_map(const RelFileNodeBackend *relFileNode)
+remove_from_active_table_map(const RelFileLocatorBackend *relFileNode)
 {
 	DiskQuotaActiveTableFileEntry item = {0};
 
-	item.dbid          = relFileNode->node.dbNode;
-	item.relfilenode   = relFileNode->node.relNode;
-	item.tablespaceoid = relFileNode->node.spcNode;
+	item.dbid          = relFileNode->locator.dbOid;
+	item.relfilenode   = relFileNode->locator.relNumber;
+	item.tablespaceoid = relFileNode->locator.spcOid;
 
 	LWLockAcquire(diskquota_locks.active_table_lock, LW_EXCLUSIVE);
 	hash_search(active_tables_map, &item, HASH_REMOVE, NULL);

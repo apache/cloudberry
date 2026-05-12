@@ -4,7 +4,7 @@
  *	  creator functions for various nodes. The functions here are for the
  *	  most frequently created nodes.
  *
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -21,6 +21,7 @@
 #include "catalog/pg_type.h"
 #include "nodes/makefuncs.h"
 #include "nodes/nodeFuncs.h"
+#include "utils/errcodes.h"
 #include "utils/lsyscache.h"
 
 
@@ -65,7 +66,7 @@ makeSimpleA_Expr(A_Expr_Kind kind, char *name,
  *	  creates a Var node
  */
 Var *
-makeVar(Index varno,
+makeVar(int varno,
 		AttrNumber varattno,
 		Oid vartype,
 		int32 vartypmod,
@@ -82,12 +83,14 @@ makeVar(Index varno,
 	var->varlevelsup = varlevelsup;
 
 	/*
-	 * Only a few callers need to make Var nodes with varnosyn/varattnosyn
-	 * different from varno/varattno.  We don't provide separate arguments for
-	 * them, but just initialize them to the given varno/varattno.  This
-	 * reduces code clutter and chance of error for most callers.
+	 * Only a few callers need to make Var nodes with non-null varnullingrels,
+	 * or with varnosyn/varattnosyn different from varno/varattno.  We don't
+	 * provide separate arguments for them, but just initialize them to NULL
+	 * and the given varno/varattno.  This reduces code clutter and chance of
+	 * error for most callers.
 	 */
-	var->varnosyn = varno;
+	var->varnullingrels = NULL;
+	var->varnosyn = (Index) varno;
 	var->varattnosyn = varattno;
 
 	/* Likewise, we just set location to "unknown" here */
@@ -102,7 +105,7 @@ makeVar(Index varno,
  *		TargetEntry
  */
 Var *
-makeVarFromTargetEntry(Index varno,
+makeVarFromTargetEntry(int varno,
 					   TargetEntry *tle)
 {
 	return makeVar(varno,
@@ -133,7 +136,7 @@ makeVarFromTargetEntry(Index varno,
  */
 Var *
 makeWholeRowVar(RangeTblEntry *rte,
-				Index varno,
+				int varno,
 				Index varlevelsup,
 				bool allowScalar)
 {
@@ -158,6 +161,54 @@ makeWholeRowVar(RangeTblEntry *rte,
 							 InvalidOid,
 							 varlevelsup);
 			break;
+
+		case RTE_SUBQUERY:
+
+			/*
+			 * For a standard subquery, the Var should be of RECORD type.
+			 * However, if we're looking at a subquery that was expanded from
+			 * a view or SRF (only possible during planning), we must use the
+			 * appropriate rowtype, so that the resulting Var has the same
+			 * type that we would have produced from the original RTE.
+			 */
+			if (OidIsValid(rte->relid))
+			{
+				/* Subquery was expanded from a view */
+				toid = get_rel_type_id(rte->relid);
+				if (!OidIsValid(toid))
+					ereport(ERROR,
+							(errcode(ERRCODE_WRONG_OBJECT_TYPE),
+							 errmsg("relation \"%s\" does not have a composite type",
+									get_rel_name(rte->relid))));
+			}
+			else if (rte->functions)
+			{
+				/*
+				 * Subquery was expanded from a set-returning function.  That
+				 * would not have happened if there's more than one function
+				 * or ordinality was requested.  We also needn't worry about
+				 * the allowScalar case, since the planner doesn't use that.
+				 * Otherwise this must match the RTE_FUNCTION code below.
+				 */
+				Assert(!allowScalar);
+				fexpr = ((RangeTblFunction *) linitial(rte->functions))->funcexpr;
+				toid = exprType(fexpr);
+				if (!type_is_rowtype(toid))
+					toid = RECORDOID;
+			}
+			else
+			{
+				/* Normal subquery-in-FROM */
+				toid = RECORDOID;
+			}
+			result = makeVar(varno,
+							 InvalidAttrNumber,
+							 toid,
+							 -1,
+							 InvalidOid,
+							 varlevelsup);
+			break;
+
 		case RTE_TABLEFUNCTION:
 		case RTE_FUNCTION:
 
@@ -215,8 +266,8 @@ makeWholeRowVar(RangeTblEntry *rte,
 		default:
 
 			/*
-			 * RTE is a join, subselect, tablefunc, or VALUES.  We represent
-			 * this as a whole-row Var of RECORD type. (Note that in most
+			 * RTE is a join, tablefunc, VALUES, CTE, etc.  We represent these
+			 * cases as a whole-row Var of RECORD type.  (Note that in most
 			 * cases the Var will be expanded to a RowExpr during planning,
 			 * but that is not our concern here.)
 			 */
@@ -745,7 +796,8 @@ make_ands_implicit(Expr *clause)
  */
 IndexInfo *
 makeIndexInfo(int numattrs, int numkeyattrs, Oid amoid, List *expressions,
-			  List *predicates, bool unique, bool isready, bool concurrent)
+			  List *predicates, bool unique, bool nulls_not_distinct,
+			  bool isready, bool concurrent, bool summarizing)
 {
 	IndexInfo  *n = makeNode(IndexInfo);
 
@@ -754,8 +806,15 @@ makeIndexInfo(int numattrs, int numkeyattrs, Oid amoid, List *expressions,
 	Assert(n->ii_NumIndexKeyAttrs != 0);
 	Assert(n->ii_NumIndexKeyAttrs <= n->ii_NumIndexAttrs);
 	n->ii_Unique = unique;
+	n->ii_NullsNotDistinct = nulls_not_distinct;
 	n->ii_ReadyForInserts = isready;
+	n->ii_CheckedUnchanged = false;
+	n->ii_IndexUnchanged = false;
 	n->ii_Concurrent = concurrent;
+	n->ii_Summarizing = summarizing;
+
+	/* summarizing indexes cannot contain non-key attributes */
+	Assert(!summarizing || (numkeyattrs == numattrs));
 
 	/* expressions */
 	n->ii_Expressions = expressions;
@@ -834,4 +893,92 @@ makeReindexIndexInfo(Oid indexId, Oid tableId, Oid amId, bool safe)
 	r->amId = amId;
 	r->safe = safe;
 	return r;
+}
+
+/*
+ * makeJsonFormat -
+ *	  creates a JsonFormat node
+ */
+JsonFormat *
+makeJsonFormat(JsonFormatType type, JsonEncoding encoding, int location)
+{
+	JsonFormat *jf = makeNode(JsonFormat);
+
+	jf->format_type = type;
+	jf->encoding = encoding;
+	jf->location = location;
+
+	return jf;
+}
+
+/*
+ * makeJsonValueExpr -
+ *	  creates a JsonValueExpr node
+ */
+JsonValueExpr *
+makeJsonValueExpr(Expr *raw_expr, Expr *formatted_expr,
+				  JsonFormat *format)
+{
+	JsonValueExpr *jve = makeNode(JsonValueExpr);
+
+	jve->raw_expr = raw_expr;
+	jve->formatted_expr = formatted_expr;
+	jve->format = format;
+
+	return jve;
+}
+
+/*
+ * makeJsonEncoding -
+ *	  converts JSON encoding name to enum JsonEncoding
+ */
+JsonEncoding
+makeJsonEncoding(char *name)
+{
+	if (!pg_strcasecmp(name, "utf8"))
+		return JS_ENC_UTF8;
+	if (!pg_strcasecmp(name, "utf16"))
+		return JS_ENC_UTF16;
+	if (!pg_strcasecmp(name, "utf32"))
+		return JS_ENC_UTF32;
+
+	ereport(ERROR,
+			errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+			errmsg("unrecognized JSON encoding: %s", name));
+
+	return JS_ENC_DEFAULT;
+}
+
+/*
+ * makeJsonKeyValue -
+ *	  creates a JsonKeyValue node
+ */
+Node *
+makeJsonKeyValue(Node *key, Node *value)
+{
+	JsonKeyValue *n = makeNode(JsonKeyValue);
+
+	n->key = (Expr *) key;
+	n->value = castNode(JsonValueExpr, value);
+
+	return (Node *) n;
+}
+
+/*
+ * makeJsonIsPredicate -
+ *	  creates a JsonIsPredicate node
+ */
+Node *
+makeJsonIsPredicate(Node *expr, JsonFormat *format, JsonValueType item_type,
+					bool unique_keys, int location)
+{
+	JsonIsPredicate *n = makeNode(JsonIsPredicate);
+
+	n->expr = expr;
+	n->format = format;
+	n->item_type = item_type;
+	n->unique_keys = unique_keys;
+	n->location = location;
+
+	return (Node *) n;
 }

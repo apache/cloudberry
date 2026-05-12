@@ -288,6 +288,7 @@ ao_vacuum_rel_post_cleanup(Relation onerel, VacuumParams *params, BufferAccessSt
 								 &relhasindex,
 								 &total_file_segs);
 
+	/* MERGE16_FIXME: How to set limits for ao */
 	vacuum_set_xid_limits(onerel,
 						  params->freeze_min_age,
 						  params->freeze_table_age,
@@ -306,6 +307,8 @@ ao_vacuum_rel_post_cleanup(Relation onerel, VacuumParams *params, BufferAccessSt
 						relhasindex,
 						FreezeLimit,
 						MultiXactCutoff,
+						NULL,
+						NULL,
 						false,
 						true /* isvacuum */);
 
@@ -631,6 +634,7 @@ vacuum_appendonly_index(Relation indexRelation,
 	pg_rusage_init(&ru0);
 
 	ivinfo.index = indexRelation;
+	ivinfo.heaprel = aoRelation;
 	ivinfo.analyze_only = false;
 	ivinfo.message_level = elevel;
 	/* 
@@ -640,6 +644,7 @@ vacuum_appendonly_index(Relation indexRelation,
 	ivinfo.num_heap_tuples = aoRelation->rd_rel->reltuples;
 	ivinfo.estimated_count = true;
 	ivinfo.strategy = bstrategy;
+	ivinfo.heaprel = aoRelation;
 
 	/* Do bulk deletion */
 	stats = index_bulk_delete(&ivinfo, NULL, appendonly_tid_reaped,
@@ -667,6 +672,8 @@ vacuum_appendonly_index(Relation indexRelation,
 							false,
 							InvalidTransactionId,
 							InvalidMultiXactId,
+							NULL,
+							NULL,
 							false,
 							true /* isvacuum */);
 
@@ -802,6 +809,7 @@ scan_index(Relation indrel, Relation aorel, int elevel, BufferAccessStrategy vac
 	pg_rusage_init(&ru0);
 
 	ivinfo.index = indrel;
+	ivinfo.heaprel = aorel;
 	ivinfo.analyze_only = false;
 	ivinfo.message_level = elevel;
 	/* 
@@ -811,6 +819,7 @@ scan_index(Relation indrel, Relation aorel, int elevel, BufferAccessStrategy vac
 	ivinfo.num_heap_tuples = aorel->rd_rel->reltuples;
 	ivinfo.estimated_count = true;
 	ivinfo.strategy = vac_strategy;
+	ivinfo.heaprel = aorel;
 
 
 	/* Do post-VACUUM cleanup */
@@ -830,6 +839,8 @@ scan_index(Relation indrel, Relation aorel, int elevel, BufferAccessStrategy vac
 							false,
 							InvalidTransactionId,
 							InvalidMultiXactId,
+							NULL,
+							NULL,
 							false,
 							true /* isvacuum */);
 

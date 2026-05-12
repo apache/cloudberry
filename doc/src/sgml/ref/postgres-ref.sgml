@@ -133,11 +133,19 @@ PostgreSQL documentation
       <listitem>
        <para>
         Prints the value of the named run-time parameter, and exits.
-        (See the <option>-c</option> option above for details.)  This can
-        be used on a running server, and returns values from
+        (See the <option>-c</option> option above for details.)  This
+        returns values from
         <filename>postgresql.conf</filename>, modified by any parameters
         supplied in this invocation.  It does not reflect parameters
         supplied when the cluster was started.
+       </para>
+
+       <para>
+        This can be used on a running server for most parameters.  However,
+        the server must be shut down for some runtime-computed parameters
+        (e.g., <xref linkend="guc-shared-memory-size"/>,
+        <xref linkend="guc-shared-memory-size-in-huge-pages"/>, and
+        <xref linkend="guc-wal-segment-size"/>).
        </para>
 
        <para>
@@ -415,24 +423,6 @@ PostgreSQL documentation
      </varlistentry>
 
      <varlistentry>
-      <term><option>-n</option></term>
-      <listitem>
-       <para>
-        This option is for debugging problems that cause a server
-        process to die abnormally.  The ordinary strategy in this
-        situation is to notify all other server processes that they
-        must terminate and then reinitialize the shared memory and
-        semaphores.  This is because an errant server process could
-        have corrupted some shared state before terminating.  This
-        option specifies that <command>postgres</command> will
-        not reinitialize shared data structures.  A knowledgeable
-        system programmer can then use a debugger to examine shared
-        memory and semaphore state.
-       </para>
-     </listitem>
-    </varlistentry>
-
-     <varlistentry>
       <term><option>-O</option></term>
       <listitem>
        <para>
@@ -471,14 +461,9 @@ PostgreSQL documentation
         This option is for debugging problems that cause a server
         process to die abnormally.  The ordinary strategy in this
         situation is to notify all other server processes that they
-        must terminate and then reinitialize the shared memory and
-        semaphores.  This is because an errant server process could
-        have corrupted some shared state before terminating.  This
-        option specifies that <command>postgres</command> will
-        stop all other server processes by sending the signal
-        <literal>SIGSTOP</literal>, but will not cause them to
-        terminate.  This permits system programmers to collect core
-        dumps from all server processes by hand.
+        must terminate, by sending them <systemitem>SIGQUIT</systemitem>
+        signals.  With this option, <systemitem>SIGABRT</systemitem>
+        will be sent instead, resulting in production of core dump files.
        </para>
       </listitem>
      </varlistentry>

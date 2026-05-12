@@ -221,10 +221,10 @@ SET ROLE regress_user_mvtest;
 -- duplicate all the aliases used in those queries
 CREATE TABLE mvtest_foo_data AS SELECT i,
   i+1 AS tid,
-  md5(random()::text) AS mv,
-  md5(random()::text) AS newdata,
-  md5(random()::text) AS newdata2,
-  md5(random()::text) AS diff
+  fipshash(random()::text) AS mv,
+  fipshash(random()::text) AS newdata,
+  fipshash(random()::text) AS newdata2,
+  fipshash(random()::text) AS diff
   FROM generate_series(1, 10) i;
 CREATE MATERIALIZED VIEW mvtest_mv_foo AS SELECT * FROM mvtest_foo_data distributed by(i);
 CREATE MATERIALIZED VIEW mvtest_mv_foo AS SELECT * FROM mvtest_foo_data distributed by(i);
@@ -235,6 +235,23 @@ REFRESH MATERIALIZED VIEW mvtest_mv_foo;
 REFRESH MATERIALIZED VIEW CONCURRENTLY mvtest_mv_foo;
 DROP OWNED BY regress_user_mvtest CASCADE;
 DROP ROLE regress_user_mvtest;
+
+-- Concurrent refresh requires a unique index on the materialized
+-- view. Test what happens if it's dropped during the refresh.
+CREATE OR REPLACE FUNCTION mvtest_drop_the_index()
+  RETURNS bool AS $$
+BEGIN
+  EXECUTE 'DROP INDEX IF EXISTS mvtest_drop_idx';
+  RETURN true;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE MATERIALIZED VIEW drop_idx_matview AS
+  SELECT 1 as i WHERE mvtest_drop_the_index();
+
+CREATE UNIQUE INDEX mvtest_drop_idx ON drop_idx_matview (i);
+REFRESH MATERIALIZED VIEW CONCURRENTLY drop_idx_matview;
+DROP MATERIALIZED VIEW drop_idx_matview; -- clean up
 
 -- make sure that create WITH NO DATA works via SPI
 BEGIN;

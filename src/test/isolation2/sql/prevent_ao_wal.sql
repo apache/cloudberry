@@ -14,7 +14,7 @@
 -- validate WAL records on the coordinator.
 
 -- start_matchignore
--- m/pg_waldump: fatal: error in WAL record at */
+-- m/pg_waldump: error: error in WAL record at */
 -- m/.*The 'DISTRIBUTED BY' clause determines the distribution of data*/
 -- m/.*Table doesn't have 'DISTRIBUTED BY' clause*/
 -- end_matchignore

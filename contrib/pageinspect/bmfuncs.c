@@ -7,7 +7,7 @@
 #include "postgres.h"
 
 #include "pageinspect.h"
-
+#include <arpa/inet.h>
 #include "access/bitmap_private.h"
 #include "access/relation.h"
 #include "catalog/namespace.h"

@@ -3,7 +3,7 @@
  * barrier.c
  *	  Barriers for synchronizing cooperating processes.
  *
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * From Wikipedia[1]: "In parallel computing, a barrier is a type of
@@ -220,11 +220,17 @@ BarrierArriveAndDetachExceptLast(Barrier *barrier)
 
 		return false;
 	}
-	Assert(barrier->participants == 1);
-	++barrier->phase;
-	SpinLockRelease(&barrier->mutex);
-
-	return true;
+	else if (barrier->participants == 1)
+	{
+		++barrier->phase;
+		SpinLockRelease(&barrier->mutex);
+		return true;
+	}
+	else
+	{
+		SpinLockRelease(&barrier->mutex);
+		return true;
+	}
 }
 
 /*

@@ -40,9 +40,9 @@ PostgreSQL documentation
   <application>pg_upgrade</application> (formerly called <application>pg_migrator</application>) allows data
   stored in <productname>PostgreSQL</productname> data files to be upgraded to a later <productname>PostgreSQL</productname>
   major version without the data dump/restore typically required for
-  major version upgrades, e.g., from 9.5.8 to 9.6.4 or from 10.7 to 11.2.
-  It is not required for minor version upgrades, e.g., from 9.6.2 to 9.6.3
-  or from 10.1 to 10.2.
+  major version upgrades, e.g., from 12.14 to 13.10 or from 14.9 to 15.5.
+  It is not required for minor version upgrades, e.g., from 12.7 to 12.8
+  or from 14.1 to 14.5.
  </para>
 
  <para>
@@ -127,6 +127,22 @@ PostgreSQL documentation
       <term><option>--link</option></term>
       <listitem><para>use hard links instead of copying files to the new
       cluster</para></listitem>
+     </varlistentry>
+
+     <varlistentry>
+      <term><option>-N</option></term>
+      <term><option>--no-sync</option></term>
+      <listitem>
+       <para>
+        By default, <command>pg_upgrade</command> will wait for all files
+        of the upgraded cluster to be written safely to disk.  This option
+        causes <command>pg_upgrade</command> to return without waiting, which
+        is faster, but means that a subsequent operating system crash can leave
+        the data directory corrupt.  Generally, this option is
+        useful for testing but should not be used on a production
+        installation.
+       </para>
+      </listitem>
      </varlistentry>
 
      <varlistentry>
@@ -219,6 +235,16 @@ PostgreSQL documentation
         <application>pg_upgrade</application> run will error.  At present, it
         is supported on Linux (kernel 4.5 or later) with Btrfs and XFS (on
         file systems created with reflink support), and on macOS with APFS.
+       </para>
+      </listitem>
+     </varlistentry>
+
+     <varlistentry>
+      <term><option>--copy</option></term>
+      <listitem>
+       <para>
+        Copy files to the new cluster.  This is the default.  (See also
+        <option>--link</option> and <option>--clone</option>.)
        </para>
       </listitem>
      </varlistentry>
@@ -352,21 +378,21 @@ make prefix=/usr/local/pgsql.new install
      Make sure both database servers are stopped using, on Unix, e.g.:
 
 <programlisting>
-pg_ctl -D /opt/PostgreSQL/9.6 stop
+pg_ctl -D /opt/PostgreSQL/12 stop
 pg_ctl -D /opt/PostgreSQL/&majorversion; stop
 </programlisting>
 
      or on Windows, using the proper service names:
 
 <programlisting>
-NET STOP postgresql-9.6
+NET STOP postgresql-12
 NET STOP postgresql-&majorversion;
 </programlisting>
     </para>
 
     <para>
-     Streaming replication and log-shipping standby servers can
-     remain running until a later step.
+     Streaming replication and log-shipping standby servers must be
+     running during this shutdown so they receive all changes.
     </para>
    </step>
 
@@ -379,8 +405,6 @@ NET STOP postgresql-&majorversion;
      servers are caught up by running <application>pg_controldata</application>
      against the old primary and standby clusters.  Verify that the
      <quote>Latest checkpoint location</quote> values match in all clusters.
-     (There will be a mismatch if old standby servers were shut down
-     before the old primary or if the old standby servers are still running.)
      Also, make sure <varname>wal_level</varname> is not set to
      <literal>minimal</literal> in the <filename>postgresql.conf</filename> file on the
      new primary cluster.
@@ -435,9 +459,9 @@ SET PATH=%PATH%;C:\Program Files\PostgreSQL\&majorversion;\bin;
 
 <programlisting>
 pg_upgrade.exe
-        --old-datadir "C:/Program Files/PostgreSQL/9.6/data"
+        --old-datadir "C:/Program Files/PostgreSQL/12/data"
         --new-datadir "C:/Program Files/PostgreSQL/&majorversion;/data"
-        --old-bindir "C:/Program Files/PostgreSQL/9.6/bin"
+        --old-bindir "C:/Program Files/PostgreSQL/12/bin"
         --new-bindir "C:/Program Files/PostgreSQL/&majorversion;/bin"
 </programlisting>
 
@@ -493,7 +517,7 @@ pg_upgrade.exe
      is running.
     </para>
 
-    <substeps>
+    <procedure>
 
      <step>
       <title>Install the new PostgreSQL binaries on standby servers</title>
@@ -567,8 +591,8 @@ rsync --archive --delete --hard-links --size-only --no-inc-recursive old_cluster
        remote directory, e.g.,
 
 <programlisting>
-rsync --archive --delete --hard-links --size-only --no-inc-recursive /opt/PostgreSQL/9.5 \
-      /opt/PostgreSQL/9.6 standby.example.com:/opt/PostgreSQL
+rsync --archive --delete --hard-links --size-only --no-inc-recursive /opt/PostgreSQL/12 \
+      /opt/PostgreSQL/&majorversion; standby.example.com:/opt/PostgreSQL
 </programlisting>
 
        You can verify what the command will do using
@@ -597,8 +621,8 @@ rsync --archive --delete --hard-links --size-only --no-inc-recursive /opt/Postgr
        <application>rsync</application> command for each tablespace directory, e.g.:
 
 <programlisting>
-rsync --archive --delete --hard-links --size-only --no-inc-recursive /vol1/pg_tblsp/PG_9.5_201510051 \
-      /vol1/pg_tblsp/PG_9.6_201608131 standby.example.com:/vol1/pg_tblsp
+rsync --archive --delete --hard-links --size-only --no-inc-recursive /vol1/pg_tblsp/PG_12_201909212 \
+      /vol1/pg_tblsp/PG_&majorversion;_202307071 standby.example.com:/vol1/pg_tblsp
 </programlisting>
 
        If you have relocated <filename>pg_wal</filename> outside the data
@@ -612,14 +636,14 @@ rsync --archive --delete --hard-links --size-only --no-inc-recursive /vol1/pg_tb
 
       <para>
        Configure the servers for log shipping.  (You do not need to run
-       <function>pg_start_backup()</function> and <function>pg_stop_backup()</function>
+       <function>pg_backup_start()</function> and <function>pg_backup_stop()</function>
        or take a file system backup as the standbys are still synchronized
        with the primary.)  Replication slots are not copied and must
        be recreated.
       </para>
      </step>
 
-    </substeps>
+    </procedure>
 
    </step>
 
@@ -763,11 +787,15 @@ psql --username=postgres --file=script.sql postgres
 
   <para>
    <application>pg_upgrade</application> creates various working files, such
-   as schema dumps, stored within <literal>pg_upgrade_output.d</literal> in
+   as schema dumps, stored within <filename>pg_upgrade_output.d</filename> in
    the directory of the new cluster. Each run creates a new subdirectory named
    with a timestamp formatted as per ISO 8601
-   (<literal>%Y%m%dT%H%M%S</literal>), where all the generated files are
+   (<literal>%Y%m%dT%H%M%S</literal>), where all its generated files are
    stored.
+   <filename>pg_upgrade_output.d</filename> and its contained files will be
+   removed automatically if <application>pg_upgrade</application> completes
+   successfully; but in the event of trouble, the files there may provide
+   useful debugging information.
   </para>
 
   <para>

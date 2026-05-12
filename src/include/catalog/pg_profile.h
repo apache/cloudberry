@@ -31,6 +31,7 @@
 #ifndef PG_PROFILE_H
 #define PG_PROFILE_H
 
+#include "catalog/objectaddress.h"
 #include "catalog/genbki.h"
 #include "catalog/pg_profile_d.h"
 #include "parser/parse_node.h"
@@ -40,7 +41,7 @@
  *		typedef struct FormData_pg_profile
  * ----------------
  */
-CATALOG(pg_profile,10135,ProfileRelationId) BKI_SHARED_RELATION BKI_ROWTYPE_OID(10136,ProfileRelation_Rowtype_Id) BKI_SCHEMA_MACRO
+CATALOG(pg_profile,10135,ProfileRelationId) BKI_SHARED_RELATION BKI_ROWTYPE_OID(11145,ProfileRelation_Rowtype_Id) BKI_SCHEMA_MACRO
 {
 	Oid		oid BKI_FORCE_NOT_NULL;		/* oid */
 	NameData	prfname BKI_FORCE_NOT_NULL;	/* name of profile */
@@ -62,12 +63,9 @@ CATALOG(pg_profile,10135,ProfileRelationId) BKI_SHARED_RELATION BKI_ROWTYPE_OID(
  */
 typedef FormData_pg_profile *Form_pg_profile;
 
-DECLARE_UNIQUE_INDEX(profile_name_index, 10137, on pg_profile using btree(prfname name_ops));
-#define ProfilePrfnameIndexId	10137
-DECLARE_UNIQUE_INDEX(profile_oid_index, 10138, on pg_profile using btree(oid oid_ops));
-#define ProfileOidIndexId	10138
-DECLARE_INDEX(profile_password_verify_function_index, 10139, on pg_profile using btree(prfpasswordverifyfuncdb oid_ops, prfpasswordverifyfunc oid_ops));
-#define ProfileVerifyFunctionIndexId	10139
+DECLARE_UNIQUE_INDEX(profile_name_index, 10137, ProfilePrfnameIndexId, on pg_profile using btree(prfname name_ops));
+DECLARE_UNIQUE_INDEX(profile_oid_index, 10138, ProfileOidIndexId, on pg_profile using btree(oid oid_ops));
+DECLARE_INDEX(profile_password_verify_function_index, 10139, ProfileVerifyFunctionIndexId, on pg_profile using btree(prfpasswordverifyfuncdb oid_ops, prfpasswordverifyfunc oid_ops));
 
 #define DefaultProfileOID	10140
 

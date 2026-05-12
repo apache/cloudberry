@@ -40,7 +40,7 @@
 #include "storage/ufile.h"
 #include "storage/fd.h"
 #include "storage/lwlock.h"
-#include "storage/relfilenode.h"
+#include "storage/relfilelocator.h"
 #include "utils/elog.h"
 #include "utils/wait_event.h"
 
@@ -59,7 +59,7 @@ static int localFileRead(UFile *file, char *buffer, int amount);
 static int localFileWrite(UFile *file, char *buffer, int amount);
 static off_t localFileSize(UFile *file);
 static void localFileUnlink(Oid spcId, const char *fileName);
-static char *localFormatPathName(Oid relid, RelFileNode *relFileNode);
+static char *localFormatPathName(Oid relid, RelFileLocator *relFileNode);
 static bool localEnsurePath(Oid spcId, const char *PathName);
 static bool localFileExists(Oid spcId, const char *fileName);
 static const char *localFileName(UFile *file);
@@ -307,15 +307,15 @@ localFileUnlink(Oid spcId, const char *fileName)
 }
 
 static char *
-localFormatPathName(Oid relid, RelFileNode *relFileNode)
+localFormatPathName(Oid relid, RelFileLocator *relFileNode)
 {
-	if (relFileNode->spcNode == DEFAULTTABLESPACE_OID)
+	if (relFileNode->spcOid == DEFAULTTABLESPACE_OID)
 		return psprintf("base/%u/%u_dirtable",
-				  		relFileNode->dbNode, relid);
+				  		relFileNode->dbOid, relid);
 	else
 		return psprintf("pg_tblspc/%u/%s/%u/%u_dirtable",
-						relFileNode->spcNode, GP_TABLESPACE_VERSION_DIRECTORY,
-						relFileNode->dbNode, relid);
+						relFileNode->spcOid, GP_TABLESPACE_VERSION_DIRECTORY,
+						relFileNode->dbOid, relid);
 }
 
 bool
@@ -440,11 +440,11 @@ UFileUnlink(Oid spcId, const char *fileName)
 }
 
 char *
-UFileFormatPathName(Oid relid, RelFileNode *relFileNode)
+UFileFormatPathName(Oid relid, RelFileLocator *relFileNode)
 {
 	FileAm *fileAm;
 
-	fileAm = GetTablespaceFileHandler(relFileNode->spcNode);
+	fileAm = GetTablespaceFileHandler(relFileNode->spcOid);
 
 	return fileAm->formatPathName(relid, relFileNode);
 }

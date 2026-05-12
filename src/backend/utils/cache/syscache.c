@@ -5,7 +5,7 @@
  *
  * Portions Copyright (c) 2007-2010, Greenplum inc
  * Portions Copyright (c) 2012-Present VMware, Inc. or its affiliates.
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -51,11 +51,13 @@
 #include "catalog/pg_opclass.h"
 #include "catalog/pg_operator.h"
 #include "catalog/pg_opfamily.h"
+#include "catalog/pg_parameter_acl.h"
 #include "catalog/pg_partitioned_table.h"
 #include "catalog/pg_password_history.h"
 #include "catalog/pg_profile.h"
 #include "catalog/pg_proc.h"
 #include "catalog/pg_publication.h"
+#include "catalog/pg_publication_namespace.h"
 #include "catalog/pg_publication_rel.h"
 #include "catalog/pg_range.h"
 #include "catalog/pg_replication_origin.h"
@@ -84,7 +86,11 @@
 #include "catalog/gp_storage_user_mapping.h"
 #include "catalog/gp_storage_server.h"
 #include "lib/qunique.h"
+#include "miscadmin.h"
+#include "storage/lmgr.h"
 #include "utils/catcache.h"
+#include "utils/inval.h"
+#include "utils/lsyscache.h"
 #include "utils/rel.h"
 #include "utils/syscache.h"
 
@@ -116,8 +122,8 @@
 
 	There must be a unique index underlying each syscache (ie, an index
 	whose key is the same as that of the cache).  If there is not one
-	already, add definitions for it to include/catalog/pg_*.h: you need
-	to add a DECLARE_UNIQUE_INDEX macro and a #define for the index OID.
+	already, add the definition for it to include/catalog/pg_*.h using
+	DECLARE_UNIQUE_INDEX.
 	(Adding an index requires a catversion.h update, while simply
 	adding/deleting caches only requires a recompile.)
 
@@ -140,1074 +146,671 @@ struct cachedesc
 	int			nbuckets;		/* number of hash buckets for this cache */
 };
 
+/* Macro to provide nkeys and key array with convenient syntax. */
+#define KEY(...) VA_ARGS_NARGS(__VA_ARGS__), { __VA_ARGS__ }
+
 static const struct cachedesc cacheinfo[] = {
-	{AggregateRelationId,		/* AGGFNOID */
+	[AGGFNOID] = {
+		AggregateRelationId,
 		AggregateFnoidIndexId,
-		1,
-		{
-			Anum_pg_aggregate_aggfnoid,
-			0,
-			0,
-			0
-		},
+		KEY(Anum_pg_aggregate_aggfnoid),
 		16
 	},
-	{AccessMethodRelationId,	/* AMNAME */
+	[AMNAME] = {
+		AccessMethodRelationId,
 		AmNameIndexId,
-		1,
-		{
-			Anum_pg_am_amname,
-			0,
-			0,
-			0
-		},
+		KEY(Anum_pg_am_amname),
 		4
 	},
-	{AccessMethodRelationId,	/* AMOID */
+	[AMOID] = {
+		AccessMethodRelationId,
 		AmOidIndexId,
-		1,
-		{
-			Anum_pg_am_oid,
-			0,
-			0,
-			0
-		},
+		KEY(Anum_pg_am_oid),
 		4
 	},
-	{AccessMethodOperatorRelationId,	/* AMOPOPID */
+	[AMOPOPID] = {
+		AccessMethodOperatorRelationId,
 		AccessMethodOperatorIndexId,
-		3,
-		{
-			Anum_pg_amop_amopopr,
+		KEY(Anum_pg_amop_amopopr,
 			Anum_pg_amop_amoppurpose,
-			Anum_pg_amop_amopfamily,
-			0
-		},
+			Anum_pg_amop_amopfamily),
 		64
 	},
-	{AccessMethodOperatorRelationId,	/* AMOPSTRATEGY */
+	[AMOPSTRATEGY] = {
+		AccessMethodOperatorRelationId,
 		AccessMethodStrategyIndexId,
-		4,
-		{
-			Anum_pg_amop_amopfamily,
+		KEY(Anum_pg_amop_amopfamily,
 			Anum_pg_amop_amoplefttype,
 			Anum_pg_amop_amoprighttype,
-			Anum_pg_amop_amopstrategy
-		},
+			Anum_pg_amop_amopstrategy),
 		64
 	},
-	{AccessMethodProcedureRelationId,	/* AMPROCNUM */
+	[AMPROCNUM] = {
+		AccessMethodProcedureRelationId,
 		AccessMethodProcedureIndexId,
-		4,
-		{
-			Anum_pg_amproc_amprocfamily,
+		KEY(Anum_pg_amproc_amprocfamily,
 			Anum_pg_amproc_amproclefttype,
 			Anum_pg_amproc_amprocrighttype,
-			Anum_pg_amproc_amprocnum
-		},
+			Anum_pg_amproc_amprocnum),
 		16
 	},
-	{AttributeRelationId,		/* ATTNAME */
+	[ATTNAME] = {
+		AttributeRelationId,
 		AttributeRelidNameIndexId,
-		2,
-		{
-			Anum_pg_attribute_attrelid,
-			Anum_pg_attribute_attname,
-			0,
-			0
-		},
+		KEY(Anum_pg_attribute_attrelid,
+			Anum_pg_attribute_attname),
 		32
 	},
-	{AttributeRelationId,		/* ATTNUM */
+	[ATTNUM] = {
+		AttributeRelationId,
 		AttributeRelidNumIndexId,
-		2,
-		{
-			Anum_pg_attribute_attrelid,
-			Anum_pg_attribute_attnum,
-			0,
-			0
-		},
+		KEY(Anum_pg_attribute_attrelid,
+			Anum_pg_attribute_attnum),
 		128
 	},
-	{AuthMemRelationId,			/* AUTHMEMMEMROLE */
+	[AUTHMEMMEMROLE] = {
+		AuthMemRelationId,
 		AuthMemMemRoleIndexId,
-		2,
-		{
-			Anum_pg_auth_members_member,
+		KEY(Anum_pg_auth_members_member,
 			Anum_pg_auth_members_roleid,
-			0,
-			0
-		},
+			Anum_pg_auth_members_grantor),
 		8
 	},
-	{AuthMemRelationId,			/* AUTHMEMROLEMEM */
+	[AUTHMEMROLEMEM] = {
+		AuthMemRelationId,
 		AuthMemRoleMemIndexId,
-		2,
-		{
-			Anum_pg_auth_members_roleid,
+		KEY(Anum_pg_auth_members_roleid,
 			Anum_pg_auth_members_member,
-			0,
-			0
-		},
+			Anum_pg_auth_members_grantor),
 		8
 	},
-	{AuthIdRelationId,			/* AUTHNAME */
+	[AUTHNAME] = {
+		AuthIdRelationId,
 		AuthIdRolnameIndexId,
-		1,
-		{
-			Anum_pg_authid_rolname,
-			0,
-			0,
-			0
-		},
+		KEY(Anum_pg_authid_rolname),
 		8
 	},
-	{AuthIdRelationId,			/* AUTHOID */
+	[AUTHOID] = {
+		AuthIdRelationId,
 		AuthIdOidIndexId,
-		1,
-		{
-			Anum_pg_authid_oid,
-			0,
-			0,
-			0
-		},
+		KEY(Anum_pg_authid_oid),
 		8
 	},
-	{
-		CastRelationId,			/* CASTSOURCETARGET */
+	[CASTSOURCETARGET] = {
+		CastRelationId,
 		CastSourceTargetIndexId,
-		2,
-		{
-			Anum_pg_cast_castsource,
-			Anum_pg_cast_casttarget,
-			0,
-			0
-		},
+		KEY(Anum_pg_cast_castsource,
+			Anum_pg_cast_casttarget),
 		256
 	},
-	{OperatorClassRelationId,	/* CLAAMNAMENSP */
+	[CLAAMNAMENSP] = {
+		OperatorClassRelationId,
 		OpclassAmNameNspIndexId,
-		3,
-		{
-			Anum_pg_opclass_opcmethod,
+		KEY(Anum_pg_opclass_opcmethod,
 			Anum_pg_opclass_opcname,
-			Anum_pg_opclass_opcnamespace,
-			0
-		},
+			Anum_pg_opclass_opcnamespace),
 		8
 	},
-	{OperatorClassRelationId,	/* CLAOID */
+	[CLAOID] = {
+		OperatorClassRelationId,
 		OpclassOidIndexId,
-		1,
-		{
-			Anum_pg_opclass_oid,
-			0,
-			0,
-			0
-		},
+		KEY(Anum_pg_opclass_oid),
 		8
 	},
-	{CollationRelationId,		/* COLLNAMEENCNSP */
+	[COLLNAMEENCNSP] = {
+		CollationRelationId,
 		CollationNameEncNspIndexId,
-		3,
-		{
-			Anum_pg_collation_collname,
+		KEY(Anum_pg_collation_collname,
 			Anum_pg_collation_collencoding,
-			Anum_pg_collation_collnamespace,
-			0
-		},
+			Anum_pg_collation_collnamespace),
 		8
 	},
-	{CollationRelationId,		/* COLLOID */
+	[COLLOID] = {
+		CollationRelationId,
 		CollationOidIndexId,
-		1,
-		{
-			Anum_pg_collation_oid,
-			0,
-			0,
-			0
-		},
+		KEY(Anum_pg_collation_oid),
 		8
 	},
-	{ConversionRelationId,		/* CONDEFAULT */
+	[CONDEFAULT] = {
+		ConversionRelationId,
 		ConversionDefaultIndexId,
-		4,
-		{
-			Anum_pg_conversion_connamespace,
+		KEY(Anum_pg_conversion_connamespace,
 			Anum_pg_conversion_conforencoding,
 			Anum_pg_conversion_contoencoding,
-			Anum_pg_conversion_oid
-		},
+			Anum_pg_conversion_oid),
 		8
 	},
-	{ConversionRelationId,		/* CONNAMENSP */
+	[CONNAMENSP] = {
+		ConversionRelationId,
 		ConversionNameNspIndexId,
-		2,
-		{
-			Anum_pg_conversion_conname,
-			Anum_pg_conversion_connamespace,
-			0,
-			0
-		},
+		KEY(Anum_pg_conversion_conname,
+			Anum_pg_conversion_connamespace),
 		8
 	},
-	{ConstraintRelationId,		/* CONSTROID */
+	[CONSTROID] = {
+		ConstraintRelationId,
 		ConstraintOidIndexId,
-		1,
-		{
-			Anum_pg_constraint_oid,
-			0,
-			0,
-			0
-		},
+		KEY(Anum_pg_constraint_oid),
 		16
 	},
-	{ConversionRelationId,		/* CONVOID */
+	[CONVOID] = {
+		ConversionRelationId,
 		ConversionOidIndexId,
-		1,
-		{
-			Anum_pg_conversion_oid,
-			0,
-			0,
-			0
-		},
+		KEY(Anum_pg_conversion_oid),
 		8
 	},
-	{DatabaseRelationId,		/* DATABASEOID */
+	[DATABASEOID] = {
+		DatabaseRelationId,
 		DatabaseOidIndexId,
-		1,
-		{
-			Anum_pg_database_oid,
-			0,
-			0,
-			0
-		},
+		KEY(Anum_pg_database_oid),
 		4
 	},
-	{DefaultAclRelationId,		/* DEFACLROLENSPOBJ */
+	[DEFACLROLENSPOBJ] = {
+		DefaultAclRelationId,
 		DefaultAclRoleNspObjIndexId,
-		3,
-		{
-			Anum_pg_default_acl_defaclrole,
+		KEY(Anum_pg_default_acl_defaclrole,
 			Anum_pg_default_acl_defaclnamespace,
-			Anum_pg_default_acl_defaclobjtype,
-			0
-		},
+			Anum_pg_default_acl_defaclobjtype),
 		8
 	},
-	{EnumRelationId,			/* ENUMOID */
+	[ENUMOID] = {
+		EnumRelationId,
 		EnumOidIndexId,
-		1,
-		{
-			Anum_pg_enum_oid,
-			0,
-			0,
-			0
-		},
+		KEY(Anum_pg_enum_oid),
 		8
 	},
-	{EnumRelationId,			/* ENUMTYPOIDNAME */
+	[ENUMTYPOIDNAME] = {
+		EnumRelationId,
 		EnumTypIdLabelIndexId,
-		2,
-		{
-			Anum_pg_enum_enumtypid,
-			Anum_pg_enum_enumlabel,
-			0,
-			0
-		},
+		KEY(Anum_pg_enum_enumtypid,
+			Anum_pg_enum_enumlabel),
 		8
 	},
-	{EventTriggerRelationId,	/* EVENTTRIGGERNAME */
+	[EVENTTRIGGERNAME] = {
+		EventTriggerRelationId,
 		EventTriggerNameIndexId,
-		1,
-		{
-			Anum_pg_event_trigger_evtname,
-			0,
-			0,
-			0
-		},
+		KEY(Anum_pg_event_trigger_evtname),
 		8
 	},
-	{EventTriggerRelationId,	/* EVENTTRIGGEROID */
+	[EVENTTRIGGEROID] = {
+		EventTriggerRelationId,
 		EventTriggerOidIndexId,
-		1,
-		{
-			Anum_pg_event_trigger_oid,
-			0,
-			0,
-			0
-		},
+		KEY(Anum_pg_event_trigger_oid),
 		8
 	},
-	{ExtprotocolRelationId,		/* EXTPROTOCOLOID */
+	[EXTPROTOCOLOID] = {
+		ExtprotocolRelationId,
 		ExtprotocolOidIndexId,
-		1,
-		{
-			Anum_pg_extprotocol_oid,
-			0,
-			0,
-			0
-		},
+		KEY(Anum_pg_extprotocol_oid),
 		128
 	},
-	{ExtprotocolRelationId,		/* EXTPROTOCOLNAME */
+	[EXTPROTOCOLNAME] = {
+		ExtprotocolRelationId,
 		ExtprotocolPtcnameIndexId,
-		1,
-		{
-			Anum_pg_extprotocol_ptcname,
-			0,
-			0,
-			0
-		},
+		KEY(Anum_pg_extprotocol_ptcname),
 		128
 	},
-	{ForeignDataWrapperRelationId,	/* FOREIGNDATAWRAPPERNAME */
+	[FOREIGNDATAWRAPPERNAME] = {
+		ForeignDataWrapperRelationId,
 		ForeignDataWrapperNameIndexId,
-		1,
-		{
-			Anum_pg_foreign_data_wrapper_fdwname,
-			0,
-			0,
-			0
-		},
+		KEY(Anum_pg_foreign_data_wrapper_fdwname),
 		2
 	},
-	{ForeignDataWrapperRelationId,	/* FOREIGNDATAWRAPPEROID */
+	[FOREIGNDATAWRAPPEROID] = {
+		ForeignDataWrapperRelationId,
 		ForeignDataWrapperOidIndexId,
-		1,
-		{
-			Anum_pg_foreign_data_wrapper_oid,
-			0,
-			0,
-			0
-		},
+		KEY(Anum_pg_foreign_data_wrapper_oid),
 		2
 	},
-	{ForeignServerRelationId,	/* FOREIGNSERVERNAME */
+	[FOREIGNSERVERNAME] = {
+		ForeignServerRelationId,
 		ForeignServerNameIndexId,
-		1,
-		{
-			Anum_pg_foreign_server_srvname,
-			0,
-			0,
-			0
-		},
+		KEY(Anum_pg_foreign_server_srvname),
 		2
 	},
-	{ForeignServerRelationId,	/* FOREIGNSERVEROID */
+	[FOREIGNSERVEROID] = {
+		ForeignServerRelationId,
 		ForeignServerOidIndexId,
-		1,
-		{
-			Anum_pg_foreign_server_oid,
-			0,
-			0,
-			0
-		},
+		KEY(Anum_pg_foreign_server_oid),
 		2
 	},
-	{StorageServerRelationId,	/* STORAGESERVERNAME */
+	[STORAGESERVERNAME] = {
+		StorageServerRelationId,
 		StorageServerNameIndexId,
-		1,
-	 	{
-			Anum_gp_storage_server_srvname,
-			0,
-			0,
-			0
-	 	},
-	 	2
+		KEY(Anum_gp_storage_server_srvname),
+		2
 	},
-	{StorageServerRelationId,	/* STORAGESERVEROID */
+	[STORAGESERVEROID] = {
+		StorageServerRelationId,
 		StorageServerOidIndexId,
-		1,
-	 	{
-			Anum_gp_storage_server_oid,
-			0,
-			0,
-			0
-	 	},
-	 	2
+		KEY(Anum_gp_storage_server_oid),
+		2
 	},
-	{ForeignTableRelationId,	/* FOREIGNTABLEREL */
+	[FOREIGNTABLEREL] = {
+		ForeignTableRelationId,
 		ForeignTableRelidIndexId,
-		1,
-		{
-			Anum_pg_foreign_table_ftrelid,
-			0,
-			0,
-			0
-		},
+		KEY(Anum_pg_foreign_table_ftrelid),
 		4
 	},
-	{GpPolicyRelationId,	/* GPPOLICYID */
+	[GPPOLICYID] = {
+		GpPolicyRelationId,
 		GpPolicyLocalOidIndexId,
-		1,
-		{
-			Anum_gp_distribution_policy_localoid,
-			0,
-			0,
-			0
-		},
+		KEY(Anum_gp_distribution_policy_localoid),
 		1024
 	},
-	{AppendOnlyRelationId,	/* AORELID */
+	[AORELID] = {
+		AppendOnlyRelationId,
 		AppendOnlyRelidIndexId,
-		1,
-		{
-			Anum_pg_appendonly_relid,
-			0,
-			0,
-			0
-		},
+		KEY(Anum_pg_appendonly_relid),
 		1024
 	},
-	{IndexRelationId,			/* INDEXRELID */
+	[INDEXRELID] = {
+		IndexRelationId,
 		IndexRelidIndexId,
-		1,
-		{
-			Anum_pg_index_indexrelid,
-			0,
-			0,
-			0
-		},
+		KEY(Anum_pg_index_indexrelid),
 		64
 	},
-	{LanguageRelationId,		/* LANGNAME */
+	[LANGNAME] = {
+		LanguageRelationId,
 		LanguageNameIndexId,
-		1,
-		{
-			Anum_pg_language_lanname,
-			0,
-			0,
-			0
-		},
+		KEY(Anum_pg_language_lanname),
 		4
 	},
-	{LanguageRelationId,		/* LANGOID */
+	[LANGOID] = {
+		LanguageRelationId,
 		LanguageOidIndexId,
-		1,
-		{
-			Anum_pg_language_oid,
-			0,
-			0,
-			0
-		},
+		KEY(Anum_pg_language_oid),
 		4
 	},
-	{NamespaceRelationId,		/* NAMESPACENAME */
+	[NAMESPACENAME] = {
+		NamespaceRelationId,
 		NamespaceNameIndexId,
-		1,
-		{
-			Anum_pg_namespace_nspname,
-			0,
-			0,
-			0
-		},
+		KEY(Anum_pg_namespace_nspname),
 		4
 	},
-	{NamespaceRelationId,		/* NAMESPACEOID */
+	[NAMESPACEOID] = {
+		NamespaceRelationId,
 		NamespaceOidIndexId,
-		1,
-		{
-			Anum_pg_namespace_oid,
-			0,
-			0,
-			0
-		},
+		KEY(Anum_pg_namespace_oid),
 		16
 	},
-	{OperatorRelationId,		/* OPERNAMENSP */
+	[OPERNAMENSP] = {
+		OperatorRelationId,
 		OperatorNameNspIndexId,
-		4,
-		{
-			Anum_pg_operator_oprname,
+		KEY(Anum_pg_operator_oprname,
 			Anum_pg_operator_oprleft,
 			Anum_pg_operator_oprright,
-			Anum_pg_operator_oprnamespace
-		},
+			Anum_pg_operator_oprnamespace),
 		256
 	},
-	{OperatorRelationId,		/* OPEROID */
+	[OPEROID] = {
+		OperatorRelationId,
 		OperatorOidIndexId,
-		1,
-		{
-			Anum_pg_operator_oid,
-			0,
-			0,
-			0
-		},
+		KEY(Anum_pg_operator_oid),
 		32
 	},
-	{OperatorFamilyRelationId,	/* OPFAMILYAMNAMENSP */
+	[OPFAMILYAMNAMENSP] = {
+		OperatorFamilyRelationId,
 		OpfamilyAmNameNspIndexId,
-		3,
-		{
-			Anum_pg_opfamily_opfmethod,
+		KEY(Anum_pg_opfamily_opfmethod,
 			Anum_pg_opfamily_opfname,
-			Anum_pg_opfamily_opfnamespace,
-			0
-		},
+			Anum_pg_opfamily_opfnamespace),
 		8
 	},
-	{OperatorFamilyRelationId,	/* OPFAMILYOID */
+	[OPFAMILYOID] = {
+		OperatorFamilyRelationId,
 		OpfamilyOidIndexId,
-		1,
-		{
-			Anum_pg_opfamily_oid,
-			0,
-			0,
-			0
-		},
+		KEY(Anum_pg_opfamily_oid),
 		8
 	},
-	{PartitionedRelationId,		/* PARTRELID */
+	[PARAMETERACLNAME] = {
+		ParameterAclRelationId,
+		ParameterAclParnameIndexId,
+		KEY(Anum_pg_parameter_acl_parname),
+		4
+	},
+	[PARAMETERACLOID] = {
+		ParameterAclRelationId,
+		ParameterAclOidIndexId,
+		KEY(Anum_pg_parameter_acl_oid),
+		4
+	},
+	[PARTRELID] = {
+		PartitionedRelationId,
 		PartitionedRelidIndexId,
-		1,
-		{
-			Anum_pg_partitioned_table_partrelid,
-			0,
-			0,
-			0
-		},
+		KEY(Anum_pg_partitioned_table_partrelid),
 		32
 	},
-	{ProfileRelationId,		/* PROFILEID */
+	[PROFILEID] = {
+		ProfileRelationId,
 		ProfileOidIndexId,
-		1,
-		{
-			Anum_pg_profile_oid,
-			0,
-			0,
-			0
-		},
+		KEY(Anum_pg_profile_oid),
 		8
 	},
-	{ProfileRelationId,		/* PROFILENAME */
+	[PROFILENAME] = {
+		ProfileRelationId,
 		ProfilePrfnameIndexId,
-		1,
-		{
-			Anum_pg_profile_prfname,
-			0,
-			0,
-			0
-		},
+		KEY(Anum_pg_profile_prfname),
 		8
 	},
-	{ProcedureRelationId,		/* PROCNAMEARGSNSP */
+	[PROCNAMEARGSNSP] = {
+		ProcedureRelationId,
 		ProcedureNameArgsNspIndexId,
-		3,
-		{
-			Anum_pg_proc_proname,
+		KEY(Anum_pg_proc_proname,
 			Anum_pg_proc_proargtypes,
-			Anum_pg_proc_pronamespace,
-			0
-		},
+			Anum_pg_proc_pronamespace),
 		128
 	},
-	{ProcedureRelationId,		/* PROCOID */
+	[PROCOID] = {
+		ProcedureRelationId,
 		ProcedureOidIndexId,
-		1,
-		{
-			Anum_pg_proc_oid,
-			0,
-			0,
-			0
-		},
+		KEY(Anum_pg_proc_oid),
 		128
 	},
-	{PublicationRelationId,		/* PUBLICATIONNAME */
+	[PUBLICATIONNAME] = {
+		PublicationRelationId,
 		PublicationNameIndexId,
-		1,
-		{
-			Anum_pg_publication_pubname,
-			0,
-			0,
-			0
-		},
+		KEY(Anum_pg_publication_pubname),
 		8
 	},
-	{PublicationRelationId,		/* PUBLICATIONOID */
+	[PUBLICATIONNAMESPACE] = {
+		PublicationNamespaceRelationId,
+		PublicationNamespaceObjectIndexId,
+		KEY(Anum_pg_publication_namespace_oid),
+		64
+	},
+	[PUBLICATIONNAMESPACEMAP] = {
+		PublicationNamespaceRelationId,
+		PublicationNamespacePnnspidPnpubidIndexId,
+		KEY(Anum_pg_publication_namespace_pnnspid,
+			Anum_pg_publication_namespace_pnpubid),
+		64
+	},
+	[PUBLICATIONOID] = {
+		PublicationRelationId,
 		PublicationObjectIndexId,
-		1,
-		{
-			Anum_pg_publication_oid,
-			0,
-			0,
-			0
-		},
+		KEY(Anum_pg_publication_oid),
 		8
 	},
-	{PublicationRelRelationId,	/* PUBLICATIONREL */
+	[PUBLICATIONREL] = {
+		PublicationRelRelationId,
 		PublicationRelObjectIndexId,
-		1,
-		{
-			Anum_pg_publication_rel_oid,
-			0,
-			0,
-			0
-		},
+		KEY(Anum_pg_publication_rel_oid),
 		64
 	},
-	{PublicationRelRelationId,	/* PUBLICATIONRELMAP */
+	[PUBLICATIONRELMAP] = {
+		PublicationRelRelationId,
 		PublicationRelPrrelidPrpubidIndexId,
-		2,
-		{
-			Anum_pg_publication_rel_prrelid,
-			Anum_pg_publication_rel_prpubid,
-			0,
-			0
-		},
+		KEY(Anum_pg_publication_rel_prrelid,
+			Anum_pg_publication_rel_prpubid),
 		64
 	},
-	{RangeRelationId,			/* RANGEMULTIRANGE */
+	[RANGEMULTIRANGE] = {
+		RangeRelationId,
 		RangeMultirangeTypidIndexId,
-		1,
-		{
-			Anum_pg_range_rngmultitypid,
-			0,
-			0,
-			0
-		},
+		KEY(Anum_pg_range_rngmultitypid),
 		4
 	},
-
-	{RangeRelationId,			/* RANGETYPE */
+	[RANGETYPE] = {
+		RangeRelationId,
 		RangeTypidIndexId,
-		1,
-		{
-			Anum_pg_range_rngtypid,
-			0,
-			0,
-			0
-		},
+		KEY(Anum_pg_range_rngtypid),
 		4
 	},
-	{RelationRelationId,		/* RELNAMENSP */
+	[RELNAMENSP] = {
+		RelationRelationId,
 		ClassNameNspIndexId,
-		2,
-		{
-			Anum_pg_class_relname,
-			Anum_pg_class_relnamespace,
-			0,
-			0
-		},
+		KEY(Anum_pg_class_relname,
+			Anum_pg_class_relnamespace),
 		128
 	},
-	{RelationRelationId,		/* RELOID */
+	[RELOID] = {
+		RelationRelationId,
 		ClassOidIndexId,
-		1,
-		{
-			Anum_pg_class_oid,
-			0,
-			0,
-			0
-		},
+		KEY(Anum_pg_class_oid),
 		128
 	},
-	{ReplicationOriginRelationId,	/* REPLORIGIDENT */
+	[REPLORIGIDENT] = {
+		ReplicationOriginRelationId,
 		ReplicationOriginIdentIndex,
-		1,
-		{
-			Anum_pg_replication_origin_roident,
-			0,
-			0,
-			0
-		},
+		KEY(Anum_pg_replication_origin_roident),
 		16
 	},
-	{ReplicationOriginRelationId,	/* REPLORIGNAME */
+	[REPLORIGNAME] = {
+		ReplicationOriginRelationId,
 		ReplicationOriginNameIndex,
-		1,
-		{
-			Anum_pg_replication_origin_roname,
-			0,
-			0,
-			0
-		},
+		KEY(Anum_pg_replication_origin_roname),
 		16
 	},
-	{ResGroupRelationId,		/* RESGROUPOID */
+	[RESGROUPOID] = {
+		ResGroupRelationId,
 		ResGroupOidIndexId,
-		1,
-		{
-			Anum_pg_resgroup_oid,
-			0,
-			0,
-			0
-		},
+		KEY(Anum_pg_resgroup_oid),
 		128
 	},
-	{ResGroupRelationId,		/* RESGROUPNAME */
-		ResGroupRsgnameIndexId,
-		1,
-		{
-			Anum_pg_resgroup_rsgname,
-			0,
-			0,
-			0
-		},
-		128
+	[RESGROUPNAME] = {
+			ResGroupRelationId,
+			ResGroupRsgnameIndexId,
+			KEY(Anum_pg_resgroup_rsgname),
+			128
 	},
-	{RewriteRelationId,			/* RULERELNAME */
+	[RULERELNAME] = {
+		RewriteRelationId,
 		RewriteRelRulenameIndexId,
-		2,
-		{
-			Anum_pg_rewrite_ev_class,
-			Anum_pg_rewrite_rulename,
-			0,
-			0
-		},
+		KEY(Anum_pg_rewrite_ev_class,
+			Anum_pg_rewrite_rulename),
 		8
 	},
-	{SequenceRelationId,		/* SEQRELID */
+	[SEQRELID] = {
+		SequenceRelationId,
 		SequenceRelidIndexId,
-		1,
-		{
-			Anum_pg_sequence_seqrelid,
-			0,
-			0,
-			0
-		},
+		KEY(Anum_pg_sequence_seqrelid),
 		32
 	},
-	{StatisticExtDataRelationId,	/* STATEXTDATASTXOID */
-		StatisticExtDataStxoidIndexId,
-		1,
-		{
-			Anum_pg_statistic_ext_data_stxoid,
-			0,
-			0,
-			0
-		},
+	[STATEXTDATASTXOID] = {
+		StatisticExtDataRelationId,
+		StatisticExtDataStxoidInhIndexId,
+		KEY(Anum_pg_statistic_ext_data_stxoid,
+			Anum_pg_statistic_ext_data_stxdinherit),
 		4
 	},
-	{StatisticExtRelationId,	/* STATEXTNAMENSP */
+	[STATEXTNAMENSP] = {
+		StatisticExtRelationId,
 		StatisticExtNameIndexId,
-		2,
-		{
-			Anum_pg_statistic_ext_stxname,
-			Anum_pg_statistic_ext_stxnamespace,
-			0,
-			0
-		},
+		KEY(Anum_pg_statistic_ext_stxname,
+			Anum_pg_statistic_ext_stxnamespace),
 		4
 	},
-	{StatisticExtRelationId,	/* STATEXTOID */
+	[STATEXTOID] = {
+		StatisticExtRelationId,
 		StatisticExtOidIndexId,
-		1,
-		{
-			Anum_pg_statistic_ext_oid,
-			0,
-			0,
-			0
-		},
+		KEY(Anum_pg_statistic_ext_oid),
 		4
 	},
-	{StatisticRelationId,		/* STATRELATTINH */
+	[STATRELATTINH] = {
+		StatisticRelationId,
 		StatisticRelidAttnumInhIndexId,
-		3,
-		{
-			Anum_pg_statistic_starelid,
+		KEY(Anum_pg_statistic_starelid,
 			Anum_pg_statistic_staattnum,
-			Anum_pg_statistic_stainherit,
-			0
-		},
+			Anum_pg_statistic_stainherit),
 		128
 	},
-	{SubscriptionRelationId,	/* SUBSCRIPTIONNAME */
+	[SUBSCRIPTIONNAME] = {
+		SubscriptionRelationId,
 		SubscriptionNameIndexId,
-		2,
-		{
-			Anum_pg_subscription_subdbid,
-			Anum_pg_subscription_subname,
-			0,
-			0
-		},
+		KEY(Anum_pg_subscription_subdbid,
+			Anum_pg_subscription_subname),
 		4
 	},
-	{SubscriptionRelationId,	/* SUBSCRIPTIONOID */
+	[SUBSCRIPTIONOID] = {
+		SubscriptionRelationId,
 		SubscriptionObjectIndexId,
-		1,
-		{
-			Anum_pg_subscription_oid,
-			0,
-			0,
-			0
-		},
+		KEY(Anum_pg_subscription_oid),
 		4
 	},
-	{SubscriptionRelRelationId, /* SUBSCRIPTIONRELMAP */
+	[SUBSCRIPTIONRELMAP] = {
+		SubscriptionRelRelationId,
 		SubscriptionRelSrrelidSrsubidIndexId,
-		2,
-		{
-			Anum_pg_subscription_rel_srrelid,
-			Anum_pg_subscription_rel_srsubid,
-			0,
-			0
-		},
+		KEY(Anum_pg_subscription_rel_srrelid,
+			Anum_pg_subscription_rel_srsubid),
 		64
 	},
-	{TableSpaceRelationId,		/* TABLESPACEOID */
+	[TABLESPACEOID] = {
+		TableSpaceRelationId,
 		TablespaceOidIndexId,
-		1,
-		{
-			Anum_pg_tablespace_oid,
-			0,
-			0,
-			0,
-		},
+		KEY(Anum_pg_tablespace_oid),
 		4
 	},
-	{TagRelationId,				/* TAGNAME */
+	[TAGNAME] = {
+		TagRelationId,
 		TagNameIndexId,
-		1,
-		{
-			Anum_pg_tag_tagname,
-			0,
-			0,
-			0,
-		},
+		KEY(Anum_pg_tag_tagname),
 		16
 	},
-	{TagRelationId,				/* TAGOID */
-		TagOidIndexId,
-		1,
-		{
-			Anum_pg_tag_oid,
-			0,
-			0,
-			0,
-		},
-		16
+	[TAGOID] = {
+			TagRelationId,
+			TagOidIndexId,
+			KEY(Anum_pg_tag_oid),
+			16
 	},
-	{TagDescriptionRelationId,	/* TAGDESCRIPTION */
-		TagDescriptionIndexId,
-		4,
-		{
-			Anum_pg_tag_description_tddatabaseid,
-			Anum_pg_tag_description_tdclassid,
-			Anum_pg_tag_description_tdobjid,
-			Anum_pg_tag_description_tagid,
-		},
-		16
+	[TAGDESCRIPTION] = {
+			TagDescriptionRelationId,
+			TagDescriptionIndexId,
+			KEY(Anum_pg_tag_description_tddatabaseid,
+				Anum_pg_tag_description_tdclassid,
+				Anum_pg_tag_description_tdobjid,
+				Anum_pg_tag_description_tagid),
+			16
 	},
-	{TransformRelationId,		/* TRFOID */
+	[TRFOID] = {
+		TransformRelationId,
 		TransformOidIndexId,
-		1,
-		{
-			Anum_pg_transform_oid,
-			0,
-			0,
-			0,
-		},
+		KEY(Anum_pg_transform_oid),
 		16
 	},
-	{TransformRelationId,		/* TRFTYPELANG */
+	[TRFTYPELANG] = {
+		TransformRelationId,
 		TransformTypeLangIndexId,
-		2,
-		{
-			Anum_pg_transform_trftype,
-			Anum_pg_transform_trflang,
-			0,
-			0,
-		},
+		KEY(Anum_pg_transform_trftype,
+			Anum_pg_transform_trflang),
 		16
 	},
-	{TSConfigMapRelationId,		/* TSCONFIGMAP */
+	[TSCONFIGMAP] = {
+		TSConfigMapRelationId,
 		TSConfigMapIndexId,
-		3,
-		{
-			Anum_pg_ts_config_map_mapcfg,
+		KEY(Anum_pg_ts_config_map_mapcfg,
 			Anum_pg_ts_config_map_maptokentype,
-			Anum_pg_ts_config_map_mapseqno,
-			0
-		},
+			Anum_pg_ts_config_map_mapseqno),
 		2
 	},
-	{TSConfigRelationId,		/* TSCONFIGNAMENSP */
+	[TSCONFIGNAMENSP] = {
+		TSConfigRelationId,
 		TSConfigNameNspIndexId,
-		2,
-		{
-			Anum_pg_ts_config_cfgname,
-			Anum_pg_ts_config_cfgnamespace,
-			0,
-			0
-		},
+		KEY(Anum_pg_ts_config_cfgname,
+			Anum_pg_ts_config_cfgnamespace),
 		2
 	},
-	{TSConfigRelationId,		/* TSCONFIGOID */
+	[TSCONFIGOID] = {
+		TSConfigRelationId,
 		TSConfigOidIndexId,
-		1,
-		{
-			Anum_pg_ts_config_oid,
-			0,
-			0,
-			0
-		},
+		KEY(Anum_pg_ts_config_oid),
 		2
 	},
-	{TSDictionaryRelationId,	/* TSDICTNAMENSP */
+	[TSDICTNAMENSP] = {
+		TSDictionaryRelationId,
 		TSDictionaryNameNspIndexId,
-		2,
-		{
-			Anum_pg_ts_dict_dictname,
-			Anum_pg_ts_dict_dictnamespace,
-			0,
-			0
-		},
+		KEY(Anum_pg_ts_dict_dictname,
+			Anum_pg_ts_dict_dictnamespace),
 		2
 	},
-	{TSDictionaryRelationId,	/* TSDICTOID */
+	[TSDICTOID] = {
+		TSDictionaryRelationId,
 		TSDictionaryOidIndexId,
-		1,
-		{
-			Anum_pg_ts_dict_oid,
-			0,
-			0,
-			0
-		},
+		KEY(Anum_pg_ts_dict_oid),
 		2
 	},
-	{TSParserRelationId,		/* TSPARSERNAMENSP */
+	[TSPARSERNAMENSP] = {
+		TSParserRelationId,
 		TSParserNameNspIndexId,
-		2,
-		{
-			Anum_pg_ts_parser_prsname,
-			Anum_pg_ts_parser_prsnamespace,
-			0,
-			0
-		},
+		KEY(Anum_pg_ts_parser_prsname,
+			Anum_pg_ts_parser_prsnamespace),
 		2
 	},
-	{TSParserRelationId,		/* TSPARSEROID */
+	[TSPARSEROID] = {
+		TSParserRelationId,
 		TSParserOidIndexId,
-		1,
-		{
-			Anum_pg_ts_parser_oid,
-			0,
-			0,
-			0
-		},
+		KEY(Anum_pg_ts_parser_oid),
 		2
 	},
-	{TSTemplateRelationId,		/* TSTEMPLATENAMENSP */
+	[TSTEMPLATENAMENSP] = {
+		TSTemplateRelationId,
 		TSTemplateNameNspIndexId,
-		2,
-		{
-			Anum_pg_ts_template_tmplname,
-			Anum_pg_ts_template_tmplnamespace,
-			0,
-			0
-		},
+		KEY(Anum_pg_ts_template_tmplname,
+			Anum_pg_ts_template_tmplnamespace),
 		2
 	},
-	{TSTemplateRelationId,		/* TSTEMPLATEOID */
+	[TSTEMPLATEOID] = {
+		TSTemplateRelationId,
 		TSTemplateOidIndexId,
-		1,
-		{
-			Anum_pg_ts_template_oid,
-			0,
-			0,
-			0
-		},
+		KEY(Anum_pg_ts_template_oid),
 		2
 	},
-	{TypeRelationId,			/* TYPENAMENSP */
+	[TYPENAMENSP] = {
+		TypeRelationId,
 		TypeNameNspIndexId,
-		2,
-		{
-			Anum_pg_type_typname,
-			Anum_pg_type_typnamespace,
-			0,
-			0
-		},
+		KEY(Anum_pg_type_typname,
+			Anum_pg_type_typnamespace),
 		64
 	},
-	{TypeRelationId,			/* TYPEOID */
+	[TYPEOID] = {
+		TypeRelationId,
 		TypeOidIndexId,
-		1,
-		{
-			Anum_pg_type_oid,
-			0,
-			0,
-			0
-		},
+		KEY(Anum_pg_type_oid),
 		64
 	},
-	{DirectoryTableRelationId,			/* DIRECTORYTABLEREL */
+	[DIRECTORYTABLEREL] = {
+		DirectoryTableRelationId,
 		DirectoryTableRelidIndexId,
-		1,
-	 	{
-			Anum_pg_directory_table_dtrelid,
-			0,
-			0,
-			0
-		},
+		KEY(Anum_pg_directory_table_dtrelid),
 		4
 	},
-	{StorageUserMappingRelationId,		/* STORAGEUSERMAPPINGOID */
-	 	StorageUserMappingOidIndexId,
-	 	1,
-	 	{
-		 	Anum_gp_storage_user_mapping_oid,
-		 	0,
-		 	0,
-		 	0
-	 	},
-	 	2
+	[STORAGEUSERMAPPINGOID] = {
+		StorageUserMappingRelationId,
+		StorageUserMappingOidIndexId,
+		KEY(Anum_gp_storage_user_mapping_oid),
+		2
 	},
-	{StorageUserMappingRelationId,		/* STORAGEUSERMAPPINGUSERSERVER */
-	 	StorageUserMappingServerIndexId,
-	 	2,
-	 	{
-		 	Anum_gp_storage_user_mapping_umuser,
-		 	Anum_gp_storage_user_mapping_umserver,
-		 	0,
-		 	0
-	 	},
-	 	2
+	[STORAGEUSERMAPPINGUSERSERVER] = {
+		StorageUserMappingRelationId,
+		StorageUserMappingServerIndexId,
+		KEY(Anum_gp_storage_user_mapping_umuser,
+		Anum_gp_storage_user_mapping_umserver),
+		2
 	},
-	{GpMatviewAuxId,		/* MVAUXOID */
+	[MVAUXOID] = {
+		GpMatviewAuxId,
 		GpMatviewAuxMvoidIndexId,
-		1,
-		{
-			Anum_gp_matview_aux_mvoid,
-			0,
-			0,
-			0
-		},
+		KEY(Anum_gp_matview_aux_mvoid),
 		32
 	},
-	{GpMatviewTablesId,		/* MVTABLESMVRELOID */
+	[MVTABLESMVRELOID] = {
+		GpMatviewTablesId,
 		GpMatviewTablesMvRelIndexId,
-		2,
-		{
-			Anum_gp_matview_tables_mvoid,
-			Anum_gp_matview_tables_relid,
-			0,
-			0
-		},
+		KEY(Anum_gp_matview_tables_mvoid,
+			Anum_gp_matview_tables_relid),
 		128
 	},
-	{UserMappingRelationId,		/* USERMAPPINGOID */
+	[USERMAPPINGOID] = {
+		UserMappingRelationId,
 		UserMappingOidIndexId,
-		1,
-		{
-			Anum_pg_user_mapping_oid,
-			0,
-			0,
-			0
-		},
+		KEY(Anum_pg_user_mapping_oid),
 		2
 	},
-	{UserMappingRelationId,		/* USERMAPPINGUSERSERVER */
+	[USERMAPPINGUSERSERVER] = {
+		UserMappingRelationId,
 		UserMappingUserServerIndexId,
-		2,
-		{
-			Anum_pg_user_mapping_umuser,
-			Anum_pg_user_mapping_umserver,
-			0,
-			0
-		},
+		KEY(Anum_pg_user_mapping_umuser,
+			Anum_pg_user_mapping_umserver),
 		2
 	},
 	{AttributeEncodingRelationId,		/* ATTENCODINGNUM */
@@ -1222,6 +825,9 @@ static const struct cachedesc cacheinfo[] = {
 		128
 	}
 };
+
+StaticAssertDecl(lengthof(cacheinfo) == SysCacheSize,
+				 "SysCacheSize does not match syscache.c's array");
 
 static CatCache *SysCache[SysCacheSize];
 
@@ -1251,15 +857,18 @@ InitCatalogCache(void)
 {
 	int			cacheId;
 
-	StaticAssertStmt(SysCacheSize == (int) lengthof(cacheinfo),
-					 "SysCacheSize does not match syscache.c's array");
-
 	Assert(!CacheInitialized);
 
 	SysCacheRelationOidSize = SysCacheSupportingRelOidSize = 0;
 
 	for (cacheId = 0; cacheId < SysCacheSize; cacheId++)
 	{
+		/*
+		 * Assert that every enumeration value defined in syscache.h has been
+		 * populated in the cacheinfo array.
+		 */
+		Assert(cacheinfo[cacheId].reloid != 0);
+
 		SysCache[cacheId] = InitCatCache(cacheId,
 										 cacheinfo[cacheId].reloid,
 										 cacheinfo[cacheId].indoid,
@@ -1407,6 +1016,103 @@ ReleaseSysCache(HeapTuple tuple)
 }
 
 /*
+ * SearchSysCacheLocked1
+ *
+ * Combine SearchSysCache1() with acquiring a LOCKTAG_TUPLE at mode
+ * InplaceUpdateTupleLock.  This is a tool for complying with the
+ * README.tuplock section "Locking to write inplace-updated tables".  After
+ * the caller's heap_update(), it should UnlockTuple(InplaceUpdateTupleLock)
+ * and ReleaseSysCache().
+ *
+ * The returned tuple may be the subject of an uncommitted update, so this
+ * doesn't prevent the "tuple concurrently updated" error.
+ */
+HeapTuple
+SearchSysCacheLocked1(int cacheId,
+					  Datum key1)
+{
+	CatCache   *cache = SysCache[cacheId];
+	ItemPointerData tid;
+	LOCKTAG		tag;
+
+	/*----------
+	 * Since inplace updates may happen just before our LockTuple(), we must
+	 * return content acquired after LockTuple() of the TID we return.  If we
+	 * just fetched twice instead of looping, the following sequence would
+	 * defeat our locking:
+	 *
+	 * GRANT:   SearchSysCache1() = TID (1,5)
+	 * GRANT:   LockTuple(pg_class, (1,5))
+	 * [no more inplace update of (1,5) until we release the lock]
+	 * CLUSTER: SearchSysCache1() = TID (1,5)
+	 * CLUSTER: heap_update() = TID (1,8)
+	 * CLUSTER: COMMIT
+	 * GRANT:   SearchSysCache1() = TID (1,8)
+	 * GRANT:   return (1,8) from SearchSysCacheLocked1()
+	 * VACUUM:  SearchSysCache1() = TID (1,8)
+	 * VACUUM:  LockTuple(pg_class, (1,8))  # two TIDs now locked for one rel
+	 * VACUUM:  inplace update
+	 * GRANT:   heap_update() = (1,9)  # lose inplace update
+	 *
+	 * In the happy case, this takes two fetches, one to determine the TID to
+	 * lock and another to get the content and confirm the TID didn't change.
+	 *
+	 * This is valid even if the row gets updated to a new TID, the old TID
+	 * becomes LP_UNUSED, and the row gets updated back to its old TID.  We'd
+	 * still hold the right LOCKTAG_TUPLE and a copy of the row captured after
+	 * the LOCKTAG_TUPLE.
+	 */
+	ItemPointerSetInvalid(&tid);
+	for (;;)
+	{
+		HeapTuple	tuple;
+		LOCKMODE	lockmode = InplaceUpdateTupleLock;
+
+		tuple = SearchSysCache1(cacheId, key1);
+		if (ItemPointerIsValid(&tid))
+		{
+			if (!HeapTupleIsValid(tuple))
+			{
+				LockRelease(&tag, lockmode, false);
+				return tuple;
+			}
+			if (ItemPointerEquals(&tid, &tuple->t_self))
+				return tuple;
+			LockRelease(&tag, lockmode, false);
+		}
+		else if (!HeapTupleIsValid(tuple))
+			return tuple;
+
+		tid = tuple->t_self;
+		ReleaseSysCache(tuple);
+
+		/*
+		 * Do like LockTuple(rel, &tid, lockmode).  While cc_relisshared won't
+		 * change from one iteration to another, it may have been a temporary
+		 * "false" until our first SearchSysCache1().
+		 */
+		SET_LOCKTAG_TUPLE(tag,
+						  cache->cc_relisshared ? InvalidOid : MyDatabaseId,
+						  cache->cc_reloid,
+						  ItemPointerGetBlockNumber(&tid),
+						  ItemPointerGetOffsetNumber(&tid));
+		(void) LockAcquire(&tag, lockmode, false, false);
+
+		/*
+		 * If an inplace update just finished, ensure we process the syscache
+		 * inval.  XXX this is insufficient: the inplace updater may not yet
+		 * have reached AtEOXact_Inval().  See test at inplace-inval.spec.
+		 *
+		 * If a heap_update() call just released its LOCKTAG_TUPLE, we'll
+		 * probably find the old tuple and reach "tuple concurrently updated".
+		 * If that heap_update() aborts, our LOCKTAG_TUPLE blocks inplace
+		 * updates while our caller works.
+		 */
+		AcceptInvalidationMessages();
+	}
+}
+
+/*
  * SearchSysCacheCopy
  *
  * A convenience routine that does SearchSysCache and (if successful)
@@ -1425,6 +1131,28 @@ SearchSysCacheCopy(int cacheId,
 				newtuple;
 
 	tuple = SearchSysCache(cacheId, key1, key2, key3, key4);
+	if (!HeapTupleIsValid(tuple))
+		return tuple;
+	newtuple = heap_copytuple(tuple);
+	ReleaseSysCache(tuple);
+	return newtuple;
+}
+
+/*
+ * SearchSysCacheLockedCopy1
+ *
+ * Meld SearchSysCacheLockedCopy1 with SearchSysCacheCopy().  After the
+ * caller's heap_update(), it should UnlockTuple(InplaceUpdateTupleLock) and
+ * heap_freetuple().
+ */
+HeapTuple
+SearchSysCacheLockedCopy1(int cacheId,
+						  Datum key1)
+{
+	HeapTuple	tuple,
+				newtuple;
+
+	tuple = SearchSysCacheLocked1(cacheId, key1);
 	if (!HeapTupleIsValid(tuple))
 		return tuple;
 	newtuple = heap_copytuple(tuple);
@@ -1636,6 +1364,32 @@ SysCacheGetAttr(int cacheId, HeapTuple tup,
 	return heap_getattr(tup, attributeNumber,
 						SysCache[cacheId]->cc_tupdesc,
 						isNull);
+}
+
+/*
+ * SysCacheGetAttrNotNull
+ *
+ * As above, a version of SysCacheGetAttr which knows that the attr cannot
+ * be NULL.
+ */
+Datum
+SysCacheGetAttrNotNull(int cacheId, HeapTuple tup,
+					   AttrNumber attributeNumber)
+{
+	bool		isnull;
+	Datum		attr;
+
+	attr = SysCacheGetAttr(cacheId, tup, attributeNumber, &isnull);
+
+	if (isnull)
+	{
+		elog(ERROR,
+			 "unexpected null value in cached tuple for catalog %s column %s",
+			 get_rel_name(cacheinfo[cacheId].reloid),
+			 NameStr(TupleDescAttr(SysCache[cacheId]->cc_tupdesc, attributeNumber - 1)->attname));
+	}
+
+	return attr;
 }
 
 /*

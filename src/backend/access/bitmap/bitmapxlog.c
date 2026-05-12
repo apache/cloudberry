@@ -113,7 +113,7 @@ _bitmap_xlog_insert_meta(XLogRecPtr lsn, XLogReaderState *record)
 	Page			mp;
 	BMMetaPage		metapage;
 
-	metabuf = XLogReadBufferExtended(xlrec->bm_node, xlrec->bm_fork, BM_METAPAGE, RBM_ZERO_AND_LOCK);
+	metabuf = XLogReadBufferExtended(xlrec->bm_node, xlrec->bm_fork, BM_METAPAGE, RBM_ZERO_AND_LOCK, InvalidBuffer);
 	Assert(BufferIsValid(metabuf));
 
 	mp = BufferGetPage(metabuf);

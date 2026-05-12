@@ -3,7 +3,7 @@
  * nodeSeqscan.c
  *	  Support routines for sequential scans of relations.
  *
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -168,7 +168,7 @@ ExecInitSeqScan(SeqScan *node, EState *estate, int eflags)
 	 * get the relation object id from the relid'th entry in the range table,
 	 * open that relation and acquire appropriate lock on it.
 	 */
-	currentRelation = ExecOpenScanRelation(estate, node->scanrelid, eflags);
+	currentRelation = ExecOpenScanRelation(estate, node->scan.scanrelid, eflags);
 
 	return ExecInitSeqScanForPartition(node, estate, currentRelation);
 }
@@ -204,6 +204,7 @@ ExecInitSeqScanForPartition(SeqScan *node, EState *estate,
 	/*
 	 * open the scan relation
 	 */
+
 	scanstate->ss.ss_currentRelation = currentRelation;
 
 	/* and create slot with the appropriate rowtype */
@@ -221,7 +222,7 @@ ExecInitSeqScanForPartition(SeqScan *node, EState *estate,
 	 * initialize child expressions
 	 */
 	scanstate->ss.ps.qual =
-		ExecInitQual(node->plan.qual, (PlanState *) scanstate);
+		ExecInitQual(node->scan.plan.qual, (PlanState *) scanstate);
 
 	/*
 	 * check scan slot with bloom filters in seqscan node or not.

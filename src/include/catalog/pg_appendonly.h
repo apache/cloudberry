@@ -43,6 +43,7 @@ CATALOG(pg_appendonly,6105,AppendOnlyRelationId)
 
 /* GPDB added foreign key definitions for gpcheckcat. */
 FOREIGN_KEY(relid REFERENCES pg_class(oid));
+DECLARE_UNIQUE_INDEX(pg_appendonly_relid_index, 7141, AppendOnlyRelidIndexId, on pg_appendonly using btree(relid oid_ops));
 
 /*
  * Size of fixed part of pg_appendonly tuples, not counting var-length fields

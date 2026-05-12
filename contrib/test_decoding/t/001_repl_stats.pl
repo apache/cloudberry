@@ -1,17 +1,17 @@
 
-# Copyright (c) 2021, PostgreSQL Global Development Group
+# Copyright (c) 2021-2023, PostgreSQL Global Development Group
 
 # Test replication statistics data in pg_stat_replication_slots is sane after
 # drop replication slot and restart.
 use strict;
 use warnings;
 use File::Path qw(rmtree);
-use PostgresNode;
-use TestLib;
-use Test::More tests => 2;
+use PostgreSQL::Test::Cluster;
+use PostgreSQL::Test::Utils;
+use Test::More;
 
 # Test set-up
-my $node = get_new_node('test');
+my $node = PostgreSQL::Test::Cluster->new('test');
 $node->init(allows_streaming => 'logical');
 $node->append_conf('postgresql.conf', 'synchronous_commit = on');
 $node->start;
@@ -88,12 +88,11 @@ regression_slot3|t|t),
 # Test to remove one of the replication slots and adjust
 # max_replication_slots accordingly to the number of slots. This leads
 # to a mismatch between the number of slots present in the stats file and the
-# number of stats present in the shared memory, simulating the scenario for
-# drop slot message lost by the statistics collector process. We verify
+# number of stats present in shared memory. We verify
 # replication statistics data is fine after restart.
 
 $node->stop;
-my $datadir           = $node->data_dir;
+my $datadir = $node->data_dir;
 my $slot3_replslotdir = "$datadir/pg_replslot/regression_slot3";
 
 rmtree($slot3_replslotdir);
@@ -118,3 +117,65 @@ $node->safe_psql('postgres',
 
 # shutdown
 $node->stop;
+
+# Test replication slot stats persistence in a single session.  The slot
+# is dropped and created concurrently of a session peeking at its data
+# repeatedly, hence holding in its local cache a reference to the stats.
+$node->start;
+
+my $slot_name_restart = 'regression_slot5';
+$node->safe_psql('postgres',
+	"SELECT pg_create_logical_replication_slot('$slot_name_restart', 'test_decoding');"
+);
+
+# Look at slot data, with a persistent connection.
+my $bpgsql = $node->background_psql('postgres', on_error_stop => 1);
+
+# Launch query and look at slot data, incrementing the refcount of the
+# stats entry.
+$bpgsql->query_safe(
+	"SELECT pg_logical_slot_peek_binary_changes('$slot_name_restart', NULL, NULL)"
+);
+
+# Drop the slot entry.  The stats entry is not dropped yet as the previous
+# session still holds a reference to it.
+$node->safe_psql('postgres',
+	"SELECT pg_drop_replication_slot('$slot_name_restart')");
+
+# Create again the same slot.  The stats entry is reinitialized, not marked
+# as dropped anymore.
+$node->safe_psql('postgres',
+	"SELECT pg_create_logical_replication_slot('$slot_name_restart', 'test_decoding');"
+);
+
+# Look again at the slot data.  The local stats reference should be refreshed
+# to the reinitialized entry.
+$bpgsql->query_safe(
+	"SELECT pg_logical_slot_peek_binary_changes('$slot_name_restart', NULL, NULL)"
+);
+# Drop again the slot, the entry is not dropped yet as the previous session
+# still has a refcount on it.
+$node->safe_psql('postgres',
+	"SELECT pg_drop_replication_slot('$slot_name_restart')");
+
+# Shutdown the node, which should happen cleanly with the stats file written
+# to disk.  Note that the background session created previously needs to be
+# hold *while* the node is shutting down to check that it drops the stats
+# entry of the slot before writing the stats file.
+$node->stop;
+
+# Make sure that the node is correctly shut down.  Checking the control file
+# is not enough, as the node may detect that something is incorrect after the
+# control file has been updated and the shutdown checkpoint is finished, so
+# also check that the stats file has been written out.
+command_like(
+	[ 'pg_controldata', $node->data_dir ],
+	qr/Database cluster state:\s+shut down\n/,
+	'node shut down ok');
+
+my $stats_file = "$datadir/pg_stat/pgstat.stat";
+ok(-f "$stats_file", "stats file must exist after shutdown");
+
+$bpgsql->quit;
+
+done_testing();

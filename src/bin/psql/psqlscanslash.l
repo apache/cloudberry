@@ -8,7 +8,7 @@
  *
  * See fe_utils/psqlscan_int.h for additional commentary.
  *
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * IDENTIFICATION
@@ -18,7 +18,9 @@
  */
 #include "postgres_fe.h"
 
+#include "common.h"
 #include "psqlscanslash.h"
+
 #include "common/logging.h"
 #include "fe_utils/conditional.h"
 
@@ -778,16 +780,19 @@ evaluate_backtick(PsqlScanState state)
 	PQExpBufferData cmd_output;
 	FILE	   *fd;
 	bool		error = false;
+	int			exit_code = 0;
 	char		buf[512];
 	size_t		result;
 
 	initPQExpBuffer(&cmd_output);
 
+	fflush(NULL);
 	fd = popen(cmd, "r");
 	if (!fd)
 	{
 		pg_log_error("%s: %m", cmd);
 		error = true;
+		exit_code = -1;
 	}
 
 	if (!error)
@@ -805,10 +810,19 @@ evaluate_backtick(PsqlScanState state)
 		} while (!feof(fd));
 	}
 
-	if (fd && pclose(fd) == -1)
+	if (fd)
 	{
-		pg_log_error("%s: %m", cmd);
-		error = true;
+		/*
+		 * Although pclose's result always sets the shell result variables, we
+		 * historically have abandoned the backtick substitution only if it
+		 * returns -1.
+		 */
+		exit_code = pclose(fd);
+		if (exit_code == -1)
+		{
+			pg_log_error("%s: %m", cmd);
+			error = true;
+		}
 	}
 
 	if (PQExpBufferDataBroken(cmd_output))
@@ -830,6 +844,9 @@ evaluate_backtick(PsqlScanState state)
 			cmd_output.len--;
 		appendBinaryPQExpBuffer(output_buf, cmd_output.data, cmd_output.len);
 	}
+
+	/* And finally, set the shell result variables */
+	SetShellResultVariables(exit_code);
 
 	termPQExpBuffer(&cmd_output);
 }

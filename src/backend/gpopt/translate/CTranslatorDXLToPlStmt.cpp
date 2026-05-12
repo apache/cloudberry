@@ -244,6 +244,7 @@ CTranslatorDXLToPlStmt::GetPlannedStmtFromDXL(const CDXLNode *dxlnode,
 	planned_stmt->planGen = PLANGEN_OPTIMIZER;
 
 	planned_stmt->rtable = m_dxl_to_plstmt_context->GetRTableEntriesList();
+	planned_stmt->permInfos = m_dxl_to_plstmt_context->GetPermInfosList();
 	planned_stmt->subplans = m_dxl_to_plstmt_context->GetSubplanEntriesList();
 	planned_stmt->planTree = plan;
 
@@ -663,9 +664,24 @@ CTranslatorDXLToPlStmt::TranslateDXLTblScan(
 
 		// The postgres_fdw wrapper does not support row level security. So
 		// passing only the query_quals while creating the foreign scan node.
+		//
+		// BuildForeignScan internally calls build_simple_rel which looks up
+		// RTEPermissionInfo via root->parse->rteperminfos.  The RTE here was
+		// newly created by ORCA with its own perminfoindex numbering, which
+		// may not match m_orig_query->rteperminfos (e.g. after the rewriter
+		// expands external-table ON SELECT rules into subqueries the outer
+		// query's rteperminfos shrinks).  Temporarily swap in ORCA's own
+		// perminfos list so the indices are consistent.
+		Query *orig_query = m_dxl_to_plstmt_context->m_orig_query;
+		List *saved_perminfos = orig_query->rteperminfos;
+		orig_query->rteperminfos =
+			m_dxl_to_plstmt_context->GetPermInfosList();
+
 		ForeignScan *foreign_scan =
 			gpdb::CreateForeignScan(oidRel, index, query_quals, targetlist,
-									m_dxl_to_plstmt_context->m_orig_query, rte);
+									orig_query, rte);
+
+		orig_query->rteperminfos = saved_perminfos;
 		foreign_scan->scan.scanrelid = index;
 		plan = &(foreign_scan->scan.plan);
 		plan_return = (Plan *) foreign_scan;
@@ -673,8 +689,8 @@ CTranslatorDXLToPlStmt::TranslateDXLTblScan(
 	else
 	{
 		SeqScan *seq_scan = MakeNode(SeqScan);
-		seq_scan->scanrelid = index;
-		plan = &(seq_scan->plan);
+		seq_scan->scan.scanrelid = index;
+		plan = &(seq_scan->scan.plan);
 		plan_return = (Plan *) seq_scan;
 
 		plan->targetlist = targetlist;
@@ -1760,7 +1776,7 @@ CTranslatorDXLToPlStmt::TranslateDXLTvfToRangeTblEntry(
 			CTranslatorUtils::CreateMultiByteCharStringFromWCString(
 				dxl_proj_elem->GetMdNameAlias()->GetMDName()->GetBuffer());
 
-		Value *val_colname = gpdb::MakeStringValue(col_name_char_array);
+		String *val_colname = gpdb::MakeStringValue(col_name_char_array);
 		alias->colnames = gpdb::LAppend(alias->colnames, val_colname);
 
 		// save mapping col id -> index in translate context
@@ -1851,6 +1867,7 @@ CTranslatorDXLToPlStmt::TranslateDXLTvfToRangeTblEntry(
 	rte->functions = ListMake1(rtfunc);
 
 	rte->inFromCl = true;
+	rte->perminfoindex = 0;
 
 	rte->eref = alias;
 	return rte;
@@ -1873,8 +1890,8 @@ CTranslatorDXLToPlStmt::TranslateDXLValueScanToRangeTblEntry(
 	rte->rtekind = RTE_VALUES;
 	rte->inh = false; /* never true for values RTEs */
 	rte->inFromCl = true;
-	rte->requiredPerms = 0;
-	rte->checkAsUser = InvalidOid;
+	/* No permission checks */
+	rte->perminfoindex = 0;
 
 	Alias *alias = MakeNode(Alias);
 	alias->colnames = NIL;
@@ -1898,7 +1915,7 @@ CTranslatorDXLToPlStmt::TranslateDXLValueScanToRangeTblEntry(
 			CTranslatorUtils::CreateMultiByteCharStringFromWCString(
 				dxl_proj_elem->GetMdNameAlias()->GetMDName()->GetBuffer());
 
-		Value *val_colname = gpdb::MakeStringValue(col_name_char_array);
+		String *val_colname = gpdb::MakeStringValue(col_name_char_array);
 		alias->colnames = gpdb::LAppend(alias->colnames, val_colname);
 
 		// save mapping col id -> index in translate context
@@ -2839,10 +2856,10 @@ CTranslatorDXLToPlStmt::TranslateAggFillInfo(CContextDXLToPlStmt *ctx,
 	}
 	else
 	{
-		AggInfo *agginfo = (AggInfo *) gpdb::GPDBAlloc(sizeof(AggInfo));
+		AggInfo *agginfo = makeNode(AggInfo);
 
 		agginfo->finalfn_oid = aggfinalfn;
-		agginfo->representative_aggref = aggref;
+		agginfo->aggrefs = list_make1(aggref);
 		agginfo->shareable = shareable;
 
 		aggno = gpdb::ListLength(ctx->GetAggInfos());
@@ -4673,7 +4690,7 @@ CTranslatorDXLToPlStmt::TranslateDXLDynTblScan(
 	// create dynamic scan node
 	DynamicSeqScan *dyn_seq_scan = MakeNode(DynamicSeqScan);
 
-	dyn_seq_scan->seqscan.scanrelid = index;
+	dyn_seq_scan->seqscan.scan.scanrelid = index;
 
 	const CDXLTableDescr *dxl_table_descr =
 		dyn_tbl_scan_dxlop->GetDXLTableDescr();
@@ -4695,7 +4712,7 @@ CTranslatorDXLToPlStmt::TranslateDXLDynTblScan(
 		TranslateJoinPruneParamids(dyn_tbl_scan_dxlop->GetSelectorIds(),
 								   oid_type, m_dxl_to_plstmt_context);
 
-	Plan *plan = &(dyn_seq_scan->seqscan.plan);
+	Plan *plan = &(dyn_seq_scan->seqscan.scan.plan);
 	plan->plan_node_id = m_dxl_to_plstmt_context->GetNextPlanId();
 	//plan->nMotionNodes = 0;
 
@@ -4912,7 +4929,7 @@ RemapAttrsFromTupDesc(TupleDesc fromDesc, TupleDesc toDesc, Index index,
 					  List *qual, List *targetlist)
 {
 	AttrMap *attMap;
-	attMap = build_attrmap_by_name_if_req(toDesc, fromDesc);
+	attMap = build_attrmap_by_name_if_req(toDesc, fromDesc, false);
 
 	/* If attribute remapping is not necessary, then do not change the varattno */
 	if (attMap)
@@ -5011,9 +5028,15 @@ CTranslatorDXLToPlStmt::TranslateDXLDynForeignScan(
 											   RelationGetDescr(childRel),
 											   index, qual, targetlist);
 
+	// Same perminfos swap as in the non-dynamic foreign scan path above.
+	Query *orig_query = m_dxl_to_plstmt_context->m_orig_query;
+	List *saved_perminfos = orig_query->rteperminfos;
+	orig_query->rteperminfos =
+		m_dxl_to_plstmt_context->GetPermInfosList();
+
 	ForeignScan *foreign_scan_first_part =
 		gpdb::CreateForeignScan(oid_first_child, index, qual, targetlist,
-								m_dxl_to_plstmt_context->m_orig_query, rte);
+								orig_query, rte);
 
 	// Set the plan fields to the first partition. We still want the plan type to be
 	// a dynamic foreign scan
@@ -5045,11 +5068,14 @@ CTranslatorDXLToPlStmt::TranslateDXLDynForeignScan(
 
 		ForeignScan *foreign_scan =
 			gpdb::CreateForeignScan(rte->relid, index, qual, targetlist,
-									m_dxl_to_plstmt_context->m_orig_query, rte);
+									orig_query, rte);
 
 		dyn_foreign_scan->fdw_private_list = gpdb::LAppend(
 			dyn_foreign_scan->fdw_private_list, foreign_scan->fdw_private);
 	}
+
+	orig_query->rteperminfos = saved_perminfos;
+
 	// convert qual and targetlist back to root relation. This is used by the
 	// executor node to remap to the children
 	gpdb::RelationWrapper prevRel = gpdb::GetRelation(rte->relid);
@@ -5668,16 +5694,25 @@ CTranslatorDXLToPlStmt::ProcessDXLTblDescr(
 	{
 		RangeTblEntry *rte = m_dxl_to_plstmt_context->GetRTEByIndex(index);
 		GPOS_ASSERT(nullptr != rte);
-		rte->requiredPerms |= required_perms;
+
+		if (rte->perminfoindex != 0)
+		{
+			RTEPermissionInfo *pi = m_dxl_to_plstmt_context->GetPermInfoByIndex(rte->perminfoindex);
+			pi->requiredPerms |= required_perms;
+		}
+
 		return index;
 	}
 
 	// create a new RTE (and it's alias) and store it at context rtable list
 	RangeTblEntry *rte = MakeNode(RangeTblEntry);
+	// A perm info entry corresponding this rte.
+	RTEPermissionInfo *pi = MakeNode(RTEPermissionInfo);
 	rte->rtekind = RTE_RELATION;
 	rte->relid = oid;
-	rte->checkAsUser = table_descr->GetExecuteAsUserId();
-	rte->requiredPerms |= required_perms;
+	pi->relid = oid;
+	pi->checkAsUser = table_descr->GetExecuteAsUserId();
+	pi->requiredPerms |= required_perms;
 	rte->rellockmode = table_descr->LockMode();
 
 	Alias *alias = MakeNode(Alias);
@@ -5701,7 +5736,7 @@ CTranslatorDXLToPlStmt::ProcessDXLTblDescr(
 			for (INT dropped_col_attno = last_attno + 1;
 				 dropped_col_attno < attno; dropped_col_attno++)
 			{
-				Value *val_dropped_colname = gpdb::MakeStringValue(PStrDup(""));
+				String *val_dropped_colname = gpdb::MakeStringValue(PStrDup(""));
 				alias->colnames =
 					gpdb::LAppend(alias->colnames, val_dropped_colname);
 			}
@@ -5710,7 +5745,7 @@ CTranslatorDXLToPlStmt::ProcessDXLTblDescr(
 			CHAR *col_name_char_array =
 				CTranslatorUtils::CreateMultiByteCharStringFromWCString(
 					dxl_col_descr->MdName()->GetMDName()->GetBuffer());
-			Value *val_colname = gpdb::MakeStringValue(col_name_char_array);
+			String *val_colname = gpdb::MakeStringValue(col_name_char_array);
 
 			alias->colnames = gpdb::LAppend(alias->colnames, val_colname);
 			last_attno = attno;
@@ -5720,12 +5755,18 @@ CTranslatorDXLToPlStmt::ProcessDXLTblDescr(
 	// if there are any dropped columns at the end, add those too to the RangeTblEntry
 	for (ULONG ul = last_attno + 1; ul <= num_of_non_sys_cols; ul++)
 	{
-		Value *val_dropped_colname = gpdb::MakeStringValue(PStrDup(""));
+		String *val_dropped_colname = gpdb::MakeStringValue(PStrDup(""));
 		alias->colnames = gpdb::LAppend(alias->colnames, val_dropped_colname);
 	}
 
 	rte->eref = alias;
 	rte->alias = alias;
+
+	m_dxl_to_plstmt_context->AddPermInfo(pi);
+
+	// set up rte <> perm info link.
+	rte->perminfoindex = gpdb::ListLength(
+					m_dxl_to_plstmt_context->GetPermInfosList());
 
 	// A new RTE is added to the range table entries list if it's not found in the look
 	// up table. However, it is only added to the look up table if it's a result relation

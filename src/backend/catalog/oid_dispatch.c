@@ -87,6 +87,7 @@
 #include "catalog/pg_amproc.h"
 #include "catalog/pg_attrdef.h"
 #include "catalog/pg_authid.h"
+#include "catalog/pg_auth_members.h"
 #include "catalog/pg_cast.h"
 #include "catalog/pg_collation.h"
 #include "catalog/pg_constraint.h"
@@ -109,6 +110,7 @@
 #include "catalog/pg_profile.h"
 #include "catalog/pg_proc.h"
 #include "catalog/pg_publication.h"
+#include "catalog/pg_publication_namespace.h"
 #include "catalog/pg_publication_rel.h"
 #include "catalog/pg_resqueue.h"
 #include "catalog/pg_resqueuecapability.h"
@@ -568,6 +570,22 @@ GetNewOidForAuthId(Relation relation, Oid indexId, AttrNumber oidcolumn,
 	Assert(RelationGetRelid(relation) == AuthIdRelationId);
 	Assert(indexId == AuthIdOidIndexId);
 	Assert(oidcolumn == Anum_pg_authid_oid);
+
+	memset(&key, 0, sizeof(OidAssignment));
+	key.type = T_OidAssignment;
+	key.objname = rolname;
+	return GetNewOrPreassignedOid(relation, indexId, oidcolumn, &key);
+}
+
+Oid
+GetNewOidForAuthMem(Relation relation, Oid indexId, AttrNumber oidcolumn,
+				   char *rolname)
+{
+	OidAssignment key;
+
+	Assert(RelationGetRelid(relation) == AuthMemRelationId);
+	Assert(indexId == AuthMemOidIndexId);
+	Assert(oidcolumn == Anum_pg_auth_members_oid);
 
 	memset(&key, 0, sizeof(OidAssignment));
 	key.type = T_OidAssignment;
@@ -1341,6 +1359,23 @@ GetNewOidForPublicationRel(Relation relation, Oid indexId, AttrNumber oidcolumn,
 	memset(&key, 0, sizeof(OidAssignment));
 	key.type = T_OidAssignment;
 	key.keyOid1 = prrelid;
+	key.keyOid2 = prpubid;
+	return GetNewOrPreassignedOid(relation, indexId, oidcolumn, &key);
+}
+
+Oid
+GetNewOidForPublicationNameSpace(Relation relation, Oid indexId, AttrNumber oidcolumn,
+								 Oid prschemaid, Oid prpubid)
+{
+	OidAssignment key;
+
+	Assert(RelationGetRelid(relation) == PublicationNamespaceRelationId);
+	Assert(indexId == PublicationNamespaceObjectIndexId);
+	Assert(oidcolumn == Anum_pg_publication_namespace_oid);
+
+	memset(&key, 0, sizeof(OidAssignment));
+	key.type = T_OidAssignment;
+	key.keyOid1 = prschemaid;
 	key.keyOid2 = prpubid;
 	return GetNewOrPreassignedOid(relation, indexId, oidcolumn, &key);
 }

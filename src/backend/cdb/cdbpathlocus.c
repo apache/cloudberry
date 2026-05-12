@@ -185,7 +185,6 @@ cdb_build_distribution_keys(PlannerInfo *root, Index rti, GpPolicy *policy)
 		mergeopfamilies = get_mergejoin_opfamilies(eqopoid);
 
 		eclass = get_eclass_for_sort_expr(root, (Expr *) expr,
-										  NULL, /* nullable_relids */ /* GPDB_94_MERGE_FIXME: is NULL ok here? */
 										  mergeopfamilies,
 										  opcintype,
 										  exprCollation((Node *) expr),
@@ -288,7 +287,6 @@ cdbpathlocus_for_insert(PlannerInfo *root, GpPolicy *policy,
 		mergeopfamilies = get_mergejoin_opfamilies(eqopoid);
 
 		eclass = get_eclass_for_sort_expr(root, (Expr *) expr,
-										  NULL, /* nullable_relids */ /* GPDB_94_MERGE_FIXME: is NULL ok here? */
 										  mergeopfamilies,
 										  opcintype,
 										  exprCollation((Node *) expr),
@@ -847,7 +845,8 @@ cdbpathlocus_join(JoinType jointype, CdbPathLocus a, CdbPathLocus b)
 	{
 		resultlocus = a;
 	}
-	else if (jointype == JOIN_RIGHT)
+	else if (jointype == JOIN_RIGHT ||
+			 jointype == JOIN_RIGHT_ANTI)
 	{
 		resultlocus = b;
 	}
@@ -1066,39 +1065,23 @@ cdbpathlocus_is_hashed_on_tlist(CdbPathLocus locus, List *tlist,
 				if (ignore_constants && CdbEquivClassIsConstant(dk_eclass))
 					continue;
 
-				if (dk_eclass->ec_sortref != 0)
+				foreach(i, dk_eclass->ec_members)
 				{
-					foreach(i, tlist)
-					{
-						TargetEntry *tle = (TargetEntry *) lfirst(i);
+					EquivalenceMember *em = (EquivalenceMember *) lfirst(i);
+					ListCell *ltl;
 
-						if (tle->ressortgroupref == dk_eclass->ec_sortref)
+					foreach(ltl, tlist)
+					{
+						TargetEntry *tle = (TargetEntry *) lfirst(ltl);
+
+						if (equal(tle->expr, em->em_expr))
 						{
 							found = true;
 							break;
 						}
 					}
-				}
-				else
-				{
-					foreach(i, dk_eclass->ec_members)
-					{
-						EquivalenceMember *em = (EquivalenceMember *) lfirst(i);
-						ListCell *ltl;
-
-						foreach(ltl, tlist)
-						{
-							TargetEntry *tle = (TargetEntry *) lfirst(ltl);
-
-							if (equal(tle->expr, em->em_expr))
-							{
-								found = true;
-								break;
-							}
-						}
-						if (found)
-							break;
-					}
+					if (found)
+						break;
 				}
 				if (!found)
 					return false;
@@ -1442,7 +1425,8 @@ cdbpathlocus_parallel_join(JoinType jointype, CdbPathLocus a, CdbPathLocus b, bo
 	{
 		resultlocus = a;
 	}
-	else if (jointype == JOIN_RIGHT)
+	else if (jointype == JOIN_RIGHT ||
+			 jointype == JOIN_RIGHT_ANTI)
 	{
 		resultlocus = b;
 	}

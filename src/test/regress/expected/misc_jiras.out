@@ -39,9 +39,6 @@ select sum(cc) from (
       from misc_jiras.t1
      group by 1, 2
 ) tt;
-NOTICE:  winagg: tuplestore spilled to disk  (seg0 slice1 127.0.0.1:7002 pid=54719)
-NOTICE:  winagg: tuplestore spilled to disk  (seg1 slice1 127.0.0.1:7003 pid=54720)
-NOTICE:  winagg: tuplestore spilled to disk  (seg2 slice1 127.0.0.1:7004 pid=54721)
    sum   
 ---------
  30006.5

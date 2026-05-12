@@ -95,7 +95,7 @@
 	{ int16 en=node->fldname; appendBinaryStringInfo(str, (const char *)&en, sizeof(int16)); }
 
 /* Write a float field --- the format is accepted but ignored (for compat with outfuncs.c)  */
-#define WRITE_FLOAT_FIELD(fldname,format) \
+#define WRITE_FLOAT_FIELD(fldname) \
 	appendBinaryStringInfo(str, (const char *)&node->fldname, sizeof(double))
 
 /* Write a boolean field */
@@ -427,7 +427,6 @@ _outQuery(StringInfo str, Query *node)
 	WRITE_ENUM_FIELD(commandType, CmdType);
 	WRITE_ENUM_FIELD(querySource, QuerySource);
 	WRITE_BOOL_FIELD(canSetTag);
-
 	WRITE_NODE_FIELD(utilityStmt);
 	WRITE_INT_FIELD(resultRelation);
 	WRITE_BOOL_FIELD(hasAggs);
@@ -443,7 +442,10 @@ _outQuery(StringInfo str, Query *node)
 	WRITE_BOOL_FIELD(canOptSelectLockingClause);
 	WRITE_NODE_FIELD(cteList);
 	WRITE_NODE_FIELD(rtable);
+	WRITE_NODE_FIELD(rteperminfos);
 	WRITE_NODE_FIELD(jointree);
+	WRITE_NODE_FIELD(mergeActionList);
+	WRITE_BOOL_FIELD(mergeUseOuterJoin);
 	WRITE_NODE_FIELD(targetList);
 	WRITE_NODE_FIELD(withCheckOptions);
 	WRITE_NODE_FIELD(onConflict);
@@ -545,43 +547,71 @@ _outAExpr(StringInfo str, A_Expr *node)
 }
 
 static void
-_outValue(StringInfo str, Value *value)
+_outInteger(StringInfo str, const Integer *node)
 {
-
-	int16 vt = value->type;
+	int16 vt = T_Integer;
 	appendBinaryStringInfo(str, (const char *)&vt, sizeof(int16));
-	switch (value->type)
-	{
-		case T_Integer:
-			appendBinaryStringInfo(str, (const char *)&value->val.ival, sizeof(long));
-			break;
-		case T_Float:
-		case T_String:
-		case T_BitString:
-			{
-				int slen = (value->val.str != NULL ? strlen(value->val.str) : 0);
-				appendBinaryStringInfo(str, (const char *)&slen, sizeof(int));
-				if (slen > 0)
-					appendBinaryStringInfo(str, value->val.str, slen);
-			}
-			break;
-		case T_Null:
-			/* nothing to do */
-			break;
-		default:
-			elog(ERROR, "unrecognized node type: %d", (int) value->type);
-			break;
-	}
+	appendBinaryStringInfo(str, (const char *)&node->ival, sizeof(int));
 }
+
+
+static void
+_outFloat(StringInfo str, const Float *node)
+{
+	int16 vt = T_Float;
+	int slen;
+
+	appendBinaryStringInfo(str, (const char *) &vt, sizeof(int16));
+	slen = (node->fval != NULL ? strlen(node->fval) : 0);
+	appendBinaryStringInfo(str, (const char *)&slen, sizeof(int));
+	if (slen > 0)
+		appendBinaryStringInfo(str, node->fval, slen);
+}
+
+static void
+_outBoolean(StringInfo str, const Boolean *node)
+{
+	int16 vt = T_Boolean;
+	appendBinaryStringInfo(str, (const char *)&vt, sizeof(int16));
+	appendBinaryStringInfo(str, (const char *)&node->boolval, sizeof(bool));
+}
+
+
+static void
+_outString(StringInfo str, const String *node)
+{
+	int16 vt = T_String;
+	int slen;
+
+	appendBinaryStringInfo(str, (const char *) &vt, sizeof(int16));
+	slen = (node->sval != NULL ? strlen(node->sval) : 0);
+	appendBinaryStringInfo(str, (const char *)&slen, sizeof(int));
+	if (slen > 0)
+		appendBinaryStringInfo(str, node->sval, slen);
+}
+
+static void
+_outBitString(StringInfo str, const BitString *node)
+{
+	int16 vt = T_BitString;
+	int slen;
+
+	appendBinaryStringInfo(str, (const char *) &vt, sizeof(int16));
+	slen = (node->bsval != NULL ? strlen(node->bsval) : 0);
+	appendBinaryStringInfo(str, (const char *)&slen, sizeof(int));
+	if (slen > 0)
+		appendBinaryStringInfo(str, node->bsval, slen);
+}
+
 
 static void
 _outAConst(StringInfo str, A_Const *node)
 {
 	WRITE_NODE_TYPE("A_CONST");
-
-	_outValue(str, &(node->val));
-	WRITE_LOCATION_FIELD(location);  /*CDB*/
-
+	WRITE_BOOL_FIELD(isnull);
+	if (!node->isnull)
+		_outNode(str, &node->val);
+	WRITE_LOCATION_FIELD(location);
 }
 
 static void
@@ -788,18 +818,6 @@ _outAccessPriv(StringInfo str, AccessPriv *node)
 }
 
 static void
-_outGpPolicy(StringInfo str, GpPolicy *node)
-{
-	WRITE_NODE_TYPE("GPPOLICY");
-
-	WRITE_ENUM_FIELD(ptype, GpPolicyType);
-	WRITE_INT_FIELD(numsegments);
-	WRITE_INT_FIELD(nattrs);
-	WRITE_ATTRNUMBER_ARRAY(attrs, node->nattrs);
-	WRITE_OID_ARRAY(opclasses, node->nattrs);
-}
-
-static void
 _outAlterTableMoveAllStmt(StringInfo str, AlterTableMoveAllStmt *node)
 {
 	WRITE_NODE_TYPE("ALTERTABLESPACEMOVESTMT");
@@ -871,14 +889,18 @@ _outNode(StringInfo str, void *obj)
 	}
 	else if (IsA(obj, List) ||IsA(obj, IntList) || IsA(obj, OidList))
 		_outList(str, obj);
-	else if (IsA(obj, Integer) ||
-			 IsA(obj, Float) ||
-			 IsA(obj, String) ||
-			 IsA(obj, Null) ||
-			 IsA(obj, BitString))
-	{
-		_outValue(str, obj);
-	}
+	else if (IsA(obj, Integer))
+		_outInteger(str, (Integer *) obj);
+	else if (IsA(obj, Float))
+		_outFloat(str, (Float *) obj);
+	else if (IsA(obj, Boolean))
+		_outBoolean(str, (Boolean *) obj);
+	else if (IsA(obj, String))
+		_outString(str, (String *) obj);
+	else if (IsA(obj, BitString))
+		_outBitString(str, (BitString *) obj);
+	else if (IsA(obj, Bitmapset))
+		outBitmapset(str, (Bitmapset *) obj);
 	else
 	{
 		switch (nodeTag(obj))
@@ -1095,6 +1117,9 @@ _outNode(StringInfo str, void *obj)
 				break;
 			case T_SplitUpdate:
 				_outSplitUpdate(str, obj);
+				break;
+			case T_SplitMerge:
+				_outSplitMerge(str, obj);
 				break;
 			case T_AssertOp:
 				_outAssertOp(str, obj);
@@ -1935,6 +1960,36 @@ _outNode(StringInfo str, void *obj)
 				break;
 			case T_AlterDatabaseStmt:
 				_outAlterDatabaseStmt(str, obj);
+				break;
+			case T_RTEPermissionInfo:
+				_outRTEPermissionInfo(str, obj);
+				break;
+			case T_MergeAction:
+				_outMergeAction(str, obj);
+				break;
+			case T_PublicationObjSpec:
+				_outPublicationObjSpec(str, obj);
+				break;
+			case T_PublicationTable:
+				_outPublicationTable(str, obj);
+				break;
+			case T_WindowDef:
+				_outWindowDef(str, obj);
+				break;
+			case T_JsonConstructorExpr:
+				_outJsonConstructorExpr(str, obj);
+				break;
+			case T_JsonIsPredicate:
+				_outJsonIsPredicate(str, obj);
+				break;
+			case T_JsonReturning:
+				_outJsonReturning(str, obj);
+				break;
+			case T_JsonValueExpr:
+				_outJsonValueExpr(str, obj);
+				break;
+			case T_JsonFormat:
+				_outJsonFormat(str, obj);
 				break;
 			default:
 				elog(ERROR, "could not serialize unrecognized node type: %d",

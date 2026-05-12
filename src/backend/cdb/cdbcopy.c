@@ -450,7 +450,6 @@ cdbCopyEndInternal(CdbCopy *c, char *abort_msg,
 	struct pollfd	*pollRead;
 	bool		io_errors = false;
 	StringInfoData io_err_msg;
-	List           *oidList = NIL;
 	int				nest_level;
 
 	SIMPLE_FAULT_INJECTOR("cdb_copy_end_internal_start");
@@ -576,8 +575,6 @@ cdbCopyEndInternal(CdbCopy *c, char *abort_msg,
 				if (!first_error)
 					first_error = cdbdisp_get_PQerror(res);
 			}
-
-			pgstat_combine_one_qe_result(&oidList, res, nest_level, q->segindex);
 
 			if (q->conn->wrote_xlog)
 			{

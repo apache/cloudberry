@@ -3,7 +3,8 @@
  * tablecmds.h
  *	  prototypes for tablecmds.c.
  *
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
+ *
+ * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * src/include/commands/tablecmds.h
@@ -75,13 +76,14 @@ extern void ExecuteTruncateGuts(List *explicit_rels,
 								List *relids_logged,
 								DropBehavior behavior,
 								bool restart_seqs,
+								bool run_as_table_owner,
 								TruncateStmt *stmt);
 
 extern void SetRelationHasSubclass(Oid relationId, bool relhassubclass);
 
 extern bool CheckRelationTableSpaceMove(Relation rel, Oid newTableSpaceId);
 extern void SetRelationTableSpace(Relation rel, Oid newTableSpaceId,
-                                  Oid newRelFileNode);
+								  RelFileNumber newRelFilenumber);
 
 extern ObjectAddress renameatt(RenameStmt *stmt);
 
@@ -124,7 +126,7 @@ extern void RangeVarCallbackOwnsRelation(const RangeVar *relation,
 extern bool PartConstraintImpliedByRelConstraint(Relation scanrel,
 												 List *partConstraint);
 extern void ComputePartitionAttrs(ParseState *pstate, Relation rel, List *partParams, AttrNumber *partattrs,
-								  List **partexprs, Oid *partopclass, Oid *partcollation, char strategy);
+								  List **partexprs, Oid *partopclass, Oid *partcollation,  PartitionStrategy strategy);
 
 /* GPDB specific functions */
 extern void ATExecGPPartCmds(Relation origrel, AlterTableCmd *cmd);

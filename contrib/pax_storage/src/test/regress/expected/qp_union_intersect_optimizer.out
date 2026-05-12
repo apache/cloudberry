@@ -653,8 +653,6 @@ SELECT COUNT(*) FROM dml_union_r;
    120
 (1 row)
 
--- GPDB_12_MERGE_FIXME: ORCA doesn't produce the right intersect plan
-set optimizer=off;
 SELECT COUNT(*) FROM (SELECT dml_union_r.* FROM dml_union_r INTERSECT (SELECT dml_union_r.* FROM dml_union_r UNION ALL SELECT dml_union_s.* FROM dml_union_s) EXCEPT SELECT dml_union_s.* FROM dml_union_s)foo;
  count 
 -------
@@ -668,7 +666,6 @@ SELECT COUNT(*) FROM dml_union_r;
    221
 (1 row)
 
-reset optimizer;
 rollback;
 -- @description union_test30: INSERT NON ATOMICS with union/intersect/except
 begin;
@@ -2010,6 +2007,44 @@ select * from generate_series(100, 105);
  105
 (12 rows)
 
+-- test INTERSECT/EXCEPT with General and partitioned locus, but none of the columns are hashable
+CREATE TABLE p1(a int) distributed by (a);
+INSERT INTO p1 select generate_series(1,10);
+explain (costs off)
+select from generate_series(1,5) intersect select from p1;
+                      QUERY PLAN
+------------------------------------------------------
+ Nested Loop
+   Join Filter: true
+   ->  Aggregate
+         ->  Gather Motion 3:1  (slice1; segments: 3)
+               ->  Seq Scan on p1
+   ->  Aggregate
+         ->  Function Scan on generate_series
+ Optimizer: Pivotal Optimizer (GPORCA)
+(8 rows)
+
+select from generate_series(1,5) intersect select from p1;
+--
+(1 row)
+
+explain (costs off)
+select from generate_series(1,5) except select from p1;
+                      QUERY PLAN
+------------------------------------------------------
+ Nested Loop Anti Join
+   Join Filter: true
+   ->  Function Scan on generate_series
+   ->  Materialize
+         ->  Gather Motion 3:1  (slice1; segments: 3)
+               ->  Seq Scan on p1
+ Optimizer: Pivotal Optimizer (GPORCA)
+(7 rows)
+
+select from generate_series(1,5) except select from p1;
+--
+(0 rows)
+
 --
 -- Test for creation of MergeAppend paths.
 --
@@ -2026,13 +2061,13 @@ select null, null, array_dims(array_agg(x)) from mergeappend_test r
 order by 1,2;
  a | b | array_dims 
 ---+---+------------
+   |   | [1:500]
  0 | 0 | [1:99]
  1 | 1 | [1:100]
  2 | 2 | [1:100]
  3 | 3 | [1:100]
  4 | 4 | [1:100]
  5 | 5 | [1:1]
-   |   | [1:500]
 (7 rows)
 
 -- Check that it's using a MergeAppend

@@ -168,6 +168,7 @@ execute_cmd ./configure --prefix=${BUILD_DESTINATION} \
             --with-ldap \
             --with-libxml \
             --with-lz4 \
+            --with-zstd \
             --with-openssl \
             --with-pam \
             --with-perl \

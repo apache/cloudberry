@@ -496,7 +496,7 @@ create_datumstreamwrite(
 						Oid reloid,
 						char *title,
 						bool needsWAL,
-						RelFileNodeBackend *rnode,
+						RelFileLocatorBackend *rnode,
 						const struct f_smgr_ao *smgrAO)
 {
 	DatumStreamWrite *acc = palloc0(sizeof(DatumStreamWrite));
@@ -628,7 +628,7 @@ create_datumstreamwrite(
 								/* errdetailArg */ (void *) acc,
 				  /* errcontextCallback */ datumstreamwrite_context_callback,
 								/* errcontextArg */ (void *) acc,
-								&acc->ao_write.relFileNode.node);
+								&acc->ao_write.relFileNode.locator);
 
 	return acc;
 }
@@ -643,7 +643,7 @@ create_datumstreamread(
 					   char *relname,
 					   Oid reloid,
 					   char *title,
-					   RelFileNode *relFileNode, const struct f_smgr_ao *smgrAO)
+					   RelFileLocator *relFileNode, const struct f_smgr_ao *smgrAO)
 {
 	DatumStreamRead *acc = palloc0(sizeof(DatumStreamRead));
 
@@ -805,7 +805,7 @@ destroy_datumstreamread(DatumStreamRead * ds)
 
 void
 datumstreamwrite_open_file(DatumStreamWrite *ds, char *fn, int64 eof, int64 eofUncompressed,
-						   RelFileNodeBackend *relFileNode, int32 segmentFileNum, int version)
+						   RelFileLocatorBackend *relFileNode, int32 segmentFileNum, int version)
 {
 	ds->eof = eof;
 	ds->eofUncompress = eofUncompressed;
@@ -840,7 +840,7 @@ datumstreamwrite_open_file(DatumStreamWrite *ds, char *fn, int64 eof, int64 eofU
 }
 
 void
-datumstreamread_open_file(DatumStreamRead * ds, char *fn, int64 eof, int64 eofUncompressed, RelFileNode relFileNode, int32 segmentFileNum, int version)
+datumstreamread_open_file(DatumStreamRead * ds, char *fn, int64 eof, int64 eofUncompressed, int version)
 {
 	ds->eof = eof;
 	ds->eofUncompress = eofUncompressed;
@@ -904,7 +904,7 @@ datumstreamwrite_block_orig(DatumStreamWrite * acc)
 	writesz = DatumStreamBlockWrite_Block(
 										  &acc->blockWrite,
 										  buffer,
-										  &acc->ao_write.relFileNode.node);
+										  &acc->ao_write.relFileNode.locator);
 
 	acc->ao_write.logicalBlockStartOffset =
 		BufferedAppendNextBufferPosition(&(acc->ao_write.bufferedAppend));
@@ -959,7 +959,7 @@ datumstreamwrite_block_dense(DatumStreamWrite * acc)
 	writesz = DatumStreamBlockWrite_Block(
 										  &acc->blockWrite,
 										  buffer,
-										  &acc->ao_write.relFileNode.node);
+										  &acc->ao_write.relFileNode.locator);
 
 	acc->ao_write.logicalBlockStartOffset =
 		BufferedAppendNextBufferPosition(&(acc->ao_write.bufferedAppend));
@@ -1097,7 +1097,7 @@ datumstreamwrite_lob(DatumStreamWrite * acc,
 
 		EncryptAOBLock((unsigned char *)encryptData, 
 						encryptLen, 
-						&acc->ao_write.relFileNode.node);
+						&acc->ao_write.relFileNode.locator);
 
 		*(uint16 *)content = 1;
 		memcpy(content + alignedHeaderSize, p, varLen);

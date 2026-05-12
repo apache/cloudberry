@@ -234,7 +234,7 @@ gp_dump_query_oids(PG_FUNCTION_ARGS)
 		List	   *queryTree_sublist;
 
 
-		Query	*query = parse_analyze(parsetree, sqlText, NULL, 0, NULL);
+		Query	*query = parse_analyze_fixedparams(parsetree, sqlText, NULL, 0, NULL);
 		query->expandMatViews = true;
 		queryTree_sublist = pg_rewrite_query(query);
 

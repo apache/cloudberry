@@ -1,17 +1,12 @@
 --
 -- TEXT
 --
-
+set optimizer_trace_fallback to on;
 SELECT text 'this is a text string' = text 'this is a text string' AS true;
 
 SELECT text 'this is a text string' = text 'this is a text strin' AS false;
 
-CREATE TABLE TEXT_TBL (f1 text);
-
-INSERT INTO TEXT_TBL VALUES ('doh!');
-ANALYZE TEXT_TBL;
-INSERT INTO TEXT_TBL VALUES ('hi de ho neighbor');
-
+-- text_tbl was already created and filled in test_setup.sql.
 SELECT * FROM TEXT_TBL;
 
 -- As of 8.3 we have removed most implicit casts to text, so that for example
@@ -127,3 +122,5 @@ select format('>>%-s<<', 'Hello');
 select format('>>%10L<<', NULL);
 select format('>>%2$*1$L<<', NULL, 'Hello');
 select format('>>%2$*1$L<<', 0, 'Hello');
+
+set optimizer_trace_fallback to off;

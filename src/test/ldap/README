@@ -20,9 +20,9 @@ Running the tests
 NOTE: You must have given the --enable-tap-tests argument to configure.
 
 Run
-    make check
+    make check PG_TEST_EXTRA=ldap
 or
-    make installcheck
+    make installcheck PG_TEST_EXTRA=ldap
 You can use "make installcheck" if you previously did "make install".
 In that case, the code in the installation tree is tested.  With
 "make check", a temporary installation tree is built from the current
@@ -30,6 +30,8 @@ sources and then tested.
 
 Either way, this test initializes, starts, and stops a test Postgres
 cluster, as well as a test LDAP server.
+
+See src/test/perl/README for more info about running these tests.
 
 Requirements
 ============

@@ -493,16 +493,17 @@
     will skip pages that don't have any dead row versions even if those pages
     might still have row versions with old XID values.  Therefore, normal
     <command>VACUUM</command>s won't always freeze every old row version in the table.
-    Periodically, <command>VACUUM</command> will perform an <firstterm>aggressive
-    vacuum</firstterm>, skipping only those pages which contain neither dead rows nor
-    any unfrozen XID or MXID values.
+    When that happens, <command>VACUUM</command> will eventually need to perform an
+    <firstterm>aggressive vacuum</firstterm>, which will freeze all eligible unfrozen
+    XID and MXID values, including those from all-visible but not all-frozen pages.
+    In practice most tables require periodic aggressive vacuuming.
     <xref linkend="guc-vacuum-freeze-table-age"/>
     controls when <command>VACUUM</command> does that: all-visible but not all-frozen
     pages are scanned if the number of transactions that have passed since the
     last such scan is greater than <varname>vacuum_freeze_table_age</varname> minus
     <varname>vacuum_freeze_min_age</varname>. Setting
     <varname>vacuum_freeze_table_age</varname> to 0 forces <command>VACUUM</command> to
-    use this more aggressive strategy for all scans.
+    always use its aggressive strategy.
    </para>
 
    <para>
@@ -585,11 +586,11 @@
     statistics in the system tables <structname>pg_class</structname> and
     <structname>pg_database</structname>.  In particular,
     the <structfield>relfrozenxid</structfield> column of a table's
-    <structname>pg_class</structname> row contains the freeze cutoff XID that was used
-    by the last aggressive <command>VACUUM</command> for that table.  All rows
-    inserted by transactions with XIDs older than this cutoff XID are
-    guaranteed to have been frozen.  Similarly,
-    the <structfield>datfrozenxid</structfield> column of a database's
+    <structname>pg_class</structname> row contains the oldest remaining unfrozen
+    XID at the end of the most recent <command>VACUUM</command> that successfully
+    advanced <structfield>relfrozenxid</structfield> (typically the most recent
+    aggressive VACUUM).  Similarly, the
+    <structfield>datfrozenxid</structfield> column of a database's
     <structname>pg_database</structname> row is a lower bound on the unfrozen XIDs
     appearing in that database &mdash; it is just the minimum of the
     per-table <structfield>relfrozenxid</structfield> values within the database.
@@ -610,6 +611,20 @@ SELECT datname, age(datfrozenxid) FROM pg_database;
     cutoff XID to the current transaction's XID.
    </para>
 
+   <tip>
+    <para>
+     When the <command>VACUUM</command> command's <literal>VERBOSE</literal>
+     parameter is specified, <command>VACUUM</command> prints various
+     statistics about the table.  This includes information about how
+     <structfield>relfrozenxid</structfield> and
+     <structfield>relminmxid</structfield> advanced, and the number of
+     newly frozen pages.  The same details appear in the server log when
+     autovacuum logging (controlled by <xref
+      linkend="guc-log-autovacuum-min-duration"/>) reports on a
+     <command>VACUUM</command> operation executed by autovacuum.
+    </para>
+   </tip>
+
    <para>
     <command>VACUUM</command> normally only scans pages that have been modified
     since the last vacuum, but <structfield>relfrozenxid</structfield> can only be
@@ -624,7 +639,11 @@ SELECT datname, age(datfrozenxid) FROM pg_database;
     set <literal>age(relfrozenxid)</literal> to a value just a little more than the
     <varname>vacuum_freeze_min_age</varname> setting
     that was used (more by the number of transactions started since the
-    <command>VACUUM</command> started).  If no <structfield>relfrozenxid</structfield>-advancing
+    <command>VACUUM</command> started).  <command>VACUUM</command>
+    will set <structfield>relfrozenxid</structfield> to the oldest XID
+    that remains in the table, so it's possible that the final value
+    will be much more recent than strictly required.
+    If no <structfield>relfrozenxid</structfield>-advancing
     <command>VACUUM</command> is issued on the table until
     <varname>autovacuum_freeze_max_age</varname> is reached, an autovacuum will soon
     be forced for the table.
@@ -641,28 +660,78 @@ HINT:  To avoid a database shutdown, execute a database-wide VACUUM in that data
 </programlisting>
 
     (A manual <command>VACUUM</command> should fix the problem, as suggested by the
-    hint; but note that the <command>VACUUM</command> must be performed by a
-    superuser, else it will fail to process system catalogs and thus not
-    be able to advance the database's <structfield>datfrozenxid</structfield>.)
-    If these warnings are
-    ignored, the system will shut down and refuse to start any new
-    transactions once there are fewer than three million transactions left
-    until wraparound:
+    hint; but note that the <command>VACUUM</command> should be performed by a
+    superuser, else it will fail to process system catalogs, which prevent it from
+    being able to advance the database's <structfield>datfrozenxid</structfield>.)
+    If these warnings are ignored, the system will refuse to assign new XIDs once
+    there are fewer than three million transactions left until wraparound:
 
 <programlisting>
 ERROR:  database is not accepting commands to avoid wraparound data loss in database "mydb"
 HINT:  Stop the postmaster and vacuum that database in single-user mode.
 </programlisting>
 
-    The three-million-transaction safety margin exists to let the
-    administrator recover without data loss, by manually executing the
-    required <command>VACUUM</command> commands.  However, since the system will not
-    execute commands once it has gone into the safety shutdown mode,
-    the only way to do this is to stop the server and start the server in single-user
-    mode to execute <command>VACUUM</command>.  The shutdown mode is not enforced
-    in single-user mode.  See the <xref linkend="app-postgres"/> reference
-    page for details about using single-user mode.
+    In this condition any transactions already in progress can continue,
+    but only read-only transactions can be started. Operations that
+    modify database records or truncate relations will fail.
+    The <command>VACUUM</command> command can still be run normally.
+    Contrary to what the hint states, it is not necessary or desirable to stop the
+    postmaster or enter single user-mode in order to restore normal operation.
+    Instead, follow these steps:
+
+    <orderedlist>
+     <listitem>
+      <simpara>Resolve old prepared transactions. You can find these by checking
+       <link linkend="view-pg-prepared-xacts">pg_prepared_xacts</link> for rows where
+       <literal>age(transactionid)</literal> is large. Such transactions should be
+       committed or rolled back.</simpara>
+     </listitem>
+     <listitem>
+      <simpara>End long-running open transactions. You can find these by checking
+       <link linkend="monitoring-pg-stat-activity-view">pg_stat_activity</link> for rows where
+       <literal>age(backend_xid)</literal> or <literal>age(backend_xmin)</literal> is
+       large. Such transactions should be committed or rolled back, or the session
+       can be terminated using <literal>pg_terminate_backend</literal>.</simpara>
+     </listitem>
+     <listitem>
+      <simpara>Drop any old replication slots. Use
+       <link linkend="monitoring-pg-stat-replication-view">pg_stat_replication</link> to
+       find slots where <literal>age(xmin)</literal> or <literal>age(catalog_xmin)</literal>
+       is large. In many cases, such slots were created for replication to servers that no
+       longer exist, or that have been down for a long time. If you drop a slot for a server
+       that still exists and might still try to connect to that slot, that replica may
+       need to be rebuilt.</simpara>
+     </listitem>
+     <listitem>
+      <simpara>Execute <command>VACUUM</command> in the target database. A database-wide
+       <literal>VACUUM</literal> is simplest; to reduce the time required, it as also possible
+       to issue manual <command>VACUUM</command> commands on the tables where
+       <structfield>relminxid</structfield> is oldest. Do not use <literal>VACUUM FULL</literal>
+       in this scenario, because it requires an XID and will therefore fail, except in super-user
+       mode, where it will instead consume an XID and thus increase the risk of transaction ID
+       wraparound. Do not use <literal>VACUUM FREEZE</literal> either, because it will do
+       more than the minimum amount of work required to restore normal operation.</simpara>
+     </listitem>
+     <listitem>
+      <simpara>Once normal operation is restored, ensure that autovacuum is properly configured
+       in the target database in order to avoid future problems.</simpara>
+     </listitem>
+    </orderedlist>
    </para>
+
+   <note>
+    <para>
+     In earlier versions, it was sometimes necessary to stop the postmaster and
+     <command>VACUUM</command> the database in a single-user mode. In typical scenarios, this
+     is no longer necessary, and should be avoided whenever possible, since it involves taking
+     the system down. It is also riskier, since it disables transaction ID wraparound safeguards
+     that are designed to prevent data loss.  The only reason to use single-user mode in this
+     scenario is if you wish to <command>TRUNCATE</command> or <command>DROP</command> unneeded
+     tables to avoid needing to <command>VACUUM</command> them.  The three-million-transaction
+     safety margin exists to let the administrator do this. See the
+     <xref linkend="app-postgres"/> reference page for details about using single-user mode.
+    </para>
+   </note>
 
    <sect3 id="vacuum-for-multixact-wraparound">
     <title>Multixacts and Wraparound</title>
@@ -711,8 +780,9 @@ HINT:  Stop the postmaster and vacuum that database in single-user mode.
     </para>
 
     <para>
-     Aggressive <command>VACUUM</command> scans, regardless of
-     what causes them, enable advancing the value for that table.
+     Aggressive <command>VACUUM</command>s, regardless of what causes
+     them, are <emphasis>guaranteed</emphasis> to be able to advance
+     the table's <structfield>relminmxid</structfield>.
      Eventually, as all tables in all databases are scanned and their
      oldest multixact values are advanced, on-disk storage for older
      multixacts can be removed.
@@ -722,11 +792,44 @@ HINT:  Stop the postmaster and vacuum that database in single-user mode.
      As a safety device, an aggressive vacuum scan will
      occur for any table whose multixact-age is greater than <xref
      linkend="guc-autovacuum-multixact-freeze-max-age"/>.  Also, if the
-     storage occupied by multixacts members exceeds 2GB, aggressive vacuum
+     storage occupied by multixacts members exceeds about 10GB, aggressive vacuum
      scans will occur more often for all tables, starting with those that
      have the oldest multixact-age.  Both of these kinds of aggressive
-     scans will occur even if autovacuum is nominally disabled.
+     scans will occur even if autovacuum is nominally disabled. The members storage
+     area can grow up to about 20GB before reaching wraparound.
     </para>
+
+    <para>
+     Similar to the XID case, if autovacuum fails to clear old MXIDs from a table, the
+     system will begin to emit warning messages when the database's oldest MXIDs reach forty
+     million transactions from the wraparound point.  And, just as an the XID case, if these
+     warnings are ignored, the system will refuse to generate new MXIDs once there are fewer
+     than three million left until wraparound.
+    </para>
+
+    <para>
+     Normal operation when MXIDs are exhausted can be restored in much the same way as
+     when XIDs are exhausted. Follow the same steps in the previous section, but with the
+     following differences:
+
+    <orderedlist>
+     <listitem>
+      <simpara>Running transactions and prepared transactions can be ignored if there
+       is no chance that they might appear in a multixact.</simpara>
+     </listitem>
+     <listitem>
+      <simpara>MXID information is not directly visible in system views such as
+       <literal>pg_stat_activity</literal>; however, looking for old XIDs is still a good
+       way of determining which transactions are causing MXID wraparound problems.</simpara>
+     </listitem>
+     <listitem>
+      <simpara>XID exhaustion will block all write transactions, but MXID exhaustion will
+       only block a subset of write transactions, specifically those that involve
+       row locks that require an MXID.</simpara>
+     </listitem>
+    </orderedlist>
+   </para>
+
    </sect3>
   </sect2>
 
@@ -820,7 +923,7 @@ vacuum insert threshold = vacuum base insert threshold + vacuum insert scale fac
     it may be beneficial to lower the table's
     <xref linkend="reloption-autovacuum-freeze-min-age"/> as this may allow
     tuples to be frozen by earlier vacuums.  The number of obsolete tuples and
-    the number of inserted tuples are obtained from the statistics collector;
+    the number of inserted tuples are obtained from the cumulative statistics system;
     it is a semi-accurate count updated by each <command>UPDATE</command>,
     <command>DELETE</command> and <command>INSERT</command> operation.  (It is
     only semi-accurate because some information might be lost under heavy
@@ -841,10 +944,15 @@ analyze threshold = analyze base threshold + analyze scale factor * number of tu
    </para>
 
    <para>
-    Partitioned tables are not processed by autovacuum.  Statistics
-    should be collected by running a manual <command>ANALYZE</command> when it is
-    first populated, and again whenever the distribution of data in its
-    partitions changes significantly.
+    Partitioned tables do not directly store tuples and consequently
+    are not processed by autovacuum.  (Autovacuum does process table
+    partitions just like other tables.)  Unfortunately, this means that
+    autovacuum does  not run <command>ANALYZE</command> on partitioned
+    tables, and this can cause suboptimal plans for queries that reference
+    partitioned table statistics.  You can work around this problem by
+    manually running <command>ANALYZE</command> on partitioned tables
+    when they are first populated, and again whenever the distribution
+    of data in their partitions changes significantly.
    </para>
 
    <para>
@@ -958,7 +1066,25 @@ analyze threshold = analyze base threshold + analyze scale factor * number of tu
    It is a good idea to save the database server's log output
    somewhere, rather than just discarding it via <filename>/dev/null</filename>.
    The log output is invaluable when diagnosing
-   problems.  However, the log output tends to be voluminous
+   problems.
+  </para>
+
+  <note>
+   <para>
+    The server log can contain sensitive information and needs to be protected,
+    no matter how or where it is stored, or the destination to which it is routed.
+    For example, some DDL statements might contain plaintext passwords or other
+    authentication details. Logged statements at the <literal>ERROR</literal>
+    level might show the SQL source code for applications
+    and might also contain some parts of data rows. Recording data, events and
+    related information is the intended function of this facility, so this is
+    not a leakage or a bug. Please ensure the server logs are visible only to
+    appropriately authorized people.
+   </para>
+  </note>
+
+  <para>
+   Log output tends to be voluminous
    (especially at higher debug levels) so you won't want to save it
    indefinitely.  You need to <emphasis>rotate</emphasis> the log files so that
    new log files are started and old ones removed after a reasonable

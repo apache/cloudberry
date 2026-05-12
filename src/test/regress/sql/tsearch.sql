@@ -1,4 +1,7 @@
 set optimizer_print_missing_stats = off;
+-- directory paths are passed to us in environment variables
+\getenv abs_srcdir PG_ABS_SRCDIR
+
 --
 -- Sanity checks for text search catalogs
 --
@@ -39,6 +42,17 @@ RIGHT JOIN pg_ts_config_map AS m
     ON (tt.cfgid=m.mapcfg AND tt.tokid=m.maptokentype)
 WHERE
     tt.cfgid IS NULL OR tt.tokid IS NULL;
+
+-- Load some test data
+CREATE TABLE test_tsvector(
+	t text,
+	a tsvector
+);
+
+\set filename :abs_srcdir '/data/tsearch.data'
+COPY test_tsvector FROM :'filename';
+
+ANALYZE test_tsvector;
 
 -- test basic text search behavior without indexes, then with
 
@@ -256,6 +270,8 @@ INSERT INTO test_tsvector VALUES ('???', 'DFG:1A,2B,6C,10 FGH');
 SELECT * FROM ts_stat('SELECT a FROM test_tsvector') ORDER BY ndoc DESC, nentry DESC, word LIMIT 10;
 SELECT * FROM ts_stat('SELECT a FROM test_tsvector', 'AB') ORDER BY ndoc DESC, nentry DESC, word;
 
+DROP INDEX wowidx;
+
 --dictionaries and to_tsvector
 
 SELECT ts_lexize('english_stem', 'skies');
@@ -455,6 +471,78 @@ Water, water, every where
 Water, water, every where,
   Nor any drop to drink.
 S. T. Coleridge (1772-1834)
+', to_tsquery('english', 'day & drink'));
+
+SELECT ts_headline('english', '
+Day after day, day after day,
+  We stuck, nor breath nor motion,
+As idle as a painted Ship
+  Upon a painted Ocean.
+Water, water, every where
+  And all the boards did shrink;
+Water, water, every where,
+  Nor any drop to drink.
+S. T. Coleridge (1772-1834)
+', to_tsquery('english', 'day | drink'));
+
+SELECT ts_headline('english', '
+Day after day, day after day,
+  We stuck, nor breath nor motion,
+As idle as a painted Ship
+  Upon a painted Ocean.
+Water, water, every where
+  And all the boards did shrink;
+Water, water, every where,
+  Nor any drop to drink.
+S. T. Coleridge (1772-1834)
+', to_tsquery('english', 'day | !drink'));
+
+SELECT ts_headline('english', '
+Day after day, day after day,
+  We stuck, nor breath nor motion,
+As idle as a painted Ship
+  Upon a painted Ocean.
+Water, water, every where
+  And all the boards did shrink;
+Water, water, every where,
+  Nor any drop to drink.
+S. T. Coleridge (1772-1834)
+', to_tsquery('english', 'painted <-> Ship & drink'));
+
+SELECT ts_headline('english', '
+Day after day, day after day,
+  We stuck, nor breath nor motion,
+As idle as a painted Ship
+  Upon a painted Ocean.
+Water, water, every where
+  And all the boards did shrink;
+Water, water, every where,
+  Nor any drop to drink.
+S. T. Coleridge (1772-1834)
+', to_tsquery('english', 'painted <-> Ship | drink'));
+
+SELECT ts_headline('english', '
+Day after day, day after day,
+  We stuck, nor breath nor motion,
+As idle as a painted Ship
+  Upon a painted Ocean.
+Water, water, every where
+  And all the boards did shrink;
+Water, water, every where,
+  Nor any drop to drink.
+S. T. Coleridge (1772-1834)
+', to_tsquery('english', 'painted <-> Ship | !drink'));
+
+SELECT ts_headline('english', '
+Day after day, day after day,
+  We stuck, nor breath nor motion,
+As idle as a painted Ship
+  Upon a painted Ocean.
+Water, water, every where
+  And all the boards did shrink;
+Water, water, every where,
+  Nor any drop to drink.
+S. T. Coleridge (1772-1834)
 ', phraseto_tsquery('english', 'painted Ocean'));
 
 SELECT ts_headline('english', '
@@ -473,6 +561,11 @@ SELECT ts_headline('english',
 'Lorem ipsum urna.  Nullam nullam ullamcorper urna.',
 to_tsquery('english','Lorem') && phraseto_tsquery('english','ullamcorper urna'),
 'MaxWords=100, MinWords=1');
+
+SELECT ts_headline('english',
+'Lorem ipsum urna.  Nullam nullam ullamcorper urna.',
+phraseto_tsquery('english','ullamcorper urna'),
+'MaxWords=100, MinWords=5');
 
 SELECT ts_headline('english', '
 <html>
@@ -549,6 +642,12 @@ SELECT ts_headline('english',
 'Lorem ipsum urna.  Nullam nullam ullamcorper urna.',
 to_tsquery('english','Lorem') && phraseto_tsquery('english','ullamcorper urna'),
 'MaxFragments=100, MaxWords=100, MinWords=1');
+
+-- Edge cases with empty query
+SELECT ts_headline('english',
+'', to_tsquery('english', ''));
+SELECT ts_headline('english',
+'foo bar', to_tsquery('english', ''));
 
 --Rewrite sub system
 
@@ -728,7 +827,10 @@ select websearch_to_tsquery('simple', ':');
 select websearch_to_tsquery('simple', 'abc & def');
 select websearch_to_tsquery('simple', 'abc | def');
 select websearch_to_tsquery('simple', 'abc <-> def');
+
+-- parens are ignored, too
 select websearch_to_tsquery('simple', 'abc (pg or class)');
+select websearch_to_tsquery('simple', '(foo bar) or (ding dong)');
 
 -- NOT is ignored in quotes
 select websearch_to_tsquery('english', 'My brand new smartphone');

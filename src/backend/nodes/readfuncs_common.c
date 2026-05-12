@@ -38,70 +38,47 @@ static void unwrapStringList(List *list);
 /* functions only used for text representation */
 #ifndef COMPILING_BINARY_FUNCS
 
+
+
 static A_Const *
 _readAConst(void)
 {
 	READ_LOCALS(A_Const);
 
-	/* skip " :val " */
+	/* We expect either NULL or :val here */
 	token = pg_strtok(&length);
-	if (length != 4 || token[0] != ':' || token[1] != 'v')
-		elog(ERROR,"Unable to understand A_CONST node \"%.30s\"", token);
-
-	token = pg_strtok(&length);
-	token = debackslash(token,length);
-	local_node->val.type = T_String;
-
-	if (token[0] == '"')
-	{
-		local_node->val.val.str = palloc(length - 1);
-		strncpy(local_node->val.val.str , token+1, strlen(token)-2);
-		local_node->val.val.str[strlen(token)-2] = '\0';
-	}
-	else if (length > 2 && (token[0] == 'b'|| token[0] == 'B') && (token[1] == '\'' || token[1] == '"'))
-	{
-		local_node->val.type = T_BitString;
-		local_node->val.val.str = palloc(length+1);
-		strncpy(local_node->val.val.str , token, length);
-		local_node->val.val.str[length] = '\0';
-	}
+	if (length == 4 && strncmp(token, "NULL", 4) == 0)
+		local_node->isnull = true;
 	else
 	{
-		bool isInt = true;
-		bool isFloat = true;
-		int i = 0;
-		if (token[i] == ' ')
-			i++;
-		if (token[i] == '-' || token[i] == '+')
-			i++;
-		for (; i < length; i++)
-	 	   if (token[i] < '0' || token[i] > '9')
-	 	   {
-	 	   	 isInt = false;
-	 	   	 if (token[i] != '.' && token[i] != 'e' && token[i] != 'E' && token[i] != '+' && token[i] != '-')
-	 	   	 	isFloat = false;
-	 	   }
-	 	if (isInt)
+		union ValUnion *tmp = nodeRead(NULL, 0);
+
+		/* To forestall valgrind complaints, copy only the valid data */
+		switch (nodeTag(tmp))
 		{
-			local_node->val.type = T_Integer;
-			local_node->val.val.ival = atol(token);
-		}
-		else if (isFloat)
-		{
-			local_node->val.type = T_Float;
-			local_node->val.val.str = palloc(length + 1);
-			strcpy(local_node->val.val.str , token);
-		}
-		else
-		{
-			elog(ERROR,"Deserialization problem:  A_Const not string, bitstring, float, or int");
-			local_node->val.val.str = palloc(length + 1);
-			strcpy(local_node->val.val.str , token);
+			case T_Integer:
+				memcpy(&local_node->val, tmp, sizeof(Integer));
+				break;
+			case T_Float:
+				memcpy(&local_node->val, tmp, sizeof(Float));
+				break;
+			case T_Boolean:
+				memcpy(&local_node->val, tmp, sizeof(Boolean));
+				break;
+			case T_String:
+				memcpy(&local_node->val, tmp, sizeof(String));
+				break;
+			case T_BitString:
+				memcpy(&local_node->val, tmp, sizeof(BitString));
+				break;
+			default:
+				elog(ERROR, "unrecognized node type: %d",
+					 (int) nodeTag(tmp));
+				break;
 		}
 	}
 
-    /* CDB: 'location' field is not serialized */
-    local_node->location = -1;
+	READ_LOCATION_FIELD(location);
 
 	READ_DONE();
 }
@@ -363,9 +340,9 @@ _readAlterPublicationStmt()
 
 	READ_STRING_FIELD(pubname);
 	READ_NODE_FIELD(options);
-	READ_NODE_FIELD(tables);
+	READ_NODE_FIELD(pubobjects);
 	READ_BOOL_FIELD(for_all_tables);
-	READ_ENUM_FIELD(tableAction, DefElemAction);
+	READ_ENUM_FIELD(action, AlterPublicationAction);
 
 	READ_DONE();
 }
@@ -456,6 +433,7 @@ _readAlterTableCmd(void)
 	READ_NODE_FIELD(transform);
 	READ_ENUM_FIELD(behavior, DropBehavior);
 	READ_BOOL_FIELD(missing_ok);
+	READ_BOOL_FIELD(recurse);
 
 	READ_INT_FIELD(backendId);
 	READ_NODE_FIELD(policy);
@@ -557,6 +535,7 @@ _readColumnDef(void)
 	READ_BOOL_FIELD(is_from_type);
 	READ_INT_FIELD(attnum);
 	READ_INT_FIELD(storage);
+	READ_STRING_FIELD(storage_name);
 	READ_NODE_FIELD(raw_default);
 	READ_NODE_FIELD(cooked_default);
 
@@ -653,6 +632,7 @@ _readConstraint(void)
 	READ_NODE_FIELD(raw_expr);
 	READ_STRING_FIELD(cooked_expr);
 	READ_CHAR_FIELD(generated_when);
+	READ_BOOL_FIELD(nulls_not_distinct);
 
 	READ_NODE_FIELD(keys);
 	READ_NODE_FIELD(including);
@@ -903,7 +883,7 @@ _readCreatePublicationStmt()
 
 	READ_STRING_FIELD(pubname);
 	READ_NODE_FIELD(options);
-	READ_NODE_FIELD(tables);
+	READ_NODE_FIELD(pubobjects);
 	READ_BOOL_FIELD(for_all_tables);
 
 	READ_DONE();
@@ -1260,7 +1240,7 @@ _readGrantRoleStmt(void)
 	READ_NODE_FIELD(granted_roles);
 	READ_NODE_FIELD(grantee_roles);
 	READ_BOOL_FIELD(is_grant);
-	READ_BOOL_FIELD(admin_opt);
+	READ_NODE_FIELD(opt);
 	READ_NODE_FIELD(grantor);
 	READ_ENUM_FIELD(behavior, DropBehavior);
     Assert(local_node->behavior <= DROP_CASCADE);
@@ -1346,10 +1326,11 @@ _readIndexStmt(void)
 	READ_NODE_FIELD(excludeOpNames);
 	READ_STRING_FIELD(idxcomment);
 	READ_OID_FIELD(indexOid);
-	READ_OID_FIELD(oldNode);
+	READ_OID_FIELD(oldNumber);
 	READ_UINT_FIELD(oldCreateSubid);
-	READ_UINT_FIELD(oldFirstRelfilenodeSubid);
+	READ_UINT_FIELD(oldFirstRelfilelocatorSubid);
 	READ_BOOL_FIELD(unique);
+	READ_BOOL_FIELD(nulls_not_distinct);
 	READ_BOOL_FIELD(primary);
 	READ_BOOL_FIELD(isconstraint);
 	READ_BOOL_FIELD(deferrable);
@@ -1472,7 +1453,7 @@ _readPartitionSpec(void)
 {
 	READ_LOCALS(PartitionSpec);
 
-	READ_STRING_FIELD(strategy);
+	READ_ENUM_FIELD(strategy, PartitionStrategy);
 	READ_NODE_FIELD(partParams);
 	READ_LOCATION_FIELD(location);
 
@@ -1561,21 +1542,26 @@ _readRestrictInfo(void)
 	/* NB: this isn't a complete set of fields */
 	READ_NODE_FIELD(clause);
 	READ_BOOL_FIELD(is_pushed_down);
-	READ_BOOL_FIELD(outerjoin_delayed);
 	READ_BOOL_FIELD(can_join);
 	READ_BOOL_FIELD(pseudoconstant);
+	READ_BOOL_FIELD(has_clone);
+	READ_BOOL_FIELD(is_clone);
 	READ_BOOL_FIELD(leakproof);
 	READ_ENUM_FIELD(has_volatile, VolatileFunctionStatus);
 	READ_UINT_FIELD(security_level);
+	READ_INT_FIELD(num_base_rels);
 	READ_BOOL_FIELD(contain_outer_query_references);
 	READ_BITMAPSET_FIELD(clause_relids);
 	READ_BITMAPSET_FIELD(required_relids);
+	READ_BITMAPSET_FIELD(incompatible_relids);
 	READ_BITMAPSET_FIELD(outer_relids);
-	READ_BITMAPSET_FIELD(nullable_relids);
 	READ_BITMAPSET_FIELD(left_relids);
 	READ_BITMAPSET_FIELD(right_relids);
 	READ_NODE_FIELD(orclause);
 
+	READ_INT_FIELD(rinfo_serial);
+	READ_FLOAT_FIELD(eval_cost.startup);
+	READ_FLOAT_FIELD(eval_cost.per_tuple);
 	READ_FLOAT_FIELD(norm_selec);
 	READ_FLOAT_FIELD(outer_selec);
 	READ_NODE_FIELD(mergeopfamilies);
@@ -1584,6 +1570,11 @@ _readRestrictInfo(void)
 	READ_NODE_FIELD(right_em);
 	READ_BOOL_FIELD(outer_is_left);
 	READ_OID_FIELD(hashjoinoperator);
+	READ_FLOAT_FIELD(left_bucketsize);
+	READ_FLOAT_FIELD(left_mcvfreq);
+	READ_FLOAT_FIELD(right_mcvfreq);
+	READ_OID_FIELD(left_hasheqoperator);
+	READ_OID_FIELD(right_hasheqoperator);
 	READ_OID_FIELD(hasheqoperator);
 
 	READ_DONE();
@@ -1832,7 +1823,7 @@ unwrapStringList(List *list)
 
 	foreach(lc, list)
 	{
-		Value	   *val = (Value *) lfirst(lc);
+		String	   *val = lfirst(lc);
 
 		lfirst(lc) = strVal(val);
 		pfree(val);

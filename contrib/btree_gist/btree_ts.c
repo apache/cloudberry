@@ -123,7 +123,7 @@ gbt_ts_dist(const void *a, const void *b, FmgrInfo *flinfo)
 	i = DatumGetIntervalP(DirectFunctionCall2(timestamp_mi,
 											  TimestampGetDatumFast(*aa),
 											  TimestampGetDatumFast(*bb)));
-	return (float8) Abs(INTERVAL_TO_SEC(i));
+	return fabs(INTERVAL_TO_SEC(i));
 }
 
 
@@ -377,7 +377,6 @@ gbt_ts_penalty(PG_FUNCTION_ARGS)
 	penalty_num(result, orgdbl[0], orgdbl[1], newdbl[0], newdbl[1]);
 
 	PG_RETURN_POINTER(result);
-
 }
 
 

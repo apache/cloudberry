@@ -6,7 +6,7 @@
  *
  * Portions Copyright (c) 2005-2008, Greenplum inc
  * Portions Copyright (c) 2012-Present VMware, Inc. or its affiliates.
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * src/include/optimizer/paths.h
@@ -127,14 +127,17 @@ extern void add_paths_to_join_relation(PlannerInfo *root, RelOptInfo *joinrel,
 extern void join_search_one_level(PlannerInfo *root, int level);
 extern RelOptInfo *make_join_rel(PlannerInfo *root,
 								 RelOptInfo *rel1, RelOptInfo *rel2);
-extern RelOptInfo *make_join_relation(PlannerInfo *root, 
+extern RelOptInfo *make_join_relation(PlannerInfo *root,
 										  RelOptInfo *rel1, RelOptInfo *rel2);
+extern Relids add_outer_joins_to_relids(PlannerInfo *root, Relids input_relids,
+										SpecialJoinInfo *sjinfo,
+										List **pushed_down_joins);
 extern bool have_join_order_restriction(PlannerInfo *root,
 										RelOptInfo *rel1, RelOptInfo *rel2);
 extern bool have_dangerous_phv(PlannerInfo *root,
 							   Relids outer_relids, Relids inner_params);
 extern void mark_dummy_rel(PlannerInfo *root, RelOptInfo *rel);
-extern bool have_partkey_equi_join(RelOptInfo *joinrel,
+extern bool have_partkey_equi_join(PlannerInfo *root, RelOptInfo *joinrel,
 								   RelOptInfo *rel1, RelOptInfo *rel2,
 								   JoinType jointype, List *restrictlist);
 
@@ -150,13 +153,12 @@ typedef bool (*ec_matches_callback_type) (PlannerInfo *root,
 
 extern bool process_equivalence(PlannerInfo *root,
 								RestrictInfo **p_restrictinfo,
-								bool below_outer_join);
+								JoinDomain *jdomain);
 extern Expr *canonicalize_ec_expression(Expr *expr,
 										Oid req_type, Oid req_collation);
 extern void reconsider_outer_join_clauses(PlannerInfo *root);
 extern EquivalenceClass *get_eclass_for_sort_expr(PlannerInfo *root,
 												  Expr *expr,
-												  Relids nullable_relids,
 												  List *opfamilies,
 												  Oid opcintype,
 												  Oid collation,
@@ -171,7 +173,6 @@ extern EquivalenceMember *find_computable_ec_member(PlannerInfo *root,
 													List *exprs,
 													Relids relids,
 													bool require_parallel_safe);
-extern Expr *find_em_expr_for_rel(EquivalenceClass *ec, RelOptInfo *rel);
 extern bool relation_can_be_sorted_early(PlannerInfo *root, RelOptInfo *rel,
 										 EquivalenceClass *ec,
 										 bool require_parallel_safe);
@@ -179,7 +180,8 @@ extern void generate_base_implied_equalities(PlannerInfo *root);
 extern List *generate_join_implied_equalities(PlannerInfo *root,
 											  Relids join_relids,
 											  Relids outer_relids,
-											  RelOptInfo *inner_rel);
+											  RelOptInfo *inner_rel,
+											  SpecialJoinInfo *sjinfo);
 extern List *generate_join_implied_equalities_for_ecs(PlannerInfo *root,
 													  List *eclasses,
 													  Relids join_relids,
@@ -198,8 +200,8 @@ extern void add_child_rel_equivalences(PlannerInfo *root,
 extern void add_child_join_rel_equivalences(PlannerInfo *root,
 											int nappinfos,
 											AppendRelInfo **appinfos,
-											RelOptInfo *parent_rel,
-											RelOptInfo *child_rel);
+											RelOptInfo *parent_joinrel,
+											RelOptInfo *child_joinrel);
 extern List *generate_implied_equalities_for_column(PlannerInfo *root,
 													RelOptInfo *rel,
 													ec_matches_callback_type callback,
@@ -259,13 +261,12 @@ extern List *build_partition_pathkeys(PlannerInfo *root, RelOptInfo *partrel,
 									  ScanDirection scandir, bool *partialkeys);
 extern PathKey *make_pathkey_from_sortop(PlannerInfo *root,
 										 Expr *expr,
-										 Relids nullable_relids,
 										 Oid ordering_op,
 										 bool nulls_first,
 										 Index sortref,
 										 bool create_it);
 extern List *build_expression_pathkey(PlannerInfo *root, Expr *expr,
-									  Relids nullable_relids, Oid opno,
+									  Oid opno,
 									  Relids rel, bool create_it);
 extern List *convert_subquery_pathkeys(PlannerInfo *root, RelOptInfo *rel,
 									   List *subquery_pathkeys,
@@ -295,6 +296,11 @@ extern void make_distribution_exprs_for_groupclause(PlannerInfo *root,
 													List **partition_dist_exprs,
 													List **partition_dist_opfamilies,
 													List **partition_dist_sortrefs);
+extern List *make_pathkeys_for_sortclauses_extended(PlannerInfo *root,
+													List **sortclauses,
+													List *tlist,
+													bool remove_redundant,
+													bool *sortable);
 extern void initialize_mergeclause_eclasses(PlannerInfo *root,
 											RestrictInfo *restrictinfo);
 extern void update_mergeclause_eclasses(PlannerInfo *root,
@@ -315,6 +321,7 @@ extern List *truncate_useless_pathkeys(PlannerInfo *root,
 									   RelOptInfo *rel,
 									   List *pathkeys);
 extern bool has_useful_pathkeys(PlannerInfo *root, RelOptInfo *rel);
+extern List *append_pathkeys(List *target, List *source);
 extern PathKey *make_canonical_pathkey(PlannerInfo *root,
 									   EquivalenceClass *eclass, Oid opfamily,
 									   int strategy, bool nulls_first);

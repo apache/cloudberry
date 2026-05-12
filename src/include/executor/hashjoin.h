@@ -6,7 +6,7 @@
  *
  * Portions Copyright (c) 2007-2008, Greenplum inc
  * Portions Copyright (c) 2012-Present VMware, Inc. or its affiliates.
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * src/include/executor/hashjoin.h
@@ -30,12 +30,12 @@ struct StringInfoData;                  /* #include "lib/stringinfo.h" */
 /* ----------------------------------------------------------------
  *				hash-join hash table structures
  *
- * Each active hashjoin has a HashJoinTable control block, which is
- * palloc'd in the executor's per-query context.  All other storage needed
- * for the hashjoin is kept in private memory contexts, two for each hashjoin.
- * This makes it easy and fast to release the storage when we don't need it
- * anymore.  (Exception: data associated with the temp files lives in the
- * per-query context too, since we always call buffile.c in that context.)
+ * Each active hashjoin has a HashJoinTable structure, which is
+ * palloc'd in the executor's per-query context.  Other storage needed for
+ * each hashjoin is kept in child contexts, three for each hashjoin:
+ *   - HashTableContext (hashCxt): the parent hash table storage context
+ *   - HashSpillContext (spillCxt): storage for temp files buffers
+ *   - HashBatchContext (batchCxt): storage for a batch in serial hash join
  *
  * The hashtable contexts are made children of the per-query context, ensuring
  * that they will be discarded at end of statement even if the join is
@@ -43,9 +43,20 @@ struct StringInfoData;                  /* #include "lib/stringinfo.h" */
  * be cleaned up by the virtual file manager in event of an error.)
  *
  * Storage that should live through the entire join is allocated from the
- * "hashCxt", while storage that is only wanted for the current batch is
- * allocated in the "batchCxt".  By resetting the batchCxt at the end of
- * each batch, we free all the per-batch storage reliably and without tedium.
+ * "hashCxt" (mainly the hashtable's metadata). Also, the "hashCxt" context is
+ * the parent of "spillCxt" and "batchCxt". It makes it easy and fast to
+ * release the storage when we don't need it anymore.
+ *
+ * Data associated with temp files is allocated in the "spillCxt" context
+ * which lives for the duration of the entire join as batch files'
+ * creation and usage may span batch execution. These files are
+ * explicitly destroyed by calling BufFileClose() when the code is done
+ * with them. The aim of this context is to help accounting for the
+ * memory allocated for temp files and their buffers.
+ *
+ * Finally, data used only during a single batch's execution is allocated
+ * in the "batchCxt". By resetting the batchCxt at the end of each batch,
+ * we free all the per-batch storage reliably and without tedium.
  *
  * During first scan of inner relation, we get its tuples from executor.
  * If nbatch > 1 then tuples that don't belong in first batch get saved
@@ -295,32 +306,33 @@ typedef struct ParallelHashJoinState
 } ParallelHashJoinState;
 
 /* The phases for building batches, used by build_barrier. */
-#define PHJ_BUILD_ELECTING				0
-#define PHJ_BUILD_ALLOCATING			1
-#define PHJ_BUILD_HASHING_INNER			2
-#define PHJ_BUILD_HASHING_OUTER			3
-#define PHJ_BUILD_DONE					4
+#define PHJ_BUILD_ELECT					0
+#define PHJ_BUILD_ALLOCATE				1
+#define PHJ_BUILD_HASH_INNER			2
+#define PHJ_BUILD_HASH_OUTER			3
+#define PHJ_BUILD_RUN					4
+#define PHJ_BUILD_FREE					5
 
 /* The phases for probing each batch, used by for batch_barrier. */
-#define PHJ_BATCH_ELECTING				0
-#define PHJ_BATCH_ALLOCATING			1
-#define PHJ_BATCH_LOADING				2
-#define PHJ_BATCH_PROBING				3
+#define PHJ_BATCH_ELECT					0
+#define PHJ_BATCH_ALLOCATE				1
+#define PHJ_BATCH_LOAD					2
+#define PHJ_BATCH_PROBE					3
 #define PHJ_BATCH_SCAN					4
 #define PHJ_BATCH_FREE					5
 
 /* The phases of batch growth while hashing, for grow_batches_barrier. */
-#define PHJ_GROW_BATCHES_ELECTING		0
-#define PHJ_GROW_BATCHES_ALLOCATING		1
-#define PHJ_GROW_BATCHES_REPARTITIONING 2
-#define PHJ_GROW_BATCHES_DECIDING		3
-#define PHJ_GROW_BATCHES_FINISHING		4
+#define PHJ_GROW_BATCHES_ELECT			0
+#define PHJ_GROW_BATCHES_REALLOCATE		1
+#define PHJ_GROW_BATCHES_REPARTITION	2
+#define PHJ_GROW_BATCHES_DECIDE			3
+#define PHJ_GROW_BATCHES_FINISH			4
 #define PHJ_GROW_BATCHES_PHASE(n)		((n) % 5)	/* circular phases */
 
 /* The phases of bucket growth while hashing, for grow_buckets_barrier. */
-#define PHJ_GROW_BUCKETS_ELECTING		0
-#define PHJ_GROW_BUCKETS_ALLOCATING		1
-#define PHJ_GROW_BUCKETS_REINSERTING	2
+#define PHJ_GROW_BUCKETS_ELECT			0
+#define PHJ_GROW_BUCKETS_REALLOCATE		1
+#define PHJ_GROW_BUCKETS_REINSERT		2
 #define PHJ_GROW_BUCKETS_PHASE(n)		((n) % 3)	/* circular phases */
 
 typedef struct HashJoinTableData
@@ -401,6 +413,7 @@ typedef struct HashJoinTableData
 
     HashJoinState * hjstate; /* reference to the enclosing HashJoinState */
     bool first_pass; /* Is this the first pass (pre-rescan) */
+	MemoryContext spillCxt;		/* context for spilling to temp files */
 
 	/* used for dense allocation of tuples (into linked chunks) */
 	HashMemoryChunk chunks;		/* one list for the whole batch */
@@ -411,6 +424,6 @@ typedef struct HashJoinTableData
 	ParallelHashJoinState *parallel_state;
 	ParallelHashJoinBatchAccessor *batches;
 	dsa_pointer current_chunk_shared;
-}			HashJoinTableData;
+} HashJoinTableData;
 
 #endif							/* HASHJOIN_H */

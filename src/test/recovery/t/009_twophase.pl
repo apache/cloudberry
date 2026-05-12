@@ -1,23 +1,16 @@
 
-# Copyright (c) 2021, PostgreSQL Global Development Group
+# Copyright (c) 2021-2023, PostgreSQL Global Development Group
 
 # Tests dedicated to two-phase commit in recovery
 use strict;
 use warnings;
 
-use PostgresNode;
-use TestLib;
-
-# GPDB: Effectively disable this TAP test. We cannot run PREPARE
-# TRANSACTION in utility-mode. We need at least 1 test so create a
-# dummy one.
-#use Test::More tests => 24;
-use Test::More tests => 1;
-is(-1, -1, "Disable this TAP test");
-exit;
+use PostgreSQL::Test::Cluster;
+use PostgreSQL::Test::Utils;
+use Test::More;
 
 my $psql_out = '';
-my $psql_rc  = '';
+my $psql_rc = '';
 
 sub configure_and_reload
 {
@@ -38,7 +31,7 @@ sub configure_and_reload
 # Set up two nodes, which will alternately be primary and replication standby.
 
 # Setup london node
-my $node_london = get_new_node("london");
+my $node_london = PostgreSQL::Test::Cluster->new("london");
 $node_london->init(allows_streaming => 1);
 $node_london->append_conf(
 	'postgresql.conf', qq(
@@ -49,14 +42,14 @@ $node_london->start;
 $node_london->backup('london_backup');
 
 # Setup paris node
-my $node_paris = get_new_node('paris');
+my $node_paris = PostgreSQL::Test::Cluster->new('paris');
 $node_paris->init_from_backup($node_london, 'london_backup',
 	has_streaming => 1);
 $node_paris->start;
 
 # Switch to synchronous replication in both directions
 configure_and_reload($node_london, "synchronous_standby_names = 'paris'");
-configure_and_reload($node_paris,  "synchronous_standby_names = 'london'");
+configure_and_reload($node_paris, "synchronous_standby_names = 'london'");
 
 # Set up nonce names for current primary and standby nodes
 note "Initially, london is primary and paris is standby";
@@ -316,6 +309,53 @@ $cur_standby->start;
 $cur_primary->psql('postgres', "COMMIT PREPARED 'xact_009_12'");
 
 ###############################################################################
+# Check visibility of prepared transactions in standby after a restart while
+# primary is down.
+###############################################################################
+
+$cur_primary->psql(
+	'postgres', "
+	SET synchronous_commit='remote_apply'; -- To ensure the standby is caught up
+	CREATE TABLE t_009_tbl_standby_mvcc (id int, msg text);
+	BEGIN;
+	INSERT INTO t_009_tbl_standby_mvcc VALUES (1, 'issued to ${cur_primary_name}');
+	SAVEPOINT s1;
+	INSERT INTO t_009_tbl_standby_mvcc VALUES (2, 'issued to ${cur_primary_name}');
+	PREPARE TRANSACTION 'xact_009_standby_mvcc';
+	");
+$cur_primary->stop;
+$cur_standby->restart;
+
+# Acquire a snapshot in standby, before we commit the prepared transaction
+my $standby_session = $cur_standby->background_psql('postgres', on_error_die => 1);
+$standby_session->query_safe("BEGIN ISOLATION LEVEL REPEATABLE READ");
+$psql_out = $standby_session->query_safe(
+	"SELECT count(*) FROM t_009_tbl_standby_mvcc");
+is($psql_out, '0',
+	"Prepared transaction not visible in standby before commit");
+
+# Commit the transaction in primary
+$cur_primary->start;
+$cur_primary->psql('postgres', "
+SET synchronous_commit='remote_apply'; -- To ensure the standby is caught up
+COMMIT PREPARED 'xact_009_standby_mvcc';
+");
+
+# Still not visible to the old snapshot
+$psql_out = $standby_session->query_safe(
+	"SELECT count(*) FROM t_009_tbl_standby_mvcc");
+is($psql_out, '0',
+	"Committed prepared transaction not visible to old snapshot in standby");
+
+# Is visible to a new snapshot
+$standby_session->query_safe("COMMIT");
+$psql_out = $standby_session->query_safe(
+	"SELECT count(*) FROM t_009_tbl_standby_mvcc");
+is($psql_out, '2',
+   "Committed prepared transaction is visible to new snapshot in standby");
+$standby_session->quit;
+
+###############################################################################
 # Check for a lock conflict between prepared transaction with DDL inside and
 # replay of XLOG_STANDBY_LOCK wal record.
 ###############################################################################
@@ -487,3 +527,5 @@ $cur_standby->psql(
 is( $psql_out,
 	qq{27|issued to paris},
 	"Check expected t_009_tbl2 data on standby");
+
+done_testing();

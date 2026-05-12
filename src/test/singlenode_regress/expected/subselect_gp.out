@@ -780,14 +780,14 @@ select * from csq_pullup t0 where 1= (select count(*) from csq_pullup t1 where t
 -- text, text
 --
 explain select * from csq_pullup t0 where not exists (select 1 from csq_pullup t1 where t0.t=t1.t and t1.i = 1);
-                               QUERY PLAN                                
--------------------------------------------------------------------------
- Hash Anti Join  (cost=1.02..2.07 rows=3 width=17)
-   Hash Cond: (t0.t = t1.t)
-   ->  Seq Scan on csq_pullup t0  (cost=0.00..1.01 rows=1 width=17)
-   ->  Hash  (cost=1.01..1.01 rows=1 width=4)
-         ->  Seq Scan on csq_pullup t1  (cost=0.00..1.01 rows=1 width=4)
-               Filter: (i = 1)
+                                QUERY PLAN                                
+--------------------------------------------------------------------------
+ Hash Right Anti Join  (cost=1.02..2.07 rows=3 width=17)
+   Hash Cond: (t1.t = t0.t)
+   ->  Seq Scan on csq_pullup t1  (cost=0.00..1.01 rows=1 width=4)
+         Filter: (i = 1)
+   ->  Hash  (cost=1.01..1.01 rows=1 width=17)
+         ->  Seq Scan on csq_pullup t0  (cost=0.00..1.01 rows=1 width=17)
  Optimizer: Postgres query optimizer
 (7 rows)
 

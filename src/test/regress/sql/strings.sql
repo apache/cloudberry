@@ -123,6 +123,12 @@ SELECT E'DeAdBeEf'::bytea;
 SELECT E'De\\000dBeEf'::bytea;
 SELECT E'De\\123dBeEf'::bytea;
 
+-- Test non-error-throwing API too
+SELECT pg_input_is_valid(E'\\xDeAdBeE', 'bytea');
+SELECT * FROM pg_input_error_info(E'\\xDeAdBeE', 'bytea');
+SELECT * FROM pg_input_error_info(E'\\xDeAdBeEx', 'bytea');
+SELECT * FROM pg_input_error_info(E'foo\\99bar', 'bytea');
+
 --
 -- test conversions between various string types
 -- E021-10 implicit casting among the character data types
@@ -209,6 +215,8 @@ SELECT SUBSTRING('abcdefg' FROM 'c.e') AS "cde";
 
 -- With a parenthesized subexpression, return only what matches the subexpr
 SELECT SUBSTRING('abcdefg' FROM 'b(.*)f') AS "cde";
+-- Check case where we have a match, but not a subexpression match
+SELECT SUBSTRING('foo' FROM 'foo(bar)?') IS NULL AS t;
 
 -- Check behavior of SIMILAR TO, which uses largely the same regexp variant
 SELECT 'abcdefg' SIMILAR TO '_bcd%' AS true;
@@ -223,13 +231,105 @@ SELECT 'abcd\efg' SIMILAR TO '_bcd\%' ESCAPE '' AS true;
 SELECT 'abcdefg' SIMILAR TO '_bcd%' ESCAPE NULL AS null;
 SELECT 'abcdefg' SIMILAR TO '_bcd#%' ESCAPE '##' AS error;
 
--- Test back reference in regexp_replace
+-- Test backslash escapes in regexp_replace's replacement string
 SELECT regexp_replace('1112223333', E'(\\d{3})(\\d{3})(\\d{4})', E'(\\1) \\2-\\3');
+SELECT regexp_replace('foobarrbazz', E'(.)\\1', E'X\\&Y', 'g');
+SELECT regexp_replace('foobarrbazz', E'(.)\\1', E'X\\\\Y', 'g');
+-- not an error, though perhaps it should be:
+SELECT regexp_replace('foobarrbazz', E'(.)\\1', E'X\\Y\\1Z\\');
+
 SELECT regexp_replace('AAA   BBB   CCC   ', E'\\s+', ' ', 'g');
 SELECT regexp_replace('AAA', '^|$', 'Z', 'g');
 SELECT regexp_replace('AAA aaa', 'A+', 'Z', 'gi');
 -- invalid regexp option
 SELECT regexp_replace('AAA aaa', 'A+', 'Z', 'z');
+
+-- extended regexp_replace tests
+SELECT regexp_replace('A PostgreSQL function', 'A|e|i|o|u', 'X', 1);
+SELECT regexp_replace('A PostgreSQL function', 'A|e|i|o|u', 'X', 1, 2);
+SELECT regexp_replace('A PostgreSQL function', 'a|e|i|o|u', 'X', 1, 0, 'i');
+SELECT regexp_replace('A PostgreSQL function', 'a|e|i|o|u', 'X', 1, 1, 'i');
+SELECT regexp_replace('A PostgreSQL function', 'a|e|i|o|u', 'X', 1, 2, 'i');
+SELECT regexp_replace('A PostgreSQL function', 'a|e|i|o|u', 'X', 1, 3, 'i');
+SELECT regexp_replace('A PostgreSQL function', 'a|e|i|o|u', 'X', 1, 9, 'i');
+SELECT regexp_replace('A PostgreSQL function', 'A|e|i|o|u', 'X', 7, 0, 'i');
+-- 'g' flag should be ignored when N is specified
+SELECT regexp_replace('A PostgreSQL function', 'a|e|i|o|u', 'X', 1, 1, 'g');
+-- errors
+SELECT regexp_replace('A PostgreSQL function', 'a|e|i|o|u', 'X', -1, 0, 'i');
+SELECT regexp_replace('A PostgreSQL function', 'a|e|i|o|u', 'X', 1, -1, 'i');
+-- erroneous invocation of non-extended form
+SELECT regexp_replace('A PostgreSQL function', 'a|e|i|o|u', 'X', '1');
+
+--  regexp_count tests
+SELECT regexp_count('123123123123123', '(12)3');
+SELECT regexp_count('123123123123', '123', 1);
+SELECT regexp_count('123123123123', '123', 3);
+SELECT regexp_count('123123123123', '123', 33);
+SELECT regexp_count('ABCABCABCABC', 'Abc', 1, '');
+SELECT regexp_count('ABCABCABCABC', 'Abc', 1, 'i');
+-- errors
+SELECT regexp_count('123123123123', '123', 0);
+SELECT regexp_count('123123123123', '123', -3);
+
+-- regexp_like tests
+SELECT regexp_like('Steven', '^Ste(v|ph)en$');
+SELECT regexp_like('a'||CHR(10)||'d', 'a.d', 'n');
+SELECT regexp_like('a'||CHR(10)||'d', 'a.d', 's');
+SELECT regexp_like('abc', ' a . c ', 'x');
+SELECT regexp_like('abc', 'a.c', 'g');  -- error
+
+-- regexp_instr tests
+SELECT regexp_instr('abcdefghi', 'd.f');
+SELECT regexp_instr('abcdefghi', 'd.q');
+SELECT regexp_instr('abcabcabc', 'a.c');
+SELECT regexp_instr('abcabcabc', 'a.c', 2);
+SELECT regexp_instr('abcabcabc', 'a.c', 1, 3);
+SELECT regexp_instr('abcabcabc', 'a.c', 1, 4);
+SELECT regexp_instr('abcabcabc', 'A.C', 1, 2, 0, 'i');
+SELECT regexp_instr('1234567890', '(123)(4(56)(78))', 1, 1, 0, 'i', 0);
+SELECT regexp_instr('1234567890', '(123)(4(56)(78))', 1, 1, 0, 'i', 1);
+SELECT regexp_instr('1234567890', '(123)(4(56)(78))', 1, 1, 0, 'i', 2);
+SELECT regexp_instr('1234567890', '(123)(4(56)(78))', 1, 1, 0, 'i', 3);
+SELECT regexp_instr('1234567890', '(123)(4(56)(78))', 1, 1, 0, 'i', 4);
+SELECT regexp_instr('1234567890', '(123)(4(56)(78))', 1, 1, 0, 'i', 5);
+SELECT regexp_instr('1234567890', '(123)(4(56)(78))', 1, 1, 1, 'i', 0);
+SELECT regexp_instr('1234567890', '(123)(4(56)(78))', 1, 1, 1, 'i', 1);
+SELECT regexp_instr('1234567890', '(123)(4(56)(78))', 1, 1, 1, 'i', 2);
+SELECT regexp_instr('1234567890', '(123)(4(56)(78))', 1, 1, 1, 'i', 3);
+SELECT regexp_instr('1234567890', '(123)(4(56)(78))', 1, 1, 1, 'i', 4);
+SELECT regexp_instr('1234567890', '(123)(4(56)(78))', 1, 1, 1, 'i', 5);
+-- Check case where we have a match, but not a subexpression match
+SELECT regexp_instr('foo', 'foo(bar)?', 1, 1, 0, '', 1);
+-- errors
+SELECT regexp_instr('abcabcabc', 'a.c', 0, 1);
+SELECT regexp_instr('abcabcabc', 'a.c', 1, 0);
+SELECT regexp_instr('abcabcabc', 'a.c', 1, 1, -1);
+SELECT regexp_instr('abcabcabc', 'a.c', 1, 1, 2);
+SELECT regexp_instr('abcabcabc', 'a.c', 1, 1, 0, 'g');
+SELECT regexp_instr('abcabcabc', 'a.c', 1, 1, 0, '', -1);
+
+-- regexp_substr tests
+SELECT regexp_substr('abcdefghi', 'd.f');
+SELECT regexp_substr('abcdefghi', 'd.q') IS NULL AS t;
+SELECT regexp_substr('abcabcabc', 'a.c');
+SELECT regexp_substr('abcabcabc', 'a.c', 2);
+SELECT regexp_substr('abcabcabc', 'a.c', 1, 3);
+SELECT regexp_substr('abcabcabc', 'a.c', 1, 4) IS NULL AS t;
+SELECT regexp_substr('abcabcabc', 'A.C', 1, 2, 'i');
+SELECT regexp_substr('1234567890', '(123)(4(56)(78))', 1, 1, 'i', 0);
+SELECT regexp_substr('1234567890', '(123)(4(56)(78))', 1, 1, 'i', 1);
+SELECT regexp_substr('1234567890', '(123)(4(56)(78))', 1, 1, 'i', 2);
+SELECT regexp_substr('1234567890', '(123)(4(56)(78))', 1, 1, 'i', 3);
+SELECT regexp_substr('1234567890', '(123)(4(56)(78))', 1, 1, 'i', 4);
+SELECT regexp_substr('1234567890', '(123)(4(56)(78))', 1, 1, 'i', 5) IS NULL AS t;
+-- Check case where we have a match, but not a subexpression match
+SELECT regexp_substr('foo', 'foo(bar)?', 1, 1, '', 1) IS NULL AS t;
+-- errors
+SELECT regexp_substr('abcabcabc', 'a.c', 0, 1);
+SELECT regexp_substr('abcabcabc', 'a.c', 1, 0);
+SELECT regexp_substr('abcabcabc', 'a.c', 1, 1, 'g');
+SELECT regexp_substr('abcabcabc', 'a.c', 1, 1, '', -1);
 
 -- set so we can tell NULL from empty string
 \pset null '\\N'
@@ -633,38 +733,6 @@ select to_hex(256*256*256 - 1) AS "ffffff";
 select to_hex(256::bigint*256::bigint*256::bigint*256::bigint - 1) AS "ffffffff";
 
 --
--- MD5 test suite - from IETF RFC 1321
--- (see: ftp://ftp.rfc-editor.org/in-notes/rfc1321.txt)
---
-select md5('') = 'd41d8cd98f00b204e9800998ecf8427e' AS "TRUE";
-
-select md5('a') = '0cc175b9c0f1b6a831c399e269772661' AS "TRUE";
-
-select md5('abc') = '900150983cd24fb0d6963f7d28e17f72' AS "TRUE";
-
-select md5('message digest') = 'f96b697d7cb7938d525a2f31aaf161d0' AS "TRUE";
-
-select md5('abcdefghijklmnopqrstuvwxyz') = 'c3fcd3d76192e4007dfb496cca67e13b' AS "TRUE";
-
-select md5('ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789') = 'd174ab98d277d9f5a5611c2c9f419d9f' AS "TRUE";
-
-select md5('12345678901234567890123456789012345678901234567890123456789012345678901234567890') = '57edf4a22be3c955ac49da2e2107b67a' AS "TRUE";
-
-select md5(''::bytea) = 'd41d8cd98f00b204e9800998ecf8427e' AS "TRUE";
-
-select md5('a'::bytea) = '0cc175b9c0f1b6a831c399e269772661' AS "TRUE";
-
-select md5('abc'::bytea) = '900150983cd24fb0d6963f7d28e17f72' AS "TRUE";
-
-select md5('message digest'::bytea) = 'f96b697d7cb7938d525a2f31aaf161d0' AS "TRUE";
-
-select md5('abcdefghijklmnopqrstuvwxyz'::bytea) = 'c3fcd3d76192e4007dfb496cca67e13b' AS "TRUE";
-
-select md5('ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'::bytea) = 'd174ab98d277d9f5a5611c2c9f419d9f' AS "TRUE";
-
-select md5('12345678901234567890123456789012345678901234567890123456789012345678901234567890'::bytea) = '57edf4a22be3c955ac49da2e2107b67a' AS "TRUE";
-
---
 -- SHA-2
 --
 SET bytea_output TO hex;
@@ -770,6 +838,7 @@ SELECT ltrim('zzzytrim', 'xyz');
 
 SELECT translate('', '14', 'ax');
 SELECT translate('12345', '14', 'ax');
+SELECT translate('12345', '134', 'a');
 
 SELECT ascii('x');
 SELECT ascii('');

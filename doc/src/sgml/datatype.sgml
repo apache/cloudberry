@@ -545,8 +545,8 @@
 <programlisting>
 NUMERIC(<replaceable>precision</replaceable>, <replaceable>scale</replaceable>)
 </programlisting>
-     The precision must be positive, the scale zero or positive.
-     Alternatively:
+     The precision must be positive, while the scale may be positive or
+     negative (see below).  Alternatively:
 <programlisting>
 NUMERIC(<replaceable>precision</replaceable>)
 </programlisting>
@@ -569,8 +569,8 @@ NUMERIC
     <note>
      <para>
       The maximum precision that can be explicitly specified in
-      a <type>NUMERIC</type> type declaration is 1000.  An
-      unconstrained <type>NUMERIC</type> column is subject to the limits
+      a <type>numeric</type> type declaration is 1000.  An
+      unconstrained <type>numeric</type> column is subject to the limits
       described in <xref linkend="datatype-numeric-table"/>.
      </para>
     </note>
@@ -581,7 +581,47 @@ NUMERIC
      number of fractional digits.  Then, if the number of digits to the
      left of the decimal point exceeds the declared precision minus the
      declared scale, an error is raised.
+     For example, a column declared as
+<programlisting>
+NUMERIC(3, 1)
+</programlisting>
+     will round values to 1 decimal place and can store values between
+     -99.9 and 99.9, inclusive.
     </para>
+
+    <para>
+     Beginning in <productname>PostgreSQL</productname> 15, it is allowed
+     to declare a <type>numeric</type> column with a negative scale.  Then
+     values will be rounded to the left of the decimal point.  The
+     precision still represents the maximum number of non-rounded digits.
+     Thus, a column declared as
+<programlisting>
+NUMERIC(2, -3)
+</programlisting>
+     will round values to the nearest thousand and can store values
+     between -99000 and 99000, inclusive.
+     It is also allowed to declare a scale larger than the declared
+     precision.  Such a column can only hold fractional values, and it
+     requires the number of zero digits just to the right of the decimal
+     point to be at least the declared scale minus the declared precision.
+     For example, a column declared as
+<programlisting>
+NUMERIC(3, 5)
+</programlisting>
+     will round values to 5 decimal places and can store values between
+     -0.00999 and 0.00999, inclusive.
+    </para>
+
+    <note>
+     <para>
+      <productname>PostgreSQL</productname> permits the scale in a
+      <type>numeric</type> type declaration to be any value in the range
+      -1000 to 1000.  However, the <acronym>SQL</acronym> standard requires
+      the scale to be in the range 0 to <replaceable>precision</replaceable>.
+      Using scales outside that range may not be portable to other database
+      systems.
+     </para>
+    </note>
 
     <para>
      Numeric values are physically stored without any extra leading or
@@ -1114,6 +1154,10 @@ SELECT '52093.89'::money::numeric::float8;
     <primary>varchar</primary>
    </indexterm>
 
+   <indexterm zone="datatype-character">
+    <primary>bpchar</primary>
+   </indexterm>
+
     <table id="datatype-character-table">
      <title>Character Types</title>
      <tgroup cols="2">
@@ -1129,8 +1173,12 @@ SELECT '52093.89'::money::numeric::float8;
         <entry>variable-length with limit</entry>
        </row>
        <row>
-        <entry><type>character(<replaceable>n</replaceable>)</type>, <type>char(<replaceable>n</replaceable>)</type></entry>
-        <entry>fixed-length, blank padded</entry>
+        <entry><type>character(<replaceable>n</replaceable>)</type>, <type>char(<replaceable>n</replaceable>)</type>, <type>bpchar(<replaceable>n</replaceable>)</type></entry>
+        <entry>fixed-length, blank-padded</entry>
+       </row>
+       <row>
+        <entry><type>bpchar</type></entry>
+        <entry>variable unlimited length, blank-trimmed</entry>
        </row>
        <row>
         <entry><type>text</type></entry>
@@ -1156,7 +1204,14 @@ SELECT '52093.89'::money::numeric::float8;
     error, unless the excess characters are all spaces, in which case
     the string will be truncated to the maximum length. (This somewhat
     bizarre exception is required by the <acronym>SQL</acronym>
-    standard.) If the string to be stored is shorter than the declared
+    standard.)
+    However, if one explicitly casts a value to <type>character
+    varying(<replaceable>n</replaceable>)</type> or
+    <type>character(<replaceable>n</replaceable>)</type>, then an over-length
+    value will be truncated to <replaceable>n</replaceable> characters without
+    raising an error. (This too is required by the
+    <acronym>SQL</acronym> standard.)
+    If the string to be stored is shorter than the declared
     length, values of type <type>character</type> will be space-padded;
     values of type <type>character varying</type> will simply store the
     shorter
@@ -1164,31 +1219,37 @@ SELECT '52093.89'::money::numeric::float8;
    </para>
 
    <para>
-    If one explicitly casts a value to <type>character
-    varying(<replaceable>n</replaceable>)</type> or
-    <type>character(<replaceable>n</replaceable>)</type>, then an over-length
-    value will be truncated to <replaceable>n</replaceable> characters without
-    raising an error. (This too is required by the
-    <acronym>SQL</acronym> standard.)
-   </para>
-
-   <para>
-    The notations <type>varchar(<replaceable>n</replaceable>)</type> and
-    <type>char(<replaceable>n</replaceable>)</type> are aliases for <type>character
-    varying(<replaceable>n</replaceable>)</type> and
-    <type>character(<replaceable>n</replaceable>)</type>, respectively.
-    <type>character</type> without length specifier is equivalent to
-    <type>character(1)</type>. If <type>character varying</type> is used
-    without length specifier, the type accepts strings of any size. The
-    latter is a <productname>PostgreSQL</productname> extension.
-   </para>
-
-   <para>
     In addition, <productname>PostgreSQL</productname> provides the
     <type>text</type> type, which stores strings of any length.
-    Although the type <type>text</type> is not in the
+    Although the <type>text</type> type is not in the
     <acronym>SQL</acronym> standard, several other SQL database
     management systems have it as well.
+    <type>text</type> is <productname>PostgreSQL</productname>'s native
+    string data type, in that most built-in functions operating on strings
+    are declared to take or return <type>text</type> not <type>character
+    varying</type>.  For many purposes, <type>character varying</type>
+    acts as though it were a <link linkend="domains">domain</link>
+    over <type>text</type>.
+   </para>
+
+   <para>
+    The type name <type>varchar</type> is an alias for <type>character
+    varying</type>, while <type>bpchar</type> (with length specifier) and
+    <type>char</type> are aliases for <type>character</type>.  The
+    <type>varchar</type> and <type>char</type> aliases are defined in the
+    <acronym>SQL</acronym> standard;  <type>bpchar</type> is a
+    <productname>PostgreSQL</productname> extension.
+   </para>
+
+   <para>
+    If specified, the length <replaceable>n</replaceable> must be greater
+    than zero and cannot exceed 10,485,760.  If <type>character
+    varying</type> (or <type>varchar</type>) is used without
+    length specifier, the type accepts strings of any length. If
+    <type>bpchar</type> lacks a length specifier, it also accepts strings
+    of any length, but trailing spaces are semantically insignificant.
+    If <type>character</type> (or <type>char</type>) lacks a specifier,
+    it is equivalent to <type>character(1)</type>.
    </para>
 
    <para>
@@ -1298,9 +1359,10 @@ SELECT b, char_length(b) FROM test2;
    <para>
     There are two other fixed-length character types in
     <productname>PostgreSQL</productname>, shown in <xref
-    linkend="datatype-character-special-table"/>. The <type>name</type>
-    type exists <emphasis>only</emphasis> for the storage of identifiers
-    in the internal system catalogs and is not intended for use by the general user. Its
+    linkend="datatype-character-special-table"/>.
+    These are not intended for general-purpose use, only for use
+    in the internal system catalogs.
+    The <type>name</type> type is used to store identifiers. Its
     length is currently defined as 64 bytes (63 usable characters plus
     terminator) but should be referenced using the constant
     <symbol>NAMEDATALEN</symbol> in <literal>C</literal> source code.
@@ -1308,7 +1370,8 @@ SELECT b, char_length(b) FROM test2;
     is therefore adjustable for special uses); the default maximum
     length might change in a future release. The type <type>"char"</type>
     (note the quotes) is different from <type>char(1)</type> in that it
-    only uses one byte of storage. It is internally used in the system
+    only uses one byte of storage, and therefore can store only a single
+    ASCII character. It is used in the system
     catalogs as a simplistic enumeration type.
    </para>
 
@@ -1414,7 +1477,7 @@ SELECT b, char_length(b) FROM test2;
     mostly the same.
    </para>
 
-  <sect2>
+  <sect2 id="datatype-binary-bytea-hex-format">
    <title><type>bytea</type> Hex Format</title>
 
    <para>
@@ -1436,12 +1499,17 @@ SELECT b, char_length(b) FROM test2;
    <para>
     Example:
 <programlisting>
-SELECT '\xDEADBEEF';
+SET bytea_output = 'hex';
+
+SELECT '\xDEADBEEF'::bytea;
+   bytea
+------------
+ \xdeadbeef
 </programlisting>
    </para>
   </sect2>
 
-  <sect2>
+  <sect2 id="datatype-binary-bytea-escape-format">
    <title><type>bytea</type> Escape Format</title>
 
    <para>
@@ -1847,7 +1915,7 @@ MINUTE TO SECOND
      more than 6 digits).
     </para>
 
-    <sect3>
+    <sect3 id="datatype-datetime-input-dates">
     <title>Dates</title>
 
     <indexterm>
@@ -1946,7 +2014,7 @@ MINUTE TO SECOND
      </table>
     </sect3>
 
-    <sect3>
+    <sect3 id="datatype-datetime-input-times">
      <title>Times</title>
 
      <indexterm>
@@ -1979,7 +2047,8 @@ MINUTE TO SECOND
       <literal>America/New_York</literal>. In this case specifying the date
       is required in order to determine whether standard or daylight-savings
       time applies.  The appropriate time zone offset is recorded in the
-      <type>time with time zone</type> value.
+      <type>time with time zone</type> value and is output as stored;
+      it is not adjusted to the active time zone.
      </para>
 
       <table id="datatype-datetime-time-table">
@@ -2110,7 +2179,7 @@ MINUTE TO SECOND
     </para>
     </sect3>
 
-    <sect3>
+    <sect3 id="datatype-datetime-input-time-stamps">
     <title>Time Stamps</title>
 
     <indexterm>
@@ -2176,24 +2245,27 @@ TIMESTAMP '2004-10-19 10:23:54+02'
 <programlisting>
 TIMESTAMP WITH TIME ZONE '2004-10-19 10:23:54+02'
 </programlisting>
-
-      In a literal that has been determined to be <type>timestamp without time
-      zone</type>, <productname>PostgreSQL</productname> will silently ignore
-      any time zone indication.
-      That is, the resulting value is derived from the date/time
-      fields in the input value, and is not adjusted for time zone.
      </para>
 
      <para>
-      For <type>timestamp with time zone</type>, the internally stored
-      value is always in UTC (Universal
-      Coordinated Time, traditionally known as Greenwich Mean Time,
-      <acronym>GMT</acronym>).  An input value that has an explicit
-      time zone specified is converted to UTC using the appropriate offset
+      In a value that has been determined to be <type>timestamp without time
+      zone</type>, <productname>PostgreSQL</productname> will silently ignore
+      any time zone indication.
+      That is, the resulting value is derived from the date/time
+      fields in the input string, and is not adjusted for time zone.
+     </para>
+
+     <para>
+      For <type>timestamp with time zone</type> values, an input string
+      that includes an explicit time zone will be converted to UTC
+      (<glossterm linkend="glossary-utc">Universal Coordinated
+      Time</glossterm>) using the appropriate offset
       for that time zone.  If no time zone is stated in the input string,
       then it is assumed to be in the time zone indicated by the system's
       <xref linkend="guc-timezone"/> parameter, and is converted to UTC using the
       offset for the <varname>timezone</varname> zone.
+      In either case, the value is stored internally as UTC, and the
+      originally stated or assumed time zone is not retained.
      </para>
 
      <para>
@@ -2402,7 +2474,7 @@ TIMESTAMP WITH TIME ZONE '2004-10-19 10:23:54+02'
       the date and time.  <productname>PostgreSQL</productname> accepts that format on
       input, but on output it uses a space rather than <literal>T</literal>, as shown
       above.  This is for readability and for consistency with
-      <ulink url="https://tools.ietf.org/html/rfc3339">RFC 3339</ulink> as
+      <ulink url="https://datatracker.ietf.org/doc/html/rfc3339">RFC 3339</ulink> as
       well as some other database systems.
      </para>
     </note>
@@ -2610,7 +2682,7 @@ TIMESTAMP WITH TIME ZONE '2004-10-19 10:23:54+02'
      To complicate matters, some jurisdictions have used the same timezone
      abbreviation to mean different UTC offsets at different times; for
      example, in Moscow <literal>MSK</literal> has meant UTC+3 in some years and
-     UTC+4 in others.  <application>PostgreSQL</application> interprets such
+     UTC+4 in others.  <productname>PostgreSQL</productname> interprets such
      abbreviations according to whatever they meant (or had most recently
      meant) on the specified date; but, as with the <literal>EST</literal> example
      above, this is not necessarily the same as local civil time on that date.
@@ -2800,11 +2872,32 @@ P <optional> <replaceable>years</replaceable>-<replaceable>months</replaceable>-
     </para>
 
     <para>
-     Field values can have fractional parts:  for example, <literal>'1.5
+     Internally, <type>interval</type> values are stored as three integral
+     fields: months, days, and microseconds.  These fields are kept
+     separate because the number of days in a month varies, while a day
+     can have 23 or 25 hours if a daylight savings time transition is
+     involved.  An interval input string that uses other units is
+     normalized into this format, and then reconstructed in a standardized
+     way for output, for example:
+
+<programlisting>
+SELECT '2 years 15 months 100 weeks 99 hours 123456789 milliseconds'::interval;
+               interval
+---------------------------------------
+ 3 years 3 mons 700 days 133:17:36.789
+</programlisting>
+
+     Here weeks, which are understood as <quote>7 days</quote>, have been
+     kept separate, while the smaller and larger time units were
+     combined and normalized.
+    </para>
+
+    <para>
+     Input field values can have fractional parts, for example <literal>'1.5
      weeks'</literal> or <literal>'01:02:03.45'</literal>.  However,
-     because interval internally stores only three integer units (months,
-     days, microseconds), fractional units must be spilled to smaller
-     units.  Fractional parts of units greater than months are truncated to
+     because <type>interval</type> internally stores only integral fields,
+     fractional values must be converted into smaller
+     units.  Fractional parts of units greater than months are rounded to
      be an integer number of months, e.g. <literal>'1.5 years'</literal>
      becomes <literal>'1 year 6 mons'</literal>.  Fractional parts of
      weeks and days are computed to be an integer number of days and
@@ -2853,33 +2946,6 @@ P <optional> <replaceable>years</replaceable>-<replaceable>months</replaceable>-
       </tgroup>
      </table>
 
-    <para>
-     Internally <type>interval</type> values are stored as months, days,
-     and microseconds. This is done because the number of days in a month
-     varies, and a day can have 23 or 25 hours if a daylight savings
-     time adjustment is involved.  The months and days fields are integers
-     while the microseconds field can store fractional seconds.  Because intervals are
-     usually created from constant strings or <type>timestamp</type> subtraction,
-     this storage method works well in most cases, but can cause unexpected
-     results:
-
-<programlisting>
-SELECT EXTRACT(hours from '80 minutes'::interval);
- date_part
------------
-         1
-
-SELECT EXTRACT(days from '80 hours'::interval);
- date_part
------------
-         0
-</programlisting>
-
-     Functions <function>justify_days</function> and
-     <function>justify_hours</function> are available for adjusting days
-     and hours that overflow their normal ranges.
-    </para>
-
    </sect2>
 
    <sect2 id="datatype-interval-output">
@@ -2890,6 +2956,23 @@ SELECT EXTRACT(days from '80 hours'::interval);
      <secondary>output format</secondary>
      <seealso>formatting</seealso>
     </indexterm>
+
+    <para>
+     As previously explained, <productname>PostgreSQL</productname>
+     stores <type>interval</type> values as months, days, and
+     microseconds.  For output, the months field is converted to years and
+     months by dividing by 12.  The days field is shown as-is.  The
+     microseconds field is converted to hours, minutes, seconds, and
+     fractional seconds.  Thus months, minutes, and seconds will never be
+     shown as exceeding the ranges 0&ndash;11, 0&ndash;59, and 0&ndash;59
+     respectively, while the displayed years, days, and hours fields can
+     be quite large.  (The <link
+     linkend="function-justify-days"><function>justify_days</function></link>
+     and <link
+     linkend="function-justify-hours"><function>justify_hours</function></link>
+     functions can be used if it is desirable to transpose large days or
+     hours values into the next higher field.)
+    </para>
 
     <para>
      The output format of the interval type can be set to one of the
@@ -3115,7 +3198,7 @@ SELECT * FROM test1 WHERE a;
     a piece of data.
    </para>
 
-   <sect2>
+   <sect2 id="datatype-enum-declaration">
     <title>Declaration of Enumerated Types</title>
 
     <para>
@@ -3137,7 +3220,7 @@ CREATE TABLE person (
 );
 INSERT INTO person VALUES ('Moe', 'happy');
 SELECT * FROM person WHERE current_mood = 'happy';
- name | current_mood 
+ name | current_mood
 ------+--------------
  Moe  | happy
 (1 row)
@@ -3145,7 +3228,7 @@ SELECT * FROM person WHERE current_mood = 'happy';
     </para>
     </sect2>
 
-    <sect2>
+    <sect2 id="datatype-enum-ordering">
      <title>Ordering</title>
 
      <para>
@@ -3158,14 +3241,14 @@ SELECT * FROM person WHERE current_mood = 'happy';
 INSERT INTO person VALUES ('Larry', 'sad');
 INSERT INTO person VALUES ('Curly', 'ok');
 SELECT * FROM person WHERE current_mood > 'sad';
- name  | current_mood 
+ name  | current_mood
 -------+--------------
  Moe   | happy
  Curly | ok
 (2 rows)
 
 SELECT * FROM person WHERE current_mood > 'sad' ORDER BY current_mood;
- name  | current_mood 
+ name  | current_mood
 -------+--------------
  Curly | ok
  Moe   | happy
@@ -3174,7 +3257,7 @@ SELECT * FROM person WHERE current_mood > 'sad' ORDER BY current_mood;
 SELECT name
 FROM person
 WHERE current_mood = (SELECT MIN(current_mood) FROM person);
- name  
+ name
 -------
  Larry
 (1 row)
@@ -3182,7 +3265,7 @@ WHERE current_mood = (SELECT MIN(current_mood) FROM person);
      </para>
    </sect2>
 
-   <sect2>
+   <sect2 id="datatype-enum-type-safety">
     <title>Type Safety</title>
 
     <para>
@@ -3213,7 +3296,7 @@ ERROR:  operator does not exist: mood = happiness
 <programlisting>
 SELECT person.name, holidays.num_weeks FROM person, holidays
   WHERE person.current_mood::text = holidays.happiness::text;
- name | num_weeks 
+ name | num_weeks
 ------+-----------
  Moe  |         4
 (1 row)
@@ -3222,7 +3305,7 @@ SELECT person.name, holidays.num_weeks FROM person, holidays
     </para>
    </sect2>
 
-   <sect2>
+   <sect2 id="datatype-enum-implementation-details">
     <title>Implementation Details</title>
 
     <para>
@@ -3289,7 +3372,7 @@ SELECT person.name, holidays.num_weeks FROM person, holidays
        </row>
        <row>
         <entry><type>line</type></entry>
-        <entry>32 bytes</entry>
+        <entry>24 bytes</entry>
         <entry>Infinite line</entry>
         <entry>{A,B,C}</entry>
        </row>
@@ -3334,12 +3417,17 @@ SELECT person.name, holidays.num_weeks FROM person, holidays
     </table>
 
    <para>
+    In all these types, the individual coordinates are stored as
+    <type>double precision</type> (<type>float8</type>) numbers.
+   </para>
+
+   <para>
     A rich set of functions and operators is available to perform various geometric
     operations such as scaling, translation, rotation, and determining
     intersections.  They are explained in <xref linkend="functions-geometry"/>.
    </para>
 
-   <sect2>
+   <sect2 id="datatype-geometric-points">
     <title>Points</title>
 
     <indexterm>
@@ -3433,7 +3521,7 @@ SELECT person.name, holidays.num_weeks FROM person, holidays
     </para>
    </sect2>
 
-   <sect2>
+   <sect2 id="datatype-geometric-boxes">
     <title>Boxes</title>
 
     <indexterm>
@@ -3474,7 +3562,7 @@ SELECT person.name, holidays.num_weeks FROM person, holidays
     </para>
    </sect2>
 
-   <sect2>
+   <sect2 id="datatype-geometric-paths">
     <title>Paths</title>
 
     <indexterm>
@@ -3522,8 +3610,17 @@ SELECT person.name, holidays.num_weeks FROM person, holidays
 
     <para>
      Polygons are represented by lists of points (the vertexes of the
-     polygon). Polygons are very similar to closed paths, but are
-     stored differently and have their own set of support routines.
+     polygon). Polygons are very similar to closed paths; the essential
+     semantic difference is that a polygon is considered to include the
+     area within it, while a path is not.
+    </para>
+
+    <para>
+     An important implementation difference between polygons and
+     paths is that the stored representation of a polygon includes its
+     smallest bounding box.  This speeds up certain search operations,
+     although computing the bounding box adds overhead while constructing
+     new polygons.
     </para>
 
     <para>
@@ -3941,7 +4038,7 @@ SELECT person.name, holidays.num_weeks FROM person, holidays
 <programlisting>
 SELECT macaddr8_set7bit('08:00:2b:01:02:03');
 <computeroutput>
-    macaddr8_set7bit     
+    macaddr8_set7bit
 -------------------------
  0a:00:2b:ff:fe:01:02:03
 (1 row)
@@ -4083,7 +4180,7 @@ SELECT 'a fat cat sat on a mat and ate a fat rat'::tsvector;
 
 <programlisting>
 SELECT $$the lexeme '    ' contains spaces$$::tsvector;
-                 tsvector                  
+                 tsvector
 -------------------------------------------
  '    ' 'contains' 'lexeme' 'spaces' 'the'
 </programlisting>
@@ -4094,7 +4191,7 @@ SELECT $$the lexeme '    ' contains spaces$$::tsvector;
 
 <programlisting>
 SELECT $$the lexeme 'Joe''s' contains a quote$$::tsvector;
-                    tsvector                    
+                    tsvector
 ------------------------------------------------
  'Joe''s' 'a' 'contains' 'lexeme' 'quote' 'the'
 </programlisting>
@@ -4124,7 +4221,7 @@ SELECT 'a:1 fat:2 cat:3 sat:4 on:5 a:6 mat:7 and:8 ate:9 a:10 fat:11 rat:12'::ts
 
 <programlisting>
 SELECT 'a:1A fat:2B,4C cat:5D'::tsvector;
-          tsvector          
+          tsvector
 ----------------------------
  'a':1A 'cat':5 'fat':2B,4C
 </programlisting>
@@ -4143,7 +4240,7 @@ SELECT 'a:1A fat:2B,4C cat:5D'::tsvector;
 
 <programlisting>
 SELECT 'The Fat Rats'::tsvector;
-      tsvector      
+      tsvector
 --------------------
  'Fat' 'Rats' 'The'
 </programlisting>
@@ -4156,7 +4253,7 @@ SELECT 'The Fat Rats'::tsvector;
 
 <programlisting>
 SELECT to_tsvector('english', 'The Fat Rats');
-   to_tsvector   
+   to_tsvector
 -----------------
  'fat':2 'rat':3
 </programlisting>
@@ -4198,17 +4295,17 @@ SELECT to_tsvector('english', 'The Fat Rats');
 
 <programlisting>
 SELECT 'fat &amp; rat'::tsquery;
-    tsquery    
+    tsquery
 ---------------
  'fat' &amp; 'rat'
 
 SELECT 'fat &amp; (rat | cat)'::tsquery;
-          tsquery          
+          tsquery
 ---------------------------
  'fat' &amp; ( 'rat' | 'cat' )
 
 SELECT 'fat &amp; rat &amp; ! cat'::tsquery;
-        tsquery         
+        tsquery
 ------------------------
  'fat' &amp; 'rat' &amp; !'cat'
 </programlisting>
@@ -4232,7 +4329,7 @@ SELECT 'fat:ab &amp; cat'::tsquery;
      to specify prefix matching:
 <programlisting>
 SELECT 'super:*'::tsquery;
-  tsquery  
+  tsquery
 -----------
  'super':*
 </programlisting>
@@ -4249,7 +4346,7 @@ SELECT 'super:*'::tsquery;
 
 <programlisting>
 SELECT to_tsquery('Fat:ab &amp; Cats');
-    to_tsquery    
+    to_tsquery
 ------------------
  'fat':AB &amp; 'cat'
 </programlisting>
@@ -4286,7 +4383,7 @@ SELECT to_tsvector( 'postgraduate' ), to_tsquery( 'postgres:*' );
 
    <para>
     The data type <type>uuid</type> stores Universally Unique Identifiers
-    (UUID) as defined by <ulink url="https://tools.ietf.org/html/rfc4122">RFC 4122</ulink>,
+    (UUID) as defined by <ulink url="https://datatracker.ietf.org/doc/html/rfc4122">RFC 4122</ulink>,
     ISO/IEC 9834-8:2005, and related standards.
     (Some systems refer to this data type as a globally unique identifier, or
     GUID,<indexterm><primary>GUID</primary></indexterm> instead.)  This
@@ -4364,7 +4461,7 @@ a0ee-bc99-9c0b-4ef8-bb6d-6bb9-bd38-0a11
     can be found in <xref linkend="xml-limits-conformance"/>.
    </para>
 
-   <sect2>
+   <sect2 id="datatype-xml-creating">
     <title>Creating XML Values</title>
    <para>
     To produce a value of type <type>xml</type> from character data,
@@ -4402,7 +4499,7 @@ xml '<foo>bar</foo>'
     <type>xml</type>, uses the function
     <function>xmlserialize</function>:<indexterm><primary>xmlserialize</primary></indexterm>
 <synopsis>
-XMLSERIALIZE ( { DOCUMENT | CONTENT } <replaceable>value</replaceable> AS <replaceable>type</replaceable> )
+XMLSERIALIZE ( { DOCUMENT | CONTENT } <replaceable>value</replaceable> AS <replaceable>type</replaceable> [ [ NO ] INDENT ] )
 </synopsis>
     <replaceable>type</replaceable> can be
     <type>character</type>, <type>character varying</type>, or
@@ -4410,6 +4507,13 @@ XMLSERIALIZE ( { DOCUMENT | CONTENT } <replaceable>value</replaceable> AS <repla
     to the SQL standard, this is the only way to convert between type
     <type>xml</type> and character types, but PostgreSQL also allows
     you to simply cast the value.
+   </para>
+
+   <para>
+    The <literal>INDENT</literal> option causes the result to be
+    pretty-printed, while <literal>NO INDENT</literal> (which is the
+    default) just emits the original input string.  Casting to a character
+    type likewise produces the original string.
    </para>
 
    <para>
@@ -4434,7 +4538,7 @@ SET xmloption TO { DOCUMENT | CONTENT };
 
    </sect2>
 
-   <sect2>
+   <sect2 id="datatype-xml-encoding-handling">
     <title>Encoding Handling</title>
    <para>
     Care must be taken when dealing with multiple character encodings
@@ -4492,7 +4596,7 @@ SET xmloption TO { DOCUMENT | CONTENT };
    </caution>
    </sect2>
 
-   <sect2>
+   <sect2 id="datatype-xml-accessing-xml-values">
    <title>Accessing XML Values</title>
 
    <para>
@@ -4934,7 +5038,8 @@ WHERE ...
     <structfield>xmin</structfield> and <structfield>xmax</structfield>.  Transaction identifiers are 32-bit quantities.
     In some contexts, a 64-bit variant <type>xid8</type> is used.  Unlike
     <type>xid</type> values, <type>xid8</type> values increase strictly
-    monotonically and cannot be reused in the lifetime of a database cluster.
+    monotonically and cannot be reused in the lifetime of a database
+    cluster.  See <xref linkend="transaction-id"/> for more details.
    </para>
 
    <para>

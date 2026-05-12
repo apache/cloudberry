@@ -36,7 +36,6 @@ struct TypeCacheEntry;
 using Numeric = struct NumericData *;
 using HeapTuple = struct HeapTupleData *;
 using Relation = struct RelationData *;
-struct Value;
 using TupleDesc = struct TupleDescData *;
 struct Query;
 using ScanKey = struct ScanKeyData *;
@@ -506,10 +505,10 @@ void ListFreeDeep(List *list);
 TypeCacheEntry *LookupTypeCache(Oid type_id, int flags);
 
 // create a value node for a string
-Value *MakeStringValue(char *str);
+String *MakeStringValue(char *str);
 
 // create a value node for an integer
-Value *MakeIntegerValue(long i);
+Integer *MakeIntegerValue(long i);
 
 // create a constant of type int4
 Node *MakeIntConst(int32 intValue);
@@ -690,7 +689,7 @@ int32 CdbHashConstList(List *constants, int num_segments, Oid *hashfuncs);
 unsigned int CdbHashRandomSeg(int num_segments);
 
 // check permissions on range table
-void CheckRTPermissions(List *rtable);
+void CheckRTPermissions(List *rtable, List *rteperminfos);
 
 // throw an error if table has update triggers.
 bool HasUpdateTriggers(Oid relid);
@@ -798,6 +797,9 @@ char *GetRelAmName(Oid reloid);
 IndexAmRoutine *GetIndexAmRoutineFromAmHandler(Oid am_handler);
 
 bool TestexprIsHashable(Node *testexpr, List *param_ids);
+
+RTEPermissionInfo *
+GetRTEPermissionInfo(List *rteperminfos, const RangeTblEntry *rte);
 
 gpos::BOOL WalkQueryTree(Query *query, bool (*walker)(), void *context,
 						 int flags);

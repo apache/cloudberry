@@ -42,7 +42,7 @@ extern bool ignore_invalid_pages;
 namespace paxc {
 
 typedef struct xl_invalid_pax_file_key {
-  RelFileNode node; /* the relation */
+	RelFileLocator node; /* the relation */
   char filename[MAX_PATH_FILE_NAME_LEN];
 } xl_invalid_pax_file_key;
 
@@ -58,7 +58,7 @@ static HTAB *invalid_pax_file_tab = NULL;
 uint32 pax_file_key_hash(const void *key, Size keysize) {
   xl_invalid_pax_file_key *pax_file_key = (xl_invalid_pax_file_key *)key;
   return hash_any((const unsigned char *)key,
-                  sizeof(RelFileNode) + strlen(pax_file_key->filename));
+                  sizeof(RelFileLocator) + strlen(pax_file_key->filename));
 }
 
 /*
@@ -69,12 +69,12 @@ int pax_file_key_compare(const void *key1, const void *key2, Size keysize) {
   xl_invalid_pax_file_key *pax_file_key1 = (xl_invalid_pax_file_key *)key1;
   xl_invalid_pax_file_key *pax_file_key2 = (xl_invalid_pax_file_key *)key2;
 
-  return !(RelFileNodeEquals(pax_file_key1->node, pax_file_key2->node) &&
+  return !(RelFileLocatorEquals(pax_file_key1->node, pax_file_key2->node) &&
            strncmp(pax_file_key1->filename, pax_file_key2->filename,
                    MAX_PATH_FILE_NAME_LEN) == 0);
 }
 
-static void LogInvalidPaxFile(RelFileNode node, const char *filename) {
+static void LogInvalidPaxFile(RelFileLocator node, const char *filename) {
   xl_invalid_pax_file_key key;
   bool found;
 
@@ -100,12 +100,12 @@ static void LogInvalidPaxFile(RelFileNode node, const char *filename) {
   hash_search(invalid_pax_file_tab, (void *)&key, HASH_ENTER, &found);
 }
 
-void LogInvalidPaxDirctory(RelFileNode node) {
+void LogInvalidPaxDirctory(RelFileLocator node) {
   // mark the directory as invalid, filename is empty
   LogInvalidPaxFile(node, "");
 }
 
-bool IsPaxDirectoryValid(RelFileNode node) {
+bool IsPaxDirectoryValid(RelFileLocator node) {
   xl_invalid_pax_file hentry;
 
   if (invalid_pax_file_tab == NULL) return true; /* nothing to do */
@@ -118,7 +118,7 @@ bool IsPaxDirectoryValid(RelFileNode node) {
   return !found;
 }
 
-void XLogForgetInvalidPaxFile(RelFileNode node, const char *filename) {
+void XLogForgetInvalidPaxFile(RelFileLocator node, const char *filename) {
   xl_invalid_pax_file hentry;
 
   if (invalid_pax_file_tab == NULL) return; /* nothing to do */
@@ -131,16 +131,16 @@ void XLogForgetInvalidPaxFile(RelFileNode node, const char *filename) {
   if (found) {
     PAX_LOG_IF(pax::pax_enable_debug,
                "forget invalid pax file, node: %u/%u/%u, filename: %s",
-               node.dbNode, node.spcNode, node.relNode, filename);
+               node.dbOid, node.spcOid, node.relNumber, filename);
   } else {
     PAX_LOG_IF(
         pax::pax_enable_debug,
         "forget invalid pax file not found, node: %u/%u/%u, filename: %s",
-        node.dbNode, node.spcNode, node.relNode, filename);
+        node.dbOid, node.spcOid, node.relNumber, filename);
   }
 }
 
-void XLogForgetRelation(RelFileNode node) {
+void XLogForgetRelation(RelFileLocator node) {
   HASH_SEQ_STATUS status;
   xl_invalid_pax_file *hentry;
 
@@ -149,7 +149,7 @@ void XLogForgetRelation(RelFileNode node) {
   hash_seq_init(&status, invalid_pax_file_tab);
 
   while ((hentry = (xl_invalid_pax_file *)hash_seq_search(&status)) != NULL) {
-    if (RelFileNodeEquals(hentry->key.node, node)) {
+    if (RelFileLocatorEquals(hentry->key.node, node)) {
       if (hash_search(invalid_pax_file_tab, (void *)&hentry->key, HASH_REMOVE,
                       NULL) == NULL) {
         elog(ERROR, "hash table corrupted");
@@ -167,7 +167,7 @@ void XLogForgetDatabase(Oid dbId) {
   hash_seq_init(&status, invalid_pax_file_tab);
   PAX_LOG_IF(pax::pax_enable_debug, "forget database, dbid: %u", dbId);
   while ((hentry = (xl_invalid_pax_file *)hash_seq_search(&status)) != NULL) {
-    if (hentry->key.node.dbNode == dbId) {
+    if (hentry->key.node.dbOid == dbId) {
       if (hash_search(invalid_pax_file_tab, (void *)&hentry->key, HASH_REMOVE,
                       NULL) == NULL) {
         elog(ERROR, "hash table corrupted");
@@ -187,8 +187,8 @@ void XLogConsistencyCheck() {
   hash_seq_init(&status, invalid_pax_file_tab);
   while ((hentry = (xl_invalid_pax_file *)hash_seq_search(&status)) != NULL) {
     elog(WARNING, "pax file is invalid, node: %u/%u/%u, filename: %s",
-         hentry->key.node.dbNode, hentry->key.node.spcNode,
-         hentry->key.node.relNode, hentry->key.filename);
+         hentry->key.node.dbOid, hentry->key.node.spcOid,
+         hentry->key.node.relNumber, hentry->key.filename);
     foundone = true;
   }
 
@@ -201,7 +201,7 @@ void XLogConsistencyCheck() {
   invalid_pax_file_tab = NULL;
 }
 
-void XLogPaxInsert(RelFileNode node, const char *filename, int64 offset,
+void XLogPaxInsert(RelFileLocator node, const char *filename, int64 offset,
                    void *buffer, int32 bufferLen) {
   int file_name_len = strlen(filename);
 
@@ -229,7 +229,7 @@ void XLogPaxInsert(RelFileNode node, const char *filename, int64 offset,
              "pax xlog insert, node: %u/%u/%u,filename: %s, offset: %ld, "
              "bufferLen: %d, "
              "xlog_ptr: %X/%X",
-             node.dbNode, node.spcNode, node.relNode, filename, offset,
+             node.dbOid, node.spcOid, node.relNumber, filename, offset,
              bufferLen, (uint32)(lsn >> 32), (uint32)lsn);
 
   // FIXME(gongxun): we should wait for mirror here,copy from xlog_ao_insert
@@ -237,7 +237,7 @@ void XLogPaxInsert(RelFileNode node, const char *filename, int64 offset,
   wait_to_avoid_large_repl_lag();
 }
 
-void XLogPaxCreateDirectory(RelFileNode node) {
+void XLogPaxCreateDirectory(RelFileLocator node) {
   xl_pax_directory xlrec;
   xlrec.node = node;
 
@@ -248,11 +248,11 @@ void XLogPaxCreateDirectory(RelFileNode node) {
   XLogRecPtr lsn = XLogInsert(PAX_RMGR_ID, XLOG_PAX_CREATE_DIRECTORY);
   PAX_LOG_IF(pax::pax_enable_debug,
              "pax xlog create directory, node: %u/%u/%u, xlog_ptr: %X/%X",
-             node.dbNode, node.spcNode, node.relNode, (uint32)(lsn >> 32),
+             node.dbOid, node.spcOid, node.relNumber, (uint32)(lsn >> 32),
              (uint32)lsn);
 }
 
-void XLogPaxTruncate(RelFileNode node) {
+void XLogPaxTruncate(RelFileLocator node) {
   xl_pax_directory xlrec;
   xlrec.node = node;
 
@@ -264,7 +264,7 @@ void XLogPaxTruncate(RelFileNode node) {
   XLogRecPtr lsn = XLogInsert(PAX_RMGR_ID, XLOG_PAX_TRUNCATE);
   PAX_LOG_IF(pax::pax_enable_debug,
              "pax xlog truncate, node: %u/%u/%u,  xlog_ptr: %X/%X",
-             node.dbNode, node.spcNode, node.relNode, (uint32)(lsn >> 32),
+             node.dbOid, node.spcOid, node.relNumber, (uint32)(lsn >> 32),
              (uint32)lsn);
 }
 
@@ -297,8 +297,8 @@ void XLogRedoPaxInsert(XLogReaderState *record) {
   PAX_LOG_IF(pax::pax_enable_debug,
              "pax xlog redo insert, node: %u/%u/%u, offset: %ld, "
              "path: %s",
-             xlrec->target.node.dbNode, xlrec->target.node.spcNode,
-             xlrec->target.node.relNode, xlrec->target.offset, path);
+             xlrec->target.node.dbOid, xlrec->target.node.spcOid,
+             xlrec->target.node.relNumber, xlrec->target.offset, path);
   char *buffer = (char *)xlrec + SizeOfPAXInsert + xlrec->target.file_name_len;
   int32 bufferLen =
       XLogRecGetDataLen(record) - SizeOfPAXInsert - xlrec->target.file_name_len;
@@ -313,8 +313,8 @@ void XLogRedoPaxInsert(XLogReaderState *record) {
     if (errno == ENOENT) {
       PAX_LOG_IF(pax::pax_enable_debug,
                  "directory not exists, node: %u/%u/%u, path: %s",
-                 xlrec->target.node.dbNode, xlrec->target.node.spcNode,
-                 xlrec->target.node.relNode, path);
+                 xlrec->target.node.dbOid, xlrec->target.node.spcOid,
+                 xlrec->target.node.relNumber, path);
       LogInvalidPaxDirctory(xlrec->target.node);
     } else {
       ereport(ignore_invalid_pages ? WARNING : PANIC,
@@ -347,8 +347,8 @@ void XLogRedoPaxInsert(XLogReaderState *record) {
     if (errno == ENOENT) {
       PAX_LOG_IF(pax::pax_enable_debug,
                  "file not exists, node: %u/%u/%u, path: %s",
-                 xlrec->target.node.dbNode, xlrec->target.node.spcNode,
-                 xlrec->target.node.relNode, path);
+                 xlrec->target.node.dbOid, xlrec->target.node.spcOid,
+                 xlrec->target.node.relNumber, path);
       LogInvalidPaxFile(xlrec->target.node, path);
     } else {
       ereport(
@@ -378,18 +378,18 @@ void XLogRedoPaxCreateDirectory(XLogReaderState *record) {
   char *rec = XLogRecGetData(record);
   xl_pax_directory *xlrec = (xl_pax_directory *)rec;
 
-  TablespaceCreateDbspace(xlrec->node.spcNode, xlrec->node.dbNode, true);
+  TablespaceCreateDbspace(xlrec->node.spcOid, xlrec->node.dbOid, true);
   dirpath = paxc::BuildPaxDirectoryPath(xlrec->node, InvalidBackendId);
 
   PAX_LOG_IF(pax::pax_enable_debug,
              "pax xlog redo create directory, node: %u/%u/%u, dirpath: %s",
-             xlrec->node.dbNode, xlrec->node.spcNode, xlrec->node.relNode,
+             xlrec->node.dbOid, xlrec->node.spcOid, xlrec->node.relNumber,
              dirpath);
 
   // Like mdcreate, we need to create the directory for pax storage.
   // We may be using the target table space for the first time in this
   // database, so create a per-database subdirectory if needed.
-  TablespaceCreateDbspace(xlrec->node.spcNode, xlrec->node.dbNode, true);
+  TablespaceCreateDbspace(xlrec->node.spcOid, xlrec->node.dbOid, true);
 
   int ret = MakePGDirectory(dirpath);
   if (ret != 0) {
@@ -397,7 +397,7 @@ void XLogRedoPaxCreateDirectory(XLogReaderState *record) {
     if (errno == EEXIST) {
       PAX_LOG_IF(pax::pax_enable_debug,
                  "directory already exists, node: %u/%u/%u, dirpath: %s",
-                 xlrec->node.dbNode, xlrec->node.spcNode, xlrec->node.relNode,
+                 xlrec->node.dbOid, xlrec->node.spcOid, xlrec->node.relNumber,
                  dirpath);
     } else {
       ereport(ignore_invalid_pages ? WARNING : PANIC,
@@ -416,7 +416,7 @@ void XLogRedoPaxTruncate(XLogReaderState *record) {
 
   PAX_LOG_IF(pax::pax_enable_debug,
              "pax xlog redo truncate, node: %u/%u/%u, dirpath: %s",
-             xlrec->node.dbNode, xlrec->node.spcNode, xlrec->node.relNode,
+             xlrec->node.dbOid, xlrec->node.spcOid, xlrec->node.relNumber,
              dirpath);
 
   paxc::DeletePaxDirectoryPath(dirpath, false);

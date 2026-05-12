@@ -44,7 +44,7 @@ CREATE GROUP regress_priv_group1;
 CREATE GROUP regress_priv_group2 WITH USER regress_priv_user1, regress_priv_user2;
 ALTER GROUP regress_priv_group1 ADD USER regress_priv_user4;
 ALTER GROUP regress_priv_group2 ADD USER regress_priv_user2;	-- duplicate
-NOTICE:  role "regress_priv_user2" is already a member of role "regress_priv_group2"
+NOTICE:  role "regress_priv_user2" has already been granted membership in role "regress_priv_group2" by role "gpadmin"
 ALTER GROUP regress_priv_group2 DROP USER regress_priv_user2;
 GRANT regress_priv_group2 TO regress_priv_user4 WITH ADMIN OPTION;
 -- prepare non-leakproof function for later
@@ -55,7 +55,9 @@ ALTER FUNCTION leak(integer,integer) OWNER TO regress_priv_user1;
 -- test owner privileges
 GRANT regress_priv_role TO regress_priv_user1 WITH ADMIN OPTION GRANTED BY CURRENT_ROLE;
 REVOKE ADMIN OPTION FOR regress_priv_role FROM regress_priv_user1 GRANTED BY foo; -- error
+ERROR:  role "foo" does not exist
 REVOKE ADMIN OPTION FOR regress_priv_role FROM regress_priv_user1 GRANTED BY regress_priv_user2; -- error
+WARNING:  role "regress_priv_user1" has not been granted membership in role "regress_priv_role" by role "regress_priv_user2"
 REVOKE ADMIN OPTION FOR regress_priv_role FROM regress_priv_user1 GRANTED BY CURRENT_USER;
 REVOKE regress_priv_role FROM regress_priv_user1 GRANTED BY CURRENT_ROLE;
 DROP ROLE regress_priv_role;
@@ -421,7 +423,6 @@ RESET SESSION AUTHORIZATION;
 ALTER ROLE regress_priv_user1 NOINHERIT;
 SET SESSION AUTHORIZATION regress_priv_user1;
 DELETE FROM atest3;
-ERROR:  permission denied for table atest3
 ROLLBACK;
 -- views
 SET SESSION AUTHORIZATION regress_priv_user3;
@@ -1581,7 +1582,8 @@ REFRESH MATERIALIZED VIEW sro_mv;
 ERROR:  cannot fire deferred trigger within security-restricted operation
 CONTEXT:  SQL function "mv_action" statement 1
 BEGIN; SET allow_segment_DML = ON; SET CONSTRAINTS ALL IMMEDIATE; REFRESH MATERIALIZED VIEW sro_mv; COMMIT;
-ERROR:  must have admin option on role "regress_priv_group2"
+ERROR:  permission denied to grant role "regress_priv_group2"
+DETAIL:  Only roles with the ADMIN option on role "regress_priv_group2" may grant this role.
 CONTEXT:  SQL function "unwanted_grant" statement 1
 SQL statement "SELECT unwanted_grant()"
 PL/pgSQL function sro_trojan() line 1 at PERFORM
@@ -1617,12 +1619,14 @@ CREATE FUNCTION dogrant_ok() RETURNS void LANGUAGE sql SECURITY DEFINER AS
 GRANT regress_priv_group2 TO regress_priv_user5; -- ok: had ADMIN OPTION
 SET ROLE regress_priv_group2;
 GRANT regress_priv_group2 TO regress_priv_user5; -- fails: SET ROLE suspended privilege
-ERROR:  must have admin option on role "regress_priv_group2"
+ERROR:  permission denied to grant role "regress_priv_group2"
+DETAIL:  Only roles with the ADMIN option on role "regress_priv_group2" may grant this role.
 SET SESSION AUTHORIZATION regress_priv_user1;
 GRANT regress_priv_group2 TO regress_priv_user5; -- fails: no ADMIN OPTION
-ERROR:  must have admin option on role "regress_priv_group2"
+ERROR:  permission denied to grant role "regress_priv_group2"
+DETAIL:  Only roles with the ADMIN option on role "regress_priv_group2" may grant this role.
 SELECT dogrant_ok();			-- ok: SECURITY DEFINER conveys ADMIN
-NOTICE:  role "regress_priv_user5" is already a member of role "regress_priv_group2"
+NOTICE:  role "regress_priv_user5" has already been granted membership in role "regress_priv_group2" by role "regress_priv_user4"
  dogrant_ok 
 ------------
  
@@ -1630,14 +1634,17 @@ NOTICE:  role "regress_priv_user5" is already a member of role "regress_priv_gro
 
 SET ROLE regress_priv_group2;
 GRANT regress_priv_group2 TO regress_priv_user5; -- fails: SET ROLE did not help
-ERROR:  must have admin option on role "regress_priv_group2"
+ERROR:  permission denied to grant role "regress_priv_group2"
+DETAIL:  Only roles with the ADMIN option on role "regress_priv_group2" may grant this role.
 SET SESSION AUTHORIZATION regress_priv_group2;
 GRANT regress_priv_group2 TO regress_priv_user5; -- ok: a role can self-admin
-NOTICE:  role "regress_priv_user5" is already a member of role "regress_priv_group2"
+ERROR:  permission denied to grant role "regress_priv_group2"
+DETAIL:  Only roles with the ADMIN option on role "regress_priv_group2" may grant this role.
 CREATE FUNCTION dogrant_fails() RETURNS void LANGUAGE sql SECURITY DEFINER AS
 	'GRANT regress_priv_group2 TO regress_priv_user5';
 SELECT dogrant_fails();			-- fails: no self-admin in SECURITY DEFINER
-ERROR:  must have admin option on role "regress_priv_group2"
+ERROR:  permission denied to grant role "regress_priv_group2"
+DETAIL:  Only roles with the ADMIN option on role "regress_priv_group2" may grant this role.
 CONTEXT:  SQL function "dogrant_fails" statement 1
 DROP FUNCTION dogrant_fails();
 SET SESSION AUTHORIZATION regress_priv_user4;
@@ -1699,63 +1706,114 @@ ERROR:  large objects are not supported
 SET SESSION AUTHORIZATION regress_priv_user2;
 -- start_ignore
 SELECT lo_create(2001);
-ERROR:  large objects are not supported
+ lo_create 
+-----------
+      2001
+(1 row)
+
 SELECT lo_create(2002);
-ERROR:  large objects are not supported
+ lo_create 
+-----------
+      2002
+(1 row)
+
 SELECT loread(lo_open(1001, x'20000'::int), 32);	-- allowed, for now
-ERROR:  large objects are not supported
+ loread 
+--------
+ \x
+(1 row)
+
 SELECT lowrite(lo_open(1001, x'40000'::int), 'abcd');	-- fail, wrong mode
-ERROR:  large objects are not supported
+ERROR:  large object descriptor 0 was not opened for writing
 SELECT loread(lo_open(1001, x'40000'::int), 32);
-ERROR:  large objects are not supported
+ loread 
+--------
+ \x
+(1 row)
+
 SELECT loread(lo_open(1002, x'40000'::int), 32);	-- to be denied
-ERROR:  large objects are not supported
+ERROR:  permission denied for large object 1002
 SELECT loread(lo_open(1003, x'40000'::int), 32);
-ERROR:  large objects are not supported
+ loread 
+--------
+ \x
+(1 row)
+
 SELECT loread(lo_open(1004, x'40000'::int), 32);
-ERROR:  large objects are not supported
+ loread 
+--------
+ \x
+(1 row)
+
 SELECT lowrite(lo_open(1001, x'20000'::int), 'abcd');
-ERROR:  large objects are not supported
+ lowrite 
+---------
+       4
+(1 row)
+
 SELECT lowrite(lo_open(1002, x'20000'::int), 'abcd');	-- to be denied
-ERROR:  large objects are not supported
+ERROR:  permission denied for large object 1002
 SELECT lowrite(lo_open(1003, x'20000'::int), 'abcd');	-- to be denied
-ERROR:  large objects are not supported
+ERROR:  permission denied for large object 1003
 SELECT lowrite(lo_open(1004, x'20000'::int), 'abcd');
-ERROR:  large objects are not supported
+ lowrite 
+---------
+       4
+(1 row)
+
 GRANT SELECT ON LARGE OBJECT 1005 TO regress_priv_user3;
-ERROR:  large objects are not supported
 GRANT UPDATE ON LARGE OBJECT 1006 TO regress_priv_user3;	-- to be denied
-ERROR:  large objects are not supported
+ERROR:  large object 1006 does not exist
 REVOKE ALL ON LARGE OBJECT 2001, 2002 FROM PUBLIC;
-ERROR:  large objects are not supported
 GRANT ALL ON LARGE OBJECT 2001 TO regress_priv_user3;
-ERROR:  large objects are not supported
 SELECT lo_unlink(1001);		-- to be denied
-ERROR:  large objects are not supported
+ERROR:  must be owner of large object 1001
 SELECT lo_unlink(2002);
-ERROR:  large objects are not supported
+ lo_unlink 
+-----------
+         1
+(1 row)
+
 -- end_ignore
 \c -
 -- start_ignore
 -- confirm ACL setting
 SELECT oid, pg_get_userbyid(lomowner) ownername, lomacl FROM pg_largeobject_metadata WHERE oid >= 1000 AND oid < 3000 ORDER BY oid;
- oid | ownername | lomacl 
------+-----------+--------
-(0 rows)
+ oid  |     ownername      |                                                            lomacl                                                            
+------+--------------------+------------------------------------------------------------------------------------------------------------------------------
+ 1001 | regress_priv_user1 | {regress_priv_user1=rw/regress_priv_user1,=rw/regress_priv_user1}
+ 1002 | regress_priv_user1 | 
+ 1003 | regress_priv_user1 | {regress_priv_user1=rw/regress_priv_user1,regress_priv_user2=r/regress_priv_user1}
+ 1004 | regress_priv_user1 | {regress_priv_user1=rw/regress_priv_user1,regress_priv_user2=rw/regress_priv_user1}
+ 1005 | regress_priv_user1 | {regress_priv_user1=rw/regress_priv_user1,regress_priv_user2=r*w/regress_priv_user1,regress_priv_user3=r/regress_priv_user2}
+ 2001 | regress_priv_user2 | {regress_priv_user2=rw/regress_priv_user2,regress_priv_user3=rw/regress_priv_user2}
+(6 rows)
 
 -- end_ignore
 SET SESSION AUTHORIZATION regress_priv_user3;
 -- start_ignore
 SELECT loread(lo_open(1001, x'40000'::int), 32);
-ERROR:  large objects are not supported
+   loread   
+------------
+ \x61626364
+(1 row)
+
 SELECT loread(lo_open(1003, x'40000'::int), 32);	-- to be denied
-ERROR:  large objects are not supported
+ERROR:  permission denied for large object 1003
 SELECT loread(lo_open(1005, x'40000'::int), 32);
-ERROR:  large objects are not supported
+ loread 
+--------
+ \x
+(1 row)
+
 SELECT lo_truncate(lo_open(1005, x'20000'::int), 10);	-- to be denied
-ERROR:  large objects are not supported
+ERROR:  permission denied for large object 1005
 SELECT lo_truncate(lo_open(2001, x'20000'::int), 10);
-ERROR:  large objects are not supported
+ lo_truncate 
+-------------
+           0
+(1 row)
+
 -- end_ignore
 -- compatibility mode in largeobject permission
 \c -
@@ -1763,15 +1821,15 @@ SET lo_compat_privileges = false;	-- default setting
 SET SESSION AUTHORIZATION regress_priv_user4;
 -- start_ignore
 SELECT loread(lo_open(1002, x'40000'::int), 32);	-- to be denied
-ERROR:  large objects are not supported
+ERROR:  permission denied for large object 1002
 SELECT lowrite(lo_open(1002, x'20000'::int), 'abcd');	-- to be denied
-ERROR:  large objects are not supported
+ERROR:  permission denied for large object 1002
 SELECT lo_truncate(lo_open(1002, x'20000'::int), 10);	-- to be denied
-ERROR:  large objects are not supported
+ERROR:  permission denied for large object 1002
 SELECT lo_put(1002, 1, 'abcd');				-- to be denied
-ERROR:  large object 1002 does not exist
+ERROR:  permission denied for large object 1002
 SELECT lo_unlink(1002);					-- to be denied
-ERROR:  large objects are not supported
+ERROR:  must be owner of large object 1002
 SELECT lo_export(1001, '/dev/null');			-- to be denied
 ERROR:  permission denied for function lo_export
 SELECT lo_import('/dev/null');				-- to be denied
@@ -1784,13 +1842,29 @@ SET lo_compat_privileges = true;	-- compatibility mode
 SET SESSION AUTHORIZATION regress_priv_user4;
 -- start_ignore
 SELECT loread(lo_open(1002, x'40000'::int), 32);
-ERROR:  large objects are not supported
+ loread 
+--------
+ \x
+(1 row)
+
 SELECT lowrite(lo_open(1002, x'20000'::int), 'abcd');
-ERROR:  large objects are not supported
+ lowrite 
+---------
+       4
+(1 row)
+
 SELECT lo_truncate(lo_open(1002, x'20000'::int), 10);
-ERROR:  large objects are not supported
+ lo_truncate 
+-------------
+           0
+(1 row)
+
 SELECT lo_unlink(1002);
-ERROR:  large objects are not supported
+ lo_unlink 
+-----------
+         1
+(1 row)
+
 SELECT lo_export(1001, '/dev/null');			-- to be denied
 ERROR:  permission denied for function lo_export
 -- end_ignore
@@ -1807,7 +1881,7 @@ ERROR:  permission denied for table pg_largeobject
 -- test pg_database_owner
 RESET SESSION AUTHORIZATION;
 GRANT pg_database_owner TO regress_priv_user1;
-ERROR:  role "pg_database_owner" cannot have explicit members
+ERROR:  role "pg_database_owner" cannot have explicit members (user.c:3722)
 GRANT regress_priv_user1 TO pg_database_owner;
 ERROR:  role "pg_database_owner" cannot be a member of any role
 CREATE TABLE datdba_only ();
@@ -2405,7 +2479,6 @@ LOCK TABLE lock_table IN ROW EXCLUSIVE MODE; -- should pass
 COMMIT;
 BEGIN;
 LOCK TABLE lock_table IN ACCESS SHARE MODE; -- should fail
-ERROR:  permission denied for table lock_table
 ROLLBACK;
 BEGIN;
 LOCK TABLE lock_table IN ACCESS EXCLUSIVE MODE; -- should fail
@@ -2421,7 +2494,6 @@ LOCK TABLE lock_table IN ROW EXCLUSIVE MODE; -- should pass
 COMMIT;
 BEGIN;
 LOCK TABLE lock_table IN ACCESS SHARE MODE; -- should fail
-ERROR:  permission denied for table lock_table
 ROLLBACK;
 BEGIN;
 LOCK TABLE lock_table IN ACCESS EXCLUSIVE MODE; -- should pass
@@ -2436,7 +2508,6 @@ LOCK TABLE lock_table IN ROW EXCLUSIVE MODE; -- should pass
 COMMIT;
 BEGIN;
 LOCK TABLE lock_table IN ACCESS SHARE MODE; -- should fail
-ERROR:  permission denied for table lock_table
 ROLLBACK;
 BEGIN;
 LOCK TABLE lock_table IN ACCESS EXCLUSIVE MODE; -- should pass
@@ -2451,7 +2522,6 @@ LOCK TABLE lock_table IN ROW EXCLUSIVE MODE; -- should pass
 COMMIT;
 BEGIN;
 LOCK TABLE lock_table IN ACCESS SHARE MODE; -- should fail
-ERROR:  permission denied for table lock_table
 ROLLBACK;
 BEGIN;
 LOCK TABLE lock_table IN ACCESS EXCLUSIVE MODE; -- should pass

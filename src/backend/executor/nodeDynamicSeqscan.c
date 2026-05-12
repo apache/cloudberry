@@ -31,6 +31,7 @@
 #include "executor/execPartition.h"
 #include "executor/nodeDynamicSeqscan.h"
 #include "executor/nodeSeqscan.h"
+#include "utils/guc.h"
 #include "utils/memutils.h"
 #include "utils/rel.h"
 #include "access/table.h"
@@ -58,9 +59,9 @@ ExecInitDynamicSeqScan(DynamicSeqScan *node, EState *estate, int eflags)
 
 	/* Initialize child expressions. This is needed to find subplans. */
 	state->ss.ps.qual =
-		ExecInitQual(node->seqscan.plan.qual, (PlanState *) state);
+		ExecInitQual(node->seqscan.scan.plan.qual, (PlanState *) state);
 
-	Relation scanRel = ExecOpenScanRelation(estate, node->seqscan.scanrelid, eflags);
+	Relation scanRel = ExecOpenScanRelation(estate, node->seqscan.scan.scanrelid, eflags);
 	ExecInitScanTupleSlot(estate, &state->ss, RelationGetDescr(scanRel), table_slot_callbacks(scanRel));
 
 	/* Dynamic table/index/bitmap scan can't tell the ops of tupleslot */
@@ -80,13 +81,13 @@ ExecInitDynamicSeqScan(DynamicSeqScan *node, EState *estate, int eflags)
 		state->partOids[i] = lfirst_oid(lc);
 	state->whichPart = -1;
 
-	reloid = exec_rt_fetch(node->seqscan.scanrelid, estate)->relid;
+	reloid = exec_rt_fetch(node->seqscan.scan.scanrelid, estate)->relid;
 	Assert(OidIsValid(reloid));
 
 	/* lastRelOid is used to remap varattno for heterogeneous partitions */
 	state->lastRelOid = reloid;
 
-	state->scanrelid = node->seqscan.scanrelid;
+	state->scanrelid = node->seqscan.scan.scanrelid;
 
 	state->as_prune_state = NULL;
 
@@ -151,7 +152,7 @@ initNextTableToScan(DynamicSeqScanState *node)
 	 * FIXME: should we use execute_attr_map_tuple instead? Seems like a
 	 * higher level abstraction that fits the bill
 	 */
-	attMap = build_attrmap_by_name_if_req(partTupDesc, lastTupDesc);
+	attMap = build_attrmap_by_name_if_req(partTupDesc, lastTupDesc, false);
 	table_close(lastScannedRel, AccessShareLock);
 
 	/* If attribute remapping is not necessary, then do not change the varattno */
@@ -187,6 +188,7 @@ ExecDynamicSeqScan(PlanState *pstate)
 		node->did_pruning = true;
 		node->as_valid_subplans =
 			ExecFindMatchingSubPlans(node->as_prune_state,
+									 false,
 									 node->ss.ps.state,
 									 list_length(plan->partOids),
 									 plan->join_prune_paramids);

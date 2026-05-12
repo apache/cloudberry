@@ -83,7 +83,7 @@ intr2num(const Interval *i)
 static float8
 gbt_intv_dist(const void *a, const void *b, FmgrInfo *flinfo)
 {
-	return (float8) Abs(intr2num((const Interval *) a) - intr2num((const Interval *) b));
+	return fabs(intr2num((const Interval *) a) - intr2num((const Interval *) b));
 }
 
 /*
@@ -157,8 +157,8 @@ gbt_intv_compress(PG_FUNCTION_ARGS)
 		{
 			Interval   *key = DatumGetIntervalP(entry->key);
 
-			memcpy((void *) r, (void *) key, INTERVALSIZE);
-			memcpy((void *) (r + INTERVALSIZE), (void *) key, INTERVALSIZE);
+			memcpy(r, key, INTERVALSIZE);
+			memcpy(r + INTERVALSIZE, key, INTERVALSIZE);
 		}
 		else
 		{
@@ -173,7 +173,6 @@ gbt_intv_compress(PG_FUNCTION_ARGS)
 	}
 
 	PG_RETURN_POINTER(retval);
-
 }
 
 Datum
@@ -276,7 +275,6 @@ gbt_intv_penalty(PG_FUNCTION_ARGS)
 	penalty_num(result, iorg[0], iorg[1], inew[0], inew[1]);
 
 	PG_RETURN_POINTER(result);
-
 }
 
 Datum

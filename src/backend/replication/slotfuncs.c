@@ -3,7 +3,7 @@
  * slotfuncs.c
  *	   Support functions for replication slots
  *
- * Copyright (c) 2012-2021, PostgreSQL Global Development Group
+ * Copyright (c) 2012-2023, PostgreSQL Global Development Group
  *
  * IDENTIFICATION
  *	  src/backend/replication/slotfuncs.c
@@ -14,6 +14,7 @@
 
 #include "access/htup_details.h"
 #include "access/xlog_internal.h"
+#include "access/xlogrecovery.h"
 #include "access/xlogutils.h"
 #include "funcapi.h"
 #include "miscadmin.h"
@@ -24,15 +25,6 @@
 #include "utils/inval.h"
 #include "utils/pg_lsn.h"
 #include "utils/resowner.h"
-
-static void
-check_permissions(void)
-{
-	if (!superuser() && !has_rolreplication(GetUserId()))
-		ereport(ERROR,
-				(errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
-				 errmsg("must be superuser or replication role to use replication slots")));
-}
 
 static void
 warn_slot_only_created_on_segment(const char *name) {
@@ -92,7 +84,7 @@ pg_create_physical_replication_slot(PG_FUNCTION_ARGS)
 	if (get_call_result_type(fcinfo, NULL, &tupdesc) != TYPEFUNC_COMPOSITE)
 		elog(ERROR, "return type must be a row type");
 
-	check_permissions();
+	CheckSlotPermissions();
 
 	CheckSlotRequirements();
 
@@ -197,7 +189,7 @@ pg_create_logical_replication_slot(PG_FUNCTION_ARGS)
 	if (get_call_result_type(fcinfo, NULL, &tupdesc) != TYPEFUNC_COMPOSITE)
 		elog(ERROR, "return type must be a row type");
 
-	check_permissions();
+	CheckSlotPermissions();
 
 	CheckLogicalDecodingRequirements();
 
@@ -233,7 +225,7 @@ pg_drop_replication_slot(PG_FUNCTION_ARGS)
 {
 	Name		name = PG_GETARG_NAME(0);
 
-	check_permissions();
+	CheckSlotPermissions();
 
 	CheckSlotRequirements();
 
@@ -243,33 +235,16 @@ pg_drop_replication_slot(PG_FUNCTION_ARGS)
 }
 
 /*
- * pg_get_replication_slots - SQL SRF showing active replication slots.
+ * pg_get_replication_slots - SQL SRF showing all replication slots
+ * that currently exist on the database cluster.
  */
 Datum
 pg_get_replication_slots(PG_FUNCTION_ARGS)
 {
-#define PG_GET_REPLICATION_SLOTS_COLS 14
+#define PG_GET_REPLICATION_SLOTS_COLS 15
 	ReturnSetInfo *rsinfo = (ReturnSetInfo *) fcinfo->resultinfo;
-	TupleDesc	tupdesc;
-	Tuplestorestate *tupstore;
-	MemoryContext per_query_ctx;
-	MemoryContext oldcontext;
 	XLogRecPtr	currlsn;
 	int			slotno;
-
-	/* check to see if caller supports us returning a tuplestore */
-	if (rsinfo == NULL || !IsA(rsinfo, ReturnSetInfo))
-		ereport(ERROR,
-				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-				 errmsg("set-valued function called in context that cannot accept a set")));
-	if (!(rsinfo->allowedModes & SFRM_Materialize))
-		ereport(ERROR,
-				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-				 errmsg("materialize mode required, but it is not allowed in this context")));
-
-	/* Build a tuple descriptor for our result type */
-	if (get_call_result_type(fcinfo, NULL, &tupdesc) != TYPEFUNC_COMPOSITE)
-		elog(ERROR, "return type must be a row type");
 
 	/*
 	 * We don't require any special permission to see this function's data
@@ -277,15 +252,7 @@ pg_get_replication_slots(PG_FUNCTION_ARGS)
 	 * name, which shouldn't contain anything particularly sensitive.
 	 */
 
-	per_query_ctx = rsinfo->econtext->ecxt_per_query_memory;
-	oldcontext = MemoryContextSwitchTo(per_query_ctx);
-
-	tupstore = tuplestore_begin_heap(true, false, work_mem);
-	rsinfo->returnMode = SFRM_Materialize;
-	rsinfo->setResult = tupstore;
-	rsinfo->setDesc = tupdesc;
-
-	MemoryContextSwitchTo(oldcontext);
+	InitMaterializedSRF(fcinfo, 0);
 
 	currlsn = GetXLogWriteRecPtr();
 
@@ -357,12 +324,10 @@ pg_get_replication_slots(PG_FUNCTION_ARGS)
 			nulls[i++] = true;
 
 		/*
-		 * If invalidated_at is valid and restart_lsn is invalid, we know for
-		 * certain that the slot has been invalidated.  Otherwise, test
-		 * availability from restart_lsn.
+		 * If the slot has not been invalidated, test availability from
+		 * restart_lsn.
 		 */
-		if (XLogRecPtrIsInvalid(slot_contents.data.restart_lsn) &&
-			!XLogRecPtrIsInvalid(slot_contents.data.invalidated_at))
+		if (slot_contents.data.invalidated != RS_INVAL_NONE)
 			walstate = WALAVAIL_REMOVED;
 		else
 			walstate = GetWALAvailability(slot_contents.data.restart_lsn);
@@ -432,7 +397,7 @@ pg_get_replication_slots(PG_FUNCTION_ARGS)
 
 			XLByteToSeg(slot_contents.data.restart_lsn, targetSeg, wal_segment_size);
 
-			/* determine how many segments slots can be kept by slots */
+			/* determine how many segments can be kept by slots */
 			slotKeepSegs = XLogMBVarToSegs(max_slot_wal_keep_size_mb, wal_segment_size);
 			/* ditto for wal_keep_size */
 			keepSegs = XLogMBVarToSegs(wal_keep_size_mb, wal_segment_size);
@@ -446,14 +411,23 @@ pg_get_replication_slots(PG_FUNCTION_ARGS)
 
 		values[i++] = BoolGetDatum(slot_contents.data.two_phase);
 
+		if (slot_contents.data.database == InvalidOid)
+			nulls[i++] = true;
+		else
+		{
+			if (slot_contents.data.invalidated != RS_INVAL_NONE)
+				values[i++] = BoolGetDatum(true);
+			else
+				values[i++] = BoolGetDatum(false);
+		}
+
 		Assert(i == PG_GET_REPLICATION_SLOTS_COLS);
 
-		tuplestore_putvalues(tupstore, tupdesc, values, nulls);
+		tuplestore_putvalues(rsinfo->setResult, rsinfo->setDesc,
+							 values, nulls);
 	}
 
 	LWLockRelease(ReplicationSlotControlLock);
-
-	tuplestore_donestoring(tupstore);
 
 	return (Datum) 0;
 }
@@ -547,7 +521,8 @@ pg_logical_replication_slot_advance(XLogRecPtr moveto)
 			 */
 			record = XLogReadRecord(ctx->reader, &errm);
 			if (errm)
-				elog(ERROR, "%s", errm);
+				elog(ERROR, "could not find record while advancing replication slot: %s",
+					 errm);
 
 			/*
 			 * Process the record.  Storage-level changes are ignored in
@@ -628,7 +603,7 @@ pg_replication_slot_advance(PG_FUNCTION_ARGS)
 
 	Assert(!MyReplicationSlot);
 
-	check_permissions();
+	CheckSlotPermissions();
 
 	if (XLogRecPtrIsInvalid(moveto))
 		ereport(ERROR,
@@ -643,9 +618,9 @@ pg_replication_slot_advance(PG_FUNCTION_ARGS)
 	 * target position accordingly.
 	 */
 	if (!RecoveryInProgress())
-		moveto = Min(moveto, GetFlushRecPtr());
+		moveto = Min(moveto, GetFlushRecPtr(NULL));
 	else
-		moveto = Min(moveto, GetXLogReplayRecPtr(&ThisTimeLineID));
+		moveto = Min(moveto, GetXLogReplayRecPtr(NULL));
 
 	/* Acquire the slot so we "own" it */
 	ReplicationSlotAcquire(NameStr(*slotname), true);
@@ -727,7 +702,7 @@ copy_replication_slot(FunctionCallInfo fcinfo, bool logical_slot)
 	if (get_call_result_type(fcinfo, NULL, &tupdesc) != TYPEFUNC_COMPOSITE)
 		elog(ERROR, "return type must be a row type");
 
-	check_permissions();
+	CheckSlotPermissions();
 
 	if (logical_slot)
 		CheckLogicalDecodingRequirements();
@@ -789,6 +764,13 @@ copy_replication_slot(FunctionCallInfo fcinfo, bool logical_slot)
 		ereport(ERROR,
 				(errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
 				 errmsg("cannot copy a replication slot that doesn't reserve WAL")));
+
+	/* Cannot copy an invalidated replication slot */
+	if (first_slot_contents.data.invalidated != RS_INVAL_NONE)
+		ereport(ERROR,
+				errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
+				errmsg("cannot copy invalidated replication slot \"%s\"",
+					   NameStr(*src_name)));
 
 	/* Overwrite params from optional arguments */
 	if (PG_NARGS() >= 3)
@@ -876,6 +858,20 @@ copy_replication_slot(FunctionCallInfo fcinfo, bool logical_slot)
 					 errmsg("cannot copy unfinished logical replication slot \"%s\"",
 							NameStr(*src_name)),
 					 errhint("Retry when the source replication slot's confirmed_flush_lsn is valid.")));
+
+		/*
+		 * Copying an invalid slot doesn't make sense. Note that the source
+		 * slot can become invalid after we creat the new slot and copy the
+		 * data of source slot. This is possible because the operations in
+		 * InvalidateObsoleteReplicationSlots() are not serialized with this
+		 * function. Even though we can't detect such a case here, the copied
+		 * slot will become invalid in the next checkpoint cycle.
+		 */
+		if (second_slot_contents.data.invalidated != RS_INVAL_NONE)
+			ereport(ERROR,
+					errmsg("cannot copy replication slot \"%s\"",
+						   NameStr(*src_name)),
+					errdetail("The source replication slot was invalidated during the copy operation."));
 
 		/* Install copied values again */
 		SpinLockAcquire(&MyReplicationSlot->mutex);

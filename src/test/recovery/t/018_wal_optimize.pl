@@ -1,24 +1,20 @@
 
-# Copyright (c) 2021, PostgreSQL Global Development Group
+# Copyright (c) 2021-2023, PostgreSQL Global Development Group
 
 # Test WAL replay when some operation has skipped WAL.
 #
 # These tests exercise code that once violated the mandate described in
 # src/backend/access/transam/README section "Skipping WAL for New
-# RelFileNode".  The tests work by committing some transactions, initiating an
+# RelFileLocator".  The tests work by committing some transactions, initiating an
 # immediate shutdown, and confirming that the expected data survives recovery.
 # For many years, individual commands made the decision to skip WAL, hence the
 # frequent appearance of COPY in these tests.
 use strict;
 use warnings;
 
-use PostgresNode;
-use TestLib;
-
-# GPDB: Effectively disable some of these tests. We cannot run
-# PREPARE TRANSACTION in utility-mode.
-# use Test::More tests => 38;
-use Test::More tests => 36;
+use PostgreSQL::Test::Cluster;
+use PostgreSQL::Test::Utils;
+use Test::More;
 
 sub check_orphan_relfilenodes
 {
@@ -28,7 +24,7 @@ sub check_orphan_relfilenodes
 
 	my $db_oid = $node->safe_psql('postgres',
 		"SELECT oid FROM pg_database WHERE datname = 'postgres'");
-	my $prefix               = "base/$db_oid/";
+	my $prefix = "base/$db_oid/";
 	my $filepaths_referenced = $node->safe_psql(
 		'postgres', "
 	   SELECT pg_relation_filepath(oid) FROM pg_class
@@ -49,7 +45,7 @@ sub run_wal_optimize
 {
 	my $wal_level = shift;
 
-	my $node = get_new_node("node_$wal_level");
+	my $node = PostgreSQL::Test::Cluster->new("node_$wal_level");
 	$node->init;
 	$node->append_conf(
 		'postgresql.conf', qq(
@@ -118,23 +114,22 @@ wal_skip_threshold = 0
 		"SELECT count(*), min(id) FROM trunc_ins;");
 	is($result, qq(1|2), "wal_level = $wal_level, TRUNCATE INSERT");
 
-	# GPDB: Disable this test.
-	# # Same for prepared transaction.
-	# # Tuples inserted after the truncation should be seen.
-	# $node->safe_psql(
-	# 	'postgres', "
-	# 	BEGIN;
-	# 	CREATE TABLE twophase (id serial PRIMARY KEY);
-	# 	INSERT INTO twophase VALUES (DEFAULT);
-	# 	TRUNCATE twophase;
-	# 	INSERT INTO twophase VALUES (DEFAULT);
-	# 	PREPARE TRANSACTION 't';
-	# 	COMMIT PREPARED 't';");
-	# $node->stop('immediate');
-	# $node->start;
-	# $result = $node->safe_psql('postgres',
-	# 	"SELECT count(*), min(id) FROM trunc_ins;");
-	# is($result, qq(1|2), "wal_level = $wal_level, TRUNCATE INSERT PREPARE");
+	# Same for prepared transaction.
+	# Tuples inserted after the truncation should be seen.
+	$node->safe_psql(
+		'postgres', "
+		BEGIN;
+		CREATE TABLE twophase (id serial PRIMARY KEY);
+		INSERT INTO twophase VALUES (DEFAULT);
+		TRUNCATE twophase;
+		INSERT INTO twophase VALUES (DEFAULT);
+		PREPARE TRANSACTION 't';
+		COMMIT PREPARED 't';");
+	$node->stop('immediate');
+	$node->start;
+	$result = $node->safe_psql('postgres',
+		"SELECT count(*), min(id) FROM trunc_ins;");
+	is($result, qq(1|2), "wal_level = $wal_level, TRUNCATE INSERT PREPARE");
 
 	# Writing WAL at end of xact, instead of syncing.
 	$node->safe_psql(
@@ -150,9 +145,9 @@ wal_skip_threshold = 0
 	is($result, qq(20000), "wal_level = $wal_level, end-of-xact WAL");
 
 	# Data file for COPY query in subsequent tests
-	my $basedir   = $node->basedir;
+	my $basedir = $node->basedir;
 	my $copy_file = "$basedir/copy_data.txt";
-	TestLib::append_to_file(
+	PostgreSQL::Test::Utils::append_to_file(
 		$copy_file, qq(20000,30000
 20001,30001
 20002,30002));
@@ -354,41 +349,38 @@ wal_skip_threshold = 0
 
 	# Test consistency of INSERT, COPY and TRUNCATE in same transaction block
 	# with TRUNCATE triggers.
-	SKIP: {
-		skip('Triggers for statements are not yet supported', 1);
-		$node->safe_psql(
-			'postgres', "
-			BEGIN;
-			CREATE TABLE trunc_trig (id serial PRIMARY KEY, id2 text);
-			CREATE FUNCTION trunc_trig_before_stat_trig() RETURNS trigger
-			LANGUAGE plpgsql as \$\$
-			BEGIN
-				INSERT INTO trunc_trig VALUES (DEFAULT, 'triggered stat before');
-				RETURN NULL;
-			END; \$\$;
-			CREATE FUNCTION trunc_trig_after_stat_trig() RETURNS trigger
-			LANGUAGE plpgsql as \$\$
-			BEGIN
-				INSERT INTO trunc_trig VALUES (DEFAULT, 'triggered stat before');
-				RETURN NULL;
-			END; \$\$;
-			CREATE TRIGGER trunc_trig_before_stat_truncate
-			BEFORE TRUNCATE ON trunc_trig
-			FOR EACH STATEMENT EXECUTE PROCEDURE trunc_trig_before_stat_trig();
-			CREATE TRIGGER trunc_trig_after_stat_truncate
-			AFTER TRUNCATE ON trunc_trig
-			FOR EACH STATEMENT EXECUTE PROCEDURE trunc_trig_after_stat_trig();
-			INSERT INTO trunc_trig VALUES (DEFAULT, 1);
-			TRUNCATE trunc_trig;
-			COPY trunc_trig FROM '$copy_file' DELIMITER ',';
-			COMMIT;");
-		$node->stop('immediate');
-		$node->start;
-		$result =
-		$node->safe_psql('postgres', "SELECT count(*) FROM trunc_trig;");
-		is($result, qq(4),
-			"wal_level = $wal_level, TRUNCATE COPY with TRUNCATE triggers");
-	}
+	$node->safe_psql(
+		'postgres', "
+		BEGIN;
+		CREATE TABLE trunc_trig (id serial PRIMARY KEY, id2 text);
+		CREATE FUNCTION trunc_trig_before_stat_trig() RETURNS trigger
+		  LANGUAGE plpgsql as \$\$
+		  BEGIN
+			INSERT INTO trunc_trig VALUES (DEFAULT, 'triggered stat before');
+			RETURN NULL;
+		  END; \$\$;
+		CREATE FUNCTION trunc_trig_after_stat_trig() RETURNS trigger
+		  LANGUAGE plpgsql as \$\$
+		  BEGIN
+			INSERT INTO trunc_trig VALUES (DEFAULT, 'triggered stat before');
+			RETURN NULL;
+		  END; \$\$;
+		CREATE TRIGGER trunc_trig_before_stat_truncate
+		  BEFORE TRUNCATE ON trunc_trig
+		  FOR EACH STATEMENT EXECUTE PROCEDURE trunc_trig_before_stat_trig();
+		CREATE TRIGGER trunc_trig_after_stat_truncate
+		  AFTER TRUNCATE ON trunc_trig
+		  FOR EACH STATEMENT EXECUTE PROCEDURE trunc_trig_after_stat_trig();
+		INSERT INTO trunc_trig VALUES (DEFAULT, 1);
+		TRUNCATE trunc_trig;
+		COPY trunc_trig FROM '$copy_file' DELIMITER ',';
+		COMMIT;");
+	$node->stop('immediate');
+	$node->start;
+	$result =
+	  $node->safe_psql('postgres', "SELECT count(*) FROM trunc_trig;");
+	is($result, qq(4),
+		"wal_level = $wal_level, TRUNCATE COPY with TRUNCATE triggers");
 
 	# Test redo of temp table creation.
 	$node->safe_psql(
@@ -405,3 +397,5 @@ wal_skip_threshold = 0
 # Run same test suite for multiple wal_level values.
 run_wal_optimize("minimal");
 run_wal_optimize("replica");
+
+done_testing();

@@ -7,7 +7,7 @@
  *
  * Portions Copyright (c) 2006-2008, Greenplum inc
  * Portions Copyright (c) 2012-Present VMware, Inc. or its affiliates.
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
  *
  *	  src/include/utils/guc_tables.h
  *
@@ -16,7 +16,9 @@
 #ifndef GUC_TABLES_H
 #define GUC_TABLES_H 1
 
+#include "lib/ilist.h"
 #include "utils/guc.h"
+#include "utils/hsearch.h"
 
 /*
  * GUC supports these types of variables:
@@ -58,6 +60,7 @@ enum config_group
 	UNGROUPED,					/* use for options not shown in pg_settings */
 	FILE_LOCATIONS,
 	CONN_AUTH_SETTINGS,
+	CONN_AUTH_TCP,
 	CONN_AUTH_AUTH,
 	CONN_AUTH_SSL,
 
@@ -78,6 +81,7 @@ enum config_group
 	WAL_SETTINGS,
 	WAL_CHECKPOINTS,
 	WAL_ARCHIVING,
+	WAL_RECOVERY,
 	WAL_ARCHIVE_RECOVERY,
 	WAL_RECOVERY_TARGET,
 	REPLICATION_SENDING,
@@ -95,8 +99,8 @@ enum config_group
 
 	STATS_ANALYZE,                      /*CDB*/
 	STATS_MONITORING,
-	STATS_COLLECTOR,
 	ENCRYPTION,
+	STATS_CUMULATIVE,
 	AUTOVACUUM,
 
 	CLIENT_CONN_STATEMENT,
@@ -165,6 +169,8 @@ typedef struct guc_stack
 	/* masked value's source must be PGC_S_SESSION, so no need to store it */
 	GucContext	scontext;		/* context that set the prior value */
 	GucContext	masked_scontext;	/* context that set the masked value */
+	Oid			srole;			/* role that set the prior value */
+	Oid			masked_srole;	/* role that set the masked value */
 	config_var_value prior;		/* previous value of variable */
 	config_var_value masked;	/* SET value in a GUC_SET_LOCAL entry */
 } GucStack;
@@ -175,6 +181,15 @@ typedef struct guc_stack
  * The short description should be less than 80 chars in length. Some
  * applications may use the long description as well, and will append
  * it to the short description. (separated by a newline or '. ')
+ *
+ * srole is the role that set the current value, or BOOTSTRAP_SUPERUSERID
+ * if the value came from an internal source or the config file.  Similarly
+ * for reset_srole (which is usually BOOTSTRAP_SUPERUSERID, but not always).
+ *
+ * Variables that are currently of active interest for maintenance
+ * operations are linked into various lists using the xxx_link fields.
+ * The link fields are unused/garbage in variables not currently having
+ * the specified properties.
  *
  * Note that sourcefile/sourceline are kept here, and not pushed into stacked
  * values, although in principle they belong with some stacked value if the
@@ -197,8 +212,16 @@ struct config_generic
 	GucSource	reset_source;	/* source of the reset_value */
 	GucContext	scontext;		/* context that set the current value */
 	GucContext	reset_scontext; /* context that set the reset value */
+	Oid			srole;			/* role that set the current value */
+	Oid			reset_srole;	/* role that set the reset value */
 	GucStack   *stack;			/* stacked prior values */
 	void	   *extra;			/* "extra" pointer for current actual value */
+	dlist_node	nondef_link;	/* list link for variables that have source
+								 * different from PGC_S_DEFAULT */
+	slist_node	stack_link;		/* list link for variables that have non-NULL
+								 * stack */
+	slist_node	report_link;	/* list link for variables that have the
+								 * GUC_NEEDS_REPORT bit set in status */
 	char	   *last_reported;	/* if variable is GUC_REPORT, value last sent
 								 * to client (NULL if not yet sent) */
 	char	   *sourcefile;		/* file current setting is from (NULL if not
@@ -207,6 +230,17 @@ struct config_generic
 
 	bool		mdb_admin_allowed; /* is mdb admin allowed to change this, makes sence only for superuser/not superuser ctx */
 };
+
+/*
+ * We use a dynahash table to look up GUCs by name, or to iterate through
+ * all the GUCs.  The gucname field is redundant with gucvar->name, but
+ * dynahash makes it too painful to not store the hash key separately.
+ */
+typedef struct
+{
+	const char *gucname;		/* hash key */
+	struct config_generic *gucvar;	/* -> GUC's defining structure */
+} GUCHashEntry;
 
 /* bit values in status field */
 #define GUC_IS_IN_FILE		0x0001	/* found it in config file */
@@ -313,14 +347,29 @@ struct config_enum
 };
 
 /* constant tables corresponding to enums above and in guc.h */
-extern const char *const config_group_names[];
-extern const char *const config_type_names[];
-extern const char *const GucContext_Names[];
-extern const char *const GucSource_Names[];
+extern PGDLLIMPORT const char *const config_group_names[];
+extern PGDLLIMPORT const char *const config_type_names[];
+extern PGDLLIMPORT const char *const GucContext_Names[];
+extern PGDLLIMPORT const char *const GucSource_Names[];
 
-/* get the current set of variables */
-extern struct config_generic **get_guc_variables(void);
-extern int get_num_guc_variables(void);
+/* data arrays defining all the built-in GUC variables */
+extern PGDLLIMPORT struct config_bool ConfigureNamesBool[];
+extern PGDLLIMPORT struct config_int ConfigureNamesInt[];
+extern PGDLLIMPORT struct config_real ConfigureNamesReal[];
+extern PGDLLIMPORT struct config_string ConfigureNamesString[];
+extern PGDLLIMPORT struct config_enum ConfigureNamesEnum[];
+
+/* lookup GUC variables, returning config_generic pointers */
+extern struct config_generic *find_option(const char *name,
+										  bool create_placeholders,
+										  bool skip_errors,
+										  int elevel);
+
+/* get string value of variable */
+extern char *ShowGUCOption(struct config_generic *record, bool use_units);
+
+/* get whether or not the GUC variable is visible to current user */
+extern bool ConfigOptionIsVisible(struct config_generic *conf);
 
 extern void build_guc_variables(void);
 
@@ -342,6 +391,12 @@ extern struct config_real ConfigureNamesReal_gp[];
 extern struct config_string ConfigureNamesString_gp[];
 extern struct config_enum ConfigureNamesEnum_gp[];
 
-extern void gpdb_assign_sync_flag(struct config_generic **guc_variables, int size, bool predefine);
+extern void gpdb_assign_sync_flag(HTAB *guc_tab);
+extern void gpdb_assign_sync_flag_one(struct config_generic *var, bool predefine);
+
+extern char *config_enum_get_options(struct config_enum *record,
+									 const char *prefix,
+									 const char *suffix,
+									 const char *separator);
 
 #endif							/* GUC_TABLES_H */

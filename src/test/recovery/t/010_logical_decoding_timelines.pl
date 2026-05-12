@@ -1,5 +1,5 @@
 
-# Copyright (c) 2021, PostgreSQL Global Development Group
+# Copyright (c) 2021-2023, PostgreSQL Global Development Group
 
 # Demonstrate that logical can follow timeline switches.
 #
@@ -24,17 +24,16 @@
 use strict;
 use warnings;
 
-use PostgresNode;
-use TestLib;
-use Test::More tests => 13;
+use PostgreSQL::Test::Cluster;
+use PostgreSQL::Test::Utils;
+use Test::More;
 use File::Copy;
-use IPC::Run ();
 use Scalar::Util qw(blessed);
 
 my ($stdout, $stderr, $ret);
 
 # Initialize primary node
-my $node_primary = get_new_node('primary');
+my $node_primary = PostgreSQL::Test::Cluster->new('primary');
 $node_primary->init(allows_streaming => 1, has_archiving => 1);
 $node_primary->append_conf(
 	'postgresql.conf', q[
@@ -69,12 +68,14 @@ $node_primary->safe_psql('dropme',
 $node_primary->safe_psql('postgres', 'CHECKPOINT;');
 
 my $backup_name = 'b1';
-$node_primary->backup_fs_hot($backup_name);
+$node_primary->stop();
+$node_primary->backup_fs_cold($backup_name);
+$node_primary->start();
 
 $node_primary->safe_psql('postgres',
 	q[SELECT pg_create_physical_replication_slot('phys_slot');]);
 
-my $node_replica = get_new_node('replica');
+my $node_replica = PostgreSQL::Test::Cluster->new('replica');
 $node_replica->init_from_backup(
 	$node_primary, $backup_name,
 	has_streaming => 1,
@@ -88,14 +89,13 @@ $node_replica->start;
 # db and associated slot.
 is($node_primary->psql('postgres', 'DROP DATABASE dropme'),
 	0, 'dropped DB with logical slot OK on primary');
-$node_primary->wait_for_catchup($node_replica, 'replay',
-	$node_primary->lsn('insert'));
+$node_primary->wait_for_catchup($node_replica);
 is( $node_replica->safe_psql(
 		'postgres', q[SELECT 1 FROM pg_database WHERE datname = 'dropme']),
 	'',
 	'dropped DB dropme on standby');
-is($node_primary->slot('dropme_slot')->{'slot_name'},
-	undef, 'logical slot was actually dropped on standby');
+is($node_replica->slot('dropme_slot')->{'plugin'},
+	'', 'logical slot was actually dropped on standby');
 
 # Back to testing failover...
 $node_primary->safe_psql('postgres',
@@ -158,7 +158,7 @@ like(
 ($ret, $stdout, $stderr) = $node_replica->psql(
 	'postgres',
 	"SELECT data FROM pg_logical_slot_peek_changes('before_basebackup', NULL, NULL, 'include-xids', '0', 'skip-empty-xacts', '1');",
-	timeout => $TestLib::timeout_default);
+	timeout => $PostgreSQL::Test::Utils::timeout_default);
 is($ret, 0, 'replay from slot before_basebackup succeeds');
 
 my $final_expected_output_bb = q(BEGIN
@@ -187,8 +187,8 @@ my $endpos = $node_replica->safe_psql('postgres',
 
 $stdout = $node_replica->pg_recvlogical_upto(
 	'postgres', 'before_basebackup',
-	$endpos,    $TestLib::timeout_default,
-	'include-xids'     => '0',
+	$endpos, $PostgreSQL::Test::Utils::timeout_default,
+	'include-xids' => '0',
 	'skip-empty-xacts' => '1');
 
 # walsender likes to add a newline
@@ -197,3 +197,5 @@ is($stdout, $final_expected_output_bb,
 	'got same output from walsender via pg_recvlogical on before_basebackup');
 
 $node_replica->teardown_node();
+
+done_testing();

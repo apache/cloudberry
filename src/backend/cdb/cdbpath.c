@@ -75,6 +75,8 @@ static bool try_redistribute(PlannerInfo *root, CdbpathMfjRel *g,
 
 static SplitUpdatePath *make_splitupdate_path(PlannerInfo *root, Path *subpath, Index rti);
 
+static SplitMergePath *make_split_merge_path(PlannerInfo *root, Path *subpath, List* resultRelations, List *mergeActionLists);
+
 static bool can_elide_explicit_motion(PlannerInfo *root, Index rti, Path *subpath, GpPolicy *policy);
 /*
  * cdbpath_cost_motion
@@ -579,6 +581,7 @@ cdbpath_create_motion_path(PlannerInfo *root,
         newSubqueryScanPath = create_subqueryscan_path(root,
                                                        subqueryScanPath->path.parent,
                                                        motionPath,
+													   false,
                                                        subqueryScanPath->path.pathkeys,
                                                        locus,
                                                        subqueryScanPath->required_outer);
@@ -1107,11 +1110,11 @@ cdbpath_match_preds_to_both_distkeys(PlannerInfo *root,
 			/* Skip predicate if neither side matches inner distkey item. */
 			if (inner_dk != outer_dk)
 			{
-				ListCell   *i;
+				ListCell   *k;
 
-				foreach(i, inner_dk->dk_eclasses)
+				foreach(k, inner_dk->dk_eclasses)
 				{
-					EquivalenceClass *inner_ec = (EquivalenceClass *) lfirst(i);
+					EquivalenceClass *inner_ec = (EquivalenceClass *) lfirst(k);
 
 					if (inner_ec != rinfo->left_ec && inner_ec != rinfo->right_ec)
 					{
@@ -1466,6 +1469,7 @@ cdbpath_motion_for_join(PlannerInfo *root,
 			outer.ok_to_replicate = false;
 			break;
 		case JOIN_RIGHT:
+		case JOIN_RIGHT_ANTI:
 			inner.ok_to_replicate = false;
 			break;
 		case JOIN_FULL:
@@ -2780,6 +2784,82 @@ create_split_update_path(PlannerInfo *root, Index rti, GpPolicy *policy, Path *s
 	return subpath;
 }
 
+
+Path *
+create_motion_path_for_merge(PlannerInfo *root, List *resultRelations, GpPolicy *policy, List *mergeActionLists, Path *subpath)
+{
+	GpPolicyType	policyType = policy->ptype;
+	CdbPathLocus	targetLocus;
+	RelOptInfo	   *rel;
+	ListCell	   *lc, *l;
+	bool			need_split_merge = false;
+
+	if (policyType == POLICYTYPE_PARTITIONED)
+	{
+		/*
+		 * If merge contain CMD_INSERT, we need split merge to let new
+		 * insert tuple redistributed to correct segment. otherwise, we
+		 * create motion as the same as update/delete in create_motion_path_for_upddel
+		 */
+		foreach(l, mergeActionLists)
+		{
+			List *mergeActionList = lfirst(l);
+			foreach(lc, mergeActionList) 
+			{
+				MergeAction *action = lfirst(lc);
+				if (action->commandType == CMD_INSERT)
+					need_split_merge = true;
+			}
+		}
+
+		if (need_split_merge)
+		{
+			if (root->simple_rel_array[linitial_int(resultRelations)])
+				rel = root->simple_rel_array[linitial_int(resultRelations)];
+			else
+				rel = build_simple_rel(root, linitial_int(resultRelations), NULL /*parent*/);
+			targetLocus = cdbpathlocus_from_baserel(root, rel, 0);
+
+			subpath = (Path *) make_split_merge_path(root, subpath, resultRelations, mergeActionLists);
+			subpath = cdbpath_create_explicit_motion_path(root,
+														subpath,
+														targetLocus);
+		}
+		else
+		{
+			
+			if (can_elide_explicit_motion(root, linitial_int(resultRelations), subpath, policy))
+				return subpath;
+			else
+			{
+				CdbPathLocus_MakeStrewn(&targetLocus, policy->numsegments, 0);
+				subpath = cdbpath_create_explicit_motion_path(root,
+															subpath,
+															targetLocus);
+			}
+		}
+	}
+	else if (policyType == POLICYTYPE_ENTRY)
+	{
+		/* Master-only table */
+		CdbPathLocus_MakeEntry(&targetLocus);
+		subpath = cdbpath_create_motion_path(root, subpath, NIL, false, targetLocus);
+	}
+	else if (policyType == POLICYTYPE_REPLICATED)
+	{
+		/*
+		 * The statement that insert/update/delete on replicated table has to
+		 * be dispatched to each segment and executed on each segment. Thus
+		 * the targetlist cannot contain volatile functions.
+		 */
+		if (contain_volatile_functions((Node *) (subpath->pathtarget->exprs)))
+			elog(ERROR, "could not devise a plan.");
+	}
+	else
+		elog(ERROR, "unrecognized policy type %u", policyType);
+	return subpath;
+}
+
 /*
  * turn_volatile_seggen_to_singleqe
  *
@@ -2840,6 +2920,35 @@ turn_volatile_seggen_to_singleqe(PlannerInfo *root, Path *path, Node *node)
 	}
 	else
 		return path;
+}
+
+static SplitMergePath *
+make_split_merge_path(PlannerInfo *root, Path *subpath, List *resultRelations, List *mergeActionLists)
+{
+	PathTarget		*splitMergePathTarget;
+	SplitMergePath	*splitmergepath;
+
+	splitMergePathTarget = copy_pathtarget(subpath->pathtarget);
+
+	/* populate information generated above into splitupdate node */
+	splitmergepath = makeNode(SplitMergePath);
+	splitmergepath->path.pathtype = T_SplitMerge;
+	splitmergepath->path.parent = subpath->parent;
+	splitmergepath->path.pathtarget = splitMergePathTarget;
+	splitmergepath->path.param_info = NULL;
+	splitmergepath->path.parallel_aware = false;
+	splitmergepath->path.parallel_safe = subpath->parallel_safe;
+	splitmergepath->path.parallel_workers = subpath->parallel_workers;
+	splitmergepath->path.rows = 2 * subpath->rows;
+	splitmergepath->path.startup_cost = subpath->startup_cost;
+	splitmergepath->path.total_cost = subpath->total_cost;
+	splitmergepath->path.pathkeys = subpath->pathkeys;
+	splitmergepath->path.locus = subpath->locus;
+	splitmergepath->subpath = subpath;
+	splitmergepath->resultRelations = resultRelations;
+	splitmergepath->mergeActionLists = mergeActionLists;
+
+	return splitmergepath;
 }
 
 static SplitUpdatePath *
@@ -3111,6 +3220,7 @@ cdbpath_motion_for_parallel_join(PlannerInfo *root,
 		case JOIN_UNIQUE_OUTER:
 		case JOIN_UNIQUE_INNER:
 		case JOIN_RIGHT:
+		case JOIN_RIGHT_ANTI:
 		case JOIN_FULL:
 			outer.ok_to_replicate = false;
 			inner.ok_to_replicate = false;

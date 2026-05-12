@@ -1,19 +1,17 @@
 
-# Copyright (c) 2021, PostgreSQL Global Development Group
+# Copyright (c) 2021-2023, PostgreSQL Global Development Group
 
 # Verify the behavior of assorted pg_verifybackup options.
 
 use strict;
 use warnings;
-use Cwd;
-use Config;
 use File::Path qw(rmtree);
-use PostgresNode;
-use TestLib;
-use Test::More tests => 25;
+use PostgreSQL::Test::Cluster;
+use PostgreSQL::Test::Utils;
+use Test::More;
 
 # Start up the server and take a backup.
-my $primary = get_new_node('primary');
+my $primary = PostgreSQL::Test::Cluster->new('primary');
 $primary->init(allows_streaming => 1);
 $primary->start;
 my $backup_path = $primary->backup_dir . '/test_options';
@@ -28,6 +26,12 @@ my $result = IPC::Run::run [ 'pg_verifybackup', '-q', $backup_path ],
 ok($result, "-q succeeds: exit code 0");
 is($stdout, '', "-q succeeds: no stdout");
 is($stderr, '', "-q succeeds: no stderr");
+
+# Test invalid options
+command_fails_like(
+	[ 'pg_verifybackup', '--progress', '--quiet', $backup_path ],
+	qr{cannot specify both -P/--progress and -q/--quiet},
+	'cannot use --progress and --quiet at the same time');
 
 # Corrupt the PG_VERSION file.
 my $version_pathname = "$backup_path/PG_VERSION";
@@ -49,10 +53,13 @@ command_like(
 	qr/backup successfully verified/,
 	'-s skips checksumming');
 
-# Validation should succeed if we ignore the problem file.
-command_like(
-	[ 'pg_verifybackup', '-i', 'PG_VERSION', $backup_path ],
-	qr/backup successfully verified/,
+# Validation should succeed if we ignore the problem file. Also, check
+# the progress information.
+command_checks_all(
+	[ 'pg_verifybackup', '--progress', '-i', 'PG_VERSION', $backup_path ],
+	0,
+	[qr/backup successfully verified/],
+	[qr{(\d+/\d+ kB \(\d+%\) verified)+}],
 	'-i ignores problem file');
 
 # PG_VERSION is already corrupt; let's try also removing all of pg_xact.
@@ -100,8 +107,10 @@ unlike(
 # Test valid manifest with nonexistent backup directory.
 command_fails_like(
 	[
-		'pg_verifybackup',              '-m',
+		'pg_verifybackup', '-m',
 		"$backup_path/backup_manifest", "$backup_path/fake"
 	],
 	qr/could not open directory/,
 	'nonexistent backup directory');
+
+done_testing();

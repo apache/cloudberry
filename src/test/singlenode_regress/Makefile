@@ -38,19 +38,22 @@ clean distclean:
 ## Run tests
 ##
 
-REGRESS_OPTS = --dlpath=. --max-concurrent-tests=24 --init-file=$(srcdir)/init_file --make-testtablespace-dir \
+REGRESS_OPTS = --dlpath=. --max-concurrent-tests=24 --init-file=$(srcdir)/init_file \
 	$(EXTRA_REGRESS_OPTS)
+tablespace-setup:
+	rm -rf ./testtablespace
+	mkdir -p ./testtablespace
 
 installcheck-singlenode: installcheck-good-singlenode
 
-installcheck-small-singlenode: all
+installcheck-small-singlenode: all tablespace-setup
 	(\
 	gpconfig -c gp_appendonly_insert_files -v 0; \
 	gpstop -u; \
 	$(pg_regress_installcheck) $(REGRESS_OPTS) --schedule=$(srcdir)/parallel_schedule $(EXTRA_TESTS) \
 	)
 
-installcheck-good-singlenode: all
+installcheck-good-singlenode: all tablespace-setup
 	(\
 	gpconfig -c gp_appendonly_insert_files -v 0; \
 	gpstop -u; \

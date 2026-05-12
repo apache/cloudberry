@@ -51,10 +51,8 @@ CATALOG(pg_task,9637,TaskRelationId) BKI_SHARED_RELATION
 
 typedef FormData_pg_task *Form_pg_task;
 
-DECLARE_UNIQUE_INDEX(pg_task_jobname_username_index, 8915, on pg_task using btree(jobname text_ops, username text_ops));
-#define TaskJobNameUserNameIndexId  8915
-DECLARE_UNIQUE_INDEX_PKEY(pg_task_jobid_index, 8916, on pg_task using btree(jobid oid_ops));
-#define TaskJobIdIndexId  8916
+DECLARE_UNIQUE_INDEX(pg_task_jobname_username_index, 8915, TaskJobNameUserNameIndexId, on pg_task using btree(jobname text_ops, username text_ops));
+DECLARE_UNIQUE_INDEX_PKEY(pg_task_jobid_index, 8916, TaskJobIdIndexId, on pg_task using btree(jobid oid_ops));
 
 extern Oid TaskCreate(const char *schedule, const char *command,
 					  const char *nodename, int32 nodeport,

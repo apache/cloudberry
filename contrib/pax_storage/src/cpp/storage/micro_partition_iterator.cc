@@ -181,7 +181,7 @@ MicroPartitionInfoIterator::New(Relation pax_rel, Snapshot snapshot) {
   auto it = std::make_unique<MicroPartitionInfoIterator>(
       pax_rel, snapshot,
       cbdb::BuildPaxDirectoryPath(
-          pax_rel->rd_node, pax_rel->rd_backend));
+          pax_rel->rd_locator, pax_rel->rd_backend));
 
   it->Begin();
   return it;
@@ -259,7 +259,7 @@ MicroPartitionInfoParallelIterator::New(Relation pax_rel, Snapshot snapshot,
   auto it = std::make_unique<MicroPartitionInfoParallelIterator>(
       pax_rel, snapshot, pscan,
       cbdb::BuildPaxDirectoryPath(
-          pax_rel->rd_node, pax_rel->rd_backend));
+          pax_rel->rd_locator, pax_rel->rd_backend));
 
   return it;
 }
