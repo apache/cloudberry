@@ -611,6 +611,12 @@ TupleTableSlot *cbdb::MakeSingleTupleTableSlot(
   CBDB_WRAP_END;
 }
 
+HeapTuple cbdb::ExecCopyHeapTuple(TupleTableSlot *slot) {
+  CBDB_WRAP_START;
+  { return ::ExecCopySlotHeapTuple(slot); }
+  CBDB_WRAP_END;
+}
+
 void cbdb::SlotGetAllAttrs(TupleTableSlot *slot) {
   CBDB_WRAP_START;
   { ::slot_getallattrs(slot); }
@@ -626,5 +632,11 @@ void cbdb::ExecClearTuple(TupleTableSlot *slot) {
 void cbdb::ExecStoreVirtualTuple(TupleTableSlot *slot) {
   CBDB_WRAP_START;
   { ::ExecStoreVirtualTuple(slot); }
+  CBDB_WRAP_END;
+}
+
+void cbdb::VacuumDelayPoint() {
+  CBDB_WRAP_START;
+  { vacuum_delay_point(); }
   CBDB_WRAP_END;
 }
