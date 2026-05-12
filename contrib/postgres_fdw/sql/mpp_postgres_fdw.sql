@@ -1,3 +1,8 @@
+-- start_ignore
+alter system set optimizer = off;
+select pg_reload_conf();
+-- end_ignore
+
 CREATE EXTENSION IF NOT EXISTS postgres_fdw;
 
 CREATE SERVER testserver2 FOREIGN DATA WRAPPER postgres_fdw;
@@ -135,3 +140,7 @@ explain (costs off) select count(*) from fs1, fs2 where fs1.a = fs2.a and fs1.gp
 select count(*) from fs1,fs2 where fs1.a = fs2.a and fs1.gp_foreign_server = fs2.gp_foreign_server;
 
 reset enable_parallel;
+-- start_ignore
+alter system reset optimizer;
+select pg_reload_conf();
+-- end_ignore

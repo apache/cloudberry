@@ -1,5 +1,5 @@
 -- ===================================================================
--- Greenplum-specific features for postgres_fdw
+-- Cloudberry-specific features for postgres_fdw
 -- ===================================================================
 -- ===================================================================
 -- Create source tables and populate with data
@@ -667,9 +667,9 @@ SELECT * FROM postgres_fdw_gp."GP 1" ORDER BY f1;
 
 TRUNCATE TABLE postgres_fdw_gp."GP 1";
 -- ===================================================================
--- validate writes on coordinator (mpp_execute set to coordinator)
+-- validate writes on master (mpp_execute set to master)
 -- ===================================================================
-ALTER FOREIGN TABLE gp_ft1 OPTIONS ( SET mpp_execute 'coordinator' );
+ALTER FOREIGN TABLE gp_ft1 OPTIONS ( SET mpp_execute 'master' );
 EXPLAIN (COSTS FALSE) INSERT INTO gp_ft1 SELECT * FROM table_dist_rand;
                    QUERY PLAN                   
 ------------------------------------------------
@@ -1365,27 +1365,27 @@ ALTER TABLE sub_part_1_prt_1 EXCHANGE PARTITION for(1) WITH TABLE sub_part_1_prt
 ALTER TABLE sub_part_1_prt_1 EXCHANGE PARTITION for(2) WITH TABLE sub_part_1_prt_1_2_prt_two_foreign;
 -- explain with ORCA should fall back to planner, rather than raise ERROR
 explain select * from sub_part;
-                                         QUERY PLAN                                          
----------------------------------------------------------------------------------------------
+                                               QUERY PLAN                                                
+---------------------------------------------------------------------------------------------------------
  Append  (cost=100.00..14631.81 rows=641404 width=12)
-   ->  Foreign Scan on sub_part_1_prt_1_2_prt_one  (cost=100.00..383.06 rows=9102 width=12)
-   ->  Foreign Scan on sub_part_1_prt_1_2_prt_two  (cost=100.00..383.06 rows=9102 width=12)
+   ->  Foreign Scan on sub_part_1_prt_1_2_prt_one sub_part_1  (cost=100.00..383.06 rows=9102 width=12)
+   ->  Foreign Scan on sub_part_1_prt_1_2_prt_two sub_part_2  (cost=100.00..383.06 rows=9102 width=12)
    ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..1332.33 rows=77900 width=12)
-         ->  Seq Scan on sub_part_1_prt_2_2_prt_one  (cost=0.00..293.67 rows=25967 width=12)
+         ->  Seq Scan on sub_part_1_prt_2_2_prt_one sub_part_3  (cost=0.00..293.67 rows=25967 width=12)
    ->  Gather Motion 3:1  (slice2; segments: 3)  (cost=0.00..1332.33 rows=77900 width=12)
-         ->  Seq Scan on sub_part_1_prt_2_2_prt_two  (cost=0.00..293.67 rows=25967 width=12)
+         ->  Seq Scan on sub_part_1_prt_2_2_prt_two sub_part_4  (cost=0.00..293.67 rows=25967 width=12)
    ->  Gather Motion 3:1  (slice3; segments: 3)  (cost=0.00..1332.33 rows=77900 width=12)
-         ->  Seq Scan on sub_part_1_prt_3_2_prt_one  (cost=0.00..293.67 rows=25967 width=12)
+         ->  Seq Scan on sub_part_1_prt_3_2_prt_one sub_part_5  (cost=0.00..293.67 rows=25967 width=12)
    ->  Gather Motion 3:1  (slice4; segments: 3)  (cost=0.00..1332.33 rows=77900 width=12)
-         ->  Seq Scan on sub_part_1_prt_3_2_prt_two  (cost=0.00..293.67 rows=25967 width=12)
+         ->  Seq Scan on sub_part_1_prt_3_2_prt_two sub_part_6  (cost=0.00..293.67 rows=25967 width=12)
    ->  Gather Motion 3:1  (slice5; segments: 3)  (cost=0.00..1332.33 rows=77900 width=12)
-         ->  Seq Scan on sub_part_1_prt_4_2_prt_one  (cost=0.00..293.67 rows=25967 width=12)
+         ->  Seq Scan on sub_part_1_prt_4_2_prt_one sub_part_7  (cost=0.00..293.67 rows=25967 width=12)
    ->  Gather Motion 3:1  (slice6; segments: 3)  (cost=0.00..1332.33 rows=77900 width=12)
-         ->  Seq Scan on sub_part_1_prt_4_2_prt_two  (cost=0.00..293.67 rows=25967 width=12)
+         ->  Seq Scan on sub_part_1_prt_4_2_prt_two sub_part_8  (cost=0.00..293.67 rows=25967 width=12)
    ->  Gather Motion 3:1  (slice7; segments: 3)  (cost=0.00..1332.33 rows=77900 width=12)
-         ->  Seq Scan on sub_part_1_prt_5_2_prt_one  (cost=0.00..293.67 rows=25967 width=12)
+         ->  Seq Scan on sub_part_1_prt_5_2_prt_one sub_part_9  (cost=0.00..293.67 rows=25967 width=12)
    ->  Gather Motion 3:1  (slice8; segments: 3)  (cost=0.00..1332.33 rows=77900 width=12)
-         ->  Seq Scan on sub_part_1_prt_5_2_prt_two  (cost=0.00..293.67 rows=25967 width=12)
+         ->  Seq Scan on sub_part_1_prt_5_2_prt_two sub_part_10  (cost=0.00..293.67 rows=25967 width=12)
  Optimizer: Postgres query optimizer
 (20 rows)
 

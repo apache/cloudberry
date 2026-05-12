@@ -5881,27 +5881,7 @@ apply_server_options(PgFdwRelationInfo *fpinfo)
 		DefElem    *def = (DefElem *) lfirst(lc);
 
 		if (strcmp(def->defname, "use_remote_estimate") == 0)
-		{
-			/*
-			 * GPDB_13_MERGE_FIXME: For updable statement, different forked Backends by Master
-			 * (QD and entrydb instances)
-			 * will hold Exclusive lock on the same table, which causes lock hang issue.
-			 * For Postgres, there is only one backend, and connnections have been shared,
-			 * so the issue doesn't exist.
-			 *
-			 * For example, following query will hang:
-			 * SELECT *
-			 * FROM ft1, ft2, ft4, ft5, local_tbl
-			 * WHERE ft1.c1 = ft2.c1 AND
-			 *		 ft1.c2 = ft4.c1 AND
-			 *		 ft1.c2 = ft5.c1 AND
-			 *		 ft1.c2 = local_tbl.c1 AND
-			 *		 ft1.c1 < 100 AND
-			 *		 ft2.c1 < 100 FOR UPDATE;
-			 */
-			elog(WARNING, "fdw option 'use_remote_estimate' is not supported.");
-			fpinfo->use_remote_estimate = false;
-		}
+			fpinfo->use_remote_estimate = defGetBoolean(def);
 		else if (strcmp(def->defname, "fdw_startup_cost") == 0)
 			(void) parse_real(defGetString(def), &fpinfo->fdw_startup_cost, 0,
 							  NULL);
@@ -5933,27 +5913,7 @@ apply_table_options(PgFdwRelationInfo *fpinfo)
 		DefElem    *def = (DefElem *) lfirst(lc);
 
 		if (strcmp(def->defname, "use_remote_estimate") == 0)
-		{
-			/*
-			 * GPDB_13_MERGE_FIXME: For updable statement, different forked Backends by Master
-			 * (QD and entrydb instances)
-			 * will hold Exclusive lock on the same table, which causes lock hang issue.
-			 * For Postgres, there is only one backend, and connnections have been shared,
-			 * so the issue doesn't exist.
-			 *
-			 * For example, following query will hang:
-			 * SELECT *
-			 * FROM ft1, ft2, ft4, ft5, local_tbl
-			 * WHERE ft1.c1 = ft2.c1 AND
-			 *		 ft1.c2 = ft4.c1 AND
-			 *		 ft1.c2 = ft5.c1 AND
-			 *		 ft1.c2 = local_tbl.c1 AND
-			 *		 ft1.c1 < 100 AND
-			 *		 ft2.c1 < 100 FOR UPDATE;
-			 */
-			elog(WARNING, "fdw option 'use_remote_estimate' is not supported.");
-			fpinfo->use_remote_estimate = false;
-		}
+			fpinfo->use_remote_estimate = defGetBoolean(def);
 		else if (strcmp(def->defname, "fetch_size") == 0)
 			(void) parse_int(defGetString(def), &fpinfo->fetch_size, 0, NULL);
 		else if (strcmp(def->defname, "async_capable") == 0)

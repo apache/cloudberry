@@ -20,34 +20,6 @@ $d$;
 
 CREATE USER MAPPING IF NOT EXISTS FOR CURRENT_USER SERVER loopback;
 
-CREATE EXTENSION postgres_fdw;
-
-CREATE SERVER testserver1 FOREIGN DATA WRAPPER postgres_fdw;
-DO $d$
-    BEGIN
-        EXECUTE $$CREATE SERVER loopback FOREIGN DATA WRAPPER postgres_fdw
-            OPTIONS (dbname '$$||current_database()||$$',
-                     port '$$||current_setting('port')||$$'
-            )$$;
-        EXECUTE $$CREATE SERVER loopback2 FOREIGN DATA WRAPPER postgres_fdw
-            OPTIONS (dbname '$$||current_database()||$$',
-                     port '$$||current_setting('port')||$$'
-            )$$;
-        EXECUTE $$CREATE SERVER loopback3 FOREIGN DATA WRAPPER postgres_fdw
-            OPTIONS (dbname '$$||current_database()||$$',
-                     port '$$||current_setting('port')||$$'
-            )$$;
-    END;
-$d$;
-
-CREATE USER MAPPING FOR public SERVER testserver1
-	OPTIONS (user 'value', password 'value');
-CREATE USER MAPPING FOR CURRENT_USER SERVER loopback;
-CREATE USER MAPPING FOR CURRENT_USER SERVER loopback2;
-CREATE USER MAPPING FOR public SERVER loopback3;
-
-CREATE SCHEMA "S 1";
-
 CREATE TABLE table_dist_rand
 (
 	f1 int,
