@@ -120,6 +120,7 @@ RUN dnf makecache && \
         libcurl-devel \
         libssh2-devel \
         libevent-devel \
+        libicu-devel \
         libxml2-devel \
         libuuid-devel \
         libzstd-devel \
