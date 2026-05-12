@@ -56,6 +56,9 @@ enum CmdType;
 #define SCAN_SUPPORT_VECTORIZATION        (1 << 2)  /* support vectorization scan */
 #define SCAN_FORCE_BIG_WRITE_LOCK         (1 << 3)  /* force big write lock */
 
+/* force to held big lock for write */
+#define SCAN_FORCE_BIG_WRITE_LOCK (1 << 1)
+
 /*
  * Bitmask values for the flags argument to the scan_begin callback.
  */
