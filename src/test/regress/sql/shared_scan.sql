@@ -120,3 +120,31 @@ where
 	(data_hour = date_trunc('day',data_hour) and stat.schema_name || '.' ||stat.table_name not in (select table_nm_23 from tbls_daily_report_23))
 	and (stat.schema_name || '.' ||stat.table_name not in (select table_nm_onl_act from tbls_w_onl_actl_data))
 	or (stat.schema_name || '.' ||stat.table_name in (select table_nm_onl_act from tbls_w_onl_actl_data));
+
+-- ORCA should fallback when a CTE over a replicated table is referenced
+-- from multiple scalar subqueries.
+-- ss_t1 needs enough rows (40000) to push ORCA to the cross-slice plan;
+-- with fewer rows the bug does not manifest and the test would silently
+-- pass even without the fix.
+-- start_ignore
+DROP TABLE IF EXISTS ss_t1, ss_t2;
+-- end_ignore
+CREATE TABLE ss_t1 AS
+  SELECT generate_series(1, 40000) id
+  DISTRIBUTED BY (id);
+CREATE TABLE ss_t2 AS
+  SELECT * FROM (VALUES (1, 10), (2, 20)) AS v(id, v)
+  DISTRIBUTED REPLICATED;
+ANALYZE ss_t1;
+ANALYZE ss_t2;
+
+SET statement_timeout = '15s';
+WITH
+    cte1 AS (SELECT v FROM ss_t2 WHERE id = 1),
+    cte2 AS (SELECT v FROM ss_t2 WHERE id = 2)
+  SELECT (SELECT v FROM cte1) + (SELECT v FROM cte2) +
+         (SELECT v FROM cte1) + (SELECT v FROM cte2) AS result
+  FROM ss_t1
+  LIMIT 1;
+RESET statement_timeout;
+DROP TABLE ss_t1, ss_t2;
