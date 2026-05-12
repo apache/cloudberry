@@ -14,7 +14,9 @@ include $(top_builddir)/src/Makefile.global
 
 OBJS = \
 	assert.o \
-	elog.o
+	csvlog.o \
+	elog.o \
+	jsonlog.o
 OBJS += debugutils.o
 
 include $(top_srcdir)/src/backend/common.mk
