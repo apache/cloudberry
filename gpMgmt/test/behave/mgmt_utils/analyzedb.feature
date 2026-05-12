@@ -1775,6 +1775,7 @@ Feature: Incrementally analyze the database
         And the user runs "dropdb schema_with_temp_table"
         And the user drops the named connection "default"
 
+    @extended
     Scenario: analyzedb can handle the table name with special utf-8 characters.
         Given database "special_encoding_db" is dropped and recreated
         And the user connects to "special_encoding_db" with named connection "default"

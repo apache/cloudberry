@@ -1,0 +1,740 @@
+#
+# --------------------------------------------------------------------
+#
+# Licensed to the Apache Software Foundation (ASF) under one or more
+# contributor license agreements. See the NOTICE file distributed with
+# this work for additional information regarding copyright ownership.
+# The ASF licenses this file to You under the Apache License, Version 2.0
+# (the "License"); you may not use this file except in compliance with
+# the License. You may obtain a copy of the License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+# --------------------------------------------------------------------
+# GitHub Actions Workflow: Apache Cloudberry Behave Pipeline
+# --------------------------------------------------------------------
+# Description:
+#
+#   This workflow runs Apache Cloudberry gpMgmt Behave tests on Rocky Linux 9.
+#   It is intentionally separated from the main build/installcheck workflow so
+#   that Behave-specific matrix expansion, environment setup, result parsing,
+#   and iterative test stabilization do not disturb the primary CI path.
+#
+# Workflow Overview:
+# 1. **Prepare Behave Matrix**:
+#    - Expands the selected Behave command-level test matrix.
+#    - Supports manual filtering through `test_selection`.
+#
+# 2. **Build Job**:
+#    - Builds Apache Cloudberry and creates source/RPM artifacts for reuse
+#      within this workflow.
+#
+# 3. **Behave Job (Matrix)**:
+#    - Creates a demo cluster for each Behave matrix entry.
+#    - Runs the selected gpMgmt feature file(s) in isolation.
+#    - Parses Behave summaries and uploads logs/metadata artifacts.
+#
+# 4. **Report Job**:
+#    - Aggregates build and Behave job status into a final workflow summary.
+#
+# Execution Environment:
+# - **Runs On**: ubuntu-22.04 with Rocky Linux 9 containers.
+# - **Primary Test Scope**: `gpMgmt/test/behave/mgmt_utils`
+#
+# Notes:
+# - Trigger mode: push, pull_request, and manual `workflow_dispatch`.
+# - Behave tests are split by command to reduce cross-feature environment
+#   pollution.
+# - This workflow currently focuses on single-host CI-compatible Behave tests.
+# - Logs and parsed summaries are uploaded as artifacts for each matrix entry.
+# --------------------------------------------------------------------
+
+name: Apache Cloudberry Behave
+
+on:
+  push:
+    branches: [main, REL_2_STABLE]
+  pull_request:
+    branches: [main, REL_2_STABLE]
+    types: [opened, synchronize, reopened, edited]
+  workflow_dispatch:
+    inputs:
+      test_selection:
+        description: 'Select Behave tests to run (comma-separated). Examples: ic-behave-gpconfig,ic-behave-gpstart'
+        required: false
+        default: 'all'
+        type: string
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  packages: read
+  actions: write
+  checks: read
+  pull-requests: read
+
+env:
+  LOG_RETENTION_DAYS: 7
+  ENABLE_DEBUG: false
+
+jobs:
+  prepare-behave-matrix:
+    runs-on: ubuntu-22.04
+    outputs:
+      behave-matrix: ${{ steps.set-matrix.outputs.matrix }}
+    steps:
+      - id: set-matrix
+        run: |
+          echo "=== Behave Matrix Preparation Diagnostics ==="
+          echo "Event type: ${{ github.event_name }}"
+          echo "Test selection input: '${{ github.event.inputs.test_selection || 'all' }}'"
+
+          ALL_BEHAVE_TESTS='{
+            "include": [
+              {"test":"ic-behave-analyzedb","behave_features":["test/behave/mgmt_utils/analyzedb.feature"]},
+              {"test":"ic-behave-gp-bash-functions","behave_features":["test/behave/mgmt_utils/gp_bash_functions.feature"]},
+              {"test":"ic-behave-gpactivatestandby","behave_features":["test/behave/mgmt_utils/gpactivatestandby.feature"]},
+              {"test":"ic-behave-gpaddmirrors",
+               "behave_features":["test/behave/mgmt_utils/gpaddmirrors.feature"],
+               "behave_args":"--tags ~@concourse_cluster"
+              },
+              {"test":"ic-behave-gpcheckcat",
+               "behave_features":["test/behave/mgmt_utils/gpcheckcat.feature"],
+               "behave_args":"--tags ~@extended"
+              },
+              {"test":"ic-behave-gpcheckperf",
+               "behave_features":["test/behave/mgmt_utils/gpcheckperf.feature"],
+               "behave_args":"--tags ~@concourse_cluster"
+              },
+              {"test":"ic-behave-gpconfig","behave_features":["test/behave/mgmt_utils/gpconfig.feature"]},
+              {"test":"ic-behave-gpinitstandby",
+               "behave_features":["test/behave/mgmt_utils/gpinitstandby.feature"],
+               "behave_args":"--tags ~@concourse_cluster"
+              },
+              {"test":"ic-behave-gpinitsystem",
+               "behave_features":["test/behave/mgmt_utils/gpinitsystem.feature"],
+               "behave_args":"--tags ~@extended"
+              },
+              {"test":"ic-behave-gpmovemirrors",
+               "behave_features":["test/behave/mgmt_utils/gpmovemirrors.feature"],
+               "behave_args":"--tags ~@concourse_cluster --tags ~@extended"
+              },
+              {"test":"ic-behave-gprecoverseg",
+               "behave_features":["test/behave/mgmt_utils/gprecoverseg.feature"],
+               "behave_args":"--tags ~@concourse_cluster --tags ~@extended"
+              },
+              {"test":"ic-behave-gpreload","behave_features":["test/behave/mgmt_utils/gpreload.feature"]},
+              {"test":"ic-behave-gpstart",
+               "behave_features":["test/behave/mgmt_utils/gpstart.feature"],
+               "behave_args":"--tags ~@concourse_cluster"
+              },
+              {"test":"ic-behave-gpstate",
+               "behave_features":["test/behave/mgmt_utils/gpstate.feature"],
+               "behave_args":"--tags ~@concourse_cluster"
+              },
+              {"test":"ic-behave-gpstop","behave_features":["test/behave/mgmt_utils/gpstop.feature"]},
+              {"test":"ic-behave-gpssh",
+               "behave_features":["test/behave/mgmt_utils/gpssh.feature"],
+               "behave_args":"--tags ~@requires_netem"
+              },
+              {"test":"ic-behave-minirepro",
+               "behave_features":["test/behave/mgmt_utils/minirepro.feature"],
+               "behave_args":"--tags ~@extended"
+              },
+              {"test":"ic-behave-replication-slots",
+               "behave_features":["test/behave/mgmt_utils/replication_slots.feature"],
+               "behave_args":"--tags ~@extended"
+              }
+            ]
+          }'
+
+          VALID_TESTS=$(echo "$ALL_BEHAVE_TESTS" | jq -r '.include[].test')
+          IFS=',' read -ra SELECTED_TESTS <<< "${{ github.event.inputs.test_selection || 'all' }}"
+
+          if [[ "${SELECTED_TESTS[*]}" == "all" || -z "${SELECTED_TESTS[*]}" ]]; then
+            mapfile -t SELECTED_TESTS <<< "$VALID_TESTS"
+          fi
+
+          INVALID_TESTS=()
+          FILTERED_TESTS=()
+          for TEST in "${SELECTED_TESTS[@]}"; do
+            TEST=$(echo "$TEST" | tr -d '[:space:]')
+            if echo "$VALID_TESTS" | grep -qw "$TEST"; then
+              FILTERED_TESTS+=("$TEST")
+            else
+              INVALID_TESTS+=("$TEST")
+            fi
+          done
+
+          if [[ ${#INVALID_TESTS[@]} -gt 0 ]]; then
+            echo "::error::Invalid Behave test(s) selected: ${INVALID_TESTS[*]}"
+            echo "Valid tests are: $(echo "$VALID_TESTS" | tr '\n' ', ')"
+            exit 1
+          fi
+
+          RESULT='{"include":['
+          FIRST=true
+          for TEST in "${FILTERED_TESTS[@]}"; do
+            CONFIG=$(jq -c --arg test "$TEST" '.include[] | select(.test == $test)' <<< "$ALL_BEHAVE_TESTS")
+            if [[ "$FIRST" == true ]]; then
+              FIRST=false
+            else
+              RESULT="${RESULT},"
+            fi
+            RESULT="${RESULT}${CONFIG}"
+          done
+          RESULT="${RESULT}]}"
+
+          echo "Final behave matrix configuration:"
+          echo "$RESULT" | jq .
+
+          {
+            echo "matrix<<EOF"
+            echo "$RESULT"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+  build:
+    name: Build Apache Cloudberry RPM
+    env:
+      JOB_TYPE: build
+    runs-on: ubuntu-22.04
+    timeout-minutes: 120
+    outputs:
+      build_timestamp: ${{ steps.set_timestamp.outputs.timestamp }}
+    container:
+      image: apache/incubator-cloudberry:cbdb-build-rocky9-latest
+      options: >-
+        --user root
+        -h cdw
+        -v /usr/share:/host_usr_share
+        -v /usr/local:/host_usr_local
+        -v /opt:/host_opt
+    steps:
+      - name: Free Disk Space
+        run: |
+          echo "=== Disk space before cleanup ==="
+          df -h /
+
+          rm -rf /host_opt/hostedtoolcache || true
+          rm -rf /host_usr_local/lib/android || true
+          rm -rf /host_usr_share/dotnet || true
+          rm -rf /host_opt/ghc || true
+          rm -rf /host_usr_local/.ghcup || true
+          rm -rf /host_usr_share/swift || true
+          rm -rf /host_usr_local/share/powershell || true
+          rm -rf /host_usr_local/share/chromium || true
+          rm -rf /host_usr_share/miniconda || true
+          rm -rf /host_opt/az || true
+          rm -rf /host_usr_share/sbt || true
+
+          echo "=== Disk space after cleanup ==="
+          df -h /
+
+      - name: Set build timestamp
+        id: set_timestamp
+        run: |
+          timestamp=$(date +'%Y%m%d_%H%M%S')
+          echo "timestamp=$timestamp" | tee -a "$GITHUB_OUTPUT"
+          echo "BUILD_TIMESTAMP=$timestamp" | tee -a "$GITHUB_ENV"
+
+      - name: Checkout Apache Cloudberry
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          submodules: true
+
+      - name: Cloudberry Environment Initialization
+        env:
+          LOGS_DIR: build-logs
+        run: |
+          set -eo pipefail
+          if ! su - gpadmin -c "/tmp/init_system.sh"; then
+            echo "::error::Container initialization failed"
+            exit 1
+          fi
+
+          mkdir -p "${LOGS_DIR}/details"
+          chown -R gpadmin:gpadmin .
+          chmod -R 755 .
+          chmod 777 "${LOGS_DIR}"
+
+          df -kh /
+          rm -rf /__t/*
+          df -kh /
+
+          df -h | tee -a "${LOGS_DIR}/details/disk-usage.log"
+          free -h | tee -a "${LOGS_DIR}/details/memory-usage.log"
+
+          {
+            echo "=== Environment Information ==="
+            uname -a
+            df -h
+            free -h
+            env
+          } | tee -a "${LOGS_DIR}/details/environment.log"
+
+          echo "SRC_DIR=${GITHUB_WORKSPACE}" | tee -a "$GITHUB_ENV"
+
+      - name: Run Apache Cloudberry configure script
+        env:
+          SRC_DIR: ${{ github.workspace }}
+        run: |
+          set -eo pipefail
+          chmod +x "${SRC_DIR}"/devops/build/automation/cloudberry/scripts/configure-cloudberry.sh
+          if ! time su - gpadmin -c "cd ${SRC_DIR} && SRC_DIR=${SRC_DIR} ENABLE_DEBUG=${{ env.ENABLE_DEBUG }} ${SRC_DIR}/devops/build/automation/cloudberry/scripts/configure-cloudberry.sh"; then
+            echo "::error::Configure script failed"
+            exit 1
+          fi
+
+      - name: Run Apache Cloudberry build script
+        env:
+          SRC_DIR: ${{ github.workspace }}
+        run: |
+          set -eo pipefail
+          chmod +x "${SRC_DIR}"/devops/build/automation/cloudberry/scripts/build-cloudberry.sh
+          if ! time su - gpadmin -c "cd ${SRC_DIR} && SRC_DIR=${SRC_DIR} ${SRC_DIR}/devops/build/automation/cloudberry/scripts/build-cloudberry.sh"; then
+            echo "::error::Build script failed"
+            exit 1
+          fi
+
+      - name: Create Source tarball, create RPM and verify artifacts
+        env:
+          CBDB_VERSION: 99.0.0
+          BUILD_NUMBER: 1
+          SRC_DIR: ${{ github.workspace }}
+        run: |
+          set -eo pipefail
+
+          tar czf "${SRC_DIR}"/../apache-cloudberry-incubating-src.tgz -C "${SRC_DIR}"/.. ./cloudberry
+          mv "${SRC_DIR}"/../apache-cloudberry-incubating-src.tgz "${SRC_DIR}"
+
+          rpmdev-setuptree
+          ln -s "${SRC_DIR}"/devops/build/packaging/rpm/apache-cloudberry-db-incubating.spec "${HOME}"/rpmbuild/SPECS/apache-cloudberry-db-incubating.spec
+          cp "${SRC_DIR}"/LICENSE /usr/local/cloudberry-db
+
+          DEBUG_RPMBUILD_OPT=""
+          DEBUG_IDENTIFIER=""
+          if [ "${{ env.ENABLE_DEBUG }}" = "true" ]; then
+             DEBUG_RPMBUILD_OPT="--with-debug"
+             DEBUG_IDENTIFIER=".debug"
+          fi
+
+          "${SRC_DIR}"/devops/build/packaging/rpm/build-rpm.sh --version "${CBDB_VERSION}" --release "${BUILD_NUMBER}" "${DEBUG_RPMBUILD_OPT}"
+
+          os_version=$(grep -oP '(?<=^VERSION_ID=")[0-9]' /etc/os-release)
+          RPM_FILE="${HOME}"/rpmbuild/RPMS/x86_64/apache-cloudberry-db-incubating-"${CBDB_VERSION}"-"${BUILD_NUMBER}""${DEBUG_IDENTIFIER}".el"${os_version}".x86_64.rpm
+          cp "${RPM_FILE}" "${SRC_DIR}"
+          RPM_DEBUG="${HOME}"/rpmbuild/RPMS/x86_64/apache-cloudberry-db-incubating-debuginfo-"${CBDB_VERSION}"-"${BUILD_NUMBER}""${DEBUG_IDENTIFIER}".el"${os_version}".x86_64.rpm
+          cp "${RPM_DEBUG}" "${SRC_DIR}"
+
+      - name: Upload build logs
+        uses: actions/upload-artifact@v4
+        with:
+          name: behave-build-logs-${{ env.BUILD_TIMESTAMP }}
+          path: |
+            build-logs/
+          retention-days: ${{ env.LOG_RETENTION_DAYS }}
+
+      - name: Upload Cloudberry RPM build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: apache-cloudberry-db-incubating-rpm-build-artifacts
+          retention-days: ${{ env.LOG_RETENTION_DAYS }}
+          if-no-files-found: error
+          path: |
+            *.rpm
+
+      - name: Upload Cloudberry source build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: apache-cloudberry-db-incubating-source-build-artifacts
+          retention-days: ${{ env.LOG_RETENTION_DAYS }}
+          if-no-files-found: error
+          path: |
+            apache-cloudberry-incubating-src.tgz
+
+  behave:
+    name: ${{ matrix.test }}
+    needs: [build, prepare-behave-matrix]
+    if: |
+      !cancelled() &&
+      needs.build.result == 'success'
+    runs-on: ubuntu-22.04
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.prepare-behave-matrix.outputs.behave-matrix) }}
+    container:
+      image: apache/incubator-cloudberry:cbdb-build-rocky9-latest
+      options: >-
+        --privileged
+        --user root
+        --hostname cdw
+        --shm-size=2gb
+        --ulimit core=-1
+        --cgroupns=host
+        -v /sys/fs/cgroup:/sys/fs/cgroup:rw
+        -v /usr/share:/host_usr_share
+        -v /usr/local:/host_usr_local
+        -v /opt:/host_opt
+    steps:
+      - name: Free Disk Space
+        run: |
+          echo "=== Disk space before cleanup ==="
+          df -h /
+
+          rm -rf /host_opt/hostedtoolcache || true
+          rm -rf /host_usr_local/lib/android || true
+          rm -rf /host_usr_share/dotnet || true
+          rm -rf /host_opt/ghc || true
+          rm -rf /host_usr_local/.ghcup || true
+          rm -rf /host_usr_share/swift || true
+          rm -rf /host_usr_local/share/powershell || true
+          rm -rf /host_usr_local/share/chromium || true
+          rm -rf /host_usr_share/miniconda || true
+          rm -rf /host_opt/az || true
+          rm -rf /host_usr_share/sbt || true
+
+          echo "=== Disk space after cleanup ==="
+          df -h /
+
+      - name: Cloudberry Environment Initialization
+        env:
+          LOGS_DIR: build-logs
+        run: |
+          set -eo pipefail
+          if ! su - gpadmin -c "/tmp/init_system.sh"; then
+            echo "::error::Container initialization failed"
+            exit 1
+          fi
+
+          mkdir -p "${LOGS_DIR}/details"
+          chown -R gpadmin:gpadmin .
+          chmod -R 755 .
+          chmod 777 "${LOGS_DIR}"
+
+          df -kh /
+          rm -rf /__t/*
+          df -kh /
+
+          df -h | tee -a "${LOGS_DIR}/details/disk-usage.log"
+          free -h | tee -a "${LOGS_DIR}/details/memory-usage.log"
+
+          {
+            echo "=== Environment Information ==="
+            uname -a
+            df -h
+            free -h
+            env
+          } | tee -a "${LOGS_DIR}/details/environment.log"
+
+          echo "SRC_DIR=${GITHUB_WORKSPACE}" | tee -a "$GITHUB_ENV"
+
+      - name: Generate Behave Job Summary Start
+        if: always()
+        run: |
+          {
+            echo "# Behave Job Summary: ${{ matrix.test }}"
+            echo "## Environment"
+            echo "- Start Time: $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
+            echo "- OS Version: $(cat /etc/redhat-release)"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Download Cloudberry RPM build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: apache-cloudberry-db-incubating-rpm-build-artifacts
+          path: ${{ github.workspace }}/rpm_build_artifacts
+          merge-multiple: false
+          run-id: ${{ github.run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Download Cloudberry Source build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: apache-cloudberry-db-incubating-source-build-artifacts
+          path: ${{ github.workspace }}/source_build_artifacts
+          merge-multiple: false
+          run-id: ${{ github.run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Verify downloaded artifacts
+        id: verify-artifacts
+        run: |
+          set -eo pipefail
+
+          SRC_TARBALL_FILE=$(ls "${GITHUB_WORKSPACE}"/source_build_artifacts/apache-cloudberry-incubating-src.tgz)
+          if [ ! -f "${SRC_TARBALL_FILE}" ]; then
+            echo "::error::SRC TARBALL file not found"
+            exit 1
+          fi
+          echo "src_tarball_file=${SRC_TARBALL_FILE}" >> "$GITHUB_OUTPUT"
+
+          RPM_FILE=$(ls "${GITHUB_WORKSPACE}"/rpm_build_artifacts/apache-cloudberry-db-incubating-[0-9]*.rpm | grep -v "debuginfo")
+          if [ ! -f "${RPM_FILE}" ]; then
+            echo "::error::RPM file not found"
+            exit 1
+          fi
+          echo "rpm_file=${RPM_FILE}" >> "$GITHUB_OUTPUT"
+
+      - name: Install Cloudberry RPM
+        if: success()
+        env:
+          RPM_FILE: ${{ steps.verify-artifacts.outputs.rpm_file }}
+        run: |
+          set -eo pipefail
+
+          dnf clean all
+          dnf makecache --refresh || dnf makecache
+          rm -rf /usr/local/cloudberry-db
+
+          if ! time dnf install -y --setopt=retries=10 --releasever=9 "${RPM_FILE}"; then
+            echo "::error::RPM installation failed"
+            exit 1
+          fi
+
+          rm -rf "${GITHUB_WORKSPACE}"/rpm_build_artifacts
+
+      - name: Extract source tarball
+        if: success()
+        env:
+          SRC_TARBALL_FILE: ${{ steps.verify-artifacts.outputs.src_tarball_file }}
+          SRC_DIR: ${{ github.workspace }}
+        run: |
+          set -eo pipefail
+
+          if ! time tar zxf "${SRC_TARBALL_FILE}" -C "${SRC_DIR}"/.. ; then
+            echo "::error::Source extraction failed"
+            exit 1
+          fi
+
+          rm -rf "${GITHUB_WORKSPACE}"/source_build_artifacts
+
+      - name: Create Apache Cloudberry demo cluster
+        if: success()
+        env:
+          SRC_DIR: ${{ github.workspace }}
+        run: |
+          set -eo pipefail
+          chmod +x "${SRC_DIR}"/devops/build/automation/cloudberry/scripts/create-cloudberry-demo-cluster.sh
+
+          if ! time su - gpadmin -c "cd ${SRC_DIR} && NUM_PRIMARY_MIRROR_PAIRS='3' SRC_DIR=${SRC_DIR} ${SRC_DIR}/devops/build/automation/cloudberry/scripts/create-cloudberry-demo-cluster.sh"; then
+            echo "::error::Demo cluster creation failed"
+            exit 1
+          fi
+
+      - name: Run Behave Tests
+        if: success()
+        env:
+          SRC_DIR: ${{ github.workspace }}
+        shell: bash {0}
+        run: |
+          set -o pipefail
+
+          mkdir -p build-logs/details
+          config_log="build-logs/details/make-${{ matrix.test }}-config0.log"
+          behave_targets="${{ join(matrix.behave_features, ' ') }}"
+          behave_args="${{ matrix.behave_args || '' }}"
+
+          mkdir -p "/tmp/cloudberry-cores"
+          chmod 1777 "/tmp/cloudberry-cores"
+          sysctl -w kernel.core_pattern="/tmp/cloudberry-cores/core-%e-%s-%u-%g-%p-%t"
+
+          dnf install -y libffi-devel || echo "Warning: failed to install libffi-devel"
+          su - gpadmin -c "pip3 install --user -r ${SRC_DIR}/gpMgmt/requirements-dev.txt || pip install --user -r ${SRC_DIR}/gpMgmt/requirements-dev.txt"
+
+          echo "Running features:"
+          for feature in $behave_targets; do
+            echo "- $feature"
+          done
+          if [[ -n "$behave_args" ]]; then
+            echo "Behave args: $behave_args"
+          fi
+
+          if ! time su - gpadmin -c "cd ${SRC_DIR}/gpMgmt && source /usr/local/cloudberry-db/cloudberry-env.sh && source ${SRC_DIR}/gpAux/gpdemo/gpdemo-env.sh && PYTHONPATH=${SRC_DIR}/gpMgmt:\$PYTHONPATH behave $behave_args $behave_targets" \
+               2>&1 | tee -a "$config_log"; then
+            echo "::warning::Behave execution reported failures"
+            exit 1
+          fi
+
+      - name: Parse Behave Results
+        if: always()
+        shell: bash {0}
+        run: |
+          set -o pipefail
+
+          config_log="build-logs/details/make-${{ matrix.test }}-config0.log"
+          behave_cmd="behave ${{ matrix.behave_args || '' }} ${{ join(matrix.behave_features, ' ') }}"
+          if [ ! -f "$config_log" ]; then
+            {
+              echo "MAKE_COMMAND=\"${behave_cmd}\""
+              echo "STATUS=missing_log"
+              echo "TOTAL_TESTS=0"
+              echo "FAILED_TESTS=0"
+              echo "PASSED_TESTS=0"
+              echo "IGNORED_TESTS=0"
+            } | tee "test_results.${{ matrix.test }}.0.txt"
+            exit 1
+          fi
+
+          features_line=$(grep -E '^[0-9]+ feature(s)? passed, [0-9]+ failed, [0-9]+ skipped$' "$config_log" | tail -n 1)
+          scenarios_line=$(grep -E '^[0-9]+ scenario(s)? passed, [0-9]+ failed, [0-9]+ skipped(, [0-9]+ untested)?$' "$config_log" | tail -n 1)
+          steps_line=$(grep -E '^[0-9]+ step(s)? passed, [0-9]+ failed, [0-9]+ skipped, [0-9]+ undefined(, [0-9]+ untested)?$' "$config_log" | tail -n 1)
+
+          if [[ -z "$scenarios_line" ]]; then
+            {
+              echo "MAKE_COMMAND=\"${behave_cmd}\""
+              echo "STATUS=parse_error"
+              echo "TOTAL_TESTS=0"
+              echo "FAILED_TESTS=0"
+              echo "PASSED_TESTS=0"
+              echo "IGNORED_TESTS=0"
+            } | tee "test_results.${{ matrix.test }}.0.txt"
+            exit 1
+          fi
+
+          scenario_counts=$(echo "$scenarios_line" | sed -E 's/^([0-9]+) scenario(s)? passed, ([0-9]+) failed, ([0-9]+) skipped(, ([0-9]+) untested)?$/\1 \3 \4 \6/')
+          read -r scenarios_passed scenarios_failed scenarios_skipped scenarios_untested <<< "$scenario_counts"
+          scenarios_untested=${scenarios_untested:-0}
+          total_scenarios=$((scenarios_passed + scenarios_failed + scenarios_skipped))
+
+          {
+            echo "MAKE_COMMAND=\"${behave_cmd}\""
+            if [[ "$scenarios_failed" -eq 0 ]]; then
+              echo "STATUS=passed"
+            else
+              echo "STATUS=failed"
+            fi
+            echo "TOTAL_TESTS=${total_scenarios}"
+            echo "FAILED_TESTS=${scenarios_failed}"
+            echo "PASSED_TESTS=${scenarios_passed}"
+            echo "IGNORED_TESTS=${scenarios_skipped}"
+            echo "BEHAVE_UNTESTED_SCENARIOS=${scenarios_untested}"
+            echo "BEHAVE_FEATURES_SUMMARY=\"${features_line:-unavailable}\""
+            echo "BEHAVE_SCENARIOS_SUMMARY=\"${scenarios_line}\""
+            echo "BEHAVE_STEPS_SUMMARY=\"${steps_line:-unavailable}\""
+          } | tee "test_results.${{ matrix.test }}.0.txt"
+
+          if [[ "$scenarios_failed" -eq 0 ]]; then
+            exit 0
+          fi
+          exit 1
+
+      - name: Generate Behave Job Summary End
+        if: always()
+        shell: bash {0}
+        run: |
+          {
+            echo "## Test Results"
+            echo "- End Time: $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
+
+            if [[ ! -f "test_results.${{ matrix.test }}.0.txt" ]]; then
+              echo "### Result Status"
+              echo "⚠️ No results file found"
+              exit 0
+            fi
+
+            . "test_results.${{ matrix.test }}.0.txt"
+
+            echo "### Command"
+            echo "\`$MAKE_COMMAND\`"
+            echo ""
+
+            echo "### Status"
+            case "${STATUS:-unknown}" in
+              passed)
+                echo "✅ All scenarios passed"
+                ;;
+              failed)
+                echo "❌ Some scenarios failed"
+                ;;
+              parse_error)
+                echo "⚠️ Could not parse Behave results"
+                ;;
+              missing_log)
+                echo "⚠️ Behave log file missing"
+                ;;
+              *)
+                echo "⚠️ Unknown status: ${STATUS:-unknown}"
+                ;;
+            esac
+
+            echo ""
+            echo "### Scenario Counts"
+            echo "| Metric | Count |"
+            echo "|--------|-------|"
+            echo "| Total Scenarios | ${TOTAL_TESTS:-0} |"
+            echo "| Passed Scenarios | ${PASSED_TESTS:-0} |"
+            echo "| Failed Scenarios | ${FAILED_TESTS:-0} |"
+            echo "| Skipped Scenarios | ${IGNORED_TESTS:-0} |"
+            echo "| Untested Scenarios | ${BEHAVE_UNTESTED_SCENARIOS:-0} |"
+
+            echo ""
+            echo "### Behave Summary"
+            echo "| Metric | Summary |"
+            echo "|--------|---------|"
+            echo "| Features | ${BEHAVE_FEATURES_SUMMARY:-unavailable} |"
+            echo "| Scenarios | ${BEHAVE_SCENARIOS_SUMMARY:-unavailable} |"
+            echo "| Steps | ${BEHAVE_STEPS_SUMMARY:-unavailable} |"
+          } >> "$GITHUB_STEP_SUMMARY" || true
+
+      - name: Upload behave logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: behave-logs-${{ matrix.test }}-${{ needs.build.outputs.build_timestamp || github.run_id }}
+          path: |
+            build-logs/
+          retention-days: ${{ env.LOG_RETENTION_DAYS }}
+
+      - name: Upload Behave Metadata
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: behave-metadata-${{ matrix.test }}
+          path: |
+            test_results*.txt
+          retention-days: ${{ env.LOG_RETENTION_DAYS }}
+
+  report:
+    name: Generate Apache Cloudberry Behave Report
+    needs: [build, prepare-behave-matrix, behave]
+    if: always()
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Generate Final Report
+        run: |
+          {
+            echo "# Apache Cloudberry Behave Report"
+            echo "## Job Status"
+            echo "- Build Job: ${{ needs.build.result }}"
+            echo "- Behave Job: ${{ needs.behave.result }}"
+            echo "- Completion Time: $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
+
+            if [[ "${{ needs.build.result }}" == "success" &&
+                  "${{ needs.behave.result }}" =~ ^(success|skipped)$ ]]; then
+              echo "✅ Pipeline completed successfully"
+            else
+              echo "⚠️ Pipeline completed with failures"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Notify on failure
+        if: |
+          needs.build.result != 'success' ||
+          !contains(fromJson('["success","skipped"]'), needs.behave.result)
+        run: |
+          echo "::error::Behave pipeline failed! Check job summaries and logs for details"
+          echo "Timestamp: $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
+          echo "Build Result: ${{ needs.build.result }}"
+          echo "Behave Result: ${{ needs.behave.result }}"

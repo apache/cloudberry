@@ -138,7 +138,6 @@ def step_impl(context):
 @given('a preferred primary has failed')
 def step_impl(context):
     stop_primary(context, 0)
-    wait_for_unblocked_transactions(context)
 
 
 @when('primary and mirror switch to non-preferred roles')

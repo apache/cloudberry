@@ -24,6 +24,7 @@ Feature: gpssh behave tests
         And gpssh should print "unable to login to localhost" to stdout
         And gpssh should print "could not synchronize with original prompt" to stdout
 
+    @requires_netem
     Scenario: gpssh succeeds when network has latency
         When the user runs command "sudo tc qdisc add dev lo root netem delay 4000ms"
         Then sudo should return a return code of 0

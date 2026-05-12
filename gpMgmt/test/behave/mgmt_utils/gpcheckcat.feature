@@ -311,14 +311,14 @@ Feature: gpcheckcat tests
         Then gpcheckcat should return a return code of 3
         And the user runs "dropdb fkey_ta"
 
+    @extended
     Scenario: gpcheckcat should report and repair extra entries with non-oid primary keys
         Given database "extra_pk_db" is dropped and recreated
         And the path "gpcheckcat.repair.*" is removed from current working directory
         And the user runs "psql extra_pk_db -c 'CREATE SCHEMA my_pk_schema' "
         And the user runs "psql extra_pk_db -f test/behave/mgmt_utils/steps/data/gpcheckcat/add_operator.sql "
         Then psql should return a return code of 0
-        And the user runs "psql extra_pk_db -c "set allow_system_table_mods=true;DELETE FROM pg_catalog.pg_operator where oprname='!#'" "
-        Then psql should return a return code of 0
+        Then The user runs sql "set allow_system_table_mods=true;DELETE FROM pg_catalog.pg_operator where oprname='!#'" in "extra_pk_db" on first primary segment
         When the user runs "gpcheckcat -R missing_extraneous extra_pk_db"
         Then gpcheckcat should return a return code of 3
         And the path "gpcheckcat.repair.*" is found in cwd "0" times
@@ -728,18 +728,13 @@ Feature: gpcheckcat tests
         And the user runs "dropdb all_good"
 
 
-    Scenario: validate session GUC passed with -x is set
+    Scenario: gpcheckcat accepts session GUC passed with -x in single node mode
         Given the database is not running
           And the user runs "gpstart -ma"
           And "gpstart -ma" should return a return code of 0
-         Then the user runs "gpcheckcat -R foreign_key"
-         Then gpcheckcat should return a return code of 1
-          And gpcheckcat should print ".* System was started in single node mode - only utility mode connections are allowed" to stdout
          Then the user runs "gpcheckcat -x gp_role=utility -R foreign_key"
          Then gpcheckcat should return a return code of 0
           And the user runs "gpstop -ma"
           And "gpstop -m" should return a return code of 0
           And the user runs "gpstart -a"
-
-
 

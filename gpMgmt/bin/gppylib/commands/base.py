@@ -37,6 +37,12 @@ GPHOME = os.environ.get('GPHOME')
 
 CMD_CACHE = {}
 
+
+def _safe_log_string(value):
+    if isinstance(value, str):
+        return value.encode('ascii', 'backslashreplace').decode('ascii')
+    return str(value)
+
 # Maximum retries if sshd rejects the connection due to too many
 # unauthenticated connections.
 SSH_MAX_RETRY = 10
@@ -86,7 +92,7 @@ class WorkerPool(object):
         self.work_queue.task_done()
 
     def addCommand(self, cmd):
-        self.logger.debug("Adding cmd to work_queue: %s" % cmd.cmdStr)
+        self.logger.debug("Adding cmd to work_queue: %s" % _safe_log_string(cmd.cmdStr))
         self.work_queue.put(cmd)
         self._assigned += 1
 
@@ -272,20 +278,20 @@ class Worker(Thread):
                     self.cmd = None
                     return
                 elif self.pool.should_stop:
-                    self.logger.debug("[%s] got cmd and pool is stopped: %s" % (self.name, self.cmd))
+                    self.logger.debug("[%s] got cmd and pool is stopped: %s" % (self.name, _safe_log_string(self.cmd)))
                     self.pool.markTaskDone()
                     self.cmd = None
                 else:
-                    self.logger.debug("[%s] got cmd: %s" % (self.name, self.cmd.cmdStr))
+                    self.logger.debug("[%s] got cmd: %s" % (self.name, _safe_log_string(self.cmd.cmdStr)))
                     self.cmd.run()
-                    self.logger.debug("[%s] finished cmd: %s" % (self.name, self.cmd))
+                    self.logger.debug("[%s] finished cmd: %s" % (self.name, _safe_log_string(self.cmd)))
                     self.pool.addFinishedWorkItem(self.cmd)
                     self.cmd = None
 
             except Exception as e:
                 self.logger.exception(e)
                 if self.cmd:
-                    self.logger.debug("[%s] finished cmd with exception: %s" % (self.name, self.cmd))
+                    self.logger.debug("[%s] finished cmd with exception: %s" % (self.name, _safe_log_string(self.cmd)))
                     self.pool.addFinishedWorkItem(self.cmd)
                     self.cmd = None
 
@@ -548,9 +554,9 @@ class Command(object):
 
     def __str__(self):
         if self.results:
-            return "%s cmdStr='%s'  had result: %s" % (self.name, self.cmdStr, self.results)
+            return "%s cmdStr='%s'  had result: %s" % (self.name, _safe_log_string(self.cmdStr), self.results)
         else:
-            return "%s cmdStr='%s'" % (self.name, self.cmdStr)
+            return "%s cmdStr='%s'" % (self.name, _safe_log_string(self.cmdStr))
 
     # Start a process that will execute the command but don't wait for
     # it to complete.  Return the Popen object instead.
@@ -559,7 +565,7 @@ class Command(object):
         return self.exec_context.proc
 
     def run(self, validateAfter=False):
-        self.logger.debug("Running Command: %s" % self.cmdStr)
+        self.logger.debug("Running Command: %s" % _safe_log_string(self.cmdStr))
         self.exec_context.execute(self, pickled=self.pickled, start_new_session=self.start_new_session)
 
         if validateAfter:

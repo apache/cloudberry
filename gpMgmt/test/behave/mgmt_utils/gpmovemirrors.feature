@@ -103,6 +103,7 @@ Feature: Tests for gpmovemirrors
                 assert that gp_seg_config wasn't updated
         """
 
+    @extended
     Scenario Outline: user can <correction> if <failed_count> mirrors failed to move initially
         Given the database is running
         And all the segments are running
@@ -146,6 +147,7 @@ Feature: Tests for gpmovemirrors
         | run gprecoverseg          | some         | 0                  | 1,2            | running in place full recovery for all failed contents |
         | run gprecoverseg          | all          | None               | 0,1,2          | running in place full recovery for all failed contents |
 
+    @extended
     @skip_cleanup
     Scenario: gpmovemirrors can move mirrors even if start fails for some mirrors
         Given the database is running
@@ -181,6 +183,7 @@ Feature: Tests for gpmovemirrors
         And user can start transactions
 
 
+  @extended
   @demo_cluster
   Scenario: gpmovemirrors -i creates recovery_progress.file if some mirrors are moved
     Given the database is running
@@ -204,6 +207,7 @@ Feature: Tests for gpmovemirrors
     And user can start transactions
     And all files in gpAdminLogs directory are deleted on all hosts in the cluster
 
+  @extended
   @demo_cluster
   Scenario: gpmovemirrors -i creates recovery_progress.file if all mirrors are moved
     Given the database is running
