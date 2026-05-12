@@ -986,6 +986,24 @@ select t1_anti.a, t1_anti.b from t1_anti left join t2_anti on t1_anti.a = t2_ant
 select t1_anti.a, t1_anti.b from t1_anti left join t2_anti on t1_anti.a = t2_anti.a where t2_anti.a is null;
 abort;
 
+-- test rows out
+-- start_matchsubs
+-- m/\(actual rows=\d+ loops=\d+\)/
+-- s/\(actual rows=\d+ loops=\d+\)/(actual rows=# loops=#)/
+-- m/Rows Removed by Filter: \d+/
+-- s/Rows Removed by Filter: \d+/Rows Removed by Filter: ###/
+-- m/\d+ rows max \(seg\d+ worker\d+\), \d+ rows min \(seg\d+ worker\d+\)/
+-- s/\d+ rows max \(seg\d+ worker\d+\), \d+ rows min \(seg\d+ worker\d+\)/##### rows max (seg# worker#), ##### rows min (seg# worker#)/
+-- end_matchsubs
+begin;
+create table tt (a int, b int) with(parallel_workers=2) distributed by(a, b);
+insert into tt select * from generate_series(1,1000)a,generate_series(1,1000)b;
+set local enable_parallel = on;
+set local max_parallel_workers_per_gather = 2;
+set local gp_enable_explain_rows_out = on;
+explain(costs off, summary off, timing off, analyze) select * from tt where a > b;
+abort;
+
 --
 -- Test Parallel DISTINCT
 --
