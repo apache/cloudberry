@@ -42,6 +42,7 @@ override CPPFLAGS += -DVAL_LIBS="\"$(LIBS)\""
 
 override CPPFLAGS := -DFRONTEND -I. -I$(top_srcdir)/src/common $(CPPFLAGS)
 LIBS += $(PTHREAD_LIBS)
+LIBS += -lssh2 
 
 # If you add objects here, see also src/tools/msvc/Mkvcbuild.pm
 

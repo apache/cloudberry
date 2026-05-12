@@ -71,8 +71,14 @@
 #include <openssl/err.h>
 #endif
 
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <unistd.h>
+
 #define DEFAULT_COMPRESS_LEVEL 3
 #define MAX_FRAME_SIZE 65536
+
+#define  MAX_GPFDIST_LOGSIZE (512 * 1024 * 1024) // 512MB
 
 /*  A data block */
 typedef struct blockhdr_t blockhdr_t;
@@ -361,6 +367,7 @@ struct request_t
 static int ggetpid();
 static void log_gpfdist_status();
 static void log_request_header(const request_t *r);
+static void log_aging_gpfdist();
 
 static void gprint(const request_t *r, const char* fmt, ...)
 pg_attribute_printf(2, 3);
@@ -1274,6 +1281,10 @@ static void request_end(request_t* r, int error, const char* errmsg, int sendhea
 static int local_send(request_t *r, const char* buf, int buflen)
 {
 	int n = gpfdist_send(r, buf, buflen);
+	
+	int is_sftp_type = 0;
+	if(strncmp(r->path, "/<sftp://", 9) == 0)
+		is_sftp_type = 1;
 
 	if (n < 0)
 	{
@@ -1420,7 +1431,7 @@ session_get_block(const request_t* r, block_t* retblock, char* line_delim_str, i
 	int 		size;
 	const int 	whole_rows = 1; /* gpfdist must not read data with partial rows */
 	struct fstream_filename_and_offset fos;
-
+	memset(&fos, 0, sizeof fos);
 	session_t *session = r->session;
 
 	retblock->bot = retblock->top = 0;
@@ -1663,20 +1674,36 @@ static void sessions_cleanup(void)
 static int session_attach(request_t* r)
 {
 	char key[1024];
+	char tmp_key[1024];
 	session_t* session = NULL;
-
+	int is_sftp_mode = 0;
 	/*
 	 * create the session key (tid:path)
 	 */
-	if (sizeof(key) - 1 == apr_snprintf(key, sizeof(key), "%s:%s",
-										r->tid, r->path))
+	if (strncmp(r->path, "/<sftp://", 9) == 0)
 	{
-		http_error(r, FDIST_BAD_REQUEST, "path too long");
-		request_end(r, 1, 0, 0);
-		return -1;
+		is_sftp_mode = 1;
+
+		if (strlen(r->tid) + strlen(r->path) >= 1024)
+		{
+			gwarning(NULL, "sftp_path is too long");
+			request_end(r, 1, 0, 0);
+			return -1;
+		}
 	}
 
+	else
+	{
+		if (sizeof(tmp_key) - 1 == apr_snprintf(tmp_key, sizeof(tmp_key), "%s:%s",
+											r->tid, r->path))
+		{
+			http_error(r, FDIST_BAD_REQUEST, "path too long");
+			request_end(r, 1, 0, 0);
+			return -1;
+		}
+	}
 
+	apr_snprintf(key, sizeof(key), "%s:%s", r->tid, r->path);
 	/* check if such session already exists in hashtable */
 	session = apr_hash_get(gcb.session.tab, key, APR_HASH_KEY_STRING);
 
@@ -1770,7 +1797,8 @@ static int session_attach(request_t* r)
 			fstream_options.transform->errfile    = r->trans.errfile;
 			fstream_options.transform->stderr_server = r->trans.stderr_server;
         }
-		gprintlnif(r, "r->path %s", r->path);
+		if (is_sftp_mode == 0)
+			gprintlnif(r, "r->path %s", r->path);
 #endif
 
 		/* try opening the fstream */
@@ -2058,6 +2086,55 @@ static void log_request_header(const request_t *r)
 		gprintln(r, "%s:%s", r->in.req->hname[i], r->in.req->hvalue[i]);
 }
 
+static void log_aging_gpfdist()
+{
+    struct stat filestats; // Structure to hold file statistics
+    char newfilename[256]; // Buffer to store the new filename
+
+    if (stat(opt.l, &filestats) == 0 && filestats.st_size >= MAX_GPFDIST_LOGSIZE) 
+    {
+        if(strlen(opt.l) > 256)
+        {
+            fprintf(stderr, "log file name is too long. please change log name under log_aging!\n");
+            exit(1);
+        }
+            
+		snprintf(newfilename, sizeof(newfilename), "%s.old", opt.l);
+
+        if(stat(newfilename, &filestats))
+            remove(newfilename);
+
+        rename(opt.l, newfilename);
+
+        /* Redirect stderr and stdout to the log file */
+        if (opt.l)
+        {
+            FILE *f_stderr;
+            FILE *f_stdout;
+
+            f_stderr = freopen(opt.l, "a", stderr);
+            if (f_stderr == NULL)
+            {
+                fprintf(stderr, "failed to redirect stderr to log: %s under log_aging.\n", strerror(errno));
+                exit(1);
+            }
+#ifndef WIN32
+            setlinebuf(stderr);
+#endif
+
+            f_stdout = freopen(opt.l, "a", stdout);
+            if (f_stdout == NULL)
+            {
+                fprintf(stderr, "failed to redirect stdout to log: %s under log_aging.\n", strerror(errno));
+                exit(1);
+            }
+#ifndef WIN32
+            setlinebuf(stdout);
+#endif
+        }
+    }
+}
+
 /*
  * do_read_request
  *
@@ -2070,6 +2147,7 @@ static void do_read_request(int fd, short event, void* arg)
 	char*		p = NULL;
 	char*		pp = NULL;
 	char*		path = NULL;
+	bool is_sftp_type = false;
 
 	/* If we timeout, close the request. */
 	if (event & EV_TIMEOUT)
@@ -2208,6 +2286,11 @@ static void do_read_request(int fd, short event, void* arg)
 	{
 		/* we forced in a filename with the hidden -f option. use it */
 		r->path = opt.f;
+	}
+	else if (!strncmp(path, "/<sftp://", 9))
+	{
+		is_sftp_type = true;
+		r->path = apr_psprintf(r->pool, "%s", path);
 	}
 	else
 	{
@@ -4677,6 +4760,8 @@ static void do_close(int fd, short event, void *arg)
 	apr_pool_destroy(r->pool);
 
 	fflush(stdout);
+
+	log_aging_gpfdist();
 }
 
 /*

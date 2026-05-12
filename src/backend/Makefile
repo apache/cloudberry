@@ -67,6 +67,7 @@ LIBS := $(filter-out -lreadline -ledit -ltermcap -lncurses -lcurses, $(LIBS))
 
 # Cloudberry uses threads in the backend
 LIBS := $(LIBS) -lpthread
+LIBS := $(LIBS) -lssh2
 
 ifeq ($(with_systemd),yes)
 LIBS += -lsystemd
