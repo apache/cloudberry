@@ -7,6 +7,7 @@
 set default_table_access_method to pax;
 set pax.enable_debug to on;
 set pax.enable_sparse_filter to on;
+set pax.enable_sync_collect_stats = on;
 create  or replace function intrc(iint int)
  returns int as $$ 
  begin return iint; end;
@@ -738,6 +739,7 @@ LOG:  statement: select count(*) from t1 where coalesce(v1, 2) != 1;
 
 reset client_min_messages;
 LOG:  statement: reset client_min_messages;
+reset pax.enable_sync_collect_stats;
 drop table t1;
 drop table t2;
 drop table t_allnull;

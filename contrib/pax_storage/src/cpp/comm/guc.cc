@@ -72,6 +72,7 @@ int pax_min_size_of_external_toast = PAX_MIN_SIZE_MAKE_EXTERNAL_TOAST;
 char *pax_default_storage_format = nullptr;
 int pax_bloom_filter_work_memory_bytes = PAX_BLOOM_FILTER_WORK_MEMORY_BYTES;
 bool pax_log_filter_tree = false;
+bool pax_enable_sync_collect_stats = false;
 
 }  // namespace pax
 
@@ -200,6 +201,10 @@ void DefineGUCs() {
 
   DefineCustomBoolVariable("pax.log_filter_tree", "Log the filter tree", NULL,
                            &pax::pax_log_filter_tree, false, PGC_USERSET, 0,
+                           NULL, NULL, NULL);
+
+  DefineCustomBoolVariable("pax.enable_sync_collect_stats", "collect column statistics in sync mode", NULL,
+                           &pax::pax_enable_sync_collect_stats, false, PGC_USERSET, 0,
                            NULL, NULL, NULL);
 }
 

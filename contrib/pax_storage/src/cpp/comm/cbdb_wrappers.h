@@ -292,6 +292,8 @@ void ExecClearTuple(TupleTableSlot *slot);
 
 void ExecStoreVirtualTuple(TupleTableSlot *slot);
 
+void VacuumDelayPoint();
+
 }  // namespace cbdb
 
 // clang-format off

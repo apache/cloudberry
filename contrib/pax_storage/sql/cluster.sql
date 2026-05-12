@@ -1,4 +1,5 @@
 set pax.max_tuples_per_file to 131072;
+set pax.enable_sync_collect_stats = on;
 
 -- cluster table using index
 -- start_ignore
@@ -147,3 +148,5 @@ cluster t_lexical_cluster;
 select ptblockname,ptstatistics,ptisclustered from get_pax_aux_table('t_lexical_cluster');
 
 drop table t_lexical_cluster;
+
+reset pax.enable_sync_collect_stats;

@@ -49,6 +49,7 @@ void PaxClusteringWriter::WriteTuple(TupleTableSlot *tuple) {
     writer_ = std::make_unique<TableWriter>(rel_);
     writer_->SetWriteSummaryCallback(InsertOrUpdateClusteredMicroPartitionEntry)
         ->SetFileSplitStrategy(std::make_unique<PaxDefaultSplitStrategy>())
+        ->SetEnableStats(true)
         ->Open();
   }
   writer_->WriteTuple(tuple);

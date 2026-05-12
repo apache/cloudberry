@@ -248,9 +248,10 @@ OrcWriter::OrcWriter(
   post_script_.set_magic(PORC_MAGIC_ID);
 
   group_stats_.Initialize(writer_options.enable_min_max_col_idxs,
-                          writer_options.enable_bf_col_idxs);
+    writer_options.enable_bf_col_idxs);
 
-  // Precompute slowpath indices for varlena columns (non-byval and typlen == -1)
+  // Precompute slowpath indices for varlena columns (non-byval and typlen ==
+  // -1)
   varlena_slowpath_indices_.clear();
   varlena_slowpath_indices_.reserve(writer_options.rel_tuple_desc->natts);
   for (int i = 0; i < writer_options.rel_tuple_desc->natts; ++i) {
@@ -259,6 +260,8 @@ OrcWriter::OrcWriter(
       varlena_slowpath_indices_.push_back(i);
     }
   }
+
+  summary_.is_stats_valid = writer_options.enable_stats;
 }
 
 OrcWriter::~OrcWriter() {}
@@ -531,7 +534,9 @@ void OrcWriter::WriteTuple(TupleTableSlot *table_slot) {
   for (const auto &pair : detoast_map)
     table_slot->tts_values[pair.first] = pair.second;
 
-  group_stats_.AddRow(table_slot);
+  if (writer_options_.enable_stats) {
+    group_stats_.AddRow(table_slot, false);
+  }
 
   EndWriteTuple(table_slot);
 }
@@ -801,6 +806,16 @@ bool OrcWriter::WriteStripe(BufferedOutputStream *buffer_mem_stream,
     data_len += stream.length();
   }
 
+  // update the null stats for the column
+  for (size_t i = 0; i < pax_columns->GetColumns(); i++) {
+    auto pax_column = (*pax_columns)[i].get();
+    NullCountStats null_count_stats;
+    null_count_stats.has_null = pax_column->HasNull();
+    null_count_stats.all_null = pax_column->AllNull();
+    null_count_stats.not_null_count = pax_column->GetNonNullRows();
+    stripe_stats->UpdateNullStats(i, null_count_stats);
+  }
+
   if (file_stats) {
     file_stats->MergeTo(stripe_stats);
   }
@@ -821,21 +836,21 @@ bool OrcWriter::WriteStripe(BufferedOutputStream *buffer_mem_stream,
     *stripe_footer.add_pax_col_encodings() = encoding_kinds[i];
 
     pb_stats->set_hastoast(pax_column->ToastCounts() > 0);
-    pb_stats->set_hasnull(col_stats.hasnull());
-    pb_stats->set_allnull(col_stats.allnull());
-    pb_stats->set_nonnullrows(col_stats.nonnullrows());
+    pb_stats->set_hasnull(pax_column->HasNull());
+    pb_stats->set_allnull(pax_column->AllNull());
+    pb_stats->set_nonnullrows(pax_column->GetNonNullRows());
     if (col_stats.has_bloomfilterinfo())
       *pb_stats->mutable_bloomfilterinfo() = col_stats.bloomfilterinfo();
     if (col_stats.has_columnbfstats())
       *pb_stats->mutable_columnbfstats() = col_stats.columnbfstats();
     *pb_stats->mutable_coldatastats() = col_stats.datastats();
-    PAX_LOG_IF(pax_enable_debug,
-               "write group[%lu](allnull=%s, hasnull=%s, nonnullrows=%lu, "
-               "hastoast=%s, nrows=%lu)",
-               i, BOOL_TOSTRING(col_stats.allnull()),
-               BOOL_TOSTRING(col_stats.hasnull()), col_stats.nonnullrows(),
-               BOOL_TOSTRING(pax_column->ToastCounts() > 0),
-               pax_column->GetRows());
+    PAX_LOG_IF(
+        pax_enable_debug,
+        "write group[%lu](allnull=%s, hasnull=%s, nonnullrows=%lu, "
+        "hastoast=%s, nrows=%lu)",
+        i, BOOL_TOSTRING(pax_column->AllNull()),
+        BOOL_TOSTRING(pax_column->HasNull()), pax_column->GetNonNullRows(),
+        BOOL_TOSTRING(pax_column->ToastCounts() > 0), pax_column->GetRows());
   }
 
   stripe_stats->Reset();

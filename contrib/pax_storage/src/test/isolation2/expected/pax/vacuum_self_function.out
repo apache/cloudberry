@@ -34,9 +34,9 @@ VACUUM
 2: SELECT ptblockname, pttupcount FROM get_pax_aux_table_all('pax_tbl');
  ptblockname | pttupcount 
 -------------+------------
- 0           | 38         
- 0           | 25         
- 0           | 37         
+ 1           | 20         
+ 1           | 11         
+ 1           | 19         
 (3 rows)
 
 -- A second VACUUM shouldn't recycle them either.
@@ -45,14 +45,14 @@ VACUUM
 2: SELECT ptblockname, pttupcount FROM get_pax_aux_table_all('pax_tbl');
  ptblockname | pttupcount 
 -------------+------------
- 0           | 38         
- 0           | 37         
- 0           | 25         
+ 1           | 20         
+ 1           | 19         
+ 1           | 11         
 (3 rows)
 1<:  <... completed>
  myfunc 
 --------
- 70     
+ 120    
 (1 row)
 
 -- Now that the first transaction has finished, VACUUM can recycle.
@@ -61,7 +61,7 @@ VACUUM
 2: SELECT ptblockname, pttupcount FROM get_pax_aux_table_all('pax_tbl');
  ptblockname | pttupcount 
 -------------+------------
- 0           | 38         
- 0           | 37         
- 0           | 25         
+ 1           | 20         
+ 1           | 11         
+ 1           | 19         
 (3 rows)
