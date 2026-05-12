@@ -111,6 +111,7 @@ with the contribution.
 | Code contribution | Learn how to contribute code to the Cloudberry, including coding preparation, conventions, workflow, review, and checklist following the [code contribution guide](https://cloudberry.apache.org/contribute/code).|
 | Submit the proposal | Proposing major changes to Cloudberry through [proposal guide](https://cloudberry.apache.org/contribute/proposal).|
 | Doc contribution | We need you to join us to help us improve the documentation, see the [doc contribution guide](https://cloudberry.apache.org/contribute/doc).|
+| AI policy | For AI-assisted development, please review our [AI policy](AI_POLICY.md) for guidelines on responsible AI usage.|
 
 ## Roadmap
 
