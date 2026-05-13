@@ -194,5 +194,8 @@ test: constraints_check
 # run stats by itself because its delay may be insufficient under heavy load
 test: stats
 
+# orca parallel
+test: orca_parallel
+
 # test of tag
 test: tag
