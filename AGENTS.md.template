@@ -1,0 +1,175 @@
+<!--
+  Licensed to the Apache Software Foundation (ASF) under one
+  or more contributor license agreements.  See the NOTICE file
+  distributed with this work for additional information
+  regarding copyright ownership.  The ASF licenses this file
+  to you under the Apache License, Version 2.0 (the
+  "License"); you may not use this file except in compliance
+  with the License.  You may obtain a copy of the License at
+
+   http://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing,
+  software distributed under the License is distributed on an
+  "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+  KIND, either express or implied.  See the License for the
+  specific language governing permissions and limitations
+  under the License.
+-->
+
+# AGENTS.md
+
+Guidance for agent-style coding tools working in the Apache Cloudberry repository.
+
+## Project overview
+
+Apache Cloudberry is an Apache Incubator project and an open-source massively parallel processing database. It evolved from Greenplum Database and is built on a PostgreSQL kernel. It is used for data warehouse, large-scale analytics, and AI or ML workloads.
+
+Treat this repository as a database system, not as a typical application project. Small changes can affect SQL semantics, query planning, storage, distributed execution, management tooling, upgrade behavior, and user data safety.
+
+## Core principles for agents
+
+- Keep changes as small and direct as possible.
+- Do not perform broad code refactoring. Cloudberry's core is PostgreSQL-based, and unnecessary refactoring makes familiar code harder for maintainers to recognize and review.
+- Preserve PostgreSQL and Greenplum coding style in the area being edited.
+- Prefer localized fixes over architecture rewrites unless explicitly requested.
+- Read surrounding code before editing. Match existing naming, memory management, error handling, locking, and test patterns.
+- Do not generate or import code with incompatible licensing. The project is Apache License 2.0.
+- Never treat AI output as automatically correct. The contributor owns the final code.
+
+## Repository map
+
+- [README.md](README.md) — project introduction, community links, contribution overview, and license information.
+- [CONTRIBUTING.md](CONTRIBUTING.md) — contribution expectations and community guidance.
+- [AI_POLICY.md](AI_POLICY.md) — rules for AI-assisted development.
+- [SECURITY.md](SECURITY.md) — security reporting policy.
+- [.github/pull_request_template.md](.github/pull_request_template.md) — PR checklist, test plan, impact, and AI disclosure checkbox.
+- [src/](src/) — database source tree, including PostgreSQL-derived backend, frontend utilities, interfaces, tests, and build integration.
+- [src/backend/](src/backend/) — main database backend. Important areas include parser, optimizer, executor, storage, catalog, commands, postmaster, replication, and Cloudberry distributed components.
+- [src/backend/cdb/](src/backend/cdb/) — Cloudberry or Greenplum distributed database logic, including dispatch, gangs, motion, and MPP behavior.
+- [src/backend/gporca/](src/backend/gporca/) and [src/backend/gpopt/](src/backend/gpopt/) — ORCA optimizer integration and optimizer-related code.
+- [src/common/](src/common/) — code shared by backend and frontend utilities.
+- [src/interfaces/](src/interfaces/) — client interfaces such as libpq, ECPG, and GPPC.
+- [src/test/](src/test/) — regression, isolation, unit, and integration test infrastructure.
+- [gpMgmt/](gpMgmt/) — Python management utilities and cluster administration tooling.
+- [gpAux/](gpAux/) — auxiliary scripts, demo cluster support, packaging, and build helpers.
+- [gpcontrib/](gpcontrib/) — Cloudberry-related extensions and contributed modules.
+- [contrib/](contrib/) — PostgreSQL-style contributed modules and Cloudberry-specific extensions.
+- [doc/](doc/) — SGML documentation sources.
+- [devops/](devops/) — Docker, automation, sandbox, and build/deployment helper scripts.
+- [mcp-server/](mcp-server/) — MCP server for AI-ready Cloudberry database interaction.
+
+## Architecture notes
+
+Cloudberry follows a PostgreSQL-style source layout with additional MPP database components inherited from Greenplum. The coordinator receives SQL, plans or optimizes it, dispatches work to segments, and collects results. Segment processes execute distributed pieces of the plan and interact through the interconnect.
+
+Key concepts agents should recognize:
+
+- Coordinator and segments are separate roles in a distributed database cluster.
+- Query execution may involve dispatch, gangs, motion nodes, distributed transactions, snapshots, and interconnect behavior.
+- Storage and catalog changes can affect upgrade, recovery, visibility, and distributed consistency.
+- PostgreSQL compatibility matters. Avoid changing behavior that is inherited from PostgreSQL unless the task explicitly targets Cloudberry divergence.
+- Extensions under [gpcontrib/](gpcontrib/) and [contrib/](contrib/) may have independent build or test workflows.
+
+## Working rules
+
+1. Start by identifying the subsystem and reading nearby files, tests, and documentation.
+2. Prefer existing helpers, macros, memory contexts, error reporting conventions, and test infrastructure.
+3. Avoid unrelated formatting changes.
+4. Avoid renaming symbols or moving files unless explicitly required.
+5. Do not silently change SQL-visible behavior, catalog definitions, on-disk format, wire protocol, GUC behavior, or user-facing messages.
+6. If a change touches security-sensitive areas, call that out clearly in the PR description and request appropriate human review.
+7. If a change touches distributed execution, verify whether it affects both coordinator and segment behavior.
+8. If a change touches management scripts, check Python compatibility and existing unit or behave tests.
+9. If a change touches documentation, keep examples accurate and consistent with project terminology.
+10. If behavior is uncertain, add a small regression or unit test rather than relying on assumptions.
+
+## Build and test guidance
+
+Use the smallest relevant validation first, then broader validation when the change is ready.
+
+Common validation entry points mentioned by project docs and PR templates:
+
+- Configure and build through the repository's standard build flow or the automation in [devops/README.md](devops/README.md).
+- Use Docker-based development and sandbox workflows under [devops/](devops/) when local system dependencies are not available.
+- Run `make installcheck` for regression coverage when appropriate.
+- Run `make -C src/test installcheck-cbdb-parallel` for Cloudberry parallel regression coverage when appropriate.
+- For extension-specific changes, run the extension's local installcheck or documented test target.
+- For management tooling under [gpMgmt/](gpMgmt/), inspect the relevant README and test targets before selecting a test command.
+
+Do not invent successful test results. If tests are not run, state that clearly in the final response or PR notes.
+
+## AI-assisted contribution policy
+
+Follow [AI_POLICY.md](AI_POLICY.md):
+
+- AI-generated code has the same responsibility and quality bar as human-written code.
+- AI-assisted changes must pass normal review, testing, and CI standards.
+- The contributor must ensure license compatibility.
+- Significant AI-generated code should be disclosed using the PR template checkbox.
+- Do not use AI to auto-generate responses to maintainer review feedback.
+- Include or verify tests for AI-generated code.
+- Keep changes simple and avoid code refactoring.
+
+## Security policy
+
+Follow [SECURITY.md](SECURITY.md):
+
+- Do not report security vulnerabilities in public issues, public mailing lists, or public forums.
+- Send vulnerability reports to security@apache.org.
+- For normal non-security bugs, use GitHub Issues, Discussions, the dev mailing list, or Slack.
+
+When working as an agent, do not expose secrets, credentials, private keys, database dumps with sensitive data, or vulnerability details in public-facing output.
+
+## Pull request expectations
+
+Use [.github/pull_request_template.md](.github/pull_request_template.md) as the checklist for final change summaries:
+
+- Explain what the PR does.
+- Identify the type of change.
+- Document breaking changes if any.
+- Provide a test plan.
+- Describe performance, user-facing, and dependency impact when applicable.
+- Confirm documentation updates when needed.
+- Confirm security review consideration.
+- Disclose significant AI-assisted code generation.
+
+## Style expectations
+
+- C code should follow the surrounding PostgreSQL or Cloudberry style.
+- Python code in [gpMgmt/](gpMgmt/) should follow nearby management script patterns and existing test style.
+- SQL tests should include expected output files when required by the test framework.
+- Documentation uses Markdown in many repository files and SGML under [doc/src/sgml/](doc/src/sgml/).
+- Prefer project terminology: Apache Cloudberry, coordinator, segment, MPP, PostgreSQL kernel, Greenplum heritage.
+
+## High-risk areas
+
+Be especially conservative around:
+
+- Catalog definitions and upgrade-sensitive files.
+- Storage formats, WAL, recovery, transactions, snapshots, and visibility.
+- Planner, optimizer, executor, and motion/distributed execution logic.
+- Authentication, cryptography, TLS, network protocol, and libpq behavior.
+- Interconnect and dispatch paths.
+- Cluster management commands that start, stop, expand, recover, or reconfigure clusters.
+- Public SQL behavior, GUCs, system views, and extension APIs.
+
+## Recommended agent workflow
+
+1. Restate the requested change in concrete terms.
+2. Locate the smallest relevant subsystem.
+3. Read nearby implementation and tests.
+4. Plan a minimal change.
+5. Edit only files required for the task.
+6. Add or update tests when behavior changes.
+7. Run the narrowest relevant tests available.
+8. Summarize changed files, test results, and any risks or follow-ups.
+
+## What not to do
+
+- Do not perform drive-by cleanup.
+- Do not reformat unrelated code.
+- Do not replace established PostgreSQL-style patterns with modern alternatives just for preference.
+- Do not change public behavior without tests and documentation.
+- Do not assume single-node behavior is enough for distributed database changes.
+- Do not fabricate command output, test results, issue links, or reviewer decisions.
