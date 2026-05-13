@@ -175,4 +175,4 @@ take the template from the `AGENTS.md.template` file.
 - [CodeRabbit](https://www.coderabbit.ai/)
   — Yet another AI pair programmer and code reviewer
 - [AGENTS.md](https://agents.md/)
-  - README for agents
+  — README for agents
