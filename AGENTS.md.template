@@ -41,7 +41,7 @@ Treat this repository as a database system, not as a typical application project
 
 - [README.md](README.md) — project introduction, community links, contribution overview, and license information.
 - [CONTRIBUTING.md](CONTRIBUTING.md) — contribution expectations and community guidance.
-- [AI_POLICY.md](AI_POLICY.md) — rules for AI-assisted development.
+- [AI_GUIDELINE.md](AI_GUIDELINE.md) — rules for AI-assisted development.
 - [SECURITY.md](SECURITY.md) — security reporting policy.
 - [.github/pull_request_template.md](.github/pull_request_template.md) — PR checklist, test plan, impact, and AI disclosure checkbox.
 - [src/](src/) — database source tree, including PostgreSQL-derived backend, frontend utilities, interfaces, tests, and build integration.
