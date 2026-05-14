@@ -170,6 +170,7 @@ execute_cmd ./configure --prefix=${BUILD_DESTINATION} \
             --with-lz4 \
             --with-zstd \
             --with-openssl \
+            --with-zstd \
             --with-pam \
             --with-perl \
             --with-pgport=5432 \
@@ -177,6 +178,7 @@ execute_cmd ./configure --prefix=${BUILD_DESTINATION} \
             --with-pythonsrc-ext \
             --with-ssl=openssl \
             --with-openssl \
+            --with-zstd \
             --with-uuid=e2fs \
             ${CONFIGURE_MDBLOCALES_OPTS} \
             --with-includes=/usr/local/xerces-c/include \
