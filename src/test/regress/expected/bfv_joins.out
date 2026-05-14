@@ -1,3 +1,9 @@
+-- start_matchsubs
+-- m/\(runaway_cleaner\.c:\d+\)/
+-- s/\(runaway_cleaner\.c:\d+\)/(runaway_cleaner.c:XXX)/
+-- m/Used: \d+MB, available \d+MB, red zone: \d+MB/
+-- s/Used: \d+MB, available \d+MB, red zone: \d+MB/Used: XXXMB, available XXXMB, red zone: XXXMB/
+-- end_matchsubs
 --
 -- Set up
 --
@@ -4221,7 +4227,7 @@ from tj1
   join tj18 on tj17.id = tj18.id
   join tj19 on tj18.id = tj19.id
   join tj20 on tj19.id = tj20.id;
-ERROR:  Canceling query because of high VMEM usage. Used: 7379MB, available 813MB, red zone: 7372MB (runaway_cleaner.c:189)
+ERROR:  Canceling query because of high VMEM usage. Used: XXXMB, available XXXMB, red zone: XXXMB (runaway_cleaner.c:XXX)
 select (trunc(extract(epoch from now())) - :unix_time1) < 100 is_ok;
  is_ok 
 -------

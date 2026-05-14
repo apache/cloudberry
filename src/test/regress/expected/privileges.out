@@ -4,6 +4,8 @@
 -- start_matchsubs
 -- m/DETAIL:  Failing row contains \(.*\) = \(.*\)/
 -- s/DETAIL:  Failing row contains \(.*\) = \(.*\)/DETAIL:  Failing row contains (#####)/
+-- m/\(user\.c:\d+\)/
+-- s/\(user\.c:\d+\)/(user.c:XXX)/
 -- end_matchsubs
 set optimizer=off;
 -- We use "discard plans" to reset the plan cache, to re-plan
@@ -2251,7 +2253,7 @@ ROLLBACK;
 -- test pg_database_owner
 RESET SESSION AUTHORIZATION;
 GRANT pg_database_owner TO regress_priv_user1;
-ERROR:  role "pg_database_owner" cannot have explicit members (user.c:3722)
+ERROR:  role "pg_database_owner" cannot have explicit members (user.c:XXX)
 GRANT regress_priv_user1 TO pg_database_owner;
 ERROR:  role "pg_database_owner" cannot be a member of any role
 CREATE TABLE datdba_only ();
