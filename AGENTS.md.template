@@ -23,7 +23,7 @@ Guidance for agent-style coding tools working in the Apache Cloudberry repositor
 
 ## Project overview
 
-Apache Cloudberry is an Apache Incubator project and an open-source massively parallel processing database. It evolved from Greenplum Database and is built on a PostgreSQL kernel. It is used for data warehouse, large-scale analytics, and AI or ML workloads.
+Apache Cloudberry is an Apache Incubator project and an open-source massively parallel processing database. It evolved from Greenplum Database and is built on a modern PostgreSQL kernel. It is used for data warehouse, large-scale analytics, and AI or ML workloads.
 
 Treat this repository as a database system, not as a typical application project. Small changes can affect SQL semantics, query planning, storage, distributed execution, management tooling, upgrade behavior, and user data safety.
 
