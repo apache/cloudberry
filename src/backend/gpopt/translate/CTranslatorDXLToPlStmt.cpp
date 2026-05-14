@@ -792,8 +792,8 @@ CTranslatorDXLToPlStmt::TranslateDXLParallelTblScan(
 
 	// Parallel table scans are always sequential scans (not foreign scans)
 	SeqScan *seq_scan = MakeNode(SeqScan);
-	seq_scan->scanrelid = index;
-	plan = &(seq_scan->plan);
+	seq_scan->scan.scanrelid = index;
+	plan = &(seq_scan->scan.plan);
 	plan_return = (Plan *) seq_scan;
 
 	// Set parallel execution flags
