@@ -101,7 +101,7 @@ Do not invent successful test results. If tests are not run, state that clearly 
 
 ## AI-assisted contribution policy
 
-Follow [AI_POLICY.md](AI_POLICY.md):
+Follow [AI_GUIDELINE.md](AI_GUIDELINE.md):
 
 - AI-generated code has the same responsibility and quality bar as human-written code.
 - AI-assisted changes must pass normal review, testing, and CI standards.
