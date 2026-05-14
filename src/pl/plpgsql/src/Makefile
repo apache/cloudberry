@@ -73,6 +73,12 @@ uninstall-headers:
 .PHONY: install-data install-headers uninstall-data uninstall-headers
 
 
+# Suppress false-positive array-bounds warning from GCC 13+ at -O3 when
+# inlining varatt.h macros (VARATT_IS_EXTERNAL_NON_EXPANDED) in assign_simple_var.
+ifeq ($(GCC),yes)
+pl_exec.o: CFLAGS += -Wno-array-bounds
+endif
+
 # Force these dependencies to be known even without dependency info built:
 pl_gram.o pl_handler.o pl_comp.o pl_exec.o pl_funcs.o pl_scanner.o: plpgsql.h pl_gram.h plerrcodes.h
 pl_scanner.o: pl_reserved_kwlist_d.h pl_unreserved_kwlist_d.h
