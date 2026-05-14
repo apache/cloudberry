@@ -783,16 +783,15 @@ SELECT * FROM t1 FOR SHARE;
 EXPLAIN (COSTS OFF) SELECT * FROM t1 FOR SHARE;
              QUERY PLAN              
 -------------------------------------
- LockRows
-   ->  Append
-         ->  Seq Scan on t1 t1_1
-               Filter: ((a % 2) = 0)
-         ->  Seq Scan on t2 t1_2
-               Filter: ((a % 2) = 0)
-         ->  Seq Scan on t3 t1_3
-               Filter: ((a % 2) = 0)
+ Append
+   ->  Seq Scan on t1 t1_1
+         Filter: ((a % 2) = 0)
+   ->  Seq Scan on t2 t1_2
+         Filter: ((a % 2) = 0)
+   ->  Seq Scan on t3 t1_3
+         Filter: ((a % 2) = 0)
  Optimizer: Postgres query optimizer
-(9 rows)
+(8 rows)
 
 SELECT * FROM t1 WHERE f_leak(b) FOR SHARE;
 NOTICE:  f_leak => bbb
@@ -810,18 +809,17 @@ NOTICE:  f_leak => yyy
 (5 rows)
 
 EXPLAIN (COSTS OFF) SELECT * FROM t1 WHERE f_leak(b) FOR SHARE;
-                     QUERY PLAN                      
------------------------------------------------------
- LockRows
-   ->  Append
-         ->  Seq Scan on t1 t1_1
-               Filter: (((a % 2) = 0) AND f_leak(b))
-         ->  Seq Scan on t2 t1_2
-               Filter: (((a % 2) = 0) AND f_leak(b))
-         ->  Seq Scan on t3 t1_3
-               Filter: (((a % 2) = 0) AND f_leak(b))
+                  QUERY PLAN                   
+-----------------------------------------------
+ Append
+   ->  Seq Scan on t1 t1_1
+         Filter: (((a % 2) = 0) AND f_leak(b))
+   ->  Seq Scan on t2 t1_2
+         Filter: (((a % 2) = 0) AND f_leak(b))
+   ->  Seq Scan on t3 t1_3
+         Filter: (((a % 2) = 0) AND f_leak(b))
  Optimizer: Postgres query optimizer
-(9 rows)
+(8 rows)
 
 -- union all query
 SELECT a, b, tableoid::regclass FROM t2 UNION ALL SELECT a, b, tableoid::regclass FROM t3;
