@@ -99,6 +99,7 @@ RUN dnf makecache && \
         krb5-devel \
         libcurl-devel \
         libevent-devel \
+        libicu-devel \
         libssh2-devel \
         libuuid-devel \
         libxml2-devel \
