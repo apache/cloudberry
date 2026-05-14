@@ -42,6 +42,10 @@ endif
 ifeq "$(with_zstd)" "yes"
 	recurse_targets += zstd
 endif
+
+ifeq "$(with_gp_stats_collector)" "yes"
+	recurse_targets += gp_stats_collector
+endif
 $(call recurse,all install clean distclean, $(recurse_targets))
 
 all: gpcloud pxf mapreduce orafce

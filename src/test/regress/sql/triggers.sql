@@ -1,3 +1,7 @@
+-- start_matchsubs
+-- m/\(trigger\.c:\d+\)/
+-- s/\(trigger\.c:\d+\)/(trigger.c:XXX)/
+-- end_matchsubs
 --
 -- TRIGGERS
 --

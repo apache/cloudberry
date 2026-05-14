@@ -1,3 +1,7 @@
+-- start_matchsubs
+-- m/\(nodeMotion\.c:\d+\)/
+-- s/\(nodeMotion\.c:\d+\)/(nodeMotion.c:XXX)/
+-- end_matchsubs
 --
 -- exercises for the hash join code
 --

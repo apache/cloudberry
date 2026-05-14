@@ -1,3 +1,9 @@
+-- start_matchsubs
+-- m/\(runaway_cleaner\.c:\d+\)/
+-- s/\(runaway_cleaner\.c:\d+\)/(runaway_cleaner.c:XXX)/
+-- m/Used: \d+MB, available \d+MB, red zone: \d+MB/
+-- s/Used: \d+MB, available \d+MB, red zone: \d+MB/Used: XXXMB, available XXXMB, red zone: XXXMB/
+-- end_matchsubs
 --
 -- Set up
 --

@@ -4,6 +4,8 @@
 -- start_matchsubs
 -- m/DETAIL:  Failing row contains \(.*\) = \(.*\)/
 -- s/DETAIL:  Failing row contains \(.*\) = \(.*\)/DETAIL:  Failing row contains (#####)/
+-- m/\(user\.c:\d+\)/
+-- s/\(user\.c:\d+\)/(user.c:XXX)/
 -- end_matchsubs
 
 set optimizer=off;

@@ -38,6 +38,8 @@ aimed at controlling command execution, logging and test functions.
 # This module should never depend on any other PostgreSQL regression test
 # modules.
 
+package PostgreSQL::Test::Utils;
+
 use strict;
 use warnings;
 

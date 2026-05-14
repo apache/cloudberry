@@ -25,13 +25,13 @@ INSERT INTO cmdata1 VALUES(repeat('1234567890', 1004));
 SELECT pg_column_compression(f1) FROM cmdata;
  pg_column_compression 
 -----------------------
- pglz
+ 
 (1 row)
 
 SELECT pg_column_compression(f1) FROM cmdata1;
  pg_column_compression 
 -----------------------
- lz4
+ 
 (1 row)
 
 -- decompress data slice
@@ -58,7 +58,7 @@ SELECT * INTO cmmove1 FROM cmdata;
 SELECT pg_column_compression(f1) FROM cmmove1;
  pg_column_compression 
 -----------------------
- pglz
+ 
 (1 row)
 
 -- copy to existing table
@@ -68,8 +68,8 @@ INSERT INTO cmmove3 SELECT * FROM cmdata1;
 SELECT pg_column_compression(f1) FROM cmmove3;
  pg_column_compression 
 -----------------------
- pglz
- lz4
+ 
+ 
 (2 rows)
 
 -- test LIKE INCLUDING COMPRESSION
@@ -90,14 +90,14 @@ INSERT INTO cmmove2 VALUES (repeat('1234567890', 1004));
 SELECT pg_column_compression(f1) FROM cmmove2;
  pg_column_compression 
 -----------------------
- pglz
+ 
 (1 row)
 
 UPDATE cmmove2 SET f1 = cmdata1.f1 FROM cmdata1;
 SELECT pg_column_compression(f1) FROM cmmove2;
  pg_column_compression 
 -----------------------
- lz4
+ 
 (1 row)
 
 -- test externally stored compressed data
@@ -108,15 +108,15 @@ INSERT INTO cmdata2 SELECT large_val() || repeat('a', 4000);
 SELECT pg_column_compression(f1) FROM cmdata2;
  pg_column_compression 
 -----------------------
- pglz
+ 
 (1 row)
 
 INSERT INTO cmdata1 SELECT large_val() || repeat('a', 4000);
 SELECT pg_column_compression(f1) FROM cmdata1;
  pg_column_compression 
 -----------------------
- lz4
- lz4
+ 
+ 
 (2 rows)
 
 SELECT SUBSTR(f1, 200, 5) FROM cmdata1;
@@ -193,15 +193,15 @@ View definition:
 SELECT pg_column_compression(f1) FROM cmdata1;
  pg_column_compression 
 -----------------------
- lz4
- lz4
+ 
+ 
 (2 rows)
 
 SELECT pg_column_compression(x) FROM compressmv;
  pg_column_compression 
 -----------------------
- lz4
- lz4
+ 
+ 
 (2 rows)
 
 -- test compression with partition
@@ -214,13 +214,13 @@ INSERT INTO cmpart VALUES (repeat('123456789', 4004));
 SELECT pg_column_compression(f1) FROM cmpart1;
  pg_column_compression 
 -----------------------
- lz4
+ 
 (1 row)
 
 SELECT pg_column_compression(f1) FROM cmpart2;
  pg_column_compression 
 -----------------------
- pglz
+ 
 (1 row)
 
 -- test compression with inheritance, error
@@ -255,8 +255,8 @@ Indexes:
 SELECT pg_column_compression(f1) FROM cmdata;
  pg_column_compression 
 -----------------------
- pglz
- lz4
+ 
+ 
 (2 rows)
 
 ALTER TABLE cmdata2 ALTER COLUMN f1 SET COMPRESSION default;
@@ -286,31 +286,31 @@ INSERT INTO cmpart VALUES (repeat('123456789', 4004));
 SELECT pg_column_compression(f1) FROM cmpart1;
  pg_column_compression 
 -----------------------
- lz4
- pglz
+ 
+ 
 (2 rows)
 
 SELECT pg_column_compression(f1) FROM cmpart2;
  pg_column_compression 
 -----------------------
- pglz
- lz4
+ 
+ 
 (2 rows)
 
 -- VACUUM FULL does not recompress
 SELECT pg_column_compression(f1) FROM cmdata;
  pg_column_compression 
 -----------------------
- pglz
- lz4
+ 
+ 
 (2 rows)
 
 VACUUM FULL cmdata;
 SELECT pg_column_compression(f1) FROM cmdata;
  pg_column_compression 
 -----------------------
- pglz
- lz4
+ 
+ 
 (2 rows)
 
 -- test expression index
@@ -319,7 +319,7 @@ CREATE TABLE cmdata2 (f1 TEXT COMPRESSION pglz, f2 TEXT COMPRESSION lz4);
 CREATE UNIQUE INDEX idx1 ON cmdata2 ((f1 || f2));
 DETAIL:  Distribution key column "f1" is not included in the constraint.
 ERROR:  UNIQUE index must contain all columns in the table's distribution key
-INSERT INTO cmdata2 VALUES((SELECT array_agg(md5(g::TEXT))::TEXT FROM=
+INSERT INTO cmdata2 VALUES((SELECT array_agg(fipshash(g::TEXT))::TEXT FROM
 generate_series(1, 50) g), VERSION());
 -- check data is ok
 SELECT length(f1) FROM cmdata;

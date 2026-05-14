@@ -93,6 +93,8 @@ The IPC::Run module is required.
 
 =cut
 
+package PostgreSQL::Test::Cluster;
+
 use strict;
 use warnings;
 
