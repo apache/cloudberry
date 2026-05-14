@@ -31,7 +31,7 @@ Treat this repository as a database system, not as a typical application project
 
 - Keep changes as small and direct as possible.
 - Do not perform broad code refactoring. Cloudberry's core is PostgreSQL-based, and unnecessary refactoring makes familiar code harder for maintainers to recognize and review.
-- Preserve PostgreSQL and Greenplum coding style in the area being edited.
+- Preserve PostgreSQL and Cloudberry coding style in the area being edited.
 - Prefer localized fixes over architecture rewrites unless explicitly requested.
 - Read surrounding code before editing. Match existing naming, memory management, error handling, locking, and test patterns.
 - Do not generate or import code with incompatible licensing. The project is Apache License 2.0.
