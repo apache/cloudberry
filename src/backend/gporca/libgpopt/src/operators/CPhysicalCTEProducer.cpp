@@ -14,6 +14,7 @@
 #include "gpos/base.h"
 
 #include "gpopt/base/CCTEMap.h"
+#include "gpopt/base/CDistributionSpecRandom.h"
 #include "gpopt/base/COptCtxt.h"
 #include "gpopt/operators/CExpression.h"
 #include "gpopt/operators/CExpressionHandle.h"

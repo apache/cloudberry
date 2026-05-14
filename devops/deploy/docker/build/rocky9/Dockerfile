@@ -152,14 +152,14 @@ RUN dnf makecache && \
     make -j$(nproc) && \
     make install -C ~/xerces-c-${XERCES_LATEST_RELEASE} && \
     rm -rf ~/xerces-c* && \
-    cd && GO_VERSION="go1.24.13" && \
+    cd && GO_VERSION="go1.25.10" && \
     ARCH=$(uname -m) && \
     if [ "${ARCH}" = "aarch64" ]; then \
         GO_ARCH="arm64" && \
-        GO_SHA256="74d97be1cc3a474129590c67ebf748a96e72d9f3a2b6fef3ed3275de591d49b3"; \
+        GO_SHA256="654da1f9b50a5d1c2a85ccf8ed405aa89c06e94d18384628bf186f7712677b08"; \
     elif [ "${ARCH}" = "x86_64" ]; then \
         GO_ARCH="amd64" && \
-        GO_SHA256="1fc94b57134d51669c72173ad5d49fd62afb0f1db9bf3f798fd98ee423f8d730"; \
+        GO_SHA256="42d4f7a32316aa66591eca7e89867256057a4264451aca10570a715b3637ba70"; \
     else \
         echo "Unsupported architecture: ${ARCH}" && exit 1; \
     fi && \

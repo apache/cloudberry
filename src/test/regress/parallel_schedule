@@ -197,6 +197,9 @@ test: fast_default
 # loose over-eager constraint exclusion check, please refer to issue 10287
 test: constraints_check
 
+# orca parallel
+# test: orca_parallel
+
 # test of tag
 # test: tag
 
