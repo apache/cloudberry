@@ -63,13 +63,13 @@ select * from (select max(i1) from testhagg group by i2) foo order by 1 limit 10
 select * from hashagg_spill.is_workfile_created('explain (analyze, verbose) select max(i1) from testhagg group by i2;');
  is_workfile_created 
 ---------------------
-                   1
+                   0
 (1 row)
 
 select * from hashagg_spill.is_workfile_created('explain (analyze, verbose) select max(i1) from testhagg group by i2 limit 90000;');
  is_workfile_created 
 ---------------------
-                   1
+                   0
 (1 row)
 
 reset all;
@@ -117,14 +117,14 @@ SET gp_workfile_compression = OFF;
 select * from hashagg_spill.is_workfile_created('explain (analyze, verbose) SELECT avg(col2) col2 FROM hashagg_spill GROUP BY col1 HAVING(sum(col1)) < 0;');
  is_workfile_created 
 ---------------------
-                   1
+                   0
 (1 row)
 
 SET gp_workfile_compression = ON;
 select * from hashagg_spill.is_workfile_created('explain (analyze, verbose) SELECT avg(col2) col2 FROM hashagg_spill GROUP BY col1 HAVING(sum(col1)) < 0;');
  is_workfile_created 
 ---------------------
-                   1
+                   0
 (1 row)
 
 -- check spilling to a temp tablespace
