@@ -28,6 +28,7 @@
 #include "naucrates/dxl/operators/CDXLDatumStatsDoubleMappable.h"
 #include "naucrates/dxl/operators/CDXLDatumStatsLintMappable.h"
 #include "naucrates/dxl/operators/CDXLLogicalJoin.h"
+#include "naucrates/dxl/operators/CDXLPhysicalParallelTableScan.h"
 #include "naucrates/dxl/operators/CDXLPhysicalAgg.h"
 #include "naucrates/dxl/operators/CDXLPhysicalAppend.h"
 #include "naucrates/dxl/operators/CDXLPhysicalBroadcastMotion.h"
@@ -99,6 +100,31 @@ CDXLOperatorFactory::MakeDXLTblScan(CDXLMemoryManager *dxl_memory_manager,
 	CMemoryPool *mp = dxl_memory_manager->Pmp();
 
 	return GPOS_NEW(mp) CDXLPhysicalTableScan(mp);
+}
+
+//---------------------------------------------------------------------------
+//	@function:
+//		CDXLOperatorFactory::MakeDXLParallelTblScan
+//
+//	@doc:
+//		Construct a parallel table scan operator
+//
+//---------------------------------------------------------------------------
+CDXLPhysical *
+CDXLOperatorFactory::MakeDXLParallelTblScan(CDXLMemoryManager *dxl_memory_manager,
+											const Attributes &attrs)
+{
+	// get the memory pool from the memory manager
+	CMemoryPool *mp = dxl_memory_manager->Pmp();
+
+	// extract number of parallel workers
+	const XMLCh *parallel_workers_xml = ExtractAttrValue(attrs, EdxltokenParallelWorkers, 
+														 EdxltokenPhysicalParallelTableScan);
+	ULONG ulParallelWorkers = CDXLOperatorFactory::ConvertAttrValueToUlong(
+		dxl_memory_manager, parallel_workers_xml, EdxltokenParallelWorkers, 
+		EdxltokenPhysicalParallelTableScan);
+
+	return GPOS_NEW(mp) CDXLPhysicalParallelTableScan(mp, ulParallelWorkers);
 }
 
 //---------------------------------------------------------------------------

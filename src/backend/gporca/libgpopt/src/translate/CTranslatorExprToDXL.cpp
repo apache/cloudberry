@@ -66,6 +66,7 @@
 #include "gpopt/operators/CPhysicalStreamAggDeduplicate.h"
 #include "gpopt/operators/CPhysicalTVF.h"
 #include "gpopt/operators/CPhysicalTableScan.h"
+#include "gpopt/operators/CPhysicalParallelTableScan.h"
 #include "gpopt/operators/CPhysicalUnionAll.h"
 #include "gpopt/operators/CPredicateUtils.h"
 #include "gpopt/operators/CScalarArray.h"
@@ -129,6 +130,7 @@
 #include "naucrates/dxl/operators/CDXLPhysicalSplit.h"
 #include "naucrates/dxl/operators/CDXLPhysicalTVF.h"
 #include "naucrates/dxl/operators/CDXLPhysicalTableScan.h"
+#include "naucrates/dxl/operators/CDXLPhysicalParallelTableScan.h"
 #include "naucrates/dxl/operators/CDXLPhysicalWindow.h"
 #include "naucrates/dxl/operators/CDXLScalarAggref.h"
 #include "naucrates/dxl/operators/CDXLScalarArray.h"
@@ -265,6 +267,20 @@ CTranslatorExprToDXL::PdxlnTranslate(CExpression *pexpr,
 
 	GPOS_ASSERT(nullptr == m_pdpplan);
 
+	// Walk the physical tree and detect a CTE Consumer placed on a
+	// different slice than its Producer when the Producer's output is
+	// replicated-like (StrictReplicated/TaintedReplicated/Universal).
+	// Fall back to the Postgres optimizer if it is detected because
+	// it breaks Producer-Consumer locality and can hang the
+	// query at execution.
+	if (CUtils::FHasCrossSliceReplicatedCTEConsumer(m_mp, pexpr))
+	{
+		GPOS_RAISE(
+			gpopt::ExmaDXL, gpopt::ExmiExpr2DXLUnsupportedFeature,
+			GPOS_WSZ_LIT(
+				"CTE Consumer placed on a different slice than its replicated Producer"));
+	}
+
 	m_pdpplan = CDrvdPropPlan::Pdpplan(pexpr->PdpDerive());
 	m_pdpplan->AddRef();
 
@@ -342,6 +358,7 @@ CTranslatorExprToDXL::CreateDXLNode(CExpression *pexpr,
 	GPOS_ASSERT(nullptr != pexpr);
 	ULONG ulOpId = (ULONG) pexpr->Pop()->Eopid();
 	if (COperator::EopPhysicalTableScan == ulOpId ||
+		COperator::EopPhysicalParallelTableScan == ulOpId ||
 		COperator::EopPhysicalForeignScan == ulOpId)
 	{
 		CDXLNode *dxlnode = PdxlnTblScan(
@@ -710,6 +727,13 @@ CTranslatorExprToDXL::PdxlnTblScan(CExpression *pexprTblScan,
 	if (COperator::EopPhysicalTableScan == op_id)
 	{
 		pdxlopTS = GPOS_NEW(m_mp) CDXLPhysicalTableScan(m_mp, table_descr);
+	}
+	else if (COperator::EopPhysicalParallelTableScan == op_id)
+	{
+		CPhysicalParallelTableScan *parallel_scan =
+			CPhysicalParallelTableScan::PopConvert(pexprTblScan->Pop());
+		pdxlopTS = GPOS_NEW(m_mp) CDXLPhysicalParallelTableScan(
+			m_mp, table_descr, parallel_scan->UlParallelWorkers());
 	}
 	else
 	{
@@ -2556,6 +2580,7 @@ CTranslatorExprToDXL::PdxlnFromFilter(CExpression *pexprFilter,
 	switch (eopidRelational)
 	{
 		case COperator::EopPhysicalTableScan:
+		case COperator::EopPhysicalParallelTableScan:
 		case COperator::EopPhysicalForeignScan:
 		{
 			// if there is a structure of the form
@@ -4250,6 +4275,18 @@ CTranslatorExprToDXL::BuildScalarSubplans(
 {
 	const ULONG size = pdrgpcrInner->Size();
 
+	// Fallback to Postgres optimizer if the SubPlan's inner expression contains a
+	// CTE Consumer placed on a different slice than its replicated Producer.
+	// Such a Consumer becomes a cross-slice Shared Scan reader without a local
+	// Producer, which can hang the query or fail at execution time.
+	if (CUtils::FHasCrossSliceReplicatedCTEConsumer(m_mp, pexprInner))
+	{
+		GPOS_RAISE(
+			gpopt::ExmaDXL, gpopt::ExmiExpr2DXLUnsupportedFeature,
+			GPOS_WSZ_LIT(
+				"CTE Consumer placed on a different slice than its replicated Producer"));
+	}
+
 	CDXLNodeArray *pdrgpdxlnInner = GPOS_NEW(m_mp) CDXLNodeArray(m_mp);
 	for (ULONG ul = 0; ul < size; ul++)
 	{
@@ -4383,6 +4420,7 @@ CTranslatorExprToDXL::PdxlnCorrelatedNLJoin(
 	switch (pexprOuterChild->Pop()->Eopid())
 	{
 		case COperator::EopPhysicalTableScan:
+		case COperator::EopPhysicalParallelTableScan:
 		{
 			dxl_properties->AddRef();
 			// create and return a table scan node
@@ -4571,6 +4609,7 @@ UlIndexFilter(Edxlopid edxlopid)
 	{
 		case EdxlopPhysicalTableScan:
 		case EdxlopPhysicalForeignScan:
+		case EdxlopPhysicalParallelTableScan:
 			return EdxltsIndexFilter;
 		case EdxlopPhysicalDynamicForeignScan:
 			return EdxldfsIndexFilter;
@@ -4626,6 +4665,7 @@ CTranslatorExprToDXL::PdxlnResultFromNLJoinOuter(
 		case EdxlopPhysicalDynamicIndexScan:
 		case EdxlopPhysicalDynamicBitmapTableScan:
 		case EdxlopPhysicalResult:
+		case EdxlopPhysicalParallelTableScan:
 		{
 			// if the scalar join condition is a constant TRUE, just translate the child, no need to create an AND expression
 			if (CTranslatorExprToDXLUtils::FScalarConstTrue(m_pmda,

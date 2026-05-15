@@ -52,6 +52,7 @@
 #include "gpopt/xforms/CXformGbAggDedup2StreamAggDedup.h"
 #include "gpopt/xforms/CXformGbAggWithMDQA2Join.h"
 #include "gpopt/xforms/CXformGet2TableScan.h"
+#include "gpopt/xforms/CXformGet2ParallelTableScan.h"
 #include "gpopt/xforms/CXformImplementAssert.h"
 #include "gpopt/xforms/CXformImplementBitmapTableGet.h"
 #include "gpopt/xforms/CXformImplementCTEConsumer.h"
