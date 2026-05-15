@@ -25,10 +25,9 @@ HINT:  Inject an infinite 'skip' into the 'fts_probe' fault to disable FTS probi
  Success:
 (3 rows)
 
--- failed because of fault injection
-insert into t_insert select generate_series(1,10);
-ERROR:  fault triggered, fault name:'orc_writer_write_tuple' fault type:'panic'
 -- start_ignore
+-- failed because of fault injection; crash recovery messages are non-deterministic
+insert into t_insert select generate_series(1,10);
 -- clear the fault inject, so the next insert will success.
 -- put the reset operation in ignore range
 select gp_inject_fault('orc_writer_write_tuple','reset',dbid) FROM gp_segment_configuration WHERE role = 'p' AND content > -1;
