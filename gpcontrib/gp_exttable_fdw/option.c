@@ -135,11 +135,13 @@ gp_exttable_permission_check(PG_FUNCTION_ARGS)
 		}
 		else if(pg_strcasecmp(def->defname, "encoding") == 0)
 		{
-			char	*encoding = (char *) defGetString(def);
-			if (!PG_VALID_ENCODING(atoi(encoding)))
-				ereport(ERROR,
-				        (errcode(ERRCODE_FDW_INVALID_ATTRIBUTE_VALUE),
-				         errmsg("%s is not a valid encoding code", encoding)));
+			/*
+			 * Accept either a symbolic encoding name (e.g. 'UTF8', 'GBK')
+			 * or a numeric encoding ID. Reject anything else explicitly,
+			 * rather than letting atoi() silently mistranslate non-numeric
+			 * names to SQL_ASCII.
+			 */
+			(void) parse_fdw_encoding_option((char *) defGetString(def));
 		}
 	}
 
