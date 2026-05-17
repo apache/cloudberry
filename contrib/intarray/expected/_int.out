@@ -398,6 +398,9 @@ SELECT '1&(2&(4&(5|!6)))'::query_int;
  1 & 2 & 4 & ( 5 | !6 )
 (1 row)
 
+SELECT (SELECT '0 | ' || string_agg(i::text, ' & ')
+        FROM generate_series(1, 17000) AS i)::query_int;
+ERROR:  query_int expression is too complex
 CREATE TABLE test__int( a int[] );
 NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
