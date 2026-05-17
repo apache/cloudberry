@@ -50,6 +50,7 @@ SUBDIRS = \
 		tablefunc	\
 		tcn		\
 		test_decoding	\
+		try_convert \
 		tsm_system_rows \
 		tsm_system_time \
 		unaccent	\
