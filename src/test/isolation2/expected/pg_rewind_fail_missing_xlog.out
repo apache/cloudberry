@@ -585,7 +585,7 @@ CHECKPOINT
 1U: SELECT pg_wal_lsn_diff(restart_lsn, restart_lsn_before) > 0 from pg_replication_slots, unlogged_wal_retention_test WHERE slot_name = 'internal_wal_replication_slot';
  ?column? 
 ----------
- f        
+ t        
 (1 row)
 1U: SELECT pg_wal_lsn_diff(restart_lsn, redo_lsn) = 0 from pg_replication_slots, pg_control_checkpoint() WHERE slot_name = 'internal_wal_replication_slot';
  ?column? 
