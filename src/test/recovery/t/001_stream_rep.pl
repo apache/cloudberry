@@ -15,6 +15,9 @@ my $node_primary = PostgreSQL::Test::Cluster->new('primary');
 $node_primary->init(
 	allows_streaming => 1,
 	auth_extra => [ '--create-role', 'repl_role' ]);
+# Cloudberry defaults wal_keep_size to 320MB which prevents WAL segment
+# recycling in tests with few segments.  Set to 0 to match upstream PG.
+$node_primary->append_conf('postgresql.conf', 'wal_keep_size = 0');
 $node_primary->start;
 my $backup_name = 'my_backup';
 
@@ -62,7 +65,7 @@ is($result, qq(1002), 'check streamed content on standby 2');
 
 # Likewise, but for a sequence
 $node_primary->safe_psql('postgres',
-	"CREATE SEQUENCE seq1; SELECT nextval('seq1')");
+	"CREATE SEQUENCE seq1 CACHE 1; SELECT nextval('seq1')");
 
 # Wait for standbys to catch up
 $node_primary->wait_for_replay_catchup($node_standby_1);
@@ -77,12 +80,17 @@ print "standby 2: $result\n";
 is($result, qq(33|0|t), 'check streamed sequence content on standby 2');
 
 # Check pg_sequence_last_value() returns NULL for unlogged sequence on standby
-$node_primary->safe_psql('postgres',
-	"CREATE UNLOGGED SEQUENCE ulseq; SELECT nextval('ulseq')");
-$node_primary->wait_for_replay_catchup($node_standby_1);
-is($node_standby_1->safe_psql('postgres',
-	"SELECT pg_sequence_last_value('ulseq'::regclass) IS NULL"),
-	't', 'pg_sequence_last_value() on unlogged sequence on standby 1');
+# Cloudberry does not support unlogged sequences.
+SKIP:
+{
+	skip "Cloudberry does not support unlogged sequences", 1;
+	$node_primary->safe_psql('postgres',
+		"CREATE UNLOGGED SEQUENCE ulseq; SELECT nextval('ulseq')");
+	$node_primary->wait_for_replay_catchup($node_standby_1);
+	is($node_standby_1->safe_psql('postgres',
+		"SELECT pg_sequence_last_value('ulseq'::regclass) IS NULL"),
+		't', 'pg_sequence_last_value() on unlogged sequence on standby 1');
+}
 
 # Check that only READ-only queries can run on standbys
 is($node_standby_1->psql('postgres', 'INSERT INTO tab_int VALUES (1)'),

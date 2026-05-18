@@ -116,43 +116,49 @@ ok( send_query_and_wait(
 
 #
 # 5. Check that changes in prepared xacts is invisible
+# Cloudberry does not support PREPARE TRANSACTION in utility mode.
 #
-ok( send_query_and_wait(
-		\%psql_primary, q[
-DELETE from test_visibility; -- delete old data, so we start with clean slate
-BEGIN;
-INSERT INTO test_visibility VALUES('inserted in prepared will_commit');
-PREPARE TRANSACTION 'will_commit';],
-		qr/^PREPARE TRANSACTION$/m),
-	'prepared will_commit');
+SKIP:
+{
+	skip "Cloudberry does not support PREPARE TRANSACTION in utility mode", 4;
 
-ok( send_query_and_wait(
-		\%psql_primary, q[
-BEGIN;
-INSERT INTO test_visibility VALUES('inserted in prepared will_abort');
-PREPARE TRANSACTION 'will_abort';
-					   ],
-		qr/^PREPARE TRANSACTION$/m),
-	'prepared will_abort');
+	ok( send_query_and_wait(
+			\%psql_primary, q[
+	DELETE from test_visibility; -- delete old data, so we start with clean slate
+	BEGIN;
+	INSERT INTO test_visibility VALUES('inserted in prepared will_commit');
+	PREPARE TRANSACTION 'will_commit';],
+			qr/^PREPARE TRANSACTION$/m),
+		'prepared will_commit');
 
-$node_primary->wait_for_catchup($node_standby);
+	ok( send_query_and_wait(
+			\%psql_primary, q[
+	BEGIN;
+	INSERT INTO test_visibility VALUES('inserted in prepared will_abort');
+	PREPARE TRANSACTION 'will_abort';
+						   ],
+			qr/^PREPARE TRANSACTION$/m),
+		'prepared will_abort');
 
-ok( send_query_and_wait(
-		\%psql_standby,
-		q[SELECT * FROM test_visibility ORDER BY data;],
-		qr/^\(0 rows\)$/m),
-	'uncommitted prepared invisible');
+	$node_primary->wait_for_catchup($node_standby);
 
-# For some variation, finish prepared xacts via separate connections
-$node_primary->safe_psql('postgres', "COMMIT PREPARED 'will_commit';");
-$node_primary->safe_psql('postgres', "ROLLBACK PREPARED 'will_abort';");
-$node_primary->wait_for_catchup($node_standby);
+	ok( send_query_and_wait(
+			\%psql_standby,
+			q[SELECT * FROM test_visibility ORDER BY data;],
+			qr/^\(0 rows\)$/m),
+		'uncommitted prepared invisible');
 
-ok( send_query_and_wait(
-		\%psql_standby,
-		q[SELECT * FROM test_visibility ORDER BY data;],
-		qr/will_commit.*\n\(1 row\)$/m),
-	'finished prepared visible');
+	# For some variation, finish prepared xacts via separate connections
+	$node_primary->safe_psql('postgres', "COMMIT PREPARED 'will_commit';");
+	$node_primary->safe_psql('postgres', "ROLLBACK PREPARED 'will_abort';");
+	$node_primary->wait_for_catchup($node_standby);
+
+	ok( send_query_and_wait(
+			\%psql_standby,
+			q[SELECT * FROM test_visibility ORDER BY data;],
+			qr/will_commit.*\n\(1 row\)$/m),
+		'finished prepared visible');
+}
 
 # explicitly shut down psql instances gracefully - to avoid hangs
 # or worse on windows

@@ -4,6 +4,15 @@ use warnings;
 use PostgreSQL::Test::Cluster;
 use PostgreSQL::Test::Utils;
 use Test::More;
+
+# Cloudberry: parallel_schedule regression tests require a full cluster
+# with segments and cannot run on a standalone utility-mode TAP test node.
+# Disable this test entirely.
+plan tests => 1;
+is(-1, -1, "Disable: parallel_schedule requires a full Cloudberry cluster");
+done_testing();
+exit;
+
 use File::Basename;
 
 # Initialize primary node

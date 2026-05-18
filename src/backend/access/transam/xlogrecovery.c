@@ -1650,7 +1650,7 @@ pauseRecoveryOnRestorePoint(XLogReaderState *record)
 
 		recordRestorePointData = (xl_restore_point *) XLogRecGetData(record);
 
-		if (gp_pause_on_restore_point_replay)
+		if (strcmp(recordRestorePointData->rp_name, gp_pause_on_restore_point_replay) == 0)
 		{
 			ereport(LOG,
 					(errmsg("setting recovery pause at restore point \"%s\", time %s",
@@ -1844,7 +1844,7 @@ PerformWalRecovery(void)
 			 */
 			ApplyWalRecord(xlogreader, record, &replayTLI);
 			
-			if (gp_pause_on_restore_point_replay)
+			if (gp_pause_on_restore_point_replay[0] != '\0')
 				pauseRecoveryOnRestorePoint(xlogreader);
 
 			/* Exit the recovery loop if a promotion is triggered in pauseRecoveryOnRestorePoint() */

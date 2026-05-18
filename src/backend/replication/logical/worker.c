@@ -4587,9 +4587,11 @@ ApplyWorkerMain(Datum main_arg)
 	MyLogicalRepWorker->last_send_time = MyLogicalRepWorker->last_recv_time =
 		MyLogicalRepWorker->reply_time = GetCurrentTimestamp();
 
-	/* Load the libpq-specific functions */
-	load_file("libpqwalreceiver", false);
-
+	/*
+	 * Cloudberry: libpqwalreceiver is linked directly into the backend
+	 * (not a separate shared library), so skip load_file() and let
+	 * InitializeApplyWorker() call libpqwalreceiver_PG_init() instead.
+	 */
 	InitializeApplyWorker();
 
 	/*

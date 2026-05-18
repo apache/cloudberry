@@ -956,6 +956,24 @@ sub start
 
 	$self->_update_pid(1);
 	$ENV{PGOPTIONS}      = '-c gp_role=utility';
+
+	# Cloudberry: pg_ctl -w may return before the server fully accepts
+	# connections after crash recovery. Wait until we can connect.
+	{
+		local $ENV{PGOPTIONS} = '-c gp_role=utility';
+		for (my $i = 0; $i < 300; $i++)
+		{
+			my ($stdout, $stderr);
+			my $connok = IPC::Run::run
+				[ $self->installed_command('psql'), '-XAtq',
+				  '-d', $self->connstr('postgres'),
+				  '-c', 'SELECT 1' ],
+				'>', \$stdout, '2>', \$stderr;
+			last if $connok && $stdout =~ /1/;
+			usleep(100_000);
+		}
+	}
+
 	return 1;
 }
 
@@ -1362,6 +1380,7 @@ sub new
 
 	my $testname = basename($0);
 	$testname =~ s/\.[^.]+$//;
+	$last_dbid = $last_dbid + 1;
 	my $node = {
 		_port => $port,
 		_host => $host,
@@ -1372,7 +1391,8 @@ sub new
 		_logfile_base =>
 		  "$PostgreSQL::Test::Utils::log_path/${testname}_${name}",
 		_logfile =>
-		  "$PostgreSQL::Test::Utils::log_path/${testname}_${name}.log"
+		  "$PostgreSQL::Test::Utils::log_path/${testname}_${name}.log",
+		_dbid => $last_dbid,
 	};
 
 	if ($params{install_path})

@@ -8644,6 +8644,13 @@ xlog_redo(XLogReaderState *record)
 			Buffer		buffer;
 			XLogRedoAction result;
 
+			if (!XLogRecHasBlockImage(record, block_id))
+			{
+				if (info == XLOG_FPI)
+					elog(ERROR, "XLOG_FPI record did not contain a full-page image");
+				continue;
+			}
+
 			result = XLogReadBufferForRedo(record, block_id, &buffer);
 			if (result == BLK_DONE && !IsUnderPostmaster)
 			{
@@ -8654,13 +8661,6 @@ xlog_redo(XLogReaderState *record)
 			}
 			else if (result != BLK_RESTORED)
 			    elog(ERROR, "unexpected XLogReadBufferForRedo result when restoring backup block");
-
-			if (!XLogRecHasBlockImage(record, block_id))
-			{
-				if (info == XLOG_FPI)
-					elog(ERROR, "XLOG_FPI record did not contain a full-page image");
-				continue;
-			}
 
 			UnlockReleaseBuffer(buffer);
 		}

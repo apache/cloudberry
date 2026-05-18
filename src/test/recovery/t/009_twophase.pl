@@ -9,6 +9,12 @@ use PostgreSQL::Test::Cluster;
 use PostgreSQL::Test::Utils;
 use Test::More;
 
+# Cloudberry does not support PREPARE TRANSACTION (two-phase commit),
+# neither in dispatch mode nor in utility mode.
+# Skip the entire test.
+plan skip_all => 'Cloudberry does not support PREPARE TRANSACTION';
+
+
 my $psql_out = '';
 my $psql_rc = '';
 

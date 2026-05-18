@@ -449,7 +449,7 @@ SlabReset(MemoryContext context)
 #ifdef CLOBBER_FREED_MEMORY
 		wipe_mem(block, slab->blockSize);
 #endif
-		free(block);
+		gp_free(block);
 		context->mem_allocated -= slab->blockSize;
 	}
 
@@ -522,8 +522,6 @@ SlabAlloc(MemoryContext context, Size size)
 	{
 		dlist_head *blocklist;
 		int			blocklist_idx;
-\
-		block = (SlabBlock *) gp_malloc(slab->blockSize);\
 
 		/* to save allocating a new one, first check the empty blocks list */
 		if (dclist_count(&slab->emptyblocks) > 0)
@@ -543,7 +541,7 @@ SlabAlloc(MemoryContext context, Size size)
 		}
 		else
 		{
-			block = (SlabBlock *) malloc(slab->blockSize);
+			block = (SlabBlock *) gp_malloc(slab->blockSize);
 
 			if (unlikely(block == NULL))
 				return NULL;
@@ -742,7 +740,7 @@ SlabFree(void *pointer)
 #ifdef CLOBBER_FREED_MEMORY
 			wipe_mem(block, slab->blockSize);
 #endif
-			free(block);
+			gp_free(block);
 			slab->header.mem_allocated -= slab->blockSize;
 		}
 

@@ -9,6 +9,10 @@ use PostgreSQL::Test::Cluster;
 use PostgreSQL::Test::Utils;
 use Test::More;
 
+# Cloudberry does not support PREPARE TRANSACTION (two-phase commit),
+# neither in dispatch mode nor in utility mode.
+plan skip_all => 'Cloudberry does not support PREPARE TRANSACTION';
+
 # Setup primary node
 my $node_primary = PostgreSQL::Test::Cluster->new("primary");
 $node_primary->init(allows_streaming => 1);

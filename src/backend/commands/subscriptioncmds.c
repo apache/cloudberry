@@ -1840,7 +1840,14 @@ ReplicationSlotDropAtPubNode(WalReceiverConn *wrconn, char *slotname, bool missi
 
 	Assert(wrconn);
 
-	load_file("libpqwalreceiver", false);
+	/*
+	 * Cloudberry: libpqwalreceiver is linked directly into the backend
+	 * (not a separate shared library), so call libpqwalreceiver_PG_init()
+	 * directly instead of load_file(). Guard against double-init since
+	 * callers may have already initialized it.
+	 */
+	if (WalReceiverFunctions == NULL)
+		libpqwalreceiver_PG_init();
 
 	initStringInfo(&cmd);
 	appendStringInfo(&cmd, "DROP_REPLICATION_SLOT %s WAIT", quote_identifier(slotname));

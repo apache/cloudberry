@@ -57,7 +57,9 @@ $node_primary->init(has_archiving => 1, allows_streaming => 1);
 
 # Bump the transaction ID epoch.  This is useful to stress the portability
 # of recovery_target_xid parsing.
-system_or_bail('pg_resetwal', '--epoch', '1', $node_primary->data_dir);
+# Cloudberry: pg_resetwal has an interactive confirmation prompt, so pipe
+# 'yes' through shell to bypass it.
+system('echo yes | pg_resetwal --epoch 1 ' . $node_primary->data_dir);
 
 # Start it
 $node_primary->start;
@@ -145,10 +147,13 @@ $node_standby->append_conf(
 	'postgresql.conf', "recovery_target_name = '$recovery_name'
 recovery_target_time = '$recovery_time'");
 
+# Cloudberry: pg_ctl requires --gp_dbid and --gp_contentid options.
 my $res = run_log(
 	[
 		'pg_ctl', '-D', $node_standby->data_dir, '-l',
-		$node_standby->logfile, 'start'
+		$node_standby->logfile, '-o',
+		"--gp_dbid=$node_standby->{_dbid} --gp_contentid=0 -c gp_role=utility",
+		'start'
 	]);
 ok(!$res, 'invalid recovery startup fails');
 
@@ -169,7 +174,9 @@ $node_standby->append_conf('postgresql.conf',
 run_log(
 	[
 		'pg_ctl', '-D', $node_standby->data_dir, '-l',
-		$node_standby->logfile, 'start'
+		$node_standby->logfile, '-o',
+		"--gp_dbid=$node_standby->{_dbid} --gp_contentid=0 -c gp_role=utility",
+		'start'
 	]);
 
 # wait for postgres to terminate

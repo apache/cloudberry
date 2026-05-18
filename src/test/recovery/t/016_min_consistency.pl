@@ -52,7 +52,7 @@ $primary->init(allows_streaming => 1);
 # file.  Autovacuum is disabled so as there is no risk of having other
 # processes than the checkpointer doing page flushes.
 $primary->append_conf("postgresql.conf", <<EOF);
-shared_buffers = 128kB
+shared_buffers = 512kB
 autovacuum = off
 EOF
 

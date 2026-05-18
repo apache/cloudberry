@@ -22,6 +22,7 @@ $node_primary->append_conf(
 min_wal_size = 2MB
 max_wal_size = 4MB
 log_checkpoints = yes
+wal_keep_size = 0
 ));
 $node_primary->start;
 $node_primary->safe_psql('postgres',
@@ -72,11 +73,14 @@ is($result, "reserved|t",
 advance_wal($node_primary, 4);
 $node_primary->safe_psql('postgres', "CHECKPOINT;");
 
-# The slot is always "safe" when max_slot_wal_keep_size is not set
+# The slot is always "safe" when max_slot_wal_keep_size is not set.
+# Cloudberry: with 32kB blocks, checkpoint overhead can push WAL slightly
+# beyond max_wal_size boundary, resulting in "extended" instead of "reserved".
+# Both mean the slot is safe.
 $result = $node_primary->safe_psql('postgres',
 	"SELECT wal_status, safe_wal_size IS NULL FROM pg_replication_slots WHERE slot_name = 'rep1'"
 );
-is($result, "reserved|t", 'check that slot is working');
+like($result, qr/^(reserved|extended)\|t$/, 'check that slot is working');
 
 # The standby can reconnect to primary
 $node_standby->start;
@@ -251,10 +255,12 @@ $node_standby->stop;
 
 my $node_primary2 = PostgreSQL::Test::Cluster->new('primary2');
 $node_primary2->init(allows_streaming => 1);
+# Cloudberry: default WAL segment size is 64MB, so min_wal_size must be
+# at least 128MB (twice the segment size).
 $node_primary2->append_conf(
 	'postgresql.conf', qq(
-min_wal_size = 32MB
-max_wal_size = 32MB
+min_wal_size = 128MB
+max_wal_size = 128MB
 log_checkpoints = yes
 ));
 $node_primary2->start;
@@ -310,6 +316,7 @@ $node_primary3->append_conf(
 	max_wal_size = 2MB
 	log_checkpoints = yes
 	max_slot_wal_keep_size = 1MB
+	wal_keep_size = 0
 	));
 $node_primary3->start;
 $node_primary3->safe_psql('postgres',

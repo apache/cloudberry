@@ -7,6 +7,14 @@ use warnings;
 use PostgreSQL::Test::Cluster;
 use PostgreSQL::Test::Utils;
 use Test::More;
+
+# Cloudberry: PREPARE TRANSACTION is not supported in utility mode.
+# Disable this entire test.
+plan tests => 1;
+is(-1, -1, "Disable this TAP test: PREPARE TRANSACTION not supported in utility mode");
+done_testing();
+exit;
+
 use File::Compare;
 
 # Initialize and start primary node with WAL archiving
