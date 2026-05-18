@@ -323,10 +323,15 @@ $node_standby->init_from_backup(
 	$node_primary, $backup_name,
 	has_streaming => 1,
 	has_restoring => 1);
+# Cloudberry defaults: wal_segment_size=64MB (vs PG 16MB), wal_keep_size=320MB
+# (vs PG 0), min_wal_size=320MB (vs PG 80MB). These prevent WAL file removal
+# in the "invalidated slots do not retain WAL" test. Override them here.
 $node_standby->append_conf(
 	'postgresql.conf',
 	qq[primary_slot_name = '$primary_slotname'
-       max_replication_slots = 5]);
+       max_replication_slots = 5
+       wal_keep_size = 0
+       min_wal_size = '128MB']);
 $node_standby->start;
 $node_primary->wait_for_replay_catchup($node_standby);
 
@@ -622,13 +627,8 @@ $node_standby->safe_psql('postgres', 'checkpoint;');
 
 # Verify that the WAL file has not been retained on the standby
 my $standby_walfile = $node_standby->data_dir . '/pg_wal/' . $walfile_name;
-# Cloudberry: WAL retention behavior differs in utility mode; skip this check.
-SKIP:
-{
-	skip "Cloudberry: WAL file retention behavior differs in utility mode", 1;
-	ok(!-f "$standby_walfile",
-		"invalidated logical slots do not lead to retaining WAL");
-}
+ok(!-f "$standby_walfile",
+	"invalidated logical slots do not lead to retaining WAL");
 
 ##################################################
 # Recovery conflict: Invalidate conflicting slots
@@ -766,32 +766,36 @@ reactive_slots_change_hfs_and_wait_for_xmins('no_conflict_', 'pruning_', 0,
 	0);
 
 # This should trigger the conflict
+# Cloudberry: BLCKSZ=32KB (vs PG 8KB), so we need more UPDATEs to fill the
+# page enough for on-access pruning to trigger.  With char(2000) tuples
+# (~2032 bytes each) and fillfactor=75, the page needs ~13 tuples before
+# free space drops below minfree (8192 bytes).
 $node_primary->safe_psql('testdb',
 	qq[CREATE TABLE prun(id integer, s char(2000)) WITH (fillfactor = 75, user_catalog_table = true);]
 );
 $node_primary->safe_psql('testdb', qq[INSERT INTO prun VALUES (1, 'A');]);
-$node_primary->safe_psql('testdb', qq[UPDATE prun SET s = 'B';]);
-$node_primary->safe_psql('testdb', qq[UPDATE prun SET s = 'C';]);
-$node_primary->safe_psql('testdb', qq[UPDATE prun SET s = 'D';]);
-$node_primary->safe_psql('testdb', qq[UPDATE prun SET s = 'E';]);
+for my $i (1 .. 14)
+{
+	$node_primary->safe_psql('testdb',
+		qq[UPDATE prun SET s = chr(ascii('A') + $i);]);
+}
 
 $node_primary->wait_for_replay_catchup($node_standby);
 
-# Cloudberry: on-access pruning slot invalidation does not trigger in
-# utility-mode TAP tests. Skip the invalidation checks for this scenario.
-SKIP:
-{
-	skip "Cloudberry: on-access pruning slot invalidation not supported in utility mode", 3;
+# Check invalidation in the logfile and in pg_stat_database_conflicts
+check_for_invalidation('pruning_', $logstart, 'with on-access pruning', 0);
 
-	# Check invalidation in the logfile and in pg_stat_database_conflicts
-	check_for_invalidation('pruning_', $logstart, 'with on-access pruning', 0);
+# Verify slots are reported as conflicting in pg_replication_slots
+check_slots_conflicting_status(1);
 
-	# Verify slots are reported as conflicting in pg_replication_slots
-	check_slots_conflicting_status(1);
-}
+$handle = make_slot_active($node_standby, 'pruning_', 0, \$stdout, \$stderr);
+
+# We are not able to read from the slot as it has been invalidated
+check_pg_recvlogical_stderr($handle,
+	"can no longer get changes from replication slot \"pruning_activeslot\"");
 
 # Turn hot_standby_feedback back on
-change_hot_standby_feedback_and_wait_for_xmins(1, 0);
+change_hot_standby_feedback_and_wait_for_xmins(1, 1);
 
 ##################################################
 # Recovery conflict: Invalidate conflicting slots, including in-use slots

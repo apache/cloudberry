@@ -314,22 +314,22 @@ note "Multi-page, but header is split, so page checks are done first";
 ###########################################################################
 
 # xl_prev is bad and xl_tot_len is too big, but we'll check xlp_magic first.
-# Cloudberry: skip this test - WAL record header size differs, causing the
-# split zone position to overlap with leftover WAL data from prior tests,
-# so the next page may not be zeroed as expected.
+# Cloudberry: with 32KB WAL pages, the split zone may leave only 8 bytes on the
+# current page.  Writing a full 24-byte record header would spill xl_prev bytes
+# (0xDEADBEEF) into the next page, making xlp_magic=0xBEEF instead of 0x0000.
+# Fix: only write the bytes that fit on the current page, leaving the next page
+# zeroed so the WAL reader correctly detects xlp_magic=0x0000.
 $node->emit_wal(0);
 $end_lsn = $node->advance_wal_to_record_splitting_zone($WAL_BLOCK_SIZE);
+my $split_bytes_left = $WAL_BLOCK_SIZE - ($end_lsn % $WAL_BLOCK_SIZE);
 $node->stop('immediate');
 $node->write_wal($TLI, $end_lsn, $WAL_SEGMENT_SIZE,
-	build_record_header(2 * 1024 * 1024 * 1024, 0, 0xdeadbeef));
+	substr(build_record_header(2 * 1024 * 1024 * 1024, 0, 0xdeadbeef),
+		0, $split_bytes_left));
 $log_size = -s $node->logfile;
 $node->start;
-SKIP:
-{
-	skip "Cloudberry: WAL record header size differs, split zone test unreliable", 1;
-	ok($node->log_contains("invalid magic number 0000 .* LSN .*", $log_size),
-		"xlp_magic zero (split record header)");
-}
+ok($node->log_contains("invalid magic number 0000 .* LSN .*", $log_size),
+	"xlp_magic zero (split record header)");
 
 # And we'll also check xlp_pageaddr before any header checks.
 $node->emit_wal(0);
