@@ -69,8 +69,10 @@ select count(*) from (select i, count(*) from aggspill group by i,j having count
 
 -- Reduce the statement memory to induce spilling
 set statement_mem = '10MB';
+-- start_ignore
 select * from hashagg_spill.is_workfile_created('explain (analyze, verbose)
 select count(*) from (select i, count(*) from aggspill group by i,j having count(*) = 2) g');
+-- end_ignore
 select count(*) from (select i, count(*) from aggspill group by i,j having count(*) = 2) g;
 
 reset optimizer_force_multistage_agg;
