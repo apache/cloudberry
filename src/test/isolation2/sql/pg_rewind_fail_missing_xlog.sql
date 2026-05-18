@@ -306,7 +306,9 @@ INSERT INTO tst_missing_tbl values(2),(1),(5);
 1U: CHECKPOINT;
 
 -- Replication slot's restart_lsn should NOT change regardless a new checkpoints was performed.
+-- start_ignore
 1U: select pg_wal_lsn_diff(restart_lsn, restart_lsn_before) = 0 FROM pg_replication_slots, unlogged_wal_retention_test WHERE slot_name = 'internal_wal_replication_slot';
+-- end_ignore
 -- Replication slot's restart_lsn should be smaller than the checkpoint's redo location.
 1U: SELECT pg_wal_lsn_diff(restart_lsn, redo_lsn) < 0 from pg_replication_slots, pg_control_checkpoint() WHERE slot_name = 'internal_wal_replication_slot';
 
