@@ -1380,10 +1380,14 @@ sub new
 
 	my $testname = basename($0);
 	$testname =~ s/\.[^.]+$//;
+
+	# GPDB needs unique dbid for each node for certain operations
 	$last_dbid = $last_dbid + 1;
+
 	my $node = {
 		_port => $port,
 		_host => $host,
+		_dbid    => $last_dbid,
 		_basedir =>
 		  "$PostgreSQL::Test::Utils::tmp_check/t_${testname}_${name}_data",
 		_name => $name,

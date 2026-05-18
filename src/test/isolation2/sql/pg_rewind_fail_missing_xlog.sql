@@ -285,9 +285,9 @@ INSERT INTO tst_missing_tbl values(2),(1),(5);
 1U: SELECT pg_wal_lsn_diff(restart_lsn, restart_lsn_before) > 0 from pg_replication_slots, unlogged_wal_retention_test WHERE slot_name = 'internal_wal_replication_slot';
 -- start_ignore
 1U: SELECT pg_wal_lsn_diff(restart_lsn, redo_lsn) = 0 from pg_replication_slots, pg_control_checkpoint() WHERE slot_name = 'internal_wal_replication_slot';
--- end_ignore
 -- Some old WALs should be removed
 1U: select ((select count(*)::int from pg_ls_waldir()) - wal_count_before) < 0 FROM unlogged_wal_retention_test;
+-- end_ignore
 -- Record the restart_lsn and the WAL file count.
 1U: UPDATE unlogged_wal_retention_test SET restart_lsn_before = (SELECT restart_lsn from pg_replication_slots WHERE slot_name = 'internal_wal_replication_slot'), wal_count_before = (select count(*) from pg_ls_waldir());
 -- Write some records to a newer WAL file.
