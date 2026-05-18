@@ -723,4 +723,9 @@ select a, b, rank(b) within group (order by b nulls last)
 from (values (1,1),(1,4),(1,5),(3,1),(3,2)) v(a,b)
 group by rollup (a,b) order by a;
 
+-- ORCA: rollup over a derived-expression group alias with a target-list SRF.
+select generate_series(1, a) g, a+b ab
+  from (values (1,1),(2,2)) t(a,b)
+  group by rollup(a, ab) order by 1,2;
+
 -- end
