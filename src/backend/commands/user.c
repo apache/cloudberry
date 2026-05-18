@@ -3720,8 +3720,9 @@ check_role_membership_authorization(Oid currentUserId, Oid roleid,
 	 */
 	if (is_grant && roleid == ROLE_PG_DATABASE_OWNER)
 		ereport(ERROR,
+				(errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
 				errmsg("role \"%s\" cannot have explicit members",
-					   GetUserNameFromId(roleid, false)));
+					   GetUserNameFromId(roleid, false))));
 
 	/* To mess with a superuser role, you gotta be superuser. */
 	if (superuser_arg(roleid))
