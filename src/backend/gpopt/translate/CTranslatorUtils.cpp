@@ -918,7 +918,7 @@ CTranslatorUtils::GetColumnAttnosForGroupBy(
 			case GROUPING_SET_EMPTY:
 			{
 				col_attnos_arr_current = GPOS_NEW(mp) CBitSetArray(mp);
-				CBitSet *bset = GPOS_NEW(mp) CBitSet(mp);
+				CBitSet *bset = GPOS_NEW(mp) CBitSet(mp, num_cols);
 				col_attnos_arr_current->Append(bset);
 				break;
 			}
@@ -1113,11 +1113,12 @@ CTranslatorUtils::CreateGroupingSetsForRollup(CMemoryPool *mp,
 	GPOS_ASSERT(grouping_set->kind == GROUPING_SET_ROLLUP);
 	CBitSetArray *col_attnos_arr = GPOS_NEW(mp) CBitSetArray(mp);
 	ListCell *lc = nullptr;
-	CBitSet *current_result = GPOS_NEW(mp) CBitSet(mp);
+
+	CBitSet *current_result = GPOS_NEW(mp) CBitSet(mp, num_cols);
 	// Maintaining the order of grouping sets is essential because the
 	// UnionAll operator matches each child's distribution with the
 	// distribution of the first child
-	col_attnos_arr->Append(GPOS_NEW(mp) CBitSet(mp));
+	col_attnos_arr->Append(GPOS_NEW(mp) CBitSet(mp, num_cols));
 	ForEach(lc, grouping_set->content)
 	{
 		GroupingSet *gs_current = (GroupingSet *) lfirst(lc);
@@ -1152,8 +1153,9 @@ CTranslatorUtils::CreateGroupingSetsForCube(CMemoryPool *mp,
 	GPOS_ASSERT(grouping_set->kind == GROUPING_SET_CUBE);
 	CBitSetArray *col_attnos_arr = GPOS_NEW(mp) CBitSetArray(mp);
 
-	// add an empty set
-	col_attnos_arr->Append(GPOS_NEW(mp) CBitSet(mp));
+	// add an empty set — vec_size must match what CreateAttnoSetForGroupingSet
+	// produces (num_cols), otherwise Union below leaves misaligned links.
+	col_attnos_arr->Append(GPOS_NEW(mp) CBitSet(mp, num_cols));
 
 	ListCell *lc = nullptr;
 	ForEach(lc, grouping_set->content)
