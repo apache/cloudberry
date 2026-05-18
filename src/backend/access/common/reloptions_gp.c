@@ -1791,7 +1791,7 @@ transformColumnEncoding(const TableAmRoutine *tam, Relation rel, List *colDefs,
 	return result;
 }
 
-List* transfromColumnEncodingAocoRootPartition(List *colDefs, List *stenc, List *withOptions, bool errorOnEncodingClause)
+List* transformColumnEncodingAocoRootPartition(List *colDefs, List *stenc, List *withOptions, bool errorOnEncodingClause)
 {
 	ColumnReferenceStorageDirective *deflt = NULL;
 	ListCell   *lc;

@@ -1183,7 +1183,7 @@ DefineRelation(CreateStmt *stmt, char relkind, Oid ownerId,
 		 * table access method. The partition table will have the same behaviors on
 		 * relam, reloptions, attribute encodings in the future.
 		 */
-		stmt->attr_encodings = transfromColumnEncodingAocoRootPartition(schema,
+		stmt->attr_encodings = transformColumnEncodingAocoRootPartition(schema,
 								stmt->attr_encodings,
 								stmt->options,
 								!AMHandlerIsAoCols(amHandlerOid)
