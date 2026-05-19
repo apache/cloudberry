@@ -34,6 +34,7 @@ This directory contains GitHub Actions workflows for Apache Cloudberry CI/CD.
 |----------|---------|---------|
 | `build-cloudberry.yml` | Main CI: build, test, create RPMs | Push, PR, Manual |
 | `build-dbg-cloudberry.yml` | Debug build with assertions enabled | Push, PR, Manual |
+| `package-convenience-binaries.yml` | Build convenience DEB/RPM packages from an ASF-approved source release | Manual |
 | `apache-rat-audit.yml` | License header compliance check | Push, PR |
 | `coverity.yml` | Static code analysis with Coverity | Weekly, Manual |
 | `sonarqube.yml` | Code quality analysis with SonarQube | Push to main |
@@ -73,6 +74,42 @@ Many workflows support manual triggering via `workflow_dispatch`, allowing devel
 - `ic-singlenode` - Single-node mode tests
 - `make-installcheck-world` - Full test suite
 - And more... (see workflow for complete list)
+
+#### `package-convenience-binaries.yml` - Official source release packaging
+
+This manual workflow supports two manual modes:
+- `official_source_release`: builds convenience `DEB/RPM` packages from an ASF-approved official source release
+- `git_ref_test`: temporarily archives a specified tag or commit from the repository with `git archive` semantics and runs the same packaging flow for CI validation
+
+| Parameter | Description | Example |
+|-----------|-------------|---------|
+| `source_mode` | `official_source_release` or temporary `git_ref_test` | `official_source_release` |
+| `version` | Official release version | `2.2.0-incubating` |
+| `source_url` | Official Apache source tarball URL from `downloads.apache.org` | `https://downloads.apache.org/incubator/cloudberry/2.2.0-incubating/apache-cloudberry-2.2.0-incubating-src.tar.gz` |
+| `source_asc_url` | Detached GPG signature URL for the source tarball (`.asc`) | `https://downloads.apache.org/incubator/cloudberry/2.2.0-incubating/apache-cloudberry-2.2.0-incubating-src.tar.gz.asc` |
+| `source_sha512_url` | SHA-512 checksum URL for the source tarball (`.sha512`) | `https://downloads.apache.org/incubator/cloudberry/2.2.0-incubating/apache-cloudberry-2.2.0-incubating-src.tar.gz.sha512` |
+| `git_ref` | Temporary test-only git tag or commit SHA | `2.1.0-incubating` |
+
+Workflow behavior:
+- In `official_source_release` mode, verifies the source tarball with the project `KEYS`, `.asc`, and `.sha512` before any build starts.
+- In `git_ref_test` mode, checks out the specified tag or commit and prepares a temporary source tarball using `git archive` semantics, including checked-out submodule contents, without Apache release verification.
+- Derives the package build version automatically by stripping a trailing `-incubating` from the release version before invoking the DEB/RPM packaging scripts.
+- Runs `unittest-cloudberry.sh` after building from source and before packaging.
+- Installs each generated `DEB/RPM`, verifies its `.sha512`, and runs a `gpdemo` smoke test with basic SQL validation.
+- Runs the full flow, from source release verification to package generation, inside Cloudberry Docker build images instead of installing dependencies on the GitHub runner.
+- Generates `.sha512` files for each produced `DEB/RPM` artifact.
+- Preserves the default package filenames emitted by `dpkg-buildpackage` and `rpmbuild`.
+- Does not generate detached `.asc` signatures for convenience binaries; that remains a release manager local signing step.
+
+Input rules:
+- `official_source_release`: fill `source_url`, `source_asc_url`, and `source_sha512_url`
+- `git_ref_test`: fill `git_ref`; the Apache URL inputs may be left empty
+
+Current target matrix:
+- `rocky8`: `x86_64`, `arm64`
+- `rocky9`: `x86_64`, `arm64`
+- `ubuntu22.04`: `x86_64`, `arm64`
+- `ubuntu24.04`: `x86_64`, `arm64`
 
 ## Artifact Reuse for Faster Testing
 
