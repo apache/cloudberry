@@ -725,6 +725,7 @@ PROTOC
 with_gp_stats_collector
 with_diskquota
 with_zstd
+with_yezzey
 with_libbz2
 LZ4_LIBS
 LZ4_CFLAGS
@@ -947,6 +948,7 @@ with_libbz2
 with_zstd
 with_diskquota
 with_gp_stats_collector
+with_yezzey
 with_rt
 with_libcurl
 with_apr_config
@@ -11335,6 +11337,56 @@ else
 $as_echo "yes" >&6; }
 
 fi
+fi
+
+#
+# gp_stats_collector
+#
+
+
+
+# Check whether --with-gp-stats-collector was given.
+if test "${with_gp_stats_collector+set}" = set; then :
+  withval=$with_gp_stats_collector;
+  case $withval in
+    yes)
+      :
+      ;;
+    no)
+      :
+      ;;
+    *)
+      as_fn_error $? "no argument expected for --with-gp-stats-collector option" "$LINENO" 5
+      ;;
+  esac
+
+else
+  with_gp_stats_collector=no
+
+fi
+
+#
+# yezzey
+#
+
+# Check whether --with-yezzey was given.
+if test "${with_yezzey+set}" = set; then :
+  withval=$with_yezzey;
+  case $withval in
+    yes)
+      :
+      ;;
+    no)
+      :
+      ;;
+    *)
+      as_fn_error $? "no argument expected for --with-yezzey option" "$LINENO" 5
+      ;;
+  esac
+
+else
+  with_yezzey=no
+
 fi
 
 #
