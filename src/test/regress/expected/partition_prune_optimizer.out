@@ -1574,8 +1574,8 @@ explain (costs off)  select * from boolrangep where not a and not b and c = 25;
 
 -- ensure we prune boolrangep_tf
 explain (costs off)  select * from boolrangep where a is not true and not b and c = 25;
-QUERY PLAN
-___________
+                            QUERY PLAN
+------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Append
          ->  Seq Scan on boolrangep_ff1 boolrangep_1
@@ -1586,17 +1586,21 @@ ___________
                Filter: ((a IS NOT TRUE) AND (NOT b) AND (c = 25))
          ->  Seq Scan on boolrangep_null boolrangep_4
                Filter: ((a IS NOT TRUE) AND (NOT b) AND (c = 25))
+ Optimizer: Postgres query optimizer
+(11 rows)
 
 -- ensure we prune everything apart from boolrangep_tf and boolrangep_null
 explain (costs off)  select * from boolrangep where a is not false and not b and c = 25;
-QUERY PLAN
-___________
+                            QUERY PLAN
+-------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Append
          ->  Seq Scan on boolrangep_tf boolrangep_1
                Filter: ((a IS NOT FALSE) AND (NOT b) AND (c = 25))
          ->  Seq Scan on boolrangep_null boolrangep_2
                Filter: ((a IS NOT FALSE) AND (NOT b) AND (c = 25))
+ Optimizer: Postgres query optimizer
+(7 rows)
 
 -- test scalar-to-array operators
 create table coercepart (a varchar) partition by list (a);
@@ -2462,13 +2466,15 @@ create table hp3 partition of hp for values with (modulus 4, remainder 3);
 prepare hp_q1 (text) as
 select * from hp where a is null and b = $1;
 explain (costs off) execute hp_q1('xxx');
-QUERY PLAN
-___________
- Gather Motion XXX
+                    QUERY PLAN
+--------------------------------------------------
+ Gather Motion 1:1  (slice1; segments: 1)
    ->  Append
          Subplans Removed: 3
          ->  Seq Scan on hp2 hp_1
                Filter: ((a IS NULL) AND (b = $1))
+ Optimizer: Postgres query optimizer
+(6 rows)
 
 deallocate hp_q1;
 drop table hp;

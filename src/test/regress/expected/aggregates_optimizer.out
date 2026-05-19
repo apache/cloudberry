@@ -1569,13 +1569,14 @@ drop table t1, t2;
 explain (costs off)
 select sum(two order by two),max(four order by four), min(four order by four)
 from tenk1;
-QUERY PLAN
-___________
+                   QUERY PLAN
+------------------------------------------------
  Finalize Aggregate
    ->  Gather Motion 3:1  (slice1; segments: 3)
          ->  Partial Aggregate
                ->  Seq Scan on tenk1
- Optimizer: Pivotal Optimizer (GPORCA)
+ Optimizer: GPORCA
+(5 rows)
 
 -- Ensure we order by two.  It's a tie between ordering by two and four but
 -- we tiebreak on the aggregate's position.
@@ -1584,13 +1585,14 @@ select
   sum(two order by two), max(four order by four),
   min(four order by four), max(two order by two)
 from tenk1;
-QUERY PLAN
-___________
+                   QUERY PLAN
+------------------------------------------------
  Finalize Aggregate
    ->  Gather Motion 3:1  (slice1; segments: 3)
          ->  Partial Aggregate
                ->  Seq Scan on tenk1
- Optimizer: Pivotal Optimizer (GPORCA)
+ Optimizer: GPORCA
+(5 rows)
 
 -- Similar to above, but tiebreak on ordering by four
 explain (costs off)
@@ -1598,13 +1600,14 @@ select
   max(four order by four), sum(two order by two),
   min(four order by four), max(two order by two)
 from tenk1;
-QUERY PLAN
-___________
+                   QUERY PLAN
+------------------------------------------------
  Finalize Aggregate
    ->  Gather Motion 3:1  (slice1; segments: 3)
          ->  Partial Aggregate
                ->  Seq Scan on tenk1
- Optimizer: Pivotal Optimizer (GPORCA)
+ Optimizer: GPORCA
+(5 rows)
 
 -- Ensure this one orders by ten since there are 3 aggregates that require ten
 -- vs two that suit two and four.
@@ -1614,13 +1617,14 @@ select
   min(four order by four), max(two order by two),
   sum(ten order by ten), min(ten order by ten), max(ten order by ten)
 from tenk1;
-QUERY PLAN
-___________
+                   QUERY PLAN
+------------------------------------------------
  Finalize Aggregate
    ->  Gather Motion 3:1  (slice1; segments: 3)
          ->  Partial Aggregate
                ->  Seq Scan on tenk1
- Optimizer: Pivotal Optimizer (GPORCA)
+ Optimizer: GPORCA
+(5 rows)
 
 -- Try a case involving a GROUP BY clause where the GROUP BY column is also
 -- part of an aggregate's ORDER BY clause.  We want a sort order that works
@@ -1633,8 +1637,8 @@ from tenk1
 group by ten;
 INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
 DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: Hash aggregation with ORDER BY
-QUERY PLAN
-___________
+                            QUERY PLAN
+------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  GroupAggregate
          Group Key: ten
@@ -1643,7 +1647,8 @@ ___________
                ->  Redistribute Motion 3:3  (slice2; segments: 3)
                      Hash Key: ten
                      ->  Seq Scan on tenk1
- Optimizer: Pivotal Optimizer (GPORCA)
+ Optimizer: Postgres query optimizer
+(9 rows)
 
 -- Ensure that we never choose to provide presorted input to an Aggref with
 -- a volatile function in the ORDER BY / DISTINCT clause.  We want to ensure
@@ -1682,13 +1687,14 @@ from (select null as val from generate_series(1, 2));
 set enable_presorted_aggregate to off;
 explain (costs off)
 select sum(two order by two) from tenk1;
-QUERY PLAN
-___________
+                   QUERY PLAN
+------------------------------------------------
  Finalize Aggregate
    ->  Gather Motion 3:1  (slice1; segments: 3)
          ->  Partial Aggregate
                ->  Seq Scan on tenk1
- Optimizer: Pivotal Optimizer (GPORCA)
+ Optimizer: GPORCA
+(5 rows)
 
 reset enable_presorted_aggregate;
 --
@@ -1699,12 +1705,13 @@ explain (costs off)
 select sum(two order by two) filter (where two > 1) from tenk1;
 INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
 DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: Aggregate functions with FILTER
-QUERY PLAN
-___________
+                   QUERY PLAN
+------------------------------------------------
  Aggregate
    ->  Gather Motion 3:1  (slice1; segments: 3)
          ->  Seq Scan on tenk1
- Optimizer: Pivotal Optimizer (GPORCA)
+ Optimizer: Postgres query optimizer
+(4 rows)
 
 -- Ensure we presort for RelabelType'd Vars
 explain (costs off)
@@ -1712,13 +1719,14 @@ select string_agg(distinct f1, ',') filter (where length(f1) > 1)
 from varchar_tbl;
 INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
 DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: Aggregate functions with FILTER
-QUERY PLAN
-___________
+                   QUERY PLAN
+------------------------------------------------
  Finalize Aggregate
    ->  Gather Motion 3:1  (slice1; segments: 3)
          ->  Partial Aggregate
                ->  Seq Scan on varchar_tbl
- Optimizer: Pivotal Optimizer (GPORCA)
+ Optimizer: Postgres query optimizer
+(5 rows)
 
 -- Ensure we don't presort when the aggregate's argument contains an
 -- explicit cast.
