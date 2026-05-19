@@ -807,7 +807,10 @@ error:
 			 errmsg("could not write file \"%s\": %m",
 					PGSS_DUMP_FILE ".tmp")));
 	if (qbuffer)
+	{
 		free(qbuffer);
+		qbuffer = NULL;
+	}
 	if (file)
 		FreeFile(file);
 	unlink(PGSS_DUMP_FILE ".tmp");
@@ -2310,7 +2313,7 @@ need_gc_qtexts(void)
 static void
 gc_qtexts(void)
 {
-	char	   *qbuffer;
+	char	   *qbuffer = NULL;
 	Size		qbuffer_size;
 	FILE	   *qfile = NULL;
 	HASH_SEQ_STATUS hash_seq;
@@ -2425,6 +2428,7 @@ gc_qtexts(void)
 		pgss->mean_query_len = ASSUMED_LENGTH_INIT;
 
 	free(qbuffer);
+	qbuffer = NULL;
 
 	/*
 	 * OK, count a garbage collection cycle.  (Note: even though we have
@@ -2681,8 +2685,10 @@ generate_normalized_query(JumbleState *jstate, const char *query,
 		n_quer_loc += len_to_wrt;
 
 		/* And insert a param symbol in place of the constant token */
-		n_quer_loc += sprintf(norm_query + n_quer_loc, "$%d",
-							  i + 1 + jstate->highest_extern_param_id);
+		n_quer_loc += snprintf(norm_query + n_quer_loc,
+							   norm_query_buflen - n_quer_loc + 1,
+							   "$%d",
+							   i + 1 + jstate->highest_extern_param_id);
 
 		quer_loc = off + tok_len;
 		last_off = off;
