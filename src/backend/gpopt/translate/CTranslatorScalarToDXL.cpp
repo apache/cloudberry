@@ -2659,6 +2659,22 @@ CTranslatorScalarToDXL::ExtractLintValueFromDatum(const IMDType *md_type,
 			payload = (const BYTE *) VARDATA_ANY((const void *) bytes);
 			payload_len = (ULONG) VARSIZE_ANY_EXHDR((const void *) bytes);
 			is_varlena_string = true;
+
+			// PG bpchareq treats trailing spaces as insignificant: a
+			// char(50) MCV stored as 'Books' is space-padded to 50 bytes,
+			// while a query constant ``i_category='Books'`` arrives
+			// unpadded.  Without trimming, the two produce different
+			// sort-key prefixes (and hence different LINTs), so
+			// StatsAreEqual misses every MCV bucket and the filter falls
+			// back to MinRows -- e.g. TPC-DS sf=5 Q33 estimating 1 row
+			// for ``i_category='Books'`` (actual 5331).
+			if (mdid->Equals(&CMDIdGPDB::m_mdid_bpchar) ||
+				(base_mdid->IsValid() &&
+				 base_mdid->Equals(&CMDIdGPDB::m_mdid_bpchar)))
+			{
+				while (payload_len > 0 && payload[payload_len - 1] == ' ')
+					payload_len--;
+			}
 		}
 
 		// For non-C collation on varlena strings, run the payload through
