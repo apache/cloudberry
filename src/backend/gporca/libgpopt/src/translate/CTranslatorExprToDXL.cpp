@@ -4964,41 +4964,46 @@ CTranslatorExprToDXL::PdxlnMergeJoin(CExpression *pexprMJ,
 		// At this point, they all better be merge joinable
 		GPOS_ASSERT(CPhysicalJoin::FMergeJoinCompatible(
 			pexprPred, pexprOuterChild, pexprInnerChild));
-		CExpression *pexprPredOuter = (*pexprPred)[0];
-		CExpression *pexprPredInner = (*pexprPred)[1];
 
-		// align extracted columns with outer and inner children of the join
-		CColRefSet *pcrsOuterChild = pexprOuterChild->DeriveOutputColumns();
-		CColRefSet *pcrsPredInner = pexprPredInner->DeriveUsedColumns();
+		// Extract the two key columns out of pexprPred.  Plain equality
+		// is `a = b` (binary ScalarCmp) but NULL-safe equality (INDF) is
+		// `NOT (a IS DISTINCT FROM b)`, a *unary* NOT around the binary
+		// IsDistinctFrom.  Indexing [0]/[1] directly works for equality
+		// but accesses out of bounds for INDF.
+		CExpression *pexprPredOuter = nullptr;
+		CExpression *pexprPredInner = nullptr;
+		IMDId *mdid_scop = nullptr;
+		CPhysicalJoin::AlignJoinKeyOuterInner(pexprPred, pexprOuterChild,
+											  pexprInnerChild, &pexprPredOuter,
+											  &pexprPredInner, &mdid_scop);
+
 #ifdef GPOS_DEBUG
+		CColRefSet *pcrsOuterChild = pexprOuterChild->DeriveOutputColumns();
 		CColRefSet *pcrsInnerChild = pexprInnerChild->DeriveOutputColumns();
 		CColRefSet *pcrsPredOuter = pexprPredOuter->DeriveUsedColumns();
-#endif
-
-		if (pcrsOuterChild->ContainsAll(pcrsPredInner))
-		{
-			GPOS_ASSERT(pcrsInnerChild->ContainsAll(pcrsPredOuter));
-			std::swap(pexprPredOuter, pexprPredInner);
-#ifdef GPOS_DEBUG
-			std::swap(pcrsPredOuter, pcrsPredInner);
-#endif
-
-			pexprPredOuter->AddRef();
-			pexprPredInner->AddRef();
-			pexprPred =
-				CUtils::PexprScalarEqCmp(m_mp, pexprPredOuter, pexprPredInner);
-		}
-		else
-		{
-			pexprPred->AddRef();
-		}
-
+		CColRefSet *pcrsPredInner = pexprPredInner->DeriveUsedColumns();
 		GPOS_ASSERT(pcrsOuterChild->ContainsAll(pcrsPredOuter) &&
 					pcrsInnerChild->ContainsAll(pcrsPredInner) &&
 					"merge join keys are not aligned with children");
+#endif
 
-		dxlnode_merge_conds->AddChild(PdxlnScalar(pexprPred));
-		pexprPred->Release();
+		pexprPredOuter->AddRef();
+		pexprPredInner->AddRef();
+		CExpression *pexprPredNew;
+		if (CPredicateUtils::IsEqualityOp(pexprPred))
+		{
+			pexprPredNew = CUtils::PexprScalarCmp(m_mp, pexprPredOuter,
+												  pexprPredInner, mdid_scop);
+		}
+		else
+		{
+			GPOS_ASSERT(CPredicateUtils::FINDF(pexprPred));
+			pexprPredNew = CUtils::PexprINDF(m_mp, pexprPredOuter,
+											 pexprPredInner, mdid_scop);
+		}
+
+		dxlnode_merge_conds->AddChild(PdxlnScalar(pexprPredNew));
+		pexprPredNew->Release();
 	}
 	pdrgpexprPredicates->Release();
 
