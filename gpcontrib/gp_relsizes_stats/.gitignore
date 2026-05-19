@@ -1,0 +1,6 @@
+*.o
+*.so
+src/protos/
+results
+.vscode
+compile_commands.json
