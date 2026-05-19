@@ -708,6 +708,9 @@ smgrzeroextend(SMgrRelation reln, ForkNumber forknum, BlockNumber blocknum,
 		reln->smgr_cached_nblocks[forknum] = blocknum + nblocks;
 	else
 		reln->smgr_cached_nblocks[forknum] = InvalidBlockNumber;
+
+	if (file_extend_hook)
+		(*file_extend_hook)(reln->smgr_rlocator);
 }
 
 /*

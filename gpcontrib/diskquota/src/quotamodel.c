@@ -191,6 +191,7 @@ static HTAB *disk_quota_reject_map       = NULL;
 static HTAB *local_disk_quota_reject_map = NULL;
 
 static shmem_startup_hook_type prev_shmem_startup_hook = NULL;
+static shmem_request_hook_type prev_shmem_request_hook = NULL;
 
 /* functions to maintain the quota maps */
 static void update_size_for_quota(int64 size, QuotaType type, Oid *keys, int16 segid);
@@ -212,6 +213,7 @@ static void do_load_quotas(void);
 
 static Size DiskQuotaShmemSize(void);
 static void disk_quota_shmem_startup(void);
+static void diskquota_shmem_request(void);
 static void init_lwlocks(void);
 
 static void export_exceeded_error(GlobalRejectMapEntry *entry, bool skip_name);
@@ -408,18 +410,28 @@ clean_all_quota_limit(void)
 void
 init_disk_quota_shmem(void)
 {
-	/*
-	 * Request additional shared resources.  (These are no-ops if we're not in
-	 * the postmaster process.)  We'll allocate or attach to the shared
-	 * resources in pgss_shmem_startup().
-	 */
-	RequestAddinShmemSpace(DiskQuotaShmemSize());
-	/* locks for diskquota refer to init_lwlocks() for details */
-	RequestNamedLWLockTranche("DiskquotaLocks", DiskQuotaLocksItemNumber);
+	/* Install shmem request hook to request shared memory (PG16 requirement). */
+	prev_shmem_request_hook = shmem_request_hook;
+	shmem_request_hook      = diskquota_shmem_request;
 
 	/* Install startup hook to initialize our shared memory. */
 	prev_shmem_startup_hook = shmem_startup_hook;
 	shmem_startup_hook      = disk_quota_shmem_startup;
+}
+
+/*
+ * Shmem request hook: request shared memory and LWLocks.
+ * In PG16+, RequestAddinShmemSpace/RequestNamedLWLockTranche must be called
+ * from shmem_request_hook, not directly from _PG_init().
+ */
+static void
+diskquota_shmem_request(void)
+{
+	if (prev_shmem_request_hook)
+		prev_shmem_request_hook();
+
+	RequestAddinShmemSpace(DiskQuotaShmemSize());
+	RequestNamedLWLockTranche("DiskquotaLocks", DiskQuotaLocksItemNumber);
 }
 
 /*
