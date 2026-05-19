@@ -118,6 +118,7 @@ RUN dnf makecache && \
         krb5-devel \
         libcurl-devel \
         libevent-devel \
+        libicu-devel \
         libxml2-devel \
         libuuid-devel \
         libzstd-devel \

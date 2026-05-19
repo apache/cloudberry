@@ -34,6 +34,47 @@
 
 static List *create_external_scan_uri_list(ExtTableEntry *ext, bool *ismasteronly);
 
+/*
+ * parse_fdw_encoding_option
+ *
+ * Parse the value of an "encoding" FDW OPTIONS entry (whether on creation,
+ * during validation, or when reading back stored ftoptions) into a numeric
+ * encoding ID. Accepts a symbolic encoding name (e.g. "UTF8", "utf-8", "GBK")
+ * resolved via pg_char_to_encoding(), or a strictly numeric string (e.g. "6")
+ * validated via PG_VALID_ENCODING(). Anything else raises ERROR.
+ *
+ * Note: atoi() is intentionally avoided in the numeric fallback. atoi("UTF8")
+ * silently returns 0 (= SQL_ASCII), which is exactly the bug this helper
+ * exists to fix. strtol() with end-of-string and range checks is strict.
+ */
+int
+parse_fdw_encoding_option(const char *value)
+{
+	int			encoding;
+	char	   *endptr;
+	long		n;
+
+	if (value == NULL || *value == '\0')
+		ereport(ERROR,
+				(errcode(ERRCODE_FDW_INVALID_ATTRIBUTE_VALUE),
+				 errmsg("encoding option must not be empty")));
+
+	encoding = pg_char_to_encoding(value);
+	if (encoding >= 0)
+		return encoding;
+
+	errno = 0;
+	n = strtol(value, &endptr, 10);
+	if (endptr != value && *endptr == '\0' && errno == 0 &&
+		n >= 0 && PG_VALID_ENCODING((int) n))
+		return (int) n;
+
+	ereport(ERROR,
+			(errcode(ERRCODE_FDW_INVALID_ATTRIBUTE_VALUE),
+			 errmsg("\"%s\" is not a valid encoding name or code", value)));
+	return -1;					/* unreachable, keeps compiler happy */
+}
+
 void
 gfile_printf_then_putc_newline(const char *format,...)
 {
@@ -277,7 +318,7 @@ GetExtFromForeignTableOptions(List *ftoptons, Oid relid)
 
 		if (pg_strcasecmp(def->defname, "encoding") == 0)
 		{
-			extentry->encoding = atoi(defGetString(def));
+			extentry->encoding = parse_fdw_encoding_option(defGetString(def));
 			encoding_found = true;
 			continue;
 		}
