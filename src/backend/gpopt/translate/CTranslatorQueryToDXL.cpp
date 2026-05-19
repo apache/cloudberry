@@ -20,12 +20,15 @@ extern "C" {
 #include "access/sysattr.h"
 #include "catalog/heap.h"
 #include "catalog/pg_class.h"
+#include "catalog/pg_language.h"
+#include "catalog/pg_proc.h"
 #include "nodes/makefuncs.h"
 #include "nodes/parsenodes.h"
 #include "nodes/plannodes.h"
 #include "optimizer/walkers.h"
 #include "utils/guc.h"
 #include "utils/rel.h"
+#include "utils/syscache.h"
 }
 
 #include "gpos/base.h"
@@ -213,8 +216,19 @@ CTranslatorQueryToDXL::CTranslatorQueryToDXL(
 	// check if the query has any unsupported node types
 	CheckUnsupportedNodeTypes(query);
 
-	// check if the query has SIRV functions in the targetlist without a FROM clause
-	CheckSirvFuncsWithoutFromClause(query);
+	// Preserve the historical fallback for SIRV functions in targetlists
+	// without a FROM clause for statement-level and derived-table queries.
+	// Scalar subqueries use a copied outer var mapping and should retain
+	// ORCA's existing handling for expressions such as nested random().
+	if (nullptr == var_colid_mapping)
+	{
+		CheckSirvFuncsWithoutFromClause(query);
+	}
+
+	// Add a separate guard for targetlist expressions that mix SIRV
+	// functions with current-level Vars from the FROM clause. Those
+	// expressions are row-dependent and must stay on the QEs.
+	CheckSirvFuncsWithCurrentLevelVarsInTargetList(query);
 
 	// first normalize the query
 	m_query =
@@ -347,19 +361,88 @@ CTranslatorQueryToDXL::CheckUnsupportedNodeTypes(Query *query)
 void
 CTranslatorQueryToDXL::CheckSirvFuncsWithoutFromClause(Query *query)
 {
+	ListCell *lc = nullptr;
+
 	// if there is a FROM clause or if target list is empty, look no further
-	if ((nullptr != query->jointree &&
-		 0 < gpdb::ListLength(query->jointree->fromlist)) ||
-		NIL == query->targetList)
+	if (!((nullptr != query->jointree &&
+		   0 < gpdb::ListLength(query->jointree->fromlist)) ||
+		  NIL == query->targetList))
+	{
+		// see if we have SIRV functions in the immediate target list
+		if (HasSirvFunctions((Node *) query->targetList,
+							 false /*descend_into_subqueries*/))
+		{
+			GPOS_RAISE(gpdxl::ExmaDXL, gpdxl::ExmiQuery2DXLUnsupportedFeature,
+					   GPOS_WSZ_LIT("SIRV functions"));
+		}
+	}
+
+	// Derived tables should keep the legacy fallback behavior, but scalar
+	// subqueries in targetlist expressions are handled separately and must
+	// not force an outer-query fallback.
+	ForEach(lc, query->rtable)
+	{
+		RangeTblEntry *rte = (RangeTblEntry *) lfirst(lc);
+
+		if (RTE_SUBQUERY == rte->rtekind && nullptr != rte->subquery)
+		{
+			CheckSirvFuncsWithoutFromClause(rte->subquery);
+		}
+	}
+
+	ForEach(lc, query->cteList)
+	{
+		CommonTableExpr *cte = (CommonTableExpr *) lfirst(lc);
+
+		if (nullptr != cte->ctequery)
+		{
+			CheckSirvFuncsWithoutFromClause((Query *) cte->ctequery);
+		}
+	}
+}
+
+//---------------------------------------------------------------------------
+//	@function:
+//		CTranslatorQueryToDXL::CheckSirvFuncsWithCurrentLevelVarsInTargetList
+//
+//	@doc:
+//		Check for target list expressions that contain both SIRV functions and
+//		current-level Vars from the FROM clause, and throw an exception when
+//		found.
+//
+//		ORCA can place target list projections above a Motion and execute
+//		them on the coordinator. If a SIRV expression also depends on columns
+//		produced by the current query's FROM clause, it is row-dependent and
+//		must stay on the segment workers alongside those rows. Only inspect
+//		the immediate target list expression tree here; functions or Vars
+//		inside nested subqueries are planned within their own query context
+//		and should not force a fallback for the outer query.
+//
+//---------------------------------------------------------------------------
+void
+CTranslatorQueryToDXL::CheckSirvFuncsWithCurrentLevelVarsInTargetList(
+	Query *query)
+{
+	ListCell *lc = nullptr;
+
+	// if target list is empty, look no further
+	if (NIL == query->targetList)
 	{
 		return;
 	}
 
-	// see if we have SIRV functions in the target list
-	if (HasSirvFunctions((Node *) query->targetList))
+	ForEach(lc, query->targetList)
 	{
-		GPOS_RAISE(gpdxl::ExmaDXL, gpdxl::ExmiQuery2DXLUnsupportedFeature,
-				   GPOS_WSZ_LIT("SIRV functions"));
+		TargetEntry *target_entry = (TargetEntry *) lfirst(lc);
+
+		if (HasSirvFunctions((Node *) target_entry->expr,
+							 false /*descend_into_subqueries*/) &&
+			HasCurrentLevelVars((Node *) target_entry->expr,
+								false /*descend_into_subqueries*/))
+		{
+			GPOS_RAISE(gpdxl::ExmaDXL, gpdxl::ExmiQuery2DXLUnsupportedFeature,
+					   GPOS_WSZ_LIT("SIRV functions"));
+		}
 	}
 }
 
@@ -372,12 +455,13 @@ CTranslatorQueryToDXL::CheckSirvFuncsWithoutFromClause(Query *query)
 //
 //---------------------------------------------------------------------------
 BOOL
-CTranslatorQueryToDXL::HasSirvFunctions(Node *node) const
+CTranslatorQueryToDXL::HasSirvFunctions(Node *node,
+										bool descend_into_subqueries) const
 {
 	GPOS_ASSERT(nullptr != node);
 
 	List *function_list = gpdb::ExtractNodesExpression(
-		node, T_FuncExpr, true /*descendIntoSubqueries*/);
+		node, T_FuncExpr, descend_into_subqueries);
 	ListCell *lc = nullptr;
 
 	BOOL has_sirv = false;
@@ -394,6 +478,41 @@ CTranslatorQueryToDXL::HasSirvFunctions(Node *node) const
 	gpdb::ListFree(function_list);
 
 	return has_sirv;
+}
+
+//---------------------------------------------------------------------------
+//	@function:
+//		CTranslatorQueryToDXL::HasCurrentLevelVars
+//
+//	@doc:
+//		Check for Vars from the current query level in the tree rooted at the
+//		given node
+//
+//---------------------------------------------------------------------------
+BOOL
+CTranslatorQueryToDXL::HasCurrentLevelVars(Node *node,
+										   bool descend_into_subqueries) const
+{
+	GPOS_ASSERT(nullptr != node);
+
+	List *var_list = gpdb::ExtractNodesExpression(node, T_Var,
+												  descend_into_subqueries);
+	ListCell *lc = nullptr;
+
+	BOOL has_current_level_var = false;
+	ForEach(lc, var_list)
+	{
+		Var *var = (Var *) lfirst(lc);
+
+		if (0 == var->varlevelsup)
+		{
+			has_current_level_var = true;
+			break;
+		}
+	}
+	gpdb::ListFree(var_list);
+
+	return has_current_level_var;
 }
 
 //---------------------------------------------------------------------------
@@ -3907,7 +4026,9 @@ CTranslatorQueryToDXL::TranslateTVFToDXL(const RangeTblEntry *rte,
 	FuncExpr *funcexpr = (FuncExpr *) rtfunc->funcexpr;
 
 	// check if arguments contain SIRV functions
-	if (NIL != funcexpr->args && HasSirvFunctions((Node *) funcexpr->args))
+	if (NIL != funcexpr->args &&
+		HasSirvFunctions((Node *) funcexpr->args,
+						 true /*descend_into_subqueries*/))
 	{
 		GPOS_RAISE(gpdxl::ExmaDXL, gpdxl::ExmiQuery2DXLUnsupportedFeature,
 				   GPOS_WSZ_LIT("SIRV functions"));
