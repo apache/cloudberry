@@ -55,7 +55,7 @@ static int update_table_sizes_history(void);
 static void get_stats_for_databases(Oid *databases_oids, int databases_cnt, bool fast);
 static void run_database_stats_worker(bool fast, Oid db);
 static int plugin_created(void);
-static BgwHandleStatus WaitForBackgroundWorkerShutdown(BackgroundWorkerHandle *handle);
+static BgwHandleStatus WaitForBackgroundWorkerShutdownSafely(BackgroundWorkerHandle *handle);
 static int delete_data_in_history(void);
 static int put_data_into_history(void);
 void _PG_init(void);
@@ -109,15 +109,11 @@ static void worker_sigterm(SIGNAL_ARGS) {
  * error handling to prevent infinite loops in case of hung workers.
  * Returns BGWH_STOPPED on success, BGWH_POSTMASTER_DIED on error/timeout.
  */
-static BgwHandleStatus WaitForBackgroundWorkerShutdown(BackgroundWorkerHandle *handle) {
+static BgwHandleStatus WaitForBackgroundWorkerShutdownSafely(BackgroundWorkerHandle *handle) {
     BgwHandleStatus status;
     int rc;
-    bool save_set_latch_on_sigusr1;
     int attempts = 0;
     const int max_attempts = 5 * HOUR_TIME / 100; /* maximum 5 hours wait time */
-
-    save_set_latch_on_sigusr1 = set_latch_on_sigusr1;
-    set_latch_on_sigusr1 = true;
 
     PG_TRY();
     {
@@ -126,12 +122,11 @@ static BgwHandleStatus WaitForBackgroundWorkerShutdown(BackgroundWorkerHandle *h
 
             status = GetBackgroundWorkerPid(handle, &pid);
             if (status == BGWH_STOPPED) {
-                set_latch_on_sigusr1 = save_set_latch_on_sigusr1;
                 return status;
             }
 
             /* Add 100ms timeout instead of infinite wait */
-            rc = WaitLatch(&MyProc->procLatch, WL_LATCH_SET | WL_TIMEOUT | WL_POSTMASTER_DEATH, 100L);
+            rc = WaitLatch(&MyProc->procLatch, WL_LATCH_SET | WL_TIMEOUT | WL_POSTMASTER_DEATH, 100L, WAIT_EVENT_BGWORKER_SHUTDOWN);
 
             ResetLatch(&MyProc->procLatch);
 
@@ -142,7 +137,7 @@ static BgwHandleStatus WaitForBackgroundWorkerShutdown(BackgroundWorkerHandle *h
 
             /* Check for interrupts but don't let them break the entire process */
             if (QueryCancelPending || ProcDiePending) {
-                ereport(WARNING, (errmsg("WaitForBackgroundWorkerShutdown: received interrupt signal, stopping wait")));
+                ereport(WARNING, (errmsg("WaitForBackgroundWorkerShutdownSafely: received interrupt signal, stopping wait")));
                 status = BGWH_POSTMASTER_DIED; /* Return status as if postmaster died */
                 break;
             }
@@ -152,21 +147,18 @@ static BgwHandleStatus WaitForBackgroundWorkerShutdown(BackgroundWorkerHandle *h
 
         /* If maximum attempts reached */
         if (attempts >= max_attempts) {
-            ereport(WARNING, (errmsg("WaitForBackgroundWorkerShutdown: timeout after %d attempts", max_attempts)));
+            ereport(WARNING, (errmsg("WaitForBackgroundWorkerShutdownSafely: timeout after %d attempts", max_attempts)));
             status = BGWH_POSTMASTER_DIED; /* Return error status */
         }
     }
     PG_CATCH();
     {
         /* Log error but do NOT re-throw exception */
-        ereport(WARNING, (errmsg("WaitForBackgroundWorkerShutdown: caught exception, returning error status")));
-        set_latch_on_sigusr1 = save_set_latch_on_sigusr1;
+        ereport(WARNING, (errmsg("WaitForBackgroundWorkerShutdownSafely: caught exception, returning error status")));
         /* Return error status instead of PG_RE_THROW() */
         return BGWH_POSTMASTER_DIED;
     }
     PG_END_TRY();
-
-    set_latch_on_sigusr1 = save_set_latch_on_sigusr1;
     return status;
 }
 
@@ -356,7 +348,7 @@ void relsizes_database_stats_job(Datum args) {
     pqsignal(SIGTERM, worker_sigterm);
     BackgroundWorkerUnblockSignals();
 
-    BackgroundWorkerInitializeConnectionByOid(wa.s.db, InvalidOid);
+    BackgroundWorkerInitializeConnectionByOid(wa.s.db, InvalidOid, 0);
 
     SetCurrentStatementStartTimestamp();
     StartTransactionCommand();
@@ -394,7 +386,7 @@ void relsizes_database_stats_job(Datum args) {
     /* Remove this condition after decision how to upgrade extensions is made. */
     if (SearchSysCacheExists3(PROCNAMEARGSNSP,
             CStringGetDatum("get_stats_for_database"),
-            PointerGetDatum((&(oidvector){ .dim1 = 1, .values = { INT4OID } })),
+            PointerGetDatum(buildoidvector((Oid[]){INT4OID}, 1)),
             ObjectIdGetDatum(get_namespace_oid("relsizes_stats_schema", true))))
     {
         const char* sql_get_stats =
@@ -495,7 +487,7 @@ static void run_database_stats_worker(bool fast, Oid db) {
         ereport(WARNING, (errmsg("Failed to start background worker [%s], skipping", database_worker.bgw_name)));
         return;
     }
-    status = WaitForBackgroundWorkerShutdown(handle);
+    status = WaitForBackgroundWorkerShutdownSafely(handle);
     if (status != BGWH_STOPPED) {
         ereport(WARNING, (errmsg("Failure during background worker execution [%s], continuing", database_worker.bgw_name)));
         /* Don't abort execution, just log and continue */
@@ -618,7 +610,7 @@ Datum get_stats_for_database(PG_FUNCTION_ARGS) {
                 /* Brief pause between file processing to reduce system load */
                 int retcode = WaitLatch(&MyProc->procLatch,
                                 WL_LATCH_SET | WL_TIMEOUT | WL_POSTMASTER_DEATH,
-                                worker_file_naptime);
+                                worker_file_naptime, WAIT_EVENT_BUFFER_IO);
                 ResetLatch(&MyProc->procLatch);
 
                 CHECK_FOR_INTERRUPTS();
@@ -671,7 +663,7 @@ static void get_stats_for_databases(Oid *databases_oids, int databases_cnt, bool
             CHECK_FOR_INTERRUPTS();
         else {
             int naptime = (databases_cnt > 0) ? (worker_database_naptime / databases_cnt) : worker_database_naptime;
-            int retcode = WaitLatch(&MyProc->procLatch, WL_LATCH_SET | WL_TIMEOUT | WL_POSTMASTER_DEATH, naptime);
+            int retcode = WaitLatch(&MyProc->procLatch, WL_LATCH_SET | WL_TIMEOUT | WL_POSTMASTER_DEATH, naptime, WAIT_EVENT_BGWORKER_STARTUP);
             ResetLatch(&MyProc->procLatch);
             CHECK_FOR_INTERRUPTS();
             /* emergency bailout if postmaster has died */
@@ -839,14 +831,14 @@ void relsizes_collect_stats(Datum main_arg) {
     optimizer = false;
     pqsignal(SIGTERM, worker_sigterm);
     BackgroundWorkerUnblockSignals();
-    BackgroundWorkerInitializeConnection("postgres", NULL);
+    BackgroundWorkerInitializeConnection("postgres", NULL, 0);
 
     while (!got_sigterm) {
         if (enabled)
             relsizes_collect_stats_once_internal(true);
 
         int retcode =
-            WaitLatch(&MyProc->procLatch, WL_LATCH_SET | WL_TIMEOUT | WL_POSTMASTER_DEATH, worker_restart_naptime);
+            WaitLatch(&MyProc->procLatch, WL_LATCH_SET | WL_TIMEOUT | WL_POSTMASTER_DEATH, worker_restart_naptime, WAIT_EVENT_BGWORKER_STARTUP);
         ResetLatch(&MyProc->procLatch);
         CHECK_FOR_INTERRUPTS();
         if (retcode & WL_POSTMASTER_DEATH) {

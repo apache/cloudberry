@@ -1,14 +1,14 @@
-# gp_relsizes_stats: Table sizes monitoring tool for Greenplum
+# gp_relsizes_stats: Table sizes monitoring tool for Cloudberry
 
 ### Features
-gp_relsizes_stats is an extension for the Greenplum database that calculates and stores statistics on the size of files and tables, occupied space on the disks of the master and segment hosts.
+gp_relsizes_stats is an extension for the Cloudberry database that calculates and stores statistics on the size of files and tables, occupied space on the disks of the master and segment hosts.
 
 #### Features include
 - BackgroundWorker support for collecting statistics automatically
 - the ability to fine-tune the timeout values between actions, for example, between launches for different databases, or during file processing to distribute the load over time 
 
 ### Supported versions and platforms
-At the moment, the program is being tested only for GP6 and Linux.
+At the moment, the program is being tested only for Cloudberry and Linux.
 
 ### Installation
 Install from source:
