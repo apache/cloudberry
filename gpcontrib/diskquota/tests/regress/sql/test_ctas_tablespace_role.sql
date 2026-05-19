@@ -10,6 +10,8 @@ DROP TABLESPACE IF EXISTS ctas_rolespc;
 CREATE TABLESPACE ctas_rolespc LOCATION '/tmp/ctas_rolespc';
 CREATE ROLE hardlimit_r;
 GRANT USAGE ON SCHEMA diskquota TO hardlimit_r;
+GRANT USAGE ON SCHEMA public TO hardlimit_r;
+GRANT CREATE ON SCHEMA public TO hardlimit_r;
 GRANT ALL ON TABLESPACE ctas_rolespc TO hardlimit_r;
 SELECT diskquota.set_role_tablespace_quota('hardlimit_r', 'ctas_rolespc', '1 MB');
 SET default_tablespace = ctas_rolespc;
@@ -43,6 +45,8 @@ RESET ROLE;
 RESET default_tablespace;
 DROP TABLESPACE ctas_rolespc;
 REVOKE USAGE ON SCHEMA diskquota FROM hardlimit_r;
+REVOKE USAGE ON SCHEMA public FROM hardlimit_r;
+REVOKE CREATE ON SCHEMA public FROM hardlimit_r;
 DROP ROLE hardlimit_r;
 \! gpconfig -c "diskquota.hard_limit" -v "off" > /dev/null
 \! gpstop -u > /dev/null

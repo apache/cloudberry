@@ -58,8 +58,7 @@ quota_check_ExecCheckRTPerms(List *rangeTable,  List *rtePermInfos, bool ereport
 
 		if (rte->perminfoindex == 0 ||
 			rte->perminfoindex > list_length(rtePermInfos))
-			elog(ERROR, "invalid perminfoindex %u in RTE with relid %u",
-				 rte->perminfoindex, rte->relid);
+			continue;
 		perminfo = list_nth_node(RTEPermissionInfo, rtePermInfos,
 								 rte->perminfoindex - 1);
 		/*
