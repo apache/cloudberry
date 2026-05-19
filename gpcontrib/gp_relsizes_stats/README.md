@@ -22,7 +22,7 @@ make && make install
 
 ### Confguration
 gp_relsizes_stats configuration parameters:
-| **Parameter** | **Type**     | **Default**  | **Default**  |
+| **Parameter** | **Type**     | **Default**  | **Description**  |
 | ---------------- | --------------- | ------------ | ------------ |
 | `gp_relsizes_stats.enabled`          | bool    | false    | Using `gp_relsizes_stats.enabled` you can enable/disable background stats collection for database where extension installed (actually enable/disable background worker which collecting stats).|
 | `gp_relsizes_stats.restart_naptime`  | int     | 21600000 | Using `gp_relsizes_stats.restart_naptime` you can set naptime between each startup of collecting process. Value set time in milliseconds. Default is equal to 6 hours.|

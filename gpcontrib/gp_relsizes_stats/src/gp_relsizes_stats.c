@@ -110,7 +110,7 @@ static void worker_sigterm(SIGNAL_ARGS) {
  * Returns BGWH_STOPPED on success, BGWH_POSTMASTER_DIED on error/timeout.
  */
 static BgwHandleStatus WaitForBackgroundWorkerShutdownSafely(BackgroundWorkerHandle *handle) {
-    BgwHandleStatus status;
+    BgwHandleStatus status = BGWH_NOT_YET_STARTED;
     int rc;
     int attempts = 0;
     const int max_attempts = 5 * HOUR_TIME / 100; /* maximum 5 hours wait time */
