@@ -185,12 +185,14 @@ private:
 	// transform GPDB's MCV information to optimizer's histogram structure
 	static CHistogram *TransformMcvToOrcaHistogram(
 		CMemoryPool *mp, const IMDType *md_type, const Datum *mcv_values,
-		const float4 *mcv_frequencies, ULONG num_mcv_values);
+		const float4 *mcv_frequencies, ULONG num_mcv_values,
+		Oid collation = InvalidOid);
 
 	// transform GPDB's hist information to optimizer's histogram structure
 	static CHistogram *TransformHistToOrcaHistogram(
 		CMemoryPool *mp, const IMDType *md_type, const Datum *hist_values,
-		ULONG num_hist_values, CDouble num_distinct, CDouble hist_freq);
+		ULONG num_hist_values, CDouble num_distinct, CDouble hist_freq,
+		Oid collation = InvalidOid);
 
 	// histogram to array of dxl buckets
 	static CDXLBucketArray *TransformHistogramToDXLBucketArray(
@@ -200,7 +202,8 @@ private:
 	static CDXLBucketArray *TransformStatsToDXLBucketArray(
 		CMemoryPool *mp, OID att_type, CDouble num_distinct, CDouble null_freq,
 		const Datum *mcv_values, const float4 *mcv_frequencies,
-		ULONG num_mcv_values, const Datum *hist_values, ULONG num_hist_values);
+		ULONG num_mcv_values, const Datum *hist_values, ULONG num_hist_values,
+		Oid collation = InvalidOid);
 
 	// get partition keys and types for a relation
 	static void RetrievePartKeysAndTypes(CMemoryPool *mp, Relation rel, OID oid,

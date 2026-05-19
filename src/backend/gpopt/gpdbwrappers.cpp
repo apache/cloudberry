@@ -43,6 +43,7 @@ extern "C" {
 #include "catalog/pg_inherits.h"
 #include "cdb/cdbvars.h"
 #include "foreign/fdwapi.h"
+#include "mb/pg_wchar.h"
 #include "nodes/nodeFuncs.h"
 #include "optimizer/clauses.h"
 #include "optimizer/optimizer.h"
@@ -56,10 +57,13 @@ extern "C" {
 #include "utils/lsyscache.h"
 #include "utils/memutils.h"
 #include "utils/partcache.h"
+#include "utils/pg_locale.h"
 
 extern bool enable_parallel;
 extern int max_parallel_workers_per_gather;
+
 }
+
 #define GP_WRAP_START                                            \
 	sigjmp_buf local_sigjmp_buf;                                 \
 	{                                                            \
@@ -2448,6 +2452,133 @@ gpdb::MakeGpPolicy(GpPolicyType ptype, int nattrs, int numsegments)
 		return makeGpPolicy(ptype, nattrs, numsegments);
 	}
 	GP_WRAP_END;
+}
+
+size_t
+gpdb::ComputeLocaleSortKey(char *dest, size_t destsize, const char *src,
+						   size_t srclen, Oid collation)
+{
+	GP_WRAP_START;
+	{
+		if (destsize == 0)
+		{
+			return 0;
+		}
+
+		// C/POSIX collation: byte order already matches sort order, just copy.
+		// Treat InvalidOid the same way (no collation info available).
+		if (!OidIsValid(collation) || lc_collate_is_c(collation))
+		{
+			size_t n = (srclen < destsize) ? srclen : destsize;
+			memcpy(dest, src, n);
+			return n;
+		}
+
+		pg_locale_t locale = pg_newlocale_from_collation(collation);
+
+		// Non-deterministic collations (case/accent-insensitive ICU) don't
+		// produce a totally-ordered sort key for our purposes; bail.
+		if (locale != NULL && !locale->deterministic)
+		{
+			return 0;
+		}
+
+#ifdef USE_ICU
+		if (locale != NULL && locale->provider == COLLPROVIDER_ICU)
+		{
+			// Best path for UTF-8 databases: ICU iterator gives us exactly
+			// the prefix we want without computing the full sort key.
+			if (GetDatabaseEncoding() == PG_UTF8)
+			{
+				UCharIterator iter;
+				uint32_t state[2] = {0, 0};
+				UErrorCode status = U_ZERO_ERROR;
+				uiter_setUTF8(&iter, src, (int32_t) srclen);
+				int32_t bsize = ucol_nextSortKeyPart(
+					locale->info.icu.ucol, &iter, state,
+					(uint8_t *) dest, (int32_t) destsize, &status);
+				if (U_FAILURE(status))
+				{
+					return 0;
+				}
+				return (size_t) bsize;
+			}
+			// Non-UTF8 ICU: skip the conversion dance; caller falls back.
+			return 0;
+		}
+#endif
+
+		// libc path: strxfrm[_l] needs a NUL-terminated input and an output
+		// buffer big enough to hold the full transform (the C standard
+		// leaves dest indeterminate if the result didn't fit). Allocate a
+		// big-enough work buffer, then copy the prefix we actually need.
+		char nullterm_stack[256];
+		char *nullterm = nullterm_stack;
+		if (srclen + 1 > sizeof(nullterm_stack))
+		{
+			nullterm = (char *) palloc(srclen + 1);
+		}
+		memcpy(nullterm, src, srclen);
+		nullterm[srclen] = '\0';
+
+		char xfrm_stack[1024];
+		char *xfrm = xfrm_stack;
+		size_t xfrm_size = sizeof(xfrm_stack);
+		size_t bsize;
+		for (;;)
+		{
+#ifdef HAVE_LOCALE_T
+			if (locale != NULL && locale->provider == COLLPROVIDER_LIBC)
+			{
+				bsize =
+					strxfrm_l(xfrm, nullterm, xfrm_size, locale->info.lt);
+			}
+			else
+#endif
+			{
+				bsize = strxfrm(xfrm, nullterm, xfrm_size);
+			}
+			if (bsize < xfrm_size)
+			{
+				break;
+			}
+			// grow and retry; cap to avoid runaway allocations.
+			if (xfrm_size >= (size_t) 64 * 1024)
+			{
+				if (xfrm != xfrm_stack)
+				{
+					pfree(xfrm);
+				}
+				if (nullterm != nullterm_stack)
+				{
+					pfree(nullterm);
+				}
+				return 0;
+			}
+			if (xfrm != xfrm_stack)
+			{
+				pfree(xfrm);
+			}
+			xfrm_size = (bsize + 1 > xfrm_size * 2) ? bsize + 1
+												   : xfrm_size * 2;
+			xfrm = (char *) palloc(xfrm_size);
+		}
+
+		size_t out = (bsize < destsize) ? bsize : destsize;
+		memcpy(dest, xfrm, out);
+
+		if (xfrm != xfrm_stack)
+		{
+			pfree(xfrm);
+		}
+		if (nullterm != nullterm_stack)
+		{
+			pfree(nullterm);
+		}
+		return out;
+	}
+	GP_WRAP_END;
+	return 0;
 }
 
 uint32

@@ -756,7 +756,7 @@ CTranslatorScalarToDXL::TranslateConstToDXL(CMemoryPool *mp, CMDAccessor *mda,
 	// translate gpdb datum into a DXL datum
 	CDXLDatum *datum_dxl = CTranslatorScalarToDXL::TranslateDatumToDXL(
 		mp, md_type, constant->consttypmod, constant->constisnull,
-		constant->constlen, constant->constvalue);
+		constant->constlen, constant->constvalue, constant->constcollid);
 
 	return datum_dxl;
 }
@@ -2272,7 +2272,8 @@ CDXLDatum *
 CTranslatorScalarToDXL::TranslateDatumToDXL(CMemoryPool *mp,
 											const IMDType *md_type,
 											INT type_modifier, BOOL is_null,
-											ULONG len, Datum datum)
+											ULONG len, Datum datum,
+											Oid collation)
 {
 	switch (md_type->GetDatumType())
 	{
@@ -2280,7 +2281,7 @@ CTranslatorScalarToDXL::TranslateDatumToDXL(CMemoryPool *mp,
 		{
 			// generate a datum of generic type
 			return TranslateGenericDatumToDXL(mp, md_type, type_modifier,
-											  is_null, len, datum);
+											  is_null, len, datum, collation);
 		}
 		case IMDType::EtiInt2:
 		{
@@ -2322,7 +2323,7 @@ CTranslatorScalarToDXL::TranslateGenericDatumToDXL(CMemoryPool *mp,
 												   const IMDType *md_type,
 												   INT type_modifier,
 												   BOOL is_null, ULONG len,
-												   Datum datum)
+												   Datum datum, Oid collation)
 {
 	CMDIdGPDB *mdid_old = CMDIdGPDB::CastMdid(md_type->MDId());
 	CMDIdGPDB *mdid = GPOS_NEW(mp) CMDIdGPDB(*mdid_old);
@@ -2348,7 +2349,7 @@ CTranslatorScalarToDXL::TranslateGenericDatumToDXL(CMemoryPool *mp,
 			CMDIdGPDB(IMDId::EmdidGeneral, gpdb::GetBaseType(mdid->Oid()));
 		// base_mdid is used for text related domain types
 		lint_value = ExtractLintValueFromDatum(md_type, is_null, bytes, length,
-											   base_mdid);
+											   base_mdid, collation);
 		base_mdid->Release();
 	}
 
@@ -2593,7 +2594,8 @@ LINT
 CTranslatorScalarToDXL::ExtractLintValueFromDatum(const IMDType *md_type,
 												  BOOL is_null, BYTE *bytes,
 												  ULONG length,
-												  IMDId *base_mdid)
+												  IMDId *base_mdid,
+												  Oid collation)
 {
 	IMDId *mdid = md_type->MDId();
 	GPOS_ASSERT(CMDTypeGenericGPDB::HasByte2IntMapping(md_type));
@@ -2615,43 +2617,99 @@ CTranslatorScalarToDXL::ExtractLintValueFromDatum(const IMDType *md_type,
 	}
 	else
 	{
-		// use hash value
-		ULONG hash = 0;
-		if (is_null)
+		// We pack the first 7 bytes of an "order-aligned" prefix into a
+		// non-negative LINT, so that LINT comparison preserves the type's
+		// native ordering. The prefix bytes come from one of:
+		//   * a libc/ICU locale sort key (pg_strxfrm-equivalent) when the
+		//     column has a non-C collation
+		//   * the raw payload otherwise (C/POSIX collation, uuid, char,
+		//     name -- all byte-orderable)
+		//
+		// Trade-off: two values whose first 7 sort-key bytes coincide will
+		// collide to the same LINT, so StatsAreEqual via LINT mapping treats
+		// them as equal. This is acceptable for MCV stats and is what
+		// PG14's convert_string_to_scalar effectively does for intra-bucket
+		// interpolation as well.
+		const BYTE *payload = bytes;
+		ULONG payload_len = length;
+
+		BOOL is_varlena_string = false;
+
+		if (mdid->Equals(&CMDIdGPDB::m_mdid_uuid))
 		{
-			hash = gpos::HashValue<ULONG>(&hash);
+			// uuid: raw bytes are byte-orderable
+		}
+		else if (mdid->Equals(&CMDIdGPDB::m_mdid_name) ||
+				 (base_mdid->IsValid() &&
+				  base_mdid->Equals(&CMDIdGPDB::m_mdid_name)))
+		{
+			// name uses C collation in PG, raw bytes are order-correct
+			payload_len =
+				(ULONG) strnlen((const char *) bytes, (size_t) length);
+		}
+		else if (mdid->Equals(&CMDIdGPDB::m_mdid_char) ||
+				 (base_mdid->IsValid() &&
+				  base_mdid->Equals(&CMDIdGPDB::m_mdid_char)))
+		{
+			// char: byte-orderable
 		}
 		else
 		{
-			if (mdid->Equals(&CMDIdGPDB::m_mdid_uuid))
+			// varlena types: text, varchar, bpchar.
+			payload = (const BYTE *) VARDATA_ANY((const void *) bytes);
+			payload_len = (ULONG) VARSIZE_ANY_EXHDR((const void *) bytes);
+			is_varlena_string = true;
+
+			// PG bpchareq treats trailing spaces as insignificant: a
+			// char(50) MCV stored as 'Books' is space-padded to 50 bytes,
+			// while a query constant ``i_category='Books'`` arrives
+			// unpadded.  Without trimming, the two produce different
+			// sort-key prefixes (and hence different LINTs), so
+			// StatsAreEqual misses every MCV bucket and the filter falls
+			// back to MinRows -- e.g. TPC-DS sf=5 Q33 estimating 1 row
+			// for ``i_category='Books'`` (actual 5331).
+			if (mdid->Equals(&CMDIdGPDB::m_mdid_bpchar) ||
+				(base_mdid->IsValid() &&
+				 base_mdid->Equals(&CMDIdGPDB::m_mdid_bpchar)))
 			{
-				hash = gpdb::UUIDHash((Datum) bytes);
-			}
-			else if (mdid->Equals(&CMDIdGPDB::m_mdid_bpchar) ||
-					 (base_mdid->IsValid() &&
-					  base_mdid->Equals(&CMDIdGPDB::m_mdid_bpchar)))
-			{
-				hash = gpdb::HashBpChar((Datum) bytes);
-			}
-			else if (mdid->Equals(&CMDIdGPDB::m_mdid_char) ||
-					 (base_mdid->IsValid() &&
-					  base_mdid->Equals(&CMDIdGPDB::m_mdid_char)))
-			{
-				hash = gpdb::HashChar((Datum) bytes);
-			}
-			else if (mdid->Equals(&CMDIdGPDB::m_mdid_name) ||
-					 (base_mdid->IsValid() &&
-					  base_mdid->Equals(&CMDIdGPDB::m_mdid_name)))
-			{
-				hash = gpdb::HashName((Datum) bytes);
-			}
-			else
-			{
-				hash = gpdb::HashText((Datum) bytes);
+				while (payload_len > 0 && payload[payload_len - 1] == ' ')
+					payload_len--;
 			}
 		}
 
-		lint_value = (LINT) hash;
+		// For non-C collation on varlena strings, run the payload through
+		// the locale sort-key transform so the prefix orders by the
+		// actual comparison semantics rather than raw bytes. uuid/name/
+		// char are always byte-orderable and don't need this.
+		BYTE sortkey[16];
+		if (is_varlena_string && OidIsValid(collation))
+		{
+			size_t produced = gpdb::ComputeLocaleSortKey(
+				(char *) sortkey, sizeof(sortkey),
+				(const char *) payload, (size_t) payload_len, collation);
+			if (produced > 0)
+			{
+				payload = sortkey;
+				payload_len = (ULONG) produced;
+			}
+			// produced == 0 means C collation (caller short-circuit) or a
+			// non-deterministic/unsupported collation; either way keep the
+			// raw payload. For C collation this is also order-correct.
+		}
+
+		LINT packed = 0;
+		const ULONG kPrefix = 7;  // leave the sign byte clear
+		ULONG take = payload_len < kPrefix ? payload_len : kPrefix;
+		for (ULONG i = 0; i < take; i++)
+		{
+			packed = (packed << 8) | (LINT) payload[i];
+		}
+		// right-pad short prefixes with zeros so shorter strings sort before
+		// longer ones that share the prefix.
+		packed <<= (kPrefix - take) * 8;
+		packed &= (LINT) 0x7FFFFFFFFFFFFFFFLL;
+
+		lint_value = packed;
 	}
 
 	return lint_value;
@@ -2669,7 +2727,8 @@ IDatum *
 CTranslatorScalarToDXL::CreateIDatumFromGpdbDatum(CMemoryPool *mp,
 												  const IMDType *md_type,
 												  BOOL is_null,
-												  Datum gpdb_datum)
+												  Datum gpdb_datum,
+												  Oid collation)
 {
 	ULONG length = md_type->Length();
 	if (!md_type->IsPassedByValue() && !is_null)
@@ -2682,7 +2741,8 @@ CTranslatorScalarToDXL::CreateIDatumFromGpdbDatum(CMemoryPool *mp,
 	GPOS_ASSERT(is_null || length > 0);
 
 	CDXLDatum *datum_dxl = CTranslatorScalarToDXL::TranslateDatumToDXL(
-		mp, md_type, gpmd::default_type_modifier, is_null, length, gpdb_datum);
+		mp, md_type, gpmd::default_type_modifier, is_null, length, gpdb_datum,
+		collation);
 	IDatum *datum = md_type->GetDatumForDXLDatum(mp, datum_dxl);
 	datum_dxl->Release();
 	return datum;

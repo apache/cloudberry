@@ -426,10 +426,6 @@ public:
 	// cap the total number of distinct values (NDVs) in buckets to the number of rows
 	void CapNDVs(CDouble rows);
 
-	// is comparison type supported for filters for text columns
-	static BOOL IsOpSupportedForTextFilter(
-		CStatsPred::EStatsCmpType stats_cmp_type);
-
 	// is comparison type supported for filters
 	static BOOL IsOpSupportedForFilter(
 		CStatsPred::EStatsCmpType stats_cmp_type);
