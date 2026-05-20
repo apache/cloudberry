@@ -6,3 +6,4 @@ select type,database,user_name,address,netmask,auth_method,options from pg_hba_f
  hostnossl | {all}    | {all}     | 10.10.100.100 | 255.255.255.255 | ldap        | {ldapserver=abc.example.com,ldapport=3268,ldaptls=true,ldapbasedn=DC=COM,"ldapbinddn=OU=Hosting,DC=COM",ldapbindpasswd=ldapbindpasswd111,ldapscope=2}
 (1 row)
 
+\! sed -i '$ d' $COORDINATOR_DATA_DIRECTORY/pg_hba.conf

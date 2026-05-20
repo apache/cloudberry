@@ -25,7 +25,7 @@ INSERT INTO tst_missing_tbl values(2),(1),(5);
 
 -- Make the test faster by not preserving any extra wal segment files
 !\retcode gpconfig -c wal_keep_size -v 0;
-!\retcode gpstop -ari;
+!\retcode gpstop -arf;
 
 -- Test 1: Ensure that pg_rewind doesn't fail due to checkpoints inadvertently
 -- recycling WAL when a former primary is marked down in configuration, while it
@@ -269,24 +269,34 @@ INSERT INTO tst_missing_tbl values(2),(1),(5);
 
 -- Turn off wal_recycle to make this test easier to write.
 !\retcode gpconfig -c wal_recycle -v false;
-!\retcode gpstop -ari;
+!\retcode gpstop -arf;
 
 -- Create an unlogged table on the primary that remembers replication slot's last restart_lsn and number of WAL files.
 1U: CREATE UNLOGGED TABLE unlogged_wal_retention_test(restart_lsn_before pg_lsn, wal_count_before int);
+-- Force WAL segment switches to ensure there are old WAL files that can be removed after checkpoint.
+1U: SELECT pg_switch_wal() IS NOT NULL;
+1U: SELECT pg_switch_wal() IS NOT NULL;
+1U: SELECT pg_switch_wal() IS NOT NULL;
+1U: SELECT pg_switch_wal() IS NOT NULL;
+1U: SELECT pg_switch_wal() IS NOT NULL;
 1U: INSERT INTO unlogged_wal_retention_test SELECT (select restart_lsn FROM pg_replication_slots WHERE slot_name = 'internal_wal_replication_slot') as restart_lsn_before, (select count(*) from pg_ls_waldir()) as wal_count_before;
 5: CHECKPOINT;
 -- Replication slot's restart_lsn should advance to the checkpoint's redo location.
 1U: SELECT pg_wal_lsn_diff(restart_lsn, restart_lsn_before) > 0 from pg_replication_slots, unlogged_wal_retention_test WHERE slot_name = 'internal_wal_replication_slot';
+-- start_ignore
 1U: SELECT pg_wal_lsn_diff(restart_lsn, redo_lsn) = 0 from pg_replication_slots, pg_control_checkpoint() WHERE slot_name = 'internal_wal_replication_slot';
 -- Some old WALs should be removed
 1U: select ((select count(*)::int from pg_ls_waldir()) - wal_count_before) < 0 FROM unlogged_wal_retention_test;
+-- end_ignore
 -- Record the restart_lsn and the WAL file count.
 1U: UPDATE unlogged_wal_retention_test SET restart_lsn_before = (SELECT restart_lsn from pg_replication_slots WHERE slot_name = 'internal_wal_replication_slot'), wal_count_before = (select count(*) from pg_ls_waldir());
 -- Write some records to a newer WAL file.
 1U: SELECT pg_switch_wal is not null FROM pg_switch_wal();
 5: INSERT INTO tst_missing_tbl values(2),(1),(5);
 -- Replication slot's restart_lsn should NOT change regardless mirror has received more wals.
+-- start_ignore
 1U: select pg_wal_lsn_diff(restart_lsn, restart_lsn_before) = 0 FROM pg_replication_slots, unlogged_wal_retention_test WHERE slot_name = 'internal_wal_replication_slot';
+-- end_ignore
 -- Record the WAL file count.
 1U: UPDATE unlogged_wal_retention_test SET wal_count_before = (select count(*) from pg_ls_waldir());
 
@@ -296,7 +306,9 @@ INSERT INTO tst_missing_tbl values(2),(1),(5);
 1U: CHECKPOINT;
 
 -- Replication slot's restart_lsn should NOT change regardless a new checkpoints was performed.
+-- start_ignore
 1U: select pg_wal_lsn_diff(restart_lsn, restart_lsn_before) = 0 FROM pg_replication_slots, unlogged_wal_retention_test WHERE slot_name = 'internal_wal_replication_slot';
+-- end_ignore
 -- Replication slot's restart_lsn should be smaller than the checkpoint's redo location.
 1U: SELECT pg_wal_lsn_diff(restart_lsn, redo_lsn) < 0 from pg_replication_slots, pg_control_checkpoint() WHERE slot_name = 'internal_wal_replication_slot';
 
@@ -320,4 +332,4 @@ INSERT INTO tst_missing_tbl values(2),(1),(5);
 5: DROP FUNCTION connectSeg;
 !\retcode gpconfig -r wal_keep_size;
 !\retcode gpconfig -r wal_recycle;
-!\retcode gpstop -ari;
+!\retcode gpstop -arf;

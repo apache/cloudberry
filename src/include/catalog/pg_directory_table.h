@@ -49,8 +49,7 @@ typedef FormData_pg_directory_table *Form_pg_directory_table;
 
 DECLARE_TOAST(pg_directory_table, 8546, 8547);
 
-DECLARE_UNIQUE_INDEX_PKEY(pg_directory_table_relid_index, 8548, on pg_directory_table using btree(dtrelid oid_ops));
-#define DirectoryTableRelidIndexId	8548
+DECLARE_UNIQUE_INDEX_PKEY(pg_directory_table_relid_index, 8548, DirectoryTableRelidIndexId, on pg_directory_table using btree(dtrelid oid_ops));
 
 typedef struct DirectoryTable
 {

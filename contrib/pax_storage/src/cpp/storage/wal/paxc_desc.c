@@ -69,8 +69,8 @@ void pax_rmgr_desc(StringInfo buf, XLogReaderState *record) {
       appendStringInfo(buf,
                        "PAX_CREATE_DIRECTORY, dbid = %u, spcId = %u, "
                        "relfilenodeid = %u",
-                       xlrec->node.dbNode, xlrec->node.spcNode,
-                       xlrec->node.relNode);
+                       xlrec->node.dbOid, xlrec->node.spcOid,
+                       xlrec->node.relNumber);
       break;
     }
     case XLOG_PAX_TRUNCATE: {
@@ -78,8 +78,8 @@ void pax_rmgr_desc(StringInfo buf, XLogReaderState *record) {
       appendStringInfo(buf,
                        "PAX_TRUNCATE, dbid = %u, spcId = %u, "
                        "relfilenodeid = %u",
-                       xlrec->node.dbNode, xlrec->node.spcNode,
-                       xlrec->node.relNode);
+                       xlrec->node.dbOid, xlrec->node.spcOid,
+                       xlrec->node.relNumber);
       break;
     }
     default:

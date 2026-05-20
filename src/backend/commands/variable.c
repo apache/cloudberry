@@ -4,7 +4,7 @@
  *		Routines for handling specialized SET variables.
  *
  *
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -22,16 +22,25 @@
 #include "access/parallel.h"
 #include "access/xact.h"
 #include "access/xlog.h"
+#include "access/xlogprefetcher.h"
 #include "catalog/pg_authid.h"
 #include "cdb/cdbvars.h"
 #include "commands/variable.h"
+#include "common/string.h"
 #include "mb/pg_wchar.h"
 #include "miscadmin.h"
+#include "postmaster/postmaster.h"
+#include "postmaster/syslogger.h"
+#include "storage/bufmgr.h"
 #include "utils/acl.h"
+#include "utils/backend_status.h"
 #include "utils/builtins.h"
+#include "utils/datetime.h"
+#include "utils/guc_hooks.h"
 #include "utils/snapmgr.h"
 #include "utils/syscache.h"
 #include "utils/timestamp.h"
+#include "utils/tzparser.h"
 #include "utils/varlena.h"
 
 /*
@@ -141,7 +150,7 @@ check_datestyle(char **newval, void **extra, GucSource source)
 			char	   *subval;
 			void	   *subextra = NULL;
 
-			subval = strdup(GetConfigOptionResetString("datestyle"));
+			subval = guc_strdup(LOG, GetConfigOptionResetString("datestyle"));
 			if (!subval)
 			{
 				ok = false;
@@ -149,7 +158,7 @@ check_datestyle(char **newval, void **extra, GucSource source)
 			}
 			if (!check_datestyle(&subval, &subextra, source))
 			{
-				free(subval);
+				guc_free(subval);
 				ok = false;
 				break;
 			}
@@ -158,8 +167,8 @@ check_datestyle(char **newval, void **extra, GucSource source)
 				newDateStyle = myextra[0];
 			if (!have_order)
 				newDateOrder = myextra[1];
-			free(subval);
-			free(subextra);
+			guc_free(subval);
+			guc_free(subextra);
 		}
 		else
 		{
@@ -180,9 +189,9 @@ check_datestyle(char **newval, void **extra, GucSource source)
 	}
 
 	/*
-	 * Prepare the canonical string to return.  GUC wants it malloc'd.
+	 * Prepare the canonical string to return.  GUC wants it guc_malloc'd.
 	 */
-	result = (char *) malloc(32);
+	result = (char *) guc_malloc(LOG, 32);
 	if (!result)
 		return false;
 
@@ -214,13 +223,13 @@ check_datestyle(char **newval, void **extra, GucSource source)
 			break;
 	}
 
-	free(*newval);
+	guc_free(*newval);
 	*newval = result;
 
 	/*
 	 * Set up the "extra" struct actually used by assign_datestyle.
 	 */
-	myextra = (int *) malloc(2 * sizeof(int));
+	myextra = (int *) guc_malloc(LOG, 2 * sizeof(int));
 	if (!myextra)
 		return false;
 	myextra[0] = newDateStyle;
@@ -359,7 +368,7 @@ check_timezone(char **newval, void **extra, GucSource source)
 	/*
 	 * Pass back data for assign_timezone to use
 	 */
-	*extra = malloc(sizeof(pg_tz *));
+	*extra = guc_malloc(LOG, sizeof(pg_tz *));
 	if (!*extra)
 		return false;
 	*((pg_tz **) *extra) = new_tz;
@@ -432,7 +441,7 @@ check_log_timezone(char **newval, void **extra, GucSource source)
 	/*
 	 * Pass back data for assign_log_timezone to use
 	 */
-	*extra = malloc(sizeof(pg_tz *));
+	*extra = guc_malloc(LOG, sizeof(pg_tz *));
 	if (!*extra)
 		return false;
 	*((pg_tz **) *extra) = new_tz;
@@ -464,6 +473,56 @@ show_log_timezone(void)
 		return tzn;
 
 	return "unknown";
+}
+
+
+/*
+ * TIMEZONE_ABBREVIATIONS
+ */
+
+/*
+ * GUC check_hook for timezone_abbreviations
+ */
+bool
+check_timezone_abbreviations(char **newval, void **extra, GucSource source)
+{
+	/*
+	 * The boot_val for timezone_abbreviations is NULL.  When we see that we
+	 * just do nothing.  If the value isn't overridden from the config file
+	 * then pg_timezone_abbrev_initialize() will eventually replace it with
+	 * "Default".  This hack has two purposes: to avoid wasting cycles loading
+	 * values that might soon be overridden from the config file, and to avoid
+	 * trying to read the timezone abbrev files during InitializeGUCOptions().
+	 * The latter doesn't work in an EXEC_BACKEND subprocess because
+	 * my_exec_path hasn't been set yet and so we can't locate PGSHAREDIR.
+	 */
+	if (*newval == NULL)
+	{
+		Assert(source == PGC_S_DEFAULT);
+		return true;
+	}
+
+	/* OK, load the file and produce a guc_malloc'd TimeZoneAbbrevTable */
+	*extra = load_tzoffsets(*newval);
+
+	/* tzparser.c returns NULL on failure, reporting via GUC_check_errmsg */
+	if (!*extra)
+		return false;
+
+	return true;
+}
+
+/*
+ * GUC assign_hook for timezone_abbreviations
+ */
+void
+assign_timezone_abbreviations(const char *newval, void *extra)
+{
+	/* Do nothing for the boot_val default of NULL */
+	if (!extra)
+		return;
+
+	InstallTimeZoneAbbrevs((TimeZoneAbbrevTable *) extra);
 }
 
 
@@ -523,7 +582,7 @@ check_transaction_read_only(bool *newval, void **extra, GucSource source)
  * As in check_transaction_read_only, allow it if not inside a transaction.
  */
 bool
-check_XactIsoLevel(int *newval, void **extra, GucSource source)
+check_transaction_isolation(int *newval, void **extra, GucSource source)
 {
 	int			newXactIsoLevel = *newval;
 
@@ -626,7 +685,7 @@ check_transaction_deferrable(bool *newval, void **extra, GucSource source)
 bool
 check_random_seed(double *newval, void **extra, GucSource source)
 {
-	*extra = malloc(sizeof(int));
+	*extra = guc_malloc(LOG, sizeof(int));
 	if (!*extra)
 		return false;
 	/* Arm the assign only if source of value is an interactive SET */
@@ -714,8 +773,8 @@ check_client_encoding(char **newval, void **extra, GucSource source)
 	if (strcmp(*newval, canonical_name) != 0 &&
 		strcmp(*newval, "UNICODE") != 0)
 	{
-		free(*newval);
-		*newval = strdup(canonical_name);
+		guc_free(*newval);
+		*newval = guc_strdup(LOG, canonical_name);
 		if (!*newval)
 			return false;
 	}
@@ -723,7 +782,7 @@ check_client_encoding(char **newval, void **extra, GucSource source)
 	/*
 	 * Save the encoding's ID in *extra, for use by assign_client_encoding.
 	 */
-	*extra = malloc(sizeof(int));
+	*extra = guc_malloc(LOG, sizeof(int));
 	if (!*extra)
 		return false;
 	*((int *) *extra) = encoding;
@@ -790,43 +849,81 @@ check_session_authorization(char **newval, void **extra, GucSource source)
 	if (*newval == NULL)
 		return true;
 
-	if (!IsTransactionState())
+	if (InitializingParallelWorker)
 	{
 		/*
-		 * Can't do catalog lookups, so fail.  The result of this is that
-		 * session_authorization cannot be set in postgresql.conf, which seems
-		 * like a good thing anyway, so we don't work hard to avoid it.
+		 * In parallel worker initialization, we want to copy the leader's
+		 * state even if it no longer matches the catalogs. ParallelWorkerMain
+		 * already installed the correct role OID and superuser state.
 		 */
-		return false;
+		roleid = GetSessionUserId();
+		is_superuser = GetSessionUserIsSuperuser();
 	}
-
-	/* Look up the username */
-	roleTup = SearchSysCache1(AUTHNAME, PointerGetDatum(*newval));
-	if (!HeapTupleIsValid(roleTup))
+	else
 	{
+		if (!IsTransactionState())
+		{
+			/*
+			 * Can't do catalog lookups, so fail.  The result of this is that
+			 * session_authorization cannot be set in postgresql.conf, which
+			 * seems like a good thing anyway, so we don't work hard to avoid
+			 * it.
+			 */
+			return false;
+		}
+
 		/*
 		 * When source == PGC_S_TEST, we don't throw a hard error for a
-		 * nonexistent user name, only a NOTICE.  See comments in guc.h.
+		 * nonexistent user name or insufficient privileges, only a NOTICE.
+		 * See comments in guc.h.
 		 */
-		if (source == PGC_S_TEST)
+
+		/* Look up the username */
+		roleTup = SearchSysCache1(AUTHNAME, PointerGetDatum(*newval));
+		if (!HeapTupleIsValid(roleTup))
 		{
-			ereport(NOTICE,
-					(errcode(ERRCODE_UNDEFINED_OBJECT),
-					 errmsg("role \"%s\" does not exist", *newval)));
-			return true;
+			if (source == PGC_S_TEST)
+			{
+				ereport(NOTICE,
+						(errcode(ERRCODE_UNDEFINED_OBJECT),
+						 errmsg("role \"%s\" does not exist", *newval)));
+				return true;
+			}
+			GUC_check_errmsg("role \"%s\" does not exist", *newval);
+			return false;
 		}
-		GUC_check_errmsg("role \"%s\" does not exist", *newval);
-		return false;
+
+		roleform = (Form_pg_authid) GETSTRUCT(roleTup);
+		roleid = roleform->oid;
+		is_superuser = roleform->rolsuper;
+
+		ReleaseSysCache(roleTup);
+
+		/*
+		 * Only superusers may SET SESSION AUTHORIZATION a role other than
+		 * itself. Note that in case of multiple SETs in a single session, the
+		 * original authenticated user's superuserness is what matters.
+		 */
+		if (roleid != GetAuthenticatedUserId() &&
+			!GetAuthenticatedUserIsSuperuser())
+		{
+			if (source == PGC_S_TEST)
+			{
+				ereport(NOTICE,
+						(errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
+						 errmsg("permission will be denied to set session authorization \"%s\"",
+								*newval)));
+				return true;
+			}
+			GUC_check_errcode(ERRCODE_INSUFFICIENT_PRIVILEGE);
+			GUC_check_errmsg("permission denied to set session authorization \"%s\"",
+							 *newval);
+			return false;
+		}
 	}
 
-	roleform = (Form_pg_authid) GETSTRUCT(roleTup);
-	roleid = roleform->oid;
-	is_superuser = roleform->rolsuper;
-
-	ReleaseSysCache(roleTup);
-
 	/* Set up "extra" struct for assign_session_authorization to use */
-	myextra = (role_auth_extra *) malloc(sizeof(role_auth_extra));
+	myextra = (role_auth_extra *) guc_malloc(LOG, sizeof(role_auth_extra));
 	if (!myextra)
 		return false;
 	myextra->roleid = roleid;
@@ -856,7 +953,7 @@ assign_session_authorization(const char *newval, void *extra)
  * a translation of "none" to InvalidOid.  Otherwise this is much like
  * SET SESSION AUTHORIZATION.
  */
-extern char *role_string;		/* in guc.c */
+extern char *role_string;		/* in guc_tables.c */
 
 bool
 check_role(char **newval, void **extra, GucSource source)
@@ -872,6 +969,16 @@ check_role(char **newval, void **extra, GucSource source)
 		/* hardwired translation */
 		roleid = InvalidOid;
 		is_superuser = false;
+	}
+	else if (InitializingParallelWorker)
+	{
+		/*
+		 * In parallel worker initialization, we want to copy the leader's
+		 * state even if it no longer matches the catalogs. ParallelWorkerMain
+		 * already installed the correct role OID and superuser state.
+		 */
+		roleid = GetCurrentRoleId();
+		is_superuser = session_auth_is_superuser;
 	}
 	else
 	{
@@ -912,13 +1019,8 @@ check_role(char **newval, void **extra, GucSource source)
 
 		ReleaseSysCache(roleTup);
 
-		/*
-		 * Verify that session user is allowed to become this role, but skip
-		 * this in parallel mode, where we must blindly recreate the parallel
-		 * leader's state.
-		 */
-		if (!InitializingParallelWorker &&
-			!is_member_of_role(GetSessionUserId(), roleid))
+		/* Verify that session user is allowed to become this role */
+		if (!member_can_set_role(GetSessionUserId(), roleid))
 		{
 			if (source == PGC_S_TEST)
 			{
@@ -936,7 +1038,7 @@ check_role(char **newval, void **extra, GucSource source)
 	}
 
 	/* Set up "extra" struct for assign_role to use */
-	myextra = (role_auth_extra *) malloc(sizeof(role_auth_extra));
+	myextra = (role_auth_extra *) guc_malloc(LOG, sizeof(role_auth_extra));
 	if (!myextra)
 		return false;
 	myextra->roleid = roleid;
@@ -969,4 +1071,227 @@ show_role(void)
 
 	/* Otherwise we can just use the GUC string */
 	return role_string ? role_string : "none";
+}
+
+
+/*
+ * PATH VARIABLES
+ *
+ * check_canonical_path is used for log_directory and some other GUCs where
+ * all we want to do is canonicalize the represented path name.
+ */
+
+bool
+check_canonical_path(char **newval, void **extra, GucSource source)
+{
+	/*
+	 * Since canonicalize_path never enlarges the string, we can just modify
+	 * newval in-place.  But watch out for NULL, which is the default value
+	 * for external_pid_file.
+	 */
+	if (*newval)
+		canonicalize_path(*newval);
+	return true;
+}
+
+
+/*
+ * MISCELLANEOUS
+ */
+
+/*
+ * GUC check_hook for application_name
+ */
+bool
+check_application_name(char **newval, void **extra, GucSource source)
+{
+	char	   *clean;
+	char	   *ret;
+
+	/* Only allow clean ASCII chars in the application name */
+	clean = pg_clean_ascii(*newval, MCXT_ALLOC_NO_OOM);
+	if (!clean)
+		return false;
+
+	ret = guc_strdup(WARNING, clean);
+	if (!ret)
+	{
+		pfree(clean);
+		return false;
+	}
+
+	guc_free(*newval);
+
+	pfree(clean);
+	*newval = ret;
+	return true;
+}
+
+/*
+ * GUC assign_hook for application_name
+ */
+void
+assign_application_name(const char *newval, void *extra)
+{
+	/* Update the pg_stat_activity view */
+	pgstat_report_appname(newval);
+}
+
+/*
+ * GUC check_hook for cluster_name
+ */
+bool
+check_cluster_name(char **newval, void **extra, GucSource source)
+{
+	char	   *clean;
+	char	   *ret;
+
+	/* Only allow clean ASCII chars in the cluster name */
+	clean = pg_clean_ascii(*newval, MCXT_ALLOC_NO_OOM);
+	if (!clean)
+		return false;
+
+	ret = guc_strdup(WARNING, clean);
+	if (!ret)
+	{
+		pfree(clean);
+		return false;
+	}
+
+	guc_free(*newval);
+
+	pfree(clean);
+	*newval = ret;
+	return true;
+}
+
+/*
+ * GUC assign_hook for maintenance_io_concurrency
+ */
+void
+assign_maintenance_io_concurrency(int newval, void *extra)
+{
+#ifdef USE_PREFETCH
+	/*
+	 * Reconfigure recovery prefetching, because a setting it depends on
+	 * changed.
+	 */
+	maintenance_io_concurrency = newval;
+	if (AmStartupProcess())
+		XLogPrefetchReconfigure();
+#endif
+}
+
+
+/*
+ * These show hooks just exist because we want to show the values in octal.
+ */
+
+/*
+ * GUC show_hook for data_directory_mode
+ */
+const char *
+show_data_directory_mode(void)
+{
+	static char buf[12];
+
+	snprintf(buf, sizeof(buf), "%04o", data_directory_mode);
+	return buf;
+}
+
+/*
+ * GUC show_hook for log_file_mode
+ */
+const char *
+show_log_file_mode(void)
+{
+	static char buf[12];
+
+	snprintf(buf, sizeof(buf), "%04o", Log_file_mode);
+	return buf;
+}
+
+/*
+ * GUC show_hook for unix_socket_permissions
+ */
+const char *
+show_unix_socket_permissions(void)
+{
+	static char buf[12];
+
+	snprintf(buf, sizeof(buf), "%04o", Unix_socket_permissions);
+	return buf;
+}
+
+
+/*
+ * These check hooks do nothing more than reject non-default settings
+ * in builds that don't support them.
+ */
+
+bool
+check_bonjour(bool *newval, void **extra, GucSource source)
+{
+#ifndef USE_BONJOUR
+	if (*newval)
+	{
+		GUC_check_errmsg("Bonjour is not supported by this build");
+		return false;
+	}
+#endif
+	return true;
+}
+
+bool
+check_default_with_oids(bool *newval, void **extra, GucSource source)
+{
+	if (*newval)
+	{
+		/* check the GUC's definition for an explanation */
+		GUC_check_errcode(ERRCODE_FEATURE_NOT_SUPPORTED);
+		GUC_check_errmsg("tables declared WITH OIDS are not supported");
+
+		return false;
+	}
+
+	return true;
+}
+
+bool
+check_effective_io_concurrency(int *newval, void **extra, GucSource source)
+{
+#ifndef USE_PREFETCH
+	if (*newval != 0)
+	{
+		GUC_check_errdetail("effective_io_concurrency must be set to 0 on platforms that lack posix_fadvise().");
+		return false;
+	}
+#endif							/* USE_PREFETCH */
+	return true;
+}
+
+bool
+check_maintenance_io_concurrency(int *newval, void **extra, GucSource source)
+{
+#ifndef USE_PREFETCH
+	if (*newval != 0)
+	{
+		GUC_check_errdetail("maintenance_io_concurrency must be set to 0 on platforms that lack posix_fadvise().");
+		return false;
+	}
+#endif							/* USE_PREFETCH */
+	return true;
+}
+
+bool
+check_ssl(bool *newval, void **extra, GucSource source)
+{
+#ifndef USE_SSL
+	if (*newval)
+	{
+		GUC_check_errmsg("SSL is not supported by this build");
+		return false;
+	}
+#endif
+	return true;
 }

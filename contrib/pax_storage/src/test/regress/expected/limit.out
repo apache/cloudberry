@@ -407,8 +407,8 @@ select unique1, unique2, nextval('testseq')
 explain (verbose, costs off)
 select unique1, unique2, generate_series(1,10)
   from tenk1 order by unique2 limit 7;
-                                                                               QUERY PLAN                                                                                
--------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+                               QUERY PLAN                               
+------------------------------------------------------------------------
  Limit
    Output: unique1, unique2, (generate_series(1, 10))
    ->  Gather Motion 3:1  (slice1; segments: 3)
@@ -627,10 +627,10 @@ CREATE VIEW limit_thousand_v_1 AS SELECT thousand FROM onek WHERE thousand < 995
 ----------+---------+-----------+----------+---------+---------+-------------
  thousand | integer |           |          |         | plain   | 
 View definition:
- SELECT onek.thousand
+ SELECT thousand
    FROM onek
-  WHERE onek.thousand < 995
-  ORDER BY onek.thousand
+  WHERE thousand < 995
+  ORDER BY thousand
  OFFSET 10
  FETCH FIRST 5 ROWS WITH TIES;
 
@@ -642,10 +642,10 @@ CREATE VIEW limit_thousand_v_2 AS SELECT thousand FROM onek WHERE thousand < 995
 ----------+---------+-----------+----------+---------+---------+-------------
  thousand | integer |           |          |         | plain   | 
 View definition:
- SELECT onek.thousand
+ SELECT thousand
    FROM onek
-  WHERE onek.thousand < 995
-  ORDER BY onek.thousand
+  WHERE thousand < 995
+  ORDER BY thousand
  OFFSET 10
  LIMIT 5;
 
@@ -660,10 +660,10 @@ CREATE VIEW limit_thousand_v_3 AS SELECT thousand FROM onek WHERE thousand < 995
 ----------+---------+-----------+----------+---------+---------+-------------
  thousand | integer |           |          |         | plain   | 
 View definition:
- SELECT onek.thousand
+ SELECT thousand
    FROM onek
-  WHERE onek.thousand < 995
-  ORDER BY onek.thousand
+  WHERE thousand < 995
+  ORDER BY thousand
  FETCH FIRST (NULL::integer + 1) ROWS WITH TIES;
 
 CREATE VIEW limit_thousand_v_4 AS SELECT thousand FROM onek WHERE thousand < 995
@@ -674,10 +674,10 @@ CREATE VIEW limit_thousand_v_4 AS SELECT thousand FROM onek WHERE thousand < 995
 ----------+---------+-----------+----------+---------+---------+-------------
  thousand | integer |           |          |         | plain   | 
 View definition:
- SELECT onek.thousand
+ SELECT thousand
    FROM onek
-  WHERE onek.thousand < 995
-  ORDER BY onek.thousand
+  WHERE thousand < 995
+  ORDER BY thousand
  LIMIT ALL;
 
 -- leave these views

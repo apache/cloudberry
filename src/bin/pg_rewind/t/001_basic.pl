@@ -1,10 +1,10 @@
 
-# Copyright (c) 2021, PostgreSQL Global Development Group
+# Copyright (c) 2021-2023, PostgreSQL Global Development Group
 
 use strict;
 use warnings;
-use TestLib;
-use Test::More tests => 23;
+use PostgreSQL::Test::Utils;
+use Test::More;
 
 use FindBin;
 use lib $FindBin::RealBin;
@@ -92,7 +92,7 @@ sub run_test
 		# step.
 		command_fails(
 			[
-				'pg_rewind',       '--debug',
+				'pg_rewind', '--debug',
 				'--source-pgdata', $standby_pgdata,
 				'--target-pgdata', $primary_pgdata,
 				'--no-sync'
@@ -104,10 +104,10 @@ sub run_test
 		# recovery once.
 		command_fails(
 			[
-				'pg_rewind',       '--debug',
+				'pg_rewind', '--debug',
 				'--source-pgdata', $standby_pgdata,
 				'--target-pgdata', $primary_pgdata,
-				'--no-sync',       '--no-ensure-shutdown'
+				'--no-sync', '--no-ensure-shutdown'
 			],
 			'pg_rewind --no-ensure-shutdown with running target');
 
@@ -117,10 +117,10 @@ sub run_test
 		$node_primary->stop;
 		command_fails(
 			[
-				'pg_rewind',       '--debug',
+				'pg_rewind', '--debug',
 				'--source-pgdata', $standby_pgdata,
 				'--target-pgdata', $primary_pgdata,
-				'--no-sync',       '--no-ensure-shutdown'
+				'--no-sync', '--no-ensure-shutdown'
 			],
 			'pg_rewind with unexpected running source');
 
@@ -131,10 +131,10 @@ sub run_test
 		$node_standby->stop;
 		command_ok(
 			[
-				'pg_rewind',       '--debug',
+				'pg_rewind', '--debug',
 				'--source-pgdata', $standby_pgdata,
 				'--target-pgdata', $primary_pgdata,
-				'--no-sync',       '--dry-run'
+				'--no-sync', '--dry-run'
 			],
 			'pg_rewind --dry-run');
 
@@ -191,4 +191,4 @@ run_test('local');
 run_test('remote');
 run_test('archive');
 
-exit(0);
+done_testing();

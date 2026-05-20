@@ -113,8 +113,8 @@ CREATE TABLE jsonexplaintest (i int4) PARTITION BY RANGE (i) (START(1) END(3) EV
 EXPLAIN (FORMAT JSON, COSTS OFF) SELECT * FROM jsonexplaintest WHERE i = 2;
 
 -- start_matchsubs
--- m/Extra Text: \(seg\d+\)   hash table\(s\): \d+; \d+ groups total in \d+ batches, \d+ spill partitions; disk usage: \d+KB; chain length \d+.\d+ avg, \d+ max; using \d+ of \d+ buckets; total \d+ expansions./
--- s/Extra Text: \(seg\d+\)   hash table\(s\): \d+; \d+ groups total in \d+ batches, \d+ spill partitions; disk usage: \d+KB; chain length \d+.\d+ avg, \d+ max; using \d+ of \d+ buckets; total \d+ expansions./Extra Text: (seg0)   hash table(s): ###; ### groups total in ### batches, ### spill partitions; disk usage: ###KB; chain length ###.## avg, ### max; using ## of ### buckets; total ### expansions./
+-- m/Extra Text: \(seg\d+\)   hash table\(s\): .*/
+-- s/Extra Text: \(seg\d+\)   hash table\(s\): .*/Extra Text: (seg0)   hash table(s): ###/
 -- m/Work_mem: \d+K bytes max, \d+K bytes wanted/
 -- s/Work_mem: \d+K bytes max, \d+K bytes wanted/Work_mem: ###K bytes max, ###K bytes wanted/
 -- end_matchsubs

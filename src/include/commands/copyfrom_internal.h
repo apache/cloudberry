@@ -4,7 +4,7 @@
  *	  Internal definitions for COPY FROM command.
  *
  *
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * src/include/commands/copyfrom_internal.h
@@ -29,13 +29,15 @@ typedef enum CopySource
 } CopySource;
 
 /*
- * Represents the heap insert method to be used during COPY FROM.
+ * Represents the insert method to be used during COPY FROM.
  */
 typedef enum CopyInsertMethod
 {
-	CIM_SINGLE,					/* use table_tuple_insert or fdw routine */
-	CIM_MULTI,					/* always use table_multi_insert */
-	CIM_MULTI_CONDITIONAL		/* use table_multi_insert only if valid */
+	CIM_SINGLE,					/* use table_tuple_insert or ExecForeignInsert */
+	CIM_MULTI,					/* always use table_multi_insert or
+								 * ExecForeignBatchInsert */
+	CIM_MULTI_CONDITIONAL		/* use table_multi_insert or
+								 * ExecForeignBatchInsert only if valid */
 } CopyInsertMethod;
 
 /*
@@ -83,19 +85,26 @@ typedef struct CopyFromStateData
 	uint64		cur_lineno;		/* line number for error messages */
 	const char *cur_attname;	/* current att for error messages */
 	const char *cur_attval;		/* current att value for error messages */
+	bool		relname_only;	/* don't output line number, att, etc. */
 
 	/*
 	 * Working state
 	 */
 	MemoryContext copycontext;  /* per-copy execution context */
 
-	AttrNumber	num_defaults;
+	AttrNumber	num_defaults;	/* count of att that are missing and have
+								 * default value */
 	FmgrInfo   *in_functions;	/* array of input functions for each attrs */
 	Oid		   *typioparams;	/* array of element types for in_functions */
-	int		   *defmap;			/* array of default att numbers */
-	ExprState **defexprs;		/* array of default att expressions */
+	int		   *defmap;			/* array of default att numbers related to
+								 * missing att */
+	ExprState **defexprs;		/* array of default att expressions for all
+								 * att */
+	bool	   *defaults;		/* if DEFAULT marker was found for
+								 * corresponding att */
 	bool		volatile_defexprs;	/* is any of defexprs volatile? */
-	List	   *range_table;
+	List	   *range_table;	/* single element list of RangeTblEntry */
+	List	   *rteperminfos;	/* single element list of RTEPermissionInfo */
 	ExprState  *qualexpr;
 
 	TransitionCaptureState *transition_capture;
@@ -205,6 +214,8 @@ extern Datum CopyReadBinaryAttribute(CopyFromState cstate, FmgrInfo *flinfo,
 extern int CopyGetData(CopyFromState cstate, void *databuf,
 					   int minread, int maxread);
 extern int CopyReadBinaryData(CopyFromState cstate, char *dest, int nbytes);
+extern bool NextCopyFromX(CopyFromState cstate, ExprContext *econtext,
+						  Datum *values, bool *nulls);
 
 /*
  * These functions do apply some data conversion

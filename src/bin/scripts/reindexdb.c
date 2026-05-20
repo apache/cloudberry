@@ -2,7 +2,7 @@
  *
  * reindexdb
  *
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
  *
  * src/bin/scripts/reindexdb.c
  *
@@ -10,6 +10,8 @@
  */
 
 #include "postgres_fe.h"
+
+#include <limits.h>
 
 #include "catalog/pg_class_d.h"
 #include "common.h"
@@ -107,59 +109,56 @@ main(int argc, char *argv[])
 	handle_help_version_opts(argc, argv, "reindexdb", help);
 
 	/* process command-line options */
-	while ((c = getopt_long(argc, argv, "h:p:U:wWeqS:d:ast:i:j:v", long_options, &optindex)) != -1)
+	while ((c = getopt_long(argc, argv, "ad:eh:i:j:qp:sS:t:U:vwW", long_options, &optindex)) != -1)
 	{
 		switch (c)
 		{
+			case 'a':
+				alldb = true;
+				break;
+			case 'd':
+				dbname = pg_strdup(optarg);
+				break;
+			case 'e':
+				echo = true;
+				break;
 			case 'h':
 				host = pg_strdup(optarg);
+				break;
+			case 'i':
+				simple_string_list_append(&indexes, optarg);
+				break;
+			case 'j':
+				if (!option_parse_int(optarg, "-j/--jobs", 1, INT_MAX,
+									  &concurrentCons))
+					exit(1);
+				break;
+			case 'q':
+				quiet = true;
 				break;
 			case 'p':
 				port = pg_strdup(optarg);
 				break;
+			case 's':
+				syscatalog = true;
+				break;
+			case 'S':
+				simple_string_list_append(&schemas, optarg);
+				break;
+			case 't':
+				simple_string_list_append(&tables, optarg);
+				break;
 			case 'U':
 				username = pg_strdup(optarg);
+				break;
+			case 'v':
+				verbose = true;
 				break;
 			case 'w':
 				prompt_password = TRI_NO;
 				break;
 			case 'W':
 				prompt_password = TRI_YES;
-				break;
-			case 'e':
-				echo = true;
-				break;
-			case 'q':
-				quiet = true;
-				break;
-			case 'S':
-				simple_string_list_append(&schemas, optarg);
-				break;
-			case 'd':
-				dbname = pg_strdup(optarg);
-				break;
-			case 'a':
-				alldb = true;
-				break;
-			case 's':
-				syscatalog = true;
-				break;
-			case 't':
-				simple_string_list_append(&tables, optarg);
-				break;
-			case 'i':
-				simple_string_list_append(&indexes, optarg);
-				break;
-			case 'j':
-				concurrentCons = atoi(optarg);
-				if (concurrentCons <= 0)
-				{
-					pg_log_error("number of parallel jobs must be at least 1");
-					exit(1);
-				}
-				break;
-			case 'v':
-				verbose = true;
 				break;
 			case 1:
 				concurrently = true;
@@ -171,7 +170,8 @@ main(int argc, char *argv[])
 				tablespace = pg_strdup(optarg);
 				break;
 			default:
-				fprintf(stderr, _("Try \"%s --help\" for more information.\n"), progname);
+				/* getopt_long already emitted a complaint */
+				pg_log_error_hint("Try \"%s --help\" for more information.", progname);
 				exit(1);
 		}
 	}
@@ -190,7 +190,7 @@ main(int argc, char *argv[])
 	{
 		pg_log_error("too many command-line arguments (first is \"%s\")",
 					 argv[optind]);
-		fprintf(stderr, _("Try \"%s --help\" for more information.\n"), progname);
+		pg_log_error_hint("Try \"%s --help\" for more information.", progname);
 		exit(1);
 	}
 
@@ -217,30 +217,15 @@ main(int argc, char *argv[])
 	if (alldb)
 	{
 		if (dbname)
-		{
-			pg_log_error("cannot reindex all databases and a specific one at the same time");
-			exit(1);
-		}
+			pg_fatal("cannot reindex all databases and a specific one at the same time");
 		if (syscatalog)
-		{
-			pg_log_error("cannot reindex all databases and system catalogs at the same time");
-			exit(1);
-		}
+			pg_fatal("cannot reindex all databases and system catalogs at the same time");
 		if (schemas.head != NULL)
-		{
-			pg_log_error("cannot reindex specific schema(s) in all databases");
-			exit(1);
-		}
+			pg_fatal("cannot reindex specific schema(s) in all databases");
 		if (tables.head != NULL)
-		{
-			pg_log_error("cannot reindex specific table(s) in all databases");
-			exit(1);
-		}
+			pg_fatal("cannot reindex specific table(s) in all databases");
 		if (indexes.head != NULL)
-		{
-			pg_log_error("cannot reindex specific index(es) in all databases");
-			exit(1);
-		}
+			pg_fatal("cannot reindex specific index(es) in all databases");
 
 		cparams.dbname = maintenance_db;
 
@@ -250,26 +235,14 @@ main(int argc, char *argv[])
 	else if (syscatalog)
 	{
 		if (schemas.head != NULL)
-		{
-			pg_log_error("cannot reindex specific schema(s) and system catalogs at the same time");
-			exit(1);
-		}
+			pg_fatal("cannot reindex specific schema(s) and system catalogs at the same time");
 		if (tables.head != NULL)
-		{
-			pg_log_error("cannot reindex specific table(s) and system catalogs at the same time");
-			exit(1);
-		}
+			pg_fatal("cannot reindex specific table(s) and system catalogs at the same time");
 		if (indexes.head != NULL)
-		{
-			pg_log_error("cannot reindex specific index(es) and system catalogs at the same time");
-			exit(1);
-		}
+			pg_fatal("cannot reindex specific index(es) and system catalogs at the same time");
 
 		if (concurrentCons > 1)
-		{
-			pg_log_error("cannot use multiple jobs to reindex system catalogs");
-			exit(1);
-		}
+			pg_fatal("cannot use multiple jobs to reindex system catalogs");
 
 		if (dbname == NULL)
 		{
@@ -295,10 +268,7 @@ main(int argc, char *argv[])
 		 * depending on the same relation.
 		 */
 		if (concurrentCons > 1 && indexes.head != NULL)
-		{
-			pg_log_error("cannot use multiple jobs to reindex indexes");
-			exit(1);
-		}
+			pg_fatal("cannot use multiple jobs to reindex indexes");
 
 		if (dbname == NULL)
 		{
@@ -361,9 +331,8 @@ reindex_one_database(ConnParams *cparams, ReindexType type,
 	if (tablespace && PQserverVersion(conn) < 140000)
 	{
 		PQfinish(conn);
-		pg_log_error("cannot use the \"%s\" option on server versions older than PostgreSQL %s",
-					 "tablespace", "14");
-		exit(1);
+		pg_fatal("cannot use the \"%s\" option on server versions older than PostgreSQL %s",
+				 "tablespace", "14");
 	}
 
 	if (!parallel)
@@ -394,18 +363,6 @@ reindex_one_database(ConnParams *cparams, ReindexType type,
 		switch (process_type)
 		{
 			case REINDEX_DATABASE:
-
-				/*
-				 * Database-wide parallel reindex requires special processing.
-				 * If multiple jobs were asked, we have to reindex system
-				 * catalogs first as they cannot be processed in parallel.
-				 */
-				if (concurrently)
-					pg_log_warning("cannot reindex system catalogs concurrently, skipping all");
-				else
-					run_reindex_command(conn, REINDEX_SYSTEM, PQdb(conn), echo,
-										verbose, concurrently, false,
-										tablespace);
 
 				/* Build a list of relations from the database */
 				process_list = get_parallel_object_list(conn, process_type,
@@ -676,6 +633,8 @@ get_parallel_object_list(PGconn *conn, ReindexType type,
 								 CppAsString2(RELKIND_RELATION) ", "
 								 CppAsString2(RELKIND_DIRECTORY_TABLE) ", "
 								 CppAsString2(RELKIND_MATVIEW) ")\n"
+								 "   AND c.relpersistence != "
+								 CppAsString2(RELPERSISTENCE_TEMP) "\n"
 								 " ORDER BY c.relpages DESC;");
 			break;
 
@@ -699,6 +658,8 @@ get_parallel_object_list(PGconn *conn, ReindexType type,
 									 CppAsString2(RELKIND_RELATION) ", "
 									 CppAsString2(RELKIND_DIRECTORY_TABLE) ", "
 									 CppAsString2(RELKIND_MATVIEW) ")\n"
+									 "   AND c.relpersistence != "
+									 CppAsString2(RELPERSISTENCE_TEMP) "\n"
 									 " AND ns.nspname IN (");
 
 				for (cell = user_list->head; cell; cell = cell->next)
@@ -770,7 +731,9 @@ reindex_all_databases(ConnParams *cparams,
 	int			i;
 
 	conn = connectMaintenanceDatabase(cparams, progname, echo);
-	result = executeQuery(conn, "SELECT datname FROM pg_database WHERE datallowconn ORDER BY 1;", echo);
+	result = executeQuery(conn,
+						  "SELECT datname FROM pg_database WHERE datallowconn AND datconnlimit <> -2 ORDER BY 1;",
+						  echo);
 	PQfinish(conn);
 
 	for (i = 0; i < PQntuples(result); i++)

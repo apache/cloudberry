@@ -76,6 +76,14 @@ sub adjust_database_contents
 	my ($old_version, %dbnames) = @_;
 	my $result = {};
 
+	die "wrong type for \$old_version\n"
+	  unless $old_version->isa("PostgreSQL::Version");
+
+	# The version tests can be sensitive if fixups have been applied in a
+	# recent version and pg_upgrade is run with a beta version, or such.
+	# Therefore, use a modified version object that only contains the major.
+	$old_version = PostgreSQL::Version->new($old_version->major);
+
 	# remove dbs of modules known to cause pg_upgrade to fail
 	# anything not builtin and incompatible should clean up its own db
 	foreach my $bad_module ('test_ddl_deparse', 'tsearch2')
@@ -88,27 +96,54 @@ sub adjust_database_contents
 		}
 	}
 
-	# avoid version number issues with test_ext7
+	# avoid no-path-to-downgrade-extension-version issues
 	if ($dbnames{contrib_regression_test_extensions})
 	{
 		_add_st(
 			$result,
 			'contrib_regression_test_extensions',
+			'drop extension if exists test_ext_cine',
 			'drop extension if exists test_ext7');
 	}
 
-	# get rid of dblink's dependencies on regress.so
-	my $regrdb =
-	  $old_version le '9.4'
-	  ? 'contrib_regression'
-	  : 'contrib_regression_dblink';
-
-	if ($dbnames{$regrdb})
+	# stuff not supported from release 16
+	if ($old_version >= 12 && $old_version < 16)
 	{
+		# Can't upgrade aclitem in user tables from pre 16 to 16+.
+		_add_st($result, 'regression',
+			'alter table public.tab_core_types drop column aclitem');
+		# Can't handle child tables with locally-generated columns.
 		_add_st(
-			$result, $regrdb,
-			'drop function if exists public.putenv(text)',
-			'drop function if exists public.wait_pid(integer)');
+			$result, 'regression',
+			'drop table public.gtest_normal_child',
+			'drop table public.gtest_normal_child2');
+	}
+
+	# stuff not supported from release 14
+	if ($old_version < 14)
+	{
+		# postfix operators (some don't exist in very old versions)
+		_add_st(
+			$result,
+			'regression',
+			'drop operator #@# (bigint,NONE)',
+			'drop operator #%# (bigint,NONE)',
+			'drop operator if exists !=- (bigint,NONE)',
+			'drop operator if exists #@%# (bigint,NONE)');
+
+		# get rid of dblink's dependencies on regress.so
+		my $regrdb =
+		  $old_version le '9.4'
+		  ? 'contrib_regression'
+		  : 'contrib_regression_dblink';
+
+		if ($dbnames{$regrdb})
+		{
+			_add_st(
+				$result, $regrdb,
+				'drop function if exists public.putenv(text)',
+				'drop function if exists public.wait_pid(integer)');
+		}
 	}
 
 	# user table OIDs are gone from release 12 on
@@ -235,11 +270,33 @@ sub adjust_old_dumpfile
 {
 	my ($old_version, $dump) = @_;
 
+	die "wrong type for \$old_version\n"
+	  unless $old_version->isa("PostgreSQL::Version");
+	# See adjust_database_contents about this
+	$old_version = PostgreSQL::Version->new($old_version->major);
+
 	# use Unix newlines
 	$dump =~ s/\r\n/\n/g;
 
 	# Version comments will certainly not match.
 	$dump =~ s/^-- Dumped from database version.*\n//mg;
+
+	if ($old_version < 16)
+	{
+		# Fix up some view queries that no longer require table-qualification.
+		$dump = _mash_view_qualifiers($dump);
+	}
+
+	if ($old_version < 14)
+	{
+		# Remove mentions of extended hash functions.
+		$dump =~ s {^(\s+OPERATOR\s1\s=\(integer,integer\))\s,\n
+                    \s+FUNCTION\s2\s\(integer,\sinteger\)\spublic\.part_hashint4_noop\(integer,bigint\);}
+				   {$1;}mxg;
+		$dump =~ s {^(\s+OPERATOR\s1\s=\(text,text\))\s,\n
+                    \s+FUNCTION\s2\s\(text,\stext\)\spublic\.part_hashtext_length\(text,bigint\);}
+				   {$1;}mxg;
+	}
 
 	# Change trigger definitions to say ... EXECUTE FUNCTION ...
 	if ($old_version < 12)
@@ -269,46 +326,18 @@ sub adjust_old_dumpfile
 		$dump =~ s/(?<=^\Q$prefix\E)\Q$orig\E/$repl/mg;
 	}
 
-	# dumps from pre-9.6 databases will show assorted default grants explicitly
-	if ($old_version lt '9.6')
-	{
-		my $comment =
-		  "-- Name: SCHEMA public; Type: ACL; Schema: -; Owner: .*";
-		my $sql =
-		    "REVOKE ALL ON SCHEMA public FROM PUBLIC;\n"
-		  . "REVOKE ALL ON SCHEMA public FROM .*;\n"
-		  . "GRANT ALL ON SCHEMA public TO .*;\n"
-		  . "GRANT ALL ON SCHEMA public TO PUBLIC;";
-		$dump =~ s/^--\n$comment\n--\n+$sql\n+//mg;
-
-		$comment = "-- Name: DATABASE .*; Type: ACL; Schema: -; Owner: .*";
-		$sql =
-		    "REVOKE ALL ON DATABASE .* FROM PUBLIC;\n"
-		  . "REVOKE ALL ON DATABASE .* FROM .*;\n"
-		  . "GRANT ALL ON DATABASE .* TO .*;\n"
-		  . "GRANT CONNECT,TEMPORARY ON DATABASE .* TO PUBLIC;\n";
-		$dump =~ s/^--\n$comment\n--\n+$sql\n+//mg;
-		$dump =~ s/^$sql//mg;
-
-		$sql =
-		    "REVOKE ALL ON TABLE .* FROM PUBLIC;\n"
-		  . "REVOKE ALL ON TABLE .* FROM .*;\n"
-		  . "GRANT ALL ON TABLE .* TO .*;\n";
-		$dump =~ s/^$sql//mg;
-	}
-
 	if ($old_version lt '9.5')
 	{
 		# adjust some places where we don't print so many parens anymore
 
 		my $prefix = "CONSTRAINT (?:sequence|copy)_con CHECK [(][(]";
-		my $orig   = "((x > 3) AND (y <> 'check failed'::text))";
-		my $repl   = "(x > 3) AND (y <> 'check failed'::text)";
+		my $orig = "((x > 3) AND (y <> 'check failed'::text))";
+		my $repl = "(x > 3) AND (y <> 'check failed'::text)";
 		$dump =~ s/($prefix)\Q$orig\E/$1$repl/mg;
 
 		$prefix = "CONSTRAINT insert_con CHECK [(][(]";
-		$orig   = "((x >= 3) AND (y <> 'check failed'::text))";
-		$repl   = "(x >= 3) AND (y <> 'check failed'::text)";
+		$orig = "((x >= 3) AND (y <> 'check failed'::text))";
+		$repl = "(x >= 3) AND (y <> 'check failed'::text)";
 		$dump =~ s/($prefix)\Q$orig\E/$1$repl/mg;
 
 		$orig = "DEFAULT ((-1) * currval('public.insert_seq'::regclass))";
@@ -375,6 +404,135 @@ sub adjust_old_dumpfile
 	return $dump;
 }
 
+
+# Data for _mash_view_qualifiers
+my @_unused_view_qualifiers = (
+	# Present at least since 9.2
+	{ obj => 'VIEW public.trigger_test_view', qual => 'trigger_test' },
+	{ obj => 'VIEW public.domview', qual => 'domtab' },
+	{ obj => 'VIEW public.my_property_normal', qual => 'customer' },
+	{ obj => 'VIEW public.my_property_secure', qual => 'customer' },
+	{ obj => 'VIEW public.pfield_v1', qual => 'pf' },
+	{ obj => 'VIEW public.rtest_v1', qual => 'rtest_t1' },
+	{ obj => 'VIEW public.rtest_vview1', qual => 'x' },
+	{ obj => 'VIEW public.rtest_vview2', qual => 'rtest_view1' },
+	{ obj => 'VIEW public.rtest_vview3', qual => 'x' },
+	{ obj => 'VIEW public.rtest_vview5', qual => 'rtest_view1' },
+	{ obj => 'VIEW public.shoelace_obsolete', qual => 'shoelace' },
+	{ obj => 'VIEW public.shoelace_candelete', qual => 'shoelace_obsolete' },
+	{ obj => 'VIEW public.toyemp', qual => 'emp' },
+	{ obj => 'VIEW public.xmlview4', qual => 'emp' },
+	# Since 9.3 (some of these were removed in 9.6)
+	{ obj => 'VIEW public.tv', qual => 't' },
+	{ obj => 'MATERIALIZED VIEW mvschema.tvm', qual => 'tv' },
+	{ obj => 'VIEW public.tvv', qual => 'tv' },
+	{ obj => 'MATERIALIZED VIEW public.tvvm', qual => 'tvv' },
+	{ obj => 'VIEW public.tvvmv', qual => 'tvvm' },
+	{ obj => 'MATERIALIZED VIEW public.bb', qual => 'tvvmv' },
+	{ obj => 'VIEW public.nums', qual => 'nums' },
+	{ obj => 'VIEW public.sums_1_100', qual => 't' },
+	{ obj => 'MATERIALIZED VIEW public.tm', qual => 't' },
+	{ obj => 'MATERIALIZED VIEW public.tmm', qual => 'tm' },
+	{ obj => 'MATERIALIZED VIEW public.tvmm', qual => 'tvm' },
+	# Since 9.4
+	{
+		obj => 'MATERIALIZED VIEW public.citext_matview',
+		qual => 'citext_table'
+	},
+	{
+		obj => 'OR REPLACE VIEW public.key_dependent_view',
+		qual => 'view_base_table'
+	},
+	{
+		obj => 'OR REPLACE VIEW public.key_dependent_view_no_cols',
+		qual => 'view_base_table'
+	},
+	# Since 9.5
+	{
+		obj => 'VIEW public.dummy_seclabel_view1',
+		qual => 'dummy_seclabel_tbl2'
+	},
+	{ obj => 'VIEW public.vv', qual => 'test_tablesample' },
+	{ obj => 'VIEW public.test_tablesample_v1', qual => 'test_tablesample' },
+	{ obj => 'VIEW public.test_tablesample_v2', qual => 'test_tablesample' },
+	# Since 9.6
+	{
+		obj => 'MATERIALIZED VIEW public.test_pg_dump_mv1',
+		qual => 'test_pg_dump_t1'
+	},
+	{ obj => 'VIEW public.test_pg_dump_v1', qual => 'test_pg_dump_t1' },
+	{ obj => 'VIEW public.mvtest_tv', qual => 'mvtest_t' },
+	{
+		obj => 'MATERIALIZED VIEW mvtest_mvschema.mvtest_tvm',
+		qual => 'mvtest_tv'
+	},
+	{ obj => 'VIEW public.mvtest_tvv', qual => 'mvtest_tv' },
+	{ obj => 'MATERIALIZED VIEW public.mvtest_tvvm', qual => 'mvtest_tvv' },
+	{ obj => 'VIEW public.mvtest_tvvmv', qual => 'mvtest_tvvm' },
+	{ obj => 'MATERIALIZED VIEW public.mvtest_bb', qual => 'mvtest_tvvmv' },
+	{ obj => 'MATERIALIZED VIEW public.mvtest_tm', qual => 'mvtest_t' },
+	{ obj => 'MATERIALIZED VIEW public.mvtest_tmm', qual => 'mvtest_tm' },
+	{ obj => 'MATERIALIZED VIEW public.mvtest_tvmm', qual => 'mvtest_tvm' },
+	# Since 10 (some removed in 12)
+	{ obj => 'VIEW public.itestv10', qual => 'itest10' },
+	{ obj => 'VIEW public.itestv11', qual => 'itest11' },
+	{ obj => 'VIEW public.xmltableview2', qual => '"xmltable"' },
+	# Since 12
+	{
+		obj => 'MATERIALIZED VIEW public.tableam_tblmv_heap2',
+		qual => 'tableam_tbl_heap2'
+	},
+	# Since 13
+	{ obj => 'VIEW public.limit_thousand_v_1', qual => 'onek' },
+	{ obj => 'VIEW public.limit_thousand_v_2', qual => 'onek' },
+	{ obj => 'VIEW public.limit_thousand_v_3', qual => 'onek' },
+	{ obj => 'VIEW public.limit_thousand_v_4', qual => 'onek' },
+	# Since 14
+	{ obj => 'MATERIALIZED VIEW public.compressmv', qual => 'cmdata1' });
+
+# Internal subroutine to remove no-longer-used table qualifiers from
+# CREATE [MATERIALIZED] VIEW commands.  See list of targeted views above.
+sub _mash_view_qualifiers
+{
+	my ($dump) = @_;
+
+	for my $uvq (@_unused_view_qualifiers)
+	{
+		my $leader = "CREATE $uvq->{obj} ";
+		my $qualifier = $uvq->{qual};
+		# Note: we loop because there are presently some cases where the same
+		# view name appears in multiple databases.  Fortunately, the same
+		# qualifier removal applies or is harmless for each instance ... but
+		# we might want to rename some things to avoid assuming that.
+		my @splitchunks = split $leader, $dump;
+		$dump = shift(@splitchunks);
+		foreach my $chunk (@splitchunks)
+		{
+			my @thischunks = split /;/, $chunk, 2;
+			my $stmt = shift(@thischunks);
+			my $ostmt = $stmt;
+
+			# now $stmt is just the body of the CREATE [MATERIALIZED] VIEW
+			$stmt =~ s/$qualifier\.//g;
+
+			$dump .= $leader . $stmt . ';' . $thischunks[0];
+		}
+	}
+
+	# Further hack a few cases where not all occurrences of the qualifier
+	# should be removed.
+	$dump =~ s {^(CREATE VIEW public\.rtest_vview1 .*?)(a\)\)\);)}
+	{$1x.$2}ms;
+	$dump =~ s {^(CREATE VIEW public\.rtest_vview3 .*?)(a\)\)\);)}
+	{$1x.$2}ms;
+	$dump =~
+	  s {^(CREATE VIEW public\.shoelace_obsolete .*?)(sl_color\)\)\)\);)}
+	{$1shoelace.$2}ms;
+
+	return $dump;
+}
+
+
 # Internal subroutine to mangle whitespace within view/rule commands.
 # Any consecutive sequence of whitespace is reduced to one space.
 sub _mash_view_whitespace
@@ -434,11 +592,47 @@ sub adjust_new_dumpfile
 {
 	my ($old_version, $dump) = @_;
 
+	die "wrong type for \$old_version\n"
+	  unless $old_version->isa("PostgreSQL::Version");
+	# See adjust_database_contents about this
+	$old_version = PostgreSQL::Version->new($old_version->major);
+
 	# use Unix newlines
 	$dump =~ s/\r\n/\n/g;
 
 	# Version comments will certainly not match.
 	$dump =~ s/^-- Dumped from database version.*\n//mg;
+
+	# pre-v16 dumps do not know about XMLSERIALIZE(NO INDENT).
+	if ($old_version < 16)
+	{
+		$dump =~ s/XMLSERIALIZE\((.*)? NO INDENT\)/XMLSERIALIZE\($1\)/mg;
+	}
+
+	if ($old_version < 14)
+	{
+		# Suppress noise-word uses of IN in CREATE/ALTER PROCEDURE.
+		$dump =~ s/^(CREATE PROCEDURE .*?)\(IN /$1(/mg;
+		$dump =~ s/^(ALTER PROCEDURE .*?)\(IN /$1(/mg;
+		$dump =~ s/^(CREATE PROCEDURE .*?), IN /$1, /mg;
+		$dump =~ s/^(ALTER PROCEDURE .*?), IN /$1, /mg;
+		$dump =~ s/^(CREATE PROCEDURE .*?), IN /$1, /mg;
+		$dump =~ s/^(ALTER PROCEDURE .*?), IN /$1, /mg;
+
+		# Remove SUBSCRIPT clauses in CREATE TYPE.
+		$dump =~ s/^\s+SUBSCRIPT = raw_array_subscript_handler,\n//mg;
+
+		# Remove multirange_type_name clauses in CREATE TYPE AS RANGE.
+		$dump =~ s {,\n\s+multirange_type_name = .*?(,?)$} {$1}mg;
+
+		# Remove mentions of extended hash functions.
+		$dump =~
+		  s {^ALTER\sOPERATOR\sFAMILY\spublic\.part_test_int4_ops\sUSING\shash\sADD\n
+						\s+FUNCTION\s2\s\(integer,\sinteger\)\spublic\.part_hashint4_noop\(integer,bigint\);} {}mxg;
+		$dump =~
+		  s {^ALTER\sOPERATOR\sFAMILY\spublic\.part_test_text_ops\sUSING\shash\sADD\n
+						\s+FUNCTION\s2\s\(text,\stext\)\spublic\.part_hashtext_length\(text,bigint\);} {}mxg;
+	}
 
 	# pre-v12 dumps will not say anything about default_table_access_method.
 	if ($old_version < 12)

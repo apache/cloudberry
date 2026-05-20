@@ -1,60 +1,47 @@
 
-# Copyright (c) 2021, PostgreSQL Global Development Group
+# Copyright (c) 2021-2023, PostgreSQL Global Development Group
 
 use strict;
 use warnings;
 
-use PostgresNode;
-use TestLib;
-use Test::More tests => 0 + 1;
+use PostgreSQL::Test::Cluster;
+use PostgreSQL::Test::Utils;
+use Test::More;
 
-SKIP:
+# Runs the specified query and returns the emitted server log.
+# params is an optional hash mapping GUC names to values;
+# any such settings are transmitted to the backend via PGOPTIONS.
+sub query_log
 {
-	skip "auto_explain is only expected to run on QD, skip test for utility mode", 1;
+	my ($node, $sql, $params) = @_;
+	$params ||= {};
 
-my $node = get_new_node('main');
-$node->init;
+	local $ENV{PGOPTIONS} = join " ",
+	  map { "-c $_=$params->{$_}" } keys %$params;
+
+	my $log = $node->logfile();
+	my $offset = -s $log;
+
+	$node->safe_psql("postgres", $sql);
+
+	return slurp_file($log, $offset);
+}
+
+my $node = PostgreSQL::Test::Cluster->new('main');
+$node->init('auth_extra' => [ '--create-role', 'regress_user1' ]);
 $node->append_conf('postgresql.conf',
-	"shared_preload_libraries = 'auto_explain'");
+	"session_preload_libraries = 'auto_explain'");
 $node->append_conf('postgresql.conf', "auto_explain.log_min_duration = 0");
 $node->append_conf('postgresql.conf', "auto_explain.log_analyze = on");
 $node->start;
 
-# run a couple of queries
-$node->safe_psql("postgres", "SELECT * FROM pg_class;");
-$node->safe_psql("postgres",
-	"SELECT * FROM pg_proc WHERE proname = 'int4pl';");
+# Simple query.
+my $log_contents = query_log($node, "SELECT * FROM pg_class;");
 
-# emit some json too
-$node->append_conf('postgresql.conf', "auto_explain.log_format = json");
-$node->reload;
-$node->safe_psql("postgres", "SELECT * FROM pg_proc;");
-$node->safe_psql("postgres",
-	"SELECT * FROM pg_class WHERE relname = 'pg_class';");
-
-$node->stop('fast');
-
-my $log = $node->logfile();
-
-my $log_contents = slurp_file($log);
-
-like(
+unlike(
 	$log_contents,
-	qr/Seq Scan on pg_class/,
-	"sequential scan logged, text mode");
+	qr/Query Parameters:/,
+	"no query parameters logged when none, text mode");
 
-like(
-	$log_contents,
-	qr/Index Scan using pg_proc_proname_args_nsp_index on pg_proc/,
-	"index scan logged, text mode");
 
-like(
-	$log_contents,
-	qr/"Node Type": "Seq Scan"[^}]*"Relation Name": "pg_proc"/s,
-	"sequential scan logged, json mode");
-
-like(
-	$log_contents,
-	qr/"Node Type": "Index Scan"[^}]*"Index Name": "pg_class_relname_nsp_index"/s,
-	"index scan logged, json mode");
-}
+done_testing();

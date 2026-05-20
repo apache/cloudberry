@@ -1,8 +1,10 @@
 --
 -- Test foreign-data wrapper and server management. Cloudberry MPP specific
 --
-CREATE FOREIGN DATA WRAPPER dummy;
+CREATE FOREIGN DATA WRAPPER dummy OPTIONS (mpp_execute 'coordinator');;
 COMMENT ON FOREIGN DATA WRAPPER dummy IS 'useless';
+ALTER FOREIGN DATA WRAPPER dummy OPTIONS (SET mpp_execute 'all segments');
+ERROR:  "mpp_execute" of foreign data wrapper is not allowed to be altered
 -- CREATE FOREIGN TABLE
 CREATE SERVER s0 FOREIGN DATA WRAPPER dummy;
 CREATE FOREIGN TABLE ft2 (
@@ -39,6 +41,44 @@ CREATE FOREIGN TABLE ft5 (
 Server: s1
 FDW options: (delimiter ',', mpp_execute 'all segments', num_segments '5')
 
+-- CREATE FOREIGN TABLE LIKE
+CREATE TABLE ft_source_table(a INT, b INT, c INT) DISTRIBUTED BY (b);
+CREATE FOREIGN TABLE ft_like (LIKE ft_source_table) SERVER s0; 
+\d+ ft_like
+                                     Foreign table "public.ft_like"
+ Column |  Type   | Collation | Nullable | Default | FDW options | Storage | Stats target | Description 
+--------+---------+-----------+----------+---------+-------------+---------+--------------+-------------
+ a      | integer |           |          |         |             | plain   |              | 
+ b      | integer |           |          |         |             | plain   |              | 
+ c      | integer |           |          |         |             | plain   |              | 
+Server: s0
+
+-- shoule be null
+SELECT * FROM gp_distribution_policy WHERE localoid = 'ft_like'::regclass::oid;
+ localoid | policytype | numsegments | distkey | distclass 
+----------+------------+-------------+---------+-----------
+(0 rows)
+
+CREATE FOREIGN TABLE ft_like1 (LIKE ft_source_table) SERVER s0
+OPTIONS (delimiter ',', mpp_execute 'all segments', num_segments '3');
+\d+ ft_like1
+                                    Foreign table "public.ft_like1"
+ Column |  Type   | Collation | Nullable | Default | FDW options | Storage | Stats target | Description 
+--------+---------+-----------+----------+---------+-------------+---------+--------------+-------------
+ a      | integer |           |          |         |             | plain   |              | 
+ b      | integer |           |          |         |             | plain   |              | 
+ c      | integer |           |          |         |             | plain   |              | 
+Server: s0
+FDW options: (delimiter ',', mpp_execute 'all segments', num_segments '3')
+
+SELECT * FROM gp_distribution_policy WHERE localoid = 'ft_like1'::regclass::oid;
+ localoid | policytype | numsegments | distkey | distclass 
+----------+------------+-------------+---------+-----------
+(0 rows)
+
+DROP TABLE ft_source_table;
+DROP FOREIGN TABLE ft_like;
+DROP FOREIGN TABLE ft_like1;
 --start_ignore
 DROP FOREIGN DATA WRAPPER dummy CASCADE;
 --end_ignore

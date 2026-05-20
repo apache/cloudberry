@@ -46,7 +46,6 @@
 #include "cdb/cdbappendonlystorageread.h"
 #include "cdb/cdbappendonlystoragewrite.h"
 #include "utils/datumstream.h"
-#include "utils/int8.h"
 #include "utils/fmgroids.h"
 #include "access/aocssegfiles.h"
 #include "access/aosegfiles.h"
@@ -577,6 +576,7 @@ MarkAOCSFileSegInfoAwaitingDrop(Relation prel, int segno)
 	TupleDesc	tupdesc;
 	Snapshot	appendOnlyMetaDataSnapshot;
 	Oid			segrelid;
+	TU_UpdateIndexes updateIndexes = TU_All;
 
 	if (Debug_appendonly_print_compaction)
 		elog(LOG,
@@ -629,7 +629,7 @@ MarkAOCSFileSegInfoAwaitingDrop(Relation prel, int segno)
 
 	newtup = heap_modify_tuple(oldtup, tupdesc, d, null, repl);
 
-	simple_heap_update(segrel, &oldtup->t_self, newtup);
+	simple_heap_update(segrel, &oldtup->t_self, newtup, &updateIndexes);
 
 	pfree(newtup);
 
@@ -665,6 +665,7 @@ ClearAOCSFileSegInfo(Relation prel, int segno)
 	AOCSVPInfo	*vpinfo = create_aocs_vpinfo(nvp);
 	Oid			segrelid;
 	Snapshot	appendOnlyMetaDataSnapshot;
+	TU_UpdateIndexes updateIndexes = TU_All;
 
 	Assert(RelationStorageIsAoCols(prel));
 
@@ -736,7 +737,7 @@ ClearAOCSFileSegInfo(Relation prel, int segno)
 
 	newtup = heap_modify_tuple(oldtup, tupdesc, d, null, repl);
 
-	simple_heap_update(segrel, &oldtup->t_self, newtup);
+	simple_heap_update(segrel, &oldtup->t_self, newtup, &updateIndexes);
 
 	pfree(newtup);
 	pfree(vpinfo);
@@ -765,6 +766,7 @@ UpdateAOCSFileSegInfo(AOCSInsertDesc idesc)
 	int			nvp = RelationGetNumberOfAttributes(prel);
 	int			i;
 	AOCSVPInfo *vpinfo = create_aocs_vpinfo(nvp);
+	TU_UpdateIndexes updateIndexes = TU_All;
 
 	segrel = heap_open(idesc->segrelid, RowExclusiveLock);
 	tupdesc = RelationGetDescr(segrel);
@@ -867,7 +869,7 @@ UpdateAOCSFileSegInfo(AOCSInsertDesc idesc)
 		{
 			elog(ERROR, "Unexpected compressed EOF for relation %s, relfilenode %u, segment file %d coln %d. "
 				 "EOF " INT64_FORMAT " to be updated cannot be smaller than current EOF " INT64_FORMAT " in pg_aocsseg",
-				 RelationGetRelationName(prel), prel->rd_node.relNode,
+				 RelationGetRelationName(prel), prel->rd_locator.relNumber,
 				 idesc->cur_segno, i, idesc->ds[i]->eof, oldvpinfo->entry[i].eof);
 		}
 
@@ -879,7 +881,7 @@ UpdateAOCSFileSegInfo(AOCSInsertDesc idesc)
 		{
 			elog(ERROR, "Unexpected EOF for relation %s, relfilenode %u, segment file %d coln %d. "
 				 "EOF " INT64_FORMAT " to be updated cannot be smaller than current EOF " INT64_FORMAT " in pg_aocsseg",
-				 RelationGetRelationName(prel), prel->rd_node.relNode,
+				 RelationGetRelationName(prel), prel->rd_locator.relNumber,
 				 idesc->cur_segno, i, idesc->ds[i]->eofUncompress, oldvpinfo->entry[i].eof_uncompressed);
 		}
 	}
@@ -895,7 +897,7 @@ UpdateAOCSFileSegInfo(AOCSInsertDesc idesc)
 
 	newtup = heap_modify_tuple(oldtup, tupdesc, d, null, repl);
 
-	simple_heap_update(segrel, &oldtup->t_self, newtup);
+	simple_heap_update(segrel, &oldtup->t_self, newtup, &updateIndexes);
 
 	pfree(newtup);
 	pfree(vpinfo);
@@ -935,6 +937,7 @@ AOCSFileSegInfoAddVpe(Relation prel, int32 segno,
 	/* nvp is new columns + existing columns */
 	int			i;
 	int			j;
+	TU_UpdateIndexes updateIndexes = TU_All;
 
 	if (IS_UTILITY_BUT_NOT_SINGLENODE())
 	{
@@ -1038,7 +1041,7 @@ AOCSFileSegInfoAddVpe(Relation prel, int32 segno,
 
 	newtup = heap_modify_tuple(oldtup, tupdesc, d, null, repl);
 
-	simple_heap_update(segrel, &oldtup->t_self, newtup);
+	simple_heap_update(segrel, &oldtup->t_self, newtup, &updateIndexes);
 
 	pfree(newtup);
 	pfree(newvpinfo);
@@ -1070,7 +1073,9 @@ AOCSFileSegInfoAddCount(Relation prel, int32 segno,
 	TupleDesc	tupdesc;
 
     Oid         segrelid;
-    GetAppendOnlyEntryAuxOids(prel,
+	TU_UpdateIndexes updateIndexes = TU_All;
+
+	GetAppendOnlyEntryAuxOids(prel,
                               &segrelid, NULL, NULL,
                               NULL, NULL);
 
@@ -1131,7 +1136,7 @@ AOCSFileSegInfoAddCount(Relation prel, int32 segno,
 
 	newtup = heap_modify_tuple(oldtup, tupdesc, d, null, repl);
 
-	simple_heap_update(segrel, &oldtup->t_self, newtup);
+	simple_heap_update(segrel, &oldtup->t_self, newtup, &updateIndexes);
 
 	heap_freetuple(newtup);
 

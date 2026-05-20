@@ -61,7 +61,7 @@ BufferedReadInit(BufferedRead *bufferedRead,
 				 int32 maxBufferLen,
 				 int32 maxLargeReadLen,
 				 char *relationName,
-				 RelFileNode *file_node,
+				 RelFileLocator *file_node,
 				 const struct f_smgr_ao *smgr)
 {
 	Assert(bufferedRead != NULL);

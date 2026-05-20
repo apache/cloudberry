@@ -3,7 +3,7 @@
  * pl_exec.c		- Executor for the PL/pgSQL
  *			  procedural language
  *
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -136,18 +136,22 @@ static ResourceOwner shared_simple_eval_resowner = NULL;
 	MemoryContextAllocZero(get_eval_mcontext(estate), sz)
 
 /*
- * We use a session-wide hash table for caching cast information.
+ * We use two session-wide hash tables for caching cast information.
  *
- * Once built, the compiled expression trees (cast_expr fields) survive for
- * the life of the session.  At some point it might be worth invalidating
- * those after pg_cast changes, but for the moment we don't bother.
+ * cast_expr_hash entries (of type plpgsql_CastExprHashEntry) hold compiled
+ * expression trees for casts.  These survive for the life of the session and
+ * are shared across all PL/pgSQL functions and DO blocks.  At some point it
+ * might be worth invalidating them after pg_cast changes, but for the moment
+ * we don't bother.
  *
- * The evaluation state trees (cast_exprstate) are managed in the same way as
- * simple expressions (i.e., we assume cast expressions are always simple).
+ * There is a separate hash table shared_cast_hash (with entries of type
+ * plpgsql_CastHashEntry) containing evaluation state trees for these
+ * expressions, which are managed in the same way as simple expressions
+ * (i.e., we assume cast expressions are always simple).
  *
- * As with simple expressions, DO blocks don't use the shared hash table but
- * must have their own.  This isn't ideal, but we don't want to deal with
- * multiple simple_eval_estates within a DO block.
+ * As with simple expressions, DO blocks don't use the shared_cast_hash table
+ * but must have their own evaluation state trees.  This isn't ideal, but we
+ * don't want to deal with multiple simple_eval_estates within a DO block.
  */
 typedef struct					/* lookup key for cast info */
 {
@@ -158,18 +162,24 @@ typedef struct					/* lookup key for cast info */
 	int32		dsttypmod;		/* destination typmod for cast */
 } plpgsql_CastHashKey;
 
-typedef struct					/* cast_hash table entry */
+typedef struct					/* cast_expr_hash table entry */
 {
 	plpgsql_CastHashKey key;	/* hash key --- MUST BE FIRST */
 	Expr	   *cast_expr;		/* cast expression, or NULL if no-op cast */
 	CachedExpression *cast_cexpr;	/* cached expression backing the above */
+} plpgsql_CastExprHashEntry;
+
+typedef struct					/* cast_hash table entry */
+{
+	plpgsql_CastHashKey key;	/* hash key --- MUST BE FIRST */
+	plpgsql_CastExprHashEntry *cast_centry; /* link to matching expr entry */
 	/* ExprState is valid only when cast_lxid matches current LXID */
 	ExprState  *cast_exprstate; /* expression's eval tree */
 	bool		cast_in_use;	/* true while we're executing eval tree */
 	LocalTransactionId cast_lxid;
 } plpgsql_CastHashEntry;
 
-static MemoryContext shared_cast_context = NULL;
+static HTAB *cast_expr_hash = NULL;
 static HTAB *shared_cast_hash = NULL;
 
 /*
@@ -329,8 +339,10 @@ static void exec_eval_cleanup(PLpgSQL_execstate *estate);
 static void exec_prepare_plan(PLpgSQL_execstate *estate,
 							  PLpgSQL_expr *expr, int cursorOptions);
 static void exec_simple_check_plan(PLpgSQL_execstate *estate, PLpgSQL_expr *expr);
+static bool exec_is_simple_query(PLpgSQL_expr *expr);
 static void exec_save_simple_expr(PLpgSQL_expr *expr, CachedPlan *cplan);
 static void exec_check_rw_parameter(PLpgSQL_expr *expr);
+static void exec_check_assignable(PLpgSQL_execstate *estate, int dno);
 static bool exec_eval_simple_expr(PLpgSQL_execstate *estate,
 								  PLpgSQL_expr *expr,
 								  Datum *result,
@@ -373,7 +385,7 @@ static ParamListInfo setup_param_list(PLpgSQL_execstate *estate,
 									  PLpgSQL_expr *expr);
 static ParamExternData *plpgsql_param_fetch(ParamListInfo params,
 											int paramid, bool speculative,
-											ParamExternData *workspace);
+											ParamExternData *prm);
 static void plpgsql_param_compile(ParamListInfo params, Param *param,
 								  ExprState *state,
 								  Datum *resv, bool *resnull);
@@ -629,11 +641,16 @@ plpgsql_exec_function(PLpgSQL_function *func, FunctionCallInfo fcinfo,
 		ReturnSetInfo *rsi = estate.rsi;
 
 		/* Check caller can handle a set result */
-		if (!rsi || !IsA(rsi, ReturnSetInfo) ||
-			(rsi->allowedModes & SFRM_Materialize) == 0)
+		if (!rsi || !IsA(rsi, ReturnSetInfo))
 			ereport(ERROR,
 					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 					 errmsg("set-valued function called in context that cannot accept a set")));
+
+		if (!(rsi->allowedModes & SFRM_Materialize))
+			ereport(ERROR,
+					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+					 errmsg("materialize mode required, but it is not allowed in this context")));
+
 		rsi->returnMode = SFRM_Materialize;
 
 		/* If we produced any tuples, send back the result */
@@ -1214,6 +1231,20 @@ static void
 plpgsql_exec_error_callback(void *arg)
 {
 	PLpgSQL_execstate *estate = (PLpgSQL_execstate *) arg;
+	int			err_lineno;
+
+	/*
+	 * If err_var is set, report the variable's declaration line number.
+	 * Otherwise, if err_stmt is set, report the err_stmt's line number.  When
+	 * err_stmt is not set, we're in function entry/exit, or some such place
+	 * not attached to a specific line number.
+	 */
+	if (estate->err_var != NULL)
+		err_lineno = estate->err_var->lineno;
+	else if (estate->err_stmt != NULL)
+		err_lineno = estate->err_stmt->lineno;
+	else
+		err_lineno = 0;
 
 	if (estate->err_text != NULL)
 	{
@@ -1222,13 +1253,8 @@ plpgsql_exec_error_callback(void *arg)
 		 * actually need it.  Therefore, places that set up err_text should
 		 * use gettext_noop() to ensure the strings get recorded in the
 		 * message dictionary.
-		 *
-		 * If both err_text and err_stmt are set, use the err_text as
-		 * description, but report the err_stmt's line number.  When err_stmt
-		 * is not set, we're in function entry/exit, or some such place not
-		 * attached to a specific line number.
 		 */
-		if (estate->err_stmt != NULL)
+		if (err_lineno > 0)
 		{
 			/*
 			 * translator: last %s is a phrase such as "during statement block
@@ -1236,7 +1262,7 @@ plpgsql_exec_error_callback(void *arg)
 			 */
 			errcontext("PL/pgSQL function %s line %d %s",
 					   estate->func->fn_signature,
-					   estate->err_stmt->lineno,
+					   err_lineno,
 					   _(estate->err_text));
 		}
 		else
@@ -1250,12 +1276,12 @@ plpgsql_exec_error_callback(void *arg)
 					   _(estate->err_text));
 		}
 	}
-	else if (estate->err_stmt != NULL)
+	else if (estate->err_stmt != NULL && err_lineno > 0)
 	{
 		/* translator: last %s is a plpgsql statement type name */
 		errcontext("PL/pgSQL function %s line %d at %s",
 				   estate->func->fn_signature,
-				   estate->err_stmt->lineno,
+				   err_lineno,
 				   plpgsql_stmt_typename(estate->err_stmt));
 	}
 	else
@@ -1643,7 +1669,12 @@ exec_stmt_block(PLpgSQL_execstate *estate, PLpgSQL_stmt_block *block)
 		 * Note that we currently don't support promise datums within blocks,
 		 * only at a function's outermost scope, so we needn't handle those
 		 * here.
+		 *
+		 * Since RECFIELD isn't a supported case either, it's okay to cast the
+		 * PLpgSQL_datum to PLpgSQL_variable.
 		 */
+		estate->err_var = (PLpgSQL_variable *) datum;
+
 		switch (datum->dtype)
 		{
 			case PLPGSQL_DTYPE_VAR:
@@ -1716,6 +1747,8 @@ exec_stmt_block(PLpgSQL_execstate *estate, PLpgSQL_stmt_block *block)
 				elog(ERROR, "unrecognized dtype: %d", datum->dtype);
 		}
 	}
+
+	estate->err_var = NULL;
 
 	if (block->exceptions)
 	{
@@ -2243,8 +2276,8 @@ exec_stmt_call(PLpgSQL_execstate *estate, PLpgSQL_stmt_call *stmt)
 static PLpgSQL_variable *
 make_callstmt_target(PLpgSQL_execstate *estate, PLpgSQL_expr *expr)
 {
-	List	   *plansources;
-	CachedPlanSource *plansource;
+	CachedPlan *cplan;
+	PlannedStmt *pstmt;
 	CallStmt   *stmt;
 	FuncExpr   *funcexpr;
 	HeapTuple	func_tuple;
@@ -2261,16 +2294,15 @@ make_callstmt_target(PLpgSQL_execstate *estate, PLpgSQL_expr *expr)
 	oldcontext = MemoryContextSwitchTo(get_eval_mcontext(estate));
 
 	/*
-	 * Get the parsed CallStmt, and look up the called procedure
+	 * Get the parsed CallStmt, and look up the called procedure.  We use
+	 * SPI_plan_get_cached_plan to cover the edge case where expr->plan is
+	 * already stale and needs to be updated.
 	 */
-	plansources = SPI_plan_get_plan_sources(expr->plan);
-	if (list_length(plansources) != 1)
+	cplan = SPI_plan_get_cached_plan(expr->plan);
+	if (cplan == NULL || list_length(cplan->stmt_list) != 1)
 		elog(ERROR, "query for CALL statement is not a CallStmt");
-	plansource = (CachedPlanSource *) linitial(plansources);
-	if (list_length(plansource->query_list) != 1)
-		elog(ERROR, "query for CALL statement is not a CallStmt");
-	stmt = (CallStmt *) linitial_node(Query,
-									  plansource->query_list)->utilityStmt;
+	pstmt = linitial_node(PlannedStmt, cplan->stmt_list);
+	stmt = (CallStmt *) pstmt->utilityStmt;
 	if (stmt == NULL || !IsA(stmt, CallStmt))
 		elog(ERROR, "query for CALL statement is not a CallStmt");
 
@@ -2321,9 +2353,13 @@ make_callstmt_target(PLpgSQL_execstate *estate, PLpgSQL_expr *expr)
 			if (IsA(n, Param))
 			{
 				Param	   *param = (Param *) n;
+				int			dno;
 
 				/* paramid is offset by 1 (see make_datum_param()) */
-				row->varnos[nfields++] = param->paramid - 1;
+				dno = param->paramid - 1;
+				/* must check assignability now, because grammar can't */
+				exec_check_assignable(estate, dno);
+				row->varnos[nfields++] = dno;
 			}
 			else
 			{
@@ -2345,6 +2381,8 @@ make_callstmt_target(PLpgSQL_execstate *estate, PLpgSQL_expr *expr)
 	Assert(nfields == list_length(stmt->outargs));
 
 	row->nfields = nfields;
+
+	ReleaseCachedPlan(cplan, CurrentResourceOwner);
 
 	MemoryContextSwitchTo(oldcontext);
 
@@ -2383,6 +2421,12 @@ exec_stmt_getdiag(PLpgSQL_execstate *estate, PLpgSQL_stmt_getdiag *stmt)
 				exec_assign_value(estate, var,
 								  UInt64GetDatum(estate->eval_processed),
 								  false, INT8OID, -1);
+				break;
+
+			case PLPGSQL_GETDIAG_ROUTINE_OID:
+				exec_assign_value(estate, var,
+								  ObjectIdGetDatum(estate->func->fn_oid),
+								  false, OIDOID, -1);
 				break;
 
 			case PLPGSQL_GETDIAG_ERROR_CONTEXT:
@@ -2905,10 +2949,14 @@ exec_stmt_forc(PLpgSQL_execstate *estate, PLpgSQL_stmt_forc *stmt)
 			 SPI_result_code_string(SPI_result));
 
 	/*
-	 * If cursor variable was NULL, store the generated portal name in it
+	 * If cursor variable was NULL, store the generated portal name in it,
+	 * after verifying it's okay to assign to.
 	 */
 	if (curname == NULL)
+	{
+		exec_check_assignable(estate, stmt->curvar);
 		assign_text_var(estate, curvar, portal->name);
+	}
 
 	/*
 	 * Clean up before entering exec_for_query
@@ -3629,12 +3677,16 @@ exec_init_tuple_store(PLpgSQL_execstate *estate)
 	/*
 	 * Check caller can handle a set result in the way we want
 	 */
-	if (!rsi || !IsA(rsi, ReturnSetInfo) ||
-		(rsi->allowedModes & SFRM_Materialize) == 0 ||
-		rsi->expectedDesc == NULL)
+	if (!rsi || !IsA(rsi, ReturnSetInfo))
 		ereport(ERROR,
 				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 				 errmsg("set-valued function called in context that cannot accept a set")));
+
+	if (!(rsi->allowedModes & SFRM_Materialize) ||
+		rsi->expectedDesc == NULL)
+		ereport(ERROR,
+				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+				 errmsg("materialize mode required, but it is not allowed in this context")));
 
 	/*
 	 * Switch to the right memory context and resource owner for storing the
@@ -3985,6 +4037,17 @@ plpgsql_estate_setup(PLpgSQL_execstate *estate,
 	estate->paramLI->parserSetupArg = NULL; /* filled during use */
 	estate->paramLI->numParams = estate->ndatums;
 
+	/* Create the session-wide cast-expression hash if we didn't already */
+	if (cast_expr_hash == NULL)
+	{
+		ctl.keysize = sizeof(plpgsql_CastHashKey);
+		ctl.entrysize = sizeof(plpgsql_CastExprHashEntry);
+		cast_expr_hash = hash_create("PLpgSQL cast expressions",
+									 16,	/* start small and extend */
+									 &ctl,
+									 HASH_ELEM | HASH_BLOBS);
+	}
+
 	/* set up for use of appropriate simple-expression EState and cast hash */
 	if (simple_eval_estate)
 	{
@@ -3997,7 +4060,6 @@ plpgsql_estate_setup(PLpgSQL_execstate *estate,
 										16, /* start small and extend */
 										&ctl,
 										HASH_ELEM | HASH_BLOBS | HASH_CONTEXT);
-		estate->cast_hash_context = CurrentMemoryContext;
 	}
 	else
 	{
@@ -4005,19 +4067,14 @@ plpgsql_estate_setup(PLpgSQL_execstate *estate,
 		/* Create the session-wide cast-info hash table if we didn't already */
 		if (shared_cast_hash == NULL)
 		{
-			shared_cast_context = AllocSetContextCreate(TopMemoryContext,
-														"PLpgSQL cast info",
-														ALLOCSET_DEFAULT_SIZES);
 			ctl.keysize = sizeof(plpgsql_CastHashKey);
 			ctl.entrysize = sizeof(plpgsql_CastHashEntry);
-			ctl.hcxt = shared_cast_context;
 			shared_cast_hash = hash_create("PLpgSQL cast cache",
 										   16,	/* start small and extend */
 										   &ctl,
-										   HASH_ELEM | HASH_BLOBS | HASH_CONTEXT);
+										   HASH_ELEM | HASH_BLOBS);
 		}
 		estate->cast_hash = shared_cast_hash;
-		estate->cast_hash_context = shared_cast_context;
 	}
 	/* likewise for the simple-expression resource owner */
 	if (simple_eval_resowner)
@@ -4041,6 +4098,7 @@ plpgsql_estate_setup(PLpgSQL_execstate *estate,
 	estate->eval_econtext = NULL;
 
 	estate->err_stmt = NULL;
+	estate->err_var = NULL;
 	estate->err_text = NULL;
 
 	estate->plugin_info = NULL;
@@ -4051,15 +4109,18 @@ plpgsql_estate_setup(PLpgSQL_execstate *estate,
 	plpgsql_create_econtext(estate);
 
 	/*
-	 * Let the plugin see this function before we initialize any local
-	 * PL/pgSQL variables - note that we also give the plugin a few function
-	 * pointers so it can call back into PL/pgSQL for doing things like
-	 * variable assignments and stack traces
+	 * Let the plugin, if any, see this function before we initialize local
+	 * PL/pgSQL variables.  Note that we also give the plugin a few function
+	 * pointers, so it can call back into PL/pgSQL for doing things like
+	 * variable assignments and stack traces.
 	 */
 	if (*plpgsql_plugin_ptr)
 	{
 		(*plpgsql_plugin_ptr)->error_callback = plpgsql_exec_error_callback;
 		(*plpgsql_plugin_ptr)->assign_expr = exec_assign_expr;
+		(*plpgsql_plugin_ptr)->assign_value = exec_assign_value;
+		(*plpgsql_plugin_ptr)->eval_datum = exec_eval_datum;
+		(*plpgsql_plugin_ptr)->cast_value = exec_cast_value;
 
 		if ((*plpgsql_plugin_ptr)->func_setup)
 			((*plpgsql_plugin_ptr)->func_setup) (estate, func);
@@ -4168,7 +4229,7 @@ exec_stmt_execsql(PLpgSQL_execstate *estate,
 
 	/*
 	 * On the first call for this statement generate the plan, and detect
-	 * whether the statement is INSERT/UPDATE/DELETE
+	 * whether the statement is INSERT/UPDATE/DELETE/MERGE
 	 */
 	if (expr->plan == NULL)
 		exec_prepare_plan(estate, expr, CURSOR_OPT_PARALLEL_OK);
@@ -4185,12 +4246,14 @@ exec_stmt_execsql(PLpgSQL_execstate *estate,
 			/*
 			 * We could look at the raw_parse_tree, but it seems simpler to
 			 * check the command tag.  Note we should *not* look at the Query
-			 * tree(s), since those are the result of rewriting and could have
-			 * been transmogrified into something else entirely.
+			 * tree(s), since those are the result of rewriting and could be
+			 * stale, or could have been transmogrified into something else
+			 * entirely.
 			 */
 			if (plansource->commandTag == CMDTAG_INSERT ||
 				plansource->commandTag == CMDTAG_UPDATE ||
-				plansource->commandTag == CMDTAG_DELETE)
+				plansource->commandTag == CMDTAG_DELETE ||
+				plansource->commandTag == CMDTAG_MERGE)
 			{
 				stmt->mod_stmt = true;
 				break;
@@ -4256,6 +4319,7 @@ exec_stmt_execsql(PLpgSQL_execstate *estate,
 		case SPI_OK_INSERT_RETURNING:
 		case SPI_OK_UPDATE_RETURNING:
 		case SPI_OK_DELETE_RETURNING:
+		case SPI_OK_MERGE:
 			exec_set_found(estate, (SPI_processed != 0));
 			break;
 
@@ -4435,6 +4499,7 @@ exec_stmt_dynexecute(PLpgSQL_execstate *estate,
 		case SPI_OK_INSERT_RETURNING:
 		case SPI_OK_UPDATE_RETURNING:
 		case SPI_OK_DELETE_RETURNING:
+		case SPI_OK_MERGE:
 		case SPI_OK_UTILITY:
 		case SPI_OK_REWRITTEN:
 			break;
@@ -4660,13 +4725,18 @@ exec_stmt_open(PLpgSQL_execstate *estate, PLpgSQL_stmt_open *stmt)
 										   stmt->cursor_options | CURSOR_OPT_UPDATABLE);
 
 		/*
-		 * If cursor variable was NULL, store the generated portal name in it.
+		 * If cursor variable was NULL, store the generated portal name in it,
+		 * after verifying it's okay to assign to.
+		 *
 		 * Note: exec_dynquery_with_params already reset the stmt_mcontext, so
 		 * curname is a dangling pointer here; but testing it for nullness is
 		 * OK.
 		 */
 		if (curname == NULL)
+		{
+			exec_check_assignable(estate, stmt->curvar);
 			assign_text_var(estate, curvar, portal->name);
+		}
 
 		return PLPGSQL_RC_OK;
 	}
@@ -4735,10 +4805,14 @@ exec_stmt_open(PLpgSQL_execstate *estate, PLpgSQL_stmt_open *stmt)
 			 SPI_result_code_string(SPI_result));
 
 	/*
-	 * If cursor variable was NULL, store the generated portal name in it
+	 * If cursor variable was NULL, store the generated portal name in it,
+	 * after verifying it's okay to assign to.
 	 */
 	if (curname == NULL)
+	{
+		exec_check_assignable(estate, stmt->curvar);
 		assign_text_var(estate, curvar, portal->name);
+	}
 
 	/* If we had any transient data, clean it up */
 	exec_eval_cleanup(estate);
@@ -6025,12 +6099,18 @@ exec_eval_simple_expr(PLpgSQL_execstate *estate,
 		 * release it, so we don't leak plans intra-transaction.
 		 */
 		if (expr->expr_simple_plan_lxid == curlxid)
-		{
 			ReleaseCachedPlan(expr->expr_simple_plan,
 							  estate->simple_eval_resowner);
-			expr->expr_simple_plan = NULL;
-			expr->expr_simple_plan_lxid = InvalidLocalTransactionId;
-		}
+
+		/*
+		 * Reset to "not simple" to leave sane state (with no dangling
+		 * pointers) in case we fail while replanning.  expr_simple_plansource
+		 * can be left alone however, as that cannot move.
+		 */
+		expr->expr_simple_expr = NULL;
+		expr->expr_rw_param = NULL;
+		expr->expr_simple_plan = NULL;
+		expr->expr_simple_plan_lxid = InvalidLocalTransactionId;
 
 		/* Do the replanning work in the eval_mcontext */
 		oldcontext = MemoryContextSwitchTo(get_eval_mcontext(estate));
@@ -6046,11 +6126,15 @@ exec_eval_simple_expr(PLpgSQL_execstate *estate,
 		Assert(cplan != NULL);
 
 		/*
-		 * This test probably can't fail either, but if it does, cope by
-		 * declaring the plan to be non-simple.  On success, we'll acquire a
-		 * refcount on the new plan, stored in simple_eval_resowner.
+		 * Recheck exec_is_simple_query, which could now report false in
+		 * edge-case scenarios such as a non-SRF having been replaced with a
+		 * SRF.  Also recheck CachedPlanAllowsSimpleValidityCheck, just to be
+		 * sure.  If either test fails, cope by declaring the plan to be
+		 * non-simple.  On success, we'll acquire a refcount on the new plan,
+		 * stored in simple_eval_resowner.
 		 */
-		if (CachedPlanAllowsSimpleValidityCheck(expr->expr_simple_plansource,
+		if (exec_is_simple_query(expr) &&
+			CachedPlanAllowsSimpleValidityCheck(expr->expr_simple_plansource,
 												cplan,
 												estate->simple_eval_resowner))
 		{
@@ -6062,9 +6146,6 @@ exec_eval_simple_expr(PLpgSQL_execstate *estate,
 		{
 			/* Release SPI_plan_get_cached_plan's refcount */
 			ReleaseCachedPlan(cplan, CurrentResourceOwner);
-			/* Mark expression as non-simple, and fail */
-			expr->expr_simple_expr = NULL;
-			expr->expr_rw_param = NULL;
 			return false;
 		}
 
@@ -6194,12 +6275,9 @@ setup_param_list(PLpgSQL_execstate *estate, PLpgSQL_expr *expr)
 	Assert(expr->plan != NULL);
 
 	/*
-	 * We only need a ParamListInfo if the expression has parameters.  In
-	 * principle we should test with bms_is_empty(), but we use a not-null
-	 * test because it's faster.  In current usage bits are never removed from
-	 * expr->paramnos, only added, so this test is correct anyway.
+	 * We only need a ParamListInfo if the expression has parameters.
 	 */
-	if (expr->paramnos)
+	if (!bms_is_empty(expr->paramnos))
 	{
 		/* Use the common ParamListInfo */
 		paramLI = estate->paramLI;
@@ -7719,6 +7797,7 @@ get_cast_hashentry(PLpgSQL_execstate *estate,
 {
 	plpgsql_CastHashKey cast_key;
 	plpgsql_CastHashEntry *cast_entry;
+	plpgsql_CastExprHashEntry *expr_entry;
 	bool		found;
 	LocalTransactionId curlxid;
 	MemoryContext oldcontext;
@@ -7729,13 +7808,31 @@ get_cast_hashentry(PLpgSQL_execstate *estate,
 	cast_key.srctypmod = srctypmod;
 	cast_key.dsttypmod = dsttypmod;
 	cast_entry = (plpgsql_CastHashEntry *) hash_search(estate->cast_hash,
-													   (void *) &cast_key,
+													   &cast_key,
 													   HASH_ENTER, &found);
 	if (!found)					/* initialize if new entry */
-		cast_entry->cast_cexpr = NULL;
+	{
+		/* We need a second lookup to see if a cast_expr_hash entry exists */
+		expr_entry = (plpgsql_CastExprHashEntry *) hash_search(cast_expr_hash,
+															   &cast_key,
+															   HASH_ENTER,
+															   &found);
+		if (!found)				/* initialize if new expr entry */
+			expr_entry->cast_cexpr = NULL;
 
-	if (cast_entry->cast_cexpr == NULL ||
-		!cast_entry->cast_cexpr->is_valid)
+		cast_entry->cast_centry = expr_entry;
+		cast_entry->cast_exprstate = NULL;
+		cast_entry->cast_in_use = false;
+		cast_entry->cast_lxid = InvalidLocalTransactionId;
+	}
+	else
+	{
+		/* Use always-valid link to avoid a second hash lookup */
+		expr_entry = cast_entry->cast_centry;
+	}
+
+	if (expr_entry->cast_cexpr == NULL ||
+		!expr_entry->cast_cexpr->is_valid)
 	{
 		/*
 		 * We've not looked up this coercion before, or we have but the cached
@@ -7748,10 +7845,10 @@ get_cast_hashentry(PLpgSQL_execstate *estate,
 		/*
 		 * Drop old cached expression if there is one.
 		 */
-		if (cast_entry->cast_cexpr)
+		if (expr_entry->cast_cexpr)
 		{
-			FreeCachedExpression(cast_entry->cast_cexpr);
-			cast_entry->cast_cexpr = NULL;
+			FreeCachedExpression(expr_entry->cast_cexpr);
+			expr_entry->cast_cexpr = NULL;
 		}
 
 		/*
@@ -7832,9 +7929,11 @@ get_cast_hashentry(PLpgSQL_execstate *estate,
 			((RelabelType *) cast_expr)->arg == (Expr *) placeholder)
 			cast_expr = NULL;
 
-		/* Now we can fill in the hashtable entry. */
-		cast_entry->cast_cexpr = cast_cexpr;
-		cast_entry->cast_expr = (Expr *) cast_expr;
+		/* Now we can fill in the expression hashtable entry. */
+		expr_entry->cast_cexpr = cast_cexpr;
+		expr_entry->cast_expr = (Expr *) cast_expr;
+
+		/* Be sure to reset the exprstate hashtable entry, too. */
 		cast_entry->cast_exprstate = NULL;
 		cast_entry->cast_in_use = false;
 		cast_entry->cast_lxid = InvalidLocalTransactionId;
@@ -7843,7 +7942,7 @@ get_cast_hashentry(PLpgSQL_execstate *estate,
 	}
 
 	/* Done if we have determined that this is a no-op cast. */
-	if (cast_entry->cast_expr == NULL)
+	if (expr_entry->cast_expr == NULL)
 		return NULL;
 
 	/*
@@ -7862,7 +7961,7 @@ get_cast_hashentry(PLpgSQL_execstate *estate,
 	if (cast_entry->cast_lxid != curlxid || cast_entry->cast_in_use)
 	{
 		oldcontext = MemoryContextSwitchTo(estate->simple_eval_estate->es_query_cxt);
-		cast_entry->cast_exprstate = ExecInitExpr(cast_entry->cast_expr, NULL);
+		cast_entry->cast_exprstate = ExecInitExpr(expr_entry->cast_expr, NULL);
 		cast_entry->cast_in_use = false;
 		cast_entry->cast_lxid = curlxid;
 		MemoryContextSwitchTo(oldcontext);
@@ -7887,7 +7986,6 @@ exec_simple_check_plan(PLpgSQL_execstate *estate, PLpgSQL_expr *expr)
 {
 	List	   *plansources;
 	CachedPlanSource *plansource;
-	Query	   *query;
 	CachedPlan *cplan;
 	MemoryContext oldcontext;
 
@@ -7903,65 +8001,14 @@ exec_simple_check_plan(PLpgSQL_execstate *estate, PLpgSQL_expr *expr)
 	 * called immediately after creating the CachedPlanSource, we need not
 	 * worry about the query being stale.
 	 */
-
-	/*
-	 * We can only test queries that resulted in exactly one CachedPlanSource
-	 */
-	plansources = SPI_plan_get_plan_sources(expr->plan);
-	if (list_length(plansources) != 1)
+	if (!exec_is_simple_query(expr))
 		return;
+
+	/* exec_is_simple_query verified that there's just one CachedPlanSource */
+	plansources = SPI_plan_get_plan_sources(expr->plan);
 	plansource = (CachedPlanSource *) linitial(plansources);
 
 	/*
-	 * 1. There must be one single querytree.
-	 */
-	if (list_length(plansource->query_list) != 1)
-		return;
-	query = (Query *) linitial(plansource->query_list);
-
-	/*
-	 * 2. It must be a plain SELECT query without any input tables
-	 */
-	if (!IsA(query, Query))
-		return;
-	if (query->commandType != CMD_SELECT)
-		return;
-	if (query->rtable != NIL)
-		return;
-
-	/*
-	 * 3. Can't have any subplans, aggregates, qual clauses either.  (These
-	 * tests should generally match what inline_function() checks before
-	 * inlining a SQL function; otherwise, inlining could change our
-	 * conclusion about whether an expression is simple, which we don't want.)
-	 */
-	if (query->hasAggs ||
-		query->hasWindowFuncs ||
-		query->hasTargetSRFs ||
-		query->hasSubLinks ||
-		query->cteList ||
-		query->jointree->fromlist ||
-		query->jointree->quals ||
-		query->groupClause ||
-		query->groupingSets ||
-		query->havingQual ||
-		query->windowClause ||
-		query->distinctClause ||
-		query->sortClause ||
-		query->limitOffset ||
-		query->limitCount ||
-		query->setOperations)
-		return;
-
-	/*
-	 * 4. The query must have a single attribute as result
-	 */
-	if (list_length(query->targetList) != 1)
-		return;
-
-	/*
-	 * OK, we can treat it as a simple plan.
-	 *
 	 * Get the generic plan for the query.  If replanning is needed, do that
 	 * work in the eval_mcontext.  (Note that replanning could throw an error,
 	 * in which case the expr is left marked "not simple", which is fine.)
@@ -7999,6 +8046,81 @@ exec_simple_check_plan(PLpgSQL_execstate *estate, PLpgSQL_expr *expr)
 }
 
 /*
+ * exec_is_simple_query - precheck a query tree to see if it might be simple
+ *
+ * Check the analyzed-and-rewritten form of a query to see if we will be
+ * able to treat it as a simple expression.  It is caller's responsibility
+ * that the CachedPlanSource be up-to-date.
+ */
+static bool
+exec_is_simple_query(PLpgSQL_expr *expr)
+{
+	List	   *plansources;
+	CachedPlanSource *plansource;
+	Query	   *query;
+
+	/*
+	 * We can only test queries that resulted in exactly one CachedPlanSource.
+	 */
+	plansources = SPI_plan_get_plan_sources(expr->plan);
+	if (list_length(plansources) != 1)
+		return false;
+	plansource = (CachedPlanSource *) linitial(plansources);
+
+	/*
+	 * 1. There must be one single querytree.
+	 */
+	if (list_length(plansource->query_list) != 1)
+		return false;
+	query = (Query *) linitial(plansource->query_list);
+
+	/*
+	 * 2. It must be a plain SELECT query without any input tables.
+	 */
+	if (!IsA(query, Query))
+		return false;
+	if (query->commandType != CMD_SELECT)
+		return false;
+	if (query->rtable != NIL)
+		return false;
+
+	/*
+	 * 3. Can't have any subplans, aggregates, qual clauses either.  (These
+	 * tests should generally match what inline_function() checks before
+	 * inlining a SQL function; otherwise, inlining could change our
+	 * conclusion about whether an expression is simple, which we don't want.)
+	 */
+	if (query->hasAggs ||
+		query->hasWindowFuncs ||
+		query->hasTargetSRFs ||
+		query->hasSubLinks ||
+		query->cteList ||
+		query->jointree->fromlist ||
+		query->jointree->quals ||
+		query->groupClause ||
+		query->groupingSets ||
+		query->havingQual ||
+		query->windowClause ||
+		query->distinctClause ||
+		query->sortClause ||
+		query->limitOffset ||
+		query->limitCount ||
+		query->setOperations)
+		return false;
+
+	/*
+	 * 4. The query must have a single attribute as result.
+	 */
+	if (list_length(query->targetList) != 1)
+		return false;
+
+	/*
+	 * OK, we can treat it as a simple plan.
+	 */
+	return true;
+}
+
+/*
  * exec_save_simple_expr --- extract simple expression from CachedPlan
  */
 static void
@@ -8020,18 +8142,20 @@ exec_save_simple_expr(PLpgSQL_expr *expr, CachedPlan *cplan)
 
 	/*
 	 * Ordinarily, the plan node should be a simple Result.  However, if
-	 * force_parallel_mode is on, the planner might've stuck a Gather node
-	 * atop that.  The simplest way to deal with this is to look through the
-	 * Gather node.  The Gather node's tlist would normally contain a Var
-	 * referencing the child node's output, but it could also be a Param, or
-	 * it could be a Const that setrefs.c copied as-is.
+	 * debug_parallel_query is on, the planner might've stuck a Gather node
+	 * atop that; and/or if this plan is for a scrollable cursor, the planner
+	 * might've stuck a Material node atop it.  The simplest way to deal with
+	 * this is to look through the Gather and/or Material nodes.  The upper
+	 * node's tlist would normally contain a Var referencing the child node's
+	 * output, but it could also be a Param, or it could be a Const that
+	 * setrefs.c copied as-is.
 	 */
 	plan = stmt->planTree;
 	for (;;)
 	{
 		/* Extract the single tlist expression */
 		Assert(list_length(plan->targetlist) == 1);
-		tle_expr = castNode(TargetEntry, linitial(plan->targetlist))->expr;
+		tle_expr = linitial_node(TargetEntry, plan->targetlist)->expr;
 
 		if (IsA(plan, Result))
 		{
@@ -8042,7 +8166,7 @@ exec_save_simple_expr(PLpgSQL_expr *expr, CachedPlan *cplan)
 				   ((Result *) plan)->resconstantqual == NULL);
 			break;
 		}
-		else if (IsA(plan, Gather))
+		else if (IsA(plan, Gather) || IsA(plan, Material))
 		{
 			Assert(plan->lefttree != NULL &&
 				   plan->righttree == NULL &&
@@ -8211,6 +8335,43 @@ exec_check_rw_parameter(PLpgSQL_expr *expr)
 				return;
 			}
 		}
+	}
+}
+
+/*
+ * exec_check_assignable --- is it OK to assign to the indicated datum?
+ *
+ * This should match pl_gram.y's check_assignable().
+ */
+static void
+exec_check_assignable(PLpgSQL_execstate *estate, int dno)
+{
+	PLpgSQL_datum *datum;
+
+	Assert(dno >= 0 && dno < estate->ndatums);
+	datum = estate->datums[dno];
+	switch (datum->dtype)
+	{
+		case PLPGSQL_DTYPE_VAR:
+		case PLPGSQL_DTYPE_PROMISE:
+		case PLPGSQL_DTYPE_REC:
+			if (((PLpgSQL_variable *) datum)->isconst)
+				ereport(ERROR,
+						(errcode(ERRCODE_ERROR_IN_ASSIGNMENT),
+						 errmsg("variable \"%s\" is declared CONSTANT",
+								((PLpgSQL_variable *) datum)->refname)));
+			break;
+		case PLPGSQL_DTYPE_ROW:
+			/* always assignable; member vars were checked at compile time */
+			break;
+		case PLPGSQL_DTYPE_RECFIELD:
+			/* assignable if parent record is */
+			exec_check_assignable(estate,
+								  ((PLpgSQL_recfield *) datum)->recparentno);
+			break;
+		default:
+			elog(ERROR, "unrecognized dtype: %d", datum->dtype);
+			break;
 	}
 }
 

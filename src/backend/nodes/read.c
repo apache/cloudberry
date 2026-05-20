@@ -6,7 +6,7 @@
  *
  * Portions Copyright (c) 2006-2008, Greenplum inc
  * Portions Copyright (c) 2012-Present VMware, Inc. or its affiliates.
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -24,6 +24,7 @@
 #include <ctype.h>
 
 #include "common/string.h"
+#include "nodes/bitmapset.h"
 #include "nodes/pg_list.h"
 #include "nodes/readfuncs.h"
 #include "nodes/value.h"
@@ -263,7 +264,7 @@ debackslash(const char *token, int length)
  * nodeTokenType -
  *	  returns the type of the node token contained in token.
  *	  It returns one of the following valid NodeTags:
- *		T_Integer, T_Float, T_String, T_BitString
+ *		T_Integer, T_Float, T_Boolean, T_String, T_BitString
  *	  and some of its own:
  *		RIGHT_PAREN, LEFT_PAREN, LEFT_BRACE, OTHER_TOKEN
  *
@@ -295,7 +296,7 @@ nodeTokenType(const char *token, int length)
 		char	   *endptr;
 
 		errno = 0;
-		(void) strtoint(token, &endptr, 10);
+		(void) strtoint(numptr, &endptr, 10);
 		if (endptr != token + length || errno == ERANGE)
 			return T_Float;
 		return T_Integer;
@@ -311,9 +312,12 @@ nodeTokenType(const char *token, int length)
 		retval = RIGHT_PAREN;
 	else if (*token == '{')
 		retval = LEFT_BRACE;
+	else if ((length == 4 && strncmp(token, "true", 4) == 0) ||
+			 (length == 5 && strncmp(token, "false", 5) == 0))
+		retval = T_Boolean;
 	else if (*token == '"' && length > 1 && token[length - 1] == '"')
 		retval = T_String;
-	else if (*token == 'b')
+	else if (*token == 'b' || *token == 'x')
 		retval = T_BitString;
 	else
 		retval = OTHER_TOKEN;
@@ -326,10 +330,10 @@ nodeTokenType(const char *token, int length)
  *
  * This routine applies some semantic knowledge on top of the purely
  * lexical tokenizer pg_strtok().   It can read
- *	* Value token nodes (integers, floats, or strings);
+ *	* Value token nodes (integers, floats, booleans, or strings);
  *	* General nodes (via parseNodeString() from readfuncs.c);
  *	* Lists of the above;
- *	* Lists of integers or OIDs.
+ *	* Lists of integers, OIDs, or TransactionIds.
  * The return value is declared void *, not Node *, to avoid having to
  * cast it explicitly in callers that assign to fields of different types.
  *
@@ -421,6 +425,8 @@ nodeRead(const char *token, int tok_len)
 				/*----------
 				 * Could be an integer list:	(i int int ...)
 				 * or an OID list:				(o int int ...)
+				 * or an XID list:				(x int int ...)
+				 * or a bitmapset:				(b int int ...)
 				 * or a list of nodes/values:	(node node ...)
 				 *----------
 				 */
@@ -446,6 +452,7 @@ nodeRead(const char *token, int tok_len)
 								 tok_len, token);
 						l = lappend_int(l, val);
 					}
+					result = (Node *) l;
 				}
 				else if (tok_len == 1 && token[0] == 'o')
 				{
@@ -466,6 +473,51 @@ nodeRead(const char *token, int tok_len)
 								 tok_len, token);
 						l = lappend_oid(l, val);
 					}
+					result = (Node *) l;
+				}
+				else if (tok_len == 1 && token[0] == 'x')
+				{
+					/* List of TransactionIds */
+					for (;;)
+					{
+						TransactionId val;
+						char	   *endptr;
+
+						token = pg_strtok(&tok_len);
+						if (token == NULL)
+							elog(ERROR, "unterminated List structure");
+						if (token[0] == ')')
+							break;
+						val = (TransactionId) strtoul(token, &endptr, 10);
+						if (endptr != token + tok_len)
+							elog(ERROR, "unrecognized Xid: \"%.*s\"",
+								 tok_len, token);
+						l = lappend_xid(l, val);
+					}
+					result = (Node *) l;
+				}
+				else if (tok_len == 1 && token[0] == 'b')
+				{
+					/* Bitmapset -- see also _readBitmapset() */
+					Bitmapset  *bms = NULL;
+
+					for (;;)
+					{
+						int			val;
+						char	   *endptr;
+
+						token = pg_strtok(&tok_len);
+						if (token == NULL)
+							elog(ERROR, "unterminated Bitmapset structure");
+						if (tok_len == 1 && token[0] == ')')
+							break;
+						val = (int) strtol(token, &endptr, 10);
+						if (endptr != token + tok_len)
+							elog(ERROR, "unrecognized integer: \"%.*s\"",
+								 tok_len, token);
+						bms = bms_add_member(bms, val);
+					}
+					result = (Node *) bms;
 				}
 				else
 				{
@@ -480,8 +532,8 @@ nodeRead(const char *token, int tok_len)
 						if (token == NULL)
 							elog(ERROR, "unterminated List structure");
 					}
+					result = (Node *) l;
 				}
-				result = (Node *) l;
 				break;
 			}
 		case RIGHT_PAREN:
@@ -516,20 +568,17 @@ nodeRead(const char *token, int tok_len)
 				result = (Node *) makeFloat(fval);
 			}
 			break;
+		case T_Boolean:
+			result = (Node *) makeBoolean(token[0] == 't');
+			break;
 		case T_String:
 			/* need to remove leading and trailing quotes, and backslashes */
 			result = (Node *) makeString(debackslash(token + 1, tok_len - 2));
 			break;
 		case T_BitString:
-			{
-				char	   *val = palloc(tok_len);
-
-				/* skip leading 'b' */
-				memcpy(val, token + 1, tok_len - 1);
-				val[tok_len - 1] = '\0';
-				result = (Node *) makeBitString(val);
-				break;
-			}
+			/* need to remove backslashes, but there are no quotes */
+			result = (Node *) makeBitString(debackslash(token, tok_len));
+			break;
 		default:
 			elog(ERROR, "unrecognized node type: %d", (int) type);
 			result = NULL;		/* keep compiler happy */

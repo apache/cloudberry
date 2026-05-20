@@ -20,7 +20,7 @@
  *
  *
  * Portions Copyright (c) 2012-Present VMware, Inc. or its affiliates.
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * IDENTIFICATION
@@ -42,14 +42,12 @@
 #include "win32.h"
 #else
 #include <unistd.h>
+#include <sys/select.h>
 #include <sys/time.h>
 #endif
 
 #ifdef HAVE_POLL_H
 #include <poll.h>
-#endif
-#ifdef HAVE_SYS_SELECT_H
-#include <sys/select.h>
 #endif
 
 #include "libpq-fe.h"
@@ -622,8 +620,7 @@ pqReadData(PGconn *conn)
 
 	if (conn->sock == PGINVALID_SOCKET)
 	{
-		appendPQExpBufferStr(&conn->errorMessage,
-							 libpq_gettext("connection not open\n"));
+		libpq_append_conn_error(conn, "connection not open");
 		return -1;
 	}
 
@@ -801,10 +798,9 @@ retry4:
 	 * means the connection has been closed.  Cope.
 	 */
 definitelyEOF:
-	appendPQExpBufferStr(&conn->errorMessage,
-						 libpq_gettext("server closed the connection unexpectedly\n"
-									   "\tThis probably means the server terminated abnormally\n"
-									   "\tbefore or while processing the request.\n"));
+	libpq_append_conn_error(conn, "server closed the connection unexpectedly\n"
+							"\tThis probably means the server terminated abnormally\n"
+							"\tbefore or while processing the request.");
 
 	/* Come here if lower-level code already set a suitable errorMessage */
 definitelyFailed:
@@ -827,19 +823,19 @@ definitelyFailed:
  * (putting it in conn->inBuffer) in any situation where we can't send
  * all the specified data immediately.
  *
- * Upon write failure, conn->write_failed is set and the error message is
- * saved in conn->write_err_msg, but we clear the output buffer and return
- * zero anyway; this is because callers should soldier on until it's possible
- * to read from the server and check for an error message.  write_err_msg
- * should be reported only when we are unable to obtain a server error first.
- * (Thus, a -1 result is returned only for an internal *read* failure.)
+ * If a socket-level write failure occurs, conn->write_failed is set and the
+ * error message is saved in conn->write_err_msg, but we clear the output
+ * buffer and return zero anyway; this is because callers should soldier on
+ * until we have read what we can from the server and checked for an error
+ * message.  write_err_msg should be reported only when we are unable to
+ * obtain a server error first.  Much of that behavior is implemented at
+ * lower levels, but this function deals with some edge cases.
  */
 static int
 pqSendSome(PGconn *conn, int len)
 {
 	char	   *ptr = conn->outBuffer;
 	int			remaining = conn->outCount;
-	int			oldmsglen = conn->errorMessage.len;
 	int			result = 0;
 
 	/*
@@ -867,7 +863,7 @@ pqSendSome(PGconn *conn, int len)
 	if (conn->sock == PGINVALID_SOCKET)
 	{
 		conn->write_failed = true;
-		/* Insert error message into conn->write_err_msg, if possible */
+		/* Store error message in conn->write_err_msg, if possible */
 		/* (strdup failure is OK, we'll cope later) */
 		conn->write_err_msg = strdup(libpq_gettext("connection not open\n"));
 		/* Discard queued data; no chance it'll ever be sent */
@@ -909,24 +905,6 @@ pqSendSome(PGconn *conn, int len)
 					continue;
 
 				default:
-					/* pqsecure_write set the error message for us */
-					conn->write_failed = true;
-
-					/*
-					 * Transfer error message to conn->write_err_msg, if
-					 * possible (strdup failure is OK, we'll cope later).
-					 *
-					 * We only want to transfer whatever has been appended to
-					 * conn->errorMessage since we entered this routine.
-					 */
-					if (!PQExpBufferBroken(&conn->errorMessage))
-					{
-						conn->write_err_msg = strdup(conn->errorMessage.data +
-													 oldmsglen);
-						conn->errorMessage.len = oldmsglen;
-						conn->errorMessage.data[oldmsglen] = '\0';
-					}
-
 					/* Discard queued data; no chance it'll ever be sent */
 					conn->outCount = 0;
 
@@ -936,7 +914,18 @@ pqSendSome(PGconn *conn, int len)
 						if (pqReadData(conn) < 0)
 							return -1;
 					}
-					return 0;
+
+					/*
+					 * Lower-level code should already have filled
+					 * conn->write_err_msg (and set conn->write_failed) or
+					 * conn->errorMessage.  In the former case, we pretend
+					 * there's no problem; the write_failed condition will be
+					 * dealt with later.  Otherwise, report the error now.
+					 */
+					if (conn->write_failed)
+						return 0;
+					else
+						return -1;
 			}
 		}
 		else
@@ -1093,8 +1082,7 @@ pqWaitTimed(int forRead, int forWrite, PGconn *conn, time_t finish_time)
 
 	if (result == 0)
 	{
-		appendPQExpBufferStr(&conn->errorMessage,
-							 libpq_gettext("timeout expired\n"));
+		libpq_append_conn_error(conn, "timeout expired");
 		return 1;
 	}
 
@@ -1160,8 +1148,7 @@ pqSocketCheck(PGconn *conn, int forRead, int forWrite, time_t end_time)
 		return -1;
 	if (conn->sock == PGINVALID_SOCKET)
 	{
-		appendPQExpBufferStr(&conn->errorMessage,
-							 libpq_gettext("invalid socket\n"));
+		libpq_append_conn_error(conn, "invalid socket");
 		return -1;
 	}
 
@@ -1183,10 +1170,8 @@ pqSocketCheck(PGconn *conn, int forRead, int forWrite, time_t end_time)
 	{
 		char		sebuf[PG_STRERROR_R_BUFLEN];
 
-		appendPQExpBuffer(&conn->errorMessage,
-						  libpq_gettext("%s() failed: %s\n"),
-						  "select",
-						  SOCK_STRERROR(SOCK_ERRNO, sebuf, sizeof(sebuf)));
+		libpq_append_conn_error(conn, "%s() failed: %s", "select",
+								SOCK_STRERROR(SOCK_ERRNO, sebuf, sizeof(sebuf)));
 	}
 
 	return result;
@@ -1284,13 +1269,9 @@ pqSocketPoll(int sock, int forRead, int forWrite, time_t end_time)
  */
 
 /*
- * Returns the byte length of the character beginning at s, using the
- * specified encoding.
- *
- * Caution: when dealing with text that is not certainly valid in the
- * specified encoding, the result may exceed the actual remaining
- * string length.  Callers that are not prepared to deal with that
- * should use PQmblenBounded() instead.
+ * Like pg_encoding_mblen().  Use this in callers that want the
+ * dynamically-linked libpq's stance on encodings, even if that means
+ * different behavior in different startups of the executable.
  */
 int
 PQmblen(const char *s, int encoding)
@@ -1299,8 +1280,9 @@ PQmblen(const char *s, int encoding)
 }
 
 /*
- * Returns the byte length of the character beginning at s, using the
- * specified encoding; but not more than the distance to end of string.
+ * Like pg_encoding_mblen_bounded().  Use this in callers that want the
+ * dynamically-linked libpq's stance on encodings, even if that means
+ * different behavior in different startups of the executable.
  */
 int
 PQmblenBounded(const char *s, int encoding)
@@ -1359,7 +1341,6 @@ libpq_binddomain(void)
 #else
 		int			save_errno = errno;
 #endif
-		const char *ldir;
 
 		/* No relocatable lookup here because the binary could be anywhere */
 		ldir = getenv("PGLOCALEDIR");
@@ -1390,3 +1371,62 @@ libpq_ngettext(const char *msgid, const char *msgid_plural, unsigned long n)
 }
 
 #endif							/* ENABLE_NLS */
+
+
+/*
+ * Append a formatted string to the given buffer, after translating it.  A
+ * newline is automatically appended; the format should not end with a
+ * newline.
+ */
+void
+libpq_append_error(PQExpBuffer errorMessage, const char *fmt,...)
+{
+	int			save_errno = errno;
+	bool		done;
+	va_list		args;
+
+	Assert(fmt[strlen(fmt) - 1] != '\n');
+
+	if (PQExpBufferBroken(errorMessage))
+		return;					/* already failed */
+
+	/* Loop in case we have to retry after enlarging the buffer. */
+	do
+	{
+		errno = save_errno;
+		va_start(args, fmt);
+		done = appendPQExpBufferVA(errorMessage, libpq_gettext(fmt), args);
+		va_end(args);
+	} while (!done);
+
+	appendPQExpBufferChar(errorMessage, '\n');
+}
+
+/*
+ * Append a formatted string to the error message buffer of the given
+ * connection, after translating it.  A newline is automatically appended; the
+ * format should not end with a newline.
+ */
+void
+libpq_append_conn_error(PGconn *conn, const char *fmt,...)
+{
+	int			save_errno = errno;
+	bool		done;
+	va_list		args;
+
+	Assert(fmt[strlen(fmt) - 1] != '\n');
+
+	if (PQExpBufferBroken(&conn->errorMessage))
+		return;					/* already failed */
+
+	/* Loop in case we have to retry after enlarging the buffer. */
+	do
+	{
+		errno = save_errno;
+		va_start(args, fmt);
+		done = appendPQExpBufferVA(&conn->errorMessage, libpq_gettext(fmt), args);
+		va_end(args);
+	} while (!done);
+
+	appendPQExpBufferChar(&conn->errorMessage, '\n');
+}

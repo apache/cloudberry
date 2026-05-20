@@ -1,23 +1,12 @@
 
-# Copyright (c) 2021, PostgreSQL Global Development Group
+# Copyright (c) 2021-2023, PostgreSQL Global Development Group
 
 # Test generic xlog record work for bloom index replication.
 use strict;
 use warnings;
-use PostgresNode;
-use TestLib;
+use PostgreSQL::Test::Cluster;
+use PostgreSQL::Test::Utils;
 use Test::More;
-
-if (TestLib::has_wal_read_bug)
-{
-	# We'd prefer to use Test::More->builder->todo_start, but the bug causes
-	# this test file to die(), not merely to fail.
-	plan skip_all => 'filesystem bug';
-}
-else
-{
-	plan tests => 31;
-}
 
 my $node_primary;
 my $node_standby;
@@ -52,7 +41,7 @@ SELECT * FROM tst WHERE i = 7 AND t = 'e';
 }
 
 # Initialize primary node
-$node_primary = get_new_node('primary');
+$node_primary = PostgreSQL::Test::Cluster->new('primary');
 $node_primary->init(allows_streaming => 1);
 $node_primary->start;
 my $backup_name = 'my_backup';
@@ -61,7 +50,7 @@ my $backup_name = 'my_backup';
 $node_primary->backup($backup_name);
 
 # Create streaming standby linking to primary
-$node_standby = get_new_node('standby');
+$node_standby = PostgreSQL::Test::Cluster->new('standby');
 $node_standby->init_from_backup($node_primary, $backup_name,
 	has_streaming => 1);
 $node_standby->start;
@@ -91,3 +80,5 @@ for my $i (1 .. 10)
 	);
 	test_index_replay("insert $i");
 }
+
+done_testing();

@@ -2,7 +2,7 @@
 #
 # Makefile for backend/catalog
 #
-# Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
+# Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
 # Portions Copyright (c) 1994, Regents of the University of California
 #
 # src/backend/catalog/Makefile
@@ -25,7 +25,9 @@ OBJS = \
 	objectaddress.o \
 	partition.o \
 	pg_aggregate.o \
+	pg_attrdef.o \
 	pg_cast.o \
+	pg_class.o \
 	pg_collation.o \
 	pg_constraint.o \
 	pg_conversion.o \
@@ -36,6 +38,7 @@ OBJS = \
 	pg_largeobject.o \
 	pg_namespace.o \
 	pg_operator.o \
+	pg_parameter_acl.o \
 	pg_proc.o \
 	pg_publication.o \
 	pg_range.o \
@@ -94,8 +97,8 @@ CATALOG_HEADERS := \
 	pg_stat_last_operation.h pg_stat_last_shoperation.h \
 	pg_foreign_table.h pg_foreign_table_seg.h pg_policy.h pg_replication_origin.h \
 	pg_default_acl.h pg_init_privs.h pg_seclabel.h pg_shseclabel.h \
-	pg_collation.h pg_partitioned_table.h pg_range.h pg_transform.h \
-	pg_sequence.h pg_publication.h pg_publication_rel.h pg_subscription.h \
+	pg_collation.h pg_parameter_acl.h pg_partitioned_table.h pg_range.h pg_transform.h \
+	pg_sequence.h pg_publication.h pg_publication_namespace.h pg_publication_rel.h pg_subscription.h \
 	pg_subscription_rel.h gp_partition_template.h pg_task.h pg_task_run_history.h \
 	pg_profile.h pg_password_history.h pg_directory_table.h gp_storage_server.h \
 	gp_storage_user_mapping.h pg_tag.h pg_tag_description.h \
@@ -162,7 +165,7 @@ ifeq ($(enable_catalog_ext),yes)
 catalog_data_extra_path = $(top_srcdir)/src/backend/catalog-extension/
 endif
 
-bki-stamp: genbki.pl Catalog.pm $(POSTGRES_BKI_SRCS) $(POSTGRES_BKI_DATA) $(top_srcdir)/configure.ac $(top_builddir)/src/Makefile.global
+bki-stamp: genbki.pl Catalog.pm $(POSTGRES_BKI_SRCS) $(POSTGRES_BKI_DATA) $(top_srcdir)/configure.ac $(top_srcdir)/src/include/access/transam.h $(top_builddir)/src/Makefile.global
 	$(PERL) $< --include-path=$(top_srcdir)/src/include/ \
 		--extra-path=$(catalog_data_extra_path) \
 		--set-version=$(PG_MAJORVERSION) $(POSTGRES_BKI_SRCS)

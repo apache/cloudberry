@@ -15,7 +15,7 @@
  *
  * Portions Copyright (c) 2007-2008, Greenplum inc
  * Portions Copyright (c) 2012-Present VMware, Inc. or its affiliates.
- * Copyright (c) 2003-2021, PostgreSQL Global Development Group
+ * Copyright (c) 2003-2023, PostgreSQL Global Development Group
  *
  * src/include/nodes/tidbitmap.h
  *

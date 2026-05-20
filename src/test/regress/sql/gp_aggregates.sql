@@ -123,11 +123,11 @@ create aggregate mysum_prefunc(int4) (
 -- tweak settings to force multistage agg to be used
 set gp_motion_cost_per_row = 1000;
 set optimizer_force_multistage_agg = on;
-set force_parallel_mode = off;
+set debug_parallel_query = off;
 select mysum_prefunc(a::int4) from aggtest;
 reset gp_motion_cost_per_row;
 reset optimizer_force_multistage_agg;
-reset force_parallel_mode;
+reset debug_parallel_query;
 
 
 -- Test an aggregate with 'internal' transition type, and a combine function,

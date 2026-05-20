@@ -1,15 +1,8 @@
 -- Tests for range data types.
 
--- start_matchsubs
--- m/NOTICE:  One or more columns in the following table\(s\) do not have statistics: /
--- s/.//gs
--- m/HINT:  For non-partitioned tables, run analyze .+\. For partitioned tables, run analyze rootpartition .+\. See log for columns missing statistics\./
--- s/.//gs
--- end_matchsubs
-create type textrange as range (subtype=text, collation="C");
-
 --
 -- test input parser
+-- (type textrange was already made in test_setup.sql)
 --
 
 -- negative tests; should fail
@@ -46,6 +39,19 @@ select '[a,a]'::textrange;
 select '[a,a)'::textrange;
 select '(a,a]'::textrange;
 select '(a,a)'::textrange;
+
+-- Also try it with non-error-throwing API
+select pg_input_is_valid('(1,4)', 'int4range');
+select pg_input_is_valid('(1,4', 'int4range');
+select * from pg_input_error_info('(1,4', 'int4range');
+select pg_input_is_valid('(4,1)', 'int4range');
+select * from pg_input_error_info('(4,1)', 'int4range');
+select pg_input_is_valid('(4,zed)', 'int4range');
+select * from pg_input_error_info('(4,zed)', 'int4range');
+select pg_input_is_valid('[1,2147483647]', 'int4range');
+select * from pg_input_error_info('[1,2147483647]', 'int4range');
+select pg_input_is_valid('[2000-01-01,5874897-12-31]', 'daterange');
+select * from pg_input_error_info('[2000-01-01,5874897-12-31]', 'daterange');
 
 --
 -- create some test data and test the operators
@@ -431,13 +437,12 @@ set timezone to default;
 
 --
 -- Test user-defined range of floats
+-- (type float8range was already made in test_setup.sql)
 --
 
 --should fail
-create type float8range as range (subtype=float8, subtype_diff=float4mi);
+create type bogus_float8range as range (subtype=float8, subtype_diff=float4mi);
 
---should succeed
-create type float8range as range (subtype=float8, subtype_diff=float8mi);
 select '[123.001, 5.e9)'::float8range @> 888.882::float8;
 create table float8range_test(f8r float8range, i int);
 insert into float8range_test values(float8range(-100.00007, '1.111113e9'), 42);
@@ -569,7 +574,7 @@ reset enable_sort;
 create type two_ints as (a int, b int);
 create type two_ints_range as range (subtype = two_ints);
 
--- with force_parallel_mode on, this exercises tqueue.c's range remapping
+-- with debug_parallel_query on, this exercises tqueue.c's range remapping
 select *, row_to_json(upper(t)) as u from
   (values (two_ints_range(row(1,2), row(3,4))),
           (two_ints_range(row(5,6), row(7,8)))) v(t);

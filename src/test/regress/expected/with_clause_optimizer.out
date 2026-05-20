@@ -1029,7 +1029,7 @@ SELECT pg_get_viewdef('my_view'::regclass);
           SELECT sum(with_test1.value) AS sum+
             FROM with_test1                  +
          )                                   +
-  SELECT my_sum.total                        +
+  SELECT total                               +
     FROM my_sum;
 (1 row)
 
@@ -1040,7 +1040,7 @@ SELECT pg_get_viewdef('my_view'::regclass, true);
           SELECT sum(with_test1.value) AS sum+
             FROM with_test1                  +
          )                                   +
-  SELECT my_sum.total                        +
+  SELECT total                               +
     FROM my_sum;
 (1 row)
 
@@ -1063,7 +1063,7 @@ SELECT pg_get_viewdef('my_view'::regclass);
           SELECT sum(my_group_sum.total) AS sum      +
             FROM my_group_sum                        +
          )                                           +
-  SELECT my_sum.total                                +
+  SELECT total                                       +
     FROM my_sum;
 (1 row)
 
@@ -1079,7 +1079,7 @@ SELECT pg_get_viewdef('my_view'::regclass, true);
           SELECT sum(my_group_sum.total) AS sum      +
             FROM my_group_sum                        +
          )                                           +
-  SELECT my_sum.total                                +
+  SELECT total                                       +
     FROM my_sum;
 (1 row)
 
@@ -2390,13 +2390,13 @@ SELECT EXISTS(
                  ->  GroupAggregate
                        Group Key: share0_ref1.a, share0_ref1.b, share0_ref1.c
                        ->  Sort
-                             Sort Key: share0_ref1.a, share0_ref1.b, share0_ref1.c
+                             Sort Key: share0_ref1.a, share0_ref1.b, share0_ref1.c, share0_ref1.d
                              ->  Shared Scan (share slice:id 2:0)
                                    ->  Seq Scan on foo_issue_1204_test
                  ->  GroupAggregate
                        Group Key: foo_issue_1204_test_1.a, foo_issue_1204_test_1.b, foo_issue_1204_test_1.c
                        ->  Sort
-                             Sort Key: foo_issue_1204_test_1.a, foo_issue_1204_test_1.b, foo_issue_1204_test_1.c
+                             Sort Key: foo_issue_1204_test_1.a, foo_issue_1204_test_1.b, foo_issue_1204_test_1.c, foo_issue_1204_test_1.d
                              ->  Seq Scan on foo_issue_1204_test foo_issue_1204_test_1
  Optimizer: Postgres query optimizer
 (17 rows)

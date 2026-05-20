@@ -880,7 +880,7 @@ explain (costs off) update foo_rls set a=-10 where c=4;
 ---------------------------------------------------------------
  Update on foo_rls
    ->  Explicit Redistribute Motion 3:3  (slice1; segments: 3)
-         ->  Split
+         ->  Split Update
                ->  Seq Scan on foo_rls
                      Filter: ((c >= 3) AND (c = 4))
  Optimizer: Postgres-based planner
@@ -911,7 +911,7 @@ explain (costs off) update foo_part_rls set a=10 where foo_part_rls.c = 800;
    Update on foo_part_rls_1_prt_4 foo_part_rls_4
    Update on foo_part_rls_1_prt_5 foo_part_rls_5
    ->  Explicit Redistribute Motion 3:3  (slice1; segments: 3)
-         ->  Split
+         ->  Split Update
                ->  Append
                      ->  Seq Scan on foo_part_rls_1_prt_1 foo_part_rls_1
                            Filter: ((c >= 500) AND (c = 800))

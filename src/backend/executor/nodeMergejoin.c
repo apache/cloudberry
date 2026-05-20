@@ -5,7 +5,7 @@
  *
  * Portions Copyright (c) 2005-2008, Greenplum inc
  * Portions Copyright (c) 2012-Present VMware, Inc. or its affiliates.
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -883,12 +883,21 @@ ExecMergeJoin_guts(PlanState *pstate)
 					}
 
 					/*
-					 * If we only need to join to the first matching inner
-					 * tuple, then consider returning this one, but after that
-					 * continue with next outer tuple.
+					 * If we only need to consider the first matching inner
+					 * tuple, then advance to next outer tuple after we've
+					 * processed this one.
 					 */
 					if (node->js.single_match)
 						node->mj_JoinState = EXEC_MJ_NEXTOUTER;
+
+					/*
+					 * In a right-antijoin, we never return a matched tuple.
+					 * If it's not an inner_unique join, we need to stay on
+					 * the current outer tuple to continue scanning the inner
+					 * side for matches.
+					 */
+					if (node->js.jointype == JOIN_RIGHT_ANTI)
+						break;
 
 					qualResult = (otherqual == NULL ||
 								  ExecQual(otherqual, econtext));
@@ -1154,12 +1163,12 @@ ExecMergeJoin_guts(PlanState *pstate)
 					 * them will match this new outer tuple and therefore
 					 * won't be emitted as fill tuples.  This works *only*
 					 * because we require the extra joinquals to be constant
-					 * when doing a right or full join --- otherwise some of
-					 * the rescanned tuples might fail the extra joinquals.
-					 * This obviously won't happen for a constant-true extra
-					 * joinqual, while the constant-false case is handled by
-					 * forcing the merge clause to never match, so we never
-					 * get here.
+					 * when doing a right, right-anti or full join ---
+					 * otherwise some of the rescanned tuples might fail the
+					 * extra joinquals.  This obviously won't happen for a
+					 * constant-true extra joinqual, while the constant-false
+					 * case is handled by forcing the merge clause to never
+					 * match, so we never get here.
 					 */
 					if (!node->mj_SkipMarkRestore)
 					{
@@ -1234,7 +1243,7 @@ ExecMergeJoin_guts(PlanState *pstate)
 				break;
 
 				/*----------------------------------------------------------
-				 * EXEC_MJ_SKIP means compare tuples and if they do not
+				 * EXEC_MJ_SKIP_TEST means compare tuples and if they do not
 				 * match, skip whichever is lesser.
 				 *
 				 * For example:
@@ -1290,8 +1299,8 @@ ExecMergeJoin_guts(PlanState *pstate)
 				break;
 
 				/*
-				 * SKIPOUTER_ADVANCE: advance over an outer tuple that is
-				 * known not to join to any inner tuple.
+				 * EXEC_MJ_SKIPOUTER_ADVANCE: advance over an outer tuple that
+				 * is known not to join to any inner tuple.
 				 *
 				 * Before advancing, we check to see if we must emit an
 				 * outer-join fill tuple for this outer tuple.
@@ -1352,8 +1361,8 @@ ExecMergeJoin_guts(PlanState *pstate)
 				break;
 
 				/*
-				 * SKIPINNER_ADVANCE: advance over an inner tuple that is
-				 * known not to join to any outer tuple.
+				 * EXEC_MJ_SKIPINNER_ADVANCE: advance over an inner tuple that
+				 * is known not to join to any outer tuple.
 				 *
 				 * Before advancing, we check to see if we must emit an
 				 * outer-join fill tuple for this inner tuple.
@@ -1423,8 +1432,8 @@ ExecMergeJoin_guts(PlanState *pstate)
 
 				/*
 				 * EXEC_MJ_ENDOUTER means we have run out of outer tuples, but
-				 * are doing a right/full join and therefore must null-fill
-				 * any remaining unmatched inner tuples.
+				 * are doing a right/right-anti/full join and therefore must
+				 * null-fill any remaining unmatched inner tuples.
 				 */
 			case EXEC_MJ_ENDOUTER:
 				MJ_printf("ExecMergeJoin: EXEC_MJ_ENDOUTER\n");
@@ -1688,14 +1697,15 @@ ExecInitMergeJoin(MergeJoin *node, EState *estate, int eflags)
 				ExecInitNullTupleSlot(estate, innerDesc, &TTSOpsVirtual);
 			break;
 		case JOIN_RIGHT:
+		case JOIN_RIGHT_ANTI:
 			mergestate->mj_FillOuter = false;
 			mergestate->mj_FillInner = true;
 			mergestate->mj_NullOuterTupleSlot =
 				ExecInitNullTupleSlot(estate, outerDesc, &TTSOpsVirtual);
 
 			/*
-			 * Can't handle right or full join with non-constant extra
-			 * joinclauses.  This should have been caught by planner.
+			 * Can't handle right, right-anti or full join with non-constant
+			 * extra joinclauses.  This should have been caught by planner.
 			 */
 			if (!check_constant_qual(node->join.joinqual,
 									 &mergestate->mj_ConstFalseJoin))
@@ -1712,8 +1722,8 @@ ExecInitMergeJoin(MergeJoin *node, EState *estate, int eflags)
 				ExecInitNullTupleSlot(estate, innerDesc, &TTSOpsVirtual);
 
 			/*
-			 * Can't handle right or full join with non-constant extra
-			 * joinclauses.  This should have been caught by planner.
+			 * Can't handle right, right-anti or full join with non-constant
+			 * extra joinclauses.  This should have been caught by planner.
 			 */
 			if (!check_constant_qual(node->join.joinqual,
 									 &mergestate->mj_ConstFalseJoin))
@@ -1795,6 +1805,9 @@ ExecEndMergeJoin(MergeJoinState *node)
 void
 ExecReScanMergeJoin(MergeJoinState *node)
 {
+	PlanState  *outerPlan = outerPlanState(node);
+	PlanState  *innerPlan = innerPlanState(node);
+
 	ExecClearTuple(node->mj_MarkedTupleSlot);
 
 	node->mj_JoinState = EXEC_MJ_INITIALIZE_OUTER;
@@ -1807,9 +1820,8 @@ ExecReScanMergeJoin(MergeJoinState *node)
 	 * if chgParam of subnodes is not null then plans will be re-scanned by
 	 * first ExecProcNode.
 	 */
-	if (node->js.ps.lefttree->chgParam == NULL)
-		ExecReScan(node->js.ps.lefttree);
-	if (node->js.ps.righttree->chgParam == NULL)
-		ExecReScan(node->js.ps.righttree);
-
+	if (outerPlan->chgParam == NULL)
+		ExecReScan(outerPlan);
+	if (innerPlan->chgParam == NULL)
+		ExecReScan(innerPlan);
 }

@@ -1,3 +1,9 @@
+-- start_matchsubs
+-- m/\(runaway_cleaner\.c:\d+\)/
+-- s/\(runaway_cleaner\.c:\d+\)/(runaway_cleaner.c:XXX)/
+-- m/Used: \d+MB, available \d+MB, red zone: \d+MB/
+-- s/Used: \d+MB, available \d+MB, red zone: \d+MB/Used: XXXMB, available XXXMB, red zone: XXXMB/
+-- end_matchsubs
 --
 -- Set up
 --
@@ -3526,6 +3532,7 @@ explain (costs off) select * from b, lateral (select * from a, c where b.i = a.i
 ---------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Nested Loop
+         Join Filter: ((a.i + b.i) = c.j)
          ->  Broadcast Motion 3:3  (slice2; segments: 3)
                ->  Seq Scan on b
          ->  Materialize
@@ -3537,7 +3544,7 @@ explain (costs off) select * from b, lateral (select * from a, c where b.i = a.i
                      ->  Index Only Scan using c_j_i_idx on c
                            Index Cond: (j = (a.i + b.i))
  Optimizer: Postgres query optimizer
-(13 rows)
+(14 rows)
 
 select * from b, lateral (select * from a, c where b.i = a.i and (a.i + b.i) = c.j) as ac;
  i | i | i | j 
@@ -4237,10 +4244,7 @@ from tj1
   join tj18 on tj17.id = tj18.id
   join tj19 on tj18.id = tj19.id
   join tj20 on tj19.id = tj20.id;
- id | id | id | id | id | id | id | id | id | id | id | id | id | id | id | id | id | id | id | id 
-----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----
-(0 rows)
-
+ERROR:  Canceling query because of high VMEM usage. Used: XXXMB, available XXXMB, red zone: XXXMB (runaway_cleaner.c:XXX)
 select (trunc(extract(epoch from now())) - :unix_time1) < 100 is_ok;
  is_ok 
 -------

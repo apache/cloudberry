@@ -86,7 +86,6 @@ step s1_exit:
     SELECT pg_terminate_backend(pg_backend_pid());
 
 FATAL:  terminating connection due to administrator command
-FATAL:  terminating connection due to administrator command
 server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.

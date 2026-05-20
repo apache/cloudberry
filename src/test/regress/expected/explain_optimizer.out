@@ -51,6 +51,12 @@ begin
     reset enable_parallel;
 end;
 $$;
+-- Disable JIT, or we'll get different output on machines where that's been
+-- forced on
+set jit = off;
+-- Similarly, disable track_io_timing, to avoid output differences when
+-- enabled.
+set track_io_timing = off;
 -- Simple cases
 select explain_filter('explain select * from int8_tbl i8');
                               explain_filter                              
@@ -101,111 +107,6 @@ select explain_filter('explain (analyze, buffers, format text) select * from int
  Optimizer: GPORCA
  Execution Time: N.N ms
 (8 rows)
-
-select explain_filter('explain (analyze, buffers, format json) select * from int8_tbl i8');
-              explain_filter               
--------------------------------------------
- [                                        +
-   {                                      +
-     "Plan": {                            +
-       "Node Type": "Gather Motion",      +
-       "Senders": N,                      +
-       "Receivers": N,                    +
-       "Slice": N,                        +
-       "Segments": N,                     +
-       "Gang Type": "primary reader",     +
-       "Parallel Aware": false,           +
-       "Async Capable": false,            +
-       "Startup Cost": N.N,               +
-       "Total Cost": N.N,                 +
-       "Plan Rows": N,                    +
-       "Plan Width": N,                   +
-       "Actual Startup Time": N.N,        +
-       "Actual Total Time": N.N,          +
-       "Actual Rows": N,                  +
-       "Actual Loops": N,                 +
-       "Shared Hit Blocks": N,            +
-       "Shared Read Blocks": N,           +
-       "Shared Dirtied Blocks": N,        +
-       "Shared Written Blocks": N,        +
-       "Local Hit Blocks": N,             +
-       "Local Read Blocks": N,            +
-       "Local Dirtied Blocks": N,         +
-       "Local Written Blocks": N,         +
-       "Temp Read Blocks": N,             +
-       "Temp Written Blocks": N,          +
-       "Plans": [                         +
-         {                                +
-           "Node Type": "Seq Scan",       +
-           "Parent Relationship": "Outer",+
-           "Slice": N,                    +
-           "Segments": N,                 +
-           "Gang Type": "primary reader", +
-           "Parallel Aware": false,       +
-           "Async Capable": false,        +
-           "Relation Name": "int8_tbl",   +
-           "Alias": "int8_tbl",           +
-           "Startup Cost": N.N,           +
-           "Total Cost": N.N,             +
-           "Plan Rows": N,                +
-           "Plan Width": N,               +
-           "Actual Startup Time": N.N,    +
-           "Actual Total Time": N.N,      +
-           "Actual Rows": N,              +
-           "Actual Loops": N,             +
-           "Shared Hit Blocks": N,        +
-           "Shared Read Blocks": N,       +
-           "Shared Dirtied Blocks": N,    +
-           "Shared Written Blocks": N,    +
-           "Local Hit Blocks": N,         +
-           "Local Read Blocks": N,        +
-           "Local Dirtied Blocks": N,     +
-           "Local Written Blocks": N,     +
-           "Temp Read Blocks": N,         +
-           "Temp Written Blocks": N       +
-         }                                +
-       ]                                  +
-     },                                   +
-     "Settings": {                        +
-       "Optimizer": "GPORCA"              +
-     },                                   +
-     "Planning": {                        +
-       "Shared Hit Blocks": N,            +
-       "Shared Read Blocks": N,           +
-       "Shared Dirtied Blocks": N,        +
-       "Shared Written Blocks": N,        +
-       "Local Hit Blocks": N,             +
-       "Local Read Blocks": N,            +
-       "Local Dirtied Blocks": N,         +
-       "Local Written Blocks": N,         +
-       "Temp Read Blocks": N,             +
-       "Temp Written Blocks": N           +
-     },                                   +
-     "Planning Time": N.N,                +
-     "Triggers": [                        +
-     ],                                   +
-     "Slice statistics": [                +
-       {                                  +
-         "Slice": N,                      +
-         "Executor Memory": N             +
-       },                                 +
-       {                                  +
-         "Slice": N,                      +
-         "Executor Memory": {             +
-           "Average": N,                  +
-           "Workers": N,                  +
-           "Subworkers": N,               +
-           "Maximum Memory Used": N       +
-         }                                +
-       }                                  +
-     ],                                   +
-     "Statement statistics": {            +
-       "Memory used": N                   +
-     },                                   +
-     "Execution Time": N.N                +
-   }                                      +
- ]
-(1 row)
 
 select explain_filter('explain (analyze, buffers, format xml) select * from int8_tbl i8');
                        explain_filter                       
@@ -481,6 +382,115 @@ select explain_filter('explain (buffers, format json) select * from int8_tbl i8'
  ]
 (1 row)
 
+-- Check output including I/O timings.  These fields are conditional
+-- but always set in JSON format, so check them only in this case.
+set track_io_timing = on;
+select explain_filter('explain (analyze, buffers, format json) select * from int8_tbl i8');
+              explain_filter               
+-------------------------------------------
+ [                                        +
+   {                                      +
+     "Plan": {                            +
+       "Node Type": "Gather Motion",      +
+       "Senders": N,                      +
+       "Receivers": N,                    +
+       "Slice": N,                        +
+       "Segments": N,                     +
+       "Gang Type": "primary reader",     +
+       "Parallel Aware": false,           +
+       "Async Capable": false,            +
+       "Startup Cost": N.N,               +
+       "Total Cost": N.N,                 +
+       "Plan Rows": N,                    +
+       "Plan Width": N,                   +
+       "Actual Startup Time": N.N,        +
+       "Actual Total Time": N.N,          +
+       "Actual Rows": N,                  +
+       "Actual Loops": N,                 +
+       "Shared Hit Blocks": N,            +
+       "Shared Read Blocks": N,           +
+       "Shared Dirtied Blocks": N,        +
+       "Shared Written Blocks": N,        +
+       "Local Hit Blocks": N,             +
+       "Local Read Blocks": N,            +
+       "Local Dirtied Blocks": N,         +
+       "Local Written Blocks": N,         +
+       "Temp Read Blocks": N,             +
+       "Temp Written Blocks": N,          +
+       "Plans": [                         +
+         {                                +
+           "Node Type": "Seq Scan",       +
+           "Parent Relationship": "Outer",+
+           "Slice": N,                    +
+           "Segments": N,                 +
+           "Gang Type": "primary reader", +
+           "Parallel Aware": false,       +
+           "Async Capable": false,        +
+           "Relation Name": "int8_tbl",   +
+           "Alias": "int8_tbl",           +
+           "Startup Cost": N.N,           +
+           "Total Cost": N.N,             +
+           "Plan Rows": N,                +
+           "Plan Width": N,               +
+           "Actual Startup Time": N.N,    +
+           "Actual Total Time": N.N,      +
+           "Actual Rows": N,              +
+           "Actual Loops": N,             +
+           "Shared Hit Blocks": N,        +
+           "Shared Read Blocks": N,       +
+           "Shared Dirtied Blocks": N,    +
+           "Shared Written Blocks": N,    +
+           "Local Hit Blocks": N,         +
+           "Local Read Blocks": N,        +
+           "Local Dirtied Blocks": N,     +
+           "Local Written Blocks": N,     +
+           "Temp Read Blocks": N,         +
+           "Temp Written Blocks": N       +
+         }                                +
+       ]                                  +
+     },                                   +
+     "Settings": {                        +
+       "Optimizer": "GPORCA"              +
+     },                                   +
+     "Planning": {                        +
+       "Shared Hit Blocks": N,            +
+       "Shared Read Blocks": N,           +
+       "Shared Dirtied Blocks": N,        +
+       "Shared Written Blocks": N,        +
+       "Local Hit Blocks": N,             +
+       "Local Read Blocks": N,            +
+       "Local Dirtied Blocks": N,         +
+       "Local Written Blocks": N,         +
+       "Temp Read Blocks": N,             +
+       "Temp Written Blocks": N           +
+     },                                   +
+     "Planning Time": N.N,                +
+     "Triggers": [                        +
+     ],                                   +
+     "Slice statistics": [                +
+       {                                  +
+         "Slice": N,                      +
+         "Executor Memory": N             +
+       },                                 +
+       {                                  +
+         "Slice": N,                      +
+         "Executor Memory": {             +
+           "Average": N,                  +
+           "Workers": N,                  +
+           "Subworkers": N,               +
+           "Maximum Memory Used": N       +
+         }                                +
+       }                                  +
+     ],                                   +
+     "Statement statistics": {            +
+       "Memory used": N                   +
+     },                                   +
+     "Execution Time": N.N                +
+   }                                      +
+ ]
+(1 row)
+
+set track_io_timing = off;
 -- SETTINGS option
 -- We have to ignore other settings that might be imposed by the environment,
 -- so printing the whole Settings field unfortunately won't do.
@@ -501,6 +511,49 @@ select explain_filter_to_json('explain (settings, format json) select * from int
 (1 row)
 
 rollback;
+-- GENERIC_PLAN option
+select explain_filter('explain (generic_plan) select unique1 from tenk1 where thousand = $1');
+                                    explain_filter                                    
+--------------------------------------------------------------------------------------
+ Gather Motion N:N  (slice1; segments: N)  (cost=N.N..N.N rows=N width=N)
+   ->  Index Scan using tenk1_thous_tenthous on tenk1  (cost=N.N..N.N rows=N width=N)
+         Index Cond: (thousand = $1)
+ Optimizer: GPORCA
+(4 rows)
+
+-- should fail
+select explain_filter('explain (analyze, generic_plan) select unique1 from tenk1 where thousand = $1');
+ERROR:  EXPLAIN options ANALYZE and GENERIC_PLAN cannot be used together
+-- Test EXPLAIN (GENERIC_PLAN) with partition pruning
+-- partitions should be pruned at plan time, based on constants,
+-- but there should be no pruning based on parameter placeholders
+create table gen_part (
+  key1 integer not null,
+  key2 integer not null
+) partition by list (key1);
+create table gen_part_1
+  partition of gen_part for values in (1)
+  partition by range (key2);
+create table gen_part_1_1
+  partition of gen_part_1 for values from (1) to (2);
+create table gen_part_1_2
+  partition of gen_part_1 for values from (2) to (3);
+create table gen_part_2
+  partition of gen_part for values in (2);
+-- should scan gen_part_1_1 and gen_part_1_2, but not gen_part_2
+select explain_filter('explain (generic_plan) select key1, key2 from gen_part where key1 = 1 and key2 = $1');
+                                 explain_filter                                  
+---------------------------------------------------------------------------------
+ Gather Motion N:N  (slice1; segments: N)  (cost=N.N..N.N rows=N width=N)
+   ->  Append  (cost=N.N..N.N rows=N width=N)
+         ->  Seq Scan on gen_part_1_1 gen_part_1  (cost=N.N..N.N rows=N width=N)
+               Filter: ((key1 = N) AND (key2 = $1))
+         ->  Seq Scan on gen_part_1_2 gen_part_2  (cost=N.N..N.N rows=N width=N)
+               Filter: ((key1 = N) AND (key2 = $1))
+ Optimizer: GPORCA
+(7 rows)
+
+drop table gen_part;
 --
 -- Test production of per-worker data
 --
@@ -605,13 +658,6 @@ select jsonb_pretty(
                      "Sort Key": [                          +
                          "tenk1.tenthous"                   +
                      ],                                     +
-                     "work_mem": {                          +
-                         "Used": 0,                         +
-                         "Segments": 0,                     +
-                         "Max Memory": 0,                   +
-                         "Workfile Spilling": 0,            +
-                         "Max Memory Segment": 0            +
-                     },                                     +
                      "Gang Type": "primary reader",         +
                      "Node Type": "Sort",                   +
                      "Plan Rows": 0,                        +
@@ -702,6 +748,7 @@ select jsonb_pretty(
              "Shared Written Blocks": 0                     +
          },                                                 +
          "Settings": {                                      +
+             "jit": "off",                                  +
              "Optimizer": "GPORCA",                         +
              "optimizer": "on",                             +
              "enable_parallel": "off",                      +
@@ -725,8 +772,7 @@ select jsonb_pretty(
                      "Workers": 0,                          +
                      "Subworkers": 0,                       +
                      "Maximum Memory Used": 0               +
-                 },                                         +
-                 "Work Maximum Memory": 0                   +
+                 }                                          +
              }                                              +
          ],                                                 +
          "Statement statistics": {                          +
@@ -737,6 +783,22 @@ select jsonb_pretty(
 (1 row)
 
 rollback;
+-- Test display of temporary objects
+create temp table t1(f1 float8);
+create function pg_temp.mysin(float8) returns float8 language plpgsql
+as 'begin return sin($1); end';
+select explain_filter('explain (verbose) select * from t1 where pg_temp.mysin(f1) < 0.5');
+                              explain_filter                              
+--------------------------------------------------------------------------
+ Gather Motion N:N  (slice1; segments: N)  (cost=N.N..N.N rows=N width=N)
+   Output: f1
+   ->  Seq Scan on pg_temp.t1  (cost=N.N..N.N rows=N width=N)
+         Output: f1
+         Filter: (pg_temp.mysin(t1.f1) < 'N.N'::double precision)
+ Optimizer: GPORCA
+(6 rows)
+
+-- Test compute_query_id
 set compute_query_id = on;
 select explain_filter('explain (verbose) select * from int8_tbl i8');
                               explain_filter                              

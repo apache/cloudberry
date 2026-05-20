@@ -3,7 +3,7 @@
  *
  * Portions Copyright (c) 2006-2010, Greenplum inc.
  * Portions Copyright (c) 2012-Present VMware, Inc. or its affiliates.
- * Copyright (c) 1996-2021, PostgreSQL Global Development Group
+ * Copyright (c) 1996-2023, PostgreSQL Global Development Group
  *
  * src/backend/catalog/system_views.sql
  *
@@ -67,7 +67,7 @@ CREATE VIEW pg_group AS
     SELECT
         rolname AS groname,
         oid AS grosysid,
-        ARRAY(SELECT member FROM pg_auth_members WHERE roleid = oid) AS grolist
+        ARRAY(SELECT member FROM pg_auth_members WHERE roleid = pg_authid.oid) AS grolist
     FROM pg_authid
     WHERE NOT rolcanlogin;
 
@@ -293,6 +293,7 @@ CREATE VIEW pg_stats_ext WITH (security_barrier) AS
            ) AS attnames,
            pg_get_statisticsobjdef_expressions(s.oid) as exprs,
            s.stxkind AS kinds,
+           sd.stxdinherit AS inherited,
            sd.stxdndistinct AS n_distinct,
            sd.stxddependencies AS dependencies,
            m.most_common_vals,
@@ -320,6 +321,7 @@ CREATE VIEW pg_stats_ext_exprs WITH (security_barrier) AS
            s.stxname AS statistics_name,
            pg_get_userbyid(s.stxowner) AS statistics_owner,
            stat.expr,
+           sd.stxdinherit AS inherited,
            (stat.a).stanullfrac AS null_frac,
            (stat.a).stawidth AS avg_width,
            (stat.a).stadistinct AS n_distinct,
@@ -390,7 +392,13 @@ CREATE VIEW pg_publication_tables AS
     SELECT
         P.pubname AS pubname,
         N.nspname AS schemaname,
-        C.relname AS tablename
+        C.relname AS tablename,
+        ( SELECT array_agg(a.attname ORDER BY a.attnum)
+          FROM pg_attribute a
+          WHERE a.attrelid = GPT.relid AND
+                a.attnum = ANY(GPT.attrs)
+        ) AS attnames,
+        pg_get_expr(GPT.qual, GPT.relid) AS rowfilter
     FROM pg_publication P,
          LATERAL pg_get_publication_tables(P.pubname) GPT,
          pg_class C JOIN pg_namespace N ON (N.oid = C.relnamespace)
@@ -629,6 +637,12 @@ CREATE VIEW pg_hba_file_rules AS
 REVOKE ALL ON pg_hba_file_rules FROM PUBLIC;
 REVOKE EXECUTE ON FUNCTION pg_hba_file_rules() FROM PUBLIC;
 
+CREATE VIEW pg_ident_file_mappings AS
+   SELECT * FROM pg_ident_file_mappings() AS A;
+
+REVOKE ALL ON pg_ident_file_mappings FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION pg_ident_file_mappings() FROM PUBLIC;
+
 CREATE VIEW pg_timezone_abbrevs AS
     SELECT * FROM pg_timezone_abbrevs();
 
@@ -645,13 +659,17 @@ CREATE VIEW pg_shmem_allocations AS
     SELECT * FROM pg_get_shmem_allocations();
 
 REVOKE ALL ON pg_shmem_allocations FROM PUBLIC;
+GRANT SELECT ON pg_shmem_allocations TO pg_read_all_stats;
 REVOKE EXECUTE ON FUNCTION pg_get_shmem_allocations() FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION pg_get_shmem_allocations() TO pg_read_all_stats;
 
 CREATE VIEW pg_backend_memory_contexts AS
     SELECT * FROM pg_get_backend_memory_contexts();
 
 REVOKE ALL ON pg_backend_memory_contexts FROM PUBLIC;
+GRANT SELECT ON pg_backend_memory_contexts TO pg_read_all_stats;
 REVOKE EXECUTE ON FUNCTION pg_get_backend_memory_contexts() FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION pg_get_backend_memory_contexts() TO pg_read_all_stats;
 
 -- Statistics views
 
@@ -661,14 +679,17 @@ CREATE VIEW pg_stat_all_tables AS
             N.nspname AS schemaname,
             C.relname AS relname,
             pg_stat_get_numscans(C.oid) AS seq_scan,
+            pg_stat_get_lastscan(C.oid) AS last_seq_scan,
             pg_stat_get_tuples_returned(C.oid) AS seq_tup_read,
             sum(pg_stat_get_numscans(I.indexrelid))::bigint AS idx_scan,
+            max(pg_stat_get_lastscan(I.indexrelid)) AS last_idx_scan,
             sum(pg_stat_get_tuples_fetched(I.indexrelid))::bigint +
             pg_stat_get_tuples_fetched(C.oid) AS idx_tup_fetch,
             pg_stat_get_tuples_inserted(C.oid) AS n_tup_ins,
             pg_stat_get_tuples_updated(C.oid) AS n_tup_upd,
             pg_stat_get_tuples_deleted(C.oid) AS n_tup_del,
             pg_stat_get_tuples_hot_updated(C.oid) AS n_tup_hot_upd,
+            pg_stat_get_tuples_newpage_updated(C.oid) AS n_tup_newpage_upd,
             pg_stat_get_live_tuples(C.oid) AS n_live_tup,
             pg_stat_get_dead_tuples(C.oid) AS n_dead_tup,
             pg_stat_get_mod_since_analyze(C.oid) AS n_mod_since_analyze,
@@ -701,7 +722,8 @@ CREATE VIEW pg_stat_xact_all_tables AS
             pg_stat_get_xact_tuples_inserted(C.oid) AS n_tup_ins,
             pg_stat_get_xact_tuples_updated(C.oid) AS n_tup_upd,
             pg_stat_get_xact_tuples_deleted(C.oid) AS n_tup_del,
-            pg_stat_get_xact_tuples_hot_updated(C.oid) AS n_tup_hot_upd
+            pg_stat_get_xact_tuples_hot_updated(C.oid) AS n_tup_hot_upd,
+            pg_stat_get_xact_tuples_newpage_updated(C.oid) AS n_tup_newpage_upd
     FROM pg_class C LEFT JOIN
          pg_index I ON C.oid = I.indrelid
          LEFT JOIN pg_namespace N ON (N.oid = C.relnamespace)
@@ -746,29 +768,38 @@ CREATE VIEW pg_stat_xact_user_tables AS
           schemaname !~ '^pg_toast';
 
 CREATE VIEW pg_statio_all_tables AS
-    SELECT
-            C.oid AS relid,
-            N.nspname AS schemaname,
-            C.relname AS relname,
-            pg_stat_get_blocks_fetched(C.oid) -
-                    pg_stat_get_blocks_hit(C.oid) AS heap_blks_read,
-            pg_stat_get_blocks_hit(C.oid) AS heap_blks_hit,
-            sum(pg_stat_get_blocks_fetched(I.indexrelid) -
-                    pg_stat_get_blocks_hit(I.indexrelid))::bigint AS idx_blks_read,
-            sum(pg_stat_get_blocks_hit(I.indexrelid))::bigint AS idx_blks_hit,
-            pg_stat_get_blocks_fetched(T.oid) -
-                    pg_stat_get_blocks_hit(T.oid) AS toast_blks_read,
-            pg_stat_get_blocks_hit(T.oid) AS toast_blks_hit,
-            pg_stat_get_blocks_fetched(X.indexrelid) -
-                    pg_stat_get_blocks_hit(X.indexrelid) AS tidx_blks_read,
-            pg_stat_get_blocks_hit(X.indexrelid) AS tidx_blks_hit
-    FROM pg_class C LEFT JOIN
-            pg_index I ON C.oid = I.indrelid LEFT JOIN
-            pg_class T ON C.reltoastrelid = T.oid LEFT JOIN
-            pg_index X ON T.oid = X.indrelid
-            LEFT JOIN pg_namespace N ON (N.oid = C.relnamespace)
-    WHERE C.relkind IN ('r', 't', 'm', 'o', 'b', 'M')
-    GROUP BY C.oid, N.nspname, C.relname, T.oid, X.indexrelid;
+SELECT
+    C.oid AS relid,
+    N.nspname AS schemaname,
+    C.relname AS relname,
+    pg_stat_get_blocks_fetched(C.oid) -
+    pg_stat_get_blocks_hit(C.oid) AS heap_blks_read,
+    pg_stat_get_blocks_hit(C.oid) AS heap_blks_hit,
+    I.idx_blks_read AS idx_blks_read,
+    I.idx_blks_hit AS idx_blks_hit,
+    pg_stat_get_blocks_fetched(T.oid) -
+    pg_stat_get_blocks_hit(T.oid) AS toast_blks_read,
+    pg_stat_get_blocks_hit(T.oid) AS toast_blks_hit,
+    X.idx_blks_read AS tidx_blks_read,
+    X.idx_blks_hit AS tidx_blks_hit
+FROM pg_class C LEFT JOIN
+     pg_class T ON C.reltoastrelid = T.oid
+                LEFT JOIN pg_namespace N ON (N.oid = C.relnamespace)
+                LEFT JOIN LATERAL (
+    SELECT sum(pg_stat_get_blocks_fetched(indexrelid) -
+               pg_stat_get_blocks_hit(indexrelid))::bigint
+                     AS idx_blks_read,
+            sum(pg_stat_get_blocks_hit(indexrelid))::bigint
+                     AS idx_blks_hit
+    FROM pg_index WHERE indrelid = C.oid ) I ON true
+                LEFT JOIN LATERAL (
+    SELECT sum(pg_stat_get_blocks_fetched(indexrelid) -
+               pg_stat_get_blocks_hit(indexrelid))::bigint
+                     AS idx_blks_read,
+            sum(pg_stat_get_blocks_hit(indexrelid))::bigint
+                     AS idx_blks_hit
+    FROM pg_index WHERE indrelid = T.oid ) X ON true
+WHERE C.relkind IN ('r', 't', 'm', 'o', 'b', 'M');
 
 CREATE VIEW pg_statio_sys_tables AS
     SELECT * FROM pg_statio_all_tables
@@ -788,6 +819,7 @@ CREATE VIEW pg_stat_all_indexes AS
             C.relname AS relname,
             I.relname AS indexrelname,
             pg_stat_get_numscans(I.oid) AS idx_scan,
+            pg_stat_get_lastscan(I.oid) AS last_idx_scan,
             pg_stat_get_tuples_returned(I.oid) AS idx_tup_read,
             pg_stat_get_tuples_fetched(I.oid) AS idx_tup_fetch
     FROM pg_class C JOIN
@@ -1044,11 +1076,26 @@ CREATE VIEW pg_stat_wal_receiver AS
     FROM pg_stat_get_wal_receiver() s
     WHERE s.pid IS NOT NULL;
 
+CREATE VIEW pg_stat_recovery_prefetch AS
+    SELECT
+            s.stats_reset,
+            s.prefetch,
+            s.hit,
+            s.skip_init,
+            s.skip_new,
+            s.skip_fpw,
+            s.skip_rep,
+            s.wal_distance,
+            s.block_distance,
+            s.io_depth
+     FROM pg_stat_get_recovery_prefetch() s;
+
 CREATE VIEW pg_stat_subscription AS
     SELECT
             su.oid AS subid,
             su.subname,
             st.pid,
+            st.leader_pid,
             st.relid,
             st.received_lsn,
             st.last_msg_send_time,
@@ -1077,7 +1124,8 @@ CREATE VIEW pg_stat_gssapi AS
             S.pid,
             S.gss_auth AS gss_authenticated,
             S.gss_princ AS principal,
-            S.gss_enc AS encrypted
+            S.gss_enc AS encrypted,
+            S.gss_delegation AS credentials_delegated
     FROM pg_stat_get_activity(NULL) AS S
     WHERE S.client_port IS NOT NULL;
 
@@ -1097,7 +1145,8 @@ CREATE VIEW pg_replication_slots AS
             L.confirmed_flush_lsn,
             L.wal_status,
             L.safe_wal_size,
-            L.two_phase
+            L.two_phase,
+            L.conflicting
     FROM pg_get_replication_slots() AS L
             LEFT JOIN pg_database D ON (L.datoid = D.oid);
 
@@ -1156,19 +1205,6 @@ CREATE VIEW pg_stat_database AS
         UNION ALL
         SELECT oid, datname FROM pg_database
     ) D;
-
-CREATE VIEW pg_stat_resqueues AS
-    SELECT
-        Q.oid AS queueid,
-        Q.rsqname AS queuename,
-        pg_stat_get_queue_num_exec(Q.oid) AS n_queries_exec,
-        pg_stat_get_queue_num_wait(Q.oid) AS n_queries_wait,
-        pg_stat_get_queue_elapsed_exec(Q.oid) AS elapsed_exec,
-        pg_stat_get_queue_elapsed_wait(Q.oid) AS elapsed_wait
-    FROM pg_resqueue AS Q;
-
--- Resource queue views
-
 CREATE VIEW pg_resqueue_status AS
     SELECT
             q.rsqname,
@@ -1186,6 +1222,25 @@ CREATE VIEW pg_resqueue_status AS
              queuewaiters int4,
              queueholders int4)
             ON (s.queueid = q.oid);
+
+-- Resource queue cumulative statistics view
+CREATE VIEW pg_stat_resqueues AS
+    SELECT
+        q.oid                           AS queueid,
+        q.rsqname                       AS queuename,
+        s.queries_submitted,
+        s.queries_admitted,
+        s.queries_rejected,
+        s.queries_completed,
+        s.elapsed_wait_secs             AS total_wait_time_secs,
+        s.max_wait_secs,
+        s.elapsed_exec_secs             AS total_exec_time_secs,
+        s.max_exec_secs,
+        s.total_cost,
+        s.total_memory_kb,
+        s.stat_reset_timestamp
+    FROM pg_resqueue AS q,
+         pg_stat_get_resqueue_stats(q.oid) AS s;
 
 -- External table views
 
@@ -1382,7 +1437,8 @@ CREATE VIEW pg_stat_database_conflicts AS
             pg_stat_get_db_conflict_lock(D.oid) AS confl_lock,
             pg_stat_get_db_conflict_snapshot(D.oid) AS confl_snapshot,
             pg_stat_get_db_conflict_bufferpin(D.oid) AS confl_bufferpin,
-            pg_stat_get_db_conflict_startup_deadlock(D.oid) AS confl_deadlock
+            pg_stat_get_db_conflict_startup_deadlock(D.oid) AS confl_deadlock,
+            pg_stat_get_db_conflict_logicalslot(D.oid) AS confl_active_logicalslot
     FROM pg_database D;
 
 CREATE VIEW pg_stat_user_functions AS
@@ -1455,6 +1511,28 @@ LANGUAGE SQL;
 
 CREATE VIEW pg_stat_bgwriter AS
     SELECT * FROM pg_stat_bgwriter_func();
+
+CREATE VIEW pg_stat_io AS
+SELECT
+       b.backend_type,
+       b.object,
+       b.context,
+       b.reads,
+       b.read_time,
+       b.writes,
+       b.write_time,
+       b.writebacks,
+       b.writeback_time,
+       b.extends,
+       b.extend_time,
+       b.op_bytes,
+       b.hits,
+       b.evictions,
+       b.reuses,
+       b.fsyncs,
+       b.fsync_time,
+       b.stats_reset
+FROM pg_stat_get_io() b;
 
 CREATE VIEW pg_stat_wal AS
     SELECT
@@ -1659,9 +1737,21 @@ REVOKE ALL ON pg_replication_origin_status FROM public;
 
 -- All columns of pg_subscription except subconninfo are publicly readable.
 REVOKE ALL ON pg_subscription FROM public;
-GRANT SELECT (oid, subdbid, subname, subowner, subenabled, subbinary,
-              substream, subslotname, subsynccommit, subpublications)
+GRANT SELECT (oid, subdbid, subskiplsn, subname, subowner, subenabled,
+              subbinary, substream, subtwophasestate, subdisableonerr,
+			  subpasswordrequired, subrunasowner,
+              subslotname, subsynccommit, subpublications, suborigin)
     ON pg_subscription TO public;
+
+CREATE VIEW pg_stat_subscription_stats AS
+SELECT
+    ss.subid,
+    s.subname,
+    ss.apply_error_count,
+    ss.sync_error_count,
+    ss.stats_reset
+FROM pg_subscription as s,
+     pg_stat_get_subscription_stats(s.oid) as ss;
 
 -- Dispatch and Aggregate the backends information of subtransactions overflowed
 CREATE VIEW gp_suboverflowed_backend(segid, pids) AS
@@ -1753,3 +1843,94 @@ CREATE VIEW relation_tag_descriptions AS
          pg_namespace AS ns
     WHERE td.tagid = t.oid AND td.tdobjid = c.oid
           AND td.tddatabaseid = d.oid AND ns.oid = c.relnamespace;
+
+CREATE FUNCTION gp_stat_get_snapshot_timestamp() RETURNS timestamptz AS
+$$
+    SELECT MAX(pg_stat_get_snapshot_timestamp) as gp_stat_get_snapshot_timestamp
+    FROM
+    (
+    SELECT pg_stat_get_snapshot_timestamp()
+    UNION ALL
+    SELECT pg_stat_get_snapshot_timestamp() FROM gp_dist_random('gp_id')
+    )
+    WHERE pg_stat_get_snapshot_timestamp IS NOT NULL;
+$$
+LANGUAGE SQL;
+
+CREATE FUNCTION gp_stat_force_next_flush() RETURNS VOID AS
+$$
+    SELECT pg_stat_force_next_flush()
+    UNION ALL
+    SELECT pg_stat_force_next_flush() FROM gp_dist_random('gp_id');
+$$
+LANGUAGE SQL;
+
+CREATE FUNCTION gp_stat_reset(tableoid oid) RETURNS VOID AS
+$$
+    SELECT pg_stat_reset()
+    UNION ALL
+    SELECT pg_stat_reset() FROM gp_dist_random('gp_id');
+$$ LANGUAGE SQL;
+
+CREATE FUNCTION gp_stat_reset_shared(target text) RETURNS VOID AS
+$$
+    SELECT pg_stat_reset_shared(target)
+    UNION ALL
+    SELECT pg_stat_reset_shared(target) FROM gp_dist_random('gp_id');
+$$ LANGUAGE SQL;
+
+CREATE FUNCTION gp_stat_reset_single_table_counters(tableoid oid) RETURNS VOID AS
+$$
+    WITH table_info AS (
+    SELECT tableoid::regclass::text AS v_relname
+    )
+    SELECT pg_stat_reset_single_table_counters(v_relname::regclass)
+    FROM table_info
+    UNION ALL
+    SELECT pg_stat_reset_single_table_counters(v_relname::regclass)
+    FROM table_info, gp_dist_random('gp_id');
+$$ LANGUAGE SQL;
+
+CREATE FUNCTION gp_stat_reset_single_function_counters(funcoid oid) RETURNS VOID AS
+$$
+    WITH func_info AS (
+    SELECT proname FROM pg_proc WHERE oid = funcoid
+    )
+    SELECT pg_stat_reset_single_function_counters(funcoid)
+    UNION ALL
+    SELECT (
+        SELECT pg_stat_reset_single_function_counters(pg_proc.oid)
+        FROM pg_proc, func_info 
+        WHERE pg_proc.proname = func_info.proname
+    )
+    from gp_dist_random('gp_id');
+$$ LANGUAGE SQL;
+
+CREATE FUNCTION gp_stat_reset_slru(target text) RETURNS VOID AS
+$$
+    SELECT pg_stat_reset_slru(target)
+    UNION ALL
+    SELECT pg_stat_reset_slru(target) FROM gp_dist_random('gp_id');
+$$ LANGUAGE SQL;
+
+CREATE FUNCTION gp_stat_reset_replication_slot(target text) RETURNS VOID AS
+$$
+    SELECT pg_stat_reset_replication_slot(target)
+    UNION ALL
+    SELECT pg_stat_reset_replication_slot(target) FROM gp_dist_random('gp_id');
+$$ LANGUAGE SQL;
+
+CREATE FUNCTION gp_stat_reset_subscription_stats(subid oid) RETURNS VOID AS
+$$
+    WITH sub_info AS (
+    SELECT subname FROM pg_subscription WHERE oid = subid
+    )
+    SELECT pg_stat_reset_single_function_counters(subid)
+    UNION ALL
+    SELECT (
+        SELECT pg_stat_reset_single_function_counters(pg_subscription.oid)
+        FROM pg_subscription, sub_info 
+        WHERE pg_subscription.subname = sub_info.subname
+    )
+    from gp_dist_random('gp_id');
+$$ LANGUAGE SQL;

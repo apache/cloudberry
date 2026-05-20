@@ -169,7 +169,7 @@ external_beginscan(Relation relation, uint32 scancounter,
 	if (Gp_role == GP_ROLE_EXECUTE)
 	{
 		/* this is the normal path for most ext tables */
-		Value	   *v;
+		String 	   *v;
 		int			idx = segindex;
 
 		/*
@@ -184,12 +184,12 @@ external_beginscan(Relation relation, uint32 scancounter,
 
 		if (idx >= 0)
 		{
-			v = (Value *) list_nth(uriList, idx);
+			v = list_nth(uriList, idx);
 
-			if (v->type == T_Null)
+			if (strlen(v->sval) == 0)
 				uri = NULL;
 			else
-				uri = (char *) strVal(v);
+				uri = strVal(v);
 		}
 	}
 	/*
@@ -203,12 +203,12 @@ external_beginscan(Relation relation, uint32 scancounter,
 		/* this is a ON COORDINATOR table. Only get uri if we are the master */
 		if (segindex == -1)
 		{
-			Value	   *v = list_nth(uriList, 0);
+			String 	   *v = list_nth(uriList, 0);
 
-			if (v->type == T_Null)
+			if (strlen(v->sval) == 0)
 				uri = NULL;
 			else
-				uri = (char *) strVal(v);
+				uri = strVal(v);
 		}
 	}
 
@@ -601,7 +601,7 @@ external_insert_init(Relation rel)
 	{
 		/* LOCATION - gpfdist or custom */
 
-		Value	   *v;
+		String 	   *v;
 		char	   *uri_str;
 		int			segindex = GpIdentity.segindex;
 		int			num_segs = getgpsegmentCount();
@@ -615,7 +615,7 @@ external_insert_init(Relation rel)
 
 		/* get a url to use. we use seg number modulo total num of urls */
 		v = list_nth(extentry->urilocations, my_url);
-		uri_str = pstrdup(v->val.str);
+		uri_str = pstrdup(v->sval);
 		extInsertDesc->ext_uri = uri_str;
 
 #if 0

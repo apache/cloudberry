@@ -1,5 +1,5 @@
-#ifndef _REGEX_H_
-#define _REGEX_H_				/* never again */
+#ifndef _PG_REGEX_H_
+#define _PG_REGEX_H_			/* never again */
 /*
  * regular expressions
  *
@@ -33,6 +33,84 @@
  */
 
 /*
+ * This is an implementation of POSIX regex_t, so it clashes with the
+ * system-provided <regex.h> header.  That header might be unintentionally
+ * included already, so we force that to happen now on all systems to show that
+ * we can cope and that we completely replace the system regex interfaces.
+ *
+ * Note that we avoided using _REGEX_H_ as an include guard, as that confuses
+ * matters on BSD family systems including macOS that use the same include
+ * guard.
+ */
+#ifndef _WIN32
+#include <regex.h>
+#endif
+
+/* Avoid redefinition errors due to the system header. */
+#undef REG_UBACKREF
+#undef REG_ULOOKAROUND
+#undef REG_UBOUNDS
+#undef REG_UBRACES
+#undef REG_UBSALNUM
+#undef REG_UPBOTCH
+#undef REG_UBBS
+#undef REG_UNONPOSIX
+#undef REG_UUNSPEC
+#undef REG_UUNPORT
+#undef REG_ULOCALE
+#undef REG_UEMPTYMATCH
+#undef REG_UIMPOSSIBLE
+#undef REG_USHORTEST
+#undef REG_BASIC
+#undef REG_EXTENDED
+#undef REG_ADVF
+#undef REG_ADVANCED
+#undef REG_QUOTE
+#undef REG_NOSPEC
+#undef REG_ICASE
+#undef REG_NOSUB
+#undef REG_EXPANDED
+#undef REG_NLSTOP
+#undef REG_NLANCH
+#undef REG_NEWLINE
+#undef REG_PEND
+#undef REG_EXPECT
+#undef REG_BOSONLY
+#undef REG_DUMP
+#undef REG_FAKE
+#undef REG_PROGRESS
+#undef REG_NOTBOL
+#undef REG_NOTEOL
+#undef REG_STARTEND
+#undef REG_FTRACE
+#undef REG_MTRACE
+#undef REG_SMALL
+#undef REG_OKAY
+#undef REG_NOMATCH
+#undef REG_BADPAT
+#undef REG_ECOLLATE
+#undef REG_ECTYPE
+#undef REG_EESCAPE
+#undef REG_ESUBREG
+#undef REG_EBRACK
+#undef REG_EPAREN
+#undef REG_EBRACE
+#undef REG_BADBR
+#undef REG_ERANGE
+#undef REG_ESPACE
+#undef REG_BADRPT
+#undef REG_ASSERT
+#undef REG_INVARG
+#undef REG_MIXED
+#undef REG_BADOPT
+#undef REG_ETOOBIG
+#undef REG_ECOLORS
+#undef REG_ATOI
+#undef REG_ITOA
+#undef REG_PREFIX
+#undef REG_EXACT
+
+/*
  * Add your own defines, if needed, here.
  */
 #include "mb/pg_wchar.h"
@@ -45,7 +123,7 @@
  * regoff_t has to be large enough to hold either off_t or ssize_t,
  * and must be signed; it's only a guess that long is suitable.
  */
-typedef long regoff_t;
+typedef long pg_regoff_t;
 
 /*
  * other interface types
@@ -79,19 +157,19 @@ typedef struct
 	/* the rest is opaque pointers to hidden innards */
 	char	   *re_guts;		/* `char *' is more portable than `void *' */
 	char	   *re_fns;
-} regex_t;
+} pg_regex_t;
 
 /* result reporting (may acquire more fields later) */
 typedef struct
 {
-	regoff_t	rm_so;			/* start of substring */
-	regoff_t	rm_eo;			/* end of substring */
-} regmatch_t;
+	pg_regoff_t rm_so;			/* start of substring */
+	pg_regoff_t rm_eo;			/* end of substring */
+} pg_regmatch_t;
 
 /* supplementary control and reporting */
 typedef struct
 {
-	regmatch_t	rm_extend;		/* see REG_EXPECT */
+	pg_regmatch_t rm_extend;	/* see REG_EXPECT */
 } rm_detail_t;
 
 
@@ -106,7 +184,7 @@ typedef struct
 #define REG_QUOTE	000004		/* no special characters, none */
 #define REG_NOSPEC	REG_QUOTE	/* historical synonym */
 #define REG_ICASE	000010		/* ignore case */
-#define REG_NOSUB	000020		/* don't care about subexpressions */
+#define REG_NOSUB	000020		/* caller doesn't need subexpr match data */
 #define REG_EXPANDED	000040	/* expanded format, white space & comments */
 #define REG_NLSTOP	000100		/* \n doesn't match . or [^ ] */
 #define REG_NLANCH	000200		/* ^ matches after \n, $ before */
@@ -156,7 +234,6 @@ typedef struct
 #define REG_BADOPT	18			/* invalid embedded option */
 #define REG_ETOOBIG 19			/* regular expression is too complex */
 #define REG_ECOLORS 20			/* too many colors */
-#define REG_CANCEL	21			/* operation cancelled */
 /* two specials for debugging and testing */
 #define REG_ATOI	101			/* convert error-code name to number */
 #define REG_ITOA	102			/* convert error-code number to name */
@@ -165,17 +242,26 @@ typedef struct
 #define REG_EXACT	(-2)		/* identified an exact match */
 
 
+/* Redirect the standard typenames to our typenames. */
+#define regoff_t pg_regoff_t
+#define regex_t pg_regex_t
+#define regmatch_t pg_regmatch_t
+
 
 /*
  * the prototypes for exported functions
  */
 
 /* regcomp.c */
-extern int	pg_regcomp(regex_t *, const pg_wchar *, size_t, int, Oid);
-extern int	pg_regexec(regex_t *, const pg_wchar *, size_t, size_t, rm_detail_t *, size_t, regmatch_t[], int);
-extern int	pg_regprefix(regex_t *, pg_wchar **, size_t *);
-extern void pg_regfree(regex_t *);
-extern size_t pg_regerror(int, const regex_t *, char *, size_t);
+extern int	pg_regcomp(regex_t *re, const pg_wchar *string, size_t len,
+					   int flags, Oid collation);
+extern int	pg_regexec(regex_t *re, const pg_wchar *string, size_t len,
+					   size_t search_start, rm_detail_t *details,
+					   size_t nmatch, regmatch_t pmatch[], int flags);
+extern int	pg_regprefix(regex_t *re, pg_wchar **string, size_t *slength);
+extern void pg_regfree(regex_t *re);
+extern size_t pg_regerror(int errcode, const regex_t *preg, char *errbuf,
+						  size_t errbuf_size);
 
 /* regexp.c */
 extern regex_t *RE_compile_and_cache(text *text_re, int cflags, Oid collation);
@@ -183,4 +269,4 @@ extern bool RE_compile_and_execute(text *text_re, char *dat, int dat_len,
 								   int cflags, Oid collation,
 								   int nmatch, regmatch_t *pmatch);
 
-#endif							/* _REGEX_H_ */
+#endif							/* _PG_REGEX_H_ */

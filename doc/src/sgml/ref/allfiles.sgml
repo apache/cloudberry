@@ -163,6 +163,7 @@ Complete list of usable sgml source files in this directory.
 <!ENTITY listen             SYSTEM "listen.sgml">
 <!ENTITY load               SYSTEM "load.sgml">
 <!ENTITY lock               SYSTEM "lock.sgml">
+<!ENTITY merge              SYSTEM "merge.sgml">
 <!ENTITY move               SYSTEM "move.sgml">
 <!ENTITY notify             SYSTEM "notify.sgml">
 <!ENTITY prepare            SYSTEM "prepare.sgml">
@@ -226,7 +227,6 @@ Complete list of usable sgml source files in this directory.
 <!ENTITY pgupgrade          SYSTEM "pgupgrade.sgml">
 <!ENTITY pgwaldump          SYSTEM "pg_waldump.sgml">
 <!ENTITY postgres           SYSTEM "postgres-ref.sgml">
-<!ENTITY postmaster         SYSTEM "postmaster.sgml">
 <!ENTITY psqlRef            SYSTEM "psql-ref.sgml">
 <!ENTITY reindexdb          SYSTEM "reindexdb.sgml">
 <!ENTITY vacuumdb           SYSTEM "vacuumdb.sgml">

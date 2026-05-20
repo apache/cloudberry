@@ -3,7 +3,7 @@
  * pl_handler.c		- Handler for the PL/pgSQL
  *			  procedural language
  *
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -116,7 +116,7 @@ plpgsql_extra_checks_check_hook(char **newvalue, void **extra, GucSource source)
 		list_free(elemlist);
 	}
 
-	myextra = (int *) malloc(sizeof(int));
+	myextra = (int *) guc_malloc(LOG, sizeof(int));
 	if (!myextra)
 		return false;
 	*myextra = extrachecks;
@@ -205,7 +205,7 @@ _PG_init(void)
 							   plpgsql_extra_errors_assign_hook,
 							   NULL);
 
-	EmitWarningsOnPlaceholders("plpgsql");
+	MarkGUCPrefixReserved("plpgsql");
 
 	plpgsql_HashTableInit();
 	RegisterXactCallback(plpgsql_xact_cb, NULL);

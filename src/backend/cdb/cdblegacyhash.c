@@ -16,6 +16,7 @@
  *
  *--------------------------------------------------------------------------
  */
+#include <sys/socket.h>
 #include "postgres.h"
 
 #include "cdb/cdbhash.h"

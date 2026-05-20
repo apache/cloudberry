@@ -76,12 +76,37 @@ loop
   end if;
 end loop;
 end$$;
+NOTICE:  pg_am contains unpinned initdb-created object(s)
+NOTICE:  pg_amop contains unpinned initdb-created object(s)
+NOTICE:  pg_amproc contains unpinned initdb-created object(s)
+NOTICE:  pg_auth_members contains unpinned initdb-created object(s)
+NOTICE:  pg_authid contains unpinned initdb-created object(s)
+NOTICE:  pg_cast contains unpinned initdb-created object(s)
+NOTICE:  pg_class contains unpinned initdb-created object(s)
+NOTICE:  pg_collation contains unpinned initdb-created object(s)
+NOTICE:  pg_constraint contains unpinned initdb-created object(s)
+NOTICE:  pg_conversion contains unpinned initdb-created object(s)
 NOTICE:  pg_database contains unpinned initdb-created object(s)
 NOTICE:  pg_extension contains unpinned initdb-created object(s)
 NOTICE:  pg_foreign_data_wrapper contains unpinned initdb-created object(s)
 NOTICE:  pg_foreign_server contains unpinned initdb-created object(s)
+NOTICE:  pg_language contains unpinned initdb-created object(s)
+NOTICE:  pg_namespace contains unpinned initdb-created object(s)
+NOTICE:  pg_opclass contains unpinned initdb-created object(s)
+NOTICE:  pg_operator contains unpinned initdb-created object(s)
+NOTICE:  pg_opfamily contains unpinned initdb-created object(s)
+NOTICE:  pg_proc contains unpinned initdb-created object(s)
+NOTICE:  pg_profile contains unpinned initdb-created object(s)
+NOTICE:  pg_resgroup contains unpinned initdb-created object(s)
+NOTICE:  pg_resourcetype contains unpinned initdb-created object(s)
+NOTICE:  pg_resqueue contains unpinned initdb-created object(s)
 NOTICE:  pg_rewrite contains unpinned initdb-created object(s)
 NOTICE:  pg_tablespace contains unpinned initdb-created object(s)
+NOTICE:  pg_ts_config contains unpinned initdb-created object(s)
+NOTICE:  pg_ts_dict contains unpinned initdb-created object(s)
+NOTICE:  pg_ts_parser contains unpinned initdb-created object(s)
+NOTICE:  pg_ts_template contains unpinned initdb-created object(s)
+NOTICE:  pg_type contains unpinned initdb-created object(s)
 -- **************** pg_class ****************
 -- Look for system tables with varlena columns but no toast table. All
 -- system tables with toastable columns should have toast tables, with

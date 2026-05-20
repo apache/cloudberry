@@ -563,7 +563,7 @@ DROP
 -- start_ignore
 -- end_ignore
 (exited with code 0)
-!\retcode gpstop -ari;
+!\retcode gpstop -arf;
 -- start_ignore
 -- end_ignore
 (exited with code 0)
@@ -579,7 +579,7 @@ DROP
 -- start_ignore
 -- end_ignore
 (exited with code 0)
-!\retcode gpstop -ari;
+!\retcode gpstop -arf;
 -- start_ignore
 -- end_ignore
 (exited with code 0)

@@ -101,7 +101,7 @@
 #define READ_UINT64_FIELD(fldname) \
 	token = pg_strtok(&length);		/* skip :fldname */ \
 	token = pg_strtok(&length);		/* get field value */ \
-	local_node->fldname = pg_strtouint64(token, NULL, 10)
+	local_node->fldname = strtou64(token, NULL, 10)
 
 /* Read a long integer field (anything written as ":fldname %ld") */
 #define READ_LONG_FIELD(fldname) \
@@ -297,7 +297,10 @@ _readQuery(void)
 	READ_BOOL_FIELD(isReturn);
 	READ_NODE_FIELD(cteList);
 	READ_NODE_FIELD(rtable);
+	READ_NODE_FIELD(rteperminfos);
 	READ_NODE_FIELD(jointree);
+	READ_NODE_FIELD(mergeActionList);
+	READ_BOOL_FIELD(mergeUseOuterJoin);
 	READ_NODE_FIELD(targetList);
 	READ_ENUM_FIELD(override, OverridingKind);
 	READ_NODE_FIELD(onConflict);
@@ -587,6 +590,7 @@ _readVar(void)
 	READ_OID_FIELD(vartype);
 	READ_INT_FIELD(vartypmod);
 	READ_OID_FIELD(varcollid);
+	READ_BITMAPSET_FIELD(varnullingrels);
 	READ_UINT_FIELD(varlevelsup);
 	READ_UINT_FIELD(varnosyn);
 	READ_INT_FIELD(varattnosyn);
@@ -1452,10 +1456,15 @@ _readRangeTblEntry(void)
 			READ_CHAR_FIELD(relkind);
 			READ_INT_FIELD(rellockmode);
 			READ_NODE_FIELD(tablesample);
+			READ_UINT_FIELD(perminfoindex);
 			break;
 		case RTE_SUBQUERY:
 			READ_NODE_FIELD(subquery);
 			READ_BOOL_FIELD(security_barrier);
+			READ_OID_FIELD(relid);
+			READ_CHAR_FIELD(relkind);
+			READ_INT_FIELD(rellockmode);
+			READ_UINT_FIELD(perminfoindex);
 			break;
 		case RTE_JOIN:
 			READ_ENUM_FIELD(jointype, JoinType);
@@ -1522,12 +1531,6 @@ _readRangeTblEntry(void)
 	READ_BOOL_FIELD(lateral);
 	READ_BOOL_FIELD(inh);
 	READ_BOOL_FIELD(inFromCl);
-	READ_UINT_FIELD(requiredPerms);
-	READ_OID_FIELD(checkAsUser);
-	READ_BITMAPSET_FIELD(selectedCols);
-	READ_BITMAPSET_FIELD(insertedCols);
-	READ_BITMAPSET_FIELD(updatedCols);
-	READ_BITMAPSET_FIELD(extraUpdatedCols);
 	READ_NODE_FIELD(securityQuals);
 
 	READ_BOOL_FIELD(forceDistRandom);
@@ -1622,6 +1625,7 @@ _readPlannedStmt(void)
 	READ_INT_FIELD(jitFlags);
 	READ_NODE_FIELD(planTree);
 	READ_NODE_FIELD(rtable);
+	READ_NODE_FIELD(permInfos);
 	READ_NODE_FIELD(resultRelations);
 	READ_NODE_FIELD(appendRelations);
 	READ_NODE_FIELD(subplans);
@@ -1777,6 +1781,7 @@ _readModifyTable(void)
 	READ_UINT_FIELD(exclRelRTI);
 	READ_NODE_FIELD(exclRelTlist);
 	READ_BOOL_FIELD(forceTupleRouting);
+	READ_NODE_FIELD(mergeActionLists);
 
 	READ_DONE();
 }
@@ -1910,7 +1915,7 @@ _readSeqScan(void)
 {
 	READ_LOCALS_NO_FIELDS(SeqScan);
 
-	ReadCommonScan(local_node);
+	ReadCommonScan(&local_node->scan);
 
 	READ_DONE();
 }
@@ -2524,11 +2529,14 @@ _readWindowAgg(void)
 	READ_INT_FIELD(frameOptions);
 	READ_NODE_FIELD(startOffset);
 	READ_NODE_FIELD(endOffset);
+	READ_NODE_FIELD(runCondition);
+	READ_NODE_FIELD(runConditionOrig);
 	READ_OID_FIELD(startInRangeFunc);
 	READ_OID_FIELD(endInRangeFunc);
 	READ_OID_FIELD(inRangeColl);
 	READ_BOOL_FIELD(inRangeAsc);
 	READ_BOOL_FIELD(inRangeNullsFirst);
+	READ_BOOL_FIELD(topWindow);
 
 	READ_DONE();
 }
@@ -2921,6 +2929,165 @@ _readPartitionRangeDatum(void)
 
 	READ_ENUM_FIELD(kind, PartitionRangeDatumKind);
 	READ_NODE_FIELD(value);
+	READ_LOCATION_FIELD(location);
+
+	READ_DONE();
+}
+
+static RTEPermissionInfo *
+_readRTEPermissionInfo(void)
+{
+	READ_LOCALS(RTEPermissionInfo);
+
+	READ_OID_FIELD(relid);
+	READ_BOOL_FIELD(inh);
+	READ_UINT64_FIELD(requiredPerms);
+	READ_OID_FIELD(checkAsUser);
+	READ_BITMAPSET_FIELD(selectedCols);
+	READ_BITMAPSET_FIELD(insertedCols);
+	READ_BITMAPSET_FIELD(updatedCols);
+
+	READ_DONE();
+}
+
+/*
+ * _readGpPolicy
+ */
+static GpPolicy *
+_readGpPolicy(void)
+{
+	READ_LOCALS(GpPolicy);
+
+	READ_ENUM_FIELD(ptype, GpPolicyType);
+
+	READ_INT_FIELD(numsegments);
+
+	READ_INT_FIELD(nattrs);
+	READ_ATTRNUMBER_ARRAY(attrs, local_node->nattrs);
+	READ_OID_ARRAY(opclasses, local_node->nattrs);
+
+	READ_DONE();
+}
+
+static MergeAction *
+_readMergeAction(void)
+{
+	READ_LOCALS(MergeAction);
+
+	READ_BOOL_FIELD(matched);
+	READ_ENUM_FIELD(commandType, CmdType);
+	READ_ENUM_FIELD(override, OverridingKind);
+	READ_NODE_FIELD(qual);
+	READ_NODE_FIELD(targetList);
+	READ_NODE_FIELD(updateColnos);
+
+	READ_DONE();
+}
+
+static PublicationObjSpec *
+_readPublicationObjSpec(void)
+{
+	READ_LOCALS(PublicationObjSpec);
+
+	READ_ENUM_FIELD(pubobjtype, PublicationObjSpecType);
+	READ_STRING_FIELD(name);
+	READ_NODE_FIELD(pubtable);
+	READ_LOCATION_FIELD(location);
+
+	READ_DONE();
+}
+
+static PublicationTable *
+_readPublicationTable(void)
+{
+	READ_LOCALS(PublicationTable);
+
+	READ_NODE_FIELD(relation);
+	READ_NODE_FIELD(whereClause);
+	READ_NODE_FIELD(columns);
+
+	READ_DONE();
+}
+
+static WindowDef *
+_readWindowDef(void)
+{
+	READ_LOCALS(WindowDef);
+
+	READ_STRING_FIELD(name);
+	READ_STRING_FIELD(refname);
+	READ_NODE_FIELD(partitionClause);
+	READ_NODE_FIELD(orderClause);
+	READ_INT_FIELD(frameOptions);
+	READ_NODE_FIELD(startOffset);
+	READ_NODE_FIELD(endOffset);
+	READ_LOCATION_FIELD(location);
+
+	READ_DONE();
+}
+
+static JsonConstructorExpr *
+_readJsonConstructorExpr(void)
+{
+	READ_LOCALS(JsonConstructorExpr);
+
+	READ_ENUM_FIELD(type, JsonConstructorType);
+	READ_NODE_FIELD(args);
+	READ_NODE_FIELD(func);
+	READ_NODE_FIELD(coercion);
+	READ_NODE_FIELD(returning);
+	READ_BOOL_FIELD(absent_on_null);
+	READ_BOOL_FIELD(unique);
+	READ_LOCATION_FIELD(location);
+
+	READ_DONE();
+}
+
+static JsonIsPredicate *
+_readJsonIsPredicate(void)
+{
+	READ_LOCALS(JsonIsPredicate);
+
+	READ_NODE_FIELD(expr);
+	READ_NODE_FIELD(format);
+	READ_ENUM_FIELD(item_type, JsonValueType);
+	READ_BOOL_FIELD(unique_keys);
+	READ_LOCATION_FIELD(location);
+
+	READ_DONE();
+}
+
+static JsonReturning *
+_readJsonReturning(void)
+{
+	READ_LOCALS(JsonReturning);
+
+	READ_NODE_FIELD(format);
+	READ_OID_FIELD(typid);
+	READ_INT_FIELD(typmod);
+
+	READ_DONE();
+}
+
+static JsonValueExpr *
+_readJsonValueExpr(void)
+{
+	READ_LOCALS(JsonValueExpr);
+
+	READ_NODE_FIELD(raw_expr);
+	READ_NODE_FIELD(formatted_expr);
+	READ_NODE_FIELD(format);
+
+	READ_DONE();
+}
+
+static JsonFormat *
+_readJsonFormat(void)
+{
+	READ_LOCALS(JsonFormat);
+
+	READ_ENUM_FIELD(format_type, JsonFormatType);
+	READ_ENUM_FIELD(encoding, JsonEncoding);
 	READ_LOCATION_FIELD(location);
 
 	READ_DONE();
@@ -3445,6 +3612,28 @@ parseNodeString(void)
 		return_value = _readReturnStmt();
 	else if (MATCHX("DROPDIRECTORYTABLESTMT"))
 		return_value = _readDropDirectoryTableStmt();
+	else if (MATCHX("RTEPERMISSIONINFO"))
+		return_value = _readRTEPermissionInfo();
+	else if (MATCHX("GPPOLICY"))
+		return_value = _readGpPolicy();
+	else if (MATCHX("MERGEACTION"))
+		return_value = _readMergeAction();
+	else if (MATCHX("PUBLICATIONOBJSPEC"))
+		return_value = _readPublicationObjSpec();
+	else if (MATCHX("PUBLICATIONTABLE"))
+		return_value = _readPublicationTable();
+	else if (MATCHX("WINDOWDEF"))
+		return_value = _readWindowDef();
+	else if (MATCHX("JSONCONSTRUCTOREXPR"))
+		return_value = _readJsonConstructorExpr();
+	else if (MATCHX("JSONISPREDICATE"))
+		return_value = _readJsonIsPredicate();
+	else if (MATCHX("JSONRETURNING"))
+		return_value = _readJsonReturning();
+	else if (MATCHX("JSONVALUEEXPR"))
+		return_value = _readJsonValueExpr();
+	else if (MATCHX("JSONFORMAT"))
+		return_value = _readJsonFormat();
 	else
 	{
         ereport(ERROR,

@@ -1,17 +1,17 @@
 
-# Copyright (c) 2021, PostgreSQL Global Development Group
+# Copyright (c) 2021-2023, PostgreSQL Global Development Group
 
 # Test for archive recovery of WAL generated with wal_level=minimal
 use strict;
 use warnings;
-use PostgresNode;
-use TestLib;
-use Test::More tests => 2;
+use PostgreSQL::Test::Cluster;
+use PostgreSQL::Test::Utils;
+use Test::More;
 use Time::HiRes qw(usleep);
 
 # Initialize and start node with wal_level = replica and WAL archiving
 # enabled.
-my $node = get_new_node('orig');
+my $node = PostgreSQL::Test::Cluster->new('orig');
 $node->init(has_archiving => 1, allows_streaming => 1);
 my $replica_config = q[
 wal_level = replica
@@ -66,35 +66,29 @@ sub test_recovery_wal_level_minimal
 {
 	my ($node_name, $node_text, $standby_setting) = @_;
 
-	my $recovery_node = get_new_node($node_name);
+	my $recovery_node = PostgreSQL::Test::Cluster->new($node_name);
 	$recovery_node->init_from_backup(
 		$node, $backup_name,
 		has_restoring => 1,
-		standby       => $standby_setting);
+		standby => $standby_setting);
 
-	# Use run_log instead of recovery_node->start because this test expects
-	# that the server ends with an error during recovery.
-	run_log(
-		[
-			'pg_ctl',                 '-D',
-			$recovery_node->data_dir, '-l',
-			$recovery_node->logfile,  'start'
-			, '-o', "--cluster-name=$node_name -c gp_role=utility --gp_dbid=1 --gp_contentid=0"
-		]);
+	# Cloudberry: use start() instead of raw pg_ctl to get proper gp options.
+	# Cloudberry emits a WARNING (not FATAL) for wal_level=minimal WAL and
+	# continues recovery, so we start the node, wait for it to be ready,
+	# check for the warning, then stop it.
+	$recovery_node->start;
 
-	# wait for postgres to terminate
-	foreach my $i (0 .. 10 * $TestLib::timeout_default)
-	{
-		last if !-f $recovery_node->data_dir . '/postmaster.pid';
-		usleep(100_000);
-	}
+	# Wait a moment for WAL replay to process the wal_level change record
+	sleep(2);
 
-	# Confirm that the archive recovery fails with an expected error
+	# Confirm that the archive recovery logs a warning about wal_level=minimal
 	my $logfile = slurp_file($recovery_node->logfile());
 	ok( $logfile =~
-		  qr/WARNING: .* WAL was generated with wal_level=minimal, cannot continue recovering/,
-		"$node_text ends with an error because it finds WAL generated with wal_level=minimal"
+		  qr/WARNING: .* WAL was generated with wal_level=minimal/,
+		"$node_text logs a warning because it finds WAL generated with wal_level=minimal"
 	);
+
+	$recovery_node->stop;
 }
 
 # Test for archive recovery
@@ -102,3 +96,5 @@ test_recovery_wal_level_minimal('archive_recovery', 'archive recovery', 0);
 
 # Test for standby server
 test_recovery_wal_level_minimal('standby', 'standby', 1);
+
+done_testing();

@@ -23,7 +23,7 @@
  * the result is validly encoded according to the destination encoding.
  *
  *
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -40,6 +40,7 @@
 #include "utils/builtins.h"
 #include "utils/memutils.h"
 #include "utils/syscache.h"
+#include "varatt.h"
 #include "common/mdb_locale.h"
 
 /*
@@ -412,8 +413,8 @@ pg_do_encoding_conversion(unsigned char *src, int len,
 	(void) OidFunctionCall6(proc,
 							Int32GetDatum(src_encoding),
 							Int32GetDatum(dest_encoding),
-							CStringGetDatum((char *)src),
-							CStringGetDatum((char *)result),
+							CStringGetDatum((char *) src),
+							CStringGetDatum((char *) result),
 							Int32GetDatum(len),
 							BoolGetDatum(false));
 
@@ -455,7 +456,7 @@ pg_do_encoding_conversion(unsigned char *src, int len,
  *
  * The output is null-terminated.
  *
- * If destlen < srclen * MAX_CONVERSION_LENGTH + 1, the converted output
+ * If destlen < srclen * MAX_CONVERSION_INPUT_LENGTH + 1, the converted output
  * wouldn't necessarily fit in the output buffer, and the function will not
  * convert the whole input.
  *
@@ -488,8 +489,8 @@ pg_do_encoding_conversion_buf(Oid proc,
 	result = OidFunctionCall6(proc,
 							  Int32GetDatum(src_encoding),
 							  Int32GetDatum(dest_encoding),
-							  CStringGetDatum((char *)src),
-							  CStringGetDatum((char *)dest),
+							  CStringGetDatum((char *) src),
+							  CStringGetDatum((char *) dest),
 							  Int32GetDatum(srclen),
 							  BoolGetDatum(noError));
 	return DatumGetInt32(result);
@@ -943,10 +944,67 @@ pg_unicode_to_server(pg_wchar c, unsigned char *s)
 	FunctionCall6(Utf8ToServerConvProc,
 				  Int32GetDatum(PG_UTF8),
 				  Int32GetDatum(server_encoding),
-				  CStringGetDatum((const char *) c_as_utf8),
-				  CStringGetDatum((const char *) s),
+				  CStringGetDatum((char *) c_as_utf8),
+				  CStringGetDatum((char *) s),
 				  Int32GetDatum(c_as_utf8_len),
 				  BoolGetDatum(false));
+}
+
+/*
+ * Convert a single Unicode code point into a string in the server encoding.
+ *
+ * Same as pg_unicode_to_server(), except that we don't throw errors,
+ * but simply return false on conversion failure.
+ */
+bool
+pg_unicode_to_server_noerror(pg_wchar c, unsigned char *s)
+{
+	unsigned char c_as_utf8[MAX_MULTIBYTE_CHAR_LEN + 1];
+	int			c_as_utf8_len;
+	int			converted_len;
+	int			server_encoding;
+
+	/* Fail if invalid Unicode code point */
+	if (!is_valid_unicode_codepoint(c))
+		return false;
+
+	/* Otherwise, if it's in ASCII range, conversion is trivial */
+	if (c <= 0x7F)
+	{
+		s[0] = (unsigned char) c;
+		s[1] = '\0';
+		return true;
+	}
+
+	/* If the server encoding is UTF-8, we just need to reformat the code */
+	server_encoding = GetDatabaseEncoding();
+	if (server_encoding == PG_UTF8)
+	{
+		unicode_to_utf8(c, s);
+		s[pg_utf_mblen(s)] = '\0';
+		return true;
+	}
+
+	/* For all other cases, we must have a conversion function available */
+	if (Utf8ToServerConvProc == NULL)
+		return false;
+
+	/* Construct UTF-8 source string */
+	unicode_to_utf8(c, c_as_utf8);
+	c_as_utf8_len = pg_utf_mblen(c_as_utf8);
+	c_as_utf8[c_as_utf8_len] = '\0';
+
+	/* Convert, but without throwing error if we can't */
+	converted_len = DatumGetInt32(FunctionCall6(Utf8ToServerConvProc,
+												Int32GetDatum(PG_UTF8),
+												Int32GetDatum(server_encoding),
+												CStringGetDatum((char *) c_as_utf8),
+												CStringGetDatum((char *) s),
+												Int32GetDatum(c_as_utf8_len),
+												BoolGetDatum(true)));
+
+	/* Conversion was successful iff it consumed the whole input */
+	return (converted_len == c_as_utf8_len);
 }
 
 
@@ -1160,7 +1218,7 @@ pg_mbcliplen(const char *mbstr, int len, int limit)
 }
 
 /*
- * pg_mbcliplen with specified encoding
+ * pg_mbcliplen with specified encoding; string must be valid in encoding
  */
 int
 pg_encoding_mbcliplen(int encoding, const char *mbstr,
@@ -1771,12 +1829,12 @@ check_encoding_conversion_args(int src_encoding,
  * report_invalid_encoding: complain about invalid multibyte character
  *
  * note: len is remaining length of string, not length of character;
- * len must be greater than zero, as we always examine the first byte.
+ * len must be greater than zero (or we'd neglect initializing "buf").
  */
 void
 report_invalid_encoding(int encoding, const char *mbstr, int len)
 {
-	int			l = pg_encoding_mblen(encoding, mbstr);
+	int			l = pg_encoding_mblen_or_incomplete(encoding, mbstr, len);
 	char		buf[8 * 5 + 1];
 	char	   *p = buf;
 	int			j,
@@ -1803,18 +1861,26 @@ report_invalid_encoding(int encoding, const char *mbstr, int len)
  * report_untranslatable_char: complain about untranslatable character
  *
  * note: len is remaining length of string, not length of character;
- * len must be greater than zero, as we always examine the first byte.
+ * len must be greater than zero (or we'd neglect initializing "buf").
  */
 void
 report_untranslatable_char(int src_encoding, int dest_encoding,
 						   const char *mbstr, int len)
 {
-	int			l = pg_encoding_mblen(src_encoding, mbstr);
+	int			l;
 	char		buf[8 * 5 + 1];
 	char	   *p = buf;
 	int			j,
 				jlimit;
 
+	/*
+	 * We probably could use plain pg_encoding_mblen(), because
+	 * gb18030_to_utf8() verifies before it converts.  All conversions should.
+	 * For src_encoding!=GB18030, len>0 meets pg_encoding_mblen() needs.  Even
+	 * so, be defensive, since a buggy conversion might pass invalid data.
+	 * This is not a performance-critical path.
+	 */
+	l = pg_encoding_mblen_or_incomplete(src_encoding, mbstr, len);
 	jlimit = Min(l, len);
 	jlimit = Min(jlimit, 8);	/* prevent buffer overrun */
 

@@ -25,7 +25,7 @@ ALTER RESOURCE GROUP rg1_cpuset_test SET cpuset '0';
 ! psql -d isolation2resgrouptest -Ac "ALTER RESOURCE GROUP rg1_cpuset_test SET cpuset '0-$(($(nproc)-1))'";
 
 -- start_ignore
-! gpstop -rai;
+! gpstop -raf;
 -- end_ignore
 
 -- Cleanup in a new connection as the default one is disconnected by gpstop

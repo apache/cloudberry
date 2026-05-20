@@ -230,8 +230,9 @@ DROP TABLE rngfunc2;
 DROP TABLE rngfunc;
 
 -- Rescan tests --
-CREATE TEMPORARY SEQUENCE rngfunc_rescan_seq1;
-CREATE TEMPORARY SEQUENCE rngfunc_rescan_seq2;
+-- GPDB sets the cache to 1 to ensure consistency in tests
+CREATE TEMPORARY SEQUENCE rngfunc_rescan_seq1 CACHE 1;
+CREATE TEMPORARY SEQUENCE rngfunc_rescan_seq2 CACHE 1;
 CREATE TYPE rngfunc_rescan_t AS (i integer, s bigint);
 
 CREATE FUNCTION rngfunc_sql(int,int) RETURNS setof rngfunc_rescan_t AS 'SELECT i, nextval(''rngfunc_rescan_seq1'') FROM generate_series($1,$2) i;' LANGUAGE SQL;
@@ -459,7 +460,10 @@ DROP FUNCTION rngfunc();
 -- some tests on SQL functions with RETURNING
 --
 
-create temp table tt(f1 serial, data text);
+-- GPDB: use a sequence column instead of serial to enforce a cache size for consistent results
+create temporary sequence tt_seq cache 1;
+create temp table tt(f1 int NOT NULL DEFAULT nextval('tt_seq'), data text);
+alter sequence tt_seq owned by tt.f1;
 
 -- GPDB: The tests below which throw NOTICEs, throw them in indeterminate
 -- order, if the rows are hashed to different segments. Force the rows
@@ -509,28 +513,32 @@ select insert_tt2('foolish','barrish') limit 1;
 select * from tt;
 
 -- triggers will fire, too
--- Pax have not implements tuple_fetch_row_version
--- create function noticetrigger() returns trigger as $$
--- begin
---   raise notice 'noticetrigger % %', new.f1, new.data;
---   return null;
--- end $$ language plpgsql;
--- create trigger tnoticetrigger after insert on tt for each row
--- execute procedure noticetrigger();
+create function noticetrigger() returns trigger as $$
+begin
+  raise notice 'noticetrigger % %', new.f1, new.data;
+  return null;
+end $$ language plpgsql;
+create trigger tnoticetrigger after insert on tt for each row
+execute procedure noticetrigger();
 
 select insert_tt2('foolme','barme') limit 1;
 select * from tt;
 
 -- and rules work
--- Pax have not implements tuple_fetch_row_version
--- create temp table tt_log(f1 int, data text);
--- create rule insert_tt_rule as on insert to tt do also
---   insert into tt_log values(new.*);
--- select insert_tt2('foollog','barlog') limit 1;
--- select * from tt;
+create temp table tt_log(f1 int, data text);
+
+create rule insert_tt_rule as on insert to tt do also
+  insert into tt_log values(new.*);
+
+select insert_tt2('foollog','barlog') limit 1;
+select * from tt;
 -- note that nextval() gets executed a second time in the rule expansion,
 -- which is expected.
--- select * from tt_log;
+-- GPDB: Only select data here. With triggers and rules, some may execute in
+-- different orders depending on which segment triggers first--causing the
+-- sequence number to be different. Therefore, we only select the data here to
+-- ensure consistency in the tests
+select data from tt_log;
 
 -- test case for a whole-row-variable bug
 create function rngfunc1(n integer, out a text, out b text)
@@ -702,12 +710,45 @@ SELECT * FROM ROWS FROM(get_users(), generate_series(10,11)) WITH ORDINALITY;
 select * from usersview;
 alter table users add column junk text;
 select * from usersview;
+
+alter table users drop column moredrop;  -- fail, view has reference
+
+-- We used to have a bug that would allow the above to succeed, posing
+-- hazards for later execution of the view.  Check that the internal
+-- defenses for those hazards haven't bit-rotted, in case some other
+-- bug with similar symptoms emerges.
 begin;
-alter table users drop column moredrop;
+
+-- destroy the dependency entry that prevents the DROP:
+delete from pg_depend where
+  objid = (select oid from pg_rewrite
+           where ev_class = 'usersview'::regclass and rulename = '_RETURN')
+  and refobjsubid = 5
+returning pg_describe_object(classid, objid, objsubid) as obj,
+          pg_describe_object(refclassid, refobjid, refobjsubid) as ref,
+          deptype;
+
+alter table users drop column moredrop cascade;
 select * from usersview;  -- expect clean failure
 rollback;
-alter table users alter column seq type numeric;
+
+alter table users alter column seq type numeric;  -- fail, view has reference
+
+-- likewise, check we don't crash if the dependency goes wrong
+begin;
+
+-- destroy the dependency entry that prevents the ALTER:
+delete from pg_depend where
+  objid = (select oid from pg_rewrite
+           where ev_class = 'usersview'::regclass and rulename = '_RETURN')
+  and refobjsubid = 2
+returning pg_describe_object(classid, objid, objsubid) as obj,
+          pg_describe_object(refclassid, refobjid, refobjsubid) as ref,
+          deptype;
+
+-- alter table users alter column seq type numeric;
 select * from usersview;  -- expect clean failure
+rollback;
 
 drop view usersview;
 drop function get_first_user();
@@ -821,3 +862,13 @@ select * from
    from unnest(array['{"lectures": [{"id": "1"}]}'::jsonb])
         as unnested_modules(module)) as ss,
   jsonb_to_recordset(ss.lecture) as j (id text);
+
+-- check detection of mismatching record types with a const-folded expression
+
+with a(b) as (values (row(1,2,3)))
+select * from a, coalesce(b) as c(d int, e int);  -- fail
+with a(b) as (values (row(1,2,3)))
+select * from a, coalesce(b) as c(d int, e int, f int, g int);  -- fail
+with a(b) as (values (row(1,2,3)))
+select * from a, coalesce(b) as c(d int, e int, f float);  -- fail
+select * from int8_tbl, coalesce(row(1)) as (a int, b int);  -- fail

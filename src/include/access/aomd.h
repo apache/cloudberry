@@ -53,10 +53,10 @@ TruncateAOSegmentFile(File fd,
 extern void ao_truncate_one_rel(Relation rel);
 
 extern void
-mdunlink_ao(RelFileNodeBackend rnode, ForkNumber forkNumber, bool isRedo);
+mdunlink_ao(RelFileLocatorBackend rnode, ForkNumber forkNumber, bool isRedo);
 
 extern void
-copy_append_only_data(RelFileNode src, RelFileNode dst, 
+copy_append_only_data(RelFileLocator src, RelFileLocator dst,
 	SMgrRelation srcSMGR, SMgrRelation dstSMGR, BackendId backendid, char relpersistence);
 
 /*
@@ -69,7 +69,7 @@ typedef bool (*ao_extent_callback)(int segno, void *ctx);
 
 extern void ao_foreach_extent_file(ao_extent_callback callback, void *ctx);
 
-extern void register_dirty_segment_ao(RelFileNode rnode, int segno, File vfd);
+extern void register_dirty_segment_ao(RelFileLocator rnode, int segno, File vfd);
 
 extern uint64 ao_rel_get_physical_size(Relation aorel);
 #endif							/* AOMD_H */

@@ -4,7 +4,7 @@
  *
  *	Parallel support for pg_dump and pg_restore
  *
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * IDENTIFICATION
@@ -53,13 +53,11 @@
 #include "postgres_fe.h"
 
 #ifndef WIN32
+#include <sys/select.h>
 #include <sys/wait.h>
 #include <signal.h>
 #include <unistd.h>
 #include <fcntl.h>
-#endif
-#ifdef HAVE_SYS_SELECT_H
-#include <sys/select.h>
 #endif
 
 #include "fe_utils/string_utils.h"
@@ -250,10 +248,7 @@ init_parallel_dump_utils(void)
 		/* Initialize socket access */
 		err = WSAStartup(MAKEWORD(2, 2), &wsaData);
 		if (err != 0)
-		{
-			pg_log_error("%s() failed: error code %d", "WSAStartup", err);
-			exit_nicely(1);
-		}
+			pg_fatal("%s() failed: error code %d", "WSAStartup", err);
 
 		parallel_init_done = true;
 	}
@@ -393,7 +388,7 @@ archive_close_connection(int code, void *arg)
  *
  * Note that we don't expect to come here during normal exit (the workers
  * should be long gone, and the ParallelState too).  We're only here in a
- * fatal() situation, so intervening to cancel active commands is
+ * pg_fatal() situation, so intervening to cancel active commands is
  * appropriate.
  */
 static void
@@ -961,7 +956,7 @@ ParallelBackupStart(ArchiveHandle *AH)
 
 		/* Create communication pipes for this worker */
 		if (pgpipe(pipeMW) < 0 || pgpipe(pipeWM) < 0)
-			fatal("could not create communication channels: %m");
+			pg_fatal("could not create communication channels: %m");
 
 		/* leader's ends of the pipes */
 		slot->pipeRead = pipeWM[PIPE_READ];
@@ -1018,7 +1013,7 @@ ParallelBackupStart(ArchiveHandle *AH)
 		else if (pid < 0)
 		{
 			/* fork failed */
-			fatal("could not create worker process: %m");
+			pg_fatal("could not create worker process: %m");
 		}
 
 		/* In Leader after successful fork */
@@ -1148,8 +1143,8 @@ parseWorkerCommand(ArchiveHandle *AH, TocEntry **te, T_Action *act,
 		Assert(*te != NULL);
 	}
 	else
-		fatal("unrecognized command received from leader: \"%s\"",
-			  msg);
+		pg_fatal("unrecognized command received from leader: \"%s\"",
+				 msg);
 }
 
 /*
@@ -1191,8 +1186,8 @@ parseWorkerResponse(ArchiveHandle *AH, TocEntry *te,
 		AH->public.n_errors += n_errors;
 	}
 	else
-		fatal("invalid message received from worker: \"%s\"",
-			  msg);
+		pg_fatal("invalid message received from worker: \"%s\"",
+				 msg);
 
 	return status;
 }
@@ -1323,10 +1318,10 @@ lockTableForWorker(ArchiveHandle *AH, TocEntry *te)
 	res = PQexec(AH->connection, query->data);
 
 	if (!res || PQresultStatus(res) != PGRES_COMMAND_OK)
-		fatal("could not obtain lock on relation \"%s\"\n"
-			  "This usually means that someone requested an ACCESS EXCLUSIVE lock "
-			  "on the table after the pg_dump parent process had gotten the "
-			  "initial ACCESS SHARE lock on the table.", qualId);
+		pg_fatal("could not obtain lock on relation \"%s\"\n"
+				 "This usually means that someone requested an ACCESS EXCLUSIVE lock "
+				 "on the table after the pg_dump parent process had gotten the "
+				 "initial ACCESS SHARE lock on the table.", qualId);
 
 	PQclear(res);
 	destroyPQExpBuffer(query);
@@ -1412,7 +1407,7 @@ ListenToWorkers(ArchiveHandle *AH, ParallelState *pstate, bool do_wait)
 	{
 		/* If do_wait is true, we must have detected EOF on some socket */
 		if (do_wait)
-			fatal("a worker process died unexpectedly");
+			pg_fatal("a worker process died unexpectedly");
 		return false;
 	}
 
@@ -1429,8 +1424,8 @@ ListenToWorkers(ArchiveHandle *AH, ParallelState *pstate, bool do_wait)
 		pstate->te[worker] = NULL;
 	}
 	else
-		fatal("invalid message received from worker: \"%s\"",
-			  msg);
+		pg_fatal("invalid message received from worker: \"%s\"",
+				 msg);
 
 	/* Free the string returned from getMessageFromWorker */
 	free(msg);
@@ -1534,7 +1529,7 @@ sendMessageToLeader(int pipefd[2], const char *str)
 	int			len = strlen(str) + 1;
 
 	if (pipewrite(pipefd[PIPE_WRITE], str, len) != len)
-		fatal("could not write to the communication channel: %m");
+		pg_fatal("could not write to the communication channel: %m");
 }
 
 /*
@@ -1611,7 +1606,7 @@ getMessageFromWorker(ParallelState *pstate, bool do_wait, int *worker)
 	}
 
 	if (i < 0)
-		fatal("%s() failed: %m", "select");
+		pg_fatal("%s() failed: %m", "select");
 
 	for (i = 0; i < pstate->numWorkers; i++)
 	{
@@ -1652,7 +1647,7 @@ sendMessageToWorker(ParallelState *pstate, int worker, const char *str)
 
 	if (pipewrite(pstate->parallelSlot[worker].pipeWrite, str, len) != len)
 	{
-		fatal("could not write to the communication channel: %m");
+		pg_fatal("could not write to the communication channel: %m");
 	}
 }
 
@@ -1741,7 +1736,7 @@ pgpipe(int handles[2])
 		return -1;
 	}
 
-	memset((void *) &serv_addr, 0, sizeof(serv_addr));
+	memset(&serv_addr, 0, sizeof(serv_addr));
 	serv_addr.sin_family = AF_INET;
 	serv_addr.sin_port = pg_hton16(0);
 	serv_addr.sin_addr.s_addr = pg_hton32(INADDR_LOOPBACK);

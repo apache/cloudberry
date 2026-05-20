@@ -25,6 +25,7 @@
 #include "catalog/gp_distribution_policy.h"
 #include "catalog/namespace.h"
 #include "catalog/pg_attribute.h"
+#include "catalog/pg_database.h"
 #include "catalog/pg_namespace.h"
 #include "catalog/pg_type.h"
 #include "cdb/cdbdisp_query.h"
@@ -781,7 +782,7 @@ RetrievePersistentErrorLogFromRangeVar(RangeVar *relrv, AclMode mode, char *fnam
 	if (findfile)
 	{
 		/* Requires priv on namespace to operate error log. */
-		aclresult = pg_namespace_aclcheck(namespaceId, GetUserId(), mode);
+		aclresult = object_aclcheck(NamespaceRelationId, namespaceId, GetUserId(), mode);
 		if (aclresult != ACLCHECK_OK)
 			aclcheck_error(aclresult, OBJECT_SCHEMA, schemaname);
 		return true;
@@ -1029,7 +1030,7 @@ TruncateErrorLog(text *relname, bool persistent)
 		/*
 		 * Database owner can delete error log files.
 		 */
-		if (!pg_database_ownercheck(MyDatabaseId, GetUserId()))
+		if (!object_ownercheck(DatabaseRelationId, MyDatabaseId, GetUserId()))
 			aclcheck_error(ACLCHECK_NOT_OWNER, OBJECT_DATABASE,
 						   get_database_name(MyDatabaseId));
 

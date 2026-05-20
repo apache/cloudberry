@@ -147,9 +147,9 @@ select count(*)  from ao2_@amname@;
 
 delete from ao2_@amname@ where i < 27;
 -- make sure the pgstat msg sends out at least PGSTAT_STAT_INTERVAL msec since last one
-select pg_sleep(0.6);
- pg_sleep 
-----------
+SELECT gp_stat_force_next_flush();
+ gp_stat_force_next_flush 
+--------------------------
  
 (1 row)
 
@@ -161,9 +161,9 @@ select count(*)  from ao2_@amname@;
 (1 row)
 
 -- make sure the pgstat msg sends out at least PGSTAT_STAT_INTERVAL msec since last one
-select pg_sleep(0.6);
- pg_sleep 
-----------
+SELECT gp_stat_force_next_flush();
+ gp_stat_force_next_flush 
+--------------------------
  
 (1 row)
 

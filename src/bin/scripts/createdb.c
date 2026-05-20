@@ -2,7 +2,7 @@
  *
  * createdb
  *
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * src/bin/scripts/createdb.c
@@ -34,10 +34,14 @@ main(int argc, char *argv[])
 		{"tablespace", required_argument, NULL, 'D'},
 		{"template", required_argument, NULL, 'T'},
 		{"encoding", required_argument, NULL, 'E'},
+		{"strategy", required_argument, NULL, 'S'},
 		{"lc-collate", required_argument, NULL, 1},
 		{"lc-ctype", required_argument, NULL, 2},
 		{"locale", required_argument, NULL, 'l'},
 		{"maintenance-db", required_argument, NULL, 3},
+		{"locale-provider", required_argument, NULL, 4},
+		{"icu-locale", required_argument, NULL, 5},
+		{"icu-rules", required_argument, NULL, 6},
 		{NULL, 0, NULL, 0}
 	};
 
@@ -58,9 +62,13 @@ main(int argc, char *argv[])
 	char	   *tablespace = NULL;
 	char	   *template = NULL;
 	char	   *encoding = NULL;
+	char	   *strategy = NULL;
 	char	   *lc_collate = NULL;
 	char	   *lc_ctype = NULL;
 	char	   *locale = NULL;
+	char	   *locale_provider = NULL;
+	char	   *icu_locale = NULL;
+	char	   *icu_rules = NULL;
 
 	PQExpBufferData sql;
 
@@ -73,15 +81,36 @@ main(int argc, char *argv[])
 
 	handle_help_version_opts(argc, argv, "createdb", help);
 
-	while ((c = getopt_long(argc, argv, "h:p:U:wWeO:D:T:E:l:", long_options, &optindex)) != -1)
+	while ((c = getopt_long(argc, argv, "D:eE:h:l:O:p:S:T:U:wW", long_options, &optindex)) != -1)
 	{
 		switch (c)
 		{
+			case 'D':
+				tablespace = pg_strdup(optarg);
+				break;
+			case 'e':
+				echo = true;
+				break;
+			case 'E':
+				encoding = pg_strdup(optarg);
+				break;
 			case 'h':
 				host = pg_strdup(optarg);
 				break;
+			case 'l':
+				locale = pg_strdup(optarg);
+				break;
+			case 'O':
+				owner = pg_strdup(optarg);
+				break;
 			case 'p':
 				port = pg_strdup(optarg);
+				break;
+			case 'S':
+				strategy = pg_strdup(optarg);
+				break;
+			case 'T':
+				template = pg_strdup(optarg);
 				break;
 			case 'U':
 				username = pg_strdup(optarg);
@@ -92,35 +121,27 @@ main(int argc, char *argv[])
 			case 'W':
 				prompt_password = TRI_YES;
 				break;
-			case 'e':
-				echo = true;
-				break;
-			case 'O':
-				owner = pg_strdup(optarg);
-				break;
-			case 'D':
-				tablespace = pg_strdup(optarg);
-				break;
-			case 'T':
-				template = pg_strdup(optarg);
-				break;
-			case 'E':
-				encoding = pg_strdup(optarg);
-				break;
 			case 1:
 				lc_collate = pg_strdup(optarg);
 				break;
 			case 2:
 				lc_ctype = pg_strdup(optarg);
 				break;
-			case 'l':
-				locale = pg_strdup(optarg);
-				break;
 			case 3:
 				maintenance_db = pg_strdup(optarg);
 				break;
+			case 4:
+				locale_provider = pg_strdup(optarg);
+				break;
+			case 5:
+				icu_locale = pg_strdup(optarg);
+				break;
+			case 6:
+				icu_rules = pg_strdup(optarg);
+				break;
 			default:
-				fprintf(stderr, _("Try \"%s --help\" for more information.\n"), progname);
+				/* getopt_long already emitted a complaint */
+				pg_log_error_hint("Try \"%s --help\" for more information.", progname);
 				exit(1);
 		}
 	}
@@ -139,33 +160,14 @@ main(int argc, char *argv[])
 		default:
 			pg_log_error("too many command-line arguments (first is \"%s\")",
 						 argv[optind + 2]);
-			fprintf(stderr, _("Try \"%s --help\" for more information.\n"), progname);
+			pg_log_error_hint("Try \"%s --help\" for more information.", progname);
 			exit(1);
-	}
-
-	if (locale)
-	{
-		if (lc_ctype)
-		{
-			pg_log_error("only one of --locale and --lc-ctype can be specified");
-			exit(1);
-		}
-		if (lc_collate)
-		{
-			pg_log_error("only one of --locale and --lc-collate can be specified");
-			exit(1);
-		}
-		lc_ctype = locale;
-		lc_collate = locale;
 	}
 
 	if (encoding)
 	{
 		if (pg_char_to_encoding(encoding) < 0)
-		{
-			pg_log_error("\"%s\" is not a valid encoding name", encoding);
-			exit(1);
-		}
+			pg_fatal("\"%s\" is not a valid encoding name", encoding);
 	}
 
 	if (dbname == NULL)
@@ -207,8 +209,15 @@ main(int argc, char *argv[])
 		appendPQExpBufferStr(&sql, " ENCODING ");
 		appendStringLiteralConn(&sql, encoding, conn);
 	}
+	if (strategy)
+		appendPQExpBuffer(&sql, " STRATEGY %s", fmtId(strategy));
 	if (template)
 		appendPQExpBuffer(&sql, " TEMPLATE %s", fmtId(template));
+	if (locale)
+	{
+		appendPQExpBufferStr(&sql, " LOCALE ");
+		appendStringLiteralConn(&sql, locale, conn);
+	}
 	if (lc_collate)
 	{
 		appendPQExpBufferStr(&sql, " LC_COLLATE ");
@@ -218,6 +227,18 @@ main(int argc, char *argv[])
 	{
 		appendPQExpBufferStr(&sql, " LC_CTYPE ");
 		appendStringLiteralConn(&sql, lc_ctype, conn);
+	}
+	if (locale_provider)
+		appendPQExpBuffer(&sql, " LOCALE_PROVIDER %s", fmtId(locale_provider));
+	if (icu_locale)
+	{
+		appendPQExpBufferStr(&sql, " ICU_LOCALE ");
+		appendStringLiteralConn(&sql, icu_locale, conn);
+	}
+	if (icu_rules)
+	{
+		appendPQExpBufferStr(&sql, " ICU_RULES ");
+		appendStringLiteralConn(&sql, icu_rules, conn);
 	}
 
 	appendPQExpBufferChar(&sql, ';');
@@ -275,7 +296,12 @@ help(const char *progname)
 	printf(_("  -l, --locale=LOCALE          locale settings for the database\n"));
 	printf(_("      --lc-collate=LOCALE      LC_COLLATE setting for the database\n"));
 	printf(_("      --lc-ctype=LOCALE        LC_CTYPE setting for the database\n"));
+	printf(_("      --icu-locale=LOCALE      ICU locale setting for the database\n"));
+	printf(_("      --icu-rules=RULES        ICU rules setting for the database\n"));
+	printf(_("      --locale-provider={libc|icu}\n"
+			 "                               locale provider for the database's default collation\n"));
 	printf(_("  -O, --owner=OWNER            database user to own the new database\n"));
+	printf(_("  -S, --strategy=STRATEGY      database creation strategy wal_log or file_copy\n"));
 	printf(_("  -T, --template=TEMPLATE      template database to copy\n"));
 	printf(_("  -V, --version                output version information, then exit\n"));
 	printf(_("  -?, --help                   show this help, then exit\n"));

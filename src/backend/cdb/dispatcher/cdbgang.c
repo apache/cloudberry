@@ -17,6 +17,7 @@
 #include "miscadmin.h"			/* MyProcPid */
 #include "pgstat.h"			/* pgstat_report_sessionid() */
 #include "utils/memutils.h"
+#include "utils/guc_tables.h"
 
 #include "access/xact.h"
 #include "catalog/namespace.h"
@@ -25,7 +26,6 @@
 #include "nodes/execnodes.h"	/* CdbProcess, Slice, SliceTable */
 #include "postmaster/postmaster.h"
 #include "tcop/tcopprot.h"
-#include "utils/int8.h"
 #include "utils/sharedsnapshot.h"
 #include "tcop/pquery.h"
 
@@ -174,7 +174,7 @@ segment_failure_due_to_recovery(const char *error_message)
 	if (error_message == NULL)
 		return false;
 
-	fatal = _("FATAL");
+	fatal = ("FATAL");
 	fatal_len = strlen(fatal);
 
 	/*
@@ -188,15 +188,15 @@ segment_failure_due_to_recovery(const char *error_message)
 	ptr = strstr(error_message, fatal);
 	if ((ptr != NULL) && ptr[fatal_len] == ':')
 	{
-		if (strstr(error_message, _(POSTMASTER_IN_RESET_MSG)))
+		if (strstr(error_message, (POSTMASTER_IN_RESET_MSG)))
 		{
 			return true;
 		}
-		if (strstr(error_message, _(POSTMASTER_IN_STARTUP_MSG)))
+		if (strstr(error_message, (POSTMASTER_IN_STARTUP_MSG)))
 		{
 			return true;
 		}
-		if (strstr(error_message, _(POSTMASTER_IN_RECOVERY_MSG)))
+		if (strstr(error_message, (POSTMASTER_IN_RECOVERY_MSG)))
 		{
 			return true;
 		}
@@ -217,12 +217,12 @@ segment_failure_due_to_missing_writer(const char *error_message)
 	if (error_message == NULL)
 		return false;
 
-	fatal = _("FATAL");
+	fatal = ("FATAL");
 	fatal_len = strlen(fatal);
 
 	ptr = strstr(error_message, fatal);
 	if ((ptr != NULL) && ptr[fatal_len] == ':' &&
-		strstr(error_message, _(WRITER_IS_MISSING_MSG)))
+		strstr(error_message, (WRITER_IS_MISSING_MSG)))
 		return true;
 
 	return false;
@@ -239,7 +239,7 @@ segment_failure_due_to_fault_injector(const char *error_message)
 	if (error_message == NULL)
 		return false;
 
-	fatal = _("FATAL");
+	fatal = ("FATAL");
 	fatal_len = strlen(fatal);
 
 	ptr = strstr(error_message, fatal);
@@ -441,8 +441,8 @@ addOneOption(StringInfo option, StringInfo diff, struct config_generic *guc)
 void
 makeOptions(char **options, char **diff_options)
 {
-	struct config_generic **gucs = get_guc_variables();
-	int			ngucs = get_num_guc_variables();
+	int			ngucs;
+	struct config_generic **gucs = get_guc_variables(&ngucs);
 	CdbComponentDatabaseInfo *qdinfo = NULL;
 	StringInfoData optionsStr;
 	StringInfoData diffStr;
@@ -545,8 +545,7 @@ cdbgang_parse_gpqeid_params(struct Port *port pg_attribute_unused(),
 	if (gpqeid_next_param(&cp, &np))
 	{
 #ifdef HAVE_INT64_TIMESTAMP
-		if (!scanint8(cp, true, &PgStartTime))
-			goto bad;
+		PgStartTime = pg_strtoint64(cp);
 #else
 		PgStartTime = strtod(cp, NULL);
 #endif
@@ -802,7 +801,7 @@ GpDropTempTables(void)
 
 		gp_session_id = newSessionId;
 		gp_command_count = 0;
-		pgstat_report_sessionid(newSessionId);
+		//pgstat_report_sessionid(newSessionId);
 
 		/* Update the slotid for our singleton reader. */
 		if (SharedLocalSnapshotSlot != NULL)

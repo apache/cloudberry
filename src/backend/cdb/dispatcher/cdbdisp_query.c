@@ -526,8 +526,11 @@ cdbdisp_dispatchCommandInternal(DispatchCommandQueryParms *pQueryParms,
 		ThrowErrorData(qeError);
 	}
 
-	/* collect pgstat from QEs for current transaction level */
-	pgstat_combine_from_qe(pr, -1);
+	/*
+	 * GPDB: Merge relation stats sent by QEs so QD's mod_since_analyze
+	 * stays up to date for autovacuum triggering.
+	 */
+	pgstat_combine_from_qe(pr);
 
 	cdbdisp_returnResults(pr, cdb_pgresults);
 

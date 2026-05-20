@@ -38,7 +38,7 @@ typedef int16 FileNumber;
  *		typedef struct FormData_pg_attribute_encoding
  * ----------------
  */
-CATALOG(pg_attribute_encoding,6231,AttributeEncodingRelationId)
+CATALOG(pg_attribute_encoding,6422,AttributeEncodingRelationId)
 {
 	Oid		attrelid;
 	int16	attnum;
@@ -57,10 +57,11 @@ FOREIGN_KEY(attrelid REFERENCES pg_attribute(attrelid));
  * ----------------
  */
 typedef FormData_pg_attribute_encoding *Form_pg_attribute_encoding;
-DECLARE_TOAST(pg_attribute_encoding, 6233, 6234);
+DECLARE_TOAST(pg_attribute_encoding, 6412, 6427);
 
-DECLARE_UNIQUE_INDEX(pg_attribute_encoding_attrelid_filenum_index, 6238, on pg_attribute_encoding using btree(attrelid oid_ops, filenum int2_ops));
-#define AttributeEncodingAttrelidFilenumIndexId        6238
+DECLARE_UNIQUE_INDEX(pg_attribute_encoding_attrelid_filenum_index, 6453, AttributeEncodingAttrelidFilenumIndexId, on pg_attribute_encoding using btree(attrelid oid_ops, filenum int2_ops));
+DECLARE_INDEX(pg_attribute_encoding_attrelid_index, 6467, AttributeEncodingAttrelidIndexId, on pg_attribute_encoding using btree(attrelid oid_ops));
+DECLARE_UNIQUE_INDEX(pg_attribute_encoding_attrelid_attnum_index, 6466, AttributeEncodingAttrelidAttnumIndexId, on pg_attribute_encoding using btree(attrelid oid_ops, attnum int2_ops));
 
 extern PGFunction *get_funcs_for_compression(char *compresstype);
 extern StdRdOptions **RelationGetAttributeOptions(Relation rel);

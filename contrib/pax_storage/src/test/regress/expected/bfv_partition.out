@@ -1265,6 +1265,7 @@ CREATE TABLE mpp3762_weather (
 );
 NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'city' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Apache Cloudberry, will not be enforced
 CREATE TABLE mpp3762_cities_partition (
         city     varchar(80) primary key,
         location point
@@ -1278,6 +1279,7 @@ CREATE TABLE mpp3762_weather_partition (
 ) partition by range(date) ( start('2008-01-01') end ('2009-01-01') every (interval '1 month'));
 NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'city' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Apache Cloudberry, will not be enforced
 drop table mpp3762_cities, mpp3762_weather cascade;
 drop table mpp3762_cities_partition, mpp3762_weather_partition cascade;
 create table mpp3754a ( i int, d date, primary key (d)) partition by range(d) ( start ('2008-01-01')  inclusive end ('2008-12-01')  exclusive every (interval '1 month'));
@@ -1600,20 +1602,20 @@ CREATE TABLE mpp3817 (
 NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'unique1' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 alter table mpp3817 drop column unique1; -- Set distribution key to randomly
-NOTICE:  dropping a column that is part of the distribution policy forces a NULL distribution policy
-NOTICE:  dropping a column that is part of the distribution policy forces a NULL distribution policy
-NOTICE:  dropping a column that is part of the distribution policy forces a NULL distribution policy
-NOTICE:  dropping a column that is part of the distribution policy forces a NULL distribution policy
-NOTICE:  dropping a column that is part of the distribution policy forces a NULL distribution policy
-NOTICE:  dropping a column that is part of the distribution policy forces a NULL distribution policy
-NOTICE:  dropping a column that is part of the distribution policy forces a NULL distribution policy
-NOTICE:  dropping a column that is part of the distribution policy forces a NULL distribution policy
-NOTICE:  dropping a column that is part of the distribution policy forces a NULL distribution policy
-NOTICE:  dropping a column that is part of the distribution policy forces a NULL distribution policy
-NOTICE:  dropping a column that is part of the distribution policy forces a NULL distribution policy
-NOTICE:  dropping a column that is part of the distribution policy forces a NULL distribution policy
-NOTICE:  dropping a column that is part of the distribution policy forces a NULL distribution policy
-NOTICE:  dropping a column that is part of the distribution policy forces a NULL distribution policy
+NOTICE:  dropping a column that is part of the distribution policy forces a random distribution policy
+NOTICE:  dropping a column that is part of the distribution policy forces a random distribution policy
+NOTICE:  dropping a column that is part of the distribution policy forces a random distribution policy
+NOTICE:  dropping a column that is part of the distribution policy forces a random distribution policy
+NOTICE:  dropping a column that is part of the distribution policy forces a random distribution policy
+NOTICE:  dropping a column that is part of the distribution policy forces a random distribution policy
+NOTICE:  dropping a column that is part of the distribution policy forces a random distribution policy
+NOTICE:  dropping a column that is part of the distribution policy forces a random distribution policy
+NOTICE:  dropping a column that is part of the distribution policy forces a random distribution policy
+NOTICE:  dropping a column that is part of the distribution policy forces a random distribution policy
+NOTICE:  dropping a column that is part of the distribution policy forces a random distribution policy
+NOTICE:  dropping a column that is part of the distribution policy forces a random distribution policy
+NOTICE:  dropping a column that is part of the distribution policy forces a random distribution policy
+NOTICE:  dropping a column that is part of the distribution policy forces a random distribution policy
 alter table mpp3817 drop column unique2;
 \d mpp3817
        Partitioned table "bfv_partition.mpp3817"
@@ -3105,6 +3107,7 @@ WITH cte AS (
 ----
 (0 rows)
 
+DROP TABLE a_partition_table_used_in_cte_test;
 -- CLEANUP
 -- start_ignore
 drop schema if exists bfv_partition cascade;

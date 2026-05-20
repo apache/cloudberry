@@ -88,7 +88,7 @@ void CPaxCopyAllTuples(Relation old_rel, Relation new_rel, Snapshot snapshot) {
 } // namespace paxc
 
 namespace pax {
-void PaxCopyAllDataFiles(Relation rel, const RelFileNode *newrnode,
+void PaxCopyAllDataFiles(Relation rel, const RelFileLocator *newrnode,
                          bool createnewpath) {
   std::string src_path;
   std::string dst_path;
@@ -97,7 +97,7 @@ void PaxCopyAllDataFiles(Relation rel, const RelFileNode *newrnode,
   Assert(rel && newrnode);
 
   FileSystem *fs = pax::Singleton<LocalFileSystem>::GetInstance();
-  src_path = cbdb::BuildPaxDirectoryPath(rel->rd_node, rel->rd_backend);
+  src_path = cbdb::BuildPaxDirectoryPath(rel->rd_locator, rel->rd_backend);
   Assert(!src_path.empty());
 
   dst_path =
@@ -109,9 +109,9 @@ void PaxCopyAllDataFiles(Relation rel, const RelFileNode *newrnode,
              fmt("Fail to build directory path. "
                  "src [spcNode=%u, dbNode=%u, relNode=%u, backend=%d]"
                  "dst [spcNode=%u, dbNode=%u, relNode=%u, backend=%d]",
-                 rel->rd_node.spcNode, rel->rd_node.dbNode,
-                 rel->rd_node.relNode, rel->rd_backend, newrnode->spcNode,
-                 newrnode->dbNode, newrnode->relNode, rel->rd_backend));
+                 rel->rd_locator.spcOid, rel->rd_locator.dbOid,
+                 rel->rd_locator.relNumber, rel->rd_backend, newrnode->spcOid,
+                 newrnode->dbOid, newrnode->relNumber, rel->rd_backend));
 
   // createnewpath is used to indicate if creating destination micropartition
   // file directory and storage file for copying or not.

@@ -100,8 +100,8 @@ DECLARE
 -- After ending the transactions, there should be 0 active statements.
 1<:  <... completed>
 ERROR:  deadlock detected
-DETAIL:  Process 738539 waits for ExclusiveLock on resource queue 90366; blocked by process 738548.
-Process 738548 waits for ExclusiveLock on resource queue 90366; blocked by process 738539.
+Process PID waits for ExclusiveLock on resource queue OID; blocked by process PID.
+Process PID waits for ExclusiveLock on resource queue OID; blocked by process PID.
 HINT:  See server log for query details.
 1:END;
 END
@@ -135,7 +135,7 @@ DECLARE
 -- its transaction.
 1:DECLARE c3 CURSOR FOR SELECT 1;
 ERROR:  deadlock detected, locking against self
-DETAIL:  resource queue id: 585193, portal id: 3
+DETAIL:  resource queue id: OID, portal id: NUM
 
 -- There should be 0 active statements following the transaction abort.
 0:SELECT rsqcountlimit, rsqcountvalue FROM pg_resqueue_status WHERE rsqname = 'rq_multi_portal';

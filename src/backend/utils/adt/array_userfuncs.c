@@ -3,7 +3,7 @@
  * array_userfuncs.c
  *	  Misc user-visible array support functions
  *
- * Copyright (c) 2003-2021, PostgreSQL Global Development Group
+ * Copyright (c) 2003-2023, PostgreSQL Global Development Group
  *
  * IDENTIFICATION
  *	  src/backend/utils/adt/array_userfuncs.c
@@ -15,7 +15,10 @@
 #include "catalog/pg_type.h"
 #include "libpq/pqformat.h"
 #include "common/int.h"
+#include "common/pg_prng.h"
+#include "port/pg_bitutils.h"
 #include "utils/array.h"
+#include "utils/datum.h"
 #include "utils/builtins.h"
 #include "utils/datum.h"
 #include "utils/lsyscache.h"
@@ -38,7 +41,7 @@ typedef struct SerialIOData
 typedef struct DeserialIOData
 {
 	FmgrInfo	typreceive;
-	Oid		typioparam;
+	Oid			typioparam;
 } DeserialIOData;
 
 static Datum array_position_common(FunctionCallInfo fcinfo);
@@ -559,7 +562,6 @@ array_agg_combine(PG_FUNCTION_ARGS)
 	ArrayBuildState *state2;
 	MemoryContext agg_context;
 	MemoryContext old_context;
-	int			i;
 
 	if (!AggCheckCallContext(fcinfo, &agg_context))
 		elog(ERROR, "aggregate function called in non-aggregate context");
@@ -586,7 +588,7 @@ array_agg_combine(PG_FUNCTION_ARGS)
 
 		old_context = MemoryContextSwitchTo(agg_context);
 
-		for (i = 0; i < state2->nelems; i++)
+		for (int i = 0; i < state2->nelems; i++)
 		{
 			if (!state2->dnulls[i])
 				state1->dvalues[i] = datumCopy(state2->dvalues[i],
@@ -626,7 +628,7 @@ array_agg_combine(PG_FUNCTION_ARGS)
 		}
 
 		/* Copy in the state2 elements to the end of the state1 arrays */
-		for (i = 0; i < state2->nelems; i++)
+		for (int i = 0; i < state2->nelems; i++)
 		{
 			if (!state2->dnulls[i])
 				state1->dvalues[i + state1->nelems] =
@@ -704,7 +706,6 @@ array_agg_serialize(PG_FUNCTION_ARGS)
 	else
 	{
 		SerialIOData *iodata;
-		int			i;
 
 		/* Avoid repeat catalog lookups for typsend function */
 		iodata = (SerialIOData *) fcinfo->flinfo->fn_extra;
@@ -723,7 +724,7 @@ array_agg_serialize(PG_FUNCTION_ARGS)
 			fcinfo->flinfo->fn_extra = (void *) iodata;
 		}
 
-		for (i = 0; i < state->nelems; i++)
+		for (int i = 0; i < state->nelems; i++)
 		{
 			bytea	   *outputbytes;
 
@@ -1142,31 +1143,6 @@ array_agg_array_transfn(PG_FUNCTION_ARGS)
 }
 
 Datum
-array_agg_array_finalfn(PG_FUNCTION_ARGS)
-{
-	Datum		result;
-	ArrayBuildStateArr *state;
-
-	/* cannot be called directly because of internal-type argument */
-	Assert(AggCheckCallContext(fcinfo, NULL));
-
-	state = PG_ARGISNULL(0) ? NULL : (ArrayBuildStateArr *) PG_GETARG_POINTER(0);
-
-	if (state == NULL)
-		PG_RETURN_NULL();		/* returns null iff no input values */
-
-	/*
-	 * Make the result.  We cannot release the ArrayBuildStateArr because
-	 * sometimes aggregate final functions are re-executed.  Rather, it is
-	 * nodeAgg.c's responsibility to reset the aggcontext when it's safe to do
-	 * so.
-	 */
-	result = makeArrayResultArr(state, CurrentMemoryContext, false);
-
-	PG_RETURN_DATUM(result);
-}
-
-Datum
 array_agg_array_combine(PG_FUNCTION_ARGS)
 {
 	ArrayBuildStateArr *state1;
@@ -1262,9 +1238,7 @@ array_agg_array_combine(PG_FUNCTION_ARGS)
 		if (state1->abytes < reqsize)
 		{
 			/* use a power of 2 size rather than allocating just reqsize */
-			while (state1->abytes < reqsize)
-				state1->abytes *= 2;
-
+			state1->abytes = pg_nextpower2_32(reqsize);
 			state1->data = (char *) repalloc(state1->data, state1->abytes);
 		}
 
@@ -1278,9 +1252,7 @@ array_agg_array_combine(PG_FUNCTION_ARGS)
 				 * First input with nulls; we must retrospectively handle any
 				 * previous inputs by marking all their items non-null.
 				 */
-				state1->aitems = 256;
-				while (state1->aitems <= newnitems)
-					state1->aitems *= 2;
+				state1->aitems = pg_nextpower2_32(Max(256, newnitems + 1));
 				state1->nullbitmap = (bits8 *) palloc((state1->aitems + 7) / 8);
 				array_bitmap_copy(state1->nullbitmap, 0,
 								  NULL, 0,
@@ -1290,9 +1262,7 @@ array_agg_array_combine(PG_FUNCTION_ARGS)
 			{
 				int			newaitems = state1->aitems + state2->aitems;
 
-				while (state1->aitems < newaitems)
-					state1->aitems *= 2;
-
+				state1->aitems = pg_nextpower2_32(newaitems);
 				state1->nullbitmap = (bits8 *)
 					repalloc(state1->nullbitmap, (state1->aitems + 7) / 8);
 			}
@@ -1306,10 +1276,10 @@ array_agg_array_combine(PG_FUNCTION_ARGS)
 		state1->nitems += state2->nitems;
 
 		state1->dims[0] += state2->dims[0];
-		/* remaing dims already match, per test above */
+		/* remaining dims already match, per test above */
 
 		Assert(state1->array_type == state2->array_type);
-		Assert(state1->element_type = state2->element_type);
+		Assert(state1->element_type == state2->element_type);
 
 		MemoryContextSwitchTo(oldContext);
 	}
@@ -1360,7 +1330,7 @@ array_agg_array_serialize(PG_FUNCTION_ARGS)
 	if (state->nullbitmap)
 	{
 		Assert(state->aitems > 0);
-		pq_sendbytes(&buf, (char *) state->nullbitmap, (state->aitems + 7) / 8);
+		pq_sendbytes(&buf, state->nullbitmap, (state->aitems + 7) / 8);
 	}
 
 	/* nitems */
@@ -1369,11 +1339,11 @@ array_agg_array_serialize(PG_FUNCTION_ARGS)
 	/* ndims */
 	pq_sendint32(&buf, state->ndims);
 
-	/* dims */
-	pq_sendbytes(&buf, (char *) state->dims, state->ndims * sizeof(int));
+	/* dims: XXX should we just send ndims elements? */
+	pq_sendbytes(&buf, state->dims, sizeof(state->dims));
 
 	/* lbs */
-	pq_sendbytes(&buf, (char *) state->lbs, state->ndims * sizeof(int));
+	pq_sendbytes(&buf, state->lbs, sizeof(state->lbs));
 
 	result = pq_endtypsend(&buf);
 
@@ -1405,13 +1375,13 @@ array_agg_array_deserialize(PG_FUNCTION_ARGS)
 						   VARDATA_ANY(sstate), VARSIZE_ANY_EXHDR(sstate));
 
 	/* element_type */
-	element_type = pq_getmsgint(&buf, sizeof(Oid));
+	element_type = pq_getmsgint(&buf, 4);
 
 	/* array_type */
-	array_type = pq_getmsgint(&buf, sizeof(Oid));
+	array_type = pq_getmsgint(&buf, 4);
 
 	/* nbytes */
-	nbytes = pq_getmsgint(&buf, sizeof(int));
+	nbytes = pq_getmsgint(&buf, 4);
 
 	result = initArrayResultArr(array_type, element_type,
 								CurrentMemoryContext, false);
@@ -1428,10 +1398,10 @@ array_agg_array_deserialize(PG_FUNCTION_ARGS)
 	result->nbytes = nbytes;
 
 	/* abytes */
-	result->abytes = pq_getmsgint(&buf, sizeof(int));
+	result->abytes = pq_getmsgint(&buf, 4);
 
 	/* aitems: might be 0 */
-	result->aitems = pq_getmsgint(&buf, sizeof(int));
+	result->aitems = pq_getmsgint(&buf, 4);
 
 	/* nullbitmap */
 	if (result->aitems > 0)
@@ -1446,18 +1416,18 @@ array_agg_array_deserialize(PG_FUNCTION_ARGS)
 		result->nullbitmap = NULL;
 
 	/* nitems */
-	result->nitems = pq_getmsgint(&buf, sizeof(int));
+	result->nitems = pq_getmsgint(&buf, 4);
 
 	/* ndims */
-	result->ndims = pq_getmsgint(&buf, sizeof(int));
+	result->ndims = pq_getmsgint(&buf, 4);
 
 	/* dims */
-	temp = pq_getmsgbytes(&buf, result->ndims * sizeof(int));
-	memcpy(result->dims, temp, result->ndims * sizeof(int));
+	temp = pq_getmsgbytes(&buf, sizeof(result->dims));
+	memcpy(result->dims, temp, sizeof(result->dims));
 
 	/* lbs */
-	temp = pq_getmsgbytes(&buf, result->ndims * sizeof(int));
-	memcpy(result->lbs, temp, result->ndims * sizeof(int));
+	temp = pq_getmsgbytes(&buf, sizeof(result->lbs));
+	memcpy(result->lbs, temp, sizeof(result->lbs));
 
 	pq_getmsgend(&buf);
 	pfree(buf.data);
@@ -1465,6 +1435,30 @@ array_agg_array_deserialize(PG_FUNCTION_ARGS)
 	PG_RETURN_POINTER(result);
 }
 
+Datum
+array_agg_array_finalfn(PG_FUNCTION_ARGS)
+{
+	Datum		result;
+	ArrayBuildStateArr *state;
+
+	/* cannot be called directly because of internal-type argument */
+	Assert(AggCheckCallContext(fcinfo, NULL));
+
+	state = PG_ARGISNULL(0) ? NULL : (ArrayBuildStateArr *) PG_GETARG_POINTER(0);
+
+	if (state == NULL)
+		PG_RETURN_NULL();		/* returns null iff no input values */
+
+	/*
+	 * Make the result.  We cannot release the ArrayBuildStateArr because
+	 * sometimes aggregate final functions are re-executed.  Rather, it is
+	 * nodeAgg.c's responsibility to reset the aggcontext when it's safe to do
+	 * so.
+	 */
+	result = makeArrayResultArr(state, CurrentMemoryContext, false);
+
+	PG_RETURN_DATUM(result);
+}
 
 /*-----------------------------------------------------------------------------
  * array_position, array_position_start :
@@ -1514,7 +1508,6 @@ array_position_common(FunctionCallInfo fcinfo)
 		PG_RETURN_NULL();
 
 	array = PG_GETARG_ARRAYTYPE_P(0);
-	element_type = ARR_ELEMTYPE(array);
 
 	/*
 	 * We refuse to search for elements in multi-dimensional arrays, since we
@@ -1524,6 +1517,10 @@ array_position_common(FunctionCallInfo fcinfo)
 		ereport(ERROR,
 				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 				 errmsg("searching for elements in multidimensional arrays is not supported")));
+
+	/* Searching in an empty array is well-defined, though: it always fails */
+	if (ARR_NDIM(array) < 1)
+		PG_RETURN_NULL();
 
 	if (PG_ARGISNULL(1))
 	{
@@ -1539,6 +1536,7 @@ array_position_common(FunctionCallInfo fcinfo)
 		null_search = false;
 	}
 
+	element_type = ARR_ELEMTYPE(array);
 	position = (ARR_LBOUND(array))[0] - 1;
 
 	/* figure out where to start */
@@ -1664,9 +1662,6 @@ array_positions(PG_FUNCTION_ARGS)
 		PG_RETURN_NULL();
 
 	array = PG_GETARG_ARRAYTYPE_P(0);
-	element_type = ARR_ELEMTYPE(array);
-
-	position = (ARR_LBOUND(array))[0] - 1;
 
 	/*
 	 * We refuse to search for elements in multi-dimensional arrays, since we
@@ -1678,6 +1673,10 @@ array_positions(PG_FUNCTION_ARGS)
 				 errmsg("searching for elements in multidimensional arrays is not supported")));
 
 	astate = initArrayResult(INT4OID, CurrentMemoryContext, false);
+
+	/* Searching in an empty array is well-defined, though: it always fails */
+	if (ARR_NDIM(array) < 1)
+		PG_RETURN_DATUM(makeArrayResult(astate, CurrentMemoryContext));
 
 	if (PG_ARGISNULL(1))
 	{
@@ -1692,6 +1691,9 @@ array_positions(PG_FUNCTION_ARGS)
 		searched_element = PG_GETARG_DATUM(1);
 		null_search = false;
 	}
+
+	element_type = ARR_ELEMTYPE(array);
+	position = (ARR_LBOUND(array))[0] - 1;
 
 	/*
 	 * We arrange to look up type info for array_create_iterator only once per
@@ -1764,4 +1766,169 @@ array_positions(PG_FUNCTION_ARGS)
 	PG_FREE_IF_COPY(array, 0);
 
 	PG_RETURN_DATUM(makeArrayResult(astate, CurrentMemoryContext));
+}
+
+/*
+ * array_shuffle_n
+ *		Return a copy of array with n randomly chosen items.
+ *
+ * The number of items must not exceed the size of the first dimension of the
+ * array.  We preserve the first dimension's lower bound if keep_lb,
+ * else it's set to 1.  Lower-order dimensions are preserved in any case.
+ *
+ * NOTE: it would be cleaner to look up the elmlen/elmbval/elmalign info
+ * from the system catalogs, given only the elmtyp. However, the caller is
+ * in a better position to cache this info across multiple calls.
+ */
+static ArrayType *
+array_shuffle_n(ArrayType *array, int n, bool keep_lb,
+				Oid elmtyp, TypeCacheEntry *typentry)
+{
+	ArrayType  *result;
+	int			ndim,
+			   *dims,
+			   *lbs,
+				nelm,
+				nitem,
+				rdims[MAXDIM],
+				rlbs[MAXDIM];
+	int16		elmlen;
+	bool		elmbyval;
+	char		elmalign;
+	Datum	   *elms,
+			   *ielms;
+	bool	   *nuls,
+			   *inuls;
+
+	ndim = ARR_NDIM(array);
+	dims = ARR_DIMS(array);
+	lbs = ARR_LBOUND(array);
+
+	elmlen = typentry->typlen;
+	elmbyval = typentry->typbyval;
+	elmalign = typentry->typalign;
+
+	/* If the target array is empty, exit fast */
+	if (ndim < 1 || dims[0] < 1 || n < 1)
+		return construct_empty_array(elmtyp);
+
+	deconstruct_array(array, elmtyp, elmlen, elmbyval, elmalign,
+					  &elms, &nuls, &nelm);
+
+	nitem = dims[0];			/* total number of items */
+	nelm /= nitem;				/* number of elements per item */
+
+	Assert(n <= nitem);			/* else it's caller error */
+
+	/*
+	 * Shuffle array using Fisher-Yates algorithm.  Scan the array and swap
+	 * current item (nelm datums starting at ielms) with a randomly chosen
+	 * later item (nelm datums starting at jelms) in each iteration.  We can
+	 * stop once we've done n iterations; then first n items are the result.
+	 */
+	ielms = elms;
+	inuls = nuls;
+	for (int i = 0; i < n; i++)
+	{
+		int			j = (int) pg_prng_uint64_range(&pg_global_prng_state, i, nitem - 1) * nelm;
+		Datum	   *jelms = elms + j;
+		bool	   *jnuls = nuls + j;
+
+		/* Swap i'th and j'th items; advance ielms/inuls to next item */
+		for (int k = 0; k < nelm; k++)
+		{
+			Datum		elm = *ielms;
+			bool		nul = *inuls;
+
+			*ielms++ = *jelms;
+			*inuls++ = *jnuls;
+			*jelms++ = elm;
+			*jnuls++ = nul;
+		}
+	}
+
+	/* Set up dimensions of the result */
+	memcpy(rdims, dims, ndim * sizeof(int));
+	memcpy(rlbs, lbs, ndim * sizeof(int));
+	rdims[0] = n;
+	if (!keep_lb)
+		rlbs[0] = 1;
+
+	result = construct_md_array(elms, nuls, ndim, rdims, rlbs,
+								elmtyp, elmlen, elmbyval, elmalign);
+
+	pfree(elms);
+	pfree(nuls);
+
+	return result;
+}
+
+/*
+ * array_shuffle
+ *
+ * Returns an array with the same dimensions as the input array, with its
+ * first-dimension elements in random order.
+ */
+Datum
+array_shuffle(PG_FUNCTION_ARGS)
+{
+	ArrayType  *array = PG_GETARG_ARRAYTYPE_P(0);
+	ArrayType  *result;
+	Oid			elmtyp;
+	TypeCacheEntry *typentry;
+
+	/*
+	 * There is no point in shuffling empty arrays or arrays with less than
+	 * two items.
+	 */
+	if (ARR_NDIM(array) < 1 || ARR_DIMS(array)[0] < 2)
+		PG_RETURN_ARRAYTYPE_P(array);
+
+	elmtyp = ARR_ELEMTYPE(array);
+	typentry = (TypeCacheEntry *) fcinfo->flinfo->fn_extra;
+	if (typentry == NULL || typentry->type_id != elmtyp)
+	{
+		typentry = lookup_type_cache(elmtyp, 0);
+		fcinfo->flinfo->fn_extra = (void *) typentry;
+	}
+
+	result = array_shuffle_n(array, ARR_DIMS(array)[0], true, elmtyp, typentry);
+
+	PG_RETURN_ARRAYTYPE_P(result);
+}
+
+/*
+ * array_sample
+ *
+ * Returns an array of n randomly chosen first-dimension elements
+ * from the input array.
+ */
+Datum
+array_sample(PG_FUNCTION_ARGS)
+{
+	ArrayType  *array = PG_GETARG_ARRAYTYPE_P(0);
+	int			n = PG_GETARG_INT32(1);
+	ArrayType  *result;
+	Oid			elmtyp;
+	TypeCacheEntry *typentry;
+	int			nitem;
+
+	nitem = (ARR_NDIM(array) < 1) ? 0 : ARR_DIMS(array)[0];
+
+	if (n < 0 || n > nitem)
+		ereport(ERROR,
+				(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+				 errmsg("sample size must be between 0 and %d", nitem)));
+
+	elmtyp = ARR_ELEMTYPE(array);
+	typentry = (TypeCacheEntry *) fcinfo->flinfo->fn_extra;
+	if (typentry == NULL || typentry->type_id != elmtyp)
+	{
+		typentry = lookup_type_cache(elmtyp, 0);
+		fcinfo->flinfo->fn_extra = (void *) typentry;
+	}
+
+	result = array_shuffle_n(array, n, false, elmtyp, typentry);
+
+	PG_RETURN_ARRAYTYPE_P(result);
 }

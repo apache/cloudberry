@@ -36,9 +36,9 @@ FROM motiondata;
   2 |    10004 |         |             |            
   3 |          |   10004 |             |            
   4 |          |   20004 |             |            
+  1 |        7 |       7 |           7 |          10
   5 |          |         |       10004 |            
   6 |          |         |             |     1000004
-  1 |        7 |       7 |           7 |          10
 (6 rows)
 
 CREATE TABLE motiondata_ao WITH (appendonly=true) AS SELECT * from motiondata;

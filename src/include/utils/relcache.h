@@ -6,7 +6,7 @@
  *
  * Portions Copyright (c) 2005-2009, Greenplum inc.
  * Portions Copyright (c) 2012-Present VMware, Inc. or its affiliates.
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * src/include/utils/relcache.h
@@ -18,6 +18,7 @@
 
 #include "postgres.h"
 #include "access/tupdesc.h"
+#include "common/relpath.h"
 #include "nodes/bitmapset.h"
 
 
@@ -54,15 +55,19 @@ extern Oid	RelationGetReplicaIndex(Relation relation);
 extern List *RelationGetIndexExpressions(Relation relation);
 extern List *RelationGetDummyIndexExpressions(Relation relation);
 extern List *RelationGetIndexPredicate(Relation relation);
-extern Datum *RelationGetIndexRawAttOptions(Relation relation);
+extern Datum *RelationGetIndexRawAttOptions(Relation indexrel);
 extern bytea **RelationGetIndexAttOptions(Relation relation, bool copy);
 
+/*
+ * Which set of columns to return by RelationGetIndexAttrBitmap.
+ */
 typedef enum IndexAttrBitmapKind
 {
-	INDEX_ATTR_BITMAP_ALL,
 	INDEX_ATTR_BITMAP_KEY,
 	INDEX_ATTR_BITMAP_PRIMARY_KEY,
-	INDEX_ATTR_BITMAP_IDENTITY_KEY
+	INDEX_ATTR_BITMAP_IDENTITY_KEY,
+	INDEX_ATTR_BITMAP_HOT_BLOCKING,
+	INDEX_ATTR_BITMAP_SUMMARIZED
 } IndexAttrBitmapKind;
 
 extern Bitmapset *RelationGetIndexAttrBitmap(Relation relation,
@@ -78,8 +83,9 @@ extern void RelationGetExclusionInfo(Relation indexRelation,
 extern void RelationInitIndexAccessInfo(Relation relation);
 
 /* caller must include pg_publication.h */
-struct PublicationActions;
-extern struct PublicationActions *GetRelationPublicationActions(Relation relation);
+struct PublicationDesc;
+extern void RelationBuildPublicationDesc(Relation relation,
+										 struct PublicationDesc *pubdesc);
 
 extern void RelationInitTableAccessMethod(Relation relation);
 
@@ -106,7 +112,7 @@ extern Relation RelationBuildLocalRelation(const char *relname,
 										   TupleDesc tupDesc,
 										   Oid relid,
 										   Oid accessmtd,
-										   Oid relfilenode,
+										   RelFileNumber relfilenumber,
 										   Oid reltablespace,
 										   bool shared_relation,
 										   bool mapped_relation,
@@ -114,10 +120,10 @@ extern Relation RelationBuildLocalRelation(const char *relname,
 										   char relkind);
 
 /*
- * Routines to manage assignment of new relfilenode to a relation
+ * Routines to manage assignment of new relfilenumber to a relation
  */
-extern void RelationSetNewRelfilenode(Relation relation, char persistence);
-extern void RelationAssumeNewRelfilenode(Relation relation);
+extern void RelationSetNewRelfilenumber(Relation relation, char persistence);
+extern void RelationAssumeNewRelfilelocator(Relation relation);
 
 /*
  * Routines for flushing/rebuilding relcache entries in various scenarios
@@ -148,9 +154,9 @@ extern void RelationCacheInitFilePostInvalidate(void);
 extern void RelationCacheInitFileRemove(void);
 
 /* should be used only by relcache.c and catcache.c */
-extern bool criticalRelcachesBuilt;
+extern PGDLLIMPORT bool criticalRelcachesBuilt;
 
 /* should be used only by relcache.c and postinit.c */
-extern bool criticalSharedRelcachesBuilt;
+extern PGDLLIMPORT bool criticalSharedRelcachesBuilt;
 
 #endif							/* RELCACHE_H */

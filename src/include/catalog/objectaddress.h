@@ -3,7 +3,7 @@
  * objectaddress.h
  *	  functions for working with object addresses
  *
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * src/include/catalog/objectaddress.h
@@ -28,7 +28,7 @@ typedef struct ObjectAddress
 	int32		objectSubId;	/* Subitem within object (eg column), or 0 */
 } ObjectAddress;
 
-extern const ObjectAddress InvalidObjectAddress;
+extern PGDLLIMPORT const ObjectAddress InvalidObjectAddress;
 
 #define ObjectAddressSubSet(addr, class_id, object_id, object_sub_id) \
 	do { \
@@ -69,6 +69,10 @@ extern bool get_object_namensp_unique(Oid class_id);
 
 extern HeapTuple get_catalog_object_by_oid(Relation catalog,
 										   AttrNumber oidcol, Oid objectId);
+extern HeapTuple get_catalog_object_by_oid_extended(Relation catalog,
+													AttrNumber oidcol,
+													Oid objectId,
+													bool locktup);
 
 extern char *getObjectDescription(const ObjectAddress *object,
 								  bool missing_ok);
@@ -77,9 +81,9 @@ extern char *getObjectDescriptionOids(Oid classid, Oid objid);
 extern int	read_objtype_from_string(const char *objtype);
 extern char *getObjectTypeDescription(const ObjectAddress *object,
 									  bool missing_ok);
-extern char *getObjectIdentity(const ObjectAddress *address,
+extern char *getObjectIdentity(const ObjectAddress *object,
 							   bool missing_ok);
-extern char *getObjectIdentityParts(const ObjectAddress *address,
+extern char *getObjectIdentityParts(const ObjectAddress *object,
 									List **objname, List **objargs,
 									bool missing_ok);
 extern struct ArrayType *strlist_to_textarray(List *list);

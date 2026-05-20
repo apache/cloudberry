@@ -1172,22 +1172,27 @@ explain (costs off) select * from boolpart where a is true or a is not true;
          Filter: ((a IS TRUE) OR (a IS NOT TRUE))
    ->  Seq Scan on boolpart_t boolpart_2
          Filter: ((a IS TRUE) OR (a IS NOT TRUE))
+   ->  Seq Scan on boolpart_default boolpart_3
+         Filter: ((a IS TRUE) OR (a IS NOT TRUE))
+ Optimizer: Postgres query optimizer
+(8 rows)
+
+explain (costs off) select * from boolpart where a is not true;
+                  QUERY PLAN                   
+-----------------------------------------------
+ Append
+   ->  Seq Scan on boolpart_f boolpart_1
+         Filter: (a IS NOT TRUE)
+   ->  Seq Scan on boolpart_default boolpart_2
+         Filter: (a IS NOT TRUE)
  Optimizer: Postgres query optimizer
 (6 rows)
 
-explain (costs off) select * from boolpart where a is not true;
-             QUERY PLAN              
--------------------------------------
- Seq Scan on boolpart_f boolpart
-   Filter: (a IS NOT TRUE)
- Optimizer: Postgres query optimizer
-(3 rows)
-
 explain (costs off) select * from boolpart where a is not true and a is not false;
-             QUERY PLAN              
--------------------------------------
- Result
-   One-Time Filter: false
+                    QUERY PLAN                    
+--------------------------------------------------
+ Seq Scan on boolpart_default boolpart
+   Filter: ((a IS NOT TRUE) AND (a IS NOT FALSE))
  Optimizer: Postgres query optimizer
 (3 rows)
 
@@ -1378,8 +1383,8 @@ EXPLAIN (COSTS OFF) SELECT tableoid::regclass as part, a, b FROM part WHERE a IS
 (5 rows)
 
 EXPLAIN (VERBOSE, COSTS OFF) SELECT * FROM part p(x) ORDER BY x;
-                    QUERY PLAN                    
---------------------------------------------------
+                             QUERY PLAN                              
+---------------------------------------------------------------------
  Sort
    Output: p.x, p.b
    Sort Key: p.x
@@ -2624,6 +2629,7 @@ update ab_a1 set b = 3 from ab where ab.a = 1 and ab.a = ab_a1.a;
                            Index Cond: (a = 1)
                ->  Bitmap Heap Scan on ab_a1_b3 ab_a1_3 (actual rows=0 loops=1)
                      Recheck Cond: (a = 1)
+                     Heap Blocks: exact=1
                      ->  Bitmap Index Scan on ab_a1_b3_a_idx (actual rows=1 loops=1)
                            Index Cond: (a = 1)
          ->  Materialize (actual rows=1 loops=1)
@@ -2639,10 +2645,11 @@ update ab_a1 set b = 3 from ab where ab.a = 1 and ab.a = ab_a1.a;
                                  Index Cond: (a = 1)
                      ->  Bitmap Heap Scan on ab_a1_b3 ab_3 (actual rows=0 loops=1)
                            Recheck Cond: (a = 1)
+                           Heap Blocks: exact=1
                            ->  Bitmap Index Scan on ab_a1_b3_a_idx (actual rows=1 loops=1)
                                  Index Cond: (a = 1)
  Optimizer: Postgres query optimizer
-(35 rows)
+(37 rows)
 
 table ab;
  a | b 

@@ -116,10 +116,10 @@ CREATE INDEX mvtest_aa ON mvtest_bb (grandtot);
  type   | text    |           |          |         | extended |              | 
  totamt | numeric |           |          |         | main     |              | 
 View definition:
- SELECT mvtest_tv.type,
-    mvtest_tv.totamt
+ SELECT type,
+    totamt
    FROM mvtest_tv
-  ORDER BY mvtest_tv.type;
+  ORDER BY type;
 Distributed by: (type)
 
 \d+ mvtest_tvm
@@ -129,10 +129,10 @@ Distributed by: (type)
  type   | text    |           |          |         | extended |              | 
  totamt | numeric |           |          |         | main     |              | 
 View definition:
- SELECT mvtest_tv.type,
-    mvtest_tv.totamt
+ SELECT type,
+    totamt
    FROM mvtest_tv
-  ORDER BY mvtest_tv.type;
+  ORDER BY type;
 Distributed by: (type)
 
 \d+ mvtest_tvvm
@@ -141,7 +141,7 @@ Distributed by: (type)
 ----------+---------+-----------+----------+---------+---------+--------------+-------------
  grandtot | numeric |           |          |         | main    |              | 
 View definition:
- SELECT mvtest_tvv.grandtot
+ SELECT grandtot
    FROM mvtest_tvv;
 Distributed by: (grandtot)
 
@@ -153,7 +153,7 @@ Distributed by: (grandtot)
 Indexes:
     "mvtest_aa" btree (grandtot)
 View definition:
- SELECT mvtest_tvvmv.grandtot
+ SELECT grandtot
    FROM mvtest_tvvmv;
 Distributed by: (grandtot)
 
@@ -169,7 +169,7 @@ ALTER MATERIALIZED VIEW mvtest_tvm SET SCHEMA mvtest_mvschema;
 Indexes:
     "mvtest_tvmm_pred" UNIQUE, btree (grandtot) WHERE grandtot < 0::numeric
 View definition:
- SELECT sum(mvtest_tvm.totamt) AS grandtot
+ SELECT sum(totamt) AS grandtot
    FROM mvtest_mvschema.mvtest_tvm;
 Distributed by: (grandtot)
 
@@ -181,10 +181,10 @@ SET search_path = mvtest_mvschema, public;
  type   | text    |           |          |         | extended |              | 
  totamt | numeric |           |          |         | main     |              | 
 View definition:
- SELECT mvtest_tv.type,
-    mvtest_tv.totamt
+ SELECT type,
+    totamt
    FROM mvtest_tv
-  ORDER BY mvtest_tv.type;
+  ORDER BY type;
 Distributed by: (type)
 
 -- modify the underlying table data
@@ -556,6 +556,7 @@ View definition:
     'foo'::text AS u,
     'foo'::text AS u2,
     NULL::text AS n;
+Distributed by: (i)
 
 SELECT * FROM mv_unspecified_types;
  i  | num  |  u  | u2  | n 
@@ -603,10 +604,10 @@ SET ROLE regress_user_mvtest;
 -- duplicate all the aliases used in those queries
 CREATE TABLE mvtest_foo_data AS SELECT i,
   i+1 AS tid,
-  md5(random()::text) AS mv,
-  md5(random()::text) AS newdata,
-  md5(random()::text) AS newdata2,
-  md5(random()::text) AS diff
+  fipshash(random()::text) AS mv,
+  fipshash(random()::text) AS newdata,
+  fipshash(random()::text) AS newdata2,
+  fipshash(random()::text) AS diff
   FROM generate_series(1, 10) i;
 CREATE MATERIALIZED VIEW mvtest_mv_foo AS SELECT * FROM mvtest_foo_data distributed by(i);
 CREATE MATERIALIZED VIEW mvtest_mv_foo AS SELECT * FROM mvtest_foo_data distributed by(i);
@@ -619,6 +620,26 @@ REFRESH MATERIALIZED VIEW mvtest_mv_foo;
 REFRESH MATERIALIZED VIEW CONCURRENTLY mvtest_mv_foo;
 DROP OWNED BY regress_user_mvtest CASCADE;
 DROP ROLE regress_user_mvtest;
+-- Concurrent refresh requires a unique index on the materialized
+-- view. Test what happens if it's dropped during the refresh.
+CREATE OR REPLACE FUNCTION mvtest_drop_the_index()
+  RETURNS bool AS $$
+BEGIN
+  EXECUTE 'DROP INDEX IF EXISTS mvtest_drop_idx';
+  RETURN true;
+END;
+$$ LANGUAGE plpgsql;
+CREATE MATERIALIZED VIEW drop_idx_matview AS
+  SELECT 1 as i WHERE mvtest_drop_the_index();
+ERROR:  function cannot execute on a QE slice because it issues a non-SELECT statement  (seg2 slice1 127.0.1.1:7004 pid=1719927)
+CONTEXT:  SQL statement "DROP INDEX IF EXISTS mvtest_drop_idx"
+PL/pgSQL function mvtest_drop_the_index() line 3 at EXECUTE
+CREATE UNIQUE INDEX mvtest_drop_idx ON drop_idx_matview (i);
+ERROR:  relation "drop_idx_matview" does not exist
+REFRESH MATERIALIZED VIEW CONCURRENTLY drop_idx_matview;
+ERROR:  relation "drop_idx_matview" does not exist
+DROP MATERIALIZED VIEW drop_idx_matview; -- clean up
+ERROR:  materialized view "drop_idx_matview" does not exist
 -- make sure that create WITH NO DATA works via SPI
 BEGIN;
 CREATE FUNCTION mvtest_func()

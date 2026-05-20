@@ -7,13 +7,13 @@
 create or replace function isSpilling(explain_query text) returns int as
 $$
 rv = plpy.execute(explain_query)
-search_text = 'Workfile: ('
+search_text = 'Disk:'
 result = 0
 for i in range(len(rv)):
    cur_line = rv[i]['QUERY PLAN']
    if search_text.lower() in cur_line.lower():
-      str_trim = cur_line.split('Workfile: (')
-      str_trim = str_trim[1].split(' spilling')
+      str_trim = cur_line.split('Disk: ')
+      str_trim = str_trim[1].split('kB')
       if int(str_trim[0]) > 0:
          result = 1
 return result

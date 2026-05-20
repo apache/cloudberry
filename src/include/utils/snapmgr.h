@@ -3,7 +3,7 @@
  * snapmgr.h
  *	  POSTGRES snapshot manager
  *
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * src/include/utils/snapmgr.h
@@ -53,7 +53,7 @@ extern TimestampTz GetSnapshotCurrentTimestamp(void);
 extern TimestampTz GetOldSnapshotThresholdTimestamp(void);
 extern void SnapshotTooOldMagicForTest(void);
 
-extern bool FirstSnapshotSet;
+extern PGDLLIMPORT bool FirstSnapshotSet;
 
 extern PGDLLIMPORT TransactionId TransactionXmin;
 extern PGDLLIMPORT TransactionId RecentXmin;
@@ -97,12 +97,13 @@ extern PGDLLIMPORT SnapshotData CatalogSnapshotData;
 	((snapshot)->snapshot_type == SNAPSHOT_MVCC || \
 	 (snapshot)->snapshot_type == SNAPSHOT_HISTORIC_MVCC)
 
-
+#ifndef FRONTEND
 static inline bool
 OldSnapshotThresholdActive(void)
 {
 	return old_snapshot_threshold >= 0;
 }
+#endif
 
 extern Snapshot GetTransactionSnapshot(void);
 extern Snapshot GetLatestSnapshot(void);
@@ -138,6 +139,7 @@ extern bool XactHasExportedSnapshots(void);
 extern void DeleteAllExportedSnapshotFiles(void);
 extern void WaitForOlderSnapshots(TransactionId limitXmin, bool progress);
 extern bool ThereAreNoPriorRegisteredSnapshots(void);
+extern bool HaveRegisteredOrActiveSnapshot(void);
 extern bool TransactionIdLimitedForOldSnapshots(TransactionId recentXmin,
 												Relation relation,
 												TransactionId *limit_xid,
@@ -177,7 +179,7 @@ extern bool XidInMVCCSnapshot_Local(TransactionId xid, Snapshot snapshot);
 /* Support for catalog timetravel for logical decoding */
 struct HTAB;
 extern struct HTAB *HistoricSnapshotGetTupleCids(void);
-extern void SetupHistoricSnapshot(Snapshot snapshot_now, struct HTAB *tuplecids);
+extern void SetupHistoricSnapshot(Snapshot historic_snapshot, struct HTAB *tuplecids);
 extern void TeardownHistoricSnapshot(bool is_error);
 extern bool HistoricSnapshotActive(void);
 

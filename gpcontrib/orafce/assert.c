@@ -302,7 +302,7 @@ dbms_assert_schema_name(PG_FUNCTION_ARGS)
 
 #else
 
-	aclresult = pg_namespace_aclcheck(namespaceId, GetUserId(), ACL_USAGE);
+	aclresult = object_aclcheck(NamespaceRelationId, namespaceId, GetUserId(), ACL_USAGE);
 
 #endif
 

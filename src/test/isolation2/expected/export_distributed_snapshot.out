@@ -390,6 +390,7 @@ BEGIN
 -- Open another utility mode connection and set the snapshot
 ! TOKEN=$(find ${COORDINATOR_DATA_DIRECTORY}/pg_snapshots/ -name "0*" -exec basename {} \;) \ && echo ${TOKEN} \ && PGOPTIONS='-c gp_role=utility' psql postgres -Atc "BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ; SET TRANSACTION SNAPSHOT '${TOKEN}';";
 0000000A-0000000E-1
+BEGIN
 SET
 
 

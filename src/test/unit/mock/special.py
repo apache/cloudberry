@@ -83,6 +83,7 @@ class ByValStructs(object):
             'PGSemaphoreData',
             'PossibleValueSet',
             'PrimaryMirrorModeTransitionArguments',
+            'RelFileLocator',
             'RelFileNode',
             'struct timeval',
             'VariableStatData',

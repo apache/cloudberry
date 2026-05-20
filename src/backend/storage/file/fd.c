@@ -5,7 +5,6 @@
  *
  * Portions Copyright (c) 2007-2009, Greenplum inc
  * Portions Copyright (c) 2012-Present VMware, Inc. or its affiliates.
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * IDENTIFICATION
@@ -77,6 +76,7 @@
 #include <dirent.h>
 #include <sys/file.h>
 #include <sys/param.h>
+#include <sys/resource.h>		/* for getrlimit */
 #include <sys/stat.h>
 #include <sys/types.h>
 #ifndef WIN32
@@ -85,9 +85,6 @@
 #include <limits.h>
 #include <unistd.h>
 #include <fcntl.h>
-#ifdef HAVE_SYS_RESOURCE_H
-#include <sys/resource.h>		/* for getrlimit */
-#endif
 
 #include "access/xact.h"
 #include "access/xlog.h"
@@ -95,16 +92,19 @@
 #include "cdb/cdbvars.h"
 #include "common/file_perm.h"
 #include "common/file_utils.h"
+#include "common/pg_prng.h"
 #include "miscadmin.h"
 #include "pgstat.h"
-#include "port/pg_iovec.h"
 #include "portability/mem.h"
+#include "postmaster/startup.h"
 #include "storage/fd.h"
 #include "storage/ipc.h"
 #include "utils/guc.h"
+#include "utils/guc_hooks.h"
 #include "utils/resowner_private.h"
 #include "utils/workfile_mgr.h"
 #include "utils/faultinjector.h"
+#include "utils/varlena.h"
 
 /* Define PG_FLUSH_DATA_WORKS if we have an implementation for pg_flush_data */
 #if defined(HAVE_SYNC_FILE_RANGE)
@@ -167,6 +167,9 @@ bool		data_sync_retry = false;
 
 /* How SyncDataDirectory() should do its job. */
 int			recovery_init_sync_method = RECOVERY_INIT_SYNC_METHOD_FSYNC;
+
+/* Which kinds of files should be opened with PG_O_DIRECT. */
+int			io_direct_flags;
 
 /* Debugging.... */
 
@@ -237,6 +240,11 @@ static bool have_xact_temporary_files = false;
  * overflow, but we don't care.
  */
 static uint64 temporary_files_size = 0;
+
+/* Temporary file access initialized and not yet shut down? */
+#ifdef USE_ASSERT_CHECKING
+static bool temporary_files_allowed = false;
+#endif
 
 /*
  * List of OS handles opened with AllocateFile, AllocateDir and
@@ -339,7 +347,7 @@ static File OpenTemporaryFileInTablespace(Oid tblspcOid, bool rejectError,
 static bool reserveAllocatedDesc(void);
 static int	FreeDesc(AllocateDesc *desc);
 
-static void AtProcExit_Files(int code, Datum arg);
+static void BeforeShmemExit_Files(int code, Datum arg);
 static void CleanupTempFiles(bool isCommit, bool isProcExit);
 static void RemovePgTempRelationFiles(const char *tsdirname);
 static void RemovePgTempRelationFilesInDbspace(const char *dbspacedirname);
@@ -418,10 +426,18 @@ pg_fsync(int fd)
 int
 pg_fsync_no_writethrough(int fd)
 {
-	if (enableFsync)
-		return fsync(fd);
-	else
+	int			rc;
+
+	if (!enableFsync)
 		return 0;
+
+retry:
+	rc = fsync(fd);
+
+	if (rc == -1 && errno == EINTR)
+		goto retry;
+
+	return rc;
 }
 
 /*
@@ -447,22 +463,22 @@ pg_fsync_writethrough(int fd)
 
 /*
  * pg_fdatasync --- same as fdatasync except does nothing if enableFsync is off
- *
- * Not all platforms have fdatasync; treat as fsync if not available.
  */
 int
 pg_fdatasync(int fd)
 {
-	if (enableFsync)
-	{
-#ifdef HAVE_FDATASYNC
-		return fdatasync(fd);
-#else
-		return fsync(fd);
-#endif
-	}
-	else
+	int			rc;
+
+	if (!enableFsync)
 		return 0;
+
+retry:
+	rc = fdatasync(fd);
+
+	if (rc == -1 && errno == EINTR)
+		goto retry;
+
+	return rc;
 }
 
 /*
@@ -494,6 +510,8 @@ pg_flush_data(int fd, off_t offset, off_t nbytes)
 		if (not_implemented_by_kernel)
 			return;
 
+retry:
+
 		/*
 		 * sync_file_range(SYNC_FILE_RANGE_WRITE), currently linux specific,
 		 * tells the OS that writeback for the specified blocks should be
@@ -508,6 +526,9 @@ pg_flush_data(int fd, off_t offset, off_t nbytes)
 		if (rc != 0)
 		{
 			int			elevel;
+
+			if (rc == EINTR)
+				goto retry;
 
 			/*
 			 * For systems that don't have an implementation of
@@ -645,7 +666,8 @@ pg_flush_data(int fd, off_t offset, off_t nbytes)
  * unlink to fail later.
  */
 int
-gp_retry_close(int fd) {
+gp_retry_close(int fd)
+{
 	int err = 0;
 	do
 	{
@@ -655,31 +677,53 @@ gp_retry_close(int fd) {
 }
 
 /*
+ * Truncate an open file to a given length.
+ */
+static int
+pg_ftruncate(int fd, off_t length)
+{
+	int			ret;
+
+retry:
+	ret = ftruncate(fd, length);
+
+	if (ret == -1 && errno == EINTR)
+		goto retry;
+
+	return ret;
+}
+
+/*
  * Truncate a file to a given length by name.
  */
 int
 pg_truncate(const char *path, off_t length)
 {
+	int			ret;
 #ifdef WIN32
 	int			save_errno;
-	int			ret;
 	int			fd;
 
 	fd = OpenTransientFile(path, O_RDWR | PG_BINARY);
 	if (fd >= 0)
 	{
-		ret = ftruncate(fd, 0);
+		ret = pg_ftruncate(fd, length);
 		save_errno = errno;
 		CloseTransientFile(fd);
 		errno = save_errno;
 	}
 	else
 		ret = -1;
+#else
+
+retry:
+	ret = truncate(path, length);
+
+	if (ret == -1 && errno == EINTR)
+		goto retry;
+#endif
 
 	return ret;
-#else
-	return truncate(path, length);
-#endif
 }
 
 /*
@@ -896,10 +940,15 @@ durable_rename_excl(const char *oldfile, const char *newfile, int elevel)
 }
 
 /*
+=======
+>>>>>>> REL_16_9
  * InitFileAccess --- initialize this module during backend startup
  *
  * This is called during either normal or standalone backend start.
  * It is *not* called in the postmaster.
+ *
+ * Note that this does not initialize temporary file access, that is
+ * separately initialized via InitTemporaryFileAccess().
  */
 void
 InitFileAccess(void)
@@ -917,9 +966,35 @@ InitFileAccess(void)
 	VfdCache->fd = VFD_CLOSED;
 
 	SizeVfdCache = 1;
+}
 
-	/* register proc-exit hook to ensure temp files are dropped at exit */
-	on_proc_exit(AtProcExit_Files, 0);
+/*
+ * InitTemporaryFileAccess --- initialize temporary file access during startup
+ *
+ * This is called during either normal or standalone backend start.
+ * It is *not* called in the postmaster.
+ *
+ * This is separate from InitFileAccess() because temporary file cleanup can
+ * cause pgstat reporting. As pgstat is shut down during before_shmem_exit(),
+ * our reporting has to happen before that. Low level file access should be
+ * available for longer, hence the separate initialization / shutdown of
+ * temporary file handling.
+ */
+void
+InitTemporaryFileAccess(void)
+{
+	Assert(SizeVfdCache != 0);	/* InitFileAccess() needs to have run */
+	Assert(!temporary_files_allowed);	/* call me only once */
+
+	/*
+	 * Register before-shmem-exit hook to ensure temp files are dropped while
+	 * we can still report stats.
+	 */
+	before_shmem_exit(BeforeShmemExit_Files, 0);
+
+#ifdef USE_ASSERT_CHECKING
+	temporary_files_allowed = true;
+#endif
 }
 
 /*
@@ -954,11 +1029,7 @@ count_usable_fds(int max_to_probe, int *usable_fds, int *already_open)
 	fd = (int *) palloc(size * sizeof(int));
 
 #ifdef HAVE_GETRLIMIT
-#ifdef RLIMIT_NOFILE			/* most platforms use RLIMIT_NOFILE */
 	getrlimit_status = getrlimit(RLIMIT_NOFILE, &rlim);
-#else							/* but BSD doesn't ... */
-	getrlimit_status = getrlimit(RLIMIT_OFILE, &rlim);
-#endif							/* RLIMIT_NOFILE */
 	if (getrlimit_status != 0)
 		ereport(WARNING, (errmsg("getrlimit failed: %m")));
 #endif							/* HAVE_GETRLIMIT */
@@ -1051,7 +1122,7 @@ set_max_safe_fds(void)
 		ereport(FATAL,
 				(errcode(ERRCODE_INSUFFICIENT_RESOURCES),
 				 errmsg("insufficient file descriptors available to start server process"),
-				 errdetail("System allows %d, we need at least %d.",
+				 errdetail("System allows %d, server needs at least %d.",
 						   max_safe_fds + NUM_RESERVED_FDS,
 						   FD_MINFREE + NUM_RESERVED_FDS)));
 
@@ -1091,10 +1162,47 @@ BasicOpenFilePerm(const char *fileName, int fileFlags, mode_t fileMode)
 	int			fd;
 
 tryAgain:
+#ifdef PG_O_DIRECT_USE_F_NOCACHE
+
+	/*
+	 * The value we defined to stand in for O_DIRECT when simulating it with
+	 * F_NOCACHE had better not collide with any of the standard flags.
+	 */
+	StaticAssertStmt((PG_O_DIRECT &
+					  (O_APPEND |
+					   O_CLOEXEC |
+					   O_CREAT |
+					   O_DSYNC |
+					   O_EXCL |
+					   O_RDWR |
+					   O_RDONLY |
+					   O_SYNC |
+					   O_TRUNC |
+					   O_WRONLY)) == 0,
+					 "PG_O_DIRECT value collides with standard flag");
+	fd = open(fileName, fileFlags & ~PG_O_DIRECT, fileMode);
+#else
 	fd = open(fileName, fileFlags, fileMode);
+#endif
 
 	if (fd >= 0)
+	{
+#ifdef PG_O_DIRECT_USE_F_NOCACHE
+		if (fileFlags & PG_O_DIRECT)
+		{
+			if (fcntl(fd, F_NOCACHE, 1) < 0)
+			{
+				int			save_errno = errno;
+
+				close(fd);
+				errno = save_errno;
+				return -1;
+			}
+		}
+#endif
+
 		return fd;				/* success! */
+	}
 
 	if (errno == EMFILE || errno == ENFILE)
 	{
@@ -1470,6 +1578,9 @@ FileAccess(File file)
 static void
 ReportTemporaryFileUsage(const char *path, off_t size)
 {
+	/* MERGE16_FIXME: Now the pgstat has not worked, so disable the report first */
+	return;
+	
 	pgstat_report_tempfile(size);
 
 	if (log_temp_files >= 0)
@@ -1551,6 +1662,14 @@ PathNameOpenFilePerm(const char *fileName, int fileFlags, mode_t fileMode)
 
 	/* Close excess kernel FDs. */
 	ReleaseLruFiles();
+
+	/*
+	 * Descriptors managed by VFDs are implicitly marked O_CLOEXEC.  The
+	 * client shouldn't be expected to know which kernel descriptors are
+	 * currently open, so it wouldn't make sense for them to be inherited by
+	 * executed subprograms.
+	 */
+	fileFlags |= O_CLOEXEC;
 
 	vfdP->fd = BasicOpenFilePerm(fileName, fileFlags, fileMode);
 
@@ -1662,6 +1781,8 @@ File
 OpenTemporaryFile(bool interXact, const char *filePrefix)
 {
 	File		file = 0;
+
+	Assert(temporary_files_allowed);	/* check temp file access is up */
 
 	/*
 	 * Make sure the current resource owner has space for this File before we
@@ -1829,6 +1950,8 @@ PathNameCreateTemporaryFile(const char *path, bool error_on_failure)
 {
 	File		file;
 
+	Assert(temporary_files_allowed);	/* check temp file access is up */
+
 	ResourceOwnerEnlargeFiles(CurrentResourceOwner);
 
 	/*
@@ -1866,6 +1989,8 @@ File
 PathNameOpenTemporaryFile(const char *path, int mode)
 {
 	File		file;
+
+	Assert(temporary_files_allowed);	/* check temp file access is up */
 
 	ResourceOwnerEnlargeFiles(CurrentResourceOwner);
 
@@ -1905,7 +2030,7 @@ PathNameDeleteTemporaryFile(const char *path, bool error_on_failure)
 
 	/*
 	 * Unlike FileClose's automatic file deletion code, we tolerate
-	 * non-existence to support BufFileDeleteShared which doesn't know how
+	 * non-existence to support BufFileDeleteFileSet which doesn't know how
 	 * many segments it has to delete until it runs out.
 	 */
 	if (stat_errno == ENOENT)
@@ -2042,25 +2167,29 @@ FileClose(File file)
  * to read into.
  */
 int
-FilePrefetch(File file, off_t offset, int amount, uint32 wait_event_info)
+FilePrefetch(File file, off_t offset, off_t amount, uint32 wait_event_info)
 {
 #if defined(USE_POSIX_FADVISE) && defined(POSIX_FADV_WILLNEED)
 	int			returnCode;
 
 	Assert(FileIsValid(file));
 
-	DO_DB(elog(LOG, "FilePrefetch: %d (%s) " INT64_FORMAT " %d",
+	DO_DB(elog(LOG, "FilePrefetch: %d (%s) " INT64_FORMAT " " INT64_FORMAT,
 			   file, VfdCache[file].fileName,
-			   (int64) offset, amount));
+			   (int64) offset, (int64) amount));
 
 	returnCode = FileAccess(file);
 	if (returnCode < 0)
 		return returnCode;
 
+retry:
 	pgstat_report_wait_start(wait_event_info);
 	returnCode = posix_fadvise(VfdCache[file].fd, offset, amount,
 							   POSIX_FADV_WILLNEED);
 	pgstat_report_wait_end();
+
+	if (returnCode == EINTR)
+		goto retry;
 
 	return returnCode;
 #else
@@ -2083,6 +2212,9 @@ FileWriteback(File file, off_t offset, off_t nbytes, uint32 wait_event_info)
 	if (nbytes <= 0)
 		return;
 
+	if (VfdCache[file].fileFlags & PG_O_DIRECT)
+		return;
+
 	returnCode = FileAccess(file);
 	if (returnCode < 0)
 		return;
@@ -2093,7 +2225,7 @@ FileWriteback(File file, off_t offset, off_t nbytes, uint32 wait_event_info)
 }
 
 int
-FileRead(File file, char *buffer, int amount, off_t offset,
+FileRead(File file, void *buffer, size_t amount, off_t offset,
 		 uint32 wait_event_info)
 {
 	int			returnCode;
@@ -2101,7 +2233,7 @@ FileRead(File file, char *buffer, int amount, off_t offset,
 
 	Assert(FileIsValid(file));
 
-	DO_DB(elog(LOG, "FileRead: %d (%s) " INT64_FORMAT " %d %p",
+	DO_DB(elog(LOG, "FileRead: %d (%s) " INT64_FORMAT " %zu %p",
 			   file, VfdCache[file].fileName,
 			   (int64) offset,
 			   amount, buffer));
@@ -2149,7 +2281,7 @@ retry:
 }
 
 int
-FileWrite(File file, char *buffer, int amount, off_t offset,
+FileWrite(File file, const void *buffer, size_t amount, off_t offset,
 		  uint32 wait_event_info)
 {
 	int			returnCode;
@@ -2157,7 +2289,7 @@ FileWrite(File file, char *buffer, int amount, off_t offset,
 
 	Assert(FileIsValid(file));
 
-	DO_DB(elog(LOG, "FileWrite: %d (%s) " INT64_FORMAT " %d %p",
+	DO_DB(elog(LOG, "FileWrite: %d (%s) " INT64_FORMAT " %zu %p",
 			   file, VfdCache[file].fileName,
 			   (int64) offset,
 			   amount, buffer));
@@ -2305,6 +2437,97 @@ FileDiskSize(File file)
 	return (int64) buf.st_size;
 }
 
+/*
+ * Zero a region of the file.
+ *
+ * Returns 0 on success, -1 otherwise. In the latter case errno is set to the
+ * appropriate error.
+ */
+int
+FileZero(File file, off_t offset, off_t amount, uint32 wait_event_info)
+{
+	int			returnCode;
+	ssize_t		written;
+
+	Assert(FileIsValid(file));
+
+	DO_DB(elog(LOG, "FileZero: %d (%s) " INT64_FORMAT " " INT64_FORMAT,
+			file, VfdCache[file].fileName,
+			(int64) offset, (int64) amount));
+
+	returnCode = FileAccess(file);
+	if (returnCode < 0)
+		return returnCode;
+
+	pgstat_report_wait_start(wait_event_info);
+	written = pg_pwrite_zeros(VfdCache[file].fd, amount, offset);
+	pgstat_report_wait_end();
+
+	if (written < 0)
+		return -1;
+	else if (written != amount)
+	{
+		/* if errno is unset, assume problem is no disk space */
+		if (errno == 0)
+			errno = ENOSPC;
+		return -1;
+	}
+
+	return 0;
+}
+
+/*
+ * Try to reserve file space with posix_fallocate(). If posix_fallocate() is
+ * not implemented on the operating system or fails with EINVAL / EOPNOTSUPP,
+ * use FileZero() instead.
+ *
+ * Note that at least glibc() implements posix_fallocate() in userspace if not
+ * implemented by the filesystem. That's not the case for all environments
+ * though.
+ *
+ * Returns 0 on success, -1 otherwise. In the latter case errno is set to the
+ * appropriate error.
+ */
+int
+FileFallocate(File file, off_t offset, off_t amount, uint32 wait_event_info)
+{
+#ifdef HAVE_POSIX_FALLOCATE
+	int			returnCode;
+
+	Assert(FileIsValid(file));
+
+	DO_DB(elog(LOG, "FileFallocate: %d (%s) " INT64_FORMAT " " INT64_FORMAT,
+			   file, VfdCache[file].fileName,
+			   (int64) offset, (int64) amount));
+
+	returnCode = FileAccess(file);
+	if (returnCode < 0)
+		return -1;
+
+retry:
+	pgstat_report_wait_start(wait_event_info);
+	returnCode = posix_fallocate(VfdCache[file].fd, offset, amount);
+	pgstat_report_wait_end();
+
+	if (returnCode == 0)
+		return 0;
+	else if (returnCode == EINTR)
+		goto retry;
+
+	/* for compatibility with %m printing etc */
+	errno = returnCode;
+
+	/*
+	 * Return in cases of a "real" failure, if fallocate is not supported,
+	 * fall through to the FileZero() backed implementation.
+	 */
+	if (returnCode != EINVAL && returnCode != EOPNOTSUPP)
+		return -1;
+#endif
+
+	return FileZero(file, offset, amount, wait_event_info);
+}
+
 off_t
 FileSize(File file)
 {
@@ -2344,7 +2567,7 @@ FileTruncate(File file, int64 offset, uint32 wait_event_info)
 	 * table data.
 	 */
 	pgstat_report_wait_start(wait_event_info);
-	returnCode = ftruncate(VfdCache[file].fd, offset);
+	returnCode = pg_ftruncate(VfdCache[file].fd, offset);
 	pgstat_report_wait_end();
 
 	if (returnCode == 0 && VfdCache[file].fileSize > offset)
@@ -2623,8 +2846,7 @@ OpenPipeStream(const char *command, const char *mode)
 	ReleaseLruFiles();
 
 TryAgain:
-	fflush(stdout);
-	fflush(stderr);
+	fflush(NULL);
 	pqsignal(SIGPIPE, SIG_DFL);
 	errno = 0;
 	file = popen(command, mode);
@@ -2985,7 +3207,8 @@ SetTempTablespaces(Oid *tableSpaces, int numSpaces)
 	 * available tablespaces.
 	 */
 	if (numSpaces > 1)
-		nextTempTableSpace = random() % numSpaces;
+		nextTempTableSpace = pg_prng_uint64_range(&pg_global_prng_state,
+												  0, numSpaces - 1);
 	else
 		nextTempTableSpace = 0;
 }
@@ -3104,15 +3327,20 @@ AtEOXact_Files(bool isCommit)
 }
 
 /*
- * AtProcExit_Files
+ * BeforeShmemExit_Files
  *
- * on_proc_exit hook to clean up temp files during backend shutdown.
+ * before_shmem_exit hook to clean up temp files during backend shutdown.
  * Here, we want to clean up *all* temp files including interXact ones.
  */
 static void
-AtProcExit_Files(int code, Datum arg)
+BeforeShmemExit_Files(int code, Datum arg)
 {
 	CleanupTempFiles(false, true);
+
+	/* prevent further temp files from being created */
+#ifdef USE_ASSERT_CHECKING
+	temporary_files_allowed = false;
+#endif
 }
 
 /*
@@ -3284,17 +3512,11 @@ RemovePgTempFilesInDir(const char *tmpdirname, bool missing_ok, bool unlink_all)
 					PG_TEMP_FILE_PREFIX,
 					strlen(PG_TEMP_FILE_PREFIX)) == 0)
 		{
-			struct stat statbuf;
+			PGFileType	type = get_dirent_type(rm_path, temp_de, false, LOG);
 
-			if (lstat(rm_path, &statbuf) < 0)
-			{
-				ereport(LOG,
-						(errcode_for_file_access(),
-						 errmsg("could not stat file \"%s\": %m", rm_path)));
+			if (type == PGFILETYPE_ERROR)
 				continue;
-			}
-
-			if (S_ISDIR(statbuf.st_mode))
+			else if (type == PGFILETYPE_DIR)
 			{
 				/* recursively remove contents, then directory itself */
 				RemovePgTempFilesInDir(rm_path, false, true);
@@ -3461,6 +3683,9 @@ do_syncfs(const char *path)
 {
 	int			fd;
 
+	ereport_startup_progress("syncing data directory (syncfs), elapsed time: %ld.%02d s, current path: %s",
+							 path);
+
 	fd = OpenTransientFile(path, O_RDONLY);
 	if (fd < 0)
 	{
@@ -3514,7 +3739,6 @@ SyncDataDirectory(void)
 	 */
 	xlog_is_symlink = false;
 
-#ifndef WIN32
 	{
 		struct stat st;
 
@@ -3526,10 +3750,6 @@ SyncDataDirectory(void)
 		else if (S_ISLNK(st.st_mode))
 			xlog_is_symlink = true;
 	}
-#else
-	if (pgwin32_is_junction("pg_wal"))
-		xlog_is_symlink = true;
-#endif
 
 #ifdef HAVE_SYNCFS
 	if (recovery_init_sync_method == RECOVERY_INIT_SYNC_METHOD_SYNCFS)
@@ -3544,6 +3764,9 @@ SyncDataDirectory(void)
 		 * pg_wal and the tablespaces, so we call syncfs() for each of those
 		 * directories.
 		 */
+
+		/* Prepare to report progress syncing the data directory via syncfs. */
+		begin_startup_progress_phase();
 
 		/* Sync the top level pgdata directory. */
 		do_syncfs(".");
@@ -3567,17 +3790,23 @@ SyncDataDirectory(void)
 	}
 #endif							/* !HAVE_SYNCFS */
 
+#ifdef PG_FLUSH_DATA_WORKS
+	/* Prepare to report progress of the pre-fsync phase. */
+	begin_startup_progress_phase();
+
 	/*
 	 * If possible, hint to the kernel that we're soon going to fsync the data
 	 * directory and its contents.  Errors in this step are even less
 	 * interesting than normal, so log them only at DEBUG1.
 	 */
-#ifdef PG_FLUSH_DATA_WORKS
 	walkdir(".", pre_sync_fname, false, DEBUG1);
 	if (xlog_is_symlink)
 		walkdir("pg_wal", pre_sync_fname, false, DEBUG1);
 	walkdir("pg_tblspc", pre_sync_fname, true, DEBUG1);
 #endif
+
+	/* Prepare to report progress syncing the data directory via fsync. */
+	begin_startup_progress_phase();
 
 	/*
 	 * Now we do the fsync()s in the same order.
@@ -3681,6 +3910,9 @@ pre_sync_fname(const char *fname, bool isdir, int elevel)
 	if (isdir)
 		return;
 
+	ereport_startup_progress("syncing data directory (pre-fsync), elapsed time: %ld.%02d s, current path: %s",
+							 fname);
+
 	fd = OpenTransientFile(fname, O_RDONLY | PG_BINARY);
 
 	if (fd < 0)
@@ -3710,6 +3942,9 @@ pre_sync_fname(const char *fname, bool isdir, int elevel)
 static void
 datadir_fsync_fname(const char *fname, bool isdir, int elevel)
 {
+	ereport_startup_progress("syncing data directory (fsync), elapsed time: %ld.%02d s, current path: %s",
+							 fname);
+
 	/*
 	 * We want to silently ignoring errors about unreadable files.  Pass that
 	 * desire on to fsync_fname_ext().
@@ -3910,68 +4145,94 @@ data_sync_elevel(int elevel)
 	return data_sync_retry ? elevel : PANIC;
 }
 
-/*
- * A convenience wrapper for pg_pwritev() that retries on partial write.  If an
- * error is returned, it is unspecified how much has been written.
- */
-ssize_t
-pg_pwritev_with_retry(int fd, const struct iovec *iov, int iovcnt, off_t offset)
+bool
+check_debug_io_direct(char **newval, void **extra, GucSource source)
 {
-	struct iovec iov_copy[PG_IOV_MAX];
-	ssize_t		sum = 0;
-	ssize_t		part;
+	bool		result = true;
+	int			flags;
 
-	/* We'd better have space to make a copy, in case we need to retry. */
-	if (iovcnt > PG_IOV_MAX)
+#if PG_O_DIRECT == 0
+	if (strcmp(*newval, "") != 0)
 	{
-		errno = EINVAL;
-		return -1;
+		GUC_check_errdetail("debug_io_direct is not supported on this platform.");
+		result = false;
+	}
+	flags = 0;
+#else
+	List	   *elemlist;
+	ListCell   *l;
+	char	   *rawstring;
+
+	/* Need a modifiable copy of string */
+	rawstring = pstrdup(*newval);
+
+	if (!SplitGUCList(rawstring, ',', &elemlist))
+	{
+		GUC_check_errdetail("invalid list syntax in parameter \"%s\"",
+							"debug_io_direct");
+		pfree(rawstring);
+		list_free(elemlist);
+		return false;
 	}
 
-	for (;;)
+	flags = 0;
+	foreach(l, elemlist)
 	{
-		/* Write as much as we can. */
-		part = pg_pwritev(fd, iov, iovcnt, offset);
-		if (part < 0)
-			return -1;
+		char	   *item = (char *) lfirst(l);
 
-#ifdef SIMULATE_SHORT_WRITE
-		part = Min(part, 4096);
-#endif
-
-		/* Count our progress. */
-		sum += part;
-		offset += part;
-
-		/* Step over iovecs that are done. */
-		while (iovcnt > 0 && iov->iov_len <= part)
+		if (pg_strcasecmp(item, "data") == 0)
+			flags |= IO_DIRECT_DATA;
+		else if (pg_strcasecmp(item, "wal") == 0)
+			flags |= IO_DIRECT_WAL;
+		else if (pg_strcasecmp(item, "wal_init") == 0)
+			flags |= IO_DIRECT_WAL_INIT;
+		else
 		{
-			part -= iov->iov_len;
-			++iov;
-			--iovcnt;
-		}
-
-		/* Are they all done? */
-		if (iovcnt == 0)
-		{
-			/* We don't expect the kernel to write more than requested. */
-			Assert(part == 0);
+			GUC_check_errdetail("invalid option \"%s\"", item);
+			result = false;
 			break;
 		}
-
-		/*
-		 * Move whatever's left to the front of our mutable copy and adjust
-		 * the leading iovec.
-		 */
-		Assert(iovcnt > 0);
-		memmove(iov_copy, iov, sizeof(*iov) * iovcnt);
-		Assert(iov->iov_len > part);
-		iov_copy[0].iov_base = (char *) iov_copy[0].iov_base + part;
-		iov_copy[0].iov_len -= part;
-		iov = iov_copy;
 	}
 
-	return sum;
+	/*
+	 * It's possible to configure block sizes smaller than our assumed I/O
+	 * alignment size, which could result in invalid I/O requests.
+	 */
+#if XLOG_BLCKSZ < PG_IO_ALIGN_SIZE
+	if (result && (flags & (IO_DIRECT_WAL | IO_DIRECT_WAL_INIT)))
+	{
+		GUC_check_errdetail("debug_io_direct is not supported for WAL because XLOG_BLCKSZ is too small");
+		result = false;
+	}
+#endif
+#if BLCKSZ < PG_IO_ALIGN_SIZE
+	if (result && (flags & IO_DIRECT_DATA))
+	{
+		GUC_check_errdetail("debug_io_direct is not supported for data because BLCKSZ is too small");
+		result = false;
+	}
+#endif
+
+	pfree(rawstring);
+	list_free(elemlist);
+#endif
+
+	if (!result)
+		return result;
+
+	/* Save the flags in *extra, for use by assign_debug_io_direct */
+	*extra = guc_malloc(ERROR, sizeof(int));
+	*((int *) *extra) = flags;
+
+	return result;
+}
+
+extern void
+assign_debug_io_direct(const char *newval, void *extra)
+{
+	int		   *flags = (int *) extra;
+
+	io_direct_flags = *flags;
 }
 
 void FileSetTempfile(File file, bool isTemp)

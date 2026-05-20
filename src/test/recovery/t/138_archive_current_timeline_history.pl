@@ -14,14 +14,14 @@
 
 use strict;
 use warnings;
-use PostgresNode;
-use TestLib;
+use PostgreSQL::Test::Cluster;
+use PostgreSQL::Test::Utils;
 use Test::More tests => 15;
 
 $ENV{PGDATABASE} = 'postgres';
 
 # Initialize primary node
-my $node_primary = get_new_node('primary');
+my $node_primary = PostgreSQL::Test::Cluster->new('primary');
 $node_primary->init(allows_streaming => 1);
 $node_primary->start;
 
@@ -29,14 +29,21 @@ $node_primary->start;
 my $backup_name = 'my_backup_1';
 $node_primary->backup($backup_name);
 
-# Create a standby that will be promoted onto timeline 2
-my $node_primary_tli2 = get_new_node('primary_tli2');
+# Create a standby that will be promoted onto timeline 2.
+# Enable archive_mode before promotion so that the timeline history
+# file gets marked .ready during promotion (PG16 behavior change).
+my $node_primary_tli2 = PostgreSQL::Test::Cluster->new('primary_tli2');
 $node_primary_tli2->init_from_backup($node_primary, $backup_name,
 	has_streaming => 1);
+my $node_primary_tli2_archive_dir = $node_primary_tli2->archive_dir;
+$node_primary_tli2->append_conf('postgresql.conf', qq{
+archive_mode = 'on'
+archive_command = 'cp -n "%p" "$node_primary_tli2_archive_dir/%f"'
+});
 $node_primary_tli2->start;
 
 # Stop and remove the primary; it's not needed anymore
-$node_primary->teardown_node;
+$node_primary->stop;
 
 # Promote the standby using "pg_promote", switching it to timeline 2
 my $psql_out = '';
@@ -45,18 +52,6 @@ $node_primary_tli2->psql(
 	"SELECT pg_promote(wait_seconds => 300);",
 	stdout => \$psql_out);
 is($psql_out, 't', "promotion of standby with pg_promote");
-
-# Enable archiving on the promoted node. The timeline 2 history file
-# will be pushed to the archive. We set this up ourselves instead of
-# using $node_primary_tli2->enable_archiving so that the
-# archive_command will fail if it tries to archive the same file
-# again.
-my $node_primary_tli2_archive_dir = $node_primary_tli2->archive_dir;
-$node_primary_tli2->append_conf('postgresql.conf', qq{
-archive_mode = 'on'
-archive_command = 'cp -n "%p" "$node_primary_tli2_archive_dir/%f"'
-});
-$node_primary_tli2->restart;
 
 # Wait until the timeline 2 history file has been archived. The file
 # is marked ready after recovery has completed and will be archived
@@ -101,7 +96,7 @@ my $archive_wait_query =
   "SELECT '$walfile_to_be_archived' <= last_archived_wal FROM pg_stat_archiver;";
 $node_primary_tli2->poll_query_until('postgres', $archive_wait_query)
   or die "Timed out while waiting for WAL segment to be archived";
-$node_primary_tli2->teardown_node;
+$node_primary_tli2->stop;
 
 # Scenario 1: Initialize a new standby node from the backup using
 # recovery_target_timeline explicitly set to '2'. This node will start
@@ -110,7 +105,7 @@ $node_primary_tli2->teardown_node;
 # timeline id, startup will fail if the timeline history file is not
 # retrievable from the archive but will not fail if we use 'current'
 # or 'latest'.
-my $node_standby_explicit = get_new_node('standby_explicit');
+my $node_standby_explicit = PostgreSQL::Test::Cluster->new('standby_explicit');
 $node_standby_explicit->init_from_backup($node_primary_tli2, $backup_name,
 	has_restoring => 1, standby => 0);
 $node_standby_explicit->append_conf('postgresql.conf', qq{
@@ -122,7 +117,7 @@ primary_conninfo = ''
 });
 $node_standby_explicit->start;
 standby_sanity_check($node_standby_explicit, $restore_point_lsn);
-$node_standby_explicit->teardown_node;
+$node_standby_explicit->stop;
 
 # Scenario 2: Initialize a new standby node from the backup using
 # recovery_target_timeline set to 'current'.  This node will start off
@@ -130,7 +125,7 @@ $node_standby_explicit->teardown_node;
 # on the same timeline.  If the timeline history file was not
 # retrievable from the archive, the standby would just log a warning
 # and proceed normally which is not desirable.
-my $node_standby_current = get_new_node('standby_current');
+my $node_standby_current = PostgreSQL::Test::Cluster->new('standby_current');
 $node_standby_current->init_from_backup($node_primary_tli2, $backup_name,
 	has_restoring => 1, standby => 0);
 $node_standby_current->append_conf('postgresql.conf', qq{
@@ -142,7 +137,7 @@ primary_conninfo = ''
 });
 $node_standby_current->start;
 standby_sanity_check($node_standby_current, $restore_point_lsn);
-$node_standby_current->teardown_node;
+$node_standby_current->stop;
 
 # Scenario 3: Initialize a new standby node from the backup using
 # recovery_target_timeline set to 'latest'. This node will start off
@@ -150,7 +145,7 @@ $node_standby_current->teardown_node;
 # onto the same timeline.  If the timeline history file was not
 # retrievable from the archive, the standby would just log a warning
 # and proceed normally which is not desirable.
-my $node_standby_latest = get_new_node('standby_latest');
+my $node_standby_latest = PostgreSQL::Test::Cluster->new('standby_latest');
 $node_standby_latest->init_from_backup($node_primary_tli2, $backup_name,
 	has_restoring => 1, standby => 0);
 $node_standby_latest->append_conf('postgresql.conf', qq{
@@ -169,7 +164,7 @@ standby_sanity_check($node_standby_latest, $restore_point_lsn);
 # history file was not retrievable from the standby node, the cascade
 # standby node would continuously loop trying to re-request the
 # timeline history file and always fail.
-my $node_cascade = get_new_node('cascade');
+my $node_cascade = PostgreSQL::Test::Cluster->new('cascade');
 $node_cascade->init_from_backup($node_primary_tli2, $backup_name,
 	standby => 1);
 $node_cascade->enable_streaming($node_standby_latest);
@@ -183,8 +178,8 @@ my $result_cascade =
   $node_cascade->safe_psql('postgres', "SELECT * FROM tab_int;");
 is($result_cascade, qq(8), 'check that the node received the streamed WAL data');
 
-$node_cascade->teardown_node;
-$node_standby_latest->teardown_node;
+$node_cascade->stop;
+$node_standby_latest->stop;
 
 sub standby_sanity_check
 {

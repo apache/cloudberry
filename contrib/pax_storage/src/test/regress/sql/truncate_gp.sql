@@ -35,7 +35,7 @@ for dbid, datadir in db_instances.items():
     absolute_path_to_dboid_dir = '%s/base/%d' % (datadir, dboid)
     i = i+1
     try:
-        for relfilenode in os.listdir(absolute_path_to_dboid_dir):
+        for relfilenode in sorted(os.listdir(absolute_path_to_dboid_dir)):
             relfilenode_prefix = relfilenode.split('.')[0]
             if relfilenodes[i] != relfilenode_prefix:
                 continue
@@ -57,6 +57,9 @@ for dbid, datadir in db_instances.items():
 return rows
 $fn$;
 
+-- switch to unaligned output mode
+\pset format unaligned
+
 -- test truncate table and create table are in the same transaction for ao table
 begin;
 create table truncate_with_create_ao(a int, b int) with (appendoptimized = true, orientation = row) distributed by (a);
@@ -65,7 +68,7 @@ truncate truncate_with_create_ao;
 end; 
 
 -- the ao table segment file size after truncate should be zero
-select dbid,size from stat_table_segfile_size('regression', 'truncate_with_create_ao');
+select stat_table_segfile_size('regression', 'truncate_with_create_ao');
 
 -- test truncate table and create table are in the same transaction for aocs table
 begin;
@@ -75,7 +78,7 @@ truncate truncate_with_create_aocs;
 end; 
 
 -- the aocs table segment file size after truncate should be zero
-select dbid,size from stat_table_segfile_size('regression', 'truncate_with_create_aocs');
+select stat_table_segfile_size('regression', 'truncate_with_create_aocs');
 
 -- test truncate table and create table are in the same transaction for heap table
 begin;                                                                          
@@ -85,4 +88,4 @@ truncate truncate_with_create_heap;
 end;
 
 -- the heap table segment file size after truncate should be zero
-select dbid,size from stat_table_segfile_size('regression', 'truncate_with_create_heap');
+select stat_table_segfile_size('regression', 'truncate_with_create_heap');

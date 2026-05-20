@@ -19,6 +19,7 @@ OBJS = \
 	extensible.o \
 	list.o \
 	makefuncs.o \
+	multibitmapset.o \
 	nodeFuncs.o \
 	nodes.o \
 	outfast.o \

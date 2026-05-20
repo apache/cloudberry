@@ -450,6 +450,24 @@ _outSplitUpdate(StringInfo str, const SplitUpdate *node)
 }
 
 /*
+ * _outSplitMerge
+ */
+static void
+_outSplitMerge(StringInfo str, const SplitMerge *node)
+{
+	WRITE_NODE_TYPE("SplitMerge");
+
+	WRITE_INT_FIELD(numHashSegments);
+	WRITE_INT_FIELD(numHashAttrs);
+	WRITE_ATTRNUMBER_ARRAY(hashAttnos, node->numHashAttrs);
+	WRITE_OID_ARRAY(hashFuncs, node->numHashAttrs);
+	WRITE_NODE_FIELD(resultRelations);
+	WRITE_NODE_FIELD(mergeActionLists);
+
+	_outPlanInfo(str, (Plan *) node);
+}
+
+/*
  * _outAssertOp
  */
 static void
@@ -712,6 +730,7 @@ _outAlterTableCmd(StringInfo str, const AlterTableCmd *node)
 	WRITE_NODE_FIELD(transform);
 	WRITE_ENUM_FIELD(behavior, DropBehavior);
 	WRITE_BOOL_FIELD(missing_ok);
+	WRITE_BOOL_FIELD(recurse);
 
 	WRITE_INT_FIELD(backendId);
 	WRITE_NODE_FIELD(policy);
@@ -739,7 +758,7 @@ unwrapStringList(List *list)
 
 	foreach(lc, list)
 	{
-		Value	   *val = (Value *) lfirst(lc);
+		String	   *val = lfirst(lc);
 
 		lfirst(lc) = strVal(val);
 		pfree(val);
@@ -1255,7 +1274,7 @@ _outGrantRoleStmt(StringInfo str, const GrantRoleStmt *node)
 	WRITE_NODE_FIELD(granted_roles);
 	WRITE_NODE_FIELD(grantee_roles);
 	WRITE_BOOL_FIELD(is_grant);
-	WRITE_BOOL_FIELD(admin_opt);
+	WRITE_NODE_FIELD(opt);
 	WRITE_NODE_FIELD(grantor);
 	WRITE_ENUM_FIELD(behavior, DropBehavior);
 }
@@ -1644,7 +1663,7 @@ _outCreatePublicationStmt(StringInfo str, const CreatePublicationStmt *node)
 
 	WRITE_STRING_FIELD(pubname);
 	WRITE_NODE_FIELD(options);
-	WRITE_NODE_FIELD(tables);
+	WRITE_NODE_FIELD(pubobjects);
 	WRITE_BOOL_FIELD(for_all_tables);
 }
 
@@ -1655,9 +1674,9 @@ _outAlterPublicationStmt(StringInfo str, const AlterPublicationStmt *node)
 
 	WRITE_STRING_FIELD(pubname);
 	WRITE_NODE_FIELD(options);
-	WRITE_NODE_FIELD(tables);
+	WRITE_NODE_FIELD(pubobjects);
 	WRITE_BOOL_FIELD(for_all_tables);
-	WRITE_ENUM_FIELD(tableAction, DefElemAction);
+	WRITE_ENUM_FIELD(action, AlterPublicationAction);
 }
 
 static void
@@ -1766,7 +1785,7 @@ _outEphemeralNamedRelationInfo(StringInfo str, const EphemeralNamedRelationInfo 
 	WRITE_INT_FIELD(tuple->tdtypmod);
 	WRITE_INT_FIELD(tuple->tdrefcount);
 	WRITE_ENUM_FIELD(enrtype, EphemeralNameRelationType);
-	WRITE_FLOAT_FIELD(enrtuples, "%.0f");
+	WRITE_FLOAT_FIELD(enrtuples);
 }
 
 static void

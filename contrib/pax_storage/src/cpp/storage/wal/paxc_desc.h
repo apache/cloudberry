@@ -36,7 +36,7 @@ extern "C" {
 
 #include "access/xlogreader.h"
 #include "lib/stringinfo.h"
-#include "storage/relfilenode.h"
+#include "storage/relfilelocator.h"
 
 // FIXME(gongxun):
 // there are three types of pax file, data file, toast file and visimap file,
@@ -55,7 +55,7 @@ extern "C" {
 #define XLOG_PAX_TRUNCATE 0x20
 
 typedef struct xl_pax_target {
-  RelFileNode node;
+  RelFileLocator node;
   uint16 file_name_len;
   int64 offset;
 } xl_pax_target;
@@ -66,7 +66,7 @@ typedef struct xl_pax_target {
  * layout of the pax insert:
  *
  * +-----------------+
- * |  RelFileNode    |
+ * |  RelFileLocator |
  * +-----------------+
  * |  file_name_len  |
  * +-----------------+
@@ -89,11 +89,11 @@ typedef struct xl_pax_insert {
  * layout of the pax directory:
  *
  * +-----------------+
- * |  RelFileNode    |
+ * |  RelFileLocator |
  * +-----------------+
  */
 typedef struct xl_pax_directory {
-  RelFileNode node;
+  RelFileLocator node;
 } xl_pax_directory;
 
 #define SizeOfPAXDirectory sizeof(xl_pax_directory)

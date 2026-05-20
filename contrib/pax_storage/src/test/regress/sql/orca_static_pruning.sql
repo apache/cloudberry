@@ -14,6 +14,7 @@ FROM rp
 WHERE b > 4200
 $query$ AS qry \gset
 
+SET optimizer_trace_fallback TO on;
 EXPLAIN (COSTS OFF, VERBOSE)
 :qry ;
 
@@ -41,6 +42,7 @@ EXPLAIN (COSTS OFF, VERBOSE)
 
 :qry ;
 
+RESET optimizer_trace_fallback;
 
 CREATE TABLE lp (a int, b int) DISTRIBUTED BY (a) PARTITION BY LIST (b);
 CREATE TABLE lp0 PARTITION OF lp FOR VALUES IN (0, 1);
@@ -48,6 +50,7 @@ CREATE TABLE lp1 PARTITION OF lp FOR VALUES IN (10, 11);
 CREATE TABLE lp2 PARTITION OF lp FOR VALUES IN (42, 43);
 INSERT INTO lp VALUES (0, 0), (10, 10), (42, 42);
 
+SET optimizer_trace_fallback TO on;
 
 SELECT $query$
 SELECT *
@@ -71,12 +74,14 @@ EXPLAIN (COSTS OFF, VERBOSE)
 
 :qry ;
 
+RESET optimizer_trace_fallback;
 
 CREATE TABLE hp (a int, b int) PARTITION BY HASH (b);
 CREATE TABLE hp0 PARTITION OF hp FOR VALUES WITH (MODULUS 2, REMAINDER 0);
 CREATE TABLE hp1 PARTITION OF hp FOR VALUES WITH (MODULUS 2, REMAINDER 1);
 INSERT INTO hp VALUES (0, 1), (0, 3), (0, 4), (0, 42);
 
+SET optimizer_trace_fallback TO on;
 SELECT $query$
 SELECT *
 FROM hp
@@ -88,6 +93,7 @@ EXPLAIN (COSTS OFF, VERBOSE)
 
 :qry ;
 
+RESET optimizer_trace_fallback;
 
 CREATE TABLE rp_multi_inds (a int, b int, c int) DISTRIBUTED BY (a) PARTITION BY RANGE (b);
 CREATE TABLE rp_multi_inds_part1 PARTITION OF rp_multi_inds FOR VALUES FROM (MINVALUE) TO (10);
@@ -104,9 +110,11 @@ CREATE INDEX rp_bitmap_idx ON rp_multi_inds USING bitmap(b);
 
 -- Expect a plan that only uses the two indexes inherited from root
 SET optimizer_enable_dynamictablescan TO off;
+SET optimizer_trace_fallback TO on;
 EXPLAIN (COSTS OFF, VERBOSE) SELECT * FROM rp_multi_inds WHERE b = 11 AND (c = 11 OR c = 4201);
 SELECT * FROM rp_multi_inds WHERE b = 11 AND (c = 11 OR c = 4201);
 
+RESET optimizer_trace_fallback;
 RESET optimizer_enable_dynamictablescan;
 
 CREATE TABLE foo (a int, b int) DISTRIBUTED BY (a) PARTITION BY RANGE (b);
@@ -118,6 +126,7 @@ CREATE TABLE bar (a int) DISTRIBUTED BY (a);
 INSERT INTO foo VALUES (0, 0), (11, 11), (4201, 4201);
 INSERT INTO bar VALUES (0), (11), (42);
 
+SET optimizer_trace_fallback TO on;
 -- Test ORCA index nested loop join has correct outer ref
 -- Set below GUCs for planner just to keep parity
 SET enable_hashjoin TO off;

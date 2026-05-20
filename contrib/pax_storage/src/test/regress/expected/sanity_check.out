@@ -20,18 +20,11 @@ SELECT relname, relhasindex
    ORDER BY relname;
 a|f
 a_star|f
-aggtest|f
 array_index_op_test|t
-array_op_test|f
 b|f
 b_star|f
 bit_defaults|f
 box_tbl|f
-bprime|f
-bt_f8_heap|t
-bt_i4_heap|t
-bt_name_heap|t
-bt_txt_heap|t
 c|f
 c_star|f
 char_tbl|f
@@ -40,23 +33,16 @@ city|f
 d|f
 d_star|f
 date_tbl|f
-dept|f
 dttm_com|t
 dupindexcols|t
 e_star|f
 emp|f
-equipment_r|f
 extra_wide_table|f
 f_star|f
 fast_emp4000|f
 float4_tbl|f
 float8_tbl|f
 func_index_heap|t
-hash_f8_heap|t
-hash_i4_heap|t
-hash_name_heap|t
-hash_txt_heap|t
-hobbies_r|f
 ihighway|t
 inet_tbl|t
 int2_tbl|f
@@ -65,7 +51,6 @@ int8_tbl|f
 interval_tbl|f
 invalid_check_con|f
 invalid_check_con_child|f
-iportaltest|f
 line_tbl|f
 lseg_tbl|f
 mlparted|f
@@ -91,6 +76,7 @@ num_exp_sqrt|t
 num_exp_sub|t
 num_input_test|f
 num_result|f
+num_typemod_test|f
 nummultirange_test|t
 numrange_test|t
 onek|t
@@ -140,6 +126,7 @@ pg_namespace|t
 pg_opclass|t
 pg_operator|t
 pg_opfamily|t
+pg_parameter_acl|t
 pg_partitioned_table|t
 pg_password_history|t
 pg_policy|t
@@ -147,6 +134,7 @@ pg_proc|t
 pg_proc_callback|t
 pg_profile|t
 pg_publication|t
+pg_publication_namespace|t
 pg_publication_rel|t
 pg_range|t
 pg_replication_origin|t
@@ -208,7 +196,6 @@ tableam_parted_d_heap2|f
 tableam_parted_heap2|f
 tableam_tbl_heap2|f
 tableam_tblas_heap2|f
-tablespace_table1|f
 tbl_include_box|t
 tbl_include_box_pk|t
 tbl_include_pk|t
@@ -219,15 +206,12 @@ tenk1|t
 tenk2|t
 test_range_gist|f
 test_range_spgist|f
-test_tsvector|t
-testjsonb|t
 text_tbl|f
 textrange_test|t
 time_tbl|f
 timestamp_tbl|f
 timestamptz_tbl|f
 timetz_tbl|f
-tmp|f
 unlogged_toast|f
 varchar_tbl|f
 view_base_table|t
@@ -258,4 +242,37 @@ SELECT relname, relkind
  relname | relkind 
 ---------+---------
 (0 rows)
+
+--
+-- When ALIGNOF_DOUBLE==4 (e.g. AIX), the C ABI may impose 8-byte alignment on
+-- some of the C types that correspond to TYPALIGN_DOUBLE SQL types.  To ensure
+-- catalog C struct layout matches catalog tuple layout, arrange for the tuple
+-- offset of each fixed-width, attalign='d' catalog column to be divisible by 8
+-- unconditionally.  Keep such columns before the first NameData column of the
+-- catalog, since packagers can override NAMEDATALEN to an odd number.
+--
+WITH check_columns AS (
+ SELECT relname, attname,
+  array(
+   SELECT t.oid
+    FROM pg_type t JOIN pg_attribute pa ON t.oid = pa.atttypid
+    WHERE pa.attrelid = a.attrelid AND
+          pa.attnum > 0 AND pa.attnum < a.attnum
+    ORDER BY pa.attnum) AS coltypes
+ FROM pg_attribute a JOIN pg_class c ON c.oid = attrelid
+  JOIN pg_namespace n ON c.relnamespace = n.oid
+ WHERE attalign = 'd' AND relkind = 'r' AND
+  attnotnull AND attlen <> -1 AND n.nspname = 'pg_catalog'
+)
+SELECT relname, attname, coltypes, get_columns_length(coltypes)
+ FROM check_columns
+ WHERE get_columns_length(coltypes) % 8 != 0 OR
+       'name'::regtype::oid = ANY(coltypes);
+         relname         |        attname        |    coltypes     | get_columns_length 
+-------------------------+-----------------------+-----------------+--------------------
+ gp_fastsequence         | objmod                | {26}            |                  4
+ pg_auth_time_constraint | start_time            | {26,21}         |                  6
+ pg_auth_time_constraint | end_time              | {26,21,1083,21} |                 18
+ pg_password_history     | passhistpasswordsetat | {26}            |                  4
+(4 rows)
 

@@ -5,7 +5,7 @@
  *
  * Portions Copyright (c) 2005-2010, Greenplum inc
  * Portions Copyright (c) 2012-Present VMware, Inc. or its affiliates.
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -248,7 +248,7 @@ ProcessQuery(Portal portal,
 	/*
 	 * Run the plan to completion.
 	 */
-	ExecutorRun(queryDesc, ForwardScanDirection, 0L, true);
+	ExecutorRun(queryDesc, ForwardScanDirection, 0, true);
 
 	autostats_get_cmdtype(queryDesc, &cmdType, &relationOid);
 
@@ -277,6 +277,9 @@ ProcessQuery(Portal portal,
 				break;
 			case CMD_DELETE:
 				SetQueryCompletion(qc, CMDTAG_DELETE, queryDesc->es_processed);
+				break;
+			case CMD_MERGE:
+				SetQueryCompletion(qc, CMDTAG_MERGE, queryDesc->es_processed);
 				break;
 			default:
 				SetQueryCompletion(qc, CMDTAG_UNKNOWN, queryDesc->es_processed);
@@ -562,8 +565,8 @@ PortalStart(Portal portal, ParamListInfo params,
 	QueryDesc  *queryDesc;
 	int			myeflags;
 
-	AssertArg(PortalIsValid(portal));
-	AssertState(portal->status == PORTAL_DEFINED);
+	Assert(PortalIsValid(portal));
+	Assert(portal->status == PORTAL_DEFINED);
 
 	portal->hasResQueueLock = false;
     
@@ -881,6 +884,8 @@ PortalSetResultFormat(Portal portal, int nFormats, int16 *formats)
  * isTopLevel: true if query is being executed at backend "top level"
  * (that is, directly from a client command message)
  *
+ * run_once: ignored, present only to avoid an API break in stable branches.
+ *
  * dest: where to send output of primary (canSetTag) query
  *
  * altdest: where to send output of non-primary queries
@@ -905,7 +910,7 @@ PortalRun(Portal portal, int64 count, bool isTopLevel, bool run_once,
 	MemoryContext savePortalContext;
 	MemoryContext saveMemoryContext;
 
-	AssertArg(PortalIsValid(portal));
+	Assert(PortalIsValid(portal));
 
 	TRACE_POSTGRESQL_QUERY_EXECUTE_START();
 
@@ -924,10 +929,6 @@ PortalRun(Portal portal, int64 count, bool isTopLevel, bool run_once,
 	 * Check for improper portal use, and mark portal active.
 	 */
 	MarkPortalActive(portal);
-
-	/* Set run_once flag.  Shouldn't be clear if previously set. */
-	Assert(!portal->run_once || run_once);
-	portal->run_once = run_once;
 
 	/*
 	 * Set up global portal context pointers.
@@ -1136,7 +1137,7 @@ PortalRunSelect(Portal portal,
 		{
 			PushActiveSnapshot(queryDesc->snapshot);
 			ExecutorRun(queryDesc, direction, (uint64) count,
-						portal->run_once);
+						false);
 			nprocessed = queryDesc->estate->es_processed;
 			PopActiveSnapshot();
 		}
@@ -1176,7 +1177,7 @@ PortalRunSelect(Portal portal,
 		{
 			PushActiveSnapshot(queryDesc->snapshot);
 			ExecutorRun(queryDesc, direction, (uint64) count,
-						portal->run_once);
+						false);
 			nprocessed = queryDesc->estate->es_processed;
 			PopActiveSnapshot();
 		}
@@ -1618,15 +1619,12 @@ PortalRunFetch(Portal portal,
 	MemoryContext savePortalContext;
 	MemoryContext oldContext = CurrentMemoryContext;
 
-	AssertArg(PortalIsValid(portal));
+	Assert(PortalIsValid(portal));
 
 	/*
 	 * Check for improper portal use, and mark portal active.
 	 */
 	MarkPortalActive(portal);
-
-	/* If supporting FETCH, portal can't be run-once. */
-	Assert(!portal->run_once);
 
 	/*
 	 * Set up global portal context pointers.
@@ -1957,13 +1955,8 @@ DoPortalRewind(Portal portal)
 	if (portal->atStart && !portal->atEnd)
 		return;
 
-	/*
-	 * Otherwise, cursor should allow scrolling.  However, we're only going to
-	 * enforce that policy fully beginning in v15.  In older branches, insist
-	 * on this only if the portal has a holdStore.  That prevents users from
-	 * seeing that the holdStore may not have all the rows of the query.
-	 */
-	if ((portal->cursorOptions & CURSOR_OPT_NO_SCROLL) && portal->holdStore)
+	/* Otherwise, cursor must allow scrolling */
+	if (portal->cursorOptions & CURSOR_OPT_NO_SCROLL)
 		ereport(ERROR,
 				(errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
 				 errmsg("cursor can only scan forward"),

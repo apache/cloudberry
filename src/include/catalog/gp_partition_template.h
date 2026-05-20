@@ -40,6 +40,7 @@ CATALOG(gp_partition_template,7131,PartitionTemplateRelationId)
 } FormData_gp_partition_template;
 
 FOREIGN_KEY(relid REFERENCES pg_class(oid));
+DECLARE_UNIQUE_INDEX(gp_partition_template_relid_level_index, 7168, GpPartitionTemplateRelidLevelIndexId, on gp_partition_template using btree(relid oid_ops, level int2_ops));
 
 /* ----------------
  *		Form_gp_partition_template corresponds to a pointer to a tuple with

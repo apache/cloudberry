@@ -3,7 +3,7 @@
  * spi.c
  *				Server Programming Interface
  *
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -248,6 +248,7 @@ static void
 _SPI_commit(bool chain)
 {
 	MemoryContext oldcontext = CurrentMemoryContext;
+	SavedTransactionCharacteristics savetc;
 
 	/*
 	 * Complain if we are in a context that doesn't permit transaction
@@ -277,7 +278,7 @@ _SPI_commit(bool chain)
 
 	/* XXX this ain't re-entrant enough for my taste */
 	if (chain)
-		SaveTransactionCharacteristics();
+		SaveTransactionCharacteristics(&savetc);
 
 	/* Catch any error occurring during the COMMIT */
 	PG_TRY();
@@ -301,7 +302,7 @@ _SPI_commit(bool chain)
 		/* Immediately start a new transaction */
 		StartTransactionCommand();
 		if (chain)
-			RestoreTransactionCharacteristics();
+			RestoreTransactionCharacteristics(&savetc);
 
 		MemoryContextSwitchTo(oldcontext);
 
@@ -325,7 +326,7 @@ _SPI_commit(bool chain)
 		/* ... and start a new one */
 		StartTransactionCommand();
 		if (chain)
-			RestoreTransactionCharacteristics();
+			RestoreTransactionCharacteristics(&savetc);
 
 		MemoryContextSwitchTo(oldcontext);
 
@@ -353,14 +354,15 @@ static void
 _SPI_rollback(bool chain)
 {
 	MemoryContext oldcontext = CurrentMemoryContext;
+	SavedTransactionCharacteristics savetc;
 
-	/* see under SPI_commit() */
+	/* see comments in _SPI_commit() */
 	if (_SPI_current->atomic)
 		ereport(ERROR,
 				(errcode(ERRCODE_INVALID_TRANSACTION_TERMINATION),
 				 errmsg("invalid transaction termination")));
 
-	/* see under SPI_commit() */
+	/* see comments in _SPI_commit() */
 	if (IsSubTransaction())
 		ereport(ERROR,
 				(errcode(ERRCODE_INVALID_TRANSACTION_TERMINATION),
@@ -368,7 +370,7 @@ _SPI_rollback(bool chain)
 
 	/* XXX this ain't re-entrant enough for my taste */
 	if (chain)
-		SaveTransactionCharacteristics();
+		SaveTransactionCharacteristics(&savetc);
 
 	/* Catch any error occurring during the ROLLBACK */
 	PG_TRY();
@@ -393,7 +395,7 @@ _SPI_rollback(bool chain)
 		/* Immediately start a new transaction */
 		StartTransactionCommand();
 		if (chain)
-			RestoreTransactionCharacteristics();
+			RestoreTransactionCharacteristics(&savetc);
 
 		MemoryContextSwitchTo(oldcontext);
 
@@ -418,7 +420,7 @@ _SPI_rollback(bool chain)
 		/* ... and start a new one */
 		StartTransactionCommand();
 		if (chain)
-			RestoreTransactionCharacteristics();
+			RestoreTransactionCharacteristics(&savetc);
 
 		MemoryContextSwitchTo(oldcontext);
 
@@ -443,16 +445,6 @@ SPI_rollback_and_chain(void)
 }
 
 /*
- * SPICleanup is a no-op, kept for backwards compatibility. We rely on
- * AtEOXact_SPI to cleanup. Extensions should not (need to) fiddle with the
- * internal SPI state directly.
- */
-void
-SPICleanup(void)
-{
-}
-
-/*
  * Clean up SPI state at transaction commit or abort.
  */
 void
@@ -462,7 +454,7 @@ AtEOXact_SPI(bool isCommit)
 
 	/*
 	 * Pop stack entries, stopping if we find one marked internal_xact (that
-	 * one belongs to the caller of SPI_commit or SPI_abort).
+	 * one belongs to the caller of SPI_commit or SPI_rollback).
 	 */
 	while (_SPI_connected >= 0)
 	{
@@ -613,8 +605,11 @@ SPI_inside_nonatomic_context(void)
 {
 	if (_SPI_current == NULL)
 		return false;			/* not in any SPI context at all */
+	/* these tests must match _SPI_commit's opinion of what's atomic: */
 	if (_SPI_current->atomic)
 		return false;			/* it's atomic (ie function not procedure) */
+	if (IsSubTransaction())
+		return false;			/* if within subtransaction, it's atomic */
 	return true;
 }
 
@@ -1170,7 +1165,7 @@ SPI_modifytuple(Relation rel, HeapTuple tuple, int natts, int *attnum,
 		if (attnum[i] <= 0 || attnum[i] > numberOfAttributes)
 			break;
 		v[attnum[i] - 1] = Values[i];
-		n[attnum[i] - 1] = (Nulls && Nulls[i] == 'n') ? true : false;
+		n[attnum[i] - 1] = (Nulls && Nulls[i] == 'n');
 	}
 
 	if (i == natts)				/* no errors in *attnum */
@@ -2084,6 +2079,10 @@ SPI_result_code_string(int code)
 			return "SPI_OK_REL_REGISTER";
 		case SPI_OK_REL_UNREGISTER:
 			return "SPI_OK_REL_UNREGISTER";
+		case SPI_OK_TD_REGISTER:
+			return "SPI_OK_TD_REGISTER";
+		case SPI_OK_MERGE:
+			return "SPI_OK_MERGE";
 	}
 	/* Unrecognized code ... return something useful ... */
 	sprintf(buf, "Unrecognized SPI code %d", code);
@@ -2093,6 +2092,8 @@ SPI_result_code_string(int code)
 /*
  * SPI_plan_get_plan_sources --- get a SPI plan's underlying list of
  * CachedPlanSources.
+ *
+ * CAUTION: there is no check on whether the CachedPlanSources are up-to-date.
  *
  * This is exported so that PL/pgSQL can use it (this beats letting PL/pgSQL
  * look directly into the SPIPlan for itself).  It's not documented in
@@ -2322,7 +2323,7 @@ _SPI_prepare_plan(const char *src, SPIPlanPtr plan)
 		else if (plan->parserSetup != NULL)
 		{
 			Assert(plan->nargs == 0);
-			stmt_list = pg_analyze_and_rewrite_params(parsetree,
+			stmt_list = pg_analyze_and_rewrite_withcb(parsetree,
 													  src,
 													  plan->parserSetup,
 													  plan->parserSetupArg,
@@ -2330,11 +2331,11 @@ _SPI_prepare_plan(const char *src, SPIPlanPtr plan)
 		}
 		else
 		{
-			stmt_list = pg_analyze_and_rewrite(parsetree,
-											   src,
-											   plan->argtypes,
-											   plan->nargs,
-											   _SPI_current->queryEnv);
+			stmt_list = pg_analyze_and_rewrite_fixedparams(parsetree,
+														   src,
+														   plan->argtypes,
+														   plan->nargs,
+														   _SPI_current->queryEnv);
 		}
 
 		/* Check that all the queries are safe to execute on QE. */
@@ -2472,12 +2473,22 @@ _SPI_execute_plan(SPIPlanPtr plan, const SPIExecuteOptions *options,
 	uint64		my_processed = 0;
 	SPITupleTable *my_tuptable = NULL;
 	int			res = 0;
+	bool		allow_nonatomic;
 	bool		pushed_active_snap = false;
 	ResourceOwner plan_owner = options->owner;
 	SPICallbackArg spicallbackarg;
 	ErrorContextCallback spierrcontext;
 	CachedPlan *cplan = NULL;
 	ListCell   *lc1;
+
+	/*
+	 * We allow nonatomic behavior only if options->allow_nonatomic is set
+	 * *and* the SPI_OPT_NONATOMIC flag was given when connecting and we are
+	 * not inside a subtransaction.  The latter two tests match whether
+	 * _SPI_commit() would allow a commit; see there for more commentary.
+	 */
+	allow_nonatomic = options->allow_nonatomic &&
+		!_SPI_current->atomic && !IsSubTransaction();
 
 	/*
 	 * Setup error traceback support for ereport()
@@ -2498,12 +2509,17 @@ _SPI_execute_plan(SPIPlanPtr plan, const SPIExecuteOptions *options,
 	 * snapshot != InvalidSnapshot, read_only = false: use the given snapshot,
 	 * modified by advancing its command ID before each querytree.
 	 *
-	 * snapshot == InvalidSnapshot, read_only = true: use the entry-time
-	 * ActiveSnapshot, if any (if there isn't one, we run with no snapshot).
+	 * snapshot == InvalidSnapshot, read_only = true: do nothing for queries
+	 * that require no snapshot.  For those that do, ensure that a Portal
+	 * snapshot exists; then use that, or use the entry-time ActiveSnapshot if
+	 * that exists and is different.
 	 *
-	 * snapshot == InvalidSnapshot, read_only = false: take a full new
-	 * snapshot for each user command, and advance its command ID before each
-	 * querytree within the command.
+	 * snapshot == InvalidSnapshot, read_only = false: do nothing for queries
+	 * that require no snapshot.  For those that do, ensure that a Portal
+	 * snapshot exists; then, in atomic execution (!allow_nonatomic) take a
+	 * full new snapshot for each user command, and advance its command ID
+	 * before each querytree within the command.  In allow_nonatomic mode we
+	 * just use the Portal snapshot unmodified.
 	 *
 	 * In the first two cases, we can just push the snap onto the stack once
 	 * for the whole plan list.
@@ -2573,19 +2589,19 @@ _SPI_execute_plan(SPIPlanPtr plan, const SPIExecuteOptions *options,
 			else if (plan->parserSetup != NULL)
 			{
 				Assert(plan->nargs == 0);
-				stmt_list = pg_analyze_and_rewrite_params(parsetree,
-														  src,
-														  plan->parserSetup,
-														  plan->parserSetupArg,
-														  _SPI_current->queryEnv);
+				stmt_list = pg_analyze_and_rewrite_withcb(parsetree,
+															   src,
+															   plan->parserSetup,
+															   plan->parserSetupArg,
+															   _SPI_current->queryEnv);
 			}
 			else
 			{
-				stmt_list = pg_analyze_and_rewrite(parsetree,
-												   src,
-												   plan->argtypes,
-												   plan->nargs,
-												   _SPI_current->queryEnv);
+				stmt_list = pg_analyze_and_rewrite_fixedparams(parsetree,
+																	src,
+																	plan->argtypes,
+																	plan->nargs,
+																	_SPI_current->queryEnv);
 			}
 
 			/* Check that all the queries are safe to execute on QE. */
@@ -2780,9 +2796,8 @@ _SPI_execute_plan(SPIPlanPtr plan, const SPIExecuteOptions *options,
 				QueryCompletion qc;
 
 				/*
-				 * If the SPI context is atomic, or we were not told to allow
-				 * nonatomic operations, tell ProcessUtility this is an atomic
-				 * execution context.
+				 * If we're not allowing nonatomic operations, tell
+				 * ProcessUtility this is an atomic execution context.
 				 */
 				if (_SPI_current->atomic || !options->allow_nonatomic)
 					context = PROCESS_UTILITY_QUERY;
@@ -3051,6 +3066,9 @@ _SPI_pquery(QueryDesc *queryDesc, bool fire_triggers, uint64 tcount)
 				res = SPI_OK_UPDATE_RETURNING;
 			else
 				res = SPI_OK_UPDATE;
+			break;
+		case CMD_MERGE:
+			res = SPI_OK_MERGE;
 			break;
 		default:
 			return SPI_ERROR_OPUNKNOWN;
@@ -3633,7 +3651,7 @@ SPI_register_trigger_data(TriggerData *tdata)
 	if (tdata->tg_newtable)
 	{
 		EphemeralNamedRelation enr =
-		palloc(sizeof(EphemeralNamedRelationData));
+			palloc(sizeof(EphemeralNamedRelationData));
 		int			rc;
 
 		enr->md.name = tdata->tg_trigger->tgnewtable;
@@ -3650,7 +3668,7 @@ SPI_register_trigger_data(TriggerData *tdata)
 	if (tdata->tg_oldtable)
 	{
 		EphemeralNamedRelation enr =
-		palloc(sizeof(EphemeralNamedRelationData));
+			palloc(sizeof(EphemeralNamedRelationData));
 		int			rc;
 
 		enr->md.name = tdata->tg_trigger->tgoldtable;

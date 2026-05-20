@@ -3,6 +3,7 @@
 -- m/DETAIL:  The symlinked path \".*\" will be truncated to 100 characters when sending a TAR to the utilities \(e.g. pg_basebackup\)/
 -- end_matchignore
 -- create a tablespace using WITH clause
+GRANT ALL ON SCHEMA public TO public;
 CREATE TABLESPACE regress_tblspacewith LOCATION '@testtablespace@' WITH (some_nonexistent_parameter = true); -- fail
 ERROR:  unrecognized parameter "some_nonexistent_parameter"
 CREATE TABLESPACE regress_tblspacewith LOCATION '@testtablespace@' WITH (random_page_cost = 3.0); -- ok

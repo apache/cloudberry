@@ -57,7 +57,7 @@ language plpgsql volatile execute on all segments;
 
 -- start_ignore
 !\retcode gpconfig -c gp_workfile_max_entries -v 32 --skipvalidation;
-!\retcode gpstop -ari;
+!\retcode gpstop -arf;
 -- end_ignore
 
 -- setup for workfile made in temp tablespace test
@@ -80,7 +80,7 @@ language plpgsql volatile execute on all segments;
 
 -- start_ignore
 !\retcode gpconfig -r gp_workfile_max_entries --skipvalidation;
-!\retcode gpstop -ari;
+!\retcode gpstop -arf;
 -- end_ignore
 
 -- test workset cleanup

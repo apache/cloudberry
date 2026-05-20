@@ -268,7 +268,10 @@ _readQuery(void)
 	READ_BOOL_FIELD(canOptSelectLockingClause);
 	READ_NODE_FIELD(cteList);
 	READ_NODE_FIELD(rtable);
+	READ_NODE_FIELD(rteperminfos);
 	READ_NODE_FIELD(jointree);
+	READ_NODE_FIELD(mergeActionList);
+	READ_BOOL_FIELD(mergeUseOuterJoin);
 	READ_NODE_FIELD(targetList);
 	READ_NODE_FIELD(withCheckOptions);
 	READ_NODE_FIELD(onConflict);
@@ -458,34 +461,115 @@ _readUpdateStmt(void)
 	READ_DONE();
 }
 
+
+static Integer *
+_readInteger(void)
+{
+	READ_LOCALS(Integer);
+
+	memcpy(&local_node->ival, read_str_ptr, sizeof(int));
+	read_str_ptr += sizeof(int);
+
+	READ_DONE();
+}
+
+static Boolean *
+_readBoolean(void)
+{
+	READ_LOCALS(Boolean);
+
+	memcpy(&local_node->boolval, read_str_ptr, sizeof(bool));
+	read_str_ptr += sizeof(bool);
+
+	READ_DONE();
+}
+
+static Float *
+_readFloat(void)
+{
+	READ_LOCALS(Float);
+
+	int slen;
+	char *nn;
+	memcpy(&slen, read_str_ptr, sizeof(int));
+	read_str_ptr += sizeof(int);
+	nn = palloc(slen + 1);
+	memcpy(nn, read_str_ptr, slen);
+	nn[slen] = '\0';
+	local_node->fval = nn;
+	read_str_ptr += slen;
+
+	READ_DONE();
+}
+
+static String *
+_readString(void)
+{
+	int slen;
+	char *nn;
+
+	READ_LOCALS(String);
+
+	memcpy(&slen, read_str_ptr, sizeof(int));
+	read_str_ptr += sizeof(int);
+	nn = palloc(slen + 1);
+	memcpy(nn, read_str_ptr, slen);
+	nn[slen] = '\0';
+	local_node->sval = nn;
+	read_str_ptr += slen;
+
+	READ_DONE();
+}
+
+static BitString *
+_readBitString(void)
+{
+	READ_LOCALS(BitString);
+
+	int slen;
+	char *nn;
+	memcpy(&slen, read_str_ptr, sizeof(int));
+	read_str_ptr += sizeof(int);
+	nn = palloc(slen + 1);
+	memcpy(nn, read_str_ptr, slen);
+	nn[slen] = '\0';
+	local_node->bsval = nn;
+	read_str_ptr += slen;
+
+	READ_DONE();
+}
+
 static A_Const *
 _readAConst(void)
 {
 	READ_LOCALS(A_Const);
 
-	READ_ENUM_FIELD(val.type, NodeTag);
+	READ_BOOL_FIELD(isnull);
 
-	switch (local_node->val.type)
+	if (!local_node->isnull)
 	{
-		case T_Integer:
-			memcpy(&local_node->val.val.ival, read_str_ptr, sizeof(long)); read_str_ptr+=sizeof(long);
-			break;
-		case T_Float:
-		case T_String:
-		case T_BitString:
+		union ValUnion *tmp = readNodeBinary();
+
+		switch (nodeTag(tmp))
 		{
-			int slen; char * nn;
-			memcpy(&slen, read_str_ptr, sizeof(int));
-			read_str_ptr+=sizeof(int);
-			nn = palloc(slen+1);
-			memcpy(nn,read_str_ptr,slen);
-			nn[slen] = '\0';
-			local_node->val.val.str = nn; read_str_ptr+=slen;
+			case T_Integer:
+				memcpy(&local_node->val, tmp, sizeof(Integer));
+				break;
+			case T_Float:
+				memcpy(&local_node->val, tmp, sizeof(Float));
+				break;
+			case T_Boolean:
+				memcpy(&local_node->val, tmp, sizeof(Boolean));
+				break;
+			case T_String:
+				memcpy(&local_node->val, tmp, sizeof(String));
+				break;
+			case T_BitString:
+				memcpy(&local_node->val, tmp, sizeof(BitString));
+				break;
+			default:
+				break;
 		}
-			break;
-	 	case T_Null:
-	 	default:
-	 		break;
 	}
 
     READ_LOCATION_FIELD(location);   /*CDB*/
@@ -935,7 +1019,7 @@ _readDynamicSeqScan(void)
 {
 	READ_LOCALS(DynamicSeqScan);
 
-	ReadCommonScan(&local_node->seqscan);
+	ReadCommonScan(&local_node->seqscan.scan);
 	READ_NODE_FIELD(partOids);
 	READ_NODE_FIELD(part_prune_info);
 	READ_NODE_FIELD(join_prune_paramids);
@@ -1064,6 +1148,42 @@ _readSplitUpdate(void)
 	READ_OID_ARRAY(hashFuncs, local_node->numHashAttrs);
 
 	ReadCommonPlan(&local_node->plan);
+
+	READ_DONE();
+}
+
+/*
+ * _readSplitUpdate
+ */
+static SplitMerge *
+_readSplitMerge(void)
+{
+	READ_LOCALS(SplitMerge);
+
+	READ_INT_FIELD(numHashSegments);
+	READ_INT_FIELD(numHashAttrs);
+	READ_ATTRNUMBER_ARRAY(hashAttnos, local_node->numHashAttrs);
+	READ_OID_ARRAY(hashFuncs, local_node->numHashAttrs);
+
+	READ_NODE_FIELD(resultRelations);
+	READ_NODE_FIELD(mergeActionLists);
+
+	ReadCommonPlan(&local_node->plan);
+
+	READ_DONE();
+}
+
+
+static PlaceHolderVar *
+_readPlaceHolderVar(void)
+{
+	READ_LOCALS(PlaceHolderVar);
+
+	READ_NODE_FIELD(phexpr);
+	READ_BITMAPSET_FIELD(phrels);
+	READ_BITMAPSET_FIELD(phnullingrels);
+	READ_UINT_FIELD(phid);
+	READ_UINT_FIELD(phlevelsup);
 
 	READ_DONE();
 }
@@ -1653,78 +1773,6 @@ _readGpDropPartitionCmd(void)
 	READ_DONE();
 }
 
-static Node *
-_readValue(NodeTag nt)
-{
-	Node * result = NULL;
-	if (nt == T_Integer)
-	{
-		long ival;
-		memcpy(&ival, read_str_ptr, sizeof(long)); read_str_ptr+=sizeof(long);
-		result = (Node *) makeInteger(ival);
-	}
-	else if (nt == T_Null)
-	{
-		Value *val = makeNode(Value);
-		val->type = T_Null;
-		result = (Node *)val;
-	}
-	else
-	{
-		int slen;
-		char * nn = NULL;
-		memcpy(&slen, read_str_ptr, sizeof(int));
-		read_str_ptr+=sizeof(int);
-
-		/*
-		 * For the String case we want to create an empty string if slen is
-		 * equal to zero, since otherwise we'll set the string to NULL, which
-		 * has a different meaning and the NULL case is handed above.
-		 */
-		if (slen > 0 || nt == T_String)
-		{
-		    nn = palloc(slen + 1);
-
-			if (slen > 0)
-			    memcpy(nn, read_str_ptr, slen);
-
-		    read_str_ptr += (slen);
-			nn[slen] = '\0';
-		}
-
-		if (nt == T_Float)
-			result = (Node *) makeFloat(nn);
-		else if (nt == T_String)
-			result = (Node *) makeString(nn);
-		else if (nt == T_BitString)
-			result = (Node *) makeBitString(nn);
-		else
-			elog(ERROR, "unknown Value node type %i", nt);
-	}
-
-	return result;
-
-}
-
-/*
- * _readGpPolicy
- */
-static GpPolicy *
-_readGpPolicy(void)
-{
-	READ_LOCALS(GpPolicy);
-
-	READ_ENUM_FIELD(ptype, GpPolicyType);
-
-	READ_INT_FIELD(numsegments);
-
-	READ_INT_FIELD(nattrs);
-	READ_ATTRNUMBER_ARRAY(attrs, local_node->nattrs);
-	READ_OID_ARRAY(opclasses, local_node->nattrs);
-
-	READ_DONE();
-}
-
 static GpSplitPartitionCmd *
 _readGpSplitPartitionCmd(void)
 {
@@ -1926,12 +1974,6 @@ readNodeBinary(void)
 		Assert(l->length==listsize);
 
 		return l;
-	}
-
-	if (nt == T_Integer || nt == T_Float || nt == T_String ||
-	   	nt == T_BitString || nt == T_Null)
-	{
-		return _readValue(nt);
 	}
 
 	switch(nt)
@@ -2139,6 +2181,9 @@ readNodeBinary(void)
 				break;
 			case T_SplitUpdate:
 				return_value = _readSplitUpdate();
+				break;
+			case T_SplitMerge:
+				return_value = _readSplitMerge();
 				break;
 			case T_AssertOp:
 				return_value = _readAssertOp();
@@ -2653,6 +2698,21 @@ readNodeBinary(void)
 			case T_ParamRef:
 				return_value = _readParamRef();
 				break;
+			case T_Integer:
+				return_value = _readInteger();
+				break;
+			case T_Boolean:
+				return_value = _readBoolean();
+				break;
+			case T_Float:
+				return_value = _readFloat();
+				break;
+			case T_String:
+				return_value = _readString();
+				break;
+			case T_BitString:
+				return_value = _readBitString();
+				break;
 			case T_A_Const:
 				return_value = _readAConst();
 				break;
@@ -2943,6 +3003,39 @@ readNodeBinary(void)
 				break;
 			case T_DropTaskStmt:
 				return_value = _readDropTaskStmt();
+				break;
+			case T_RTEPermissionInfo:
+				return_value = _readRTEPermissionInfo();
+				break;
+			case T_MergeAction:
+				return_value = _readMergeAction();
+				break;
+			case T_PublicationObjSpec:
+				return_value = _readPublicationObjSpec();
+				break;
+			case T_PublicationTable:
+				return_value = _readPublicationTable();
+				break;
+			case T_WindowDef:
+				return_value = _readWindowDef();
+				break;
+			case T_JsonConstructorExpr:
+				return_value = _readJsonConstructorExpr();
+				break;
+			case T_JsonIsPredicate:
+				return_value = _readJsonIsPredicate();
+				break;
+			case T_JsonReturning:
+				return_value = _readJsonReturning();
+				break;
+			case T_JsonValueExpr:
+				return_value = _readJsonValueExpr();
+				break;
+			case T_JsonFormat:
+				return_value = _readJsonFormat();
+				break;
+			case T_PlaceHolderVar:
+				return_value = _readPlaceHolderVar();
 				break;
 			default:
 				return_value = NULL; /* keep the compiler silent */

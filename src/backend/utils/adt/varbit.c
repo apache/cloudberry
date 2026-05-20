@@ -20,7 +20,7 @@
  *
  * Code originally contributed by Adriaan Joubert.
  *
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * IDENTIFICATION
@@ -148,11 +148,11 @@ Datum
 bit_in(PG_FUNCTION_ARGS)
 {
 	char	   *input_string = PG_GETARG_CSTRING(0);
-
 #ifdef NOT_USED
 	Oid			typelem = PG_GETARG_OID(1);
 #endif
 	int32		atttypmod = PG_GETARG_INT32(2);
+	Node	   *escontext = fcinfo->context;
 	VarBit	   *result;			/* The resulting bit string			  */
 	char	   *sp;				/* pointer into the character string  */
 	bits8	   *r;				/* pointer into the result */
@@ -194,7 +194,7 @@ bit_in(PG_FUNCTION_ARGS)
 	else
 	{
 		if (slen > VARBITMAXLEN / 4)
-			ereport(ERROR,
+			ereturn(escontext, (Datum) 0,
 					(errcode(ERRCODE_PROGRAM_LIMIT_EXCEEDED),
 					 errmsg("bit string length exceeds the maximum allowed (%d)",
 							VARBITMAXLEN)));
@@ -208,7 +208,7 @@ bit_in(PG_FUNCTION_ARGS)
 	if (atttypmod <= 0)
 		atttypmod = bitlen;
 	else if (bitlen != atttypmod)
-		ereport(ERROR,
+		ereturn(escontext, (Datum) 0,
 				(errcode(ERRCODE_STRING_DATA_LENGTH_MISMATCH),
 				 errmsg("bit string length %d does not match type bit(%d)",
 						bitlen, atttypmod)));
@@ -230,7 +230,7 @@ bit_in(PG_FUNCTION_ARGS)
 			if (*sp == '1')
 				*r |= x;
 			else if (*sp != '0')
-				ereport(ERROR,
+				ereturn(escontext, (Datum) 0,
 						(errcode(ERRCODE_INVALID_TEXT_REPRESENTATION),
 						 errmsg("\"%.*s\" is not a valid binary digit",
 								pg_mblen(sp), sp)));
@@ -255,7 +255,7 @@ bit_in(PG_FUNCTION_ARGS)
 			else if (*sp >= 'a' && *sp <= 'f')
 				x = (bits8) (*sp - 'a') + 10;
 			else
-				ereport(ERROR,
+				ereturn(escontext, (Datum) 0,
 						(errcode(ERRCODE_INVALID_TEXT_REPRESENTATION),
 						 errmsg("\"%.*s\" is not a valid hexadecimal digit",
 								pg_mblen(sp), sp)));
@@ -453,11 +453,11 @@ Datum
 varbit_in(PG_FUNCTION_ARGS)
 {
 	char	   *input_string = PG_GETARG_CSTRING(0);
-
 #ifdef NOT_USED
 	Oid			typelem = PG_GETARG_OID(1);
 #endif
 	int32		atttypmod = PG_GETARG_INT32(2);
+	Node	   *escontext = fcinfo->context;
 	VarBit	   *result;			/* The resulting bit string			  */
 	char	   *sp;				/* pointer into the character string  */
 	bits8	   *r;				/* pointer into the result */
@@ -495,7 +495,7 @@ varbit_in(PG_FUNCTION_ARGS)
 	else
 	{
 		if (slen > VARBITMAXLEN / 4)
-			ereport(ERROR,
+			ereturn(escontext, (Datum) 0,
 					(errcode(ERRCODE_PROGRAM_LIMIT_EXCEEDED),
 					 errmsg("bit string length exceeds the maximum allowed (%d)",
 							VARBITMAXLEN)));
@@ -509,7 +509,7 @@ varbit_in(PG_FUNCTION_ARGS)
 	if (atttypmod <= 0)
 		atttypmod = bitlen;
 	else if (bitlen > atttypmod)
-		ereport(ERROR,
+		ereturn(escontext, (Datum) 0,
 				(errcode(ERRCODE_STRING_DATA_RIGHT_TRUNCATION),
 				 errmsg("bit string too long for type bit varying(%d)",
 						atttypmod)));
@@ -531,7 +531,7 @@ varbit_in(PG_FUNCTION_ARGS)
 			if (*sp == '1')
 				*r |= x;
 			else if (*sp != '0')
-				ereport(ERROR,
+				ereturn(escontext, (Datum) 0,
 						(errcode(ERRCODE_INVALID_TEXT_REPRESENTATION),
 						 errmsg("\"%.*s\" is not a valid binary digit",
 								pg_mblen(sp), sp)));
@@ -556,7 +556,7 @@ varbit_in(PG_FUNCTION_ARGS)
 			else if (*sp >= 'a' && *sp <= 'f')
 				x = (bits8) (*sp - 'a') + 10;
 			else
-				ereport(ERROR,
+				ereturn(escontext, (Datum) 0,
 						(errcode(ERRCODE_INVALID_TEXT_REPRESENTATION),
 						 errmsg("\"%.*s\" is not a valid hexadecimal digit",
 								pg_mblen(sp), sp)));
@@ -686,7 +686,7 @@ varbit_send(PG_FUNCTION_ARGS)
 
 	pq_begintypsend(&buf);
 	pq_sendint32(&buf, VARBITLEN(s));
-	pq_sendbytes(&buf, (char *) VARBITS(s), VARBITBYTES(s));
+	pq_sendbytes(&buf, VARBITS(s), VARBITBYTES(s));
 	PG_RETURN_BYTEA_P(pq_endtypsend(&buf));
 }
 

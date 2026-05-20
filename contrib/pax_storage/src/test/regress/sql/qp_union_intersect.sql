@@ -267,12 +267,9 @@ SELECT COUNT(*) FROM dml_union_r;
 -- @description union_test29: INSERT NON ATOMICS with union/intersect/except
 begin;
 SELECT COUNT(*) FROM dml_union_r;
--- GPDB_12_MERGE_FIXME: ORCA doesn't produce the right intersect plan
-set optimizer=off;
 SELECT COUNT(*) FROM (SELECT dml_union_r.* FROM dml_union_r INTERSECT (SELECT dml_union_r.* FROM dml_union_r UNION ALL SELECT dml_union_s.* FROM dml_union_s) EXCEPT SELECT dml_union_s.* FROM dml_union_s)foo;
 INSERT INTO dml_union_r SELECT dml_union_r.* FROM dml_union_r INTERSECT (SELECT dml_union_r.* FROM dml_union_r UNION ALL SELECT dml_union_s.* FROM dml_union_s) EXCEPT SELECT dml_union_s.* FROM dml_union_s;
 SELECT COUNT(*) FROM dml_union_r;
-reset optimizer;
 rollback;
 
 -- @description union_test30: INSERT NON ATOMICS with union/intersect/except
@@ -763,6 +760,16 @@ select * from generate_series(100, 105);
 select a from t_test_append_rep
 union all
 select * from generate_series(100, 105);
+
+-- test INTERSECT/EXCEPT with General and partitioned locus, but none of the columns are hashable
+CREATE TABLE p1(a int) distributed by (a);
+INSERT INTO p1 select generate_series(1,10);
+explain (costs off)
+select from generate_series(1,5) intersect select from p1;
+select from generate_series(1,5) intersect select from p1;
+explain (costs off)
+select from generate_series(1,5) except select from p1;
+select from generate_series(1,5) except select from p1;
 
 --
 -- Test for creation of MergeAppend paths.

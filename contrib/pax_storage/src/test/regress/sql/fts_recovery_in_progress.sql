@@ -69,7 +69,7 @@ begin
 end;
 $$;
 
-\! gprecoverseg -av
+\! gprecoverseg -av --no-progress
 \!gpfts -A -D
 -- end_ignore
 

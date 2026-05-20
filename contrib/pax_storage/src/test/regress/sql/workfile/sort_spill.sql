@@ -37,11 +37,7 @@ insert into testsort select i, i % 1000, i % 100000, i % 75 from
 set statement_mem="1MB";
 set gp_resqueue_print_operator_memory_limits=on;
 
-select avg(i2) from (select i1,i2 from testsort order by i2) foo;
-select * from sort_spill.is_workfile_created('explain (analyze, verbose) select i1,i2 from testsort order by i2;');
-select * from sort_spill.is_workfile_created('explain (analyze, verbose) select i1,i2 from testsort order by i2 limit 50000;');
-
-select avg(i2) from (select i1,i2 from testsort order by i2) foo;
+analyze testsort;
 select * from sort_spill.is_workfile_created('explain (analyze, verbose) select i1,i2 from testsort order by i2;');
 select * from sort_spill.is_workfile_created('explain (analyze, verbose) select i1,i2 from testsort order by i2 limit 50000;');
 

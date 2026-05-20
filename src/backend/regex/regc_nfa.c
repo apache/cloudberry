@@ -143,11 +143,7 @@ newstate(struct nfa *nfa)
 	 * compilation, since no code path will go very long without making a new
 	 * state or arc.
 	 */
-	if (CANCEL_REQUESTED(nfa->v->re))
-	{
-		NERR(REG_CANCEL);
-		return NULL;
-	}
+	INTERRUPT(nfa->v->re);
 
 	/* first, recycle anything that's on the freelist */
 	if (nfa->freestates != NULL)
@@ -297,11 +293,7 @@ newarc(struct nfa *nfa,
 	 * compilation, since no code path will go very long without making a new
 	 * state or arc.
 	 */
-	if (CANCEL_REQUESTED(nfa->v->re))
-	{
-		NERR(REG_CANCEL);
-		return;
-	}
+	INTERRUPT(nfa->v->re);
 
 	/* check for duplicate arc, using whichever chain is shorter */
 	if (from->nouts <= to->nins)
@@ -777,6 +769,10 @@ sortouts_cmp(const void *a, const void *b)
  * However, if we have a whole lot of arcs to deal with, retail duplicate
  * checks become too slow.  In that case we proceed by sorting and merging
  * the arc lists, and then we can indeed just update the arcs in-place.
+ *
+ * On the other hand, it's also true that this is frequently called with
+ * a brand-new newState that has no existing in-arcs.  In that case,
+ * de-duplication is unnecessary, so we can just blindly move all the arcs.
  */
 static void
 moveins(struct nfa *nfa,
@@ -785,7 +781,18 @@ moveins(struct nfa *nfa,
 {
 	assert(oldState != newState);
 
-	if (!BULK_ARC_OP_USE_SORT(oldState->nins, newState->nins))
+	if (newState->nins == 0)
+	{
+		/* No need for de-duplication */
+		struct arc *a;
+
+		while ((a = oldState->ins) != NULL)
+		{
+			createarc(nfa, a->type, a->co, a->from, newState);
+			freearc(nfa, a);
+		}
+	}
+	else if (!BULK_ARC_OP_USE_SORT(oldState->nins, newState->nins))
 	{
 		/* With not too many arcs, just do them one at a time */
 		struct arc *a;
@@ -810,11 +817,7 @@ moveins(struct nfa *nfa,
 		 * Because we bypass newarc() in this code path, we'd better include a
 		 * cancel check.
 		 */
-		if (CANCEL_REQUESTED(nfa->v->re))
-		{
-			NERR(REG_CANCEL);
-			return;
-		}
+		INTERRUPT(nfa->v->re);
 
 		sortins(nfa, oldState);
 		sortins(nfa, newState);
@@ -869,6 +872,11 @@ moveins(struct nfa *nfa,
 
 /*
  * copyins - copy in arcs of a state to another state
+ *
+ * The comments for moveins() apply here as well.  However, in current
+ * usage, this is *only* called with brand-new target states, so that
+ * only the "no need for de-duplication" code path is ever reached.
+ * We keep the rest #ifdef'd out in case it's needed in the future.
  */
 static void
 copyins(struct nfa *nfa,
@@ -876,8 +884,18 @@ copyins(struct nfa *nfa,
 		struct state *newState)
 {
 	assert(oldState != newState);
+	assert(newState->nins == 0);	/* see comment above */
 
-	if (!BULK_ARC_OP_USE_SORT(oldState->nins, newState->nins))
+	if (newState->nins == 0)
+	{
+		/* No need for de-duplication */
+		struct arc *a;
+
+		for (a = oldState->ins; a != NULL; a = a->inchain)
+			createarc(nfa, a->type, a->co, a->from, newState);
+	}
+#ifdef NOT_USED					/* see comment above */
+	else if (!BULK_ARC_OP_USE_SORT(oldState->nins, newState->nins))
 	{
 		/* With not too many arcs, just do them one at a time */
 		struct arc *a;
@@ -899,11 +917,7 @@ copyins(struct nfa *nfa,
 		 * Because we bypass newarc() in this code path, we'd better include a
 		 * cancel check.
 		 */
-		if (CANCEL_REQUESTED(nfa->v->re))
-		{
-			NERR(REG_CANCEL);
-			return;
-		}
+		INTERRUPT(nfa->v->re);
 
 		sortins(nfa, oldState);
 		sortins(nfa, newState);
@@ -944,6 +958,7 @@ copyins(struct nfa *nfa,
 			createarc(nfa, a->type, a->co, a->from, newState);
 		}
 	}
+#endif							/* NOT_USED */
 }
 
 /*
@@ -969,11 +984,7 @@ mergeins(struct nfa *nfa,
 	 * Because we bypass newarc() in this code path, we'd better include a
 	 * cancel check.
 	 */
-	if (CANCEL_REQUESTED(nfa->v->re))
-	{
-		NERR(REG_CANCEL);
-		return;
-	}
+	INTERRUPT(nfa->v->re);
 
 	/* Sort existing inarcs as well as proposed new ones */
 	sortins(nfa, s);
@@ -1058,7 +1069,18 @@ moveouts(struct nfa *nfa,
 {
 	assert(oldState != newState);
 
-	if (!BULK_ARC_OP_USE_SORT(oldState->nouts, newState->nouts))
+	if (newState->nouts == 0)
+	{
+		/* No need for de-duplication */
+		struct arc *a;
+
+		while ((a = oldState->outs) != NULL)
+		{
+			createarc(nfa, a->type, a->co, newState, a->to);
+			freearc(nfa, a);
+		}
+	}
+	else if (!BULK_ARC_OP_USE_SORT(oldState->nouts, newState->nouts))
 	{
 		/* With not too many arcs, just do them one at a time */
 		struct arc *a;
@@ -1083,11 +1105,7 @@ moveouts(struct nfa *nfa,
 		 * Because we bypass newarc() in this code path, we'd better include a
 		 * cancel check.
 		 */
-		if (CANCEL_REQUESTED(nfa->v->re))
-		{
-			NERR(REG_CANCEL);
-			return;
-		}
+		INTERRUPT(nfa->v->re);
 
 		sortouts(nfa, oldState);
 		sortouts(nfa, newState);
@@ -1142,6 +1160,8 @@ moveouts(struct nfa *nfa,
 
 /*
  * copyouts - copy out arcs of a state to another state
+ *
+ * See comments for copyins()
  */
 static void
 copyouts(struct nfa *nfa,
@@ -1149,8 +1169,18 @@ copyouts(struct nfa *nfa,
 		 struct state *newState)
 {
 	assert(oldState != newState);
+	assert(newState->nouts == 0);	/* see comment above */
 
-	if (!BULK_ARC_OP_USE_SORT(oldState->nouts, newState->nouts))
+	if (newState->nouts == 0)
+	{
+		/* No need for de-duplication */
+		struct arc *a;
+
+		for (a = oldState->outs; a != NULL; a = a->outchain)
+			createarc(nfa, a->type, a->co, newState, a->to);
+	}
+#ifdef NOT_USED					/* see comment above */
+	else if (!BULK_ARC_OP_USE_SORT(oldState->nouts, newState->nouts))
 	{
 		/* With not too many arcs, just do them one at a time */
 		struct arc *a;
@@ -1172,11 +1202,7 @@ copyouts(struct nfa *nfa,
 		 * Because we bypass newarc() in this code path, we'd better include a
 		 * cancel check.
 		 */
-		if (CANCEL_REQUESTED(nfa->v->re))
-		{
-			NERR(REG_CANCEL);
-			return;
-		}
+		INTERRUPT(nfa->v->re);
 
 		sortouts(nfa, oldState);
 		sortouts(nfa, newState);
@@ -1217,6 +1243,7 @@ copyouts(struct nfa *nfa,
 			createarc(nfa, a->type, a->co, newState, a->to);
 		}
 	}
+#endif							/* NOT_USED */
 }
 
 /*
@@ -1435,6 +1462,7 @@ removetraverse(struct nfa *nfa,
 		{
 			case PLAIN:
 			case EMPTY:
+			case CANTMATCH:
 				/* nothing to do */
 				break;
 			case AHEAD:
@@ -1572,6 +1600,12 @@ optimize(struct nfa *nfa,
 	if (verbose)
 		fprintf(f, "\ninitial cleanup:\n");
 #endif
+	/* If we have any CANTMATCH arcs, drop them; but this is uncommon */
+	if (nfa->flags & HASCANTMATCH)
+	{
+		removecantmatch(nfa);
+		nfa->flags &= ~HASCANTMATCH;
+	}
 	cleanup(nfa);				/* may simplify situation */
 #ifdef REG_DEBUG
 	if (verbose)
@@ -1975,6 +2009,7 @@ combine(struct nfa *nfa,
 			else if (a->co == RAINBOW)
 			{
 				/* con is incompatible if it's for a pseudocolor */
+				/* (this is hypothetical; we make no such constraints today) */
 				if (nfa->cm->cd[con->co].flags & PSEUDO)
 					return INCOMPATIBLE;
 				/* otherwise, constraint constrains arc to be only its color */
@@ -2001,6 +2036,7 @@ combine(struct nfa *nfa,
 			else if (a->co == RAINBOW)
 			{
 				/* con is incompatible if it's for a pseudocolor */
+				/* (this is hypothetical; we make no such constraints today) */
 				if (nfa->cm->cd[con->co].flags & PSEUDO)
 					return INCOMPATIBLE;
 				/* otherwise, constraint constrains arc to be only its color */
@@ -2894,6 +2930,34 @@ clonesuccessorstates(struct nfa *nfa,
 }
 
 /*
+ * removecantmatch - remove CANTMATCH arcs, which are no longer useful
+ * once we are done with the parsing phase.  (We need them only to
+ * preserve connectedness of NFA subgraphs during parsing.)
+ */
+static void
+removecantmatch(struct nfa *nfa)
+{
+	struct state *s;
+
+	for (s = nfa->states; s != NULL; s = s->next)
+	{
+		struct arc *a;
+		struct arc *nexta;
+
+		for (a = s->outs; a != NULL; a = nexta)
+		{
+			nexta = a->outchain;
+			if (a->type == CANTMATCH)
+			{
+				freearc(nfa, a);
+				if (NISERR())
+					return;
+			}
+		}
+	}
+}
+
+/*
  * cleanup - clean up NFA after optimizations
  */
 static void
@@ -3225,11 +3289,7 @@ checkmatchall_recurse(struct nfa *nfa, struct state *s, bool **haspaths)
 		return false;
 
 	/* In case the search takes a long time, check for cancel */
-	if (CANCEL_REQUESTED(nfa->v->re))
-	{
-		NERR(REG_CANCEL);
-		return false;
-	}
+	INTERRUPT(nfa->v->re);
 
 	/* Create a haspath array for this state */
 	haspath = (bool *) MALLOC((DUPINF + 2) * sizeof(bool));
@@ -3562,6 +3622,7 @@ carc_cmp(const void *a, const void *b)
 		return -1;
 	if (aa->to > bb->to)
 		return +1;
+	/* This is unreached, since there should be no duplicate arcs now: */
 	return 0;
 }
 
@@ -3601,6 +3662,8 @@ dumpnfa(struct nfa *nfa,
 		fprintf(f, ", eol [%ld]", (long) nfa->eos[1]);
 	if (nfa->flags & HASLACONS)
 		fprintf(f, ", haslacons");
+	if (nfa->flags & HASCANTMATCH)
+		fprintf(f, ", hascantmatch");
 	if (nfa->flags & MATCHALL)
 	{
 		fprintf(f, ", minmatchall %d", nfa->minmatchall);
@@ -3722,6 +3785,9 @@ dumparc(struct arc *a,
 			fprintf(f, "%c%d", a->type, (int) a->co);
 			break;
 		case EMPTY:
+			break;
+		case CANTMATCH:
+			fprintf(f, "X");
 			break;
 		default:
 			fprintf(f, "0x%x/0%lo", a->type, (long) a->co);

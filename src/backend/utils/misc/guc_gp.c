@@ -3013,15 +3013,6 @@ struct config_bool ConfigureNamesBool_gp[] =
 	},
 
 	{
-		{"stats_queue_level", PGC_SUSET, STATS_COLLECTOR,
-			gettext_noop("Collects resource queue-level statistics on database activity."),
-			NULL
-		},
-		&pgstat_collect_queuelevel,
-		false, NULL, NULL
-	},
-
-	{
 		{"create_restartpoint_on_ckpt_record_replay", PGC_SIGHUP, DEVELOPER_OPTIONS,
 			gettext_noop("Creates a restartpoint only on mirror immediately after replaying a checkpoint record."),
 			NULL
@@ -4283,7 +4274,7 @@ struct config_int ConfigureNamesInt_gp[] =
 		{"gp_resqueue_priority_local_interval", PGC_POSTMASTER, RESOURCES_MGM,
 			gettext_noop("A measure of how often a backend process must consider backing off."),
 			NULL,
-			GUC_NO_SHOW_ALL
+			GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE
 		},
 		&gp_resqueue_priority_local_interval,
 		100000, 500, INT_MAX,
@@ -4302,7 +4293,7 @@ struct config_int ConfigureNamesInt_gp[] =
 		{"gp_resqueue_priority_inactivity_timeout", PGC_POSTMASTER, RESOURCES_MGM,
 			gettext_noop("If a backend does not report progress in this time (in ms), it is deemed inactive."),
 			NULL,
-			GUC_NO_SHOW_ALL
+			GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE
 		},
 		&gp_resqueue_priority_inactivity_timeout,
 		2000, 500, INT_MAX,
@@ -4312,7 +4303,7 @@ struct config_int ConfigureNamesInt_gp[] =
 		{"gp_resqueue_priority_grouping_timeout", PGC_POSTMASTER, RESOURCES_MGM,
 			gettext_noop("A backend gives up on finding a better group leader after this timeout (in ms)."),
 			NULL,
-			GUC_NO_SHOW_ALL
+			GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE
 		},
 		&gp_resqueue_priority_grouping_timeout,
 		1000, 1000, INT_MAX,
@@ -4937,7 +4928,7 @@ struct config_string ConfigureNamesString_gp[] =
 		{"gp_resqueue_priority_default_value", PGC_POSTMASTER, RESOURCES_MGM,
 			gettext_noop("Default weight when one cannot be associated with a statement."),
 			NULL,
-			GUC_NO_SHOW_ALL
+			GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE
 		},
 		&gp_resqueue_priority_default_value,
 		"MEDIUM",
@@ -5403,62 +5394,72 @@ static int guc_array_compare(const void *a, const void *b)
 	return guc_name_compare(namea, nameb);
 }
 
-void gpdb_assign_sync_flag(struct config_generic **guc_variables, int size, bool predefine)
+void gpdb_assign_sync_flag_one(struct config_generic *var, bool predefine)
 {
 	static bool init = false;
 	/* ordering guc_name_array alphabets */
 	if (!init) {
 		sync_guc_num = sizeof(sync_guc_names_array) / sizeof(char *);
 		qsort((void *) sync_guc_names_array, sync_guc_num,
-		      sizeof(char *), guc_array_compare);
+			  sizeof(char *), guc_array_compare);
 
 		unsync_guc_num = sizeof(unsync_guc_names_array) / sizeof(char *);
 		qsort((void *) unsync_guc_names_array, unsync_guc_num,
-		      sizeof(char *), guc_array_compare);
+			  sizeof(char *), guc_array_compare);
 
 		init = true;
 	}
 
-	for (int i = 0; i < size; i ++)
+	/* if the sync flags is defined in guc variable, skip it */
+	if (var->flags & (GUC_GPDB_NEED_SYNC | GUC_GPDB_NO_SYNC))
+		return;
+
+	char *res = (char *) bsearch((void *) &var->name,
+								 (void *) sync_guc_names_array,
+								 sync_guc_num,
+								 sizeof(char *),
+								 guc_array_compare);
+	if (!res)
 	{
-		struct config_generic *var = guc_variables[i];
+		res = (char *) bsearch((void *) &var->name,
+									 (void *) unsync_guc_names_array,
+									 unsync_guc_num,
+									 sizeof(char *),
+									 guc_array_compare);
 
-		/* if the sync flags is defined in guc variable, skip it */
-		if (var->flags & (GUC_GPDB_NEED_SYNC | GUC_GPDB_NO_SYNC))
-			continue;
-
-		char *res = (char *) bsearch((void *) &var->name,
-		                             (void *) sync_guc_names_array,
-		                             sync_guc_num,
-		                             sizeof(char *),
-		                             guc_array_compare);
-		if (!res)
+		/* for predefined guc, we force its name in one array.
+		 * for the third-part libraries gucs introduced by customer
+		 * we assign unsync flags as default.
+		 */
+		if (!res && predefine)
 		{
-			char *res = (char *) bsearch((void *) &var->name,
-			                             (void *) unsync_guc_names_array,
-			                             unsync_guc_num,
-			                             sizeof(char *),
-			                             guc_array_compare);
-
-			/* for predefined guc, we force its name in one array.
-			 * for the third-part libraries gucs introduced by customer
-			 * we assign unsync flags as default.
-			 */
-			if (!res && predefine)
-			{
-				ereport(ERROR,
-				        (errcode(ERRCODE_INTERNAL_ERROR),
-						 errmsg("Neither sync_guc_names_array nor "
-								"unsync_guc_names_array contains predefined "
-								"guc name: %s", var->name)));
-			}
-
-			var->flags |= GUC_GPDB_NO_SYNC;
+			ereport(ERROR,
+					(errcode(ERRCODE_INTERNAL_ERROR),
+							errmsg("Neither sync_guc_names_array nor "
+								   "unsync_guc_names_array contains predefined "
+								   "guc name: %s", var->name)));
 		}
-		else
-		{
-			var->flags |= GUC_GPDB_NEED_SYNC;
-		}
+
+		var->flags |= GUC_GPDB_NO_SYNC;
+	}
+	else
+	{
+		var->flags |= GUC_GPDB_NEED_SYNC;
+	}
+}
+
+void gpdb_assign_sync_flag(HTAB *guc_tab)
+{
+	HASH_SEQ_STATUS status;
+	GUCHashEntry *entry;
+
+	hash_seq_init(&status, guc_tab);
+	while((entry = hash_seq_search(&status)) != NULL)
+	{
+		struct config_generic *var;
+
+		var = entry->gucvar;
+		gpdb_assign_sync_flag_one(var, true);
 	}
 }
 
@@ -5621,7 +5622,7 @@ storageOptToString(const StdRdOptions *ao_opts)
 	}
 	appendStringInfo(&buf, "%s=%s", SOPT_CHECKSUM,
 					 ao_opts->checksum ? "true" : "false");
-	ret = strdup(buf.data);
+	ret = guc_strdup(ERROR, buf.data);
 	if (ret == NULL)
 		elog(ERROR, "out of memory");
 	pfree(buf.data);
@@ -5638,12 +5639,14 @@ check_gp_default_storage_options(char **newval, void **extra, GucSource source)
 	/* Value of "appendonly" option if one is specified. */
 	StdRdOptions *newopts;
 
-	newopts = calloc(sizeof(*newopts), 1);
+	newopts = guc_malloc(ERROR, sizeof(*newopts));
 	if (!newopts)
 		ereport(ERROR,
 				(errcode(ERRCODE_OUT_OF_MEMORY),
 				 errmsg("out of memory")));
 
+	memset(newopts, 0, sizeof(*newopts));
+	
 	resetAOStorageOpts(newopts);
 
 	/*
@@ -5664,7 +5667,7 @@ check_gp_default_storage_options(char **newval, void **extra, GucSource source)
 	 * appendonly storage options.
 	 */
 
-	free(*newval);
+	guc_free(*newval);
 	*newval = storageOptToString(newopts);
 	*extra = newopts;
 
@@ -5691,7 +5694,7 @@ assign_gp_default_storage_options(const char *newval, void *extra)
 void
 set_gp_replication_config(const char *name, const char *value)
 {
-	A_Const aconst = {.type = T_A_Const, .val = {.type = T_String, .val.str = pstrdup(value)}};
+	A_Const aconst = {.type = T_A_Const, .val = {.sval = {.type = T_String, .sval = pstrdup(value)}}};
 	List *args = list_make1(&aconst);
 	VariableSetStmt setstmt = {.type = T_VariableSetStmt, .kind = VAR_SET_VALUE, .name = pstrdup(name), .args = args};
 	AlterSystemStmt alterSystemStmt = {.type = T_AlterSystemStmt, .setstmt = &setstmt};

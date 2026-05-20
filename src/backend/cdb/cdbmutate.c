@@ -630,9 +630,6 @@ create_shareinput_producer_rte(ApplyShareInputContext *ctxt, int share_id,
 	rte->inh = false;
 	rte->inFromCl = false;
 
-	rte->requiredPerms = 0;
-	rte->checkAsUser = InvalidOid;
-
 	return rte;
 }
 

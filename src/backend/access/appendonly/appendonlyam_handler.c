@@ -1077,7 +1077,7 @@ static TM_Result
 appendonly_tuple_update(Relation relation, ItemPointer otid, TupleTableSlot *slot,
 					CommandId cid, Snapshot snapshot, Snapshot crosscheck,
 					bool wait, TM_FailureData *tmfd,
-					LockTupleMode *lockmode, bool *update_indexes)
+					LockTupleMode *lockmode, TU_UpdateIndexes *update_indexes)
 {
 	AppendOnlyInsertDesc	insertDesc;
 	AppendOnlyDeleteDesc	deleteDesc;
@@ -1108,9 +1108,9 @@ appendonly_tuple_update(Relation relation, ItemPointer otid, TupleTableSlot *slo
 
 	appendonly_insert(insertDesc, mtuple, (AOTupleId *) &slot->tts_tid);
 
-	pgstat_count_heap_update(relation, false);
+	pgstat_count_heap_update(relation, false, false);
 	/* No HOT updates with AO tables. */
-	*update_indexes = true;
+	*update_indexes = TU_All;
 
 	appendonly_free_memtuple(mtuple);
 
@@ -1176,7 +1176,7 @@ heap_truncate_one_relid(Oid relid)
  */
 static void
 appendonly_relation_set_new_filenode(Relation rel,
-									 const RelFileNode *newrnode,
+									 const RelFileLocator *newrnode,
 									 char persistence,
 									 TransactionId *freezeXid,
 									 MultiXactId *minmulti)
@@ -1196,7 +1196,7 @@ appendonly_relation_set_new_filenode(Relation rel,
 	 *
 	 * Segment files will be created when / if needed.
 	 */
-	srel = RelationCreateStorage(*newrnode, persistence, SMGR_AO, rel);
+	srel = RelationCreateStorage(*newrnode, persistence, true, SMGR_AO, rel);
 
 	/*
 	 * If required, set up an init fork for an unlogged table so that it can
@@ -1242,7 +1242,7 @@ appendonly_relation_nontransactional_truncate(Relation rel)
 }
 
 static void
-appendonly_relation_copy_data(Relation rel, const RelFileNode *newrnode)
+appendonly_relation_copy_data(Relation rel, const RelFileLocator *newrnode)
 {
 	SMgrRelation dstrel;
 
@@ -1251,7 +1251,6 @@ appendonly_relation_copy_data(Relation rel, const RelFileNode *newrnode)
 	 * implementation
 	 */
 	dstrel = smgropen(*newrnode, rel->rd_backend, SMGR_AO, rel);
-	RelationOpenSmgr(rel);
 
 	/*
 	 * Create and copy all forks of the relation, and schedule unlinking of
@@ -1260,9 +1259,10 @@ appendonly_relation_copy_data(Relation rel, const RelFileNode *newrnode)
 	 * NOTE: any conflict in relfilenode value will be caught in
 	 * RelationCreateStorage().
 	 */
-	RelationCreateStorage(*newrnode, rel->rd_rel->relpersistence, SMGR_AO, rel);
+	RelationCreateStorage(*newrnode, rel->rd_rel->relpersistence, SMGR_AO, true, rel);
 
-	copy_append_only_data(rel->rd_node, *newrnode, rel->rd_smgr, dstrel, rel->rd_backend, rel->rd_rel->relpersistence);
+	copy_append_only_data(rel->rd_locator, *newrnode, RelationGetSmgr(rel), dstrel,
+						  rel->rd_backend, rel->rd_rel->relpersistence);
 
 	/*
 	 * For append-optimized tables, no forks other than the main fork should
@@ -2336,7 +2336,7 @@ static const TableAmRoutine ao_row_methods = {
 	.tuple_satisfies_snapshot = appendonly_tuple_satisfies_snapshot,
 	.index_delete_tuples = appendonly_index_delete_tuples,
 
-	.relation_set_new_filenode = appendonly_relation_set_new_filenode,
+	.relation_set_new_filelocator = appendonly_relation_set_new_filenode,
 	.relation_nontransactional_truncate = appendonly_relation_nontransactional_truncate,
 	.relation_copy_data = appendonly_relation_copy_data,
 	.relation_copy_for_cluster = appendonly_relation_copy_for_cluster,

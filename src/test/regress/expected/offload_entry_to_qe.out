@@ -684,7 +684,7 @@ explain (costs off, locus) update tst set x = (select min(x) from tst);
                              Locus: Hashed
    ->  Explicit Redistribute Motion 3:3  (slice1; segments: 3)
          Locus: Hashed
-         ->  Split
+         ->  Split Update
                Locus: Hashed
                ->  Seq Scan on tst
                      Locus: Hashed

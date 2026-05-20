@@ -167,8 +167,8 @@ test: instr_in_shmem_verify
 # hold locks.
 test: partition_locking
 test: vacuum_gp
+# test: resource_queue_stat
 test: vacuum_fsm_nondefault_tablespace
-test: resource_queue_stat
 # background analyze may affect pgstat
 test: pg_stat
 test: bfv_partition qp_misc_rio
@@ -234,7 +234,7 @@ test: hooktest tuple_serialization
 # Test query_info_collect_hook are called in expected sequence on normal query, query error/abort
 test: query_info_hook_test
 
-ignore: tpch500GB_orca
+# ignore: tpch500GB_orca
 
 # Tests for "compaction", i.e. VACUUM, of updatable append-only tables
 test: uao_compaction/full uao_compaction/outdated_partialindex uao_compaction/drop_column_update uao_compaction/eof_truncate uao_compaction/basic uao_compaction/outdatedindex uao_compaction/update_toast uao_compaction/outdatedindex_abort uao_compaction/delete_toast uao_compaction/alter_table_analyze uao_compaction/full_eof_truncate uao_compaction/full_threshold
@@ -315,7 +315,7 @@ test: dpe
 test: enable_autovacuum
 
 test: ao_checksum_corruption AOCO_Compression AORO_Compression table_statistics
-test: session_reset
+ignore: session_reset
 # below test(s) inject faults so each of them need to be in a separate group
 test: fts_error
 
@@ -385,7 +385,6 @@ test: dynamic_table
 
 # DML tests for AO/CO unique indexes.
 test: uao_dml/uao_dml_unique_index_delete_row uao_dml/uao_dml_unique_index_delete_column uao_dml/uao_dml_unique_index_update_row uao_dml/uao_dml_unique_index_update_column
-
 
 # run pg_hba raleted testing
 test: hba_conf

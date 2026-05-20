@@ -3,7 +3,7 @@
  * pg_proc.c
  *	  routines to support manipulation of the pg_proc relation
  *
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -41,6 +41,7 @@
 #include "parser/analyze.h"
 #include "parser/parse_coerce.h"
 #include "parser/parse_type.h"
+#include "pgstat.h"
 #include "rewrite/rewriteHandler.h"
 #include "tcop/pquery.h"
 #include "tcop/tcopprot.h"
@@ -388,7 +389,7 @@ ProcedureCreate(const char *procedureName,
 					(errcode(ERRCODE_DUPLICATE_FUNCTION),
 					 errmsg("function \"%s\" already exists with same argument types",
 							procedureName)));
-		if (!pg_proc_ownercheck(oldproc->oid, proowner))
+		if (!object_ownercheck(ProcedureRelationId, oldproc->oid, proowner))
 			aclcheck_error(ACLCHECK_NOT_OWNER, OBJECT_FUNCTION,
 						   procedureName);
 
@@ -533,10 +534,8 @@ ProcedureCreate(const char *procedureName,
 								 dropcmd,
 								 format_procedure(oldproc->oid))));
 
-			proargdefaults = SysCacheGetAttr(PROCNAMEARGSNSP, oldtup,
-											 Anum_pg_proc_proargdefaults,
-											 &isnull);
-			Assert(!isnull);
+			proargdefaults = SysCacheGetAttrNotNull(PROCNAMEARGSNSP, oldtup,
+													Anum_pg_proc_proargdefaults);
 			oldDefaults = castNode(List, stringToNode(TextDatumGetCString(proargdefaults)));
 			Assert(list_length(oldDefaults) == oldproc->pronargdefaults);
 
@@ -784,6 +783,10 @@ ProcedureCreate(const char *procedureName,
 			AtEOXact_GUC(true, save_nestlevel);
 	}
 
+	/* ensure that stats are dropped if transaction aborts */
+	if (!is_update)
+		pgstat_create_function(retval);
+
 	return myself;
 }
 
@@ -800,7 +803,6 @@ fmgr_internal_validator(PG_FUNCTION_ARGS)
 {
 	Oid			funcoid = PG_GETARG_OID(0);
 	HeapTuple	tuple;
-	bool		isnull;
 	Datum		tmp;
 	char	   *prosrc;
 
@@ -816,9 +818,7 @@ fmgr_internal_validator(PG_FUNCTION_ARGS)
 	if (!HeapTupleIsValid(tuple))
 		elog(ERROR, "cache lookup failed for function %u", funcoid);
 
-	tmp = SysCacheGetAttr(PROCOID, tuple, Anum_pg_proc_prosrc, &isnull);
-	if (isnull)
-		elog(ERROR, "null prosrc");
+	tmp = SysCacheGetAttrNotNull(PROCOID, tuple, Anum_pg_proc_prosrc);
 	prosrc = TextDatumGetCString(tmp);
 
 	if (fmgr_internal_function(prosrc) == InvalidOid)
@@ -847,7 +847,6 @@ fmgr_c_validator(PG_FUNCTION_ARGS)
 	Oid			funcoid = PG_GETARG_OID(0);
 	void	   *libraryhandle;
 	HeapTuple	tuple;
-	bool		isnull;
 	Datum		tmp;
 	char	   *prosrc;
 	char	   *probin;
@@ -865,14 +864,10 @@ fmgr_c_validator(PG_FUNCTION_ARGS)
 	if (!HeapTupleIsValid(tuple))
 		elog(ERROR, "cache lookup failed for function %u", funcoid);
 
-	tmp = SysCacheGetAttr(PROCOID, tuple, Anum_pg_proc_prosrc, &isnull);
-	if (isnull)
-		elog(ERROR, "null prosrc for C function %u", funcoid);
+	tmp = SysCacheGetAttrNotNull(PROCOID, tuple, Anum_pg_proc_prosrc);
 	prosrc = TextDatumGetCString(tmp);
 
-	tmp = SysCacheGetAttr(PROCOID, tuple, Anum_pg_proc_probin, &isnull);
-	if (isnull)
-		elog(ERROR, "null probin for C function %u", funcoid);
+	tmp = SysCacheGetAttrNotNull(PROCOID, tuple, Anum_pg_proc_probin);
 	probin = TextDatumGetCString(tmp);
 
 	(void) load_external_function(probin, prosrc, true, &libraryhandle);
@@ -945,10 +940,7 @@ fmgr_sql_validator(PG_FUNCTION_ARGS)
 	/* Postpone body checks if !check_function_bodies */
 	if (check_function_bodies)
 	{
-		tmp = SysCacheGetAttr(PROCOID, tuple, Anum_pg_proc_prosrc, &isnull);
-		if (isnull)
-			elog(ERROR, "null prosrc");
-
+		tmp = SysCacheGetAttrNotNull(PROCOID, tuple, Anum_pg_proc_prosrc);
 		prosrc = TextDatumGetCString(tmp);
 
 		/*
@@ -1022,7 +1014,7 @@ fmgr_sql_validator(PG_FUNCTION_ARGS)
 					RawStmt    *parsetree = lfirst_node(RawStmt, lc);
 					List	   *querytree_sublist;
 
-					querytree_sublist = pg_analyze_and_rewrite_params(parsetree,
+					querytree_sublist = pg_analyze_and_rewrite_withcb(parsetree,
 																	  prosrc,
 																	  (ParserSetupHook) sql_fn_parser_setup,
 																	  pinfo,
@@ -1042,9 +1034,10 @@ fmgr_sql_validator(PG_FUNCTION_ARGS)
 
 			(void) get_func_result_type(funcoid, &rettype, &rettupdesc);
 
-			(void) check_sql_fn_retval(querytree_list,
-									   rettype, rettupdesc,
-									   false, NULL);
+			(void) check_sql_fn_retval_ext(querytree_list,
+										   rettype, rettupdesc,
+										   proc->prokind,
+										   false, NULL);
 		}
 
 		error_context_stack = sqlerrcontext.previous;
@@ -1263,10 +1256,7 @@ oid_array_to_list(Datum datum)
 	int			i;
 	List	   *result = NIL;
 
-	deconstruct_array(array,
-					  OIDOID,
-					  sizeof(Oid), true, TYPALIGN_INT,
-					  &values, NULL, &nelems);
+	deconstruct_array_builtin(array, OIDOID, &values, NULL, &nelems);
 	for (i = 0; i < nelems; i++)
 		result = lappend_oid(result, values[i]);
 	return result;

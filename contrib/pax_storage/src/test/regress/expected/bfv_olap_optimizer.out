@@ -65,8 +65,7 @@ drop aggregate if exists mysum2(int4);
 NOTICE:  aggregate mysum2(int4) does not exist, skipping
 -- end_ignore
 create table toy(id,val) as select i,i from generate_series(1,5) i;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'id' as the Apache Cloudberry data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause. Creating a NULL policy entry.
 create aggregate mysum1(int4) (sfunc = int4_sum, combinefunc=int8pl, stype=bigint);
 create aggregate mysum2(int4) (sfunc = int4_sum, stype=bigint);
 -- TEST
@@ -94,9 +93,9 @@ drop table if exists toy;
 drop type if exists ema_type cascade;
 NOTICE:  type "ema_type" does not exist, skipping
 drop function if exists ema_adv(t ema_type, v float, x float) cascade;
-ERROR:  type "ema_type" does not exist
+NOTICE:  type "ema_type" does not exist, skipping
 drop function if exists ema_fin(t ema_type) cascade;
-ERROR:  type "ema_type" does not exist
+NOTICE:  type "ema_type" does not exist, skipping
 drop aggregate if exists ema(float, float);
 NOTICE:  aggregate ema(pg_catalog.float8,pg_catalog.float8) does not exist, skipping
 drop table if exists ema_test cascade;
@@ -408,35 +407,37 @@ drop table mpp23240;
 -- Test for the bug reported at https://github.com/greenplum-db/gpdb/issues/2236
 --
 create table test1 (x int, y int, z double precision);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'x' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into test1 select a, b, a*10 + b from generate_series(1, 5) a, generate_series(1, 5) b;
 select sum(z) over (partition by x) as sumx, sum(z) over (partition by y) as sumy from test1;
  sumx | sumy 
 ------+------
-   65 |  155
-   65 |  160
-   65 |  165
-   65 |  170
    65 |  175
-  115 |  155
-  115 |  160
-  115 |  165
-  115 |  170
+  265 |  175
   115 |  175
-  165 |  155
-  165 |  160
-  165 |  165
-  165 |  170
   165 |  175
-  215 |  155
+  215 |  175
+  165 |  160
+  115 |  160
+   65 |  160
+  265 |  160
   215 |  160
+  115 |  165
+   65 |  165
+  265 |  165
+  165 |  165
   215 |  165
   215 |  170
-  215 |  175
-  265 |  155
-  265 |  160
-  265 |  165
+  165 |  170
+   65 |  170
+  115 |  170
   265 |  170
-  265 |  175
+   65 |  155
+  265 |  155
+  115 |  155
+  165 |  155
+  215 |  155
 (25 rows)
 
 drop table test1;
@@ -454,49 +455,219 @@ where g in (
 (1 row)
 
 --
+-- Test to check the query plan for a ROLLUP query.
+--
+explain (costs off) select cn, vn, pn, sum(qty*prc) from sale group by rollup(cn,vn,pn);
+                                     QUERY PLAN                                     
+------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Sequence
+         ->  Shared Scan (share slice:id 1:0)
+               ->  Seq Scan on sale
+         ->  Append
+               ->  GroupAggregate
+                     Group Key: share0_ref2.cn, share0_ref2.vn, share0_ref2.pn
+                     ->  Sort
+                           Sort Key: share0_ref2.cn, share0_ref2.vn, share0_ref2.pn
+                           ->  Shared Scan (share slice:id 1:0)
+               ->  HashAggregate
+                     Group Key: share0_ref3.cn, share0_ref3.vn
+                     ->  Redistribute Motion 3:3  (slice2; segments: 3)
+                           Hash Key: share0_ref3.cn, share0_ref3.vn
+                           ->  Result
+                                 ->  Shared Scan (share slice:id 2:0)
+               ->  HashAggregate
+                     Group Key: share0_ref4.cn
+                     ->  Redistribute Motion 3:3  (slice3; segments: 3)
+                           Hash Key: share0_ref4.cn
+                           ->  Result
+                                 ->  Shared Scan (share slice:id 3:0)
+               ->  Result
+                     ->  Redistribute Motion 1:3  (slice4)
+                           ->  Finalize Aggregate
+                                 ->  Gather Motion 3:1  (slice5; segments: 3)
+                                       ->  Partial Aggregate
+                                             ->  Shared Scan (share slice:id 5:0)
+ Optimizer: GPORCA
+(29 rows)
+
+select cn, vn, pn, sum(qty*prc) from sale group by rollup(cn,vn,pn);
+ cn | vn | pn  |   sum   
+----+----+-----+---------
+  2 | 50 | 400 |       0
+  3 | 30 | 600 |      60
+  4 | 40 | 800 |       1
+  4 | 40 |     |       2
+  3 | 30 |     |     120
+  3 |    |     |     120
+  4 |    |     |       2
+  2 |    |     | 2640000
+  1 | 20 | 100 |       0
+  1 | 30 | 300 |       0
+  1 | 30 | 500 |      60
+  1 | 50 | 400 |       0
+  2 | 40 | 100 | 2640000
+  3 | 40 | 200 |       0
+  4 | 40 | 700 |       1
+  2 | 50 |     |       0
+  1 | 10 |     |       0
+  1 | 50 |     |       0
+  1 | 20 |     |       0
+  1 | 30 |     |      60
+  1 |    |     |      60
+  1 | 10 | 200 |       0
+  3 | 30 | 500 |      60
+  2 | 40 |     | 2640000
+  3 | 40 |     |       0
+    |    |     | 2640182
+(26 rows)
+
+--
 -- This caused a crash in ROLLUP planning at one point.
 --
+EXPLAIN (costs off)
+SELECT sale.vn
+FROM sale,vendor
+WHERE sale.vn=vendor.vn
+GROUP BY ROLLUP( (sale.dt,sale.cn),(sale.pn),(sale.vn));
+                                             QUERY PLAN                                             
+----------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Sequence
+         ->  Shared Scan (share slice:id 1:0)
+               ->  Nested Loop
+                     Join Filter: true
+                     ->  Redistribute Motion 3:3  (slice2; segments: 3)
+                           Hash Key: sale.vn
+                           ->  Seq Scan on sale
+                     ->  Index Only Scan using vendor_pkey on vendor
+                           Index Cond: (vn = sale.vn)
+         ->  Append
+               ->  GroupAggregate
+                     Group Key: share0_ref2.dt, share0_ref2.cn, share0_ref2.pn, share0_ref2.vn
+                     ->  Sort
+                           Sort Key: share0_ref2.dt, share0_ref2.cn, share0_ref2.pn, share0_ref2.vn
+                           ->  Shared Scan (share slice:id 1:0)
+               ->  GroupAggregate
+                     Group Key: share0_ref3.dt, share0_ref3.cn, share0_ref3.pn
+                     ->  Sort
+                           Sort Key: share0_ref3.dt, share0_ref3.cn, share0_ref3.pn
+                           ->  Redistribute Motion 3:3  (slice3; segments: 3)
+                                 Hash Key: share0_ref3.dt, share0_ref3.cn, share0_ref3.pn
+                                 ->  Result
+                                       ->  Shared Scan (share slice:id 3:0)
+               ->  GroupAggregate
+                     Group Key: share0_ref4.dt, share0_ref4.cn
+                     ->  Sort
+                           Sort Key: share0_ref4.dt, share0_ref4.cn
+                           ->  Redistribute Motion 3:3  (slice4; segments: 3)
+                                 Hash Key: share0_ref4.dt, share0_ref4.cn
+                                 ->  Result
+                                       ->  Shared Scan (share slice:id 4:0)
+               ->  Result
+                     ->  Redistribute Motion 1:3  (slice5)
+                           ->  Aggregate
+                                 ->  Gather Motion 3:1  (slice6; segments: 3)
+                                       ->  Result
+                                             ->  Shared Scan (share slice:id 6:0)
+ Optimizer: GPORCA
+(39 rows)
+
 SELECT sale.vn
 FROM sale,vendor
 WHERE sale.vn=vendor.vn
 GROUP BY ROLLUP( (sale.dt,sale.cn),(sale.pn),(sale.vn));
  vn 
 ----
+   
+   
+   
+   
+   
+   
+   
+ 40
+ 40
+ 20
+ 30
+ 50
+ 30
+ 50
+ 30
+ 30
+ 40
  40
    
    
- 20
    
    
- 30
+   
+   
    
    
    
  10
- 40
-   
-   
- 50
-   
-   
- 30
-   
-   
- 40
    
    
    
    
    
-   
- 30
-   
- 50
-   
- 30
- 40
    
 (34 rows)
+
+EXPLAIN (costs off)
+SELECT DISTINCT sale.vn
+FROM sale,vendor
+WHERE sale.vn=vendor.vn
+GROUP BY ROLLUP( (sale.dt,sale.cn),(sale.pn),(sale.vn));
+                                                      QUERY PLAN                                                      
+----------------------------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  GroupAggregate
+         Group Key: share0_ref2.vn
+         ->  Sort
+               Sort Key: share0_ref2.vn
+               ->  Redistribute Motion 3:3  (slice2; segments: 3)
+                     Hash Key: share0_ref2.vn
+                     ->  Sequence
+                           ->  Shared Scan (share slice:id 2:0)
+                                 ->  Nested Loop
+                                       Join Filter: true
+                                       ->  Redistribute Motion 3:3  (slice3; segments: 3)
+                                             Hash Key: sale.vn
+                                             ->  Seq Scan on sale
+                                       ->  Index Only Scan using vendor_pkey on vendor
+                                             Index Cond: (vn = sale.vn)
+                           ->  Append
+                                 ->  GroupAggregate
+                                       Group Key: share0_ref2.dt, share0_ref2.cn, share0_ref2.pn, share0_ref2.vn
+                                       ->  Sort
+                                             Sort Key: share0_ref2.dt, share0_ref2.cn, share0_ref2.pn, share0_ref2.vn
+                                             ->  Shared Scan (share slice:id 2:0)
+                                 ->  GroupAggregate
+                                       Group Key: share0_ref3.dt, share0_ref3.cn, share0_ref3.pn
+                                       ->  Sort
+                                             Sort Key: share0_ref3.dt, share0_ref3.cn, share0_ref3.pn
+                                             ->  Redistribute Motion 3:3  (slice4; segments: 3)
+                                                   Hash Key: share0_ref3.dt, share0_ref3.cn, share0_ref3.pn
+                                                   ->  Result
+                                                         ->  Shared Scan (share slice:id 4:0)
+                                 ->  GroupAggregate
+                                       Group Key: share0_ref4.dt, share0_ref4.cn
+                                       ->  Sort
+                                             Sort Key: share0_ref4.dt, share0_ref4.cn
+                                             ->  Redistribute Motion 3:3  (slice5; segments: 3)
+                                                   Hash Key: share0_ref4.dt, share0_ref4.cn
+                                                   ->  Result
+                                                         ->  Shared Scan (share slice:id 5:0)
+                                 ->  Result
+                                       ->  Redistribute Motion 1:3  (slice6)
+                                             ->  Aggregate
+                                                   ->  Gather Motion 3:1  (slice7; segments: 3)
+                                                         ->  Result
+                                                               ->  Shared Scan (share slice:id 7:0)
+ Optimizer: GPORCA
+(45 rows)
 
 SELECT DISTINCT sale.vn
 FROM sale,vendor
@@ -505,11 +676,11 @@ GROUP BY ROLLUP( (sale.dt,sale.cn),(sale.pn),(sale.vn));
  vn 
 ----
  10
+   
  20
  30
  40
  50
-   
 (6 rows)
 
 --
@@ -523,17 +694,19 @@ GROUP BY ROLLUP( sale.vn);
  vn | rank 
 ----+------
     |    1
- 10 |    1
  20 |    1
  30 |    1
  40 |    1
  50 |    1
+ 10 |    1
 (6 rows)
 
 --
 -- Test window function with constant PARTITION BY
 --
 CREATE TABLE testtab (a int4);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into testtab values (1), (2);
 SELECT count(*) OVER (PARTITION BY 1) AS count FROM testtab;
  count 
@@ -600,17 +773,22 @@ create table t1_github_issue_10143(
   code varchar(5),
   name varchar(60)
 );
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'base_ym' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table t2_github_issue_10143(
   base_ym varchar(6),
   dong varchar(8),
   code varchar(6),
   salary numeric(18)
 );
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'base_ym' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into t1_github_issue_10143 values ('a', 'acode', 'aname');
 insert into t2_github_issue_10143 values ('a', 'adong', 'acode', 1000);
 insert into t2_github_issue_10143 values ('b', 'bdong', 'bcode', 1100);
 analyze t1_github_issue_10143;
 analyze t2_github_issue_10143;
+set optimizer_trace_fallback = on;
 explain select (select name from t1_github_issue_10143 where code = a.code limit 1) as dongnm
 ,sum(sum(a.salary)) over()
 from t2_github_issue_10143 a
@@ -640,8 +818,8 @@ from t2_github_issue_10143 a
 group by a.code;
  dongnm | sum  
 --------+------
- aname  | 2100
         | 2100
+ aname  | 2100
 (2 rows)
 
 select * from (select sum(a.salary) over(), count(*)
@@ -653,7 +831,6 @@ select * from (select sum(a.salary) over(), count(*)
  2100 |     1
 (2 rows)
 
--- this query currently falls back, needs to be fixed
 select (select rn from (select row_number() over () as rn, name
                         from t1_github_issue_10143
                         where code = a.code
@@ -664,13 +841,10 @@ from t2_github_issue_10143 a
 group by a.code;
  dongnm | sum  
 --------+------
-      1 | 2100
         | 2100
+      1 | 2100
 (2 rows)
 
--- start_ignore
--- GPDB_12_MERGE_FIXME: unsupported exec location fallback
--- end_ignore
 with cte as (select row_number() over (order by code) as rn1, code
              from t2_github_issue_10143
              group by code)
@@ -686,7 +860,15 @@ select * from cte;
    2 | bcode
 (3 rows)
 
+reset optimizer_trace_fallback;
 -- CLEANUP
 -- start_ignore
 drop schema bfv_olap cascade;
+NOTICE:  drop cascades to 6 other objects
+DETAIL:  drop cascades to table customer
+drop cascades to table vendor
+drop cascades to table sale
+drop cascades to table testtab
+drop cascades to table t1_github_issue_10143
+drop cascades to table t2_github_issue_10143
 -- end_ignore

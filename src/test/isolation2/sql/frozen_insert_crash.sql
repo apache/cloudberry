@@ -1,9 +1,9 @@
 -- Test server crash in case of frozen insert. Make sure that after crash
 -- recovery, the frozen insert and index are consistent:
--- 
+--
 -- 1. If crash happened before the row is frozen, the row will be invisible;
 -- 2. If crash happened after the row is frozen, the row will be visible.
--- 
+--
 -- And the above behavior should remain consistent using seqscan or indexscan.
 --
 -- We test gp_fastsequence and bitmap here since they do frozen insert and
@@ -162,7 +162,9 @@ $$ LANGUAGE plpgsql;
 1: select gp_inject_fault('fts_probe', 'reset', dbid) from gp_segment_configuration where role='p' and content=-1;
 2<:
 1q:
--- check the lov table content w/ table vs index scan, neither should see the 
+-- wait for segment to complete recovering
+!\retcode bash -c 'for i in $(seq 1 120); do pg_isready -q -p 7002 && exit 0; sleep 0.5; done; exit 1';
+-- check the lov table content w/ table vs index scan, neither should see the
 -- new inserted row (b=2)
 0U: set enable_indexscan = on;
 0U: set enable_seqscan = off;
@@ -198,7 +200,9 @@ $$ LANGUAGE plpgsql;
 1: select gp_inject_fault('fts_probe', 'reset', dbid) from gp_segment_configuration where role='p' and content=-1;
 2<:
 1q:
--- check the lov table content w/ table vs index scan, both should see the 
+-- wait for segment to complete recovering
+!\retcode bash -c 'for i in $(seq 1 120); do pg_isready -q -p 7002 && exit 0; sleep 0.5; done; exit 1';
+-- check the lov table content w/ table vs index scan, both should see the
 -- new inserted row (b=2)
 0U: set enable_indexscan = on;
 0U: set enable_seqscan = off;

@@ -45,6 +45,7 @@ test_check_superuser_connection_limit_error(void **state)
 	am_ftshandler = false;
 
 	expect_value(HaveNFreeProcs, n, RESERVED_FTS_CONNECTIONS);
+	expect_any(HaveNFreeProcs, nfree);
 	will_return(HaveNFreeProcs, false);
 
 	expect_ereport(FATAL);
@@ -69,6 +70,7 @@ test_check_superuser_connection_limit_ok_with_free_procs(void **state)
 	am_ftshandler = false;
 
 	expect_value(HaveNFreeProcs, n, RESERVED_FTS_CONNECTIONS);
+	expect_any(HaveNFreeProcs, nfree);
 	will_return(HaveNFreeProcs, true);
 
 	/*

@@ -19,7 +19,7 @@
 #define CDBBUFFEREDAPPEND_H
 
 #include "storage/fd.h"
-#include "storage/relfilenode.h"
+#include "storage/relfilelocator.h"
 
 typedef struct BufferedAppend
 {
@@ -73,7 +73,7 @@ typedef struct BufferedAppend
 	 * File level members.
 	 */
 	File 				 file;
-	RelFileNodeBackend	relFileNode;
+	RelFileLocatorBackend 	relFileNode;
 	int32				segmentFileNum;
     char				 *filePathName;
     int64                fileLen;
@@ -112,7 +112,7 @@ extern void BufferedAppendInit(
 extern void BufferedAppendSetFile(
     BufferedAppend       *bufferedAppend,
     File 				 file,
-	RelFileNodeBackend	 relfilenode,
+	RelFileLocatorBackend 	 relfilenode,
 	int32				 segmentFileNum,
     char				 *filePathName,
     int64				 eof,

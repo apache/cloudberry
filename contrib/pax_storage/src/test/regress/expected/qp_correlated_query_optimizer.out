@@ -3,6 +3,7 @@
 -- ----------------------------------------------------------------------
 create schema qp_correlated_query;
 set search_path to qp_correlated_query;
+set optimizer_trace_fallback TO on;
 -- ----------------------------------------------------------------------
 -- Test: csq_heap_in.sql (Correlated Subquery: CSQ using IN clause (Heap))
 -- ----------------------------------------------------------------------
@@ -955,6 +956,57 @@ select A.i, B.i, C.j from A, B, C where A.j = all (select C.j from C where C.j =
  1 | -1 | 62
 (10 rows)
 
+-- -- -- --
+-- Test ALL clause with subqueries
+-- -- -- --
+create table qp_csq_all_t1(a int) distributed by (a);
+create table qp_csq_all_t2(b int) distributed by (b);
+insert into qp_csq_all_t1 values (null);
+select * from qp_csq_all_t1 where (select a from qp_csq_all_t1 limit 1) = all(select b from qp_csq_all_t2);
+ a 
+---
+  
+(1 row)
+
+truncate qp_csq_all_t1, qp_csq_all_t2;
+insert into qp_csq_all_t2 values (null);
+select * from qp_csq_all_t1 where (select a from qp_csq_all_t1 limit 1) = all(select b from qp_csq_all_t2);
+ a 
+---
+(0 rows)
+
+truncate qp_csq_all_t1, qp_csq_all_t2;
+insert into qp_csq_all_t1 values (1);
+select * from qp_csq_all_t1 where (select a from qp_csq_all_t1 limit 1) = all(select b from qp_csq_all_t2);
+ a 
+---
+ 1
+(1 row)
+
+truncate qp_csq_all_t1, qp_csq_all_t2;
+insert into qp_csq_all_t2 values (1);
+select * from qp_csq_all_t1 where (select a from qp_csq_all_t1 limit 1) = all(select b from qp_csq_all_t2);
+ a 
+---
+(0 rows)
+
+truncate qp_csq_all_t1, qp_csq_all_t2;
+insert into qp_csq_all_t1 values (1);
+insert into qp_csq_all_t2 values (1);
+select * from qp_csq_all_t1 where (select a from qp_csq_all_t1 limit 1) = all(select b from qp_csq_all_t2);
+ a 
+---
+ 1
+(1 row)
+
+truncate qp_csq_all_t1, qp_csq_all_t2;
+insert into qp_csq_all_t1 values (1);
+insert into qp_csq_all_t2 values (2);
+select * from qp_csq_all_t1 where (select a from qp_csq_all_t1 limit 1) = all(select b from qp_csq_all_t2);
+ a 
+---
+(0 rows)
+
 -- ----------------------------------------------------------------------
 -- Test: Correlated Subquery: CSQ using EXISTS clause (Heap)
 -- ----------------------------------------------------------------------
@@ -1555,6 +1607,8 @@ select * from qp_csq_t4 order by a;
 (4 rows)
 
 update qp_csq_t4 set a = (select y from qp_csq_t2 where x=a) where b < 8;
+INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
+DETAIL:  DXL-to-PlStmt Translation: Attribute number 21 not found in project list
 select * from qp_csq_t4 order by a;
  a  | b 
 ----+---
@@ -1565,6 +1619,8 @@ select * from qp_csq_t4 order by a;
 (4 rows)
 
 update qp_csq_t4 set a = 9999 where qp_csq_t4.a = (select max(x) from qp_csq_t2);
+INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
+DETAIL:  DXL-to-PlStmt Translation: Attribute number 23 not found in project list
 select * from qp_csq_t4 order by a;
   a   | b 
 ------+---
@@ -1575,6 +1631,8 @@ select * from qp_csq_t4 order by a;
 (4 rows)
 
 update qp_csq_t4 set a = (select max(y) from qp_csq_t2 where x=a) where qp_csq_t4.a = (select min(x) from qp_csq_t2);
+INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
+DETAIL:  DXL-to-PlStmt Translation: Attribute number 35 not found in project list
 select * from qp_csq_t4 order by a;
   a   | b 
 ------+---
@@ -1585,6 +1643,8 @@ select * from qp_csq_t4 order by a;
 (4 rows)
 
 update qp_csq_t4 set a = 8888 where (select (y*2)>b from qp_csq_t2 where a=x);
+INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
+DETAIL:  DXL-to-PlStmt Translation: Attribute number 22 not found in project list
 select * from qp_csq_t4 order by a;
   a   | b 
 ------+---
@@ -1595,6 +1655,8 @@ select * from qp_csq_t4 order by a;
 (4 rows)
 
 update qp_csq_t4 set a = 3333 where qp_csq_t4.a in (select x from qp_csq_t2);
+INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
+DETAIL:  DXL-to-PlStmt Translation: Attribute number 25 not found in project list
 select * from qp_csq_t4 order by a;
   a   | b 
 ------+---
@@ -1605,6 +1667,8 @@ select * from qp_csq_t4 order by a;
 (4 rows)
 
 update D set i = 11111 from C where C.i = D.i and exists (select C.j from C,B where C.j = B.j and D.j < 10);
+INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
+DETAIL:  DXL-to-PlStmt Translation: Attribute number 45 not found in project list
 select * from D;
    i   | j  
 -------+----
@@ -1616,13 +1680,15 @@ select * from D;
 (5 rows)
 
 update D set i = 22222 from C where C.i = D.i and not exists (select C.j from C,B where C.j = B.j and D.j < 10);
+INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
+DETAIL:  DXL-to-PlStmt Translation: Attribute number 45 not found in project list
 select * from D;
    i   | j  
 -------+----
+    19 |  5
  11111 |  1
  11111 |  1
  11111 | -1
-    19 |  5
  22222 | 62
 (5 rows)
 
@@ -1771,10 +1837,22 @@ select (select avg(x) from qp_csq_t1, qp_csq_t2 where qp_csq_t1.a = any (select 
  4.0000000000000000
 (4 rows)
 
+-- Planner should fail due to skip-level correlation not supported. Query should not cause segfault like in issue #12054.
+select A.j, (select array_agg(a_B) from (select B.j, (select array_agg(a_C) from (select C.j from C where C.i = A.i) a_C) from B where B.i = A.i order by A.j) a_B) from A;
+INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
+DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: Whole-row variable
+ERROR:  correlated subquery with skip-level correlations is not supported
+-- Planner should fail due to skip-level correlation not supported. Query should not return wrong results like in issue #12054.
+select A.j, (select array_agg(a_B) from (select B.j, (select sum(a_C.j) from (select C.j from C where C.i = A.i) a_C) from B where B.i = A.i order by A.j) a_B) from A;
+INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
+DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: Whole-row variable
+ERROR:  correlated subquery with skip-level correlations is not supported
 -- ----------------------------------------------------------------------
 -- Test: Correlated Subquery: CSQ with multiple columns (Heap)
 -- ----------------------------------------------------------------------
 select A.i, B.i from A, B where (A.i,A.j) = (select min(B.i),min(B.j) from B where B.i = A.i) order by A.i, B.i;
+INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
+DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: Non-Scalar Subquery
  i | i  
 ---+----
  1 | -1
@@ -1792,6 +1870,8 @@ select A.i, B.i from A, B where (A.i,A.j) = (select min(B.i),min(B.j) from B whe
 (12 rows)
 
 select A.i, B.i from A, B where (A.i,A.j) = all(select B.i,B.j from B where B.i = A.i) order by A.i, B.i;
+INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
+DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: Non-Scalar Subquery
  i  | i  
 ----+----
  19 | -1
@@ -1838,6 +1918,8 @@ select A.i, B.i from A, B where not exists (select B.i,B.j from B where B.i = A.
 (18 rows)
 
 select A.i, B.i from A, B where (A.i,A.j) in (select B.i,B.j from B where B.i = A.i) order by A.i, B.i;
+INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
+DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: Non-Scalar Subquery
  i | i  
 ---+----
  1 | -1
@@ -1855,6 +1937,8 @@ select A.i, B.i from A, B where (A.i,A.j) in (select B.i,B.j from B where B.i = 
 (12 rows)
 
 select A.i, B.i,C.i from A, B, C where (A.i,B.i) = any (select A.i, B.i from A,B where A.i = C.i and B.i = C.i) order by A.i, B.i, C.i;
+INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
+DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: Non-Scalar Subquery
  i | i | i 
 ---+---+---
  1 | 1 | 1
@@ -2109,6 +2193,8 @@ select A.i, B.i,C.i from A, B, C where not exists (select A.i, B.i from A,B wher
 (240 rows)
 
 select A.i, B.i,C.i from A, B, C where (A.i,B.i) in (select A.i, B.i from A,B where A.i = C.i and B.i = C.i) order by A.i, B.i, C.i;
+INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
+DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: Non-Scalar Subquery
  i | i | i 
 ---+---+---
  1 | 1 | 1
@@ -2118,6 +2204,8 @@ select A.i, B.i,C.i from A, B, C where (A.i,B.i) in (select A.i, B.i from A,B wh
 (4 rows)
 
 select * from A,B,C where (A.i,B.i) = any (select A.i, B.i from A,B where A.i < C.i and B.i = C.i and C.i not in (select A.i from A where A.j = 1 and A.j = B.j)) order by 1,2,3,4,5,6;
+INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
+DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: Non-Scalar Subquery
  i  | j | i  | j | i  | j  
 ----+---+----+---+----+----
   1 | 1 |  2 | 7 |  2 |  7
@@ -2131,6 +2219,8 @@ select * from A,B,C where (A.i,B.i) = any (select A.i, B.i from A,B where A.i < 
 (8 rows)
 
 select A.i as A_i, B.i as B_i,C.i as C_i from A, B, C where (A.i,B.i) = (select min(A.i), min(B.i) from A,B where A.i = C.i and B.i = C.i) order by A_i, B_i, C_i;
+INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
+DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: Non-Scalar Subquery
  a_i | b_i | c_i 
 -----+-----+-----
    1 |   1 |   1
@@ -2259,6 +2349,8 @@ SELECT id, first_name FROM employee WHERE id IN
 SELECT id, first_name, salary from employee
     where (id, salary) IN
         (SELECT id, MIN(salary) FROM employee GROUP BY id) order by id;
+INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
+DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: Non-Scalar Subquery
  id | first_name | salary  
 ----+------------+---------
  01 | Jason      | 1234.56
@@ -2313,6 +2405,8 @@ analyze product;
 commit;
 UPDATE product SET product_price = product_price * .9 
     where product_name NOT IN (SELECT DISTINCT product_name FROM product_order);
+INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
+DETAIL:  DXL-to-PlStmt Translation: Attribute number 35 not found in project list
 SELECT * FROM  product order by product_name;
  product_name | product_price | quantity_on_hand | last_stock_date 
 --------------+---------------+------------------+-----------------
@@ -3901,8 +3995,121 @@ select * from t1 where 0 < (select count(*) from generate_series(1, a), t1);
 reset optimizer_enforce_subplans;
 DROP TABLE IF EXISTS t1;
 DROP TABLE IF EXISTS supplier;
+--------------------------------------------------------------------------------
+-- Planner should fail due to skip-level correlation not supported. Query should
+-- not cause segfault on ORCA. Currently ORCA is falling back to planner which
+-- is undesired. Github Issue #15693
+--------------------------------------------------------------------------------
+CREATE TABLE skip_correlated_t1 (
+    a INT,
+    b INT
+) DISTRIBUTED BY (a);
+CREATE TABLE skip_correlated_t2 (
+    a INT,
+    b INT
+) DISTRIBUTED BY (a);
+CREATE TABLE skip_correlated_t3 (
+    a INT,
+    b INT
+) DISTRIBUTED BY (a);
+CREATE TABLE skip_correlated_t4 (
+    a INT,
+    b INT
+) DISTRIBUTED BY (a);
+EXPLAIN (COSTS OFF)
+SELECT *
+FROM skip_correlated_t1
+WHERE EXISTS (
+    SELECT skip_correlated_t2.a
+    FROM skip_correlated_t2
+             LEFT JOIN skip_correlated_t3 ON EXISTS (
+        SELECT skip_correlated_t1.b
+        FROM skip_correlated_t2
+    )
+);
+INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
+DETAIL:  Falling back to Postgres-based planner because no plan has been computed for required properties in GPORCA
+ERROR:  correlated subquery with skip-level correlations is not supported
+EXPLAIN (COSTS OFF)
+SELECT *
+FROM skip_correlated_t1
+WHERE EXISTS (
+    SELECT skip_correlated_t2.a
+    FROM skip_correlated_t2
+             LEFT JOIN skip_correlated_t3 ON (
+        EXISTS (
+            SELECT 1
+            FROM skip_correlated_t2
+            WHERE a > skip_correlated_t1.b
+        )
+        )
+);
+INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
+DETAIL:  Falling back to Postgres-based planner because no plan has been computed for required properties in GPORCA
+ERROR:  correlated subquery with skip-level correlations is not supported
+EXPLAIN (COSTS OFF)
+SELECT *
+FROM skip_correlated_t1
+WHERE EXISTS (
+    SELECT skip_correlated_t2.a
+    FROM skip_correlated_t2
+             INNER JOIN skip_correlated_t3 ON skip_correlated_t2.a = skip_correlated_t3.a
+             LEFT JOIN skip_correlated_t4 ON (
+        EXISTS (
+            SELECT skip_correlated_t1.b
+            FROM skip_correlated_t2
+        )
+        )
+);
+INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
+DETAIL:  Falling back to Postgres-based planner because no plan has been computed for required properties in GPORCA
+ERROR:  correlated subquery with skip-level correlations is not supported
+--------------------------------------------------------------------------------
+-- Query should not cause segfault on ORCA. Will fallback to planner as no plan
+-- is computed by ORCA. Github Issue #15693
+--------------------------------------------------------------------------------
+EXPLAIN (COSTS OFF)
+SELECT *
+FROM skip_correlated_t1
+WHERE EXISTS (
+    SELECT skip_correlated_t2.a
+    FROM skip_correlated_t2
+             LEFT JOIN skip_correlated_t3 ON skip_correlated_t3.a = ALL (
+        SELECT skip_correlated_t1.a
+        FROM skip_correlated_t2
+    )
+);
+INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
+DETAIL:  Falling back to Postgres-based planner because no plan has been computed for required properties in GPORCA
+                                           QUERY PLAN                                            
+-------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Seq Scan on skip_correlated_t1
+         Filter: (SubPlan 1)
+         SubPlan 1
+           ->  Nested Loop Left Join
+                 ->  Materialize
+                       ->  Broadcast Motion 3:3  (slice2; segments: 3)
+                             ->  Seq Scan on skip_correlated_t2
+                 ->  Materialize
+                       ->  Nested Loop Left Anti Semi (Not-In) Join
+                             Join Filter: (skip_correlated_t3.a <> skip_correlated_t1.a)
+                             ->  Materialize
+                                   ->  Broadcast Motion 3:3  (slice3; segments: 3)
+                                         ->  Seq Scan on skip_correlated_t3
+                             ->  Materialize
+                                   ->  Broadcast Motion 3:3  (slice4; segments: 3)
+                                         ->  Seq Scan on skip_correlated_t2 skip_correlated_t2_1
+ Optimizer: Postgres query optimizer
+(18 rows)
+
+DROP TABLE skip_correlated_t1;
+DROP TABLE skip_correlated_t2;
+DROP TABLE skip_correlated_t3;
+DROP TABLE skip_correlated_t4;
 -- ----------------------------------------------------------------------
 -- Test: teardown.sql
 -- ----------------------------------------------------------------------
 set client_min_messages='warning';
 drop schema qp_correlated_query cascade;
+reset optimizer_trace_fallback;

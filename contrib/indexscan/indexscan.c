@@ -114,7 +114,7 @@ readindextuple(readindexinfo *info, Relation irel, Relation hrel, Datum *values,
 
 	if (hrel != NULL)
 	{
-		if (heap_fetch(hrel, SnapshotAny, &htup, &hbuf))
+		if (heap_fetch(hrel, SnapshotAny, &htup, &hbuf, false))
 			values[4] = PointerGetDatum(hstatus_text(htup.t_data, true));
 		else if (htup.t_data)
 			values[4] = PointerGetDatum(hstatus_text(htup.t_data, false));

@@ -6,7 +6,7 @@ NOTICE:  table "my_tq_agg_small" does not exist, skipping
 drop index if exists my_tt_agg_small_event_ts_ix;
 NOTICE:  index "my_tt_agg_small_event_ts_ix" does not exist, skipping
 --
--- Cloudberry Database database dump
+-- Apache Cloudberry database dump
 --
 SET client_encoding = 'UTF8';
 SET standard_conforming_strings = off;

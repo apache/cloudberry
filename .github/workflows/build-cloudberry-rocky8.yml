@@ -103,12 +103,12 @@ name: Apache Cloudberry Build (Rocky 8)
 
 on:
   push:
-    branches: [main, REL_2_STABLE]
+    branches: [main, cbdb-postgres-merge]
   pull_request:
     paths:
       - '.github/workflows/build-cloudberry-rocky8.yml'
     # We can enable the PR test when needed
-    # branches: [main, REL_2_STABLE]
+    # branches: [main, cbdb-postgres-merge]
     # types: [opened, synchronize, reopened, edited]
   schedule:
     # Run every Monday at 02:00 UTC

@@ -93,7 +93,7 @@ from generate_series(0, 99) i;
 alter table vactst drop column b;
 vacuum analyze vactst;
 alter table vactst drop column i;
-NOTICE:  dropping a column that is part of the distribution policy forces a NULL distribution policy
+NOTICE:  dropping a column that is part of the distribution policy forces a random distribution policy
 vacuum analyze vactst;
 drop table vactst;
 -- vacuum analyze a table whose index has pg_statistic stats
@@ -402,8 +402,38 @@ select datname, pg_column_size(datacl) > 8192 as datacl_size, age(datfrozenxid) 
 DROP DATABASE vacuum_freeze_test;
 -- start_ignore
 select clean_roles();
+ clean_roles 
+ ok
+-------------
+(1 row)
+
 drop function toast_pg_database_datacl();
 drop function clean_roles();
 -- end_ignore
 -- free pg_global space, otherwise it fails db_size_functions
 VACUUM FULL pg_authid, pg_database;
+-- Multiple VACUUM commands run on a table should not distort the values of reltuples.
+CREATE TABLE vac_reltuple_distortion(a int) DISTRIBUTED BY (a);
+INSERT INTO vac_reltuple_distortion SELECT generate_series(1, 1000000);
+ANALYZE vac_reltuple_distortion;
+SELECT reltuples, relname FROM pg_class WHERE oid='vac_reltuple_distortion'::regclass;
+ reltuples |         relname         
+-----------+-------------------------
+     1e+06 | vac_reltuple_distortion
+(1 row)
+
+VACUUM vac_reltuple_distortion;
+VACUUM vac_reltuple_distortion; -- 2nd call to VACUUM after ANALYZE
+SELECT reltuples, relname FROM pg_class WHERE oid='vac_reltuple_distortion'::regclass;
+ reltuples |         relname         
+-----------+-------------------------
+     1e+06 | vac_reltuple_distortion
+(1 row)
+
+VACUUM vac_reltuple_distortion;
+SELECT reltuples, relname FROM pg_class WHERE oid='vac_reltuple_distortion'::regclass;
+ reltuples |         relname         
+-----------+-------------------------
+     1e+06 | vac_reltuple_distortion
+(1 row)
+

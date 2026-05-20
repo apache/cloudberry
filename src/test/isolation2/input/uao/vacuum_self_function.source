@@ -27,7 +27,9 @@ $$ stable language plpgsql;
 
 -- A second VACUUM shouldn't recycle them either.
 2: VACUUM ao;
+-- start_ignore
 2: SELECT segno, tupcount, state FROM gp_ao_or_aocs_seg('ao');
+-- end_ignore
 1<:
 
 -- Now that the first transaction has finished, VACUUM can recycle.

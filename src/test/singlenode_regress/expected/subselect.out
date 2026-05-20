@@ -1114,7 +1114,8 @@ where o.ten = 0;
                      SubPlan 1
                        ->  Seq Scan on public.int4_tbl
                              Output: int4_tbl.f1
-                             Filter: (int4_tbl.f1 <= $0)
+                             Filter: (int4_tbl.f1 <= o.hundred)
+ Settings: optimizer = 'off'
  Optimizer: Postgres query optimizer
 (17 rows)
 

@@ -237,8 +237,7 @@ CMappingVarColId::Load(ULONG query_level, ULONG RTE_index,
 	// add mapping information for columns
 	ForEach(col_name, col_names)
 	{
-		Value *value = (Value *) lfirst(col_name);
-		CHAR *col_name_char_array = strVal(value);
+		CHAR *col_name_char_array = strVal(lfirst(col_name));
 
 		CWStringDynamic *column_name =
 			CDXLUtils::CreateDynamicStringFromCharArray(m_mp,

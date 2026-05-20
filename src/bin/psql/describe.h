@@ -1,7 +1,7 @@
 /*
  * psql - the PostgreSQL interactive terminal
  *
- * Copyright (c) 2000-2021, PostgreSQL Global Development Group
+ * Copyright (c) 2000-2023, PostgreSQL Global Development Group
  *
  * src/bin/psql/describe.h
  */
@@ -37,8 +37,11 @@ extern bool describeRoles(const char *pattern, bool verbose, bool showSystem);
 /* \drds */
 extern bool listDbRoleSettings(const char *pattern, const char *pattern2);
 
+/* \drg */
+extern bool describeRoleGrants(const char *pattern, bool showSystem);
+
 /* \z (or \dp) */
-extern bool permissionsList(const char *pattern);
+extern bool permissionsList(const char *pattern, bool showSystem);
 
 /* \ddp */
 extern bool listDefaultACLs(const char *pattern);
@@ -88,6 +91,10 @@ extern bool listDomains(const char *pattern, bool verbose, bool showSystem);
 /* \dc */
 extern bool listConversions(const char *pattern, bool verbose, bool showSystem);
 
+/* \dconfig */
+extern bool describeConfigurationParameters(const char *pattern, bool verbose,
+											bool showSystem);
+
 /* \dC */
 extern bool listCasts(const char *pattern, bool verbose);
 
@@ -135,21 +142,23 @@ bool		describeSubscriptions(const char *pattern, bool verbose);
 
 /* \dAc */
 extern bool listOperatorClasses(const char *access_method_pattern,
-								const char *opclass_pattern,
+								const char *type_pattern,
 								bool verbose);
 
 /* \dAf */
 extern bool listOperatorFamilies(const char *access_method_pattern,
-								 const char *opclass_pattern,
+								 const char *type_pattern,
 								 bool verbose);
 
 /* \dAo */
-extern bool listOpFamilyOperators(const char *accessMethod_pattern,
+extern bool listOpFamilyOperators(const char *access_method_pattern,
 								  const char *family_pattern, bool verbose);
 
 /* \dAp */
 extern bool listOpFamilyFunctions(const char *access_method_pattern,
 								  const char *family_pattern, bool verbose);
 
+/* \dl or \lo_list */
+extern bool listLargeObjects(bool verbose);
 
 #endif							/* DESCRIBE_H */

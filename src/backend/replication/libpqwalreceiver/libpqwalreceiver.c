@@ -6,7 +6,7 @@
  * loaded as a dynamic module to avoid linking the main server binary with
  * libpq.
  *
- * Portions Copyright (c) 2010-2021, PostgreSQL Global Development Group
+ * Portions Copyright (c) 2010-2023, PostgreSQL Global Development Group
  *
  *
  * IDENTIFICATION
@@ -56,9 +56,10 @@ struct WalReceiverConn
 
 /* Prototypes for interface functions */
 static WalReceiverConn *libpqrcv_connect(const char *conninfo,
-										 bool logical, const char *appname,
-										 char **err);
-static void libpqrcv_check_conninfo(const char *conninfo);
+										 bool logical, bool must_use_password,
+										 const char *appname, char **err);
+static void libpqrcv_check_conninfo(const char *conninfo,
+									bool must_use_password);
 static char *libpqrcv_get_conninfo(WalReceiverConn *conn);
 static void libpqrcv_get_senderinfo(WalReceiverConn *conn,
 									char **sender_host, int *sender_port);
@@ -79,6 +80,7 @@ static void libpqrcv_send(WalReceiverConn *conn, const char *buffer,
 static char *libpqrcv_create_slot(WalReceiverConn *conn,
 								  const char *slotname,
 								  bool temporary,
+								  bool two_phase,
 								  CRSSnapshotAction snapshot_action,
 								  XLogRecPtr *lsn);
 static pid_t libpqrcv_get_backend_pid(WalReceiverConn *conn);
@@ -89,21 +91,21 @@ static WalRcvExecResult *libpqrcv_exec(WalReceiverConn *conn,
 static void libpqrcv_disconnect(WalReceiverConn *conn);
 
 static WalReceiverFunctionsType PQWalReceiverFunctions = {
-	libpqrcv_connect,
-	libpqrcv_check_conninfo,
-	libpqrcv_get_conninfo,
-	libpqrcv_get_senderinfo,
-	libpqrcv_identify_system,
-	libpqrcv_server_version,
-	libpqrcv_readtimelinehistoryfile,
-	libpqrcv_startstreaming,
-	libpqrcv_endstreaming,
-	libpqrcv_receive,
-	libpqrcv_send,
-	libpqrcv_create_slot,
-	libpqrcv_get_backend_pid,
-	libpqrcv_exec,
-	libpqrcv_disconnect
+	.walrcv_connect = libpqrcv_connect,
+	.walrcv_check_conninfo = libpqrcv_check_conninfo,
+	.walrcv_get_conninfo = libpqrcv_get_conninfo,
+	.walrcv_get_senderinfo = libpqrcv_get_senderinfo,
+	.walrcv_identify_system = libpqrcv_identify_system,
+	.walrcv_server_version = libpqrcv_server_version,
+	.walrcv_readtimelinehistoryfile = libpqrcv_readtimelinehistoryfile,
+	.walrcv_startstreaming = libpqrcv_startstreaming,
+	.walrcv_endstreaming = libpqrcv_endstreaming,
+	.walrcv_receive = libpqrcv_receive,
+	.walrcv_send = libpqrcv_send,
+	.walrcv_create_slot = libpqrcv_create_slot,
+	.walrcv_get_backend_pid = libpqrcv_get_backend_pid,
+	.walrcv_exec = libpqrcv_exec,
+	.walrcv_disconnect = libpqrcv_disconnect
 };
 
 /* Prototypes for private functions */
@@ -125,17 +127,32 @@ libpqwalreceiver_PG_init(void)
 /*
  * Establish the connection to the primary server for XLOG streaming
  *
- * Returns NULL on error and fills the err with palloc'ed error message.
+ * If an error occurs, this function will normally return NULL and set *err
+ * to a palloc'ed error message. However, if must_use_password is true and
+ * the connection fails to use the password, this function will ereport(ERROR).
+ * We do this because in that case the error includes a detail and a hint for
+ * consistency with other parts of the system, and it's not worth adding the
+ * machinery to pass all of those back to the caller just to cover this one
+ * case.
  */
 static WalReceiverConn *
-libpqrcv_connect(const char *conninfo, bool logical, const char *appname,
-				 char **err)
+libpqrcv_connect(const char *conninfo, bool logical, bool must_use_password,
+				 const char *appname, char **err)
 {
 	WalReceiverConn *conn;
 	PostgresPollingStatusType status;
-	const char *keys[5];
-	const char *vals[5];
+	const char *keys[6];
+	const char *vals[6];
 	int			i = 0;
+
+	/*
+	 * Re-validate connection string. The validation already happened at DDL
+	 * time, but the subscription owner may have changed. If we don't recheck
+	 * with the correct must_use_password, it's possible that the connection
+	 * will obtain the password from a different source, such as PGPASSFILE or
+	 * PGPASSWORD.
+	 */
+	libpqrcv_check_conninfo(conninfo, must_use_password);
 
 	/*
 	 * We use the expand_dbname parameter to process the connection string (or
@@ -158,8 +175,20 @@ libpqrcv_connect(const char *conninfo, bool logical, const char *appname,
 	vals[i] = appname;
 	if (logical)
 	{
+		/* Tell the publisher to translate to our encoding */
 		keys[++i] = "client_encoding";
 		vals[i] = GetDatabaseEncodingName();
+
+		/*
+		 * Force assorted GUC parameters to settings that ensure that the
+		 * publisher will output data values in a form that is unambiguous to
+		 * the subscriber.  (We don't want to modify the subscriber's GUC
+		 * settings, since that might surprise user-defined code running in
+		 * the subscriber, such as triggers.)  This should match what pg_dump
+		 * does.
+		 */
+		keys[++i] = "options";
+		vals[i] = "-c datestyle=ISO -c intervalstyle=postgres -c extra_float_digits=3";
 	}
 	keys[++i] = NULL;
 	vals[i] = NULL;
@@ -170,10 +199,7 @@ libpqrcv_connect(const char *conninfo, bool logical, const char *appname,
 	conn->streamConn = PQconnectStartParams(keys, vals,
 											 /* expand_dbname = */ true);
 	if (PQstatus(conn->streamConn) == CONNECTION_BAD)
-	{
-		*err = pchomp(PQerrorMessage(conn->streamConn));
-		return NULL;
-	}
+		goto bad_connection_errmsg;
 
 	/*
 	 * Poll connection until we have OK or FAILED status.
@@ -215,9 +241,18 @@ libpqrcv_connect(const char *conninfo, bool logical, const char *appname,
 	} while (status != PGRES_POLLING_OK && status != PGRES_POLLING_FAILED);
 
 	if (PQstatus(conn->streamConn) != CONNECTION_OK)
+		goto bad_connection_errmsg;
+
+	if (must_use_password && !PQconnectionUsedPassword(conn->streamConn))
 	{
-		*err = pchomp(PQerrorMessage(conn->streamConn));
-		return NULL;
+		PQfinish(conn->streamConn);
+		pfree(conn);
+
+		ereport(ERROR,
+				(errcode(ERRCODE_S_R_E_PROHIBITED_SQL_STATEMENT_ATTEMPTED),
+				 errmsg("password is required"),
+				 errdetail("Non-superuser cannot connect if the server does not request a password."),
+				 errhint("Target server's authentication method must be changed, or set password_required=false in the subscription parameters.")));
 	}
 
 	if (logical)
@@ -229,9 +264,9 @@ libpqrcv_connect(const char *conninfo, bool logical, const char *appname,
 		if (PQresultStatus(res) != PGRES_TUPLES_OK)
 		{
 			PQclear(res);
-			ereport(ERROR,
-					(errmsg("could not clear search path: %s",
-							pchomp(PQerrorMessage(conn->streamConn)))));
+			*err = psprintf(_("could not clear search path: %s"),
+							pchomp(PQerrorMessage(conn->streamConn)));
+			goto bad_connection;
 		}
 		PQclear(res);
 	}
@@ -239,15 +274,31 @@ libpqrcv_connect(const char *conninfo, bool logical, const char *appname,
 	conn->logical = logical;
 
 	return conn;
+
+	/* error path, using libpq's error message */
+bad_connection_errmsg:
+	*err = pchomp(PQerrorMessage(conn->streamConn));
+
+	/* error path, error already set */
+bad_connection:
+	PQfinish(conn->streamConn);
+	pfree(conn);
+	return NULL;
 }
 
 /*
- * Validate connection info string (just try to parse it)
+ * Validate connection info string, and determine whether it might cause
+ * local filesystem access to be attempted.
+ *
+ * If the connection string can't be parsed, this function will raise
+ * an error and will not return. If it can, it will return true if this
+ * connection string specifies a password and false otherwise.
  */
 static void
-libpqrcv_check_conninfo(const char *conninfo)
+libpqrcv_check_conninfo(const char *conninfo, bool must_use_password)
 {
 	PQconninfoOption *opts = NULL;
+	PQconninfoOption *opt;
 	char	   *err = NULL;
 
 	opts = PQconninfoParse(conninfo, &err);
@@ -260,6 +311,35 @@ libpqrcv_check_conninfo(const char *conninfo)
 		ereport(ERROR,
 				(errcode(ERRCODE_SYNTAX_ERROR),
 				 errmsg("invalid connection string syntax: %s", errcopy)));
+	}
+
+	if (must_use_password)
+	{
+		bool		uses_password = false;
+
+		for (opt = opts; opt->keyword != NULL; ++opt)
+		{
+			/* Ignore connection options that are not present. */
+			if (opt->val == NULL)
+				continue;
+
+			if (strcmp(opt->keyword, "password") == 0 && opt->val[0] != '\0')
+			{
+				uses_password = true;
+				break;
+			}
+		}
+
+		if (!uses_password)
+		{
+			/* malloc'd, so we must free it explicitly */
+			PQconninfoFree(opts);
+
+			ereport(ERROR,
+					(errcode(ERRCODE_S_R_E_PROHIBITED_SQL_STATEMENT_ATTEMPTED),
+					 errmsg("password is required"),
+					 errdetail("Non-superusers must provide a password in the connection string.")));
+		}
 	}
 
 	PQconninfoFree(opts);
@@ -362,6 +442,10 @@ libpqrcv_identify_system(WalReceiverConn *conn, TimeLineID *primary_tli)
 						"the primary server: %s",
 						pchomp(PQerrorMessage(conn->streamConn)))));
 	}
+	/*
+	 * IDENTIFY_SYSTEM returns 3 columns in 9.3 and earlier, and 4 columns in
+	 * 9.4 and onwards.
+	 */
 	if (PQnfields(res) < 3 || PQntuples(res) != 1)
 	{
 		int			ntuples = PQntuples(res);
@@ -372,7 +456,7 @@ libpqrcv_identify_system(WalReceiverConn *conn, TimeLineID *primary_tli)
 				(errcode(ERRCODE_PROTOCOL_VIOLATION),
 				 errmsg("invalid response from primary server"),
 				 errdetail("Could not identify system: got %d rows and %d fields, expected %d rows and %d or more fields.",
-						   ntuples, nfields, 3, 1)));
+						   ntuples, nfields, 1, 3)));
 	}
 	primary_sysid = pstrdup(PQgetvalue(res, 0, 0));
 	*primary_tli = pg_strtoint32(PQgetvalue(res, 0, 1));
@@ -438,9 +522,18 @@ libpqrcv_startstreaming(WalReceiverConn *conn,
 		appendStringInfo(&cmd, "proto_version '%u'",
 						 options->proto.logical.proto_version);
 
-		if (options->proto.logical.streaming &&
-			PQserverVersion(conn->streamConn) >= 140000)
-			appendStringInfoString(&cmd, ", streaming 'on'");
+		if (options->proto.logical.streaming_str)
+			appendStringInfo(&cmd, ", streaming '%s'",
+							 options->proto.logical.streaming_str);
+
+		if (options->proto.logical.twophase &&
+			PQserverVersion(conn->streamConn) >= 150000)
+			appendStringInfoString(&cmd, ", two_phase 'on'");
+
+		if (options->proto.logical.origin &&
+			PQserverVersion(conn->streamConn) >= 160000)
+			appendStringInfo(&cmd, ", origin '%s'",
+							 options->proto.logical.origin);
 
 		pubnames = options->proto.logical.publication_names;
 		pubnames_str = stringlist_to_identifierstr(conn->streamConn, pubnames);
@@ -620,12 +713,9 @@ libpqrcv_readtimelinehistoryfile(WalReceiverConn *conn,
  * Send a query and wait for the results by using the asynchronous libpq
  * functions and socket readiness events.
  *
- * We must not use the regular blocking libpq functions like PQexec()
- * since they are uninterruptible by signals on some platforms, such as
- * Windows.
- *
- * The function is modeled on PQexec() in libpq, but only implements
- * those parts that are in use in the walreceiver api.
+ * The function is modeled on libpqsrv_exec(), with the behavior difference
+ * being that it calls ProcessWalRcvInterrupts().  As an optimization, it
+ * skips try/catch, since all errors terminate the process.
  *
  * May return NULL, rather than an error result, on failure.
  */
@@ -727,8 +817,7 @@ static void
 libpqrcv_disconnect(WalReceiverConn *conn)
 {
 	PQfinish(conn->streamConn);
-	if (conn->recvBuf != NULL)
-		PQfreemem(conn->recvBuf);
+	PQfreemem(conn->recvBuf);
 	pfree(conn);
 }
 
@@ -754,8 +843,7 @@ libpqrcv_receive(WalReceiverConn *conn, char **buffer,
 {
 	int			rawlen;
 
-	if (conn->recvBuf != NULL)
-		PQfreemem(conn->recvBuf);
+	PQfreemem(conn->recvBuf);
 	conn->recvBuf = NULL;
 
 	/* Try to receive a CopyData message */
@@ -857,12 +945,15 @@ libpqrcv_send(WalReceiverConn *conn, const char *buffer, int nbytes)
  */
 static char *
 libpqrcv_create_slot(WalReceiverConn *conn, const char *slotname,
-					 bool temporary, CRSSnapshotAction snapshot_action,
+					 bool temporary, bool two_phase, CRSSnapshotAction snapshot_action,
 					 XLogRecPtr *lsn)
 {
 	PGresult   *res;
 	StringInfoData cmd;
 	char	   *snapshot;
+	int			use_new_options_syntax;
+
+	use_new_options_syntax = (PQserverVersion(conn->streamConn) >= 150000);
 
 	initStringInfo(&cmd);
 
@@ -873,23 +964,58 @@ libpqrcv_create_slot(WalReceiverConn *conn, const char *slotname,
 
 	if (conn->logical)
 	{
-		appendStringInfoString(&cmd, " LOGICAL pgoutput");
-		switch (snapshot_action)
+		appendStringInfoString(&cmd, " LOGICAL pgoutput ");
+		if (use_new_options_syntax)
+			appendStringInfoChar(&cmd, '(');
+		if (two_phase)
 		{
-			case CRS_EXPORT_SNAPSHOT:
-				appendStringInfoString(&cmd, " EXPORT_SNAPSHOT");
-				break;
-			case CRS_NOEXPORT_SNAPSHOT:
-				appendStringInfoString(&cmd, " NOEXPORT_SNAPSHOT");
-				break;
-			case CRS_USE_SNAPSHOT:
-				appendStringInfoString(&cmd, " USE_SNAPSHOT");
-				break;
+			appendStringInfoString(&cmd, "TWO_PHASE");
+			if (use_new_options_syntax)
+				appendStringInfoString(&cmd, ", ");
+			else
+				appendStringInfoChar(&cmd, ' ');
 		}
+
+		if (use_new_options_syntax)
+		{
+			switch (snapshot_action)
+			{
+				case CRS_EXPORT_SNAPSHOT:
+					appendStringInfoString(&cmd, "SNAPSHOT 'export'");
+					break;
+				case CRS_NOEXPORT_SNAPSHOT:
+					appendStringInfoString(&cmd, "SNAPSHOT 'nothing'");
+					break;
+				case CRS_USE_SNAPSHOT:
+					appendStringInfoString(&cmd, "SNAPSHOT 'use'");
+					break;
+			}
+		}
+		else
+		{
+			switch (snapshot_action)
+			{
+				case CRS_EXPORT_SNAPSHOT:
+					appendStringInfoString(&cmd, "EXPORT_SNAPSHOT");
+					break;
+				case CRS_NOEXPORT_SNAPSHOT:
+					appendStringInfoString(&cmd, "NOEXPORT_SNAPSHOT");
+					break;
+				case CRS_USE_SNAPSHOT:
+					appendStringInfoString(&cmd, "USE_SNAPSHOT");
+					break;
+			}
+		}
+
+		if (use_new_options_syntax)
+			appendStringInfoChar(&cmd, ')');
 	}
 	else
 	{
-		appendStringInfoString(&cmd, " PHYSICAL RESERVE_WAL");
+		if (use_new_options_syntax)
+			appendStringInfoString(&cmd, " PHYSICAL (RESERVE_WAL)");
+		else
+			appendStringInfoString(&cmd, " PHYSICAL RESERVE_WAL");
 	}
 
 	res = libpqrcv_PQexec(conn->streamConn, cmd.data);

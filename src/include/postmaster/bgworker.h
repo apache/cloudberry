@@ -31,7 +31,7 @@
  * different) code.
  *
  *
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * IDENTIFICATION
@@ -48,6 +48,7 @@
 
 /*
  * Pass this flag to have your worker be able to connect to shared memory.
+ * This flag is required.
  */
 #define BGWORKER_SHMEM_ACCESS						0x0001
 
@@ -128,7 +129,7 @@ extern bool RegisterDynamicBackgroundWorker(BackgroundWorker *worker,
 extern BgwHandleStatus GetBackgroundWorkerPid(BackgroundWorkerHandle *handle,
 											  pid_t *pidp);
 
-extern BgwHandleStatus WaitForBackgroundWorkerStartup(BackgroundWorkerHandle *handle, pid_t *pid);
+extern BgwHandleStatus WaitForBackgroundWorkerStartup(BackgroundWorkerHandle *handle, pid_t *pidp);
 extern BgwHandleStatus
 			WaitForBackgroundWorkerShutdown(BackgroundWorkerHandle *);
 extern const char *GetBackgroundWorkerTypeByPid(pid_t pid);

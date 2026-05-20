@@ -283,7 +283,7 @@ c2.parent = p.i WHERE c1.j = c2.k GROUP BY p.i;
                      Sort Key: p.i
                      ->  Nested Loop
                            Output: p.i, c1.v, c2.v
-                           Join Filter: (c1.parent = p.i)
+                           Join Filter: (p.i = c1.parent)
                            ->  Broadcast Motion 3:3  (slice2; segments: 3)
                                  Output: p.i
                                  ->  Seq Scan on public.agg_pushdown_parent p
@@ -323,7 +323,7 @@ c2.parent = p.i WHERE c1.j = c2.k GROUP BY p.i;
                      Hash Key: p.i
                      ->  Nested Loop
                            Output: p.i, (PARTIAL avg((c1.v + c2.v)))
-                           Join Filter: (c1.parent = p.i)
+                           Join Filter: (p.i = c1.parent)
                            ->  Broadcast Motion 3:3  (slice3; segments: 3)
                                  Output: p.i
                                  ->  Seq Scan on public.agg_pushdown_parent p

@@ -14,7 +14,7 @@ SELECT relkind FROM pg_class
 SELECT 1 FROM gp_distribution_policy
     WHERE localoid = 'table_to_view_test1'::regclass;
 
-DROP VIEW table_to_view_test1;
+DROP TABLE table_to_view_test1;
 DROP TABLE table_to_view_test2;
 
 -- Same for an Append-Only table. It is currently not supported.

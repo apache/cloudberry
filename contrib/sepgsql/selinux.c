@@ -5,7 +5,7 @@
  * Interactions between userspace and selinux in kernelspace,
  * using libselinux api.
  *
- * Copyright (c) 2010-2021, PostgreSQL Global Development Group
+ * Copyright (c) 2010-2023, PostgreSQL Global Development Group
  *
  * -------------------------------------------------------------------------
  */
@@ -615,7 +615,7 @@ static int	sepgsql_mode = SEPGSQL_MODE_INTERNAL;
 bool
 sepgsql_is_enabled(void)
 {
-	return (sepgsql_mode != SEPGSQL_MODE_DISABLED ? true : false);
+	return (sepgsql_mode != SEPGSQL_MODE_DISABLED);
 }
 
 /*
@@ -676,6 +676,7 @@ sepgsql_getenforce(void)
  */
 void
 sepgsql_audit_log(bool denied,
+				  bool enforcing,
 				  const char *scontext,
 				  const char *tcontext,
 				  uint16 tclass,
@@ -712,6 +713,11 @@ sepgsql_audit_log(bool denied,
 					 scontext, tcontext, class_name);
 	if (audit_name)
 		appendStringInfo(&buf, " name=\"%s\"", audit_name);
+
+	if (enforcing)
+		appendStringInfoString(&buf, " permissive=0");
+	else
+		appendStringInfoString(&buf, " permissive=1");
 
 	ereport(LOG, (errmsg("SELinux: %s", buf.data)));
 }
@@ -878,68 +884,5 @@ sepgsql_compute_create(const char *scontext,
 	}
 	PG_END_TRY();
 
-	return result;
-}
-
-/*
- * sepgsql_check_perms
- *
- * It makes access control decision without userspace caching mechanism.
- * If SELinux denied the required accesses on the pair of security labels,
- * it raises an error or returns false.
- *
- * scontext: security label of the subject (mostly, peer process)
- * tcontext: security label of the object being referenced
- * tclass: class code (SEPG_CLASS_*) of the object being referenced
- * required: a mask of required permissions (SEPG_<class>__<perm>)
- * audit_name: a human-readable object name for audit logs, or NULL.
- * abort_on_violation: true, if error shall be raised on access violation
- */
-bool
-sepgsql_check_perms(const char *scontext,
-					const char *tcontext,
-					uint16 tclass,
-					uint32 required,
-					const char *audit_name,
-					bool abort_on_violation)
-{
-	struct av_decision avd;
-	uint32		denied;
-	uint32		audited;
-	bool		result = true;
-
-	sepgsql_compute_avd(scontext, tcontext, tclass, &avd);
-
-	denied = required & ~avd.allowed;
-
-	if (sepgsql_get_debug_audit())
-		audited = (denied ? denied : required);
-	else
-		audited = (denied ? (denied & avd.auditdeny)
-				   : (required & avd.auditallow));
-
-	if (denied &&
-		sepgsql_getenforce() > 0 &&
-		(avd.flags & SELINUX_AVD_FLAGS_PERMISSIVE) == 0)
-		result = false;
-
-	/*
-	 * It records a security audit for the request, if needed. But, when
-	 * SE-PgSQL performs 'internal' mode, it needs to keep silent.
-	 */
-	if (audited && sepgsql_mode != SEPGSQL_MODE_INTERNAL)
-	{
-		sepgsql_audit_log(denied,
-						  scontext,
-						  tcontext,
-						  tclass,
-						  audited,
-						  audit_name);
-	}
-
-	if (!result && abort_on_violation)
-		ereport(ERROR,
-				(errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
-				 errmsg("SELinux: security policy violation")));
 	return result;
 }

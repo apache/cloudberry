@@ -58,14 +58,11 @@ CATALOG(gp_matview_aux,7153,GpMatviewAuxId)
  */
 typedef FormData_gp_matview_aux *Form_gp_matview_aux;
 
-DECLARE_UNIQUE_INDEX(gp_matview_aux_mvoid_index, 7147, on gp_matview_aux using btree(mvoid oid_ops));
-#define GpMatviewAuxMvoidIndexId 7147
+DECLARE_UNIQUE_INDEX(gp_matview_aux_mvoid_index, 7147, GpMatviewAuxMvoidIndexId, on gp_matview_aux using btree(mvoid oid_ops));
 
-DECLARE_INDEX(gp_matview_aux_mvname_index, 7148, on gp_matview_aux using btree(mvname name_ops));
-#define GpMatviewAuxMvnameIndexId 7148
+DECLARE_INDEX(gp_matview_aux_mvname_index, 7148, GpMatviewAuxMvnameIndexId, on gp_matview_aux using btree(mvname name_ops));
 
-DECLARE_INDEX(gp_matview_aux_datastatus_index, 7149, on gp_matview_aux using btree(datastatus char_ops));
-#define GpMatviewAuxDatastatusIndexId 7149
+DECLARE_INDEX(gp_matview_aux_datastatus_index, 7149, GpMatviewAuxDatastatusIndexId, on gp_matview_aux using btree(datastatus char_ops));
 
 #define		MV_DATA_STATUS_UP_TO_DATE				'u'	/* data is up to date */
 #define		MV_DATA_STATUS_UP_REORGANIZED			'r' /* data is up to date, but reorganized. VACUUM FULL/CLUSTER */

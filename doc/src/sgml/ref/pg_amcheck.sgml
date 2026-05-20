@@ -41,8 +41,9 @@ PostgreSQL documentation
   </para>
 
   <para>
-   Only table relations and btree indexes are currently supported.  Other
-   relation types are silently skipped.
+   Only ordinary and toast table relations, materialized views, sequences, and
+   btree indexes are currently supported.  Other relation types are silently
+   skipped.
   </para>
 
   <para>
@@ -124,7 +125,7 @@ PostgreSQL documentation
       </para>
       <para>
        This is similar to the <option>--relation</option> option, except that
-       it applies only to indexes, not tables.
+       it applies only to indexes, not to other relation types.
       </para>
      </listitem>
     </varlistentry>
@@ -140,7 +141,7 @@ PostgreSQL documentation
       </para>
       <para>
        This is similar to the <option>--exclude-relation</option> option,
-       except that it applies only to indexes, not tables.
+       except that it applies only to indexes, not other relation types.
       </para>
      </listitem>
     </varlistentry>
@@ -159,7 +160,7 @@ PostgreSQL documentation
        Patterns may be unqualified, e.g. <literal>myrel*</literal>, or they
        may be schema-qualified, e.g. <literal>myschema*.myrel*</literal> or
        database-qualified and schema-qualified, e.g.
-       <literal>mydb*.myscheam*.myrel*</literal>. A database-qualified
+       <literal>mydb*.myschema*.myrel*</literal>. A database-qualified
        pattern will add matching databases to the list of databases to be
        checked.
       </para>
@@ -236,7 +237,8 @@ PostgreSQL documentation
       </para>
       <para>
        This is similar to the <option>--relation</option> option, except that
-       it applies only to tables, not indexes.
+       it applies only to tables, materialized views, and sequences, not to
+       indexes.
       </para>
      </listitem>
     </varlistentry>
@@ -252,7 +254,8 @@ PostgreSQL documentation
       </para>
       <para>
        This is similar to the <option>--exclude-relation</option> option,
-       except that it applies only to tables, not indexes.
+       except that it applies only to tables, materialized views, and
+       sequences, not to indexes.
       </para>
      </listitem>
     </varlistentry>

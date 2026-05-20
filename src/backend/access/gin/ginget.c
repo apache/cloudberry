@@ -4,7 +4,7 @@
  *	  fetch tuples from a GIN scan.
  *
  *
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * IDENTIFICATION
@@ -16,6 +16,7 @@
 
 #include "access/gin_private.h"
 #include "access/relscan.h"
+#include "common/pg_prng.h"
 #include "miscadmin.h"
 #include "storage/predicate.h"
 #include "utils/datum.h"
@@ -139,7 +140,9 @@ collectMatchBitmap(GinBtreeData *btree, GinBtreeStack *stack,
 	 * Predicate lock entry leaf page, following pages will be locked by
 	 * moveRightIfItNeeded()
 	 */
-	PredicateLockPage(btree->index, stack->buffer, snapshot);
+	PredicateLockPage(btree->index,
+					  BufferGetBlockNumber(stack->buffer),
+					  snapshot);
 
 	for (;;)
 	{
@@ -396,7 +399,7 @@ restartScanEntry:
 		{
 			BlockNumber rootPostingTree = GinGetPostingTree(itup);
 			GinBtreeStack *stack;
-			Page		page;
+			Page		entrypage;
 			ItemPointerData minItem;
 
 			/*
@@ -427,13 +430,13 @@ restartScanEntry:
 			 */
 			IncrBufferRefCount(entry->buffer);
 
-			page = BufferGetPage(entry->buffer);
+			entrypage = BufferGetPage(entry->buffer);
 
 			/*
 			 * Load the first page into memory.
 			 */
 			ItemPointerSetMin(&minItem);
-			entry->list = GinDataLeafPageGetItems(page, &entry->nlist, minItem);
+			entry->list = GinDataLeafPageGetItems(entrypage, &entry->nlist, minItem);
 
 			entry->predictNumberResult = stack->predictNumber * entry->nlist;
 
@@ -555,16 +558,18 @@ startScanKey(GinState *ginstate, GinScanOpaque so, GinScanKey key)
 		qsort_arg(entryIndexes, key->nentries, sizeof(int),
 				  entryIndexByFrequencyCmp, key);
 
+		for (i = 1; i < key->nentries; i++)
+			key->entryRes[entryIndexes[i]] = GIN_MAYBE;
 		for (i = 0; i < key->nentries - 1; i++)
 		{
 			/* Pass all entries <= i as FALSE, and the rest as MAYBE */
-			for (j = 0; j <= i; j++)
-				key->entryRes[entryIndexes[j]] = GIN_FALSE;
-			for (j = i + 1; j < key->nentries; j++)
-				key->entryRes[entryIndexes[j]] = GIN_MAYBE;
+			key->entryRes[entryIndexes[i]] = GIN_FALSE;
 
 			if (key->triConsistentFn(key) == GIN_FALSE)
 				break;
+
+			/* Make this loop interruptible in case there are many keys */
+			CHECK_FOR_INTERRUPTS();
 		}
 		/* i is now the last required entry. */
 
@@ -787,7 +792,7 @@ entryLoadMoreItems(GinState *ginstate, GinScanEntry entry,
 	}
 }
 
-#define gin_rand() (((double) random()) / ((double) MAX_RANDOM_VALUE))
+#define gin_rand() pg_prng_double(&pg_global_prng_state)
 #define dropItem(e) ( gin_rand() > ((double)GinFuzzySearchLimit)/((double)((e)->predictNumberResult)) )
 
 /*
@@ -1318,7 +1323,7 @@ scanGetItem(IndexScanDesc scan, ItemPointerData advancePast,
 			GinScanKey	key = so->keys + i;
 
 			/*
-			 * If we're considering a lossy page, skip excludeOnly keys,  They
+			 * If we're considering a lossy page, skip excludeOnly keys. They
 			 * can't exclude the whole page anyway.
 			 */
 			if (ItemPointerIsLossyPage(item) && key->excludeOnly)

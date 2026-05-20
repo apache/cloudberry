@@ -19,7 +19,6 @@
  */
 #define EXPECT_EXCEPTION()     \
 	expect_any(ExceptionalCondition,conditionName); \
-	expect_any(ExceptionalCondition,errorType); \
 	expect_any(ExceptionalCondition,fileName); \
 	expect_any(ExceptionalCondition,lineNumber); \
     will_be_called_with_sideeffect(ExceptionalCondition, &_ExceptionalCondition, NULL);\

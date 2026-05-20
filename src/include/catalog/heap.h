@@ -6,7 +6,7 @@
  *
  * Portions Copyright (c) 2005-2008, Greenplum inc
  * Portions Copyright (c) 2012-Present VMware, Inc. or its affiliates.
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * src/include/catalog/heap.h
@@ -30,7 +30,7 @@ typedef struct RawColumnDefault
 {
 	AttrNumber	attnum;			/* attribute to attach default to */
 	Node	   *raw_default;	/* default value (untransformed parse tree) */
-	bool		missingMode;	/* true if part of add column processing */
+	bool		missingMode;	/* obsolete, no longer used */
 	char		generated;		/* attgenerated setting */
 	bool		hasCookedMissingVal;
 	bool		missingIsNull;
@@ -67,7 +67,7 @@ extern Relation heap_create(const char *relname,
 							Oid relnamespace,
 							Oid reltablespace,
 							Oid relid,
-							Oid relfilenode,
+							RelFileNumber relfilenumber,
 							Oid accessmtd,
 							TupleDesc tupDesc,
 							char relkind,
@@ -76,7 +76,8 @@ extern Relation heap_create(const char *relname,
 							bool mapped_relation,
 							bool allow_system_table_mods,
 							TransactionId *relfrozenxid,
-							MultiXactId *relminmxid);
+							MultiXactId *relminmxid,
+							bool create_storage);
 
 extern Oid	heap_create_with_catalog(const char *relname,
 									 Oid relnamespace,
@@ -136,15 +137,10 @@ extern List *AddRelationConstraints(Relation rel,
 						  List *constraints);
 
 extern void RelationClearMissing(Relation rel);
-extern void SetAttrMissing(Oid relid, char *attname, char *value);
 
-extern Oid	StoreAttrDefault(Relation rel, AttrNumber attnum,
-							 Node *expr,
-							 bool *cookedMissingVal,
-							 Datum *missingval_p,
-							 bool *missingIsNull_p,
-							 bool is_internal,
-							 bool add_column_mode);
+extern void StoreAttrMissingVal(Relation rel, AttrNumber attnum,
+								Datum missingval);
+extern void SetAttrMissing(Oid relid, char *attname, char *value);
 
 extern Node *cookDefault(ParseState *pstate,
 						 Node *raw_default,
@@ -157,9 +153,7 @@ extern void DeleteRelationTuple(Oid relid);
 extern void DeleteAttributeTuples(Oid relid);
 extern void DeleteSystemAttributeTuples(Oid relid);
 extern void RemoveAttributeById(Oid relid, AttrNumber attnum);
-extern void RemoveAttrDefault(Oid relid, AttrNumber attnum,
-							  DropBehavior behavior, bool complain, bool internal);
-extern void RemoveAttrDefaultById(Oid attrdefId);
+
 extern void CopyStatistics(Oid fromrelid, Oid torelid);
 extern void RemoveStatistics(Oid relid, AttrNumber attnum);
 

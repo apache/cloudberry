@@ -2,7 +2,7 @@
 -- SELECT_DISTINCT_ON
 --
 SELECT DISTINCT ON (string4) string4, two, ten
-   FROM tmp
+   FROM onek
    ORDER BY string4 using <, two using >, ten using <;
  string4 | two | ten 
 ---------+-----+-----
@@ -14,13 +14,13 @@ SELECT DISTINCT ON (string4) string4, two, ten
 
 -- this will fail due to conflict of ordering requirements
 SELECT DISTINCT ON (string4, ten) string4, two, ten
-   FROM tmp
+   FROM onek
    ORDER BY string4 using <, two using <, ten using <;
 ERROR:  SELECT DISTINCT ON expressions must match initial ORDER BY expressions
 LINE 1: SELECT DISTINCT ON (string4, ten) string4, two, ten
                                      ^
 SELECT DISTINCT ON (string4, ten) string4, ten, two
-   FROM tmp
+   FROM onek
    ORDER BY string4 using <, ten using >, two using <;
  string4 | ten | two 
 ---------+-----+-----
@@ -72,4 +72,71 @@ select distinct on (1) floor(random()) as r, f1 from int4_tbl order by 1,2;
 ---+-------------
  0 | -2147483647
 (1 row)
+
+--
+-- Test the planner's ability to use a LIMIT 1 instead of a Unique node when
+-- all of the distinct_pathkeys have been marked as redundant
+--
+-- Ensure we also get a LIMIT plan with DISTINCT ON
+EXPLAIN (COSTS OFF)
+SELECT DISTINCT ON (four) four,two
+   FROM tenk1 WHERE four = 0 ORDER BY 1;
+                   QUERY PLAN                   
+------------------------------------------------
+ GroupAggregate
+   Group Key: four
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         ->  GroupAggregate
+               Group Key: four
+               ->  Seq Scan on tenk1
+                     Filter: (four = 0)
+ Optimizer: Postgres query optimizer
+(8 rows)
+
+-- and check the result of the above query is correct
+SELECT DISTINCT ON (four) four,two
+   FROM tenk1 WHERE four = 0 ORDER BY 1;
+ four | two 
+------+-----
+    0 |   0
+(1 row)
+
+-- Ensure a Sort -> Limit is used when the ORDER BY contains additional cols
+EXPLAIN (COSTS OFF)
+SELECT DISTINCT ON (four) four,two
+   FROM tenk1 WHERE four = 0 ORDER BY 1,2;
+                   QUERY PLAN                   
+------------------------------------------------
+ GroupAggregate
+   Group Key: four
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         Merge Key: two
+         ->  GroupAggregate
+               Group Key: four
+               ->  Sort
+                     Sort Key: two
+                     ->  Seq Scan on tenk1
+                           Filter: (four = 0)
+ Optimizer: Postgres query optimizer
+(11 rows)
+
+-- Same again but use a column that is indexed so that we get an index scan
+-- then a limit
+EXPLAIN (COSTS OFF)
+SELECT DISTINCT ON (four) four,hundred
+   FROM tenk1 WHERE four = 0 ORDER BY 1,2;
+                   QUERY PLAN                   
+------------------------------------------------
+ GroupAggregate
+   Group Key: four
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         Merge Key: hundred
+         ->  GroupAggregate
+               Group Key: four
+               ->  Sort
+                     Sort Key: hundred
+                     ->  Seq Scan on tenk1
+                           Filter: (four = 0)
+ Optimizer: Postgres query optimizer
+(11 rows)
 

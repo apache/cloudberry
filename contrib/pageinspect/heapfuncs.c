@@ -15,7 +15,7 @@
  * there's hardly any use case for using these without superuser-rights
  * anyway.
  *
- * Copyright (c) 2007-2021, PostgreSQL Global Development Group
+ * Copyright (c) 2007-2023, PostgreSQL Global Development Group
  *
  * IDENTIFICATION
  *	  contrib/pageinspect/heapfuncs.c
@@ -212,11 +212,8 @@ heap_page_items(PG_FUNCTION_ARGS)
 			lp_offset + lp_len <= raw_page_size)
 		{
 			HeapTupleHeader tuphdr;
-			bytea	   *tuple_data_bytea;
-			int			tuple_data_len;
 
 			/* Extract information from the tuple header */
-
 			tuphdr = (HeapTupleHeader) PageGetItem(page, id);
 
 			values[4] = UInt32GetDatum(HeapTupleHeaderGetRawXmin(tuphdr));
@@ -228,31 +225,32 @@ heap_page_items(PG_FUNCTION_ARGS)
 			values[9] = UInt32GetDatum(tuphdr->t_infomask);
 			values[10] = UInt8GetDatum(tuphdr->t_hoff);
 
-			/* Copy raw tuple data into bytea attribute */
-			tuple_data_len = lp_len - tuphdr->t_hoff;
-			tuple_data_bytea = (bytea *) palloc(tuple_data_len + VARHDRSZ);
-			SET_VARSIZE(tuple_data_bytea, tuple_data_len + VARHDRSZ);
-			memcpy(VARDATA(tuple_data_bytea), (char *) tuphdr + tuphdr->t_hoff,
-				   tuple_data_len);
-			values[13] = PointerGetDatum(tuple_data_bytea);
-
 			/*
 			 * We already checked that the item is completely within the raw
 			 * page passed to us, with the length given in the line pointer.
-			 * Let's check that t_hoff doesn't point over lp_len, before using
-			 * it to access t_bits and oid.
+			 * But t_hoff could be out of range, so check it before relying on
+			 * it to fetch additional info.
 			 */
 			if (tuphdr->t_hoff >= SizeofHeapTupleHeader &&
 				tuphdr->t_hoff <= lp_len &&
 				tuphdr->t_hoff == MAXALIGN(tuphdr->t_hoff))
 			{
+				int			tuple_data_len;
+				bytea	   *tuple_data_bytea;
+
+				/* Copy null bitmask and OID, if present */
 				if (tuphdr->t_infomask & HEAP_HASNULL)
 				{
-					int			bits_len;
+					int			bitmaplen;
 
-					bits_len =
-						BITMAPLEN(HeapTupleHeaderGetNatts(tuphdr)) * BITS_PER_BYTE;
-					values[11] = CStringGetTextDatum(bits_to_text(tuphdr->t_bits, bits_len));
+					bitmaplen = BITMAPLEN(HeapTupleHeaderGetNatts(tuphdr));
+					/* better range-check the attribute count, too */
+					if (bitmaplen <= tuphdr->t_hoff - SizeofHeapTupleHeader)
+						values[11] =
+							CStringGetTextDatum(bits_to_text(tuphdr->t_bits,
+															 bitmaplen * BITS_PER_BYTE));
+					else
+						nulls[11] = true;
 				}
 				else
 					nulls[11] = true;
@@ -261,11 +259,22 @@ heap_page_items(PG_FUNCTION_ARGS)
 					values[12] = HeapTupleHeaderGetOidOld(tuphdr);
 				else
 					nulls[12] = true;
+
+				/* Copy raw tuple data into bytea attribute */
+				tuple_data_len = lp_len - tuphdr->t_hoff;
+				tuple_data_bytea = (bytea *) palloc(tuple_data_len + VARHDRSZ);
+				SET_VARSIZE(tuple_data_bytea, tuple_data_len + VARHDRSZ);
+				if (tuple_data_len > 0)
+					memcpy(VARDATA(tuple_data_bytea),
+						   (char *) tuphdr + tuphdr->t_hoff,
+						   tuple_data_len);
+				values[13] = PointerGetDatum(tuple_data_bytea);
 			}
 			else
 			{
 				nulls[11] = true;
 				nulls[12] = true;
+				nulls[13] = true;
 			}
 		}
 		else
@@ -320,7 +329,11 @@ tuple_data_split_internal(Oid relid, char *tupdata,
 	raw_attrs = initArrayResult(BYTEAOID, CurrentMemoryContext, false);
 	nattrs = tupdesc->natts;
 
-	if (rel->rd_rel->relam != HEAP_TABLE_AM_OID)
+	/*
+	 * Sequences always use heap AM, but they don't show that in the catalogs.
+	 */
+	if (rel->rd_rel->relkind != RELKIND_SEQUENCE &&
+		rel->rd_rel->relam != HEAP_TABLE_AM_OID)
 		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 						errmsg("only heap AM is supported")));
 
@@ -383,7 +396,7 @@ tuple_data_split_internal(Oid relid, char *tupdata,
 						 errmsg("unexpected end of tuple data")));
 
 			if (attr->attlen == -1 && do_detoast)
-				attr_data = DatumGetByteaPCopy(tupdata + off);
+				attr_data = pg_detoast_datum_copy((struct varlena *) (tupdata + off));
 			else
 			{
 				attr_data = (bytea *) palloc(len + VARHDRSZ);
@@ -455,8 +468,8 @@ tuple_data_split(PG_FUNCTION_ARGS)
 	 */
 	if (t_infomask & HEAP_HASNULL)
 	{
-		int			bits_str_len;
-		int			bits_len;
+		size_t		bits_str_len;
+		size_t		bits_len;
 
 		bits_len = BITMAPLEN(t_infomask2 & HEAP_NATTS_MASK) * BITS_PER_BYTE;
 		if (!t_bits_str)
@@ -468,7 +481,7 @@ tuple_data_split(PG_FUNCTION_ARGS)
 		if (bits_len != bits_str_len)
 			ereport(ERROR,
 					(errcode(ERRCODE_DATA_CORRUPTED),
-					 errmsg("unexpected length of t_bits string: %u, expected %u",
+					 errmsg("unexpected length of t_bits string: %zu, expected %zu",
 							bits_str_len, bits_len)));
 
 		/* do the conversion */
@@ -492,7 +505,7 @@ tuple_data_split(PG_FUNCTION_ARGS)
 	if (t_bits)
 		pfree(t_bits);
 
-	PG_RETURN_ARRAYTYPE_P(res);
+	PG_RETURN_DATUM(res);
 }
 
 /*
@@ -507,8 +520,8 @@ Datum
 heap_tuple_infomask_flags(PG_FUNCTION_ARGS)
 {
 #define HEAP_TUPLE_INFOMASK_COLS 2
-	Datum		values[HEAP_TUPLE_INFOMASK_COLS];
-	bool		nulls[HEAP_TUPLE_INFOMASK_COLS];
+	Datum		values[HEAP_TUPLE_INFOMASK_COLS] = {0};
+	bool		nulls[HEAP_TUPLE_INFOMASK_COLS] = {0};
 	uint16		t_infomask = PG_GETARG_INT16(0);
 	uint16		t_infomask2 = PG_GETARG_INT16(1);
 	int			cnt = 0;
@@ -529,10 +542,6 @@ heap_tuple_infomask_flags(PG_FUNCTION_ARGS)
 
 	bitcnt = pg_popcount((const char *) &t_infomask, sizeof(uint16)) +
 		pg_popcount((const char *) &t_infomask2, sizeof(uint16));
-
-	/* Initialize values and NULL flags arrays */
-	MemSet(values, 0, sizeof(values));
-	MemSet(nulls, 0, sizeof(nulls));
 
 	/* If no flags, return a set of empty arrays */
 	if (bitcnt <= 0)
@@ -590,7 +599,7 @@ heap_tuple_infomask_flags(PG_FUNCTION_ARGS)
 
 	/* build value */
 	Assert(cnt <= bitcnt);
-	a = construct_array(flags, cnt, TEXTOID, -1, false, TYPALIGN_INT);
+	a = construct_array_builtin(flags, cnt, TEXTOID);
 	values[0] = PointerGetDatum(a);
 
 	/*
@@ -612,7 +621,7 @@ heap_tuple_infomask_flags(PG_FUNCTION_ARGS)
 	if (cnt == 0)
 		a = construct_empty_array(TEXTOID);
 	else
-		a = construct_array(flags, cnt, TEXTOID, -1, false, TYPALIGN_INT);
+		a = construct_array_builtin(flags, cnt, TEXTOID);
 	pfree(flags);
 	values[1] = PointerGetDatum(a);
 

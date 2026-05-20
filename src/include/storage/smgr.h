@@ -6,7 +6,7 @@
  *
  * Portions Copyright (c) 2006-2008, Greenplum inc
  * Portions Copyright (c) 2012-Present VMware, Inc. or its affiliates.
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * src/include/storage/smgr.h
@@ -18,7 +18,7 @@
 
 #include "lib/ilist.h"
 #include "storage/block.h"
-#include "storage/relfilenode.h"
+#include "storage/relfilelocator.h"
 #include "storage/dbdirnode.h"
 #include "storage/fd.h"
 #include "utils/relcache.h"
@@ -76,8 +76,8 @@ struct f_smgr;
  */
 typedef struct SMgrRelationData
 {
-	/* rnode is the hashtable lookup key, so it must be first! */
-	RelFileNodeBackend smgr_rnode;	/* relation physical identifier */
+	/* rlocator is the hashtable lookup key, so it must be first! */
+	RelFileLocatorBackend smgr_rlocator;	/* relation physical identifier */
 
 	/* pointer to owning pointer, or NULL if none */
 	struct SMgrRelationData **smgr_owner;
@@ -120,7 +120,7 @@ typedef struct SMgrRelationData
 typedef SMgrRelationData *SMgrRelation;
 
 #define SmgrIsTemp(smgr) \
-	RelFileNodeBackendIsTemp((smgr)->smgr_rnode)
+	RelFileLocatorBackendIsTemp((smgr)->smgr_rlocator)
 
 /*
  *	Redefinition of storage manager here to make it accessible by other plugins(Union Store),
@@ -136,33 +136,35 @@ typedef struct f_smgr
 	void		(*smgr_create) (SMgrRelation reln, ForkNumber forknum,
 								bool isRedo);
 	bool		(*smgr_exists) (SMgrRelation reln, ForkNumber forknum);
-	void		(*smgr_unlink) (RelFileNodeBackend rnode, ForkNumber forknum,
+	void		(*smgr_unlink) (RelFileLocatorBackend rlocator, ForkNumber forknum,
 								bool isRedo);
 	void		(*smgr_extend) (SMgrRelation reln, ForkNumber forknum,
-								BlockNumber blocknum, char *buffer, bool skipFsync);
+								BlockNumber blocknum, const void *buffer, bool skipFsync);
+	void		(*smgr_zeroextend) (SMgrRelation reln, ForkNumber forknum,
+									BlockNumber blocknum, int nblocks, bool skipFsync);
 	bool		(*smgr_prefetch) (SMgrRelation reln, ForkNumber forknum,
 								  BlockNumber blocknum);
 	void		(*smgr_read) (SMgrRelation reln, ForkNumber forknum,
-							  BlockNumber blocknum, char *buffer);
+							  BlockNumber blocknum, void *buffer);
 	void		(*smgr_write) (SMgrRelation reln, ForkNumber forknum,
-							   BlockNumber blocknum, char *buffer, bool skipFsync);
+							   BlockNumber blocknum, const void *buffer, bool skipFsync);
 	void		(*smgr_writeback) (SMgrRelation reln, ForkNumber forknum,
 								   BlockNumber blocknum, BlockNumber nblocks);
 	BlockNumber (*smgr_nblocks) (SMgrRelation reln, ForkNumber forknum);
 	void		(*smgr_truncate) (SMgrRelation reln, ForkNumber forknum,
-								  BlockNumber nblocks);
+								  BlockNumber old_blocks, BlockNumber nblocks);
 	void		(*smgr_immedsync) (SMgrRelation reln, ForkNumber forknum);
 } f_smgr;
 
 typedef struct f_smgr_ao {
-	void			(*smgr_create_ao) (RelFileNodeBackend rnode, int32 segmentFileNum, bool isRedo);
+	void			(*smgr_create_ao) (RelFileLocatorBackend rnode, int32 segmentFileNum, bool isRedo);
 	off_t			(*smgr_FileDiskSize) (File file);
 	void			(*smgr_FileClose) (File file);
 	int				(*smgr_FileTruncate) (File file, int64 offset, uint32 wait_event_info);
 	File			(*smgr_AORelOpenSegFile) (Oid reloid, const char *filePath, int fileFlags);
-	File			(*smgr_AORelOpenSegFileXlog) (RelFileNode node, int32 segmentFileNum, int fileFlags);
-	int				(*smgr_FileWrite) (File file, char *buffer, int amount, off_t offset, uint32 wait_event_info);
-	int				(*smgr_FileRead) (File file, char *buffer, int amount, off_t offset, uint32 wait_event_info);
+	File			(*smgr_AORelOpenSegFileXlog) (RelFileLocator node, int32 segmentFileNum, int fileFlags);
+	int				(*smgr_FileWrite) (File file, const void *buffer, size_t amount, off_t offset, uint32 wait_event_info);
+	int				(*smgr_FileRead) (File file, void *buffer, size_t amount, off_t offset, uint32 wait_event_info);
 	off_t			(*smgr_FileSize) (File file);
 	int				(*smgr_FileSync) (File file, uint32 wait_event_info);
 } f_smgr_ao;
@@ -185,36 +187,44 @@ extern const f_smgr *smgr_get(SMgrImpl smgr_impl);
 extern SMgrImpl smgr_get_impl(const Relation rel);
 
 extern void smgrinit(void);
-extern SMgrRelation smgropen(RelFileNode rnode, BackendId backend,
-                             SMgrImpl smgr_which, Relation rel);
+extern SMgrRelation smgropen(RelFileLocator rlocator, BackendId backend,
+							 SMgrImpl smgr_which, Relation rel);
 extern bool smgrexists(SMgrRelation reln, ForkNumber forknum);
 extern void smgrsetowner(SMgrRelation *owner, SMgrRelation reln);
 extern void smgrclearowner(SMgrRelation *owner, SMgrRelation reln);
 extern void smgrclose(SMgrRelation reln);
 extern void smgrcloseall(void);
-extern void smgrclosenode(RelFileNodeBackend rnode);
+extern void smgrcloserellocator(RelFileLocatorBackend rlocator);
+extern void smgrrelease(SMgrRelation reln);
+extern void smgrreleaseall(void);
 extern void smgrcreate(SMgrRelation reln, ForkNumber forknum, bool isRedo);
 extern void smgrcreate_ao(const struct f_smgr_ao *smgr,
-				RelFileNodeBackend rnode,
-				int32 segmentFileNum, bool isRedo);
+						  RelFileLocatorBackend rnode,
+						  int32 segmentFileNum, bool isRedo);
 extern void smgrdosyncall(SMgrRelation *rels, int nrels);
 extern void smgrdounlinkall(SMgrRelation *rels, int nrels, bool isRedo);
 extern void smgrextend(SMgrRelation reln, ForkNumber forknum,
-					   BlockNumber blocknum, char *buffer, bool skipFsync);
+					   BlockNumber blocknum, const void *buffer, bool skipFsync);
+extern void smgrzeroextend(SMgrRelation reln, ForkNumber forknum,
+						   BlockNumber blocknum, int nblocks, bool skipFsync);
 extern bool smgrprefetch(SMgrRelation reln, ForkNumber forknum,
 						 BlockNumber blocknum);
 extern void smgrread(SMgrRelation reln, ForkNumber forknum,
-					 BlockNumber blocknum, char *buffer);
+					 BlockNumber blocknum, void *buffer);
 extern void smgrwrite(SMgrRelation reln, ForkNumber forknum,
-					  BlockNumber blocknum, char *buffer, bool skipFsync);
+					  BlockNumber blocknum, const void *buffer, bool skipFsync);
 extern void smgrwriteback(SMgrRelation reln, ForkNumber forknum,
 						  BlockNumber blocknum, BlockNumber nblocks);
 extern BlockNumber smgrnblocks(SMgrRelation reln, ForkNumber forknum);
 extern BlockNumber smgrnblocks_cached(SMgrRelation reln, ForkNumber forknum);
-extern void smgrtruncate(SMgrRelation reln, ForkNumber *forknum,
-						 int nforks, BlockNumber *nblocks);
+extern void smgrtruncate(SMgrRelation reln, ForkNumber *forknum, int nforks,
+						 BlockNumber *nblocks);
+extern void smgrtruncate2(SMgrRelation reln, ForkNumber *forknum, int nforks,
+						  BlockNumber *old_nblocks,
+						  BlockNumber *nblocks);
 extern void smgrimmedsync(SMgrRelation reln, ForkNumber forknum);
 extern void AtEOXact_SMgr(void);
+extern bool ProcessBarrierSmgrRelease(void);
 
 extern const struct f_smgr_ao * smgrAOGetDefault(void);
 
@@ -226,16 +236,16 @@ extern const char* smgr_get_name(SMgrImpl impl);
  * For example, disk quota extension will use these hooks to
  * detect active tables.
  */
-typedef void (*file_create_hook_type)(RelFileNodeBackend rnode);
+typedef void (*file_create_hook_type)(RelFileLocatorBackend rnode);
 extern PGDLLIMPORT file_create_hook_type file_create_hook;
 
-typedef void (*file_extend_hook_type)(RelFileNodeBackend rnode);
+typedef void (*file_extend_hook_type)(RelFileLocatorBackend rnode);
 extern PGDLLIMPORT file_extend_hook_type file_extend_hook;
 
-typedef void (*file_truncate_hook_type)(RelFileNodeBackend rnode);
+typedef void (*file_truncate_hook_type)(RelFileLocatorBackend rnode);
 extern PGDLLIMPORT file_truncate_hook_type file_truncate_hook;
 
-typedef void (*file_unlink_hook_type)(RelFileNodeBackend rnode);
+typedef void (*file_unlink_hook_type)(RelFileLocatorBackend rnode);
 extern PGDLLIMPORT file_unlink_hook_type file_unlink_hook;
 
 /*

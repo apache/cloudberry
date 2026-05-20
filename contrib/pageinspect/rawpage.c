@@ -5,7 +5,7 @@
  *
  * Access-method specific inspection functions are in separate files.
  *
- * Copyright (c) 2007-2021, PostgreSQL Global Development Group
+ * Copyright (c) 2007-2023, PostgreSQL Global Development Group
  *
  * IDENTIFICATION
  *	  contrib/pageinspect/rawpage.c
@@ -155,32 +155,12 @@ get_raw_page_internal(text *relname, ForkNumber forknum, BlockNumber blkno)
 	relrv = makeRangeVarFromNameList(textToQualifiedNameList(relname));
 	rel = relation_openrv(relrv, AccessShareLock);
 
-	/* Check that this relation has storage */
-	if (rel->rd_rel->relkind == RELKIND_VIEW)
+	if (!RELKIND_HAS_STORAGE(rel->rd_rel->relkind))
 		ereport(ERROR,
 				(errcode(ERRCODE_WRONG_OBJECT_TYPE),
-				 errmsg("cannot get raw page from view \"%s\"",
-						RelationGetRelationName(rel))));
-	if (rel->rd_rel->relkind == RELKIND_COMPOSITE_TYPE)
-		ereport(ERROR,
-				(errcode(ERRCODE_WRONG_OBJECT_TYPE),
-				 errmsg("cannot get raw page from composite type \"%s\"",
-						RelationGetRelationName(rel))));
-	if (rel->rd_rel->relkind == RELKIND_FOREIGN_TABLE)
-		ereport(ERROR,
-				(errcode(ERRCODE_WRONG_OBJECT_TYPE),
-				 errmsg("cannot get raw page from foreign table \"%s\"",
-						RelationGetRelationName(rel))));
-	if (rel->rd_rel->relkind == RELKIND_PARTITIONED_TABLE)
-		ereport(ERROR,
-				(errcode(ERRCODE_WRONG_OBJECT_TYPE),
-				 errmsg("cannot get raw page from partitioned table \"%s\"",
-						RelationGetRelationName(rel))));
-	if (rel->rd_rel->relkind == RELKIND_PARTITIONED_INDEX)
-		ereport(ERROR,
-				(errcode(ERRCODE_WRONG_OBJECT_TYPE),
-				 errmsg("cannot get raw page from partitioned index \"%s\"",
-						RelationGetRelationName(rel))));
+				 errmsg("cannot get raw page from relation \"%s\"",
+						RelationGetRelationName(rel)),
+				 errdetail_relkind_not_supported(rel->rd_rel->relkind)));
 
 	/* Check that this relation has the right kind of storage */
 	if (RelationIsAppendOptimized(rel))
@@ -281,7 +261,8 @@ page_header(PG_FUNCTION_ARGS)
 	Datum		values[9];
 	bool		nulls[9];
 
-	PageHeader	page;
+	Page		page;
+	PageHeader	pageheader;
 	XLogRecPtr	lsn;
 
 	if (!superuser())
@@ -289,7 +270,8 @@ page_header(PG_FUNCTION_ARGS)
 				(errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
 				 errmsg("must be superuser to use raw page functions")));
 
-	page = (PageHeader) get_page_from_raw(raw_page);
+	page = get_page_from_raw(raw_page);
+	pageheader = (PageHeader) page;
 
 	/* Build a tuple descriptor for our result type */
 	if (get_call_result_type(fcinfo, NULL, &tupdesc) != TYPEFUNC_COMPOSITE)
@@ -309,14 +291,37 @@ page_header(PG_FUNCTION_ARGS)
 	}
 	else
 		values[0] = LSNGetDatum(lsn);
-	values[1] = UInt16GetDatum(page->pd_checksum);
-	values[2] = UInt16GetDatum(page->pd_flags);
-	values[3] = UInt16GetDatum(page->pd_lower);
-	values[4] = UInt16GetDatum(page->pd_upper);
-	values[5] = UInt16GetDatum(page->pd_special);
-	values[6] = UInt32GetDatum(PageGetPageSize(page));
+	values[1] = UInt16GetDatum(pageheader->pd_checksum);
+	values[2] = UInt16GetDatum(pageheader->pd_flags);
+
+	/* pageinspect >= 1.10 uses int4 instead of int2 for those fields */
+	switch (TupleDescAttr(tupdesc, 3)->atttypid)
+	{
+		case INT2OID:
+			Assert(TupleDescAttr(tupdesc, 4)->atttypid == INT2OID &&
+				   TupleDescAttr(tupdesc, 5)->atttypid == INT2OID &&
+				   TupleDescAttr(tupdesc, 6)->atttypid == INT2OID);
+			values[3] = UInt16GetDatum(pageheader->pd_lower);
+			values[4] = UInt16GetDatum(pageheader->pd_upper);
+			values[5] = UInt16GetDatum(pageheader->pd_special);
+			values[6] = UInt16GetDatum(PageGetPageSize(page));
+			break;
+		case INT4OID:
+			Assert(TupleDescAttr(tupdesc, 4)->atttypid == INT4OID &&
+				   TupleDescAttr(tupdesc, 5)->atttypid == INT4OID &&
+				   TupleDescAttr(tupdesc, 6)->atttypid == INT4OID);
+			values[3] = Int32GetDatum(pageheader->pd_lower);
+			values[4] = Int32GetDatum(pageheader->pd_upper);
+			values[5] = Int32GetDatum(pageheader->pd_special);
+			values[6] = Int32GetDatum(PageGetPageSize(page));
+			break;
+		default:
+			elog(ERROR, "incorrect output types");
+			break;
+	}
+
 	values[7] = UInt16GetDatum(PageGetPageLayoutVersion(page));
-	values[8] = TransactionIdGetDatum(page->pd_prune_xid);
+	values[8] = TransactionIdGetDatum(pageheader->pd_prune_xid);
 
 	/* Build and return the tuple. */
 

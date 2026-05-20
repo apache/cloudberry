@@ -161,6 +161,7 @@ ERROR:  child table is missing column "b"
 -- different owner 
 create role part_role_append;
 NOTICE:  resource queue required -- using default resource queue "pg_default"
+GRANT CREATE ON SCHEMA public TO part_role_append;
 create table bar_p (i int, j int) distributed by (i);
 set session authorization part_role_append;
 -- should fail
@@ -196,6 +197,7 @@ alter table foo_p split partition for (1) at (2) into (partition prt_11, partiti
 (4 rows)
 
 drop table foo_p;
+REVOKE CREATE ON SCHEMA public FROM part_role_append;
 drop role part_role_append;
 -- WITH OIDS is no longer supported. Check that it't rejected with the GPDB
 -- partitioning syntax, too.
@@ -5726,6 +5728,13 @@ select relname, relkind from pg_class where relkind in ('r', 'p') and relname li
 select gp_segment_id, relname, relkind from gp_dist_random('pg_class') where relkind in ('r', 'p') and relname like 'sales%' and relfrozenxid=0;
  gp_segment_id |          relname           | relkind 
 ---------------+----------------------------+---------
+             2 | sales                      | p
+             2 | sales                      | p
+             2 | sales_1_prt_2              | p
+             2 | sales_1_prt_3              | p
+             2 | sales_1_prt_4              | p
+             2 | sales_1_prt_5              | p
+             2 | sales_1_prt_outlying_dates | p
              0 | sales                      | p
              0 | sales                      | p
              0 | sales_1_prt_2              | p
@@ -5740,13 +5749,6 @@ select gp_segment_id, relname, relkind from gp_dist_random('pg_class') where rel
              1 | sales_1_prt_4              | p
              1 | sales_1_prt_5              | p
              1 | sales_1_prt_outlying_dates | p
-             2 | sales                      | p
-             2 | sales                      | p
-             2 | sales_1_prt_2              | p
-             2 | sales_1_prt_3              | p
-             2 | sales_1_prt_4              | p
-             2 | sales_1_prt_5              | p
-             2 | sales_1_prt_outlying_dates | p
 (21 rows)
 
 alter table sales drop column tax;
@@ -6176,6 +6178,7 @@ DROP TABLE unexpanded_attach2;
 -- set owner for partition root (should be inherited except for ATTACH, EXCHANGE)
 CREATE ROLE part_inherit_role CREATEROLE;
 NOTICE:  resource queue required -- using default resource queue "pg_default"
+GRANT CREATE ON SCHEMA public TO part_inherit_role;
 CREATE ROLE part_inherit_other_role IN ROLE part_inherit_role;
 NOTICE:  resource queue required -- using default resource queue "pg_default"
 CREATE ROLE part_inherit_priv_role;
@@ -6438,6 +6441,7 @@ RESET ROLE;
 DROP TABLE part_inherit;
 DROP FUNCTION part_inherit_trig CASCADE;
 DROP TABLE part_inherit_exchange_out;
+REVOKE CREATE ON SCHEMA public FROM part_inherit_role;
 DROP ROLE part_inherit_role;
 DROP ROLE part_inherit_other_role;
 DROP ROLE part_inherit_priv_role;

@@ -11,24 +11,24 @@ include $(top_builddir)/src/Makefile.global
 $(call recurse,all install,src config)
 
 all:
-	$(MAKE) -C contrib/auto_explain all
+#	$(MAKE) -C contrib/auto_explain all
 	$(MAKE) -C contrib/citext all
 	$(MAKE) -C contrib/file_fdw all
 	$(MAKE) -C contrib/formatter all
-	$(MAKE) -C contrib/formatter_fixedwidth all
-	$(MAKE) -C contrib/fuzzystrmatch all
+#	$(MAKE) -C contrib/formatter_fixedwidth all
+#	$(MAKE) -C contrib/fuzzystrmatch all
 	$(MAKE) -C contrib/extprotocol all
-	$(MAKE) -C contrib/dblink all
-	$(MAKE) -C contrib/indexscan all
+#	$(MAKE) -C contrib/dblink all
+#	$(MAKE) -C contrib/indexscan all
 	$(MAKE) -C contrib/interconnect all
 	$(MAKE) -C contrib/pageinspect all  # needed by src/test/isolation
-	$(MAKE) -C contrib/hstore all
-	$(MAKE) -C contrib/pgcrypto all
-	$(MAKE) -C contrib/btree_gin all
-	$(MAKE) -C contrib/pg_trgm all
-	$(MAKE) -C contrib/tablefunc all
-	$(MAKE) -C contrib/passwordcheck all
-	$(MAKE) -C contrib/pg_buffercache all
+#	$(MAKE) -C contrib/hstore all
+#	$(MAKE) -C contrib/pgcrypto all
+#	$(MAKE) -C contrib/btree_gin all
+#	$(MAKE) -C contrib/pg_trgm all
+#	$(MAKE) -C contrib/tablefunc all
+#	$(MAKE) -C contrib/passwordcheck all
+#	$(MAKE) -C contrib/pg_buffercache all
 ifeq ($(with_openssl), yes)
 	$(MAKE) -C contrib/sslinfo all
 endif
@@ -61,24 +61,24 @@ html man:
 	$(MAKE) -C doc $@
 
 install:
-	$(MAKE) -C contrib/auto_explain $@
+#	$(MAKE) -C contrib/auto_explain $@
 	$(MAKE) -C contrib/citext $@
 	$(MAKE) -C contrib/file_fdw $@
 	$(MAKE) -C contrib/formatter $@
-	$(MAKE) -C contrib/formatter_fixedwidth $@
-	$(MAKE) -C contrib/fuzzystrmatch $@
+#	$(MAKE) -C contrib/formatter_fixedwidth $@
+#	$(MAKE) -C contrib/fuzzystrmatch $@
 	$(MAKE) -C contrib/extprotocol $@
-	$(MAKE) -C contrib/dblink $@
-	$(MAKE) -C contrib/indexscan $@
+#	$(MAKE) -C contrib/dblink $@
+#	$(MAKE) -C contrib/indexscan $@
 	$(MAKE) -C contrib/interconnect $@
 	$(MAKE) -C contrib/pageinspect $@  # needed by src/test/isolation
-	$(MAKE) -C contrib/hstore $@
-	$(MAKE) -C contrib/pgcrypto $@
-	$(MAKE) -C contrib/btree_gin $@
-	$(MAKE) -C contrib/pg_trgm $@
-	$(MAKE) -C contrib/tablefunc $@
-	$(MAKE) -C contrib/passwordcheck $@
-	$(MAKE) -C contrib/pg_buffercache $@
+#	$(MAKE) -C contrib/hstore $@
+#	$(MAKE) -C contrib/pgcrypto $@
+#	$(MAKE) -C contrib/btree_gin $@
+#	$(MAKE) -C contrib/pg_trgm $@
+#	$(MAKE) -C contrib/tablefunc $@
+#	$(MAKE) -C contrib/passwordcheck $@
+#	$(MAKE) -C contrib/pg_buffercache $@
 ifeq ($(enable_pax), yes)
 	$(MAKE) -C contrib/pax_storage $@
 endif
@@ -115,7 +115,7 @@ $(call recurse,distprep coverage,doc src config contrib gpcontrib)
 # it's not built by default
 $(call recurse,clean,doc contrib gpcontrib src config)
 clean:
-	rm -rf tmp_install/
+	rm -rf tmp_install/ portlock/
 # Garbage from autoconf:
 	@rm -rf autom4te.cache/
 # leap over gpAux/Makefile into subdirectories to avoid circular dependency.
@@ -132,7 +132,7 @@ distclean maintainer-clean:
 	$(MAKE) -C config $@
 	$(MAKE) -C gpMgmt $@
 	$(MAKE) -C src $@
-	rm -rf tmp_install/
+	rm -rf tmp_install/ portlock/
 # Garbage from autoconf:
 	@rm -rf autom4te.cache/
 	rm -f config.cache config.log config.status GNUmakefile
@@ -202,6 +202,11 @@ endif
 ICW_TARGETS += gpcontrib gpMgmt/bin
 
 $(call recurse,installcheck-world,src/test src/pl src/interfaces/ecpg $(ICW_TARGETS) src/bin,installcheck)
+
+$(call recurse,check-world,src/test src/pl src/interfaces contrib src/bin src/tools/pg_bsd_indent,check)
+$(call recurse,checkprep,  src/test src/pl src/interfaces contrib src/bin)
+
+$(call recurse,installcheck-world,src/test src/pl src/interfaces contrib src/bin,installcheck)
 $(call recurse,install-tests,src/test/regress,install-tests)
 
 # GPDB: Postgres disables the SSL tests during ICW because of the TCP port that

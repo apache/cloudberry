@@ -169,6 +169,7 @@ execute_cmd ./configure --prefix=${BUILD_DESTINATION} \
             --with-libxml \
             --with-lz4 \
             --with-openssl \
+            --with-zstd \
             --with-pam \
             --with-perl \
             --with-pgport=5432 \

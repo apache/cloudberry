@@ -13,6 +13,8 @@ SELECT 1 AS zero WHERE 1 IN (SELECT 2);
 SELECT * FROM (SELECT 1 AS x) ss;
 SELECT * FROM ((SELECT 1 AS x)) ss;
 
+SELECT * FROM ((SELECT 1 AS x)), ((SELECT * FROM ((SELECT 2 AS y))));
+
 (SELECT 2) UNION SELECT 2;
 ((SELECT 2)) UNION SELECT 2;
 
@@ -79,6 +81,35 @@ SELECT f1 AS "Correlated Field"
   FROM SUBSELECT_TBL
   WHERE (f1, f2) IN (SELECT f2, CAST(f3 AS int4) FROM SUBSELECT_TBL
                      WHERE f3 IS NOT NULL);
+
+-- Subselects without aliases
+
+SELECT count FROM (SELECT COUNT(DISTINCT name) FROM road);
+SELECT COUNT(*) FROM (SELECT DISTINCT name FROM road);
+
+SELECT * FROM (SELECT * FROM int4_tbl), (VALUES (123456)) WHERE f1 = column1;
+
+CREATE VIEW view_unnamed_ss AS
+SELECT * FROM (SELECT * FROM (SELECT abs(f1) AS a1 FROM int4_tbl)),
+              (SELECT * FROM int8_tbl)
+  WHERE a1 < 10 AND q1 > a1 ORDER BY q1, q2;
+
+SELECT * FROM view_unnamed_ss;
+
+\sv view_unnamed_ss
+
+DROP VIEW view_unnamed_ss;
+
+-- Test matching of locking clause to correct alias
+
+CREATE VIEW view_unnamed_ss_locking AS
+SELECT * FROM (SELECT * FROM int4_tbl), int8_tbl AS unnamed_subquery
+  WHERE f1 = q1
+  FOR UPDATE OF unnamed_subquery;
+
+\sv view_unnamed_ss_locking
+
+DROP VIEW view_unnamed_ss_locking;
 
 --
 -- Use some existing tables in the regression test
@@ -415,18 +446,16 @@ from
 --
 -- Test case for subselect within UPDATE of INSERT...ON CONFLICT DO UPDATE
 --
+create temp table upsert(key int4 primary key, val text);
+insert into upsert values(1, 'val') on conflict (key) do update set val = 'not seen';
+insert into upsert values(1, 'val') on conflict (key) do update set val = 'seen with subselect ' || (select f1 from int4_tbl where f1 != 0 order by f1 limit 1)::text;
 
--- pax not support TupleInsertSpeculative
--- create temp table upsert(key int4 primary key, val text);
--- insert into upsert values(1, 'val') on conflict (key) do update set val = 'not seen';
--- insert into upsert values(1, 'val') on conflict (key) do update set val = 'seen with subselect ' || (select f1 from int4_tbl where f1 != 0 order by f1 limit 1)::text;
+select * from upsert;
 
--- select * from upsert;
-
--- with aa as (select 'int4_tbl' u from int4_tbl limit 1)
--- insert into upsert values (1, 'x'), (999, 'y')
--- on conflict (key) do update set val = (select u from aa)
--- returning *;
+with aa as (select 'int4_tbl' u from int4_tbl limit 1)
+insert into upsert values (1, 'x'), (999, 'y')
+on conflict (key) do update set val = (select u from aa)
+returning *;
 
 --
 -- Test case for cross-type partial matching in hashed subplan (bug #7597)
@@ -495,31 +524,37 @@ select '1'::text in (select '1'::name union all select '1'::name);
 -- this fails by default, of course
 select * from int8_tbl where q1 in (select c1 from inner_text);
 
--- It's a known bug in PAX
--- it will use row reader and exec the sub plan with same motion
--- begin;
--- -- make an operator to allow it to succeed
--- create function bogus_int8_text_eq(int8, text) returns boolean
--- language sql as 'select $1::text = $2';
--- create operator = (procedure=bogus_int8_text_eq, leftarg=int8, rightarg=text);
--- explain (costs off)
--- select * from int8_tbl where q1 in (select c1 from inner_text);
--- select * from int8_tbl where q1 in (select c1 from inner_text);
--- -- inlining of this function results in unusual number of hash clauses,
--- -- which we can still cope with
--- create or replace function bogus_int8_text_eq(int8, text) returns boolean
--- language sql as 'select $1::text = $2 and $1::text = $2';
--- explain (costs off)
--- select * from int8_tbl where q1 in (select c1 from inner_text);
--- select * from int8_tbl where q1 in (select c1 from inner_text);
--- -- inlining of this function causes LHS and RHS to be switched,
--- -- which we can't cope with, so hashing should be abandoned
--- create or replace function bogus_int8_text_eq(int8, text) returns boolean
--- language sql as 'select $2 = $1::text';
--- explain (costs off)
--- select * from int8_tbl where q1 in (select c1 from inner_text);
--- select * from int8_tbl where q1 in (select c1 from inner_text);
--- rollback;  -- to get rid of the bogus operator
+begin;
+
+-- make an operator to allow it to succeed
+create function bogus_int8_text_eq(int8, text) returns boolean
+language sql as 'select $1::text = $2';
+
+create operator = (procedure=bogus_int8_text_eq, leftarg=int8, rightarg=text);
+
+explain (costs off)
+select * from int8_tbl where q1 in (select c1 from inner_text);
+select * from int8_tbl where q1 in (select c1 from inner_text);
+
+-- inlining of this function results in unusual number of hash clauses,
+-- which we can still cope with
+create or replace function bogus_int8_text_eq(int8, text) returns boolean
+language sql as 'select $1::text = $2 and $1::text = $2';
+
+explain (costs off)
+select * from int8_tbl where q1 in (select c1 from inner_text);
+select * from int8_tbl where q1 in (select c1 from inner_text);
+
+-- inlining of this function causes LHS and RHS to be switched,
+-- which we can't cope with, so hashing should be abandoned
+create or replace function bogus_int8_text_eq(int8, text) returns boolean
+language sql as 'select $2 = $1::text';
+
+explain (costs off)
+select * from int8_tbl where q1 in (select c1 from inner_text);
+select * from int8_tbl where q1 in (select c1 from inner_text);
+
+rollback;  -- to get rid of the bogus operator
 
 --
 -- Test resolution of hashed vs non-hashed implementation of EXISTS subplan
@@ -803,16 +838,10 @@ set optimizer to off;
 -- Test that LIMIT can be pushed to SORT through a subquery that just projects
 -- columns.  We check for that having happened by looking to see if EXPLAIN
 -- ANALYZE shows that a top-N sort was used.  We must suppress or filter away
--- all the non-invariant parts of the EXPLAIN ANALYZE output.
+-- all the non-invariant parts of the EXPLAIN ANALYZE output. Use a replicated
+-- table to genarate a plan like: Limit -> Subquery -> Sort
 --
--- GPDB_12_MERGE_FIXME: we need to revisit the following test because it is not
--- testing what it advertized in the above comment. Specificly, we don't
--- execute top-N sort for the planner plan. Orca on the other hand never honors
--- ORDER BY in a subquery, as permitted by the SQL spec.  Consider rewriting
--- the test using a replicated table so that we get the plan stucture like
--- this: Limit -> Subquery -> Sort
---
-create table sq_limit (pk int primary key, c1 int, c2 int);
+create table sq_limit (pk int primary key, c1 int, c2 int) distributed replicated;
 insert into sq_limit values
     (1, 1, 1),
     (2, 2, 2),
@@ -873,6 +902,55 @@ commit;
 --end_ignore
 
 --
+-- Verify that we correctly flatten cases involving a subquery output
+-- expression that doesn't need to be wrapped in a PlaceHolderVar
+--
+
+explain (costs off)
+select tname, attname from (
+select relname::information_schema.sql_identifier as tname, * from
+  (select * from pg_class c) ss1) ss2
+  right join pg_attribute a on a.attrelid = ss2.oid
+where tname = 'tenk1' and attnum = 1;
+
+select tname, attname from (
+select relname::information_schema.sql_identifier as tname, * from
+  (select * from pg_class c) ss1) ss2
+  right join pg_attribute a on a.attrelid = ss2.oid
+where tname = 'tenk1' and attnum = 1;
+
+-- Check behavior when there's a lateral reference in the output expression
+explain (verbose, costs off)
+select t1.ten, sum(x) from
+  tenk1 t1 left join lateral (
+    select t1.ten + t2.ten as x, t2.fivethous from tenk1 t2
+  ) ss on t1.unique1 = ss.fivethous
+group by t1.ten
+order by t1.ten;
+
+select t1.ten, sum(x) from
+  tenk1 t1 left join lateral (
+    select t1.ten + t2.ten as x, t2.fivethous from tenk1 t2
+  ) ss on t1.unique1 = ss.fivethous
+group by t1.ten
+order by t1.ten;
+
+explain (verbose, costs off)
+select t1.q1, x from
+  int8_tbl t1 left join
+  (int8_tbl t2 left join
+   lateral (select t2.q1+t3.q1 as x, * from int8_tbl t3) t3 on t2.q2 = t3.q2)
+  on t1.q2 = t2.q2
+order by 1, 2;
+
+select t1.q1, x from
+  int8_tbl t1 left join
+  (int8_tbl t2 left join
+   lateral (select t2.q1+t3.q1 as x, * from int8_tbl t3) t3 on t2.q2 = t3.q2)
+  on t1.q2 = t2.q2
+order by 1, 2;
+
+--
 -- Tests for CTE inlining behavior
 --
 
@@ -893,14 +971,21 @@ explain (verbose, costs off)
 with x as (select * from (select f1, current_database() from subselect_tbl) ss)
 select * from x where f1 = 1;
 
+
 -- Volatile functions prevent inlining
--- GPDB_12_MERGE_FIXME: inlining happens on GPDB: But the plan seems OK
--- nevertheless. Is the GPDB planner smart, and notices that this is
--- ok to inline, or is it doing something that would be unsafe in more
--- complicated queries? Investigte
+-- Prevent inlining happens on GPDB, inlining may cause wrong results.
+-- For example, nextval() function.
 explain (verbose, costs off)
 with x as (select * from (select f1, random() from subselect_tbl) ss)
 select * from x where f1 = 1;
+
+create temporary sequence ts;
+create table vol_test(a int, b int);
+explain (verbose, costs off)
+with x as (select * from (select a, nextval('ts') from vol_test) ss)
+select * from x where a = 1;
+drop sequence ts;
+drop table vol_test;
 
 -- SELECT FOR UPDATE cannot be inlined
 -- GPDB: select statement with locking clause is not easy to fully supported
@@ -921,11 +1006,6 @@ with x as not materialized (select * from (select f1, current_database() as n fr
 select * from x, x x2 where x.n = x2.n;
 
 -- Multiply-referenced CTEs can't be inlined if they contain outer self-refs
--- start_ignore
--- GPDB_12_MERGE_FIXME: This currenty produces incorrect results on GPDB.
--- It's not a new issue, but it was exposed by this new upstream test case
--- with the PostgreSQL v12 merge.
--- See https://github.com/greenplum-db/gpdb/issues/10014
 explain (verbose, costs off)
 with recursive x(a) as
   ((values ('a'), ('b'))
@@ -942,7 +1022,6 @@ with recursive x(a) as
     select z.a || z1.a as a from z cross join z as z1
     where length(z.a || z1.a) < 5))
 select * from x;
--- end_ignore
 
 explain (verbose, costs off)
 with recursive x(a) as
@@ -982,3 +1061,57 @@ with x as (select * from subselect_tbl)
 select * from x for update;
 
 set gp_cte_sharing to off;
+
+-- Ensure that both planners produce valid plans for the query with the nested
+-- SubLink, which contains attributes referenced in query's GROUP BY clause.
+-- Due to presence of non-grouping columns in targetList, ORCA performs query
+-- normalization, during which ORCA establishes a correspondence between vars
+-- from targetlist entries to grouping attributes. And this process should
+-- correctly handle nested structures. The inner part of SubPlan in the test
+-- should contain only t.j.
+-- start_ignore
+drop table if exists t;
+-- end_ignore
+create table t (i int, j int) distributed by (i);
+insert into t values (1, 2);
+
+explain (verbose, costs off)
+select j,
+(select j from (select j) q2)
+from t
+group by i, j;
+
+select j,
+(select j from (select j) q2)
+from t
+group by i, j;
+
+-- Ensure that both planners produce valid plans for the query with the nested
+-- SubLink when this SubLink is inside the GROUP BY clause. Attribute, which is
+-- not grouping column (1 as c), is added to query targetList to make ORCA
+-- perform query normalization. During normalization ORCA modifies the vars of
+-- the grouping elements of targetList in order to produce a new Query tree.
+-- The modification of vars inside nested part of SubLinks should be handled
+-- correctly. ORCA shouldn't fall back due to missing variable entry as a result
+-- of incorrect query normalization.
+explain (verbose, costs off)
+select j, 1 as c,
+(select j from (select j) q2) q1
+from t
+group by j, q1;
+
+select j, 1 as c,
+(select j from (select j) q2) q1
+from t
+group by j, q1;
+
+-- Ensure that both planners produce valid plans for the query with the nested
+-- SubLink, and this SubLink is under aggregation. ORCA shouldn't fall back due
+-- to missing variable entry as a result of incorrect query normalization. ORCA
+-- should correctly process args of the aggregation during normalization.
+explain (verbose, costs off)
+select (select max((select t.i))) from t;
+
+select (select max((select t.i))) from t;
+
+drop table t;

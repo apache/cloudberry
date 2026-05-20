@@ -546,18 +546,20 @@ EXPLAIN (COSTS OFF) :qry;
                      ->  GroupAggregate
                            Group Key: a.col12
                            Filter: (count(*) > 1)
-                           ->  Merge Join
-                                 Merge Cond: (a.col12 = b.col12)
-                                 ->  Sort
-                                       Sort Key: a.col12 DESC
-                                       ->  Redistribute Motion 3:3  (slice2; segments: 3)
-                                             Hash Key: a.col12
-                                             ->  Seq Scan on test_mark_restore a
-                                 ->  Sort
-                                       Sort Key: b.col12 DESC
-                                       ->  Redistribute Motion 3:3  (slice3; segments: 3)
-                                             Hash Key: b.col12
-                                             ->  Seq Scan on test_mark_restore b
+                           ->  Sort
+                                 Sort Key: a.col12 DESC, a.col1
+                                 ->  Merge Join
+                                       Merge Cond: (a.col12 = b.col12)
+                                       ->  Sort
+                                             Sort Key: a.col12 DESC
+                                             ->  Redistribute Motion 3:3  (slice2; segments: 3)
+                                                   Hash Key: a.col12
+                                                   ->  Seq Scan on test_mark_restore a
+                                       ->  Sort
+                                             Sort Key: b.col12 DESC
+                                             ->  Redistribute Motion 3:3  (slice3; segments: 3)
+                                                   Hash Key: b.col12
+                                                   ->  Seq Scan on test_mark_restore b
  Optimizer: Postgres query optimizer
 (22 rows)
 
@@ -590,18 +592,20 @@ EXPLAIN (COSTS OFF) :qry;
                      ->  GroupAggregate
                            Group Key: a.col12
                            Filter: (count(*) > 1)
-                           ->  Merge Join
-                                 Merge Cond: (a.col12 = b.col12)
-                                 ->  Sort
-                                       Sort Key: a.col12 DESC
-                                       ->  Redistribute Motion 3:3  (slice2; segments: 3)
-                                             Hash Key: a.col12
-                                             ->  Seq Scan on test_mark_restore a
-                                 ->  Sort
-                                       Sort Key: b.col12 DESC
-                                       ->  Redistribute Motion 3:3  (slice3; segments: 3)
-                                             Hash Key: b.col12
-                                             ->  Seq Scan on test_mark_restore b
+                           ->  Sort
+                                 Sort Key: a.col12 DESC, a.col1
+                                 ->  Merge Join
+                                       Merge Cond: (a.col12 = b.col12)
+                                       ->  Sort
+                                             Sort Key: a.col12 DESC
+                                             ->  Redistribute Motion 3:3  (slice2; segments: 3)
+                                                   Hash Key: a.col12
+                                                   ->  Seq Scan on test_mark_restore a
+                                       ->  Sort
+                                             Sort Key: b.col12 DESC
+                                             ->  Redistribute Motion 3:3  (slice3; segments: 3)
+                                                   Hash Key: b.col12
+                                                   ->  Seq Scan on test_mark_restore b
  Optimizer: Postgres query optimizer
 (22 rows)
 

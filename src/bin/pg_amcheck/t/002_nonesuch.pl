@@ -1,16 +1,16 @@
 
-# Copyright (c) 2021, PostgreSQL Global Development Group
+# Copyright (c) 2021-2023, PostgreSQL Global Development Group
 
 use strict;
 use warnings;
 
-use PostgresNode;
-use TestLib;
-use Test::More tests => 100;
+use PostgreSQL::Test::Cluster;
+use PostgreSQL::Test::Utils;
+use Test::More;
 
 # Test set-up
 my ($node, $port);
-$node = get_new_node('test');
+$node = PostgreSQL::Test::Cluster->new('test');
 $node->init;
 $node->start;
 $port = $node->port;
@@ -155,8 +155,7 @@ $node->command_checks_all(
 	[
 		qr/pg_amcheck: error: improper qualified name \(too many dotted names\): localhost\.postgres/
 	],
-	'multipart database patterns are rejected'
-);
+	'multipart database patterns are rejected');
 
 # Check that a three-part schema name is rejected
 $node->command_checks_all(
@@ -166,8 +165,7 @@ $node->command_checks_all(
 	[
 		qr/pg_amcheck: error: improper qualified name \(too many dotted names\): localhost\.postgres\.pg_catalog/
 	],
-	'three part schema patterns are rejected'
-);
+	'three part schema patterns are rejected');
 
 # Check that a four-part table name is rejected
 $node->command_checks_all(
@@ -177,39 +175,44 @@ $node->command_checks_all(
 	[
 		qr/pg_amcheck: error: improper relation name \(too many dotted names\): localhost\.postgres\.pg_catalog\.pg_class/
 	],
-	'four part table patterns are rejected'
-);
+	'four part table patterns are rejected');
 
 # Check that too many dotted names still draws an error under --no-strict-names
 # That flag means that it is ok for the object to be missing, not that it is ok
 # for the object name to be ungrammatical
 $node->command_checks_all(
-	[ 'pg_amcheck', '--no-strict-names', '-t', 'this.is.a.really.long.dotted.string' ],
+	[
+		'pg_amcheck', '--no-strict-names',
+		'-t', 'this.is.a.really.long.dotted.string'
+	],
 	2,
 	[qr/^$/],
 	[
 		qr/pg_amcheck: error: improper relation name \(too many dotted names\): this\.is\.a\.really\.long\.dotted\.string/
 	],
-	'ungrammatical table names still draw errors under --no-strict-names'
-);
+	'ungrammatical table names still draw errors under --no-strict-names');
 $node->command_checks_all(
-	[ 'pg_amcheck', '--no-strict-names', '-s', 'postgres.long.dotted.string' ],
+	[
+		'pg_amcheck', '--no-strict-names', '-s',
+		'postgres.long.dotted.string'
+	],
 	2,
 	[qr/^$/],
 	[
 		qr/pg_amcheck: error: improper qualified name \(too many dotted names\): postgres\.long\.dotted\.string/
 	],
-	'ungrammatical schema names still draw errors under --no-strict-names'
-);
+	'ungrammatical schema names still draw errors under --no-strict-names');
 $node->command_checks_all(
-	[ 'pg_amcheck', '--no-strict-names', '-d', 'postgres.long.dotted.string' ],
+	[
+		'pg_amcheck', '--no-strict-names', '-d',
+		'postgres.long.dotted.string'
+	],
 	2,
 	[qr/^$/],
 	[
 		qr/pg_amcheck: error: improper qualified name \(too many dotted names\): postgres\.long\.dotted\.string/
 	],
-	'ungrammatical database names still draw errors under --no-strict-names'
-);
+	'ungrammatical database names still draw errors under --no-strict-names');
 
 # Likewise for exclusion patterns
 $node->command_checks_all(
@@ -249,20 +252,20 @@ $node->command_checks_all(
 $node->command_checks_all(
 	[
 		'pg_amcheck', '--no-strict-names',
-		'-t',         'no_such_table',
-		'-t',         'no*such*table',
-		'-i',         'no_such_index',
-		'-i',         'no*such*index',
-		'-r',         'no_such_relation',
-		'-r',         'no*such*relation',
-		'-d',         'no_such_database',
-		'-d',         'no*such*database',
-		'-r',         'none.none',
-		'-r',         'none.none.none',
-		'-r',         'postgres.none.none',
-		'-r',         'postgres.pg_catalog.none',
-		'-r',         'postgres.none.pg_class',
-		'-t',         'postgres.pg_catalog.pg_class',          # This exists
+		'-t', 'no_such_table',
+		'-t', 'no*such*table',
+		'-i', 'no_such_index',
+		'-i', 'no*such*index',
+		'-r', 'no_such_relation',
+		'-r', 'no*such*relation',
+		'-d', 'no_such_database',
+		'-d', 'no*such*database',
+		'-r', 'none.none',
+		'-r', 'none.none.none',
+		'-r', 'postgres.none.none',
+		'-r', 'postgres.pg_catalog.none',
+		'-r', 'postgres.none.pg_class',
+		'-t', 'postgres.pg_catalog.pg_class',    # This exists
 	],
 	0,
 	[qr/^$/],
@@ -288,6 +291,40 @@ $node->command_checks_all(
 	'many unmatched patterns and one matched pattern under --no-strict-names'
 );
 
+
+#########################################
+# Test that an invalid / partially dropped database won't be targeted
+
+$node->safe_psql(
+	'postgres', q(
+	CREATE DATABASE regression_invalid;
+	UPDATE pg_database SET datconnlimit = -2 WHERE datname = 'regression_invalid';
+));
+
+$node->command_checks_all(
+	[
+		'pg_amcheck', '-d', 'regression_invalid'
+	],
+	1,
+	[qr/^$/],
+	[
+		qr/pg_amcheck: error: no connectable databases to check matching "regression_invalid"/,
+	],
+	'checking handling of invalid database');
+
+$node->command_checks_all(
+	[
+	    'pg_amcheck', '-d', 'postgres',
+		'-t', 'regression_invalid.public.foo',
+	],
+	1,
+	[qr/^$/],
+	[
+		qr/pg_amcheck: error: no connectable databases to check matching "regression_invalid.public.foo"/,
+	],
+	'checking handling of object in invalid database');
+
+
 #########################################
 # Test checking otherwise existent objects but in databases where they do not exist
 
@@ -301,13 +338,13 @@ $node->safe_psql('postgres', q(CREATE DATABASE another_db));
 $node->command_checks_all(
 	[
 		'pg_amcheck', '-d',
-		'postgres',   '--no-strict-names',
-		'-t',         'template1.public.foo',
-		'-t',         'another_db.public.foo',
-		'-t',         'no_such_database.public.foo',
-		'-i',         'template1.public.foo_idx',
-		'-i',         'another_db.public.foo_idx',
-		'-i',         'no_such_database.public.foo_idx',
+		'postgres', '--no-strict-names',
+		'-t', 'template1.public.foo',
+		'-t', 'another_db.public.foo',
+		'-t', 'no_such_database.public.foo',
+		'-i', 'template1.public.foo_idx',
+		'-i', 'another_db.public.foo_idx',
+		'-i', 'no_such_database.public.foo_idx',
 	],
 	1,
 	[qr/^$/],
@@ -321,7 +358,7 @@ $node->command_checks_all(
 		qr/pg_amcheck: warning: no connectable databases to check matching "no_such_database\.public\.foo_idx"/,
 		qr/pg_amcheck: error: no relations to check/,
 	],
-	'checking otherwise existent objets in the wrong databases');
+	'checking otherwise existent objects in the wrong databases');
 
 
 #########################################
@@ -331,8 +368,8 @@ $node->command_checks_all(
 $node->command_checks_all(
 	[
 		'pg_amcheck', '--all', '--no-strict-names', '-S',
-		'public',     '-S',    'pg_catalog',        '-S',
-		'pg_toast',   '-S',    'information_schema',
+		'public', '-S', 'pg_catalog', '-S',
+		'pg_toast', '-S', 'information_schema',
 	],
 	1,
 	[qr/^$/],
@@ -345,9 +382,9 @@ $node->command_checks_all(
 # Check with schema exclusion patterns overriding relation and schema inclusion patterns
 $node->command_checks_all(
 	[
-		'pg_amcheck',          '--all', '--no-strict-names',  '-s',
-		'public',              '-s',    'pg_catalog',         '-s',
-		'pg_toast',            '-s',    'information_schema', '-t',
+		'pg_amcheck', '--all', '--no-strict-names', '-s',
+		'public', '-s', 'pg_catalog', '-s',
+		'pg_toast', '-s', 'information_schema', '-t',
 		'pg_catalog.pg_class', '-S*'
 	],
 	1,
@@ -357,3 +394,5 @@ $node->command_checks_all(
 		qr/pg_amcheck: error: no relations to check/
 	],
 	'schema exclusion pattern overrides all inclusion patterns');
+
+done_testing();

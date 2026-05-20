@@ -81,7 +81,7 @@ class PaxCatalogUpdater {
 #endif
 };
 
-void PaxCopyAllDataFiles(Relation rel, const RelFileNode *newrnode,
+void PaxCopyAllDataFiles(Relation rel, const RelFileLocator *newrnode,
                          bool createnewpath);
 } // namespace pax
 
