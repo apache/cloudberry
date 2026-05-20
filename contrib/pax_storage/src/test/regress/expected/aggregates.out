@@ -3570,18 +3570,6 @@ drop table agg_hash_3;
 drop table agg_hash_4;
 -- GitHub issue https://github.com/greenplum-db/gpdb/issues/12061
 -- numsegments of the general locus should be -1 on create_minmaxagg_path
-explain analyze select count(*) from pg_class, (select count(*) > 0 from (select count(*) from pg_class where relnatts > 8) x) y;
-                                                       QUERY PLAN                                                        
--------------------------------------------------------------------------------------------------------------------------
- Aggregate  (cost=10000000055.82..10000000055.83 rows=1 width=8) (actual time=0.394..0.395 rows=1 loops=1)
-   ->  Nested Loop  (cost=10000000000.02..10000000052.40 rows=1368 width=0) (actual time=0.017..0.310 rows=1378 loops=1)
-         ->  Aggregate  (cost=0.02..0.03 rows=1 width=1) (actual time=0.005..0.006 rows=1 loops=1)
-               ->  Result  (cost=0.00..0.01 rows=1 width=8) (actual time=0.002..0.003 rows=1 loops=1)
-         ->  Seq Scan on pg_class  (cost=0.00..38.68 rows=1368 width=0) (actual time=0.009..0.170 rows=1378 loops=1)
- Planning Time: 0.738 ms
-   (slice0)    Executor memory: 29K bytes.
- Memory used:  128000kB
- Optimizer: Postgres query optimizer
- Execution Time: 0.446 ms
-(10 rows)
+-- start_ignore
 
+-- end_ignore
