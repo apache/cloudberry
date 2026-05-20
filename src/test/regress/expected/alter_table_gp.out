@@ -266,7 +266,6 @@ ANALYZE gp_test_fast_def;
 -- start_ignore
 
 -- end_ignore
-
 -- Create view with JOIN clause, drop column, check select to view not causing segfault
 CREATE TABLE dropped_col_t1(i1 int, i2 int);
 CREATE TABLE dropped_col_t2(i1 int, i2 int);
