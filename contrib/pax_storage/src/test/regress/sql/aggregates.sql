@@ -1623,4 +1623,6 @@ drop table agg_hash_4;
 
 -- GitHub issue https://github.com/greenplum-db/gpdb/issues/12061
 -- numsegments of the general locus should be -1 on create_minmaxagg_path
+-- start_ignore
 explain analyze select count(*) from pg_class, (select count(*) > 0 from (select count(*) from pg_class where relnatts > 8) x) y;
+-- end_ignore

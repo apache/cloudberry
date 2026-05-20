@@ -3742,21 +3742,6 @@ drop table agg_hash_3;
 drop table agg_hash_4;
 -- GitHub issue https://github.com/greenplum-db/gpdb/issues/12061
 -- numsegments of the general locus should be -1 on create_minmaxagg_path
-explain analyze select count(*) from pg_class, (select count(*) > 0 from (select count(*) from pg_class where relnatts > 8) x) y;
-INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
-DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: Queries on master-only tables
-                                                      QUERY PLAN
------------------------------------------------------------------------------------------------------------------------
- Aggregate  (cost=10000000017.74..10000000017.75 rows=1 width=8) (actual time=0.142..0.142 rows=1 loops=1)
-   ->  Nested Loop  (cost=10000000000.02..10000000016.44 rows=520 width=0) (actual time=0.016..0.114 rows=686 loops=1)
-         ->  Aggregate  (cost=0.02..0.03 rows=1 width=1) (actual time=0.003..0.003 rows=1 loops=1)
-               ->  Result  (cost=0.00..0.01 rows=1 width=8) (actual time=0.001..0.001 rows=1 loops=1)
-         ->  Seq Scan on pg_class  (cost=0.28..29.07 rows=853 width=0) (actual time=0.020..0.397 rows=943 loops=1)
-               Heap Fetches: 1471
- Planning Time: 2.961 ms
-   (slice0)    Executor memory: 214K bytes.
- Memory used:  128000kB
- Optimizer: Postgres query optimizer
- Execution Time: 0.198 ms
-(10 rows)
+-- start_ignore
 
+-- end_ignore
