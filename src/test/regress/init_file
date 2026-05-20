@@ -171,6 +171,7 @@ s/ERROR:  could not devise a query plan for the given query \(.*\)/ERROR:  could
 m/Parallel Seq Scan on /
 s/Parallel Seq Scan on /Seq Scan on /
 
+
 m/^DETAIL:.*gid=.*/
 s/gid=\d+/gid DUMMY/
 
