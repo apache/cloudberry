@@ -306,7 +306,7 @@ extern List *transformColumnEncoding(const TableAmRoutine *tam, Relation rel, Li
 										List *stenc, List *withOptions, List *parentenc,
 										bool explicitOnly, bool createDefaultOne, bool appendonly);
 
-List* transfromColumnEncodingAocoRootPartition(List *colDefs, List *stenc, List *withOptions, bool errorOnEncodingClause);
+List* transformColumnEncodingAocoRootPartition(List *colDefs, List *stenc, List *withOptions, bool errorOnEncodingClause);
 
 extern List *transformStorageEncodingClause(List *options, bool validate);
 extern List *form_default_storage_directive(List *enc);

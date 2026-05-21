@@ -1621,8 +1621,10 @@ GetExtStatisticsName(Oid statOid)
 		elog(ERROR, "cache lookup failed for statistics object %u", statOid);
 
 	staForm = (Form_pg_statistic_ext) GETSTRUCT(htup);
+	/* Copy the name before releasing the cache entry. */
+	char *result = pstrdup(NameStr(staForm->stxname));
 	ReleaseSysCache(htup);
-	return NameStr(staForm->stxname);
+	return result;
 }
 
 /*

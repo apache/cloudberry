@@ -225,6 +225,14 @@ ao_vacuum_rel_pre_cleanup(Relation onerel, VacuumParams *params, BufferAccessStr
 	ao_vacuum_rel_recycle_dead_segments(onerel, params, bstrategy, vacrelstats);
 
 	/*
+	 * Make the pg_aoseg updates above visible to AppendOptimizedTruncateToEOF's
+	 * catalog snapshot; without this the zeroed-eof rows are invisible (same
+	 * CommandId) and the old non-zero-eof rows appear live, triggering "file
+	 * size smaller than logical eof".
+	 */
+	CommandCounterIncrement();
+
+	/*
 	 * Also truncate all live segments to the EOF values stored in pg_aoseg.
 	 * This releases space left behind by aborted inserts.
 	 */

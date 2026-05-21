@@ -33,14 +33,13 @@ declare
   updated3 bool;
   updated4 bool;
   updated5 bool;
+  updated6 bool;
 begin
   -- we don't want to wait forever; loop will exit after 30 seconds
   for i in 1 .. 300 loop
 
-    -- With parallel query, the seqscan and indexscan on tenk2 might be done
-    -- in parallel worker processes, which will send their stats counters
-    -- asynchronously to what our own session does.  So we must check for
-    -- those counts to be registered separately from the update counts.
+    -- Segment stats are sent asynchronously to the coordinator, so we must
+    -- check for each counter independently to avoid false exits.
 
     -- check to see if seqscan has been sensed
     SELECT (st.seq_scan >= pr.seq_scan + 1) INTO updated1
@@ -67,7 +66,13 @@ begin
       FROM gp_stat_user_tables_summary AS st, pg_class AS cl, prevstats AS pr
      WHERE st.relname='tenk2' AND cl.relname='tenk2';
 
-    exit when updated1 and updated2 and updated3 and updated4 and updated5;
+    -- check to see if seq_tup_read has been sensed; segment stats may arrive
+    -- after seq_scan count, so wait for this explicitly
+    SELECT (st.seq_tup_read >= pr.seq_tup_read + cl.reltuples) INTO updated6
+      FROM gp_stat_user_tables_summary AS st, pg_class AS cl, prevstats AS pr
+     WHERE st.relname='tenk2' AND cl.relname='tenk2';
+
+    exit when updated1 and updated2 and updated3 and updated4 and updated5 and updated6;
 
     -- wait a little
     perform pg_sleep_for('100 milliseconds');

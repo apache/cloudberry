@@ -99,6 +99,7 @@ RUN dnf makecache && \
         krb5-devel \
         libcurl-devel \
         libevent-devel \
+        libicu-devel \
         libssh2-devel \
         libuuid-devel \
         libxml2-devel \
@@ -150,14 +151,14 @@ RUN dnf makecache && \
     make -j$(nproc) && \
     make install -C ~/xerces-c-${XERCES_LATEST_RELEASE} && \
     rm -rf ~/xerces-c* && \
-    cd && GO_VERSION="go1.23.4" && \
+    cd && GO_VERSION="go1.25.10" && \
     ARCH=$(uname -m) && \
     if [ "${ARCH}" = "aarch64" ]; then \
         GO_ARCH="arm64" && \
-        GO_SHA256="16e5017863a7f6071363782b1b8042eb12c6ca4f4cd71528b2123f0a1275b13e"; \
+        GO_SHA256="654da1f9b50a5d1c2a85ccf8ed405aa89c06e94d18384628bf186f7712677b08"; \
     elif [ "${ARCH}" = "x86_64" ]; then \
         GO_ARCH="amd64" && \
-        GO_SHA256="6924efde5de86fe277676e929dc9917d466efa02fb934197bc2eba35d5680971"; \
+        GO_SHA256="42d4f7a32316aa66591eca7e89867256057a4264451aca10570a715b3637ba70"; \
     else \
         echo "Unsupported architecture: ${ARCH}" && exit 1; \
     fi && \

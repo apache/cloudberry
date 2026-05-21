@@ -92,14 +92,14 @@ Build and deploy steps:
 
     ```shell
     cd cloudberry/devops/sandbox
-    ./run.sh -c 2.0.0
+    ./run.sh -c 2.1.0
     ```
 
     - For latest Apache Cloudberry release running across multiple containers
 
     ```shell
     cd cloudberry/devops/sandbox
-    ./run.sh -c 2.0.0 -m
+    ./run.sh -c 2.1.0 -m
     ```
 
     - For latest main branch running on a single container

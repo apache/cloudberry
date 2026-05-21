@@ -331,7 +331,12 @@ CConfigParamMapping::SConfigMappingElem CConfigParamMapping::m_elements[] = {
 	 false,	 // m_negate_param
 	 GPOS_WSZ_LIT(
 		 "Enable create window hash agg")},
-	
+
+	{EopttraceDisableStreamingHashAgg, &optimizer_use_streaming_hashagg,
+	 true,	// m_negate_param
+	 GPOS_WSZ_LIT(
+		 "Disable streaming hash agg in ORCA-generated local partial aggregations.")},
+
 };
 
 //---------------------------------------------------------------------------
@@ -449,6 +454,8 @@ CConfigParamMapping::PackConfigParamInBitset(
 		// disable table scan if the corresponding GUC is turned off
 		traceflag_bitset->ExchangeSet(
 			GPOPT_DISABLE_XFORM_TF(CXform::ExfGet2TableScan));
+		traceflag_bitset->ExchangeSet(
+			GPOPT_DISABLE_XFORM_TF(CXform::ExfGet2ParallelTableScan));
 	}
 
 	if (!optimizer_enable_push_join_below_union_all)

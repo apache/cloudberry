@@ -85,6 +85,7 @@ OBJS        = CDXLColDescr.o \
               CDXLPhysicalSplit.o \
               CDXLPhysicalTVF.o \
               CDXLPhysicalTableScan.o \
+              CDXLPhysicalParallelTableScan.o \
               CDXLPhysicalValuesScan.o \
               CDXLPhysicalWindow.o \
               CDXLProperties.o \

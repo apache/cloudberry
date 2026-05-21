@@ -49,6 +49,7 @@ on:
     paths:
       - 'devops/deploy/docker/test/rocky8/**'
       - 'devops/deploy/docker/test/rocky9/**'
+      - 'devops/deploy/docker/test/rocky10/**'
       - 'devops/deploy/docker/test/ubuntu22.04/**'
       - 'devops/deploy/docker/test/ubuntu24.04/**'
   pull_request:
@@ -68,7 +69,7 @@ jobs:
     strategy:
       matrix:
         # Build for Rocky Linux 8 and 9, Ubuntu 22.04 and 24.04
-        platform: ['rocky8', 'rocky9', 'ubuntu22.04', 'ubuntu24.04']
+        platform: ['rocky8', 'rocky9', 'rocky10', 'ubuntu22.04', 'ubuntu24.04']
 
     steps:
       # Checkout repository code
@@ -92,6 +93,8 @@ jobs:
               - 'devops/deploy/docker/test/rocky8/**'
             rocky9:
               - 'devops/deploy/docker/test/rocky9/**'
+            rocky10:
+              - 'devops/deploy/docker/test/rocky10/**'
             ubuntu22.04:
               - 'devops/deploy/docker/test/ubuntu22.04/**'
             ubuntu24.04:
@@ -106,12 +109,12 @@ jobs:
       # This allows building ARM64 images on AMD64 infrastructure and vice versa
       - name: Set up QEMU
         if: ${{ steps.platform-filter.outputs[matrix.platform] == 'true' }}
-        uses: docker/setup-qemu-action@v3
+        uses: docker/setup-qemu-action@ce360397dd3f832beb865e1373c09c0e9f86d70a # v4.0.0
 
       # Login to DockerHub for pushing images
       - name: Login to Docker Hub
         if: ${{ steps.platform-filter.outputs[matrix.platform] == 'true' && github.event_name == 'push' && github.ref == 'refs/heads/main' }}
-        uses: docker/login-action@v3
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
         with:
           username: ${{ secrets.DOCKERHUB_USER }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
@@ -119,7 +122,7 @@ jobs:
       # Setup Docker Buildx for efficient multi-architecture builds
       - name: Set up Docker Buildx
         if: ${{ steps.platform-filter.outputs[matrix.platform] == 'true' }}
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
         with:
           buildkitd-flags: --debug
 
@@ -142,7 +145,7 @@ jobs:
       # Creates a manifest list that supports both architectures
       - name: Build and Push Multi-arch Docker images
         if: ${{ steps.platform-filter.outputs[matrix.platform] == 'true' && github.event_name == 'push' && github.ref == 'refs/heads/main' }}
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
         with:
           context: ./devops/deploy/docker/test/${{ matrix.platform }}
           push: true

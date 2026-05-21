@@ -504,7 +504,7 @@ CStatisticsTest::EresUnittest_CStatisticsBasic()
 
 	ULongPtrArray *aggs = GPOS_NEW(mp) ULongPtrArray(mp);
 	CStatistics *pstats4 = CGroupByStatsProcessor::CalcGroupByStats(
-		mp, stats, GCs, aggs, nullptr /*keys*/);
+		mp, stats, GCs, aggs, nullptr /*keys*/, false /*is_partial*/);
 
 	GPOS_TRACE(GPOS_WSZ_LIT("pstats4 = stats group by"));
 	CCardinalityTestUtils::PrintStats(mp, pstats4);

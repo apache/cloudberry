@@ -673,6 +673,9 @@ int FindNodes(Node *node, List *nodeTags);
 // look for nodes with non-default collation; returns 1 if any exist, -1 otherwise
 int CheckCollation(Node *node);
 
+// check if ORDER BY uses an ordering operator (amcanorderbyop) unsupported by ORCA
+bool HasOrderByOrderingOp(Query *query);
+
 Node *CoerceToCommonType(ParseState *pstate, Node *node, Oid target_type,
 						 const char *context);
 
@@ -716,6 +719,9 @@ List *GetMergeJoinOpFamilies(Oid opno);
 
 // get the OID of base elementtype fora given typid
 Oid GetBaseType(Oid typid);
+
+// check if parallel mode is OK (comprehensive check)
+bool IsParallelModeOK(void);
 
 // returns the result of evaluating 'expr' as an Expr. Caller keeps ownership of 'expr'
 // and takes ownership of the result
@@ -767,6 +773,8 @@ void GPDBMemoryContextDelete(MemoryContext context);
 List *GetRelChildIndexes(Oid reloid);
 
 Oid GetForeignServerId(Oid reloid);
+
+int16 GetAppendOnlySegmentFilesCount(Relation rel);
 
 void GPDBLockRelationOid(Oid reloid, int lockmode);
 

@@ -43,5 +43,6 @@ extern List *extract_nodes_plan(Plan *pl, int nodeTag, bool descendIntoSubquerie
 extern List *extract_nodes_expression(Node *node, int nodeTag, bool descendIntoSubqueries);
 extern int find_nodes(Node *node, List *nodeTags);
 extern int check_collation(Node *node);
+extern bool has_orderby_ordering_op(Query *query);
 
 #endif /* WALKERS_H_ */

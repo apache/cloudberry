@@ -69,11 +69,15 @@ private:
 	// default window oids
 	CWindowOids *m_window_oids;
 
+	// should generate parallel plans ?
+	BOOL m_create_parallel_plan;
+
 public:
 	// ctor
 	COptimizerConfig(CEnumeratorConfig *pec, CStatisticsConfig *stats_config,
 					 CCTEConfig *pcteconf, ICostModel *pcm, CHint *phint,
-					 CPlanHint *pplanhint, CWindowOids *pdefoidsGPDB);
+					 CPlanHint *pplanhint, CWindowOids *pdefoidsGPDB,
+					 BOOL enable_parallel_plans = false);
 
 	// dtor
 	~COptimizerConfig() override;
@@ -125,6 +129,13 @@ public:
 	GetPlanHint() const
 	{
 		return m_plan_hint;
+	}
+
+	// parallel plans setting
+	BOOL
+	CreateParallelPlan() const
+	{
+		return m_create_parallel_plan;
 	}
 
 	// generate default optimizer configurations

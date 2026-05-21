@@ -121,6 +121,53 @@ select array_agg(a order by b)
 -- Orca should fallback if a function in 'from' clause uses 'WITH ORDINALITY'
 SELECT * FROM jsonb_array_elements('["b", "a"]'::jsonb) WITH ORDINALITY;
 
+-- The walker that detects a CTE Consumer on a different slice than its
+-- replicated Producer. Without it ORCA would emit a plan with cross-slice
+-- replicated CTE Consumers that hangs at execution.
+-- start_ignore
+DROP TABLE IF EXISTS tbl1, tbl2;
+-- end_ignore
+CREATE TABLE tbl2 (id numeric, refrcode varchar(255), referenceid numeric)
+DISTRIBUTED REPLICATED;
+CREATE TABLE tbl1 (id bigserial, iscalctrg varchar(15) NOT NULL,
+                   iscalcdetail varchar(15))
+DISTRIBUTED REPLICATED;
+-- start_ignore
+INSERT INTO tbl2 SELECT i, 'A'||(i%5), 101991
+  FROM generate_series(1, 50000) i;
+INSERT INTO tbl1 (iscalctrg, iscalcdetail)
+  SELECT 'A'||(i%5), 'A'||(i%7) FROM generate_series(1, 50000) i;
+ANALYZE tbl1;
+ANALYZE tbl2;
+-- end_ignore
+
+-- Case 1: walker triggers fallback. With scalar subqueries on the CTE
+-- ORCA produces a plan whose CTE Producer is replicated and Consumers
+-- live on a different slice -- the walker raises ExmiExpr2DXLUnsupported
+-- and trace_fallback DETAIL says "CTE Consumer placed on a different
+-- slice than its replicated Producer".
+EXPLAIN (COSTS OFF)
+WITH t2 AS (SELECT id, refrcode FROM tbl2 WHERE referenceid = 101991)
+SELECT p.iscalctrg,
+       (SELECT refrcode FROM t2 WHERE refrcode = p.iscalctrg    LIMIT 1) AS r,
+       (SELECT refrcode FROM t2 WHERE refrcode = p.iscalcdetail LIMIT 1) AS r1
+FROM tbl1 p
+LIMIT 1;
+
+-- Case 2: walker correctly stays silent. The same CTE referenced from a
+-- JOIN: ORCA pins the Producer body to a single segment with a One-Time
+-- Filter (gp_execution_segment() = N), so the Producer's child
+-- distribution is EdtSingleton, not replicated -- the walker skips it.
+EXPLAIN (COSTS OFF)
+WITH t1 AS (SELECT * FROM tbl1),
+     t2 AS (SELECT id, refrcode FROM tbl2 WHERE referenceid = 101991)
+SELECT p.* FROM t1 p
+  JOIN t2 r  ON p.iscalctrg   = r.refrcode
+  JOIN t2 r1 ON p.iscalcdetail = r1.refrcode
+LIMIT 1;
+
+DROP TABLE tbl1, tbl2;
+
 -- start_ignore
 -- FIXME: gpcheckcat fails due to mismatching distribution policy if this table isn't dropped
 -- Keep this table around once this is fixed

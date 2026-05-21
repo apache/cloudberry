@@ -593,8 +593,13 @@ getCdbComponentInfo(void)
 			continue;
 
 		hsEntry = (HostPrimaryCountEntry *) hash_search(hostPrimaryCountHash, cdbInfo->config->hostname, HASH_FIND, &found);
-		Assert(found);
-		cdbInfo->hostPrimaryCount = hsEntry->segmentCount;
+		Assert(found || IS_HOT_STANDBY_QD());
+		/*
+		 * Standby and mirror entries can legitimately live on hosts that do not
+		 * own any primary segments. In that case the lookup is absent and the
+		 * count should be treated as zero instead of dereferencing a NULL entry.
+		 */
+		cdbInfo->hostPrimaryCount = found ? hsEntry->segmentCount : 0;
 	}
 
 	for (i = 0; i < component_databases->total_entry_dbs; i++)
@@ -605,8 +610,13 @@ getCdbComponentInfo(void)
 			continue;
 
 		hsEntry = (HostPrimaryCountEntry *) hash_search(hostPrimaryCountHash, cdbInfo->config->hostname, HASH_FIND, &found);
-		Assert(found);
-		cdbInfo->hostPrimaryCount = hsEntry->segmentCount;
+		Assert(found || IS_HOT_STANDBY_QD());
+		/*
+		 * Standby and mirror entries can legitimately live on hosts that do not
+		 * own any primary segments. In that case the lookup is absent and the
+		 * count should be treated as zero instead of dereferencing a NULL entry.
+		 */
+		cdbInfo->hostPrimaryCount = found ? hsEntry->segmentCount : 0;
 	}
 
 	hash_destroy(hostPrimaryCountHash);

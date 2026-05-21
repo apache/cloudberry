@@ -1,0 +1,120 @@
+create schema orca_parallel;
+set search_path=orca_parallel, public;
+set statement_mem = '256MB';
+set optimizer=on;
+create table t1(a int, b int) with(parallel_workers=2) distributed by (a);
+create table t2(c int, d int ) with(parallel_workers=3) distributed by (c);
+insert into t1 select i, i+1 from generate_series(1, 1000)i;
+insert into t2 select i, i+2 from generate_series(1, 20000)i;
+analyze t1;
+analyze t2;
+set parallel_setup_cost=0;
+set max_parallel_workers_per_gather=4;
+set enable_parallel = on;
+explain (verbose, costs off) select * from t1  join t2  on t1.a = t2.c;
+                                  QUERY PLAN                                   
+-------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Output: t1.a, t1.b, t2.c, t2.d
+   ->  Hash Join
+         Output: t1.a, t1.b, t2.c, t2.d
+         Hash Cond: (t2.c = t1.a)
+         ->  Redistribute Motion 9:3  (slice2; segments: 9)
+               Output: t2.c, t2.d
+               Hash Key: t2.c
+               ->  Parallel Seq Scan on orca_parallel.t2
+                     Output: t2.c, t2.d
+         ->  Hash
+               Output: t1.a, t1.b
+               ->  Redistribute Motion 6:3  (slice3; segments: 6)
+                     Output: t1.a, t1.b
+                     Hash Key: t1.a
+                     ->  Parallel Seq Scan on orca_parallel.t1
+                           Output: t1.a, t1.b
+ Settings: enable_parallel = 'on', optimizer = 'on', parallel_setup_cost = '0'
+ Optimizer: GPORCA
+(19 rows)
+
+explain (verbose, costs off) select * from t1  join t2  on t1.a = t2.d;
+                                  QUERY PLAN                                   
+-------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Output: t1.a, t1.b, t2.c, t2.d
+   ->  Hash Join
+         Output: t1.a, t1.b, t2.c, t2.d
+         Hash Cond: (t2.d = t1.a)
+         ->  Redistribute Motion 9:3  (slice2; segments: 9)
+               Output: t2.c, t2.d
+               Hash Key: t2.d
+               ->  Parallel Seq Scan on orca_parallel.t2
+                     Output: t2.c, t2.d
+         ->  Hash
+               Output: t1.a, t1.b
+               ->  Redistribute Motion 6:3  (slice3; segments: 6)
+                     Output: t1.a, t1.b
+                     Hash Key: t1.a
+                     ->  Parallel Seq Scan on orca_parallel.t1
+                           Output: t1.a, t1.b
+ Settings: enable_parallel = 'on', optimizer = 'on', parallel_setup_cost = '0'
+ Optimizer: GPORCA
+(19 rows)
+
+explain (verbose, costs off) select * from t1  join t2  on t1.b = t2.c;
+                                  QUERY PLAN                                   
+-------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Output: t1.a, t1.b, t2.c, t2.d
+   ->  Hash Join
+         Output: t1.a, t1.b, t2.c, t2.d
+         Hash Cond: (t2.c = t1.b)
+         ->  Redistribute Motion 9:3  (slice2; segments: 9)
+               Output: t2.c, t2.d
+               Hash Key: t2.c
+               ->  Parallel Seq Scan on orca_parallel.t2
+                     Output: t2.c, t2.d
+         ->  Hash
+               Output: t1.a, t1.b
+               ->  Redistribute Motion 6:3  (slice3; segments: 6)
+                     Output: t1.a, t1.b
+                     Hash Key: t1.b
+                     ->  Parallel Seq Scan on orca_parallel.t1
+                           Output: t1.a, t1.b
+ Settings: enable_parallel = 'on', optimizer = 'on', parallel_setup_cost = '0'
+ Optimizer: GPORCA
+(19 rows)
+
+explain (verbose, costs off) select * from t1  join t2  on t1.b = t2.d;
+                                  QUERY PLAN                                   
+-------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Output: t1.a, t1.b, t2.c, t2.d
+   ->  Hash Join
+         Output: t1.a, t1.b, t2.c, t2.d
+         Hash Cond: (t2.d = t1.b)
+         ->  Redistribute Motion 9:3  (slice2; segments: 9)
+               Output: t2.c, t2.d
+               Hash Key: t2.d
+               ->  Parallel Seq Scan on orca_parallel.t2
+                     Output: t2.c, t2.d
+         ->  Hash
+               Output: t1.a, t1.b
+               ->  Redistribute Motion 6:3  (slice3; segments: 6)
+                     Output: t1.a, t1.b
+                     Hash Key: t1.b
+                     ->  Parallel Seq Scan on orca_parallel.t1
+                           Output: t1.a, t1.b
+ Settings: enable_parallel = 'on', optimizer = 'on', parallel_setup_cost = '0'
+ Optimizer: GPORCA
+(19 rows)
+
+reset enable_parallel;
+reset max_parallel_workers_per_gather;
+reset parallel_setup_cost;
+reset statement_mem;
+reset optimizer;
+-- start_ignore
+drop schema orca_parallel cascade;
+NOTICE:  drop cascades to 2 other objects
+DETAIL:  drop cascades to table t1
+drop cascades to table t2
+-- end_ignore

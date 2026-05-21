@@ -154,6 +154,7 @@ bool		enable_parallel_dedup_semi_join = true;
 bool		enable_parallel_dedup_semi_reverse_join = true;
 bool		parallel_query_use_streaming_hashagg = false;
 bool		gp_use_streaming_hashagg = true;
+bool		optimizer_use_streaming_hashagg = true;
 int			gp_appendonly_insert_files = 0;
 int			gp_appendonly_insert_files_tuples_range = 0;
 int			gp_random_insert_segments = 0;
@@ -1906,6 +1907,16 @@ struct config_bool ConfigureNamesBool_gp[] =
 			GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE
 		},
 		&gp_use_streaming_hashagg,
+		true, NULL, NULL
+	},
+
+	{
+		{"optimizer_use_streaming_hashagg", PGC_USERSET, DEVELOPER_OPTIONS,
+			gettext_noop("Use streaming hash agg in ORCA-generated local partial hash aggregations."),
+			NULL,
+			GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE
+		},
+		&optimizer_use_streaming_hashagg,
 		true, NULL, NULL
 	},
 
