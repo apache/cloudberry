@@ -10,7 +10,7 @@ from optparse import Option, OptionGroup, OptionParser, OptionValueError, SUPPRE
 
 from gppylib.gpparseopts import OptParser, OptChecker
 from gppylib.commands.gp import ModifyConfSetting, SegmentStart, SegmentStop
-from gppylib.commands.pg import PgBaseBackup
+from gppylib.commands.pg import PgBaseBackup, ensure_replication_slot_exists
 from gppylib.db import dbconn
 from gppylib.commands import unix
 from gppylib.commands.pg import DbStatus
@@ -134,6 +134,10 @@ class ConfExpSegCmd(Command):
                         self.progressFile = '%s/pg_basebackup.%s.dbid%s.out' % (gplog.get_logger_dir(),
                                                                                 datetime.datetime.today().strftime('%Y%m%d_%H%M%S'),
                                                                                 self.dbid)
+                    ensure_replication_slot_exists(
+                        self.syncWithSegmentHostname,
+                        self.syncWithSegmentPort,
+                        self.replicationSlotName)
                     # Create a mirror based on the primary
                     cmd = PgBaseBackup(target_datadir=self.datadir,
                                        source_host=self.syncWithSegmentHostname,
@@ -149,30 +153,9 @@ class ConfExpSegCmd(Command):
                         self.set_results(CommandResult(0, b'', b'', True, False))
                         if shouldDeleteProgressFile:
                             os.remove(self.progressFile)
-
                     except Exception as e:
-                        #  If the cluster never has mirrors, cmd will fail
-                        #  quickly because the internal slot doesn't exist.
-                        #  Re-run with `create_slot`.
-                        #  GPDB_12_MERGE_FIXME could we check it before? or let
-                        #  pg_basebackup create slot if not exists.
-                        cmd = PgBaseBackup(target_datadir=self.datadir,
-                                           source_host=self.syncWithSegmentHostname,
-                                           source_port=str(self.syncWithSegmentPort),
-                                           create_slot = True,
-                                           replication_slot_name=self.replicationSlotName,
-                                           forceoverwrite=True,
-                                           target_gp_dbid=self.dbid,
-                                           logfile=self.progressFile)
-                        try:
-                            logger.info("Re-running pg_basebackup, creating the slot this time")
-                            cmd.run(validateAfter=True)
-                            self.set_results(CommandResult(0, b'', b'', True, False))
-                            if shouldDeleteProgressFile:
-                                os.remove(self.progressFile)
-                        except Exception as e:
-                            self.set_results(CommandResult(1, b'', str(e).encode(), True, False))
-                            raise
+                        self.set_results(CommandResult(1, b'', str(e).encode(), True, False))
+                        raise
 
                     logger.info("Successfully ran pg_basebackup: %s" % cmd.cmdStr)
                     return
