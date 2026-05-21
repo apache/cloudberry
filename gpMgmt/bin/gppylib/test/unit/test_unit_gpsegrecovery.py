@@ -106,10 +106,12 @@ class FullRecoveryTestCase(GpTestCase):
         self.maxDiff = None
         self.mock_logger = Mock(spec=['log', 'info', 'debug', 'error', 'warn', 'exception'])
         self.apply_patches([
+            patch('gpsegrecovery.ensure_replication_slot_exists'),
             patch('gpsegrecovery.start_segment', return_value=Mock()),
             patch('gpsegrecovery.PgBaseBackup.__init__', return_value=None),
             patch('gpsegrecovery.PgBaseBackup.run')
         ])
+        self.mock_ensure_slot = self.get_mock_from_apply_patch('ensure_replication_slot_exists')
         self.mock_pgbasebackup_run = self.get_mock_from_apply_patch('run')
         self.mock_pgbasebackup_init = self.get_mock_from_apply_patch('__init__')
 
@@ -130,6 +132,7 @@ class FullRecoveryTestCase(GpTestCase):
         super(FullRecoveryTestCase, self).tearDown()
 
     def _assert_basebackup_runs(self, expected_init_args):
+        self.mock_ensure_slot.assert_called_once_with('sdw1', 40000, 'internal_wal_replication_slot')
         self.assertEqual(1, self.mock_pgbasebackup_init.call_count)
         self.assertEqual(expected_init_args, self.mock_pgbasebackup_init.call_args)
         self.assertEqual(1, self.mock_pgbasebackup_run.call_count)
@@ -172,49 +175,37 @@ class FullRecoveryTestCase(GpTestCase):
         self._assert_basebackup_runs(expected_init_args1)
         self._assert_cmd_passed()
 
-    def test_basebackup_run_one_exception(self):
-        self.mock_pgbasebackup_run.side_effect = [Exception('backup failed once'), Mock()]
+    def test_basebackup_slot_check_exception(self):
+        self.mock_ensure_slot.side_effect = [Exception('slot check failed')]
 
         self.full_recovery_cmd.run()
 
-        expected_init_args1 = call("/data/mirror0", "sdw1", '40000', create_slot=False,
-                                   replication_slot_name='internal_wal_replication_slot',
-                                   forceoverwrite=True, target_gp_dbid=2, progress_file='/tmp/test_progress_file')
-        expected_init_args2 = call("/data/mirror0", "sdw1", '40000', create_slot=True,
-                                   replication_slot_name='internal_wal_replication_slot',
-                                   forceoverwrite=True, target_gp_dbid=2, progress_file='/tmp/test_progress_file')
-        self.assertEqual(2, self.mock_pgbasebackup_init.call_count)
-        self.assertEqual([expected_init_args1, expected_init_args2] , self.mock_pgbasebackup_init.call_args_list)
-        self.assertEqual(2, self.mock_pgbasebackup_run.call_count)
-        self.assertEqual([call(validateAfter=True),call(validateAfter=True)], self.mock_pgbasebackup_run.call_args_list)
-        gpsegrecovery.start_segment.assert_called_once_with(self.seg_recovery_info, self.mock_logger, self.era)
-        self._assert_cmd_passed()
-
-    def test_basebackup_run_two_exceptions(self):
-        self.mock_pgbasebackup_run.side_effect=[Exception('backup failed once'),
-                                                Exception('backup failed twice')]
-
-        self.full_recovery_cmd.run()
-
-        expected_init_args1 = call("/data/mirror0", "sdw1", '40000', create_slot=False,
-                                   replication_slot_name='internal_wal_replication_slot',
-                                   forceoverwrite=True, target_gp_dbid=2, progress_file='/tmp/test_progress_file')
-        expected_init_args2 = call("/data/mirror0", "sdw1", '40000', create_slot=True,
-                                   replication_slot_name='internal_wal_replication_slot',
-                                   forceoverwrite=True, target_gp_dbid=2, progress_file='/tmp/test_progress_file')
-        self.assertEqual(2, self.mock_pgbasebackup_init.call_count)
-        self.assertEqual([expected_init_args1, expected_init_args2], self.mock_pgbasebackup_init.call_args_list)
-        self.assertEqual(2, self.mock_pgbasebackup_run.call_count)
-        self.assertEqual([call(validateAfter=True),call(validateAfter=True)], self.mock_pgbasebackup_run.call_args_list)
-        self.mock_logger.info.any_call('Running pg_basebackup failed: backup failed once')
-        self.mock_logger.info.assert_called_with("Re-running pg_basebackup, creating the slot this time")
+        self.assertEqual(0, self.mock_pgbasebackup_init.call_count)
+        self.assertEqual(0, self.mock_pgbasebackup_run.call_count)
         self.assertEqual(0, gpsegrecovery.start_segment.call_count)
-        self._assert_cmd_failed('{"error_type": "full", "error_msg": "backup failed twice", "dbid": 2, ' \
+        self._assert_cmd_failed('{"error_type": "full", "error_msg": "slot check failed", "dbid": 2, '
+                                '"datadir": "/data/mirror0", "port": 50000, '
+                                '"progress_file": "/tmp/test_progress_file"}')
+
+    def test_basebackup_run_exception(self):
+        self.mock_pgbasebackup_run.side_effect=[Exception('backup failed once')]
+
+        self.full_recovery_cmd.run()
+
+        expected_init_args1 = call("/data/mirror0", "sdw1", '40000', create_slot=False,
+                                   replication_slot_name='internal_wal_replication_slot',
+                                   forceoverwrite=True, target_gp_dbid=2, progress_file='/tmp/test_progress_file')
+        self.mock_ensure_slot.assert_called_once_with('sdw1', 40000, 'internal_wal_replication_slot')
+        self.assertEqual(1, self.mock_pgbasebackup_init.call_count)
+        self.assertEqual([expected_init_args1], self.mock_pgbasebackup_init.call_args_list)
+        self.assertEqual(1, self.mock_pgbasebackup_run.call_count)
+        self.assertEqual([call(validateAfter=True)], self.mock_pgbasebackup_run.call_args_list)
+        self.assertEqual(0, gpsegrecovery.start_segment.call_count)
+        self._assert_cmd_failed('{"error_type": "full", "error_msg": "backup failed once", "dbid": 2, ' \
                                 '"datadir": "/data/mirror0", "port": 50000, "progress_file": "/tmp/test_progress_file"}')
 
-    def test_basebackup_run_no_forceoverwrite_two_exceptions(self):
-        self.mock_pgbasebackup_run.side_effect = [Exception('backup failed once'),
-                                                  Exception('backup failed twice')]
+    def test_basebackup_run_no_forceoverwrite_exception(self):
+        self.mock_pgbasebackup_run.side_effect = [Exception('backup failed once')]
         self.full_recovery_cmd.forceoverwrite = False
 
         self.full_recovery_cmd.run()
@@ -222,16 +213,13 @@ class FullRecoveryTestCase(GpTestCase):
         expected_init_args1 = call("/data/mirror0", "sdw1", '40000', create_slot=False,
                                    replication_slot_name='internal_wal_replication_slot',
                                    forceoverwrite=False, target_gp_dbid=2, progress_file='/tmp/test_progress_file')
-        # regardless of the passed in value, second call to pg_basebackup will always have forceoverwrite=True
-        expected_init_args2 = call("/data/mirror0", "sdw1", '40000', create_slot=True,
-                                   replication_slot_name='internal_wal_replication_slot',
-                                   forceoverwrite=True, target_gp_dbid=2, progress_file='/tmp/test_progress_file')
-        self.assertEqual(2, self.mock_pgbasebackup_init.call_count)
-        self.assertEqual([expected_init_args1, expected_init_args2], self.mock_pgbasebackup_init.call_args_list)
-        self.assertEqual(2, self.mock_pgbasebackup_run.call_count)
-        self.assertEqual([call(validateAfter=True),call(validateAfter=True)], self.mock_pgbasebackup_run.call_args_list)
+        self.mock_ensure_slot.assert_called_once_with('sdw1', 40000, 'internal_wal_replication_slot')
+        self.assertEqual(1, self.mock_pgbasebackup_init.call_count)
+        self.assertEqual([expected_init_args1], self.mock_pgbasebackup_init.call_args_list)
+        self.assertEqual(1, self.mock_pgbasebackup_run.call_count)
+        self.assertEqual([call(validateAfter=True)], self.mock_pgbasebackup_run.call_args_list)
         self.assertEqual(0, gpsegrecovery.start_segment.call_count)
-        self._assert_cmd_failed('{"error_type": "full", "error_msg": "backup failed twice", "dbid": 2, ' \
+        self._assert_cmd_failed('{"error_type": "full", "error_msg": "backup failed once", "dbid": 2, ' \
                                 '"datadir": "/data/mirror0", "port": 50000, "progress_file": "/tmp/test_progress_file"}')
 
     def test_basebackup_init_exception(self):
@@ -287,7 +275,10 @@ class SegRecoveryTestCase(GpTestCase):
     @patch('gppylib.commands.pg.PgRewind.run')
     @patch('gpsegrecovery.PgBaseBackup.__init__', return_value=None)
     @patch('gpsegrecovery.PgBaseBackup.run')
-    def test_complete_workflow(self, mock_pgbasebackup_run, mock_pgbasebackup_init, mock_pgrewind_run, mock_pgrewind_init):
+    @patch('gpsegrecovery.ensure_replication_slot_exists')
+    def test_complete_workflow(self, mock_ensure_slot, mock_pgbasebackup_run,
+                               mock_pgbasebackup_init, mock_pgrewind_run,
+                               mock_pgrewind_init):
         mix_confinfo = gppylib.recoveryinfo.serialize_list([
             self.full_r1, self.incr_r2])
         sys.argv = ['gpsegrecovery', '-l', '/tmp/logdir', '--era', '{}'.format(self.era), '-c {}'.format(mix_confinfo)]
@@ -301,17 +292,21 @@ class SegRecoveryTestCase(GpTestCase):
         self.assertEqual(1, mock_pgrewind_init.call_count)
         self.assertEqual(1, mock_pgbasebackup_run.call_count)
         self.assertEqual(1, mock_pgbasebackup_init.call_count)
+        mock_ensure_slot.assert_called_once_with('source_hostname1', 6001, 'internal_wal_replication_slot')
         self.assertRegex(gplog.get_logfile(), '/gpsegrecovery.py_\d+\.log')
 
     @patch('gppylib.commands.pg.PgRewind.__init__', return_value=None)
     @patch('gppylib.commands.pg.PgRewind.run')
     @patch('gpsegrecovery.PgBaseBackup.__init__', return_value=None)
     @patch('gpsegrecovery.PgBaseBackup.run')
-    def test_complete_workflow_exception(self, mock_pgbasebackup_run, mock_pgbasebackup_init, mock_pgrewind_run,
+    @patch('gpsegrecovery.ensure_replication_slot_exists')
+    def test_complete_workflow_exception(self, mock_ensure_slot,
+                                         mock_pgbasebackup_run,
+                                         mock_pgbasebackup_init,
+                                         mock_pgrewind_run,
                                          mock_pgrewind_init):
         mock_pgrewind_run.side_effect = [Exception('pg_rewind failed')]
-        mock_pgbasebackup_run.side_effect = [Exception('pg_basebackup failed once'),
-                                             Exception('pg_basebackup failed twice')]
+        mock_pgbasebackup_run.side_effect = [Exception('pg_basebackup failed once')]
         mix_confinfo = gppylib.recoveryinfo.serialize_list([
             self.full_r1, self.incr_r2])
         sys.argv = ['gpsegrecovery', '-l', '/tmp/logdir', '--era={}'.format(self.era), '-c {}'.format(mix_confinfo)]
@@ -322,14 +317,15 @@ class SegRecoveryTestCase(GpTestCase):
 
         self.assertCountEqual('[{"error_type": "incremental", "error_msg": "pg_rewind failed", "dbid": 4, "datadir": "target_data_dir4", '
                               '"port": 5004, "progress_file": "/tmp/progress_file4"} , '
-                              '{"error_type": "full", "error_msg": "pg_basebackup failed twice", "dbid": 1,'
+                              '{"error_type": "full", "error_msg": "pg_basebackup failed once", "dbid": 1,'
                               '"datadir": "target_data_dir1", "port": 5001, "progress_file": "/tmp/progress_file1"}]',
                               buf.getvalue().strip())
         self.assertEqual(1, ex.exception.code)
         self.assertEqual(1, mock_pgrewind_run.call_count)
         self.assertEqual(1, mock_pgrewind_init.call_count)
-        self.assertEqual(2, mock_pgbasebackup_run.call_count)
-        self.assertEqual(2, mock_pgbasebackup_init.call_count)
+        self.assertEqual(1, mock_pgbasebackup_run.call_count)
+        self.assertEqual(1, mock_pgbasebackup_init.call_count)
+        mock_ensure_slot.assert_called_once_with('source_hostname1', 6001, 'internal_wal_replication_slot')
         self.assertRegex(gplog.get_logfile(), '/gpsegrecovery.py_\d+\.log')
 
     @patch('recovery_base.gplog.setup_tool_logging')
