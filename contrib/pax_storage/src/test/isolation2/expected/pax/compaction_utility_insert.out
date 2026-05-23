@@ -27,6 +27,4 @@ SELECT segment_id, pttupcount FROM get_pax_aux_table_all('foo') where pttupcount
  segment_id | pttupcount 
 ------------+------------
  0          | 1          
- 0          | 1          
- 0          | 1          
-(3 rows)
+(1 row)

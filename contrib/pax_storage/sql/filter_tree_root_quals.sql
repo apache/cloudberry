@@ -8,6 +8,7 @@
 set default_table_access_method to pax;
 set pax.enable_debug to on;
 set pax.enable_sparse_filter to on;
+set pax.enable_sync_collect_stats = on;
 
 create table t1(same int, v1 int, v2 int, v3 int, v4 int) using pax with (minmax_columns='v1,v2,v3,v4');
 create table t2(same int, v1 int, v2 int, v3 int, v4 int) using pax with (minmax_columns='v1,v2,v3,v4');
@@ -41,6 +42,7 @@ WHERE
 
 reset client_min_messages;
 reset optimizer;
+reset pax.enable_sync_collect_stats;
 
 drop table t1;
 drop table t2;

@@ -7,6 +7,7 @@
 -- end_matchignore
 set default_table_access_method = pax;
 set pax.enable_debug to on;
+set pax.enable_sync_collect_stats = on;
 -- 
 -- Test with small group
 -- 
@@ -462,3 +463,4 @@ reset pax.bloom_filter_work_memory_bytes;
 reset pax.max_tuples_per_group;
 reset pax.max_tuples_per_file;
 reset pax.enable_sparse_filter;
+reset pax.enable_sync_collect_stats;

@@ -9,6 +9,7 @@
 set default_table_access_method to pax;
 set pax.enable_debug to on;
 set pax.enable_sparse_filter to on;
+set pax.enable_sync_collect_stats = on;
 
 create  or replace function intrc(iint int)
  returns int as $$ 
@@ -162,6 +163,7 @@ select count(*) from t1 left join t2 on t1.v1 = t2.v1 where t1.v1 > 1 and t2.v1 
 select count(*) from t1 where coalesce(v1, 2) != 1;
 
 reset client_min_messages;
+reset pax.enable_sync_collect_stats;
 
 drop table t1;
 drop table t2;

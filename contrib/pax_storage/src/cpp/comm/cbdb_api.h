@@ -102,8 +102,10 @@ extern "C" {
 #ifndef BUILD_PAX_FORMAT
 #include "access/reloptions.h"
 #endif
+#include "access/multixact.h"
 #include "catalog/storage.h"
 #include "cdb/cdbvars.h"
+#include "commands/vacuum.h"
 #include "commands/cluster.h"
 #include "common/file_utils.h"
 #include "common/int128.h"

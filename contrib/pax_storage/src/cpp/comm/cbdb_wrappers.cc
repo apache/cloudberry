@@ -300,8 +300,7 @@ std::string cbdb::BuildPaxDirectoryPath(RelFileNode rd_node,
                                         BackendId rd_backend) {
   CBDB_WRAP_START;
   {
-    char *tmp_str =
-        paxc::BuildPaxDirectoryPath(rd_node, rd_backend);
+    char *tmp_str = paxc::BuildPaxDirectoryPath(rd_node, rd_backend);
     std::string ret_str(tmp_str);
     pfree(tmp_str);
     return ret_str;
@@ -626,5 +625,11 @@ void cbdb::ExecClearTuple(TupleTableSlot *slot) {
 void cbdb::ExecStoreVirtualTuple(TupleTableSlot *slot) {
   CBDB_WRAP_START;
   { ::ExecStoreVirtualTuple(slot); }
+  CBDB_WRAP_END;
+}
+
+void cbdb::VacuumDelayPoint() {
+  CBDB_WRAP_START;
+  { ::vacuum_delay_point(); }
   CBDB_WRAP_END;
 }

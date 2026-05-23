@@ -17,31 +17,40 @@
  * specific language governing permissions and limitations
  * under the License.
  *
- * pax_catalog_columns.h
- *
+ * pax_vacuum_compactor.h
+*
  * IDENTIFICATION
- *	  contrib/pax_storage/src/cpp/catalog/pax_catalog_columns.h
+ *	  contrib/pax_storage/src/cpp/storage/pax_vacuum_compactor.h
  *
  *-------------------------------------------------------------------------
  */
-
 #pragma once
 
-#define PAX_AUX_PTBLOCKNAME       "ptblockname"
-#define PAX_AUX_PTTUPCOUNT        "pttupcount"
-#define PAX_AUX_PTBLOCKSIZE       "ptblocksize"
-#define PAX_AUX_PTSTATISITICS     "ptstatistics"
-#define PAX_AUX_PTVISIMAPNAME     "ptvisimapname"
-#define PAX_AUX_PTEXISTEXTTOAST   "ptexistexttoast"
-#define PAX_AUX_PTISCLUSTERED     "ptisclustered"
-#define PAX_AUX_PTISSTATSVALID    "ptisstatsvalid"
+#include "comm/cbdb_api.h"
 
-#define ANUM_PG_PAX_BLOCK_TABLES_PTBLOCKNAME 1
-#define ANUM_PG_PAX_BLOCK_TABLES_PTTUPCOUNT 2
-#define ANUM_PG_PAX_BLOCK_TABLES_PTBLOCKSIZE 3
-#define ANUM_PG_PAX_BLOCK_TABLES_PTSTATISITICS 4
-#define ANUM_PG_PAX_BLOCK_TABLES_PTVISIMAPNAME 5
-#define ANUM_PG_PAX_BLOCK_TABLES_PTEXISTEXTTOAST 6
-#define ANUM_PG_PAX_BLOCK_TABLES_PTISCLUSTERED 7
-#define ANUM_PG_PAX_BLOCK_TABLES_PTISSTATSVALID 8
-#define NATTS_PG_PAX_BLOCK_TABLES 8
+#include <memory>
+#include <string>
+#include <vector>
+
+#include "comm/bitmap.h"
+#include "storage/micro_partition.h"
+#include "storage/micro_partition_metadata.h"
+#include "comm/iterator.h"
+
+struct EState;
+struct ResultRelInfo;
+
+namespace pax {
+
+class PaxVacuumBatcher final {
+ public:
+  explicit PaxVacuumBatcher(Relation rel);
+  void Process(std::unique_ptr<IteratorBase<MicroPartitionMetadata>> &&it,
+               const std::vector<int> &minmax_col_idxs,
+               const std::vector<int> &bf_col_idxs);
+
+ private:
+  Relation rel_ = nullptr;
+};
+
+}  // namespace pax 

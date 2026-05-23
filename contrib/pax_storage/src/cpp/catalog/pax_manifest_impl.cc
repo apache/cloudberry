@@ -77,6 +77,8 @@ static inline AttrNumber get_aux_name_attrno(const char *colname) {
     return ANUM_PG_PAX_BLOCK_TABLES_PTEXISTEXTTOAST;
   if (strcmp(colname, PAX_AUX_PTISCLUSTERED) == 0)
     return ANUM_PG_PAX_BLOCK_TABLES_PTISCLUSTERED;
+  if (strcmp(colname, PAX_AUX_PTISSTATSVALID) == 0)
+    return ANUM_PG_PAX_BLOCK_TABLES_PTISSTATSVALID;
 
   elog(ERROR, "unknown column name '%s'", colname);
   return 0;
@@ -131,7 +133,12 @@ ManifestDesc manifest_init() {
                           ANUM_PG_PAX_BLOCK_TABLES_PTISCLUSTERED - 1,
                           PAX_AUX_PTISCLUSTERED,
                           Meta_Field_Type_Bool,
-                          0);                            
+                          0);     
+  manifest_init_attribute(desc, 
+                          ANUM_PG_PAX_BLOCK_TABLES_PTISSTATSVALID - 1,
+                          PAX_AUX_PTISSTATSVALID,
+                          Meta_Field_Type_Bool,
+                          0);     
 
   return desc;
 }
@@ -203,7 +210,7 @@ static void manifest_create_data_dir(Relation rel, const RelFileNode &newrnode) 
   CBDB_END_TRY();
 
   if (rc != 0)
-    elog(ERROR, "create data dir failed for %u/%u/%lu",
+    elog(ERROR, "create data dir failed for %u/%u/%u",
                 newrnode.dbNode, newrnode.spcNode, newrnode.relNode);
 }
 
@@ -310,6 +317,9 @@ void manifest_insert(ManifestRelation mrel, const MetaValue data[], int count) {
     } else if (AUX_CMP_NAME(col, PAX_AUX_PTISCLUSTERED)) {
       values[ANUM_PG_PAX_BLOCK_TABLES_PTISCLUSTERED - 1] = col.value;
       isnull[ANUM_PG_PAX_BLOCK_TABLES_PTISCLUSTERED - 1] = false;
+    } else if (AUX_CMP_NAME(col, PAX_AUX_PTISSTATSVALID)) {
+      values[ANUM_PG_PAX_BLOCK_TABLES_PTISSTATSVALID - 1] = col.value;
+      isnull[ANUM_PG_PAX_BLOCK_TABLES_PTISSTATSVALID - 1] = false;
     } else {
       elog(ERROR, "unknown column name '%s'", col.field_name);
     }
@@ -380,6 +390,10 @@ static void manifest_update_internal(ManifestRelation mrel,
       values[ANUM_PG_PAX_BLOCK_TABLES_PTISCLUSTERED - 1] = col.value;
       isnull[ANUM_PG_PAX_BLOCK_TABLES_PTISCLUSTERED - 1] = false;
       repl[ANUM_PG_PAX_BLOCK_TABLES_PTISCLUSTERED - 1] = true;
+    } else if (AUX_CMP_NAME(col, PAX_AUX_PTISSTATSVALID)) {
+      values[ANUM_PG_PAX_BLOCK_TABLES_PTISSTATSVALID - 1] = col.value;
+      isnull[ANUM_PG_PAX_BLOCK_TABLES_PTISSTATSVALID - 1] = false;
+      repl[ANUM_PG_PAX_BLOCK_TABLES_PTISSTATSVALID - 1] = true;
     } else {
       elog(ERROR, "unknown column name '%s'", col.field_name);
     }
