@@ -140,7 +140,6 @@ extern core_yyscan_t scanner_init(const char *str,
 extern void scanner_finish(core_yyscan_t yyscanner);
 extern int	core_yylex(core_YYSTYPE *lvalp, YYLTYPE *llocp,
 					   core_yyscan_t yyscanner);
-
 extern int	scanner_errposition(int location, core_yyscan_t yyscanner);
 extern void setup_scanner_errposition_callback(ScannerCallbackState *scbstate,
 											   core_yyscan_t yyscanner,
