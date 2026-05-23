@@ -200,8 +200,12 @@ pg_sub_s64_overflow(int64 a, int64 b, int64 *result)
 	*result = (int64) res;
 	return false;
 #else
+	/*
+	 * Note: overflow is also possible when a == 0 and b < 0 (specifically,
+	 * when b == PG_INT64_MIN).
+	 */
 	if ((a < 0 && b > 0 && a < PG_INT64_MIN + b) ||
-		(a > 0 && b < 0 && a > PG_INT64_MAX + b))
+		(a >= 0 && b < 0 && a > PG_INT64_MAX + b))
 	{
 		*result = 0x5EED;		/* to avoid spurious warnings */
 		return true;
@@ -433,5 +437,72 @@ pg_mul_u64_overflow(uint64 a, uint64 b, uint64 *result)
 	return false;
 #endif
 }
+
+/*
+ * size_t
+ */
+static inline bool
+pg_add_size_overflow(size_t a, size_t b, size_t *result)
+{
+#if defined(HAVE__BUILTIN_OP_OVERFLOW)
+	return __builtin_add_overflow(a, b, result);
+#else
+	size_t		res = a + b;
+
+	if (res < a)
+	{
+		*result = 0x5EED;		/* to avoid spurious warnings */
+		return true;
+	}
+	*result = res;
+	return false;
+#endif
+}
+
+static inline bool
+pg_sub_size_overflow(size_t a, size_t b, size_t *result)
+{
+#if defined(HAVE__BUILTIN_OP_OVERFLOW)
+	return __builtin_sub_overflow(a, b, result);
+#else
+	if (b > a)
+	{
+		*result = 0x5EED;		/* to avoid spurious warnings */
+		return true;
+	}
+	*result = a - b;
+	return false;
+#endif
+}
+
+static inline bool
+pg_mul_size_overflow(size_t a, size_t b, size_t *result)
+{
+#if defined(HAVE__BUILTIN_OP_OVERFLOW)
+	return __builtin_mul_overflow(a, b, result);
+#else
+	size_t		res = a * b;
+
+	if (a != 0 && b != res / a)
+	{
+		*result = 0x5EED;		/* to avoid spurious warnings */
+		return true;
+	}
+	*result = res;
+	return false;
+#endif
+}
+
+/*
+ * pg_neg_size_overflow is currently omitted, to avoid having to reason about
+ * the portability of SSIZE_MIN/_MAX before a use case exists.
+ */
+/*
+ * static inline bool
+ * pg_neg_size_overflow(size_t a, ssize_t *result)
+ * {
+ *     ...
+ * }
+ */
 
 #endif							/* COMMON_INT_H */
