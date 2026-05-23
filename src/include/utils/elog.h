@@ -20,6 +20,9 @@
 #include <sys/time.h>
 #include <setjmp.h>
 #include "miscadmin.h" /* dispatch_nest_level */
+#include "lib/stringinfo.h"
+
+#include "postmaster/syslogger.h"
 
 /* Error level codes */
 #define DEBUG5		10			/* Debugging messages, in categories of
@@ -559,11 +562,31 @@ extern bool syslog_split_messages;
 #define LOG_DESTINATION_SYSLOG	 2
 #define LOG_DESTINATION_EVENTLOG 4
 #define LOG_DESTINATION_CSVLOG	 8
+#define LOG_DESTINATION_JSONLOG	16
 
 /* Other exported functions */
 extern void DebugFileOpen(void);
 extern char *unpack_sql_state(int sql_state);
 extern bool in_error_recursion_trouble(void);
+
+/* Common functions shared across destinations */
+extern void reset_formatted_start_time(void);
+extern char *get_formatted_start_time(void);
+extern char *get_formatted_log_time(void);
+extern const char *get_backend_type_for_log(void);
+extern bool check_log_of_query(ErrorData *edata);
+extern const char *error_severity(int elevel);
+extern void write_pipe_chunks(char *data, int len, int dest);
+
+/* Destination-specific functions */
+extern void write_csvlog(ErrorData *edata);
+extern void write_jsonlog(ErrorData *edata);
+
+extern void append_stacktrace(PipeProtoChunk *buffer,
+							  StringInfo append,
+							  void *const *stackarray,
+							  int stacksize,
+							  bool amsyslogger);
 
 #ifdef HAVE_SYSLOG
 extern void set_syslog_parameters(const char *ident, int facility);
