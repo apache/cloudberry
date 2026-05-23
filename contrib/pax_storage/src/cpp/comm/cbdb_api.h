@@ -80,6 +80,7 @@ extern "C" {
 #include "commands/progress.h"
 #include "commands/tablecmds.h"
 #include "funcapi.h"
+#include "lib/bloomfilter.h"
 #include "miscadmin.h"
 #include "nodes/bitmapset.h"
 #include "nodes/execnodes.h"

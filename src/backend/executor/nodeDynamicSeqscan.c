@@ -170,6 +170,22 @@ initNextTableToScan(DynamicSeqScanState *node)
 
 	node->seqScanState = ExecInitSeqScanForPartition(&plan->seqscan, estate,
 													 currentRelation);
+
+	if(estate->es_instrument)
+	{
+		node->seqScanState->ss.ps.instrument = GpInstrAlloc(node->seqScanState->ss.ps.plan, estate->es_instrument, node->seqScanState->ss.ps.async_capable);
+	}
+
+	if (gp_enable_runtime_filter_pushdown && !estate->useMppParallelMode)
+	{
+		node->seqScanState->filter_in_seqscan = true;
+		// copy filters to seqscan state
+		node->seqScanState->filters = list_concat(node->seqScanState->filters, node->filters);
+	}
+	else
+	{
+		node->seqScanState->filter_in_seqscan = false;
+	}
 	return true;
 }
 
@@ -223,16 +239,7 @@ ExecDynamicSeqScan(PlanState *pstate)
 		slot = ExecProcNode(&node->seqScanState->ss.ps);
 
 		if (!TupIsNull(slot))
-		{
-			if (gp_enable_runtime_filter_pushdown
-				&& !pstate->state->useMppParallelMode
-				&& node->filters)
-			{
-				if (!PassByBloomFilter(&node->ss.ps, node->filters, slot))
-					continue;
-			}
 			break;
-		}
 
 		/* No more tuples from this partition. Move to next one. */
 		CleanupOnePartition(node);
@@ -252,6 +259,13 @@ CleanupOnePartition(DynamicSeqScanState *scanState)
 
 	if (scanState->seqScanState)
 	{
+		// if runtime filter really work in subpartition, accumulate the statistics
+		if(scanState->seqScanState->ss.ps.instrument && scanState->seqScanState->ss.ps.instrument->prf_work)
+		{	
+			scanState->ss.ps.instrument->prf_work = true;
+			scanState->ss.ps.instrument->nfilteredPRF += scanState->seqScanState->ss.ps.instrument->nfilteredPRF;
+		}
+
 		ExecEndSeqScan(scanState->seqScanState);
 		scanState->seqScanState = NULL;
 		Assert(scanState->ss.ss_currentRelation != NULL);
