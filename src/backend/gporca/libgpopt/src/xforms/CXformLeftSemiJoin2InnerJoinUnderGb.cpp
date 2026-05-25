@@ -24,6 +24,11 @@
 #include "gpopt/operators/CPredicateUtils.h"
 #include "gpopt/operators/CScalarProjectList.h"
 
+namespace gpdb
+{
+	bool IsParallelModeOK(void);
+}
+
 using namespace gpopt;
 
 //---------------------------------------------------------------------------
@@ -60,6 +65,16 @@ CXformLeftSemiJoin2InnerJoinUnderGb::CXformLeftSemiJoin2InnerJoinUnderGb(
 CXform::EXformPromise
 CXformLeftSemiJoin2InnerJoinUnderGb::Exfp(CExpressionHandle &exprhdl) const
 {
+	/*
+	 * In parallel mode, prefer direct semi-join implementations. Rewriting a
+	 * semi-join to an inner join plus dedup can produce unstable ORCA plans
+	 * for parallel queries.
+	 */
+	if (gpdb::IsParallelModeOK())
+	{
+		return ExfpNone;
+	}
+
 	CColRefSet *pcrsInnerOutput = exprhdl.DeriveOutputColumns(1);
 	CExpression *pexprScalar = exprhdl.PexprScalarExactChild(2);
 	CAutoMemoryPool amp;
