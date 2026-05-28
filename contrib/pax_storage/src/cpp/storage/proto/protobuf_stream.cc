@@ -75,9 +75,9 @@ void BufferedOutputStream::BackUp(int count) {
   }
 }
 
-google::protobuf::int64 BufferedOutputStream::ByteCount() const {
+int64_t BufferedOutputStream::ByteCount() const {
   Assert(data_buffer_);
-  return static_cast<google::protobuf::int64>(data_buffer_->Used());
+  return static_cast<int64_t>(data_buffer_->Used());
 }
 
 bool BufferedOutputStream::WriteAliasedRaw(const void * /*data*/,
@@ -151,8 +151,8 @@ bool SeekableInputStream::Skip(int count) {
   return false;
 }
 
-google::protobuf::int64 SeekableInputStream::ByteCount() const {
-  return static_cast<google::protobuf::int64>(data_buffer_.Used());
+int64_t SeekableInputStream::ByteCount() const {
+  return static_cast<int64_t>(data_buffer_.Used());
 }
 
 }  // namespace pax

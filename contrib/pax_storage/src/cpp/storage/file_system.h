@@ -28,10 +28,17 @@
 #pragma once
 
 #include <fcntl.h>
+#include <sys/types.h>
 
 #include <functional>
 #include <string>
 #include <vector>
+
+// glibc exposes off64_t for 32-bit programs opting into 64-bit file
+// offsets. macOS's off_t is already 64-bit and there is no off64_t.
+#ifdef __APPLE__
+typedef off_t off64_t;
+#endif
 
 #include "comm/common_io.h"
 #include "comm/pax_memory.h"
