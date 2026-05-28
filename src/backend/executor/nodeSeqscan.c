@@ -226,8 +226,7 @@ ExecInitSeqScanForPartition(SeqScan *node, EState *estate,
 	/*
 	 * check scan slot with bloom filters in seqscan node or not.
 	 */
-	if (gp_enable_runtime_filter_pushdown
-		&& !estate->useMppParallelMode)
+	if (gp_enable_runtime_filter_pushdown)
 	{
 		scanstate->filter_in_seqscan = true;
 	}

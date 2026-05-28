@@ -146,16 +146,16 @@ SELECT depname, empno, salary, rank() OVER (PARTITION BY depname ORDER BY salary
 SELECT depname, empno, salary, rank() OVER (PARTITION BY depname ORDER BY salary) FROM empsalary;
   depname  | empno | salary | rank 
 -----------+-------+--------+------
- personnel |     5 |   3500 |    1
- personnel |     2 |   3900 |    2
- sales     |     4 |   4800 |    1
- sales     |     3 |   4800 |    1
- sales     |     1 |   5000 |    3
  develop   |     7 |   4200 |    1
  develop   |     9 |   4500 |    2
  develop   |    10 |   5200 |    3
  develop   |    11 |   5200 |    3
  develop   |     8 |   6000 |    5
+ personnel |     5 |   3500 |    1
+ personnel |     2 |   3900 |    2
+ sales     |     4 |   4800 |    1
+ sales     |     3 |   4800 |    1
+ sales     |     1 |   5000 |    3
 (10 rows)
 
 -- w3
@@ -886,27 +886,33 @@ select b, count(*) from t1 group by b union all select b, count(*) from t2 group
  Gather Motion 6:1  (slice1; segments: 6)
    Output: t1.b, (count(*))
    ->  Append
-         ->  HashAggregate
+         ->  Finalize HashAggregate
                Output: t1.b, count(*)
                Group Key: t1.b
                ->  Redistribute Motion 6:6  (slice2; segments: 6)
-                     Output: t1.b
+                     Output: t1.b, (PARTIAL count(*))
                      Hash Key: t1.b
                      Hash Module: 3
-                     ->  Parallel Seq Scan on window_parallel.t1
-                           Output: t1.b
-         ->  HashAggregate
+                     ->  Streaming Partial HashAggregate
+                           Output: t1.b, PARTIAL count(*)
+                           Group Key: t1.b
+                           ->  Parallel Seq Scan on window_parallel.t1
+                                 Output: t1.a, t1.b
+         ->  Finalize HashAggregate
                Output: t2.b, count(*)
                Group Key: t2.b
                ->  Redistribute Motion 6:6  (slice3; segments: 6)
-                     Output: t2.b
+                     Output: t2.b, (PARTIAL count(*))
                      Hash Key: t2.b
                      Hash Module: 3
-                     ->  Parallel Seq Scan on window_parallel.t2
-                           Output: t2.b
+                     ->  Streaming Partial HashAggregate
+                           Output: t2.b, PARTIAL count(*)
+                           Group Key: t2.b
+                           ->  Parallel Seq Scan on window_parallel.t2
+                                 Output: t2.a, t2.b
  Settings: enable_parallel = 'on', enable_parallel_append = 'on', min_parallel_table_scan_size = '0', optimizer = 'off'
  Optimizer: Postgres query optimizer
-(23 rows)
+(29 rows)
 
 set local enable_parallel_append = off;
 -- Naturally, use parallel-oblivious append directly when parallel-aware mode is disabled.
@@ -917,27 +923,33 @@ select b, count(*) from t1 group by b union all select b, count(*) from t2 group
  Gather Motion 6:1  (slice1; segments: 6)
    Output: t1.b, (count(*))
    ->  Append
-         ->  HashAggregate
+         ->  Finalize HashAggregate
                Output: t1.b, count(*)
                Group Key: t1.b
                ->  Redistribute Motion 6:6  (slice2; segments: 6)
-                     Output: t1.b
+                     Output: t1.b, (PARTIAL count(*))
                      Hash Key: t1.b
                      Hash Module: 3
-                     ->  Parallel Seq Scan on window_parallel.t1
-                           Output: t1.b
-         ->  HashAggregate
+                     ->  Streaming Partial HashAggregate
+                           Output: t1.b, PARTIAL count(*)
+                           Group Key: t1.b
+                           ->  Parallel Seq Scan on window_parallel.t1
+                                 Output: t1.a, t1.b
+         ->  Finalize HashAggregate
                Output: t2.b, count(*)
                Group Key: t2.b
                ->  Redistribute Motion 6:6  (slice3; segments: 6)
-                     Output: t2.b
+                     Output: t2.b, (PARTIAL count(*))
                      Hash Key: t2.b
                      Hash Module: 3
-                     ->  Parallel Seq Scan on window_parallel.t2
-                           Output: t2.b
+                     ->  Streaming Partial HashAggregate
+                           Output: t2.b, PARTIAL count(*)
+                           Group Key: t2.b
+                           ->  Parallel Seq Scan on window_parallel.t2
+                                 Output: t2.a, t2.b
  Settings: enable_parallel = 'on', enable_parallel_append = 'off', min_parallel_table_scan_size = '0', optimizer = 'off'
  Optimizer: Postgres query optimizer
-(23 rows)
+(29 rows)
 
 -- Ensure compatibility between different paths when using parallel workers
 set local enable_parallel_append = on;
@@ -950,27 +962,33 @@ select b, count(*) from t1 group by b union all select b, count(*) from t2 group
  Gather Motion 9:1  (slice1; segments: 9)
    Output: t1.b, (count(*))
    ->  Append
-         ->  HashAggregate
+         ->  Finalize HashAggregate
                Output: t1.b, count(*)
                Group Key: t1.b
                ->  Redistribute Motion 6:9  (slice2; segments: 6)
-                     Output: t1.b
+                     Output: t1.b, (PARTIAL count(*))
                      Hash Key: t1.b
                      Hash Module: 3
-                     ->  Parallel Seq Scan on window_parallel.t1
-                           Output: t1.b
-         ->  HashAggregate
+                     ->  Streaming Partial HashAggregate
+                           Output: t1.b, PARTIAL count(*)
+                           Group Key: t1.b
+                           ->  Parallel Seq Scan on window_parallel.t1
+                                 Output: t1.a, t1.b
+         ->  Finalize HashAggregate
                Output: t2.b, count(*)
                Group Key: t2.b
                ->  Redistribute Motion 9:9  (slice3; segments: 9)
-                     Output: t2.b
+                     Output: t2.b, (PARTIAL count(*))
                      Hash Key: t2.b
                      Hash Module: 3
-                     ->  Parallel Seq Scan on window_parallel.t2
-                           Output: t2.b
+                     ->  Streaming Partial HashAggregate
+                           Output: t2.b, PARTIAL count(*)
+                           Group Key: t2.b
+                           ->  Parallel Seq Scan on window_parallel.t2
+                                 Output: t2.a, t2.b
  Settings: enable_parallel = 'on', enable_parallel_append = 'on', min_parallel_table_scan_size = '0', optimizer = 'off'
  Optimizer: Postgres query optimizer
-(23 rows)
+(29 rows)
 
 -- Could not drive a parallel plan if no partial paths are avaliable
 alter table t2 set(parallel_workers=0);
@@ -1037,7 +1055,10 @@ abort;
 --
 -- start_ignore
 drop schema window_parallel cascade;
-NOTICE:  drop cascades to table empsalary
+NOTICE:  drop cascades to 3 other objects
+DETAIL:  drop cascades to table empsalary
+drop cascades to table t1
+drop cascades to table t2
 -- end_ignore
 reset min_parallel_table_scan_size;
 reset enable_parallel;

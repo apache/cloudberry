@@ -57,4 +57,6 @@ extern Plan *cdbpathtoplan_create_sri_plan(RangeTblEntry *rte, PlannerInfo *subr
 
 extern bool contains_outer_params(Node *node, void *context);
 
+extern bool apply_shareinput_dag_to_tree_from_subplan;
+
 #endif   /* CDBMUTATE_H */

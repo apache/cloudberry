@@ -27,6 +27,7 @@
 #include "cdb/cdbpathlocus.h"
 #include "foreign/foreign.h"
 
+#include "access/attmap.h"
 
 /*
  * Relids
@@ -137,6 +138,9 @@ typedef struct ApplyShareInputContext
 	ApplyShareInputContextPerShare *shared_inputs; /* one for each share */
 	Bitmapset  *qdShares;		/* share_ids that are referenced from QD slices */
 
+	char	  **ctenames;
+	bool	  *producer_from_subplan;
+	ShareInputScan **producer_parent_plans;
 } ApplyShareInputContext;
 
 /*----------
@@ -209,6 +213,8 @@ typedef struct PlannerGlobal
 	 */
 	int			numSlices;
 	struct PlanSlice *slices;
+
+	bool	under_recursive_cte;
 
 } PlannerGlobal;
 
@@ -507,6 +513,13 @@ struct PlannerInfo
 	bool		is_from_orca; /* true if this PlannerInfo was created from Orca*/
 
 	Query	   *aqumv_raw_parse;	/* Raw parse tree for AQUMV join exact-match */
+	bool 		is_shared_scan; /* true for shared scan */
+	Node		*lower_window_filter; /* simple window function on subquery. */
+	int 		lower_window_filter_winref; /* winref of subquery. */
+	Node		*upper_window_filter; /* simple window function from parent query.*/
+	int 		upper_window_filter_winref; /* winref of subquery. */
+
+	Bitmapset	*init_plan_ids;		/* init SubPlans plan_ids for query */
 };
 
 /*
@@ -526,6 +539,21 @@ typedef struct CtePlanInfo
 	 * The subroot corresponding to the subplan.
 	 */
 	PlannerInfo *subroot;
+
+	/* the relations refered to shared cte. */
+	List *rels;
+	
+	List *list_quals;
+
+	Relids relids;
+	
+	bool push_quals_possible;
+	bool save_columns_possible;
+	
+	Bitmapset	*attrs_used;
+	AttrMap 	*attr_map;
+	
+	Query *subquery;
 } CtePlanInfo;
 
 /*

@@ -59,4 +59,17 @@ extern List *get_common_group_tles(PathTarget *target,
 extern CdbPathLocus choose_grouping_locus(PlannerInfo *root, Path *path,
 										  List *group_tles,
 										  bool *need_redistribute_p);
+
+extern Path *
+cdb_create_pre_window_agg_path(PlannerInfo *root,
+								bool is_sorted,
+								int presorted_keys,
+								RelOptInfo *rel,
+								Path *subpath,
+								PathTarget *target,
+								List *group_pathkeys,
+								PathTarget *window_target,
+								List *window_functions,
+								WindowClause *wc);
+
 #endif   /* CDBGROUPINGPATHS_H */

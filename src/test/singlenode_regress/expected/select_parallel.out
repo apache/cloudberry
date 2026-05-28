@@ -317,13 +317,14 @@ explain (costs off)
              QUERY PLAN              
 -------------------------------------
  Aggregate
-   InitPlan 1 (returns $1)
-     ->  Aggregate
-           ->  Seq Scan on tenk2
    ->  Seq Scan on tenk1
-         Filter: (unique1 = $1)
+         Filter: (unique1 = (SubPlan 1))
+         SubPlan 1
+           ->  Materialize
+                 ->  Aggregate
+                       ->  Seq Scan on tenk2
  Optimizer: Postgres query optimizer
-(7 rows)
+(8 rows)
 
 select count(*) from tenk1
     where tenk1.unique1 = (Select max(tenk2.unique1) from tenk2);

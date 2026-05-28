@@ -2129,12 +2129,16 @@ select * from testrngfunc();
                Output: (1), (2)
                Sort Key: (1), (2)
                ->  Append
-                     ->  Result
+                     ->  Unique
                            Output: 1, 2
-                     ->  Result
+                           ->  Result
+                                 Output: 1, 2
+                     ->  Unique
                            Output: 3, 4
+                           ->  Result
+                                 Output: 3, 4
  Optimizer: Postgres query optimizer
-(14 rows)
+(18 rows)
 
 select * from testrngfunc();
     f1    |  f2  

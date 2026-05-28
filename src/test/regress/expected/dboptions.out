@@ -1,6 +1,10 @@
 --
 -- Test create/alter database options
 --
+-- start_matchsubs
+-- m/\"\/tmp\/.s.PGSQL.\d+\"/
+-- s/\"\/tmp\/.s.PGSQL.\d+\"/\"\/tmp\/.s.PGSQL.xxx\"/
+-- end_matchsubs
 -- Test CONNECTION LIMIT
 -- create a regular user as superusers are exempt from limits
 create user connlimit_test_user;
@@ -54,7 +58,7 @@ order by gp_segment_id;
 alter database limitdb with connection limit 0;
 -- should fail, because the connection limit is 0
 \! psql -h /tmp limitdb -Xc "select 'connected'" -U connlimit_test_user
-psql: error: connection to server on socket "/tmp/.s.PGSQL.7000" failed: FATAL:  too many connections for database "limitdb"
+psql: error: connection to server on socket "/tmp/.s.PGSQL.xxx" failed: FATAL:  too many connections for database "limitdb"
 -- Test ALLOW_CONNECTIONS
 create database limitdb2 allow_connections = true;
 select -1 as gp_segment_id, datconnlimit, datallowconn from pg_database where datname='limitdb2'
@@ -84,7 +88,7 @@ order by gp_segment_id;
 
 -- should fail, as we have disallowed connections
 \! psql -h /tmp limitdb2 -Xc "select 'connected'" -U connlimit_test_user
-psql: error: connection to server on socket "/tmp/.s.PGSQL.7000" failed: FATAL:  database "limitdb2" is not currently accepting connections
+psql: error: connection to server on socket "/tmp/.s.PGSQL.xxx" failed: FATAL:  database "limitdb2" is not currently accepting connections
 -- Test IS_TEMPLATE
 create database templatedb is_template=true;
 select -1 as gp_segment_id, datistemplate from pg_database where datname = 'templatedb'

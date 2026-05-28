@@ -102,7 +102,7 @@ select 1, to_char(col1, 'YYYY'), median(col2) from d group by 1, 2;
 --
 -- SETUP
 create table toy(id,val) as select i,i from generate_series(1,5) i;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'id' as the Apache Cloudberry data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'i' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create aggregate mysum1(int4) (sfunc = int4_sum, combinefunc=int8pl, stype=bigint);
 create aggregate mysum2(int4) (sfunc = int4_sum, stype=bigint);
@@ -1590,14 +1590,14 @@ create temp table mpp14125 as select repeat('a', a) a, a % 10 b from generate_se
 NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'a' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 explain select string_agg(a, '') from mpp14125 group by b;
-                                           QUERY PLAN                                           
-------------------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)  (cost=6.50..6.83 rows=10 width=36)
-   ->  HashAggregate  (cost=6.50..6.62 rows=4 width=36)
+                                             QUERY PLAN                                              
+-----------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=612.67..630.17 rows=1000 width=36)
+   ->  HashAggregate  (cost=612.67..616.83 rows=333 width=36)
          Group Key: b
-         ->  Redistribute Motion 3:3  (slice2; segments: 3)  (cost=0.00..6.00 rows=34 width=55)
+         ->  Redistribute Motion 3:3  (slice2; segments: 3)  (cost=0.00..530.00 rows=16533 width=36)
                Hash Key: b
-               ->  Seq Scan on mpp14125  (cost=0.00..4.00 rows=34 width=55)
+               ->  Seq Scan on mpp14125  (cost=0.00..199.33 rows=16533 width=36)
  Optimizer: Postgres query optimizer
 (7 rows)
 
@@ -1625,19 +1625,19 @@ insert into int2vectortab values
 select distinct t from int2vectortab group by distkey, t;
    t   
 -------
- 1
- 1 2
- 1 2 3
  22
+ 1 2 3
+ 1 2
+ 1
 (4 rows)
 
 select t from int2vectortab union select t from int2vectortab;
    t   
 -------
- 1
- 1 2
- 1 2 3
  22
+ 1
+ 1 2 3
+ 1 2
 (4 rows)
 
 select count(*) over (partition by t) from int2vectortab;
@@ -1645,9 +1645,9 @@ select count(*) over (partition by t) from int2vectortab;
 -------
      1
      1
+     2
+     2
      1
-     2
-     2
 (5 rows)
 
 select count(distinct t) from int2vectortab;
@@ -1696,7 +1696,7 @@ SELECT a.x, sum(b.x) FROM pagg_tab1 a FULL OUTER JOIN pagg_tab2 b ON a.x = b.y G
                                              Hash Key: b.y
                                              ->  Seq Scan on pagg_tab2 b
  Optimizer: Postgres query optimizer
-(16 rows)
+(18 rows)
 
 SELECT a.x, sum(b.x) FROM pagg_tab1 a FULL OUTER JOIN pagg_tab2 b ON a.x = b.y GROUP BY a.x ORDER BY 1 NULLS LAST;
  x  | sum  
@@ -1741,26 +1741,26 @@ SELECT a.x, b.y, count(*) FROM pagg_tab1 a FULL JOIN pagg_tab2 b ON a.x = b.y GR
 SELECT a.x, b.y, count(*) FROM pagg_tab1 a FULL JOIN pagg_tab2 b ON a.x = b.y GROUP BY a.x, b.y;
  x  | y  | count 
 ----+----+-------
- 26 |    |    10
- 28 |    |    10
   4 |    |    10
-    | 15 |    10
-  6 |  6 |   100
   8 |    |    10
-  2 |    |    10
- 22 |    |    10
- 10 |    |    10
-    |  9 |    10
-    | 21 |    10
-  0 |  0 |   100
- 14 |    |    10
- 12 | 12 |   100
-    |  3 |    10
+    | 15 |    10
+ 28 |    |    10
+ 26 |    |    10
+  6 |  6 |   100
  16 |    |    10
-    | 27 |    10
- 18 | 18 |   100
- 20 |    |    10
+ 12 | 12 |   100
  24 | 24 |   100
+ 20 |    |    10
+    |  3 |    10
+ 18 | 18 |   100
+    | 27 |    10
+ 14 |    |    10
+    |  9 |    10
+  0 |  0 |   100
+    | 21 |    10
+ 10 |    |    10
+ 22 |    |    10
+  2 |    |    10
 (20 rows)
 
 --
@@ -1813,7 +1813,7 @@ select 1, median(col1) from group_by_const group by 1;
 
 -- Test GROUP BY with a RelabelType
 create table tx (c1 text);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c1' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c1' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into tx values('hello');
 EXPLAIN (COSTS OFF, VERBOSE ON)
@@ -1827,8 +1827,8 @@ SELECT MIN(tx.c1) FROM tx GROUP BY (tx.c1)::VARCHAR;
          Group Key: (tx.c1)::character varying
          ->  Seq Scan on bfv_aggregate.tx
                Output: (c1)::character varying, c1
- Optimizer: Postgres query optimizer
  Settings: optimizer = 'off'
+ Optimizer: Postgres query optimizer
 (9 rows)
 
 SELECT MIN(tx.c1) FROM tx GROUP BY (tx.c1)::VARCHAR;
@@ -1951,40 +1951,43 @@ HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sur
 insert into ex1 select i,i,i from generate_series(1, 10) i;
 insert into ex2 select i,i,i from generate_series(1, 10) i;
 explain (verbose on, costs off) select ex2.b/2, sum(ex1.a) from ex1, (select a, coalesce(b, 1) b from ex2) ex2 where ex1.a = ex2.a group by ex2.b/2;
-                                 QUERY PLAN                                 
-----------------------------------------------------------------------------
+                                    QUERY PLAN                                    
+----------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    Output: ((COALESCE(ex2.b, 1) / 2)), (sum(ex1.a))
-   ->  Finalize HashAggregate
+   ->  Finalize GroupAggregate
          Output: ((COALESCE(ex2.b, 1) / 2)), sum(ex1.a)
          Group Key: ((COALESCE(ex2.b, 1) / 2))
-         ->  Redistribute Motion 3:3  (slice2; segments: 3)
+         ->  Sort
                Output: ((COALESCE(ex2.b, 1) / 2)), (PARTIAL sum(ex1.a))
-               Hash Key: ((COALESCE(ex2.b, 1) / 2))
-               ->  Streaming Partial HashAggregate
-                     Output: ((COALESCE(ex2.b, 1) / 2)), PARTIAL sum(ex1.a)
-                     Group Key: (COALESCE(ex2.b, 1) / 2)
-                     ->  Hash Join
-                           Output: (COALESCE(ex2.b, 1) / 2), ex1.a
-                           Hash Cond: (ex1.a = ex2.a)
-                           ->  Seq Scan on bfv_aggregate.ex1
-                                 Output: ex1.a, ex1.b, ex1.c
-                           ->  Hash
-                                 Output: ex2.b, ex2.a
-                                 ->  Seq Scan on bfv_aggregate.ex2
+               Sort Key: ((COALESCE(ex2.b, 1) / 2))
+               ->  Redistribute Motion 3:3  (slice2; segments: 3)
+                     Output: ((COALESCE(ex2.b, 1) / 2)), (PARTIAL sum(ex1.a))
+                     Hash Key: ((COALESCE(ex2.b, 1) / 2))
+                     ->  Streaming Partial HashAggregate
+                           Output: ((COALESCE(ex2.b, 1) / 2)), PARTIAL sum(ex1.a)
+                           Group Key: (COALESCE(ex2.b, 1) / 2)
+                           ->  Hash Join
+                                 Output: (COALESCE(ex2.b, 1) / 2), ex1.a
+                                 Hash Cond: (ex1.a = ex2.a)
+                                 ->  Seq Scan on bfv_aggregate.ex1
+                                       Output: ex1.a, ex1.b, ex1.c
+                                 ->  Hash
                                        Output: ex2.b, ex2.a
+                                       ->  Seq Scan on bfv_aggregate.ex2
+                                             Output: ex2.b, ex2.a
  Settings: optimizer = 'off'
  Optimizer: Postgres query optimizer
-(22 rows)
+(25 rows)
 
 select ex2.b/2, sum(ex1.a) from ex1, (select a, coalesce(b, 1) b from ex2) ex2 where ex1.a = ex2.a group by ex2.b/2;
  ?column? | sum 
 ----------+-----
-        4 |  17
         2 |   9
         3 |  13
-        1 |   5
+        4 |  17
         0 |   1
+        1 |   5
         5 |  10
 (6 rows)
 
@@ -2011,12 +2014,12 @@ explain (verbose on, costs off) SELECT b/2, sum(b) * (b/2) FROM ex1  GROUP BY b/
 SELECT b/2, sum(b) * (b/2) FROM ex1  GROUP BY b/2;
  ?column? | ?column? 
 ----------+----------
-        5 |       50
         4 |       68
         2 |       18
         3 |       39
         1 |        5
         0 |        0
+        5 |       50
 (6 rows)
 
 -- Test if Motion is placed between the "group by clauses"
@@ -2172,7 +2175,7 @@ select * from t3 group by a, b, c;
 (3 rows)
 
 commit;
-ERROR:  duplicate key value violates unique constraint "t3_pkey"  (seg1 127.0.0.1:7003 pid=86457)
+ERROR:  duplicate key value violates unique constraint "t3_pkey"  (seg1 127.0.1.1:9203 pid=1582955)
 DETAIL:  Key (a, b)=(1, 1) already exists.
 drop table  t1, t2, t3, t4, t5, t6;
 -- CLEANUP

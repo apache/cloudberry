@@ -5,6 +5,9 @@
 -- Note: to ensure plan stability, it's a good idea to make the partitions of
 -- any one partitioned table in this test all have different numbers of rows.
 --
+-- start_ignore
+set gp_use_streaming_hashagg = off;
+-- end_ignore
 -- Disable ORCA since it does support partition-wise aggregates
 set optimizer to off;
 -- Enable partitionwise aggregate, which by default is disabled.
@@ -19,37 +22,46 @@ SET enable_incremental_sort TO off;
 -- Tests for list partitioned tables.
 --
 CREATE TABLE pagg_tab (a int, b int, c text, d int) PARTITION BY LIST(c);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE pagg_tab_p1 PARTITION OF pagg_tab FOR VALUES IN ('0000', '0001', '0002', '0003', '0004');
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE pagg_tab_p2 PARTITION OF pagg_tab FOR VALUES IN ('0005', '0006', '0007', '0008');
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE pagg_tab_p3 PARTITION OF pagg_tab FOR VALUES IN ('0009', '0010', '0011');
+NOTICE:  table has parent, setting distribution columns to match parent table
 INSERT INTO pagg_tab SELECT i % 20, i % 30, to_char(i % 12, 'FM0000'), i % 30 FROM generate_series(0, 2999) i;
 ANALYZE pagg_tab;
 -- When GROUP BY clause matches; full aggregation is performed for each partition.
 EXPLAIN (COSTS OFF)
 SELECT c, sum(a), avg(b), count(*), min(a), max(b) FROM pagg_tab GROUP BY c HAVING avg(d) < 15 ORDER BY 1, 2, 3;
-                                 QUERY PLAN                                  
------------------------------------------------------------------------------
+                                  QUERY PLAN                                  
+------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    Merge Key: pagg_tab.c, (sum(pagg_tab.a)), (avg(pagg_tab.b))
    ->  Sort
          Sort Key: pagg_tab.c, (sum(pagg_tab.a)), (avg(pagg_tab.b))
          ->  Append
-               ->  Finalize HashAggregate
+               ->  Finalize GroupAggregate
                      Group Key: pagg_tab.c
                      Filter: (avg(pagg_tab.d) < '15'::numeric)
-                     ->  Redistribute Motion 3:3  (slice2; segments: 3)
-                           Hash Key: pagg_tab.c
-                           ->  Partial HashAggregate
-                                 Group Key: pagg_tab.c
-                                 ->  Seq Scan on pagg_tab_p1 pagg_tab
-               ->  Finalize HashAggregate
+                     ->  Sort
+                           Sort Key: pagg_tab.c
+                           ->  Redistribute Motion 3:3  (slice2; segments: 3)
+                                 Hash Key: pagg_tab.c
+                                 ->  Partial HashAggregate
+                                       Group Key: pagg_tab.c
+                                       ->  Seq Scan on pagg_tab_p1 pagg_tab
+               ->  Finalize GroupAggregate
                      Group Key: pagg_tab_1.c
                      Filter: (avg(pagg_tab_1.d) < '15'::numeric)
-                     ->  Redistribute Motion 3:3  (slice3; segments: 3)
-                           Hash Key: pagg_tab_1.c
-                           ->  Partial HashAggregate
-                                 Group Key: pagg_tab_1.c
-                                 ->  Seq Scan on pagg_tab_p2 pagg_tab_1
+                     ->  Sort
+                           Sort Key: pagg_tab_1.c
+                           ->  Redistribute Motion 3:3  (slice3; segments: 3)
+                                 Hash Key: pagg_tab_1.c
+                                 ->  Partial HashAggregate
+                                       Group Key: pagg_tab_1.c
+                                       ->  Seq Scan on pagg_tab_p2 pagg_tab_1
                ->  Finalize GroupAggregate
                      Group Key: pagg_tab_2.c
                      Filter: (avg(pagg_tab_2.d) < '15'::numeric)
@@ -61,7 +73,7 @@ SELECT c, sum(a), avg(b), count(*), min(a), max(b) FROM pagg_tab GROUP BY c HAVI
                                        Group Key: pagg_tab_2.c
                                        ->  Seq Scan on pagg_tab_p3 pagg_tab_2
  Optimizer: Postgres query optimizer
-(30 rows)
+(36 rows)
 
 SELECT c, sum(a), avg(b), count(*), min(a), max(b) FROM pagg_tab GROUP BY c HAVING avg(d) < 15 ORDER BY 1, 2, 3;
   c   | sum  |         avg         | count | min | max 
@@ -77,8 +89,8 @@ SELECT c, sum(a), avg(b), count(*), min(a), max(b) FROM pagg_tab GROUP BY c HAVI
 -- When GROUP BY clause does not match; partial aggregation is performed for each partition.
 EXPLAIN (COSTS OFF)
 SELECT a, sum(b), avg(b), count(*), min(a), max(b) FROM pagg_tab GROUP BY a HAVING avg(d) < 15 ORDER BY 1, 2, 3;
-                                 QUERY PLAN                                  
------------------------------------------------------------------------------
+                             QUERY PLAN                             
+--------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    Merge Key: pagg_tab.a, (sum(pagg_tab.b)), (avg(pagg_tab.b))
    ->  Sort
@@ -117,8 +129,8 @@ SELECT a, sum(b), avg(b), count(*), min(a), max(b) FROM pagg_tab GROUP BY a HAVI
 -- Check with multiple columns in GROUP BY
 EXPLAIN (COSTS OFF)
 SELECT a, c, count(*) FROM pagg_tab GROUP BY a, c;
-                      QUERY PLAN                       
--------------------------------------------------------
+                      QUERY PLAN                      
+------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Append
          ->  HashAggregate
@@ -136,8 +148,8 @@ SELECT a, c, count(*) FROM pagg_tab GROUP BY a, c;
 -- Check with multiple columns in GROUP BY, order in GROUP BY is reversed
 EXPLAIN (COSTS OFF)
 SELECT a, c, count(*) FROM pagg_tab GROUP BY c, a;
-                      QUERY PLAN                       
--------------------------------------------------------
+                      QUERY PLAN                      
+------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Append
          ->  HashAggregate
@@ -155,8 +167,8 @@ SELECT a, c, count(*) FROM pagg_tab GROUP BY c, a;
 -- Check with multiple columns in GROUP BY, order in target-list is reversed
 EXPLAIN (COSTS OFF)
 SELECT c, a, count(*) FROM pagg_tab GROUP BY a, c;
-                      QUERY PLAN                       
--------------------------------------------------------
+                      QUERY PLAN                      
+------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Append
          ->  HashAggregate
@@ -174,13 +186,14 @@ SELECT c, a, count(*) FROM pagg_tab GROUP BY a, c;
 -- Test when input relation for grouping is dummy
 EXPLAIN (COSTS OFF)
 SELECT c, sum(a) FROM pagg_tab WHERE 1 = 2 GROUP BY c;
-           QUERY PLAN           
---------------------------------
+             QUERY PLAN              
+-------------------------------------
  HashAggregate
    Group Key: c
    ->  Result
          One-Time Filter: false
-(4 rows)
+ Optimizer: Postgres query optimizer
+(5 rows)
 
 SELECT c, sum(a) FROM pagg_tab WHERE 1 = 2 GROUP BY c;
  c | sum 
@@ -189,13 +202,14 @@ SELECT c, sum(a) FROM pagg_tab WHERE 1 = 2 GROUP BY c;
 
 EXPLAIN (COSTS OFF)
 SELECT c, sum(a) FROM pagg_tab WHERE c = 'x' GROUP BY c;
-           QUERY PLAN           
---------------------------------
+             QUERY PLAN              
+-------------------------------------
  GroupAggregate
    Group Key: c
    ->  Result
          One-Time Filter: false
-(4 rows)
+ Optimizer: Postgres query optimizer
+(5 rows)
 
 SELECT c, sum(a) FROM pagg_tab WHERE c = 'x' GROUP BY c;
  c | sum 
@@ -207,35 +221,44 @@ SET enable_hashagg TO false;
 -- When GROUP BY clause matches full aggregation is performed for each partition.
 EXPLAIN (COSTS OFF)
 SELECT c, sum(a), avg(b), count(*) FROM pagg_tab GROUP BY 1 HAVING avg(d) < 15 ORDER BY 1, 2, 3;
-                          QUERY PLAN                          
---------------------------------------------------------------
+                                     QUERY PLAN                                     
+------------------------------------------------------------------------------------
  Sort
    Sort Key: pagg_tab.c, (sum(pagg_tab.a)), (avg(pagg_tab.b))
-   ->  Append
-         ->  Finalize GroupAggregate
-               Group Key: pagg_tab.c
-               Filter: (avg(pagg_tab.d) < '15'::numeric)
-               ->  Gather Motion 3:1  (slice1; segments: 3)
-                     Merge Key: pagg_tab.c
-                     ->  Partial GroupAggregate
-                           Group Key: pagg_tab.c
-                           ->  Sort
-                                 Sort Key: pagg_tab.c
-                                 ->  Seq Scan on pagg_tab_p1 pagg_tab
-         ->  Finalize GroupAggregate
-               Group Key: pagg_tab_1.c
-               Filter: (avg(pagg_tab_1.d) < '15'::numeric)
-               ->  Gather Motion 3:1  (slice2; segments: 3)
-                     Merge Key: pagg_tab_1.c
-                     ->  Partial GroupAggregate
-                           Group Key: pagg_tab_1.c
-                           ->  Sort
-                                 Sort Key: pagg_tab_1.c
-                                 ->  Seq Scan on pagg_tab_p2 pagg_tab_1
+   ->  Merge Append
+         Sort Key: pagg_tab.c
+         ->  Gather Motion 3:1  (slice1; segments: 3)
+               Merge Key: pagg_tab.c
+               ->  Finalize GroupAggregate
+                     Group Key: pagg_tab.c
+                     Filter: (avg(pagg_tab.d) < '15'::numeric)
+                     ->  Sort
+                           Sort Key: pagg_tab.c
+                           ->  Redistribute Motion 3:3  (slice2; segments: 3)
+                                 Hash Key: pagg_tab.c
+                                 ->  Partial GroupAggregate
+                                       Group Key: pagg_tab.c
+                                       ->  Sort
+                                             Sort Key: pagg_tab.c
+                                             ->  Seq Scan on pagg_tab_p1 pagg_tab
+         ->  Gather Motion 3:1  (slice3; segments: 3)
+               Merge Key: pagg_tab_1.c
+               ->  Finalize GroupAggregate
+                     Group Key: pagg_tab_1.c
+                     Filter: (avg(pagg_tab_1.d) < '15'::numeric)
+                     ->  Sort
+                           Sort Key: pagg_tab_1.c
+                           ->  Redistribute Motion 3:3  (slice4; segments: 3)
+                                 Hash Key: pagg_tab_1.c
+                                 ->  Partial GroupAggregate
+                                       Group Key: pagg_tab_1.c
+                                       ->  Sort
+                                             Sort Key: pagg_tab_1.c
+                                             ->  Seq Scan on pagg_tab_p2 pagg_tab_1
          ->  Finalize GroupAggregate
                Group Key: pagg_tab_2.c
                Filter: (avg(pagg_tab_2.d) < '15'::numeric)
-               ->  Gather Motion 3:1  (slice3; segments: 3)
+               ->  Gather Motion 3:1  (slice5; segments: 3)
                      Merge Key: pagg_tab_2.c
                      ->  Partial GroupAggregate
                            Group Key: pagg_tab_2.c
@@ -243,7 +266,7 @@ SELECT c, sum(a), avg(b), count(*) FROM pagg_tab GROUP BY 1 HAVING avg(d) < 15 O
                                  Sort Key: pagg_tab_2.c
                                  ->  Seq Scan on pagg_tab_p3 pagg_tab_2
  Optimizer: Postgres query optimizer
-(34 rows)
+(43 rows)
 
 SELECT c, sum(a), avg(b), count(*) FROM pagg_tab GROUP BY 1 HAVING avg(d) < 15 ORDER BY 1, 2, 3;
   c   | sum  |         avg         | count 
@@ -306,39 +329,48 @@ SELECT a, sum(b), avg(b), count(*) FROM pagg_tab GROUP BY 1 HAVING avg(d) < 15 O
 -- Test partitionwise grouping without any aggregates
 EXPLAIN (COSTS OFF)
 SELECT c FROM pagg_tab GROUP BY c ORDER BY 1;
-                      QUERY PLAN                       
--------------------------------------------------------
- Merge Append
-   Sort Key: pagg_tab.c
-   ->  GroupAggregate
-         Group Key: pagg_tab.c
-         ->  Gather Motion 3:1  (slice1; segments: 3)
-               Merge Key: pagg_tab.c
+                                     QUERY PLAN                                     
+------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Merge Key: pagg_tab.c
+   ->  Sort
+         Sort Key: pagg_tab.c
+         ->  Append
                ->  GroupAggregate
                      Group Key: pagg_tab.c
                      ->  Sort
                            Sort Key: pagg_tab.c
-                           ->  Seq Scan on pagg_tab_p1 pagg_tab
-   ->  GroupAggregate
-         Group Key: pagg_tab_1.c
-         ->  Gather Motion 3:1  (slice2; segments: 3)
-               Merge Key: pagg_tab_1.c
+                           ->  Redistribute Motion 3:3  (slice2; segments: 3)
+                                 Hash Key: pagg_tab.c
+                                 ->  GroupAggregate
+                                       Group Key: pagg_tab.c
+                                       ->  Sort
+                                             Sort Key: pagg_tab.c
+                                             ->  Seq Scan on pagg_tab_p1 pagg_tab
                ->  GroupAggregate
                      Group Key: pagg_tab_1.c
                      ->  Sort
                            Sort Key: pagg_tab_1.c
-                           ->  Seq Scan on pagg_tab_p2 pagg_tab_1
-   ->  GroupAggregate
-         Group Key: pagg_tab_2.c
-         ->  Gather Motion 3:1  (slice3; segments: 3)
-               Merge Key: pagg_tab_2.c
+                           ->  Redistribute Motion 3:3  (slice3; segments: 3)
+                                 Hash Key: pagg_tab_1.c
+                                 ->  GroupAggregate
+                                       Group Key: pagg_tab_1.c
+                                       ->  Sort
+                                             Sort Key: pagg_tab_1.c
+                                             ->  Seq Scan on pagg_tab_p2 pagg_tab_1
                ->  GroupAggregate
                      Group Key: pagg_tab_2.c
                      ->  Sort
                            Sort Key: pagg_tab_2.c
-                           ->  Seq Scan on pagg_tab_p3 pagg_tab_2
+                           ->  Redistribute Motion 3:3  (slice4; segments: 3)
+                                 Hash Key: pagg_tab_2.c
+                                 ->  GroupAggregate
+                                       Group Key: pagg_tab_2.c
+                                       ->  Sort
+                                             Sort Key: pagg_tab_2.c
+                                             ->  Seq Scan on pagg_tab_p3 pagg_tab_2
  Optimizer: Postgres query optimizer
-(30 rows)
+(39 rows)
 
 SELECT c FROM pagg_tab GROUP BY c ORDER BY 1;
   c   
@@ -400,8 +432,8 @@ RESET enable_hashagg;
 -- ROLLUP, partitionwise aggregation does not apply
 EXPLAIN (COSTS OFF)
 SELECT c, sum(a) FROM pagg_tab GROUP BY rollup(c) ORDER BY 1, 2;
-                            QUERY PLAN                            
-------------------------------------------------------------------
+                               QUERY PLAN                               
+------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    Merge Key: pagg_tab.c, (sum(pagg_tab.a))
    ->  Sort
@@ -462,8 +494,8 @@ SELECT c, sum(b order by a) FROM pagg_tab GROUP BY c ORDER BY 1, 2;
 -- partitionwise aggregation plan is not generated.
 EXPLAIN (COSTS OFF)
 SELECT a, sum(b order by a) FROM pagg_tab GROUP BY a ORDER BY 1, 2;
-                                  QUERY PLAN                                  
-------------------------------------------------------------------------------
+                             QUERY PLAN                              
+---------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    Merge Key: pagg_tab.a, (sum(pagg_tab.b ORDER BY pagg_tab.a))
    ->  Sort
@@ -481,13 +513,23 @@ SELECT a, sum(b order by a) FROM pagg_tab GROUP BY a ORDER BY 1, 2;
 
 -- JOIN query
 CREATE TABLE pagg_tab1(x int, y int) PARTITION BY RANGE(x);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'x' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE pagg_tab1_p1 PARTITION OF pagg_tab1 FOR VALUES FROM (0) TO (10);
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE pagg_tab1_p2 PARTITION OF pagg_tab1 FOR VALUES FROM (10) TO (20);
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE pagg_tab1_p3 PARTITION OF pagg_tab1 FOR VALUES FROM (20) TO (30);
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE pagg_tab2(x int, y int) PARTITION BY RANGE(y);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'x' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE pagg_tab2_p1 PARTITION OF pagg_tab2 FOR VALUES FROM (0) TO (10);
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE pagg_tab2_p2 PARTITION OF pagg_tab2 FOR VALUES FROM (10) TO (20);
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE pagg_tab2_p3 PARTITION OF pagg_tab2 FOR VALUES FROM (20) TO (30);
+NOTICE:  table has parent, setting distribution columns to match parent table
 INSERT INTO pagg_tab1 SELECT i % 30, i % 20 FROM generate_series(0, 299, 2) i;
 INSERT INTO pagg_tab2 SELECT i % 20, i % 30 FROM generate_series(0, 299, 3) i;
 ANALYZE pagg_tab1;
@@ -872,8 +914,8 @@ SELECT a.x, sum(b.x) FROM pagg_tab1 a FULL OUTER JOIN pagg_tab2 b ON a.x = b.y G
 -- But right now we are unable to do partitionwise join in this case.
 EXPLAIN (COSTS OFF)
 SELECT a.x, b.y, count(*) FROM (SELECT * FROM pagg_tab1 WHERE x < 20) a LEFT JOIN (SELECT * FROM pagg_tab2 WHERE y > 10) b ON a.x = b.y WHERE a.x > 5 or b.y < 20  GROUP BY a.x, b.y ORDER BY 1, 2;
-                                  QUERY PLAN                                  
-------------------------------------------------------------------------------
+                                   QUERY PLAN                                   
+--------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    Merge Key: pagg_tab1.x, pagg_tab2.y
    ->  Sort
@@ -917,8 +959,8 @@ SELECT a.x, b.y, count(*) FROM (SELECT * FROM pagg_tab1 WHERE x < 20) a LEFT JOI
 -- But right now we are unable to do partitionwise join in this case.
 EXPLAIN (COSTS OFF)
 SELECT a.x, b.y, count(*) FROM (SELECT * FROM pagg_tab1 WHERE x < 20) a FULL JOIN (SELECT * FROM pagg_tab2 WHERE y > 10) b ON a.x = b.y WHERE a.x > 5 or b.y < 20  GROUP BY a.x, b.y ORDER BY 1, 2;
-                                     QUERY PLAN                                     
-------------------------------------------------------------------------------------
+                                      QUERY PLAN                                      
+--------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    Merge Key: pagg_tab1.x, pagg_tab2.y
    ->  Sort
@@ -970,7 +1012,8 @@ SELECT a.x, a.y, count(*) FROM (SELECT * FROM pagg_tab1 WHERE x = 1 AND x = 2) a
          Sort Key: pagg_tab1.y
          ->  Result
                One-Time Filter: false
-(6 rows)
+ Optimizer: Postgres query optimizer
+(7 rows)
 
 SELECT a.x, a.y, count(*) FROM (SELECT * FROM pagg_tab1 WHERE x = 1 AND x = 2) a LEFT JOIN pagg_tab2 b ON a.x = b.y GROUP BY a.x, a.y ORDER BY 1, 2;
  x | y | count 
@@ -979,16 +1022,21 @@ SELECT a.x, a.y, count(*) FROM (SELECT * FROM pagg_tab1 WHERE x = 1 AND x = 2) a
 
 -- Partition by multiple columns
 CREATE TABLE pagg_tab_m (a int, b int, c int) PARTITION BY RANGE(a, ((a+b)/2));
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE pagg_tab_m_p1 PARTITION OF pagg_tab_m FOR VALUES FROM (0, 0) TO (12, 12);
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE pagg_tab_m_p2 PARTITION OF pagg_tab_m FOR VALUES FROM (12, 12) TO (22, 22);
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE pagg_tab_m_p3 PARTITION OF pagg_tab_m FOR VALUES FROM (22, 22) TO (30, 30);
+NOTICE:  table has parent, setting distribution columns to match parent table
 INSERT INTO pagg_tab_m SELECT i % 30, i % 40, i % 50 FROM generate_series(0, 2999) i;
 ANALYZE pagg_tab_m;
 -- Partial aggregation as GROUP BY clause does not match with PARTITION KEY
 EXPLAIN (COSTS OFF)
 SELECT a, sum(b), avg(c), count(*) FROM pagg_tab_m GROUP BY a HAVING avg(c) < 22 ORDER BY 1, 2, 3;
-                                    QUERY PLAN                                     
------------------------------------------------------------------------------------
+                                QUERY PLAN                                
+--------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    Merge Key: pagg_tab_m.a, (sum(pagg_tab_m.b)), (avg(pagg_tab_m.c))
    ->  Sort
@@ -1023,8 +1071,8 @@ SELECT a, sum(b), avg(c), count(*) FROM pagg_tab_m GROUP BY a HAVING avg(c) < 22
 -- Full aggregation as GROUP BY clause matches with PARTITION KEY
 EXPLAIN (COSTS OFF)
 SELECT a, sum(b), avg(c), count(*) FROM pagg_tab_m GROUP BY a, (a+b)/2 HAVING sum(b) < 50 ORDER BY 1, 2, 3;
-                                        QUERY PLAN                                         
--------------------------------------------------------------------------------------------
+                                       QUERY PLAN                                       
+----------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    Merge Key: pagg_tab_m.a, (sum(pagg_tab_m.b)), (avg(pagg_tab_m.c))
    ->  Sort
@@ -1059,8 +1107,8 @@ SELECT a, sum(b), avg(c), count(*) FROM pagg_tab_m GROUP BY a, (a+b)/2 HAVING su
 -- Full aggregation as PARTITION KEY is part of GROUP BY clause
 EXPLAIN (COSTS OFF)
 SELECT a, c, sum(b), avg(c), count(*) FROM pagg_tab_m GROUP BY (a+b)/2, 2, 1 HAVING sum(b) = 50 AND avg(c) > 25 ORDER BY 1, 2, 3;
-                                                 QUERY PLAN                                                 
-------------------------------------------------------------------------------------------------------------
+                                               QUERY PLAN                                               
+--------------------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    Merge Key: pagg_tab_m.a, pagg_tab_m.c, (sum(pagg_tab_m.b))
    ->  Sort
@@ -1094,16 +1142,27 @@ SELECT a, c, sum(b), avg(c), count(*) FROM pagg_tab_m GROUP BY (a+b)/2, 2, 1 HAV
 
 -- Test with multi-level partitioning scheme
 CREATE TABLE pagg_tab_ml (a int, b int, c text) PARTITION BY RANGE(a);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE pagg_tab_ml_p1 PARTITION OF pagg_tab_ml FOR VALUES FROM (0) TO (12);
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE pagg_tab_ml_p2 PARTITION OF pagg_tab_ml FOR VALUES FROM (12) TO (20) PARTITION BY LIST (c);
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE pagg_tab_ml_p2_s1 PARTITION OF pagg_tab_ml_p2 FOR VALUES IN ('0000', '0001', '0002');
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE pagg_tab_ml_p2_s2 PARTITION OF pagg_tab_ml_p2 FOR VALUES IN ('0003');
+NOTICE:  table has parent, setting distribution columns to match parent table
 -- This level of partitioning has different column positions than the parent
 CREATE TABLE pagg_tab_ml_p3(b int, c text, a int) PARTITION BY RANGE (b);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'b' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 ALTER TABLE pagg_tab_ml_p3 SET DISTRIBUTED BY (a);
 CREATE TABLE pagg_tab_ml_p3_s1(c text, a int, b int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 ALTER TABLE pagg_tab_ml_p3_s1 SET DISTRIBUTED BY (a);
 CREATE TABLE pagg_tab_ml_p3_s2 PARTITION OF pagg_tab_ml_p3 FOR VALUES FROM (7) TO (10);
+NOTICE:  table has parent, setting distribution columns to match parent table
 ALTER TABLE pagg_tab_ml_p3 ATTACH PARTITION pagg_tab_ml_p3_s1 FOR VALUES FROM (0) TO (7);
 ALTER TABLE pagg_tab_ml ATTACH PARTITION pagg_tab_ml_p3 FOR VALUES FROM (20) TO (30);
 INSERT INTO pagg_tab_ml SELECT i % 30, i % 10, to_char(i % 4, 'FM0000') FROM generate_series(0, 29999) i;
@@ -1511,9 +1570,14 @@ SELECT a, sum(b), count(*) FROM pagg_tab_ml GROUP BY a, b, c HAVING avg(b) > 7 O
 -- costing such plans.
 SET parallel_setup_cost TO 10;
 CREATE TABLE pagg_tab_para(x int, y int) PARTITION BY RANGE(x);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'x' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE pagg_tab_para_p1 PARTITION OF pagg_tab_para FOR VALUES FROM (0) TO (12);
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE pagg_tab_para_p2 PARTITION OF pagg_tab_para FOR VALUES FROM (12) TO (22);
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE pagg_tab_para_p3 PARTITION OF pagg_tab_para FOR VALUES FROM (22) TO (30);
+NOTICE:  table has parent, setting distribution columns to match parent table
 INSERT INTO pagg_tab_para SELECT i % 30, i % 20 FROM generate_series(0, 29999) i;
 ANALYZE pagg_tab_para;
 -- When GROUP BY clause matches; full aggregation is performed for each partition.

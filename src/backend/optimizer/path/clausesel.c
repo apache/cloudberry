@@ -31,6 +31,7 @@
 #include "utils/selfuncs.h"
 
 #include "cdb/cdbvars.h"        /* cdb GUCs */
+#include "utils/guc.h"
 
 /*
  * Data structure for accumulating info about possible range-query
@@ -941,6 +942,8 @@ clause_selectivity_ext(PlannerInfo *root,
 								  opclause->inputcollid,
 								  jointype,
 								  sjinfo);
+			if (sjinfo->jointype == JOIN_INNER && s1 < 0.00001)
+				s1 = 1.0 - pow(1.0 - s1, cbdb_inner_join_selectivity_damping_factor);
 		}
 		else
 		{

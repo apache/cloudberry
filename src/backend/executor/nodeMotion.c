@@ -734,8 +734,23 @@ ExecInitMotion(Motion *node, EState *estate, int eflags)
 			}
 			else
 			{
-				/* sanity checks */
-				if (list_length(recvSlice->segments) != 1)
+				/*
+				 * A Gather normally requires exactly 1 receiver.
+				 * When the receiving slice uses MPP parallel mode
+				 * (parallel_workers > 1 on a single segment), the
+				 * segments list is expanded by the parallel factor.
+				 * This is valid: the sender will broadcast tuples
+				 * to all parallel workers so each one gets the
+				 * complete result set (see doSendTuple).
+				 */
+				if (recvSlice->useMppParallelMode)
+				{
+					if (list_length(recvSlice->segments) != recvSlice->parallel_workers)
+						elog(ERROR, "unexpected gang size: %d for parallel_workers %d",
+							 list_length(recvSlice->segments),
+							 recvSlice->parallel_workers);
+				}
+				else if (list_length(recvSlice->segments) != 1)
 					elog(ERROR, "unexpected gang size: %d", list_length(recvSlice->segments));
 			}
 		}
@@ -1198,12 +1213,17 @@ doSendTuple(Motion *motion, MotionState *node, TupleTableSlot *outerTupleSlot)
 		motion->motionType == MOTIONTYPE_GATHER_SINGLE)
 	{
 		/*
-		 * Actually, since we can only send to a single output segment
-		 * here, we are guaranteed that we only have a single targetRoute
-		 * setup that we could possibly send to.  So we can cheat and just
-		 * fix the targetRoute to 0 (the 1st route).
+		 * Normally a Gather sends to a single receiver (route 0).
+		 *
+		 * When the receiving slice has parallel workers (e.g., a
+		 * SubPlan's Gather Motion embedded in a parallel slice),
+		 * we broadcast to all workers so each one receives the
+		 * complete set of tuples for correct aggregate finalization.
 		 */
-		targetRoute = 0;
+		if (parallel_workers >= 2)
+			targetRoute = BROADCAST_SEGIDX;
+		else
+			targetRoute = 0;
 
 	}
 	else if (motion->motionType == MOTIONTYPE_BROADCAST)

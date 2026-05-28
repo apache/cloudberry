@@ -1148,6 +1148,7 @@ replace_rte_variables(Node *node, int target_varno, int sublevels_up,
 	context.callback_arg = callback_arg;
 	context.target_varno = target_varno;
 	context.sublevels_up = sublevels_up;
+	context.target_varno_bms = NULL;
 
 	/*
 	 * We try to initialize inserted_sublink to true if there is no need to
@@ -1192,7 +1193,8 @@ replace_rte_variables_mutator(Node *node,
 	{
 		Var		   *var = (Var *) node;
 
-		if (var->varno == context->target_varno &&
+		if ((var->varno == context->target_varno ||
+			bms_is_member(var->varno, context->target_varno_bms)) &&
 			var->varlevelsup == context->sublevels_up)
 		{
 			/* Found a matching variable, make the substitution */
@@ -1581,5 +1583,140 @@ ReplaceVarsFromTargetList(Node *node,
 	return replace_rte_variables(node, target_varno, sublevels_up,
 								 ReplaceVarsFromTargetList_callback,
 								 (void *) &context,
+								 outer_hasSubLinks);
+}
+
+static Node *
+replace_rte_variables_1(Node *node, Bitmapset *target_varno_bms, int sublevels_up,
+					  replace_rte_variables_callback callback,
+					  void *callback_arg,
+					  bool *outer_hasSubLinks)
+{
+	Node	   *result;
+	replace_rte_variables_context context;
+
+	context.callback = callback;
+	context.callback_arg = callback_arg;
+	context.target_varno = 0;
+	context.target_varno_bms = target_varno_bms;
+	context.sublevels_up = sublevels_up;
+
+	/*
+	 * We try to initialize inserted_sublink to true if there is no need to
+	 * detect new sublinks because the query already has some.
+	 */
+	if (node && IsA(node, Query))
+		context.inserted_sublink = ((Query *) node)->hasSubLinks;
+	else if (outer_hasSubLinks)
+		context.inserted_sublink = *outer_hasSubLinks;
+	else
+		context.inserted_sublink = false;
+
+	/*
+	 * Must be prepared to start with a Query or a bare expression tree; if
+	 * it's a Query, we don't want to increment sublevels_up.
+	 */
+	result = query_or_expression_tree_mutator(node,
+											  replace_rte_variables_mutator,
+											  (void *) &context,
+											  0);
+
+	if (context.inserted_sublink)
+	{
+		if (result && IsA(result, Query))
+			((Query *) result)->hasSubLinks = true;
+		else if (outer_hasSubLinks)
+			*outer_hasSubLinks = true;
+		else
+			elog(ERROR, "replace_rte_variables inserted a SubLink, but has noplace to record it");
+	}
+
+	return result;
+}
+
+
+Node *
+ReplaceVarsFromTargetList_CTE(Node *node,
+						  Bitmapset *target_varno_bms, int sublevels_up,
+						  List *targetlist,
+						  ReplaceVarsNoMatchOption nomatch_option,
+						  int nomatch_varno,
+						  bool *outer_hasSubLinks)
+{
+	ReplaceVarsFromTargetList_context context;
+
+	context.target_rte = NULL;
+	context.targetlist = targetlist;
+	context.nomatch_option = nomatch_option;
+	context.nomatch_varno = nomatch_varno;
+
+	return replace_rte_variables_1(node, target_varno_bms, sublevels_up,
+								 ReplaceVarsFromTargetList_callback,
+								 (void *) &context,
+								 outer_hasSubLinks);
+}
+
+static Node *
+ReplaceVarnoFromSubquery_callback(Var *var,
+								   replace_rte_variables_context *context)
+{
+	ReplaceVarsFromTargetList_context *rcon = (ReplaceVarsFromTargetList_context *) context->callback_arg;
+
+	if (var->varattno == InvalidAttrNumber)
+	{
+		/* Must expand whole-tuple reference into RowExpr */
+		RowExpr    *rowexpr;
+		List	   *colnames;
+		List	   *fields;
+
+		/*
+		 * If generating an expansion for a var of a named rowtype (ie, this
+		 * is a plain relation RTE), then we must include dummy items for
+		 * dropped columns.  If the var is RECORD (ie, this is a JOIN), then
+		 * omit dropped columns.  Either way, attach column names to the
+		 * RowExpr for use of ruleutils.c.
+		 */
+		expandRTE(rcon->target_rte,
+				  var->varno, var->varlevelsup, var->location,
+				  (var->vartype != RECORDOID),
+				  &colnames, &fields);
+		/* Adjust the generated per-field Vars... */
+		fields = (List *) replace_rte_variables_mutator((Node *) fields,
+														context);
+		rowexpr = makeNode(RowExpr);
+		rowexpr->args = fields;
+		rowexpr->row_typeid = var->vartype;
+		rowexpr->row_format = COERCE_IMPLICIT_CAST;
+		rowexpr->colnames = colnames;
+		rowexpr->location = var->location;
+
+		return (Node *) rowexpr;
+	}
+
+	Var *newnode = (Var *)copyObject(var);
+	/* Make var to the subquery itself. */
+	((Var *) newnode)->varno = 1;
+	return (Node *) newnode;
+}
+
+Node *
+ReplaceVarnoFromSubquery(Node *node,
+						  int target_varno, int sublevels_up,
+						  RangeTblEntry *target_rte,
+						  List *targetlist,
+						  ReplaceVarsNoMatchOption nomatch_option,
+						  int nomatch_varno,
+						  bool *outer_hasSubLinks)
+{
+	ReplaceVarsFromTargetList_context context;
+
+	context.target_rte = target_rte;
+	context.targetlist = targetlist;
+	context.nomatch_option = nomatch_option;
+	context.nomatch_varno = nomatch_varno;
+
+	return replace_rte_variables(node, target_varno, sublevels_up,
+								 ReplaceVarnoFromSubquery_callback,
+								 (void *)&context,
 								 outer_hasSubLinks);
 }

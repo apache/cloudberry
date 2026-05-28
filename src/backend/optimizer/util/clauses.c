@@ -849,7 +849,7 @@ max_parallel_hazard_walker(Node *node, max_parallel_hazard_context *context)
 		List	   *save_safe_param_ids;
 
 		if (!subplan->parallel_safe &&
-			max_parallel_hazard_test(PROPARALLEL_RESTRICTED, context))
+			max_parallel_hazard_test(PROPARALLEL_SAFE, context))
 			return true;
 		save_safe_param_ids = context->safe_param_ids;
 		context->safe_param_ids = list_concat_copy(context->safe_param_ids,

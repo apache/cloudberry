@@ -71,6 +71,8 @@
 #include "utils/lsyscache.h"
 #include "utils/selfuncs.h"
 
+#include "optimizer/restrictinfo.h"
+
 typedef enum
 {
 	INVALID_DQA = -1,
@@ -180,7 +182,8 @@ static void add_first_stage_group_agg_path(PlannerInfo *root,
 										   cdb_agg_planning_context *ctx);
 static void add_first_stage_hash_agg_path(PlannerInfo *root,
 										  Path *path,
-										  cdb_agg_planning_context *ctx);
+										  cdb_agg_planning_context *ctx,
+										  bool is_partial);
 static void add_second_stage_group_agg_path(PlannerInfo *root,
 											Path *path,
 											bool is_sorted,
@@ -675,6 +678,7 @@ create_two_stage_paths(PlannerInfo *root, cdb_agg_planning_context *ctx,
 {
 	Path	   *cheapest_path = input_rel->cheapest_total_path;
 	Path       *cheapest_partial_path =  partial_pathlist ? (Path *) linitial(partial_pathlist) : NULL;
+	Path       *input_rel_cheapest_partial_path =  input_rel->partial_pathlist ? (Path *) linitial(input_rel->partial_pathlist) : NULL;
 
 	/*
 	 * Consider ways to do the first Aggregate stage.
@@ -730,6 +734,33 @@ create_two_stage_paths(PlannerInfo *root, cdb_agg_planning_context *ctx,
 				add_first_stage_group_agg_partial_path(root, path, is_sorted, ctx);
 			}
 		}
+
+		/* Enable Parallel GroupingSets. */
+		if (ctx->groupingSets &&
+			!ctx->is_distinct &&
+			ctx->agg_costs->distinctAggrefs == NIL && 
+			input_rel->partial_pathlist)
+		{
+			/*
+			 * GroupingSets could not be partial aggregated.
+			 * But in MPP, it still have a chance to be parallel if 
+			 * using input_rel's partial paths.
+			 */
+			foreach(lc, input_rel->partial_pathlist)
+			{
+				Path	   *path = (Path *) lfirst(lc);
+				bool		is_sorted;
+
+				if (cdbpathlocus_collocates_tlist(root, path->locus, ctx->group_tles))
+					continue;
+
+				/* Don't check locus as parallel might be winner. */
+				is_sorted = pathkeys_contained_in(ctx->partial_needed_pathkeys,
+													path->pathkeys);
+				if (path == input_rel_cheapest_partial_path || is_sorted)
+					add_first_stage_group_agg_partial_path(root, path, is_sorted, ctx);
+			}
+		}
 	}
 
 	/*
@@ -746,39 +777,75 @@ create_two_stage_paths(PlannerInfo *root, cdb_agg_planning_context *ctx,
 		 * created the straightforward one-stage plan.
 		 */
 		if (!cdbpathlocus_collocates_tlist(root, cheapest_path->locus, ctx->group_tles))
-			add_first_stage_hash_agg_path(root, cheapest_path, ctx);
+			add_first_stage_hash_agg_path(root, cheapest_path, ctx, false);
+
+		if (ctx->is_distinct &&
+			cheapest_partial_path &&
+			!cdbpathlocus_collocates_tlist(root, cheapest_partial_path->locus, ctx->group_tles))
+			add_first_stage_hash_agg_path(root, cheapest_partial_path, ctx, true);
+		else if (ctx->groupingSets &&
+				input_rel_cheapest_partial_path &&
+				(!cdbpathlocus_collocates_tlist(root, input_rel_cheapest_partial_path->locus, ctx->group_tles)))
+			add_first_stage_hash_agg_path(root, input_rel_cheapest_partial_path, ctx, true);
 	}
 
-	if (partial_pathlist)
+	if (!ctx->groupingSets &&
+		(ctx->hasAggs || ctx->groupClause != NIL) &&
+		!ctx->is_distinct &&
+		(list_length(ctx->agg_costs->distinctAggrefs) == 0) &&
+		cheapest_partial_path)
 	{
-		ListCell *lc;
+		/*
+		 * For GroupBy, if there were partially aggregated paths, add it to
+		 * first stage.  Erase output_rel's partial paths, eager cbdb
+		 * multiphase.
+		 *
+		 * However, skip forcing multiphase in two cases:
+		 *
+		 * 1. When the non-parallel cheapest path is already collocated by
+		 *    GROUP BY columns.  In parallel mode, partial paths have Strewn
+		 *    locus (not collocated), but within each segment the data
+		 *    retains its hash distribution.  Forcing 2-phase is wasteful
+		 *    when 1-phase aggregation can run locally per segment.
+		 *
+		 * 2. When the GROUP BY cardinality is high relative to input rows.
+		 *    In parallel mode with Strewn locus, each worker encounters
+		 *    most of the per-segment groups.  When there are many groups
+		 *    (>100K) and they exceed 10% of per-worker input rows, partial
+		 *    aggregation barely reduces row count and the hash table is
+		 *    likely to exceed work_mem, causing streaming spills that
+		 *    produce far more output rows than the group count.  A 1-phase
+		 *    plan (redistribute raw rows, then aggregate on collocated
+		 *    data) is more efficient in this scenario.  The absolute floor
+		 *    of 100K groups avoids affecting small queries where either
+		 *    plan performs equally well.
+		 */
+		bool		force_twophase = true;
 
-		foreach (lc, partial_pathlist)
+		/* Case 1: data already collocated by GROUP BY columns */
+		if (cdbpathlocus_collocates_tlist(root, cheapest_partial_path->locus,
+										  ctx->group_tles) ||
+			cdbpathlocus_collocates_tlist(root, cheapest_path->locus,
+										  ctx->group_tles))
+			force_twophase = false;
+
+		/* Case 2: high cardinality GROUP BY */
+		if (force_twophase)
 		{
-			Path *path = (Path *)lfirst(lc);
+			double	dNumGroups;
 
-			if (cdbpathlocus_collocates_tlist(root, path->locus, ctx->group_tles))
-				continue;
+			dNumGroups = estimate_num_groups_on_segment(ctx->dNumGroupsTotal,
+														cheapest_partial_path->rows,
+														cheapest_partial_path->locus);
+			if (dNumGroups > 100000 &&
+				dNumGroups > cheapest_partial_path->rows * 0.1)
+				force_twophase = false;
+		}
 
-			if (ctx->is_distinct && ctx->can_hash)
-			{
-				double dNumGroups = estimate_num_groups_on_segment(ctx->dNumGroupsTotal,
-																	path->rows,
-																	path->locus);
-
-				path = (Path *) create_agg_path(root,
-											  ctx->partial_rel,
-											  path,
-											  ctx->partial_grouping_target,
-											  AGG_HASHED,
-											  ctx->hasAggs ? AGGSPLIT_INITIAL_SERIAL : AGGSPLIT_SIMPLE,
-											  parallel_query_use_streaming_hashagg, /* streaming */
-											  ctx->groupClause,
-											  NIL,
-											  ctx->agg_partial_costs,
-											  dNumGroups);
-			}
-			add_partial_path(ctx->partial_rel, path);
+		if (force_twophase)
+		{
+			output_rel->partial_pathlist = NIL;
+			add_partial_path(ctx->partial_rel, cheapest_partial_path);
 		}
 	}
 
@@ -1012,6 +1079,16 @@ add_first_stage_group_agg_path(PlannerInfo *root,
 {
 	DQAType     dqa_type;
 
+	double		dNumGroups;
+
+	dNumGroups = estimate_num_groups_on_segment(ctx->dNumGroupsTotal,
+												path->rows, path->locus);
+	if (path->parallel_workers > 1)
+	{
+		dNumGroups /= path->parallel_workers;
+		dNumGroups = clamp_row_est(dNumGroups);
+	}
+
 	/*
 	 * DISTINCT-qualified aggregates are accepted only in the special
 	 * case that the input happens to be collocated with the DISTINCT
@@ -1096,8 +1173,7 @@ add_first_stage_group_agg_path(PlannerInfo *root,
 									 ctx->groupClause,
 									 NIL,
 									 ctx->agg_partial_costs,
-									 estimate_num_groups_on_segment(ctx->dNumGroupsTotal,
-																	path->rows, path->locus)),
+									 dNumGroups),
 				 root);
 	}
 	else
@@ -1122,6 +1198,7 @@ add_second_stage_group_agg_path(PlannerInfo *root,
 	CdbPathLocus singleQE_locus;
 	CdbPathLocus group_locus;
 	bool		need_redistribute;
+	double		dNumGroups;
 
 	/* The input should be distributed, otherwise no point in a two-stage Agg. */
 	Assert(CdbPathLocus_IsPartitioned(initial_agg_path->locus));
@@ -1131,6 +1208,12 @@ add_second_stage_group_agg_path(PlannerInfo *root,
 										ctx->final_group_tles,
 										&need_redistribute);
 	Assert(need_redistribute);
+
+	if (CdbPathLocus_IsPartitioned(group_locus))
+		dNumGroups = clamp_row_est(ctx->dNumGroupsTotal /
+								   CdbPathLocus_NumSegmentsPlusParallelWorkers(group_locus));
+	else
+		dNumGroups = ctx->dNumGroupsTotal;
 
 	/*
 	 * We consider two different loci for the final result:
@@ -1176,7 +1259,7 @@ add_second_stage_group_agg_path(PlannerInfo *root,
 										ctx->final_groupClause,
 										ctx->havingQual,
 										ctx->agg_final_costs,
-										ctx->dNumGroupsTotal);
+										dNumGroups);
 		path->pathkeys = strip_gsetid_from_pathkeys(ctx->gsetid_sortref, path->pathkeys);
 
 		if (!is_partial)
@@ -1229,7 +1312,8 @@ add_second_stage_group_agg_path(PlannerInfo *root,
 static void
 add_first_stage_hash_agg_path(PlannerInfo *root,
 							  Path *path,
-							  cdb_agg_planning_context *ctx)
+							  cdb_agg_planning_context *ctx,
+							  bool is_partial)
 {
 	Query	   *parse = root->parse;
 	Path       *first_stage_agg_path = NULL;
@@ -1238,6 +1322,28 @@ add_first_stage_hash_agg_path(PlannerInfo *root,
 	dNumGroups = estimate_num_groups_on_segment(ctx->dNumGroupsTotal,
 												path->rows, path->locus);
 
+	/*
+	 * When the estimated per-segment groups exceed half the per-segment input
+	 * rows, the cardinality estimate is likely unreliable (e.g., from default
+	 * statistics on UNION ALL subquery columns that lack pg_statistic data).
+	 *
+	 * In MPP systems, choosing a 1-phase plan (redistribute all raw rows,
+	 * then aggregate) over a 2-phase plan (local partial aggregate, then
+	 * redistribute fewer rows) is very costly when the estimate is wrong.
+	 * The streaming hash aggregate can efficiently discover the true group
+	 * count at runtime, so we optimistically reduce the estimate to give
+	 * the 2-phase plan a fair chance in cost comparison.
+	 */
+	if (gp_use_streaming_hashagg &&
+		cbdb_2phase_agg_cardinality_cap < 1.0 &&
+		dNumGroups > path->rows * cbdb_2phase_agg_cardinality_cap)
+		dNumGroups = clamp_row_est(path->rows * 0.1);
+
+	if (path->parallel_workers > 1)
+	{
+		dNumGroups /= path->parallel_workers;
+		dNumGroups = clamp_row_est(dNumGroups);
+	}
 
 	if (parse->groupingSets && ctx->new_rollups)
 	{
@@ -1253,12 +1359,14 @@ add_first_stage_hash_agg_path(PlannerInfo *root,
 		CdbPathLocus_MakeStrewn(&(first_stage_agg_path->locus),
 								CdbPathLocus_NumSegments(first_stage_agg_path->locus),
 								path->parallel_workers);
-		add_path(ctx->partial_rel, first_stage_agg_path, root);
+		if (!is_partial)
+        	add_path(ctx->partial_rel, first_stage_agg_path, root);
+		else
+			add_partial_path(ctx->partial_rel, first_stage_agg_path);
 	}
 	else
 	{
-		add_path(ctx->partial_rel,
-				 (Path *) create_agg_path(root,
+		first_stage_agg_path =	(Path *) create_agg_path(root,
 										  ctx->partial_rel,
 										  path,
 										  ctx->partial_grouping_target,
@@ -1268,8 +1376,11 @@ add_first_stage_hash_agg_path(PlannerInfo *root,
 										  ctx->groupClause,
 										  NIL,
 										  ctx->agg_partial_costs,
-										  dNumGroups),
-				 root);
+										  dNumGroups);
+		if (!is_partial)
+			add_path(ctx->partial_rel, first_stage_agg_path, root);
+		else
+			add_partial_path(ctx->partial_rel, first_stage_agg_path);
 	}
 }
 
@@ -1299,10 +1410,9 @@ add_second_stage_hash_agg_path(PlannerInfo *root,
 	/*
 	 * Calculate the number of groups in the second stage, per segment.
 	 */
-	// consider parallel?
 	if (CdbPathLocus_IsPartitioned(group_locus))
 		dNumGroups = clamp_row_est(ctx->dNumGroupsTotal /
-								   CdbPathLocus_NumSegments(group_locus));
+								   CdbPathLocus_NumSegmentsPlusParallelWorkers(group_locus));
 	else
 		dNumGroups = ctx->dNumGroupsTotal;
 
@@ -2778,10 +2888,18 @@ static void add_first_stage_group_agg_partial_path(PlannerInfo *root,
 										   bool is_sorted,
 										   cdb_agg_planning_context *ctx)
 {
+	double		dNumGroups;
 
-	if (ctx->agg_costs->distinctAggrefs ||
-		ctx->groupingSets)
+	if (list_length(ctx->agg_costs->distinctAggrefs) != 0)
 		return;
+
+	dNumGroups = estimate_num_groups_on_segment(ctx->dNumGroupsTotal,
+												path->rows, path->locus);
+	if (path->parallel_workers > 1)
+	{
+		dNumGroups /= path->parallel_workers;
+		dNumGroups = clamp_row_est(dNumGroups);
+	}
 
 	if (!is_sorted)
 	{
@@ -2792,18 +2910,124 @@ static void add_first_stage_group_agg_partial_path(PlannerInfo *root,
 										 -1.0);
 	}
 
-	Assert(ctx->hasAggs || ctx->groupClause);
-	add_partial_path(ctx->partial_rel,
-		(Path *) create_agg_path(root,
-								 ctx->partial_rel,
-								 path,
-								 ctx->partial_grouping_target,
-								 ctx->groupClause ? AGG_SORTED : AGG_PLAIN,
-								 ctx->hasAggs ? AGGSPLIT_INITIAL_SERIAL : AGGSPLIT_SIMPLE,
-								 false, /* streaming */
-								 ctx->groupClause,
-								 NIL,
-								 ctx->agg_partial_costs,
-								 estimate_num_groups_on_segment(ctx->dNumGroupsTotal,
-																path->rows, path->locus)));
+	Assert(ctx->hasAggs || ctx->groupClause || ctx->groupingSets);
+	if (ctx->groupingSets)
+	{
+		/*
+		 * We have grouping sets, possibly with aggregation.  Make
+		 * a GroupingSetsPath.
+		 *
+		 * NOTE: We don't pass the HAVING quals here. HAVING quals can
+		 * only be evaluated in the Finalize stage, after computing the
+		 * final aggregate values.
+		 */
+		Path	   *first_stage_agg_path;
+
+		first_stage_agg_path =
+			(Path *) create_groupingsets_path(root,
+											  ctx->partial_rel,
+											  path,
+											  AGGSPLIT_INITIAL_SERIAL,
+											  NIL,
+											  AGG_SORTED,
+											  ctx->rollups,
+											  ctx->agg_partial_costs);
+		add_partial_path(ctx->partial_rel, first_stage_agg_path);
+	}
+	else if (ctx->hasAggs || ctx->groupClause)
+	{
+		add_partial_path(ctx->partial_rel,
+			(Path *) create_agg_path(root,
+									 ctx->partial_rel,
+									 path,
+									 ctx->partial_grouping_target,
+									 ctx->groupClause ? AGG_SORTED : AGG_PLAIN,
+									 ctx->hasAggs ? AGGSPLIT_INITIAL_SERIAL : AGGSPLIT_SIMPLE,
+									 false, /* streaming */
+									 ctx->groupClause,
+									 NIL,
+									 ctx->agg_partial_costs,
+									 dNumGroups));
+	}
+}
+
+/*
+ * cdb_create_pre_window_agg_path - Create a path with pre-filtered window aggregation
+ *
+ * This function creates a path that computes a window function (rank/dense_rank)
+ * and applies a filter (e.g., rank <= N) before the main window aggregation.
+ * This optimization reduces the number of rows processed by subsequent operations.
+ *
+ * Returns: A path with WindowAgg -> Result(filter) structure
+ */
+Path *
+cdb_create_pre_window_agg_path(PlannerInfo *root,
+								bool is_sorted,
+								int presorted_keys,
+								RelOptInfo *rel,
+								Path *subpath,
+								PathTarget *target,
+								List *group_pathkeys,
+								PathTarget *window_target,
+								List *window_functions,
+								WindowClause *wc)
+{
+	bool	use_incremental_sort = (presorted_keys != 0 && enable_incremental_sort);
+	PathTarget *orig_pathtarget;
+	
+	if(!is_sorted && group_pathkeys)
+	{
+		if (!use_incremental_sort)
+			subpath = (Path *) create_sort_path(root,
+												rel,
+												subpath,
+												group_pathkeys,
+												-1.0);
+		else
+		{
+			subpath = (Path *) create_incremental_sort_path(root,
+															rel,
+															subpath,
+															group_pathkeys,
+															presorted_keys,
+															-1.0);
+		}
+	}
+
+	/*
+	 * Save origin pathtarget before we create pre window filter.
+	 * We need to keep Result node's pathtarget same as if there
+	 * is no window filter.
+	 *
+	 * ->  Result
+	 *	 Output: tenk1.ten, tenk1.four
+	 *	 Filter: ((rank() OVER (?)) < 3)
+	 *	 ->  WindowAgg
+	 *		   Output: rank() OVER (?), tenk1.ten, tenk1.four
+	 *		   Partition By: tenk1.four
+	 *		   Order By: tenk1.ten
+	 *		   ->  Sort
+	 *				 Output: tenk1.ten, tenk1.four
+	 *				 Sort Key: tenk1.four, tenk1.ten
+	 *				 ->  Index Scan using tenk1_unique2 on public.tenk1
+	 *					   Output: tenk1.ten, tenk1.four
+	 *					   Index Cond: (tenk1.unique2 < 10)
+	 */
+	orig_pathtarget = copy_pathtarget(subpath->pathtarget);
+
+	subpath = (Path *)
+			create_windowagg_path(root, rel, subpath, window_target,
+									window_functions, wc);
+
+	Node *window_filter = copyObject(root->upper_window_filter);
+	
+	RestrictInfo *restrict_info = make_simple_restrictinfo(root, (Expr*) window_filter);
+
+	subpath = (Path *) create_projection_path_with_quals(root,
+													  rel,
+													  subpath,
+													  orig_pathtarget,
+													  list_make1(restrict_info),
+													  false);
+	return subpath;
 }

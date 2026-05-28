@@ -495,6 +495,11 @@ adjust_appendrel_attrs_mutator(Node *node,
 			PlannerInfo *newsubroot = makeNode(PlannerInfo);
 			PlannerInfo *oldsubroot = planner_subplan_get_root(root, sp);
 
+			/*
+			 * TODO: correct ShareInputScan copy fields. 
+			 * We use lefttree to find the same cte ref
+			 */
+
 			memcpy(newsubroot, oldsubroot, sizeof(PlannerInfo));
 			newsubroot->append_rel_list = (List *) copyObject(oldsubroot->append_rel_list);
 

@@ -130,28 +130,31 @@ SELECT DISTINCT p.age FROM person* p ORDER BY age using >;
 EXPLAIN (VERBOSE, COSTS OFF)
 SELECT count(*) FROM
   (SELECT DISTINCT two, four, two FROM tenk1) ss;
-                                   QUERY PLAN                                   
---------------------------------------------------------------------------------
+                                      QUERY PLAN                                      
+--------------------------------------------------------------------------------------
  Finalize Aggregate
    Output: count(*)
    ->  Gather Motion 3:1  (slice1; segments: 3)
          Output: (PARTIAL count(*))
          ->  Partial Aggregate
                Output: PARTIAL count(*)
-               ->  HashAggregate
+               ->  GroupAggregate
                      Output: tenk1.two, tenk1.four, tenk1.two
                      Group Key: tenk1.two, tenk1.four, tenk1.two
-                     ->  Redistribute Motion 3:3  (slice2; segments: 3)
+                     ->  Sort
                            Output: tenk1.two, tenk1.four, tenk1.two
-                           Hash Key: tenk1.two, tenk1.four, tenk1.two
-                           ->  Streaming HashAggregate
+                           Sort Key: tenk1.two, tenk1.four
+                           ->  Redistribute Motion 3:3  (slice2; segments: 3)
                                  Output: tenk1.two, tenk1.four, tenk1.two
-                                 Group Key: tenk1.two, tenk1.four, tenk1.two
-                                 ->  Seq Scan on public.tenk1
+                                 Hash Key: tenk1.two, tenk1.four, tenk1.two
+                                 ->  Streaming HashAggregate
                                        Output: tenk1.two, tenk1.four, tenk1.two
+                                       Group Key: tenk1.two, tenk1.four, tenk1.two
+                                       ->  Seq Scan on public.tenk1
+                                             Output: tenk1.two, tenk1.four, tenk1.two
+ Settings: optimizer = 'off'
  Optimizer: Postgres query optimizer
- Settings: optimizer=off
-(19 rows)
+(22 rows)
 
 SELECT count(*) FROM
   (SELECT DISTINCT two, four, two FROM tenk1) ss;

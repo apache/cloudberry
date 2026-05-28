@@ -30,6 +30,8 @@ sql/resgroup/resgroup_views.sql
 /gpdiff.pl
 /gpstringsubs.pl
 /data
+/sql/ao_upgrade.sql
+/expected/ao_upgrade.out
 
 # Generated subdirectories
 /results/

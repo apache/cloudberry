@@ -1684,7 +1684,7 @@ with x as materialized (select * from (select f1 from subselect_tbl) ss)
 select * from x where f1 = 1;
                      QUERY PLAN                     
 ----------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)
+ Gather Motion 1:1  (slice1; segments: 1)
    Output: x.f1
    ->  Subquery Scan on x
          Output: x.f1
@@ -1693,9 +1693,10 @@ select * from x where f1 = 1;
                Output: share0_ref1.f1
                ->  Seq Scan on public.subselect_tbl
                      Output: subselect_tbl.f1
+                     Filter: (subselect_tbl.f1 = 1)
+ Settings: optimizer = 'off'
  Optimizer: Postgres query optimizer
- Settings: gp_cte_sharing=on
-(11 rows)
+(12 rows)
 
 -- Stable functions are safe to inline
 explain (verbose, costs off)
@@ -1720,7 +1721,7 @@ with x as (select * from (select f1, random() from subselect_tbl) ss)
 select * from x where f1 = 1;
                         QUERY PLAN                        
 ----------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)
+ Gather Motion 1:1  (slice1; segments: 1)
    Output: x.f1, x.random
    ->  Subquery Scan on x
          Output: x.f1, x.random
@@ -1729,8 +1730,10 @@ select * from x where f1 = 1;
                Output: share0_ref1.f1, share0_ref1.random
                ->  Seq Scan on public.subselect_tbl
                      Output: subselect_tbl.f1, random()
+                     Filter: (subselect_tbl.f1 = 1)
+ Settings: optimizer = 'off'
  Optimizer: Postgres query optimizer
-(10 rows)
+(12 rows)
 
 create temporary sequence ts;
 create table vol_test(a int, b int);
@@ -1741,7 +1744,7 @@ with x as (select * from (select a, nextval('ts') from vol_test) ss)
 select * from x where a = 1;
                            QUERY PLAN                            
 -----------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)
+ Gather Motion 1:1  (slice1; segments: 1)
    Output: x.a, x.nextval
    ->  Subquery Scan on x
          Output: x.a, x.nextval
@@ -1750,8 +1753,10 @@ select * from x where a = 1;
                Output: share0_ref1.a, share0_ref1.nextval
                ->  Seq Scan on public.vol_test
                      Output: vol_test.a, nextval('ts'::regclass)
+                     Filter: (vol_test.a = 1)
+ Settings: optimizer = 'off'
  Optimizer: Postgres query optimizer
-(10 rows)
+(12 rows)
 
 drop sequence ts;
 drop table vol_test;
@@ -1801,7 +1806,7 @@ select * from x, x x2 where x.n = x2.n;
                            Output: share0_ref1.f1, share0_ref1.n
                            ->  Seq Scan on public.subselect_tbl
                                  Output: subselect_tbl.f1, 'regression'::name
- Settings: gp_cte_sharing=on
+ Settings: gp_cte_sharing = 'on', optimizer = 'off'
  Optimizer: Postgres query optimizer
 (21 rows)
 
@@ -1944,16 +1949,16 @@ select * from (with y as (select * from x) select * from y) ss;
 explain (verbose, costs off)
 with x as materialized (select * from int4_tbl)
 select * from (with y as (select * from x) select * from y) ss;
-                 QUERY PLAN                 
---------------------------------------------
+                     QUERY PLAN                     
+----------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    Output: share0_ref1.f1
    ->  Shared Scan (share slice:id 1:0)
          Output: share0_ref1.f1
          ->  Seq Scan on public.int4_tbl
                Output: int4_tbl.f1
+ Settings: gp_cte_sharing = 'on', optimizer = 'off'
  Optimizer: Postgres query optimizer
- Settings: gp_cte_sharing=on, optimizer=off
 (8 rows)
 
 -- Ensure that we inline the currect CTE when there are

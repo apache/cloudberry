@@ -265,8 +265,8 @@ INFO:  (slice 1) Dispatch command to ALL contents: 0 1 2
  key | value 
 -----+-------
      | cow
-   1 | 100
    2 | 100
+   1 | 100
 (3 rows)
 
 prepare test_update (int) as update direct_test set value = 'boo' where key = $1;
@@ -278,9 +278,9 @@ select * from direct_test;
 INFO:  (slice 1) Dispatch command to ALL contents: 0 1 2
  key | value 
 -----+-------
-   1 | 100
-   2 | boo
      | cow
+   2 | boo
+   1 | 100
 (3 rows)
 
 ------------------------
@@ -381,20 +381,20 @@ INFO:  Distributed transaction command 'Distributed Commit Prepared' to ALL cont
 EXPLAIN SELECT a.* FROM MPP_22019_a a INNER JOIN MPP_22019_b b ON a.i = b.i WHERE a.j NOT IN (SELECT j FROM MPP_22019_a a2 where a2.j = b.j) and a.i = 1;
                                                    QUERY PLAN                                                   
 ----------------------------------------------------------------------------------------------------------------
- Gather Motion 1:1  (slice1; segments: 1)  (cost=10000000000.00..10000002519.51 rows=3707 width=8)
-   ->  Nested Loop  (cost=10000000000.00..10000002445.38 rows=1236 width=8)
+ Gather Motion 1:1  (slice1; segments: 1)  (cost=10000000000.00..10000000845.29 rows=3707 width=8)
+   ->  Nested Loop  (cost=10000000000.00..10000000795.87 rows=1236 width=8)
          Join Filter: (SubPlan 1)
-         ->  Seq Scan on mpp_22019_a a  (cost=0.00..1176.25 rows=29 width=8)
+         ->  Seq Scan on mpp_22019_a a  (cost=0.00..392.75 rows=29 width=8)
                Filter: (i = 1)
-         ->  Materialize  (cost=0.00..1176.68 rows=29 width=8)
-               ->  Seq Scan on mpp_22019_b b  (cost=0.00..1176.25 rows=29 width=8)
+         ->  Materialize  (cost=0.00..392.89 rows=29 width=8)
+               ->  Seq Scan on mpp_22019_b b  (cost=0.00..392.75 rows=29 width=8)
                      Filter: (i = 1)
          SubPlan 1
-           ->  Result  (cost=0.00..3974.50 rows=86100 width=4)
+           ->  Result  (cost=0.00..2760.50 rows=86100 width=4)
                  Filter: (a2.j = b.j)
-                 ->  Materialize  (cost=0.00..3113.50 rows=86100 width=4)
-                       ->  Broadcast Motion 3:1  (slice2; segments: 3)  (cost=0.00..2683.00 rows=28700 width=4)
-                             ->  Seq Scan on mpp_22019_a a2  (cost=0.00..961.00 rows=28700 width=4)
+                 ->  Materialize  (cost=0.00..1899.50 rows=86100 width=4)
+                       ->  Broadcast Motion 3:1  (slice2; segments: 3)  (cost=0.00..1469.00 rows=86100 width=4)
+                             ->  Seq Scan on mpp_22019_a a2  (cost=0.00..321.00 rows=28700 width=4)
  Optimizer: Postgres query optimizer
 (15 rows)
 
@@ -467,7 +467,7 @@ INFO:  Distributed transaction command 'Distributed Commit Prepared' to ALL cont
 -- One partition is randomly distributed, while others are distributed by key.
 alter table ddtesttab_1_prt_2 set distributed randomly;
 ERROR:  can't set the distribution policy of "ddtesttab_1_prt_2"
-HINT:  Distribution policy can be set for an entire partitioned table, not for one of its leaf parts or an interior branch.
+HINT:  Distribution policy of a partition can only be the same as its parent's.
 insert into ddtesttab values (1, 1, 5);
 INFO:  (slice 0) Dispatch command to SINGLE content
 INFO:  Distributed transaction command 'Distributed Commit (one-phase)' to SINGLE content
@@ -652,18 +652,20 @@ explain (costs off) select gp_segment_id, * from bar_randDistr where gp_segment_
 (4 rows)
 
 explain (costs off) select gp_segment_id, count(*) from bar_randDistr group by gp_segment_id;
-                         QUERY PLAN                         
-------------------------------------------------------------
+                            QUERY PLAN                            
+------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
-   ->  Finalize HashAggregate
+   ->  Finalize GroupAggregate
          Group Key: gp_segment_id
-         ->  Redistribute Motion 3:3  (slice2; segments: 3)
-               Hash Key: gp_segment_id
-               ->  Streaming Partial HashAggregate
-                     Group Key: gp_segment_id
-                     ->  Seq Scan on bar_randdistr
+         ->  Sort
+               Sort Key: gp_segment_id
+               ->  Redistribute Motion 3:3  (slice2; segments: 3)
+                     Hash Key: gp_segment_id
+                     ->  Streaming Partial HashAggregate
+                           Group Key: gp_segment_id
+                           ->  Seq Scan on bar_randdistr
  Optimizer: Postgres query optimizer
-(9 rows)
+(11 rows)
 
 -- Case2: Conjunction scenario with filter condition on gp_segment_id and column
 explain (costs off) select gp_segment_id, * from bar_randDistr where gp_segment_id=0 and col1 between 1 and 10;
@@ -895,8 +897,8 @@ INFO:  (slice 1) Dispatch command to ALL contents: 0 1 2
  gp_segment_id | gp_segment_id | id | id 
 ---------------+---------------+----+----
              1 |             1 |  1 |  1
-             2 |             0 |  5 |  2
              2 |             0 |  6 |  2
+             2 |             0 |  5 |  2
 (3 rows)
 
 -- flaky tests
@@ -1044,8 +1046,8 @@ select gp_segment_id, * from t_test_dd_via_segid_conj where a in (1,3) and gp_se
 INFO:  (slice 1) Dispatch command to PARTIAL contents: 1 0
  gp_segment_id | a | b 
 ---------------+---+---
-             0 | 3 | 3
              1 | 1 | 1
+             0 | 3 | 3
 (2 rows)
 
 --test direct dispatch if distribution column is of varchar type
@@ -1104,11 +1106,11 @@ select gp_segment_id,  * from t1_varchar where col1_varchar <>'c';
 INFO:  (slice 1) Dispatch command to ALL contents: 0 1 2
  gp_segment_id | col1_varchar | col2_int 
 ---------------+--------------+----------
+             2 | a            |        1
+             2 | 97           |        6
              1 | b            |        2
              1 | e            |        5
              0 | d            |        4
-             2 | a            |        1
-             2 | 97           |        6
 (5 rows)
 
 --test direct dispatch if distribution column is of varchar type and disjunction scenario
@@ -1474,8 +1476,8 @@ begin;
 -- orca does not handle direct dispatch for DELETE or UPDATE now
 -- also orca does not handle DELETE/UPDATE for partitioned tables now.
 explain (costs off) delete from t_hash_partition where r_regionkey=1;
-                    QUERY PLAN                    
---------------------------------------------------
+                             QUERY PLAN                              
+---------------------------------------------------------------------
  Delete on t_hash_partition
    Delete on t_hash_partition_1_prt_region1 t_hash_partition_1
    ->  Seq Scan on t_hash_partition_1_prt_region1 t_hash_partition_1
@@ -1498,8 +1500,8 @@ begin;
 -- orca does not handle direct dispatch for DELETE or UPDATE now
 -- also orca does not handle DELETE/UPDATE for partitioned tables now.
 explain (costs off) update t_hash_partition set r_name = 'CHINA' where r_regionkey=1;
-                    QUERY PLAN                    
---------------------------------------------------
+                             QUERY PLAN                              
+---------------------------------------------------------------------
  Update on t_hash_partition
    Update on t_hash_partition_1_prt_region1 t_hash_partition_1
    ->  Seq Scan on t_hash_partition_1_prt_region1 t_hash_partition_1

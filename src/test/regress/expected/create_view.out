@@ -1934,8 +1934,8 @@ select pg_get_viewdef('tt25v', true);
 -- also check cases seen only in EXPLAIN
 explain (verbose, costs off)
 select * from tt24v;
-                                            QUERY PLAN                                            
---------------------------------------------------------------------------------------------------
+                                        QUERY PLAN                                        
+------------------------------------------------------------------------------------------
  Hash Join
    Output: (share0_ref1.r).column2, ((ROW("*VALUES*".column1, "*VALUES*".column2))).column2
    Hash Cond: (((ROW("*VALUES*".column1, "*VALUES*".column2))).column1 = (share0_ref1.r).column1)
@@ -1949,8 +1949,9 @@ select * from tt24v;
                Output: share0_ref1.r
                ->  Values Scan on "*VALUES*_1"
                      Output: ROW("*VALUES*_1".column1, "*VALUES*_1".column2)
+ Settings: optimizer = 'off'
  Optimizer: Postgres query optimizer
-(14 rows)
+(15 rows)
 
 explain (verbose, costs off)
 select (r).column2 from (select r from (values(1,2),(3,4)) r limit 1) ss;

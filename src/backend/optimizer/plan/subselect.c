@@ -52,6 +52,8 @@
 #include "cdb/cdbutil.h"
 #include "cdb/cdbpath.h"
 
+#include "utils/guc.h"
+
 typedef struct convert_testexpr_context
 {
 	PlannerInfo *root;
@@ -82,7 +84,9 @@ static Node *build_subplan(PlannerInfo *root, Plan *plan, PlannerInfo *subroot,
 						   List *plan_params,
 						   SubLinkType subLinkType, int subLinkId,
 						   Node *testexpr, List *testexpr_paramids,
-						   bool unknownEqFalse);
+						   bool unknownEqFalse,
+						   bool outer_has_rte_function);
+static bool outer_query_has_rte_function(PlannerInfo *root);
 static List *generate_subquery_params(PlannerInfo *root, List *tlist,
 									  List **paramIds);
 static Node *convert_testexpr_mutator(Node *node,
@@ -123,6 +127,18 @@ extern	double global_work_mem(void);
 static bool contain_outer_selfref_walker(Node *node, Index *depth);
 
 static bool splan_is_initplan(List *plan_params, SubLinkType subLinkType);
+
+typedef struct
+{
+	plan_tree_base_prefix base; /* Required prefix for
+								 * plan_tree_walker/mutator */
+	Bitmapset            *seen_subplans;
+	bool                  result;
+	int					  sisc_role;
+} contain_ShareInputScan_walk_context;
+
+static bool
+contain_ShareInputScan_walk(Node *node, contain_ShareInputScan_walk_context *ctx);
 
 /*
  * Get the datatype/typmod/collation of the first column of the plan's output.
@@ -375,20 +391,10 @@ make_subplan(PlannerInfo *root, Query *orig_subquery,
 	if (Gp_role == GP_ROLE_DISPATCH)
 	{
 		config->is_under_subplan = true;
-
-		/*
-		 * Disable CTE sharing in subplan.
-		 *
-		 * fixup_subplans() copys duplicate subplan (subplan with same
-		 * plan_id), but doesn't copy the subroot.
-		 * If enable cte sharing here, it leads to mismatch of the length
-		 * of subplans and subroots. And apply_shareinput_xslice() cannot
-		 * make it correct when shared scan is in subplan, then an assert
-		 * (or panic) error will happen in init_tuplestore_state().
-		 *
-		 * See github issue: https://github.com/greenplum-db/gpdb/issues/12701
-		 */
-		config->gp_cte_sharing = false;
+		config->gp_cte_sharing = config->gp_cte_sharing ? !(subLinkType == ROWCOMPARE_SUBLINK ||
+															subLinkType == ARRAY_SUBLINK ||
+															subLinkType == MULTIEXPR_SUBLINK ||
+															subLinkType == EXISTS_SUBLINK) : config->gp_cte_sharing;
 	}
 	/*
 	 * Strictly speaking, the order of rows in a subquery doesn't matter.
@@ -432,8 +438,17 @@ make_subplan(PlannerInfo *root, Query *orig_subquery,
 	{
 		Path	   *cheapest_partial_path;
 		cheapest_partial_path = linitial(final_rel->partial_pathlist);
-		add_path(final_rel, cheapest_partial_path, root);
-		set_cheapest(final_rel);
+		/*
+		 * Do not be parallel if there is only one row of a SeqScan.
+		 * Else, it will allocate many processes which are unnecessary inside
+		 * InitPlan nodes such as case: TPCDS query 114, 158.
+		 */
+		if (cheapest_partial_path->pathtype != T_SeqScan ||
+			cheapest_partial_path->rows > 1)
+		{
+			add_path(final_rel, cheapest_partial_path, root);
+			set_cheapest(final_rel);
+		}
 	}
 	best_path = get_cheapest_fractional_path(final_rel, tuple_fraction);
 
@@ -465,10 +480,22 @@ make_subplan(PlannerInfo *root, Query *orig_subquery,
 	set_allow_append_initplan_for_function_scan();
 	Assert(get_allow_append_initplan_for_function_scan() == true);
 
+	/* if we are a shared scan */
+	subroot->is_shared_scan = contain_ShareInputScan(subroot, (Node*) plan);
+
+	/*
+	 * Detect whether the outer query has an RTE_FUNCTION.  If so,
+	 * build_subplan will avoid the eager SubPlan conversion because
+	 * the resulting SubPlan would live in the same multi-segment
+	 * slice as the FunctionScan.  See outer_query_has_rte_function().
+	 */
+	bool		has_rte_function = outer_query_has_rte_function(root);
+
 	/* And convert to SubPlan or InitPlan format. */
 	result = build_subplan(root, plan, subroot, plan_params,
 						   subLinkType, subLinkId,
-						   testexpr, NIL, isTopQual);
+						   testexpr, NIL, isTopQual,
+						   has_rte_function);
 
 	/*
 	 * If it's a correlated EXISTS with an unimportant targetlist, we might be
@@ -527,7 +554,8 @@ make_subplan(PlannerInfo *root, Query *orig_subquery,
 												  ANY_SUBLINK, 0,
 												  newtestexpr,
 												  paramIds,
-												  true));
+												  true,
+												  has_rte_function));
 				/* Check we got what we expected */
 				Assert(hashplan->parParam == NIL);
 				Assert(hashplan->useHashTable);
@@ -545,6 +573,53 @@ make_subplan(PlannerInfo *root, Query *orig_subquery,
 }
 
 /*
+ * Return true if the outer query's range table contains any RTE_FUNCTION.
+ *
+ * A FunctionScan corresponding to an RTE_FUNCTION typically executes on
+ * every segment (especially SETOF / VOLATILE functions).  When that is
+ * the case, any SubPlan that cbdb_eager_subplan would create for a
+ * SubLink in the same query level ends up embedded in the same
+ * multi-segment slice as the FunctionScan.  The SubPlan's Entry-locus
+ * Gather Motion then fails at execution time either with
+ *   "unexpected gang size: N"
+ * or, when a PL-language SRF tries SPI from inside a QE,
+ *   "query plan with multiple segworker groups is not supported".
+ *
+ * Two example shapes that both hit this:
+ *
+ *   (1) SubLink as an argument to a function in FROM:
+ *       SELECT ... FROM t, generate_series(0, (SELECT max(x) FROM y)) g ...
+ *
+ *   (2) SubLink as a sibling of a FunctionScan in the target list:
+ *       SELECT n - (SELECT count(*) FROM t)
+ *       FROM srf($$...$$) AS n;
+ *
+ * In both shapes the surrounding slice is multi-segment, so we fall
+ * back to keeping the SubLink as an InitPlan: it is executed on the QD
+ * and its scalar result is dispatched to QEs via execParams.  This
+ * over-approximates -- some RTE_FUNCTIONs would run on the QD only and
+ * could safely be eager -- but the cost of missing the optimization is
+ * low, while the executor errors it prevents are hard failures.
+ */
+static bool
+outer_query_has_rte_function(PlannerInfo *root)
+{
+	ListCell   *lc;
+
+	if (root->parse == NULL)
+		return false;
+
+	foreach(lc, root->parse->rtable)
+	{
+		RangeTblEntry *rte = lfirst_node(RangeTblEntry, lc);
+
+		if (rte->rtekind == RTE_FUNCTION)
+			return true;
+	}
+	return false;
+}
+
+/*
  * Build a SubPlan node given the raw inputs --- subroutine for make_subplan
  *
  * Returns either the SubPlan, or a replacement expression if we decide to
@@ -555,12 +630,93 @@ build_subplan(PlannerInfo *root, Plan *plan, PlannerInfo *subroot,
 			  List *plan_params,
 			  SubLinkType subLinkType, int subLinkId,
 			  Node *testexpr, List *testexpr_paramids,
-			  bool unknownEqFalse)
+			  bool unknownEqFalse,
+			  bool outer_has_rte_function)
 {
 	Node	   *result;
 	SubPlan    *splan;
 	ListCell   *lc;
 	Bitmapset  *plan_param_set;
+
+	bool eager_subplan = false;
+
+	if (subroot->is_shared_scan)
+		eager_subplan = true;
+	else if (plan->locustype == CdbLocusType_Entry && plan->initPlan != NIL)
+	{
+		/*
+		 * Don't eager subplan if we are already on QD,
+		 * else a broadcast under SubPlan will cause inactive Motion.
+		 *
+		 * select a from test_index_with_orderby_limit order by a limit (
+		 * 		select min(a) from test_index_with_orderby_limit);
+		 *
+		 *  Limit
+		 *    Locus: Entry
+		 *    ->  Gather Motion 32:1  (slice1; segments: 32)
+		 * 		 Locus: Entry
+		 * 		 Merge Key: test_index_with_orderby_limit.a
+		 * 		 ->  Limit
+		 * 			   Locus: Hashed
+		 * 			   ->  Index Only Scan using index_ab on test_index_with_orderby_limit
+		 * 					 Locus: Hashed
+		 * 			   SubPlan 2
+		 * 				 ->  Materialize
+		 * 					   Locus: Replicated
+		 * 					   ->  Broadcast Motion 1:32  (slice2)
+		 * 							 Locus: Replicated
+		 * 							 InitPlan 1 (returns $0)  (slice3)
+		 * 							   ->  Limit
+		 * 									 Locus: Entry
+		 * 									 ->  Gather Motion 32:1  (slice4; segments: 32)
+		 * 										   Locus: Entry
+		 * 										   Merge Key: test_index_with_orderby_limit_1.a
+		 *                                         ->  Index Only Scan using index_ab on test_index_with_orderby_limit test_index_with_orderby_limit_1
+		 * 												 Locus: Hashed
+		 * 												 Index Cond: (a IS NOT NULL)
+		 * 							 ->  Result
+		 * 								   Locus: Entry
+		 * 
+		 * When SubPlan executes before the main plan, its nested InitPlan slice completes
+		 * and attempts to broadcast data to parent operators.
+		 * However, the main plan hasn't yet initialized the SubPlan execution context
+		 * to receive this data, causing the Motion error.
+		 */
+		eager_subplan = false;
+	}
+	else if (cbdb_eager_subplan && !is_single_simple_query(subroot))
+		eager_subplan = true;
+
+	/*
+	 * If the outer query contains any RTE_FUNCTION, its FunctionScan
+	 * node usually runs on every segment and its slice is therefore
+	 * multi-segment.  Any SubPlan created for a SubLink at this query
+	 * level is embedded in that multi-segment slice, and an Entry-locus
+	 * Gather Motion inside the SubPlan fails at execution time (see
+	 * outer_query_has_rte_function()).  Fall back to InitPlan in that
+	 * case: it is computed once on the QD and its scalar result is
+	 * dispatched to the QEs via execParams.
+	 */
+	if (outer_has_rte_function)
+		eager_subplan = false;
+
+	/*
+	 * Don't use subpan if there is modify operation, citd might be wrong.
+	 * 		with updated AS (update table_for_initplan set k = 33 where i = 3 returning k)
+	 * 			select table_for_initplan.*, (select sum(k) from updated) from table_for_initplan;
+	 */
+	if (contain_ModifyTable_plan(root, plan))
+		eager_subplan = false;
+
+	/*
+	 * InitPlan can't have ShareInputScan, neither producer or consumer in same slice, else it will hang.
+	 * However, we don't know the slice info here, so make it to subplan.
+	 * 
+	 * WITH q1(x,y) AS (SELECT hundred, sum(ten) FROM tenk1 GROUP BY hundred)
+	 * SELECT count(*) FROM q1 WHERE y > (SELECT sum(y)/100 FROM q1 qsub);
+	 */
+	if (contain_ShareInputScan(root, (Node *)plan))
+		eager_subplan = true;
 
 	/*
 	 * Initialize the SubPlan node.  Note plan_id, plan_name, and cost fields
@@ -632,7 +788,7 @@ build_subplan(PlannerInfo *root, Plan *plan, PlannerInfo *subroot,
 		splan->is_initplan = true;
 		result = (Node *) prm;
 	}
-	else if (splan->parParam == NIL && subLinkType == EXPR_SUBLINK)
+	else if (splan->parParam == NIL && subLinkType == EXPR_SUBLINK && !eager_subplan)
 	{
 		TargetEntry *te = linitial(plan->targetlist);
 		Param	   *prm;
@@ -791,7 +947,10 @@ build_subplan(PlannerInfo *root, Plan *plan, PlannerInfo *subroot,
 	splan->plan_id = list_length(root->glob->subplans);
 
 	if (splan->is_initplan)
+	{
 		root->init_plans = lappend(root->init_plans, splan);
+		root->init_plan_ids = bms_add_member(root->init_plan_ids, splan->plan_id);
+	}
 
 	/*
 	 * A parameterless subplan (not initplan) should be prepared to handle
@@ -2765,6 +2924,21 @@ finalize_plan(PlannerInfo *root, Plan *plan,
 		}
 	}
 
+	if (IsA(plan, ShareInputScan) && plan->lefttree != NULL)
+	{
+		foreach(l, plan->lefttree->initPlan)
+		{
+			SubPlan    *initsubplan = (SubPlan *) lfirst(l);
+			ListCell   *l2;
+
+			foreach(l2, initsubplan->setParam)
+			{
+				initSetParam = bms_add_member(initSetParam, lfirst_int(l2));
+			}
+		}
+	}
+
+
 	/* Any setParams are validly referenceable in this node and children */
 	if (initSetParam)
 		valid_params = bms_union(valid_params, initSetParam);
@@ -3550,6 +3724,7 @@ SS_make_initplan_from_plan(PlannerInfo *root,
 	node->setParam = list_make1_int(prm->paramid);
 
 	root->init_plans = lappend(root->init_plans, node);
+	root->init_plan_ids = bms_add_member(root->init_plan_ids, node->plan_id);
 
 	/*
 	 * The node can't have any inputs (since it's an initplan), so the
@@ -3576,4 +3751,164 @@ splan_is_initplan(List *plan_params, SubLinkType subLinkType)
 	))
 		return true;
 	return false;
+}
+
+bool contain_ShareInputScan(PlannerInfo *root, Node *node)
+{
+	contain_ShareInputScan_walk_context ctx;
+	planner_init_plan_tree_base(&ctx.base, root);
+	ctx.result = false;
+	ctx.seen_subplans = NULL;
+	ctx.sisc_role = SISC_NONE;
+
+	(void) contain_ShareInputScan_walk(node, &ctx);
+
+	return ctx.result;
+}
+
+static bool
+contain_ShareInputScan_walk(Node *node, contain_ShareInputScan_walk_context *ctx)
+{
+	PlannerInfo *root = (PlannerInfo *) ctx->base.node;
+
+	if (node == NULL)
+		return false;
+
+	if (IsA(node, SubPlan))
+	{
+		SubPlan	   *spexpr = (SubPlan *) node;
+		int			plan_id = spexpr->plan_id;
+
+		if (!bms_is_member(plan_id, ctx->seen_subplans))
+		{
+			ctx->seen_subplans = bms_add_member(ctx->seen_subplans, plan_id);
+
+			if (spexpr->is_initplan)
+				return false;
+
+			Plan *plan = list_nth(root->glob->subplans, plan_id - 1);
+			return plan_tree_walker((Node *) plan, contain_ShareInputScan_walk, ctx, true);
+		}
+	}
+
+	if (IsA(node, ShareInputScan))
+	{
+		ctx->result = true;
+
+		if (((Plan*) node)->lefttree != NULL)
+			ctx->sisc_role |= SISC_PRODUCER;
+		else
+			ctx->sisc_role |= SISC_CONSUMER;
+		
+		return false;
+	}
+
+	return plan_tree_walker((Node *) node, contain_ShareInputScan_walk, ctx, true);
+}
+
+/* 
+ * Similar to contain_ShareInputScan()
+ * with details about producer and consumer info.
+ */
+int contain_ShareInputScan_detail(PlannerInfo *root, Node *node)
+{
+	contain_ShareInputScan_walk_context ctx;
+	planner_init_plan_tree_base(&ctx.base, root);
+	ctx.result = false;
+	ctx.seen_subplans = NULL;
+	ctx.sisc_role = SISC_NONE;
+
+	(void) contain_ShareInputScan_walk(node, &ctx);
+	return ctx.sisc_role;
+}
+
+/*
+ * Used to judege if a query is simple enough to be an InitPlan.
+ * If not, convert it to SubPlan for more parallel.
+ * A simple select, on a simple relation(not CTE or Partitioned)
+ * No agg or Group By.
+ *
+ * For UPDATE/DELETE/INSERT, we return true to make them no changed.
+ */
+bool
+is_single_simple_query(PlannerInfo *root)
+{
+	Query* parse = root->parse;
+
+	/* Don't touch writable operations. */
+	if (parse->commandType != CMD_SELECT)
+		return true;
+
+	if (parse->hasAggs ||
+		parse->groupClause != NIL ||
+		parse->cteList != NIL ||
+		parse->hasSubLinks ||
+		parse->hasWindowFuncs)
+		return false;
+
+	if (list_length(parse->jointree->fromlist) != 1)
+		return false;
+
+	Node *jtnode = (Node *) linitial(parse->jointree->fromlist);
+	if (!IsA(jtnode, RangeTblRef))
+		return false;
+
+	int varno = ((RangeTblRef *) jtnode)->rtindex;
+	RangeTblEntry *rte = planner_rt_fetch(varno, root);
+
+	/*
+	 * Don't disturb Result or Values.
+	 * select * from listp where a = (select 1);
+	 */
+	if (rte->rtekind == RTE_RESULT ||
+		rte->rtekind == RTE_VALUES ||
+		rte->rtekind == RTE_FUNCTION)
+		return true;
+
+	if (rte->rtekind != RTE_RELATION )
+		return false;
+
+	char relkind = get_rel_relkind(rte->relid);
+	if (relkind != RELKIND_RELATION)
+		return false;
+
+	/* OK, it's simple enough. */
+	return true;
+}
+
+typedef struct ModifyTableFinderContext
+{
+	plan_tree_base_prefix base; /* Required prefix for plan_tree_walker/mutator */
+	bool	found;
+} ModifyTableFinderContext;
+
+/*
+ * Walker to find a motion node that matches a particular motionID
+ */
+static bool
+ModifyTableFinderWalker (Plan *node, void *context)
+{
+	Assert(context);
+	ModifyTableFinderContext *ctx = (ModifyTableFinderContext *) context;
+
+	if (node == NULL)
+		return false;
+
+	if (IsA(node, ModifyTable))
+	{
+		ctx->found = true;
+		return true;	/* found our node; no more visit */
+	}
+
+	/* Continue walking */
+	return plan_tree_walker((Node*)node, ModifyTableFinderWalker, ctx, true);
+}
+
+bool contain_ModifyTable_plan(PlannerInfo *root, Plan* node)
+{
+	ModifyTableFinderContext ctx;
+	ctx.base.node = (Node*)root;
+	ctx.found = false;
+	ModifyTableFinderWalker(node, &ctx);
+	return ctx.found;
 }

@@ -2,6 +2,10 @@
 -- Test create/alter database options
 --
 
+-- start_matchsubs
+-- m/\"\/tmp\/.s.PGSQL.\d+\"/
+-- s/\"\/tmp\/.s.PGSQL.\d+\"/\"\/tmp\/.s.PGSQL.xxx\"/
+-- end_matchsubs
 -- Test CONNECTION LIMIT
 
 -- create a regular user as superusers are exempt from limits

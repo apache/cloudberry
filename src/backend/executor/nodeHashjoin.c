@@ -182,7 +182,8 @@ static List *FindTargetNodes(HashJoinState *hjstate,
 static AttrFilter *CreateAttrFilter(PlanState *target,
 									AttrNumber lattno,
 									AttrNumber rattno,
-									double plan_rows);
+									double plan_rows,
+									uint64 seed);
 extern bool Test_print_prefetch_joinqual;
 
 
@@ -1026,8 +1027,7 @@ ExecInitHashJoin(HashJoin *node, EState *estate, int eflags)
 	}
 
 	if (Gp_role == GP_ROLE_EXECUTE
-		&& gp_enable_runtime_filter_pushdown
-		&& !estate->useMppParallelMode)
+		&& gp_enable_runtime_filter_pushdown)
 		CreateRuntimeFilter(hjstate);
 
 	return hjstate;
@@ -2134,6 +2134,8 @@ ExecHashJoinInitializeDSM(HashJoinState *state, ParallelContext *pcxt)
 		BarrierInit(&pstate->outer_motion_barrier, pcxt->nworkers);
 
 	pstate->phs_lasj_has_null = false;
+	pstate->rf_merge_buf = InvalidDsaPointer;
+	pg_atomic_init_u32(&pstate->rf_merge_count, 0);
 
 	/* Set up the space we'll use for shared temporary files. */
 	SharedFileSetInit(&pstate->fileset, pcxt->seg);
@@ -2224,6 +2226,7 @@ CreateRuntimeFilter(HashJoinState* hjstate)
 	AttrFilter	*attr_filter;
 	ListCell	*lc;
 	List		*targets;
+	uint64		seed;
 
 	/*
 	 * A build-side Bloom filter tells us if a row is definitely not in the build
@@ -2243,6 +2246,16 @@ CreateRuntimeFilter(HashJoinState* hjstate)
 
 	hstate = castNode(HashState, innerPlanState(hjstate));
 	hstate->filters = NIL;
+
+	/*
+	 * For parallel-aware hash joins, all workers must use the same bloom
+	 * filter seed so their partial filters can be merged via bitwise OR.
+	 * Use plan_node_id as a deterministic seed in that case.
+	 */
+	if (hstate->ps.plan->parallel_aware)
+		seed = (uint64) hstate->ps.plan->plan_node_id;
+	else
+		seed = random();
 
 	/*
 	 * check and initialize the runtime filter for all hash conds in
@@ -2274,7 +2287,7 @@ CreateRuntimeFilter(HashJoinState* hjstate)
 			Assert(IsA(target, SeqScanState) || IsA(target, DynamicSeqScanState));
 
 			attr_filter = CreateAttrFilter(target, lattno, rattno,
-					hstate->ps.plan->plan_rows);
+					hstate->ps.plan->plan_rows, seed);
 			if (attr_filter->blm_filter)
 				hstate->filters = lappend(hstate->filters, attr_filter);
 			else
@@ -2490,7 +2503,7 @@ FindTargetNodes(HashJoinState *hjstate, AttrNumber attno, AttrNumber *lattno)
 
 static AttrFilter*
 CreateAttrFilter(PlanState *target, AttrNumber lattno, AttrNumber rattno,
-				 double plan_rows)
+				 double plan_rows, uint64 seed)
 {
 	AttrFilter *attr_filter = palloc0(sizeof(AttrFilter));
 	attr_filter->empty  = true;
@@ -2499,7 +2512,7 @@ CreateAttrFilter(PlanState *target, AttrNumber lattno, AttrNumber rattno,
 	attr_filter->lattno = lattno;
 	attr_filter->rattno = rattno;
 
-	attr_filter->blm_filter = bloom_create_aggresive(plan_rows, work_mem, random());
+	attr_filter->blm_filter = bloom_create_aggresive(plan_rows, work_mem, seed);
 
 	StaticAssertDecl(sizeof(LONG_MAX) == sizeof(Datum), "sizeof(LONG_MAX) should be equal to sizeof(Datum)");
 	StaticAssertDecl(sizeof(LONG_MIN) == sizeof(Datum), "sizeof(LONG_MIN) should be equal to sizeof(Datum)");

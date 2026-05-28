@@ -13,71 +13,71 @@ insert into t2 values(generate_series(0, 100), generate_series(100, 200), genera
 analyze t2;
 
 -- should pruned both seq scan and shared scan
-explain verbose with c1 as (select v1, v2, v3 from t1) select c11.v1 from c1 as c11 left join c1 as c22 on c11.v1=c22.v1 where c11.v1 < 5;
+explain(costs off, verbose) with c1 as (select v1, v2, v3 from t1) select c11.v1 from c1 as c11 left join c1 as c22 on c11.v1=c22.v1 where c11.v1 < 5;
 with c1 as (select v1, v2, v3 from t1) select c11.v1 from c1 as c11 left join c1 as c22 on c11.v1=c22.v1 where c11.v1 < 5;
-explain verbose with c1 as (select v1, v2, v3 from t1) select c11.v2 from c1 as c11 left join c1 as c22 on c11.v1=c22.v1 where c11.v1 < 5;
+explain(costs off, verbose) with c1 as (select v1, v2, v3 from t1) select c11.v2 from c1 as c11 left join c1 as c22 on c11.v1=c22.v1 where c11.v1 < 5;
 with c1 as (select v1, v2, v3 from t1) select c11.v2 from c1 as c11 left join c1 as c22 on c11.v1=c22.v1 where c11.v1 < 5;
-explain verbose with c1 as (select v1, v2, v3 from t1) select c11.v3 from c1 as c11 left join c1 as c22 on c11.v1=c22.v1 where c11.v1 < 5;
+explain(costs off, verbose) with c1 as (select v1, v2, v3 from t1) select c11.v3 from c1 as c11 left join c1 as c22 on c11.v1=c22.v1 where c11.v1 < 5;
 with c1 as (select v1, v2, v3 from t1) select c11.v3 from c1 as c11 left join c1 as c22 on c11.v1=c22.v1 where c11.v1 < 5;
 
 -- * also should be pruned
-explain verbose with c1 as (select * from t1) select c11.v1 from c1 as c11 left join c1 as c22 on c11.v1=c22.v1 where c11.v1 < 5;
+explain(costs off, verbose) with c1 as (select * from t1) select c11.v1 from c1 as c11 left join c1 as c22 on c11.v1=c22.v1 where c11.v1 < 5;
 with c1 as (select * from t1) select c11.v1 from c1 as c11 left join c1 as c22 on c11.v1=c22.v1 where c11.v1 < 5;
 
 -- no push filter
-explain verbose with c1 as (select v1, v2, v3 from t1) select c11.v3 from c1 as c11 left join c1 as c22 on c11.v1=c22.v2;
+explain(costs off, verbose) with c1 as (select v1, v2, v3 from t1) select c11.v3 from c1 as c11 left join c1 as c22 on c11.v1=c22.v2;
 with c1 as (select v1, v2, v3 from t1) select c11.v3 from c1 as c11 left join c1 as c22 on c11.v1=c22.v2;
 
-explain verbose with c1 as (select v1, v2, v3 from t1) select c11.v2 from c1 as c11 left join c1 as c22 on c11.v1=c22.v2;
+explain(costs off, verbose) with c1 as (select v1, v2, v3 from t1) select c11.v2 from c1 as c11 left join c1 as c22 on c11.v1=c22.v2;
 with c1 as (select v1, v2, v3 from t1) select c11.v2 from c1 as c11 left join c1 as c22 on c11.v1=c22.v2;
 
 -- distribution col can be pruned which is better than do redistribute in CTE consumer
-explain verbose with c1 as (select v1, v2, v3 from t1) select c11.v2 from c1 as c11 left join c1 as c22 on c11.v2=c22.v2;
+explain(costs off, verbose) with c1 as (select v1, v2, v3 from t1) select c11.v2 from c1 as c11 left join c1 as c22 on c11.v2=c22.v2;
 with c1 as (select v1, v2, v3 from t1) select c11.v2 from c1 as c11 left join c1 as c22 on c11.v2=c22.v2;
-explain verbose with c1 as (select v1, v2, v3 from t1) select c11.v3 from c1 as c11 left join c1 as c22 on c11.v3=c22.v3;
+explain(costs off, verbose) with c1 as (select v1, v2, v3 from t1) select c11.v3 from c1 as c11 left join c1 as c22 on c11.v3=c22.v3;
 with c1 as (select v1, v2, v3 from t1) select c11.v3 from c1 as c11 left join c1 as c22 on c11.v3=c22.v3;
 
 -- groupby/order by/window function/grouping set should be contains in CTE output
 
 -- group by 
-explain verbose with c1 as (select v1, v2, v3 from t1) select sum(c11.v1) from c1 as c11 left join c1 as c22 on c11.v1=c22.v1 group by c11.v1;
+explain(costs off, verbose) with c1 as (select v1, v2, v3 from t1) select sum(c11.v1) from c1 as c11 left join c1 as c22 on c11.v1=c22.v1 group by c11.v1;
 with c1 as (select v1, v2, v3 from t1) select sum(c11.v1) from c1 as c11 left join c1 as c22 on c11.v1=c22.v1 group by c11.v1;
 
-explain verbose with c1 as (select v1, v2, v3 from t1) select sum(c11.v1) from c1 as c11 left join c1 as c22 on c11.v1=c22.v1 group by c11.v2;
+explain(costs off, verbose) with c1 as (select v1, v2, v3 from t1) select sum(c11.v1) from c1 as c11 left join c1 as c22 on c11.v1=c22.v1 group by c11.v2;
 with c1 as (select v1, v2, v3 from t1) select sum(c11.v1) from c1 as c11 left join c1 as c22 on c11.v1=c22.v1 group by c11.v2;
 
-explain verbose with c1 as (select v1, v2, v3 from t1) select sum(c11.v3) from c1 as c11 left join c1 as c22 on c11.v1=c22.v1 group by c11.v2;
+explain(costs off, verbose) with c1 as (select v1, v2, v3 from t1) select sum(c11.v3) from c1 as c11 left join c1 as c22 on c11.v1=c22.v1 group by c11.v2;
 with c1 as (select v1, v2, v3 from t1) select sum(c11.v3) from c1 as c11 left join c1 as c22 on c11.v1=c22.v1 group by c11.v2;
 
 -- order by 
-explain verbose with c1 as (select v1, v2, v3 from t1) select c11.v1 from c1 as c11 left join c1 as c22 on c11.v1=c22.v1 order by c22.v1;
+explain(costs off, verbose) with c1 as (select v1, v2, v3 from t1) select c11.v1 from c1 as c11 left join c1 as c22 on c11.v1=c22.v1 order by c22.v1;
 with c1 as (select v1, v2, v3 from t1) select c11.v1 from c1 as c11 left join c1 as c22 on c11.v1=c22.v1 order by c22.v1;
 
-explain verbose with c1 as (select v1, v2, v3 from t1) select c11.v1 from c1 as c11 left join c1 as c22 on c11.v1=c22.v1 order by c22.v3;
+explain(costs off, verbose) with c1 as (select v1, v2, v3 from t1) select c11.v1 from c1 as c11 left join c1 as c22 on c11.v1=c22.v1 order by c22.v3;
 with c1 as (select v1, v2, v3 from t1) select c11.v1 from c1 as c11 left join c1 as c22 on c11.v1=c22.v1 order by c22.v3;
 
 -- window function
-explain verbose with c1 as (select v1, v2, v3 from t1) select sum(c11.v1) OVER (ORDER BY c11.v2) from c1 as c11 left join c1 as c22 on c11.v1=c22.v1;
+explain(costs off, verbose) with c1 as (select v1, v2, v3 from t1) select sum(c11.v1) OVER (ORDER BY c11.v2) from c1 as c11 left join c1 as c22 on c11.v1=c22.v1;
 with c1 as (select v1, v2, v3 from t1) select sum(c11.v1) OVER (ORDER BY c11.v2) from c1 as c11 left join c1 as c22 on c11.v1=c22.v1;
-explain verbose with c1 as (select v1, v2, v3 from t1) select sum(c11.v2) OVER (ORDER BY c11.v3) from c1 as c11 left join c1 as c22 on c11.v1=c22.v1;
+explain(costs off, verbose) with c1 as (select v1, v2, v3 from t1) select sum(c11.v2) OVER (ORDER BY c11.v3) from c1 as c11 left join c1 as c22 on c11.v1=c22.v1;
 with c1 as (select v1, v2, v3 from t1) select sum(c11.v2) OVER (ORDER BY c11.v3) from c1 as c11 left join c1 as c22 on c11.v1=c22.v1;
 
 -- grouping set 
-explain verbose with c1 as (select v1, v2, v3 from t1) select sum(c11.v2) from c1 as c11 left join c1 as c22 on c11.v1=c22.v1 group by ROLLUP(c11.v1,c11.v2);
+explain(costs off, verbose) with c1 as (select v1, v2, v3 from t1) select sum(c11.v2) from c1 as c11 left join c1 as c22 on c11.v1=c22.v1 group by ROLLUP(c11.v1,c11.v2);
 with c1 as (select v1, v2, v3 from t1) select sum(c11.v2) from c1 as c11 left join c1 as c22 on c11.v1=c22.v1 group by ROLLUP(c11.v1,c11.v2);
-explain verbose with c1 as (select v1, v2, v3 from t1) select sum(c11.v2) from c1 as c11 left join c1 as c22 on c11.v1=c22.v1 group by ROLLUP(c11.v2,c11.v3);
+explain(costs off, verbose) with c1 as (select v1, v2, v3 from t1) select sum(c11.v2) from c1 as c11 left join c1 as c22 on c11.v1=c22.v1 group by ROLLUP(c11.v2,c11.v3);
 with c1 as (select v1, v2, v3 from t1) select sum(c11.v2) OVER (ORDER BY c11.v3) from c1 as c11 left join c1 as c22 on c11.v1=c22.v1;
 
 
 -- CTE producer should have right output
 
-explain verbose with c1 as (select t1.v1 as v1, t2.v1 as t21, t2.v2 as t22, t2.v3 as t23 from t1 join t2 on t1.v1 = t2.v1) 
+explain(costs off, verbose) with c1 as (select t1.v1 as v1, t2.v1 as t21, t2.v2 as t22, t2.v3 as t23 from t1 join t2 on t1.v1 = t2.v1) 
 select c11.v1 from c1 as c11 left join c1 as c22 on c11.v1=c22.v1;
 
 with c1 as (select t1.v1 as v1, t2.v1 as t21, t2.v2 as t22, t2.v3 as t23 from t1 join t2 on t1.v1 = t2.v1) 
 select c11.v1 from c1 as c11 left join c1 as c22 on c11.v1=c22.v1;
 
-explain verbose with c1 as (select sum(v1) as v1, sum(v2) as v2, v3 from t1 group by v3) 
+explain(costs off, verbose) with c1 as (select sum(v1) as v1, sum(v2) as v2, v3 from t1 group by v3) 
 select c11.v1 from c1 as c11 left join c1 as c22 on c11.v1=c22.v1;
 
 with c1 as (select lt1.v3 as v3, lt1.v1 as lo1, rt1.v1 as ro1 from t1 lt1, t1 rt1 where lt1.v2 = rt1.v2 and lt1.v1 = rt1.v1)  
@@ -213,7 +213,7 @@ primary key (ws_item_sk, ws_order_number)
 );
 
 -- sql 23
-explain verbose with frequent_ss_items as 
+explain (costs off, verbose) with frequent_ss_items as 
  (select substr(i_item_desc,1,30) itemdesc,i_item_sk item_sk,d_date solddate,count(*) cnt
   from tpcds_store_sales
       ,tpcds_date_dim 
@@ -227,14 +227,14 @@ select t1.v1 from t1 where t1.v1 in (select item_sk from frequent_ss_items where
     and t1.v1 in (select item_sk from frequent_ss_items where item_sk > 0);
 
 -- sql 95
-explain verbose with ws_wh as
+explain (costs off, verbose) with ws_wh as
 (select ws1.ws_order_number,ws1.ws_warehouse_sk wh1,ws2.ws_warehouse_sk wh2
  from tpcds_web_sales ws1,tpcds_web_sales ws2
  where ws1.ws_order_number = ws2.ws_order_number
    and ws1.ws_warehouse_sk <> ws2.ws_warehouse_sk)
 select * from t1 where t1.v1 in (select ws_order_number from ws_wh where true) and t1.v1 in (select ws_order_number from ws_wh where ws_order_number > 0);
 
-explain verbose with ws_wh as
+explain (costs off, verbose) with ws_wh as
 (select ws1.ws_order_number,ws1.ws_warehouse_sk wh1,ws2.ws_warehouse_sk wh2
  from tpcds_web_sales ws1,tpcds_web_sales ws2
  where ws1.ws_order_number = ws2.ws_order_number
@@ -261,7 +261,7 @@ analyze t4;
 
 -- Additional filtering conditions are added to the consumer.
 -- This is caused by `PexprInferPredicates` in the ORCA preprocessor.
-explain verbose WITH t(a,b,d) AS
+explain(costs off, verbose) WITH t(a,b,d) AS
 (
   SELECT t3.a,t3.b,t4.d FROM t3,t4 WHERE t3.a = t4.d
 )
@@ -315,7 +315,7 @@ SELECT
   END) AS string4
 FROM generate_series(0, 99) AS i;
 
-explain verbose select four, x
+explain(costs off, verbose) select four, x
   from (select four, ten, 'foo'::text as x from cte_prune_tenk1) as t
   group by grouping sets (four, x)
   having x = 'foo';
@@ -376,7 +376,7 @@ ALTER TABLE ONLY countrylanguage
     ADD CONSTRAINT countrylanguage_pkey PRIMARY KEY (countrycode, "language");
 
 -- CTE1(inlined) in CTE2(no-inlined) case
-explain verbose with country as
+explain(costs off, verbose) with country as
 (select country.code,country.name COUNTRY, city.name CAPITAL, language, isofficial, percentage
  FROM country,city,countrylanguage
  WHERE country.code = countrylanguage.countrycode
@@ -393,7 +393,7 @@ select * from
 where country.percentage = countrylanguage.percentage order by countrylanguage.COUNTRY,country.language LIMIT 40;
 
 -- CTE in the main query and subqueries within the main query
-explain verbose with bad_headofstates as 
+explain(costs off, verbose) with bad_headofstates as 
 (
  select country.code,country.name,country.headofstate,countrylanguage.language
  from
@@ -424,7 +424,7 @@ CREATE TABLE t5 AS SELECT i as c, i+1 as d from generate_series(1,10)i;
 CREATE TABLE t6 AS SELECT i as a, i+1 as b from generate_series(1,10)i;
 
 -- inlined CTEs should have not unused columns(ex. t5.*, t6.* in output)
-explain verbose WITH w AS (SELECT a, b from t6 where b < 5)
+explain(costs off, verbose) WITH w AS (SELECT a, b from t6 where b < 5)
 SELECT *
 FROM t6,
      (WITH v AS (SELECT c, d FROM t5, w WHERE c = w.a AND c < 2)

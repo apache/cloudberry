@@ -10351,7 +10351,7 @@ EXPLAIN (COSTS OFF) WITH q AS (SELECT * FROM (WITH cte AS (SELECT * FROM car) SE
 WITH q AS (SELECT * FROM (WITH cte AS (SELECT * FROM car) SELECT * FROM car WHERE a > 7) t) SELECT * FROM q;
 
 -- start_ignore
-drop schema qp_with_clause cascade;
+--drop schema qp_with_clause cascade;
 -- end_ignore
 
 RESET optimizer_trace_fallback;

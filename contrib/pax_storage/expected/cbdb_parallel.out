@@ -613,6 +613,15 @@ explain(locus, costs off) select * from rt1 join t1 on rt1.a = t1.b join rt2 on 
 select * from rt1 join t1 on rt1.a = t1.b join rt2 on rt2.a = t1.b;
  a  | b  | a  | b  | a  | b  
 ----+----+----+----+----+----
+  5 |  6 |  5 |  5 |  5 |  6
+  6 |  7 |  6 |  6 |  6 |  7
+  9 | 10 |  9 |  9 |  9 | 10
+ 10 | 11 | 10 | 10 | 10 | 11
+  6 |  7 |  5 |  6 |  6 |  7
+  7 |  8 |  6 |  7 |  7 |  8
+ 10 | 11 |  9 | 10 | 10 | 11
+  1 |  2 |  1 |  1 |  1 |  2
+  2 |  3 |  1 |  2 |  2 |  3
   2 |  3 |  2 |  2 |  2 |  3
   3 |  4 |  3 |  3 |  3 |  4
   4 |  5 |  4 |  4 |  4 |  5
@@ -623,15 +632,6 @@ select * from rt1 join t1 on rt1.a = t1.b join rt2 on rt2.a = t1.b;
   5 |  6 |  4 |  5 |  5 |  6
   8 |  9 |  7 |  8 |  8 |  9
   9 | 10 |  8 |  9 |  9 | 10
-  1 |  2 |  1 |  1 |  1 |  2
-  2 |  3 |  1 |  2 |  2 |  3
-  5 |  6 |  5 |  5 |  5 |  6
-  6 |  7 |  6 |  6 |  6 |  7
-  9 | 10 |  9 |  9 |  9 | 10
- 10 | 11 | 10 | 10 | 10 | 11
-  6 |  7 |  5 |  6 |  6 |  7
-  7 |  8 |  6 |  7 |  7 |  8
- 10 | 11 |  9 | 10 | 10 | 11
 (19 rows)
 
 -- parallel hash join
@@ -674,6 +674,15 @@ explain(locus, costs off) select * from rt1 join t1 on rt1.a = t1.b join rt2 on 
 select * from rt1 join t1 on rt1.a = t1.b join rt2 on rt2.a = t1.b;
  a  | b  | a  | b  | a  | b  
 ----+----+----+----+----+----
+  5 |  6 |  5 |  5 |  5 |  6
+  6 |  7 |  5 |  6 |  6 |  7
+  6 |  7 |  6 |  6 |  6 |  7
+  7 |  8 |  6 |  7 |  7 |  8
+  9 | 10 |  9 |  9 |  9 | 10
+ 10 | 11 |  9 | 10 | 10 | 11
+ 10 | 11 | 10 | 10 | 10 | 11
+  1 |  2 |  1 |  1 |  1 |  2
+  2 |  3 |  1 |  2 |  2 |  3
   2 |  3 |  2 |  2 |  2 |  3
   3 |  4 |  2 |  3 |  3 |  4
   3 |  4 |  3 |  3 |  3 |  4
@@ -684,15 +693,6 @@ select * from rt1 join t1 on rt1.a = t1.b join rt2 on rt2.a = t1.b;
   8 |  9 |  7 |  8 |  8 |  9
   8 |  9 |  8 |  8 |  8 |  9
   9 | 10 |  8 |  9 |  9 | 10
-  1 |  2 |  1 |  1 |  1 |  2
-  2 |  3 |  1 |  2 |  2 |  3
-  5 |  6 |  5 |  5 |  5 |  6
-  6 |  7 |  5 |  6 |  6 |  7
-  6 |  7 |  6 |  6 |  6 |  7
-  7 |  8 |  6 |  7 |  7 |  8
-  9 | 10 |  9 |  9 |  9 | 10
- 10 | 11 |  9 | 10 | 10 | 11
- 10 | 11 | 10 | 10 | 10 | 11
 (19 rows)
 
 --
@@ -728,6 +728,13 @@ select * from rt1 join t1 on rt1.a = t1.b join rt3 on rt3.a = t1.b;
 ----+----+----+----+----+----
   1 |  2 |  1 |  1 |  1 |  2
   2 |  3 |  1 |  2 |  2 |  3
+  5 |  6 |  5 |  5 |  5 |  6
+  6 |  7 |  6 |  6 |  6 |  7
+  9 | 10 |  9 |  9 |  9 | 10
+ 10 | 11 | 10 | 10 | 10 | 11
+  6 |  7 |  5 |  6 |  6 |  7
+  7 |  8 |  6 |  7 |  7 |  8
+ 10 | 11 |  9 | 10 | 10 | 11
   2 |  3 |  2 |  2 |  2 |  3
   3 |  4 |  3 |  3 |  3 |  4
   4 |  5 |  4 |  4 |  4 |  5
@@ -738,13 +745,6 @@ select * from rt1 join t1 on rt1.a = t1.b join rt3 on rt3.a = t1.b;
   5 |  6 |  4 |  5 |  5 |  6
   8 |  9 |  7 |  8 |  8 |  9
   9 | 10 |  8 |  9 |  9 | 10
-  5 |  6 |  5 |  5 |  5 |  6
-  6 |  7 |  6 |  6 |  6 |  7
-  9 | 10 |  9 |  9 |  9 | 10
- 10 | 11 | 10 | 10 | 10 | 11
-  6 |  7 |  5 |  6 |  6 |  7
-  7 |  8 |  6 |  7 |  7 |  8
- 10 | 11 |  9 | 10 | 10 | 11
 (19 rows)
 
 -- parallel join without parallel hash
@@ -814,12 +814,12 @@ set local enable_parallel = off;
 select * from rt4 join t2 using(b);
  b  | a  | a  
 ----+----+----
+  2 |  1 |  1
   3 |  2 |  2
   4 |  3 |  3
   5 |  4 |  4
   8 |  7 |  7
   9 |  8 |  8
-  2 |  1 |  1
   6 |  5 |  5
   7 |  6 |  6
  10 |  9 |  9
@@ -858,12 +858,12 @@ select * from rt4 join t2 using(b);
   7 |  6 |  6
  10 |  9 |  9
  11 | 10 | 10
+  2 |  1 |  1
   3 |  2 |  2
   4 |  3 |  3
   5 |  4 |  4
   8 |  7 |  7
   9 |  8 |  8
-  2 |  1 |  1
 (10 rows)
 
 create table t3(a int, b int) with(parallel_workers=2);
@@ -947,11 +947,11 @@ explain(locus, costs off) select * from t_replica_workers_2 join t_random_worker
 select * from t_replica_workers_2 join t_random_workers_0 using(a);
  a | b | b 
 ---+---+---
- 1 | 2 | 2
  2 | 3 | 3
- 4 | 5 | 5
  3 | 4 | 4
  5 | 6 | 6
+ 1 | 2 | 2
+ 4 | 5 | 5
 (5 rows)
 
 -- non parallel results
@@ -959,11 +959,11 @@ set local enable_parallel=false;
 select * from t_replica_workers_2 join t_random_workers_0 using(a);
  a | b | b 
 ---+---+---
+ 1 | 2 | 2
+ 4 | 5 | 5
+ 2 | 3 | 3
  3 | 4 | 4
  5 | 6 | 6
- 4 | 5 | 5
- 1 | 2 | 2
- 2 | 3 | 3
 (5 rows)
 
 abort;
@@ -1005,10 +1005,10 @@ select * from t_replica_workers_2 right join t_random_workers_2 using(a);
  a | b | b 
 ---+---+---
  1 | 2 | 2
- 2 | 3 | 3
- 3 | 4 | 4
  4 | 5 | 5
+ 3 | 4 | 4
  5 | 6 | 6
+ 2 | 3 | 3
 (5 rows)
 
 -- non parallel results
@@ -1016,11 +1016,11 @@ set local enable_parallel=false;
 select * from t_replica_workers_2 right join t_random_workers_2 using(a);
  a | b | b 
 ---+---+---
- 1 | 2 | 2
- 2 | 3 | 3
  3 | 4 | 4
- 4 | 5 | 5
  5 | 6 | 6
+ 2 | 3 | 3
+ 1 | 2 | 2
+ 4 | 5 | 5
 (5 rows)
 
 abort;
@@ -1061,11 +1061,11 @@ explain(locus, costs off) select * from t_replica_workers_2 join t_random_worker
 select * from t_replica_workers_2 join t_random_workers_2 using(a);
  a | b | b 
 ---+---+---
- 1 | 2 | 2
  3 | 4 | 4
- 2 | 3 | 3
  4 | 5 | 5
+ 1 | 2 | 2
  5 | 6 | 6
+ 2 | 3 | 3
 (5 rows)
 
 -- non parallel results
@@ -1073,10 +1073,10 @@ set local enable_parallel=false;
 select * from t_replica_workers_2 join t_random_workers_2 using(a);
  a | b | b 
 ---+---+---
- 1 | 2 | 2
- 3 | 4 | 4
  2 | 3 | 3
+ 3 | 4 | 4
  4 | 5 | 5
+ 1 | 2 | 2
  5 | 6 | 6
 (5 rows)
 
@@ -1103,17 +1103,17 @@ explain(costs off) select * from t1 right join t2 on t1.b = t2.a;
                             QUERY PLAN                            
 ------------------------------------------------------------------
  Gather Motion 9:1  (slice1; segments: 9)
-   ->  Parallel Hash Right Join
-         Hash Cond: (t1.b = t2.a)
-         ->  Redistribute Motion 9:9  (slice2; segments: 9)
-               Hash Key: t1.b
+   ->  Parallel Hash Left Join
+         Hash Cond: (t2.a = t1.b)
+         ->  Redistribute Motion 6:9  (slice2; segments: 6)
+               Hash Key: t2.a
                Hash Module: 3
-               ->  Parallel Seq Scan on t1
+               ->  Parallel Seq Scan on t2
          ->  Parallel Hash
-               ->  Redistribute Motion 6:9  (slice3; segments: 6)
-                     Hash Key: t2.a
+               ->  Redistribute Motion 9:9  (slice3; segments: 9)
+                     Hash Key: t1.b
                      Hash Module: 3
-                     ->  Parallel Seq Scan on t2
+                     ->  Parallel Seq Scan on t1
  Optimizer: Postgres query optimizer
 (13 rows)
 
@@ -1136,34 +1136,34 @@ analyze t2;
 set local enable_parallel = on;
 -- parallel hash join with shared table, SinglQE as outer partial path.
 explain(locus, costs off) select * from (select count(*) as a from t2) t2 left join t1 on t1.a = t2.a;
-                               QUERY PLAN                               
-------------------------------------------------------------------------
+                            QUERY PLAN                            
+------------------------------------------------------------------
  Gather Motion 6:1  (slice1; segments: 6)
    Locus: Entry
-   ->  Parallel Hash Right Join
-         Locus: HashedWorkers
+   ->  Parallel Hash Left Join
+         Locus: Hashed
          Parallel Workers: 2
-         Hash Cond: (t1.a = (count(*)))
-         ->  Parallel Seq Scan on t1
-               Locus: HashedWorkers
-               Parallel Workers: 2
-         ->  Parallel Hash
+         Hash Cond: ((count(*)) = t1.a)
+         ->  Redistribute Motion 1:6  (slice2; segments: 1)
                Locus: Hashed
-               ->  Redistribute Motion 1:6  (slice2; segments: 1)
-                     Locus: Hashed
-                     Parallel Workers: 2
-                     Hash Key: (count(*))
-                     Hash Module: 3
-                     ->  Finalize Aggregate
+               Parallel Workers: 2
+               Hash Key: (count(*))
+               Hash Module: 3
+               ->  Finalize Aggregate
+                     Locus: SingleQE
+                     ->  Gather Motion 6:1  (slice3; segments: 6)
                            Locus: SingleQE
-                           ->  Gather Motion 6:1  (slice3; segments: 6)
-                                 Locus: SingleQE
-                                 ->  Partial Aggregate
+                           ->  Partial Aggregate
+                                 Locus: HashedWorkers
+                                 Parallel Workers: 2
+                                 ->  Parallel Seq Scan on t2
                                        Locus: HashedWorkers
                                        Parallel Workers: 2
-                                       ->  Parallel Seq Scan on t2
-                                             Locus: HashedWorkers
-                                             Parallel Workers: 2
+         ->  Parallel Hash
+               Locus: Hashed
+               ->  Parallel Seq Scan on t1
+                     Locus: HashedWorkers
+                     Parallel Workers: 2
  Optimizer: Postgres query optimizer
 (27 rows)
 
@@ -1427,7 +1427,7 @@ explain (locus, costs off) select * from rt1 union all select * from t1;
          ->  Result
                Locus: Strewn
                Parallel Workers: 2
-               One-Time Filter: (gp_execution_segment() = 0)
+               One-Time Filter: (gp_execution_segment() = 2)
                ->  Parallel Seq Scan on rt1
                      Locus: SegmentGeneralWorkers
                      Parallel Workers: 2
@@ -1451,7 +1451,7 @@ explain (locus, costs off) select * from rt1 union all select * from t2;
          ->  Result
                Locus: Strewn
                Parallel Workers: 2
-               One-Time Filter: (gp_execution_segment() = 0)
+               One-Time Filter: (gp_execution_segment() = 2)
                ->  Parallel Seq Scan on rt1
                      Locus: SegmentGeneralWorkers
                      Parallel Workers: 2
@@ -1930,49 +1930,62 @@ set local enable_hashagg to false;
 set local enable_parallel = off;
 explain (costs off, locus)
 select c, sum(a), avg(b), count(*) from pagg_tab group by 1 having avg(d) < 15 order by 1, 2, 3;
-                               QUERY PLAN                               
-------------------------------------------------------------------------
+                                     QUERY PLAN                                     
+------------------------------------------------------------------------------------
  Sort
    Locus: Entry
    Sort Key: pagg_tab.c, (sum(pagg_tab.a)), (avg(pagg_tab.b))
-   ->  Append
+   ->  Merge Append
          Locus: Entry
-         ->  Finalize GroupAggregate
-               Locus: Entry
-               Group Key: pagg_tab.c
-               Filter: (avg(pagg_tab.d) < '15'::numeric)
-               ->  Gather Motion 3:1  (slice1; segments: 3)
-                     Locus: Entry
-                     Merge Key: pagg_tab.c
-                     ->  Partial GroupAggregate
+         Sort Key: pagg_tab.c
+         ->  Gather Motion 3:1  (slice1; segments: 3)
+               Locus: SingleQE
+               Merge Key: pagg_tab.c
+               ->  Finalize GroupAggregate
+                     Locus: Hashed
+                     Group Key: pagg_tab.c
+                     Filter: (avg(pagg_tab.d) < '15'::numeric)
+                     ->  Sort
                            Locus: Hashed
-                           Group Key: pagg_tab.c
-                           ->  Sort
+                           Sort Key: pagg_tab.c
+                           ->  Redistribute Motion 3:3  (slice2; segments: 3)
                                  Locus: Hashed
-                                 Sort Key: pagg_tab.c
-                                 ->  Seq Scan on pagg_tab_p1 pagg_tab
+                                 Hash Key: pagg_tab.c
+                                 ->  Partial GroupAggregate
                                        Locus: Hashed
-         ->  Finalize GroupAggregate
-               Locus: Entry
-               Group Key: pagg_tab_1.c
-               Filter: (avg(pagg_tab_1.d) < '15'::numeric)
-               ->  Gather Motion 3:1  (slice2; segments: 3)
-                     Locus: Entry
-                     Merge Key: pagg_tab_1.c
-                     ->  Partial GroupAggregate
+                                       Group Key: pagg_tab.c
+                                       ->  Sort
+                                             Locus: Hashed
+                                             Sort Key: pagg_tab.c
+                                             ->  Seq Scan on pagg_tab_p1 pagg_tab
+                                                   Locus: Hashed
+         ->  Gather Motion 3:1  (slice3; segments: 3)
+               Locus: SingleQE
+               Merge Key: pagg_tab_1.c
+               ->  Finalize GroupAggregate
+                     Locus: Hashed
+                     Group Key: pagg_tab_1.c
+                     Filter: (avg(pagg_tab_1.d) < '15'::numeric)
+                     ->  Sort
                            Locus: Hashed
-                           Group Key: pagg_tab_1.c
-                           ->  Sort
+                           Sort Key: pagg_tab_1.c
+                           ->  Redistribute Motion 3:3  (slice4; segments: 3)
                                  Locus: Hashed
-                                 Sort Key: pagg_tab_1.c
-                                 ->  Seq Scan on pagg_tab_p2 pagg_tab_1
+                                 Hash Key: pagg_tab_1.c
+                                 ->  Partial GroupAggregate
                                        Locus: Hashed
+                                       Group Key: pagg_tab_1.c
+                                       ->  Sort
+                                             Locus: Hashed
+                                             Sort Key: pagg_tab_1.c
+                                             ->  Seq Scan on pagg_tab_p2 pagg_tab_1
+                                                   Locus: Hashed
          ->  Finalize GroupAggregate
-               Locus: Entry
+               Locus: SingleQE
                Group Key: pagg_tab_2.c
                Filter: (avg(pagg_tab_2.d) < '15'::numeric)
-               ->  Gather Motion 3:1  (slice3; segments: 3)
-                     Locus: Entry
+               ->  Gather Motion 3:1  (slice5; segments: 3)
+                     Locus: SingleQE
                      Merge Key: pagg_tab_2.c
                      ->  Partial GroupAggregate
                            Locus: Hashed
@@ -1983,7 +1996,7 @@ select c, sum(a), avg(b), count(*) from pagg_tab group by 1 having avg(d) < 15 o
                                  ->  Seq Scan on pagg_tab_p3 pagg_tab_2
                                        Locus: Hashed
  Optimizer: Postgres query optimizer
-(51 rows)
+(64 rows)
 
 abort;
 --

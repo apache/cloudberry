@@ -312,6 +312,30 @@ bloom_total_bits(bloom_filter *filter)
 	return filter->m;
 }
 
+Size
+bloom_bitset_bytes(bloom_filter *filter)
+{
+	return filter->m / BITS_PER_BYTE;
+}
+
+unsigned char *
+bloom_get_bitset(bloom_filter *filter)
+{
+	return filter->bitset;
+}
+
+uint64
+bloom_get_seed(bloom_filter *filter)
+{
+	return filter->seed;
+}
+
+int
+bloom_get_k(bloom_filter *filter)
+{
+	return filter->k_hash_funcs;
+}
+
 /*
  * Create Bloom filter in caller's memory context.
  *

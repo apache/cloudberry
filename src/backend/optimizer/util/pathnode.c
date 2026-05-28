@@ -2344,8 +2344,11 @@ create_unique_path(PlannerInfo *root, RelOptInfo *rel, Path *subpath,
 	bool		add_motion = false;
 	double		numsegments;
 
+	/* CBDB_PARALLEL: we might try different paths to be unique. */
+#if 0
 	/* Caller made a mistake if subpath isn't cheapest_total ... */
 	Assert(subpath == rel->cheapest_total_path);
+#endif
 	Assert(subpath->parent == rel);
 	/* ... or if SpecialJoinInfo is the wrong one */
 	Assert(sjinfo->jointype == JOIN_SEMI);
@@ -3405,9 +3408,13 @@ create_ctescan_path(PlannerInfo *root, RelOptInfo *rel,
 													 required_outer);
 	pathnode->parallel_aware = false;
 	pathnode->parallel_safe = rel->consider_parallel;
+#if 0
 	pathnode->parallel_workers = 0;
+#endif
 	pathnode->pathkeys = pathkeys;
 	pathnode->locus = locus;
+	/* CBDB_PARALLEL: use locus.parallel */
+	pathnode->parallel_workers = locus.parallel_workers;
 
 	pathnode->sameslice_relids = NULL;
 
@@ -4048,11 +4055,14 @@ create_nestloop_path(PlannerInfo *root,
 	if (orig_jointype == JOIN_DEDUP_SEMI ||
 		orig_jointype == JOIN_DEDUP_SEMI_REVERSE)
 	{
-		return (Path *) create_unique_rowid_path(root,
+		UniquePath *upath = create_unique_rowid_path(root,
 												 joinrel,
 												 (Path *) pathnode,
 												 pathnode->innerjoinpath->parent->relids,
 												 rowidexpr_id);
+		if (upath)
+			upath->path.total_cost *= cbdb_dedup_semi_damping_factor;
+		return (Path *) upath;
 	}
 
 	/*
@@ -4268,11 +4278,14 @@ create_mergejoin_path(PlannerInfo *root,
 	if (orig_jointype == JOIN_DEDUP_SEMI ||
 		orig_jointype == JOIN_DEDUP_SEMI_REVERSE)
 	{
-		return (Path *) create_unique_rowid_path(root,
+		UniquePath* upath =	create_unique_rowid_path(root,
 												 joinrel,
 												 (Path *) pathnode,
 												 pathnode->jpath.innerjoinpath->parent->relids,
 												 rowidexpr_id);
+		if (upath)
+			upath->path.total_cost *= cbdb_dedup_semi_damping_factor;
+		return (Path *) upath;
 	}
 
 	/*
@@ -4514,11 +4527,14 @@ create_hashjoin_path(PlannerInfo *root,
 	if (orig_jointype == JOIN_DEDUP_SEMI ||
 		orig_jointype == JOIN_DEDUP_SEMI_REVERSE)
 	{
-		return (Path *) create_unique_rowid_path(root,
+		UniquePath *upath = create_unique_rowid_path(root,
 												 joinrel,
 												 (Path *) pathnode,
 												 pathnode->jpath.innerjoinpath->parent->relids,
 												 rowidexpr_id);
+		if (upath)
+			upath->path.total_cost *= cbdb_dedup_semi_damping_factor;
+		return (Path *) upath;
 	}
 
 	/*
@@ -5089,6 +5105,17 @@ create_agg_path(PlannerInfo *root,
 			 qual,
 			 subpath->startup_cost, subpath->total_cost,
 			 subpath->rows, subpath->pathtarget->width);
+
+	/* Correct the effect of streaming */
+	if (streaming &&
+		pathnode->path.rows >= cbdb_streaming_damping_rows_threshold&&
+		(subpath->pathtype != T_SeqScan) &&
+		(pathnode->path.rows >= subpath->rows * cbdb_streaming_damping_factor))
+	{
+		pathnode->path.rows *= cbdb_streaming_damping_factor;
+		pathnode->path.startup_cost *= cbdb_streaming_damping_factor;
+		pathnode->path.total_cost *= cbdb_streaming_damping_factor;
+	}
 
 	/* add tlist eval cost for each output row */
 	pathnode->path.startup_cost += target->cost.startup;

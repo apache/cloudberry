@@ -3098,6 +3098,8 @@ cdbpath_motion_for_parallel_join(PlannerInfo *root,
 	switch (jointype)
 	{
 		case JOIN_INNER:
+		case JOIN_UNIQUE_INNER:
+		case JOIN_UNIQUE_OUTER:
 			break;
 		case JOIN_SEMI:
 			if (!enable_parallel_semi_join)
@@ -3108,8 +3110,6 @@ cdbpath_motion_for_parallel_join(PlannerInfo *root,
 		case JOIN_LASJ_NOTIN:
 			outer.ok_to_replicate = false;
 			break;
-		case JOIN_UNIQUE_OUTER:
-		case JOIN_UNIQUE_INNER:
 		case JOIN_RIGHT:
 		case JOIN_FULL:
 			outer.ok_to_replicate = false;
@@ -3372,13 +3372,11 @@ cdbpath_motion_for_parallel_join(PlannerInfo *root,
 	else if (CdbPathLocus_IsSegmentGeneral(outer.locus))
 	{
 		/*
-		 * In principle, we couldn't get here as:
-		 * 1.If both's parallel_workers is 0, they should be handled in cdbpath_motion_for_join().
-		 * 2.If inner path's parallel_workers > 0, it must be from a partial_pathlist.
-		 *  SegmentGeneral neighter could be from base rel's partial_pathlist nor could be from
-		 *  partial_pathlist of a join locus.
+		 * As we have enabled parallel unique outer and inner joins, this case would be possibile.
+		 * Ex: join between rpt tables.
 		 */
-		Assert(false);
+
+		/* TODO: enable more possible cases. */
 		goto fail;
 	}
 	else if (CdbPathLocus_IsSingleQE(outer.locus))

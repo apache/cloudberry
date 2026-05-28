@@ -18,6 +18,9 @@ SET max_parallel_workers_per_gather TO 0;
 -- Disable incremental sort, which can influence selected plans due to fuzz factor.
 SET enable_incremental_sort TO off;
 
+-- start_ignore
+set gp_use_streaming_hashagg=off;
+-- end_ignore
 --
 -- Tests for list partitioned tables.
 --
@@ -336,3 +339,7 @@ RESET parallel_setup_cost;
 EXPLAIN (COSTS OFF)
 SELECT x, sum(y), avg(y), count(*) FROM pagg_tab_para GROUP BY x HAVING avg(y) < 7 ORDER BY 1, 2, 3;
 SELECT x, sum(y), avg(y), count(*) FROM pagg_tab_para GROUP BY x HAVING avg(y) < 7 ORDER BY 1, 2, 3;
+
+-- start_ignore
+reset gp_use_streaming_hashagg;
+-- end_ignore

@@ -67,13 +67,13 @@ SELECT a, sum(b), avg(b), count(*), min(a), max(b) FROM pagg_tab GROUP BY a HAVI
          Group Key: pagg_tab.a
          Filter: (avg(pagg_tab.d) < '15'::numeric)
          ->  Append
-               ->  Partial HashAggregate
+               ->  Streaming Partial HashAggregate
                      Group Key: pagg_tab.a
                      ->  Seq Scan on pagg_tab_p1 pagg_tab
-               ->  Partial HashAggregate
+               ->  Streaming Partial HashAggregate
                      Group Key: pagg_tab_1.a
                      ->  Seq Scan on pagg_tab_p2 pagg_tab_1
-               ->  Partial HashAggregate
+               ->  Streaming Partial HashAggregate
                      Group Key: pagg_tab_2.a
                      ->  Seq Scan on pagg_tab_p3 pagg_tab_2
  Optimizer: Postgres query optimizer
@@ -603,21 +603,21 @@ SELECT b.y, sum(a.y) FROM pagg_tab1 a LEFT JOIN pagg_tab2 b ON a.x = b.y GROUP B
    ->  Sort
          Sort Key: b.y
          ->  Append
-               ->  Partial HashAggregate
+               ->  Streaming Partial HashAggregate
                      Group Key: b.y
                      ->  Hash Left Join
                            Hash Cond: (a.x = b.y)
                            ->  Seq Scan on pagg_tab1_p1 a
                            ->  Hash
                                  ->  Seq Scan on pagg_tab2_p1 b
-               ->  Partial HashAggregate
+               ->  Streaming Partial HashAggregate
                      Group Key: b_1.y
                      ->  Hash Left Join
                            Hash Cond: (a_1.x = b_1.y)
                            ->  Seq Scan on pagg_tab1_p2 a_1
                            ->  Hash
                                  ->  Seq Scan on pagg_tab2_p2 b_1
-               ->  Partial HashAggregate
+               ->  Streaming Partial HashAggregate
                      Group Key: b_2.y
                      ->  Hash Right Join
                            Hash Cond: (b_2.y = a_2.x)
@@ -697,21 +697,21 @@ SELECT a.x, sum(b.x) FROM pagg_tab1 a FULL OUTER JOIN pagg_tab2 b ON a.x = b.y G
    ->  Sort
          Sort Key: a.x
          ->  Append
-               ->  Partial HashAggregate
+               ->  Streaming Partial HashAggregate
                      Group Key: a.x
                      ->  Hash Full Join
                            Hash Cond: (a.x = b.y)
                            ->  Seq Scan on pagg_tab1_p1 a
                            ->  Hash
                                  ->  Seq Scan on pagg_tab2_p1 b
-               ->  Partial HashAggregate
+               ->  Streaming Partial HashAggregate
                      Group Key: a_1.x
                      ->  Hash Full Join
                            Hash Cond: (a_1.x = b_1.y)
                            ->  Seq Scan on pagg_tab1_p2 a_1
                            ->  Hash
                                  ->  Seq Scan on pagg_tab2_p2 b_1
-               ->  Partial HashAggregate
+               ->  Streaming Partial HashAggregate
                      Group Key: a_2.x
                      ->  Hash Full Join
                            Hash Cond: (b_2.y = a_2.x)
@@ -862,13 +862,13 @@ SELECT a, sum(b), avg(c), count(*) FROM pagg_tab_m GROUP BY a HAVING avg(c) < 22
          Group Key: pagg_tab_m.a
          Filter: (avg(pagg_tab_m.c) < '22'::numeric)
          ->  Append
-               ->  Partial HashAggregate
+               ->  Streaming Partial HashAggregate
                      Group Key: pagg_tab_m.a
                      ->  Seq Scan on pagg_tab_m_p1 pagg_tab_m
-               ->  Partial HashAggregate
+               ->  Streaming Partial HashAggregate
                      Group Key: pagg_tab_m_1.a
                      ->  Seq Scan on pagg_tab_m_p2 pagg_tab_m_1
-               ->  Partial HashAggregate
+               ->  Streaming Partial HashAggregate
                      Group Key: pagg_tab_m_2.a
                      ->  Seq Scan on pagg_tab_m_p3 pagg_tab_m_2
  Optimizer: Postgres query optimizer
@@ -1070,10 +1070,10 @@ SELECT a, sum(b), count(*) FROM pagg_tab_ml GROUP BY a HAVING avg(b) < 3 ORDER B
                ->  Sort
                      Sort Key: pagg_tab_ml_2.a
                      ->  Append
-                           ->  Partial HashAggregate
+                           ->  Streaming Partial HashAggregate
                                  Group Key: pagg_tab_ml_2.a
                                  ->  Seq Scan on pagg_tab_ml_p2_s1 pagg_tab_ml_2
-                           ->  Partial HashAggregate
+                           ->  Streaming Partial HashAggregate
                                  Group Key: pagg_tab_ml_3.a
                                  ->  Seq Scan on pagg_tab_ml_p2_s2 pagg_tab_ml_3
          ->  Finalize GroupAggregate
@@ -1082,10 +1082,10 @@ SELECT a, sum(b), count(*) FROM pagg_tab_ml GROUP BY a HAVING avg(b) < 3 ORDER B
                ->  Sort
                      Sort Key: pagg_tab_ml_5.a
                      ->  Append
-                           ->  Partial HashAggregate
+                           ->  Streaming Partial HashAggregate
                                  Group Key: pagg_tab_ml_5.a
                                  ->  Seq Scan on pagg_tab_ml_p3_s1 pagg_tab_ml_5
-                           ->  Partial HashAggregate
+                           ->  Streaming Partial HashAggregate
                                  Group Key: pagg_tab_ml_6.a
                                  ->  Seq Scan on pagg_tab_ml_p3_s2 pagg_tab_ml_6
  Optimizer: Postgres query optimizer
@@ -1118,19 +1118,19 @@ SELECT b, sum(a), count(*) FROM pagg_tab_ml GROUP BY b ORDER BY 1, 2, 3;
          ->  Sort
                Sort Key: pagg_tab_ml.b
                ->  Append
-                     ->  Partial HashAggregate
+                     ->  Streaming Partial HashAggregate
                            Group Key: pagg_tab_ml.b
                            ->  Seq Scan on pagg_tab_ml_p1 pagg_tab_ml
-                     ->  Partial HashAggregate
+                     ->  Streaming Partial HashAggregate
                            Group Key: pagg_tab_ml_1.b
                            ->  Seq Scan on pagg_tab_ml_p2_s1 pagg_tab_ml_1
-                     ->  Partial HashAggregate
+                     ->  Streaming Partial HashAggregate
                            Group Key: pagg_tab_ml_2.b
                            ->  Seq Scan on pagg_tab_ml_p2_s2 pagg_tab_ml_2
-                     ->  Partial HashAggregate
+                     ->  Streaming Partial HashAggregate
                            Group Key: pagg_tab_ml_3.b
                            ->  Seq Scan on pagg_tab_ml_p3_s1 pagg_tab_ml_3
-                     ->  Partial HashAggregate
+                     ->  Streaming Partial HashAggregate
                            Group Key: pagg_tab_ml_4.b
                            ->  Seq Scan on pagg_tab_ml_p3_s2 pagg_tab_ml_4
  Optimizer: Postgres query optimizer
@@ -1217,10 +1217,10 @@ SELECT a, sum(b), count(*) FROM pagg_tab_ml GROUP BY a HAVING avg(b) < 3 ORDER B
                ->  Sort
                      Sort Key: pagg_tab_ml_2.a
                      ->  Append
-                           ->  Partial HashAggregate
+                           ->  Streaming Partial HashAggregate
                                  Group Key: pagg_tab_ml_2.a
                                  ->  Seq Scan on pagg_tab_ml_p2_s1 pagg_tab_ml_2
-                           ->  Partial HashAggregate
+                           ->  Streaming Partial HashAggregate
                                  Group Key: pagg_tab_ml_3.a
                                  ->  Seq Scan on pagg_tab_ml_p2_s2 pagg_tab_ml_3
          ->  Finalize GroupAggregate
@@ -1229,10 +1229,10 @@ SELECT a, sum(b), count(*) FROM pagg_tab_ml GROUP BY a HAVING avg(b) < 3 ORDER B
                ->  Sort
                      Sort Key: pagg_tab_ml_5.a
                      ->  Append
-                           ->  Partial HashAggregate
+                           ->  Streaming Partial HashAggregate
                                  Group Key: pagg_tab_ml_5.a
                                  ->  Seq Scan on pagg_tab_ml_p3_s1 pagg_tab_ml_5
-                           ->  Partial HashAggregate
+                           ->  Streaming Partial HashAggregate
                                  Group Key: pagg_tab_ml_6.a
                                  ->  Seq Scan on pagg_tab_ml_p3_s2 pagg_tab_ml_6
  Optimizer: Postgres query optimizer
@@ -1265,19 +1265,19 @@ SELECT b, sum(a), count(*) FROM pagg_tab_ml GROUP BY b ORDER BY 1, 2, 3;
          ->  Sort
                Sort Key: pagg_tab_ml.b
                ->  Append
-                     ->  Partial HashAggregate
+                     ->  Streaming Partial HashAggregate
                            Group Key: pagg_tab_ml.b
                            ->  Seq Scan on pagg_tab_ml_p1 pagg_tab_ml
-                     ->  Partial HashAggregate
+                     ->  Streaming Partial HashAggregate
                            Group Key: pagg_tab_ml_1.b
                            ->  Seq Scan on pagg_tab_ml_p2_s1 pagg_tab_ml_1
-                     ->  Partial HashAggregate
+                     ->  Streaming Partial HashAggregate
                            Group Key: pagg_tab_ml_2.b
                            ->  Seq Scan on pagg_tab_ml_p2_s2 pagg_tab_ml_2
-                     ->  Partial HashAggregate
+                     ->  Streaming Partial HashAggregate
                            Group Key: pagg_tab_ml_3.b
                            ->  Seq Scan on pagg_tab_ml_p3_s1 pagg_tab_ml_3
-                     ->  Partial HashAggregate
+                     ->  Streaming Partial HashAggregate
                            Group Key: pagg_tab_ml_4.b
                            ->  Seq Scan on pagg_tab_ml_p3_s2 pagg_tab_ml_4
  Optimizer: Postgres query optimizer
@@ -1403,13 +1403,13 @@ SELECT y, sum(x), avg(x), count(*) FROM pagg_tab_para GROUP BY y HAVING avg(x) <
          ->  Sort
                Sort Key: pagg_tab_para.y
                ->  Append
-                     ->  Partial HashAggregate
+                     ->  Streaming Partial HashAggregate
                            Group Key: pagg_tab_para.y
                            ->  Seq Scan on pagg_tab_para_p1 pagg_tab_para
-                     ->  Partial HashAggregate
+                     ->  Streaming Partial HashAggregate
                            Group Key: pagg_tab_para_1.y
                            ->  Seq Scan on pagg_tab_para_p2 pagg_tab_para_1
-                     ->  Partial HashAggregate
+                     ->  Streaming Partial HashAggregate
                            Group Key: pagg_tab_para_2.y
                            ->  Seq Scan on pagg_tab_para_p3 pagg_tab_para_2
  Optimizer: Postgres query optimizer

@@ -2269,23 +2269,27 @@ SELECT count(a1.i)
    ->  Gather Motion 3:1  (slice1; segments: 3)
          ->  Subquery Scan on "*SELECT* 1"
                ->  Hash Join
-                     Hash Cond: (share1_ref1.i = a2.i)
-                     ->  Shared Scan (share slice:id 1:1)
-                           ->  Seq Scan on foo
+                     Hash Cond: (a1.i = a2.i)
+                     ->  Subquery Scan on a1
+                           ->  Shared Scan (share slice:id 1:1)
+                                 ->  Result
+                                       ->  Seq Scan on foo
                      ->  Hash
                            ->  Subquery Scan on a2
                                  ->  Shared Scan (share slice:id 1:0)
-                                       ->  Seq Scan on foo foo_1
+                                       ->  Result
+                                             ->  Seq Scan on foo foo_1
    ->  Aggregate
          ->  Gather Motion 3:1  (slice2; segments: 3)
                ->  Hash Join
-                     Hash Cond: (share1_ref2.i = a2_1.i)
-                     ->  Shared Scan (share slice:id 2:1)
+                     Hash Cond: (a1_1.i = a2_1.i)
+                     ->  Subquery Scan on a1_1
+                           ->  Shared Scan (share slice:id 2:1)
                      ->  Hash
                            ->  Subquery Scan on a2_1
                                  ->  Shared Scan (share slice:id 2:0)
  Optimizer: Postgres query optimizer
-(20 rows)
+(24 rows)
 
 -- Another cross-slice ShareInputScan test. There is one producing slice,
 -- and two consumers in second slice. Make sure the Share Input Scan

@@ -7,6 +7,7 @@
 /pt_io_in_progress_deadlock.out
 /distributed_snapshot.out
 /local_directory_table_mixed.out
+/hot_standby/query_conflict.out
 
 # ignores including sub-directories
 autovacuum-analyze.out

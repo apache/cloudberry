@@ -27,5 +27,9 @@ extern double bloom_false_positive_rate(bloom_filter *filter);
 extern uint64 bloom_total_bits(bloom_filter *filter);
 extern bloom_filter *bloom_create_aggresive(int64 total_elems,
 											int work_mem, uint64 seed);
+extern Size bloom_bitset_bytes(bloom_filter *filter);
+extern unsigned char *bloom_get_bitset(bloom_filter *filter);
+extern uint64 bloom_get_seed(bloom_filter *filter);
+extern int bloom_get_k(bloom_filter *filter);
 
 #endif							/* BLOOMFILTER_H */

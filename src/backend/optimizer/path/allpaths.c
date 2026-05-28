@@ -63,6 +63,10 @@
 #include "cdb/cdbutil.h"
 #include "cdb/cdbvars.h"
 
+#include "optimizer/optimizer.h"
+
+#include "access/attmap.h"
+
 // TODO: these planner gucs need to be refactored into PlannerConfig.
 bool		gp_enable_sort_limit = false;
 
@@ -172,6 +176,18 @@ static void bring_to_singleQE(PlannerInfo *root, RelOptInfo *rel);
 static bool is_query_contain_limit_groupby(Query *parse);
 static void handle_gen_seggen_volatile_path(PlannerInfo *root, RelOptInfo *rel);
 
+static List *
+collect_cte_quals(PlannerInfo *root, RelOptInfo *rel,
+				   RangeTblEntry *rte, Index rti, Query *subquery);
+
+static void subquery_push_qual_cte(Query *subquery, Relids relids, Node *qual);
+
+static void
+remove_cte_unused_subquery_outputs(CtePlanInfo * cteplaninfo);
+
+static void
+set_subquery_window_filter (PlannerInfo *root, RelOptInfo *rel,
+				   RangeTblEntry *rte, Index rti, Query *subquery);
 
 /*
  * make_one_rel
@@ -995,6 +1011,7 @@ set_rel_consider_parallel(PlannerInfo *root, RelOptInfo *rel,
 
 		case RTE_CTE:
 
+#if 0
 			/*
 			 * CTE tuplestores aren't shared among parallel workers, so we
 			 * force all CTE scans to happen in the leader.  Also, populating
@@ -1003,7 +1020,16 @@ set_rel_consider_parallel(PlannerInfo *root, RelOptInfo *rel,
 			 * executed only once.
 			 */
 			return;
-
+#endif
+			/*
+			 * CBDB_PARALLEL:
+			 * For shared CTE, we gater partial path to single worker:
+			 * producer. Unlinke UPSTREAM, CBDB might add path(parallel_worker=0) with
+			 * subpaths(parallel_workers > 1) into pathlist with help of Motion.
+			 * So that we could be parallel.
+			 * For no-shared CTE, there is no such problem.
+			 */
+			break;
 		case RTE_VOID:
 
 			/*
@@ -2536,6 +2562,10 @@ set_subquery_pathlist(PlannerInfo *root, RelOptInfo *rel,
 		 */
 		subquery = push_down_restrict(root, rel, rte, rti, subquery);
 
+		/* set_subquery_window_filter */
+		if (cbdb_enable_multi_window_agg)
+			set_subquery_window_filter(root, rel, rte, rti, subquery);
+
 		/*
 		 * The upper query might not use all the subquery's output columns; if
 		 * not, we can simplify.
@@ -2856,6 +2886,81 @@ set_tablefunction_pathlist(PlannerInfo *root, RelOptInfo *rel, RangeTblEntry *rt
 	}
 }
 
+static void
+recurse_push_qual_cte(Node *setOp, Query *topquery,
+				   Relids relids, Node *qual)
+{
+	if (IsA(setOp, RangeTblRef))
+	{
+		RangeTblRef *rtr = (RangeTblRef *) setOp;
+		RangeTblEntry *subrte = rt_fetch(rtr->rtindex, topquery->rtable);
+		Query	   *subquery = subrte->subquery;
+
+		Assert(subquery != NULL);
+		subquery_push_qual_cte(subquery, relids, qual);
+	}
+	else if (IsA(setOp, SetOperationStmt))
+	{
+		SetOperationStmt *op = (SetOperationStmt *) setOp;
+
+		recurse_push_qual_cte(op->larg, topquery, relids, qual);
+		recurse_push_qual_cte(op->rarg, topquery, relids, qual);
+	}
+	else
+	{
+		elog(ERROR, "unrecognized node type: %d",
+			 (int) nodeTag(setOp));
+	}
+}
+
+/*
+ * subquery_push_qual - push down a qual that we have determined is safe
+ */
+static void
+subquery_push_qual_cte(Query *subquery, Relids relids, Node *qual)
+{
+	if (subquery->setOperations != NULL)
+	{
+		/* Recurse to push it separately to each component query */
+		recurse_push_qual_cte(subquery->setOperations, subquery,
+						  relids, qual);
+	}
+	else
+	{
+		/*
+		 * We need to replace Vars in the qual (which must refer to outputs of
+		 * the subquery) with copies of the subquery's targetlist expressions.
+		 * Note that at this point, any uplevel Vars in the qual should have
+		 * been replaced with Params, so they need no work.
+		 *
+		 * This step also ensures that when we are pushing into a setop tree,
+		 * each component query gets its own copy of the qual.
+		 */
+		qual = ReplaceVarsFromTargetList_CTE(qual, relids, 0,
+										 subquery->targetList,
+										 REPLACEVARS_REPORT_ERROR, 0,
+										 &subquery->hasSubLinks);
+
+		/*
+		 * Now attach the qual to the proper place: normally WHERE, but if the
+		 * subquery uses grouping or aggregation, put it in HAVING (since the
+		 * qual really refers to the group-result rows).
+		 */
+		if (subquery->hasAggs || subquery->groupClause || subquery->groupingSets || subquery->havingQual)
+		{
+			subquery->havingQual = (Node *) make_and_qual(subquery->havingQual, qual);
+		}
+		else
+			subquery->jointree->quals = make_and_qual(subquery->jointree->quals, qual);
+
+		/*
+		 * We need not change the subquery's hasAggs or hasSubLinks flags,
+		 * since we can't be pushing down any aggregates that weren't there
+		 * before, and we don't push down subselects at all.
+		 */
+	}
+}
+
 /*
  * set_values_pathlist
  *		Build the (single) access path for a VALUES RTE
@@ -3014,8 +3119,27 @@ set_cte_pathlist(PlannerInfo *root, RelOptInfo *rel, RangeTblEntry *rte)
 			break;
 		default:
 			/* if plan sharing is enabled and contains volatile functions in the CTE query, also generate a shared scan plan */
-			is_shared =  root->config->gp_cte_sharing && (cte->cterefcount > 1 || contain_volatile_function);
+			/*
+			 * we must use shared scan if there is volatile function, even gp_cte_sharing is false.
+			 * SELECT count(*) FROM (
+			 *  WITH q1(x) AS (SELECT random() FROM generate_series(1, 5))
+			 *	SELECT * FROM q1
+			 *  UNION
+			 *	SELECT * FROM q1
+			 * ) ss;
+			 *
+			 */
+			{
+				if (contain_volatile_function)
+					is_shared = true;
+				else if (cte->cterefcount <= 1) /* XXX: could it be 0 ? */
+					is_shared = false;
+				else
+					is_shared = root->config->gp_cte_sharing;
 
+				if (Gp_role == GP_ROLE_EXECUTE)
+					is_shared = false;
+			}
 	}
 
 	/*
@@ -3025,6 +3149,17 @@ set_cte_pathlist(PlannerInfo *root, RelOptInfo *rel, RangeTblEntry *rte)
 	if (is_shared && contain_outer_selfref(cte->ctequery))
 		is_shared = false;
 
+	if (cte->cterecursive ||
+		cteroot->hasRecursion ||
+		root->hasRecursion ||
+		root->glob->under_recursive_cte ||
+		(cteroot->parent_root && cteroot->parent_root->glob->under_recursive_cte))
+	{
+		cteroot->glob->under_recursive_cte = true;
+		is_shared = false;
+	}
+
+
 	if (!is_shared)
 	{
 		PlannerConfig *config = CopyPlannerConfig(root->config);
@@ -3033,7 +3168,6 @@ set_cte_pathlist(PlannerInfo *root, RelOptInfo *rel, RangeTblEntry *rte)
 		 * Having multiple SharedScans can lead to deadlocks. For now,
 		 * disallow sharing of ctes at lower levels.
 		 */
-		config->gp_cte_sharing = false;
 
 		config->honor_order_by = false;
 
@@ -3063,6 +3197,8 @@ set_cte_pathlist(PlannerInfo *root, RelOptInfo *rel, RangeTblEntry *rte)
 			subroot = subquery_planner(cteroot->glob, subquery, root,
 									   cte->cterecursive,
 									   tuple_fraction, config);
+
+			sub_final_rel = fetch_upper_rel(subroot, UPPERREL_FINAL, NULL);
 		}
 		else
 		{
@@ -3095,11 +3231,75 @@ set_cte_pathlist(PlannerInfo *root, RelOptInfo *rel, RangeTblEntry *rte)
 
 			config->honor_order_by = false;
 
+			/*
+			 * collect all quals
+			 * make them with OR clause
+			 * push down to subquery
+			 * keep rel's baserestrictioninfo as original
+			 * reset rels->{root, paths, keys and etc.}
+			 * if one have no qual, should be XXX OR (TRUE) ?
+			 */
+
+			cteplaninfo->subquery = copyObject(subquery);
+
 			subroot = subquery_planner(cteroot->glob, subquery, cteroot, cte->cterecursive,
 									   tuple_fraction, config);
 
 			/* Select best Path and turn it into a Plan */
 			sub_final_rel = fetch_upper_rel(subroot, UPPERREL_FINAL, NULL);
+
+			cteplaninfo->subroot = subroot;
+			cteplaninfo->push_quals_possible = true;
+			cteplaninfo->save_columns_possible = true;
+			if (!contain_volatile_function &&
+				(cte->ctematerialized == CTEMaterializeDefault) && /* Don't change if user has the decision. */
+				cbdb_enable_dynamic_shared_scan &&
+				(sub_final_rel->cheapest_total_path->rows >= 10 * cte->cterefcount * sub_final_rel->cheapest_total_path->total_cost))
+			{
+				root->config->gp_cte_sharing = false;
+				cteplaninfo->push_quals_possible = false;
+				cteplaninfo->subroot = NULL;
+				cte->ctematerialized = CTEMaterializeNever;
+				is_shared = false;
+			}
+			subroot->is_shared_scan = is_shared;
+
+			if (is_shared)
+			{
+				if (!IS_DUMMY_REL(sub_final_rel) && (sub_final_rel->partial_pathlist != NIL))
+				{
+					Path * partial_path = (Path*) linitial(sub_final_rel->partial_pathlist);
+
+					if (partial_path->parallel_workers <= 1)
+						add_path(sub_final_rel, partial_path, subroot);
+					else
+					{
+						if (!IsA(partial_path, Motion))
+						{
+							CdbPathLocus locus = cdbpathlocus_from_subquery(root, sub_final_rel, partial_path);
+							locus.parallel_workers = 0;
+							/*
+							 * We force to add a Motion to gather partial paths becuase Shared Scan producer could be only
+							 * one process to write tuples.
+							 * But the locus might be not fit enough for join, ex: HashedWrokers with parallel_workers would be
+							 * buggy. And a Redistribute Motion will make HashedWorkers to be Hashed.
+							 */
+							if (CdbPathLocus_IsHashedWorkers(locus))
+								locus.locustype = CdbLocusType_Hashed;
+
+							partial_path = cdbpath_create_motion_path(subroot,
+																		partial_path,
+																		partial_path->pathkeys,
+																		false,
+																		locus);
+
+							add_path(sub_final_rel, partial_path, subroot);
+						}
+					}
+				}
+			}
+
+			set_cheapest(sub_final_rel);
 
 			/*
 			 * we cannot use different plans for different instances of this CTE
@@ -3107,10 +3307,223 @@ set_cte_pathlist(PlannerInfo *root, RelOptInfo *rel, RangeTblEntry *rte)
 			 */
 			sub_final_rel->pathlist = list_make1(sub_final_rel->cheapest_total_path);
 
-			cteplaninfo->subroot = subroot;
 		}
 		else
 			subroot = cteplaninfo->subroot;
+
+		// collect, tlist, joininfo, baserestrioninfo
+		Bitmapset  *attrs_used = NULL;
+		pull_varattnos((Node *)rel->reltarget->exprs, rel->relid, &attrs_used);
+		foreach(lc, rel->baserestrictinfo)
+		{
+			RestrictInfo *rinfo = (RestrictInfo *) lfirst(lc);
+
+			pull_varattnos((Node *) rinfo->clause, rel->relid, &attrs_used);
+		}
+		cteplaninfo->attrs_used = bms_union(cteplaninfo->attrs_used, attrs_used);
+
+		if (cteplaninfo->save_columns_possible)
+		{
+			/* If there is whole row, we can't save any columns. */
+			if (bms_is_member(-FirstLowInvalidHeapAttributeNumber, cteplaninfo->attrs_used))
+				cteplaninfo->save_columns_possible = false;
+			else
+				cteplaninfo->save_columns_possible = (bms_num_members(cteplaninfo->attrs_used) != list_length(cteplaninfo->subquery->targetList));
+		}
+
+		if (cteplaninfo->push_quals_possible || cteplaninfo->save_columns_possible)
+		{
+			/* Also replace Vars with subquery's targetlist */
+			List *quals = collect_cte_quals(root, rel, rte, rel->relid, subquery);
+			cteplaninfo->rels = lappend(cteplaninfo->rels, rel);
+			cteplaninfo->relids = bms_add_member(cteplaninfo->relids, rel->relid);
+
+			if (quals != NIL)
+				cteplaninfo->list_quals = lappend(cteplaninfo->list_quals, make_andclause(quals));
+			else
+			{
+				/* if quals is NIL, it means a cte ref need all the data from cte */
+				cteplaninfo->push_quals_possible = false;
+				cteplaninfo->list_quals = NIL;
+			}
+
+
+			if (list_length(cteplaninfo->rels) == cte->cterefcount &&
+				(cteplaninfo->push_quals_possible || cteplaninfo->save_columns_possible))
+			{
+				/* Do a second plan for shared cte. */
+
+				PlannerConfig *config = CopyPlannerConfig(root->config);
+
+				/*
+				 * Having multiple SharedScans can lead to deadlocks. For now,
+				 * disallow sharing of ctes at lower levels.
+				 */
+				config->gp_cte_sharing = false;
+
+				config->honor_order_by = false;
+
+				if (cteplaninfo->push_quals_possible)
+				{
+					Expr *new_quals = convert_expr_to_cnf_complete(make_orclause(cteplaninfo->list_quals));
+
+					List *quals = make_ands_implicit(new_quals);
+
+					ListCell   *lc;
+					// hack to make varno = 1 in bms
+					cteplaninfo->relids = bms_add_member(cteplaninfo->relids, 1);
+					foreach(lc, quals)
+					{
+						subquery_push_qual_cte(cteplaninfo->subquery, cteplaninfo->relids, (Node *)lfirst(lc));
+					}
+				}
+
+				// remove unused columns
+				if (cteplaninfo->save_columns_possible)
+					remove_cte_unused_subquery_outputs(cteplaninfo);
+
+				subroot = subquery_planner(cteroot->glob, cteplaninfo->subquery, cteroot, cte->cterecursive,
+											   tuple_fraction, config);
+
+				/* Select best Path and turn it into a Plan */
+				sub_final_rel = fetch_upper_rel(subroot, UPPERREL_FINAL, NULL);
+
+				/*
+				 * we cannot use different plans for different instances of this CTE
+				 * reference, so keep only the cheapest one.
+				 */
+
+				if (!IS_DUMMY_REL(sub_final_rel) && (sub_final_rel->partial_pathlist != NIL))
+				{
+					Path * partial_path = (Path*) linitial(sub_final_rel->partial_pathlist);
+
+					if (partial_path->parallel_workers <= 1)
+						add_path(sub_final_rel, partial_path, subroot);
+					else
+					{
+						if (!IsA(partial_path, Motion))
+						{
+							CdbPathLocus locus = cdbpathlocus_from_subquery(root, sub_final_rel, partial_path);
+							locus.parallel_workers = 0;
+							/*
+							 * See comments above.
+							 */
+							if (CdbPathLocus_IsHashedWorkers(locus))
+								locus.locustype = CdbLocusType_Hashed;
+
+							partial_path = cdbpath_create_motion_path(subroot,
+																		partial_path,
+																		partial_path->pathkeys,
+																		false,
+																		locus);
+
+							add_path(sub_final_rel, partial_path, subroot);
+						}
+					}
+				}
+
+				set_cheapest(sub_final_rel);
+
+				sub_final_rel->pathlist = list_make1(sub_final_rel->cheapest_total_path);
+
+				cteplaninfo->subroot = subroot;
+
+				Path *best_path = sub_final_rel->cheapest_total_path;
+				CdbPathLocus locus;
+				double		sub_total_rows = 0;
+
+				if (!IS_DUMMY_REL(sub_final_rel))
+				{
+					double		numsegments;
+
+					if (CdbPathLocus_IsPartitioned(sub_final_rel->cheapest_total_path->locus))
+						numsegments = CdbPathLocus_NumSegments(sub_final_rel->cheapest_total_path->locus);
+					else
+						numsegments = 1;
+					sub_total_rows = sub_final_rel->cheapest_total_path->rows * numsegments;
+
+				}
+
+				if (sub_total_rows == 0)
+					sub_total_rows = 1;
+
+				foreach (lc, cteplaninfo->rels)
+				{
+					RelOptInfo *cte_rel = (RelOptInfo*) lfirst(lc);
+					Relids required_outer = cte_rel->lateral_relids;
+					Path *cte_path = NULL;
+
+					if (IS_DUMMY_REL(sub_final_rel))
+					{
+						set_dummy_rel_pathlist(root, cte_rel);
+						continue;
+					}
+
+					/*
+					 * Set size estimates per consumer, respecting RTE type.
+					 * CTE consumers that appear as RTE_SUBQUERY (e.g. inside
+					 * a subquery wrapper) need set_subquery_size_estimates.
+					 */
+					RangeTblEntry *cte_rte = planner_rt_fetch(cte_rel->relid, root);
+					if (cte_rte->rtekind == RTE_CTE)
+						set_cte_size_estimates(root, cte_rel, sub_total_rows);
+					else if (cte_rte->rtekind == RTE_SUBQUERY)
+						set_subquery_size_estimates(root, cte_rel);
+					else
+						Assert(false);
+
+					/*
+					 * Compute locus and pathkeys per consumer rel so that
+					 * distribution key Vars reference each consumer's own
+					 * relid.  Sharing a single producer-based locus caused
+					 * the planner to treat different CTE references as
+					 * co-located, skipping necessary Redistribute Motions
+					 * (e.g. TPC-DS Q75 self-join on a subset of GROUP BY
+					 * keys).
+					 */
+					locus = cdbpathlocus_from_subquery(root, cte_rel, best_path);
+					pathkeys = convert_subquery_pathkeys(root, cte_rel, best_path->pathkeys,
+														 make_tlist_from_pathtarget(best_path->pathtarget));
+
+					cte_rel->subroot = subroot;
+
+					/* truncate preivous path */
+					cte_rel->pathlist = NIL;
+					cte_path =  create_ctescan_path(root,
+													  cte_rel,
+													  NULL /* is_shared */,
+													  locus,
+													  pathkeys,
+													  required_outer);
+
+					/* Correct the hazrads here using best_path_ */
+					cte_path->barrierHazard = best_path->barrierHazard;
+					cte_path->motionHazard = best_path->motionHazard;
+
+					/* Generate appropriate path */
+					add_path(cte_rel, cte_path, root);
+
+					/*
+					 * For shared scan, we must gather parallel to write tuples in producer. 
+					 * We also do that in partial_pathlist for possible parallel.
+					 */
+					if (rel->consider_parallel)
+					{
+						cte_path = create_ctescan_path(root,
+													  rel,
+													  NULL /* is_shared */,
+													  locus,
+													  pathkeys,
+													  required_outer);
+
+						cte_path->barrierHazard = best_path->barrierHazard;
+						cte_path->motionHazard = best_path->motionHazard;
+						add_partial_path(rel,  cte_path);
+					}
+				}
+				return;
+			}
+		}
 	}
 	rel->subroot = subroot;
 
@@ -3159,21 +3572,78 @@ set_cte_pathlist(PlannerInfo *root, RelOptInfo *rel, RangeTblEntry *rte)
 		Path	   *subpath = (Path *) lfirst(lc);
 		List	   *pathkeys;
 		CdbPathLocus locus;
+		Path		*cte_path = NULL;
 
 		locus = cdbpathlocus_from_subquery(root, rel, subpath);
 
 		/* Convert subquery pathkeys to outer representation */
 		pathkeys = convert_subquery_pathkeys(root, rel, subpath->pathkeys,
 											 make_tlist_from_pathtarget(subpath->pathtarget));
-
-		/* Generate appropriate path */
-		add_path(rel, create_ctescan_path(root,
+		
+		cte_path = create_ctescan_path(root,
 										  rel,
 										  is_shared ? NULL : subpath,
 										  locus,
 										  pathkeys,
-										  required_outer),
-				 root);
+										  required_outer);
+		if (is_shared)
+		{
+			/* if shared, there could be only one path of sub_final_rel. */
+			cte_path->barrierHazard = subpath->barrierHazard;
+			cte_path->motionHazard = subpath->motionHazard;
+		}
+
+		/* Generate appropriate path */
+		add_path(rel, cte_path, root);
+	}
+
+	/* Also add partial paths for cte, for possibile paralle join and etc. */
+	if (sub_final_rel->partial_pathlist != NIL)
+	{
+		List	   *pathkeys;
+		CdbPathLocus locus;
+		Path * subpath;
+
+		/* Generate appropriate path */
+		if (!is_shared)
+		{
+			subpath = (Path*) linitial(sub_final_rel->partial_pathlist);
+			locus = cdbpathlocus_from_subquery(root, rel, subpath);
+
+			/* Convert subquery pathkeys to outer representation */
+			pathkeys = convert_subquery_pathkeys(root, rel, subpath->pathkeys,
+											 make_tlist_from_pathtarget(subpath->pathtarget));
+			add_partial_path(rel, create_ctescan_path(root,
+									  rel,
+									  subpath,
+									  locus,
+									  pathkeys,
+									  required_outer));
+		}
+		else if (rel->consider_parallel)
+		{
+			/*
+			 * For shared scan, we must gather parallel to write tuples in producer. 
+			 * We also do that in partial_pathlist for possible parallel.
+			 */
+			Assert(sub_final_rel->cheapest_total_path);
+			subpath = sub_final_rel->cheapest_total_path;
+			locus = cdbpathlocus_from_subquery(root, rel, subpath);
+			/* Convert subquery pathkeys to outer representation */
+			pathkeys = convert_subquery_pathkeys(root, rel, subpath->pathkeys,
+											 make_tlist_from_pathtarget(subpath->pathtarget));
+
+			Path	*cte_path = create_ctescan_path(root,
+										  rel,
+										  NULL /* is_shared */,
+										  locus,
+										  pathkeys,
+										  required_outer);
+
+			cte_path->barrierHazard = subpath->barrierHazard;
+			cte_path->motionHazard = subpath->motionHazard;
+			add_partial_path(rel, cte_path);
+		}
 	}
 }
 
@@ -4004,6 +4474,153 @@ push_down_restrict(PlannerInfo *root, RelOptInfo *rel,
 	return subquery;
 }
 
+static void
+set_subquery_window_filter (PlannerInfo *root, RelOptInfo *rel,
+				   RangeTblEntry *rte, Index rti, Query *subquery)
+{
+	Node* window_filter = NULL;
+	WindowFunc* winfunc_candidate = NULL;
+	int winref = 0;
+	ListCell *lc = NULL;
+	TargetEntry *tle = NULL;
+	int *window_attr_refs;
+
+	if(!subquery->hasWindowFuncs ||
+		rel->baserestrictinfo == NIL)
+		return;
+
+	int size = list_length(subquery->targetList);
+	window_attr_refs = (int*) palloc0(size*sizeof(int));
+
+	foreach(lc, subquery->targetList)
+	{
+		tle = (TargetEntry *)lfirst(lc);
+		if (IsA(tle->expr, WindowFunc))
+		{
+			WindowFunc* winfunc = (WindowFunc*) (tle->expr);
+			if (winfunc->winfnoid == F_RANK_ ||
+				winfunc->winfnoid == F_DENSE_RANK_)
+				window_attr_refs[tle->resno - 1] = winfunc->winref;
+		}
+	}
+
+	foreach(lc, rel->baserestrictinfo)
+	{
+		RestrictInfo *rinfo = (RestrictInfo *) lfirst(lc);
+		Node	   *clause = (Node *) rinfo->clause;
+
+		if (rinfo->pseudoconstant)
+			continue;
+
+		if (!IsA(clause, OpExpr))
+			continue;
+
+		OpExpr *op = (OpExpr*) clause;
+		if (op->opno != 420 /* <= */ &&
+			op->opno != 418 /* < */)
+			continue;
+
+		if (list_length(op->args) != 2)
+			continue;
+
+		Node * leftop = (Node *) linitial(op->args);
+		Node * rightop = (Node *) lsecond(op->args);
+		if (!IsA(leftop, Var) ||
+			!IsA(rightop, Const))
+			continue;
+		
+		Var *var = (Var*) leftop;
+
+		if (var->varno != rti)
+			continue;
+
+		if (window_attr_refs[var->varattno - 1] == 0)
+			continue;
+
+		/* fail if there were already one. */
+		if (window_filter != NULL)
+		{
+			pfree(window_attr_refs);
+			return;
+		}
+	
+		/* Now we found a candidate. */
+		window_filter = clause;
+		winref = window_attr_refs[var->varattno - 1];
+		TargetEntry *tle = (TargetEntry *) list_nth(subquery->targetList, var->varattno -1);
+		Assert(IsA(tle->expr, WindowFunc));
+		winfunc_candidate = (WindowFunc*)copyObject(tle->expr);
+
+	}
+
+	if (window_filter)
+	{
+		root->lower_window_filter = copyObject(window_filter);
+		/* record window expr, as var will be replaced later. */
+		list_nth_replace(((OpExpr *) root->lower_window_filter)->args, 0, winfunc_candidate);
+		root->lower_window_filter_winref = winref;
+	}
+	pfree(window_attr_refs);
+
+	return;
+}
+
+/*
+ * collect_cte_quals - Collect pushdown-safe quals from CTE references
+ *
+ * Returns a list of qual expressions that can be safely pushed down
+ * into the CTE subquery.
+ */
+static List *
+collect_cte_quals(PlannerInfo *root, RelOptInfo *rel,
+				   RangeTblEntry *rte, Index rti, Query *subquery)
+{
+	List *quals = NIL;
+
+	pushdown_safety_info safetyInfo;
+
+	/* Nothing to do here if it doesn't have qual at all */
+	if (rel->baserestrictinfo == NIL)
+		return NIL;
+
+	memset(&safetyInfo, 0, sizeof(safetyInfo));
+	safetyInfo.unsafeColumns = (bool *)
+		palloc0((list_length(subquery->targetList) + 1) * sizeof(bool));
+
+	safetyInfo.unsafeLeaky = rte->security_barrier;
+
+	if (subquery_is_pushdown_safe(subquery, subquery, &safetyInfo))
+	{
+		/* OK to consider pushing down individual quals */
+		ListCell   *l;
+
+		foreach(l, rel->baserestrictinfo)
+		{
+			RestrictInfo *rinfo = (RestrictInfo *) lfirst(l);
+			Node	   *qual= (Node *) rinfo->clause;
+
+			if (!rinfo->pseudoconstant &&
+				qual_is_pushdown_safe(subquery, rti, rinfo, &safetyInfo))
+			{
+				// TODO: replace varno to the subquery itself.
+				// Is it possible that baseresctictinfo has quals with sublink or whole row? 
+
+				qual = ReplaceVarnoFromSubquery(qual, rti, 0, rte,
+												 subquery->targetList,
+												 REPLACEVARS_REPORT_ERROR, 0,
+												 &subquery->hasSubLinks);
+				/* valid quals */
+				quals = lappend(quals, qual);
+			}
+		}
+	}
+	pfree(safetyInfo.unsafeColumns);
+	quals = list_copy_deep(quals);
+
+	return quals;
+}
+
+
 /*
  * subquery_is_pushdown_safe - is a subquery safe for pushing down quals?
  *
@@ -4483,8 +5100,7 @@ subquery_push_qual(Query *subquery, RangeTblEntry *rte, Index rti, Node *qual)
 		if (subquery->hasAggs || subquery->groupClause || subquery->groupingSets || subquery->havingQual)
 			subquery->havingQual = make_and_qual(subquery->havingQual, qual);
 		else
-			subquery->jointree->quals =
-				make_and_qual(subquery->jointree->quals, qual);
+			subquery->jointree->quals = make_and_qual(subquery->jointree->quals, qual);
 
 		/*
 		 * We need not change the subquery's hasAggs or hasSubLinks flags,
@@ -4527,6 +5143,71 @@ recurse_push_qual(Node *setOp, Query *topquery,
 /*****************************************************************************
  *			SIMPLIFYING SUBQUERY TARGETLISTS
  *****************************************************************************/
+
+static void
+remove_cte_unused_subquery_outputs(CtePlanInfo * cteplaninfo)
+{
+	ListCell   *lc;
+	AttrMap    *attrMap;
+	Query *subquery = cteplaninfo->subquery;
+	Bitmapset *attrs_used = cteplaninfo->attrs_used;
+	int new_resno = 1;
+
+	attrMap = make_attrmap(list_length(subquery->targetList));
+
+ 	foreach(lc, subquery->targetList)
+ 	{
+ 		TargetEntry *tle = (TargetEntry *) lfirst(lc);
+ 		Node	   *texpr = (Node *) tle->expr;
+ 
+ 
+ 		if (!bms_is_member(tle->resno - FirstLowInvalidHeapAttributeNumber, attrs_used))
+		{
+			attrMap->attnums[tle->resno - 1] = 0; // no upper need this
+		}
+		else
+		{
+			attrMap->attnums[tle->resno - 1] = new_resno;
+			new_resno++;
+			//new_tlist = lappend(new_tlist, (TargetEntry *) copyObject(tle));
+			continue;
+		}
+
+ 		/*
+ 		 * If it has a sortgroupref number, it's used in some sort/group
+ 		 * clause so we'd better not remove it.  Also, don't remove any
+ 		 * resjunk columns, since their reason for being has nothing to do
+ 		 * with anybody reading the subquery's output.  (It's likely that
+ 		 * resjunk columns in a sub-SELECT would always have ressortgroupref
+ 		 * set, but even if they don't, it seems imprudent to remove them.)
+ 		 */
+ 		if (tle->ressortgroupref || tle->resjunk)
+ 			continue;
+
+ 		if (subquery->setOperations)
+ 			continue;
+ 
+ 		if (subquery->distinctClause && !subquery->hasDistinctOn)
+ 			continue;
+
+ 		if (subquery->hasTargetSRFs &&
+ 			expression_returns_set(texpr))
+ 			continue;
+ 
+ 		if (contain_volatile_functions(texpr))
+ 			continue;
+ 
+ 		/*
+ 		 * OK, we don't need it.  Replace the expression with a NULL constant.
+ 		 * Preserve the exposed type of the expression, in case something
+ 		 * looks at the rowtype of the subquery's result.
+ 		 */
+ 		tle->expr = (Expr *) makeNullConst(exprType(texpr),
+ 										   exprTypmod(texpr),
+ 										   exprCollation(texpr));
+	}
+	cteplaninfo->attr_map = attrMap;
+}
 
 /*
  * remove_unused_subquery_outputs
@@ -5272,3 +5953,5 @@ debug_print_rel(PlannerInfo *root, RelOptInfo *rel)
 }
 
 #endif							/* OPTIMIZER_DEBUG */
+
+

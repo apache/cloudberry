@@ -214,6 +214,21 @@ static Plan *cdb_insert_result_node(PlannerInfo *root,
 static bool cdb_extract_plan_dependencies_walker(Node *node,
 									 cdb_extract_plan_dependencies_context *context);
 
+static CtePlanInfo *
+get_cte_plan_info(Plan *plan);
+
+typedef struct CteAttrMapContext
+{
+	Relids	relids;
+	AttrNumber *newattno; /* The mapping table to remap the varattno */
+} CteAttrMapContext;
+
+static bool
+change_varattnos_of_ShareInputScan_walker(Node *node, const CteAttrMapContext *attrMapCxt);
+
+static void
+change_varattnos_of_ShareInputScan(Node *node, CtePlanInfo *cteplaninfo);
+
 #ifdef USE_ASSERT_CHECKING
 #include "cdb/cdbplan.h"
 
@@ -1570,6 +1585,49 @@ set_indexonlyscan_references(PlannerInfo *root,
 	return (Plan *) plan;
 }
 
+CtePlanInfo *
+get_cte_plan_info(Plan *plan)
+{
+	Assert(IsA(plan, ShareInputScan));
+	return ((ShareInputScan*) plan)->cteplaninfo;
+}
+
+/*
+ * Remaps the varattno of a varattno in a Var node using an attribute map.
+ */
+static bool
+change_varattnos_of_ShareInputScan_walker(Node *node, const CteAttrMapContext *attrMapCxt)
+{
+	if (node == NULL)
+		return false;
+	if (IsA(node, Var))
+	{
+		Var		   *var = (Var *) node;
+
+		if (var->varlevelsup == 0 &&
+			var->varattno > 0 &&
+			bms_is_member(var->varno, attrMapCxt->relids))
+		{
+			Assert(attrMapCxt->newattno[var->varattno - 1]);
+			var->varattno = var->varattnosyn = attrMapCxt->newattno[var->varattno - 1];
+		}
+		return false;
+	}
+	return expression_tree_walker(node, change_varattnos_of_ShareInputScan_walker,
+								  (void *) attrMapCxt);
+}
+
+static void
+change_varattnos_of_ShareInputScan(Node *node, CtePlanInfo *cteplaninfo)
+{
+	CteAttrMapContext attrMapCxt;
+
+	attrMapCxt.newattno = cteplaninfo->attr_map->attnums;
+	attrMapCxt.relids = cteplaninfo->relids;
+
+	(void) change_varattnos_of_ShareInputScan_walker(node, &attrMapCxt);
+}
+
 /*
  * set_subqueryscan_references
  *		Do set_plan_references processing on a SubqueryScan
@@ -1584,6 +1642,9 @@ set_subqueryscan_references(PlannerInfo *root,
 {
 	RelOptInfo *rel;
 	Plan	   *result;
+	bool is_producer = false;
+	CtePlanInfo *cteplaninfo = NULL;
+	bool 	omit_subqueryscan = true;
 
 	/* Need to look up the subquery's RelOptInfo, since we need its subroot */
 	rel = find_base_rel(root, plan->scan.scanrelid);
@@ -1591,7 +1652,22 @@ set_subqueryscan_references(PlannerInfo *root,
 	/* Recursively process the subplan */
 	plan->subplan = set_plan_references(rel->subroot, plan->subplan);
 
-	if (trivial_subqueryscan(plan))
+	if (IsA(plan->subplan, ShareInputScan))
+	{
+		if (plan->subplan->lefttree != NULL)
+			is_producer = true;
+
+		cteplaninfo = get_cte_plan_info(plan->subplan);
+
+		if (cteplaninfo && cteplaninfo->attr_map != NULL)
+			omit_subqueryscan = false; /* can not omit as we will adjust columns.*/
+	}
+
+	/*
+	 * Producer needs to insert Result node, so don't omit here.
+	 * Consumer needs to adjust targetlist too.
+	 */
+	if (omit_subqueryscan && trivial_subqueryscan(plan))
 	{
 		/*
 		 * We can omit the SubqueryScan node and just pull up the subplan.
@@ -1609,14 +1685,184 @@ set_subqueryscan_references(PlannerInfo *root,
 		 */
 		plan->scan.scanrelid += rtoffset;
 
-		//Assert(plan->scan.scanrelid <= list_length(glob->finalrtable) && "Scan node's relid is outside the finalrtable!");
+		if (IsA(plan->subplan, ShareInputScan) &&
+			cteplaninfo &&
+			(cteplaninfo->attr_map != NULL))
+		{
+			/*
+			 * Subquery [attno: 5]
+			 *	-> ShareInputScan arrno[1, 2, 3, 4, 5]
+			 *		->lefttree attrno [1, 2, 3, 4, 5]
+			 *
+			 *
+			 * Subquery [attno: 1]
+			 *	-> ShareInputScan arrno[1]
+			 * 		-> Result [attno: 5]
+			 *			->lefttree attrno [1, 2, 3, 4, 5]
+			 */
+			List *new_tlist = NIL;
+			ListCell *lc;
+			foreach(lc, plan->subplan->targetlist)
+			{
+				TargetEntry *tle = (TargetEntry*) lfirst(lc);
+				AttrNumber new_resno = cteplaninfo->attr_map->attnums[tle->resno - 1];
+				if (new_resno != 0)
+				{
+					// we need this column
+					TargetEntry *newtle = flatCopyTargetEntry(tle);
+					newtle->resno = new_resno;
+					newtle->ressortgroupref = 0 ;
+					Var *new_var = (Var *)copyObject(tle->expr);
+					newtle->expr = (Expr *) new_var;
+					new_tlist = lappend(new_tlist, newtle);
+				}
+			}
 
+			if (is_producer)
+			{
+				/* insert result node */
+				Plan	   *resultplan;
+				resultplan = (Plan *) make_result(new_tlist, NULL, plan->subplan->lefttree);
+				resultplan->flow = plan->subplan->lefttree->flow;
+
+				plan->subplan->lefttree = resultplan;
+				/* we must update the shared plan for correct tlist used later. */
+				root->glob->share.shared_plans[((ShareInputScan*)plan->subplan)->share_id] = resultplan;
+			}
+
+			plan->subplan->targetlist = copyObject(new_tlist);
+			foreach(lc, plan->subplan->targetlist)
+			{
+				TargetEntry *tle = (TargetEntry*) lfirst(lc);
+				Var *var = (Var *)tle->expr;
+				var->varattno = tle->resno;
+			}
+
+			foreach (lc, plan->scan.plan.targetlist)
+			{
+				TargetEntry *tle = (TargetEntry *)lfirst(lc);
+				Var *var = (Var *)tle->expr;
+
+				/* Don't touch other refs. */
+				if (!bms_is_member(var->varno, cteplaninfo->relids))
+					continue;
+
+				/*
+				 * We must eliminate tlist that are not used by making nulls like UPSTREAM.
+				 * But don't correct varattno here as the var could be inside expression
+				 * recursively, do it in change_varattnos_of_ShareInputScan().
+				 */
+				if (var->varattno == 0)
+				{
+					/* whole row, don't change. */
+				}
+				else if (cteplaninfo->attr_map->attnums[var->varattno - 1] == 0)
+				{
+					tle->expr = (Expr *)makeNullConst(exprType((Node *)var),
+													   exprTypmod((Node *)var),
+													   exprCollation((Node *)var));
+				}
+
+				/*
+				 * resno, attno: (1, 1), (2, 2), (3, 3), (4, 4), (5, 5)
+				 * used attno: 2, 4
+				 * resno, attno: (1, null), (2, 1), (3, null), (4, 2), (5, null)
+				 *
+				 * SELECT * from gp_toolkit.gp_partitions where schemaname = 'public'
+				 * and tablename = 'partrl' and partitionlevel = 1 order by partitionrank;
+				 */
+			}
+			change_varattnos_of_ShareInputScan((Node *)plan->scan.plan.targetlist, cteplaninfo);
+			change_varattnos_of_ShareInputScan((Node *)plan->scan.plan.qual, cteplaninfo);
+		}
 		plan->scan.plan.targetlist =
 			fix_scan_list(root, plan->scan.plan.targetlist,
 						  rtoffset, NUM_EXEC_TLIST((Plan *) plan));
 		plan->scan.plan.qual =
 			fix_scan_list(root, plan->scan.plan.qual,
 						  rtoffset, NUM_EXEC_QUAL((Plan *) plan));
+		
+
+		if (IsA(plan->subplan, ShareInputScan) &&
+			cteplaninfo &&
+			(cteplaninfo->attr_map != NULL))
+		{
+			/* after fix_scan_list, the vano could be changed to subquery, we need to adjust the columns for explain */
+			RangeTblEntry *rte = rt_fetch(plan->scan.scanrelid, root->glob->finalrtable);
+
+			/*
+			 * It's possible that attr_map has more elements than colnames when subquery
+			 * has junk lists which are useless for upper query.
+			 *
+			 * qp_with_clause:
+			 * 
+			 * denseregions as
+			 * (
+			 * select FOO.*,count(distinct language) as "lang_count",
+			 * 	   sum(surfacearea) as "REGION_SURFACE_AREA"
+			 * from(
+			 * 	 select
+			 * 	   sum(population) as "REGION_POP",
+			 * 	   sum(gnp) as "REGION_GNP",
+			 * 	   region
+			 * 	 from
+			 * 	  country
+			 * 	 group by region
+			 * 	) FOO,countrylanguage,country
+			 * where
+			 *    country.code = countrylanguage.countrycode
+			 *    and FOO.region = country.region
+			 *    and FOO."REGION_POP" != 0
+			 * group by
+			 * FOO.region,foo."REGION_POP",foo."REGION_GNP"
+			 * order by sum(surfacearea)/foo."REGION_POP" desc)
+			 * 
+			 * the order by clause is not used by upper quqery.
+			 */
+			Assert(cteplaninfo->attr_map->maplen >= list_length(rte->eref->colnames));
+
+			ListCell *lc;
+			List *new_colnames1 = NIL;
+			List *new_colnames2 = NIL;
+			int i = 0;
+			foreach(lc, rte->eref->colnames)
+			{
+				Alias *alias = (Alias*) lfirst(lc); 
+				if (cteplaninfo->attr_map->attnums[i] != 0)
+					new_colnames1 = lappend(new_colnames1, copyObject(alias));
+				else
+					new_colnames2 = lappend(new_colnames2, copyObject(alias));
+				i++;
+			}
+			rte->eref->colnames = list_concat(new_colnames1, new_colnames2);
+		}
+
+		if (cteplaninfo && cteplaninfo->attr_map != NULL)
+		{
+			if (is_producer)
+			{
+				/* If we are producer, correct the width of Results and ShareInputsScan */
+				Assert(IsA(plan->subplan->lefttree, Result));
+				Plan *dest = plan->subplan->lefttree;
+				Plan *src = plan->subplan->lefttree->lefttree;
+				dest->startup_cost = src->startup_cost;
+				dest->total_cost = src->total_cost;
+				dest->plan_rows = src->plan_rows;
+				dest->parallel_aware = false;
+				dest->parallel_safe = src->parallel_safe;
+				/* We have done projecton here, use the width of subquery */
+				dest->plan_width = plan->scan.plan.plan_width;
+
+				/* as well as the ShareInputScan node */
+				plan->subplan->plan_width = plan->scan.plan.plan_width;
+			}
+			else
+			{
+				/* correct the width of ShareInputsScan */
+				/* as well as the ShareInputScan node */
+				plan->subplan->plan_width = plan->scan.plan.plan_width;
+			}
+		}
 
 		result = (Plan *) plan;
 	}

@@ -356,10 +356,14 @@ select count(*) from
    ->  HashAggregate
          Group Key: tenk1.unique1
          ->  Append
-               ->  Seq Scan on tenk1
-               ->  Seq Scan on tenk1 tenk1_1
+               ->  Unique
+                     Group Key: tenk1.unique1
+                     ->  Index Only Scan using tenk1_unique1 on tenk1
+               ->  HashAggregate
+                     Group Key: tenk1_1.fivethous
+                     ->  Seq Scan on tenk1 tenk1_1
  Optimizer: Postgres query optimizer
-(7 rows)
+(11 rows)
 
 select count(*) from
   ( select unique1 from tenk1 union select fivethous from tenk1 ) ss;
@@ -378,11 +382,15 @@ select count(*) from
          ->  HashSetOp Intersect
                ->  Append
                      ->  Subquery Scan on "*SELECT* 2"
-                           ->  Seq Scan on tenk1
+                           ->  HashAggregate
+                                 Group Key: tenk1.fivethous
+                                 ->  Seq Scan on tenk1
                      ->  Subquery Scan on "*SELECT* 1"
-                           ->  Seq Scan on tenk1 tenk1_1
+                           ->  Unique
+                                 Group Key: tenk1_1.unique1
+                                 ->  Index Only Scan using tenk1_unique1 on tenk1 tenk1_1
  Optimizer: Postgres query optimizer
-(9 rows)
+(13 rows)
 
 select count(*) from
   ( select unique1 from tenk1 intersect select fivethous from tenk1 ) ss;
@@ -423,10 +431,16 @@ select count(*) from
          ->  Sort
                Sort Key: tenk1.unique1
                ->  Append
-                     ->  Seq Scan on tenk1
-                     ->  Seq Scan on tenk1 tenk1_1
+                     ->  Unique
+                           Group Key: tenk1.unique1
+                           ->  Index Only Scan using tenk1_unique1 on tenk1
+                     ->  Unique
+                           Group Key: tenk1_1.fivethous
+                           ->  Sort
+                                 Sort Key: tenk1_1.fivethous
+                                 ->  Seq Scan on tenk1 tenk1_1
  Optimizer: Postgres query optimizer
-(9 rows)
+(15 rows)
 
 select count(*) from
   ( select unique1 from tenk1 union select fivethous from tenk1 ) ss;
@@ -447,11 +461,17 @@ select count(*) from
                      Sort Key: "*SELECT* 2".fivethous
                      ->  Append
                            ->  Subquery Scan on "*SELECT* 2"
-                                 ->  Seq Scan on tenk1
+                                 ->  Unique
+                                       Group Key: tenk1.fivethous
+                                       ->  Sort
+                                             Sort Key: tenk1.fivethous
+                                             ->  Seq Scan on tenk1
                            ->  Subquery Scan on "*SELECT* 1"
-                                 ->  Seq Scan on tenk1 tenk1_1
+                                 ->  Unique
+                                       Group Key: tenk1_1.unique1
+                                       ->  Index Only Scan using tenk1_unique1 on tenk1 tenk1_1
  Optimizer: Postgres query optimizer
-(11 rows)
+(17 rows)
 
 select count(*) from
   ( select unique1 from tenk1 intersect select fivethous from tenk1 ) ss;
@@ -1144,12 +1164,14 @@ explain (costs off)
  HashAggregate
    Group Key: ((t1.a || t1.b))
    ->  Append
-         ->  Index Scan using t1_ab_idx on t1
-               Index Cond: ((a || b) = 'ab'::text)
-         ->  Index Only Scan using t2_pkey on t2
-               Index Cond: (ab = 'ab'::text)
+         ->  Unique
+               ->  Index Scan using t1_ab_idx on t1
+                     Index Cond: ((a || b) = 'ab'::text)
+         ->  Unique
+               ->  Index Only Scan using t2_pkey on t2
+                     Index Cond: (ab = 'ab'::text)
  Optimizer: Postgres query optimizer
-(8 rows)
+(10 rows)
 
 --
 -- Test that ORDER BY for UNION ALL can be pushed down to inheritance
@@ -1255,11 +1277,13 @@ ORDER BY x;
          ->  Sort
                Sort Key: (1), (2)
                ->  Append
-                     ->  Result
-                     ->  Result
-                           One-Time Filter: false
+                     ->  Unique
+                           ->  Result
+                     ->  Unique
+                           ->  Result
+                                 One-Time Filter: false
  Optimizer: Postgres query optimizer
-(11 rows)
+(13 rows)
 
 SELECT * FROM
   (SELECT 1 AS t, 2 AS x
@@ -1286,13 +1310,17 @@ ORDER BY x;
    ->  Subquery Scan on ss
          Filter: (ss.x < 4)
          ->  HashAggregate
-               Group Key: (1), (generate_series(1, 10))
+               Group Key: (1), "*SELECT* 1".x
                ->  Append
-                     ->  ProjectSet
+                     ->  Subquery Scan on "*SELECT* 1"
+                           ->  HashAggregate
+                                 Group Key: 1, generate_series(1, 10)
+                                 ->  ProjectSet
+                                       ->  Result
+                     ->  Unique
                            ->  Result
-                     ->  Result
  Optimizer: Postgres query optimizer
-(11 rows)
+(15 rows)
 
 SELECT * FROM
   (SELECT 1 AS t, generate_series(1,10) AS x
@@ -1325,12 +1353,14 @@ ORDER BY x;
                ->  Sort
                      Sort Key: (1), ((($0 * '3'::double precision))::integer)
                      ->  Append
-                           ->  Result
+                           ->  Unique
                                  InitPlan 1 (returns $0)
                                    ->  Result
-                           ->  Result
+                                 ->  Result
+                           ->  Unique
+                                 ->  Result
  Optimizer: Postgres query optimizer
-(14 rows)
+(16 rows)
 
 SELECT * FROM
   (SELECT 1 AS t, (random()*3)::int AS x

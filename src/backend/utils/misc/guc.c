@@ -10064,6 +10064,10 @@ get_explain_guc_options(int *num, bool verbose, bool settings)
 			explain = true;
 		}
 
+		/* Temp fix EXPLAIN */
+		if ((conf->flags & GUC_NO_EXPLAIN))
+			continue;
+
 		if (!explain)
 			continue;
 

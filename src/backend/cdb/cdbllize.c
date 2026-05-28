@@ -819,7 +819,17 @@ cdbllize_decorate_subplans_with_motions(PlannerInfo *root, Plan *plan)
 			if (IsA(subplan, Motion) && !sstate->is_initplan &&
 				/* CBDB_PARALLEL_FIXME: enable_material && */
 				!sstate->useHashTable)
+			{
 				subplan = (Plan *) make_material(subplan);
+				subplan->startup_cost = ((Material*)subplan)->plan.lefttree->startup_cost;
+				subplan->total_cost = ((Material*)subplan)->plan.lefttree->total_cost;
+				subplan->plan_rows = ((Material*)subplan)->plan.lefttree->plan_rows;
+				subplan->plan_width = ((Material*)subplan)->plan.lefttree->plan_width;
+				subplan->parallel_aware = false;
+				subplan->parallel_safe = subplan->parallel_safe;
+
+			}
+
 		}
 
 		subplan = (Plan *) fix_outer_query_motions_mutator((Node *) subplan, &context);

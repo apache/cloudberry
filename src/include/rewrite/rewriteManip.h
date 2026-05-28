@@ -29,6 +29,7 @@ struct replace_rte_variables_context
 	replace_rte_variables_callback callback;	/* callback function */
 	void	   *callback_arg;	/* context data for callback function */
 	int			target_varno;	/* RTE index to search for */
+	Bitmapset 	*target_varno_bms;	/* RTE indexes to search for */
 	int			sublevels_up;	/* (current) nesting depth */
 	bool		inserted_sublink;	/* have we inserted a SubLink? */
 };
@@ -85,5 +86,20 @@ extern Node *ReplaceVarsFromTargetList(Node *node,
 									   ReplaceVarsNoMatchOption nomatch_option,
 									   int nomatch_varno,
 									   bool *outer_hasSubLinks);
+
+extern Node *ReplaceVarsFromTargetList_CTE(Node *node,
+									   Bitmapset *target_varno_bms, int sublevels_up,
+									   List *targetlist,
+									   ReplaceVarsNoMatchOption nomatch_option,
+									   int nomatch_varno,
+									   bool *outer_hasSubLinks);
+extern Node *
+ReplaceVarnoFromSubquery(Node *node,
+						  int target_varno, int sublevels_up,
+						  RangeTblEntry *target_rte,
+						  List *targetlist,
+						  ReplaceVarsNoMatchOption nomatch_option,
+						  int nomatch_varno,
+						  bool *outer_hasSubLinks);
 
 #endif							/* REWRITEMANIP_H */

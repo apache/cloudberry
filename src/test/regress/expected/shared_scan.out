@@ -91,8 +91,8 @@ HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sur
 -- ORCA plan contains a Shared Scan producer with a unsorted Motion below it
 EXPLAIN (COSTS OFF)
 WITH cte AS (SELECT * FROM t1 WHERE random() < 0.1 LIMIT 10) SELECT a, 1, 1 FROM cte JOIN t2 USING (a);
-                                           QUERY PLAN                                           
-------------------------------------------------------------------------------------------------
+                                                 QUERY PLAN                                                 
+------------------------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Hash Join
          Hash Cond: (t2.a = cte.a)
@@ -101,13 +101,15 @@ WITH cte AS (SELECT * FROM t1 WHERE random() < 0.1 LIMIT 10) SELECT a, 1, 1 FROM
                ->  Redistribute Motion 1:3  (slice2; segments: 1)
                      Hash Key: cte.a
                      ->  Subquery Scan on cte
-                           ->  Limit
-                                 ->  Gather Motion 3:1  (slice3; segments: 3)
+                           ->  Shared Scan (share slice:id 2:0)
+                                 ->  Result
                                        ->  Limit
-                                             ->  Seq Scan on t1
-                                                   Filter: (random() < '0.1'::double precision)
+                                             ->  Gather Motion 3:1  (slice3; segments: 3)
+                                                   ->  Limit
+                                                         ->  Seq Scan on t1
+                                                               Filter: (random() < '0.1'::double precision)
  Optimizer: Postgres query optimizer
-(14 rows)
+(16 rows)
 
 -- This functions returns one more column than expected.
 CREATE OR REPLACE FUNCTION col_mismatch_func1() RETURNS TABLE (field1 int, field2 int)
@@ -129,8 +131,8 @@ PL/pgSQL function col_mismatch_func1() line 6 at RETURN QUERY
 -- ORCA plan contains a Shared Scan producer with a sorted Motion below it
 EXPLAIN (COSTS OFF)
 WITH cte AS (SELECT * FROM t1 WHERE random() < 0.1 ORDER BY b LIMIT 10) SELECT a, 1, 1 FROM cte JOIN t2 USING (a);
-                                              QUERY PLAN                                              
-------------------------------------------------------------------------------------------------------
+                                                    QUERY PLAN                                                    
+------------------------------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Hash Join
          Hash Cond: (t2.a = cte.a)
@@ -139,16 +141,18 @@ WITH cte AS (SELECT * FROM t1 WHERE random() < 0.1 ORDER BY b LIMIT 10) SELECT a
                ->  Redistribute Motion 1:3  (slice2; segments: 1)
                      Hash Key: cte.a
                      ->  Subquery Scan on cte
-                           ->  Limit
-                                 ->  Gather Motion 3:1  (slice3; segments: 3)
-                                       Merge Key: t1.b
+                           ->  Shared Scan (share slice:id 2:0)
+                                 ->  Result
                                        ->  Limit
-                                             ->  Sort
-                                                   Sort Key: t1.b
-                                                   ->  Seq Scan on t1
-                                                         Filter: (random() < '0.1'::double precision)
+                                             ->  Gather Motion 3:1  (slice3; segments: 3)
+                                                   Merge Key: t1.b
+                                                   ->  Limit
+                                                         ->  Sort
+                                                               Sort Key: t1.b
+                                                               ->  Seq Scan on t1
+                                                                     Filter: (random() < '0.1'::double precision)
  Optimizer: Postgres query optimizer
-(17 rows)
+(19 rows)
 
 --- This functions returns one more column than expected.
 CREATE OR REPLACE FUNCTION col_mismatch_func2() RETURNS TABLE (field1 int, field2 int)

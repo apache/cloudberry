@@ -1277,6 +1277,9 @@ SELECT * FROM cte1, exttab_limit_2 e3 where cte1.i = e3.i ORDER BY cte1.i LIMIT 
 SELECT count(*) FROM gp_read_error_log('exttab_limit_2');
 SELECT gp_truncate_error_log('exttab_limit_1');
 SELECT gp_truncate_error_log('exttab_limit_2');
+-- start_ignore
+set cbdb_enable_setop_pre_dedup=off;
+-- end_ignore
 -- Note that even though we use exttab_limit_2 here , the LIMIT 3 will not throw a segment reject limit error
 SELECT * FROM
 (
@@ -3703,3 +3706,6 @@ DROP EXTERNAL TABLE ext_persistently;
 
 CREATE EXTERNAL WEB TEMP TABLE test_program_not_exist(content text) EXECUTE '/bin/bash /xx/seq 1 5' ON MASTER FORMAT 'TEXT';
 SELECT * FROM test_program_not_exist;
+-- start_ignore
+reset cbdb_enable_setop_pre_dedup;
+-- end_ignore

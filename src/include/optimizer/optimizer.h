@@ -140,6 +140,7 @@ extern void extract_query_dependencies(Node *query,
 
 extern Node *negate_clause(Node *node);
 extern Expr *canonicalize_qual(Expr *qual, bool is_check);
+extern Expr *convert_expr_to_cnf_complete(Expr *expr);
 
 /* in util/clauses.c: */
 

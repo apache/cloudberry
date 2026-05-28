@@ -1263,6 +1263,7 @@ _copyShareInputScan(const ShareInputScan *from)
 	COPY_SCALAR_FIELD(nconsumers);
 	COPY_SCALAR_FIELD(discard_output);
 	COPY_SCALAR_FIELD(ref_set);
+	COPY_SCALAR_FIELD(ctename);
 
 	return newnode;
 }

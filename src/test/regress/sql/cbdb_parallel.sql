@@ -1014,7 +1014,7 @@ set enable_parallel = on;
 -- first stage HashAgg, second stage GroupAgg
 explain(costs off)
 select distinct a from t_distinct_0;
-set parallel_query_use_streaming_hashagg = off;
+set gp_use_streaming_hashagg = off;
 explain(costs off)
 select distinct a from t_distinct_0;
 -- GroupAgg
@@ -1026,7 +1026,7 @@ set enable_hashagg = on;
 set enable_groupagg = off;
 explain(costs off)
 select distinct a from t_distinct_0;
-set parallel_query_use_streaming_hashagg = on;
+set gp_use_streaming_hashagg = on;
 explain(costs off)
 select distinct a from t_distinct_0;
 -- multi DISTINCT tlist
@@ -1200,7 +1200,7 @@ select count(*) from (pj_t1 full join pj_t2 using (id)) fj full join pj_t3 using
 abort;
 
 -- start_ignore
-drop schema test_parallel cascade;
+--drop schema test_parallel cascade;
 -- end_ignore
 
 reset gp_appendonly_insert_files;

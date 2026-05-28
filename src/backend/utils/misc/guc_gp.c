@@ -484,6 +484,16 @@ bool		gp_allow_date_field_width_5digits = false;
 /* Avoid do a real REFRESH materialized view if possibile. */
 bool		gp_enable_refresh_fast_path = true;
 
+double	cbdb_streaming_damping_factor;
+int 	cbdb_streaming_damping_rows_threshold;
+double	cbdb_inner_join_selectivity_damping_factor;
+bool	cbdb_enable_multi_window_agg = true;
+bool	cbdb_eager_subplan = true;
+double	cbdb_dedup_semi_damping_factor;
+bool	cbdb_enable_setop_pre_dedup;
+bool	cbdb_enable_dynamic_shared_scan;
+double	cbdb_2phase_agg_cardinality_cap;
+
 static const struct config_enum_entry gp_log_format_options[] = {
 	{"text", 0},
 	{"csv", 1},
@@ -1883,8 +1893,7 @@ struct config_bool ConfigureNamesBool_gp[] =
 	{
 		{"gp_eager_two_phase_agg", PGC_USERSET, QUERY_TUNING_METHOD,
 			gettext_noop("Eager two stage agg."),
-			NULL,
-			GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE
+			NULL
 		},
 		&gp_eager_two_phase_agg,
 		false, NULL, NULL
@@ -3387,6 +3396,50 @@ struct config_bool ConfigureNamesBool_gp[] =
 		NULL, NULL, NULL
 	},
 
+	{
+		{"cbdb_enable_multi_window_agg", PGC_USERSET, QUERY_TUNING_METHOD,
+			gettext_noop("Enable multi phase aggregations for window functions."),
+			NULL,
+			GUC_NOT_IN_SAMPLE | GUC_NO_EXPLAIN
+		},
+		&cbdb_enable_multi_window_agg,
+		true,
+		NULL, NULL, NULL
+	},
+
+	{
+		{"cbdb_eager_subplan", PGC_USERSET, QUERY_TUNING_METHOD,
+			gettext_noop("Eager SubPlan instead of InitPlan."),
+			NULL,
+			GUC_NOT_IN_SAMPLE | GUC_NO_EXPLAIN
+		},
+		&cbdb_eager_subplan,
+		true,
+		NULL, NULL, NULL
+	},
+
+	{
+		{"cbdb_enable_setop_pre_dedup", PGC_USERSET, QUERY_TUNING_METHOD,
+			gettext_noop("Enable do pre-deduplicate on subqueries of SetOp when there is no ALL."),
+			NULL,
+			GUC_NOT_IN_SAMPLE | GUC_NO_EXPLAIN
+		},
+		&cbdb_enable_setop_pre_dedup,
+		true,
+		NULL, NULL, NULL
+	},
+
+	{
+		{"cbdb_enable_dynamic_shared_scan", PGC_USERSET, QUERY_TUNING_METHOD,
+			gettext_noop("Choose Shared Scan dynamically according to costs even CTE has multiple references."),
+			NULL,
+			GUC_NOT_IN_SAMPLE | GUC_NO_EXPLAIN
+		},
+		&cbdb_enable_dynamic_shared_scan,
+		true,
+		NULL, NULL, NULL
+	},
+
 	/* End-of-list marker */
 	{
 		{NULL, 0, 0, NULL, NULL}, NULL, false, NULL, NULL
@@ -4720,6 +4773,17 @@ struct config_int ConfigureNamesInt_gp[] =
 		5, 1, MAX_BACKENDS,
 		check_max_running_tasks, NULL, NULL
 	},
+
+	{
+		{"cbdb_streaming_damping_rows_threshold", PGC_USERSET, QUERY_TUNING_METHOD,
+			gettext_noop("Set the threshold of using streaming damping"),
+			NULL,
+			GUC_NOT_IN_SAMPLE | GUC_NO_EXPLAIN
+		},
+		&cbdb_streaming_damping_rows_threshold,
+		1000, 0, INT_MAX,
+		NULL, NULL, NULL
+	},
 	
 	/* End-of-list marker */
 	{
@@ -4856,6 +4920,52 @@ struct config_real ConfigureNamesReal_gp[] =
 		},
 		&optimizer_spilling_mem_threshold,
 		0.0, 0.0, DBL_MAX,
+		NULL, NULL, NULL
+	},
+
+	{
+		{"cbdb_streaming_damping_factor", PGC_USERSET, QUERY_TUNING_METHOD,
+			gettext_noop("streaming hash aggregate costs damping facor."),
+			NULL,
+			GUC_NOT_IN_SAMPLE | GUC_NO_EXPLAIN
+		},
+		&cbdb_streaming_damping_factor,
+		0.95, 0.0, 1.0,
+		NULL, NULL, NULL
+	},
+
+	{
+		{"cbdb_inner_join_selectivity_damping_factor", PGC_USERSET, QUERY_TUNING_METHOD,
+			gettext_noop("Damping of selectivities in inner join clauses."),
+			NULL,
+			GUC_NOT_IN_SAMPLE | GUC_NO_EXPLAIN
+		},
+		&cbdb_inner_join_selectivity_damping_factor,
+		1.4, 1.0, DBL_MAX,
+		NULL, NULL, NULL
+	},
+
+	{
+		{"cbdb_dedup_semi_damping_factor", PGC_USERSET, QUERY_TUNING_METHOD,
+			gettext_noop("Damping of dedup semi and dedup semi reverse join costs."),
+			NULL,
+			GUC_NOT_IN_SAMPLE | GUC_NO_EXPLAIN
+		},
+		&cbdb_dedup_semi_damping_factor,
+		1.04, 1.0, DBL_MAX,
+		NULL, NULL, NULL
+	},
+
+	{
+		{"cbdb_2phase_agg_cardinality_cap", PGC_USERSET, QUERY_TUNING_METHOD,
+			gettext_noop("Cardinality ratio threshold for capping partial group estimates in 2-phase aggregation."),
+			gettext_noop("When estimated groups exceed this fraction of input rows, "
+						 "cap partial group count at 10% to favor 2-phase aggregation. "
+						 "Set to 1.0 to disable the cap."),
+			GUC_NOT_IN_SAMPLE | GUC_NO_EXPLAIN
+		},
+		&cbdb_2phase_agg_cardinality_cap,
+		0.5, 0.0, 1.0,
 		NULL, NULL, NULL
 	},
 

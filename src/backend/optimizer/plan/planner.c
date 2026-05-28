@@ -87,6 +87,8 @@
 #include "storage/lmgr.h"
 #include "utils/guc.h"
 
+#include "cdb/cdbmutate.h"
+
 #ifdef USE_ORCA
 extern void InitGPOPT();
 #endif
@@ -733,13 +735,22 @@ standard_planner(Query *parse, const char *query_string, int cursorOptions,
 	 *
 	 * apply_shareinput will fix shared_id, and change the DAG to a tree.
 	 */
+	int subplan_id = 0;
 	forboth(lp, glob->subplans, lr, glob->subroots)
 	{
 		Plan	   *subplan = (Plan *) lfirst(lp);
 		PlannerInfo	   *subroot = (PlannerInfo *) lfirst(lr);
+		subplan_id++;
+
+		apply_shareinput_dag_to_tree_from_subplan = true;
+
+		/* We must make producer in InitPlan if it was. */
+		if (bms_is_member(subplan_id, root->init_plan_ids))
+			apply_shareinput_dag_to_tree_from_subplan = false;
 
 		lfirst(lp) = apply_shareinput_dag_to_tree(subroot, subplan);
 	}
+	apply_shareinput_dag_to_tree_from_subplan = false;
 	top_plan = apply_shareinput_dag_to_tree(root, top_plan);
 
 	/* final cleanup of the plan */
@@ -930,6 +941,7 @@ subquery_planner(PlannerGlobal *glob, Query *parse,
 	root->eq_classes = NIL;
 	root->non_eq_clauses = NIL;
 	root->init_plans = NIL;
+	root->init_plan_ids = NULL;
 
 	root->list_cteplaninfo = NIL;
 	if (parse->cteList != NIL)
@@ -967,6 +979,10 @@ subquery_planner(PlannerGlobal *glob, Query *parse,
 	root->non_recursive_path = NULL;
 	root->partColsUpdated = false;
 	root->is_correlated_subplan = false;
+	root->lower_window_filter = NULL;
+	root->lower_window_filter_winref = 0;
+	root->upper_window_filter = parent_root ? copyObject(parent_root->lower_window_filter) : NULL;
+	root->upper_window_filter_winref = parent_root ? parent_root->lower_window_filter_winref : 0;
 
 	/*
 	 * Save a copy of the raw parse tree for AQUMV join exact-match.
@@ -4596,7 +4612,10 @@ consider_groupingsets_paths(PlannerInfo *root,
 			dNumGroups = clamp_row_est(dNumGroupsTotal /
 									   CdbPathLocus_NumSegments(path->locus));
 			if (path->locus.parallel_workers > 1)
+			{
 				dNumGroups /= path->locus.parallel_workers;
+				dNumGroups = clamp_row_est(dNumGroups);
+			}
 		}
 		else
 			dNumGroups = dNumGroupsTotal;
@@ -5021,29 +5040,6 @@ create_one_window_path(PlannerInfo *root,
 												path->pathkeys,
 												&presorted_keys);
 
-		/*
-		 * Unless the PARTITION BY in the window happens to match the
-		 * current distribution, we need a motion. Each partition
-		 * needs to be handled in the same segment.
-		 *
-		 * If there is no PARTITION BY, then all rows form a single
-		 * partition, so we need to gather all the tuples to a single
-		 * node. But we'll do that after the Sort, so that the Sort
-		 * is parallelized.
-		 *
-		 * This is the same logic that is used for sorted Aggregates.
-		 */
-
-		path = cdb_prepare_path_for_sorted_agg(root,
-											   is_sorted,
-											   presorted_keys,
-											   window_rel,
-											   path,
-											   path->pathtarget,
-											   window_pathkeys,
-											   -1.0,
-											   wc->partitionClause,
-											   NIL);
 		if (lnext(activeWindows, l))
 		{
 			/*
@@ -5070,6 +5066,44 @@ create_one_window_path(PlannerInfo *root,
 			/* Install the goal target in the topmost WindowAgg */
 			window_target = output_target;
 		}
+
+		if (cbdb_enable_multi_window_agg &&
+			root->upper_window_filter &&
+			root->upper_window_filter_winref == wc->winref)
+			path = cdb_create_pre_window_agg_path(root,
+												is_sorted,
+												presorted_keys,
+												window_rel,
+												path,
+												path->pathtarget,
+											   	window_pathkeys,
+												window_target,
+								  				wflists->windowFuncs[wc->winref],
+								  				wc);
+
+		/*
+		 * Unless the PARTITION BY in the window happens to match the
+		 * current distribution, we need a motion. Each partition
+		 * needs to be handled in the same segment.
+		 *
+		 * If there is no PARTITION BY, then all rows form a single
+		 * partition, so we need to gather all the tuples to a single
+		 * node. But we'll do that after the Sort, so that the Sort
+		 * is parallelized.
+		 *
+		 * This is the same logic that is used for sorted Aggregates.
+		 */
+
+		path = cdb_prepare_path_for_sorted_agg(root,
+											   is_sorted,
+											   presorted_keys,
+											   window_rel,
+											   path,
+											   path->pathtarget,
+											   window_pathkeys,
+											   -1.0,
+											   wc->partitionClause,
+											   NIL);
 
 		path = (Path *)
 			create_windowagg_path(root, window_rel, path, window_target,
@@ -7501,7 +7535,7 @@ add_paths_to_grouping_rel(PlannerInfo *root, RelOptInfo *input_rel,
 				/* Now decide what to stick atop it */
 				if (parse->groupingSets)
 				{
-					/* do nothing, not support parallel now */
+					/* do nothing, could not support parallel directly */
 				}
 				else if (parse->hasAggs || parse->groupClause)
 				{
@@ -8120,17 +8154,34 @@ create_partial_grouping_paths(PlannerInfo *root,
 
 	/* Estimate number of partial groups. */
 	if (cheapest_total_path != NULL)
+	{
 		dNumPartialGroups =
-			get_number_of_groups(root,
-								 cheapest_total_path->rows,
-								 gd,
-								 extra->targetList);
+			get_number_of_groups(root, cheapest_total_path->rows,
+								gd, extra->targetList);
+
+		/*
+		 * When estimated groups exceed half the input rows, the cardinality
+		 * estimate is likely unreliable (e.g., from default statistics on
+		 * UNION ALL subquery columns). Cap at 10% of input rows to give
+		 * 2-phase aggregation a fair chance in cost comparison.
+		 */
+		if (gp_use_streaming_hashagg &&
+			cbdb_2phase_agg_cardinality_cap < 1.0 &&
+			dNumPartialGroups > cheapest_total_path->rows * cbdb_2phase_agg_cardinality_cap)
+			dNumPartialGroups = clamp_row_est(cheapest_total_path->rows * 0.1);
+	}
 	if (cheapest_partial_path != NULL)
+	{
 		dNumPartialPartialGroups =
-			get_number_of_groups(root,
-								 cheapest_partial_path->rows,
-								 gd,
-								 extra->targetList);
+			get_number_of_groups(root, cheapest_partial_path->rows,
+								gd, extra->targetList);
+
+		if (gp_use_streaming_hashagg &&
+			cbdb_2phase_agg_cardinality_cap < 1.0 &&
+			dNumPartialPartialGroups > cheapest_partial_path->rows * cbdb_2phase_agg_cardinality_cap)
+			dNumPartialPartialGroups =
+				clamp_row_est(cheapest_partial_path->rows * 0.1);
+	}
 
 	if (can_sort && cheapest_total_path != NULL)
 	{
@@ -8392,7 +8443,7 @@ create_partial_grouping_paths(PlannerInfo *root,
 									 partially_grouped_rel->reltarget,
 									 AGG_HASHED,
 									 AGGSPLIT_INITIAL_SERIAL,
-									 false,
+									 gp_use_streaming_hashagg, /* streaming */
 									 parse->groupClause,
 									 NIL,
 									 agg_partial_costs,
@@ -8425,7 +8476,7 @@ create_partial_grouping_paths(PlannerInfo *root,
 											 partially_grouped_rel->reltarget,
 											 AGG_HASHED,
 											 AGGSPLIT_INITIAL_SERIAL,
-											 false,
+											 gp_use_streaming_hashagg, /* streaming */
 											 parse->groupClause,
 											 NIL,
 											 agg_partial_costs,
@@ -9208,16 +9259,6 @@ create_partial_window_path(PlannerInfo *root,
 												path->pathkeys,
 												&presorted_keys);
 
-		path = cdb_prepare_path_for_sorted_agg(root,
-											   is_sorted,
-											   presorted_keys,
-											   window_rel,
-											   path,
-											   path->pathtarget,
-											   window_pathkeys,
-											   -1.0,
-											   wc->partitionClause,
-											   NIL);
 		if (lnext(activeWindows, l))
 		{
 			ListCell   *lc2;
@@ -9235,6 +9276,31 @@ create_partial_window_path(PlannerInfo *root,
 		{
 			window_target = output_target;
 		}
+
+		if (cbdb_enable_multi_window_agg &&
+			root->upper_window_filter &&
+			root->upper_window_filter_winref == wc->winref)
+			path = cdb_create_pre_window_agg_path(root,
+												is_sorted,
+												presorted_keys,
+												window_rel,
+												path,
+												path->pathtarget,
+											   	window_pathkeys,
+												window_target,
+								  				wflists->windowFuncs[wc->winref],
+								  				wc);
+
+		path = cdb_prepare_path_for_sorted_agg(root,
+											   is_sorted,
+											   presorted_keys,
+											   window_rel,
+											   path,
+											   path->pathtarget,
+											   window_pathkeys,
+											   -1.0,
+											   wc->partitionClause,
+											   NIL);
 
 		path = (Path *)
 			create_windowagg_path(root, window_rel, path, window_target,

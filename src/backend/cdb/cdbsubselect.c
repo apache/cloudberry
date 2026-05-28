@@ -586,7 +586,23 @@ convert_EXPR_to_join(PlannerInfo *root, OpExpr *opexp)
 {
 	Assert(root);
 	Assert(list_length(opexp->args) == 2);
-	Node	   *rarg = list_nth(opexp->args, 1);
+
+	Node *rarg = NULL;
+	Node *n_tmp = (Node*) opexp; 
+	OpExpr *op_tmp = NULL;
+
+	while (IsA(n_tmp, OpExpr))
+	{
+		op_tmp = (OpExpr *) n_tmp;
+		Assert(list_length(op_tmp->args) == 2);
+
+		rarg = list_nth(op_tmp->args, 1);
+		if (IsA(rarg, SubLink))
+		{
+			break;
+		}
+		n_tmp = list_nth(op_tmp->args, 1);
+	}
 
 	Assert(IsA(rarg, SubLink));
 	SubLink    *sublink = (SubLink *) rarg;
@@ -656,7 +672,7 @@ convert_EXPR_to_join(PlannerInfo *root, OpExpr *opexp)
 											 exprCollation((Node *) subselectAggTLE->expr),
 											 0);
 
-		list_nth_replace(opexp->args, 1, aggVar);
+		list_nth_replace(op_tmp->args, 1, aggVar);
 
 		return join_expr;
 	}

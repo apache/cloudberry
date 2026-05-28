@@ -12,10 +12,12 @@ set enable_answer_query_using_materialized_views = on;
 -- drop views if there is no data populated
 begin;
 create incremental materialized view aqumv_mvt1_need_refresh as select * from aqumv_t1 where c1 = 2 with no data;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'c1' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 set local enable_answer_query_using_materialized_views = on;
 explain(verbose, costs off) select * from aqumv_t1 where c1 = 2;
-                                QUERY PLAN                                 
----------------------------------------------------------------------------
+                                    QUERY PLAN                                    
+----------------------------------------------------------------------------------
  Gather Motion 1:1  (slice1; segments: 1)
    Output: c1, c2, c3
    ->  Seq Scan on aqumv.aqumv_t1
@@ -28,8 +30,8 @@ explain(verbose, costs off) select * from aqumv_t1 where c1 = 2;
 refresh materialized view aqumv_mvt1_need_refresh;
 analyze aqumv_mvt1_need_refresh;
 explain(verbose, costs off) select * from aqumv_t1 where c1 = 2;
-                                QUERY PLAN                                 
----------------------------------------------------------------------------
+                                    QUERY PLAN                                    
+----------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    Output: c1, c2, c3
    ->  Seq Scan on aqumv.aqumv_mvt1_need_refresh
@@ -41,6 +43,8 @@ explain(verbose, costs off) select * from aqumv_t1 where c1 = 2;
 abort;
 begin;
 create incremental materialized view aqumv_mvt1_0 as select * from aqumv_t1 where c1 = 2;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'c1' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 analyze aqumv_mvt1_0;
 set local enable_answer_query_using_materialized_views = off;
 select * from aqumv_t1 where c1 = 2;
@@ -102,8 +106,8 @@ select c3, c2 from aqumv_t1 where c1 = 2;
 
 -- tlist matched.
 explain(verbose, costs off) select * from aqumv_t1 where c1 = 2;
-                                QUERY PLAN                                 
----------------------------------------------------------------------------
+                                    QUERY PLAN                                    
+----------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    Output: c1, c2, c3
    ->  Seq Scan on aqumv.aqumv_mvt1_0
@@ -113,8 +117,8 @@ explain(verbose, costs off) select * from aqumv_t1 where c1 = 2;
 (6 rows)
 
 explain(verbose, costs off) select c1, c2, c3 from aqumv_t1 where c1 = 2;
-                                QUERY PLAN                                 
----------------------------------------------------------------------------
+                                    QUERY PLAN                                    
+----------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    Output: c1, c2, c3
    ->  Seq Scan on aqumv.aqumv_mvt1_0
@@ -125,8 +129,8 @@ explain(verbose, costs off) select c1, c2, c3 from aqumv_t1 where c1 = 2;
 
 -- tlist partially matched.
 explain(verbose, costs off) select c2 from aqumv_t1 where c1 = 2;
-                                QUERY PLAN                                 
----------------------------------------------------------------------------
+                                    QUERY PLAN                                    
+----------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    Output: c2
    ->  Seq Scan on aqumv.aqumv_mvt1_0
@@ -137,8 +141,8 @@ explain(verbose, costs off) select c2 from aqumv_t1 where c1 = 2;
 
 -- tlist disorder.
 explain(verbose, costs off) select c3, c2 from aqumv_t1 where c1 = 2;
-                                QUERY PLAN                                 
----------------------------------------------------------------------------
+                                    QUERY PLAN                                    
+----------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    Output: c3, c2
    ->  Seq Scan on aqumv.aqumv_mvt1_0
@@ -150,6 +154,8 @@ explain(verbose, costs off) select c3, c2 from aqumv_t1 where c1 = 2;
 abort;
 begin;
 create incremental materialized view aqumv_mvt1_1 as select c2 as mc2, c3 as mc3, c1 as mc1, c2 as mc2_1 from aqumv_t1 where c1 = 3;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'mc1' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 analyze aqumv_mvt1_1;
 set local enable_answer_query_using_materialized_views = off;
 select c1 as col1, c2 as col2 from aqumv_t1 where c1 = 3;
@@ -183,8 +189,8 @@ select c1, c1 from aqumv_t1 where c1 = 3;
 
 -- tlist alias.
 explain(verbose, costs off) select c1 as col1, c2 as col2 from aqumv_t1 where c1 = 3;
-                                QUERY PLAN                                 
----------------------------------------------------------------------------
+                                    QUERY PLAN                                    
+----------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    Output: mc1, mc2
    ->  Seq Scan on aqumv.aqumv_mvt1_1
@@ -195,8 +201,8 @@ explain(verbose, costs off) select c1 as col1, c2 as col2 from aqumv_t1 where c1
 
 -- duplicated projection.
 explain(verbose, costs off) select c1, c1 from aqumv_t1 where c1 = 3;
-                                QUERY PLAN                                 
----------------------------------------------------------------------------
+                                    QUERY PLAN                                    
+----------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    Output: mc1, mc1
    ->  Seq Scan on aqumv.aqumv_mvt1_1
@@ -210,6 +216,8 @@ begin;
 create incremental materialized view aqumv_mvt1_nonvar_expr as
   select c2, 1 as mc_const_1, sqrt(100) as mc_sqrt_100
   from aqumv_t1 where c1 = 4;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'c2' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 analyze aqumv_mvt1_nonvar_expr;
 set local enable_answer_query_using_materialized_views = off;
 select c2, 200 from aqumv_t1 where c1 = 4;
@@ -243,8 +251,8 @@ select c2, 1, sqrt(100) from aqumv_t1 where c1 = 4;
 
 -- Const are copied to output.
 explain(verbose, costs off) select c2, 200 from aqumv_t1 where c1 = 4;
-                                QUERY PLAN                                 
----------------------------------------------------------------------------
+                                    QUERY PLAN                                    
+----------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    Output: c2, 200
    ->  Seq Scan on aqumv.aqumv_mvt1_nonvar_expr
@@ -254,8 +262,8 @@ explain(verbose, costs off) select c2, 200 from aqumv_t1 where c1 = 4;
 (6 rows)
 
 explain(verbose, costs off) select c2, 1, sqrt(100) from aqumv_t1 where c1 = 4;
-                                QUERY PLAN                                 
----------------------------------------------------------------------------
+                                    QUERY PLAN                                    
+----------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    Output: c2, 1, '10'::double precision
    ->  Seq Scan on aqumv.aqumv_mvt1_nonvar_expr
@@ -274,6 +282,8 @@ $$ LANGUAGE plpgsql IMMUTABLE;
 create incremental materialized view aqumv_mvt1_func_has_var as
   select c2, aqumv_func(c1, c3) as mc_func_res
   from aqumv_t1 where c1 = 5;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'c2' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 analyze aqumv_mvt1_func_has_var;
 set local enable_answer_query_using_materialized_views = off; 
 select c2, aqumv_func(c1, c3) from aqumv_t1 where c1 = 5;
@@ -293,8 +303,8 @@ select c2, aqumv_func(c1, c3) from aqumv_t1 where c1 = 5;
 
 -- Functions has Vars are replaced.
 explain(verbose, costs off) select c2, aqumv_func(c1, c3), aqumv_func(c1, c3) from aqumv_t1 where c1 = 5;
-                                QUERY PLAN                                 
----------------------------------------------------------------------------
+                                    QUERY PLAN                                    
+----------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    Output: c2, mc_func_res, mc_func_res
    ->  Seq Scan on aqumv.aqumv_mvt1_func_has_var
@@ -306,12 +316,14 @@ explain(verbose, costs off) select c2, aqumv_func(c1, c3), aqumv_func(c1, c3) fr
 abort;
 begin;
 create incremental materialized view aqumv_mvt1_2 as select c2 as mc2, c1 as mc1 from aqumv_t1 where c1 > 1 and c1 < 5;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'mc1' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 analyze aqumv_mvt1_2;
 set local enable_answer_query_using_materialized_views = on;
 -- shoud be unable to use mv, projection doesn't exit in mv's tlist 
 explain(verbose, costs off) select c3 from aqumv_t1 where c1 < 5 and c1 > 1;
-                                QUERY PLAN                                 
----------------------------------------------------------------------------
+                                    QUERY PLAN                                    
+----------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    Output: c3
    ->  Seq Scan on aqumv.aqumv_t1
@@ -323,8 +335,8 @@ explain(verbose, costs off) select c3 from aqumv_t1 where c1 < 5 and c1 > 1;
 
 -- no post quals.
 explain(verbose, costs off) select c1, c2 from aqumv_t1 where c1 < 5 and c1 > 1;
-                                QUERY PLAN                                 
----------------------------------------------------------------------------
+                                    QUERY PLAN                                    
+----------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    Output: mc1, mc2
    ->  Seq Scan on aqumv.aqumv_mvt1_2
@@ -351,8 +363,8 @@ select c1, c2 from aqumv_t1 where c1 < 5 and c1 > 1 and c2 = 4;
 (2 rows)
 
 explain(verbose, costs off) select c1, c2 from aqumv_t1 where c1 < 5 and c1 > 1 and c2 = 4;
-                                QUERY PLAN                                 
----------------------------------------------------------------------------
+                                    QUERY PLAN                                    
+----------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    Output: mc1, mc2
    ->  Seq Scan on aqumv.aqumv_mvt1_2
@@ -364,8 +376,8 @@ explain(verbose, costs off) select c1, c2 from aqumv_t1 where c1 < 5 and c1 > 1 
 
 -- should be unable to use mv, post quals has column doesn't exit in mv's tlist.
 explain(verbose, costs off) select * from aqumv_t1 where c1 < 5 and c1 > 1 and c3 > 1; 
-                                   QUERY PLAN                                    
----------------------------------------------------------------------------------
+                                    QUERY PLAN                                    
+----------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    Output: c1, c2, c3
    ->  Seq Scan on aqumv.aqumv_t1
@@ -378,12 +390,14 @@ explain(verbose, costs off) select * from aqumv_t1 where c1 < 5 and c1 > 1 and c
 abort;
 begin;
 create incremental materialized view aqumv_mvt1_3 as select c2 as mc2, c1 as mc1, c3+1 as mc3 from aqumv_t1 where c1 > 5 and c1 < 10;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'mc1' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 analyze aqumv_mvt1_3;
 set local enable_answer_query_using_materialized_views = on;
 -- should be unable to use mv, column c3 doesn't exist in mv's tlist.
 explain(verbose, costs off) select * from aqumv_t1 where c1 > 5 and c1 < 10; 
-                                QUERY PLAN                                 
----------------------------------------------------------------------------
+                                    QUERY PLAN                                    
+----------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    Output: c1, c2, c3
    ->  Seq Scan on aqumv.aqumv_t1
@@ -395,8 +409,8 @@ explain(verbose, costs off) select * from aqumv_t1 where c1 > 5 and c1 < 10;
 
 -- expr c3+1 is in mv's tlist
 explain(verbose, costs off) select c1 as col1, c3+1 as col2 from aqumv_t1 where c1 > 5 and c1 < 10; 
-                                QUERY PLAN                                 
----------------------------------------------------------------------------
+                                    QUERY PLAN                                    
+----------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    Output: mc1, mc3
    ->  Seq Scan on aqumv.aqumv_mvt1_3
@@ -407,8 +421,8 @@ explain(verbose, costs off) select c1 as col1, c3+1 as col2 from aqumv_t1 where 
 
 -- expr c1+1 could be derived from mv's tlist
 explain(verbose, costs off) select c1+1 as col1, c2, c3+1 as col2 from aqumv_t1 where c1 > 5 and c1 < 10; 
-                                QUERY PLAN                                 
----------------------------------------------------------------------------
+                                    QUERY PLAN                                    
+----------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    Output: ((mc1 + 1)), mc2, mc3
    ->  Seq Scan on aqumv.aqumv_mvt1_3
@@ -420,27 +434,27 @@ explain(verbose, costs off) select c1+1 as col1, c2, c3+1 as col2 from aqumv_t1 
 select c1 as col1, c3+1 as col2 from aqumv_t1 where c1 > 5 and c1 < 10; 
  col1 | col2 
 ------+------
-    6 |    9
-    9 |   12
-    6 |    9
-    9 |   12
     7 |   10
     8 |   11
     7 |   10
     8 |   11
+    6 |    9
+    9 |   12
+    6 |    9
+    9 |   12
 (8 rows)
 
 select c1+1 as col1, c2, c3+1 as col2 from aqumv_t1 where c1 > 5 and c1 < 10; 
  col1 | c2 | col2 
 ------+----+------
-    7 |  7 |    9
-   10 | 10 |   12
-    7 |  7 |    9
-   10 | 10 |   12
     8 |  8 |   10
     9 |  9 |   11
     8 |  8 |   10
     9 |  9 |   11
+    7 |  7 |    9
+   10 | 10 |   12
+    7 |  7 |    9
+   10 | 10 |   12
 (8 rows)
 
 set local enable_answer_query_using_materialized_views = off;
@@ -475,6 +489,8 @@ begin;
 create incremental materialized view aqumv_mvt1_4 as
   select c1 as mc1, c2 as mc2, abs(c2) as mc3, abs(abs(c2) - c1 - 1) as mc4
   from aqumv_t1 where c1 > 10 and c1 < 15;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'mc1' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 analyze aqumv_mvt1_4;
 set local enable_answer_query_using_materialized_views = on;
 -- complex exprs
@@ -506,14 +522,14 @@ set local enable_answer_query_using_materialized_views = off;
 select c1, sqrt(abs(abs(c2) - c1 - 1) + abs(c2)) + 1, abs(c2) + 1 from aqumv_t1 where c1 > 10 and c1 < 15;
  c1 |     ?column?      | ?column? 
 ----+-------------------+----------
+ 12 |  4.60555127546399 |       14
+ 12 |  4.60555127546399 |       14
  11 | 4.464101615137754 |       13
  13 | 4.741657386773941 |       15
  14 | 4.872983346207417 |       16
  11 | 4.464101615137754 |       13
  13 | 4.741657386773941 |       15
  14 | 4.872983346207417 |       16
- 12 |  4.60555127546399 |       14
- 12 |  4.60555127546399 |       14
 (8 rows)
 
 abort;
@@ -522,6 +538,8 @@ begin;
 create incremental materialized view aqumv_mvt1_post_quals as
   select c1 as mc1, c2 as mc2, abs(c2) as mc3, abs(abs(c2) - c1 - 1) as mc4
   from aqumv_t1 where c1 > 20 and c1 < 30;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'mc1' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 analyze aqumv_mvt1_post_quals;
 set local enable_answer_query_using_materialized_views = on;
 explain(verbose, costs off)
@@ -570,6 +588,12 @@ select c1, sqrt(abs(abs(c2) - c1 - 1) + abs(c2)) + 1, abs(c2) + 1
   from aqumv_t1 where c1 > 20 and c1 < 30 and sqrt(abs(c2) + 1) > 1;
  c1 |      ?column?      | ?column? 
 ----+--------------------+----------
+ 21 |   5.69041575982343 |       23
+ 25 | 6.0990195135927845 |       27
+ 28 |  6.385164807134504 |       30
+ 21 |   5.69041575982343 |       23
+ 25 | 6.0990195135927845 |       27
+ 28 |  6.385164807134504 |       30
  22 |  5.795831523312719 |       24
  24 |                  6 |       26
  27 |  6.291502622129181 |       29
@@ -582,12 +606,6 @@ select c1, sqrt(abs(abs(c2) - c1 - 1) + abs(c2)) + 1, abs(c2) + 1
  26 |  6.196152422706632 |       28
  23 |  5.898979485566356 |       25
  26 |  6.196152422706632 |       28
- 21 |   5.69041575982343 |       23
- 25 | 6.0990195135927845 |       27
- 28 |  6.385164807134504 |       30
- 21 |   5.69041575982343 |       23
- 25 | 6.0990195135927845 |       27
- 28 |  6.385164807134504 |       30
 (18 rows)
 
 select c1, sqrt(abs(abs(c2) - c1 - 1) + abs(c2)) + 1, abs(c2) + 1
@@ -608,16 +626,16 @@ select c1, sqrt(abs(abs(c2) - c1 - 1) + abs(c2)) + 1, abs(c2) + 1
  24 |                  6 |       26
  27 |  6.291502622129181 |       29
  29 |  6.477225575051661 |       31
- 23 |  5.898979485566356 |       25
- 26 |  6.196152422706632 |       28
- 23 |  5.898979485566356 |       25
- 26 |  6.196152422706632 |       28
  21 |   5.69041575982343 |       23
  25 | 6.0990195135927845 |       27
  28 |  6.385164807134504 |       30
  21 |   5.69041575982343 |       23
  25 | 6.0990195135927845 |       27
  28 |  6.385164807134504 |       30
+ 23 |  5.898979485566356 |       25
+ 26 |  6.196152422706632 |       28
+ 23 |  5.898979485566356 |       25
+ 26 |  6.196152422706632 |       28
 (18 rows)
 
 set local enable_answer_query_using_materialized_views = off;
@@ -633,16 +651,16 @@ select c1, sqrt(abs(abs(c2) - c1 - 1) + abs(c2)) + 1, abs(c2) + 1
  24 |                  6 |       26
  27 |  6.291502622129181 |       29
  29 |  6.477225575051661 |       31
- 23 |  5.898979485566356 |       25
- 26 |  6.196152422706632 |       28
- 23 |  5.898979485566356 |       25
- 26 |  6.196152422706632 |       28
  21 |   5.69041575982343 |       23
  25 | 6.0990195135927845 |       27
  28 |  6.385164807134504 |       30
  21 |   5.69041575982343 |       23
  25 | 6.0990195135927845 |       27
  28 |  6.385164807134504 |       30
+ 23 |  5.898979485566356 |       25
+ 26 |  6.196152422706632 |       28
+ 23 |  5.898979485566356 |       25
+ 26 |  6.196152422706632 |       28
 (18 rows)
 
 select c1, sqrt(abs(abs(c2) - c1 - 1) + abs(c2)) + 1, abs(c2) + 1
@@ -655,12 +673,6 @@ select c1, sqrt(abs(abs(c2) - c1 - 1) + abs(c2)) + 1, abs(c2) + 1
   from aqumv_t1 where c1 > 20 and c1 < 30 and sqrt(abs(abs(c2) - c1 - 1) + 10) > 2; 
  c1 |      ?column?      | ?column? 
 ----+--------------------+----------
- 21 |   5.69041575982343 |       23
- 25 | 6.0990195135927845 |       27
- 28 |  6.385164807134504 |       30
- 21 |   5.69041575982343 |       23
- 25 | 6.0990195135927845 |       27
- 28 |  6.385164807134504 |       30
  22 |  5.795831523312719 |       24
  24 |                  6 |       26
  27 |  6.291502622129181 |       29
@@ -669,6 +681,12 @@ select c1, sqrt(abs(abs(c2) - c1 - 1) + abs(c2)) + 1, abs(c2) + 1
  24 |                  6 |       26
  27 |  6.291502622129181 |       29
  29 |  6.477225575051661 |       31
+ 21 |   5.69041575982343 |       23
+ 25 | 6.0990195135927845 |       27
+ 28 |  6.385164807134504 |       30
+ 21 |   5.69041575982343 |       23
+ 25 | 6.0990195135927845 |       27
+ 28 |  6.385164807134504 |       30
  23 |  5.898979485566356 |       25
  26 |  6.196152422706632 |       28
  23 |  5.898979485566356 |       25
@@ -682,6 +700,8 @@ set local enable_answer_query_using_materialized_views = on;
 create incremental materialized view aqumv_mvt1_candidate_0 as
   select c1 as mc1, c2 as mc2, abs(c2) as mc3
   from aqumv_t1 where c1 > 30;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'mc1' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 analyze aqumv_mvt1_candidate_0;
 -- choose aqumv_mvt1_candidate_0
 explain(verbose, costs off)
@@ -700,6 +720,8 @@ select sqrt(abs(abs(c2) - c1 - 1) + abs(c2)) from aqumv_t1 where c1 > 30 and c1 
 create incremental materialized view aqumv_mvt1_candidate_1 as
   select c1 as mc1, c2 as mc2, abs(c2) as mc3, abs(abs(c2) - c1 - 1) as mc4
   from aqumv_t1 where c1 > 30 and c1 < 40;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'mc1' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 analyze aqumv_mvt1_candidate_1;
 -- choose aqumv_mvt1_candidate_1 as it has lower cost(less rows).
 explain(verbose, costs off)
@@ -718,6 +740,8 @@ select sqrt(abs(abs(c2) - c1 - 1) + abs(c2)) from aqumv_t1 where c1 > 30 and c1 
 create incremental materialized view aqumv_mvt1_candidate_2 as
   select c1 as mc1, c2 as mc2, abs(c2) as mc3, abs(abs(c2) - c1 - 1) as mc4
   from aqumv_t1 where c1 > 30 and c1 < 500;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'mc1' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 analyze aqumv_mvt1_candidate_2;
 -- still choose aqumv_mvt1_candidate_1 as it has lowest cost(less rows).
 explain(verbose, costs off)
@@ -746,6 +770,8 @@ analyze aqumv_t2;
 create incremental materialized view aqumv_mvt2_0 as
   select c1 as mc1, c2 as mc2, c3 as mc3
   from aqumv_t2 where c1 > 90;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'mc1' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 analyze aqumv_mvt2_0;
 -- test aggregation functions supported in IVM. 
 set local enable_answer_query_using_materialized_views = off;
@@ -1109,6 +1135,8 @@ analyze aqumv_t2;
 create incremental materialized view aqumv_mvt2_1 as
   select c3 as mc3, c1 as mc1
   from aqumv_t2 where c1 > 90;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'mc1' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 analyze aqumv_mvt2_1;
 set local enable_answer_query_using_materialized_views = off;
 explain(costs off, verbose)
@@ -1172,6 +1200,8 @@ analyze aqumv_t3;
 create incremental materialized view aqumv_mvt3_0 as
   select c1 as mc1, c2 as mc2, c3 as mc3
   from aqumv_t3 where c1 > 90;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'mc1' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 analyze aqumv_mvt3_0;
 -- Group By
 set local enable_answer_query_using_materialized_views = off;
@@ -1199,12 +1229,12 @@ select c1, c3, count(c2) from aqumv_t3 where c1 > 90 group by c1, c3;
   99 | 101 |     1
   97 |  99 |     1
   92 |  94 |     1
+ 100 | 102 |     1
+  96 |  98 |     1
   98 | 100 |     1
   95 |  97 |     1
   91 |  93 |     1
   91 |  95 |     0
- 100 | 102 |     1
-  96 |  98 |     1
 (11 rows)
 
 set local enable_answer_query_using_materialized_views = on;
@@ -1226,6 +1256,8 @@ select c1, c3, count(c2) from aqumv_t3 where c1 > 90 group by c1, c3;
 select c1, c3, count(c2) from aqumv_t3 where c1 > 90 group by c1, c3;
  c1  | c3  | count 
 -----+-----+-------
+ 100 | 102 |     1
+  96 |  98 |     1
   94 |  96 |     1
   93 |  95 |     1
   99 | 101 |     1
@@ -1235,8 +1267,6 @@ select c1, c3, count(c2) from aqumv_t3 where c1 > 90 group by c1, c3;
   95 |  97 |     1
   91 |  93 |     1
   91 |  95 |     0
- 100 | 102 |     1
-  96 |  98 |     1
 (11 rows)
 
 -- GROUPING SETS
@@ -1271,14 +1301,14 @@ select c1, c3, count(c2) from aqumv_t3 where c1 > 90 group by grouping sets((c1)
   98 |     |     1
   95 |     |     1
   91 |     |     1
-     | 101 |     1
      |  93 |     1
+     | 101 |     1
      |  99 |     1
      |  94 |     1
      | 100 |     1
      | 102 |     1
-     |  96 |     1
      |  97 |     1
+     |  96 |     1
      |  98 |     1
      |  95 |     1
 (20 rows)
@@ -1308,8 +1338,8 @@ select c1, c3, count(c2) from aqumv_t3 where c1 > 90 group by grouping sets((c1)
   99 |     |     1
   94 |     |     1
  100 |     |     1
-  96 |     |     1
   97 |     |     1
+  96 |     |     1
   98 |     |     1
   95 |     |     1
   91 |     |     1
@@ -1559,10 +1589,14 @@ analyze aqumv_t4;
 create incremental materialized view aqumv_mvt4_0 as
   select c1 as mc1, c2 as mc2, c3 as mc3
   from aqumv_t4 where c1 > 90;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'mc1' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 analyze aqumv_mvt4_0;
 create incremental materialized view aqumv_mvt4_1 as
   select c2 as mc2, c1 as mc1
   from aqumv_t4 where c1 > 95;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'mc1' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 analyze aqumv_mvt4_1;
 -- HAVING clause pushed down to where quals.
 set local enable_answer_query_using_materialized_views = off;
@@ -1588,10 +1622,10 @@ select c1, c3 from aqumv_t4 where c1 > 90 group by (c1, c3) having c3 > 97 ;
 select c1, c3 from aqumv_t4 where c1 > 90 group by (c1, c3) having c3 > 97 ;
  c1  | c3  
 -----+-----
-  96 |  98
- 100 | 102
   97 |  99
   99 | 101
+  96 |  98
+ 100 | 102
   98 | 100
 (5 rows)
 
@@ -1615,11 +1649,11 @@ select c1, c3 from aqumv_t4 where c1 > 90 group by (c1, c3) having c3 > 97 ;
 select c1, c3 from aqumv_t4 where c1 > 90 group by (c1, c3) having c3 > 97 ;
  c1  | c3  
 -----+-----
+  99 | 101
+  97 |  99
  100 | 102
   96 |  98
   98 | 100
-  99 | 101
-  97 |  99
 (5 rows)
 
 -- quals kept in HAVING clause.
@@ -1646,10 +1680,10 @@ select c1, c3, avg(c2) from aqumv_t4 where c1 > 90 group by (c1, c3) having avg(
 -----+-----+----------------------
   99 | 101 | 100.0000000000000000
   97 |  99 |  98.0000000000000000
-  98 | 100 |  99.0000000000000000
-  95 |  97 |  96.0000000000000000
  100 | 102 | 101.0000000000000000
   96 |  98 |  97.0000000000000000
+  98 | 100 |  99.0000000000000000
+  95 |  97 |  96.0000000000000000
 (6 rows)
 
 set local enable_answer_query_using_materialized_views = on;
@@ -1672,10 +1706,10 @@ select c1, c3, avg(c2) from aqumv_t4 where c1 > 90 group by (c1, c3) having avg(
 select c1, c3, avg(c2) from aqumv_t4 where c1 > 90 group by (c1, c3) having avg(c2) > 95;
  c1  | c3  |         avg          
 -----+-----+----------------------
-  98 | 100 |  99.0000000000000000
-  95 |  97 |  96.0000000000000000
   99 | 101 | 100.0000000000000000
   97 |  99 |  98.0000000000000000
+  98 | 100 |  99.0000000000000000
+  95 |  97 |  96.0000000000000000
  100 | 102 | 101.0000000000000000
   96 |  98 |  97.0000000000000000
 (6 rows)
@@ -1799,9 +1833,9 @@ select c1, avg(c2) from aqumv_t4 where c1 > 95 group by c1 having avg(c3) > 96;
 -----+----------------------
   99 | 100.0000000000000000
   97 |  98.0000000000000000
-  98 |  99.0000000000000000
  100 | 101.0000000000000000
   96 |  97.0000000000000000
+  98 |  99.0000000000000000
 (5 rows)
 
 -- Can use AQUMV.
@@ -1856,10 +1890,10 @@ select c1, avg(c2) from aqumv_t4 where c1 > 90 group by c1 having avg(c3) > 96;
 -----+----------------------
   99 | 100.0000000000000000
   97 |  98.0000000000000000
-  98 |  99.0000000000000000
-  95 |  96.0000000000000000
  100 | 101.0000000000000000
   96 |  97.0000000000000000
+  98 |  99.0000000000000000
+  95 |  96.0000000000000000
 (6 rows)
 
 abort;
@@ -2162,6 +2196,8 @@ analyze aqumv_t6;
 create incremental materialized view aqumv_mvt6_0 as
   select c1 as mc1, c2 as mc2
   from aqumv_t6 where c1 > 90;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'mc1' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 analyze aqumv_mvt6_0;
 -- DISTINCT
 \pset null NULL
@@ -2282,6 +2318,8 @@ sum(c2) as sum_c2, sum(distinct c2) as sum_distinct_c2 from aqumv_t6 where c1 > 
 create incremental materialized view aqumv_mvt6_1 as
   select c3 as mc3, c4 as mc4, c1 as mc1, c2 as mc2
   from aqumv_t6 where c1 > 97;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'mc1' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 analyze aqumv_mvt6_1;
 set local enable_answer_query_using_materialized_views = off;
 explain(costs off, verbose)
@@ -2457,6 +2495,8 @@ analyze aqumv_t7;
 create incremental materialized view aqumv_mvt7_0 as
   select c3 as cm3, c1 as mc1, c2 as mc2
   from aqumv_t7 where c1 > 90;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'mc1' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 analyze aqumv_mvt7_0;
 -- LIMIT
 set local enable_answer_query_using_materialized_views = off;
@@ -2745,11 +2785,11 @@ select * from aqumv_ext_r;
   4
   7
   8
+  1
   5
   6
   9
  10
-  1
 (10 rows)
 
 set local enable_answer_query_using_materialized_views = on;
@@ -2810,12 +2850,12 @@ select * from aqumv_ext_mv;
   6
   9
  10
+  1
   2
   3
   4
   7
   8
-  1
 (10 rows)
 
 INSERT INTO aqumv_ext_w SELECT * FROM generate_series(10, 15);
@@ -2830,11 +2870,6 @@ refresh materialized view aqumv_ext_mv;
 select * from aqumv_ext_mv;
  id 
 ----
-  2
-  3
-  4
-  7
-  8
   1
  12
  15
@@ -2846,6 +2881,11 @@ select * from aqumv_ext_mv;
  11
  13
  14
+  2
+  3
+  4
+  7
+  8
 (16 rows)
 
 abort;
@@ -3173,16 +3213,32 @@ abort;
 create table par(a int, b int, c int) partition by range(b)
     subpartition by range(c) subpartition template (start (1) end (3) every (1))
     (start(1) end(3) every(1));
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into par values(1, 1, 1), (1, 1, 2), (2, 2, 1), (2, 2, 2);
 insert into par values(1, 1, 1), (1, 1, 2), (2, 2, 1), (2, 2, 2);
 insert into par values(1, 1, 1), (1, 1, 2), (2, 2, 1), (2, 2, 2);
 create materialized view mv_par as select    count(*) from par;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'count' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create materialized view mv_par1 as select   count(*) from par_1_prt_1;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'count' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create materialized view mv_par1_1 as select count(*) from par_1_prt_1_2_prt_1;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'count' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create materialized view mv_par1_2 as select count(*) from par_1_prt_1_2_prt_2;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'count' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create materialized view mv_par2 as select   count(*) from par_1_prt_2;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'count' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create materialized view mv_par2_1 as select count(*) from par_1_prt_2_2_prt_1;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'count' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create materialized view mv_par_prune as select count(*) from par where b = 1;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'count' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 set enable_answer_query_using_materialized_views = on;
 explain(costs off, verbose)
 select count(*) from par;
@@ -3480,10 +3536,10 @@ select b, sum(a), c, count(b) from t0 group by c, b;
 select b, sum(a), c, count(b) from t0 group by c, b;
  b | sum  | c | count 
 ---+------+---+-------
+ 3 | 1024 | 4 |   512
  6 | 2560 | 7 |   512
  4 | 1536 | 5 |   512
  5 | 2048 | 6 |   512
- 3 | 1024 | 4 |   512
  2 |  512 | 3 |   512
 (5 rows)
 
@@ -3559,11 +3615,11 @@ select b + c + 1, sum(a) + count(b) from t0 group by c, b;
 select b + c + 1, sum(a) + count(b) from t0 group by c, b;
  ?column? | ?column? 
 ----------+----------
-        8 |     1536
-       14 |     3072
        12 |     2560
         6 |     1024
        10 |     2048
+        8 |     1536
+       14 |     3072
 (5 rows)
 
 -- no qual, should not match 
@@ -3574,26 +3630,29 @@ select c, count(b) from t0 group by c ;
 -----------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    Output: c, (count(b))
-   ->  Finalize HashAggregate
+   ->  Finalize GroupAggregate
          Output: c, count(b)
          Group Key: t0.c
-         ->  Redistribute Motion 3:3  (slice2; segments: 3)
+         ->  Sort
                Output: c, (PARTIAL count(b))
-               Hash Key: c
-               ->  Streaming Partial HashAggregate
-                     Output: c, PARTIAL count(b)
-                     Group Key: t0.c
-                     ->  Seq Scan on aqumv.t0
-                           Output: a, b, c, d
+               Sort Key: t0.c
+               ->  Redistribute Motion 3:3  (slice2; segments: 3)
+                     Output: c, (PARTIAL count(b))
+                     Hash Key: c
+                     ->  Streaming Partial HashAggregate
+                           Output: c, PARTIAL count(b)
+                           Group Key: t0.c
+                           ->  Seq Scan on aqumv.t0
+                                 Output: a, b, c, d
  Settings: enable_answer_query_using_materialized_views = 'off', optimizer = 'off'
  Optimizer: Postgres query optimizer
-(15 rows)
+(18 rows)
 
 select c, count(b) from t0 group by c ;
  c | count 
 ---+-------
- 4 |   512
  3 |   512
+ 4 |   512
  7 |   512
  5 |   512
  6 |   512
@@ -3606,26 +3665,29 @@ select c, count(b) from t0 group by c ;
 ----------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    Output: c, (count(b))
-   ->  Finalize HashAggregate
+   ->  Finalize GroupAggregate
          Output: c, count(b)
          Group Key: t0.c
-         ->  Redistribute Motion 3:3  (slice2; segments: 3)
+         ->  Sort
                Output: c, (PARTIAL count(b))
-               Hash Key: c
-               ->  Streaming Partial HashAggregate
-                     Output: c, PARTIAL count(b)
-                     Group Key: t0.c
-                     ->  Seq Scan on aqumv.t0
-                           Output: a, b, c, d
+               Sort Key: t0.c
+               ->  Redistribute Motion 3:3  (slice2; segments: 3)
+                     Output: c, (PARTIAL count(b))
+                     Hash Key: c
+                     ->  Streaming Partial HashAggregate
+                           Output: c, PARTIAL count(b)
+                           Group Key: t0.c
+                           ->  Seq Scan on aqumv.t0
+                                 Output: a, b, c, d
  Settings: enable_answer_query_using_materialized_views = 'on', optimizer = 'off'
  Optimizer: Postgres query optimizer
-(15 rows)
+(18 rows)
 
 select c, count(b) from t0 group by c ;
  c | count 
 ---+-------
- 4 |   512
  3 |   512
+ 4 |   512
  7 |   512
  5 |   512
  6 |   512
@@ -3709,8 +3771,8 @@ select count(b), b, c from t0 where a > 3 group by b, c;
 select count(b), b, c from t0 where a > 3 group by b, c;
  count | b | c 
 -------+---+---
-   512 | 5 | 6
    512 | 6 | 7
+   512 | 5 | 6
 (2 rows)
 
 set local enable_answer_query_using_materialized_views = on;
@@ -3850,5 +3912,17 @@ reset optimizer;
 reset enable_answer_query_using_materialized_views;
 -- start_ignore
 drop schema aqumv cascade;
+NOTICE:  drop cascades to 11 other objects
+DETAIL:  drop cascades to table aqumv_t1
+drop cascades to table t1
+drop cascades to materialized view normal_mv_t1
+drop cascades to table par
+drop cascades to materialized view mv_par
+drop cascades to materialized view mv_par1
+drop cascades to materialized view mv_par1_1
+drop cascades to materialized view mv_par1_2
+drop cascades to materialized view mv_par2
+drop cascades to materialized view mv_par2_1
+drop cascades to materialized view mv_par_prune
 -- end_ignore
 reset search_path;

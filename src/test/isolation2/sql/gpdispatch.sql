@@ -27,6 +27,7 @@ insert into test_waitevent select generate_series(1,1000);
 1: set optimizer = off;
 1: set gp_cte_sharing to on;
 1: set max_parallel_workers_per_gather = 0;
+1: set cbdb_enable_dynamic_shared_scan = off;
 1: select gp_inject_fault_infinite('shareinput_writer_notifyready', 'suspend', 2);
 1&: WITH a1 as (select * from test_waitevent), a2 as (select * from test_waitevent) SELECT sum(a1.i)  FROM a1 INNER JOIN a2 ON a2.i = a1.i  UNION ALL SELECT count(a1.i)  FROM a1 INNER JOIN a2 ON a2.i = a1.i;
 -- start_ignore

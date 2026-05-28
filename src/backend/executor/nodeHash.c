@@ -83,6 +83,7 @@ static HashJoinTuple ExecParallelHashTupleAlloc(HashJoinTable hashtable,
 												dsa_pointer *shared);
 static void MultiExecPrivateHash(HashState *node);
 static void MultiExecParallelHash(HashState *node);
+static void MergeParallelRuntimeFilters(HashState *node, HashJoinTable hashtable);
 static inline HashJoinTuple ExecParallelHashFirstTuple(HashJoinTable table,
 													   int bucketno);
 static inline HashJoinTuple ExecParallelHashNextTuple(HashJoinTable table,
@@ -346,6 +347,9 @@ MultiExecParallelHash(HashState *node)
 				if (TupIsNull(slot))
 					break;
 
+				if (gp_enable_runtime_filter_pushdown && node->filters)
+					AddTupleValuesIntoRF(node, slot);
+
 				econtext->ecxt_outertuple = slot;
 				if (ExecHashGetHashValue(node, hashtable, econtext, hashkeys,
 										 false, hashtable->keepNulls,
@@ -437,6 +441,17 @@ MultiExecParallelHash(HashState *node)
 	hashtable->log2_nbuckets = my_log2(hashtable->nbuckets);
 	hashtable->totalTuples = pstate->total_tuples;
 	ExecParallelHashEnsureBatchAccessors(hashtable);
+
+	if (gp_enable_runtime_filter_pushdown && node->filters)
+	{
+		/*
+		 * In parallel hash join, each worker has only a partial bloom filter
+		 * (containing ~1/N of inner tuples). We must merge all partial filters
+		 * into a complete one before pushing down to the probe-side SeqScan.
+		 */
+		MergeParallelRuntimeFilters(node, hashtable);
+		PushdownRuntimeFilter(node);
+	}
 
 	/*
 	 * The next synchronization point is in ExecHashJoin's HJ_BUILD_HASHTABLE
@@ -4311,6 +4326,177 @@ get_hash_mem(void)
 	mem_limit = Min(mem_limit, (size_t) MAX_KILOBYTES);
 
 	return (int) mem_limit;
+}
+
+/*
+ * Shared merge buffer layout for parallel runtime filter merge.
+ *
+ * For each AttrFilter, we store: empty flag, min, max, and the bloom filter
+ * bitset.  All workers OR their partial bitsets into this shared buffer,
+ * then read back the complete merged result.
+ */
+typedef struct SharedRFSlot
+{
+	bool		empty;
+	Datum		min;
+	Datum		max;
+	Size		bitset_bytes;
+	/* unsigned char bitset[] follows, at offset MAXALIGN(sizeof(SharedRFSlot)) */
+} SharedRFSlot;
+
+#define SHARED_RF_SLOT_HEADER	MAXALIGN(sizeof(SharedRFSlot))
+#define SHARED_RF_SLOT_SIZE(bs)	(SHARED_RF_SLOT_HEADER + MAXALIGN(bs))
+
+static SharedRFSlot *
+GetSharedRFSlot(char *base, int idx, Size bitset_bytes)
+{
+	return (SharedRFSlot *)(base + idx * SHARED_RF_SLOT_SIZE(bitset_bytes));
+}
+
+static unsigned char *
+GetSharedRFBitset(SharedRFSlot *slot)
+{
+	return (unsigned char *)slot + SHARED_RF_SLOT_HEADER;
+}
+
+/*
+ * MergeParallelRuntimeFilters - merge partial bloom filters from all parallel
+ * workers into a complete filter via shared memory.
+ *
+ * Each parallel hash join worker builds a partial bloom filter containing only
+ * the inner tuples it processed (~1/N of total).  Before pushing down to the
+ * probe-side SeqScan, we must merge all partial filters.
+ *
+ * Protocol:
+ * 1. First worker to acquire lock allocates shared buffer via DSA, initializes
+ *    it (empty=true, min=LONG_MAX, max=LONG_MIN, bitset=0).
+ * 2. Each worker locks, OR's its partial bitset into shared buffer, updates
+ *    min/max, unlocks, increments atomic counter.
+ * 3. All workers wait for counter == nparticipants.
+ * 4. Each worker copies merged data back to its private AttrFilter.
+ */
+static void
+MergeParallelRuntimeFilters(HashState *node, HashJoinTable hashtable)
+{
+	ParallelHashJoinState *pstate = hashtable->parallel_state;
+	ListCell   *lc;
+	int			nfilters = list_length(node->filters);
+	int			i;
+	Size		bitset_bytes;
+	Size		total_size;
+	char	   *shared_base;
+
+	if (nfilters == 0)
+		return;
+
+	/* All filters have the same bitset size (same plan_rows, work_mem, seed) */
+	bitset_bytes = bloom_bitset_bytes(
+		((AttrFilter *) linitial(node->filters))->blm_filter);
+
+	total_size = nfilters * SHARED_RF_SLOT_SIZE(bitset_bytes);
+
+	/*
+	 * Phase 1: Each worker merges its partial data into shared buffer.
+	 * Use the existing LWLock in ParallelHashJoinState for serialization.
+	 */
+	LWLockAcquire(&pstate->lock, LW_EXCLUSIVE);
+
+	/* First worker allocates and initializes the shared merge buffer */
+	if (!DsaPointerIsValid(pstate->rf_merge_buf))
+	{
+		dsa_pointer dp;
+		SharedRFSlot *slot;
+
+		dp = dsa_allocate0(hashtable->area, total_size);
+		shared_base = dsa_get_address(hashtable->area, dp);
+
+		for (i = 0; i < nfilters; i++)
+		{
+			slot = GetSharedRFSlot(shared_base, i, bitset_bytes);
+			slot->empty = true;
+			slot->min = LONG_MAX;
+			slot->max = LONG_MIN;
+			slot->bitset_bytes = bitset_bytes;
+			/* bitset is already zeroed by dsa_allocate0 */
+		}
+
+		pstate->rf_merge_buf = dp;
+	}
+
+	shared_base = dsa_get_address(hashtable->area, pstate->rf_merge_buf);
+
+	/* OR this worker's partial bloom filter into the shared buffer */
+	i = 0;
+	foreach(lc, node->filters)
+	{
+		AttrFilter		   *af = lfirst(lc);
+		SharedRFSlot	   *slot = GetSharedRFSlot(shared_base, i, bitset_bytes);
+		unsigned char	   *shared_bits = GetSharedRFBitset(slot);
+		unsigned char	   *my_bits = bloom_get_bitset(af->blm_filter);
+		Size				nbytes = bloom_bitset_bytes(af->blm_filter);
+		Size				j;
+
+		Assert(nbytes == bitset_bytes);
+
+		if (!af->empty)
+		{
+			slot->empty = false;
+
+			/* Merge min/max */
+			if ((int64_t)af->min < (int64_t)slot->min)
+				slot->min = af->min;
+			if ((int64_t)af->max > (int64_t)slot->max)
+				slot->max = af->max;
+		}
+
+		/* Bitwise OR the bloom filter bitset */
+		for (j = 0; j < nbytes; j++)
+			shared_bits[j] |= my_bits[j];
+
+		i++;
+	}
+
+	LWLockRelease(&pstate->lock);
+
+	/* Signal that this worker is done merging */
+	pg_atomic_add_fetch_u32(&pstate->rf_merge_count, 1);
+
+	/*
+	 * Wait for all workers to finish merging (cancel-safe).
+	 *
+	 * Use build_barrier's participant count instead of pstate->nparticipants,
+	 * because under Parallel Append only a subset of workers may enter this
+	 * hash join.  nparticipants is the total worker count, but build_barrier
+	 * tracks only workers that actually attached to this hash join instance.
+	 */
+	{
+		int		nworkers = BarrierParticipants(&pstate->build_barrier);
+
+		while (pg_atomic_read_u32(&pstate->rf_merge_count) < (uint32) nworkers)
+			CHECK_FOR_INTERRUPTS();
+	}
+
+	/*
+	 * Phase 2: Copy merged data back to this worker's private AttrFilter.
+	 * The shared buffer is read-only at this point (all writers are done).
+	 */
+	shared_base = dsa_get_address(hashtable->area, pstate->rf_merge_buf);
+
+	i = 0;
+	foreach(lc, node->filters)
+	{
+		AttrFilter		   *af = lfirst(lc);
+		SharedRFSlot	   *slot = GetSharedRFSlot(shared_base, i, bitset_bytes);
+		unsigned char	   *shared_bits = GetSharedRFBitset(slot);
+		unsigned char	   *my_bits = bloom_get_bitset(af->blm_filter);
+
+		af->empty = slot->empty;
+		af->min = slot->min;
+		af->max = slot->max;
+		memcpy(my_bits, shared_bits, bitset_bytes);
+
+		i++;
+	}
 }
 
 /*

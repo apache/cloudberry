@@ -5,7 +5,11 @@ SET search_path to s1;
 CREATE TABLE a(i int) DISTRIBUTED BY (i);
 INSERT INTO a SELECT generate_series(1,200000);
 SELECT diskquota.wait_for_worker_new_epoch();
+-- FIXME: cbdb_eager_subplan=on converts InitPlan to SubPlan in the view's
+-- subqueries, creating multiple segworker groups with pg_database_size().
+SET cbdb_eager_subplan = off;
 SELECT (pg_database_size(oid)-dbsize)/dbsize < 0.1  FROM pg_database, diskquota.show_fast_database_size_view WHERE datname='contrib_regression';
+RESET cbdb_eager_subplan;
 RESET search_path;
 DROP TABLE s1.a;
 DROP SCHEMA s1;

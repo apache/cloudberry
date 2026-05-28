@@ -292,6 +292,10 @@ typedef struct ParallelHashJoinState
 	pg_atomic_uint32 distributor;	/* counter for load balancing */
 
 	SharedFileSet fileset;		/* space for shared temporary files */
+
+	/* Runtime filter merge support for parallel hash join */
+	dsa_pointer			rf_merge_buf;		/* DSA pointer to shared merge buffer */
+	pg_atomic_uint32	rf_merge_count;		/* workers that finished merging */
 } ParallelHashJoinState;
 
 /* The phases for building batches, used by build_barrier. */

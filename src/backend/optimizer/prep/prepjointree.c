@@ -45,6 +45,10 @@
 #include "cdb/cdbsubselect.h"
 
 #include "optimizer/transform.h"
+#include "parser/parse_clause.h"
+#include "parser/parse_oper.h"
+
+#include "utils/guc.h"
 
 typedef struct pullup_replace_vars_context
 {
@@ -139,6 +143,10 @@ static void fix_append_rel_relids(List *append_rel_list, int varno,
 								  Relids subrelids);
 static Node *find_jointree_node_for_rel(Node *jtnode, int relid);
 
+static void make_setop_distinct(Query *subquery);
+
+static void
+make_setop_distinct_recurse(Node *setOp, Query *setOpQuery, bool distinct);
 
 /*
  * replace_empty_jointree
@@ -744,13 +752,33 @@ pull_up_sublinks_qual_recurse(PlannerInfo *root, Node *node,
 	{
 		OpExpr *opexp = (OpExpr *) node;
 		JoinExpr   *j;
+		Node *rarg;
+		Node *n_tmp = node; 
 
-		if (list_length(opexp->args) == 2)
+
+		bool sublink_found = false;
+		while (IsA(n_tmp, OpExpr))
+		{
+			OpExpr *op_tmp = (OpExpr *) n_tmp;
+
+			if (list_length(op_tmp->args) != 2)
+				break;
+
+			rarg = list_nth(op_tmp->args, 1);
+			if (IsA(rarg, SubLink))
+			{
+				sublink_found = true;
+				break;
+			}
+			n_tmp = list_nth(op_tmp->args, 1);
+		}
+
+		if (sublink_found && list_length(opexp->args) == 2)
 		{
 			/**
 			 * Check if second arg is sublink
 			 */
-			Node *rarg = list_nth(opexp->args, 1);
+			// Node *rarg = list_nth(opexp->args, 1);
 
 			if (IsA(rarg, SubLink))
 			{
@@ -936,6 +964,10 @@ pull_up_subqueries_recurse(PlannerInfo *root, Node *jtnode,
 			is_simple_union_all(rte->subquery))
 			return pull_up_simple_union_all(root, jtnode, rte);
 
+		if (rte->rtekind == RTE_SUBQUERY &&
+			cbdb_enable_setop_pre_dedup)
+			make_setop_distinct(rte->subquery);
+
 		/*
 		 * Or perhaps it's a simple VALUES RTE?
 		 *
@@ -1107,6 +1139,7 @@ pull_up_simple_subquery(PlannerInfo *root, Node *jtnode, RangeTblEntry *rte,
 	subroot->hasRecursion = false;
 	subroot->wt_param_id = -1;
 	subroot->non_recursive_path = NULL;
+	subroot->init_plan_ids = NULL;
 
 	/* No CTEs to worry about */
 	Assert(subquery->cteList == NIL);
@@ -3891,4 +3924,90 @@ init_list_cteplaninfo(int numCtes)
 
 	return list_cteplaninfo;
 	
+}
+
+static void
+make_setop_distinct(Query *subquery)
+{
+	SetOperationStmt *topop;
+
+
+	/* Let's just make sure it's a valid subselect ... */
+	if (!IsA(subquery, Query) ||
+		subquery->commandType != CMD_SELECT)
+		elog(ERROR, "subquery is bogus");
+
+	/* Is it a set-operation query at all? */
+	topop = castNode(SetOperationStmt, subquery->setOperations);
+	if (!topop)
+		return;
+
+	/* Recursively check the tree of set operations */
+	make_setop_distinct_recurse((Node *) topop, subquery, !topop->all);
+}
+
+static void
+make_setop_distinct_recurse(Node *setOp, Query *setOpQuery, bool distinct)
+{
+	if (IsA(setOp, RangeTblRef))
+	{
+		if (!distinct)
+			return;
+		RangeTblRef *rtr = (RangeTblRef *) setOp;
+		RangeTblEntry *rte = rt_fetch(rtr->rtindex, setOpQuery->rtable);
+		Query	   *subquery = rte->subquery;
+		ListCell *lc;
+		List *distinct_clause = NIL;
+
+		Assert(subquery != NULL);
+		/*
+		 * Don't disturb if subquery is already distinct.
+		 * DISTINCT, DISTINCT ON
+		 * GROUP BY(no grouping sets)
+		 */
+		if (subquery->hasDistinctOn ||
+			subquery->groupingSets != NIL ||
+			subquery->distinctClause)
+		return;
+
+		// add distinct on subquery->targetList
+		foreach(lc, subquery->targetList)
+		{
+			TargetEntry *tle = (TargetEntry *) lfirst(lc);
+
+			if (tle->resjunk)
+				continue;			/* ignore junk */
+
+			SortGroupClause *grpcl = makeNode(SortGroupClause);
+			Oid	restype = exprType((Node *) tle->expr);
+			Oid			sortop;
+			Oid			eqop;
+			bool		hashable;
+			/* determine the eqop and optional sortop */
+			get_sort_group_operators(restype,
+									 false, true, false,
+									 &sortop, &eqop, NULL,
+									 &hashable);
+			grpcl->tleSortGroupRef = assignSortGroupRef(tle, subquery->targetList);
+			grpcl->eqop = eqop;
+			grpcl->sortop = sortop;
+			grpcl->nulls_first = false; /* OK with or without sortop */
+			grpcl->hashable = hashable;
+			distinct_clause = lappend(distinct_clause, grpcl);
+		}
+		subquery->distinctClause = distinct_clause;
+	}
+	else if (IsA(setOp, SetOperationStmt))
+	{
+		SetOperationStmt *op = (SetOperationStmt *) setOp;
+
+		make_setop_distinct_recurse(op->larg, setOpQuery, !op->all);
+		make_setop_distinct_recurse(op->rarg, setOpQuery, !op->all);
+	}
+	else
+	{
+		elog(ERROR, "unrecognized node type: %d",
+			 (int) nodeTag(setOp));
+		return;			/* keep compiler quiet */
+	}
 }

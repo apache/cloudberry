@@ -229,11 +229,31 @@ jobs:
             "include": [
               {"test":"ic-good-opt-off",
                "make_configs":["src/test/regress:installcheck-good"],
-               "pg_settings":{"optimizer":"off"}
+               "pg_settings":{
+                 "optimizer":"off",
+                 "cbdb_inner_join_selectivity_damping_factor":"1",
+                 "cbdb_streaming_damping_factor":"1",
+                 "cbdb_eager_subplan":"off",
+                 "cbdb_dedup_semi_damping_factor":"1",
+                 "cbdb_enable_multi_window_agg":"off",
+                 "cbdb_enable_setop_pre_dedup":"off",
+                 "cbdb_enable_dynamic_shared_scan":"off",
+                 "cbdb_2phase_agg_cardinality_cap":"1"
+                }
               },
               {"test":"ic-good-opt-on",
                "make_configs":["src/test/regress:installcheck-good"],
-               "pg_settings":{"optimizer":"on"}
+               "pg_settings":{
+                 "optimizer":"on",
+                 "cbdb_inner_join_selectivity_damping_factor":"1",
+                 "cbdb_streaming_damping_factor":"1",
+                 "cbdb_eager_subplan":"off",
+                 "cbdb_dedup_semi_damping_factor":"1",
+                 "cbdb_enable_multi_window_agg":"off",
+                 "cbdb_enable_setop_pre_dedup":"off",
+                 "cbdb_enable_dynamic_shared_scan":"off",
+                 "cbdb_2phase_agg_cardinality_cap":"1"
+                }
               },
               {"test":"pax-ic-good-opt-off",
                "make_configs":[
@@ -242,7 +262,16 @@ jobs:
               ],
                "pg_settings":{
                  "optimizer":"off",
-                 "default_table_access_method":"pax"
+                 "default_table_access_method":"pax",
+                 "cbdb_inner_join_selectivity_damping_factor":"1",
+                 "cbdb_streaming_damping_factor":"1",
+                 "cbdb_eager_subplan":"off",
+                 "cbdb_dedup_semi_damping_factor":"1",
+                 "cbdb_enable_multi_window_agg":"off",
+                 "cbdb_enable_setop_pre_dedup":"off",
+                 "cbdb_enable_dynamic_shared_scan":"off",
+                 "cbdb_2phase_agg_cardinality_cap":"1",
+                 "force_parallel_mode":"1"
                 }
               },
               {"test":"pax-ic-good-opt-on",
@@ -252,14 +281,30 @@ jobs:
               ],
                "pg_settings":{
                  "optimizer":"on",
-                 "default_table_access_method":"pax"
+                 "default_table_access_method":"pax",
+                 "cbdb_inner_join_selectivity_damping_factor":"1",
+                 "cbdb_streaming_damping_factor":"1",
+                 "cbdb_eager_subplan":"off",
+                 "cbdb_dedup_semi_damping_factor":"1",
+                 "cbdb_enable_multi_window_agg":"off",
+                 "cbdb_enable_setop_pre_dedup":"off",
+                 "cbdb_enable_dynamic_shared_scan":"off",
+                 "cbdb_2phase_agg_cardinality_cap":"1"
                 }
               },
               {"test":"pax-ic-isolation2-opt-off",
                "make_configs":["contrib/pax_storage/:isolation2_test"],
                "pg_settings":{
                  "optimizer":"off",
-                 "default_table_access_method":"pax"
+                 "default_table_access_method":"pax",
+                 "cbdb_inner_join_selectivity_damping_factor":"1",
+                 "cbdb_streaming_damping_factor":"1",
+                 "cbdb_eager_subplan":"off",
+                 "cbdb_dedup_semi_damping_factor":"1",
+                 "cbdb_enable_multi_window_agg":"off",
+                 "cbdb_enable_setop_pre_dedup":"off",
+                 "cbdb_enable_dynamic_shared_scan":"off",
+                 "cbdb_2phase_agg_cardinality_cap":"1"
                 },
                 "enable_core_check":false
               },
@@ -267,7 +312,15 @@ jobs:
                "make_configs":["contrib/pax_storage/:isolation2_test"],
                "pg_settings":{
                  "optimizer":"on",
-                 "default_table_access_method":"pax"
+                 "default_table_access_method":"pax",
+                 "cbdb_inner_join_selectivity_damping_factor":"1",
+                 "cbdb_streaming_damping_factor":"1",
+                 "cbdb_eager_subplan":"off",
+                 "cbdb_dedup_semi_damping_factor":"1",
+                 "cbdb_enable_multi_window_agg":"off",
+                 "cbdb_enable_setop_pre_dedup":"off",
+                 "cbdb_enable_dynamic_shared_scan":"off",
+                 "cbdb_2phase_agg_cardinality_cap":"1"
                 },
                 "enable_core_check":false
               },
@@ -1434,10 +1487,16 @@ jobs:
           # 2. Follow the same pattern as optimizer
           # 3. Update matrix entries to include the new setting
 
-          # Set PostgreSQL options if defined
+          # Set PostgreSQL options from pg_settings matrix
           PG_OPTS=""
-          if [[ "${{ matrix.pg_settings.optimizer != '' }}" == "true" ]]; then
-            PG_OPTS="$PG_OPTS -c optimizer=${{ matrix.pg_settings.optimizer }}"
+          PG_SETTINGS_JSON='${{ toJson(matrix.pg_settings) }}'
+          if [[ "$PG_SETTINGS_JSON" != "null" && "$PG_SETTINGS_JSON" != "" ]]; then
+            while IFS= read -r line; do
+              # Extract key and value from JSON lines like: "key": "value"
+              if [[ "$line" =~ \"([^\"]+)\"[[:space:]]*:[[:space:]]*\"([^\"]+)\" ]]; then
+                PG_OPTS="$PG_OPTS -c ${BASH_REMATCH[1]}=${BASH_REMATCH[2]}"
+              fi
+            done <<< "$PG_SETTINGS_JSON"
           fi
 
           # Create extension if required
@@ -1462,10 +1521,6 @@ jobs:
                 exit 1
                 ;;
             esac
-          fi
-
-          if [[ "${{ matrix.pg_settings.default_table_access_method != '' }}" == "true" ]]; then
-            PG_OPTS="$PG_OPTS -c default_table_access_method=${{ matrix.pg_settings.default_table_access_method }}"
           fi
 
           # Read configs into array

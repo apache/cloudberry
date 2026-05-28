@@ -569,3 +569,12 @@ TupleHashTableMatch(struct tuplehash_hash *tb, const MinimalTuple tuple1, const 
 	econtext->ecxt_outertuple = slot1;
 	return !ExecQualAndReset(hashtable->cur_eq_func, econtext);
 }
+
+/*
+ * Destroy the hashtable, free all memory allocated for the hashtable.
+ */
+void
+DestroyTupleHashTable(TupleHashTable hashtable)
+{
+	tuplehash_destroy(hashtable->hashtab);
+}

@@ -801,6 +801,9 @@ generate_nonunion_paths(SetOperationStmt *op, PlannerInfo *root,
 	int			firstFlag;
 	GpSetOpType optype = PSETOP_NONE; /* CDB */
 
+	List	*partial_pathlist = NIL;
+	int		parallel_workers = 0;
+
 	/*
 	 * Tell children to fetch all tuples.
 	 */
@@ -821,6 +824,33 @@ generate_nonunion_paths(SetOperationStmt *op, PlannerInfo *root,
 								  &rpath_tlist,
 								  &dRightGroups);
 	rpath = rrel->cheapest_total_path;
+
+	if (lrel->consider_parallel &&
+		(lrel->partial_pathlist != NIL) &&
+		(rrel->partial_pathlist != NIL) &&
+		rrel->consider_parallel)
+	{
+		ListCell *lc;
+
+		/* TODO: adjust nGroups ? */
+		if (op->op == SETOP_EXCEPT || dLeftGroups <= dRightGroups)
+		{
+			partial_pathlist = list_make2(linitial(lrel->partial_pathlist),
+									  linitial(rrel->partial_pathlist));
+		}
+		else
+		{
+			partial_pathlist = list_make2(linitial(rrel->partial_pathlist),
+										linitial(lrel->partial_pathlist));
+		}
+		/* Find the highest number of workers requested for any subpath. */
+		foreach(lc, partial_pathlist)
+		{
+			Path	   *path = lfirst(lc);
+
+			parallel_workers = Max(parallel_workers, path->parallel_workers);
+		}
+	}
 
 	/* Undo effects of forcing tuple_fraction to 0 */
 	root->tuple_fraction = save_fraction;
@@ -855,6 +885,13 @@ generate_nonunion_paths(SetOperationStmt *op, PlannerInfo *root,
 	{
 		optype = choose_setop_type(pathlist,tlist_list);
 		adjust_setop_arguments(root, pathlist, tlist_list, optype);
+
+		if (partial_pathlist != NIL)
+		{
+			/* We don't need optype in parallel, create_append_path will handle that. */
+			adjust_setop_arguments(root, partial_pathlist, tlist_list, 
+									choose_setop_type(pathlist,tlist_list));
+		}
 	}
 	else if ( Gp_role == GP_ROLE_UTILITY 
 			|| Gp_role == GP_ROLE_EXECUTE ) /* MPP-2928 */
@@ -880,6 +917,9 @@ generate_nonunion_paths(SetOperationStmt *op, PlannerInfo *root,
 	result_rel = fetch_upper_rel(root, UPPERREL_SETOP,
 								 bms_union(lrel->relids, rrel->relids));
 	result_rel->reltarget = create_pathtarget(root, tlist);
+
+	if (partial_pathlist != NIL)
+		result_rel->consider_parallel = true;
 
 	/*
 	 * Append the child results together.
@@ -955,6 +995,40 @@ generate_nonunion_paths(SetOperationStmt *op, PlannerInfo *root,
 
 	result_rel->rows = path->rows;
 	add_path(result_rel, path, root);
+
+	if (partial_pathlist != NIL)
+	{
+		/* Same as above, do partial paths. */
+		path = (Path *) create_append_path(root, result_rel, NIL, partial_pathlist,
+										   NIL, NULL, parallel_workers, false, -1);
+
+		use_hash = choose_hashed_setop(root, groupList, path,
+									   dNumGroups, dNumOutputRows,
+									   (op->op == SETOP_INTERSECT) ? "INTERSECT" : "EXCEPT");
+
+		if (groupList && !use_hash)
+			path = (Path *) create_sort_path(root,
+											 result_rel,
+											 path,
+											 make_pathkeys_for_sortclauses(root,
+																		   groupList,
+																		   tlist),
+											 -1.0);
+
+		path = (Path *) create_setop_path(root,
+										  result_rel,
+										  path,
+										  cmd,
+										  use_hash ? SETOP_HASHED : SETOP_SORTED,
+										  groupList,
+										  list_length(op->colTypes) + 1,
+										  use_hash ? firstFlag : -1,
+										  dNumGroups,
+										  dNumOutputRows);
+
+		add_partial_path(result_rel, path);
+	}
+
 	return result_rel;
 }
 

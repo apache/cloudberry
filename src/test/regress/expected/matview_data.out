@@ -1339,23 +1339,25 @@ explain(costs off)
   select c.region, count(*) as order_count, sum(o.amount) as total_amount, avg(o.amount) as avg_amount
   from aqj_orders o join aqj_customers c on o.customer_id = c.customer_id
   group by c.region;
-                                   QUERY PLAN                                    
----------------------------------------------------------------------------------
+                                      QUERY PLAN                                       
+---------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
-   ->  Finalize HashAggregate
+   ->  Finalize GroupAggregate
          Group Key: c.region
-         ->  Redistribute Motion 3:3  (slice2; segments: 3)
-               Hash Key: c.region
-               ->  Streaming Partial HashAggregate
-                     Group Key: c.region
-                     ->  Hash Join
-                           Hash Cond: (o.customer_id = c.customer_id)
-                           ->  Seq Scan on aqj_orders o
-                           ->  Hash
-                                 ->  Broadcast Motion 3:3  (slice3; segments: 3)
-                                       ->  Seq Scan on aqj_customers c
+         ->  Sort
+               Sort Key: c.region
+               ->  Redistribute Motion 3:3  (slice2; segments: 3)
+                     Hash Key: c.region
+                     ->  Streaming Partial HashAggregate
+                           Group Key: c.region
+                           ->  Hash Join
+                                 Hash Cond: (o.customer_id = c.customer_id)
+                                 ->  Seq Scan on aqj_orders o
+                                 ->  Hash
+                                       ->  Broadcast Motion 3:3  (slice3; segments: 3)
+                                             ->  Seq Scan on aqj_customers c
  Optimizer: Postgres query optimizer
-(14 rows)
+(16 rows)
 
 select c.region, count(*) as order_count, sum(o.amount) as total_amount, avg(o.amount) as avg_amount
   from aqj_orders o join aqj_customers c on o.customer_id = c.customer_id
@@ -1470,23 +1472,25 @@ explain(costs off)
   select c.region, sum(o.amount) as total_amount
   from aqj_orders o join aqj_customers c on o.customer_id = c.customer_id
   group by c.region;
-                                   QUERY PLAN                                    
----------------------------------------------------------------------------------
+                                      QUERY PLAN                                       
+---------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
-   ->  Finalize HashAggregate
+   ->  Finalize GroupAggregate
          Group Key: c.region
-         ->  Redistribute Motion 3:3  (slice2; segments: 3)
-               Hash Key: c.region
-               ->  Streaming Partial HashAggregate
-                     Group Key: c.region
-                     ->  Hash Join
-                           Hash Cond: (o.customer_id = c.customer_id)
-                           ->  Seq Scan on aqj_orders o
-                           ->  Hash
-                                 ->  Broadcast Motion 3:3  (slice3; segments: 3)
-                                       ->  Seq Scan on aqj_customers c
+         ->  Sort
+               Sort Key: c.region
+               ->  Redistribute Motion 3:3  (slice2; segments: 3)
+                     Hash Key: c.region
+                     ->  Streaming Partial HashAggregate
+                           Group Key: c.region
+                           ->  Hash Join
+                                 Hash Cond: (o.customer_id = c.customer_id)
+                                 ->  Seq Scan on aqj_orders o
+                                 ->  Hash
+                                       ->  Broadcast Motion 3:3  (slice3; segments: 3)
+                                             ->  Seq Scan on aqj_customers c
  Optimizer: Postgres query optimizer
-(14 rows)
+(16 rows)
 
 -- 18. Non-match: different join order (o JOIN c vs c JOIN o)
 explain(costs off) select o.order_id, o.amount, c.name, c.region
@@ -2363,12 +2367,12 @@ insert into par_1_prt_1 values (1, 1, 1);
 select mvname, datastatus from gp_matview_aux where mvname like 'mv_par%';
   mvname   | datastatus 
 -----------+------------
+ mv_par    | i
+ mv_par1   | i
+ mv_par1_1 | i
  mv_par1_2 | u
  mv_par2   | u
  mv_par2_1 | u
- mv_par1_1 | i
- mv_par1   | i
- mv_par    | i
 (6 rows)
 
 insert into par values (1, 2, 2);
@@ -2376,12 +2380,12 @@ insert into par values (1, 2, 2);
 select mvname, datastatus from gp_matview_aux where mvname like 'mv_par%';
   mvname   | datastatus 
 -----------+------------
- mv_par1_2 | u
- mv_par2_1 | u
- mv_par1_1 | i
- mv_par1   | i
  mv_par    | i
+ mv_par1   | i
+ mv_par1_1 | i
+ mv_par1_2 | u
  mv_par2   | i
+ mv_par2_1 | u
 (6 rows)
 
 refresh materialized view mv_par;
@@ -2396,12 +2400,12 @@ insert into par_1_prt_2_2_prt_1 values (1, 2, 1);
 select mvname, datastatus from gp_matview_aux where mvname like 'mv_par%';
   mvname   | datastatus 
 -----------+------------
- mv_par1_2 | u
+ mv_par    | i
  mv_par1   | u
  mv_par1_1 | u
- mv_par2_1 | i
+ mv_par1_2 | u
  mv_par2   | i
- mv_par    | i
+ mv_par2_1 | i
 (6 rows)
 
 abort;
@@ -2411,12 +2415,12 @@ truncate par_1_prt_2;
 select mvname, datastatus from gp_matview_aux where mvname like 'mv_par%';
   mvname   | datastatus 
 -----------+------------
- mv_par1_2 | u
+ mv_par    | e
  mv_par1   | u
  mv_par1_1 | u
- mv_par2_1 | e
+ mv_par1_2 | u
  mv_par2   | e
- mv_par    | e
+ mv_par2_1 | e
 (6 rows)
 
 abort;
@@ -2425,12 +2429,12 @@ truncate par_1_prt_2;
 select mvname, datastatus from gp_matview_aux where mvname like 'mv_par%';
   mvname   | datastatus 
 -----------+------------
- mv_par1_2 | u
+ mv_par    | e
  mv_par1   | u
  mv_par1_1 | u
- mv_par2_1 | e
+ mv_par1_2 | u
  mv_par2   | e
- mv_par    | e
+ mv_par2_1 | e
 (6 rows)
 
 refresh materialized view mv_par;
@@ -2443,12 +2447,12 @@ vacuum full par_1_prt_1_2_prt_1;
 select mvname, datastatus from gp_matview_aux where mvname like 'mv_par%';
   mvname   | datastatus 
 -----------+------------
+ mv_par    | r
+ mv_par1   | r
+ mv_par1_1 | r
  mv_par1_2 | u
  mv_par2   | u
  mv_par2_1 | u
- mv_par1_1 | r
- mv_par1   | r
- mv_par    | r
 (6 rows)
 
 refresh materialized view mv_par;
@@ -2462,12 +2466,12 @@ vacuum full par;
 select mvname, datastatus from gp_matview_aux where mvname like 'mv_par%';
   mvname   | datastatus 
 -----------+------------
- mv_par2   | r
  mv_par    | r
- mv_par2_1 | r
- mv_par1_2 | r
  mv_par1   | r
  mv_par1_1 | r
+ mv_par1_2 | r
+ mv_par2   | r
+ mv_par2_1 | r
 (6 rows)
 
 refresh materialized view mv_par;
@@ -2483,12 +2487,12 @@ NOTICE:  table has parent, setting distribution columns to match parent table
 select mvname, datastatus from gp_matview_aux where mvname like 'mv_par%';
   mvname   | datastatus 
 -----------+------------
+ mv_par    | e
+ mv_par1   | e
  mv_par1_1 | u
  mv_par1_2 | u
  mv_par2   | u
  mv_par2_1 | u
- mv_par1   | e
- mv_par    | e
 (6 rows)
 
 abort;
@@ -2502,9 +2506,9 @@ drop cascades to materialized view mv_par1
 select mvname, datastatus from gp_matview_aux where mvname like 'mv_par%';
   mvname   | datastatus 
 -----------+------------
+ mv_par    | e
  mv_par2   | u
  mv_par2_1 | u
- mv_par    | e
 (3 rows)
 
 abort;
@@ -2514,12 +2518,12 @@ alter table par_1_prt_1 detach partition par_1_prt_1_2_prt_1;
 select mvname, datastatus from gp_matview_aux where mvname like 'mv_par%';
   mvname   | datastatus 
 -----------+------------
+ mv_par    | e
+ mv_par1   | e
  mv_par1_1 | u
  mv_par1_2 | u
  mv_par2   | u
  mv_par2_1 | u
- mv_par1   | e
- mv_par    | e
 (6 rows)
 
 abort;
@@ -2532,12 +2536,12 @@ alter table par_1_prt_1 attach partition new_par for values from (4) to (5);
 select mvname, datastatus from gp_matview_aux where mvname like 'mv_par%';
   mvname   | datastatus 
 -----------+------------
+ mv_par    | e
+ mv_par1   | e
  mv_par1_1 | u
  mv_par1_2 | u
  mv_par2   | u
  mv_par2_1 | u
- mv_par1   | e
- mv_par    | e
 (6 rows)
 
 abort;
@@ -2567,12 +2571,12 @@ insert into par values(1, 1, 1), (1, 1, 2);
 select mvname, datastatus from gp_matview_aux where mvname like 'mv_par%';
   mvname   | datastatus 
 -----------+------------
+ mv_par    | i
+ mv_par1   | i
+ mv_par1_1 | i
+ mv_par1_2 | i
  mv_par2   | u
  mv_par2_1 | u
- mv_par1_2 | i
- mv_par1   | i
- mv_par    | i
- mv_par1_1 | i
 (6 rows)
 
 abort;
@@ -2592,12 +2596,12 @@ insert into par_1_prt_2_2_prt_1 values(2, 2, 1);
 select mvname, datastatus from gp_matview_aux where mvname like 'mv_par%';
   mvname   | datastatus 
 -----------+------------
+ mv_par    | i
  mv_par1   | u
  mv_par1_1 | u
  mv_par1_2 | u
- mv_par2_1 | i
  mv_par2   | i
- mv_par    | i
+ mv_par2_1 | i
 (6 rows)
 
 abort;
@@ -2617,12 +2621,12 @@ delete from par where b = 2  and c = 1;
 select mvname, datastatus from gp_matview_aux where mvname like 'mv_par%';
   mvname   | datastatus 
 -----------+------------
+ mv_par    | e
  mv_par1   | u
  mv_par1_1 | u
  mv_par1_2 | u
- mv_par2_1 | e
  mv_par2   | e
- mv_par    | e
+ mv_par2_1 | e
 (6 rows)
 
 abort;
@@ -2642,12 +2646,12 @@ delete from par_1_prt_1_2_prt_2;
 select mvname, datastatus from gp_matview_aux where mvname like 'mv_par%';
   mvname   | datastatus 
 -----------+------------
+ mv_par    | e
+ mv_par1   | e
  mv_par1_1 | u
+ mv_par1_2 | e
  mv_par2   | u
  mv_par2_1 | u
- mv_par1_2 | e
- mv_par1   | e
- mv_par    | e
 (6 rows)
 
 abort;
@@ -2668,12 +2672,12 @@ update par set c = 2 where b = 1 and c = 1;
 select mvname, datastatus from gp_matview_aux where mvname like 'mv_par%';
   mvname   | datastatus 
 -----------+------------
+ mv_par    | e
+ mv_par1   | e
+ mv_par1_1 | e
+ mv_par1_2 | i
  mv_par2   | u
  mv_par2_1 | u
- mv_par1_2 | i
- mv_par1_1 | e
- mv_par1   | e
- mv_par    | e
 (6 rows)
 
 abort;
@@ -2694,12 +2698,12 @@ update par set c = 2, a = 2 where  b = 1 and c = 1;
 select mvname, datastatus from gp_matview_aux where mvname like 'mv_par%';
   mvname   | datastatus 
 -----------+------------
+ mv_par    | e
+ mv_par1   | e
+ mv_par1_1 | e
+ mv_par1_2 | i
  mv_par2   | u
  mv_par2_1 | u
- mv_par1_2 | i
- mv_par1_1 | e
- mv_par1   | e
- mv_par    | e
 (6 rows)
 
 abort;

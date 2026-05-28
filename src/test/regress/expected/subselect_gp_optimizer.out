@@ -2979,66 +2979,25 @@ explain (verbose, costs off) with run_dt as (
 )
 select * from run_dt, extra_flow_dist1
 where dt < extra_flow_dist1.a;
-                                     QUERY PLAN                                      
--------------------------------------------------------------------------------------
+                                      QUERY PLAN                                       
+---------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
-   Output: extra_flow_rand.a, (max(1)), extra_flow_dist1.a, extra_flow_dist1.b
+   Output: share0_ref1.x, share0_ref1.dt, extra_flow_dist1.a, extra_flow_dist1.b
    ->  Nested Loop
-         Output: extra_flow_rand.a, (max(1)), extra_flow_dist1.a, extra_flow_dist1.b
-         Join Filter: ((max(1)) < extra_flow_dist1.a)
-         ->  Nested Loop Left Join
-               Output: extra_flow_rand.a, (max(1))
-               Inner Unique: true
-               Join Filter: ((SubPlan 1))
-               ->  Seq Scan on subselect_gp.extra_flow_rand
-                     Output: extra_flow_rand.a, (SubPlan 1)
-                     SubPlan 1
-                       ->  Materialize
-                             Output: (random())
-                             ->  Broadcast Motion 3:3  (slice2; segments: 3)
-                                   Output: (random())
-                                   ->  Seq Scan on subselect_gp.extra_flow_dist
-                                         Output: random()
-               ->  Materialize
-                     Output: (max(1))
-                     ->  Aggregate
-                           Output: max(1)
-                           ->  Result
-         ->  Materialize
-               Output: extra_flow_dist1.a, extra_flow_dist1.b
-               ->  Seq Scan on subselect_gp.extra_flow_dist1
-                     Output: extra_flow_dist1.a, extra_flow_dist1.b
- Optimizer: Postgres query optimizer
-(28 rows)
-
--- case 5 for subplan with outer entry locus without param in subplan (CTE and subquery)
-explain (verbose, costs off) with run_dt as (
-	select x, y dt
-	from (select relnatts x from pg_class ) a  -- entry locus
-	left join (select max(1) y) aaa
-	on a.x > any (select random() from extra_flow_dist)  -- subplan's outer is the above entry loucs
-)
-select * from run_dt, extra_flow_dist1
-where dt < extra_flow_dist1.a;
-                                      QUERY PLAN                                      
---------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)
-   Output: pg_class.relnatts, (max(1)), extra_flow_dist1.a, extra_flow_dist1.b
-   ->  Nested Loop
-         Output: pg_class.relnatts, (max(1)), extra_flow_dist1.a, extra_flow_dist1.b
-         Join Filter: ((max(1)) < extra_flow_dist1.a)
-         ->  Broadcast Motion 1:3  (slice2)
-               Output: pg_class.relnatts, (max(1))
+         Output: share0_ref1.x, share0_ref1.dt, extra_flow_dist1.a, extra_flow_dist1.b
+         Join Filter: (share0_ref1.dt < extra_flow_dist1.a)
+         ->  Shared Scan (share slice:id 1:0)
+               Output: share0_ref1.x, share0_ref1.dt
                ->  Nested Loop Left Join
-                     Output: pg_class.relnatts, (max(1))
+                     Output: extra_flow_rand.a, (max(1))
                      Inner Unique: true
                      Join Filter: ((SubPlan 1))
-                     ->  Seq Scan on pg_catalog.pg_class
-                           Output: pg_class.relnatts, (SubPlan 1)
+                     ->  Seq Scan on subselect_gp.extra_flow_rand
+                           Output: extra_flow_rand.a, (SubPlan 1)
                            SubPlan 1
                              ->  Materialize
                                    Output: (random())
-                                   ->  Gather Motion 3:1  (slice3; segments: 3)
+                                   ->  Broadcast Motion 3:3  (slice2; segments: 3)
                                          Output: (random())
                                          ->  Seq Scan on subselect_gp.extra_flow_dist
                                                Output: random()
@@ -3051,8 +3010,55 @@ where dt < extra_flow_dist1.a;
                Output: extra_flow_dist1.a, extra_flow_dist1.b
                ->  Seq Scan on subselect_gp.extra_flow_dist1
                      Output: extra_flow_dist1.a, extra_flow_dist1.b
+ Settings: optimizer = 'on'
  Optimizer: Postgres query optimizer
-(30 rows)
+(31 rows)
+
+-- case 5 for subplan with outer entry locus without param in subplan (CTE and subquery)
+explain (verbose, costs off) with run_dt as (
+	select x, y dt
+	from (select relnatts x from pg_class ) a  -- entry locus
+	left join (select max(1) y) aaa
+	on a.x > any (select random() from extra_flow_dist)  -- subplan's outer is the above entry loucs
+)
+select * from run_dt, extra_flow_dist1
+where dt < extra_flow_dist1.a;
+                                         QUERY PLAN                                         
+--------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Output: share0_ref1.x, share0_ref1.dt, extra_flow_dist1.a, extra_flow_dist1.b
+   ->  Nested Loop
+         Output: share0_ref1.x, share0_ref1.dt, extra_flow_dist1.a, extra_flow_dist1.b
+         Join Filter: (share0_ref1.dt < extra_flow_dist1.a)
+         ->  Broadcast Motion 1:3  (slice2)
+               Output: share0_ref1.x, share0_ref1.dt
+               ->  Shared Scan (share slice:id 2:0)
+                     Output: share0_ref1.x, share0_ref1.dt
+                     ->  Nested Loop Left Join
+                           Output: pg_class.relnatts, (max(1))
+                           Inner Unique: true
+                           Join Filter: ((SubPlan 1))
+                           ->  Seq Scan on pg_catalog.pg_class
+                                 Output: pg_class.relnatts, (SubPlan 1)
+                                 SubPlan 1
+                                   ->  Materialize
+                                         Output: (random())
+                                         ->  Gather Motion 3:1  (slice3; segments: 3)
+                                               Output: (random())
+                                               ->  Seq Scan on subselect_gp.extra_flow_dist
+                                                     Output: random()
+                           ->  Materialize
+                                 Output: (max(1))
+                                 ->  Aggregate
+                                       Output: max(1)
+                                       ->  Result
+         ->  Materialize
+               Output: extra_flow_dist1.a, extra_flow_dist1.b
+               ->  Seq Scan on subselect_gp.extra_flow_dist1
+                     Output: extra_flow_dist1.a, extra_flow_dist1.b
+ Settings: optimizer = 'on'
+ Optimizer: Postgres query optimizer
+(33 rows)
 
 -- case 6 without CTE, nested subquery should not add extral flow
 explain (verbose, costs off) select * from (
@@ -3364,30 +3370,33 @@ with cte(table_oid, size) as
 select pc.relname, ts.size
 from pg_class pc, cte ts
 where pc.oid = ts.table_oid;
-                                                   QUERY PLAN                                                   
-----------------------------------------------------------------------------------------------------------------
+                                                                            QUERY PLAN                                                                             
+-------------------------------------------------------------------------------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
-   Output: pc.relname, (sum((pg_relation_size((pg_class.oid)::regclass, 'main'::text))))
+   Output: pc.relname, share0_ref1.size
    ->  Nested Loop
-         Output: pc.relname, (sum((pg_relation_size((pg_class.oid)::regclass, 'main'::text))))
-         Join Filter: (pc.oid = pg_class.oid)
+         Output: pc.relname, share0_ref1.size
+         Join Filter: (pc.oid = share0_ref1.table_oid)
          ->  Redistribute Motion 1:3  (slice2)
                Output: pc.relname, pc.oid
                Hash Key: pc.oid
                ->  Seq Scan on pg_catalog.pg_class pc
                      Output: pc.relname, pc.oid
          ->  Materialize
-               Output: pg_class.oid, (sum((pg_relation_size((pg_class.oid)::regclass, 'main'::text))))
-               ->  HashAggregate
-                     Output: pg_class.oid, sum((pg_relation_size((pg_class.oid)::regclass, 'main'::text)))
-                     Group Key: pg_class.oid
-                     ->  Redistribute Motion 3:3  (slice3; segments: 3)
-                           Output: pg_class.oid, (pg_relation_size((pg_class.oid)::regclass, 'main'::text))
-                           Hash Key: pg_class.oid
-                           ->  Seq Scan on pg_catalog.pg_class
-                                 Output: pg_class.oid, pg_relation_size((pg_class.oid)::regclass, 'main'::text)
+               Output: share0_ref1.table_oid, share0_ref1.size
+               ->  Shared Scan (share slice:id 1:0)
+                     Output: share0_ref1.table_oid, share0_ref1.size
+                     ->  HashAggregate
+                           Output: pg_class.oid, sum((pg_relation_size((pg_class.oid)::regclass, 'main'::text)))
+                           Group Key: pg_class.oid
+                           ->  Redistribute Motion 3:3  (slice3; segments: 3)
+                                 Output: pg_class.oid, (pg_relation_size((pg_class.oid)::regclass, 'main'::text))
+                                 Hash Key: pg_class.oid
+                                 ->  Seq Scan on pg_catalog.pg_class
+                                       Output: pg_class.oid, pg_relation_size((pg_class.oid)::regclass, 'main'::text)
+ Settings: enable_bitmapscan = 'off', enable_hashjoin = 'off', enable_indexscan = 'off', enable_nestloop = 'on', gp_enable_multiphase_agg = 'on', optimizer = 'on'
  Optimizer: Postgres query optimizer
-(21 rows)
+(24 rows)
 
 set gp_enable_multiphase_agg = off;
 explain (verbose on, costs off)
@@ -3406,30 +3415,33 @@ with cte(table_oid, size) as
 select pc.relname, ts.size
 from pg_class pc, cte ts
 where pc.oid = ts.table_oid;
-                                                   QUERY PLAN                                                   
-----------------------------------------------------------------------------------------------------------------
+                                                                             QUERY PLAN                                                                             
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
-   Output: pc.relname, (sum((pg_relation_size((pg_class.oid)::regclass, 'main'::text))))
+   Output: pc.relname, share0_ref1.size
    ->  Nested Loop
-         Output: pc.relname, (sum((pg_relation_size((pg_class.oid)::regclass, 'main'::text))))
-         Join Filter: (pc.oid = pg_class.oid)
+         Output: pc.relname, share0_ref1.size
+         Join Filter: (pc.oid = share0_ref1.table_oid)
          ->  Redistribute Motion 1:3  (slice2)
                Output: pc.relname, pc.oid
                Hash Key: pc.oid
                ->  Seq Scan on pg_catalog.pg_class pc
                      Output: pc.relname, pc.oid
          ->  Materialize
-               Output: pg_class.oid, (sum((pg_relation_size((pg_class.oid)::regclass, 'main'::text))))
-               ->  HashAggregate
-                     Output: pg_class.oid, sum((pg_relation_size((pg_class.oid)::regclass, 'main'::text)))
-                     Group Key: pg_class.oid
-                     ->  Redistribute Motion 3:3  (slice3; segments: 3)
-                           Output: pg_class.oid, (pg_relation_size((pg_class.oid)::regclass, 'main'::text))
-                           Hash Key: pg_class.oid
-                           ->  Seq Scan on pg_catalog.pg_class
-                                 Output: pg_class.oid, pg_relation_size((pg_class.oid)::regclass, 'main'::text)
+               Output: share0_ref1.table_oid, share0_ref1.size
+               ->  Shared Scan (share slice:id 1:0)
+                     Output: share0_ref1.table_oid, share0_ref1.size
+                     ->  HashAggregate
+                           Output: pg_class.oid, sum((pg_relation_size((pg_class.oid)::regclass, 'main'::text)))
+                           Group Key: pg_class.oid
+                           ->  Redistribute Motion 3:3  (slice3; segments: 3)
+                                 Output: pg_class.oid, (pg_relation_size((pg_class.oid)::regclass, 'main'::text))
+                                 Hash Key: pg_class.oid
+                                 ->  Seq Scan on pg_catalog.pg_class
+                                       Output: pg_class.oid, pg_relation_size((pg_class.oid)::regclass, 'main'::text)
+ Settings: enable_bitmapscan = 'off', enable_hashjoin = 'off', enable_indexscan = 'off', enable_nestloop = 'on', gp_enable_multiphase_agg = 'off', optimizer = 'on'
  Optimizer: Postgres query optimizer
-(21 rows)
+(24 rows)
 
 reset gp_enable_multiphase_agg;
 reset enable_hashjoin;

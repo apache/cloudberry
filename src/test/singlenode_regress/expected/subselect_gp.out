@@ -2410,30 +2410,32 @@ where dt < extra_flow_dist1.a;
                                   QUERY PLAN                                   
 -------------------------------------------------------------------------------
  Nested Loop
-   Output: extra_flow_rand.a, (max(1)), extra_flow_dist1.a, extra_flow_dist1.b
-   Join Filter: ((max(1)) < extra_flow_dist1.a)
-   ->  Nested Loop Left Join
-         Output: extra_flow_rand.a, (max(1))
-         Inner Unique: true
-         Join Filter: ((SubPlan 1))
-         ->  Seq Scan on subselect_gp.extra_flow_rand
-               Output: extra_flow_rand.a, (SubPlan 1)
-               SubPlan 1
-                 ->  Materialize
-                       Output: (random())
-                       ->  Seq Scan on subselect_gp.extra_flow_dist
-                             Output: random()
-         ->  Materialize
-               Output: (max(1))
-               ->  Aggregate
-                     Output: max(1)
-                     ->  Result
+   Output: share0_ref1.x, share0_ref1.dt, extra_flow_dist1.a, extra_flow_dist1.b
+   Join Filter: (share0_ref1.dt < extra_flow_dist1.a)
+   ->  Shared Scan (share slice:id -1:0)
+         Output: share0_ref1.x, share0_ref1.dt
+         ->  Nested Loop Left Join
+               Output: extra_flow_rand.a, (max(1))
+               Inner Unique: true
+               Join Filter: ((SubPlan 1))
+               ->  Seq Scan on subselect_gp.extra_flow_rand
+                     Output: extra_flow_rand.a, (SubPlan 1)
+                     SubPlan 1
+                       ->  Materialize
+                             Output: (random())
+                             ->  Seq Scan on subselect_gp.extra_flow_dist
+                                   Output: random()
+               ->  Materialize
+                     Output: (max(1))
+                     ->  Aggregate
+                           Output: max(1)
+                           ->  Result
    ->  Materialize
          Output: extra_flow_dist1.a, extra_flow_dist1.b
          ->  Seq Scan on subselect_gp.extra_flow_dist1
                Output: extra_flow_dist1.a, extra_flow_dist1.b
  Optimizer: Postgres query optimizer
-(25 rows)
+(27 rows)
 
 -- case 5 for subplan with outer entry locus without param in subplan (CTE and subquery)
 explain (verbose, costs off) with run_dt as (
@@ -2447,30 +2449,32 @@ where dt < extra_flow_dist1.a;
                                   QUERY PLAN                                   
 -------------------------------------------------------------------------------
  Nested Loop
-   Output: pg_class.relnatts, (max(1)), extra_flow_dist1.a, extra_flow_dist1.b
-   Join Filter: ((max(1)) < extra_flow_dist1.a)
-   ->  Nested Loop Left Join
-         Output: pg_class.relnatts, (max(1))
-         Inner Unique: true
-         Join Filter: ((SubPlan 1))
-         ->  Seq Scan on pg_catalog.pg_class
-               Output: pg_class.relnatts, (SubPlan 1)
-               SubPlan 1
-                 ->  Materialize
-                       Output: (random())
-                       ->  Seq Scan on subselect_gp.extra_flow_dist
-                             Output: random()
-         ->  Materialize
-               Output: (max(1))
-               ->  Aggregate
-                     Output: max(1)
-                     ->  Result
+   Output: share0_ref1.x, share0_ref1.dt, extra_flow_dist1.a, extra_flow_dist1.b
+   Join Filter: (share0_ref1.dt < extra_flow_dist1.a)
+   ->  Shared Scan (share slice:id -1:0)
+         Output: share0_ref1.x, share0_ref1.dt
+         ->  Nested Loop Left Join
+               Output: pg_class.relnatts, (max(1))
+               Inner Unique: true
+               Join Filter: ((SubPlan 1))
+               ->  Seq Scan on pg_catalog.pg_class
+                     Output: pg_class.relnatts, (SubPlan 1)
+                     SubPlan 1
+                       ->  Materialize
+                             Output: (random())
+                             ->  Seq Scan on subselect_gp.extra_flow_dist
+                                   Output: random()
+               ->  Materialize
+                     Output: (max(1))
+                     ->  Aggregate
+                           Output: max(1)
+                           ->  Result
    ->  Materialize
          Output: extra_flow_dist1.a, extra_flow_dist1.b
          ->  Seq Scan on subselect_gp.extra_flow_dist1
                Output: extra_flow_dist1.a, extra_flow_dist1.b
  Optimizer: Postgres query optimizer
-(25 rows)
+(27 rows)
 
 -- case 6 without CTE, nested subquery should not add extral flow
 explain (verbose, costs off) select * from (
@@ -2504,28 +2508,40 @@ where dt < '2010-01-01'::date;
                      Output: ((SubPlan 1))
                      Sort Key: ((SubPlan 1))
                      ->  Append
-                           ->  Subquery Scan on a
-                                 Output: (SubPlan 1)
-                                 ->  Aggregate
-                                       Output: max(1)
-                                       ->  Result
-                                 SubPlan 1
-                                   ->  Seq Scan on subselect_gp.extra_flow_dist
-                                         Output: extra_flow_dist.c
-                                         Filter: (extra_flow_dist.b = a.x)
-                           ->  Subquery Scan on aa
-                                 Output: (SubPlan 2)
-                                 ->  Aggregate
-                                       Output: max(1)
-                                       ->  Result
-                                 SubPlan 2
-                                   ->  Seq Scan on subselect_gp.extra_flow_dist extra_flow_dist_1
-                                         Output: extra_flow_dist_1.c
-                                         Filter: (extra_flow_dist_1.b = aa.x)
+                           ->  Unique
+                                 Output: ((SubPlan 1))
+                                 Group Key: ((SubPlan 1))
+                                 ->  Sort
+                                       Output: ((SubPlan 1))
+                                       Sort Key: ((SubPlan 1))
+                                       ->  Subquery Scan on a
+                                             Output: (SubPlan 1)
+                                             ->  Aggregate
+                                                   Output: max(1)
+                                                   ->  Result
+                                             SubPlan 1
+                                               ->  Seq Scan on subselect_gp.extra_flow_dist
+                                                     Output: extra_flow_dist.c
+                                                     Filter: (extra_flow_dist.b = a.x)
+                           ->  Unique
+                                 Output: ((SubPlan 2))
+                                 Group Key: ((SubPlan 2))
+                                 ->  Sort
+                                       Output: ((SubPlan 2))
+                                       Sort Key: ((SubPlan 2))
+                                       ->  Subquery Scan on aa
+                                             Output: (SubPlan 2)
+                                             ->  Aggregate
+                                                   Output: max(1)
+                                                   ->  Result
+                                             SubPlan 2
+                                               ->  Seq Scan on subselect_gp.extra_flow_dist extra_flow_dist_1
+                                                     Output: extra_flow_dist_1.c
+                                                     Filter: (extra_flow_dist_1.b = aa.x)
    ->  Seq Scan on subselect_gp.extra_flow_dist1
          Output: extra_flow_dist1.a, extra_flow_dist1.b
  Optimizer: Postgres query optimizer
-(34 rows)
+(45 rows)
 
 -- Check DISTINCT ON clause and ORDER BY clause in SubLink, See https://github.com/greenplum-db/gpdb/issues/12656.
 -- For EXISTS SubLink, we don’t need to care about the data deduplication problem, we can delete DISTINCT ON clause and

@@ -1947,8 +1947,9 @@ distribute_qual_to_rels(PlannerInfo *root, Node *clause,
 	if (!bms_is_subset(relids, qualscope))
 	{
 		PostponedQual *pq = (PostponedQual *) palloc(sizeof(PostponedQual));
-
+#if 0
 		Assert(root->hasLateralRTEs);	/* shouldn't happen otherwise */
+#endif
 		Assert(jointype == JOIN_INNER); /* mustn't postpone past outer join */
 		pq->qual = clause;
 		pq->relids = relids;

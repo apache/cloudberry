@@ -19,7 +19,7 @@
 #include "nodes/plannodes.h"
 
 extern Plan *prepare_plan_for_sharing(PlannerInfo *root, Plan *common);
-extern Plan *share_prepared_plan(PlannerInfo *root, Plan *common);
+extern Plan *share_prepared_plan(PlannerInfo *root, Plan *common, char* ctename);
 
 #endif /* _PLANSHARE_H_ */
 

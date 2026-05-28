@@ -3310,23 +3310,25 @@ having sum(tgb1.v3 * tgb2.v3) > 100 and
   sum(tgb1.v3) > 200;
                                                                                                                                                                                      QUERY PLAN                                                                                                                                                                                     
 ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)  (cost=145986.91..145999.46 rows=4 width=12)
-   ->  Finalize HashAggregate  (cost=145986.91..145999.41 rows=1 width=12)
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=146024.23..146051.79 rows=4 width=12)
+   ->  Finalize GroupAggregate  (cost=146024.23..146051.73 rows=1 width=12)
          Group Key: tgb2.v2
          Filter: ((sum((tgb1.v3 * tgb2.v3)) > 100) AND (sum((tgb1.v3 * tgb2.v3)) > 101) AND (sum((tgb1.v3 * tgb2.v3)) < 1020) AND (sum((tgb1.v3 * tgb2.v3)) <> 103) AND (sum((tgb1.v3 * tgb2.v3)) >= 104) AND (avg((tgb1.v3 * tgb2.v3)) <> '11'::numeric) AND (avg((tgb1.v3 * tgb2.v3)) <> '12'::numeric) AND (avg((tgb2.v1 * tgb1.v1)) <> '13'::numeric) AND (sum(tgb1.v3) > 200))
          AggRefs(TargetList): [(0, 0)]
-         ->  Redistribute Motion 3:3  (slice2; segments: 3)  (cost=145944.41..145974.41 rows=1000 width=84)
-               Hash Key: tgb2.v2
-               ->  Streaming Partial HashAggregate  (cost=145944.41..145954.41 rows=1000 width=84)
-                     Group Key: tgb2.v2
-                     AggRefs(TargetList): [(0, 0), (1, 1), (2, 2), (3, 3)]
-                     ->  Hash Join  (cost=618.25..105488.34 rows=2022803 width=20)
-                           Hash Cond: (tgb1.v1 = tgb2.v1)
-                           ->  Seq Scan on tgb1  (cost=0.00..293.67 rows=25967 width=8)
-                           ->  Hash  (cost=293.67..293.67 rows=25967 width=12)
-                                 ->  Seq Scan on tgb2  (cost=0.00..293.67 rows=25967 width=12)
+         ->  Sort  (cost=146024.23..146026.73 rows=1000 width=84)
+               Sort Key: tgb2.v2
+               ->  Redistribute Motion 3:3  (slice2; segments: 3)  (cost=145944.41..145974.41 rows=1000 width=84)
+                     Hash Key: tgb2.v2
+                     ->  Streaming Partial HashAggregate  (cost=145944.41..145954.41 rows=1000 width=84)
+                           Group Key: tgb2.v2
+                           AggRefs(TargetList): [(0, 0), (1, 1), (2, 2), (3, 3)]
+                           ->  Hash Join  (cost=618.25..105488.34 rows=2022803 width=20)
+                                 Hash Cond: (tgb1.v1 = tgb2.v1)
+                                 ->  Seq Scan on tgb1  (cost=0.00..293.67 rows=25967 width=8)
+                                 ->  Hash  (cost=293.67..293.67 rows=25967 width=12)
+                                       ->  Seq Scan on tgb2  (cost=0.00..293.67 rows=25967 width=12)
  Optimizer: Postgres query optimizer
-(16 rows)
+(18 rows)
 
 select
   sum(tgb1.v3 * tgb2.v3) 
@@ -3365,23 +3367,25 @@ having sum(tgb1.v3 * tgb2.v3) > 100 and
   sum(tgb1.v3) > 200;
                                                                                                                                                                                      QUERY PLAN                                                                                                                                                                                     
 ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)  (cost=145986.91..145999.46 rows=4 width=12)
-   ->  Finalize HashAggregate  (cost=145986.91..145999.41 rows=1 width=12)
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=146024.23..146051.79 rows=4 width=12)
+   ->  Finalize GroupAggregate  (cost=146024.23..146051.73 rows=1 width=12)
          Group Key: tgb2.v2
          Filter: ((sum((tgb1.v3 * tgb2.v3)) > 100) AND (sum((tgb1.v3 * tgb2.v3)) > 101) AND (sum((tgb1.v3 * tgb2.v3)) < 1020) AND (sum((tgb1.v3 * tgb2.v3)) <> 103) AND (sum((tgb1.v3 * tgb2.v3)) >= 104) AND (avg((tgb1.v3 * tgb2.v3)) <> '11'::numeric) AND (avg((tgb1.v3 * tgb2.v3)) <> '12'::numeric) AND (avg((tgb2.v1 * tgb1.v1)) <> '13'::numeric) AND (sum(tgb1.v3) > 200))
          AggRefs(TargetList): [(0, 0)]
-         ->  Redistribute Motion 3:3  (slice2; segments: 3)  (cost=145944.41..145974.41 rows=1000 width=84)
-               Hash Key: tgb2.v2
-               ->  Streaming Partial HashAggregate  (cost=145944.41..145954.41 rows=1000 width=84)
-                     Group Key: tgb2.v2
-                     AggRefs(TargetList): [(0, 0), (1, 1), (2, 2), (3, 3)]
-                     ->  Hash Join  (cost=618.25..105488.34 rows=2022803 width=20)
-                           Hash Cond: (tgb1.v1 = tgb2.v1)
-                           ->  Seq Scan on tgb1  (cost=0.00..293.67 rows=25967 width=8)
-                           ->  Hash  (cost=293.67..293.67 rows=25967 width=12)
-                                 ->  Seq Scan on tgb2  (cost=0.00..293.67 rows=25967 width=12)
+         ->  Sort  (cost=146024.23..146026.73 rows=1000 width=84)
+               Sort Key: tgb2.v2
+               ->  Redistribute Motion 3:3  (slice2; segments: 3)  (cost=145944.41..145974.41 rows=1000 width=84)
+                     Hash Key: tgb2.v2
+                     ->  Streaming Partial HashAggregate  (cost=145944.41..145954.41 rows=1000 width=84)
+                           Group Key: tgb2.v2
+                           AggRefs(TargetList): [(0, 0), (1, 1), (2, 2), (3, 3)]
+                           ->  Hash Join  (cost=618.25..105488.34 rows=2022803 width=20)
+                                 Hash Cond: (tgb1.v1 = tgb2.v1)
+                                 ->  Seq Scan on tgb1  (cost=0.00..293.67 rows=25967 width=8)
+                                 ->  Hash  (cost=293.67..293.67 rows=25967 width=12)
+                                       ->  Seq Scan on tgb2  (cost=0.00..293.67 rows=25967 width=12)
  Optimizer: Postgres query optimizer
-(16 rows)
+(18 rows)
 
 select
   sum(tgb1.v3 * tgb2.v3) 

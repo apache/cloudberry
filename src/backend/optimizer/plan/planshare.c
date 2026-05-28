@@ -24,7 +24,7 @@
 #include "optimizer/planshare.h"
 
 static ShareInputScan *
-make_shareinputscan(PlannerInfo *root, Plan *inputplan)
+make_shareinputscan(PlannerInfo *root, Plan *inputplan, char *ctename)
 {
 	ShareInputScan *sisc;
 	Path		sipath;
@@ -55,6 +55,7 @@ make_shareinputscan(PlannerInfo *root, Plan *inputplan)
 	sisc->scan.plan.locustype = inputplan->locustype;
 	sisc->scan.plan.parallel = 0; /* No parallel ShareInputScan */
 
+	sisc->ctename = ctename;
 	return sisc;
 }
 
@@ -86,7 +87,7 @@ prepare_plan_for_sharing(PlannerInfo *root, Plan *common)
  * prepare_plan_for_sharing().
  */
 Plan *
-share_prepared_plan(PlannerInfo *root, Plan *common)
+share_prepared_plan(PlannerInfo *root, Plan *common, char* ctename)
 {
-	return (Plan *) make_shareinputscan(root, common);
+	return (Plan *) make_shareinputscan(root, common, ctename);
 }

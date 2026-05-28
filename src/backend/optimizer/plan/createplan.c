@@ -4780,7 +4780,8 @@ create_ctescan_plan(PlannerInfo *root, Path *best_path,
 			cteplaninfo->shared_plan = prepare_plan_for_sharing(cteroot, subplan);
 		}
 		/* Wrap the common Plan tree in a ShareInputScan node */
-		subplan = share_prepared_plan(cteroot, cteplaninfo->shared_plan);
+		subplan = share_prepared_plan(cteroot, cteplaninfo->shared_plan, rte->ctename);
+		((ShareInputScan*) subplan)->cteplaninfo = cteplaninfo;
 	}
 
 	scan_plan = (Plan *) make_subqueryscan(tlist,
@@ -5377,6 +5378,23 @@ create_nestloop_plan(PlannerInfo *root,
 	if (partition_selectors_created)
 		join_plan->join.prefetch_inner = true;
 
+
+	int outer_sisc_role = contain_ShareInputScan_detail(root, (Node*) outer_plan);
+	int inner_sisc_role = contain_ShareInputScan_detail(root, (Node*) inner_plan);
+
+	if (join_plan->join.prefetch_inner)
+	{
+		/* We have to execute outer first if outer has producer and inner has a consumer. */
+		if ((outer_sisc_role & (SISC_PRODUCER)) &&
+			((inner_sisc_role & SISC_PRODUCER) == 0) &&
+			(inner_sisc_role & (SISC_CONSUMER)))
+			join_plan->join.prefetch_inner = false;
+	}
+	else if (inner_sisc_role & (SISC_PRODUCER))
+	{
+		join_plan->join.prefetch_inner = true;
+	}
+
 	/*
 	 * A motion deadlock can also happen when outer and joinqual both contain
 	 * motions.  It is not easy to check for joinqual here, so we set the
@@ -5389,6 +5407,13 @@ create_nestloop_plan(PlannerInfo *root,
 		best_path->outerjoinpath->motionHazard &&
 		join_plan->join.joinqual != NIL)
 		join_plan->join.prefetch_joinqual = true;
+	
+	int joinqual_sisc_role = contain_ShareInputScan_detail(root, (Node *) join_plan->join.joinqual);
+
+	/* If we have producer in outer plan, we have to execute it first. */
+	if ((outer_sisc_role & (SISC_PRODUCER)) && 
+		(joinqual_sisc_role & (SISC_CONSUMER)))  
+		join_plan->join.prefetch_joinqual = false;
 
 	/*
 	 * Similar for non join qual.
@@ -5397,6 +5422,12 @@ create_nestloop_plan(PlannerInfo *root,
 		best_path->outerjoinpath->motionHazard &&
 		join_plan->join.plan.qual != NIL)
 		join_plan->join.prefetch_qual = true;
+
+	int qual_sisc_role = contain_ShareInputScan_detail(root, (Node *) join_plan->join.plan.qual);
+
+	if ((outer_sisc_role & (SISC_PRODUCER)) && 
+		(qual_sisc_role& (SISC_CONSUMER)))
+		join_plan->join.prefetch_qual = false;
 
 	return join_plan;
 }
@@ -5754,6 +5785,22 @@ create_mergejoin_plan(PlannerInfo *root,
 	if (partition_selectors_created)
 		join_plan->join.prefetch_inner = true;
 
+	int outer_sisc_role = contain_ShareInputScan_detail(root, (Node*) outer_plan);
+	int inner_sisc_role = contain_ShareInputScan_detail(root, (Node*) inner_plan);
+
+	if (join_plan->join.prefetch_inner)
+	{
+		/* We have to execute outer first if outer has producer and inner has a consumer. */
+		if ((outer_sisc_role & (SISC_PRODUCER)) &&
+			((inner_sisc_role & SISC_PRODUCER) == 0) &&
+			(inner_sisc_role & (SISC_CONSUMER)))
+			join_plan->join.prefetch_inner = false;
+	}
+	else if (inner_sisc_role & (SISC_PRODUCER))
+	{
+		join_plan->join.prefetch_inner = true;
+	}
+
 	/*
 	 * A motion deadlock can also happen when outer and joinqual both contain
 	 * motions.  It is not easy to check for joinqual here, so we set the
@@ -5775,6 +5822,13 @@ create_mergejoin_plan(PlannerInfo *root,
 		join_plan->join.joinqual != NIL)
 		join_plan->join.prefetch_joinqual = true;
 
+	int joinqual_sisc_role = contain_ShareInputScan_detail(root, (Node*)join_plan->join.joinqual);
+
+	/* If we have producer in outer plan, we have to execute it first. */
+	if ((outer_sisc_role & (SISC_PRODUCER)) && 
+		(joinqual_sisc_role & (SISC_CONSUMER)))  
+		join_plan->join.prefetch_joinqual = false;
+
 	/*
 	 * Similar for non join qual.
 	 */
@@ -5782,6 +5836,12 @@ create_mergejoin_plan(PlannerInfo *root,
 		best_path->jpath.innerjoinpath->motionHazard &&
 		join_plan->join.plan.qual != NIL)
 		join_plan->join.prefetch_qual = true;
+
+	int qual_sisc_role = contain_ShareInputScan_detail(root, (Node*) join_plan->join.plan.qual);
+
+	if ((outer_sisc_role & (SISC_PRODUCER)) && 
+		(qual_sisc_role& (SISC_CONSUMER)))
+		join_plan->join.prefetch_qual = false;
 
 	/* Costs of sort and material steps are included in path cost already */
 	copy_generic_path_info(&join_plan->join.plan, &best_path->jpath.path);
@@ -6042,6 +6102,22 @@ create_hashjoin_plan(PlannerInfo *root,
 	if (partition_selectors_created)
 		join_plan->join.prefetch_inner = true;
 
+	int outer_sisc_role = contain_ShareInputScan_detail(root, (Node*) outer_plan);
+	int inner_sisc_role = contain_ShareInputScan_detail(root, (Node*)inner_plan);
+
+	if (join_plan->join.prefetch_inner)
+	{
+		/* We have to execute outer first if outer has producer and inner has a consumer. */
+		if ((outer_sisc_role & (SISC_PRODUCER)) &&
+			((inner_sisc_role & SISC_PRODUCER) == 0) &&
+			(inner_sisc_role & (SISC_CONSUMER)))
+			join_plan->join.prefetch_inner = false;
+	}
+	else if (inner_sisc_role & (SISC_PRODUCER))
+	{
+		join_plan->join.prefetch_inner = true;
+	}
+
 	/*
 	 * A motion deadlock can also happen when outer and joinqual both contain
 	 * motions.  It is not easy to check for joinqual here, so we set the
@@ -6055,6 +6131,13 @@ create_hashjoin_plan(PlannerInfo *root,
 		join_plan->join.joinqual != NIL)
 		join_plan->join.prefetch_joinqual = true;
 
+	int joinqual_sisc_role = contain_ShareInputScan_detail(root, (Node*) join_plan->join.joinqual);
+
+	/* If we have producer in outer plan, we have to execute it first. */
+	if ((outer_sisc_role & (SISC_PRODUCER)) && 
+		(joinqual_sisc_role & (SISC_CONSUMER)))  
+		join_plan->join.prefetch_joinqual = false;
+
 	/*
 	 * Similar for non join qual.
 	 */
@@ -6062,6 +6145,12 @@ create_hashjoin_plan(PlannerInfo *root,
 		best_path->jpath.outerjoinpath->motionHazard &&
 		join_plan->join.plan.qual != NIL)
 		join_plan->join.prefetch_qual = true;
+
+	int qual_sisc_role = contain_ShareInputScan_detail(root, (Node*) join_plan->join.plan.qual);
+
+	if ((outer_sisc_role & (SISC_PRODUCER)) && 
+		(qual_sisc_role & (SISC_CONSUMER)))
+		join_plan->join.prefetch_qual = false;
 
 	copy_generic_path_info(&join_plan->join.plan, &best_path->jpath.path);
 
