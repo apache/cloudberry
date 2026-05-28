@@ -155,9 +155,18 @@ add_library(paxformat SHARED ${PROTO_SRCS} ${pax_storage_src} ${pax_clustering_s
 target_include_directories(paxformat PUBLIC ${pax_target_include})
 target_link_directories(paxformat PUBLIC ${pax_target_link_directories})
 target_link_libraries(paxformat PRIVATE ${pax_target_link_libs})
-   
+
 set_target_properties(paxformat PROPERTIES
   OUTPUT_NAME paxformat)
+if(APPLE)
+  # PAX C++ code calls PG backend functions (write_stderr,
+  # xlog_check_consistency_hook, ...). On Linux ld defers unresolved
+  # references in .so; macOS ld rejects them unless told otherwise.
+  # Defer them to load time so paxformat is usable wherever PG symbols
+  # are provided.
+  set_target_properties(paxformat PROPERTIES
+    LINK_FLAGS "-Wl,-undefined,dynamic_lookup")
+endif()
 add_dependencies(paxformat generate_protobuf)
 
 # export headers
@@ -215,4 +224,13 @@ install(TARGETS paxformat
 add_executable(paxformat_test paxformat_test.cc)
 target_include_directories(paxformat_test PUBLIC ${pax_target_include} ${CMAKE_CURRENT_SOURCE_DIR})
 add_dependencies(paxformat_test paxformat)
-target_link_libraries(paxformat_test PRIVATE paxformat postgres)
+if(APPLE)
+  # No libpostgres.so to link against on macOS; defer PG symbols to
+  # load time. The test still validates that paxformat itself is a
+  # complete dylib.
+  target_link_libraries(paxformat_test PRIVATE paxformat)
+  set_target_properties(paxformat_test PROPERTIES
+    LINK_FLAGS "-Wl,-undefined,dynamic_lookup")
+else()
+  target_link_libraries(paxformat_test PRIVATE paxformat postgres)
+endif()
