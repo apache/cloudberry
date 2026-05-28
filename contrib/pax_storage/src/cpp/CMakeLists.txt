@@ -48,7 +48,13 @@ add_custom_target(generate_protobuf DEPENDS ${PROTO_SRCS} ${PROTO_HDRS})
 link_directories($ENV{GPHOME}/lib)
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
-## build pax_format.so
-include(pax_format)
+## build pax_format.so — standalone reader lib used by external tools.
+## On macOS it would need -undefined dynamic_lookup to resolve PG symbols
+## (write_stderr, xlog_check_consistency_hook, ...). Skip for now; pax.so
+## itself (the in-backend extension) still builds and is enough to run
+## the demo cluster with `USING pax` tables.
+if(NOT APPLE)
+  include(pax_format)
+endif()
 ## build pax.so
 include(pax)

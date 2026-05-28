@@ -174,15 +174,49 @@ add_subdirectory(contrib/tabulate)
 set(pax_target_src  ${PROTO_SRCS} ${pax_storage_src} ${pax_clustering_src} ${pax_exceptions_src}
   ${pax_access_src} ${pax_comm_src} ${pax_catalog_src} ${pax_vec_src})
 set(pax_target_include ${pax_target_include} ${ZTSD_HEADER} ${CMAKE_CURRENT_SOURCE_DIR} ${CBDB_INCLUDE_DIR} contrib/tabulate/include)
-set(pax_target_link_libs ${pax_target_link_libs} protobuf zstd z postgres uring)
+set(pax_target_link_libs ${pax_target_link_libs} zstd z)
+# On Linux, link against the libpostgres.so produced by the backend
+# (shared-postgres-backend). On macOS we must NOT do this: pax.so is
+# loaded by postgres via dlopen, and a separate libpostgres.so would
+# give pax.so its own copy of backend globals (e.g.
+# process_shared_preload_libraries_in_progress). Instead, use the
+# standard PG extension pattern: resolve symbols at load time against
+# the postgres binary itself via -bundle_loader.
+if(NOT APPLE)
+  list(APPEND pax_target_link_libs postgres)
+endif()
+# protobuf v22+ split its abseil deps into separate libs. On macOS the
+# Homebrew protobuf is built this way and the link fails for abseil
+# log_internal symbols unless we pull them via pkg-config.
+if(APPLE)
+  find_package(PkgConfig REQUIRED)
+  pkg_check_modules(PB_PC REQUIRED protobuf)
+  set(pax_target_include ${pax_target_include} ${PB_PC_INCLUDE_DIRS})
+  list(APPEND pax_target_link_directories ${PB_PC_LIBRARY_DIRS})
+  list(APPEND pax_target_link_libs ${PB_PC_LIBRARIES})
+else()
+  list(APPEND pax_target_link_libs protobuf)
+endif()
+# liburing is Linux-only; PAX falls back to pread-based SyncFastIO elsewhere.
+if (CMAKE_SYSTEM_NAME STREQUAL "Linux")
+  list(APPEND pax_target_link_libs uring)
+endif()
 if (PAX_USE_LZ4)
   list(APPEND pax_target_link_libs lz4)
 endif()
 set(pax_target_link_directories ${PROJECT_SOURCE_DIR}/../../src/backend/)
 set(pax_target_dependencies generate_protobuf create_sql_script)
 
-add_library(pax SHARED ${pax_target_src})
-set_target_properties(pax PROPERTIES OUTPUT_NAME pax)
+# On macOS, build pax as a MODULE (bundle) so that -bundle_loader is
+# accepted and undefined PG symbols resolve at load time against the
+# postgres binary (one shared copy of backend globals).
+if(APPLE)
+  add_library(pax MODULE ${pax_target_src})
+  set_target_properties(pax PROPERTIES OUTPUT_NAME pax SUFFIX ".so")
+else()
+  add_library(pax SHARED ${pax_target_src})
+  set_target_properties(pax PROPERTIES OUTPUT_NAME pax)
+endif()
 
 if(USE_MANIFEST_API AND NOT USE_PAX_CATALOG)
   set(pax_target_link_libs ${pax_target_link_libs} yyjson)
@@ -209,12 +243,25 @@ endif(VEC_BUILD)
 target_include_directories(pax PUBLIC ${pax_target_include})
 target_link_directories(pax PUBLIC ${pax_target_link_directories})
 target_link_libraries(pax PRIVATE ${pax_target_link_libs})
-set_target_properties(pax PROPERTIES
-  BUILD_RPATH_USE_ORIGIN ON
-  BUILD_WITH_INSTALL_RPATH ON
-  INSTALL_RPATH "$ORIGIN:$ORIGIN/.."
-  LINK_FLAGS "-Wl,--enable-new-dtags"
-)
+if(APPLE)
+  # macOS uses @loader_path / LC_RPATH; GNU-ld --enable-new-dtags and
+  # $ORIGIN aren't supported. We must NOT link against libpostgres.so —
+  # instead let undefined PG symbols resolve at load time against the
+  # postgres binary. That keeps a single instance of each backend global
+  # shared between postgres and pax.so.
+  set_target_properties(pax PROPERTIES
+    BUILD_WITH_INSTALL_RPATH ON
+    INSTALL_RPATH "@loader_path;@loader_path/.."
+    LINK_FLAGS "-Wl,-undefined,dynamic_lookup -Wl,-bundle_loader,${PROJECT_SOURCE_DIR}/../../src/backend/postgres"
+  )
+else()
+  set_target_properties(pax PROPERTIES
+    BUILD_RPATH_USE_ORIGIN ON
+    BUILD_WITH_INSTALL_RPATH ON
+    INSTALL_RPATH "$ORIGIN:$ORIGIN/.."
+    LINK_FLAGS "-Wl,--enable-new-dtags"
+  )
+endif()
 
 add_dependencies(pax ${pax_target_dependencies})
 add_custom_command(TARGET pax POST_BUILD

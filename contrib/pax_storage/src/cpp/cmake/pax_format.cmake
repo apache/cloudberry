@@ -109,11 +109,29 @@ set(pax_vec_src ${pax_vec_src}
 endif()
 
 set(pax_target_include ${ZTSD_HEADER} ${CMAKE_CURRENT_SOURCE_DIR} ${CBDB_INCLUDE_DIR} contrib/tabulate/include)
-set(pax_target_link_libs uuid protobuf zstd z uring)
+set(pax_target_link_libs zstd z)
+# protobuf v22+ on macOS splits its abseil deps into separate libs;
+# pull them in via pkg-config.
+if(APPLE)
+  find_package(PkgConfig REQUIRED)
+  pkg_check_modules(PB_PC REQUIRED protobuf)
+  set(pax_target_include ${pax_target_include} ${PB_PC_INCLUDE_DIRS})
+  list(APPEND pax_target_link_libs ${PB_PC_LIBRARIES})
+else()
+  list(APPEND pax_target_link_libs protobuf)
+endif()
+# liburing is Linux-only (kernel io_uring iface). macOS provides uuid_*
+# functions in libSystem, so -luuid is also Linux-only.
+if (CMAKE_SYSTEM_NAME STREQUAL "Linux")
+  list(APPEND pax_target_link_libs uuid uring)
+endif()
 if (PAX_USE_LZ4)
   list(APPEND pax_target_link_libs lz4)
 endif()
 set(pax_target_link_directories ${PROJECT_SOURCE_DIR}/../../src/backend/)
+if(APPLE)
+  list(APPEND pax_target_link_directories ${PB_PC_LIBRARY_DIRS})
+endif()
 
 # vec build
 if (VEC_BUILD)
