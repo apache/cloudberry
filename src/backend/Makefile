@@ -109,8 +109,18 @@ SYMBOL_MAPPING_FLAGS = -Wl,--version-script=$(SYMBOL_MAP_FILE)
 endif
 ifeq ($(enable_shared_postgres_backend),yes)
 all: libpostgres.so
+
+# On macOS, main/main.o (providing `progname` and other globals) is filtered
+# out of libpostgres.so but is linked into the postgres executable. Tell ld
+# to defer those undefined symbols to load time (resolved when the postgres
+# binary loads libpostgres.so). Linux's ld allows undefined refs in shared
+# libs by default, so no flag needed there.
+ifeq ($(PORTNAME), darwin)
+LIBPOSTGRES_SO_LDFLAGS = -Wl,-undefined,dynamic_lookup
+endif
+
 libpostgres.so: $(OBJS) $(SYMBOL_MAP_FILE)
-	$(CXX) -shared $(CXXFLAGS) $(LDFLAGS) $(LDFLAGS_SL) $(export_dynamic) \
+	$(CXX) -shared $(CXXFLAGS) $(LDFLAGS) $(LDFLAGS_SL) $(LIBPOSTGRES_SO_LDFLAGS) $(export_dynamic) \
 	  $(filter-out main/main.o, $(call expand_subsys,$(OBJS))) $(LIBS) $(SYMBOL_MAPPING_FLAGS) -o $@
 
 # if enable-build-postgres-with-shared is yes, link postgres with shared library libpostgres.so
