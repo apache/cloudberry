@@ -23,7 +23,6 @@ PG_CPPFLAGS = -I/usr/local/include
 PG_CXXFLAGS = -std=c++17
 
 PGFILEDESC = "pax - PAX table access method"
-SHLIB_LINK += -luuid
 
 PAX_REGRESS_DIR = src/test/regress
 PAX_ISOLATION2_DIR = src/test/isolation2
@@ -40,6 +39,12 @@ top_builddir = ../../
 include $(top_builddir)/src/Makefile.global
 include $(top_srcdir)/contrib/contrib-global.mk
 PG_REGRESS = $(top_builddir)/src/test/regress/pg_regress
+endif
+
+# Must come AFTER Makefile.global include so PORTNAME is defined.
+# libuuid is shipped by libSystem on macOS (no separate -luuid needed).
+ifneq ($(PORTNAME), darwin)
+SHLIB_LINK += -luuid
 endif
 
 .PHONY: all
@@ -63,6 +68,15 @@ ifeq ($(USE_PAX_CATALOG),)
 endif
 
 .PHONY: install-data build
+# googletest's own CMakeLists.txt sprinkles gcc-only warning flags
+# (-Wno-clobbered, -Wno-sized-deallocation, -Wno-parameter-name) that
+# Apple clang rejects with -Werror,-Wunknown-warning-option. Skip the
+# gtest target on darwin so the rest of PAX still builds; Linux keeps
+# gtest enabled so 'make pax-unit-test' works as before.
+ifeq ($(PORTNAME), darwin)
+PAX_GTEST_OPT := -DBUILD_GTEST=OFF
+endif
+
 build: $(SRC) $(CSRC)
 	@echo "build pax, USE_MANIFEST_API=$(USE_MANIFEST_API) USE_PAX_CATALOG=$(USE_PAX_CATALOG)"
 	@if [ ! -f build/Makefile ]; then \
@@ -70,9 +84,12 @@ build: $(SRC) $(CSRC)
 		cd build && \
 		cmake -DCMAKE_INSTALL_PREFIX=$(DESTDIR)$(prefix) \
 			-DUSE_MANIFEST_API=$(USE_MANIFEST_API) \
-			-DUSE_PAX_CATALOG=$(USE_PAX_CATALOG) .. ; \
+			-DUSE_PAX_CATALOG=$(USE_PAX_CATALOG) \
+			$(PAX_GTEST_OPT) \
+			.. ; \
 	fi
 	cd build && make -j8
+# CMake emits libpax.so on both platforms (Linux SHARED, macOS MODULE).
 	@cp -f build/src/cpp/libpax.so pax.so
 
 pax-unit-test: 
