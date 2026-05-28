@@ -29,11 +29,16 @@
 
 #include "comm/common_io.h"
 
-#include <liburing.h>
 #include <cstddef>
 #include <cstdio>
 #include <algorithm>
 #include <vector>
+
+/* liburing is Linux-only (io_uring kernel iface). On macOS / *BSD we
+ * compile only the SyncFastIO (pread-based) path. */
+#ifdef __linux__
+#include <liburing.h>
+#endif
 
 namespace pax
 {
@@ -56,7 +61,8 @@ public:
   std::pair<int, int> read(int fd, std::vector<IORequest> &request, std::vector<bool> &result);
 };
 
-// io_uring-based FastIO
+#ifdef __linux__
+// io_uring-based FastIO (Linux only).
 class IOUringFastIO {
 public:
   IOUringFastIO(size_t queue_size = 128) {
@@ -84,5 +90,6 @@ private:
   // 'u' for uninitialized, 'i' for initialized, 'x' for unsupported
   char status_ = 'u';
 };
+#endif // __linux__
 
 } // namespace pax

@@ -9891,7 +9891,16 @@ _ACEOF
   LIBS="-luring $LIBS"
 
 else
-  as_fn_error $? "library 'uring' is required for PAX support" "$LINENO" 5
+  # liburing is required on Linux (io_uring is a Linux 5.1+ kernel iface);
+  # on non-Linux hosts PAX falls back to pread-based SyncFastIO.
+  case $host_os in
+    linux*)
+      as_fn_error $? "library 'uring' is required for PAX support on Linux" "$LINENO" 5
+      ;;
+    *)
+      :
+      ;;
+  esac
 fi
 
 
