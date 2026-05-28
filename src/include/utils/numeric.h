@@ -317,8 +317,8 @@ extern void free_numeric_var(NumericVar *var);
 
 extern void alloc_numeric_var(NumericVar *var, int ndigits);
 extern void zero_numeric_var(NumericVar *var);
-extern const bool init_var_from_str(const char *str, const char *cp, NumericVar *dest, const char **endptr,
-									 Node *escontext);
+extern bool init_var_from_str(const char *str, const char *cp, NumericVar *dest, const char **endptr,
+							  Node *escontext);
 extern void init_var_from_var(const NumericVar *value, NumericVar *dest);
 extern void init_ro_var_from_var(const NumericVar *value, NumericVar *dest);
 extern void set_var_from_num(Numeric value, NumericVar *dest);
