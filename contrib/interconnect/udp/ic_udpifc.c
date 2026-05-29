@@ -835,7 +835,7 @@ static void sendOnce(ChunkTransportState *transportStates, ChunkTransportStateEn
 static inline uint64 computeExpirationPeriod(MotionConn *conn, uint32 retry);
 
 static ICBuffer *getSndBuffer(MotionConn *conn);
-static void initSndBufferPool();
+static void initSndBufferPool(SendBufferPool *p);
 
 static void putIntoUnackQueueRing(UnackQueueRing *uqr, ICBuffer *buf, uint64 expTime, uint64 now);
 static void initUnackQueueRing(UnackQueueRing *uqr);
