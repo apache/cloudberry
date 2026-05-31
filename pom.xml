@@ -1802,6 +1802,7 @@ code or new licensing patterns.
             <exclude>contrib/btree_gist/btree_bool.c</exclude>
             <exclude>contrib/basic_archive/basic_archive.conf</exclude>
             <exclude>contrib/pg_freespacemap/pg_freespacemap.conf</exclude>
+            <exclude>contrib/pgcrypto/scripts/pgp_session_data.py</exclude>
             <exclude>contrib/pg_walinspect/walinspect.conf</exclude>
             <exclude>contrib/pgrowlocks/specs/pgrowlocks.spec</exclude>
             <exclude>contrib/tcn/specs/tcn.spec</exclude>

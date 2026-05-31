@@ -132,7 +132,7 @@ enum SysCacheIdentifier
 	MVTABLESMVRELOID,
 	USERMAPPINGOID,
 	USERMAPPINGUSERSERVER,
-	ATTENCODINGNUM
+	ATTENCODINGNUM,
 
 	/* intentionally out of alphabetical order, to avoid an ABI break: */
 	EXTENSIONOID
