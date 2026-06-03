@@ -85,12 +85,16 @@ install:
 	@if [ "$(enable_orafce)" = "yes" ]; then \
 		$(MAKE) -C orafce NO_PGXS=true install; \
 	fi
+	@if [ "$(with_zstd)" = "yes" ]; then \
+		$(MAKE) -C zstd install; \
+	fi
 
 clean:
 	if [ "$(enable_mapreduce)" = "yes" ]; then $(MAKE) -C gpmapreduce clean; fi
 	if [ "$(enable_gpcloud)" = "yes" ]; then $(MAKE) -C gpcloud cleanall; fi
 	if [ "$(enable_pxf)" = "yes" ]; then $(MAKE) -C pxf_fdw clean; fi
 	if [ "${enable_orafce}" = "yes" ]; then $(MAKE) -C orafce NO_PGXS=true clean; fi
+	if [ "$(with_zstd)" = "yes" ]; then $(MAKE) -C zstd clean; fi
 
 
 distclean:
