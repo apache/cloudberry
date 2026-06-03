@@ -278,7 +278,7 @@ check_dynamic_scan_fullscan(Plan *plan, List *rtable)
 			partOids = ((DynamicSeqScan *) plan)->partOids;
 			join_prune_paramids =
 				((DynamicSeqScan *) plan)->join_prune_paramids;
-			scanrelid = ((DynamicSeqScan *) plan)->seqscan.scanrelid;
+			scanrelid = ((DynamicSeqScan *) plan)->seqscan.scan.scanrelid;
 			break;
 		case T_DynamicIndexScan:
 			partOids = ((DynamicIndexScan *) plan)->partOids;
