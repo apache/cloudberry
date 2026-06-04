@@ -66,7 +66,8 @@ node_headers = \
 	nodes/replnodes.h \
 	nodes/supportnodes.h \
 	nodes/value.h \
-	utils/rel.h
+	utils/rel.h \
+	catalog/gp_distribution_policy.h
 
 # see also catalog/Makefile for an explanation of these make rules
 

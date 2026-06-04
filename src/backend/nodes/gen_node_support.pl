@@ -51,7 +51,6 @@ sub elem
 # able to make this list the only copy.  For now, we just check that
 # it matches the list of files passed on the command line.
 my @all_input_files = qw(
-  catalog/gp_distribution_policy.h
   nodes/nodes.h
   nodes/primnodes.h
   nodes/parsenodes.h
@@ -74,6 +73,7 @@ my @all_input_files = qw(
   nodes/supportnodes.h
   nodes/value.h
   utils/rel.h
+  catalog/gp_distribution_policy.h
 );
 
 # Nodes from these input files are automatically treated as nodetag_only.
@@ -108,7 +108,7 @@ my @nodetag_only_files = qw(
 # ABI stability during development.
 
 my $last_nodetag = 'WindowObjectData';
-my $last_nodetag_no = 557;
+my $last_nodetag_no = 561;
 
 # output file names
 my @output_files;
