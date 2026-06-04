@@ -889,6 +889,457 @@ close $eff;
 close $cfs;
 close $efs;
 
+
+# outfuncs.c, readfuncs.c
+
+push @output_files, 'outfuncs.funcs.c';
+open my $off, '>', "$output_path/outfuncs.funcs.c$tmpext" or die $!;
+push @output_files, 'readfuncs.funcs.c';
+open my $rff, '>', "$output_path/readfuncs.funcs.c$tmpext" or die $!;
+push @output_files, 'outfuncs.switch.c';
+open my $ofs, '>', "$output_path/outfuncs.switch.c$tmpext" or die $!;
+push @output_files, 'readfuncs.switch.c';
+open my $rfs, '>', "$output_path/readfuncs.switch.c$tmpext" or die $!;
+
+printf $off $header_comment, 'outfuncs.funcs.c';
+printf $rff $header_comment, 'readfuncs.funcs.c';
+printf $ofs $header_comment, 'outfuncs.switch.c';
+printf $rfs $header_comment, 'readfuncs.switch.c';
+
+print $off $node_includes;
+print $rff $node_includes;
+
+foreach my $n (@node_types)
+{
+	next if elem $n, @abstract_types;
+	next if elem $n, @nodetag_only;
+	next if elem $n, @no_read_write;
+	next if elem $n, @special_read_write;
+
+	my $no_read = (elem $n, @no_read);
+
+	# output format starts with upper case node type name
+	my $N = uc $n;
+
+	print $ofs "\t\t\tcase T_${n}:\n"
+	  . "\t\t\t\t_out${n}(str, obj);\n"
+	  . "\t\t\t\tbreak;\n";
+
+	print $rfs "\tif (MATCH(\"$N\", "
+	  . length($N) . "))\n"
+	  . "\t\treturn (Node *) _read${n}();\n"
+	  unless $no_read;
+
+	next if elem $n, @custom_read_write;
+
+	print $off "
+static void
+_out${n}(StringInfo str, const $n *node)
+{
+\tWRITE_NODE_TYPE(\"$N\");
+
+";
+
+	if (!$no_read)
+	{
+		my $macro =
+		  (@{ $node_type_info{$n}->{fields} } > 0)
+		  ? 'READ_LOCALS'
+		  : 'READ_LOCALS_NO_FIELDS';
+		print $rff "
+static $n *
+_read${n}(void)
+{
+\t$macro($n);
+
+";
+	}
+
+	# track already-processed fields to support field order checks
+	# (this isn't quite redundant with the previous loop, since
+	# we may be considering structs that lack copy/equal support)
+	my %previous_fields;
+
+	# print instructions for each field
+	foreach my $f (@{ $node_type_info{$n}->{fields} })
+	{
+		my $t = $node_type_info{$n}->{field_types}{$f};
+		my @a = @{ $node_type_info{$n}->{field_attrs}{$f} };
+
+		# extract per-field attributes
+		my $array_size_field;
+		my $read_as_field;
+		my $read_write_ignore = 0;
+		foreach my $a (@a)
+		{
+			if ($a =~ /^array_size\(([\w.]+)\)$/)
+			{
+				$array_size_field = $1;
+				# insist that we read the array size first!
+				die
+				  "array size field $array_size_field for field $n.$f must precede $f\n"
+				  if (!$previous_fields{$array_size_field} && !$no_read);
+			}
+			elsif ($a =~ /^read_as\(([\w.]+)\)$/)
+			{
+				$read_as_field = $1;
+			}
+			elsif ($a eq 'read_write_ignore')
+			{
+				$read_write_ignore = 1;
+			}
+		}
+
+		if ($read_write_ignore)
+		{
+			# nothing to do if no_read
+			next if $no_read;
+			# for read_write_ignore with read_as(), emit the appropriate
+			# assignment on the read side and move on.
+			if (defined $read_as_field)
+			{
+				print $rff "\tlocal_node->$f = $read_as_field;\n";
+				next;
+			}
+			# else, bad specification
+			die "$n.$f must not be marked read_write_ignore\n";
+		}
+
+		# select instructions by field type
+		if ($t eq 'bool')
+		{
+			print $off "\tWRITE_BOOL_FIELD($f);\n";
+			print $rff "\tREAD_BOOL_FIELD($f);\n" unless $no_read;
+		}
+		elsif ($t eq 'int' && $f =~ 'location$')
+		{
+			print $off "\tWRITE_LOCATION_FIELD($f);\n";
+			print $rff "\tREAD_LOCATION_FIELD($f);\n" unless $no_read;
+		}
+		elsif ($t eq 'int'
+			|| $t eq 'int16'
+			|| $t eq 'int32'
+			|| $t eq 'AttrNumber'
+			|| $t eq 'StrategyNumber')
+		{
+			print $off "\tWRITE_INT_FIELD($f);\n";
+			print $rff "\tREAD_INT_FIELD($f);\n" unless $no_read;
+		}
+		elsif ($t eq 'uint32'
+			|| $t eq 'bits32'
+			|| $t eq 'BlockNumber'
+			|| $t eq 'Index'
+			|| $t eq 'SubTransactionId')
+		{
+			print $off "\tWRITE_UINT_FIELD($f);\n";
+			print $rff "\tREAD_UINT_FIELD($f);\n" unless $no_read;
+		}
+		elsif ($t eq 'uint64'
+			|| $t eq 'AclMode')
+		{
+			print $off "\tWRITE_UINT64_FIELD($f);\n";
+			print $rff "\tREAD_UINT64_FIELD($f);\n" unless $no_read;
+		}
+		elsif ($t eq 'Oid' || $t eq 'RelFileNumber')
+		{
+			print $off "\tWRITE_OID_FIELD($f);\n";
+			print $rff "\tREAD_OID_FIELD($f);\n" unless $no_read;
+		}
+		elsif ($t eq 'long')
+		{
+			print $off "\tWRITE_LONG_FIELD($f);\n";
+			print $rff "\tREAD_LONG_FIELD($f);\n" unless $no_read;
+		}
+		elsif ($t eq 'char')
+		{
+			print $off "\tWRITE_CHAR_FIELD($f);\n";
+			print $rff "\tREAD_CHAR_FIELD($f);\n" unless $no_read;
+		}
+		elsif ($t eq 'double')
+		{
+			print $off "\tWRITE_FLOAT_FIELD($f);\n";
+			print $rff "\tREAD_FLOAT_FIELD($f);\n" unless $no_read;
+		}
+		elsif ($t eq 'Cardinality')
+		{
+			print $off "\tWRITE_FLOAT_FIELD($f);\n";
+			print $rff "\tREAD_FLOAT_FIELD($f);\n" unless $no_read;
+		}
+		elsif ($t eq 'Cost')
+		{
+			print $off "\tWRITE_FLOAT_FIELD($f);\n";
+			print $rff "\tREAD_FLOAT_FIELD($f);\n" unless $no_read;
+		}
+		elsif ($t eq 'QualCost')
+		{
+			print $off "\tWRITE_FLOAT_FIELD($f.startup);\n";
+			print $off "\tWRITE_FLOAT_FIELD($f.per_tuple);\n";
+			print $rff "\tREAD_FLOAT_FIELD($f.startup);\n" unless $no_read;
+			print $rff "\tREAD_FLOAT_FIELD($f.per_tuple);\n" unless $no_read;
+		}
+		elsif ($t eq 'Selectivity')
+		{
+			print $off "\tWRITE_FLOAT_FIELD($f);\n";
+			print $rff "\tREAD_FLOAT_FIELD($f);\n" unless $no_read;
+		}
+		elsif ($t eq 'char*')
+		{
+			print $off "\tWRITE_STRING_FIELD($f);\n";
+			print $rff "\tREAD_STRING_FIELD($f);\n" unless $no_read;
+		}
+		elsif ($t eq 'Bitmapset*' || $t eq 'Relids')
+		{
+			print $off "\tWRITE_BITMAPSET_FIELD($f);\n";
+			print $rff "\tREAD_BITMAPSET_FIELD($f);\n" unless $no_read;
+		}
+		elsif (elem $t, @enum_types)
+		{
+			print $off "\tWRITE_ENUM_FIELD($f, $t);\n";
+			print $rff "\tREAD_ENUM_FIELD($f, $t);\n" unless $no_read;
+		}
+		# arrays of scalar types
+		elsif ($t =~ /^(\w+)(\*|\[\w+\])$/ and elem $1, @scalar_types)
+		{
+			my $tt = uc $1;
+			if (!defined $array_size_field)
+			{
+				die "no array size defined for $n.$f of type $t\n";
+			}
+			if ($node_type_info{$n}->{field_types}{$array_size_field} eq
+				'List*')
+			{
+				print $off
+				  "\tWRITE_${tt}_ARRAY($f, list_length(node->$array_size_field));\n";
+				print $rff
+				  "\tREAD_${tt}_ARRAY($f, list_length(local_node->$array_size_field));\n"
+				  unless $no_read;
+			}
+			else
+			{
+				print $off
+				  "\tWRITE_${tt}_ARRAY($f, node->$array_size_field);\n";
+				print $rff
+				  "\tREAD_${tt}_ARRAY($f, local_node->$array_size_field);\n"
+				  unless $no_read;
+			}
+		}
+		elsif ($t eq 'function pointer')
+		{
+			# We don't print these, and we can't read them either
+			die "cannot read function pointer in struct \"$n\" field \"$f\"\n"
+			  unless $no_read;
+		}
+		# Special treatments of several Path node fields
+		elsif ($t eq 'RelOptInfo*' && elem 'write_only_relids', @a)
+		{
+			print $off
+			  "\tappendStringInfoString(str, \" :parent_relids \");\n"
+			  . "\toutBitmapset(str, node->$f->relids);\n";
+		}
+		elsif ($t eq 'PathTarget*' && elem 'write_only_nondefault_pathtarget',
+			@a)
+		{
+			(my $f2 = $f) =~ s/pathtarget/parent/;
+			print $off "\tif (node->$f != node->$f2->reltarget)\n"
+			  . "\t\tWRITE_NODE_FIELD($f);\n";
+		}
+		elsif ($t eq 'ParamPathInfo*' && elem 'write_only_req_outer', @a)
+		{
+			print $off
+			  "\tappendStringInfoString(str, \" :required_outer \");\n"
+			  . "\tif (node->$f)\n"
+			  . "\t\toutBitmapset(str, node->$f->ppi_req_outer);\n"
+			  . "\telse\n"
+			  . "\t\toutBitmapset(str, NULL);\n";
+		}
+		# node type
+		elsif (($t =~ /^(\w+)\*$/ or $t =~ /^struct\s+(\w+)\*$/)
+			and elem $1, @node_types)
+		{
+			die
+			  "node type \"$1\" lacks write support, which is required for struct \"$n\" field \"$f\"\n"
+			  if (elem $1, @no_read_write or elem $1, @nodetag_only);
+			die
+			  "node type \"$1\" lacks read support, which is required for struct \"$n\" field \"$f\"\n"
+			  if (elem $1, @no_read or elem $1, @nodetag_only)
+			  and !$no_read;
+
+			print $off "\tWRITE_NODE_FIELD($f);\n";
+			print $rff "\tREAD_NODE_FIELD($f);\n" unless $no_read;
+		}
+		# arrays of node pointers (currently supported for write only)
+		elsif (($t =~ /^(\w+)\*\*$/ or $t =~ /^struct\s+(\w+)\*\*$/)
+			and elem($1, @node_types))
+		{
+			if (!defined $array_size_field)
+			{
+				die "no array size defined for $n.$f of type $t\n";
+			}
+			if ($node_type_info{$n}->{field_types}{$array_size_field} eq
+				'List*')
+			{
+				print $off
+				  "\tWRITE_NODE_ARRAY($f, list_length(node->$array_size_field));\n";
+				print $rff
+				  "\tREAD_NODE_ARRAY($f, list_length(local_node->$array_size_field));\n"
+				  unless $no_read;
+			}
+			else
+			{
+				print $off
+				  "\tWRITE_NODE_ARRAY($f, node->$array_size_field);\n";
+				print $rff
+				  "\tREAD_NODE_ARRAY($f, local_node->$array_size_field);\n"
+				  unless $no_read;
+			}
+		}
+		elsif ($t eq 'struct CustomPathMethods*'
+			|| $t eq 'struct CustomScanMethods*')
+		{
+			print $off q{
+	/* CustomName is a key to lookup CustomScanMethods */
+	appendStringInfoString(str, " :methods ");
+	outToken(str, node->methods->CustomName);
+};
+			print $rff q!
+	{
+		/* Lookup CustomScanMethods by CustomName */
+		char	   *custom_name;
+		const CustomScanMethods *methods;
+		token = pg_strtok(&length); /* skip methods: */
+		token = pg_strtok(&length); /* CustomName */
+		custom_name = nullable_string(token, length);
+		methods = GetCustomScanMethods(custom_name, false);
+		local_node->methods = methods;
+	}
+! unless $no_read;
+		}
+		else
+		{
+			die
+			  "could not handle type \"$t\" in struct \"$n\" field \"$f\"\n";
+		}
+
+		# for read_as() without read_write_ignore, we have to read the value
+		# that outfuncs.c wrote and then overwrite it.
+		if (defined $read_as_field)
+		{
+			print $rff "\tlocal_node->$f = $read_as_field;\n" unless $no_read;
+		}
+
+		$previous_fields{$f} = 1;
+	}
+
+	print $off "}
+";
+	print $rff "
+\tREAD_DONE();
+}
+" unless $no_read;
+}
+
+close $off;
+close $rff;
+close $ofs;
+close $rfs;
+
+
+# queryjumblefuncs.c
+
+push @output_files, 'queryjumblefuncs.funcs.c';
+open my $jff, '>', "$output_path/queryjumblefuncs.funcs.c$tmpext" or die $!;
+push @output_files, 'queryjumblefuncs.switch.c';
+open my $jfs, '>', "$output_path/queryjumblefuncs.switch.c$tmpext" or die $!;
+
+printf $jff $header_comment, 'queryjumblefuncs.funcs.c';
+printf $jfs $header_comment, 'queryjumblefuncs.switch.c';
+
+print $jff $node_includes;
+
+foreach my $n (@node_types)
+{
+	next if elem $n, @abstract_types;
+	next if elem $n, @nodetag_only;
+	my $struct_no_query_jumble = (elem $n, @no_query_jumble);
+
+	print $jfs "\t\t\tcase T_${n}:\n"
+	  . "\t\t\t\t_jumble${n}(jstate, expr);\n"
+	  . "\t\t\t\tbreak;\n"
+	  unless $struct_no_query_jumble;
+
+	next if elem $n, @custom_query_jumble;
+
+	print $jff "
+static void
+_jumble${n}(JumbleState *jstate, Node *node)
+{
+\t${n} *expr = (${n} *) node;\n
+" unless $struct_no_query_jumble;
+
+	# print instructions for each field
+	foreach my $f (@{ $node_type_info{$n}->{fields} })
+	{
+		my $t = $node_type_info{$n}->{field_types}{$f};
+		my @a = @{ $node_type_info{$n}->{field_attrs}{$f} };
+		my $query_jumble_ignore = $struct_no_query_jumble;
+		my $query_jumble_location = 0;
+
+		# extract per-field attributes
+		foreach my $a (@a)
+		{
+			if ($a eq 'query_jumble_ignore')
+			{
+				$query_jumble_ignore = 1;
+			}
+			elsif ($a eq 'query_jumble_location')
+			{
+				$query_jumble_location = 1;
+			}
+		}
+
+		# node type
+		if (($t =~ /^(\w+)\*$/ or $t =~ /^struct\s+(\w+)\*$/)
+			and elem $1, @node_types)
+		{
+			print $jff "\tJUMBLE_NODE($f);\n"
+			  unless $query_jumble_ignore;
+		}
+		elsif ($t eq 'int' && $f =~ 'location$')
+		{
+			# Track the node's location only if directly requested.
+			if ($query_jumble_location)
+			{
+				print $jff "\tJUMBLE_LOCATION($f);\n"
+				  unless $query_jumble_ignore;
+			}
+		}
+		elsif ($t eq 'char*')
+		{
+			print $jff "\tJUMBLE_STRING($f);\n"
+			  unless $query_jumble_ignore;
+		}
+		else
+		{
+			print $jff "\tJUMBLE_FIELD($f);\n"
+			  unless $query_jumble_ignore;
+		}
+	}
+
+	# Some nodes have no attributes like CheckPointStmt,
+	# so tweak things for empty contents.
+	if (scalar(@{ $node_type_info{$n}->{fields} }) == 0)
+	{
+		print $jff "\t(void) expr;\n"
+		  unless $struct_no_query_jumble;
+	}
+
+	print $jff "}
+" unless $struct_no_query_jumble;
+}
+
+close $jff;
+close $jfs;
+
 # now rename the temporary files to their final names
 foreach my $file (@output_files)
 {
