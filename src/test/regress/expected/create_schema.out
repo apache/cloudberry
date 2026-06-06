@@ -21,7 +21,7 @@ ERROR:  CREATE specifies a schema (schema_not_existing) different from the one b
 CREATE SCHEMA AUTHORIZATION regress_create_schema_role
   CREATE TRIGGER schema_trig BEFORE INSERT ON schema_not_existing.tab
   EXECUTE FUNCTION schema_trig.no_func();
-ERROR:  CREATE specifies a schema (schema_not_existing) different from the one being created (regress_create_schema_role)
+ERROR:  Triggers for statements are not yet supported
 -- Again, with a role specification and no schema names.
 SET ROLE regress_create_schema_role;
 CREATE SCHEMA AUTHORIZATION CURRENT_ROLE
@@ -39,7 +39,7 @@ ERROR:  CREATE specifies a schema (schema_not_existing) different from the one b
 CREATE SCHEMA AUTHORIZATION CURRENT_ROLE
   CREATE TRIGGER schema_trig BEFORE INSERT ON schema_not_existing.tab
   EXECUTE FUNCTION schema_trig.no_func();
-ERROR:  CREATE specifies a schema (schema_not_existing) different from the one being created (regress_create_schema_role)
+ERROR:  Triggers for statements are not yet supported
 -- Again, with a schema name and a role specification.
 CREATE SCHEMA regress_schema_1 AUTHORIZATION CURRENT_ROLE
   CREATE SEQUENCE schema_not_existing.seq;
@@ -56,7 +56,7 @@ ERROR:  CREATE specifies a schema (schema_not_existing) different from the one b
 CREATE SCHEMA regress_schema_1 AUTHORIZATION CURRENT_ROLE
   CREATE TRIGGER schema_trig BEFORE INSERT ON schema_not_existing.tab
   EXECUTE FUNCTION schema_trig.no_func();
-ERROR:  CREATE specifies a schema (schema_not_existing) different from the one being created (regress_schema_1)
+ERROR:  Triggers for statements are not yet supported
 RESET ROLE;
 -- Cases where the schema creation succeeds.
 -- The schema created matches the role name.
