@@ -1422,7 +1422,7 @@ typedef struct RangeTblFunction
 	List	   *funccoltypmods pg_node_attr(query_jumble_ignore);
 	/* OID list of column collation OIDs */
 	List	   *funccolcollations pg_node_attr(query_jumble_ignore);
-	bytea	   *funcuserdata;	/* merge16_delete_temp  */	/* describe function user data. assume bytea */
+	bytea	   *funcuserdata pg_node_attr(array_size(funccolcount));	/* merge16_delete_temp  */	/* describe function user data. assume bytea */
 
 	/* This is set during planning for use by the executor: */
 	/* PARAM_EXEC Param IDs affecting this func */

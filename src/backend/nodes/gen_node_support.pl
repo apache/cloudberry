@@ -1028,6 +1028,7 @@ _read${n}(void)
 			print $rff "\tREAD_LOCATION_FIELD($f);\n" unless $no_read;
 		}
 		elsif ($t eq 'int'
+			|| $t eq 'int8'
 			|| $t eq 'int16'
 			|| $t eq 'int32'
 			|| $t eq 'AttrNumber'
@@ -1036,7 +1037,13 @@ _read${n}(void)
 			print $off "\tWRITE_INT_FIELD($f);\n";
 			print $rff "\tREAD_INT_FIELD($f);\n" unless $no_read;
 		}
+		elsif ($t eq 'int64')
+		{
+			print $off "\tWRITE_LONG_FIELD($f);\n";
+			print $rff "\tREAD_LONG_FIELD($f);\n" unless $no_read;
+		}
 		elsif ($t eq 'uint32'
+			|| $t eq 'uint8'
 			|| $t eq 'bits32'
 			|| $t eq 'BlockNumber'
 			|| $t eq 'Index'
@@ -1224,6 +1231,15 @@ _read${n}(void)
 		local_node->methods = methods;
 	}
 ! unless $no_read;
+		}
+		elsif($t eq 'bytea*')
+		{
+			 
+		}
+		elsif($t eq 'CdbPathLocus')
+		{
+			print $off
+				"\t_outCdbPathLocus(str, &node->locus);\n";
 		}
 		else
 		{

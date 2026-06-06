@@ -156,7 +156,7 @@ typedef struct ApplyShareInputContext
  */
 typedef struct PlannerGlobal
 {
-	pg_node_attr(no_copy_equal, no_read, no_query_jumble)
+	pg_node_attr(no_copy_equal, no_read, no_query_jumble, custom_read_write)
 
 	NodeTag		type;
 
@@ -169,7 +169,7 @@ typedef struct PlannerGlobal
 	/* PlannerInfos for SubPlan nodes */
 	List	   *subroots pg_node_attr(read_write_ignore);
 
-	int		   *subplan_sliceIds;	/* slice IDs for SubPlan nodes. */
+	int		   *subplan_sliceIds pg_node_attr(array_size(subplans));	/* slice IDs for SubPlan nodes. */
 
 	/* indices of subplans that require REWIND */
 	Bitmapset  *rewindPlanIDs;
@@ -270,7 +270,7 @@ typedef struct PlannerInfo PlannerInfo;
 
 struct PlannerInfo
 {
-	pg_node_attr(no_copy_equal, no_read, no_query_jumble)
+	pg_node_attr(no_copy_equal, no_read, no_query_jumble, custom_read_write)
 
 	NodeTag		type;
 
@@ -1295,7 +1295,7 @@ typedef struct RelOptInfo
  */
 typedef struct RelAggInfo
 {
-	pg_node_attr(custom_copy_equal)
+	pg_node_attr(custom_copy_equal, no_read)
 	
 	NodeTag		type;
 
@@ -1932,7 +1932,7 @@ typedef struct Path
 	Cost		startup_cost;	/* cost expended before fetching any tuples */
 	Cost		total_cost;		/* total cost (assuming all tuples fetched) */
 
-	EstimatedBytes  memory;     /* executor RAM needed for Path + kids */
+	EstimatedBytes  memory pg_node_attr(read_write_ignore);     /* executor RAM needed for Path + kids */
 
 	CdbPathLocus    locus;      /* distribution of the result tuples */
 

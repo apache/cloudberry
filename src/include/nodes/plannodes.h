@@ -124,7 +124,7 @@ typedef struct PlannedStmt
 
 	List	   *subplans;		/* Plan trees for SubPlan expressions; note
 								 * that some could be NULL */
-	int		   *subplan_sliceIds;	/* merge16_delete_temp  */	/* slice IDs containing SubPlans; size equals 'subplans' */
+	int		   *subplan_sliceIds pg_node_attr(array_size(subplans));	/* merge16_delete_temp  */	/* slice IDs containing SubPlans; size equals 'subplans' */
 
 	Bitmapset  *rewindPlanIDs;	/* indices of subplans that require REWIND */
 
