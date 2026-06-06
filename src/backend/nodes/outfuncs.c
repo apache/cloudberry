@@ -429,8 +429,8 @@ _outPlannedStmt(StringInfo str, const PlannedStmt *node)
 		WRITE_INT_FIELD(slices[i].numsegments);
 		WRITE_INT_FIELD(slices[i].parallel_workers);
 		WRITE_INT_FIELD(slices[i].segindex);
-		WRITE_BOOL_FIELD(slices[i].directDispatch.isDirectDispatch);
-		WRITE_NODE_FIELD(slices[i].directDispatch.contentIds);
+		WRITE_BOOL_FIELD(slices[i].directDispatch->isDirectDispatch);
+		WRITE_NODE_FIELD(slices[i].directDispatch->contentIds);
 	}
 
 	WRITE_BITMAPSET_FIELD(rewindPlanIDs);

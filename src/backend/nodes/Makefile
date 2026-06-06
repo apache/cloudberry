@@ -67,7 +67,8 @@ node_headers = \
 	nodes/supportnodes.h \
 	nodes/value.h \
 	utils/rel.h \
-	catalog/gp_distribution_policy.h
+	catalog/gp_distribution_policy.h \
+	cdb/cdbpathlocus.h
 
 # see also catalog/Makefile for an explanation of these make rules
 

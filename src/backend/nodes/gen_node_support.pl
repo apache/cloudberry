@@ -74,6 +74,7 @@ my @all_input_files = qw(
   nodes/value.h
   utils/rel.h
   catalog/gp_distribution_policy.h
+  cdb/cdbpathlocus.h
 );
 
 # Nodes from these input files are automatically treated as nodetag_only.
@@ -108,7 +109,7 @@ my @nodetag_only_files = qw(
 # ABI stability during development.
 
 my $last_nodetag = 'WindowObjectData';
-my $last_nodetag_no = 561;
+my $last_nodetag_no = 564;
 
 # output file names
 my @output_files;
@@ -474,6 +475,7 @@ foreach my $infile (@ARGV)
 								equal_as_scalar
 								equal_ignore
 								equal_ignore_if_zero
+								copy_ignore
 								query_jumble_ignore
 								query_jumble_location
 								read_write_ignore
@@ -742,6 +744,10 @@ _equal${n}(const $n *a, const $n *b)
 			{
 				$equal_ignore = 1;
 			}
+			elsif ($a eq 'copy_ignore')
+			{
+				$copy_ignore = 1;
+			}
 		}
 
 		# override type-specific copy method if requested
@@ -864,6 +870,11 @@ _equal${n}(const $n *a, const $n *b)
 			# the table itself, just reference the original one.
 			print $cff "\tCOPY_SCALAR_FIELD($f);\n" unless $copy_ignore;
 			print $eff "\tCOMPARE_SCALAR_FIELD($f);\n" unless $equal_ignore;
+		}
+		elsif ($t eq 'bytea*')
+		{
+			print $cff "\tCOPY_VARLENA_FIELD($f);\n" unless $copy_ignore;
+			print $eff "\tCOMPARE_VARLENA_FIELD($f);\n" unless $equal_ignore;
 		}
 		else
 		{

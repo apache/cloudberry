@@ -1210,8 +1210,8 @@ cached_plan_cost(CachedPlan *plan, bool include_planner)
 				int			nsegments;
 
 				/* How many segments are involved in this slice? */
-				if (slice->directDispatch.isDirectDispatch)
-					nsegments = list_length(slice->directDispatch.contentIds);
+				if (slice->directDispatch->isDirectDispatch)
+					nsegments = list_length(slice->directDispatch->contentIds);
 				else
 					nsegments = slice->numsegments;
 				maxsegments = Max(maxsegments, nsegments);

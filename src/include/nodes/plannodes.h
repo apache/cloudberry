@@ -28,6 +28,8 @@
 
 typedef struct DirectDispatchInfo
 {
+	NodeTag		type;
+
 	/*
 	 * if true then this Slice requires an n-gang but the gang can be
 	 * targeted to fewer segments than the entire cluster.
@@ -77,7 +79,7 @@ typedef enum DMLAction
  */
 typedef struct PlannedStmt
 {
-	pg_node_attr(no_equal, no_query_jumble)
+	pg_node_attr(no_equal, no_query_jumble, no_copy)
 
 	NodeTag		type;
 
@@ -243,6 +245,8 @@ typedef enum GangType
  */
 typedef struct PlanSlice
 {
+	NodeTag		type;
+
 	int			sliceIndex;
 	int			parentIndex;
 
@@ -255,7 +259,7 @@ typedef struct PlanSlice
 	int			segindex;
 
 	/* direct dispatch information, for PRIMARY_READER/WRITER slices */
-	DirectDispatchInfo directDispatch;
+	DirectDispatchInfo *directDispatch;
 } PlanSlice;
 
 /* ----------------
@@ -1648,22 +1652,22 @@ typedef struct WindowHashAgg
 	Plan		plan;
 	Index		winref;			/* ID referenced by window functions */
 	int			partNumCols;	/* number of columns in partition clause */
-	AttrNumber *partColIdx;		/* their indexes in the target list */
-	Oid		   *partOperators;	/* equality operators for partition columns */
-	Oid		   *partCollations; /* collations for partition columns */
+	AttrNumber *partColIdx pg_node_attr(array_size(partNumCols));		/* their indexes in the target list */
+	Oid		   *partOperators pg_node_attr(array_size(partNumCols));	/* equality operators for partition columns */
+	Oid		   *partCollations pg_node_attr(array_size(partNumCols));	/* collations for partition columns */
 	/*
 	 * Different with `WindowAgg`, WindowHashAgg may use the 
 	 * `order by` information.
 	 */
 	int			ordNumCols;		/* number of sort-key columns */
-	AttrNumber *ordColIdx;		/* their indexes in the target list */
-	Oid		   *ordOperators;	/* OIDs of operators to sort them by */
-	Oid		   *ordCollations;	/* OIDs of collations */
-	bool	   *ordNullsFirst;	/* NULLS FIRST/LAST directions */
+	AttrNumber *ordColIdx pg_node_attr(array_size(ordNumCols));		/* their indexes in the target list */
+	Oid		   *ordOperators pg_node_attr(array_size(ordNumCols));	/* OIDs of operators to sort them by */
+	Oid		   *ordCollations pg_node_attr(array_size(ordNumCols));	/* OIDs of collations */
+	bool	   *ordNullsFirst pg_node_attr(array_size(ordNumCols));	/* NULLS FIRST/LAST directions */
 
 	int			frameOptions;	/* frame_clause options, see WindowDef */
-	Node	   *startOffset;	/* expression for starting bound, if any */
-	Node	   *endOffset;		/* expression for ending bound, if any */
+	Node	   *startOffset pg_node_attr(array_size(frameOptions));	/* expression for starting bound, if any */
+	Node	   *endOffset pg_node_attr(array_size(frameOptions));	/* expression for ending bound, if any */
 	/* these fields are used with RANGE offset PRECEDING/FOLLOWING: */
 	Oid			startInRangeFunc;	/* in_range function for startOffset */
 	Oid			endInRangeFunc; /* in_range function for endOffset */
@@ -1900,7 +1904,7 @@ typedef struct Motion
 
 	/* For Hash */
 	List		*hashExprs;			/* list of hash expressions */
-	Oid			*hashFuncs;			/* merge16_delete_temp 	*/		/* corresponding hash functions */
+	Oid			*hashFuncs pg_node_attr(array_size(hashExprs));			/* merge16_delete_temp 	*/		/* corresponding hash functions */
 	int         numHashSegments;	/* the module number of the hash function */
 
 	/* For Explicit */

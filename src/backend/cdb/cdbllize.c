@@ -596,8 +596,8 @@ cdbllize_adjust_top_path(PlannerInfo *root, Path *best_path,
 	else if (query->commandType == CMD_SELECT && query->parentStmtType == PARENTSTMTTYPE_COPY)
 	{
 		/* COPY (SELECT ...) TO */
-		topslice->directDispatch.isDirectDispatch = false;
-		topslice->directDispatch.haveProcessedAnyCalculations = true;
+		topslice->directDispatch->isDirectDispatch = false;
+		topslice->directDispatch->haveProcessedAnyCalculations = true;
 		topslice->numsegments = getgpsegmentCount();
 		topslice->segindex = 0;
 		topslice->gangType = GANGTYPE_PRIMARY_READER;
@@ -1343,8 +1343,8 @@ build_slice_table_walker(Node *node, build_slice_table_context *context)
 		save_currentSliceIndex = context->currentSliceIndex;
 		context->currentSliceIndex = sendSlice->sliceIndex;
 
-		if (sendSlice->directDispatch.isDirectDispatch &&
-			sendSlice->directDispatch.contentIds == NIL)
+		if (sendSlice->directDispatch->isDirectDispatch &&
+			sendSlice->directDispatch->contentIds == NIL)
 		{
 			/*
 			 * Direct dispatch, but we've already determined that there will
@@ -1354,7 +1354,7 @@ build_slice_table_walker(Node *node, build_slice_table_context *context)
 			 * XXX: Would've been better to replace this with a dummy Result
 			 * node or something in the planner.
 			 */
-			sendSlice->directDispatch.contentIds = list_make1_int(0);
+			sendSlice->directDispatch->contentIds = list_make1_int(0);
 		}
 
 		if (root->parse->commandType == CMD_INSERT &&

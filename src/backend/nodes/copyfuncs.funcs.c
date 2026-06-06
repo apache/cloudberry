@@ -4486,8 +4486,8 @@ _copyPlannedStmt(const PlannedStmt *from)
 		COPY_SCALAR_FIELD(slices[i].numsegments);
 		COPY_SCALAR_FIELD(slices[i].parallel_workers);
 		COPY_SCALAR_FIELD(slices[i].segindex);
-		COPY_SCALAR_FIELD(slices[i].directDispatch.isDirectDispatch);
-		COPY_NODE_FIELD(slices[i].directDispatch.contentIds);
+		COPY_SCALAR_FIELD(slices[i].directDispatch->isDirectDispatch);
+		COPY_NODE_FIELD(slices[i].directDispatch->contentIds);
 	}
 	COPY_NODE_FIELD(rtable);
 	COPY_NODE_FIELD(permInfos);

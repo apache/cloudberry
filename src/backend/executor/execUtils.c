@@ -1679,7 +1679,7 @@ FillSliceGangInfo(ExecSlice *slice, PlanSlice *ps)
 	int factor = ps->parallel_workers ? ps->parallel_workers : 1;
 	int numsegments = ps->numsegments;
 
-	DirectDispatchInfo *dd = &ps->directDispatch;
+	DirectDispatchInfo *dd = ps->directDispatch;
 
 	slice->useMppParallelMode = (ps->parallel_workers != 0);
 	slice->parallel_workers = factor;

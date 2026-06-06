@@ -2360,7 +2360,7 @@ create_projection_plan(PlannerInfo *root, ProjectionPath *best_path, int flags)
 		dispatchInfo.contentIds = best_path->direct_dispatch_contentIds;
 		dispatchInfo.haveProcessedAnyCalculations = true;
 
-		MergeDirectDispatchCalculationInfo(&root->curSlice->directDispatch, &dispatchInfo);
+		MergeDirectDispatchCalculationInfo(root->curSlice->directDispatch, &dispatchInfo);
 	}
 
 	return plan;
@@ -3412,8 +3412,8 @@ create_motion_plan(PlannerInfo *root, CdbMotionPath *path)
 		 * Combine any new direct dispatch information from the subplan to
 		 * the parent slice.
 		 */
-		MergeDirectDispatchCalculationInfo(&root->curSlice->directDispatch,
-										   &sendSlice->directDispatch);
+		MergeDirectDispatchCalculationInfo(root->curSlice->directDispatch,
+										   sendSlice->directDispatch);
 
 		return subplan;
 	}

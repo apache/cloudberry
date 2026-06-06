@@ -768,6 +768,8 @@ typedef struct RangeTableSample
  */
 typedef struct ColumnDef
 {
+	pg_node_attr(custom_copy_equal, custom_read_write)
+
 	NodeTag		type;
 	char	   *colname;		/* name of column */
 	TypeName   *typeName;		/* type of column */
@@ -1208,7 +1210,7 @@ typedef struct RangeTblEntry
 	/* These are for pre-planned sub-queries only.  They are internal to
 	 * window planning.
 	 */
-	struct PlannerInfo *subquery_root;	/* merge16_delete_temp   */
+	struct PlannerInfo *subquery_root pg_node_attr(equal_ignore, copy_ignore);	/* merge16_delete_temp   */
 	List		*subquery_rtable;
 	List		*subquery_pathkeys;
 
@@ -2885,7 +2887,7 @@ typedef enum ExtTableType
 	EXTTBL_TYPE_EXECUTE			/* table defined with EXECUTE clause */
 } ExtTableType;
 
-typedef struct
+typedef struct ExtTableTypeDesc
 {
 	NodeTag			type;
 	ExtTableType	exttabletype;
@@ -3938,7 +3940,8 @@ typedef struct FetchStmt
  * properties are empty.
  * ----------------------
  */
-typedef enum IndexConcurrentlyPhase {
+typedef enum IndexConcurrentlyPhase 
+{
 	CONCURRENTLY_INIT,
 	CONCURRENTLY_BUILD_INDEX,
 	CONCURRENTLY_VALIDATE_INDEX,

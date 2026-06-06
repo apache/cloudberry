@@ -549,7 +549,7 @@ DirectDispatchUpdateContentIdsFromPlan(PlannerInfo *root, Plan *plan)
 	if (dispatchInfo.haveProcessedAnyCalculations)
 	{
 		/* learned new info: merge it in */
-		MergeDirectDispatchCalculationInfo(&root->curSlice->directDispatch, &dispatchInfo);
+		MergeDirectDispatchCalculationInfo(root->curSlice->directDispatch, &dispatchInfo);
 	}
 }
 
@@ -626,7 +626,7 @@ DirectDispatchUpdateContentIdsForInsert(PlannerInfo *root, Plan *plan,
 		dispatchInfo.haveProcessedAnyCalculations = true;
 
 		/* learned new info: merge it in */
-		MergeDirectDispatchCalculationInfo(&root->curSlice->directDispatch, &dispatchInfo);
+		MergeDirectDispatchCalculationInfo(root->curSlice->directDispatch, &dispatchInfo);
 
 		elog(DEBUG1, "sending single row constant insert to content %d", hashcode);
 	}

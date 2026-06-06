@@ -3862,12 +3862,12 @@ can_bypass_direct_dispatch_plan(PlannedStmt *stmt)
 	if (stmt->commandType == CMD_SELECT)
 	{
 		return (stmt->numSlices == 2 &&
-				stmt->slices[1].directDispatch.isDirectDispatch);
+				stmt->slices[1].directDispatch->isDirectDispatch);
 	}
 	else if (stmt->commandType == CMD_UPDATE ||
 			 stmt->commandType == CMD_INSERT ||
 			 stmt->commandType == CMD_DELETE)
-		return stmt->numSlices == 1 && stmt->slices[0].directDispatch.isDirectDispatch;
+		return stmt->numSlices == 1 && stmt->slices[0].directDispatch->isDirectDispatch;
 	else
 		return false;
 }

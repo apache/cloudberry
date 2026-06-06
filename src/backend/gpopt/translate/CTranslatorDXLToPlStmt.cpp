@@ -182,9 +182,9 @@ CTranslatorDXLToPlStmt::GetPlannedStmtFromDXL(const CDXLNode *dxlnode,
 	topslice->gangType = GANGTYPE_UNALLOCATED;
 	topslice->numsegments = 1;
 	topslice->segindex = -1;
-	topslice->directDispatch.isDirectDispatch = false;
-	topslice->directDispatch.contentIds = NIL;
-	topslice->directDispatch.haveProcessedAnyCalculations = false;
+	topslice->directDispatch->isDirectDispatch = false;
+	topslice->directDispatch->contentIds = NIL;
+	topslice->directDispatch->haveProcessedAnyCalculations = false;
 
 	m_dxl_to_plstmt_context->m_orig_query = (Query *) orig_query;
 	m_dxl_to_plstmt_context->AddSlice(topslice);
@@ -279,8 +279,8 @@ CTranslatorDXLToPlStmt::GetPlannedStmtFromDXL(const CDXLNode *dxlnode,
 			{
 				PlanSlice *slice = &planned_stmt->slices[i];
 
-				slice->directDispatch.isDirectDispatch = true;
-				slice->directDispatch.contentIds = direct_dispatch_segids;
+				slice->directDispatch->isDirectDispatch = true;
+				slice->directDispatch->contentIds = direct_dispatch_segids;
 			}
 		}
 	}
@@ -296,8 +296,8 @@ CTranslatorDXLToPlStmt::GetPlannedStmtFromDXL(const CDXLNode *dxlnode,
 			phy_dml_dxlop->GetDXLDirectDispatchInfo(), pRTEHashFuncCal);
 		if (direct_dispatch_segids != NIL)
 		{
-			topslice->directDispatch.isDirectDispatch = true;
-			topslice->directDispatch.contentIds = direct_dispatch_segids;
+			topslice->directDispatch->isDirectDispatch = true;
+			topslice->directDispatch->contentIds = direct_dispatch_segids;
 		}
 	}
 
@@ -2540,9 +2540,9 @@ CTranslatorDXLToPlStmt::TranslateDXLMotion(
 		sendslice->numsegments = m_num_of_segments;
 		sendslice->segindex = 0;
 	}
-	sendslice->directDispatch.isDirectDispatch = false;
-	sendslice->directDispatch.contentIds = NIL;
-	sendslice->directDispatch.haveProcessedAnyCalculations = false;
+	sendslice->directDispatch->isDirectDispatch = false;
+	sendslice->directDispatch->contentIds = NIL;
+	sendslice->directDispatch->haveProcessedAnyCalculations = false;
 
 	// set parallel workers if needed
 	ULONG child_index = motion_dxlop->GetRelationChildIdx();

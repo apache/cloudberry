@@ -1653,8 +1653,8 @@ _readPlannedStmt(void)
 		READ_INT_FIELD(slices[i].numsegments);
 		READ_INT_FIELD(slices[i].parallel_workers);
 		READ_INT_FIELD(slices[i].segindex);
-		READ_BOOL_FIELD(slices[i].directDispatch.isDirectDispatch);
-		READ_NODE_FIELD(slices[i].directDispatch.contentIds);
+		READ_BOOL_FIELD(slices[i].directDispatch->isDirectDispatch);
+		READ_NODE_FIELD(slices[i].directDispatch->contentIds);
 	}
 
 	READ_BITMAPSET_FIELD(rewindPlanIDs);

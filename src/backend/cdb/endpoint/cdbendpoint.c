@@ -232,8 +232,8 @@ GetParallelCursorEndpointPosition(PlannedStmt *plan)
 		else
 			return ENDPOINT_ON_ENTRY_DB;
 	}
-	else if (plan->slices[0].directDispatch.isDirectDispatch &&
-			 plan->slices[0].directDispatch.contentIds != NULL)
+	else if (plan->slices[0].directDispatch->isDirectDispatch &&
+			 plan->slices[0].directDispatch->contentIds != NULL)
 	{
 		return ENDPOINT_ON_SOME_QE;
 	}

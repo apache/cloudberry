@@ -619,7 +619,7 @@ PortalStart(Portal portal, ParamListInfo params,
 					PlannedStmt *pstmt = linitial_node(PlannedStmt, portal->stmts);
 
 					if (pstmt->numSlices == 2 &&
-						pstmt->slices[determinedSliceIndex].directDispatch.isDirectDispatch)
+						pstmt->slices[determinedSliceIndex].directDispatch->isDirectDispatch)
 						needDistributedSnapshot = false;
 				}
 				
