@@ -924,6 +924,24 @@ printf $rfs $header_comment, 'readfuncs.switch.c';
 print $off $node_includes;
 print $rff $node_includes;
 
+
+push @output_files, 'outfast.funcs.c';
+open my $ofaf, '>', "$output_path/outfast.funcs.c$tmpext" or die $!;
+push @output_files, 'readfast.funcs.c';
+open my $rfaf, '>', "$output_path/readfast.funcs.c$tmpext" or die $!;
+push @output_files, 'outfast.switch.c';
+open my $ofas, '>', "$output_path/outfast.switch.c$tmpext" or die $!;
+push @output_files, 'readfast.switch.c';
+open my $rfas, '>', "$output_path/readfast.switch.c$tmpext" or die $!;
+
+printf $ofaf $header_comment, 'outfast.funcs.c';
+printf $rfaf $header_comment, 'readfast.funcs.c';
+printf $ofas $header_comment, 'outfast.switch.c';
+printf $rfas $header_comment, 'readfast.switch.c';
+
+print $ofaf $node_includes;
+print $rfaf $node_includes;
+
 foreach my $n (@node_types)
 {
 	next if elem $n, @abstract_types;
@@ -1025,11 +1043,19 @@ _read${n}(void)
 		{
 			print $off "\tWRITE_BOOL_FIELD($f);\n";
 			print $rff "\tREAD_BOOL_FIELD($f);\n" unless $no_read;
+			
+			# for out and read fast
+			print $ofaf "\tWRITE_BOOL_FIELD($f);\n";
+			print $rfaf "\tREAD_BOOL_FIELD($f);\n" unless $no_read;
 		}
 		elsif ($t eq 'int' && $f =~ 'location$')
 		{
 			print $off "\tWRITE_LOCATION_FIELD($f);\n";
 			print $rff "\tREAD_LOCATION_FIELD($f);\n" unless $no_read;
+
+			# for out and read fast
+			print $ofaf "\tWRITE_LOCATION_FIELD($f);\n";
+			print $rfaf "\tREAD_LOCATION_FIELD($f);\n" unless $no_read;
 		}
 		elsif ($t eq 'int'
 			|| $t eq 'int8'
@@ -1040,11 +1066,19 @@ _read${n}(void)
 		{
 			print $off "\tWRITE_INT_FIELD($f);\n";
 			print $rff "\tREAD_INT_FIELD($f);\n" unless $no_read;
+
+			# for out and read fast
+			print $ofaf "\tWRITE_INT_FIELD($f);\n";
+			print $rfaf "\tREAD_INT_FIELD($f);\n" unless $no_read;
 		}
 		elsif ($t eq 'int64')
 		{
 			print $off "\tWRITE_LONG_FIELD($f);\n";
 			print $rff "\tREAD_LONG_FIELD($f);\n" unless $no_read;
+
+			# for out and read fast
+			print $ofaf "\tWRITE_LONG_FIELD($f);\n";
+			print $rfaf "\tREAD_LONG_FIELD($f);\n" unless $no_read;
 		}
 		elsif ($t eq 'uint32'
 			|| $t eq 'uint8'
@@ -1055,42 +1089,74 @@ _read${n}(void)
 		{
 			print $off "\tWRITE_UINT_FIELD($f);\n";
 			print $rff "\tREAD_UINT_FIELD($f);\n" unless $no_read;
+
+			# for out and read fast
+			print $ofaf "\tWRITE_UINT_FIELD($f);\n";
+			print $rfaf "\tREAD_UINT_FIELD($f);\n" unless $no_read;
 		}
 		elsif ($t eq 'uint64'
 			|| $t eq 'AclMode')
 		{
 			print $off "\tWRITE_UINT64_FIELD($f);\n";
 			print $rff "\tREAD_UINT64_FIELD($f);\n" unless $no_read;
+
+			# for out and read fast
+			print $ofaf "\tWRITE_UINT64_FIELD($f);\n";
+			print $rfaf "\tREAD_UINT64_FIELD($f);\n" unless $no_read;
 		}
 		elsif ($t eq 'Oid' || $t eq 'RelFileNumber')
 		{
 			print $off "\tWRITE_OID_FIELD($f);\n";
 			print $rff "\tREAD_OID_FIELD($f);\n" unless $no_read;
+
+			# for out and read fast
+			print $ofaf "\tWRITE_OID_FIELD($f);\n";
+			print $rfaf "\tREAD_OID_FIELD($f);\n" unless $no_read;
 		}
 		elsif ($t eq 'long')
 		{
 			print $off "\tWRITE_LONG_FIELD($f);\n";
 			print $rff "\tREAD_LONG_FIELD($f);\n" unless $no_read;
+
+			# for out and read fast
+			print $ofaf "\tWRITE_LONG_FIELD($f);\n";
+			print $rfaf "\tREAD_LONG_FIELD($f);\n" unless $no_read;
 		}
 		elsif ($t eq 'char')
 		{
 			print $off "\tWRITE_CHAR_FIELD($f);\n";
 			print $rff "\tREAD_CHAR_FIELD($f);\n" unless $no_read;
+
+			# for out and read fast
+			print $ofaf "\tWRITE_CHAR_FIELD($f);\n";
+			print $rfaf "\tREAD_CHAR_FIELD($f);\n" unless $no_read;
 		}
 		elsif ($t eq 'double')
 		{
 			print $off "\tWRITE_FLOAT_FIELD($f);\n";
 			print $rff "\tREAD_FLOAT_FIELD($f);\n" unless $no_read;
+
+			# for out and read fast
+			print $ofaf "\tWRITE_FLOAT_FIELD($f);\n";
+			print $rfaf "\tREAD_FLOAT_FIELD($f);\n" unless $no_read;
 		}
 		elsif ($t eq 'Cardinality')
 		{
 			print $off "\tWRITE_FLOAT_FIELD($f);\n";
 			print $rff "\tREAD_FLOAT_FIELD($f);\n" unless $no_read;
+
+			# for out and read fast
+			print $ofaf "\tWRITE_FLOAT_FIELD($f);\n";
+			print $rfaf "\tREAD_FLOAT_FIELD($f);\n" unless $no_read;
 		}
 		elsif ($t eq 'Cost')
 		{
 			print $off "\tWRITE_FLOAT_FIELD($f);\n";
 			print $rff "\tREAD_FLOAT_FIELD($f);\n" unless $no_read;
+
+			# for out and read fast
+			print $ofaf "\tWRITE_FLOAT_FIELD($f);\n";
+			print $rfaf "\tREAD_FLOAT_FIELD($f);\n" unless $no_read;
 		}
 		elsif ($t eq 'QualCost')
 		{
@@ -1098,26 +1164,48 @@ _read${n}(void)
 			print $off "\tWRITE_FLOAT_FIELD($f.per_tuple);\n";
 			print $rff "\tREAD_FLOAT_FIELD($f.startup);\n" unless $no_read;
 			print $rff "\tREAD_FLOAT_FIELD($f.per_tuple);\n" unless $no_read;
+
+			# for out and read fast
+			print $ofaf "\tWRITE_FLOAT_FIELD($f.startup);\n";
+			print $ofaf "\tWRITE_FLOAT_FIELD($f.per_tuple);\n";
+			print $rfaf "\tREAD_FLOAT_FIELD($f.startup);\n" unless $no_read;
+			print $rfaf "\tREAD_FLOAT_FIELD($f.per_tuple);\n" unless $no_read;
 		}
 		elsif ($t eq 'Selectivity')
 		{
 			print $off "\tWRITE_FLOAT_FIELD($f);\n";
 			print $rff "\tREAD_FLOAT_FIELD($f);\n" unless $no_read;
+
+			# for out and read fast
+			print $ofaf "\tWRITE_FLOAT_FIELD($f);\n";
+			print $rfaf "\tREAD_FLOAT_FIELD($f);\n" unless $no_read;
 		}
 		elsif ($t eq 'char*')
 		{
 			print $off "\tWRITE_STRING_FIELD($f);\n";
 			print $rff "\tREAD_STRING_FIELD($f);\n" unless $no_read;
+
+			# for out and read fast
+			print $ofaf "\tWRITE_STRING_FIELD($f);\n";
+			print $rfaf "\tREAD_STRING_FIELD($f);\n" unless $no_read;
 		}
 		elsif ($t eq 'Bitmapset*' || $t eq 'Relids')
 		{
 			print $off "\tWRITE_BITMAPSET_FIELD($f);\n";
 			print $rff "\tREAD_BITMAPSET_FIELD($f);\n" unless $no_read;
+
+			# for out and read fast
+			print $ofaf "\tWRITE_BITMAPSET_FIELD($f);\n";
+			print $rfaf "\tREAD_BITMAPSET_FIELD($f);\n" unless $no_read;
 		}
 		elsif (elem $t, @enum_types)
 		{
 			print $off "\tWRITE_ENUM_FIELD($f, $t);\n";
 			print $rff "\tREAD_ENUM_FIELD($f, $t);\n" unless $no_read;
+
+			# for out and read fast
+			print $ofaf "\tWRITE_ENUM_FIELD($f, $t);\n";
+			print $rfaf "\tREAD_ENUM_FIELD($f, $t);\n" unless $no_read;
 		}
 		# arrays of scalar types
 		elsif ($t =~ /^(\w+)(\*|\[\w+\])$/ and elem $1, @scalar_types)
@@ -1135,6 +1223,13 @@ _read${n}(void)
 				print $rff
 				  "\tREAD_${tt}_ARRAY($f, list_length(local_node->$array_size_field));\n"
 				  unless $no_read;
+
+				# for out and read fast
+				print $ofaf
+					"\tWRITE_${tt}_ARRAY($f, list_length(node->$array_size_field));\n";
+				print $rfaf
+					"\tREAD_${tt}_ARRAY($f, list_length(local_node->$array_size_field));\n"
+					unless $no_read;
 			}
 			else
 			{
@@ -1143,6 +1238,13 @@ _read${n}(void)
 				print $rff
 				  "\tREAD_${tt}_ARRAY($f, local_node->$array_size_field);\n"
 				  unless $no_read;
+
+				# for out and read fast
+				print $ofaf
+					"\tWRITE_${tt}_ARRAY($f, node->$array_size_field);\n";
+				print $rfaf
+					"\tREAD_${tt}_ARRAY($f, local_node->$array_size_field);\n"
+					unless $no_read;
 			}
 		}
 		elsif ($t eq 'function pointer')
@@ -1157,6 +1259,11 @@ _read${n}(void)
 			print $off
 			  "\tappendStringInfoString(str, \" :parent_relids \");\n"
 			  . "\toutBitmapset(str, node->$f->relids);\n";
+
+			# for out and read fast
+			print $ofaf
+				"\tappendStringInfoString(str, \" :parent_relids \");\n"
+					. "\toutBitmapset(str, node->$f->relids);\n";
 		}
 		elsif ($t eq 'PathTarget*' && elem 'write_only_nondefault_pathtarget',
 			@a)
@@ -1164,6 +1271,10 @@ _read${n}(void)
 			(my $f2 = $f) =~ s/pathtarget/parent/;
 			print $off "\tif (node->$f != node->$f2->reltarget)\n"
 			  . "\t\tWRITE_NODE_FIELD($f);\n";
+
+			# for out and read fast
+			print $ofaf "\tif (node->$f != node->$f2->reltarget)\n"
+				. "\t\tWRITE_NODE_FIELD($f);\n";
 		}
 		elsif ($t eq 'ParamPathInfo*' && elem 'write_only_req_outer', @a)
 		{
@@ -1173,6 +1284,14 @@ _read${n}(void)
 			  . "\t\toutBitmapset(str, node->$f->ppi_req_outer);\n"
 			  . "\telse\n"
 			  . "\t\toutBitmapset(str, NULL);\n";
+
+			# for out and read fast
+			print $ofaf
+				"\tappendStringInfoString(str, \" :required_outer \");\n"
+					. "\tif (node->$f)\n"
+					. "\t\toutBitmapset(str, node->$f->ppi_req_outer);\n"
+					. "\telse\n"
+					. "\t\toutBitmapset(str, NULL);\n";
 		}
 		# node type
 		elsif (($t =~ /^(\w+)\*$/ or $t =~ /^struct\s+(\w+)\*$/)
@@ -1188,6 +1307,10 @@ _read${n}(void)
 
 			print $off "\tWRITE_NODE_FIELD($f);\n";
 			print $rff "\tREAD_NODE_FIELD($f);\n" unless $no_read;
+
+			# for out and read fast
+			print $ofaf "\tWRITE_NODE_FIELD($f);\n";
+			print $rfaf "\tREAD_NODE_FIELD($f);\n" unless $no_read;
 		}
 		# arrays of node pointers (currently supported for write only)
 		elsif (($t =~ /^(\w+)\*\*$/ or $t =~ /^struct\s+(\w+)\*\*$/)
@@ -1205,6 +1328,13 @@ _read${n}(void)
 				print $rff
 				  "\tREAD_NODE_ARRAY($f, list_length(local_node->$array_size_field));\n"
 				  unless $no_read;
+
+				# for out and read fast
+				print $ofaf
+					"\tWRITE_NODE_ARRAY($f, list_length(node->$array_size_field));\n";
+				print $rfaf
+					"\tREAD_NODE_ARRAY($f, list_length(local_node->$array_size_field));\n"
+					unless $no_read;
 			}
 			else
 			{
@@ -1213,6 +1343,13 @@ _read${n}(void)
 				print $rff
 				  "\tREAD_NODE_ARRAY($f, local_node->$array_size_field);\n"
 				  unless $no_read;
+				
+				# for out and read fast
+				print $ofaf
+					"\tWRITE_NODE_ARRAY($f, node->$array_size_field);\n";
+				print $rfaf
+					"\tREAD_NODE_ARRAY($f, local_node->$array_size_field);\n"
+					unless $no_read;
 			}
 		}
 		elsif ($t eq 'struct CustomPathMethods*'
@@ -1235,6 +1372,25 @@ _read${n}(void)
 		local_node->methods = methods;
 	}
 ! unless $no_read;
+
+			# for out and read fast
+			print $ofaf q{
+	/* CustomName is a key to lookup CustomScanMethods */
+	appendStringInfoString(str, " :methods ");
+	outToken(str, node->methods->CustomName);
+};
+			print $rfaf q!
+	{
+		/* Lookup CustomScanMethods by CustomName */
+		char	   *custom_name;
+		const CustomScanMethods *methods;
+		token = pg_strtok(&length); /* skip methods: */
+		token = pg_strtok(&length); /* CustomName */
+		custom_name = nullable_string(token, length);
+		methods = GetCustomScanMethods(custom_name, false);
+		local_node->methods = methods;
+	}
+! unless $no_read;
 		}
 		elsif($t eq 'bytea*')
 		{
@@ -1243,6 +1399,10 @@ _read${n}(void)
 		elsif($t eq 'CdbPathLocus')
 		{
 			print $off
+				"\t_outCdbPathLocus(str, &node->$f);\n";
+			
+			# for out and read fast
+			print $ofaf
 				"\t_outCdbPathLocus(str, &node->$f);\n";
 		}
 		else
@@ -1255,6 +1415,9 @@ _read${n}(void)
 		# that outfuncs.c wrote and then overwrite it.
 		if (defined $read_as_field)
 		{
+			print $rff "\tlocal_node->$f = $read_as_field;\n" unless $no_read;
+			
+			# for out and read fast
 			print $rff "\tlocal_node->$f = $read_as_field;\n" unless $no_read;
 		}
 
