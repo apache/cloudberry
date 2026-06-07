@@ -276,7 +276,7 @@ typedef struct PlanSlice
  */
 typedef struct Plan
 {
-	pg_node_attr(abstract, no_equal, no_query_jumble)
+	pg_node_attr(no_equal, no_query_jumble)
 
 	NodeTag		type;
 
@@ -385,7 +385,7 @@ typedef struct Result
 	Node	   *resconstantqual;
 
 	int			numHashFilterCols;
-	int16	   *hashFilterColIdx pg_node_attr(array_size(numHashFilterCols));
+	AttrNumber *hashFilterColIdx pg_node_attr(array_size(numHashFilterCols));
 	Oid		   *hashFilterFuncs pg_node_attr(array_size(numHashFilterCols));
 } Result;
 
@@ -599,8 +599,6 @@ typedef struct BitmapOr
  */
 typedef struct Scan
 {
-	pg_node_attr(abstract)
-
 	Plan		plan;
 	Index		scanrelid;		/* relid is index into the range table */
 } Scan;
@@ -1192,8 +1190,6 @@ typedef struct CustomScan
  */
 typedef struct Join
 {
-	pg_node_attr(abstract)
-
 	Plan		plan;
 	JoinType	jointype;
 	bool		inner_unique;

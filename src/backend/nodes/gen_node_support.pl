@@ -65,6 +65,7 @@ my @all_input_files = qw(
   commands/trigger.h
   executor/tuptable.h
   foreign/fdwapi.h
+  nodes/altertablenodes.h
   nodes/bitmapset.h
   nodes/extensible.h
   nodes/lockoptions.h
@@ -91,6 +92,7 @@ my @nodetag_only_files = qw(
   commands/trigger.h
   executor/tuptable.h
   foreign/fdwapi.h
+  nodes/altertablenodes.h
   nodes/lockoptions.h
   nodes/miscnodes.h
   nodes/replnodes.h
@@ -109,7 +111,7 @@ my @nodetag_only_files = qw(
 # ABI stability during development.
 
 my $last_nodetag = 'WindowObjectData';
-my $last_nodetag_no = 564;
+my $last_nodetag_no = 571;
 
 # output file names
 my @output_files;
@@ -873,8 +875,8 @@ _equal${n}(const $n *a, const $n *b)
 		}
 		elsif ($t eq 'bytea*')
 		{
-			print $cff "\tCOPY_VARLENA_FIELD($f);\n" unless $copy_ignore;
-			print $eff "\tCOMPARE_VARLENA_FIELD($f);\n" unless $equal_ignore;
+			print $cff "\tCOPY_VARLENA_FIELD($f, -1);\n" unless $copy_ignore;
+			print $eff "\tCOMPARE_VARLENA_FIELD($f, -1);\n" unless $equal_ignore;
 		}
 		else
 		{
@@ -1239,7 +1241,7 @@ _read${n}(void)
 		elsif($t eq 'CdbPathLocus')
 		{
 			print $off
-				"\t_outCdbPathLocus(str, &node->locus);\n";
+				"\t_outCdbPathLocus(str, &node->$f);\n";
 		}
 		else
 		{

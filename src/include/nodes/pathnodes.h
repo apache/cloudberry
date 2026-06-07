@@ -1295,7 +1295,7 @@ typedef struct RelOptInfo
  */
 typedef struct RelAggInfo
 {
-	pg_node_attr(custom_copy_equal, no_read)
+	pg_node_attr(no_copy_equal, no_read)
 	
 	NodeTag		type;
 

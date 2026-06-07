@@ -197,6 +197,42 @@ _copyBitmapset(const Bitmapset *from)
 }
 
 
+static ColumnDef *
+_copyColumnDef(const ColumnDef *from)
+{
+	ColumnDef  *newnode = makeNode(ColumnDef);
+
+	COPY_STRING_FIELD(colname);
+	COPY_NODE_FIELD(typeName);
+	COPY_STRING_FIELD(compression);
+	COPY_SCALAR_FIELD(inhcount);
+	COPY_SCALAR_FIELD(is_local);
+	COPY_SCALAR_FIELD(is_not_null);
+	COPY_SCALAR_FIELD(is_from_type);
+	COPY_SCALAR_FIELD(attnum);
+	COPY_SCALAR_FIELD(storage);
+	COPY_NODE_FIELD(raw_default);
+	COPY_NODE_FIELD(cooked_default);
+
+	COPY_SCALAR_FIELD(hasCookedMissingVal);
+	COPY_SCALAR_FIELD(missingIsNull);
+	if (from->hasCookedMissingVal && !from->missingIsNull)
+		newnode->missingVal = datumCopy(from->missingVal, false, -1);
+
+	COPY_SCALAR_FIELD(identity);
+	COPY_NODE_FIELD(identitySequence);
+	COPY_SCALAR_FIELD(generated);
+	COPY_NODE_FIELD(collClause);
+	COPY_SCALAR_FIELD(collOid);
+	COPY_NODE_FIELD(constraints);
+	COPY_NODE_FIELD(fdwoptions);
+	COPY_NODE_FIELD(encoding);
+	COPY_LOCATION_FIELD(location);
+
+	return newnode;
+}
+
+
 /*
  * copyObjectImpl -- implementation of copyObject(); see nodes/nodes.h
  *

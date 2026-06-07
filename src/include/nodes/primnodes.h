@@ -520,7 +520,7 @@ typedef struct Aggref
 
 } Aggref;
 
-typedef struct
+typedef struct DQAExpr
 {
 	Expr		xpr;
 

@@ -24,19 +24,13 @@ OBJS = \
 	multibitmapset.o \
 	nodeFuncs.o \
 	nodes.o \
-	outfast.o \
 	outfuncs.o \
 	params.o \
 	print.o \
 	read.o \
-	readfast.o \
 	readfuncs.o \
 	tidbitmap.o \
 	value.o
-
-# readfast.c #includes readfuncs.c. Same with outfast.c and outfast.c
-readfast.o: readfuncs.c readfast.c readfuncs_common.c
-outfast.o: outfuncs.c outfast.c outfuncs_common.c
 
 include $(top_srcdir)/src/backend/common.mk
 
@@ -59,6 +53,7 @@ node_headers = \
 	commands/trigger.h \
 	executor/tuptable.h \
 	foreign/fdwapi.h \
+	nodes/altertablenodes.h \
 	nodes/bitmapset.h \
 	nodes/extensible.h \
 	nodes/lockoptions.h \
