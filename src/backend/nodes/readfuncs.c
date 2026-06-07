@@ -687,6 +687,42 @@ _readExtensibleNode(void)
 	READ_DONE();
 }
 
+static ColumnDef *
+_readColumnDef(void)
+{
+	READ_LOCALS(ColumnDef);
+
+	READ_STRING_FIELD(colname);
+	READ_NODE_FIELD(typeName);
+	READ_STRING_FIELD(compression);
+	READ_INT_FIELD(inhcount);
+	READ_BOOL_FIELD(is_local);
+	READ_BOOL_FIELD(is_not_null);
+	READ_BOOL_FIELD(is_from_type);
+	READ_INT_FIELD(attnum);
+	READ_INT_FIELD(storage);
+	READ_STRING_FIELD(storage_name);
+	READ_NODE_FIELD(raw_default);
+	READ_NODE_FIELD(cooked_default);
+
+	READ_BOOL_FIELD(hasCookedMissingVal);
+	READ_BOOL_FIELD(missingIsNull);
+	if (local_node->hasCookedMissingVal && !local_node->missingIsNull)
+		local_node->missingVal = readDatum(false);
+
+	READ_CHAR_FIELD(identity);
+	READ_NODE_FIELD(identitySequence);
+	READ_CHAR_FIELD(generated);
+	READ_NODE_FIELD(collClause);
+	READ_OID_FIELD(collOid);
+	READ_NODE_FIELD(constraints);
+	READ_NODE_FIELD(encoding);
+	READ_NODE_FIELD(fdwoptions);
+	READ_LOCATION_FIELD(location);
+
+	READ_DONE();
+}
+
 
 /*
  * parseNodeString

@@ -60,6 +60,7 @@ node_headers = \
 	nodes/miscnodes.h \
 	nodes/replnodes.h \
 	nodes/supportnodes.h \
+	nodes/tidbitmap.h \
 	nodes/value.h \
 	utils/rel.h \
 	catalog/gp_distribution_policy.h \

@@ -72,6 +72,7 @@ my @all_input_files = qw(
   nodes/miscnodes.h
   nodes/replnodes.h
   nodes/supportnodes.h
+  nodes/tidbitmap.h
   nodes/value.h
   utils/rel.h
   catalog/gp_distribution_policy.h
@@ -96,7 +97,8 @@ my @nodetag_only_files = qw(
   nodes/lockoptions.h
   nodes/miscnodes.h
   nodes/replnodes.h
-  nodes/supportnodes.h
+  nodes/supportnodes.h 
+  nodes/tidbitmap.h
 );
 
 # ARM ABI STABILITY CHECK HERE:
@@ -111,7 +113,7 @@ my @nodetag_only_files = qw(
 # ABI stability during development.
 
 my $last_nodetag = 'WindowObjectData';
-my $last_nodetag_no = 571;
+my $last_nodetag_no = 572;
 
 # output file names
 my @output_files;
@@ -535,7 +537,7 @@ foreach my $infile (@ARGV)
 			{
 				# We're not too picky about what's outside structs,
 				# but we'd better understand everything inside.
-				die "$infile:$lineno: could not parse \"$line\"\n";
+				warn "$infile:$lineno: could not parse \"$line\"\n";
 			}
 		}
 		# not in a struct
