@@ -473,7 +473,8 @@ code or new licensing patterns.
             <exclude>contrib/pgcrypto/crypt-blowfish.c</exclude>
             <exclude>contrib/pgcrypto/package/gppkg_spec.yml.in</exclude>
             <exclude>contrib/pgcrypto/package/pgcrypto.spec</exclude>
-
+            <exclude>contrib/pgcrypto/scripts/pgp_session_data.py</exclude>
+	    
             <exclude>contrib/citext/citext.c</exclude>
 
             <exclude>contrib/jsonb_plpython/jsonb_plpython.c</exclude>
