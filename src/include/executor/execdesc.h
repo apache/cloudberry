@@ -267,7 +267,7 @@ typedef struct QueryDispatchDesc
  * When a CREATE command is dispatched to segments, the OIDs used for the
  * new objects are sent in a list of OidAssignments.
  */
-typedef struct
+typedef struct OidAssignment
 {
 	NodeTag		type;
 

@@ -58,11 +58,14 @@ my @all_input_files = qw(
   nodes/plannodes.h
   nodes/execnodes.h
   access/amapi.h
+  access/extprotocol.h
   access/sdir.h
   access/tableam.h
   access/tsmapi.h
+  access/tupdesc.h
   commands/event_trigger.h
   commands/trigger.h
+  executor/execdesc.h
   executor/tuptable.h
   foreign/fdwapi.h
   nodes/altertablenodes.h
@@ -86,11 +89,14 @@ my @all_input_files = qw(
 my @nodetag_only_files = qw(
   nodes/execnodes.h
   access/amapi.h
+  access/extprotocol.h
   access/sdir.h
   access/tableam.h
   access/tsmapi.h
+  access/tupdesc.h
   commands/event_trigger.h
   commands/trigger.h
+  executor/execdesc.h
   executor/tuptable.h
   foreign/fdwapi.h
   nodes/altertablenodes.h
@@ -113,7 +119,7 @@ my @nodetag_only_files = qw(
 # ABI stability during development.
 
 my $last_nodetag = 'WindowObjectData';
-my $last_nodetag_no = 572;
+my $last_nodetag_no = 580;
 
 # output file names
 my @output_files;
@@ -537,7 +543,7 @@ foreach my $infile (@ARGV)
 			{
 				# We're not too picky about what's outside structs,
 				# but we'd better understand everything inside.
-				warn "$infile:$lineno: could not parse \"$line\"\n";
+				die "$infile:$lineno: could not parse \"$line\"\n";
 			}
 		}
 		# not in a struct

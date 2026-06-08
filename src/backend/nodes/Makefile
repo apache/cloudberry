@@ -46,11 +46,14 @@ node_headers = \
 	nodes/plannodes.h \
 	nodes/execnodes.h \
 	access/amapi.h \
+	access/extprotocol.h \
 	access/sdir.h \
 	access/tableam.h \
 	access/tsmapi.h \
+	access/tupdesc.h \
 	commands/event_trigger.h \
 	commands/trigger.h \
+	executor/execdesc.h \
 	executor/tuptable.h \
 	foreign/fdwapi.h \
 	nodes/altertablenodes.h \

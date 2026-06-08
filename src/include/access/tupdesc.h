@@ -97,7 +97,7 @@ typedef struct TupleDescData *TupleDesc;
  * These are never serialized on disk, only in the read/outfast protocol,
  * as part of PlannedStmts.
  */
-typedef struct tupleDescNode
+typedef struct TupleDescNode
 {
 	NodeTag		type;
 	int			natts;
