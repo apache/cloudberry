@@ -32,6 +32,9 @@ typedef enum NodeTag
 #include "nodes/nodetags.h"
 } NodeTag;
 
+#define T_Plan_Start T_Result
+#define T_Plan_End T_NestLoopParam
+
 /*
  * pg_node_attr() - Used in node definitions to set extra information for
  * gen_node_support.pl

@@ -51,7 +51,10 @@ node_headers = \
 	access/tableam.h \
 	access/tsmapi.h \
 	access/tupdesc.h \
+	catalog/heap.h \
+	cdb/cdbgang.h \
 	commands/event_trigger.h \
+	commands/explain_gp.h \
 	commands/trigger.h \
 	executor/execdesc.h \
 	executor/tuptable.h \
@@ -65,6 +68,7 @@ node_headers = \
 	nodes/supportnodes.h \
 	nodes/tidbitmap.h \
 	nodes/value.h \
+	utils/queryenvironment.h \
 	utils/rel.h \
 	catalog/gp_distribution_policy.h \
 	cdb/cdbpathlocus.h

@@ -63,7 +63,10 @@ my @all_input_files = qw(
   access/tableam.h
   access/tsmapi.h
   access/tupdesc.h
+  catalog/heap.h
+  cdb/cdbgang.h
   commands/event_trigger.h
+  commands/explain_gp.h
   commands/trigger.h
   executor/execdesc.h
   executor/tuptable.h
@@ -77,6 +80,7 @@ my @all_input_files = qw(
   nodes/supportnodes.h
   nodes/tidbitmap.h
   nodes/value.h
+  utils/queryenvironment.h
   utils/rel.h
   catalog/gp_distribution_policy.h
   cdb/cdbpathlocus.h
@@ -94,7 +98,10 @@ my @nodetag_only_files = qw(
   access/tableam.h
   access/tsmapi.h
   access/tupdesc.h
+  catalog/heap.h 
+  cdb/cdbgang.h
   commands/event_trigger.h
+  commands/explain_gp.h
   commands/trigger.h
   executor/execdesc.h
   executor/tuptable.h
@@ -105,6 +112,7 @@ my @nodetag_only_files = qw(
   nodes/replnodes.h
   nodes/supportnodes.h 
   nodes/tidbitmap.h
+  utils/queryenvironment.h
 );
 
 # ARM ABI STABILITY CHECK HERE:
@@ -119,7 +127,7 @@ my @nodetag_only_files = qw(
 # ABI stability during development.
 
 my $last_nodetag = 'WindowObjectData';
-my $last_nodetag_no = 580;
+my $last_nodetag_no = 585;
 
 # output file names
 my @output_files;

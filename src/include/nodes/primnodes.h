@@ -195,8 +195,6 @@ typedef struct RefreshClause
  */
 typedef struct Expr
 {
-	pg_node_attr(abstract)
-
 	NodeTag		type;
 } Expr;
 
