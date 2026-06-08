@@ -35,6 +35,7 @@
 #include "commands/trigger.h"
 #include "catalog/pg_operator.h"
 #include "catalog/pg_proc.h"
+#include "catalog/gp_distribution_policy.h"
 
 #include "cdb/cdbhash.h"
 #include "cdb/cdbllize.h"
@@ -963,10 +964,257 @@ shareinput_mutator_xslice_1(Node *node, PlannerInfo *root, bool fPop)
 		/* Remember information about the slice that this instance appears in. */
 		if (shared)
 			ctxt->shared_inputs[sisc->share_id].producer_slice_id = motId;
+		else if (sisc->share_id < ctxt->orig_shared_input_count)
+		{
+			/* Consumer: count references to original producers. */
+			ctxt->consumer_counts[sisc->share_id]++;
+		}
 		share_info->participant_slices = bms_add_member(share_info->participant_slices, motId);
 
 		sisc->this_slice_id = motId;
 	}
+
+	return true;
+}
+
+/*
+ * Is 'plan' safe to materialize locally in each consumer slice?
+ *
+ * A local copy is only valid if the subtree yields identical output on every
+ * segment.  That holds when the subtree contains no Motion (nothing is moved
+ * between segments) and every base-relation scan is over a DISTRIBUTED
+ * REPLICATED table.  Anything else -- a Motion, a scan over a distributed
+ * table, a non-relation scan (VALUES/function/etc.), or an unresolvable nested
+ * shared scan -- means the per-segment output may differ, so we must not copy.
+ *
+ * This generalizes the "single base-table scan" case to any replicated
+ * producer subtree (UNION ALL / Append, aggregates, joins of replicated
+ * tables, partitioned scans, ...).
+ */
+static bool
+shareinput_subtree_is_replicated(Plan *plan, List *rtable)
+{
+	ListCell   *lc;
+
+	if (plan == NULL)
+		return true;
+
+	/* A Motion moves rows between segments: output is not purely local. */
+	if (IsA(plan, Motion))
+		return false;
+
+	switch (nodeTag(plan))
+	{
+		case T_SeqScan:
+		case T_IndexScan:
+		case T_IndexOnlyScan:
+		case T_BitmapHeapScan:
+		case T_TidScan:
+		case T_DynamicSeqScan:
+		case T_DynamicIndexScan:
+		case T_DynamicIndexOnlyScan:
+		case T_DynamicBitmapHeapScan:
+			{
+				Index		scanrelid = ((Scan *) plan)->scanrelid;
+				RangeTblEntry *rte;
+				GpPolicy   *policy;
+				bool		replicated;
+
+				if (scanrelid == 0 || scanrelid > (Index) list_length(rtable))
+					return false;
+				rte = rt_fetch(scanrelid, rtable);
+				if (rte->rtekind != RTE_RELATION)
+					return false;
+				policy = GpPolicyFetch(rte->relid);
+				replicated = (policy != NULL &&
+							  policy->ptype == POLICYTYPE_REPLICATED);
+				if (policy)
+					pfree(policy);
+				return replicated;
+			}
+
+		/* Scans that are not replicated base relations -- not safe to copy. */
+		case T_ValuesScan:
+		case T_FunctionScan:
+		case T_TableFuncScan:
+		case T_CteScan:
+		case T_WorkTableScan:
+		case T_NamedTuplestoreScan:
+		case T_ForeignScan:
+		case T_SampleScan:
+			return false;
+
+		case T_SubqueryScan:
+			return shareinput_subtree_is_replicated(((SubqueryScan *) plan)->subplan,
+													rtable);
+
+		case T_ShareInputScan:
+			/*
+			 * A nested shared scan consumer (no subtree) refers to another CTE
+			 * whose locality we cannot resolve here -- be conservative.  A
+			 * nested producer (with a subtree) is validated through its
+			 * lefttree below.
+			 */
+			if (plan->lefttree == NULL)
+				return false;
+			break;
+
+		default:
+			break;
+	}
+
+	/* Recurse into all child plans; every one must be replicated-safe. */
+	if (IsA(plan, Append))
+	{
+		foreach(lc, ((Append *) plan)->appendplans)
+			if (!shareinput_subtree_is_replicated((Plan *) lfirst(lc), rtable))
+				return false;
+	}
+	else if (IsA(plan, MergeAppend))
+	{
+		foreach(lc, ((MergeAppend *) plan)->mergeplans)
+			if (!shareinput_subtree_is_replicated((Plan *) lfirst(lc), rtable))
+				return false;
+	}
+	else if (IsA(plan, Sequence))
+	{
+		foreach(lc, ((Sequence *) plan)->subplans)
+			if (!shareinput_subtree_is_replicated((Plan *) lfirst(lc), rtable))
+				return false;
+	}
+	else if (IsA(plan, BitmapAnd))
+	{
+		foreach(lc, ((BitmapAnd *) plan)->bitmapplans)
+			if (!shareinput_subtree_is_replicated((Plan *) lfirst(lc), rtable))
+				return false;
+	}
+	else if (IsA(plan, BitmapOr))
+	{
+		foreach(lc, ((BitmapOr *) plan)->bitmapplans)
+			if (!shareinput_subtree_is_replicated((Plan *) lfirst(lc), rtable))
+				return false;
+	}
+	else
+	{
+		if (!shareinput_subtree_is_replicated(plan->lefttree, rtable))
+			return false;
+		if (!shareinput_subtree_is_replicated(plan->righttree, rtable))
+			return false;
+	}
+
+	return true;
+}
+
+/*
+ * Try to repair a cross-slice ShareInputScan consumer that reads a CTE built
+ * over a DISTRIBUTED REPLICATED table.
+ *
+ * When such a CTE is referenced from a scalar subquery, ORCA places the
+ * SharedScan producer and consumer in different slices.  The cross-slice
+ * temp-file protocol then expects the producer to have written its tuplestore
+ * on every consumer segment, which is not the case, and execution hangs.
+ *
+ * Since the source is replicated, every segment already holds the full data,
+ * so a local copy of the producer's subtree (any replicated subtree -- see
+ * shareinput_subtree_is_replicated) is equivalent.  Give this consumer its own
+ * copy with a fresh share_id, turning
+ * it into an intra-slice producer that materializes locally instead of reading
+ * cross-slice temp files.  Sibling consumers of the same CTE in the same slice
+ * reuse this copy (tracked by (orig_share_id, motId) -> new_share_id), so the
+ * CTE is materialized once and read by all references.
+ *
+ * Returns true if the consumer was inlined.
+ */
+static bool
+shareinput_inline_replicated_consumer(ShareInputScan *sisc, int motId,
+									  PlannerInfo *root,
+									  ApplyShareInputContext *ctxt)
+{
+	PlannerGlobal *glob = root->glob;
+	int			origShareId = sisc->share_id;
+	Plan	   *producerChild;
+	Plan	   *newChild;
+	int			newShareId;
+	int			k;
+
+	/*
+	 * Have we already inlined a consumer for this same original share_id in
+	 * this same slice?  If so, make this consumer a reader of the existing
+	 * inlined producer instead of creating another copy.
+	 */
+	for (k = 0; k < ctxt->inlined_count; k++)
+	{
+		if (ctxt->inlined_orig_ids[k] == origShareId &&
+			ctxt->inlined_mot_ids[k] == motId)
+		{
+			if (origShareId < ctxt->orig_shared_input_count)
+				ctxt->consumer_counts[origShareId]--;
+
+			sisc->share_id = ctxt->inlined_new_ids[k];
+			sisc->cross_slice = false;
+			sisc->producer_slice_id = motId;
+			sisc->nconsumers = 0;
+			return true;
+		}
+	}
+
+	/* Locate the producer's subtree. */
+	if (origShareId >= ctxt->shared_input_count)
+		return false;
+	producerChild = ctxt->shared_plans[origShareId];
+	if (producerChild == NULL)
+		return false;
+
+	/*
+	 * Only inline when the whole producer subtree is replicated, i.e. it yields
+	 * identical output on every segment (no Motion, all base scans replicated).
+	 * Then the local copy is equivalent to the cross-slice shared scan.
+	 */
+	if (!shareinput_subtree_is_replicated(producerChild, glob->finalrtable))
+		return false;
+
+	/*
+	 * Deep-copy the producer's subtree and turn this consumer into a local
+	 * intra-slice producer with a fresh share_id.
+	 */
+	if (origShareId < ctxt->orig_shared_input_count)
+		ctxt->consumer_counts[origShareId]--;
+
+	newChild = (Plan *) copyObject(producerChild);
+	newShareId = ctxt->shared_input_count;
+
+	sisc->scan.plan.lefttree = newChild;
+	sisc->share_id = newShareId;
+	sisc->cross_slice = false;
+	sisc->producer_slice_id = motId;
+	sisc->nconsumers = 0;
+
+	/*
+	 * Register the new producer subtree so that replace_shareinput_targetlists()
+	 * can build an RTE for it.  This grows shared_plans / shared_input_count.
+	 */
+	shareinput_save_producer(sisc, ctxt);
+
+	/* Record the mapping so sibling consumers in this slice can reuse it. */
+	if (ctxt->inlined_count == 0)
+	{
+		ctxt->inlined_orig_ids = palloc(sizeof(int));
+		ctxt->inlined_mot_ids = palloc(sizeof(int));
+		ctxt->inlined_new_ids = palloc(sizeof(int));
+	}
+	else
+	{
+		ctxt->inlined_orig_ids = repalloc(ctxt->inlined_orig_ids,
+										  (ctxt->inlined_count + 1) * sizeof(int));
+		ctxt->inlined_mot_ids = repalloc(ctxt->inlined_mot_ids,
+										 (ctxt->inlined_count + 1) * sizeof(int));
+		ctxt->inlined_new_ids = repalloc(ctxt->inlined_new_ids,
+										 (ctxt->inlined_count + 1) * sizeof(int));
+	}
+	ctxt->inlined_orig_ids[ctxt->inlined_count] = origShareId;
+	ctxt->inlined_mot_ids[ctxt->inlined_count] = motId;
+	ctxt->inlined_new_ids[ctxt->inlined_count] = newShareId;
+	ctxt->inlined_count++;
 
 	return true;
 }
@@ -1006,6 +1254,22 @@ shareinput_mutator_xslice_2(Node *node, PlannerInfo *root, bool fPop)
 
 		pershare = &ctxt->shared_inputs[sisc->share_id];
 
+		/*
+		 * A cross-slice consumer of a replicated-table CTE inside a SubPlan
+		 * cannot use the cross-slice temp-file protocol (it hangs).  Give it a
+		 * local copy of the producer's subtree instead.  If that succeeds the
+		 * consumer becomes an intra-slice producer and the generic cross-slice
+		 * bookkeeping below must be skipped.
+		 */
+		if (ctxt->is_orca_plan &&
+			ctxt->walking_subplan &&
+			plan->lefttree == NULL &&
+			pershare->producer_slice_id != motId &&
+			shareinput_inline_replicated_consumer(sisc, motId, root, ctxt))
+		{
+			return true;
+		}
+
 		if (bms_num_members(pershare->participant_slices) > 1)
 		{
 			Assert(!sisc->cross_slice);
@@ -1041,11 +1305,109 @@ shareinput_mutator_xslice_2(Node *node, PlannerInfo *root, bool fPop)
 }
 
 /*
+ * cleanup_orphaned_producers
+ *   After inlining cross-slice replicated CTE consumers, some original
+ *   producers may have lost all of their consumers.  Remove those orphaned
+ *   ShareInputScan producers from Sequence nodes to eliminate unnecessary
+ *   scans, and collapse Sequence nodes that end up with a single child.
+ */
+static Plan *
+cleanup_orphaned_producers(Plan *plan, ApplyShareInputContext *ctxt)
+{
+	if (plan == NULL)
+		return NULL;
+
+	if (IsA(plan, Sequence))
+	{
+		Sequence   *seq = (Sequence *) plan;
+		List	   *newplans = NIL;
+		ListCell   *lc;
+
+		foreach(lc, seq->subplans)
+		{
+			Plan	   *child = (Plan *) lfirst(lc);
+
+			child = cleanup_orphaned_producers(child, ctxt);
+
+			/* Skip orphaned ShareInputScan producers (those with a subtree). */
+			if (IsA(child, ShareInputScan) && child->lefttree != NULL)
+			{
+				ShareInputScan *sisc = (ShareInputScan *) child;
+
+				if (sisc->share_id < ctxt->orig_shared_input_count &&
+					ctxt->consumer_counts[sisc->share_id] == 0)
+					continue;
+			}
+
+			/*
+			 * Flatten nested Sequences: if a child is itself a Sequence,
+			 * splice its children into this level.
+			 */
+			if (IsA(child, Sequence))
+			{
+				Sequence   *inner = (Sequence *) child;
+				ListCell   *lc2;
+
+				foreach(lc2, inner->subplans)
+					newplans = lappend(newplans, lfirst(lc2));
+			}
+			else
+				newplans = lappend(newplans, child);
+		}
+
+		seq->subplans = newplans;
+		return plan;
+	}
+
+	if (IsA(plan, Append))
+	{
+		ListCell   *lc;
+
+		foreach(lc, ((Append *) plan)->appendplans)
+			lfirst(lc) = cleanup_orphaned_producers((Plan *) lfirst(lc), ctxt);
+	}
+	else if (IsA(plan, MergeAppend))
+	{
+		ListCell   *lc;
+
+		foreach(lc, ((MergeAppend *) plan)->mergeplans)
+			lfirst(lc) = cleanup_orphaned_producers((Plan *) lfirst(lc), ctxt);
+	}
+	else if (IsA(plan, BitmapAnd))
+	{
+		ListCell   *lc;
+
+		foreach(lc, ((BitmapAnd *) plan)->bitmapplans)
+			lfirst(lc) = cleanup_orphaned_producers((Plan *) lfirst(lc), ctxt);
+	}
+	else if (IsA(plan, BitmapOr))
+	{
+		ListCell   *lc;
+
+		foreach(lc, ((BitmapOr *) plan)->bitmapplans)
+			lfirst(lc) = cleanup_orphaned_producers((Plan *) lfirst(lc), ctxt);
+	}
+	else if (IsA(plan, SubqueryScan))
+	{
+		SubqueryScan *sub = (SubqueryScan *) plan;
+
+		sub->subplan = cleanup_orphaned_producers(sub->subplan, ctxt);
+	}
+	else
+	{
+		plan->lefttree = cleanup_orphaned_producers(plan->lefttree, ctxt);
+		plan->righttree = cleanup_orphaned_producers(plan->righttree, ctxt);
+	}
+
+	return plan;
+}
+
+/*
  * Scan through the plan tree and make note of which Share Input Scans
  * are cross-slice.
  */
 Plan *
-apply_shareinput_xslice(Plan *plan, PlannerInfo *root)
+apply_shareinput_xslice(Plan *plan, PlannerInfo *root, bool is_orca)
 {
 	PlannerGlobal *glob = root->glob;
 	ApplyShareInputContext *ctxt = &glob->share;
@@ -1066,6 +1428,25 @@ apply_shareinput_xslice(Plan *plan, PlannerInfo *root)
 	ctxt->slices = root->glob->slices;
 
 	ctxt->shared_inputs = palloc0(ctxt->shared_input_count * sizeof(ApplyShareInputContextPerShare));
+
+	/*
+	 * The cross-slice replicated-CTE inlining below structurally rewrites the
+	 * plan tree (adds local producers, drops orphaned ones).  That is only safe
+	 * -- and only needed -- for ORCA plans, where this pass runs before
+	 * replace_shareinput_targetlists() and slice-table construction.  In the
+	 * standard planner those steps have already run by the time we get here, and
+	 * the Postgres fallback never produces the problematic cross-slice
+	 * replicated shared scan in the first place (it uses InitPlans), so the
+	 * transformation is disabled there.
+	 */
+	ctxt->is_orca_plan = is_orca;
+	ctxt->walking_subplan = false;
+	ctxt->inlined_orig_ids = NULL;
+	ctxt->inlined_mot_ids = NULL;
+	ctxt->inlined_new_ids = NULL;
+	ctxt->inlined_count = 0;
+	ctxt->orig_shared_input_count = ctxt->shared_input_count;
+	ctxt->consumer_counts = palloc0(ctxt->shared_input_count * sizeof(int));
 
 	shareinput_pushmot(ctxt, 0);
 
@@ -1089,7 +1470,9 @@ apply_shareinput_xslice(Plan *plan, PlannerInfo *root)
 		int			slice_id = glob->subplan_sliceIds[subplan_id];
 
 		shareinput_pushmot(ctxt, slice_id);
+		ctxt->walking_subplan = true;
 		shareinput_walker(shareinput_mutator_xslice_1, (Node *) subplan, subroot);
+		ctxt->walking_subplan = false;
 		shareinput_popmot(ctxt);
 		subplan_id++;
 	}
@@ -1104,11 +1487,21 @@ apply_shareinput_xslice(Plan *plan, PlannerInfo *root)
 		int			slice_id = glob->subplan_sliceIds[subplan_id];
 
 		shareinput_pushmot(ctxt, slice_id);
+		ctxt->walking_subplan = true;
 		shareinput_walker(shareinput_mutator_xslice_2, (Node *) subplan, subroot);
+		ctxt->walking_subplan = false;
 		shareinput_popmot(ctxt);
 		subplan_id++;
 	}
 	shareinput_walker(shareinput_mutator_xslice_2, (Node *) plan, root);
+
+	/*
+	 * Cleanup: remove orphaned ShareInputScan producers from Sequence nodes.
+	 * After inlining, some original producers may have lost all consumers;
+	 * keeping them would cause unnecessary scans at execution time.
+	 */
+	if (ctxt->inlined_count > 0)
+		plan = cleanup_orphaned_producers(plan, ctxt);
 
 	return plan;
 }

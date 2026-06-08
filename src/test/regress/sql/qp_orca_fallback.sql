@@ -141,31 +141,19 @@ ANALYZE tbl1;
 ANALYZE tbl2;
 -- end_ignore
 
--- Case 1: walker triggers fallback. With scalar subqueries on the CTE
--- ORCA produces a plan whose CTE Producer is replicated and Consumers
--- live on a different slice -- the walker raises ExmiExpr2DXLUnsupported
--- and trace_fallback DETAIL says "CTE Consumer placed on a different
--- slice than its replicated Producer".
-EXPLAIN (COSTS OFF)
-WITH t2 AS (SELECT id, refrcode FROM tbl2 WHERE referenceid = 101991)
-SELECT p.iscalctrg,
-       (SELECT refrcode FROM t2 WHERE refrcode = p.iscalctrg    LIMIT 1) AS r,
-       (SELECT refrcode FROM t2 WHERE refrcode = p.iscalcdetail LIMIT 1) AS r1
-FROM tbl1 p
-LIMIT 1;
-
--- Case 2: walker correctly stays silent. The same CTE referenced from a
--- JOIN: ORCA pins the Producer body to a single segment with a One-Time
--- Filter (gp_execution_segment() = N), so the Producer's child
--- distribution is EdtSingleton, not replicated -- the walker skips it.
-EXPLAIN (COSTS OFF)
-WITH t1 AS (SELECT * FROM tbl1),
-     t2 AS (SELECT id, refrcode FROM tbl2 WHERE referenceid = 101991)
-SELECT p.* FROM t1 p
-  JOIN t2 r  ON p.iscalctrg   = r.refrcode
-  JOIN t2 r1 ON p.iscalcdetail = r1.refrcode
-LIMIT 1;
-
+-- The native scalar-subquery case and the silent JOIN case live in the
+-- shared_scan test. A replicated CTE joined to a DISTRIBUTED table: ORCA pins
+-- the producer to one segment here too, so it is handled natively (no fallback)
+-- and the result is correct.
+CREATE TABLE dist_t (a int, b int) DISTRIBUTED BY (a);
+INSERT INTO dist_t SELECT i, i % 5 FROM generate_series(1, 50000) i;
+ANALYZE dist_t;
+WITH cte AS (SELECT id, refrcode FROM tbl2 WHERE referenceid = 101991)
+SELECT count(*)
+FROM dist_t d
+  JOIN cte c1 ON d.b = c1.id
+  JOIN cte c2 ON d.a = c2.id;
+DROP TABLE dist_t;
 DROP TABLE tbl1, tbl2;
 
 -- start_ignore

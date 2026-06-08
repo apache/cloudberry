@@ -121,8 +121,12 @@ where
 	and (stat.schema_name || '.' ||stat.table_name not in (select table_nm_onl_act from tbls_w_onl_actl_data))
 	or (stat.schema_name || '.' ||stat.table_name in (select table_nm_onl_act from tbls_w_onl_actl_data));
 
--- ORCA should fallback when a CTE over a replicated table is referenced
--- from multiple scalar subqueries.
+-- A CTE over a replicated table referenced from multiple scalar subqueries
+-- used to hang: ORCA placed the SharedScan consumer on a different slice than
+-- the producer and the cross-slice temp-file protocol cannot handle that
+-- topology. ORCA now force-inlines a replicated-table CTE (the data is on
+-- every segment, so a local copy per consumer is equivalent), producing a
+-- correct native plan instead of a cross-slice shared scan.
 -- ss_t1 needs enough rows (40000) to push ORCA to the cross-slice plan;
 -- with fewer rows the bug does not manifest and the test would silently
 -- pass even without the fix.
@@ -137,7 +141,17 @@ CREATE TABLE ss_t2 AS
   DISTRIBUTED REPLICATED;
 ANALYZE ss_t1;
 ANALYZE ss_t2;
-
+-- Plan: the replicated CTE is materialized once into a local Shared Scan
+-- co-located with its consumers, and the repeated reference reuses that copy,
+-- so ss_t2 is scanned once per CTE -- no cross-slice SharedScan, no duplicates.
+EXPLAIN (COSTS OFF) WITH
+    cte1 AS (SELECT v FROM ss_t2 WHERE id = 1),
+    cte2 AS (SELECT v FROM ss_t2 WHERE id = 2)
+  SELECT (SELECT v FROM cte1) + (SELECT v FROM cte2) +
+         (SELECT v FROM cte1) + (SELECT v FROM cte2) AS result
+  FROM ss_t1
+  LIMIT 1;
+-- Run it under a timeout to prove it no longer hangs.
 SET statement_timeout = '15s';
 WITH
     cte1 AS (SELECT v FROM ss_t2 WHERE id = 1),
@@ -147,4 +161,120 @@ WITH
   FROM ss_t1
   LIMIT 1;
 RESET statement_timeout;
+
+-- Walker coverage: a single replicated CTE referenced from three scalar
+-- subqueries. The first cross-slice consumer is inlined into a local Shared
+-- Scan producer; the second and third reuse that inlined copy (the reuse path
+-- in shareinput_inline_replicated_consumer), so ss_t2 is scanned exactly once
+-- and the orphaned original producer is dropped by cleanup_orphaned_producers.
+-- The exact plan text is not pinned (it depends on the optimizer); we only
+-- assert that the walker produces a correct, non-hanging plan. cte1.v = 10, so
+-- the result is 10 * 3 = 30.
+SET statement_timeout = '15s';
+WITH
+    cte1 AS (SELECT v FROM ss_t2 WHERE id = 1)
+  SELECT (SELECT v FROM cte1) + (SELECT v FROM cte1) + (SELECT v FROM cte1) AS result
+  FROM ss_t1
+  LIMIT 1;
+RESET statement_timeout;
+
+-- Walker coverage: two replicated CTEs, each referenced an odd number of times,
+-- interleaved in the same expression. Exercises building two independent
+-- inlined producers in the same slice and reusing each. cte1.v = 10, cte2.v = 20,
+-- so the result is 10 + 20 + 10 + 20 + 10 = 70.
+SET statement_timeout = '15s';
+WITH
+    cte1 AS (SELECT v FROM ss_t2 WHERE id = 1),
+    cte2 AS (SELECT v FROM ss_t2 WHERE id = 2)
+  SELECT (SELECT v FROM cte1) + (SELECT v FROM cte2) +
+         (SELECT v FROM cte1) + (SELECT v FROM cte2) +
+         (SELECT v FROM cte1) AS result
+  FROM ss_t1
+  LIMIT 1;
+RESET statement_timeout;
+
+-- Walker coverage: a non-replicated CTE referenced from scalar subqueries must
+-- NOT be inlined (the leaf scan is not over a replicated table), so the normal
+-- cross-slice shared-scan path is taken and the result is still correct.
+-- cte1.id = 1, so the result is 1 + 1 = 2.
+SET statement_timeout = '15s';
+WITH
+    cte1 AS (SELECT id FROM ss_t1 WHERE id = 1)
+  SELECT (SELECT id FROM cte1) + (SELECT id FROM cte1) AS result
+  FROM ss_t1
+  LIMIT 1;
+RESET statement_timeout;
+
 DROP TABLE ss_t1, ss_t2;
+
+-- The walker that detects a CTE Consumer on a different slice than its
+-- replicated Producer. Without it ORCA would emit a plan with cross-slice
+-- replicated CTE Consumers that hangs at execution.
+-- start_ignore
+DROP TABLE IF EXISTS tbl1, tbl2;
+-- end_ignore
+CREATE TABLE tbl2 (id numeric, refrcode varchar(255), referenceid numeric)
+DISTRIBUTED REPLICATED;
+CREATE TABLE tbl1 (id bigserial, iscalctrg varchar(15) NOT NULL,
+                   iscalcdetail varchar(15))
+DISTRIBUTED REPLICATED;
+-- start_ignore
+INSERT INTO tbl2 SELECT i, 'A'||(i%5), 101991
+  FROM generate_series(1, 50000) i;
+INSERT INTO tbl1 (iscalctrg, iscalcdetail)
+  SELECT 'A'||(i%5), 'A'||(i%7) FROM generate_series(1, 50000) i;
+ANALYZE tbl1;
+ANALYZE tbl2;
+-- end_ignore
+
+-- Case 1: handled natively (no fallback). With scalar subqueries on the CTE,
+-- ORCA produces a plan whose replicated CTE Producer and Consumers live on
+-- different slices. apply_shareinput_xslice now materializes the replicated
+-- CTE locally in each consumer slice (Shared Scan over a per-slice copy)
+-- instead of a hanging cross-slice shared scan, so ORCA no longer falls back.
+EXPLAIN (COSTS OFF)
+WITH t2 AS (SELECT id, refrcode FROM tbl2 WHERE referenceid = 101991)
+SELECT p.iscalctrg,
+       (SELECT refrcode FROM t2 WHERE refrcode = p.iscalctrg    LIMIT 1) AS r,
+       (SELECT refrcode FROM t2 WHERE refrcode = p.iscalcdetail LIMIT 1) AS r1
+FROM tbl1 p
+LIMIT 1;
+
+-- Case 2: walker correctly stays silent. The same CTE referenced from a
+-- JOIN: ORCA pins the Producer body to a single segment with a One-Time
+-- Filter (gp_execution_segment() = N), so the Producer's child
+-- distribution is EdtSingleton, not replicated -- the walker skips it.
+EXPLAIN (COSTS OFF)
+WITH t1 AS (SELECT * FROM tbl1),
+     t2 AS (SELECT id, refrcode FROM tbl2 WHERE referenceid = 101991)
+SELECT p.* FROM t1 p
+  JOIN t2 r  ON p.iscalctrg   = r.refrcode
+  JOIN t2 r1 ON p.iscalcdetail = r1.refrcode
+LIMIT 1;
+SET statement_timeout = '30s';
+SELECT count(*) AS n FROM (
+  WITH t1 AS (SELECT * FROM tbl1),
+       t2 AS (SELECT id, refrcode FROM tbl2 WHERE referenceid = 101991)
+  SELECT p.* FROM t1 p
+    JOIN t2 r  ON p.iscalctrg   = r.refrcode
+    JOIN t2 r1 ON p.iscalcdetail = r1.refrcode
+  LIMIT 1) s;
+RESET statement_timeout;
+
+-- Case 3: a replicated CTE built with UNION ALL has an Append at the root of
+-- the producer subtree (children are in appendplans, not lefttree), which the
+-- old single-leaf inline check missed -- the cross-slice shared scan then hung.
+-- shareinput_subtree_is_replicated now recognizes the whole replicated subtree
+-- and materializes it locally. Correlated subqueries keep the SubPlan shape;
+-- p.id = 1 makes it deterministic (iscalctrg = iscalcdetail = 'A1'), so ok = t.
+SET statement_timeout = '30s';
+WITH cte AS (
+  SELECT id, refrcode FROM tbl2 WHERE referenceid = 101991 AND id <  25000
+  UNION ALL
+  SELECT id, refrcode FROM tbl2 WHERE referenceid = 101991 AND id >= 25000
+)
+SELECT (SELECT refrcode FROM cte WHERE refrcode = p.iscalctrg    LIMIT 1) = 'A1'
+   AND (SELECT refrcode FROM cte WHERE refrcode = p.iscalcdetail LIMIT 1) = 'A1' AS ok
+FROM tbl1 p WHERE p.id = 1;
+RESET statement_timeout;
+DROP TABLE tbl1, tbl2;

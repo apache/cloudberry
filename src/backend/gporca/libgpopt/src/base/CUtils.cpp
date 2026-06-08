@@ -10,6 +10,8 @@
 //---------------------------------------------------------------------------
 #include "gpopt/base/CUtils.h"
 
+#include "gpos/common/CBitSet.h"
+#include "gpos/common/CBitSetIter.h"
 #include "gpos/common/clibwrapper.h"
 #include "gpos/common/syslibwrapper.h"
 #include "gpos/io/CFileDescriptor.h"
@@ -978,107 +980,89 @@ CUtils::FHasCTEAnchor(CExpression *pexpr)
 	return false;
 }
 
-// True if the distribution is replicated-like.
-static BOOL
-FReplicatedLikeDistribution(CDistributionSpec::EDistributionType edt)
-{
-	return (CDistributionSpec::EdtStrictReplicated == edt ||
-			CDistributionSpec::EdtTaintedReplicated == edt ||
-			CDistributionSpec::EdtUniversal == edt);
-}
-
-struct SCTEInfo
-{
-	ULONG cteId;
-	ULONG sliceId;
-
-	SCTEInfo(ULONG cte_id, ULONG slice_id) : cteId(cte_id), sliceId(slice_id)
-	{
-	}
-};
-
-typedef CDynamicPtrArray<SCTEInfo, CleanupDelete<SCTEInfo> > CTEInfoArray;
-
-// Walk the physical tree, recording the slice id of every replicated
-// CTE Producer and every CTE Consumer. Slices are delimited by Motion
-// nodes: each non-scalar child of a Motion lives in a fresh slice --
-// same motId-stack idea as in apply_shareinput_xslice.
+// Collect the CTE ids of every CTE Consumer and CTE Producer found beneath the
+// given expression. Scalar subtrees are skipped: a Consumer inside a scalar
+// subquery runs in its own SubPlan slice and is repaired separately by the
+// local-materialization pass in apply_shareinput_xslice, so it must not be
+// treated as living "beneath" the current Motion here.
 static void
-CollectCTESlices(CMemoryPool *mp, CExpression *pexpr, ULONG curSlice,
-				 ULONG *pNextSlice, CTEInfoArray *prodInfos,
-				 CTEInfoArray *consInfos)
+CollectConsumersAndProducers(CExpression *pexpr, CBitSet *pbsConsumers,
+							 CBitSet *pbsProducers)
 {
 	GPOS_CHECK_STACK_SIZE;
 	GPOS_ASSERT(nullptr != pexpr);
 
 	COperator *pop = pexpr->Pop();
 
-	if (COperator::EopPhysicalCTEProducer == pop->Eopid())
+	if (COperator::EopPhysicalCTEConsumer == pop->Eopid())
 	{
-		// Producer's distribution comes from its only child -- inspect
-		// it there. Skip non-replicated Producers; they cannot trigger
-		// the cross-slice issue we are checking for.
-		GPOS_ASSERT(1 == pexpr->Arity());
-		CExpression *pexprChild = (*pexpr)[0];
-		CDrvdPropPlan *pdpplan =
-			CDrvdPropPlan::Pdpplan(pexprChild->PdpDerive());
-
-		if (FReplicatedLikeDistribution(pdpplan->Pds()->Edt()))
-		{
-			prodInfos->Append(GPOS_NEW(mp) SCTEInfo(
-				CPhysicalCTEProducer::PopConvert(pop)->UlCTEId(), curSlice));
-		}
+		pbsConsumers->ExchangeSet(
+			CPhysicalCTEConsumer::PopConvert(pop)->UlCTEId());
 	}
-	else if (COperator::EopPhysicalCTEConsumer == pop->Eopid())
+	else if (COperator::EopPhysicalCTEProducer == pop->Eopid())
 	{
-		// Consumer is a leaf -- record (cteId, curSlice) and let the
-		// caller decide later, once the whole tree has been walked.
-		consInfos->Append(GPOS_NEW(mp) SCTEInfo(
-			CPhysicalCTEConsumer::PopConvert(pop)->UlCTEId(), curSlice));
+		pbsProducers->ExchangeSet(
+			CPhysicalCTEProducer::PopConvert(pop)->UlCTEId());
 	}
-
-	BOOL isMotion = CUtils::FPhysicalMotion(pop);
 
 	for (ULONG ul = 0; ul < pexpr->Arity(); ul++)
 	{
 		CExpression *pexprChild = (*pexpr)[ul];
-
 		if (pexprChild->Pop()->FScalar())
 		{
 			continue;
 		}
-
-		ULONG childSlice = curSlice;
-		if (isMotion)
-		{
-			(*pNextSlice)++;
-			childSlice = *pNextSlice;
-		}
-
-		CollectCTESlices(mp, pexprChild, childSlice, pNextSlice, prodInfos,
-						 consInfos);
+		CollectConsumersAndProducers(pexprChild, pbsConsumers, pbsProducers);
 	}
 }
 
+// True if some CTE Consumer beneath pexprMotion has no matching CTE Producer
+// beneath the same Motion -- i.e. the Consumer reads data produced on the
+// other side of the Motion (a different slice).
 static BOOL
-FFoundCrossSlice(const CTEInfoArray *consInfos, const CTEInfoArray *prodInfos)
+FHasUnpairedCTEConsumer(CMemoryPool *mp, CExpression *pexprMotion)
 {
-	for (ULONG ic = 0; ic < consInfos->Size(); ic++)
-	{
-		SCTEInfo *cons = (*consInfos)[ic];
+	CBitSet *pbsConsumers = GPOS_NEW(mp) CBitSet(mp);
+	CBitSet *pbsProducers = GPOS_NEW(mp) CBitSet(mp);
 
-		for (ULONG ip = 0; ip < prodInfos->Size(); ip++)
+	CollectConsumersAndProducers(pexprMotion, pbsConsumers, pbsProducers);
+
+	BOOL fUnpaired = false;
+	CBitSetIter bsiter(*pbsConsumers);
+	while (bsiter.Advance())
+	{
+		if (!pbsProducers->Get(bsiter.Bit()))
 		{
-			SCTEInfo *prod = (*prodInfos)[ip];
-			if (prod->cteId == cons->cteId && prod->sliceId != cons->sliceId)
-			{
-				return true;
-			}
+			fUnpaired = true;
+			break;
 		}
 	}
-	return false;
+
+	pbsConsumers->Release();
+	pbsProducers->Release();
+
+	return fUnpaired;
 }
 
+//---------------------------------------------------------------------------
+//	@function:
+//		CUtils::FHasCrossSliceReplicatedCTEConsumer
+//
+//	@doc:
+//		Detect a CTE Consumer placed beneath a duplicate-hazard Motion (a
+//		Motion whose input is strict-replicated / universal) whose Producer is
+//		on the other side of that Motion. That topology depends on the
+//		cross-slice shared-scan protocol and hangs at execution.
+//
+//		Unlike a CTE referenced from a scalar subquery -- whose cross-slice
+//		Consumer is repaired locally by apply_shareinput_xslice -- this
+//		broadcast/duplicate-hazard topology cannot be repaired, so the caller
+//		falls back to the Postgres optimizer.
+//
+//		Mirrors greengage 51fe92e: it deliberately does NOT trigger for the
+//		scalar-subquery case (whose Motions are plain Gather / Redistribute,
+//		not duplicate-hazard), leaving that case to apply_shareinput_xslice.
+//---------------------------------------------------------------------------
 BOOL
 CUtils::FHasCrossSliceReplicatedCTEConsumer(CMemoryPool *mp, CExpression *pexpr)
 {
@@ -1087,19 +1071,22 @@ CUtils::FHasCrossSliceReplicatedCTEConsumer(CMemoryPool *mp, CExpression *pexpr)
 		return false;
 	}
 
-	CTEInfoArray *prodInfos = GPOS_NEW(mp) CTEInfoArray(mp);
-	CTEInfoArray *consInfos = GPOS_NEW(mp) CTEInfoArray(mp);
-	ULONG nextSlice = 0;
+	if (CUtils::FPhysicalMotion(pexpr->Pop()) &&
+		CUtils::FDuplicateHazardMotion(pexpr) &&
+		FHasUnpairedCTEConsumer(mp, pexpr))
+	{
+		return true;
+	}
 
-	CollectCTESlices(mp, pexpr, 0 /*curSlice*/, &nextSlice, prodInfos,
-					 consInfos);
+	for (ULONG ul = 0; ul < pexpr->Arity(); ul++)
+	{
+		if (FHasCrossSliceReplicatedCTEConsumer(mp, (*pexpr)[ul]))
+		{
+			return true;
+		}
+	}
 
-	BOOL cross = FFoundCrossSlice(consInfos, prodInfos);
-
-	prodInfos->Release();
-	consInfos->Release();
-
-	return cross;
+	return false;
 }
 
 //---------------------------------------------------------------------------

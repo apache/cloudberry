@@ -794,7 +794,7 @@ standard_planner(Query *parse, const char *query_string, int cursorOptions,
 		 * share input. need to mark material nodes that are split acrossed
 		 * multi slices.
 		 */
-		top_plan = apply_shareinput_xslice(top_plan, root);
+		top_plan = apply_shareinput_xslice(top_plan, root, false /* is_orca */);
 	}
 
 	/* build the PlannedStmt result */
