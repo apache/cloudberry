@@ -25,10 +25,12 @@ OBJS = \
 	nodeFuncs.o \
 	nodes.o \
 	outfuncs.o \
+	outfast.o \
 	params.o \
 	print.o \
 	read.o \
 	readfuncs.o \
+	readfast.o \
 	tidbitmap.o \
 	value.o
 
@@ -105,8 +107,10 @@ $(top_builddir)/src/include/nodes/header-stamp: node-support-stamp
 copyfuncs.o: copyfuncs.c copyfuncs.funcs.c copyfuncs.switch.c | node-support-stamp
 equalfuncs.o: equalfuncs.c equalfuncs.funcs.c equalfuncs.switch.c | node-support-stamp
 outfuncs.o: outfuncs.c outfuncs.funcs.c outfuncs.switch.c | node-support-stamp
+outfast.o: outfast.c outfast.funcs.c outfast.switch.c | node-support-stamp
 queryjumblefuncs.o: queryjumblefuncs.c queryjumblefuncs.funcs.c queryjumblefuncs.switch.c | node-support-stamp
 readfuncs.o:  readfuncs.c readfuncs.funcs.c readfuncs.switch.c | node-support-stamp
+readfast.o:  readfast.c readfast.funcs.c readfast.switch.c | node-support-stamp
 
 maintainer-clean: clean
 	rm -f node-support-stamp $(addsuffix funcs.funcs.c,copy equal out queryjumble read) $(addsuffix funcs.switch.c,copy equal out queryjumble read) nodetags.h

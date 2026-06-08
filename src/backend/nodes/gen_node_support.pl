@@ -977,9 +977,27 @@ foreach my $n (@node_types)
 	  . "\t\treturn (Node *) _read${n}();\n"
 	  unless $no_read;
 
+	# for out and read fast
+	print $ofas "\t\t\tcase T_${n}:\n"
+		. "\t\t\t\t_out${n}(str, obj);\n"
+		. "\t\t\t\tbreak;\n";
+
+	print $rfas "\tif (MATCH(\"$N\", "
+		. length($N) . "))\n"
+		. "\t\treturn (Node *) _read${n}();\n"
+		unless $no_read;
+
 	next if elem $n, @custom_read_write;
 
 	print $off "
+static void
+_out${n}(StringInfo str, const $n *node)
+{
+\tWRITE_NODE_TYPE(\"$N\");
+
+";
+	# for out fast
+	print $ofaf "
 static void
 _out${n}(StringInfo str, const $n *node)
 {
@@ -1046,6 +1064,9 @@ _read${n}(void)
 			if (defined $read_as_field)
 			{
 				print $rff "\tlocal_node->$f = $read_as_field;\n";
+				
+				#for read fast
+				print $rfaf "\tlocal_node->$f = $read_as_field;\n";
 				next;
 			}
 			# else, bad specification
@@ -1441,6 +1462,14 @@ _read${n}(void)
 	print $off "}
 ";
 	print $rff "
+\tREAD_DONE();
+}
+" unless $no_read;
+
+	# for out and read fast
+	print $ofaf "}
+";
+	print $rfaf "
 \tREAD_DONE();
 }
 " unless $no_read;
