@@ -31,6 +31,10 @@
 #include "storage/paxc_smgr.h"
 #include "storage/wal/paxc_wal.h"
 
+extern "C" {
+#include "storage/sync.h"
+}
+
 #include <unistd.h>
 
 smgr_get_impl_hook_type prev_smgr_get_impl_hook = NULL;
@@ -51,6 +55,18 @@ static void mdunlink_pax(RelFileLocatorBackend rnode, ForkNumber forkNumber,
       paxc::XLogForgetRelation(rnode.locator);
     }
   }
+
+  // Forget any pending fsync requests for this relation.  mdcreate()
+  // registers the base relfile with SYNC_HANDLER_MD.  Without canceling
+  // it here, the checkpointer will PANIC when trying to fsync the
+  // already-deleted file.
+  FileTag tag;
+  memset(&tag, 0, sizeof(FileTag));
+  tag.handler = SYNC_HANDLER_MD;
+  tag.rlocator = rnode.locator;
+  tag.forknum = forkNumber;
+  tag.segno = 0;
+  RegisterSyncRequest(&tag, SYNC_FORGET_REQUEST, true /* retryOnError */);
 
   // unlink the relfilelocator file directly, mdunlink will not remove
   // the relfilelocator file, only truncate it if isRedo is false.

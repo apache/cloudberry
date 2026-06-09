@@ -18,6 +18,7 @@
 
 #include "nodes/pathnodes.h"
 #include "nodes/plannodes.h"
+#include "utils/relcache.h"
 
 
 /*
@@ -43,6 +44,10 @@ extern List *init_list_cteplaninfo(int numCtes);
 extern void preprocess_targetlist(PlannerInfo *root);
 
 extern List *extract_update_targetlist_colnos(List *tlist, bool reorder_resno);
+
+extern List *expand_insert_targetlist(PlannerInfo *root, List *tlist,
+									  Relation rel,
+									  Index split_update_result_relation);
 
 extern PlanRowMark *get_plan_rowmark(List *rowmarks, Index rtindex);
 

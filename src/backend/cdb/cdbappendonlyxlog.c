@@ -107,10 +107,9 @@ ao_insert_replay(XLogReaderState *record)
 						path)));
 	}
 
-	/* MERGE16_FIXME delete the register_dirty_segment, but this is not correct */
-//	register_dirty_segment_ao(xlrec->target.node,
-//							  xlrec->target.segment_filenum,
-//							  file);
+	register_dirty_segment_ao(xlrec->target.node,
+							  xlrec->target.segment_filenum,
+							  file);
 
 	smgr->smgr_ao->smgr_FileClose(file);
 }
@@ -187,6 +186,15 @@ ao_truncate_replay(XLogReaderState *record)
 	}
 
 	FileClose(file);
+
+	/*
+	 * Cancel any pending fsync requests for this AO segment file.
+	 * The file has been truncated, so any previously registered dirty
+	 * segment requests are no longer needed and would cause PANIC in
+	 * ProcessSyncRequests if the file is later removed.
+	 */
+	register_forget_request_ao(xlrec->target.node,
+							   xlrec->target.segment_filenum);
 }
 
 void

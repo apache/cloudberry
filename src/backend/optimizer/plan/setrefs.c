@@ -186,6 +186,7 @@ static Node *convert_combining_aggrefs(Node *node, void *context);
 static Node *convert_deduplicated_aggrefs(Node *node, void *context);
 static void set_dummy_tlist_references(Plan *plan, int rtoffset);
 static void set_splitupdate_tlist_references(Plan *plan, int rtoffset);
+static void set_splitmerge_tlist_references(Plan *plan, int rtoffset);
 static indexed_tlist *build_tlist_index(List *tlist);
 static Var *search_indexed_tlist_for_var(Var *var,
 										 indexed_tlist *itlist,
@@ -1630,8 +1631,61 @@ set_plan_refs(PlannerInfo *root, Plan *plan, int rtoffset)
 			set_splitupdate_tlist_references(plan, rtoffset);
 			break;
 		case T_SplitMerge:
-			/* mergeActionLists will be process in T_ModifyTable */ 
-			set_dummy_tlist_references(plan, rtoffset);
+			{
+				SplitMerge *sm = (SplitMerge *) plan;
+				Plan	   *childplan = plan->lefttree;
+
+				set_splitmerge_tlist_references(plan, rtoffset);
+
+				/*
+				 * Fix SplitMerge's own mergeActionLists to reference the
+				 * child plan's output positions.  This is separate from
+				 * ModifyTable's mergeActionLists which reference the
+				 * Motion output.
+				 */
+				if (sm->mergeActionLists != NIL && childplan != NULL)
+				{
+					indexed_tlist *itlist;
+					ListCell   *lca;
+
+					itlist = build_tlist_index(childplan->targetlist);
+
+					foreach(lca, sm->mergeActionLists)
+					{
+						List	   *mergeActionList = lfirst(lca);
+						ListCell   *lc2;
+
+						/*
+						 * SplitMerge always uses root table action lists,
+						 * so action Vars reference root table attributes.
+						 * Use root table RTI as acceptable_rel.
+						 */
+						Index		acceptable_rel = sm->rootResultRelation;
+
+						foreach(lc2, mergeActionList)
+						{
+							MergeAction *action = (MergeAction *) lfirst(lc2);
+
+							action->targetList = fix_join_expr(root,
+															   action->targetList,
+															   NULL, itlist,
+															   acceptable_rel,
+															   rtoffset,
+															   NRM_EQUAL,
+															   NUM_EXEC_TLIST(plan));
+
+							action->qual = (Node *) fix_join_expr(root,
+																  (List *) action->qual,
+																  NULL, itlist,
+																  acceptable_rel,
+																  rtoffset,
+																  NRM_EQUAL,
+																  NUM_EXEC_QUAL(plan));
+						}
+					}
+					pfree(itlist);
+				}
+			}
 			break;
 		default:
 			elog(ERROR, "unrecognized node type: %d",
@@ -3185,7 +3239,91 @@ set_splitupdate_tlist_references(Plan *plan, int rtoffset)
 	/* We don't touch plan->qual here */
 }
 
+/*
+ * set_splitmerge_tlist_references
+ *    Like set_splitupdate_tlist_references, but handles the case where
+ *    hasSplitUpdate prepends N target-table columns before the child plan's
+ *    columns. Non-junk entries (positions 1..N) become OUTER_VAR references
+ *    to themselves (tle->resno), allowing the Motion node to pass them
+ *    through and ModifyTable to extract them via projection.
+ *    Junk entries (positions N+1..N+M) become OUTER_VAR references to
+ *    the child plan's output positions (tracked via child_resno).
+ *    Const entries (dropped columns) and DMLActionExpr are kept as-is.
+ */
+static void
+set_splitmerge_tlist_references(Plan *plan, int rtoffset)
+{
+	List	   *output_targetlist;
+	ListCell   *l;
+	int			child_resno = 0;
 
+	output_targetlist = NIL;
+	foreach(l, plan->targetlist)
+	{
+		TargetEntry *tle = (TargetEntry *) lfirst(l);
+		Var		   *oldvar = (Var *) tle->expr;
+		Var		   *newvar;
+
+		if (IsA(tle->expr, DMLActionExpr))
+		{
+			output_targetlist = lappend(output_targetlist, tle);
+			continue;
+		}
+		else if (IsA(tle->expr, Const))
+		{
+			/* Dropped column placeholder - keep as Const */
+			output_targetlist = lappend(output_targetlist, tle);
+			continue;
+		}
+
+		if (!tle->resjunk)
+		{
+			/*
+			 * Non-junk entry (target table column, position 1..N).
+			 * Create OUTER_VAR reference to tle->resno (self-referencing).
+			 * At runtime, SplitMerge fills these with actual INSERT values.
+			 * The Motion node passes them through, and ModifyTable extracts them.
+			 */
+			newvar = makeVar(OUTER_VAR,
+							 tle->resno,
+							 exprType((Node *) oldvar),
+							 exprTypmod((Node *) oldvar),
+							 exprCollation((Node *) oldvar),
+							 0);
+			newvar->varnosyn = 0;
+			newvar->varattnosyn = 0;
+		}
+		else
+		{
+			/*
+			 * Junk entry (subplan column, position N+1..N+M).
+			 * Create OUTER_VAR reference to the child plan's output position.
+			 */
+			child_resno++;
+			newvar = makeVar(OUTER_VAR,
+							 child_resno,
+							 exprType((Node *) oldvar),
+							 exprTypmod((Node *) oldvar),
+							 exprCollation((Node *) oldvar),
+							 0);
+			if (IsA(oldvar, Var))
+			{
+				newvar->varnosyn = oldvar->varnosyn + rtoffset;
+				newvar->varattnosyn = oldvar->varattnosyn;
+			}
+			else
+			{
+				newvar->varnosyn = 0;
+				newvar->varattnosyn = 0;
+			}
+		}
+
+		tle = flatCopyTargetEntry(tle);
+		tle->expr = (Expr *) newvar;
+		output_targetlist = lappend(output_targetlist, tle);
+	}
+	plan->targetlist = output_targetlist;
+}
 
 /*
  * build_tlist_index --- build an index data structure for a child tlist

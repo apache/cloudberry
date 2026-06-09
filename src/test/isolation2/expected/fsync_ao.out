@@ -13,11 +13,28 @@
 -- Set the GUC to perform replay of checkpoint records immediately.
 -- It speeds up the test.
 !\retcode gpconfig -c create_restartpoint_on_ckpt_record_replay -v on --skipvalidation;
+-- start_ignore
+20260601:18:43:09:246691 gpconfig:10-13-10-243:gpadmin-[INFO]:-completed successfully with parameters '-c create_restartpoint_on_ckpt_record_replay -v on --skipvalidation'
+
+-- end_ignore
 (exited with code 0)
 -- Set fsync on since we need to test the fsync code logic.
 !\retcode gpconfig -c fsync -v on --skipvalidation;
+-- start_ignore
+20260601:18:43:10:246738 gpconfig:10-13-10-243:gpadmin-[INFO]:-completed successfully with parameters '-c fsync -v on --skipvalidation'
+
+-- end_ignore
 (exited with code 0)
 !\retcode gpstop -u;
+-- start_ignore
+20260601:18:43:10:246785 gpstop:10-13-10-243:gpadmin-[INFO]:-Starting gpstop with args: -u
+20260601:18:43:10:246785 gpstop:10-13-10-243:gpadmin-[INFO]:-Gathering information and validating the environment...
+20260601:18:43:10:246785 gpstop:10-13-10-243:gpadmin-[INFO]:-Obtaining Cloudberry Coordinator catalog information
+20260601:18:43:10:246785 gpstop:10-13-10-243:gpadmin-[INFO]:-Obtaining Segment details from coordinator...
+20260601:18:43:10:246785 gpstop:10-13-10-243:gpadmin-[INFO]:-Cloudberry Version: 'postgres (Apache Cloudberry) 3.0.0-devel+dev.8521.g052d16bc73b build dev'
+20260601:18:43:10:246785 gpstop:10-13-10-243:gpadmin-[INFO]:-Signalling all postmaster processes to reload
+
+-- end_ignore
 (exited with code 0)
 
 create table fsync_ao(a int, b int) with (appendoptimized = true) distributed by (a);
@@ -86,8 +103,12 @@ select gp_wait_until_triggered_fault('restartpoint_guts', 2, dbid) from gp_segme
 -- mirror).  This should match the number of files for fsync_ao and fsync_co.
 -- select gp_wait_until_triggered_fault('ao_fsync_counter', 3, dbid)
 -- 	from gp_segment_configuration where content=0 and role='m';
--- select gp_inject_fault('ao_fsync_counter', 'status', dbid)
--- 	from gp_segment_configuration where content=0 and role='m';
+select gp_inject_fault('ao_fsync_counter', 'status', dbid) from gp_segment_configuration where content=0 and role='m';
+ gp_inject_fault                                                                                                                                                                                                        
+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Success: fault name:'ao_fsync_counter' fault type:'skip' ddl statement:'' database name:'' table name:'' start occurrence:'1' end occurrence:'-1' extra arg:'0' fault injection state:'triggered'  num times hit:'3' 
+ 
+(1 row)
 
 -- Test vacuum compaction with more than one segment file per table.
 -- Perform concurrent inserts before vacuum to get multiple segment
@@ -124,10 +145,10 @@ select segment_id, segno, state from gp_toolkit.__gp_aoseg('fsync_ao');
 ------------+-------+-------
  0          | 1     | 1     
  0          | 2     | 1     
- 1          | 1     | 1     
- 1          | 2     | 1     
  2          | 1     | 1     
  2          | 2     | 1     
+ 1          | 1     | 1     
+ 1          | 2     | 1     
 (6 rows)
 select segment_id, segno, column_num, physical_segno, state from gp_toolkit.__gp_aocsseg('fsync_co');
  segment_id | segno | column_num | physical_segno | state 
@@ -148,6 +169,12 @@ select segment_id, segno, column_num, physical_segno, state from gp_toolkit.__gp
 select segment_id, segno, column_num, physical_segno, state from gp_toolkit.__gp_aocsseg('ul_fsync_co');
  segment_id | segno | column_num | physical_segno | state 
 ------------+-------+------------+----------------+-------
+ 0          | 1     | 0          | 1              | 1     
+ 0          | 1     | 1          | 129            | 1     
+ 0          | 1     | 2          | 257            | 1     
+ 0          | 2     | 0          | 2              | 1     
+ 0          | 2     | 1          | 130            | 1     
+ 0          | 2     | 2          | 258            | 1     
  1          | 1     | 0          | 1              | 1     
  1          | 1     | 1          | 129            | 1     
  1          | 1     | 2          | 257            | 1     
@@ -160,12 +187,6 @@ select segment_id, segno, column_num, physical_segno, state from gp_toolkit.__gp
  2          | 2     | 0          | 2              | 1     
  2          | 2     | 1          | 130            | 1     
  2          | 2     | 2          | 258            | 1     
- 0          | 1     | 0          | 1              | 1     
- 0          | 1     | 1          | 129            | 1     
- 0          | 1     | 2          | 257            | 1     
- 0          | 2     | 0          | 2              | 1     
- 0          | 2     | 1          | 130            | 1     
- 0          | 2     | 2          | 258            | 1     
 (18 rows)
 vacuum fsync_ao;
 VACUUM
@@ -185,8 +206,12 @@ select gp_wait_until_triggered_fault('restartpoint_guts', 3, dbid) from gp_segme
 -- Expect the segment files that were updated by vacuum to be fsync'ed.
 -- select gp_wait_until_triggered_fault('ao_fsync_counter', 12, dbid)
 -- 	from gp_segment_configuration where content=0 and role='m';
--- select gp_inject_fault('ao_fsync_counter', 'status', dbid)
--- 	from gp_segment_configuration where content=0 and role='m';
+select gp_inject_fault('ao_fsync_counter', 'status', dbid) from gp_segment_configuration where content=0 and role='m';
+ gp_inject_fault                                                                                                                                                                                                        
+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Success: fault name:'ao_fsync_counter' fault type:'skip' ddl statement:'' database name:'' table name:'' start occurrence:'1' end occurrence:'-1' extra arg:'0' fault injection state:'triggered'  num times hit:'6' 
+ 
+(1 row)
 
 -- Test that replay of drop table operation removes fsync requests
 -- previously registed with the checkpointer.
@@ -224,8 +249,12 @@ select gp_wait_until_triggered_fault('restartpoint_guts', 4, dbid) from gp_segme
 -- not for fsync_co table because it was dropped after being updated.
 -- select gp_wait_until_triggered_fault('ao_fsync_counter', 13, dbid)
 -- 	from gp_segment_configuration where content=0 and role='m';
--- select gp_inject_fault('ao_fsync_counter', 'status', dbid)
--- 	from gp_segment_configuration where content=0 and role='m';
+select gp_inject_fault('ao_fsync_counter', 'status', dbid) from gp_segment_configuration where content=0 and role='m';
+ gp_inject_fault                                                                                                                                                                                                        
+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Success: fault name:'ao_fsync_counter' fault type:'skip' ddl statement:'' database name:'' table name:'' start occurrence:'1' end occurrence:'-1' extra arg:'0' fault injection state:'triggered'  num times hit:'7' 
+ 
+(1 row)
 
 -- Reset all faults.
 select gp_inject_fault('all', 'reset', dbid) from gp_segment_configuration where content = 0;
@@ -237,20 +266,24 @@ select gp_inject_fault('all', 'reset', dbid) from gp_segment_configuration where
 
 !\retcode gpconfig -r create_restartpoint_on_ckpt_record_replay --skipvalidation;
 -- start_ignore
-20191204:17:13:13:024809 gpconfig:asimmac:apraveen-[INFO]:-completed successfully with parameters '-r create_restartpoint_on_ckpt_record_replay --skipvalidation'
+20260601:18:43:12:246844 gpconfig:10-13-10-243:gpadmin-[INFO]:-completed successfully with parameters '-r create_restartpoint_on_ckpt_record_replay --skipvalidation'
 
 -- end_ignore
 (exited with code 0)
 !\retcode gpconfig -c fsync -v off --skipvalidation;
+-- start_ignore
+20260601:18:43:13:246900 gpconfig:10-13-10-243:gpadmin-[INFO]:-completed successfully with parameters '-c fsync -v off --skipvalidation'
+
+-- end_ignore
 (exited with code 0)
 !\retcode gpstop -u;
 -- start_ignore
-20191204:17:13:27:024927 gpstop:asimmac:apraveen-[INFO]:-Starting gpstop with args: -u
-20191204:17:13:27:024927 gpstop:asimmac:apraveen-[INFO]:-Gathering information and validating the environment...
-20191204:17:13:27:024927 gpstop:asimmac:apraveen-[INFO]:-Obtaining Cloudberry Master catalog information
-20191204:17:13:27:024927 gpstop:asimmac:apraveen-[INFO]:-Obtaining Segment details from master...
-20191204:17:13:27:024927 gpstop:asimmac:apraveen-[INFO]:-Cloudberry Version: 'postgres (Apache Cloudberry) 7.0.0-alpha.0+dev.5242.gb96afb4d9fa build dev'
-20191204:17:13:27:024927 gpstop:asimmac:apraveen-[INFO]:-Signalling all postmaster processes to reload
+20260601:18:43:13:246947 gpstop:10-13-10-243:gpadmin-[INFO]:-Starting gpstop with args: -u
+20260601:18:43:13:246947 gpstop:10-13-10-243:gpadmin-[INFO]:-Gathering information and validating the environment...
+20260601:18:43:13:246947 gpstop:10-13-10-243:gpadmin-[INFO]:-Obtaining Cloudberry Coordinator catalog information
+20260601:18:43:13:246947 gpstop:10-13-10-243:gpadmin-[INFO]:-Obtaining Segment details from coordinator...
+20260601:18:43:13:246947 gpstop:10-13-10-243:gpadmin-[INFO]:-Cloudberry Version: 'postgres (Apache Cloudberry) 3.0.0-devel+dev.8521.g052d16bc73b build dev'
+20260601:18:43:13:246947 gpstop:10-13-10-243:gpadmin-[INFO]:-Signalling all postmaster processes to reload
 
 -- end_ignore
 (exited with code 0)
