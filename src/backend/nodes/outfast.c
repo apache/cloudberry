@@ -402,7 +402,6 @@ _outBitString(StringInfo str, const BitString *node)
 		appendBinaryStringInfo(str, node->bsval, slen);
 }
 
-
 static void
 _outA_Const(StringInfo str, A_Const *node)
 {
@@ -412,7 +411,6 @@ _outA_Const(StringInfo str, A_Const *node)
 		_outNode(str, &node->val);
 	WRITE_LOCATION_FIELD(location);
 }
-
 
 static void
 _outConst(StringInfo str, Const *node)
@@ -440,7 +438,6 @@ _outBoolExpr(StringInfo str, BoolExpr *node)
 	WRITE_NODE_FIELD(args);
 	WRITE_LOCATION_FIELD(location);
 }
-
 
 static void
 _outA_Expr(StringInfo str, A_Expr *node)
@@ -520,7 +517,6 @@ _outA_Expr(StringInfo str, A_Expr *node)
 	WRITE_LOCATION_FIELD(location);
 }
 
-
 static void
 _outColumnDef(StringInfo str, const ColumnDef *node)
 {
@@ -554,7 +550,6 @@ _outColumnDef(StringInfo str, const ColumnDef *node)
 	WRITE_NODE_FIELD(fdwoptions);
 	WRITE_LOCATION_FIELD(location);
 }
-
 
 static void
 _outRangeTblEntry(StringInfo str, const RangeTblEntry *node)
@@ -644,7 +639,6 @@ _outRangeTblEntry(StringInfo str, const RangeTblEntry *node)
 	WRITE_BOOL_FIELD(forceDistRandom);
 }
 
-
 static void
 _outConstraint(StringInfo str, const Constraint *node)
 {
@@ -689,7 +683,6 @@ _outConstraint(StringInfo str, const Constraint *node)
 	WRITE_BOOL_FIELD(initially_valid);
 }
 
-
 static void
 _outPlannerGlobal(StringInfo str, const PlannerGlobal *node)
 {
@@ -717,7 +710,6 @@ _outPlannerGlobal(StringInfo str, const PlannerGlobal *node)
 	WRITE_BOOL_FIELD(parallelModeNeeded);
 	WRITE_CHAR_FIELD(maxParallelHazard);
 }
-
 
 static void
 _outPlannerInfo(StringInfo str, const PlannerInfo *node)
@@ -793,7 +785,6 @@ _outPlannerInfo(StringInfo str, const PlannerInfo *node)
 	WRITE_BOOL_FIELD(partColsUpdated);
 }
 
-
 static void
 _outForeignKeyOptInfo(StringInfo str, const ForeignKeyOptInfo *node)
 {
@@ -810,7 +801,6 @@ _outForeignKeyOptInfo(StringInfo str, const ForeignKeyOptInfo *node)
 	WRITE_INT_FIELD(nmatched_rcols);
 	WRITE_INT_FIELD(nmatched_ri);
 }
-
 
 static void
 _outEquivalenceClass(StringInfo str, const EquivalenceClass *node)

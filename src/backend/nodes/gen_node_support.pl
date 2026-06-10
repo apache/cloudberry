@@ -59,6 +59,7 @@ my @all_input_files = qw(
   nodes/execnodes.h
   access/amapi.h
   access/extprotocol.h
+  access/formatter.h
   access/sdir.h
   access/tableam.h
   access/tsmapi.h
@@ -94,6 +95,7 @@ my @nodetag_only_files = qw(
   nodes/execnodes.h
   access/amapi.h
   access/extprotocol.h
+  access/formatter.h
   access/sdir.h
   access/tableam.h
   access/tsmapi.h
@@ -127,7 +129,7 @@ my @nodetag_only_files = qw(
 # ABI stability during development.
 
 my $last_nodetag = 'WindowObjectData';
-my $last_nodetag_no = 585;
+my $last_nodetag_no = 586;
 
 # output file names
 my @output_files;
@@ -982,9 +984,9 @@ foreach my $n (@node_types)
 		. "\t\t\t\t_out${n}(str, obj);\n"
 		. "\t\t\t\tbreak;\n";
 
-	print $rfas "\tif (MATCH(\"$N\", "
-		. length($N) . "))\n"
-		. "\t\treturn (Node *) _read${n}();\n"
+	print $rfas "\t\t\tcase T_${n}:\n"
+		. "\t\t\t\treturn_value = _read${n}();\n"
+		. "\t\t\t\tbreak;\n"
 		unless $no_read;
 
 	next if elem $n, @custom_read_write;
@@ -1012,6 +1014,19 @@ _out${n}(StringInfo str, const $n *node)
 		  ? 'READ_LOCALS'
 		  : 'READ_LOCALS_NO_FIELDS';
 		print $rff "
+static $n *
+_read${n}(void)
+{
+\t$macro($n);
+
+";
+		
+		# for read fast
+		my $macro =
+			(@{ $node_type_info{$n}->{fields} } > 0)
+				? 'READ_LOCALS'
+				: 'READ_LOCALS_NO_FIELDS';
+		print $rfaf "
 static $n *
 _read${n}(void)
 {
@@ -1419,9 +1434,8 @@ _read${n}(void)
 		/* Lookup CustomScanMethods by CustomName */
 		char	   *custom_name;
 		const CustomScanMethods *methods;
-		token = pg_strtok(&length); /* skip methods: */
-		token = pg_strtok(&length); /* CustomName */
-		custom_name = nullable_string(token, length);
+		READ_STRING_VAR(custom_name);
+		/* find custom scan methods from hash table. */
 		methods = GetCustomScanMethods(custom_name, false);
 		local_node->methods = methods;
 	}

@@ -33,6 +33,7 @@
 
 #include <math.h>
 
+#include "nodes/extensible.h"
 #include "nodes/parsenodes.h"
 #include "nodes/plannodes.h"
 #include "nodes/readfuncs.h"
@@ -230,12 +231,405 @@ static Bitmapset *_readBitmapset(void);
  */
 static const char *read_str_ptr;
 
-/*
- * For most structs, we reuse the definitions from readfuncs.c. See comment
- * in readfuncs.c.
- */
-#define COMPILING_BINARY_FUNCS
-#include "readfuncs.c"
+static Const *
+_readConst(void)
+{
+	READ_LOCALS(Const);
+
+	READ_OID_FIELD(consttype);
+	READ_INT_FIELD(consttypmod);
+	READ_OID_FIELD(constcollid);
+	READ_INT_FIELD(constlen);
+	READ_BOOL_FIELD(constbyval);
+	READ_BOOL_FIELD(constisnull);
+	READ_LOCATION_FIELD(location);
+	if (local_node->constisnull)
+		local_node->constvalue = 0;
+	else
+		local_node->constvalue = readDatumBinary(local_node->constbyval);
+
+	READ_DONE();
+}
+
+static BoolExpr *
+_readBoolExpr(void)
+{
+	READ_LOCALS(BoolExpr);
+
+	READ_ENUM_FIELD(boolop, BoolExprType);
+
+	READ_NODE_FIELD(args);
+	READ_LOCATION_FIELD(location);
+
+	READ_DONE();
+}
+
+
+static A_Expr *
+_readA_Expr(void)
+{
+	READ_LOCALS(A_Expr);
+
+	READ_ENUM_FIELD(kind, A_Expr_Kind);
+
+	switch (local_node->kind)
+	{
+		case AEXPR_OP:
+
+			READ_NODE_FIELD(name);
+			break;
+		case AEXPR_OP_ANY:
+
+			READ_NODE_FIELD(name);
+
+			break;
+		case AEXPR_OP_ALL:
+
+			READ_NODE_FIELD(name);
+
+			break;
+		case AEXPR_DISTINCT:
+
+			READ_NODE_FIELD(name);
+			break;
+		case AEXPR_NOT_DISTINCT:
+
+			READ_NODE_FIELD(name);
+			break;
+		case AEXPR_NULLIF:
+
+			READ_NODE_FIELD(name);
+			break;
+
+		case AEXPR_IN:
+
+			READ_NODE_FIELD(name);
+			break;
+		case AEXPR_LIKE:
+
+			READ_NODE_FIELD(name);
+			break;
+		case AEXPR_ILIKE:
+
+			READ_NODE_FIELD(name);
+			break;
+		case AEXPR_SIMILAR:
+
+			READ_NODE_FIELD(name);
+			break;
+		case AEXPR_BETWEEN:
+
+			READ_NODE_FIELD(name);
+			break;
+		case AEXPR_NOT_BETWEEN:
+
+			READ_NODE_FIELD(name);
+			break;
+		case AEXPR_BETWEEN_SYM:
+
+			READ_NODE_FIELD(name);
+			break;
+		case AEXPR_NOT_BETWEEN_SYM:
+
+			READ_NODE_FIELD(name);
+			break;
+
+		default:
+			elog(ERROR,"Unable to understand A_Expr node ");
+			break;
+	}
+
+	READ_NODE_FIELD(lexpr);
+	READ_NODE_FIELD(rexpr);
+	READ_LOCATION_FIELD(location);
+
+	READ_DONE();
+}
+
+static A_Const *
+_readA_Const(void)
+{
+	READ_LOCALS(A_Const);
+
+	READ_BOOL_FIELD(isnull);
+
+	if (!local_node->isnull)
+	{
+		union ValUnion *tmp = readNodeBinary();
+
+		switch (nodeTag(tmp))
+		{
+			case T_Integer:
+				memcpy(&local_node->val, tmp, sizeof(Integer));
+				break;
+			case T_Float:
+				memcpy(&local_node->val, tmp, sizeof(Float));
+				break;
+			case T_Boolean:
+				memcpy(&local_node->val, tmp, sizeof(Boolean));
+				break;
+			case T_String:
+				memcpy(&local_node->val, tmp, sizeof(String));
+				break;
+			case T_BitString:
+				memcpy(&local_node->val, tmp, sizeof(BitString));
+				break;
+			default:
+				break;
+		}
+	}
+
+	READ_LOCATION_FIELD(location);   /*CDB*/
+	READ_DONE();
+}
+
+
+static ColumnDef *
+_readColumnDef(void)
+{
+	READ_LOCALS(ColumnDef);
+
+	READ_STRING_FIELD(colname);
+	READ_NODE_FIELD(typeName);
+	READ_STRING_FIELD(compression);
+	READ_INT_FIELD(inhcount);
+	READ_BOOL_FIELD(is_local);
+	READ_BOOL_FIELD(is_not_null);
+	READ_BOOL_FIELD(is_from_type);
+	READ_INT_FIELD(attnum);
+	READ_INT_FIELD(storage);
+	READ_STRING_FIELD(storage_name);
+	READ_NODE_FIELD(raw_default);
+	READ_NODE_FIELD(cooked_default);
+
+	READ_BOOL_FIELD(hasCookedMissingVal);
+	READ_BOOL_FIELD(missingIsNull);
+	if (local_node->hasCookedMissingVal && !local_node->missingIsNull)
+		local_node->missingVal = readDatum(false);
+
+	READ_CHAR_FIELD(identity);
+	READ_NODE_FIELD(identitySequence);
+	READ_CHAR_FIELD(generated);
+	READ_NODE_FIELD(collClause);
+	READ_OID_FIELD(collOid);
+	READ_NODE_FIELD(constraints);
+	READ_NODE_FIELD(encoding);
+	READ_NODE_FIELD(fdwoptions);
+	READ_LOCATION_FIELD(location);
+
+	READ_DONE();
+}
+
+static RangeTblEntry *
+_readRangeTblEntry(void)
+{
+	READ_LOCALS(RangeTblEntry);
+
+	/* put alias + eref first to make dump more legible */
+	READ_NODE_FIELD(alias);
+	READ_NODE_FIELD(eref);
+	READ_ENUM_FIELD(rtekind, RTEKind);
+	READ_BOOL_FIELD(relisivm);
+
+	switch (local_node->rtekind)
+	{
+		case RTE_RELATION:
+			READ_OID_FIELD(relid);
+			READ_CHAR_FIELD(relkind);
+			READ_INT_FIELD(rellockmode);
+			READ_NODE_FIELD(tablesample);
+			READ_UINT_FIELD(perminfoindex);
+			break;
+		case RTE_SUBQUERY:
+			READ_NODE_FIELD(subquery);
+			READ_BOOL_FIELD(security_barrier);
+			READ_OID_FIELD(relid);
+			READ_CHAR_FIELD(relkind);
+			READ_INT_FIELD(rellockmode);
+			READ_UINT_FIELD(perminfoindex);
+			break;
+		case RTE_JOIN:
+			READ_ENUM_FIELD(jointype, JoinType);
+			READ_INT_FIELD(joinmergedcols);
+			READ_NODE_FIELD(joinaliasvars);
+			READ_NODE_FIELD(joinleftcols);
+			READ_NODE_FIELD(joinrightcols);
+			READ_NODE_FIELD(join_using_alias);
+			break;
+		case RTE_FUNCTION:
+			READ_NODE_FIELD(functions);
+			READ_BOOL_FIELD(funcordinality);
+			break;
+		case RTE_TABLEFUNCTION:
+			READ_NODE_FIELD(subquery);
+			READ_NODE_FIELD(functions);
+			READ_BOOL_FIELD(funcordinality);
+			break;
+		case RTE_TABLEFUNC:
+			READ_NODE_FIELD(tablefunc);
+			/* The RTE must have a copy of the column type info, if any */
+			if (local_node->tablefunc)
+			{
+				TableFunc  *tf = local_node->tablefunc;
+
+				local_node->coltypes = tf->coltypes;
+				local_node->coltypmods = tf->coltypmods;
+				local_node->colcollations = tf->colcollations;
+			}
+			break;
+		case RTE_VALUES:
+			READ_NODE_FIELD(values_lists);
+			READ_NODE_FIELD(coltypes);
+			READ_NODE_FIELD(coltypmods);
+			READ_NODE_FIELD(colcollations);
+			break;
+		case RTE_CTE:
+			READ_STRING_FIELD(ctename);
+			READ_UINT_FIELD(ctelevelsup);
+			READ_BOOL_FIELD(self_reference);
+			READ_NODE_FIELD(coltypes);
+			READ_NODE_FIELD(coltypmods);
+			READ_NODE_FIELD(colcollations);
+			break;
+		case RTE_NAMEDTUPLESTORE:
+			READ_STRING_FIELD(enrname);
+			READ_FLOAT_FIELD(enrtuples);
+			READ_OID_FIELD(relid);
+			READ_NODE_FIELD(coltypes);
+			READ_NODE_FIELD(coltypmods);
+			READ_NODE_FIELD(colcollations);
+			break;
+		case RTE_RESULT:
+			/* no extra fields */
+			break;
+        case RTE_VOID:                                                  /*CDB*/
+            break;
+		default:
+			elog(ERROR, "unrecognized RTE kind: %d",
+				 (int) local_node->rtekind);
+			break;
+	}
+
+	READ_BOOL_FIELD(lateral);
+	READ_BOOL_FIELD(inh);
+	READ_BOOL_FIELD(inFromCl);
+	READ_NODE_FIELD(securityQuals);
+
+	READ_BOOL_FIELD(forceDistRandom);
+
+	READ_DONE();
+}
+
+static Constraint *
+_readConstraint(void)
+{
+	READ_LOCALS(Constraint);
+
+	READ_ENUM_FIELD(contype, ConstrType);
+	READ_STRING_FIELD(conname);			/* name, or NULL if unnamed */
+	READ_BOOL_FIELD(deferrable);
+	READ_BOOL_FIELD(initdeferred);
+	READ_LOCATION_FIELD(location);
+
+	READ_BOOL_FIELD(is_no_inherit);
+	READ_NODE_FIELD(raw_expr);
+	READ_STRING_FIELD(cooked_expr);
+	READ_CHAR_FIELD(generated_when);
+	READ_BOOL_FIELD(nulls_not_distinct);
+
+	READ_NODE_FIELD(keys);
+	READ_NODE_FIELD(including);
+
+	READ_NODE_FIELD(exclusions);
+
+	READ_NODE_FIELD(options);
+	READ_STRING_FIELD(indexname);
+	READ_STRING_FIELD(indexspace);
+	READ_BOOL_FIELD(reset_default_tblspc);
+
+	READ_STRING_FIELD(access_method);
+	READ_NODE_FIELD(where_clause);
+
+	READ_NODE_FIELD(pktable);
+	READ_NODE_FIELD(fk_attrs);
+	READ_NODE_FIELD(pk_attrs);
+	READ_CHAR_FIELD(fk_matchtype);
+	READ_CHAR_FIELD(fk_upd_action);
+	READ_CHAR_FIELD(fk_del_action);
+	READ_NODE_FIELD(old_conpfeqop);
+	READ_OID_FIELD(old_pktable_oid);
+
+	READ_BOOL_FIELD(skip_validation);
+	READ_BOOL_FIELD(initially_valid);
+
+	READ_DONE();
+}
+
+
+static ExtensibleNode *
+_readExtensibleNode(void)
+{
+	const ExtensibleNodeMethods *methods;
+	ExtensibleNode *local_node;
+	const char *extnodename;
+
+	char *str;
+	const char *save_strtok = NULL;
+	const char *save_begin = NULL;
+	const char ** save_strtok_ptr = &save_strtok;
+	const char ** save_begin_ptr = &save_begin;
+
+	READ_STRING_VAR(extnodename);
+	if (!extnodename)
+		elog(ERROR, "extnodename has to be supplied");
+	methods = GetExtensibleNodeMethods(extnodename, false);
+
+	local_node = (ExtensibleNode *) newNode(methods->node_size,
+											T_ExtensibleNode);
+	local_node->extnodename = extnodename;
+
+	READ_STRING_VAR(str);
+
+	/*
+	 * deserialize the private fields
+	 */
+
+	/* set the states for pg_strtok(), let methods->nodeRead() to process str */
+	save_strtok_states(save_strtok_ptr, save_begin_ptr);
+	set_strtok_states(str, str);
+
+	/* do reading */
+	methods->nodeRead(local_node);
+
+	/* set the states for pg_strtok() back */
+	set_strtok_states(save_strtok, save_begin);
+
+	READ_DONE();
+}
+
+static Bitmapset *
+_readBitmapset(void)
+{
+	Bitmapset  *bms = NULL;
+	int			nwords;
+	int			i;
+
+	memcpy(&nwords, read_str_ptr, sizeof(int)); read_str_ptr+=sizeof(int);
+	if (nwords==0)
+		return bms;
+
+	bms = palloc(offsetof(Bitmapset, words)+nwords*sizeof(bitmapword));
+	bms->nwords = nwords;
+	for (i = 0; i < nwords; i++)
+	{
+		memcpy(&bms->words[i], read_str_ptr, sizeof(bitmapword)); read_str_ptr+=sizeof(bitmapword);
+	}
+
+	return bms;
+}
+
+
+#include "readfast.funcs.c"
 
 /*
  * For some structs, we have to provide a read functions because it differs
@@ -300,1065 +694,9 @@ readNodeBinary(void)
 
 	switch(nt)
 	{
-			case T_PlannedStmt:
-				return_value = _readPlannedStmt();
-				break;
-			case T_QueryDispatchDesc:
-				return_value = _readQueryDispatchDesc();
-				break;
-			case T_OidAssignment:
-				return_value = _readOidAssignment();
-				break;
-			case T_Plan:
-				return_value = _readPlan();
-				break;
-			case T_Result:
-				return_value = _readResult();
-				break;
-			case T_ProjectSet:
-				return_value = _readProjectSet();
-				break;
-			case T_Append:
-				return_value = _readAppend();
-				break;
-			case T_MergeAppend:
-				return_value = _readMergeAppend();
-				break;
-			case T_Sequence:
-				return_value = _readSequence();
-				break;
-			case T_RecursiveUnion:
-				return_value = _readRecursiveUnion();
-				break;
-			case T_BitmapAnd:
-				return_value = _readBitmapAnd();
-				break;
-			case T_BitmapOr:
-				return_value = _readBitmapOr();
-				break;
-			case T_Gather:
-				return_value = _readGather();
-				break;
-			case T_GatherMerge:
-				return_value = _readGatherMerge();
-				break;
-			case T_Scan:
-				return_value = _readScan();
-				break;
-			case T_SeqScan:
-				return_value = _readSeqScan();
-				break;
-			case T_DynamicSeqScan:
-				return_value = _readDynamicSeqScan();
-				break;
-			case T_ExternalScanInfo:
-				return_value = _readExternalScanInfo();
-				break;
-			case T_IndexScan:
-				return_value = _readIndexScan();
-				break;
-			case T_IndexOnlyScan:
-				return_value = _readIndexOnlyScan();
-				break;
-			case T_DynamicIndexScan:
-				return_value = _readDynamicIndexScan();
-				break;
-			case T_DynamicIndexOnlyScan:
-				return_value = _readDynamicIndexOnlyScan();
-				break;
-			case T_BitmapIndexScan:
-				return_value = _readBitmapIndexScan();
-				break;
-			case T_DynamicBitmapIndexScan:
-				return_value = _readDynamicBitmapIndexScan();
-				break;
-			case T_BitmapHeapScan:
-				return_value = _readBitmapHeapScan();
-				break;
-			case T_DynamicBitmapHeapScan:
-				return_value = _readDynamicBitmapHeapScan();
-				break;
-			case T_CteScan:
-				return_value = _readCteScan();
-				break;
-			case T_NamedTuplestoreScan:
-				return_value = _readNamedTuplestoreScan();
-				break;
-			case T_WorkTableScan:
-				return_value = _readWorkTableScan();
-				break;
-			case T_TidScan:
-				return_value = _readTidScan();
-				break;
-			case T_TidRangeScan:
-				return_value = _readTidRangeScan();
-				break;
-			case T_SubqueryScan:
-				return_value = _readSubqueryScan();
-				break;
-			case T_FunctionScan:
-				return_value = _readFunctionScan();
-				break;
-			case T_TableFuncScan:
-				return_value = _readTableFuncScan();
-				break;
-			case T_ValuesScan:
-				return_value = _readValuesScan();
-				break;
-			case T_ForeignScan:
-				return_value = _readForeignScan();
-				break;
-			case T_DynamicForeignScan:
-				return_value = _readDynamicForeignScan();
-				break;
-			case T_CustomScan:
-				return_value = _readCustomScan();
-				break;
-			case T_SampleScan:
-				return_value = _readSampleScan();
-				break;
-			case T_Join:
-				return_value = _readJoin();
-				break;
-			case T_NestLoop:
-				return_value = _readNestLoop();
-				break;
-			case T_MergeJoin:
-				return_value = _readMergeJoin();
-				break;
-			case T_HashJoin:
-				return_value = _readHashJoin();
-				break;
-			case T_Agg:
-				return_value = _readAgg();
-				break;
-			case T_TupleSplit:
-				return_value = _readTupleSplit();
-				break;
-			case T_DQAExpr:
-				return_value = _readDQAExpr();
-				break;
-			case T_WindowAgg:
-				return_value = _readWindowAgg();
-				break;
-			case T_WindowHashAgg:
-				return_value = _readWindowHashAgg();
-				break;
-			case T_TableFunctionScan:
-				return_value = _readTableFunctionScan();
-				break;
-			case T_Material:
-				return_value = _readMaterial();
-				break;
-			case T_Memoize:
-				return_value = _readMemoize();
-				break;
-			case T_ShareInputScan:
-				return_value = _readShareInputScan();
-				break;
-			case T_Sort:
-				return_value = _readSort();
-				break;
-			case T_IncrementalSort:
-				return_value = _readIncrementalSort();
-				break;
-			case T_Unique:
-				return_value = _readUnique();
-				break;
-			case T_SetOp:
-				return_value = _readSetOp();
-				break;
-			case T_RuntimeFilter:
-				return_value = _readRuntimeFilter();
-				break;
-			case T_Limit:
-				return_value = _readLimit();
-				break;
-			case T_NestLoopParam:
-				return_value = _readNestLoopParam();
-				break;
-			case T_PlanRowMark:
-				return_value = _readPlanRowMark();
-				break;
-			case T_PartitionPruneInfo:
-				return_value = _readPartitionPruneInfo();
-				break;
-			case T_PartitionedRelPruneInfo:
-				return_value = _readPartitionedRelPruneInfo();
-				break;
-			case T_PartitionPruneStepOp:
-				return_value = _readPartitionPruneStepOp();
-				break;
-			case T_PartitionPruneStepCombine:
-				return_value = _readPartitionPruneStepCombine();
-				break;
-			case T_PlanInvalItem:
-				return_value = _readPlanInvalItem();
-				break;
-			case T_Hash:
-				return_value = _readHash();
-				break;
-			case T_Motion:
-				return_value = _readMotion();
-				break;
-			case T_SplitUpdate:
-				return_value = _readSplitUpdate();
-				break;
-			case T_SplitMerge:
-				return_value = _readSplitMerge();
-				break;
-			case T_AssertOp:
-				return_value = _readAssertOp();
-				break;
-			case T_PartitionSelector:
-				return_value = _readPartitionSelector();
-				break;
-			case T_GpPartDefElem:
-				return_value = _readGpPartDefElem();
-				break;
-			case T_Alias:
-				return_value = _readAlias();
-				break;
-			case T_RangeVar:
-				return_value = _readRangeVar();
-				break;
-			case T_TableFunc:
-				return_value = _readTableFunc();
-				break;
-			case T_IntoClause:
-				return_value = _readIntoClause();
-				break;
-			case T_CopyIntoClause:
-				return_value = _readCopyIntoClause();
-				break;
-			case T_RefreshClause:
-				return_value = _readRefreshClause();
-				break;
-			case T_Var:
-				return_value = _readVar();
-				break;
-			case T_Const:
-				return_value = _readConst();
-				break;
-			case T_Param:
-				return_value = _readParam();
-				break;
-			case T_Aggref:
-				return_value = _readAggref();
-				break;
-			case T_GroupingFunc:
-				return_value = _readGroupingFunc();
-				break;
-			case T_GroupId:
-				return_value = _readGroupId();
-				break;
-			case T_GroupingSetId:
-				return_value = _readGroupingSetId();
-				break;
-			case T_WindowFunc:
-				return_value = _readWindowFunc();
-				break;
-			case T_SubscriptingRef:
-				return_value = _readSubscriptingRef();
-				break;
-			case T_FuncExpr:
-				return_value = _readFuncExpr();
-				break;
-			case T_NamedArgExpr:
-				return_value = _readNamedArgExpr();
-				break;
-			case T_OpExpr:
-				return_value = _readOpExpr();
-				break;
-			case T_DistinctExpr:
-				return_value = _readDistinctExpr();
-				break;
-			case T_ScalarArrayOpExpr:
-				return_value = _readScalarArrayOpExpr();
-				break;
-			case T_BoolExpr:
-				return_value = _readBoolExpr();
-				break;
-			case T_SubLink:
-				return_value = _readSubLink();
-				break;
-			case T_SubPlan:
-				return_value = _readSubPlan();
-				break;
-			case T_AlternativeSubPlan:
-				return_value = _readAlternativeSubPlan();
-				break;
-			case T_FieldSelect:
-				return_value = _readFieldSelect();
-				break;
-			case T_FieldStore:
-				return_value = _readFieldStore();
-				break;
-			case T_RelabelType:
-				return_value = _readRelabelType();
-				break;
-			case T_CoerceViaIO:
-				return_value = _readCoerceViaIO();
-				break;
-			case T_ArrayCoerceExpr:
-				return_value = _readArrayCoerceExpr();
-				break;
-			case T_ConvertRowtypeExpr:
-				return_value = _readConvertRowtypeExpr();
-				break;
-			case T_CollateExpr:
-				return_value = _readCollateExpr();
-				break;
-			case T_CaseExpr:
-				return_value = _readCaseExpr();
-				break;
-			case T_CaseWhen:
-				return_value = _readCaseWhen();
-				break;
-			case T_CaseTestExpr:
-				return_value = _readCaseTestExpr();
-				break;
-			case T_ArrayExpr:
-				return_value = _readArrayExpr();
-				break;
-			case T_A_ArrayExpr:
-				return_value = _readA_ArrayExpr();
-				break;
-			case T_RowExpr:
-				return_value = _readRowExpr();
-				break;
-			case T_RowCompareExpr:
-				return_value = _readRowCompareExpr();
-				break;
-			case T_CoalesceExpr:
-				return_value = _readCoalesceExpr();
-				break;
-			case T_MinMaxExpr:
-				return_value = _readMinMaxExpr();
-				break;
-			case T_NullIfExpr:
-				return_value = _readNullIfExpr();
-				break;
-			case T_NullTest:
-				return_value = _readNullTest();
-				break;
-			case T_BooleanTest:
-				return_value = _readBooleanTest();
-				break;
-			case T_SQLValueFunction:
-				return_value = _readSQLValueFunction();
-				break;
-			case T_XmlExpr:
-				return_value = _readXmlExpr();
-				break;
-			case T_CoerceToDomain:
-				return_value = _readCoerceToDomain();
-				break;
-			case T_CoerceToDomainValue:
-				return_value = _readCoerceToDomainValue();
-				break;
-			case T_SetToDefault:
-				return_value = _readSetToDefault();
-				break;
-			case T_CurrentOfExpr:
-				return_value = _readCurrentOfExpr();
-				break;
-			case T_NextValueExpr:
-				return_value = _readNextValueExpr();
-				break;
-			case T_InferenceElem:
-				return_value = _readInferenceElem();
-				break;
-			case T_TargetEntry:
-				return_value = _readTargetEntry();
-				break;
-			case T_RangeTblRef:
-				return_value = _readRangeTblRef();
-				break;
-			case T_RangeTblFunction:
-				return_value = _readRangeTblFunction();
-				break;
-			case T_TableSampleClause:
-				return_value = _readTableSampleClause();
-				break;
-			case T_JoinExpr:
-				return_value = _readJoinExpr();
-				break;
-			case T_FromExpr:
-				return_value = _readFromExpr();
-				break;
-			case T_OnConflictExpr:
-				return_value = _readOnConflictExpr();
-				break;
-			case T_AppendRelInfo:
-				return_value = _readAppendRelInfo();
-				break;
-			case T_GrantStmt:
-				return_value = _readGrantStmt();
-				break;
-			case T_AccessPriv:
-				return_value = _readAccessPriv();
-				break;
-			case T_ObjectWithArgs:
-				return_value = _readObjectWithArgs();
-				break;
-			case T_GrantRoleStmt:
-				return_value = _readGrantRoleStmt();
-				break;
-			case T_LockStmt:
-				return_value = _readLockStmt();
-				break;
 
-			case T_PartitionSpec:
-				return_value = _readPartitionSpec();
-				break;
-			case T_PartitionElem:
-				return_value = _readPartitionElem();
-				break;
-			case T_PartitionRangeDatum:
-				return_value = _readPartitionRangeDatum();
-				break;
-			case T_PartitionCmd:
-				return_value = _readPartitionCmd();
-				break;
-			case T_GpAlterPartitionId:
-				return_value = _readGpAlterPartitionId();
-				break;
-			case T_DistributionKeyElem:
-				return_value = _readDistributionKeyElem();
-				break;
-			case T_PartitionBoundSpec:
-				return_value = _readPartitionBoundSpec();
-				break;
-			case T_RestrictInfo:
-				return_value = _readRestrictInfo();
-				break;
-			case T_ExtensibleNode:
-				return_value = _readExtensibleNode();
-				break;
-			case T_CreateStmt:
-				return_value = _readCreateStmt();
-				break;
-			case T_CreateForeignTableStmt:
-				return_value = _readCreateForeignTableStmt();
-				break;
-			case T_ColumnReferenceStorageDirective:
-				return_value = _readColumnReferenceStorageDirective();
-				break;
-			case T_SegfileMapNode:
-				return_value = _readSegfileMapNode();
-				break;
-			case T_ExtTableTypeDesc:
-				return_value = _readExtTableTypeDesc();
-				break;
-			case T_CreateExternalStmt:
-				return_value = _readCreateExternalStmt();
-				break;
-			case T_CreateExtensionStmt:
-				return_value = _readCreateExtensionStmt();
-				break;
-			case T_IndexStmt:
-				return_value = _readIndexStmt();
-				break;
-			case T_ReindexStmt:
-				return_value = _readReindexStmt();
-				break;
-			case T_ReindexIndexInfo:
-				return_value = _readReindexIndexInfo();
-				break;
+#include "readfast.switch.c"
 
-			case T_ConstraintsSetStmt:
-				return_value = _readConstraintsSetStmt();
-				break;
-
-			case T_CreateFunctionStmt:
-				return_value = _readCreateFunctionStmt();
-				break;
-			case T_FunctionParameter:
-				return_value = _readFunctionParameter();
-				break;
-			case T_AlterFunctionStmt:
-				return_value = _readAlterFunctionStmt();
-				break;
-
-			case T_DefineStmt:
-				return_value = _readDefineStmt();
-				break;
-
-			case T_CompositeTypeStmt:
-				return_value = _readCompositeTypeStmt();
-				break;
-			case T_CreateEnumStmt:
-				return_value = _readCreateEnumStmt();
-				break;
-			case T_CreateRangeStmt:
-				return_value = _readCreateRangeStmt();
-				break;
-			case T_AlterEnumStmt:
-				return_value = _readAlterEnumStmt();
-				break;
-			case T_CreateCastStmt:
-				return_value = _readCreateCastStmt();
-				break;
-			case T_CreateOpClassStmt:
-				return_value = _readCreateOpClassStmt();
-				break;
-			case T_CreateOpClassItem:
-				return_value = _readCreateOpClassItem();
-				break;
-			case T_CreateOpFamilyStmt:
-				return_value = _readCreateOpFamilyStmt();
-				break;
-			case T_CreateStatsStmt:
-				return_value = _readCreateStatsStmt();
-				break;
-			case T_AlterOpFamilyStmt:
-				return_value = _readAlterOpFamilyStmt();
-				break;
-			case T_CreateConversionStmt:
-				return_value = _readCreateConversionStmt();
-				break;
-			case T_ViewStmt:
-				return_value = _readViewStmt();
-				break;
-			case T_RuleStmt:
-				return_value = _readRuleStmt();
-				break;
-			case T_DropStmt:
-				return_value = _readDropStmt();
-				break;
-
-			case T_DropOwnedStmt:
-				return_value = _readDropOwnedStmt();
-				break;
-			case T_ReassignOwnedStmt:
-				return_value = _readReassignOwnedStmt();
-				break;
-
-			case T_TruncateStmt:
-				return_value = _readTruncateStmt();
-				break;
-
-			case T_ReplicaIdentityStmt:
-				return_value = _readReplicaIdentityStmt();
-				break;
-			case T_AlterTableStmt:
-				return_value = _readAlterTableStmt();
-				break;
-			case T_AlterTableCmd:
-				return_value = _readAlterTableCmd();
-				break;
-			case T_AlteredTableInfo:
-				return_value = _readAlteredTableInfo();
-				break;
-			case T_NewConstraint:
-				return_value = _readNewConstraint();
-				break;
-			case T_NewColumnValue:
-				return_value = _readNewColumnValue();
-				break;
-
-			case T_CreateRoleStmt:
-				return_value = _readCreateRoleStmt();
-				break;
-			case T_DropRoleStmt:
-				return_value = _readDropRoleStmt();
-				break;
-			case T_AlterRoleStmt:
-				return_value = _readAlterRoleStmt();
-				break;
-			case T_AlterRoleSetStmt:
-				return_value = _readAlterRoleSetStmt();
-				break;
-
-			case T_CreateProfileStmt:
-				return_value = _readCreateProfileStmt();
-				break;
-			case T_AlterProfileStmt:
-				return_value = _readAlterProfileStmt();
-				break;
-			case T_DropProfileStmt:
-				return_value = _readDropProfileStmt();
-				break;
-
-			case T_AlterObjectDependsStmt:
-				return_value = _readAlterObjectDependsStmt();
-				break;
-
-			case T_AlterSystemStmt:
-				return_value = _readAlterSystemStmt();
-				break;
-
-			case T_AlterObjectSchemaStmt:
-				return_value = _readAlterObjectSchemaStmt();
-				break;
-
-			case T_AlterOwnerStmt:
-				return_value = _readAlterOwnerStmt();
-				break;
-
-			case T_RenameStmt:
-				return_value = _readRenameStmt();
-				break;
-
-			case T_CreateSeqStmt:
-				return_value = _readCreateSeqStmt();
-				break;
-			case T_AlterSeqStmt:
-				return_value = _readAlterSeqStmt();
-				break;
-			case T_ClusterStmt:
-				return_value = _readClusterStmt();
-				break;
-			case T_CreatedbStmt:
-				return_value = _readCreatedbStmt();
-				break;
-			case T_DropdbStmt:
-				return_value = _readDropdbStmt();
-				break;
-			case T_CreateDomainStmt:
-				return_value = _readCreateDomainStmt();
-				break;
-			case T_AlterDomainStmt:
-				return_value = _readAlterDomainStmt();
-				break;
-			case T_AlterDefaultPrivilegesStmt:
-				return_value = _readAlterDefaultPrivilegesStmt();
-				break;
-
-			case T_NotifyStmt:
-				return_value = _readNotifyStmt();
-				break;
-			case T_DeclareCursorStmt:
-				return_value = _readDeclareCursorStmt();
-				break;
-
-			case T_SingleRowErrorDesc:
-				return_value = _readSingleRowErrorDesc();
-				break;
-			case T_CopyStmt:
-				return_value = _readCopyStmt();
-				break;
-			case T_SelectStmt:
-				return_value = _readSelectStmt();
-				break;
-			case T_InsertStmt:
-				return_value = _readInsertStmt();
-				break;
-			case T_DeleteStmt:
-				return_value = _readDeleteStmt();
-				break;
-			case T_UpdateStmt:
-				return_value = _readUpdateStmt();
-				break;
-			case T_ColumnDef:
-				return_value = _readColumnDef();
-				break;
-			case T_TypeName:
-				return_value = _readTypeName();
-				break;
-			case T_SortBy:
-				return_value = _readSortBy();
-				break;
-			case T_TypeCast:
-				return_value = _readTypeCast();
-				break;
-			case T_CollateClause:
-				return_value = _readCollateClause();
-				break;
-			case T_IndexElem:
-				return_value = _readIndexElem();
-				break;
-			case T_Query:
-				return_value = _readQuery();
-				break;
-			case T_WithCheckOption:
-				return_value = _readWithCheckOption();
-				break;
-			case T_SortGroupClause:
-				return_value = _readSortGroupClause();
-				break;
-			case T_DMLActionExpr:
-				return_value = _readDMLActionExpr();
-				break;
-			case T_GroupingSet:
-				return_value = _readGroupingSet();
-				break;
-			case T_WindowClause:
-				return_value = _readWindowClause();
-				break;
-			case T_RowMarkClause:
-				return_value = _readRowMarkClause();
-				break;
-			case T_CTESearchClause:
-				return_value = _readCTESearchClause();
-				break;
-			case T_CTECycleClause:
-				return_value = _readCTECycleClause();
-				break;
-			case T_WithClause:
-				return_value = _readWithClause();
-				break;
-			case T_CommonTableExpr:
-				return_value = _readCommonTableExpr();
-				break;
-			case T_RoleSpec:
-				return_value = _readRoleSpec();
-				break;
-			case T_SetOperationStmt:
-				return_value = _readSetOperationStmt();
-				break;
-			case T_RangeTblEntry:
-				return_value = _readRangeTblEntry();
-				break;
-			case T_A_Expr:
-				return_value = _readAExpr();
-				break;
-			case T_ColumnRef:
-				return_value = _readColumnRef();
-				break;
-			case T_ParamRef:
-				return_value = _readParamRef();
-				break;
-			case T_Integer:
-				return_value = _readInteger();
-				break;
-			case T_Boolean:
-				return_value = _readBoolean();
-				break;
-			case T_Float:
-				return_value = _readFloat();
-				break;
-			case T_String:
-				return_value = _readString();
-				break;
-			case T_BitString:
-				return_value = _readBitString();
-				break;
-			case T_A_Const:
-				return_value = _readAConst();
-				break;
-			case T_A_Star:
-				return_value = _readA_Star();
-				break;
-			case T_A_Indices:
-				return_value = _readA_Indices();
-				break;
-			case T_A_Indirection:
-				return_value = _readA_Indirection();
-				break;
-			case T_ResTarget:
-				return_value = _readResTarget();
-				break;
-			case T_MultiAssignRef:
-				return_value = _readMultiAssignRef();
-				break;
-			case T_Constraint:
-				return_value = _readConstraint();
-				break;
-			case T_FuncCall:
-				return_value = _readFuncCall();
-				break;
-			case T_DefElem:
-				return_value = _readDefElem();
-				break;
-			case T_CreateSchemaStmt:
-				return_value = _readCreateSchemaStmt();
-				break;
-			case T_AlterSchemaStmt:
-				return_value = _readAlterSchemaStmt();
-				break;
-			case T_CreateTagStmt:
-				return_value = _readCreateTagStmt();
-				break;
-			case T_AlterTagStmt:
-				return_value = _readAlterTagStmt();
-				break;
-			case T_DropTagStmt:
-				return_value = _readDropTagStmt();
-				break;
-			case T_CreatePLangStmt:
-				return_value = _readCreatePLangStmt();
-				break;
-			case T_VacuumStmt:
-				return_value = _readVacuumStmt();
-				break;
-			case T_VacuumRelation:
-				return_value = _readVacuumRelation();
-				break;
-			case T_CdbProcess:
-				return_value = _readCdbProcess();
-				break;
-			case T_SliceTable:
-				return_value = _readSliceTable();
-				break;
-			case T_CursorPosInfo:
-				return_value = _readCursorPosInfo();
-				break;
-			case T_VariableSetStmt:
-				return_value = _readVariableSetStmt();
-				break;
-			case T_CreateTrigStmt:
-				return_value = _readCreateTrigStmt();
-				break;
-			case T_TriggerTransition:
-				return_value = _readTriggerTransition();
-				break;
-
-			case T_CreateTableSpaceStmt:
-				return_value = _readCreateTableSpaceStmt();
-				break;
-			case T_AlterTableSpaceOptionsStmt:
-				return_value = _readAlterTableSpaceOptionsStmt();
-				break;
-			case T_DropTableSpaceStmt:
-				return_value = _readDropTableSpaceStmt();
-				break;
-
-			case T_CreateQueueStmt:
-				return_value = _readCreateQueueStmt();
-				break;
-			case T_AlterQueueStmt:
-				return_value = _readAlterQueueStmt();
-				break;
-			case T_DropQueueStmt:
-				return_value = _readDropQueueStmt();
-				break;
-
-			case T_CreateResourceGroupStmt:
-				return_value = _readCreateResourceGroupStmt();
-				break;
-			case T_DropResourceGroupStmt:
-				return_value = _readDropResourceGroupStmt();
-				break;
-			case T_AlterResourceGroupStmt:
-				return_value = _readAlterResourceGroupStmt();
-				break;
-
-			case T_CommentStmt:
-				return_value = _readCommentStmt();
-				break;
-			case T_DenyLoginInterval:
-				return_value = _readDenyLoginInterval();
-				break;
-			case T_DenyLoginPoint:
-				return_value = _readDenyLoginPoint();
-				break;
-
-			case T_TableValueExpr:
-				return_value = _readTableValueExpr();
-				break;
-
-			case T_AlterTypeStmt:
-				return_value = _readAlterTypeStmt();
-				break;
-			case T_AlterExtensionStmt:
-				return_value = _readAlterExtensionStmt();
-				break;
-			case T_AlterExtensionContentsStmt:
-				return_value = _readAlterExtensionContentsStmt();
-				break;
-
-			case T_TupleDescNode:
-				return_value = _readTupleDescNode();
-				break;
-			case T_SerializedParams:
-				return_value = _readSerializedParams();
-				break;
-
-			case T_AlterTSConfigurationStmt:
-				return_value = _readAlterTSConfigurationStmt();
-				break;
-			case T_AlterTSDictionaryStmt:
-				return_value = _readAlterTSDictionaryStmt();
-				break;
-
-			case T_CookedConstraint:
-				return_value = _readCookedConstraint();
-				break;
-
-			case T_DropUserMappingStmt:
-				return_value = _readDropUserMappingStmt();
-				break;
-			case T_AlterUserMappingStmt:
-				return_value = _readAlterUserMappingStmt();
-				break;
-			case T_CreateUserMappingStmt:
-				return_value = _readCreateUserMappingStmt();
-				break;
-			case T_CreateStorageUserMappingStmt:
-				return_value = _readCreateStorageUserMappingStmt();
-				break;
-			case T_AlterStorageUserMappingStmt:
-				return_value = _readAlterStorageUserMappingStmt();
-				break;
-			case T_DropStorageUserMappingStmt:
-				return_value = _readDropStorageUserMappingStmt();
-				break;
-			case T_AlterForeignServerStmt:
-				return_value = _readAlterForeignServerStmt();
-				break;
-			case T_CreateForeignServerStmt:
-				return_value = _readCreateForeignServerStmt();
-				break;
-			case T_AddForeignSegStmt:
-				return_value = _readAddForeignSegStmt();
-				break;
-			case T_AlterFdwStmt:
-				return_value = _readAlterFdwStmt();
-				break;
-			case T_CreateStorageServerStmt:
-				return_value = _readCreateStorageServerStmt();
-				break;
-			case T_AlterStorageServerStmt:
-				return_value = _readAlterStorageServerStmt();
-				break;
-			case T_DropStorageServerStmt:
-				return_value = _readDropStorageServerStmt();
-				break;
-			case T_CreateFdwStmt:
-				return_value = _readCreateFdwStmt();
-				break;
-			case T_ModifyTable:
-				return_value = _readModifyTable();
-				break;
-			case T_LockRows:
-				return_value = _readLockRows();
-				break;
-			case T_GpPolicy:
-				return_value = _readGpPolicy();
-				break;
-			case T_DistributedBy:
-				return_value = _readDistributedBy();
-				break;
-			case T_ImportForeignSchemaStmt:
-				return_value = _readImportForeignSchemaStmt();
-				break;
-			case T_AlterTableMoveAllStmt:
-				return_value = _readAlterTableMoveAllStmt();
-				break;
-
-			case T_CreatePublicationStmt:
-				return_value = _readCreatePublicationStmt();
-				break;
-			case T_AlterPublicationStmt:
-				return_value = _readAlterPublicationStmt();
-				break;
-			case T_CreateSubscriptionStmt:
-				return_value = _readCreateSubscriptionStmt();
-				break;
-			case T_DropSubscriptionStmt:
-				return_value = _readDropSubscriptionStmt();
-				break;
-			case T_AlterSubscriptionStmt:
-				return_value = _readAlterSubscriptionStmt();
-				break;
-
-			case T_CreatePolicyStmt:
-				return_value = _readCreatePolicyStmt();
-				break;
-			case T_AlterPolicyStmt:
-				return_value = _readAlterPolicyStmt();
-				break;
-			case T_CreateTransformStmt:
-				return_value = _readCreateTransformStmt();
-				break;
-			case T_CreateAmStmt:
-				return_value = _readCreateAmStmt();
-				break;
-			case T_LockingClause:
-				return_value = _readLockingClause();
-				break;
-			case T_AggExprId:
-				return_value = _readAggExprId();
-				break;
-			case T_RowIdExpr:
-				return_value = _readRowIdExpr();
-				break;
-			case T_GpDropPartitionCmd:
-				return_value = _readGpDropPartitionCmd();
-				break;
-			case T_GpPartitionRangeSpec:
-				return_value = _readGpPartitionRangeSpec();
-				break;
-			case T_GpPartitionRangeItem:
-				return_value = _readGpPartitionRangeItem();
-				break;
-			case T_GpPartitionListSpec:
-				return_value = _readGpPartitionListSpec();
-				break;
-			case T_GpAlterPartitionCmd:
-				return_value = _readGpAlterPartitionCmd();
-				break;
-			case T_GpPartitionDefinition:
-				return_value = _readGpPartitionDefinition();
-				break;
-			case T_GpSplitPartitionCmd:
-				return_value = _readGpSplitPartitionCmd();
-				break;
-			case T_ReturnStmt:
-				return_value = _readReturnStmt();
-				break;
-			case T_StatsElem:
-				return_value = _readStatsElem();
-				break;
-			case T_EphemeralNamedRelationInfo:
-				return_value = _readEphemeralNamedRelationInfo();
-				break;
-			case T_AlterDatabaseStmt:
-				return_value = _readAlterDatabaseStmt();
-				break;
-			case T_CreateDirectoryTableStmt:
-				return_value = _readCreateDirectoryTableStmt();
-				break;
-			case T_AlterDirectoryTableStmt:
-				return_value = _readAlterDirectoryTableStmt();
-				break;
-			case T_DropDirectoryTableStmt:
-				return_value = _readDropDirectoryTableStmt();
-				break;
-			case T_CreateTaskStmt:
-				return_value = _readCreateTaskStmt();
-				break;
-			case T_AlterTaskStmt:
-				return_value = _readAlterTaskStmt();
-				break;
-			case T_DropTaskStmt:
-				return_value = _readDropTaskStmt();
-				break;
-			case T_RTEPermissionInfo:
-				return_value = _readRTEPermissionInfo();
-				break;
-			case T_MergeAction:
-				return_value = _readMergeAction();
-				break;
-			case T_PublicationObjSpec:
-				return_value = _readPublicationObjSpec();
-				break;
-			case T_PublicationTable:
-				return_value = _readPublicationTable();
-				break;
-			case T_WindowDef:
-				return_value = _readWindowDef();
-				break;
-			case T_JsonConstructorExpr:
-				return_value = _readJsonConstructorExpr();
-				break;
-			case T_JsonIsPredicate:
-				return_value = _readJsonIsPredicate();
-				break;
-			case T_JsonReturning:
-				return_value = _readJsonReturning();
-				break;
-			case T_JsonValueExpr:
-				return_value = _readJsonValueExpr();
-				break;
-			case T_JsonFormat:
-				return_value = _readJsonFormat();
-				break;
-			case T_PlaceHolderVar:
-				return_value = _readPlaceHolderVar();
-				break;
 			default:
 				return_value = NULL; /* keep the compiler silent */
 				elog(ERROR, "could not deserialize unrecognized node type: %d",

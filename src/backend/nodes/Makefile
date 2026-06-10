@@ -49,6 +49,7 @@ node_headers = \
 	nodes/execnodes.h \
 	access/amapi.h \
 	access/extprotocol.h \
+	access/formatter.h \
 	access/sdir.h \
 	access/tableam.h \
 	access/tsmapi.h \
