@@ -41,16 +41,18 @@
  */
 CATALOG(pg_task_run_history,9993,TaskRunHistoryRelationId) BKI_SHARED_RELATION
 {
-	Oid         runid;
-	Oid         jobid;
+	Oid			runid;
+	Oid			jobid;
 	int32		job_pid BKI_DEFAULT(0);
+	timestamptz start_time BKI_FORCE_NULL;
+	timestamptz end_time BKI_FORCE_NULL;
+#ifdef CATALOG_VARLEN			/* variable-length fields start here */
 	text		database;
 	text		username;
 	text		command;
 	text		status;
-    text        return_message;
-    timestamptz start_time;
-    timestamptz end_time;
+	text		return_message BKI_FORCE_NULL;
+#endif
 } FormData_pg_task_run_history;
 
 typedef FormData_pg_task_run_history *Form_pg_task_run_history;
