@@ -34,6 +34,7 @@
 #include "commands/resgroupcmds.h"
 #include "miscadmin.h"
 #include "nodes/pg_list.h"
+#include "utils/acl.h"
 #include "utils/builtins.h"
 #include "utils/datetime.h"
 #include "utils/fmgroids.h"
@@ -103,11 +104,11 @@ CreateResourceGroup(CreateResourceGroupStmt *stmt)
 	int			nResGroups;
 	MemoryContext oldContext;
 
-	/* Permission check - only superuser can create groups. */
-	if (!superuser())
+	/* Permission check - only superuser or mdb_admin can create groups. */
+	if (!is_member_of_role(GetUserId(), MDB_ADMIN_ROLEID))
 		ereport(ERROR,
 				(errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
-				 errmsg("must be superuser to create resource groups")));
+				 errmsg("must be mdb_admin to create resource groups")));
 
 	/*
 	 * Check for an illegal name ('none' is used to signify no group in ALTER ROLE).
@@ -269,11 +270,11 @@ DropResourceGroup(DropResourceGroupStmt *stmt)
 	Oid			 groupid;
 	ResourceGroupCallbackContext	*callbackCtx;
 
-	/* Permission check - only superuser can drop resource groups. */
-	if (!superuser())
+	/* Permission check - only superuser or mdb_admin can drop resource groups. */
+	if (!is_member_of_role(GetUserId(), MDB_ADMIN_ROLEID))
 		ereport(ERROR,
 				(errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
-				 errmsg("must be superuser to drop resource groups")));
+				 errmsg("must be mdb_admin to drop resource groups")));
 
 	/*
 	 * Check the pg_resgroup relation to be certain the resource group already
@@ -301,6 +302,13 @@ DropResourceGroup(DropResourceGroupStmt *stmt)
 	 * resource group later.
 	 */
 	groupid = ((Form_pg_resgroup) GETSTRUCT(tuple))->oid;
+
+	/* Permission check - only superuser can drop the admin/system resource groups. */
+	if (!superuser() && (groupid == ADMINRESGROUP_OID || groupid == SYSTEMRESGROUP_OID))
+		ereport(ERROR,
+				(errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
+				 errmsg("must be superuser to drop resource group \"%s\"",
+						stmt->name)));
 
 	/* cannot DROP default resource groups  */
 	if (groupid == DEFAULTRESGROUP_OID
@@ -375,11 +383,24 @@ AlterResourceGroup(AlterResourceGroupStmt *stmt)
 	ResourceGroupCallbackContext	*callbackCtx;
 	MemoryContext oldContext;
 
-	/* Permission check - only superuser can alter resource groups. */
-	if (!superuser())
+	/* Permission check - only mdb_admin can alter resource groups. */
+	if (!is_member_of_role(GetUserId(), MDB_ADMIN_ROLEID))
 		ereport(ERROR,
 				(errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
-				 errmsg("must be superuser to alter resource groups")));
+				 errmsg("must be mdb_admin to alter resource groups")));
+
+	/*
+	 * Check the pg_resgroup relation to be certain the resource group already
+	 * exists.
+	 */
+	groupid = get_resgroup_oid(stmt->name, false);
+
+	/* Permission check - only superuser can alter the admin/system resource groups. */
+	if (!superuser() && (groupid == ADMINRESGROUP_OID || groupid == SYSTEMRESGROUP_OID))
+		ereport(ERROR,
+				(errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
+				 errmsg("must be superuser to alter resource group \"%s\"",
+						stmt->name)));
 
 	/* Currently we only support to ALTER one limit at one time */
 	Assert(list_length(stmt->options) == 1);
@@ -405,12 +426,6 @@ AlterResourceGroup(AlterResourceGroupStmt *stmt)
 		value = getResgroupOptionValue(defel);
 		checkResgroupCapLimit(limitType, value);
 	}
-
-	/*
-	 * Check the pg_resgroup relation to be certain the resource group already
-	 * exists.
-	 */
-	groupid = get_resgroup_oid(stmt->name, false);
 
 	if (limitType == RESGROUP_LIMIT_TYPE_CONCURRENCY &&
 		value == 0 &&
@@ -500,7 +515,7 @@ AlterResourceGroup(AlterResourceGroupStmt *stmt)
 									  RESGROUP_DEFAULT_CPU_WEIGHT, "");
 
 		updateResgroupCapabilityEntry(pg_resgroupcapability_rel,
-									  groupid, RESGROUP_LIMIT_TYPE_CPUSET, 
+									  groupid, RESGROUP_LIMIT_TYPE_CPUSET,
 									  0, caps.cpuset);
 	}
 	else if (limitType == RESGROUP_LIMIT_TYPE_CPU)
@@ -1007,7 +1022,7 @@ parseStmtOptions(CreateResourceGroupStmt *stmt, ResGroupCaps *caps)
 		else
 			mask |= 1 << type;
 
-		if (type == RESGROUP_LIMIT_TYPE_CPUSET) 
+		if (type == RESGROUP_LIMIT_TYPE_CPUSET)
 		{
 			const char *cpuset = defGetString(defel);
 			strlcpy(caps->cpuset, cpuset, sizeof(caps->cpuset));
@@ -1611,7 +1626,7 @@ checkCpuSetByRole(const char *cpuset)
  * ex:
  * cpuset = "1;4"
  * then we should assign '1' to corrdinator and '4' to segment
- * 
+ *
  * cpuset = "1"
  * assign '1' to both coordinator and segment
  */

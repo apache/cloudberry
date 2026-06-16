@@ -352,6 +352,9 @@ code or new licensing patterns.
             <exclude>contrib/indexscan/indexscan.c</exclude>
             <exclude>contrib/indexscan/indexscan.sql.in</exclude>
 
+            <exclude>contrib/pg_aux_catalog/pg_aux_catalog.c</exclude>
+            <exclude>contrib/pg_aux_catalog/isolation2/isolation2_schedule</exclude>
+
             <exclude>contrib/file_fdw/init_file</exclude>
             <exclude>contrib/file_fdw/data/**</exclude>
 

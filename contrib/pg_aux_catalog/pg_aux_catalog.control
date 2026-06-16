@@ -1,0 +1,5 @@
+# pg_aux_catalog extension
+comment = 'auxiliary catalog management (mdb_admin role creation)'
+default_version = '1.0'
+module_pathname = '$libdir/pg_aux_catalog'
+relocatable = false

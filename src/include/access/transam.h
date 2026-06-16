@@ -209,6 +209,16 @@ FullTransactionIdAdvance(FullTransactionId *dest)
 #define LastBinaryUpgradeReservedObjectId 9100
 
 /*
+ * Reserve a block of OIDs for auxiliary catalog objects (such as the
+ * mdb_admin role created by contrib/pg_aux_catalog).  These need fixed,
+ * well-known OIDs that are stable across clusters, so they live in their own
+ * range below FirstBinaryUpgradeReservedObjectId.
+ */
+#define FirstAuxObjectId		8000
+#define LastAuxObjectId			9000
+#define IsAuxOid(oid)	((oid) >= FirstAuxObjectId && (oid) < LastAuxObjectId)
+
+/*
  * VariableCache is a data structure in shared memory that is used to track
  * OID and XID assignment state.  For largely historical reasons, there is
  * just one struct with different fields that are protected by different
