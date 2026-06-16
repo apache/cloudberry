@@ -180,7 +180,6 @@ static void ExecutePlan(QueryDesc *queryDesc,
 						ScanDirection direction,
 						DestReceiver *dest,
 						bool execute_once);
-static bool ExecCheckOneRelPerms(RTEPermissionInfo *perminfo);
 static bool ExecCheckPermissionsModified(Oid relOid, Oid userid,
 										 Bitmapset *modifiedCols,
 										 AclMode requiredPerms);
@@ -1523,7 +1522,7 @@ ExecCheckPermissions(List *rangeTable, List *rteperminfos,
  * ExecCheckOneRelPerms
  *		Check access permissions for a single relation.
  */
-static bool
+bool
 ExecCheckOneRelPerms(RTEPermissionInfo *perminfo)
 {
 	AclMode		requiredPerms;
