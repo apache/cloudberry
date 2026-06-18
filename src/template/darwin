@@ -27,4 +27,12 @@ case $host_os in
     ;;
 esac
 
-DLSUFFIX=".dylib"
+# PG 16 upstream (b55f62abb2c) unified DLSUFFIX to .dylib on macOS.
+# Cloudberry's catalog SQL and cdb_init.d scripts (and many test
+# expected files) hard-code "$libdir/foo.so" — when PG sees an
+# explicit suffix it does NOT re-append DLSUFFIX, so .so / .dylib
+# divergence breaks the catalog bootstrap. Keep the pre-PG16
+# behaviour of DLSUFFIX=.so so all those references continue to
+# resolve. The Python-shared-library check below is patched in
+# configure to try .dylib as a fallback for macOS's libpython.
+DLSUFFIX=".so"

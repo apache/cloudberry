@@ -48,7 +48,7 @@ add_custom_target(generate_protobuf DEPENDS ${PROTO_SRCS} ${PROTO_HDRS})
 link_directories($ENV{GPHOME}/lib)
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
-## build pax_format.so
+## build pax_format.so — standalone PAX reader used by external tools.
 include(pax_format)
 ## build pax.so
 include(pax)

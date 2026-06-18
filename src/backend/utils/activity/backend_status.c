@@ -751,6 +751,28 @@ pgstat_report_resgroup(Oid groupId)
 }
 
 /* ----------
+ * pgstat_report_sessionid() -
+ *
+ *	Called to update the session id in MyBEEntry after a gang reset
+ *	assigns a new gp_session_id.
+ * ----------
+ */
+void
+pgstat_report_sessionid(int session_id)
+{
+	volatile PgBackendStatus *beentry = MyBEEntry;
+
+	if (!beentry)
+		return;
+
+	PGSTAT_BEGIN_WRITE_ACTIVITY(beentry);
+
+	beentry->st_session_id = session_id;
+
+	PGSTAT_END_WRITE_ACTIVITY(beentry);
+}
+
+/* ----------
  * pgstat_read_current_status() -
  *
  *	Copy the current contents of the PgBackendStatus array to local memory,

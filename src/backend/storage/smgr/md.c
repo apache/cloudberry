@@ -248,9 +248,8 @@ mdcreate(SMgrRelation reln, ForkNumber forknum, bool isRedo)
 	mdfd->mdfd_vfd = fd;
 	mdfd->mdfd_segno = 0;
 
-	/* MERGE16_FIXME delete the register_dirty_segment, but this is not correct */
-//	if (!SmgrIsTemp(reln))
-//		register_dirty_segment(reln, forknum, mdfd);
+	if (!SmgrIsTemp(reln))
+		register_dirty_segment(reln, forknum, mdfd);
 }
 
 /*
@@ -1277,6 +1276,22 @@ register_dirty_segment_ao(RelFileLocator rnode, int segno, File vfd)
 }
 
 /*
+ * register_forget_request_ao() -- forget any fsyncs for an AO relation segment
+ *
+ * Similar to register_forget_request() but for append optimized tables,
+ * using SYNC_HANDLER_AO instead of SYNC_HANDLER_MD.
+ */
+void
+register_forget_request_ao(RelFileLocator rnode, int segno)
+{
+	FileTag		tag;
+
+	INIT_FILETAG(tag, rnode, MAIN_FORKNUM, segno, SYNC_HANDLER_AO);
+
+	RegisterSyncRequest(&tag, SYNC_FORGET_REQUEST, true /* retryOnError */ );
+}
+
+/*
  * register_unlink_segment() -- Schedule a file to be deleted after next checkpoint
  */
 static void
@@ -1712,8 +1727,8 @@ aosyncfiletag(const FileTag *ftag, char *path)
 	pfree(p);
 
 	File fd = PathNameOpenFile(path, O_RDWR);
-	if (fd <= 0)
-		elog(ERROR, "could not open file %s: %m", path);
+	if (fd < 0)
+		return -1;
 
 	/* Try to fsync the file. */
 	result = FileSync(fd, WAIT_EVENT_DATA_FILE_SYNC);

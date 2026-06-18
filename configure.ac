@@ -1035,9 +1035,19 @@ if test "$enable_pax" = yes; then
     [AC_MSG_ERROR([libzstd >= 1.4.0 is required for PAX support])]
   )
 
-  # Check liburing
-  AC_CHECK_LIB(uring, io_uring_queue_init, [],
-               [AC_MSG_ERROR([library 'uring' is required for PAX support])])
+  # Check liburing. liburing is Linux-only (io_uring kernel iface, 5.1+).
+  # On Linux it is required as before; on non-Linux hosts (macOS / *BSD)
+  # PAX falls back to pread-based SyncFastIO and the IOUringFastIO path
+  # is conditionally compiled — see contrib/pax_storage/src/cpp/comm/fast_io.*
+  case $host_os in
+    linux*)
+      AC_CHECK_LIB(uring, io_uring_queue_init, [],
+                   [AC_MSG_ERROR([library 'uring' is required for PAX support on Linux])])
+      ;;
+    *)
+      AC_CHECK_LIB(uring, io_uring_queue_init, [], [])
+      ;;
+  esac
 
   # Check cmake >= 3.11.0 using AX_COMPARE_VERSION
   AC_PATH_PROG([CMAKE], [cmake], [no])

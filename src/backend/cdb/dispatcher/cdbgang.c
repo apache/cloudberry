@@ -801,7 +801,7 @@ GpDropTempTables(void)
 
 		gp_session_id = newSessionId;
 		gp_command_count = 0;
-		//pgstat_report_sessionid(newSessionId);
+		pgstat_report_sessionid(newSessionId);
 
 		/* Update the slotid for our singleton reader. */
 		if (SharedLocalSnapshotSlot != NULL)

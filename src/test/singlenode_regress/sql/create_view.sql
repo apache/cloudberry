@@ -573,62 +573,89 @@ select * from tt14v;
 
 alter table tt14t drop column f3;  -- fail, view has explicit reference to f3
 
--- MERGE16_FIXME: delete command can only delete tuples from master, But we
--- need to delete them from both master and segments
-    
 -- We used to have a bug that would allow the above to succeed, posing
 -- hazards for later execution of the view.  Check that the internal
 -- defenses for those hazards haven't bit-rotted, in case some other
 -- bug with similar symptoms emerges.
--- begin;
--- 
--- -- destroy the dependency entry that prevents the DROP:
--- delete from pg_depend where
---   objid = (select oid from pg_rewrite
---            where ev_class = 'tt14v'::regclass and rulename = '_RETURN')
---   and refobjsubid = 3
--- returning pg_describe_object(classid, objid, objsubid) as obj,
---           pg_describe_object(refclassid, refobjid, refobjsubid) as ref,
---           deptype;
--- 
--- -- this will now succeed:
--- alter table tt14t drop column f3;
--- 
--- -- column f3 is still in the view, sort of ...
--- select pg_get_viewdef('tt14v', true);
--- -- ... and you can even EXPLAIN it ...
--- explain (verbose, costs off) select * from tt14v;
--- -- but it will fail at execution
--- select f1, f4 from tt14v;
--- select * from tt14v;
--- 
--- rollback;
+
+-- Cloudberry: In a distributed environment, DELETE FROM pg_depend only affects
+-- the coordinator. We use a helper function with EXECUTE ON ALL SEGMENTS plus
+-- allow_segment_DML to also delete the dependency on segments, so that the
+-- subsequent ALTER TABLE can succeed on all nodes.
+set allow_system_table_mods = on;
+set allow_segment_DML = on;
+create function delete_dep_on_segs(p_objid oid, p_refobjsubid int4)
+returns setof int as $$
+  delete from pg_depend where objid = p_objid and refobjsubid = p_refobjsubid returning 1;
+$$ language sql modifies sql data execute on all segments
+   set allow_system_table_mods = on
+   set allow_segment_DML = on;
+
+begin;
+
+-- destroy the dependency entry that prevents the DROP:
+delete from pg_depend where
+  objid = (select oid from pg_rewrite
+           where ev_class = 'tt14v'::regclass and rulename = '_RETURN')
+  and refobjsubid = 3
+returning pg_describe_object(classid, objid, objsubid) as obj,
+          pg_describe_object(refclassid, refobjid, refobjsubid) as ref,
+          deptype;
+
+-- Cloudberry: also delete from segments
+select delete_dep_on_segs(
+  (select oid from pg_rewrite
+   where ev_class = 'tt14v'::regclass and rulename = '_RETURN'),
+  3);
+
+-- this will now succeed:
+alter table tt14t drop column f3;
+
+-- column f3 is still in the view, sort of ...
+select pg_get_viewdef('tt14v', true);
+-- ... and you can even EXPLAIN it ...
+explain (verbose, costs off) select * from tt14v;
+-- but it will fail at execution
+select f1, f4 from tt14v;
+select * from tt14v;
+
+rollback;
 
 -- likewise, altering a referenced column's type is prohibited ...
 alter table tt14t alter column f4 type integer using f4::integer;  -- fail
 
 -- ... but some bug might let it happen, so check defenses
--- begin;
--- 
--- -- destroy the dependency entry that prevents the ALTER:
--- delete from pg_depend where
---   objid = (select oid from pg_rewrite
---            where ev_class = 'tt14v'::regclass and rulename = '_RETURN')
---   and refobjsubid = 4
--- returning pg_describe_object(classid, objid, objsubid) as obj,
---           pg_describe_object(refclassid, refobjid, refobjsubid) as ref,
---           deptype;
--- 
--- -- this will now succeed:
--- alter table tt14t alter column f4 type integer using f4::integer;
--- 
--- -- f4 is still in the view ...
--- select pg_get_viewdef('tt14v', true);
--- -- but will fail at execution
--- select f1, f3 from tt14v;
--- select * from tt14v;
--- 
--- rollback;
+begin;
+
+-- destroy the dependency entry that prevents the ALTER:
+delete from pg_depend where
+  objid = (select oid from pg_rewrite
+           where ev_class = 'tt14v'::regclass and rulename = '_RETURN')
+  and refobjsubid = 4
+returning pg_describe_object(classid, objid, objsubid) as obj,
+          pg_describe_object(refclassid, refobjid, refobjsubid) as ref,
+          deptype;
+
+-- Cloudberry: also delete from segments
+select delete_dep_on_segs(
+  (select oid from pg_rewrite
+   where ev_class = 'tt14v'::regclass and rulename = '_RETURN'),
+  4);
+
+-- this will now succeed:
+alter table tt14t alter column f4 type integer using f4::integer;
+
+-- f4 is still in the view ...
+select pg_get_viewdef('tt14v', true);
+-- but will fail at execution
+select f1, f3 from tt14v;
+select * from tt14v;
+
+rollback;
+
+reset allow_system_table_mods;
+reset allow_segment_DML;
+drop function delete_dep_on_segs(oid, int4);
 
 drop view tt14v;
 

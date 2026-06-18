@@ -1095,7 +1095,7 @@ ExecInsert(ModifyTableContext *context,
 		 */
 		if (mtstate->operation == CMD_UPDATE)
 			wco_kind = WCO_RLS_UPDATE_CHECK;
-		else if (mtstate->operation == CMD_MERGE)
+		else if (mtstate->operation == CMD_MERGE && context->relaction != NULL)
 			wco_kind = (context->relaction->mas_action->commandType == CMD_UPDATE) ?
 				WCO_RLS_UPDATE_CHECK : WCO_RLS_INSERT_CHECK;
 		else
@@ -4376,7 +4376,77 @@ ExecModifyTable(PlanState *pstate)
 				break;
 
 			case CMD_MERGE:
-				slot = ExecMerge(&context, resultRelInfo, tupleid, node->canSetTag);
+				if (action == (int) DML_INSERT)
+				{
+					/*
+					 * Split merge INSERT: extract non-junk columns (positions
+					 * 1..N) from the plan slot into a properly-typed insert
+					 * slot. We can't use ExecGetInsertNewTuple because the
+					 * SplitMerge's ExecInitMergeTupleSlots may have set
+					 * ri_projectNewInfoValid without building the INSERT
+					 * projection.
+					 */
+					ResultRelInfo *saved = resultRelInfo;
+					TupleTableSlot *insertSlot;
+					int natts;
+
+					resultRelInfo = node->rootResultRelInfo;
+					natts = RelationGetNumberOfAttributes(resultRelInfo->ri_RelationDesc);
+
+					/*
+					 * Lazily set up partition tuple routing for split-update
+					 * MERGE INSERT on partitioned tables.
+					 */
+					if (resultRelInfo->ri_RelationDesc->rd_rel->relkind ==
+						RELKIND_PARTITIONED_TABLE &&
+						node->mt_partition_tuple_routing == NULL)
+					{
+						node->mt_partition_tuple_routing =
+							ExecSetupPartitionTupleRouting(estate,
+														   resultRelInfo->ri_RelationDesc);
+					}
+
+					insertSlot = resultRelInfo->ri_newTupleSlot;
+					if (insertSlot == NULL)
+					{
+						insertSlot = table_slot_create(resultRelInfo->ri_RelationDesc,
+													   &estate->es_tupleTable);
+						resultRelInfo->ri_newTupleSlot = insertSlot;
+					}
+
+					ExecClearTuple(insertSlot);
+					slot_getallattrs(context.planSlot);
+					memcpy(insertSlot->tts_values, context.planSlot->tts_values,
+						   natts * sizeof(Datum));
+					memcpy(insertSlot->tts_isnull, context.planSlot->tts_isnull,
+						   natts * sizeof(bool));
+					ExecStoreVirtualTuple(insertSlot);
+
+					/* Set relaction to NULL to avoid ExecInsert dereferencing it */
+					context.relaction = NULL;
+
+					slot = ExecInsert(&context, resultRelInfo, insertSlot,
+									  node->canSetTag, NULL, NULL,
+									  true /* splitUpdate */);
+					resultRelInfo = saved;
+				}
+				else if (action == (int) DML_DELETE)
+				{
+					/*
+					 * Split merge DELETE: delete the old tuple on this segment.
+					 */
+					slot = ExecDelete(&context, resultRelInfo, tupleid, oldtuple, segid,
+									  false,	/* processReturning */
+									  false,	/* changingPart */
+									  node->canSetTag,
+									  NULL, NULL, NULL,
+									  true	/* splitUpdate */);
+				}
+				else
+				{
+					/* Normal MERGE processing (no split or pass-through) */
+					slot = ExecMerge(&context, resultRelInfo, tupleid, node->canSetTag);
+				}
 				break;
 
 			default:
@@ -4661,6 +4731,11 @@ ExecInitModifyTable(ModifyTable *node, EState *estate, int eflags)
 			ExecFindJunkAttributeInTlist(subplan->targetlist, "gp_segment_id");
 
 		if (operation == CMD_UPDATE && node->splitUpdate)
+		{
+			mtstate->mt_action_attno =
+				ExecFindJunkAttributeInTlist(subplan->targetlist, "DMLAction");
+		}
+		else if (operation == CMD_MERGE)
 		{
 			mtstate->mt_action_attno =
 				ExecFindJunkAttributeInTlist(subplan->targetlist, "DMLAction");

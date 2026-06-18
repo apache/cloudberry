@@ -44,7 +44,7 @@ class BufferedOutputStream : public google::protobuf::io::ZeroCopyOutputStream {
 
   void BackUp(int count) override;
 
-  google::protobuf::int64 ByteCount() const override;
+  int64_t ByteCount() const override;
 
   bool WriteAliasedRaw(const void *data, int size) override;
 
@@ -76,7 +76,7 @@ class SeekableInputStream : public google::protobuf::io::ZeroCopyInputStream {
 
   bool Skip(int count) override;
 
-  google::protobuf::int64 ByteCount() const override;
+  int64_t ByteCount() const override;
 
  private:
   DataBuffer<char> data_buffer_;

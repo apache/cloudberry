@@ -70,6 +70,7 @@ typedef bool (*ao_extent_callback)(int segno, void *ctx);
 extern void ao_foreach_extent_file(ao_extent_callback callback, void *ctx);
 
 extern void register_dirty_segment_ao(RelFileLocator rnode, int segno, File vfd);
+extern void register_forget_request_ao(RelFileLocator rnode, int segno);
 
 extern uint64 ao_rel_get_physical_size(Relation aorel);
 #endif							/* AOMD_H */

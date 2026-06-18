@@ -319,6 +319,17 @@ mdunlink_ao_base_relfile(void *ctx)
 					 SYNC_HANDLER_AO);
 		RegisterSyncRequest(&tag, SYNC_FORGET_REQUEST, true);
 
+		/*
+		 * Also forget any SYNC_HANDLER_MD requests.  mdcreate() registers
+		 * the base relfile with SYNC_HANDLER_MD because it doesn't know
+		 * about AO tables.  Without this, the SYNC_HANDLER_MD entry would
+		 * never be canceled, causing checkpointer PANIC when the file is
+		 * gone.
+		 */
+		INIT_FILETAG(tag, unlinkFiles->rnode, MAIN_FORKNUM, 0,
+					 SYNC_HANDLER_MD);
+		RegisterSyncRequest(&tag, SYNC_FORGET_REQUEST, true);
+
 		if (unlink(baserel) != 0)
 		{
 			/* ENOENT is expected after the end of the extensions */

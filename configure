@@ -9891,7 +9891,16 @@ _ACEOF
   LIBS="-luring $LIBS"
 
 else
-  as_fn_error $? "library 'uring' is required for PAX support" "$LINENO" 5
+  # liburing is required on Linux (io_uring is a Linux 5.1+ kernel iface);
+  # on non-Linux hosts PAX falls back to pread-based SyncFastIO.
+  case $host_os in
+    linux*)
+      as_fn_error $? "library 'uring' is required for PAX support on Linux" "$LINENO" 5
+      ;;
+    *)
+      :
+      ;;
+  esac
 fi
 
 
@@ -12968,13 +12977,24 @@ else
 	fi
 	# Search for a likely-looking file.
 	found_shlib=0
+	# On Darwin, Python ships its shared lib as .dylib regardless of
+	# what DLSUFFIX is set to for modules. Try .dylib in addition to
+	# the configured DLSUFFIX so this check still finds libpython.
+	if test "$PORTNAME" = darwin; then
+		python_shlib_suffixes="$DLSUFFIX .dylib"
+	else
+		python_shlib_suffixes="$DLSUFFIX"
+	fi
 	for d in "${python_libdir}" "${python_configdir}" /usr/lib64 /usr/lib
 	do
-		if test -e "$d/lib${ldlibrary}${DLSUFFIX}"; then
-			python_libdir="$d"
-			found_shlib=1
-			break 2
-		fi
+		for s in $python_shlib_suffixes
+		do
+			if test -e "$d/lib${ldlibrary}${s}"; then
+				python_libdir="$d"
+				found_shlib=1
+				break 3
+			fi
+		done
 	done
 	# Some platforms (OpenBSD) require us to accept a bare versioned shlib
 	# (".so.n.n") as well. However, check this only after failing to find

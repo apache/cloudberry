@@ -61,7 +61,7 @@ $(top_builddir)/src/port/pg_config_paths.h: | submake-libpgport
 
 install: all installdirs
 	$(INSTALL_PROGRAM) pg_regress$(X) '$(DESTDIR)$(pgxsdir)/$(subdir)/pg_regress$(X)'
-	$(INSTALL_PROGRAM) regress.so '$(DESTDIR)$(pkglibdir)/regress.so'
+	$(INSTALL_PROGRAM) regress$(DLSUFFIX) '$(DESTDIR)$(pkglibdir)/regress$(DLSUFFIX)'
 	$(INSTALL_PROGRAM) gpdiff.pl '$(DESTDIR)$(pgxsdir)/$(subdir)/gpdiff.pl'
 	$(INSTALL_PROGRAM) gpstringsubs.pl '$(DESTDIR)$(pgxsdir)/$(subdir)/gpstringsubs.pl'
 	$(INSTALL_PROGRAM) atmsort.pl '$(DESTDIR)$(pgxsdir)/$(subdir)/atmsort.pl'
@@ -71,13 +71,13 @@ install: all installdirs
 	$(INSTALL_PROGRAM) GPTest.pm '$(DESTDIR)$(pgxsdir)/$(subdir)/GPTest.pm'
 	$(INSTALL_PROGRAM) scan_flaky_fault_injectors.sh '$(DESTDIR)$(pgxsdir)/$(subdir)/scan_flaky_fault_injectors.sh'
 	$(INSTALL_PROGRAM) twophase_pqexecparams '$(DESTDIR)$(pgxsdir)/$(subdir)/twophase_pqexecparams'
-	$(INSTALL_PROGRAM) hooktest/test_hook.so '$(DESTDIR)$(pkglibdir)/test_hook.so'
-	$(INSTALL_PROGRAM) query_info_hook_test/query_info_hook_test.so '$(DESTDIR)$(pkglibdir)/query_info_hook_test.so'
+	$(INSTALL_PROGRAM) hooktest/test_hook$(DLSUFFIX) '$(DESTDIR)$(pkglibdir)/test_hook$(DLSUFFIX)'
+	$(INSTALL_PROGRAM) query_info_hook_test/query_info_hook_test$(DLSUFFIX) '$(DESTDIR)$(pkglibdir)/query_info_hook_test$(DLSUFFIX)'
 installdirs:
 	$(MKDIR_P) '$(DESTDIR)$(pgxsdir)/$(subdir)'
 
 uninstall:
-	rm -f '$(DESTDIR)$(pkglibdir)/regress.so'
+	rm -f '$(DESTDIR)$(pkglibdir)/regress$(DLSUFFIX)'
 	rm -f '$(DESTDIR)$(pgxsdir)/$(subdir)/pg_regress$(X)'
 	rm -f '$(DESTDIR)$(pgxsdir)/$(subdir)/gpdiff.pl'
 	rm -f '$(DESTDIR)$(pgxsdir)/$(subdir)/gpstringsubs.pl'
@@ -87,8 +87,8 @@ uninstall:
 	rm -f '$(DESTDIR)$(pgxsdir)/$(subdir)/explain.pm'
 	rm -f '$(DESTDIR)$(pgxsdir)/$(subdir)/GPTest.pm'
 	rm -f '$(DESTDIR)$(pgxsdir)/$(subdir)/twophase_pqexecparams'
-	rm -f '$(DESTDIR)$(pkglibdir)/test_hook.so'
-	rm -f '$(DESTDIR)$(pkglibdir)/query_info_hook_test.so'
+	rm -f '$(DESTDIR)$(pkglibdir)/test_hook$(DLSUFFIX)'
+	rm -f '$(DESTDIR)$(pkglibdir)/query_info_hook_test$(DLSUFFIX)'
 
 
 # Build dynamically-loaded object file for CREATE FUNCTION ... LANGUAGE C.

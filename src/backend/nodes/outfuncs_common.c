@@ -463,6 +463,8 @@ _outSplitMerge(StringInfo str, const SplitMerge *node)
 	WRITE_OID_ARRAY(hashFuncs, node->numHashAttrs);
 	WRITE_NODE_FIELD(resultRelations);
 	WRITE_NODE_FIELD(mergeActionLists);
+	WRITE_BOOL_FIELD(hasSplitUpdate);
+	WRITE_UINT_FIELD(rootResultRelation);
 
 	_outPlanInfo(str, (Plan *) node);
 }

@@ -70,6 +70,7 @@ extern int64 get_size_from_segDBs(const char *cmd);
 
 /* oid.c */
 extern oidvector *buildoidvector(const Oid *oids, int n);
+extern void check_valid_oidvector(const oidvector *oidArray);
 extern Oid	oidparse(Node *node);
 
 /* pseudotypes.c */

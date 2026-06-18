@@ -61,8 +61,8 @@ select gp_wait_until_triggered_fault('restartpoint_guts', 2, dbid)
 -- mirror).  This should match the number of files for fsync_ao and fsync_co.
 -- select gp_wait_until_triggered_fault('ao_fsync_counter', 3, dbid)
 -- 	from gp_segment_configuration where content=0 and role='m';
--- select gp_inject_fault('ao_fsync_counter', 'status', dbid)
--- 	from gp_segment_configuration where content=0 and role='m';
+select gp_inject_fault('ao_fsync_counter', 'status', dbid)
+	from gp_segment_configuration where content=0 and role='m';
 
 -- Test vacuum compaction with more than one segment file per table.
 -- Perform concurrent inserts before vacuum to get multiple segment
@@ -97,8 +97,8 @@ select gp_wait_until_triggered_fault('restartpoint_guts', 3, dbid)
 -- Expect the segment files that were updated by vacuum to be fsync'ed.
 -- select gp_wait_until_triggered_fault('ao_fsync_counter', 12, dbid)
 -- 	from gp_segment_configuration where content=0 and role='m';
--- select gp_inject_fault('ao_fsync_counter', 'status', dbid)
--- 	from gp_segment_configuration where content=0 and role='m';
+select gp_inject_fault('ao_fsync_counter', 'status', dbid)
+	from gp_segment_configuration where content=0 and role='m';
 
 -- Test that replay of drop table operation removes fsync requests
 -- previously registed with the checkpointer.
@@ -123,8 +123,8 @@ select gp_wait_until_triggered_fault('restartpoint_guts', 4, dbid)
 -- not for fsync_co table because it was dropped after being updated.
 -- select gp_wait_until_triggered_fault('ao_fsync_counter', 13, dbid)
 -- 	from gp_segment_configuration where content=0 and role='m';
--- select gp_inject_fault('ao_fsync_counter', 'status', dbid)
--- 	from gp_segment_configuration where content=0 and role='m';
+select gp_inject_fault('ao_fsync_counter', 'status', dbid)
+	from gp_segment_configuration where content=0 and role='m';
 
 -- Reset all faults.
 select gp_inject_fault('all', 'reset', dbid) from gp_segment_configuration where content = 0;
