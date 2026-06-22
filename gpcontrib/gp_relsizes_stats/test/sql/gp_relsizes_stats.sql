@@ -1,3 +1,5 @@
+\set QUIET off
+SET client_min_messages TO error;
 CREATE EXTENSION gp_relsizes_stats;
 
 -- start_ignore
@@ -16,6 +18,7 @@ INSERT INTO employees (first_name, last_name, department_id, date_of_birth) VALU
 ('Jane', 'Smith', 2, '1990-07-20'),
 ('Emily', 'Jones', 1, '1985-08-30');
 
+-- Default is save_history = on — history write
 SELECT relsizes_stats_schema.relsizes_collect_stats_once();
 
 SELECT size FROM relsizes_stats_schema.table_sizes_history WHERE relname = 'employees';
@@ -94,3 +97,32 @@ SELECT relname, segment, own_file, size
 ORDER BY relname, segment, own_file;
 
 DROP SCHEMA test CASCADE;
+
+
+--
+-- Check that save_history option controls writing to table_sizes_history
+
+-- start_ignore
+DROP TABLE IF EXISTS t_history_test;
+-- end_ignore
+CREATE TABLE t_history_test (i INT) DISTRIBUTED BY (i);
+INSERT INTO t_history_test VALUES (1);
+
+-- Disable option - history should not write
+ALTER SYSTEM SET gp_relsizes_stats.save_history = off;
+SELECT pg_reload_conf();
+SELECT relsizes_stats_schema.relsizes_collect_stats_once();
+SELECT count(*) FROM relsizes_stats_schema.table_sizes_history
+ WHERE relname = 't_history_test';
+
+-- Enable option - history should write
+ALTER SYSTEM SET gp_relsizes_stats.save_history = on;
+SELECT pg_reload_conf();
+SELECT relsizes_stats_schema.relsizes_collect_stats_once();
+SELECT count(*) FROM relsizes_stats_schema.table_sizes_history
+ WHERE relname = 't_history_test';
+
+-- Cleanup
+ALTER SYSTEM RESET gp_relsizes_stats.save_history;
+SELECT pg_reload_conf();
+DROP TABLE t_history_test;

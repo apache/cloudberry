@@ -13,7 +13,10 @@ WHERE name = 'data_directory' \gset
 
 :cp_backup
 
-SELECT '\! echo "local all user1,user2 trust" >> ' || setting || '/pg_hba.conf' as add_users
+SELECT '\! { echo "local all user1,user2 trust"; '
+    || 'echo "host  all user1,user2 127.0.0.1/32 trust"; '
+    || 'echo "host  all user1,user2 ::1/128 trust"; '
+    || '} >> ' || setting || '/pg_hba.conf' as add_users
 FROM pg_settings
 WHERE name = 'data_directory' \gset
 

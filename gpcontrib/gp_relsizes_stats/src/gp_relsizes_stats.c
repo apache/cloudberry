@@ -1,3 +1,30 @@
+/*-------------------------------------------------------------------------
+ *
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ *
+ * gp_relsizes_stats.c
+ *
+ * IDENTIFICATION
+ *	  gpcontrib/gp_relsizes_stats/src/gp_relsizes_stats.c
+ *
+ *-------------------------------------------------------------------------
+ */
+
 #include "postgres.h"
 
 /* Required headers for background workers */
@@ -49,27 +76,30 @@ Datum get_stats_for_database(PG_FUNCTION_ARGS);
 Datum relsizes_collect_stats_once(PG_FUNCTION_ARGS);
 
 static void worker_sigterm(SIGNAL_ARGS);
+static void worker_sighup(SIGNAL_ARGS);
 static Oid *get_databases_oids(int *databases_cnt, MemoryContext ctx, bool create_transaction);
 static int update_segment_file_map_table(void);
 static int update_table_sizes_history(void);
 static void get_stats_for_databases(Oid *databases_oids, int databases_cnt, bool fast);
 static void run_database_stats_worker(bool fast, Oid db);
 static int plugin_created(void);
-static BgwHandleStatus WaitForBackgroundWorkerShutdown(BackgroundWorkerHandle *handle);
+static BgwHandleStatus WaitForBackgroundWorkerShutdownSafely(BackgroundWorkerHandle *handle);
 static int delete_data_in_history(void);
 static int put_data_into_history(void);
 void _PG_init(void);
 
-void relsizes_collect_stats(Datum main_arg);
-void relsizes_database_stats_job(Datum args);
+PGDLLEXPORT void relsizes_collect_stats(Datum main_arg);
+PGDLLEXPORT void relsizes_database_stats_job(Datum args);
 
 /* Global variables */
 static int worker_restart_naptime = 0;
 static int worker_database_naptime = 0;
 static int worker_file_naptime = 0;
 static bool enabled = false;
+static bool save_history = true;
 
 static volatile sig_atomic_t got_sigterm = false;
+static volatile sig_atomic_t got_sighup = false;
 
 typedef union DbWorkerArg {
     Datum d;
@@ -79,23 +109,31 @@ typedef union DbWorkerArg {
     } s;
 } DbWorkerArg;
 
-static_assert(sizeof(Datum) == sizeof(DbWorkerArg), "Invalid size of structure in DbWorkerArg");
+StaticAssertDecl(sizeof(Datum) == sizeof(DbWorkerArg),
+                 "Invalid size of structure in DbWorkerArg");
 
 /*
- * Signal handler for SIGTERM in background worker processes.
- *
- * This handler is called when the postmaster requests the background worker
- * to shut down. It sets the got_sigterm flag and wakes up the main worker
- * loop by setting the process latch.
- *
- * The function follows PostgreSQL signal handling conventions:
- * - Saves and restores errno
- * - Uses only async-signal-safe operations
- * - Sets a flag that the main loop can check
+ * Signal handler for SIGTERM
+ *		Set a flag to let the main loop to terminate, and set our latch to wake
+ *		it up.
  */
 static void worker_sigterm(SIGNAL_ARGS) {
     int save_errno = errno;
     got_sigterm = true;
+    if (MyProc) {
+        SetLatch(&MyProc->procLatch);
+    }
+    errno = save_errno;
+}
+
+/*
+ * Signal handler for SIGHUP
+ *		Set a flag to tell the main loop to reread the config file, and set
+ *		our latch to wake it up.
+ */
+static void worker_sighup(SIGNAL_ARGS) {
+    int save_errno = errno;
+    got_sighup = true;
     if (MyProc) {
         SetLatch(&MyProc->procLatch);
     }
@@ -109,15 +147,11 @@ static void worker_sigterm(SIGNAL_ARGS) {
  * error handling to prevent infinite loops in case of hung workers.
  * Returns BGWH_STOPPED on success, BGWH_POSTMASTER_DIED on error/timeout.
  */
-static BgwHandleStatus WaitForBackgroundWorkerShutdown(BackgroundWorkerHandle *handle) {
-    BgwHandleStatus status;
+static BgwHandleStatus WaitForBackgroundWorkerShutdownSafely(BackgroundWorkerHandle *handle) {
+    BgwHandleStatus status = BGWH_NOT_YET_STARTED;
     int rc;
-    bool save_set_latch_on_sigusr1;
     int attempts = 0;
     const int max_attempts = 5 * HOUR_TIME / 100; /* maximum 5 hours wait time */
-
-    save_set_latch_on_sigusr1 = set_latch_on_sigusr1;
-    set_latch_on_sigusr1 = true;
 
     PG_TRY();
     {
@@ -126,12 +160,11 @@ static BgwHandleStatus WaitForBackgroundWorkerShutdown(BackgroundWorkerHandle *h
 
             status = GetBackgroundWorkerPid(handle, &pid);
             if (status == BGWH_STOPPED) {
-                set_latch_on_sigusr1 = save_set_latch_on_sigusr1;
                 return status;
             }
 
             /* Add 100ms timeout instead of infinite wait */
-            rc = WaitLatch(&MyProc->procLatch, WL_LATCH_SET | WL_TIMEOUT | WL_POSTMASTER_DEATH, 100L);
+            rc = WaitLatch(&MyProc->procLatch, WL_LATCH_SET | WL_TIMEOUT | WL_POSTMASTER_DEATH, 100L, WAIT_EVENT_BGWORKER_SHUTDOWN);
 
             ResetLatch(&MyProc->procLatch);
 
@@ -142,7 +175,7 @@ static BgwHandleStatus WaitForBackgroundWorkerShutdown(BackgroundWorkerHandle *h
 
             /* Check for interrupts but don't let them break the entire process */
             if (QueryCancelPending || ProcDiePending) {
-                ereport(WARNING, (errmsg("WaitForBackgroundWorkerShutdown: received interrupt signal, stopping wait")));
+                ereport(WARNING, (errmsg("WaitForBackgroundWorkerShutdownSafely: received interrupt signal, stopping wait")));
                 status = BGWH_POSTMASTER_DIED; /* Return status as if postmaster died */
                 break;
             }
@@ -152,21 +185,18 @@ static BgwHandleStatus WaitForBackgroundWorkerShutdown(BackgroundWorkerHandle *h
 
         /* If maximum attempts reached */
         if (attempts >= max_attempts) {
-            ereport(WARNING, (errmsg("WaitForBackgroundWorkerShutdown: timeout after %d attempts", max_attempts)));
+            ereport(WARNING, (errmsg("WaitForBackgroundWorkerShutdownSafely: timeout after %d attempts", max_attempts)));
             status = BGWH_POSTMASTER_DIED; /* Return error status */
         }
     }
     PG_CATCH();
     {
         /* Log error but do NOT re-throw exception */
-        ereport(WARNING, (errmsg("WaitForBackgroundWorkerShutdown: caught exception, returning error status")));
-        set_latch_on_sigusr1 = save_set_latch_on_sigusr1;
+        ereport(WARNING, (errmsg("WaitForBackgroundWorkerShutdownSafely: caught exception, returning error status")));
         /* Return error status instead of PG_RE_THROW() */
         return BGWH_POSTMASTER_DIED;
     }
     PG_END_TRY();
-
-    set_latch_on_sigusr1 = save_set_latch_on_sigusr1;
     return status;
 }
 
@@ -200,15 +230,13 @@ static Oid *get_databases_oids(int *databases_cnt, MemoryContext ctx, bool creat
     if (create_transaction) {
         SetCurrentStatementStartTimestamp();
         StartTransactionCommand();
+        PushActiveSnapshot(GetTransactionSnapshot());
+        pgstat_report_activity(STATE_RUNNING, sql);
     }
 
     if (SPI_connect() < 0) {
         error = "get_databases_oids: SPI_connect failed";
         goto finish_transaction;
-    }
-    if (create_transaction) {
-        PushActiveSnapshot(GetTransactionSnapshot());
-        pgstat_report_activity(STATE_RUNNING, sql);
     }
 
     if (SPI_execute(sql, true, 0) != SPI_OK_SELECT) {
@@ -225,9 +253,9 @@ static Oid *get_databases_oids(int *databases_cnt, MemoryContext ctx, bool creat
 
     for (int i = 0; i < SPI_processed; ++i) {
         Datum oid_datum;
-        bool oid_nullable;
+        bool oid_isnull;
 
-        heap_deform_tuple(SPI_tuptable->vals[i], SPI_tuptable->tupdesc, &oid_datum, &oid_nullable);
+        oid_datum = SPI_getbinval(SPI_tuptable->vals[i], SPI_tuptable->tupdesc, 1, &oid_isnull);
 
         databases_oids[i] = DatumGetObjectId(oid_datum);
     }
@@ -347,16 +375,20 @@ static unsigned int fill_relfilenode(char *name) {
  * Note: This function is called via the background worker framework and
  *       should not be called directly.
  */
-void relsizes_database_stats_job(Datum args) {
+PGDLLEXPORT void relsizes_database_stats_job(Datum args) {
     int retcode = 0;
     char *error = NULL;
     DbWorkerArg wa = { .d = args };
 
     optimizer = false;
     pqsignal(SIGTERM, worker_sigterm);
+    pqsignal(SIGHUP, worker_sighup);
     BackgroundWorkerUnblockSignals();
 
-    BackgroundWorkerInitializeConnectionByOid(wa.s.db, InvalidOid);
+    BackgroundWorkerInitializeConnectionByOid(wa.s.db, InvalidOid, 0);
+
+    if (IS_QUERY_DISPATCHER() && !IS_SINGLENODE())
+        Gp_role = GP_ROLE_DISPATCH;
 
     SetCurrentStatementStartTimestamp();
     StartTransactionCommand();
@@ -394,7 +426,7 @@ void relsizes_database_stats_job(Datum args) {
     /* Remove this condition after decision how to upgrade extensions is made. */
     if (SearchSysCacheExists3(PROCNAMEARGSNSP,
             CStringGetDatum("get_stats_for_database"),
-            PointerGetDatum((&(oidvector){ .dim1 = 1, .values = { INT4OID } })),
+            PointerGetDatum(buildoidvector((Oid[]){INT4OID}, 1)),
             ObjectIdGetDatum(get_namespace_oid("relsizes_stats_schema", true))))
     {
         const char* sql_get_stats =
@@ -403,7 +435,7 @@ void relsizes_database_stats_job(Datum args) {
         pgstat_report_activity(STATE_RUNNING, sql_get_stats);
         retcode = SPI_execute_with_args(sql_get_stats, 1,
                               (Oid[]){INT4OID},
-                              (Datum[]){ObjectIdGetDatum(MyDatabaseId)},
+                              (Datum[]){Int32GetDatum((int32) MyDatabaseId)},
                               NULL, false, 0);
     } else {
         const char* sql_get_stats =
@@ -412,7 +444,7 @@ void relsizes_database_stats_job(Datum args) {
         pgstat_report_activity(STATE_RUNNING, sql_get_stats);
         retcode = SPI_execute_with_args(sql_get_stats, 2,
                               (Oid[]){OIDOID, BOOLOID},
-                              (Datum[]){ObjectIdGetDatum(MyDatabaseId), BoolGetDatum(wa.s.fast)},
+                              (Datum[]){Int32GetDatum((int32) MyDatabaseId), BoolGetDatum(wa.s.fast)},
                               NULL, false, 0);
     }
     if (retcode != SPI_OK_INSERT) {
@@ -420,10 +452,12 @@ void relsizes_database_stats_job(Datum args) {
         goto finish_spi;
     }
 
-    retcode = update_table_sizes_history();
-    if (retcode < 0) {
-        error = "relsizes_database_stats_job: updating tables sizes history table failed";
-        goto finish_spi;
+    if (save_history) {
+        retcode = update_table_sizes_history();
+        if (retcode < 0) {
+            error = "relsizes_database_stats_job: updating tables sizes history table failed";
+            goto finish_spi;
+        }
     }
 
 finish_spi:
@@ -433,7 +467,8 @@ finish_spi:
     }
     SPI_finish();
 finish_transaction:
-    PopActiveSnapshot();
+    if (ActiveSnapshotSet())
+        PopActiveSnapshot();
     CommitTransactionCommand();
     pgstat_report_stat(false);
     pgstat_report_activity(STATE_IDLE, NULL);
@@ -495,7 +530,7 @@ static void run_database_stats_worker(bool fast, Oid db) {
         ereport(WARNING, (errmsg("Failed to start background worker [%s], skipping", database_worker.bgw_name)));
         return;
     }
-    status = WaitForBackgroundWorkerShutdown(handle);
+    status = WaitForBackgroundWorkerShutdownSafely(handle);
     if (status != BGWH_STOPPED) {
         ereport(WARNING, (errmsg("Failure during background worker execution [%s], continuing", database_worker.bgw_name)));
         /* Don't abort execution, just log and continue */
@@ -531,21 +566,88 @@ static void run_database_stats_worker(bool fast, Oid db) {
  *
  * Note: Includes configurable delays between file processing to reduce I/O load
  */
+/*
+ * Scan a single directory and add file stats to the tuple store.
+ * Returns false if the directory could not be opened (non-fatal).
+ */
+static void
+scan_db_dir(const char *dir_path, int segment_id, bool fast,
+            TupleDesc tupdesc, Tuplestorestate *tupstore)
+{
+    DIR        *current_dir = AllocateDir(dir_path);
+    if (!current_dir)
+    {
+        ereport(WARNING,
+                (errmsg("get_stats_for_database: could not open directory \"%s\": %m",
+                        dir_path)));
+        return;
+    }
+
+    struct dirent *file;
+    while ((file = ReadDir(current_dir, dir_path)) != NULL)
+    {
+        char *filename = file->d_name;
+        if (strcmp(filename, ".") == 0 || strcmp(filename, "..") == 0)
+            continue;
+
+        char *file_path = psprintf("%s/%s", dir_path, filename);
+        struct stat stb;
+        if (lstat(file_path, &stb) < 0)
+        {
+            ereport(WARNING,
+                    (errmsg("get_stats_for_database: lstat failed for \"%s\" (unexpected behavior)",
+                            file_path)));
+            pfree(file_path);
+            continue;
+        }
+
+        if (S_ISREG(stb.st_mode))
+        {
+            unsigned int relfilenode = fill_relfilenode(filename);
+            if (relfilenode == 0)
+            {
+                /* Skip non-relation files (PG_VERSION, pg_filenode.map, etc.) */
+                pfree(file_path);
+                continue;
+            }
+
+            Datum outputValues[FILEINFO_ARGS_CNT];
+            bool  outputNulls[FILEINFO_ARGS_CNT] = { false };
+
+            outputValues[0] = Int32GetDatum(segment_id);
+            outputValues[1] = ObjectIdGetDatum(relfilenode);
+            outputValues[2] = CStringGetTextDatum(file_path);
+            outputValues[3] = Int64GetDatum(stb.st_size);
+            outputValues[4] = Int64GetDatum(stb.st_mtime);
+
+            tuplestore_putvalues(tupstore, tupdesc, outputValues, outputNulls);
+
+            if (fast)
+                CHECK_FOR_INTERRUPTS();
+            else
+            {
+                int retcode = WaitLatch(&MyProc->procLatch,
+                                        WL_LATCH_SET | WL_TIMEOUT | WL_POSTMASTER_DEATH,
+                                        worker_file_naptime, WAIT_EVENT_BUFFER_IO);
+                ResetLatch(&MyProc->procLatch);
+                CHECK_FOR_INTERRUPTS();
+                if (retcode & WL_POSTMASTER_DEATH)
+                    proc_exit(1);
+            }
+        }
+        pfree(file_path);
+    }
+
+    FreeDir(current_dir);
+}
+
 Datum get_stats_for_database(PG_FUNCTION_ARGS) {
     int segment_id = GpIdentity.segindex;
     Oid dboid = PG_GETARG_OID(0);
     bool fast = (PG_NARGS() < 2) ? false : PG_GETARG_BOOL(1);
 
-    char cwd[PATH_MAX];
-    char *data_dir = NULL;
-    char *error = NULL;
-    char *file_path = NULL;
+    const char *error = NULL;
 
-    if (getcwd(cwd, sizeof(cwd)) == NULL) {
-        error = "get_stats_for_database: failed to get current working directory";
-        goto finish_data;
-    }
-    data_dir = psprintf("%s/base/%u", cwd, dboid);
     ReturnSetInfo *rsinfo = (ReturnSetInfo *)fcinfo->resultinfo;
     /* Validate function call context */
     if (rsinfo == NULL || !IsA(rsinfo, ReturnSetInfo)) {
@@ -569,71 +671,63 @@ Datum get_stats_for_database(PG_FUNCTION_ARGS) {
 
     bool randomAccess = (rsinfo->allowedModes & SFRM_Materialize_Random) != 0;
     Tuplestorestate *tupstore = tuplestore_begin_heap(randomAccess, false, work_mem);
-    
     rsinfo->returnMode = SFRM_Materialize;
     rsinfo->setResult = tupstore;
     rsinfo->setDesc = tupdesc;
 
-    Datum outputValues[FILEINFO_ARGS_CNT];
-    bool outputNulls[FILEINFO_ARGS_CNT] = { false };
-
     MemoryContextSwitchTo(oldcontext);
 
-    /* Scan database directory for files */
-    DIR *current_dir = AllocateDir(data_dir);
-    if (!current_dir) {
-        error = "get_stats_for_database: failed to allocate current directory";
-        goto finish_data;
+    /* Scan default tablespace: $DataDir/base/<dboid> */
+    {
+        char *default_dir = psprintf("%s/base/%u", DataDir, dboid);
+        scan_db_dir(default_dir, segment_id, fast, tupdesc, tupstore);
+        pfree(default_dir);
     }
 
-    struct dirent *file;
-    while ((file = ReadDir(current_dir, data_dir)) != NULL) {
-        char *filename = file->d_name;
-        if (strcmp(filename, ".") == 0 || strcmp(filename, "..") == 0) {
-            continue;
-        }
+    /* Scan non-default tablespaces: $DataDir/pg_tblspc/<spcoid>/<version>/<dboid> */
+    {
+        char *tblspc_base = psprintf("%s/pg_tblspc", DataDir);
+        DIR  *tblspc_dir  = AllocateDir(tblspc_base);
+        if (tblspc_dir)
+        {
+            struct dirent *spc_entry;
+            while ((spc_entry = ReadDir(tblspc_dir, tblspc_base)) != NULL)
+            {
+                if (strcmp(spc_entry->d_name, ".") == 0 ||
+                    strcmp(spc_entry->d_name, "..") == 0)
+                    continue;
 
-        file_path = psprintf("%s/%s", data_dir, filename);
-        struct stat stb;
-        if (lstat(file_path, &stb) < 0) {
-            ereport(WARNING,
-                    (errmsg("get_stats_for_database: lstat failed with %s file (unexpected behavior)", file_path)));
-            pfree(file_path);
-            continue;
-        }
+                /*
+                 * Each entry is a symlink to the tablespace directory.
+                 * Inside it there is a version subdirectory (e.g. PG_14_202107181)
+                 * and then per-database subdirectories named by dboid.
+                 */
+                char *spc_path = psprintf("%s/%s", tblspc_base, spc_entry->d_name);
+                DIR  *ver_dir  = AllocateDir(spc_path);
+                if (ver_dir)
+                {
+                    struct dirent *ver_entry;
+                    while ((ver_entry = ReadDir(ver_dir, spc_path)) != NULL)
+                    {
+                        if (strcmp(ver_entry->d_name, ".") == 0 ||
+                            strcmp(ver_entry->d_name, "..") == 0)
+                            continue;
 
-        if (S_ISREG(stb.st_mode)) {
-            /* Process regular files and collect size statistics */
-            outputValues[0] = Int32GetDatum(segment_id);
-            outputValues[1] = ObjectIdGetDatum(fill_relfilenode(filename));
-            outputValues[2] = CStringGetTextDatum(file_path);
-            outputValues[3] = Int64GetDatum(stb.st_size);
-            outputValues[4] = Int64GetDatum(stb.st_mtime);
-
-            tuplestore_putvalues(tupstore, tupdesc, outputValues, outputNulls);
-
-            if (fast)
-                CHECK_FOR_INTERRUPTS();
-            else {
-                /* Brief pause between file processing to reduce system load */
-                int retcode = WaitLatch(&MyProc->procLatch,
-                                WL_LATCH_SET | WL_TIMEOUT | WL_POSTMASTER_DEATH,
-                                worker_file_naptime);
-                ResetLatch(&MyProc->procLatch);
-
-                CHECK_FOR_INTERRUPTS();
-
-                if (retcode & WL_POSTMASTER_DEATH) {
-                    proc_exit(1);
+                        char *db_dir = psprintf("%s/%s/%u",
+                                                spc_path, ver_entry->d_name, dboid);
+                        scan_db_dir(db_dir, segment_id, fast, tupdesc, tupstore);
+                        pfree(db_dir);
+                    }
+                    FreeDir(ver_dir);
                 }
+                pfree(spc_path);
             }
+            FreeDir(tblspc_dir);
         }
-        pfree(file_path);
+        pfree(tblspc_base);
     }
 
-    FreeDir(current_dir);
 finish_data:
-    pfree(data_dir);
     if (error != NULL) {
         ereport(WARNING, (errmsg("%s: %m", error)));
         /* Don't abort execution, return result */
@@ -671,7 +765,7 @@ static void get_stats_for_databases(Oid *databases_oids, int databases_cnt, bool
             CHECK_FOR_INTERRUPTS();
         else {
             int naptime = (databases_cnt > 0) ? (worker_database_naptime / databases_cnt) : worker_database_naptime;
-            int retcode = WaitLatch(&MyProc->procLatch, WL_LATCH_SET | WL_TIMEOUT | WL_POSTMASTER_DEATH, naptime);
+            int retcode = WaitLatch(&MyProc->procLatch, WL_LATCH_SET | WL_TIMEOUT | WL_POSTMASTER_DEATH, naptime, WAIT_EVENT_BGWORKER_STARTUP);
             ResetLatch(&MyProc->procLatch);
             CHECK_FOR_INTERRUPTS();
             /* emergency bailout if postmaster has died */
@@ -835,18 +929,23 @@ static void relsizes_collect_stats_once_internal(bool from_worker) {
  * Note: This function should only be called via the background worker
  *       framework and runs in the "postgres" database context.
  */
-void relsizes_collect_stats(Datum main_arg) {
+PGDLLEXPORT void relsizes_collect_stats(Datum main_arg) {
     optimizer = false;
     pqsignal(SIGTERM, worker_sigterm);
+    pqsignal(SIGHUP, worker_sighup);
     BackgroundWorkerUnblockSignals();
-    BackgroundWorkerInitializeConnection("postgres", NULL);
+    BackgroundWorkerInitializeConnection("postgres", NULL, 0);
 
     while (!got_sigterm) {
+        if (got_sighup) {
+            got_sighup = false;
+            ProcessConfigFile(PGC_SIGHUP);
+        }
         if (enabled)
             relsizes_collect_stats_once_internal(true);
 
         int retcode =
-            WaitLatch(&MyProc->procLatch, WL_LATCH_SET | WL_TIMEOUT | WL_POSTMASTER_DEATH, worker_restart_naptime);
+            WaitLatch(&MyProc->procLatch, WL_LATCH_SET | WL_TIMEOUT | WL_POSTMASTER_DEATH, worker_restart_naptime, WAIT_EVENT_BGWORKER_STARTUP);
         ResetLatch(&MyProc->procLatch);
         CHECK_FOR_INTERRUPTS();
         if (retcode & WL_POSTMASTER_DEATH) {
@@ -892,6 +991,7 @@ Datum relsizes_collect_stats_once(PG_FUNCTION_ARGS) {
  *
  * GUC Parameters defined:
  * - gp_relsizes_stats.enabled: Enable/disable the background worker
+ * - gp_relsizes_stats.save_history: Enable saving table sizes to history table
  * - gp_relsizes_stats.restart_naptime: Delay between collection cycles (ms)
  * - gp_relsizes_stats.database_naptime: Delay between database processing (ms)
  * - gp_relsizes_stats.file_naptime: Delay between file processing (ms)
@@ -913,6 +1013,10 @@ void _PG_init(void) {
     /* Define GUC variables */
     DefineCustomBoolVariable("gp_relsizes_stats.enabled", "Enable main background worker flag", NULL, &enabled, false,
                              PGC_SIGHUP, GUC_NOT_IN_SAMPLE, NULL, NULL, NULL);
+    DefineCustomBoolVariable("gp_relsizes_stats.save_history",
+                             "Enable saving table sizes to history table.",
+                             NULL, &save_history, true,
+                             PGC_SIGHUP, 0, NULL, NULL, NULL);
     DefineCustomIntVariable("gp_relsizes_stats.restart_naptime", "Duration between every collect-phases (in ms).", NULL,
                             &worker_restart_naptime,
                             6 * HOUR_TIME, /* 6 hours delay between collect-phases */

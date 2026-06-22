@@ -324,6 +324,11 @@ jobs:
                "make_configs":["gpcontrib/gp_stats_collector:installcheck"],
                "extension":"gp_stats_collector"
               },
+              {"test":"gpcontrib-gp-relsizes-stats",
+               "make_configs":["gpcontrib/gp_relsizes_stats:installcheck"],
+               "extension":"gp_relsizes_stats",
+               "shared_preload_libraries":"gp_relsizes_stats"
+              },
               {"test":"ic-fixme",
                "make_configs":["src/test/regress:installcheck-fixme"],
                "enable_core_check":false
@@ -1442,6 +1447,20 @@ jobs:
                     psql postgres"
                 then
                     echo "Error creating gp_stats_collector extension"
+                    exit 1
+                fi
+                ;;
+              gp_relsizes_stats)
+                if ! su - gpadmin -c "source ${BUILD_DESTINATION}/cloudberry-env.sh && \
+                  source ${SRC_DIR}/gpAux/gpdemo/gpdemo-env.sh && \
+                  gpconfig -c shared_preload_libraries -v 'gp_relsizes_stats' && \
+                  gpstop -ra && \
+                  echo 'CREATE EXTENSION IF NOT EXISTS gp_relsizes_stats; \
+                        SHOW shared_preload_libraries; \
+                        TABLE pg_extension;' | \
+                    psql postgres"
+                then
+                    echo "Error creating gp_relsizes_stats extension"
                     exit 1
                 fi
                 ;;

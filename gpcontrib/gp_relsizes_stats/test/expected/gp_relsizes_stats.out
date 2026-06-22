@@ -1,4 +1,8 @@
+\set QUIET off
+SET client_min_messages TO error;
+SET
 CREATE EXTENSION gp_relsizes_stats;
+CREATE EXTENSION
 CREATE TABLE employees (
     employee_id SERIAL PRIMARY KEY,
     first_name VARCHAR(50) NOT NULL,
@@ -6,10 +10,13 @@ CREATE TABLE employees (
     department_id INT,
     date_of_birth DATE
 );
+CREATE TABLE
 INSERT INTO employees (first_name, last_name, department_id, date_of_birth) VALUES
 ('John', 'Doe', 1, '1988-06-15'),
 ('Jane', 'Smith', 2, '1990-07-20'),
 ('Emily', 'Jones', 1, '1985-08-30');
+INSERT 0 3
+-- Default is save_history = on — history write
 SELECT relsizes_stats_schema.relsizes_collect_stats_once();
  relsizes_collect_stats_once 
 -----------------------------
@@ -26,6 +33,7 @@ SELECT size FROM relsizes_stats_schema.table_sizes_history WHERE relname = 'empl
 insert into employees (first_name, last_name, department_id, date_of_birth) 
 select 'First' || i, 'Last' || i, (i % 10) + 1, DATE '1980-01-01' + (i % 365 * 365 / 30) 
 from generate_series(1, 10001)i;
+INSERT 0 10001
 SELECT relsizes_stats_schema.relsizes_collect_stats_once();
  relsizes_collect_stats_once 
 -----------------------------
@@ -54,6 +62,7 @@ SELECT size FROM relsizes_stats_schema.table_sizes_history WHERE relname = 'empl
 
 -- Cleanup
 DROP TABLE employees;
+DROP TABLE
 --
 -- relsizes_collect_stats_once should collect files sizes without pauses
 -- The naptime value is 1ms, so the pauses take at least 10s to process 10k files.
@@ -73,32 +82,24 @@ SELECT (EXTRACT(EPOCH FROM LOCALTIMESTAMP(0)) - :t1) < 5;
 
 -- Cleanup
 DROP TABLE t;
+DROP TABLE
 --
 -- Check that schema size is calculated correctly when the schema
 -- contains partitioned tables and ordinary ones.
--- start_ignore
-DROP SCHEMA IF EXISTS test CASCADE;
-NOTICE:  schema "test" does not exist, skipping
--- end_ignore
 CREATE SCHEMA test;
+CREATE SCHEMA
 CREATE TABLE test.t1 (i INT, j INT)
 DISTRIBUTED BY (i)
 PARTITION BY RANGE (i)
   SUBPARTITION BY RANGE (j)
   SUBPARTITION TEMPLATE (SUBPARTITION sp START (0) END (2) EVERY(1))
 (PARTITION p START (0) END (3) EVERY(1));
-NOTICE:  CREATE TABLE will create partition "t1_1_prt_p_1" for table "t1"
-NOTICE:  CREATE TABLE will create partition "t1_1_prt_p_1_2_prt_sp_1" for table "t1_1_prt_p_1"
-NOTICE:  CREATE TABLE will create partition "t1_1_prt_p_1_2_prt_sp_2" for table "t1_1_prt_p_1"
-NOTICE:  CREATE TABLE will create partition "t1_1_prt_p_2" for table "t1"
-NOTICE:  CREATE TABLE will create partition "t1_1_prt_p_2_2_prt_sp_1" for table "t1_1_prt_p_2"
-NOTICE:  CREATE TABLE will create partition "t1_1_prt_p_2_2_prt_sp_2" for table "t1_1_prt_p_2"
-NOTICE:  CREATE TABLE will create partition "t1_1_prt_p_3" for table "t1"
-NOTICE:  CREATE TABLE will create partition "t1_1_prt_p_3_2_prt_sp_1" for table "t1_1_prt_p_3"
-NOTICE:  CREATE TABLE will create partition "t1_1_prt_p_3_2_prt_sp_2" for table "t1_1_prt_p_3"
+CREATE TABLE
 INSERT INTO test.t1 (i, j)
 SELECT a % 3, a % 2 FROM generate_series(0, 2 * 3 - 1) a;
+INSERT 0 6
 CREATE TABLE test.t2 AS SELECT 1 i DISTRIBUTED BY(i);
+SELECT 1
 SELECT relsizes_stats_schema.relsizes_collect_stats_once();
  relsizes_collect_stats_once 
 -----------------------------
@@ -182,6 +183,69 @@ ORDER BY relname, segment, own_file;
 (60 rows)
 
 DROP SCHEMA test CASCADE;
-NOTICE:  drop cascades to 2 other objects
-DETAIL:  drop cascades to table test.t1
-drop cascades to table test.t2
+DROP SCHEMA
+--
+-- Check that save_history option controls writing to table_sizes_history
+-- start_ignore
+DROP TABLE IF EXISTS t_history_test;
+DROP TABLE
+-- end_ignore
+CREATE TABLE t_history_test (i INT) DISTRIBUTED BY (i);
+CREATE TABLE
+INSERT INTO t_history_test VALUES (1);
+INSERT 0 1
+-- Disable option - history should not write
+ALTER SYSTEM SET gp_relsizes_stats.save_history = off;
+ALTER SYSTEM
+SELECT pg_reload_conf();
+ pg_reload_conf 
+----------------
+ t
+(1 row)
+
+SELECT relsizes_stats_schema.relsizes_collect_stats_once();
+ relsizes_collect_stats_once 
+-----------------------------
+ 
+(1 row)
+
+SELECT count(*) FROM relsizes_stats_schema.table_sizes_history
+ WHERE relname = 't_history_test';
+ count 
+-------
+     0
+(1 row)
+
+-- Enable option - history should write
+ALTER SYSTEM SET gp_relsizes_stats.save_history = on;
+ALTER SYSTEM
+SELECT pg_reload_conf();
+ pg_reload_conf 
+----------------
+ t
+(1 row)
+
+SELECT relsizes_stats_schema.relsizes_collect_stats_once();
+ relsizes_collect_stats_once 
+-----------------------------
+ 
+(1 row)
+
+SELECT count(*) FROM relsizes_stats_schema.table_sizes_history
+ WHERE relname = 't_history_test';
+ count 
+-------
+     1
+(1 row)
+
+-- Cleanup
+ALTER SYSTEM RESET gp_relsizes_stats.save_history;
+ALTER SYSTEM
+SELECT pg_reload_conf();
+ pg_reload_conf 
+----------------
+ t
+(1 row)
+
+DROP TABLE t_history_test;
+DROP TABLE
