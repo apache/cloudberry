@@ -1,0 +1,6 @@
+# gp_url_tools extension
+comment = 'Greenplum extension providing functionality for working with URL addresses'
+default_version = '1.0'
+module_pathname = '$libdir/gp_url_tools'
+relocatable = true
+trusted = true
