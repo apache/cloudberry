@@ -74,6 +74,7 @@ static void valid_encoding_length(char *current, char *end, int length) {
     Assert(current + length <= end);
 }
 
+
 static text *encode(text *input, const char *unreserved_special) {
     int input_length, output_length;
     text *output;
