@@ -1,4 +1,8 @@
-CREATE EXTENSION gp_url_tools;
+-- start_ignore
+CREATE EXTENSION IF NOT EXISTS gp_url_tools;
+-- end_ignore
+SET client_encoding TO UTF8;
+-- Basic encode/decode with ASCII and %XX escaping.
 SELECT url_tools_schema.encode_url('Hello World');
   encode_url   
 ---------------
@@ -11,6 +15,7 @@ SELECT url_tools_schema.decode_url('Hello%20World');
  Hello World
 (1 row)
 
+-- encode_url() should escape reserved URL characters like ':'.
 SELECT url_tools_schema.encode_url(unnest) from unnest(string_to_array('http://hu.wikipedia.org/wiki/São_Paulo','/'));
     encode_url    
 ------------------
@@ -21,6 +26,7 @@ SELECT url_tools_schema.encode_url(unnest) from unnest(string_to_array('http://h
  S%C3%A3o_Paulo
 (5 rows)
 
+-- encode_uri() keeps URI delimiters, decode_uri() reverses UTF-8 %XX escaping.
 SELECT url_tools_schema.encode_uri('http://hu.wikipedia.org/wiki/São_Paulo');
                  encode_uri                  
 ---------------------------------------------
@@ -33,9 +39,38 @@ SELECT md5(url_tools_schema.decode_uri('http://hu.wikipedia.org/wiki/S%C3%A3o_Pa
  147ded7d471df9cf050bc13242cbf39e
 (1 row)
 
+-- Legacy UTF-16 %uXXXX decoding for BMP characters.
 SELECT md5(url_tools_schema.decode_url('%u6D6A%u82B1%u4E00%u6735%u6735%20%u7B2C8%u96C6%20-%20%u89C6%u9891%u5728%u7EBF%u89C2%u770B%20-%20%u6D6A%u82B1%u4E00%u6735%u6735%20-%20%u8292%u679CTV'));
                md5                
 ----------------------------------
  d155b1f894fcd5540ba5881fb71753e1
 (1 row)
 
+-- Single UTF-16 surrogate pair should decode to one Unicode character.
+SELECT url_tools_schema.decode_url('%uD83D%uDE00');
+ decode_url 
+------------
+ 😀
+(1 row)
+
+-- Surrogate pair should also decode correctly in the middle of a string.
+SELECT url_tools_schema.decode_url('hello%uD83D%uDE00world');
+ decode_url  
+-------------
+ hello😀world
+(1 row)
+
+-- Mixed input: ASCII, UTF-8 %XX, UTF-16 BMP, and UTF-16 surrogate pair.
+SELECT url_tools_schema.decode_url('A%20%C3%A3%20%u6D6A%20%uD83D%uDE00');
+ decode_url 
+------------
+ A ã 浪 😀
+(1 row)
+
+-- Truncated surrogate pair should raise an error.
+SELECT url_tools_schema.decode_url('%uD83D');
+ERROR:  invalid sequence: not enough characters to decode UTF-16 symbol from 0 position
+-- High surrogate followed by a non-low-surrogate code unit should fail.
+SELECT url_tools_schema.decode_url('%uD83D%u0041');
+ERROR:  invalid UTF-16 byte: characters from 6 position define invalid UTF-16 symbol
+DROP EXTENSION gp_url_tools;

@@ -4,6 +4,7 @@
 \echo Use "CREATE EXTENSION gp_url_tools" to load this file. \quit
 
 CREATE SCHEMA IF NOT EXISTS url_tools_schema;
+GRANT USAGE ON SCHEMA url_tools_schema TO public;
 
 CREATE FUNCTION url_tools_schema.encode_url(text)
 RETURNS text
@@ -24,4 +25,3 @@ CREATE FUNCTION url_tools_schema.decode_uri(text)
 RETURNS text
 AS 'MODULE_PATHNAME', 'decode_uri'
 LANGUAGE C IMMUTABLE STRICT;
-

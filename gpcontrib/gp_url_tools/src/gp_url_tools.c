@@ -1,3 +1,30 @@
+/*-------------------------------------------------------------------------
+ *
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ *
+ * gp_url_tools.c
+ *
+ * IDENTIFICATION
+ *	  gpcontrib/gp_url_tools/src/gp_url_tools.c
+ *
+ *-------------------------------------------------------------------------
+ */
+
 #include "postgres.h"
 
 #include "fmgr.h"
@@ -11,56 +38,43 @@ PG_FUNCTION_INFO_V1(decode_url);
 PG_FUNCTION_INFO_V1(encode_uri);
 PG_FUNCTION_INFO_V1(decode_uri);
 
-Datum url_encode(PG_FUNCTION_ARGS);
-Datum url_decode(PG_FUNCTION_ARGS);
-Datum uri_encode(PG_FUNCTION_ARGS);
-Datum uri_decode(PG_FUNCTION_ARGS);
-
-static bool allowed_character(const char c, const char *unreserved_special);
-static unsigned char char2hex(char c);
-static char *write_character(char *output, const char c);
-static void valid_encoding_length(char *current, char *end, int length);
-static text *encode(text *input, const char *unreserved_special);
-static bool valid_utf16(unsigned int byte, int byte_num);
-static unsigned int decode_utf16_pair(unsigned int bytes[2]);
-static text *decode(text *input, const char *unreserved_special);
-static bool is_utf8(const char *sequence, int length);
-static bool is_utf16(const char *sequence, int length);
-static void fetch_utf16(unsigned int *byte, const char *input);
-
 static const unsigned int utf16_low[2] = {0xD800, 0xDC00};
 static const unsigned int utf16_high[2] = {0xDBFF, 0xDFFF};
 static const unsigned int utf16_decode = 0x03FF;
 static const unsigned int utf16_decode_base = 0x10000;
+static const int utf8_with_percent_length = 3;          // Example: '%20
+static const int utf16_with_percent_length = 6;         // Example: '%u0430'
+static const int utf16_surrogate_pair_length = 12;      // Example: '%uD800%uDC00'
+static const int utf16_second_codepoint_offset = 8;     // '%uD800%uDC00' => ('%uD800%u'.lenght == 8)
+static const int utf16_past_first_codepoint_offset = 6; // '%uD800%uDC00' => ('%uD800'.lenght == 6)
 
-unsigned char char2hex(char c) {
-    if ('0' <= c && c <= '9') {
+static unsigned char hex_char_to_value(char c) {
+    if ('0' <= c && c <= '9')
         return c - '0';
-    } else if ('A' <= c && c <= 'Z') {
+    if ('A' <= c && c <= 'F')
         return c - 'A' + 10;
-    } else if ('a' <= c && c <= 'z') {
+    if ('a' <= c && c <= 'f')
         return c - 'a' + 10;
-    }
     ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
                     errmsg("invalid hexadecimal digit: \"%c\"", c)));
-    return -1;
+    pg_unreachable();
 }
 
-bool allowed_character(const char c, const char *unreserved_special) {
+static bool allowed_character(const char c, const char *unreserved_special) {
     return ('0' <= c && c <= '9') || ('A' <= c && c <= 'Z') ||
            ('a' <= c && c <= 'z') || (strchr(unreserved_special, c) != NULL);
 }
 
-char *write_character(char *output, const char c) {
+static char *write_character(char *output, const char c) {
     *output = c;
     return ++output;
 }
 
-void valid_encoding_length(char *current, char *end, int length) {
+static void valid_encoding_length(char *current, char *end, int length) {
     Assert(current + length <= end);
 }
 
-text *encode(text *input, const char *unreserved_special) {
+static text *encode(text *input, const char *unreserved_special) {
     int input_length, output_length;
     text *output;
     char *cinput, *coutput, *current, *cend;
@@ -68,8 +82,10 @@ text *encode(text *input, const char *unreserved_special) {
     // Convert input data for processing
     cinput = text_to_cstring(input);
     input_length = strlen(cinput);
-    // Allocate memory for result url string (allocate more memory for bad
-    // cases)
+    /*
+     * Worst case: every input byte becomes '%XX' (3 output chars).
+     * The +1 accounts for the null terminator
+     */
     output_length = 3 * input_length + 1;
     coutput = palloc(sizeof(*coutput) * output_length);
     current = coutput;
@@ -77,30 +93,29 @@ text *encode(text *input, const char *unreserved_special) {
 
     for (int i = 0; i < input_length; ++i) {
         if (allowed_character(cinput[i], unreserved_special)) {
-            // single character => does not encode it or skip it
+            // Allowed character => copy it into result string
             valid_encoding_length(current, cend, 1);
             current = write_character(current, cinput[i]);
         } else {
-            // some characters => process them all into '%XX' or '%XXXX'
-            // notation
-            valid_encoding_length(current, cend, 2);
+            // Percent-encode byte as '%XX'
+            valid_encoding_length(current, cend, 3);
             current += sprintf(current, "%%%02X", (unsigned char)cinput[i]);
         }
     }
+    // Terminate result string
     valid_encoding_length(current, cend, 1);
-    current = write_character(current, 0);
+    current = write_character(current, '\0');
 
-    // Convert to text and return
     output = cstring_to_text(coutput);
     pfree(coutput);
     return output;
 }
 
-bool valid_utf16(unsigned int byte, int byte_num) {
+static bool valid_utf16(unsigned int byte, int byte_num) {
     return utf16_low[byte_num] <= byte && byte <= utf16_high[byte_num];
 }
 
-unsigned int decode_utf16_pair(unsigned int bytes[2]) {
+static unsigned int decode_utf16_pair(unsigned int bytes[2]) {
     Assert(valid_utf16(bytes[0], 0));
     Assert(valid_utf16(bytes[1], 1));
 
@@ -108,56 +123,56 @@ unsigned int decode_utf16_pair(unsigned int bytes[2]) {
             (bytes[1] & utf16_decode));
 }
 
-// Check that sequence of bytes starts with 'symbol' in UTF-8 encoding
-//
-// UTF-16 'symbols' starts with '%' or '%', and 'XX' after it.
-// 'XX' - hex sequence that encode bytes
-bool is_utf8(const char *sequence, int length) {
-    return 3 <= length && sequence[0] == '%' && sequence[1] != 'u' &&
-           sequence[1] != 'U';
+/*
+ * Check whether the sequence starts with a percent-encoded UTF-8 byte (%XX).
+ *
+ * A UTF-8 percent-encoded byte starts with '%' followed by exactly two hex
+ * digits (e.g. "%20", "%D0").  This is distinguished from a UTF-16 sequence
+ * which starts with '%u' or '%U' (e.g. "%uD83D").
+ *
+ * Requires at least 3 characters: '%' + 2 hex digits.
+ */
+static bool is_utf8(const char *sequence, int length) {
+    return utf8_with_percent_length <= length && sequence[0] == '%' &&
+           sequence[1] != 'u' && sequence[1] != 'U';
 }
 
-// Check that sequence of bytes starts with 'symbol' in UTF-16 encoding
-//
-// UTF-16 'symbols' starts with '%u' or '%U', and 'XXXX' after it.
-// 'XXXX' - hex sequence that encode bytes (optinally sequence 'XXXX' ->
-// 'XXXXXXXX')
-bool is_utf16(const char *sequence, int length) {
-    return 6 <= length && sequence[0] == '%' &&
+/*
+ * Check whether the sequence starts with a legacy percent-encoded UTF-16 unit
+ * ('%uXXXX' or '%UXXXX'). Requires at least 6 characters: '%u' + 4 hex digits.
+ */
+static bool is_utf16(const char *sequence, int length) {
+    return utf16_with_percent_length <= length && sequence[0] == '%' &&
            (sequence[1] == 'u' || sequence[1] == 'U');
 }
 
-void fetch_utf16(unsigned int *byte, const char *input) {
-    for (int i = 0; i < 4; ++i) {
-        *byte = ((*byte) << 4) | char2hex(input[i]);
-    }
+static void fetch_utf16(unsigned int *byte, const char *input) {
+    for (int i = 0; i < 4; ++i)
+        *byte = ((*byte) << 4) | hex_char_to_value(input[i]);
 }
 
-text *decode(text *input, const char *unreserved_special) {
+static text *decode(text *input, const char *unreserved_special) {
     int input_length;
     text *output;
     char *cinput, *coutput, *current;
 
-    // Convert input data for processing
     cinput = text_to_cstring(input);
     input_length = strlen(cinput);
-    // Allocate memory for result string
     coutput = palloc(sizeof(*coutput) * (input_length + 1));
     current = coutput;
 
     for (int i = 0; i < input_length;) {
         if (cinput[i] == '%') {
-            // special character => start process '%XX' or '%XXXX' sequence of
-            // chars
+            // Special character => start process '%XX' sequence of chars
             if (is_utf16(cinput + i, input_length - i)) {
                 unsigned int result = 0;
-                unsigned int bytes[2] = {0, 0};
-                unsigned char buffer[10] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+                unsigned int bytes[2] = {};
+                unsigned char buffer[10] = {};
 
                 fetch_utf16(bytes, cinput + i + 2);
 
                 if (valid_utf16(bytes[0], 0)) {
-                    if (10 < input_length - i) {
+                    if (input_length - i < utf16_surrogate_pair_length) {
                         ereport(
                             ERROR,
                             (errcode(ERRCODE_CHARACTER_NOT_IN_REPERTOIRE),
@@ -166,34 +181,35 @@ text *decode(text *input, const char *unreserved_special) {
                                     i)));
                     }
 
-                    fetch_utf16(bytes + 1, cinput + i + 6);
+                    fetch_utf16(bytes + 1,
+                                cinput + i + utf16_second_codepoint_offset);
                     if (!valid_utf16(bytes[1], 1)) {
                         ereport(
                             ERROR,
                             (errcode(ERRCODE_CHARACTER_NOT_IN_REPERTOIRE),
                              errmsg("invalid UTF-16 byte: characters from %d "
                                     "position define invalid UTF-16 symbol",
-                                    i + 6)));
+                                    i + utf16_past_first_codepoint_offset)));
                     }
 
                     result = decode_utf16_pair(bytes);
-                    i += 10;
+                    i += utf16_surrogate_pair_length;
                 } else {
                     result = bytes[0];
-                    i += 6;
+                    i += utf16_with_percent_length;
                 }
 
                 unicode_to_utf8((pg_wchar)result, buffer);
-                strncpy(current, (const char *)buffer, pg_utf_mblen(buffer));
+                memcpy(current, buffer, pg_utf_mblen(buffer));
                 current += pg_utf_mblen(buffer);
             } else if (is_utf8(cinput + i, input_length - i)) {
                 current =
-                    write_character(current, (char2hex(cinput[i + 1]) << 4) |
-                                                 char2hex(cinput[i + 2]));
+                    write_character(current, (hex_char_to_value(cinput[i + 1]) << 4) |
+                                                 hex_char_to_value(cinput[i + 2]));
                 i += 3;
             } else {
-                // common case: not enough characters in line to decode special
-                // sequence => error 'incorrect sequence of tokens'
+                // '%' starts a special sequence, but there are not enough
+                // characters left to decode it => error 'incorrect sequence of tokens'
                 ereport(ERROR,
                         (errcode(ERRCODE_CHARACTER_NOT_IN_REPERTOIRE),
                          errmsg("invalid sequence: not enough characters to "
@@ -201,49 +217,46 @@ text *decode(text *input, const char *unreserved_special) {
                                 i)));
             }
         } else if (allowed_character(cinput[i], unreserved_special)) {
-            // allowed and not '%' character => just copy it into result string
+            // Copy an unescaped character that is allowed
             current = write_character(current, cinput[i]);
             i += 1;
         } else {
-            // cinput[i] - is not '%' and not allowed character => error
-            // 'unexpected character'
             ereport(ERROR, (errcode(ERRCODE_CHARACTER_NOT_IN_REPERTOIRE),
-                            errmsg("unalloweed characters in url code: \"%c\"",
+                            errmsg("disallowed characters in URL: \"%c\"",
                                    cinput[i])));
         }
     }
-    current = write_character(current, 0);
+    current = write_character(current, '\0');
 
-    // Convert to text and return
     output = cstring_to_text(coutput);
     pfree(coutput);
     return output;
 }
 
+static const char *url_unreserved_special = ".-~_";
+
 Datum encode_url(PG_FUNCTION_ARGS) {
-    if (PG_ARGISNULL(0)) {
+    if (PG_ARGISNULL(0))
         PG_RETURN_NULL();
-    }
-    PG_RETURN_TEXT_P(encode(PG_GETARG_TEXT_PP(0), ".-~_"));
+    PG_RETURN_TEXT_P(encode(PG_GETARG_TEXT_PP(0), url_unreserved_special));
 }
 
 Datum decode_url(PG_FUNCTION_ARGS) {
-    if (PG_ARGISNULL(0)) {
+    if (PG_ARGISNULL(0))
         PG_RETURN_NULL();
-    }
-    PG_RETURN_TEXT_P(decode(PG_GETARG_TEXT_PP(0), ".-~_"));
+    PG_RETURN_TEXT_P(decode(PG_GETARG_TEXT_PP(0), url_unreserved_special));
 }
 
+static const char *uri_unreserved_special = "-_.!~*'();/?:@&=+$,#";
+
 Datum encode_uri(PG_FUNCTION_ARGS) {
-    if (PG_ARGISNULL(0)) {
+    if (PG_ARGISNULL(0))
         PG_RETURN_NULL();
-    }
-    PG_RETURN_TEXT_P(encode(PG_GETARG_TEXT_PP(0), "-_.!~*'();/?:@&=+$,#"));
+    PG_RETURN_TEXT_P(encode(PG_GETARG_TEXT_PP(0), uri_unreserved_special));
 }
 
 Datum decode_uri(PG_FUNCTION_ARGS) {
-    if (PG_ARGISNULL(0)) {
+    if (PG_ARGISNULL(0))
         PG_RETURN_NULL();
-    }
-    PG_RETURN_TEXT_P(decode(PG_GETARG_TEXT_PP(0), "-_.!~*'();/?:@&=+$,#"));
+    PG_RETURN_TEXT_P(decode(PG_GETARG_TEXT_PP(0), uri_unreserved_special));
 }
