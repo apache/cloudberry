@@ -1260,7 +1260,7 @@ Time: 13.068 ms
 <para>
     In the previous example, a unique index "mv_ivm_index" is created on aid and bid
     columns of materialized view "mv_ivm", and this enables the rapid update of the view.
-    Dropping this index make updating the view take a longer time.
+    Dropping this index makes updating the view take a longer time.
 <programlisting>
 test=# DROP INDEX mv_ivm_index;
 DROP INDEX
