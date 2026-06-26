@@ -13631,7 +13631,7 @@ Author: Michael Paquier <michael@paquier.xyz>
 
       <para>
        Backend support for this authentication method was removed in
-       <productname>PostgresSQL</productname> 9.1.
+       <productname>PostgreSQL</productname> 9.1.
       </para>
      </listitem>
 

@@ -1151,7 +1151,7 @@ CREATE <emphasis>INCREMENTAL</emphasis> MATERIALIZED VIEW mymatview AS SELECT * 
 <programlisting>
 postgres=# CREATE INCREMENTAL MATERIALIZED VIEW m AS SELECT * FROM t0;
 NOTICE:  could not create an index on materialized view "m" automatically
-HINT:  Create an index on the materialized view for effcient incremental maintenance.
+HINT:  Create an index on the materialized view for efficient incremental maintenance.
 SELECT 3
 postgres=# SELECT * FROM m;
  i
@@ -1253,14 +1253,14 @@ Time: 13.068 ms
     automatically if possible.  If the view definition query has a GROUP BY clause, a unique
     index is created on the columns of GROUP BY expressions.  Also, if the view has DISTINCT
     clause, a unique index is created on all columns in the target list. Otherwise, if the
-    view contains all primary key attritubes of its base tables in the target list, a unique
-    index is created on these attritubes.  In other cases, no index is created.
+    view contains all primary key attributes of its base tables in the target list, a unique
+    index is created on these attributes.  In other cases, no index is created.
 </para>
 
 <para>
     In the previous example, a unique index "mv_ivm_index" is created on aid and bid
     columns of materialized view "mv_ivm", and this enables the rapid update of the view.
-    Dropping this index make updating the view take a loger time.
+    Dropping this index make updating the view take a longer time.
 <programlisting>
 test=# DROP INDEX mv_ivm_index;
 DROP INDEX
@@ -1409,7 +1409,7 @@ Time: 16386.245 ms (00:16.386)
 
         <listitem>
           <para>
-            UNION/INTERSECT/EXCEPT clauses cannnot be used.
+            UNION/INTERSECT/EXCEPT clauses cannot be used.
           </para>
         </listitem>
 
@@ -1427,13 +1427,13 @@ Time: 16386.245 ms (00:16.386)
 
         <listitem>
           <para>
-            inheritance parent tables cannnot be used.
+            inheritance parent tables cannot be used.
           </para>
         </listitem>
 
         <listitem>
           <para>
-            VALUES clause cannnot be used.
+            VALUES clause cannot be used.
           </para>
         </listitem>
 
