@@ -1077,6 +1077,16 @@ static const SchemaQuery Query_for_trigger_of_table = {
 "   FROM pg_catalog.pg_foreign_server "\
 "  WHERE srvname LIKE '%s'"
 
+#define Query_for_list_of_foreign_catalogs \
+" SELECT fcname "\
+"   FROM pg_catalog.pg_foreign_catalog "\
+"  WHERE fcname LIKE '%s'"
+
+#define Query_for_list_of_foreign_volumes \
+" SELECT fvname "\
+"   FROM pg_catalog.pg_foreign_volume "\
+"  WHERE fvname LIKE '%s'"
+
 #define Query_for_list_of_user_mappings \
 " SELECT usename "\
 "   FROM pg_catalog.pg_user_mappings "\
@@ -1257,6 +1267,7 @@ static const pgsql_thing_t words_after_create[] = {
 	{"AGGREGATE", NULL, NULL, Query_for_list_of_aggregates},
 	{"CAST", NULL, NULL, NULL}, /* Casts have complex structures for names, so
 								 * skip it */
+	{"CATALOG", Query_for_list_of_foreign_catalogs, NULL, NULL, NULL, THING_NO_CREATE | THING_NO_ALTER},
 	{"COLLATION", NULL, NULL, &Query_for_list_of_collations},
 
 	/*
@@ -1274,10 +1285,13 @@ static const pgsql_thing_t words_after_create[] = {
 	{"EVENT TRIGGER", NULL, NULL, NULL},
 	{"EXTENSION", Query_for_list_of_extensions},
 	{"EXTERNAL TABLE", NULL, NULL, NULL},
+	{"FOREIGN CATALOG", NULL, NULL, NULL, NULL, THING_NO_DROP | THING_NO_ALTER},
 	{"FOREIGN DATA WRAPPER", NULL, NULL, NULL},
 	{"FOREIGN TABLE", NULL, NULL, NULL},
+	{"FOREIGN VOLUME", NULL, NULL, NULL, NULL, THING_NO_DROP | THING_NO_ALTER},
 	{"FUNCTION", NULL, NULL, Query_for_list_of_functions},
 	{"GROUP", Query_for_list_of_roles},
+	{"ICEBERG TABLE", NULL, NULL, NULL, NULL, THING_NO_DROP | THING_NO_ALTER},
 	{"INCREMENTAL MATERIALIZED VIEW", NULL, NULL, &Query_for_list_of_matviews, NULL, THING_NO_DROP | THING_NO_ALTER},
 	{"INDEX", NULL, NULL, &Query_for_list_of_indexes},
 	{"LANGUAGE", Query_for_list_of_languages},
@@ -1324,6 +1338,7 @@ static const pgsql_thing_t words_after_create[] = {
 	{"USER MAPPING FOR", NULL, NULL, NULL},
 	{"STORAGE USER MAPPING FOR", NULL, NULL, NULL},
 	{"VIEW", NULL, NULL, &Query_for_list_of_views},
+	{"VOLUME", Query_for_list_of_foreign_volumes, NULL, NULL, NULL, THING_NO_CREATE | THING_NO_ALTER},
 	{"WAREHOUSE", NULL},
 	{NULL}						/* end of list */
 };
@@ -3042,7 +3057,27 @@ psql_completion(const char *text, int start, int end)
 
 	/* CREATE FOREIGN */
 	else if (Matches("CREATE", "FOREIGN"))
-		COMPLETE_WITH("DATA WRAPPER", "TABLE");
+		COMPLETE_WITH("CATALOG", "DATA WRAPPER", "TABLE", "VOLUME");
+
+	/* CREATE FOREIGN CATALOG */
+	else if (Matches("CREATE", "FOREIGN", "CATALOG", MatchAny))
+		COMPLETE_WITH("SERVER");
+	else if (Matches("CREATE", "FOREIGN", "CATALOG", MatchAny, "SERVER"))
+		COMPLETE_WITH_QUERY(Query_for_list_of_servers);
+	else if (Matches("CREATE", "FOREIGN", "CATALOG", MatchAny, "SERVER", MatchAny))
+		COMPLETE_WITH("OPTIONS");
+
+	/* CREATE FOREIGN VOLUME */
+	else if (Matches("CREATE", "FOREIGN", "VOLUME", MatchAny))
+		COMPLETE_WITH("SERVER");
+	else if (Matches("CREATE", "FOREIGN", "VOLUME", MatchAny, "SERVER"))
+		COMPLETE_WITH_QUERY(Query_for_list_of_servers);
+	else if (Matches("CREATE", "FOREIGN", "VOLUME", MatchAny, "SERVER", MatchAny))
+		COMPLETE_WITH("OPTIONS");
+
+	/* CREATE ICEBERG */
+	else if (Matches("CREATE", "ICEBERG"))
+		COMPLETE_WITH("TABLE");
 
 	/* CREATE FOREIGN DATA WRAPPER */
 	else if (Matches("CREATE", "FOREIGN", "DATA", "WRAPPER", MatchAny))
@@ -3801,7 +3836,7 @@ psql_completion(const char *text, int start, int end)
 /* DROP */
 	/* Complete DROP object with CASCADE / RESTRICT */
 	else if (Matches("DROP",
-					 "COLLATION|CONVERSION|DOMAIN|EXTENSION|LANGUAGE|PUBLICATION|SCHEMA|SEQUENCE|SERVER|SUBSCRIPTION|STATISTICS|TABLE|TYPE|VIEW",
+					 "CATALOG|COLLATION|CONVERSION|DOMAIN|EXTENSION|LANGUAGE|PUBLICATION|SCHEMA|SEQUENCE|SERVER|SUBSCRIPTION|STATISTICS|TABLE|TYPE|VIEW|VOLUME",
 					 MatchAny) ||
 			 Matches("DROP", "ACCESS", "METHOD", MatchAny) ||
 			 (Matches("DROP", "AGGREGATE|FUNCTION|PROCEDURE|ROUTINE", MatchAny, MatchAny) &&
@@ -4039,6 +4074,18 @@ psql_completion(const char *text, int start, int end)
 /* FOREIGN SERVER */
 	else if (TailMatches("FOREIGN", "SERVER"))
 		COMPLETE_WITH_QUERY(Query_for_list_of_servers);
+
+/* CATALOG, e.g. the CATALOG clause of CREATE ICEBERG TABLE */
+	else if (TailMatches("CATALOG") &&
+			 !TailMatches("CREATE", MatchAny, MatchAny) &&
+			 !TailMatches("FOREIGN", MatchAny))
+		COMPLETE_WITH_QUERY(Query_for_list_of_foreign_catalogs);
+
+/* VOLUME, e.g. the VOLUME clause of CREATE ICEBERG TABLE */
+	else if (TailMatches("VOLUME") &&
+			 !TailMatches("CREATE", MatchAny, MatchAny) &&
+			 !TailMatches("FOREIGN", MatchAny))
+		COMPLETE_WITH_QUERY(Query_for_list_of_foreign_volumes);
 
 /* STORAGE SERVER */
 	else if (TailMatches("ALTER", "STORAGE", "SERVER"))
