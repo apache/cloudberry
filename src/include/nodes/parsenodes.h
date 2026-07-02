@@ -3271,6 +3271,24 @@ typedef struct CreateForeignServerStmt
 	List	   *options;		/* generic options to server */
 } CreateForeignServerStmt;
 
+typedef struct CreateForeignCatalogStmt
+{
+	NodeTag		type;
+	char	   *catalogname;	/* foreign catalog name */
+	char	   *servername;		/* server name */
+	bool		if_not_exists;	/* just do nothing if it already exists? */
+	List	   *options;		/* generic options to catalog */
+} CreateForeignCatalogStmt;
+
+typedef struct CreateForeignVolumeStmt
+{
+	NodeTag		type;
+	char	   *volumename;		/* foreign volume name */
+	char	   *servername;		/* server name */
+	bool		if_not_exists;	/* just do nothing if it already exists? */
+	List	   *options;		/* generic options to volume */
+} CreateForeignVolumeStmt;
+
 typedef struct AlterForeignServerStmt
 {
 	NodeTag		type;
@@ -3777,6 +3795,15 @@ typedef struct CreateDirectoryTableStmt
 	char	   *tablespacename;
 	char       *location;   /* dtlocation for pg_directory_table */
 } CreateDirectoryTableStmt;
+
+typedef struct CreateLakeTableStmt
+{
+	CreateStmt	base;			/* base table creation info */
+	char	   *table_type;		/* lake table type, e.g. "ICEBERG" */
+	char	   *foreign_catalog;	/* foreign catalog name, or NULL */
+	char	   *foreign_volume;	/* foreign volume name, or NULL */
+	List	   *options;		/* lake-table-specific options */
+} CreateLakeTableStmt;
 
 typedef struct AlterDirectoryTableStmt
 {

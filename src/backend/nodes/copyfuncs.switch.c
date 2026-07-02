@@ -567,6 +567,12 @@
 		case T_CreateForeignServerStmt:
 			retval = _copyCreateForeignServerStmt(from);
 			break;
+		case T_CreateForeignCatalogStmt:
+			retval = _copyCreateForeignCatalogStmt(from);
+			break;
+		case T_CreateForeignVolumeStmt:
+			retval = _copyCreateForeignVolumeStmt(from);
+			break;
 		case T_AlterForeignServerStmt:
 			retval = _copyAlterForeignServerStmt(from);
 			break;
@@ -698,6 +704,9 @@
 			break;
 		case T_CreateDirectoryTableStmt:
 			retval = _copyCreateDirectoryTableStmt(from);
+			break;
+		case T_CreateLakeTableStmt:
+			retval = _copyCreateLakeTableStmt(from);
 			break;
 		case T_AlterDirectoryTableStmt:
 			retval = _copyAlterDirectoryTableStmt(from);
