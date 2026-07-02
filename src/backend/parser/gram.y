@@ -313,6 +313,7 @@ static void check_expressions_in_partition_key(PartitionSpec *spec, core_yyscan_
 		CreateSchemaStmt CreateSeqStmt CreateStmt CreateStatsStmt
 		CreateStorageServerStmt CreateStorageUserMappingStmt
 		CreateTableSpaceStmt CreateFdwStmt CreateForeignServerStmt CreateForeignTableStmt CreateDirectoryTableStmt
+		CreateLakeTableStmt CreateForeignCatalogStmt CreateForeignVolumeStmt
 		CreateAssertionStmt CreateTransformStmt CreateTrigStmt CreateEventTrigStmt
 		CreateUserStmt CreateUserMappingStmt CreateRoleStmt CreatePolicyStmt
 		CreatedbStmt CreateWarehouseStmt DeclareCursorStmt DefineStmt DeleteStmt DiscardStmt DoStmt
@@ -410,6 +411,7 @@ static void check_expressions_in_partition_key(PartitionSpec *spec, core_yyscan_
 %type <defelt>  OptProfileElem
 
 %type <str>		opt_type
+%type <str>		OptForeignCatalog OptForeignVolume
 %type <str>		foreign_server_version opt_foreign_server_version
 %type <str>		opt_in_database
 
@@ -830,7 +832,7 @@ static void check_expressions_in_partition_key(PartitionSpec *spec, core_yyscan_
 
 	HANDLER HAVING HEADER_P HOLD HOUR_P
 
-	IDENTITY_P IF_P ILIKE IMMEDIATE IMMUTABLE IMPLICIT_P IMPORT_P IN_P INCLUDE
+	ICEBERG IDENTITY_P IF_P ILIKE IMMEDIATE IMMUTABLE IMPLICIT_P IMPORT_P IN_P INCLUDE
 	INCLUDING INCREMENT INCREMENTAL INDENT INDEX INDEXES INHERIT INHERITS INITIALLY INLINE_P
 	INNER_P INOUT INPUT_P INSENSITIVE INSERT INSTEAD INT_P INTEGER
 	INTERSECT INTERVAL INTO INVOKER IS ISNULL ISOLATION
@@ -883,7 +885,7 @@ static void check_expressions_in_partition_key(PartitionSpec *spec, core_yyscan_
 	UNLISTEN UNLOGGED UNTIL UPDATE USER USING
 
 	VACUUM VALID VALIDATE VALIDATOR VALUE_P VALUES VARCHAR VARIADIC VARYING
-	VERBOSE VERSION_P VIEW VIEWS VOLATILE
+	VERBOSE VERSION_P VIEW VIEWS VOLATILE VOLUME
 
 	WHEN WHERE WHITESPACE_P WINDOW WITH WITHIN WITHOUT WORK WRAPPER WRITE
 
@@ -1535,6 +1537,9 @@ stmt:
 			| CreateConversionStmt
 			| CreateDomainStmt
 			| CreateDirectoryTableStmt
+			| CreateLakeTableStmt
+			| CreateForeignCatalogStmt
+			| CreateForeignVolumeStmt
 			| CreateExtensionStmt
 			| CreateExternalStmt
 			| CreateFdwStmt
@@ -9092,6 +9097,149 @@ CreateDirectoryTableStmt:
                     $$ = (Node *) n;
                 }
             ;
+
+/*****************************************************************************
+ *
+ *		QUERY:
+ *             CREATE FOREIGN CATALOG name SERVER server_name OPTIONS (...)
+ *
+ *****************************************************************************/
+
+CreateForeignCatalogStmt:
+			CREATE FOREIGN CATALOG_P name SERVER name create_generic_options
+				{
+					CreateForeignCatalogStmt *n = makeNode(CreateForeignCatalogStmt);
+					n->catalogname = $4;
+					n->servername = $6;
+					n->options = $7;
+					n->if_not_exists = false;
+					$$ = (Node *) n;
+				}
+			| CREATE FOREIGN CATALOG_P IF_P NOT EXISTS name SERVER name create_generic_options
+				{
+					CreateForeignCatalogStmt *n = makeNode(CreateForeignCatalogStmt);
+					n->catalogname = $7;
+					n->servername = $9;
+					n->options = $10;
+					n->if_not_exists = true;
+					$$ = (Node *) n;
+				}
+		;
+
+/*****************************************************************************
+ *
+ *		QUERY:
+ *             CREATE FOREIGN VOLUME name SERVER server_name OPTIONS (...)
+ *
+ *****************************************************************************/
+
+CreateForeignVolumeStmt:
+			CREATE FOREIGN VOLUME name SERVER name create_generic_options
+				{
+					CreateForeignVolumeStmt *n = makeNode(CreateForeignVolumeStmt);
+					n->volumename = $4;
+					n->servername = $6;
+					n->options = $7;
+					n->if_not_exists = false;
+					$$ = (Node *) n;
+				}
+			| CREATE FOREIGN VOLUME IF_P NOT EXISTS name SERVER name create_generic_options
+				{
+					CreateForeignVolumeStmt *n = makeNode(CreateForeignVolumeStmt);
+					n->volumename = $7;
+					n->servername = $9;
+					n->options = $10;
+					n->if_not_exists = true;
+					$$ = (Node *) n;
+				}
+		;
+
+OptForeignCatalog:
+			CATALOG_P name							{ $$ = $2; }
+			| /*EMPTY*/								{ $$ = NULL; }
+		;
+
+OptForeignVolume:
+			VOLUME name								{ $$ = $2; }
+			| /*EMPTY*/								{ $$ = NULL; }
+		;
+
+/*****************************************************************************
+ *
+ *		QUERY:
+ *             CREATE ICEBERG TABLE relname (columns)
+ *                 [FOREIGN CATALOG cat] [FOREIGN VOLUME vol] OPTIONS (...)
+ *
+ * A lake table stores its data on external object storage; fragments are
+ * not hash-distributed across segments, so the distribution policy is
+ * forced to RANDOM to keep UPDATE/DELETE correct.
+ *
+ *****************************************************************************/
+
+CreateLakeTableStmt:
+			CREATE ICEBERG TABLE qualified_name '(' OptTableElementList ')'
+			OptForeignCatalog OptForeignVolume create_generic_options
+			OptDistributedBy table_access_method_clause
+				{
+					CreateLakeTableStmt *n = makeNode(CreateLakeTableStmt);
+					$4->relpersistence = RELPERSISTENCE_PERMANENT;
+					n->base.relation = $4;
+					n->base.tableElts = $6;
+					n->base.inhRelations = NIL;
+					n->base.ofTypename = NULL;
+					n->base.constraints = NIL;
+					n->base.options = NIL;
+					n->base.oncommit = ONCOMMIT_NOOP;
+					n->base.tablespacename = NULL;
+					n->base.accessMethod = $12 ? $12 : pstrdup("iceberg");
+					n->base.if_not_exists = false;
+					n->base.relKind = RELKIND_RELATION;
+					n->table_type = pstrdup("ICEBERG");
+					n->foreign_catalog = $8 ? pstrdup($8) : NULL;
+					n->foreign_volume = $9 ? pstrdup($9) : NULL;
+					n->options = $10;
+					if ($11 != NULL)
+						ereport(WARNING,
+								(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+								 errmsg("DISTRIBUTED clause has no effect for lake tables, using DISTRIBUTED RANDOMLY")));
+					n->base.distributedBy = makeNode(DistributedBy);
+					n->base.distributedBy->ptype = POLICYTYPE_PARTITIONED;
+					n->base.distributedBy->keyCols = NIL;
+					n->base.distributedBy->numsegments = -1;
+					$$ = (Node *) n;
+				}
+			| CREATE ICEBERG TABLE IF_P NOT EXISTS qualified_name '(' OptTableElementList ')'
+			OptForeignCatalog OptForeignVolume create_generic_options
+			OptDistributedBy table_access_method_clause
+				{
+					CreateLakeTableStmt *n = makeNode(CreateLakeTableStmt);
+					$7->relpersistence = RELPERSISTENCE_PERMANENT;
+					n->base.relation = $7;
+					n->base.tableElts = $9;
+					n->base.inhRelations = NIL;
+					n->base.ofTypename = NULL;
+					n->base.constraints = NIL;
+					n->base.options = NIL;
+					n->base.oncommit = ONCOMMIT_NOOP;
+					n->base.tablespacename = NULL;
+					n->base.accessMethod = $15 ? $15 : pstrdup("iceberg");
+					n->base.if_not_exists = true;
+					n->base.relKind = RELKIND_RELATION;
+					n->table_type = pstrdup("ICEBERG");
+					n->foreign_catalog = $11 ? pstrdup($11) : NULL;
+					n->foreign_volume = $12 ? pstrdup($12) : NULL;
+					n->options = $13;
+					if ($14 != NULL)
+						ereport(WARNING,
+								(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+								 errmsg("DISTRIBUTED clause has no effect for lake tables, using DISTRIBUTED RANDOMLY")));
+					n->base.distributedBy = makeNode(DistributedBy);
+					n->base.distributedBy->ptype = POLICYTYPE_PARTITIONED;
+					n->base.distributedBy->keyCols = NIL;
+					n->base.distributedBy->numsegments = -1;
+					$$ = (Node *) n;
+				}
+		;
 
 /*****************************************************************************
  *
@@ -21175,6 +21323,7 @@ unreserved_keyword:
 			| HOLD
 			| HOST
 			| HOUR_P
+			| ICEBERG
 			| IDENTITY_P
 			| IF_P
 			| IGNORE_P
@@ -21415,6 +21564,7 @@ unreserved_keyword:
 			| VIEW
 			| VIEWS
 			| VOLATILE
+			| VOLUME
 			| WAREHOUSE
 			| WAREHOUSE_SIZE
 			| WEB /* gp */
@@ -22162,6 +22312,7 @@ bare_label_keyword:
 			| HEADER_P
 			| HOLD
 			| HOST
+			| ICEBERG
 			| IDENTITY_P
 			| IF_P
 			| IGNORE_P
@@ -22465,6 +22616,7 @@ bare_label_keyword:
 			| VIEW
 			| VIEWS
 			| VOLATILE
+			| VOLUME
 			| WAREHOUSE
 			| WAREHOUSE_SIZE
 			| WEB
