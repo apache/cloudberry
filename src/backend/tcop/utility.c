@@ -38,6 +38,7 @@
 #include "commands/dbcommands.h"
 #include "commands/defrem.h"
 #include "commands/dirtablecmds.h"
+#include "commands/laketablecmds.h"
 #include "commands/discard.h"
 #include "commands/event_trigger.h"
 #include "commands/explain.h"
@@ -264,6 +265,7 @@ ClassifyUtilityCommandAsReadOnly(Node *parsetree)
 		case T_AlterResourceGroupStmt:
 		case T_AlterTagStmt:
 		case T_CreateDirectoryTableStmt:
+		case T_CreateLakeTableStmt:
 		case T_AlterDirectoryTableStmt:
 		case T_DropDirectoryTableStmt:
 		case T_CreateProfileStmt:
@@ -1450,6 +1452,7 @@ ProcessUtilitySlow(ParseState *pstate,
 			case T_CreateStmt:
 			case T_CreateForeignTableStmt:
 			case T_CreateDirectoryTableStmt:
+			case T_CreateLakeTableStmt:
 				{
 					List	   *stmts;
 					RangeVar   *table_rv = NULL;
@@ -1656,6 +1659,70 @@ ProcessUtilitySlow(ParseState *pstate,
 							EventTriggerCollectSimpleCommand(address,
 															 secondaryObject,
 															 stmt);
+						}
+						else if (IsA(stmt, CreateLakeTableStmt))
+						{
+							CreateLakeTableStmt *cstmt = (CreateLakeTableStmt *) stmt;
+							Datum		toast_options;
+							static char *validnsps[] = HEAP_RELOPT_NAMESPACES;
+
+							/* Remember transformed RangeVar for LIKE */
+							table_rv = cstmt->base.relation;
+
+							/*
+							 * Validate catalog/volume resolution up front:
+							 * the statement is dispatched to the QEs, so a
+							 * failure raised only later inside
+							 * CreateLakeTable() would surface as a confusing
+							 * QE-annotated error.
+							 */
+							if (Gp_role == GP_ROLE_DISPATCH)
+								ValidateLakeTableOptions(cstmt);
+
+							/*
+							 * Create the table itself.  Dispatch manually
+							 * below (like the plain CreateStmt path above)
+							 * so that the TOAST table exists before the
+							 * statement is sent and its OID is included in
+							 * the dispatched OID list.
+							 */
+							address = DefineRelation(&cstmt->base,
+													 RELKIND_RELATION,
+													 InvalidOid, NULL,
+													 queryString,
+													 false,
+													 true,
+													 NULL);
+							/* Create the lake table metadata entry */
+							CreateLakeTable(cstmt, address.objectId);
+							EventTriggerCollectSimpleCommand(address,
+															 secondaryObject,
+															 stmt);
+
+							/*
+							 * Lake tables are backed by a real table access
+							 * method, so let NewRelationCreateToastTable
+							 * decide whether a secondary relation is needed,
+							 * just like plain CREATE TABLE.
+							 */
+							CommandCounterIncrement();
+
+							toast_options = transformRelOptions((Datum) 0,
+																cstmt->base.options,
+																"toast",
+																validnsps,
+																true,
+																false);
+							NewRelationCreateToastTable(address.objectId,
+														toast_options);
+
+							if (Gp_role == GP_ROLE_DISPATCH && ENABLE_DISPATCH())
+								CdbDispatchUtilityStatement((Node *) stmt,
+															DF_CANCEL_ON_ERROR |
+															DF_NEED_TWO_PHASE |
+															DF_WITH_SNAPSHOT,
+															GetAssignedOidsForDispatch(),
+															NULL);
 						}
 						else if (IsA(stmt, TableLikeClause))
 						{
@@ -3329,6 +3396,10 @@ CreateCommandTag(Node *parsetree)
 			tag = CMDTAG_CREATE_DIRECTORY_TABLE;
 			break;
 
+		case T_CreateLakeTableStmt:
+			tag = CMDTAG_CREATE_LAKE_TABLE;
+			break;
+
 		case T_AlterDirectoryTableStmt:
 			tag = CMDTAG_ALTER_DIRECTORY_TABLE;
 			break;
@@ -4237,6 +4308,7 @@ GetCommandLogLevel(Node *parsetree)
 		case T_DropStorageUserMappingStmt:
 		case T_ImportForeignSchemaStmt:
 		case T_CreateDirectoryTableStmt:
+		case T_CreateLakeTableStmt:
 		case T_AlterDirectoryTableStmt:
 		case T_DropDirectoryTableStmt:
 			lev = LOGSTMT_DDL;

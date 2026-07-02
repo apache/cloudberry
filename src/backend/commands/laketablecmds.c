@@ -1,0 +1,469 @@
+/*-------------------------------------------------------------------------
+ *
+ * laketablecmds.c
+ *	  lake table creation/manipulation commands
+ *
+ * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
+ *
+ *
+ * IDENTIFICATION
+ *	  src/backend/commands/laketablecmds.c
+ *
+ *-------------------------------------------------------------------------
+ */
+#include "postgres.h"
+
+#include "access/genam.h"
+#include "access/htup_details.h"
+#include "access/reloptions.h"
+#include "access/table.h"
+#include "access/xact.h"
+#include "catalog/catalog.h"
+#include "catalog/dependency.h"
+#include "catalog/indexing.h"
+#include "catalog/objectaccess.h"
+#include "catalog/pg_foreign_catalog.h"
+#include "catalog/pg_foreign_volume.h"
+#include "catalog/pg_lake_table.h"
+#include "commands/defrem.h"
+#include "commands/laketablecmds.h"
+#include "foreign/foreign.h"
+#include "miscadmin.h"
+#include "utils/builtins.h"
+#include "utils/fmgroids.h"
+#include "utils/rel.h"
+
+/* GUC variables for default Iceberg catalog and volume */
+char	   *iceberg_default_catalog = NULL;
+char	   *iceberg_default_volume = NULL;
+
+/*
+ * check_iceberg_default_catalog: validate new iceberg_default_catalog GUC value
+ */
+bool
+check_iceberg_default_catalog(char **newval, void **extra, GucSource source)
+{
+	/*
+	 * If we aren't inside a transaction, or connected to a database, we
+	 * cannot do the catalog accesses necessary to verify the name.  Must
+	 * accept the value on faith.
+	 */
+	if (IsTransactionState() && MyDatabaseId != InvalidOid)
+	{
+		if (**newval != '\0')
+		{
+			Oid			catalog_oid = get_foreign_catalog_oid(*newval, true);
+
+			if (!OidIsValid(catalog_oid))
+			{
+				/*
+				 * When source == PGC_S_TEST, don't throw a hard error for a
+				 * nonexistent catalog, only a NOTICE.  See comments in guc.h.
+				 */
+				if (source == PGC_S_TEST)
+				{
+					ereport(NOTICE,
+							(errcode(ERRCODE_UNDEFINED_OBJECT),
+							 errmsg("foreign catalog \"%s\" does not exist",
+									*newval)));
+				}
+				else
+				{
+					GUC_check_errdetail("Foreign catalog \"%s\" does not exist.",
+										*newval);
+					return false;
+				}
+			}
+		}
+	}
+
+	return true;
+}
+
+/*
+ * check_iceberg_default_volume: validate new iceberg_default_volume GUC value
+ */
+bool
+check_iceberg_default_volume(char **newval, void **extra, GucSource source)
+{
+	/*
+	 * If we aren't inside a transaction, or connected to a database, we
+	 * cannot do the catalog accesses necessary to verify the name.  Must
+	 * accept the value on faith.
+	 */
+	if (IsTransactionState() && MyDatabaseId != InvalidOid)
+	{
+		if (**newval != '\0')
+		{
+			Oid			volume_oid = get_foreign_volume_oid(*newval, true);
+
+			if (!OidIsValid(volume_oid))
+			{
+				/*
+				 * When source == PGC_S_TEST, don't throw a hard error for a
+				 * nonexistent volume, only a NOTICE.  See comments in guc.h.
+				 */
+				if (source == PGC_S_TEST)
+				{
+					ereport(NOTICE,
+							(errcode(ERRCODE_UNDEFINED_OBJECT),
+							 errmsg("foreign volume \"%s\" does not exist",
+									*newval)));
+				}
+				else
+				{
+					GUC_check_errdetail("Foreign volume \"%s\" does not exist.",
+										*newval);
+					return false;
+				}
+			}
+		}
+	}
+
+	return true;
+}
+
+/*
+ * GetDefaultIcebergCatalog -- get the name of the current default Iceberg catalog
+ *
+ * Returns NULL if no default catalog is set.
+ * This function hides the iceberg_default_catalog GUC variable.
+ */
+const char *
+GetDefaultIcebergCatalog(void)
+{
+	if (iceberg_default_catalog == NULL || iceberg_default_catalog[0] == '\0')
+		return NULL;
+
+	/*
+	 * Verify that the catalog still exists.  We don't cache this because
+	 * the catalog could be dropped after the GUC was set.
+	 */
+	if (!OidIsValid(get_foreign_catalog_oid(iceberg_default_catalog, true)))
+		return NULL;
+
+	return iceberg_default_catalog;
+}
+
+/*
+ * GetDefaultIcebergVolume -- get the name of the current default Iceberg volume
+ *
+ * Returns NULL if no default volume is set.
+ * This function hides the iceberg_default_volume GUC variable.
+ */
+const char *
+GetDefaultIcebergVolume(void)
+{
+	if (iceberg_default_volume == NULL || iceberg_default_volume[0] == '\0')
+		return NULL;
+
+	/*
+	 * Verify that the volume still exists.  We don't cache this because
+	 * the volume could be dropped after the GUC was set.
+	 */
+	if (!OidIsValid(get_foreign_volume_oid(iceberg_default_volume, true)))
+		return NULL;
+
+	return iceberg_default_volume;
+}
+
+/*
+ * GetIcebergTableAmOid
+ *
+ * Look up the OID of the iceberg table access method, which is provided by
+ * a datalake extension rather than the kernel.  Returns InvalidOid if the
+ * access method is not installed and missing_ok is true.
+ */
+Oid
+GetIcebergTableAmOid(bool missing_ok)
+{
+	return get_table_am_oid(ICEBERG_TABLE_AM_NAME, missing_ok);
+}
+
+/*
+ * RelationIsIcebergTable
+ *
+ * True iff the relation uses the iceberg table access method.  Resolved by
+ * access method name so the kernel does not depend on any particular
+ * extension's OID assignments.
+ */
+bool
+RelationIsIcebergTable(Relation rel)
+{
+	Oid			iceberg_amoid;
+
+	if (!OidIsValid(rel->rd_rel->relam))
+		return false;
+
+	iceberg_amoid = GetIcebergTableAmOid(true);
+
+	return OidIsValid(iceberg_amoid) && rel->rd_rel->relam == iceberg_amoid;
+}
+
+/*
+ * Validate table type
+ */
+static void
+validate_table_type(const char *table_type)
+{
+	if (!table_type)
+		ereport(ERROR,
+				(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+				 errmsg("table type cannot be NULL")));
+
+	if (strcmp(table_type, "ICEBERG") != 0)
+		ereport(ERROR,
+				(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+				 errmsg("unsupported table type \"%s\"", table_type),
+				 errhint("The only supported table type is ICEBERG.")));
+}
+
+/*
+ * Validate foreign catalog exists
+ */
+static Oid
+validate_foreign_catalog(const char *catalog_name)
+{
+	if (!catalog_name || catalog_name[0] == '\0')
+		ereport(ERROR,
+				(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+				 errmsg("no foreign catalog specified"),
+				 errhint("Specify CATALOG in CREATE ICEBERG TABLE or set iceberg_default_catalog.")));
+
+	return get_foreign_catalog_oid(catalog_name, false);
+}
+
+/*
+ * Validate foreign volume exists
+ */
+static Oid
+validate_foreign_volume(const char *volume_name)
+{
+	if (!volume_name || volume_name[0] == '\0')
+		ereport(ERROR,
+				(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+				 errmsg("no foreign volume specified"),
+				 errhint("Specify VOLUME in CREATE ICEBERG TABLE or set iceberg_default_volume.")));
+
+	return get_foreign_volume_oid(volume_name, false);
+}
+
+/*
+ * ResolveLakeTableOptions
+ *
+ * Resolve and validate the table type, catalog and volume of a
+ * CreateLakeTableStmt, returning the catalog/volume OIDs.
+ *
+ * Also exposed (via ValidateLakeTableOptions) so ProcessUtilitySlow can run
+ * the validation on the QD before DefineRelation: DefineRelation dispatches
+ * the statement to the QEs, so a validation failure raised only inside
+ * CreateLakeTable() would surface as a confusing QE-annotated error.
+ */
+static void
+ResolveLakeTableOptions(CreateLakeTableStmt *stmt,
+						Oid *catalog_oid_out, Oid *volume_oid_out)
+{
+	const char *catalog_name;
+	const char *volume_name;
+
+	/*
+	 * Lake tables are unusable without an extension providing the iceberg
+	 * table access method; check it first so the install hint takes
+	 * precedence over catalog/volume resolution errors.
+	 */
+	if (!OidIsValid(GetIcebergTableAmOid(true)))
+		ereport(ERROR,
+				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+				 errmsg("table access method \"%s\" does not exist",
+						ICEBERG_TABLE_AM_NAME),
+				 errhint("CREATE ICEBERG TABLE requires an extension that provides the \"%s\" table access method.",
+						 ICEBERG_TABLE_AM_NAME)));
+
+	/*
+	 * The grammar accepts a USING clause, but an iceberg table must use the
+	 * iceberg access method: a lake table created with another AM would get
+	 * pg_lake_table metadata without lake-table semantics (and DROP TABLE,
+	 * which detects lake tables by their AM, would leave that metadata
+	 * behind as an orphaned row).
+	 */
+	if (stmt->base.accessMethod != NULL &&
+		strcmp(stmt->base.accessMethod, ICEBERG_TABLE_AM_NAME) != 0)
+		ereport(ERROR,
+				(errcode(ERRCODE_INVALID_TABLE_DEFINITION),
+				 errmsg("access method \"%s\" is not supported for iceberg tables",
+						stmt->base.accessMethod),
+				 errhint("Omit the USING clause; CREATE ICEBERG TABLE always uses the \"%s\" access method.",
+						 ICEBERG_TABLE_AM_NAME)));
+
+	/* Validate table type */
+	validate_table_type(stmt->table_type);
+
+	/*
+	 * Determine catalog name: use explicit value if provided, otherwise
+	 * fall back to the iceberg_default_catalog GUC.  When the GUC is set
+	 * but its catalog has been dropped, say so instead of the generic
+	 * "no foreign catalog specified".
+	 */
+	catalog_name = stmt->foreign_catalog;
+	if (catalog_name == NULL || catalog_name[0] == '\0')
+	{
+		catalog_name = GetDefaultIcebergCatalog();
+		if (catalog_name == NULL &&
+			iceberg_default_catalog != NULL && iceberg_default_catalog[0] != '\0')
+			ereport(ERROR,
+					(errcode(ERRCODE_UNDEFINED_OBJECT),
+					 errmsg("default iceberg catalog \"%s\" does not exist",
+							iceberg_default_catalog),
+					 errhint("Set iceberg_default_catalog to an existing foreign catalog.")));
+	}
+
+	/*
+	 * Determine volume name: use explicit value if provided, otherwise
+	 * fall back to the iceberg_default_volume GUC.
+	 */
+	volume_name = stmt->foreign_volume;
+	if (volume_name == NULL || volume_name[0] == '\0')
+	{
+		volume_name = GetDefaultIcebergVolume();
+		if (volume_name == NULL &&
+			iceberg_default_volume != NULL && iceberg_default_volume[0] != '\0')
+			ereport(ERROR,
+					(errcode(ERRCODE_UNDEFINED_OBJECT),
+					 errmsg("default iceberg volume \"%s\" does not exist",
+							iceberg_default_volume),
+					 errhint("Set iceberg_default_volume to an existing foreign volume.")));
+	}
+
+	*catalog_oid_out = validate_foreign_catalog(catalog_name);
+
+	/*
+	 * A volume is required for every lake table, even when the catalog
+	 * vends the table's physical location: the QEs still read and write
+	 * the data files through the volume's storage endpoint and
+	 * credentials.  Without this check the missing volume only surfaces
+	 * later, deep in the access method's create path.
+	 */
+	*volume_oid_out = validate_foreign_volume(volume_name);
+}
+
+/*
+ * ValidateLakeTableOptions
+ *
+ * QD-side pre-DefineRelation validation wrapper; see ResolveLakeTableOptions.
+ */
+void
+ValidateLakeTableOptions(CreateLakeTableStmt *stmt)
+{
+	Oid			catalog_oid;
+	Oid			volume_oid;
+
+	ResolveLakeTableOptions(stmt, &catalog_oid, &volume_oid);
+}
+
+/*
+ * CreateLakeTable
+ *
+ * Create a lake table entry in pg_lake_table after the base table has been
+ * created.
+ */
+void
+CreateLakeTable(CreateLakeTableStmt *stmt, Oid relId)
+{
+	Relation	lake_rel;
+	Datum		values[Natts_pg_lake_table];
+	bool		nulls[Natts_pg_lake_table];
+	HeapTuple	tuple;
+	Oid			catalog_oid;
+	Oid			volume_oid;
+	ObjectAddress myself;
+	ObjectAddress referenced;
+
+	ResolveLakeTableOptions(stmt, &catalog_oid, &volume_oid);
+
+	/*
+	 * Make the just-created base relation (from DefineRelation) visible to
+	 * this command before we record dependencies on it.
+	 */
+	CommandCounterIncrement();
+
+	lake_rel = table_open(LakeTableRelationId, RowExclusiveLock);
+
+	/*
+	 * Insert tuple into pg_lake_table.
+	 */
+	memset(values, 0, sizeof(values));
+	memset(nulls, false, sizeof(nulls));
+
+	values[Anum_pg_lake_table_ltrelid - 1] = ObjectIdGetDatum(relId);
+	values[Anum_pg_lake_table_ltforeign_catalog - 1] = ObjectIdGetDatum(catalog_oid);
+	values[Anum_pg_lake_table_ltforeign_volume - 1] = ObjectIdGetDatum(volume_oid);
+	values[Anum_pg_lake_table_lttable_type - 1] = CStringGetTextDatum(stmt->table_type);
+
+	if (stmt->options)
+	{
+		Datum		options_datum;
+
+		/* Build standard text[] reloptions from DefElem list */
+		options_datum = transformRelOptions((Datum) 0, stmt->options,
+											NULL, NULL, false, false);
+
+		if (options_datum != (Datum) 0)
+			values[Anum_pg_lake_table_ltoptions - 1] = options_datum;
+		else
+			nulls[Anum_pg_lake_table_ltoptions - 1] = true;
+	}
+	else
+	{
+		nulls[Anum_pg_lake_table_ltoptions - 1] = true;
+	}
+
+	tuple = heap_form_tuple(lake_rel->rd_att, values, nulls);
+
+	CatalogTupleInsert(lake_rel, tuple);
+
+	/* Record dependencies on the foreign catalog and volume */
+	myself.classId = RelationRelationId;
+	myself.objectId = relId;
+	myself.objectSubId = 0;
+
+	referenced.classId = ForeignCatalogRelationId;
+	referenced.objectId = catalog_oid;
+	referenced.objectSubId = 0;
+	recordDependencyOn(&myself, &referenced, DEPENDENCY_NORMAL);
+
+	referenced.classId = ForeignVolumeRelationId;
+	referenced.objectId = volume_oid;
+	referenced.objectSubId = 0;
+	recordDependencyOn(&myself, &referenced, DEPENDENCY_NORMAL);
+
+	heap_freetuple(tuple);
+	table_close(lake_rel, RowExclusiveLock);
+
+	CommandCounterIncrement();
+	InvokeObjectPostCreateHook(LakeTableRelationId, relId, 0);
+}
+
+/*
+ * RemoveLakeTableEntry
+ *
+ * Remove the pg_lake_table entry for the given relation.
+ */
+void
+RemoveLakeTableEntry(Oid relid)
+{
+	Relation	ltRel;
+	HeapTuple	tup;
+	ScanKeyData skey;
+	SysScanDesc scan;
+
+	ltRel = table_open(LakeTableRelationId, RowExclusiveLock);
+	ScanKeyInit(&skey,
+				Anum_pg_lake_table_ltrelid,
+				BTEqualStrategyNumber, F_OIDEQ,
+				ObjectIdGetDatum(relid));
+	scan = systable_beginscan(ltRel, LakeTableRelidIndexId, true, NULL, 1, &skey);
+	while (HeapTupleIsValid(tup = systable_getnext(scan)))
+		CatalogTupleDelete(ltRel, &tup->t_self);
+	systable_endscan(scan);
+	table_close(ltRel, RowExclusiveLock);
+}

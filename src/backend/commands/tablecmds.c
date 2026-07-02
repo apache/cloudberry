@@ -69,6 +69,7 @@
 #include "commands/comment.h"
 #include "commands/createas.h"
 #include "commands/defrem.h"
+#include "commands/laketablecmds.h"
 #include "commands/matview.h"
 #include "commands/event_trigger.h"
 #include "commands/policy.h"
@@ -937,6 +938,24 @@ DefineRelation(CreateStmt *stmt, char relkind, Oid ownerId,
 		accessMethodId = get_table_am_oid(accessMethod, false);
 		amHandlerOid = get_table_am_handler_oid(accessMethod, false);
 	}
+
+	/*
+	 * Lake tables must be created through CREATE ICEBERG TABLE, which also
+	 * creates the pg_lake_table catalog entries the iceberg access method
+	 * relies on.  A relation created with the iceberg AM through any other
+	 * path (CREATE TABLE ... USING iceberg, CTAS, matview,
+	 * default_table_access_method, partition child) would be unusable and
+	 * undroppable, so reject it up front.  CreateLakeTableStmt embeds
+	 * CreateStmt as its first member, so nodeTag() distinguishes the paths.
+	 */
+	if (OidIsValid(accessMethodId) &&
+		accessMethodId == GetIcebergTableAmOid(true) &&
+		nodeTag(stmt) != T_CreateLakeTableStmt)
+		ereport(ERROR,
+				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+				 errmsg("cannot create table \"%s\" with access method \"%s\"",
+						stmt->relation->relname, ICEBERG_TABLE_AM_NAME),
+				 errhint("Use CREATE ICEBERG TABLE instead.")));
 
 	/*
 	 * GPDB: for partitioned tables, inherit reloptions from the parent.
@@ -17059,12 +17078,31 @@ static void
 ATPrepSetAccessMethod(AlteredTableInfo *tab, Relation rel, const char *amname)
 {
 	Oid			amoid;
+	Oid			iceberg_amoid;
 
 	/* Check that the table access method exists */
 	amoid = get_table_am_oid(amname, false);
 
 	if (rel->rd_rel->relam == amoid)
 		return;
+
+	/*
+	 * The iceberg AM relies on catalog entries that only the CREATE/DROP
+	 * ICEBERG TABLE paths manage, so a table cannot be converted to or from
+	 * it with SET ACCESS METHOD.
+	 */
+	iceberg_amoid = GetIcebergTableAmOid(true);
+	if (OidIsValid(iceberg_amoid) && amoid == iceberg_amoid)
+		ereport(ERROR,
+				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+				 errmsg("cannot change access method of table \"%s\" to \"%s\"",
+						RelationGetRelationName(rel), ICEBERG_TABLE_AM_NAME),
+				 errhint("Use CREATE ICEBERG TABLE to create an iceberg table.")));
+	if (OidIsValid(iceberg_amoid) && rel->rd_rel->relam == iceberg_amoid)
+		ereport(ERROR,
+				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+				 errmsg("cannot change access method of lake table \"%s\"",
+						RelationGetRelationName(rel))));
 
 	/* Save info for Phase 3 to do the real work */
 	tab->rewrite |= AT_REWRITE_ACCESS_METHOD;
@@ -19759,6 +19797,14 @@ ATExecSetDistributedBy(Relation rel, Node *node, AlterTableCmd *cmd)
 						(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 						 errmsg("SET DISTRIBUTED REPLICATED is not supported for external table")));
 		}
+
+		/* Lake tables must remain DISTRIBUTED RANDOMLY */
+		if (RelationIsIcebergTable(rel))
+			ereport(ERROR,
+					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+					 errmsg("cannot change distribution policy of lake table \"%s\"",
+							RelationGetRelationName(rel)),
+					 errhint("Lake tables must use DISTRIBUTED RANDOMLY because data is stored on object storage.")));
 	}
 
 	if (Gp_role == GP_ROLE_DISPATCH)

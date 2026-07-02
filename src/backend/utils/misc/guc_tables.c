@@ -39,6 +39,7 @@
 #include "catalog/storage_directory_table.h"
 #include "commands/async.h"
 #include "commands/tablespace.h"
+#include "commands/laketablecmds.h"
 #include "commands/trigger.h"
 #include "commands/user.h"
 #include "commands/vacuum.h"
@@ -4117,6 +4118,28 @@ struct config_string ConfigureNamesString[] =
 		&temp_tablespaces,
 		"",
 		check_temp_tablespaces, assign_temp_tablespaces, NULL
+	},
+
+	{
+		{"iceberg_default_catalog", PGC_USERSET, CLIENT_CONN_STATEMENT,
+			gettext_noop("Sets the default foreign catalog to create Iceberg tables in."),
+			gettext_noop("An empty string means no default catalog."),
+			GUC_IS_NAME
+		},
+		&iceberg_default_catalog,
+		"",
+		check_iceberg_default_catalog, NULL, NULL
+	},
+
+	{
+		{"iceberg_default_volume", PGC_USERSET, CLIENT_CONN_STATEMENT,
+			gettext_noop("Sets the default foreign volume to create Iceberg tables in."),
+			gettext_noop("An empty string means no default volume."),
+			GUC_IS_NAME
+		},
+		&iceberg_default_volume,
+		"",
+		check_iceberg_default_volume, NULL, NULL
 	},
 
 	{

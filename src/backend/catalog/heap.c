@@ -72,6 +72,7 @@
 #include "catalog/storage.h"
 #include "catalog/storage_directory_table.h"
 #include "catalog/storage_xlog.h"
+#include "commands/laketablecmds.h"
 #include "commands/tablecmds.h"
 #include "commands/typecmds.h"
 #include "miscadmin.h"
@@ -2321,6 +2322,10 @@ heap_drop_with_catalog(Oid relid)
 	 * the table.
 	 */
 	CheckTableForSerializableConflictIn(rel);
+
+	/* If this is a lake table, remove its pg_lake_table entry */
+	if (RelationIsIcebergTable(rel))
+		RemoveLakeTableEntry(relid);
 
 	/*
 	 * Delete pg_foreign_table tuple first.
