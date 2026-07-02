@@ -210,6 +210,8 @@ ClassifyUtilityCommandAsReadOnly(Node *parsetree)
 		case T_CreateExtensionStmt:
 		case T_CreateFdwStmt:
 		case T_CreateForeignServerStmt:
+		case T_CreateForeignCatalogStmt:
+		case T_CreateForeignVolumeStmt:
 		case T_CreateForeignTableStmt:
 		case T_AddForeignSegStmt:
 		case T_CreateFunctionStmt:
@@ -2183,6 +2185,14 @@ ProcessUtilitySlow(ParseState *pstate,
 				address = CreateForeignServer((CreateForeignServerStmt *) parsetree);
 				break;
 
+			case T_CreateForeignCatalogStmt:
+				address = CreateForeignCatalog((CreateForeignCatalogStmt *) parsetree);
+				break;
+
+			case T_CreateForeignVolumeStmt:
+				address = CreateForeignVolume((CreateForeignVolumeStmt *) parsetree);
+				break;
+
 			case T_AlterForeignServerStmt:
 				address = AlterForeignServer((AlterForeignServerStmt *) parsetree);
 				break;
@@ -3255,6 +3265,14 @@ CreateCommandTag(Node *parsetree)
 			tag = CMDTAG_CREATE_SERVER;
 			break;
 
+		case T_CreateForeignCatalogStmt:
+			tag = CMDTAG_CREATE_FOREIGN_CATALOG;
+			break;
+
+		case T_CreateForeignVolumeStmt:
+			tag = CMDTAG_CREATE_FOREIGN_VOLUME;
+			break;
+
 		case T_AlterForeignServerStmt:
 			tag = CMDTAG_ALTER_SERVER;
 			break;
@@ -3420,6 +3438,12 @@ CreateCommandTag(Node *parsetree)
 					break;
 				case OBJECT_FOREIGN_SERVER:
 					tag = CMDTAG_DROP_SERVER;
+					break;
+				case OBJECT_FOREIGN_CATALOG:
+					tag = CMDTAG_DROP_FOREIGN_CATALOG;
+					break;
+				case OBJECT_FOREIGN_VOLUME:
+					tag = CMDTAG_DROP_FOREIGN_VOLUME;
 					break;
 				case OBJECT_STORAGE_SERVER:
 					tag = CMDTAG_DROP_STORAGE_SERVER;
@@ -4199,6 +4223,8 @@ GetCommandLogLevel(Node *parsetree)
 		case T_CreateFdwStmt:
 		case T_AlterFdwStmt:
 		case T_CreateForeignServerStmt:
+		case T_CreateForeignCatalogStmt:
+		case T_CreateForeignVolumeStmt:
 		case T_AlterForeignServerStmt:
 		case T_CreateStorageServerStmt:
 		case T_AlterStorageServerStmt:

@@ -15,10 +15,12 @@
 #include "access/htup_details.h"
 #include "access/reloptions.h"
 #include "access/table.h"
+#include "catalog/pg_foreign_catalog.h"
 #include "catalog/pg_foreign_data_wrapper.h"
 #include "catalog/pg_foreign_server.h"
 #include "catalog/pg_foreign_table.h"
 #include "catalog/pg_foreign_table_seg.h"
+#include "catalog/pg_foreign_volume.h"
 #include "catalog/pg_user_mapping.h"
 #include "cdb/cdbgang.h"
 #include "cdb/cdbutil.h"
@@ -980,6 +982,98 @@ get_foreign_server_oid(const char *servername, bool missing_ok)
 				(errcode(ERRCODE_UNDEFINED_OBJECT),
 				 errmsg("server \"%s\" does not exist", servername)));
 	return oid;
+}
+
+/*
+ * get_foreign_catalog_oid - given a foreign catalog name, look up the OID
+ *
+ * If missing_ok is false, throw an error if name not found.  If true, just
+ * return InvalidOid.
+ */
+Oid
+get_foreign_catalog_oid(const char *catalogname, bool missing_ok)
+{
+	Oid			oid;
+
+	oid = GetSysCacheOid1(FOREIGNCATALOGNAME,
+						  Anum_pg_foreign_catalog_oid,
+						  CStringGetDatum(catalogname));
+	if (!OidIsValid(oid) && !missing_ok)
+		ereport(ERROR,
+				(errcode(ERRCODE_UNDEFINED_OBJECT),
+				 errmsg("foreign catalog \"%s\" does not exist",
+						catalogname)));
+
+	return oid;
+}
+
+/*
+ * get_foreign_volume_oid - given a foreign volume name, look up the OID
+ *
+ * If missing_ok is false, throw an error if name not found.  If true, just
+ * return InvalidOid.
+ */
+Oid
+get_foreign_volume_oid(const char *volumename, bool missing_ok)
+{
+	Oid			oid;
+
+	oid = GetSysCacheOid1(FOREIGNVOLUMENAME,
+						  Anum_pg_foreign_volume_oid,
+						  CStringGetDatum(volumename));
+	if (!OidIsValid(oid) && !missing_ok)
+		ereport(ERROR,
+				(errcode(ERRCODE_UNDEFINED_OBJECT),
+				 errmsg("foreign volume \"%s\" does not exist",
+						volumename)));
+
+	return oid;
+}
+
+/*
+ * GetForeignVolumeByName - look up a foreign volume by name
+ */
+ForeignVolume *
+GetForeignVolumeByName(const char *volumename, bool missing_ok)
+{
+	HeapTuple	tp;
+	Form_pg_foreign_volume fvform;
+	ForeignVolume *volume;
+	Datum		datum;
+	bool		isnull;
+
+	tp = SearchSysCache1(FOREIGNVOLUMENAME,
+						 PointerGetDatum(volumename));
+	if (!HeapTupleIsValid(tp))
+	{
+		if (!missing_ok)
+			ereport(ERROR,
+					(errcode(ERRCODE_UNDEFINED_OBJECT),
+					 errmsg("foreign volume \"%s\" does not exist",
+							volumename)));
+		return NULL;
+	}
+
+	fvform = (Form_pg_foreign_volume) GETSTRUCT(tp);
+
+	volume = (ForeignVolume *) palloc(sizeof(ForeignVolume));
+	volume->volumeid = fvform->oid;
+	volume->serverid = fvform->fvserver;
+	volume->volumename = pstrdup(NameStr(fvform->fvname));
+
+	/* Extract the volume options */
+	datum = SysCacheGetAttr(FOREIGNVOLUMENAME,
+							tp,
+							Anum_pg_foreign_volume_fvoptions,
+							&isnull);
+	if (isnull)
+		volume->options = NIL;
+	else
+		volume->options = untransformRelOptions(datum);
+
+	ReleaseSysCache(tp);
+
+	return volume;
 }
 
 /*

@@ -456,6 +456,14 @@ does_not_exist_skipping(ObjectType objtype, Node *object)
 			msg = gettext_noop("server \"%s\" does not exist, skipping");
 			name = strVal(object);
 			break;
+		case OBJECT_FOREIGN_CATALOG:
+			msg = gettext_noop("foreign catalog \"%s\" does not exist, skipping");
+			name = strVal(object);
+			break;
+		case OBJECT_FOREIGN_VOLUME:
+			msg = gettext_noop("foreign volume \"%s\" does not exist, skipping");
+			name = strVal(object);
+			break;
 		case OBJECT_STORAGE_SERVER:
 			msg = gettext_noop("storage server \"%s\" does not exist, skipping");
 			name = strVal(object);

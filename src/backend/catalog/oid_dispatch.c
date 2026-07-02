@@ -98,8 +98,10 @@
 #include "catalog/pg_extension.h"
 #include "catalog/pg_extprotocol.h"
 #include "catalog/pg_event_trigger.h"
+#include "catalog/pg_foreign_catalog.h"
 #include "catalog/pg_foreign_data_wrapper.h"
 #include "catalog/pg_foreign_server.h"
+#include "catalog/pg_foreign_volume.h"
 #include "catalog/pg_language.h"
 #include "catalog/pg_largeobject_metadata.h"
 #include "catalog/pg_namespace.h"
@@ -876,6 +878,40 @@ GetNewOidForForeignServer(Relation relation, Oid indexId, AttrNumber oidcolumn,
 	memset(&key, 0, sizeof(OidAssignment));
 	key.type = T_OidAssignment;
 	key.objname = srvname;
+	return GetNewOrPreassignedOid(relation, indexId, oidcolumn, &key);
+
+}
+
+Oid
+GetNewOidForForeignCatalog(Relation relation, Oid indexId, AttrNumber oidcolumn,
+						   char *catname)
+{
+	OidAssignment key;
+
+	Assert(RelationGetRelid(relation) == ForeignCatalogRelationId);
+	Assert(indexId == ForeignCatalogOidIndexId);
+	Assert(oidcolumn == Anum_pg_foreign_catalog_oid);
+
+	memset(&key, 0, sizeof(OidAssignment));
+	key.type = T_OidAssignment;
+	key.objname = catname;
+	return GetNewOrPreassignedOid(relation, indexId, oidcolumn, &key);
+
+}
+
+Oid
+GetNewOidForForeignVolume(Relation relation, Oid indexId, AttrNumber oidcolumn,
+						  char *volumename)
+{
+	OidAssignment key;
+
+	Assert(RelationGetRelid(relation) == ForeignVolumeRelationId);
+	Assert(indexId == ForeignVolumeOidIndexId);
+	Assert(oidcolumn == Anum_pg_foreign_volume_oid);
+
+	memset(&key, 0, sizeof(OidAssignment));
+	key.type = T_OidAssignment;
+	key.objname = volumename;
 	return GetNewOrPreassignedOid(relation, indexId, oidcolumn, &key);
 
 }
