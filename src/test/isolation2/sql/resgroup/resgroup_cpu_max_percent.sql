@@ -38,12 +38,11 @@ $$ LANGUAGE plpython3u;
 CREATE OR REPLACE FUNCTION verify_cpu_usage(groupname TEXT, expect_cpu_usage INT, err_rate INT)
 RETURNS BOOL AS $$
     import json
-    import functools
 
     all_info = plpy.execute('''
         SELECT sample::json->'{name}' AS cpu FROM cpu_usage_samples
     '''.format(name=groupname))
-    usage = float(all_info[0]['cpu'])
+    usage = sum(float(row['cpu']) for row in all_info) / len(all_info)
 
     return abs(usage - expect_cpu_usage) <= err_rate
 $$ LANGUAGE plpython3u;

@@ -1,3 +1,7 @@
+-- start_matchsubs
+-- m/\(cluster.c:\d+\)/
+-- s/\(cluster.c:\d+\)/\(cluster.c:###\)/
+-- end_matchsubs
 -- ALTER TABLE ... SET DISTRIBUTED BY
 -- This is the main interface for system expansion
 \set DATA values(1, 2), (2, 3), (3, 4)

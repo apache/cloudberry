@@ -1,3 +1,7 @@
+-- start_matchsubs
+-- m/\(cluster.c:\d+\)/
+-- s/\(cluster.c:\d+\)/\(cluster.c:###\)/
+-- end_matchsubs
 -- ALTER TABLE ... SET DISTRIBUTED BY
 -- This is the main interface for system expansion
 \set DATA values(1, 2), (2, 3), (3, 4)
@@ -171,7 +175,7 @@ ERROR:  permission denied: "pg_class" is a system catalog
 create table atsdb (i int, j text) distributed by (j);
 insert into atsdb select i, i::text from generate_series(1, 10) i;
 alter table atsdb set with(appendonly = true);
-ERROR:  PAX not allow swap relation files for different AM (cluster.c:1535)
+ERROR:  PAX not allow swap relation files for different AM (cluster.c:###)
 select relname, segrelid != 0, reloptions from pg_class, pg_appendonly where pg_class.oid =
 'atsdb'::regclass and relid = pg_class.oid;
  relname | ?column? | reloptions 
@@ -316,7 +320,7 @@ select * from distcheck where rel = 'atsdb';
 
 alter table atsdb drop column n;
 alter table atsdb set with(appendonly = true, compresslevel = 3);
-ERROR:  PAX not allow swap relation files for different AM (cluster.c:1535)
+ERROR:  PAX not allow swap relation files for different AM (cluster.c:###)
 select relname, segrelid != 0, reloptions from pg_class, pg_appendonly where pg_class.oid =
 'atsdb'::regclass and relid = pg_class.oid;
  relname | ?column? | reloptions 

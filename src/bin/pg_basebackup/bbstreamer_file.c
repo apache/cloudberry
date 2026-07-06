@@ -327,7 +327,6 @@ should_allow_existing_directory(const char *pathname)
 static void
 extract_directory(const char *filename, mode_t mode)
 {
-	/* MERGE16_FIXME: We should test forceoverwrite here ? */
 	if (pg_check_dir(filename) != 0)
 	{
 		/*

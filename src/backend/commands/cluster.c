@@ -1486,17 +1486,24 @@ swap_relation_files(Oid r1, Oid r2, bool target_is_pg_class,
 		Assert(!TransactionIdIsValid(frozenXid) ||
 			   TransactionIdIsNormal(frozenXid));
 		relform1->relfrozenxid = frozenXid;
-		Assert(MultiXactIdIsValid(cutoffMulti));
+		Assert(!MultiXactIdIsValid(cutoffMulti) ||
+			   MultiXactIdPrecedesOrEquals(FirstMultiXactId, cutoffMulti));
 		relform1->relminmxid = cutoffMulti;
 	}
 	/*
-	 * Cloudberry: append-optimized tables do not have a valid relfrozenxid.
-	 * Overwrite the entry for both relations.
+	 * Cloudberry: append-optimized tables do not have a valid relfrozenxid
+	 * or relminmxid. Overwrite the entry for both relations.
 	 */
 	if (relform1->relkind != RELKIND_INDEX && IsAccessMethodAO(relform1->relam))
+	{
 		relform1->relfrozenxid = InvalidTransactionId;
+		relform1->relminmxid = InvalidMultiXactId;
+	}
 	if (relform2->relkind != RELKIND_INDEX && IsAccessMethodAO(relform2->relam))
+	{
 		relform2->relfrozenxid = InvalidTransactionId;
+		relform2->relminmxid = InvalidMultiXactId;
+	}
 
 	/* swap size statistics too, since new rel has freshly-updated stats */
 	if (swap_stats)

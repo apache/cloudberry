@@ -154,7 +154,6 @@ record_in(PG_FUNCTION_ARGS)
 		ptr++;
 	if (*ptr++ != '(')
 	{
-		ReleaseTupleDesc(tupdesc);
 		errsave(escontext,
 				(errcode(ERRCODE_INVALID_TEXT_REPRESENTATION),
 				 errmsg("malformed record literal: \"%s\"", string),
@@ -186,7 +185,6 @@ record_in(PG_FUNCTION_ARGS)
 				ptr++;
 			else
 			{
-				ReleaseTupleDesc(tupdesc);
 				/* *ptr must be ')' */
 				errsave(escontext,
 						(errcode(ERRCODE_INVALID_TEXT_REPRESENTATION),
@@ -214,7 +212,6 @@ record_in(PG_FUNCTION_ARGS)
 
 				if (ch == '\0')
 				{
-					ReleaseTupleDesc(tupdesc);
 					errsave(escontext,
 							(errcode(ERRCODE_INVALID_TEXT_REPRESENTATION),
 							 errmsg("malformed record literal: \"%s\"",
@@ -226,7 +223,6 @@ record_in(PG_FUNCTION_ARGS)
 				{
 					if (*ptr == '\0')
 					{
-						ReleaseTupleDesc(tupdesc);
 						errsave(escontext,
 								(errcode(ERRCODE_INVALID_TEXT_REPRESENTATION),
 								 errmsg("malformed record literal: \"%s\"",
@@ -285,7 +281,6 @@ record_in(PG_FUNCTION_ARGS)
 
 	if (*ptr++ != ')')
 	{
-		ReleaseTupleDesc(tupdesc);
 		errsave(escontext,
 				(errcode(ERRCODE_INVALID_TEXT_REPRESENTATION),
 				 errmsg("malformed record literal: \"%s\"", string),
@@ -297,7 +292,6 @@ record_in(PG_FUNCTION_ARGS)
 		ptr++;
 	if (*ptr)
 	{
-		ReleaseTupleDesc(tupdesc);
 		errsave(escontext,
 				(errcode(ERRCODE_INVALID_TEXT_REPRESENTATION),
 				 errmsg("malformed record literal: \"%s\"", string),

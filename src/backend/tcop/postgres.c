@@ -1300,28 +1300,6 @@ exec_mpp_query(const char *query_string,
 		elog(ERROR, "MPPEXEC: received non-DML Plan");
 	commandType = plan->commandType;
 
-	// MERGE16_FIXME: Check if wo should remove requiredPerms in Query
-//	if ( slice )
-//	{
-//		/* Non root slices don't need update privileges. */
-//		if (sliceTable->localSlice != slice->rootIndex)
-//		{
-//			ListCell       *rtcell;
-//			RangeTblEntry  *rte;
-//			RTEPermissionInfo  *rte_permission;
-//			AclMode         removeperms = ACL_INSERT | ACL_UPDATE | ACL_DELETE | ACL_SELECT_FOR_UPDATE;
-//
-//			/* Just reading, so don't check INS/DEL/UPD permissions. */
-//			foreach(rtcell, plan->rtable)
-//			{
-//				rte = (RangeTblEntry *)lfirst(rtcell);
-//				if (rte->rtekind == RTE_RELATION &&
-//					0 != (rte->requiredPerms & removeperms))
-//					rte->requiredPerms &= ~removeperms;
-//			}
-//		}
-//	}
-
 	if (log_statement != LOGSTMT_NONE)
 	{
 	    /*

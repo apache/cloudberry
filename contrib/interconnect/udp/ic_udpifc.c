@@ -41,6 +41,7 @@
 #include "access/transam.h"
 #include "access/xact.h"
 #include "common/ip.h"
+#include "funcapi.h"
 #include "nodes/execnodes.h"
 #include "nodes/pg_list.h"
 #include "nodes/print.h"
@@ -51,6 +52,8 @@
 #include "pgstat.h"
 #include "postmaster/postmaster.h"
 #include "storage/latch.h"
+#include "storage/lock.h"
+#include "storage/pg_shmem.h"
 #include "storage/pmsignal.h"
 #include "utils/builtins.h"
 #include "utils/guc.h"
@@ -720,6 +723,8 @@ typedef struct ICStatistics
 
 /* Statistics for UDP interconnect. */
 static ICStatistics ic_statistics;
+
+static ICStatisticsShmem *pICStatisticsShmem = NULL;
 
 /* UDP listen fd */
 int			UDP_listenerFd;
@@ -1819,6 +1824,27 @@ ic_reset_pthread_sigmasks(sigset_t *sigs)
 #endif
 
 	return;
+}
+
+void
+InterconnectShmemInitUDPIFC(void)
+{
+	bool found;
+	pICStatisticsShmem = ShmemInitStruct("global interconnect statistics",
+                                         sizeof(ICStatisticsShmem), &found);
+    if (pICStatisticsShmem == NULL)
+	{
+        ereport(FATAL,
+			(errcode(ERRCODE_OUT_OF_MEMORY),
+			 errmsg("not enough shared memory for global interconnect statistics")));
+	}
+
+	if (!found)
+		memset(pICStatisticsShmem, 0, sizeof(*pICStatisticsShmem));
+
+    int tranche_id = LWLockNewTrancheId();
+    LWLockRegisterTranche(tranche_id, "IC Statistics");
+    LWLockInitialize(&pICStatisticsShmem->lock, tranche_id);
 }
 
 /*
@@ -3908,6 +3934,30 @@ chunkTransportStateEntryInitialized(ChunkTransportState *transportStates,
 	return pEntry->valid;
 }
 
+/* Append local interconnect stats to global cummulative stats. */
+static void 
+updateGlobalInterconnectStats(void)
+{
+	LWLockAcquire(&pICStatisticsShmem->lock, LW_EXCLUSIVE);
+	pICStatisticsShmem->totalRecvQueueSize += ic_statistics.totalRecvQueueSize;
+	pICStatisticsShmem->recvQueueSizeCountingTime += ic_statistics.recvQueueSizeCountingTime;
+	pICStatisticsShmem->totalCapacity += ic_statistics.totalCapacity;
+	pICStatisticsShmem->capacityCountingTime += ic_statistics.capacityCountingTime;
+	pICStatisticsShmem->totalBuffers += ic_statistics.totalBuffers;
+	pICStatisticsShmem->bufferCountingTime += ic_statistics.bufferCountingTime;
+	pICStatisticsShmem->retransmits += ic_statistics.retransmits;
+	pICStatisticsShmem->startupCachedPktNum += ic_statistics.startupCachedPktNum;
+	pICStatisticsShmem->mismatchNum += ic_statistics.mismatchNum;
+	pICStatisticsShmem->crcErrors += ic_statistics.crcErrors;
+	pICStatisticsShmem->sndPktNum += ic_statistics.sndPktNum;
+	pICStatisticsShmem->recvPktNum += ic_statistics.recvPktNum;
+	pICStatisticsShmem->disorderedPktNum += ic_statistics.disorderedPktNum;
+	pICStatisticsShmem->duplicatedPktNum += ic_statistics.duplicatedPktNum;
+	pICStatisticsShmem->recvAckNum += ic_statistics.recvAckNum;
+	pICStatisticsShmem->statusQueryMsgNum += ic_statistics.statusQueryMsgNum;
+	LWLockRelease(&pICStatisticsShmem->lock);
+}
+
 /*
  * computeNetworkStatistics
  * 		Compute the max/min/avg network statistics.
@@ -4214,6 +4264,7 @@ TeardownUDPIFCInterconnect_Internal(ChunkTransportState *transportStates,
 		 (minRtt == ~((uint64) 0) ? 0 : minRtt), (minDev == ~((uint64) 0) ? 0 : minDev), avgRtt, avgDev, maxRtt, maxDev,
 		 snd_control_info.cwnd, ic_statistics.statusQueryMsgNum);
 
+	updateGlobalInterconnectStats();
 	ic_control_info.isSender = false;
 	memset(&ic_statistics, 0, sizeof(ICStatistics));
 
@@ -8230,4 +8281,73 @@ MlPutRxBufferIFC(ChunkTransportState *transportStates, int motNodeID, int route)
 	 */
 	if (param.msg.len != 0)
 		sendAckWithParam(&param);
+}
+
+PG_FUNCTION_INFO_V1(gp_interconnect_get_stats);
+
+Datum
+gp_interconnect_get_stats(PG_FUNCTION_ARGS)
+{
+	if (Gp_interconnect_type != INTERCONNECT_TYPE_UDPIFC)
+	{
+    	ereport(WARNING,
+        	(errcode(ERRCODE_WARNING_GP_INTERCONNECTION),
+        	errmsg("Interconnect statistics are collected only for UDPIFC protocol")));
+    	PG_RETURN_NULL();
+	}
+
+	/*
+	 * Build a tuple descriptor for our result type
+	 * The number and type of attributes have to match the definition of the
+	 * view gp_interconnect_stats_per_segment
+	 */
+	enum {NUM_IC_STATS_ELEM = 17};
+	TupleDesc tupdesc = CreateTemplateTupleDesc(NUM_IC_STATS_ELEM);
+
+	TupleDescInitEntry(tupdesc, 1, "segid", INT2OID, -1, 0);
+    TupleDescInitEntry(tupdesc, 2, "total_recv_queue_size", INT8OID, -1, 0);
+    TupleDescInitEntry(tupdesc, 3, "recv_queue_conting_time", INT8OID, -1, 0);
+    TupleDescInitEntry(tupdesc, 4, "total_capacity", INT8OID, -1, 0);
+    TupleDescInitEntry(tupdesc, 5, "capacity_counting_time", INT8OID, -1, 0);
+    TupleDescInitEntry(tupdesc, 6, "total_buffers", INT8OID, -1, 0);
+    TupleDescInitEntry(tupdesc, 7, "buffer_counting_time", INT8OID, -1, 0);
+    TupleDescInitEntry(tupdesc, 8, "retransmits", INT8OID, -1, 0);
+    TupleDescInitEntry(tupdesc, 9, "startup_cached_pkts", INT8OID, -1, 0);
+    TupleDescInitEntry(tupdesc, 10, "mismatches", INT8OID, -1, 0);
+    TupleDescInitEntry(tupdesc, 11, "crs_errors", INT8OID, -1, 0);
+    TupleDescInitEntry(tupdesc, 12, "snd_pkt_num", INT8OID, -1, 0);
+    TupleDescInitEntry(tupdesc, 13, "recv_pkt_num", INT8OID, -1, 0);
+    TupleDescInitEntry(tupdesc, 14, "disordered_pkt_num", INT8OID, -1, 0);
+    TupleDescInitEntry(tupdesc, 15, "duplicate_pkt_num", INT8OID, -1, 0);
+    TupleDescInitEntry(tupdesc, 16, "recv_ack_num", INT8OID, -1, 0);
+    TupleDescInitEntry(tupdesc, 17, "status_query_msg_num", INT8OID, -1, 0);
+	tupdesc =  BlessTupleDesc(tupdesc);
+
+	Datum		values[NUM_IC_STATS_ELEM];
+	bool		nulls[NUM_IC_STATS_ELEM] = {0};
+
+	LWLockAcquire(&pICStatisticsShmem->lock, LW_SHARED);
+	values[0] = Int32GetDatum(GpIdentity.segindex);
+	values[1] = Int64GetDatum(pICStatisticsShmem->totalRecvQueueSize);
+	values[2] = Int64GetDatum(pICStatisticsShmem->recvQueueSizeCountingTime);
+	values[3] = Int64GetDatum(pICStatisticsShmem->totalCapacity);
+	values[4] = Int64GetDatum(pICStatisticsShmem->capacityCountingTime);
+	values[5] = Int64GetDatum(pICStatisticsShmem->totalBuffers);
+	values[6] = Int64GetDatum(pICStatisticsShmem->bufferCountingTime);
+	values[7] = Int64GetDatum(pICStatisticsShmem->retransmits);
+	values[8] = Int64GetDatum(pICStatisticsShmem->startupCachedPktNum);
+	values[9] = Int64GetDatum(pICStatisticsShmem->mismatchNum);
+	values[10] = Int64GetDatum(pICStatisticsShmem->crcErrors);
+	values[11] = Int64GetDatum(pICStatisticsShmem->sndPktNum);
+	values[12] = Int64GetDatum(pICStatisticsShmem->recvPktNum);
+	values[13] = Int64GetDatum(pICStatisticsShmem->disorderedPktNum);
+	values[14] = Int64GetDatum(pICStatisticsShmem->duplicatedPktNum);
+	values[15] = Int64GetDatum(pICStatisticsShmem->recvAckNum);
+	values[16] = Int64GetDatum(pICStatisticsShmem->statusQueryMsgNum);
+	LWLockRelease(&pICStatisticsShmem->lock);
+
+	HeapTuple tuple = heap_form_tuple(tupdesc, values, nulls);
+	Datum result = HeapTupleGetDatum(tuple);
+
+	PG_RETURN_DATUM(result);
 }

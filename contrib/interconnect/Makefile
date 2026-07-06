@@ -7,6 +7,10 @@ include $(top_builddir)/contrib/interconnect/Makefile.interconnect
 MODULE_big = interconnect
 PGFILEDESC = "interconnect - inter connection module"
 
+EXTENSION = interconnect
+EXTENSION_VERSION = 1.0
+DATA = interconnect--$(EXTENSION_VERSION).sql
+
 OBJS =  \
 	$(WIN32RES) \
 	ic_common.o \
@@ -32,6 +36,8 @@ OBJS += proxy/ic_proxy_pkt_cache.o
 OBJS += proxy/ic_proxy_iobuf.o
 SHLIB_LINK += $(filter -luv, $(LIBS))
 endif  # enable_ic_proxy
+
+REGRESS = interconnect
 
 ifdef USE_PGXS
 PG_CONFIG = pg_config

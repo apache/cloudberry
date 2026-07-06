@@ -101,7 +101,6 @@ ExecInitPartitionSelector(PartitionSelector *node, EState *estate, int eflags)
 	outerPlanState(psstate) = ExecInitNode(outerPlan(node), estate, eflags);
 
 	/* Create the working data structure for pruning. */
-	/* MERGE16_FIXME: This use of ExecInitPartitionPruning may be incorrect */
 	psstate->prune_state = CreatePartitionPruneState(&psstate->ps, node->part_prune_info);
 
 	return psstate;

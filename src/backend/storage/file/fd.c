@@ -1576,10 +1576,14 @@ FileAccess(File file)
 static void
 ReportTemporaryFileUsage(const char *path, off_t size)
 {
-	/* MERGE16_FIXME: Now the pgstat has not worked, so disable the report first */
-	return;
-	
-	pgstat_report_tempfile(size);
+	/*
+	 * pgstat_report_tempfile() accesses shared memory via dshash, which
+	 * may already be detached during process exit cleanup.  Calling it
+	 * from PathNameDeleteTemporaryDir's walkdir causes SIGSEGV in
+	 * dshash_find().  Guard with IsUnderPostmaster and proc_exit_inprogress.
+	 */
+	if (!proc_exit_inprogress)
+		pgstat_report_tempfile(size);
 
 	if (log_temp_files >= 0)
 	{

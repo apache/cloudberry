@@ -347,6 +347,8 @@ CBitSet::ExchangeClear(ULONG pos)
 void
 CBitSet::Union(const CBitSet *pbsOther)
 {
+	GPOS_ASSERT(m_vector_size == pbsOther->m_vector_size);
+
 	CBitSetLink *bsl = nullptr;
 	CBitSetLink *bsl_other = nullptr;
 
@@ -424,6 +426,10 @@ CBitSet::Intersection(const CBitSet *pbsOther)
 	{
 		return;
 	}
+
+	// See CBitSet::Union: link offsets depend on m_vector_size, so mixing
+	// bitsets with different sizes makes FindLinkByOffset miss links.
+	GPOS_ASSERT(m_vector_size == pbsOther->m_vector_size);
 
 	CBitSetLink *bsl_other = nullptr;
 	CBitSetLink *bsl = m_bsllist.First();

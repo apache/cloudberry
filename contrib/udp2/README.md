@@ -21,7 +21,7 @@
 
 ## Project Background
 
-UDP2 is a next-generation interconnect protocol implementation based on the original UDP protocol, located in the `contrib/udp2` directory. In CloudBerry Database, the interconnect is responsible for data transmission and synchronization between nodes, serving as a core component for distributed query execution.
+UDP2 is a next-generation interconnect protocol implementation based on the original UDP protocol, located in the `contrib/udp2` directory. In Apache Cloudberry, the interconnect is responsible for data transmission and synchronization between nodes, serving as a core component for distributed query execution.
 
 Currently, the database supports three interconnect protocol implementations:
 - **TCP** (`contrib/interconnect/tcp`) - Reliable transmission based on TCP protocol

@@ -130,14 +130,10 @@ extern ResultRelInfo *ExecFindPartition(ModifyTableState *mtstate,
 										EState *estate);
 extern void ExecCleanupTupleRouting(ModifyTableState *mtstate,
 									PartitionTupleRouting *proute);
-extern PartitionPruneState *ExecCreatePartitionPruneState(PlanState *planstate,
-														  PartitionPruneInfo *partitionpruneinfo);
 extern Bitmapset *ExecFindMatchingSubPlans(PartitionPruneState *prunestate,
 										   bool initial_prune,
 										   EState *estate,
 										   int nplans, List *join_prune_paramids);
-extern Bitmapset *ExecFindInitialMatchingSubPlans(PartitionPruneState *prunestate,
-												  int nsubplans);
 extern int get_partition_for_tuple(PartitionKey key, PartitionDesc partdesc,
 								   Datum *values, bool *isnull);
 

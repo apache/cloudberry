@@ -141,27 +141,6 @@ select relid::regclass as relname, phase, heap_blks_total, heap_blks_scanned, he
 2: SELECT gp_inject_fault('vacuum_worker_changed', 'suspend', dbid) FROM gp_segment_configuration WHERE content > -1 AND role = 'p';
 -- resume walsender and let it exit so that mirror stop can be detected
 2: SELECT gp_inject_fault_infinite('wal_sender_loop', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p' and content = 1;
--- Trigger FTS probe repeatedly until mirror is marked as down, so that
--- FTS version change propagates to QD and gang gets reset.
-CREATE OR REPLACE FUNCTION wait_for_mirror_down(content_id int) RETURNS bool AS $$
-declare /* in func */
-  retries int; /* in func */
-begin /* in func */
-  retries := 60; /* in func */
-  loop /* in func */
-    perform gp_request_fts_probe_scan(); /* in func */
-    if (select status = 'd' from gp_segment_configuration where content = content_id and role = 'm') then /* in func */
-      return true; /* in func */
-    end if; /* in func */
-    if retries <= 0 then /* in func */
-      return false; /* in func */
-    end if; /* in func */
-    perform pg_sleep(1); /* in func */
-    retries := retries - 1; /* in func */
-  end loop; /* in func */
-end; /* in func */
-$$ language plpgsql;
-2: SELECT wait_for_mirror_down(1);
 -- Ensure we enter into the target logic which stops cumulative data but
 -- initializes a new vacrelstats at the beginning of post-cleanup phase.
 -- Also all segments should reach to the same "vacuum_worker_changed" point

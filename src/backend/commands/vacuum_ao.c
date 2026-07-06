@@ -245,11 +245,6 @@ ao_vacuum_rel_post_cleanup(Relation onerel, VacuumParams *params, BufferAccessSt
 	BlockNumber	total_file_segs;
 	int			elevel;
 	int			options = params->options;
-	TransactionId OldestXmin;
-	TransactionId FreezeLimit;
-	MultiXactId MultiXactCutoff;
-	TransactionId xidFullScanLimit;
-	MultiXactId mxactFullScanLimit;
 
 	if (options & VACOPT_VERBOSE)
 		elevel = INFO;
@@ -288,16 +283,11 @@ ao_vacuum_rel_post_cleanup(Relation onerel, VacuumParams *params, BufferAccessSt
 								 &relhasindex,
 								 &total_file_segs);
 
-	/* MERGE16_FIXME: How to set limits for ao */
-	vacuum_set_xid_limits(onerel,
-						  params->freeze_min_age,
-						  params->freeze_table_age,
-						  params->multixact_freeze_min_age,
-						  params->multixact_freeze_table_age,
-						  &OldestXmin, &FreezeLimit, &xidFullScanLimit,
-						  &MultiXactCutoff, &mxactFullScanLimit);
-
-	/* Causion: AO/AOCO use relallvisible to represent total segment file count */
+	/*
+	 * AO/AOCO tables have no per-tuple xmin/xmax, so freeze limits don't
+	 * apply. Pass InvalidTransactionId/InvalidMultiXactId to keep
+	 * relfrozenxid and relminmxid unchanged.
+	 */
 	vac_update_relstats(onerel,
 						relpages,
 						reltuples,
@@ -305,8 +295,8 @@ ao_vacuum_rel_post_cleanup(Relation onerel, VacuumParams *params, BufferAccessSt
 							  Heap's 'all visible pages', use this field to represent
 							  AO/AOCO's total segment file count */
 						relhasindex,
-						FreezeLimit,
-						MultiXactCutoff,
+						InvalidTransactionId,
+						InvalidMultiXactId,
 						NULL,
 						NULL,
 						false,

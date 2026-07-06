@@ -1462,8 +1462,6 @@ aoco_relation_copy_for_cluster(Relation OldHeap, Relation NewHeap,
 	int			natts;
 	Datum	   *values;
 	bool	   *isnull;
-	TransactionId FreezeXid;
-	MultiXactId MultiXactCutoff;
 	Tuplesortstate *tuplesort;
 	PGRUsage	ru0;
 
@@ -1523,29 +1521,12 @@ aoco_relation_copy_for_cluster(Relation OldHeap, Relation NewHeap,
 	Assert(RelationGetTargetBlock(NewHeap) == InvalidBlockNumber);
 
 	/*
-	 * Compute sane values for FreezeXid and CutoffMulti with regular
-	 * VACUUM machinery to avoidconfising existing CLUSTER code.
+	 * AO/AOCO tables have no per-tuple xmin/xmax, so freeze limits don't
+	 * apply. Return Invalid values so that relfrozenxid and relminmxid
+	 * remain unchanged after CLUSTER.
 	 */
-	vacuum_set_xid_limits(OldHeap, 0, 0, 0, 0,
-						  &OldestXmin, &FreezeXid, NULL, &MultiXactCutoff,
-						  NULL);
-
-	/*
-	 * FreezeXid will become the table's new relfrozenxid, and that mustn't go
-	 * backwards, so take the max.
-	 */
-	if (TransactionIdPrecedes(FreezeXid, OldHeap->rd_rel->relfrozenxid))
-		FreezeXid = OldHeap->rd_rel->relfrozenxid;
-
-	/*
-	 * MultiXactCutoff, similarly, shouldn't go backwards either.
-	 */
-	if (MultiXactIdPrecedes(MultiXactCutoff, OldHeap->rd_rel->relminmxid))
-		MultiXactCutoff = OldHeap->rd_rel->relminmxid;
-
-	/* return selected values to caller */
-	*xid_cutoff = FreezeXid;
-	*multi_cutoff = MultiXactCutoff;
+	*xid_cutoff = InvalidTransactionId;
+	*multi_cutoff = InvalidMultiXactId;
 
 	tuplesort = tuplesort_begin_cluster(oldTupDesc, OldIndex,
 											maintenance_work_mem, NULL, false);

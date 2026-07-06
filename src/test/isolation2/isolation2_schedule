@@ -253,8 +253,7 @@ test: segwalrep/dtm_recovery_on_standby
 test: segwalrep/commit_blocking_on_standby
 test: segwalrep/dtx_recovery_wait_lsn
 
-# MERGE16_FIXME: enable this case latter
-# test: segwalrep/select_throttle
+test: segwalrep/select_throttle
 test: segwalrep/startup_rename_prepared_xlog
 test: fts_manual_probe
 test: fts_session_reset

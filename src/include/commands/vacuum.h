@@ -491,15 +491,6 @@ extern Size vac_max_items_to_alloc_size(int max_items);
 /* In postmaster/autovacuum.c */
 extern void AutoVacuumUpdateCostLimit(void);
 extern void VacuumUpdateCosts(void);
-extern void vacuum_set_xid_limits(Relation rel,
-								  int freeze_min_age, int freeze_table_age,
-								  int multixact_freeze_min_age,
-								  int multixact_freeze_table_age,
-								  TransactionId *oldestXmin,
-								  TransactionId *freezeLimit,
-								  TransactionId *xidFullScanLimit,
-								  MultiXactId *multiXactCutoff,
-								  MultiXactId *mxactFullScanLimit);
 /* in commands/vacuumparallel.c */
 extern ParallelVacuumState *parallel_vacuum_init(Relation rel, Relation *indrels,
 												 int nindexes, int nrequested_workers,

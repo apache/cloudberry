@@ -74,6 +74,7 @@ bool		gp_enable_sort_limit = false;
 #define UNSAFE_NOTIN_DISTINCTON_CLAUSE	(1 << 2)
 #define UNSAFE_NOTIN_PARTITIONBY_CLAUSE	(1 << 3)
 #define UNSAFE_TYPE_MISMATCH			(1 << 4)
+#define UNSAFE_HAS_SUBPLAN				(1 << 5)
 
 /* results of subquery_is_pushdown_safe */
 typedef struct pushdown_safety_info
@@ -4714,11 +4715,10 @@ check_output_expressions(Query *subquery, pushdown_safety_info *safetyInfo)
 			continue;
 		}
 
-		/* Refuse subplans */
+		/* Refuse subplans (Cloudberry-specific, see UNSAFE_HAS_SUBPLAN) */
 		if (contain_subplans((Node *) tle->expr))
 		{
-			/*.MERGE16_FIXME: should we add a new unsafe type? */
-			safetyInfo->unsafeFlags[tle->resno] |= UNSAFE_NOTIN_PARTITIONBY_CLAUSE;
+			safetyInfo->unsafeFlags[tle->resno] |= UNSAFE_HAS_SUBPLAN;
 			continue;
 		}
 	}
@@ -4896,7 +4896,8 @@ qual_is_pushdown_safe(Query *subquery, Index rti, RestrictInfo *rinfo,
 		{
 			if (safetyInfo->unsafeFlags[var->varattno] &
 				(UNSAFE_HAS_VOLATILE_FUNC | UNSAFE_HAS_SET_FUNC |
-				 UNSAFE_NOTIN_DISTINCTON_CLAUSE | UNSAFE_TYPE_MISMATCH))
+				 UNSAFE_NOTIN_DISTINCTON_CLAUSE | UNSAFE_TYPE_MISMATCH |
+				 UNSAFE_HAS_SUBPLAN))
 			{
 				safe = PUSHDOWN_UNSAFE;
 				break;

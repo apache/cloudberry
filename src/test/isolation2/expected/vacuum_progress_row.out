@@ -293,8 +293,6 @@ SELECT n_live_tup, n_dead_tup, last_vacuum is not null as has_last_vacuum, vacuu
 -- phase (at injecting point vacuum_ao_post_cleanup_end), which is different from above case
 -- in which vacuum worker isn't changed.
 
-CREATE OR REPLACE FUNCTION wait_for_mirror_down(content_id int) RETURNS bool AS $$ declare /* in func */ retries int; /* in func */ begin /* in func */ retries := 60; /* in func */ loop /* in func */ perform gp_request_fts_probe_scan(); /* in func */ if (select status = 'd' from gp_segment_configuration where content = content_id and role = 'm') then /* in func */ return true; /* in func */ end if; /* in func */ if retries <= 0 then /* in func */ return false; /* in func */ end if; /* in func */ perform pg_sleep(1); /* in func */ retries := retries - 1; /* in func */ end loop; /* in func */ end; /* in func */ $$ language plpgsql;
-CREATE
 DROP TABLE IF EXISTS vacuum_progress_ao_row;
 DROP
 CREATE TABLE vacuum_progress_ao_row(i int, j int);
@@ -394,13 +392,6 @@ select relid::regclass as relname, phase, heap_blks_total, heap_blks_scanned, he
  gp_inject_fault_infinite 
 --------------------------
  Success:                 
-(1 row)
--- Trigger FTS probe repeatedly until mirror is marked as down, so that
--- FTS version change propagates to QD and gang gets reset.
-2: SELECT wait_for_mirror_down(1);
- wait_for_mirror_down 
-----------------------
- t                    
 (1 row)
 -- Ensure we enter into the target logic which stops cumulative data but
 -- initializes a new vacrelstats at the beginning of post-cleanup phase.
@@ -605,13 +596,6 @@ select relid::regclass as relname, phase, heap_blks_total, heap_blks_scanned, he
  gp_inject_fault_infinite 
 --------------------------
  Success:                 
-(1 row)
--- Trigger FTS probe repeatedly until mirror is marked as down, so that
--- FTS version change propagates to QD and gang gets reset.
-2: SELECT wait_for_mirror_down(1);
- wait_for_mirror_down 
-----------------------
- t                    
 (1 row)
 -- Ensure we enter into the target logic which stops cumulative data but
 -- initializes a new vacrelstats at the beginning of post-cleanup phase.
