@@ -3867,6 +3867,58 @@ get_anchor_col(AOCSFileSegInfo **segInfos, int nseg, int natts,
 	return scancol_proj != -1 ? scancol_proj : (scancol_all == -1 ? 0 : scancol_all);
 }
 
+/*
+ * Choose the column whose block directory entries are consulted during unique
+ * constraint checks, and for which insert commands persist their placeholder
+ * block directory row (see AppendOnlyBlockDirectory_InsertPlaceholder()).
+ *
+ * Writers and readers must agree on this column: a reader looking up a
+ * different column than the one covered by a concurrent (or same-command)
+ * writer's placeholder row would miss in-progress conflicts. The choice
+ * therefore has to be deterministic and independent of mutable state such as
+ * segfile eofs (which is what rules out get_anchor_col() here).
+ *
+ * The column also has to be "complete" (see get_anchor_col()): an
+ * incomplete column's block directory does not cover rows that predate its
+ * missing-mode ADD COLUMN, so consulting it would miss conflicts with those
+ * rows. We prefer the first non-dropped complete column, but fall back to a
+ * dropped one - block directory entries are written even for dropped columns.
+ */
+int
+aocs_unique_check_col(Relation aocsrel)
+{
+	int			natts = RelationGetNumberOfAttributes(aocsrel);
+	bool	   *column_not_complete;
+	int			checkcol = -1;
+
+	column_not_complete = ExistValidLastrownums(RelationGetRelid(aocsrel), natts);
+
+	for (int i = 0; i < natts; i++)
+	{
+		if (column_not_complete[i])
+			continue;
+
+		if (!TupleDescAttr(RelationGetDescr(aocsrel), i)->attisdropped)
+		{
+			checkcol = i;
+			break;
+		}
+
+		if (checkcol == -1)
+			checkcol = i;
+	}
+
+	pfree(column_not_complete);
+
+	if (checkcol == -1)
+		ereport(ERROR,
+				(errcode(ERRCODE_INTERNAL_ERROR),
+				 errmsg("could not find a complete column for unique check block directory lookups for relation \"%s\"",
+						RelationGetRelationName(aocsrel))));
+
+	return checkcol;
+}
+
 /* 
  * A helper for aocs_writecol_writesegfiles(). It evaluates expression stored in 
  * the 'exprstate' field of the 'newvals', and store the values in 'slot'. In
