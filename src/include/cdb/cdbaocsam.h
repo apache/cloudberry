@@ -406,8 +406,12 @@ typedef struct AOCSWriteColumnDescData
 typedef AOCSWriteColumnDescData *AOCSWriteColumnDesc;
 
 /* function to help find the anchor column to scan */
-extern int 
+extern int
 get_anchor_col(AOCSFileSegInfo **segInfos, int nseg, int natts, Relation aocsrel, AttrNumber *proj_atts, AttrNumber num_proj_atts);
+
+/* function to find the column consulted by unique constraint checks */
+extern int
+aocs_unique_check_col(Relation aocsrel);
 
 /* ----------------
  *		function prototypes for appendoptimized columnar access method

@@ -426,31 +426,23 @@ get_insert_descriptor(const Relation relation)
 	* AppendOnlyBlockDirectory_InsertPlaceholder() for details.
 	*
 	* Note: For AOCO tables, we need to only insert a placeholder block
-	* directory row for the 1st non-dropped column. This is because
-	* during a uniqueness check, only the first non-dropped column's block
-	* directory entry is consulted. (See AppendOnlyBlockDirectory_CoversTuple())
+	* directory row for the column that uniqueness checks consult, as
+	* determined by aocs_unique_check_col().
+	* (See AppendOnlyBlockDirectory_CoversTuple())
 	*/
 	if (relationHasUniqueIndex(relation) && !state->insertDesc->placeholderInserted)
 	{
-		int 				firstNonDroppedColumn = -1;
+		int 				uniqueCheckCol;
 		int64 				firstRowNum;
 		DatumStreamWrite 	*dsw;
 		BufferedAppend 		*bufferedAppend;
 		int64 				fileOffset;
 		AOCSInsertDesc 		insertDesc;
 
-
-		for(int i = 0; i < relation->rd_att->natts; i++)
-		{
-			if (!relation->rd_att->attrs[i].attisdropped) {
-				firstNonDroppedColumn = i;
-				break;
-			}
-		}
-		Assert(firstNonDroppedColumn != -1);
+		uniqueCheckCol = aocs_unique_check_col(relation);
 
 		insertDesc = state->insertDesc;
-		dsw = insertDesc->ds[firstNonDroppedColumn];
+		dsw = insertDesc->ds[uniqueCheckCol];
 		firstRowNum = dsw->blockFirstRowNum;
 		bufferedAppend = &dsw->ao_write.bufferedAppend;
 		fileOffset = BufferedAppendNextBufferPosition(bufferedAppend);
@@ -458,7 +450,7 @@ get_insert_descriptor(const Relation relation)
 		AppendOnlyBlockDirectory_InsertPlaceholder(&insertDesc->blockDirectory,
 												firstRowNum,
 												fileOffset,
-												firstNonDroppedColumn);
+												uniqueCheckCol);
 		insertDesc->placeholderInserted = true;
 	}
 	MemoryContextSwitchTo(oldcxt);

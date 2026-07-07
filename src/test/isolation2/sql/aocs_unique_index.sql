@@ -376,4 +376,84 @@ CREATE UNIQUE INDEX a_b_unique ON unique_index_ao_column(a,b);
 INSERT INTO unique_index_ao_column VALUES (1,2);
 -- should conflict
 INSERT INTO unique_index_ao_column VALUES (1,1);
+
+--------------------------------------------------------------------------------
+--------------- Tests for the unique-check column choice ------------------------
+--------------------------------------------------------------------------------
+
+-- GPDB_PORT: cbdb's copy of this test does not drop its last table; the
+-- scenarios below reuse the same name.
+DROP TABLE IF EXISTS unique_index_ao_column;
+
+-- The column whose block directory entries are consulted during uniqueness
+-- checks must be the same column for which insert commands persist their
+-- placeholder row, and its choice must not depend on mutable state such as
+-- segfile eofs (see aocs_unique_check_col()).
+--
+-- These tests use multi-column tables with a highly-compressible constant
+-- column: after a bulk load, that column has the smallest eof, which used to
+-- make readers consult it (as the min-eof "anchor" column) while writers
+-- placed their placeholder row on the first non-dropped column, letting
+-- same-command and concurrent duplicates slip through undetected.
+
+-- Case A: same-command and cross-command duplicates after a bulk load.
+CREATE TABLE unique_index_ao_column (a bigint unique, b bigint, c bigint)
+    USING ao_column WITH (compresstype=zstd) DISTRIBUTED REPLICATED;
+INSERT INTO unique_index_ao_column SELECT i, i, 1 FROM generate_series(1, 10000) i;
+-- should conflict (same command)
+INSERT INTO unique_index_ao_column SELECT v.x, 0, 1 FROM (VALUES (-1), (-1)) v(x);
+-- should conflict (cross command, with a committed row)
+INSERT INTO unique_index_ao_column VALUES (-2, 0, 1);
+INSERT INTO unique_index_ao_column VALUES (-2, 0, 1);
+-- should not conflict
+INSERT INTO unique_index_ao_column VALUES (-3, 0, 1);
+SELECT a, count(*) FROM unique_index_ao_column WHERE a < 0 GROUP BY a ORDER BY a;
+DROP TABLE unique_index_ao_column;
+
+-- Case B: conflict with a concurrent to-be-committed transaction after a bulk
+-- load (only the placeholder row can reveal the in-progress conflict).
+CREATE TABLE unique_index_ao_column (a bigint unique, b bigint, c bigint)
+    USING ao_column WITH (compresstype=zstd) DISTRIBUTED REPLICATED;
+INSERT INTO unique_index_ao_column SELECT i, i, 1 FROM generate_series(1, 10000) i;
+1: BEGIN;
+1: INSERT INTO unique_index_ao_column VALUES (-1, 0, 1);
+-- should block on tx 1's in-progress insert
+2&: INSERT INTO unique_index_ao_column VALUES (-1, 0, 1);
+1: COMMIT;
+2<:
+SELECT a, count(*) FROM unique_index_ao_column WHERE a < 0 GROUP BY a ORDER BY a;
+DROP TABLE unique_index_ao_column;
+
+-- Case C: with the first column dropped, the unique-check column moves to the
+-- first non-dropped complete column, on both the write and the read side.
+CREATE TABLE unique_index_ao_column (dropme int, a bigint unique, c bigint)
+    USING ao_column WITH (compresstype=zstd) DISTRIBUTED REPLICATED;
+INSERT INTO unique_index_ao_column SELECT 0, i, 1 FROM generate_series(1, 10000) i;
+ALTER TABLE unique_index_ao_column DROP COLUMN dropme;
+-- should conflict (same command)
+INSERT INTO unique_index_ao_column SELECT v.x, 1 FROM (VALUES (-1), (-1)) v(x);
+-- should conflict (cross command, with a committed row)
+INSERT INTO unique_index_ao_column VALUES (1, 1);
+-- should not conflict
+INSERT INTO unique_index_ao_column VALUES (-3, 1);
+SELECT a, count(*) FROM unique_index_ao_column WHERE a < 0 GROUP BY a ORDER BY a;
+DROP TABLE unique_index_ao_column;
+
+-- Case D: a column added in missing mode is "incomplete": its block directory
+-- does not cover rows predating the ADD COLUMN, so it must never be picked as
+-- the unique-check column even though it has the smallest eof.
+CREATE TABLE unique_index_ao_column (a bigint unique, b bigint)
+    USING ao_column WITH (compresstype=zstd) DISTRIBUTED REPLICATED;
+INSERT INTO unique_index_ao_column SELECT i, i FROM generate_series(1, 10000) i;
+ALTER TABLE unique_index_ao_column ADD COLUMN c int DEFAULT 1;
+-- the added column is incomplete (lastrownums is set)
+SELECT attnum FROM pg_attribute_encoding
+    WHERE attrelid = 'unique_index_ao_column'::regclass AND lastrownums IS NOT NULL;
+-- should conflict (same command)
+INSERT INTO unique_index_ao_column SELECT v.x, 0, 1 FROM (VALUES (-1), (-1)) v(x);
+-- should conflict with a row predating the ADD COLUMN
+INSERT INTO unique_index_ao_column VALUES (1, 0, 1);
+-- should not conflict
+INSERT INTO unique_index_ao_column VALUES (-3, 0, 1);
+SELECT a, count(*) FROM unique_index_ao_column WHERE a < 0 GROUP BY a ORDER BY a;
 DROP TABLE unique_index_ao_column;

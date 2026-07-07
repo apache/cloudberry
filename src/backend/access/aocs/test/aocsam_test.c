@@ -247,6 +247,65 @@ test__get_anchor_col(void **state)
 	assert_int_equal(col, 2);
 }
 
+/*
+ * Ensure that the column consulted by unique constraint checks is picked
+ * deterministically: the first non-dropped complete column, falling back to
+ * a dropped complete column, while never picking an incomplete column.
+ */
+static void
+test__aocs_unique_check_col(void **state)
+{
+	RelationData reldata;
+	FormData_pg_class pgclass;
+	int numcols = 3;
+	bool *lastrownums_exist;
+
+	reldata.rd_rel = &pgclass;
+	reldata.rd_id = 12345;
+	reldata.rd_rel->relnatts = numcols;
+	reldata.rd_att = (TupleDesc) palloc0(sizeof(TupleDescData) +
+										 sizeof(FormData_pg_attribute) * numcols);
+	reldata.rd_att->natts = numcols;
+
+	/* all columns complete and non-dropped: the first column is picked */
+	lastrownums_exist = (bool *) palloc0(numcols * sizeof(bool));
+	expect_any(ExistValidLastrownums, relid);
+	expect_any(ExistValidLastrownums, natts);
+	will_return(ExistValidLastrownums, lastrownums_exist);
+	assert_int_equal(aocs_unique_check_col(&reldata), 0);
+
+	/* first column dropped: the first non-dropped complete column is picked */
+	TupleDescAttr(reldata.rd_att, 0)->attisdropped = true;
+	lastrownums_exist = (bool *) palloc0(numcols * sizeof(bool));
+	expect_any(ExistValidLastrownums, relid);
+	expect_any(ExistValidLastrownums, natts);
+	will_return(ExistValidLastrownums, lastrownums_exist);
+	assert_int_equal(aocs_unique_check_col(&reldata), 1);
+
+	/* incomplete columns are skipped over */
+	TupleDescAttr(reldata.rd_att, 0)->attisdropped = false;
+	lastrownums_exist = (bool *) palloc0(numcols * sizeof(bool));
+	lastrownums_exist[0] = true;
+	lastrownums_exist[1] = true;
+	expect_any(ExistValidLastrownums, relid);
+	expect_any(ExistValidLastrownums, natts);
+	will_return(ExistValidLastrownums, lastrownums_exist);
+	assert_int_equal(aocs_unique_check_col(&reldata), 2);
+
+	/*
+	 * If the only complete column is a dropped one, fall back to it (block
+	 * directory entries are written even for dropped columns).
+	 */
+	TupleDescAttr(reldata.rd_att, 0)->attisdropped = true;
+	lastrownums_exist = (bool *) palloc0(numcols * sizeof(bool));
+	lastrownums_exist[1] = true;
+	lastrownums_exist[2] = true;
+	expect_any(ExistValidLastrownums, relid);
+	expect_any(ExistValidLastrownums, natts);
+	will_return(ExistValidLastrownums, lastrownums_exist);
+	assert_int_equal(aocs_unique_check_col(&reldata), 0);
+}
+
 int
 main(int argc, char *argv[])
 {
@@ -255,7 +314,8 @@ main(int argc, char *argv[])
 	const		UnitTest tests[] = {
 		unit_test(test__aocs_begin_headerscan),
 		unit_test(test__aocs_writecol_init),
-		unit_test(test__get_anchor_col)
+		unit_test(test__get_anchor_col),
+		unit_test(test__aocs_unique_check_col)
 	};
 
 	MemoryContextInit();
