@@ -1061,28 +1061,26 @@ CreateForeignCatalog(CreateForeignCatalogStmt *stmt)
 	catalogId = get_foreign_catalog_oid(stmt->catalogname, true);
 	if (OidIsValid(catalogId))
 	{
-		if (stmt->if_not_exists)
-		{
-			/*
-			 * If we are in an extension script, insist that the pre-existing
-			 * object be a member of the extension, to avoid security risks.
-			 */
-			ObjectAddressSet(myself, ForeignCatalogRelationId, catalogId);
-			checkMembershipInCurrentExtension(&myself);
-
-			/* OK to skip */
-			ereport(NOTICE,
-					(errcode(ERRCODE_DUPLICATE_OBJECT),
-					 errmsg("foreign catalog \"%s\" already exists, skipping",
-							stmt->catalogname)));
-			table_close(rel, RowExclusiveLock);
-			return InvalidObjectAddress;
-		}
-		else
+		if (!stmt->if_not_exists)
 			ereport(ERROR,
 					(errcode(ERRCODE_DUPLICATE_OBJECT),
 					 errmsg("foreign catalog \"%s\" already exists",
 							stmt->catalogname)));
+
+		/*
+		 * If we are in an extension script, insist that the pre-existing
+		 * object be a member of the extension, to avoid security risks.
+		 */
+		ObjectAddressSet(myself, ForeignCatalogRelationId, catalogId);
+		checkMembershipInCurrentExtension(&myself);
+
+		/* OK to skip */
+		ereport(NOTICE,
+				(errcode(ERRCODE_DUPLICATE_OBJECT),
+				 errmsg("foreign catalog \"%s\" already exists, skipping",
+						stmt->catalogname)));
+		table_close(rel, RowExclusiveLock);
+		return InvalidObjectAddress;
 	}
 
 	/*
@@ -1191,28 +1189,26 @@ CreateForeignVolume(CreateForeignVolumeStmt *stmt)
 	volumeId = get_foreign_volume_oid(stmt->volumename, true);
 	if (OidIsValid(volumeId))
 	{
-		if (stmt->if_not_exists)
-		{
-			/*
-			 * If we are in an extension script, insist that the pre-existing
-			 * object be a member of the extension, to avoid security risks.
-			 */
-			ObjectAddressSet(myself, ForeignVolumeRelationId, volumeId);
-			checkMembershipInCurrentExtension(&myself);
-
-			/* OK to skip */
-			ereport(NOTICE,
-					(errcode(ERRCODE_DUPLICATE_OBJECT),
-					 errmsg("foreign volume \"%s\" already exists, skipping",
-							stmt->volumename)));
-			table_close(rel, RowExclusiveLock);
-			return InvalidObjectAddress;
-		}
-		else
+		if (!stmt->if_not_exists)
 			ereport(ERROR,
 					(errcode(ERRCODE_DUPLICATE_OBJECT),
 					 errmsg("foreign volume \"%s\" already exists",
 							stmt->volumename)));
+
+		/*
+		 * If we are in an extension script, insist that the pre-existing
+		 * object be a member of the extension, to avoid security risks.
+		 */
+		ObjectAddressSet(myself, ForeignVolumeRelationId, volumeId);
+		checkMembershipInCurrentExtension(&myself);
+
+		/* OK to skip */
+		ereport(NOTICE,
+				(errcode(ERRCODE_DUPLICATE_OBJECT),
+				 errmsg("foreign volume \"%s\" already exists, skipping",
+						stmt->volumename)));
+		table_close(rel, RowExclusiveLock);
+		return InvalidObjectAddress;
 	}
 
 	/*
