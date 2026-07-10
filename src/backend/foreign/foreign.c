@@ -1066,10 +1066,7 @@ GetForeignVolumeByName(const char *volumename, bool missing_ok)
 							tp,
 							Anum_pg_foreign_volume_fvoptions,
 							&isnull);
-	if (isnull)
-		volume->options = NIL;
-	else
-		volume->options = untransformRelOptions(datum);
+	volume->options = (isnull) ? NIL : untransformRelOptions(datum);
 
 	ReleaseSysCache(tp);
 
