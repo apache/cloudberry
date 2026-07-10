@@ -3412,7 +3412,10 @@ CreateCommandTag(Node *parsetree)
 			switch (((DropStmt *) parsetree)->removeType)
 			{
 				case OBJECT_TABLE:
-					tag = CMDTAG_DROP_TABLE;
+					if (((DropStmt *) parsetree)->isiceberg)
+						tag = CMDTAG_DROP_LAKE_TABLE;
+					else
+						tag = CMDTAG_DROP_TABLE;
 					break;
 				case OBJECT_SEQUENCE:
 					tag = CMDTAG_DROP_SEQUENCE;

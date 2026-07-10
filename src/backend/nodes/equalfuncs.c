@@ -1493,6 +1493,7 @@ _equalDropStmt(const DropStmt *a, const DropStmt *b)
 	COMPARE_SCALAR_FIELD(missing_ok);
 	COMPARE_SCALAR_FIELD(concurrent);
 	COMPARE_SCALAR_FIELD(isdynamic);
+	COMPARE_SCALAR_FIELD(isiceberg);
 
 	return true;
 }

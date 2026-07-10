@@ -3446,6 +3446,7 @@ _copyDropStmt(const DropStmt *from)
 	COPY_SCALAR_FIELD(missing_ok);
 	COPY_SCALAR_FIELD(concurrent);
 	COPY_SCALAR_FIELD(isdynamic);
+	COPY_SCALAR_FIELD(isiceberg);
 
 	return newnode;
 }
@@ -3461,6 +3462,7 @@ _copyDropDirectoryTableStmt(const DropDirectoryTableStmt *from)
 	COPY_SCALAR_FIELD(base.missing_ok);
 	COPY_SCALAR_FIELD(base.concurrent);
 	COPY_SCALAR_FIELD(base.isdynamic);
+	COPY_SCALAR_FIELD(base.isiceberg);
 	COPY_SCALAR_FIELD(with_content);
 
 	return newnode;

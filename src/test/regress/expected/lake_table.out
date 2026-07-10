@@ -225,9 +225,9 @@ HINT:  Lake tables must use DISTRIBUTED RANDOMLY because data is stored on objec
 CREATE ROLE regress_lake_user;
 NOTICE:  resource queue required -- using default resource queue "pg_default"
 SET ROLE regress_lake_user;
-DROP CATALOG lake_test_cat;		-- fail, not owner
+DROP FOREIGN CATALOG lake_test_cat;	-- fail, not owner
 ERROR:  must be owner of foreign catalog lake_test_cat
-DROP VOLUME lake_test_vol;		-- fail, not owner
+DROP FOREIGN VOLUME lake_test_vol;	-- fail, not owner
 ERROR:  must be owner of foreign volume lake_test_vol
 RESET ROLE;
 -- Dependencies: the server holds the catalog/volume, which hold the tables
@@ -240,7 +240,7 @@ table lake_test_t2 depends on volume lake_test_vol
 table lake_test_t3 depends on volume lake_test_vol
 table lake_test_t4 depends on volume lake_test_vol
 HINT:  Use DROP ... CASCADE to drop the dependent objects too.
-DROP CATALOG lake_test_cat;		-- fail, tables depend on it
+DROP FOREIGN CATALOG lake_test_cat;	-- fail, tables depend on it
 ERROR:  cannot drop catalog lake_test_cat because other objects depend on it
 DETAIL:  table lake_test_t1 depends on catalog lake_test_cat
 table lake_test_t2 depends on catalog lake_test_cat
@@ -248,7 +248,7 @@ table lake_test_t3 depends on catalog lake_test_cat
 table lake_test_t4 depends on catalog lake_test_cat
 HINT:  Use DROP ... CASCADE to drop the dependent objects too.
 -- Dropping a lake table removes its pg_lake_table entry
-DROP TABLE lake_test_t1;
+DROP ICEBERG TABLE lake_test_t1;
 SELECT count(*) FROM pg_lake_table lt JOIN pg_class c ON c.oid = lt.ltrelid
  WHERE c.relname = 'lake_test_t1';
  count 
@@ -256,11 +256,23 @@ SELECT count(*) FROM pg_lake_table lt JOIN pg_class c ON c.oid = lt.ltrelid
      0
 (1 row)
 
--- DROP CATALOG ... CASCADE takes the remaining tables with it
-DROP CATALOG lake_test_cat CASCADE;
-NOTICE:  drop cascades to 3 other objects
-DETAIL:  drop cascades to table lake_test_t2
-drop cascades to table lake_test_t3
+-- DROP ICEBERG TABLE rejects a non-iceberg table ...
+DROP ICEBERG TABLE lake_test_heap;	-- fail, not an iceberg table
+ERROR:  "lake_test_heap" is not an iceberg table
+HINT:  Use DROP TABLE to remove a table.
+-- ... while DROP TABLE still removes an iceberg table (no reverse restriction)
+DROP TABLE lake_test_t2;
+SELECT count(*) FROM pg_lake_table lt JOIN pg_class c ON c.oid = lt.ltrelid
+ WHERE c.relname = 'lake_test_t2';
+ count 
+-------
+     0
+(1 row)
+
+-- DROP FOREIGN CATALOG ... CASCADE takes the remaining tables with it
+DROP FOREIGN CATALOG lake_test_cat CASCADE;
+NOTICE:  drop cascades to 2 other objects
+DETAIL:  drop cascades to table lake_test_t3
 drop cascades to table lake_test_t4
 SELECT count(*) FROM pg_lake_table lt JOIN pg_class c ON c.oid = lt.ltrelid
  WHERE c.relname LIKE 'lake\_test%';
@@ -270,14 +282,14 @@ SELECT count(*) FROM pg_lake_table lt JOIN pg_class c ON c.oid = lt.ltrelid
 (1 row)
 
 -- DROP variants
-DROP CATALOG lake_test_cat;		-- fail, already gone
+DROP FOREIGN CATALOG lake_test_cat;		-- fail, already gone
 ERROR:  foreign catalog "lake_test_cat" does not exist
-DROP CATALOG IF EXISTS lake_test_cat;	-- skip with notice
+DROP FOREIGN CATALOG IF EXISTS lake_test_cat;	-- skip with notice
 NOTICE:  foreign catalog "lake_test_cat" does not exist, skipping
-DROP VOLUME lake_test_vol;
-DROP VOLUME lake_test_vol;		-- fail, already gone
+DROP FOREIGN VOLUME lake_test_vol;
+DROP FOREIGN VOLUME lake_test_vol;		-- fail, already gone
 ERROR:  foreign volume "lake_test_vol" does not exist
-DROP VOLUME IF EXISTS lake_test_vol;	-- skip with notice
+DROP FOREIGN VOLUME IF EXISTS lake_test_vol;	-- skip with notice
 NOTICE:  foreign volume "lake_test_vol" does not exist, skipping
 -- Cleanup
 DROP TABLE lake_test_heap;

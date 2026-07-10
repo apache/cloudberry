@@ -10530,6 +10530,31 @@ DropStmt:	DROP object_type_any_name IF_P EXISTS any_name_list opt_drop_behavior
 					n->isdynamic = true;
 					$$ = (Node *)n;
 				}
+/* DROP ICEBERG TABLE */
+			| DROP ICEBERG TABLE IF_P EXISTS any_name_list opt_drop_behavior
+				{
+					DropStmt *n = makeNode(DropStmt);
+					n->removeType = OBJECT_TABLE;
+					n->missing_ok = true;
+					n->objects = $6;
+					n->behavior = $7;
+					n->concurrent = false;
+					n->isdynamic = false;
+					n->isiceberg = true;
+					$$ = (Node *)n;
+				}
+			| DROP ICEBERG TABLE any_name_list opt_drop_behavior
+				{
+					DropStmt *n = makeNode(DropStmt);
+					n->removeType = OBJECT_TABLE;
+					n->missing_ok = false;
+					n->objects = $4;
+					n->behavior = $5;
+					n->concurrent = false;
+					n->isdynamic = false;
+					n->isiceberg = true;
+					$$ = (Node *)n;
+				}
 		;
 
 /* object types taking any_name/any_name_list */
@@ -10577,8 +10602,8 @@ drop_type_name:
 			| PUBLICATION							{ $$ = OBJECT_PUBLICATION; }
 			| SCHEMA								{ $$ = OBJECT_SCHEMA; }
 			| SERVER								{ $$ = OBJECT_FOREIGN_SERVER; }
-			| CATALOG_P								{ $$ = OBJECT_FOREIGN_CATALOG; }
-			| VOLUME								{ $$ = OBJECT_FOREIGN_VOLUME; }
+			| FOREIGN CATALOG_P						{ $$ = OBJECT_FOREIGN_CATALOG; }
+			| FOREIGN VOLUME						{ $$ = OBJECT_FOREIGN_VOLUME; }
 			| PROTOCOL								{ $$ = OBJECT_EXTPROTOCOL; }
 		;
 

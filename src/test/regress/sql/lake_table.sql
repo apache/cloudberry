@@ -108,30 +108,37 @@ ALTER TABLE lake_test_t1 SET DISTRIBUTED BY (a);					-- fail
 -- Only the owner can drop a catalog or volume
 CREATE ROLE regress_lake_user;
 SET ROLE regress_lake_user;
-DROP CATALOG lake_test_cat;		-- fail, not owner
-DROP VOLUME lake_test_vol;		-- fail, not owner
+DROP FOREIGN CATALOG lake_test_cat;	-- fail, not owner
+DROP FOREIGN VOLUME lake_test_vol;	-- fail, not owner
 RESET ROLE;
 
 -- Dependencies: the server holds the catalog/volume, which hold the tables
 DROP SERVER lake_test_srv;		-- fail, catalog and volume depend on it
-DROP CATALOG lake_test_cat;		-- fail, tables depend on it
+DROP FOREIGN CATALOG lake_test_cat;	-- fail, tables depend on it
 
 -- Dropping a lake table removes its pg_lake_table entry
-DROP TABLE lake_test_t1;
+DROP ICEBERG TABLE lake_test_t1;
 SELECT count(*) FROM pg_lake_table lt JOIN pg_class c ON c.oid = lt.ltrelid
  WHERE c.relname = 'lake_test_t1';
 
--- DROP CATALOG ... CASCADE takes the remaining tables with it
-DROP CATALOG lake_test_cat CASCADE;
+-- DROP ICEBERG TABLE rejects a non-iceberg table ...
+DROP ICEBERG TABLE lake_test_heap;	-- fail, not an iceberg table
+-- ... while DROP TABLE still removes an iceberg table (no reverse restriction)
+DROP TABLE lake_test_t2;
+SELECT count(*) FROM pg_lake_table lt JOIN pg_class c ON c.oid = lt.ltrelid
+ WHERE c.relname = 'lake_test_t2';
+
+-- DROP FOREIGN CATALOG ... CASCADE takes the remaining tables with it
+DROP FOREIGN CATALOG lake_test_cat CASCADE;
 SELECT count(*) FROM pg_lake_table lt JOIN pg_class c ON c.oid = lt.ltrelid
  WHERE c.relname LIKE 'lake\_test%';
 
 -- DROP variants
-DROP CATALOG lake_test_cat;		-- fail, already gone
-DROP CATALOG IF EXISTS lake_test_cat;	-- skip with notice
-DROP VOLUME lake_test_vol;
-DROP VOLUME lake_test_vol;		-- fail, already gone
-DROP VOLUME IF EXISTS lake_test_vol;	-- skip with notice
+DROP FOREIGN CATALOG lake_test_cat;		-- fail, already gone
+DROP FOREIGN CATALOG IF EXISTS lake_test_cat;	-- skip with notice
+DROP FOREIGN VOLUME lake_test_vol;
+DROP FOREIGN VOLUME lake_test_vol;		-- fail, already gone
+DROP FOREIGN VOLUME IF EXISTS lake_test_vol;	-- skip with notice
 
 -- Cleanup
 DROP TABLE lake_test_heap;

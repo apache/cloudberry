@@ -256,6 +256,7 @@ struct DropRelationCallbackState
 {
 	/* These fields are set by RemoveRelations: */
 	char		expected_relkind;
+	bool		iceberg_only;	/* DROP ICEBERG TABLE: require iceberg AM */
 	LOCKMODE	heap_lockmode;
 	/* These fields are state to track which subsidiary locks are held: */
 	Oid			heapOid;
@@ -1998,6 +1999,7 @@ RemoveRelations(DropStmt *drop)
 
 		/* Look up the appropriate relation using namespace search. */
 		state.expected_relkind = relkind;
+		state.iceberg_only = drop->isiceberg;
 		state.heap_lockmode = drop->concurrent ?
 			ShareUpdateExclusiveLock : AccessExclusiveLock;
 		/* We must initialize these fields to show that no locks are held: */
@@ -2218,6 +2220,24 @@ RangeVarCallbackForDropRelation(const RangeVar *rel, Oid relOid, Oid oldRelOid,
 	if (state->expected_relkind != expected_relkind)
 		DropErrorMsgWrongType(rel->relname, classform->relkind,
 							  state->expected_relkind);
+
+	/*
+	 * DROP ICEBERG TABLE must target an iceberg (lake) table.  Iceberg tables
+	 * share RELKIND_RELATION with ordinary tables, so the relkind check above
+	 * cannot tell them apart; verify the access method here (same rule as
+	 * RelationIsIcebergTable).  If no provider installed the iceberg AM, no
+	 * relation can be an iceberg table, so this always rejects.
+	 */
+	if (state->iceberg_only)
+	{
+		Oid			iceberg_amoid = GetIcebergTableAmOid(true);
+
+		if (!OidIsValid(iceberg_amoid) || classform->relam != iceberg_amoid)
+			ereport(ERROR,
+					(errcode(ERRCODE_WRONG_OBJECT_TYPE),
+					 errmsg("\"%s\" is not an iceberg table", rel->relname),
+					 errhint("Use DROP TABLE to remove a table.")));
+	}
 
 	/* Allow DROP to either table owner or schema owner */
 	if (!object_ownercheck(RelationRelationId, relOid, GetUserId()) &&

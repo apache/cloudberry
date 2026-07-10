@@ -1267,7 +1267,6 @@ static const pgsql_thing_t words_after_create[] = {
 	{"AGGREGATE", NULL, NULL, Query_for_list_of_aggregates},
 	{"CAST", NULL, NULL, NULL}, /* Casts have complex structures for names, so
 								 * skip it */
-	{"CATALOG", Query_for_list_of_foreign_catalogs, NULL, NULL, NULL, THING_NO_CREATE | THING_NO_ALTER},
 	{"COLLATION", NULL, NULL, &Query_for_list_of_collations},
 
 	/*
@@ -1285,13 +1284,13 @@ static const pgsql_thing_t words_after_create[] = {
 	{"EVENT TRIGGER", NULL, NULL, NULL},
 	{"EXTENSION", Query_for_list_of_extensions},
 	{"EXTERNAL TABLE", NULL, NULL, NULL},
-	{"FOREIGN CATALOG", NULL, NULL, NULL, NULL, THING_NO_DROP | THING_NO_ALTER},
+	{"FOREIGN CATALOG", Query_for_list_of_foreign_catalogs, NULL, NULL, NULL, THING_NO_ALTER},
 	{"FOREIGN DATA WRAPPER", NULL, NULL, NULL},
 	{"FOREIGN TABLE", NULL, NULL, NULL},
-	{"FOREIGN VOLUME", NULL, NULL, NULL, NULL, THING_NO_DROP | THING_NO_ALTER},
+	{"FOREIGN VOLUME", Query_for_list_of_foreign_volumes, NULL, NULL, NULL, THING_NO_ALTER},
 	{"FUNCTION", NULL, NULL, Query_for_list_of_functions},
 	{"GROUP", Query_for_list_of_roles},
-	{"ICEBERG TABLE", NULL, NULL, NULL, NULL, THING_NO_DROP | THING_NO_ALTER},
+	{"ICEBERG TABLE", NULL, NULL, &Query_for_list_of_tables, NULL, THING_NO_ALTER},
 	{"INCREMENTAL MATERIALIZED VIEW", NULL, NULL, &Query_for_list_of_matviews, NULL, THING_NO_DROP | THING_NO_ALTER},
 	{"INDEX", NULL, NULL, &Query_for_list_of_indexes},
 	{"LANGUAGE", Query_for_list_of_languages},
@@ -1338,7 +1337,6 @@ static const pgsql_thing_t words_after_create[] = {
 	{"USER MAPPING FOR", NULL, NULL, NULL},
 	{"STORAGE USER MAPPING FOR", NULL, NULL, NULL},
 	{"VIEW", NULL, NULL, &Query_for_list_of_views},
-	{"VOLUME", Query_for_list_of_foreign_volumes, NULL, NULL, NULL, THING_NO_CREATE | THING_NO_ALTER},
 	{"WAREHOUSE", NULL},
 	{NULL}						/* end of list */
 };
@@ -3836,7 +3834,7 @@ psql_completion(const char *text, int start, int end)
 /* DROP */
 	/* Complete DROP object with CASCADE / RESTRICT */
 	else if (Matches("DROP",
-					 "CATALOG|COLLATION|CONVERSION|DOMAIN|EXTENSION|LANGUAGE|PUBLICATION|SCHEMA|SEQUENCE|SERVER|SUBSCRIPTION|STATISTICS|TABLE|TYPE|VIEW|VOLUME",
+					 "COLLATION|CONVERSION|DOMAIN|EXTENSION|LANGUAGE|PUBLICATION|SCHEMA|SEQUENCE|SERVER|SUBSCRIPTION|STATISTICS|TABLE|TYPE|VIEW",
 					 MatchAny) ||
 			 Matches("DROP", "ACCESS", "METHOD", MatchAny) ||
 			 (Matches("DROP", "AGGREGATE|FUNCTION|PROCEDURE|ROUTINE", MatchAny, MatchAny) &&
@@ -3844,6 +3842,8 @@ psql_completion(const char *text, int start, int end)
 			 Matches("DROP", "EVENT", "TRIGGER", MatchAny) ||
 			 Matches("DROP", "FOREIGN", "DATA", "WRAPPER", MatchAny) ||
 			 Matches("DROP", "FOREIGN", "TABLE", MatchAny) ||
+			 Matches("DROP", "FOREIGN", "CATALOG|VOLUME", MatchAny) ||
+			 Matches("DROP", "ICEBERG", "TABLE", MatchAny) ||
 			 Matches("DROP", "DIRECTORY", "TABLE", MatchAny) ||
 			 Matches("DROP", "TEXT", "SEARCH", "CONFIGURATION|DICTIONARY|PARSER|TEMPLATE", MatchAny))
 		COMPLETE_WITH("CASCADE", "RESTRICT");
@@ -3854,7 +3854,15 @@ psql_completion(const char *text, int start, int end)
 	else if (Matches("DROP", "AGGREGATE|FUNCTION|PROCEDURE|ROUTINE", MatchAny, "("))
 		COMPLETE_WITH_FUNCTION_ARG(prev2_wd);
 	else if (Matches("DROP", "FOREIGN"))
-		COMPLETE_WITH("DATA WRAPPER", "TABLE");
+		COMPLETE_WITH("CATALOG", "DATA WRAPPER", "TABLE", "VOLUME");
+	else if (Matches("DROP", "FOREIGN", "CATALOG"))
+		COMPLETE_WITH_QUERY(Query_for_list_of_foreign_catalogs);
+	else if (Matches("DROP", "FOREIGN", "VOLUME"))
+		COMPLETE_WITH_QUERY(Query_for_list_of_foreign_volumes);
+	else if (Matches("DROP", "ICEBERG"))
+		COMPLETE_WITH("TABLE");
+	else if (Matches("DROP", "ICEBERG", "TABLE"))
+		COMPLETE_WITH_SCHEMA_QUERY(Query_for_list_of_tables);
 	else if (Matches("DROP", "DATABASE", MatchAny))
 		COMPLETE_WITH("WITH (");
 	else if (HeadMatches("DROP", "DATABASE") && (ends_with(prev_wd, '(')))

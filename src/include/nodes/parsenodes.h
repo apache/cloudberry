@@ -3832,6 +3832,7 @@ typedef struct DropStmt
 	bool		missing_ok;		/* skip error if object is missing? */
 	bool		concurrent;		/* drop index concurrently? */
 	bool		isdynamic;		/* drop a dynamic table? */
+	bool		isiceberg;		/* drop an iceberg (lake) table? */
 } DropStmt;
 
 /* ----------------------
