@@ -9106,21 +9106,23 @@ CreateDirectoryTableStmt:
  *****************************************************************************/
 
 CreateForeignCatalogStmt:
-			CREATE FOREIGN CATALOG_P name SERVER name create_generic_options
+			CREATE FOREIGN CATALOG_P name SERVER name TYPE_P Sconst create_generic_options
 				{
 					CreateForeignCatalogStmt *n = makeNode(CreateForeignCatalogStmt);
 					n->catalogname = $4;
 					n->servername = $6;
-					n->options = $7;
+					n->catalogtype = $8;
+					n->options = $9;
 					n->if_not_exists = false;
 					$$ = (Node *) n;
 				}
-			| CREATE FOREIGN CATALOG_P IF_P NOT EXISTS name SERVER name create_generic_options
+			| CREATE FOREIGN CATALOG_P IF_P NOT EXISTS name SERVER name TYPE_P Sconst create_generic_options
 				{
 					CreateForeignCatalogStmt *n = makeNode(CreateForeignCatalogStmt);
 					n->catalogname = $7;
 					n->servername = $9;
-					n->options = $10;
+					n->catalogtype = $11;
+					n->options = $12;
 					n->if_not_exists = true;
 					$$ = (Node *) n;
 				}

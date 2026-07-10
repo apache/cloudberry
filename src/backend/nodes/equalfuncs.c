@@ -2169,6 +2169,7 @@ _equalCreateForeignCatalogStmt(const CreateForeignCatalogStmt *a, const CreateFo
 {
 	COMPARE_STRING_FIELD(catalogname);
 	COMPARE_STRING_FIELD(servername);
+	COMPARE_STRING_FIELD(catalogtype);
 	COMPARE_SCALAR_FIELD(if_not_exists);
 	COMPARE_NODE_FIELD(options);
 

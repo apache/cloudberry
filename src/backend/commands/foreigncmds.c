@@ -1107,6 +1107,19 @@ CreateForeignCatalog(CreateForeignCatalogStmt *stmt)
 	values[Anum_pg_foreign_catalog_fcowner - 1] = ObjectIdGetDatum(ownerId);
 	values[Anum_pg_foreign_catalog_fcserver - 1] = ObjectIdGetDatum(server->serverid);
 
+	/*
+	 * The catalog type is a required property (every catalog has a type such
+	 * as 'hive', 'hdfs', ...).  The grammar enforces the TYPE clause, so this
+	 * is just a defensive check; the value is stored verbatim and validated by
+	 * the datalake provider rather than the kernel.
+	 */
+	if (stmt->catalogtype == NULL || stmt->catalogtype[0] == '\0')
+		ereport(ERROR,
+				(errcode(ERRCODE_INVALID_OBJECT_DEFINITION),
+				 errmsg("foreign catalog type cannot be empty")));
+	values[Anum_pg_foreign_catalog_fctype - 1] =
+		CStringGetTextDatum(stmt->catalogtype);
+
 	/* Add catalog options; there is no validator for them */
 	catalogoptions = transformGenericOptions(ForeignCatalogRelationId,
 											 PointerGetDatum(NULL),

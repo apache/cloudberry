@@ -10,6 +10,7 @@
  fcname    | name   |           | not null |         | plain    |              | 
  fcowner   | oid    |           | not null |         | plain    |              | 
  fcserver  | oid    |           | not null |         | plain    |              | 
+ fctype    | text   | C         | not null |         | extended |              | 
  fcoptions | text[] | C         |          |         | extended |              | 
 Indexes:
     "pg_foreign_catalog_oid_index" PRIMARY KEY, btree (oid)
@@ -44,23 +45,27 @@ Indexes:
 CREATE FOREIGN DATA WRAPPER lake_test_fdw;
 CREATE SERVER lake_test_srv FOREIGN DATA WRAPPER lake_test_fdw;
 CREATE SERVER lake_test_srv2 FOREIGN DATA WRAPPER lake_test_fdw;
--- CREATE FOREIGN CATALOG
-CREATE FOREIGN CATALOG lake_test_cat SERVER lake_test_srv OPTIONS (type 'hive', uri 'thrift://localhost:9083');
-CREATE FOREIGN CATALOG lake_test_cat SERVER lake_test_srv;			-- fail, duplicate
+-- CREATE FOREIGN CATALOG: TYPE is a required first-class property
+CREATE FOREIGN CATALOG lake_test_cat SERVER lake_test_srv TYPE 'hive' OPTIONS (uri 'thrift://localhost:9083');
+CREATE FOREIGN CATALOG lake_test_notype SERVER lake_test_srv;		-- fail, TYPE is required
+ERROR:  syntax error at or near ";"
+LINE 1: ...REATE FOREIGN CATALOG lake_test_notype SERVER lake_test_srv;
+                                                                      ^
+CREATE FOREIGN CATALOG lake_test_cat SERVER lake_test_srv TYPE 'hive';			-- fail, duplicate
 ERROR:  foreign catalog "lake_test_cat" already exists
-CREATE FOREIGN CATALOG IF NOT EXISTS lake_test_cat SERVER lake_test_srv;	-- skip with notice
+CREATE FOREIGN CATALOG IF NOT EXISTS lake_test_cat SERVER lake_test_srv TYPE 'hive';	-- skip with notice
 NOTICE:  foreign catalog "lake_test_cat" already exists, skipping
 -- catalog names are global: the same name on another server is still a duplicate
-CREATE FOREIGN CATALOG lake_test_cat SERVER lake_test_srv2;			-- fail, duplicate
+CREATE FOREIGN CATALOG lake_test_cat SERVER lake_test_srv2 TYPE 'hive';			-- fail, duplicate
 ERROR:  foreign catalog "lake_test_cat" already exists
-CREATE FOREIGN CATALOG IF NOT EXISTS lake_test_cat SERVER lake_test_srv2;	-- skip with notice
+CREATE FOREIGN CATALOG IF NOT EXISTS lake_test_cat SERVER lake_test_srv2 TYPE 'hive';	-- skip with notice
 NOTICE:  foreign catalog "lake_test_cat" already exists, skipping
-CREATE FOREIGN CATALOG lake_test_bad SERVER no_such_server;		-- fail, no server
+CREATE FOREIGN CATALOG lake_test_bad SERVER no_such_server TYPE 'hive';		-- fail, no server
 ERROR:  server "no_such_server" does not exist
-SELECT fcname, fcoptions FROM pg_foreign_catalog WHERE fcname LIKE 'lake\_test%' ORDER BY 1;
-    fcname     |                fcoptions                
----------------+-----------------------------------------
- lake_test_cat | {type=hive,uri=thrift://localhost:9083}
+SELECT fcname, fctype, fcoptions FROM pg_foreign_catalog WHERE fcname LIKE 'lake\_test%' ORDER BY 1;
+    fcname     | fctype |           fcoptions           
+---------------+--------+-------------------------------
+ lake_test_cat | hive   | {uri=thrift://localhost:9083}
 (1 row)
 
 -- CREATE FOREIGN VOLUME

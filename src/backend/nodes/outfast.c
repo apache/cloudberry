@@ -680,6 +680,7 @@ _outCreateForeignCatalogStmt(StringInfo str, CreateForeignCatalogStmt *node)
 
 	WRITE_STRING_FIELD(catalogname);
 	WRITE_STRING_FIELD(servername);
+	WRITE_STRING_FIELD(catalogtype);
 	WRITE_BOOL_FIELD(if_not_exists);
 	WRITE_NODE_FIELD(options);
 }

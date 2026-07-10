@@ -2755,6 +2755,7 @@ _copyCreateForeignCatalogStmt(const CreateForeignCatalogStmt *from)
 
 	COPY_STRING_FIELD(catalogname);
 	COPY_STRING_FIELD(servername);
+	COPY_STRING_FIELD(catalogtype);
 	COPY_SCALAR_FIELD(if_not_exists);
 	COPY_NODE_FIELD(options);
 

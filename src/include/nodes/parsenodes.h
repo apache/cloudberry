@@ -3278,6 +3278,7 @@ typedef struct CreateForeignCatalogStmt
 	NodeTag		type;
 	char	   *catalogname;	/* foreign catalog name */
 	char	   *servername;		/* server name */
+	char	   *catalogtype;	/* catalog type, e.g. 'hive' */
 	bool		if_not_exists;	/* just do nothing if it already exists? */
 	List	   *options;		/* generic options to catalog */
 } CreateForeignCatalogStmt;

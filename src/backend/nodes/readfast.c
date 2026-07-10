@@ -1605,6 +1605,7 @@ _readCreateForeignCatalogStmt(void)
 
 	READ_STRING_FIELD(catalogname);
 	READ_STRING_FIELD(servername);
+	READ_STRING_FIELD(catalogtype);
 	READ_BOOL_FIELD(if_not_exists);
 	READ_NODE_FIELD(options);
 

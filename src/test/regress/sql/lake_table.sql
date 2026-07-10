@@ -12,15 +12,16 @@ CREATE FOREIGN DATA WRAPPER lake_test_fdw;
 CREATE SERVER lake_test_srv FOREIGN DATA WRAPPER lake_test_fdw;
 CREATE SERVER lake_test_srv2 FOREIGN DATA WRAPPER lake_test_fdw;
 
--- CREATE FOREIGN CATALOG
-CREATE FOREIGN CATALOG lake_test_cat SERVER lake_test_srv OPTIONS (type 'hive', uri 'thrift://localhost:9083');
-CREATE FOREIGN CATALOG lake_test_cat SERVER lake_test_srv;			-- fail, duplicate
-CREATE FOREIGN CATALOG IF NOT EXISTS lake_test_cat SERVER lake_test_srv;	-- skip with notice
+-- CREATE FOREIGN CATALOG: TYPE is a required first-class property
+CREATE FOREIGN CATALOG lake_test_cat SERVER lake_test_srv TYPE 'hive' OPTIONS (uri 'thrift://localhost:9083');
+CREATE FOREIGN CATALOG lake_test_notype SERVER lake_test_srv;		-- fail, TYPE is required
+CREATE FOREIGN CATALOG lake_test_cat SERVER lake_test_srv TYPE 'hive';			-- fail, duplicate
+CREATE FOREIGN CATALOG IF NOT EXISTS lake_test_cat SERVER lake_test_srv TYPE 'hive';	-- skip with notice
 -- catalog names are global: the same name on another server is still a duplicate
-CREATE FOREIGN CATALOG lake_test_cat SERVER lake_test_srv2;			-- fail, duplicate
-CREATE FOREIGN CATALOG IF NOT EXISTS lake_test_cat SERVER lake_test_srv2;	-- skip with notice
-CREATE FOREIGN CATALOG lake_test_bad SERVER no_such_server;		-- fail, no server
-SELECT fcname, fcoptions FROM pg_foreign_catalog WHERE fcname LIKE 'lake\_test%' ORDER BY 1;
+CREATE FOREIGN CATALOG lake_test_cat SERVER lake_test_srv2 TYPE 'hive';			-- fail, duplicate
+CREATE FOREIGN CATALOG IF NOT EXISTS lake_test_cat SERVER lake_test_srv2 TYPE 'hive';	-- skip with notice
+CREATE FOREIGN CATALOG lake_test_bad SERVER no_such_server TYPE 'hive';		-- fail, no server
+SELECT fcname, fctype, fcoptions FROM pg_foreign_catalog WHERE fcname LIKE 'lake\_test%' ORDER BY 1;
 
 -- CREATE FOREIGN VOLUME
 CREATE FOREIGN VOLUME lake_test_vol SERVER lake_test_srv OPTIONS (path 's3://bucket/prefix');

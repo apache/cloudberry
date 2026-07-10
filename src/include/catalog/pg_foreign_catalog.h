@@ -50,6 +50,7 @@ CATALOG(pg_foreign_catalog,8549,ForeignCatalogRelationId)
 	Oid			fcserver BKI_LOOKUP(pg_foreign_server);	/* foreign server this catalog belongs to */
 
 #ifdef CATALOG_VARLEN			/* variable-length fields start here */
+	text		fctype BKI_FORCE_NOT_NULL;	/* catalog type, e.g. 'hive' */
 	text		fcoptions[1];	/* foreign catalog options */
 #endif
 } FormData_pg_foreign_catalog;
