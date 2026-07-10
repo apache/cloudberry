@@ -1677,7 +1677,7 @@ ProcessUtilitySlow(ParseState *pstate,
 							 * QE-annotated error.
 							 */
 							if (Gp_role == GP_ROLE_DISPATCH)
-								ValidateLakeTableOptions(cstmt);
+								ValidateLakeTableStmt(cstmt);
 
 							/*
 							 * Create the table itself.  Dispatch manually

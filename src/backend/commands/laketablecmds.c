@@ -268,7 +268,7 @@ validate_foreign_volume(const char *volume_name)
  * Resolve and validate the table type, catalog and volume of a
  * CreateLakeTableStmt, returning the catalog/volume OIDs.
  *
- * Also exposed (via ValidateLakeTableOptions) so ProcessUtilitySlow can run
+ * Also exposed (via ValidateLakeTableStmt) so ProcessUtilitySlow can run
  * the validation on the QD before DefineRelation: DefineRelation dispatches
  * the statement to the QEs, so a validation failure raised only inside
  * CreateLakeTable() would surface as a confusing QE-annotated error.
@@ -361,12 +361,12 @@ ResolveLakeTableOptions(CreateLakeTableStmt *stmt,
 }
 
 /*
- * ValidateLakeTableOptions
+ * ValidateLakeTableStmt
  *
  * QD-side pre-DefineRelation validation wrapper; see ResolveLakeTableOptions.
  */
 void
-ValidateLakeTableOptions(CreateLakeTableStmt *stmt)
+ValidateLakeTableStmt(CreateLakeTableStmt *stmt)
 {
 	Oid			catalog_oid;
 	Oid			volume_oid;
