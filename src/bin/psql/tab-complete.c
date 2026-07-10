@@ -678,6 +678,23 @@ static const SchemaQuery Query_for_list_of_tables = {
 	.result = "c.relname",
 };
 
+/*
+ * An iceberg (lake) table is an ordinary relation whose access method is the
+ * "iceberg" AM -- the same rule DROP ICEBERG TABLE validates against.  When no
+ * provider installed that AM the scalar subquery yields NULL and the list is
+ * empty, which is correct (no relation can be an iceberg table).
+ */
+static const SchemaQuery Query_for_list_of_iceberg_tables = {
+	.catname = "pg_catalog.pg_class c",
+	.selcondition =
+	"c.relkind IN (" CppAsString2(RELKIND_RELATION) ") AND "
+	"c.relam = (SELECT oid FROM pg_catalog.pg_am "
+	"WHERE amname = 'iceberg' AND amtype = 't')",
+	.viscondition = "pg_catalog.pg_table_is_visible(c.oid)",
+	.namespace = "c.relnamespace",
+	.result = "c.relname",
+};
+
 static const SchemaQuery Query_for_list_of_directory_tables = {
 	.catname = "pg_catalog.pg_class c",
 	.selcondition = "c.relkind IN (" CppAsString2(RELKIND_DIRECTORY_TABLE) ")",
@@ -1290,7 +1307,7 @@ static const pgsql_thing_t words_after_create[] = {
 	{"FOREIGN VOLUME", Query_for_list_of_foreign_volumes, NULL, NULL, NULL, THING_NO_ALTER},
 	{"FUNCTION", NULL, NULL, Query_for_list_of_functions},
 	{"GROUP", Query_for_list_of_roles},
-	{"ICEBERG TABLE", NULL, NULL, &Query_for_list_of_tables, NULL, THING_NO_ALTER},
+	{"ICEBERG TABLE", NULL, NULL, &Query_for_list_of_iceberg_tables, NULL, THING_NO_ALTER},
 	{"INCREMENTAL MATERIALIZED VIEW", NULL, NULL, &Query_for_list_of_matviews, NULL, THING_NO_DROP | THING_NO_ALTER},
 	{"INDEX", NULL, NULL, &Query_for_list_of_indexes},
 	{"LANGUAGE", Query_for_list_of_languages},
@@ -3862,7 +3879,7 @@ psql_completion(const char *text, int start, int end)
 	else if (Matches("DROP", "ICEBERG"))
 		COMPLETE_WITH("TABLE");
 	else if (Matches("DROP", "ICEBERG", "TABLE"))
-		COMPLETE_WITH_SCHEMA_QUERY(Query_for_list_of_tables);
+		COMPLETE_WITH_SCHEMA_QUERY(Query_for_list_of_iceberg_tables);
 	else if (Matches("DROP", "DATABASE", MatchAny))
 		COMPLETE_WITH("WITH (");
 	else if (HeadMatches("DROP", "DATABASE") && (ends_with(prev_wd, '(')))
