@@ -366,7 +366,7 @@ replaceStringInfoString(StringInfo str, char *replace, char *replacement)
 	char	*dup = NULL;
 	size_t	replace_len = strlen(replace);
 
-	// prevent empty loop, cuz strstr will always return start_ptr
+	// prevent empty loop, because strstr will always return start_ptr
 	if (replace_len == 0)
 		return;
 
