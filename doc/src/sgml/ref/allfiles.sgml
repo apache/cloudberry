@@ -69,10 +69,13 @@ Complete list of usable sgml source files in this directory.
 <!ENTITY createDynamicTable SYSTEM "create_dynamic_table.sgml">
 <!ENTITY createEventTrigger SYSTEM "create_event_trigger.sgml">
 <!ENTITY createExtension    SYSTEM "create_extension.sgml">
+<!ENTITY createForeignCatalog SYSTEM "create_foreign_catalog.sgml">
 <!ENTITY createForeignDataWrapper SYSTEM "create_foreign_data_wrapper.sgml">
 <!ENTITY createForeignTable SYSTEM "create_foreign_table.sgml">
+<!ENTITY createForeignVolume SYSTEM "create_foreign_volume.sgml">
 <!ENTITY createFunction     SYSTEM "create_function.sgml">
 <!ENTITY createGroup        SYSTEM "create_group.sgml">
+<!ENTITY createIcebergTable SYSTEM "create_iceberg_table.sgml">
 <!ENTITY createIndex        SYSTEM "create_index.sgml">
 <!ENTITY createLanguage     SYSTEM "create_language.sgml">
 <!ENTITY createMaterializedView SYSTEM "create_materialized_view.sgml">
@@ -118,10 +121,13 @@ Complete list of usable sgml source files in this directory.
 <!ENTITY dropDynamicTable   SYSTEM "drop_dynamic_table.sgml">
 <!ENTITY dropEventTrigger   SYSTEM "drop_event_trigger.sgml">
 <!ENTITY dropExtension      SYSTEM "drop_extension.sgml">
+<!ENTITY dropForeignCatalog SYSTEM "drop_foreign_catalog.sgml">
 <!ENTITY dropForeignDataWrapper SYSTEM "drop_foreign_data_wrapper.sgml">
 <!ENTITY dropForeignTable   SYSTEM "drop_foreign_table.sgml">
+<!ENTITY dropForeignVolume  SYSTEM "drop_foreign_volume.sgml">
 <!ENTITY dropFunction       SYSTEM "drop_function.sgml">
 <!ENTITY dropGroup          SYSTEM "drop_group.sgml">
+<!ENTITY dropIcebergTable   SYSTEM "drop_iceberg_table.sgml">
 <!ENTITY dropIndex          SYSTEM "drop_index.sgml">
 <!ENTITY dropLanguage       SYSTEM "drop_language.sgml">
 <!ENTITY dropMaterializedView SYSTEM "drop_materialized_view.sgml">

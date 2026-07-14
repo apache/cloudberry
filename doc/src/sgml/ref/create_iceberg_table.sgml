@@ -1,0 +1,193 @@
+<!--
+doc/src/sgml/ref/create_iceberg_table.sgml
+PostgreSQL documentation
+-->
+
+<refentry id="sql-createicebergtable">
+ <indexterm zone="sql-createicebergtable">
+  <primary>CREATE ICEBERG TABLE</primary>
+ </indexterm>
+
+ <refmeta>
+  <refentrytitle>CREATE ICEBERG TABLE</refentrytitle>
+  <manvolnum>7</manvolnum>
+  <refmiscinfo>SQL - Language Statements</refmiscinfo>
+ </refmeta>
+
+ <refnamediv>
+  <refname>CREATE ICEBERG TABLE</refname>
+  <refpurpose>define a new Iceberg table</refpurpose>
+ </refnamediv>
+
+ <refsynopsisdiv>
+<synopsis>
+CREATE ICEBERG TABLE [ IF NOT EXISTS ] <replaceable class="parameter">table_name</replaceable> ( [
+    <replaceable class="parameter">column_name</replaceable> <replaceable class="parameter">data_type</replaceable> [, ... ]
+  ] )
+    [ CATALOG <replaceable class="parameter">catalog_name</replaceable> ]
+    [ VOLUME <replaceable class="parameter">volume_name</replaceable> ]
+    [ OPTIONS ( <replaceable class="parameter">option</replaceable> '<replaceable class="parameter">value</replaceable>' [, ...] ) ]
+    [ DISTRIBUTED BY ( <replaceable class="parameter">column</replaceable> [, ... ] ) | DISTRIBUTED RANDOMLY | DISTRIBUTED REPLICATED ]
+    [ USING <replaceable class="parameter">access_method</replaceable> ]
+</synopsis>
+ </refsynopsisdiv>
+
+ <refsect1 id="sql-createicebergtable-description">
+  <title>Description</title>
+
+  <para>
+   <command>CREATE ICEBERG TABLE</command> defines a new Iceberg table.  The
+   parenthesized element list is required, but it can be empty.  The command
+   requires an extension that provides the <literal>iceberg</literal> table
+   access method.
+  </para>
+
+  <para>
+   The foreign catalog and volume can be specified by the
+   <literal>CATALOG</literal> and <literal>VOLUME</literal> clauses.  If either
+   clause is omitted, the corresponding <varname>iceberg_default_catalog</varname>
+   or <varname>iceberg_default_volume</varname> configuration parameter is used.
+  </para>
+
+  <para>
+   Iceberg tables are always distributed randomly.  A
+   <literal>DISTRIBUTED</literal> clause is accepted, but a warning is issued
+   and <literal>DISTRIBUTED RANDOMLY</literal> is used.  The optional
+   <literal>USING</literal> clause accepts only <literal>iceberg</literal> and
+   is normally omitted.
+  </para>
+ </refsect1>
+
+ <refsect1>
+  <title>Parameters</title>
+
+  <variablelist>
+   <varlistentry>
+    <term><literal>IF NOT EXISTS</literal></term>
+    <listitem>
+     <para>
+      Do not throw an error if a relation with the same name already exists.
+      A notice is issued in this case.
+     </para>
+    </listitem>
+   </varlistentry>
+
+   <varlistentry>
+    <term><replaceable class="parameter">table_name</replaceable></term>
+    <listitem>
+     <para>
+      The name, optionally schema-qualified, of the Iceberg table to be
+      created.
+     </para>
+    </listitem>
+   </varlistentry>
+
+   <varlistentry>
+    <term><replaceable class="parameter">column_name</replaceable></term>
+    <listitem>
+     <para>
+      The name of a column in the new table.
+     </para>
+    </listitem>
+   </varlistentry>
+
+   <varlistentry>
+    <term><replaceable class="parameter">data_type</replaceable></term>
+    <listitem>
+     <para>
+      The data type of a column in the new table.
+     </para>
+    </listitem>
+   </varlistentry>
+
+   <varlistentry>
+    <term><replaceable class="parameter">catalog_name</replaceable></term>
+    <listitem>
+     <para>
+      The name of the foreign catalog to use.  If omitted, the value of
+      <varname>iceberg_default_catalog</varname> is used.
+     </para>
+    </listitem>
+   </varlistentry>
+
+   <varlistentry>
+    <term><replaceable class="parameter">volume_name</replaceable></term>
+    <listitem>
+     <para>
+      The name of the foreign volume to use.  If omitted, the value of
+      <varname>iceberg_default_volume</varname> is used.
+     </para>
+    </listitem>
+   </varlistentry>
+
+   <varlistentry>
+    <term><replaceable class="parameter">option</replaceable></term>
+    <listitem>
+     <para>
+      The name of an option for the Iceberg table.
+     </para>
+    </listitem>
+   </varlistentry>
+
+   <varlistentry>
+    <term><replaceable class="parameter">value</replaceable></term>
+    <listitem>
+     <para>
+      The value of an Iceberg table option.
+     </para>
+    </listitem>
+   </varlistentry>
+
+   <varlistentry>
+    <term><replaceable class="parameter">column</replaceable></term>
+    <listitem>
+     <para>
+      A column named in a <literal>DISTRIBUTED BY</literal> clause.  The clause
+      is accepted with a warning; the table is distributed randomly instead.
+     </para>
+    </listitem>
+   </varlistentry>
+
+   <varlistentry>
+    <term><replaceable class="parameter">access_method</replaceable></term>
+    <listitem>
+     <para>
+      The table access method.  The only accepted value is
+      <literal>iceberg</literal>.
+     </para>
+    </listitem>
+   </varlistentry>
+  </variablelist>
+ </refsect1>
+
+ <refsect1 id="sql-createicebergtable-examples">
+  <title>Examples</title>
+
+  <para>
+   Create an Iceberg table using an explicit foreign catalog and volume:
+<programlisting>
+CREATE ICEBERG TABLE t (a int, b text) CATALOG hive_cat VOLUME s3_vol OPTIONS (fileformat 'parquet');
+</programlisting></para>
+ </refsect1>
+
+ <refsect1 id="sql-createicebergtable-compatibility">
+  <title>Compatibility</title>
+
+  <para>
+   <command>CREATE ICEBERG TABLE</command> is an
+   <productname>Apache Cloudberry</productname> extension and is not defined in
+   the <acronym>SQL</acronym> standard.
+  </para>
+ </refsect1>
+
+ <refsect1>
+  <title>See Also</title>
+
+  <simplelist type="inline">
+   <member><xref linkend="sql-dropicebergtable"/></member>
+   <member><xref linkend="sql-createforeigncatalog"/></member>
+   <member><xref linkend="sql-createforeignvolume"/></member>
+   <member><xref linkend="sql-createtable"/></member>
+  </simplelist>
+ </refsect1>
+</refentry>

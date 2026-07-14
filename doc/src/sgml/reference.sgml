@@ -96,10 +96,13 @@
    &createDynamicTable;
    &createEventTrigger;
    &createExtension;
+   &createForeignCatalog;
    &createForeignDataWrapper;
    &createForeignTable;
+   &createForeignVolume;
    &createFunction;
    &createGroup;
+   &createIcebergTable;
    &createIndex;
    &createLanguage;
    &createMaterializedView;
@@ -144,10 +147,13 @@
    &dropDynamicTable;
    &dropEventTrigger;
    &dropExtension;
+   &dropForeignCatalog;
    &dropForeignDataWrapper;
    &dropForeignTable;
+   &dropForeignVolume;
    &dropFunction;
    &dropGroup;
+   &dropIcebergTable;
    &dropIndex;
    &dropLanguage;
    &dropMaterializedView;
