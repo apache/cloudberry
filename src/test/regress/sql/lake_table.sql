@@ -124,8 +124,13 @@ SELECT count(*) FROM pg_lake_table lt JOIN pg_class c ON c.oid = lt.ltrelid
 
 -- DROP ICEBERG TABLE rejects a non-iceberg table ...
 DROP ICEBERG TABLE lake_test_heap;	-- fail, not an iceberg table
--- ... while DROP TABLE still removes an iceberg table (no reverse restriction)
+-- plain DROP TABLE must reject an iceberg table (mirrors foreign-table behavior)
 DROP TABLE lake_test_t2;
+DROP TABLE IF EXISTS lake_test_t2;	-- IF EXISTS does not suppress wrong-type errors
+-- the rejected drops must have left the table and its lake metadata intact
+SELECT count(*) FROM pg_lake_table WHERE ltrelid = 'lake_test_t2'::regclass;
+-- the correct command still works
+DROP ICEBERG TABLE lake_test_t2;
 SELECT count(*) FROM pg_lake_table lt JOIN pg_class c ON c.oid = lt.ltrelid
  WHERE c.relname = 'lake_test_t2';
 

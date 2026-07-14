@@ -668,11 +668,18 @@ static const SchemaQuery Query_for_list_of_foreign_tables = {
 	.result = "c.relname",
 };
 
+/*
+ * Exclude iceberg tables; Query_for_list_of_iceberg_tables serves DROP ICEBERG
+ * TABLE.  With no iceberg AM, the NOT EXISTS subquery finds no match, so
+ * ordinary tables remain listed.
+ */
 static const SchemaQuery Query_for_list_of_tables = {
 	.catname = "pg_catalog.pg_class c",
 	.selcondition =
 	"c.relkind IN (" CppAsString2(RELKIND_RELATION) ", "
-	CppAsString2(RELKIND_PARTITIONED_TABLE) ")",
+	CppAsString2(RELKIND_PARTITIONED_TABLE) ") AND "
+	"NOT EXISTS (SELECT 1 FROM pg_catalog.pg_am a "
+	"WHERE a.oid = c.relam AND a.amname = 'iceberg' AND a.amtype = 't')",
 	.viscondition = "pg_catalog.pg_table_is_visible(c.oid)",
 	.namespace = "c.relnamespace",
 	.result = "c.relname",

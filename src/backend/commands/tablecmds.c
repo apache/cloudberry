@@ -2222,21 +2222,33 @@ RangeVarCallbackForDropRelation(const RangeVar *rel, Oid relOid, Oid oldRelOid,
 							  state->expected_relkind);
 
 	/*
-	 * DROP ICEBERG TABLE must target an iceberg (lake) table.  Iceberg tables
-	 * share RELKIND_RELATION with ordinary tables, so the relkind check above
-	 * cannot tell them apart; verify the access method here (same rule as
-	 * RelationIsIcebergTable).  If no provider installed the iceberg AM, no
-	 * relation can be an iceberg table, so this always rejects.
+	 * Iceberg (lake) tables share RELKIND_RELATION with ordinary tables and are
+	 * told apart only by their access method. DROP ICEBERG TABLE must target one;
+	 * plain DROP TABLE must NOT (mirrors the foreign-table rule) -- direct the user
+	 * to the matching command in each case.
 	 */
-	if (state->iceberg_only)
+	if (state->expected_relkind == RELKIND_RELATION)
 	{
 		Oid			iceberg_amoid = GetIcebergTableAmOid(true);
+		bool		is_iceberg = classform->relkind == RELKIND_RELATION &&
+			OidIsValid(iceberg_amoid) &&
+			classform->relam == iceberg_amoid;
 
-		if (!OidIsValid(iceberg_amoid) || classform->relam != iceberg_amoid)
+		if (state->iceberg_only)
+		{
+			if (!is_iceberg)
+				ereport(ERROR,
+						(errcode(ERRCODE_WRONG_OBJECT_TYPE),
+						 errmsg("\"%s\" is not an iceberg table", rel->relname),
+						 errhint("Use DROP TABLE to remove a table.")));
+		}
+		else if (is_iceberg)
+		{
 			ereport(ERROR,
 					(errcode(ERRCODE_WRONG_OBJECT_TYPE),
-					 errmsg("\"%s\" is not an iceberg table", rel->relname),
-					 errhint("Use DROP TABLE to remove a table.")));
+					 errmsg("\"%s\" is not a table", rel->relname),
+					 errhint("Use DROP ICEBERG TABLE to remove an iceberg table.")));
+		}
 	}
 
 	/* Allow DROP to either table owner or schema owner */
