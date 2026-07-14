@@ -40,6 +40,9 @@ test: resgroup/resgroup_functions
 #test: resgroup/restore_default_resgroup
 #test: resgroup/resgroup_parallel_queries
 
+# mdb_admin permission checks
+test: resgroup/resgroup_mdb_admin
+
 # dump info
 test: resgroup/resgroup_dumpinfo
 

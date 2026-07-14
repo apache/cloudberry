@@ -21,6 +21,7 @@
 #include "cdb/cdbvars.h"
 #include "commands/resgroupcmds.h"
 #include "storage/procarray.h"
+#include "utils/acl.h"
 #include "utils/builtins.h"
 #include "utils/datetime.h"
 #include "utils/resgroup.h"
@@ -464,10 +465,10 @@ pg_resgroup_move_query(PG_FUNCTION_ARGS)
 				(errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
 						(errmsg("resource group is not enabled"))));
 
-	if (!superuser())
+	if (!is_member_of_role(GetUserId(), MDB_ADMIN_ROLEID))
 		ereport(ERROR,
 				(errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
-						(errmsg("must be superuser to move query"))));
+						(errmsg("must be mdb_admin to move query"))));
 
 	if (Gp_role == GP_ROLE_DISPATCH)
 	{
