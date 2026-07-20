@@ -343,6 +343,8 @@ jobs:
           - {target_os: rocky8, target_arch: arm64, package_type: rpm, runner: ubuntu-24.04-arm, build_container_image: apache/incubator-cloudberry:cbdb-build-rocky8-latest}
           - {target_os: rocky9, target_arch: x86_64, package_type: rpm, runner: ubuntu-24.04, build_container_image: apache/incubator-cloudberry:cbdb-build-rocky9-latest}
           - {target_os: rocky9, target_arch: arm64, package_type: rpm, runner: ubuntu-24.04-arm, build_container_image: apache/incubator-cloudberry:cbdb-build-rocky9-latest}
+          - {target_os: rocky10, target_arch: x86_64, package_type: rpm, runner: ubuntu-24.04, build_container_image: apache/incubator-cloudberry:cbdb-build-rocky10-latest}
+          - {target_os: rocky10, target_arch: arm64, package_type: rpm, runner: ubuntu-24.04-arm, build_container_image: apache/incubator-cloudberry:cbdb-build-rocky10-latest}
           # DEB Package
           - {target_os: ubuntu22.04, target_arch: x86_64, package_type: deb, runner: ubuntu-24.04, build_container_image: apache/incubator-cloudberry:cbdb-build-ubuntu22.04-latest}
           - {target_os: ubuntu22.04, target_arch: arm64, package_type: deb, runner: ubuntu-24.04-arm, build_container_image: apache/incubator-cloudberry:cbdb-build-ubuntu22.04-latest}
@@ -550,6 +552,8 @@ jobs:
           - {target_os: rocky8, target_arch: arm64, package_type: rpm, runner: ubuntu-24.04-arm, test_container_image: apache/incubator-cloudberry:cbdb-test-rocky8-latest, label: rocky8-arm64-rpm}
           - {target_os: rocky9, target_arch: x86_64, package_type: rpm, runner: ubuntu-24.04, test_container_image: apache/incubator-cloudberry:cbdb-test-rocky9-latest, label: rocky9-x86_64-rpm}
           - {target_os: rocky9, target_arch: arm64, package_type: rpm, runner: ubuntu-24.04-arm, test_container_image: apache/incubator-cloudberry:cbdb-test-rocky9-latest, label: rocky9-arm64-rpm}
+          - {target_os: rocky10, target_arch: x86_64, package_type: rpm, runner: ubuntu-24.04, test_container_image: apache/incubator-cloudberry:cbdb-test-rocky10-latest, label: rocky10-x86_64-rpm}
+          - {target_os: rocky10, target_arch: arm64, package_type: rpm, runner: ubuntu-24.04-arm, test_container_image: apache/incubator-cloudberry:cbdb-test-rocky10-latest, label: rocky10-arm64-rpm}
           # DEB Package
           - {target_os: ubuntu22.04, target_arch: x86_64, package_type: deb, runner: ubuntu-24.04, test_container_image: apache/incubator-cloudberry:cbdb-test-ubuntu22.04-latest, label: ubuntu22.04-x86_64-deb}
           - {target_os: ubuntu22.04, target_arch: arm64, package_type: deb, runner: ubuntu-24.04-arm, test_container_image: apache/incubator-cloudberry:cbdb-test-ubuntu22.04-latest, label: ubuntu22.04-arm64-deb}
