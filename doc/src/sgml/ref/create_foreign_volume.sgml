@@ -107,7 +107,7 @@ CREATE FOREIGN VOLUME [ IF NOT EXISTS ] <replaceable class="parameter">volume_na
    Create a volume for an object storage prefix using the foreign server
    <literal>s3_srv</literal>:
 <programlisting>
-CREATE FOREIGN VOLUME s3_vol SERVER s3_srv OPTIONS (path 's3://bucket/prefix');
+CREATE FOREIGN VOLUME s3_vol SERVER s3_srv OPTIONS (base_path 's3://bucket/prefix');
 </programlisting></para>
  </refsect1>
 

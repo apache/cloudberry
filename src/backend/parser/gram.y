@@ -9188,10 +9188,19 @@ CreateLakeTableStmt:
 				{
 					CreateLakeTableStmt *n = makeNode(CreateLakeTableStmt);
 					char	   *table_type = pstrdup($9);
+					char	   *access_method = pstrdup($9);
 					char	   *p;
 
+					/*
+					 * The USING format is case-insensitive: upper-case it for
+					 * the stored table_type and lower-case it for the access
+					 * method name, so a quoted "ICEBERG" resolves the same AM
+					 * as an unquoted iceberg.
+					 */
 					for (p = table_type; *p; p++)
 						*p = pg_toupper((unsigned char) *p);
+					for (p = access_method; *p; p++)
+						*p = pg_tolower((unsigned char) *p);
 
 					$4->relpersistence = RELPERSISTENCE_PERMANENT;
 					n->base.relation = $4;
@@ -9202,7 +9211,7 @@ CreateLakeTableStmt:
 					n->base.options = NIL;
 					n->base.oncommit = ONCOMMIT_NOOP;
 					n->base.tablespacename = NULL;
-					n->base.accessMethod = $9;
+					n->base.accessMethod = access_method;
 					n->base.if_not_exists = false;
 					n->base.relKind = RELKIND_RELATION;
 					n->table_type = table_type;
@@ -9226,10 +9235,19 @@ CreateLakeTableStmt:
 				{
 					CreateLakeTableStmt *n = makeNode(CreateLakeTableStmt);
 					char	   *table_type = pstrdup($12);
+					char	   *access_method = pstrdup($12);
 					char	   *p;
 
+					/*
+					 * The USING format is case-insensitive: upper-case it for
+					 * the stored table_type and lower-case it for the access
+					 * method name, so a quoted "ICEBERG" resolves the same AM
+					 * as an unquoted iceberg.
+					 */
 					for (p = table_type; *p; p++)
 						*p = pg_toupper((unsigned char) *p);
+					for (p = access_method; *p; p++)
+						*p = pg_tolower((unsigned char) *p);
 
 					$7->relpersistence = RELPERSISTENCE_PERMANENT;
 					n->base.relation = $7;
@@ -9240,7 +9258,7 @@ CreateLakeTableStmt:
 					n->base.options = NIL;
 					n->base.oncommit = ONCOMMIT_NOOP;
 					n->base.tablespacename = NULL;
-					n->base.accessMethod = $12;
+					n->base.accessMethod = access_method;
 					n->base.if_not_exists = true;
 					n->base.relKind = RELKIND_RELATION;
 					n->table_type = table_type;

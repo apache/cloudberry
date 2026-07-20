@@ -24,7 +24,7 @@ CREATE FOREIGN CATALOG lake_test_bad SERVER no_such_server TYPE 'hive';		-- fail
 SELECT fcname, fctype, fcoptions FROM pg_foreign_catalog WHERE fcname LIKE 'lake\_test%';
 
 -- CREATE FOREIGN VOLUME
-CREATE FOREIGN VOLUME lake_test_vol SERVER lake_test_srv OPTIONS (path 's3://bucket/prefix');
+CREATE FOREIGN VOLUME lake_test_vol SERVER lake_test_srv OPTIONS (base_path 's3://bucket/prefix');
 CREATE FOREIGN VOLUME lake_test_vol SERVER lake_test_srv;			-- fail, duplicate
 CREATE FOREIGN VOLUME IF NOT EXISTS lake_test_vol SERVER lake_test_srv;	-- skip with notice
 -- volume names are global: the same name on another server is still a duplicate
@@ -92,7 +92,7 @@ SELECT policytype, distkey FROM gp_distribution_policy WHERE localoid = 'lake_te
 
 -- The USING clause names the table format; only ICEBERG is supported (any case)
 CREATE LAKE TABLE lake_test_bad0 (a int) USING heap CATALOG lake_test_cat VOLUME lake_test_vol;		-- fail, unsupported format
-CREATE LAKE TABLE lake_test_t4 (a int) USING iceberg CATALOG lake_test_cat VOLUME lake_test_vol;	-- lower-case format is fine
+CREATE LAKE TABLE lake_test_t4 (a int) USING "IceBerg" CATALOG lake_test_cat VOLUME lake_test_vol;	-- quoted mixed-case format resolves the iceberg AM
 
 -- The iceberg AM is rejected for every path other than CREATE LAKE TABLE
 CREATE TABLE lake_test_bad1 (a int) USING iceberg DISTRIBUTED RANDOMLY;			-- fail

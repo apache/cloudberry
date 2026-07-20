@@ -69,7 +69,7 @@ SELECT fcname, fctype, fcoptions FROM pg_foreign_catalog WHERE fcname LIKE 'lake
 (1 row)
 
 -- CREATE FOREIGN VOLUME
-CREATE FOREIGN VOLUME lake_test_vol SERVER lake_test_srv OPTIONS (path 's3://bucket/prefix');
+CREATE FOREIGN VOLUME lake_test_vol SERVER lake_test_srv OPTIONS (base_path 's3://bucket/prefix');
 CREATE FOREIGN VOLUME lake_test_vol SERVER lake_test_srv;			-- fail, duplicate
 ERROR:  foreign volume "lake_test_vol" already exists
 CREATE FOREIGN VOLUME IF NOT EXISTS lake_test_vol SERVER lake_test_srv;	-- skip with notice
@@ -82,9 +82,9 @@ NOTICE:  foreign volume "lake_test_vol" already exists, skipping
 CREATE FOREIGN VOLUME lake_test_bad SERVER no_such_server;			-- fail, no server
 ERROR:  server "no_such_server" does not exist
 SELECT fvname, fvoptions FROM pg_foreign_volume WHERE fvname LIKE 'lake\_test%';
-    fvname     |         fvoptions         
----------------+---------------------------
- lake_test_vol | {path=s3://bucket/prefix}
+    fvname     |           fvoptions            
+---------------+--------------------------------
+ lake_test_vol | {base_path=s3://bucket/prefix}
 (1 row)
 
 -- Object descriptions
@@ -203,7 +203,7 @@ SELECT policytype, distkey FROM gp_distribution_policy WHERE localoid = 'lake_te
 CREATE LAKE TABLE lake_test_bad0 (a int) USING heap CATALOG lake_test_cat VOLUME lake_test_vol;		-- fail, unsupported format
 ERROR:  unsupported lake table format "HEAP"
 HINT:  The only supported format is ICEBERG (USING ICEBERG).
-CREATE LAKE TABLE lake_test_t4 (a int) USING iceberg CATALOG lake_test_cat VOLUME lake_test_vol;	-- lower-case format is fine
+CREATE LAKE TABLE lake_test_t4 (a int) USING "IceBerg" CATALOG lake_test_cat VOLUME lake_test_vol;	-- quoted mixed-case format resolves the iceberg AM
 -- The iceberg AM is rejected for every path other than CREATE LAKE TABLE
 CREATE TABLE lake_test_bad1 (a int) USING iceberg DISTRIBUTED RANDOMLY;			-- fail
 ERROR:  cannot create table "lake_test_bad1" with access method "iceberg"
