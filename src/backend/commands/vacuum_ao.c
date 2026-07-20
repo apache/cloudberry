@@ -322,7 +322,9 @@ ao_vacuum_rel_post_cleanup(Relation onerel, VacuumParams *params, BufferAccessSt
 						 onerel->rd_rel->relisshared,
 						 reltuples,
 						 deadtuples,
-						 vacrelstats->starttime);
+						 vacrelstats->starttime,
+						 vacrelstats->delay_time +
+						 (VacuumDelayTime - vacrelstats->phase_start_delay));
 
 	/*
 	 * Remember what is left behind for the vacuum statistics, which
@@ -491,6 +493,7 @@ ao_vacuum_rel(Relation rel, VacuumParams *params, BufferAccessStrategy bstrategy
 	 */
 	INSTR_TIME_SET_CURRENT(phasestart);
 	startdelaytime = VacuumDelayTime;
+	vacrelstats->phase_start_delay = startdelaytime;
 
 	if (ao_vacuum_phase == VACOPT_AO_PRE_CLEANUP_PHASE)
 		ao_vacuum_rel_pre_cleanup(rel, params, bstrategy, vacrelstats);
