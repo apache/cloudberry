@@ -517,6 +517,9 @@ heap_vacuum_rel(Relation rel, VacuumParams *params,
 	bool		aggressive;		/* should we scan all unfrozen pages? */
 	bool		scanned_all_unfrozen;	/* actually scanned all such pages? */
 	bool		freeze_age_vacuum; /* aggressive due to freeze age? */
+	instr_time	vacstart;
+	int64		startdelaytime;
+	instr_time	vacend;
 	char	  **indnames = NULL;
 	TransactionId xidFullScanLimit;
 	MultiXactId mxactFullScanLimit;
@@ -534,6 +537,10 @@ heap_vacuum_rel(Relation rel, VacuumParams *params,
 
 	/* Used for instrumentation and cumulative maintenance statistics. */
 	starttime = GetCurrentTimestamp();
+
+	/* measure elapsed and delay time for the vacuum statistics */
+	INSTR_TIME_SET_CURRENT(vacstart);
+	startdelaytime = VacuumDelayTime;
 
 	/* measure elapsed time iff autovacuum logging requires it */
 	if (IsAutoVacuumWorkerProcess() && params->log_min_duration >= 0)
@@ -767,11 +774,13 @@ heap_vacuum_rel(Relation rel, VacuumParams *params,
 	pgstat_report_vacuum(RelationGetRelid(rel),
 						 rel->rd_rel->relisshared,
 						 Max(new_live_tuples, 0),
-						 vacrel->new_dead_tuples, starttime);
+						 vacrel->new_dead_tuples, starttime,
+						 VacuumDelayTime - startdelaytime);
 
 	/* assemble the per-vacuum measurements for subsequent reporting */
 	{
 		PgStat_VacuumStats vacstats;
+		PgStat_Counter elapsedtime;
 
 		MemSet(&vacstats, 0, sizeof(vacstats));
 		vacstats.tuples_deleted = (PgStat_Counter) vacrel->tuples_deleted;
@@ -782,9 +791,16 @@ heap_vacuum_rel(Relation rel, VacuumParams *params,
 		vacstats.pages_all_visible = (PgStat_Counter) vacrel->pages_all_visible;
 		vacstats.freeze_age_vacuum_count = freeze_age_vacuum ? 1 : 0;
 
+		INSTR_TIME_SET_CURRENT(vacend);
+		INSTR_TIME_SUBTRACT(vacend, vacstart);
+		elapsedtime = (PgStat_Counter) INSTR_TIME_GET_MICROSEC(vacend);
+
 		ereport(elevel,
 				(errmsg("table \"%s\": vacuum statistics", vacrel->relname),
-				 errdetail("aggressive scan required by freeze age: %s",
+				 errdetail("elapsed: %.3f ms, cost-based delay: %.3f ms\n"
+						   "aggressive scan required by freeze age: %s",
+						   elapsedtime / 1000.0,
+						   (VacuumDelayTime - startdelaytime) / 1000.0,
 						   freeze_age_vacuum ? _("yes") : _("no"))));
 
 	}
@@ -930,6 +946,8 @@ heap_vacuum_rel(Relation rel, VacuumParams *params,
 							 (long long) walusage.wal_records,
 							 (long long) walusage.wal_fpi,
 							 (unsigned long long) walusage.wal_bytes);
+			appendStringInfo(&buf, _("cost-based delay: %.3f ms\n"),
+							 (VacuumDelayTime - startdelaytime) / 1000.0);
 			appendStringInfo(&buf, _("system usage: %s"), pg_rusage_show(&ru0));
 
 			ereport(LOG,
@@ -3117,7 +3135,8 @@ lazy_cleanup_all_indexes(LVRelState *vacrel)
  * is skipped, and keeps it from being counted twice when it is not.
  */
 static IndexBulkDeleteResult
-lazy_index_vacstats_start(IndexBulkDeleteResult *istat)
+lazy_index_vacstats_start(IndexBulkDeleteResult *istat,
+						  instr_time *starttime, int64 *startdelaytime)
 {
 	IndexBulkDeleteResult before;
 
@@ -3125,6 +3144,9 @@ lazy_index_vacstats_start(IndexBulkDeleteResult *istat)
 		before = *istat;
 	else
 		MemSet(&before, 0, sizeof(before));
+
+	INSTR_TIME_SET_CURRENT(*starttime);
+	*startdelaytime = VacuumDelayTime;
 
 	return before;
 }
@@ -3139,9 +3161,14 @@ lazy_index_vacstats_start(IndexBulkDeleteResult *istat)
  */
 static void
 lazy_index_vacstats_finish(Relation indrel, IndexBulkDeleteResult *istat,
-						   IndexBulkDeleteResult *before, bool cleanup)
+						   IndexBulkDeleteResult *before, bool cleanup,
+						   instr_time starttime, int64 startdelaytime)
 {
 	PgStat_VacuumStats vacstats;
+	instr_time	endtime;
+
+	INSTR_TIME_SET_CURRENT(endtime);
+	INSTR_TIME_SUBTRACT(endtime, starttime);
 
 	MemSet(&vacstats, 0, sizeof(vacstats));
 	if (istat)
@@ -3161,6 +3188,11 @@ lazy_index_vacstats_finish(Relation indrel, IndexBulkDeleteResult *istat,
 			vacstats.dead_pages =
 				(PgStat_Counter) (istat->pages_deleted - istat->pages_free);
 	}
+
+	pgstat_report_index_vacuum_time(indrel,
+									   (PgStat_Counter) INSTR_TIME_GET_MICROSEC(endtime),
+									   VacuumDelayTime - startdelaytime,
+									   IsAutoVacuumWorkerProcess());
 
 }
 
@@ -3183,6 +3215,8 @@ lazy_vacuum_one_index(Relation indrel, IndexBulkDeleteResult *istat,
 	PGRUsage	ru0;
 	LVSavedErrInfo saved_err_info;
 	IndexBulkDeleteResult istat_before;
+	instr_time	starttime;
+	int64		startdelaytime;
 
 	pg_rusage_init(&ru0);
 
@@ -3207,15 +3241,19 @@ lazy_vacuum_one_index(Relation indrel, IndexBulkDeleteResult *istat,
 							 InvalidBlockNumber, InvalidOffsetNumber);
 
 	/* Do bulk deletion */
-	istat_before = lazy_index_vacstats_start(istat);
+	istat_before = lazy_index_vacstats_start(istat, &starttime,
+											 &startdelaytime);
 	istat = index_bulk_delete(&ivinfo, istat, lazy_tid_reaped,
 							  (void *) vacrel->dead_tuples);
-	lazy_index_vacstats_finish(indrel, istat, &istat_before, false);
+	lazy_index_vacstats_finish(indrel, istat, &istat_before, false,
+							   starttime, startdelaytime);
 
 	ereport(elevel,
 			(errmsg("scanned index \"%s\" to remove %d row versions",
 					vacrel->indname, vacrel->dead_tuples->num_tuples),
-			 errdetail_internal("%s", pg_rusage_show(&ru0))));
+			 errdetail("cost-based delay: %.3f ms\n%s",
+					   (VacuumDelayTime - startdelaytime) / 1000.0,
+					   pg_rusage_show(&ru0))));
 
 	/* Revert to the previous phase information for error traceback */
 	restore_vacuum_error_info(vacrel, &saved_err_info);
@@ -3242,6 +3280,8 @@ lazy_cleanup_one_index(Relation indrel, IndexBulkDeleteResult *istat,
 	PGRUsage	ru0;
 	LVSavedErrInfo saved_err_info;
 	IndexBulkDeleteResult istat_before;
+	instr_time	starttime;
+	int64		startdelaytime;
 
 	pg_rusage_init(&ru0);
 
@@ -3266,9 +3306,11 @@ lazy_cleanup_one_index(Relation indrel, IndexBulkDeleteResult *istat,
 							 VACUUM_ERRCB_PHASE_INDEX_CLEANUP,
 							 InvalidBlockNumber, InvalidOffsetNumber);
 
-	istat_before = lazy_index_vacstats_start(istat);
+	istat_before = lazy_index_vacstats_start(istat, &starttime,
+											 &startdelaytime);
 	istat = index_vacuum_cleanup(&ivinfo, istat);
-	lazy_index_vacstats_finish(indrel, istat, &istat_before, true);
+	lazy_index_vacstats_finish(indrel, istat, &istat_before, true,
+							   starttime, startdelaytime);
 
 	if (istat)
 	{
@@ -3280,10 +3322,12 @@ lazy_cleanup_one_index(Relation indrel, IndexBulkDeleteResult *istat,
 				 errdetail("%.0f index row versions were removed.\n"
 						   "%u index pages were newly deleted.\n"
 						   "%u index pages are currently deleted, of which %u are currently reusable.\n"
+						   "cost-based delay: %.3f ms\n"
 						   "%s.",
 						   (istat)->tuples_removed,
 						   (istat)->pages_newly_deleted,
 						   (istat)->pages_deleted, (istat)->pages_free,
+						   (VacuumDelayTime - startdelaytime) / 1000.0,
 						   pg_rusage_show(&ru0))));
 	}
 
