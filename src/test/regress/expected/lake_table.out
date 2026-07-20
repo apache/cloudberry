@@ -1,5 +1,5 @@
 --
--- Test lake table DDL: FOREIGN CATALOG, FOREIGN VOLUME, ICEBERG TABLE
+-- Test lake table DDL: FOREIGN CATALOG, FOREIGN VOLUME, LAKE TABLE
 --
 -- Display the lake table catalogs
 \d+ pg_foreign_catalog
@@ -62,7 +62,7 @@ CREATE FOREIGN CATALOG IF NOT EXISTS lake_test_cat SERVER lake_test_srv2 TYPE 'h
 NOTICE:  foreign catalog "lake_test_cat" already exists, skipping
 CREATE FOREIGN CATALOG lake_test_bad SERVER no_such_server TYPE 'hive';		-- fail, no server
 ERROR:  server "no_such_server" does not exist
-SELECT fcname, fctype, fcoptions FROM pg_foreign_catalog WHERE fcname LIKE 'lake\_test%' ORDER BY 1;
+SELECT fcname, fctype, fcoptions FROM pg_foreign_catalog WHERE fcname LIKE 'lake\_test%';
     fcname     | fctype |           fcoptions           
 ---------------+--------+-------------------------------
  lake_test_cat | hive   | {uri=thrift://localhost:9083}
@@ -81,7 +81,7 @@ CREATE FOREIGN VOLUME IF NOT EXISTS lake_test_vol SERVER lake_test_srv2;	-- skip
 NOTICE:  foreign volume "lake_test_vol" already exists, skipping
 CREATE FOREIGN VOLUME lake_test_bad SERVER no_such_server;			-- fail, no server
 ERROR:  server "no_such_server" does not exist
-SELECT fvname, fvoptions FROM pg_foreign_volume WHERE fvname LIKE 'lake\_test%' ORDER BY 1;
+SELECT fvname, fvoptions FROM pg_foreign_volume WHERE fvname LIKE 'lake\_test%';
     fvname     |         fvoptions         
 ---------------+---------------------------
  lake_test_vol | {path=s3://bucket/prefix}
@@ -118,9 +118,9 @@ SELECT count(DISTINCT gp_segment_id) > 1 AS on_all_segments
 (1 row)
 
 -- Without a provider extension there is no iceberg table AM
-CREATE ICEBERG TABLE lake_test_t0 (a int) CATALOG lake_test_cat VOLUME lake_test_vol;	-- fail with hint
+CREATE LAKE TABLE lake_test_t0 (a int) USING ICEBERG CATALOG lake_test_cat VOLUME lake_test_vol;	-- fail with hint
 ERROR:  table access method "iceberg" does not exist
-HINT:  CREATE ICEBERG TABLE requires an extension that provides the "iceberg" table access method.
+HINT:  CREATE LAKE TABLE ... USING ICEBERG requires an extension that provides the "iceberg" table access method.
 -- The default catalog/volume GUCs verify that the object exists
 SET iceberg_default_catalog = 'no_such_catalog';	-- fail
 ERROR:  invalid value for parameter "iceberg_default_catalog": "no_such_catalog"
@@ -130,14 +130,13 @@ ERROR:  invalid value for parameter "iceberg_default_volume": "no_such_volume"
 DETAIL:  Foreign volume "no_such_volume" does not exist.
 -- Simulate a datalake provider with a heap-backed iceberg AM
 CREATE ACCESS METHOD iceberg TYPE TABLE HANDLER heap_tableam_handler;
--- CREATE ICEBERG TABLE with explicit catalog and volume
-CREATE ICEBERG TABLE lake_test_t1 (a int, b text) CATALOG lake_test_cat VOLUME lake_test_vol OPTIONS (fileformat 'parquet');
+-- CREATE LAKE TABLE with explicit catalog and volume
+CREATE LAKE TABLE lake_test_t1 (a int, b text) USING ICEBERG CATALOG lake_test_cat VOLUME lake_test_vol OPTIONS (fileformat 'parquet');
 SELECT c.relname, lt.lttable_type, lt.ltoptions, fc.fcname, fv.fvname
   FROM pg_lake_table lt
   JOIN pg_class c ON c.oid = lt.ltrelid
   JOIN pg_foreign_catalog fc ON fc.oid = lt.ltforeign_catalog
-  JOIN pg_foreign_volume fv ON fv.oid = lt.ltforeign_volume
- ORDER BY 1;
+  JOIN pg_foreign_volume fv ON fv.oid = lt.ltforeign_volume;
    relname    | lttable_type |      ltoptions       |    fcname     |    fvname     
 --------------+--------------+----------------------+---------------+---------------
  lake_test_t1 | ICEBERG      | {fileformat=parquet} | lake_test_cat | lake_test_vol
@@ -179,20 +178,20 @@ SELECT a, length(b) FROM lake_test_t1 WHERE a = 3;
 (1 row)
 
 -- Catalog and volume are both required
-CREATE ICEBERG TABLE lake_test_t2 (a int) VOLUME lake_test_vol;		-- fail, no catalog
+CREATE LAKE TABLE lake_test_t2 (a int) USING ICEBERG VOLUME lake_test_vol;	-- fail, no catalog
 ERROR:  no foreign catalog specified
-HINT:  Specify CATALOG in CREATE ICEBERG TABLE or set iceberg_default_catalog.
-CREATE ICEBERG TABLE lake_test_t2 (a int) CATALOG lake_test_cat;	-- fail, no volume
+HINT:  Specify CATALOG in CREATE LAKE TABLE or set iceberg_default_catalog.
+CREATE LAKE TABLE lake_test_t2 (a int) USING ICEBERG CATALOG lake_test_cat;	-- fail, no volume
 ERROR:  no foreign volume specified
-HINT:  Specify VOLUME in CREATE ICEBERG TABLE or set iceberg_default_volume.
+HINT:  Specify VOLUME in CREATE LAKE TABLE or set iceberg_default_volume.
 -- ... unless the GUCs provide defaults
 SET iceberg_default_catalog = 'lake_test_cat';
 SET iceberg_default_volume = 'lake_test_vol';
-CREATE ICEBERG TABLE lake_test_t2 (a int);
+CREATE LAKE TABLE lake_test_t2 (a int) USING ICEBERG;
 RESET iceberg_default_catalog;
 RESET iceberg_default_volume;
 -- A DISTRIBUTED clause is ignored with a warning
-CREATE ICEBERG TABLE lake_test_t3 (a int) CATALOG lake_test_cat VOLUME lake_test_vol DISTRIBUTED BY (a);
+CREATE LAKE TABLE lake_test_t3 (a int) USING ICEBERG CATALOG lake_test_cat VOLUME lake_test_vol DISTRIBUTED BY (a);
 WARNING:  DISTRIBUTED clause has no effect for lake tables, using DISTRIBUTED RANDOMLY
 SELECT policytype, distkey FROM gp_distribution_policy WHERE localoid = 'lake_test_t3'::regclass;
  policytype | distkey 
@@ -200,27 +199,27 @@ SELECT policytype, distkey FROM gp_distribution_policy WHERE localoid = 'lake_te
  p          | 
 (1 row)
 
--- CREATE ICEBERG TABLE only accepts the iceberg access method
-CREATE ICEBERG TABLE lake_test_bad0 (a int) CATALOG lake_test_cat VOLUME lake_test_vol USING heap;	-- fail
-ERROR:  access method "heap" is not supported for iceberg tables
-HINT:  Omit the USING clause; CREATE ICEBERG TABLE always uses the "iceberg" access method.
-CREATE ICEBERG TABLE lake_test_t4 (a int) CATALOG lake_test_cat VOLUME lake_test_vol USING iceberg;	-- explicit iceberg is fine
--- The iceberg AM is rejected for every path other than CREATE ICEBERG TABLE
+-- The USING clause names the table format; only ICEBERG is supported (any case)
+CREATE LAKE TABLE lake_test_bad0 (a int) USING heap CATALOG lake_test_cat VOLUME lake_test_vol;		-- fail, unsupported format
+ERROR:  unsupported lake table format "HEAP"
+HINT:  The only supported format is ICEBERG (USING ICEBERG).
+CREATE LAKE TABLE lake_test_t4 (a int) USING iceberg CATALOG lake_test_cat VOLUME lake_test_vol;	-- lower-case format is fine
+-- The iceberg AM is rejected for every path other than CREATE LAKE TABLE
 CREATE TABLE lake_test_bad1 (a int) USING iceberg DISTRIBUTED RANDOMLY;			-- fail
 ERROR:  cannot create table "lake_test_bad1" with access method "iceberg"
-HINT:  Use CREATE ICEBERG TABLE instead.
+HINT:  Use CREATE LAKE TABLE ... USING ICEBERG instead.
 CREATE TABLE lake_test_bad2 USING iceberg AS SELECT 1 AS a DISTRIBUTED RANDOMLY;	-- fail
 ERROR:  cannot create table "lake_test_bad2" with access method "iceberg"
-HINT:  Use CREATE ICEBERG TABLE instead.
+HINT:  Use CREATE LAKE TABLE ... USING ICEBERG instead.
 SET default_table_access_method = iceberg;
 CREATE TABLE lake_test_bad3 (a int) DISTRIBUTED RANDOMLY;				-- fail
 ERROR:  cannot create table "lake_test_bad3" with access method "iceberg"
-HINT:  Use CREATE ICEBERG TABLE instead.
+HINT:  Use CREATE LAKE TABLE ... USING ICEBERG instead.
 RESET default_table_access_method;
 CREATE TABLE lake_test_heap (a int) DISTRIBUTED RANDOMLY;
 ALTER TABLE lake_test_heap SET ACCESS METHOD iceberg;					-- fail
 ERROR:  cannot change access method of table "lake_test_heap" to "iceberg"
-HINT:  Use CREATE ICEBERG TABLE to create an iceberg table.
+HINT:  Use CREATE LAKE TABLE ... USING ICEBERG to create a lake table.
 ALTER TABLE lake_test_t1 SET ACCESS METHOD heap;					-- fail
 ERROR:  cannot change access method of lake table "lake_test_t1"
 ALTER TABLE lake_test_t1 SET DISTRIBUTED BY (a);					-- fail
@@ -253,7 +252,7 @@ table lake_test_t3 depends on catalog lake_test_cat
 table lake_test_t4 depends on catalog lake_test_cat
 HINT:  Use DROP ... CASCADE to drop the dependent objects too.
 -- Dropping a lake table removes its pg_lake_table entry
-DROP ICEBERG TABLE lake_test_t1;
+DROP LAKE TABLE lake_test_t1;
 SELECT count(*) FROM pg_lake_table lt JOIN pg_class c ON c.oid = lt.ltrelid
  WHERE c.relname = 'lake_test_t1';
  count 
@@ -261,17 +260,17 @@ SELECT count(*) FROM pg_lake_table lt JOIN pg_class c ON c.oid = lt.ltrelid
      0
 (1 row)
 
--- DROP ICEBERG TABLE rejects a non-iceberg table ...
-DROP ICEBERG TABLE lake_test_heap;	-- fail, not an iceberg table
-ERROR:  "lake_test_heap" is not an iceberg table
+-- DROP LAKE TABLE rejects a non-lake table ...
+DROP LAKE TABLE lake_test_heap;	-- fail, not a lake table
+ERROR:  "lake_test_heap" is not a lake table
 HINT:  Use DROP TABLE to remove a table.
--- plain DROP TABLE must reject an iceberg table (mirrors foreign-table behavior)
+-- plain DROP TABLE must reject a lake table (mirrors foreign-table behavior)
 DROP TABLE lake_test_t2;
 ERROR:  "lake_test_t2" is not a table
-HINT:  Use DROP ICEBERG TABLE to remove an iceberg table.
+HINT:  Use DROP LAKE TABLE to remove a lake table.
 DROP TABLE IF EXISTS lake_test_t2;	-- IF EXISTS does not suppress wrong-type errors
 ERROR:  "lake_test_t2" is not a table
-HINT:  Use DROP ICEBERG TABLE to remove an iceberg table.
+HINT:  Use DROP LAKE TABLE to remove a lake table.
 -- the rejected drops must have left the table and its lake metadata intact
 SELECT count(*) FROM pg_lake_table WHERE ltrelid = 'lake_test_t2'::regclass;
  count 
@@ -280,7 +279,7 @@ SELECT count(*) FROM pg_lake_table WHERE ltrelid = 'lake_test_t2'::regclass;
 (1 row)
 
 -- the correct command still works
-DROP ICEBERG TABLE lake_test_t2;
+DROP LAKE TABLE lake_test_t2;
 SELECT count(*) FROM pg_lake_table lt JOIN pg_class c ON c.oid = lt.ltrelid
  WHERE c.relname = 'lake_test_t2';
  count 

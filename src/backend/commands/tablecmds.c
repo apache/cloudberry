@@ -256,7 +256,7 @@ struct DropRelationCallbackState
 {
 	/* These fields are set by RemoveRelations: */
 	char		expected_relkind;
-	bool		iceberg_only;	/* DROP ICEBERG TABLE: require iceberg AM */
+	bool		iceberg_only;	/* DROP LAKE TABLE: require iceberg AM */
 	LOCKMODE	heap_lockmode;
 	/* These fields are state to track which subsidiary locks are held: */
 	Oid			heapOid;
@@ -941,7 +941,7 @@ DefineRelation(CreateStmt *stmt, char relkind, Oid ownerId,
 	}
 
 	/*
-	 * Lake tables must be created through CREATE ICEBERG TABLE, which also
+	 * Lake tables must be created through CREATE LAKE TABLE, which also
 	 * creates the pg_lake_table catalog entries the iceberg access method
 	 * relies on.  A relation created with the iceberg AM through any other
 	 * path (CREATE TABLE ... USING iceberg, CTAS, matview,
@@ -956,7 +956,7 @@ DefineRelation(CreateStmt *stmt, char relkind, Oid ownerId,
 				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 				 errmsg("cannot create table \"%s\" with access method \"%s\"",
 						stmt->relation->relname, ICEBERG_TABLE_AM_NAME),
-				 errhint("Use CREATE ICEBERG TABLE instead.")));
+				 errhint("Use CREATE LAKE TABLE ... USING ICEBERG instead.")));
 
 	/*
 	 * GPDB: for partitioned tables, inherit reloptions from the parent.
@@ -2223,7 +2223,7 @@ RangeVarCallbackForDropRelation(const RangeVar *rel, Oid relOid, Oid oldRelOid,
 
 	/*
 	 * Iceberg (lake) tables share RELKIND_RELATION with ordinary tables and are
-	 * told apart only by their access method. DROP ICEBERG TABLE must target one;
+	 * told apart only by their access method. DROP LAKE TABLE must target one;
 	 * plain DROP TABLE must NOT (mirrors the foreign-table rule) -- direct the user
 	 * to the matching command in each case.
 	 */
@@ -2239,7 +2239,7 @@ RangeVarCallbackForDropRelation(const RangeVar *rel, Oid relOid, Oid oldRelOid,
 			if (!is_iceberg)
 				ereport(ERROR,
 						(errcode(ERRCODE_WRONG_OBJECT_TYPE),
-						 errmsg("\"%s\" is not an iceberg table", rel->relname),
+						 errmsg("\"%s\" is not a lake table", rel->relname),
 						 errhint("Use DROP TABLE to remove a table.")));
 		}
 		else if (is_iceberg)
@@ -2247,7 +2247,7 @@ RangeVarCallbackForDropRelation(const RangeVar *rel, Oid relOid, Oid oldRelOid,
 			ereport(ERROR,
 					(errcode(ERRCODE_WRONG_OBJECT_TYPE),
 					 errmsg("\"%s\" is not a table", rel->relname),
-					 errhint("Use DROP ICEBERG TABLE to remove an iceberg table.")));
+					 errhint("Use DROP LAKE TABLE to remove a lake table.")));
 		}
 	}
 
@@ -17120,7 +17120,7 @@ ATPrepSetAccessMethod(AlteredTableInfo *tab, Relation rel, const char *amname)
 
 	/*
 	 * The iceberg AM relies on catalog entries that only the CREATE/DROP
-	 * ICEBERG TABLE paths manage, so a table cannot be converted to or from
+	 * LAKE TABLE paths manage, so a table cannot be converted to or from
 	 * it with SET ACCESS METHOD.
 	 */
 	iceberg_amoid = GetIcebergTableAmOid(true);
@@ -17129,7 +17129,7 @@ ATPrepSetAccessMethod(AlteredTableInfo *tab, Relation rel, const char *amname)
 				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 				 errmsg("cannot change access method of table \"%s\" to \"%s\"",
 						RelationGetRelationName(rel), ICEBERG_TABLE_AM_NAME),
-				 errhint("Use CREATE ICEBERG TABLE to create an iceberg table.")));
+				 errhint("Use CREATE LAKE TABLE ... USING ICEBERG to create a lake table.")));
 	if (OidIsValid(iceberg_amoid) && rel->rd_rel->relam == iceberg_amoid)
 		ereport(ERROR,
 				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),

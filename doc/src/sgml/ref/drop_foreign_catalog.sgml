@@ -35,7 +35,7 @@ DROP FOREIGN CATALOG [ IF EXISTS ] <replaceable class="parameter">name</replacea
   </para>
 
   <para>
-   Using <literal>CASCADE</literal> can also drop dependent Iceberg tables.
+   Using <literal>CASCADE</literal> can also drop dependent lake tables.
   </para>
  </refsect1>
 
@@ -67,7 +67,7 @@ DROP FOREIGN CATALOG [ IF EXISTS ] <replaceable class="parameter">name</replacea
     <listitem>
      <para>
       Automatically drop objects that depend on the catalog, including
-      dependent Iceberg tables, and in turn all objects that depend on those
+      dependent lake tables, and in turn all objects that depend on those
       objects (see <xref linkend="ddl-depend"/>).
      </para>
     </listitem>
@@ -110,7 +110,7 @@ DROP FOREIGN CATALOG hive_cat;
 
   <simplelist type="inline">
    <member><xref linkend="sql-createforeigncatalog"/></member>
-   <member><xref linkend="sql-dropicebergtable"/></member>
+   <member><xref linkend="sql-droplaketable"/></member>
    <member><xref linkend="sql-dropserver"/></member>
   </simplelist>
  </refsect1>

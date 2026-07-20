@@ -669,7 +669,7 @@ static const SchemaQuery Query_for_list_of_foreign_tables = {
 };
 
 /*
- * Exclude iceberg tables; Query_for_list_of_iceberg_tables serves DROP ICEBERG
+ * Exclude lake tables; Query_for_list_of_iceberg_tables serves DROP LAKE
  * TABLE.  With no iceberg AM, the NOT EXISTS subquery finds no match, so
  * ordinary tables remain listed.
  */
@@ -686,10 +686,10 @@ static const SchemaQuery Query_for_list_of_tables = {
 };
 
 /*
- * An iceberg (lake) table is an ordinary relation whose access method is the
- * "iceberg" AM -- the same rule DROP ICEBERG TABLE validates against.  When no
+ * A lake table is an ordinary relation whose access method is the
+ * "iceberg" AM -- the same rule DROP LAKE TABLE validates against.  When no
  * provider installed that AM the scalar subquery yields NULL and the list is
- * empty, which is correct (no relation can be an iceberg table).
+ * empty, which is correct (no relation can be a lake table).
  */
 static const SchemaQuery Query_for_list_of_iceberg_tables = {
 	.catname = "pg_catalog.pg_class c",
@@ -1314,9 +1314,9 @@ static const pgsql_thing_t words_after_create[] = {
 	{"FOREIGN VOLUME", Query_for_list_of_foreign_volumes, NULL, NULL, NULL, THING_NO_ALTER},
 	{"FUNCTION", NULL, NULL, Query_for_list_of_functions},
 	{"GROUP", Query_for_list_of_roles},
-	{"ICEBERG TABLE", NULL, NULL, &Query_for_list_of_iceberg_tables, NULL, THING_NO_ALTER},
 	{"INCREMENTAL MATERIALIZED VIEW", NULL, NULL, &Query_for_list_of_matviews, NULL, THING_NO_DROP | THING_NO_ALTER},
 	{"INDEX", NULL, NULL, &Query_for_list_of_indexes},
+	{"LAKE TABLE", NULL, NULL, &Query_for_list_of_iceberg_tables, NULL, THING_NO_ALTER},
 	{"LANGUAGE", Query_for_list_of_languages},
 	{"LARGE OBJECT", NULL, NULL, NULL, NULL, THING_NO_CREATE | THING_NO_DROP},
 	{"MATERIALIZED VIEW", NULL, NULL, &Query_for_list_of_matviews},
@@ -3097,9 +3097,14 @@ psql_completion(const char *text, int start, int end)
 	else if (Matches("CREATE", "FOREIGN", "VOLUME", MatchAny, "SERVER", MatchAny))
 		COMPLETE_WITH("OPTIONS");
 
-	/* CREATE ICEBERG */
-	else if (Matches("CREATE", "ICEBERG"))
+	/* CREATE LAKE TABLE */
+	else if (Matches("CREATE", "LAKE"))
 		COMPLETE_WITH("TABLE");
+	/* CREATE LAKE TABLE ... USING <format> */
+	else if (HeadMatches("CREATE", "LAKE", "TABLE") && TailMatches("USING"))
+		COMPLETE_WITH("ICEBERG");
+	else if (HeadMatches("CREATE", "LAKE", "TABLE") && TailMatches("USING", "ICEBERG"))
+		COMPLETE_WITH("CATALOG", "VOLUME", "OPTIONS");
 
 	/* CREATE FOREIGN DATA WRAPPER */
 	else if (Matches("CREATE", "FOREIGN", "DATA", "WRAPPER", MatchAny))
@@ -3867,7 +3872,7 @@ psql_completion(const char *text, int start, int end)
 			 Matches("DROP", "FOREIGN", "DATA", "WRAPPER", MatchAny) ||
 			 Matches("DROP", "FOREIGN", "TABLE", MatchAny) ||
 			 Matches("DROP", "FOREIGN", "CATALOG|VOLUME", MatchAny) ||
-			 Matches("DROP", "ICEBERG", "TABLE", MatchAny) ||
+			 Matches("DROP", "LAKE", "TABLE", MatchAny) ||
 			 Matches("DROP", "DIRECTORY", "TABLE", MatchAny) ||
 			 Matches("DROP", "TEXT", "SEARCH", "CONFIGURATION|DICTIONARY|PARSER|TEMPLATE", MatchAny))
 		COMPLETE_WITH("CASCADE", "RESTRICT");
@@ -3883,9 +3888,9 @@ psql_completion(const char *text, int start, int end)
 		COMPLETE_WITH_QUERY(Query_for_list_of_foreign_catalogs);
 	else if (Matches("DROP", "FOREIGN", "VOLUME"))
 		COMPLETE_WITH_QUERY(Query_for_list_of_foreign_volumes);
-	else if (Matches("DROP", "ICEBERG"))
+	else if (Matches("DROP", "LAKE"))
 		COMPLETE_WITH("TABLE");
-	else if (Matches("DROP", "ICEBERG", "TABLE"))
+	else if (Matches("DROP", "LAKE", "TABLE"))
 		COMPLETE_WITH_SCHEMA_QUERY(Query_for_list_of_iceberg_tables);
 	else if (Matches("DROP", "DATABASE", MatchAny))
 		COMPLETE_WITH("WITH (");
@@ -4107,13 +4112,13 @@ psql_completion(const char *text, int start, int end)
 	else if (TailMatches("FOREIGN", "SERVER"))
 		COMPLETE_WITH_QUERY(Query_for_list_of_servers);
 
-/* CATALOG, e.g. the CATALOG clause of CREATE ICEBERG TABLE */
+/* CATALOG, e.g. the CATALOG clause of CREATE LAKE TABLE */
 	else if (TailMatches("CATALOG") &&
 			 !TailMatches("CREATE", MatchAny, MatchAny) &&
 			 !TailMatches("FOREIGN", MatchAny))
 		COMPLETE_WITH_QUERY(Query_for_list_of_foreign_catalogs);
 
-/* VOLUME, e.g. the VOLUME clause of CREATE ICEBERG TABLE */
+/* VOLUME, e.g. the VOLUME clause of CREATE LAKE TABLE */
 	else if (TailMatches("VOLUME") &&
 			 !TailMatches("CREATE", MatchAny, MatchAny) &&
 			 !TailMatches("FOREIGN", MatchAny))

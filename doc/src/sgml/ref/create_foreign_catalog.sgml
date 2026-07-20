@@ -137,7 +137,7 @@ CREATE FOREIGN CATALOG hive_cat SERVER hive_srv TYPE 'hive' OPTIONS (uri 'thrift
 
   <simplelist type="inline">
    <member><xref linkend="sql-dropforeigncatalog"/></member>
-   <member><xref linkend="sql-createicebergtable"/></member>
+   <member><xref linkend="sql-createlaketable"/></member>
    <member><xref linkend="sql-createserver"/></member>
   </simplelist>
  </refsect1>

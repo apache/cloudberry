@@ -2144,7 +2144,7 @@ selectDumpableTable(TableInfo *tbinfo, Archive *fout)
 	{
 		tbinfo->dobj.dump = DUMP_COMPONENT_NONE;
 
-		pg_log_warning("iceberg table \"%s\" is not supported by pg_dump and will be ignored",
+		pg_log_warning("lake table \"%s\" is not supported by pg_dump and will be ignored",
 					   tbinfo->dobj.name);
 	}
 }

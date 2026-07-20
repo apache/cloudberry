@@ -102,8 +102,8 @@
    &createForeignVolume;
    &createFunction;
    &createGroup;
-   &createIcebergTable;
    &createIndex;
+   &createLakeTable;
    &createLanguage;
    &createMaterializedView;
    &createOperator;
@@ -153,8 +153,8 @@
    &dropForeignVolume;
    &dropFunction;
    &dropGroup;
-   &dropIcebergTable;
    &dropIndex;
+   &dropLakeTable;
    &dropLanguage;
    &dropMaterializedView;
    &dropOperator;

@@ -223,13 +223,13 @@ validate_table_type(const char *table_type)
 	if (!table_type)
 		ereport(ERROR,
 				(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
-				 errmsg("table type cannot be NULL")));
+				 errmsg("lake table format cannot be NULL")));
 
 	if (strcmp(table_type, "ICEBERG") != 0)
 		ereport(ERROR,
 				(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
-				 errmsg("unsupported table type \"%s\"", table_type),
-				 errhint("The only supported table type is ICEBERG.")));
+				 errmsg("unsupported lake table format \"%s\"", table_type),
+				 errhint("The only supported format is ICEBERG (USING ICEBERG).")));
 }
 
 /*
@@ -242,7 +242,7 @@ validate_foreign_catalog(const char *catalog_name)
 		ereport(ERROR,
 				(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
 				 errmsg("no foreign catalog specified"),
-				 errhint("Specify CATALOG in CREATE ICEBERG TABLE or set iceberg_default_catalog.")));
+				 errhint("Specify CATALOG in CREATE LAKE TABLE or set iceberg_default_catalog.")));
 
 	return get_foreign_catalog_oid(catalog_name, false);
 }
@@ -257,7 +257,7 @@ validate_foreign_volume(const char *volume_name)
 		ereport(ERROR,
 				(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
 				 errmsg("no foreign volume specified"),
-				 errhint("Specify VOLUME in CREATE ICEBERG TABLE or set iceberg_default_volume.")));
+				 errhint("Specify VOLUME in CREATE LAKE TABLE or set iceberg_default_volume.")));
 
 	return get_foreign_volume_oid(volume_name, false);
 }
@@ -290,26 +290,10 @@ ResolveLakeTableOptions(CreateLakeTableStmt *stmt,
 				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 				 errmsg("table access method \"%s\" does not exist",
 						ICEBERG_TABLE_AM_NAME),
-				 errhint("CREATE ICEBERG TABLE requires an extension that provides the \"%s\" table access method.",
+				 errhint("CREATE LAKE TABLE ... USING ICEBERG requires an extension that provides the \"%s\" table access method.",
 						 ICEBERG_TABLE_AM_NAME)));
 
-	/*
-	 * The grammar accepts a USING clause, but an iceberg table must use the
-	 * iceberg access method: a lake table created with another AM would get
-	 * pg_lake_table metadata without lake-table semantics (and DROP TABLE,
-	 * which detects lake tables by their AM, would leave that metadata
-	 * behind as an orphaned row).
-	 */
-	if (stmt->base.accessMethod != NULL &&
-		strcmp(stmt->base.accessMethod, ICEBERG_TABLE_AM_NAME) != 0)
-		ereport(ERROR,
-				(errcode(ERRCODE_INVALID_TABLE_DEFINITION),
-				 errmsg("access method \"%s\" is not supported for iceberg tables",
-						stmt->base.accessMethod),
-				 errhint("Omit the USING clause; CREATE ICEBERG TABLE always uses the \"%s\" access method.",
-						 ICEBERG_TABLE_AM_NAME)));
-
-	/* Validate table type */
+	/* Validate the table format named in the USING clause */
 	validate_table_type(stmt->table_type);
 
 	/*

@@ -1,41 +1,41 @@
 <!--
-doc/src/sgml/ref/drop_iceberg_table.sgml
+doc/src/sgml/ref/drop_lake_table.sgml
 PostgreSQL documentation
 -->
 
-<refentry id="sql-dropicebergtable">
- <indexterm zone="sql-dropicebergtable">
-  <primary>DROP ICEBERG TABLE</primary>
+<refentry id="sql-droplaketable">
+ <indexterm zone="sql-droplaketable">
+  <primary>DROP LAKE TABLE</primary>
  </indexterm>
 
  <refmeta>
-  <refentrytitle>DROP ICEBERG TABLE</refentrytitle>
+  <refentrytitle>DROP LAKE TABLE</refentrytitle>
   <manvolnum>7</manvolnum>
   <refmiscinfo>SQL - Language Statements</refmiscinfo>
  </refmeta>
 
  <refnamediv>
-  <refname>DROP ICEBERG TABLE</refname>
-  <refpurpose>remove an Iceberg table</refpurpose>
+  <refname>DROP LAKE TABLE</refname>
+  <refpurpose>remove a lake table</refpurpose>
  </refnamediv>
 
  <refsynopsisdiv>
 <synopsis>
-DROP ICEBERG TABLE [ IF EXISTS ] <replaceable class="parameter">name</replaceable> [, ...] [ CASCADE | RESTRICT ]
+DROP LAKE TABLE [ IF EXISTS ] <replaceable class="parameter">name</replaceable> [, ...] [ CASCADE | RESTRICT ]
 </synopsis>
  </refsynopsisdiv>
 
- <refsect1 id="sql-dropicebergtable-description">
+ <refsect1 id="sql-droplaketable-description">
   <title>Description</title>
 
   <para>
-   <command>DROP ICEBERG TABLE</command> removes one or more Iceberg tables.
-   Only the owner of an Iceberg table can remove it.
+   <command>DROP LAKE TABLE</command> removes one or more lake tables.
+   Only the owner of a lake table can remove it.
   </para>
 
   <para>
-   This command only drops Iceberg tables.  Plain
-   <command>DROP TABLE</command> rejects Iceberg tables and is used for
+   This command only drops lake tables.  Plain
+   <command>DROP TABLE</command> rejects lake tables and is used for
    ordinary tables.
   </para>
  </refsect1>
@@ -48,7 +48,7 @@ DROP ICEBERG TABLE [ IF EXISTS ] <replaceable class="parameter">name</replaceabl
     <term><literal>IF EXISTS</literal></term>
     <listitem>
      <para>
-      Do not throw an error if the Iceberg table does not exist.  A notice is
+      Do not throw an error if the lake table does not exist.  A notice is
       issued in this case.
      </para>
     </listitem>
@@ -58,7 +58,7 @@ DROP ICEBERG TABLE [ IF EXISTS ] <replaceable class="parameter">name</replaceabl
     <term><replaceable class="parameter">name</replaceable></term>
     <listitem>
      <para>
-      The name, optionally schema-qualified, of an Iceberg table to drop.
+      The name, optionally schema-qualified, of a lake table to drop.
      </para>
     </listitem>
    </varlistentry>
@@ -67,7 +67,7 @@ DROP ICEBERG TABLE [ IF EXISTS ] <replaceable class="parameter">name</replaceabl
     <term><literal>CASCADE</literal></term>
     <listitem>
      <para>
-      Automatically drop objects that depend on the Iceberg table, and in
+      Automatically drop objects that depend on the lake table, and in
       turn all objects that depend on those objects (see <xref
       linkend="ddl-depend"/>).
      </para>
@@ -78,7 +78,7 @@ DROP ICEBERG TABLE [ IF EXISTS ] <replaceable class="parameter">name</replaceabl
     <term><literal>RESTRICT</literal></term>
     <listitem>
      <para>
-      Refuse to drop the Iceberg table if any objects depend on it.  This is
+      Refuse to drop the lake table if any objects depend on it.  This is
       the default.
      </para>
     </listitem>
@@ -86,21 +86,21 @@ DROP ICEBERG TABLE [ IF EXISTS ] <replaceable class="parameter">name</replaceabl
   </variablelist>
  </refsect1>
 
- <refsect1 id="sql-dropicebergtable-examples">
+ <refsect1 id="sql-droplaketable-examples">
   <title>Examples</title>
 
   <para>
-   Drop the Iceberg table <literal>t</literal>:
+   Drop the lake table <literal>t</literal>:
 <programlisting>
-DROP ICEBERG TABLE t;
+DROP LAKE TABLE t;
 </programlisting></para>
  </refsect1>
 
- <refsect1 id="sql-dropicebergtable-compatibility">
+ <refsect1 id="sql-droplaketable-compatibility">
   <title>Compatibility</title>
 
   <para>
-   <command>DROP ICEBERG TABLE</command> is an
+   <command>DROP LAKE TABLE</command> is an
    <productname>Apache Cloudberry</productname> extension and is not defined in
    the <acronym>SQL</acronym> standard.
   </para>
@@ -110,7 +110,7 @@ DROP ICEBERG TABLE t;
   <title>See Also</title>
 
   <simplelist type="inline">
-   <member><xref linkend="sql-createicebergtable"/></member>
+   <member><xref linkend="sql-createlaketable"/></member>
    <member><xref linkend="sql-droptable"/></member>
    <member><xref linkend="sql-dropforeigncatalog"/></member>
    <member><xref linkend="sql-dropforeignvolume"/></member>

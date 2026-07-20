@@ -126,7 +126,7 @@ CREATE FOREIGN VOLUME s3_vol SERVER s3_srv OPTIONS (path 's3://bucket/prefix');
 
   <simplelist type="inline">
    <member><xref linkend="sql-dropforeignvolume"/></member>
-   <member><xref linkend="sql-createicebergtable"/></member>
+   <member><xref linkend="sql-createlaketable"/></member>
    <member><xref linkend="sql-createserver"/></member>
   </simplelist>
  </refsect1>

@@ -832,7 +832,7 @@ static void check_expressions_in_partition_key(PartitionSpec *spec, core_yyscan_
 
 	HANDLER HAVING HEADER_P HOLD HOUR_P
 
-	ICEBERG IDENTITY_P IF_P ILIKE IMMEDIATE IMMUTABLE IMPLICIT_P IMPORT_P IN_P INCLUDE
+	IDENTITY_P IF_P ILIKE IMMEDIATE IMMUTABLE IMPLICIT_P IMPORT_P IN_P INCLUDE
 	INCLUDING INCREMENT INCREMENTAL INDENT INDEX INDEXES INHERIT INHERITS INITIALLY INLINE_P
 	INNER_P INOUT INPUT_P INSENSITIVE INSERT INSTEAD INT_P INTEGER
 	INTERSECT INTERVAL INTO INVOKER IS ISNULL ISOLATION
@@ -841,7 +841,7 @@ static void check_expressions_in_partition_key(PartitionSpec *spec, core_yyscan_
 
 	KEY KEYS
 
-	LABEL LANGUAGE LARGE_P LAST_P LATERAL_P
+	LABEL LAKE LANGUAGE LARGE_P LAST_P LATERAL_P
 	LEADING LEAKPROOF LEAST LEFT LEVEL LIKE LIMIT LISTEN LOAD LOCAL
 	LOCALTIME LOCALTIMESTAMP LOCATION LOCK_P LOCKED LOCUS LOGGED
 
@@ -9169,21 +9169,30 @@ OptForeignVolume:
 /*****************************************************************************
  *
  *		QUERY:
- *             CREATE ICEBERG TABLE relname (columns)
- *                 [FOREIGN CATALOG cat] [FOREIGN VOLUME vol] OPTIONS (...)
+ *             CREATE LAKE TABLE relname (columns) USING format
+ *                 [CATALOG cat] [VOLUME vol] OPTIONS (...)
  *
  * A lake table stores its data on external object storage; fragments are
  * not hash-distributed across segments, so the distribution policy is
- * forced to RANDOM to keep UPDATE/DELETE correct.
+ * forced to RANDOM to keep UPDATE/DELETE correct.  The USING clause names
+ * the table format (currently only ICEBERG); the format also determines the
+ * table access method the relation is created with.
  *
  *****************************************************************************/
 
 CreateLakeTableStmt:
-			CREATE ICEBERG TABLE qualified_name '(' OptTableElementList ')'
+			CREATE LAKE TABLE qualified_name '(' OptTableElementList ')'
+			USING name
 			OptForeignCatalog OptForeignVolume create_generic_options
-			OptDistributedBy table_access_method_clause
+			OptDistributedBy
 				{
 					CreateLakeTableStmt *n = makeNode(CreateLakeTableStmt);
+					char	   *table_type = pstrdup($9);
+					char	   *p;
+
+					for (p = table_type; *p; p++)
+						*p = pg_toupper((unsigned char) *p);
+
 					$4->relpersistence = RELPERSISTENCE_PERMANENT;
 					n->base.relation = $4;
 					n->base.tableElts = $6;
@@ -9193,14 +9202,14 @@ CreateLakeTableStmt:
 					n->base.options = NIL;
 					n->base.oncommit = ONCOMMIT_NOOP;
 					n->base.tablespacename = NULL;
-					n->base.accessMethod = $12 ? $12 : pstrdup("iceberg");
+					n->base.accessMethod = $9;
 					n->base.if_not_exists = false;
 					n->base.relKind = RELKIND_RELATION;
-					n->table_type = pstrdup("ICEBERG");
-					n->foreign_catalog = $8 ? pstrdup($8) : NULL;
-					n->foreign_volume = $9 ? pstrdup($9) : NULL;
-					n->options = $10;
-					if ($11 != NULL)
+					n->table_type = table_type;
+					n->foreign_catalog = $10 ? pstrdup($10) : NULL;
+					n->foreign_volume = $11 ? pstrdup($11) : NULL;
+					n->options = $12;
+					if ($13 != NULL)
 						ereport(WARNING,
 								(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 								 errmsg("DISTRIBUTED clause has no effect for lake tables, using DISTRIBUTED RANDOMLY")));
@@ -9210,11 +9219,18 @@ CreateLakeTableStmt:
 					n->base.distributedBy->numsegments = -1;
 					$$ = (Node *) n;
 				}
-			| CREATE ICEBERG TABLE IF_P NOT EXISTS qualified_name '(' OptTableElementList ')'
+			| CREATE LAKE TABLE IF_P NOT EXISTS qualified_name '(' OptTableElementList ')'
+			USING name
 			OptForeignCatalog OptForeignVolume create_generic_options
-			OptDistributedBy table_access_method_clause
+			OptDistributedBy
 				{
 					CreateLakeTableStmt *n = makeNode(CreateLakeTableStmt);
+					char	   *table_type = pstrdup($12);
+					char	   *p;
+
+					for (p = table_type; *p; p++)
+						*p = pg_toupper((unsigned char) *p);
+
 					$7->relpersistence = RELPERSISTENCE_PERMANENT;
 					n->base.relation = $7;
 					n->base.tableElts = $9;
@@ -9224,14 +9240,14 @@ CreateLakeTableStmt:
 					n->base.options = NIL;
 					n->base.oncommit = ONCOMMIT_NOOP;
 					n->base.tablespacename = NULL;
-					n->base.accessMethod = $15 ? $15 : pstrdup("iceberg");
+					n->base.accessMethod = $12;
 					n->base.if_not_exists = true;
 					n->base.relKind = RELKIND_RELATION;
-					n->table_type = pstrdup("ICEBERG");
-					n->foreign_catalog = $11 ? pstrdup($11) : NULL;
-					n->foreign_volume = $12 ? pstrdup($12) : NULL;
-					n->options = $13;
-					if ($14 != NULL)
+					n->table_type = table_type;
+					n->foreign_catalog = $13 ? pstrdup($13) : NULL;
+					n->foreign_volume = $14 ? pstrdup($14) : NULL;
+					n->options = $15;
+					if ($16 != NULL)
 						ereport(WARNING,
 								(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 								 errmsg("DISTRIBUTED clause has no effect for lake tables, using DISTRIBUTED RANDOMLY")));
@@ -10532,8 +10548,8 @@ DropStmt:	DROP object_type_any_name IF_P EXISTS any_name_list opt_drop_behavior
 					n->isdynamic = true;
 					$$ = (Node *)n;
 				}
-/* DROP ICEBERG TABLE */
-			| DROP ICEBERG TABLE IF_P EXISTS any_name_list opt_drop_behavior
+/* DROP LAKE TABLE */
+			| DROP LAKE TABLE IF_P EXISTS any_name_list opt_drop_behavior
 				{
 					DropStmt *n = makeNode(DropStmt);
 					n->removeType = OBJECT_TABLE;
@@ -10545,7 +10561,7 @@ DropStmt:	DROP object_type_any_name IF_P EXISTS any_name_list opt_drop_behavior
 					n->isiceberg = true;
 					$$ = (Node *)n;
 				}
-			| DROP ICEBERG TABLE any_name_list opt_drop_behavior
+			| DROP LAKE TABLE any_name_list opt_drop_behavior
 				{
 					DropStmt *n = makeNode(DropStmt);
 					n->removeType = OBJECT_TABLE;
@@ -21352,7 +21368,6 @@ unreserved_keyword:
 			| HOLD
 			| HOST
 			| HOUR_P
-			| ICEBERG
 			| IDENTITY_P
 			| IF_P
 			| IGNORE_P
@@ -21383,6 +21398,7 @@ unreserved_keyword:
 			| KEY
 			| KEYS
 			| LABEL
+			| LAKE
 			| LANGUAGE
 			| LARGE_P
 			| LAST_P
@@ -22341,7 +22357,6 @@ bare_label_keyword:
 			| HEADER_P
 			| HOLD
 			| HOST
-			| ICEBERG
 			| IDENTITY_P
 			| IF_P
 			| IGNORE_P
@@ -22386,6 +22401,7 @@ bare_label_keyword:
 			| KEY
 			| KEYS
 			| LABEL
+			| LAKE
 			| LANGUAGE
 			| LARGE_P
 			| LAST_P

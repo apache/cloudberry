@@ -1,45 +1,49 @@
 <!--
-doc/src/sgml/ref/create_iceberg_table.sgml
+doc/src/sgml/ref/create_lake_table.sgml
 PostgreSQL documentation
 -->
 
-<refentry id="sql-createicebergtable">
- <indexterm zone="sql-createicebergtable">
-  <primary>CREATE ICEBERG TABLE</primary>
+<refentry id="sql-createlaketable">
+ <indexterm zone="sql-createlaketable">
+  <primary>CREATE LAKE TABLE</primary>
  </indexterm>
 
  <refmeta>
-  <refentrytitle>CREATE ICEBERG TABLE</refentrytitle>
+  <refentrytitle>CREATE LAKE TABLE</refentrytitle>
   <manvolnum>7</manvolnum>
   <refmiscinfo>SQL - Language Statements</refmiscinfo>
  </refmeta>
 
  <refnamediv>
-  <refname>CREATE ICEBERG TABLE</refname>
-  <refpurpose>define a new Iceberg table</refpurpose>
+  <refname>CREATE LAKE TABLE</refname>
+  <refpurpose>define a new lake table</refpurpose>
  </refnamediv>
 
  <refsynopsisdiv>
 <synopsis>
-CREATE ICEBERG TABLE [ IF NOT EXISTS ] <replaceable class="parameter">table_name</replaceable> ( [
+CREATE LAKE TABLE [ IF NOT EXISTS ] <replaceable class="parameter">table_name</replaceable> ( [
     <replaceable class="parameter">column_name</replaceable> <replaceable class="parameter">data_type</replaceable> [, ... ]
   ] )
+    USING <replaceable class="parameter">format</replaceable>
     [ CATALOG <replaceable class="parameter">catalog_name</replaceable> ]
     [ VOLUME <replaceable class="parameter">volume_name</replaceable> ]
     [ OPTIONS ( <replaceable class="parameter">option</replaceable> '<replaceable class="parameter">value</replaceable>' [, ...] ) ]
-    [ DISTRIBUTED BY ( <replaceable class="parameter">column</replaceable> [, ... ] ) | DISTRIBUTED RANDOMLY | DISTRIBUTED REPLICATED ]
-    [ USING <replaceable class="parameter">access_method</replaceable> ]
 </synopsis>
  </refsynopsisdiv>
 
- <refsect1 id="sql-createicebergtable-description">
+ <refsect1 id="sql-createlaketable-description">
   <title>Description</title>
 
   <para>
-   <command>CREATE ICEBERG TABLE</command> defines a new Iceberg table.  The
-   parenthesized element list is required, but it can be empty.  The command
-   requires an extension that provides the <literal>iceberg</literal> table
-   access method.
+   <command>CREATE LAKE TABLE</command> defines a new lake table: a table whose
+   data lives in external object storage and is described by an open table
+   format.  The parenthesized element list is required, but it can be empty.
+  </para>
+
+  <para>
+   The <literal>USING</literal> clause names the table format.  The only
+   supported format is <literal>ICEBERG</literal>, which requires an extension
+   that provides the <literal>iceberg</literal> table access method.
   </para>
 
   <para>
@@ -50,11 +54,9 @@ CREATE ICEBERG TABLE [ IF NOT EXISTS ] <replaceable class="parameter">table_name
   </para>
 
   <para>
-   Iceberg tables are always distributed randomly.  A
-   <literal>DISTRIBUTED</literal> clause is accepted, but a warning is issued
-   and <literal>DISTRIBUTED RANDOMLY</literal> is used.  The optional
-   <literal>USING</literal> clause accepts only <literal>iceberg</literal> and
-   is normally omitted.
+   Lake tables are always distributed randomly, because their fragments are not
+   hash-distributed across segments.  A <literal>DISTRIBUTED</literal> clause,
+   if given, is accepted with a warning and has no effect.
   </para>
  </refsect1>
 
@@ -76,8 +78,7 @@ CREATE ICEBERG TABLE [ IF NOT EXISTS ] <replaceable class="parameter">table_name
     <term><replaceable class="parameter">table_name</replaceable></term>
     <listitem>
      <para>
-      The name, optionally schema-qualified, of the Iceberg table to be
-      created.
+      The name, optionally schema-qualified, of the lake table to be created.
      </para>
     </listitem>
    </varlistentry>
@@ -96,6 +97,16 @@ CREATE ICEBERG TABLE [ IF NOT EXISTS ] <replaceable class="parameter">table_name
     <listitem>
      <para>
       The data type of a column in the new table.
+     </para>
+    </listitem>
+   </varlistentry>
+
+   <varlistentry>
+    <term><replaceable class="parameter">format</replaceable></term>
+    <listitem>
+     <para>
+      The lake table format.  The only accepted value is
+      <literal>ICEBERG</literal>.
      </para>
     </listitem>
    </varlistentry>
@@ -124,7 +135,7 @@ CREATE ICEBERG TABLE [ IF NOT EXISTS ] <replaceable class="parameter">table_name
     <term><replaceable class="parameter">option</replaceable></term>
     <listitem>
      <para>
-      The name of an option for the Iceberg table.
+      The name of an option for the lake table.
      </para>
     </listitem>
    </varlistentry>
@@ -133,48 +144,28 @@ CREATE ICEBERG TABLE [ IF NOT EXISTS ] <replaceable class="parameter">table_name
     <term><replaceable class="parameter">value</replaceable></term>
     <listitem>
      <para>
-      The value of an Iceberg table option.
-     </para>
-    </listitem>
-   </varlistentry>
-
-   <varlistentry>
-    <term><replaceable class="parameter">column</replaceable></term>
-    <listitem>
-     <para>
-      A column named in a <literal>DISTRIBUTED BY</literal> clause.  The clause
-      is accepted with a warning; the table is distributed randomly instead.
-     </para>
-    </listitem>
-   </varlistentry>
-
-   <varlistentry>
-    <term><replaceable class="parameter">access_method</replaceable></term>
-    <listitem>
-     <para>
-      The table access method.  The only accepted value is
-      <literal>iceberg</literal>.
+      The value of a lake table option.
      </para>
     </listitem>
    </varlistentry>
   </variablelist>
  </refsect1>
 
- <refsect1 id="sql-createicebergtable-examples">
+ <refsect1 id="sql-createlaketable-examples">
   <title>Examples</title>
 
   <para>
-   Create an Iceberg table using an explicit foreign catalog and volume:
+   Create an Iceberg lake table using an explicit foreign catalog and volume:
 <programlisting>
-CREATE ICEBERG TABLE t (a int, b text) CATALOG hive_cat VOLUME s3_vol OPTIONS (fileformat 'parquet');
+CREATE LAKE TABLE t (a int, b text) USING ICEBERG CATALOG hive_cat VOLUME s3_vol OPTIONS (fileformat 'parquet');
 </programlisting></para>
  </refsect1>
 
- <refsect1 id="sql-createicebergtable-compatibility">
+ <refsect1 id="sql-createlaketable-compatibility">
   <title>Compatibility</title>
 
   <para>
-   <command>CREATE ICEBERG TABLE</command> is an
+   <command>CREATE LAKE TABLE</command> is an
    <productname>Apache Cloudberry</productname> extension and is not defined in
    the <acronym>SQL</acronym> standard.
   </para>
@@ -184,7 +175,7 @@ CREATE ICEBERG TABLE t (a int, b text) CATALOG hive_cat VOLUME s3_vol OPTIONS (f
   <title>See Also</title>
 
   <simplelist type="inline">
-   <member><xref linkend="sql-dropicebergtable"/></member>
+   <member><xref linkend="sql-droplaketable"/></member>
    <member><xref linkend="sql-createforeigncatalog"/></member>
    <member><xref linkend="sql-createforeignvolume"/></member>
    <member><xref linkend="sql-createtable"/></member>

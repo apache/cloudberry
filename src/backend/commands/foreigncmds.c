@@ -1054,7 +1054,7 @@ CreateForeignCatalog(CreateForeignCatalogStmt *stmt)
 	/*
 	 * Check that there is no other foreign catalog by this name.  Catalog
 	 * names are global (like server names): every reference syntax (DROP
-	 * CATALOG, the CATALOG clause of CREATE ICEBERG TABLE, GUCs) identifies
+	 * CATALOG, the CATALOG clause of CREATE LAKE TABLE, GUCs) identifies
 	 * a catalog by bare name, so the name alone must be unique.  If there is
 	 * one, do nothing if IF NOT EXISTS was specified.
 	 */
@@ -1195,7 +1195,7 @@ CreateForeignVolume(CreateForeignVolumeStmt *stmt)
 	/*
 	 * Check that there is no other foreign volume by this name.  Volume
 	 * names are global (like server names): every reference syntax (DROP
-	 * VOLUME, the VOLUME clause of CREATE ICEBERG TABLE, GUCs) identifies
+	 * VOLUME, the VOLUME clause of CREATE LAKE TABLE, GUCs) identifies
 	 * a volume by bare name, so the name alone must be unique.  If there is
 	 * one, do nothing if IF NOT EXISTS was specified.
 	 */
