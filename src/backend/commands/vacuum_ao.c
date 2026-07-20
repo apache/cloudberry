@@ -317,12 +317,12 @@ ao_vacuum_rel_post_cleanup(Relation onerel, VacuumParams *params, BufferAccessSt
 						false,
 						true /* isvacuum */);
 
-	/* report results to the stats collector, too */
+	/* Update estimates/counts once; phase timings are reported separately. */
 	pgstat_report_vacuum(RelationGetRelid(onerel),
 						 onerel->rd_rel->relisshared,
 						 reltuples,
 						 deadtuples,
-						 vacrelstats->starttime);
+						 0, 0);
 
 	/*
 	 * Remember what is left behind for the vacuum statistics, which
@@ -436,8 +436,6 @@ init_vacrelstats()
 
 	old_context = MemoryContextSwitchTo(TopMemoryContext);
 	vacrelstats = (AOVacuumRelStats *) palloc0(sizeof(AOVacuumRelStats));
-	/* Time the run from its first phase in this worker. */
-	vacrelstats->starttime = GetCurrentTimestamp();
 	MemoryContextSwitchTo(old_context);
 
 	return vacrelstats;
@@ -483,11 +481,8 @@ ao_vacuum_rel(Relation rel, VacuumParams *params, BufferAccessStrategy bstrategy
 	/*
 	 * Do the actual work --- either FULL or "lazy" vacuum
 	 *
-	 * Each phase is timed for the vacuum statistics, which are reported for
-	 * the relation once the last phase is done.  The phases run in separate
-	 * transactions and may even end up in different vacuum workers; when that
-	 * happens vacrelstats is reset above, and the statistics report describes
-	 * the phases this worker did.
+	 * Report each completed phase immediately, so a replacement worker does
+	 * not lose earlier timings.  Local totals are used only for logging.
 	 */
 	INSTR_TIME_SET_CURRENT(phasestart);
 	startdelaytime = VacuumDelayTime;
@@ -504,6 +499,12 @@ ao_vacuum_rel(Relation rel, VacuumParams *params, BufferAccessStrategy bstrategy
 
 	INSTR_TIME_SET_CURRENT(phaseend);
 	INSTR_TIME_SUBTRACT(phaseend, phasestart);
+	if (ao_vacuum_phase != 0)
+		pgstat_report_vacuum_time(rel,
+								 (PgStat_Counter) INSTR_TIME_GET_MICROSEC(phaseend),
+								 VacuumDelayTime - startdelaytime,
+								 IsAutoVacuumWorkerProcess(), false);
+
 	vacrelstats->vacuum_time += (int64) INSTR_TIME_GET_MICROSEC(phaseend);
 	vacrelstats->delay_time += VacuumDelayTime - startdelaytime;
 
@@ -711,8 +712,10 @@ vacuum_appendonly_index(Relation indexRelation,
 
 	INSTR_TIME_SET_CURRENT(endtime);
 	INSTR_TIME_SUBTRACT(endtime, starttime);
-
-
+	pgstat_report_vacuum_time(indexRelation,
+							 (PgStat_Counter) INSTR_TIME_GET_MICROSEC(endtime),
+							 VacuumDelayTime - startdelaytime,
+							 IsAutoVacuumWorkerProcess(), true);
 	if (!stats)
 		return;
 
@@ -885,7 +888,10 @@ scan_index(Relation indrel, Relation aorel, int elevel, BufferAccessStrategy vac
 
 	INSTR_TIME_SET_CURRENT(endtime);
 	INSTR_TIME_SUBTRACT(endtime, starttime);
-
+	pgstat_report_vacuum_time(indrel,
+							 (PgStat_Counter) INSTR_TIME_GET_MICROSEC(endtime),
+							 VacuumDelayTime - startdelaytime,
+							 IsAutoVacuumWorkerProcess(), true);
 	if (!stats)
 		return;
 

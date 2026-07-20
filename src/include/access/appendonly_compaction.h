@@ -13,7 +13,6 @@
 #ifndef APPENDONLY_COMPACTION_H
 #define APPENDONLY_COMPACTION_H
 
-#include "datatype/timestamp.h"
 #include "nodes/pg_list.h"
 #include "access/appendonly_visimap.h"
 #include "utils/rel.h"
@@ -29,12 +28,11 @@
  */
 typedef struct AOVacuumRelStats
 {
-	TimestampTz starttime; /* start of the first vacuum phase in this worker */
 	int64	nbytes_truncated;	/* current # of bytes truncated from segment file */
 	int64	num_dead_tuples;	/* current # of dead tuples */
 	int		num_index_vacuumed; /* current # of indexes been vacuumed */
 
-	/* for the vacuum statistics, accumulated over all the phases */
+	/* Local log totals; collector timings are reported per phase. */
 	int64	vacuum_time;		/* time spent in the phases, in microseconds */
 	int64	delay_time;			/* of which the cost-based vacuum delay */
 	int64	dead_tuples_left;	/* tuples the post-cleanup found still hidden */
