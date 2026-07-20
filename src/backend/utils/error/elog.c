@@ -1648,6 +1648,23 @@ geterrcode(void)
 }
 
 /*
+ * geterrlevel --- return the elevel of the error currently being constructed
+ *
+ * This is only intended for use in error callback subroutines, where it lets
+ * a callback tell a genuine error apart from a lower-severity report.
+ */
+int
+geterrlevel(void)
+{
+	ErrorData  *edata = &errordata[errordata_stack_depth];
+
+	/* we don't bother incrementing recursion_depth */
+	CHECK_STACK_DEPTH();
+
+	return edata->elevel;
+}
+
+/*
  * geterrposition --- return the currently set error position (0 if none)
  *
  * This is only intended for use in error callback subroutines, since there
