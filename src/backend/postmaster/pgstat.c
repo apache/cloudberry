@@ -258,6 +258,10 @@ static PgStat_SubXactStatus *pgStatXactStack = NULL;
 
 static int	pgStatXactCommit = 0;
 static int	pgStatXactRollback = 0;
+
+/* Only incremented in error callbacks; sent by pgstat_report_stat(). */
+static PgStat_Counter pgStatVacuumErrors = 0;
+static PgStat_Counter pgStatSharedVacuumErrors = 0;
 PgStat_Counter pgStatBlockReadTime = 0;
 PgStat_Counter pgStatBlockWriteTime = 0;
 static PgStat_Counter pgLastSessionReportTime = 0;
@@ -893,6 +897,7 @@ pgstat_report_stat(bool disconnect)
 	 */
 	if ((pgStatTabList == NULL || pgStatTabList->tsa_used == 0) &&
 		pgStatXactCommit == 0 && pgStatXactRollback == 0 &&
+		pgStatVacuumErrors == 0 && pgStatSharedVacuumErrors == 0 &&
 		pgWalUsage.wal_records == prevWalUsage.wal_records &&
 		WalStats.m_wal_write == 0 && WalStats.m_wal_sync == 0 &&
 		!have_function_stats && !disconnect)
@@ -975,13 +980,14 @@ pgstat_report_stat(bool disconnect)
 
 	/*
 	 * Send partial messages.  Make sure that any pending xact commit/abort
-	 * and connection stats get counted, even if there are no table stats to
-	 * send.
+	 * counts, connection stats and interrupted vacuums get counted, even if
+	 * there are no table stats to send.
 	 */
 	if (regular_msg.m_nentries > 0 ||
-		pgStatXactCommit > 0 || pgStatXactRollback > 0 || disconnect)
+		pgStatXactCommit > 0 || pgStatXactRollback > 0 ||
+		pgStatVacuumErrors > 0 || disconnect)
 		pgstat_send_tabstat(&regular_msg, now);
-	if (shared_msg.m_nentries > 0)
+	if (shared_msg.m_nentries > 0 || pgStatSharedVacuumErrors > 0)
 		pgstat_send_tabstat(&shared_msg, now);
 
 	/* Now, send function statistics */
@@ -1008,13 +1014,15 @@ pgstat_send_tabstat(PgStat_MsgTabstat *tsmsg, TimestampTz now)
 		return;
 
 	/*
-	 * Report and reset accumulated xact commit/rollback and I/O timings
-	 * whenever we send a normal tabstat message
+	 * Report and reset accumulated xact commit/rollback, I/O timings and
+	 * interrupted vacuums whenever we send a normal tabstat message.
 	 */
 	if (OidIsValid(tsmsg->m_databaseid))
 	{
 		tsmsg->m_xact_commit = pgStatXactCommit;
 		tsmsg->m_xact_rollback = pgStatXactRollback;
+		tsmsg->m_vacuum_interrupt_count = pgStatVacuumErrors;
+		pgStatVacuumErrors = 0;
 		tsmsg->m_block_read_time = pgStatBlockReadTime;
 		tsmsg->m_block_write_time = pgStatBlockWriteTime;
 
@@ -1050,6 +1058,8 @@ pgstat_send_tabstat(PgStat_MsgTabstat *tsmsg, TimestampTz now)
 	{
 		tsmsg->m_xact_commit = 0;
 		tsmsg->m_xact_rollback = 0;
+		tsmsg->m_vacuum_interrupt_count = pgStatSharedVacuumErrors;
+		pgStatSharedVacuumErrors = 0;
 		tsmsg->m_block_read_time = 0;
 		tsmsg->m_block_write_time = 0;
 		tsmsg->m_session_time = 0;
@@ -1610,6 +1620,25 @@ pgstat_report_vacuum(Oid tableoid, bool shared,
 	msg.m_live_tuples = livetuples;
 	msg.m_dead_tuples = deadtuples;
 	pgstat_send(&msg, sizeof(msg));
+}
+
+/*
+ * Count a heap vacuum interrupted by ERROR.  The caller is an error context
+ * callback, possibly running while a lock is held.  Do not allocate memory,
+ * acquire locks or send messages here.  Like transaction counts, these local
+ * counters are sent by pgstat_report_stat() outside a transaction.  Shared
+ * relations belong to the InvalidOid database entry.
+ */
+void
+pgstat_count_vacuum_error(bool shared)
+{
+	if (!pgstat_track_counts)
+		return;
+
+	if (shared)
+		pgStatSharedVacuumErrors++;
+	else
+		pgStatVacuumErrors++;
 }
 
 /* Report an index pass without changing table estimates or vacuum counts. */
@@ -3853,6 +3882,8 @@ reset_dbentry_counters(PgStat_StatDBEntry *dbentry)
 	dbentry->total_vacuum_delay_time = 0;
 	dbentry->total_autovacuum_delay_time = 0;
 	dbentry->vacuum_failsafe_count = 0;
+	dbentry->vacuum_interrupt_count = 0;
+
 	dbentry->n_frozen_page_marks_cleared = 0;
 	dbentry->n_visible_page_marks_cleared = 0;
 
@@ -5274,6 +5305,7 @@ pgstat_recv_tabstat(PgStat_MsgTabstat *msg, int len)
 	 */
 	dbentry->n_xact_commit += (PgStat_Counter) (msg->m_xact_commit);
 	dbentry->n_xact_rollback += (PgStat_Counter) (msg->m_xact_rollback);
+	dbentry->vacuum_interrupt_count += msg->m_vacuum_interrupt_count;
 	dbentry->n_block_read_time += msg->m_block_read_time;
 	dbentry->n_block_write_time += msg->m_block_write_time;
 
