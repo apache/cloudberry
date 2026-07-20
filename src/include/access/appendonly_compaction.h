@@ -36,6 +36,7 @@ typedef struct AOVacuumRelStats
 
 	/* for the vacuum statistics, accumulated over all the phases */
 	int64	vacuum_time;		/* time spent in the phases, in microseconds */
+	int64	phase_start_delay; /* counter at the start of the current phase */
 	int64	delay_time;			/* of which the cost-based vacuum delay */
 	int64	dead_tuples_left;	/* tuples the post-cleanup found still hidden */
 } AOVacuumRelStats;
