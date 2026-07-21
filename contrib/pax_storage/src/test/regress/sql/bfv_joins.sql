@@ -604,6 +604,26 @@ ANALYZE ext_stats_tbl;
 
 explain SELECT 1 FROM ext_stats_tbl t11 FULL JOIN ext_stats_tbl t12 ON t12.c2;
 
+-- ORCA bug: a boolean ON-clause of a LEFT JOIN must not be pushed down as a
+-- scan filter on the outer relation. When the same outer relation feeds
+-- multiple LEFT JOINs whose ON-clauses use the same boolean column AND there
+-- is a WHERE on top, the normalizer used to push the ON-pred onto the LOJ's
+-- own outer child, discarding outer rows that should be null-padded.
+create table loj_bool_x(c1 boolean);
+create table loj_bool_y1(c1 boolean);
+create table loj_bool_y2(c1 boolean);
+insert into loj_bool_x values (true), (false), (false);
+insert into loj_bool_y1 values (true);
+insert into loj_bool_y2 values (true);
+
+-- Expect 2 rows: the two FALSE rows in loj_bool_x, with NULL from loj_bool_y2.
+-- The plan must NOT contain "Filter: c1" on Seq Scan of loj_bool_x.
+select loj_bool_x.c1, loj_bool_y2.c1 as y2c1
+  from loj_bool_x left join loj_bool_y1 on loj_bool_x.c1
+                  left join loj_bool_y2 on loj_bool_x.c1
+ where loj_bool_y2.c1 is null
+ order by 1, 2;
+
 -- Clean up. None of the objects we create are very interesting to keep around.
 reset search_path;
 set client_min_messages='warning';
