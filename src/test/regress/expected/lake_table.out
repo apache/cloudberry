@@ -30,14 +30,12 @@ Indexes:
     "pg_foreign_volume_name_index" UNIQUE CONSTRAINT, btree (fvname)
 
 \d+ pg_lake_table
-                                  Table "pg_catalog.pg_lake_table"
-      Column       |  Type  | Collation | Nullable | Default | Storage  | Stats target | Description 
--------------------+--------+-----------+----------+---------+----------+--------------+-------------
- ltrelid           | oid    |           | not null |         | plain    |              | 
- ltforeign_catalog | oid    |           | not null |         | plain    |              | 
- ltforeign_volume  | oid    |           | not null |         | plain    |              | 
- lttable_type      | text   | C         |          |         | extended |              | 
- ltoptions         | text[] | C         |          |         | extended |              | 
+                                 Table "pg_catalog.pg_lake_table"
+      Column       | Type | Collation | Nullable | Default | Storage | Stats target | Description 
+-------------------+------+-----------+----------+---------+---------+--------------+-------------
+ ltrelid           | oid  |           | not null |         | plain   |              | 
+ ltforeign_catalog | oid  |           | not null |         | plain   |              | 
+ ltforeign_volume  | oid  |           | not null |         | plain   |              | 
 Indexes:
     "pg_lake_table_relid_index" PRIMARY KEY, btree (ltrelid)
 
@@ -130,22 +128,19 @@ ERROR:  invalid value for parameter "iceberg_default_volume": "no_such_volume"
 DETAIL:  Foreign volume "no_such_volume" does not exist.
 -- Simulate a datalake provider with a heap-backed iceberg AM
 CREATE ACCESS METHOD iceberg TYPE TABLE HANDLER heap_tableam_handler;
--- CREATE LAKE TABLE with explicit catalog and volume
-CREATE LAKE TABLE lake_test_t1 (a int, b text) USING ICEBERG CATALOG lake_test_cat VOLUME lake_test_vol OPTIONS (fileformat 'parquet');
-SELECT c.relname, lt.lttable_type, lt.ltoptions, fc.fcname, fv.fvname
+-- CREATE LAKE TABLE with explicit catalog and volume.  The format is the
+-- table's access method (pg_class.relam) and its options are the relation's
+-- reloptions; pg_lake_table records only the catalog/volume binding.
+CREATE LAKE TABLE lake_test_t1 (a int, b text) USING ICEBERG CATALOG lake_test_cat VOLUME lake_test_vol;
+SELECT c.relname, am.amname, c.reloptions, fc.fcname, fv.fvname
   FROM pg_lake_table lt
   JOIN pg_class c ON c.oid = lt.ltrelid
+  JOIN pg_am am ON am.oid = c.relam
   JOIN pg_foreign_catalog fc ON fc.oid = lt.ltforeign_catalog
   JOIN pg_foreign_volume fv ON fv.oid = lt.ltforeign_volume;
-   relname    | lttable_type |      ltoptions       |    fcname     |    fvname     
---------------+--------------+----------------------+---------------+---------------
- lake_test_t1 | ICEBERG      | {fileformat=parquet} | lake_test_cat | lake_test_vol
-(1 row)
-
-SELECT a.amname FROM pg_am a JOIN pg_class c ON c.relam = a.oid WHERE c.relname = 'lake_test_t1';
- amname  
----------
- iceberg
+   relname    | amname  | reloptions |    fcname     |    fvname     
+--------------+---------+------------+---------------+---------------
+ lake_test_t1 | iceberg |            | lake_test_cat | lake_test_vol
 (1 row)
 
 -- Lake tables are always DISTRIBUTED RANDOMLY (policytype 'p', no distkey)
@@ -163,20 +158,18 @@ SELECT count(*) FROM lake_test_t1;
      2
 (1 row)
 
--- Lake tables get a TOAST table like plain tables, so wide values work
-SELECT reltoastrelid <> 0 AS has_toast FROM pg_class WHERE relname = 'lake_test_t1';
- has_toast 
------------
- t
+-- OPTIONS become the relation's reloptions and are validated by the access
+-- method: a value the AM accepts is stored, an unknown one is rejected.
+CREATE LAKE TABLE lake_test_opt (a int) USING ICEBERG CATALOG lake_test_cat VOLUME lake_test_vol OPTIONS (fillfactor '70');
+SELECT reloptions FROM pg_class WHERE relname = 'lake_test_opt';
+   reloptions    
+-----------------
+ {fillfactor=70}
 (1 row)
 
-INSERT INTO lake_test_t1 VALUES (3, repeat('x', 500000));
-SELECT a, length(b) FROM lake_test_t1 WHERE a = 3;
- a | length 
----+--------
- 3 | 500000
-(1 row)
-
+CREATE LAKE TABLE lake_test_optbad (a int) USING ICEBERG CATALOG lake_test_cat VOLUME lake_test_vol OPTIONS (bogus_opt 'x');	-- fail, AM rejects unknown option
+ERROR:  unrecognized parameter "bogus_opt"
+DROP LAKE TABLE lake_test_opt;
 -- Catalog and volume are both required
 CREATE LAKE TABLE lake_test_t2 (a int) USING ICEBERG VOLUME lake_test_vol;	-- fail, no catalog
 ERROR:  no foreign catalog specified
@@ -190,15 +183,10 @@ SET iceberg_default_volume = 'lake_test_vol';
 CREATE LAKE TABLE lake_test_t2 (a int) USING ICEBERG;
 RESET iceberg_default_catalog;
 RESET iceberg_default_volume;
--- A DISTRIBUTED clause is ignored with a warning
-CREATE LAKE TABLE lake_test_t3 (a int) USING ICEBERG CATALOG lake_test_cat VOLUME lake_test_vol DISTRIBUTED BY (a);
-WARNING:  DISTRIBUTED clause has no effect for lake tables, using DISTRIBUTED RANDOMLY
-SELECT policytype, distkey FROM gp_distribution_policy WHERE localoid = 'lake_test_t3'::regclass;
- policytype | distkey 
-------------+---------
- p          | 
-(1 row)
-
+-- A DISTRIBUTED clause is rejected (lake tables are always distributed randomly)
+CREATE LAKE TABLE lake_test_t3 (a int) USING ICEBERG CATALOG lake_test_cat VOLUME lake_test_vol DISTRIBUTED BY (a);	-- fail
+ERROR:  DISTRIBUTED clause is not supported for lake tables
+HINT:  Lake tables are always distributed randomly; omit the DISTRIBUTED clause.
 -- The USING clause names the table format; only ICEBERG is supported (any case)
 CREATE LAKE TABLE lake_test_bad0 (a int) USING heap CATALOG lake_test_cat VOLUME lake_test_vol;		-- fail, unsupported format
 ERROR:  unsupported lake table format "HEAP"
@@ -241,14 +229,12 @@ DETAIL:  catalog lake_test_cat depends on server lake_test_srv
 volume lake_test_vol depends on server lake_test_srv
 table lake_test_t1 depends on volume lake_test_vol
 table lake_test_t2 depends on volume lake_test_vol
-table lake_test_t3 depends on volume lake_test_vol
 table lake_test_t4 depends on volume lake_test_vol
 HINT:  Use DROP ... CASCADE to drop the dependent objects too.
 DROP FOREIGN CATALOG lake_test_cat;	-- fail, tables depend on it
 ERROR:  cannot drop catalog lake_test_cat because other objects depend on it
 DETAIL:  table lake_test_t1 depends on catalog lake_test_cat
 table lake_test_t2 depends on catalog lake_test_cat
-table lake_test_t3 depends on catalog lake_test_cat
 table lake_test_t4 depends on catalog lake_test_cat
 HINT:  Use DROP ... CASCADE to drop the dependent objects too.
 -- Dropping a lake table removes its pg_lake_table entry
@@ -289,9 +275,7 @@ SELECT count(*) FROM pg_lake_table lt JOIN pg_class c ON c.oid = lt.ltrelid
 
 -- DROP FOREIGN CATALOG ... CASCADE takes the remaining tables with it
 DROP FOREIGN CATALOG lake_test_cat CASCADE;
-NOTICE:  drop cascades to 2 other objects
-DETAIL:  drop cascades to table lake_test_t3
-drop cascades to table lake_test_t4
+NOTICE:  drop cascades to table lake_test_t4
 SELECT count(*) FROM pg_lake_table lt JOIN pg_class c ON c.oid = lt.ltrelid
  WHERE c.relname LIKE 'lake\_test%';
  count 

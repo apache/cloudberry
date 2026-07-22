@@ -9208,7 +9208,7 @@ CreateLakeTableStmt:
 					n->base.inhRelations = NIL;
 					n->base.ofTypename = NULL;
 					n->base.constraints = NIL;
-					n->base.options = NIL;
+					n->base.options = $12;		/* OPTIONS become reloptions, validated by the AM */
 					n->base.oncommit = ONCOMMIT_NOOP;
 					n->base.tablespacename = NULL;
 					n->base.accessMethod = access_method;
@@ -9217,11 +9217,11 @@ CreateLakeTableStmt:
 					n->table_type = table_type;
 					n->foreign_catalog = $10 ? pstrdup($10) : NULL;
 					n->foreign_volume = $11 ? pstrdup($11) : NULL;
-					n->options = $12;
 					if ($13 != NULL)
-						ereport(WARNING,
+						ereport(ERROR,
 								(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-								 errmsg("DISTRIBUTED clause has no effect for lake tables, using DISTRIBUTED RANDOMLY")));
+								 errmsg("DISTRIBUTED clause is not supported for lake tables"),
+								 errhint("Lake tables are always distributed randomly; omit the DISTRIBUTED clause.")));
 					n->base.distributedBy = makeNode(DistributedBy);
 					n->base.distributedBy->ptype = POLICYTYPE_PARTITIONED;
 					n->base.distributedBy->keyCols = NIL;
@@ -9255,7 +9255,7 @@ CreateLakeTableStmt:
 					n->base.inhRelations = NIL;
 					n->base.ofTypename = NULL;
 					n->base.constraints = NIL;
-					n->base.options = NIL;
+					n->base.options = $15;		/* OPTIONS become reloptions, validated by the AM */
 					n->base.oncommit = ONCOMMIT_NOOP;
 					n->base.tablespacename = NULL;
 					n->base.accessMethod = access_method;
@@ -9264,11 +9264,11 @@ CreateLakeTableStmt:
 					n->table_type = table_type;
 					n->foreign_catalog = $13 ? pstrdup($13) : NULL;
 					n->foreign_volume = $14 ? pstrdup($14) : NULL;
-					n->options = $15;
 					if ($16 != NULL)
-						ereport(WARNING,
+						ereport(ERROR,
 								(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-								 errmsg("DISTRIBUTED clause has no effect for lake tables, using DISTRIBUTED RANDOMLY")));
+								 errmsg("DISTRIBUTED clause is not supported for lake tables"),
+								 errhint("Lake tables are always distributed randomly; omit the DISTRIBUTED clause.")));
 					n->base.distributedBy = makeNode(DistributedBy);
 					n->base.distributedBy->ptype = POLICYTYPE_PARTITIONED;
 					n->base.distributedBy->keyCols = NIL;

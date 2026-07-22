@@ -3802,10 +3802,9 @@ typedef struct CreateDirectoryTableStmt
 typedef struct CreateLakeTableStmt
 {
 	CreateStmt	base;			/* base table creation info */
-	char	   *table_type;		/* lake table type, e.g. "ICEBERG" */
+	char	   *table_type;		/* lake table format, e.g. "ICEBERG" (validation only) */
 	char	   *foreign_catalog;	/* foreign catalog name, or NULL */
 	char	   *foreign_volume;	/* foreign volume name, or NULL */
-	List	   *options;		/* lake-table-specific options */
 } CreateLakeTableStmt;
 
 typedef struct AlterDirectoryTableStmt

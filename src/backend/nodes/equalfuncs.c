@@ -3519,7 +3519,6 @@ _equalCreateLakeTableStmt(const CreateLakeTableStmt *a, const CreateLakeTableStm
 	COMPARE_STRING_FIELD(table_type);
 	COMPARE_STRING_FIELD(foreign_catalog);
 	COMPARE_STRING_FIELD(foreign_volume);
-	COMPARE_NODE_FIELD(options);
 
 	return true;
 }

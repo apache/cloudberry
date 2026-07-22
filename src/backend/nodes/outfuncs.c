@@ -4279,7 +4279,6 @@ _outCreateLakeTableStmt(StringInfo str, const CreateLakeTableStmt *node)
 	WRITE_STRING_FIELD(table_type);
 	WRITE_STRING_FIELD(foreign_catalog);
 	WRITE_STRING_FIELD(foreign_volume);
-	WRITE_NODE_FIELD(options);
 }
 
 static void

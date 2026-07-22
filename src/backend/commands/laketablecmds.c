@@ -395,25 +395,6 @@ CreateLakeTable(CreateLakeTableStmt *stmt, Oid relId)
 	values[Anum_pg_lake_table_ltrelid - 1] = ObjectIdGetDatum(relId);
 	values[Anum_pg_lake_table_ltforeign_catalog - 1] = ObjectIdGetDatum(catalog_oid);
 	values[Anum_pg_lake_table_ltforeign_volume - 1] = ObjectIdGetDatum(volume_oid);
-	values[Anum_pg_lake_table_lttable_type - 1] = CStringGetTextDatum(stmt->table_type);
-
-	if (stmt->options)
-	{
-		Datum		options_datum;
-
-		/* Build standard text[] reloptions from DefElem list */
-		options_datum = transformRelOptions((Datum) 0, stmt->options,
-											NULL, NULL, false, false);
-
-		if (options_datum != (Datum) 0)
-			values[Anum_pg_lake_table_ltoptions - 1] = options_datum;
-		else
-			nulls[Anum_pg_lake_table_ltoptions - 1] = true;
-	}
-	else
-	{
-		nulls[Anum_pg_lake_table_ltoptions - 1] = true;
-	}
 
 	tuple = heap_form_tuple(lake_rel->rd_att, values, nulls);
 

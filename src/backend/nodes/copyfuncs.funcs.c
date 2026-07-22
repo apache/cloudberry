@@ -3419,7 +3419,6 @@ _copyCreateLakeTableStmt(const CreateLakeTableStmt *from)
 	COPY_STRING_FIELD(table_type);
 	COPY_STRING_FIELD(foreign_catalog);
 	COPY_STRING_FIELD(foreign_volume);
-	COPY_NODE_FIELD(options);
 
 	return newnode;
 }

@@ -45,21 +45,18 @@ CATALOG(pg_lake_table,9901,LakeTableRelationId)
 	Oid		ltrelid BKI_LOOKUP(pg_class);				/* OID of the lake table relation */
 	Oid		ltforeign_catalog BKI_LOOKUP_OPT(pg_foreign_catalog);	/* OID of foreign catalog */
 	Oid		ltforeign_volume BKI_LOOKUP_OPT(pg_foreign_volume);		/* OID of foreign volume */
-
-#ifdef CATALOG_VARLEN			/* variable-length fields start here */
-	text	lttable_type;		/* table type: ICEBERG, etc. */
-	text	ltoptions[1];		/* lake table options */
-#endif
 } FormData_pg_lake_table;
 
 /* ----------------
  *		Form_pg_lake_table corresponds to a pointer to a tuple with
  *		the format of pg_lake_table relation.
+ *
+ * A lake table's format is its access method (pg_class.relam) and its
+ * options are the relation's reloptions (pg_class.reloptions), validated by
+ * the access method; pg_lake_table only records the catalog/volume binding.
  * ----------------
  */
 typedef FormData_pg_lake_table *Form_pg_lake_table;
-
-DECLARE_TOAST(pg_lake_table, 9903, 9904);
 
 DECLARE_UNIQUE_INDEX_PKEY(pg_lake_table_relid_index, 9902, LakeTableRelidIndexId, on pg_lake_table using btree(ltrelid oid_ops));
 
@@ -70,10 +67,8 @@ DECLARE_UNIQUE_INDEX_PKEY(pg_lake_table_relid_index, 9902, LakeTableRelidIndexId
 typedef struct LakeTable
 {
 	Oid			relid;				/* OID of the lake table relation */
-	char	   *table_type;			/* table type: ICEBERG, etc. */
 	char	   *foreign_catalog;	/* foreign catalog name */
 	char	   *foreign_volume;		/* foreign volume name */
-	List	   *options;			/* lake table options */
 } LakeTable;
 
 #endif							/* PG_LAKE_TABLE_H */

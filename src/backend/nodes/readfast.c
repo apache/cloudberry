@@ -1947,7 +1947,6 @@ _readCreateLakeTableStmt(void)
 	READ_STRING_FIELD(table_type);
 	READ_STRING_FIELD(foreign_catalog);
 	READ_STRING_FIELD(foreign_volume);
-	READ_NODE_FIELD(options);
 
 	READ_DONE();
 }

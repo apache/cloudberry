@@ -55,14 +55,16 @@ SET iceberg_default_volume = 'no_such_volume';		-- fail
 -- Simulate a datalake provider with a heap-backed iceberg AM
 CREATE ACCESS METHOD iceberg TYPE TABLE HANDLER heap_tableam_handler;
 
--- CREATE LAKE TABLE with explicit catalog and volume
-CREATE LAKE TABLE lake_test_t1 (a int, b text) USING ICEBERG CATALOG lake_test_cat VOLUME lake_test_vol OPTIONS (fileformat 'parquet');
-SELECT c.relname, lt.lttable_type, lt.ltoptions, fc.fcname, fv.fvname
+-- CREATE LAKE TABLE with explicit catalog and volume.  The format is the
+-- table's access method (pg_class.relam) and its options are the relation's
+-- reloptions; pg_lake_table records only the catalog/volume binding.
+CREATE LAKE TABLE lake_test_t1 (a int, b text) USING ICEBERG CATALOG lake_test_cat VOLUME lake_test_vol;
+SELECT c.relname, am.amname, c.reloptions, fc.fcname, fv.fvname
   FROM pg_lake_table lt
   JOIN pg_class c ON c.oid = lt.ltrelid
+  JOIN pg_am am ON am.oid = c.relam
   JOIN pg_foreign_catalog fc ON fc.oid = lt.ltforeign_catalog
   JOIN pg_foreign_volume fv ON fv.oid = lt.ltforeign_volume;
-SELECT a.amname FROM pg_am a JOIN pg_class c ON c.relam = a.oid WHERE c.relname = 'lake_test_t1';
 -- Lake tables are always DISTRIBUTED RANDOMLY (policytype 'p', no distkey)
 SELECT policytype, distkey FROM gp_distribution_policy WHERE localoid = 'lake_test_t1'::regclass;
 
@@ -70,10 +72,12 @@ SELECT policytype, distkey FROM gp_distribution_policy WHERE localoid = 'lake_te
 INSERT INTO lake_test_t1 VALUES (1, 'x'), (2, 'y');
 SELECT count(*) FROM lake_test_t1;
 
--- Lake tables get a TOAST table like plain tables, so wide values work
-SELECT reltoastrelid <> 0 AS has_toast FROM pg_class WHERE relname = 'lake_test_t1';
-INSERT INTO lake_test_t1 VALUES (3, repeat('x', 500000));
-SELECT a, length(b) FROM lake_test_t1 WHERE a = 3;
+-- OPTIONS become the relation's reloptions and are validated by the access
+-- method: a value the AM accepts is stored, an unknown one is rejected.
+CREATE LAKE TABLE lake_test_opt (a int) USING ICEBERG CATALOG lake_test_cat VOLUME lake_test_vol OPTIONS (fillfactor '70');
+SELECT reloptions FROM pg_class WHERE relname = 'lake_test_opt';
+CREATE LAKE TABLE lake_test_optbad (a int) USING ICEBERG CATALOG lake_test_cat VOLUME lake_test_vol OPTIONS (bogus_opt 'x');	-- fail, AM rejects unknown option
+DROP LAKE TABLE lake_test_opt;
 
 -- Catalog and volume are both required
 CREATE LAKE TABLE lake_test_t2 (a int) USING ICEBERG VOLUME lake_test_vol;	-- fail, no catalog
@@ -86,9 +90,8 @@ CREATE LAKE TABLE lake_test_t2 (a int) USING ICEBERG;
 RESET iceberg_default_catalog;
 RESET iceberg_default_volume;
 
--- A DISTRIBUTED clause is ignored with a warning
-CREATE LAKE TABLE lake_test_t3 (a int) USING ICEBERG CATALOG lake_test_cat VOLUME lake_test_vol DISTRIBUTED BY (a);
-SELECT policytype, distkey FROM gp_distribution_policy WHERE localoid = 'lake_test_t3'::regclass;
+-- A DISTRIBUTED clause is rejected (lake tables are always distributed randomly)
+CREATE LAKE TABLE lake_test_t3 (a int) USING ICEBERG CATALOG lake_test_cat VOLUME lake_test_vol DISTRIBUTED BY (a);	-- fail
 
 -- The USING clause names the table format; only ICEBERG is supported (any case)
 CREATE LAKE TABLE lake_test_bad0 (a int) USING heap CATALOG lake_test_cat VOLUME lake_test_vol;		-- fail, unsupported format
