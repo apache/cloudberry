@@ -2324,7 +2324,7 @@ heap_drop_with_catalog(Oid relid)
 	CheckTableForSerializableConflictIn(rel);
 
 	/* If this is a lake table, remove its pg_lake_table entry */
-	if (RelationIsIcebergTable(rel))
+	if (RelationIsLakeTable(rel))
 		RemoveLakeTableEntry(relid);
 
 	/*

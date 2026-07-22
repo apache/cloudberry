@@ -195,23 +195,31 @@ GetIcebergTableAmOid(bool missing_ok)
 }
 
 /*
- * RelationIsIcebergTable
+ * RelationIsLakeTable
  *
- * True iff the relation uses the iceberg table access method.  Resolved by
- * access method name so the kernel does not depend on any particular
- * extension's OID assignments.
+ * True iff the relation has a pg_lake_table entry, i.e. it was created by
+ * CREATE LAKE TABLE.  Lake tables are told apart from ordinary relations by
+ * this catalog membership rather than by their access method.
  */
 bool
-RelationIsIcebergTable(Relation rel)
+RelationIsLakeTable(Relation rel)
 {
-	Oid			iceberg_amoid;
+	Relation	ltRel;
+	ScanKeyData skey;
+	SysScanDesc scan;
+	bool		found;
 
-	if (!OidIsValid(rel->rd_rel->relam))
-		return false;
+	ltRel = table_open(LakeTableRelationId, AccessShareLock);
+	ScanKeyInit(&skey,
+				Anum_pg_lake_table_ltrelid,
+				BTEqualStrategyNumber, F_OIDEQ,
+				ObjectIdGetDatum(RelationGetRelid(rel)));
+	scan = systable_beginscan(ltRel, LakeTableRelidIndexId, true, NULL, 1, &skey);
+	found = HeapTupleIsValid(systable_getnext(scan));
+	systable_endscan(scan);
+	table_close(ltRel, AccessShareLock);
 
-	iceberg_amoid = GetIcebergTableAmOid(true);
-
-	return OidIsValid(iceberg_amoid) && rel->rd_rel->relam == iceberg_amoid;
+	return found;
 }
 
 /*
@@ -225,7 +233,7 @@ validate_table_type(const char *table_type)
 				(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
 				 errmsg("lake table format cannot be NULL")));
 
-	if (strcmp(table_type, "ICEBERG") != 0)
+	if (strcmp(table_type, ICEBERG_TABLE_AM_NAME) != 0)
 		ereport(ERROR,
 				(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
 				 errmsg("unsupported lake table format \"%s\"", table_type),
@@ -280,21 +288,23 @@ ResolveLakeTableOptions(CreateLakeTableStmt *stmt,
 	const char *catalog_name;
 	const char *volume_name;
 
+	/* Validate the table format named in the USING clause first, so an
+	 * unsupported format is reported before anything else. */
+	validate_table_type(stmt->table_type);
+
 	/*
-	 * Lake tables are unusable without an extension providing the iceberg
-	 * table access method; check it first so the install hint takes
-	 * precedence over catalog/volume resolution errors.
+	 * The format is implemented by a like-named table access method that a
+	 * datalake extension provides; a lake table is unusable without it, so
+	 * check it here (after the format) so the install hint takes precedence
+	 * over catalog/volume resolution errors.
 	 */
-	if (!OidIsValid(GetIcebergTableAmOid(true)))
+	if (!OidIsValid(get_table_am_oid(stmt->table_type, true)))
 		ereport(ERROR,
 				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 				 errmsg("table access method \"%s\" does not exist",
-						ICEBERG_TABLE_AM_NAME),
+						stmt->table_type),
 				 errhint("CREATE LAKE TABLE ... USING ICEBERG requires an extension that provides the \"%s\" table access method.",
-						 ICEBERG_TABLE_AM_NAME)));
-
-	/* Validate the table format named in the USING clause */
-	validate_table_type(stmt->table_type);
+						 stmt->table_type)));
 
 	/*
 	 * Determine catalog name: use explicit value if provided, otherwise

@@ -190,7 +190,7 @@ LINE 1: ...CEBERG CATALOG lake_test_cat VOLUME lake_test_vol DISTRIBUTE...
                                                              ^
 -- The USING clause names the table format; only ICEBERG is supported (any case)
 CREATE LAKE TABLE lake_test_bad0 (a int) USING heap CATALOG lake_test_cat VOLUME lake_test_vol;		-- fail, unsupported format
-ERROR:  unsupported lake table format "HEAP"
+ERROR:  unsupported lake table format "heap"
 HINT:  The only supported format is ICEBERG (USING ICEBERG).
 CREATE LAKE TABLE lake_test_t4 (a int) USING "IceBerg" CATALOG lake_test_cat VOLUME lake_test_vol;	-- quoted mixed-case format resolves the iceberg AM
 -- The iceberg AM is rejected for every path other than CREATE LAKE TABLE

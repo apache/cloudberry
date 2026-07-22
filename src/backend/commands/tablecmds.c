@@ -19831,7 +19831,7 @@ ATExecSetDistributedBy(Relation rel, Node *node, AlterTableCmd *cmd)
 		}
 
 		/* Lake tables must remain DISTRIBUTED RANDOMLY */
-		if (RelationIsIcebergTable(rel))
+		if (RelationIsLakeTable(rel))
 			ereport(ERROR,
 					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 					 errmsg("cannot change distribution policy of lake table \"%s\"",

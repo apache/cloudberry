@@ -9186,19 +9186,16 @@ CreateLakeTableStmt:
 			OptForeignCatalog OptForeignVolume create_generic_options
 				{
 					CreateLakeTableStmt *n = makeNode(CreateLakeTableStmt);
-					char	   *table_type = pstrdup($9);
-					char	   *access_method = pstrdup($9);
+					char	   *format = pstrdup($9);
 					char	   *p;
 
 					/*
-					 * The USING format is case-insensitive: upper-case it for
-					 * the stored table_type and lower-case it for the access
-					 * method name, so a quoted "ICEBERG" resolves the same AM
-					 * as an unquoted iceberg.
+					 * The USING clause names both the lake table format and
+					 * the access method that implements it; normalize to lower
+					 * case so a quoted "ICEBERG" resolves the same AM as an
+					 * unquoted iceberg.
 					 */
-					for (p = table_type; *p; p++)
-						*p = pg_toupper((unsigned char) *p);
-					for (p = access_method; *p; p++)
+					for (p = format; *p; p++)
 						*p = pg_tolower((unsigned char) *p);
 
 					$4->relpersistence = RELPERSISTENCE_PERMANENT;
@@ -9210,10 +9207,10 @@ CreateLakeTableStmt:
 					n->base.options = $12;		/* OPTIONS become reloptions, validated by the AM */
 					n->base.oncommit = ONCOMMIT_NOOP;
 					n->base.tablespacename = NULL;
-					n->base.accessMethod = access_method;
+					n->base.accessMethod = format;
 					n->base.if_not_exists = false;
 					n->base.relKind = RELKIND_RELATION;
-					n->table_type = table_type;
+					n->table_type = format;
 					n->foreign_catalog = $10 ? pstrdup($10) : NULL;
 					n->foreign_volume = $11 ? pstrdup($11) : NULL;
 					/* lake tables are always distributed randomly */
@@ -9228,19 +9225,16 @@ CreateLakeTableStmt:
 			OptForeignCatalog OptForeignVolume create_generic_options
 				{
 					CreateLakeTableStmt *n = makeNode(CreateLakeTableStmt);
-					char	   *table_type = pstrdup($12);
-					char	   *access_method = pstrdup($12);
+					char	   *format = pstrdup($12);
 					char	   *p;
 
 					/*
-					 * The USING format is case-insensitive: upper-case it for
-					 * the stored table_type and lower-case it for the access
-					 * method name, so a quoted "ICEBERG" resolves the same AM
-					 * as an unquoted iceberg.
+					 * The USING clause names both the lake table format and
+					 * the access method that implements it; normalize to lower
+					 * case so a quoted "ICEBERG" resolves the same AM as an
+					 * unquoted iceberg.
 					 */
-					for (p = table_type; *p; p++)
-						*p = pg_toupper((unsigned char) *p);
-					for (p = access_method; *p; p++)
+					for (p = format; *p; p++)
 						*p = pg_tolower((unsigned char) *p);
 
 					$7->relpersistence = RELPERSISTENCE_PERMANENT;
@@ -9252,10 +9246,10 @@ CreateLakeTableStmt:
 					n->base.options = $15;		/* OPTIONS become reloptions, validated by the AM */
 					n->base.oncommit = ONCOMMIT_NOOP;
 					n->base.tablespacename = NULL;
-					n->base.accessMethod = access_method;
+					n->base.accessMethod = format;
 					n->base.if_not_exists = true;
 					n->base.relKind = RELKIND_RELATION;
-					n->table_type = table_type;
+					n->table_type = format;
 					n->foreign_catalog = $13 ? pstrdup($13) : NULL;
 					n->foreign_volume = $14 ? pstrdup($14) : NULL;
 					/* lake tables are always distributed randomly */

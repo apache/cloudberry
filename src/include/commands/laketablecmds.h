@@ -53,7 +53,7 @@ extern const char *GetDefaultIcebergVolume(void);
 
 /* Lake table management */
 extern Oid	GetIcebergTableAmOid(bool missing_ok);
-extern bool RelationIsIcebergTable(Relation rel);
+extern bool RelationIsLakeTable(Relation rel);
 extern void ValidateLakeTableStmt(CreateLakeTableStmt *stmt);
 extern void CreateLakeTable(CreateLakeTableStmt *stmt, Oid relId);
 extern void RemoveLakeTableEntry(Oid relid);
