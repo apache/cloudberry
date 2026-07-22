@@ -178,6 +178,18 @@ fi
 
 # Run rpmbuild with the provided options
 echo "Building RPM with Version: $VERSION, Release: $RELEASE$([ "$DEBUG_BUILD" = true ] && echo ", Debug: enabled")..."
+
+# Relax rpm's check-rpaths QA check.
+#
+# Cloudberry ships shared objects (e.g. PL/Python's _pg*.so) whose RUNPATH
+# points at the product's install prefix (/usr/local/cloudberry-db/lib).
+# This is intentional, but check-rpaths classifies such absolute,
+# non-standard rpaths as "invalid" (0x0002) and, on the el10 toolchain,
+# turns it into a fatal "%install" error. Setting QA_RPATHS downgrades the
+# standard (0x0001), invalid (0x0002) and empty (0x0010) rpath findings to
+# warnings so packaging succeeds. This is a no-op relaxation on el8/el9.
+export QA_RPATHS=$(( 0x0001 | 0x0002 | 0x0010 ))
+
 if ! eval "$RPMBUILD_CMD"; then
   echo "Error: rpmbuild failed."
   exit 1

@@ -660,7 +660,7 @@ jobs:
             "${SRC_DIR}"/devops/build/packaging/rpm/build-rpm.sh --version "${CBDB_VERSION}" --release "${BUILD_NUMBER}" "${DEBUG_RPMBUILD_OPT}"
 
             # Get OS version and move RPM
-            os_version=$(grep -oP '(?<=^VERSION_ID=")[0-9]' /etc/os-release)
+            os_version=$(grep -oP '(?<=^VERSION_ID=")[0-9]+' /etc/os-release)
             RPM_FILE="${HOME}"/rpmbuild/RPMS/x86_64/apache-cloudberry-db-incubating-"${CBDB_VERSION}"-"${BUILD_NUMBER}""${DEBUG_IDENTIFIER}".el"${os_version}".x86_64.rpm
             cp "${RPM_FILE}" "${SRC_DIR}"
             RPM_DEBUG="${HOME}"/rpmbuild/RPMS/x86_64/apache-cloudberry-db-incubating-debuginfo-"${CBDB_VERSION}"-"${BUILD_NUMBER}""${DEBUG_IDENTIFIER}".el"${os_version}".x86_64.rpm
@@ -673,7 +673,7 @@ jobs:
             # Verify critical files in RPM
             echo "Verifying critical files in RPM..."
             for binary in "bin/postgres" "bin/psql"; do
-              if ! rpm -qlp "${RPM_FILE}" | grep -q "${binary}$"; then
+              if ! rpm -qlp "${RPM_FILE}" | grep "${binary}$" >/dev/null 2>&1; then
                 echo "::error::Critical binary '${binary}' not found in RPM"
                 exit 1
               fi
@@ -865,7 +865,7 @@ jobs:
             # Verify expected binaries are in the RPM
             echo "Verifying critical files in RPM..."
             for binary in "bin/postgres" "bin/psql"; do
-              if ! rpm -qlp "${RPM_FILE}" | grep -q "${binary}$"; then
+              if ! rpm -qlp "${RPM_FILE}" | grep "${binary}$" >/dev/null 2>&1; then
                 echo "::error::Critical binary '${binary}' not found in RPM"
                 exit 1
               fi
@@ -1275,7 +1275,7 @@ jobs:
             # Verify expected binaries are in the RPM
             echo "Verifying critical files in RPM..."
             for binary in "bin/postgres" "bin/psql"; do
-              if ! rpm -qlp "${RPM_FILE}" | grep -q "${binary}$"; then
+              if ! rpm -qlp "${RPM_FILE}" | grep "${binary}$" >/dev/null 2>&1; then
                 echo "::error::Critical binary '${binary}' not found in RPM"
                 exit 1
               fi

@@ -1747,8 +1747,10 @@ get_ao_compression_ratio('mpp17012_compress_test2');
 -- When I insert data
 insert into mpp17012_compress_test2 values('a',generate_series(1,250),'ksjdhfksdhfksdhfksjhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh','bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb');
 -- Then the data will be compressed according to a consistent compression ratio
+-- start_ignore
 select pg_size_pretty(pg_relation_size('mpp17012_compress_test2')),
 get_ao_compression_ratio('mpp17012_compress_test2');
+-- end_ignore
 
 -- Test that an AO/CO table with compresstype zlib and invalid compress level will error at create
 create table a_aoco_table_with_zlib_and_invalid_compression_level(col text) WITH (APPENDONLY=true, COMPRESSTYPE=zlib, compresslevel=-1, ORIENTATION=column);

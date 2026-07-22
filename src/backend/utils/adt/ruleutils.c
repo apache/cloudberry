@@ -13158,14 +13158,16 @@ flatten_reloptions(Oid relid)
 Datum
 pg_get_dynamic_table_schedule(PG_FUNCTION_ARGS)
 {
-	Oid			relid = PG_GETARG_OID(0);
-	Relation 	pg_task;
-	StringInfoData buf;
-	char		*username;
+	Oid				relid = PG_GETARG_OID(0);
+	Relation		pg_task;
+	StringInfoData	buf;
+	char			*username;
 	SysScanDesc		scanDescriptor = NULL;
-	ScanKeyData scanKey[2];
+	ScanKeyData		scanKey[2];
 	HeapTuple		heapTuple = NULL;
 	Form_pg_task	task = NULL;
+	bool			isnull;
+	Datum			datum;
 
 	if (!get_rel_relisdynamic(relid))
 	{
@@ -13209,7 +13211,10 @@ pg_get_dynamic_table_schedule(PG_FUNCTION_ARGS)
 	task = (Form_pg_task) GETSTRUCT(heapTuple);
 
 	resetStringInfo(&buf);
-	appendStringInfo(&buf, "%s", text_to_cstring(&task->schedule));
+	datum = heap_getattr(heapTuple, Anum_pg_task_schedule,
+						 RelationGetDescr(pg_task), &isnull);
+	if (!isnull)
+		appendStringInfo(&buf, "%s", TextDatumGetCString(datum));
 
 	systable_endscan(scanDescriptor);
 	table_close(pg_task, AccessShareLock);

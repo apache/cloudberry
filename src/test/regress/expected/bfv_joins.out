@@ -4235,6 +4235,36 @@ select (trunc(extract(epoch from now())) - :unix_time1) < 100 is_ok;
 (1 row)
 
 reset optimizer;
+-- ORCA bug: a boolean ON-clause of a LEFT JOIN must not be pushed down as a
+-- scan filter on the outer relation. When the same outer relation feeds
+-- multiple LEFT JOINs whose ON-clauses use the same boolean column AND there
+-- is a WHERE on top, the normalizer used to push the ON-pred onto the LOJ's
+-- own outer child, discarding outer rows that should be null-padded.
+create table loj_bool_x(c1 boolean);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c1' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+create table loj_bool_y1(c1 boolean);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c1' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+create table loj_bool_y2(c1 boolean);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c1' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+insert into loj_bool_x values (true), (false), (false);
+insert into loj_bool_y1 values (true);
+insert into loj_bool_y2 values (true);
+-- Expect 2 rows: the two FALSE rows in loj_bool_x, with NULL from loj_bool_y2.
+-- The plan must NOT contain "Filter: c1" on Seq Scan of loj_bool_x.
+select loj_bool_x.c1, loj_bool_y2.c1 as y2c1
+  from loj_bool_x left join loj_bool_y1 on loj_bool_x.c1
+                  left join loj_bool_y2 on loj_bool_x.c1
+ where loj_bool_y2.c1 is null
+ order by 1, 2;
+ c1 | y2c1 
+----+------
+ f  | 
+ f  | 
+(2 rows)
+
 -- Clean up. None of the objects we create are very interesting to keep around.
 reset search_path;
 set client_min_messages='warning';

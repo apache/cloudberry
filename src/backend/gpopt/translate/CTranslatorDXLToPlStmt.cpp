@@ -4031,6 +4031,49 @@ CTranslatorDXLToPlStmt::CreateProjectSetNodeTree(const CDXLNode *result_dxlnode,
 	return project_set_parent_plan;
 }
 
+//---------------------------------------------------------------------------
+//	@function:
+//		restore_unknown_locale_resname
+//
+//	@doc:
+//		ORCA represents strings using wide characters. Converting a multibyte
+//		name to wide format uses vswprintf(), which depends on the database
+//		LC_CTYPE. When that locale cannot interpret the name (e.g. LC_CTYPE=C
+//		with a UTF-8 alias), ORCA substitutes the generic "UNKNOWN" string
+//		(see gpos::clib::Vswprintf). This function restores the original name
+//		from the query tree.
+//
+//		Only the topmost plan node is translated with a context that carries
+//		the original query (see GetPlannedStmtFromDXL); everywhere else query
+//		is NULL and this is a no-op. The topmost projection list produces the
+//		query's output columns in order, so the original name is the non-junk
+//		query targetList entry with the same resno. Matching only top-level
+//		entries (never descending into subqueries or expressions) also keeps
+//		a legitimate alias named "UNKNOWN" intact: its positional match is
+//		the entry itself, making the restore a no-op.
+//---------------------------------------------------------------------------
+static void
+restore_unknown_locale_resname(const Query *query, TargetEntry *target_entry)
+{
+	if (nullptr == query || 0 != strcmp(target_entry->resname, "UNKNOWN"))
+	{
+		return;
+	}
+
+	ListCell *lc;
+	ForEach(lc, query->targetList)
+	{
+		TargetEntry *te = (TargetEntry *) lfirst(lc);
+
+		if (!te->resjunk && nullptr != te->resname &&
+			te->resno == target_entry->resno)
+		{
+			target_entry->resname = te->resname;
+			return;
+		}
+	}
+}
+
 //------------------------------------------------------------------------------
 // If a result plan node is not required on top of a project set node then the
 // alias parameter needs to be set for all the project set nodes else not
@@ -4040,7 +4083,7 @@ CTranslatorDXLToPlStmt::CreateProjectSetNodeTree(const CDXLNode *result_dxlnode,
 void
 SetupAliasParameter(const BOOL will_require_result_node,
 					const CDXLNode *project_list_dxlnode,
-					Plan *project_set_parent_plan)
+					Plan *project_set_parent_plan, const Query *query)
 {
 	if (!will_require_result_node)
 	{
@@ -4069,6 +4112,9 @@ SetupAliasParameter(const BOOL will_require_result_node,
 					sc_proj_elem_dxlop->GetMdNameAlias()
 						->GetMDName()
 						->GetBuffer());
+
+			// restore aliases that failed the wide character conversion
+			restore_unknown_locale_resname(query, te);
 			ul++;
 		}
 	}
@@ -4243,7 +4289,7 @@ CTranslatorDXLToPlStmt::TranslateDXLResult(
 	}
 
 	SetupAliasParameter(will_require_result_node, project_list_dxlnode,
-						project_set_parent_plan);
+						project_set_parent_plan, output_context->GetQuery());
 
 	Plan *final_plan = nullptr;
 
@@ -4499,6 +4545,10 @@ CTranslatorDXLToPlStmt::TranslateDXLAppend(
 			CTranslatorUtils::CreateMultiByteCharStringFromWCString(
 				sc_proj_elem_dxlop->GetMdNameAlias()->GetMDName()->GetBuffer());
 		target_entry->resno = attno;
+
+		// restore aliases that failed the wide character conversion
+		restore_unknown_locale_resname(output_context->GetQuery(),
+									   target_entry);
 
 		// add column mapping to output translation context
 		output_context->InsertMapping(sc_proj_elem_dxlop->Id(), target_entry);
@@ -5925,51 +5975,6 @@ CTranslatorDXLToPlStmt::ProcessDXLTblDescr(
 
 //---------------------------------------------------------------------------
 //	@function:
-//		update_unknown_locale_walker
-//
-//	@doc:
-//		Given an expression tree and a TargetEntry pointer context, look for a
-//		matching target entry in the expression tree and overwrite the given
-//		TargetEntry context's resname with the original found in the expression
-//		tree.
-//
-//---------------------------------------------------------------------------
-static bool
-update_unknown_locale_walker(Node *node, void *context)
-{
-	if (node == nullptr)
-	{
-		return false;
-	}
-
-	TargetEntry *unknown_target_entry = (TargetEntry *) context;
-
-	if (IsA(node, TargetEntry))
-	{
-		TargetEntry *te = (TargetEntry *) node;
-
-		if (te->resorigtbl == unknown_target_entry->resorigtbl &&
-			te->resno == unknown_target_entry->resno)
-		{
-			unknown_target_entry->resname = te->resname;
-			return false;
-		}
-	}
-	else if (IsA(node, Query))
-	{
-		Query *query = (Query *) node;
-
-		return gpdb::WalkExpressionTree(
-			(Node *) query->targetList,
-			(bool (*)(Node *, void *)) update_unknown_locale_walker, (void *) context);
-	}
-
-	return gpdb::WalkExpressionTree(
-		node, (bool (*)(Node *, void *)) update_unknown_locale_walker, (void *) context);
-}
-
-//---------------------------------------------------------------------------
-//	@function:
 //		CTranslatorDXLToPlStmt::TranslateDXLProjList
 //
 //	@doc:
@@ -6072,23 +6077,14 @@ CTranslatorDXLToPlStmt::TranslateDXLProjList(
 				}
 				target_entry->resorigtbl = pteOriginal->resorigtbl;
 				target_entry->resorigcol = pteOriginal->resorigcol;
-
-				// ORCA represents strings using wide characters. That can
-				// require converting from multibyte characters using
-				// vswprintf(). However, vswprintf() is dependent on the system
-				// locale which is set at the database level. When that locale
-				// cannot interpret the string correctly, it fails. ORCA
-				// bypasses the failure by using a generic "UNKNOWN" string.
-				// When that happens, the following code translates it back to
-				// the original multibyte string.
-				if (strcmp(target_entry->resname, "UNKNOWN") == 0)
-				{
-					update_unknown_locale_walker(
-						(Node *) output_context->GetQuery(),
-						(void *) target_entry);
-				}
 			}
 		}
+
+		// restore aliases that failed the wide character conversion; this
+		// must cover not only Vars but also other expressions (e.g. Consts
+		// and Aggrefs) whose aliases can equally fail the conversion
+		restore_unknown_locale_resname(output_context->GetQuery(),
+									   target_entry);
 
 		// add column mapping to output translation context
 		output_context->InsertMapping(sc_proj_elem_dxlop->Id(), target_entry);
