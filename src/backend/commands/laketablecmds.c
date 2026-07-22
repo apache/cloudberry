@@ -303,8 +303,8 @@ ResolveLakeTableOptions(CreateLakeTableStmt *stmt,
 				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 				 errmsg("table access method \"%s\" does not exist",
 						stmt->table_type),
-				 errhint("CREATE LAKE TABLE ... USING ICEBERG requires an extension that provides the \"%s\" table access method.",
-						 stmt->table_type)));
+				 errhint("CREATE LAKE TABLE ... USING \"%s\" requires an extension that provides the \"%s\" table access method.",
+						 stmt->table_type, stmt->table_type)));
 
 	/*
 	 * Determine catalog name: use explicit value if provided, otherwise

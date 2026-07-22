@@ -118,7 +118,7 @@ SELECT count(DISTINCT gp_segment_id) > 1 AS on_all_segments
 -- Without a provider extension there is no iceberg table AM
 CREATE LAKE TABLE lake_test_t0 (a int) USING ICEBERG CATALOG lake_test_cat VOLUME lake_test_vol;	-- fail with hint
 ERROR:  table access method "iceberg" does not exist
-HINT:  CREATE LAKE TABLE ... USING ICEBERG requires an extension that provides the "iceberg" table access method.
+HINT:  CREATE LAKE TABLE ... USING "iceberg" requires an extension that provides the "iceberg" table access method.
 -- The default catalog/volume GUCs verify that the object exists
 SET iceberg_default_catalog = 'no_such_catalog';	-- fail
 ERROR:  invalid value for parameter "iceberg_default_catalog": "no_such_catalog"
