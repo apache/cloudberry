@@ -185,8 +185,9 @@ RESET iceberg_default_catalog;
 RESET iceberg_default_volume;
 -- A DISTRIBUTED clause is rejected (lake tables are always distributed randomly)
 CREATE LAKE TABLE lake_test_t3 (a int) USING ICEBERG CATALOG lake_test_cat VOLUME lake_test_vol DISTRIBUTED BY (a);	-- fail
-ERROR:  DISTRIBUTED clause is not supported for lake tables
-HINT:  Lake tables are always distributed randomly; omit the DISTRIBUTED clause.
+ERROR:  syntax error at or near "DISTRIBUTED"
+LINE 1: ...CEBERG CATALOG lake_test_cat VOLUME lake_test_vol DISTRIBUTE...
+                                                             ^
 -- The USING clause names the table format; only ICEBERG is supported (any case)
 CREATE LAKE TABLE lake_test_bad0 (a int) USING heap CATALOG lake_test_cat VOLUME lake_test_vol;		-- fail, unsupported format
 ERROR:  unsupported lake table format "HEAP"

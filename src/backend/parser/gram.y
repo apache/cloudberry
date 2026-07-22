@@ -9184,7 +9184,6 @@ CreateLakeTableStmt:
 			CREATE LAKE TABLE qualified_name '(' OptTableElementList ')'
 			USING name
 			OptForeignCatalog OptForeignVolume create_generic_options
-			OptDistributedBy
 				{
 					CreateLakeTableStmt *n = makeNode(CreateLakeTableStmt);
 					char	   *table_type = pstrdup($9);
@@ -9217,11 +9216,7 @@ CreateLakeTableStmt:
 					n->table_type = table_type;
 					n->foreign_catalog = $10 ? pstrdup($10) : NULL;
 					n->foreign_volume = $11 ? pstrdup($11) : NULL;
-					if ($13 != NULL)
-						ereport(ERROR,
-								(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-								 errmsg("DISTRIBUTED clause is not supported for lake tables"),
-								 errhint("Lake tables are always distributed randomly; omit the DISTRIBUTED clause.")));
+					/* lake tables are always distributed randomly */
 					n->base.distributedBy = makeNode(DistributedBy);
 					n->base.distributedBy->ptype = POLICYTYPE_PARTITIONED;
 					n->base.distributedBy->keyCols = NIL;
@@ -9231,7 +9226,6 @@ CreateLakeTableStmt:
 			| CREATE LAKE TABLE IF_P NOT EXISTS qualified_name '(' OptTableElementList ')'
 			USING name
 			OptForeignCatalog OptForeignVolume create_generic_options
-			OptDistributedBy
 				{
 					CreateLakeTableStmt *n = makeNode(CreateLakeTableStmt);
 					char	   *table_type = pstrdup($12);
@@ -9264,11 +9258,7 @@ CreateLakeTableStmt:
 					n->table_type = table_type;
 					n->foreign_catalog = $13 ? pstrdup($13) : NULL;
 					n->foreign_volume = $14 ? pstrdup($14) : NULL;
-					if ($16 != NULL)
-						ereport(ERROR,
-								(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-								 errmsg("DISTRIBUTED clause is not supported for lake tables"),
-								 errhint("Lake tables are always distributed randomly; omit the DISTRIBUTED clause.")));
+					/* lake tables are always distributed randomly */
 					n->base.distributedBy = makeNode(DistributedBy);
 					n->base.distributedBy->ptype = POLICYTYPE_PARTITIONED;
 					n->base.distributedBy->keyCols = NIL;
