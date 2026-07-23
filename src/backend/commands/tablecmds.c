@@ -17124,17 +17124,20 @@ ATPrepSetAccessMethod(AlteredTableInfo *tab, Relation rel, const char *amname)
 	 * it with SET ACCESS METHOD.
 	 */
 	iceberg_amoid = GetIcebergTableAmOid(true);
-	if (OidIsValid(iceberg_amoid) && amoid == iceberg_amoid)
-		ereport(ERROR,
-				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-				 errmsg("cannot change access method of table \"%s\" to \"%s\"",
-						RelationGetRelationName(rel), ICEBERG_TABLE_AM_NAME),
-				 errhint("Use CREATE LAKE TABLE ... USING ICEBERG to create a lake table.")));
-	if (OidIsValid(iceberg_amoid) && rel->rd_rel->relam == iceberg_amoid)
-		ereport(ERROR,
-				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-				 errmsg("cannot change access method of lake table \"%s\"",
-						RelationGetRelationName(rel))));
+	if (OidIsValid(iceberg_amoid))
+	{
+		if (amoid == iceberg_amoid)
+			ereport(ERROR,
+					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+					 errmsg("cannot change access method of table \"%s\" to \"" ICEBERG_TABLE_AM_NAME "\"",
+							RelationGetRelationName(rel)),
+					 errhint("Use CREATE LAKE TABLE ... USING ICEBERG to create a lake table.")));
+		if (rel->rd_rel->relam == iceberg_amoid)
+			ereport(ERROR,
+					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+					 errmsg("cannot change access method of lake table \"%s\"",
+							RelationGetRelationName(rel))));
+	}
 
 	/* Save info for Phase 3 to do the real work */
 	tab->rewrite |= AT_REWRITE_ACCESS_METHOD;

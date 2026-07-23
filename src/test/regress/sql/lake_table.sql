@@ -119,10 +119,11 @@ RESET ROLE;
 DROP SERVER lake_test_srv;		-- fail, catalog and volume depend on it
 DROP FOREIGN CATALOG lake_test_cat;	-- fail, tables depend on it
 
--- Dropping a lake table removes its pg_lake_table entry
+-- Dropping a lake table removes its pg_lake_table entry: remember the
+-- table's OID so the check still finds an orphaned row after the drop
+SELECT oid AS t1_oid FROM pg_class WHERE relname = 'lake_test_t1' \gset
 DROP LAKE TABLE lake_test_t1;
-SELECT count(*) FROM pg_lake_table lt JOIN pg_class c ON c.oid = lt.ltrelid
- WHERE c.relname = 'lake_test_t1';
+SELECT count(*) FROM pg_lake_table WHERE ltrelid = :t1_oid;
 
 -- DROP LAKE TABLE rejects a non-lake table ...
 DROP LAKE TABLE lake_test_heap;	-- fail, not a lake table
@@ -132,14 +133,14 @@ DROP TABLE IF EXISTS lake_test_t2;	-- IF EXISTS does not suppress wrong-type err
 -- the rejected drops must have left the table and its lake metadata intact
 SELECT count(*) FROM pg_lake_table WHERE ltrelid = 'lake_test_t2'::regclass;
 -- the correct command still works
+SELECT oid AS t2_oid FROM pg_class WHERE relname = 'lake_test_t2' \gset
 DROP LAKE TABLE lake_test_t2;
-SELECT count(*) FROM pg_lake_table lt JOIN pg_class c ON c.oid = lt.ltrelid
- WHERE c.relname = 'lake_test_t2';
+SELECT count(*) FROM pg_lake_table WHERE ltrelid = :t2_oid;
 
 -- DROP FOREIGN CATALOG ... CASCADE takes the remaining tables with it
+SELECT oid AS t4_oid FROM pg_class WHERE relname = 'lake_test_t4' \gset
 DROP FOREIGN CATALOG lake_test_cat CASCADE;
-SELECT count(*) FROM pg_lake_table lt JOIN pg_class c ON c.oid = lt.ltrelid
- WHERE c.relname LIKE 'lake\_test%';
+SELECT count(*) FROM pg_lake_table WHERE ltrelid = :t4_oid;
 
 -- DROP variants
 DROP FOREIGN CATALOG lake_test_cat;		-- fail, already gone
