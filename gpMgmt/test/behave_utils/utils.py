@@ -217,6 +217,22 @@ def stop_database_if_started(context):
 def stop_database(context):
     run_gpcommand(context, 'gpstop -M fast -a')
     if context.exception:
+        # Some gpinitsystem scenarios intentionally generate pg_hba.conf that
+        # blocks gpstop's coordinator connection. Fall back to local pg_ctl so
+        # later scenarios still start from a clean cluster.
+        stop_output = '%s\n%s' % (context.error_message or '', context.stdout_message or '')
+        if 'no pg_hba.conf entry' in stop_output:
+            coordinator_data_dir = get_coordinatordatadir()
+            subprocess.check_call([
+                'bash', '-lc',
+                'source %s/cloudberry-env.sh && pg_ctl stop -m fast -D %s' % (
+                    pipes.quote(os.environ.get("GPHOME")),
+                    pipes.quote(coordinator_data_dir),
+                )
+            ])
+            context.exception = None
+            context.ret_code = 0
+            return
         raise context.exception
 
 

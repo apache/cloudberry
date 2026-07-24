@@ -251,7 +251,7 @@ Feature: gpstate tests
     Scenario: gpstate -m logs mirror details
         Given a standard local demo cluster is running
         When the user runs "gpstate -m"
-        Then gpstate should print "Current GPDB mirror list and status" to stdout
+        Then gpstate should print "Current CBDB mirror list and status" to stdout
         And gpstate output looks like
             | Mirror | Datadir                        | Port   | Status  | Data Status  |
             | \S+    | .*/dbfast_mirror1/demoDataDir0 | [0-9]+ | Passive | Synchronized |
@@ -263,7 +263,7 @@ Feature: gpstate tests
           And user stops all primary processes
           And user can start transactions
         When the user runs "gpstate -m"
-        Then gpstate should print "Current GPDB mirror list and status" to stdout
+        Then gpstate should print "Current CBDB mirror list and status" to stdout
         And gpstate output looks like
             | Mirror | Datadir                        | Port   | Status            | Data Status |
             | \S+    | .*/dbfast_mirror1/demoDataDir0 | [0-9]+ | Acting as Primary | Not In Sync |

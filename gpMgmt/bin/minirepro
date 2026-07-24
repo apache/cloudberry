@@ -74,6 +74,11 @@ sysnslist = "('pg_toast', 'pg_bitmapindex', 'pg_catalog', 'information_schema', 
 # unset search path due to CVE-2018-1058
 pgoptions = '-c optimizer=off -c gp_role=utility -c search_path='
 
+
+def escape_sql_literal(value):
+    return value.replace("'", "''")
+
+
 class MRQuery(object):
     def __init__(self):
         self.schemas = []
@@ -136,7 +141,7 @@ def dump_query(connectionInfo, query_file):
 
     with open(query_file, 'r') as query_f:
         sql_text = query_f.read()
-    query = "select pg_catalog.gp_dump_query_oids('%s')" % Escape(sql_text)
+    query = "select pg_catalog.gp_dump_query_oids('%s')" % escape_sql_literal(sql_text)
 
     toolkit_sql = PATH_PREFIX + 'toolkit.sql'
     with open(toolkit_sql, 'w') as toolkit_f:
@@ -164,6 +169,23 @@ def parse_oids(cursor, json_oids):
         result.relids = '0'
     if len(result.funcids) == 0:
         result.funcids = '0'
+
+    # In PG16, gp_dump_query_oids may return only view OIDs without their
+    # dependent table OIDs. Expand view dependencies so pg_dump includes
+    # the tables that views reference.
+    dep_query = "SELECT DISTINCT d.refobjid FROM pg_depend d " \
+                "JOIN pg_class c ON d.classid = 'pg_rewrite'::regclass " \
+                "JOIN pg_rewrite r ON d.objid = r.oid " \
+                "WHERE r.ev_class IN (%s) AND d.refobjid != r.ev_class " \
+                "AND d.refclassid = 'pg_class'::regclass " \
+                "AND d.refobjid NOT IN (%s)" % (result.relids, result.relids)
+    try:
+        cursor.execute(dep_query)
+        dep_oids = [str(row[0]) for row in result_iter(cursor)]
+        if dep_oids:
+            result.relids = result.relids + ',' + ','.join(dep_oids)
+    except Exception:
+        pass  # if dependency query fails, proceed with original oids
 
     cat_query = "SELECT distinct(nspname) FROM pg_class c, pg_namespace n WHERE " \
                 "c.relnamespace = n.oid AND c.oid IN (%s) " \

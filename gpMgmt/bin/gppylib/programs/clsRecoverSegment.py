@@ -27,6 +27,7 @@ from gppylib.util import gp_utils
 from gppylib.commands import gp, pg, unix
 from gppylib.commands.base import Command, WorkerPool, REMOTE
 from gppylib.db import dbconn
+from gppylib.db.catalog import RemoteQueryCommand
 from gppylib.gpparseopts import OptParser, OptChecker
 from gppylib.operations.detect_unreachable_hosts import get_unreachable_segment_hosts, update_unreachable_flag_for_segments
 from gppylib.operations.startSegments import *
@@ -46,26 +47,6 @@ from gppylib.programs.clsRecoverSegment_triples import RecoveryTripletsFactory
 
 logger = gplog.get_default_logger()
 
-# -------------------------------------------------------------------------
-
-class RemoteQueryCommand(Command):
-    def __init__(self, qname, query, hostname, port, dbname=None):
-        self.qname = qname
-        self.query = query
-        self.hostname = hostname
-        self.port = port
-        self.dbname = dbname or os.environ.get('PGDATABASE', None) or 'template1'
-        self.res = None
-
-    def get_results(self):
-        return self.res
-
-    def run(self):
-        logger.debug('Executing query (%s:%s) for segment (%s:%s) on database (%s)' % (
-            self.qname, self.query, self.hostname, self.port, self.dbname))
-        with closing(dbconn.connect(dbconn.DbURL(hostname=self.hostname, port=self.port, dbname=self.dbname),
-                            utility=True)) as conn:
-            self.res = dbconn.query(conn, self.query).fetchall()
 # -------------------------------------------------------------------------
 
 class GpRecoverSegmentProgram:
@@ -252,6 +233,11 @@ class GpRecoverSegmentProgram:
         gpEnv = GpCoordinatorEnvironment(self.__options.coordinatorDataDirectory, True)
 
         # verify "where to recover" options
+        if self.__options.differentialResynchronization:
+            if self.__options.forceFullResynchronization:
+                raise ProgramArgumentValidationException("Only one of -F and --differential may be specified")
+            if self.__options.outputSampleConfigFile is not None:
+                raise ProgramArgumentValidationException("Invalid -o provided with --differential argument")
         optionCnt = 0
         if self.__options.newRecoverHosts is not None:
             optionCnt += 1
@@ -259,8 +245,10 @@ class GpRecoverSegmentProgram:
             optionCnt += 1
         if self.__options.rebalanceSegments:
             optionCnt += 1
+        if self.__options.differentialResynchronization:
+            optionCnt += 1
         if optionCnt > 1:
-            raise ProgramArgumentValidationException("Only one of -i, -p, and -r may be specified")
+            raise ProgramArgumentValidationException("Only one of -p, -r and --differential may be specified")
 
         faultProberInterface.getFaultProber().initializeProber(gpEnv.getCoordinatorPort())
 
@@ -378,6 +366,11 @@ class GpRecoverSegmentProgram:
             if not mirrorBuilder.recover_mirrors(gpEnv, gpArray):
                 if self.termination_requested:
                     self.logger.error("gprecoverseg process was interrupted by the user.")
+                elif self.__options.differentialResynchronization:
+                    self.logger.error("gprecoverseg differential recovery failed. Please check the gpsegrecovery.py log"
+                                      " file and rsync log file for more details.")
+                else:
+                    self.logger.error("gprecoverseg failed. Please check the output for more details.")
                 sys.exit(1)
 
             if self.termination_requested:
@@ -487,6 +480,9 @@ class GpRecoverSegmentProgram:
                          dest="forceFullResynchronization",
                          metavar="<forceFullResynchronization>",
                          help="Force full segment resynchronization")
+        addTo.add_option('--differential', None, default=False, action='store_true',
+                         dest='differentialResynchronization',
+                         help='Differential segment resynchronization')
         addTo.add_option("-B", None, type="int", default=gp.DEFAULT_COORDINATOR_NUM_WORKERS,
                          dest="parallelDegree",
                          metavar="<parallelDegree>",

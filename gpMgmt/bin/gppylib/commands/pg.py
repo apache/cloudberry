@@ -5,6 +5,7 @@
 
 import os
 import pipes
+from contextlib import closing
 
 from gppylib.gplog import *
 from gppylib.gparray import *
@@ -12,6 +13,12 @@ from .base import *
 from .unix import *
 from gppylib.commands.base import *
 from gppylib.commands.gp import RECOVERY_REWIND_APPNAME
+from gppylib.db import dbconn
+
+try:
+    from pgdb import DatabaseError
+except ImportError:
+    DatabaseError = Exception
 
 logger = get_default_logger()
 
@@ -152,6 +159,74 @@ def killPgProc(db,procname,signal):
         raise Exception("Invalid PID: '0' to kill.  parent postmaster PID: %s" % postmasterPID)
     cmd=Kill.remote("kill "+procname,procPID,signal,hostname)
     return (parentPID,procPID)
+
+
+class PgReplicationSlot:
+    """
+    PgReplicationSlot have utility function related to replication slot
+    """
+    def __init__(self, host, port, slot_name):
+        self.host = host
+        self.port = port
+        self.name = slot_name
+
+    def slot_exists(self):
+        count = -1
+        logger.debug('Checking if slot {} exists for host:{}, port:{}'.format(self.name, self.host, self.port))
+        sql = "SELECT count(*) FROM pg_catalog.pg_replication_slots WHERE slot_name = '{}'".format(self.name)
+        try:
+            dburl = dbconn.DbURL(hostname=self.host, port=self.port)
+            with closing(dbconn.connect(dburl, utility=True, encoding='UTF8')) as conn:
+                count = dbconn.querySingleton(conn, sql)
+        except Exception as ex:
+            raise Exception("Failed to query pg_replication_slots for host:{}, port:{}: {}".
+                            format(self.host, self.port, str(ex)))
+
+        if count == 0:
+            logger.debug("Slot {} does not exist for host:{}, port:{}".
+                         format(self.name, self.host, self.port))
+            return False
+
+        return True
+
+    def drop_slot(self):
+        logger.debug("Dropping slot {} for host:{}, port:{}".format(self.name, self.host, self.port))
+        sql = "SELECT pg_drop_replication_slot('{}');".format(self.name)
+        try:
+            dburl = dbconn.DbURL(hostname=self.host, port=self.port)
+            with closing(dbconn.connect(dburl, utility=True, encoding='UTF8')) as conn:
+                dbconn.query(conn, sql)
+        except DatabaseError as e:
+            logger.exception("Failed to query pg_drop_replication_slot for host:{}, port:{}: {}".
+                             format(self.host, self.port, str(e)))
+            return False
+        except Exception as ex:
+            raise Exception("Failed to drop replication slot for host:{}, port:{} : {}".
+                            format(self.host, self.port, str(ex)))
+
+        logger.debug("Successfully dropped replication slot {} for host:{}, port:{}".
+                     format(self.name, self.host, self.port))
+        return True
+
+    def create_slot(self):
+        logger.debug("Creating slot {} for host:{}, port:{}".format(self.name, self.host, self.port))
+        sql = "SELECT pg_create_physical_replication_slot('{}', true, false);".format(self.name)
+        try:
+            dburl = dbconn.DbURL(hostname=self.host, port=self.port)
+            with closing(dbconn.connect(dburl, utility=True, encoding='UTF8')) as conn:
+                dbconn.query(conn, sql)
+        except DatabaseError as e:
+            logger.exception("Failed to query pg_create_physical_replication_slot for host:{}, port:{}: {}".
+                             format(self.host, self.port, str(e)))
+            return False
+        except Exception as ex:
+            raise Exception("Failed to create replication slot for host:{}, port:{} : {}".
+                            format(self.host, self.port, str(ex)))
+
+        logger.debug("Successfully created replication slot {} for host:{}, port:{}".
+                     format(self.name, self.host, self.port))
+        return True
+
 
 class PgControlData(Command):
     def __init__(self, name, datadir, ctxt=LOCAL, remoteHost=None):

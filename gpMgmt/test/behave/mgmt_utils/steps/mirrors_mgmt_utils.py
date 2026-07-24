@@ -385,13 +385,15 @@ def impl(context, content_ids, mode):
                 break
 
 
-@given("edit the input file to add mirror with content {content_ids} to a new directory with mode {mode}")
-def impl(context, content_ids, mode):
+@given("edit the input file to add mirror with content {content_ids} to a new {directory} with mode {mode}")
+def impl(context, content_ids, directory, mode):
     if content_ids == "None":
         return
     for content in [int(c) for c in content_ids.split(',')]:
         make_temp_dir(context, context.mirror_context.working_directory[0], mode)
         new_datadir = context.temp_base_dir
+        if directory == "non-empty directory":
+            make_temp_dir(context, new_datadir, mode)
         segments = GpArray.initFromCatalog(dbconn.DbURL()).getSegmentList()
 
         for seg in segments:
@@ -479,7 +481,7 @@ def make_temp_dir_on_remote(context, hostname, tmp_base_dir_remote, mode='700'):
         raise Exception("tmp_base_dir cannot be empty")
 
     tempfile_cmd = Command(name="Create temp directory on remote host",
-                           cmdStr=""" python -c "import tempfile; t=tempfile.mkdtemp(dir='{}');print(t)" """
+                           cmdStr=""" python3 -c "import tempfile; t=tempfile.mkdtemp(dir='{}');print(t)" """
                            .format(tmp_base_dir_remote),
                            remoteHost=hostname, ctxt=REMOTE)
     tempfile_cmd.run(validateAfter=True)

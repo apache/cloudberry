@@ -17,6 +17,23 @@ Feature: gpinitsystem tests
         And gpconfig should print "Coordinator value: off" to stdout
         And gpconfig should print "Segment     value: off" to stdout
 
+    Scenario: gpinitsystem should import the system collations
+        Given the database is not running
+        And create demo cluster config
+        When the user runs command "gpinitsystem -a -c ../gpAux/gpdemo/clusterConfigFile"
+        Then gpinitsystem should return a return code of 0
+        And the user runs "psql postgres -c \"create table collationimport1 as select * from pg_collation where collnamespace = 'pg_catalog'::regnamespace\""
+        # no more collation is imported
+        When the user runs "psql postgres -c 'select pg_import_system_collations($$pg_catalog$$)'"
+        Then psql should return a return code of 0
+        And psql should print "0" to stdout
+        And psql should print "(1 row)" to stdout
+        And the user runs "psql postgres -c \"create table collationimport2 as select * from pg_collation where collnamespace = 'pg_catalog'::regnamespace\""
+        # no difference is before import and after import
+        When the user runs "psql postgres -c \"select * from collationimport1 except select * from collationimport2\""
+        Then psql should return a return code of 0
+        And psql should print "(0 rows)" to stdout
+
     Scenario: gpinitsystem creates a cluster when the user set LC_ALL env variable
         Given create demo cluster config
         And the environment variable "LC_ALL" is set to "en_US.UTF-8"
@@ -70,6 +87,7 @@ Feature: gpinitsystem tests
         Given the user runs "gpstate"
          Then gpstate should return a return code of 0
 
+    @extended
     Scenario: gpinitsystem creates a backout file when gpinitsystem process terminated
         Given create demo cluster config
         And all files in gpAdminLogs directory are deleted
@@ -84,6 +102,7 @@ Feature: gpinitsystem tests
         And gpinitsystem should return a return code of 0
         And gpintsystem logs should not contain lines about running backout script
 
+    @extended
     Scenario: gpinitsystem creates a backout file when gpcreateseg process terminated
         Given create demo cluster config
         And all files in gpAdminLogs directory are deleted
@@ -97,6 +116,7 @@ Feature: gpinitsystem tests
         And gpinitsystem should return a return code of 0
         And gpintsystem logs should not contain lines about running backout script
 
+    @extended
     Scenario: gpinitsystem does not create or need backout file when user terminated very early
         Given create demo cluster config
         And all files in gpAdminLogs directory are deleted
@@ -333,4 +353,3 @@ Feature: gpinitsystem tests
         When the user runs command "grep -q '.*gpcreateseg\.sh.*Completed ssh.*' ~/gpAdminLogs/gpinitsystem*log"
         Then grep should return a return code of 0
         And the user runs command "mv ../gpAux/gpdemo/clusterConfigFile.bak ../gpAux/gpdemo/clusterConfigFile"
-

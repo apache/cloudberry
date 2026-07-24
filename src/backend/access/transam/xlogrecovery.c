@@ -4575,6 +4575,8 @@ SetPromoteIsTriggered(void)
 static bool
 CheckForStandbyTrigger(void)
 {
+	struct stat stat_buf;
+
 	if (LocalPromoteIsTriggered)
 		return true;
 
@@ -4586,6 +4588,30 @@ CheckForStandbyTrigger(void)
 		SetPromoteIsTriggered();
 		return true;
 	}
+
+	/*
+	 * Cloudberry retains the promote_trigger_file GUC (removed upstream in
+	 * PostgreSQL 16) because management utilities such as gpactivatestandby
+	 * rely on it to promote a standby coordinator that is started in utility
+	 * mode.  Honor the GUC here: the presence of the configured file ends
+	 * recovery, matching the documented behavior of the GUC.
+	 */
+	if (PromoteTriggerFile == NULL || strcmp(PromoteTriggerFile, "") == 0)
+		return false;
+
+	if (stat(PromoteTriggerFile, &stat_buf) == 0)
+	{
+		ereport(LOG,
+				(errmsg("promote trigger file found: %s", PromoteTriggerFile)));
+		unlink(PromoteTriggerFile);
+		SetPromoteIsTriggered();
+		return true;
+	}
+	else if (errno != ENOENT)
+		ereport(ERROR,
+				(errcode_for_file_access(),
+				 errmsg("could not stat promote trigger file \"%s\": %m",
+						PromoteTriggerFile)));
 
 	return false;
 }
