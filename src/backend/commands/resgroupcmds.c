@@ -1632,16 +1632,20 @@ getCpuSetByRole(const char *cpuset)
 		splitcpuset = (char *)cpuset;
 	else
 	{
-		char *scpu = first + 1;
+		char *second = first + 1;
 
 		/* Get result cpuset by IS_QUERY_DISPATCHER(), on master or segment */
 		if (IS_QUERY_DISPATCHER())
-			splitcpuset = scpu;
-		else
 		{
 			char *mcpu = (char *)palloc0(sizeof(char) * MaxCpuSetLength);
 			strncpy(mcpu, cpuset, first - cpuset);
 			splitcpuset = mcpu;
+		}
+		else
+		{
+			char *scpu = (char *)palloc0(sizeof(char) * MaxCpuSetLength);
+			strlcpy(scpu, second, MaxCpuSetLength);
+			splitcpuset = scpu;
 		}
 	}
 
