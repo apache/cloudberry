@@ -758,7 +758,7 @@ void MicroPartitionStats::MergeRawInfo(
     } else if (sum_stat->status == STATUS_NEED_UPDATE) {
       sum_result =
           FromValue(stats_info->columnstats(column_index).datastats().sum(),
-                    typlen, typbyval, column_index);
+                    sum_stat->rettyplen, sum_stat->rettypbyval, column_index);
       Datum newval = cbdb::FunctionCall2Coll(&sum_stat->add_func, InvalidOid,
                                              sum_stat->result, sum_result);
       if (!sum_stat->rettypbyval && newval != sum_stat->result &&
@@ -766,11 +766,11 @@ void MicroPartitionStats::MergeRawInfo(
         cbdb::Pfree(cbdb::DatumToPointer(sum_stat->result));
       }
       sum_stat->result =
-          cbdb::datumCopy(newval, sum_stat->rettyplen, sum_stat->rettypbyval);
+          cbdb::datumCopy(newval, sum_stat->rettypbyval, sum_stat->rettyplen);
     } else if (sum_stat->status == STATUS_MISSING_INIT_VAL) {
       sum_result =
           FromValue(stats_info->columnstats(column_index).datastats().sum(),
-                    typlen, typbyval, column_index);
+                    sum_stat->rettyplen, sum_stat->rettypbyval, column_index);
       sum_stat->result = cbdb::datumCopy(sum_result, sum_stat->rettypbyval,
                                          sum_stat->rettyplen);
       sum_stat->status = STATUS_NEED_UPDATE;
@@ -966,8 +966,8 @@ void MicroPartitionStats::MergeTo(MicroPartitionStats *stats) {
           left_sum_stat->result) {
         cbdb::Pfree(cbdb::DatumToPointer(left_sum_stat->result));
       }
-      left_sum_stat->result = cbdb::datumCopy(newval, left_sum_stat->rettyplen,
-                                              left_sum_stat->rettypbyval);
+      left_sum_stat->result = cbdb::datumCopy(
+          newval, left_sum_stat->rettypbyval, left_sum_stat->rettyplen);
     } else if (left_sum_stat->status == STATUS_MISSING_INIT_VAL) {
       left_sum_stat->result =
           cbdb::datumCopy(right_sum_stat->result, left_sum_stat->rettypbyval,
