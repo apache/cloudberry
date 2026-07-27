@@ -106,10 +106,10 @@ SELECT '' AS six, f1 AS "Correlated Field", f2 AS "Second Field"
  six | Correlated Field | Second Field 
 -----+------------------+--------------
      |                1 |            2
-     |                2 |            3
      |                1 |            1
-     |                2 |            2
+     |                2 |            3
      |                3 |            4
+     |                2 |            2
      |                3 |            3
 (6 rows)
 
@@ -119,10 +119,10 @@ SELECT '' AS six, f1 AS "Correlated Field", f3 AS "Second Field"
                                 (SELECT f2 FROM SUBSELECT_TBL1 WHERE CAST(upper.f2 AS float) = f3);
  six | Correlated Field | Second Field 
 -----+------------------+--------------
-     |                2 |            4
      |                1 |            1
-     |                2 |            2
+     |                2 |            4
      |                3 |            5
+     |                2 |            2
      |                3 |            3
 (5 rows)
 
@@ -132,10 +132,10 @@ SELECT '' AS six, f1 AS "Correlated Field", f3 AS "Second Field"
                                 WHERE f2 = CAST(f3 AS integer));
  six | Correlated Field | Second Field 
 -----+------------------+--------------
-     |                1 |            3
+     |                6 |            8
      |                2 |            4
      |                3 |            5
-     |                6 |            8
+     |                1 |            3
 (4 rows)
 
 SELECT '' AS five, f1 AS "Correlated Field"
@@ -146,11 +146,11 @@ INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
 DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: Non-Scalar Subquery
  five | Correlated Field 
 ------+------------------
-      |                3
+      |                2
       |                3
       |                2
+      |                3
       |                1
-      |                2
 (5 rows)
 
 begin;
@@ -187,31 +187,31 @@ select * from ( SELECT '' AS "col", * FROM join_tab1 AS tx)A;
  col | i | j |   t   
 -----+---+---+-------
      | 1 | 4 | one
-     | 2 | 3 | two
      | 0 |   | zero
-     | 3 | 2 | three
-     | 4 | 1 | four
      | 5 | 0 | five
      | 6 | 6 | six
+     | 2 | 3 | two
+     | 3 | 2 | three
+     | 4 | 1 | four
      | 7 | 7 | seven
+     | 8 | 8 | eight
      |   |   | null
      |   | 0 | zero
-     | 8 | 8 | eight
 (11 rows)
 
                          
 select * from ( SELECT '' AS "col", * FROM join_tab1 AS tx) AS A;
  col | i | j |   t   
 -----+---+---+-------
-     | 8 | 8 | eight
      | 1 | 4 | one
-     | 2 | 3 | two
      | 0 |   | zero
-     | 3 | 2 | three
-     | 4 | 1 | four
      | 5 | 0 | five
      | 6 | 6 | six
+     | 2 | 3 | two
+     | 3 | 2 | three
+     | 4 | 1 | four
      | 7 | 7 | seven
+     | 8 | 8 | eight
      |   |   | null
      |   | 0 | zero
 (11 rows)
@@ -220,17 +220,17 @@ select * from ( SELECT '' AS "col", * FROM join_tab1 AS tx) AS A;
 select * from(SELECT '' AS "col", * FROM join_tab1 AS tx) as A(a,b,c);
  a | b | c |   t   
 ---+---+---+-------
+   | 2 | 3 | two
    | 3 | 2 | three
    | 4 | 1 | four
-   | 5 | 0 | five
-   | 6 | 6 | six
    | 7 | 7 | seven
+   | 8 | 8 | eight
    |   |   | null
    |   | 0 | zero
-   | 8 | 8 | eight
    | 1 | 4 | one
-   | 2 | 3 | two
    | 0 |   | zero
+   | 5 | 0 | five
+   | 6 | 6 | six
 (11 rows)
 
                          
@@ -238,23 +238,23 @@ select * from(SELECT '' AS "col", t1.a, t2.e FROM join_tab1 t1 (a, b, c), join_t
 				WHERE t1.a = t2.d)as A;
  col | a | e  
 -----+---+----
-     | 3 | -3
      | 5 | -5
      | 5 | -5
      | 1 | -1
-     | 2 |  2
-     | 2 |  4
      | 0 |   
+     | 2 |  2
+     | 3 | -3
+     | 2 |  4
 (7 rows)
 
                          
 select * from join_tab1 where exists(select * from join_tab2 where join_tab1.i=join_tab2.i);
  i | j |   t   
 ---+---+-------
+ 2 | 3 | two
  3 | 2 | three
  5 | 0 | five
  1 | 4 | one
- 2 | 3 | two
  0 |   | zero
 (5 rows)
 
@@ -418,8 +418,8 @@ select name from emp_list where sal>(select avg(sal) from emp_list);
 select name from emp_list where sal<(select avg(sal) from emp_list);
          name         
 ----------------------
- empone              
  emptwo              
+ empone              
 (2 rows)
 
                       
@@ -469,24 +469,24 @@ select i,j,t from (select * from (select i,j,t from join_tab1)as dtab1
 				UNION select * from(select i,j,t from join_tab4) as dtab2 )as mtab; 	
  i | j |   t    
 ---+---+--------
- 1 | 7 | sunday
- 3 | 5 | tueday
- 4 | 1 | four
- 6 | 2 | friday
-   |   | null
+ 0 |   | zero
  1 | 4 | one
- 2 | 6 | monday
+ 1 | 7 | sunday
  5 | 0 | five
  5 | 3 | thuday
+ 6 | 2 | friday
  6 | 6 | six
+ 2 | 3 | two
+ 2 | 6 | monday
+ 3 | 2 | three
+ 3 | 5 | tueday
+ 4 | 1 | four
+ 4 | 4 | wedday
+ 7 | 1 | satday
  7 | 7 | seven
  8 | 8 | eight
    | 0 | zero
- 0 |   | zero
- 2 | 3 | two
- 3 | 2 | three
- 4 | 4 | wedday
- 7 | 1 | satday
+   |   | null
 (18 rows)
 
                       
@@ -525,7 +525,7 @@ FROM subselect_tbl1 out;
                                                ->  Seq Scan on join_tab1
                                                ->  Hash
                                                      ->  Seq Scan on join_tab2
- Optimizer: Pivotal Optimizer (GPORCA)
+ Optimizer: GPORCA
 (15 rows)
 
 SELECT (SELECT join_tab1.i - join_tab2.i
@@ -550,8 +550,8 @@ SELECT (SELECT join_tab1.i - join_tab2.i
         FROM join_tab1, join_tab2 WHERE join_tab1.i = join_tab2.i and out1.i = out2.i
         LIMIT 1) as x
 FROM join_tab1 out1, join_tab2 out2;
-                                        QUERY PLAN                                         
--------------------------------------------------------------------------------------------
+                                      QUERY PLAN                                      
+--------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Nested Loop
          Join Filter: true
@@ -570,7 +570,7 @@ FROM join_tab1 out1, join_tab2 out2;
                                                ->  Seq Scan on join_tab1
                                                ->  Hash
                                                      ->  Seq Scan on join_tab2
- Optimizer: Pivotal Optimizer (GPORCA)
+ Optimizer: GPORCA
 (19 rows)
 
 SELECT (SELECT join_tab1.i - join_tab2.i
@@ -579,53 +579,9 @@ SELECT (SELECT join_tab1.i - join_tab2.i
 FROM join_tab1 out1, join_tab2 out2;
  x 
 ---
-  
-  
- 0
- 0
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
- 0
-  
-  
-  
-  
-  
-  
-  
-  
-  
- 0
-  
-  
-  
-  
-  
-  
  0
   
  0
-  
-  
-  
-  
   
   
   
@@ -678,6 +634,50 @@ FROM join_tab1 out1, join_tab2 out2;
   
   
   
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+ 0
+ 0
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+ 0
+  
+  
+ 0
 (99 rows)
 
 -- Same, in an outer join
@@ -691,8 +691,8 @@ SELECT (SELECT coalesce(join_tab1.i + join_tab2.i, 0) >= 0
         FROM join_tab1 LEFT JOIN join_tab2 ON join_tab1.i = join_tab2.i and out.f1 > 0
         LIMIT 1) as x
 FROM subselect_tbl1 out;
-                                          QUERY PLAN                                          
-----------------------------------------------------------------------------------------------
+                                     QUERY PLAN                                      
+-------------------------------------------------------------------------------------
  Result
    ->  Gather Motion 3:1  (slice1; segments: 3)
          ->  Seq Scan on subselect_tbl1 "out"
@@ -707,7 +707,7 @@ FROM subselect_tbl1 out;
                        ->  Materialize
                              ->  Gather Motion 3:1  (slice2; segments: 3)
                                    ->  Seq Scan on join_tab2
- Optimizer: Pivotal Optimizer (GPORCA)
+ Optimizer: GPORCA
 (15 rows)
 
 SELECT (SELECT coalesce(join_tab1.i + join_tab2.i, 0) >= 0
@@ -731,8 +731,8 @@ SELECT (SELECT coalesce(join_tab1.i + join_tab2.i, 0) >= 0
         FROM join_tab1 LEFT JOIN join_tab2 ON join_tab1.i = join_tab2.i and out1.i = out2.i
         LIMIT 1) as x
 FROM join_tab1 out1, join_tab2 out2;
-                                              QUERY PLAN                                              
-------------------------------------------------------------------------------------------------------
+                                       QUERY PLAN                                       
+----------------------------------------------------------------------------------------
  Result
    ->  Gather Motion 3:1  (slice1; segments: 3)
          ->  Nested Loop
@@ -751,7 +751,7 @@ FROM join_tab1 out1, join_tab2 out2;
                        ->  Materialize
                              ->  Gather Motion 3:1  (slice3; segments: 3)
                                    ->  Seq Scan on join_tab2
- Optimizer: Pivotal Optimizer (GPORCA)
+ Optimizer: GPORCA
 (19 rows)
 
 SELECT (SELECT coalesce(join_tab1.i + join_tab2.i, 0) >= 0
@@ -990,8 +990,8 @@ INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
 DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: Non-Scalar Subquery
  a | b 
 ---+---
- 3 | 4
  5 |  
+ 3 | 4
 (2 rows)
 
 select t1.a, t2.b from t1 left join t2 on  (t1.a=t2.a and ((t1.a,t2.b) not in (select i1.a,i1.b from i1)));
@@ -999,9 +999,9 @@ INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
 DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: Non-Scalar Subquery
  a | b 
 ---+---
- 1 |  
- 3 | 4
  5 |  
+ 3 | 4
+ 1 |  
 (3 rows)
 
 --
@@ -1012,8 +1012,8 @@ INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
 DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: Non-Scalar Subquery
  a | b 
 ---+---
- 3 | 4
  5 |  
+ 3 | 4
    | 8
 (3 rows)
 
@@ -1023,11 +1023,11 @@ INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
 DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: Non-Scalar Subquery
  a | b 
 ---+---
- 3 | 4
- 5 |  
-   | 8
  1 |  
    | 2
+ 3 | 4
+   | 8
+ 5 |  
 (5 rows)
 
 --
@@ -1062,10 +1062,10 @@ commit;
 select Tbl01.*,foo(Tbl01.a) as foo from Tbl01; -- showing foo values
  a | b  | c  | foo 
 ---+----+----+-----
- 1 |  2 |  3 |    
  4 |  5 |  6 |    
  7 |  8 |  9 |    
    | 11 | 12 |  13
+ 1 |  2 |  3 |    
 (4 rows)
 
 select Tbl01.* from Tbl01 where foo(Tbl01.a) not in (select a from Tbl03);
@@ -1075,8 +1075,7 @@ select Tbl01.* from Tbl01 where foo(Tbl01.a) not in (select a from Tbl03);
 (1 row)
 
 create table Tbl02 as select Tbl01.*,foo(Tbl01.a) as foo from Tbl01;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'a' as the Apache Cloudberry data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause. Creating a NULL policy entry.
 select Tbl02.* from Tbl02 where foo not in (select a from Tbl03);
  a | b  | c  | foo 
 ---+----+----+-----
@@ -1085,18 +1084,32 @@ select Tbl02.* from Tbl02 where foo not in (select a from Tbl03);
 
 begin;
 create table Tbl04(a int, b int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into Tbl04 values(1,2),(3,4),(5,6);
 create table Tbl05(a int, b int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into Tbl05 values(1,2);
 create table Tbl06(a int, b int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into Tbl06 values(1,2),(3,4);
 create table i3(a int not null, b int not null);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into i3 values(1,2);
 create table Tbl07(a int, b int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into Tbl07 values(1,2),(3,4),(null,null);
 create table Tbl08(a int, b int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into Tbl08 values(1,2),(3,4),(null,null);
 create table Tbl09(a int, b int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into Tbl09 values(1,2),(5,null),(null,8);
 analyze Tbl04;
 analyze Tbl05;
@@ -1134,8 +1147,8 @@ INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
 DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: Non-Scalar Subquery
  a | b 
 ---+---
- 3 | 4
  5 | 6
+ 3 | 4
 (2 rows)
 
 select Tbl04.* from Tbl04 where (Tbl04.a,Tbl04.b) not in (select Tbl07.a,Tbl07.b from Tbl07 left join Tbl08 on (Tbl07.a=Tbl08.a) where Tbl07.a = 1 and Tbl07.b = 2); -- expected: (3,4),(5,6)
@@ -1189,8 +1202,8 @@ INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
 DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: Non-Scalar Subquery
  a | b 
 ---+---
- 3 | 4
  5 | 6
+ 3 | 4
 (2 rows)
 
 select Tbl04.* from Tbl04 where (Tbl04.a,Tbl04.b) not in (select Tbl05.a,Tbl05.b from Tbl05,i3 where Tbl05.a < i3.a and Tbl05.b > i3.b);
@@ -1209,8 +1222,8 @@ INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
 DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: Non-Scalar Subquery
  a | b 
 ---+---
- 3 | 4
  5 | 6
+ 3 | 4
 (2 rows)
 
 select Tbl04.* from Tbl04 where (Tbl04.a,Tbl04.b) not in ((1,2));
@@ -1262,8 +1275,8 @@ DETAIL:  Falling back to Postgres-based planner because GPORCA does not support 
 select Tbl04.* from Tbl04 where Tbl04.a NOT IN (select Tbl09.a from Tbl09 where Tbl09.b is null); -- (1,2) (3,4)
  a | b 
 ---+---
- 3 | 4
  1 | 2
+ 3 | 4
 (2 rows)
 
 select Tbl04.* from Tbl04 where Tbl04.a NOT IN (select i3.a from i3);
@@ -1347,9 +1360,9 @@ DETAIL:  Falling back to Postgres-based planner because GPORCA does not support 
 select Tbl09.a, Tbl09.b from Tbl09;
  a | b 
 ---+---
+   | 8
  1 | 2
  5 |  
-   | 8
 (3 rows)
 
 select Tbl04.* from Tbl04 where (Tbl04.a,Tbl04.b) not in (select Tbl09.a,Tbl09.b from Tbl09); -- expected: (3,4)
@@ -1363,8 +1376,8 @@ DETAIL:  Falling back to Postgres-based planner because GPORCA does not support 
 select Tbl09.a, Tbl09.b from Tbl09 group by Tbl09.a, Tbl09.b;
  a | b 
 ---+---
- 5 |  
    | 8
+ 5 |  
  1 | 2
 (3 rows)
 
@@ -1437,8 +1450,8 @@ INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
 DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: Non-Scalar Subquery
  a | b 
 ---+---
- 3 | 4
  5 | 6
+ 3 | 4
 (2 rows)
 
 -- Cases where the planner "should have" determined not-nullabitlity
@@ -1463,9 +1476,13 @@ DETAIL:  Falling back to Postgres-based planner because GPORCA does not support 
 -- additional queries
 drop table if exists Tbl04;
 create table Tbl04(x int, y int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'x' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into Tbl04 values(1,2);
 insert into Tbl04 values(3,4);
 create table Tbl10(x int, y int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'x' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into Tbl10 values(1,null);
 select * from Tbl04 where (x,y) not in (select x,y from Tbl10);
 INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
@@ -1521,8 +1538,8 @@ INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
 DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: Non-Scalar Subquery
    a    |    b     
 --------+----------
- tushar | pednekar
  rob    | klopp
+ tushar | pednekar
 (2 rows)
 
 SELECT TblText1.a, TblText2.b FROM TblText1 JOIN TblText2 ON TblText1.a = TblText2.a WHERE (( (TblText1.a, TblText2.b) IN (SELECT TblText3.a, TblText3.b FROM TblText3)));
@@ -1530,8 +1547,8 @@ INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
 DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: Non-Scalar Subquery
     a    |    b    
 ---------+---------
- florian | waas
  oak     | barrett
+ florian | waas
 (2 rows)
 
 --
@@ -1539,37 +1556,44 @@ DETAIL:  Falling back to Postgres-based planner because GPORCA does not support 
 --
 begin;
 create table TabDel1(a int, b int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into TabDel1 values(1,2),(3,4),(5,6);
 create table TabDel2 as select * from TabDel1;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause. Creating a NULL policy entry.
 create table TabDel3(a int, b int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into TabDel3 values(1,2);
 create table TabDel4(a int not null, b int not null);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into TabDel4 values(1,2);
 commit;
 explain delete from TabDel1 where TabDel1.a not in (select a from TabDel3); -- do not support this because we produce NLASJ
                                             QUERY PLAN                                             
 ---------------------------------------------------------------------------------------------------
- Delete on tabdel1  (cost=0.00..862.04 rows=1 width=1)
-   ->  Hash Left Anti Semi (Not-In) Join  (cost=0.00..862.00 rows=1 width=18)
+ Delete on tabdel1  (cost=0.00..862.02 rows=1 width=1)
+   ->  Hash Left Anti Semi (Not-In) Join  (cost=0.00..862.00 rows=1 width=14)
          Hash Cond: (tabdel1.a = tabdel3.a)
-         ->  Seq Scan on tabdel1  (cost=0.00..431.00 rows=1 width=18)
-         ->  Hash  (cost=431.00..431.00 rows=1 width=4)
-               ->  Broadcast Motion 3:3  (slice1; segments: 3)  (cost=0.00..431.00 rows=1 width=4)
+         ->  Seq Scan on tabdel1  (cost=0.00..431.00 rows=1 width=14)
+         ->  Hash  (cost=431.00..431.00 rows=3 width=4)
+               ->  Broadcast Motion 3:3  (slice1; segments: 3)  (cost=0.00..431.00 rows=3 width=4)
                      ->  Seq Scan on tabdel3  (cost=0.00..431.00 rows=1 width=4)
- Optimizer: Pivotal Optimizer (GPORCA)
+ Optimizer: GPORCA
 (8 rows)
 
 explain delete from TabDel2 where TabDel2.a not in (select a from TabDel4); -- support this
                                             QUERY PLAN                                             
 ---------------------------------------------------------------------------------------------------
- Delete on tabdel2  (cost=0.00..862.03 rows=1 width=1)
-   ->  Hash Left Anti Semi (Not-In) Join  (cost=0.00..862.00 rows=1 width=18)
+ Delete on tabdel2  (cost=0.00..862.02 rows=1 width=1)
+   ->  Hash Left Anti Semi (Not-In) Join  (cost=0.00..862.00 rows=1 width=10)
          Hash Cond: (tabdel2.a = tabdel4.a)
-         ->  Seq Scan on tabdel2  (cost=0.00..431.00 rows=1 width=18)
+         ->  Seq Scan on tabdel2  (cost=0.00..431.00 rows=1 width=14)
          ->  Hash  (cost=431.00..431.00 rows=3 width=4)
                ->  Broadcast Motion 3:3  (slice1; segments: 3)  (cost=0.00..431.00 rows=3 width=4)
                      ->  Seq Scan on tabdel4  (cost=0.00..431.00 rows=1 width=4)
- Optimizer: Pivotal Optimizer (GPORCA)
+ Optimizer: GPORCA
 (8 rows)
 
 delete from TabDel2 where TabDel2.a not in (select a from TabDel4); 
@@ -1612,9 +1636,9 @@ update TblUp2 set a=100 where a not in (select a from TblUp4);
 select * from TblUp2;
   a  | b 
 -----+---
- 100 | 4
-   1 | 2
  100 | 6
+   1 | 2
+ 100 | 4
 (3 rows)
 
 --
@@ -1645,8 +1669,8 @@ select * from subselect_tab1 where (select b from subselect_tab2) is null;
 select * from subselect_tab1 where b::bool = ( c = any(select c from subselect_tab2));
   a  |   b   | c 
 -----+-------+---
- 200 | true  | 2
  100 | false | 1
+ 200 | true  | 2
 (2 rows)
 
 -- ALL subquery deeply nested in a scalar expression
@@ -1708,15 +1732,15 @@ INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
 DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: Inherited tables
                                                           QUERY PLAN                                                          
 ------------------------------------------------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)  (cost=2296.15..4165.55 rows=51935 width=4)
-   ->  Hash Join  (cost=2296.15..3473.08 rows=17312 width=4)
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=2123.03..3992.43 rows=51935 width=4)
+   ->  Hash Join  (cost=2123.03..3299.97 rows=17312 width=4)
          Hash Cond: (append_rel.att1 = test.att1)
          ->  Append  (cost=0.00..848.02 rows=51934 width=8)
                ->  Seq Scan on append_rel append_rel_1  (cost=0.00..1.01 rows=1 width=8)
                ->  Seq Scan on append_rel1 append_rel_2  (cost=0.00..293.67 rows=25967 width=8)
                ->  Seq Scan on append_rel2 append_rel_3  (cost=0.00..293.67 rows=25967 width=8)
-         ->  Hash  (cost=2283.65..2283.65 rows=1000 width=4)
-               ->  HashAggregate  (cost=2280.31..2283.65 rows=1000 width=4)
+         ->  Hash  (cost=2110.53..2110.53 rows=1000 width=4)
+               ->  HashAggregate  (cost=2107.20..2110.53 rows=1000 width=4)
                      Group Key: test.att1
                      ->  Subquery Scan on test  (cost=1021.14..2063.92 rows=17312 width=4)
                            ->  Hash Semi Join  (cost=1021.14..2063.92 rows=17312 width=8)
@@ -1795,8 +1819,8 @@ from (
   select unnest(t1.an_array_column) unnested_array_column
   from table_with_array_column t1, table_with_array_column t2) zz
 where unnested_array_column is not null;
-                                      QUERY PLAN                                       
----------------------------------------------------------------------------------------
+                                 QUERY PLAN                                 
+----------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Result
          Filter: (NOT ((unnest(t1.an_array_column)) IS NULL))
@@ -1807,7 +1831,7 @@ where unnested_array_column is not null;
                      ->  Materialize
                            ->  Broadcast Motion 3:3  (slice2; segments: 3)
                                  ->  Seq Scan on table_with_array_column t2
- Optimizer: Pivotal Optimizer (GPORCA)
+ Optimizer: GPORCA
 (11 rows)
 
 select *
@@ -1834,8 +1858,8 @@ from(
   select (subquery_nonpush_through_1.a in (select a from subquery_nonpush_through_2))::text as xx, subquery_nonpush_through_1.b
   from subquery_nonpush_through_1,subquery_nonpush_through_2) t
 where xx='dd';
-                                                                          QUERY PLAN                                                                           
----------------------------------------------------------------------------------------------------------------------------------------------------------------
+                                                   QUERY PLAN                                                    
+-----------------------------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Result
          Filter: ((((hashed SubPlan 1))::text) = 'dd'::text)
@@ -1851,8 +1875,8 @@ where xx='dd';
                              ->  Materialize
                                    ->  Broadcast Motion 3:3  (slice3; segments: 3)
                                          ->  Seq Scan on subquery_nonpush_through_2 subquery_nonpush_through_2_1
- Optimizer: Pivotal Optimizer (GPORCA)
-(19 rows)
+ Optimizer: GPORCA
+(16 rows)
 
 select *
 from(
@@ -1895,8 +1919,9 @@ from (
                        ->  Seq Scan on qp_subquery.a1
                              Output: a1.a1
                              Filter: (NOT (a1.a1 IS NULL))
+ Settings: optimizer = 'on'
  Optimizer: GPORCA
-(13 rows)
+(14 rows)
 
 select a1,case when a2 in (select a1::text from a1 where a1 is not null) then 'true' else 'false' end as checkcol
 from (
@@ -1924,9 +1949,9 @@ create materialized view v as select a, b from t distributed randomly;
 select * from v where exists (select a from v);
  a | b 
 ---+---
+ 1 | 1
  2 |  
    | 3
- 1 | 1
 (3 rows)
 
 select * from v where exists (select a from v limit 0);
@@ -1937,17 +1962,17 @@ select * from v where exists (select a from v limit 0);
 select * from v where exists (select a from v where a=2);
  a | b 
 ---+---
+ 1 | 1
  2 |  
    | 3
- 1 | 1
 (3 rows)
 
 select * from v where exists (select a from v where a<>2);
  a | b 
 ---+---
+ 1 | 1
  2 |  
    | 3
- 1 | 1
 (3 rows)
 
 select * from v where not exists (select a from v);
@@ -1976,9 +2001,9 @@ select * from v where not exists (select a from v where a<>2);
 select * from v where exists (select b from v);
  a | b 
 ---+---
+ 1 | 1
  2 |  
    | 3
- 1 | 1
 (3 rows)
 
 select * from v where exists (select b from v limit 0);
@@ -1994,9 +2019,9 @@ select * from v where exists (select b from v where b=2);
 select * from v where exists (select b from v where b<>2);
  a | b 
 ---+---
+ 1 | 1
  2 |  
    | 3
- 1 | 1
 (3 rows)
 
 select * from v where not exists (select b from v);
@@ -2007,17 +2032,17 @@ select * from v where not exists (select b from v);
 select * from v where not exists (select b from v limit 0);
  a | b 
 ---+---
+ 1 | 1
  2 |  
    | 3
- 1 | 1
 (3 rows)
 
 select * from v where not exists (select b from v where b=2);
  a | b 
 ---+---
+ 1 | 1
  2 |  
    | 3
- 1 | 1
 (3 rows)
 
 select * from v where not exists (select b from v where b<>2);
@@ -2036,9 +2061,9 @@ WHERE EXISTS
            WHERE t2.param = t1.param);
  param 
 -------
+ 2
  3
  1
- 2
 (3 rows)
 
 EXPLAIN (COSTS OFF) SELECT * FROM (SELECT BTRIM(p1.b) AS param FROM tab1 p1 JOIN tab1 p2 USING(a)) t1
@@ -2046,26 +2071,26 @@ WHERE EXISTS
           (SELECT 1 FROM
               (SELECT BTRIM(p1.b) AS param FROM tab1 p1 JOIN tab1 p2 USING(a)) t2
            WHERE t2.param = t1.param);
-                                   QUERY PLAN                                    
----------------------------------------------------------------------------------
+                                QUERY PLAN                                 
+---------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
-   ->  Hash Semi Join
-         Hash Cond: (btrim(p1.b) = btrim(p1_1.b))
-         ->  Hash Join
-               Hash Cond: (p1.a = p2.a)
-               ->  Seq Scan on tab1 p1
-                     Filter: (NOT (btrim(b) IS NULL))
-               ->  Hash
-                     ->  Broadcast Motion 3:3  (slice2; segments: 3)
-                           ->  Seq Scan on tab1 p2
+   ->  Hash Right Semi Join
+         Hash Cond: (btrim(p1_1.b) = btrim(p1.b))
+         ->  Broadcast Motion 3:3  (slice2; segments: 3)
+               ->  Hash Join
+                     Hash Cond: (p1.a = p2.a)
+                     ->  Seq Scan on tab1 p1
+                     ->  Hash
+                           ->  Broadcast Motion 3:3  (slice3; segments: 3)
+                                 ->  Seq Scan on tab1 p2
          ->  Hash
-               ->  Broadcast Motion 3:3  (slice3; segments: 3)
-                     ->  Hash Join
-                           Hash Cond: (p1_1.a = p2_1.a)
-                           ->  Seq Scan on tab1 p1_1
-                           ->  Hash
-                                 ->  Broadcast Motion 3:3  (slice4; segments: 3)
-                                       ->  Seq Scan on tab1 p2_1
+               ->  Hash Join
+                     Hash Cond: (p1_1.a = p2_1.a)
+                     ->  Seq Scan on tab1 p1_1
+                           Filter: (NOT (btrim(b) IS NULL))
+                     ->  Hash
+                           ->  Broadcast Motion 3:3  (slice4; segments: 3)
+                                 ->  Seq Scan on tab1 p2_1
  Optimizer: GPORCA
 (19 rows)
 
@@ -2080,8 +2105,8 @@ WHERE EXISTS
  param 
 -------
  2
- 1
  3
+ 1
 (3 rows)
 
 EXPLAIN (COSTS OFF) SELECT * FROM (SELECT BTRIM(p1.b) AS param FROM tab1 p1 JOIN tab1 p2 USING(a)) t1

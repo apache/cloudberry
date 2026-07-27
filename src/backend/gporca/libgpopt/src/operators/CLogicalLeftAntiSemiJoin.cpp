@@ -75,6 +75,10 @@ CLogicalLeftAntiSemiJoin::PxfsCandidates(CMemoryPool *mp) const
 	(void) xform_set->ExchangeSet(CXform::ExfLeftAntiSemiJoin2CrossProduct);
 	(void) xform_set->ExchangeSet(CXform::ExfLeftAntiSemiJoin2NLJoin);
 	(void) xform_set->ExchangeSet(CXform::ExfLeftAntiSemiJoin2HashJoin);
+	// Right-anti hash join (build on the smaller LHS).  CTranslatorDXLToPlStmt
+	// swaps the build (inner) side and the outer/inner hash keys to the LHS for
+	// JOIN_RIGHT_ANTI, matching the PostgreSQL planner / executor.
+	(void) xform_set->ExchangeSet(CXform::ExfLeftAntiSemiJoin2RightAntiSemiHashJoin);
 	return xform_set;
 }
 

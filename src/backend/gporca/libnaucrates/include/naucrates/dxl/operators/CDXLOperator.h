@@ -183,6 +183,8 @@ enum EdxlJoinType
 	EdxljtIn,
 	EdxljtLeftAntiSemijoin,
 	EdxljtLeftAntiSemijoinNotIn,
+	EdxljtRightSemijoin,		/* PG JOIN_RIGHT_SEMI -- build = LHS */
+	EdxljtRightAntiSemijoin,	/* PG JOIN_RIGHT_ANTI -- build = LHS */
 	EdxljtSentinel
 };
 

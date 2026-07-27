@@ -112,6 +112,8 @@ OBJS        = CExpression.o \
               CPhysicalLeftOuterIndexNLJoin.o \
               CPhysicalLeftOuterNLJoin.o \
               CPhysicalLeftSemiHashJoin.o \
+              CPhysicalRightSemiHashJoin.o \
+              CPhysicalRightAntiSemiHashJoin.o \
               CPhysicalLeftSemiNLJoin.o \
               CPhysicalFullHashJoin.o \
               CPhysicalLimit.o \

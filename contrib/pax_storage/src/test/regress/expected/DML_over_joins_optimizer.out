@@ -15,7 +15,9 @@ set optimizer_trace_fallback=on;
 ------------------------------------------------------------
 -- start_ignore
 drop table if exists r;
+NOTICE:  table "r" does not exist, skipping
 drop table if exists s;
+NOTICE:  table "s" does not exist, skipping
 -- end_ignore
 create table r (a int4, b int4) distributed by (a);
 create table s (a int4, b int4) distributed by (a);
@@ -25,10 +27,10 @@ analyze r;
 analyze s;
 update r set b = r.b + 1 from s where r.a = s.a;
 INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
-DETAIL:  DXL-to-PlStmt Translation: Attribute number 21 not found in project list
+DETAIL:  DXL-to-PlStmt Translation: Attribute number 13 not found in project list
 update r set b = r.b + 1 from s where r.a in (select a from s);
 INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
-DETAIL:  DXL-to-PlStmt Translation: Attribute number 35 not found in project list
+DETAIL:  DXL-to-PlStmt Translation: Attribute number 23 not found in project list
 delete from r using s where r.a = s.a;
 delete from r;
 insert into r select generate_series(1, 10000), generate_series(1, 10000) * 3;
@@ -46,10 +48,10 @@ insert into r select generate_series(1, 10000), generate_series(1, 10000) * 3;
 insert into s select generate_series(1, 100), generate_series(1, 100) * 4;
 update r set b = r.b + 4 from s where r.b = s.b;
 INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
-DETAIL:  DXL-to-PlStmt Translation: Attribute number 21 not found in project list
+DETAIL:  DXL-to-PlStmt Translation: Attribute number 13 not found in project list
 update r set b = b + 1 where b in (select b from s);
 INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
-DETAIL:  DXL-to-PlStmt Translation: Attribute number 25 not found in project list
+DETAIL:  DXL-to-PlStmt Translation: Attribute number 17 not found in project list
 delete from s using r where r.a = s.b;
 delete from r;
 delete from s;
@@ -65,13 +67,13 @@ insert into r select generate_series(1, 10000), generate_series(1, 10000) * 3;
 insert into s select generate_series(1, 100), generate_series(1, 100) * 4;
 explain update s set b = b + 1 where exists (select 1 from r where s.a = r.b);
 INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
-DETAIL:  DXL-to-PlStmt Translation: Attribute number 28 not found in project list
-                                                         QUERY PLAN
+DETAIL:  DXL-to-PlStmt Translation: Attribute number 20 not found in project list
+                                                         QUERY PLAN                                                         
 ----------------------------------------------------------------------------------------------------------------------------
  Update on s  (cost=47.71..49.13 rows=0 width=0)
    ->  Explicit Redistribute Motion 3:3  (slice1; segments: 3)  (cost=47.71..49.13 rows=33 width=52)
          ->  Result  (cost=47.71..48.46 rows=33 width=52)
-               ->  HashAggregate  (cost=47.71..48.05 rows=33 width=52)
+               ->  HashAggregate  (cost=47.71..48.04 rows=33 width=52)
                      Group Key: (RowIdExpr)
                      ->  Redistribute Motion 3:3  (slice2; segments: 3)  (cost=3.92..47.63 rows=33 width=52)
                            Hash Key: (RowIdExpr)
@@ -86,21 +88,22 @@ DETAIL:  DXL-to-PlStmt Translation: Attribute number 28 not found in project lis
 
 update s set b = b + 1 where exists (select 1 from r where s.a = r.b);
 INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
-DETAIL:  DXL-to-PlStmt Translation: Attribute number 28 not found in project list
+DETAIL:  DXL-to-PlStmt Translation: Attribute number 20 not found in project list
 explain delete from s where exists (select 1 from r where s.a = r.b);
-                                                  QUERY PLAN
----------------------------------------------------------------------------------------------------------------
- Delete on s  (cost=0.00..865.66 rows=34 width=1)
-   ->  Hash Semi Join  (cost=0.00..862.80 rows=34 width=18)
-         Hash Cond: (s_1.a = r.b)
-         ->  Seq Scan on s  (cost=0.00..431.00 rows=34 width=18)
-         ->  Hash  (cost=431.15..431.15 rows=3334 width=4)
-               ->  Result  (cost=0.00..431.15 rows=3334 width=4)
-                     ->  Redistribute Motion 3:3  (slice1; segments: 3)  (cost=0.00..431.14 rows=3334 width=4)
-                           Hash Key: r.b
-                           ->  Seq Scan on r  (cost=0.00..431.07 rows=3334 width=4)
- Optimizer: Pivotal Optimizer (GPORCA) version 3.83.0
-(10 rows)
+                                                QUERY PLAN                                                
+----------------------------------------------------------------------------------------------------------
+ Delete on s  (cost=0.00..865.08 rows=34 width=1)
+   ->  Hash Right Semi Join  (cost=0.00..862.73 rows=100 width=14)
+         Hash Cond: (s.a = r.b)
+         ->  Result  (cost=0.00..431.13 rows=10000 width=4)
+               ->  Redistribute Motion 3:3  (slice1; segments: 3)  (cost=0.00..431.11 rows=10000 width=4)
+                     Hash Key: r.b
+                     ->  Seq Scan on r  (cost=0.00..431.05 rows=3334 width=4)
+         ->  Hash  (cost=431.00..431.00 rows=100 width=14)
+               ->  Seq Scan on s  (cost=0.00..431.00 rows=100 width=14)
+                     Filter: (NOT (a IS NULL))
+ Optimizer: GPORCA
+(11 rows)
 
 delete from s where exists (select 1 from r where s.a = r.b);
 -- ----------------------------------------------------------------------
@@ -122,10 +125,10 @@ insert into r select generate_series(1, 10000), generate_series(1, 10000) * 3;
 insert into s select generate_series(1, 100), generate_series(1, 100) * 4;
 update r set b = r.b + 1 from s where r.a = s.a;
 INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
-DETAIL:  DXL-to-PlStmt Translation: Attribute number 21 not found in project list
+DETAIL:  DXL-to-PlStmt Translation: Attribute number 13 not found in project list
 update r set b = r.b + 1 from s where r.a in (select a from s);
 INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
-DETAIL:  DXL-to-PlStmt Translation: Attribute number 35 not found in project list
+DETAIL:  DXL-to-PlStmt Translation: Attribute number 23 not found in project list
 delete from r using s where r.a = s.a;
 delete from r;
 insert into r select generate_series(1, 10000), generate_series(1, 10000) * 3;
@@ -143,10 +146,10 @@ insert into r select generate_series(1, 10000), generate_series(1, 10000) * 3;
 insert into s select generate_series(1, 100), generate_series(1, 100) * 4;
 update r set b = r.b + 4 from s where r.b = s.b;
 INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
-DETAIL:  DXL-to-PlStmt Translation: Attribute number 21 not found in project list
+DETAIL:  DXL-to-PlStmt Translation: Attribute number 13 not found in project list
 update r set b = b + 1 where b in (select b from s);
 INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
-DETAIL:  DXL-to-PlStmt Translation: Attribute number 25 not found in project list
+DETAIL:  DXL-to-PlStmt Translation: Attribute number 17 not found in project list
 delete from s using r where r.a = s.b;
 delete from r;
 delete from s;
@@ -162,7 +165,7 @@ insert into r select generate_series(1, 10000), generate_series(1, 10000) * 3;
 insert into s select generate_series(1, 100), generate_series(1, 100) * 4;
 update s set b = b + 1 where exists (select 1 from r where s.a = r.b);
 INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
-DETAIL:  DXL-to-PlStmt Translation: Attribute number 28 not found in project list
+DETAIL:  DXL-to-PlStmt Translation: Attribute number 20 not found in project list
 delete from s where exists (select 1 from r where s.a = r.b);
 -- ----------------------------------------------------------------------
 -- Test: heap_motion3.sql
@@ -183,10 +186,10 @@ insert into r select generate_series(1, 10000), generate_series(1, 10000) * 3;
 insert into s select generate_series(1, 100), generate_series(1, 100) * 4;
 update r set b = r.b + 1 from s where r.a = s.a;
 INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
-DETAIL:  DXL-to-PlStmt Translation: Attribute number 21 not found in project list
+DETAIL:  DXL-to-PlStmt Translation: Attribute number 13 not found in project list
 update r set b = r.b + 1 from s where r.a in (select a from s);
 INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
-DETAIL:  DXL-to-PlStmt Translation: Attribute number 35 not found in project list
+DETAIL:  DXL-to-PlStmt Translation: Attribute number 23 not found in project list
 delete from r using s where r.a = s.a;
 delete from r;
 insert into r select generate_series(1, 10000), generate_series(1, 10000) * 3;
@@ -204,10 +207,10 @@ insert into r select generate_series(1, 10000), generate_series(1, 10000) * 3;
 insert into s select generate_series(1, 100), generate_series(1, 100) * 4;
 update r set b = r.b + 4 from s where r.b = s.b;
 INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
-DETAIL:  DXL-to-PlStmt Translation: Attribute number 21 not found in project list
+DETAIL:  DXL-to-PlStmt Translation: Attribute number 13 not found in project list
 update r set b = b + 1 where b in (select b from s);
 INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
-DETAIL:  DXL-to-PlStmt Translation: Attribute number 25 not found in project list
+DETAIL:  DXL-to-PlStmt Translation: Attribute number 17 not found in project list
 delete from s using r where r.a = s.b;
 delete from r;
 delete from s;
@@ -223,7 +226,7 @@ insert into r select generate_series(1, 10000), generate_series(1, 10000) * 3;
 insert into s select generate_series(1, 100), generate_series(1, 100) * 4;
 update s set b = b + 1 where exists (select 1 from r where s.a = r.b);
 INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
-DETAIL:  DXL-to-PlStmt Translation: Attribute number 28 not found in project list
+DETAIL:  DXL-to-PlStmt Translation: Attribute number 20 not found in project list
 delete from s where exists (select 1 from r where s.a = r.b);
 -- ----------------------------------------------------------------------
 -- Test: heap_motion4.sql
@@ -244,10 +247,10 @@ insert into r select generate_series(1, 10000), generate_series(1, 10000) * 3;
 insert into s select generate_series(1, 100), generate_series(1, 100) * 4;
 update r set b = r.b + 1 from s where r.a = s.a;
 INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
-DETAIL:  DXL-to-PlStmt Translation: Attribute number 21 not found in project list
+DETAIL:  DXL-to-PlStmt Translation: Attribute number 13 not found in project list
 update r set b = r.b + 1 from s where r.a in (select a from s);
 INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
-DETAIL:  DXL-to-PlStmt Translation: Attribute number 35 not found in project list
+DETAIL:  DXL-to-PlStmt Translation: Attribute number 23 not found in project list
 delete from r using s where r.a = s.a;
 delete from r;
 insert into r select generate_series(1, 10000), generate_series(1, 10000) * 3;
@@ -265,10 +268,10 @@ insert into r select generate_series(1, 10000), generate_series(1, 10000) * 3;
 insert into s select generate_series(1, 100), generate_series(1, 100) * 4;
 update r set b = r.b + 4 from s where r.b = s.b;
 INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
-DETAIL:  DXL-to-PlStmt Translation: Attribute number 21 not found in project list
+DETAIL:  DXL-to-PlStmt Translation: Attribute number 13 not found in project list
 update r set b = b + 1 where b in (select b from s);
 INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
-DETAIL:  DXL-to-PlStmt Translation: Attribute number 25 not found in project list
+DETAIL:  DXL-to-PlStmt Translation: Attribute number 17 not found in project list
 delete from s using r where r.a = s.b;
 delete from r;
 delete from s;
@@ -284,7 +287,7 @@ insert into r select generate_series(1, 10000), generate_series(1, 10000) * 3;
 insert into s select generate_series(1, 100), generate_series(1, 100) * 4;
 update s set b = b + 1 where exists (select 1 from r where s.a = r.b);
 INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
-DETAIL:  DXL-to-PlStmt Translation: Attribute number 28 not found in project list
+DETAIL:  DXL-to-PlStmt Translation: Attribute number 20 not found in project list
 delete from s where exists (select 1 from r where s.a = r.b);
 -- ----------------------------------------------------------------------
 -- Test: heap_motion5.sql
@@ -305,10 +308,10 @@ insert into r select generate_series(1, 10000), generate_series(1, 10000) * 3;
 insert into s select generate_series(1, 100), generate_series(1, 100) * 4;
 update r set b = r.b + 1 from s where r.a = s.a;
 INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
-DETAIL:  DXL-to-PlStmt Translation: Attribute number 21 not found in project list
+DETAIL:  DXL-to-PlStmt Translation: Attribute number 13 not found in project list
 update r set b = r.b + 1 from s where r.a in (select a from s);
 INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
-DETAIL:  DXL-to-PlStmt Translation: Attribute number 35 not found in project list
+DETAIL:  DXL-to-PlStmt Translation: Attribute number 23 not found in project list
 delete from r using s where r.a = s.a;
 delete from r;
 insert into r select generate_series(1, 10000), generate_series(1, 10000) * 3;
@@ -326,10 +329,10 @@ insert into r select generate_series(1, 10000), generate_series(1, 10000) * 3;
 insert into s select generate_series(1, 100), generate_series(1, 100) * 4;
 update r set b = r.b + 4 from s where r.b = s.b;
 INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
-DETAIL:  DXL-to-PlStmt Translation: Attribute number 21 not found in project list
+DETAIL:  DXL-to-PlStmt Translation: Attribute number 13 not found in project list
 update r set b = b + 1 where b in (select b from s);
 INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
-DETAIL:  DXL-to-PlStmt Translation: Attribute number 25 not found in project list
+DETAIL:  DXL-to-PlStmt Translation: Attribute number 17 not found in project list
 delete from s using r where r.a = s.b;
 delete from r;
 delete from s;
@@ -345,7 +348,7 @@ insert into r select generate_series(1, 10000), generate_series(1, 10000) * 3;
 insert into s select generate_series(1, 100), generate_series(1, 100) * 4;
 update s set b = b + 1 where exists (select 1 from r where s.a = r.b);
 INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
-DETAIL:  DXL-to-PlStmt Translation: Attribute number 28 not found in project list
+DETAIL:  DXL-to-PlStmt Translation: Attribute number 20 not found in project list
 delete from s where exists (select 1 from r where s.a = r.b);
 ------------------------------------------------------------
 -- Update with Motion:
@@ -355,6 +358,7 @@ delete from s where exists (select 1 from r where s.a = r.b);
 drop table if exists r;
 drop table if exists s;
 drop table if exists p;
+NOTICE:  table "p" does not exist, skipping
 -- end_ignore
 create table r (a int4, b int4) distributed by (a);
 create table s (a int4, b int4) distributed by (a);
@@ -371,7 +375,7 @@ update s set a = r.a from r where r.b = s.b;
 ------------------------------------------------------------
 update s set b = (select min(a) from r where b = s.b);
 INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
-DETAIL:  DXL-to-PlStmt Translation: Attribute number 23 not found in project list
+DETAIL:  DXL-to-PlStmt Translation: Attribute number 15 not found in project list
 delete from s where b = (select min(a) from r where b = s.b);
 ------------------------------------------------------------
 --	Update partition key (requires moving tuples from one partition to another)
@@ -383,13 +387,15 @@ update p set c = c + 1 where b in (select b from s) and c = 0;
 INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
 DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: DML(update) on partitioned tables
 select tableoid::regclass, c, count(*) from p group by 1, 2;
+NOTICE:  One or more columns in the following table(s) do not have statistics: p
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
    tableoid    | c | count 
 ---------------+---+-------
  p_1_prt_3     | 2 |  1667
  p_1_prt_4     | 3 |  1667
  p_1_prt_extra | 5 |  1666
- p_1_prt_5     | 4 |  1667
  p_1_prt_2     | 1 |  3333
+ p_1_prt_5     | 4 |  1667
 (5 rows)
 
 ------------------------------------------------------------
@@ -416,7 +422,7 @@ update s set a = r.a from r where r.b = s.b;
 ------------------------------------------------------------
 update s set b = (select min(a) from r where b = s.b);
 INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
-DETAIL:  DXL-to-PlStmt Translation: Attribute number 23 not found in project list
+DETAIL:  DXL-to-PlStmt Translation: Attribute number 15 not found in project list
 delete from s where b = (select min(a) from r where b = s.b);
 ------------------------------------------------------------
 --	Update partition key (requires moving tuples from one partition to another)
@@ -428,13 +434,15 @@ update p set c = c + 1 where b in (select b from s where b = 36);
 INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
 DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: DML(update) on partitioned tables
 select tableoid::regclass, c, count(*) from p group by 1, 2;
+NOTICE:  One or more columns in the following table(s) do not have statistics: p
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
    tableoid    | c | count 
 ---------------+---+-------
- p_1_prt_3     | 2 |  1668
- p_1_prt_4     | 3 |  1667
  p_1_prt_extra | 5 |  1666
+ p_1_prt_4     | 3 |  1667
  p_1_prt_5     | 4 |  1667
  p_1_prt_2     | 1 |  3332
+ p_1_prt_3     | 2 |  1668
 (5 rows)
 
 ------------------------------------------------------------
@@ -461,7 +469,7 @@ update s set a = r.a from r where r.b = s.b;
 ------------------------------------------------------------
 update s set b = (select min(a) from r where b = s.b);
 INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
-DETAIL:  DXL-to-PlStmt Translation: Attribute number 23 not found in project list
+DETAIL:  DXL-to-PlStmt Translation: Attribute number 15 not found in project list
 delete from s where b = (select min(a) from r where b = s.b);
 ------------------------------------------------------------
 --	Update partition key (requires moving tuples from one partition to another)
@@ -473,13 +481,15 @@ update p set c = c + 1 where b in (select b from s) and c = 0;
 INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
 DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: DML(update) on partitioned tables
 select tableoid::regclass, c, count(*) from p group by 1, 2;
+NOTICE:  One or more columns in the following table(s) do not have statistics: p
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
    tableoid    | c | count 
 ---------------+---+-------
- p_1_prt_5     | 4 |  1667
  p_1_prt_4     | 3 |  1667
  p_1_prt_2     | 1 |  3333
- p_1_prt_3     | 2 |  1667
  p_1_prt_extra | 5 |  1666
+ p_1_prt_3     | 2 |  1667
+ p_1_prt_5     | 4 |  1667
 (5 rows)
 
 ------------------------------------------------------------
@@ -506,7 +516,7 @@ update s set a = r.a from r where r.b = s.b;
 ------------------------------------------------------------
 update s set b = (select min(a) from r where b = s.b);
 INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
-DETAIL:  DXL-to-PlStmt Translation: Attribute number 23 not found in project list
+DETAIL:  DXL-to-PlStmt Translation: Attribute number 15 not found in project list
 delete from s where b = (select min(a) from r where b = s.b);
 ------------------------------------------------------------
 --	Update partition key (requires moving tuples from one partition to another)
@@ -518,13 +528,15 @@ update p set c = c + 1 where b in (select b from s) and c = 0;
 INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
 DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: DML(update) on partitioned tables
 select tableoid::regclass, c, count(*) from p group by 1, 2;
+NOTICE:  One or more columns in the following table(s) do not have statistics: p
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
    tableoid    | c | count 
 ---------------+---+-------
- p_1_prt_3     | 2 |  1667
- p_1_prt_extra | 5 |  1666
- p_1_prt_5     | 4 |  1667
  p_1_prt_4     | 3 |  1667
+ p_1_prt_extra | 5 |  1666
+ p_1_prt_3     | 2 |  1667
  p_1_prt_2     | 1 |  3333
+ p_1_prt_5     | 4 |  1667
 (5 rows)
 
 ------------------------------------------------------------
@@ -551,7 +563,7 @@ update s set a = r.a from r where r.b = s.b;
 ------------------------------------------------------------
 update s set b = (select min(a) from r where b = s.b);
 INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
-DETAIL:  DXL-to-PlStmt Translation: Attribute number 23 not found in project list
+DETAIL:  DXL-to-PlStmt Translation: Attribute number 15 not found in project list
 delete from s where b = (select min(a) from r where b = s.b);
 ------------------------------------------------------------
 --	Update partition key (requires moving tuples from one partition to another)
@@ -563,10 +575,12 @@ update p set c = c + 1 where b in (select b from s) and c = 0;
 INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
 DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: DML(update) on partitioned tables
 select tableoid::regclass, c, count(*) from p group by 1, 2;
+NOTICE:  One or more columns in the following table(s) do not have statistics: p
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
    tableoid    | c | count 
 ---------------+---+-------
- p_1_prt_extra | 5 |  1666
  p_1_prt_4     | 3 |  1667
+ p_1_prt_extra | 5 |  1666
  p_1_prt_3     | 2 |  1667
  p_1_prt_2     | 1 |  3333
  p_1_prt_5     | 4 |  1667
@@ -619,6 +633,8 @@ DETAIL:  Falling back to Postgres-based planner because GPORCA does not support 
 -- 	No motion of s
 ------------------------------------------------------------
 delete from s where a in (select a from p where p.b = s.b);
+NOTICE:  One or more columns in the following table(s) do not have statistics: p
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 select count(*) from s;
  count 
 -------
@@ -628,15 +644,17 @@ select count(*) from s;
 select * from s;
  a | b  
 ---+----
- 1 |  3
  2 |  6
  3 |  9
  4 | 12
+ 1 |  3
  5 | 15
  9 | 27
 (6 rows)
 
 delete from s where b in (select a from p where p.c = s.b);
+NOTICE:  One or more columns in the following table(s) do not have statistics: p
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 -- ----------------------------------------------------------------------
 -- Test: partition_motion2.sql
 -- ----------------------------------------------------------------------
@@ -684,6 +702,8 @@ DETAIL:  Falling back to Postgres-based planner because GPORCA does not support 
 -- 	No motion of s
 ------------------------------------------------------------
 delete from s where a in (select a from p where p.b = s.b);
+NOTICE:  One or more columns in the following table(s) do not have statistics: p
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 select count(*) from s;
  count 
 -------
@@ -693,15 +713,17 @@ select count(*) from s;
 select * from s;
  a | b  
 ---+----
- 1 |  3
  2 |  6
  3 |  9
  4 | 12
  5 | 15
  9 | 27
+ 1 |  3
 (6 rows)
 
 delete from s where b in (select a from p where p.c = s.b);
+NOTICE:  One or more columns in the following table(s) do not have statistics: p
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 -- ----------------------------------------------------------------------
 -- Test: partition_motion3.sql
 -- ----------------------------------------------------------------------
@@ -749,6 +771,8 @@ DETAIL:  Falling back to Postgres-based planner because GPORCA does not support 
 -- 	No motion of s
 ------------------------------------------------------------
 delete from s where a in (select a from p where p.b = s.b);
+NOTICE:  One or more columns in the following table(s) do not have statistics: p
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 select count(*) from s;
  count 
 -------
@@ -758,15 +782,17 @@ select count(*) from s;
 select * from s;
  a | b  
 ---+----
- 9 | 27
  1 |  3
- 5 | 15
- 2 |  6
  3 |  9
  4 | 12
+ 9 | 27
+ 2 |  6
+ 5 | 15
 (6 rows)
 
 delete from s where b in (select a from p where p.c = s.b);
+NOTICE:  One or more columns in the following table(s) do not have statistics: p
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 -- ----------------------------------------------------------------------
 -- Test: partition_motion4.sql
 -- ----------------------------------------------------------------------
@@ -814,6 +840,8 @@ DETAIL:  Falling back to Postgres-based planner because GPORCA does not support 
 -- 	No motion of s
 ------------------------------------------------------------
 delete from s where a in (select a from p where p.b = s.b);
+NOTICE:  One or more columns in the following table(s) do not have statistics: p
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 select count(*) from s;
  count 
 -------
@@ -823,15 +851,17 @@ select count(*) from s;
 select * from s;
  a | b  
 ---+----
- 9 | 27
  2 |  6
+ 5 | 15
+ 1 |  3
  3 |  9
  4 | 12
- 1 |  3
- 5 | 15
+ 9 | 27
 (6 rows)
 
 delete from s where b in (select a from p where p.c = s.b);
+NOTICE:  One or more columns in the following table(s) do not have statistics: p
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 -- ----------------------------------------------------------------------
 -- Test: partition_motion5.sql
 -- ----------------------------------------------------------------------
@@ -879,6 +909,8 @@ DETAIL:  Falling back to Postgres-based planner because GPORCA does not support 
 -- 	No motion of s
 ------------------------------------------------------------
 delete from s where a in (select a from p where p.b = s.b);
+NOTICE:  One or more columns in the following table(s) do not have statistics: p
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 select count(*) from s;
  count 
 -------
@@ -888,15 +920,17 @@ select count(*) from s;
 select * from s;
  a | b  
 ---+----
+ 2 |  6
+ 5 | 15
+ 1 |  3
  3 |  9
  4 | 12
  9 | 27
- 1 |  3
- 2 |  6
- 5 | 15
 (6 rows)
 
 delete from s where b in (select a from p where p.c = s.b);
+NOTICE:  One or more columns in the following table(s) do not have statistics: p
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 -- ----------------------------------------------------------------------
 -- Test: mpp1070.sql
 -- ----------------------------------------------------------------------
@@ -930,7 +964,7 @@ SELECT a,b,c FROM update_test ORDER BY a,c;
 
 UPDATE update_test SET a = DEFAULT, b = DEFAULT;
 INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
-DETAIL:  DXL-to-PlStmt Translation: Attribute number 14 not found in project list
+DETAIL:  DXL-to-PlStmt Translation: Attribute number 10 not found in project list
 SELECT a,b,c FROM update_test ORDER BY a,c;
  a  | b |  c  
 ----+---+-----
@@ -941,7 +975,7 @@ SELECT a,b,c FROM update_test ORDER BY a,c;
 -- aliases for the UPDATE target table
 UPDATE update_test AS t SET b = 10 WHERE t.a = 10;
 INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
-DETAIL:  DXL-to-PlStmt Translation: Attribute number 13 not found in project list
+DETAIL:  DXL-to-PlStmt Translation: Attribute number 9 not found in project list
 SELECT a,b,c FROM update_test ORDER BY a,c;
  a  | b  |  c  
 ----+----+-----
@@ -951,7 +985,7 @@ SELECT a,b,c FROM update_test ORDER BY a,c;
 
 UPDATE update_test t SET b = t.b + 10 WHERE t.a = 10;
 INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
-DETAIL:  DXL-to-PlStmt Translation: Attribute number 13 not found in project list
+DETAIL:  DXL-to-PlStmt Translation: Attribute number 9 not found in project list
 SELECT a,b,c FROM update_test ORDER BY a,c;
  a  | b  |  c  
 ----+----+-----
@@ -962,7 +996,7 @@ SELECT a,b,c FROM update_test ORDER BY a,c;
 UPDATE update_test SET a=v.i FROM (VALUES(100, 20)) AS v(i, j)
 	WHERE update_test.b = v.j;
 INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
-DETAIL:  DXL-to-PlStmt Translation: Attribute number 14 not found in project list
+DETAIL:  DXL-to-PlStmt Translation: Attribute number 10 not found in project list
 SELECT a,b,c FROM update_test ORDER BY a,c;
   a  | b  |  c  
 -----+----+-----
@@ -987,14 +1021,14 @@ INSERT INTO t2 (id, data1, data2) VALUES (4, 3, 104);
 -- upon the number of segments; in my case, I used only 2 segments).
 UPDATE t1 SET data2 = t2.data2 FROM t2 WHERE t1.data1 = t2.data1;
 INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
-DETAIL:  DXL-to-PlStmt Translation: Attribute number 22 not found in project list
+DETAIL:  DXL-to-PlStmt Translation: Attribute number 14 not found in project list
 SELECT * from t1;
  id | data1 | data2 
 ----+-------+-------
   1 |     1 |   102
   2 |     2 |   101
-  3 |     3 |   104
   4 |     4 |   103
+  3 |     3 |   104
 (4 rows)
 
 -- ----------------------------------------------------------------------
@@ -1170,64 +1204,64 @@ ANALYZE sales;
 select sales.* from sales,s,r where sales.id = s.b and sales.month = r.b+1;
  id | year | month | day |  region   
 ----+------+-------+-----+-----------
-  9 | 2004 |    10 |  10 | europe
- 21 | 2002 |    10 |  22 | europe
- 33 | 2007 |    10 |   6 | europe
- 27 | 2008 |     4 |  28 | australia
- 39 | 2006 |     4 |  12 | australia
-  3 | 2005 |     4 |   4 | australia
- 15 | 2003 |     4 |  16 | australia
  18 | 2006 |     7 |  19 | usa
-  6 | 2008 |     7 |   7 | usa
  30 | 2004 |     7 |   3 | usa
+  6 | 2008 |     7 |   7 | usa
+ 21 | 2002 |    10 |  22 | europe
+  9 | 2004 |    10 |  10 | europe
+ 33 | 2007 |    10 |   6 | europe
+  3 | 2005 |     4 |   4 | australia
+ 39 | 2006 |     4 |  12 | australia
+ 27 | 2008 |     4 |  28 | australia
+ 15 | 2003 |     4 |  16 | australia
 (10 rows)
 
 update sales set month = month+1 from r,s where sales.id = s.b and sales.month = r.b+1;
 INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
-DETAIL:  DXL-to-PlStmt Translation: Attribute number 34 not found in project list
+DETAIL:  DXL-to-PlStmt Translation: Attribute number 22 not found in project list
 select sales.* from sales,s,r where sales.id = s.b and sales.month = r.b+2;
  id | year | month | day |  region   
 ----+------+-------+-----+-----------
- 39 | 2006 |     5 |  12 | australia
-  3 | 2005 |     5 |   4 | australia
- 27 | 2008 |     5 |  28 | australia
- 15 | 2003 |     5 |  16 | australia
  18 | 2006 |     8 |  19 | usa
   6 | 2008 |     8 |   7 | usa
  30 | 2004 |     8 |   3 | usa
  21 | 2002 |    11 |  22 | europe
   9 | 2004 |    11 |  10 | europe
  33 | 2007 |    11 |   6 | europe
+ 39 | 2006 |     5 |  12 | australia
+ 27 | 2008 |     5 |  28 | australia
+  3 | 2005 |     5 |   4 | australia
+ 15 | 2003 |     5 |  16 | australia
 (10 rows)
 
 select sales.* from sales where id in (select s.b from s, r where s.a = r.b) and day in (select a from r);
  id | year | month | day |  region   
 ----+------+-------+-----+-----------
- 27 | 2008 |     5 |  28 | australia
  18 | 2006 |     8 |  19 | usa
  36 | 2003 |     1 |   9 | asia
   9 | 2004 |    11 |  10 | europe
+ 27 | 2008 |     5 |  28 | australia
 (4 rows)
 
 update sales set region = 'new_region' where id in (select s.b from s, r where s.a = r.b) and day in (select a from r);
 INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
-DETAIL:  DXL-to-PlStmt Translation: Attribute number 52 not found in project list
+DETAIL:  DXL-to-PlStmt Translation: Attribute number 36 not found in project list
 select sales.* from sales where id in (select s.b from s, r where s.a = r.b) and day in (select a from r);
  id | year | month | day |   region   
 ----+------+-------+-----+------------
- 27 | 2008 |     5 |  28 | new_region
- 18 | 2006 |     8 |  19 | new_region
  36 | 2003 |     1 |   9 | new_region
   9 | 2004 |    11 |  10 | new_region
+ 27 | 2008 |     5 |  28 | new_region
+ 18 | 2006 |     8 |  19 | new_region
 (4 rows)
 
 select sales.* from sales where id in (select s.b-1 from s,r where s.a = r.b);
  id | year | month | day |  region   
 ----+------+-------+-----+-----------
  17 | 2005 |     6 |  18 | europe
- 35 | 2002 |    12 |   8 | australia
   8 | 2003 |     9 |   9 | asia
  26 | 2007 |     3 |  27 | usa
+ 35 | 2002 |    12 |   8 | australia
 (4 rows)
 
 delete from sales where id in (select s.b-1 from s,r where s.a = r.b);
@@ -1240,10 +1274,10 @@ select sales.* from sales where id in (select s.b-1 from s,r where s.a = r.b);
 select s.* from s, r,sales where s.a = r.b and s.b = sales.id;
  a  | b  
 ----+----
-  3 |  9
   6 | 18
   9 | 27
  12 | 36
+  3 |  9
 (4 rows)
 
 delete from s using r,sales where s.a = r.b and s.b = sales.id;
@@ -1255,26 +1289,26 @@ select s.* from s, r,sales where s.a = r.b and s.b = sales.id;
 select r.* from r,s,sales where s.a = sales.day and sales.month = r.b;
  a | b  
 ---+----
- 1 |  3
- 1 |  3
  2 |  6
  3 |  9
  3 |  9
  4 | 12
+ 1 |  3
+ 1 |  3
 (6 rows)
 
 update r set b = r.b + 1 from s,sales where s.a = sales.day and sales.month = r.b;
 INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
-DETAIL:  DXL-to-PlStmt Translation: Attribute number 34 not found in project list
+DETAIL:  DXL-to-PlStmt Translation: Attribute number 22 not found in project list
 select r.* from r,s,sales where s.a = sales.day and sales.month = r.b-1;
  a | b  
 ---+----
- 1 |  4
- 1 |  4
+ 3 | 10
+ 3 | 10
  2 |  7
- 3 | 10
- 3 | 10
  4 | 13
+ 1 |  4
+ 1 |  4
 (6 rows)
 
 -- ----------------------------------------------------------------------
@@ -1298,6 +1332,8 @@ DETAIL:  Falling back to Postgres-based planner because GPORCA does not support 
 
 -- update partition key
 select sales_par.* from sales_par where id in (select s.b from s, r where s.a = r.b) and day in (select a from r);
+NOTICE:  One or more columns in the following table(s) do not have statistics: sales_par
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  id | year | month | day | region 
 ----+------+-------+-----+--------
  18 | 2006 |     7 |  19 | usa
@@ -1308,60 +1344,76 @@ update sales_par set region = 'new_region' where id in (select s.b from s, r whe
 INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
 DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: DML(update) on partitioned tables
 select sales_par.* from sales_par where id in (select s.b from s, r where s.a = r.b) and day in (select a from r);
+NOTICE:  One or more columns in the following table(s) do not have statistics: sales_par
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  id | year | month | day |   region   
 ----+------+-------+-----+------------
- 18 | 2006 |     7 |  19 | new_region
   9 | 2004 |    10 |  10 | new_region
+ 18 | 2006 |     7 |  19 | new_region
 (2 rows)
 
 select sales_par.* from sales_par,s,r where sales_par.id = s.b and sales_par.month = r.b+1;
+NOTICE:  One or more columns in the following table(s) do not have statistics: sales_par
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  id | year | month | day |   region   
 ----+------+-------+-----+------------
-  3 | 2005 |     4 |   4 | australia
- 15 | 2003 |     4 |  16 | australia
  18 | 2006 |     7 |  19 | new_region
   6 | 2008 |     7 |   7 | usa
   9 | 2004 |    10 |  10 | new_region
+  3 | 2005 |     4 |   4 | australia
+ 15 | 2003 |     4 |  16 | australia
 (5 rows)
 
 update sales_par set month = month+1 from r,s where sales_par.id = s.b and sales_par.month = r.b+1;
 INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
 DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: DML(update) on partitioned tables
 select sales_par.* from sales_par,s,r where sales_par.id = s.b and sales_par.month = r.b+2;
+NOTICE:  One or more columns in the following table(s) do not have statistics: sales_par
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  id | year | month | day |   region   
 ----+------+-------+-----+------------
   3 | 2005 |     5 |   4 | australia
  15 | 2003 |     5 |  16 | australia
- 18 | 2006 |     8 |  19 | new_region
   6 | 2008 |     8 |   7 | usa
+ 18 | 2006 |     8 |  19 | new_region
   9 | 2004 |    11 |  10 | new_region
 (5 rows)
 
 select sales_par.* from sales_par where id in (select s.b-1 from s,r where s.a = r.b);
+NOTICE:  One or more columns in the following table(s) do not have statistics: sales_par
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  id | year | month | day | region 
 ----+------+-------+-----+--------
- 17 | 2005 |     6 |  18 | europe
   8 | 2003 |     9 |   9 | asia
+ 17 | 2005 |     6 |  18 | europe
 (2 rows)
 
 delete from sales_par where id in (select s.b-1 from s,r where s.a = r.b);
 INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
 DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: DML(delete) on partitioned tables
 select sales_par.* from sales_par where id in (select s.b-1 from s,r where s.a = r.b);
+NOTICE:  One or more columns in the following table(s) do not have statistics: sales_par
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  id | year | month | day | region 
 ----+------+-------+-----+--------
 (0 rows)
 
 -- heap table
 select s.* from s, r,sales_par where s.a = r.b and s.b = sales_par.id;
+NOTICE:  One or more columns in the following table(s) do not have statistics: sales_par
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  a | b  
 ---+----
- 3 |  9
  6 | 18
+ 3 |  9
 (2 rows)
 
 delete from s using r,sales_par where s.a = r.b and s.b = sales_par.id;
+NOTICE:  One or more columns in the following table(s) do not have statistics: sales_par
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 select s.* from s, r,sales_par where s.a = r.b and s.b = sales_par.id;
+NOTICE:  One or more columns in the following table(s) do not have statistics: sales_par
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  a | b 
 ---+---
 (0 rows)
@@ -1393,10 +1445,10 @@ DETAIL:  Falling back to Postgres-based planner because GPORCA does not support 
  id | year | month | day |  region   
 ----+------+-------+-----+-----------
   3 | 2005 |     4 |   4 | australia
- 15 | 2003 |     4 |  16 | australia
  18 | 2006 |     7 |  19 | usa
-  6 | 2008 |     7 |   7 | usa
+ 15 | 2003 |     4 |  16 | australia
   9 | 2004 |    10 |  10 | europe
+  6 | 2008 |     7 |   7 | usa
 (5 rows)
 
 update sales_par2 set month = month+1 from r,s where sales_par2.id = s.b and sales_par2.month = r.b+1;
@@ -1407,11 +1459,11 @@ INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
 DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: Multi-level partitioned tables
  id | year | month | day |  region   
 ----+------+-------+-----+-----------
-  9 | 2004 |    11 |  10 | europe
- 15 | 2003 |     5 |  16 | australia
   3 | 2005 |     5 |   4 | australia
  18 | 2006 |     8 |  19 | usa
+  9 | 2004 |    11 |  10 | europe
   6 | 2008 |     8 |   7 | usa
+ 15 | 2003 |     5 |  16 | australia
 (5 rows)
 
 PREPARE plan0 as update sales_par2 set month = month+1 from r,s where sales_par2.id = s.b and sales_par2.month = r.b+2;
@@ -1423,11 +1475,11 @@ INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
 DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: Multi-level partitioned tables
  id | year | month | day |  region   
 ----+------+-------+-----+-----------
-  9 | 2004 |    12 |  10 | europe
   3 | 2005 |     6 |   4 | australia
- 15 | 2003 |     6 |  16 | australia
  18 | 2006 |     9 |  19 | usa
+  9 | 2004 |    12 |  10 | europe
   6 | 2008 |     9 |   7 | usa
+ 15 | 2003 |     6 |  16 | australia
 (5 rows)
 
 select sales_par2.* from sales_par2 where id in (select s.b-1 from s,r where s.a = r.b);
@@ -1435,8 +1487,8 @@ INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
 DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: Multi-level partitioned tables
  id | year | month | day | region 
 ----+------+-------+-----+--------
- 17 | 2005 |     6 |  18 | europe
   8 | 2003 |     9 |   9 | asia
+ 17 | 2005 |     6 |  18 | europe
 (2 rows)
 
 delete from sales_par2 where id in (select s.b-1 from s,r where s.a = r.b);
@@ -1455,8 +1507,8 @@ INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
 DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: Multi-level partitioned tables
  a | b  
 ---+----
- 3 |  9
  6 | 18
+ 3 |  9
 (2 rows)
 
 delete from s using r,sales_par2 where s.a = r.b and s.b = sales_par2.id;
@@ -1487,9 +1539,9 @@ INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
 DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: Multi-level partitioned tables
  a | b 
 ---+---
+ 2 | 6
  3 | 9
  1 | 3
- 2 | 6
 (3 rows)
 
 delete from r where b in (select month-1 from sales_par_CO, s_ao where sales_par_CO.id = s_ao.b);
@@ -1516,11 +1568,11 @@ INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
 DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: Multi-level partitioned tables
  a  | b  
 ----+----
-  6 | 18
- 18 | 54
- 15 | 45
-  9 | 27
  12 | 36
+ 15 | 45
+  6 | 18
+  9 | 27
+ 18 | 54
 (5 rows)
 
 update r set b = r.b + 1 where a in (select sales_par_CO.id from sales_par_CO, s_ao where sales_par_CO.id = s_ao.b);
@@ -1531,11 +1583,11 @@ INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
 DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: Multi-level partitioned tables
  a  | b  
 ----+----
- 15 | 46
-  9 | 28
  12 | 37
-  6 | 19
+ 15 | 46
  18 | 55
+  6 | 19
+  9 | 28
 (5 rows)
 
 -- heap table: delete:
@@ -1580,19 +1632,25 @@ DETAIL:  Falling back to Postgres-based planner because GPORCA does not support 
 
 -- heap table: duplicate distribution key: delete --
 select * from s where a in (select day from sales_par,m where sales_par.id = m.b);
+NOTICE:  One or more columns in the following table(s) do not have statistics: sales_par
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  a  | b  
 ----+----
+  5 | 15
+  9 | 27
  13 | 39
  17 | 51
-  9 | 27
-  9 | 36
-  5 | 15
  21 | 63
   5 | 20
+  9 | 36
 (7 rows)
 
 delete from s where a in (select day from sales_par,m where sales_par.id = m.b);
+NOTICE:  One or more columns in the following table(s) do not have statistics: sales_par
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 select * from s where a in (select day from sales_par,m where sales_par.id = m.b);
+NOTICE:  One or more columns in the following table(s) do not have statistics: sales_par
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  a | b 
 ---+---
 (0 rows)
@@ -1607,7 +1665,7 @@ select * from s where a = 4 and a in (select b from m);
 
 update s set b = b + 1 where a = 4 and a in (select b from m);
 INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
-DETAIL:  DXL-to-PlStmt Translation: Attribute number 25 not found in project list
+DETAIL:  DXL-to-PlStmt Translation: Attribute number 17 not found in project list
 select * from s where a = 4 and a in (select b from m);
  a | b  
 ---+----
@@ -1617,18 +1675,22 @@ select * from s where a = 4 and a in (select b from m);
 
 -- direct dispatch: partitioned table: update --
 select distinct sales_par.* from sales_par,s where sales_par.id in (s.b, s.b+1) and region='europe';
+NOTICE:  One or more columns in the following table(s) do not have statistics: sales_par
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  id | year | month | day | region 
 ----+------+-------+-----+--------
- 13 | 2008 |     2 |  14 | europe
-  5 | 2007 |     6 |   6 | europe
- 17 | 2005 |     6 |  18 | europe
   9 | 2004 |    10 |  10 | europe
+  5 | 2007 |     6 |   6 | europe
+ 13 | 2008 |     2 |  14 | europe
+ 17 | 2005 |     6 |  18 | europe
 (4 rows)
 
 update sales_par set month = month+1 from s where sales_par.id in (s.b, s.b+1) and region = 'europe';
 INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
 DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: DML(update) on partitioned tables
 select distinct sales_par.* from sales_par,s where sales_par.id in (s.b, s.b+1) and region='europe';
+NOTICE:  One or more columns in the following table(s) do not have statistics: sales_par
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  id | year | month | day | region 
 ----+------+-------+-----+--------
   5 | 2007 |     7 |   6 | europe
@@ -1639,6 +1701,8 @@ select distinct sales_par.* from sales_par,s where sales_par.id in (s.b, s.b+1) 
 
 -- direct dispatch: partitioned table: delete --
 select * from sales_par where region='asia' and id in (select b from s where a = 1);
+NOTICE:  One or more columns in the following table(s) do not have statistics: sales_par
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  id | year | month | day | region 
 ----+------+-------+-----+--------
   4 | 2006 |     5 |   5 | asia
@@ -1648,11 +1712,15 @@ delete from sales_par where region='asia' and id in (select b from s where a = 1
 INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
 DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: DML(delete) on partitioned tables
 select * from sales_par where region='asia' and id in (select b from s where a = 1);
+NOTICE:  One or more columns in the following table(s) do not have statistics: sales_par
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  id | year | month | day | region 
 ----+------+-------+-----+--------
 (0 rows)
 
 select * from sales_par where region='asia' and id in (select b from m where a = 2);
+NOTICE:  One or more columns in the following table(s) do not have statistics: sales_par
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  id | year | month | day | region 
 ----+------+-------+-----+--------
   8 | 2003 |     9 |   9 | asia
@@ -1662,6 +1730,8 @@ delete from sales_par where region='asia' and id in (select b from m where a = 2
 INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
 DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: DML(delete) on partitioned tables
 select * from sales_par where region='asia' and id in (select b from m where a = 2);
+NOTICE:  One or more columns in the following table(s) do not have statistics: sales_par
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  id | year | month | day | region 
 ----+------+-------+-----+--------
 (0 rows)
@@ -1688,20 +1758,26 @@ DETAIL:  Falling back to Postgres-based planner because GPORCA does not support 
 
 -- heap table: duplicate distribution key: delete --
 select * from s where a in (select day from sales_par,m where sales_par.id = m.b);
+NOTICE:  One or more columns in the following table(s) do not have statistics: sales_par
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  a  | b  
 ----+----
+  5 | 15
+  9 | 27
  13 | 39
  17 | 51
-  5 | 15
  21 | 63
   5 | 20
-  9 | 27
   9 | 36
 (7 rows)
 
 PREPARE plan1 AS delete from s where a in (select day from sales_par,m where sales_par.id = m.b);
 EXECUTE plan1;
+NOTICE:  One or more columns in the following table(s) do not have statistics: sales_par
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 select * from s where a in (select day from sales_par,m where sales_par.id = m.b);
+NOTICE:  One or more columns in the following table(s) do not have statistics: sales_par
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  a | b 
 ---+---
 (0 rows)
@@ -1717,7 +1793,7 @@ select * from s where a = 4 and a in (select b from m);
 PREPARE plan2 AS update s set b = b + 1 where a = 4 and a in (select b from m);
 EXECUTE plan2;
 INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
-DETAIL:  DXL-to-PlStmt Translation: Attribute number 25 not found in project list
+DETAIL:  DXL-to-PlStmt Translation: Attribute number 17 not found in project list
 select * from s where a = 4 and a in (select b from m);
  a | b  
 ---+----
@@ -1727,11 +1803,13 @@ select * from s where a = 4 and a in (select b from m);
 
 -- direct dispatch: partitioned table: update --
 select distinct sales_par.* from sales_par,s where sales_par.id in (s.b, s.b+1) and region='europe';
+NOTICE:  One or more columns in the following table(s) do not have statistics: sales_par
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  id | year | month | day | region 
 ----+------+-------+-----+--------
   5 | 2007 |     6 |   6 | europe
- 17 | 2005 |     6 |  18 | europe
  13 | 2008 |     2 |  14 | europe
+ 17 | 2005 |     6 |  18 | europe
   9 | 2004 |    10 |  10 | europe
 (4 rows)
 
@@ -1740,6 +1818,8 @@ EXECUTE plan3;
 INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
 DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: DML(update) on partitioned tables
 select distinct sales_par.* from sales_par,s where sales_par.id in (s.b, s.b+1) and region='europe';
+NOTICE:  One or more columns in the following table(s) do not have statistics: sales_par
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  id | year | month | day | region 
 ----+------+-------+-----+--------
   5 | 2007 |     7 |   6 | europe
@@ -1750,6 +1830,8 @@ select distinct sales_par.* from sales_par,s where sales_par.id in (s.b, s.b+1) 
 
 -- direct dispatch: partitioned table: delete --
 select * from sales_par where region='asia' and id in (select b from s where a = 1);
+NOTICE:  One or more columns in the following table(s) do not have statistics: sales_par
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  id | year | month | day | region 
 ----+------+-------+-----+--------
   4 | 2006 |     5 |   5 | asia
@@ -1760,11 +1842,15 @@ EXECUTE plan4;
 INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
 DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: DML(delete) on partitioned tables
 select * from sales_par where region='asia' and id in (select b from s where a = 1);
+NOTICE:  One or more columns in the following table(s) do not have statistics: sales_par
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  id | year | month | day | region 
 ----+------+-------+-----+--------
 (0 rows)
 
 select * from sales_par where region='asia' and id in (select b from m where a = 2);
+NOTICE:  One or more columns in the following table(s) do not have statistics: sales_par
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  id | year | month | day | region 
 ----+------+-------+-----+--------
   8 | 2003 |     9 |   9 | asia
@@ -1775,6 +1861,8 @@ EXECUTE plan5;
 INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
 DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: DML(delete) on partitioned tables
 select * from sales_par where region='asia' and id in (select b from m where a = 2);
+NOTICE:  One or more columns in the following table(s) do not have statistics: sales_par
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  id | year | month | day | region 
 ----+------+-------+-----+--------
 (0 rows)
@@ -1857,8 +1945,8 @@ DETAIL:  Falling back to Postgres-based planner because GPORCA does not support 
 explain (costs off) delete from tab1 using tab2, tab3 where tab1.a = tab2.a and tab1.b = tab3.b;
 NOTICE:  One or more columns in the following table(s) do not have statistics: tab2
 HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
-                                  QUERY PLAN                                  
-------------------------------------------------------------------------------
+                                     QUERY PLAN                                     
+------------------------------------------------------------------------------------
  Delete on tab1
    ->  Hash Join
          Hash Cond: (tab3.b = tab1.b)
@@ -1880,15 +1968,27 @@ HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For 
 -- Test delete on partition table from join on another partition table
 -- ----------------------------------------------------------------------
 drop table if exists part_eq_dis_1;
+NOTICE:  table "part_eq_dis_1" does not exist, skipping
 drop table if exists part_eq_dis_2;
+NOTICE:  table "part_eq_dis_2" does not exist, skipping
 create table part_eq_dis_1 (a int4, b int4) partition by range (a) (start(1) end(20) every(1), default partition extra);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table part_eq_dis_2 (c int4, d int4) partition by range (c) (start(1) end(20) every(1), default partition extra);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into part_eq_dis_1 select generate_series(1,40), generate_series(1,40);
 insert into part_eq_dis_2 select generate_series(1,40), generate_series(1,40);
 drop table if exists part_neq_dis_1;
+NOTICE:  table "part_neq_dis_1" does not exist, skipping
 drop table if exists part_neq_dis_2;
+NOTICE:  table "part_neq_dis_2" does not exist, skipping
 create table part_neq_dis_1 (a int4, b int4) partition by range (b) (start(1) end(20) every(1), default partition extra);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table part_neq_dis_2 (c int4, d int4) partition by range (d) (start(1) end(20) every(1), default partition extra);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into part_neq_dis_1 select generate_series(1,40), generate_series(1,40);
 insert into part_neq_dis_2 select generate_series(1,40), generate_series(1,40);
 -- T1 - distribution partitioned column, T2 - distributed partitioned column
@@ -2036,61 +2136,65 @@ delete from part_neq_dis_1 where b = (select c from part_neq_dis_2 where c=36);
 INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
 DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: DML(delete) on partitioned tables
 select * from part_eq_dis_1;
+NOTICE:  One or more columns in the following table(s) do not have statistics: part_eq_dis_1
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  a  | b  
 ----+----
+ 12 | 12
+ 15 | 15
+ 20 | 20
+ 30 | 30
+ 31 | 31
+ 35 | 35
+ 36 | 36
+ 38 | 38
+ 40 | 40
+ 16 | 16
+ 18 | 18
+ 19 | 19
+ 29 | 29
+ 34 | 34
+ 37 | 37
+ 39 | 39
   9 |  9
  10 | 10
  11 | 11
- 12 | 12
  13 | 13
  14 | 14
- 15 | 15
- 16 | 16
  17 | 17
- 18 | 18
- 19 | 19
- 20 | 20
- 29 | 29
- 30 | 30
- 31 | 31
  32 | 32
  33 | 33
- 34 | 34
- 35 | 35
- 36 | 36
- 37 | 37
- 38 | 38
- 39 | 39
- 40 | 40
 (24 rows)
 
 select * from part_neq_dis_1;
+NOTICE:  One or more columns in the following table(s) do not have statistics: part_neq_dis_1
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  a  | b  
 ----+----
   1 |  1
+ 20 | 20
+ 23 | 23
+ 26 | 26
+ 38 | 38
+ 40 | 40
   2 |  2
   3 |  3
   4 |  4
-  5 |  5
-  6 |  6
   7 |  7
   8 |  8
- 17 | 17
  18 | 18
  19 | 19
- 20 | 20
- 21 | 21
  22 | 22
- 23 | 23
  24 | 24
- 25 | 25
- 26 | 26
  27 | 27
- 28 | 28
  37 | 37
- 38 | 38
  39 | 39
- 40 | 40
+  5 |  5
+  6 |  6
+ 17 | 17
+ 21 | 21
+ 25 | 25
+ 28 | 28
 (24 rows)
 
 reset optimizer_trace_fallback;
@@ -2099,7 +2203,7 @@ reset optimizer_trace_fallback;
 -- ----------------------------------------------------------------------
 -- start_ignore
 drop schema DML_over_joins cascade;
-NOTICE:  drop cascades to 15 other objects
+NOTICE:  drop cascades to 22 other objects
 DETAIL:  drop cascades to table update_test
 drop cascades to table t1
 drop cascades to table t2
@@ -2115,4 +2219,11 @@ drop cascades to table sales_par_co
 drop cascades to function insertintosales(character varying,integer,character varying)
 drop cascades to function insertmanyintosales(integer,character varying)
 drop cascades to table s_ao
+drop cascades to table tab1
+drop cascades to table tab2
+drop cascades to table tab3
+drop cascades to table part_eq_dis_1
+drop cascades to table part_eq_dis_2
+drop cascades to table part_neq_dis_1
+drop cascades to table part_neq_dis_2
 -- end_ignore

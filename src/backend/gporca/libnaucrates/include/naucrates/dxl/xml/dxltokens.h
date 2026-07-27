@@ -309,6 +309,8 @@ enum Edxltoken
 	EdxltokenJoinIn,
 	EdxltokenJoinLeftAntiSemiJoin,
 	EdxltokenJoinLeftAntiSemiJoinNotIn,
+	EdxltokenJoinRightSemiJoin,
+	EdxltokenJoinRightAntiSemiJoin,
 
 	EdxltokenMergeJoinUniqueOuter,
 

@@ -3444,6 +3444,18 @@ CDXLOperatorFactory::ParseJoinType(const XMLCh *join_type_xml,
 	{
 		join_type = EdxljtLeftAntiSemijoinNotIn;
 	}
+	else if (0 == XMLString::compareString(
+					  CDXLTokens::XmlstrToken(EdxltokenJoinRightSemiJoin),
+					  join_type_xml))
+	{
+		join_type = EdxljtRightSemijoin;
+	}
+	else if (0 == XMLString::compareString(
+					  CDXLTokens::XmlstrToken(EdxltokenJoinRightAntiSemiJoin),
+					  join_type_xml))
+	{
+		join_type = EdxljtRightAntiSemijoin;
+	}
 	else
 	{
 		GPOS_RAISE(gpdxl::ExmaDXL, gpdxl::ExmiDXLInvalidAttributeValue,

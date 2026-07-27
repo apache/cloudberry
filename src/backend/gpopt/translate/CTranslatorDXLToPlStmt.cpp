@@ -1559,6 +1559,24 @@ CTranslatorDXLToPlStmt::TranslateDXLHashJoin(
 	// translate join children
 	CDXLNode *left_tree_dxlnode = (*hj_dxlnode)[EdxlhjIndexHashLeft];
 	CDXLNode *right_tree_dxlnode = (*hj_dxlnode)[EdxlhjIndexHashRight];
+
+	// For JOIN_RIGHT_SEMI / JOIN_RIGHT_ANTI the GPDB executor builds the hash
+	// table on the inner (right) child and emits inner-side rows, but ORCA
+	// places the semantically-preserved LHS as the DXL left child.  Swap which
+	// DXL child becomes the executor's outer (probe) vs inner (build/Hash) so
+	// that the LHS ends up as the inner -- mirroring the PostgreSQL planner,
+	// which generates JOIN_RIGHT_SEMI with inner = LHS.  OUTER_VAR/INNER_VAR
+	// assignment follows the child-context order (context[0] -> OUTER_VAR,
+	// context[1] -> INNER_VAR), so the target list, quals and hash clauses are
+	// remapped automatically; the outer/inner hash-key extraction below is
+	// also swapped to match.
+	BOOL fSwapBuildSide = (join->jointype == JOIN_RIGHT_SEMI ||
+						   join->jointype == JOIN_RIGHT_ANTI);
+	CDXLNode *outer_tree_dxlnode =
+		fSwapBuildSide ? right_tree_dxlnode : left_tree_dxlnode;
+	CDXLNode *inner_tree_dxlnode =
+		fSwapBuildSide ? left_tree_dxlnode : right_tree_dxlnode;
+
 	CDXLNode *project_list_dxlnode = (*hj_dxlnode)[EdxlhjIndexProjList];
 	CDXLNode *filter_dxlnode = (*hj_dxlnode)[EdxlhjIndexFilter];
 	CDXLNode *join_filter_dxlnode = (*hj_dxlnode)[EdxlhjIndexJoinFilter];
@@ -1570,7 +1588,7 @@ CTranslatorDXLToPlStmt::TranslateDXLHashJoin(
 		m_mp, false, output_context->GetColIdToParamIdMap());
 
 	Plan *left_plan =
-		TranslateDXLOperatorToPlan(left_tree_dxlnode, &left_dxl_translate_ctxt,
+		TranslateDXLOperatorToPlan(outer_tree_dxlnode, &left_dxl_translate_ctxt,
 								   ctxt_translation_prev_siblings);
 
 	// the right side of the join is the one where the hash phase is done
@@ -1580,9 +1598,16 @@ CTranslatorDXLToPlStmt::TranslateDXLHashJoin(
 	translation_context_arr_with_siblings->AppendArray(
 		ctxt_translation_prev_siblings);
 	Plan *right_plan =
-		(Plan *) TranslateDXLHash(right_tree_dxlnode, &right_dxl_translate_ctxt,
+		(Plan *) TranslateDXLHash(inner_tree_dxlnode, &right_dxl_translate_ctxt,
 								  translation_context_arr_with_siblings);
 
+	// INVARIANT: child_contexts[0] must hold the context of the plan's outer
+	// (left) child and [1] the inner (right) child, because OUTER_VAR/INNER_VAR
+	// are assigned by this order.  left_dxl_translate_ctxt was populated from
+	// outer_tree_dxlnode and right_dxl_translate_ctxt from inner_tree_dxlnode
+	// (both already swapped when fSwapBuildSide), so this order is correct for
+	// JOIN_RIGHT_SEMI/ANTI as well.  Do not reorder these appends without also
+	// reordering the TranslateDXL* calls above.
 	CDXLTranslationContextArray *child_contexts =
 		GPOS_NEW(m_mp) CDXLTranslationContextArray(m_mp);
 	child_contexts->Append(&left_dxl_translate_ctxt);
@@ -1740,8 +1765,26 @@ CTranslatorDXLToPlStmt::TranslateDXLHashJoin(
 		hashoperators = gpdb::LAppendOid(hashoperators, hclause->opno);
 		hashcollations = gpdb::LAppendOid(hashcollations, hclause->inputcollid);
 
-		outer_hashkeys = gpdb::LAppend(outer_hashkeys, linitial(hclause->args));
-		inner_hashkeys = gpdb::LAppend(inner_hashkeys, lsecond(hclause->args));
+		// Hash clauses are built as (DXL-left-key OP DXL-right-key).  Normally
+		// DXL-left is the outer child, so linitial is the outer key.  When the
+		// build side is swapped (JOIN_RIGHT_SEMI / JOIN_RIGHT_ANTI), the DXL
+		// left child became the executor's inner and the right child the
+		// outer, so the outer/inner hash keys must be taken from the opposite
+		// operands to stay consistent with the swapped lefttree/righttree.
+		if (fSwapBuildSide)
+		{
+			outer_hashkeys =
+				gpdb::LAppend(outer_hashkeys, lsecond(hclause->args));
+			inner_hashkeys =
+				gpdb::LAppend(inner_hashkeys, linitial(hclause->args));
+		}
+		else
+		{
+			outer_hashkeys =
+				gpdb::LAppend(outer_hashkeys, linitial(hclause->args));
+			inner_hashkeys =
+				gpdb::LAppend(inner_hashkeys, lsecond(hclause->args));
+		}
 	}
 
 	hashjoin->hashoperators = hashoperators;
@@ -6773,6 +6816,12 @@ CTranslatorDXLToPlStmt::GetGPDBJoinTypeFromDXLJoinType(EdxlJoinType join_type)
 			break;
 		case EdxljtLeftAntiSemijoinNotIn:
 			jt = JOIN_LASJ_NOTIN;
+			break;
+		case EdxljtRightSemijoin:
+			jt = JOIN_RIGHT_SEMI;
+			break;
+		case EdxljtRightAntiSemijoin:
+			jt = JOIN_RIGHT_ANTI;
 			break;
 		default:
 			GPOS_ASSERT(!"Unrecognized join type");

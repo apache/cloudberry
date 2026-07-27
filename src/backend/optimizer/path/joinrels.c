@@ -1128,6 +1128,18 @@ populate_joinrel_with_paths(PlannerInfo *root, RelOptInfo *rel1,
 									 JOIN_SEMI, sjinfo,
 									 restrictlist);
 
+				/*
+				 * Also consider "Right Semi Join" plan shapes, with the inputs
+				 * swapped so that the LHS (rel1) becomes the hash/build side.
+				 * This lets us hash the smaller table.  Like JOIN_SEMI above,
+				 * this does not add a UniquePath, so (unlike the GPDB
+				 * JOIN_DEDUP_SEMI paths below) it is safe to consider
+				 * unconditionally.
+				 */
+				add_paths_to_joinrel(root, joinrel, rel2, rel1,
+									 JOIN_RIGHT_SEMI, sjinfo,
+									 restrictlist);
+
 				if (root->upd_del_replicated_table > 0 &&
 					(bms_is_member(root->upd_del_replicated_table, rel1->relids) ||
 					 bms_is_member(root->upd_del_replicated_table, rel2->relids)))

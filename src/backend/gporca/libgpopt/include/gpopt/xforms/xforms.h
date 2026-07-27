@@ -119,6 +119,8 @@
 #include "gpopt/xforms/CXformLeftSemiApplyWithExternalCorrs2InnerJoin.h"
 #include "gpopt/xforms/CXformLeftSemiJoin2CrossProduct.h"
 #include "gpopt/xforms/CXformLeftSemiJoin2HashJoin.h"
+#include "gpopt/xforms/CXformLeftSemiJoin2RightSemiHashJoin.h"
+#include "gpopt/xforms/CXformLeftAntiSemiJoin2RightAntiSemiHashJoin.h"
 #include "gpopt/xforms/CXformLeftSemiJoin2InnerJoin.h"
 #include "gpopt/xforms/CXformLeftSemiJoin2InnerJoinUnderGb.h"
 #include "gpopt/xforms/CXformLeftSemiJoin2NLJoin.h"

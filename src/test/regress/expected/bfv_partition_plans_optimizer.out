@@ -24,7 +24,7 @@ SET optimizer_trace_fallback=on;
 --
 -- start_ignore
 create language plpython3u;
-ERROR:  language "plpython3u" already exists
+ERROR:  extension "plpython3u" already exists
 -- end_ignore
 create or replace function count_operator(query text, operator text) returns int as
 $$
@@ -61,6 +61,8 @@ update mpp3061 set i = 2 where i = 1;
 INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
 DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: DML(update) on partitioned tables
 select tableoid::regclass, * from mpp3061 where i = 2;
+NOTICE:  One or more columns in the following table(s) do not have statistics: mpp3061
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
     tableoid     | i 
 -----------------+---
  mpp3061_1_prt_2 | 2
@@ -91,6 +93,8 @@ distributed by (subscription_id, bill_stmt_id)
 select count_operator('select cust_type, subscription_status,count(distinct subscription_id),sum(voice_call_min),sum(minute_per_call) from mpp7980 where month_id =E''2009-04-01'' group by rollup(1,2);','SIGSEGV');
 INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
 DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: SIRV functions
+NOTICE:  One or more columns in the following table(s) do not have statistics: mpp7980
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  count_operator 
 ----------------
               0
@@ -100,12 +104,14 @@ insert into mpp7980 values('2009-04-01','xyz','zyz','1',1,1,'1');
 insert into mpp7980 values('2009-04-01','zxyz','zyz','2',2,1,'1');
 insert into mpp7980 values('2009-03-03','xyz','zyz','4',1,3,'1');
 select cust_type, subscription_status,count(distinct subscription_id),sum(voice_call_min),sum(minute_per_call) from mpp7980 where month_id ='2009-04-01' group by rollup(1,2);
+NOTICE:  One or more columns in the following table(s) do not have statistics: mpp7980
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  cust_type | subscription_status | count | sum  | sum  
 -----------+---------------------+-------+------+------
-           |                     |     1 | 3.00 | 2.00
- zyz       |                     |     1 | 3.00 | 2.00
  zyz       | 1                   |     1 | 1.00 | 1.00
  zyz       | 2                   |     1 | 2.00 | 1.00
+ zyz       |                     |     1 | 3.00 | 2.00
+           |                     |     1 | 3.00 | 2.00
 (4 rows)
 
 -- CLEANUP
@@ -117,6 +123,7 @@ drop table mpp7980;
 -- SETUP
 -- start_ignore
 set optimizer_enable_bitmapscan=on;
+set optimizer_enable_dynamicbitmapscan=on;
 set optimizer_enable_indexjoin=on;
 drop table if exists mpp23195_t1;
 NOTICE:  table "mpp23195_t1" does not exist, skipping
@@ -136,12 +143,16 @@ insert into mpp23195_t2 values (1);
 select find_operator('select * from mpp23195_t1,mpp23195_t2 where mpp23195_t1.i < mpp23195_t2.i;', 'Dynamic Index Scan');
 INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
 DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: SIRV functions
+NOTICE:  One or more columns in the following table(s) do not have statistics: mpp23195_t1
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  find_operator 
 ---------------
  ['true']
 (1 row)
 
 select * from mpp23195_t1,mpp23195_t2 where mpp23195_t1.i < mpp23195_t2.i;
+NOTICE:  One or more columns in the following table(s) do not have statistics: mpp23195_t1
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  i | i 
 ---+---
 (0 rows)
@@ -169,6 +180,7 @@ HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For 
 drop table if exists mpp23195_t1;
 drop table if exists mpp23195_t2;
 set optimizer_enable_bitmapscan=off;
+set optimizer_enable_dynamicbitmapscan=off;
 set optimizer_enable_indexjoin=off;
 -- end_ignore
 --
@@ -194,6 +206,8 @@ set optimizer_enable_hashjoin = off;
 select find_operator('analyze select * from mpp21834_t2,mpp21834_t1 where mpp21834_t2.i < mpp21834_t1.i;','Dynamic Index Scan');
 INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
 DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: SIRV functions
+NOTICE:  One or more columns in the following table(s) do not have statistics: mpp21834_t1
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  find_operator 
 ---------------
  ['false']
@@ -202,6 +216,8 @@ DETAIL:  Falling back to Postgres-based planner because GPORCA does not support 
 select find_operator('analyze select * from mpp21834_t2,mpp21834_t1 where mpp21834_t2.i < mpp21834_t1.i;','Nested Loop');
 INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
 DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: SIRV functions
+NOTICE:  One or more columns in the following table(s) do not have statistics: mpp21834_t1
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  find_operator 
 ---------------
  ['true']
@@ -652,6 +668,8 @@ create index dbs_index on dbs using bitmap(c3);
 select find_operator('(select * from dts where c2 = 1) union (select * from dts where c2 = 2) union (select * from dts where c2 = 3) union (select * from dts where c2 = 4) union (select * from dts where c2 = 5) union (select * from dts where c2 = 6) union (select * from dts where c2 = 7) union (select * from dts where c2 = 8) union (select * from dts where c2 = 9) union (select * from dts where c2 = 10);', 'Dynamic Seq Scan');
 INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
 DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: SIRV functions
+NOTICE:  One or more columns in the following table(s) do not have statistics: dts
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  find_operator 
 ---------------
  ['true']
@@ -667,6 +685,8 @@ DETAIL:  Falling back to Postgres-based planner because GPORCA does not support 
 (select * from dts where c2 = 8) union
 (select * from dts where c2 = 9) union
 (select * from dts where c2 = 10);
+NOTICE:  One or more columns in the following table(s) do not have statistics: dts
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  c1 | c2 
 ----+----
 (0 rows)
@@ -675,6 +695,8 @@ set optimizer_enable_dynamictablescan = off;
 select find_operator('(select * from dis where c3 = 1) union (select * from dis where c3 = 2) union (select * from dis where c3 = 3) union (select * from dis where c3 = 4) union (select * from dis where c3 = 5) union (select * from dis where c3 = 6) union (select * from dis where c3 = 7) union (select * from dis where c3 = 8) union (select * from dis where c3 = 9) union (select * from dis where c3 = 10);', 'Dynamic Index Scan');
 INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
 DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: SIRV functions
+NOTICE:  One or more columns in the following table(s) do not have statistics: dis
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  find_operator 
 ---------------
  ['true']
@@ -690,6 +712,8 @@ DETAIL:  Falling back to Postgres-based planner because GPORCA does not support 
 (select * from dis where c3 = 8) union
 (select * from dis where c3 = 9) union
 (select * from dis where c3 = 10);
+NOTICE:  One or more columns in the following table(s) do not have statistics: dis
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  c1 | c2 | c3 
 ----+----+----
 (0 rows)
@@ -794,6 +818,8 @@ PARTITION BY LIST(month_id)
 );
 -- TEST
 select * from ds_4 where month_id = '200800';
+NOTICE:  One or more columns in the following table(s) do not have statistics: ds_4
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  month_id | cust_group_acc | mobile_no 
 ----------+----------------+-----------
 (0 rows)
@@ -801,12 +827,16 @@ select * from ds_4 where month_id = '200800';
 select count_operator('select * from ds_4 where month_id = E''200800'';','Partition Selector');
 INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
 DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: SIRV functions
+NOTICE:  One or more columns in the following table(s) do not have statistics: ds_4
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  count_operator 
 ----------------
               0
 (1 row)
 
 select * from ds_4 where month_id > '200800';
+NOTICE:  One or more columns in the following table(s) do not have statistics: ds_4
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  month_id | cust_group_acc | mobile_no 
 ----------+----------------+-----------
 (0 rows)
@@ -814,12 +844,16 @@ select * from ds_4 where month_id > '200800';
 select count_operator('select * from ds_4 where month_id > E''200800'';','Partition Selector');
 INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
 DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: SIRV functions
+NOTICE:  One or more columns in the following table(s) do not have statistics: ds_4
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  count_operator 
 ----------------
               0
 (1 row)
 
 select * from ds_4 where month_id <= '200800';
+NOTICE:  One or more columns in the following table(s) do not have statistics: ds_4
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  month_id | cust_group_acc | mobile_no 
 ----------+----------------+-----------
 (0 rows)
@@ -827,12 +861,16 @@ select * from ds_4 where month_id <= '200800';
 select count_operator('select * from ds_4 where month_id <= E''200800'';','Partition Selector');
 INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
 DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: SIRV functions
+NOTICE:  One or more columns in the following table(s) do not have statistics: ds_4
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  count_operator 
 ----------------
               0
 (1 row)
 
 select * from ds_4 a1,ds_4 a2 where a1.month_id = a2.month_id and a1.month_id > '200800';
+NOTICE:  One or more columns in the following table(s) do not have statistics: ds_4
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  month_id | cust_group_acc | mobile_no | month_id | cust_group_acc | mobile_no 
 ----------+----------------+-----------+----------+----------------+-----------
 (0 rows)
@@ -840,6 +878,8 @@ select * from ds_4 a1,ds_4 a2 where a1.month_id = a2.month_id and a1.month_id > 
 select count_operator('select * from ds_4 a1,ds_4 a2 where a1.month_id = a2.month_id and a1.month_id > E''200800'';','Partition Selector');
 INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
 DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: SIRV functions
+NOTICE:  One or more columns in the following table(s) do not have statistics: ds_4
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  count_operator 
 ----------------
               1
@@ -857,6 +897,7 @@ reset optimizer_segments;
 -- SETUP
 -- start_ignore
 DROP TABLE IF EXISTS bar;
+NOTICE:  table "bar" does not exist, skipping
 -- end_ignore
 CREATE TABLE bar (b int, c int)
 PARTITION BY RANGE (b)
@@ -871,26 +912,26 @@ ANALYZE bar;
 SELECT b FROM bar GROUP BY b;
  b  
 ----
-  7
-  4
- 19
-  3
-  5
- 18
-  6
- 11
-  9
-  8
- 12
- 10
- 17
-  1
+ 15
   0
+  1
+ 12
+ 17
+ 11
+ 13
+ 10
+  9
+  5
+  6
+ 14
+  8
+ 19
+  7
+ 18
+  4
   2
  16
- 15
- 14
- 13
+  3
 (20 rows)
 
 EXPLAIN SELECT b FROM bar GROUP BY b;
@@ -901,11 +942,12 @@ EXPLAIN SELECT b FROM bar GROUP BY b;
          Group Key: b
          ->  Dynamic Seq Scan on bar  (cost=0.00..431.01 rows=334 width=4)
                Number of partitions to scan: 2 (out of 2)
- Optimizer: Pivotal Optimizer (GPORCA)
+ Optimizer: GPORCA
 (6 rows)
 
 -- CLEANUP
 DROP TABLE IF EXISTS foo;
+NOTICE:  table "foo" does not exist, skipping
 DROP TABLE IF EXISTS bar;
 -- Test EXPLAIN ANALYZE on a partitioned table. There used to be a bug, where
 -- you got an internal error with this, because the EXPLAIN ANALYZE sends the
@@ -926,24 +968,26 @@ EVERY ('2 mons'::interval)
 NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'oid' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 explain analyze select a.* from mpp8031 a, mpp8031 b where a.oid = b.oid;
-                                                       QUERY PLAN                                                        
--------------------------------------------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..862.00 rows=1 width=16) (actual time=2.533..2.533 rows=0 loops=1)
-   ->  Hash Join  (cost=0.00..862.00 rows=1 width=16) (never executed)
+NOTICE:  One or more columns in the following table(s) do not have statistics: mpp8031
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+                                                          QUERY PLAN                                                           
+-------------------------------------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..862.00 rows=1 width=16) (actual time=2.953..2.954 rows=0 loops=1)
+   ->  Hash Join  (cost=0.00..862.00 rows=1 width=16) (actual time=2.691..2.693 rows=0 loops=1)
          Hash Cond: (a.oid = b.oid)
          ->  Dynamic Seq Scan on mpp8031 a  (cost=0.00..431.00 rows=1 width=16) (never executed)
                Number of partitions to scan: 4 (out of 4)
-         ->  Hash  (cost=431.00..431.00 rows=1 width=4) (never executed)
+         ->  Hash  (cost=431.00..431.00 rows=1 width=4) (actual time=0.131..0.132 rows=0 loops=1)
                Buckets: 524288  Batches: 1  Memory Usage: 4096kB
-               ->  Dynamic Seq Scan on mpp8031 b  (cost=0.00..431.00 rows=1 width=4) (actual time=0.000..0.324 rows=0 loops=1)
+               ->  Dynamic Seq Scan on mpp8031 b  (cost=0.00..431.00 rows=1 width=4) (actual time=0.131..0.131 rows=0 loops=1)
                      Number of partitions to scan: 4 (out of 4)
                      Partitions scanned:  Avg 4.0 x 3 workers.  Max 4 parts (seg0).
- Planning Time: 4.433 ms
-   (slice0)    Executor memory: 31K bytes.
-   (slice1)    Executor memory: 4156K bytes avg x 3 workers, 4156K bytes max (seg0).  Work_mem: 4096K bytes max.
+ Planning Time: 3.321 ms
+   (slice0)    Executor memory: 25K bytes.
+   (slice1)    Executor memory: 4227K bytes avg x 3x(0) workers, 4227K bytes max (seg0).  Work_mem: 4096K bytes max.
  Memory used:  128000kB
- Optimizer: Pivotal Optimizer (GPORCA)
- Execution Time: 3.231 ms
+ Optimizer: GPORCA
+ Execution Time: 3.214 ms
 (16 rows)
 
 drop table mpp8031;
@@ -976,13 +1020,16 @@ INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
 DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: Multi-level partitioned tables
 CREATE INDEX part_tbl_idx 
 ON part_tbl(profile_key);
+-- start_ignore
+analyze part_tbl;
+-- end_ignore
 EXPLAIN SELECT * FROM part_tbl WHERE profile_key = 99999999;
 INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
 DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: Multi-level partitioned tables
-                                                QUERY PLAN                                                
-----------------------------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..2.07 rows=2 width=25)
-   ->  Append  (cost=0.00..2.03 rows=1 width=25)
+                                                     QUERY PLAN                                                      
+---------------------------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..2.11 rows=6 width=25)
+   ->  Append  (cost=0.00..2.03 rows=2 width=25)
          ->  Seq Scan on part_tbl_1_prt_p20151110_2_prt_package5 part_tbl_1  (cost=0.00..1.01 rows=1 width=25)
                Filter: (profile_key = '99999999'::numeric)
          ->  Seq Scan on part_tbl_1_prt_p20151110_2_prt_other_services part_tbl_2  (cost=0.00..1.01 rows=1 width=25)
@@ -995,8 +1042,8 @@ INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
 DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: Multi-level partitioned tables
  time_client_key | ngin_service_key | profile_key 
 -----------------+------------------+-------------
-      2015111000 |        479534742 |    99999999
       2015111000 |        479534741 |    99999999
+      2015111000 |        479534742 |    99999999
 (2 rows)
 
 DROP TABLE part_tbl;
@@ -1025,6 +1072,8 @@ HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sur
 insert into r_part values (1,1), (2,2), (3,3), (4,4), (5,5), (6,6), (7,7), (8,8);
 -- following tests rely on the data distribution, verify them
 select gp_segment_id, * from r_part order by a,b;
+NOTICE:  One or more columns in the following table(s) do not have statistics: r_part
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  gp_segment_id | a | b 
 ---------------+---+---
              1 | 1 | 1
@@ -1041,8 +1090,8 @@ analyze r_part;
 explain select * from r_part r1, r_part r2 where r1.a=1; -- should eliminate partitions in the r1 copy of r_part
                                             QUERY PLAN                                             
 ---------------------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..1324032.53 rows=8 width=16)
-   ->  Nested Loop  (cost=0.00..1324032.53 rows=3 width=16)
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..1324032.54 rows=8 width=16)
+   ->  Nested Loop  (cost=0.00..1324032.54 rows=3 width=16)
          Join Filter: true
          ->  Dynamic Seq Scan on r_part r2  (cost=0.00..431.00 rows=3 width=8)
                Number of partitions to scan: 9 (out of 9)
@@ -1051,7 +1100,7 @@ explain select * from r_part r1, r_part r2 where r1.a=1; -- should eliminate par
                      ->  Dynamic Seq Scan on r_part r1  (cost=0.00..431.00 rows=1 width=8)
                            Number of partitions to scan: 1 (out of 9)
                            Filter: (a = 1)
- Optimizer: Pivotal Optimizer (GPORCA)
+ Optimizer: GPORCA
 (11 rows)
 
 -- the numbers in the filter should be both on segment 0
@@ -1062,7 +1111,7 @@ explain select * from r_part where a in (7,8); -- should eliminate partitions
    ->  Dynamic Seq Scan on r_part  (cost=0.00..431.00 rows=1 width=8)
          Number of partitions to scan: 2 (out of 9)
          Filter: (a = ANY ('{7,8}'::integer[]))
- Optimizer: Pivotal Optimizer (GPORCA)
+ Optimizer: GPORCA
 (5 rows)
 
 -- Test partition elimination in prepared statements
@@ -1096,7 +1145,7 @@ explain select * from r_part where a = 1 order by a,b; -- should eliminate parti
          ->  Dynamic Seq Scan on r_part  (cost=0.00..431.00 rows=1 width=8)
                Number of partitions to scan: 1 (out of 9)
                Filter: (a = 1)
- Optimizer: Pivotal Optimizer (GPORCA)
+ Optimizer: GPORCA
 (8 rows)
 
 --force_explain
@@ -1110,7 +1159,7 @@ explain execute f1(1); -- should eliminate partitions
          ->  Dynamic Seq Scan on r_part  (cost=0.00..431.00 rows=1 width=8)
                Number of partitions to scan: 1 (out of 9)
                Filter: (a = 1)
- Optimizer: Pivotal Optimizer (GPORCA)
+ Optimizer: GPORCA
 (8 rows)
 
 --force_explain
@@ -1124,7 +1173,7 @@ explain execute f2(2); -- should eliminate partitions
          ->  Dynamic Seq Scan on r_part  (cost=0.00..431.00 rows=1 width=8)
                Number of partitions to scan: 1 (out of 9)
                Filter: (a = 2)
- Optimizer: Pivotal Optimizer (GPORCA)
+ Optimizer: GPORCA
 (8 rows)
 
 -- Test partition elimination on CO tables
@@ -1137,7 +1186,7 @@ explain select * from r_co where a=2; -- should eliminate partitions
    ->  Dynamic Seq Scan on r_co  (cost=0.00..431.00 rows=1 width=8)
          Number of partitions to scan: 1 (out of 9)
          Filter: (a = 2)
- Optimizer: Pivotal Optimizer (GPORCA)
+ Optimizer: GPORCA
 (5 rows)
 
 -- test partition elimination in prepared statements on CO tables
@@ -1153,7 +1202,7 @@ explain execute f3(2); -- should eliminate partitions
          ->  Dynamic Seq Scan on r_co  (cost=0.00..431.00 rows=1 width=8)
                Number of partitions to scan: 1 (out of 9)
                Filter: (a = 2)
- Optimizer: Pivotal Optimizer (GPORCA)
+ Optimizer: GPORCA
 (8 rows)
 
 -- start_ignore
@@ -1187,7 +1236,7 @@ explain select * from fact where dd < '2009-01-02'::date; -- partitions eliminat
    ->  Dynamic Seq Scan on fact  (cost=0.00..431.00 rows=1 width=16)
          Number of partitions to scan: 1 (out of 4)
          Filter: (dd < '01-02-2009'::date)
- Optimizer: Pivotal Optimizer (GPORCA)
+ Optimizer: GPORCA
 (5 rows)
 
 explain select * from fact where dd < to_date('2009-01-02','YYYY-MM-DD'); -- partitions eliminated
@@ -1197,7 +1246,7 @@ explain select * from fact where dd < to_date('2009-01-02','YYYY-MM-DD'); -- par
    ->  Dynamic Seq Scan on fact  (cost=0.00..431.00 rows=1 width=16)
          Number of partitions to scan: 1 (out of 4)
          Filter: (dd < '01-02-2009'::date)
- Optimizer: Pivotal Optimizer (GPORCA)
+ Optimizer: GPORCA
 (5 rows)
 
 explain select * from fact where dd < current_date; --partitions eliminated
@@ -1206,8 +1255,8 @@ explain select * from fact where dd < current_date; --partitions eliminated
  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..431.00 rows=1 width=16)
    ->  Dynamic Seq Scan on fact  (cost=0.00..431.00 rows=1 width=16)
          Number of partitions to scan: 1 (out of 4)
-         Filter: (dd < '09-30-2022'::date)
- Optimizer: Pivotal Optimizer (GPORCA)
+         Filter: (dd < '06-17-2026'::date)
+ Optimizer: GPORCA
 (5 rows)
 
 -- Test partition elimination in prepared statements
@@ -1220,7 +1269,7 @@ explain execute f1('2009-01-02'::date); -- should eliminate partitions
    ->  Dynamic Seq Scan on fact  (cost=0.00..431.00 rows=1 width=16)
          Number of partitions to scan: 1 (out of 4)
          Filter: (dd < '01-02-2009'::date)
- Optimizer: Pivotal Optimizer (GPORCA)
+ Optimizer: GPORCA
 (5 rows)
 
 -- force_explain
@@ -1231,7 +1280,7 @@ explain execute f1(to_date('2009-01-02', 'YYYY-MM-DD')); -- should eliminate par
    ->  Dynamic Seq Scan on fact  (cost=0.00..431.00 rows=1 width=16)
          Number of partitions to scan: 1 (out of 4)
          Filter: (dd < '01-02-2009'::date)
- Optimizer: Pivotal Optimizer (GPORCA)
+ Optimizer: GPORCA
 (5 rows)
 
 -- start_ignore
@@ -1280,6 +1329,8 @@ DELETE FROM delete_from_indexed_pt WHERE b=1;
 INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
 DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: DML(delete) on partitioned tables
 SELECT * FROM delete_from_indexed_pt;
+NOTICE:  One or more columns in the following table(s) do not have statistics: delete_from_indexed_pt
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  a  | b 
 ----+---
   6 | 0
@@ -1305,39 +1356,37 @@ ANALYZE delete_from_pt, t;
 EXPLAIN (COSTS OFF, TIMING OFF, SUMMARY OFF, ANALYZE) DELETE FROM delete_from_pt WHERE b IN (SELECT b FROM delete_from_pt, t WHERE t.a=delete_from_pt.b);
 INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
 DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: DML(delete) on partitioned tables
-                                                      QUERY PLAN                                                       
------------------------------------------------------------------------------------------------------------------------
+                                                QUERY PLAN                                                 
+-----------------------------------------------------------------------------------------------------------
  Delete on delete_from_pt (actual rows=0 loops=1)
    Delete on delete_from_pt_1_prt_1 delete_from_pt_2
    Delete on delete_from_pt_1_prt_2 delete_from_pt_3
    Delete on delete_from_pt_1_prt_3 delete_from_pt_4
-   ->  Hash Semi Join (actual rows=1 loops=1)
-         Hash Cond: (delete_from_pt.b = t.a)
-         Extra Text: (seg0)   Hash chain length 2.0 avg, 2 max, using 1 of 131072 buckets.
-         ->  Append (actual rows=3 loops=1)
-               Partition Selectors: $1
-               ->  Seq Scan on delete_from_pt_1_prt_1 delete_from_pt_2 (actual rows=3 loops=1)
-               ->  Seq Scan on delete_from_pt_1_prt_2 delete_from_pt_3 (never executed)
-               ->  Seq Scan on delete_from_pt_1_prt_3 delete_from_pt_4 (never executed)
-         ->  Hash (actual rows=2 loops=1)
+   ->  Hash Right Semi Join (actual rows=1 loops=1)
+         Hash Cond: (t.a = delete_from_pt.b)
+         Extra Text: (seg0)   Hash chain length 1.2 avg, 2 max, using 4 of 131072 buckets.
+         ->  Broadcast Motion 3:3  (slice1; segments: 3) (actual rows=2 loops=1)
+               ->  Hash Join (actual rows=1 loops=1)
+                     Hash Cond: (delete_from_pt_1.b = t.a)
+                     Extra Text: (seg0)   Hash chain length 1.0 avg, 1 max, using 1 of 262144 buckets.
+                     ->  Append (actual rows=3 loops=1)
+                           Partition Selectors: $1
+                           ->  Seq Scan on delete_from_pt_1_prt_1 delete_from_pt_5 (actual rows=3 loops=1)
+                           ->  Seq Scan on delete_from_pt_1_prt_2 delete_from_pt_6 (never executed)
+                           ->  Seq Scan on delete_from_pt_1_prt_3 delete_from_pt_7 (never executed)
+                     ->  Hash (actual rows=1 loops=1)
+                           Buckets: 262144  Batches: 1  Memory Usage: 2049kB
+                           ->  Partition Selector (selector id: $1) (actual rows=1 loops=1)
+                                 ->  Broadcast Motion 3:3  (slice2; segments: 3) (actual rows=1 loops=1)
+                                       ->  Seq Scan on t (actual rows=1 loops=1)
+         ->  Hash (actual rows=5 loops=1)
                Buckets: 131072  Batches: 1  Memory Usage: 1025kB
-               ->  Partition Selector (selector id: $1) (actual rows=2 loops=1)
-                     ->  Broadcast Motion 3:3  (slice1; segments: 3) (actual rows=2 loops=1)
-                           ->  Hash Join (actual rows=1 loops=1)
-                                 Hash Cond: (delete_from_pt_1.b = t.a)
-                                 Extra Text: (seg0)   Hash chain length 1.0 avg, 1 max, using 1 of 262144 buckets.
-                                 ->  Append (actual rows=3 loops=1)
-                                       Partition Selectors: $2
-                                       ->  Seq Scan on delete_from_pt_1_prt_1 delete_from_pt_5 (actual rows=3 loops=1)
-                                       ->  Seq Scan on delete_from_pt_1_prt_2 delete_from_pt_6 (never executed)
-                                       ->  Seq Scan on delete_from_pt_1_prt_3 delete_from_pt_7 (never executed)
-                                 ->  Hash (actual rows=1 loops=1)
-                                       Buckets: 262144  Batches: 1  Memory Usage: 2049kB
-                                       ->  Partition Selector (selector id: $2) (actual rows=1 loops=1)
-                                             ->  Broadcast Motion 3:3  (slice2; segments: 3) (actual rows=1 loops=1)
-                                                   ->  Seq Scan on t (actual rows=1 loops=1)
+               ->  Append (actual rows=5 loops=1)
+                     ->  Seq Scan on delete_from_pt_1_prt_1 delete_from_pt_2 (actual rows=3 loops=1)
+                     ->  Seq Scan on delete_from_pt_1_prt_2 delete_from_pt_3 (actual rows=3 loops=1)
+                     ->  Seq Scan on delete_from_pt_1_prt_3 delete_from_pt_4 (actual rows=0 loops=1)
  Optimizer: Postgres query optimizer
-(30 rows)
+(28 rows)
 
 SELECT * FROM delete_from_pt order by a;
  a  | b 
@@ -1356,7 +1405,10 @@ RESET optimizer_trace_fallback;
 -- CLEANUP
 -- start_ignore
 drop schema if exists bfv_partition_plans cascade;
-NOTICE:  drop cascades to 2 other objects
+NOTICE:  drop cascades to 5 other objects
 DETAIL:  drop cascades to function count_operator(text,text)
 drop cascades to function find_operator(text,text)
+drop cascades to table delete_from_indexed_pt
+drop cascades to table delete_from_pt
+drop cascades to table t
 -- end_ignore

@@ -222,6 +222,8 @@ public:
 		EopPhysicalLeftSemiHashJoin,
 		EopPhysicalLeftAntiSemiHashJoin,
 		EopPhysicalLeftAntiSemiHashJoinNotIn,
+		EopPhysicalRightSemiHashJoin,
+		EopPhysicalRightAntiSemiHashJoin,
 		EopPhysicalRightOuterHashJoin,
 		EopPhysicalFullHashJoin,
 

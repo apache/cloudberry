@@ -60,6 +60,10 @@ CLogicalLeftSemiJoin::PxfsCandidates(CMemoryPool *mp) const
 	(void) xform_set->ExchangeSet(CXform::ExfLeftSemiJoin2CrossProduct);
 	(void) xform_set->ExchangeSet(CXform::ExfLeftSemiJoin2NLJoin);
 	(void) xform_set->ExchangeSet(CXform::ExfLeftSemiJoin2HashJoin);
+	// Right-semi hash join (build on the smaller LHS).  CTranslatorDXLToPlStmt
+	// swaps the build (inner) side and the outer/inner hash keys to the LHS for
+	// JOIN_RIGHT_SEMI, matching the PostgreSQL planner / executor.
+	(void) xform_set->ExchangeSet(CXform::ExfLeftSemiJoin2RightSemiHashJoin);
 
 	return xform_set;
 }

@@ -76,9 +76,9 @@ commit;
 select a, x from qp_csq_t1, qp_csq_t2 where qp_csq_t1.a in (select x);
  a | x 
 ---+---
+ 5 | 5
  1 | 1
  3 | 3
- 5 | 5
  7 | 7
 (4 rows)
 
@@ -169,8 +169,8 @@ select A.i, B.i, C.j from A, B, C where A.j in (select C.j from C where C.j = A.
 -- Test for sublink pull-up based on both left-hand and right-hand input
 explain (costs off)
 select * from A where exists (select * from B where A.i in (select C.i from C where C.i = B.i));
-                       QUERY PLAN                        
----------------------------------------------------------
+                              QUERY PLAN                               
+-----------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Hash Join
          Hash Cond: (a.i = c.i)
@@ -186,7 +186,7 @@ select * from A where exists (select * from B where A.i in (select C.i from C wh
                                  ->  Hash
                                        ->  Seq Scan on b
                                              Filter: (NOT (i IS NULL))
- Optimizer: Pivotal Optimizer (GPORCA) version 2.70.0
+ Optimizer: GPORCA
 (16 rows)
 
 select * from A where exists (select * from B where A.i in (select C.i from C where C.i = B.i));
@@ -199,8 +199,8 @@ select * from A where exists (select * from B where A.i in (select C.i from C wh
 -- Test for ALL_SUBLINK pull-up based on both left-hand and right-hand input
 explain (costs off)
 select * from A,B where exists (select * from C where B.i not in (select C.i from C where C.i != 10));
-                                                                                                                                                                             QUERY PLAN                                                                                                                                                                              
----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+                                                                                                                                                                                QUERY PLAN                                                                                                                                                                                 
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Nested Loop
          Join Filter: true
@@ -225,17 +225,17 @@ select * from A,B where exists (select * from C where B.i not in (select C.i fro
                                    ->  Materialize
                                          ->  Broadcast Motion 3:3  (slice2; segments: 3)
                                                ->  Seq Scan on c
- Optimizer: Pivotal Optimizer (GPORCA)
+ Optimizer: GPORCA
 (25 rows)
 
 select * from A,B where exists (select * from C where B.i not in (select C.i from C where C.i != 10));
  i  | j  | i  | j 
 ----+----+----+---
- 78 | -1 | 88 | 1
-  1 |  1 | 88 | 1
  19 |  5 | 88 | 1
  99 | 62 | 88 | 1
   1 |  1 | 88 | 1
+  1 |  1 | 88 | 1
+ 78 | -1 | 88 | 1
 (5 rows)
 
 -- -- -- --
@@ -391,29 +391,29 @@ select A.j from A, B, C where A.j = (select C.j from C where C.j = A.j and C.i i
 explain select A.i, B.i, C.j from A, B, C where A.j = (select C.j from C where C.j = A.j and C.i not in (select B.i from B where C.i = B.i and B.i !=10)) order by A.i, B.i, C.j limit 10;
                                                                                                                                                                                                 QUERY PLAN                                                                                                                                                                                                 
 -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
- Limit  (cost=0.00..1390613111661.99 rows=10 width=12)
-   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..1390613111661.99 rows=10 width=12)
+ Limit  (cost=0.00..1390613123493.04 rows=10 width=12)
+   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..1390613123493.04 rows=10 width=12)
          Merge Key: a.i, b_1.i, c_1.j
-         ->  Limit  (cost=0.00..1390613111661.99 rows=4 width=12)
-               ->  Sort  (cost=0.00..1390613111661.99 rows=90 width=12)
+         ->  Limit  (cost=0.00..1390613123493.04 rows=4 width=12)
+               ->  Sort  (cost=0.00..1390613123493.04 rows=90 width=12)
                      Sort Key: a.i, b_1.i, c_1.j
-                     ->  Nested Loop  (cost=0.00..1390613111661.95 rows=90 width=12)
+                     ->  Nested Loop  (cost=0.00..1390613123493.00 rows=90 width=12)
                            Join Filter: true
-                           ->  Nested Loop  (cost=0.00..1324033.29 rows=18 width=8)
+                           ->  Nested Loop  (cost=0.00..1324033.31 rows=18 width=8)
                                  Join Filter: true
                                  ->  Broadcast Motion 3:3  (slice5; segments: 3)  (cost=0.00..431.00 rows=6 width=4)
                                        ->  Seq Scan on b b_1  (cost=0.00..431.00 rows=2 width=4)
                                  ->  Seq Scan on c c_1  (cost=0.00..431.00 rows=3 width=4)
-                           ->  Materialize  (cost=0.00..1356696152.56 rows=5 width=4)
-                                 ->  Broadcast Motion 3:3  (slice2; segments: 3)  (cost=0.00..1356696152.56 rows=5 width=4)
-                                       ->  Seq Scan on a  (cost=0.00..1356696152.56 rows=2 width=4)
+                           ->  Materialize  (cost=0.00..1356696164.10 rows=5 width=4)
+                                 ->  Broadcast Motion 3:3  (slice2; segments: 3)  (cost=0.00..1356696164.10 rows=5 width=4)
+                                       ->  Seq Scan on a  (cost=0.00..1356696164.10 rows=2 width=4)
                                              Filter: (j = (SubPlan 2))
                                              SubPlan 2
-                                               ->  Result  (cost=0.00..1324036.59 rows=1 width=4)
+                                               ->  Result  (cost=0.00..1324036.60 rows=1 width=4)
                                                      Filter: (c.j = a.j)
-                                                     ->  Materialize  (cost=0.00..1324036.58 rows=9 width=4)
-                                                           ->  Broadcast Motion 3:3  (slice3; segments: 3)  (cost=0.00..1324036.58 rows=9 width=4)
-                                                                 ->  Seq Scan on c  (cost=0.00..1324036.58 rows=3 width=4)
+                                                     ->  Materialize  (cost=0.00..1324036.59 rows=9 width=4)
+                                                           ->  Broadcast Motion 3:3  (slice3; segments: 3)  (cost=0.00..1324036.59 rows=9 width=4)
+                                                                 ->  Seq Scan on c  (cost=0.00..1324036.59 rows=3 width=4)
                                                                        Filter: (SubPlan 1)
                                                                        SubPlan 1
                                                                          ->  Result  (cost=0.00..431.00 rows=1 width=1)
@@ -425,7 +425,7 @@ explain select A.i, B.i, C.j from A, B, C where A.j = (select C.j from C where C
                                                                                                  ->  Broadcast Motion 3:3  (slice4; segments: 3)  (cost=0.00..431.00 rows=6 width=4)
                                                                                                        ->  Seq Scan on b  (cost=0.00..431.00 rows=2 width=4)
                                                                                                              Filter: (i <> 10)
- Optimizer: Pivotal Optimizer (GPORCA)
+ Optimizer: GPORCA
 (35 rows)
 
 select A.i, B.i, C.j from A, B, C where A.j = (select C.j from C where C.j = A.j and C.i not in (select B.i from B where C.i = B.i and B.i !=10)) order by A.i, B.i, C.j limit 10;
@@ -446,23 +446,23 @@ select A.i, B.i, C.j from A, B, C where A.j = (select C.j from C where C.j = A.j
 explain select A.j from A, B, C where A.j = (select C.j from C where C.j = A.j and C.i not in (select B.i from B where C.i = B.i and B.i !=10)) order by A.j limit 10;
                                                                                                                                                                                                    QUERY PLAN                                                                                                                                                                                                    
 -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
- Limit  (cost=0.00..1390613110663.90 rows=10 width=4)
-   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..1390613110663.90 rows=10 width=4)
+ Limit  (cost=0.00..1390613122494.94 rows=10 width=4)
+   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..1390613122494.94 rows=10 width=4)
          Merge Key: a.j
-         ->  Limit  (cost=0.00..1390613110663.90 rows=4 width=4)
-               ->  Sort  (cost=0.00..1390613110663.90 rows=90 width=4)
+         ->  Limit  (cost=0.00..1390613122494.94 rows=4 width=4)
+               ->  Sort  (cost=0.00..1390613122494.94 rows=90 width=4)
                      Sort Key: a.j
-                     ->  Nested Loop  (cost=0.00..1390613110663.88 rows=90 width=4)
+                     ->  Nested Loop  (cost=0.00..1390613122494.93 rows=90 width=4)
                            Join Filter: true
-                           ->  Broadcast Motion 3:3  (slice3; segments: 3)  (cost=0.00..1356696152.54 rows=5 width=4)
-                                 ->  Seq Scan on a  (cost=0.00..1356696152.54 rows=2 width=4)
+                           ->  Broadcast Motion 3:3  (slice3; segments: 3)  (cost=0.00..1356696164.08 rows=5 width=4)
+                                 ->  Seq Scan on a  (cost=0.00..1356696164.08 rows=2 width=4)
                                        Filter: (j = (SubPlan 2))
                                        SubPlan 2
-                                         ->  Result  (cost=0.00..1324036.59 rows=1 width=4)
+                                         ->  Result  (cost=0.00..1324036.60 rows=1 width=4)
                                                Filter: (c_1.j = a.j)
-                                               ->  Materialize  (cost=0.00..1324036.58 rows=9 width=4)
-                                                     ->  Broadcast Motion 3:3  (slice4; segments: 3)  (cost=0.00..1324036.58 rows=9 width=4)
-                                                           ->  Seq Scan on c c_1  (cost=0.00..1324036.58 rows=3 width=4)
+                                               ->  Materialize  (cost=0.00..1324036.59 rows=9 width=4)
+                                                     ->  Broadcast Motion 3:3  (slice4; segments: 3)  (cost=0.00..1324036.59 rows=9 width=4)
+                                                           ->  Seq Scan on c c_1  (cost=0.00..1324036.59 rows=3 width=4)
                                                                  Filter: (SubPlan 1)
                                                                  SubPlan 1
                                                                    ->  Result  (cost=0.00..431.00 rows=1 width=1)
@@ -474,13 +474,13 @@ explain select A.j from A, B, C where A.j = (select C.j from C where C.j = A.j a
                                                                                            ->  Broadcast Motion 3:3  (slice5; segments: 3)  (cost=0.00..431.00 rows=6 width=4)
                                                                                                  ->  Seq Scan on b b_1  (cost=0.00..431.00 rows=2 width=4)
                                                                                                        Filter: (i <> 10)
-                           ->  Materialize  (cost=0.00..1324032.34 rows=18 width=1)
-                                 ->  Nested Loop  (cost=0.00..1324032.34 rows=18 width=1)
+                           ->  Materialize  (cost=0.00..1324032.35 rows=18 width=1)
+                                 ->  Nested Loop  (cost=0.00..1324032.35 rows=18 width=1)
                                        Join Filter: true
                                        ->  Broadcast Motion 3:3  (slice2; segments: 3)  (cost=0.00..431.00 rows=6 width=1)
                                              ->  Seq Scan on b  (cost=0.00..431.00 rows=2 width=1)
                                        ->  Seq Scan on c  (cost=0.00..431.00 rows=3 width=1)
- Optimizer: Pivotal Optimizer (GPORCA)
+ Optimizer: GPORCA
 (35 rows)
 
 select A.j from A, B, C where A.j = (select C.j from C where C.j = A.j and C.i not in (select B.i from B where C.i = B.i and B.i !=10)) order by A.j limit 10;
@@ -501,8 +501,8 @@ select A.j from A, B, C where A.j = (select C.j from C where C.j = A.j and C.i n
 explain select A.i from A where A.j = (select C.j from C where C.j = A.j and C.i = any (select B.i from B where C.i = B.i and B.i !=10));
                                                 QUERY PLAN                                                 
 -----------------------------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..1765379.74 rows=5 width=4)
-   ->  Seq Scan on a  (cost=0.00..1765379.74 rows=2 width=4)
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..1765380.02 rows=5 width=4)
+   ->  Seq Scan on a  (cost=0.00..1765380.02 rows=2 width=4)
          Filter: (j = (SubPlan 1))
          SubPlan 1
            ->  Result  (cost=0.00..862.00 rows=1 width=4)
@@ -512,11 +512,12 @@ explain select A.i from A where A.j = (select C.j from C where C.j = A.j and C.i
                              ->  Hash Semi Join  (cost=0.00..862.00 rows=2 width=4)
                                    Hash Cond: ((c.i = b.i) AND (c.i = b.i))
                                    ->  Seq Scan on c  (cost=0.00..431.00 rows=3 width=8)
+                                         Filter: (i <> 10)
                                    ->  Hash  (cost=431.00..431.00 rows=2 width=4)
                                          ->  Seq Scan on b  (cost=0.00..431.00 rows=2 width=4)
                                                Filter: (i <> 10)
- Optimizer: Pivotal Optimizer (GPORCA) version 3.83.0
-(15 rows)
+ Optimizer: GPORCA
+(16 rows)
 
 select A.i from A where A.j = (select C.j from C where C.j = A.j and C.i = any (select B.i from B where C.i = B.i and B.i !=10));
  i  
@@ -533,10 +534,10 @@ select A.i from A where A.j = (select C.j from C where C.j = A.j and C.i = any (
 select a, x from qp_csq_t1, qp_csq_t2 where qp_csq_t1.a = any (select x);
  a | x 
 ---+---
- 1 | 1
  3 | 3
- 5 | 5
  7 | 7
+ 5 | 5
+ 1 | 1
 (4 rows)
 
 select a, x from qp_csq_t1, qp_csq_t2 where qp_csq_t1.a = any (select x) order by a, x;
@@ -620,22 +621,22 @@ select * from A,B where A.j = any (select C.j from C where C.j = A.j and B.i = a
 explain select A.i, B.i, C.j from A, B, C where A.j = (select C.j from C where C.j = A.j and C.i = any (select B.i from B where C.i = B.i and B.i !=10)) order by A.i, B.i, C.j limit 10;
                                                                   QUERY PLAN                                                                   
 -----------------------------------------------------------------------------------------------------------------------------------------------
- Limit  (cost=0.00..3164000462.21 rows=10 width=12)
-   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..3164000462.21 rows=10 width=12)
+ Limit  (cost=0.00..3164000591.57 rows=10 width=12)
+   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..3164000591.57 rows=10 width=12)
          Merge Key: a.i, b_1.i, c_1.j
-         ->  Limit  (cost=0.00..3164000462.21 rows=4 width=12)
-               ->  Sort  (cost=0.00..3164000462.21 rows=90 width=12)
+         ->  Limit  (cost=0.00..3164000591.57 rows=4 width=12)
+               ->  Sort  (cost=0.00..3164000591.57 rows=90 width=12)
                      Sort Key: a.i, b_1.i, c_1.j
-                     ->  Nested Loop  (cost=0.00..3164000462.17 rows=90 width=12)
+                     ->  Nested Loop  (cost=0.00..3164000591.53 rows=90 width=12)
                            Join Filter: true
-                           ->  Nested Loop  (cost=0.00..1324033.29 rows=18 width=8)
+                           ->  Nested Loop  (cost=0.00..1324033.31 rows=18 width=8)
                                  Join Filter: true
                                  ->  Broadcast Motion 3:3  (slice4; segments: 3)  (cost=0.00..431.00 rows=6 width=4)
                                        ->  Seq Scan on b b_1  (cost=0.00..431.00 rows=2 width=4)
                                  ->  Seq Scan on c c_1  (cost=0.00..431.00 rows=3 width=4)
-                           ->  Materialize  (cost=0.00..1765379.90 rows=5 width=4)
-                                 ->  Broadcast Motion 3:3  (slice2; segments: 3)  (cost=0.00..1765379.90 rows=5 width=4)
-                                       ->  Seq Scan on a  (cost=0.00..1765379.90 rows=2 width=4)
+                           ->  Materialize  (cost=0.00..1765380.02 rows=5 width=4)
+                                 ->  Broadcast Motion 3:3  (slice2; segments: 3)  (cost=0.00..1765380.02 rows=5 width=4)
+                                       ->  Seq Scan on a  (cost=0.00..1765380.02 rows=2 width=4)
                                              Filter: (j = (SubPlan 1))
                                              SubPlan 1
                                                ->  Result  (cost=0.00..862.00 rows=1 width=4)
@@ -645,11 +646,12 @@ explain select A.i, B.i, C.j from A, B, C where A.j = (select C.j from C where C
                                                                  ->  Hash Semi Join  (cost=0.00..862.00 rows=2 width=4)
                                                                        Hash Cond: ((c.i = b.i) AND (c.i = b.i))
                                                                        ->  Seq Scan on c  (cost=0.00..431.00 rows=3 width=8)
+                                                                             Filter: (i <> 10)
                                                                        ->  Hash  (cost=431.00..431.00 rows=2 width=4)
                                                                              ->  Seq Scan on b  (cost=0.00..431.00 rows=2 width=4)
                                                                                    Filter: (i <> 10)
- Optimizer: Pivotal Optimizer (GPORCA)
-(29 rows)
+ Optimizer: GPORCA
+(30 rows)
 
 select A.i, B.i, C.j from A, B, C where A.j = (select C.j from C where C.j = A.j and C.i = any (select B.i from B where C.i = B.i and B.i !=10)) order by A.i, B.i, C.j limit 10;
  i  | i  |  j  
@@ -669,17 +671,17 @@ select A.i, B.i, C.j from A, B, C where A.j = (select C.j from C where C.j = A.j
 explain select A.i, B.i, C.j from A, B, C where A.j = any ( select C.j from C where not exists(select C.i from C,A where C.i = A.i and C.i =10)) order by A.i, B.i, C.j limit 10;
                                                               QUERY PLAN                                                               
 ---------------------------------------------------------------------------------------------------------------------------------------
- Limit  (cost=0.00..1358457987.42 rows=4 width=12)
-   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..1358457987.42 rows=10 width=12)
+ Limit  (cost=0.00..1358457995.86 rows=10 width=12)
+   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..1358457995.86 rows=10 width=12)
          Merge Key: a.i, b.i, c.j
-         ->  Limit  (cost=0.00..1358457987.42 rows=4 width=12)
-               ->  Sort  (cost=0.00..1358457987.42 rows=90 width=12)
+         ->  Limit  (cost=0.00..1358457995.86 rows=4 width=12)
+               ->  Sort  (cost=0.00..1358457995.86 rows=90 width=12)
                      Sort Key: a.i, b.i, c.j
-                     ->  Hash Semi Join  (cost=0.00..1358457987.38 rows=90 width=12)
-                           Hash Cond: a.j = c_2.j
-                           ->  Nested Loop  (cost=0.00..1356692610.50 rows=90 width=16)
+                     ->  Hash Semi Join  (cost=0.00..1358457995.82 rows=90 width=12)
+                           Hash Cond: (a.j = c_2.j)
+                           ->  Nested Loop  (cost=0.00..1356692618.97 rows=90 width=16)
                                  Join Filter: true
-                                 ->  Nested Loop  (cost=0.00..1324033.12 rows=10 width=12)
+                                 ->  Nested Loop  (cost=0.00..1324033.13 rows=10 width=12)
                                        Join Filter: true
                                        ->  Seq Scan on a  (cost=0.00..431.00 rows=2 width=8)
                                        ->  Materialize  (cost=0.00..431.00 rows=6 width=4)
@@ -688,21 +690,21 @@ explain select A.i, B.i, C.j from A, B, C where A.j = any ( select C.j from C wh
                                  ->  Materialize  (cost=0.00..431.00 rows=9 width=4)
                                        ->  Broadcast Motion 3:3  (slice2; segments: 3)  (cost=0.00..431.00 rows=9 width=4)
                                              ->  Seq Scan on c  (cost=0.00..431.00 rows=3 width=4)
-                           ->  Hash  (cost=1765376.85..1765376.85 rows=9 width=4)
-                                 ->  Broadcast Motion 3:3  (slice4; segments: 3)  (cost=0.00..1765376.85 rows=9 width=4)
-                                       ->  Nested Loop Anti Join  (cost=0.00..1765376.85 rows=3 width=4)
+                           ->  Hash  (cost=1765376.83..1765376.83 rows=9 width=4)
+                                 ->  Broadcast Motion 3:3  (slice4; segments: 3)  (cost=0.00..1765376.83 rows=9 width=4)
+                                       ->  Nested Loop Anti Join  (cost=0.00..1765376.83 rows=3 width=4)
                                              Join Filter: true
                                              ->  Seq Scan on c c_2  (cost=0.00..431.00 rows=3 width=4)
-                                             ->  Materialize  (cost=0.00..862.00 rows=2 width=1)
-                                                   ->  Broadcast Motion 3:3  (slice5; segments: 3)  (cost=0.00..862.00 rows=2 width=1)
+                                             ->  Materialize  (cost=0.00..862.00 rows=1 width=1)
+                                                   ->  Broadcast Motion 3:3  (slice5; segments: 3)  (cost=0.00..862.00 rows=1 width=1)
                                                          ->  Hash Join  (cost=0.00..862.00 rows=1 width=1)
-                                                               Hash Cond: c_1.i = a_1.i
+                                                               Hash Cond: (c_1.i = a_1.i)
                                                                ->  Seq Scan on c c_1  (cost=0.00..431.00 rows=1 width=4)
-                                                                     Filter: i = 10 AND i = 10
+                                                                     Filter: ((i = 10) AND (i = 10))
                                                                ->  Hash  (cost=431.00..431.00 rows=1 width=4)
                                                                      ->  Seq Scan on a a_1  (cost=0.00..431.00 rows=1 width=4)
-                                                                           Filter: i = 10 AND i = 10
- Optimizer: Pivotal Optimizer (GPORCA) version 2.74.0
+                                                                           Filter: ((i = 10) AND (i = 10))
+ Optimizer: GPORCA
 (34 rows)
 
 select A.i, B.i, C.j from A, B, C where A.j = any ( select C.j from C where not exists(select C.i from C,A where C.i = A.i and C.i =10)) order by A.i, B.i, C.j limit 10;
@@ -723,15 +725,15 @@ select A.i, B.i, C.j from A, B, C where A.j = any ( select C.j from C where not 
 explain select A.i, B.i, C.j from A, B, C where A.j = any (select C.j from C where C.j = A.j and not exists (select sum(B.i) from B where C.i = B.i and C.i !=10)) order by A.i, B.i, C.j limit 10;
                                                      QUERY PLAN                                                      
 ---------------------------------------------------------------------------------------------------------------------
- Limit  (cost=0.00..1356692053.43 rows=10 width=12)
-   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..1356692053.43 rows=10 width=12)
+ Limit  (cost=0.00..1356692061.89 rows=10 width=12)
+   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..1356692061.89 rows=10 width=12)
          Merge Key: a.i, b.i, c.j
-         ->  Limit  (cost=0.00..1356692053.43 rows=4 width=12)
-               ->  Sort  (cost=0.00..1356692053.43 rows=18 width=12)
+         ->  Limit  (cost=0.00..1356692061.89 rows=4 width=12)
+               ->  Sort  (cost=0.00..1356692061.89 rows=18 width=12)
                      Sort Key: a.i, b.i, c.j
-                     ->  Nested Loop  (cost=0.00..1356692053.42 rows=18 width=12)
+                     ->  Nested Loop  (cost=0.00..1356692061.89 rows=18 width=12)
                            Join Filter: true
-                           ->  Nested Loop  (cost=0.00..1324032.58 rows=2 width=8)
+                           ->  Nested Loop  (cost=0.00..1324032.59 rows=2 width=8)
                                  Join Filter: true
                                  ->  Broadcast Motion 3:3  (slice3; segments: 3)  (cost=0.00..431.00 rows=1 width=4)
                                        ->  Hash Semi Join  (cost=0.00..431.00 rows=1 width=4)
@@ -744,7 +746,7 @@ explain select A.i, B.i, C.j from A, B, C where A.j = any (select C.j from C whe
                            ->  Materialize  (cost=0.00..431.00 rows=9 width=4)
                                  ->  Broadcast Motion 3:3  (slice2; segments: 3)  (cost=0.00..431.00 rows=9 width=4)
                                        ->  Seq Scan on c  (cost=0.00..431.00 rows=3 width=4)
- Optimizer: Pivotal Optimizer (GPORCA)
+ Optimizer: GPORCA
 (22 rows)
 
 select A.i, B.i, C.j from A, B, C where A.j = any (select C.j from C where C.j = A.j and not exists (select sum(B.i) from B where C.i = B.i and C.i !=10)) order by A.i, B.i, C.j limit 10;
@@ -811,30 +813,30 @@ select * from A,B where exists (select * from C where C.j = A.j and B.i = all (s
 explain select A.i, B.i, C.j from A, B, C where A.j = (select sum(C.j) from C where C.j = A.j and C.i = all (select B.i from B where C.i = B.i and B.i !=10)) order by A.i, B.i, C.j limit 10;
                                                                                                                                                                                                 QUERY PLAN                                                                                                                                                                                                 
 -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
- Limit  (cost=0.00..2712506248.09 rows=10 width=12)
-   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..2712506248.09 rows=10 width=12)
+ Limit  (cost=0.00..2712506271.17 rows=10 width=12)
+   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..2712506271.17 rows=10 width=12)
          Merge Key: a.i, b_1.i, c_1.j
-         ->  Limit  (cost=0.00..2712506248.09 rows=4 width=12)
-               ->  Sort  (cost=0.00..2712506248.09 rows=90 width=12)
+         ->  Limit  (cost=0.00..2712506271.17 rows=4 width=12)
+               ->  Sort  (cost=0.00..2712506271.17 rows=90 width=12)
                      Sort Key: a.i, b_1.i, c_1.j
-                     ->  Nested Loop  (cost=0.00..2712506248.05 rows=90 width=12)
+                     ->  Nested Loop  (cost=0.00..2712506271.13 rows=90 width=12)
                            Join Filter: true
-                           ->  Nested Loop  (cost=0.00..1324033.29 rows=18 width=8)
+                           ->  Nested Loop  (cost=0.00..1324033.31 rows=18 width=8)
                                  Join Filter: true
                                  ->  Broadcast Motion 3:3  (slice6; segments: 3)  (cost=0.00..431.00 rows=6 width=4)
                                        ->  Seq Scan on b b_1  (cost=0.00..431.00 rows=2 width=4)
                                  ->  Seq Scan on c c_1  (cost=0.00..431.00 rows=3 width=4)
-                           ->  Materialize  (cost=0.00..1324467.58 rows=5 width=4)
-                                 ->  Broadcast Motion 3:3  (slice2; segments: 3)  (cost=0.00..1324467.58 rows=5 width=4)
-                                       ->  Hash Join  (cost=0.00..1324467.58 rows=2 width=4)
+                           ->  Materialize  (cost=0.00..1324467.60 rows=5 width=4)
+                                 ->  Broadcast Motion 3:3  (slice2; segments: 3)  (cost=0.00..1324467.60 rows=5 width=4)
+                                       ->  Hash Join  (cost=0.00..1324467.60 rows=2 width=4)
                                              Hash Cond: (((sum(c.j)) = (a.j)::bigint) AND (c.j = a.j))
-                                             ->  GroupAggregate  (cost=0.00..1324036.58 rows=3 width=12)
+                                             ->  GroupAggregate  (cost=0.00..1324036.59 rows=3 width=12)
                                                    Group Key: c.j
-                                                   ->  Sort  (cost=0.00..1324036.58 rows=3 width=4)
+                                                   ->  Sort  (cost=0.00..1324036.59 rows=3 width=4)
                                                          Sort Key: c.j
-                                                         ->  Redistribute Motion 3:3  (slice3; segments: 3)  (cost=0.00..1324036.58 rows=3 width=4)
+                                                         ->  Redistribute Motion 3:3  (slice3; segments: 3)  (cost=0.00..1324036.59 rows=3 width=4)
                                                                Hash Key: c.j
-                                                               ->  Seq Scan on c  (cost=0.00..1324036.58 rows=3 width=4)
+                                                               ->  Seq Scan on c  (cost=0.00..1324036.59 rows=3 width=4)
                                                                      Filter: (SubPlan 1)
                                                                      SubPlan 1
                                                                        ->  Result  (cost=0.00..431.00 rows=1 width=1)
@@ -850,7 +852,7 @@ explain select A.i, B.i, C.j from A, B, C where A.j = (select sum(C.j) from C wh
                                                    ->  Redistribute Motion 3:3  (slice5; segments: 3)  (cost=0.00..431.00 rows=2 width=8)
                                                          Hash Key: a.j
                                                          ->  Seq Scan on a  (cost=0.00..431.00 rows=2 width=8)
- Optimizer: Pivotal Optimizer (GPORCA)
+ Optimizer: GPORCA
 (40 rows)
 
 select A.i, B.i, C.j from A, B, C where A.j = (select sum(C.j) from C where C.j = A.j and C.i = all (select B.i from B where C.i = B.i and B.i !=10)) order by A.i, B.i, C.j limit 10;
@@ -871,17 +873,17 @@ select A.i, B.i, C.j from A, B, C where A.j = (select sum(C.j) from C where C.j 
 explain select A.i, B.i, C.j from A, B, C where A.j < all ( select C.j from C where not exists(select C.i from C,A where C.i = A.i and C.i =10)) order by A.i, B.i, C.j limit 10;
                                                               QUERY PLAN                                                               
 ---------------------------------------------------------------------------------------------------------------------------------------
- Limit  (cost=0.00..1391061420469.59 rows=4 width=12)
-   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..1391061420469.59 rows=10 width=12)
+ Limit  (cost=0.00..1391061429119.82 rows=10 width=12)
+   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..1391061429119.82 rows=10 width=12)
          Merge Key: a_1.i, b.i, c_2.j
-         ->  Limit  (cost=0.00..1391061420469.59 rows=4 width=12)
-               ->  Sort  (cost=0.00..1391061420469.59 rows=36 width=12)
+         ->  Limit  (cost=0.00..1391061429119.82 rows=4 width=12)
+               ->  Sort  (cost=0.00..1391061429119.82 rows=36 width=12)
                      Sort Key: a_1.i, b.i, c_2.j
-                     ->  Nested Loop Left Anti Semi (Not-In) Join  (cost=0.00..1391061420469.58 rows=36 width=12)
-                           Join Filter: a_1.j >= c_1.j
-                           ->  Nested Loop  (cost=0.00..1356692610.50 rows=90 width=16)
+                     ->  Nested Loop Left Anti Semi (Not-In) Join  (cost=0.00..1391061429119.81 rows=36 width=12)
+                           Join Filter: (a_1.j >= c_1.j)
+                           ->  Nested Loop  (cost=0.00..1356692618.97 rows=90 width=16)
                                  Join Filter: true
-                                 ->  Nested Loop  (cost=0.00..1324033.12 rows=10 width=12)
+                                 ->  Nested Loop  (cost=0.00..1324033.13 rows=10 width=12)
                                        Join Filter: true
                                        ->  Seq Scan on a a_1  (cost=0.00..431.00 rows=2 width=8)
                                        ->  Materialize  (cost=0.00..431.00 rows=6 width=4)
@@ -890,21 +892,21 @@ explain select A.i, B.i, C.j from A, B, C where A.j < all ( select C.j from C wh
                                  ->  Materialize  (cost=0.00..431.00 rows=9 width=4)
                                        ->  Broadcast Motion 3:3  (slice4; segments: 3)  (cost=0.00..431.00 rows=9 width=4)
                                              ->  Seq Scan on c c_2  (cost=0.00..431.00 rows=3 width=4)
-                           ->  Materialize  (cost=0.00..1765376.85 rows=9 width=4)
-                                 ->  Broadcast Motion 3:3  (slice2; segments: 3)  (cost=0.00..1765376.85 rows=9 width=4)
-                                       ->  Nested Loop Anti Join  (cost=0.00..1765376.85 rows=3 width=4)
+                           ->  Materialize  (cost=0.00..1765376.83 rows=9 width=4)
+                                 ->  Broadcast Motion 3:3  (slice2; segments: 3)  (cost=0.00..1765376.83 rows=9 width=4)
+                                       ->  Nested Loop Anti Join  (cost=0.00..1765376.83 rows=3 width=4)
                                              Join Filter: true
                                              ->  Seq Scan on c c_1  (cost=0.00..431.00 rows=3 width=4)
-                                             ->  Materialize  (cost=0.00..862.00 rows=2 width=1)
-                                                   ->  Broadcast Motion 3:3  (slice3; segments: 3)  (cost=0.00..862.00 rows=2 width=1)
+                                             ->  Materialize  (cost=0.00..862.00 rows=1 width=1)
+                                                   ->  Broadcast Motion 3:3  (slice3; segments: 3)  (cost=0.00..862.00 rows=1 width=1)
                                                          ->  Hash Join  (cost=0.00..862.00 rows=1 width=1)
-                                                               Hash Cond: c.i = a.i
+                                                               Hash Cond: (c.i = a.i)
                                                                ->  Seq Scan on c  (cost=0.00..431.00 rows=1 width=4)
-                                                                     Filter: i = 10 AND i = 10
+                                                                     Filter: ((i = 10) AND (i = 10))
                                                                ->  Hash  (cost=431.00..431.00 rows=1 width=4)
                                                                      ->  Seq Scan on a  (cost=0.00..431.00 rows=1 width=4)
-                                                                           Filter: i = 10 AND i = 10
- Optimizer: Pivotal Optimizer (GPORCA) version 2.74.0
+                                                                           Filter: ((i = 10) AND (i = 10))
+ Optimizer: GPORCA
 (34 rows)
 
 select A.i, B.i, C.j from A, B, C where A.j < all ( select C.j from C where not exists(select C.i from C,A where C.i = A.i and C.i =10)) order by A.i, B.i, C.j limit 10;
@@ -915,15 +917,15 @@ select A.i, B.i, C.j from A, B, C where A.j < all ( select C.j from C where not 
 explain select A.i, B.i, C.j from A, B, C where A.j = all (select C.j from C where C.j = A.j and not exists (select sum(B.i) from B where C.i = B.i and C.i !=10)) order by A.i, B.i, C.j limit 10;
                                                                                                                                                                                                    QUERY PLAN                                                                                                                                                                                                    
 -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
- Limit  (cost=0.00..2260124027.48 rows=10 width=12)
-   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..2260124027.48 rows=10 width=12)
+ Limit  (cost=0.00..2260124042.86 rows=10 width=12)
+   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..2260124042.86 rows=10 width=12)
          Merge Key: a.i, b.i, c.j
-         ->  Limit  (cost=0.00..2260124027.48 rows=4 width=12)
-               ->  Sort  (cost=0.00..2260124027.48 rows=18 width=12)
+         ->  Limit  (cost=0.00..2260124042.86 rows=4 width=12)
+               ->  Sort  (cost=0.00..2260124042.86 rows=18 width=12)
                      Sort Key: a.i, b.i, c.j
-                     ->  Nested Loop  (cost=0.00..2260124027.48 rows=18 width=12)
+                     ->  Nested Loop  (cost=0.00..2260124042.86 rows=18 width=12)
                            Join Filter: true
-                           ->  Nested Loop  (cost=0.00..1324033.29 rows=18 width=8)
+                           ->  Nested Loop  (cost=0.00..1324033.31 rows=18 width=8)
                                  Join Filter: true
                                  ->  Broadcast Motion 3:3  (slice3; segments: 3)  (cost=0.00..431.00 rows=6 width=4)
                                        ->  Seq Scan on b  (cost=0.00..431.00 rows=2 width=4)
@@ -938,7 +940,7 @@ explain select A.i, B.i, C.j from A, B, C where A.j = all (select C.j from C whe
                                                      ->  Aggregate  (cost=0.00..0.00 rows=0 width=16)
                                                            ->  Result  (cost=0.00..0.00 rows=0 width=4)
                                                                  One-Time Filter: false
- Optimizer: Pivotal Optimizer (GPORCA)
+ Optimizer: GPORCA
 (24 rows)
 
 select A.i, B.i, C.j from A, B, C where A.j = all (select C.j from C where C.j = A.j and not exists (select sum(B.i) from B where C.i = B.i and C.i !=10)) order by A.i, B.i, C.j limit 10;
@@ -1066,26 +1068,26 @@ select * from A where exists (select * from C,B where C.j = A.j and exists (sele
 select * from A,B where exists (select * from C where C.j = A.j and exists (select * from C where C.i = B.i));
  i  | j  | i  | j  
 ----+----+----+----
-  1 |  1 | 32 |  5
-  1 |  1 | 32 |  5
- 99 | 62 | 32 |  5
- 78 | -1 | 32 |  5
-  1 |  1 |  1 | 43
-  1 |  1 | -1 | 62
-  1 |  1 |  1 |  1
-  1 |  1 |  2 |  7
-  1 |  1 |  1 | 43
-  1 |  1 | -1 | 62
-  1 |  1 |  1 |  1
-  1 |  1 |  2 |  7
- 99 | 62 |  1 | 43
- 99 | 62 | -1 | 62
- 99 | 62 |  1 |  1
  99 | 62 |  2 |  7
- 78 | -1 |  1 | 43
- 78 | -1 | -1 | 62
- 78 | -1 |  1 |  1
+  1 |  1 |  2 |  7
+  1 |  1 |  2 |  7
  78 | -1 |  2 |  7
+ 99 | 62 |  1 | 43
+ 99 | 62 |  1 |  1
+  1 |  1 |  1 | 43
+  1 |  1 |  1 |  1
+  1 |  1 |  1 | 43
+  1 |  1 |  1 |  1
+ 78 | -1 |  1 | 43
+ 78 | -1 |  1 |  1
+ 99 | 62 | -1 | 62
+ 99 | 62 | 32 |  5
+  1 |  1 | -1 | 62
+  1 |  1 | 32 |  5
+  1 |  1 | -1 | 62
+  1 |  1 | 32 |  5
+ 78 | -1 | -1 | 62
+ 78 | -1 | 32 |  5
 (20 rows)
 
 select * from A where exists (select * from B, C where C.j = A.j and exists (select sum(C.i) from C where C.i != 10 and C.i = B.i)) order by 1, 2;
@@ -1194,8 +1196,8 @@ select b from qp_csq_t1 where not exists(select * from qp_csq_t2 where y=a);
  b 
 ---
  4
- 6
  8
+ 6
 (3 rows)
 
 select b from qp_csq_t1 where not exists(select * from qp_csq_t2 where y=a) order by b;
@@ -1272,67 +1274,64 @@ explain select * from A where not exists (select sum(C.i) from C where C.i = A.i
          ->  Seq Scan on a  (cost=0.00..431.00 rows=2 width=8)
          ->  Result  (cost=0.00..0.00 rows=0 width=1)
                One-Time Filter: false
- Settings:  optimizer=on
- Optimizer status: Pivotal Optimizer (GPORCA) version 2.42.0
-(8 rows)
+ Optimizer: GPORCA
+(7 rows)
 
 select * from A where not exists (select sum(C.i) from C where C.i = A.i limit 0);
  i  | j  
 ----+----
  19 |  5
  99 | 62
+  1 |  1
+  1 |  1
  78 | -1
-  1 |  1
-  1 |  1
 (5 rows)
 
 explain select * from A where not exists (select sum(C.i) from C where C.i = A.i limit 5 offset 3);
                                                   QUERY PLAN                                                  
 --------------------------------------------------------------------------------------------------------------
- Result  (cost=0.00..1324035.78 rows=2 width=8)
-   Filter: (subplan)
+ Result  (cost=0.00..1324035.79 rows=5 width=8)
+   Filter: (SubPlan 1)
    ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..431.00 rows=5 width=8)
          ->  Seq Scan on a  (cost=0.00..431.00 rows=2 width=8)
    SubPlan 1
      ->  Limit  (cost=0.00..431.00 rows=1 width=8)
            ->  Aggregate  (cost=0.00..431.00 rows=1 width=8)
                  ->  Result  (cost=0.00..431.00 rows=1 width=4)
-                       Filter: c.i = $0
-                       ->  Materialize  (cost=0.00..431.00 rows=3 width=4)
+                       Filter: (c.i = a.i)
+                       ->  Materialize  (cost=0.00..431.00 rows=9 width=4)
                              ->  Gather Motion 3:1  (slice2; segments: 3)  (cost=0.00..431.00 rows=9 width=4)
                                    ->  Seq Scan on c  (cost=0.00..431.00 rows=3 width=4)
- Settings:  optimizer=on
- Optimizer status: Pivotal Optimizer (GPORCA) version 2.42.0
-(14 rows)
+ Optimizer: GPORCA
+(13 rows)
 
 select * from A where not exists (select sum(C.i) from C where C.i = A.i limit 5 offset 3);
  i  | j  
 ----+----
  19 |  5
-  1 |  1
-  1 |  1
  99 | 62
+  1 |  1
+  1 |  1
  78 | -1
 (5 rows)
 
 explain select * from A where not exists (select sum(C.i) from C where C.i = A.i limit 1 offset 0);
                                                   QUERY PLAN                                                  
 --------------------------------------------------------------------------------------------------------------
- Result  (cost=0.00..1324035.78 rows=2 width=8)
-   Filter: (subplan)
+ Result  (cost=0.00..1324035.79 rows=5 width=8)
+   Filter: (SubPlan 1)
    ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..431.00 rows=5 width=8)
          ->  Seq Scan on a  (cost=0.00..431.00 rows=2 width=8)
    SubPlan 1
      ->  Limit  (cost=0.00..431.00 rows=1 width=8)
            ->  Aggregate  (cost=0.00..431.00 rows=1 width=8)
                  ->  Result  (cost=0.00..431.00 rows=1 width=4)
-                       Filter: c.i = $0
-                       ->  Materialize  (cost=0.00..431.00 rows=3 width=4)
+                       Filter: (c.i = a.i)
+                       ->  Materialize  (cost=0.00..431.00 rows=9 width=4)
                              ->  Gather Motion 3:1  (slice2; segments: 3)  (cost=0.00..431.00 rows=9 width=4)
                                    ->  Seq Scan on c  (cost=0.00..431.00 rows=3 width=4)
- Settings:  optimizer=on
- Optimizer status: Pivotal Optimizer (GPORCA) version 2.42.0
-(14 rows)
+ Optimizer: GPORCA
+(13 rows)
 
 select * from A where not exists (select sum(C.i) from C where C.i = A.i limit 1 offset 0);
  i | j 
@@ -1347,19 +1346,18 @@ explain select C.j from C where not exists (select max(B.i) from B  where C.i = 
    ->  Sort  (cost=0.00..862.00 rows=2 width=4)
          Sort Key: c.j
          ->  Hash Anti Join  (cost=0.00..862.00 rows=2 width=4)
-               Hash Cond: c.i = b.i
+               Hash Cond: (c.i = b.i)
                ->  Seq Scan on c  (cost=0.00..431.00 rows=3 width=8)
                ->  Hash  (cost=431.00..431.00 rows=1 width=4)
                      ->  Result  (cost=0.00..431.00 rows=1 width=4)
-                           Filter: NOT (max(b.i)) IS NULL
+                           Filter: (NOT ((max(b.i)) IS NULL))
                            ->  GroupAggregate  (cost=0.00..431.00 rows=2 width=8)
-                                 Group By: b.i
+                                 Group Key: b.i
                                  ->  Sort  (cost=0.00..431.00 rows=2 width=4)
                                        Sort Key: b.i
                                        ->  Seq Scan on b  (cost=0.00..431.00 rows=2 width=4)
- Settings:  optimizer=on
- Optimizer status: Pivotal Optimizer (GPORCA) version 2.34.0
-(17 rows)
+ Optimizer: GPORCA
+(16 rows)
 
 select C.j from C where not exists (select max(B.i) from B  where C.i = B.i having max(B.i) is not null) order by C.j;
  j  
@@ -1373,24 +1371,23 @@ select C.j from C where not exists (select max(B.i) from B  where C.i = B.i havi
 explain select C.j from C where not exists (select max(B.i) from B  where C.i = B.i offset 1000) order by C.j;
                                                             QUERY PLAN                                                             
 -----------------------------------------------------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..1324036.36 rows=9 width=4)
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..1324036.37 rows=9 width=4)
    Merge Key: c.j
-   ->  Result  (cost=0.00..1324036.36 rows=3 width=4)
-         ->  Sort  (cost=0.00..1324036.36 rows=3 width=4)
+   ->  Result  (cost=0.00..1324036.37 rows=3 width=4)
+         ->  Sort  (cost=0.00..1324036.37 rows=3 width=4)
                Sort Key: c.j
-               ->  Seq Scan on c  (cost=0.00..1324036.36 rows=3 width=4)
-                     Filter: (subplan)
+               ->  Seq Scan on c  (cost=0.00..1324036.37 rows=3 width=4)
+                     Filter: (SubPlan 1)
                      SubPlan 1
                        ->  Limit  (cost=0.00..431.00 rows=1 width=4)
                              ->  Aggregate  (cost=0.00..431.00 rows=1 width=4)
                                    ->  Result  (cost=0.00..431.00 rows=1 width=4)
-                                         Filter: $0 = b.i
+                                         Filter: (c.i = b.i)
                                          ->  Materialize  (cost=0.00..431.00 rows=6 width=4)
                                                ->  Broadcast Motion 3:3  (slice2; segments: 3)  (cost=0.00..431.00 rows=6 width=4)
                                                      ->  Seq Scan on b  (cost=0.00..431.00 rows=2 width=4)
- Settings:  optimizer=on
- Optimizer status: Pivotal Optimizer (GPORCA) version 2.34.0
-(17 rows)
+ Optimizer: GPORCA
+(16 rows)
 
 select C.j from C where not exists (select max(B.i) from B  where C.i = B.i offset 1000) order by C.j;
   j  
@@ -1409,12 +1406,12 @@ select C.j from C where not exists (select max(B.i) from B  where C.i = B.i offs
 explain select C.j from C where not exists (select rank() over (order by B.i) from B  where C.i = B.i) order by C.j;
                                                             QUERY PLAN                                                             
 -----------------------------------------------------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..1324036.36 rows=9 width=4)
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..1324036.79 rows=9 width=4)
    Merge Key: c.j
-   ->  Result  (cost=0.00..1324036.36 rows=3 width=4)
-         ->  Sort  (cost=0.00..1324036.36 rows=3 width=4)
+   ->  Result  (cost=0.00..1324036.79 rows=3 width=4)
+         ->  Sort  (cost=0.00..1324036.79 rows=3 width=4)
                Sort Key: c.j
-               ->  Seq Scan on c  (cost=0.00..1324036.36 rows=3 width=4)
+               ->  Seq Scan on c  (cost=0.00..1324036.79 rows=3 width=4)
                      Filter: (SubPlan 1)
                      SubPlan 1
                        ->  WindowAgg  (cost=0.00..431.00 rows=1 width=4)
@@ -1426,7 +1423,7 @@ explain select C.j from C where not exists (select rank() over (order by B.i) fr
                                          ->  Materialize  (cost=0.00..431.00 rows=6 width=4)
                                                ->  Broadcast Motion 3:3  (slice2; segments: 3)  (cost=0.00..431.00 rows=6 width=4)
                                                      ->  Seq Scan on b  (cost=0.00..431.00 rows=2 width=4)
- Optimizer: Pivotal Optimizer (GPORCA) version 3.83.0
+ Optimizer: GPORCA
 (18 rows)
 
 select C.j from C where not exists (select rank() over (order by B.i) from B  where C.i = B.i) order by C.j;
@@ -1439,19 +1436,19 @@ select C.j from C where not exists (select rank() over (order by B.i) from B  wh
 (4 rows)
 
 explain select * from A where not exists (select sum(C.i) from C where C.i = A.i group by a.i);
-                   QUERY PLAN                   
-------------------------------------------------
+                                   QUERY PLAN                                    
+---------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..862.00 rows=2 width=8)
    ->  Hash Anti Join  (cost=0.00..862.00 rows=1 width=8)
-         Hash Cond: a.i = c.i
+         Hash Cond: (a.i = c.i)
          ->  Seq Scan on a  (cost=0.00..431.00 rows=2 width=8)
          ->  Hash  (cost=431.00..431.00 rows=3 width=4)
                ->  GroupAggregate  (cost=0.00..431.00 rows=3 width=4)
-                     Group By: c.i
+                     Group Key: c.i
                      ->  Sort  (cost=0.00..431.00 rows=3 width=4)
                            Sort Key: c.i
                            ->  Seq Scan on c  (cost=0.00..431.00 rows=3 width=4)
- Optimizer status: Pivotal Optimizer (GPORCA) version 2.46.1
+ Optimizer: GPORCA
 (11 rows)
 
 select * from A where not exists (select sum(C.i) from C where C.i = A.i group by a.i);
@@ -1461,94 +1458,93 @@ select * from A where not exists (select sum(C.i) from C where C.i = A.i group b
 (1 row)
 
 explain select A.i from A where not exists (select B.i from B where B.i in (select C.i from C) and B.i = A.i);
-                                   QUERY PLAN                                    
----------------------------------------------------------------------------------
+                                  QUERY PLAN                                   
+-------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..1293.00 rows=2 width=4)
-   ->  Hash Anti Join  (cost=0.00..1293.00 rows=1 width=4)
-         Hash Cond: a.i = b.i
-         ->  Seq Scan on a  (cost=0.00..431.00 rows=2 width=4)
-         ->  Hash  (cost=862.00..862.00 rows=2 width=4)
-               ->  Hash Semi Join  (cost=0.00..862.00 rows=2 width=4)
-                     Hash Cond: b.i = c.i
+   ->  Hash Right Anti Join  (cost=0.00..1293.00 rows=1 width=4)
+         Hash Cond: (a.i = b.i)
+         ->  Hash Right Semi Join  (cost=0.00..862.00 rows=2 width=4)
+               Hash Cond: (b.i = c.i)
+               ->  Seq Scan on c  (cost=0.00..431.00 rows=3 width=4)
+               ->  Hash  (cost=431.00..431.00 rows=2 width=4)
                      ->  Seq Scan on b  (cost=0.00..431.00 rows=2 width=4)
-                     ->  Hash  (cost=431.00..431.00 rows=3 width=4)
-                           ->  Seq Scan on c  (cost=0.00..431.00 rows=3 width=4)
- Settings:  optimizer=on
- Optimizer status: Pivotal Optimizer (GPORCA) version 2.40.3
-(12 rows)
+         ->  Hash  (cost=431.00..431.00 rows=2 width=4)
+               ->  Seq Scan on a  (cost=0.00..431.00 rows=2 width=4)
+ Optimizer: GPORCA
+(11 rows)
 
 select A.i from A where not exists (select B.i from B where B.i in (select C.i from C) and B.i = A.i);
  i  
 ----
+ 19
  99
  78
- 19
 (3 rows)
 
 explain select * from B where not exists (select * from C,A where C.i in (select C.i from C where C.i = A.i and C.i != 10) AND B.i = C.i);
                                                         QUERY PLAN                                                         
 ---------------------------------------------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..1324895.10 rows=1 width=8)
-   ->  Hash Anti Join  (cost=0.00..1324895.10 rows=1 width=8)
-         Hash Cond: b.i = c.i
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..1324895.11 rows=1 width=8)
+   ->  Hash Anti Join  (cost=0.00..1324895.11 rows=1 width=8)
+         Hash Cond: (b.i = c.i)
          ->  Seq Scan on b  (cost=0.00..431.00 rows=2 width=8)
-         ->  Hash  (cost=1324464.10..1324464.10 rows=13 width=4)
-               ->  Redistribute Motion 3:3  (slice2; segments: 3)  (cost=0.00..1324464.10 rows=13 width=4)
+         ->  Hash  (cost=1324464.11..1324464.11 rows=3 width=4)
+               ->  Redistribute Motion 3:3  (slice2; segments: 3)  (cost=0.00..1324464.11 rows=3 width=4)
                      Hash Key: c.i
-                     ->  Hash Semi Join  (cost=0.00..1324464.10 rows=13 width=4)
-                           Hash Cond: a.i = c_1.i AND c.i = c_1.i
-                           ->  Redistribute Motion 3:3  (slice3; segments: 3)  (cost=0.00..1324033.09 rows=15 width=8)
+                     ->  Hash Semi Join  (cost=0.00..1324464.11 rows=3 width=4)
+                           Hash Cond: ((a.i = c_1.i) AND (c.i = c_1.i))
+                           ->  Redistribute Motion 3:3  (slice3; segments: 3)  (cost=0.00..1324033.10 rows=15 width=8)
                                  Hash Key: a.i
-                                 ->  Nested Loop  (cost=0.00..1324033.09 rows=15 width=8)
+                                 ->  Nested Loop  (cost=0.00..1324033.10 rows=15 width=8)
                                        Join Filter: true
                                        ->  Broadcast Motion 3:3  (slice4; segments: 3)  (cost=0.00..431.00 rows=5 width=4)
                                              ->  Seq Scan on a  (cost=0.00..431.00 rows=2 width=4)
                                        ->  Seq Scan on c  (cost=0.00..431.00 rows=3 width=4)
                            ->  Hash  (cost=431.00..431.00 rows=3 width=4)
                                  ->  Seq Scan on c c_1  (cost=0.00..431.00 rows=3 width=4)
-                                       Filter: i <> 10
- Optimizer: Pivotal Optimizer (GPORCA) version 2.74.0
+                                       Filter: (i <> 10)
+ Optimizer: GPORCA
 (20 rows)
 
 select * from B where not exists (select * from C,A where C.i in (select C.i from C where C.i = A.i and C.i != 10) AND B.i = C.i);
  i  | j  
 ----+----
- 88 |  1
- -1 | 62
   2 |  7
+ -1 | 62
  32 |  5
+ 88 |  1
 (4 rows)
 
 explain select * from A where A.i in (select C.j from C,B where B.i in (select i from C));
                                                                     QUERY PLAN                                                                     
 ---------------------------------------------------------------------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..1324895.30 rows=5 width=8)
-   ->  Hash Join  (cost=0.00..1324895.30 rows=2 width=8)
-         Hash Cond: a.i = c.j
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..1324895.31 rows=5 width=8)
+   ->  Hash Join  (cost=0.00..1324895.31 rows=2 width=8)
+         Hash Cond: (a.i = c.j)
          ->  Seq Scan on a  (cost=0.00..431.00 rows=2 width=8)
-         ->  Hash  (cost=1324464.30..1324464.30 rows=3 width=4)
-               ->  GroupAggregate  (cost=0.00..1324464.30 rows=3 width=4)
+         ->  Hash  (cost=1324464.31..1324464.31 rows=3 width=4)
+               ->  GroupAggregate  (cost=0.00..1324464.31 rows=3 width=4)
                      Group Key: c.j
-                     ->  Sort  (cost=0.00..1324464.30 rows=3 width=4)
+                     ->  Sort  (cost=0.00..1324464.31 rows=3 width=4)
                            Sort Key: c.j
-                           ->  Redistribute Motion 3:3  (slice2; segments: 3)  (cost=0.00..1324464.30 rows=3 width=4)
+                           ->  Redistribute Motion 3:3  (slice2; segments: 3)  (cost=0.00..1324464.31 rows=3 width=4)
                                  Hash Key: c.j
-                                 ->  GroupAggregate  (cost=0.00..1324464.30 rows=3 width=4)
+                                 ->  GroupAggregate  (cost=0.00..1324464.31 rows=3 width=4)
                                        Group Key: c.j
-                                       ->  Sort  (cost=0.00..1324464.30 rows=18 width=4)
+                                       ->  Sort  (cost=0.00..1324464.31 rows=18 width=4)
                                              Sort Key: c.j
-                                             ->  Hash Semi Join  (cost=0.00..1324464.30 rows=18 width=4)
-                                                   Hash Cond: b.i = c_1.i
-                                                   ->  Redistribute Motion 3:3  (slice3; segments: 3)  (cost=0.00..1324033.29 rows=18 width=8)
+                                             ->  Hash Semi Join  (cost=0.00..1324464.31 rows=18 width=4)
+                                                   Hash Cond: (b.i = c_1.i)
+                                                   ->  Redistribute Motion 3:3  (slice3; segments: 3)  (cost=0.00..1324033.31 rows=18 width=8)
                                                          Hash Key: b.i
-                                                         ->  Nested Loop  (cost=0.00..1324033.29 rows=18 width=8)
+                                                         ->  Nested Loop  (cost=0.00..1324033.31 rows=18 width=8)
                                                                Join Filter: true
                                                                ->  Broadcast Motion 3:3  (slice4; segments: 3)  (cost=0.00..431.00 rows=6 width=4)
                                                                      ->  Seq Scan on b  (cost=0.00..431.00 rows=2 width=4)
                                                                ->  Seq Scan on c  (cost=0.00..431.00 rows=3 width=4)
                                                    ->  Hash  (cost=431.00..431.00 rows=3 width=4)
                                                          ->  Seq Scan on c c_1  (cost=0.00..431.00 rows=3 width=4)
- Optimizer: Pivotal Optimizer (GPORCA) version 2.74.0
+ Optimizer: GPORCA
 (27 rows)
 
 select * from A where A.i in (select C.j from C,B where B.i in (select i from C));
@@ -1563,7 +1559,7 @@ explain select * from A where not exists (select sum(c.i) from C where C.i = A.i
 ---------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..862.00 rows=2 width=8)
    ->  Hash Anti Join  (cost=0.00..862.00 rows=1 width=8)
-         Hash Cond: a.i = c.i
+         Hash Cond: (a.i = c.i)
          ->  Seq Scan on a  (cost=0.00..431.00 rows=2 width=8)
          ->  Hash  (cost=431.00..431.00 rows=2 width=4)
                ->  GroupAggregate  (cost=0.00..431.00 rows=2 width=4)
@@ -1571,16 +1567,16 @@ explain select * from A where not exists (select sum(c.i) from C where C.i = A.i
                      ->  Sort  (cost=0.00..431.00 rows=2 width=4)
                            Sort Key: c.i
                            ->  Seq Scan on c  (cost=0.00..431.00 rows=2 width=4)
-                                 Filter: i > 3
- Optimizer: Pivotal Optimizer (GPORCA) version 2.55.13
+                                 Filter: (i > 3)
+ Optimizer: GPORCA
 (12 rows)
 
 select * from A where not exists (select sum(c.i) from C where C.i = A.i group by C.i having c.i > 3);
  i  | j 
 ----+---
+  1 | 1
+  1 | 1
  19 | 5
-  1 | 1
-  1 | 1
 (3 rows)
 
 -- ----------------------------------------------------------------------
@@ -1660,10 +1656,10 @@ update D set i = 11111 from C where C.i = D.i and exists (select C.j from C,B wh
 select * from D;
    i   | j  
 -------+----
+ 11111 |  1
+ 11111 |  1
     19 |  5
     99 | 62
- 11111 |  1
- 11111 |  1
  11111 | -1
 (5 rows)
 
@@ -1671,11 +1667,11 @@ update D set i = 22222 from C where C.i = D.i and not exists (select C.j from C,
 select * from D;
    i   | j  
 -------+----
- 11111 |  1
- 11111 |  1
- 11111 | -1
     19 |  5
+ 11111 | -1
  22222 | 62
+ 11111 |  1
+ 11111 |  1
 (5 rows)
 
 -- -- -- --
@@ -2261,6 +2257,8 @@ select A.i, B.i, C.j from A, B, C where exists (select C.j from C group by C.j h
 
 begin;
 create table csq_emp(name text, department text, salary numeric);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'name' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into csq_emp values('a','adept',11200.00);
 insert into csq_emp values('b','adept',22222.00);
 insert into csq_emp values('c','bdept',99222.00);
@@ -2310,6 +2308,8 @@ create table job (
       EMPNO         VARCHAR(4),
       jobtitle      VARCHAR(20)
     );
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'empno' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into job (EMPNO, Jobtitle) values ('01','Tester');
 insert into job (EMPNO, Jobtitle) values ('02','Accountant');
 insert into job (EMPNO, Jobtitle) values ('03','Developer');
@@ -3699,32 +3699,32 @@ ANALYZE qp_tab1;
 ANALYZE qp_tab2;
 ANALYZE qp_tab3;
 EXPLAIN SELECT a FROM qp_tab1 f1 LEFT JOIN qp_tab2 on a=c WHERE NOT EXISTS(SELECT 1 FROM qp_tab1 f2 WHERE f1.a = f2.a);
-                                        QUERY PLAN                                         
--------------------------------------------------------------------------------------------
+                                     QUERY PLAN                                     
+------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..1293.00 rows=2 width=4)
    ->  Hash Left Join  (cost=0.00..1293.00 rows=1 width=4)
-         Hash Cond: (qp_tab1.a = qp_tab2.c)
+         Hash Cond: (f1.a = qp_tab2.c)
          ->  Hash Anti Join  (cost=0.00..862.00 rows=1 width=4)
-               Hash Cond: (qp_tab1.a = qp_tab1_1.a)
+               Hash Cond: (f1.a = f2.a)
                ->  Seq Scan on qp_tab1 f1  (cost=0.00..431.00 rows=1 width=4)
                ->  Hash  (cost=431.00..431.00 rows=1 width=4)
                      ->  Seq Scan on qp_tab1 f2  (cost=0.00..431.00 rows=1 width=4)
          ->  Hash  (cost=431.00..431.00 rows=1 width=4)
                ->  Seq Scan on qp_tab2  (cost=0.00..431.00 rows=1 width=4)
- Optimizer: Pivotal Optimizer (GPORCA) version 3.83.0
+ Optimizer: GPORCA
 (11 rows)
 
 EXPLAIN SELECT DISTINCT a FROM qp_tab1 WHERE NOT (SELECT TRUE FROM qp_tab2 WHERE EXISTS (SELECT * FROM qp_tab3 WHERE qp_tab2.c = qp_tab3.e));
                                                              QUERY PLAN                                                             
 ------------------------------------------------------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..1765377.02 rows=1 width=4)
-   ->  GroupAggregate  (cost=0.00..1765377.02 rows=1 width=4)
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..1765377.06 rows=1 width=4)
+   ->  GroupAggregate  (cost=0.00..1765377.06 rows=1 width=4)
          Group Key: qp_tab1.a
-         ->  Sort  (cost=0.00..1765377.02 rows=1 width=4)
+         ->  Sort  (cost=0.00..1765377.06 rows=1 width=4)
                Sort Key: qp_tab1.a
-               ->  Result  (cost=0.00..1765377.02 rows=1 width=4)
+               ->  Result  (cost=0.00..1765377.06 rows=1 width=4)
                      Filter: (NOT (true))
-                     ->  Nested Loop Left Join  (cost=0.00..1765377.02 rows=1 width=5)
+                     ->  Nested Loop Left Join  (cost=0.00..1765377.06 rows=1 width=5)
                            Join Filter: true
                            ->  Seq Scan on qp_tab1  (cost=0.00..431.00 rows=1 width=4)
                            ->  Assert  (cost=0.00..862.00 rows=1 width=1)
@@ -3736,10 +3736,11 @@ EXPLAIN SELECT DISTINCT a FROM qp_tab1 WHERE NOT (SELECT TRUE FROM qp_tab2 WHERE
                                                          ->  Hash Semi Join  (cost=0.00..862.00 rows=1 width=1)
                                                                Hash Cond: (qp_tab2.c = qp_tab3.e)
                                                                ->  Seq Scan on qp_tab2  (cost=0.00..431.00 rows=1 width=4)
+                                                                     Filter: (NOT (c IS NULL))
                                                                ->  Hash  (cost=431.00..431.00 rows=1 width=4)
                                                                      ->  Seq Scan on qp_tab3  (cost=0.00..431.00 rows=1 width=4)
- Optimizer: Pivotal Optimizer (GPORCA)
-(22 rows)
+ Optimizer: GPORCA
+(23 rows)
 
 SELECT DISTINCT a FROM qp_tab1 WHERE NOT (SELECT TRUE FROM qp_tab2 WHERE EXISTS (SELECT * FROM qp_tab3 WHERE qp_tab2.c = qp_tab3.e));
  a 
@@ -3764,13 +3765,13 @@ EXPLAIN SELECT * FROM qp_non_eq_a, qp_non_eq_b WHERE qp_non_eq_a.f = qp_non_eq_b
 ----------------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..862.00 rows=2 width=24)
    ->  Hash Join  (cost=0.00..862.00 rows=1 width=24)
-         Hash Cond: qp_non_eq_b.f = qp_non_eq_a.f
+         Hash Cond: (qp_non_eq_b.f = qp_non_eq_a.f)
          ->  Seq Scan on qp_non_eq_b  (cost=0.00..431.00 rows=1 width=12)
          ->  Hash  (cost=431.00..431.00 rows=1 width=12)
                ->  Broadcast Motion 3:3  (slice2; segments: 3)  (cost=0.00..431.00 rows=1 width=12)
                      ->  Seq Scan on qp_non_eq_a  (cost=0.00..431.00 rows=1 width=12)
-                           Filter: f::text <> '-0'::text
- Optimizer: Pivotal Optimizer (GPORCA) version 2.72.0
+                           Filter: ((f)::text <> '-0'::text)
+ Optimizer: GPORCA
 (9 rows)
 
 SELECT * FROM qp_non_eq_a, qp_non_eq_b WHERE qp_non_eq_a.f = qp_non_eq_b.f AND qp_non_eq_a.f::text <> '-0';
@@ -3781,38 +3782,38 @@ SELECT * FROM qp_non_eq_a, qp_non_eq_b WHERE qp_non_eq_a.f = qp_non_eq_b.f AND q
 (2 rows)
 
 EXPLAIN SELECT * FROM qp_non_eq_a INNER JOIN qp_non_eq_b ON qp_non_eq_a.f = qp_non_eq_b.f AND CASE WHEN qp_non_eq_b.f::text = '-0' THEN 1 ELSE -1::float8 END < '0';
-                                                                   QUERY PLAN                                                                    
--------------------------------------------------------------------------------------------------------------------------------------------------
+                                                                        QUERY PLAN                                                                         
+-----------------------------------------------------------------------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..862.00 rows=2 width=24)
    ->  Hash Join  (cost=0.00..862.00 rows=1 width=24)
-         Hash Cond: qp_non_eq_a.f = qp_non_eq_b.f
+         Hash Cond: (qp_non_eq_a.f = qp_non_eq_b.f)
          ->  Seq Scan on qp_non_eq_a  (cost=0.00..431.00 rows=1 width=12)
          ->  Hash  (cost=431.00..431.00 rows=1 width=12)
                ->  Broadcast Motion 3:3  (slice2; segments: 3)  (cost=0.00..431.00 rows=1 width=12)
                      ->  Seq Scan on qp_non_eq_b  (cost=0.00..431.00 rows=1 width=12)
-                           Filter: CASE WHEN f::text = '-0'::text THEN 1::double precision ELSE (-1)::double precision END < 0::double precision
- Optimizer: Pivotal Optimizer (GPORCA) version 2.72.0
+                           Filter: (CASE WHEN ((f)::text = '-0'::text) THEN '1'::double precision ELSE '-1'::double precision END < '0'::double precision)
+ Optimizer: GPORCA
 (9 rows)
 
 SELECT * FROM qp_non_eq_a INNER JOIN qp_non_eq_b ON qp_non_eq_a.f = qp_non_eq_b.f AND CASE WHEN qp_non_eq_b.f::text = '-0' THEN 1 ELSE -1::float8 END < '0';
  i | f  | i | f 
 ---+----+---+---
- 2 | -0 | 3 | 0
  1 |  0 | 3 | 0
+ 2 | -0 | 3 | 0
 (2 rows)
 
 EXPLAIN SELECT * FROM qp_non_eq_a, qp_non_eq_b WHERE qp_non_eq_a.i = qp_non_eq_b.i AND qp_non_eq_a.i = ANY('{1,2,3}'::integer[]);
-                                      QUERY PLAN                                      
---------------------------------------------------------------------------------------
+                                          QUERY PLAN                                           
+-----------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..862.00 rows=2 width=24)
    ->  Hash Join  (cost=0.00..862.00 rows=1 width=24)
-         Hash Cond: qp_non_eq_a.i = qp_non_eq_b.i
+         Hash Cond: (qp_non_eq_a.i = qp_non_eq_b.i)
          ->  Seq Scan on qp_non_eq_a  (cost=0.00..431.00 rows=1 width=12)
-               Filter: (i = ANY ('{1,2,3}'::integer[])) AND (i = 1 OR i = 2 OR i = 3)
+               Filter: ((i = ANY ('{1,2,3}'::integer[])) AND (i = ANY ('{1,2,3}'::integer[])))
          ->  Hash  (cost=431.00..431.00 rows=1 width=12)
                ->  Seq Scan on qp_non_eq_b  (cost=0.00..431.00 rows=1 width=12)
-                     Filter: i = 1 OR i = 2 OR i = 3
- Optimizer: Pivotal Optimizer (GPORCA) version 2.72.0
+                     Filter: (i = ANY ('{1,2,3}'::integer[]))
+ Optimizer: GPORCA
 (9 rows)
 
 SELECT * FROM qp_non_eq_a, qp_non_eq_b WHERE qp_non_eq_a.i = qp_non_eq_b.i AND qp_non_eq_a.i = ANY('{1,2,3}'::integer[]);
@@ -3826,12 +3827,12 @@ EXPLAIN SELECT * FROM qp_non_eq_a, qp_non_eq_b WHERE qp_non_eq_a.i = qp_non_eq_b
 --------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..862.00 rows=1 width=24)
    ->  Hash Join  (cost=0.00..862.00 rows=1 width=24)
-         Hash Cond: qp_non_eq_a.i = qp_non_eq_b.i
+         Hash Cond: (qp_non_eq_a.i = qp_non_eq_b.i)
          ->  Seq Scan on qp_non_eq_a  (cost=0.00..431.00 rows=1 width=12)
-               Filter: i::numeric = ANY ('{1,2,3}'::numeric[])
+               Filter: ((i)::numeric = ANY ('{1,2,3}'::numeric[]))
          ->  Hash  (cost=431.00..431.00 rows=1 width=12)
                ->  Seq Scan on qp_non_eq_b  (cost=0.00..431.00 rows=1 width=12)
- Optimizer: Pivotal Optimizer (GPORCA) version 2.72.0
+ Optimizer: GPORCA
 (8 rows)
 
 SELECT * FROM qp_non_eq_a, qp_non_eq_b WHERE qp_non_eq_a.i = qp_non_eq_b.i AND qp_non_eq_a.i = ANY('{1,2,3}'::numeric[]);
@@ -3888,15 +3889,15 @@ explain select x1.a, (select count(*) from generate_series(1, x1.a)) from t1 x1;
          SubPlan 1
            ->  Aggregate  (cost=0.00..0.00 rows=1 width=8)
                  ->  Function Scan on generate_series  (cost=0.00..0.00 rows=334 width=1)
- Optimizer: Pivotal Optimizer (GPORCA) version 3.83.0
+ Optimizer: GPORCA
 (6 rows)
 
 select x1.a, (select count(*) from generate_series(1, x1.a)) from t1 x1;
  a | count 
 ---+-------
- 1 |     1
  2 |     2
  3 |     3
+ 1 |     1
 (3 rows)
 
 -- with limit
@@ -3911,7 +3912,7 @@ explain select t1.a, (select count(*) c from (select city from supplier limit t1
                        ->  Materialize  (cost=0.00..431.00 rows=5 width=1)
                              ->  Broadcast Motion 3:3  (slice2; segments: 3)  (cost=0.00..431.00 rows=5 width=1)
                                    ->  Seq Scan on supplier  (cost=0.00..431.00 rows=2 width=1)
- Optimizer: Pivotal Optimizer (GPORCA) version 3.83.0
+ Optimizer: GPORCA
 (9 rows)
 
 select t1.a, (select count(*) c from (select city from supplier limit t1.a) x) from t1;
@@ -3926,17 +3927,17 @@ select t1.a, (select count(*) c from (select city from supplier limit t1.a) x) f
 explain select t1.*, (select count(*) as ct from generate_series(1, a), t1) from t1;
                                                    QUERY PLAN                                                    
 -----------------------------------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..1808684647.64 rows=3 width=16)
-   ->  Seq Scan on t1  (cost=0.00..1808684647.64 rows=334 width=16)
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..1808684649.95 rows=3 width=16)
+   ->  Seq Scan on t1  (cost=0.00..1808684649.95 rows=334 width=16)
          SubPlan 1
            ->  Aggregate  (cost=0.00..1765431.58 rows=1 width=8)
-                 ->  Nested Loop  (cost=0.00..1765431.58 rows=1000 width=1)
+                 ->  Nested Loop  (cost=0.00..1765431.58 rows=3000 width=1)
                        Join Filter: true
                        ->  Materialize  (cost=0.00..431.00 rows=3 width=1)
                              ->  Broadcast Motion 3:3  (slice2; segments: 3)  (cost=0.00..431.00 rows=3 width=1)
                                    ->  Seq Scan on t1 t1_1  (cost=0.00..431.00 rows=1 width=1)
                        ->  Function Scan on generate_series  (cost=0.00..0.00 rows=334 width=1)
- Optimizer: Pivotal Optimizer (GPORCA) version 3.83.0
+ Optimizer: GPORCA
 (11 rows)
 
 select t1.*, (select count(*) as ct from generate_series(1, a), t1) from t1;
@@ -3950,19 +3951,19 @@ select t1.*, (select count(*) as ct from generate_series(1, a), t1) from t1;
 explain select * from t1 where 0 < (select count(*) from generate_series(1, a), t1);
                                                    QUERY PLAN                                                    
 -----------------------------------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..1808684647.65 rows=3 width=8)
-   ->  Result  (cost=0.00..1808684647.65 rows=1 width=8)
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..1808684649.96 rows=3 width=8)
+   ->  Result  (cost=0.00..1808684649.96 rows=1 width=8)
          Filter: (0 < (SubPlan 1))
-         ->  Seq Scan on t1  (cost=0.00..1808684647.64 rows=334 width=16)
+         ->  Seq Scan on t1  (cost=0.00..1808684649.95 rows=334 width=16)
          SubPlan 1
            ->  Aggregate  (cost=0.00..1765431.58 rows=1 width=8)
-                 ->  Nested Loop  (cost=0.00..1765431.58 rows=1000 width=1)
+                 ->  Nested Loop  (cost=0.00..1765431.58 rows=3000 width=1)
                        Join Filter: true
                        ->  Materialize  (cost=0.00..431.00 rows=3 width=1)
                              ->  Broadcast Motion 3:3  (slice2; segments: 3)  (cost=0.00..431.00 rows=3 width=1)
                                    ->  Seq Scan on t1 t1_1  (cost=0.00..431.00 rows=1 width=1)
                        ->  Function Scan on generate_series  (cost=0.00..0.00 rows=334 width=1)
- Optimizer: PQO version 3.27.0
+ Optimizer: GPORCA
 (13 rows)
 
 select * from t1 where 0 < (select count(*) from generate_series(1, a), t1);

@@ -457,6 +457,8 @@ CTranslatorExprToDXL::CreateDXLNode(CExpression *pexpr,
 		case COperator::EopPhysicalLeftSemiHashJoin:
 		case COperator::EopPhysicalLeftAntiSemiHashJoin:
 		case COperator::EopPhysicalLeftAntiSemiHashJoinNotIn:
+		case COperator::EopPhysicalRightSemiHashJoin:
+		case COperator::EopPhysicalRightAntiSemiHashJoin:
 		case COperator::EopPhysicalRightOuterHashJoin:
 		case COperator::EopPhysicalFullHashJoin:
 			dxlnode = CTranslatorExprToDXL::PdxlnHashJoin(
@@ -5068,6 +5070,12 @@ CTranslatorExprToDXL::EdxljtHashJoin(CPhysicalHashJoin *popHJ)
 
 		case COperator::EopPhysicalLeftAntiSemiHashJoinNotIn:
 			return EdxljtLeftAntiSemijoinNotIn;
+
+		case COperator::EopPhysicalRightSemiHashJoin:
+			return EdxljtRightSemijoin;
+
+		case COperator::EopPhysicalRightAntiSemiHashJoin:
+			return EdxljtRightAntiSemijoin;
 
 		case COperator::EopPhysicalFullHashJoin:
 			return EdxljtFull;

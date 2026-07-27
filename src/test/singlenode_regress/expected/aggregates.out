@@ -2924,7 +2924,7 @@ FROM (SELECT * FROM tenk1
                Output: tenk1_2.unique1
          ->  Seq Scan on public.tenk1 tenk1_3
                Output: tenk1_3.unique1
- Settings: enable_indexonlyscan = 'off', min_parallel_table_scan_size = '0', parallel_setup_cost = '0', parallel_tuple_cost = '0'
+ Settings: parallel_setup_cost = '0', parallel_tuple_cost = '0', min_parallel_table_scan_size = '0', enable_indexonlyscan = 'off'
  Optimizer: Postgres query optimizer
 (13 rows)
 
@@ -2959,7 +2959,7 @@ FROM (SELECT * FROM tenk1
                Output: tenk1_2.unique1
          ->  Seq Scan on public.tenk1 tenk1_3
                Output: tenk1_3.unique1
- Settings: enable_indexonlyscan = 'off', min_parallel_table_scan_size = '0', parallel_setup_cost = '0', parallel_tuple_cost = '0'
+ Settings: parallel_setup_cost = '0', parallel_tuple_cost = '0', min_parallel_table_scan_size = '0', enable_indexonlyscan = 'off'
  Optimizer: Postgres query optimizer
 (13 rows)
 
@@ -3024,18 +3024,16 @@ set enable_memoize to off;
 explain (costs off)
   select 1 from tenk1
    where (hundred, thousand) in (select twothousand, twothousand from onek);
-                         QUERY PLAN                          
--------------------------------------------------------------
- Hash Join
-   Hash Cond: (tenk1.hundred = onek.twothousand)
-   ->  Seq Scan on tenk1
-         Filter: (hundred = thousand)
+                   QUERY PLAN                    
+-------------------------------------------------
+ Hash Right Semi Join
+   Hash Cond: (onek.twothousand = tenk1.hundred)
+   ->  Seq Scan on onek
    ->  Hash
-         ->  HashAggregate
-               Group Key: onek.twothousand, onek.twothousand
-               ->  Seq Scan on onek
+         ->  Seq Scan on tenk1
+               Filter: (hundred = thousand)
  Optimizer: Postgres query optimizer
-(9 rows)
+(7 rows)
 
 reset enable_memoize;
 --
@@ -3225,17 +3223,17 @@ drop table agg_hash_4;
  */
 set enable_indexonlyscan = off;
 explain analyze select count(*) from pg_class,  (select count(*) >0 from  (select count(*) from pg_class where relname like 't%')x)y;
-                                                       QUERY PLAN                                                       
-------------------------------------------------------------------------------------------------------------------------
- Aggregate  (cost=10000000047.47..10000000047.48 rows=1 width=8) (actual time=0.515..0.516 rows=1 loops=1)
-   ->  Nested Loop  (cost=10000000000.02..10000000043.98 rows=1397 width=0) (actual time=0.014..0.460 rows=889 loops=1)
-         ->  Aggregate  (cost=0.02..0.03 rows=1 width=1) (actual time=0.004..0.005 rows=1 loops=1)
-               ->  Result  (cost=0.00..0.01 rows=1 width=8) (actual time=0.001..0.002 rows=1 loops=1)
-         ->  Seq Scan on pg_class  (cost=0.00..29.97 rows=1397 width=0) (actual time=0.009..0.371 rows=889 loops=1)
- Planning Time: 0.760 ms
-   (slice0)    Executor memory: 128K bytes.
+                                                       QUERY PLAN                                                        
+-------------------------------------------------------------------------------------------------------------------------
+ Aggregate  (cost=10000000083.05..10000000083.06 rows=1 width=8) (actual time=0.485..0.486 rows=1 loops=1)
+   ->  Nested Loop  (cost=10000000000.02..10000000076.16 rows=2756 width=0) (actual time=0.019..0.420 rows=1115 loops=1)
+         ->  Aggregate  (cost=0.02..0.03 rows=1 width=1) (actual time=0.002..0.002 rows=1 loops=1)
+               ->  Result  (cost=0.00..0.01 rows=1 width=8) (actual time=0.000..0.001 rows=1 loops=1)
+         ->  Seq Scan on pg_class  (cost=0.00..48.56 rows=2756 width=0) (actual time=0.017..0.306 rows=1115 loops=1)
+ Planning Time: 0.238 ms
+   (slice0)    Executor memory: 125K bytes.
  Memory used:  128000kB
  Optimizer: Postgres query optimizer
- Execution Time: 0.603 ms
+ Execution Time: 0.540 ms
 (10 rows)
 

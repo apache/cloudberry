@@ -702,6 +702,14 @@ CTranslatorUtils::ConvertToDXLJoinType(JoinType jt)
 			join_type = EdxljtLeftAntiSemijoinNotIn;
 			break;
 
+		case JOIN_RIGHT_SEMI:
+			join_type = EdxljtRightSemijoin;
+			break;
+
+		case JOIN_RIGHT_ANTI:
+			join_type = EdxljtRightAntiSemijoin;
+			break;
+
 		default:
 			GPOS_ASSERT(!"Unrecognized join type");
 	}

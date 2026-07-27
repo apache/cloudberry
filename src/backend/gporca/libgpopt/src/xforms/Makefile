@@ -102,6 +102,8 @@ OBJS        = CDecorrelator.o \
               CXformLeftSemiApplyWithExternalCorrs2InnerJoin.o \
               CXformLeftSemiJoin2CrossProduct.o \
               CXformLeftSemiJoin2HashJoin.o \
+              CXformLeftSemiJoin2RightSemiHashJoin.o \
+              CXformLeftAntiSemiJoin2RightAntiSemiHashJoin.o \
               CXformLeftSemiJoin2InnerJoin.o \
               CXformLeftSemiJoin2InnerJoinUnderGb.o \
               CXformLeftSemiJoin2NLJoin.o \

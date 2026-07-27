@@ -1045,7 +1045,19 @@ typedef enum JoinType
 	 * moving the larger of the two relations.
 	 */
 	JOIN_DEDUP_SEMI,			/* inner join, LHS path must be made unique afterwards */
-	JOIN_DEDUP_SEMI_REVERSE		/* inner join, RHS path must be made unique afterwards */
+	JOIN_DEDUP_SEMI_REVERSE,	/* inner join, RHS path must be made unique afterwards */
+
+	/*
+	 * JOIN_RIGHT_SEMI (backported from upstream commit aa86129e1) is an
+	 * executor-supported join type, but it is deliberately placed at the END
+	 * of this enum rather than next to JOIN_RIGHT_ANTI where upstream puts it.
+	 * Inserting it in the middle would shift the integer values of the
+	 * GPDB-specific JOIN_DEDUP_SEMI/REVERSE (and JOIN_UNIQUE_*) codes, which
+	 * breaks value-dependent code elsewhere and corrupts MPP motion planning
+	 * (observed as a SIGSEGV during dispatch on semijoins over non-partitioned
+	 * loci).  Appending here keeps every pre-existing value stable.
+	 */
+	JOIN_RIGHT_SEMI				/* 1 copy of each RHS row that has match(es) */
 
 	/*
 	 * We might need additional join types someday.
@@ -1054,10 +1066,10 @@ typedef enum JoinType
 
 /*
  * OUTER joins are those for which pushed-down quals must behave differently
- * from the join's own quals.  This is in fact everything except INNER and
- * SEMI joins.  However, this macro must also exclude the JOIN_UNIQUE symbols
- * since those are temporary proxies for what will eventually be an INNER
- * join.
+ * from the join's own quals.  This is in fact everything except INNER, SEMI
+ * and RIGHT_SEMI joins.  However, this macro must also exclude the
+ * JOIN_UNIQUE symbols since those are temporary proxies for what will
+ * eventually be an INNER join.
  *
  * Note: semijoins are a hybrid case, but we choose to treat them as not
  * being outer joins.  This is okay principally because the SQL syntax makes

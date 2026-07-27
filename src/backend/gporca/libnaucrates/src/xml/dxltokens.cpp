@@ -302,6 +302,8 @@ CDXLTokens::Init(CMemoryPool *mp)
 		{EdxltokenJoinLeftAntiSemiJoin, GPOS_WSZ_LIT("LeftAntiSemiJoin")},
 		{EdxltokenJoinLeftAntiSemiJoinNotIn,
 		 GPOS_WSZ_LIT("LeftAntiSemiJoinNotIn")},
+		{EdxltokenJoinRightSemiJoin, GPOS_WSZ_LIT("RightSemiJoin")},
+		{EdxltokenJoinRightAntiSemiJoin, GPOS_WSZ_LIT("RightAntiSemiJoin")},
 
 		{EdxltokenMergeJoinUniqueOuter, GPOS_WSZ_LIT("UniqueOuter")},
 

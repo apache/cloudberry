@@ -29,8 +29,8 @@ explain select * from nhtest a join nhtest b using (i);
 select * from nhtest a join nhtest b using (i);
      i     
 -----------
- 100000.22
  300000.19
+ 100000.22
 (2 rows)
 
 create temp table l(a int);
@@ -94,7 +94,6 @@ set enable_hashjoin to off;
 set enable_mergejoin to on;
 set enable_nestloop to off;
 DROP TABLE IF EXISTS alpha;
-NOTICE:  table "alpha" does not exist, skipping
 DROP TABLE IF EXISTS theta;
 NOTICE:  table "theta" does not exist, skipping
 CREATE TABLE alpha (i int, j int) distributed by (i);
@@ -129,8 +128,8 @@ analyze t2;
 -- infer over equalities
 --
 explain select count(*) from t1,t2 where t1.x = 100 and t1.x = t2.x;
-                                                 QUERY PLAN                                                 
-------------------------------------------------------------------------------------------------------------
+                                           QUERY PLAN                                           
+------------------------------------------------------------------------------------------------
  Aggregate  (cost=0.00..862.00 rows=1 width=8)
    ->  Hash Join  (cost=0.00..862.00 rows=1 width=1)
          Hash Cond: (t1.x = t2.x)
@@ -141,7 +140,7 @@ explain select count(*) from t1,t2 where t1.x = 100 and t1.x = t2.x;
                ->  Gather Motion 3:1  (slice2; segments: 3)  (cost=0.00..431.00 rows=1 width=4)
                      ->  Seq Scan on t2  (cost=0.00..431.00 rows=1 width=4)
                            Filter: (x = 100)
- Optimizer: Pivotal Optimizer (GPORCA) version 3.64.0
+ Optimizer: GPORCA
 (11 rows)
 
 select count(*) from t1,t2 where t1.x = 100 and t1.x = t2.x;
@@ -156,16 +155,15 @@ select count(*) from t1,t2 where t1.x = 100 and t1.x = t2.x;
 explain select * from t1,t2 where t1.x = 100 and t2.x >= t1.x;
                                           QUERY PLAN                                          
 ----------------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..1324039.56 rows=34 width=24)
-   ->  Nested Loop  (cost=0.00..1324039.56 rows=12 width=24)
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..1324039.11 rows=34 width=24)
+   ->  Nested Loop  (cost=0.00..1324039.11 rows=12 width=24)
          Join Filter: (t2.x >= t1.x)
          ->  Broadcast Motion 3:3  (slice2; segments: 3)  (cost=0.00..431.00 rows=1 width=12)
                ->  Seq Scan on t1  (cost=0.00..431.00 rows=1 width=12)
                      Filter: (x = 100)
          ->  Seq Scan on t2  (cost=0.00..431.00 rows=34 width=12)
- Settings:  optimizer=on
- Optimizer status: Pivotal Optimizer (GPORCA) version 2.39.2
-(9 rows)
+ Optimizer: GPORCA
+(8 rows)
 
 select * from t1,t2 where t1.x = 100 and t2.x >= t1.x;
   x  |  y  |  z  |  x  |  y  |  z  
@@ -190,7 +188,7 @@ explain select * from t1,t2 where t1.x = 100 and t1.x = t2.y and t1.x <= t2.x;
          ->  Gather Motion 3:1  (slice2; segments: 3)  (cost=0.00..431.00 rows=1 width=12)
                ->  Seq Scan on t2  (cost=0.00..431.00 rows=1 width=12)
                      Filter: (y = 100)
- Optimizer: Pivotal Optimizer (GPORCA) version 3.64.0
+ Optimizer: GPORCA
 (11 rows)
 
 reset optimizer_segments;
@@ -234,10 +232,10 @@ select count(*) from hjn_test, (select 3 as bar) foo where hjn_test.i = least (f
 select * from int4_tbl a join int4_tbl b on (a.f1 = (select f1 from int4_tbl c where c.f1=b.f1));
      f1      |     f1      
 -------------+-------------
-  2147483647 |  2147483647
-      123456 |      123456
  -2147483647 | -2147483647
            0 |           0
+  2147483647 |  2147483647
+      123456 |      123456
      -123456 |     -123456
 (5 rows)
 
@@ -252,11 +250,13 @@ insert into part4_tbl values
        (-1), (0), (1),
        (123455), (123456), (123457);
 select * from part4_tbl a join part4_tbl b on (a.f1 = (select f1 from int4_tbl c where c.f1=b.f1));
+NOTICE:  One or more columns in the following table(s) do not have statistics: part4_tbl
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
    f1    |   f1    
 ---------+---------
        0 |       0
-  123456 |  123456
  -123456 | -123456
+  123456 |  123456
 (3 rows)
 
 --
@@ -277,18 +277,18 @@ from tjoin1
 left outer join (tjoin2 left outer join tjoin3 on tjoin2.id=tjoin3.id) on tjoin1.id=tjoin3.id;
  id |  t  |  t  
 ----+-----+-----
+  2 |     | 
+  2 |     | 
   3 |     | 
   3 |     | 
-  1 | 2-1 | 1-1
-  1 | 2-1 | 2-1
+  1 | 1-1 | 1-1
   1 | 1-1 | 1-1
   1 | 1-1 | 2-1
-  2 |     | 
+  1 | 1-1 | 2-1
+  1 | 2-1 | 1-1
   1 | 2-1 | 1-1
   1 | 2-1 | 2-1
-  1 | 1-1 | 1-1
-  1 | 1-1 | 2-1
-  2 |     | 
+  1 | 2-1 | 2-1
 (12 rows)
 
 set enable_hashjoin to off;
@@ -320,10 +320,10 @@ select count(*) from hjn_test, (select 3 as bar) foo where hjn_test.i = least (f
 select * from int4_tbl a join int4_tbl b on (a.f1 = (select f1 from int4_tbl c where c.f1=b.f1));
      f1      |     f1      
 -------------+-------------
-  2147483647 |  2147483647
-      123456 |      123456
  -2147483647 | -2147483647
            0 |           0
+  2147483647 |  2147483647
+      123456 |      123456
      -123456 |     -123456
 (5 rows)
 
@@ -340,11 +340,11 @@ create table bar (c int, d int) distributed randomly;
 insert into foo select generate_series(1,10);
 insert into bar select generate_series(1,10);
 explain select a from foo where a<1 and a>1 and not exists (select c from bar where c=a);
-                      QUERY PLAN                      
-------------------------------------------------------
+                QUERY PLAN                
+------------------------------------------
  Result  (cost=0.00..0.00 rows=0 width=4)
    One-Time Filter: false
- Optimizer: Pivotal Optimizer (GPORCA) version 3.83.0
+ Optimizer: GPORCA
 (3 rows)
 
 select a from foo where a<1 and a>1 and not exists (select c from bar where c=a);
@@ -363,8 +363,8 @@ select * from foo where a not in (select c from bar where c <= 5);
  a  | b 
 ----+---
   7 |  
-  6 |  
   8 |  
+  6 |  
   9 |  
  10 |  
 (5 rows)
@@ -536,9 +536,7 @@ drop schema pred cascade;
 reset search_path;
 -- github issue 5370 cases
 drop table if exists t5370;
-NOTICE:  table "t5370" does not exist, skipping
 drop table if exists t5370_2;
-NOTICE:  table "t5370_2" does not exist, skipping
 create table t5370(id int,name text) distributed by(id);
 insert into t5370 select i,i from  generate_series(1,1000) i;
 create table t5370_2 as select * from t5370 distributed by (id);
@@ -548,15 +546,15 @@ explain select * from t5370 a , t5370_2 b where a.name=b.name;
                                                QUERY PLAN                                               
 --------------------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..862.25 rows=1000 width=14)
-   ->  Hash Join  (cost=0.00..862.20 rows=334 width=14)
+   ->  Hash Join  (cost=0.00..862.19 rows=334 width=14)
          Hash Cond: (a.name = b.name)
          ->  Redistribute Motion 3:3  (slice2; segments: 3)  (cost=0.00..431.02 rows=334 width=7)
                Hash Key: a.name
-               ->  Seq Scan on t5370 a  (cost=0.00..431.01 rows=334 width=7)
+               ->  Seq Scan on t5370 a  (cost=0.00..431.00 rows=334 width=7)
          ->  Hash  (cost=431.02..431.02 rows=334 width=7)
                ->  Redistribute Motion 3:3  (slice3; segments: 3)  (cost=0.00..431.02 rows=334 width=7)
                      Hash Key: b.name
-                     ->  Seq Scan on t5370_2 b  (cost=0.00..431.01 rows=334 width=7)
+                     ->  Seq Scan on t5370_2 b  (cost=0.00..431.00 rows=334 width=7)
  Optimizer: GPORCA
 (11 rows)
 
@@ -650,7 +648,7 @@ explain (costs off) select * from t1 left join t2 on (t1.a = t2.a) join t3 on (t
                            ->  Hash
                                  ->  Broadcast Motion 3:3  (slice2; segments: 3)
                                        ->  Seq Scan on t3
- Optimizer: Pivotal Optimizer (GPORCA)
+ Optimizer: GPORCA
 (14 rows)
 
 select * from t1 left join t2 on (t1.a = t2.a) join t3 on (t1.b = t3.b) where (t2.a IS NULL OR (t1.c = t3.c));
@@ -673,7 +671,7 @@ explain (costs off) select * from t1 left join t2 on (t1.a = t2.a) join t3 on (t
                      ->  Seq Scan on t2
                      ->  Hash
                            ->  Seq Scan on t3
- Optimizer: Pivotal Optimizer (GPORCA) version 3.75.0
+ Optimizer: GPORCA
 (11 rows)
 
 select * from t1 left join t2 on (t1.a = t2.a) join t3 on (t1.b = t3.b) where (t2.a = t3.a);
@@ -698,7 +696,7 @@ explain (costs off) select * from t1 left join t2 on (t1.a = t2.a) join t3 on (t
                            ->  Hash
                                  ->  Broadcast Motion 3:3  (slice2; segments: 3)
                                        ->  Seq Scan on t3
- Optimizer: Pivotal Optimizer (GPORCA)
+ Optimizer: GPORCA
 (14 rows)
 
 select * from t1 left join t2 on (t1.a = t2.a) join t3 on (t1.b = t3.b) where (t2.a is distinct from t3.a);
@@ -718,13 +716,13 @@ explain select * from t3 join (select t1.a t1a, t1.b t1b, t1.c t1c, t2.a t2a, t2
          ->  Hash Right Join  (cost=0.00..1293.15 rows=2 width=36)
                Hash Cond: (t2.a = t1.a)
                ->  Seq Scan on t2  (cost=0.00..431.01 rows=333 width=12)
-               ->  Hash  (cost=862.08..862.08 rows=1 width=24)
-                     ->  Hash Join  (cost=0.00..862.08 rows=1 width=24)
+               ->  Hash  (cost=862.07..862.07 rows=1 width=24)
+                     ->  Hash Join  (cost=0.00..862.07 rows=1 width=24)
                            Hash Cond: (t1.a = t3.a)
                            ->  Seq Scan on t1  (cost=0.00..431.01 rows=334 width=12)
                            ->  Hash  (cost=431.00..431.00 rows=1 width=12)
                                  ->  Seq Scan on t3  (cost=0.00..431.00 rows=1 width=12)
- Optimizer: Pivotal Optimizer (GPORCA)
+ Optimizer: GPORCA
 (13 rows)
 
 select * from t3 join (select t1.a t1a, t1.b t1b, t1.c t1c, t2.a t2a, t2.b t2b, t2.c t2c from t1 left join t2 on (t1.a = t2.a)) t on (t1a = t3.a) WHERE (t2a IS NULL OR (t1c = t3.a));
@@ -740,10 +738,10 @@ explain select * from (select t1.a t1a, t1.b t1b, t2.a t2a, t2.b t2b from t1 lef
   join t3 t3_1 on tt1.t1b = t3_1.b and (tt1.t2a is NULL OR tt1.t1b = t3.b);
                                                             QUERY PLAN                                                            
 ----------------------------------------------------------------------------------------------------------------------------------
- Hash Join  (cost=0.00..2586.30 rows=7 width=56)
+ Hash Join  (cost=0.00..2586.29 rows=7 width=56)
    Hash Cond: (t1.b = t3.b)
-   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..1293.15 rows=3 width=28)
-         ->  Hash Right Join  (cost=0.00..1293.15 rows=1 width=28)
+   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..1293.14 rows=3 width=28)
+         ->  Hash Right Join  (cost=0.00..1293.14 rows=1 width=28)
                Hash Cond: (t2.a = t1.a)
                ->  Seq Scan on t2  (cost=0.00..431.01 rows=333 width=8)
                ->  Hash  (cost=862.07..862.07 rows=1 width=20)
@@ -753,11 +751,11 @@ explain select * from (select t1.a t1a, t1.b t1b, t2.a t2a, t2.b t2b from t1 lef
                            ->  Hash  (cost=431.00..431.00 rows=2 width=12)
                                  ->  Broadcast Motion 3:3  (slice2; segments: 3)  (cost=0.00..431.00 rows=2 width=12)
                                        ->  Seq Scan on t3 t3_1  (cost=0.00..431.00 rows=1 width=12)
-   ->  Hash  (cost=1293.15..1293.15 rows=3 width=28)
-         ->  Gather Motion 3:1  (slice3; segments: 3)  (cost=0.00..1293.15 rows=3 width=28)
-               ->  Result  (cost=0.00..1293.15 rows=1 width=28)
+   ->  Hash  (cost=1293.14..1293.14 rows=3 width=28)
+         ->  Gather Motion 3:1  (slice3; segments: 3)  (cost=0.00..1293.14 rows=3 width=28)
+               ->  Result  (cost=0.00..1293.14 rows=1 width=28)
                      Filter: ((t2_1.a IS NULL) OR (t1_1.b = t3.b))
-                     ->  Hash Right Join  (cost=0.00..1293.15 rows=1 width=28)
+                     ->  Hash Right Join  (cost=0.00..1293.14 rows=1 width=28)
                            Hash Cond: (t2_1.a = t1_1.a)
                            ->  Seq Scan on t2 t2_1  (cost=0.00..431.01 rows=333 width=8)
                            ->  Hash  (cost=862.07..862.07 rows=1 width=20)
@@ -776,10 +774,10 @@ select * from (select t1.a t1a, t1.b t1b, t2.a t2a, t2.b t2b from t1 left join t
   join t3 t3_1 on tt1.t1b = t3_1.b and (tt1.t2a is NULL OR tt1.t1b = t3.b);
  t1a | t1b | t2a | t2b | a | b | c | t1a | t1b | t2a | t2b | a | b | c 
 -----+-----+-----+-----+---+---+---+-----+-----+-----+-----+---+---+---
-   2 |   2 |   2 |   2 |   | 2 | 2 |   2 |   2 |   2 |   2 | 1 | 2 | 3
-   2 |   2 |   2 |   2 |   | 2 | 2 |   2 |   2 |   2 |   2 |   | 2 | 2
    2 |   2 |   2 |   2 | 1 | 2 | 3 |   2 |   2 |   2 |   2 | 1 | 2 | 3
+   2 |   2 |   2 |   2 |   | 2 | 2 |   2 |   2 |   2 |   2 | 1 | 2 | 3
    2 |   2 |   2 |   2 | 1 | 2 | 3 |   2 |   2 |   2 |   2 |   | 2 | 2
+   2 |   2 |   2 |   2 |   | 2 | 2 |   2 |   2 |   2 |   2 |   | 2 | 2
 (4 rows)
 
 -- test different join order enumeration methods
@@ -819,8 +817,8 @@ reset optimizer_join_order;
 select * from t1 join t2 on t1.a = t2.a join t3 on t1.b = t3.b;
  a | b | c | a | b | c | a | b | c 
 ---+---+---+---+---+---+---+---+---
- 2 | 2 | 2 | 2 | 2 | 2 | 1 | 2 | 3
  2 | 2 | 2 | 2 | 2 | 2 |   | 2 | 2
+ 2 | 2 | 2 | 2 | 2 | 2 | 1 | 2 | 3
 (2 rows)
 
 drop table t1, t2, t3;
@@ -848,15 +846,15 @@ set enable_bitmapscan = 0;
 explain select tenk1.unique2 >= 0 from tenk1 left join tenk2 on true limit 1;
                                                     QUERY PLAN                                                     
 -------------------------------------------------------------------------------------------------------------------
- Limit  (cost=0.00..1885524.86 rows=1 width=1)
-   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..1885524.86 rows=1 width=1)
-         ->  Limit  (cost=0.00..1885524.86 rows=1 width=1)
-               ->  Nested Loop Left Join  (cost=0.00..1885491.53 rows=33336667 width=4)
+ Limit  (cost=0.00..1885464.79 rows=1 width=1)
+   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..1885464.79 rows=1 width=1)
+         ->  Limit  (cost=0.00..1885464.79 rows=1 width=1)
+               ->  Nested Loop Left Join  (cost=0.00..1885431.45 rows=33336667 width=4)
                      Join Filter: true
-                     ->  Seq Scan on tenk1  (cost=0.00..431.51 rows=3334 width=4)
-                     ->  Materialize  (cost=0.00..431.70 rows=10000 width=1)
-                           ->  Broadcast Motion 3:3  (slice2; segments: 3)  (cost=0.00..431.69 rows=10000 width=1)
-                                 ->  Seq Scan on tenk2  (cost=0.00..431.51 rows=3334 width=1)
+                     ->  Seq Scan on tenk1  (cost=0.00..431.48 rows=3334 width=4)
+                     ->  Materialize  (cost=0.00..431.68 rows=10000 width=1)
+                           ->  Broadcast Motion 3:3  (slice2; segments: 3)  (cost=0.00..431.67 rows=10000 width=1)
+                                 ->  Seq Scan on tenk2  (cost=0.00..431.48 rows=3334 width=1)
  Optimizer: GPORCA
 (10 rows)
 
@@ -913,7 +911,7 @@ explain select * from generate_series(1, 5) g left join trep_join_gp on g = trep
          ->  Materialize  (cost=0.00..1.01 rows=1 width=8)
                ->  Seq Scan on thash_join_gp  (cost=0.00..1.01 rows=1 width=8)
  Optimizer: Postgres query optimizer
-(9 rows)
+(10 rows)
 
 select * from generate_series(1, 5) g left join trep_join_gp on g = trep_join_gp.c1 join thash_join_gp on true;
  g | c1 | c2 | c1 | c2 
@@ -950,11 +948,11 @@ explain select * from generate_series(1, 5) g left join thash_join_gp on g = tha
 select * from generate_series(1, 5) g left join thash_join_gp on g = thash_join_gp.c1;
  g | c1 | c2 
 ---+----+----
- 2 |  2 |  2
- 3 |    |   
- 4 |    |   
- 5 |    |   
  1 |  1 |  1
+ 2 |  2 |  2
+ 4 |    |   
+ 3 |    |   
+ 5 |    |   
 (5 rows)
 
 explain select * from generate_series(1, 5) g left join thash_join_gp on g = thash_join_gp.c2;
@@ -976,11 +974,11 @@ explain select * from generate_series(1, 5) g left join thash_join_gp on g = tha
 select * from generate_series(1, 5) g left join thash_join_gp on g = thash_join_gp.c2;
  g | c1 | c2 
 ---+----+----
- 2 |  2 |  2
- 3 |    |   
- 4 |    |   
  1 |  1 |  1
  5 |    |   
+ 2 |  2 |  2
+ 4 |    |   
+ 3 |    |   
 (5 rows)
 
 explain select * from generate_series(1, 5) g left join trand_join_gp on g = trand_join_gp.c1;
@@ -1002,10 +1000,10 @@ explain select * from generate_series(1, 5) g left join trand_join_gp on g = tra
 select * from generate_series(1, 5) g left join trand_join_gp on g = trand_join_gp.c1;
  g | c1 | c2 
 ---+----+----
- 1 |    |   
+ 4 |    |   
  2 |    |   
  3 |    |   
- 4 |    |   
+ 1 |    |   
  5 |    |   
 (5 rows)
 
@@ -1029,10 +1027,10 @@ select * from generate_series(1, 5) g full join trand_join_gp on g = trand_join_
  g | c1 | c2 
 ---+----+----
  1 |    |   
+ 5 |    |   
+ 4 |    |   
  2 |    |   
  3 |    |   
- 4 |    |   
- 5 |    |   
 (5 rows)
 
 -- The following 3 tests are to check that segmentGeneral left join partition
@@ -1056,23 +1054,23 @@ explain select * from trep_join_gp left join thash_join_gp using (c1);
 select * from trep_join_gp left join thash_join_gp using (c1);
  c1 | c2 | c2 
 ----+----+----
-  1 |  1 |  1
   2 |  2 |  2
+  1 |  1 |  1
 (2 rows)
 
 explain select * from trep_join_gp left join trand_join_gp using (c1);
                                              QUERY PLAN                                             
 ----------------------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)  (cost=1.03..2.13 rows=4 width=12)
-   ->  Hash Left Join  (cost=1.03..2.13 rows=2 width=12)
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=1.04..2.15 rows=3 width=12)
+   ->  Hash Left Join  (cost=1.04..2.11 rows=1 width=12)
          Hash Cond: (trep_join_gp.c1 = trand_join_gp.c1)
-         ->  Redistribute Motion 1:3  (slice2; segments: 1)  (cost=0.00..1.06 rows=2 width=8)
+         ->  Redistribute Motion 1:3  (slice2; segments: 1)  (cost=0.00..1.05 rows=1 width=8)
                Hash Key: trep_join_gp.c1
                ->  Seq Scan on trep_join_gp  (cost=0.00..1.02 rows=2 width=8)
-         ->  Hash  (cost=1.02..1.02 rows=1 width=8)
-               ->  Redistribute Motion 3:3  (slice3; segments: 3)  (cost=0.00..1.02 rows=1 width=8)
+         ->  Hash  (cost=1.03..1.03 rows=1 width=8)
+               ->  Redistribute Motion 3:3  (slice3; segments: 3)  (cost=0.00..1.03 rows=1 width=8)
                      Hash Key: trand_join_gp.c1
-                     ->  Seq Scan on trand_join_gp  (cost=0.00..1.00 rows=1 width=8)
+                     ->  Seq Scan on trand_join_gp  (cost=0.00..1.01 rows=1 width=8)
  Optimizer: Postgres query optimizer
 (11 rows)
 
@@ -1142,10 +1140,10 @@ analyze t_joinsize_3;
 explain select * from (t_joinsize_1 join t_joinsize_2 on t_joinsize_1.c2 = t_joinsize_2.c2) join t_joinsize_3 on t_joinsize_3.c = t_joinsize_1.c1;
                                                     QUERY PLAN                                                     
 -------------------------------------------------------------------------------------------------------------------
- Hash Join  (cost=0.00..1300.54 rows=99503 width=20)
+ Hash Join  (cost=0.00..1300.53 rows=99503 width=20)
    Hash Cond: (t_joinsize_2.c2 = t_joinsize_1.c2)
    ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..431.04 rows=1000 width=8)
-         ->  Seq Scan on t_joinsize_2  (cost=0.00..431.01 rows=334 width=8)
+         ->  Seq Scan on t_joinsize_2  (cost=0.00..431.00 rows=334 width=8)
    ->  Hash  (cost=862.13..862.13 rows=598 width=12)
          ->  Gather Motion 3:1  (slice2; segments: 3)  (cost=0.00..862.13 rows=598 width=12)
                ->  Hash Join  (cost=0.00..862.10 rows=200 width=12)
@@ -1188,7 +1186,7 @@ join t_randomly_dist_table on t_subquery_general.a = t_randomly_dist_table.c;
                ->  Redistribute Motion 3:3  (slice2; segments: 3)  (cost=0.00..431.00 rows=1 width=4)
                      Hash Key: t_randomly_dist_table.c
                      ->  Seq Scan on t_randomly_dist_table  (cost=0.00..431.00 rows=1 width=4)
- Optimizer: Pivotal Optimizer (GPORCA) version 3.77.0
+ Optimizer: GPORCA
 (13 rows)
 
 drop table t_randomly_dist_table;
@@ -1211,19 +1209,19 @@ insert into t2_lateral_limit values (2, 2);
 insert into t2_lateral_limit values (3, 3);
 explain select * from t1_lateral_limit as t1 cross join lateral
 (select ((c).x+t2.b) as n  from t2_lateral_limit as t2 order by n limit 1)s;
-                                                   QUERY PLAN                                                   
-----------------------------------------------------------------------------------------------------------------
- Nested Loop  (cost=10000000001.06..10000000002.12 rows=4 width=41)
-   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..1.03 rows=1 width=37)
-         ->  Seq Scan on t1_lateral_limit t1  (cost=0.00..1.01 rows=1 width=37)
-   ->  Materialize  (cost=1.06..1.08 rows=1 width=4)
-         ->  Limit  (cost=1.06..1.06 rows=1 width=4)
-               ->  Sort  (cost=1.06..1.06 rows=1 width=4)
+                                                      QUERY PLAN                                                       
+-----------------------------------------------------------------------------------------------------------------------
+ Nested Loop  (cost=10000003406.25..10159073271.08 rows=46700 width=44)
+   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..812.33 rows=46700 width=40)
+         ->  Seq Scan on t1_lateral_limit t1  (cost=0.00..189.67 rows=15567 width=40)
+   ->  Materialize  (cost=3406.25..3406.26 rows=1 width=4)
+         ->  Limit  (cost=3406.25..3406.25 rows=1 width=4)
+               ->  Sort  (cost=3406.25..3621.50 rows=86100 width=4)
                      Sort Key: (((t1.c).x + t2.b))
-                     ->  Result  (cost=0.00..1.05 rows=1 width=4)
-                           ->  Materialize  (cost=0.00..1.03 rows=1 width=4)
-                                 ->  Gather Motion 3:1  (slice2; segments: 3)  (cost=0.00..1.03 rows=1 width=4)
-                                       ->  Seq Scan on t2_lateral_limit t2  (cost=0.00..1.01 rows=1 width=4)
+                     ->  Result  (cost=0.00..2975.75 rows=86100 width=4)
+                           ->  Materialize  (cost=0.00..1899.50 rows=86100 width=4)
+                                 ->  Gather Motion 3:1  (slice2; segments: 3)  (cost=0.00..1469.00 rows=86100 width=4)
+                                       ->  Seq Scan on t2_lateral_limit t2  (cost=0.00..321.00 rows=28700 width=4)
  Optimizer: Postgres query optimizer
 (12 rows)
 
@@ -1276,18 +1274,18 @@ select * from t1_lateral_limit as t1 cross join lateral
 -- may add motions in the subquery's plan).
 explain select * from t1_lateral_limit t1 cross join lateral
 (select (c).x+t2.a, sum(t2.a+t2.b) from t2_lateral_limit t2 group by (c).x+t2.a)x;
-                                                QUERY PLAN                                                
-----------------------------------------------------------------------------------------------------------
- Nested Loop  (cost=10000000001.06..10000000002.12 rows=4 width=49)
-   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..1.03 rows=1 width=37)
-         ->  Seq Scan on t1_lateral_limit t1  (cost=0.00..1.01 rows=1 width=37)
-   ->  Materialize  (cost=1.05..1.08 rows=1 width=12)
-         ->  HashAggregate  (cost=1.05..1.07 rows=1 width=12)
+                                                   QUERY PLAN                                                    
+-----------------------------------------------------------------------------------------------------------------
+ Nested Loop  (cost=10000003621.50..10170175612.33 rows=46700000 width=52)
+   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..812.33 rows=46700 width=40)
+         ->  Seq Scan on t1_lateral_limit t1  (cost=0.00..189.67 rows=15567 width=40)
+   ->  Materialize  (cost=3621.50..3639.00 rows=1000 width=12)
+         ->  HashAggregate  (cost=3621.50..3634.00 rows=1000 width=12)
                Group Key: ((t1.c).x + t2.a)
-               ->  Result  (cost=0.00..1.05 rows=1 width=12)
-                     ->  Materialize  (cost=0.00..1.03 rows=1 width=8)
-                           ->  Gather Motion 3:1  (slice2; segments: 3)  (cost=0.00..1.03 rows=1 width=8)
-                                 ->  Seq Scan on t2_lateral_limit t2  (cost=0.00..1.01 rows=1 width=8)
+               ->  Result  (cost=0.00..2975.75 rows=86100 width=12)
+                     ->  Materialize  (cost=0.00..1899.50 rows=86100 width=8)
+                           ->  Gather Motion 3:1  (slice2; segments: 3)  (cost=0.00..1469.00 rows=86100 width=8)
+                                 ->  Seq Scan on t2_lateral_limit t2  (cost=0.00..321.00 rows=28700 width=8)
  Optimizer: Postgres query optimizer
 (11 rows)
 
@@ -1295,8 +1293,8 @@ select * from t1_lateral_limit t1 cross join lateral
 (select (c).x+t2.a, sum(t2.a+t2.b) from t2_lateral_limit t2 group by (c).x+t2.a)x;
  a | b |   c   | ?column? | sum 
 ---+---+-------+----------+-----
- 1 | 1 | (1,1) |        4 |   6
  1 | 1 | (1,1) |        3 |   4
+ 1 | 1 | (1,1) |        4 |   6
  1 | 2 | (2,2) |        5 |   6
  1 | 2 | (2,2) |        4 |   4
 (4 rows)
@@ -1423,7 +1421,7 @@ select box(point(0.05*i, 0.05*i), point(0.05*i, 0.05*i)),
 from generate_series(0,10000) as i;
 vacuum analyze gist_tbl_github9733;
 create index gist_tbl_point_index_github9733 on gist_tbl_github9733 using gist (p);
-ERROR:  pax only support btree/hash/gin/bitmap indexes (pax_access_handle.cc:###)
+ERROR:  pax only support btree/hash/gin/bitmap indexes (pax_access_handle.cc:588)
 set enable_seqscan=off;
 set enable_bitmapscan=off;
 explain (costs off)
@@ -1494,7 +1492,9 @@ reset enable_bitmapscan;
 --- Test that GUC enable_hashagg takes effect for SEMI join
 ---
 drop table if exists foo;
+NOTICE:  table "foo" does not exist, skipping
 drop table if exists bar;
+NOTICE:  table "bar" does not exist, skipping
 create table foo(a int) distributed by (a);
 create table bar(b int) distributed by (b);
 insert into foo select i from generate_series(1,10)i;
@@ -1504,59 +1504,59 @@ analyze bar;
 set enable_hashagg to on;
 explain (costs off)
 select * from foo where exists (select 1 from bar where foo.a = bar.b);
-                QUERY PLAN                
-------------------------------------------
+                  QUERY PLAN                   
+-----------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
-   ->  Hash Semi Join
+   ->  Hash Right Semi Join
          Hash Cond: (foo.a = bar.b)
-         ->  Seq Scan on foo
-               Filter: (NOT (a IS NULL))
+         ->  Seq Scan on bar
          ->  Hash
-               ->  Seq Scan on bar
+               ->  Seq Scan on foo
+                     Filter: (NOT (a IS NULL))
  Optimizer: GPORCA
 (8 rows)
 
 select * from foo where exists (select 1 from bar where foo.a = bar.b);
  a  
 ----
- 10
-  9
-  3
-  7
-  4
-  5
-  8
   1
-  2
+  5
   6
+  9
+ 10
+  2
+  3
+  4
+  7
+  8
 (10 rows)
 
 set enable_hashagg to off;
 explain (costs off)
 select * from foo where exists (select 1 from bar where foo.a = bar.b);
-                QUERY PLAN                
-------------------------------------------
+                  QUERY PLAN                   
+-----------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
-   ->  Hash Semi Join
+   ->  Hash Right Semi Join
          Hash Cond: (foo.a = bar.b)
-         ->  Seq Scan on foo
-               Filter: (NOT (a IS NULL))
+         ->  Seq Scan on bar
          ->  Hash
-               ->  Seq Scan on bar
+               ->  Seq Scan on foo
+                     Filter: (NOT (a IS NULL))
  Optimizer: GPORCA
 (8 rows)
 
 select * from foo where exists (select 1 from bar where foo.a = bar.b);
  a  
 ----
-  1
   2
   3
   4
-  5
-  6
   7
   8
+  1
+  5
+  6
   9
  10
 (10 rows)
@@ -1599,8 +1599,8 @@ select * from fix_param_a left join fix_param_b on
                            ->  Seq Scan on fix_param_c
                ->  Hash
                      ->  Seq Scan on fix_param_a
- Optimizer: Pivotal Optimizer (GPORCA)
-(14 rows)
+ Optimizer: GPORCA
+(15 rows)
 
 select * from fix_param_a left join fix_param_b on
 	fix_param_a.i = fix_param_b.i and fix_param_b.j in
@@ -1656,18 +1656,18 @@ on (coalesce(t.id1) = tq_all.id1  and t.id2 = tq_all.id2) ;
 -----+-----+-----+-----+-----+-----
    2 |   2 |   2 |   2 |   2 |   2
    2 |     |     |     |     |    
-     |   1 |     |     |     |    
      |   2 |     |     |     |    
-     |     |     |   2 |     |    
-     |     |     |   1 |     |    
-     |     |   2 |     |     |    
-     |     |   1 |     |     |    
-     |     |     |     |     |   2
-     |     |     |     |     |   1
-     |     |     |     |   2 |    
-   1 |   1 |   1 |   1 |   1 |   1
    1 |     |     |     |     |    
+     |     |   1 |     |     |    
+     |     |   2 |     |     |    
+     |     |     |   2 |     |    
      |     |     |     |   1 |    
+     |     |     |     |   2 |    
+     |     |     |     |     |   2
+     |   1 |     |     |     |    
+   1 |   1 |   1 |   1 |   1 |   1
+     |     |     |   1 |     |    
+     |     |     |     |     |   1
 (14 rows)
 
 drop table t_issue_10315;
@@ -1714,8 +1714,8 @@ explain select fooJoinPruning.* from fooJoinPruning left join barJoinPruning on 
 explain select fooJoinPruning.* from fooJoinPruning left join barJoinPruning on fooJoinPruning.c=barJoinPruning.p where fooJoinPruning.b>300 and fooJoinPruning.c > ANY (select barJoinPruning.q from barJoinPruning );
                                              QUERY PLAN                                              
 -----------------------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..1324032.22 rows=1 width=12)
-   ->  Seq Scan on foojoinpruning  (cost=0.00..1324032.22 rows=1 width=12)
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..1324032.21 rows=1 width=12)
+   ->  Seq Scan on foojoinpruning  (cost=0.00..1324032.21 rows=1 width=12)
          Filter: ((b > 300) AND (SubPlan 1))
          SubPlan 1
            ->  Materialize  (cost=0.00..431.00 rows=1 width=4)
@@ -1728,8 +1728,8 @@ explain select fooJoinPruning.* from fooJoinPruning left join barJoinPruning on 
 explain select fooJoinPruning.* from fooJoinPruning left join barJoinPruning on fooJoinPruning.c=barJoinPruning.p  where fooJoinPruning.b in (select fooJoinPruning.a from barJoinPruning);
                                                  QUERY PLAN                                                 
 ------------------------------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..1324032.19 rows=1 width=12)
-   ->  Nested Loop Semi Join  (cost=0.00..1324032.19 rows=1 width=12)
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..1324032.18 rows=1 width=12)
+   ->  Nested Loop Semi Join  (cost=0.00..1324032.18 rows=1 width=12)
          Join Filter: true
          ->  Seq Scan on foojoinpruning  (cost=0.00..431.00 rows=1 width=12)
                Filter: (b = a)
@@ -1812,8 +1812,8 @@ explain select fooJoinPruning.* from fooJoinPruning left join barJoinPruning on 
 explain select fooJoinPruning.* from fooJoinPruning left join barJoinPruning on fooJoinPruning.g=barJoinPruning.p and fooJoinPruning.a=barJoinPruning.q where fooJoinPruning.c > ANY (select barJoinPruning.t from barJoinPruning );
                                              QUERY PLAN                                              
 -----------------------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..1324032.25 rows=1 width=28)
-   ->  Seq Scan on foojoinpruning  (cost=0.00..1324032.25 rows=1 width=28)
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..1324032.24 rows=1 width=28)
+   ->  Seq Scan on foojoinpruning  (cost=0.00..1324032.24 rows=1 width=28)
          Filter: (SubPlan 1)
          SubPlan 1
            ->  Materialize  (cost=0.00..431.00 rows=1 width=4)
@@ -1826,8 +1826,8 @@ explain select fooJoinPruning.* from fooJoinPruning left join barJoinPruning on 
 explain select fooJoinPruning.* from fooJoinPruning left join barJoinPruning on fooJoinPruning.g=barJoinPruning.p and fooJoinPruning.a=barJoinPruning.q where fooJoinPruning.e in (select fooJoinPruning.f from barJoinPruning);
                                                  QUERY PLAN                                                 
 ------------------------------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..1324032.17 rows=1 width=28)
-   ->  Nested Loop Semi Join  (cost=0.00..1324032.17 rows=1 width=28)
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..1324032.16 rows=1 width=28)
+   ->  Nested Loop Semi Join  (cost=0.00..1324032.16 rows=1 width=28)
          Join Filter: true
          ->  Seq Scan on foojoinpruning  (cost=0.00..431.00 rows=1 width=28)
                Filter: (e = f)
@@ -1943,8 +1943,8 @@ explain select barJoinPruning.* from fooJoinPruning left join barJoinPruning on 
 explain select fooJoinPruning.* from fooJoinPruning left join barJoinPruning on barJoinPruning.p in (select fooJoinPruning.b from fooJoinPruning  ) where fooJoinPruning.c>100;
                                                           QUERY PLAN                                                          
 ------------------------------------------------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..1330181.79 rows=2 width=12)
-   ->  Nested Loop Left Join  (cost=0.00..1330181.79 rows=1 width=12)
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..1330181.78 rows=2 width=12)
+   ->  Nested Loop Left Join  (cost=0.00..1330181.78 rows=1 width=12)
          Join Filter: true
          ->  Seq Scan on foojoinpruning foojoinpruning_1  (cost=0.00..431.00 rows=1 width=12)
                Filter: (c > 100)
@@ -2031,8 +2031,8 @@ explain select fooJoinPruning.* from fooJoinPruning left join barJoinPruning on 
 explain select fooJoinPruning.* from fooJoinPruning left join barJoinPruning on fooJoinPruning.a=barJoinPruning.p and fooJoinPruning.c=barJoinPruning.r or fooJoinPruning.d=barJoinPruning.s;
                                                                     QUERY PLAN                                                                     
 ---------------------------------------------------------------------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..1324033.62 rows=1 width=28)
-   ->  Nested Loop Left Join  (cost=0.00..1324033.62 rows=1 width=28)
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..1324033.60 rows=1 width=28)
+   ->  Nested Loop Left Join  (cost=0.00..1324033.60 rows=1 width=28)
          Join Filter: (((foojoinpruning.a = barjoinpruning.p) AND (foojoinpruning.c = barjoinpruning.r)) OR (foojoinpruning.d = barjoinpruning.s))
          ->  Seq Scan on foojoinpruning  (cost=0.00..431.00 rows=1 width=28)
          ->  Materialize  (cost=0.00..431.00 rows=1 width=12)
@@ -2044,8 +2044,8 @@ explain select fooJoinPruning.* from fooJoinPruning left join barJoinPruning on 
 explain select fooJoinPruning.* from fooJoinPruning left join barJoinPruning on fooJoinPruning.a=barJoinPruning.p or fooJoinPruning.b=barJoinPruning.q  where fooJoinPruning.b>300;
                                               QUERY PLAN                                               
 -------------------------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..1324033.17 rows=1 width=28)
-   ->  Nested Loop Left Join  (cost=0.00..1324033.17 rows=1 width=28)
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..1324033.15 rows=1 width=28)
+   ->  Nested Loop Left Join  (cost=0.00..1324033.15 rows=1 width=28)
          Join Filter: ((foojoinpruning.a = barjoinpruning.p) OR (foojoinpruning.b = barjoinpruning.q))
          ->  Seq Scan on foojoinpruning  (cost=0.00..431.00 rows=1 width=28)
                Filter: (b > 300)
@@ -2151,12 +2151,12 @@ select foo.b,foo.c from foo left join bar on foo.a=bar.a union
 select bar.b,bar.c from bar left join foo on foo.a=bar.a;
  b | c  
 ---+----
- 1 | 10
- 2 | 20
- 3 |   
  2 | 30
    |  3
    |   
+ 1 | 10
+ 2 | 20
+ 3 |   
 (6 rows)
 
 --------------------------------------------------------------------------------
@@ -2181,6 +2181,9 @@ select bar.b,bar.c from bar left join foo on foo.a=bar.a;
 ---+----
  1 | 10
  1 | 10
+ 2 | 30
+   |   
+ 1 | 10
  1 | 10
  2 | 20
  2 | 30
@@ -2188,9 +2191,6 @@ select bar.b,bar.c from bar left join foo on foo.a=bar.a;
  2 | 20
    |   
  3 |   
- 2 | 30
-   |   
- 1 | 10
 (12 rows)
 
 --------------------------------------------------------------------------------
@@ -2386,11 +2386,11 @@ select bar.b,foo.c from bar left join foo on foo.a=bar.a;
  3 | 30
    |  3
    |   
- 2 | 10
  1 | 10
  1 | 30
  2 | 20
    | 20
+ 2 | 10
 (9 rows)
 
 --------------------------------------------------------------------------------
@@ -2419,6 +2419,9 @@ select foo.b,foo.c from foo left join bar on foo.a=bar.a union all
 select bar.b,foo.c from bar left join foo on foo.a=bar.a;
  b | c  
 ---+----
+ 2 | 30
+   |   
+ 1 | 30
  1 | 10
  1 | 10
  1 | 10
@@ -2428,9 +2431,6 @@ select bar.b,foo.c from bar left join foo on foo.a=bar.a;
  2 | 10
    | 20
  3 | 30
- 2 | 30
-   |   
- 1 | 30
 (12 rows)
 
 --------------------------------------------------------------------------------
@@ -2601,12 +2601,12 @@ select foo.b,foo.c from foo left join bar on foo.a=bar.a except all
 select bar.b,foo.c from bar left join foo on foo.a=bar.a;
  b | c  
 ---+----
+ 1 | 10
+ 2 | 20
  2 | 30
  2 | 30
    |  3
    |   
- 1 | 10
- 2 | 20
 (6 rows)
 
 drop table foo;
@@ -2683,11 +2683,11 @@ explain (costs off) select * from bar_PT1 right join foo on bar_PT1.a1_PC =foo.a
 select * from bar_PT1 right join foo on bar_PT1.a1_PC =foo.a;
  a1_pc | b1 | a | b 
 -------+----+---+---
-     1 |  1 | 1 | 1
      2 |  2 | 2 | 2
      3 |  3 | 3 | 3
      4 |  4 | 4 | 4
      5 |  5 | 5 | 5
+     1 |  1 | 1 | 1
 (5 rows)
 
 -- Outer table: Partitioned table, Join Condition on Partition key: No, Result: DPE - No
@@ -2709,11 +2709,11 @@ explain (costs off) select * from bar_PT1 right join foo on bar_PT1.b1 =foo.a;
 select * from bar_PT1 right join foo on bar_PT1.b1 =foo.a;
  a1_pc | b1 | a | b 
 -------+----+---+---
-     1 |  1 | 1 | 1
+     5 |  5 | 5 | 5
      2 |  2 | 2 | 2
      3 |  3 | 3 | 3
      4 |  4 | 4 | 4
-     5 |  5 | 5 | 5
+     1 |  1 | 1 | 1
 (5 rows)
 
 -- Outer,Inner table: Partitioned table, Join Condition on Partition key: Yes, Result: DPE - Yes
@@ -2735,11 +2735,11 @@ explain (costs off) select * from bar_PT1 right join bar_PT3 on bar_PT1.a1_PC =b
 select * from bar_PT1 right join bar_PT3 on bar_PT1.a1_PC =bar_PT3.a3_PC;
  a1_pc | b1 | a3_pc | b3 
 -------+----+-------+----
-     5 |  5 |     5 |  5
      1 |  1 |     1 |  1
      2 |  2 |     2 |  2
      3 |  3 |     3 |  3
      4 |  4 |     4 |  4
+     5 |  5 |     5 |  5
 (5 rows)
 
 -- Outer table: Not a Partitioned table, Join Condition on Partition key: Yes, Result: DPE - No
@@ -2759,12 +2759,12 @@ explain (costs off) select * from foo right join bar_PT1 on foo.a=bar_PT1.a1_PC;
 select * from foo right join bar_PT1 on foo.a=bar_PT1.a1_PC;
  a | b | a1_pc | b1 
 ---+---+-------+----
- 1 | 1 |     1 |  1
  2 | 2 |     2 |  2
  3 | 3 |     3 |  3
  4 | 4 |     4 |  4
    |   |     7 |  7
    |   |     8 |  8
+ 1 | 1 |     1 |  1
  5 | 5 |     5 |  5
    |   |     6 |  6
    |   |     9 |  9
@@ -2816,11 +2816,11 @@ explain (costs off) select * from bar_PT1 right join foo on bar_PT1.a1_PC =foo.a
 select * from bar_PT1 right join foo on bar_PT1.a1_PC =foo.a and bar_PT1.b1 =foo.b;
  a1_pc | b1 | a | b 
 -------+----+---+---
+     5 |  5 | 5 | 5
      1 |  1 | 1 | 1
      2 |  2 | 2 | 2
      3 |  3 | 3 | 3
      4 |  4 | 4 | 4
-     5 |  5 | 5 | 5
 (5 rows)
 
 explain (costs off) select * from bar_PT1 right join foo on bar_PT1.a1_PC =foo.a and foo.b>2;
@@ -2841,10 +2841,10 @@ explain (costs off) select * from bar_PT1 right join foo on bar_PT1.a1_PC =foo.a
 select * from bar_PT1 right join foo on bar_PT1.a1_PC =foo.a and foo.b>2;
  a1_pc | b1 | a | b 
 -------+----+---+---
-       |    | 1 | 1
      3 |  3 | 3 | 3
      4 |  4 | 4 | 4
        |    | 2 | 2
+       |    | 1 | 1
      5 |  5 | 5 | 5
 (5 rows)
 
@@ -2875,17 +2875,17 @@ explain (costs off) select * from bar_PT1 right join foo on bar_PT1.a1_PC =foo.a
 select * from bar_PT1 right join foo on bar_PT1.a1_PC =foo.a right join bar_PT2 on bar_PT1.a1_PC =bar_PT2.b2_PC;
  a1_pc | b1 | a | b | a2 | b2_pc 
 -------+----+---+---+----+-------
-     2 |  2 | 2 | 2 |  2 |     2
-     3 |  3 | 3 | 3 |  3 |     3
-     4 |  4 | 4 | 4 |  4 |     4
-       |    |   |   |  7 |     7
-       |    |   |   |  8 |     8
      1 |  1 | 1 | 1 |  1 |     1
      5 |  5 | 5 | 5 |  5 |     5
        |    |   |   |  6 |     6
        |    |   |   |  9 |     9
        |    |   |   | 10 |    10
        |    |   |   | 11 |    11
+     2 |  2 | 2 | 2 |  2 |     2
+     3 |  3 | 3 | 3 |  3 |     3
+     4 |  4 | 4 | 4 |  4 |     4
+       |    |   |   |  7 |     7
+       |    |   |   |  8 |     8
 (11 rows)
 
 -- FOR LIST PARTITIONED TABLE
@@ -2907,10 +2907,10 @@ explain (costs off) select * from bar_List_PT1 right join foo on bar_List_PT1.a1
 select * from bar_List_PT1 right join foo on bar_List_PT1.a1_PC =foo.a;
  a1_pc | b1 | a | b 
 -------+----+---+---
-     1 |  1 | 1 | 1
      2 |  2 | 2 | 2
      3 |  3 | 3 | 3
      4 |  4 | 4 | 4
+     1 |  1 | 1 | 1
      5 |  5 | 5 | 5
 (5 rows)
 
@@ -2933,18 +2933,18 @@ explain (costs off) select * from bar_List_PT1 right join bar_List_PT2 on bar_Li
 select * from bar_List_PT1 right join bar_List_PT2 on bar_List_PT1.a1_PC =bar_List_PT2.a2_PC;
  a1_pc | b1 | a2_pc | b2 
 -------+----+-------+----
-     1 |  1 |     1 |  1
-    12 | 12 |    12 | 12
-     2 |  2 |     2 |  2
-     3 |  3 |     3 |  3
-     4 |  4 |     4 |  4
-     7 |  7 |     7 |  7
-     8 |  8 |     8 |  8
      5 |  5 |     5 |  5
      6 |  6 |     6 |  6
      9 |  9 |     9 |  9
     10 | 10 |    10 | 10
     11 | 11 |    11 | 11
+     2 |  2 |     2 |  2
+     3 |  3 |     3 |  3
+     4 |  4 |     4 |  4
+     7 |  7 |     7 |  7
+     8 |  8 |     8 |  8
+     1 |  1 |     1 |  1
+    12 | 12 |    12 | 12
 (12 rows)
 
 -- Case-2 : Distribution colm <> Partition Key.
@@ -2967,11 +2967,11 @@ explain (costs off) select * from bar_PT2 right join foo on bar_PT2.b2_PC =foo.a
 select * from bar_PT2 right join foo on bar_PT2.b2_PC =foo.a;
  a2 | b2_pc | a | b 
 ----+-------+---+---
-  5 |     5 | 5 | 5
+  1 |     1 | 1 | 1
   2 |     2 | 2 | 2
   3 |     3 | 3 | 3
   4 |     4 | 4 | 4
-  1 |     1 | 1 | 1
+  5 |     5 | 5 | 5
 (5 rows)
 
 -- Outer,Inner table: Partitioned table, Join Condition on Partition key: Yes, Result: DPE - No
@@ -2996,17 +2996,17 @@ explain (costs off) select * from bar_PT2 right join bar_PT1 on bar_PT2.b2_PC =b
 select * from bar_PT2 right join bar_PT1 on bar_PT2.b2_PC =bar_PT1.b1;
  a2 | b2_pc | a1_pc | b1 
 ----+-------+-------+----
-  2 |     2 |     2 |  2
-  3 |     3 |     3 |  3
-  4 |     4 |     4 |  4
-  7 |     7 |     7 |  7
-  8 |     8 |     8 |  8
-  1 |     1 |     1 |  1
   5 |     5 |     5 |  5
   6 |     6 |     6 |  6
   9 |     9 |     9 |  9
  10 |    10 |    10 | 10
  11 |    11 |    11 | 11
+  1 |     1 |     1 |  1
+  2 |     2 |     2 |  2
+  3 |     3 |     3 |  3
+  4 |     4 |     4 |  4
+  7 |     7 |     7 |  7
+  8 |     8 |     8 |  8
 (11 rows)
 
 drop table if exists foo;
@@ -3023,15 +3023,15 @@ INSERT INTO inverse values ('192.168.100.199');
 explain SELECT 1 FROM inverse WHERE NOT (cidr <<= ANY(SELECT * FROM inverse));
                                                                                                                 QUERY PLAN                                                                                                                 
 -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
- Result  (cost=0.00..1324032.93 rows=1 width=4)
-   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..1324032.93 rows=1 width=1)
-         ->  Result  (cost=0.00..1324032.93 rows=1 width=1)
+ Result  (cost=0.00..1324032.91 rows=1 width=4)
+   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..1324032.91 rows=1 width=1)
+         ->  Result  (cost=0.00..1324032.91 rows=1 width=1)
                Filter: (NOT CASE WHEN ((count((true))) > '0'::bigint) THEN CASE WHEN ((sum((CASE WHEN ((inverse_1.cidr <<= inverse.cidr) IS NULL) THEN 1 ELSE 0 END))) = (count((true)))) THEN NULL::boolean ELSE true END ELSE false END)
-               ->  GroupAggregate  (cost=0.00..1324032.93 rows=1 width=16)
+               ->  GroupAggregate  (cost=0.00..1324032.91 rows=1 width=16)
                      Group Key: inverse_1.cidr, inverse_1.ctid, inverse_1.gp_segment_id
-                     ->  Sort  (cost=0.00..1324032.93 rows=1 width=23)
+                     ->  Sort  (cost=0.00..1324032.91 rows=1 width=23)
                            Sort Key: inverse_1.cidr, inverse_1.ctid, inverse_1.gp_segment_id
-                           ->  Nested Loop Left Join  (cost=0.00..1324032.93 rows=1 width=27)
+                           ->  Nested Loop Left Join  (cost=0.00..1324032.91 rows=1 width=27)
                                  Join Filter: ((inverse_1.cidr <<= inverse.cidr) IS NOT FALSE)
                                  ->  Seq Scan on inverse inverse_1  (cost=0.00..431.00 rows=1 width=18)
                                  ->  Materialize  (cost=0.00..431.00 rows=1 width=9)
@@ -3063,8 +3063,8 @@ set enable_nestloop to on;
 explain select * from foo_varchar left join bar_char on foo_varchar.a=bar_char.p;
                                             QUERY PLAN                                             
 ---------------------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..1324032.83 rows=2 width=16)
-   ->  Nested Loop Left Join  (cost=0.00..1324032.83 rows=1 width=16)
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..1324032.81 rows=2 width=16)
+   ->  Nested Loop Left Join  (cost=0.00..1324032.81 rows=1 width=16)
          Join Filter: ((foo_varchar.a)::bpchar = bar_char.p)
          ->  Seq Scan on foo_varchar  (cost=0.00..431.00 rows=1 width=8)
          ->  Materialize  (cost=0.00..431.00 rows=1 width=8)
@@ -3076,9 +3076,9 @@ explain select * from foo_varchar left join bar_char on foo_varchar.a=bar_char.p
 select * from foo_varchar left join bar_char on foo_varchar.a=bar_char.p;
   a   |   p   
 ------+-------
- 2    | 2    
  1    | 1    
  3    | 3    
+ 2    | 2    
 (3 rows)
 
 -- There is a plan change (from redistribution to broadcast) because a NULL
@@ -3087,8 +3087,8 @@ select * from foo_varchar left join bar_char on foo_varchar.a=bar_char.p;
 explain select * from foo_varchar left join random_dis_char on foo_varchar.a=random_dis_char.y;
                                             QUERY PLAN                                             
 ---------------------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..1324032.51 rows=2 width=16)
-   ->  Nested Loop Left Join  (cost=0.00..1324032.51 rows=1 width=16)
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..1324032.50 rows=2 width=16)
+   ->  Nested Loop Left Join  (cost=0.00..1324032.50 rows=1 width=16)
          Join Filter: ((foo_varchar.a)::bpchar = random_dis_char.y)
          ->  Seq Scan on foo_varchar  (cost=0.00..431.00 rows=1 width=8)
          ->  Materialize  (cost=0.00..431.00 rows=1 width=8)
@@ -3108,8 +3108,8 @@ select * from foo_varchar left join random_dis_char on foo_varchar.a=random_dis_
 explain select * from bar_char left join random_dis_varchar on bar_char.p=random_dis_varchar.x;
                                             QUERY PLAN                                             
 ---------------------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..1324032.51 rows=2 width=16)
-   ->  Nested Loop Left Join  (cost=0.00..1324032.51 rows=1 width=16)
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..1324032.50 rows=2 width=16)
+   ->  Nested Loop Left Join  (cost=0.00..1324032.50 rows=1 width=16)
          Join Filter: (bar_char.p = (random_dis_varchar.x)::bpchar)
          ->  Seq Scan on bar_char  (cost=0.00..431.00 rows=1 width=8)
          ->  Materialize  (cost=0.00..431.00 rows=1 width=8)
@@ -3132,8 +3132,8 @@ select * from bar_char left join random_dis_varchar on bar_char.p=random_dis_var
 explain select * from foo_varchar inner join bar_char on foo_varchar.a=bar_char.p;
                                          QUERY PLAN                                          
 ---------------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..1324032.79 rows=1 width=16)
-   ->  Nested Loop  (cost=0.00..1324032.79 rows=1 width=16)
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..1324032.78 rows=1 width=16)
+   ->  Nested Loop  (cost=0.00..1324032.78 rows=1 width=16)
          Join Filter: ((foo_varchar.a)::bpchar = bar_char.p)
          ->  Broadcast Motion 3:3  (slice2; segments: 3)  (cost=0.00..431.00 rows=1 width=8)
                ->  Seq Scan on foo_varchar  (cost=0.00..431.00 rows=1 width=8)
@@ -3144,9 +3144,9 @@ explain select * from foo_varchar inner join bar_char on foo_varchar.a=bar_char.
 select * from foo_varchar inner join bar_char on foo_varchar.a=bar_char.p;
   a   |   p   
 ------+-------
- 1    | 1    
  2    | 2    
  3    | 3    
+ 1    | 1    
 (3 rows)
 
 -- There is a plan change (from redistribution to broadcast) because a NULL
@@ -3155,8 +3155,8 @@ select * from foo_varchar inner join bar_char on foo_varchar.a=bar_char.p;
 explain select * from foo_varchar inner join random_dis_char on foo_varchar.a=random_dis_char.y;
                                          QUERY PLAN                                          
 ---------------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..1324032.48 rows=1 width=16)
-   ->  Nested Loop  (cost=0.00..1324032.48 rows=1 width=16)
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..1324032.46 rows=1 width=16)
+   ->  Nested Loop  (cost=0.00..1324032.46 rows=1 width=16)
          Join Filter: ((foo_varchar.a)::bpchar = random_dis_char.y)
          ->  Broadcast Motion 3:3  (slice2; segments: 3)  (cost=0.00..431.00 rows=1 width=8)
                ->  Seq Scan on random_dis_char  (cost=0.00..431.00 rows=1 width=8)
@@ -3168,15 +3168,15 @@ select * from foo_varchar inner join random_dis_char on foo_varchar.a=random_dis
   a   |   y   
 ------+-------
  2    | 2    
- 3    | 3    
  1    | 1    
+ 3    | 3    
 (3 rows)
 
 explain select * from bar_char inner join random_dis_varchar on bar_char.p=random_dis_varchar.x;
                                          QUERY PLAN                                          
 ---------------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..1324032.48 rows=1 width=16)
-   ->  Nested Loop  (cost=0.00..1324032.48 rows=1 width=16)
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..1324032.46 rows=1 width=16)
+   ->  Nested Loop  (cost=0.00..1324032.46 rows=1 width=16)
          Join Filter: (bar_char.p = (random_dis_varchar.x)::bpchar)
          ->  Broadcast Motion 3:3  (slice2; segments: 3)  (cost=0.00..431.00 rows=1 width=8)
                ->  Seq Scan on random_dis_varchar  (cost=0.00..431.00 rows=1 width=8)
@@ -3188,8 +3188,8 @@ select * from bar_char inner join random_dis_varchar on bar_char.p=random_dis_va
    p   |  x   
 -------+------
  1     | 1 
- 2     | 2  
  3     | 3   
+ 2     | 2  
 (3 rows)
 
 drop table foo_varchar;
@@ -3309,10 +3309,10 @@ select * from dist_t1 where exists ( select 1 from repli_t1  where repli_t1.a >=
  a | b 
 ---+---
  1 | 1
- 5 | 1
  2 | 1
  3 | 1
  4 | 1
+ 5 | 1
 (5 rows)
 
 -- Both replicated table
@@ -3377,10 +3377,10 @@ select * from dist_t1 where exists ( select 1 from generate_series(1, 5) univ_t 
  a | b 
 ---+---
  1 | 1
+ 5 | 1
  2 | 1
  3 | 1
  4 | 1
- 5 | 1
 (5 rows)
 
 -- Outer - replicated, Inner - universal table

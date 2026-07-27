@@ -24,7 +24,7 @@ SET optimizer_trace_fallback=on;
 --
 -- start_ignore
 create language plpython3u;
-ERROR:  language "plpython3u" already exists
+ERROR:  extension "plpython3u" already exists
 -- end_ignore
 create or replace function count_operator(query text, operator text) returns int as
 $$
@@ -98,10 +98,10 @@ insert into mpp7980 values('2009-03-03','xyz','zyz','4',1,3,'1');
 select cust_type, subscription_status,count(distinct subscription_id),sum(voice_call_min),sum(minute_per_call) from mpp7980 where month_id ='2009-04-01' group by rollup(1,2);
  cust_type | subscription_status | count | sum  | sum  
 -----------+---------------------+-------+------+------
-           |                     |     1 | 3.00 | 2.00
- zyz       |                     |     1 | 3.00 | 2.00
  zyz       | 1                   |     1 | 1.00 | 1.00
  zyz       | 2                   |     1 | 2.00 | 1.00
+ zyz       |                     |     1 | 3.00 | 2.00
+           |                     |     1 | 3.00 | 2.00
 (4 rows)
 
 -- CLEANUP
@@ -113,6 +113,7 @@ drop table mpp7980;
 -- SETUP
 -- start_ignore
 set optimizer_enable_bitmapscan=on;
+set optimizer_enable_dynamicbitmapscan=on;
 set optimizer_enable_indexjoin=on;
 drop table if exists mpp23195_t1;
 NOTICE:  table "mpp23195_t1" does not exist, skipping
@@ -157,6 +158,7 @@ select * from mpp23195_t1,mpp23195_t2 where mpp23195_t1.i < mpp23195_t2.i;
 drop table if exists mpp23195_t1;
 drop table if exists mpp23195_t2;
 set optimizer_enable_bitmapscan=off;
+set optimizer_enable_dynamicbitmapscan=off;
 set optimizer_enable_indexjoin=off;
 -- end_ignore
 --
@@ -795,6 +797,7 @@ reset optimizer_segments;
 -- SETUP
 -- start_ignore
 DROP TABLE IF EXISTS bar;
+NOTICE:  table "bar" does not exist, skipping
 -- end_ignore
 CREATE TABLE bar (b int, c int)
 PARTITION BY RANGE (b)
@@ -809,26 +812,26 @@ ANALYZE bar;
 SELECT b FROM bar GROUP BY b;
  b  
 ----
-  7
-  4
- 19
-  3
-  5
- 18
-  6
- 11
-  9
   8
- 12
- 10
- 17
-  1
-  0
+ 19
+  7
+ 18
+  4
   2
  16
+  3
  15
- 14
+  0
+  1
+ 12
+ 17
+ 11
  13
+ 10
+  9
+  5
+  6
+ 14
 (20 rows)
 
 EXPLAIN SELECT b FROM bar GROUP BY b;
@@ -845,6 +848,7 @@ EXPLAIN SELECT b FROM bar GROUP BY b;
 
 -- CLEANUP
 DROP TABLE IF EXISTS foo;
+NOTICE:  table "foo" does not exist, skipping
 DROP TABLE IF EXISTS bar;
 -- Test EXPLAIN ANALYZE on a partitioned table. There used to be a bug, where
 -- you got an internal error with this, because the EXPLAIN ANALYZE sends the
@@ -867,26 +871,26 @@ HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sur
 explain analyze select a.* from mpp8031 a, mpp8031 b where a.oid = b.oid;
                                                                 QUERY PLAN                                                                
 ------------------------------------------------------------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)  (cost=2743.00..2475974.00 rows=80883360 width=16) (actual time=0.707..0.709 rows=0 loops=1)
-   ->  Hash Join  (cost=2743.00..1397529.20 rows=26961120 width=16) (actual time=0.024..0.028 rows=0 loops=1)
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=2743.00..2475974.00 rows=80883360 width=16) (actual time=5.088..5.091 rows=0 loops=1)
+   ->  Hash Join  (cost=2743.00..1397529.20 rows=26961120 width=16) (actual time=0.223..0.225 rows=0 loops=1)
          Hash Cond: (a.oid = b.oid)
-         ->  Append  (cost=0.00..1558.00 rows=94800 width=16) (actual time=0.021..0.023 rows=0 loops=1)
-               ->  Seq Scan on mpp8031_1_prt_foo_1 a_1  (cost=0.00..271.00 rows=23700 width=16) (actual time=0.010..0.010 rows=0 loops=1)
-               ->  Seq Scan on mpp8031_1_prt_2 a_2  (cost=0.00..271.00 rows=23700 width=16) (actual time=0.003..0.004 rows=0 loops=1)
-               ->  Seq Scan on mpp8031_1_prt_3 a_3  (cost=0.00..271.00 rows=23700 width=16) (actual time=0.003..0.003 rows=0 loops=1)
-               ->  Seq Scan on mpp8031_1_prt_4 a_4  (cost=0.00..271.00 rows=23700 width=16) (actual time=0.003..0.003 rows=0 loops=1)
+         ->  Append  (cost=0.00..1558.00 rows=94800 width=16) (actual time=0.221..0.223 rows=0 loops=1)
+               ->  Seq Scan on mpp8031_1_prt_foo_1 a_1  (cost=0.00..271.00 rows=23700 width=16) (actual time=0.102..0.102 rows=0 loops=1)
+               ->  Seq Scan on mpp8031_1_prt_2 a_2  (cost=0.00..271.00 rows=23700 width=16) (actual time=0.031..0.031 rows=0 loops=1)
+               ->  Seq Scan on mpp8031_1_prt_3 a_3  (cost=0.00..271.00 rows=23700 width=16) (actual time=0.037..0.037 rows=0 loops=1)
+               ->  Seq Scan on mpp8031_1_prt_4 a_4  (cost=0.00..271.00 rows=23700 width=16) (actual time=0.051..0.051 rows=0 loops=1)
          ->  Hash  (cost=1558.00..1558.00 rows=94800 width=4) (never executed)
                ->  Append  (cost=0.00..1558.00 rows=94800 width=4) (never executed)
                      ->  Seq Scan on mpp8031_1_prt_foo_1 b_1  (cost=0.00..271.00 rows=23700 width=4) (never executed)
                      ->  Seq Scan on mpp8031_1_prt_2 b_2  (cost=0.00..271.00 rows=23700 width=4) (never executed)
                      ->  Seq Scan on mpp8031_1_prt_3 b_3  (cost=0.00..271.00 rows=23700 width=4) (never executed)
                      ->  Seq Scan on mpp8031_1_prt_4 b_4  (cost=0.00..271.00 rows=23700 width=4) (never executed)
- Planning Time: 2.080 ms
-   (slice0)    Executor memory: 122K bytes.
-   (slice1)    Executor memory: 121K bytes avg x 3x(0) workers, 121K bytes max (seg0).
+ Planning Time: 0.374 ms
+   (slice0)    Executor memory: 52K bytes.
+   (slice1)    Executor memory: 149K bytes avg x 3x(0) workers, 149K bytes max (seg0).
  Memory used:  128000kB
  Optimizer: Postgres query optimizer
- Execution Time: 1.279 ms
+ Execution Time: 5.529 ms
 (20 rows)
 
 drop table mpp8031;
@@ -915,6 +919,9 @@ INSERT INTO part_tbl VALUES (2015111000, 479534741, 99999999);
 INSERT INTO part_tbl VALUES (2015111000, 479534742, 99999999);
 CREATE INDEX part_tbl_idx 
 ON part_tbl(profile_key);
+-- start_ignore
+analyze part_tbl;
+-- end_ignore
 EXPLAIN SELECT * FROM part_tbl WHERE profile_key = 99999999;
                                                      QUERY PLAN                                                      
 ---------------------------------------------------------------------------------------------------------------------
@@ -1140,9 +1147,9 @@ explain select * from fact where dd < current_date; --partitions eliminated
 -----------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..1.03 rows=1 width=40)
    ->  Seq Scan on fact_1_prt_1 fact  (cost=0.00..1.01 rows=1 width=40)
-         Filter: (dd < '04-28-2022'::date)
+         Filter: (dd < '06-21-2026'::date)
  Optimizer: Postgres query optimizer
-(6 rows)
+(4 rows)
 
 -- Test partition elimination in prepared statements
 prepare f1(date) as select * from fact where dd < $1;
@@ -1227,39 +1234,37 @@ INSERT INTO delete_from_pt SELECT i, i%6 FROM generate_series(1, 10)i;
 INSERT INTO t VALUES (1);
 ANALYZE delete_from_pt, t;
 EXPLAIN (COSTS OFF, TIMING OFF, SUMMARY OFF, ANALYZE) DELETE FROM delete_from_pt WHERE b IN (SELECT b FROM delete_from_pt, t WHERE t.a=delete_from_pt.b);
-                                                      QUERY PLAN                                                       
------------------------------------------------------------------------------------------------------------------------
+                                                QUERY PLAN                                                 
+-----------------------------------------------------------------------------------------------------------
  Delete on delete_from_pt (actual rows=0 loops=1)
    Delete on delete_from_pt_1_prt_1 delete_from_pt_2
    Delete on delete_from_pt_1_prt_2 delete_from_pt_3
    Delete on delete_from_pt_1_prt_3 delete_from_pt_4
-   ->  Hash Semi Join (actual rows=1 loops=1)
-         Hash Cond: (delete_from_pt.b = t.a)
-         Extra Text: (seg0)   Hash chain length 2.0 avg, 2 max, using 1 of 131072 buckets.
-         ->  Append (actual rows=3 loops=1)
-               Partition Selectors: $1
-               ->  Seq Scan on delete_from_pt_1_prt_1 delete_from_pt_2 (actual rows=3 loops=1)
-               ->  Seq Scan on delete_from_pt_1_prt_2 delete_from_pt_3 (never executed)
-               ->  Seq Scan on delete_from_pt_1_prt_3 delete_from_pt_4 (never executed)
-         ->  Hash (actual rows=2 loops=1)
+   ->  Hash Right Semi Join (actual rows=1 loops=1)
+         Hash Cond: (t.a = delete_from_pt.b)
+         Extra Text: (seg0)   Hash chain length 1.2 avg, 2 max, using 4 of 131072 buckets.
+         ->  Broadcast Motion 3:3  (slice1; segments: 3) (actual rows=2 loops=1)
+               ->  Hash Join (actual rows=1 loops=1)
+                     Hash Cond: (delete_from_pt_1.b = t.a)
+                     Extra Text: (seg0)   Hash chain length 1.0 avg, 1 max, using 1 of 262144 buckets.
+                     ->  Append (actual rows=3 loops=1)
+                           Partition Selectors: $1
+                           ->  Seq Scan on delete_from_pt_1_prt_1 delete_from_pt_5 (actual rows=3 loops=1)
+                           ->  Seq Scan on delete_from_pt_1_prt_2 delete_from_pt_6 (never executed)
+                           ->  Seq Scan on delete_from_pt_1_prt_3 delete_from_pt_7 (never executed)
+                     ->  Hash (actual rows=1 loops=1)
+                           Buckets: 262144  Batches: 1  Memory Usage: 2049kB
+                           ->  Partition Selector (selector id: $1) (actual rows=1 loops=1)
+                                 ->  Broadcast Motion 3:3  (slice2; segments: 3) (actual rows=1 loops=1)
+                                       ->  Seq Scan on t (actual rows=1 loops=1)
+         ->  Hash (actual rows=5 loops=1)
                Buckets: 131072  Batches: 1  Memory Usage: 1025kB
-               ->  Partition Selector (selector id: $1) (actual rows=2 loops=1)
-                     ->  Broadcast Motion 3:3  (slice1; segments: 3) (actual rows=2 loops=1)
-                           ->  Hash Join (actual rows=1 loops=1)
-                                 Hash Cond: (delete_from_pt_1.b = t.a)
-                                 Extra Text: (seg0)   Hash chain length 1.0 avg, 1 max, using 1 of 262144 buckets.
-                                 ->  Append (actual rows=3 loops=1)
-                                       Partition Selectors: $2
-                                       ->  Seq Scan on delete_from_pt_1_prt_1 delete_from_pt_5 (actual rows=3 loops=1)
-                                       ->  Seq Scan on delete_from_pt_1_prt_2 delete_from_pt_6 (never executed)
-                                       ->  Seq Scan on delete_from_pt_1_prt_3 delete_from_pt_7 (never executed)
-                                 ->  Hash (actual rows=1 loops=1)
-                                       Buckets: 262144  Batches: 1  Memory Usage: 2049kB
-                                       ->  Partition Selector (selector id: $2) (actual rows=1 loops=1)
-                                             ->  Broadcast Motion 3:3  (slice2; segments: 3) (actual rows=1 loops=1)
-                                                   ->  Seq Scan on t (actual rows=1 loops=1)
+               ->  Append (actual rows=5 loops=1)
+                     ->  Seq Scan on delete_from_pt_1_prt_1 delete_from_pt_2 (actual rows=3 loops=1)
+                     ->  Seq Scan on delete_from_pt_1_prt_2 delete_from_pt_3 (actual rows=3 loops=1)
+                     ->  Seq Scan on delete_from_pt_1_prt_3 delete_from_pt_4 (actual rows=0 loops=1)
  Optimizer: Postgres query optimizer
-(30 rows)
+(28 rows)
 
 SELECT * FROM delete_from_pt order by a;
  a  | b 
@@ -1278,7 +1283,10 @@ RESET optimizer_trace_fallback;
 -- CLEANUP
 -- start_ignore
 drop schema if exists bfv_partition_plans cascade;
-NOTICE:  drop cascades to 2 other objects
+NOTICE:  drop cascades to 5 other objects
 DETAIL:  drop cascades to function count_operator(text,text)
 drop cascades to function find_operator(text,text)
+drop cascades to table delete_from_indexed_pt
+drop cascades to table delete_from_pt
+drop cascades to table t
 -- end_ignore

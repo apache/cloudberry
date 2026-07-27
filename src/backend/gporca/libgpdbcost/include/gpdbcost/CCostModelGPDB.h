@@ -178,6 +178,21 @@ private:
 							  const CCostModelGPDB *pcmgpdb,
 							  const SCostingInfo *pci);
 
+	// cost of right semi hash join (Mark Join): build = outer/LHS, probe =
+	// inner/RHS, finalize emits LHS rows with at least one match.  Reuses the
+	// CostHashJoin formula with the build/probe input roles swapped.
+	static CCost CostRightSemiHashJoin(CMemoryPool *mp,
+									   CExpressionHandle &exprhdl,
+									   const CCostModelGPDB *pcmgpdb,
+									   const SCostingInfo *pci);
+
+	// cost of right anti semi hash join (build = outer/LHS, emit unmatched
+	// build rows).  Same skeleton as CostRightSemiHashJoin.
+	static CCost CostRightAntiSemiHashJoin(CMemoryPool *mp,
+										   CExpressionHandle &exprhdl,
+										   const CCostModelGPDB *pcmgpdb,
+										   const SCostingInfo *pci);
+
 	// cost of merge join
 	static CCost CostMergeJoin(CMemoryPool *mp, CExpressionHandle &exprhdl,
 							   const CCostModelGPDB *pcmgpdb,

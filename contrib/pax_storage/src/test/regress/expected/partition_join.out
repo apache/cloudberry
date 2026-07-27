@@ -2,6 +2,9 @@
 -- PARTITION_JOIN
 -- Test partitionwise join between partitioned tables
 --
+-- start_ignore
+set gp_use_streaming_hashagg = off;
+-- end_ignore
 -- Disable ORCA since it does support partition-wise joins
 set optimizer to off;
 -- Enable partitionwise join, which by default is disabled.
@@ -2473,12 +2476,12 @@ SELECT COUNT(*) FROM prt1_l t1 LEFT JOIN LATERAL
 			  (SELECT t1.b AS t1b, t2.* FROM prt2_l t2) s
 			  ON t1.a = s.b AND t1.b = s.a AND t1.c = s.c
 			  WHERE s.t1b = s.a;
-ERROR:  could not pull up equivalence class using projected target list (pathkeys.c:1615)
+ERROR:  could not pull up equivalence class using projected target list (pathkeys.c:1618)
 SELECT COUNT(*) FROM prt1_l t1 LEFT JOIN LATERAL
 			  (SELECT t1.b AS t1b, t2.* FROM prt2_l t2) s
 			  ON t1.a = s.b AND t1.b = s.a AND t1.c = s.c
 			  WHERE s.t1b = s.a;
-ERROR:  could not pull up equivalence class using projected target list (pathkeys.c:1615)
+ERROR:  could not pull up equivalence class using projected target list (pathkeys.c:1618)
 RESET max_parallel_workers_per_gather;
 -- join with one side empty
 EXPLAIN (COSTS OFF)
@@ -4141,54 +4144,33 @@ SELECT t1.a, t1.c, t2.a, t2.c FROM plt1_adv t1 INNER JOIN plt2_adv t2 ON (t1.a =
 -- semi join
 EXPLAIN (COSTS OFF)
 SELECT t1.* FROM plt1_adv t1 WHERE EXISTS (SELECT 1 FROM plt2_adv t2 WHERE t1.a = t2.a AND t1.c = t2.c) AND t1.b < 10 ORDER BY t1.a;
-                                            QUERY PLAN                                            
---------------------------------------------------------------------------------------------------
+                                QUERY PLAN                                
+--------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    Merge Key: t1.a
    ->  Sort
          Sort Key: t1.a
          ->  Append
-               ->  Result
-                     ->  Unique
-                           Group Key: (RowIdExpr)
-                           ->  Sort
-                                 Sort Key: (RowIdExpr)
-                                 ->  Redistribute Motion 3:3  (slice2; segments: 3)
-                                       Hash Key: (RowIdExpr)
-                                       ->  Hash Join
-                                             Hash Cond: ((t2_1.a = t1_1.a) AND (t2_1.c = t1_1.c))
-                                             ->  Seq Scan on plt2_adv_p1 t2_1
-                                             ->  Hash
-                                                   ->  Seq Scan on plt1_adv_p1 t1_1
-                                                         Filter: (b < 10)
-               ->  Result
-                     ->  Unique
-                           Group Key: (RowIdExpr)
-                           ->  Sort
-                                 Sort Key: (RowIdExpr)
-                                 ->  Redistribute Motion 3:3  (slice3; segments: 3)
-                                       Hash Key: (RowIdExpr)
-                                       ->  Hash Join
-                                             Hash Cond: ((t2_2.a = t1_2.a) AND (t2_2.c = t1_2.c))
-                                             ->  Seq Scan on plt2_adv_p2 t2_2
-                                             ->  Hash
-                                                   ->  Seq Scan on plt1_adv_p2 t1_2
-                                                         Filter: (b < 10)
-               ->  Result
-                     ->  Unique
-                           Group Key: (RowIdExpr)
-                           ->  Sort
-                                 Sort Key: (RowIdExpr)
-                                 ->  Redistribute Motion 3:3  (slice4; segments: 3)
-                                       Hash Key: (RowIdExpr)
-                                       ->  Hash Join
-                                             Hash Cond: ((t2_3.a = t1_3.a) AND (t2_3.c = t1_3.c))
-                                             ->  Seq Scan on plt2_adv_p3 t2_3
-                                             ->  Hash
-                                                   ->  Seq Scan on plt1_adv_p3 t1_3
-                                                         Filter: (b < 10)
+               ->  Hash Right Semi Join
+                     Hash Cond: ((t2_1.a = t1_1.a) AND (t2_1.c = t1_1.c))
+                     ->  Seq Scan on plt2_adv_p1 t2_1
+                     ->  Hash
+                           ->  Seq Scan on plt1_adv_p1 t1_1
+                                 Filter: (b < 10)
+               ->  Hash Right Semi Join
+                     Hash Cond: ((t2_2.a = t1_2.a) AND (t2_2.c = t1_2.c))
+                     ->  Seq Scan on plt2_adv_p2 t2_2
+                     ->  Hash
+                           ->  Seq Scan on plt1_adv_p2 t1_2
+                                 Filter: (b < 10)
+               ->  Hash Right Semi Join
+                     Hash Cond: ((t2_3.a = t1_3.a) AND (t2_3.c = t1_3.c))
+                     ->  Seq Scan on plt2_adv_p3 t2_3
+                     ->  Hash
+                           ->  Seq Scan on plt1_adv_p3 t1_3
+                                 Filter: (b < 10)
  Optimizer: Postgres query optimizer
-(45 rows)
+(24 rows)
 
 SELECT t1.* FROM plt1_adv t1 WHERE EXISTS (SELECT 1 FROM plt2_adv t2 WHERE t1.a = t2.a AND t1.c = t2.c) AND t1.b < 10 ORDER BY t1.a;
  a | b |  c   
@@ -4371,54 +4353,33 @@ SELECT t1.a, t1.c, t2.a, t2.c FROM plt1_adv t1 INNER JOIN plt2_adv t2 ON (t1.a =
 -- semi join
 EXPLAIN (COSTS OFF)
 SELECT t1.* FROM plt1_adv t1 WHERE EXISTS (SELECT 1 FROM plt2_adv t2 WHERE t1.a = t2.a AND t1.c = t2.c) AND t1.b < 10 ORDER BY t1.a;
-                                            QUERY PLAN                                            
---------------------------------------------------------------------------------------------------
+                                QUERY PLAN                                
+--------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    Merge Key: t1.a
    ->  Sort
          Sort Key: t1.a
          ->  Append
-               ->  Result
-                     ->  Unique
-                           Group Key: (RowIdExpr)
-                           ->  Sort
-                                 Sort Key: (RowIdExpr)
-                                 ->  Redistribute Motion 3:3  (slice2; segments: 3)
-                                       Hash Key: (RowIdExpr)
-                                       ->  Hash Join
-                                             Hash Cond: ((t2_1.a = t1_1.a) AND (t2_1.c = t1_1.c))
-                                             ->  Seq Scan on plt2_adv_p1 t2_1
-                                             ->  Hash
-                                                   ->  Seq Scan on plt1_adv_p1 t1_1
-                                                         Filter: (b < 10)
-               ->  Result
-                     ->  Unique
-                           Group Key: (RowIdExpr)
-                           ->  Sort
-                                 Sort Key: (RowIdExpr)
-                                 ->  Redistribute Motion 3:3  (slice3; segments: 3)
-                                       Hash Key: (RowIdExpr)
-                                       ->  Hash Join
-                                             Hash Cond: ((t2_2.a = t1_2.a) AND (t2_2.c = t1_2.c))
-                                             ->  Seq Scan on plt2_adv_p2 t2_2
-                                             ->  Hash
-                                                   ->  Seq Scan on plt1_adv_p2 t1_2
-                                                         Filter: (b < 10)
-               ->  Result
-                     ->  Unique
-                           Group Key: (RowIdExpr)
-                           ->  Sort
-                                 Sort Key: (RowIdExpr)
-                                 ->  Redistribute Motion 3:3  (slice4; segments: 3)
-                                       Hash Key: (RowIdExpr)
-                                       ->  Hash Join
-                                             Hash Cond: ((t2_3.a = t1_3.a) AND (t2_3.c = t1_3.c))
-                                             ->  Seq Scan on plt2_adv_p3 t2_3
-                                             ->  Hash
-                                                   ->  Seq Scan on plt1_adv_p3 t1_3
-                                                         Filter: (b < 10)
+               ->  Hash Right Semi Join
+                     Hash Cond: ((t2_1.a = t1_1.a) AND (t2_1.c = t1_1.c))
+                     ->  Seq Scan on plt2_adv_p1 t2_1
+                     ->  Hash
+                           ->  Seq Scan on plt1_adv_p1 t1_1
+                                 Filter: (b < 10)
+               ->  Hash Right Semi Join
+                     Hash Cond: ((t2_2.a = t1_2.a) AND (t2_2.c = t1_2.c))
+                     ->  Seq Scan on plt2_adv_p2 t2_2
+                     ->  Hash
+                           ->  Seq Scan on plt1_adv_p2 t1_2
+                                 Filter: (b < 10)
+               ->  Hash Right Semi Join
+                     Hash Cond: ((t2_3.a = t1_3.a) AND (t2_3.c = t1_3.c))
+                     ->  Seq Scan on plt2_adv_p3 t2_3
+                     ->  Hash
+                           ->  Seq Scan on plt1_adv_p3 t1_3
+                                 Filter: (b < 10)
  Optimizer: Postgres query optimizer
-(45 rows)
+(24 rows)
 
 SELECT t1.* FROM plt1_adv t1 WHERE EXISTS (SELECT 1 FROM plt2_adv t2 WHERE t1.a = t2.a AND t1.c = t2.c) AND t1.b < 10 ORDER BY t1.a;
  a | b |  c   
@@ -4638,39 +4599,29 @@ SELECT t1.a, t1.c, t2.a, t2.c FROM plt1_adv t1 INNER JOIN plt2_adv t2 ON (t1.a =
 -- semi join
 EXPLAIN (COSTS OFF)
 SELECT t1.* FROM plt1_adv t1 WHERE EXISTS (SELECT 1 FROM plt2_adv t2 WHERE t1.a = t2.a AND t1.c = t2.c) AND t1.b < 10 ORDER BY t1.a;
-                                           QUERY PLAN                                           
-------------------------------------------------------------------------------------------------
+                         QUERY PLAN                         
+------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    Merge Key: t1.a
    ->  Sort
          Sort Key: t1.a
-         ->  Result
-               ->  Unique
-                     Group Key: (RowIdExpr)
-                     ->  Sort
-                           Sort Key: (RowIdExpr)
-                           ->  Redistribute Motion 3:3  (slice2; segments: 3)
-                                 Hash Key: (RowIdExpr)
-                                 ->  Hash Join
-                                       Hash Cond: ((t2.a = t1.a) AND (t2.c = t1.c))
-                                       ->  Append
-                                             Partition Selectors: $0
-                                             ->  Seq Scan on plt2_adv_p1 t2_1
-                                             ->  Seq Scan on plt2_adv_p2_1 t2_2
-                                             ->  Seq Scan on plt2_adv_p2_2 t2_3
-                                             ->  Seq Scan on plt2_adv_p3 t2_4
-                                       ->  Hash
-                                             ->  Partition Selector (selector id: $0)
-                                                   ->  Result
-                                                         ->  Append
-                                                               ->  Seq Scan on plt1_adv_p1 t1_1
-                                                                     Filter: (b < 10)
-                                                               ->  Seq Scan on plt1_adv_p2 t1_2
-                                                                     Filter: (b < 10)
-                                                               ->  Seq Scan on plt1_adv_p3 t1_3
-                                                                     Filter: (b < 10)
+         ->  Hash Right Semi Join
+               Hash Cond: ((t2.a = t1.a) AND (t2.c = t1.c))
+               ->  Append
+                     ->  Seq Scan on plt2_adv_p1 t2_1
+                     ->  Seq Scan on plt2_adv_p2_1 t2_2
+                     ->  Seq Scan on plt2_adv_p2_2 t2_3
+                     ->  Seq Scan on plt2_adv_p3 t2_4
+               ->  Hash
+                     ->  Append
+                           ->  Seq Scan on plt1_adv_p1 t1_1
+                                 Filter: (b < 10)
+                           ->  Seq Scan on plt1_adv_p2 t1_2
+                                 Filter: (b < 10)
+                           ->  Seq Scan on plt1_adv_p3 t1_3
+                                 Filter: (b < 10)
  Optimizer: Postgres query optimizer
-(30 rows)
+(20 rows)
 
 -- left join
 EXPLAIN (COSTS OFF)
@@ -4815,54 +4766,33 @@ SELECT t1.a, t1.c, t2.a, t2.c FROM plt1_adv t1 INNER JOIN plt2_adv t2 ON (t1.a =
 -- semi join
 EXPLAIN (COSTS OFF)
 SELECT t1.* FROM plt1_adv t1 WHERE EXISTS (SELECT 1 FROM plt2_adv t2 WHERE t1.a = t2.a AND t1.c = t2.c) AND t1.b < 10 ORDER BY t1.a;
-                                            QUERY PLAN                                            
---------------------------------------------------------------------------------------------------
+                                QUERY PLAN                                
+--------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    Merge Key: t1.a
    ->  Sort
          Sort Key: t1.a
          ->  Append
-               ->  Result
-                     ->  Unique
-                           Group Key: (RowIdExpr)
-                           ->  Sort
-                                 Sort Key: (RowIdExpr)
-                                 ->  Redistribute Motion 3:3  (slice2; segments: 3)
-                                       Hash Key: (RowIdExpr)
-                                       ->  Hash Join
-                                             Hash Cond: ((t2_1.a = t1_1.a) AND (t2_1.c = t1_1.c))
-                                             ->  Seq Scan on plt2_adv_p1 t2_1
-                                             ->  Hash
-                                                   ->  Seq Scan on plt1_adv_p1_null t1_1
-                                                         Filter: (b < 10)
-               ->  Result
-                     ->  Unique
-                           Group Key: (RowIdExpr)
-                           ->  Sort
-                                 Sort Key: (RowIdExpr)
-                                 ->  Redistribute Motion 3:3  (slice3; segments: 3)
-                                       Hash Key: (RowIdExpr)
-                                       ->  Hash Join
-                                             Hash Cond: ((t2_2.a = t1_2.a) AND (t2_2.c = t1_2.c))
-                                             ->  Seq Scan on plt2_adv_p2 t2_2
-                                             ->  Hash
-                                                   ->  Seq Scan on plt1_adv_p2 t1_2
-                                                         Filter: (b < 10)
-               ->  Result
-                     ->  Unique
-                           Group Key: (RowIdExpr)
-                           ->  Sort
-                                 Sort Key: (RowIdExpr)
-                                 ->  Redistribute Motion 3:3  (slice4; segments: 3)
-                                       Hash Key: (RowIdExpr)
-                                       ->  Hash Join
-                                             Hash Cond: ((t2_3.a = t1_3.a) AND (t2_3.c = t1_3.c))
-                                             ->  Seq Scan on plt2_adv_p3_null t2_3
-                                             ->  Hash
-                                                   ->  Seq Scan on plt1_adv_p3 t1_3
-                                                         Filter: (b < 10)
+               ->  Hash Right Semi Join
+                     Hash Cond: ((t2_1.a = t1_1.a) AND (t2_1.c = t1_1.c))
+                     ->  Seq Scan on plt2_adv_p1 t2_1
+                     ->  Hash
+                           ->  Seq Scan on plt1_adv_p1_null t1_1
+                                 Filter: (b < 10)
+               ->  Hash Right Semi Join
+                     Hash Cond: ((t2_2.a = t1_2.a) AND (t2_2.c = t1_2.c))
+                     ->  Seq Scan on plt2_adv_p2 t2_2
+                     ->  Hash
+                           ->  Seq Scan on plt1_adv_p2 t1_2
+                                 Filter: (b < 10)
+               ->  Hash Right Semi Join
+                     Hash Cond: ((t2_3.a = t1_3.a) AND (t2_3.c = t1_3.c))
+                     ->  Seq Scan on plt2_adv_p3_null t2_3
+                     ->  Hash
+                           ->  Seq Scan on plt1_adv_p3 t1_3
+                                 Filter: (b < 10)
  Optimizer: Postgres query optimizer
-(45 rows)
+(24 rows)
 
 SELECT t1.* FROM plt1_adv t1 WHERE EXISTS (SELECT 1 FROM plt2_adv t2 WHERE t1.a = t2.a AND t1.c = t2.c) AND t1.b < 10 ORDER BY t1.a;
  a | b |  c   

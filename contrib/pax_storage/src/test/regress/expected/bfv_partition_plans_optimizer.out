@@ -912,18 +912,6 @@ ANALYZE bar;
 SELECT b FROM bar GROUP BY b;
  b  
 ----
- 17
- 11
- 13
- 10
-  9
-  5
-  6
- 14
- 15
-  0
-  1
- 12
   8
  19
   7
@@ -932,6 +920,18 @@ SELECT b FROM bar GROUP BY b;
   2
  16
   3
+ 15
+  0
+  1
+ 12
+ 17
+ 11
+ 13
+ 10
+  9
+  5
+  6
+ 14
 (20 rows)
 
 EXPLAIN SELECT b FROM bar GROUP BY b;
@@ -972,22 +972,22 @@ NOTICE:  One or more columns in the following table(s) do not have statistics: m
 HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
                                                           QUERY PLAN                                                           
 -------------------------------------------------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..862.00 rows=1 width=16) (actual time=9.030..9.036 rows=0 loops=1)
-   ->  Hash Join  (cost=0.00..862.00 rows=1 width=16) (actual time=6.122..6.132 rows=0 loops=1)
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..862.00 rows=1 width=16) (actual time=23.173..23.176 rows=0 loops=1)
+   ->  Hash Join  (cost=0.00..862.00 rows=1 width=16) (actual time=25.182..25.185 rows=0 loops=1)
          Hash Cond: (a.oid = b.oid)
          ->  Dynamic Seq Scan on mpp8031 a  (cost=0.00..431.00 rows=1 width=16) (never executed)
                Number of partitions to scan: 4 (out of 4)
-         ->  Hash  (cost=431.00..431.00 rows=1 width=4) (actual time=2.660..2.667 rows=0 loops=1)
+         ->  Hash  (cost=431.00..431.00 rows=1 width=4) (actual time=2.599..2.600 rows=0 loops=1)
                Buckets: 524288  Batches: 1  Memory Usage: 4096kB
-               ->  Dynamic Seq Scan on mpp8031 b  (cost=0.00..431.00 rows=1 width=4) (actual time=2.658..2.658 rows=0 loops=1)
+               ->  Dynamic Seq Scan on mpp8031 b  (cost=0.00..431.00 rows=1 width=4) (actual time=2.596..2.597 rows=0 loops=1)
                      Number of partitions to scan: 4 (out of 4)
                      Partitions scanned:  Avg 4.0 x 3 workers.  Max 4 parts (seg0).
- Planning Time: 47.729 ms
-   (slice0)    Executor memory: 113K bytes.
-   (slice1)    Executor memory: 4231K bytes avg x 3x(0) workers, 4231K bytes max (seg0).  Work_mem: 4096K bytes max.
+ Planning Time: 7.956 ms
+   (slice0)    Executor memory: 25K bytes.
+   (slice1)    Executor memory: 4229K bytes avg x 3x(0) workers, 4229K bytes max (seg0).  Work_mem: 4096K bytes max.
  Memory used:  128000kB
  Optimizer: GPORCA
- Execution Time: 11.130 ms
+ Execution Time: 30.860 ms
 (16 rows)
 
 drop table mpp8031;
@@ -1230,8 +1230,6 @@ select '2009-01-02'::date = to_date('2009-01-02','YYYY-MM-DD'); -- ensure that b
 (1 row)
 
 explain select * from fact where dd < '2009-01-02'::date; -- partitions eliminated
-NOTICE:  One or more columns in the following table(s) do not have statistics: fact
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
                                   QUERY PLAN                                   
 -------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..431.00 rows=1 width=16)
@@ -1242,8 +1240,6 @@ HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For 
 (5 rows)
 
 explain select * from fact where dd < to_date('2009-01-02','YYYY-MM-DD'); -- partitions eliminated
-NOTICE:  One or more columns in the following table(s) do not have statistics: fact
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
                                   QUERY PLAN                                   
 -------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..431.00 rows=1 width=16)
@@ -1254,14 +1250,12 @@ HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For 
 (5 rows)
 
 explain select * from fact where dd < current_date; --partitions eliminated
-NOTICE:  One or more columns in the following table(s) do not have statistics: fact
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
                                   QUERY PLAN                                   
 -------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..431.00 rows=1 width=16)
    ->  Dynamic Seq Scan on fact  (cost=0.00..431.00 rows=1 width=16)
          Number of partitions to scan: 1 (out of 4)
-         Filter: (dd < '04-10-2026'::date)
+         Filter: (dd < '06-21-2026'::date)
  Optimizer: GPORCA
 (5 rows)
 
@@ -1269,8 +1263,6 @@ HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For 
 prepare f1(date) as select * from fact where dd < $1;
 -- force_explain
 explain execute f1('2009-01-02'::date); -- should eliminate partitions
-NOTICE:  One or more columns in the following table(s) do not have statistics: fact
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
                                   QUERY PLAN                                   
 -------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..431.00 rows=1 width=16)
@@ -1282,8 +1274,6 @@ HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For 
 
 -- force_explain
 explain execute f1(to_date('2009-01-02', 'YYYY-MM-DD')); -- should eliminate partitions
-NOTICE:  One or more columns in the following table(s) do not have statistics: fact
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
                                   QUERY PLAN                                   
 -------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..431.00 rows=1 width=16)
@@ -1366,39 +1356,37 @@ ANALYZE delete_from_pt, t;
 EXPLAIN (COSTS OFF, TIMING OFF, SUMMARY OFF, ANALYZE) DELETE FROM delete_from_pt WHERE b IN (SELECT b FROM delete_from_pt, t WHERE t.a=delete_from_pt.b);
 INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
 DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: DML(delete) on partitioned tables
-                                                      QUERY PLAN                                                       
------------------------------------------------------------------------------------------------------------------------
+                                                QUERY PLAN                                                 
+-----------------------------------------------------------------------------------------------------------
  Delete on delete_from_pt (actual rows=0 loops=1)
    Delete on delete_from_pt_1_prt_1 delete_from_pt_2
    Delete on delete_from_pt_1_prt_2 delete_from_pt_3
    Delete on delete_from_pt_1_prt_3 delete_from_pt_4
-   ->  Hash Semi Join (actual rows=1 loops=1)
-         Hash Cond: (delete_from_pt.b = t.a)
-         Extra Text: (seg0)   Hash chain length 2.0 avg, 2 max, using 1 of 131072 buckets.
-         ->  Append (actual rows=3 loops=1)
-               Partition Selectors: $1
-               ->  Seq Scan on delete_from_pt_1_prt_1 delete_from_pt_2 (actual rows=3 loops=1)
-               ->  Seq Scan on delete_from_pt_1_prt_2 delete_from_pt_3 (never executed)
-               ->  Seq Scan on delete_from_pt_1_prt_3 delete_from_pt_4 (never executed)
-         ->  Hash (actual rows=2 loops=1)
+   ->  Hash Right Semi Join (actual rows=1 loops=1)
+         Hash Cond: (t.a = delete_from_pt.b)
+         Extra Text: (seg0)   Hash chain length 1.2 avg, 2 max, using 4 of 131072 buckets.
+         ->  Broadcast Motion 3:3  (slice1; segments: 3) (actual rows=2 loops=1)
+               ->  Hash Join (actual rows=1 loops=1)
+                     Hash Cond: (delete_from_pt_1.b = t.a)
+                     Extra Text: (seg0)   Hash chain length 1.0 avg, 1 max, using 1 of 262144 buckets.
+                     ->  Append (actual rows=3 loops=1)
+                           Partition Selectors: $1
+                           ->  Seq Scan on delete_from_pt_1_prt_1 delete_from_pt_5 (actual rows=3 loops=1)
+                           ->  Seq Scan on delete_from_pt_1_prt_2 delete_from_pt_6 (never executed)
+                           ->  Seq Scan on delete_from_pt_1_prt_3 delete_from_pt_7 (never executed)
+                     ->  Hash (actual rows=1 loops=1)
+                           Buckets: 262144  Batches: 1  Memory Usage: 2049kB
+                           ->  Partition Selector (selector id: $1) (actual rows=1 loops=1)
+                                 ->  Broadcast Motion 3:3  (slice2; segments: 3) (actual rows=1 loops=1)
+                                       ->  Seq Scan on t (actual rows=1 loops=1)
+         ->  Hash (actual rows=5 loops=1)
                Buckets: 131072  Batches: 1  Memory Usage: 1025kB
-               ->  Partition Selector (selector id: $1) (actual rows=2 loops=1)
-                     ->  Broadcast Motion 3:3  (slice1; segments: 3) (actual rows=2 loops=1)
-                           ->  Hash Join (actual rows=1 loops=1)
-                                 Hash Cond: (delete_from_pt_1.b = t.a)
-                                 Extra Text: (seg0)   Hash chain length 1.0 avg, 1 max, using 1 of 262144 buckets.
-                                 ->  Append (actual rows=3 loops=1)
-                                       Partition Selectors: $2
-                                       ->  Seq Scan on delete_from_pt_1_prt_1 delete_from_pt_5 (actual rows=3 loops=1)
-                                       ->  Seq Scan on delete_from_pt_1_prt_2 delete_from_pt_6 (never executed)
-                                       ->  Seq Scan on delete_from_pt_1_prt_3 delete_from_pt_7 (never executed)
-                                 ->  Hash (actual rows=1 loops=1)
-                                       Buckets: 262144  Batches: 1  Memory Usage: 2049kB
-                                       ->  Partition Selector (selector id: $2) (actual rows=1 loops=1)
-                                             ->  Broadcast Motion 3:3  (slice2; segments: 3) (actual rows=1 loops=1)
-                                                   ->  Seq Scan on t (actual rows=1 loops=1)
+               ->  Append (actual rows=5 loops=1)
+                     ->  Seq Scan on delete_from_pt_1_prt_1 delete_from_pt_2 (actual rows=3 loops=1)
+                     ->  Seq Scan on delete_from_pt_1_prt_2 delete_from_pt_3 (actual rows=3 loops=1)
+                     ->  Seq Scan on delete_from_pt_1_prt_3 delete_from_pt_4 (actual rows=0 loops=1)
  Optimizer: Postgres query optimizer
-(30 rows)
+(28 rows)
 
 SELECT * FROM delete_from_pt order by a;
  a  | b 

@@ -214,6 +214,9 @@ test: rpt rpt_joins rpt_tpch rpt_returning
 test: bfv_cte
 test: bfv_joins bfv_subquery bfv_planner bfv_legacy bfv_temp bfv_dml
 
+# GPORCA right semi / right anti hash join (optimizer_enable_right_semi_join)
+test: rightsemijoin
+
 # test tpcds query 04
 test: tpcds_q04
 

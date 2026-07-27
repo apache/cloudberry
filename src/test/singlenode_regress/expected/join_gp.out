@@ -28,8 +28,8 @@ explain select * from nhtest a join nhtest b using (i);
 select * from nhtest a join nhtest b using (i);
      i     
 -----------
- 300000.19
  100000.22
+ 300000.19
 (2 rows)
 
 create temp table l(a int);
@@ -67,6 +67,7 @@ set enable_mergejoin to on;
 set enable_nestloop to off;
 DROP TABLE IF EXISTS alpha;
 DROP TABLE IF EXISTS theta;
+NOTICE:  table "theta" does not exist, skipping
 CREATE TABLE alpha (i int, j int);
 CREATE TABLE theta (i int, j char(10000000));
 INSERT INTO alpha values (1, 1), (2, 2);
@@ -194,10 +195,10 @@ select count(*) from hjn_test, (select 3 as bar) foo where hjn_test.i = least (f
 select * from int4_tbl a join int4_tbl b on (a.f1 = (select f1 from int4_tbl c where c.f1=b.f1));
      f1      |     f1      
 -------------+-------------
- -2147483647 | -2147483647
       123456 |      123456
-     -123456 |     -123456
+ -2147483647 | -2147483647
            0 |           0
+     -123456 |     -123456
   2147483647 |  2147483647
 (5 rows)
 
@@ -212,9 +213,9 @@ insert into part4_tbl values
 select * from part4_tbl a join part4_tbl b on (a.f1 = (select f1 from int4_tbl c where c.f1=b.f1));
    f1    |   f1    
 ---------+---------
-  123456 |  123456
  -123456 | -123456
        0 |       0
+  123456 |  123456
 (3 rows)
 
 --
@@ -235,18 +236,18 @@ from tjoin1
 left outer join (tjoin2 left outer join tjoin3 on tjoin2.id=tjoin3.id) on tjoin1.id=tjoin3.id;
  id |  t  |  t  
 ----+-----+-----
-  1 | 2-1 | 2-1
-  1 | 2-1 | 1-1
+  1 | 1-1 | 2-1
   1 | 1-1 | 2-1
   1 | 1-1 | 1-1
-  3 |     | 
+  1 | 1-1 | 1-1
+  1 | 2-1 | 2-1
   1 | 2-1 | 2-1
   1 | 2-1 | 1-1
-  1 | 1-1 | 2-1
-  1 | 1-1 | 1-1
+  1 | 2-1 | 1-1
+  2 |     | 
+  2 |     | 
   3 |     | 
-  2 |     | 
-  2 |     | 
+  3 |     | 
 (12 rows)
 
 set enable_hashjoin to off;
@@ -279,9 +280,9 @@ select * from int4_tbl a join int4_tbl b on (a.f1 = (select f1 from int4_tbl c w
      f1      |     f1      
 -------------+-------------
  -2147483647 | -2147483647
-      123456 |      123456
      -123456 |     -123456
            0 |           0
+      123456 |      123456
   2147483647 |  2147483647
 (5 rows)
 
@@ -454,8 +455,8 @@ insert into test_float2 values(3, 10), (4, 20);
 select t1.id, t1.data, t2.id, t2.data from test_float1 t1, test_float2 t2 where t1.data = t2.data;
  id | data | id | data 
 ----+------+----+------
-  2 |   20 |  4 |   20
   1 |   10 |  3 |   10
+  2 |   20 |  4 |   20
 (2 rows)
 
 -- test int type
@@ -647,8 +648,8 @@ explain (costs off) select * from t1 left join t2 on (t1.a = t2.a) join t3 on (t
 select * from t1 left join t2 on (t1.a = t2.a) join t3 on (t1.b = t3.b) where (t2.a is distinct from t3.a);
  a | b | c | a | b | c | a | b | c 
 ---+---+---+---+---+---+---+---+---
- 2 | 2 | 2 | 2 | 2 | 2 |   | 2 | 2
  2 | 2 | 2 | 2 | 2 | 2 | 1 | 2 | 3
+ 2 | 2 | 2 | 2 | 2 | 2 |   | 2 | 2
 (2 rows)
 
 -- ensure plan has a filter over left outer join
@@ -712,10 +713,10 @@ select * from (select t1.a t1a, t1.b t1b, t2.a t2a, t2.b t2b from t1 left join t
   join t3 t3_1 on tt1.t1b = t3_1.b and (tt1.t2a is NULL OR tt1.t1b = t3.b);
  t1a | t1b | t2a | t2b | a | b | c | t1a | t1b | t2a | t2b | a | b | c 
 -----+-----+-----+-----+---+---+---+-----+-----+-----+-----+---+---+---
-   2 |   2 |   2 |   2 |   | 2 | 2 |   2 |   2 |   2 |   2 |   | 2 | 2
-   2 |   2 |   2 |   2 |   | 2 | 2 |   2 |   2 |   2 |   2 | 1 | 2 | 3
    2 |   2 |   2 |   2 | 1 | 2 | 3 |   2 |   2 |   2 |   2 |   | 2 | 2
+   2 |   2 |   2 |   2 |   | 2 | 2 |   2 |   2 |   2 |   2 |   | 2 | 2
    2 |   2 |   2 |   2 | 1 | 2 | 3 |   2 |   2 |   2 |   2 | 1 | 2 | 3
+   2 |   2 |   2 |   2 |   | 2 | 2 |   2 |   2 |   2 |   2 | 1 | 2 | 3
 (4 rows)
 
 -- test different join order enumeration methods
@@ -731,8 +732,8 @@ set optimizer_join_order = greedy;
 select * from t1 join t2 on t1.a = t2.a join t3 on t1.b = t3.b;
  a | b | c | a | b | c | a | b | c 
 ---+---+---+---+---+---+---+---+---
- 2 | 2 | 2 | 2 | 2 | 2 |   | 2 | 2
  2 | 2 | 2 | 2 | 2 | 2 | 1 | 2 | 3
+ 2 | 2 | 2 | 2 | 2 | 2 |   | 2 | 2
 (2 rows)
 
 set optimizer_join_order = exhaustive;
@@ -778,10 +779,10 @@ set enable_bitmapscan = 0;
 explain select tenk1.unique2 >= 0 from tenk1 left join tenk2 on true limit 1;
                                             QUERY PLAN                                            
 --------------------------------------------------------------------------------------------------
- Limit  (cost=0.57..0.63 rows=1 width=1)
-   ->  Nested Loop Left Join  (cost=0.57..6353036.29 rows=100000000 width=1)
+ Limit  (cost=0.57..0.60 rows=1 width=1)
+   ->  Nested Loop Left Join  (cost=0.57..2953036.28 rows=100000000 width=1)
          ->  Index Only Scan using tenk1_unique2 on tenk1  (cost=0.29..186.28 rows=10000 width=4)
-         ->  Index Only Scan using tenk2_hundred on tenk2  (cost=0.29..510.29 rows=10000 width=0)
+         ->  Index Only Scan using tenk2_hundred on tenk2  (cost=0.29..170.28 rows=10000 width=0)
  Optimizer: Postgres query optimizer
 (5 rows)
 
@@ -843,14 +844,14 @@ select * from generate_series(1, 5) g left join trep_join_gp on g = trep_join_gp
  g | c1 | c2 | c1 | c2 
 ---+----+----+----+----
  1 |  1 |  1 |  1 |  1
- 2 |  2 |  2 |  1 |  1
- 3 |    |    |  1 |  1
- 4 |    |    |  1 |  1
- 5 |    |    |  1 |  1
  1 |  1 |  1 |  2 |  2
+ 2 |  2 |  2 |  1 |  1
  2 |  2 |  2 |  2 |  2
+ 3 |    |    |  1 |  1
  3 |    |    |  2 |  2
+ 4 |    |    |  1 |  1
  4 |    |    |  2 |  2
+ 5 |    |    |  1 |  1
  5 |    |    |  2 |  2
 (10 rows)
 
@@ -871,10 +872,10 @@ explain select * from generate_series(1, 5) g left join thash_join_gp on g = tha
 select * from generate_series(1, 5) g left join thash_join_gp on g = thash_join_gp.c1;
  g | c1 | c2 
 ---+----+----
+ 1 |  1 |  1
  2 |  2 |  2
  3 |    |   
  4 |    |   
- 1 |  1 |  1
  5 |    |   
 (5 rows)
 
@@ -892,11 +893,11 @@ explain select * from generate_series(1, 5) g left join thash_join_gp on g = tha
 select * from generate_series(1, 5) g left join thash_join_gp on g = thash_join_gp.c2;
  g | c1 | c2 
 ---+----+----
- 5 |    |   
+ 1 |  1 |  1
  2 |  2 |  2
  3 |    |   
  4 |    |   
- 1 |  1 |  1
+ 5 |    |   
 (5 rows)
 
 explain select * from generate_series(1, 5) g left join trand_join_gp on g = trand_join_gp.c1;
@@ -913,10 +914,10 @@ explain select * from generate_series(1, 5) g left join trand_join_gp on g = tra
 select * from generate_series(1, 5) g left join trand_join_gp on g = trand_join_gp.c1;
  g | c1 | c2 
 ---+----+----
+ 1 |    |   
  2 |    |   
  3 |    |   
  4 |    |   
- 1 |    |   
  5 |    |   
 (5 rows)
 
@@ -934,10 +935,10 @@ explain select * from generate_series(1, 5) g full join trand_join_gp on g = tra
 select * from generate_series(1, 5) g full join trand_join_gp on g = trand_join_gp.c1;
  g | c1 | c2 
 ---+----+----
+ 1 |    |   
  2 |    |   
  3 |    |   
  4 |    |   
- 1 |    |   
  5 |    |   
 (5 rows)
 
@@ -977,8 +978,8 @@ explain select * from trep_join_gp left join trand_join_gp using (c1);
 select * from trep_join_gp left join trand_join_gp using (c1);
  c1 | c2 | c2 
 ----+----+----
-  2 |  2 |   
   1 |  1 |   
+  2 |  2 |   
 (2 rows)
 
 explain select * from trep1_join_gp join thash_join_gp using (c1);
@@ -1097,9 +1098,9 @@ explain select * from t1_lateral_limit as t1 cross join lateral
 (select ((c).x+t2.b) as n  from t2_lateral_limit as t2 order by n limit 1)s;
                                            QUERY PLAN                                           
 ------------------------------------------------------------------------------------------------
- Nested Loop  (cost=10000000169.08..10000813417.08 rows=4810 width=44)
+ Nested Loop  (cost=10000000169.08..10000813368.98 rows=4810 width=44)
    ->  Seq Scan on t1_lateral_limit t1  (cost=0.00..58.10 rows=4810 width=40)
-   ->  Materialize  (cost=169.08..169.09 rows=1 width=4)
+   ->  Materialize  (cost=169.08..169.08 rows=1 width=4)
          ->  Limit  (cost=169.08..169.08 rows=1 width=4)
                ->  Sort  (cost=169.08..191.80 rows=9090 width=4)
                      Sort Key: (((t1.c).x + t2.b))
@@ -1154,9 +1155,9 @@ explain select * from t1_lateral_limit t1 cross join lateral
 (select (c).x+t2.a, sum(t2.a+t2.b) from t2_lateral_limit t2 group by (c).x+t2.a)x;
                                         QUERY PLAN                                         
 -------------------------------------------------------------------------------------------
- Nested Loop  (cost=10000000191.80..10001078941.10 rows=4810000 width=52)
+ Nested Loop  (cost=10000000191.80..10001030841.10 rows=4810000 width=52)
    ->  Seq Scan on t1_lateral_limit t1  (cost=0.00..58.10 rows=4810 width=40)
-   ->  Materialize  (cost=191.80..219.30 rows=1000 width=12)
+   ->  Materialize  (cost=191.80..209.30 rows=1000 width=12)
          ->  HashAggregate  (cost=191.80..204.30 rows=1000 width=12)
                Group Key: ((t1.c).x + t2.a)
                ->  Seq Scan on t2_lateral_limit t2  (cost=0.00..123.62 rows=9090 width=12)
@@ -1167,8 +1168,8 @@ select * from t1_lateral_limit t1 cross join lateral
 (select (c).x+t2.a, sum(t2.a+t2.b) from t2_lateral_limit t2 group by (c).x+t2.a)x;
  a | b |   c   | ?column? | sum 
 ---+---+-------+----------+-----
- 1 | 1 | (1,1) |        4 |   6
  1 | 1 | (1,1) |        3 |   4
+ 1 | 1 | (1,1) |        4 |   6
  1 | 2 | (2,2) |        5 |   6
  1 | 2 | (2,2) |        4 |   4
 (4 rows)
@@ -1204,8 +1205,8 @@ inner join lateral
 on true;
  myid |          first_date          |          next_date           
 ------+------------------------------+------------------------------
-    2 | Sun Jan 02 01:04:00 2000 PST | Sun Jan 02 03:04:00 2000 PST
     1 | Sun Jan 02 02:04:00 2000 PST | Sun Jan 02 03:04:00 2000 PST
+    2 | Sun Jan 02 01:04:00 2000 PST | Sun Jan 02 03:04:00 2000 PST
 (2 rows)
 
 -- test prefetch join qual
@@ -1346,27 +1347,27 @@ explain (costs off)
 select * from foo where exists (select 1 from bar where foo.a = bar.b);
              QUERY PLAN              
 -------------------------------------
- Hash Semi Join
-   Hash Cond: (foo.a = bar.b)
-   ->  Seq Scan on foo
+ Hash Right Semi Join
+   Hash Cond: (bar.b = foo.a)
+   ->  Seq Scan on bar
    ->  Hash
-         ->  Seq Scan on bar
+         ->  Seq Scan on foo
  Optimizer: Postgres query optimizer
 (6 rows)
 
 select * from foo where exists (select 1 from bar where foo.a = bar.b);
  a  
 ----
- 10
-  9
-  3
-  7
-  4
-  5
-  8
   1
   2
+  3
+  4
+  5
   6
+  7
+  8
+  9
+ 10
 (10 rows)
 
 set enable_hashagg to off;
@@ -1374,11 +1375,11 @@ explain (costs off)
 select * from foo where exists (select 1 from bar where foo.a = bar.b);
              QUERY PLAN              
 -------------------------------------
- Hash Semi Join
-   Hash Cond: (foo.a = bar.b)
-   ->  Seq Scan on foo
+ Hash Right Semi Join
+   Hash Cond: (bar.b = foo.a)
+   ->  Seq Scan on bar
    ->  Hash
-         ->  Seq Scan on bar
+         ->  Seq Scan on foo
  Optimizer: Postgres query optimizer
 (6 rows)
 
@@ -1481,20 +1482,20 @@ full join ( select r.id1, r.id2 from t_issue_10315 r group by r.id1, r.id2 ) tq_
 on (coalesce(t.id1) = tq_all.id1  and t.id2 = tq_all.id2) ;
  id1 | id2 | id1 | id2 | id1 | id2 
 -----+-----+-----+-----+-----+-----
+   1 |   1 |   1 |   1 |   1 |   1
+     |   2 |     |     |     |    
    2 |   2 |   2 |   2 |   2 |   2
+   1 |     |     |     |     |    
    2 |     |     |     |     |    
      |   1 |     |     |     |    
-     |   2 |     |     |     |    
+     |     |   1 |     |     |    
      |     |     |   2 |     |    
      |     |     |   1 |     |    
      |     |   2 |     |     |    
-     |     |   1 |     |     |    
+     |     |     |     |   1 |    
      |     |     |     |     |   2
      |     |     |     |     |   1
      |     |     |     |   2 |    
-   1 |   1 |   1 |   1 |   1 |   1
-   1 |     |     |     |     |    
-     |     |     |     |   1 |    
 (14 rows)
 
 drop table t_issue_10315;

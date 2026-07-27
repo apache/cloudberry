@@ -105,12 +105,12 @@ SELECT '' AS six, f1 AS "Correlated Field", f2 AS "Second Field"
                                 WHERE f1 IN (SELECT f2 FROM SUBSELECT_TBL1 WHERE f1 = upper.f1);
  six | Correlated Field | Second Field 
 -----+------------------+--------------
+     |                1 |            2
+     |                1 |            1
      |                2 |            3
      |                3 |            4
      |                2 |            2
      |                3 |            3
-     |                1 |            2
-     |                1 |            1
 (6 rows)
 
 SELECT '' AS six, f1 AS "Correlated Field", f3 AS "Second Field"
@@ -119,11 +119,11 @@ SELECT '' AS six, f1 AS "Correlated Field", f3 AS "Second Field"
                                 (SELECT f2 FROM SUBSELECT_TBL1 WHERE CAST(upper.f2 AS float) = f3);
  six | Correlated Field | Second Field 
 -----+------------------+--------------
+     |                1 |            1
      |                2 |            4
      |                3 |            5
      |                2 |            2
      |                3 |            3
-     |                1 |            1
 (5 rows)
 
 SELECT '' AS six, f1 AS "Correlated Field", f3 AS "Second Field"
@@ -133,9 +133,9 @@ SELECT '' AS six, f1 AS "Correlated Field", f3 AS "Second Field"
  six | Correlated Field | Second Field 
 -----+------------------+--------------
      |                6 |            8
-     |                1 |            3
      |                2 |            4
      |                3 |            5
+     |                1 |            3
 (4 rows)
 
 SELECT '' AS five, f1 AS "Correlated Field"
@@ -188,8 +188,6 @@ select * from ( SELECT '' AS "col", * FROM join_tab1 AS tx)A;
 -----+---+---+-------
      | 1 | 4 | one
      | 0 |   | zero
-     | 5 | 0 | five
-     | 6 | 6 | six
      | 2 | 3 | two
      | 3 | 2 | three
      | 4 | 1 | four
@@ -197,6 +195,8 @@ select * from ( SELECT '' AS "col", * FROM join_tab1 AS tx)A;
      | 8 | 8 | eight
      |   |   | null
      |   | 0 | zero
+     | 5 | 0 | five
+     | 6 | 6 | six
 (11 rows)
 
                          
@@ -205,8 +205,6 @@ select * from ( SELECT '' AS "col", * FROM join_tab1 AS tx) AS A;
 -----+---+---+-------
      | 5 | 0 | five
      | 6 | 6 | six
-     | 1 | 4 | one
-     | 0 |   | zero
      | 2 | 3 | two
      | 3 | 2 | three
      | 4 | 1 | four
@@ -214,6 +212,8 @@ select * from ( SELECT '' AS "col", * FROM join_tab1 AS tx) AS A;
      | 8 | 8 | eight
      |   |   | null
      |   | 0 | zero
+     | 1 | 4 | one
+     | 0 |   | zero
 (11 rows)
 
                          
@@ -238,10 +238,10 @@ select * from(SELECT '' AS "col", t1.a, t2.e FROM join_tab1 t1 (a, b, c), join_t
 				WHERE t1.a = t2.d)as A;
  col | a | e  
 -----+---+----
+     | 5 | -5
+     | 5 | -5
      | 1 | -1
      | 0 |   
-     | 5 | -5
-     | 5 | -5
      | 2 |  2
      | 3 | -3
      | 2 |  4
@@ -418,8 +418,8 @@ select name from emp_list where sal>(select avg(sal) from emp_list);
 select name from emp_list where sal<(select avg(sal) from emp_list);
          name         
 ----------------------
- empone              
  emptwo              
+ empone              
 (2 rows)
 
                       
@@ -469,13 +469,13 @@ select i,j,t from (select * from (select i,j,t from join_tab1)as dtab1
 				UNION select * from(select i,j,t from join_tab4) as dtab2 )as mtab; 	
  i | j |   t    
 ---+---+--------
- 0 |   | zero
- 1 | 4 | one
- 1 | 7 | sunday
  5 | 0 | five
  5 | 3 | thuday
  6 | 2 | friday
  6 | 6 | six
+ 0 |   | zero
+ 1 | 4 | one
+ 1 | 7 | sunday
  2 | 3 | two
  2 | 6 | monday
  3 | 2 | three
@@ -583,60 +583,6 @@ FROM join_tab1 out1, join_tab2 out2;
   
   
   
- 0
- 0
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
- 0
-  
-  
- 0
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
   
   
   
@@ -660,6 +606,60 @@ FROM join_tab1 out1, join_tab2 out2;
   
   
   
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+ 0
+ 0
+  
+  
+ 0
+  
+  
+ 0
   
   
   
@@ -990,8 +990,8 @@ INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
 DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: Non-Scalar Subquery
  a | b 
 ---+---
- 5 |  
  3 | 4
+ 5 |  
 (2 rows)
 
 select t1.a, t2.b from t1 left join t2 on  (t1.a=t2.a and ((t1.a,t2.b) not in (select i1.a,i1.b from i1)));
@@ -1000,8 +1000,8 @@ DETAIL:  Falling back to Postgres-based planner because GPORCA does not support 
  a | b 
 ---+---
  5 |  
- 1 |  
  3 | 4
+ 1 |  
 (3 rows)
 
 --
@@ -1012,9 +1012,9 @@ INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
 DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: Non-Scalar Subquery
  a | b 
 ---+---
- 5 |  
  3 | 4
    | 8
+ 5 |  
 (3 rows)
 
 -- not in subquery with a row var in FULL JOIN condition
@@ -1023,9 +1023,9 @@ INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
 DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: Non-Scalar Subquery
  a | b 
 ---+---
- 5 |  
  3 | 4
    | 8
+ 5 |  
  1 |  
    | 2
 (5 rows)
@@ -1062,10 +1062,10 @@ commit;
 select Tbl01.*,foo(Tbl01.a) as foo from Tbl01; -- showing foo values
  a | b  | c  | foo 
 ---+----+----+-----
- 1 |  2 |  3 |    
  4 |  5 |  6 |    
  7 |  8 |  9 |    
    | 11 | 12 |  13
+ 1 |  2 |  3 |    
 (4 rows)
 
 select Tbl01.* from Tbl01 where foo(Tbl01.a) not in (select a from Tbl03);
@@ -1193,8 +1193,8 @@ INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
 DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: Non-Scalar Subquery
  a | b 
 ---+---
- 5 | 6
  3 | 4
+ 5 | 6
 (2 rows)
 
 select Tbl04.* from Tbl04 where (Tbl04.a,Tbl04.b) not in (select Tbl05.a,Tbl05.b from Tbl05,i3 where	Tbl05.a = i3.a and	Tbl05.b = i3.b);
@@ -1202,8 +1202,8 @@ INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
 DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: Non-Scalar Subquery
  a | b 
 ---+---
- 3 | 4
  5 | 6
+ 3 | 4
 (2 rows)
 
 select Tbl04.* from Tbl04 where (Tbl04.a,Tbl04.b) not in (select Tbl05.a,Tbl05.b from Tbl05,i3 where Tbl05.a < i3.a and Tbl05.b > i3.b);
@@ -1212,8 +1212,8 @@ DETAIL:  Falling back to Postgres-based planner because GPORCA does not support 
  a | b 
 ---+---
  3 | 4
- 5 | 6
  1 | 2
+ 5 | 6
 (3 rows)
 
 -- non-null constant values
@@ -1222,15 +1222,15 @@ INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
 DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: Non-Scalar Subquery
  a | b 
 ---+---
- 5 | 6
  3 | 4
+ 5 | 6
 (2 rows)
 
 select Tbl04.* from Tbl04 where (Tbl04.a,Tbl04.b) not in ((1,2));
  a | b 
 ---+---
- 3 | 4
  5 | 6
+ 3 | 4
 (2 rows)
 
 -- multiple NOT-IN expressions
@@ -1282,15 +1282,15 @@ select Tbl04.* from Tbl04 where Tbl04.a NOT IN (select Tbl09.a from Tbl09 where 
 select Tbl04.* from Tbl04 where Tbl04.a NOT IN (select i3.a from i3);
  a | b 
 ---+---
- 5 | 6
  3 | 4
+ 5 | 6
 (2 rows)
 
 select Tbl04.* from Tbl04 where Tbl04.a NOT IN (select Tbl05.a from	Tbl05 left	join i3	on (Tbl05.a=i3.a));
  a | b 
 ---+---
- 5 | 6
  3 | 4
+ 5 | 6
 (2 rows)
 
 --
@@ -1360,9 +1360,9 @@ DETAIL:  Falling back to Postgres-based planner because GPORCA does not support 
 select Tbl09.a, Tbl09.b from Tbl09;
  a | b 
 ---+---
- 5 |  
-   | 8
  1 | 2
+   | 8
+ 5 |  
 (3 rows)
 
 select Tbl04.* from Tbl04 where (Tbl04.a,Tbl04.b) not in (select Tbl09.a,Tbl09.b from Tbl09); -- expected: (3,4)
@@ -1376,9 +1376,9 @@ DETAIL:  Falling back to Postgres-based planner because GPORCA does not support 
 select Tbl09.a, Tbl09.b from Tbl09 group by Tbl09.a, Tbl09.b;
  a | b 
 ---+---
+   | 8
  1 | 2
  5 |  
-   | 8
 (3 rows)
 
 select Tbl04.* from Tbl04 where (Tbl04.a,Tbl04.b) not in (select Tbl09.a, Tbl09.b from Tbl09 group by Tbl09.a, Tbl09.b); -- expected: (3,4)
@@ -1405,8 +1405,8 @@ INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
 DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: Non-Scalar Subquery
  a | b 
 ---+---
- 5 | 6
  3 | 4
+ 5 | 6
 (2 rows)
 
 select Tbl04.* from Tbl04 where (Tbl04.a,Tbl04.b) NOT IN (select i3.a,i3.b from Tbl07 left join i3 on (i3.a=Tbl07.a and i3.b=Tbl07.b) where i3.a > 2);
@@ -1450,8 +1450,8 @@ INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
 DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: Non-Scalar Subquery
  a | b 
 ---+---
- 5 | 6
  3 | 4
+ 5 | 6
 (2 rows)
 
 -- Cases where the planner "should have" determined not-nullabitlity
@@ -1460,8 +1460,8 @@ INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
 DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: Non-Scalar Subquery
  a | b 
 ---+---
- 3 | 4
  5 | 6
+ 3 | 4
 (2 rows)
 
 select Tbl04.* from Tbl04 where (Tbl04.a,Tbl04.b) not in (select Tbl05.a,Tbl05.b from Tbl05 where (Tbl05.a IN (select i3.a from i3)) AND (Tbl05.b IN (select i3.b from i3)));
@@ -1547,8 +1547,8 @@ INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
 DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: Non-Scalar Subquery
     a    |    b    
 ---------+---------
- oak     | barrett
  florian | waas
+ oak     | barrett
 (2 rows)
 
 --
@@ -1628,13 +1628,13 @@ select * from TblUp1;
   a  | b 
 -----+---
    1 | 2
- 100 | 6
  100 | 4
+ 100 | 6
 (3 rows)
 
 update TblUp2 set a=100 where a not in (select a from TblUp4);
 INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
-DETAIL:  DXL-to-PlStmt Translation: Attribute number 26 not found in project list
+DETAIL:  DXL-to-PlStmt Translation: Attribute number 18 not found in project list
 select * from TblUp2;
   a  | b 
 -----+---
@@ -1933,15 +1933,15 @@ from (
  a1 | checkcol 
 ----+----------
   1 | true
-  5 | true
-  6 | false
-  9 | false
- 10 | false
   2 | true
   3 | true
   4 | true
   7 | false
   8 | false
+  5 | true
+  6 | false
+  9 | false
+ 10 | false
 (10 rows)
 
 -- check various [NOT] EXISTS subqueries on materialized views
@@ -1951,8 +1951,8 @@ create materialized view v as select a, b from t distributed randomly;
 select * from v where exists (select a from v);
  a | b 
 ---+---
- 2 |  
    | 3
+ 2 |  
  1 | 1
 (3 rows)
 
@@ -1964,17 +1964,17 @@ select * from v where exists (select a from v limit 0);
 select * from v where exists (select a from v where a=2);
  a | b 
 ---+---
- 1 | 1
- 2 |  
    | 3
+ 2 |  
+ 1 | 1
 (3 rows)
 
 select * from v where exists (select a from v where a<>2);
  a | b 
 ---+---
- 1 | 1
  2 |  
    | 3
+ 1 | 1
 (3 rows)
 
 select * from v where not exists (select a from v);
@@ -1985,9 +1985,9 @@ select * from v where not exists (select a from v);
 select * from v where not exists (select a from v limit 0);
  a | b 
 ---+---
+ 1 | 1
  2 |  
    | 3
- 1 | 1
 (3 rows)
 
 select * from v where not exists (select a from v where a=2);
@@ -2003,9 +2003,9 @@ select * from v where not exists (select a from v where a<>2);
 select * from v where exists (select b from v);
  a | b 
 ---+---
- 2 |  
    | 3
  1 | 1
+ 2 |  
 (3 rows)
 
 select * from v where exists (select b from v limit 0);
@@ -2021,9 +2021,9 @@ select * from v where exists (select b from v where b=2);
 select * from v where exists (select b from v where b<>2);
  a | b 
 ---+---
- 1 | 1
- 2 |  
    | 3
+ 2 |  
+ 1 | 1
 (3 rows)
 
 select * from v where not exists (select b from v);
@@ -2034,17 +2034,17 @@ select * from v where not exists (select b from v);
 select * from v where not exists (select b from v limit 0);
  a | b 
 ---+---
- 1 | 1
- 2 |  
    | 3
+ 2 |  
+ 1 | 1
 (3 rows)
 
 select * from v where not exists (select b from v where b=2);
  a | b 
 ---+---
  2 |  
-   | 3
  1 | 1
+   | 3
 (3 rows)
 
 select * from v where not exists (select b from v where b<>2);
@@ -2063,9 +2063,9 @@ WHERE EXISTS
            WHERE t2.param = t1.param);
  param 
 -------
- 2
- 1
  3
+ 1
+ 2
 (3 rows)
 
 EXPLAIN (COSTS OFF) SELECT * FROM (SELECT BTRIM(p1.b) AS param FROM tab1 p1 JOIN tab1 p2 USING(a)) t1
@@ -2073,26 +2073,26 @@ WHERE EXISTS
           (SELECT 1 FROM
               (SELECT BTRIM(p1.b) AS param FROM tab1 p1 JOIN tab1 p2 USING(a)) t2
            WHERE t2.param = t1.param);
-                                   QUERY PLAN                                    
----------------------------------------------------------------------------------
+                                QUERY PLAN                                 
+---------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
-   ->  Hash Semi Join
-         Hash Cond: (btrim(p1.b) = btrim(p1_1.b))
-         ->  Hash Join
-               Hash Cond: (p1.a = p2.a)
-               ->  Seq Scan on tab1 p1
-                     Filter: (NOT (btrim(b) IS NULL))
-               ->  Hash
-                     ->  Broadcast Motion 3:3  (slice2; segments: 3)
-                           ->  Seq Scan on tab1 p2
+   ->  Hash Right Semi Join
+         Hash Cond: (btrim(p1_1.b) = btrim(p1.b))
+         ->  Broadcast Motion 3:3  (slice2; segments: 3)
+               ->  Hash Join
+                     Hash Cond: (p1.a = p2.a)
+                     ->  Seq Scan on tab1 p1
+                     ->  Hash
+                           ->  Broadcast Motion 3:3  (slice3; segments: 3)
+                                 ->  Seq Scan on tab1 p2
          ->  Hash
-               ->  Broadcast Motion 3:3  (slice3; segments: 3)
-                     ->  Hash Join
-                           Hash Cond: (p1_1.a = p2_1.a)
-                           ->  Seq Scan on tab1 p1_1
-                           ->  Hash
-                                 ->  Broadcast Motion 3:3  (slice4; segments: 3)
-                                       ->  Seq Scan on tab1 p2_1
+               ->  Hash Join
+                     Hash Cond: (p1_1.a = p2_1.a)
+                     ->  Seq Scan on tab1 p1_1
+                           Filter: (NOT (btrim(b) IS NULL))
+                     ->  Hash
+                           ->  Broadcast Motion 3:3  (slice4; segments: 3)
+                                 ->  Seq Scan on tab1 p2_1
  Optimizer: GPORCA
 (19 rows)
 
@@ -2106,9 +2106,9 @@ WHERE EXISTS
            WHERE t2.param = t1.param);
  param 
 -------
- 2
- 1
  3
+ 1
+ 2
 (3 rows)
 
 EXPLAIN (COSTS OFF) SELECT * FROM (SELECT BTRIM(p1.b) AS param FROM tab1 p1 JOIN tab1 p2 USING(a)) t1

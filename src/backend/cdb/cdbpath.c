@@ -1469,7 +1469,13 @@ cdbpath_motion_for_join(PlannerInfo *root,
 			outer.ok_to_replicate = false;
 			break;
 		case JOIN_RIGHT:
+		case JOIN_RIGHT_SEMI:
 		case JOIN_RIGHT_ANTI:
+			/*
+			 * GPDB: A right-semi join emits inner (build-side) rows, so just
+			 * like JOIN_RIGHT/JOIN_RIGHT_ANTI the inner side must not be
+			 * replicated, or matched inner rows could be emitted more than once.
+			 */
 			inner.ok_to_replicate = false;
 			break;
 		case JOIN_FULL:
@@ -3245,6 +3251,7 @@ cdbpath_motion_for_parallel_join(PlannerInfo *root,
 		case JOIN_UNIQUE_OUTER:
 		case JOIN_UNIQUE_INNER:
 		case JOIN_RIGHT:
+		case JOIN_RIGHT_SEMI:
 		case JOIN_RIGHT_ANTI:
 		case JOIN_FULL:
 			outer.ok_to_replicate = false;

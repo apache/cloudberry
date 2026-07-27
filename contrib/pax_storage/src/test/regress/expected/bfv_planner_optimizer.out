@@ -205,11 +205,11 @@ delete from p where b = 1 or (b=2 and a in (select r.a from r));
 select * from p;
  a | b 
 ---+---
+ 2 | 2
+ 2 | 3
  3 | 3
  1 | 2
  1 | 3
- 2 | 2
- 2 | 3
 (5 rows)
 
 delete from p where b = 1 or (b=2 and a in (select b from r));
@@ -234,8 +234,8 @@ select * from booltest a, booltest b where (a.b = b.b) is not false;
  b | b 
 ---+---
    | 
-   | t
  t | 
+   | t
  t | t
 (4 rows)
 
@@ -245,7 +245,7 @@ select * from booltest a, booltest b where (a.b = b.b) is not false;
 create table tstest (t tsvector);
 NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause, and no column type is suitable for a distribution key. Creating a NULL policy entry.
 create index i_tstest on tstest using gist (t) WHERE t @@ 'bar';
-ERROR:  pax only support btree/hash/gin/bitmap indexes (pax_access_handle.cc:###)
+ERROR:  pax only support btree/hash/gin/bitmap indexes (pax_access_handle.cc:588)
 insert into tstest values ('foo');
 insert into tstest values ('bar');
 set enable_bitmapscan =off;
@@ -340,7 +340,7 @@ INSERT INTO oneoffplantest VALUES (0), (0), (0);
 -- cached.  So we expect the NOTICE to be printed only once,
 -- regardless of the number of tuples in the table.
 select volatilefunc(a) from oneoffplantest;
-NOTICE:  immutablefunc executed  (seg0 slice1 127.0.1.1:25432 pid=6257)
+NOTICE:  immutablefunc executed  (seg1 slice1 172.18.0.2:7003 pid=63971)
  volatilefunc 
 --------------
             0
@@ -354,7 +354,6 @@ CREATE TABLE bfv_planner_t2 (f int,g int) DISTRIBUTED BY (f) PARTITION BY RANGE(
 (
 PARTITION "201612" START (1) END (10)
 );
-NOTICE:  CREATE TABLE will create partition "bfv_planner_t2_1_prt_201612" for table "bfv_planner_t2"
 insert into bfv_planner_t1 values(1,2,3), (2,3,4), (3,4,5);
 insert into bfv_planner_t2 values(3,1), (4,2), (5,2);
 select count(*) from
@@ -363,6 +362,8 @@ join
 (select f,g from bfv_planner_t2) T2
 on
 T1.a=T2.g and T1.c=T2.f;
+NOTICE:  One or more columns in the following table(s) do not have statistics: bfv_planner_t2
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  count 
 -------
      2
@@ -434,7 +435,7 @@ where x.a + y.a > random();
                Join Filter: (((generate_series_1.generate_series + generate_series.generate_series))::double precision > random())
                ->  Function Scan on generate_series generate_series_1
                ->  Function Scan on generate_series
- Optimizer: Pivotal Optimizer (GPORCA)
+ Optimizer: GPORCA
 (9 rows)
 
 ---- sublink & subquery
@@ -450,28 +451,28 @@ explain (costs off) select * from t_hashdist where a > All (select random() from
            Filter: ((CASE WHEN (sum((CASE WHEN ((t_hashdist.a)::double precision <= random()) THEN 1 ELSE 0 END)) IS NULL) THEN true WHEN (sum((CASE WHEN (random() IS NULL) THEN 1 ELSE 0 END)) > '0'::bigint) THEN NULL::boolean WHEN ((t_hashdist.a)::double precision IS NULL) THEN NULL::boolean WHEN (sum((CASE WHEN ((t_hashdist.a)::double precision <= random()) THEN 1 ELSE 0 END)) = '0'::bigint) THEN true ELSE false END) = true)
            ->  Aggregate
                  ->  Function Scan on generate_series
- Optimizer: Pivotal Optimizer (GPORCA)
+ Optimizer: GPORCA
 (10 rows)
 
 explain (costs off) select * from t_hashdist where a in (select random()::int from generate_series(1, 10));
-                        QUERY PLAN                        
-----------------------------------------------------------
+                        QUERY PLAN                         
+-----------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
-   ->  Hash Semi Join
+   ->  Hash Right Semi Join
          Hash Cond: (t_hashdist.a = ((random())::integer))
-         ->  Seq Scan on t_hashdist
+         ->  Redistribute Motion 1:3  (slice2)
+               Hash Key: ((random())::integer)
+               ->  Function Scan on generate_series
          ->  Hash
-               ->  Redistribute Motion 1:3  (slice2)
-                     Hash Key: ((random())::integer)
-                     ->  Function Scan on generate_series
- Optimizer: Pivotal Optimizer (GPORCA)
+               ->  Seq Scan on t_hashdist
+ Optimizer: GPORCA
 (9 rows)
 
 -- subplan
 explain (costs off, verbose) select * from
 t_hashdist left join (select a from generate_series(1, 10) a) x on t_hashdist.a > any (select random() from generate_series(1, 10));
-                                 QUERY PLAN                                  
------------------------------------------------------------------------------
+                                  QUERY PLAN                                   
+-------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    Output: t_hashdist.a, t_hashdist.b, t_hashdist.c, a.a
    ->  Nested Loop Left Join
@@ -490,8 +491,8 @@ t_hashdist left join (select a from generate_series(1, 10) a) x on t_hashdist.a 
          ->  Function Scan on pg_catalog.generate_series a
                Output: a.a
                Function Call: generate_series(1, 10)
+ Settings: optimizer = 'on', enable_bitmapscan = 'off', enable_seqscan = 'off'
  Optimizer: Postgres query optimizer
- Settings: enable_bitmapscan=off, enable_seqscan=off, optimizer=on
 (20 rows)
 
 -- targetlist
@@ -507,7 +508,7 @@ explain (costs off) select * from t_hashdist cross join (select random () from g
                ->  Result
                      One-Time Filter: (gp_execution_segment() = 2)
                      ->  Function Scan on generate_series
- Optimizer: Pivotal Optimizer (GPORCA)
+ Optimizer: GPORCA
 (10 rows)
 
 explain (costs off) select * from t_hashdist cross join (select a, sum(random()) from generate_series(1, 10) a group by a) x;
@@ -523,7 +524,7 @@ explain (costs off) select * from t_hashdist cross join (select a, sum(random())
                      ->  HashAggregate
                            Group Key: generate_series.generate_series
                            ->  Function Scan on generate_series
- Optimizer: Pivotal Optimizer (GPORCA)
+ Optimizer: GPORCA
 (11 rows)
 
 explain (costs off) select * from t_hashdist cross join (select random() as k, sum(a) from generate_series(1, 10) a group by k) x;
@@ -540,7 +541,7 @@ explain (costs off) select * from t_hashdist cross join (select random() as k, s
          ->  Materialize
                ->  Broadcast Motion 3:3  (slice2; segments: 3)
                      ->  Seq Scan on t_hashdist
- Optimizer: Pivotal Optimizer (GPORCA)
+ Optimizer: GPORCA
 (12 rows)
 
 explain (costs off) select * from t_hashdist cross join (select a, count(1) as s from generate_series(1, 10) a group by a having count(1) > random() order by a) x ;
@@ -555,7 +556,7 @@ explain (costs off) select * from t_hashdist cross join (select a, count(1) as s
                      Group Key: generate_series.generate_series
                      ->  Function Scan on generate_series
          ->  Seq Scan on t_hashdist
- Optimizer: Pivotal Optimizer (GPORCA)
+ Optimizer: GPORCA
 (10 rows)
 
 -- limit
@@ -568,20 +569,20 @@ explain (costs off) select * from t_hashdist cross join (select * from generate_
          ->  Seq Scan on t_hashdist
          ->  Limit
                ->  Function Scan on generate_series
- Optimizer: Pivotal Optimizer (GPORCA)
+ Optimizer: GPORCA
 (7 rows)
 
 -- CTAS on general locus into replicated table
 create temp SEQUENCE test_seq;
 explain (costs off) create table t_rep as select nextval('test_seq') from (select generate_series(1, 10)) t1 distributed replicated;
-              QUERY PLAN               
----------------------------------------
+              QUERY PLAN              
+--------------------------------------
  Result
    ->  Broadcast Motion 1:3  (slice1)
          ->  Result
                ->  ProjectSet
                      ->  Result
- Optimizer: Pivotal Optimizer (GPORCA)
+ Optimizer: GPORCA
 (6 rows)
 
 create table t_rep1 as select nextval('test_seq') from (select generate_series(1, 10)) t1 distributed replicated;
@@ -610,7 +611,7 @@ explain (costs off) create table t_rep as select i from generate_series(5, 15) a
                      Group Key: generate_series
                      ->  Result
                            ->  Function Scan on generate_series
- Optimizer: Pivotal Optimizer (GPORCA)
+ Optimizer: GPORCA
 (9 rows)
 
 create table t_rep2 as select i from generate_series(5, 15) as i group by i having i < nextval('test_seq') distributed replicated;
@@ -640,7 +641,7 @@ explain (costs off) create table t_rep as select i > nextval('test_seq') from ge
                      ->  Redistribute Motion 1:3  (slice2)
                            Hash Key: ((generate_series > nextval('test_seq'::regclass)))
                            ->  Function Scan on generate_series
- Optimizer: Pivotal Optimizer (GPORCA)
+ Optimizer: GPORCA
 (10 rows)
 
 create table t_rep3 as select i > nextval('test_seq') as a from generate_series(5, 15) as i group by i > nextval('test_seq') distributed replicated;
@@ -665,7 +666,7 @@ explain (costs off) create table t_rep as select nextval('test_seq') from rep_tb
  Result
    ->  Broadcast Motion 1:3  (slice1; segments: 1)
          ->  Seq Scan on rep_tbl
- Optimizer: Pivotal Optimizer (GPORCA)
+ Optimizer: GPORCA
 (4 rows)
 
 create table t_rep4 as select nextval('test_seq') from rep_tbl distributed replicated;
@@ -737,25 +738,25 @@ from
 ) x;
                                                                   QUERY PLAN                                                                  
 ----------------------------------------------------------------------------------------------------------------------------------------------
- Finalize Aggregate  (cost=60000000416.93..60000000416.94 rows=1 width=8)
-   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=60000000416.88..60000000416.93 rows=3 width=8)
-         ->  Partial Aggregate  (cost=60000000416.88..60000000416.89 rows=1 width=8)
-               ->  Append  (cost=20000000001.29..60000000391.87 rows=10003 width=0)
-                     ->  Subquery Scan on "*SELECT* 1"  (cost=20000000001.29..20000000169.80 rows=5000 width=0)
-                           ->  Hash Left Join  (cost=20000000001.29..20000000119.80 rows=5000 width=16)
+ Finalize Aggregate  (cost=60000000358.91..60000000358.92 rows=1 width=8)
+   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=60000000358.85..60000000358.90 rows=3 width=8)
+         ->  Partial Aggregate  (cost=60000000358.85..60000000358.86 rows=1 width=8)
+               ->  Append  (cost=20000000001.29..60000000333.84 rows=10003 width=0)
+                     ->  Subquery Scan on "*SELECT* 1"  (cost=20000000001.29..20000000140.80 rows=5000 width=0)
+                           ->  Hash Left Join  (cost=20000000001.29..20000000115.80 rows=5000 width=16)
                                  Hash Cond: (t1_12146.b = t3_12146.b)
-                                 ->  Seq Scan on t1_12146  (cost=10000000000.00..10000000056.00 rows=5000 width=4)
+                                 ->  Seq Scan on t1_12146  (cost=10000000000.00..10000000052.00 rows=5000 width=4)
                                  ->  Hash  (cost=10000000001.17..10000000001.17 rows=10 width=4)
                                        ->  Broadcast Motion 3:3  (slice2; segments: 3)  (cost=10000000000.00..10000000001.17 rows=10 width=4)
                                              ->  Seq Scan on t3_12146  (cost=10000000000.00..10000000001.03 rows=3 width=4)
-                     ->  Subquery Scan on "*SELECT* 2"  (cost=20000000001.29..20000000169.80 rows=5000 width=0)
-                           ->  Hash Left Join  (cost=20000000001.29..20000000119.80 rows=5000 width=16)
+                     ->  Subquery Scan on "*SELECT* 2"  (cost=20000000001.29..20000000140.80 rows=5000 width=0)
+                           ->  Hash Left Join  (cost=20000000001.29..20000000115.80 rows=5000 width=16)
                                  Hash Cond: (t2_12146.b = t4_12146.b)
-                                 ->  Seq Scan on t2_12146  (cost=10000000000.00..10000000056.00 rows=5000 width=4)
+                                 ->  Seq Scan on t2_12146  (cost=10000000000.00..10000000052.00 rows=5000 width=4)
                                  ->  Hash  (cost=10000000001.17..10000000001.17 rows=10 width=4)
                                        ->  Broadcast Motion 3:3  (slice3; segments: 3)  (cost=10000000000.00..10000000001.17 rows=10 width=4)
                                              ->  Seq Scan on t4_12146  (cost=10000000000.00..10000000001.03 rows=3 width=4)
-                     ->  Subquery Scan on "*SELECT* 3"  (cost=20000000001.08..20000000002.25 rows=3 width=0)
+                     ->  Subquery Scan on "*SELECT* 3"  (cost=20000000001.08..20000000002.23 rows=3 width=0)
                            ->  Hash Join  (cost=20000000001.08..20000000002.22 rows=3 width=16)
                                  Hash Cond: (t3_12146_1.b = t4_12146_1.a)
                                  ->  Redistribute Motion 3:3  (slice4; segments: 3)  (cost=10000000000.00..10000000001.10 rows=3 width=4)
@@ -810,9 +811,13 @@ reset allow_system_table_mods;
 --
 CREATE TABLE t0_issue_593(c0 bigserial PRIMARY KEY) USING heap WITH (autovacuum_vacuum_threshold=1468046284, autovacuum_analyze_threshold=1889118206, autovacuum_vacuum_cost_delay=9, fillfactor=25, autovacuum_freeze_max_age=1860760049, autovacuum_enabled=0, autovacuum_freeze_min_age=402702412, autovacuum_vacuum_cost_limit=2500);
 CREATE TABLE IF NOT EXISTS t1_issue_593(LIKE t0_issue_593);
+NOTICE:  table doesn't have 'DISTRIBUTED BY' clause, defaulting to distribution columns from LIKE table
 CREATE TABLE IF NOT EXISTS t2_issue_593(LIKE t0_issue_593 INCLUDING INDEXES);
+NOTICE:  table doesn't have 'DISTRIBUTED BY' clause, defaulting to distribution columns from LIKE table
 CREATE UNLOGGED TABLE IF NOT EXISTS t3_issue_593(LIKE t2_issue_593);
+NOTICE:  table doesn't have 'DISTRIBUTED BY' clause, defaulting to distribution columns from LIKE table
 CREATE TEMPORARY TABLE IF NOT EXISTS t4_issue_593(LIKE t3_issue_593);
+NOTICE:  table doesn't have 'DISTRIBUTED BY' clause, defaulting to distribution columns from LIKE table
 SELECT '100.147.127.36' FROM t1_issue_593, ONLY t2_issue_593, t4_issue_593*
   CROSS JOIN t0_issue_593* CROSS JOIN ONLY t3_issue_593 GROUP BY pg_jit_available()
     HAVING inet_same_family('148.199.107.23', '214.26.36.61') UNION ALL

@@ -2,9 +2,13 @@
 set optimizer to on;
 set optimizer_disable_dynamic_table_scan to on;
 drop table if exists d;
+NOTICE:  table "d" does not exist, skipping
 drop table if exists c;
+NOTICE:  table "c" does not exist, skipping
 drop table if exists b;
+NOTICE:  table "b" does not exist, skipping
 drop table if exists a;
+NOTICE:  table "a" does not exist, skipping
 -- Check multi level partition COPY
 create table region
 (
@@ -108,7 +112,7 @@ select * from region where r_regionkey = '7';
 -- tables since we cannot enforce them. But since this insert maps to a
 -- single definitive partition, we can detect it.
 insert into region values(7, 'AUSTRALIA', 'def');
-ERROR:  duplicate key value violates unique constraint "region_1_prt_region3_2_prt_australia_r_regionkey_r_name_idx"
+ERROR:  duplicate key value violates unique constraint "region_1_prt_region3_2_prt_australia_r_regionkey_r_name_idx"  (seg0 172.18.0.2:7002 pid=20852)
 DETAIL:  Key (r_regionkey, r_name)=(7, AUSTRALIA                ) already exists.
 drop table region;
 -- exchange
@@ -395,12 +399,12 @@ insert into bar_p values(6);
 insert into bar_p values(100);
 -- should fail
 alter table foo_p exchange partition for(6) with table bar_p;
-ERROR:  partition constraint of relation "bar_p" is violated by some row
+ERROR:  partition constraint of relation "bar_p" is violated by some row  (seg2 172.18.0.2:7004 pid=20912)
 alter table foo_p exchange partition for(6) with table bar_p without
 validation;
 NOTICE:  specifying "WITHOUT VALIDATION" acts as no operation
 DETAIL:  If the new partition is a regular table, validation is performed to make sure all the rows obey partition constraint. If the new partition is external or foreign table, no validation is performed.
-ERROR:  partition constraint of relation "bar_p" is violated by some row
+ERROR:  partition constraint of relation "bar_p" is violated by some row  (seg2 172.18.0.2:7004 pid=20912)
 analyze foo_p;
 select * from foo_p;
  i 
@@ -472,9 +476,9 @@ select * from foo_p;
  i | j 
 ---+---
  2 | 1
- 6 | 6
- 1 | 1
  3 | 1
+ 1 | 1
+ 6 | 6
 (4 rows)
 
 drop table bar_p;
@@ -492,8 +496,8 @@ select * from foo_p;
  i | j 
 ---+---
  1 | 1
- 3 | 2
  2 | 1
+ 3 | 2
  6 | 6
 (4 rows)
 
@@ -511,10 +515,10 @@ analyze foo_p;
 select * from foo_p;
  i | j 
 ---+---
- 2 | 3
  6 | 6
- 1 | 2
+ 2 | 3
  3 | 4
+ 1 | 2
 (4 rows)
 
 drop table bar_p;
@@ -869,7 +873,7 @@ Distributed by: (i)
 insert into foo_p values(5994400);
 insert into foo_p values(1);
 insert into foo_p values(6000002);
-ERROR:  no partition of relation "foo_p" found for row
+ERROR:  no partition of relation "foo_p" found for row  (seg2 172.18.0.2:7004 pid=20912)
 DETAIL:  Partition key of the failing row contains (i) = (6000002).
 insert into foo_p values(5994376);
 drop table foo_p;
@@ -925,18 +929,18 @@ copy foo_p from stdin;
 select * from foo_p;
  i 
 ---
- 1
- 3
  2
+ 3
  4
+ 1
 (4 rows)
 
 select * from foo_p_1_prt_p1;
  i 
 ---
- 1
- 3
  2
+ 3
+ 1
 (3 rows)
 
 select * from foo_p_1_prt_p2;
@@ -958,17 +962,17 @@ copy foo_p from stdin;
 select * from foo_p;
  i 
 ---
- 1
- 3
  2
+ 3
  4
+ 1
 (4 rows)
 
 select * from foo_p_1_prt_p1;
  i 
 ---
- 2
  1
+ 2
  3
 (3 rows)
 
@@ -995,14 +999,14 @@ select * from mixed_ao_part;
 ---------+---------
        1 |      95
        1 |     100
-       2 |      96
-       2 |     101
-       3 |      97
-       3 |     102
-       4 |      98
-       4 |     103
        5 |      99
        5 |     104
+       2 |      96
+       3 |      97
+       4 |      98
+       2 |     101
+       3 |     102
+       4 |     103
 (10 rows)
 
 -- Don't drop the table, so that we leave behind a mixed table in the
@@ -1102,10 +1106,14 @@ alter table i drop partition foo2;
 -- we shoud check whether the matched table belong to the partitioned table.
 -- raise error instead of executing on the irrelevant table.
 create table i_1_prt_3 (like i);
+NOTICE:  table doesn't have 'DISTRIBUTED BY' clause, defaulting to distribution columns from LIKE table
 -- create another partitioned table which contains a partition table that
 -- could be matched by partition name when targeted on an irrelevant table.
 create table i2 (i int) partition by range(i) (start (1) end(3) every(1));
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table i_1_prt_4 partition of i2 for values from (4) to (5);
+NOTICE:  table has parent, setting distribution columns to match parent table
 -- the matechd table name is i_1_prt_3, but it's a normal table, raise error.
 alter table i drop partition "3";
 ERROR:  partition "3" of "i" does not exist
@@ -1120,6 +1128,8 @@ drop table i;
 drop table i2;
 drop table i_1_prt_3;
 create table i (i int) partition by range(i) (start(1) end(3) every(1), default partition extra);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 -- should raise error since we always make sure the partitioned table at least have one partition;
 alter table i drop partition "2", drop partition "3", drop default partition;
 ERROR:  cannot drop partition "i_1_prt_extra" of "i" -- only one remains
@@ -1128,6 +1138,8 @@ drop table i;
 create table i (i int, c text) partition by range(i) subpartition by list(c)
 subpartition template (subpartition a values ('a'), subpartition b values ('b'))
 (start (1) end(3) every(1));
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 -- should raise error since we always make sure the partitioned table at least have one partition;
 alter table i alter partition "1" drop partition a, alter partition "1" drop partition b;
 ERROR:  cannot drop partition "i_1_prt_1_2_prt_b" of "i_1_prt_1" -- only one remains
@@ -1319,7 +1331,6 @@ alter table ataprank alter partition girls drop partition
 for ('2001-01-01') ;
 -- ok , skipping
 alter table ataprank alter partition girls drop partition if exists jan01;
-NOTICE:  partition "jan01" of partition "girls" of relation "ataprank" does not exist, skipping
 -- ok
 alter table ataprank alter partition girls drop partition for ('2002-01-01');
 alter table ataprank alter partition girls drop partition for ('2003-01-01');
@@ -1475,13 +1486,13 @@ select relname, has_table_privilege('part_role_append', oid,'select') as tabpriv
 from pg_class where relname like 'granttest%';
           relname          | tabpriv | i_priv | j_priv 
 ---------------------------+---------+--------+--------
+ granttest                 | f       | f      | f
+ granttest_1_prt_1         | f       | f      | f
+ granttest_1_prt_1_2_prt_1 | f       | f      | f
  granttest_1_prt_2         | f       | f      | f
  granttest_1_prt_2_2_prt_1 | f       | f      | f
  granttest_1_prt_3         | f       | f      | f
  granttest_1_prt_3_2_prt_1 | f       | f      | f
- granttest                 | f       | f      | f
- granttest_1_prt_1         | f       | f      | f
- granttest_1_prt_1_2_prt_1 | f       | f      | f
 (7 rows)
 
 grant select (i) on granttest to part_role_append;
@@ -1491,13 +1502,13 @@ select relname, has_table_privilege('part_role_append', oid,'select') as tabpriv
 from pg_class where relname like 'granttest%';
           relname          | tabpriv | i_priv | j_priv 
 ---------------------------+---------+--------+--------
+ granttest                 | f       | t      | f
+ granttest_1_prt_1         | f       | t      | f
+ granttest_1_prt_1_2_prt_1 | f       | t      | f
  granttest_1_prt_2         | f       | t      | f
  granttest_1_prt_2_2_prt_1 | f       | t      | f
  granttest_1_prt_3         | f       | t      | f
  granttest_1_prt_3_2_prt_1 | f       | t      | f
- granttest                 | f       | t      | f
- granttest_1_prt_1         | f       | t      | f
- granttest_1_prt_1_2_prt_1 | f       | t      | f
 (7 rows)
 
 grant select on granttest to part_role_append;
@@ -1507,13 +1518,13 @@ select relname, has_table_privilege('part_role_append', oid,'select') as tabpriv
 from pg_class where relname like 'granttest%';
           relname          | tabpriv | i_priv | j_priv 
 ---------------------------+---------+--------+--------
+ granttest                 | t       | t      | t
  granttest_1_prt_1         | t       | t      | t
  granttest_1_prt_1_2_prt_1 | t       | t      | t
  granttest_1_prt_2         | t       | t      | t
  granttest_1_prt_2_2_prt_1 | t       | t      | t
  granttest_1_prt_3         | t       | t      | t
  granttest_1_prt_3_2_prt_1 | t       | t      | t
- granttest                 | t       | t      | t
 (7 rows)
 
 grant insert on granttest to part_role_append;
@@ -1523,13 +1534,13 @@ select relname, has_table_privilege('part_role_append', oid, 'insert') as tabpri
 from pg_class where relname like 'granttest%';
           relname          | tabpriv | i_priv | j_priv 
 ---------------------------+---------+--------+--------
+ granttest                 | t       | t      | t
  granttest_1_prt_1         | t       | t      | t
  granttest_1_prt_1_2_prt_1 | t       | t      | t
  granttest_1_prt_2         | t       | t      | t
  granttest_1_prt_2_2_prt_1 | t       | t      | t
  granttest_1_prt_3         | t       | t      | t
  granttest_1_prt_3_2_prt_1 | t       | t      | t
- granttest                 | t       | t      | t
 (7 rows)
 
 revoke insert on granttest from part_role_append;
@@ -1540,13 +1551,13 @@ select relname, has_table_privilege('part_role_append', oid, 'insert') as tabpri
 from pg_class where relname like 'granttest%';
           relname          | tabpriv | i_priv | j_priv 
 ---------------------------+---------+--------+--------
+ granttest                 | f       | f      | t
  granttest_1_prt_1         | f       | f      | t
  granttest_1_prt_1_2_prt_1 | f       | f      | t
  granttest_1_prt_2         | f       | f      | t
  granttest_1_prt_2_2_prt_1 | f       | f      | t
  granttest_1_prt_3         | f       | f      | t
  granttest_1_prt_3_2_prt_1 | f       | f      | t
- granttest                 | f       | f      | t
 (7 rows)
 
 -- Check that when a new partition is created, it inherits the permissions
@@ -1554,6 +1565,7 @@ from pg_class where relname like 'granttest%';
 alter table granttest add partition newpart start(100) end (101);
 -- same with the new upstream syntax.
 create table granttest_newpartsyntax partition of granttest for values from (110) to (120);
+NOTICE:  table has parent, setting distribution columns to match parent table
 select relname, has_table_privilege('part_role_append', oid, 'select') as tabpriv,
        has_column_privilege('part_role_append', oid, 'i', 'select') as i_priv,
        has_column_privilege('part_role_append', oid, 'j', 'select') as j_priv
@@ -1821,6 +1833,8 @@ drop table partsupp;
 ERROR:  table "partsupp" does not exist
 -- Deletion tests
 CREATE TABLE tmp_nation_region (n_regionkey integer);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'n_regionkey' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 drop table if exists tmp_nation;
 NOTICE:  table "tmp_nation" does not exist, skipping
 CREATE TABLE tmp_nation (N_NATIONKEY INTEGER, N_NAME CHAR(25), N_REGIONKEY INTEGER, N_COMMENT VARCHAR(152))  
@@ -1863,21 +1877,21 @@ select * from j_1_prt_fa;
 select * from j_1_prt_fb;
  i 
 ---
- 3
  2
+ 3
 (2 rows)
 
 alter table j split partition for(5) at (6);
 select * from j;
  i 
 ---
- 1
- 3
- 5
- 7
  4
  2
+ 3
+ 7
  8
+ 1
+ 5
  6
 (8 rows)
 
@@ -1906,11 +1920,11 @@ alter table k split default partition start(15) end(20) into
 select * from k_1_prt_foo;
  i  
 ----
+ 17
  16
  18
- 15
- 17
  19
+ 15
 (5 rows)
 
 alter table k split default partition start(22) exclusive end(25) inclusive
@@ -1918,9 +1932,9 @@ into (partition bar, partition mydef);
 select * from k_1_prt_bar;
  i  
 ----
+ 24
  23
  25
- 24
 (3 rows)
 
 -- This fails, because it would create a partition with an empty range. Before
@@ -2245,8 +2259,8 @@ insert into rank_exc values(2, 2, 2008, 'M', 3);
 select * from rank_exc;
  id | rank | year | gender | count 
 ----+------+------+--------+-------
-  1 |    1 | 2007 | M      |     1
   2 |    2 | 2008 | M      |     3
+  1 |    1 | 2007 | M      |     1
 (2 rows)
 
 alter table rank_exc alter partition boys split default partition start ('2007')
@@ -2266,8 +2280,8 @@ select * from rank_exc_1_prt_boys_2_prt_year7;
 select * from rank_exc;
  id | rank | year | gender | count 
 ----+------+------+--------+-------
-  2 |    2 | 2008 | M      |     3
   1 |    1 | 2007 | M      |     1
+  2 |    2 | 2008 | M      |     3
 (2 rows)
 
 --exchange test
@@ -2318,7 +2332,7 @@ alter table bar_p alter partition for ('5') alter partition for ('5')
   drop partition for ('5');
 insert into bar_p values(1, 1);
 insert into bar_p values(5, 5);
-ERROR:  no partition of relation "bar_p_1_prt_1_2_prt_5" found for row
+ERROR:  no partition of relation "bar_p_1_prt_1_2_prt_5" found for row  (seg2 172.18.0.2:7004 pid=21365)
 DETAIL:  Partition key of the failing row contains (i) = (5).
 drop table bar_p;
 -- Drop should not leave anything lingering for bar_p or its
@@ -2598,8 +2612,8 @@ into (partition p10_20, default partition);
 select c.oid::regclass, relkind, amname, reloptions from pg_class c left join pg_am am on am.oid = relam where c.oid in ('foo_p_1_prt_p10_20'::regclass, 'foo_p_1_prt_def'::regclass);
         oid         | relkind | amname | reloptions 
 --------------------+---------+--------+------------
- foo_p_1_prt_p10_20 | r       | ao_row | 
  foo_p_1_prt_def    | r       | ao_row | 
+ foo_p_1_prt_p10_20 | r       | ao_row | 
 (2 rows)
 
 select count(distinct k) from foo_p;
@@ -2645,9 +2659,9 @@ truncate table mpp5941;
 select relid::regclass, level from gp_partition_template where relid = 'mpp5941'::regclass;
   relid  | level 
 ---------+-------
+ mpp5941 |     3
  mpp5941 |     1
  mpp5941 |     2
- mpp5941 |     3
 (3 rows)
 
 -- clear level 1
@@ -2655,8 +2669,8 @@ alter table mpp5941 set subpartition template ();
 select relid::regclass, level from gp_partition_template where relid = 'mpp5941'::regclass;
   relid  | level 
 ---------+-------
- mpp5941 |     2
  mpp5941 |     3
+ mpp5941 |     2
 (2 rows)
 
 -- clear level 2
@@ -2753,6 +2767,8 @@ PARTITION BY RANGE(ps_partkey)
 (
 partition nnull start (NULL) end (300)
 );
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'ps_partkey' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 ERROR:  cannot use NULL with range partition specification
 LINE 6: partition nnull start (NULL) end (300)
                                ^
@@ -2927,14 +2943,14 @@ alter table ti add partition p3 start(3) end(10);
 select * from pg_indexes where schemaname = 'public' and tablename like 'ti%';
  schemaname |  tablename  |      indexname      | tablespace |                                     indexdef                                     
 ------------+-------------+---------------------+------------+----------------------------------------------------------------------------------
+ public     | ti_1_prt_p3 | ti_1_prt_p3_i_j_idx |            | CREATE UNIQUE INDEX ti_1_prt_p3_i_j_idx ON public.ti_1_prt_p3 USING btree (i, j)
+ public     | ti_1_prt_p3 | ti_1_prt_p3_j_idx   |            | CREATE INDEX ti_1_prt_p3_j_idx ON public.ti_1_prt_p3 USING bitmap (j)
  public     | ti_1_prt_1  | ti_1_prt_1_i_j_idx  |            | CREATE UNIQUE INDEX ti_1_prt_1_i_j_idx ON public.ti_1_prt_1 USING btree (i, j)
  public     | ti          | ti_pkey             |            | CREATE UNIQUE INDEX ti_pkey ON ONLY public.ti USING btree (i, j)
  public     | ti_1_prt_2  | ti_1_prt_2_i_j_idx  |            | CREATE UNIQUE INDEX ti_1_prt_2_i_j_idx ON public.ti_1_prt_2 USING btree (i, j)
  public     | ti_1_prt_1  | ti_1_prt_1_j_idx    |            | CREATE INDEX ti_1_prt_1_j_idx ON public.ti_1_prt_1 USING bitmap (j)
  public     | ti          | ti_j_idx            |            | CREATE INDEX ti_j_idx ON ONLY public.ti USING bitmap (j)
  public     | ti_1_prt_2  | ti_1_prt_2_j_idx    |            | CREATE INDEX ti_1_prt_2_j_idx ON public.ti_1_prt_2 USING bitmap (j)
- public     | ti_1_prt_p3 | ti_1_prt_p3_i_j_idx |            | CREATE UNIQUE INDEX ti_1_prt_p3_i_j_idx ON public.ti_1_prt_p3 USING btree (i, j)
- public     | ti_1_prt_p3 | ti_1_prt_p3_j_idx   |            | CREATE INDEX ti_1_prt_p3_j_idx ON public.ti_1_prt_p3 USING bitmap (j)
 (8 rows)
 
 -- Should not be able to drop child indexes added implicitly via ADD PARTITION
@@ -2948,16 +2964,16 @@ alter table ti split partition p3 at (7) into (partition pnew1, partition pnew2)
 select * from pg_indexes where schemaname = 'public' and tablename like 'ti%';
  schemaname |   tablename    |       indexname        | tablespace |                                        indexdef                                        
 ------------+----------------+------------------------+------------+----------------------------------------------------------------------------------------
+ public     | ti_1_prt_pnew1 | ti_1_prt_pnew1_i_j_idx |            | CREATE UNIQUE INDEX ti_1_prt_pnew1_i_j_idx ON public.ti_1_prt_pnew1 USING btree (i, j)
+ public     | ti_1_prt_pnew1 | ti_1_prt_pnew1_j_idx   |            | CREATE INDEX ti_1_prt_pnew1_j_idx ON public.ti_1_prt_pnew1 USING bitmap (j)
+ public     | ti_1_prt_pnew2 | ti_1_prt_pnew2_i_j_idx |            | CREATE UNIQUE INDEX ti_1_prt_pnew2_i_j_idx ON public.ti_1_prt_pnew2 USING btree (i, j)
+ public     | ti_1_prt_pnew2 | ti_1_prt_pnew2_j_idx   |            | CREATE INDEX ti_1_prt_pnew2_j_idx ON public.ti_1_prt_pnew2 USING bitmap (j)
  public     | ti_1_prt_1     | ti_1_prt_1_i_j_idx     |            | CREATE UNIQUE INDEX ti_1_prt_1_i_j_idx ON public.ti_1_prt_1 USING btree (i, j)
  public     | ti             | ti_pkey                |            | CREATE UNIQUE INDEX ti_pkey ON ONLY public.ti USING btree (i, j)
  public     | ti_1_prt_2     | ti_1_prt_2_i_j_idx     |            | CREATE UNIQUE INDEX ti_1_prt_2_i_j_idx ON public.ti_1_prt_2 USING btree (i, j)
  public     | ti_1_prt_1     | ti_1_prt_1_j_idx       |            | CREATE INDEX ti_1_prt_1_j_idx ON public.ti_1_prt_1 USING bitmap (j)
  public     | ti             | ti_j_idx               |            | CREATE INDEX ti_j_idx ON ONLY public.ti USING bitmap (j)
  public     | ti_1_prt_2     | ti_1_prt_2_j_idx       |            | CREATE INDEX ti_1_prt_2_j_idx ON public.ti_1_prt_2 USING bitmap (j)
- public     | ti_1_prt_pnew1 | ti_1_prt_pnew1_i_j_idx |            | CREATE UNIQUE INDEX ti_1_prt_pnew1_i_j_idx ON public.ti_1_prt_pnew1 USING btree (i, j)
- public     | ti_1_prt_pnew1 | ti_1_prt_pnew1_j_idx   |            | CREATE INDEX ti_1_prt_pnew1_j_idx ON public.ti_1_prt_pnew1 USING bitmap (j)
- public     | ti_1_prt_pnew2 | ti_1_prt_pnew2_i_j_idx |            | CREATE UNIQUE INDEX ti_1_prt_pnew2_i_j_idx ON public.ti_1_prt_pnew2 USING btree (i, j)
- public     | ti_1_prt_pnew2 | ti_1_prt_pnew2_j_idx   |            | CREATE INDEX ti_1_prt_pnew2_j_idx ON public.ti_1_prt_pnew2 USING bitmap (j)
 (10 rows)
 
 -- Should not be able to drop child indexes added implicitly via SPLIT PARTITION
@@ -2995,9 +3011,6 @@ partition by list (b)
     partition p2 values (2),
     default partition junk_data
 );
-NOTICE:  CREATE TABLE will create partition "dis_tupdesc_1_prt_p1" for table "dis_tupdesc"
-NOTICE:  CREATE TABLE will create partition "dis_tupdesc_1_prt_p2" for table "dis_tupdesc"
-NOTICE:  CREATE TABLE will create partition "dis_tupdesc_1_prt_junk_data" for table "dis_tupdesc"
 create index dis_tupdesc_idx on dis_tupdesc using btree (c);
 insert into dis_tupdesc select i, i % 3, i % 4 from generate_series (1, 240) as i;
 analyze dis_tupdesc;
@@ -3006,9 +3019,9 @@ set optimizer_segments = 2;
 select distinct b from dis_tupdesc where c >= 2;
  b 
 ---
+ 2
  0
  1
- 2
 (3 rows)
 
 reset gp_segments_for_planner;
@@ -3043,9 +3056,9 @@ select schemaname, tablename from pg_tables where schemaname = 'public' and tabl
  public     | newit_1_prt_2
  public     | newit_1_prt_2_2_prt_1
  public     | newit_1_prt_2_2_prt_2
+ public     | newit_1_prt_def
  public     | newit_1_prt_def_2_prt_1
  public     | newit_1_prt_def_2_prt_2
- public     | newit_1_prt_def
 (10 rows)
 
 alter table newit rename to anotherit;
@@ -3080,8 +3093,8 @@ alter table it add constraint it_unique_i unique (i);
 select schemaname, tablename, indexname from pg_indexes where schemaname = 'public' and tablename like 'it%';
  schemaname | tablename  |    indexname     
 ------------+------------+------------------
- public     | it         | it_unique_i
  public     | it_1_prt_1 | it_1_prt_1_i_key
+ public     | it         | it_unique_i
  public     | it_1_prt_2 | it_1_prt_2_i_key
 (3 rows)
 
@@ -3103,8 +3116,8 @@ alter table it add primary key(i);
 select schemaname, tablename, indexname from pg_indexes where schemaname = 'public' and tablename like 'it%';
  schemaname | tablename  |    indexname    
 ------------+------------+-----------------
- public     | it         | it_pkey
  public     | it_1_prt_1 | it_1_prt_1_pkey
+ public     | it         | it_pkey
  public     | it_1_prt_2 | it_1_prt_2_pkey
 (3 rows)
 
@@ -3125,8 +3138,8 @@ alter table it add primary key(i);
 select schemaname, tablename, indexname from pg_indexes where schemaname = 'public' and tablename like 'it%';
  schemaname | tablename  |    indexname    
 ------------+------------+-----------------
- public     | it         | it_pkey
  public     | it_1_prt_1 | it_1_prt_1_pkey
+ public     | it         | it_pkey
  public     | it_1_prt_2 | it_1_prt_2_pkey
 (3 rows)
 
@@ -4481,20 +4494,20 @@ where relname ~ '^s_'
 group by relname; 
           relname          | missing | oid_count 
 ---------------------------+---------+-----------
+ s_1_prt_1                 |       0 |         1
  s_1_prt_1_amt_idx         |       0 |         1
- s_1_prt_1_units_idx       |       0 |         1
- s_1_prt_s_test2_log_idx   |       0 |         1
- s_1_prt_s_test_log_idx1   |       0 |         1
- s_i_expr                  |       0 |         1
- s_j                       |       0 |         1
+ s_1_prt_1_log_idx         |       0 |         1
+ s_1_prt_s_test2           |       0 |         1
  s_1_prt_s_test2_amt_idx   |       0 |         1
  s_1_prt_s_test2_units_idx |       0 |         1
- s_1_prt_s_test_amt_idx1   |       0 |         1
+ s_1_prt_1_units_idx       |       0 |         1
  s_1_prt_s_test_units_idx1 |       0 |         1
- s_1_prt_1                 |       0 |         1
- s_1_prt_1_log_idx         |       0 |         1
+ s_i_expr                  |       0 |         1
+ s_j                       |       0 |         1
  s_1_prt_s_test            |       0 |         1
- s_1_prt_s_test2           |       0 |         1
+ s_1_prt_s_test2_log_idx   |       0 |         1
+ s_1_prt_s_test_amt_idx1   |       0 |         1
+ s_1_prt_s_test_log_idx1   |       0 |         1
  s_i                       |       0 |         1
 (15 rows)
 
@@ -4516,8 +4529,8 @@ create table tc
         default partition d,
         start (0) inclusive end(100) inclusive every (50)
     );
-DETAIL:  PRIMARY KEY constraint on table "tc" lacks column "b" which is part of the partition key.
 ERROR:  unique constraint on partitioned table must include all partitioning columns
+DETAIL:  PRIMARY KEY constraint on table "tc" lacks column "b" which is part of the partition key.
 create table cc
     (a int primary key, b int, c int)
     distributed by (a)
@@ -4526,8 +4539,8 @@ create table cc
         default partition d,
         start (0) inclusive end(100) inclusive every (50)
     );
-DETAIL:  PRIMARY KEY constraint on table "cc" lacks column "b" which is part of the partition key.
 ERROR:  unique constraint on partitioned table must include all partitioning columns
+DETAIL:  PRIMARY KEY constraint on table "cc" lacks column "b" which is part of the partition key.
 create table at
     (a int, b int, c int)
     distributed by (a)
@@ -4538,8 +4551,8 @@ create table at
     );
 alter table at
     add primary key (a);
-DETAIL:  PRIMARY KEY constraint on table "at" lacks column "b" which is part of the partition key.
 ERROR:  unique constraint on partitioned table must include all partitioning columns
+DETAIL:  PRIMARY KEY constraint on table "at" lacks column "b" which is part of the partition key.
 -- MPP-14471 end
 -- MPP-17606 (using table "at" from above)
 alter table at
@@ -4932,9 +4945,9 @@ from pnx;
   tableoid   | x | y  
 -------------+---+----
  pnx_1_prt_a | 1 | x1
- pnx_1_prt_c | 3 | x3
  pnx_1_prt_a | 2 | x2
  pnx_1_prt_c | 4 | x4
+ pnx_1_prt_c | 3 | x3
 (4 rows)
 
 alter table pnx
@@ -4945,8 +4958,8 @@ select tableoid::regclass, *
 from pnx;
   tableoid   | x | y  
 -------------+---+----
- pnx_1_prt_a | 1 | x1
  pnx_1_prt_c | 3 | x3
+ pnx_1_prt_a | 1 | x1
  pnx_1_prt_a | 2 | x2
  pnx_1_prt_c | 4 | x4
 (4 rows)
@@ -4954,6 +4967,8 @@ from pnx;
 select tableoid::regclass, *
 from pnx
 where y = 'x1';
+NOTICE:  One or more columns in the following table(s) do not have statistics: pnx
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
   tableoid   | x | y  
 -------------+---+----
  pnx_1_prt_a | 1 | x1
@@ -4962,6 +4977,8 @@ where y = 'x1';
 select tableoid::regclass, *
 from pnx
 where x = 1;
+NOTICE:  One or more columns in the following table(s) do not have statistics: pnx
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
   tableoid   | x | y  
 -------------+---+----
  pnx_1_prt_a | 1 | x1
@@ -4987,8 +5004,8 @@ from pxn;
   tableoid   | x | y  
 -------------+---+----
  pxn_1_prt_a | 1 | x1
- pxn_1_prt_c | 3 | x3
  pxn_1_prt_a | 2 | x2
+ pxn_1_prt_c | 3 | x3
  pxn_1_prt_c | 4 | x4
 (4 rows)
 
@@ -5000,15 +5017,17 @@ select tableoid::regclass, *
 from pxn;
   tableoid   | x | y  
 -------------+---+----
- pxn_1_prt_a | 2 | x2
- pxn_1_prt_c | 4 | x4
- pxn_1_prt_a | 1 | x1
  pxn_1_prt_c | 3 | x3
+ pxn_1_prt_c | 4 | x4
+ pxn_1_prt_a | 2 | x2
+ pxn_1_prt_a | 1 | x1
 (4 rows)
 
 select tableoid::regclass, *
 from pxn
 where y = 'x2';
+NOTICE:  One or more columns in the following table(s) do not have statistics: pxn
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
   tableoid   | x | y  
 -------------+---+----
  pxn_1_prt_a | 2 | x2
@@ -5017,6 +5036,8 @@ where y = 'x2';
 select tableoid::regclass, *
 from pxn
 where x = 2;
+NOTICE:  One or more columns in the following table(s) do not have statistics: pxn
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
   tableoid   | x | y  
 -------------+---+----
  pxn_1_prt_a | 2 | x2
@@ -5041,9 +5062,9 @@ from pxn;
   tableoid   | x  | y  
 -------------+----+----
  pxn_1_prt_a |  4 |  4
- pxn_1_prt_c | 14 | 14
  pxn_1_prt_a |  9 |  9
  pxn_1_prt_c | 19 | 19
+ pxn_1_prt_c | 14 | 14
 (4 rows)
 
 alter table pxn
@@ -5054,15 +5075,17 @@ select tableoid::regclass, *
 from pxn;
   tableoid   | x  | y  
 -------------+----+----
+ pxn_1_prt_c | 14 | 14
+ pxn_1_prt_a |  4 |  4
  pxn_1_prt_a |  9 |  9
  pxn_1_prt_c | 19 | 19
- pxn_1_prt_a |  4 |  4
- pxn_1_prt_c | 14 | 14
 (4 rows)
 
 select tableoid::regclass, *
 from pxn
 where y = 4;
+NOTICE:  One or more columns in the following table(s) do not have statistics: pxn
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
   tableoid   | x | y 
 -------------+---+---
  pxn_1_prt_a | 4 | 4
@@ -5071,6 +5094,8 @@ where y = 4;
 select tableoid::regclass, *
 from pxn
 where x = 4;
+NOTICE:  One or more columns in the following table(s) do not have statistics: pxn
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
   tableoid   | x | y 
 -------------+---+---
  pxn_1_prt_a | 4 | 4
@@ -5095,9 +5120,9 @@ from pxn;
   tableoid   | x  | y  
 -------------+----+----
  pxn_1_prt_a |  4 |  4
- pxn_1_prt_c | 14 | 14
  pxn_1_prt_a |  9 |  9
  pxn_1_prt_c | 19 | 19
+ pxn_1_prt_c | 14 | 14
 (4 rows)
 
 alter table pxn
@@ -5108,15 +5133,17 @@ select tableoid::regclass, *
 from pxn;
   tableoid   | x  | y  
 -------------+----+----
+ pxn_1_prt_c | 14 | 14
+ pxn_1_prt_a |  4 |  4
  pxn_1_prt_a |  9 |  9
  pxn_1_prt_c | 19 | 19
- pxn_1_prt_a |  4 |  4
- pxn_1_prt_c | 14 | 14
 (4 rows)
 
 select tableoid::regclass, *
 from pxn
 where y = 9;
+NOTICE:  One or more columns in the following table(s) do not have statistics: pxn
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
   tableoid   | x | y 
 -------------+---+---
  pxn_1_prt_a | 9 | 9
@@ -5125,6 +5152,8 @@ where y = 9;
 select tableoid::regclass, *
 from pxn
 where x = 9;
+NOTICE:  One or more columns in the following table(s) do not have statistics: pxn
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
   tableoid   | x | y 
 -------------+---+---
  pxn_1_prt_a | 9 | 9
@@ -5150,6 +5179,8 @@ alter table parttest_t drop column d;
 alter table parttest_t split partition for(1) at (2) into (partition p11, partition p22);
 insert into  parttest_t values(1,2,'a');
 select * from parttest_t;
+NOTICE:  One or more columns in the following table(s) do not have statistics: parttest_t
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  a | b | c 
 ---+---+---
  1 | 2 | a
@@ -5161,9 +5192,11 @@ reset optimizer_nestloop_factor;
 create table part_tab ( i int, j int) distributed by (i) partition by range(j) (start(0) end(10) every(2));
 -- Wrong part
 insert into part_tab_1_prt_1 values(5,5);
-ERROR:  new row for relation "part_tab_1_prt_1" violates partition constraint
+ERROR:  new row for relation "part_tab_1_prt_1" violates partition constraint  (seg2 172.18.0.2:7004 pid=21365)
 DETAIL:  Failing row contains (5, 5).
 select * from part_tab;
+NOTICE:  One or more columns in the following table(s) do not have statistics: part_tab
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  i | j 
 ---+---
 (0 rows)
@@ -5174,9 +5207,11 @@ select * from part_tab_1_prt_1;
 (0 rows)
 
 insert into part_tab_1_prt_2 values(5,5);
-ERROR:  new row for relation "part_tab_1_prt_2" violates partition constraint
+ERROR:  new row for relation "part_tab_1_prt_2" violates partition constraint  (seg2 172.18.0.2:7004 pid=21365)
 DETAIL:  Failing row contains (5, 5).
 select * from part_tab;
+NOTICE:  One or more columns in the following table(s) do not have statistics: part_tab
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  i | j 
 ---+---
 (0 rows)
@@ -5224,7 +5259,7 @@ HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sur
 insert into input2 select i, i from (select generate_series(1,10) as i) as t;
 -- Multiple range table entries in the plan
 insert into part_tab_1_prt_1 select i1.x, i2.y from input1 as i1 join input2 as i2 on i1.x = i2.x where i2.y = 5;
-ERROR:  new row for relation "part_tab_1_prt_1" violates partition constraint
+ERROR:  new row for relation "part_tab_1_prt_1" violates partition constraint  (seg2 172.18.0.2:7004 pid=21365)
 DETAIL:  Failing row contains (5, 5).
 analyze part_tab;
 select * from part_tab;
@@ -5240,7 +5275,7 @@ select * from part_tab_1_prt_1;
 (0 rows)
 
 insert into part_tab_1_prt_2 select i1.x, i2.y from input1 as i1 join input2 as i2 on i1.x = i2.x where i2.y = 5;
-ERROR:  new row for relation "part_tab_1_prt_2" violates partition constraint
+ERROR:  new row for relation "part_tab_1_prt_2" violates partition constraint  (seg2 172.18.0.2:7004 pid=21365)
 DETAIL:  Failing row contains (5, 5).
 select * from part_tab;
  i | j 
@@ -5276,15 +5311,15 @@ select * from part_tab_1_prt_3;
 
 -- Root part but no matching part for i2.y == 10
 insert into part_tab select i1.x, i2.y from input1 as i1 join input2 as i2 on i1.x = i2.x;
-ERROR:  no partition of relation "part_tab" found for row
+ERROR:  no partition of relation "part_tab" found for row  (seg2 172.18.0.2:7004 pid=21365)
 DETAIL:  Partition key of the failing row contains (j) = (10).
 select * from part_tab;
  i | j 
 ---+---
- 5 | 5
- 5 | 5
- 5 | 5
  4 | 4
+ 5 | 5
+ 5 | 5
+ 5 | 5
 (4 rows)
 
 -- Root part
@@ -5292,19 +5327,19 @@ insert into part_tab select i1.x, i2.y from input1 as i1 join input2 as i2 on i1
 select * from part_tab;
  i | j 
 ---+---
- 1 | 1
  2 | 2
  3 | 3
- 5 | 5
- 5 | 5
  4 | 4
- 5 | 5
  4 | 4
- 5 | 5
- 6 | 6
  7 | 7
  8 | 8
+ 5 | 5
+ 5 | 5
+ 5 | 5
+ 5 | 5
+ 6 | 6
  9 | 9
+ 1 | 1
 (13 rows)
 
 -- Multi-level partitioning
@@ -5319,11 +5354,11 @@ subpartition by range (k) subpartition template (start(1)  end(10) every(2))
 insert into deep_part_1_prt_male_2_prt_2 values(1,3,1,'M');
 -- but only if it's the right partition.
 insert into deep_part_1_prt_male_2_prt_2 values(1,1,1,'M');
-ERROR:  new row for relation "deep_part_1_prt_male_2_prt_2" violates partition constraint
+ERROR:  new row for relation "deep_part_1_prt_male_2_prt_2" violates partition constraint  (seg1 172.18.0.2:7003 pid=21364)
 DETAIL:  Failing row contains (1, 1, 1, M    ).
 -- Wrong sub-partition (inserting a female value in male partition)
 insert into deep_part_1_prt_male_2_prt_2_3_prt_2 values (1, 1, 1, 'F');
-ERROR:  new row for relation "deep_part_1_prt_male_2_prt_2_3_prt_2" violates partition constraint
+ERROR:  new row for relation "deep_part_1_prt_male_2_prt_2_3_prt_2" violates partition constraint  (seg1 172.18.0.2:7003 pid=21364)
 DETAIL:  Failing row contains (1, 1, 1, F    ).
 select * from deep_part;
  i | j | k |   s   
@@ -5402,10 +5437,10 @@ select * from deep_part;
  i | j | k |   s   
 ---+---+---+-------
  1 | 1 | 1 | F    
- 9 | 9 | 9 | F    
  1 | 1 | 1 | M    
  1 | 1 | 1 | M    
  1 | 3 | 1 | M    
+ 9 | 9 | 9 | F    
  5 | 5 | 5 | M    
 (6 rows)
 
@@ -5417,17 +5452,17 @@ select * from deep_part_1_prt_female_2_prt_5_3_prt_5;
 
 -- Out of range partition
 insert into deep_part values (9, 9, 10, 'F');
-ERROR:  no partition of relation "deep_part_1_prt_female_2_prt_5" found for row
+ERROR:  no partition of relation "deep_part_1_prt_female_2_prt_5" found for row  (seg2 172.18.0.2:7004 pid=21365)
 DETAIL:  Partition key of the failing row contains (k) = (10).
 select * from deep_part;
  i | j | k |   s   
 ---+---+---+-------
- 1 | 1 | 1 | F    
  9 | 9 | 9 | F    
+ 5 | 5 | 5 | M    
+ 1 | 1 | 1 | F    
  1 | 1 | 1 | M    
  1 | 1 | 1 | M    
  1 | 3 | 1 | M    
- 5 | 5 | 5 | M    
 (6 rows)
 
 drop table input2;
@@ -5451,6 +5486,8 @@ partition by range(col2)
 );
 insert into pt_td_leak select i,i,i from generate_series(1,9) i;
 copy pt_td_leak to '/tmp/pt_td_leak.out' csv;
+NOTICE:  One or more columns in the following table(s) do not have statistics: pt_td_leak
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 alter table pt_td_leak drop column col3;
 alter table pt_td_leak add column col3 int default 7;
 drop table if exists pt_td_leak_exchange;
@@ -5460,6 +5497,8 @@ alter table pt_td_leak exchange partition part2 with table pt_td_leak_exchange;
 insert into pt_td_leak values(1,8,1);
 copy pt_td_leak from '/tmp/pt_td_leak.out' with delimiter ',';
 select * from pt_td_leak where col1 = 5;
+NOTICE:  One or more columns in the following table(s) do not have statistics: pt_td_leak
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  col1 | col2 | col3 
 ------+------+------
     5 |    5 |    5
@@ -5467,6 +5506,8 @@ select * from pt_td_leak where col1 = 5;
 
 -- Check that data inserted into dropped/added column is correct
 select * from pt_td_leak where col3 = 1;
+NOTICE:  One or more columns in the following table(s) do not have statistics: pt_td_leak
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  col1 | col2 | col3 
 ------+------+------
     1 |    1 |    1
@@ -5489,6 +5530,8 @@ ALTER TABLE pt_dropped_col_distkey DROP COLUMN to_be_dropped;
 ALTER TABLE pt_dropped_col_distkey ADD PARTITION pt_dropped_col_distkey_new_part START (10) END (100);
 INSERT INTO pt_dropped_col_distkey SELECT g, 'after drop ' || g FROM generate_series(8, 15) g;
 SELECT * FROM pt_dropped_col_distkey ORDER BY i;
+NOTICE:  One or more columns in the following table(s) do not have statistics: pt_dropped_col_distkey
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  i  |       t       
 ----+---------------
   1 | before drop 1
@@ -5509,9 +5552,13 @@ SELECT * FROM pt_dropped_col_distkey ORDER BY i;
 (15 rows)
 
 COPY pt_dropped_col_distkey TO '/tmp/pt_dropped_col_distkey.out';
+NOTICE:  One or more columns in the following table(s) do not have statistics: pt_dropped_col_distkey
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 DELETE FROM pt_dropped_col_distkey;
 COPY pt_dropped_col_distkey FROM '/tmp/pt_dropped_col_distkey.out';
 SELECT * FROM pt_dropped_col_distkey ORDER BY i;
+NOTICE:  One or more columns in the following table(s) do not have statistics: pt_dropped_col_distkey
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  i  |       t       
 ----+---------------
   1 | before drop 1
@@ -5688,13 +5735,6 @@ select relname, relkind from pg_class where relkind in ('r', 'p') and relname li
 select gp_segment_id, relname, relkind from gp_dist_random('pg_class') where relkind in ('r', 'p') and relname like 'sales%' and relfrozenxid=0;
  gp_segment_id |          relname           | relkind 
 ---------------+----------------------------+---------
-             0 | sales                      | p
-             0 | sales                      | p
-             0 | sales_1_prt_2              | p
-             0 | sales_1_prt_3              | p
-             0 | sales_1_prt_4              | p
-             0 | sales_1_prt_5              | p
-             0 | sales_1_prt_outlying_dates | p
              1 | sales                      | p
              1 | sales                      | p
              1 | sales_1_prt_2              | p
@@ -5702,6 +5742,13 @@ select gp_segment_id, relname, relkind from gp_dist_random('pg_class') where rel
              1 | sales_1_prt_4              | p
              1 | sales_1_prt_5              | p
              1 | sales_1_prt_outlying_dates | p
+             0 | sales                      | p
+             0 | sales                      | p
+             0 | sales_1_prt_2              | p
+             0 | sales_1_prt_3              | p
+             0 | sales_1_prt_4              | p
+             0 | sales_1_prt_5              | p
+             0 | sales_1_prt_outlying_dates | p
              2 | sales                      | p
              2 | sales                      | p
              2 | sales_1_prt_2              | p
@@ -5728,13 +5775,6 @@ select relname, relkind from pg_class where relkind in ('r', 'p') and relname li
 select gp_segment_id, relname, relkind from gp_dist_random('pg_class') where relkind in ('r', 'p') and relname like 'sales%' and relfrozenxid=0;
  gp_segment_id |          relname           | relkind 
 ---------------+----------------------------+---------
-             2 | sales                      | p
-             2 | sales                      | p
-             2 | sales_1_prt_2              | p
-             2 | sales_1_prt_3              | p
-             2 | sales_1_prt_4              | p
-             2 | sales_1_prt_5              | p
-             2 | sales_1_prt_outlying_dates | p
              0 | sales                      | p
              0 | sales                      | p
              0 | sales_1_prt_2              | p
@@ -5742,6 +5782,13 @@ select gp_segment_id, relname, relkind from gp_dist_random('pg_class') where rel
              0 | sales_1_prt_4              | p
              0 | sales_1_prt_5              | p
              0 | sales_1_prt_outlying_dates | p
+             2 | sales                      | p
+             2 | sales                      | p
+             2 | sales_1_prt_2              | p
+             2 | sales_1_prt_3              | p
+             2 | sales_1_prt_4              | p
+             2 | sales_1_prt_5              | p
+             2 | sales_1_prt_outlying_dates | p
              1 | sales                      | p
              1 | sales                      | p
              1 | sales_1_prt_2              | p
@@ -5753,6 +5800,7 @@ select gp_segment_id, relname, relkind from gp_dist_random('pg_class') where rel
 
 alter table sales drop column tax;
 create table newpart(like sales);
+NOTICE:  table doesn't have 'DISTRIBUTED BY' clause, defaulting to distribution columns from LIKE table
 alter table newpart add constraint newpart_pkey primary key(pkid, option3);
 alter table sales split partition for(1) at (50) into (partition aa1, partition aa2);
 select table_schema, table_name, constraint_name, constraint_type
@@ -5768,17 +5816,22 @@ select table_schema, table_name, constraint_name, constraint_type
 
 alter table sales exchange partition for (101) with table newpart;
 select * from sales order by pkid;
+NOTICE:  One or more columns in the following table(s) do not have statistics: sales
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  pkid | option1 | option2 | option3 
 ------+---------+---------+---------
 (0 rows)
 
 -- Create exchange table before drop column, make sure the consistency check still exist
 create table newpart2(like sales);
+NOTICE:  table doesn't have 'DISTRIBUTED BY' clause, defaulting to distribution columns from LIKE table
 alter table sales drop column option2;
 alter table sales exchange partition for (101) with table newpart2;
 ERROR:  table "newpart2" contains column "option2" not found in parent "sales"
 DETAIL:  The new partition may contain only the columns present in parent.
 select * from sales order by pkid;
+NOTICE:  One or more columns in the following table(s) do not have statistics: sales
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  pkid | option1 | option3 
 ------+---------+---------
 (0 rows)
@@ -5787,35 +5840,41 @@ drop table sales cascade;
 NOTICE:  drop cascades to default value for column pkid of table newpart
 -- Exchage partition table with a table having dropped column
 create table exchange_part(a int, b int) partition by range(b) (start (0) end (10) every (5));
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table exchange1(a int, c int, b int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 alter table exchange1 drop column c;
 alter table exchange_part exchange partition for (1) with table exchange1;
 copy exchange_part from STDIN DELIMITER as '|';
 select * from exchange_part;
+NOTICE:  One or more columns in the following table(s) do not have statistics: exchange_part
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
   a   | b 
 ------+---
+ 9794 | 1
  9797 | 3
  9799 | 4
- 9801 | 5
- 9836 | 5
- 9802 | 6
- 9840 | 6
- 9803 | 7
- 9822 | 7
- 9806 | 8
- 9824 | 8
- 9807 | 9
- 9794 | 1
  9808 | 1
+ 9801 | 5
+ 9802 | 6
+ 9803 | 7
+ 9806 | 8
+ 9807 | 9
+ 9822 | 7
+ 9824 | 8
+ 9836 | 5
+ 9840 | 6
  9810 | 2
+ 9827 | 1
  9828 | 2
  9831 | 3
  9817 | 5
  9818 | 6
+ 9825 | 9
  9843 | 7
  9844 | 8
- 9825 | 9
- 9827 | 1
  9795 | 2
  9814 | 3
  9815 | 4
@@ -5886,7 +5945,11 @@ select c.oid::regclass, relkind, amname, reloptions from pg_class c left join pg
 
 -- Ensure that only the correct type of partitions can be added
 create table at_range (a int) partition by range (a) (start(1) end(5));
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table at_list (i int) partition by list(i) (partition p1 values(1));
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 alter table at_list add partition foo2 start(6) end (10);
 ERROR:  invalid boundary specification for LIST partition
 LINE 1: alter table at_list add partition foo2 start(6) end (10);
@@ -6010,8 +6073,14 @@ ERROR:  operator class "employee_incomplete_op_class" of access method btree is 
 -- able to SELECT from any partition table we create later.
 -- (https://github.com/greenplum-db/gpdb/issues/9524)
 DROP TABLE IF EXISTS user_prt_acl_append.t_part_acl;
+NOTICE:  schema "user_prt_acl_append" does not exist, skipping
+NOTICE:  schema "user_prt_acl_append" does not exist, skipping  (seg0 172.18.0.2:7002 pid=21363)
+NOTICE:  schema "user_prt_acl_append" does not exist, skipping  (seg1 172.18.0.2:7003 pid=21364)
+NOTICE:  schema "user_prt_acl_append" does not exist, skipping  (seg2 172.18.0.2:7004 pid=21365)
 DROP SCHEMA IF EXISTS user_prt_acl_append;
+NOTICE:  schema "user_prt_acl_append" does not exist, skipping
 DROP ROLE IF EXISTS user_prt_acl_append;
+NOTICE:  role "user_prt_acl_append" does not exist, skipping
 CREATE ROLE user_prt_acl_append;
 NOTICE:  resource queue required -- using default resource queue "pg_default"
 CREATE SCHEMA schema_part_acl_append;
@@ -6041,6 +6110,8 @@ WHERE relname LIKE 't_part_acl%'
 -- check if new user can SELECT all data
 SET ROLE user_prt_acl_append;
 SELECT * FROM schema_part_acl_append.t_part_acl;
+NOTICE:  One or more columns in the following table(s) do not have statistics: t_part_acl
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
      dt     
 ------------
  12-01-2019
@@ -6081,6 +6152,8 @@ NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into temp_parent select i from generate_series(1, 5) i;
 select count(*) from temp_parent;
+NOTICE:  One or more columns in the following table(s) do not have statistics: temp_parent
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  count 
 -------
      5
@@ -6089,6 +6162,8 @@ select count(*) from temp_parent;
 commit;
 -- DELETE ROWS will not cascaded to its partitions when we use DELETE ROWS behavior
 select count(*) from temp_parent;
+NOTICE:  One or more columns in the following table(s) do not have statistics: temp_parent
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  count 
 -------
      5
@@ -6420,9 +6495,6 @@ WHERE c.relname LIKE 'part_inherit%' AND
         c.relkind NOT IN ('i', 'I');
                      relname                      |    reloptions     | relkind |   am   | hasindex |          owner          |                                                           acl                                                           | numchecks | hasrules | hastriggers | rowsecurity 
 --------------------------------------------------+-------------------+---------+--------+----------+-------------------------+-------------------------------------------------------------------------------------------------------------------------+-----------+----------+-------------+-------------
- part_inherit_1_prt_l1_to_exchange_2_prt_l2_child | {fillfactor=30}   | r       | heap   | t        | part_inherit_other_role | {part_inherit_other_role=arwdDxt/part_inherit_other_role,part_inherit_exchange_out_priv_role=w/part_inherit_other_role} |         2 | f        | t           | f
- part_inherit_attach                              | {fillfactor=30}   | r       | heap   | t        | part_inherit_other_role | {part_inherit_other_role=arwdDxt/part_inherit_other_role,part_inherit_attach_priv_role=w/part_inherit_other_role}       |         2 | f        | t           | f
- part_inherit_partof                              | {compresslevel=7} | r       | ao_row | t        | part_inherit_other_role | {part_inherit_role=arwdDxt/part_inherit_role,part_inherit_priv_role=w/part_inherit_role}                                |         1 | f        | t           | f
  part_inherit                                     | {compresslevel=7} | p       | ao_row | t        | part_inherit_role       | {part_inherit_role=arwdDxt/part_inherit_role,part_inherit_priv_role=w/part_inherit_role}                                |         1 | t        | t           | t
  part_inherit_1_prt_added                         | {compresslevel=7} | p       | ao_row | t        | part_inherit_role       | {part_inherit_role=arwdDxt/part_inherit_role,part_inherit_priv_role=w/part_inherit_role}                                |         1 | f        | t           | f
  part_inherit_1_prt_added_2_prt_l2_child          | {compresslevel=7} | r       | ao_row | t        | part_inherit_role       | {part_inherit_role=arwdDxt/part_inherit_role,part_inherit_priv_role=w/part_inherit_role}                                |         1 | f        | t           | f
@@ -6435,6 +6507,9 @@ WHERE c.relname LIKE 'part_inherit%' AND
  part_inherit_1_prt_l1_to_split_2_prt_split1      | {compresslevel=7} | r       | ao_row | t        | part_inherit_role       | {part_inherit_role=arwdDxt/part_inherit_role,part_inherit_priv_role=w/part_inherit_role}                                |         1 | f        | t           | f
  part_inherit_1_prt_l1_to_split_2_prt_split2      | {compresslevel=7} | r       | ao_row | t        | part_inherit_role       | {part_inherit_role=arwdDxt/part_inherit_role,part_inherit_priv_role=w/part_inherit_role}                                |         1 | f        | t           | f
  part_inherit_exchange_out                        | {compresslevel=7} | r       | ao_row | t        | part_inherit_role       | {part_inherit_role=arwdDxt/part_inherit_role,part_inherit_priv_role=w/part_inherit_role}                                |         1 | f        | t           | f
+ part_inherit_partof                              | {compresslevel=7} | r       | ao_row | t        | part_inherit_other_role | {part_inherit_role=arwdDxt/part_inherit_role,part_inherit_priv_role=w/part_inherit_role}                                |         1 | f        | t           | f
+ part_inherit_1_prt_l1_to_exchange_2_prt_l2_child | {fillfactor=30}   | r       | heap   | t        | part_inherit_other_role | {part_inherit_other_role=arwdDxt/part_inherit_other_role,part_inherit_exchange_out_priv_role=w/part_inherit_other_role} |         2 | f        | t           | f
+ part_inherit_attach                              | {fillfactor=30}   | r       | heap   | t        | part_inherit_other_role | {part_inherit_other_role=arwdDxt/part_inherit_other_role,part_inherit_attach_priv_role=w/part_inherit_other_role}       |         2 | f        | t           | f
 (15 rows)
 
 RESET ROLE;
@@ -6562,8 +6637,8 @@ NOTICE:  One or more columns in the following table(s) do not have statistics: t
 HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
   datedday  
 ------------
- 10-22-2022
  10-23-2022
+ 10-22-2022
 (2 rows)
 
 drop table test_rangePartition;
@@ -6811,8 +6886,8 @@ explain select * from foo_part_rls;
 select * from foo_part_rls;
  a | b  |  c  
 ---+----+-----
- 5 | 50 | 500
  4 | 40 | 400
+ 5 | 50 | 500
 (2 rows)
 
 reset session authorization;
@@ -6870,62 +6945,53 @@ explain (costs off, timing off, summary off, analyze) select * from pt where pti
 select * from pt where ptid in (select tid from pt2 where t1 = 'hello' || tid);
  dist |   pt1   |  pt2  |    pt3    | ptid 
 ------+---------+-------+-----------+------
-    0 | hello0  | world | drop this |    0
-    6 | hello6  | world | drop this |    0
-   12 | hello12 | world | drop this |    0
    18 | hello18 | world | drop this |    0
    24 | hello24 | world | drop this |    0
+   42 | hello42 | world | drop this |    0
+    7 | hello7  | world | drop this |    1
+   19 | hello19 | world | drop this |    1
+   37 | hello37 | world | drop this |    1
+    0 | hello0  | world | drop this |    0
+   12 | hello12 | world | drop this |    0
    30 | hello30 | world | drop this |    0
    36 | hello36 | world | drop this |    0
-   42 | hello42 | world | drop this |    0
    48 | hello48 | world | drop this |    0
     1 | hello1  | world | drop this |    1
-    7 | hello7  | world | drop this |    1
-   13 | hello13 | world | drop this |    1
-   19 | hello19 | world | drop this |    1
-   25 | hello25 | world | drop this |    1
    31 | hello31 | world | drop this |    1
-   37 | hello37 | world | drop this |    1
-   43 | hello43 | world | drop this |    1
    49 | hello49 | world | drop this |    1
+    6 | hello6  | world | drop this |    0
+   13 | hello13 | world | drop this |    1
+   25 | hello25 | world | drop this |    1
+   43 | hello43 | world | drop this |    1
 (18 rows)
 
 explain (costs off, timing off, summary off, analyze) select ptid from pt where ptid in (select tid from pt2 where t1 = 'hello' || tid) and pt1 = 'hello1';
-                                                          QUERY PLAN                                                           
--------------------------------------------------------------------------------------------------------------------------------
+                                                    QUERY PLAN                                                     
+-------------------------------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3) (actual rows=1 loops=1)
-   ->  Hash Join (actual rows=1 loops=1)
-         Hash Cond: (pt2.tid = pt_1_prt_2.ptid)
-         Extra Text: (seg1)   Hash chain length 1.0 avg, 1 max, using 1 of 262144 buckets.
-         ->  GroupAggregate (actual rows=2 loops=1)
-               Group Key: pt2.tid
-               ->  Sort (actual rows=2 loops=1)
-                     Sort Key: pt2.tid
-                     Sort Method:  quicksort  Memory: 25kB
-                     ->  Redistribute Motion 3:3  (slice2; segments: 3) (actual rows=2 loops=1)
-                           Hash Key: pt2.tid
-                           ->  Seq Scan on pt2 (actual rows=2 loops=1)
-                                 Filter: (t1 = ('hello'::text || (tid)::text))
+   ->  Hash Right Semi Join (actual rows=1 loops=1)
+         Hash Cond: (pt_1_prt_2.ptid = pt2.tid)
+         Extra Text: (seg1)   Hash chain length 1.0 avg, 1 max, using 1 of 524288 buckets.
+         ->  Broadcast Motion 3:3  (slice2; segments: 3) (actual rows=2 loops=1)
+               ->  Seq Scan on pt2 (actual rows=2 loops=1)
+                     Filter: (t1 = ('hello'::text || (tid)::text))
          ->  Hash (actual rows=1 loops=1)
-               Buckets: 262144  Batches: 1  Memory Usage: 2049kB
-               ->  Redistribute Motion 3:3  (slice3; segments: 3) (actual rows=1 loops=1)
-                     Hash Key: pt_1_prt_2.ptid
-                     ->  Result (actual rows=1 loops=1)
-                           ->  Append (actual rows=1 loops=1)
-                                 ->  Index Scan using pt_1_prt_2_pt1_idx on pt_1_prt_2 (actual rows=0 loops=1)
-                                       Index Cond: (pt1 = 'hello1'::text)
-                                 ->  Index Scan using pt_1_prt_3_pt1_idx on pt_1_prt_3 (actual rows=1 loops=1)
-                                       Index Cond: (pt1 = 'hello1'::text)
-                                 ->  Index Scan using pt_1_prt_4_pt1_idx on pt_1_prt_4 (actual rows=0 loops=1)
-                                       Index Cond: (pt1 = 'hello1'::text)
-                                 ->  Index Scan using pt_1_prt_5_pt1_idx on pt_1_prt_5 (actual rows=0 loops=1)
-                                       Index Cond: (pt1 = 'hello1'::text)
-                                 ->  Index Scan using pt_1_prt_6_pt1_idx on pt_1_prt_6 (actual rows=0 loops=1)
-                                       Index Cond: (pt1 = 'hello1'::text)
-                                 ->  Index Scan using pt_1_prt_junk_data_pt1_idx on pt_1_prt_junk_data (actual rows=0 loops=1)
-                                       Index Cond: (pt1 = 'hello1'::text)
+               Buckets: 524288  Batches: 1  Memory Usage: 4097kB
+               ->  Append (actual rows=1 loops=1)
+                     ->  Index Scan using pt_1_prt_2_pt1_idx on pt_1_prt_2 (actual rows=0 loops=1)
+                           Index Cond: (pt1 = 'hello1'::text)
+                     ->  Index Scan using pt_1_prt_3_pt1_idx on pt_1_prt_3 (actual rows=1 loops=1)
+                           Index Cond: (pt1 = 'hello1'::text)
+                     ->  Index Scan using pt_1_prt_4_pt1_idx on pt_1_prt_4 (actual rows=0 loops=1)
+                           Index Cond: (pt1 = 'hello1'::text)
+                     ->  Index Scan using pt_1_prt_5_pt1_idx on pt_1_prt_5 (actual rows=0 loops=1)
+                           Index Cond: (pt1 = 'hello1'::text)
+                     ->  Index Scan using pt_1_prt_6_pt1_idx on pt_1_prt_6 (actual rows=0 loops=1)
+                           Index Cond: (pt1 = 'hello1'::text)
+                     ->  Index Scan using pt_1_prt_junk_data_pt1_idx on pt_1_prt_junk_data (actual rows=0 loops=1)
+                           Index Cond: (pt1 = 'hello1'::text)
  Optimizer: GPORCA
-(32 rows)
+(23 rows)
 
 select ptid from pt where ptid in (select tid from pt2 where t1 = 'hello' || tid) and pt1 = 'hello1';
  ptid 
@@ -6970,7 +7036,7 @@ EXPLAIN (COSTS OFF, VERBOSE) SELECT * FROM rp_multi_inds WHERE b = 11 AND (c = 1
                                  Index Cond: (rp_multi_inds_part2.c = 4201)
                      ->  Bitmap Index Scan on rp_multi_inds_part2_b_idx
                            Index Cond: (rp_multi_inds_part2.b = 11)
- Settings: enable_parallel = 'off', optimizer = 'on'
+ Settings: optimizer = 'on'
  Optimizer: GPORCA
 (16 rows)
 

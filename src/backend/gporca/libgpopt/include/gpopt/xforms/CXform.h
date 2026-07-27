@@ -241,6 +241,15 @@ public:
 		ExfFullOuterJoin2HashJoin,
 		ExfFullJoinCommutativity,
 		ExfSplitWindowFunc,
+		/*
+		 * Right semi/anti hash join xforms (Mark Join, PG18 backport).
+		 * Kept at the END of this enum to preserve the integer values of
+		 * pre-existing IDs -- inserting in the middle breaks ABI (CBitSet /
+		 * xform-id sequence checks in CXformFactory).  Same lesson as the
+		 * PG JoinType enum placement (see nodes.h JOIN_RIGHT_SEMI).
+		 */
+		ExfLeftSemiJoin2RightSemiHashJoin,
+		ExfLeftAntiSemiJoin2RightAntiSemiHashJoin,
 		ExfInvalid,
 		ExfSentinel = ExfInvalid
 	};

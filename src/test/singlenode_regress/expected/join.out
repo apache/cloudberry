@@ -218,13 +218,13 @@ SELECT t1.a, t2.e
   WHERE t1.a = t2.d;
  a | e  
 ---+----
- 0 |   
  1 | -1
  2 |  2
- 2 |  4
  3 | -3
+ 2 |  4
  5 | -5
  5 | -5
+ 0 |   
 (7 rows)
 
 --
@@ -1573,13 +1573,13 @@ SELECT *
   FROM J1_TBL INNER JOIN J2_TBL USING (i);
  i | j |   t   | k  
 ---+---+-------+----
- 0 |   | zero  |   
  1 | 4 | one   | -1
  2 | 3 | two   |  2
- 2 | 3 | two   |  4
  3 | 2 | three | -3
+ 2 | 3 | two   |  4
  5 | 0 | five  | -5
  5 | 0 | five  | -5
+ 0 |   | zero  |   
 (7 rows)
 
 -- Same as above, slightly different syntax
@@ -1587,13 +1587,13 @@ SELECT *
   FROM J1_TBL JOIN J2_TBL USING (i);
  i | j |   t   | k  
 ---+---+-------+----
- 0 |   | zero  |   
  1 | 4 | one   | -1
  2 | 3 | two   |  2
- 2 | 3 | two   |  4
  3 | 2 | three | -3
+ 2 | 3 | two   |  4
  5 | 0 | five  | -5
  5 | 0 | five  | -5
+ 0 |   | zero  |   
 (7 rows)
 
 SELECT *
@@ -1681,35 +1681,35 @@ SELECT *
   FROM J1_TBL NATURAL JOIN J2_TBL;
  i | j |   t   | k  
 ---+---+-------+----
- 0 |   | zero  |   
  1 | 4 | one   | -1
  2 | 3 | two   |  2
- 2 | 3 | two   |  4
  3 | 2 | three | -3
+ 2 | 3 | two   |  4
  5 | 0 | five  | -5
  5 | 0 | five  | -5
+ 0 |   | zero  |   
 (7 rows)
 
 SELECT *
   FROM J1_TBL t1 (a, b, c) NATURAL JOIN J2_TBL t2 (a, d);
  a | b |   c   | d  
 ---+---+-------+----
- 0 |   | zero  |   
  1 | 4 | one   | -1
  2 | 3 | two   |  2
- 2 | 3 | two   |  4
  3 | 2 | three | -3
+ 2 | 3 | two   |  4
  5 | 0 | five  | -5
  5 | 0 | five  | -5
+ 0 |   | zero  |   
 (7 rows)
 
 SELECT *
   FROM J1_TBL t1 (a, b, c) NATURAL JOIN J2_TBL t2 (d, a);
  a | b |  c   | d 
 ---+---+------+---
- 0 |   | zero |  
  2 | 3 | two  | 2
  4 | 1 | four | 2
+ 0 |   | zero |  
 (3 rows)
 
 -- mismatch number of columns
@@ -1718,13 +1718,13 @@ SELECT *
   FROM J1_TBL t1 (a, b) NATURAL JOIN J2_TBL t2 (a);
  a | b |   t   | k  
 ---+---+-------+----
- 0 |   | zero  |   
  1 | 4 | one   | -1
  2 | 3 | two   |  2
- 2 | 3 | two   |  4
  3 | 2 | three | -3
+ 2 | 3 | two   |  4
  5 | 0 | five  | -5
  5 | 0 | five  | -5
+ 0 |   | zero  |   
 (7 rows)
 
 --
@@ -1734,22 +1734,22 @@ SELECT *
   FROM J1_TBL JOIN J2_TBL ON (J1_TBL.i = J2_TBL.i);
  i | j |   t   | i | k  
 ---+---+-------+---+----
- 0 |   | zero  | 0 |   
  1 | 4 | one   | 1 | -1
  2 | 3 | two   | 2 |  2
- 2 | 3 | two   | 2 |  4
  3 | 2 | three | 3 | -3
+ 2 | 3 | two   | 2 |  4
  5 | 0 | five  | 5 | -5
  5 | 0 | five  | 5 | -5
+ 0 |   | zero  | 0 |   
 (7 rows)
 
 SELECT *
   FROM J1_TBL JOIN J2_TBL ON (J1_TBL.i = J2_TBL.k);
  i | j |  t   | i | k 
 ---+---+------+---+---
- 0 |   | zero |   | 0
  2 | 3 | two  | 2 | 2
  4 | 1 | four | 2 | 4
+ 0 |   | zero |   | 0
 (3 rows)
 
 --
@@ -1818,13 +1818,13 @@ SELECT *
   FROM J1_TBL RIGHT OUTER JOIN J2_TBL USING (i);
  i | j |   t   | k  
 ---+---+-------+----
- 0 |   | zero  |   
  1 | 4 | one   | -1
  2 | 3 | two   |  2
- 2 | 3 | two   |  4
  3 | 2 | three | -3
+ 2 | 3 | two   |  4
  5 | 0 | five  | -5
  5 | 0 | five  | -5
+ 0 |   | zero  |   
    |   |       |   
    |   |       |  0
 (9 rows)
@@ -1833,13 +1833,13 @@ SELECT *
   FROM J1_TBL RIGHT JOIN J2_TBL USING (i);
  i | j |   t   | k  
 ---+---+-------+----
- 0 |   | zero  |   
  1 | 4 | one   | -1
  2 | 3 | two   |  2
- 2 | 3 | two   |  4
  3 | 2 | three | -3
+ 2 | 3 | two   |  4
  5 | 0 | five  | -5
  5 | 0 | five  | -5
+ 0 |   | zero  |   
    |   |       |   
    |   |       |  0
 (9 rows)
@@ -1909,18 +1909,18 @@ select * from int4_tbl i4, tenk1 a
 where exists(select * from tenk1 b
              where a.twothousand = b.twothousand and a.fivethous <> b.fivethous)
       and i4.f1 = a.tenthous;
-                  QUERY PLAN                  
-----------------------------------------------
- Hash Semi Join
-   Hash Cond: (a.twothousand = b.twothousand)
+                   QUERY PLAN                    
+-------------------------------------------------
+ Hash Right Semi Join
+   Hash Cond: (b.twothousand = a.twothousand)
    Join Filter: (a.fivethous <> b.fivethous)
-   ->  Hash Join
-         Hash Cond: (a.tenthous = i4.f1)
-         ->  Seq Scan on tenk1 a
-         ->  Hash
-               ->  Seq Scan on int4_tbl i4
+   ->  Seq Scan on tenk1 b
    ->  Hash
-         ->  Seq Scan on tenk1 b
+         ->  Hash Join
+               Hash Cond: (a.tenthous = i4.f1)
+               ->  Seq Scan on tenk1 a
+               ->  Hash
+                     ->  Seq Scan on int4_tbl i4
  Optimizer: Postgres query optimizer
 (11 rows)
 
@@ -1945,8 +1945,8 @@ SELECT * FROM t1 FULL JOIN t2 USING (name) FULL JOIN t3 USING (name);
 ------+----+----+----
  bb   | 11 | 12 | 13
  cc   |    | 22 | 23
- dd   |    |    | 33
  ee   |    | 42 |   
+ dd   |    |    | 33
 (4 rows)
 
 --
@@ -1985,8 +1985,8 @@ USING (name);
 ------+----+----
  bb   | 12 | 13
  cc   | 22 | 23
- dd   |    | 33
  ee   | 42 |   
+ dd   |    | 33
 (4 rows)
 
 -- Cases with non-nullable expressions in subquery results;
@@ -2020,8 +2020,8 @@ NATURAL FULL JOIN
 ------+------+------+------+------
  bb   |   12 |    2 |   13 |    3
  cc   |   22 |    2 |   23 |    3
- dd   |      |      |   33 |    3
  ee   |   42 |    2 |      |     
+ dd   |      |      |   33 |    3
 (4 rows)
 
 SELECT * FROM
@@ -2045,8 +2045,8 @@ NATURAL FULL JOIN
 ------+------+------+------+------+------+------
  bb   |   11 |    1 |   12 |    2 |   13 |    3
  cc   |      |      |   22 |    2 |   23 |    3
- dd   |      |      |      |      |   33 |    3
  ee   |      |      |   42 |    2 |      |     
+ dd   |      |      |      |      |   33 |    3
 (4 rows)
 
 SELECT * FROM
@@ -2061,8 +2061,8 @@ NATURAL FULL JOIN
 ------+------+------+------
  bb   |   11 |   12 |   13
  cc   |      |   22 |   23
- dd   |      |      |   33
  ee   |      |   42 |     
+ dd   |      |      |   33
 (4 rows)
 
 SELECT * FROM
@@ -2077,8 +2077,8 @@ NATURAL FULL JOIN
 ------+------+------+------+------
  bb   |   11 |   12 |    2 |   13
  cc   |      |   22 |    2 |   23
- dd   |      |      |      |   33
  ee   |      |   42 |    2 |     
+ dd   |      |      |      |   33
 (4 rows)
 
 -- Constants as join keys can also be problematic
@@ -2089,10 +2089,10 @@ FULL JOIN
 ON (s1_n = s2_n);
  name | s1_n | name | s2_n 
 ------+------+------+------
-      |      | bb   |    2
-      |      | cc   |    2
-      |      | ee   |    2
  bb   |   11 |      |     
+      |      | ee   |    2
+      |      | cc   |    2
+      |      | bb   |    2
 (4 rows)
 
 -- Test for propagation of nullability constraints into sub-joins
@@ -2395,23 +2395,23 @@ select * from
 ---+---+-------+---+----
    |   |       |   |  0
    |   |       |   |   
-   | 0 | zero  |   |   
-   |   | null  |   |   
- 8 | 8 | eight |   |   
- 7 | 7 | seven |   |   
- 6 | 6 | six   |   |   
    |   |       | 5 | -5
    |   |       | 5 | -5
- 5 | 0 | five  |   |   
- 4 | 1 | four  |   |   
    |   |       | 3 | -3
- 3 | 2 | three |   |   
  2 | 3 | two   | 2 |  2
    |   |       | 2 |  4
    |   |       | 1 | -1
    |   |       | 0 |   
+   | 0 | zero  |   |   
+   |   | null  |   |   
+ 6 | 6 | six   |   |   
+ 8 | 8 | eight |   |   
  1 | 4 | one   |   |   
  0 |   | zero  |   |   
+ 5 | 0 | five  |   |   
+ 7 | 7 | seven |   |   
+ 4 | 1 | four  |   |   
+ 3 | 2 | three |   |   
 (19 rows)
 
 reset enable_mergejoin;
@@ -2595,8 +2595,8 @@ WHERE d.f1 IS NULL;
   f1  
 ------
     0
-    1
  9999
+    1
 (3 rows)
 
 --
@@ -4584,8 +4584,8 @@ explain (verbose, costs off)
   select a.q2, b.q1
     from int8_tbl a left join int8_tbl b on a.q2 = coalesce(b.q1, 1)
     where coalesce(b.q1, 1) > 0;
-                                  QUERY PLAN                                   
--------------------------------------------------------------------------------
+                         QUERY PLAN                         
+------------------------------------------------------------
  Nested Loop Left Join
    Output: a.q2, b.q1
    Join Filter: (a.q2 = COALESCE(b.q1, '1'::bigint))
@@ -4605,16 +4605,16 @@ select a.q2, b.q1
   where coalesce(b.q1, 1) > 0;
         q2         |        q1        
 -------------------+------------------
- -4567890123456789 |                 
-               123 |              123
-               123 |              123
                456 |                 
   4567890123456789 | 4567890123456789
   4567890123456789 | 4567890123456789
   4567890123456789 | 4567890123456789
+               123 |              123
+               123 |              123
   4567890123456789 | 4567890123456789
   4567890123456789 | 4567890123456789
   4567890123456789 | 4567890123456789
+ -4567890123456789 |                 
 (10 rows)
 
 reset enable_hashjoin;
@@ -4875,11 +4875,11 @@ SELECT * FROM
   ON true;
  x |        q1        |        q2         |        y         
 ---+------------------+-------------------+------------------
- 1 |              123 |               456 |              123
- 1 |              123 |  4567890123456789 |              123
  1 | 4567890123456789 |               123 |               42
- 1 | 4567890123456789 |  4567890123456789 | 4567890123456789
  1 | 4567890123456789 | -4567890123456789 | 4567890123456789
+ 1 |              123 |               456 |              123
+ 1 | 4567890123456789 |  4567890123456789 | 4567890123456789
+ 1 |              123 |  4567890123456789 |              123
 (5 rows)
 
 rollback;
@@ -5561,10 +5561,10 @@ select v.* from
   4567890123456789 | -4567890123456789
                123 |  4567890123456789
   4567890123456789 | -4567890123456789
-               123 |                  
-               456 |                  
   4567890123456789 |                  
  -4567890123456789 |                  
+               123 |                  
+               456 |                  
 (20 rows)
 
 select v.* from
@@ -5589,10 +5589,10 @@ select v.* from
   4567890123456789 | -4567890123456789
                123 |  4567890123456789
   4567890123456789 | -4567890123456789
-               123 |                  
-               456 |                  
   4567890123456789 |                  
  -4567890123456789 |                  
+               123 |                  
+               456 |                  
 (20 rows)
 
 explain (verbose, costs off)
@@ -5984,7 +5984,7 @@ select * from int8_tbl i8 left join lateral
          Output: f1, i8.q2
          One-Time Filter: false
  Optimizer: Postgres query optimizer
-(10 rows)
+(9 rows)
 
 explain (verbose, costs off)
 select * from int8_tbl i8 left join lateral

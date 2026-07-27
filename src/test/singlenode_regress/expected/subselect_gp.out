@@ -1,3 +1,7 @@
+-- start_ignore
+create schema subselect_gp;
+set search_path to subselect_gp, public;
+-- end_ignore
 set optimizer_enable_master_only_queries = on;
 set optimizer_segments = 3;
 set optimizer_nestloop_factor = 1.0;
@@ -794,8 +798,8 @@ explain select * from csq_pullup t0 where not exists (select 1 from csq_pullup t
 select * from csq_pullup t0 where not exists (select 1 from csq_pullup t1 where t0.t=t1.t and t1.i = 1);
   t  | n | i |  v  
 -----+---+---+-----
- abc | 1 | 2 | xyz
  xyz | 2 | 3 | def
+ abc | 1 | 2 | xyz
 (2 rows)
 
 --
@@ -832,11 +836,11 @@ analyze subselect_t2;
 explain select * from subselect_t1 where x in (select y from subselect_t2);
                                QUERY PLAN                               
 ------------------------------------------------------------------------
- Hash Semi Join  (cost=1.07..2.13 rows=3 width=4)
-   Hash Cond: (subselect_t1.x = subselect_t2.y)
-   ->  Seq Scan on subselect_t1  (cost=0.00..1.02 rows=2 width=4)
-   ->  Hash  (cost=1.03..1.03 rows=3 width=4)
-         ->  Seq Scan on subselect_t2  (cost=0.00..1.03 rows=3 width=4)
+ Hash Right Semi Join  (cost=1.04..2.12 rows=3 width=4)
+   Hash Cond: (subselect_t2.y = subselect_t1.x)
+   ->  Seq Scan on subselect_t2  (cost=0.00..1.03 rows=3 width=4)
+   ->  Hash  (cost=1.02..1.02 rows=2 width=4)
+         ->  Seq Scan on subselect_t1  (cost=0.00..1.02 rows=2 width=4)
  Optimizer: Postgres query optimizer
 (6 rows)
 
@@ -851,15 +855,15 @@ select * from subselect_t1 where x in (select y from subselect_t2);
 -- Known_opt_diff: MPP-21351
 -- end_ignore
 explain select * from subselect_t1 where x in (select y from subselect_t2 union all select y from subselect_t2);
-                                         QUERY PLAN                                          
----------------------------------------------------------------------------------------------
- Hash Semi Join  (cost=2.17..3.23 rows=3 width=4)
-   Hash Cond: (subselect_t1.x = subselect_t2.y)
-   ->  Seq Scan on subselect_t1  (cost=0.00..1.02 rows=2 width=4)
-   ->  Hash  (cost=2.09..2.09 rows=6 width=4)
-         ->  Append  (cost=0.00..2.09 rows=6 width=4)
-               ->  Seq Scan on subselect_t2  (cost=0.00..1.03 rows=3 width=4)
-               ->  Seq Scan on subselect_t2 subselect_t2_1  (cost=0.00..1.03 rows=3 width=4)
+                                      QUERY PLAN                                       
+---------------------------------------------------------------------------------------
+ Hash Right Semi Join  (cost=1.04..3.19 rows=3 width=4)
+   Hash Cond: (subselect_t2.y = subselect_t1.x)
+   ->  Append  (cost=0.00..2.09 rows=6 width=4)
+         ->  Seq Scan on subselect_t2  (cost=0.00..1.03 rows=3 width=4)
+         ->  Seq Scan on subselect_t2 subselect_t2_1  (cost=0.00..1.03 rows=3 width=4)
+   ->  Hash  (cost=1.02..1.02 rows=2 width=4)
+         ->  Seq Scan on subselect_t1  (cost=0.00..1.02 rows=2 width=4)
  Optimizer: Postgres query optimizer
 (8 rows)
 
@@ -873,12 +877,12 @@ select * from subselect_t1 where x in (select y from subselect_t2 union all sele
 explain select count(*) from subselect_t1 where x in (select y from subselect_t2);
                                   QUERY PLAN                                  
 ------------------------------------------------------------------------------
- Aggregate  (cost=2.14..2.15 rows=1 width=8)
-   ->  Hash Semi Join  (cost=1.07..2.13 rows=3 width=0)
-         Hash Cond: (subselect_t1.x = subselect_t2.y)
-         ->  Seq Scan on subselect_t1  (cost=0.00..1.02 rows=2 width=4)
-         ->  Hash  (cost=1.03..1.03 rows=3 width=4)
-               ->  Seq Scan on subselect_t2  (cost=0.00..1.03 rows=3 width=4)
+ Aggregate  (cost=2.13..2.14 rows=1 width=8)
+   ->  Hash Right Semi Join  (cost=1.04..2.12 rows=3 width=0)
+         Hash Cond: (subselect_t2.y = subselect_t1.x)
+         ->  Seq Scan on subselect_t2  (cost=0.00..1.03 rows=3 width=4)
+         ->  Hash  (cost=1.02..1.02 rows=2 width=4)
+               ->  Seq Scan on subselect_t1  (cost=0.00..1.02 rows=2 width=4)
  Optimizer: Postgres query optimizer
 (7 rows)
 
@@ -892,16 +896,16 @@ select count(*) from subselect_t1 where x in (select y from subselect_t2);
 -- Known_opt_diff: MPP-21351
 -- end_ignore
 explain select count(*) from subselect_t1 where x in (select y from subselect_t2 union all select y from subselect_t2);
-                                            QUERY PLAN                                             
----------------------------------------------------------------------------------------------------
- Aggregate  (cost=3.23..3.24 rows=1 width=8)
-   ->  Hash Semi Join  (cost=2.17..3.23 rows=3 width=0)
-         Hash Cond: (subselect_t1.x = subselect_t2.y)
-         ->  Seq Scan on subselect_t1  (cost=0.00..1.02 rows=2 width=4)
-         ->  Hash  (cost=2.09..2.09 rows=6 width=4)
-               ->  Append  (cost=0.00..2.09 rows=6 width=4)
-                     ->  Seq Scan on subselect_t2  (cost=0.00..1.03 rows=3 width=4)
-                     ->  Seq Scan on subselect_t2 subselect_t2_1  (cost=0.00..1.03 rows=3 width=4)
+                                         QUERY PLAN                                          
+---------------------------------------------------------------------------------------------
+ Aggregate  (cost=3.19..3.20 rows=1 width=8)
+   ->  Hash Right Semi Join  (cost=1.04..3.19 rows=3 width=0)
+         Hash Cond: (subselect_t2.y = subselect_t1.x)
+         ->  Append  (cost=0.00..2.09 rows=6 width=4)
+               ->  Seq Scan on subselect_t2  (cost=0.00..1.03 rows=3 width=4)
+               ->  Seq Scan on subselect_t2 subselect_t2_1  (cost=0.00..1.03 rows=3 width=4)
+         ->  Hash  (cost=1.02..1.02 rows=2 width=4)
+               ->  Seq Scan on subselect_t1  (cost=0.00..1.02 rows=2 width=4)
  Optimizer: Postgres query optimizer
 (9 rows)
 
@@ -924,9 +928,13 @@ select count(*) from
 -- Query was deadlocking because of not squelching subplans (MPP-18936)
 --
 drop table if exists t1; 
+NOTICE:  table "t1" does not exist, skipping
 drop table if exists t2; 
+NOTICE:  table "t2" does not exist, skipping
 drop table if exists t3; 
+NOTICE:  table "t3" does not exist, skipping
 drop table if exists t4; 
+NOTICE:  table "t4" does not exist, skipping
 CREATE TABLE t1 AS (SELECT generate_series(1, 5000) AS i, generate_series(5001, 10000) AS j);
 CREATE TABLE t2 AS (SELECT * FROM t1 WHERE gp_segment_id = 0);
 CREATE TABLE t3 AS (SELECT * FROM t1 WHERE gp_segment_id = 1);
@@ -1352,19 +1360,19 @@ EXPLAIN SELECT '' AS six, f1 AS "Uncorrelated Field" FROM SUBSELECT_TBL
 EXPLAIN SELECT '' AS six, f1 AS "Uncorrelated Field" FROM SUBSELECT_TBL
   WHERE f1 IN (SELECT f2 FROM SUBSELECT_TBL WHERE
     f2 IN (SELECT f1 FROM SUBSELECT_TBL)) ORDER BY 2;
-                                                QUERY PLAN                                                 
------------------------------------------------------------------------------------------------------------
- Sort  (cost=3.77..3.79 rows=8 width=36)
+                                             QUERY PLAN                                              
+-----------------------------------------------------------------------------------------------------
+ Sort  (cost=3.78..3.80 rows=8 width=36)
    Sort Key: subselect_tbl.f1
-   ->  Hash Semi Join  (cost=2.45..3.65 rows=8 width=36)
-         Hash Cond: (subselect_tbl.f1 = subselect_tbl_1.f2)
-         ->  Seq Scan on subselect_tbl  (cost=0.00..1.08 rows=8 width=4)
-         ->  Hash  (cost=2.36..2.36 rows=7 width=8)
-               ->  Hash Semi Join  (cost=1.18..2.36 rows=7 width=8)
-                     Hash Cond: (subselect_tbl_1.f2 = subselect_tbl_2.f1)
-                     ->  Seq Scan on subselect_tbl subselect_tbl_1  (cost=0.00..1.08 rows=8 width=4)
-                     ->  Hash  (cost=1.08..1.08 rows=8 width=4)
-                           ->  Seq Scan on subselect_tbl subselect_tbl_2  (cost=0.00..1.08 rows=8 width=4)
+   ->  Hash Right Semi Join  (cost=2.36..3.66 rows=8 width=36)
+         Hash Cond: (subselect_tbl_1.f2 = subselect_tbl.f1)
+         ->  Hash Semi Join  (cost=1.18..2.36 rows=7 width=8)
+               Hash Cond: (subselect_tbl_1.f2 = subselect_tbl_2.f1)
+               ->  Seq Scan on subselect_tbl subselect_tbl_1  (cost=0.00..1.08 rows=8 width=4)
+               ->  Hash  (cost=1.08..1.08 rows=8 width=4)
+                     ->  Seq Scan on subselect_tbl subselect_tbl_2  (cost=0.00..1.08 rows=8 width=4)
+         ->  Hash  (cost=1.08..1.08 rows=8 width=4)
+               ->  Seq Scan on subselect_tbl  (cost=0.00..1.08 rows=8 width=4)
  Optimizer: Postgres query optimizer
 (12 rows)
 
@@ -1427,13 +1435,13 @@ EXPLAIN SELECT '' AS six, f1 AS "Correlated Field", f3 AS "Second Field"
     (SELECT f2 FROM SUBSELECT_TBL WHERE CAST(upper.f2 AS float) = f3) ORDER BY 2,3;
                                                 QUERY PLAN                                                
 ----------------------------------------------------------------------------------------------------------
- Sort  (cost=2.50..2.52 rows=6 width=44)
+ Sort  (cost=2.49..2.50 rows=6 width=44)
    Sort Key: upper.f1, upper.f3
-   ->  Hash Semi Join  (cost=1.20..2.43 rows=6 width=44)
-         Hash Cond: (((upper.f2)::double precision = subselect_tbl.f3) AND (upper.f1 = subselect_tbl.f2))
-         ->  Seq Scan on subselect_tbl upper  (cost=0.00..1.08 rows=8 width=16)
-         ->  Hash  (cost=1.08..1.08 rows=8 width=12)
-               ->  Seq Scan on subselect_tbl  (cost=0.00..1.08 rows=8 width=12)
+   ->  Hash Right Semi Join  (cost=1.20..2.41 rows=6 width=44)
+         Hash Cond: ((subselect_tbl.f3 = (upper.f2)::double precision) AND (subselect_tbl.f2 = upper.f1))
+         ->  Seq Scan on subselect_tbl  (cost=0.00..1.08 rows=8 width=12)
+         ->  Hash  (cost=1.08..1.08 rows=8 width=16)
+               ->  Seq Scan on subselect_tbl upper  (cost=0.00..1.08 rows=8 width=16)
  Optimizer: Postgres query optimizer
 (8 rows)
 
@@ -1446,7 +1454,7 @@ EXPLAIN SELECT '' AS six, f1 AS "Correlated Field", f3 AS "Second Field"
  Sort  (cost=10000000002.39..10000000002.40 rows=3 width=44)
    Sort Key: upper.f1, upper.f3
    ->  Nested Loop Semi Join  (cost=10000000000.00..10000000002.36 rows=3 width=44)
-         Join Filter: (((upper.f1 + subselect_tbl.f2))::double precision = upper.f3)
+         Join Filter: (upper.f3 = ((upper.f1 + subselect_tbl.f2))::double precision)
          ->  Seq Scan on subselect_tbl upper  (cost=0.00..1.08 rows=8 width=12)
          ->  Materialize  (cost=0.00..1.12 rows=1 width=4)
                ->  Seq Scan on subselect_tbl  (cost=0.00..1.12 rows=1 width=4)
@@ -1653,13 +1661,13 @@ analyze dedup_reptab;
 -- row otherwise.
 explain (costs off)
 select * from dedup_reptab r where r.a in (select t.a/10 from dedup_tab t);
-             QUERY PLAN              
--------------------------------------
- Hash Semi Join
-   Hash Cond: (r.a = (t.a / 10))
-   ->  Seq Scan on dedup_reptab r
+               QUERY PLAN               
+----------------------------------------
+ Hash Right Semi Join
+   Hash Cond: ((t.a / 10) = r.a)
+   ->  Seq Scan on dedup_tab t
    ->  Hash
-         ->  Seq Scan on dedup_tab t
+         ->  Seq Scan on dedup_reptab r
  Optimizer: Postgres query optimizer
 (6 rows)
 
@@ -1696,13 +1704,13 @@ create function dedup_srf_volatile() RETURNS SETOF int AS $$
 $$ LANGUAGE plpgsql VOLATILE ROWS 3;
 explain (costs off)
 select * from dedup_srf() r(a) where r.a in (select t.a/10 from dedup_tab t);
-             QUERY PLAN              
--------------------------------------
- Hash Semi Join
-   Hash Cond: (r.a = (t.a / 10))
-   ->  Function Scan on dedup_srf r
+                QUERY PLAN                
+------------------------------------------
+ Hash Right Semi Join
+   Hash Cond: ((t.a / 10) = r.a)
+   ->  Seq Scan on dedup_tab t
    ->  Hash
-         ->  Seq Scan on dedup_tab t
+         ->  Function Scan on dedup_srf r
  Optimizer: Postgres query optimizer
 (6 rows)
 
@@ -1716,13 +1724,13 @@ select * from dedup_srf() r(a) where r.a in (select t.a/10 from dedup_tab t);
 
 explain (costs off)
 select * from dedup_srf_stable() r(a) where r.a in (select t.a/10 from dedup_tab t);
-                QUERY PLAN                 
--------------------------------------------
- Hash Semi Join
-   Hash Cond: (r.a = (t.a / 10))
-   ->  Function Scan on dedup_srf_stable r
+                   QUERY PLAN                    
+-------------------------------------------------
+ Hash Right Semi Join
+   Hash Cond: ((t.a / 10) = r.a)
+   ->  Seq Scan on dedup_tab t
    ->  Hash
-         ->  Seq Scan on dedup_tab t
+         ->  Function Scan on dedup_srf_stable r
  Optimizer: Postgres query optimizer
 (6 rows)
 
@@ -1736,13 +1744,13 @@ select * from dedup_srf_stable() r(a) where r.a in (select t.a/10 from dedup_tab
 
 explain (costs off)
 select * from dedup_srf_volatile() r(a) where r.a in (select t.a/10 from dedup_tab t);
-                 QUERY PLAN                  
----------------------------------------------
- Hash Semi Join
-   Hash Cond: (r.a = (t.a / 10))
-   ->  Function Scan on dedup_srf_volatile r
+                    QUERY PLAN                     
+---------------------------------------------------
+ Hash Right Semi Join
+   Hash Cond: ((t.a / 10) = r.a)
+   ->  Seq Scan on dedup_tab t
    ->  Hash
-         ->  Seq Scan on dedup_tab t
+         ->  Function Scan on dedup_srf_volatile r
  Optimizer: Postgres query optimizer
 (6 rows)
 
@@ -1803,15 +1811,15 @@ select * from dedup_func_stable() r(a) where r.a in (select t.a/10 from dedup_ta
 
 explain (costs off)
 select * from dedup_func_volatile() r(a) where r.a in (select t.a/10 from dedup_tab t);
-             QUERY PLAN              
--------------------------------------
- Hash Semi Join
-   Hash Cond: (($0) = (t.a / 10))
-   ->  Result
-         InitPlan 1 (returns $0)
-           ->  Result
+              QUERY PLAN               
+---------------------------------------
+ Hash Right Semi Join
+   Hash Cond: ((t.a / 10) = ($0))
+   ->  Seq Scan on dedup_tab t
    ->  Hash
-         ->  Seq Scan on dedup_tab t
+         ->  Result
+               InitPlan 1 (returns $0)
+                 ->  Result
  Optimizer: Postgres query optimizer
 (8 rows)
 
@@ -2217,18 +2225,18 @@ select * from foo where
   (select b.i from baz b);
                                       QUERY PLAN                                       
 ---------------------------------------------------------------------------------------
- Hash Semi Join
+ Hash Right Semi Join
    Output: foo.i, foo.j
-   Hash Cond: (CASE WHEN ((hashed SubPlan 1)) THEN foo.i ELSE NULL::integer END = b.i)
-   ->  Seq Scan on subselect_gp.foo
-         Output: foo.i, foo.j, (hashed SubPlan 1)
-         SubPlan 1
-           ->  Seq Scan on subselect_gp.baz a
-                 Output: a.i
+   Hash Cond: (b.i = CASE WHEN ((hashed SubPlan 1)) THEN foo.i ELSE NULL::integer END)
+   ->  Seq Scan on subselect_gp.baz b
+         Output: b.i, b.j
    ->  Hash
-         Output: b.i
-         ->  Seq Scan on subselect_gp.baz b
-               Output: b.i
+         Output: foo.i, foo.j, ((hashed SubPlan 1))
+         ->  Seq Scan on subselect_gp.foo
+               Output: foo.i, foo.j, (hashed SubPlan 1)
+               SubPlan 1
+                 ->  Seq Scan on subselect_gp.baz a
+                       Output: a.i
  Optimizer: Postgres query optimizer
 (13 rows)
 
@@ -2284,7 +2292,7 @@ where dt < '2010-01-01'::date;
    ->  Seq Scan on subselect_gp.extra_flow_dist1
          Output: extra_flow_dist1.a, extra_flow_dist1.b
  Optimizer: Postgres query optimizer
-(18 rows)
+(17 rows)
 
 with run_dt as (
 	select
@@ -2332,7 +2340,7 @@ where dt < '2010-01-01'::date;
          ->  Seq Scan on subselect_gp.extra_flow_dist1
                Output: extra_flow_dist1.a, extra_flow_dist1.b
  Optimizer: Postgres query optimizer
-(17 rows)
+(16 rows)
 
 with run_dt as (
 	select
@@ -2380,7 +2388,7 @@ where dt < '2010-01-01'::date;
    ->  Seq Scan on subselect_gp.extra_flow_dist1
          Output: extra_flow_dist1.a, extra_flow_dist1.b
  Optimizer: Postgres query optimizer
-(19 rows)
+(18 rows)
 
 with run_dt as (
 	select
@@ -2433,7 +2441,7 @@ where dt < extra_flow_dist1.a;
          ->  Seq Scan on subselect_gp.extra_flow_dist1
                Output: extra_flow_dist1.a, extra_flow_dist1.b
  Optimizer: Postgres query optimizer
-(25 rows)
+(24 rows)
 
 -- case 5 for subplan with outer entry locus without param in subplan (CTE and subquery)
 explain (verbose, costs off) with run_dt as (
@@ -2470,7 +2478,7 @@ where dt < extra_flow_dist1.a;
          ->  Seq Scan on subselect_gp.extra_flow_dist1
                Output: extra_flow_dist1.a, extra_flow_dist1.b
  Optimizer: Postgres query optimizer
-(25 rows)
+(24 rows)
 
 -- case 6 without CTE, nested subquery should not add extral flow
 explain (verbose, costs off) select * from (
@@ -2525,7 +2533,7 @@ where dt < '2010-01-01'::date;
    ->  Seq Scan on subselect_gp.extra_flow_dist1
          Output: extra_flow_dist1.a, extra_flow_dist1.b
  Optimizer: Postgres query optimizer
-(34 rows)
+(33 rows)
 
 -- Check DISTINCT ON clause and ORDER BY clause in SubLink, See https://github.com/greenplum-db/gpdb/issues/12656.
 -- For EXISTS SubLink, we don’t need to care about the data deduplication problem, we can delete DISTINCT ON clause and
@@ -2559,7 +2567,7 @@ select * from issue_12656 where (i, j) in (select distinct on (i) i, j from issu
                      ->  Seq Scan on subselect_gp.issue_12656 issue_12656_1
                            Output: issue_12656_1.i, issue_12656_1.j
  Optimizer: Postgres query optimizer
-(18 rows)
+(17 rows)
 
 select * from issue_12656 where (i, j) in (select distinct on (i) i, j from issue_12656);
  i |   j   
@@ -2589,7 +2597,7 @@ select * from issue_12656 where (i, j) in (select distinct on (i) i, j from issu
                      ->  Seq Scan on subselect_gp.issue_12656 issue_12656_1
                            Output: issue_12656_1.i, issue_12656_1.j
  Optimizer: Postgres query optimizer
-(18 rows)
+(17 rows)
 
 select * from issue_12656 where (i, j) in (select distinct on (i) i, j from issue_12656 order by i, j asc);
  i |   j   
@@ -2618,7 +2626,7 @@ select * from issue_12656 where (i, j) in (select distinct on (i) i, j from issu
                      ->  Seq Scan on subselect_gp.issue_12656 issue_12656_1
                            Output: issue_12656_1.i, issue_12656_1.j
  Optimizer: Postgres query optimizer
-(18 rows)
+(17 rows)
 
 select * from issue_12656 where (i, j) in (select distinct on (i) i, j from issue_12656 order by i, j desc);
  i |   j   

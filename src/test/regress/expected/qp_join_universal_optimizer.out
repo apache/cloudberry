@@ -40,7 +40,7 @@ create table part (c1 int, c2 int) partition by list(c2) (
 partition part1 values (1, 2, 3, 4), 
 partition part2 values (5, 6, 7), 
 partition part3 values (8, 9, 0));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c1' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c1' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into part select i, i%10 from generate_series(1, 999) i;
 -- const tvf (universal)
@@ -81,7 +81,7 @@ explain (analyze, costs off, timing off, summary off) select * from dist join co
                ->  Result (actual rows=1 loops=1)
                      Filter: ((1) = 1)
                      ->  Result (actual rows=1 loops=1)
- Optimizer: Pivotal Optimizer (GPORCA)
+ Optimizer: GPORCA
 (13 rows)
 
 explain (analyze, costs off, timing off, summary off) select * from dist join unnest_arr on dist.c1 = unnest_arr.c1;
@@ -97,7 +97,7 @@ explain (analyze, costs off, timing off, summary off) select * from dist join un
                ->  Result (actual rows=7 loops=1)
                      ->  ProjectSet (actual rows=7 loops=1)
                            ->  Result (actual rows=1 loops=1)
- Optimizer: Pivotal Optimizer (GPORCA)
+ Optimizer: GPORCA
 (11 rows)
 
 explain (analyze, costs off, timing off, summary off) select * from dist join gen_series on dist.c1 = gen_series.c1;
@@ -112,7 +112,7 @@ explain (analyze, costs off, timing off, summary off) select * from dist join ge
                Buckets: 524288  Batches: 1  Memory Usage: 4097kB
                ->  ProjectSet (actual rows=21 loops=1)
                      ->  Result (actual rows=1 loops=1)
- Optimizer: Pivotal Optimizer (GPORCA)
+ Optimizer: GPORCA
 (10 rows)
 
 -- randomly distributed ⋈ universal 
@@ -128,47 +128,47 @@ explain (analyze, timing off, summary off) select * from rand join const_tvf(1) 
  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..431.02 rows=1 width=8) (actual rows=1 loops=1)
    ->  Hash Join  (cost=0.00..431.02 rows=1 width=8) (actual rows=1 loops=1)
          Hash Cond: (c1 = (1))
-         Extra Text: (seg2)   Hash chain length 1.0 avg, 1 max, using 1 of 524288 buckets.
+         Extra Text: (seg1)   Hash chain length 1.0 avg, 1 max, using 1 of 524288 buckets.
          ->  Seq Scan on rand  (cost=0.00..431.02 rows=1 width=4) (actual rows=1 loops=1)
                Filter: (c1 = 1)
-               Rows Removed by Filter: 322
+               Rows Removed by Filter: 336
          ->  Hash  (cost=0.00..0.00 rows=1 width=4) (actual rows=1 loops=1)
                Buckets: 524288  Batches: 1  Memory Usage: 4097kB
                ->  Result  (cost=0.00..0.00 rows=1 width=4) (actual rows=1 loops=1)
                      Filter: ((1) = 1)
                      ->  Result  (cost=0.00..0.00 rows=1 width=1) (actual rows=1 loops=1)
- Optimizer: Pivotal Optimizer (GPORCA)
+ Optimizer: GPORCA
 (13 rows)
 
 explain (analyze, timing off, summary off) select * from rand join unnest_arr on rand.c1 = unnest_arr.c1;
                                                QUERY PLAN                                               
 --------------------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..431.11 rows=999 width=8) (actual rows=3 loops=1)
-   ->  Hash Join  (cost=0.00..431.08 rows=333 width=8) (actual rows=2 loops=1)
+   ->  Hash Join  (cost=0.00..431.08 rows=333 width=8) (actual rows=1 loops=1)
          Hash Cond: (c1 = (((unnest('{-3,-2,-1,0,1,2,3}'::text[])))::integer))
          Extra Text: (seg0)   Hash chain length 1.0 avg, 1 max, using 7 of 524288 buckets.
-         ->  Seq Scan on rand  (cost=0.00..431.01 rows=333 width=4) (actual rows=338 loops=1)
+         ->  Seq Scan on rand  (cost=0.00..431.01 rows=333 width=4) (actual rows=343 loops=1)
          ->  Hash  (cost=0.00..0.00 rows=1 width=4) (actual rows=7 loops=1)
                Buckets: 524288  Batches: 1  Memory Usage: 4097kB
                ->  Result  (cost=0.00..0.00 rows=1 width=4) (actual rows=7 loops=1)
                      ->  ProjectSet  (cost=0.00..0.00 rows=1 width=4) (actual rows=7 loops=1)
                            ->  Result  (cost=0.00..0.00 rows=1 width=1) (actual rows=1 loops=1)
- Optimizer: Pivotal Optimizer (GPORCA)
+ Optimizer: GPORCA
 (11 rows)
 
 explain (analyze, timing off, summary off) select * from rand join gen_series on rand.c1 = gen_series.c1;
                                                QUERY PLAN                                                
 ---------------------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..431.11 rows=999 width=8) (actual rows=10 loops=1)
-   ->  Hash Join  (cost=0.00..431.08 rows=333 width=8) (actual rows=7 loops=1)
+   ->  Hash Join  (cost=0.00..431.08 rows=333 width=8) (actual rows=5 loops=1)
          Hash Cond: (c1 = (generate_series('-10'::integer, 10)))
-         Extra Text: (seg2)   Hash chain length 1.0 avg, 1 max, using 21 of 524288 buckets.
-         ->  Seq Scan on rand  (cost=0.00..431.01 rows=333 width=4) (actual rows=338 loops=1)
+         Extra Text: (seg0)   Hash chain length 1.0 avg, 1 max, using 21 of 524288 buckets.
+         ->  Seq Scan on rand  (cost=0.00..431.01 rows=333 width=4) (actual rows=343 loops=1)
          ->  Hash  (cost=0.00..0.00 rows=1 width=4) (actual rows=21 loops=1)
                Buckets: 524288  Batches: 1  Memory Usage: 4097kB
                ->  ProjectSet  (cost=0.00..0.00 rows=1 width=4) (actual rows=21 loops=1)
                      ->  Result  (cost=0.00..0.00 rows=1 width=1) (actual rows=1 loops=1)
- Optimizer: Pivotal Optimizer (GPORCA)
+ Optimizer: GPORCA
 (10 rows)
 
 -- replicated ⋈ universal
@@ -181,9 +181,9 @@ explain (analyze, costs off, timing off, summary off) select * from rep join con
  Gather Motion 3:1  (slice1; segments: 3) (actual rows=1 loops=1)
    ->  Hash Join (actual rows=1 loops=1)
          Hash Cond: ((1) = c1)
-         Extra Text: (seg1)   Hash chain length 1.0 avg, 1 max, using 1 of 524288 buckets.
+         Extra Text: (seg0)   Hash chain length 1.0 avg, 1 max, using 1 of 524288 buckets.
          ->  Result (actual rows=1 loops=1)
-               One-Time Filter: (gp_execution_segment() = 1)
+               One-Time Filter: (gp_execution_segment() = 0)
                ->  Result (actual rows=1 loops=1)
                      Filter: ((1) = 1)
                      ->  Result (actual rows=1 loops=1)
@@ -192,7 +192,7 @@ explain (analyze, costs off, timing off, summary off) select * from rep join con
                ->  Seq Scan on rep (actual rows=1 loops=1)
                      Filter: (c1 = 1)
                      Rows Removed by Filter: 998
- Optimizer: Pivotal Optimizer (GPORCA)
+ Optimizer: GPORCA
 (15 rows)
 
 explain (analyze, costs off, timing off, summary off) select * from rep join unnest_arr on rep.c1 = unnest_arr.c1;
@@ -201,16 +201,16 @@ explain (analyze, costs off, timing off, summary off) select * from rep join unn
  Gather Motion 3:1  (slice1; segments: 3) (actual rows=3 loops=1)
    ->  Hash Join (actual rows=3 loops=1)
          Hash Cond: ((((unnest('{-3,-2,-1,0,1,2,3}'::text[])))::integer) = c1)
-         Extra Text: (seg2)   Hash chain length 1.0 avg, 1 max, using 999 of 524288 buckets.
+         Extra Text: (seg0)   Hash chain length 1.0 avg, 1 max, using 999 of 524288 buckets.
          ->  Result (actual rows=7 loops=1)
-               One-Time Filter: (gp_execution_segment() = 2)
+               One-Time Filter: (gp_execution_segment() = 0)
                ->  Result (actual rows=7 loops=1)
                      ->  ProjectSet (actual rows=7 loops=1)
                            ->  Result (actual rows=1 loops=1)
          ->  Hash (actual rows=999 loops=1)
                Buckets: 524288  Batches: 1  Memory Usage: 4132kB
                ->  Seq Scan on rep (actual rows=999 loops=1)
- Optimizer: Pivotal Optimizer (GPORCA)
+ Optimizer: GPORCA
 (13 rows)
 
 explain (analyze, costs off, timing off, summary off) select * from rep join gen_series on rep.c1 = gen_series.c1;
@@ -219,15 +219,15 @@ explain (analyze, costs off, timing off, summary off) select * from rep join gen
  Gather Motion 3:1  (slice1; segments: 3) (actual rows=10 loops=1)
    ->  Hash Join (actual rows=10 loops=1)
          Hash Cond: ((generate_series('-10'::integer, 10)) = c1)
-         Extra Text: (seg1)   Hash chain length 1.0 avg, 1 max, using 999 of 524288 buckets.
+         Extra Text: (seg2)   Hash chain length 1.0 avg, 1 max, using 999 of 524288 buckets.
          ->  Result (actual rows=21 loops=1)
-               One-Time Filter: (gp_execution_segment() = 1)
+               One-Time Filter: (gp_execution_segment() = 2)
                ->  ProjectSet (actual rows=21 loops=1)
                      ->  Result (actual rows=1 loops=1)
          ->  Hash (actual rows=999 loops=1)
                Buckets: 524288  Batches: 1  Memory Usage: 4132kB
                ->  Seq Scan on rep (actual rows=999 loops=1)
- Optimizer: Pivotal Optimizer (GPORCA)
+ Optimizer: GPORCA
 (12 rows)
 
 -- partitioned ⋈ universal 
@@ -251,7 +251,7 @@ explain (analyze, costs off, timing off, summary off) select * from part join co
                      ->  Result (actual rows=1 loops=1)
                            Filter: ((1) = 1)
                            ->  Result (actual rows=1 loops=1)
- Optimizer: Pivotal Optimizer (GPORCA)
+ Optimizer: GPORCA
 (15 rows)
 
 explain (analyze, costs off, timing off, summary off) select * from part join unnest_arr on part.c2 = unnest_arr.c1;
@@ -270,7 +270,7 @@ explain (analyze, costs off, timing off, summary off) select * from part join un
                      ->  Result (actual rows=7 loops=1)
                            ->  ProjectSet (actual rows=7 loops=1)
                                  ->  Result (actual rows=1 loops=1)
- Optimizer: Pivotal Optimizer (GPORCA)
+ Optimizer: GPORCA
 (14 rows)
 
 explain (analyze, costs off, timing off, summary off) select * from part join gen_series on part.c2 = gen_series.c1;
@@ -288,7 +288,7 @@ explain (analyze, costs off, timing off, summary off) select * from part join ge
                ->  Partition Selector (selector id: $0) (actual rows=21 loops=1)
                      ->  ProjectSet (actual rows=21 loops=1)
                            ->  Result (actual rows=1 loops=1)
- Optimizer: Pivotal Optimizer (GPORCA)
+ Optimizer: GPORCA
 (13 rows)
 
 -- distributed ⟕ universal 
@@ -305,7 +305,7 @@ explain (analyze, costs off, timing off, summary off) select * from dist left jo
          ->  Hash (actual rows=1 loops=1)
                Buckets: 524288  Batches: 1  Memory Usage: 4097kB
                ->  Result (actual rows=1 loops=1)
- Optimizer: Pivotal Optimizer (GPORCA)
+ Optimizer: GPORCA
 (9 rows)
 
 explain (analyze, costs off, timing off, summary off) select * from dist left join unnest_arr on dist.c1 = unnest_arr.c1;
@@ -321,7 +321,7 @@ explain (analyze, costs off, timing off, summary off) select * from dist left jo
                ->  Result (actual rows=7 loops=1)
                      ->  ProjectSet (actual rows=7 loops=1)
                            ->  Result (actual rows=1 loops=1)
- Optimizer: Pivotal Optimizer (GPORCA)
+ Optimizer: GPORCA
 (11 rows)
 
 explain (analyze, costs off, timing off, summary off) select * from dist left join gen_series on dist.c1 = gen_series.c1;
@@ -336,7 +336,7 @@ explain (analyze, costs off, timing off, summary off) select * from dist left jo
                Buckets: 524288  Batches: 1  Memory Usage: 4097kB
                ->  ProjectSet (actual rows=21 loops=1)
                      ->  Result (actual rows=1 loops=1)
- Optimizer: Pivotal Optimizer (GPORCA)
+ Optimizer: GPORCA
 (10 rows)
 
 -- universal ⟕ distributed
@@ -360,7 +360,7 @@ explain (analyze, costs off, timing off, summary off) select * from unnest_arr l
          ->  Hash (actual rows=340 loops=1)
                Buckets: 524288  Batches: 1  Memory Usage: 4108kB
                ->  Seq Scan on dist (actual rows=340 loops=1)
- Optimizer: Pivotal Optimizer (GPORCA)
+ Optimizer: GPORCA
 (12 rows)
 
 explain (analyze, costs off, timing off, summary off) select * from gen_series left join dist on dist.c1 = gen_series.c1;
@@ -376,7 +376,7 @@ explain (analyze, costs off, timing off, summary off) select * from gen_series l
          ->  Hash (actual rows=340 loops=1)
                Buckets: 524288  Batches: 1  Memory Usage: 4108kB
                ->  Seq Scan on dist (actual rows=340 loops=1)
- Optimizer: Pivotal Optimizer (GPORCA)
+ Optimizer: GPORCA
 (11 rows)
 
 -- universal ▷ distributed
@@ -385,53 +385,52 @@ explain (analyze, costs off, timing off, summary off) select * from gen_series l
 -- it needs to be deduplicated. This is achieved by a hash
 -- filter (duplicate-sensitive hash motion).
 explain (analyze, costs off, timing off, summary off) select * from const_tvf(1) ct(c1) where not exists (select 1 from dist where dist.c1 = ct.c1);
-                                     QUERY PLAN                                     
-------------------------------------------------------------------------------------
- Hash Anti Join (actual rows=0 loops=1)
-   Hash Cond: ((1) = c1)
-   Extra Text: Hash chain length 1.0 avg, 1 max, using 1 of 524288 buckets.
-   ->  Result (actual rows=1 loops=1)
-   ->  Hash (actual rows=1 loops=1)
-         Buckets: 524288  Batches: 1  Memory Usage: 4097kB
-         ->  Result (actual rows=1 loops=1)
-               ->  Gather Motion 3:1  (slice1; segments: 3) (actual rows=1 loops=1)
-                     ->  Seq Scan on dist (actual rows=1 loops=1)
-                           Filter: (c1 = 1)
-                           Rows Removed by Filter: 321
- Optimizer: Pivotal Optimizer (GPORCA)
-(12 rows)
+                            QUERY PLAN                            
+------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3) (actual rows=0 loops=1)
+   ->  Hash Right Anti Join (actual rows=0 loops=1)
+         Hash Cond: ((1) = c1)
+         ->  Seq Scan on dist (actual rows=1 loops=1)
+               Filter: (c1 = 1)
+               Rows Removed by Filter: 321
+         ->  Hash (actual rows=1 loops=1)
+               Buckets: 524288  Batches: 1  Memory Usage: 4097kB
+               ->  Result (actual rows=1 loops=1)
+                     ->  Result (actual rows=1 loops=1)
+ Optimizer: GPORCA
+(11 rows)
 
 explain (analyze, costs off, timing off, summary off) select * from unnest_arr where not exists (select 1 from dist where dist.c1 = unnest_arr.c1);
-                                         QUERY PLAN                                          
----------------------------------------------------------------------------------------------
+                                        QUERY PLAN                                         
+-------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3) (actual rows=4 loops=1)
-   ->  Hash Anti Join (actual rows=3 loops=1)
+   ->  Hash Right Anti Join (actual rows=3 loops=1)
          Hash Cond: ((((unnest('{-3,-2,-1,0,1,2,3}'::text[])))::integer) = c1)
-         Extra Text: (seg1)   Hash chain length 1.0 avg, 1 max, using 322 of 524288 buckets.
-         ->  Result (actual rows=4 loops=1)
-               ->  Result (actual rows=7 loops=1)
-                     ->  ProjectSet (actual rows=7 loops=1)
-                           ->  Result (actual rows=1 loops=1)
-         ->  Hash (actual rows=340 loops=1)
-               Buckets: 524288  Batches: 1  Memory Usage: 4110kB
-               ->  Seq Scan on dist (actual rows=340 loops=1)
- Optimizer: Pivotal Optimizer (GPORCA)
+         Extra Text: (seg1)   Hash chain length 1.0 avg, 1 max, using 4 of 524288 buckets.
+         ->  Seq Scan on dist (actual rows=340 loops=1)
+         ->  Hash (actual rows=4 loops=1)
+               Buckets: 524288  Batches: 1  Memory Usage: 4097kB
+               ->  Result (actual rows=4 loops=1)
+                     ->  Result (actual rows=7 loops=1)
+                           ->  ProjectSet (actual rows=7 loops=1)
+                                 ->  Result (actual rows=1 loops=1)
+ Optimizer: GPORCA
 (12 rows)
 
 explain (analyze, costs off, timing off, summary off) select * from gen_series where not exists (select 1 from dist where dist.c1 = gen_series.c1);
-                                         QUERY PLAN                                          
----------------------------------------------------------------------------------------------
+                                        QUERY PLAN                                         
+-------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3) (actual rows=11 loops=1)
-   ->  Hash Anti Join (actual rows=6 loops=1)
+   ->  Hash Right Anti Join (actual rows=6 loops=1)
          Hash Cond: ((generate_series('-10'::integer, 10)) = c1)
-         Extra Text: (seg1)   Hash chain length 1.0 avg, 1 max, using 322 of 524288 buckets.
-         ->  Result (actual rows=8 loops=1)
-               ->  ProjectSet (actual rows=21 loops=1)
-                     ->  Result (actual rows=1 loops=1)
-         ->  Hash (actual rows=340 loops=1)
-               Buckets: 524288  Batches: 1  Memory Usage: 4110kB
-               ->  Seq Scan on dist (actual rows=340 loops=1)
- Optimizer: Pivotal Optimizer (GPORCA)
+         Extra Text: (seg1)   Hash chain length 1.0 avg, 1 max, using 7 of 524288 buckets.
+         ->  Seq Scan on dist (actual rows=340 loops=1)
+         ->  Hash (actual rows=8 loops=1)
+               Buckets: 524288  Batches: 1  Memory Usage: 4097kB
+               ->  Result (actual rows=8 loops=1)
+                     ->  ProjectSet (actual rows=21 loops=1)
+                           ->  Result (actual rows=1 loops=1)
+ Optimizer: GPORCA
 (11 rows)
 
 -- Testing inner nested loop join
@@ -448,7 +447,7 @@ explain (analyze, costs off, timing off, summary off) select * from dist join co
          Rows Removed by Join Filter: 337
          ->  Result (actual rows=1 loops=1)
          ->  Seq Scan on dist (actual rows=170 loops=2)
- Optimizer: Pivotal Optimizer (GPORCA)
+ Optimizer: GPORCA
 (7 rows)
 
 explain (analyze, costs off, timing off, summary off) select * from dist join unnest_arr on dist.c1 < unnest_arr.c1;
@@ -462,7 +461,7 @@ explain (analyze, costs off, timing off, summary off) select * from dist join un
                ->  ProjectSet (actual rows=7 loops=1)
                      ->  Result (actual rows=1 loops=1)
          ->  Seq Scan on dist (actual rows=298 loops=8)
- Optimizer: Pivotal Optimizer (GPORCA)
+ Optimizer: GPORCA
 (9 rows)
 
 explain (analyze, costs off, timing off, summary off) select * from dist join gen_series on dist.c1 < gen_series.c1;
@@ -475,6 +474,6 @@ explain (analyze, costs off, timing off, summary off) select * from dist join ge
          ->  ProjectSet (actual rows=21 loops=1)
                ->  Result (actual rows=1 loops=1)
          ->  Seq Scan on dist (actual rows=325 loops=22)
- Optimizer: Pivotal Optimizer (GPORCA)
+ Optimizer: GPORCA
 (8 rows)
 

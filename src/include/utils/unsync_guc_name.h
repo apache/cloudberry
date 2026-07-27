@@ -424,6 +424,7 @@
 		"optimizer_discard_redistribute_hashjoin",
 		"optimizer_enable_indexjoin",
 		"optimizer_enable_indexonlyscan",
+		"optimizer_enable_right_semi_join",
 		"optimizer_enable_indexscan",
 		"optimizer_enable_master_only_queries",
 		"optimizer_enable_materialize",

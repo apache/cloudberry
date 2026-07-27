@@ -306,6 +306,12 @@ CXformFactory::Instantiate()
 	Add(GPOS_NEW(m_mp) CXformFullOuterJoin2HashJoin(m_mp));
 	Add(GPOS_NEW(m_mp) CXformFullJoinCommutativity(m_mp));
 	Add(GPOS_NEW(m_mp) CXformSplitWindowFunc(m_mp));
+	// Right semi/anti hash join xforms (Mark Join) -- kept at the END of the
+	// Add list to match the enum-end positioning in CXform.h (preserves the
+	// integer values of pre-existing xform IDs; same lesson as the PG
+	// JoinType enum placement for JOIN_RIGHT_SEMI).
+	Add(GPOS_NEW(m_mp) CXformLeftSemiJoin2RightSemiHashJoin(m_mp));
+	Add(GPOS_NEW(m_mp) CXformLeftAntiSemiJoin2RightAntiSemiHashJoin(m_mp));
 
 	GPOS_ASSERT(nullptr != m_rgpxf[CXform::ExfSentinel - 1] &&
 				"Not all xforms have been instantiated");

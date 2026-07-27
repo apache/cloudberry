@@ -352,6 +352,7 @@ bool		optimizer_enable_dml;
 bool		optimizer_enable_dml_constraints;
 bool		optimizer_enable_master_only_queries;
 bool		optimizer_enable_hashjoin;
+bool		optimizer_enable_right_semi_join = true;
 bool		optimizer_enable_dynamictablescan;
 bool		optimizer_enable_dynamicindexscan;
 bool		optimizer_enable_dynamicindexonlyscan;
@@ -2350,6 +2351,17 @@ struct config_bool ConfigureNamesBool_gp[] =
 			GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE
 		},
 		&optimizer_enable_hashjoin,
+		true,
+		NULL, NULL, NULL
+	},
+
+	{
+		{"optimizer_enable_right_semi_join", PGC_USERSET, DEVELOPER_OPTIONS,
+			gettext_noop("Enables the optimizer's use of right semi/anti hash join plans."),
+			NULL,
+			GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE
+		},
+		&optimizer_enable_right_semi_join,
 		true,
 		NULL, NULL, NULL
 	},

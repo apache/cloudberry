@@ -442,6 +442,15 @@ CConfigParamMapping::PackConfigParamInBitset(
 		hash_join_bitste->Release();
 	}
 
+	// disable right semi/anti hash join (Mark Join) xforms if the GUC is off
+	if (!optimizer_enable_right_semi_join)
+	{
+		traceflag_bitset->ExchangeSet(
+			GPOPT_DISABLE_XFORM_TF(CXform::ExfLeftSemiJoin2RightSemiHashJoin));
+		traceflag_bitset->ExchangeSet(GPOPT_DISABLE_XFORM_TF(
+			CXform::ExfLeftAntiSemiJoin2RightAntiSemiHashJoin));
+	}
+
 	if (!optimizer_enable_dynamictablescan)
 	{
 		// disable dynamic table scan if the corresponding GUC is turned off

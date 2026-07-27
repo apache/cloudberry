@@ -1115,7 +1115,6 @@ where o.ten = 0;
                        ->  Seq Scan on public.int4_tbl
                              Output: int4_tbl.f1
                              Filter: (int4_tbl.f1 <= o.hundred)
- Settings: optimizer = 'off'
  Optimizer: Postgres query optimizer
 (17 rows)
 
@@ -1341,24 +1340,24 @@ select * from int4_tbl where
 explain (verbose, costs off)
 select * from int4_tbl o where (f1, f1) in
   (select f1, generate_series(1,50) / 10 g from int4_tbl i group by f1);
-                            QUERY PLAN                             
--------------------------------------------------------------------
- Hash Semi Join
+                         QUERY PLAN                          
+-------------------------------------------------------------
+ Hash Right Semi Join
    Output: o.f1
-   Hash Cond: (o.f1 = "ANY_subquery".f1)
-   ->  Seq Scan on public.int4_tbl o
-         Output: o.f1
-   ->  Hash
+   Hash Cond: ("ANY_subquery".f1 = o.f1)
+   ->  Subquery Scan on "ANY_subquery"
          Output: "ANY_subquery".f1, "ANY_subquery".g
-         ->  Subquery Scan on "ANY_subquery"
-               Output: "ANY_subquery".f1, "ANY_subquery".g
-               Filter: ("ANY_subquery".f1 = "ANY_subquery".g)
-               ->  Result
-                     Output: i.f1, ((generate_series(1, 50)) / 10)
-                     ->  ProjectSet
-                           Output: generate_series(1, 50), i.f1
-                           ->  Seq Scan on public.int4_tbl i
-                                 Output: i.f1
+         Filter: ("ANY_subquery".f1 = "ANY_subquery".g)
+         ->  Result
+               Output: i.f1, ((generate_series(1, 50)) / 10)
+               ->  ProjectSet
+                     Output: generate_series(1, 50), i.f1
+                     ->  Seq Scan on public.int4_tbl i
+                           Output: i.f1
+   ->  Hash
+         Output: o.f1
+         ->  Seq Scan on public.int4_tbl o
+               Output: o.f1
  Optimizer: Postgres query optimizer
 (17 rows)
 
@@ -1671,8 +1670,9 @@ select * from x where f1 = 1;
  Seq Scan on public.subselect_tbl
    Output: subselect_tbl.f1
    Filter: (subselect_tbl.f1 = 1)
+ Settings: gp_cte_sharing = 'on'
  Optimizer: Postgres query optimizer
-(4 rows)
+(5 rows)
 
 -- Explicitly request materialization
 explain (verbose, costs off)
@@ -1687,8 +1687,9 @@ select * from x where f1 = 1;
          Output: share0_ref1.f1
          ->  Seq Scan on public.subselect_tbl
                Output: subselect_tbl.f1
+ Settings: gp_cte_sharing = 'on'
  Optimizer: Postgres query optimizer
-(8 rows)
+(9 rows)
 
 -- Stable functions are safe to inline
 explain (verbose, costs off)
@@ -1699,8 +1700,9 @@ select * from x where f1 = 1;
  Seq Scan on public.subselect_tbl
    Output: subselect_tbl.f1, 'regression'::name
    Filter: (subselect_tbl.f1 = 1)
+ Settings: gp_cte_sharing = 'on'
  Optimizer: Postgres query optimizer
-(4 rows)
+(5 rows)
 
 -- Volatile functions prevent inlining
 -- GPDB_12_MERGE_FIXME: inlining happens on GPDB: But the plan seems OK
@@ -1719,8 +1721,9 @@ select * from x where f1 = 1;
          Output: share0_ref1.f1, share0_ref1.random
          ->  Seq Scan on public.subselect_tbl
                Output: subselect_tbl.f1, random()
+ Settings: gp_cte_sharing = 'on'
  Optimizer: Postgres query optimizer
-(4 rows)
+(9 rows)
 
 -- SELECT FOR UPDATE cannot be inlined
 -- GPDB: select statement with locking clause is not easy to fully supported
@@ -1737,8 +1740,9 @@ select * from x where f1 = 1;
    ->  Seq Scan on public.subselect_tbl
          Output: subselect_tbl.f1, subselect_tbl.ctid
          Filter: (subselect_tbl.f1 = 1)
+ Settings: gp_cte_sharing = 'on'
  Optimizer: Postgres query optimizer
-(6 rows)
+(7 rows)
 
 -- Multiply-referenced CTEs are inlined only when requested
 explain (verbose, costs off)
@@ -1757,8 +1761,9 @@ select * from x, x x2 where x.n = x2.n;
                Output: share0_ref1.f1, share0_ref1.n
                ->  Seq Scan on public.subselect_tbl
                      Output: subselect_tbl.f1, 'regression'::name
+ Settings: gp_cte_sharing = 'on'
  Optimizer: Postgres query optimizer
-(12 rows)
+(13 rows)
 
 explain (verbose, costs off)
 with x as not materialized (select * from (select f1, current_database() as n from subselect_tbl) ss)
@@ -1774,8 +1779,9 @@ select * from x, x x2 where x.n = x2.n;
          Output: subselect_tbl_1.f1, ('regression'::name)
          ->  Seq Scan on public.subselect_tbl subselect_tbl_1
                Output: subselect_tbl_1.f1, 'regression'::name
+ Settings: gp_cte_sharing = 'on'
  Optimizer: Postgres query optimizer
-(10 rows)
+(11 rows)
 
 -- Multiply-referenced CTEs can't be inlined if they contain outer self-refs
 -- start_ignore
@@ -1801,12 +1807,11 @@ select * from x;
          Join Filter: (length((x.a || x_1.a)) < 5)
          ->  WorkTable Scan on x
                Output: x.a
-         ->  Materialize
+         ->  WorkTable Scan on x x_1
                Output: x_1.a
-               ->  WorkTable Scan on x x_1
-                     Output: x_1.a
+ Settings: gp_cte_sharing = 'on'
  Optimizer: Postgres query optimizer
-(13 rows)
+(12 rows)
 
 with recursive x(a) as
   ((values ('a'), ('b'))
@@ -1815,11 +1820,31 @@ with recursive x(a) as
     select z.a || z1.a as a from z cross join z as z1
     where length(z.a || z1.a) < 5))
 select * from x;
- a 
----
+  a   
+------
  a
  b
-(2 rows)
+ aa
+ ab
+ ba
+ bb
+ aaaa
+ aaab
+ aaba
+ aabb
+ abaa
+ abab
+ abba
+ abbb
+ baaa
+ baab
+ baba
+ babb
+ bbaa
+ bbab
+ bbba
+ bbbb
+(22 rows)
 
 -- end_ignore
 explain (verbose, costs off)
@@ -1840,8 +1865,9 @@ select * from x;
          ->  WorkTable Scan on x
                Output: x.a
                Filter: (length((x.a || x.a)) < 5)
+ Settings: gp_cte_sharing = 'on'
  Optimizer: Postgres query optimizer
-(9 rows)
+(10 rows)
 
 with recursive x(a) as
   ((values ('a'), ('b'))
@@ -1868,8 +1894,9 @@ select * from (with y as (select * from x) select * from y) ss;
 -------------------------------------
  Seq Scan on public.int4_tbl
    Output: int4_tbl.f1
+ Settings: gp_cte_sharing = 'on'
  Optimizer: Postgres query optimizer
-(3 rows)
+(4 rows)
 
 explain (verbose, costs off)
 with x as materialized (select * from int4_tbl)
@@ -1880,8 +1907,9 @@ select * from (with y as (select * from x) select * from y) ss;
    Output: share0_ref1.f1
    ->  Seq Scan on public.int4_tbl
          Output: int4_tbl.f1
+ Settings: gp_cte_sharing = 'on'
  Optimizer: Postgres query optimizer
-(5 rows)
+(6 rows)
 
 -- Ensure that we inline the currect CTE when there are
 -- multiple CTEs with the same name
@@ -1892,8 +1920,9 @@ select * from (with x as (select 2 as y) select * from x) ss;
 -------------------------------------
  Result
    Output: 2
+ Settings: gp_cte_sharing = 'on'
  Optimizer: Postgres query optimizer
-(3 rows)
+(4 rows)
 
 -- Row marks are not pushed into CTEs
 explain (verbose, costs off)
@@ -1903,7 +1932,8 @@ select * from x for update;
 ----------------------------------------------------------------
  Seq Scan on public.subselect_tbl
    Output: subselect_tbl.f1, subselect_tbl.f2, subselect_tbl.f3
+ Settings: gp_cte_sharing = 'on'
  Optimizer: Postgres query optimizer
-(3 rows)
+(4 rows)
 
 set gp_cte_sharing to off;
