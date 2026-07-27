@@ -1557,13 +1557,12 @@ ExplainNode(PlanState *planstate, List *ancestors,
 	int			motion_recv;
 	int			motion_snd;
 	ExecSlice  *parentSlice = NULL;
-	/* 
-	 * Guard if subtree on QE lives in another slice 
-	 * and not instantiated here.
-	*/
+	/*
+	 * Guard against the case where a subtree on the QE lives in another slice
+	 * and is not instantiated in this slice.
+	 */
 	if (planstate == NULL)
 		return;
-	
 	plan = planstate->plan;
 
 	/* Remember who called us. */
