@@ -27,6 +27,7 @@ all:
 	$(MAKE) -C contrib/btree_gin all
 	$(MAKE) -C contrib/pg_trgm all
 	$(MAKE) -C contrib/tablefunc all
+	$(MAKE) -C contrib/try_convert all
 	$(MAKE) -C contrib/passwordcheck all
 	$(MAKE) -C contrib/pg_buffercache all
 ifeq ($(with_openssl), yes)
@@ -77,6 +78,7 @@ install:
 	$(MAKE) -C contrib/btree_gin $@
 	$(MAKE) -C contrib/pg_trgm $@
 	$(MAKE) -C contrib/tablefunc $@
+	$(MAKE) -C contrib/try_convert $@
 	$(MAKE) -C contrib/passwordcheck $@
 	$(MAKE) -C contrib/pg_buffercache $@
 ifeq ($(enable_pax), yes)
