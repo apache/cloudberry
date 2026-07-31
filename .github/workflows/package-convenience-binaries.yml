@@ -242,7 +242,7 @@ jobs:
 
       - name: Checkout git ref for test packaging
         if: github.event.inputs.source_mode == 'git_ref_test'
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           ref: ${{ github.event.inputs.git_ref }}
           fetch-depth: 1
@@ -313,7 +313,7 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload verified source release
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ steps.validate.outputs.artifact_name }}
           retention-days: ${{ env.LOG_RETENTION_DAYS }}
@@ -376,7 +376,7 @@ jobs:
           su - gpadmin -c "/tmp/init_system.sh"
 
       - name: Download verified source release
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: ${{ needs.verify-source-release.outputs.artifact_name }}
           path: ${{ github.workspace }}/verified-source
@@ -522,7 +522,7 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload convenience package artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: packages-${{ matrix.platform.target_os }}-${{ matrix.platform.target_arch }}-${{ matrix.platform.package_type }}
           retention-days: ${{ env.LOG_RETENTION_DAYS }}
@@ -568,7 +568,7 @@ jobs:
           su - gpadmin -c "/tmp/init_system.sh"
 
       - name: Download package artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: packages-${{ matrix.platform.target_os }}-${{ matrix.platform.target_arch }}-${{ matrix.platform.package_type }}
           path: ${{ github.workspace }}/package-artifacts

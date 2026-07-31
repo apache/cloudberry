@@ -425,7 +425,7 @@ jobs:
           echo "BUILD_TIMESTAMP=$timestamp" | tee -a "$GITHUB_ENV" # Also set as environment variable
 
       - name: Checkout Apache Cloudberry
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 1
           submodules: true
@@ -658,7 +658,7 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload build logs
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: build-logs-ubuntu${{ matrix.ubuntu_version }}-${{ env.BUILD_TIMESTAMP }}
           path: |
@@ -666,7 +666,7 @@ jobs:
           retention-days: ${{ env.LOG_RETENTION_DAYS }}
 
       - name: Upload Cloudberry DEB build artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: apache-cloudberry-db-incubating-deb-build-artifacts-ubuntu${{ matrix.ubuntu_version }}
           retention-days: ${{ env.LOG_RETENTION_DAYS }}
@@ -676,7 +676,7 @@ jobs:
             deb/*.ddeb
 
       - name: Upload Cloudberry deb source build artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: apache-cloudberry-db-incubating-deb-source-build-artifacts-ubuntu${{ matrix.ubuntu_version }}
           retention-days: ${{ env.LOG_RETENTION_DAYS }}
@@ -747,7 +747,7 @@ jobs:
 
       - name: Download Cloudberry DEB build artifacts
         if: needs.check-skip.outputs.should_skip != 'true'
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: apache-cloudberry-db-incubating-deb-build-artifacts-ubuntu${{ matrix.ubuntu_version }}
           path: ${{ github.workspace }}/deb_build_artifacts
@@ -880,7 +880,7 @@ jobs:
           } 2>&1 | tee -a install-logs/details/deb-installation.log
 
       - name: Upload install logs
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: install-logs-ubuntu${{ matrix.ubuntu_version }}-${{ needs.build-deb.outputs.build_timestamp }}
           path: |
@@ -1159,7 +1159,7 @@ jobs:
 
       - name: Download Cloudberry DEB build artifacts
         if: needs.check-skip.outputs.should_skip != 'true'
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: apache-cloudberry-db-incubating-deb-build-artifacts-ubuntu${{ matrix.ubuntu_version }}
           path: ${{ github.workspace }}/deb_build_artifacts
@@ -1169,7 +1169,7 @@ jobs:
 
       - name: Download Cloudberry Source build artifacts
         if: needs.check-skip.outputs.should_skip != 'true'
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: apache-cloudberry-db-incubating-deb-source-build-artifacts-ubuntu${{ matrix.ubuntu_version }}
           path: ${{ github.workspace }}/source_build_artifacts
@@ -1818,7 +1818,7 @@ jobs:
 
       - name: Upload test logs
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: test-logs-${{ matrix.test }}-ubuntu${{ matrix.ubuntu_version }}-${{ needs.build-deb.outputs.build_timestamp }}
           path: |
@@ -1827,7 +1827,7 @@ jobs:
 
       - name: Upload Test Metadata
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: test-metadata-${{ matrix.test }}-ubuntu${{ matrix.ubuntu_version }}
           path: |
@@ -1835,7 +1835,7 @@ jobs:
           retention-days: ${{ env.LOG_RETENTION_DAYS }}
 
       - name: Upload test results files
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: results-${{ matrix.test }}-ubuntu${{ matrix.ubuntu_version }}-${{ needs.build-deb.outputs.build_timestamp }}
           path: |
@@ -1846,7 +1846,7 @@ jobs:
 
       - name: Upload test regression logs
         if: failure() || cancelled()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: regression-logs-${{ matrix.test }}-ubuntu${{ matrix.ubuntu_version }}-${{ needs.build-deb.outputs.build_timestamp }}
           path: |
