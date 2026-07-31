@@ -242,6 +242,11 @@ typedef struct _funcInfo
 	int			nargs;
 	Oid		   *argtypes;
 	Oid			prorettype;
+	char	   *proacl;
+	char	   *rproacl;
+	char	   *initproacl;
+	char	   *initrproacl;
+	bool		postponed_def;	/* function must be postponed into post-data */
 } FuncInfo;
 
 /* AggInfo is a superset of FuncInfo */
