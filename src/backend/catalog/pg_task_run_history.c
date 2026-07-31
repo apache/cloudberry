@@ -37,6 +37,9 @@
 #include "utils/builtins.h"
 #include "utils/rel.h"
 #include "utils/timestamp.h"
+#include "access/heapam.h"
+#include "access/tableam.h"
+#include "miscadmin.h"
 
 /*
  * TaskRunHistoryCreate
@@ -198,8 +201,6 @@ void
 RemoveTaskRunHistoryByJobId(Oid jobid)
 {
     Relation    pg_task_run_history;
-    HeapTuple   tup;
-    SysScanDesc scanDescriptor = NULL;
     ScanKeyData scanKey[1];
 
     pg_task_run_history = table_open(TaskRunHistoryRelationId, RowExclusiveLock);
@@ -207,14 +208,62 @@ RemoveTaskRunHistoryByJobId(Oid jobid)
     ScanKeyInit(&scanKey[0], Anum_pg_task_run_history_jobid, BTEqualStrategyNumber,
                 F_OIDEQ, ObjectIdGetDatum(jobid));
 
-    scanDescriptor = systable_beginscan(pg_task_run_history, TaskRunHistoryJobIdIndexId,
-                                        true, NULL, 1, scanKey);
-
-    while (HeapTupleIsValid(tup = systable_getnext(scanDescriptor)))
+    /*
+     * Restart the scan after each delete so we always see the latest
+     * committed version of every tuple.  Using heap_delete directly
+     * (instead of CatalogTupleDelete) lets us handle concurrent updates
+     * gracefully.
+     */
+    for (;;)
     {
-        CatalogTupleDelete(pg_task_run_history, &tup->t_self);
+        SysScanDesc    scanDescriptor;
+        HeapTuple      tup;
+        TM_Result      result;
+        TM_FailureData tmfd;
+
+        scanDescriptor = systable_beginscan(pg_task_run_history,
+                                            TaskRunHistoryJobIdIndexId,
+                                            true, NULL, 1, scanKey);
+
+        tup = systable_getnext(scanDescriptor);
+
+        if (!HeapTupleIsValid(tup))
+        {
+            systable_endscan(scanDescriptor);
+            break;
+        }
+
+        result = heap_delete(pg_task_run_history, &tup->t_self,
+                            GetCurrentCommandId(true),
+                            InvalidSnapshot,
+                            true /* wait for commit */,
+                            &tmfd,
+                            false /* changingPart */);
+
+        systable_endscan(scanDescriptor);
+
+        switch (result)
+        {
+            case TM_Ok:
+                /* deleted successfully; loop to find next row */
+                break;
+            case TM_Updated:
+            case TM_Deleted:
+                /*
+                 * The cron daemon concurrently modified this row.
+                 * Loop back to re-scan and pick up the updated version.
+                 */
+                break;
+            case TM_SelfModified:
+                elog(ERROR, "task run history tuple self-modified during DROP TASK");
+                break;
+            default:
+                elog(ERROR, "unexpected heap_delete status: %u", result);
+                break;
+        }
+
+        CommandCounterIncrement();
     }
 
-    systable_endscan(scanDescriptor);
     table_close(pg_task_run_history, RowExclusiveLock);
 }
