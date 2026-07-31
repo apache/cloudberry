@@ -1,0 +1,78 @@
+-- Foreign-server USAGE is required; user mappings remain optional.
+
+SET client_min_messages = warning;
+RESET ROLE;
+DROP SCHEMA IF EXISTS dlskel_s CASCADE;
+DROP SERVER IF EXISTS dlskel_acl_cat CASCADE;
+DROP SERVER IF EXISTS dlskel_acl_vol CASCADE;
+DROP ROLE IF EXISTS dlskel_user;
+RESET client_min_messages;
+
+-- Quiet, so that the output does not depend on whether another test in the
+-- same database created the extension first.
+SET client_min_messages = warning;
+CREATE EXTENSION IF NOT EXISTS datalake_fdw;
+RESET client_min_messages;
+
+CREATE SERVER dlskel_acl_cat
+  FOREIGN DATA WRAPPER iceberg_catalog_fdw
+  OPTIONS (type 'hive', uri 'thrift://fake:9083');
+CREATE SERVER dlskel_acl_vol
+  FOREIGN DATA WRAPPER iceberg_volume_fdw
+  OPTIONS (base_path 's3://dlskel-bucket/acl',
+           endpoint 'http://fake:9000');
+-- Which NOTICE CREATE ROLE emits depends on gp_resource_manager, and neither
+-- is what this case is about.
+SET client_min_messages = warning;
+CREATE ROLE dlskel_user LOGIN;
+RESET client_min_messages;
+CREATE SCHEMA dlskel_s;
+GRANT CREATE, USAGE ON SCHEMA dlskel_s TO dlskel_user;
+
+SET ROLE dlskel_user;
+CREATE TABLE dlskel_s.t (a int)
+  USING iceberg
+  WITH (catalog = 'dlskel_acl_cat', volume = 'dlskel_acl_vol');
+
+RESET ROLE;
+GRANT USAGE ON FOREIGN SERVER dlskel_acl_cat TO dlskel_user;
+SET ROLE dlskel_user;
+CREATE TABLE dlskel_s.t (a int)
+  USING iceberg
+  WITH (catalog = 'dlskel_acl_cat', volume = 'dlskel_acl_vol');
+
+RESET ROLE;
+GRANT USAGE ON FOREIGN SERVER dlskel_acl_vol TO dlskel_user;
+SET ROLE dlskel_user;
+CREATE TABLE dlskel_s.t (a int)
+  USING iceberg
+  WITH (catalog = 'dlskel_acl_cat', volume = 'dlskel_acl_vol');
+
+CREATE USER MAPPING FOR dlskel_user
+  SERVER dlskel_acl_cat
+  OPTIONS (username 'u', auth_method 'simple');
+-- AWS temporary credentials are three values; the mapping has to be able to
+-- hold all of them.
+CREATE USER MAPPING FOR dlskel_user
+  SERVER dlskel_acl_vol
+  OPTIONS (access_key_id 'k', secret_access_key 's', session_token 't');
+-- A server-side key is not a user mapping key.
+ALTER USER MAPPING FOR dlskel_user
+  SERVER dlskel_acl_cat
+  OPTIONS (ADD warehouse 'x');
+
+RESET ROLE;
+DROP SCHEMA dlskel_s CASCADE;
+DROP USER MAPPING FOR dlskel_user SERVER dlskel_acl_cat;
+DROP USER MAPPING FOR dlskel_user SERVER dlskel_acl_vol;
+DROP SERVER dlskel_acl_cat;
+DROP SERVER dlskel_acl_vol;
+DROP ROLE dlskel_user;
+
+SET client_min_messages = warning;
+RESET ROLE;
+DROP SCHEMA IF EXISTS dlskel_s CASCADE;
+DROP SERVER IF EXISTS dlskel_acl_cat CASCADE;
+DROP SERVER IF EXISTS dlskel_acl_vol CASCADE;
+DROP ROLE IF EXISTS dlskel_user;
+RESET client_min_messages;
