@@ -157,6 +157,18 @@ static MemoryContext oids_context = NULL;
 static bool preserve_oids_on_commit = false;
 
 /*
+ * OID to assign to the next auxiliary pg_authid role created through
+ * GetNewOidForAuthId(), or InvalidOid for the normal allocation path.
+ *
+ * This is the GPDB analogue of upstream PostgreSQL's
+ * binary_upgrade_next_pg_authid_oid (which is disabled here in favour of the
+ * generic OID pre-assignment machinery).  It lets gp_toolkit
+ * create roles such as mdb_admin with a fixed, well-known OID.  It is reset
+ * to InvalidOid as soon as it is consumed.
+ */
+Oid			next_aux_pg_authid_oid = InvalidOid;
+
+/*
  * These will be used by the schema restoration process during binary upgrade,
  * so any new object must not use any Oid in this structure or else there will
  * be collisions.
@@ -423,6 +435,7 @@ GetNewOrPreassignedOid(Relation relation, Oid indexId, AttrNumber oidcolumn,
 					   OidAssignment *searchkey)
 {
 	Oid			oid;
+	Oid			forcedOid = searchkey->oid;
 
 	searchkey->catalog = RelationGetRelid(relation);
 
@@ -461,8 +474,18 @@ GetNewOrPreassignedOid(Relation relation, Oid indexId, AttrNumber oidcolumn,
 	{
 		MemoryContext oldcontext;
 
-		/* Assign a new oid, and memorize it in the list of OIDs to dispatch */
-		oid = GetNewOidWithIndex(relation, indexId, oidcolumn);
+		/*
+		 * Assign a new oid, and memorize it in the list of OIDs to dispatch.
+		 *
+		 * A caller may request a fixed, well-known OID by passing it in
+		 * searchkey->oid (e.g. the mdb_admin auxiliary role, see
+		 * GetNewOidForAuthId()).  In that case use the requested OID instead
+		 * of allocating a fresh one, but still record it for dispatch so the
+		 * QEs end up with the same OID.
+		 */
+		oid = OidIsValid(forcedOid)
+			? forcedOid
+			: GetNewOidWithIndex(relation, indexId, oidcolumn);
 
 		oldcontext = MemoryContextSwitchTo(get_oids_context());
 		searchkey->oid = oid;
@@ -479,7 +502,9 @@ GetNewOrPreassignedOid(Relation relation, Oid indexId, AttrNumber oidcolumn,
 	}
 	else
 	{
-		oid = GetNewOidWithIndex(relation, indexId, oidcolumn);
+		oid = OidIsValid(forcedOid)
+			? forcedOid
+			: GetNewOidWithIndex(relation, indexId, oidcolumn);
 	}
 
 	return oid;
@@ -572,6 +597,25 @@ GetNewOidForAuthId(Relation relation, Oid indexId, AttrNumber oidcolumn,
 	memset(&key, 0, sizeof(OidAssignment));
 	key.type = T_OidAssignment;
 	key.objname = rolname;
+
+	/*
+	 * Allow auxiliary roles (such as mdb_admin, see gpcontrib/gp_toolkit)
+	 * to be created with a fixed, well-known OID.  The OID is supplied through
+	 * the next_aux_pg_authid_oid override, mirroring how upstream PostgreSQL
+	 * assigns role OIDs during binary upgrade.  We only honor it for OIDs in
+	 * the auxiliary range to avoid clashing with normal OID allocation, and
+	 * reset it immediately so it affects a single role only.
+	 */
+	if (OidIsValid(next_aux_pg_authid_oid))
+	{
+		if (!IsAuxOid(next_aux_pg_authid_oid))
+			elog(ERROR, "pre-assigned auxiliary role OID %u is out of the auxiliary OID range",
+				 next_aux_pg_authid_oid);
+
+		key.oid = next_aux_pg_authid_oid;
+		next_aux_pg_authid_oid = InvalidOid;
+	}
+
 	return GetNewOrPreassignedOid(relation, indexId, oidcolumn, &key);
 }
 
