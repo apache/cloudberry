@@ -35,12 +35,12 @@ test_copy_to_callback(PG_FUNCTION_ARGS)
 {
 	Relation	rel = table_open(PG_GETARG_OID(0), AccessShareLock);
 	CopyToState cstate;
-	int64		processed;
+	uint64		processed;
 
 	cstate = BeginCopyTo(NULL, rel, NULL, RelationGetRelid(rel), NULL, false,
 						 to_cb, NIL, NIL);
 	processed = DoCopyTo(cstate);
-	EndCopyTo(cstate);
+	EndCopyTo(cstate, &processed);
 
 	ereport(NOTICE, (errmsg("COPY TO callback has processed %lld rows",
 							(long long) processed)));

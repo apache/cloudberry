@@ -151,6 +151,7 @@ get_altertable_subcmdinfo(PG_FUNCTION_ARGS)
 				strtype = "SET COMPRESSION";
 				break;
 			case AT_DropColumn:
+			case AT_DropColumnRecurse:
 				strtype = "DROP COLUMN";
 				break;
 			case AT_AddIndex:
@@ -160,6 +161,7 @@ get_altertable_subcmdinfo(PG_FUNCTION_ARGS)
 				strtype = "(re) ADD INDEX";
 				break;
 			case AT_AddConstraint:
+			case AT_AddConstraintRecurse:
 				strtype = "ADD CONSTRAINT";
 				break;
 			case AT_ReAddConstraint:
@@ -172,12 +174,14 @@ get_altertable_subcmdinfo(PG_FUNCTION_ARGS)
 				strtype = "ALTER CONSTRAINT";
 				break;
 			case AT_ValidateConstraint:
+			case AT_ValidateConstraintRecurse:
 				strtype = "VALIDATE CONSTRAINT";
 				break;
 			case AT_AddIndexConstraint:
 				strtype = "ADD CONSTRAINT (using index)";
 				break;
 			case AT_DropConstraint:
+			case AT_DropConstraintRecurse:
 				strtype = "DROP CONSTRAINT";
 				break;
 			case AT_ReAddComment:
@@ -314,6 +318,43 @@ get_altertable_subcmdinfo(PG_FUNCTION_ARGS)
 				break;
 			case AT_ReAddStatistics:
 				strtype = "(re) ADD STATS";
+				break;
+			/* Cloudberry addons */
+			case AT_SetDistributedBy:
+				strtype = "SET DISTRIBUTED BY";
+				break;
+			case AT_ExpandTable:
+				strtype = "EXPAND TABLE";
+				break;
+			case AT_ExpandPartitionTablePrepare:
+				strtype = "EXPAND PARTITION TABLE PREPARE";
+				break;
+			case AT_ShrinkTable:
+				strtype = "SHRINK TABLE";
+				break;
+			case AT_PartAdd:
+				strtype = "PART ADD";
+				break;
+			case AT_PartAlter:
+				strtype = "PART ALTER";
+				break;
+			case AT_PartDrop:
+				strtype = "PART DROP";
+				break;
+			case AT_PartExchange:
+				strtype = "PART EXCHANGE";
+				break;
+			case AT_PartRename:
+				strtype = "PART RENAME";
+				break;
+			case AT_PartSetTemplate:
+				strtype = "PART SET TEMPLATE";
+				break;
+			case AT_PartSplit:
+				strtype = "PART SPLIT";
+				break;
+			case AT_PartTruncate:
+				strtype = "PART TRUNCATE";
 				break;
 		}
 
