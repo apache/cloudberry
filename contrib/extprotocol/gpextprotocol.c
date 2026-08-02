@@ -299,7 +299,7 @@ DemoUri *ParseDemoUri(const char *uri_str)
 	/*
 	 * parse protocol
 	 */
-	char *post_protocol = strstr(uri_str, "://");
+	const char *post_protocol = strstr(uri_str, "://");
 		
 	if(!post_protocol)
 	{
