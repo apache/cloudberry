@@ -1,0 +1,196 @@
+--
+-- Multi-consumer CTE column pruning (ORCA).
+--
+-- A CTE referenced by several consumers has its shared-scan output pruned to the
+-- union of all consumers' required columns. Because ShareInputScan does not
+-- project, every consumer must expose exactly the producer's surviving columns.
+-- A consumer that projects a superset (e.g. SELECT *) and is referenced directly
+-- with a join key used to keep an identity column map and read the shared tuple
+-- by stale positions, producing wrong results (join key read from the wrong slot
+-- -> LEFT JOIN yields NULLs) and "invalid attnum N for relation shareX_refY" in
+-- EXPLAIN. See CPhysicalCTEConsumer. These queries assert correct results under
+-- both optimizers.
+--
+create schema cte_mc;
+set search_path = cte_mc;
+create table policy(pr_id text, pied_id text, p_id text, amnt numeric(18,2),
+                    guarantee_period text, main_risk text, premium numeric(18,2));
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'pr_id' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+create table mid(p_id text, tenant_id text, act_premium numeric(18,2));
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'p_id' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+insert into policy values('pr1','k1','p1',300000,'1','Y',290);
+insert into mid values('p1','t1',290);
+analyze policy;
+analyze mid;
+-- The "info" consumer projects SELECT * but only p_id/amnt/main_risk are needed
+-- outside; the producer prunes pr_id/pied_id/guarantee_period. i.amnt and i.p_id
+-- must not come back NULL. EXPLAIN previously raised "invalid attnum".
+explain (costs off)
+with agent as (select pr_id,pied_id,p_id,amnt,guarantee_period,main_risk,premium from policy),
+     det as (select p_id, sum(premium) premium from agent group by p_id),
+     info as (select * from agent where main_risk='Y' and p_id='p1'),
+     unused as (select 1 from mid)
+select i.amnt, m.tenant_id, m.p_id, i.p_id, d.p_id, d.premium, m.act_premium
+from mid m
+left join det  d on d.p_id=m.p_id and d.premium=m.act_premium
+left join info i on m.p_id=i.p_id
+where m.p_id='p1'
+order by 1,2,3,4;
+                                            QUERY PLAN                                             
+---------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Merge Key: i.amnt, m.tenant_id, i.p_id
+   ->  Sort
+         Sort Key: i.amnt, m.tenant_id, i.p_id
+         ->  Hash Left Join
+               Hash Cond: (m.p_id = i.p_id)
+               ->  Hash Right Join
+                     Hash Cond: ((agent.p_id = m.p_id) AND ((sum(agent.premium)) = m.act_premium))
+                     ->  Redistribute Motion 3:3  (slice2; segments: 3)
+                           Hash Key: 'p1'::text
+                           ->  GroupAggregate
+                                 Group Key: agent.p_id
+                                 ->  Redistribute Motion 3:3  (slice3; segments: 3)
+                                       Hash Key: agent.p_id
+                                       ->  Subquery Scan on agent
+                                             ->  Seq Scan on policy
+                                                   Filter: (p_id = 'p1'::text)
+                     ->  Hash
+                           ->  Seq Scan on mid m
+                                 Filter: (p_id = 'p1'::text)
+               ->  Hash
+                     ->  Redistribute Motion 3:3  (slice4; segments: 3)
+                           Hash Key: 'p1'::text
+                           ->  Subquery Scan on i
+                                 ->  Seq Scan on policy policy_1
+                                       Filter: ((main_risk = 'Y'::text) AND (p_id = 'p1'::text))
+ Optimizer: Postgres query optimizer
+(27 rows)
+
+with agent as (select pr_id,pied_id,p_id,amnt,guarantee_period,main_risk,premium from policy),
+     det as (select p_id, sum(premium) premium from agent group by p_id),
+     info as (select * from agent where main_risk='Y' and p_id='p1'),
+     unused as (select 1 from mid)
+select i.amnt, m.tenant_id, m.p_id, i.p_id, d.p_id, d.premium, m.act_premium
+from mid m
+left join det  d on d.p_id=m.p_id and d.premium=m.act_premium
+left join info i on m.p_id=i.p_id
+where m.p_id='p1'
+order by 1,2,3,4;
+   amnt    | tenant_id | p_id | p_id | p_id | premium | act_premium 
+-----------+-----------+------+------+------+---------+-------------
+ 300000.00 | t1        | p1   | p1   | p1   |  290.00 |      290.00
+(1 row)
+
+-- Variant: project a different surviving column (main_risk) from the SELECT *
+-- consumer to exercise a different pruned layout.
+explain (costs off)
+with agent as (select pr_id,pied_id,p_id,amnt,guarantee_period,main_risk,premium from policy),
+     det as (select p_id, sum(premium) premium from agent group by p_id),
+     info as (select * from agent where p_id='p1')
+select m.p_id, i.main_risk, i.amnt, d.premium
+from mid m
+left join det  d on d.p_id=m.p_id
+left join info i on m.p_id=i.p_id
+where m.p_id='p1'
+order by 1,2,3;
+                                        QUERY PLAN                                        
+------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Merge Key: i.main_risk, i.amnt
+   ->  Sort
+         Sort Key: i.main_risk, i.amnt
+         ->  Hash Left Join
+               Hash Cond: (m.p_id = i.p_id)
+               ->  Hash Right Join
+                     Hash Cond: (d.p_id = m.p_id)
+                     ->  Redistribute Motion 3:3  (slice2; segments: 3)
+                           Hash Key: 'p1'::text
+                           ->  Subquery Scan on d
+                                 ->  GroupAggregate
+                                       Group Key: agent.p_id
+                                       ->  Redistribute Motion 3:3  (slice3; segments: 3)
+                                             Hash Key: agent.p_id
+                                             ->  Subquery Scan on agent
+                                                   ->  Seq Scan on policy
+                                                         Filter: (p_id = 'p1'::text)
+                     ->  Hash
+                           ->  Seq Scan on mid m
+                                 Filter: (p_id = 'p1'::text)
+               ->  Hash
+                     ->  Redistribute Motion 3:3  (slice4; segments: 3)
+                           Hash Key: 'p1'::text
+                           ->  Subquery Scan on i
+                                 ->  Seq Scan on policy policy_1
+                                       Filter: (p_id = 'p1'::text)
+ Optimizer: Postgres query optimizer
+(28 rows)
+
+with agent as (select pr_id,pied_id,p_id,amnt,guarantee_period,main_risk,premium from policy),
+     det as (select p_id, sum(premium) premium from agent group by p_id),
+     info as (select * from agent where p_id='p1')
+select m.p_id, i.main_risk, i.amnt, d.premium
+from mid m
+left join det  d on d.p_id=m.p_id
+left join info i on m.p_id=i.p_id
+where m.p_id='p1'
+order by 1,2,3;
+ p_id | main_risk |   amnt    | premium 
+------+-----------+-----------+---------
+ p1   | Y         | 300000.00 |  290.00
+(1 row)
+
+-- Three consumers, each needing a different subset (join key on each).
+explain (costs off)
+with agent as (select p_id, amnt, main_risk, premium from policy)
+select x.p_id, y.amnt, z.main_risk
+from agent x
+join agent y on x.p_id=y.p_id
+join agent z on x.p_id=z.p_id
+order by 1,2,3;
+                                  QUERY PLAN                                  
+------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Merge Key: x.p_id, y.amnt, z.main_risk
+   ->  Sort
+         Sort Key: x.p_id, y.amnt, z.main_risk
+         ->  Hash Join
+               Hash Cond: (x.p_id = z.p_id)
+               ->  Hash Join
+                     Hash Cond: (x.p_id = y.p_id)
+                     ->  Redistribute Motion 3:3  (slice2; segments: 3)
+                           Hash Key: x.p_id
+                           ->  Subquery Scan on x
+                                 ->  Seq Scan on policy
+                     ->  Hash
+                           ->  Redistribute Motion 3:3  (slice3; segments: 3)
+                                 Hash Key: y.p_id
+                                 ->  Subquery Scan on y
+                                       ->  Seq Scan on policy policy_1
+               ->  Hash
+                     ->  Redistribute Motion 3:3  (slice4; segments: 3)
+                           Hash Key: z.p_id
+                           ->  Subquery Scan on z
+                                 ->  Seq Scan on policy policy_2
+ Optimizer: Postgres query optimizer
+(23 rows)
+
+with agent as (select p_id, amnt, main_risk, premium from policy)
+select x.p_id, y.amnt, z.main_risk
+from agent x
+join agent y on x.p_id=y.p_id
+join agent z on x.p_id=z.p_id
+order by 1,2,3;
+ p_id |   amnt    | main_risk 
+------+-----------+-----------
+ p1   | 300000.00 | Y
+(1 row)
+
+-- start_ignore
+drop schema cte_mc cascade;
+NOTICE:  drop cascades to 2 other objects
+DETAIL:  drop cascades to table policy
+drop cascades to table mid
+-- end_ignore
