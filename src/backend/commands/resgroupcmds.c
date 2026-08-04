@@ -1632,7 +1632,7 @@ getCpuSetByRole(const char *cpuset)
 		splitcpuset = (char *)cpuset;
 	else
 	{
-		char *scpu = (char*)first + 1;
+		char *second = (char*)first + 1;
 
 		/* Get result cpuset by IS_QUERY_DISPATCHER(), on master or segment */
 		if (IS_QUERY_DISPATCHER())
