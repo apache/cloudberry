@@ -3502,30 +3502,32 @@ explain (costs off) select * from pph_arrpart where a = '{1}';
                  QUERY PLAN                 
 --------------------------------------------
  Gather Motion 1:1  (slice1; segments: 1)
-   ->  Seq Scan on pph_arrpart2 pph_arrpart
-         Filter: (a = '{1}'::integer[])
- Optimizer: Postgres query optimizer
-(4 rows)
+   ->  Append
+         ->  Seq Scan on pph_arrpart2
+               Filter: (a = '{1}'::integer[])
+ Optimizer: Pivotal Optimizer (GPORCA)
+(5 rows)
 
 explain (costs off) select * from pph_arrpart where a = '{1, 2}';
                  QUERY PLAN                 
 --------------------------------------------
  Gather Motion 1:1  (slice1; segments: 1)
-   ->  Seq Scan on pph_arrpart1 pph_arrpart
-         Filter: (a = '{1,2}'::integer[])
- Optimizer: Postgres query optimizer
-(4 rows)
+   ->  Append
+         ->  Seq Scan on pph_arrpart1
+               Filter: (a = '{1,2}'::integer[])
+ Optimizer: Pivotal Optimizer (GPORCA)
+(5 rows)
 
 explain (costs off) select * from pph_arrpart where a in ('{4, 5}', '{1}');
                                  QUERY PLAN                                 
 ----------------------------------------------------------------------------
- Gather Motion 2:1  (slice1; segments: 2)
+ Gather Motion 3:1  (slice1; segments: 3)
    ->  Append
-         ->  Seq Scan on pph_arrpart1 pph_arrpart_1
+         ->  Seq Scan on pph_arrpart1
                Filter: ((a = '{4,5}'::integer[]) OR (a = '{1}'::integer[]))
-         ->  Seq Scan on pph_arrpart2 pph_arrpart_2
+         ->  Seq Scan on pph_arrpart2
                Filter: ((a = '{4,5}'::integer[]) OR (a = '{1}'::integer[]))
- Optimizer: Postgres query optimizer
+ Optimizer: Pivotal Optimizer (GPORCA)
 (7 rows)
 
 drop table pph_arrpart;

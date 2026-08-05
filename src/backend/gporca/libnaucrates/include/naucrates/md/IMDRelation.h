@@ -75,7 +75,8 @@ public:
 	enum Erelpartitiontype
 	{
 		ErelpartitionRange = 'r',
-		ErelpartitionList = 'l'
+		ErelpartitionList = 'l',
+		ErelpartitionHash = 'h'
 	};
 
 protected:
