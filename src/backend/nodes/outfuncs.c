@@ -4271,6 +4271,17 @@ _outCreateDirectoryTableStmt(StringInfo str, const CreateDirectoryTableStmt *nod
 }
 
 static void
+_outCreateLakeTableStmt(StringInfo str, const CreateLakeTableStmt *node)
+{
+	WRITE_NODE_TYPE("CREATELAKETABLESTMT");
+
+	_outCreateStmtInfo(str, (const CreateStmt *) node);
+	WRITE_STRING_FIELD(table_type);
+	WRITE_STRING_FIELD(foreign_catalog);
+	WRITE_STRING_FIELD(foreign_volume);
+}
+
+static void
 _outAlterDirectoryTableStmt(StringInfo str, const AlterDirectoryTableStmt *node)
 {
 	WRITE_NODE_TYPE("ALTERDIRECTORYTABLESTMT");
@@ -5611,6 +5622,9 @@ outNode(StringInfo str, const void *obj)
 				break;
 			case T_CreateDirectoryTableStmt:
 				_outCreateDirectoryTableStmt(str, obj);
+				break;
+			case T_CreateLakeTableStmt:
+				_outCreateLakeTableStmt(str, obj);
 				break;
 			case T_AlterDirectoryTableStmt:
 				_outAlterDirectoryTableStmt(str, obj);

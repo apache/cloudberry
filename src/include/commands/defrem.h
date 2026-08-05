@@ -133,6 +133,8 @@ extern ObjectAddress CreateForeignDataWrapper(ParseState *pstate, CreateFdwStmt 
 extern ObjectAddress AlterForeignDataWrapper(ParseState *pstate, AlterFdwStmt *stmt);
 extern ObjectAddress CreateForeignServer(CreateForeignServerStmt *stmt);
 extern ObjectAddress AlterForeignServer(AlterForeignServerStmt *stmt);
+extern ObjectAddress CreateForeignCatalog(CreateForeignCatalogStmt *stmt);
+extern ObjectAddress CreateForeignVolume(CreateForeignVolumeStmt *stmt);
 extern ObjectAddress CreateStorageServer(CreateStorageServerStmt *stmt);
 extern ObjectAddress AlterStorageServer(AlterStorageServerStmt *stmt);
 extern Oid RemoveStorageServer(DropStorageServerStmt *stmt);

@@ -668,6 +668,7 @@ _outDropStmt(StringInfo str, const DropStmt *node)
 	WRITE_BOOL_FIELD(missing_ok);
 	WRITE_BOOL_FIELD(concurrent);
 	WRITE_BOOL_FIELD(isdynamic);
+	WRITE_BOOL_FIELD(isiceberg);
 }
 
 static void
@@ -1809,6 +1810,7 @@ _outDropStmtInfo(StringInfo str, const DropStmt *node)
 	WRITE_BOOL_FIELD(missing_ok);
 	WRITE_BOOL_FIELD(concurrent);
 	WRITE_BOOL_FIELD(isdynamic);
+	WRITE_BOOL_FIELD(isiceberg);
 }
 
 static void

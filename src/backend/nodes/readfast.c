@@ -1598,6 +1598,33 @@ _readCreateForeignServerStmt(void)
 	READ_DONE();
 }
 
+static CreateForeignCatalogStmt *
+_readCreateForeignCatalogStmt(void)
+{
+	READ_LOCALS(CreateForeignCatalogStmt);
+
+	READ_STRING_FIELD(catalogname);
+	READ_STRING_FIELD(servername);
+	READ_STRING_FIELD(catalogtype);
+	READ_BOOL_FIELD(if_not_exists);
+	READ_NODE_FIELD(options);
+
+	READ_DONE();
+}
+
+static CreateForeignVolumeStmt *
+_readCreateForeignVolumeStmt(void)
+{
+	READ_LOCALS(CreateForeignVolumeStmt);
+
+	READ_STRING_FIELD(volumename);
+	READ_STRING_FIELD(servername);
+	READ_BOOL_FIELD(if_not_exists);
+	READ_NODE_FIELD(options);
+
+	READ_DONE();
+}
+
 static AddForeignSegStmt *
 _readAddForeignSegStmt(void)
 {
@@ -1906,6 +1933,20 @@ _readCreateDirectoryTableStmt(void)
 
 	READ_STRING_FIELD(tablespacename);
 	READ_STRING_FIELD(location);
+
+	READ_DONE();
+}
+
+static CreateLakeTableStmt *
+_readCreateLakeTableStmt(void)
+{
+	READ_LOCALS(CreateLakeTableStmt);
+
+	_readCreateStmt_common(&local_node->base);
+
+	READ_STRING_FIELD(table_type);
+	READ_STRING_FIELD(foreign_catalog);
+	READ_STRING_FIELD(foreign_volume);
 
 	READ_DONE();
 }
@@ -2881,6 +2922,12 @@ readNodeBinary(void)
 			case T_CreateForeignServerStmt:
 				return_value = _readCreateForeignServerStmt();
 				break;
+			case T_CreateForeignCatalogStmt:
+				return_value = _readCreateForeignCatalogStmt();
+				break;
+			case T_CreateForeignVolumeStmt:
+				return_value = _readCreateForeignVolumeStmt();
+				break;
 			case T_AddForeignSegStmt:
 				return_value = _readAddForeignSegStmt();
 				break;
@@ -2990,6 +3037,9 @@ readNodeBinary(void)
 				break;
 			case T_CreateDirectoryTableStmt:
 				return_value = _readCreateDirectoryTableStmt();
+				break;
+			case T_CreateLakeTableStmt:
+				return_value = _readCreateLakeTableStmt();
 				break;
 			case T_AlterDirectoryTableStmt:
 				return_value = _readAlterDirectoryTableStmt();

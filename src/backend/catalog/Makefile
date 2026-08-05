@@ -102,6 +102,7 @@ CATALOG_HEADERS := \
 	pg_subscription_rel.h gp_partition_template.h pg_task.h pg_task_run_history.h \
 	pg_profile.h pg_password_history.h pg_directory_table.h gp_storage_server.h \
 	gp_storage_user_mapping.h pg_tag.h pg_tag_description.h \
+	pg_foreign_catalog.h pg_foreign_volume.h pg_lake_table.h \
 	gp_matview_aux.h \
 	gp_matview_tables.h
 

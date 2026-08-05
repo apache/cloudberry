@@ -1,0 +1,144 @@
+<!--
+doc/src/sgml/ref/create_foreign_catalog.sgml
+PostgreSQL documentation
+-->
+
+<refentry id="sql-createforeigncatalog">
+ <indexterm zone="sql-createforeigncatalog">
+  <primary>CREATE FOREIGN CATALOG</primary>
+ </indexterm>
+
+ <refmeta>
+  <refentrytitle>CREATE FOREIGN CATALOG</refentrytitle>
+  <manvolnum>7</manvolnum>
+  <refmiscinfo>SQL - Language Statements</refmiscinfo>
+ </refmeta>
+
+ <refnamediv>
+  <refname>CREATE FOREIGN CATALOG</refname>
+  <refpurpose>define a new foreign catalog</refpurpose>
+ </refnamediv>
+
+ <refsynopsisdiv>
+<synopsis>
+CREATE FOREIGN CATALOG [ IF NOT EXISTS ] <replaceable class="parameter">catalog_name</replaceable>
+    SERVER <replaceable class="parameter">server_name</replaceable>
+    TYPE '<replaceable class="parameter">catalog_type</replaceable>'
+    [ OPTIONS ( <replaceable class="parameter">option</replaceable> '<replaceable class="parameter">value</replaceable>' [, ...] ) ]
+</synopsis>
+ </refsynopsisdiv>
+
+ <refsect1 id="sql-createforeigncatalog-description">
+  <title>Description</title>
+
+  <para>
+   <command>CREATE FOREIGN CATALOG</command> defines a new foreign catalog.
+   Foreign catalog names are global within a database.  The user who creates
+   the catalog becomes its owner.
+  </para>
+
+  <para>
+   Creating a foreign catalog requires <literal>USAGE</literal> privilege on
+   the referenced foreign server.
+  </para>
+
+  <para>
+   The required catalog type is stored verbatim.  Provider-specific validation
+   of the catalog type and options is outside the kernel, and generic options
+   currently have no kernel validator.
+  </para>
+ </refsect1>
+
+ <refsect1>
+  <title>Parameters</title>
+
+  <variablelist>
+   <varlistentry>
+    <term><literal>IF NOT EXISTS</literal></term>
+    <listitem>
+     <para>
+      Do not throw an error if a foreign catalog with the same name already
+      exists.  A notice is issued in this case.
+     </para>
+    </listitem>
+   </varlistentry>
+
+   <varlistentry>
+    <term><replaceable class="parameter">catalog_name</replaceable></term>
+    <listitem>
+     <para>
+      The database-global name of the foreign catalog to be created.
+     </para>
+    </listitem>
+   </varlistentry>
+
+   <varlistentry>
+    <term><replaceable class="parameter">server_name</replaceable></term>
+    <listitem>
+     <para>
+      The name of an existing foreign server for the catalog.
+     </para>
+    </listitem>
+   </varlistentry>
+
+   <varlistentry>
+    <term><replaceable class="parameter">catalog_type</replaceable></term>
+    <listitem>
+     <para>
+      The required provider-specific catalog type.  The value is stored
+      verbatim.
+     </para>
+    </listitem>
+   </varlistentry>
+
+   <varlistentry>
+    <term><replaceable class="parameter">option</replaceable></term>
+    <listitem>
+     <para>
+      The name of a provider-specific option for the catalog.
+     </para>
+    </listitem>
+   </varlistentry>
+
+   <varlistentry>
+    <term><replaceable class="parameter">value</replaceable></term>
+    <listitem>
+     <para>
+      The value of a provider-specific catalog option.
+     </para>
+    </listitem>
+   </varlistentry>
+  </variablelist>
+ </refsect1>
+
+ <refsect1 id="sql-createforeigncatalog-examples">
+  <title>Examples</title>
+
+  <para>
+   Create a Hive catalog that uses the foreign server
+   <literal>hive_srv</literal>:
+<programlisting>
+CREATE FOREIGN CATALOG hive_cat SERVER hive_srv TYPE 'hive' OPTIONS (uri 'thrift://localhost:9083');
+</programlisting></para>
+ </refsect1>
+
+ <refsect1 id="sql-createforeigncatalog-compatibility">
+  <title>Compatibility</title>
+
+  <para>
+   <command>CREATE FOREIGN CATALOG</command> is an
+   <productname>Apache Cloudberry</productname> extension and is not defined in
+   the <acronym>SQL</acronym> standard.
+  </para>
+ </refsect1>
+
+ <refsect1>
+  <title>See Also</title>
+
+  <simplelist type="inline">
+   <member><xref linkend="sql-dropforeigncatalog"/></member>
+   <member><xref linkend="sql-createlaketable"/></member>
+   <member><xref linkend="sql-createserver"/></member>
+  </simplelist>
+ </refsect1>
+</refentry>

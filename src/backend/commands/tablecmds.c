@@ -69,6 +69,7 @@
 #include "commands/comment.h"
 #include "commands/createas.h"
 #include "commands/defrem.h"
+#include "commands/laketablecmds.h"
 #include "commands/matview.h"
 #include "commands/event_trigger.h"
 #include "commands/policy.h"
@@ -255,6 +256,7 @@ struct DropRelationCallbackState
 {
 	/* These fields are set by RemoveRelations: */
 	char		expected_relkind;
+	bool		iceberg_only;	/* DROP LAKE TABLE: require iceberg AM */
 	LOCKMODE	heap_lockmode;
 	/* These fields are state to track which subsidiary locks are held: */
 	Oid			heapOid;
@@ -937,6 +939,24 @@ DefineRelation(CreateStmt *stmt, char relkind, Oid ownerId,
 		accessMethodId = get_table_am_oid(accessMethod, false);
 		amHandlerOid = get_table_am_handler_oid(accessMethod, false);
 	}
+
+	/*
+	 * Lake tables must be created through CREATE LAKE TABLE, which also
+	 * creates the pg_lake_table catalog entries the iceberg access method
+	 * relies on.  A relation created with the iceberg AM through any other
+	 * path (CREATE TABLE ... USING iceberg, CTAS, matview,
+	 * default_table_access_method, partition child) would be unusable and
+	 * undroppable, so reject it up front.  CreateLakeTableStmt embeds
+	 * CreateStmt as its first member, so nodeTag() distinguishes the paths.
+	 */
+	if (OidIsValid(accessMethodId) &&
+		accessMethodId == GetIcebergTableAmOid(true) &&
+		nodeTag(stmt) != T_CreateLakeTableStmt)
+		ereport(ERROR,
+				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+				 errmsg("cannot create table \"%s\" with access method \"%s\"",
+						stmt->relation->relname, ICEBERG_TABLE_AM_NAME),
+				 errhint("Use CREATE LAKE TABLE ... USING ICEBERG instead.")));
 
 	/*
 	 * GPDB: for partitioned tables, inherit reloptions from the parent.
@@ -1979,6 +1999,7 @@ RemoveRelations(DropStmt *drop)
 
 		/* Look up the appropriate relation using namespace search. */
 		state.expected_relkind = relkind;
+		state.iceberg_only = drop->isiceberg;
 		state.heap_lockmode = drop->concurrent ?
 			ShareUpdateExclusiveLock : AccessExclusiveLock;
 		/* We must initialize these fields to show that no locks are held: */
@@ -2199,6 +2220,36 @@ RangeVarCallbackForDropRelation(const RangeVar *rel, Oid relOid, Oid oldRelOid,
 	if (state->expected_relkind != expected_relkind)
 		DropErrorMsgWrongType(rel->relname, classform->relkind,
 							  state->expected_relkind);
+
+	/*
+	 * Iceberg (lake) tables share RELKIND_RELATION with ordinary tables and are
+	 * told apart only by their access method. DROP LAKE TABLE must target one;
+	 * plain DROP TABLE must NOT (mirrors the foreign-table rule) -- direct the user
+	 * to the matching command in each case.
+	 */
+	if (state->expected_relkind == RELKIND_RELATION)
+	{
+		Oid			iceberg_amoid = GetIcebergTableAmOid(true);
+		bool		is_iceberg = classform->relkind == RELKIND_RELATION &&
+			OidIsValid(iceberg_amoid) &&
+			classform->relam == iceberg_amoid;
+
+		if (state->iceberg_only)
+		{
+			if (!is_iceberg)
+				ereport(ERROR,
+						(errcode(ERRCODE_WRONG_OBJECT_TYPE),
+						 errmsg("\"%s\" is not a lake table", rel->relname),
+						 errhint("Use DROP TABLE to remove a table.")));
+		}
+		else if (is_iceberg)
+		{
+			ereport(ERROR,
+					(errcode(ERRCODE_WRONG_OBJECT_TYPE),
+					 errmsg("\"%s\" is not a table", rel->relname),
+					 errhint("Use DROP LAKE TABLE to remove a lake table.")));
+		}
+	}
 
 	/* Allow DROP to either table owner or schema owner */
 	if (!object_ownercheck(RelationRelationId, relOid, GetUserId()) &&
@@ -17059,12 +17110,34 @@ static void
 ATPrepSetAccessMethod(AlteredTableInfo *tab, Relation rel, const char *amname)
 {
 	Oid			amoid;
+	Oid			iceberg_amoid;
 
 	/* Check that the table access method exists */
 	amoid = get_table_am_oid(amname, false);
 
 	if (rel->rd_rel->relam == amoid)
 		return;
+
+	/*
+	 * The iceberg AM relies on catalog entries that only the CREATE/DROP
+	 * LAKE TABLE paths manage, so a table cannot be converted to or from
+	 * it with SET ACCESS METHOD.
+	 */
+	iceberg_amoid = GetIcebergTableAmOid(true);
+	if (OidIsValid(iceberg_amoid))
+	{
+		if (amoid == iceberg_amoid)
+			ereport(ERROR,
+					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+					 errmsg("cannot change access method of table \"%s\" to \"" ICEBERG_TABLE_AM_NAME "\"",
+							RelationGetRelationName(rel)),
+					 errhint("Use CREATE LAKE TABLE ... USING ICEBERG to create a lake table.")));
+		if (rel->rd_rel->relam == iceberg_amoid)
+			ereport(ERROR,
+					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+					 errmsg("cannot change access method of lake table \"%s\"",
+							RelationGetRelationName(rel))));
+	}
 
 	/* Save info for Phase 3 to do the real work */
 	tab->rewrite |= AT_REWRITE_ACCESS_METHOD;
@@ -19759,6 +19832,14 @@ ATExecSetDistributedBy(Relation rel, Node *node, AlterTableCmd *cmd)
 						(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 						 errmsg("SET DISTRIBUTED REPLICATED is not supported for external table")));
 		}
+
+		/* Lake tables must remain DISTRIBUTED RANDOMLY */
+		if (RelationIsLakeTable(rel))
+			ereport(ERROR,
+					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+					 errmsg("cannot change distribution policy of lake table \"%s\"",
+							RelationGetRelationName(rel)),
+					 errhint("Lake tables must use DISTRIBUTED RANDOMLY because data is stored on object storage.")));
 	}
 
 	if (Gp_role == GP_ROLE_DISPATCH)

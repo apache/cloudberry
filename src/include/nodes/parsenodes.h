@@ -2260,6 +2260,8 @@ typedef enum ObjectType
 	OBJECT_EXTENSION,
 	OBJECT_FDW,
 	OBJECT_FOREIGN_SERVER,
+	OBJECT_FOREIGN_CATALOG,
+	OBJECT_FOREIGN_VOLUME,
 	OBJECT_STORAGE_SERVER,
 	OBJECT_FOREIGN_TABLE,
 	OBJECT_FUNCTION,
@@ -3271,6 +3273,25 @@ typedef struct CreateForeignServerStmt
 	List	   *options;		/* generic options to server */
 } CreateForeignServerStmt;
 
+typedef struct CreateForeignCatalogStmt
+{
+	NodeTag		type;
+	char	   *catalogname;	/* foreign catalog name */
+	char	   *servername;		/* server name */
+	char	   *catalogtype;	/* catalog type, e.g. 'hive' */
+	bool		if_not_exists;	/* just do nothing if it already exists? */
+	List	   *options;		/* generic options to catalog */
+} CreateForeignCatalogStmt;
+
+typedef struct CreateForeignVolumeStmt
+{
+	NodeTag		type;
+	char	   *volumename;		/* foreign volume name */
+	char	   *servername;		/* server name */
+	bool		if_not_exists;	/* just do nothing if it already exists? */
+	List	   *options;		/* generic options to volume */
+} CreateForeignVolumeStmt;
+
 typedef struct AlterForeignServerStmt
 {
 	NodeTag		type;
@@ -3778,6 +3799,14 @@ typedef struct CreateDirectoryTableStmt
 	char       *location;   /* dtlocation for pg_directory_table */
 } CreateDirectoryTableStmt;
 
+typedef struct CreateLakeTableStmt
+{
+	CreateStmt	base;			/* base table creation info */
+	char	   *table_type;		/* lake table format, e.g. "ICEBERG" (validation only) */
+	char	   *foreign_catalog;	/* foreign catalog name, or NULL */
+	char	   *foreign_volume;	/* foreign volume name, or NULL */
+} CreateLakeTableStmt;
+
 typedef struct AlterDirectoryTableStmt
 {
 	NodeTag 	type;
@@ -3803,6 +3832,7 @@ typedef struct DropStmt
 	bool		missing_ok;		/* skip error if object is missing? */
 	bool		concurrent;		/* drop index concurrently? */
 	bool		isdynamic;		/* drop a dynamic table? */
+	bool		isiceberg;		/* drop an iceberg (lake) table? */
 } DropStmt;
 
 /* ----------------------

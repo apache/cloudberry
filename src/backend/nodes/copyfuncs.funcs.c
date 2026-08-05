@@ -2748,6 +2748,33 @@ _copyCreateForeignServerStmt(const CreateForeignServerStmt *from)
 	return newnode;
 }
 
+static CreateForeignCatalogStmt *
+_copyCreateForeignCatalogStmt(const CreateForeignCatalogStmt *from)
+{
+	CreateForeignCatalogStmt *newnode = makeNode(CreateForeignCatalogStmt);
+
+	COPY_STRING_FIELD(catalogname);
+	COPY_STRING_FIELD(servername);
+	COPY_STRING_FIELD(catalogtype);
+	COPY_SCALAR_FIELD(if_not_exists);
+	COPY_NODE_FIELD(options);
+
+	return newnode;
+}
+
+static CreateForeignVolumeStmt *
+_copyCreateForeignVolumeStmt(const CreateForeignVolumeStmt *from)
+{
+	CreateForeignVolumeStmt *newnode = makeNode(CreateForeignVolumeStmt);
+
+	COPY_STRING_FIELD(volumename);
+	COPY_STRING_FIELD(servername);
+	COPY_SCALAR_FIELD(if_not_exists);
+	COPY_NODE_FIELD(options);
+
+	return newnode;
+}
+
 static AlterForeignServerStmt *
 _copyAlterForeignServerStmt(const AlterForeignServerStmt *from)
 {
@@ -3358,6 +3385,44 @@ _copyCreateDirectoryTableStmt(const CreateDirectoryTableStmt *from)
 	return newnode;
 }
 
+static CreateLakeTableStmt *
+_copyCreateLakeTableStmt(const CreateLakeTableStmt *from)
+{
+	CreateLakeTableStmt *newnode = makeNode(CreateLakeTableStmt);
+
+	COPY_NODE_FIELD(base.relation);
+	COPY_NODE_FIELD(base.tableElts);
+	COPY_NODE_FIELD(base.inhRelations);
+	COPY_NODE_FIELD(base.partbound);
+	COPY_NODE_FIELD(base.partspec);
+	COPY_NODE_FIELD(base.ofTypename);
+	COPY_NODE_FIELD(base.constraints);
+	COPY_NODE_FIELD(base.options);
+	COPY_SCALAR_FIELD(base.oncommit);
+	COPY_STRING_FIELD(base.tablespacename);
+	COPY_STRING_FIELD(base.accessMethod);
+	COPY_SCALAR_FIELD(base.if_not_exists);
+	COPY_SCALAR_FIELD(base.gp_style_alter_part);
+	COPY_NODE_FIELD(base.distributedBy);
+	COPY_NODE_FIELD(base.partitionBy);
+	COPY_SCALAR_FIELD(base.relKind);
+	COPY_SCALAR_FIELD(base.ownerid);
+	COPY_SCALAR_FIELD(base.buildAoBlkdir);
+	COPY_NODE_FIELD(base.attr_encodings);
+	COPY_SCALAR_FIELD(base.isCtas);
+	COPY_NODE_FIELD(base.intoQuery);
+	COPY_NODE_FIELD(base.intoPolicy);
+	COPY_NODE_FIELD(base.part_idx_oids);
+	COPY_NODE_FIELD(base.part_idx_names);
+	COPY_NODE_FIELD(base.tags);
+	COPY_SCALAR_FIELD(base.origin);
+	COPY_STRING_FIELD(table_type);
+	COPY_STRING_FIELD(foreign_catalog);
+	COPY_STRING_FIELD(foreign_volume);
+
+	return newnode;
+}
+
 static AlterDirectoryTableStmt *
 _copyAlterDirectoryTableStmt(const AlterDirectoryTableStmt *from)
 {
@@ -3381,6 +3446,7 @@ _copyDropStmt(const DropStmt *from)
 	COPY_SCALAR_FIELD(missing_ok);
 	COPY_SCALAR_FIELD(concurrent);
 	COPY_SCALAR_FIELD(isdynamic);
+	COPY_SCALAR_FIELD(isiceberg);
 
 	return newnode;
 }
@@ -3396,6 +3462,7 @@ _copyDropDirectoryTableStmt(const DropDirectoryTableStmt *from)
 	COPY_SCALAR_FIELD(base.missing_ok);
 	COPY_SCALAR_FIELD(base.concurrent);
 	COPY_SCALAR_FIELD(base.isdynamic);
+	COPY_SCALAR_FIELD(base.isiceberg);
 	COPY_SCALAR_FIELD(with_content);
 
 	return newnode;
