@@ -1814,12 +1814,14 @@ bool HandleExtendProtocol(PGconn *conn)
 
 		if (pqGetnchar(data, length, conn))
 		{
+			pfree(data);
 			MemoryContextSwitchTo(oldctx);
 			return false;
 		}
 		StringInfo buf = makeStringInfo();
 		/* Do not change the raw data, let caller process it. */
 		appendBinaryStringInfoNT(buf, data, length);
+		pfree(data);
 		epd->subtagdata[subtag] = lappend(epd->subtagdata[subtag], buf);
 		MemoryContextSwitchTo(oldctx);
 		/* Mark subtag to be consumed. */
