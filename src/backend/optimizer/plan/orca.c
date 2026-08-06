@@ -45,6 +45,8 @@
 #include "utils/syscache.h"
 #include "catalog/pg_proc.h"
 #include "catalog/pg_namespace.h"
+#include "cdb/cdbllize.h"
+#include "optimizer/walkers.h"
 
 /* GPORCA entry point */
 extern PlannedStmt * GPOPTOptimizedPlan(Query *parse, bool *had_unexpected_failure, OptimizerOptions *opts);
@@ -53,6 +55,7 @@ static Plan *remove_redundant_results(PlannerInfo *root, Plan *plan);
 static Node *remove_redundant_results_mutator(Node *node, void *);
 static bool can_replace_tlist(Plan *plan);
 static Node *push_down_expr_mutator(Node *node, List *child_tlist);
+static bool set_plan_param_bitmaps_walker(Node *node, void *context);
 
 /*
  * Logging of optimization outcome
@@ -353,6 +356,28 @@ optimize_query(Query *parse, int cursorOptions, ParamListInfo boundParams, Optim
 	result->planTree = remove_redundant_results(root, result->planTree);
 
 	/*
+	 * Compute the extParam/allParam bitmapsets of every Plan node, for the
+	 * final shape of the plan.
+	 *
+	 * Rescan correctness depends on these: the executor propagates chgParam
+	 * to a child only if the child's allParam contains the changed param
+	 * (see UpdateChangedParamSet()), and e.g. a Material node relies on that
+	 * to discard its tuplestore when a param of an enclosing SubPlan
+	 * changes; a stale bitmap silently yields wrong results.  Plans from the
+	 * Postgres planner get these bits from SS_finalize_plan(); for ORCA
+	 * plans we compute them here in one authoritative pass, instead of
+	 * relying on every translator function to fill them in piecemeal.
+	 */
+	{
+		plan_tree_base_prefix ctx;
+
+		ctx.node = (Node *) root;
+		foreach(lp, glob->subplans)
+			set_plan_param_bitmaps_walker((Node *) lfirst(lp), &ctx);
+		set_plan_param_bitmaps_walker((Node *) result->planTree, &ctx);
+	}
+
+	/*
 	 * To save on memory, and on the network bandwidth when the plan is
 	 * dispatched to QEs, strip all subquery RTEs of the original Query
 	 * objects.
@@ -410,6 +435,52 @@ optimize_query(Query *parse, int cursorOptions, ParamListInfo boundParams, Optim
 	result->stmt_len = parse->stmt_len;
 
 	return result;
+}
+
+/*
+ * Set the extParam/allParam bitmapsets of every Plan node to the set of
+ * PARAM_EXEC params referenced in the node's subtree.
+ *
+ * SubPlan bodies are not entered here (extract_nodes_plan() collects the
+ * params of a SubPlan's testexpr and args, but does not descend into the
+ * body); the caller walks each entry of glob->subplans separately instead,
+ * so every plan node in the tree gets its bitmaps set exactly once.
+ */
+static bool
+set_plan_param_bitmaps_walker(Node *node, void *context)
+{
+	if (node == NULL)
+		return false;
+
+	if (is_plan_node(node))
+	{
+		Plan	   *plan = (Plan *) node;
+		List	   *params;
+		Bitmapset  *bms = NULL;
+		ListCell   *lc;
+
+		params = extract_nodes_plan(plan, T_Param,
+									true /* descendIntoSubqueries */);
+		foreach(lc, params)
+		{
+			Param	   *param = (Param *) lfirst(lc);
+
+			/*
+			 * extParam/allParam must contain only PARAM_EXEC paramids (see
+			 * plannodes.h); PARAM_EXTERN params live in a separate numbering
+			 * space and never change during execution.
+			 */
+			if (param->paramkind == PARAM_EXEC)
+				bms = bms_add_member(bms, param->paramid);
+		}
+		list_free(params);
+
+		plan->extParam = bms;
+		plan->allParam = bms;
+	}
+
+	return plan_tree_walker(node, set_plan_param_bitmaps_walker, context,
+							false /* recurse_into_subplans */);
 }
 
 /*
