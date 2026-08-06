@@ -2230,7 +2230,7 @@ NOTICE:  One or more columns in the following table(s) do not have statistics: l
 HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
                         QUERY PLAN                        
 ----------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)
+ Gather Motion 2:1  (slice1; segments: 2)
    ->  Dynamic Seq Scan on list_parted
          Number of partitions to scan: 2 (out of 3)
          Filter: ((a)::text = ANY ('{ab,cd,ef}'::text[]))
@@ -2242,7 +2242,7 @@ NOTICE:  One or more columns in the following table(s) do not have statistics: l
 HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
                                       QUERY PLAN                                       
 ---------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)
+ Gather Motion 2:1  (slice1; segments: 2)
    ->  Dynamic Seq Scan on list_parted
          Number of partitions to scan: 1 (out of 3)
          Filter: (((a)::text = 'ab'::text) OR ((a)::text = ANY ('{NULL,cd}'::text[])))
@@ -2750,7 +2750,7 @@ NOTICE:  One or more columns in the following table(s) do not have statistics: m
 HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
                              QUERY PLAN                              
 ---------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)
+ Gather Motion 2:1  (slice1; segments: 2)
    Merge Key: a
    ->  Sort
          Sort Key: a
@@ -2771,7 +2771,7 @@ NOTICE:  One or more columns in the following table(s) do not have statistics: m
 HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
                              QUERY PLAN                              
 ---------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)
+ Gather Motion 2:1  (slice1; segments: 2)
    Merge Key: a
    ->  Sort
          Sort Key: a
@@ -2786,7 +2786,7 @@ NOTICE:  One or more columns in the following table(s) do not have statistics: m
 HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
                                QUERY PLAN                                
 -------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)
+ Gather Motion 2:1  (slice1; segments: 2)
    Merge Key: a
    ->  Sort
          Sort Key: a
@@ -2806,7 +2806,7 @@ NOTICE:  One or more columns in the following table(s) do not have statistics: m
 HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
                                QUERY PLAN                                
 -------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)
+ Gather Motion 2:1  (slice1; segments: 2)
    Merge Key: a
    ->  Sort
          Sort Key: a
@@ -2821,7 +2821,7 @@ NOTICE:  One or more columns in the following table(s) do not have statistics: m
 HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
                              QUERY PLAN                              
 ---------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)
+ Gather Motion 2:1  (slice1; segments: 2)
    Merge Key: a
    ->  Sort
          Sort Key: a
@@ -2837,7 +2837,7 @@ NOTICE:  One or more columns in the following table(s) do not have statistics: m
 HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
                              QUERY PLAN                              
 ---------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)
+ Gather Motion 2:1  (slice1; segments: 2)
    Merge Key: a
    ->  Sort
          Sort Key: a

@@ -1130,14 +1130,14 @@ INFO:  (slice 1) Dispatch command to ALL contents: 0 1 2
 explain (costs off) select gp_segment_id, * from t1_varchar where col1_varchar in ('a','b');
                            QUERY PLAN                           
 ----------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)
+ Gather Motion 2:1  (slice1; segments: 2)
    ->  Seq Scan on t1_varchar
          Filter: ((col1_varchar)::text = ANY ('{a,b}'::text[]))
  Optimizer: Pivotal Optimizer (GPORCA)
 (4 rows)
 
 select gp_segment_id, * from t1_varchar where col1_varchar in ('a','b');
-INFO:  (slice 1) Dispatch command to ALL contents: 0 1 2
+INFO:  (slice 1) Dispatch command to PARTIAL contents: 2 1
  gp_segment_id | col1_varchar | col2_int 
 ---------------+--------------+----------
              1 | b            |        2
@@ -1147,14 +1147,14 @@ INFO:  (slice 1) Dispatch command to ALL contents: 0 1 2
 explain (costs off) select gp_segment_id, * from t1_varchar where col1_varchar = 'a' or col1_varchar = 'b';
                                          QUERY PLAN                                         
 --------------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)
+ Gather Motion 2:1  (slice1; segments: 2)
    ->  Seq Scan on t1_varchar
          Filter: (((col1_varchar)::text = 'a'::text) OR ((col1_varchar)::text = 'b'::text))
  Optimizer: Pivotal Optimizer (GPORCA)
 (4 rows)
 
 select gp_segment_id, * from t1_varchar where col1_varchar = 'a' or col1_varchar = 'b';
-INFO:  (slice 1) Dispatch command to ALL contents: 0 1 2
+INFO:  (slice 1) Dispatch command to PARTIAL contents: 2 1
  gp_segment_id | col1_varchar | col2_int 
 ---------------+--------------+----------
              1 | b            |        2
@@ -1214,14 +1214,14 @@ INFO:  (slice 1) Dispatch command to SINGLE content
 explain (costs off) select gp_segment_id, * from t1_varchar where col1_varchar in ('a', 'b') and col2_int=2;
                                      QUERY PLAN                                      
 -------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)
+ Gather Motion 2:1  (slice1; segments: 2)
    ->  Seq Scan on t1_varchar
          Filter: (((col1_varchar)::text = ANY ('{a,b}'::text[])) AND (col2_int = 2))
  Optimizer: Pivotal Optimizer (GPORCA)
 (4 rows)
 
 select gp_segment_id, * from t1_varchar where col1_varchar in ('a', 'b') and col2_int=2;
-INFO:  (slice 1) Dispatch command to ALL contents: 0 1 2
+INFO:  (slice 1) Dispatch command to PARTIAL contents: 2 1
  gp_segment_id | col1_varchar | col2_int 
 ---------------+--------------+----------
              1 | b            |        2
@@ -1230,14 +1230,14 @@ INFO:  (slice 1) Dispatch command to ALL contents: 0 1 2
 explain (costs off) select gp_segment_id, * from t1_varchar where (col1_varchar = 'a' or col1_varchar = 'b') and col2_int=1;
                                                    QUERY PLAN                                                    
 -----------------------------------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)
+ Gather Motion 2:1  (slice1; segments: 2)
    ->  Seq Scan on t1_varchar
          Filter: ((((col1_varchar)::text = 'a'::text) OR ((col1_varchar)::text = 'b'::text)) AND (col2_int = 1))
  Optimizer: Pivotal Optimizer (GPORCA)
 (4 rows)
 
 select gp_segment_id, * from t1_varchar where (col1_varchar = 'a' or col1_varchar = 'b') and col2_int=1;
-INFO:  (slice 1) Dispatch command to ALL contents: 0 1 2
+INFO:  (slice 1) Dispatch command to PARTIAL contents: 2 1
  gp_segment_id | col1_varchar | col2_int 
 ---------------+--------------+----------
              2 | a            |        1

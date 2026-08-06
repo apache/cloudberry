@@ -1205,6 +1205,17 @@ gpdb::LAppendInt(List *list, int iDatum)
 }
 
 List *
+gpdb::LAppendUniqueInt(List *list, int iDatum)
+{
+	GP_WRAP_START;
+	{
+		return list_append_unique_int(list, iDatum);
+	}
+	GP_WRAP_END;
+	return NIL;
+}
+
+List *
 gpdb::LAppendOid(List *list, Oid datum)
 {
 	GP_WRAP_START;

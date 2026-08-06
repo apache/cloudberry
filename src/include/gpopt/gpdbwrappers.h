@@ -456,6 +456,9 @@ List *LAppend(List *list, void *datum);
 // append an integer to a list
 List *LAppendInt(List *list, int datum);
 
+// append an integer to a list if it is not already a member
+List *LAppendUniqueInt(List *list, int datum);
+
 // append an oid to a list
 List *LAppendOid(List *list, Oid datum);
 
