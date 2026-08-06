@@ -13,6 +13,7 @@
 
 #include "gpos/base.h"
 
+#include "gpopt/base/CCTEInfo.h"
 #include "gpopt/base/CCTEMap.h"
 #include "gpopt/base/COptCtxt.h"
 #include "gpopt/operators/CExpression.h"
@@ -45,12 +46,30 @@ CPhysicalCTEConsumer::CPhysicalCTEConsumer(CMemoryPool *mp, ULONG id,
 	m_pdrgpcr = GPOS_NEW(mp) CColRefArray(mp);
 	m_pidxmap = GPOS_NEW(mp) ULongPtrArray(mp);
 
+	// ShareInputScan does not project, so the producer finalizes its shared-scan
+	// output as the union of all consumers' required columns (see
+	// CTranslatorDXLToExpr::PruneCTEs). Therefore every consumer must expose
+	// exactly the producer's surviving columns: it can neither read a column the
+	// producer pruned (that would run past the shared tuple) nor decide what to
+	// keep from its own per-column usage. Drive the consumer's kept set from the
+	// producer's used mask, which is the single source of truth. When the
+	// producer was not pruned (mask is NULL) fall back to the previous behavior.
+	CCTEInfo *pcteinfo = COptCtxt::PoctxtFromTLS()->Pcteinfo();
+	CLogicalCTEProducer *popProducer =
+		CLogicalCTEProducer::PopConvert(pcteinfo->PexprCTEProducer(m_id)->Pop());
+	BOOL *producer_umask = popProducer->UsedMask();
+	GPOS_ASSERT_IMP(nullptr != producer_umask,
+					popProducer->Pdrgpcr()->Size() == colref_size);
+
 	for (ULONG index = 0; index < colref_size; index++) {
 		CColRef *col_ref = (*colref_array)[index];
-		if (col_ref->GetUsage(true, true) == CColRef::EUsed) {
+		BOOL kept = (nullptr != producer_umask)
+						? producer_umask[index]
+						: (col_ref->GetUsage(true, true) == CColRef::EUsed);
+		if (kept) {
 			m_pdrgpcr->Append(col_ref);
 			m_pidxmap->Append(GPOS_NEW(m_mp) ULONG(index));
-		} 
+		}
 	}
 
 	if (m_pidxmap->Size() == colref_size) {
