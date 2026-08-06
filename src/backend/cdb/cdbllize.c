@@ -142,6 +142,7 @@ typedef struct
  * Forward Declarations
  */
 static Node *fix_outer_query_motions_mutator(Node *node, decorate_subplans_with_motions_context *context);
+static Node *fix_outer_query_motions_mutator_adapter(Node *node, void *context);
 static Plan *fix_subplan_motion(PlannerInfo *root, Plan *subplan, Flow *outer_query_flow);
 static bool build_slice_table_walker(Node *node, build_slice_table_context *context);
 static void adjust_top_path_for_parallel_retrieve_cursor(Path *path, PlanSlice *slice);
@@ -852,7 +853,7 @@ fix_outer_query_motions_mutator(Node *node, decorate_subplans_with_motions_conte
 	/* An expression node might have subtrees containing plans to be mutated. */
 	if (!is_plan_node(node))
 	{
-		node = plan_tree_mutator(node, fix_outer_query_motions_mutator, context, false);
+		node = plan_tree_mutator(node, fix_outer_query_motions_mutator_adapter, context, false);
 
 		/*
 		 * If we see a SubPlan, remember the context where we saw it. We memorize
@@ -912,7 +913,7 @@ fix_outer_query_motions_mutator(Node *node, decorate_subplans_with_motions_conte
 		context->sliceDepth++;
 
 		plan = (Plan *) plan_tree_mutator((Node *) plan,
-										  fix_outer_query_motions_mutator,
+										  fix_outer_query_motions_mutator_adapter,
 										  context,
 										  false);
 		motion = (Motion *) plan;
@@ -991,11 +992,18 @@ fix_outer_query_motions_mutator(Node *node, decorate_subplans_with_motions_conte
 		saveCurrentPlanFlow = context->currentPlanFlow;
 		if (plan->flow != NULL && plan->flow->locustype != CdbLocusType_OuterQuery)
 			context->currentPlanFlow = plan->flow;
-		newnode = plan_tree_mutator(node, fix_outer_query_motions_mutator, context, false);
+		newnode = plan_tree_mutator(node, fix_outer_query_motions_mutator_adapter, context, false);
 		context->currentPlanFlow = saveCurrentPlanFlow;
 	}
 
 	return newnode;
+}
+
+static Node *
+fix_outer_query_motions_mutator_adapter(Node *node, void *context)
+{
+	return fix_outer_query_motions_mutator(
+		node, (decorate_subplans_with_motions_context *) context);
 }
 
 /*
@@ -1271,6 +1279,14 @@ cdbllize_build_slice_table(PlannerInfo *root, Plan *top_plan,
 }
 
 static bool
+build_slice_table_walker(Node *node, build_slice_table_context *context);
+static bool
+build_slice_table_walker_adapter(Node *node, void *context)
+{
+	return build_slice_table_walker(node, (build_slice_table_context *) context);
+}
+
+static bool
 build_slice_table_walker(Node *node, build_slice_table_context *context)
 {
 	PlannerInfo *root = (PlannerInfo *) context->base.node;
@@ -1312,9 +1328,9 @@ build_slice_table_walker(Node *node, build_slice_table_context *context)
 			root->glob->subplan_sliceIds[plan_id - 1] = context->currentSliceIndex;
 
 			result = plan_tree_walker(node,
-									  build_slice_table_walker,
-									  context,
-									  true);
+								  build_slice_table_walker_adapter,
+								  context,
+								  true);
 
 			context->currentSliceIndex = save_currentSliceIndex;
 
@@ -1372,7 +1388,7 @@ build_slice_table_walker(Node *node, build_slice_table_context *context)
 		}
 
 		result = plan_tree_walker((Node *) motion,
-								  build_slice_table_walker,
+								  build_slice_table_walker_adapter,
 								  context,
 								  false);
 
@@ -1382,7 +1398,7 @@ build_slice_table_walker(Node *node, build_slice_table_context *context)
 	}
 
 	return plan_tree_walker(node,
-							build_slice_table_walker,
+							build_slice_table_walker_adapter,
 							context,
 							false);
 }
@@ -1435,6 +1451,14 @@ typedef struct aware_result_t
 								 * plan_tree_walker/mutator */
 	int			nnodes;
 } aware_result_t;
+
+static bool
+motion_sanity_walker(Node *node, sanity_result_t *result);
+static bool
+motion_sanity_walker_adapter(Node *node, void *result)
+{
+	return motion_sanity_walker(node, (sanity_result_t *) result);
+}
 
 static bool
 motion_sanity_walker(Node *node, sanity_result_t *result)
@@ -1542,12 +1566,12 @@ motion_sanity_walker(Node *node, sanity_result_t *result)
 		case T_Sort:
 		case T_Material:
 		case T_ForeignScan:
-			if (plan_tree_walker(node, motion_sanity_walker, result, true))
+			if (plan_tree_walker(node, motion_sanity_walker_adapter, result, true))
 				return true;
 			break;
 
 		case T_Motion:
-			if (plan_tree_walker(node, motion_sanity_walker, result, true))
+			if (plan_tree_walker(node, motion_sanity_walker_adapter, result, true))
 				return true;
 			result->flags |= SANITY_MOTION;
 			elog(DEBUG5, "   found motion");
