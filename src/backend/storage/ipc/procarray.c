@@ -2649,12 +2649,15 @@ WaitForDtxCommit(void)
 			int					 pgprocno = procArray->pgprocnos[i];
 			volatile TMGXACT *tmGxact = &allTmGxact[pgprocno];
 
+			DistributedTransactionId gxid =
+				pg_atomic_read_u64(&tmGxact->atomic_gxid);
+
 			if (tmGxact == MyTmGxact ||
-				tmGxact->gxid == InvalidDistributedTransactionId ||
+				gxid == InvalidDistributedTransactionId ||
 				!tmGxact->commitInProgress)
 				continue;
 
-			waitGxid = tmGxact->gxid;
+			waitGxid = gxid;
 			break;
 		}
 
