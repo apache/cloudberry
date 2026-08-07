@@ -268,6 +268,8 @@ YAML_LIBS		= @YAML_LIBS@
 with_zstd 		= @with_zstd@
 ZSTD_CFLAGS		= @ZSTD_CFLAGS@
 ZSTD_LIBS		= @ZSTD_LIBS@
+with_lzo 		= @with_lzo@
+LZO_LIBS		= @LZO_LIBS@
 EVENT_LIBS		= @EVENT_LIBS@
 with_diskquota		= @with_diskquota@
 with_gp_stats_collector		= @with_gp_stats_collector@
@@ -335,8 +337,8 @@ LDAP_LIBS_BE = @LDAP_LIBS_BE@
 UUID_LIBS = @UUID_LIBS@
 LLVM_LIBS=@LLVM_LIBS@
 
-# Cloudberry uses zstd in frontend and backend
-LIBS := $(LIBS) $(ZSTD_LIBS)
+# Cloudberry uses zstd and lzo in frontend and backend
+LIBS := $(LIBS) $(ZSTD_LIBS) $(LZO_LIBS)
 
 # It's critical that within LDFLAGS, all -L switches pointing to build-tree
 # directories come before any -L switches pointing to external directories.
