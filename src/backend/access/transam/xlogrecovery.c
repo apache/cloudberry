@@ -2215,7 +2215,7 @@ CheckTablespaceDirectory(void)
 		snprintf(path, sizeof(path), "pg_tblspc/%s", de->d_name);
 
 		if (get_dirent_type(path, de, false, ERROR) != PGFILETYPE_LNK)
-			ereport(allow_in_place_tablespaces ? WARNING : PANIC,
+			ereport(allow_in_place_tablespaces ? WARNING : WARNING,
 					(errcode(ERRCODE_DATA_CORRUPTED),
 					 errmsg("unexpected directory entry \"%s\" found in %s",
 							de->d_name, "pg_tblspc/"),
