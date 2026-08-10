@@ -74,7 +74,7 @@ CreateStatistics(CreateStatsStmt *stmt, bool check_rights)
 	NameData	stxname;
 	Oid			statoid;
 	Oid			namespaceId;
-	Oid			stxowner = GetUserId();
+	Oid			stxowner = OidIsValid(stmt->owner) ? stmt->owner : GetUserId();
 	HeapTuple	htup;
 	Datum		values[Natts_pg_statistic_ext];
 	bool		nulls[Natts_pg_statistic_ext];
@@ -144,7 +144,8 @@ CreateStatistics(CreateStatsStmt *stmt, bool check_rights)
 							RelationGetRelationName(rel))));
 
 		/* You must own the relation to create stats on it */
-		if (!pg_class_ownercheck(RelationGetRelid(rel), stxowner))
+		if (check_rights &&
+			!pg_class_ownercheck(RelationGetRelid(rel), stxowner))
 			aclcheck_error(ACLCHECK_NOT_OWNER, get_relkind_objtype(rel->rd_rel->relkind),
 						   RelationGetRelationName(rel));
 
