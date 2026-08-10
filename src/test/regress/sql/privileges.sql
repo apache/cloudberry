@@ -1081,6 +1081,8 @@ DROP FUNCTION castfunc(int) CASCADE;
 DROP DOMAIN priv_testdomain3b;
 DROP TABLE test11b;
 
+DROP TABLE test12;
+DROP TABLE test13;
 DROP FUNCTION cons_priv_testtype1; -- ok
 DROP TYPE priv_testtype1; -- ok
 DROP DOMAIN priv_testdomain1; -- ok

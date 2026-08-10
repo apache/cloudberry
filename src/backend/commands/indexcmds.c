@@ -27,6 +27,7 @@
 #include "access/tableam.h"
 #include "access/xact.h"
 #include "catalog/catalog.h"
+#include "catalog/dependency.h"
 #include "catalog/index.h"
 #include "catalog/indexing.h"
 #include "catalog/pg_am.h"
@@ -1212,6 +1213,17 @@ DefineIndex(Oid relationId,
 					  accessMethodName, accessMethodId,
 					  amcanorder, stmt->isconstraint, root_save_userid,
 					  root_save_sec_context, &root_save_nestlevel);
+
+	/* index_create() records dependencies on the expression types. */
+	if (check_rights)
+	{
+		if (indexInfo->ii_Expressions)
+			CheckUsageOnTypesInSingleRelExpr((Node *) indexInfo->ii_Expressions,
+											 relationId, root_save_userid);
+		if (indexInfo->ii_Predicate)
+			CheckUsageOnTypesInSingleRelExpr((Node *) indexInfo->ii_Predicate,
+											 relationId, root_save_userid);
+	}
 
 	/*
 	 * We disallow unique indexes on IVM columns of IMMVs.
