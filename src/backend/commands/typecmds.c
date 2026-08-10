@@ -39,6 +39,7 @@
 #include "access/xact.h"
 #include "catalog/binary_upgrade.h"
 #include "catalog/catalog.h"
+#include "catalog/dependency.h"
 #include "catalog/heap.h"
 #include "catalog/objectaccess.h"
 #include "catalog/pg_am.h"
@@ -141,7 +142,8 @@ static void checkEnumOwner(HeapTuple tup);
 static char *domainAddConstraint(Oid domainOid, Oid domainNamespace,
 								 Oid baseTypeOid,
 								 int typMod, Constraint *constr,
-								 const char *domainName, ObjectAddress *constrAddr);
+								 const char *domainName, ObjectAddress *constrAddr,
+								 bool is_readd);
 static Node *replace_domain_constraint_value(ParseState *pstate,
 											 ColumnRef *cref);
 
@@ -1103,6 +1105,10 @@ DefineDomain(CreateDomainStmt *stmt)
 		}
 	}
 
+	/* TypeCreate() records dependencies on the default expression's types. */
+	if (defaultValueBin)
+		CheckUsageOnTypesInExpr(stringToNode(defaultValueBin), NIL, GetUserId());
+
 	/* Allocate OID for array type */
 	domainArrayName = makeArrayTypeName(domainName, domainNamespace);
 	domainArrayOid = AssignTypeArrayOid(domainArrayName, domainNamespace);
@@ -1200,7 +1206,7 @@ DefineDomain(CreateDomainStmt *stmt)
 			case CONSTR_CHECK:
 				domainAddConstraint(address.objectId, domainNamespace,
 									basetypeoid, basetypeMod,
-									constr, domainName, NULL);
+									constr, domainName, NULL, false);
 				break;
 
 				/* Other constraint types were fully processed above */
@@ -2768,6 +2774,12 @@ AlterDomainDefault(List *names, Node *defaultRaw)
 		else
 		{
 			/*
+			 * The below call to GenerateTypeDependencies() creates the
+			 * dependencies on types.  We are responsible for checking USAGE.
+			 */
+			CheckUsageOnTypesInExpr(defaultExpr, NIL, GetUserId());
+
+			/*
 			 * Expression must be stored as a nodeToString result, but we also
 			 * require a valid textual representation (mainly to make life
 			 * easier for pg_dump).
@@ -3050,7 +3062,7 @@ AlterDomainDropConstraint(List *names, const char *constrName,
  */
 ObjectAddress
 AlterDomainAddConstraint(List *names, Node *newConstraint,
-						 ObjectAddress *constrAddr)
+						 ObjectAddress *constrAddr, bool is_readd)
 {
 	TypeName   *typename;
 	Oid			domainoid;
@@ -3135,7 +3147,8 @@ AlterDomainAddConstraint(List *names, Node *newConstraint,
 
 	ccbin = domainAddConstraint(domainoid, typTup->typnamespace,
 								typTup->typbasetype, typTup->typtypmod,
-								constr, NameStr(typTup->typname), constrAddr);
+								constr, NameStr(typTup->typname), constrAddr,
+								is_readd);
 
 	/*
 	 * If requested to validate the constraint, test all values stored in the
@@ -3572,7 +3585,8 @@ checkDomainOwner(HeapTuple tup)
 static char *
 domainAddConstraint(Oid domainOid, Oid domainNamespace, Oid baseTypeOid,
 					int typMod, Constraint *constr,
-					const char *domainName, ObjectAddress *constrAddr)
+					const char *domainName, ObjectAddress *constrAddr,
+					bool is_readd)
 {
 	Node	   *expr;
 	char	   *ccbin;
@@ -3637,6 +3651,13 @@ domainAddConstraint(Oid domainOid, Oid domainNamespace, Oid baseTypeOid,
 	 * Fix up collation information.
 	 */
 	assign_expr_collations(pstate, expr);
+
+	/*
+	 * The below call to CreateConstraintEntry() creates the dependencies on
+	 * types.  We are responsible for checking USAGE.
+	 */
+	if (!is_readd)
+		CheckUsageOnTypesInExpr(expr, NIL, GetUserId());
 
 	/*
 	 * Domains don't allow variables (this is probably dead code now that
