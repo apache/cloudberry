@@ -463,6 +463,11 @@ lzo_read_uint32_peek(gfile_t *fd, uint32_t *val)
 static ssize_t
 lzo_file_read(gfile_t *fd, void *ptr, size_t len)
 {
+	if (fd == NULL || ptr == NULL || fd->u.lzo == NULL)
+	{
+		return -1;
+	}
+
 	struct lzo_stuff *z = fd->u.lzo;
 
 	if (!z)
@@ -502,25 +507,32 @@ lzo_file_read(gfile_t *fd, void *ptr, size_t len)
 		uint32_t uncomp_len, comp_len;
 
 		if (lzo_read_uint32_peek(fd, &uncomp_len) < 0)
-			return -1;      /* read error or truncation */
+		{
+			gfile_printf_then_putc_newline("lzo: failed to read uncomp_len - file may be truncated");
+ 			return -1;      /* read error or truncation */
+		}
+
 		if (uncomp_len == 0)
 		{
 			z->eof = 1;
 			return 0;       /* EOF marker block - normal end of file */
 		}
 		if (lzo_read_uint32_peek(fd, &comp_len) < 0)
+		{
+			gfile_printf_then_putc_newline("lzo: failed to read comp_len - file may be truncated");
 			return -1;
+		}	
 
 		/* sanity checks on the block sizes */
 		if (comp_len > (uint32_t) LZO_BUFFER_SIZE)
 		{
-			gfile_printf_then_putc_newline("lzo block too large: %u", comp_len);
+			gfile_printf_then_putc_newline("lzo: compressed block too large (%u bytes, max %d)", comp_len, LZO_BUFFER_SIZE);
 			return -1;
 		}
 		if (comp_len == 0 && uncomp_len > 0)
 		{
 			/* comp_len 0 with non-zero uncomp_len - corrupted header */
-			gfile_printf_then_putc_newline("lzo corrupted block: comp_len=0, uncomp_len=%u",
+			gfile_printf_then_putc_newline("lzo: corrupted block - zero compressed size but %u uncompressed",
 				uncomp_len);
 			return -1;
 		}
@@ -581,7 +593,10 @@ lzo_file_read(gfile_t *fd, void *ptr, size_t len)
 		 * A short read means the block was truncated.
 		 */
 		if (lzo_read_peek(fd, z->in, comp_len) < (ssize_t) comp_len)
+		{
+			gfile_printf_then_putc_newline("lzo: truncated block - expected %u bytes, got less", comp_len);
 			return -1;
+		}
 
 		/*
 		 * Step 5: decompress.
@@ -596,8 +611,17 @@ lzo_file_read(gfile_t *fd, void *ptr, size_t len)
 
 			if (r != LZO_E_OK)
 			{
+				/*
+				 * Decompression failure detailed error report
+				 * Common error codes:
+				 *   LZO_E_INPUT_OVERRUN   (-7): Input data truncated or corrupted
+				 *   LZO_E_OUTPUT_OVERRUN  (-6): Output buffer too small
+				 *   LZO_E_NOT_COMPRESSED  (-5): Data is not in LZO format
+				*/
 				/* decompression failure - corrupt data or not LZO */
-				gfile_printf_then_putc_newline("lzo safe decompress failed: %d", r);
+				gfile_printf_then_putc_newline(
+					"lzo: decompression failed (error=%d) - block: uncomp=%u comp=%u, possible causes: truncated file, corrupt data, or not LZO",
+					r, uncomp_len, comp_len);
 				return -1;
 			}
 			/* decompressed size must match the block header */
@@ -656,7 +680,7 @@ lzo_file_read(gfile_t *fd, void *ptr, size_t len)
 static int
 lzo_file_close(gfile_t *fd)
 {
-	if (fd->u.lzo)
+	if (fd != NULL && fd->u.lzo != NULL)
 	{
 		gfile_free(fd->u.lzo);
 		fd->u.lzo = NULL;
