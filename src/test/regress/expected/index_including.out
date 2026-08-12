@@ -449,6 +449,7 @@ HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sur
 CREATE INDEX nametbl_c1_c2_idx ON nametbl (c2, c1) INCLUDE (c3);
 INSERT INTO nametbl  SELECT x, 'two', 3.0 FROM generate_series(1,100) AS x;;
 VACUUM FREEZE nametbl;
+ANALYZE nametbl;
 SET enable_seqscan = 0;
 -- Ensure we get an index only scan plan
 EXPLAIN (COSTS OFF) SELECT c2, c1, c3 FROM nametbl WHERE c2 = 'two' AND c1 = 1;

@@ -53,6 +53,8 @@ SELECT INTERVAL '10 years -11 month -12 days +13:14' AS "9 years...";
 (1 row)
 
 CREATE TABLE INTERVAL_TBL (f1 interval);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO INTERVAL_TBL (f1) VALUES ('@ 1 minute');
 INSERT INTO INTERVAL_TBL (f1) VALUES ('@ 5 hour');
 INSERT INTO INTERVAL_TBL (f1) VALUES ('@ 10 day');
@@ -108,48 +110,48 @@ SELECT * FROM INTERVAL_TBL;
        f1        
 -----------------
  00:01:00
+ 3 mons
+ 5 mons
+ 5 mons 12:00:00
+ -00:00:14
  05:00:00
  10 days
  34 years
- 3 mons
- -00:00:14
  1 day 02:03:04
  6 years
- 5 mons
- 5 mons 12:00:00
 (10 rows)
 
 SELECT * FROM INTERVAL_TBL
    WHERE INTERVAL_TBL.f1 <> interval '@ 10 days';
        f1        
 -----------------
- 00:01:00
- 05:00:00
- 34 years
- 3 mons
  -00:00:14
- 1 day 02:03:04
- 6 years
+ 00:01:00
+ 3 mons
  5 mons
  5 mons 12:00:00
+ 05:00:00
+ 34 years
+ 1 day 02:03:04
+ 6 years
 (9 rows)
 
 SELECT * FROM INTERVAL_TBL
    WHERE INTERVAL_TBL.f1 <= interval '@ 5 hours';
     f1     
 -----------
+ -00:00:14
  00:01:00
  05:00:00
- -00:00:14
 (3 rows)
 
 SELECT * FROM INTERVAL_TBL
    WHERE INTERVAL_TBL.f1 < interval '@ 1 day';
     f1     
 -----------
+ -00:00:14
  00:01:00
  05:00:00
- -00:00:14
 (3 rows)
 
 SELECT * FROM INTERVAL_TBL
@@ -164,8 +166,8 @@ SELECT * FROM INTERVAL_TBL
        f1        
 -----------------
  34 years
- 3 mons
  6 years
+ 3 mons
  5 mons
  5 mons 12:00:00
 (5 rows)
@@ -175,14 +177,14 @@ SELECT * FROM INTERVAL_TBL
        f1        
 -----------------
  00:01:00
+ 3 mons
+ 5 mons
+ 5 mons 12:00:00
  05:00:00
  10 days
  34 years
- 3 mons
  1 day 02:03:04
  6 years
- 5 mons
- 5 mons 12:00:00
 (9 rows)
 
 SELECT r1.*, r2.*
@@ -240,6 +242,8 @@ SELECT r1.*, r2.*
 
 -- Test intervals that are large enough to overflow 64 bits in comparisons
 CREATE TEMP TABLE INTERVAL_TBL_OF (f1 interval);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO INTERVAL_TBL_OF (f1) VALUES
   ('2147483647 days 2147483647 months'),
   ('2147483647 days -2147483648 months'),
@@ -288,13 +292,16 @@ CREATE INDEX ON INTERVAL_TBL_OF USING btree (f1);
 SET enable_seqscan TO false;
 EXPLAIN (COSTS OFF)
 SELECT f1 FROM INTERVAL_TBL_OF r1 ORDER BY f1;
-                                QUERY PLAN                                
---------------------------------------------------------------------------
+                          QUERY PLAN                           
+---------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    Merge Key: f1
-   ->  Index Only Scan using interval_tbl_of_f1_idx on interval_tbl_of r1
+   ->  Sort
+         Sort Key: f1
+         ->  Bitmap Heap Scan on interval_tbl_of r1
+               ->  Bitmap Index Scan on interval_tbl_of_f1_idx
  Optimizer: Postgres query optimizer
-(4 rows)
+(7 rows)
 
 SELECT f1 FROM INTERVAL_TBL_OF r1 ORDER BY f1;
                     f1                     
@@ -316,33 +323,35 @@ DROP TABLE INTERVAL_TBL_OF;
 -- some time components be greater than 23:59:59 due to how intervals are
 -- stored internally.
 CREATE TABLE INTERVAL_MULDIV_TBL (span interval);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'span' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 COPY INTERVAL_MULDIV_TBL FROM STDIN;
 SELECT span * 0.3 AS product
 FROM INTERVAL_MULDIV_TBL;
               product               
 ------------------------------------
  1 year 12 days 122:24:00
- -1 years -12 days +93:36:00
  -3 days -14:24:00
+ 1 mon 6 days
+ 24 years 11 mons 320 days 16:48:00
+ -1 years -12 days +93:36:00
  2 mons 13 days 01:22:28.8
  -10 mons +120 days 37:28:21.6567
- 1 mon 6 days
  4 mons 6 days
- 24 years 11 mons 320 days 16:48:00
 (8 rows)
 
 SELECT span * 8.2 AS product
 FROM INTERVAL_MULDIV_TBL;
                    product                   
 ---------------------------------------------
- 28 years 104 days 2961:36:00
+ 682 years 7 mons 8215 days 19:12:00
  -28 years -104 days +2942:24:00
- -98 days -09:36:00
  6 years 1 mon -197 days +93:34:27.2
  -24 years -7 mons +3946 days 640:15:11.9498
- 2 years 8 mons 24 days
  9 years 6 mons 24 days
- 682 years 7 mons 8215 days 19:12:00
+ 28 years 104 days 2961:36:00
+ -98 days -09:36:00
+ 2 years 8 mons 24 days
 (8 rows)
 
 SELECT span / 10 AS quotient
@@ -350,27 +359,27 @@ FROM INTERVAL_MULDIV_TBL;
              quotient             
 ----------------------------------
  4 mons 4 days 40:48:00
- -4 mons -4 days +31:12:00
  -1 days -04:48:00
+ 12 days
+ 8 years 3 mons 126 days 21:36:00
+ -4 mons -4 days +31:12:00
  25 days -15:32:30.4
  -3 mons +30 days 12:29:27.2189
- 12 days
  1 mon 12 days
- 8 years 3 mons 126 days 21:36:00
 (8 rows)
 
 SELECT span / 100 AS quotient
 FROM INTERVAL_MULDIV_TBL;
         quotient         
 -------------------------
+ 9 mons 39 days 16:33:36
  12 days 13:40:48
- -12 days -06:28:48
  -02:52:48
+ 1 day 04:48:00
+ -12 days -06:28:48
  2 days 10:26:44.96
  -6 days +01:14:56.72189
- 1 day 04:48:00
  4 days 04:48:00
- 9 mons 39 days 16:33:36
 (8 rows)
 
 DROP TABLE INTERVAL_MULDIV_TBL;
@@ -379,14 +388,14 @@ SET IntervalStyle to postgres_verbose;
 SELECT * FROM INTERVAL_TBL;
               f1               
 -------------------------------
- @ 1 min
+ @ 14 secs ago
  @ 5 hours
  @ 10 days
  @ 34 years
- @ 3 mons
- @ 14 secs ago
  @ 1 day 2 hours 3 mins 4 secs
  @ 6 years
+ @ 1 min
+ @ 3 mons
  @ 5 mons
  @ 5 mons 12 hours
 (10 rows)
@@ -838,16 +847,16 @@ SELECT f1, f1::INTERVAL DAY TO MINUTE AS "minutes",
   FROM interval_tbl;
        f1        |     minutes     |  years   
 -----------------+-----------------+----------
+ -00:00:14       | 00:00:00        | 00:00:00
  00:01:00        | 00:01:00        | 00:00:00
+ 3 mons          | 3 mons          | 00:00:00
+ 5 mons          | 5 mons          | 00:00:00
+ 5 mons 12:00:00 | 5 mons 12:00:00 | 00:00:00
  05:00:00        | 05:00:00        | 00:00:00
  10 days         | 10 days         | 00:00:00
  34 years        | 34 years        | 34 years
- 3 mons          | 3 mons          | 00:00:00
- -00:00:14       | 00:00:00        | 00:00:00
  1 day 02:03:04  | 1 day 02:03:00  | 00:00:00
  6 years         | 6 years         | 6 years
- 5 mons          | 5 mons          | 00:00:00
- 5 mons 12:00:00 | 5 mons 12:00:00 | 00:00:00
 (10 rows)
 
 -- test inputting and outputting SQL standard interval literals
@@ -1710,14 +1719,14 @@ SELECT f1,
     FROM INTERVAL_TBL;
               f1               | microsecond | millisecond |   second   | minute | hour | day | month | quarter | year | decade | century | millennium |       epoch       
 -------------------------------+-------------+-------------+------------+--------+------+-----+-------+---------+------+--------+---------+------------+-------------------
- @ 1 min                       |           0 |       0.000 |   0.000000 |      1 |    0 |   0 |     0 |       1 |    0 |      0 |       0 |          0 |         60.000000
  @ 5 hours                     |           0 |       0.000 |   0.000000 |      0 |    5 |   0 |     0 |       1 |    0 |      0 |       0 |          0 |      18000.000000
  @ 10 days                     |           0 |       0.000 |   0.000000 |      0 |    0 |  10 |     0 |       1 |    0 |      0 |       0 |          0 |     864000.000000
  @ 34 years                    |           0 |       0.000 |   0.000000 |      0 |    0 |   0 |     0 |       1 |   34 |      3 |       0 |          0 | 1072958400.000000
- @ 3 mons                      |           0 |       0.000 |   0.000000 |      0 |    0 |   0 |     3 |       2 |    0 |      0 |       0 |          0 |    7776000.000000
- @ 14 secs ago                 |   -14000000 |  -14000.000 | -14.000000 |      0 |    0 |   0 |     0 |       1 |    0 |      0 |       0 |          0 |        -14.000000
  @ 1 day 2 hours 3 mins 4 secs |     4000000 |    4000.000 |   4.000000 |      3 |    2 |   1 |     0 |       1 |    0 |      0 |       0 |          0 |      93784.000000
  @ 6 years                     |           0 |       0.000 |   0.000000 |      0 |    0 |   0 |     0 |       1 |    6 |      0 |       0 |          0 |  189345600.000000
+ @ 14 secs ago                 |   -14000000 |  -14000.000 | -14.000000 |      0 |    0 |   0 |     0 |       1 |    0 |      0 |       0 |          0 |        -14.000000
+ @ 1 min                       |           0 |       0.000 |   0.000000 |      1 |    0 |   0 |     0 |       1 |    0 |      0 |       0 |          0 |         60.000000
+ @ 3 mons                      |           0 |       0.000 |   0.000000 |      0 |    0 |   0 |     3 |       2 |    0 |      0 |       0 |          0 |    7776000.000000
  @ 5 mons                      |           0 |       0.000 |   0.000000 |      0 |    0 |   0 |     5 |       2 |    0 |      0 |       0 |          0 |   12960000.000000
  @ 5 mons 12 hours             |           0 |       0.000 |   0.000000 |      0 |   12 |   0 |     5 |       2 |    0 |      0 |       0 |          0 |   13003200.000000
 (10 rows)
@@ -1784,14 +1793,14 @@ SELECT f1,
     FROM INTERVAL_TBL;
               f1               | microsecond | millisecond | second |   epoch    
 -------------------------------+-------------+-------------+--------+------------
- @ 1 min                       |           0 |           0 |      0 |         60
+ @ 14 secs ago                 |   -14000000 |      -14000 |    -14 |        -14
  @ 5 hours                     |           0 |           0 |      0 |      18000
  @ 10 days                     |           0 |           0 |      0 |     864000
  @ 34 years                    |           0 |           0 |      0 | 1072958400
- @ 3 mons                      |           0 |           0 |      0 |    7776000
- @ 14 secs ago                 |   -14000000 |      -14000 |    -14 |        -14
  @ 1 day 2 hours 3 mins 4 secs |     4000000 |        4000 |      4 |      93784
  @ 6 years                     |           0 |           0 |      0 |  189345600
+ @ 1 min                       |           0 |           0 |      0 |         60
+ @ 3 mons                      |           0 |           0 |      0 |    7776000
  @ 5 mons                      |           0 |           0 |      0 |   12960000
  @ 5 mons 12 hours             |           0 |           0 |      0 |   13003200
 (10 rows)

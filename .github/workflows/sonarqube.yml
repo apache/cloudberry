@@ -83,7 +83,7 @@ jobs:
         fi
 
     - name: Install Build Wrapper
-      uses: SonarSource/sonarqube-scan-action/install-build-wrapper@v6
+      uses: SonarSource/sonarqube-scan-action/install-build-wrapper@713881670b6b3676cda39549040e2d88c70d582e  # v8.2.0
 
     - name: Run Build Wrapper
       run: |
@@ -123,7 +123,7 @@ jobs:
 
     - name: SonarQube Scan
       if: ${{ github.event_name != 'pull_request' }}
-      uses: SonarSource/sonarqube-scan-action@v6
+      uses: SonarSource/sonarqube-scan-action@713881670b6b3676cda39549040e2d88c70d582e  # v8.2.0
       env:
         SONAR_TOKEN: ${{ secrets.SONARCLOUD_TOKEN }}
       with:

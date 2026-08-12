@@ -36,8 +36,8 @@ void exec_init_plan_tree_base(plan_tree_base_prefix *base, PlannedStmt *stmt)
 	base->node = (Node*)stmt;
 }
 
-static bool walk_scan_node_fields(Scan *scan, bool (*walker) (), void *context);
-static bool walk_join_node_fields(Join *join, bool (*walker) (), void *context);
+static bool walk_scan_node_fields(Scan *scan, bool (*walker) (Node *, void *), void *context);
+static bool walk_join_node_fields(Join *join, bool (*walker) (Node *, void *), void *context);
 
 
 /* ----------------------------------------------------------------------- *
@@ -57,7 +57,7 @@ static bool walk_join_node_fields(Join *join, bool (*walker) (), void *context);
  */
 bool
 walk_plan_node_fields(Plan *plan,
-					  bool (*walker) (),
+					  bool (*walker) (Node *, void *),
 					  void *context)
 {
 	/* target list to be computed at this node */
@@ -101,7 +101,7 @@ walk_plan_node_fields(Plan *plan,
  */
 bool
 walk_scan_node_fields(Scan *scan,
-					  bool (*walker) (),
+					  bool (*walker) (Node *, void *),
 					  void *context)
 {
 	/* A Scan node is a kind of Plan node. */
@@ -126,7 +126,7 @@ walk_scan_node_fields(Scan *scan,
  */
 bool
 walk_join_node_fields(Join *join,
-					  bool (*walker) (),
+					  bool (*walker) (Node *, void *),
 					  void *context)
 {
 	/* A Join node is a kind of Plan node. */
@@ -149,7 +149,7 @@ walk_join_node_fields(Join *join,
  */
 bool
 plan_tree_walker(Node *node,
-				 bool (*walker) (),
+				 bool (*walker) (Node *, void *),
 				 void *context,
 				 bool recurse_into_subplans)
 {
@@ -252,18 +252,18 @@ plan_tree_walker(Node *node,
 		case T_DynamicForeignScan:
 			if (walk_scan_node_fields((Scan *) node, walker, context))
 				return true;
-			if (walker(((ForeignScan *) node)->fdw_exprs, context))
+			if (walker((Node *) ((ForeignScan *) node)->fdw_exprs, context))
 				return true;
 			break;
 
 		case T_CustomScan:
 			if (walk_scan_node_fields((Scan *) node, walker, context))
 				return true;
-			if (walker(((CustomScan *) node)->custom_plans, context))
-				return true;
-			if (walker(((CustomScan *) node)->custom_exprs, context))
-				return true;
-			if (walker(((CustomScan *) node)->custom_scan_tlist, context))
+		if (walker((Node *) ((CustomScan *) node)->custom_plans, context))
+			return true;
+		if (walker((Node *) ((CustomScan *) node)->custom_exprs, context))
+			return true;
+		if (walker((Node *) ((CustomScan *) node)->custom_scan_tlist, context))
 				return true;
 			break;
 
@@ -396,7 +396,7 @@ plan_tree_walker(Node *node,
 			break;
 
 		case T_DQAExpr:
-			if (walker(((DQAExpr *)node)->agg_filter, context))
+			if (walker((Node *) ((DQAExpr *)node)->agg_filter, context))
 				return true;
 			/* Other fields are simple items and lists of simple items. */
 			break;
@@ -711,6 +711,11 @@ List *extract_nodes_plan(Plan *pl, int nodeTag, bool descendIntoSubqueries)
 }
 
 static bool
+extract_nodes_walker(Node *node, extract_context *context);
+static bool
+extract_nodes_walker_adapter(Node *node, void *context);
+
+static bool
 extract_nodes_walker(Node *node, extract_context *context)
 {
 	if (node == NULL)
@@ -758,9 +763,15 @@ extract_nodes_walker(Node *node, extract_context *context)
 		return false;
 	}
 
-	return plan_tree_walker(node, extract_nodes_walker,
+	return plan_tree_walker(node, extract_nodes_walker_adapter,
 							(void *) context,
 							true);
+}
+
+static bool
+extract_nodes_walker_adapter(Node *node, void *context)
+{
+	return extract_nodes_walker(node, (extract_context *) context);
 }
 
 /**

@@ -180,14 +180,14 @@ UNION ALL
 SELECT f1 FROM INT4_TBL;
           ten          
 -----------------------
+                123456
+               -123456
                      0
                 -34.84
                -1004.3
  -1.2345678901234e+200
  -1.2345678901234e-200
                      0
-                123456
-               -123456
             2147483647
            -2147483647
 (10 rows)
@@ -234,14 +234,14 @@ UNION ALL
 SELECT f1 FROM CHAR_TBL;
  eight 
 -------
- a
+ ab
+ abcd
+ abcd
  ab
  abcd
  abcd
  a
- ab
- abcd
- abcd
+ a
 (8 rows)
 
 SELECT f1 AS five FROM TEXT_TBL
@@ -351,8 +351,8 @@ set enable_hashagg to on;
 explain (costs off)
 select count(*) from
   ( select unique1 from tenk1 union select fivethous from tenk1 ) ss;
-                           QUERY PLAN                           
-----------------------------------------------------------------
+                               QUERY PLAN                               
+------------------------------------------------------------------------
  Finalize Aggregate
    ->  Gather Motion 3:1  (slice1; segments: 3)
          ->  Partial Aggregate
@@ -427,8 +427,8 @@ set enable_hashagg to off;
 explain (costs off)
 select count(*) from
   ( select unique1 from tenk1 union select fivethous from tenk1 ) ss;
-                              QUERY PLAN                              
-----------------------------------------------------------------------
+                                  QUERY PLAN                                  
+------------------------------------------------------------------------------
  Finalize Aggregate
    ->  Gather Motion 3:1  (slice1; segments: 3)
          ->  Partial Aggregate
@@ -519,7 +519,8 @@ select x from (values (100::money), (200::money)) _(x) union select x from (valu
          ->  Append
                ->  Values Scan on "*VALUES*"
                ->  Values Scan on "*VALUES*_1"
-(7 rows)
+ Optimizer: Postgres query optimizer
+(8 rows)
 
 set enable_hashagg to off;
 explain (costs off)
@@ -533,7 +534,8 @@ select x from (values (100::money), (200::money)) _(x) union select x from (valu
          ->  Append
                ->  Values Scan on "*VALUES*"
                ->  Values Scan on "*VALUES*_1"
-(7 rows)
+ Optimizer: Postgres query optimizer
+(8 rows)
 
 reset enable_hashagg;
 -- arrays
@@ -547,7 +549,8 @@ select x from (values (array[1, 2]), (array[1, 3])) _(x) union select x from (va
    ->  Append
          ->  Values Scan on "*VALUES*"
          ->  Values Scan on "*VALUES*_1"
-(5 rows)
+ Optimizer: Postgres query optimizer
+(6 rows)
 
 select x from (values (array[1, 2]), (array[1, 3])) _(x) union select x from (values (array[1, 2]), (array[1, 4])) _(x);
    x   
@@ -567,7 +570,8 @@ select x from (values (array[1, 2]), (array[1, 3])) _(x) intersect select x from
                ->  Values Scan on "*VALUES*"
          ->  Subquery Scan on "*SELECT* 2"
                ->  Values Scan on "*VALUES*_1"
-(6 rows)
+ Optimizer: Postgres query optimizer
+(7 rows)
 
 select x from (values (array[1, 2]), (array[1, 3])) _(x) intersect select x from (values (array[1, 2]), (array[1, 4])) _(x);
    x   
@@ -585,7 +589,8 @@ select x from (values (array[1, 2]), (array[1, 3])) _(x) except select x from (v
                ->  Values Scan on "*VALUES*"
          ->  Subquery Scan on "*SELECT* 2"
                ->  Values Scan on "*VALUES*_1"
-(6 rows)
+ Optimizer: Postgres query optimizer
+(7 rows)
 
 select x from (values (array[1, 2]), (array[1, 3])) _(x) except select x from (values (array[1, 2]), (array[1, 4])) _(x);
    x   
@@ -605,7 +610,8 @@ select x from (values (array[100::money]), (array[200::money])) _(x) union selec
          ->  Append
                ->  Values Scan on "*VALUES*"
                ->  Values Scan on "*VALUES*_1"
-(6 rows)
+ Optimizer: Postgres query optimizer
+(8 rows)
 
 select x from (values (array[100::money]), (array[200::money])) _(x) union select x from (values (array[100::money]), (array[300::money])) _(x);
      x     
@@ -627,7 +633,8 @@ select x from (values (array[1, 2]), (array[1, 3])) _(x) union select x from (va
          ->  Append
                ->  Values Scan on "*VALUES*"
                ->  Values Scan on "*VALUES*_1"
-(6 rows)
+ Optimizer: Postgres query optimizer
+(8 rows)
 
 select x from (values (array[1, 2]), (array[1, 3])) _(x) union select x from (values (array[1, 2]), (array[1, 4])) _(x);
    x   
@@ -649,7 +656,8 @@ select x from (values (array[1, 2]), (array[1, 3])) _(x) intersect select x from
                      ->  Values Scan on "*VALUES*"
                ->  Subquery Scan on "*SELECT* 2"
                      ->  Values Scan on "*VALUES*_1"
-(8 rows)
+ Optimizer: Postgres query optimizer
+(9 rows)
 
 select x from (values (array[1, 2]), (array[1, 3])) _(x) intersect select x from (values (array[1, 2]), (array[1, 4])) _(x);
    x   
@@ -669,7 +677,8 @@ select x from (values (array[1, 2]), (array[1, 3])) _(x) except select x from (v
                      ->  Values Scan on "*VALUES*"
                ->  Subquery Scan on "*SELECT* 2"
                      ->  Values Scan on "*VALUES*_1"
-(8 rows)
+ Optimizer: Postgres query optimizer
+(9 rows)
 
 select x from (values (array[1, 2]), (array[1, 3])) _(x) except select x from (values (array[1, 2]), (array[1, 4])) _(x);
    x   
@@ -691,7 +700,8 @@ select x from (values (row(1, 2)), (row(1, 3))) _(x) union select x from (values
          ->  Append
                ->  Values Scan on "*VALUES*"
                ->  Values Scan on "*VALUES*_1"
-(6 rows)
+ Optimizer: Postgres query optimizer
+(8 rows)
 
 select x from (values (row(1, 2)), (row(1, 3))) _(x) union select x from (values (row(1, 2)), (row(1, 4))) _(x);
    x   
@@ -713,7 +723,8 @@ select x from (values (row(1, 2)), (row(1, 3))) _(x) intersect select x from (va
                      ->  Values Scan on "*VALUES*"
                ->  Subquery Scan on "*SELECT* 2"
                      ->  Values Scan on "*VALUES*_1"
-(8 rows)
+ Optimizer: Postgres query optimizer
+(9 rows)
 
 select x from (values (row(1, 2)), (row(1, 3))) _(x) intersect select x from (values (row(1, 2)), (row(1, 4))) _(x);
    x   
@@ -733,7 +744,8 @@ select x from (values (row(1, 2)), (row(1, 3))) _(x) except select x from (value
                      ->  Values Scan on "*VALUES*"
                ->  Subquery Scan on "*SELECT* 2"
                      ->  Values Scan on "*VALUES*_1"
-(8 rows)
+ Optimizer: Postgres query optimizer
+(9 rows)
 
 select x from (values (row(1, 2)), (row(1, 3))) _(x) except select x from (values (row(1, 2)), (row(1, 4))) _(x);
    x   
@@ -755,7 +767,8 @@ select x from (values (row(100::money)), (row(200::money))) _(x) union select x 
          ->  Append
                ->  Values Scan on "*VALUES*"
                ->  Values Scan on "*VALUES*_1"
-(6 rows)
+ Optimizer: Postgres query optimizer
+(8 rows)
 
 select x from (values (row(100::money)), (row(200::money))) _(x) union select x from (values (row(100::money)), (row(300::money))) _(x);
      x     
@@ -779,7 +792,8 @@ select x from (values (row(100::money)::ct1), (row(200::money)::ct1)) _(x) union
          ->  Append
                ->  Values Scan on "*VALUES*"
                ->  Values Scan on "*VALUES*_1"
-(6 rows)
+ Optimizer: Postgres query optimizer
+(8 rows)
 
 select x from (values (row(100::money)::ct1), (row(200::money)::ct1)) _(x) union select x from (values (row(100::money)::ct1), (row(300::money)::ct1)) _(x);
      x     
@@ -802,7 +816,8 @@ select x from (values (row(1, 2)), (row(1, 3))) _(x) union select x from (values
          ->  Append
                ->  Values Scan on "*VALUES*"
                ->  Values Scan on "*VALUES*_1"
-(6 rows)
+ Optimizer: Postgres query optimizer
+(8 rows)
 
 select x from (values (row(1, 2)), (row(1, 3))) _(x) union select x from (values (row(1, 2)), (row(1, 4))) _(x);
    x   
@@ -824,7 +839,8 @@ select x from (values (row(1, 2)), (row(1, 3))) _(x) intersect select x from (va
                      ->  Values Scan on "*VALUES*"
                ->  Subquery Scan on "*SELECT* 2"
                      ->  Values Scan on "*VALUES*_1"
-(8 rows)
+ Optimizer: Postgres query optimizer
+(9 rows)
 
 select x from (values (row(1, 2)), (row(1, 3))) _(x) intersect select x from (values (row(1, 2)), (row(1, 4))) _(x);
    x   
@@ -844,7 +860,8 @@ select x from (values (row(1, 2)), (row(1, 3))) _(x) except select x from (value
                      ->  Values Scan on "*VALUES*"
                ->  Subquery Scan on "*SELECT* 2"
                      ->  Values Scan on "*VALUES*_1"
-(8 rows)
+ Optimizer: Postgres query optimizer
+(9 rows)
 
 select x from (values (row(1, 2)), (row(1, 3))) _(x) except select x from (values (row(1, 2)), (row(1, 4))) _(x);
    x   
@@ -915,13 +932,13 @@ SELECT q1 FROM int8_tbl UNION ALL SELECT q2 FROM int8_tbl EXCEPT SELECT q1 FROM 
 SELECT q1 FROM int8_tbl UNION ALL (((SELECT q2 FROM int8_tbl EXCEPT SELECT q1 FROM int8_tbl ORDER BY 1))); --order none
         q1         
 -------------------
-               123
-               123
   4567890123456789
   4567890123456789
   4567890123456789
  -4567890123456789
                456
+               123
+               123
 (7 rows)
 
 (((SELECT q1 FROM int8_tbl UNION ALL SELECT q2 FROM int8_tbl))) EXCEPT SELECT q1 FROM int8_tbl ORDER BY 1;
@@ -996,7 +1013,8 @@ select from generate_series(1,5) union select from generate_series(1,3);
    ->  Append
          ->  Function Scan on generate_series
          ->  Function Scan on generate_series generate_series_1
-(4 rows)
+ Optimizer: Postgres query optimizer
+(5 rows)
 
 explain (costs off)
 select from generate_series(1,5) intersect select from generate_series(1,3);
@@ -1008,7 +1026,8 @@ select from generate_series(1,5) intersect select from generate_series(1,3);
                ->  Function Scan on generate_series
          ->  Subquery Scan on "*SELECT* 2"
                ->  Function Scan on generate_series generate_series_1
-(6 rows)
+ Optimizer: Postgres query optimizer
+(7 rows)
 
 select from generate_series(1,5) union select from generate_series(1,3);
 --
@@ -1045,7 +1064,8 @@ select from generate_series(1,5) union select from generate_series(1,3);
    ->  Append
          ->  Function Scan on generate_series
          ->  Function Scan on generate_series generate_series_1
-(4 rows)
+ Optimizer: Postgres query optimizer
+(5 rows)
 
 explain (costs off)
 select from generate_series(1,5) intersect select from generate_series(1,3);
@@ -1057,7 +1077,8 @@ select from generate_series(1,5) intersect select from generate_series(1,3);
                ->  Function Scan on generate_series
          ->  Subquery Scan on "*SELECT* 2"
                ->  Function Scan on generate_series generate_series_1
-(6 rows)
+ Optimizer: Postgres query optimizer
+(7 rows)
 
 select from generate_series(1,5) union select from generate_series(1,3);
 --
@@ -1112,6 +1133,8 @@ LINE 1: SELECT '3.4'::numeric UNION SELECT 'foo';
 -- UNION or UNION ALL
 --
 CREATE TEMP TABLE t1 (a text, b text);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE INDEX t1_ab_idx on t1 ((a || b));
 CREATE TEMP TABLE t2 (ab text primary key);
 INSERT INTO t1 VALUES ('a', 'b'), ('x', 'y');
@@ -1127,14 +1150,14 @@ explain (costs off)
   UNION ALL
   SELECT * FROM t2) t
  WHERE ab = 'ab';
-                    QUERY PLAN                     
----------------------------------------------------
+                  QUERY PLAN                   
+-----------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Append
-         ->  Index Scan using t1_ab_idx on t1
-               Index Cond: ((a || b) = 'ab'::text)
-         ->  Index Only Scan using t2_pkey on t2
-               Index Cond: (ab = 'ab'::text)
+         ->  Seq Scan on t1
+               Filter: ((a || b) = 'ab'::text)
+         ->  Seq Scan on t2
+               Filter: (ab = 'ab'::text)
  Optimizer: Postgres query optimizer
 (7 rows)
 
@@ -1144,8 +1167,8 @@ explain (costs off)
   UNION
   SELECT * FROM t2) t
  WHERE ab = 'ab';
-                             QUERY PLAN                              
----------------------------------------------------------------------
+                            QUERY PLAN                            
+------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    Merge Key: ((t1.a || t1.b))
    ->  Unique
@@ -1155,10 +1178,10 @@ explain (costs off)
                ->  Redistribute Motion 3:3  (slice2; segments: 3)
                      Hash Key: ((t1.a || t1.b))
                      ->  Append
-                           ->  Index Scan using t1_ab_idx on t1
-                                 Index Cond: ((a || b) = 'ab'::text)
-                           ->  Index Only Scan using t2_pkey on t2
-                                 Index Cond: (ab = 'ab'::text)
+                           ->  Seq Scan on t1
+                                 Filter: ((a || b) = 'ab'::text)
+                           ->  Seq Scan on t2
+                                 Filter: (ab = 'ab'::text)
  Optimizer: Postgres query optimizer
 (14 rows)
 
@@ -1167,6 +1190,8 @@ explain (costs off)
 -- children.
 --
 CREATE TEMP TABLE t1c (b text, a text);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'b' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 ALTER TABLE t1c INHERIT t1;
 CREATE TEMP TABLE t2c (primary key (ab)) INHERITS (t2);
 INSERT INTO t1c VALUES ('v', 'w'), ('c', 'd'), ('m', 'n'), ('e', 'f');
@@ -1182,20 +1207,21 @@ explain (costs off)
    UNION ALL
    SELECT ab FROM t2) t
   ORDER BY 1 LIMIT 8;
-                           QUERY PLAN                            
------------------------------------------------------------------
+                     QUERY PLAN                     
+----------------------------------------------------
  Limit
    ->  Gather Motion 3:1  (slice1; segments: 3)
          Merge Key: ((t1.a || t1.b))
          ->  Limit
-               ->  Merge Append
+               ->  Sort
                      Sort Key: ((t1.a || t1.b))
-                     ->  Index Scan using t1_ab_idx on t1
-                     ->  Index Scan using t1c_ab_idx on t1c t1_1
-                     ->  Index Scan using t2_pkey on t2
-                     ->  Index Scan using t2c_pkey on t2c t2_1
+                     ->  Append
+                           ->  Seq Scan on t1
+                           ->  Seq Scan on t1c t1_1
+                           ->  Seq Scan on t2
+                           ->  Seq Scan on t2c t2_1
  Optimizer: Postgres query optimizer
-(11 rows)
+(12 rows)
 
   SELECT * FROM
   (SELECT a || b AS ab FROM t1
@@ -1224,6 +1250,7 @@ set enable_seqscan=off;
 create table events (event_id int primary key);
 create table other_events (event_id int primary key);
 create table events_child () inherits (events);
+NOTICE:  table has parent, setting distribution columns to match parent table
 explain (costs off)
 select event_id
  from (select event_id from events
@@ -1234,15 +1261,16 @@ select event_id
 ----------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    Merge Key: events.event_id
-   ->  Merge Append
+   ->  Sort
          Sort Key: events.event_id
-         ->  Index Scan using events_pkey on events
-         ->  Sort
-               Sort Key: events_1.event_id
+         ->  Append
+               ->  Bitmap Heap Scan on events
+                     ->  Bitmap Index Scan on events_pkey
                ->  Seq Scan on events_child events_1
-         ->  Index Scan using other_events_pkey on other_events
+               ->  Bitmap Heap Scan on other_events
+                     ->  Bitmap Index Scan on other_events_pkey
  Optimizer: Postgres query optimizer
-(10 rows)
+(11 rows)
 
 reset enable_seqscan;
 drop table events_child, events, other_events;
@@ -1457,6 +1485,8 @@ create function expensivefunc(int) returns int
 language plpgsql immutable strict cost 10000
 as $$begin return $1; end$$;
 create temp table t3 as select generate_series(-1000,1000) as x;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'x' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create index t3i on t3 (expensivefunc(x));
 analyze t3;
 explain (costs off)
@@ -1513,12 +1543,12 @@ select * from
 where (x = 0) or (q1 >= q2 and q1 <= q2);
         q1        |        q2         | x 
 ------------------+-------------------+---
-              123 |               456 | 0
-              123 |  4567890123456789 | 0
  4567890123456789 |               123 | 0
  4567890123456789 |  4567890123456789 | 0
  4567890123456789 | -4567890123456789 | 0
  4567890123456789 |  4567890123456789 | 1
+              123 |               456 | 0
+              123 |  4567890123456789 | 0
 (6 rows)
 
 reset optimizer_trace_fallback;

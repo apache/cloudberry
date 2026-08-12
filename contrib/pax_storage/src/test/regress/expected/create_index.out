@@ -47,34 +47,42 @@ CREATE INDEX onek2_stu1_prtl ON onek2 USING btree(stringu1 name_ops)
 CREATE TABLE slow_emp4000 (
 	home_base	 box
 );
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause, and no column type is suitable for a distribution key. Creating a NULL policy entry.
 CREATE TABLE fast_emp4000 (
 	home_base	 box
 );
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause, and no column type is suitable for a distribution key. Creating a NULL policy entry.
 \set filename :abs_srcdir '/data/rect.data'
 COPY slow_emp4000 FROM :'filename';
 INSERT INTO fast_emp4000 SELECT * FROM slow_emp4000;
 ANALYZE slow_emp4000;
 ANALYZE fast_emp4000;
 CREATE INDEX grect2ind ON fast_emp4000 USING gist (home_base);
-ERROR:  pax only support btree/hash/gin/bitmap indexes (pax_access_handle.cc:591)
+ERROR:  pax only support btree/hash/gin/bitmap indexes (pax_access_handle.cc:588)
 -- we want to work with a point_tbl that includes a null
 CREATE TEMP TABLE point_tbl AS SELECT * FROM public.point_tbl;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named '' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO POINT_TBL(f1) VALUES (NULL);
 ANALYZE POINT_TBL;
 CREATE INDEX gpointind ON point_tbl USING gist (f1);
-ERROR:  pax only support btree/hash/gin/bitmap indexes (pax_access_handle.cc:591)
+ERROR:  pax only support btree/hash/gin/bitmap indexes (pax_access_handle.cc:588)
 CREATE TEMP TABLE gpolygon_tbl AS
     SELECT polygon(home_base) AS f1 FROM slow_emp4000;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named '' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 ANALYZE gpolygon_tbl;
 INSERT INTO gpolygon_tbl VALUES ( '(1000,0,0,1000)' );
 INSERT INTO gpolygon_tbl VALUES ( '(0,1000,1000,1000)' );
 CREATE TEMP TABLE gcircle_tbl AS
     SELECT circle(home_base) AS f1 FROM slow_emp4000;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named '' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 ANALYZE gcircle_tbl;
 CREATE INDEX ggpolygonind ON gpolygon_tbl USING gist (f1);
-ERROR:  pax only support btree/hash/gin/bitmap indexes (pax_access_handle.cc:591)
+ERROR:  pax only support btree/hash/gin/bitmap indexes (pax_access_handle.cc:588)
 CREATE INDEX ggcircleind ON gcircle_tbl USING gist (f1);
-ERROR:  pax only support btree/hash/gin/bitmap indexes (pax_access_handle.cc:591)
+ERROR:  pax only support btree/hash/gin/bitmap indexes (pax_access_handle.cc:588)
 SET optimizer_enable_tablescan = OFF;
 --
 -- Test GiST indexes
@@ -724,6 +732,8 @@ CREATE TABLE array_index_op_test (
 	i			int4[],
 	t			text[]
 );
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'seqno' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 \set filename :abs_srcdir '/data/array.data'
 COPY array_index_op_test FROM :'filename';
 ANALYZE array_index_op_test;
@@ -1259,6 +1269,8 @@ RESET enable_bitmapscan;
 -- tree when there are enough duplicates)
 --
 CREATE TABLE array_gin_test (a int[]);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO array_gin_test SELECT ARRAY[1, g%5, g] FROM generate_series(1, 10000) g;
 CREATE INDEX array_gin_test_idx ON array_gin_test USING gin (a);
 SELECT COUNT(*) FROM array_gin_test WHERE a @> '{2}';
@@ -1285,6 +1297,8 @@ Options: fastupdate=on, gin_pending_list_limit=128
 -- HASH
 --
 CREATE UNLOGGED TABLE unlogged_hash_table (id int4);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'id' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE INDEX unlogged_hash_index ON unlogged_hash_table USING hash (id int4_ops);
 DROP TABLE unlogged_hash_table;
 -- CREATE INDEX hash_ovfl_index ON hash_ovfl_heap USING hash (x int4_ops);
@@ -1318,6 +1332,8 @@ RESET maintenance_work_mem;
 -- Test unique null behavior
 --
 CREATE TABLE unique_tbl (i int, t text);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE UNIQUE INDEX unique_idx1 ON unique_tbl (i) NULLS DISTINCT;
 CREATE UNIQUE INDEX unique_idx2 ON unique_tbl (i) NULLS NOT DISTINCT;
 INSERT INTO unique_tbl VALUES (1, 'one');
@@ -1327,14 +1343,14 @@ INSERT INTO unique_tbl VALUES (4, 'four');
 INSERT INTO unique_tbl VALUES (5, 'one');
 INSERT INTO unique_tbl (t) VALUES ('six');
 INSERT INTO unique_tbl (t) VALUES ('seven');  -- error from unique_idx2
-ERROR:  duplicate key value violates unique constraint "unique_idx2"
+ERROR:  duplicate key value violates unique constraint "unique_idx2"  (seg0 127.0.0.1:9002 pid=1404382)
 DETAIL:  Key (i)=(null) already exists.
 DROP INDEX unique_idx1, unique_idx2;
 INSERT INTO unique_tbl (t) VALUES ('seven');
 -- build indexes on filled table
 CREATE UNIQUE INDEX unique_idx3 ON unique_tbl (i) NULLS DISTINCT;  -- ok
 CREATE UNIQUE INDEX unique_idx4 ON unique_tbl (i) NULLS NOT DISTINCT;  -- error
-ERROR:  could not create unique index "unique_idx4"
+ERROR:  could not create unique index "unique_idx4"  (seg0 127.0.0.1:9002 pid=1404382)
 DETAIL:  Key (i)=(null) is duplicated.
 DELETE FROM unique_tbl WHERE t = 'seven';
 CREATE UNIQUE INDEX unique_idx4 ON unique_tbl (i) NULLS NOT DISTINCT;  -- ok now
@@ -1347,6 +1363,7 @@ CREATE UNIQUE INDEX unique_idx4 ON unique_tbl (i) NULLS NOT DISTINCT;  -- ok now
 Indexes:
     "unique_idx3" UNIQUE, btree (i)
     "unique_idx4" UNIQUE, btree (i) NULLS NOT DISTINCT
+Distributed by: (i)
 
 \d unique_idx3
       Index "public.unique_idx3"
@@ -1379,6 +1396,8 @@ DROP TABLE unique_tbl;
 -- Test functional index
 --
 CREATE TABLE func_index_heap (f1 text, f2 text);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE INDEX func_index_index on func_index_heap (textcat(f1,f2));
 INSERT INTO func_index_heap VALUES('ABC','DEF');
 INSERT INTO func_index_heap VALUES('AB','CDEFG');
@@ -1396,6 +1415,7 @@ INSERT INTO func_index_heap VALUES('QWERTY');
  f2     | text |           |          | 
 Indexes:
     "func_index_index" btree (textcat(f1, f2))
+Distributed by: (f1)
 
 \d func_index_index
      Index "public.func_index_index"
@@ -1409,6 +1429,8 @@ btree, for table "public.func_index_heap"
 --
 DROP TABLE func_index_heap;
 CREATE TABLE func_index_heap (f1 text, f2 text);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE  INDEX func_index_index on func_index_heap ((f1 || f2) text_ops);
 INSERT INTO func_index_heap VALUES('ABC','DEF');
 INSERT INTO func_index_heap VALUES('AB','CDEFG');
@@ -1426,6 +1448,7 @@ INSERT INTO func_index_heap VALUES('QWERTY');
  f2     | text |           |          | 
 Indexes:
     "func_index_index" btree ((f1 || f2))
+Distributed by: (f1)
 
 \d func_index_index
   Index "public.func_index_index"
@@ -1441,12 +1464,14 @@ ERROR:  column "row" has pseudo-type record
 -- Test unique index with included columns
 --
 CREATE TABLE covering_index_heap (f1 int, f2 int, f3 text);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE UNIQUE INDEX covering_index_index on covering_index_heap (f1,f2) INCLUDE(f3);
 INSERT INTO covering_index_heap VALUES(1,1,'AAA');
 INSERT INTO covering_index_heap VALUES(1,2,'AAA');
 -- this should fail because of unique index on f1,f2:
 INSERT INTO covering_index_heap VALUES(1,2,'BBB');
-ERROR:  duplicate key value violates unique constraint "covering_index_index"
+ERROR:  duplicate key value violates unique constraint "covering_index_index"  (seg1 127.0.0.1:9003 pid=1404383)
 DETAIL:  Key (f1, f2)=(1, 2) already exists.
 -- and this shouldn't:
 INSERT INTO covering_index_heap VALUES(1,4,'AAA');
@@ -1478,11 +1503,11 @@ CREATE UNIQUE INDEX IF NOT EXISTS concur_index2 ON concur_heap(dk, f1);
 NOTICE:  relation "concur_index2" already exists, skipping
 -- check if constraint is set up properly to be enforced
 INSERT INTO concur_heap VALUES ('b','x', '1');
-ERROR:  duplicate key value violates unique constraint "concur_index2"
+ERROR:  duplicate key value violates unique constraint "concur_index2"  (seg0 127.0.0.1:9002 pid=1404382)
 DETAIL:  Key (dk, f1)=(1, b) already exists.
 -- check if constraint is enforced properly at build time
 CREATE UNIQUE INDEX concur_index3 ON concur_heap(dk, f2);
-ERROR:  could not create unique index "concur_index3"
+ERROR:  could not create unique index "concur_index3"  (seg0 127.0.0.1:9002 pid=1404382)
 DETAIL:  Key (dk, f2)=(1, b) is duplicated.
 -- test that expression indexes and partial indexes work concurrently
 CREATE INDEX concur_index4 on concur_heap(f2) WHERE f1='a';
@@ -1519,9 +1544,9 @@ VACUUM FULL concur_heap;
            Table "public.concur_heap"
  Column | Type | Collation | Nullable | Default 
 --------+------+-----------+----------+---------
- dk     | text |           |          | 
  f1     | text |           |          | 
  f2     | text |           |          | 
+ dk     | text |           |          | 
 Indexes:
     "concur_heap_expr_idx" btree ((f2 || f1))
     "concur_index1" btree (f2, f1)
@@ -1536,9 +1561,9 @@ REINDEX TABLE concur_heap;
            Table "public.concur_heap"
  Column | Type | Collation | Nullable | Default 
 --------+------+-----------+----------+---------
- dk     | text |           |          | 
  f1     | text |           |          | 
  f2     | text |           |          | 
+ dk     | text |           |          | 
 Indexes:
     "concur_heap_expr_idx" btree ((f2 || f1))
     "concur_index1" btree (f2, f1)
@@ -1546,12 +1571,15 @@ Indexes:
     "concur_index4" btree (f2) WHERE f1 = 'a'::text
     "concur_index5" btree (f2) WHERE f1 = 'x'::text
     "std_index" btree (f2)
+Distributed by: (dk)
 
 -- Temporary tables with concurrent builds and on-commit actions
 -- CONCURRENTLY used with CREATE INDEX and DROP INDEX is ignored.
 -- PRESERVE ROWS, the default.
 CREATE TEMP TABLE concur_temp (f1 int, f2 text)
   ON COMMIT PRESERVE ROWS;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO concur_temp VALUES (1, 'foo'), (2, 'bar');
 CREATE INDEX concur_temp_ind ON concur_temp(f1);
 DROP INDEX concur_temp_ind;
@@ -1560,6 +1588,8 @@ DROP TABLE concur_temp;
 BEGIN;
 CREATE TEMP TABLE concur_temp (f1 int, f2 text)
   ON COMMIT DROP;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO concur_temp VALUES (1, 'foo'), (2, 'bar');
 -- Fails when running in a transaction.
 CREATE INDEX concur_temp_ind ON concur_temp(f1);
@@ -1567,6 +1597,8 @@ COMMIT;
 -- ON COMMIT DELETE ROWS
 CREATE TEMP TABLE concur_temp (f1 int, f2 text)
   ON COMMIT DELETE ROWS;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO concur_temp VALUES (1, 'foo'), (2, 'bar');
 CREATE INDEX concur_temp_ind ON concur_temp(f1);
 DROP INDEX concur_temp_ind;
@@ -1595,9 +1627,9 @@ DROP INDEX "concur_heap_expr_idx";
            Table "public.concur_heap"
  Column | Type | Collation | Nullable | Default 
 --------+------+-----------+----------+---------
- dk     | text |           |          | 
  f1     | text |           |          | 
  f2     | text |           |          | 
+ dk     | text |           |          | 
 Indexes:
     "std_index" btree (f2)
 Distributed by: (dk)
@@ -1607,6 +1639,8 @@ DROP TABLE concur_heap;
 -- Test ADD CONSTRAINT USING INDEX
 --
 CREATE TABLE cwi_test( a int , b varchar(10), c char);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 -- add some data so that all tests have something to work with.
 INSERT INTO cwi_test VALUES(1, 2), (3, 4), (5, 6);
 CREATE UNIQUE INDEX cwi_uniq_idx ON cwi_test(a , b);
@@ -1673,12 +1707,16 @@ DETAIL:  Cannot create a primary key or unique constraint using such an index.
 DROP TABLE cwi_test;
 -- ADD CONSTRAINT USING INDEX is forbidden on partitioned tables
 CREATE TABLE cwi_test(a int) PARTITION BY hash (a);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create unique index on cwi_test (a);
 alter table cwi_test add primary key using index cwi_test_a_idx ;
 ERROR:  ALTER TABLE / ADD CONSTRAINT USING INDEX is not supported on partitioned tables
 DROP TABLE cwi_test;
 -- PRIMARY KEY constraint cannot be backed by a NULLS NOT DISTINCT index
 CREATE TABLE cwi_test(a int, b int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE UNIQUE INDEX cwi_a_nnd ON cwi_test (a) NULLS NOT DISTINCT;
 ALTER TABLE cwi_test ADD PRIMARY KEY USING INDEX cwi_a_nnd;
 ERROR:  primary keys cannot use NULLS NOT DISTINCT indexes
@@ -1687,6 +1725,8 @@ DROP TABLE cwi_test;
 -- Check handling of indexes on system columns
 --
 CREATE TABLE syscol_table (a INT);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 -- System columns cannot be indexed
 CREATE INDEX ON syscolcol_table (ctid);
 ERROR:  relation "syscolcol_table" does not exist
@@ -1701,6 +1741,8 @@ DROP TABLE syscol_table;
 -- Tests for IS NULL/IS NOT NULL with b-tree indexes
 --
 CREATE TABLE onek_with_null AS SELECT unique1, unique2 FROM onek;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'unique1' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO onek_with_null (unique1,unique2) VALUES (NULL, -1), (NULL, NULL);
 CREATE UNIQUE INDEX onek_nulltest ON onek_with_null (unique2,unique1);
 SET enable_seqscan = OFF;
@@ -1967,20 +2009,24 @@ SELECT count(*) FROM tenk1
 --
 CREATE TABLE dupindexcols AS
   SELECT unique1 as id, stringu2::text as f1 FROM tenk1;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'id' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE INDEX dupindexcols_i ON dupindexcols (f1, id, f1 text_pattern_ops);
 ANALYZE dupindexcols;
 EXPLAIN (COSTS OFF)
   SELECT count(*) FROM dupindexcols
     WHERE f1 BETWEEN 'WA' AND 'ZZZ' and id < 1000 and f1 ~<~ 'YX';
-                                                      QUERY PLAN                                                      
-----------------------------------------------------------------------------------------------------------------------
+                                                         QUERY PLAN                                                         
+----------------------------------------------------------------------------------------------------------------------------
  Finalize Aggregate
    ->  Gather Motion 3:1  (slice1; segments: 3)
          ->  Partial Aggregate
-               ->  Index Only Scan using dupindexcols_i on dupindexcols
-                     Index Cond: ((f1 >= 'WA'::text) AND (f1 <= 'ZZZ'::text) AND (id < 1000) AND (f1 ~<~ 'YX'::text))
+               ->  Bitmap Heap Scan on dupindexcols
+                     Recheck Cond: ((f1 >= 'WA'::text) AND (f1 <= 'ZZZ'::text) AND (id < 1000) AND (f1 ~<~ 'YX'::text))
+                     ->  Bitmap Index Scan on dupindexcols_i
+                           Index Cond: ((f1 >= 'WA'::text) AND (f1 <= 'ZZZ'::text) AND (id < 1000) AND (f1 ~<~ 'YX'::text))
  Optimizer: Postgres query optimizer
-(6 rows)
+(8 rows)
 
 SELECT count(*) FROM dupindexcols
   WHERE f1 BETWEEN 'WA' AND 'ZZZ' and id < 1000 and f1 ~<~ 'YX';
@@ -1996,14 +2042,18 @@ explain (costs off)
 SELECT unique1 FROM tenk1
 WHERE unique1 IN (1,42,7)
 ORDER BY unique1;
-                         QUERY PLAN                          
--------------------------------------------------------------
+                               QUERY PLAN                                
+-------------------------------------------------------------------------
  Gather Motion 2:1  (slice1; segments: 2)
    Merge Key: unique1
-   ->  Index Only Scan using tenk1_unique1 on tenk1
-         Index Cond: (unique1 = ANY ('{1,42,7}'::integer[]))
+   ->  Sort
+         Sort Key: unique1
+         ->  Bitmap Heap Scan on tenk1
+               Recheck Cond: (unique1 = ANY ('{1,42,7}'::integer[]))
+               ->  Bitmap Index Scan on tenk1_unique1
+                     Index Cond: (unique1 = ANY ('{1,42,7}'::integer[]))
  Optimizer: Postgres query optimizer
-(5 rows)
+(9 rows)
 
 SELECT unique1 FROM tenk1
 WHERE unique1 IN (1,42,7)
@@ -2076,13 +2126,15 @@ RESET enable_indexonlyscan;
 --
 explain (costs off)
   select * from tenk1 where (thousand, tenthous) in ((1,1001), (null,null));
-                         QUERY PLAN                         
-------------------------------------------------------------
+                            QUERY PLAN                            
+------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
-   ->  Index Scan using tenk1_thous_tenthous on tenk1
-         Index Cond: ((thousand = 1) AND (tenthous = 1001))
+   ->  Bitmap Heap Scan on tenk1
+         Recheck Cond: ((thousand = 1) AND (tenthous = 1001))
+         ->  Bitmap Index Scan on tenk1_thous_tenthous
+               Index Cond: ((thousand = 1) AND (tenthous = 1001))
  Optimizer: Postgres query optimizer
-(4 rows)
+(6 rows)
 
 --
 -- Check matching of boolean index columns to WHERE conditions and sort keys
@@ -2090,15 +2142,17 @@ explain (costs off)
 create temp table boolindex (b bool, i int, unique(b, i), junk float);
 explain (costs off)
   select * from boolindex order by b, i limit 10;
-                            QUERY PLAN                             
--------------------------------------------------------------------
+                   QUERY PLAN                   
+------------------------------------------------
  Limit
    ->  Gather Motion 3:1  (slice1; segments: 3)
          Merge Key: b, i
          ->  Limit
-               ->  Index Scan using boolindex_b_i_key on boolindex
+               ->  Sort
+                     Sort Key: b, i
+                     ->  Seq Scan on boolindex
  Optimizer: Postgres query optimizer
-(6 rows)
+(8 rows)
 
 -- In PostgreSQL, this uses an Index Scan. In GPDB, the logic to deduce
 -- which path keys are useful for ordering miss this case. That's because
@@ -2126,68 +2180,78 @@ explain (costs off)
 alter table boolindex set distributed by (i);
 explain (costs off)
   select * from boolindex where b order by i limit 10;
-                            QUERY PLAN                             
--------------------------------------------------------------------
+                   QUERY PLAN                   
+------------------------------------------------
  Limit
    ->  Gather Motion 3:1  (slice1; segments: 3)
          Merge Key: i
          ->  Limit
-               ->  Index Scan using boolindex_b_i_key on boolindex
-                     Index Cond: (b = true)
+               ->  Sort
+                     Sort Key: i
+                     ->  Seq Scan on boolindex
+                           Filter: b
  Optimizer: Postgres query optimizer
-(7 rows)
+(9 rows)
 
 explain (costs off)
   select * from boolindex where b = true order by i desc limit 10;
-                                 QUERY PLAN                                 
-----------------------------------------------------------------------------
+                   QUERY PLAN                   
+------------------------------------------------
  Limit
    ->  Gather Motion 3:1  (slice1; segments: 3)
          Merge Key: i
          ->  Limit
-               ->  Index Scan Backward using boolindex_b_i_key on boolindex
-                     Index Cond: (b = true)
+               ->  Sort
+                     Sort Key: i DESC
+                     ->  Seq Scan on boolindex
+                           Filter: b
  Optimizer: Postgres query optimizer
-(7 rows)
+(9 rows)
 
 explain (costs off)
   select * from boolindex where not b order by i limit 10;
-                            QUERY PLAN                             
--------------------------------------------------------------------
+                   QUERY PLAN                   
+------------------------------------------------
  Limit
    ->  Gather Motion 3:1  (slice1; segments: 3)
          Merge Key: i
          ->  Limit
-               ->  Index Scan using boolindex_b_i_key on boolindex
-                     Index Cond: (b = false)
+               ->  Sort
+                     Sort Key: i
+                     ->  Seq Scan on boolindex
+                           Filter: (NOT b)
  Optimizer: Postgres query optimizer
-(7 rows)
+(9 rows)
 
 explain (costs off)
   select * from boolindex where b is true order by i desc limit 10;
-                                 QUERY PLAN                                 
-----------------------------------------------------------------------------
+                   QUERY PLAN                   
+------------------------------------------------
  Limit
    ->  Gather Motion 3:1  (slice1; segments: 3)
          Merge Key: i
          ->  Limit
-               ->  Index Scan Backward using boolindex_b_i_key on boolindex
-                     Index Cond: (b = true)
+               ->  Sort
+                     Sort Key: i DESC
+                     ->  Seq Scan on boolindex
+                           Filter: (b IS TRUE)
  Optimizer: Postgres query optimizer
-(7 rows)
+(9 rows)
 
 explain (costs off)
   select * from boolindex where b is false order by i desc limit 10;
-                                 QUERY PLAN                                 
-----------------------------------------------------------------------------
+                   QUERY PLAN                   
+------------------------------------------------
  Limit
    ->  Gather Motion 3:1  (slice1; segments: 3)
          Merge Key: i
          ->  Limit
-               ->  Index Scan Backward using boolindex_b_i_key on boolindex
-                     Index Cond: (b = false)
+               ->  Sort
+                     Sort Key: i DESC
+                     ->  Seq Scan on boolindex
+                           Filter: (b IS FALSE)
  Optimizer: Postgres query optimizer
-(7 rows)
+(9 rows)
 
 --
 -- REINDEX (VERBOSE)
@@ -2196,15 +2260,17 @@ CREATE TABLE reindex_verbose(id integer primary key);
 \set VERBOSITY terse \\ -- suppress machine-dependent details
 REINDEX (VERBOSE) TABLE reindex_verbose;
 INFO:  index "reindex_verbose_pkey" was reindexed
-INFO:  index "reindex_verbose_pkey" was reindexed  (seg0 127.0.1.1:7002 pid=3296159)
-INFO:  index "reindex_verbose_pkey" was reindexed  (seg1 127.0.1.1:7003 pid=3296160)
-INFO:  index "reindex_verbose_pkey" was reindexed  (seg2 127.0.1.1:7004 pid=3296161)
+INFO:  index "reindex_verbose_pkey" was reindexed  (seg0 127.0.0.1:9002 pid=1404382)
+INFO:  index "reindex_verbose_pkey" was reindexed  (seg1 127.0.0.1:9003 pid=1404383)
+INFO:  index "reindex_verbose_pkey" was reindexed  (seg2 127.0.0.1:9004 pid=1404385)
 \set VERBOSITY default
 DROP TABLE reindex_verbose;
 --
 -- REINDEX CONCURRENTLY
 --
 CREATE TABLE concur_reindex_tab (c1 int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c1' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 -- REINDEX
 REINDEX TABLE concur_reindex_tab; -- notice
 NOTICE:  table "concur_reindex_tab" has no indexes to reindex
@@ -2222,6 +2288,9 @@ CREATE INDEX concur_reindex_ind4 ON concur_reindex_tab(c1, c1, c2);
 -- Create table for check on foreign key dependence switch with indexes swapped
 ALTER TABLE concur_reindex_tab ADD PRIMARY KEY USING INDEX concur_reindex_ind1;
 CREATE TABLE concur_reindex_tab2 (c1 int REFERENCES concur_reindex_tab);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c1' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Apache Cloudberry, will not be enforced
 INSERT INTO concur_reindex_tab VALUES  (1, 'a');
 INSERT INTO concur_reindex_tab VALUES  (2, 'a');
 -- Reindex concurrently of exclusion constraint currently not supported
@@ -2244,6 +2313,8 @@ INSERT INTO concur_reindex_tab VALUES  (2, 'a');
 -- end_ignore
 -- Check materialized views
 CREATE MATERIALIZED VIEW concur_reindex_matview AS SELECT * FROM concur_reindex_tab;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'c1' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 -- Dependency lookup before and after the follow-up REINDEX commands.
 -- These should remain consistent.
 SELECT pg_describe_object(classid, objid, objsubid) as obj,
@@ -2300,6 +2371,8 @@ WHERE classid = 'pg_class'::regclass AND
 
 -- Check that comments are preserved
 CREATE TABLE testcomment (i int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE INDEX testcomment_idx1 ON testcomment (i);
 COMMENT ON INDEX testcomment_idx1 IS 'test comment';
 SELECT obj_description('testcomment_idx1'::regclass, 'pg_class');
@@ -2325,6 +2398,8 @@ SELECT obj_description('testcomment_idx1'::regclass, 'pg_class');
 DROP TABLE testcomment;
 -- Check that indisclustered updates are preserved
 CREATE TABLE concur_clustered(i int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE INDEX concur_clustered_i_idx ON concur_clustered(i);
 ALTER TABLE concur_clustered CLUSTER ON concur_clustered_i_idx;
 REINDEX TABLE concur_clustered;
@@ -2338,6 +2413,8 @@ SELECT indexrelid::regclass, indisclustered FROM pg_index
 DROP TABLE concur_clustered;
 -- Check that indisreplident updates are preserved.
 CREATE TABLE concur_replident(i int NOT NULL);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE UNIQUE INDEX concur_replident_i_idx ON concur_replident(i);
 ALTER TABLE concur_replident REPLICA IDENTITY
   USING INDEX concur_replident_i_idx;
@@ -2359,12 +2436,13 @@ SELECT indexrelid::regclass, indisreplident FROM pg_index
 DROP TABLE concur_replident;
 -- Check that opclass parameters are preserved
 CREATE TABLE concur_appclass_tab(i tsvector, j tsvector, k tsvector);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause, and no column type is suitable for a distribution key. Creating a NULL policy entry.
 CREATE INDEX concur_appclass_ind on concur_appclass_tab
   USING gist (i tsvector_ops (siglen='1000'), j tsvector_ops (siglen='500'));
-ERROR:  pax only support btree/hash/gin/bitmap indexes (pax_access_handle.cc:591)
+ERROR:  pax only support btree/hash/gin/bitmap indexes (pax_access_handle.cc:588)
 CREATE INDEX concur_appclass_ind_2 on concur_appclass_tab
   USING gist (k tsvector_ops (siglen='300'), j tsvector_ops);
-ERROR:  pax only support btree/hash/gin/bitmap indexes (pax_access_handle.cc:591)
+ERROR:  pax only support btree/hash/gin/bitmap indexes (pax_access_handle.cc:588)
 REINDEX TABLE concur_appclass_tab;
 NOTICE:  table "concur_appclass_tab" has no indexes to reindex
 \d concur_appclass_tab
@@ -2380,15 +2458,21 @@ DROP TABLE concur_appclass_tab;
 -- Partitions
 -- Create some partitioned tables
 CREATE TABLE concur_reindex_part (c1 int, c2 int) PARTITION BY RANGE (c1);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c1' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE concur_reindex_part_0 PARTITION OF concur_reindex_part
   FOR VALUES FROM (0) TO (10) PARTITION BY list (c2);
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE concur_reindex_part_0_1 PARTITION OF concur_reindex_part_0
   FOR VALUES IN (1);
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE concur_reindex_part_0_2 PARTITION OF concur_reindex_part_0
   FOR VALUES IN (2);
+NOTICE:  table has parent, setting distribution columns to match parent table
 -- This partitioned table will have no partitions.
 CREATE TABLE concur_reindex_part_10 PARTITION OF concur_reindex_part
   FOR VALUES FROM (10) TO (20) PARTITION BY list (c2);
+NOTICE:  table has parent, setting distribution columns to match parent table
 -- Create some partitioned indexes
 CREATE INDEX concur_reindex_part_index ON ONLY concur_reindex_part (c1);
 CREATE INDEX concur_reindex_part_index_0 ON ONLY concur_reindex_part_0 (c1);
@@ -2573,6 +2657,8 @@ CREATE OR REPLACE FUNCTION compare_relfilenode_part(tabname text)
   $func$ LANGUAGE plpgsql;
 --  Check that expected relfilenodes are changed, non-concurrent case.
 SELECT create_relfilenode_part('reindex_index_status', 'concur_reindex_part_index');
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'oid' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
  create_relfilenode_part 
 -------------------------
  
@@ -2592,6 +2678,8 @@ SELECT * FROM compare_relfilenode_part('reindex_index_status');
 DROP TABLE reindex_index_status;
 -- concurrent case.
 SELECT create_relfilenode_part('reindex_index_status', 'concur_reindex_part_index');
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'oid' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
  create_relfilenode_part 
 -------------------------
  
@@ -2630,6 +2718,8 @@ ROLLBACK;
 -- Check that expected relfilenodes are changed, non-concurrent case.
 -- Note that the partition tree changes of the *indexes* need to be checked.
 SELECT create_relfilenode_part('reindex_index_status', 'concur_reindex_part_index');
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'oid' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
  create_relfilenode_part 
 -------------------------
  
@@ -2649,6 +2739,8 @@ SELECT * FROM compare_relfilenode_part('reindex_index_status');
 DROP TABLE reindex_index_status;
 -- concurrent case.
 SELECT create_relfilenode_part('reindex_index_status', 'concur_reindex_part_index');
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'oid' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
  create_relfilenode_part 
 -------------------------
  
@@ -2720,10 +2812,12 @@ DROP MATERIALIZED VIEW concur_reindex_matview;
 DROP TABLE concur_reindex_tab, concur_reindex_tab2;
 -- Check handling of invalid indexes
 CREATE TABLE concur_reindex_tab4 (c1 int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c1' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO concur_reindex_tab4 VALUES (1), (1), (2);
 -- This trick creates an invalid index.
 CREATE UNIQUE INDEX concur_reindex_ind5 ON concur_reindex_tab4 (c1);
-ERROR:  could not create unique index "concur_reindex_ind5"
+ERROR:  could not create unique index "concur_reindex_ind5"  (seg1 127.0.0.1:9003 pid=1404383)
 DETAIL:  Key (c1)=(1) is duplicated.
 -- Reindexing concurrently this index fails with the same failure.
 -- The extra index created is itself invalid, and can be dropped.
@@ -2747,6 +2841,7 @@ NOTICE:  table "concur_reindex_tab4" has no indexes to reindex
  Column |  Type   | Collation | Nullable | Default 
 --------+---------+-----------+----------+---------
  c1     | integer |           |          | 
+Distributed by: (c1)
 
 -- But it is fixed with REINDEX INDEX.
 --REINDEX INDEX concur_reindex_ind5;
@@ -2755,12 +2850,15 @@ NOTICE:  table "concur_reindex_tab4" has no indexes to reindex
  Column |  Type   | Collation | Nullable | Default 
 --------+---------+-----------+----------+---------
  c1     | integer |           |          | 
+Distributed by: (c1)
 
 DROP TABLE concur_reindex_tab4;
 -- Check handling of indexes with expressions and predicates.  The
 -- definitions of the rebuilt indexes should match the original
 -- definitions.
 CREATE TABLE concur_exprs_tab (c1 int , c2 boolean);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c1' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO concur_exprs_tab (c1, c2) VALUES (1369652450, FALSE),
   (414515746, TRUE),
   (897778963, FALSE);
@@ -2872,6 +2970,8 @@ DROP TABLE concur_exprs_tab;
 -- ON COMMIT PRESERVE ROWS, the default.
 CREATE TEMP TABLE concur_temp_tab_1 (c1 int, c2 text)
   ON COMMIT PRESERVE ROWS;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c1' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO concur_temp_tab_1 VALUES (1, 'foo'), (2, 'bar');
 CREATE INDEX concur_temp_ind_1 ON concur_temp_tab_1(c2);
 REINDEX TABLE concur_temp_tab_1;
@@ -2883,6 +2983,8 @@ COMMIT;
 -- ON COMMIT DELETE ROWS
 CREATE TEMP TABLE concur_temp_tab_2 (c1 int, c2 text)
   ON COMMIT DELETE ROWS;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c1' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE INDEX concur_temp_ind_2 ON concur_temp_tab_2(c2);
 REINDEX TABLE concur_temp_tab_2;
 REINDEX INDEX concur_temp_ind_2;
@@ -2890,6 +2992,8 @@ REINDEX INDEX concur_temp_ind_2;
 BEGIN;
 CREATE TEMP TABLE concur_temp_tab_3 (c1 int, c2 text)
   ON COMMIT PRESERVE ROWS;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c1' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO concur_temp_tab_3 VALUES (1, 'foo'), (2, 'bar');
 CREATE INDEX concur_temp_ind_3 ON concur_temp_tab_3(c2);
 -- Fails when running in a transaction
@@ -2900,6 +3004,8 @@ CREATE TABLE reindex_temp_before AS
 SELECT oid, relname, relfilenode, relkind, reltoastrelid
   FROM pg_class
   WHERE relname IN ('concur_temp_ind_1', 'concur_temp_ind_2');
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'oid' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 SELECT pg_my_temp_schema()::regnamespace as temp_schema_name \gset
 REINDEX SCHEMA :temp_schema_name;
 SELECT  b.relname,
@@ -2928,12 +3034,16 @@ CREATE TABLE table2(col1 SERIAL PRIMARY KEY, col2 TEXT NOT NULL);
 INSERT INTO table2 SELECT generate_series(1,400), 'abc';
 CREATE INDEX ON table2(col2);
 CREATE MATERIALIZED VIEW matview AS SELECT col1 FROM table2;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'col1' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE INDEX ON matview(col1);
 CREATE VIEW view AS SELECT col2 FROM table2;
 CREATE TABLE reindex_before AS
 SELECT oid, relname, relfilenode, relkind, reltoastrelid
 	FROM pg_class
 	where relnamespace = (SELECT oid FROM pg_namespace WHERE nspname = 'schema_to_reindex');
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'oid' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO reindex_before
 SELECT oid, 'pg_toast_TABLE', relfilenode, relkind, reltoastrelid
 FROM pg_class WHERE oid IN
@@ -2947,6 +3057,8 @@ REINDEX SCHEMA schema_to_reindex;
 CREATE TABLE reindex_after AS SELECT oid, relname, relfilenode, relkind
 	FROM pg_class
 	where relnamespace = (SELECT oid FROM pg_namespace WHERE nspname = 'schema_to_reindex');
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'oid' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 SELECT  b.relname,
         b.relkind,
         CASE WHEN a.relfilenode = b.relfilenode THEN 'relfilenode is unchanged'
@@ -2976,6 +3088,7 @@ END;
 REINDEX SCHEMA schema_to_reindex;
 -- Failure for unauthorized user
 CREATE ROLE regress_reindexuser NOLOGIN;
+NOTICE:  resource queue required -- using default resource queue "pg_default"
 SET SESSION ROLE regress_reindexuser;
 REINDEX SCHEMA schema_to_reindex;
 ERROR:  must be owner of schema schema_to_reindex

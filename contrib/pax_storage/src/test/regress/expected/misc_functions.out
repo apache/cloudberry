@@ -300,6 +300,7 @@ SELECT pg_log_backend_memory_contexts(pid) FROM pg_stat_activity
 (1 row)
 
 CREATE ROLE regress_log_memory;
+NOTICE:  resource queue required -- using default resource queue "pg_default"
 SELECT has_function_privilege('regress_log_memory',
   'pg_log_backend_memory_contexts(integer)', 'EXECUTE'); -- no
  has_function_privilege 
@@ -486,6 +487,7 @@ select count(*) > 0 from
 -- Test replication slot directory functions
 --
 CREATE ROLE regress_slot_dir_funcs;
+NOTICE:  resource queue required -- using default resource queue "pg_default"
 -- Not available by default.
 SELECT has_function_privilege('regress_slot_dir_funcs',
   'pg_ls_logicalsnapdir()', 'EXECUTE');
@@ -569,10 +571,12 @@ WHERE my_int_eq(a.unique2, 42);
    ->  Nested Loop
          ->  Seq Scan on tenk1 a
                Filter: my_int_eq(unique2, 42)
-         ->  Index Scan using tenk1_unique1 on tenk1 b
-               Index Cond: (unique1 = a.unique1)
+         ->  Bitmap Heap Scan on tenk1 b
+               Recheck Cond: (a.unique1 = unique1)
+               ->  Bitmap Index Scan on tenk1_unique1
+                     Index Cond: (unique1 = a.unique1)
  Optimizer: Postgres query optimizer
-(7 rows)
+(9 rows)
 
 -- Also test non-default rowcount estimate
 CREATE FUNCTION my_gen_series(int, int) RETURNS SETOF integer

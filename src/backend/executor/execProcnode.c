@@ -1295,6 +1295,28 @@ planstate_walk_kids(PlanState *planstate,
 			Assert(!planstate->lefttree && !planstate->righttree);
 			break;
 
+		case T_CustomScanState:
+			{
+				CustomScanState *css = (CustomScanState *) planstate;
+				ListCell   *lc;
+
+				Assert(!(css->custom_ps != NIL &&
+						 (planstate->lefttree || planstate->righttree)));
+
+				v = CdbVisit_Walk;
+				foreach(lc, css->custom_ps)
+				{
+					v = planstate_walk_node_extended((PlanState *) lfirst(lc), walker, context, flags);
+					if (v != CdbVisit_Walk)
+						break;
+				}
+				if (v == CdbVisit_Walk && planstate->lefttree)
+					v = planstate_walk_node_extended(planstate->lefttree, walker, context, flags);
+				if (v == CdbVisit_Walk && planstate->righttree)
+					v = planstate_walk_node_extended(planstate->righttree, walker, context, flags);
+				break;
+			}
+
 		default:
 			/* Left subtree */
 			v = planstate_walk_node_extended(planstate->lefttree, walker, context, flags);

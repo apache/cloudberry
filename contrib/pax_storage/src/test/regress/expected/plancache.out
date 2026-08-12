@@ -3,6 +3,8 @@
 --
 SET optimizer_trace_fallback to on;
 CREATE TEMP TABLE pcachetest AS SELECT * FROM int8_tbl;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'q1' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 -- create and use a cached plan
 PREPARE prepstmt AS SELECT * FROM pcachetest;
 EXECUTE prepstmt;
@@ -33,14 +35,16 @@ ERROR:  relation "pcachetest" does not exist
 -- recreate the temp table (this demonstrates that the raw plan is
 -- purely textual and doesn't depend on OIDs, for instance)
 CREATE TEMP TABLE pcachetest AS SELECT * FROM int8_tbl;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'q1' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 EXECUTE prepstmt;
         q1        |        q2         
 ------------------+-------------------
- 4567890123456789 | -4567890123456789
  4567890123456789 |               123
+ 4567890123456789 |  4567890123456789
+ 4567890123456789 | -4567890123456789
               123 |               456
               123 |  4567890123456789
- 4567890123456789 |  4567890123456789
 (5 rows)
 
 EXECUTE prepstmt2(123);
@@ -64,11 +68,11 @@ ALTER TABLE pcachetest DROP COLUMN q3;
 EXECUTE prepstmt;
         q1        |        q2         
 ------------------+-------------------
- 4567890123456789 | -4567890123456789
- 4567890123456789 |               123
               123 |               456
               123 |  4567890123456789
+ 4567890123456789 |               123
  4567890123456789 |  4567890123456789
+ 4567890123456789 | -4567890123456789
 (5 rows)
 
 EXECUTE prepstmt2(123);
@@ -86,11 +90,11 @@ PREPARE vprep AS SELECT * FROM pcacheview;
 EXECUTE vprep;
         q1        |        q2         
 ------------------+-------------------
- 4567890123456789 | -4567890123456789
- 4567890123456789 |               123
               123 |               456
               123 |  4567890123456789
+ 4567890123456789 |               123
  4567890123456789 |  4567890123456789
+ 4567890123456789 | -4567890123456789
 (5 rows)
 
 CREATE OR REPLACE TEMP VIEW pcacheview AS
@@ -98,11 +102,11 @@ CREATE OR REPLACE TEMP VIEW pcacheview AS
 EXECUTE vprep;
         q1        |        q2         
 ------------------+-------------------
- 4567890123456789 | -2283945061728394
  4567890123456789 |                61
+ 4567890123456789 |  2283945061728394
+ 4567890123456789 | -2283945061728394
               123 |               228
               123 |  2283945061728394
- 4567890123456789 |  2283945061728394
 (5 rows)
 
 -- Check basic SPI plan invalidation
@@ -169,8 +173,12 @@ select cache_test_2();
 --- Check that change of search_path is honored when re-using cached plan
 create schema s1
   create table abc (f1 int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create schema s2
   create table abc (f1 int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into s1.abc values(123);
 insert into s2.abc values(456);
 set search_path = s1;
@@ -264,20 +272,26 @@ NOTICE:  3
 -- Check that addition or removal of any partition is correctly dealt with by
 -- default partition table when it is being used in prepared statement.
 create table pc_list_parted (a int) partition by list(a);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table pc_list_part_null partition of pc_list_parted for values in (null);
+NOTICE:  table has parent, setting distribution columns to match parent table
 create table pc_list_part_1 partition of pc_list_parted for values in (1);
+NOTICE:  table has parent, setting distribution columns to match parent table
 create table pc_list_part_def partition of pc_list_parted default;
+NOTICE:  table has parent, setting distribution columns to match parent table
 prepare pstmt_def_insert (int) as insert into pc_list_part_def values($1);
 -- should fail
 execute pstmt_def_insert(null);
-ERROR:  new row for relation "pc_list_part_def" violates partition constraint
+ERROR:  new row for relation "pc_list_part_def" violates partition constraint  (seg0 127.0.0.1:7002 pid=3858720)
 DETAIL:  Failing row contains (null).
 execute pstmt_def_insert(1);
-ERROR:  new row for relation "pc_list_part_def" violates partition constraint
+ERROR:  new row for relation "pc_list_part_def" violates partition constraint  (seg1 127.0.0.1:7003 pid=3858722)
 DETAIL:  Failing row contains (1).
 create table pc_list_part_2 partition of pc_list_parted for values in (2);
+NOTICE:  table has parent, setting distribution columns to match parent table
 execute pstmt_def_insert(2);
-ERROR:  new row for relation "pc_list_part_def" violates partition constraint
+ERROR:  new row for relation "pc_list_part_def" violates partition constraint  (seg0 127.0.0.1:7002 pid=3858720)
 DETAIL:  Failing row contains (2).
 alter table pc_list_parted detach partition pc_list_part_null;
 -- should be ok
@@ -289,6 +303,8 @@ drop table pc_list_parted, pc_list_part_null;
 deallocate pstmt_def_insert;
 -- Test plan_cache_mode
 create table test_mode (a int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into test_mode select 1 from generate_series(1,10000) union all select 2;
 create index on test_mode (a);
 analyze test_mode;
@@ -303,14 +319,16 @@ select name, generic_plans, custom_plans from pg_prepared_statements
 -- up to 5 executions, custom plan is used
 set plan_cache_mode to auto;
 explain (costs off) execute test_mode_pp(2);
-                        QUERY PLAN                        
-----------------------------------------------------------
+                       QUERY PLAN                       
+--------------------------------------------------------
  Aggregate
    ->  Gather Motion 1:1  (slice1; segments: 1)
-         ->  Index Only Scan using test_mode_a_idx on test_mode
-               Index Cond: (a = 2)
+         ->  Bitmap Heap Scan on test_mode
+               Recheck Cond: (a = 2)
+               ->  Bitmap Index Scan on test_mode_a_idx
+                     Index Cond: (a = 2)
  Optimizer: Postgres query optimizer
-(5 rows)
+(7 rows)
 
 select name, generic_plans, custom_plans from pg_prepared_statements
   where  name = 'test_mode_pp';
@@ -387,26 +405,30 @@ select name, generic_plans, custom_plans from pg_prepared_statements
 
 -- we should now get a really bad plan
 explain (costs off) execute test_mode_pp(2);
-         QUERY PLAN          
------------------------------
+                       QUERY PLAN                       
+--------------------------------------------------------
  Aggregate
    ->  Gather Motion 1:1  (slice1; segments: 1)
-         ->  Index Only Scan using test_mode_a_idx on test_mode
-               Index Cond: (a = 2)
+         ->  Bitmap Heap Scan on test_mode
+               Recheck Cond: (a = 2)
+               ->  Bitmap Index Scan on test_mode_a_idx
+                     Index Cond: (a = 2)
  Optimizer: Postgres query optimizer
-(5 rows)
+(7 rows)
 
 -- but we can force a custom plan
 set plan_cache_mode to force_custom_plan;
 explain (costs off) execute test_mode_pp(2);
-                        QUERY PLAN                        
-----------------------------------------------------------
+                       QUERY PLAN                       
+--------------------------------------------------------
  Aggregate
    ->  Gather Motion 1:1  (slice1; segments: 1)
-         ->  Index Only Scan using test_mode_a_idx on test_mode
-               Index Cond: (a = 2)
+         ->  Bitmap Heap Scan on test_mode
+               Recheck Cond: (a = 2)
+               ->  Bitmap Index Scan on test_mode_a_idx
+                     Index Cond: (a = 2)
  Optimizer: Postgres query optimizer
-(5 rows)
+(7 rows)
 
 select name, generic_plans, custom_plans from pg_prepared_statements
   where  name = 'test_mode_pp';

@@ -1,6 +1,6 @@
 --start_ignore
-\! gpconfig -c diskquota.max_monitored_databases -v 3
-\! gpstop -ari
+\! gpconfig -c diskquota.max_monitored_databases -v 3 > /dev/null
+\! gpstop -arf > /dev/null
 --end_ignore
 
 \c
@@ -43,6 +43,6 @@ DROP DATABASE test_db2;
 DROP DATABASE test_db3;
 
 -- start_ignore
-\! gpconfig -r diskquota.max_monitored_databases
-\! gpstop -ari
+\! gpconfig -r diskquota.max_monitored_databases > /dev/null
+\! gpstop -arf > /dev/null
 -- end_ignore

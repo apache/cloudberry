@@ -59,38 +59,38 @@ CLUSTER clstr_tst_c ON clstr_tst;
 SELECT a,b,c,substring(d for 30), length(d) from clstr_tst;
  a  | b  |       c       |           substring            | length 
 ----+----+---------------+--------------------------------+--------
- 10 | 14 | catorce       |                                |       
- 18 |  5 | cinco         |                                |       
-  9 |  4 | cuatro        |                                |       
  26 | 19 | diecinueve    |                                |       
  12 | 18 | dieciocho     |                                |       
  30 | 16 | dieciseis     |                                |       
- 24 | 17 | diecisiete    |                                |       
-  2 | 10 | diez          |                                |       
  23 | 12 | doce          |                                |       
- 11 |  2 | dos           |                                |       
- 25 |  9 | nueve         |                                |       
  31 |  8 | ocho          |                                |       
   1 | 11 | once          |                                |       
- 28 | 15 | quince        |                                |       
- 32 |  6 | seis          | xyzzyxyzzyxyzzyxyzzyxyzzyxyzzy | 500000
- 29 |  7 | siete         |                                |       
  15 | 13 | trece         |                                |       
- 22 | 30 | treinta       |                                |       
- 17 | 32 | treinta y dos |                                |       
-  3 | 31 | treinta y uno |                                |       
-  5 |  3 | tres          |                                |       
  20 |  1 | uno           |                                |       
-  6 | 20 | veinte        |                                |       
- 14 | 25 | veinticinco   |                                |       
- 21 | 24 | veinticuatro  |                                |       
+ 18 |  5 | cinco         |                                |       
+ 24 | 17 | diecisiete    |                                |       
+  2 | 10 | diez          |                                |       
+ 29 |  7 | siete         |                                |       
+ 22 | 30 | treinta       |                                |       
+  3 | 31 | treinta y uno |                                |       
   4 | 22 | veintidos     |                                |       
  19 | 29 | veintinueve   |                                |       
  16 | 28 | veintiocho    |                                |       
  27 | 26 | veintiseis    |                                |       
- 13 | 27 | veintisiete   |                                |       
   7 | 23 | veintitres    |                                |       
   8 | 21 | veintiuno     |                                |       
+ 10 | 14 | catorce       |                                |       
+  9 |  4 | cuatro        |                                |       
+ 11 |  2 | dos           |                                |       
+ 25 |  9 | nueve         |                                |       
+ 28 | 15 | quince        |                                |       
+ 32 |  6 | seis          | xyzzyxyzzyxyzzyxyzzyxyzzyxyzzy | 500000
+ 17 | 32 | treinta y dos |                                |       
+  5 |  3 | tres          |                                |       
+  6 | 20 | veinte        |                                |       
+ 14 | 25 | veinticinco   |                                |       
+ 21 | 24 | veinticuatro  |                                |       
+ 13 | 27 | veintisiete   |                                |       
 (32 rows)
 
 SELECT a,b,c,substring(d for 30), length(d) from clstr_tst ORDER BY a;
@@ -209,39 +209,39 @@ INSERT INTO clstr_tst_inh VALUES (0, 100, 'in child table');
 SELECT a,b,c,substring(d for 30), length(d) from clstr_tst;
  a  |  b  |       c        |           substring            | length 
 ----+-----+----------------+--------------------------------+--------
- 10 |  14 | catorce        |                                |       
  18 |   5 | cinco          |                                |       
-  9 |   4 | cuatro         |                                |       
- 26 |  19 | diecinueve     |                                |       
- 12 |  18 | dieciocho      |                                |       
- 30 |  16 | dieciseis      |                                |       
  24 |  17 | diecisiete     |                                |       
   2 |  10 | diez           |                                |       
- 23 |  12 | doce           |                                |       
- 11 |   2 | dos            |                                |       
- 25 |   9 | nueve          |                                |       
- 31 |   8 | ocho           |                                |       
-  1 |  11 | once           |                                |       
- 28 |  15 | quince         |                                |       
- 32 |   6 | seis           | xyzzyxyzzyxyzzyxyzzyxyzzyxyzzy | 500000
  29 |   7 | siete          |                                |       
- 15 |  13 | trece          |                                |       
  22 |  30 | treinta        |                                |       
- 17 |  32 | treinta y dos  |                                |       
   3 |  31 | treinta y uno  |                                |       
-  5 |   3 | tres           |                                |       
- 20 |   1 | uno            |                                |       
-  6 |  20 | veinte         |                                |       
- 14 |  25 | veinticinco    |                                |       
- 21 |  24 | veinticuatro   |                                |       
   4 |  22 | veintidos      |                                |       
  19 |  29 | veintinueve    |                                |       
  16 |  28 | veintiocho     |                                |       
  27 |  26 | veintiseis     |                                |       
- 13 |  27 | veintisiete    |                                |       
   7 |  23 | veintitres     |                                |       
   8 |  21 | veintiuno      |                                |       
+ 26 |  19 | diecinueve     |                                |       
+ 12 |  18 | dieciocho      |                                |       
+ 30 |  16 | dieciseis      |                                |       
+ 23 |  12 | doce           |                                |       
+ 31 |   8 | ocho           |                                |       
+  1 |  11 | once           |                                |       
+ 15 |  13 | trece          |                                |       
+ 20 |   1 | uno            |                                |       
   0 | 100 | in child table |                                |       
+ 10 |  14 | catorce        |                                |       
+  9 |   4 | cuatro         |                                |       
+ 11 |   2 | dos            |                                |       
+ 25 |   9 | nueve          |                                |       
+ 28 |  15 | quince         |                                |       
+ 32 |   6 | seis           | xyzzyxyzzyxyzzyxyzzyxyzzyxyzzy | 500000
+ 17 |  32 | treinta y dos  |                                |       
+  5 |   3 | tres           |                                |       
+  6 |  20 | veinte         |                                |       
+ 14 |  25 | veinticinco    |                                |       
+ 21 |  24 | veinticuatro   |                                |       
+ 13 |  27 | veintisiete    |                                |       
 (33 rows)
 
 -- Verify that foreign key link still works
@@ -310,6 +310,7 @@ WHERE pg_class.oid=indexrelid
 CLUSTER pg_toast.pg_toast_826 USING pg_toast_826_index;
 -- Verify that clustering all tables does in fact cluster the right ones
 CREATE USER regress_clstr_user;
+NOTICE:  resource queue required -- using default resource queue "pg_default"
 CREATE TABLE clstr_1 (a INT PRIMARY KEY);
 CREATE TABLE clstr_2 (a INT PRIMARY KEY);
 CREATE TABLE clstr_3 (a INT PRIMARY KEY);
@@ -333,11 +334,11 @@ SELECT * FROM clstr_1 UNION ALL
  a 
 ---
  1
- 2
+ 1
  1
  2
  2
- 1
+ 2
 (6 rows)
 
 -- revert to the original state
@@ -359,11 +360,11 @@ SELECT * FROM clstr_1 UNION ALL
   SELECT * FROM clstr_3;
  a 
 ---
+ 2
+ 2
+ 2
  1
- 2
- 2
  1
- 2
  1
 (6 rows)
 
@@ -401,9 +402,9 @@ UPDATE clustertest SET key = 80 WHERE key = 70;
 SELECT key FROM clustertest;
  key 
 -----
-  20
   30
  100
+  20
   35
   80
 (5 rows)
@@ -412,22 +413,22 @@ CLUSTER clustertest_pkey ON clustertest;
 SELECT key FROM clustertest;
  key 
 -----
-  20
   30
+ 100
+  20
   35
   80
- 100
 (5 rows)
 
 COMMIT;
 SELECT key FROM clustertest;
  key 
 -----
-  20
   30
+ 100
+  20
   35
   80
- 100
 (5 rows)
 
 -- check that temp tables can be clustered
@@ -437,8 +438,8 @@ cluster clstr_temp using clstr_temp_pkey;
 select * from clstr_temp;
  col1 | col2 
 ------+------
-    1 | one
     2 | two
+    1 | one
 (2 rows)
 
 drop table clstr_temp;
@@ -554,13 +555,15 @@ SET gp_enable_relsize_collection= on;
 BEGIN;
 SET LOCAL enable_seqscan = false;
 EXPLAIN (COSTS OFF) SELECT * FROM clstr_expression WHERE upper(b) = 'PREFIX3';
-                          QUERY PLAN                           
----------------------------------------------------------------
+                        QUERY PLAN                         
+-----------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
-   ->  Index Scan using clstr_expression_upper_b on clstr_expression
-         Index Cond: (upper(b) = 'PREFIX3'::text)
+   ->  Bitmap Heap Scan on clstr_expression
+         Recheck Cond: (upper(b) = 'PREFIX3'::text)
+         ->  Bitmap Index Scan on clstr_expression_upper_b
+               Index Cond: (upper(b) = 'PREFIX3'::text)
  Optimizer: Postgres query optimizer
-(4 rows)
+(6 rows)
 
 SELECT * FROM clstr_expression WHERE upper(b) = 'PREFIX3';
  id | a |    b    
@@ -569,14 +572,18 @@ SELECT * FROM clstr_expression WHERE upper(b) = 'PREFIX3';
 (1 row)
 
 EXPLAIN (COSTS OFF) SELECT * FROM clstr_expression WHERE -a = -3 ORDER BY -a, b;
-                          QUERY PLAN                           
----------------------------------------------------------------
+                           QUERY PLAN                            
+-----------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    Merge Key: b
-   ->  Index Scan using clstr_expression_minus_a on clstr_expression
-         Index Cond: ((- a) = '-3'::integer)
+   ->  Sort
+         Sort Key: b COLLATE "C"
+         ->  Bitmap Heap Scan on clstr_expression
+               Recheck Cond: ((- a) = '-3'::integer)
+               ->  Bitmap Index Scan on clstr_expression_minus_a
+                     Index Cond: ((- a) = '-3'::integer)
  Optimizer: Postgres query optimizer
-(5 rows)
+(9 rows)
 
 SELECT * FROM clstr_expression WHERE -a = -3 ORDER BY -a, b;
  id  | a |     b     
@@ -600,13 +607,15 @@ SELECT * FROM rows WHERE la < a;
 BEGIN;
 SET LOCAL enable_seqscan = false;
 EXPLAIN (COSTS OFF) SELECT * FROM clstr_expression WHERE upper(b) = 'PREFIX3';
-                          QUERY PLAN                           
----------------------------------------------------------------
+                        QUERY PLAN                         
+-----------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
-   ->  Index Scan using clstr_expression_upper_b on clstr_expression
-         Index Cond: (upper(b) = 'PREFIX3'::text)
+   ->  Bitmap Heap Scan on clstr_expression
+         Recheck Cond: (upper(b) = 'PREFIX3'::text)
+         ->  Bitmap Index Scan on clstr_expression_upper_b
+               Index Cond: (upper(b) = 'PREFIX3'::text)
  Optimizer: Postgres query optimizer
-(4 rows)
+(6 rows)
 
 SELECT * FROM clstr_expression WHERE upper(b) = 'PREFIX3';
  id | a |    b    
@@ -615,14 +624,18 @@ SELECT * FROM clstr_expression WHERE upper(b) = 'PREFIX3';
 (1 row)
 
 EXPLAIN (COSTS OFF) SELECT * FROM clstr_expression WHERE -a = -3 ORDER BY -a, b;
-                          QUERY PLAN                           
----------------------------------------------------------------
+                           QUERY PLAN                            
+-----------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    Merge Key: b
-   ->  Index Scan using clstr_expression_minus_a on clstr_expression
-         Index Cond: ((- a) = '-3'::integer)
+   ->  Sort
+         Sort Key: b COLLATE "C"
+         ->  Bitmap Heap Scan on clstr_expression
+               Recheck Cond: ((- a) = '-3'::integer)
+               ->  Bitmap Index Scan on clstr_expression_minus_a
+                     Index Cond: ((- a) = '-3'::integer)
  Optimizer: Postgres query optimizer
-(5 rows)
+(9 rows)
 
 SELECT * FROM clstr_expression WHERE -a = -3 ORDER BY -a, b;
  id  | a |     b     
@@ -646,13 +659,15 @@ SELECT * FROM rows WHERE upper(lb) > upper(b);
 BEGIN;
 SET LOCAL enable_seqscan = false;
 EXPLAIN (COSTS OFF) SELECT * FROM clstr_expression WHERE upper(b) = 'PREFIX3';
-                          QUERY PLAN                           
----------------------------------------------------------------
+                        QUERY PLAN                         
+-----------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
-   ->  Index Scan using clstr_expression_upper_b on clstr_expression
-         Index Cond: (upper(b) = 'PREFIX3'::text)
+   ->  Bitmap Heap Scan on clstr_expression
+         Recheck Cond: (upper(b) = 'PREFIX3'::text)
+         ->  Bitmap Index Scan on clstr_expression_upper_b
+               Index Cond: (upper(b) = 'PREFIX3'::text)
  Optimizer: Postgres query optimizer
-(4 rows)
+(6 rows)
 
 SELECT * FROM clstr_expression WHERE upper(b) = 'PREFIX3';
  id | a |    b    
@@ -661,14 +676,18 @@ SELECT * FROM clstr_expression WHERE upper(b) = 'PREFIX3';
 (1 row)
 
 EXPLAIN (COSTS OFF) SELECT * FROM clstr_expression WHERE -a = -3 ORDER BY -a, b;
-                          QUERY PLAN                           
----------------------------------------------------------------
+                           QUERY PLAN                            
+-----------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    Merge Key: b
-   ->  Index Scan using clstr_expression_minus_a on clstr_expression
-         Index Cond: ((- a) = '-3'::integer)
+   ->  Sort
+         Sort Key: b COLLATE "C"
+         ->  Bitmap Heap Scan on clstr_expression
+               Recheck Cond: ((- a) = '-3'::integer)
+               ->  Bitmap Index Scan on clstr_expression_minus_a
+                     Index Cond: ((- a) = '-3'::integer)
  Optimizer: Postgres query optimizer
-(5 rows)
+(9 rows)
 
 SELECT * FROM clstr_expression WHERE -a = -3 ORDER BY -a, b;
  id  | a |     b     

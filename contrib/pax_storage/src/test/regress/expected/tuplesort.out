@@ -124,18 +124,17 @@ CREATE INDEX abbrev_abort_uuids__noabort_decreasing_idx ON abbrev_abort_uuids (n
 -- verify
 EXPLAIN (COSTS OFF)
 SELECT id, noabort_increasing, noabort_decreasing FROM abbrev_abort_uuids ORDER BY noabort_increasing, id LIMIT 5;
-                                                QUERY PLAN                                                 
------------------------------------------------------------------------------------------------------------
+                       QUERY PLAN                       
+--------------------------------------------------------
  Limit
    ->  Gather Motion 3:1  (slice1; segments: 3)
          Merge Key: noabort_increasing, id
          ->  Limit
-               ->  Incremental Sort
+               ->  Sort
                      Sort Key: noabort_increasing, id
-                     Presorted Key: noabort_increasing
-                     ->  Index Scan using abbrev_abort_uuids__noabort_increasing_idx on abbrev_abort_uuids
+                     ->  Seq Scan on abbrev_abort_uuids
  Optimizer: Postgres query optimizer
-(9 rows)
+(8 rows)
 
 SELECT id, noabort_increasing, noabort_decreasing FROM abbrev_abort_uuids ORDER BY noabort_increasing, id LIMIT 5;
   id   |          noabort_increasing          |          noabort_decreasing          
@@ -149,18 +148,17 @@ SELECT id, noabort_increasing, noabort_decreasing FROM abbrev_abort_uuids ORDER 
 
 EXPLAIN (COSTS OFF)
 SELECT id, noabort_increasing, noabort_decreasing FROM abbrev_abort_uuids ORDER BY noabort_decreasing, id LIMIT 5;
-                                                QUERY PLAN                                                 
------------------------------------------------------------------------------------------------------------
+                       QUERY PLAN                       
+--------------------------------------------------------
  Limit
    ->  Gather Motion 3:1  (slice1; segments: 3)
          Merge Key: noabort_decreasing, id
          ->  Limit
-               ->  Incremental Sort
+               ->  Sort
                      Sort Key: noabort_decreasing, id
-                     Presorted Key: noabort_decreasing
-                     ->  Index Scan using abbrev_abort_uuids__noabort_decreasing_idx on abbrev_abort_uuids
+                     ->  Seq Scan on abbrev_abort_uuids
  Optimizer: Postgres query optimizer
-(9 rows)
+(8 rows)
 
 SELECT id, noabort_increasing, noabort_decreasing FROM abbrev_abort_uuids ORDER BY noabort_decreasing, id LIMIT 5;
   id   |          noabort_increasing          |          noabort_decreasing          
@@ -178,18 +176,17 @@ CREATE INDEX abbrev_abort_uuids__abort_decreasing_idx ON abbrev_abort_uuids (abo
 -- verify
 EXPLAIN (COSTS OFF)
 SELECT id, abort_increasing, abort_decreasing FROM abbrev_abort_uuids ORDER BY abort_increasing, id LIMIT 5;
-                                               QUERY PLAN                                                
----------------------------------------------------------------------------------------------------------
+                       QUERY PLAN                       
+--------------------------------------------------------
  Limit
    ->  Gather Motion 3:1  (slice1; segments: 3)
          Merge Key: abort_increasing, id
          ->  Limit
-               ->  Incremental Sort
+               ->  Sort
                      Sort Key: abort_increasing, id
-                     Presorted Key: abort_increasing
-                     ->  Index Scan using abbrev_abort_uuids__abort_increasing_idx on abbrev_abort_uuids
+                     ->  Seq Scan on abbrev_abort_uuids
  Optimizer: Postgres query optimizer
-(9 rows)
+(8 rows)
 
 SELECT id, abort_increasing, abort_decreasing FROM abbrev_abort_uuids ORDER BY abort_increasing, id LIMIT 5;
   id   |           abort_increasing           |           abort_decreasing           
@@ -203,18 +200,17 @@ SELECT id, abort_increasing, abort_decreasing FROM abbrev_abort_uuids ORDER BY a
 
 EXPLAIN (COSTS OFF)
 SELECT id, abort_increasing, abort_decreasing FROM abbrev_abort_uuids ORDER BY abort_decreasing, id LIMIT 5;
-                                               QUERY PLAN                                                
----------------------------------------------------------------------------------------------------------
+                       QUERY PLAN                       
+--------------------------------------------------------
  Limit
    ->  Gather Motion 3:1  (slice1; segments: 3)
          Merge Key: abort_decreasing, id
          ->  Limit
-               ->  Incremental Sort
+               ->  Sort
                      Sort Key: abort_decreasing, id
-                     Presorted Key: abort_decreasing
-                     ->  Index Scan using abbrev_abort_uuids__abort_decreasing_idx on abbrev_abort_uuids
+                     ->  Seq Scan on abbrev_abort_uuids
  Optimizer: Postgres query optimizer
-(9 rows)
+(8 rows)
 
 SELECT id, abort_increasing, abort_decreasing FROM abbrev_abort_uuids ORDER BY abort_decreasing, id LIMIT 5;
   id   |           abort_increasing           |           abort_decreasing           

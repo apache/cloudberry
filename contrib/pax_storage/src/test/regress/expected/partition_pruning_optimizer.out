@@ -14,6 +14,8 @@ set enable_incremental_sort=on;
 -- Create test table with two partitions, for values equal to '1' and values equal to '2'.
 create table parttab (n numeric, t text)
   partition by list (n)(partition one values ('1'), partition two values('2'));
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'n' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 -- Insert three rows. They're all equal to '1', but different number of zeros after decimal point.
 insert into parttab values
   ('1', 'one'),
@@ -21,16 +23,20 @@ insert into parttab values
   ('1.00', 'one point zero zero');
 -- select rows whose text representation is three characters long. This should return the '1.0' row.
 select * from parttab where length(n::text) = 3;
+NOTICE:  One or more columns in the following table(s) do not have statistics: parttab
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
   n  |       t        
 -----+----------------
  1.0 | one point zero
 (1 row)
 
 explain select * from parttab where length(n::text) = 3;
-                                   QUERY PLAN
---------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)
-   ->  Dynamic Seq Scan on parttab
+NOTICE:  One or more columns in the following table(s) do not have statistics: parttab
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+                                  QUERY PLAN                                   
+-------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..431.00 rows=1 width=16)
+   ->  Dynamic Seq Scan on parttab  (cost=0.00..431.00 rows=1 width=16)
          Number of partitions to scan: 2 (out of 2)
          Filter: (length((n)::text) = 3)
  Optimizer: GPORCA
@@ -134,11 +140,11 @@ PREPARE prep_prune AS select * from pt_lt_tab WHERE col2 = stabletestfunc();
 EXPLAIN EXECUTE prep_prune;
                                   QUERY PLAN                                   
 -------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..431.00 rows=2 width=12)
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..431.00 rows=1 width=12)
    ->  Dynamic Seq Scan on pt_lt_tab  (cost=0.00..431.00 rows=1 width=12)
-         Number of partitions to scan: 1 
+         Number of partitions to scan: 1 (out of 5)
          Filter: (col2 = '10'::numeric)
- Optimizer: Pivotal Optimizer (GPORCA)
+ Optimizer: GPORCA
 (5 rows)
 
 -- Also test that Params are const-evaluated.
@@ -146,11 +152,11 @@ PREPARE prep_prune_param AS select * from pt_lt_tab WHERE col2 = $1;
 EXPLAIN EXECUTE prep_prune_param(10);
                                   QUERY PLAN                                   
 -------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..431.00 rows=2 width=12)
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..431.00 rows=1 width=12)
    ->  Dynamic Seq Scan on pt_lt_tab  (cost=0.00..431.00 rows=1 width=12)
-         Number of partitions to scan: 1 
+         Number of partitions to scan: 1 (out of 5)
          Filter: (col2 = '10'::numeric)
- Optimizer: Pivotal Optimizer (GPORCA)
+ Optimizer: GPORCA
 (5 rows)
 
 -- @description B-tree single index key = non-partitioning key
@@ -166,18 +172,18 @@ SELECT * FROM pt_lt_tab WHERE col1 < 10 ORDER BY col2,col3 LIMIT 5;
 (5 rows)
 
 EXPLAIN SELECT * FROM pt_lt_tab WHERE col1 < 10 ORDER BY col2,col3 LIMIT 5;
-                                             QUERY PLAN                                             
-----------------------------------------------------------------------------------------------------
- Limit  (cost=0.00..6.00 rows=5 width=12)
-   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..6.00 rows=5 width=12)
+                                         QUERY PLAN                                         
+--------------------------------------------------------------------------------------------
+ Limit  (cost=0.00..431.00 rows=5 width=12)
+   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..431.00 rows=5 width=12)
          Merge Key: col2, col3
-         ->  Limit  (cost=0.00..6.00 rows=2 width=12)
-               ->  Sort  (cost=0.00..6.00 rows=4 width=12)
+         ->  Limit  (cost=0.00..431.00 rows=2 width=12)
+               ->  Sort  (cost=0.00..431.00 rows=4 width=12)
                      Sort Key: col2, col3
                      ->  Dynamic Seq Scan on pt_lt_tab  (cost=0.00..431.00 rows=4 width=12)
-                           Index Cond: (col1 < 10)
-                           Number of partitions to scan: 5 
- Optimizer: Pivotal Optimizer (GPORCA)
+                           Number of partitions to scan: 5 (out of 5)
+                           Filter: (col1 < 10)
+ Optimizer: GPORCA
 (10 rows)
 
 SELECT * FROM pt_lt_tab WHERE col1 > 50 ORDER BY col2,col3 LIMIT 5;
@@ -245,9 +251,9 @@ EXPLAIN SELECT * FROM pt_lt_tab WHERE col1 <> 10 ORDER BY col2,col3 LIMIT 5;
                ->  Sort  (cost=0.00..431.01 rows=17 width=12)
                      Sort Key: col2, col3
                      ->  Dynamic Seq Scan on pt_lt_tab  (cost=0.00..431.00 rows=17 width=12)
-                           Number of partitions to scan: 5 
+                           Number of partitions to scan: 5 (out of 5)
                            Filter: (col1 <> 10)
- Optimizer: Pivotal Optimizer (GPORCA)
+ Optimizer: GPORCA
 (10 rows)
 
 SELECT * FROM pt_lt_tab WHERE col1 > 10 AND col1 < 50 ORDER BY col2,col3 LIMIT 5;
@@ -288,16 +294,16 @@ SELECT * FROM pt_lt_tab WHERE col1 > 10 OR col1 = 25 ORDER BY col2,col3 LIMIT 5;
 EXPLAIN SELECT * FROM pt_lt_tab WHERE col1 > 10 OR col1 = 25 ORDER BY col2,col3 LIMIT 5;
                                          QUERY PLAN                                          
 ---------------------------------------------------------------------------------------------
- Limit  (cost=0.00..431.00 rows=5 width=12)
+ Limit  (cost=0.00..431.01 rows=5 width=12)
    ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..431.00 rows=5 width=12)
          Merge Key: col2, col3
          ->  Limit  (cost=0.00..431.00 rows=2 width=12)
                ->  Sort  (cost=0.00..431.00 rows=14 width=12)
                      Sort Key: col2, col3
                      ->  Dynamic Seq Scan on pt_lt_tab  (cost=0.00..431.00 rows=14 width=12)
-                           Number of partitions to scan: 5 
+                           Number of partitions to scan: 5 (out of 5)
                            Filter: ((col1 > 10) OR (col1 = 25))
- Optimizer: Pivotal Optimizer (GPORCA)
+ Optimizer: GPORCA
 (10 rows)
 
 SELECT * FROM pt_lt_tab WHERE col1 between 10 AND 25 ORDER BY col2,col3 LIMIT 5;
@@ -367,7 +373,7 @@ EXPLAIN SELECT * FROM pt_lt_tab WHERE col2 > 50 ORDER BY col2,col3 LIMIT 5;
                Sort Key: (NULL::numeric), (NULL::text)
                ->  Result  (cost=0.00..0.00 rows=0 width=21)
                      One-Time Filter: false
- Optimizer: Pivotal Optimizer (GPORCA)
+ Optimizer: GPORCA
 (7 rows)
 
 SELECT * FROM pt_lt_tab WHERE col2 = 25 ORDER BY col2,col3 LIMIT 5;
@@ -410,12 +416,12 @@ EXPLAIN SELECT * FROM pt_lt_tab WHERE col2 <> 10 ORDER BY col2,col3 LIMIT 5;
    ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..431.01 rows=5 width=12)
          Merge Key: col2, col3
          ->  Limit  (cost=0.00..431.01 rows=2 width=12)
-               ->  Sort  (cost=0.00..431.01 rows=16 width=12)
+               ->  Sort  (cost=0.00..431.01 rows=17 width=12)
                      Sort Key: col2, col3
-                     ->  Dynamic Seq Scan on pt_lt_tab  (cost=0.00..431.00 rows=16 width=12)
-                           Number of partitions to scan: 5 
+                     ->  Dynamic Seq Scan on pt_lt_tab  (cost=0.00..431.00 rows=17 width=12)
+                           Number of partitions to scan: 5 (out of 5)
                            Filter: (col2 <> '10'::numeric)
- Optimizer: Pivotal Optimizer (GPORCA)
+ Optimizer: GPORCA
 (10 rows)
 
 SELECT * FROM pt_lt_tab WHERE col2 > 10 AND col2 < 50 ORDER BY col2,col3 LIMIT 5;
@@ -460,12 +466,12 @@ EXPLAIN SELECT * FROM pt_lt_tab WHERE col2 > 10 OR col2 = 50 ORDER BY col2,col3 
    ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..431.00 rows=5 width=12)
          Merge Key: col2, col3
          ->  Limit  (cost=0.00..431.00 rows=2 width=12)
-               ->  Sort  (cost=0.00..431.00 rows=13 width=12)
+               ->  Sort  (cost=0.00..431.00 rows=14 width=12)
                      Sort Key: col2, col3
-                     ->  Dynamic Seq Scan on pt_lt_tab  (cost=0.00..431.00 rows=13 width=12)
-                           Number of partitions to scan: 4 
+                     ->  Dynamic Seq Scan on pt_lt_tab  (cost=0.00..431.00 rows=14 width=12)
+                           Number of partitions to scan: 4 (out of 5)
                            Filter: ((col2 > '10'::numeric) OR (col2 = '50'::numeric))
- Optimizer: Pivotal Optimizer (GPORCA)
+ Optimizer: GPORCA
 (10 rows)
 
 SELECT * FROM pt_lt_tab WHERE col2 between 10 AND 50 ORDER BY col2,col3 LIMIT 5;
@@ -580,12 +586,12 @@ EXPLAIN SELECT * FROM pt_lt_tab WHERE col2 <> 10 ORDER BY col2,col3 LIMIT 5;
    ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..431.01 rows=5 width=12)
          Merge Key: col2, col3
          ->  Limit  (cost=0.00..431.01 rows=2 width=12)
-               ->  Sort  (cost=0.00..431.01 rows=16 width=12)
+               ->  Sort  (cost=0.00..431.01 rows=17 width=12)
                      Sort Key: col2, col3
-                     ->  Dynamic Seq Scan on pt_lt_tab  (cost=0.00..431.00 rows=16 width=12)
-                           Number of partitions to scan: 5 
+                     ->  Dynamic Seq Scan on pt_lt_tab  (cost=0.00..431.00 rows=17 width=12)
+                           Number of partitions to scan: 5 (out of 5)
                            Filter: (col2 <> '10'::numeric)
- Optimizer: Pivotal Optimizer (GPORCA)
+ Optimizer: GPORCA
 (10 rows)
 
 SELECT * FROM pt_lt_tab WHERE col2 > 10 AND col1 = 10 ORDER BY col2,col3 LIMIT 5;
@@ -627,9 +633,9 @@ EXPLAIN SELECT * FROM pt_lt_tab WHERE col2 > 10.00 OR col1 = 50 ORDER BY col2,co
                ->  Sort  (cost=0.00..431.01 rows=14 width=12)
                      Sort Key: col2, col3
                      ->  Dynamic Seq Scan on pt_lt_tab  (cost=0.00..431.00 rows=14 width=12)
-                           Number of partitions to scan: 5 
+                           Number of partitions to scan: 5 (out of 5)
                            Filter: ((col2 > 10.00) OR (col1 = 50))
- Optimizer: Pivotal Optimizer (GPORCA)
+ Optimizer: GPORCA
 (10 rows)
 
 SELECT * FROM pt_lt_tab WHERE col2 between 10 AND 50 ORDER BY col2,col3 LIMIT 5;
@@ -755,9 +761,9 @@ EXPLAIN SELECT * FROM pt_lt_tab_df WHERE col2 <> 10 ORDER BY col2,col3 LIMIT 5;
                ->  Sort  (cost=0.00..431.01 rows=20 width=12)
                      Sort Key: col2, col3
                      ->  Dynamic Seq Scan on pt_lt_tab_df  (cost=0.00..431.00 rows=20 width=12)
-                           Number of partitions to scan: 6 
+                           Number of partitions to scan: 6 (out of 6)
                            Filter: (col2 <> '10'::numeric)
- Optimizer: Pivotal Optimizer (GPORCA)
+ Optimizer: GPORCA
 (10 rows)
 
 SELECT * FROM pt_lt_tab_df WHERE col2 > 10 AND col1 = 10 ORDER BY col2,col3 LIMIT 5;
@@ -799,9 +805,9 @@ EXPLAIN SELECT * FROM pt_lt_tab_df WHERE col2 > 10.00 OR col1 = 50 ORDER BY col2
                ->  Sort  (cost=0.00..431.01 rows=17 width=12)
                      Sort Key: col2, col3
                      ->  Dynamic Seq Scan on pt_lt_tab_df  (cost=0.00..431.00 rows=17 width=12)
-                           Number of partitions to scan: 6 
+                           Number of partitions to scan: 6 (out of 6)
                            Filter: ((col2 > 10.00) OR (col1 = 50))
- Optimizer: Pivotal Optimizer (GPORCA)
+ Optimizer: GPORCA
 (10 rows)
 
 SELECT * FROM pt_lt_tab_df WHERE col2 between 10 AND 50 ORDER BY col2,col3 LIMIT 5;
@@ -853,12 +859,12 @@ EXPLAIN SELECT * FROM pt_lt_tab WHERE col2 between 1 AND 50 ORDER BY col2,col3 L
    ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..431.01 rows=5 width=12)
          Merge Key: col2, col3
          ->  Limit  (cost=0.00..431.01 rows=2 width=12)
-               ->  Sort  (cost=0.00..431.01 rows=16 width=12)
+               ->  Sort  (cost=0.00..431.01 rows=17 width=12)
                      Sort Key: col2, col3
-                     ->  Dynamic Seq Scan on pt_lt_tab  (cost=0.00..431.00 rows=16 width=12)
-                           Number of partitions to scan: 5 
+                     ->  Dynamic Seq Scan on pt_lt_tab  (cost=0.00..431.00 rows=17 width=12)
+                           Number of partitions to scan: 5 (out of 5)
                            Filter: ((col2 >= '1'::numeric) AND (col2 <= '50'::numeric))
- Optimizer: Pivotal Optimizer (GPORCA)
+ Optimizer: GPORCA
 (10 rows)
 
 SELECT * FROM pt_lt_tab WHERE col2 > 5 ORDER BY col2,col3 LIMIT 5;
@@ -875,15 +881,15 @@ EXPLAIN SELECT * FROM pt_lt_tab WHERE col2 > 5 ORDER BY col2,col3 LIMIT 5;
                                          QUERY PLAN                                          
 ---------------------------------------------------------------------------------------------
  Limit  (cost=0.00..431.01 rows=5 width=12)
-   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..431.00 rows=5 width=12)
+   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..431.01 rows=5 width=12)
          Merge Key: col2, col3
-         ->  Limit  (cost=0.00..431.00 rows=2 width=12)
-               ->  Sort  (cost=0.00..431.00 rows=14 width=12)
+         ->  Limit  (cost=0.00..431.01 rows=2 width=12)
+               ->  Sort  (cost=0.00..431.01 rows=15 width=12)
                      Sort Key: col2, col3
-                     ->  Dynamic Seq Scan on pt_lt_tab  (cost=0.00..431.00 rows=14 width=12)
-                           Number of partitions to scan: 5 
+                     ->  Dynamic Seq Scan on pt_lt_tab  (cost=0.00..431.00 rows=15 width=12)
+                           Number of partitions to scan: 5 (out of 5)
                            Filter: (col2 > '5'::numeric)
- Optimizer: Pivotal Optimizer (GPORCA)
+ Optimizer: GPORCA
 (10 rows)
 
 SELECT * FROM pt_lt_tab WHERE col2 = 5 ORDER BY col2,col3 LIMIT 5;
@@ -895,15 +901,15 @@ SELECT * FROM pt_lt_tab WHERE col2 = 5 ORDER BY col2,col3 LIMIT 5;
 EXPLAIN SELECT * FROM pt_lt_tab WHERE col2 = 5 ORDER BY col2,col3 LIMIT 5;
                                       QUERY PLAN                                      
 --------------------------------------------------------------------------------------
- Limit  (cost=0.00..431.00 rows=2 width=12)
-   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..431.00 rows=2 width=12)
-         Merge Key: pt_lt_tab_1_prt_part1.col2, pt_lt_tab_1_prt_part1.col3
+ Limit  (cost=0.00..431.00 rows=1 width=12)
+   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..431.00 rows=1 width=12)
+         Merge Key: col2, col3
          ->  Sort  (cost=0.00..431.00 rows=1 width=12)
                Sort Key: col2, col3
                ->  Dynamic Seq Scan on pt_lt_tab  (cost=0.00..431.00 rows=1 width=12)
-                     Number of partitions to scan: 1 
+                     Number of partitions to scan: 1 (out of 5)
                      Filter: (col2 = '5'::numeric)
- Optimizer: Pivotal Optimizer (GPORCA)
+ Optimizer: GPORCA
 (9 rows)
 
 DROP INDEX idx1;
@@ -938,9 +944,9 @@ EXPLAIN SELECT * FROM pt_lt_tab_df WHERE col1 between 1 AND 100 ORDER BY col1 LI
                ->  Sort  (cost=0.00..431.01 rows=20 width=12)
                      Sort Key: col1
                      ->  Dynamic Seq Scan on pt_lt_tab_df  (cost=0.00..431.00 rows=20 width=12)
-                           Number of partitions to scan: 6 
+                           Number of partitions to scan: 6 (out of 6)
                            Filter: ((col1 >= 1) AND (col1 <= 100))
- Optimizer: Pivotal Optimizer (GPORCA)
+ Optimizer: GPORCA
 (10 rows)
 
 SELECT * FROM pt_lt_tab_df WHERE col1 > 50 ORDER BY col1 LIMIT 5;
@@ -963,9 +969,9 @@ EXPLAIN SELECT * FROM pt_lt_tab_df WHERE col1 > 50 ORDER BY col1 LIMIT 5;
                ->  Sort  (cost=0.00..431.00 rows=4 width=12)
                      Sort Key: col1
                      ->  Dynamic Seq Scan on pt_lt_tab_df  (cost=0.00..431.00 rows=4 width=12)
-                           Number of partitions to scan: 6 
+                           Number of partitions to scan: 6 (out of 6)
                            Filter: (col1 > 50)
- Optimizer: Pivotal Optimizer (GPORCA)
+ Optimizer: GPORCA
 (10 rows)
 
 SELECT * FROM pt_lt_tab_df WHERE col1 < 50 ORDER BY col1 LIMIT 5;
@@ -988,9 +994,9 @@ EXPLAIN SELECT * FROM pt_lt_tab_df WHERE col1 < 50 ORDER BY col1 LIMIT 5;
                ->  Sort  (cost=0.00..431.01 rows=17 width=12)
                      Sort Key: col1
                      ->  Dynamic Seq Scan on pt_lt_tab_df  (cost=0.00..431.00 rows=17 width=12)
-                           Number of partitions to scan: 6 
+                           Number of partitions to scan: 6 (out of 6)
                            Filter: (col1 < 50)
- Optimizer: Pivotal Optimizer (GPORCA)
+ Optimizer: GPORCA
 (10 rows)
 
 DROP INDEX idx1;
@@ -1026,9 +1032,9 @@ EXPLAIN SELECT * FROM pt_lt_tab_df WHERE col2 between 1 AND 100 ORDER BY col2,co
                ->  Sort  (cost=0.00..431.01 rows=20 width=12)
                      Sort Key: col2, col3
                      ->  Dynamic Seq Scan on pt_lt_tab_df  (cost=0.00..431.00 rows=20 width=12)
-                           Number of partitions to scan: 6 
+                           Number of partitions to scan: 6 (out of 6)
                            Filter: ((col2 >= '1'::numeric) AND (col2 <= '100'::numeric))
- Optimizer: Pivotal Optimizer (GPORCA)
+ Optimizer: GPORCA
 (10 rows)
 
 SELECT * FROM pt_lt_tab_df WHERE col2 > 50 ORDER BY col2,col3 LIMIT 5;
@@ -1046,14 +1052,14 @@ EXPLAIN SELECT * FROM pt_lt_tab_df WHERE col2 > 50 ORDER BY col2,col3 LIMIT 5;
 -----------------------------------------------------------------------------------------------
  Limit  (cost=0.00..431.00 rows=5 width=12)
    ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..431.00 rows=5 width=12)
-         Merge Key: pt_lt_tab_df_1_prt_def.col2, pt_lt_tab_df_1_prt_def.col3
+         Merge Key: col2, col3
          ->  Limit  (cost=0.00..431.00 rows=2 width=12)
-               ->  Sort  (cost=0.00..431.00 rows=4 width=12)
+               ->  Sort  (cost=0.00..431.00 rows=3 width=12)
                      Sort Key: col2, col3
-                     ->  Dynamic Seq Scan on pt_lt_tab_df  (cost=0.00..431.00 rows=4 width=12)
-                           Number of partitions to scan: 1 
+                     ->  Dynamic Seq Scan on pt_lt_tab_df  (cost=0.00..431.00 rows=3 width=12)
+                           Number of partitions to scan: 1 (out of 6)
                            Filter: (col2 > '50'::numeric)
- Optimizer: Pivotal Optimizer (GPORCA)
+ Optimizer: GPORCA
 (10 rows)
 
 SELECT * FROM pt_lt_tab_df WHERE col2 = 50 ORDER BY col2,col3 LIMIT 5;
@@ -1065,15 +1071,15 @@ SELECT * FROM pt_lt_tab_df WHERE col2 = 50 ORDER BY col2,col3 LIMIT 5;
 EXPLAIN SELECT * FROM pt_lt_tab_df WHERE col2 = 50 ORDER BY col2,col3 LIMIT 5;
                                        QUERY PLAN                                        
 -----------------------------------------------------------------------------------------
- Limit  (cost=0.00..431.00 rows=2 width=12)
-   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..431.00 rows=2 width=12)
+ Limit  (cost=0.00..431.00 rows=1 width=12)
+   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..431.00 rows=1 width=12)
          Merge Key: col2, col3
          ->  Sort  (cost=0.00..431.00 rows=1 width=12)
                Sort Key: col2, col3
                ->  Dynamic Seq Scan on pt_lt_tab_df  (cost=0.00..431.00 rows=1 width=12)
-                     Number of partitions to scan: 1 
+                     Number of partitions to scan: 1 (out of 6)
                      Filter: (col2 = '50'::numeric)
- Optimizer: Pivotal Optimizer (GPORCA)
+ Optimizer: GPORCA
 (9 rows)
 
 SELECT * FROM pt_lt_tab_df WHERE col2 <> 10 ORDER BY col2,col3 LIMIT 5;
@@ -1096,9 +1102,9 @@ EXPLAIN SELECT * FROM pt_lt_tab_df WHERE col2 <> 10 ORDER BY col2,col3 LIMIT 5;
                ->  Sort  (cost=0.00..431.01 rows=20 width=12)
                      Sort Key: col2, col3
                      ->  Dynamic Seq Scan on pt_lt_tab_df  (cost=0.00..431.00 rows=20 width=12)
-                           Number of partitions to scan: 6 
+                           Number of partitions to scan: 6 (out of 6)
                            Filter: (col2 <> '10'::numeric)
- Optimizer: Pivotal Optimizer (GPORCA)
+ Optimizer: GPORCA
 (10 rows)
 
 SELECT * FROM pt_lt_tab_df WHERE col2 between 1 AND 100 ORDER BY col2,col3 LIMIT 5;
@@ -1121,9 +1127,9 @@ EXPLAIN SELECT * FROM pt_lt_tab_df WHERE col2 between 1 AND 100 ORDER BY col2,co
                ->  Sort  (cost=0.00..431.01 rows=20 width=12)
                      Sort Key: col2, col3
                      ->  Dynamic Seq Scan on pt_lt_tab_df  (cost=0.00..431.00 rows=20 width=12)
-                           Number of partitions to scan: 6 
+                           Number of partitions to scan: 6 (out of 6)
                            Filter: ((col2 >= '1'::numeric) AND (col2 <= '100'::numeric))
- Optimizer: Pivotal Optimizer (GPORCA)
+ Optimizer: GPORCA
 (10 rows)
 
 SELECT * FROM pt_lt_tab_df WHERE col2 < 50 AND col1 > 10 ORDER BY col2,col3 LIMIT 5;
@@ -1146,9 +1152,9 @@ EXPLAIN SELECT * FROM pt_lt_tab_df WHERE col2 < 50 AND col1 > 10 ORDER BY col2,c
                ->  Sort  (cost=0.00..431.01 rows=17 width=12)
                      Sort Key: col2, col3
                      ->  Dynamic Seq Scan on pt_lt_tab_df  (cost=0.00..431.00 rows=17 width=12)
-                           Number of partitions to scan: 6 
+                           Number of partitions to scan: 6 (out of 6)
                            Filter: ((col2 < '50'::numeric) AND (col1 > 10))
- Optimizer: Pivotal Optimizer (GPORCA)
+ Optimizer: GPORCA
 (10 rows)
 
 DROP INDEX idx1;
@@ -1178,14 +1184,14 @@ EXPLAIN SELECT * FROM pt_lt_tab_df WHERE col2 > 51 ORDER BY col2,col3 LIMIT 5;
 -----------------------------------------------------------------------------------------------
  Limit  (cost=0.00..431.00 rows=5 width=12)
    ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..431.00 rows=5 width=12)
-         Merge Key: pt_lt_tab_df_1_prt_def.col2, pt_lt_tab_df_1_prt_def.col3
+         Merge Key: col2, col3
          ->  Limit  (cost=0.00..431.00 rows=2 width=12)
-               ->  Sort  (cost=0.00..431.00 rows=4 width=12)
+               ->  Sort  (cost=0.00..431.00 rows=3 width=12)
                      Sort Key: col2, col3
-                     ->  Dynamic Seq Scan on pt_lt_tab_df  (cost=0.00..431.00 rows=4 width=12)
-                           Number of partitions to scan: 1 
+                     ->  Dynamic Seq Scan on pt_lt_tab_df  (cost=0.00..431.00 rows=3 width=12)
+                           Number of partitions to scan: 1 (out of 6)
                            Filter: (col2 > '51'::numeric)
- Optimizer: Pivotal Optimizer (GPORCA)
+ Optimizer: GPORCA
 (10 rows)
 
 SELECT * FROM pt_lt_tab_df WHERE col2 = 50 ORDER BY col2,col3 LIMIT 5;
@@ -1197,15 +1203,15 @@ SELECT * FROM pt_lt_tab_df WHERE col2 = 50 ORDER BY col2,col3 LIMIT 5;
 EXPLAIN SELECT * FROM pt_lt_tab_df WHERE col2 = 50 ORDER BY col2,col3 LIMIT 5;
                                        QUERY PLAN                                        
 -----------------------------------------------------------------------------------------
- Limit  (cost=0.00..431.00 rows=2 width=12)
-   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..431.00 rows=2 width=12)
+ Limit  (cost=0.00..431.00 rows=1 width=12)
+   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..431.00 rows=1 width=12)
          Merge Key: col2, col3
          ->  Sort  (cost=0.00..431.00 rows=1 width=12)
                Sort Key: col2, col3
                ->  Dynamic Seq Scan on pt_lt_tab_df  (cost=0.00..431.00 rows=1 width=12)
-                     Number of partitions to scan: 1 
+                     Number of partitions to scan: 1 (out of 6)
                      Filter: (col2 = '50'::numeric)
- Optimizer: Pivotal Optimizer (GPORCA)
+ Optimizer: GPORCA
 (9 rows)
 
 DROP INDEX idx1;
@@ -1242,15 +1248,15 @@ SELECT * FROM pt_lt_tab_df WHERE col2 = 50 ORDER BY col2,col3 LIMIT 5;
 EXPLAIN SELECT * FROM pt_lt_tab_df WHERE col2 = 50 ORDER BY col2,col3 LIMIT 5;
                                        QUERY PLAN                                        
 -----------------------------------------------------------------------------------------
- Limit  (cost=0.00..431.00 rows=2 width=12)
-   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..431.00 rows=2 width=12)
+ Limit  (cost=0.00..431.00 rows=1 width=12)
+   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..431.00 rows=1 width=12)
          Merge Key: col2, col3
          ->  Sort  (cost=0.00..431.00 rows=1 width=12)
                Sort Key: col2, col3
                ->  Dynamic Seq Scan on pt_lt_tab_df  (cost=0.00..431.00 rows=1 width=12)
-                     Number of partitions to scan: 1 
+                     Number of partitions to scan: 1 (out of 6)
                      Filter: (col2 = '50'::numeric)
- Optimizer: Pivotal Optimizer (GPORCA)
+ Optimizer: GPORCA
 (9 rows)
 
 SELECT * FROM pt_lt_tab_df WHERE col2 > 10 AND col1 between 1 AND 100 ORDER BY col2,col3 LIMIT 5;
@@ -1273,9 +1279,9 @@ EXPLAIN SELECT * FROM pt_lt_tab_df WHERE col2 > 10 AND col1 between 1 AND 100 OR
                ->  Sort  (cost=0.00..431.01 rows=17 width=12)
                      Sort Key: col2, col3
                      ->  Dynamic Seq Scan on pt_lt_tab_df  (cost=0.00..431.00 rows=17 width=12)
-                           Number of partitions to scan: 5 
+                           Number of partitions to scan: 5 (out of 6)
                            Filter: ((col2 > '10'::numeric) AND (col1 >= 1) AND (col1 <= 100))
- Optimizer: Pivotal Optimizer (GPORCA)
+ Optimizer: GPORCA
 (10 rows)
 
 SELECT * FROM pt_lt_tab_df WHERE col1 = 10 ORDER BY col2,col3 LIMIT 5;
@@ -1293,9 +1299,9 @@ EXPLAIN SELECT * FROM pt_lt_tab_df WHERE col1 = 10 ORDER BY col2,col3 LIMIT 5;
          ->  Sort  (cost=0.00..431.00 rows=1 width=12)
                Sort Key: col2, col3
                ->  Dynamic Seq Scan on pt_lt_tab_df  (cost=0.00..431.00 rows=1 width=12)
-                     Number of partitions to scan: 6 
+                     Number of partitions to scan: 6 (out of 6)
                      Filter: (col1 = 10)
- Optimizer: Pivotal Optimizer (GPORCA)
+ Optimizer: GPORCA
 (9 rows)
 
 DROP INDEX idx1;
@@ -1317,15 +1323,15 @@ SELECT * FROM pt_lt_tab_df WHERE col2 = 35 ORDER BY col2,col3 LIMIT 5;
 EXPLAIN SELECT * FROM pt_lt_tab_df WHERE col2 = 35 ORDER BY col2,col3 LIMIT 5;
                                        QUERY PLAN                                        
 -----------------------------------------------------------------------------------------
- Limit  (cost=0.00..431.00 rows=2 width=12)
-   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..431.00 rows=2 width=12)
-         Merge Key: pt_lt_tab_df_1_prt_part4.col2, pt_lt_tab_df_1_prt_part4.col3
+ Limit  (cost=0.00..431.00 rows=1 width=12)
+   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..431.00 rows=1 width=12)
+         Merge Key: col2, col3
          ->  Sort  (cost=0.00..431.00 rows=1 width=12)
                Sort Key: col2, col3
                ->  Dynamic Seq Scan on pt_lt_tab_df  (cost=0.00..431.00 rows=1 width=12)
-                     Number of partitions to scan: 1 
+                     Number of partitions to scan: 1 (out of 6)
                      Filter: (col2 = '35'::numeric)
- Optimizer: Pivotal Optimizer (GPORCA)
+ Optimizer: GPORCA
 (9 rows)
 
 DROP INDEX idx1;
@@ -1352,12 +1358,12 @@ EXPLAIN SELECT * FROM pt_lt_tab_df WHERE col2 > 15 ORDER BY col2,col3 LIMIT 5;
    ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..431.01 rows=5 width=12)
          Merge Key: col2, col3
          ->  Limit  (cost=0.00..431.01 rows=2 width=12)
-               ->  Sort  (cost=0.00..431.01 rows=16 width=12)
+               ->  Sort  (cost=0.00..431.01 rows=15 width=12)
                      Sort Key: col2, col3
-                     ->  Dynamic Seq Scan on pt_lt_tab_df  (cost=0.00..431.00 rows=16 width=12)
-                           Number of partitions to scan: 5 
+                     ->  Dynamic Seq Scan on pt_lt_tab_df  (cost=0.00..431.00 rows=15 width=12)
+                           Number of partitions to scan: 5 (out of 6)
                            Filter: (col2 > '15'::numeric)
- Optimizer: Pivotal Optimizer (GPORCA)
+ Optimizer: GPORCA
 (10 rows)
 
 DROP INDEX idx1;
@@ -1369,12 +1375,12 @@ DROP INDEX idx6;
 --
 CREATE INDEX idx1 on pt_lt_tab(col4);
 ALTER TABLE pt_lt_tab DROP column col1;
-NOTICE:  dropping a column that is part of the distribution policy forces a random distribution policy
-NOTICE:  dropping a column that is part of the distribution policy forces a random distribution policy
-NOTICE:  dropping a column that is part of the distribution policy forces a random distribution policy
-NOTICE:  dropping a column that is part of the distribution policy forces a random distribution policy
-NOTICE:  dropping a column that is part of the distribution policy forces a random distribution policy
-NOTICE:  dropping a column that is part of the distribution policy forces a random distribution policy
+NOTICE:  dropping a column that is part of the distribution policy forces a NULL distribution policy
+NOTICE:  dropping a column that is part of the distribution policy forces a NULL distribution policy
+NOTICE:  dropping a column that is part of the distribution policy forces a NULL distribution policy
+NOTICE:  dropping a column that is part of the distribution policy forces a NULL distribution policy
+NOTICE:  dropping a column that is part of the distribution policy forces a NULL distribution policy
+NOTICE:  dropping a column that is part of the distribution policy forces a NULL distribution policy
 SELECT * FROM pt_lt_tab WHERE col4 is False ORDER BY col2,col3 LIMIT 5;
  col2 | col3 | col4 
 ------+------+------
@@ -1395,9 +1401,9 @@ EXPLAIN SELECT * FROM pt_lt_tab WHERE col4 is False ORDER BY col2,col3 LIMIT 5;
                ->  Sort  (cost=0.00..431.00 rows=7 width=8)
                      Sort Key: col2, col3
                      ->  Dynamic Seq Scan on pt_lt_tab  (cost=0.00..431.00 rows=7 width=8)
-                           Number of partitions to scan: 5 
+                           Number of partitions to scan: 5 (out of 5)
                            Filter: (col4 IS FALSE)
- Optimizer: Pivotal Optimizer (GPORCA)
+ Optimizer: GPORCA
 (10 rows)
 
 SELECT * FROM pt_lt_tab WHERE col4 = False ORDER BY col2,col3 LIMIT 5;
@@ -1440,14 +1446,14 @@ EXPLAIN SELECT * FROM pt_lt_tab WHERE col2 > 41 ORDER BY col2,col3 LIMIT 5;
 -------------------------------------------------------------------------------------------
  Limit  (cost=0.00..431.00 rows=5 width=8)
    ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..431.00 rows=5 width=8)
-         Merge Key: pt_lt_tab_1_prt_part5.col2, pt_lt_tab_1_prt_part5.col3
+         Merge Key: col2, col3
          ->  Limit  (cost=0.00..431.00 rows=2 width=8)
                ->  Sort  (cost=0.00..431.00 rows=4 width=8)
                      Sort Key: col2, col3
                      ->  Dynamic Seq Scan on pt_lt_tab  (cost=0.00..431.00 rows=4 width=8)
-                           Number of partitions to scan: 1 
+                           Number of partitions to scan: 1 (out of 5)
                            Filter: (col2 > '41'::numeric)
- Optimizer: Pivotal Optimizer (GPORCA)
+ Optimizer: GPORCA
 (10 rows)
 
 ALTER TABLE pt_lt_tab DROP column col4;
@@ -1466,14 +1472,14 @@ EXPLAIN SELECT * FROM pt_lt_tab WHERE col2 > 41 ORDER BY col2,col3 LIMIT 5;
 -------------------------------------------------------------------------------------------
  Limit  (cost=0.00..431.00 rows=5 width=7)
    ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..431.00 rows=5 width=7)
-         Merge Key: pt_lt_tab_1_prt_part5.col2, pt_lt_tab_1_prt_part5.col3
+         Merge Key: col2, col3
          ->  Limit  (cost=0.00..431.00 rows=2 width=7)
                ->  Sort  (cost=0.00..431.00 rows=4 width=7)
                      Sort Key: col2, col3
                      ->  Dynamic Seq Scan on pt_lt_tab  (cost=0.00..431.00 rows=4 width=7)
-                           Number of partitions to scan: 1 
+                           Number of partitions to scan: 1 (out of 5)
                            Filter: (col2 > '41'::numeric)
- Optimizer: Pivotal Optimizer (GPORCA)
+ Optimizer: GPORCA
 (10 rows)
 
 --
@@ -1552,13 +1558,15 @@ PARTITION BY LIST(month_id)
 -- Known_opt_diff: MPP-21316
 -- end_ignore
 explain select * from ds_4 where month_id = '200800';
+NOTICE:  One or more columns in the following table(s) do not have statistics: ds_4
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
                                   QUERY PLAN                                   
 -------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..431.00 rows=1 width=71)
    ->  Dynamic Seq Scan on ds_4  (cost=0.00..431.00 rows=1 width=71)
-         Number of partitions to scan: 1 
+         Number of partitions to scan: 1 (out of 4)
          Filter: ((month_id)::text = '200800'::text)
- Optimizer: Pivotal Optimizer (GPORCA)
+ Optimizer: GPORCA
 (5 rows)
 
 -- now we can evaluate this function at planning/prune time
@@ -1566,13 +1574,15 @@ explain select * from ds_4 where month_id = '200800';
 -- Known_opt_diff: MPP-21316
 -- end_ignore
 explain select * from ds_4 where month_id::int = 200800;
+NOTICE:  One or more columns in the following table(s) do not have statistics: ds_4
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
                                   QUERY PLAN                                   
 -------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..431.00 rows=1 width=71)
    ->  Dynamic Seq Scan on ds_4  (cost=0.00..431.00 rows=1 width=71)
-         Number of partitions to scan: 4 
+         Number of partitions to scan: 4 (out of 4)
          Filter: ((month_id)::integer = 200800)
- Optimizer: Pivotal Optimizer (GPORCA)
+ Optimizer: GPORCA
 (5 rows)
 
 -- this will be satisfied by 200800
@@ -1580,24 +1590,28 @@ explain select * from ds_4 where month_id::int = 200800;
 -- Known_opt_diff: MPP-21316
 -- end_ignore
 explain select * from ds_4 where month_id::int - 801 < 200000;
+NOTICE:  One or more columns in the following table(s) do not have statistics: ds_4
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
                                   QUERY PLAN                                   
 -------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..431.00 rows=1 width=71)
    ->  Dynamic Seq Scan on ds_4  (cost=0.00..431.00 rows=1 width=71)
-         Number of partitions to scan: 4 
+         Number of partitions to scan: 4 (out of 4)
          Filter: (((month_id)::integer - 801) < 200000)
- Optimizer: Pivotal Optimizer (GPORCA)
+ Optimizer: GPORCA
 (5 rows)
 
 -- test OR case -- should NOT get pruning
 explain select * from ds_4 where month_id::int - 801 < 200000 OR count_vas > 10;
+NOTICE:  One or more columns in the following table(s) do not have statistics: ds_4
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
                                   QUERY PLAN                                   
 -------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..431.00 rows=1 width=71)
    ->  Dynamic Seq Scan on ds_4  (cost=0.00..431.00 rows=1 width=71)
-         Number of partitions to scan: 4 
+         Number of partitions to scan: 4 (out of 4)
          Filter: ((((month_id)::integer - 801) < 200000) OR (count_vas > 10))
- Optimizer: Pivotal Optimizer (GPORCA)
+ Optimizer: GPORCA
 (5 rows)
 
 -- test AND case -- should still get pruning
@@ -1605,13 +1619,15 @@ explain select * from ds_4 where month_id::int - 801 < 200000 OR count_vas > 10;
 -- Known_opt_diff: MPP-21316
 -- end_ignore
 explain select * from ds_4 where month_id::int - 801 < 200000 AND count_vas > 10;
+NOTICE:  One or more columns in the following table(s) do not have statistics: ds_4
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
                                   QUERY PLAN                                   
 -------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..431.00 rows=1 width=71)
    ->  Dynamic Seq Scan on ds_4  (cost=0.00..431.00 rows=1 width=71)
-         Number of partitions to scan: 4 
+         Number of partitions to scan: 4 (out of 4)
          Filter: ((((month_id)::integer - 801) < 200000) AND (count_vas > 10))
- Optimizer: Pivotal Optimizer (GPORCA)
+ Optimizer: GPORCA
 (5 rows)
 
 -- test expression case : should get pruning
@@ -1619,13 +1635,15 @@ explain select * from ds_4 where month_id::int - 801 < 200000 AND count_vas > 10
 -- Known_opt_diff: MPP-21316
 -- end_ignore
 explain select * from ds_4 where case when month_id = '200800' then 100 else 2 end = 100;
+NOTICE:  One or more columns in the following table(s) do not have statistics: ds_4
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
                                         QUERY PLAN                                         
 -------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..431.00 rows=1 width=71)
    ->  Dynamic Seq Scan on ds_4  (cost=0.00..431.00 rows=1 width=71)
-         Number of partitions to scan: 4 
+         Number of partitions to scan: 4 (out of 4)
          Filter: (CASE WHEN ((month_id)::text = '200800'::text) THEN 100 ELSE 2 END = 100)
- Optimizer: Pivotal Optimizer (GPORCA)
+ Optimizer: GPORCA
 (5 rows)
 
 -- test expression case : should get pruning
@@ -1633,13 +1651,15 @@ explain select * from ds_4 where case when month_id = '200800' then 100 else 2 e
 -- Known_opt_diff: MPP-21316
 -- end_ignore
 explain select * from ds_4 where case when month_id = '200800' then NULL else 2 end IS NULL;
+NOTICE:  One or more columns in the following table(s) do not have statistics: ds_4
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
                                               QUERY PLAN                                               
 -------------------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..431.00 rows=1 width=71)
    ->  Dynamic Seq Scan on ds_4  (cost=0.00..431.00 rows=1 width=71)
-         Number of partitions to scan: 4 
+         Number of partitions to scan: 4 (out of 4)
          Filter: (CASE WHEN ((month_id)::text = '200800'::text) THEN NULL::integer ELSE 2 END IS NULL)
- Optimizer: Pivotal Optimizer (GPORCA)
+ Optimizer: GPORCA
 (5 rows)
 
 -- should still get pruning here -- count_vas is only used in the path for month id = 200800
@@ -1647,13 +1667,15 @@ explain select * from ds_4 where case when month_id = '200800' then NULL else 2 
 -- Known_opt_diff: MPP-21316
 -- end_ignore
 explain select * from ds_4 where case when month_id::int = 200800 then count_vas else 2 end IS NULL;
+NOTICE:  One or more columns in the following table(s) do not have statistics: ds_4
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
                                           QUERY PLAN                                          
 ----------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..431.00 rows=1 width=71)
    ->  Dynamic Seq Scan on ds_4  (cost=0.00..431.00 rows=1 width=71)
-         Number of partitions to scan: 4 
+         Number of partitions to scan: 4 (out of 4)
          Filter: (CASE WHEN ((month_id)::integer = 200800) THEN count_vas ELSE 2 END IS NULL)
- Optimizer: Pivotal Optimizer (GPORCA)
+ Optimizer: GPORCA
 (5 rows)
 
 -- do one that matches a couple partitions
@@ -1661,13 +1683,15 @@ explain select * from ds_4 where case when month_id::int = 200800 then count_vas
 -- Known_opt_diff: MPP-21316
 -- end_ignore
 explain select * from ds_4 where month_id::int in (200801, 1,55,6,6,6,6,66,565,65,65,200803);
+NOTICE:  One or more columns in the following table(s) do not have statistics: ds_4
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
                                               QUERY PLAN                                              
 ------------------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..431.00 rows=1 width=71)
    ->  Dynamic Seq Scan on ds_4  (cost=0.00..431.00 rows=1 width=71)
-         Number of partitions to scan: 4 
+         Number of partitions to scan: 4 (out of 4)
          Filter: ((month_id)::integer = ANY ('{200801,1,55,6,6,6,6,66,565,65,65,200803}'::integer[]))
- Optimizer: Pivotal Optimizer (GPORCA)
+ Optimizer: GPORCA
 (5 rows)
 
 -- cleanup
@@ -1721,6 +1745,8 @@ insert into ds_2(month_id) values('200809');
 -- end_ignore
 set optimizer_segments=2;
 explain select * from ds_2 where month_id::int in (200808, 1315) order by month_id;
+NOTICE:  One or more columns in the following table(s) do not have statistics: ds_2
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
                                    QUERY PLAN                                   
 --------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..431.00 rows=1 width=71)
@@ -1728,15 +1754,17 @@ explain select * from ds_2 where month_id::int in (200808, 1315) order by month_
    ->  Sort  (cost=0.00..431.00 rows=1 width=71)
          Sort Key: month_id
          ->  Dynamic Seq Scan on ds_2  (cost=0.00..431.00 rows=1 width=71)
-               Number of partitions to scan: 10 
+               Number of partitions to scan: 10 (out of 10)
                Filter: ((month_id)::integer = ANY ('{200808,1315}'::integer[]))
- Optimizer: Pivotal Optimizer (GPORCA)
+ Optimizer: GPORCA
 (8 rows)
 
 -- start_ignore
 -- Known_opt_diff: MPP-21316
 -- end_ignore
 explain  select * from ds_2 where month_id::int in (200808, 200801, 2008010) order by month_id;
+NOTICE:  One or more columns in the following table(s) do not have statistics: ds_2
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
                                         QUERY PLAN                                        
 ------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..431.00 rows=1 width=71)
@@ -1744,24 +1772,30 @@ explain  select * from ds_2 where month_id::int in (200808, 200801, 2008010) ord
    ->  Sort  (cost=0.00..431.00 rows=1 width=71)
          Sort Key: month_id
          ->  Dynamic Seq Scan on ds_2  (cost=0.00..431.00 rows=1 width=71)
-               Number of partitions to scan: 10 
+               Number of partitions to scan: 10 (out of 10)
                Filter: ((month_id)::integer = ANY ('{200808,200801,2008010}'::integer[]))
- Optimizer: Pivotal Optimizer (GPORCA)
+ Optimizer: GPORCA
 (8 rows)
 
 reset optimizer_segments;
 select * from ds_2 where month_id::int in (200907, 1315) order by month_id;
+NOTICE:  One or more columns in the following table(s) do not have statistics: ds_2
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  month_id | cust_group_acc | mobile_no | source | vas_group | vas_type | count_vas | amt_vas | network_type | execution_id 
 ----------+----------------+-----------+--------+-----------+----------+-----------+---------+--------------+--------------
 (0 rows)
 
 select * from ds_2 where month_id::int in (200808, 1315) order by month_id;
+NOTICE:  One or more columns in the following table(s) do not have statistics: ds_2
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  month_id | cust_group_acc | mobile_no | source | vas_group | vas_type | count_vas | amt_vas | network_type | execution_id 
 ----------+----------------+-----------+--------+-----------+----------+-----------+---------+--------------+--------------
  200808   |                |           |        |           |          |           |         |              |             
 (1 row)
 
 select * from ds_2 where month_id::int in (200808, 200801) order by month_id;
+NOTICE:  One or more columns in the following table(s) do not have statistics: ds_2
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  month_id | cust_group_acc | mobile_no | source | vas_group | vas_type | count_vas | amt_vas | network_type | execution_id 
 ----------+----------------+-----------+--------+-----------+----------+-----------+---------+--------------+--------------
  200801   |                |           |        |           |          |           |         |              |             
@@ -1769,6 +1803,8 @@ select * from ds_2 where month_id::int in (200808, 200801) order by month_id;
 (2 rows)
 
 select * from ds_2 where month_id::int in (200808, 200801, 2008010) order by month_id;
+NOTICE:  One or more columns in the following table(s) do not have statistics: ds_2
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  month_id | cust_group_acc | mobile_no | source | vas_group | vas_type | count_vas | amt_vas | network_type | execution_id 
 ----------+----------------+-----------+--------+-----------+----------+-----------+---------+--------------+--------------
  200801   |                |           |        |           |          |           |         |              |             
@@ -1842,6 +1878,10 @@ select * from mytable where ZeroFunc(i)=0 and i=-1 order by i;
 drop function ZeroFunc(int) cascade;
 NOTICE:  drop cascades to index mytable_idx1
 drop table mytable cascade;
+-- start_ignore
+create language plpython3u;
+ERROR:  extension "plpython3u" already exists
+-- end_ignore
 -- @description Tests for static partition selection (MPP-24709, GPSQL-2879)
 -- GPDB_12_MERGE_FIXME: this function extract the number such as [5,10] out of
 -- the string "Partition selected: 5 out of 10". We have temporarily broken
@@ -1878,6 +1918,7 @@ return result
 $$
 language plpython3u;
 drop table if exists partprune_foo;
+NOTICE:  table "partprune_foo" does not exist, skipping
 create table partprune_foo(a int, b int, c int) partition by range (b) (start (1) end (101) every (10));
 NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
@@ -1893,105 +1934,105 @@ select * from partprune_foo;
  a |  b  | c  
 ---+-----+----
  1 |   1 |  1
- 3 |   3 |  3
- 5 |   5 |  5
  1 |   6 |  6
- 3 |   8 |  8
- 5 |  10 | 10
  1 |  11 |  1
- 3 |  13 |  3
- 5 |  15 |  5
  1 |  16 |  6
- 3 |  18 |  8
- 5 |  20 | 10
  1 |  21 |  1
- 3 |  23 |  3
- 5 |  25 |  5
  1 |  26 |  6
- 3 |  28 |  8
- 5 |  30 | 10
  1 |  31 |  1
- 3 |  33 |  3
- 5 |  35 |  5
  1 |  36 |  6
- 3 |  38 |  8
- 5 |  40 | 10
  1 |  41 |  1
- 3 |  43 |  3
- 5 |  45 |  5
  1 |  46 |  6
- 3 |  48 |  8
- 5 |  50 | 10
  1 |  51 |  1
- 3 |  53 |  3
- 5 |  55 |  5
  1 |  56 |  6
- 3 |  58 |  8
- 5 |  60 | 10
  1 |  61 |  1
- 3 |  63 |  3
- 5 |  65 |  5
  1 |  66 |  6
- 3 |  68 |  8
- 5 |  70 | 10
  1 |  71 |  1
- 3 |  73 |  3
- 5 |  75 |  5
  1 |  76 |  6
- 3 |  78 |  8
- 5 |  80 | 10
  1 |  81 |  1
- 3 |  83 |  3
- 5 |  85 |  5
  1 |  86 |  6
- 3 |  88 |  8
- 5 |  90 | 10
  1 |  91 |  1
- 3 |  93 |  3
- 5 |  95 |  5
  1 |  96 |  6
- 3 |  98 |  8
- 5 | 100 | 10
  2 |   2 |  2
+ 3 |   3 |  3
  4 |   4 |  4
  2 |   7 |  7
+ 3 |   8 |  8
  4 |   9 |  9
  2 |  12 |  2
+ 3 |  13 |  3
  4 |  14 |  4
  2 |  17 |  7
+ 3 |  18 |  8
  4 |  19 |  9
  2 |  22 |  2
+ 3 |  23 |  3
  4 |  24 |  4
  2 |  27 |  7
+ 3 |  28 |  8
  4 |  29 |  9
  2 |  32 |  2
+ 3 |  33 |  3
  4 |  34 |  4
  2 |  37 |  7
+ 3 |  38 |  8
  4 |  39 |  9
  2 |  42 |  2
+ 3 |  43 |  3
  4 |  44 |  4
  2 |  47 |  7
+ 3 |  48 |  8
  4 |  49 |  9
  2 |  52 |  2
+ 3 |  53 |  3
  4 |  54 |  4
  2 |  57 |  7
+ 3 |  58 |  8
  4 |  59 |  9
  2 |  62 |  2
+ 3 |  63 |  3
  4 |  64 |  4
  2 |  67 |  7
+ 3 |  68 |  8
  4 |  69 |  9
  2 |  72 |  2
+ 3 |  73 |  3
  4 |  74 |  4
  2 |  77 |  7
+ 3 |  78 |  8
  4 |  79 |  9
  2 |  82 |  2
+ 3 |  83 |  3
  4 |  84 |  4
  2 |  87 |  7
+ 3 |  88 |  8
  4 |  89 |  9
  2 |  92 |  2
+ 3 |  93 |  3
  4 |  94 |  4
  2 |  97 |  7
+ 3 |  98 |  8
  4 |  99 |  9
+ 5 |   5 |  5
+ 5 |  10 | 10
+ 5 |  15 |  5
+ 5 |  20 | 10
+ 5 |  25 |  5
+ 5 |  30 | 10
+ 5 |  35 |  5
+ 5 |  40 | 10
+ 5 |  45 |  5
+ 5 |  50 | 10
+ 5 |  55 |  5
+ 5 |  60 | 10
+ 5 |  65 |  5
+ 5 |  70 | 10
+ 5 |  75 |  5
+ 5 |  80 | 10
+ 5 |  85 |  5
+ 5 |  90 | 10
+ 5 |  95 |  5
+ 5 | 100 | 10
 (100 rows)
 
 select get_selected_parts('explain select * from partprune_foo where b = 35;');
@@ -2015,40 +2056,40 @@ select get_selected_parts('explain select * from partprune_foo where b < 35;');
 select * from partprune_foo where b < 35;
  a | b  | c  
 ---+----+----
+ 1 |  1 |  1
+ 1 |  6 |  6
+ 1 | 11 |  1
+ 1 | 16 |  6
+ 1 | 21 |  1
+ 1 | 26 |  6
+ 1 | 31 |  1
+ 5 |  5 |  5
+ 5 | 10 | 10
+ 5 | 15 |  5
+ 5 | 20 | 10
+ 5 | 25 |  5
+ 5 | 30 | 10
  2 |  2 |  2
+ 3 |  3 |  3
  4 |  4 |  4
  2 |  7 |  7
+ 3 |  8 |  8
  4 |  9 |  9
  2 | 12 |  2
+ 3 | 13 |  3
  4 | 14 |  4
  2 | 17 |  7
+ 3 | 18 |  8
  4 | 19 |  9
  2 | 22 |  2
+ 3 | 23 |  3
  4 | 24 |  4
  2 | 27 |  7
+ 3 | 28 |  8
  4 | 29 |  9
  2 | 32 |  2
- 4 | 34 |  4
- 1 |  1 |  1
- 3 |  3 |  3
- 5 |  5 |  5
- 1 |  6 |  6
- 3 |  8 |  8
- 5 | 10 | 10
- 1 | 11 |  1
- 3 | 13 |  3
- 5 | 15 |  5
- 1 | 16 |  6
- 3 | 18 |  8
- 5 | 20 | 10
- 1 | 21 |  1
- 3 | 23 |  3
- 5 | 25 |  5
- 1 | 26 |  6
- 3 | 28 |  8
- 5 | 30 | 10
- 1 | 31 |  1
  3 | 33 |  3
+ 4 | 34 |  4
 (34 rows)
 
 select get_selected_parts('explain select * from partprune_foo where b in (5, 6, 14, 23);');
@@ -2060,10 +2101,10 @@ select get_selected_parts('explain select * from partprune_foo where b in (5, 6,
 select * from partprune_foo where b in (5, 6, 14, 23);
  a | b  | c 
 ---+----+---
- 5 |  5 | 5
  1 |  6 | 6
- 3 | 23 | 3
  4 | 14 | 4
+ 3 | 23 | 3
+ 5 |  5 | 5
 (4 rows)
 
 select get_selected_parts('explain select * from partprune_foo where b < 15 or b > 60;');
@@ -2075,59 +2116,59 @@ select get_selected_parts('explain select * from partprune_foo where b < 15 or b
 select * from partprune_foo where b < 15 or b > 60;
  a |  b  | c  
 ---+-----+----
+ 1 |   1 |  1
+ 1 |   6 |  6
+ 1 |  11 |  1
+ 1 |  61 |  1
+ 1 |  66 |  6
+ 1 |  71 |  1
+ 1 |  76 |  6
+ 1 |  81 |  1
+ 1 |  86 |  6
+ 1 |  91 |  1
+ 1 |  96 |  6
  2 |   2 |  2
+ 3 |   3 |  3
  4 |   4 |  4
  2 |   7 |  7
+ 3 |   8 |  8
  4 |   9 |  9
  2 |  12 |  2
+ 3 |  13 |  3
  4 |  14 |  4
  2 |  62 |  2
+ 3 |  63 |  3
  4 |  64 |  4
  2 |  67 |  7
+ 3 |  68 |  8
  4 |  69 |  9
  2 |  72 |  2
+ 3 |  73 |  3
  4 |  74 |  4
  2 |  77 |  7
+ 3 |  78 |  8
  4 |  79 |  9
  2 |  82 |  2
+ 3 |  83 |  3
  4 |  84 |  4
  2 |  87 |  7
+ 3 |  88 |  8
  4 |  89 |  9
  2 |  92 |  2
+ 3 |  93 |  3
  4 |  94 |  4
  2 |  97 |  7
- 4 |  99 |  9
- 1 |   1 |  1
- 3 |   3 |  3
- 5 |   5 |  5
- 1 |   6 |  6
- 3 |   8 |  8
- 5 |  10 | 10
- 1 |  11 |  1
- 3 |  13 |  3
- 1 |  61 |  1
- 3 |  63 |  3
- 5 |  65 |  5
- 1 |  66 |  6
- 3 |  68 |  8
- 5 |  70 | 10
- 1 |  71 |  1
- 3 |  73 |  3
- 5 |  75 |  5
- 1 |  76 |  6
- 3 |  78 |  8
- 5 |  80 | 10
- 1 |  81 |  1
- 3 |  83 |  3
- 5 |  85 |  5
- 1 |  86 |  6
- 3 |  88 |  8
- 5 |  90 | 10
- 1 |  91 |  1
- 3 |  93 |  3
- 5 |  95 |  5
- 1 |  96 |  6
  3 |  98 |  8
+ 4 |  99 |  9
+ 5 |   5 |  5
+ 5 |  10 | 10
+ 5 |  65 |  5
+ 5 |  70 | 10
+ 5 |  75 |  5
+ 5 |  80 | 10
+ 5 |  85 |  5
+ 5 |  90 | 10
+ 5 |  95 |  5
  5 | 100 | 10
 (54 rows)
 
@@ -2166,10 +2207,10 @@ select get_selected_parts('explain select * from partprune_foo where b in (5, 6,
 select * from partprune_foo where b in (5, 6, 14, 23);
  a | b  | c 
 ---+----+---
- 3 | 23 | 3
  5 |  5 | 5
- 4 | 14 | 4
  1 |  6 | 6
+ 4 | 14 | 4
+ 3 | 23 | 3
 (4 rows)
 
 reset optimizer_array_expansion_threshold;
@@ -2183,8 +2224,8 @@ select get_selected_parts($$ explain select * from partprune_foo where b = ANY (
 select * from partprune_foo where b = ANY ('{5, 6, 14}');
  a | b  | c 
 ---+----+---
- 1 |  6 | 6
  5 |  5 | 5
+ 1 |  6 | 6
  4 | 14 | 4
 (3 rows)
 
@@ -2197,18 +2238,18 @@ select get_selected_parts($$ explain select * from partprune_foo where b < ANY (
 select * from partprune_foo where b < ANY ('{12, 14, 11}');
  a | b  | c  
 ---+----+----
+ 5 |  5 |  5
+ 5 | 10 | 10
  1 |  1 |  1
- 2 |  2 |  2
  1 |  6 |  6
- 2 |  7 |  7
  1 | 11 |  1
- 2 | 12 |  2
+ 2 |  2 |  2
  3 |  3 |  3
  4 |  4 |  4
- 5 |  5 |  5
+ 2 |  7 |  7
  3 |  8 |  8
  4 |  9 |  9
- 5 | 10 | 10
+ 2 | 12 |  2
  3 | 13 |  3
 (13 rows)
 
@@ -2310,6 +2351,8 @@ HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sur
 -- General predicate
 -- Total 6 parts. b = 1: 1 part, b > 3: 2 parts, b in (0, 1): 2 parts. b is null: 1 part
 select get_selected_parts('explain analyze select * from foo where b = 1 union all select * from foo where b > 3 union all select * from foo where b in (0,1) union all select * from foo where b is null;');
+NOTICE:  One or more columns in the following table(s) do not have statistics: foo
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  get_selected_parts 
 --------------------
  [6, 0]
@@ -2326,6 +2369,8 @@ PARTITION BY LIST (gender)
 -- General filter
 -- TODO #141916623. Expecting 6 parts, but optimizer plan selects 7 parts. The 6 parts breakdown is: gender = 'F': 1 part, gender < 'M': 2 parts (including default), gender in ('F', F'M'): 2 parts, gender is null => 1 part
 select get_selected_parts('explain analyze select * from pt where gender = ''F'' union all select * from pt where gender < ''M'' union all select * from pt where gender in (''F'', ''FM'') union all select * from pt where gender is null;');
+NOTICE:  One or more columns in the following table(s) do not have statistics: pt
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  get_selected_parts 
 --------------------
  [6, 0]
@@ -2351,6 +2396,8 @@ select * from date_parts_1_prt_outlying_years_2_prt_q4_3_prt_4 where id < 0;
 -- Default month
 insert into DATE_PARTS values (-3, 2004, 20, 30, NULL);
 select * from date_parts_1_prt_2_2_prt_other_months where id < 0;
+NOTICE:  One or more columns in the following table(s) do not have statistics: date_parts_1_prt_2_2_prt_other_months
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  id | year | month | day | region 
 ----+------+-------+-----+--------
  -3 | 2004 |    20 |  30 | 
@@ -2430,14 +2477,16 @@ select * from sales where region = 'usa' or region = 'asia';
 -- Test DynamicIndexScan with extra filter
 create index idx_sales_date on sales(date);
 explain select * from sales where date = '2011-01-01' and region = 'usa';
-                                                      QUERY PLAN                                                       
------------------------------------------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)  (cost=0.12..8.16 rows=1 width=19)
-   ->  Index Scan using sales_1_prt_2_2_prt_usa_date_idx on sales_1_prt_2_2_prt_usa sales  (cost=0.12..8.14 rows=1 width=19)
-         Index Cond: (date = '01-01-2011'::date)
+                                             QUERY PLAN                                              
+-----------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=4.13..8.17 rows=1 width=19)
+   ->  Bitmap Heap Scan on sales_1_prt_2_2_prt_usa sales  (cost=4.13..8.15 rows=1 width=19)
+         Recheck Cond: (date = '01-01-2011'::date)
          Filter: (region = 'usa'::text)
+         ->  Bitmap Index Scan on sales_1_prt_2_2_prt_usa_date_idx  (cost=0.00..4.13 rows=1 width=0)
+               Index Cond: (date = '01-01-2011'::date)
  Optimizer: Postgres query optimizer
-(5 rows)
+(7 rows)
 
 select * from sales where date = '2011-01-01' and region = 'usa';
  trans_id |    date    | amount | region 
@@ -2535,34 +2584,42 @@ partition by list(col2)
 INSERT INTO pt_bool_tab SELECT i, true FROM generate_series(1,3)i;
 INSERT INTO pt_bool_tab SELECT i, false FROM generate_series(1,2)i;
 EXPLAIN SELECT * FROM pt_bool_tab WHERE col2 IS true;
+NOTICE:  One or more columns in the following table(s) do not have statistics: pt_bool_tab
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
                                   QUERY PLAN                                  
 ------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)
-   ->  Dynamic Seq Scan on pt_bool_tab
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..431.00 rows=1 width=5)
+   ->  Dynamic Seq Scan on pt_bool_tab  (cost=0.00..431.00 rows=1 width=5)
          Number of partitions to scan: 1 (out of 2)
          Filter: (col2 IS TRUE)
  Optimizer: GPORCA
 (5 rows)
 
 SELECT * FROM pt_bool_tab WHERE col2 IS true;
+NOTICE:  One or more columns in the following table(s) do not have statistics: pt_bool_tab
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  col1 | col2 
 ------+------
-    1 | t
     2 | t
     3 | t
+    1 | t
 (3 rows)
 
 EXPLAIN SELECT * FROM pt_bool_tab WHERE col2 IS false;
+NOTICE:  One or more columns in the following table(s) do not have statistics: pt_bool_tab
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
                                   QUERY PLAN                                  
 ------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)
-   ->  Dynamic Seq Scan on pt_bool_tab
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..431.00 rows=1 width=5)
+   ->  Dynamic Seq Scan on pt_bool_tab  (cost=0.00..431.00 rows=1 width=5)
          Number of partitions to scan: 1 (out of 2)
          Filter: (col2 IS FALSE)
  Optimizer: GPORCA
 (5 rows)
 
 SELECT * FROM pt_bool_tab WHERE col2 IS false;
+NOTICE:  One or more columns in the following table(s) do not have statistics: pt_bool_tab
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  col1 | col2 
 ------+------
     2 | f
@@ -2572,7 +2629,7 @@ SELECT * FROM pt_bool_tab WHERE col2 IS false;
 EXPLAIN SELECT * FROM pt_bool_tab WHERE col2 IS NULL;
                 QUERY PLAN                
 ------------------------------------------
- Result
+ Result  (cost=0.00..0.00 rows=0 width=5)
    One-Time Filter: false
  Optimizer: GPORCA
 (3 rows)
@@ -2585,7 +2642,7 @@ SELECT * FROM pt_bool_tab WHERE col2 IS NULL;
 EXPLAIN SELECT * FROM pt_bool_tab WHERE col2 IS unknown;
                 QUERY PLAN                
 ------------------------------------------
- Result
+ Result  (cost=0.00..0.00 rows=0 width=5)
    One-Time Filter: false
  Optimizer: GPORCA
 (3 rows)
@@ -2596,33 +2653,41 @@ SELECT * FROM pt_bool_tab WHERE col2 IS unknown;
 (0 rows)
 
 EXPLAIN SELECT * FROM pt_bool_tab WHERE col2 IS NOT true;
+NOTICE:  One or more columns in the following table(s) do not have statistics: pt_bool_tab
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
                                   QUERY PLAN                                  
 ------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)
-   ->  Dynamic Seq Scan on pt_bool_tab
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..431.00 rows=1 width=5)
+   ->  Dynamic Seq Scan on pt_bool_tab  (cost=0.00..431.00 rows=1 width=5)
          Number of partitions to scan: 1 (out of 2)
          Filter: (col2 IS NOT TRUE)
  Optimizer: GPORCA
 (5 rows)
 
 SELECT * FROM pt_bool_tab WHERE col2 IS NOT true;
+NOTICE:  One or more columns in the following table(s) do not have statistics: pt_bool_tab
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  col1 | col2 
 ------+------
-    1 | f
     2 | f
+    1 | f
 (2 rows)
 
 EXPLAIN SELECT * FROM pt_bool_tab WHERE col2 IS NOT false;
+NOTICE:  One or more columns in the following table(s) do not have statistics: pt_bool_tab
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
                                   QUERY PLAN                                  
 ------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)
-   ->  Dynamic Seq Scan on pt_bool_tab
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..431.00 rows=1 width=5)
+   ->  Dynamic Seq Scan on pt_bool_tab  (cost=0.00..431.00 rows=1 width=5)
          Number of partitions to scan: 1 (out of 2)
          Filter: (col2 IS NOT FALSE)
  Optimizer: GPORCA
 (5 rows)
 
 SELECT * FROM pt_bool_tab WHERE col2 IS NOT false;
+NOTICE:  One or more columns in the following table(s) do not have statistics: pt_bool_tab
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  col1 | col2 
 ------+------
     2 | t
@@ -2631,16 +2696,20 @@ SELECT * FROM pt_bool_tab WHERE col2 IS NOT false;
 (3 rows)
 
 EXPLAIN SELECT * FROM pt_bool_tab WHERE col2 IS NOT unknown;
+NOTICE:  One or more columns in the following table(s) do not have statistics: pt_bool_tab
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
                                   QUERY PLAN                                  
 ------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)
-   ->  Dynamic Seq Scan on pt_bool_tab
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..431.00 rows=1 width=5)
+   ->  Dynamic Seq Scan on pt_bool_tab  (cost=0.00..431.00 rows=1 width=5)
          Number of partitions to scan: 2 (out of 2)
          Filter: (col2 IS NOT UNKNOWN)
  Optimizer: GPORCA
 (5 rows)
 
 SELECT * FROM pt_bool_tab WHERE col2 IS NOT unknown;
+NOTICE:  One or more columns in the following table(s) do not have statistics: pt_bool_tab
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  col1 | col2 
 ------+------
     2 | f
@@ -2651,16 +2720,20 @@ SELECT * FROM pt_bool_tab WHERE col2 IS NOT unknown;
 (5 rows)
 
 EXPLAIN SELECT * FROM pt_bool_tab WHERE col2 IS NOT NULL;
+NOTICE:  One or more columns in the following table(s) do not have statistics: pt_bool_tab
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
                                   QUERY PLAN                                  
 ------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)
-   ->  Dynamic Seq Scan on pt_bool_tab
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..431.00 rows=1 width=5)
+   ->  Dynamic Seq Scan on pt_bool_tab  (cost=0.00..431.00 rows=1 width=5)
          Number of partitions to scan: 2 (out of 2)
          Filter: (NOT (col2 IS NULL))
  Optimizer: GPORCA
 (5 rows)
 
 SELECT * FROM pt_bool_tab WHERE col2 IS NOT NULL;
+NOTICE:  One or more columns in the following table(s) do not have statistics: pt_bool_tab
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  col1 | col2 
 ------+------
     1 | f
@@ -2671,33 +2744,41 @@ SELECT * FROM pt_bool_tab WHERE col2 IS NOT NULL;
 (5 rows)
 
 EXPLAIN SELECT * FROM pt_bool_tab WHERE (not col2) IS true;
+NOTICE:  One or more columns in the following table(s) do not have statistics: pt_bool_tab
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
                                   QUERY PLAN                                  
 ------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)
-   ->  Dynamic Seq Scan on pt_bool_tab
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..431.00 rows=1 width=5)
+   ->  Dynamic Seq Scan on pt_bool_tab  (cost=0.00..431.00 rows=1 width=5)
          Number of partitions to scan: 1 (out of 2)
          Filter: ((NOT col2) IS TRUE)
  Optimizer: GPORCA
 (5 rows)
 
 SELECT * FROM pt_bool_tab WHERE (not col2) IS true;
+NOTICE:  One or more columns in the following table(s) do not have statistics: pt_bool_tab
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  col1 | col2 
 ------+------
-    1 | f
     2 | f
+    1 | f
 (2 rows)
 
 EXPLAIN SELECT * FROM pt_bool_tab WHERE (not col2) IS false;
+NOTICE:  One or more columns in the following table(s) do not have statistics: pt_bool_tab
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
                                   QUERY PLAN                                  
 ------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)
-   ->  Dynamic Seq Scan on pt_bool_tab
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..431.00 rows=1 width=5)
+   ->  Dynamic Seq Scan on pt_bool_tab  (cost=0.00..431.00 rows=1 width=5)
          Number of partitions to scan: 1 (out of 2)
          Filter: ((NOT col2) IS FALSE)
  Optimizer: GPORCA
 (5 rows)
 
 SELECT * FROM pt_bool_tab WHERE (not col2) IS false;
+NOTICE:  One or more columns in the following table(s) do not have statistics: pt_bool_tab
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  col1 | col2 
 ------+------
     2 | t
@@ -2706,46 +2787,58 @@ SELECT * FROM pt_bool_tab WHERE (not col2) IS false;
 (3 rows)
 
 EXPLAIN SELECT * FROM pt_bool_tab WHERE (not col2) IS NULL;
+NOTICE:  One or more columns in the following table(s) do not have statistics: pt_bool_tab
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
                                   QUERY PLAN                                  
 ------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)
-   ->  Dynamic Seq Scan on pt_bool_tab
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..431.00 rows=1 width=5)
+   ->  Dynamic Seq Scan on pt_bool_tab  (cost=0.00..431.00 rows=1 width=5)
          Number of partitions to scan: 2 (out of 2)
          Filter: ((NOT col2) IS NULL)
  Optimizer: GPORCA
 (5 rows)
 
 SELECT * FROM pt_bool_tab WHERE (not col2) IS NULL;
+NOTICE:  One or more columns in the following table(s) do not have statistics: pt_bool_tab
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  col1 | col2 
 ------+------
 (0 rows)
 
 EXPLAIN SELECT * FROM pt_bool_tab WHERE (not col2) IS unknown;
+NOTICE:  One or more columns in the following table(s) do not have statistics: pt_bool_tab
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
                                   QUERY PLAN                                  
 ------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)
-   ->  Dynamic Seq Scan on pt_bool_tab
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..431.00 rows=1 width=5)
+   ->  Dynamic Seq Scan on pt_bool_tab  (cost=0.00..431.00 rows=1 width=5)
          Number of partitions to scan: 2 (out of 2)
          Filter: ((NOT col2) IS UNKNOWN)
  Optimizer: GPORCA
 (5 rows)
 
 SELECT * FROM pt_bool_tab WHERE (not col2) IS unknown;
+NOTICE:  One or more columns in the following table(s) do not have statistics: pt_bool_tab
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  col1 | col2 
 ------+------
 (0 rows)
 
 EXPLAIN SELECT * FROM pt_bool_tab WHERE (not col2) IS NOT true;
+NOTICE:  One or more columns in the following table(s) do not have statistics: pt_bool_tab
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
                                   QUERY PLAN                                  
 ------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)
-   ->  Dynamic Seq Scan on pt_bool_tab
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..431.00 rows=1 width=5)
+   ->  Dynamic Seq Scan on pt_bool_tab  (cost=0.00..431.00 rows=1 width=5)
          Number of partitions to scan: 1 (out of 2)
          Filter: ((NOT col2) IS NOT TRUE)
  Optimizer: GPORCA
 (5 rows)
 
 SELECT * FROM pt_bool_tab WHERE (not col2) IS NOT true;
+NOTICE:  One or more columns in the following table(s) do not have statistics: pt_bool_tab
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  col1 | col2 
 ------+------
     1 | t
@@ -2754,16 +2847,20 @@ SELECT * FROM pt_bool_tab WHERE (not col2) IS NOT true;
 (3 rows)
 
 EXPLAIN SELECT * FROM pt_bool_tab WHERE (not col2) IS NOT false;
+NOTICE:  One or more columns in the following table(s) do not have statistics: pt_bool_tab
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
                                   QUERY PLAN                                  
 ------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)
-   ->  Dynamic Seq Scan on pt_bool_tab
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..431.00 rows=1 width=5)
+   ->  Dynamic Seq Scan on pt_bool_tab  (cost=0.00..431.00 rows=1 width=5)
          Number of partitions to scan: 1 (out of 2)
          Filter: ((NOT col2) IS NOT FALSE)
  Optimizer: GPORCA
 (5 rows)
 
 SELECT * FROM pt_bool_tab WHERE (not col2) IS NOT false;
+NOTICE:  One or more columns in the following table(s) do not have statistics: pt_bool_tab
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  col1 | col2 
 ------+------
     1 | f
@@ -2771,43 +2868,51 @@ SELECT * FROM pt_bool_tab WHERE (not col2) IS NOT false;
 (2 rows)
 
 EXPLAIN SELECT * FROM pt_bool_tab WHERE (not col2) IS NOT unknown;
+NOTICE:  One or more columns in the following table(s) do not have statistics: pt_bool_tab
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
                                   QUERY PLAN                                  
 ------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)
-   ->  Dynamic Seq Scan on pt_bool_tab
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..431.00 rows=1 width=5)
+   ->  Dynamic Seq Scan on pt_bool_tab  (cost=0.00..431.00 rows=1 width=5)
          Number of partitions to scan: 2 (out of 2)
          Filter: ((NOT col2) IS NOT UNKNOWN)
  Optimizer: GPORCA
 (5 rows)
 
 SELECT * FROM pt_bool_tab WHERE (not col2) IS NOT unknown;
+NOTICE:  One or more columns in the following table(s) do not have statistics: pt_bool_tab
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  col1 | col2 
 ------+------
+    1 | f
+    1 | t
     2 | f
     2 | t
     3 | t
-    1 | f
-    1 | t
 (5 rows)
 
 EXPLAIN SELECT * FROM pt_bool_tab WHERE (not col2) IS NOT NULL;
+NOTICE:  One or more columns in the following table(s) do not have statistics: pt_bool_tab
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
                                   QUERY PLAN                                  
 ------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)
-   ->  Dynamic Seq Scan on pt_bool_tab
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..431.00 rows=1 width=5)
+   ->  Dynamic Seq Scan on pt_bool_tab  (cost=0.00..431.00 rows=1 width=5)
          Number of partitions to scan: 2 (out of 2)
          Filter: (NOT ((NOT col2) IS NULL))
  Optimizer: GPORCA
 (5 rows)
 
 SELECT * FROM pt_bool_tab WHERE (not col2) IS NOT NULL;
+NOTICE:  One or more columns in the following table(s) do not have statistics: pt_bool_tab
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  col1 | col2 
 ------+------
-    1 | f
-    1 | t
     2 | f
     2 | t
     3 | t
+    1 | f
+    1 | t
 (5 rows)
 
 CREATE TABLE pt_bool_tab_df
@@ -2826,101 +2931,125 @@ INSERT INTO pt_bool_tab_df SELECT i, true FROM generate_series(1,3)i;
 INSERT INTO pt_bool_tab_df SELECT i, false FROM generate_series(1,2)i;
 INSERT INTO pt_bool_tab_df SELECT i, NULL FROM generate_series(1,1)i;
 EXPLAIN SELECT * FROM pt_bool_tab_df WHERE col2 IS true;
+NOTICE:  One or more columns in the following table(s) do not have statistics: pt_bool_tab_df
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
                                   QUERY PLAN                                  
 ------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)
-   ->  Dynamic Seq Scan on pt_bool_tab_df
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..431.00 rows=1 width=5)
+   ->  Dynamic Seq Scan on pt_bool_tab_df  (cost=0.00..431.00 rows=1 width=5)
          Number of partitions to scan: 1 (out of 3)
          Filter: (col2 IS TRUE)
  Optimizer: GPORCA
 (5 rows)
 
 SELECT * FROM pt_bool_tab_df WHERE col2 IS true;
+NOTICE:  One or more columns in the following table(s) do not have statistics: pt_bool_tab_df
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  col1 | col2 
 ------+------
+    1 | t
     2 | t
     3 | t
-    1 | t
 (3 rows)
 
 EXPLAIN SELECT * FROM pt_bool_tab_df WHERE col2 IS false;
+NOTICE:  One or more columns in the following table(s) do not have statistics: pt_bool_tab_df
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
                                   QUERY PLAN                                  
 ------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)
-   ->  Dynamic Seq Scan on pt_bool_tab_df
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..431.00 rows=1 width=5)
+   ->  Dynamic Seq Scan on pt_bool_tab_df  (cost=0.00..431.00 rows=1 width=5)
          Number of partitions to scan: 1 (out of 3)
          Filter: (col2 IS FALSE)
  Optimizer: GPORCA
 (5 rows)
 
 SELECT * FROM pt_bool_tab_df WHERE col2 IS false;
+NOTICE:  One or more columns in the following table(s) do not have statistics: pt_bool_tab_df
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  col1 | col2 
 ------+------
-    2 | f
     1 | f
+    2 | f
 (2 rows)
 
 EXPLAIN SELECT * FROM pt_bool_tab_df WHERE col2 IS NULL;
+NOTICE:  One or more columns in the following table(s) do not have statistics: pt_bool_tab_df
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
                                   QUERY PLAN                                  
 ------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)
-   ->  Dynamic Seq Scan on pt_bool_tab_df
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..431.00 rows=1 width=5)
+   ->  Dynamic Seq Scan on pt_bool_tab_df  (cost=0.00..431.00 rows=1 width=5)
          Number of partitions to scan: 1 (out of 3)
          Filter: (col2 IS NULL)
  Optimizer: GPORCA
 (5 rows)
 
 SELECT * FROM pt_bool_tab_df WHERE col2 IS NULL;
+NOTICE:  One or more columns in the following table(s) do not have statistics: pt_bool_tab_df
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  col1 | col2 
 ------+------
     1 | 
 (1 row)
 
 EXPLAIN SELECT * FROM pt_bool_tab_df WHERE col2 IS unknown;
+NOTICE:  One or more columns in the following table(s) do not have statistics: pt_bool_tab_df
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
                                   QUERY PLAN                                  
 ------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)
-   ->  Dynamic Seq Scan on pt_bool_tab_df
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..431.00 rows=1 width=5)
+   ->  Dynamic Seq Scan on pt_bool_tab_df  (cost=0.00..431.00 rows=1 width=5)
          Number of partitions to scan: 1 (out of 3)
          Filter: (col2 IS UNKNOWN)
  Optimizer: GPORCA
 (5 rows)
 
 SELECT * FROM pt_bool_tab_df WHERE col2 IS unknown;
+NOTICE:  One or more columns in the following table(s) do not have statistics: pt_bool_tab_df
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  col1 | col2 
 ------+------
     1 | 
 (1 row)
 
 EXPLAIN SELECT * FROM pt_bool_tab_df WHERE col2 IS NOT true;
+NOTICE:  One or more columns in the following table(s) do not have statistics: pt_bool_tab_df
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
                                   QUERY PLAN                                  
 ------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)
-   ->  Dynamic Seq Scan on pt_bool_tab_df
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..431.00 rows=1 width=5)
+   ->  Dynamic Seq Scan on pt_bool_tab_df  (cost=0.00..431.00 rows=1 width=5)
          Number of partitions to scan: 2 (out of 3)
          Filter: (col2 IS NOT TRUE)
  Optimizer: GPORCA
 (5 rows)
 
 SELECT * FROM pt_bool_tab_df WHERE col2 IS NOT true;
+NOTICE:  One or more columns in the following table(s) do not have statistics: pt_bool_tab_df
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  col1 | col2 
 ------+------
-    2 | f
     1 | f
     1 | 
+    2 | f
 (3 rows)
 
 EXPLAIN SELECT * FROM pt_bool_tab_df WHERE col2 IS NOT false;
+NOTICE:  One or more columns in the following table(s) do not have statistics: pt_bool_tab_df
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
                                   QUERY PLAN                                  
 ------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)
-   ->  Dynamic Seq Scan on pt_bool_tab_df
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..431.00 rows=1 width=5)
+   ->  Dynamic Seq Scan on pt_bool_tab_df  (cost=0.00..431.00 rows=1 width=5)
          Number of partitions to scan: 2 (out of 3)
          Filter: (col2 IS NOT FALSE)
  Optimizer: GPORCA
 (5 rows)
 
 SELECT * FROM pt_bool_tab_df WHERE col2 IS NOT false;
+NOTICE:  One or more columns in the following table(s) do not have statistics: pt_bool_tab_df
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  col1 | col2 
 ------+------
     2 | t
@@ -2930,16 +3059,20 @@ SELECT * FROM pt_bool_tab_df WHERE col2 IS NOT false;
 (4 rows)
 
 EXPLAIN SELECT * FROM pt_bool_tab_df WHERE col2 IS NOT unknown;
+NOTICE:  One or more columns in the following table(s) do not have statistics: pt_bool_tab_df
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
                                   QUERY PLAN                                  
 ------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)
-   ->  Dynamic Seq Scan on pt_bool_tab_df
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..431.00 rows=1 width=5)
+   ->  Dynamic Seq Scan on pt_bool_tab_df  (cost=0.00..431.00 rows=1 width=5)
          Number of partitions to scan: 2 (out of 3)
          Filter: (col2 IS NOT UNKNOWN)
  Optimizer: GPORCA
 (5 rows)
 
 SELECT * FROM pt_bool_tab_df WHERE col2 IS NOT unknown;
+NOTICE:  One or more columns in the following table(s) do not have statistics: pt_bool_tab_df
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  col1 | col2 
 ------+------
     1 | f
@@ -2950,16 +3083,20 @@ SELECT * FROM pt_bool_tab_df WHERE col2 IS NOT unknown;
 (5 rows)
 
 EXPLAIN SELECT * FROM pt_bool_tab_df WHERE col2 IS NOT NULL;
+NOTICE:  One or more columns in the following table(s) do not have statistics: pt_bool_tab_df
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
                                   QUERY PLAN                                  
 ------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)
-   ->  Dynamic Seq Scan on pt_bool_tab_df
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..431.00 rows=1 width=5)
+   ->  Dynamic Seq Scan on pt_bool_tab_df  (cost=0.00..431.00 rows=1 width=5)
          Number of partitions to scan: 2 (out of 3)
          Filter: (NOT (col2 IS NULL))
  Optimizer: GPORCA
 (5 rows)
 
 SELECT * FROM pt_bool_tab_df WHERE col2 IS NOT NULL;
+NOTICE:  One or more columns in the following table(s) do not have statistics: pt_bool_tab_df
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  col1 | col2 
 ------+------
     1 | f
@@ -2970,16 +3107,20 @@ SELECT * FROM pt_bool_tab_df WHERE col2 IS NOT NULL;
 (5 rows)
 
 EXPLAIN SELECT * FROM pt_bool_tab_df WHERE (not col2) IS true;
+NOTICE:  One or more columns in the following table(s) do not have statistics: pt_bool_tab_df
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
                                   QUERY PLAN                                  
 ------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)
-   ->  Dynamic Seq Scan on pt_bool_tab_df
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..431.00 rows=1 width=5)
+   ->  Dynamic Seq Scan on pt_bool_tab_df  (cost=0.00..431.00 rows=1 width=5)
          Number of partitions to scan: 1 (out of 3)
          Filter: ((NOT col2) IS TRUE)
  Optimizer: GPORCA
 (5 rows)
 
 SELECT * FROM pt_bool_tab_df WHERE (not col2) IS true;
+NOTICE:  One or more columns in the following table(s) do not have statistics: pt_bool_tab_df
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  col1 | col2 
 ------+------
     1 | f
@@ -2987,16 +3128,20 @@ SELECT * FROM pt_bool_tab_df WHERE (not col2) IS true;
 (2 rows)
 
 EXPLAIN SELECT * FROM pt_bool_tab_df WHERE (not col2) IS false;
+NOTICE:  One or more columns in the following table(s) do not have statistics: pt_bool_tab_df
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
                                   QUERY PLAN                                  
 ------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)
-   ->  Dynamic Seq Scan on pt_bool_tab_df
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..431.00 rows=1 width=5)
+   ->  Dynamic Seq Scan on pt_bool_tab_df  (cost=0.00..431.00 rows=1 width=5)
          Number of partitions to scan: 1 (out of 3)
          Filter: ((NOT col2) IS FALSE)
  Optimizer: GPORCA
 (5 rows)
 
 SELECT * FROM pt_bool_tab_df WHERE (not col2) IS false;
+NOTICE:  One or more columns in the following table(s) do not have statistics: pt_bool_tab_df
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  col1 | col2 
 ------+------
     1 | t
@@ -3005,67 +3150,83 @@ SELECT * FROM pt_bool_tab_df WHERE (not col2) IS false;
 (3 rows)
 
 EXPLAIN SELECT * FROM pt_bool_tab_df WHERE (not col2) IS NULL;
+NOTICE:  One or more columns in the following table(s) do not have statistics: pt_bool_tab_df
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
                                   QUERY PLAN                                  
 ------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)
-   ->  Dynamic Seq Scan on pt_bool_tab_df
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..431.00 rows=1 width=5)
+   ->  Dynamic Seq Scan on pt_bool_tab_df  (cost=0.00..431.00 rows=1 width=5)
          Number of partitions to scan: 3 (out of 3)
          Filter: ((NOT col2) IS NULL)
  Optimizer: GPORCA
 (5 rows)
 
 SELECT * FROM pt_bool_tab_df WHERE (not col2) IS NULL;
+NOTICE:  One or more columns in the following table(s) do not have statistics: pt_bool_tab_df
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  col1 | col2 
 ------+------
     1 | 
 (1 row)
 
 EXPLAIN SELECT * FROM pt_bool_tab_df WHERE (not col2) IS unknown;
+NOTICE:  One or more columns in the following table(s) do not have statistics: pt_bool_tab_df
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
                                   QUERY PLAN                                  
 ------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)
-   ->  Dynamic Seq Scan on pt_bool_tab_df
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..431.00 rows=1 width=5)
+   ->  Dynamic Seq Scan on pt_bool_tab_df  (cost=0.00..431.00 rows=1 width=5)
          Number of partitions to scan: 3 (out of 3)
          Filter: ((NOT col2) IS UNKNOWN)
  Optimizer: GPORCA
 (5 rows)
 
 SELECT * FROM pt_bool_tab_df WHERE (not col2) IS unknown;
+NOTICE:  One or more columns in the following table(s) do not have statistics: pt_bool_tab_df
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  col1 | col2 
 ------+------
     1 | 
 (1 row)
 
 EXPLAIN SELECT * FROM pt_bool_tab_df WHERE (not col2) IS NOT true;
+NOTICE:  One or more columns in the following table(s) do not have statistics: pt_bool_tab_df
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
                                   QUERY PLAN                                  
 ------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)
-   ->  Dynamic Seq Scan on pt_bool_tab_df
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..431.00 rows=1 width=5)
+   ->  Dynamic Seq Scan on pt_bool_tab_df  (cost=0.00..431.00 rows=1 width=5)
          Number of partitions to scan: 2 (out of 3)
          Filter: ((NOT col2) IS NOT TRUE)
  Optimizer: GPORCA
 (5 rows)
 
 SELECT * FROM pt_bool_tab_df WHERE (not col2) IS NOT true;
+NOTICE:  One or more columns in the following table(s) do not have statistics: pt_bool_tab_df
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  col1 | col2 
 ------+------
-    2 | t
-    3 | t
     1 | t
     1 | 
+    2 | t
+    3 | t
 (4 rows)
 
 EXPLAIN SELECT * FROM pt_bool_tab_df WHERE (not col2) IS NOT false;
+NOTICE:  One or more columns in the following table(s) do not have statistics: pt_bool_tab_df
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
                                   QUERY PLAN                                  
 ------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)
-   ->  Dynamic Seq Scan on pt_bool_tab_df
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..431.00 rows=1 width=5)
+   ->  Dynamic Seq Scan on pt_bool_tab_df  (cost=0.00..431.00 rows=1 width=5)
          Number of partitions to scan: 2 (out of 3)
          Filter: ((NOT col2) IS NOT FALSE)
  Optimizer: GPORCA
 (5 rows)
 
 SELECT * FROM pt_bool_tab_df WHERE (not col2) IS NOT false;
+NOTICE:  One or more columns in the following table(s) do not have statistics: pt_bool_tab_df
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  col1 | col2 
 ------+------
     2 | f
@@ -3074,16 +3235,20 @@ SELECT * FROM pt_bool_tab_df WHERE (not col2) IS NOT false;
 (3 rows)
 
 EXPLAIN SELECT * FROM pt_bool_tab_df WHERE (not col2) IS NOT unknown;
+NOTICE:  One or more columns in the following table(s) do not have statistics: pt_bool_tab_df
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
                                   QUERY PLAN                                  
 ------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)
-   ->  Dynamic Seq Scan on pt_bool_tab_df
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..431.00 rows=1 width=5)
+   ->  Dynamic Seq Scan on pt_bool_tab_df  (cost=0.00..431.00 rows=1 width=5)
          Number of partitions to scan: 3 (out of 3)
          Filter: ((NOT col2) IS NOT UNKNOWN)
  Optimizer: GPORCA
 (5 rows)
 
 SELECT * FROM pt_bool_tab_df WHERE (not col2) IS NOT unknown;
+NOTICE:  One or more columns in the following table(s) do not have statistics: pt_bool_tab_df
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  col1 | col2 
 ------+------
     1 | f
@@ -3094,23 +3259,27 @@ SELECT * FROM pt_bool_tab_df WHERE (not col2) IS NOT unknown;
 (5 rows)
 
 EXPLAIN SELECT * FROM pt_bool_tab_df WHERE (not col2) IS NOT NULL;
+NOTICE:  One or more columns in the following table(s) do not have statistics: pt_bool_tab_df
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
                                   QUERY PLAN                                  
 ------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)
-   ->  Dynamic Seq Scan on pt_bool_tab_df
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..431.00 rows=1 width=5)
+   ->  Dynamic Seq Scan on pt_bool_tab_df  (cost=0.00..431.00 rows=1 width=5)
          Number of partitions to scan: 3 (out of 3)
          Filter: (NOT ((NOT col2) IS NULL))
  Optimizer: GPORCA
 (5 rows)
 
 SELECT * FROM pt_bool_tab_df WHERE (not col2) IS NOT NULL;
+NOTICE:  One or more columns in the following table(s) do not have statistics: pt_bool_tab_df
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  col1 | col2 
 ------+------
-    1 | f
-    1 | t
     2 | f
     2 | t
     3 | t
+    1 | f
+    1 | t
 (5 rows)
 
 CREATE TABLE pt_bool_tab_null
@@ -3129,34 +3298,42 @@ INSERT INTO pt_bool_tab_null SELECT i, true FROM generate_series(1,3)i;
 INSERT INTO pt_bool_tab_null SELECT i, false FROM generate_series(1,2)i;
 INSERT INTO pt_bool_tab_null SELECT i, NULL FROM generate_series(1,1)i;
 EXPLAIN SELECT * FROM pt_bool_tab_null WHERE col2 IS true;
+NOTICE:  One or more columns in the following table(s) do not have statistics: pt_bool_tab_null
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
                                    QUERY PLAN                                   
 --------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)
-   ->  Dynamic Seq Scan on pt_bool_tab_null
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..431.00 rows=1 width=5)
+   ->  Dynamic Seq Scan on pt_bool_tab_null  (cost=0.00..431.00 rows=1 width=5)
          Number of partitions to scan: 1 (out of 3)
          Filter: (col2 IS TRUE)
  Optimizer: GPORCA
 (5 rows)
 
 SELECT * FROM pt_bool_tab_null WHERE col2 IS true;
+NOTICE:  One or more columns in the following table(s) do not have statistics: pt_bool_tab_null
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  col1 | col2 
 ------+------
+    1 | t
     2 | t
     3 | t
-    1 | t
 (3 rows)
 
 EXPLAIN SELECT * FROM pt_bool_tab_null WHERE col2 IS false;
+NOTICE:  One or more columns in the following table(s) do not have statistics: pt_bool_tab_null
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
                                    QUERY PLAN                                   
 --------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)
-   ->  Dynamic Seq Scan on pt_bool_tab_null
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..431.00 rows=1 width=5)
+   ->  Dynamic Seq Scan on pt_bool_tab_null  (cost=0.00..431.00 rows=1 width=5)
          Number of partitions to scan: 1 (out of 3)
          Filter: (col2 IS FALSE)
  Optimizer: GPORCA
 (5 rows)
 
 SELECT * FROM pt_bool_tab_null WHERE col2 IS false;
+NOTICE:  One or more columns in the following table(s) do not have statistics: pt_bool_tab_null
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  col1 | col2 
 ------+------
     2 | f
@@ -3164,142 +3341,174 @@ SELECT * FROM pt_bool_tab_null WHERE col2 IS false;
 (2 rows)
 
 EXPLAIN SELECT * FROM pt_bool_tab_null WHERE col2 IS NULL;
+NOTICE:  One or more columns in the following table(s) do not have statistics: pt_bool_tab_null
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
                                    QUERY PLAN                                   
 --------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)
-   ->  Dynamic Seq Scan on pt_bool_tab_null
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..431.00 rows=1 width=5)
+   ->  Dynamic Seq Scan on pt_bool_tab_null  (cost=0.00..431.00 rows=1 width=5)
          Number of partitions to scan: 1 (out of 3)
          Filter: (col2 IS NULL)
  Optimizer: GPORCA
 (5 rows)
 
 SELECT * FROM pt_bool_tab_null WHERE col2 IS NULL;
+NOTICE:  One or more columns in the following table(s) do not have statistics: pt_bool_tab_null
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  col1 | col2 
 ------+------
     1 | 
 (1 row)
 
 EXPLAIN SELECT * FROM pt_bool_tab_null WHERE col2 IS unknown;
+NOTICE:  One or more columns in the following table(s) do not have statistics: pt_bool_tab_null
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
                                    QUERY PLAN                                   
 --------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)
-   ->  Dynamic Seq Scan on pt_bool_tab_null
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..431.00 rows=1 width=5)
+   ->  Dynamic Seq Scan on pt_bool_tab_null  (cost=0.00..431.00 rows=1 width=5)
          Number of partitions to scan: 1 (out of 3)
          Filter: (col2 IS UNKNOWN)
  Optimizer: GPORCA
 (5 rows)
 
 SELECT * FROM pt_bool_tab_null WHERE col2 IS unknown;
+NOTICE:  One or more columns in the following table(s) do not have statistics: pt_bool_tab_null
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  col1 | col2 
 ------+------
     1 | 
 (1 row)
 
 EXPLAIN SELECT * FROM pt_bool_tab_null WHERE col2 IS NOT true;
+NOTICE:  One or more columns in the following table(s) do not have statistics: pt_bool_tab_null
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
                                    QUERY PLAN                                   
 --------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)
-   ->  Dynamic Seq Scan on pt_bool_tab_null
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..431.00 rows=1 width=5)
+   ->  Dynamic Seq Scan on pt_bool_tab_null  (cost=0.00..431.00 rows=1 width=5)
          Number of partitions to scan: 2 (out of 3)
          Filter: (col2 IS NOT TRUE)
  Optimizer: GPORCA
 (5 rows)
 
 SELECT * FROM pt_bool_tab_null WHERE col2 IS NOT true;
+NOTICE:  One or more columns in the following table(s) do not have statistics: pt_bool_tab_null
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  col1 | col2 
 ------+------
-    2 | f
     1 | f
     1 | 
+    2 | f
 (3 rows)
 
 EXPLAIN SELECT * FROM pt_bool_tab_null WHERE col2 IS NOT false;
+NOTICE:  One or more columns in the following table(s) do not have statistics: pt_bool_tab_null
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
                                    QUERY PLAN                                   
 --------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)
-   ->  Dynamic Seq Scan on pt_bool_tab_null
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..431.00 rows=1 width=5)
+   ->  Dynamic Seq Scan on pt_bool_tab_null  (cost=0.00..431.00 rows=1 width=5)
          Number of partitions to scan: 2 (out of 3)
          Filter: (col2 IS NOT FALSE)
  Optimizer: GPORCA
 (5 rows)
 
 SELECT * FROM pt_bool_tab_null WHERE col2 IS NOT false;
+NOTICE:  One or more columns in the following table(s) do not have statistics: pt_bool_tab_null
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  col1 | col2 
 ------+------
-    2 | t
-    3 | t
     1 | t
     1 | 
+    2 | t
+    3 | t
 (4 rows)
 
 EXPLAIN SELECT * FROM pt_bool_tab_null WHERE col2 IS NOT unknown;
+NOTICE:  One or more columns in the following table(s) do not have statistics: pt_bool_tab_null
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
                                    QUERY PLAN                                   
 --------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)
-   ->  Dynamic Seq Scan on pt_bool_tab_null
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..431.00 rows=1 width=5)
+   ->  Dynamic Seq Scan on pt_bool_tab_null  (cost=0.00..431.00 rows=1 width=5)
          Number of partitions to scan: 2 (out of 3)
          Filter: (col2 IS NOT UNKNOWN)
  Optimizer: GPORCA
 (5 rows)
 
 SELECT * FROM pt_bool_tab_null WHERE col2 IS NOT unknown;
+NOTICE:  One or more columns in the following table(s) do not have statistics: pt_bool_tab_null
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  col1 | col2 
 ------+------
+    1 | f
+    1 | t
     2 | f
     2 | t
     3 | t
-    1 | f
-    1 | t
 (5 rows)
 
 EXPLAIN SELECT * FROM pt_bool_tab_null WHERE col2 IS NOT NULL;
+NOTICE:  One or more columns in the following table(s) do not have statistics: pt_bool_tab_null
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
                                    QUERY PLAN                                   
 --------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)
-   ->  Dynamic Seq Scan on pt_bool_tab_null
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..431.00 rows=1 width=5)
+   ->  Dynamic Seq Scan on pt_bool_tab_null  (cost=0.00..431.00 rows=1 width=5)
          Number of partitions to scan: 2 (out of 3)
          Filter: (NOT (col2 IS NULL))
  Optimizer: GPORCA
 (5 rows)
 
 SELECT * FROM pt_bool_tab_null WHERE col2 IS NOT NULL;
+NOTICE:  One or more columns in the following table(s) do not have statistics: pt_bool_tab_null
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  col1 | col2 
 ------+------
+    1 | f
+    1 | t
     2 | f
     2 | t
     3 | t
-    1 | f
-    1 | t
 (5 rows)
 
 EXPLAIN SELECT * FROM pt_bool_tab_null WHERE (not col2) IS true;
+NOTICE:  One or more columns in the following table(s) do not have statistics: pt_bool_tab_null
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
                                    QUERY PLAN                                   
 --------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)
-   ->  Dynamic Seq Scan on pt_bool_tab_null
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..431.00 rows=1 width=5)
+   ->  Dynamic Seq Scan on pt_bool_tab_null  (cost=0.00..431.00 rows=1 width=5)
          Number of partitions to scan: 1 (out of 3)
          Filter: ((NOT col2) IS TRUE)
  Optimizer: GPORCA
 (5 rows)
 
 SELECT * FROM pt_bool_tab_null WHERE (not col2) IS true;
+NOTICE:  One or more columns in the following table(s) do not have statistics: pt_bool_tab_null
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  col1 | col2 
 ------+------
-    2 | f
     1 | f
+    2 | f
 (2 rows)
 
 EXPLAIN SELECT * FROM pt_bool_tab_null WHERE (not col2) IS false;
+NOTICE:  One or more columns in the following table(s) do not have statistics: pt_bool_tab_null
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
                                    QUERY PLAN                                   
 --------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)
-   ->  Dynamic Seq Scan on pt_bool_tab_null
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..431.00 rows=1 width=5)
+   ->  Dynamic Seq Scan on pt_bool_tab_null  (cost=0.00..431.00 rows=1 width=5)
          Number of partitions to scan: 1 (out of 3)
          Filter: ((NOT col2) IS FALSE)
  Optimizer: GPORCA
 (5 rows)
 
 SELECT * FROM pt_bool_tab_null WHERE (not col2) IS false;
+NOTICE:  One or more columns in the following table(s) do not have statistics: pt_bool_tab_null
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  col1 | col2 
 ------+------
     1 | t
@@ -3308,112 +3517,136 @@ SELECT * FROM pt_bool_tab_null WHERE (not col2) IS false;
 (3 rows)
 
 EXPLAIN SELECT * FROM pt_bool_tab_null WHERE (not col2) IS NULL;
+NOTICE:  One or more columns in the following table(s) do not have statistics: pt_bool_tab_null
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
                                    QUERY PLAN                                   
 --------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)
-   ->  Dynamic Seq Scan on pt_bool_tab_null
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..431.00 rows=1 width=5)
+   ->  Dynamic Seq Scan on pt_bool_tab_null  (cost=0.00..431.00 rows=1 width=5)
          Number of partitions to scan: 3 (out of 3)
          Filter: ((NOT col2) IS NULL)
  Optimizer: GPORCA
 (5 rows)
 
 SELECT * FROM pt_bool_tab_null WHERE (not col2) IS NULL;
+NOTICE:  One or more columns in the following table(s) do not have statistics: pt_bool_tab_null
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  col1 | col2 
 ------+------
     1 | 
 (1 row)
 
 EXPLAIN SELECT * FROM pt_bool_tab_null WHERE (not col2) IS unknown;
+NOTICE:  One or more columns in the following table(s) do not have statistics: pt_bool_tab_null
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
                                    QUERY PLAN                                   
 --------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)
-   ->  Dynamic Seq Scan on pt_bool_tab_null
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..431.00 rows=1 width=5)
+   ->  Dynamic Seq Scan on pt_bool_tab_null  (cost=0.00..431.00 rows=1 width=5)
          Number of partitions to scan: 3 (out of 3)
          Filter: ((NOT col2) IS UNKNOWN)
  Optimizer: GPORCA
 (5 rows)
 
 SELECT * FROM pt_bool_tab_null WHERE (not col2) IS unknown;
+NOTICE:  One or more columns in the following table(s) do not have statistics: pt_bool_tab_null
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  col1 | col2 
 ------+------
     1 | 
 (1 row)
 
 EXPLAIN SELECT * FROM pt_bool_tab_null WHERE (not col2) IS NOT true;
+NOTICE:  One or more columns in the following table(s) do not have statistics: pt_bool_tab_null
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
                                    QUERY PLAN                                   
 --------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)
-   ->  Dynamic Seq Scan on pt_bool_tab_null
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..431.00 rows=1 width=5)
+   ->  Dynamic Seq Scan on pt_bool_tab_null  (cost=0.00..431.00 rows=1 width=5)
          Number of partitions to scan: 2 (out of 3)
          Filter: ((NOT col2) IS NOT TRUE)
  Optimizer: GPORCA
 (5 rows)
 
 SELECT * FROM pt_bool_tab_null WHERE (not col2) IS NOT true;
+NOTICE:  One or more columns in the following table(s) do not have statistics: pt_bool_tab_null
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  col1 | col2 
 ------+------
-    2 | t
-    3 | t
     1 | t
     1 | 
+    2 | t
+    3 | t
 (4 rows)
 
 EXPLAIN SELECT * FROM pt_bool_tab_null WHERE (not col2) IS NOT false;
+NOTICE:  One or more columns in the following table(s) do not have statistics: pt_bool_tab_null
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
                                    QUERY PLAN                                   
 --------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)
-   ->  Dynamic Seq Scan on pt_bool_tab_null
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..431.00 rows=1 width=5)
+   ->  Dynamic Seq Scan on pt_bool_tab_null  (cost=0.00..431.00 rows=1 width=5)
          Number of partitions to scan: 2 (out of 3)
          Filter: ((NOT col2) IS NOT FALSE)
  Optimizer: GPORCA
 (5 rows)
 
 SELECT * FROM pt_bool_tab_null WHERE (not col2) IS NOT false;
+NOTICE:  One or more columns in the following table(s) do not have statistics: pt_bool_tab_null
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  col1 | col2 
 ------+------
-    2 | f
     1 | f
     1 | 
+    2 | f
 (3 rows)
 
 EXPLAIN SELECT * FROM pt_bool_tab_null WHERE (not col2) IS NOT unknown;
+NOTICE:  One or more columns in the following table(s) do not have statistics: pt_bool_tab_null
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
                                    QUERY PLAN                                   
 --------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)
-   ->  Dynamic Seq Scan on pt_bool_tab_null
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..431.00 rows=1 width=5)
+   ->  Dynamic Seq Scan on pt_bool_tab_null  (cost=0.00..431.00 rows=1 width=5)
          Number of partitions to scan: 3 (out of 3)
          Filter: ((NOT col2) IS NOT UNKNOWN)
  Optimizer: GPORCA
 (5 rows)
 
 SELECT * FROM pt_bool_tab_null WHERE (not col2) IS NOT unknown;
+NOTICE:  One or more columns in the following table(s) do not have statistics: pt_bool_tab_null
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  col1 | col2 
 ------+------
+    1 | f
+    1 | t
     2 | f
     2 | t
     3 | t
-    1 | f
-    1 | t
 (5 rows)
 
 EXPLAIN SELECT * FROM pt_bool_tab_null WHERE (not col2) IS NOT NULL;
+NOTICE:  One or more columns in the following table(s) do not have statistics: pt_bool_tab_null
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
                                    QUERY PLAN                                   
 --------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)
-   ->  Dynamic Seq Scan on pt_bool_tab_null
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..431.00 rows=1 width=5)
+   ->  Dynamic Seq Scan on pt_bool_tab_null  (cost=0.00..431.00 rows=1 width=5)
          Number of partitions to scan: 3 (out of 3)
          Filter: (NOT ((NOT col2) IS NULL))
  Optimizer: GPORCA
 (5 rows)
 
 SELECT * FROM pt_bool_tab_null WHERE (not col2) IS NOT NULL;
+NOTICE:  One or more columns in the following table(s) do not have statistics: pt_bool_tab_null
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  col1 | col2 
 ------+------
+    1 | f
+    1 | t
     2 | f
     2 | t
     3 | t
-    1 | f
-    1 | t
 (5 rows)
 
 RESET ALL;

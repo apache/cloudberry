@@ -767,7 +767,7 @@ CJoinOrderDPv2::AddSelectNodeForRemainingEdges(CExpression *join_expr)
 			// we will have to repeat this check
 			pedge->m_fUsed = false;
 		}
-		else
+		else if (0 == pedge->m_loj_num)
 		{
 			// found an unused edge, this one will need to go into
 			// a select node on top of the join

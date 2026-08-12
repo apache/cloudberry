@@ -70,7 +70,7 @@ ParseExternalTableUri(const char *uri_str)
 
 	else /* not recognized. treat it as a custom protocol */
 	{
-		char *post_protocol = strstr(uri_str, "://");
+		const char *post_protocol = strstr(uri_str, "://");
 		
 		if(!post_protocol)
 		{

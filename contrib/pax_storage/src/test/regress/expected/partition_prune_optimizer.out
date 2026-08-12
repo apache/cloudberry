@@ -27,13 +27,23 @@
 -- Force generic plans to be used for all prepared statements in this file.
 set plan_cache_mode = force_generic_plan;
 create table lp (a char) partition by list (a);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table lp_default partition of lp default;
+NOTICE:  table has parent, setting distribution columns to match parent table
 create table lp_ef partition of lp for values in ('e', 'f');
+NOTICE:  table has parent, setting distribution columns to match parent table
 create table lp_ad partition of lp for values in ('a', 'd');
+NOTICE:  table has parent, setting distribution columns to match parent table
 create table lp_bc partition of lp for values in ('b', 'c');
+NOTICE:  table has parent, setting distribution columns to match parent table
 create table lp_g partition of lp for values in ('g');
+NOTICE:  table has parent, setting distribution columns to match parent table
 create table lp_null partition of lp for values in (null);
+NOTICE:  table has parent, setting distribution columns to match parent table
 explain (costs off) select * from lp;
+NOTICE:  One or more columns in the following table(s) do not have statistics: lp
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
                      QUERY PLAN                     
 ----------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
@@ -43,6 +53,8 @@ explain (costs off) select * from lp;
 (4 rows)
 
 explain (costs off) select * from lp where a > 'a' and a < 'd';
+NOTICE:  One or more columns in the following table(s) do not have statistics: lp
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
                         QUERY PLAN                         
 -----------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
@@ -53,6 +65,8 @@ explain (costs off) select * from lp where a > 'a' and a < 'd';
 (5 rows)
 
 explain (costs off) select * from lp where a > 'a' and a <= 'd';
+NOTICE:  One or more columns in the following table(s) do not have statistics: lp
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
                          QUERY PLAN                         
 ------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
@@ -63,6 +77,8 @@ explain (costs off) select * from lp where a > 'a' and a <= 'd';
 (5 rows)
 
 explain (costs off) select * from lp where a = 'a';
+NOTICE:  One or more columns in the following table(s) do not have statistics: lp
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
                      QUERY PLAN                     
 ----------------------------------------------------
  Gather Motion 1:1  (slice1; segments: 1)
@@ -73,6 +89,8 @@ explain (costs off) select * from lp where a = 'a';
 (5 rows)
 
 explain (costs off) select * from lp where 'a' = a;	/* commuted */
+NOTICE:  One or more columns in the following table(s) do not have statistics: lp
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
                      QUERY PLAN                     
 ----------------------------------------------------
  Gather Motion 1:1  (slice1; segments: 1)
@@ -83,6 +101,8 @@ explain (costs off) select * from lp where 'a' = a;	/* commuted */
 (5 rows)
 
 explain (costs off) select * from lp where a is not null;
+NOTICE:  One or more columns in the following table(s) do not have statistics: lp
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
                      QUERY PLAN                     
 ----------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
@@ -93,6 +113,8 @@ explain (costs off) select * from lp where a is not null;
 (5 rows)
 
 explain (costs off) select * from lp where a is null;
+NOTICE:  One or more columns in the following table(s) do not have statistics: lp
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
                      QUERY PLAN                     
 ----------------------------------------------------
  Gather Motion 1:1  (slice1; segments: 1)
@@ -103,6 +125,8 @@ explain (costs off) select * from lp where a is null;
 (5 rows)
 
 explain (costs off) select * from lp where a = 'a' or a = 'c';
+NOTICE:  One or more columns in the following table(s) do not have statistics: lp
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
                         QUERY PLAN                        
 ----------------------------------------------------------
  Gather Motion 1:1  (slice1; segments: 1)
@@ -113,6 +137,8 @@ explain (costs off) select * from lp where a = 'a' or a = 'c';
 (5 rows)
 
 explain (costs off) select * from lp where a is not null and (a = 'a' or a = 'c');
+NOTICE:  One or more columns in the following table(s) do not have statistics: lp
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
                                     QUERY PLAN                                    
 ----------------------------------------------------------------------------------
  Gather Motion 1:1  (slice1; segments: 1)
@@ -123,6 +149,8 @@ explain (costs off) select * from lp where a is not null and (a = 'a' or a = 'c'
 (5 rows)
 
 explain (costs off) select * from lp where a <> 'g';
+NOTICE:  One or more columns in the following table(s) do not have statistics: lp
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
                      QUERY PLAN                     
 ----------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
@@ -133,6 +161,8 @@ explain (costs off) select * from lp where a <> 'g';
 (5 rows)
 
 explain (costs off) select * from lp where a <> 'a' and a <> 'd';
+NOTICE:  One or more columns in the following table(s) do not have statistics: lp
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
                          QUERY PLAN                          
 -------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
@@ -143,6 +173,8 @@ explain (costs off) select * from lp where a <> 'a' and a <> 'd';
 (5 rows)
 
 explain (costs off) select * from lp where a not in ('a', 'd');
+NOTICE:  One or more columns in the following table(s) do not have statistics: lp
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
                      QUERY PLAN                     
 ----------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
@@ -154,12 +186,17 @@ explain (costs off) select * from lp where a not in ('a', 'd');
 
 -- collation matches the partitioning collation, pruning works
 create table coll_pruning (a text collate "C") partition by list (a);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table coll_pruning_a partition of coll_pruning for values in ('a');
+NOTICE:  table has parent, setting distribution columns to match parent table
 create table coll_pruning_b partition of coll_pruning for values in ('b');
+NOTICE:  table has parent, setting distribution columns to match parent table
 create table coll_pruning_def partition of coll_pruning default;
+NOTICE:  table has parent, setting distribution columns to match parent table
 explain (costs off) select * from coll_pruning where a collate "C" = 'a' collate "C";
-                 QUERY PLAN                  
----------------------------------------------
+                  QUERY PLAN                   
+-----------------------------------------------
  Gather Motion 1:1  (slice1; segments: 1)
    ->  Seq Scan on coll_pruning_a coll_pruning
          Filter: (a = 'a'::text COLLATE "C")
@@ -182,28 +219,50 @@ explain (costs off) select * from coll_pruning where a collate "POSIX" = 'a' col
 (9 rows)
 
 create table rlp (a int, b varchar) partition by range (a);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table rlp_default partition of rlp default partition by list (a);
+NOTICE:  table has parent, setting distribution columns to match parent table
 create table rlp_default_default partition of rlp_default default;
+NOTICE:  table has parent, setting distribution columns to match parent table
 create table rlp_default_10 partition of rlp_default for values in (10);
+NOTICE:  table has parent, setting distribution columns to match parent table
 create table rlp_default_30 partition of rlp_default for values in (30);
+NOTICE:  table has parent, setting distribution columns to match parent table
 create table rlp_default_null partition of rlp_default for values in (null);
+NOTICE:  table has parent, setting distribution columns to match parent table
 create table rlp1 partition of rlp for values from (minvalue) to (1);
+NOTICE:  table has parent, setting distribution columns to match parent table
 create table rlp2 partition of rlp for values from (1) to (10);
+NOTICE:  table has parent, setting distribution columns to match parent table
 create table rlp3 (b varchar, a int) partition by list (b varchar_ops);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'b' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 -- GPDB: distribution policy must match the parent table.
 alter table rlp3 set distributed by (a);
 create table rlp3_default partition of rlp3 default;
+NOTICE:  table has parent, setting distribution columns to match parent table
 create table rlp3abcd partition of rlp3 for values in ('ab', 'cd');
+NOTICE:  table has parent, setting distribution columns to match parent table
 create table rlp3efgh partition of rlp3 for values in ('ef', 'gh');
+NOTICE:  table has parent, setting distribution columns to match parent table
 create table rlp3nullxy partition of rlp3 for values in (null, 'xy');
+NOTICE:  table has parent, setting distribution columns to match parent table
 alter table rlp attach partition rlp3 for values from (15) to (20);
 create table rlp4 partition of rlp for values from (20) to (30) partition by range (a);
+NOTICE:  table has parent, setting distribution columns to match parent table
 create table rlp4_default partition of rlp4 default;
+NOTICE:  table has parent, setting distribution columns to match parent table
 create table rlp4_1 partition of rlp4 for values from (20) to (25);
+NOTICE:  table has parent, setting distribution columns to match parent table
 create table rlp4_2 partition of rlp4 for values from (25) to (29);
+NOTICE:  table has parent, setting distribution columns to match parent table
 create table rlp5 partition of rlp for values from (31) to (maxvalue) partition by range (a);
+NOTICE:  table has parent, setting distribution columns to match parent table
 create table rlp5_default partition of rlp5 default;
+NOTICE:  table has parent, setting distribution columns to match parent table
 create table rlp5_1 partition of rlp5 for values from (31) to (40);
+NOTICE:  table has parent, setting distribution columns to match parent table
 explain (costs off) select * from rlp where a < 1;
                 QUERY PLAN                
 ------------------------------------------
@@ -679,8 +738,8 @@ explain (costs off) select * from rlp where a = 20 or a = 40;
 (7 rows)
 
 explain (costs off) select * from rlp3 where a = 20;   /* empty */
-              QUERY PLAN               
----------------------------------------
+        QUERY PLAN        
+--------------------------
  Result
    One-Time Filter: false
  Optimizer: GPORCA
@@ -754,15 +813,26 @@ explain (costs off) select * from rlp where (a = 1 and a = 3) or (a > 1 and a = 
 
 -- multi-column keys
 create table mc3p (a int, b int, c int) partition by range (a, abs(b), c);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table mc3p_default partition of mc3p default;
+NOTICE:  table has parent, setting distribution columns to match parent table
 create table mc3p0 partition of mc3p for values from (minvalue, minvalue, minvalue) to (1, 1, 1);
+NOTICE:  table has parent, setting distribution columns to match parent table
 create table mc3p1 partition of mc3p for values from (1, 1, 1) to (10, 5, 10);
+NOTICE:  table has parent, setting distribution columns to match parent table
 create table mc3p2 partition of mc3p for values from (10, 5, 10) to (10, 10, 10);
+NOTICE:  table has parent, setting distribution columns to match parent table
 create table mc3p3 partition of mc3p for values from (10, 10, 10) to (10, 10, 20);
+NOTICE:  table has parent, setting distribution columns to match parent table
 create table mc3p4 partition of mc3p for values from (10, 10, 20) to (10, maxvalue, maxvalue);
+NOTICE:  table has parent, setting distribution columns to match parent table
 create table mc3p5 partition of mc3p for values from (11, 1, 1) to (20, 10, 10);
+NOTICE:  table has parent, setting distribution columns to match parent table
 create table mc3p6 partition of mc3p for values from (20, 10, 10) to (20, 20, 20);
+NOTICE:  table has parent, setting distribution columns to match parent table
 create table mc3p7 partition of mc3p for values from (20, 20, 20) to (maxvalue, maxvalue, maxvalue);
+NOTICE:  table has parent, setting distribution columns to match parent table
 explain (costs off) select * from mc3p where a = 1;
                  QUERY PLAN                  
 ---------------------------------------------
@@ -1065,13 +1135,22 @@ explain (costs off) select * from mc3p where (a = 1 and abs(b) = 1) or (a = 10 a
 
 -- a simpler multi-column keys case
 create table mc2p (a int, b int) partition by range (a, b);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table mc2p_default partition of mc2p default;
+NOTICE:  table has parent, setting distribution columns to match parent table
 create table mc2p0 partition of mc2p for values from (minvalue, minvalue) to (1, minvalue);
+NOTICE:  table has parent, setting distribution columns to match parent table
 create table mc2p1 partition of mc2p for values from (1, minvalue) to (1, 1);
+NOTICE:  table has parent, setting distribution columns to match parent table
 create table mc2p2 partition of mc2p for values from (1, 1) to (2, minvalue);
+NOTICE:  table has parent, setting distribution columns to match parent table
 create table mc2p3 partition of mc2p for values from (2, minvalue) to (2, 1);
+NOTICE:  table has parent, setting distribution columns to match parent table
 create table mc2p4 partition of mc2p for values from (2, 1) to (2, maxvalue);
+NOTICE:  table has parent, setting distribution columns to match parent table
 create table mc2p5 partition of mc2p for values from (2, maxvalue) to (maxvalue, maxvalue);
+NOTICE:  table has parent, setting distribution columns to match parent table
 explain (costs off) select * from mc2p where a < 2;
                  QUERY PLAN                  
 ---------------------------------------------
@@ -1172,11 +1251,18 @@ explain (costs off) select * from mc2p where b is null;
 
 -- boolean partitioning
 create table boolpart (a bool) partition by list (a);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table boolpart_default partition of boolpart default;
+NOTICE:  table has parent, setting distribution columns to match parent table
 create table boolpart_t partition of boolpart for values in ('true');
+NOTICE:  table has parent, setting distribution columns to match parent table
 create table boolpart_f partition of boolpart for values in ('false');
+NOTICE:  table has parent, setting distribution columns to match parent table
 insert into boolpart values (true), (false), (null);
 explain (costs off) select * from boolpart where a in (true, false);
+NOTICE:  One or more columns in the following table(s) do not have statistics: boolpart
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
                      QUERY PLAN                     
 ----------------------------------------------------
  Gather Motion 1:1  (slice1; segments: 1)
@@ -1187,6 +1273,8 @@ explain (costs off) select * from boolpart where a in (true, false);
 (5 rows)
 
 explain (costs off) select * from boolpart where a = false;
+NOTICE:  One or more columns in the following table(s) do not have statistics: boolpart
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
                      QUERY PLAN                     
 ----------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
@@ -1197,6 +1285,8 @@ explain (costs off) select * from boolpart where a = false;
 (5 rows)
 
 explain (costs off) select * from boolpart where not a = false;
+NOTICE:  One or more columns in the following table(s) do not have statistics: boolpart
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
                      QUERY PLAN                     
 ----------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
@@ -1207,6 +1297,8 @@ explain (costs off) select * from boolpart where not a = false;
 (5 rows)
 
 explain (costs off) select * from boolpart where a is true or a is not true;
+NOTICE:  One or more columns in the following table(s) do not have statistics: boolpart
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
                      QUERY PLAN                     
 ----------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
@@ -1217,6 +1309,8 @@ explain (costs off) select * from boolpart where a is true or a is not true;
 (5 rows)
 
 explain (costs off) select * from boolpart where a is not true;
+NOTICE:  One or more columns in the following table(s) do not have statistics: boolpart
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
                      QUERY PLAN                     
 ----------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
@@ -1227,6 +1321,8 @@ explain (costs off) select * from boolpart where a is not true;
 (5 rows)
 
 explain (costs off) select * from boolpart where a is not true and a is not false;
+NOTICE:  One or more columns in the following table(s) do not have statistics: boolpart
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
                        QUERY PLAN                       
 --------------------------------------------------------
  Gather Motion 1:1  (slice1; segments: 1)
@@ -1237,6 +1333,8 @@ explain (costs off) select * from boolpart where a is not true and a is not fals
 (5 rows)
 
 explain (costs off) select * from boolpart where a is unknown;
+NOTICE:  One or more columns in the following table(s) do not have statistics: boolpart
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
                      QUERY PLAN                     
 ----------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
@@ -1247,6 +1345,8 @@ explain (costs off) select * from boolpart where a is unknown;
 (5 rows)
 
 explain (costs off) select * from boolpart where a is not unknown;
+NOTICE:  One or more columns in the following table(s) do not have statistics: boolpart
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
                      QUERY PLAN                     
 ----------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
@@ -1257,6 +1357,8 @@ explain (costs off) select * from boolpart where a is not unknown;
 (5 rows)
 
 select * from boolpart where a in (true, false);
+NOTICE:  One or more columns in the following table(s) do not have statistics: boolpart
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  a 
 ---
  f
@@ -1264,18 +1366,24 @@ select * from boolpart where a in (true, false);
 (2 rows)
 
 select * from boolpart where a = false;
+NOTICE:  One or more columns in the following table(s) do not have statistics: boolpart
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  a 
 ---
  f
 (1 row)
 
 select * from boolpart where not a = false;
+NOTICE:  One or more columns in the following table(s) do not have statistics: boolpart
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  a 
 ---
  t
 (1 row)
 
 select * from boolpart where a is true or a is not true;
+NOTICE:  One or more columns in the following table(s) do not have statistics: boolpart
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  a 
 ---
  
@@ -1284,6 +1392,8 @@ select * from boolpart where a is true or a is not true;
 (3 rows)
 
 select * from boolpart where a is not true;
+NOTICE:  One or more columns in the following table(s) do not have statistics: boolpart
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  a 
 ---
  
@@ -1291,18 +1401,24 @@ select * from boolpart where a is not true;
 (2 rows)
 
 select * from boolpart where a is not true and a is not false;
+NOTICE:  One or more columns in the following table(s) do not have statistics: boolpart
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  a 
 ---
  
 (1 row)
 
 select * from boolpart where a is unknown;
+NOTICE:  One or more columns in the following table(s) do not have statistics: boolpart
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  a 
 ---
  
 (1 row)
 
 select * from boolpart where a is not unknown;
+NOTICE:  One or more columns in the following table(s) do not have statistics: boolpart
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  a 
 ---
  f
@@ -1312,9 +1428,12 @@ select * from boolpart where a is not unknown;
 -- try some other permutations with a NULL partition instead of a DEFAULT
 delete from boolpart where a is null;
 create table boolpart_null partition of boolpart for values in (null);
+NOTICE:  table has parent, setting distribution columns to match parent table
 insert into boolpart values(null);
 explain (costs off) select * from boolpart where a is not true;
-                     QUERY PLAN
+NOTICE:  One or more columns in the following table(s) do not have statistics: boolpart
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+                     QUERY PLAN                     
 ----------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Dynamic Seq Scan on boolpart
@@ -1324,9 +1443,11 @@ explain (costs off) select * from boolpart where a is not true;
 (5 rows)
 
 explain (costs off) select * from boolpart where a is not true and a is not false;
-                       QUERY PLAN
+NOTICE:  One or more columns in the following table(s) do not have statistics: boolpart
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+                       QUERY PLAN                       
 --------------------------------------------------------
- Gather Motion XXX
+ Gather Motion 1:1  (slice1; segments: 1)
    ->  Dynamic Seq Scan on boolpart
          Number of partitions to scan: 1 (out of 4)
          Filter: ((a IS NOT TRUE) AND (a IS NOT FALSE))
@@ -1334,7 +1455,9 @@ explain (costs off) select * from boolpart where a is not true and a is not fals
 (5 rows)
 
 explain (costs off) select * from boolpart where a is not false;
-                     QUERY PLAN
+NOTICE:  One or more columns in the following table(s) do not have statistics: boolpart
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+                     QUERY PLAN                     
 ----------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Dynamic Seq Scan on boolpart
@@ -1344,6 +1467,8 @@ explain (costs off) select * from boolpart where a is not false;
 (5 rows)
 
 select * from boolpart where a is not true;
+NOTICE:  One or more columns in the following table(s) do not have statistics: boolpart
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  a 
 ---
  
@@ -1351,12 +1476,16 @@ select * from boolpart where a is not true;
 (2 rows)
 
 select * from boolpart where a is not true and a is not false;
+NOTICE:  One or more columns in the following table(s) do not have statistics: boolpart
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  a 
 ---
  
 (1 row)
 
 select * from boolpart where a is not false;
+NOTICE:  One or more columns in the following table(s) do not have statistics: boolpart
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  a 
 ---
  
@@ -1366,14 +1495,19 @@ select * from boolpart where a is not false;
 -- inverse boolean partitioning - a seemingly unlikely design, but we've got
 -- code for it, so we'd better test it.
 create table iboolpart (a bool) partition by list ((not a));
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table iboolpart_default partition of iboolpart default;
+NOTICE:  table has parent, setting distribution columns to match parent table
 create table iboolpart_f partition of iboolpart for values in ('true');
+NOTICE:  table has parent, setting distribution columns to match parent table
 create table iboolpart_t partition of iboolpart for values in ('false');
+NOTICE:  table has parent, setting distribution columns to match parent table
 insert into iboolpart values (true), (false), (null);
 explain (costs off) select * from iboolpart where a in (true, false);
-                           QUERY PLAN
-----------------------------------------------------------------
- Gather Motion XXX
+                      QUERY PLAN                       
+-------------------------------------------------------
+ Gather Motion 1:1  (slice1; segments: 1)
    ->  Append
          ->  Seq Scan on iboolpart_t iboolpart_1
                Filter: (a = ANY ('{t,f}'::boolean[]))
@@ -1381,30 +1515,30 @@ explain (costs off) select * from iboolpart where a in (true, false);
                Filter: (a = ANY ('{t,f}'::boolean[]))
          ->  Seq Scan on iboolpart_default iboolpart_3
                Filter: (a = ANY ('{t,f}'::boolean[]))
- Optimizer: GPORCA
+ Optimizer: Postgres query optimizer
 (9 rows)
 
 explain (costs off) select * from iboolpart where a = false;
-                     QUERY PLAN
-----------------------------------------------------
+                QUERY PLAN                
+------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Seq Scan on iboolpart_f iboolpart
          Filter: (NOT a)
- Optimizer: GPORCA
+ Optimizer: Postgres query optimizer
 (4 rows)
 
 explain (costs off) select * from iboolpart where not a = false;
-                     QUERY PLAN
-----------------------------------------------------
+                QUERY PLAN                
+------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Seq Scan on iboolpart_t iboolpart
          Filter: a
- Optimizer: GPORCA
+ Optimizer: Postgres query optimizer
 (4 rows)
 
 explain (costs off) select * from iboolpart where a is true or a is not true;
-                           QUERY PLAN
-----------------------------------------------------------------
+                       QUERY PLAN                       
+--------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Append
          ->  Seq Scan on iboolpart_t iboolpart_1
@@ -1413,12 +1547,12 @@ explain (costs off) select * from iboolpart where a is true or a is not true;
                Filter: ((a IS TRUE) OR (a IS NOT TRUE))
          ->  Seq Scan on iboolpart_default iboolpart_3
                Filter: ((a IS TRUE) OR (a IS NOT TRUE))
- Optimizer: GPORCA
+ Optimizer: Postgres query optimizer
 (9 rows)
 
 explain (costs off) select * from iboolpart where a is not true;
-                           QUERY PLAN
-----------------------------------------------------------------
+                      QUERY PLAN                       
+-------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Append
          ->  Seq Scan on iboolpart_t iboolpart_1
@@ -1427,12 +1561,12 @@ explain (costs off) select * from iboolpart where a is not true;
                Filter: (a IS NOT TRUE)
          ->  Seq Scan on iboolpart_default iboolpart_3
                Filter: (a IS NOT TRUE)
- Optimizer: GPORCA
+ Optimizer: Postgres query optimizer
 (9 rows)
 
 explain (costs off) select * from iboolpart where a is not true and a is not false;
-                           QUERY PLAN
-----------------------------------------------------------------
+                          QUERY PLAN                          
+--------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Append
          ->  Seq Scan on iboolpart_t iboolpart_1
@@ -1441,12 +1575,12 @@ explain (costs off) select * from iboolpart where a is not true and a is not fal
                Filter: ((a IS NOT TRUE) AND (a IS NOT FALSE))
          ->  Seq Scan on iboolpart_default iboolpart_3
                Filter: ((a IS NOT TRUE) AND (a IS NOT FALSE))
- Optimizer: GPORCA
+ Optimizer: Postgres query optimizer
 (9 rows)
 
 explain (costs off) select * from iboolpart where a is unknown;
-                           QUERY PLAN
-----------------------------------------------------------------
+                      QUERY PLAN                       
+-------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Append
          ->  Seq Scan on iboolpart_t iboolpart_1
@@ -1455,12 +1589,12 @@ explain (costs off) select * from iboolpart where a is unknown;
                Filter: (a IS UNKNOWN)
          ->  Seq Scan on iboolpart_default iboolpart_3
                Filter: (a IS UNKNOWN)
- Optimizer: GPORCA
+ Optimizer: Postgres query optimizer
 (9 rows)
 
 explain (costs off) select * from iboolpart where a is not unknown;
-                           QUERY PLAN
-----------------------------------------------------------------
+                      QUERY PLAN                       
+-------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Append
          ->  Seq Scan on iboolpart_t iboolpart_1
@@ -1469,14 +1603,14 @@ explain (costs off) select * from iboolpart where a is not unknown;
                Filter: (a IS NOT UNKNOWN)
          ->  Seq Scan on iboolpart_default iboolpart_3
                Filter: (a IS NOT UNKNOWN)
- Optimizer: GPORCA
+ Optimizer: Postgres query optimizer
 (9 rows)
 
 select * from iboolpart where a in (true, false);
  a 
 ---
- f
  t
+ f
 (2 rows)
 
 select * from iboolpart where a = false;
@@ -1495,8 +1629,8 @@ select * from iboolpart where a is true or a is not true;
  a 
 ---
  
- f
  t
+ f
 (3 rows)
 
 select * from iboolpart where a is not true;
@@ -1521,13 +1655,14 @@ select * from iboolpart where a is unknown;
 select * from iboolpart where a is not unknown;
  a 
 ---
- f
  t
+ f
 (2 rows)
 
 -- Try some other permutations with a NULL partition instead of a DEFAULT
 delete from iboolpart where a is null;
 create table iboolpart_null partition of iboolpart for values in (null);
+NOTICE:  table has parent, setting distribution columns to match parent table
 insert into iboolpart values(null);
 -- Pruning shouldn't take place for these.  Just check the result is correct
 select * from iboolpart where a is not true;
@@ -1546,16 +1681,23 @@ select * from iboolpart where a is not true and a is not false;
 select * from iboolpart where a is not false;
  a 
 ---
- 
  t
+ 
 (2 rows)
 
 create table boolrangep (a bool, b bool, c int) partition by range (a,b,c);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table boolrangep_tf partition of boolrangep for values from ('true', 'false', 0) to ('true', 'false', 100);
+NOTICE:  table has parent, setting distribution columns to match parent table
 create table boolrangep_ft partition of boolrangep for values from ('false', 'true', 0) to ('false', 'true', 100);
+NOTICE:  table has parent, setting distribution columns to match parent table
 create table boolrangep_ff1 partition of boolrangep for values from ('false', 'false', 0) to ('false', 'false', 50);
+NOTICE:  table has parent, setting distribution columns to match parent table
 create table boolrangep_ff2 partition of boolrangep for values from ('false', 'false', 50) to ('false', 'false', 100);
+NOTICE:  table has parent, setting distribution columns to match parent table
 create table boolrangep_null partition of boolrangep default;
+NOTICE:  table has parent, setting distribution columns to match parent table
 -- try a more complex case that's been known to trip up pruning in the past
 explain (costs off)  select * from boolrangep where not a and not b and c = 25;
                      QUERY PLAN                     
@@ -1568,8 +1710,8 @@ explain (costs off)  select * from boolrangep where not a and not b and c = 25;
 
 -- ensure we prune boolrangep_tf
 explain (costs off)  select * from boolrangep where a is not true and not b and c = 25;
-QUERY PLAN
-___________
+                            QUERY PLAN                            
+------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Append
          ->  Seq Scan on boolrangep_ff1 boolrangep_1
@@ -1580,24 +1722,35 @@ ___________
                Filter: ((a IS NOT TRUE) AND (NOT b) AND (c = 25))
          ->  Seq Scan on boolrangep_null boolrangep_4
                Filter: ((a IS NOT TRUE) AND (NOT b) AND (c = 25))
+ Optimizer: Postgres query optimizer
+(11 rows)
 
 -- ensure we prune everything apart from boolrangep_tf and boolrangep_null
 explain (costs off)  select * from boolrangep where a is not false and not b and c = 25;
-QUERY PLAN
-___________
+                            QUERY PLAN                             
+-------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Append
          ->  Seq Scan on boolrangep_tf boolrangep_1
                Filter: ((a IS NOT FALSE) AND (NOT b) AND (c = 25))
          ->  Seq Scan on boolrangep_null boolrangep_2
                Filter: ((a IS NOT FALSE) AND (NOT b) AND (c = 25))
+ Optimizer: Postgres query optimizer
+(7 rows)
 
 -- test scalar-to-array operators
 create table coercepart (a varchar) partition by list (a);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table coercepart_ab partition of coercepart for values in ('ab');
+NOTICE:  table has parent, setting distribution columns to match parent table
 create table coercepart_bc partition of coercepart for values in ('bc');
+NOTICE:  table has parent, setting distribution columns to match parent table
 create table coercepart_cd partition of coercepart for values in ('cd');
+NOTICE:  table has parent, setting distribution columns to match parent table
 explain (costs off) select * from coercepart where a in ('ab', to_char(125, '999'));
+NOTICE:  One or more columns in the following table(s) do not have statistics: coercepart
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
                         QUERY PLAN                         
 -----------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
@@ -1608,6 +1761,8 @@ explain (costs off) select * from coercepart where a in ('ab', to_char(125, '999
 (5 rows)
 
 explain (costs off) select * from coercepart where a ~ any ('{ab}');
+NOTICE:  One or more columns in the following table(s) do not have statistics: coercepart
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
                      QUERY PLAN                     
 ----------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
@@ -1618,6 +1773,8 @@ explain (costs off) select * from coercepart where a ~ any ('{ab}');
 (5 rows)
 
 explain (costs off) select * from coercepart where a !~ all ('{ab}');
+NOTICE:  One or more columns in the following table(s) do not have statistics: coercepart
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
                      QUERY PLAN                      
 -----------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
@@ -1628,6 +1785,8 @@ explain (costs off) select * from coercepart where a !~ all ('{ab}');
 (5 rows)
 
 explain (costs off) select * from coercepart where a ~ any ('{ab,bc}');
+NOTICE:  One or more columns in the following table(s) do not have statistics: coercepart
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
                       QUERY PLAN                       
 -------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
@@ -1638,6 +1797,8 @@ explain (costs off) select * from coercepart where a ~ any ('{ab,bc}');
 (5 rows)
 
 explain (costs off) select * from coercepart where a !~ all ('{ab,bc}');
+NOTICE:  One or more columns in the following table(s) do not have statistics: coercepart
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
                        QUERY PLAN                       
 --------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
@@ -1648,6 +1809,8 @@ explain (costs off) select * from coercepart where a !~ all ('{ab,bc}');
 (5 rows)
 
 explain (costs off) select * from coercepart where a = any ('{ab,bc}');
+NOTICE:  One or more columns in the following table(s) do not have statistics: coercepart
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
                       QUERY PLAN                       
 -------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
@@ -1658,6 +1821,8 @@ explain (costs off) select * from coercepart where a = any ('{ab,bc}');
 (5 rows)
 
 explain (costs off) select * from coercepart where a = any ('{ab,null}');
+NOTICE:  One or more columns in the following table(s) do not have statistics: coercepart
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
                        QUERY PLAN                        
 ---------------------------------------------------------
  Gather Motion 1:1  (slice1; segments: 1)
@@ -1668,6 +1833,8 @@ explain (costs off) select * from coercepart where a = any ('{ab,null}');
 (5 rows)
 
 explain (costs off) select * from coercepart where a = any (null::text[]);
+NOTICE:  One or more columns in the following table(s) do not have statistics: coercepart
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
                      QUERY PLAN                     
 ----------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
@@ -1678,6 +1845,8 @@ explain (costs off) select * from coercepart where a = any (null::text[]);
 (5 rows)
 
 explain (costs off) select * from coercepart where a = all ('{ab}');
+NOTICE:  One or more columns in the following table(s) do not have statistics: coercepart
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
                      QUERY PLAN                     
 ----------------------------------------------------
  Gather Motion 1:1  (slice1; segments: 1)
@@ -1688,6 +1857,8 @@ explain (costs off) select * from coercepart where a = all ('{ab}');
 (5 rows)
 
 explain (costs off) select * from coercepart where a = all ('{ab,bc}');
+NOTICE:  One or more columns in the following table(s) do not have statistics: coercepart
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
                       QUERY PLAN                       
 -------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
@@ -1698,6 +1869,8 @@ explain (costs off) select * from coercepart where a = all ('{ab,bc}');
 (5 rows)
 
 explain (costs off) select * from coercepart where a = all ('{ab,null}');
+NOTICE:  One or more columns in the following table(s) do not have statistics: coercepart
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
                        QUERY PLAN                        
 ---------------------------------------------------------
  Gather Motion 1:1  (slice1; segments: 1)
@@ -1708,6 +1881,8 @@ explain (costs off) select * from coercepart where a = all ('{ab,null}');
 (5 rows)
 
 explain (costs off) select * from coercepart where a = all (null::text[]);
+NOTICE:  One or more columns in the following table(s) do not have statistics: coercepart
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
                      QUERY PLAN                     
 ----------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
@@ -1719,10 +1894,17 @@ explain (costs off) select * from coercepart where a = all (null::text[]);
 
 drop table coercepart;
 CREATE TABLE part (a INT, b INT) PARTITION BY LIST (a);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE part_p1 PARTITION OF part FOR VALUES IN (-2,-1,0,1,2);
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE part_p2 PARTITION OF part DEFAULT PARTITION BY RANGE(a);
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE part_p2_p1 PARTITION OF part_p2 DEFAULT;
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE part_rev (b INT, c INT, a INT);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'b' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 -- The distribution key must be the same for partition tables.
 ALTER TABLE part_rev SET DISTRIBUTED BY(a);
 ALTER TABLE part ATTACH PARTITION part_rev FOR VALUES IN (3);  -- fail
@@ -1867,10 +2049,17 @@ explain (costs off) select * from mc2p t1, lateral (select count(*) from mc3p t2
 --
 -- doesn't prune range partitions
 create table rp (a int) partition by range (a);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table rp0 partition of rp for values from (minvalue) to (1);
+NOTICE:  table has parent, setting distribution columns to match parent table
 create table rp1 partition of rp for values from (1) to (2);
+NOTICE:  table has parent, setting distribution columns to match parent table
 create table rp2 partition of rp for values from (2) to (maxvalue);
+NOTICE:  table has parent, setting distribution columns to match parent table
 explain (costs off) select * from rp where a <> 1;
+NOTICE:  One or more columns in the following table(s) do not have statistics: rp
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
                      QUERY PLAN                     
 ----------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
@@ -1881,6 +2070,8 @@ explain (costs off) select * from rp where a <> 1;
 (5 rows)
 
 explain (costs off) select * from rp where a <> 1 and a <> 2;
+NOTICE:  One or more columns in the following table(s) do not have statistics: rp
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
                      QUERY PLAN                     
 ----------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
@@ -1892,6 +2083,8 @@ explain (costs off) select * from rp where a <> 1 and a <> 2;
 
 -- null partition should be eliminated due to strict <> clause.
 explain (costs off) select * from lp where a <> 'a';
+NOTICE:  One or more columns in the following table(s) do not have statistics: lp
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
                      QUERY PLAN                     
 ----------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
@@ -1911,6 +2104,8 @@ explain (costs off) select * from lp where a <> 'a' and a is null;
 (3 rows)
 
 explain (costs off) select * from lp where (a <> 'a' and a <> 'd') or a is null;
+NOTICE:  One or more columns in the following table(s) do not have statistics: lp
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
                                   QUERY PLAN                                  
 ------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
@@ -1939,9 +2134,14 @@ explain (costs off) select * from rlp where a = 15 and b <> 'ab' and b <> 'cd' a
 -- different collations for different keys with same expression
 --
 create table coll_pruning_multi (a text) partition by range (substr(a, 1) collate "POSIX", substr(a, 1) collate "C");
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table coll_pruning_multi1 partition of coll_pruning_multi for values from ('a', 'a') to ('a', 'e');
+NOTICE:  table has parent, setting distribution columns to match parent table
 create table coll_pruning_multi2 partition of coll_pruning_multi for values from ('a', 'e') to ('a', 'z');
+NOTICE:  table has parent, setting distribution columns to match parent table
 create table coll_pruning_multi3 partition of coll_pruning_multi for values from ('b', 'a') to ('b', 'e');
+NOTICE:  table has parent, setting distribution columns to match parent table
 -- no pruning, because no value for the leading key
 explain (costs off) select * from coll_pruning_multi where substr(a, 1) = 'e' collate "C";
                             QUERY PLAN                            
@@ -1984,9 +2184,15 @@ explain (costs off) select * from coll_pruning_multi where substr(a, 1) = 'e' co
 -- LIKE operators don't prune
 --
 create table like_op_noprune (a text) partition by list (a);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table like_op_noprune1 partition of like_op_noprune for values in ('ABC');
+NOTICE:  table has parent, setting distribution columns to match parent table
 create table like_op_noprune2 partition of like_op_noprune for values in ('BCD');
+NOTICE:  table has parent, setting distribution columns to match parent table
 explain (costs off) select * from like_op_noprune where a like '%BC';
+NOTICE:  One or more columns in the following table(s) do not have statistics: like_op_noprune
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
                      QUERY PLAN                     
 ----------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
@@ -2000,8 +2206,12 @@ explain (costs off) select * from like_op_noprune where a like '%BC';
 -- tests wherein clause value requires a cross-type comparison function
 --
 create table lparted_by_int2 (a smallint) partition by list (a);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table lparted_by_int2_1 partition of lparted_by_int2 for values in (1);
+NOTICE:  table has parent, setting distribution columns to match parent table
 create table lparted_by_int2_16384 partition of lparted_by_int2 for values in (16384);
+NOTICE:  table has parent, setting distribution columns to match parent table
 explain (costs off) select * from lparted_by_int2 where a = 100_000_000_000_000;
         QUERY PLAN        
 --------------------------
@@ -2011,8 +2221,12 @@ explain (costs off) select * from lparted_by_int2 where a = 100_000_000_000_000;
 (3 rows)
 
 create table rparted_by_int2 (a smallint) partition by range (a);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table rparted_by_int2_1 partition of rparted_by_int2 for values from (1) to (10);
+NOTICE:  table has parent, setting distribution columns to match parent table
 create table rparted_by_int2_16384 partition of rparted_by_int2 for values from (10) to (16384);
+NOTICE:  table has parent, setting distribution columns to match parent table
 -- all partitions pruned
 explain (costs off) select * from rparted_by_int2 where a > 100_000_000_000_000;
         QUERY PLAN        
@@ -2023,8 +2237,11 @@ explain (costs off) select * from rparted_by_int2 where a > 100_000_000_000_000;
 (3 rows)
 
 create table rparted_by_int2_maxvalue partition of rparted_by_int2 for values from (16384) to (maxvalue);
+NOTICE:  table has parent, setting distribution columns to match parent table
 -- all partitions but rparted_by_int2_maxvalue pruned
 explain (costs off) select * from rparted_by_int2 where a > 100_000_000_000_000;
+NOTICE:  One or more columns in the following table(s) do not have statistics: rparted_by_int2
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
                      QUERY PLAN                     
 ----------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
@@ -2038,15 +2255,19 @@ drop table lp, coll_pruning, rlp, mc3p, mc2p, boolpart, iboolpart, boolrangep, r
 -- check that AlternativeSubPlan within a pruning expression gets cleaned up
 create table asptab (id int primary key) partition by range (id);
 create table asptab0 partition of asptab for values from (0) to (1);
+NOTICE:  table has parent, setting distribution columns to match parent table
 create table asptab1 partition of asptab for values from (1) to (2);
+NOTICE:  table has parent, setting distribution columns to match parent table
 explain (costs off)
 select * from
   (select exists (select 1 from int4_tbl tinner where f1 = touter.f1) as b
    from int4_tbl touter) ss,
   asptab
 where asptab.id > ss.b::int;
-                                      QUERY PLAN
---------------------------------------------------------------------------------------
+NOTICE:  One or more columns in the following table(s) do not have statistics: asptab
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+                                               QUERY PLAN                                                
+---------------------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Nested Loop
          Join Filter: true
@@ -2076,10 +2297,16 @@ drop table asptab;
 --
 create table hp (a int, b text, c int)
   partition by hash (a part_test_int4_ops, b part_test_text_ops);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table hp0 partition of hp for values with (modulus 4, remainder 0);
+NOTICE:  table has parent, setting distribution columns to match parent table
 create table hp3 partition of hp for values with (modulus 4, remainder 3);
+NOTICE:  table has parent, setting distribution columns to match parent table
 create table hp1 partition of hp for values with (modulus 4, remainder 1);
+NOTICE:  table has parent, setting distribution columns to match parent table
 create table hp2 partition of hp for values with (modulus 4, remainder 2);
+NOTICE:  table has parent, setting distribution columns to match parent table
 insert into hp values (null, null, 0);
 insert into hp values (1, null, 1);
 insert into hp values (1, 'xxx', 2);
@@ -2316,18 +2543,32 @@ explain (costs off) select * from hp where a = 1 and b = 'abcde' and
 -- Test runtime partition pruning
 --
 create table ab (a int not null, b int not null) partition by list (a);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table ab_a2 partition of ab for values in(2) partition by list (b);
+NOTICE:  table has parent, setting distribution columns to match parent table
 create table ab_a2_b1 partition of ab_a2 for values in (1);
+NOTICE:  table has parent, setting distribution columns to match parent table
 create table ab_a2_b2 partition of ab_a2 for values in (2);
+NOTICE:  table has parent, setting distribution columns to match parent table
 create table ab_a2_b3 partition of ab_a2 for values in (3);
+NOTICE:  table has parent, setting distribution columns to match parent table
 create table ab_a1 partition of ab for values in(1) partition by list (b);
+NOTICE:  table has parent, setting distribution columns to match parent table
 create table ab_a1_b1 partition of ab_a1 for values in (1);
+NOTICE:  table has parent, setting distribution columns to match parent table
 create table ab_a1_b2 partition of ab_a1 for values in (2);
+NOTICE:  table has parent, setting distribution columns to match parent table
 create table ab_a1_b3 partition of ab_a1 for values in (3);
+NOTICE:  table has parent, setting distribution columns to match parent table
 create table ab_a3 partition of ab for values in(3) partition by list (b);
+NOTICE:  table has parent, setting distribution columns to match parent table
 create table ab_a3_b1 partition of ab_a3 for values in (1);
+NOTICE:  table has parent, setting distribution columns to match parent table
 create table ab_a3_b2 partition of ab_a3 for values in (2);
+NOTICE:  table has parent, setting distribution columns to match parent table
 create table ab_a3_b3 partition of ab_a3 for values in (3);
+NOTICE:  table has parent, setting distribution columns to match parent table
 -- Disallow index only scans as concurrent transactions may stop visibility
 -- bits being set causing "Heap Fetches" to be unstable in the EXPLAIN ANALYZE
 -- output.
@@ -2450,29 +2691,39 @@ explain (analyze, costs off, summary off, timing off) execute ab_q3 (2, 2);
 --
 -- recreate partitions dropped above
 create table hp1 partition of hp for values with (modulus 4, remainder 1);
+NOTICE:  table has parent, setting distribution columns to match parent table
 create table hp2 partition of hp for values with (modulus 4, remainder 2);
+NOTICE:  table has parent, setting distribution columns to match parent table
 create table hp3 partition of hp for values with (modulus 4, remainder 3);
+NOTICE:  table has parent, setting distribution columns to match parent table
 -- Ensure we correctly prune unneeded partitions when there is an IS NULL qual
 prepare hp_q1 (text) as
 select * from hp where a is null and b = $1;
 explain (costs off) execute hp_q1('xxx');
-QUERY PLAN
-___________
- Gather Motion XXX
+                    QUERY PLAN                    
+--------------------------------------------------
+ Gather Motion 1:1  (slice1; segments: 1)
    ->  Append
          Subplans Removed: 3
          ->  Seq Scan on hp2 hp_1
                Filter: ((a IS NULL) AND (b = $1))
-GP_IGNORE:(6 rows)
+ Optimizer: Postgres query optimizer
+(6 rows)
 
 deallocate hp_q1;
 drop table hp;
 -- Test a backwards Append scan
 create table list_part (a int) partition by list (a);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table list_part1 partition of list_part for values in (1);
+NOTICE:  table has parent, setting distribution columns to match parent table
 create table list_part2 partition of list_part for values in (2);
+NOTICE:  table has parent, setting distribution columns to match parent table
 create table list_part3 partition of list_part for values in (3);
+NOTICE:  table has parent, setting distribution columns to match parent table
 create table list_part4 partition of list_part for values in (4);
+NOTICE:  table has parent, setting distribution columns to match parent table
 insert into list_part select generate_series(1,4);
 begin;
 -- Don't select an actual value out of the table as the order of the Append's
@@ -2489,6 +2740,8 @@ begin;
 create function list_part_fn(int) returns int as $$ begin return $1; end;$$ language plpgsql stable;
 -- Ensure pruning works using a stable function containing no Vars
 explain (analyze, costs off, summary off, timing off) select * from list_part where a = list_part_fn(1);
+NOTICE:  One or more columns in the following table(s) do not have statistics: list_part
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
                             QUERY PLAN                            
 ------------------------------------------------------------------
  Gather Motion 1:1  (slice1; segments: 1) (actual rows=1 loops=1)
@@ -2501,6 +2754,8 @@ explain (analyze, costs off, summary off, timing off) select * from list_part wh
 
 -- Ensure pruning does not take place when the function has a Var parameter
 explain (analyze, costs off, summary off, timing off) select * from list_part where a = list_part_fn(a);
+NOTICE:  One or more columns in the following table(s) do not have statistics: list_part
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
                                QUERY PLAN                               
 ------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3) (actual rows=4 loops=1)
@@ -2513,6 +2768,8 @@ explain (analyze, costs off, summary off, timing off) select * from list_part wh
 
 -- Ensure pruning does not take place when the expression contains a Var.
 explain (analyze, costs off, summary off, timing off) select * from list_part where a = list_part_fn(1) + a;
+NOTICE:  One or more columns in the following table(s) do not have statistics: list_part
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
                                QUERY PLAN                               
 ------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3) (actual rows=0 loops=1)
@@ -2655,6 +2912,8 @@ select explain_parallel_append('select count(*) from ab where (a = (select 1) or
 
 -- Test pruning during parallel nested loop query
 create table lprt_a (a int not null);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 -- Insert some values we won't find in ab
 insert into lprt_a select 0 from generate_series(1,100);
 -- and insert some values that we should find.
@@ -2699,7 +2958,7 @@ select explain_parallel_append('select avg(ab.a) from ab inner join lprt_a a on 
                                              Index Cond: (a = ANY ('{0,0,1}'::integer[]))
                      ->  Sort (actual rows=N loops=N)
                            Sort Key: a.a
-                           Sort Method:  quicksort  Memory: 60kB
+                           Sort Method:  quicksort  Memory: 25kB
                            ->  Partition Selector (selector id: $0) (actual rows=N loops=N)
                                  ->  Seq Scan on lprt_a a (actual rows=N loops=N)
                                        Filter: (a = ANY ('{0,0,1}'::integer[]))
@@ -2709,8 +2968,8 @@ select explain_parallel_append('select avg(ab.a) from ab inner join lprt_a a on 
 -- Ensure the same partitions are pruned when we make the nested loop
 -- parameter an Expr rather than a plain Param.
 select explain_parallel_append('select avg(ab.a) from ab inner join lprt_a a on ab.a = a.a + 0 where a.a in(0, 0, 1)');
-                                        explain_parallel_append                                         
---------------------------------------------------------------------------------------------------------
+                                     explain_parallel_append                                     
+-------------------------------------------------------------------------------------------------
  Finalize Aggregate (actual rows=N loops=N)
    ->  Gather Motion 3:1  (slice1; segments: 3) (actual rows=N loops=N)
          ->  Partial Aggregate (actual rows=N loops=N)
@@ -2720,26 +2979,44 @@ select explain_parallel_append('select avg(ab.a) from ab inner join lprt_a a on 
                            ->  Seq Scan on lprt_a a (actual rows=N loops=N)
                                  Filter: (a = ANY ('{0,0,1}'::integer[]))
                      ->  Append (actual rows=N loops=N)
-                           ->  Index Scan using ab_a1_b1_a_idx on ab_a1_b1 ab_1 (actual rows=N loops=N)
-                                 Index Cond: (a = (a.a + 0))
-                           ->  Index Scan using ab_a1_b2_a_idx on ab_a1_b2 ab_2 (actual rows=N loops=N)
-                                 Index Cond: (a = (a.a + 0))
-                           ->  Index Scan using ab_a1_b3_a_idx on ab_a1_b3 ab_3 (actual rows=N loops=N)
-                                 Index Cond: (a = (a.a + 0))
-                           ->  Index Scan using ab_a2_b1_a_idx on ab_a2_b1 ab_4 (never executed)
-                                 Index Cond: (a = (a.a + 0))
-                           ->  Index Scan using ab_a2_b2_a_idx on ab_a2_b2 ab_5 (never executed)
-                                 Index Cond: (a = (a.a + 0))
-                           ->  Index Scan using ab_a2_b3_a_idx on ab_a2_b3 ab_6 (never executed)
-                                 Index Cond: (a = (a.a + 0))
-                           ->  Index Scan using ab_a3_b1_a_idx on ab_a3_b1 ab_7 (never executed)
-                                 Index Cond: (a = (a.a + 0))
-                           ->  Index Scan using ab_a3_b2_a_idx on ab_a3_b2 ab_8 (never executed)
-                                 Index Cond: (a = (a.a + 0))
-                           ->  Index Scan using ab_a3_b3_a_idx on ab_a3_b3 ab_9 (never executed)
-                                 Index Cond: (a = (a.a + 0))
+                           ->  Bitmap Heap Scan on ab_a1_b1 ab_1 (actual rows=N loops=N)
+                                 Recheck Cond: (a = (a.a + 0))
+                                 ->  Bitmap Index Scan on ab_a1_b1_a_idx (actual rows=N loops=N)
+                                       Index Cond: (a = (a.a + 0))
+                           ->  Bitmap Heap Scan on ab_a1_b2 ab_2 (actual rows=N loops=N)
+                                 Recheck Cond: (a = (a.a + 0))
+                                 ->  Bitmap Index Scan on ab_a1_b2_a_idx (actual rows=N loops=N)
+                                       Index Cond: (a = (a.a + 0))
+                           ->  Bitmap Heap Scan on ab_a1_b3 ab_3 (actual rows=N loops=N)
+                                 Recheck Cond: (a = (a.a + 0))
+                                 ->  Bitmap Index Scan on ab_a1_b3_a_idx (actual rows=N loops=N)
+                                       Index Cond: (a = (a.a + 0))
+                           ->  Bitmap Heap Scan on ab_a2_b1 ab_4 (never executed)
+                                 Recheck Cond: (a = (a.a + 0))
+                                 ->  Bitmap Index Scan on ab_a2_b1_a_idx (never executed)
+                                       Index Cond: (a = (a.a + 0))
+                           ->  Bitmap Heap Scan on ab_a2_b2 ab_5 (never executed)
+                                 Recheck Cond: (a = (a.a + 0))
+                                 ->  Bitmap Index Scan on ab_a2_b2_a_idx (never executed)
+                                       Index Cond: (a = (a.a + 0))
+                           ->  Bitmap Heap Scan on ab_a2_b3 ab_6 (never executed)
+                                 Recheck Cond: (a = (a.a + 0))
+                                 ->  Bitmap Index Scan on ab_a2_b3_a_idx (never executed)
+                                       Index Cond: (a = (a.a + 0))
+                           ->  Bitmap Heap Scan on ab_a3_b1 ab_7 (never executed)
+                                 Recheck Cond: (a = (a.a + 0))
+                                 ->  Bitmap Index Scan on ab_a3_b1_a_idx (never executed)
+                                       Index Cond: (a = (a.a + 0))
+                           ->  Bitmap Heap Scan on ab_a3_b2 ab_8 (never executed)
+                                 Recheck Cond: (a = (a.a + 0))
+                                 ->  Bitmap Index Scan on ab_a3_b2_a_idx (never executed)
+                                       Index Cond: (a = (a.a + 0))
+                           ->  Bitmap Heap Scan on ab_a3_b3 ab_9 (never executed)
+                                 Recheck Cond: (a = (a.a + 0))
+                                 ->  Bitmap Index Scan on ab_a3_b3_a_idx (never executed)
+                                       Index Cond: (a = (a.a + 0))
  Optimizer: Postgres query optimizer
-(28 rows)
+(46 rows)
 
 insert into lprt_a values(3),(3);
 select explain_parallel_append('select avg(ab.a) from ab inner join lprt_a a on ab.a = a.a where a.a in(1, 0, 3)');
@@ -2781,7 +3058,7 @@ select explain_parallel_append('select avg(ab.a) from ab inner join lprt_a a on 
                                              Index Cond: (a = ANY ('{1,0,3}'::integer[]))
                      ->  Sort (actual rows=N loops=N)
                            Sort Key: a.a
-                           Sort Method:  quicksort  Memory: 55kB
+                           Sort Method:  quicksort  Memory: 50kB
                            ->  Partition Selector (selector id: $0) (actual rows=N loops=N)
                                  ->  Seq Scan on lprt_a a (actual rows=N loops=N)
                                        Filter: (a = ANY ('{1,0,3}'::integer[]))
@@ -2815,7 +3092,7 @@ select explain_parallel_append('select avg(ab.a) from ab inner join lprt_a a on 
                                              Index Cond: (a = ANY ('{1,0,0}'::integer[]))
                      ->  Sort (actual rows=N loops=N)
                            Sort Key: a.a
-                           Sort Method:  quicksort  Memory: 60kB
+                           Sort Method:  quicksort  Memory: 25kB
                            ->  Partition Selector (selector id: $0) (actual rows=N loops=N)
                                  ->  Seq Scan on lprt_a a (actual rows=N loops=N)
                                        Filter: (a = ANY ('{1,0,0}'::integer[]))
@@ -2850,7 +3127,7 @@ select explain_parallel_append('select avg(ab.a) from ab inner join lprt_a a on 
                                              Index Cond: (a = ANY ('{1,0,0}'::integer[]))
                      ->  Sort (actual rows=N loops=N)
                            Sort Key: a.a
-                           Sort Method:  quicksort  Memory: 30kB
+                           Sort Method:  quicksort  Memory: 25kB
                            ->  Partition Selector (selector id: $0) (actual rows=N loops=N)
                                  ->  Seq Scan on lprt_a a (actual rows=N loops=N)
                                        Filter: (a = ANY ('{1,0,0}'::integer[]))
@@ -2932,8 +3209,8 @@ select * from ab where a = (select max(a) from lprt_a) and b = (select max(a)-1 
 -- Test run-time partition pruning with UNION ALL parents
 explain (analyze, costs off, summary off, timing off)
 select * from (select * from ab where a = 1 union all select * from ab) ab where b = (select 1);
-                                  QUERY PLAN                                  
-------------------------------------------------------------------------------
+                                     QUERY PLAN                                      
+-------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3) (actual rows=0 loops=1)
    InitPlan 1 (returns $0)  (slice2)
      ->  Result (actual rows=1 loops=1)
@@ -2978,8 +3255,8 @@ select * from (select * from ab where a = 1 union all select * from ab) ab where
 -- A case containing a UNION ALL with a non-partitioned child.
 explain (analyze, costs off, summary off, timing off)
 select * from (select * from ab where a = 1 union all (values(10,5)) union all select * from ab) ab where b = (select 1);
-                                  QUERY PLAN                                  
-------------------------------------------------------------------------------
+                                     QUERY PLAN                                      
+-------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3) (actual rows=0 loops=1)
    InitPlan 1 (returns $0)  (slice2)
      ->  Result (actual rows=1 loops=1)
@@ -3001,7 +3278,7 @@ select * from (select * from ab where a = 1 union all (values(10,5)) union all s
                      ->  Bitmap Index Scan on ab_a1_b3_a_idx (never executed)
                            Index Cond: (a = 1)
          ->  Result (actual rows=0 loops=1)
-               One-Time Filter: (gp_execution_segment() = 0)
+               One-Time Filter: (gp_execution_segment() = 1)
                ->  Result (actual rows=0 loops=1)
                      One-Time Filter: (5 = $0)
          ->  Seq Scan on ab_a1_b1 ab_1 (actual rows=0 loops=1)
@@ -3027,6 +3304,8 @@ select * from (select * from ab where a = 1 union all (values(10,5)) union all s
 
 -- Another UNION ALL test, but containing a mix of exec init and exec run-time pruning.
 create table xy_1 (x int, y int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'x' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into xy_1 values(100,-10);
 set enable_bitmapscan = 0;
 set enable_indexscan = 0;
@@ -3159,25 +3438,35 @@ update ab_a1 set b = 3 from ab_a2 where ab_a2.b = (select 1);
 select tableoid::regclass, * from ab;
  tableoid | a | b 
 ----------+---+---
- ab_a1_b3 | 1 | 3
- ab_a1_b3 | 1 | 3
- ab_a1_b3 | 1 | 3
  ab_a2_b1 | 2 | 1
+ ab_a1_b3 | 1 | 3
+ ab_a1_b3 | 1 | 3
+ ab_a1_b3 | 1 | 3
 (4 rows)
 
 drop table ab, lprt_a;
 -- Join
 create table tbl1(col1 int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'col1' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into tbl1 values (501), (505);
 analyze tbl1;
 -- Basic table
 create table tprt (col1 int) partition by range (col1);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'col1' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table tprt_1 partition of tprt for values from (1) to (501);
+NOTICE:  table has parent, setting distribution columns to match parent table
 create table tprt_2 partition of tprt for values from (501) to (1001);
+NOTICE:  table has parent, setting distribution columns to match parent table
 create table tprt_3 partition of tprt for values from (1001) to (2001);
+NOTICE:  table has parent, setting distribution columns to match parent table
 create table tprt_4 partition of tprt for values from (2001) to (3001);
+NOTICE:  table has parent, setting distribution columns to match parent table
 create table tprt_5 partition of tprt for values from (3001) to (4001);
+NOTICE:  table has parent, setting distribution columns to match parent table
 create table tprt_6 partition of tprt for values from (4001) to (5001);
+NOTICE:  table has parent, setting distribution columns to match parent table
 create index tprt1_idx on tprt_1 (col1);
 create index tprt2_idx on tprt_2 (col1);
 create index tprt3_idx on tprt_3 (col1);
@@ -3190,6 +3479,8 @@ set enable_mergejoin = off;
 set enable_seqscan=off;
 explain (analyze, costs off, summary off, timing off)
 select * from tbl1 join tprt on tbl1.col1 > tprt.col1;
+NOTICE:  One or more columns in the following table(s) do not have statistics: tprt
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
                                      QUERY PLAN                                     
 ------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3) (actual rows=6 loops=1)
@@ -3206,6 +3497,8 @@ select * from tbl1 join tprt on tbl1.col1 > tprt.col1;
 
 explain (analyze, costs off, summary off, timing off)
 select * from tbl1 join tprt on tbl1.col1 = tprt.col1;
+NOTICE:  One or more columns in the following table(s) do not have statistics: tprt
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
                                         QUERY PLAN                                         
 -------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3) (actual rows=2 loops=1)
@@ -3224,6 +3517,8 @@ select * from tbl1 join tprt on tbl1.col1 = tprt.col1;
 select tbl1.col1, tprt.col1 from tbl1
 inner join tprt on tbl1.col1 > tprt.col1
 order by tbl1.col1, tprt.col1;
+NOTICE:  One or more columns in the following table(s) do not have statistics: tprt
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  col1 | col1 
 ------+------
   501 |   10
@@ -3237,6 +3532,8 @@ order by tbl1.col1, tprt.col1;
 select tbl1.col1, tprt.col1 from tbl1
 inner join tprt on tbl1.col1 = tprt.col1
 order by tbl1.col1, tprt.col1;
+NOTICE:  One or more columns in the following table(s) do not have statistics: tprt
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  col1 | col1 
 ------+------
   501 |  501
@@ -3247,6 +3544,8 @@ order by tbl1.col1, tprt.col1;
 insert into tbl1 values (1001), (1010), (1011);
 explain (analyze, costs off, summary off, timing off)
 select * from tbl1 inner join tprt on tbl1.col1 > tprt.col1;
+NOTICE:  One or more columns in the following table(s) do not have statistics: tprt
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
                                      QUERY PLAN                                     
 ------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3) (actual rows=23 loops=1)
@@ -3263,6 +3562,8 @@ select * from tbl1 inner join tprt on tbl1.col1 > tprt.col1;
 
 explain (analyze, costs off, summary off, timing off)
 select * from tbl1 inner join tprt on tbl1.col1 = tprt.col1;
+NOTICE:  One or more columns in the following table(s) do not have statistics: tprt
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
                                         QUERY PLAN                                         
 -------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3) (actual rows=3 loops=1)
@@ -3281,6 +3582,8 @@ select * from tbl1 inner join tprt on tbl1.col1 = tprt.col1;
 select tbl1.col1, tprt.col1 from tbl1
 inner join tprt on tbl1.col1 > tprt.col1
 order by tbl1.col1, tprt.col1;
+NOTICE:  One or more columns in the following table(s) do not have statistics: tprt
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  col1 | col1 
 ------+------
   501 |   10
@@ -3311,6 +3614,8 @@ order by tbl1.col1, tprt.col1;
 select tbl1.col1, tprt.col1 from tbl1
 inner join tprt on tbl1.col1 = tprt.col1
 order by tbl1.col1, tprt.col1;
+NOTICE:  One or more columns in the following table(s) do not have statistics: tprt
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  col1 | col1 
 ------+------
   501 |  501
@@ -3323,6 +3628,8 @@ delete from tbl1;
 insert into tbl1 values (4400);
 explain (analyze, costs off, summary off, timing off)
 select * from tbl1 join tprt on tbl1.col1 < tprt.col1;
+NOTICE:  One or more columns in the following table(s) do not have statistics: tprt
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
                                      QUERY PLAN                                     
 ------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3) (actual rows=1 loops=1)
@@ -3340,6 +3647,8 @@ select * from tbl1 join tprt on tbl1.col1 < tprt.col1;
 select tbl1.col1, tprt.col1 from tbl1
 inner join tprt on tbl1.col1 < tprt.col1
 order by tbl1.col1, tprt.col1;
+NOTICE:  One or more columns in the following table(s) do not have statistics: tprt
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  col1 | col1 
 ------+------
  4400 | 4500
@@ -3351,6 +3660,8 @@ delete from tbl1;
 insert into tbl1 values (10000);
 explain (analyze, costs off, summary off, timing off)
 select * from tbl1 join tprt on tbl1.col1 = tprt.col1;
+NOTICE:  One or more columns in the following table(s) do not have statistics: tprt
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
                                      QUERY PLAN                                     
 ------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3) (actual rows=0 loops=1)
@@ -3368,6 +3679,8 @@ select * from tbl1 join tprt on tbl1.col1 = tprt.col1;
 select tbl1.col1, tprt.col1 from tbl1
 inner join tprt on tbl1.col1 = tprt.col1
 order by tbl1.col1, tprt.col1;
+NOTICE:  One or more columns in the following table(s) do not have statistics: tprt
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  col1 | col1 
 ------+------
 (0 rows)
@@ -3375,9 +3688,17 @@ order by tbl1.col1, tprt.col1;
 drop table tbl1, tprt;
 -- Test with columns defined in varying orders between each level
 create table part_abc (a int not null, b int not null, c int not null) partition by list (a);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table part_bac (b int not null, a int not null, c int not null) partition by list (b);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'b' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table part_cab (c int not null, a int not null, b int not null) partition by list (c);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table part_abc_p1 (a int not null, b int not null, c int not null);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 -- GPDB: the distribution keys must be the same in all parts of partition
 -- hierarchy.
 alter table part_bac set distributed by (a);
@@ -3402,10 +3723,16 @@ drop table part_abc;
 -- Ensure that an Append node properly handles a sub-partitioned table
 -- matching without any of its leaf partitions matching the clause.
 create table listp (a int, b int) partition by list (a);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table listp_1 partition of listp for values in(1) partition by list (b);
+NOTICE:  table has parent, setting distribution columns to match parent table
 create table listp_1_1 partition of listp_1 for values in(1);
+NOTICE:  table has parent, setting distribution columns to match parent table
 create table listp_2 partition of listp for values in(2) partition by list (b);
+NOTICE:  table has parent, setting distribution columns to match parent table
 create table listp_2_1 partition of listp_2 for values in(2);
+NOTICE:  table has parent, setting distribution columns to match parent table
 select * from listp where b = 1;
  a | b 
 ---+---
@@ -3497,19 +3824,24 @@ drop table listp;
 create table stable_qual_pruning (a timestamp) distributed randomly partition by range (a);
 create table stable_qual_pruning1 partition of stable_qual_pruning
   for values from ('2000-01-01') to ('2000-02-01');
+NOTICE:  table has parent, setting distribution columns to match parent table
 create table stable_qual_pruning2 partition of stable_qual_pruning
   for values from ('2000-02-01') to ('2000-03-01');
+NOTICE:  table has parent, setting distribution columns to match parent table
 create table stable_qual_pruning3 partition of stable_qual_pruning
   for values from ('3000-02-01') to ('3000-03-01');
+NOTICE:  table has parent, setting distribution columns to match parent table
 -- comparison against a stable value requires run-time pruning
 explain (analyze, costs off, summary off, timing off)
 select * from stable_qual_pruning where a < localtimestamp;
+NOTICE:  One or more columns in the following table(s) do not have statistics: stable_qual_pruning
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
                                       QUERY PLAN                                      
 --------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3) (actual rows=0 loops=1)
    ->  Dynamic Seq Scan on stable_qual_pruning (actual rows=0 loops=1)
          Number of partitions to scan: 2 (out of 3)
-         Filter: (a < 'Fri Mar 14 19:55:02.732891 2025'::timestamp without time zone)
+         Filter: (a < 'Wed Jul 29 03:34:21.841061 2026'::timestamp without time zone)
          Partitions scanned:  Avg 2.0 x 3 workers.  Max 2 parts (seg0).
  Optimizer: GPORCA
 (6 rows)
@@ -3517,6 +3849,8 @@ select * from stable_qual_pruning where a < localtimestamp;
 -- timestamp < timestamptz comparison is only stable, not immutable
 explain (analyze, costs off, summary off, timing off)
 select * from stable_qual_pruning where a < '2000-02-01'::timestamptz;
+NOTICE:  One or more columns in the following table(s) do not have statistics: stable_qual_pruning
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
                                    QUERY PLAN                                   
 --------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3) (actual rows=0 loops=1)
@@ -3541,6 +3875,8 @@ select * from stable_qual_pruning
 explain (analyze, costs off, summary off, timing off)
 select * from stable_qual_pruning
   where a = any(array['2000-02-01', '2010-01-01']::timestamp[]);
+NOTICE:  One or more columns in the following table(s) do not have statistics: stable_qual_pruning
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
                                                       QUERY PLAN                                                      
 ----------------------------------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3) (actual rows=0 loops=1)
@@ -3554,12 +3890,14 @@ select * from stable_qual_pruning
 explain (analyze, costs off, summary off, timing off)
 select * from stable_qual_pruning
   where a = any(array['2000-02-01', localtimestamp]::timestamp[]);
+NOTICE:  One or more columns in the following table(s) do not have statistics: stable_qual_pruning
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
                                                          QUERY PLAN                                                          
 -----------------------------------------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3) (actual rows=0 loops=1)
    ->  Dynamic Seq Scan on stable_qual_pruning (actual rows=0 loops=1)
          Number of partitions to scan: 1 (out of 3)
-         Filter: (a = ANY ('{"Tue Feb 01 00:00:00 2000","Fri Mar 14 19:55:02.816628 2025"}'::timestamp without time zone[]))
+         Filter: (a = ANY ('{"Tue Feb 01 00:00:00 2000","Wed Jul 29 03:34:21.872793 2026"}'::timestamp without time zone[]))
          Partitions scanned:  Avg 1.0 x 3 workers.  Max 1 parts (seg0).
  Optimizer: GPORCA
 (6 rows)
@@ -3577,6 +3915,8 @@ select * from stable_qual_pruning
 explain (analyze, costs off, summary off, timing off)
 select * from stable_qual_pruning
   where a = any(array['2000-02-01', '2010-01-01']::timestamptz[]);
+NOTICE:  One or more columns in the following table(s) do not have statistics: stable_qual_pruning
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
                                                         QUERY PLAN                                                         
 ---------------------------------------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3) (actual rows=0 loops=1)
@@ -3590,6 +3930,8 @@ select * from stable_qual_pruning
 explain (analyze, costs off, summary off, timing off)
 select * from stable_qual_pruning
   where a = any(null::timestamptz[]);
+NOTICE:  One or more columns in the following table(s) do not have statistics: stable_qual_pruning
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
                                QUERY PLAN                               
 ------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3) (actual rows=0 loops=1)
@@ -3607,12 +3949,17 @@ drop table stable_qual_pruning;
 -- non-inclusive operator for an earlier key
 --
 create table mc3p (a int, b int, c int) partition by range (a, abs(b), c);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table mc3p0 partition of mc3p
   for values from (0, 0, 0) to (0, maxvalue, maxvalue);
+NOTICE:  table has parent, setting distribution columns to match parent table
 create table mc3p1 partition of mc3p
   for values from (1, 1, 1) to (2, minvalue, minvalue);
+NOTICE:  table has parent, setting distribution columns to match parent table
 create table mc3p2 partition of mc3p
   for values from (2, minvalue, minvalue) to (3, maxvalue, maxvalue);
+NOTICE:  table has parent, setting distribution columns to match parent table
 insert into mc3p values (0, 1, 1), (1, 1, 1), (2, 1, 1);
 explain (analyze, costs off, summary off, timing off)
 select * from mc3p where a < 3 and abs(b) = 1;
@@ -3673,12 +4020,20 @@ deallocate ps2;
 drop table mc3p;
 -- Ensure runtime pruning works with initplans params with boolean types
 create table boolvalues (value bool not null);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'value' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into boolvalues values('t'),('f');
 create table boolp (a bool) partition by list (a);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table boolp_t partition of boolp for values in('t');
+NOTICE:  table has parent, setting distribution columns to match parent table
 create table boolp_f partition of boolp for values in('f');
+NOTICE:  table has parent, setting distribution columns to match parent table
 explain (analyze, costs off, summary off, timing off)
 select * from boolp where a = (select value from boolvalues where value);
+NOTICE:  One or more columns in the following table(s) do not have statistics: boolp
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
                                            QUERY PLAN                                           
 ------------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3) (actual rows=0 loops=1)
@@ -3703,6 +4058,8 @@ select * from boolp where a = (select value from boolvalues where value);
 
 explain (analyze, costs off, summary off, timing off)
 select * from boolp where a = (select value from boolvalues where not value);
+NOTICE:  One or more columns in the following table(s) do not have statistics: boolp
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
                                            QUERY PLAN                                           
 ------------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3) (actual rows=0 loops=1)
@@ -3732,9 +4089,14 @@ drop table boolp;
 set enable_seqscan = off;
 set enable_sort = off;
 create table ma_test (a int, b int) partition by range (a);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table ma_test_p1 partition of ma_test for values from (0) to (10);
+NOTICE:  table has parent, setting distribution columns to match parent table
 create table ma_test_p2 partition of ma_test for values from (10) to (20);
+NOTICE:  table has parent, setting distribution columns to match parent table
 create table ma_test_p3 partition of ma_test for values from (20) to (30);
+NOTICE:  table has parent, setting distribution columns to match parent table
 insert into ma_test select x,x from generate_series(0,29) t(x);
 create index on ma_test (b);
 analyze ma_test;
@@ -3829,7 +4191,7 @@ explain (analyze, verbose, costs off, summary off, timing off) execute mt_q2 (35
                            Number of partitions to scan: 3 (out of 3)
                            Filter: (ma_test.a >= $1)
                            Partitions scanned:  Avg 3.0 x 3 workers.  Max 3 parts (seg0).
- Settings: enable_hashjoin = 'off', enable_indexonlyscan = 'off', enable_mergejoin = 'off', enable_seqscan = 'off', enable_sort = 'off', optimizer = 'on', plan_cache_mode = 'force_generic_plan'
+ Settings: optimizer = 'on', plan_cache_mode = 'force_generic_plan', enable_indexonlyscan = 'off', enable_hashjoin = 'off', enable_mergejoin = 'off', enable_seqscan = 'off', enable_sort = 'off'
  Optimizer: GPORCA
 (19 rows)
 
@@ -3871,9 +4233,15 @@ reset enable_indexonlyscan;
 --
 -- array type list partition key
 create table pp_arrpart (a int[]) partition by list (a);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table pp_arrpart1 partition of pp_arrpart for values in ('{1}');
+NOTICE:  table has parent, setting distribution columns to match parent table
 create table pp_arrpart2 partition of pp_arrpart for values in ('{2, 3}', '{4, 5}');
+NOTICE:  table has parent, setting distribution columns to match parent table
 explain (costs off) select * from pp_arrpart where a = '{1}';
+NOTICE:  One or more columns in the following table(s) do not have statistics: pp_arrpart
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
                      QUERY PLAN                     
 ----------------------------------------------------
  Gather Motion 1:1  (slice1; segments: 1)
@@ -3892,6 +4260,8 @@ explain (costs off) select * from pp_arrpart where a = '{1, 2}';
 (3 rows)
 
 explain (costs off) select * from pp_arrpart where a in ('{4, 5}', '{1}');
+NOTICE:  One or more columns in the following table(s) do not have statistics: pp_arrpart
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
                               QUERY PLAN                              
 ----------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
@@ -3924,8 +4294,12 @@ explain (costs off) delete from pp_arrpart where a = '{1}';
 drop table pp_arrpart;
 -- array type hash partition key
 create table pph_arrpart (a int[]) partition by hash (a);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table pph_arrpart1 partition of pph_arrpart for values with (modulus 2, remainder 0);
+NOTICE:  table has parent, setting distribution columns to match parent table
 create table pph_arrpart2 partition of pph_arrpart for values with (modulus 2, remainder 1);
+NOTICE:  table has parent, setting distribution columns to match parent table
 insert into pph_arrpart values ('{1}'), ('{1, 2}'), ('{4, 5}');
 select tableoid::regclass, * from pph_arrpart order by 1;
    tableoid   |   a   
@@ -3969,9 +4343,15 @@ drop table pph_arrpart;
 -- enum type list partition key
 create type pp_colors as enum ('green', 'blue', 'black');
 create table pp_enumpart (col1 int, a pp_colors) partition by list (a);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'col1' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table pp_enumpart_green partition of pp_enumpart for values in ('green');
+NOTICE:  table has parent, setting distribution columns to match parent table
 create table pp_enumpart_blue partition of pp_enumpart for values in ('blue');
+NOTICE:  table has parent, setting distribution columns to match parent table
 explain (costs off) select * from pp_enumpart where a = 'blue';
+NOTICE:  One or more columns in the following table(s) do not have statistics: pp_enumpart
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
                      QUERY PLAN                     
 ----------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
@@ -3994,9 +4374,15 @@ drop type pp_colors;
 -- record type as partition key
 create type pp_rectype as (a int, b int);
 create table pp_recpart (a pp_rectype) partition by list (a);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table pp_recpart_11 partition of pp_recpart for values in ('(1,1)');
+NOTICE:  table has parent, setting distribution columns to match parent table
 create table pp_recpart_23 partition of pp_recpart for values in ('(2,3)');
+NOTICE:  table has parent, setting distribution columns to match parent table
 explain (costs off) select * from pp_recpart where a = '(1,1)'::pp_rectype;
+NOTICE:  One or more columns in the following table(s) do not have statistics: pp_recpart
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
                      QUERY PLAN                     
 ----------------------------------------------------
  Gather Motion 1:1  (slice1; segments: 1)
@@ -4018,9 +4404,15 @@ drop table pp_recpart;
 drop type pp_rectype;
 -- range type partition key
 create table pp_intrangepart (a int4range) partition by list (a);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table pp_intrangepart12 partition of pp_intrangepart for values in ('[1,2]');
+NOTICE:  table has parent, setting distribution columns to match parent table
 create table pp_intrangepart2inf partition of pp_intrangepart for values in ('[2,)');
+NOTICE:  table has parent, setting distribution columns to match parent table
 explain (costs off) select * from pp_intrangepart where a = '[1,2]'::int4range;
+NOTICE:  One or more columns in the following table(s) do not have statistics: pp_intrangepart
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
                      QUERY PLAN                     
 ----------------------------------------------------
  Gather Motion 1:1  (slice1; segments: 1)
@@ -4043,9 +4435,15 @@ drop table pp_intrangepart;
 -- Ensure the enable_partition_prune GUC properly disables partition pruning.
 --
 create table pp_lp (a int, value int) partition by list (a);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table pp_lp1 partition of pp_lp for values in(1);
+NOTICE:  table has parent, setting distribution columns to match parent table
 create table pp_lp2 partition of pp_lp for values in(2);
+NOTICE:  table has parent, setting distribution columns to match parent table
 explain (costs off) select * from pp_lp where a = 1;
+NOTICE:  One or more columns in the following table(s) do not have statistics: pp_lp
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
                      QUERY PLAN                     
 ----------------------------------------------------
  Gather Motion 1:1  (slice1; segments: 1)
@@ -4078,6 +4476,8 @@ explain (costs off) delete from pp_lp where a = 1;
 set enable_partition_pruning = off;
 set constraint_exclusion = 'partition'; -- this should not affect the result.
 explain (costs off) select * from pp_lp where a = 1;
+NOTICE:  One or more columns in the following table(s) do not have statistics: pp_lp
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
                      QUERY PLAN                     
 ----------------------------------------------------
  Gather Motion 1:1  (slice1; segments: 1)
@@ -4117,6 +4517,8 @@ explain (costs off) delete from pp_lp where a = 1;
 
 set constraint_exclusion = 'off'; -- this should not affect the result.
 explain (costs off) select * from pp_lp where a = 1;
+NOTICE:  One or more columns in the following table(s) do not have statistics: pp_lp
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
                      QUERY PLAN                     
 ----------------------------------------------------
  Gather Motion 1:1  (slice1; segments: 1)
@@ -4157,10 +4559,14 @@ explain (costs off) delete from pp_lp where a = 1;
 drop table pp_lp;
 -- Ensure enable_partition_prune does not affect non-partitioned tables.
 create table inh_lp (a int, value int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table inh_lp1 (a int, value int, check(a = 1)) inherits (inh_lp);
+NOTICE:  table has parent, setting distribution columns to match parent table
 NOTICE:  merging column "a" with inherited definition
 NOTICE:  merging column "value" with inherited definition
 create table inh_lp2 (a int, value int, check(a = 2)) inherits (inh_lp);
+NOTICE:  table has parent, setting distribution columns to match parent table
 NOTICE:  merging column "a" with inherited definition
 NOTICE:  merging column "value" with inherited definition
 set constraint_exclusion = 'partition';
@@ -4225,9 +4631,15 @@ reset enable_partition_pruning;
 reset constraint_exclusion;
 -- Check pruning for a partition tree containing only temporary relations
 create temp table pp_temp_parent (a int) partition by list (a);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create temp table pp_temp_part_1 partition of pp_temp_parent for values in (1);
+NOTICE:  table has parent, setting distribution columns to match parent table
 create temp table pp_temp_part_def partition of pp_temp_parent default;
+NOTICE:  table has parent, setting distribution columns to match parent table
 explain (costs off) select * from pp_temp_parent where true;
+NOTICE:  One or more columns in the following table(s) do not have statistics: pp_temp_parent
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
                      QUERY PLAN                     
 ----------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
@@ -4237,6 +4649,8 @@ explain (costs off) select * from pp_temp_parent where true;
 (4 rows)
 
 explain (costs off) select * from pp_temp_parent where a = 2;
+NOTICE:  One or more columns in the following table(s) do not have statistics: pp_temp_parent
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
                      QUERY PLAN                     
 ----------------------------------------------------
  Gather Motion 1:1  (slice1; segments: 1)
@@ -4249,15 +4663,27 @@ explain (costs off) select * from pp_temp_parent where a = 2;
 drop table pp_temp_parent;
 -- Stress run-time partition pruning a bit more, per bug reports
 create temp table p (a int, b int, c int) partition by list (a);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create temp table p1 partition of p for values in (1);
+NOTICE:  table has parent, setting distribution columns to match parent table
 create temp table p2 partition of p for values in (2);
+NOTICE:  table has parent, setting distribution columns to match parent table
 create temp table q (a int, b int, c int) partition by list (a);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create temp table q1 partition of q for values in (1) partition by list (b);
+NOTICE:  table has parent, setting distribution columns to match parent table
 create temp table q11 partition of q1 for values in (1) partition by list (c);
+NOTICE:  table has parent, setting distribution columns to match parent table
 create temp table q111 partition of q11 for values in (1);
+NOTICE:  table has parent, setting distribution columns to match parent table
 create temp table q2 partition of q for values in (2) partition by list (b);
+NOTICE:  table has parent, setting distribution columns to match parent table
 create temp table q21 partition of q2 for values in (1);
+NOTICE:  table has parent, setting distribution columns to match parent table
 create temp table q22 partition of q2 for values in (2);
+NOTICE:  table has parent, setting distribution columns to match parent table
 insert into q22 values (2, 2, 3);
 -- GPDB: This is the query that needs the "matchsubs" rule at the top of the file
 -- The constant third branch of the UNION is executed at random segment. If the
@@ -4276,7 +4702,7 @@ from (
 where s.a = 1 and s.b = 1 and s.c = (select 1);
                          QUERY PLAN                          
 -------------------------------------------------------------
- Gather Motion 2:1  (slice1; segments: 2)
+ Gather Motion 1:1  (slice1; segments: 1)
    InitPlan 1 (returns $0)  (slice2)
      ->  Result
    ->  Append
@@ -4285,7 +4711,7 @@ where s.a = 1 and s.b = 1 and s.c = (select 1);
          ->  Seq Scan on q111 q1
                Filter: ((a = 1) AND (b = 1) AND (c = $0))
          ->  Result
-               One-Time Filter: (gp_execution_segment() = 0)
+               One-Time Filter: (gp_execution_segment() = 1)
                ->  Result
                      One-Time Filter: (1 = $0)
  Optimizer: Postgres query optimizer
@@ -4328,7 +4754,7 @@ explain (costs off) execute q (1, 1);
          ->  Seq Scan on q111 q1
                Filter: ((a = $1) AND (b = $2) AND (c = $0))
          ->  Result
-               One-Time Filter: (gp_execution_segment() = 0)
+               One-Time Filter: (gp_execution_segment() = 1)
                ->  Result
                      One-Time Filter: ((1 = $1) AND (1 = $2) AND (1 = $0))
  Optimizer: Postgres query optimizer
@@ -4344,9 +4770,14 @@ drop table p, q;
 -- Ensure run-time pruning works correctly when we match a partitioned table
 -- on the first level but find no matching partitions on the second level.
 create table listp (a int, b int) partition by list (a);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table listp1 partition of listp for values in(1);
+NOTICE:  table has parent, setting distribution columns to match parent table
 create table listp2 partition of listp for values in(2) partition by list(b);
+NOTICE:  table has parent, setting distribution columns to match parent table
 create table listp2_10 partition of listp2 for values in (10);
+NOTICE:  table has parent, setting distribution columns to match parent table
 explain (analyze, costs off, summary off, timing off)
 select * from listp where a = (select 2) and b <> 10;
                             QUERY PLAN                            
@@ -4424,9 +4855,14 @@ drop table listp;
 set parallel_setup_cost to 0;
 set parallel_tuple_cost to 0;
 create table listp (a int) partition by list(a);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table listp_12 partition of listp for values in(1,2) partition by list(a);
+NOTICE:  table has parent, setting distribution columns to match parent table
 create table listp_12_1 partition of listp_12 for values in(1);
+NOTICE:  table has parent, setting distribution columns to match parent table
 create table listp_12_2 partition of listp_12 for values in(2);
+NOTICE:  table has parent, setting distribution columns to match parent table
 -- Force the 2nd subnode of the Append to be non-parallel.  This results in
 -- a nested Append node because the mixed parallel / non-parallel paths cannot
 -- be pulled into the top-level Append.
@@ -4481,38 +4917,46 @@ reset parallel_setup_cost;
 -- Test case for run-time pruning with a nested Merge Append
 set enable_sort to 0;
 create table rangep (a int, b int) partition by range (a);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table rangep_0_to_100 partition of rangep for values from (0) to (100) partition by list (b);
+NOTICE:  table has parent, setting distribution columns to match parent table
 -- We need 3 sub-partitions. 1 to validate pruning worked and another two
 -- because a single remaining partition would be pulled up to the main Append.
 create table rangep_0_to_100_1 partition of rangep_0_to_100 for values in(1);
+NOTICE:  table has parent, setting distribution columns to match parent table
 create table rangep_0_to_100_2 partition of rangep_0_to_100 for values in(2);
+NOTICE:  table has parent, setting distribution columns to match parent table
 create table rangep_0_to_100_3 partition of rangep_0_to_100 for values in(3);
+NOTICE:  table has parent, setting distribution columns to match parent table
 create table rangep_100_to_200 partition of rangep for values from (100) to (200);
+NOTICE:  table has parent, setting distribution columns to match parent table
 create index on rangep (a);
 -- Ensure run-time pruning works on the nested Merge Append
 explain (analyze on, costs off, timing off, summary off)
 select * from rangep where b IN((select 1),(select 2)) order by a;
-                                                    QUERY PLAN                                                    
-------------------------------------------------------------------------------------------------------------------
+                                    QUERY PLAN                                    
+----------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3) (actual rows=0 loops=1)
    Merge Key: rangep.a
    InitPlan 1 (returns $0)  (slice2)
      ->  Result (actual rows=1 loops=1)
    InitPlan 2 (returns $1)  (slice3)
      ->  Result (actual rows=1 loops=1)
-   ->  Append (actual rows=0 loops=1)
-         ->  Merge Append (actual rows=0 loops=1)
-               Sort Key: rangep_2.a
-               ->  Index Scan using rangep_0_to_100_1_a_idx on rangep_0_to_100_1 rangep_2 (actual rows=0 loops=1)
+   ->  Sort (actual rows=0 loops=1)
+         Sort Key: rangep.a
+         Sort Method:  quicksort  Memory: 75kB
+         ->  Append (actual rows=0 loops=1)
+               ->  Seq Scan on rangep_0_to_100_1 rangep_1 (actual rows=0 loops=1)
                      Filter: (b = ANY (ARRAY[$0, $1]))
-               ->  Index Scan using rangep_0_to_100_2_a_idx on rangep_0_to_100_2 rangep_3 (actual rows=0 loops=1)
+               ->  Seq Scan on rangep_0_to_100_2 rangep_2 (actual rows=0 loops=1)
                      Filter: (b = ANY (ARRAY[$0, $1]))
-               ->  Index Scan using rangep_0_to_100_3_a_idx on rangep_0_to_100_3 rangep_4 (never executed)
+               ->  Seq Scan on rangep_0_to_100_3 rangep_3 (never executed)
                      Filter: (b = ANY (ARRAY[$0, $1]))
-         ->  Index Scan using rangep_100_to_200_a_idx on rangep_100_to_200 rangep_5 (actual rows=0 loops=1)
-               Filter: (b = ANY (ARRAY[$0, $1]))
+               ->  Seq Scan on rangep_100_to_200 rangep_4 (actual rows=0 loops=1)
+                     Filter: (b = ANY (ARRAY[$0, $1]))
  Optimizer: Postgres query optimizer
-(18 rows)
+(19 rows)
 
 reset enable_sort;
 drop table rangep;
@@ -4521,8 +4965,12 @@ drop table rangep;
 -- clauses for different partition keys
 --
 create table rp_prefix_test1 (a int, b varchar) partition by range(a, b);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table rp_prefix_test1_p1 partition of rp_prefix_test1 for values from (1, 'a') to (1, 'b');
+NOTICE:  table has parent, setting distribution columns to match parent table
 create table rp_prefix_test1_p2 partition of rp_prefix_test1 for values from (2, 'a') to (2, 'b');
+NOTICE:  table has parent, setting distribution columns to match parent table
 -- Don't call get_steps_using_prefix() with the last partition key b plus
 -- an empty prefix
 explain (costs off) select * from rp_prefix_test1 where a <= 1 and b = 'a';
@@ -4535,8 +4983,12 @@ explain (costs off) select * from rp_prefix_test1 where a <= 1 and b = 'a';
 (4 rows)
 
 create table rp_prefix_test2 (a int, b int, c int) partition by range(a, b, c);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table rp_prefix_test2_p1 partition of rp_prefix_test2 for values from (1, 1, 0) to (1, 1, 10);
+NOTICE:  table has parent, setting distribution columns to match parent table
 create table rp_prefix_test2_p2 partition of rp_prefix_test2 for values from (2, 2, 0) to (2, 2, 10);
+NOTICE:  table has parent, setting distribution columns to match parent table
 -- Don't call get_steps_using_prefix() with the last partition key c plus
 -- an invalid prefix (ie, b = 1)
 explain (costs off) select * from rp_prefix_test2 where a <= 1 and b = 1 and c >= 0;
@@ -4549,8 +5001,12 @@ explain (costs off) select * from rp_prefix_test2 where a <= 1 and b = 1 and c >
 (4 rows)
 
 create table rp_prefix_test3 (a int, b int, c int, d int) partition by range(a, b, c, d);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table rp_prefix_test3_p1 partition of rp_prefix_test3 for values from (1, 1, 1, 0) to (1, 1, 1, 10);
+NOTICE:  table has parent, setting distribution columns to match parent table
 create table rp_prefix_test3_p2 partition of rp_prefix_test3 for values from (2, 2, 2, 0) to (2, 2, 2, 10);
+NOTICE:  table has parent, setting distribution columns to match parent table
 -- Test that get_steps_using_prefix() handles a prefix that contains multiple
 -- clauses for the partition key b (ie, b >= 1 and b >= 2)
 explain (costs off) select * from rp_prefix_test3 where a >= 1 and b >= 1 and b >= 2 and c >= 2 and d >= 0;
@@ -4582,6 +5038,8 @@ drop table rp_prefix_test3;
 --
 create table hp_prefix_test (a int, b int, c int, d int)
   partition by hash (a part_test_int4_ops, b part_test_int4_ops, c part_test_int4_ops, d part_test_int4_ops);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 -- create 8 partitions
 select 'create table hp_prefix_test_p' || x::text || ' partition of hp_prefix_test for values with (modulus 8, remainder ' || x::text || ');'
 from generate_Series(0,7) x;
@@ -4599,13 +5057,21 @@ from generate_Series(0,7) x;
 
 \gexec
 create table hp_prefix_test_p0 partition of hp_prefix_test for values with (modulus 8, remainder 0);
+NOTICE:  table has parent, setting distribution columns to match parent table
 create table hp_prefix_test_p1 partition of hp_prefix_test for values with (modulus 8, remainder 1);
+NOTICE:  table has parent, setting distribution columns to match parent table
 create table hp_prefix_test_p2 partition of hp_prefix_test for values with (modulus 8, remainder 2);
+NOTICE:  table has parent, setting distribution columns to match parent table
 create table hp_prefix_test_p3 partition of hp_prefix_test for values with (modulus 8, remainder 3);
+NOTICE:  table has parent, setting distribution columns to match parent table
 create table hp_prefix_test_p4 partition of hp_prefix_test for values with (modulus 8, remainder 4);
+NOTICE:  table has parent, setting distribution columns to match parent table
 create table hp_prefix_test_p5 partition of hp_prefix_test for values with (modulus 8, remainder 5);
+NOTICE:  table has parent, setting distribution columns to match parent table
 create table hp_prefix_test_p6 partition of hp_prefix_test for values with (modulus 8, remainder 6);
+NOTICE:  table has parent, setting distribution columns to match parent table
 create table hp_prefix_test_p7 partition of hp_prefix_test for values with (modulus 8, remainder 7);
+NOTICE:  table has parent, setting distribution columns to match parent table
 -- insert 16 rows, one row for each test to perform.
 insert into hp_prefix_test
 select
@@ -4648,84 +5114,100 @@ order by g.s;
 
 \gexec
 explain (costs off) select tableoid::regclass,* from hp_prefix_test where a is null and b is null and c is null and d is null
- Gather Motion XXX
+ Gather Motion 1:1  (slice1; segments: 1)
    ->  Seq Scan on hp_prefix_test_p0 hp_prefix_test
          Filter: ((a IS NULL) AND (b IS NULL) AND (c IS NULL) AND (d IS NULL))
+ Optimizer: Postgres query optimizer
 
 explain (costs off) select tableoid::regclass,* from hp_prefix_test where a = 1 and b is null and c is null and d is null
- Gather Motion XXX
+ Gather Motion 1:1  (slice1; segments: 1)
    ->  Seq Scan on hp_prefix_test_p1 hp_prefix_test
          Filter: ((b IS NULL) AND (c IS NULL) AND (d IS NULL) AND (a = 1))
+ Optimizer: Postgres query optimizer
 
 explain (costs off) select tableoid::regclass,* from hp_prefix_test where a is null and b = 2 and c is null and d is null
- Gather Motion XXX
+ Gather Motion 1:1  (slice1; segments: 1)
    ->  Seq Scan on hp_prefix_test_p2 hp_prefix_test
          Filter: ((a IS NULL) AND (c IS NULL) AND (d IS NULL) AND (b = 2))
+ Optimizer: Postgres query optimizer
 
 explain (costs off) select tableoid::regclass,* from hp_prefix_test where a = 1 and b = 2 and c is null and d is null
- Gather Motion XXX
+ Gather Motion 1:1  (slice1; segments: 1)
    ->  Seq Scan on hp_prefix_test_p4 hp_prefix_test
          Filter: ((c IS NULL) AND (d IS NULL) AND (a = 1) AND (b = 2))
+ Optimizer: Postgres query optimizer
 
 explain (costs off) select tableoid::regclass,* from hp_prefix_test where a is null and b is null and c = 3 and d is null
- Gather Motion XXX
+ Gather Motion 1:1  (slice1; segments: 1)
    ->  Seq Scan on hp_prefix_test_p3 hp_prefix_test
          Filter: ((a IS NULL) AND (b IS NULL) AND (d IS NULL) AND (c = 3))
+ Optimizer: Postgres query optimizer
 
 explain (costs off) select tableoid::regclass,* from hp_prefix_test where a = 1 and b is null and c = 3 and d is null
- Gather Motion XXX
+ Gather Motion 1:1  (slice1; segments: 1)
    ->  Seq Scan on hp_prefix_test_p7 hp_prefix_test
          Filter: ((b IS NULL) AND (d IS NULL) AND (a = 1) AND (c = 3))
+ Optimizer: Postgres query optimizer
 
 explain (costs off) select tableoid::regclass,* from hp_prefix_test where a is null and b = 2 and c = 3 and d is null
- Gather Motion XXX
+ Gather Motion 1:1  (slice1; segments: 1)
    ->  Seq Scan on hp_prefix_test_p4 hp_prefix_test
          Filter: ((a IS NULL) AND (d IS NULL) AND (b = 2) AND (c = 3))
+ Optimizer: Postgres query optimizer
 
 explain (costs off) select tableoid::regclass,* from hp_prefix_test where a = 1 and b = 2 and c = 3 and d is null
- Gather Motion XXX
+ Gather Motion 1:1  (slice1; segments: 1)
    ->  Seq Scan on hp_prefix_test_p5 hp_prefix_test
          Filter: ((d IS NULL) AND (a = 1) AND (b = 2) AND (c = 3))
+ Optimizer: Postgres query optimizer
 
 explain (costs off) select tableoid::regclass,* from hp_prefix_test where a is null and b is null and c is null and d = 4
- Gather Motion XXX
+ Gather Motion 1:1  (slice1; segments: 1)
    ->  Seq Scan on hp_prefix_test_p4 hp_prefix_test
          Filter: ((a IS NULL) AND (b IS NULL) AND (c IS NULL) AND (d = 4))
+ Optimizer: Postgres query optimizer
 
 explain (costs off) select tableoid::regclass,* from hp_prefix_test where a = 1 and b is null and c is null and d = 4
- Gather Motion XXX
+ Gather Motion 1:1  (slice1; segments: 1)
    ->  Seq Scan on hp_prefix_test_p6 hp_prefix_test
          Filter: ((b IS NULL) AND (c IS NULL) AND (a = 1) AND (d = 4))
+ Optimizer: Postgres query optimizer
 
 explain (costs off) select tableoid::regclass,* from hp_prefix_test where a is null and b = 2 and c is null and d = 4
- Gather Motion XXX
+ Gather Motion 1:1  (slice1; segments: 1)
    ->  Seq Scan on hp_prefix_test_p5 hp_prefix_test
          Filter: ((a IS NULL) AND (c IS NULL) AND (b = 2) AND (d = 4))
+ Optimizer: Postgres query optimizer
 
 explain (costs off) select tableoid::regclass,* from hp_prefix_test where a = 1 and b = 2 and c is null and d = 4
- Gather Motion XXX
+ Gather Motion 1:1  (slice1; segments: 1)
    ->  Seq Scan on hp_prefix_test_p6 hp_prefix_test
          Filter: ((c IS NULL) AND (a = 1) AND (b = 2) AND (d = 4))
+ Optimizer: Postgres query optimizer
 
 explain (costs off) select tableoid::regclass,* from hp_prefix_test where a is null and b is null and c = 3 and d = 4
- Gather Motion XXX
+ Gather Motion 1:1  (slice1; segments: 1)
    ->  Seq Scan on hp_prefix_test_p4 hp_prefix_test
          Filter: ((a IS NULL) AND (b IS NULL) AND (c = 3) AND (d = 4))
+ Optimizer: Postgres query optimizer
 
 explain (costs off) select tableoid::regclass,* from hp_prefix_test where a = 1 and b is null and c = 3 and d = 4
- Gather Motion XXX
+ Gather Motion 1:1  (slice1; segments: 1)
    ->  Seq Scan on hp_prefix_test_p5 hp_prefix_test
          Filter: ((b IS NULL) AND (a = 1) AND (c = 3) AND (d = 4))
+ Optimizer: Postgres query optimizer
 
 explain (costs off) select tableoid::regclass,* from hp_prefix_test where a is null and b = 2 and c = 3 and d = 4
- Gather Motion XXX
+ Gather Motion 1:1  (slice1; segments: 1)
    ->  Seq Scan on hp_prefix_test_p6 hp_prefix_test
          Filter: ((a IS NULL) AND (b = 2) AND (c = 3) AND (d = 4))
+ Optimizer: Postgres query optimizer
 
 explain (costs off) select tableoid::regclass,* from hp_prefix_test where a = 1 and b = 2 and c = 3 and d = 4
- Gather Motion XXX
+ Gather Motion 1:1  (slice1; segments: 1)
    ->  Seq Scan on hp_prefix_test_p4 hp_prefix_test
          Filter: ((a = 1) AND (b = 2) AND (c = 3) AND (d = 4))
+ Optimizer: Postgres query optimizer
 
 -- And ensure we get exactly 1 row from each. Again, all 16 possible combinations.
 select
@@ -4820,8 +5302,12 @@ using hash as
 operator 1 ===,
 function 2 part_hashint4_noop(int4, int8);
 create table hp_contradict_test (a int, b int) partition by hash (a part_test_int4_ops2, b part_test_int4_ops2);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table hp_contradict_test_p1 partition of hp_contradict_test for values with (modulus 2, remainder 0);
+NOTICE:  table has parent, setting distribution columns to match parent table
 create table hp_contradict_test_p2 partition of hp_contradict_test for values with (modulus 2, remainder 1);
+NOTICE:  table has parent, setting distribution columns to match parent table
 explain (costs off) select * from hp_contradict_test where a is null and a === 1 and b === 1;
              QUERY PLAN              
 -------------------------------------

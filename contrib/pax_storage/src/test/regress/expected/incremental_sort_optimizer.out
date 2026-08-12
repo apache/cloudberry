@@ -14,7 +14,7 @@ select * from (select * from tenk1 order by four) t order by four, ten;
    ->  Sort
          Sort Key: four, ten
          ->  Seq Scan on tenk1
- Optimizer: Pivotal Optimizer (GPORCA)
+ Optimizer: GPORCA
 (6 rows)
 
 -- When there is a LIMIT clause, incremental sort is beneficial because
@@ -31,7 +31,7 @@ limit 1;
                ->  Sort
                      Sort Key: four, ten
                      ->  Seq Scan on tenk1
- Optimizer: Pivotal Optimizer (GPORCA)
+ Optimizer: GPORCA
 (8 rows)
 
 -- When planner_work_mem is not enough to sort the entire table, incremental sort
@@ -46,11 +46,13 @@ select * from (select * from tenk1 order by four) t order by four, ten;
    ->  Sort
          Sort Key: four, ten
          ->  Seq Scan on tenk1
- Optimizer: Pivotal Optimizer (GPORCA)
+ Optimizer: GPORCA
 (6 rows)
 
 reset planner_work_mem;
 create table t(a integer, b integer);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create or replace function explain_analyze_without_memory(query text)
 returns table (out_line text) language plpgsql
 as
@@ -160,7 +162,7 @@ explain (costs off) select * from (select * from t order by a) s order by a, b l
                ->  Sort
                      Sort Key: a, b
                      ->  Seq Scan on t
- Optimizer: Pivotal Optimizer (GPORCA)
+ Optimizer: GPORCA
 (8 rows)
 
 select * from (select * from t order by a) s order by a, b limit 31;
@@ -209,7 +211,7 @@ explain (costs off) select * from (select * from t order by a) s order by a, b l
                ->  Sort
                      Sort Key: a, b
                      ->  Seq Scan on t
- Optimizer: Pivotal Optimizer (GPORCA)
+ Optimizer: GPORCA
 (8 rows)
 
 select * from (select * from t order by a) s order by a, b limit 32;
@@ -259,7 +261,7 @@ explain (costs off) select * from (select * from t order by a) s order by a, b l
                ->  Sort
                      Sort Key: a, b
                      ->  Seq Scan on t
- Optimizer: Pivotal Optimizer (GPORCA)
+ Optimizer: GPORCA
 (8 rows)
 
 select * from (select * from t order by a) s order by a, b limit 33;
@@ -310,7 +312,7 @@ explain (costs off) select * from (select * from t order by a) s order by a, b l
                ->  Sort
                      Sort Key: a, b
                      ->  Seq Scan on t
- Optimizer: Pivotal Optimizer (GPORCA)
+ Optimizer: GPORCA
 (8 rows)
 
 select * from (select * from t order by a) s order by a, b limit 65;
@@ -393,7 +395,7 @@ explain (costs off) select * from (select * from t order by a) s order by a, b l
                ->  Sort
                      Sort Key: a, b
                      ->  Seq Scan on t
- Optimizer: Pivotal Optimizer (GPORCA)
+ Optimizer: GPORCA
 (8 rows)
 
 select * from (select * from t order by a) s order by a, b limit 66;
@@ -481,7 +483,7 @@ explain (costs off) select * from (select * from t order by a) s order by a, b l
                ->  Sort
                      Sort Key: a, b
                      ->  Seq Scan on t
- Optimizer: Pivotal Optimizer (GPORCA)
+ Optimizer: GPORCA
 (8 rows)
 
 select * from (select * from t order by a) s order by a, b limit 55;
@@ -557,7 +559,7 @@ select explain_analyze_without_memory('select * from (select * from t order by a
                      Sort Key: a, b
                      Sort Method:  top-N heapsort  Memory: NNkB
                      ->  Seq Scan on t (actual rows=400 loops=1)
- Optimizer: Pivotal Optimizer (GPORCA)
+ Optimizer: GPORCA
 (9 rows)
 
 reset max_parallel_workers_per_gather;
@@ -588,7 +590,7 @@ explain (costs off) select * from (select * from t order by a) s order by a, b l
                ->  Sort
                      Sort Key: a, b
                      ->  Seq Scan on t
- Optimizer: Pivotal Optimizer (GPORCA)
+ Optimizer: GPORCA
 (8 rows)
 
 select * from (select * from t order by a) s order by a, b limit 70;
@@ -671,7 +673,7 @@ select * from (select * from t order by a) s order by a, b limit 70;
 -- transition point) but only retain 5. Thus when we transition modes, all
 -- tuples in the full sort state have different prefix keys.
 explain (costs off) select * from (select * from t order by a) s order by a, b limit 5;
-                   QUERY PLAN
+                   QUERY PLAN                   
 ------------------------------------------------
  Limit
    ->  Gather Motion 3:1  (slice1; segments: 3)
@@ -680,7 +682,7 @@ explain (costs off) select * from (select * from t order by a) s order by a, b l
                ->  Sort
                      Sort Key: a, b
                      ->  Seq Scan on t
- Optimizer: Pivotal Optimizer (GPORCA)
+ Optimizer: GPORCA
 (8 rows)
 
 select * from (select * from t order by a) s order by a, b limit 5;
@@ -712,7 +714,7 @@ explain (costs off) select * from t left join (select * from (select * from t or
          ->  Hash
                ->  Seq Scan on t t_1
                      Filter: (a = ANY ('{1,2}'::integer[]))
- Optimizer: Pivotal Optimizer (GPORCA)
+ Optimizer: GPORCA
 (9 rows)
 
 --
@@ -740,7 +742,7 @@ select explain_analyze_without_memory('select * from (select * from t order by a
                      Sort Method:  top-N heapsort  Memory: NNkB
                      Sort Method:  quicksort  Memory: NNkB
                      ->  Seq Scan on t (actual rows=996 loops=1)
- Optimizer: Pivotal Optimizer (GPORCA)
+ Optimizer: GPORCA
 (10 rows)
 
 reset max_parallel_workers_per_gather;
@@ -771,7 +773,7 @@ explain (costs off) select * from (select * from t order by a) s order by a, b l
                ->  Sort
                      Sort Key: a, b
                      ->  Seq Scan on t
- Optimizer: Pivotal Optimizer (GPORCA)
+ Optimizer: GPORCA
 (8 rows)
 
 select * from (select * from t order by a) s order by a, b limit 31;
@@ -820,7 +822,7 @@ explain (costs off) select * from (select * from t order by a) s order by a, b l
                ->  Sort
                      Sort Key: a, b
                      ->  Seq Scan on t
- Optimizer: Pivotal Optimizer (GPORCA)
+ Optimizer: GPORCA
 (8 rows)
 
 select * from (select * from t order by a) s order by a, b limit 32;
@@ -870,7 +872,7 @@ explain (costs off) select * from (select * from t order by a) s order by a, b l
                ->  Sort
                      Sort Key: a, b
                      ->  Seq Scan on t
- Optimizer: Pivotal Optimizer (GPORCA)
+ Optimizer: GPORCA
 (8 rows)
 
 select * from (select * from t order by a) s order by a, b limit 33;
@@ -921,7 +923,7 @@ explain (costs off) select * from (select * from t order by a) s order by a, b l
                ->  Sort
                      Sort Key: a, b
                      ->  Seq Scan on t
- Optimizer: Pivotal Optimizer (GPORCA)
+ Optimizer: GPORCA
 (8 rows)
 
 select * from (select * from t order by a) s order by a, b limit 65;
@@ -1004,7 +1006,7 @@ explain (costs off) select * from (select * from t order by a) s order by a, b l
                ->  Sort
                      Sort Key: a, b
                      ->  Seq Scan on t
- Optimizer: Pivotal Optimizer (GPORCA)
+ Optimizer: GPORCA
 (8 rows)
 
 select * from (select * from t order by a) s order by a, b limit 66;
@@ -1092,7 +1094,7 @@ explain (costs off) select * from (select * from t order by a) s order by a, b l
                ->  Sort
                      Sort Key: a, b
                      ->  Seq Scan on t
- Optimizer: Pivotal Optimizer (GPORCA)
+ Optimizer: GPORCA
 (8 rows)
 
 select * from (select * from t order by a) s order by a, b limit 31;
@@ -1141,7 +1143,7 @@ explain (costs off) select * from (select * from t order by a) s order by a, b l
                ->  Sort
                      Sort Key: a, b
                      ->  Seq Scan on t
- Optimizer: Pivotal Optimizer (GPORCA)
+ Optimizer: GPORCA
 (8 rows)
 
 select * from (select * from t order by a) s order by a, b limit 32;
@@ -1191,7 +1193,7 @@ explain (costs off) select * from (select * from t order by a) s order by a, b l
                ->  Sort
                      Sort Key: a, b
                      ->  Seq Scan on t
- Optimizer: Pivotal Optimizer (GPORCA)
+ Optimizer: GPORCA
 (8 rows)
 
 select * from (select * from t order by a) s order by a, b limit 33;
@@ -1242,7 +1244,7 @@ explain (costs off) select * from (select * from t order by a) s order by a, b l
                ->  Sort
                      Sort Key: a, b
                      ->  Seq Scan on t
- Optimizer: Pivotal Optimizer (GPORCA)
+ Optimizer: GPORCA
 (8 rows)
 
 select * from (select * from t order by a) s order by a, b limit 65;
@@ -1325,7 +1327,7 @@ explain (costs off) select * from (select * from t order by a) s order by a, b l
                ->  Sort
                      Sort Key: a, b
                      ->  Seq Scan on t
- Optimizer: Pivotal Optimizer (GPORCA)
+ Optimizer: GPORCA
 (8 rows)
 
 select * from (select * from t order by a) s order by a, b limit 66;
@@ -1408,6 +1410,8 @@ set parallel_setup_cost = 0;
 set parallel_tuple_cost = 0;
 set max_parallel_workers_per_gather = 2;
 create table t (a int, b int, c int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into t select mod(i,10),mod(i,10),i from generate_series(1,10000) s(i);
 create index on t (a);
 analyze t;
@@ -1424,7 +1428,7 @@ explain (costs off) select a,b,sum(c) from t group by 1,2 order by 1,2,3 limit 1
                      ->  HashAggregate
                            Group Key: a, b
                            ->  Seq Scan on t
- Optimizer: Pivotal Optimizer (GPORCA)
+ Optimizer: GPORCA
 (10 rows)
 
 set enable_incremental_sort = on;
@@ -1440,7 +1444,7 @@ explain (costs off) select a,b,sum(c) from t group by 1,2 order by 1,2,3 limit 1
                      ->  HashAggregate
                            Group Key: a, b
                            ->  Seq Scan on t
- Optimizer: Pivotal Optimizer (GPORCA)
+ Optimizer: GPORCA
 (10 rows)
 
 -- Incremental sort vs. set operations with varno 0
@@ -1457,19 +1461,19 @@ explain (costs off) select * from t union select * from t order by 1,3;
                ->  Append
                      ->  Seq Scan on t
                      ->  Seq Scan on t t_1
- Optimizer: Pivotal Optimizer (GPORCA)
+ Optimizer: GPORCA
 (10 rows)
 
 -- Full sort, not just incremental sort can be pushed below a gather merge path
 -- by generate_useful_gather_paths.
 explain (costs off) select distinct a,b from t;
-                QUERY PLAN
+                QUERY PLAN                
 ------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  HashAggregate
          Group Key: a, b
          ->  Seq Scan on t
- Optimizer: Pivotal Optimizer (GPORCA)
+ Optimizer: GPORCA
 (5 rows)
 
 drop table t;
@@ -1487,8 +1491,8 @@ set min_parallel_index_scan_size = 0;
 -- Parallel sort below join.
 explain (costs off) select distinct sub.unique1, stringu1
 from tenk1, lateral (select tenk1.unique1 from generate_series(1, 1000)) as sub;
-                           QUERY PLAN
------------------------------------------------------------------
+                               QUERY PLAN                               
+------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    Merge Key: tenk1.unique1, tenk1.stringu1
    ->  Unique
@@ -1496,30 +1500,34 @@ from tenk1, lateral (select tenk1.unique1 from generate_series(1, 1000)) as sub;
          ->  Sort
                Sort Key: tenk1.unique1, tenk1.stringu1
                ->  Nested Loop
-                     ->  Index Scan using tenk1_unique1 on tenk1
                      ->  Function Scan on generate_series
+                     ->  Materialize
+                           ->  Bitmap Heap Scan on tenk1
+                                 ->  Bitmap Index Scan on tenk1_unique1
  Optimizer: Postgres query optimizer
-(10 rows)
+(12 rows)
 
 explain (costs off) select sub.unique1, stringu1
 from tenk1, lateral (select tenk1.unique1 from generate_series(1, 1000)) as sub
 order by 1, 2;
-                        QUERY PLAN                         
------------------------------------------------------------
+                            QUERY PLAN                            
+------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    Merge Key: tenk1.unique1, tenk1.stringu1
    ->  Sort
          Sort Key: tenk1.unique1, tenk1.stringu1
          ->  Nested Loop
-               ->  Index Scan using tenk1_unique1 on tenk1
                ->  Function Scan on generate_series
+               ->  Materialize
+                     ->  Bitmap Heap Scan on tenk1
+                           ->  Bitmap Index Scan on tenk1_unique1
  Optimizer: Postgres query optimizer
-(8 rows)
+(10 rows)
 
 -- Parallel sort but with expression that can be safely generated at the base rel.
 explain (costs off) select distinct sub.unique1, md5(stringu1)
 from tenk1, lateral (select tenk1.unique1 from generate_series(1, 1000)) as sub;
-                                    QUERY PLAN
+                                    QUERY PLAN                                    
 ----------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    Merge Key: tenk1.unique1, (md5((tenk1.stringu1)::text))
@@ -1528,10 +1536,12 @@ from tenk1, lateral (select tenk1.unique1 from generate_series(1, 1000)) as sub;
          ->  Sort
                Sort Key: tenk1.unique1, (md5((tenk1.stringu1)::text)) COLLATE "C"
                ->  Nested Loop
-                     ->  Index Scan using tenk1_unique1 on tenk1
                      ->  Function Scan on generate_series
+                     ->  Materialize
+                           ->  Bitmap Heap Scan on tenk1
+                                 ->  Bitmap Index Scan on tenk1_unique1
  Optimizer: Postgres query optimizer
-(10 rows)
+(12 rows)
 
 explain (costs off) select sub.unique1, md5(stringu1)
 from tenk1, lateral (select tenk1.unique1 from generate_series(1, 1000)) as sub
@@ -1543,10 +1553,12 @@ order by 1, 2;
    ->  Sort
          Sort Key: tenk1.unique1, (md5((tenk1.stringu1)::text)) COLLATE "C"
          ->  Nested Loop
-               ->  Index Scan using tenk1_unique1 on tenk1
                ->  Function Scan on generate_series
+               ->  Materialize
+                     ->  Bitmap Heap Scan on tenk1
+                           ->  Bitmap Index Scan on tenk1_unique1
  Optimizer: Postgres query optimizer
-(8 rows)
+(10 rows)
 
 -- Parallel sort with an aggregate that can be safely generated in parallel,
 -- but we can't sort by partial aggregate values.
@@ -1629,7 +1641,7 @@ order by 1, 2;
 -- Parallel sort but with expression not available until the upper rel.
 explain (costs off) select distinct sub.unique1, stringu1 || random()::text
 from tenk1, lateral (select tenk1.unique1 from generate_series(1, 1000)) as sub;
-                                            QUERY PLAN
+                                            QUERY PLAN                                             
 ---------------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    Merge Key: tenk1.unique1, (((tenk1.stringu1)::text || (random())::text))
@@ -1638,23 +1650,27 @@ from tenk1, lateral (select tenk1.unique1 from generate_series(1, 1000)) as sub;
          ->  Sort
                Sort Key: tenk1.unique1, (((tenk1.stringu1)::text || (random())::text)) COLLATE "C"
                ->  Nested Loop
-                     ->  Index Scan using tenk1_unique1 on tenk1
                      ->  Function Scan on generate_series
+                     ->  Materialize
+                           ->  Bitmap Heap Scan on tenk1
+                                 ->  Bitmap Index Scan on tenk1_unique1
  Optimizer: Postgres query optimizer
-(10 rows)
+(12 rows)
 
 explain (costs off) select sub.unique1, stringu1 || random()::text
 from tenk1, lateral (select tenk1.unique1 from generate_series(1, 1000)) as sub
 order by 1, 2;
-                                         QUERY PLAN
+                                         QUERY PLAN                                          
 ---------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    Merge Key: tenk1.unique1, (((tenk1.stringu1)::text || (random())::text))
    ->  Sort
          Sort Key: tenk1.unique1, (((tenk1.stringu1)::text || (random())::text)) COLLATE "C"
          ->  Nested Loop
-               ->  Index Scan using tenk1_unique1 on tenk1
                ->  Function Scan on generate_series
+               ->  Materialize
+                     ->  Bitmap Heap Scan on tenk1
+                           ->  Bitmap Index Scan on tenk1_unique1
  Optimizer: Postgres query optimizer
-(8 rows)
+(10 rows)
 

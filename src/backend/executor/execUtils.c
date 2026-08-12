@@ -2400,6 +2400,15 @@ typedef struct MotionFinderContext
  */
 static bool
 MotionFinderWalker(Plan *node,
+				  void *context);
+static bool
+MotionFinderWalker_adapter(Node *node, void *context)
+{
+	return MotionFinderWalker((Plan *) node, context);
+}
+
+static bool
+MotionFinderWalker(Plan *node,
 				  void *context)
 {
 	Assert(context);
@@ -2420,7 +2429,7 @@ MotionFinderWalker(Plan *node,
 	}
 
 	/* Continue walking */
-	return plan_tree_walker((Node*)node, MotionFinderWalker, ctx, true);
+	return plan_tree_walker((Node*)node, MotionFinderWalker_adapter, ctx, true);
 }
 
 /*

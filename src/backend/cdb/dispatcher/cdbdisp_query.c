@@ -1655,6 +1655,14 @@ getExecParamsToDispatch(PlannedStmt *stmt, ParamExecData *intPrm)
  * list looking for a specific paramid, and returns its type.
  */
 static bool
+param_walker(Node *node, ParamWalkerContext *context);
+static bool
+param_walker_adapter(Node *node, void *context)
+{
+	return param_walker(node, (ParamWalkerContext *) context);
+}
+
+static bool
 param_walker(Node *node, ParamWalkerContext *context)
 {
 	if (node == NULL)
@@ -1670,7 +1678,7 @@ param_walker(Node *node, ParamWalkerContext *context)
 			return false;
 		}
 	}
-	return plan_tree_walker(node, param_walker, context, true);
+	return plan_tree_walker(node, param_walker_adapter, context, true);
 }
 
 /*
