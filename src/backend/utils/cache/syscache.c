@@ -44,11 +44,9 @@
 #include "catalog/pg_enum.h"
 #include "catalog/pg_event_trigger.h"
 #include "catalog/pg_extension.h"
-#include "catalog/pg_foreign_catalog.h"
 #include "catalog/pg_foreign_data_wrapper.h"
 #include "catalog/pg_foreign_server.h"
 #include "catalog/pg_foreign_table.h"
-#include "catalog/pg_foreign_volume.h"
 #include "catalog/pg_language.h"
 #include "catalog/pg_namespace.h"
 #include "catalog/pg_opclass.h"
@@ -365,18 +363,6 @@ static const struct cachedesc cacheinfo[] = {
 		KEY(Anum_pg_foreign_data_wrapper_oid),
 		2
 	},
-	[FOREIGNCATALOGNAME] = {
-		ForeignCatalogRelationId,
-		ForeignCatalogNameIndexId,
-		KEY(Anum_pg_foreign_catalog_fcname),
-		2
-	},
-	[FOREIGNCATALOGOID] = {
-		ForeignCatalogRelationId,
-		ForeignCatalogOidIndexId,
-		KEY(Anum_pg_foreign_catalog_oid),
-		2
-	},
 	[FOREIGNSERVERNAME] = {
 		ForeignServerRelationId,
 		ForeignServerNameIndexId,
@@ -406,18 +392,6 @@ static const struct cachedesc cacheinfo[] = {
 		ForeignTableRelidIndexId,
 		KEY(Anum_pg_foreign_table_ftrelid),
 		4
-	},
-	[FOREIGNVOLUMENAME] = {
-		ForeignVolumeRelationId,
-		ForeignVolumeNameIndexId,
-		KEY(Anum_pg_foreign_volume_fvname),
-		2
-	},
-	[FOREIGNVOLUMEOID] = {
-		ForeignVolumeRelationId,
-		ForeignVolumeOidIndexId,
-		KEY(Anum_pg_foreign_volume_oid),
-		2
 	},
 	[GPPOLICYID] = {
 		GpPolicyRelationId,

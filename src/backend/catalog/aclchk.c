@@ -3050,12 +3050,6 @@ aclcheck_error(AclResult aclerr, ObjectType objtype,
 					case OBJECT_FOREIGN_SERVER:
 						msg = gettext_noop("permission denied for foreign server %s");
 						break;
-					case OBJECT_FOREIGN_CATALOG:
-						msg = gettext_noop("permission denied for foreign catalog %s");
-						break;
-					case OBJECT_FOREIGN_VOLUME:
-						msg = gettext_noop("permission denied for foreign volume %s");
-						break;
 					case OBJECT_FOREIGN_TABLE:
 						msg = gettext_noop("permission denied for foreign table %s");
 						break;
@@ -3203,12 +3197,6 @@ aclcheck_error(AclResult aclerr, ObjectType objtype,
 						break;
 					case OBJECT_FOREIGN_SERVER:
 						msg = gettext_noop("must be owner of foreign server %s");
-						break;
-					case OBJECT_FOREIGN_CATALOG:
-						msg = gettext_noop("must be owner of foreign catalog %s");
-						break;
-					case OBJECT_FOREIGN_VOLUME:
-						msg = gettext_noop("must be owner of foreign volume %s");
 						break;
 					case OBJECT_FOREIGN_TABLE:
 						msg = gettext_noop("must be owner of foreign table %s");

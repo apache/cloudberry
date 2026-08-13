@@ -42,7 +42,6 @@ OBJS = \
 	foreigncmds.o \
 	functioncmds.o \
 	indexcmds.o \
-	laketablecmds.o \
 	lockcmds.o \
 	matview.o \
 	opclasscmds.o \

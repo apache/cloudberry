@@ -122,8 +122,6 @@
 		"gp_workfile_limit_per_query",
 		"gp_write_shared_snapshot",
 		"hash_mem_multiplier",
-		"iceberg_default_catalog",
-		"iceberg_default_volume",
 		"ignore_system_indexes",
 		"ignore_checksum_failure",
 		"IntervalStyle",

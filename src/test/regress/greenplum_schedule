@@ -358,9 +358,6 @@ test: am_encoding
 # tests of directory table
 test: directory_table
 
-# tests of lake table DDL (foreign catalog, foreign volume, iceberg table)
-test: lake_table
-
 # test if motion sockets are created with the gp_segment_configuration.address
 test: motion_socket
 

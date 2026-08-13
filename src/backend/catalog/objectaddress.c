@@ -40,10 +40,8 @@
 #include "catalog/pg_event_trigger.h"
 #include "catalog/pg_extension.h"
 #include "catalog/pg_extprotocol.h"
-#include "catalog/pg_foreign_catalog.h"
 #include "catalog/pg_foreign_data_wrapper.h"
 #include "catalog/pg_foreign_server.h"
-#include "catalog/pg_foreign_volume.h"
 #include "catalog/pg_language.h"
 #include "catalog/pg_largeobject.h"
 #include "catalog/pg_largeobject_metadata.h"
@@ -305,34 +303,6 @@ static const ObjectPropertyType ObjectProperty[] =
 		Anum_pg_foreign_server_srvowner,
 		Anum_pg_foreign_server_srvacl,
 		OBJECT_FOREIGN_SERVER,
-		true
-	},
-	{
-		"foreign catalog",
-		ForeignCatalogRelationId,
-		ForeignCatalogOidIndexId,
-		FOREIGNCATALOGOID,
-		FOREIGNCATALOGNAME,
-		Anum_pg_foreign_catalog_oid,
-		Anum_pg_foreign_catalog_fcname,
-		InvalidAttrNumber,
-		Anum_pg_foreign_catalog_fcowner,
-		InvalidAttrNumber,
-		OBJECT_FOREIGN_CATALOG,
-		true
-	},
-	{
-		"foreign volume",
-		ForeignVolumeRelationId,
-		ForeignVolumeOidIndexId,
-		FOREIGNVOLUMEOID,
-		FOREIGNVOLUMENAME,
-		Anum_pg_foreign_volume_oid,
-		Anum_pg_foreign_volume_fvname,
-		InvalidAttrNumber,
-		Anum_pg_foreign_volume_fvowner,
-		InvalidAttrNumber,
-		OBJECT_FOREIGN_VOLUME,
 		true
 	},
 	{
@@ -1025,14 +995,6 @@ static const struct object_type_map
 	/* OCLASS_TAG */
 	{
 		"tag", OBJECT_TAG
-	},
-	/* OCLASS_FOREIGN_CATALOG */
-	{
-		"catalog", OBJECT_FOREIGN_CATALOG
-	},
-	/* OCLASS_FOREIGN_VOLUME */
-	{
-		"volume", OBJECT_FOREIGN_VOLUME
 	}
 };
 
@@ -1203,8 +1165,6 @@ get_object_address(ObjectType objtype, Node *object,
 			case OBJECT_LANGUAGE:
 			case OBJECT_FDW:
 			case OBJECT_FOREIGN_SERVER:
-			case OBJECT_FOREIGN_CATALOG:
-			case OBJECT_FOREIGN_VOLUME:
 			case OBJECT_EVENT_TRIGGER:
 			case OBJECT_EXTPROTOCOL:
 			case OBJECT_PARAMETER_ACL:
@@ -1510,16 +1470,6 @@ get_object_address_unqualified(ObjectType objtype,
 		case OBJECT_FOREIGN_SERVER:
 			address.classId = ForeignServerRelationId;
 			address.objectId = get_foreign_server_oid(name, missing_ok);
-			address.objectSubId = 0;
-			break;
-		case OBJECT_FOREIGN_CATALOG:
-			address.classId = ForeignCatalogRelationId;
-			address.objectId = get_foreign_catalog_oid(name, missing_ok);
-			address.objectSubId = 0;
-			break;
-		case OBJECT_FOREIGN_VOLUME:
-			address.classId = ForeignVolumeRelationId;
-			address.objectId = get_foreign_volume_oid(name, missing_ok);
 			address.objectSubId = 0;
 			break;
 		case OBJECT_EVENT_TRIGGER:
@@ -2556,8 +2506,6 @@ pg_get_object_address(PG_FUNCTION_ARGS)
 		case OBJECT_EXTENSION:
 		case OBJECT_FDW:
 		case OBJECT_FOREIGN_SERVER:
-		case OBJECT_FOREIGN_CATALOG:
-		case OBJECT_FOREIGN_VOLUME:
 		case OBJECT_STORAGE_SERVER:
 		case OBJECT_LANGUAGE:
 		case OBJECT_PARAMETER_ACL:
@@ -2715,8 +2663,6 @@ check_object_ownership(Oid roleid, ObjectType objtype, ObjectAddress address,
 		case OBJECT_EXTENSION:
 		case OBJECT_FDW:
 		case OBJECT_FOREIGN_SERVER:
-		case OBJECT_FOREIGN_CATALOG:
-		case OBJECT_FOREIGN_VOLUME:
 		case OBJECT_LANGUAGE:
 		case OBJECT_PUBLICATION:
 		case OBJECT_SCHEMA:
@@ -4009,50 +3955,6 @@ getObjectDescription(const ObjectAddress *object, bool missing_ok)
 				break;
 			}
 
-		case OCLASS_FOREIGN_CATALOG:
-			{
-				HeapTuple	catTup;
-				Form_pg_foreign_catalog catForm;
-
-				catTup = SearchSysCache1(FOREIGNCATALOGOID,
-										 ObjectIdGetDatum(object->objectId));
-				if (!HeapTupleIsValid(catTup))
-				{
-					if (!missing_ok)
-						elog(ERROR, "cache lookup failed for foreign catalog %u",
-							 object->objectId);
-					break;
-				}
-
-				catForm = (Form_pg_foreign_catalog) GETSTRUCT(catTup);
-				appendStringInfo(&buffer, _("catalog %s"),
-								 NameStr(catForm->fcname));
-				ReleaseSysCache(catTup);
-				break;
-			}
-
-		case OCLASS_FOREIGN_VOLUME:
-			{
-				HeapTuple	volTup;
-				Form_pg_foreign_volume volForm;
-
-				volTup = SearchSysCache1(FOREIGNVOLUMEOID,
-										 ObjectIdGetDatum(object->objectId));
-				if (!HeapTupleIsValid(volTup))
-				{
-					if (!missing_ok)
-						elog(ERROR, "cache lookup failed for foreign volume %u",
-							 object->objectId);
-					break;
-				}
-
-				volForm = (Form_pg_foreign_volume) GETSTRUCT(volTup);
-				appendStringInfo(&buffer, _("volume %s"),
-								 NameStr(volForm->fvname));
-				ReleaseSysCache(volTup);
-				break;
-			}
-
 		case OCLASS_USER_MAPPING:
 			{
 				HeapTuple	tup;
@@ -5045,14 +4947,6 @@ getObjectTypeDescription(const ObjectAddress *object, bool missing_ok)
 
 		case OCLASS_FOREIGN_SERVER:
 			appendStringInfoString(&buffer, "server");
-			break;
-
-		case OCLASS_FOREIGN_CATALOG:
-			appendStringInfoString(&buffer, "catalog");
-			break;
-
-		case OCLASS_FOREIGN_VOLUME:
-			appendStringInfoString(&buffer, "volume");
 			break;
 
 		case OCLASS_USER_MAPPING:
@@ -6146,54 +6040,6 @@ getObjectIdentityParts(const ObjectAddress *object,
 					if (objname)
 						*objname = list_make1(pstrdup(srv->servername));
 				}
-				break;
-			}
-
-		case OCLASS_FOREIGN_CATALOG:
-			{
-				HeapTuple	catTup;
-				Form_pg_foreign_catalog catForm;
-
-				catTup = SearchSysCache1(FOREIGNCATALOGOID,
-										 ObjectIdGetDatum(object->objectId));
-				if (!HeapTupleIsValid(catTup))
-				{
-					if (!missing_ok)
-						elog(ERROR, "cache lookup failed for foreign catalog %u",
-							 object->objectId);
-					break;
-				}
-
-				catForm = (Form_pg_foreign_catalog) GETSTRUCT(catTup);
-				appendStringInfoString(&buffer,
-									   quote_identifier(NameStr(catForm->fcname)));
-				if (objname)
-					*objname = list_make1(pstrdup(NameStr(catForm->fcname)));
-				ReleaseSysCache(catTup);
-				break;
-			}
-
-		case OCLASS_FOREIGN_VOLUME:
-			{
-				HeapTuple	volTup;
-				Form_pg_foreign_volume volForm;
-
-				volTup = SearchSysCache1(FOREIGNVOLUMEOID,
-										 ObjectIdGetDatum(object->objectId));
-				if (!HeapTupleIsValid(volTup))
-				{
-					if (!missing_ok)
-						elog(ERROR, "cache lookup failed for foreign volume %u",
-							 object->objectId);
-					break;
-				}
-
-				volForm = (Form_pg_foreign_volume) GETSTRUCT(volTup);
-				appendStringInfoString(&buffer,
-									   quote_identifier(NameStr(volForm->fvname)));
-				if (objname)
-					*objname = list_make1(pstrdup(NameStr(volForm->fvname)));
-				ReleaseSysCache(volTup);
 				break;
 			}
 

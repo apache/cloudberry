@@ -738,7 +738,6 @@ _readDropStmt_common(DropStmt *local_node)
 	READ_BOOL_FIELD(missing_ok);
 	READ_BOOL_FIELD(concurrent);
 	READ_BOOL_FIELD(isdynamic);
-	READ_BOOL_FIELD(isiceberg);
 
 	/* Force 'missing_ok' in QEs */
 #ifdef COMPILING_BINARY_FUNCS
@@ -1149,7 +1148,6 @@ _readDropStmt(void)
 	READ_BOOL_FIELD(missing_ok);
 	READ_BOOL_FIELD(concurrent);
 	READ_BOOL_FIELD(isdynamic);
-	READ_BOOL_FIELD(isiceberg);
 
 	/* Force 'missing_ok' in QEs */
 #ifdef COMPILING_BINARY_FUNCS

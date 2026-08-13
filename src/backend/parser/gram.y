@@ -313,7 +313,6 @@ static void check_expressions_in_partition_key(PartitionSpec *spec, core_yyscan_
 		CreateSchemaStmt CreateSeqStmt CreateStmt CreateStatsStmt
 		CreateStorageServerStmt CreateStorageUserMappingStmt
 		CreateTableSpaceStmt CreateFdwStmt CreateForeignServerStmt CreateForeignTableStmt CreateDirectoryTableStmt
-		CreateLakeTableStmt CreateForeignCatalogStmt CreateForeignVolumeStmt
 		CreateAssertionStmt CreateTransformStmt CreateTrigStmt CreateEventTrigStmt
 		CreateUserStmt CreateUserMappingStmt CreateRoleStmt CreatePolicyStmt
 		CreatedbStmt CreateWarehouseStmt DeclareCursorStmt DefineStmt DeleteStmt DiscardStmt DoStmt
@@ -411,7 +410,6 @@ static void check_expressions_in_partition_key(PartitionSpec *spec, core_yyscan_
 %type <defelt>  OptProfileElem
 
 %type <str>		opt_type
-%type <str>		OptForeignCatalog OptForeignVolume
 %type <str>		foreign_server_version opt_foreign_server_version
 %type <str>		opt_in_database
 
@@ -841,7 +839,7 @@ static void check_expressions_in_partition_key(PartitionSpec *spec, core_yyscan_
 
 	KEY KEYS
 
-	LABEL LAKE LANGUAGE LARGE_P LAST_P LATERAL_P
+	LABEL LANGUAGE LARGE_P LAST_P LATERAL_P
 	LEADING LEAKPROOF LEAST LEFT LEVEL LIKE LIMIT LISTEN LOAD LOCAL
 	LOCALTIME LOCALTIMESTAMP LOCATION LOCK_P LOCKED LOCUS LOGGED
 
@@ -885,7 +883,7 @@ static void check_expressions_in_partition_key(PartitionSpec *spec, core_yyscan_
 	UNLISTEN UNLOGGED UNTIL UPDATE USER USING
 
 	VACUUM VALID VALIDATE VALIDATOR VALUE_P VALUES VARCHAR VARIADIC VARYING
-	VERBOSE VERSION_P VIEW VIEWS VOLATILE VOLUME
+	VERBOSE VERSION_P VIEW VIEWS VOLATILE
 
 	WHEN WHERE WHITESPACE_P WINDOW WITH WITHIN WITHOUT WORK WRAPPER WRITE
 
@@ -1537,9 +1535,6 @@ stmt:
 			| CreateConversionStmt
 			| CreateDomainStmt
 			| CreateDirectoryTableStmt
-			| CreateLakeTableStmt
-			| CreateForeignCatalogStmt
-			| CreateForeignVolumeStmt
 			| CreateExtensionStmt
 			| CreateExternalStmt
 			| CreateFdwStmt
@@ -9101,169 +9096,6 @@ CreateDirectoryTableStmt:
 /*****************************************************************************
  *
  *		QUERY:
- *             CREATE FOREIGN CATALOG name SERVER server_name OPTIONS (...)
- *
- *****************************************************************************/
-
-CreateForeignCatalogStmt:
-			CREATE FOREIGN CATALOG_P name SERVER name TYPE_P Sconst create_generic_options
-				{
-					CreateForeignCatalogStmt *n = makeNode(CreateForeignCatalogStmt);
-					n->catalogname = $4;
-					n->servername = $6;
-					n->catalogtype = $8;
-					n->options = $9;
-					n->if_not_exists = false;
-					$$ = (Node *) n;
-				}
-			| CREATE FOREIGN CATALOG_P IF_P NOT EXISTS name SERVER name TYPE_P Sconst create_generic_options
-				{
-					CreateForeignCatalogStmt *n = makeNode(CreateForeignCatalogStmt);
-					n->catalogname = $7;
-					n->servername = $9;
-					n->catalogtype = $11;
-					n->options = $12;
-					n->if_not_exists = true;
-					$$ = (Node *) n;
-				}
-		;
-
-/*****************************************************************************
- *
- *		QUERY:
- *             CREATE FOREIGN VOLUME name SERVER server_name OPTIONS (...)
- *
- *****************************************************************************/
-
-CreateForeignVolumeStmt:
-			CREATE FOREIGN VOLUME name SERVER name create_generic_options
-				{
-					CreateForeignVolumeStmt *n = makeNode(CreateForeignVolumeStmt);
-					n->volumename = $4;
-					n->servername = $6;
-					n->options = $7;
-					n->if_not_exists = false;
-					$$ = (Node *) n;
-				}
-			| CREATE FOREIGN VOLUME IF_P NOT EXISTS name SERVER name create_generic_options
-				{
-					CreateForeignVolumeStmt *n = makeNode(CreateForeignVolumeStmt);
-					n->volumename = $7;
-					n->servername = $9;
-					n->options = $10;
-					n->if_not_exists = true;
-					$$ = (Node *) n;
-				}
-		;
-
-OptForeignCatalog:
-			CATALOG_P name							{ $$ = $2; }
-			| /*EMPTY*/								{ $$ = NULL; }
-		;
-
-OptForeignVolume:
-			VOLUME name								{ $$ = $2; }
-			| /*EMPTY*/								{ $$ = NULL; }
-		;
-
-/*****************************************************************************
- *
- *		QUERY:
- *             CREATE LAKE TABLE relname (columns) USING format
- *                 [CATALOG cat] [VOLUME vol] OPTIONS (...)
- *
- * A lake table stores its data on external object storage; fragments are
- * not hash-distributed across segments, so the distribution policy is
- * forced to RANDOM to keep UPDATE/DELETE correct.  The USING clause names
- * the table format (currently only ICEBERG); the format also determines the
- * table access method the relation is created with.
- *
- *****************************************************************************/
-
-CreateLakeTableStmt:
-			CREATE LAKE TABLE qualified_name '(' OptTableElementList ')'
-			USING name
-			OptForeignCatalog OptForeignVolume create_generic_options
-				{
-					CreateLakeTableStmt *n = makeNode(CreateLakeTableStmt);
-					char	   *format = pstrdup($9);
-					char	   *p;
-
-					/*
-					 * The USING clause names both the lake table format and
-					 * the access method that implements it; normalize to lower
-					 * case so a quoted "ICEBERG" resolves the same AM as an
-					 * unquoted iceberg.
-					 */
-					for (p = format; *p; p++)
-						*p = pg_tolower((unsigned char) *p);
-
-					$4->relpersistence = RELPERSISTENCE_PERMANENT;
-					n->base.relation = $4;
-					n->base.tableElts = $6;
-					n->base.inhRelations = NIL;
-					n->base.ofTypename = NULL;
-					n->base.constraints = NIL;
-					n->base.options = $12;		/* OPTIONS become reloptions, validated by the AM */
-					n->base.oncommit = ONCOMMIT_NOOP;
-					n->base.tablespacename = NULL;
-					n->base.accessMethod = format;
-					n->base.if_not_exists = false;
-					n->base.relKind = RELKIND_RELATION;
-					n->table_type = format;
-					n->foreign_catalog = $10 ? pstrdup($10) : NULL;
-					n->foreign_volume = $11 ? pstrdup($11) : NULL;
-					/* lake tables are always distributed randomly */
-					n->base.distributedBy = makeNode(DistributedBy);
-					n->base.distributedBy->ptype = POLICYTYPE_PARTITIONED;
-					n->base.distributedBy->keyCols = NIL;
-					n->base.distributedBy->numsegments = -1;
-					$$ = (Node *) n;
-				}
-			| CREATE LAKE TABLE IF_P NOT EXISTS qualified_name '(' OptTableElementList ')'
-			USING name
-			OptForeignCatalog OptForeignVolume create_generic_options
-				{
-					CreateLakeTableStmt *n = makeNode(CreateLakeTableStmt);
-					char	   *format = pstrdup($12);
-					char	   *p;
-
-					/*
-					 * The USING clause names both the lake table format and
-					 * the access method that implements it; normalize to lower
-					 * case so a quoted "ICEBERG" resolves the same AM as an
-					 * unquoted iceberg.
-					 */
-					for (p = format; *p; p++)
-						*p = pg_tolower((unsigned char) *p);
-
-					$7->relpersistence = RELPERSISTENCE_PERMANENT;
-					n->base.relation = $7;
-					n->base.tableElts = $9;
-					n->base.inhRelations = NIL;
-					n->base.ofTypename = NULL;
-					n->base.constraints = NIL;
-					n->base.options = $15;		/* OPTIONS become reloptions, validated by the AM */
-					n->base.oncommit = ONCOMMIT_NOOP;
-					n->base.tablespacename = NULL;
-					n->base.accessMethod = format;
-					n->base.if_not_exists = true;
-					n->base.relKind = RELKIND_RELATION;
-					n->table_type = format;
-					n->foreign_catalog = $13 ? pstrdup($13) : NULL;
-					n->foreign_volume = $14 ? pstrdup($14) : NULL;
-					/* lake tables are always distributed randomly */
-					n->base.distributedBy = makeNode(DistributedBy);
-					n->base.distributedBy->ptype = POLICYTYPE_PARTITIONED;
-					n->base.distributedBy->keyCols = NIL;
-					n->base.distributedBy->numsegments = -1;
-					$$ = (Node *) n;
-				}
-		;
-
-/*****************************************************************************
- *
- *		QUERY:
  *             ALTER DIRECTORY TABLE relname TAG (tagname = tagvalue, ...)
  *             ALTER DIRECTORY TABLE relname UNSET TAG (tagname_list)
  *
@@ -10550,31 +10382,6 @@ DropStmt:	DROP object_type_any_name IF_P EXISTS any_name_list opt_drop_behavior
 					n->isdynamic = true;
 					$$ = (Node *)n;
 				}
-/* DROP LAKE TABLE */
-			| DROP LAKE TABLE IF_P EXISTS any_name_list opt_drop_behavior
-				{
-					DropStmt *n = makeNode(DropStmt);
-					n->removeType = OBJECT_TABLE;
-					n->missing_ok = true;
-					n->objects = $6;
-					n->behavior = $7;
-					n->concurrent = false;
-					n->isdynamic = false;
-					n->isiceberg = true;
-					$$ = (Node *)n;
-				}
-			| DROP LAKE TABLE any_name_list opt_drop_behavior
-				{
-					DropStmt *n = makeNode(DropStmt);
-					n->removeType = OBJECT_TABLE;
-					n->missing_ok = false;
-					n->objects = $4;
-					n->behavior = $5;
-					n->concurrent = false;
-					n->isdynamic = false;
-					n->isiceberg = true;
-					$$ = (Node *)n;
-				}
 		;
 
 /* object types taking any_name/any_name_list */
@@ -10622,8 +10429,6 @@ drop_type_name:
 			| PUBLICATION							{ $$ = OBJECT_PUBLICATION; }
 			| SCHEMA								{ $$ = OBJECT_SCHEMA; }
 			| SERVER								{ $$ = OBJECT_FOREIGN_SERVER; }
-			| FOREIGN CATALOG_P						{ $$ = OBJECT_FOREIGN_CATALOG; }
-			| FOREIGN VOLUME						{ $$ = OBJECT_FOREIGN_VOLUME; }
 			| PROTOCOL								{ $$ = OBJECT_EXTPROTOCOL; }
 		;
 
@@ -21400,7 +21205,6 @@ unreserved_keyword:
 			| KEY
 			| KEYS
 			| LABEL
-			| LAKE
 			| LANGUAGE
 			| LARGE_P
 			| LAST_P
@@ -21611,7 +21415,6 @@ unreserved_keyword:
 			| VIEW
 			| VIEWS
 			| VOLATILE
-			| VOLUME
 			| WAREHOUSE
 			| WAREHOUSE_SIZE
 			| WEB /* gp */
@@ -22403,7 +22206,6 @@ bare_label_keyword:
 			| KEY
 			| KEYS
 			| LABEL
-			| LAKE
 			| LANGUAGE
 			| LARGE_P
 			| LAST_P
@@ -22663,7 +22465,6 @@ bare_label_keyword:
 			| VIEW
 			| VIEWS
 			| VOLATILE
-			| VOLUME
 			| WAREHOUSE
 			| WAREHOUSE_SIZE
 			| WEB

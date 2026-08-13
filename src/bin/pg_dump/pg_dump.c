@@ -2134,19 +2134,6 @@ selectDumpableTable(TableInfo *tbinfo, Archive *fout)
 		pg_log_warning("unsupport am pax yet, current relation \"%s\" will be ignore",
 					   tbinfo->dobj.name);
 	}
-
-	/*
-	 * Lake tables cannot be reproduced by pg_dump: their data lives in
-	 * external object storage managed through the iceberg access method's
-	 * foreign catalog and volume.  Skip them.
-	 */
-	if (tbinfo->amname && strcmp(tbinfo->amname, "iceberg") == 0)
-	{
-		tbinfo->dobj.dump = DUMP_COMPONENT_NONE;
-
-		pg_log_warning("lake table \"%s\" is not supported by pg_dump and will be ignored",
-					   tbinfo->dobj.name);
-	}
 }
 
 /*
