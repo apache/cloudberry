@@ -25,7 +25,6 @@ SUBDIRS = \
 		btree_gin	\
 		btree_gist	\
 		citext		\
-		datalake_fdw	\
 		dblink		\
 		dict_int	\
 		dict_xsyn	\
@@ -109,6 +108,12 @@ ifeq ($(enable_pax),yes)
 SUBDIRS += pax_storage
 else
 ALWAYS_SUBDIRS += pax_storage
+endif
+
+ifeq ($(enable_datalake_fdw),yes)
+SUBDIRS += datalake_fdw
+else
+ALWAYS_SUBDIRS += datalake_fdw
 endif
 
 ifeq ($(enable_ic_udp2),yes)
