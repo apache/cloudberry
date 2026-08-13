@@ -3312,9 +3312,29 @@ GetSnapshotData(Snapshot snapshot, DtxContext distributedTransactionContext)
 			globalxmin = DistributedLog_GetOldestXmin(globalxmin);
 	}
 
+	/*
+	 * globalxmin (the distributed oldestXmin read/advanced just above) can end
+	 * up greater than this snapshot's xmin.  xmin was computed under
+	 * ProcArrayLock, but DistributedLogShared->oldestXmin is maintained in a
+	 * different lock domain and is only read here, after ProcArrayLock has been
+	 * released.  In that window another backend can advance it past our xmin:
+	 * if the transaction whose local xid equals our xmin subsequently aborts,
+	 * its distributed-log entry keeps distribXid == 0, so
+	 * DistributedLog_AdvanceOldestXmin()'s forward scan skips over that xid
+	 * (instead of stopping at it) and bumps the shared oldestXmin beyond it.
+	 * A concurrent snapshot that took its xmin from that now-aborted xid then
+	 * reads the advanced value here.
+	 *
+	 * This is a benign, expected transient: the visibility horizon only needs
+	 * to be a valid lower bound (see src/backend/access/transam/README), and
+	 * the aborted transaction is invisible to us anyway, so a horizon at our
+	 * own xmin loses nothing.  Clamp to xmin (never error): a horizon <= our
+	 * own xmin is always safe -- it can never treat a tuple still needed by
+	 * this snapshot as removable.  This mirrors the clamp already done in
+	 * DistributedLog_GetOldestXmin().
+	 */
 	if (TransactionIdFollows(globalxmin, xmin))
-		elog(ERROR, "global xmin (%u) is higher than transaction xmin (%u)",
-			globalxmin, xmin);
+		globalxmin = xmin;
 
 
 	/*
