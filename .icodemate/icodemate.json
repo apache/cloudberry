@@ -1,0 +1,7 @@
+{
+  "plugin": [
+    "/home/10304955@zte.intra/.icodemate/market-plugins/plugins/superpowers/.opencode/plugins/superpowers.js",
+    "/home/10304955@zte.intra/.icodemate/market-plugins/plugins/usage-recorder/.opencode/dist/index.js"
+  ],
+  "$schema": "https://icodemate.ai/config.json"
+}

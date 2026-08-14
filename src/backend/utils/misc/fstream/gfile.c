@@ -308,10 +308,9 @@ static int bz_file_open(gfile_t *fd)
  * LZO) are cached in peek_buf and consumed first by lzo_read_peek /
  * lzo_read_uint32_peek to keep byte alignment.
  */
-#include <lzo/lzo1x.h>
 
 /* LZO block buffer size: standard lzop default block size is 256KB */
-#define LZO_BUFFER_SIZE		(1<<20)
+#define LZO_BUFFER_SIZE		(256 * 1024)
 
 /*
  * LZO decompression state structure (complete definition; gfile.h only

@@ -52,12 +52,6 @@ typedef enum Compression_type
 	LZO_COMPRESSION
 } compression_type;
 
-/*
- * LZO decompression state (incomplete declaration, complete definition
- * in gfile.c), following the same pattern as zlib_stuff/bzlib_stuff:
- * heap-allocated double buffer + EOF flag.
- */
-struct lzo_stuff;
 
 /* The struct gfile_t is private.  Please do not use any of its fields. */
 typedef struct gfile_t
