@@ -43,7 +43,7 @@ SUBDIRS = \
 #	special check for DML on system relations in GPDB
 
 # GPDB subdirs
-SUBDIRS += test_planner
+SUBDIRS += test_planner parallel_customscan
 ifeq ($(with_ssl),openssl)
 SUBDIRS += ssl_passphrase_callback
 else

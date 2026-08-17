@@ -61,6 +61,7 @@ typedef struct
  */
 static Node *pre_dispatch_function_evaluation_mutator(Node *node,
 										 pre_dispatch_function_evaluation_context *context);
+static Node *pre_dispatch_function_evaluation_mutator_adapter(Node *node, void *context);
 static bool replace_shareinput_targetlists_walker(Node *node, PlannerInfo *root, bool fPop);
 
 
@@ -239,6 +240,14 @@ typedef struct ctid_inventory_context
 } ctid_inventory_context;
 
 static bool
+ctid_inventory_walker(Node *node, ctid_inventory_context *inv);
+static bool
+ctid_inventory_walker_adapter(Node *node, void *inv)
+{
+	return ctid_inventory_walker(node, (ctid_inventory_context *) inv);
+}
+
+static bool
 ctid_inventory_walker(Node *node, ctid_inventory_context *inv)
 {
 	if (node == NULL)
@@ -259,7 +268,7 @@ ctid_inventory_walker(Node *node, ctid_inventory_context *inv)
 		}
 		return false;
 	}
-	return plan_tree_walker(node, ctid_inventory_walker, inv, true);
+	return plan_tree_walker(node, ctid_inventory_walker_adapter, inv, true);
 }
 
 void
@@ -1182,6 +1191,14 @@ typedef struct ParamWalkerContext
 } ParamWalkerContext;
 
 static bool
+param_walker(Node *node, ParamWalkerContext *context);
+static bool
+param_walker_adapter(Node *node, void *context)
+{
+	return param_walker(node, (ParamWalkerContext *) context);
+}
+
+static bool
 param_walker(Node *node, ParamWalkerContext *context)
 {
 	PlannerInfo *root = (PlannerInfo *) context->base.node;
@@ -1277,7 +1294,7 @@ param_walker(Node *node, ParamWalkerContext *context)
 			break;
 	}
 
-	return plan_tree_walker(node, param_walker, context, false);
+	return plan_tree_walker(node, param_walker_adapter, context, false);
 }
 
 /*
@@ -1344,6 +1361,14 @@ rte_param_walker(List *rtable, ParamWalkerContext *context)
 }
 
 static bool
+initplan_walker(Node *node, ParamWalkerContext *context);
+static bool
+initplan_walker_adapter(Node *node, void *context)
+{
+	return initplan_walker(node, (ParamWalkerContext *) context);
+}
+
+static bool
 initplan_walker(Node *node, ParamWalkerContext *context)
 {
 	PlannerInfo *root;
@@ -1406,7 +1431,7 @@ initplan_walker(Node *node, ParamWalkerContext *context)
 		plan->initPlan = new_initplans;
 	}
 
-	return plan_tree_walker(node, initplan_walker, context, true);
+	return plan_tree_walker(node, initplan_walker_adapter, context, true);
 }
 
 /*
@@ -1779,11 +1804,18 @@ pre_dispatch_function_evaluation_mutator(Node *node,
 	 * simplify its arguments (if any) using this routine.
 	 */
 	new_node = plan_tree_mutator(node,
-								 pre_dispatch_function_evaluation_mutator,
+								 pre_dispatch_function_evaluation_mutator_adapter,
 								 (void *) context,
 								 true);
 
 	return new_node;
+}
+
+static Node *
+pre_dispatch_function_evaluation_mutator_adapter(Node *node, void *context)
+{
+	return pre_dispatch_function_evaluation_mutator(
+		node, (pre_dispatch_function_evaluation_context *) context);
 }
 
 /*
