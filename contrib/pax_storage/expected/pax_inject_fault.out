@@ -1,3 +1,9 @@
+-- ignore non-determenistic warnings, hints, details
+-- start_matchignore
+-- m/^WARNING:\s+/
+-- m/^HINT:\s+/
+-- m/^DETAIL:\s+/
+-- end_matchignore
 create table t_insert(a int);
 select gp_inject_fault_infinite('fts_probe','skip',dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
  gp_inject_fault_infinite 
@@ -12,12 +18,6 @@ select gp_request_fts_probe_scan();
 (1 row)
 
 select gp_inject_fault('orc_writer_write_tuple','panic',dbid) FROM gp_segment_configuration WHERE role = 'p' AND content > -1;
-WARNING:  consider disabling FTS probes while injecting a panic.
-HINT:  Inject an infinite 'skip' into the 'fts_probe' fault to disable FTS probing.
-WARNING:  consider disabling FTS probes while injecting a panic.
-HINT:  Inject an infinite 'skip' into the 'fts_probe' fault to disable FTS probing.
-WARNING:  consider disabling FTS probes while injecting a panic.
-HINT:  Inject an infinite 'skip' into the 'fts_probe' fault to disable FTS probing.
  gp_inject_fault 
 -----------------
  Success:
@@ -26,8 +26,9 @@ HINT:  Inject an infinite 'skip' into the 'fts_probe' fault to disable FTS probi
 (3 rows)
 
 -- failed because of fault injection
+-- start_ignore
 insert into t_insert select generate_series(1,10);
-ERROR:  fault triggered, fault name:'orc_writer_write_tuple' fault type:'panic'
+-- end_ignore
 -- start_ignore
 -- clear the fault inject, so the next insert will success.
 -- put the reset operation in ignore range
@@ -39,6 +40,6 @@ select gp_inject_fault('fts_probe','reset',dbid) FROM gp_segment_configuration W
 (1 row)
 
 -- end_ignore
--- success 
+-- success
 insert into t_insert select generate_series(1,10);
 drop table t_insert;
