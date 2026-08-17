@@ -12,7 +12,6 @@ import base64
 import pickle
 import shlex
 import os.path
-import pipes
 import subprocess
 
 import re, socket
@@ -939,7 +938,7 @@ class ConfigureNewSegment(Command):
                  batchSize=None, verbose=False,ctxt=LOCAL, remoteHost=None, validationOnly=False, writeGpIdFileOnly=False,
                  forceoverwrite=False):
 
-        cmdStr = '$GPHOME/bin/lib/gpconfigurenewsegment -c \"%s\" -l %s' % (confinfo, pipes.quote(logdir))
+        cmdStr = '$GPHOME/bin/lib/gpconfigurenewsegment -c \"%s\" -l %s' % (confinfo, shlex.quote(logdir))
 
         if newSegments:
             cmdStr += ' -n'
@@ -1041,7 +1040,7 @@ class GpSegRecovery(Command):
 
 
 def _get_cmd_for_recovery_wrapper(wrapper_filename, confinfo, logdir, batchSize, verbose, forceoverwrite, era=None):
-    cmdStr = '$GPHOME/sbin/{}.py -c {} -l {}'.format(wrapper_filename, pipes.quote(confinfo), pipes.quote(logdir))
+    cmdStr = '$GPHOME/sbin/{}.py -c {} -l {}'.format(wrapper_filename, shlex.quote(confinfo), shlex.quote(logdir))
 
     if verbose:
         cmdStr += ' -v'

@@ -4307,9 +4307,9 @@ PQescapeInternal(PGconn *conn, const char *str, size_t len, bool as_ident)
 	return result;
 
 overflow:
-	libpq_append_conn_error(conn,
-							"escaped string size exceeds the maximum allowed (%zu)",
-							SIZE_MAX);
+	appendPQExpBuffer(&conn->errorMessage,
+					  libpq_gettext("escaped string size exceeds the maximum allowed (%zu)\n"),
+					  SIZE_MAX);
 	return NULL;
 }
 
@@ -4485,9 +4485,9 @@ PQescapeByteaInternal(PGconn *conn,
 
 overflow:
 	if (conn)
-		libpq_append_conn_error(conn,
-								"escaped bytea size exceeds the maximum allowed (%zu)",
-								SIZE_MAX);
+		appendPQExpBuffer(&conn->errorMessage,
+						  libpq_gettext("escaped bytea size exceeds the maximum allowed (%zu)\n"),
+						  SIZE_MAX);
 	return NULL;
 }
 

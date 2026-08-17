@@ -1066,7 +1066,7 @@ char *
 makeMultirangeTypeName(const char *rangeTypeName, Oid typeNamespace)
 {
 	char	   *buf;
-	char	   *rangestr;
+	const char *rangestr;
 
 	/*
 	 * If the range type name contains "range" then change that to

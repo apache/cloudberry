@@ -2004,7 +2004,7 @@ get_hints_from_comment(const char *p)
 {
 	const char *hint_head;
 	char	   *head;
-	char	   *tail;
+	const char *tail;
 	int			len;
 
 	if (p == NULL)
@@ -2051,7 +2051,7 @@ get_hints_from_comment(const char *p)
 	}
 
 	/* We don't support nested block comments. */
-	if ((head = strstr(p, BLOCK_COMMENT_START)) != NULL && head < tail)
+	if ((head = (char *) strstr(p, BLOCK_COMMENT_START)) != NULL && head < tail)
 	{
 		hint_ereport(head, ("Nested block comments are not supported."));
 		return NULL;

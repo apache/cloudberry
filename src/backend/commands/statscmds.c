@@ -187,8 +187,7 @@ CreateStatistics(CreateStatsStmt *stmt, bool check_rights)
 	{
 		AclResult	aclresult;
 
-		aclresult = object_aclcheck(NamespaceRelationId, namespaceId,
-									GetUserId(), ACL_CREATE);
+		aclresult = pg_namespace_aclcheck(namespaceId, GetUserId(), ACL_CREATE);
 		if (aclresult != ACLCHECK_OK)
 			aclcheck_error(aclresult, OBJECT_SCHEMA,
 						   get_namespace_name(namespaceId));

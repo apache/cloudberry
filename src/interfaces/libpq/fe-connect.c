@@ -5164,9 +5164,9 @@ ldapServiceLookup(const char *purl, PQconninfoOption *options,
 		if (values[i]->bv_len >= INT_MAX ||
 			size > (INT_MAX - (values[i]->bv_len + 1)))
 		{
-			libpq_append_error(errorMessage,
-							   "connection info string size exceeds the maximum allowed (%d)",
-							   INT_MAX);
+			appendPQExpBuffer(errorMessage,
+							  libpq_gettext("connection info string size exceeds the maximum allowed (%d)\n"),
+							  INT_MAX);
 			ldap_value_free_len(values);
 			ldap_unbind(ld);
 			return 3;

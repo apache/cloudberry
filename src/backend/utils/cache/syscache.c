@@ -1226,7 +1226,13 @@ static const struct cachedesc cacheinfo[] = {
 	[EXTENSIONOID] = {
 		ExtensionRelationId,
 		ExtensionOidIndexId,
-		KEY(Anum_pg_extension_oid),
+		1,
+		{
+			Anum_pg_extension_oid,
+			0,
+			0,
+			0
+		},
 		2
 	}
 };

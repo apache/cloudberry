@@ -1567,8 +1567,8 @@ checkCpusetSyntax(const char *cpuset)
 extern void
 checkCpuSetByRole(const char *cpuset)
 {
-	char *first = NULL;
-	char *last = NULL;
+	const char *first = NULL;
+	const char *last = NULL;
 
 	if (cpuset == NULL)
 	{
@@ -1627,12 +1627,12 @@ getCpuSetByRole(const char *cpuset)
 				errmsg("Unexpected cpuset invalid in getCpuSetByRole")));
 	}
 
-	char *first = strchr(cpuset, ';');
+	const char *first = strchr(cpuset, ';');
 	if (first == NULL)
 		splitcpuset = (char *)cpuset;
 	else
 	{
-		char *scpu = first + 1;
+		char *scpu = (char *) (first + 1);
 
 		/* Get result cpuset by IS_QUERY_DISPATCHER(), on master or segment */
 		if (IS_QUERY_DISPATCHER())

@@ -52,16 +52,6 @@ extern void *pg_malloc_mul_extended(Size s1, Size s2, int flags);
 extern void *pg_realloc_mul(void *p, Size s1, Size s2);
 
 /*
- * Support for safe calculation of memory request sizes
- */
-extern Size add_size(Size s1, Size s2);
-extern Size mul_size(Size s1, Size s2);
-extern void *pg_malloc_mul(Size s1, Size s2);
-extern void *pg_malloc0_mul(Size s1, Size s2);
-extern void *pg_malloc_mul_extended(Size s1, Size s2, int flags);
-extern void *pg_realloc_mul(void *p, Size s1, Size s2);
-
-/*
  * Variants with easier notation and more type safety
  */
 
