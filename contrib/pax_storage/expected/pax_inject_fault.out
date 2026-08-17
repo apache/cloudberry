@@ -28,8 +28,6 @@ select gp_inject_fault('orc_writer_write_tuple','panic',dbid) FROM gp_segment_co
 -- failed because of fault injection
 -- start_ignore
 insert into t_insert select generate_series(1,10);
--- end_ignore
--- start_ignore
 -- clear the fault inject, so the next insert will success.
 -- put the reset operation in ignore range
 select gp_inject_fault('orc_writer_write_tuple','reset',dbid) FROM gp_segment_configuration WHERE role = 'p' AND content > -1;
