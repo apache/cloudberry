@@ -1316,3 +1316,19 @@ drop table if exists repli_t1_pk;
 drop table if exists repli_t2_pk;
 drop table if exists repli_t3_pk;
 drop table if exists repli_t4_pk;
+
+--
+-- Test that a join qual containing an outer-level reference
+-- is correctly identified as referring to the outer
+-- query, so that the join motion is planned in the parent slice.
+--
+create table lat_oq_t2(i int) distributed by (i);
+create table lat_oq_t3(i int) distributed by (i);
+insert into lat_oq_t2 select generate_series(1,10);
+insert into lat_oq_t3 select generate_series(1,10);
+
+explain (costs off) select * from generate_series(1,2) t1, lateral (select t3.i from lat_oq_t2 t2 join lat_oq_t3 t3 on t2.i = t3.i + t1 order by 1) z;
+select * from generate_series(1,2) t1, lateral (select t3.i from lat_oq_t2 t2 join lat_oq_t3 t3 on t2.i = t3.i + t1 order by 1) z;
+
+drop table lat_oq_t2;
+drop table lat_oq_t3;
