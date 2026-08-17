@@ -3361,13 +3361,18 @@ GRANT USAGE ON SCHEMA sts_sch1, sts_sch2 TO regress_stats_user1;
 ALTER TABLE sts_sch1.tbl OWNER TO regress_stats_user1;
 SET SESSION AUTHORIZATION regress_stats_user1;
 CREATE STATISTICS ON a, b FROM sts_sch1.tbl;
-ERROR:  permission denied for schema sts_sch1
+ERROR:  syntax error at or near "ON"
+LINE 1: CREATE STATISTICS ON a, b FROM sts_sch1.tbl;
+                          ^
 CREATE STATISTICS sts_sch2.fail ON a, b FROM sts_sch1.tbl;
 ERROR:  permission denied for schema sts_sch2
 RESET SESSION AUTHORIZATION;
 GRANT CREATE ON SCHEMA sts_sch1 TO regress_stats_user1;
 SET SESSION AUTHORIZATION regress_stats_user1;
 CREATE STATISTICS ON a, b FROM sts_sch1.tbl;
+ERROR:  syntax error at or near "ON"
+LINE 1: CREATE STATISTICS ON a, b FROM sts_sch1.tbl;
+                          ^
 CREATE STATISTICS sts_sch2.fail ON a, b FROM sts_sch1.tbl;
 ERROR:  permission denied for schema sts_sch2
 RESET SESSION AUTHORIZATION;
@@ -3375,12 +3380,17 @@ REVOKE CREATE ON SCHEMA sts_sch1 FROM regress_stats_user1;
 GRANT CREATE ON SCHEMA sts_sch2 TO regress_stats_user1;
 SET SESSION AUTHORIZATION regress_stats_user1;
 CREATE STATISTICS ON a, b FROM sts_sch1.tbl;
-ERROR:  permission denied for schema sts_sch1
+ERROR:  syntax error at or near "ON"
+LINE 1: CREATE STATISTICS ON a, b FROM sts_sch1.tbl;
+                          ^
 CREATE STATISTICS sts_sch2.pass1 ON a, b FROM sts_sch1.tbl;
 RESET SESSION AUTHORIZATION;
 GRANT CREATE ON SCHEMA sts_sch1, sts_sch2 TO regress_stats_user1;
 SET SESSION AUTHORIZATION regress_stats_user1;
 CREATE STATISTICS ON a, b FROM sts_sch1.tbl;
+ERROR:  syntax error at or near "ON"
+LINE 1: CREATE STATISTICS ON a, b FROM sts_sch1.tbl;
+                          ^
 CREATE STATISTICS sts_sch2.pass2 ON a, b FROM sts_sch1.tbl;
 -- re-creating statistics via ALTER TABLE bypasses checks for CREATE on schema
 RESET SESSION AUTHORIZATION;
