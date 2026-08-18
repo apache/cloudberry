@@ -1121,7 +1121,7 @@ class gpexpand:
         tblspc_info = {}
 
         for oid in tblspc_oids:
-            if oid not in tblspc_oid_names:
+            if int(oid) not in tblspc_oid_names:
                 continue
             location = os.path.dirname(os.readlink(os.path.join(coordinator_tblspc_dir,
                                                                 oid)))
@@ -1241,7 +1241,7 @@ class gpexpand:
         tblspc_oid_names = self.get_tablespace_oid_names()
         flag = False
         for oid in tblspc_oids:
-            if oid in tblspc_oid_names:
+            if int(oid) in tblspc_oid_names:
                 flag = True
         if not flag:
             return None
