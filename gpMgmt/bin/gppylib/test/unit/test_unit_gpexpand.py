@@ -185,5 +185,86 @@ class GpExpand(GpTestCase):
             "5|1|m|m|s|u|sdw1|sdw1|50001|/data/mirror1")
         return GpArray([self.coordinator, self.primary0, self.primary1, self.mirror0, self.mirror1])
 
+
+class GpExpandTablespaceTests(GpTestCase):
+    """Tests for tablespace detection in gpexpand (str vs int OID type mismatch)."""
+
+    def setUp(self):
+        gpexpand_file = os.path.abspath(os.path.dirname(__file__) + "/../../../gpexpand")
+        self.subject = imp.load_source('gpexpand', gpexpand_file)
+        self.subject.logger = Mock()
+        self.coordinator = Segment.initFromString("1|-1|p|p|s|u|cdw|cdw|5432|/data/coordinator")
+        self.gparray = GpArray([self.coordinator])
+        self.options = Mock()
+        self.options.filename = "/tmp/testexpand"
+        self.options.simple_progress = True
+
+    def _make_gpexpand(self):
+        gp = object.__new__(self.subject.gpexpand)
+        gp.options = self.options
+        gp.gparray = self.gparray
+        gp.logger = self.subject.logger
+        gp.conn = None
+        return gp
+
+    @patch('gpexpand.os.listdir', return_value=["17019"])
+    @patch('gpexpand.os.path.exists', return_value=False)
+    def test_read_tablespace_file_detects_tablespace_with_int_oids(self, m_exists, m_listdir):
+        # pg_tblspc names are strings, pg_tablespace OIDs are integers.
+        # Without int() every tablespace looked unknown and was skipped
+        # silently. With a tablespace present it must be detected, the input
+        # file generated, and the user asked to review it and re-run with -i.
+        gp = self._make_gpexpand()
+        gp.get_tablespace_oid_names = Mock(return_value={17019: 'mytblspace'})
+        gp.generate_tablespace_inputfile = Mock()
+
+        with self.assertRaises(SystemExit):
+            gp.read_tablespace_file()
+
+        gp.generate_tablespace_inputfile.assert_called_once_with("/tmp/testexpand.ts")
+
+    @patch('gpexpand.os.listdir', return_value=["17019"])
+    @patch('gpexpand.os.readlink', return_value="/tbspc/1")
+    @patch('builtins.open', new_callable=mock_open)
+    def test_generate_tablespace_inputfile_writes_name_and_oid(self, m_open, m_readlink, m_listdir):
+        # Normal case: pg_tblspc and pg_tablespace agree on one tablespace.
+        # The input file must contain its name and OID in the header.
+        gp = self._make_gpexpand()
+        gp.get_tablespace_oid_names = Mock(return_value={17019: 'mytblspace'})
+
+        gp.generate_tablespace_inputfile("/tmp/testexpand.ts")
+
+        handle = m_open()
+        written = "".join(call[0][0] for call in handle.write.call_args_list)
+        self.assertIn("tableSpaceNameOrders=mytblspace", written)
+        self.assertIn("tableSpaceOidOrders=17019", written)
+
+    @patch('gpexpand.os.listdir', return_value=["17019", "99999"])
+    @patch('gpexpand.os.readlink', return_value="/tbspc/1")
+    @patch('builtins.open', new_callable=mock_open)
+    def test_generate_tablespace_inputfile_skips_stray_oid(self, m_open, m_readlink, m_listdir):
+        # An entry in pg_tblspc with no pg_tablespace row has no name and
+        # nothing to copy for the new segments. It must be skipped before the
+        # filesystem is touched: no KeyError, no OID in the input file.
+        gp = self._make_gpexpand()
+        gp.get_tablespace_oid_names = Mock(return_value={17019: 'mytblspace'})
+        segment = Mock()
+        segment.isSegmentPrimary.return_value = True
+        segment.getSegmentDbId.return_value = 2
+        gp.gparray = Mock()
+        gp.gparray.coordinator = self.gparray.coordinator
+        gp.gparray.getExpansionSegDbList.return_value = [segment]
+
+        gp.generate_tablespace_inputfile("/tmp/testexpand.ts")
+
+        handle = m_open()
+        written = "".join(call[0][0] for call in handle.write.call_args_list)
+        self.assertIn("tableSpaceNameOrders=mytblspace", written)
+        self.assertIn("tableSpaceOidOrders=17019", written)
+        self.assertIn("2|/tbspc", written)
+        self.assertNotIn("99999", written)
+        self.assertEqual(m_readlink.call_count, 1)
+
+
 if __name__ == '__main__':
     run_tests()
