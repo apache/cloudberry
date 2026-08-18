@@ -7,6 +7,12 @@
 
 set -e
 
+# Use the C locale for sort/comm below: comm requires its inputs to be
+# sorted in the exact same collation it uses for comparison, and
+# locale-aware collation (e.g. en_US.UTF-8) is not guaranteed to produce
+# output that's self-consistent under strict byte-order comparison.
+export LC_ALL=C
+
 fault_injection_tests=$(mktemp fault_injection_tests.XXX)
 parallel_tests=$(mktemp parallel_tests.XXX)
 retcode=0

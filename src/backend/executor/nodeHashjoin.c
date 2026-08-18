@@ -387,7 +387,22 @@ ExecHashJoinImpl(PlanState *pstate, bool parallel)
 				 * If LASJ_NOTIN and a null was found on the inner side, then clean out.
 				 */
 				if (node->js.jointype == JOIN_LASJ_NOTIN && hashNode->hs_hashkeys_null)
+				{
+					if (parallel)
+					{
+						/*
+						 * Advance the build barrier to PHJ_BUILD_RUNNING
+						 * before proceeding so we can negotiate resource
+						 * cleanup, matching the empty-inner-relation early
+						 * return below.
+						 */
+						Barrier    *build_barrier = &parallel_state->build_barrier;
+
+						while (BarrierPhase(build_barrier) < PHJ_BUILD_RUNNING)
+							BarrierArriveAndWait(build_barrier, 0);
+					}
 					return NULL;
+				}
 
 				/*
 				 * If the inner relation is completely empty, and we're not
