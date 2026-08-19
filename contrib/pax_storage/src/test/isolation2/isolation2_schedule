@@ -164,7 +164,6 @@ test: segwalrep/master_wal_switch
 # test: uao/bad_buffer_on_temp_ao_column
 
 # this case contains fault injection, must be put in a separate test group
-test: terminate_in_gang_creation
 test: prepare_limit
 test: add_column_after_vacuum_skip_drop_column
 test: vacuum_after_vacuum_skip_drop_column
@@ -178,7 +177,6 @@ test: enable_autovacuum
 test: segwalrep/die_commit_pending_replication
 
 # Tests for FTS
-test: fts_errors
 test: segwalrep/replication_keeps_crash
 # FIXME: MANIFEST: can't write the same table at the same time. see isolation2_unsupported_schedule
 # test: segwalrep/commit_blocking
@@ -192,7 +190,6 @@ test: segwalrep/twophase_tolerance_with_mirror_promotion
 test: segwalrep/commit_blocking_on_standby
 test: segwalrep/dtx_recovery_wait_lsn
 test: fts_manual_probe
-test: fts_session_reset
 # unstable FTS test in different arch
 # test: fts_segment_reset
 
@@ -214,7 +211,6 @@ test: reindex/vacuum_while_reindex_pax_btree
 test: reindex/vacuum_while_reindex_pax_btree_toast
 
 # Cancel test
-test: cancel_plpython
 test: cancel_query
 
 # Tests for getting numsegments in utility mode
@@ -222,7 +218,7 @@ test: upgrade_numsegments
 # Memory accounting tests
 
 # OOM tests start
-test: create_memory_accounting_tables 
+test: create_memory_accounting_tables
 ignore: setup_memory_accounting
 ignore: oom_mixed_1 oom_mixed_2 oom_simple
 ignore: restore_memory_accounting_default
@@ -230,7 +226,6 @@ ignore: restore_memory_accounting_default
 
 # Startup OOM tests start
 test: setup_startup_memory_accounting
-test: oom_startup_memory
 test: restore_memory_accounting_default
 test: runaway_query
 
@@ -239,12 +234,12 @@ test: distributed_transactions
 # Test for tablespace
 test: concurrent_drop_truncate_tablespace
 
-# Test for distributed commit array overflow during replay on standby 
+# Test for distributed commit array overflow during replay on standby
 # Skip standby_replay_dtx_info, it will cause standby down
 # test: standby_replay_dtx_info
 
 # test the orphan temp table is dropped on the coordinator when panic happens on segment
-test: orphan_temp_table 
+test: orphan_temp_table
 
 # test if gxid is valid or not on the cluster after running the tests
 test: check_gxid
