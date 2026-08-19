@@ -668,6 +668,8 @@ ROLLBACK;
 -- Verify that we behave sanely when the inner hash keys contain parameters
 -- (that is, outer or lateral references).  This situation has to defeat
 -- re-use of the inner hash table across rescans.
+-- CBDB_FIXME: our planner implemention forces not-very-effitient
+-- plan here, we can enhace by pushin join below motion.
 begin;
 set local enable_hashjoin = on;
 

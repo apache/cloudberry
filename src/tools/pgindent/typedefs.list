@@ -2177,6 +2177,7 @@ PsqlScanQuoteType
 PsqlScanResult
 PsqlScanState
 PsqlScanStateData
+PsqlScanStateSave
 PsqlSettings
 Publication
 PublicationActions
