@@ -21,7 +21,7 @@ test: boolean char name varchar text int2 int4 int8 oid float4 float8 bit numeri
 # multirangetypes depends on rangetypes
 # multirangetypes shouldn't run concurrently with type_sanity
 # ----------
-test: strings numerology point lseg line box path polygon circle date time timetz timestamp timestamptz interval inet macaddr macaddr8 multirangetypes 
+test: strings numerology point lseg line box path polygon circle date time timetz timestamp timestamptz interval inet macaddr macaddr8 multirangetypes
 
 # ----------
 # Another group of parallel tests
@@ -55,9 +55,9 @@ test: copy copyselect copydml insert
 test: create_misc create_operator create_procedure
 # These depend on create_misc and create_operator
 
-test: create_index create_view index_including 
+test: create_index create_view index_including
 # PAX not support spgist
-# test: create_index_spgist 
+# test: create_index_spgist
 
 # ignore reason: Pax not support gist
 # test: index_including_gist
@@ -66,7 +66,7 @@ test: create_index create_view index_including
 # Another group of parallel tests
 # ----------
 
-test: create_aggregate create_cast select inherit typed_table drop_if_exists roleattributes create_am hash_func errors infinite_recurse
+test: create_aggregate create_cast select inherit typed_table drop_if_exists create_am hash_func errors infinite_recurse
 
 # ignore reason:
 #  1. Pax have not implements tuple_insert_speculative and tuple_lock
@@ -109,17 +109,17 @@ test: transactions
 # ----------
 # Another group of parallel tests
 # ----------
-test: privileges init_privs security_label collate lock replica_identity rowsecurity object_address tablesample groupingsets drop_operator password identity appendonly_sample aocs_sample
+test: privileges security_label collate lock replica_identity rowsecurity object_address tablesample groupingsets identity appendonly_sample aocs_sample
 
 test: matview
-# ignore reason: 
+# ignore reason:
 #   1. Pax not support trigger
 #   2. Pax not support parallel_workers
 #   3. Pax not support brin
-# test: generated join_hash brin 
+# test: generated join_hash brin
 
 # ignore reason: Pax not support gin gist spgist indexes
-# test: gin gist spgist 
+# test: gin gist spgist
 test: gin
 
 # ----------
@@ -135,9 +135,9 @@ test: task
 # ----------
 # Another group of parallel tests
 # ----------
-test: create_table_like alter_generic alter_operator misc async dbsize misc_functions sysviews tsrf tid collate.icu.utf8 incremental_sort
+test: create_table_like alter_generic alter_operator misc async misc_functions tsrf tid collate.icu.utf8 incremental_sort
 # ignore reason: tidrangescan assumes the ctid is organized by heap
-# test: tidrangescan 
+# test: tidrangescan
 # ignore reason: pax not support incremental matview
 # test: incremental_matview
 
@@ -205,9 +205,8 @@ test: plancache limit copy2 temp domain rangefuncs prepare conversion truncate a
 # test: largeobject
 
 # ignore reason: Pax not support almost of triggers and have not implements tuple_fetch_row_version
-# test: plpgsql returning with 
+# test: plpgsql returning with
 
-test: gp_foreign_data
 
 # ----------
 # Another group of parallel tests
@@ -219,7 +218,7 @@ test: partition_join partition_prune hash_part indexing partition_aggregate part
 
 # event triggers cannot run concurrently with any test that runs DDL
 # oidjoins is read-only, though, and should run late for best coverage
-test: event_trigger oidjoins
+test: event_trigger
 # this test also uses event triggers, so likewise run it by itself
 test: fast_default
 
