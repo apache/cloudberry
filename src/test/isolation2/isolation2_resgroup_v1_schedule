@@ -35,6 +35,9 @@ test: resgroup/resgroup_move_query
 test: resgroup/resgroup_recreate
 test: resgroup/resgroup_functions
 
+# mdb_admin permission checks
+test: resgroup/resgroup_mdb_admin
+
 # dump info
 test: resgroup/resgroup_dumpinfo
 

@@ -16,6 +16,13 @@
 #include "utils/relcache.h"
 #include "access/htup.h"
 
+/*
+ * OID to assign to the next auxiliary pg_authid role created through
+ * GetNewOidForAuthId(), or InvalidOid for normal allocation.  Set by
+ * gp_toolkit to create roles such as mdb_admin with a fixed OID.
+ */
+extern PGDLLIMPORT Oid next_aux_pg_authid_oid;
+
 /* Functions used in master */
 extern List *GetAssignedOidsForDispatch(void);
 
