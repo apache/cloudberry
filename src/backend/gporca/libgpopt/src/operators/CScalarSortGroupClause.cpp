@@ -68,6 +68,28 @@ CScalarSortGroupClause::Matches(COperator *other) const
 
 //---------------------------------------------------------------------------
 //	@function:
+//		CScalarSortGroupClause::HashValue
+//
+//	@doc:
+//		Operator specific hash function
+//
+//---------------------------------------------------------------------------
+ULONG
+CScalarSortGroupClause::HashValue() const
+{
+	ULONG ulHash = COperator::HashValue();
+	ulHash =
+		gpos::CombineHashes(ulHash, gpos::HashValue<INT>(&m_tle_sort_group_ref));
+	ulHash = gpos::CombineHashes(ulHash, gpos::HashValue<INT>(&m_eqop));
+	ulHash = gpos::CombineHashes(ulHash, gpos::HashValue<INT>(&m_sortop));
+	ulHash = gpos::CombineHashes(ulHash, gpos::HashValue<BOOL>(&m_nulls_first));
+	ulHash = gpos::CombineHashes(ulHash, gpos::HashValue<BOOL>(&m_hashable));
+
+	return ulHash;
+}
+
+//---------------------------------------------------------------------------
+//	@function:
 //		CScalarSortGroupClause::OsPrint
 //
 //	@doc:
