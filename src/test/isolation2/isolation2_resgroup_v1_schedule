@@ -34,6 +34,7 @@ test: resgroup/resgroup_move_query
 # regression tests
 test: resgroup/resgroup_recreate
 test: resgroup/resgroup_functions
+test: resgroup/resgroup_pg_manage_resource_groups
 
 # dump info
 test: resgroup/resgroup_dumpinfo
