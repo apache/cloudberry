@@ -1687,7 +1687,9 @@ dropdb(const char *dbname, bool missing_ok, bool force)
 	Oid			db_id = InvalidOid;
 	bool		db_istemplate = true;
 	Relation	pgdbrel;
-	HeapTuple	tup;	int			notherbackends;
+	HeapTuple	tup;
+	Form_pg_database datform;
+	int			notherbackends;
 	int			npreparedxacts;
 	int			nslots,
 				nslots_active;
@@ -1818,39 +1820,6 @@ dropdb(const char *dbname, bool missing_ok, bool force)
 				 errdetail_busy_db(notherbackends, npreparedxacts)));
 
 	/*
-	 * Free the database on the segDBs
-	 */
-	if (Gp_role == GP_ROLE_DISPATCH)
-	{
-		StringInfoData buffer;
-
-		initStringInfo(&buffer);
-
-		appendStringInfo(&buffer, "DROP DATABASE IF EXISTS %s", quote_identifier(dbname));
-
-		/*
-		 * Do the DROP DATABASE as part of a distributed transaction.
-		 */
-		CdbDispatchCommand(buffer.data,
-							DF_CANCEL_ON_ERROR|
-							DF_NEED_TWO_PHASE|
-							DF_WITH_SNAPSHOT,
-							NULL);
-		pfree(buffer.data);
-	}
-
-	/*
-	 * Remove the database's tuple from pg_database.
-	 */
-	tup = SearchSysCache1(DATABASEOID, ObjectIdGetDatum(db_id));
-	if (!HeapTupleIsValid(tup))
-		elog(ERROR, "cache lookup failed for database %u", db_id);
-
-	CatalogTupleDelete(pgdbrel, &tup->t_self);
-
-	ReleaseSysCache(tup);
-
-	/*
 	 * Delete any comments or security labels associated with the database.
 	 */
 	DeleteSharedComments(db_id, DatabaseRelationId);
@@ -1877,6 +1846,56 @@ dropdb(const char *dbname, bool missing_ok, bool force)
 	 * Tell the cumulative stats system to forget it immediately, too.
 	 */
 	pgstat_drop_database(db_id);
+
+	tup = SearchSysCacheCopy1(DATABASEOID, ObjectIdGetDatum(db_id));
+	if (!HeapTupleIsValid(tup))
+		elog(ERROR, "cache lookup failed for database %u", db_id);
+	datform = (Form_pg_database) GETSTRUCT(tup);
+
+	/*
+	 * Except for the deletion of the catalog row, subsequent actions are not
+	 * transactional (consider DropDatabaseBuffers() discarding modified
+	 * buffers). But we might crash or get interrupted below. To prevent
+	 * accesses to a database with invalid contents, mark the database as
+	 * invalid using an in-place update.
+	 *
+	 * We need to flush the WAL before continuing, to guarantee the
+	 * modification is durable before performing irreversible filesystem
+	 * operations.
+	 */
+	datform->datconnlimit = DATCONNLIMIT_INVALID_DB;
+	heap_inplace_update(pgdbrel, tup);
+	XLogFlush(XactLastRecEnd);
+
+	/*
+	 * Also delete the tuple - transactionally. If this transaction commits,
+	 * the row will be gone, but if we fail, dropdb() can be invoked again.
+	 */
+	CatalogTupleDelete(pgdbrel, &tup->t_self);
+	
+	SIMPLE_FAULT_INJECTOR("after_dbdrop_tuple_update_tuple");
+
+	/*
+	 * Free the database on the segDBs
+	 */
+	if (Gp_role == GP_ROLE_DISPATCH)
+	{
+		StringInfoData buffer;
+
+		initStringInfo(&buffer);
+
+		appendStringInfo(&buffer, "DROP DATABASE IF EXISTS %s", quote_identifier(dbname));
+
+		/*
+		 * Do the DROP DATABASE as part of a distributed transaction.
+		 */
+		CdbDispatchCommand(buffer.data,
+							DF_CANCEL_ON_ERROR|
+							DF_NEED_TWO_PHASE|
+							DF_WITH_SNAPSHOT,
+							NULL);
+		pfree(buffer.data);
+	}
 
 	/*
 	 * Drop db-specific replication slots.
