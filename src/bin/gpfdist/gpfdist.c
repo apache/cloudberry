@@ -3774,7 +3774,7 @@ static int request_set_transform(request_t *r)
 	 */
 
 	char* param = "#transform=";
-	char* start = strstr(r->path, param);
+	char* start = (char*)strstr(r->path, param);
 	if (start)
 	{
 		/*

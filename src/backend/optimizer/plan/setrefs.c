@@ -4494,6 +4494,11 @@ cdb_extract_plan_dependencies(PlannerInfo *root, Plan *plan)
 }
 
 static bool
+cdb_extract_plan_dependencies_walker(Node *node, cdb_extract_plan_dependencies_context *context);
+static bool
+cdb_extract_plan_dependencies_walker_adapter(Node *node, void *context);
+
+static bool
 cdb_extract_plan_dependencies_walker(Node *node, cdb_extract_plan_dependencies_context *context)
 {
 	if (node == NULL)
@@ -4501,8 +4506,15 @@ cdb_extract_plan_dependencies_walker(Node *node, cdb_extract_plan_dependencies_c
 	/* Extract function dependencies and check for regclass Consts */
 	fix_expr_common(context->root, node);
 
-	return plan_tree_walker(node, cdb_extract_plan_dependencies_walker,
+	return plan_tree_walker(node, cdb_extract_plan_dependencies_walker_adapter,
 							(void *) context, true);
+}
+
+static bool
+cdb_extract_plan_dependencies_walker_adapter(Node *node, void *context)
+{
+	return cdb_extract_plan_dependencies_walker(
+		node, (cdb_extract_plan_dependencies_context *) context);
 }
 
 /*

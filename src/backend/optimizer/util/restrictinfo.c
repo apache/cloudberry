@@ -14,6 +14,7 @@
  */
 #include "postgres.h"
 
+#include "cdb/cdbmutate.h"
 #include "nodes/makefuncs.h"
 #include "nodes/nodeFuncs.h"
 #include "optimizer/clauses.h"
@@ -262,6 +263,14 @@ make_restrictinfo_internal(PlannerInfo *root,
 
 	restrictinfo->left_hasheqoperator = InvalidOid;
 	restrictinfo->right_hasheqoperator = InvalidOid;
+
+	/*
+	 * Determine whether this clause references any var in outer query levels.
+	 * Such clauses must be evaluated in the same slice as the parent query,
+	 * so we set this planner hint to later use in join motion planning.
+	 */
+	restrictinfo->contain_outer_query_references =
+		contains_outer_params((Node *) clause, root);
 
 	return restrictinfo;
 }

@@ -1551,6 +1551,10 @@ EstimateGpParallelDSMEntrySize(PlanState *planstate, ParallelContext *pctx)
 		case T_SortState:
 			ExecSortEstimate((SortState *) planstate, pctx);
 			break;
+		case T_CustomScanState:
+			if (planstate->plan->parallel_aware)
+				ExecCustomScanEstimate((CustomScanState *) planstate, pctx);
+			break;
 		default:
 			break;
 
@@ -1603,6 +1607,10 @@ InitializeGpParallelWorkers(PlanState *planstate, ParallelWorkerContext *pwcxt)
 		case T_HashJoinState:
 			if (planstate->plan->parallel_aware)
 				ExecHashJoinInitializeWorker((HashJoinState *) planstate, pwcxt);
+			break;
+		case T_CustomScanState:
+			if (planstate->plan->parallel_aware)
+				ExecCustomScanInitializeWorker((CustomScanState *) planstate, pwcxt);
 			break;
 		default:
 			break;
@@ -1661,6 +1669,10 @@ InitializeGpParallelDSMEntry(PlanState *planstate, ParallelContext *pctx)
 			break;
 		case T_SortState:
 			ExecSortInitializeDSM((SortState *) planstate, pctx);
+			break;
+		case T_CustomScanState:
+			if (planstate->plan->parallel_aware)
+				ExecCustomScanInitializeDSM((CustomScanState *) planstate, pctx);
 			break;
 		default:
 			break;
