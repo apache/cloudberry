@@ -30,22 +30,24 @@
 
 # Build stage: Use pre-built image to compile Cloudberry
 ARG CODEBASE_VERSION=main
-FROM rockylinux/rockylinux:9.6 AS builder
+FROM rockylinux/rockylinux:10.2 AS builder
 ARG CODEBASE_VERSION
 
 # Install build toolchains and development headers (avoid coreutils/curl conflicts on arm64)
 RUN dnf makecache && \
     dnf install -y \
         epel-release \
-        git && \
-    dnf config-manager --disable epel-cisco-openh264 && \
+        git \
+        wget && \
+    dnf config-manager --disable epel-cisco-openh264 || true && \
     dnf makecache && \
-    dnf config-manager --disable epel && \
-    dnf install -y --enablerepo=epel \
-        the_silver_searcher \
-        bat \
-        htop && \
-    dnf install -y \
+    dnf config-manager --disable epel
+
+RUN dnf install -y --enablerepo=epel \
+	bat \
+	htop
+
+RUN dnf install -y \
         libicu-devel \
         bison \
         cmake3 \
@@ -75,12 +77,9 @@ RUN dnf makecache && \
         util-linux-ng \
         wget \
         sshpass \
-        which && \
-    dnf install -y \
+        which \
         apr-devel \
         bzip2-devel \
-        java-11-openjdk \
-        java-11-openjdk-devel \
         krb5-devel \
         libcurl-devel \
         libevent-devel \
@@ -95,21 +94,32 @@ RUN dnf makecache && \
         perl-ExtUtils-Embed \
         perl-Test-Simple \
         perl-core \
-        python3-devel \
-        python3-pytest \
         readline-devel \
-        zlib-devel && \
-    dnf install -y --enablerepo=crb \
+        zlib-devel \
+        java-21-openjdk \
+        java-21-openjdk-devel
+
+RUN dnf install -y --enablerepo=crb \
         liburing-devel \
         libuv-devel \
         libyaml-devel \
         perl-IPC-Run \
-        protobuf-devel && \
-    dnf clean all && \
-    cd && XERCES_LATEST_RELEASE=3.3.0 && \
+        protobuf-devel \
+        python3 \
+        python3-pip \
+        python3-devel \
+        python3-pytest
+
+RUN dnf clean all && rm -rf /var/cache/dnf
+
+RUN python3 -m pip install --upgrade setuptools
+
+RUN cd && XERCES_LATEST_RELEASE=3.3.0 && \
     wget -nv "https://archive.apache.org/dist/xerces/c/3/sources/xerces-c-${XERCES_LATEST_RELEASE}.tar.gz" && \
     echo "$(curl -sL https://archive.apache.org/dist/xerces/c/3/sources/xerces-c-${XERCES_LATEST_RELEASE}.tar.gz.sha256)" | sha256sum -c - && \
-    tar xf "xerces-c-${XERCES_LATEST_RELEASE}.tar.gz"; rm "xerces-c-${XERCES_LATEST_RELEASE}.tar.gz" && \
+    tar xf "xerces-c-${XERCES_LATEST_RELEASE}.tar.gz"; rm "xerces-c-${XERCES_LATEST_RELEASE}.tar.gz"
+
+RUN cd && XERCES_LATEST_RELEASE=3.3.0 && \
     cd xerces-c-${XERCES_LATEST_RELEASE} && \
     ./configure --prefix=/usr/local/xerces-c && \
     make -j$(nproc) && \
@@ -149,12 +159,12 @@ RUN cd /home/gpadmin/cloudberry && \
     ./devops/build/automation/cloudberry/scripts/build-cloudberry.sh
 
 # --------------------------------------------------------------------
-# Runtime stage: Switch to a slimmer base image (Rocky Linux 9)
+# Runtime stage: Switch to a slimmer base image (Rocky Linux)
 # --------------------------------------------------------------------
-FROM rockylinux/rockylinux:9.6
+FROM rockylinux/rockylinux:10.2
 
 # Install required runtime dependencies, SSH server, sudo, and tools
-# Note: Use dnf on Rocky Linux 9
+# Note: Use dnf on Rocky Linux
 RUN dnf -y update && \
     dnf -y install \
       openssh-server openssh-clients \
@@ -189,8 +199,9 @@ RUN dnf -y update && \
       which \
       rsync \
       keyutils \
-      libstdc++ && \
-    dnf clean all && rm -rf /var/cache/dnf
+      libstdc++
+
+RUN dnf clean all && rm -rf /var/cache/dnf
 
 # Create gpadmin user and group, grant passwordless sudo
 RUN groupadd -r gpadmin && \

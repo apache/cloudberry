@@ -47,8 +47,11 @@ function usage() {
 }
 
 # Parse command-line options
-while getopts "c:t:p:bmh" opt; do
+while getopts "o:c:t:p:bmh" opt; do
     case "${opt}" in
+        o)
+            OS_VERSION=${OPTARG}
+            ;;
         c)
             CODEBASE_VERSION=${OPTARG}
             ;;
@@ -89,22 +92,31 @@ if [[ -z "$CODEBASE_VERSION" ]]; then
     usage
 fi
 
+# Validate CODEBASE_VERSION
+if [[ "${CODEBASE_VERSION}" != "main" && "${CODEBASE_VERSION}" != "local" && ! "${CODEBASE_VERSION}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+    echo "Invalid codebase version: ${CODEBASE_VERSION}"
+    usage
+fi
+
 # Validate OS_VERSION and map to appropriate Docker image
 case "${OS_VERSION}" in
+    rockylinux10)
+        # Match standard version tags like '2.1.0' or '2.1.0-incubating'
+        if [[ "${CODEBASE_VERSION}" =~ ^[0-9]+\.[0-9]+\.[0-9]+ ]]; then
+            echo "Error: Building release (${CODEBASE_VERSION}) on ${OS_VERSION} is not supported."
+            echo "Please use 'rockylinux9' for release ${CODEBASE_VERSION} builds, or use 'main' or 'local' with rockylinux10."
+            exit 1
+        fi
+        OS_DOCKER_IMAGE=${OS_VERSION}
+        ;;
     rockylinux9)
-        OS_DOCKER_IMAGE="rockylinux9"
+        OS_DOCKER_IMAGE=${OS_VERSION}
         ;;
     *)
         echo "Invalid OS version: ${OS_VERSION}"
         usage
         ;;
 esac
-
-# Validate CODEBASE_VERSION
-if [[ "${CODEBASE_VERSION}" != "main" && "${CODEBASE_VERSION}" != "local" && ! "${CODEBASE_VERSION}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-    echo "Invalid codebase version: ${CODEBASE_VERSION}"
-    usage
-fi
 
 # Determine sandbox directory and repository root
 SANDBOX_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
