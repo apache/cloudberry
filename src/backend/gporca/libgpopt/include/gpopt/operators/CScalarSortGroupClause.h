@@ -92,6 +92,9 @@ public:
 	// match function
 	BOOL Matches(COperator *op) const override;
 
+	// hash function
+	ULONG HashValue() const override;
+
 	// conversion function
 	static CScalarSortGroupClause *
 	PopConvert(COperator *pop)
