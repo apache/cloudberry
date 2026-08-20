@@ -23,6 +23,12 @@ typedef struct
 {
 	int 	gl_pathc;
 	char**	gl_pathv;
+	char**  gl_username;
+	char**  gl_passwd;
+	char**  gl_keyfile1;
+	char**  gl_keyfile2;
+	char**  gl_hostaddr;
+	char**  gl_port;
 } glob_and_copy_t;
 
 struct fstream_options{
@@ -84,5 +90,8 @@ fstream_t* fstream_open(const char* path, const struct fstream_options* options,
 int fstream_close_with_error(fstream_t* fs, char* msg);
 void fstream_close(fstream_t* fs);
 bool_t fstream_is_win_pipe(fstream_t *fs);
+
+int ParseFilePathUri(char *uri_str, sftp_info_t *info);
+int get_sftp_counts(const char *sftp_request);
 
 #endif
