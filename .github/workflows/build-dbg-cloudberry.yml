@@ -222,8 +222,9 @@ jobs:
           # Define base test configurations
           ALL_TESTS='{
             "include": [
-              {"test":"ic-cbdb-parallel",
-               "make_configs":["src/test/regress:installcheck-cbdb-parallel"]}
+              {"test":"ic-distributed-snapshot",
+               "make_configs":["src/test/isolation2:installcheck-distributed-snapshot"],
+               "num_primary_mirror_pairs":2}
             ]
           }'
 
