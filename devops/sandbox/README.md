@@ -116,6 +116,20 @@ Build and deploy steps:
     ./run.sh -c main -m
     ```
 
+    - For Rocky Linux 10 on main branch running on a single container
+
+    ```shell
+    cd cloudberry/devops/sandbox
+    ./run.sh -c main -o rockylinux10
+    ```
+
+    - For Rocky Linux 10 on main branch running across multiple containers
+
+    ```shell
+    cd cloudberry/devops/sandbox
+    ./run.sh -c main -m -o rockylinux10
+    ```
+
     Once the script finishes without error, the sandbox is built and running successfully. The `docker run` and `docker compose` commands use the --detach option allowing you to ssh or access the running Apache Cloudberry instance remotely.
 
     Please review run.sh script for additional options (e.g. setting Timezone in running container, only building container). You can also execute `./run.sh -h` to see the usage.
@@ -196,12 +210,14 @@ To stop the **multi-container** deployment while _keeping the data and state_ wi
 
 ```shell
 docker compose -f docker-compose-rockylinux9.yml stop
+docker compose -f docker-compose-rockylinux10.yml stop
 ```
 
 To stop the **multi-container** deployment and also remove the network and volumes that belong to the containers, you can run the command below. Running this command means it will delete the containers as well as remove the volumes that the containers are associated with. This means any changes you've made inside of the containers or any database state will be wiped and unrecoverable.
 
 ```shell
 docker compose -f docker-compose-rockylinux9.yml down -v
+docker compose -f docker-compose-rockylinux10.yml down -v
 ```
 
 **Starting A Stopped Single Container Apache Cloudberry Docker Deployment**
@@ -220,6 +236,7 @@ To start a **multi-container** deployment after it was shut down, you can run th
 
 ```shell
 docker compose -f docker-compose-rockylinux9.yml start
+docker compose -f docker-compose-rockylinux10.yml start
 ```
 
 > [!NOTE]
