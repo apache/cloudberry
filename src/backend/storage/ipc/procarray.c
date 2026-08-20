@@ -3070,6 +3070,7 @@ GetSnapshotData(Snapshot snapshot, DtxContext distributedTransactionContext)
 	 * not.
 	 */
 	if (distributedTransactionContext == DTX_CONTEXT_QD_DISTRIBUTED_CAPABLE &&
+		Gp_role != GP_ROLE_UTILITY &&
 		!Debug_disable_distributed_snapshot && needDistributedSnapshot)
 		WaitForDtxCommit();
 	else
