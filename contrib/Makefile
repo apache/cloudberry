@@ -25,6 +25,7 @@ SUBDIRS = \
 		btree_gin	\
 		btree_gist	\
 		citext		\
+		datalake_fdw	\
 		dblink		\
 		dict_int	\
 		dict_xsyn	\
