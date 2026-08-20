@@ -34,6 +34,7 @@
 #include "commands/resgroupcmds.h"
 #include "miscadmin.h"
 #include "nodes/pg_list.h"
+#include "storage/proc.h"
 #include "utils/builtins.h"
 #include "utils/datetime.h"
 #include "utils/fmgroids.h"
@@ -716,10 +717,17 @@ GetResGroupIdForRole(Oid roleid)
 	HeapTuple	tuple;
 	Oid			groupId;
 	bool		isNull;
+	bool		releaseSnapshot;
 	Relation	rel;
 	ScanKeyData	key;
 	SysScanDesc	 sscan;
 
+	/*
+	 * StartTransaction() might hold a catalog snapshot with a valid xmin.
+	 * As this fails the "CREATE INDEX CONCURRENTLY" status checks, explicitly
+	 * release the snapshot.
+	 */
+	releaseSnapshot = MyProc->xmin == InvalidTransactionId;
 	rel = table_open(AuthIdRelationId, AccessShareLock);
 
 	ScanKeyInit(&key,
@@ -756,6 +764,9 @@ GetResGroupIdForRole(Oid roleid)
 	 * resource group slot
 	 */
 	table_close(rel, AccessShareLock);
+
+	if (releaseSnapshot)
+		InvalidateCatalogSnapshot();
 
 	if (!OidIsValid(groupId))
 		groupId = InvalidOid;
