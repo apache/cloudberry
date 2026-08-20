@@ -1,6 +1,10 @@
 -- Verify that a distributed snapshot cannot retain a gxid after the QE has
 -- committed it.  Session 1 is opened before the fault is installed because
 -- the fault is scoped to the isolation2test database.
+-- The control connection uses postgres, so install the debug extension there
+-- as well.  --load-extension only installs it in isolation2test.
+-1U:@db_name postgres: CREATE EXTENSION IF NOT EXISTS gp_inject_fault;
+
 CREATE TABLE issue1465_snapshot (k int, v int) DISTRIBUTED REPLICATED;
 INSERT INTO issue1465_snapshot VALUES (1, 400);
 
