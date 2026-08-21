@@ -1073,6 +1073,19 @@ fi
 AC_SUBST(enable_pax)
 
 #
+# datalake_fdw support
+#
+# Off by default like the other storage integrations.  The module builds with
+# no external dependency today, but the read and write paths bring an
+# object-store SDK and Arrow with them, so it is opt-in from the start rather
+# than becoming opt-in later.
+#
+PGAC_ARG_BOOL(enable, datalake-fdw, no,
+              [build with Apache Iceberg lake table support])
+AC_MSG_RESULT([checking whether to build with datalake_fdw support ... $enable_datalake_fdw])
+AC_SUBST(enable_datalake_fdw)
+
+#
 # Include directories
 #
 ac_save_IFS=$IFS

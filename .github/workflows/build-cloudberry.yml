@@ -326,6 +326,10 @@ jobs:
                                "contrib/pg_buffercache:installcheck",
                                "contrib/sslinfo:installcheck"]
               },
+              {"test":"ic-datalake-fdw",
+               "make_configs":["contrib/datalake_fdw:installcheck"],
+               "shared_preload_libraries":"datalake_fdw"
+              },
               {"test":"ic-gpcontrib",
                "make_configs":["gpcontrib/orafce:installcheck",
                                "gpcontrib/zstd:installcheck",

@@ -752,6 +752,7 @@ ICU_CFLAGS
 with_icu
 enable_thread_safety
 INCLUDES
+enable_datalake_fdw
 enable_pax
 CMAKE
 ZSTD_LIBS
@@ -917,6 +918,7 @@ enable_ic_udp2
 enable_ic_proxy
 enable_preload_ic_module
 enable_pax
+enable_datalake_fdw
 enable_thread_safety
 with_icu
 with_tcl
@@ -1642,6 +1644,7 @@ Optional Features:
   --disable-preload-ic-module
                           disable preload interconnect module
   --enable-pax            enable PAX support
+  --enable-datalake-fdw   build with Apache Iceberg lake table support
   --disable-thread-safety disable thread-safety in client libraries
   --enable-openssl-redirect
                           enable redirect openssl interface to internal
@@ -10001,6 +10004,41 @@ else
   { $as_echo "$as_me:${as_lineno-$LINENO}: result: checking whether to build with PAX support ... no" >&5
 $as_echo "checking whether to build with PAX support ... no" >&6; }
 fi
+
+
+#
+# datalake_fdw support
+#
+# Off by default like the other storage integrations.  The module builds with
+# no external dependency today, but the read and write paths bring an
+# object-store SDK and Arrow with them, so it is opt-in from the start rather
+# than becoming opt-in later.
+#
+
+
+# Check whether --enable-datalake-fdw was given.
+if test "${enable_datalake_fdw+set}" = set; then :
+  enableval=$enable_datalake_fdw;
+  case $enableval in
+    yes)
+      :
+      ;;
+    no)
+      :
+      ;;
+    *)
+      as_fn_error $? "no argument expected for --enable-datalake-fdw option" "$LINENO" 5
+      ;;
+  esac
+
+else
+  enable_datalake_fdw=no
+
+fi
+
+
+{ $as_echo "$as_me:${as_lineno-$LINENO}: result: checking whether to build with datalake_fdw support ... $enable_datalake_fdw" >&5
+$as_echo "checking whether to build with datalake_fdw support ... $enable_datalake_fdw" >&6; }
 
 
 #

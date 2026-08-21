@@ -153,6 +153,7 @@ fi
 log_section "Configure"
 execute_cmd ./configure --prefix=${BUILD_DESTINATION} \
             --disable-external-fts \
+            --enable-datalake-fdw \
             --enable-gpcloud \
             --enable-ic-proxy \
             --enable-mapreduce \
