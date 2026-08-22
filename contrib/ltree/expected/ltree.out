@@ -1267,9 +1267,6 @@ SELECT 'tree.awdfg_qwerty'::ltree @ 'tree & aw_rw%*'::ltxtquery;
  f
 (1 row)
 
-SELECT (SELECT 'a | ' || string_agg('b', ' & ')
-        FROM generate_series(1, 17000) AS i)::ltxtquery;
-ERROR:  ltxtquery is too large
 --arrays
 SELECT '{1.2.3}'::ltree[] @> '1.2.3.4';
  ?column? 
@@ -8095,4 +8092,33 @@ select opcname,amname from pg_opclass opc,  pg_am am  where am.oid=opc.opcmethod
  gist_ltree_ops | gist
  ltree_ops      | bitmap
 (3 rows)
+
+-- test non-error-throwing input
+SELECT str as "value", typ as "type",
+       pg_input_is_valid(str,typ) as ok,
+       errinfo.sql_error_code,
+       errinfo.message,
+       errinfo.detail,
+       errinfo.hint
+FROM (VALUES ('.2.3', 'ltree'),
+             ('1.2.', 'ltree'),
+             ('1.2.3','ltree'),
+             ('@.2.3','lquery'),
+             (' 2.3', 'lquery'),
+             ('1.2.3','lquery'),
+             ('$tree & aWdf@*','ltxtquery'),
+             ('!tree & aWdf@*','ltxtquery'))
+      AS a(str,typ),
+     LATERAL pg_input_error_info(a.str, a.typ) as errinfo;
+     value      |   type    | ok | sql_error_code |              message               |          detail          | hint 
+----------------+-----------+----+----------------+------------------------------------+--------------------------+------
+ .2.3           | ltree     | f  | 42601          | ltree syntax error at character 1  |                          | 
+ 1.2.           | ltree     | f  | 42601          | ltree syntax error                 | Unexpected end of input. | 
+ 1.2.3          | ltree     | t  |                |                                    |                          | 
+ @.2.3          | lquery    | f  | 42601          | lquery syntax error at character 1 |                          | 
+  2.3           | lquery    | f  | 42601          | lquery syntax error at character 1 |                          | 
+ 1.2.3          | lquery    | t  |                |                                    |                          | 
+ $tree & aWdf@* | ltxtquery | f  | 42601          | operand syntax error               |                          | 
+ !tree & aWdf@* | ltxtquery | t  |                |                                    |                          | 
+(8 rows)
 

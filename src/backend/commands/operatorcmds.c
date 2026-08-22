@@ -307,7 +307,6 @@ ValidateRestrictionEstimator(List *restrictionName)
 {
 	Oid			typeId[4];
 	Oid			restrictionOid;
-	AclResult	aclresult;
 
 	typeId[0] = INTERNALOID;	/* PlannerInfo */
 	typeId[1] = OIDOID;			/* operator OID */
@@ -323,11 +322,32 @@ ValidateRestrictionEstimator(List *restrictionName)
 				 errmsg("restriction estimator function %s must return type %s",
 						NameListToString(restrictionName), "float8")));
 
-	/* Require EXECUTE rights for the estimator */
-	aclresult = pg_proc_aclcheck(restrictionOid, GetUserId(), ACL_EXECUTE);
-	if (aclresult != ACLCHECK_OK)
-		aclcheck_error(aclresult, OBJECT_FUNCTION,
-					   NameListToString(restrictionName));
+	/*
+	 * If the estimator is not a built-in function, require superuser
+	 * privilege to install it.  This protects against using something that is
+	 * not a restriction estimator or has hard-wired assumptions about what
+	 * data types it is working with.  (Built-in estimators are required to
+	 * defend themselves adequately against unexpected data type choices, but
+	 * it seems impractical to expect that of extensions' estimators.)
+	 *
+	 * If it is built-in, only require EXECUTE rights.
+	 */
+	if (restrictionOid >= FirstGenbkiObjectId)
+	{
+		if (!superuser())
+			ereport(ERROR,
+					(errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
+					 errmsg("must be superuser to specify a non-built-in restriction estimator function")));
+	}
+	else
+	{
+		AclResult	aclresult;
+
+		aclresult = pg_proc_aclcheck(restrictionOid, GetUserId(), ACL_EXECUTE);
+		if (aclresult != ACLCHECK_OK)
+			aclcheck_error(aclresult, OBJECT_FUNCTION,
+						   NameListToString(restrictionName));
+	}
 
 	return restrictionOid;
 }
@@ -343,7 +363,6 @@ ValidateJoinEstimator(List *joinName)
 	Oid			typeId[5];
 	Oid			joinOid;
 	Oid			joinOid2;
-	AclResult	aclresult;
 
 	typeId[0] = INTERNALOID;	/* PlannerInfo */
 	typeId[1] = OIDOID;			/* operator OID */
@@ -381,11 +400,23 @@ ValidateJoinEstimator(List *joinName)
 				 errmsg("join estimator function %s must return type %s",
 						NameListToString(joinName), "float8")));
 
-	/* Require EXECUTE rights for the estimator */
-	aclresult = pg_proc_aclcheck(joinOid, GetUserId(), ACL_EXECUTE);
-	if (aclresult != ACLCHECK_OK)
-		aclcheck_error(aclresult, OBJECT_FUNCTION,
-					   NameListToString(joinName));
+	/* privilege checks are the same as in ValidateRestrictionEstimator */
+	if (joinOid >= FirstGenbkiObjectId)
+	{
+		if (!superuser())
+			ereport(ERROR,
+					(errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
+					 errmsg("must be superuser to specify a non-built-in join estimator function")));
+	}
+	else
+	{
+		AclResult	aclresult;
+
+		aclresult = pg_proc_aclcheck(joinOid, GetUserId(), ACL_EXECUTE);
+		if (aclresult != ACLCHECK_OK)
+			aclcheck_error(aclresult, OBJECT_FUNCTION,
+						   NameListToString(joinName));
+	}
 
 	return joinOid;
 }

@@ -433,7 +433,7 @@ static int glob_path(fstream_t *fs, const char *path)
 		while (*path == ' ')
 			path++;
 
-		p = strchr(path, ' ');
+		p = (char *) strchr(path, ' ');
 
 		if (p)
 			*p++ = 0;

@@ -1,4 +1,4 @@
-import pipes
+import shlex
 import tempfile
 
 from behave import given, then
@@ -19,7 +19,7 @@ class Tablespace:
 
         gparray = GpArray.initFromCatalog(dbconn.DbURL())
         for host in gparray.getHostList():
-            run_cmd('ssh %s mkdir -p %s' % (pipes.quote(host), pipes.quote(self.path)))
+            run_cmd('ssh %s mkdir -p %s' % (shlex.quote(host), shlex.quote(self.path)))
 
         conn = dbconn.connect(dbconn.DbURL(), unsetSearchPath=False)
         dbconn.execSQL(conn, "CREATE TABLESPACE %s LOCATION '%s'" % (self.name, self.path))
@@ -49,7 +49,7 @@ class Tablespace:
 
         gparray = GpArray.initFromCatalog(dbconn.DbURL())
         for host in gparray.getHostList():
-            run_cmd('ssh %s rm -rf %s' % (pipes.quote(host), pipes.quote(self.path)))
+            run_cmd('ssh %s rm -rf %s' % (shlex.quote(host), shlex.quote(self.path)))
 
     def verify(self, hostname=None, port=0):
         """

@@ -1973,6 +1973,56 @@ code or new licensing patterns.
             -->
             <exclude>devops/sandbox/configs/multinode-gpinit-hosts</exclude>
 
+            <!-- PG16 merge: meson build system files -->
+            <exclude>config/meson.build</exclude>
+
+            <!-- PG16 merge: LINGUAS translation catalog files (no license headers) -->
+            <exclude>**/po/LINGUAS</exclude>
+
+            <!-- PG16 merge: Generated/data header files without license headers -->
+            <exclude>src/include/pg_config_ext.h.meson</exclude>
+            <exclude>src/include/utils/usercontext.h</exclude>
+            <exclude>src/include/pch/*.h</exclude>
+            <exclude>src/include/common/unicode_nonspacing_table.h</exclude>
+            <exclude>src/include/common/unicode_east_asian_fw_table.h</exclude>
+            <exclude>src/include/jit/llvmjit_backport.h</exclude>
+            <exclude>src/include/port/win32/sys/select.h</exclude>
+            <exclude>src/include/port/win32/sys/un.h</exclude>
+            <exclude>src/include/port/win32/netinet/tcp.h</exclude>
+
+            <!-- PG16 merge: PG upstream C files with non-standard license headers -->
+            <exclude>src/backend/backup/basebackup_server.c</exclude>
+            <exclude>src/backend/optimizer/geqo/geqo_ox1.c</exclude>
+            <exclude>src/backend/optimizer/geqo/geqo_ox2.c</exclude>
+            <exclude>src/backend/optimizer/geqo/geqo_pmx.c</exclude>
+            <exclude>src/backend/optimizer/geqo/geqo_px.c</exclude>
+            <exclude>src/backend/snowball/snowball_create.pl</exclude>
+            <exclude>src/backend/utils/sort/qsort_interruptible.c</exclude>
+
+            <!-- PG16 merge: PG tools and scripts -->
+            <exclude>src/tools/gen_export.pl</exclude>
+            <exclude>src/tools/testwrap</exclude>
+            <exclude>src/tools/install_files</exclude>
+            <exclude>src/tools/darwin_sysroot</exclude>
+            <exclude>src/tools/rcgen</exclude>
+            <exclude>src/tools/pgflex</exclude>
+            <exclude>src/tools/find_meson</exclude>
+            <exclude>src/tools/ci/**</exclude>
+            <exclude>src/tools/pg_bsd_indent/tests/**</exclude>
+
+            <!-- PG16 merge: contrib config and spec files without license headers -->
+            <exclude>contrib/btree_gist/btree_bool.c</exclude>
+            <exclude>contrib/basic_archive/basic_archive.conf</exclude>
+            <exclude>contrib/pg_freespacemap/pg_freespacemap.conf</exclude>
+            <exclude>contrib/pgcrypto/scripts/pgp_session_data.py</exclude>
+            <exclude>contrib/pg_walinspect/walinspect.conf</exclude>
+            <exclude>contrib/pgrowlocks/specs/pgrowlocks.spec</exclude>
+            <exclude>contrib/tcn/specs/tcn.spec</exclude>
+            <exclude>contrib/test_decoding/specs/catalog_change_snapshot.spec</exclude>
+            <exclude>contrib/test_decoding/specs/invalidation_distribution.spec</exclude>
+            <exclude>contrib/test_decoding/specs/skip_snapshot_restore.spec</exclude>
+            <exclude>contrib/test_decoding/specs/slot_creation_error.spec</exclude>
+
           </excludes>
 
           <!--

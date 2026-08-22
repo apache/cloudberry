@@ -214,8 +214,8 @@ is_visible_fxid(FullTransactionId value, const pg_snapshot *snap)
 	{
 		void	   *res;
 
-		res = bsearch(&value, snap->xip, snap->nxip, sizeof(FullTransactionId),
-					  cmp_fxid);
+		res = (void *) bsearch(&value, snap->xip, snap->nxip, sizeof(FullTransactionId),
+							   cmp_fxid);
 		/* if found, transaction is still in progress */
 		return (res) ? false : true;
 	}

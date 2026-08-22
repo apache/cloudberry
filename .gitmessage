@@ -35,6 +35,11 @@ Add your commit body here
 # Discussions, please list them as a reference:
 #See: Issue#id <https://github.com/apache/cloudberry/issues/?>?
 #See: Discussion#id <http://github.com/apache/cloudberry/discussions/>?
+# If AI tools substantially assisted in writing this commit, optionally
+# note which tool(s) were used (one line per tool):
+#Assisted-by: ChatGPT
+#Assisted-by: Claude Code
+#Assisted-by: GitHub Copilot
 ########################################################################
 #
 #

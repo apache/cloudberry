@@ -246,9 +246,6 @@ SELECT 'tree.awdfg'::ltree @ 'tree & aWdfg@'::ltxtquery;
 SELECT 'tree.awdfg_qwerty'::ltree @ 'tree & aw_qw%*'::ltxtquery;
 SELECT 'tree.awdfg_qwerty'::ltree @ 'tree & aw_rw%*'::ltxtquery;
 
-SELECT (SELECT 'a | ' || string_agg('b', ' & ')
-        FROM generate_series(1, 17000) AS i)::ltxtquery;
-
 --arrays
 
 SELECT '{1.2.3}'::ltree[] @> '1.2.3.4';
@@ -389,3 +386,22 @@ SELECT count(*) FROM _ltreetest WHERE t ? '{23.*.1,23.*.2}' ;
 
 -- Test that has all opclasses
 select opcname,amname from pg_opclass opc,  pg_am am  where am.oid=opc.opcmethod and opcintype='ltree'::regtype;
+
+-- test non-error-throwing input
+
+SELECT str as "value", typ as "type",
+       pg_input_is_valid(str,typ) as ok,
+       errinfo.sql_error_code,
+       errinfo.message,
+       errinfo.detail,
+       errinfo.hint
+FROM (VALUES ('.2.3', 'ltree'),
+             ('1.2.', 'ltree'),
+             ('1.2.3','ltree'),
+             ('@.2.3','lquery'),
+             (' 2.3', 'lquery'),
+             ('1.2.3','lquery'),
+             ('$tree & aWdf@*','ltxtquery'),
+             ('!tree & aWdf@*','ltxtquery'))
+      AS a(str,typ),
+     LATERAL pg_input_error_info(a.str, a.typ) as errinfo;

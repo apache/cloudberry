@@ -134,6 +134,13 @@ WSAPoll(
 #define SEC_TO_MSEC(t)                  ((t) * 1000)
 #define MSEC_TO_USEC(t)                 ((t) * 1000)
 #define USEC_TO_SEC(t)                  ((t) / 1000000)
+
+/* HZ is the kernel timer frequency. Linux defines it in <asm/param.h>
+ * (typically 100). macOS's sys/param.h does not, so provide a fallback. */
+#ifndef HZ
+#define HZ 100
+#endif
+
 #define TIME_TICK (1000000/HZ)/* in us */
 
 #define UDP_INITIAL_RTO                 (MSEC_TO_USEC(200))
@@ -833,7 +840,7 @@ static void sendOnce(ChunkTransportState *transportStates, ChunkTransportStateEn
 static inline uint64 computeExpirationPeriod(MotionConn *conn, uint32 retry);
 
 static ICBuffer *getSndBuffer(MotionConn *conn);
-static void initSndBufferPool();
+static void initSndBufferPool(SendBufferPool *p);
 
 static void putIntoUnackQueueRing(UnackQueueRing *uqr, ICBuffer *buf, uint64 expTime, uint64 now);
 static void initUnackQueueRing(UnackQueueRing *uqr);

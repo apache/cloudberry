@@ -93,7 +93,6 @@ extern void *repalloc_mul(void *p, Size s1, Size s2);
 #define palloc0_array(type, count) ((type *) palloc0_mul(sizeof(type), count))
 #define palloc_array_extended(type, count, flags) ((type *) palloc_mul_extended(sizeof(type), count, flags))
 #define repalloc_array(pointer, type, count) ((type *) repalloc_mul(pointer, sizeof(type), count))
-#define repalloc_array_extended(pointer, type, count, flags) ((type *) repalloc_mul_extended(pointer, sizeof(type), count, flags))
 
 /* sprintf into a palloc'd buffer --- these are in psprintf.c */
 extern char *psprintf(const char *fmt,...) pg_attribute_printf(1, 2);
