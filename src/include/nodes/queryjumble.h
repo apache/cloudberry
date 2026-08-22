@@ -3,20 +3,18 @@
  * queryjumble.h
  *	  Query normalization and fingerprinting.
  *
- * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2026, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * IDENTIFICATION
- *	  src/include/utils/queryjumble.h
+ *	  src/include/nodes/queryjumble.h
  *
  *-------------------------------------------------------------------------
  */
-#ifndef QUERYJUBLE_H
-#define QUERYJUBLE_H
+#ifndef QUERYJUMBLE_H
+#define QUERYJUMBLE_H
 
 #include "nodes/parsenodes.h"
-
-#define JUMBLE_SIZE				1024	/* query serialization buffer size */
 
 /*
  * Struct for tracking locations/lengths of constants during normalization
@@ -25,6 +23,12 @@ typedef struct LocationLen
 {
 	int			location;		/* start offset in query text */
 	int			length;			/* length in bytes, or -1 to ignore */
+
+	/* Does this location represent a squashed list? */
+	bool		squashed;
+
+	/* Is this location a PARAM_EXTERN parameter? */
+	bool		extern_param;
 } LocationLen;
 
 /*
@@ -48,8 +52,29 @@ typedef struct JumbleState
 	/* Current number of valid entries in clocations array */
 	int			clocations_count;
 
-	/* highest Param id we've seen, in order to start normalization correctly */
+	/*
+	 * ID of the highest PARAM_EXTERN parameter we've seen in the query; used
+	 * to start normalization correctly.  However, if there are any squashed
+	 * lists in the query, we disregard query-supplied parameter numbers and
+	 * renumber everything.  This is to avoid possible gaps caused by
+	 * squashing in case any params are in squashed lists.
+	 */
 	int			highest_extern_param_id;
+
+	/* Whether squashable lists are present */
+	bool		has_squashed_lists;
+
+	/*
+	 * Count of the number of NULL nodes seen since last appending a value.
+	 * These are flushed out to the jumble buffer before subsequent appends
+	 * and before performing the final jumble hash.
+	 */
+	unsigned int pending_nulls;
+
+#ifdef USE_ASSERT_CHECKING
+	/* The total number of bytes added to the jumble buffer */
+	Size		total_jumble_len;
+#endif
 } JumbleState;
 
 /* Values for the compute_query_id GUC */
@@ -58,19 +83,23 @@ enum ComputeQueryIdType
 	COMPUTE_QUERY_ID_OFF,
 	COMPUTE_QUERY_ID_ON,
 	COMPUTE_QUERY_ID_AUTO,
-	COMPUTE_QUERY_ID_REGRESS
+	COMPUTE_QUERY_ID_REGRESS,
 };
 
+#define JUMBLE_SIZE				1024
+
 /* GUC parameters */
-extern int	compute_query_id;
+extern PGDLLIMPORT int compute_query_id;
 
 
 extern const char *CleanQuerytext(const char *query, int *location, int *len);
-extern JumbleState *JumbleQuery(Query *query, const char *querytext);
-extern JumbleState *JumbleQueryDirect(Query *query, const char *querytext);
+extern LocationLen *ComputeConstantLengths(const JumbleState *jstate,
+										   const char *query,
+										   int query_loc);
+extern JumbleState *JumbleQuery(Query *query);
 extern void EnableQueryId(void);
 
-extern bool query_id_enabled;
+extern PGDLLIMPORT bool query_id_enabled;
 
 /*
  * Returns whether query identifier computation has been enabled, either

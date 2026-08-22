@@ -37,10 +37,10 @@
 #include "lib/stringinfo.h"
 #include "mb/pg_wchar.h"
 #include "miscadmin.h"
+#include "nodes/queryjumble.h"
 #include "parser/scanner.h"
 #include "utils/builtins.h"
 #include "utils/memutils.h"
-#include "utils/queryjumble.h"
 
 #include "pg_stat_statements_parser.h"
 
