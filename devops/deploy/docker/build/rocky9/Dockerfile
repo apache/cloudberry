@@ -124,6 +124,7 @@ RUN dnf makecache && \
         libxml2-devel \
         libuuid-devel \
         libzstd-devel \
+        lzo-devel \
         lz4 \
         lz4-devel \
         openldap-devel \

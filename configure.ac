@@ -1443,6 +1443,23 @@ AC_MSG_RESULT([$with_zstd])
 AC_SUBST(with_zstd)
 
 #
+# LZO
+#
+AC_MSG_CHECKING([whether to build with LZO support])
+AH_TEMPLATE([USE_LZO], [Define to 1 to build with LZO support. (--with-lzo)])
+PGAC_ARG_BOOL(with, lzo, no, [build with LZO support],
+              [AC_DEFINE([USE_LZO], 1)])
+AC_MSG_RESULT([$with_lzo])
+AC_SUBST(with_lzo)
+
+if test "$with_lzo" = yes; then
+  AC_CHECK_HEADER([lzo/lzo1x.h], [], [AC_MSG_ERROR([lzo/lzo1x.h header not found. Please install liblzo2-dev.])])
+  AC_CHECK_LIB([lzo2], [lzo1x_decompress_safe], [LZO_LIBS="-llzo2"],
+               [AC_MSG_ERROR([liblzo2 library not found. Please install liblzo2-dev.])])
+  AC_SUBST(LZO_LIBS)
+fi
+
+#
 # diskquota
 #
 PGAC_ARG_BOOL(with, diskquota, no,
