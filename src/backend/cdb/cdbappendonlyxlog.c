@@ -109,7 +109,7 @@ ao_insert_replay(XLogReaderState *record)
 
 	register_dirty_segment_ao(xlrec->target.node,
 							  xlrec->target.segment_filenum,
-							  file);
+							  file, smgr->smgr_ao);
 
 	smgr->smgr_ao->smgr_FileClose(file);
 }
