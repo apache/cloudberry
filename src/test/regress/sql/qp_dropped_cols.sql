@@ -37,38 +37,6 @@ SELECT * FROM mpp21090_changedistpolicy_dml_pttab_char ORDER BY 1,2,3;
 
 
 -- TEST
-DROP TABLE IF EXISTS mpp21090_changedistpolicy_dml_pttab_decimal;
-CREATE TABLE mpp21090_changedistpolicy_dml_pttab_decimal
-(
-    col1 decimal,
-    col2 decimal,
-    col3 char,
-    col4 decimal,
-    col5 int
-) DISTRIBUTED BY (col1) PARTITION BY RANGE(col2)(partition partone start(1.00) end(10.00)  WITH (APPENDONLY=true, COMPRESSLEVEL=5, ORIENTATION=column),partition parttwo start(10.00) end(20.00) WITH (APPENDONLY=true, COMPRESSLEVEL=5, ORIENTATION=row),partition partthree start(20.00) end(30.00));
-
-
-INSERT INTO mpp21090_changedistpolicy_dml_pttab_decimal VALUES(2.00,2.00,'a',2.00,0);
-SELECT * FROM mpp21090_changedistpolicy_dml_pttab_decimal ORDER BY 1,2,3,4;
-
-ALTER TABLE mpp21090_changedistpolicy_dml_pttab_decimal DROP COLUMN col4;
-
-INSERT INTO mpp21090_changedistpolicy_dml_pttab_decimal VALUES(2.00,2.00,'b',1);
-SELECT * FROM mpp21090_changedistpolicy_dml_pttab_decimal ORDER BY 1,2,3,4;
-
-ALTER TABLE mpp21090_changedistpolicy_dml_pttab_decimal SET DISTRIBUTED BY (col3);
-
-INSERT INTO mpp21090_changedistpolicy_dml_pttab_decimal SELECT 1.00, 1.00,'c', 2;
-SELECT * FROM mpp21090_changedistpolicy_dml_pttab_decimal ORDER BY 1,2,3;
-
-UPDATE mpp21090_changedistpolicy_dml_pttab_decimal SET col3 ='c' WHERE col3 ='b';
-SELECT * FROM mpp21090_changedistpolicy_dml_pttab_decimal ORDER BY 1,2,3;
-
-DELETE FROM mpp21090_changedistpolicy_dml_pttab_decimal WHERE col3 ='c';
-SELECT * FROM mpp21090_changedistpolicy_dml_pttab_decimal ORDER BY 1,2,3;
-
-
--- TEST
 DROP TABLE IF EXISTS mpp21090_changedistpolicy_dml_pttab_int4;
 CREATE TABLE mpp21090_changedistpolicy_dml_pttab_int4
 (
@@ -232,44 +200,6 @@ SELECT * FROM mpp21090_defpt_dropcol_addcol_dml_char ORDER BY 1,2,3;
 
 DELETE FROM mpp21090_defpt_dropcol_addcol_dml_char WHERE col2 = '-';
 SELECT * FROM mpp21090_defpt_dropcol_addcol_dml_char ORDER BY 1,2,3;
-
-
--- TEST
-DROP TABLE IF EXISTS mpp21090_defpt_dropcol_addcol_dml_decimal;
-CREATE TABLE mpp21090_defpt_dropcol_addcol_dml_decimal
-(
-    col1 decimal,
-    col2 decimal,
-    col3 char,
-    col4 int
-) 
-DISTRIBUTED by (col1)
-PARTITION BY LIST(col2)
-(
-default partition def
-);
-
-INSERT INTO mpp21090_defpt_dropcol_addcol_dml_decimal VALUES(2.00,2.00,'a',0);
-
-ALTER TABLE mpp21090_defpt_dropcol_addcol_dml_decimal DROP COLUMN col4;
-
-INSERT INTO mpp21090_defpt_dropcol_addcol_dml_decimal SELECT 35.00,35.00,'b';
-SELECT * FROM mpp21090_defpt_dropcol_addcol_dml_decimal ORDER BY 1,2,3;
-
-ALTER TABLE mpp21090_defpt_dropcol_addcol_dml_decimal ADD COLUMN col5 decimal;
-
-INSERT INTO mpp21090_defpt_dropcol_addcol_dml_decimal SELECT 2.00,2.00,'c',2.00;
-SELECT * FROM mpp21090_defpt_dropcol_addcol_dml_decimal ORDER BY 1,2,3;
-
-UPDATE mpp21090_defpt_dropcol_addcol_dml_decimal SET col1 = 1.00 WHERE col2 = 35.00 AND col1 = 35.00;
-SELECT * FROM mpp21090_defpt_dropcol_addcol_dml_decimal ORDER BY 1,2,3;
-
--- Update partition key
-UPDATE mpp21090_defpt_dropcol_addcol_dml_decimal SET col2 = 1.00 WHERE col2 = 35.00 AND col1 = 1.00;
-SELECT * FROM mpp21090_defpt_dropcol_addcol_dml_decimal ORDER BY 1,2,3;
-
-DELETE FROM mpp21090_defpt_dropcol_addcol_dml_decimal WHERE col2 = 1.00;
-SELECT * FROM mpp21090_defpt_dropcol_addcol_dml_decimal ORDER BY 1,2,3;
 
 
 -- TEST
@@ -528,50 +458,6 @@ DELETE FROM mpp21090_dropcol_addcol_splitdefpt_dml_char WHERE col3='b';
 SELECT * FROM mpp21090_dropcol_addcol_splitdefpt_dml_char ORDER BY 1,2,3;
 
 -- TEST
-DROP TABLE IF EXISTS mpp21090_dropcol_addcol_splitdefpt_dml_decimal;
-CREATE TABLE mpp21090_dropcol_addcol_splitdefpt_dml_decimal
-(
-    col1 decimal,
-    col2 decimal,
-    col3 char,
-    col4 decimal
-) 
-DISTRIBUTED by (col1)
-PARTITION BY LIST(col2)
-(
-default partition def
-);
-
-INSERT INTO mpp21090_dropcol_addcol_splitdefpt_dml_decimal VALUES(2.00,2.00,'a',2.00);
-SELECT * FROM mpp21090_dropcol_addcol_splitdefpt_dml_decimal ORDER BY 1,2,3,4;
-
-ALTER TABLE mpp21090_dropcol_addcol_splitdefpt_dml_decimal DROP COLUMN col4;
-
-INSERT INTO mpp21090_dropcol_addcol_splitdefpt_dml_decimal VALUES(2.00,2.00,'b');
-SELECT * FROM mpp21090_dropcol_addcol_splitdefpt_dml_decimal ORDER BY 1,2,3;
-
-ALTER TABLE mpp21090_dropcol_addcol_splitdefpt_dml_decimal ADD COLUMN col5 int DEFAULT 10;
-
-INSERT INTO mpp21090_dropcol_addcol_splitdefpt_dml_decimal VALUES(2.00,2.00,'c',1);
-SELECT * FROM mpp21090_dropcol_addcol_splitdefpt_dml_decimal ORDER BY 1,2,3,4;
-
-ALTER TABLE mpp21090_dropcol_addcol_splitdefpt_dml_decimal SPLIT DEFAULT PARTITION at (5.00) into (partition partsplitone,partition def);
-
-INSERT INTO mpp21090_dropcol_addcol_splitdefpt_dml_decimal SELECT 1.00, 1.00,'e', 1;
-SELECT * FROM mpp21090_dropcol_addcol_splitdefpt_dml_decimal ORDER BY 1,2,3;
-
--- Update distribution key
-UPDATE mpp21090_dropcol_addcol_splitdefpt_dml_decimal SET col1 = 35.00 WHERE col2 = 1.00 AND col1 = 1.00;
-SELECT * FROM mpp21090_dropcol_addcol_splitdefpt_dml_decimal ORDER BY 1,2,3;
-
--- Update partition key
-UPDATE mpp21090_dropcol_addcol_splitdefpt_dml_decimal SET col2 = 35.00 WHERE col2 = 1.00 AND col1 = 35.00;
-SELECT * FROM mpp21090_dropcol_addcol_splitdefpt_dml_decimal ORDER BY 1,2,3;
-
-DELETE FROM mpp21090_dropcol_addcol_splitdefpt_dml_decimal WHERE col3='b';
-SELECT * FROM mpp21090_dropcol_addcol_splitdefpt_dml_decimal ORDER BY 1,2,3;
-
--- TEST
 DROP TABLE IF EXISTS mpp21090_dropcol_addcol_splitdefpt_dml_int4;
 CREATE TABLE mpp21090_dropcol_addcol_splitdefpt_dml_int4
 (
@@ -789,47 +675,6 @@ DELETE FROM mpp21090_dropcol_addcol_splitpt_dml_char WHERE col3='b';
 SELECT * FROM mpp21090_dropcol_addcol_splitpt_dml_char ORDER BY 1,2,3;
 
 -- TEST
-DROP TABLE IF EXISTS mpp21090_dropcol_addcol_splitpt_dml_decimal;
-CREATE TABLE mpp21090_dropcol_addcol_splitpt_dml_decimal
-(
-    col1 decimal,
-    col2 decimal,
-    col3 char,
-    col4 decimal
-) 
-DISTRIBUTED by (col1)
-PARTITION BY RANGE(col2)(partition partone start(1.00) end(10.00)  WITH (APPENDONLY=true, COMPRESSLEVEL=5, ORIENTATION=column),partition parttwo start(10.00) end(20.00) WITH (APPENDONLY=true, COMPRESSLEVEL=5, ORIENTATION=row),partition partthree start(20.00) end(30.00));
-
-INSERT INTO mpp21090_dropcol_addcol_splitpt_dml_decimal VALUES(2.00,2.00,'a',2.00);
-SELECT * FROM mpp21090_dropcol_addcol_splitpt_dml_decimal ORDER BY 1,2,3,4;
-
-ALTER TABLE mpp21090_dropcol_addcol_splitpt_dml_decimal ADD COLUMN col5 int DEFAULT 10;
-
-INSERT INTO mpp21090_dropcol_addcol_splitpt_dml_decimal VALUES(2.00,2.00,'b',2.00,0);
-SELECT * FROM mpp21090_dropcol_addcol_splitpt_dml_decimal ORDER BY 1,2,3,4;
-
-ALTER TABLE mpp21090_dropcol_addcol_splitpt_dml_decimal DROP COLUMN col4;
-
-INSERT INTO mpp21090_dropcol_addcol_splitpt_dml_decimal VALUES(2.00,2.00,'c',1);
-SELECT * FROM mpp21090_dropcol_addcol_splitpt_dml_decimal ORDER BY 1,2,3,4;
-
-ALTER TABLE mpp21090_dropcol_addcol_splitpt_dml_decimal SPLIT PARTITION partone at (5.00) into (partition partsplitone,partition partsplitwo);
-
-INSERT INTO mpp21090_dropcol_addcol_splitpt_dml_decimal SELECT 1.00, 1.00,'d', 1;
-SELECT * FROM mpp21090_dropcol_addcol_splitpt_dml_decimal ORDER BY 1,2,3;
-
--- Update distribution key
-UPDATE mpp21090_dropcol_addcol_splitpt_dml_decimal SET col1 = 35.00 WHERE col2 = 1.00 AND col1 = 1.00;
-SELECT * FROM mpp21090_dropcol_addcol_splitpt_dml_decimal ORDER BY 1,2,3;
-
--- Update partition key
-UPDATE mpp21090_dropcol_addcol_splitpt_dml_decimal SET col2 =2.00  WHERE col2 = 1.00 AND col1 = 35.00;
-SELECT * FROM mpp21090_dropcol_addcol_splitpt_dml_decimal ORDER BY 1,2,3;
-
-DELETE FROM mpp21090_dropcol_addcol_splitpt_dml_decimal WHERE col3='b';
-SELECT * FROM mpp21090_dropcol_addcol_splitpt_dml_decimal ORDER BY 1,2,3;
-
--- TEST
 DROP TABLE IF EXISTS mpp21090_dropcol_addcol_splitpt_dml_int4;
 CREATE TABLE mpp21090_dropcol_addcol_splitpt_dml_int4
 (
@@ -1036,50 +881,6 @@ SELECT * FROM mpp21090_dropcol_splitdefpt_addcol_dml_char ORDER BY 1,2,3;
 
 DELETE FROM mpp21090_dropcol_splitdefpt_addcol_dml_char WHERE col3='b';
 SELECT * FROM mpp21090_dropcol_splitdefpt_addcol_dml_char ORDER BY 1,2,3;
-
--- TEST
-DROP TABLE IF EXISTS mpp21090_dropcol_splitdefpt_addcol_dml_decimal;
-CREATE TABLE mpp21090_dropcol_splitdefpt_addcol_dml_decimal
-(
-    col1 decimal,
-    col2 decimal,
-    col3 char,
-    col4 decimal
-) 
-DISTRIBUTED by (col1)
-PARTITION BY LIST(col2)
-(
-default partition def
-);
-
-INSERT INTO mpp21090_dropcol_splitdefpt_addcol_dml_decimal VALUES(2.00,2.00,'a',2.00);
-SELECT * FROM mpp21090_dropcol_splitdefpt_addcol_dml_decimal ORDER BY 1,2,3,4;
-
-ALTER TABLE mpp21090_dropcol_splitdefpt_addcol_dml_decimal DROP COLUMN col4;
-
-INSERT INTO mpp21090_dropcol_splitdefpt_addcol_dml_decimal VALUES(2.00,2.00,'b');
-SELECT * FROM mpp21090_dropcol_splitdefpt_addcol_dml_decimal ORDER BY 1,2,3;
-
-ALTER TABLE mpp21090_dropcol_splitdefpt_addcol_dml_decimal SPLIT DEFAULT PARTITION at (5.00) into (partition partsplitone,partition def);
-
-INSERT INTO mpp21090_dropcol_splitdefpt_addcol_dml_decimal SELECT 1.00, 1.00,'e';
-SELECT * FROM mpp21090_dropcol_splitdefpt_addcol_dml_decimal ORDER BY 1,2,3;
-
-ALTER TABLE mpp21090_dropcol_splitdefpt_addcol_dml_decimal ADD COLUMN col5 decimal DEFAULT 2.00;
-
-INSERT INTO mpp21090_dropcol_splitdefpt_addcol_dml_decimal VALUES(2.00,2.00,'c',2.00);
-SELECT * FROM mpp21090_dropcol_splitdefpt_addcol_dml_decimal ORDER BY 1,2,3,4;
-
--- Update distribution key
-UPDATE mpp21090_dropcol_splitdefpt_addcol_dml_decimal SET col1 = 35.00 WHERE col2 = 1.00 AND col1 = 1.00;
-SELECT * FROM mpp21090_dropcol_splitdefpt_addcol_dml_decimal ORDER BY 1,2,3;
-
--- Update partition key
-UPDATE mpp21090_dropcol_splitdefpt_addcol_dml_decimal SET col2 = 35.00 WHERE col2 = 1.00 AND col1 = 35.00;
-SELECT * FROM mpp21090_dropcol_splitdefpt_addcol_dml_decimal ORDER BY 1,2,3;
-
-DELETE FROM mpp21090_dropcol_splitdefpt_addcol_dml_decimal WHERE col3='b';
-SELECT * FROM mpp21090_dropcol_splitdefpt_addcol_dml_decimal ORDER BY 1,2,3;
 
 -- TEST
 DROP TABLE IF EXISTS mpp21090_dropcol_splitdefpt_addcol_dml_int4;
@@ -1295,43 +1096,6 @@ DELETE FROM mpp21090_dropcol_splitdfpt_dml_char WHERE col3='b';
 SELECT * FROM mpp21090_dropcol_splitdfpt_dml_char ORDER BY 1,2,3;
 
 -- TEST
-DROP TABLE IF EXISTS mpp21090_dropcol_splitdfpt_dml_decimal;
-CREATE TABLE mpp21090_dropcol_splitdfpt_dml_decimal
-(
-    col1 decimal,
-    col2 decimal,
-    col3 char,
-    col4 decimal,
-    col5 int
-) 
-DISTRIBUTED by (col1)
-PARTITION BY LIST(col2)
-(
-default partition def
-);
-
-INSERT INTO mpp21090_dropcol_splitdfpt_dml_decimal VALUES(2.00,2.00,'a',2.00,0);
-SELECT * FROM mpp21090_dropcol_splitdfpt_dml_decimal ORDER BY 1,2,3,4;
-
-ALTER TABLE mpp21090_dropcol_splitdfpt_dml_decimal DROP COLUMN col4;
-
-ALTER TABLE mpp21090_dropcol_splitdfpt_dml_decimal SPLIT DEFAULT PARTITION at (5.00) into (partition partsplitone,partition def);
-
-INSERT INTO mpp21090_dropcol_splitdfpt_dml_decimal SELECT 1.00, 1.00,'b', 1;
-SELECT * FROM mpp21090_dropcol_splitdfpt_dml_decimal ORDER BY 1,2,3;
-
--- Update distribution key
-UPDATE mpp21090_dropcol_splitdfpt_dml_decimal SET col1 = 35.00 WHERE col2 = 1.00 AND col1 = 1.00;
-SELECT * FROM mpp21090_dropcol_splitdfpt_dml_decimal ORDER BY 1,2,3;
-
--- Update partition key
-UPDATE mpp21090_dropcol_splitdfpt_dml_decimal SET col2 = 35.00 WHERE col2 = 1.00 AND col1 = 35.00;
-SELECT * FROM mpp21090_dropcol_splitdfpt_dml_decimal ORDER BY 1,2,3;
-
-DELETE FROM mpp21090_dropcol_splitdfpt_dml_decimal WHERE col3='b';
-SELECT * FROM mpp21090_dropcol_splitdfpt_dml_decimal ORDER BY 1,2,3;
-
--- TEST
 DROP TABLE IF EXISTS mpp21090_dropcol_splitdfpt_dml_int4;
 CREATE TABLE mpp21090_dropcol_splitdfpt_dml_int4
 (
@@ -1514,40 +1278,6 @@ DELETE FROM mpp21090_dropcol_splitpt_dml_char WHERE col3='b';
 SELECT * FROM mpp21090_dropcol_splitpt_dml_char ORDER BY 1,2,3;
 
 -- TEST
-DROP TABLE IF EXISTS mpp21090_dropcol_splitpt_dml_decimal;
-CREATE TABLE mpp21090_dropcol_splitpt_dml_decimal
-(
-    col1 decimal,
-    col2 decimal,
-    col3 char,
-    col4 decimal,
-    col5 int
-) 
-DISTRIBUTED by (col1)
-PARTITION BY RANGE(col2)(partition partone start(1.00) end(10.00)  WITH (APPENDONLY=true, COMPRESSLEVEL=5, ORIENTATION=column),partition parttwo start(10.00) end(20.00) WITH (APPENDONLY=true, COMPRESSLEVEL=5, ORIENTATION=row),partition partthree start(20.00) end(30.00));
-
-INSERT INTO mpp21090_dropcol_splitpt_dml_decimal VALUES(2.00,2.00,'a',2.00,0);
-SELECT * FROM mpp21090_dropcol_splitpt_dml_decimal ORDER BY 1,2,3,4;
-
-ALTER TABLE mpp21090_dropcol_splitpt_dml_decimal DROP COLUMN col4;
-
-ALTER TABLE mpp21090_dropcol_splitpt_dml_decimal SPLIT PARTITION partone at (5.00) into (partition partsplitone,partition partsplitwo);
-
-INSERT INTO mpp21090_dropcol_splitpt_dml_decimal SELECT 1.00, 1.00,'b', 1;
-SELECT * FROM mpp21090_dropcol_splitpt_dml_decimal ORDER BY 1,2,3;
-
--- Update distribution key
-UPDATE mpp21090_dropcol_splitpt_dml_decimal SET col1 = 35.00 WHERE col2 = 1.00 AND col1 = 1.00;
-SELECT * FROM mpp21090_dropcol_splitpt_dml_decimal ORDER BY 1,2,3;
-
--- Update partition key
-UPDATE mpp21090_dropcol_splitpt_dml_decimal SET col2 =2.00  WHERE col2 = 1.00 AND col1 = 35.00;
-SELECT * FROM mpp21090_dropcol_splitpt_dml_decimal ORDER BY 1,2,3;
-
-DELETE FROM mpp21090_dropcol_splitpt_dml_decimal WHERE col3='b';
-SELECT * FROM mpp21090_dropcol_splitpt_dml_decimal ORDER BY 1,2,3;
-
--- TEST
 DROP TABLE IF EXISTS mpp21090_dropcol_splitpt_dml_int4;
 CREATE TABLE mpp21090_dropcol_splitpt_dml_int4
 (
@@ -1719,43 +1449,6 @@ SELECT * FROM mpp21090_dropcol_splitpt_idx_dml_char ORDER BY 1,2,3;
 
 DELETE FROM mpp21090_dropcol_splitpt_idx_dml_char WHERE col3='b';
 SELECT * FROM mpp21090_dropcol_splitpt_idx_dml_char ORDER BY 1,2,3;
-
--- TEST
-DROP TABLE IF EXISTS mpp21090_dropcol_splitpt_idx_dml_decimal;
-CREATE TABLE mpp21090_dropcol_splitpt_idx_dml_decimal
-(
-    col1 decimal,
-    col2 decimal,
-    col3 char,
-    col4 decimal,
-    col5 int
-) 
-DISTRIBUTED by (col1)
-PARTITION BY RANGE(col2)(partition partone start(1.00) end(10.00)  WITH (APPENDONLY=true, COMPRESSLEVEL=5, ORIENTATION=column),partition parttwo start(10.00) end(20.00) WITH (APPENDONLY=true, COMPRESSLEVEL=5, ORIENTATION=row),partition partthree start(20.00) end(30.00));
-
-DROP INDEX IF EXISTS mpp21090_dropcol_splitpt_idx_dml_idx_decimal;
-CREATE INDEX mpp21090_dropcol_splitpt_idx_dml_idx_decimal on mpp21090_dropcol_splitpt_idx_dml_decimal(col2);
-
-INSERT INTO mpp21090_dropcol_splitpt_idx_dml_decimal VALUES(2.00,2.00,'a',2.00,0);
-SELECT * FROM mpp21090_dropcol_splitpt_idx_dml_decimal ORDER BY 1,2,3,4;
-
-ALTER TABLE mpp21090_dropcol_splitpt_idx_dml_decimal DROP COLUMN col4;
-
-ALTER TABLE mpp21090_dropcol_splitpt_idx_dml_decimal SPLIT PARTITION partone at (5.00) into (partition partsplitone,partition partsplitwo);
-
-INSERT INTO mpp21090_dropcol_splitpt_idx_dml_decimal SELECT 1.00, 1.00,'b', 1;
-SELECT * FROM mpp21090_dropcol_splitpt_idx_dml_decimal ORDER BY 1,2,3;
-
--- Update distribution key
-UPDATE mpp21090_dropcol_splitpt_idx_dml_decimal SET col1 = 35.00 WHERE col2 = 1.00 AND col1 = 1.00;
-SELECT * FROM mpp21090_dropcol_splitpt_idx_dml_decimal ORDER BY 1,2,3;
-
--- Update partition key
-UPDATE mpp21090_dropcol_splitpt_idx_dml_decimal SET col2 =2.00  WHERE col2 = 1.00 AND col1 = 35.00;
-SELECT * FROM mpp21090_dropcol_splitpt_idx_dml_decimal ORDER BY 1,2,3;
-
-DELETE FROM mpp21090_dropcol_splitpt_idx_dml_decimal WHERE col3='b';
-SELECT * FROM mpp21090_dropcol_splitpt_idx_dml_decimal ORDER BY 1,2,3;
 
 -- TEST
 DROP TABLE IF EXISTS mpp21090_dropcol_splitpt_idx_dml_int4;
@@ -2020,63 +1713,6 @@ DELETE FROM mpp21090_drop_distcol_dml_char WHERE col3='c';
 SELECT * FROM mpp21090_drop_distcol_dml_char ORDER BY 1,2,3,4;
 
 -- TEST
-DROP TABLE IF EXISTS mpp21090_drop_distcol_dml_decimal;
-CREATE TABLE mpp21090_drop_distcol_dml_decimal(
-col1 decimal,
-col2 decimal,
-col3 char,
-col4 date,
-col5 int
-)  with (appendonly= true) distributed by (col1);
-INSERT INTO mpp21090_drop_distcol_dml_decimal VALUES(2.00,0.00,'a','2014-01-01',0);
-SELECT * FROM mpp21090_drop_distcol_dml_decimal ORDER BY 1,2,3,4;
-ALTER TABLE mpp21090_drop_distcol_dml_decimal DROP COLUMN col1;
-INSERT INTO mpp21090_drop_distcol_dml_decimal SELECT 1.00,'b','2014-01-02',1;
-SELECT * FROM mpp21090_drop_distcol_dml_decimal ORDER BY 1,2,3;
-UPDATE mpp21090_drop_distcol_dml_decimal SET col3='c' WHERE col3 = 'b' AND col5 = 1;
-SELECT * FROM mpp21090_drop_distcol_dml_decimal ORDER BY 1,2,3;
-DELETE FROM mpp21090_drop_distcol_dml_decimal WHERE col3='c';
-SELECT * FROM mpp21090_drop_distcol_dml_decimal ORDER BY 1,2,3,4;
-
--- TEST
-DROP TABLE IF EXISTS mpp21090_drop_distcol_dml_decimal;
-CREATE TABLE mpp21090_drop_distcol_dml_decimal(
-col1 decimal,
-col2 decimal,
-col3 char,
-col4 date,
-col5 int
-)  with (appendonly= true, orientation= column) distributed by (col1);
-INSERT INTO mpp21090_drop_distcol_dml_decimal VALUES(2.00,0.00,'a','2014-01-01',0);
-SELECT * FROM mpp21090_drop_distcol_dml_decimal ORDER BY 1,2,3,4;
-ALTER TABLE mpp21090_drop_distcol_dml_decimal DROP COLUMN col1;
-INSERT INTO mpp21090_drop_distcol_dml_decimal SELECT 1.00,'b','2014-01-02',1;
-SELECT * FROM mpp21090_drop_distcol_dml_decimal ORDER BY 1,2,3;
-UPDATE mpp21090_drop_distcol_dml_decimal SET col3='c' WHERE col3 = 'b' AND col5 = 1;
-SELECT * FROM mpp21090_drop_distcol_dml_decimal ORDER BY 1,2,3;
-DELETE FROM mpp21090_drop_distcol_dml_decimal WHERE col3='c';
-SELECT * FROM mpp21090_drop_distcol_dml_decimal ORDER BY 1,2,3,4;
-
--- TEST
-DROP TABLE IF EXISTS mpp21090_drop_distcol_dml_decimal;
-CREATE TABLE mpp21090_drop_distcol_dml_decimal(
-col1 decimal,
-col2 decimal,
-col3 char,
-col4 date,
-col5 int
-) distributed by (col1);
-INSERT INTO mpp21090_drop_distcol_dml_decimal VALUES(2.00,0.00,'a','2014-01-01',0);
-SELECT * FROM mpp21090_drop_distcol_dml_decimal ORDER BY 1,2,3,4;
-ALTER TABLE mpp21090_drop_distcol_dml_decimal DROP COLUMN col1;
-INSERT INTO mpp21090_drop_distcol_dml_decimal SELECT 1.00,'b','2014-01-02',1;
-SELECT * FROM mpp21090_drop_distcol_dml_decimal ORDER BY 1,2,3;
-UPDATE mpp21090_drop_distcol_dml_decimal SET col3='c' WHERE col3 = 'b' AND col5 = 1;
-SELECT * FROM mpp21090_drop_distcol_dml_decimal ORDER BY 1,2,3;
-DELETE FROM mpp21090_drop_distcol_dml_decimal WHERE col3='c';
-SELECT * FROM mpp21090_drop_distcol_dml_decimal ORDER BY 1,2,3,4;
-
--- TEST
 DROP TABLE IF EXISTS mpp21090_drop_distcol_dml_int4;
 CREATE TABLE mpp21090_drop_distcol_dml_int4(
 col1 int4,
@@ -2479,66 +2115,6 @@ UPDATE mpp21090_drop_firstcol_dml_char SET col3='c' WHERE col3 = 'b' AND col5 = 
 SELECT * FROM mpp21090_drop_firstcol_dml_char ORDER BY 1,2,3,4;
 DELETE FROM mpp21090_drop_firstcol_dml_char WHERE col3='c';
 SELECT * FROM mpp21090_drop_firstcol_dml_char ORDER BY 1,2,3,4;
-
-
--- TEST
-DROP TABLE IF EXISTS mpp21090_drop_firstcol_dml_decimal;
-CREATE TABLE mpp21090_drop_firstcol_dml_decimal(
-col1 decimal,
-col2 decimal,
-col3 char,
-col4 date,
-col5 int
-)  with (appendonly= true)  DISTRIBUTED by(col3);
-INSERT INTO mpp21090_drop_firstcol_dml_decimal VALUES(2.00,0.00,'a','2014-01-01',0);
-SELECT * FROM mpp21090_drop_firstcol_dml_decimal ORDER BY 1,2,3,4;
-ALTER TABLE mpp21090_drop_firstcol_dml_decimal DROP COLUMN col1;
-INSERT INTO mpp21090_drop_firstcol_dml_decimal SELECT 1.00,'b','2014-01-02',1;
-SELECT * FROM mpp21090_drop_firstcol_dml_decimal ORDER BY 1,2,3,4;
-UPDATE mpp21090_drop_firstcol_dml_decimal SET col3='c' WHERE col3 = 'b' AND col5 = 1;
-SELECT * FROM mpp21090_drop_firstcol_dml_decimal ORDER BY 1,2,3,4;
-DELETE FROM mpp21090_drop_firstcol_dml_decimal WHERE col3='c';
-SELECT * FROM mpp21090_drop_firstcol_dml_decimal ORDER BY 1,2,3,4;
-
-
--- TEST
-DROP TABLE IF EXISTS mpp21090_drop_firstcol_dml_decimal;
-CREATE TABLE mpp21090_drop_firstcol_dml_decimal(
-col1 decimal,
-col2 decimal,
-col3 char,
-col4 date,
-col5 int
-)  with (appendonly= true, orientation= column)  DISTRIBUTED by(col3);
-INSERT INTO mpp21090_drop_firstcol_dml_decimal VALUES(2.00,0.00,'a','2014-01-01',0);
-SELECT * FROM mpp21090_drop_firstcol_dml_decimal ORDER BY 1,2,3,4;
-ALTER TABLE mpp21090_drop_firstcol_dml_decimal DROP COLUMN col1;
-INSERT INTO mpp21090_drop_firstcol_dml_decimal SELECT 1.00,'b','2014-01-02',1;
-SELECT * FROM mpp21090_drop_firstcol_dml_decimal ORDER BY 1,2,3,4;
-UPDATE mpp21090_drop_firstcol_dml_decimal SET col3='c' WHERE col3 = 'b' AND col5 = 1;
-SELECT * FROM mpp21090_drop_firstcol_dml_decimal ORDER BY 1,2,3,4;
-DELETE FROM mpp21090_drop_firstcol_dml_decimal WHERE col3='c';
-SELECT * FROM mpp21090_drop_firstcol_dml_decimal ORDER BY 1,2,3,4;
-
-
--- TEST
-DROP TABLE IF EXISTS mpp21090_drop_firstcol_dml_decimal;
-CREATE TABLE mpp21090_drop_firstcol_dml_decimal(
-col1 decimal,
-col2 decimal,
-col3 char,
-col4 date,
-col5 int
-)  DISTRIBUTED by(col3);
-INSERT INTO mpp21090_drop_firstcol_dml_decimal VALUES(2.00,0.00,'a','2014-01-01',0);
-SELECT * FROM mpp21090_drop_firstcol_dml_decimal ORDER BY 1,2,3,4;
-ALTER TABLE mpp21090_drop_firstcol_dml_decimal DROP COLUMN col1;
-INSERT INTO mpp21090_drop_firstcol_dml_decimal SELECT 1.00,'b','2014-01-02',1;
-SELECT * FROM mpp21090_drop_firstcol_dml_decimal ORDER BY 1,2,3,4;
-UPDATE mpp21090_drop_firstcol_dml_decimal SET col3='c' WHERE col3 = 'b' AND col5 = 1;
-SELECT * FROM mpp21090_drop_firstcol_dml_decimal ORDER BY 1,2,3,4;
-DELETE FROM mpp21090_drop_firstcol_dml_decimal WHERE col3='c';
-SELECT * FROM mpp21090_drop_firstcol_dml_decimal ORDER BY 1,2,3,4;
 
 
 -- TEST
@@ -2962,66 +2538,6 @@ SELECT * FROM mpp21090_drop_lastcol_dml_char ORDER BY 1,2,3,4;
 
 
 -- TEST
-DROP TABLE IF EXISTS mpp21090_drop_lastcol_dml_decimal;
-CREATE TABLE mpp21090_drop_lastcol_dml_decimal(
-col1 int,
-col2 decimal,
-col3 char,
-col4 date,
-col5 decimal
-) with (appendonly= true)  DISTRIBUTED by(col3);
-INSERT INTO mpp21090_drop_lastcol_dml_decimal VALUES(0,0.00,'a','2014-01-01',2.00);
-SELECT * FROM mpp21090_drop_lastcol_dml_decimal ORDER BY 1,2,3,4;
-ALTER TABLE mpp21090_drop_lastcol_dml_decimal DROP COLUMN col5;
-INSERT INTO mpp21090_drop_lastcol_dml_decimal SELECT 1,1.00,'b','2014-01-02';
-SELECT * FROM mpp21090_drop_lastcol_dml_decimal ORDER BY 1,2,3,4;
-UPDATE mpp21090_drop_lastcol_dml_decimal SET col3='c' WHERE col3 = 'b' AND col1 = 1;
-SELECT * FROM mpp21090_drop_lastcol_dml_decimal ORDER BY 1,2,3,4;
-DELETE FROM mpp21090_drop_lastcol_dml_decimal WHERE col3='c';
-SELECT * FROM mpp21090_drop_lastcol_dml_decimal ORDER BY 1,2,3,4;
-
-
--- TEST
-DROP TABLE IF EXISTS mpp21090_drop_lastcol_dml_decimal;
-CREATE TABLE mpp21090_drop_lastcol_dml_decimal(
-col1 int,
-col2 decimal,
-col3 char,
-col4 date,
-col5 decimal
-) with (appendonly= true, orientation= column)  DISTRIBUTED by(col3);
-INSERT INTO mpp21090_drop_lastcol_dml_decimal VALUES(0,0.00,'a','2014-01-01',2.00);
-SELECT * FROM mpp21090_drop_lastcol_dml_decimal ORDER BY 1,2,3,4;
-ALTER TABLE mpp21090_drop_lastcol_dml_decimal DROP COLUMN col5;
-INSERT INTO mpp21090_drop_lastcol_dml_decimal SELECT 1,1.00,'b','2014-01-02';
-SELECT * FROM mpp21090_drop_lastcol_dml_decimal ORDER BY 1,2,3,4;
-UPDATE mpp21090_drop_lastcol_dml_decimal SET col3='c' WHERE col3 = 'b' AND col1 = 1;
-SELECT * FROM mpp21090_drop_lastcol_dml_decimal ORDER BY 1,2,3,4;
-DELETE FROM mpp21090_drop_lastcol_dml_decimal WHERE col3='c';
-SELECT * FROM mpp21090_drop_lastcol_dml_decimal ORDER BY 1,2,3,4;
-
-
--- TEST
-DROP TABLE IF EXISTS mpp21090_drop_lastcol_dml_decimal;
-CREATE TABLE mpp21090_drop_lastcol_dml_decimal(
-col1 int,
-col2 decimal,
-col3 char,
-col4 date,
-col5 decimal
-) DISTRIBUTED by(col3);
-INSERT INTO mpp21090_drop_lastcol_dml_decimal VALUES(0,0.00,'a','2014-01-01',2.00);
-SELECT * FROM mpp21090_drop_lastcol_dml_decimal ORDER BY 1,2,3,4;
-ALTER TABLE mpp21090_drop_lastcol_dml_decimal DROP COLUMN col5;
-INSERT INTO mpp21090_drop_lastcol_dml_decimal SELECT 1,1.00,'b','2014-01-02';
-SELECT * FROM mpp21090_drop_lastcol_dml_decimal ORDER BY 1,2,3,4;
-UPDATE mpp21090_drop_lastcol_dml_decimal SET col3='c' WHERE col3 = 'b' AND col1 = 1;
-SELECT * FROM mpp21090_drop_lastcol_dml_decimal ORDER BY 1,2,3,4;
-DELETE FROM mpp21090_drop_lastcol_dml_decimal WHERE col3='c';
-SELECT * FROM mpp21090_drop_lastcol_dml_decimal ORDER BY 1,2,3,4;
-
-
--- TEST
 DROP TABLE IF EXISTS mpp21090_drop_lastcol_dml_int4;
 CREATE TABLE mpp21090_drop_lastcol_dml_int4(
 col1 int,
@@ -3403,90 +2919,6 @@ SELECT * FROM mpp21090_drop_lastcol_index_dml_char ORDER BY 1,2,3,4;
 
 DELETE FROM mpp21090_drop_lastcol_index_dml_char WHERE col3='c';
 SELECT * FROM mpp21090_drop_lastcol_index_dml_char ORDER BY 1,2,3,4;
-
-
--- TEST
-DROP TABLE IF EXISTS mpp21090_drop_lastcol_index_dml_decimal;
-CREATE TABLE mpp21090_drop_lastcol_index_dml_decimal(
-col1 int,
-col2 decimal,
-col3 char,
-col4 date,
-col5 decimal
-) with (appendonly= true)  DISTRIBUTED by(col3);
-
-DROP INDEX IF EXISTS mpp21090_drop_lastcol_index_dml_idx_decimal;
-CREATE INDEX mpp21090_drop_lastcol_index_dml_idx_decimal on mpp21090_drop_lastcol_index_dml_decimal(col3);
-
-INSERT INTO mpp21090_drop_lastcol_index_dml_decimal VALUES(0,0.00,'a','2014-01-01',2.00);
-SELECT * FROM mpp21090_drop_lastcol_index_dml_decimal ORDER BY 1,2,3,4;
-
-ALTER TABLE mpp21090_drop_lastcol_index_dml_decimal DROP COLUMN col5;
-
-INSERT INTO mpp21090_drop_lastcol_index_dml_decimal SELECT 1,1.00,'b','2014-01-02';
-SELECT * FROM mpp21090_drop_lastcol_index_dml_decimal ORDER BY 1,2,3,4;
-
-UPDATE mpp21090_drop_lastcol_index_dml_decimal SET col3='c' WHERE col3 = 'b' AND col1 = 1;
-SELECT * FROM mpp21090_drop_lastcol_index_dml_decimal ORDER BY 1,2,3,4;
-
-DELETE FROM mpp21090_drop_lastcol_index_dml_decimal WHERE col3='c';
-SELECT * FROM mpp21090_drop_lastcol_index_dml_decimal ORDER BY 1,2,3,4;
-
-
--- TEST
-DROP TABLE IF EXISTS mpp21090_drop_lastcol_index_dml_decimal;
-CREATE TABLE mpp21090_drop_lastcol_index_dml_decimal(
-col1 int,
-col2 decimal,
-col3 char,
-col4 date,
-col5 decimal
-) with (appendonly= true, orientation= column)  DISTRIBUTED by(col3);
-
-DROP INDEX IF EXISTS mpp21090_drop_lastcol_index_dml_idx_decimal;
-CREATE INDEX mpp21090_drop_lastcol_index_dml_idx_decimal on mpp21090_drop_lastcol_index_dml_decimal(col3);
-
-INSERT INTO mpp21090_drop_lastcol_index_dml_decimal VALUES(0,0.00,'a','2014-01-01',2.00);
-SELECT * FROM mpp21090_drop_lastcol_index_dml_decimal ORDER BY 1,2,3,4;
-
-ALTER TABLE mpp21090_drop_lastcol_index_dml_decimal DROP COLUMN col5;
-
-INSERT INTO mpp21090_drop_lastcol_index_dml_decimal SELECT 1,1.00,'b','2014-01-02';
-SELECT * FROM mpp21090_drop_lastcol_index_dml_decimal ORDER BY 1,2,3,4;
-
-UPDATE mpp21090_drop_lastcol_index_dml_decimal SET col3='c' WHERE col3 = 'b' AND col1 = 1;
-SELECT * FROM mpp21090_drop_lastcol_index_dml_decimal ORDER BY 1,2,3,4;
-
-DELETE FROM mpp21090_drop_lastcol_index_dml_decimal WHERE col3='c';
-SELECT * FROM mpp21090_drop_lastcol_index_dml_decimal ORDER BY 1,2,3,4;
-
-
--- TEST
-DROP TABLE IF EXISTS mpp21090_drop_lastcol_index_dml_decimal;
-CREATE TABLE mpp21090_drop_lastcol_index_dml_decimal(
-col1 int,
-col2 decimal,
-col3 char,
-col4 date,
-col5 decimal
-) DISTRIBUTED by(col3);
-
-DROP INDEX IF EXISTS mpp21090_drop_lastcol_index_dml_idx_decimal;
-CREATE INDEX mpp21090_drop_lastcol_index_dml_idx_decimal on mpp21090_drop_lastcol_index_dml_decimal(col3);
-
-INSERT INTO mpp21090_drop_lastcol_index_dml_decimal VALUES(0,0.00,'a','2014-01-01',2.00);
-SELECT * FROM mpp21090_drop_lastcol_index_dml_decimal ORDER BY 1,2,3,4;
-
-ALTER TABLE mpp21090_drop_lastcol_index_dml_decimal DROP COLUMN col5;
-
-INSERT INTO mpp21090_drop_lastcol_index_dml_decimal SELECT 1,1.00,'b','2014-01-02';
-SELECT * FROM mpp21090_drop_lastcol_index_dml_decimal ORDER BY 1,2,3,4;
-
-UPDATE mpp21090_drop_lastcol_index_dml_decimal SET col3='c' WHERE col3 = 'b' AND col1 = 1;
-SELECT * FROM mpp21090_drop_lastcol_index_dml_decimal ORDER BY 1,2,3,4;
-
-DELETE FROM mpp21090_drop_lastcol_index_dml_decimal WHERE col3='c';
-SELECT * FROM mpp21090_drop_lastcol_index_dml_decimal ORDER BY 1,2,3,4;
 
 
 -- TEST
@@ -3934,60 +3366,6 @@ UPDATE mpp21090_drop_midcol_dml_char SET col4='c' WHERE col4 = 'b' AND col1 = 1;
 SELECT * FROM mpp21090_drop_midcol_dml_char ORDER BY 1,2,3,4;
 
 -- TEST
-DROP TABLE IF EXISTS mpp21090_drop_midcol_dml_decimal;
-CREATE TABLE mpp21090_drop_midcol_dml_decimal
-(
-col1 int,
-col2 decimal,
-col3 decimal,
-col4 char,
-col5 date
-) with (appendonly= true)  DISTRIBUTED by(col4);
-INSERT INTO mpp21090_drop_midcol_dml_decimal VALUES(0,0.00,2.00,'a','2014-01-01');
-SELECT * FROM mpp21090_drop_midcol_dml_decimal ORDER BY 1,2,3,4;
-ALTER TABLE mpp21090_drop_midcol_dml_decimal DROP COLUMN col3;
-INSERT INTO mpp21090_drop_midcol_dml_decimal SELECT 1,1.00,'b','2014-01-02';
-SELECT * FROM mpp21090_drop_midcol_dml_decimal ORDER BY 1,2,3,4;
-UPDATE mpp21090_drop_midcol_dml_decimal SET col4='c' WHERE col4 = 'b' AND col1 = 1;
-SELECT * FROM mpp21090_drop_midcol_dml_decimal ORDER BY 1,2,3,4;
-
--- TEST
-DROP TABLE IF EXISTS mpp21090_drop_midcol_dml_decimal;
-CREATE TABLE mpp21090_drop_midcol_dml_decimal
-(
-col1 int,
-col2 decimal,
-col3 decimal,
-col4 char,
-col5 date
-) with (appendonly= true, orientation= column)  DISTRIBUTED by(col4);
-INSERT INTO mpp21090_drop_midcol_dml_decimal VALUES(0,0.00,2.00,'a','2014-01-01');
-SELECT * FROM mpp21090_drop_midcol_dml_decimal ORDER BY 1,2,3,4;
-ALTER TABLE mpp21090_drop_midcol_dml_decimal DROP COLUMN col3;
-INSERT INTO mpp21090_drop_midcol_dml_decimal SELECT 1,1.00,'b','2014-01-02';
-SELECT * FROM mpp21090_drop_midcol_dml_decimal ORDER BY 1,2,3,4;
-UPDATE mpp21090_drop_midcol_dml_decimal SET col4='c' WHERE col4 = 'b' AND col1 = 1;
-SELECT * FROM mpp21090_drop_midcol_dml_decimal ORDER BY 1,2,3,4;
-
--- TEST
-DROP TABLE IF EXISTS mpp21090_drop_midcol_dml_decimal;
-CREATE TABLE mpp21090_drop_midcol_dml_decimal
-(
-col1 int,
-col2 decimal,
-col3 decimal,
-col4 char,
-col5 date
-) DISTRIBUTED by(col4);
-INSERT INTO mpp21090_drop_midcol_dml_decimal VALUES(0,0.00,2.00,'a','2014-01-01');
-SELECT * FROM mpp21090_drop_midcol_dml_decimal ORDER BY 1,2,3,4;
-ALTER TABLE mpp21090_drop_midcol_dml_decimal DROP COLUMN col3;
-INSERT INTO mpp21090_drop_midcol_dml_decimal SELECT 1,1.00,'b','2014-01-02';
-SELECT * FROM mpp21090_drop_midcol_dml_decimal ORDER BY 1,2,3,4;
-UPDATE mpp21090_drop_midcol_dml_decimal SET col4='c' WHERE col4 = 'b' AND col1 = 1;
-SELECT * FROM mpp21090_drop_midcol_dml_decimal ORDER BY 1,2,3,4;
-
--- TEST
 DROP TABLE IF EXISTS mpp21090_drop_midcol_dml_int4;
 CREATE TABLE mpp21090_drop_midcol_dml_int4
 (
@@ -4381,69 +3759,6 @@ UPDATE mpp21090_drop_multicol_dml_char SET col3='c' WHERE col3 = 'b' AND col5 = 
 SELECT * FROM mpp21090_drop_multicol_dml_char ORDER BY 1,2,3;
 DELETE FROM mpp21090_drop_multicol_dml_char WHERE col3='c';
 SELECT * FROM mpp21090_drop_multicol_dml_char ORDER BY 1,2,3;
-
-
--- TEST
-DROP TABLE IF EXISTS mpp21090_drop_multicol_dml_decimal;
-CREATE TABLE mpp21090_drop_multicol_dml_decimal(
-col1 decimal,
-col2 decimal,
-col3 char,
-col4 date,
-col5 int
-)  with (appendonly= true)  DISTRIBUTED by (col3);
-INSERT INTO mpp21090_drop_multicol_dml_decimal VALUES(2.00,0.00,'a','2014-01-01',0);
-SELECT * FROM mpp21090_drop_multicol_dml_decimal ORDER BY 1,2,3,4;
-ALTER TABLE mpp21090_drop_multicol_dml_decimal DROP COLUMN col1;
-ALTER TABLE mpp21090_drop_multicol_dml_decimal DROP COLUMN col4;
-INSERT INTO mpp21090_drop_multicol_dml_decimal SELECT 1.00,'b',1;
-SELECT * FROM mpp21090_drop_multicol_dml_decimal ORDER BY 1,2,3;
-UPDATE mpp21090_drop_multicol_dml_decimal SET col3='c' WHERE col3 = 'b' AND col5 = 1;
-SELECT * FROM mpp21090_drop_multicol_dml_decimal ORDER BY 1,2,3;
-DELETE FROM mpp21090_drop_multicol_dml_decimal WHERE col3='c';
-SELECT * FROM mpp21090_drop_multicol_dml_decimal ORDER BY 1,2,3;
-
-
--- TEST
-DROP TABLE IF EXISTS mpp21090_drop_multicol_dml_decimal;
-CREATE TABLE mpp21090_drop_multicol_dml_decimal(
-col1 decimal,
-col2 decimal,
-col3 char,
-col4 date,
-col5 int
-)  with (appendonly= true, orientation= column)  DISTRIBUTED by (col3);
-INSERT INTO mpp21090_drop_multicol_dml_decimal VALUES(2.00,0.00,'a','2014-01-01',0);
-SELECT * FROM mpp21090_drop_multicol_dml_decimal ORDER BY 1,2,3,4;
-ALTER TABLE mpp21090_drop_multicol_dml_decimal DROP COLUMN col1;
-ALTER TABLE mpp21090_drop_multicol_dml_decimal DROP COLUMN col4;
-INSERT INTO mpp21090_drop_multicol_dml_decimal SELECT 1.00,'b',1;
-SELECT * FROM mpp21090_drop_multicol_dml_decimal ORDER BY 1,2,3;
-UPDATE mpp21090_drop_multicol_dml_decimal SET col3='c' WHERE col3 = 'b' AND col5 = 1;
-SELECT * FROM mpp21090_drop_multicol_dml_decimal ORDER BY 1,2,3;
-DELETE FROM mpp21090_drop_multicol_dml_decimal WHERE col3='c';
-SELECT * FROM mpp21090_drop_multicol_dml_decimal ORDER BY 1,2,3;
-
-
--- TEST
-DROP TABLE IF EXISTS mpp21090_drop_multicol_dml_decimal;
-CREATE TABLE mpp21090_drop_multicol_dml_decimal(
-col1 decimal,
-col2 decimal,
-col3 char,
-col4 date,
-col5 int
-)  DISTRIBUTED by (col3);
-INSERT INTO mpp21090_drop_multicol_dml_decimal VALUES(2.00,0.00,'a','2014-01-01',0);
-SELECT * FROM mpp21090_drop_multicol_dml_decimal ORDER BY 1,2,3,4;
-ALTER TABLE mpp21090_drop_multicol_dml_decimal DROP COLUMN col1;
-ALTER TABLE mpp21090_drop_multicol_dml_decimal DROP COLUMN col4;
-INSERT INTO mpp21090_drop_multicol_dml_decimal SELECT 1.00,'b',1;
-SELECT * FROM mpp21090_drop_multicol_dml_decimal ORDER BY 1,2,3;
-UPDATE mpp21090_drop_multicol_dml_decimal SET col3='c' WHERE col3 = 'b' AND col5 = 1;
-SELECT * FROM mpp21090_drop_multicol_dml_decimal ORDER BY 1,2,3;
-DELETE FROM mpp21090_drop_multicol_dml_decimal WHERE col3='c';
-SELECT * FROM mpp21090_drop_multicol_dml_decimal ORDER BY 1,2,3;
 
 
 -- TEST
@@ -4798,42 +4113,6 @@ SELECT * FROM mpp21090_pttab_addcol_addpt_dropcol_char ORDER BY 1,2,3;
 
 
 -- TEST
-DROP TABLE IF EXISTS mpp21090_pttab_addcol_addpt_dropcol_decimal;
-CREATE TABLE mpp21090_pttab_addcol_addpt_dropcol_decimal
-(
-    col1 decimal,
-    col2 decimal,
-    col3 char,
-    col4 int
-) 
-DISTRIBUTED by (col1)
-PARTITION BY RANGE(col2)(partition partone start(1.00) end(10.00)  WITH (APPENDONLY=true, COMPRESSLEVEL=5, ORIENTATION=column),partition parttwo start(10.00) end(20.00) WITH (APPENDONLY=true, COMPRESSLEVEL=5, ORIENTATION=row),partition partthree start(20.00) end(30.00));
-
-INSERT INTO mpp21090_pttab_addcol_addpt_dropcol_decimal VALUES(2.00,2.00,'a',0);
-
-ALTER TABLE mpp21090_pttab_addcol_addpt_dropcol_decimal ADD COLUMN col5 decimal DEFAULT 2.00;
-ALTER TABLE mpp21090_pttab_addcol_addpt_dropcol_decimal ADD PARTITION partfour start(30.00) end(40.00);
-
-INSERT INTO mpp21090_pttab_addcol_addpt_dropcol_decimal SELECT 35.00,35.00,'b',1, 35.00;
-SELECT * FROM mpp21090_pttab_addcol_addpt_dropcol_decimal ORDER BY 1,2,3;
-
-ALTER TABLE mpp21090_pttab_addcol_addpt_dropcol_decimal DROP COLUMN col1;
-
-INSERT INTO mpp21090_pttab_addcol_addpt_dropcol_decimal SELECT 35.00,'c',1, 35.00;
-SELECT * FROM mpp21090_pttab_addcol_addpt_dropcol_decimal ORDER BY 1,2,3;
-
-UPDATE mpp21090_pttab_addcol_addpt_dropcol_decimal SET col5 = 1.00 WHERE col2 = 35.00 and col3='c';
-SELECT * FROM mpp21090_pttab_addcol_addpt_dropcol_decimal ORDER BY 1,2,3;
-
--- Update partition key
-UPDATE mpp21090_pttab_addcol_addpt_dropcol_decimal SET col2 = 1.00 WHERE col2 = 35.00 and col3='c';
-SELECT * FROM mpp21090_pttab_addcol_addpt_dropcol_decimal ORDER BY 1,2,3;
-
-DELETE FROM mpp21090_pttab_addcol_addpt_dropcol_decimal WHERE col2 = 1.00;
-SELECT * FROM mpp21090_pttab_addcol_addpt_dropcol_decimal ORDER BY 1,2,3;
-
-
--- TEST
 DROP TABLE IF EXISTS mpp21090_pttab_addcol_addpt_dropcol_int4;
 CREATE TABLE mpp21090_pttab_addcol_addpt_dropcol_int4
 (
@@ -5051,46 +4330,6 @@ SELECT * FROM mpp21090_pttab_addpt_dropcol_addcol_dml_char ORDER BY 1,2,3;
 
 DELETE FROM mpp21090_pttab_addpt_dropcol_addcol_dml_char WHERE col2 = '-';
 SELECT * FROM mpp21090_pttab_addpt_dropcol_addcol_dml_char ORDER BY 1,2,3;
-
-
--- TEST
-DROP TABLE IF EXISTS mpp21090_pttab_addpt_dropcol_addcol_dml_decimal;
-CREATE TABLE mpp21090_pttab_addpt_dropcol_addcol_dml_decimal
-(
-    col1 decimal,
-    col2 decimal,
-    col3 char,
-    col4 int
-) 
-DISTRIBUTED by (col1)
-PARTITION BY RANGE(col2)(partition partone start(1.00) end(10.00)  WITH (APPENDONLY=true, COMPRESSLEVEL=5, ORIENTATION=column),partition parttwo start(10.00) end(20.00) WITH (APPENDONLY=true, COMPRESSLEVEL=5, ORIENTATION=row),partition partthree start(20.00) end(30.00));
-
-INSERT INTO mpp21090_pttab_addpt_dropcol_addcol_dml_decimal VALUES(2.00,2.00,'a',0);
-
-ALTER TABLE mpp21090_pttab_addpt_dropcol_addcol_dml_decimal ADD PARTITION partfour start(30.00) end(40.00);
-
-INSERT INTO mpp21090_pttab_addpt_dropcol_addcol_dml_decimal SELECT 35.00,35.00,'b',1;
-SELECT * FROM mpp21090_pttab_addpt_dropcol_addcol_dml_decimal ORDER BY 1,2,3;
-
-ALTER TABLE mpp21090_pttab_addpt_dropcol_addcol_dml_decimal DROP COLUMN col1;
-
-INSERT INTO mpp21090_pttab_addpt_dropcol_addcol_dml_decimal SELECT 35.00,'c',1;
-SELECT * FROM mpp21090_pttab_addpt_dropcol_addcol_dml_decimal ORDER BY 1,2,3;
-
-ALTER TABLE mpp21090_pttab_addpt_dropcol_addcol_dml_decimal ADD COLUMN col5 decimal DEFAULT 2.00;
-
-INSERT INTO mpp21090_pttab_addpt_dropcol_addcol_dml_decimal SELECT 35.00,'d',1,35.00;
-SELECT * FROM mpp21090_pttab_addpt_dropcol_addcol_dml_decimal ORDER BY 1,2,3;
-
-UPDATE mpp21090_pttab_addpt_dropcol_addcol_dml_decimal SET col4 = 10 WHERE col2 = 35.00;
-SELECT * FROM mpp21090_pttab_addpt_dropcol_addcol_dml_decimal ORDER BY 1,2,3;
-
--- Update partition key
-UPDATE mpp21090_pttab_addpt_dropcol_addcol_dml_decimal SET col2 = 1.00 WHERE col2 = 35.00;
-SELECT * FROM mpp21090_pttab_addpt_dropcol_addcol_dml_decimal ORDER BY 1,2,3;
-
-DELETE FROM mpp21090_pttab_addpt_dropcol_addcol_dml_decimal WHERE col2 = 1.00;
-SELECT * FROM mpp21090_pttab_addpt_dropcol_addcol_dml_decimal ORDER BY 1,2,3;
 
 
 -- TEST
@@ -5329,41 +4568,6 @@ SELECT * FROM mpp21090_pttab_addpt_dropcol_dml_char ORDER BY 1,2,3;
 
 
 -- TEST
-DROP TABLE IF EXISTS mpp21090_pttab_addpt_dropcol_dml_decimal;
-CREATE TABLE mpp21090_pttab_addpt_dropcol_dml_decimal
-(
-    col1 decimal,
-    col2 decimal,
-    col3 char,
-    col4 int
-) 
-DISTRIBUTED by (col1)
-PARTITION BY RANGE(col2)(partition partone start(1.00) end(10.00)  WITH (APPENDONLY=true, COMPRESSLEVEL=5, ORIENTATION=column),partition parttwo start(10.00) end(20.00) WITH (APPENDONLY=true, COMPRESSLEVEL=5, ORIENTATION=row),partition partthree start(20.00) end(30.00));
-
-INSERT INTO mpp21090_pttab_addpt_dropcol_dml_decimal VALUES(2.00,2.00,'a',0);
-
-ALTER TABLE mpp21090_pttab_addpt_dropcol_dml_decimal ADD PARTITION partfour start(30.00) end(40.00);
-
-INSERT INTO mpp21090_pttab_addpt_dropcol_dml_decimal SELECT 35.00,35.00,'b',1;
-SELECT * FROM mpp21090_pttab_addpt_dropcol_dml_decimal ORDER BY 1,2,3;
-
-ALTER TABLE mpp21090_pttab_addpt_dropcol_dml_decimal DROP COLUMN col1;
-
-INSERT INTO mpp21090_pttab_addpt_dropcol_dml_decimal SELECT 35.00,'b',1;
-SELECT * FROM mpp21090_pttab_addpt_dropcol_dml_decimal ORDER BY 1,2,3;
-
-UPDATE mpp21090_pttab_addpt_dropcol_dml_decimal SET col4 = 10 WHERE col2 = 35.00;
-SELECT * FROM mpp21090_pttab_addpt_dropcol_dml_decimal ORDER BY 1,2,3;
-
--- Update partition key
-UPDATE mpp21090_pttab_addpt_dropcol_dml_decimal SET col2 = 1.00 WHERE col2 = 35.00;
-SELECT * FROM mpp21090_pttab_addpt_dropcol_dml_decimal ORDER BY 1,2,3;
-
-DELETE FROM mpp21090_pttab_addpt_dropcol_dml_decimal WHERE col2 = 1.00;
-SELECT * FROM mpp21090_pttab_addpt_dropcol_dml_decimal ORDER BY 1,2,3;
-
-
--- TEST
 DROP TABLE IF EXISTS mpp21090_pttab_addpt_dropcol_dml_int4;
 CREATE TABLE mpp21090_pttab_addpt_dropcol_dml_int4
 (
@@ -5581,51 +4785,6 @@ SELECT * FROM mpp21090_pttab_dropcol_addcol_addpt_dml_char ORDER BY 1,2,3;
 
 DELETE FROM mpp21090_pttab_dropcol_addcol_addpt_dml_char WHERE col5 = '-';
 SELECT * FROM mpp21090_pttab_dropcol_addcol_addpt_dml_char ORDER BY 1,2,3;
-
-
--- TEST
-DROP TABLE IF EXISTS mpp21090_pttab_dropcol_addcol_addpt_dml_decimal;
-CREATE TABLE mpp21090_pttab_dropcol_addcol_addpt_dml_decimal
-(
-    col1 decimal,
-    col2 decimal,
-    col3 char,
-    col4 int
-) 
-DISTRIBUTED by (col1)
-PARTITION BY RANGE(col2)(partition partone start(1.00) end(10.00)  WITH (APPENDONLY=true, COMPRESSLEVEL=5, ORIENTATION=column),partition parttwo start(10.00) end(20.00) WITH (APPENDONLY=true, COMPRESSLEVEL=5, ORIENTATION=row),partition partthree start(20.00) end(30.00));
-
-INSERT INTO mpp21090_pttab_dropcol_addcol_addpt_dml_decimal VALUES(2.00,2.00,'a',0);
-
-ALTER TABLE mpp21090_pttab_dropcol_addcol_addpt_dml_decimal DROP COLUMN col4;
-INSERT INTO mpp21090_pttab_dropcol_addcol_addpt_dml_decimal VALUES(2.00,2.00,'b');
-
-ALTER TABLE mpp21090_pttab_dropcol_addcol_addpt_dml_decimal ADD COLUMN col5 decimal DEFAULT 2.00;
-
-INSERT INTO mpp21090_pttab_dropcol_addcol_addpt_dml_decimal SELECT 2.00,2.00,'c',2.00;
-SELECT * FROM mpp21090_pttab_dropcol_addcol_addpt_dml_decimal ORDER BY 1,2,3;
-
-UPDATE mpp21090_pttab_dropcol_addcol_addpt_dml_decimal SET col5 = 1.00 WHERE col2 = 2.00 AND col1 = 2.00;
-SELECT * FROM mpp21090_pttab_dropcol_addcol_addpt_dml_decimal ORDER BY 1,2,3;
-
-DELETE FROM mpp21090_pttab_dropcol_addcol_addpt_dml_decimal WHERE col5 = 1.00;
-SELECT * FROM mpp21090_pttab_dropcol_addcol_addpt_dml_decimal ORDER BY 1,2,3;
-
-ALTER TABLE mpp21090_pttab_dropcol_addcol_addpt_dml_decimal ADD PARTITION partfour start(30.00) end(40.00);
-ALTER TABLE mpp21090_pttab_dropcol_addcol_addpt_dml_decimal ADD DEFAULT partition def;
-
-INSERT INTO mpp21090_pttab_dropcol_addcol_addpt_dml_decimal SELECT 35.00,35.00,'d',35.00;
-SELECT * FROM mpp21090_pttab_dropcol_addcol_addpt_dml_decimal ORDER BY 1,2,3;
-
-UPDATE mpp21090_pttab_dropcol_addcol_addpt_dml_decimal SET col5 = 1.00 WHERE col2 = 35.00 AND col3 ='d';
-SELECT * FROM mpp21090_pttab_dropcol_addcol_addpt_dml_decimal ORDER BY 1,2,3;
-
--- Update partition key
-UPDATE mpp21090_pttab_dropcol_addcol_addpt_dml_decimal SET col2 = 1.00 WHERE col2 = 35.00 AND col3 ='d';
-SELECT * FROM mpp21090_pttab_dropcol_addcol_addpt_dml_decimal ORDER BY 1,2,3;
-
-DELETE FROM mpp21090_pttab_dropcol_addcol_addpt_dml_decimal WHERE col5 = 1.00;
-SELECT * FROM mpp21090_pttab_dropcol_addcol_addpt_dml_decimal ORDER BY 1,2,3;
 
 
 -- TEST
@@ -5902,54 +5061,6 @@ SELECT * FROM mpp21090_pttab_dropcol_addcol_addpt_idx_dml_char ORDER BY 1,2,3;
 
 
 -- TEST
-DROP TABLE IF EXISTS mpp21090_pttab_dropcol_addcol_addpt_idx_dml_decimal;
-CREATE TABLE mpp21090_pttab_dropcol_addcol_addpt_idx_dml_decimal
-(
-    col1 decimal,
-    col2 decimal,
-    col3 char,
-    col4 int
-) 
-DISTRIBUTED by (col1)
-PARTITION BY RANGE(col2)(partition partone start(1.00) end(10.00)  WITH (APPENDONLY=true, COMPRESSLEVEL=5, ORIENTATION=column),partition parttwo start(10.00) end(20.00) WITH (APPENDONLY=true, COMPRESSLEVEL=5, ORIENTATION=row),partition partthree start(20.00) end(30.00));
-
-INSERT INTO mpp21090_pttab_dropcol_addcol_addpt_idx_dml_decimal VALUES(2.00,2.00,'a',0);
-
-ALTER TABLE mpp21090_pttab_dropcol_addcol_addpt_idx_dml_decimal DROP COLUMN col4;
-INSERT INTO mpp21090_pttab_dropcol_addcol_addpt_idx_dml_decimal VALUES(2.00,2.00,'b');
-
-ALTER TABLE mpp21090_pttab_dropcol_addcol_addpt_idx_dml_decimal ADD COLUMN col5 decimal DEFAULT 2.00;
-
-DROP INDEX IF EXISTS mpp21090_pttab_dropcol_addcol_addpt_idx_dml_idx_decimal;
-CREATE INDEX mpp21090_pttab_dropcol_addcol_addpt_idx_dml_idx_decimal on mpp21090_pttab_dropcol_addcol_addpt_idx_dml_decimal(col5);
-
-INSERT INTO mpp21090_pttab_dropcol_addcol_addpt_idx_dml_decimal SELECT 2.00,2.00,'c',2.00;
-SELECT * FROM mpp21090_pttab_dropcol_addcol_addpt_idx_dml_decimal ORDER BY 1,2,3;
-
-UPDATE mpp21090_pttab_dropcol_addcol_addpt_idx_dml_decimal SET col5 = 1.00 WHERE col2 = 2.00 AND col1 = 2.00;
-SELECT * FROM mpp21090_pttab_dropcol_addcol_addpt_idx_dml_decimal ORDER BY 1,2,3;
-
-DELETE FROM mpp21090_pttab_dropcol_addcol_addpt_idx_dml_decimal WHERE col5 = 1.00;
-SELECT * FROM mpp21090_pttab_dropcol_addcol_addpt_idx_dml_decimal ORDER BY 1,2,3;
-
-ALTER TABLE mpp21090_pttab_dropcol_addcol_addpt_idx_dml_decimal ADD PARTITION partfour start(30.00) end(40.00);
-ALTER TABLE mpp21090_pttab_dropcol_addcol_addpt_idx_dml_decimal ADD DEFAULT partition def;
-
-INSERT INTO mpp21090_pttab_dropcol_addcol_addpt_idx_dml_decimal SELECT 35.00,35.00,'d',35.00;
-SELECT * FROM mpp21090_pttab_dropcol_addcol_addpt_idx_dml_decimal ORDER BY 1,2,3;
-
-UPDATE mpp21090_pttab_dropcol_addcol_addpt_idx_dml_decimal SET col5 = 1.00 WHERE col2 = 35.00 AND col3 ='d';
-SELECT * FROM mpp21090_pttab_dropcol_addcol_addpt_idx_dml_decimal ORDER BY 1,2,3;
-
--- Update partition key
-UPDATE mpp21090_pttab_dropcol_addcol_addpt_idx_dml_decimal SET col2 = 1.00 WHERE col2 = 35.00 AND col3 ='d';
-SELECT * FROM mpp21090_pttab_dropcol_addcol_addpt_idx_dml_decimal ORDER BY 1,2,3;
-
-DELETE FROM mpp21090_pttab_dropcol_addcol_addpt_idx_dml_decimal WHERE col5 = 1.00;
-SELECT * FROM mpp21090_pttab_dropcol_addcol_addpt_idx_dml_decimal ORDER BY 1,2,3;
-
-
--- TEST
 DROP TABLE IF EXISTS mpp21090_int4_pttab_dropcol_addcol_addpt_idx_dml;
 CREATE TABLE mpp21090_int4_pttab_dropcol_addcol_addpt_idx_dml
 (
@@ -6174,38 +5285,6 @@ SELECT * FROM mpp21090_pttab_dropfirstcol_addpt_char ORDER BY 1,2,3;
 
 
 -- TEST
-DROP TABLE IF EXISTS mpp21090_pttab_dropfirstcol_addpt_decimal;
-CREATE TABLE mpp21090_pttab_dropfirstcol_addpt_decimal
-(
-    col1 decimal,
-    col2 decimal,
-    col3 char,
-    col4 decimal,
-    col5 int
-) 
-DISTRIBUTED by (col1)
-PARTITION BY RANGE(col2)(partition partone start(1.00) end(10.00)  WITH (APPENDONLY=true, COMPRESSLEVEL=5, ORIENTATION=column),partition parttwo start(10.00) end(20.00) WITH (APPENDONLY=true, COMPRESSLEVEL=5, ORIENTATION=row),partition partthree start(20.00) end(30.00));
-
-INSERT INTO mpp21090_pttab_dropfirstcol_addpt_decimal VALUES(2.00,2.00,'a',2.00,0);
-
-ALTER TABLE mpp21090_pttab_dropfirstcol_addpt_decimal DROP COLUMN col1;
-ALTER TABLE mpp21090_pttab_dropfirstcol_addpt_decimal ADD PARTITION partfour start(30.00) end(40.00);
-
-INSERT INTO mpp21090_pttab_dropfirstcol_addpt_decimal SELECT 35.00,'b',35.00, 1;
-SELECT * FROM mpp21090_pttab_dropfirstcol_addpt_decimal ORDER BY 1,2,3;
-
-UPDATE mpp21090_pttab_dropfirstcol_addpt_decimal SET col4 = 1.00 WHERE col2 = 35.00 AND col4 = 35.00;
-SELECT * FROM mpp21090_pttab_dropfirstcol_addpt_decimal ORDER BY 1,2,3;
-
--- Update partition key
-UPDATE mpp21090_pttab_dropfirstcol_addpt_decimal SET col2 = 1.00 WHERE col2 = 35.00 AND col4 = 1.00;
-SELECT * FROM mpp21090_pttab_dropfirstcol_addpt_decimal ORDER BY 1,2,3;
-
-DELETE FROM mpp21090_pttab_dropfirstcol_addpt_decimal WHERE col2 = 1.00;
-SELECT * FROM mpp21090_pttab_dropfirstcol_addpt_decimal ORDER BY 1,2,3;
-
-
--- TEST
 DROP TABLE IF EXISTS mpp21090_pttab_dropfirstcol_addpt_index_char;
 CREATE TABLE mpp21090_pttab_dropfirstcol_addpt_index_char
 (
@@ -6238,41 +5317,6 @@ SELECT * FROM mpp21090_pttab_dropfirstcol_addpt_index_char ORDER BY 1,2,3;
 
 DELETE FROM mpp21090_pttab_dropfirstcol_addpt_index_char WHERE col2 = 'a';
 SELECT * FROM mpp21090_pttab_dropfirstcol_addpt_index_char ORDER BY 1,2,3;
-
-
--- TEST
-DROP TABLE IF EXISTS mpp21090_pttab_dropfirstcol_addpt_index_decimal;
-CREATE TABLE mpp21090_pttab_dropfirstcol_addpt_index_decimal
-(
-    col1 decimal,
-    col2 decimal,
-    col3 char,
-    col4 decimal,
-    col5 int
-) 
-DISTRIBUTED by (col1)
-PARTITION BY RANGE(col2)(partition partone start(1.00) end(10.00)  WITH (APPENDONLY=true, COMPRESSLEVEL=5, ORIENTATION=column),partition parttwo start(10.00) end(20.00) WITH (APPENDONLY=true, COMPRESSLEVEL=5, ORIENTATION=row),partition partthree start(20.00) end(30.00));
-
-INSERT INTO mpp21090_pttab_dropfirstcol_addpt_index_decimal VALUES(2.00,2.00,'a',2.00,0);
-
-DROP INDEX IF EXISTS mpp21090_pttab_dropfirstcol_addpt_index_idx_decimal;
-CREATE INDEX mpp21090_pttab_dropfirstcol_addpt_index_idx_decimal on mpp21090_pttab_dropfirstcol_addpt_index_decimal(col2);
-
-ALTER TABLE mpp21090_pttab_dropfirstcol_addpt_index_decimal DROP COLUMN col1;
-ALTER TABLE mpp21090_pttab_dropfirstcol_addpt_index_decimal ADD PARTITION partfour start(30.00) end(40.00);
-
-INSERT INTO mpp21090_pttab_dropfirstcol_addpt_index_decimal SELECT 35.00,'b',35.00, 1;
-SELECT * FROM mpp21090_pttab_dropfirstcol_addpt_index_decimal ORDER BY 1,2,3;
-
-UPDATE mpp21090_pttab_dropfirstcol_addpt_index_decimal SET col4 = 1.00 WHERE col2 = 35.00 AND col4 = 35.00;
-SELECT * FROM mpp21090_pttab_dropfirstcol_addpt_index_decimal ORDER BY 1,2,3;
-
--- Update partition key
-UPDATE mpp21090_pttab_dropfirstcol_addpt_index_decimal SET col2 = 1.00 WHERE col2 = 35.00 AND col4 = 1.00;
-SELECT * FROM mpp21090_pttab_dropfirstcol_addpt_index_decimal ORDER BY 1,2,3;
-
-DELETE FROM mpp21090_pttab_dropfirstcol_addpt_index_decimal WHERE col2 = 1.00;
-SELECT * FROM mpp21090_pttab_dropfirstcol_addpt_index_decimal ORDER BY 1,2,3;
 
 
 -- TEST
@@ -6610,40 +5654,6 @@ SELECT * FROM mpp21090_pttab_droplastcol_addpt_char ORDER BY 1,2,3;
 
 
 -- TEST
-DROP TABLE IF EXISTS mpp21090_pttab_droplastcol_addpt_decimal;
-CREATE TABLE mpp21090_pttab_droplastcol_addpt_decimal
-(
-    col1 decimal,
-    col2 decimal,
-    col3 char,
-    col4 int,
-    col5 decimal
-    
-) 
-DISTRIBUTED by (col1)
-PARTITION BY RANGE(col2)(partition partone start(1.00) end(10.00)  WITH (APPENDONLY=true, COMPRESSLEVEL=5, ORIENTATION=column),partition parttwo start(10.00) end(20.00) WITH (APPENDONLY=true, COMPRESSLEVEL=5, ORIENTATION=row),partition partthree start(20.00) end(30.00));
-
-INSERT INTO mpp21090_pttab_droplastcol_addpt_decimal VALUES(2.00,2.00,'a',0,2.00);
-
-ALTER TABLE mpp21090_pttab_droplastcol_addpt_decimal DROP COLUMN col5;
-ALTER TABLE mpp21090_pttab_droplastcol_addpt_decimal ADD PARTITION partfour start(30.00) end(40.00);
-
-INSERT INTO mpp21090_pttab_droplastcol_addpt_decimal SELECT 35.00,35.00,'b',1;
-SELECT * FROM mpp21090_pttab_droplastcol_addpt_decimal ORDER BY 1,2,3;
-
--- Update distribution key
-UPDATE mpp21090_pttab_droplastcol_addpt_decimal SET col1 = 1.00 WHERE col2 = 35.00 AND col1 = 35.00;
-SELECT * FROM mpp21090_pttab_droplastcol_addpt_decimal ORDER BY 1,2,3;
-
--- Update partition key
-UPDATE mpp21090_pttab_droplastcol_addpt_decimal SET col2 = 1.00 WHERE col2 = 35.00 AND col1 = 1.00;
-SELECT * FROM mpp21090_pttab_droplastcol_addpt_decimal ORDER BY 1,2,3;
-
-DELETE FROM mpp21090_pttab_droplastcol_addpt_decimal WHERE col2 = 1.00;
-SELECT * FROM mpp21090_pttab_droplastcol_addpt_decimal ORDER BY 1,2,3;
-
-
--- TEST
 DROP TABLE IF EXISTS mpp21090_pttab_droplastcol_addpt_int4;
 CREATE TABLE mpp21090_pttab_droplastcol_addpt_int4
 (
@@ -6847,39 +5857,6 @@ SELECT * FROM mpp21090_pttab_dropmidcol_addpt_char ORDER BY 1,2,3;
 
 
 -- TEST
-DROP TABLE IF EXISTS mpp21090_pttab_dropmidcol_addpt_decimal;
-CREATE TABLE mpp21090_pttab_dropmidcol_addpt_decimal
-(
-    col1 decimal,
-    col2 decimal,
-    col3 char,
-    col4 decimal,
-    col5 int
-) 
-DISTRIBUTED by (col1) 
-PARTITION BY RANGE(col2)(partition partone start(1.00) end(10.00)  WITH (APPENDONLY=true, COMPRESSLEVEL=5, ORIENTATION=column),partition parttwo start(10.00) end(20.00) WITH (APPENDONLY=true, COMPRESSLEVEL=5, ORIENTATION=row),partition partthree start(20.00) end(30.00));
-
-INSERT INTO mpp21090_pttab_dropmidcol_addpt_decimal VALUES(2.00,2.00,'a',2.00,0);
-
-ALTER TABLE mpp21090_pttab_dropmidcol_addpt_decimal DROP COLUMN col4;
-ALTER TABLE mpp21090_pttab_dropmidcol_addpt_decimal ADD PARTITION partfour start(30.00) end(40.00);
-
-INSERT INTO mpp21090_pttab_dropmidcol_addpt_decimal SELECT 35.00, 35.00,'b', 1;
-SELECT * FROM mpp21090_pttab_dropmidcol_addpt_decimal ORDER BY 1,2,3;
-
--- Update distribution key
-UPDATE mpp21090_pttab_dropmidcol_addpt_decimal SET col1 = 1.00 WHERE col2 = 35.00 AND col1 = 35.00;
-SELECT * FROM mpp21090_pttab_dropmidcol_addpt_decimal ORDER BY 1,2,3;
-
--- Update partition key
-UPDATE mpp21090_pttab_dropmidcol_addpt_decimal SET col2 = 1.00 WHERE col2 = 35.00 AND col1 = 1.00;
-SELECT * FROM mpp21090_pttab_dropmidcol_addpt_decimal ORDER BY 1,2,3;
-
-DELETE FROM mpp21090_pttab_dropmidcol_addpt_decimal WHERE col2 = 1.00;
-SELECT * FROM mpp21090_pttab_dropmidcol_addpt_decimal ORDER BY 1,2,3;
-
-
--- TEST
 DROP TABLE IF EXISTS mpp21090_pttab_dropmidcol_addpt_int4;
 CREATE TABLE mpp21090_pttab_dropmidcol_addpt_int4
 (
@@ -7075,36 +6052,6 @@ SELECT * FROM mpp21090_reordered_col_dml_char ORDER BY 1,2,3,4;
 
 
 -- TEST
-DROP TABLE IF EXISTS mpp21090_reordered_col_dml_decimal;
-CREATE TABLE mpp21090_reordered_col_dml_decimal
-(
-    col1 decimal DEFAULT 1.00,
-    col2 decimal,
-    col3 char,
-    col4 decimal,
-    col5 int
-) 
-DISTRIBUTED by (col1)
-PARTITION BY RANGE(col2)(partition partone start(1.00) end(10.00)  WITH (APPENDONLY=true, COMPRESSLEVEL=5, ORIENTATION=column),partition parttwo start(10.00) end(20.00) WITH (APPENDONLY=true, COMPRESSLEVEL=5, ORIENTATION=row),partition partthree start(20.00) end(30.00));
-
-INSERT INTO mpp21090_reordered_col_dml_decimal(col2,col1,col3,col5,col4) SELECT 2.00, 2.00,'a', 1,2.00;
-INSERT INTO mpp21090_reordered_col_dml_decimal(col2,col3,col5,col4) SELECT 2.00,'b', 2, 2.00; 
-SELECT * FROM mpp21090_reordered_col_dml_decimal ORDER BY 1,2,3,4;
-
-ALTER TABLE mpp21090_reordered_col_dml_decimal DROP COLUMN col4;
-ALTER TABLE mpp21090_reordered_col_dml_decimal ADD COLUMN col4 int DEFAULT 10;
-
-INSERT INTO mpp21090_reordered_col_dml_decimal(col2,col3,col5,col4) SELECT 2.00,'c', 2, 10; 
-SELECT * FROM mpp21090_reordered_col_dml_decimal ORDER BY 1,2,3,4;
-
-UPDATE mpp21090_reordered_col_dml_decimal SET col4 = 20;
-SELECT * FROM mpp21090_reordered_col_dml_decimal ORDER BY 1,2,3,4;
-
-DELETE FROM mpp21090_reordered_col_dml_decimal WHERE col4=20;
-SELECT * FROM mpp21090_reordered_col_dml_decimal ORDER BY 1,2,3,4;
-
-
--- TEST
 DROP TABLE IF EXISTS mpp21090_reordered_col_dml_int4;
 CREATE TABLE mpp21090_reordered_col_dml_int4
 (
@@ -7277,60 +6224,6 @@ SELECT * FROM mpp21090_xchange_pttab_dropcol_addcol_dml_char_candidate ORDER BY 
 
 DELETE FROM mpp21090_xchange_pttab_dropcol_addcol_dml_char_candidate WHERE col3='a';
 SELECT * FROM mpp21090_xchange_pttab_dropcol_addcol_dml_char_candidate ORDER BY 1,2,3;
-
--- TEST
-DROP TABLE IF EXISTS mpp21090_xchange_pttab_dropcol_addcol_dml_decimal;
-CREATE TABLE mpp21090_xchange_pttab_dropcol_addcol_dml_decimal
-(
-    col1 decimal,
-    col2 decimal,
-    col3 char,
-    col4 int,
-    col5 decimal
-) 
-DISTRIBUTED by (col1)
-PARTITION BY RANGE(col2)(partition partone start(1.00) end(10.00)  WITH (APPENDONLY=true, COMPRESSLEVEL=5, ORIENTATION=column),partition parttwo start(10.00) end(20.00) WITH (APPENDONLY=true, COMPRESSLEVEL=5, ORIENTATION=row),partition partthree start(20.00) end(30.00));
-
-INSERT INTO mpp21090_xchange_pttab_dropcol_addcol_dml_decimal VALUES(2.00,2.00,'a',0, 2.00);
-ANALYZE mpp21090_xchange_pttab_dropcol_addcol_dml_decimal;
-SELECT * FROM mpp21090_xchange_pttab_dropcol_addcol_dml_decimal ORDER BY 1,2,3,4;
-
-ALTER TABLE mpp21090_xchange_pttab_dropcol_addcol_dml_decimal DROP COLUMN col1;
-ALTER TABLE mpp21090_xchange_pttab_dropcol_addcol_dml_decimal ADD COLUMN col1 decimal DEFAULT 2.00;
-
--- Create Candidate table for Exchange
-DROP TABLE IF EXISTS mpp21090_xchange_pttab_dropcol_addcol_dml_decimal_candidate;
-CREATE TABLE mpp21090_xchange_pttab_dropcol_addcol_dml_decimal_candidate( like mpp21090_xchange_pttab_dropcol_addcol_dml_decimal including indexes) distributed randomly;
-INSERT INTO mpp21090_xchange_pttab_dropcol_addcol_dml_decimal_candidate VALUES(2.00,'z',1,2.00,2.00);
-
--- Exchange 
-ALTER TABLE mpp21090_xchange_pttab_dropcol_addcol_dml_decimal EXCHANGE PARTITION FOR(5.00) WITH TABLE mpp21090_xchange_pttab_dropcol_addcol_dml_decimal_candidate;
-
-SELECT * FROM mpp21090_xchange_pttab_dropcol_addcol_dml_decimal ORDER BY 1,2,3;
-SELECT * FROM mpp21090_xchange_pttab_dropcol_addcol_dml_decimal_candidate ORDER BY 1,2,3;
-
--- DML on partition table
-INSERT INTO mpp21090_xchange_pttab_dropcol_addcol_dml_decimal SELECT  1.00,'b', 1, 1.00, 1.00;
-SELECT * FROM mpp21090_xchange_pttab_dropcol_addcol_dml_decimal ORDER BY 1,2,3;
-
-UPDATE mpp21090_xchange_pttab_dropcol_addcol_dml_decimal SET col5 = 35.00 WHERE col2 = 1.00 AND col5 = 1.00;
-SELECT * FROM mpp21090_xchange_pttab_dropcol_addcol_dml_decimal ORDER BY 1,2,3;
-
-UPDATE mpp21090_xchange_pttab_dropcol_addcol_dml_decimal SET col2 =2.00 WHERE col3='b';
-SELECT * FROM mpp21090_xchange_pttab_dropcol_addcol_dml_decimal ORDER BY 1,2,3;
-
-DELETE FROM mpp21090_xchange_pttab_dropcol_addcol_dml_decimal WHERE col3='b';
-SELECT * FROM mpp21090_xchange_pttab_dropcol_addcol_dml_decimal ORDER BY 1,2,3;
-
--- DML on candidate table
-INSERT INTO mpp21090_xchange_pttab_dropcol_addcol_dml_decimal_candidate SELECT 1.00,'b', 1, 1.00, 1.00;
-SELECT * FROM mpp21090_xchange_pttab_dropcol_addcol_dml_decimal_candidate ORDER BY 1,2,3;
-
-UPDATE mpp21090_xchange_pttab_dropcol_addcol_dml_decimal_candidate SET col2=2.00 WHERE col3='a';
-SELECT * FROM mpp21090_xchange_pttab_dropcol_addcol_dml_decimal_candidate ORDER BY 1,2,3;
-
-DELETE FROM mpp21090_xchange_pttab_dropcol_addcol_dml_decimal_candidate WHERE col3='a';
-SELECT * FROM mpp21090_xchange_pttab_dropcol_addcol_dml_decimal_candidate ORDER BY 1,2,3;
 
 -- TEST
 DROP TABLE IF EXISTS mpp21090_xchange_pttab_dropcol_addcol_dml_int4;
@@ -7602,59 +6495,6 @@ DELETE FROM mpp21090_xchange_pttab_dropcol_dml_char_candidate WHERE col3='a';
 SELECT * FROM mpp21090_xchange_pttab_dropcol_dml_char_candidate ORDER BY 1,2,3;
 
 -- TEST
-DROP TABLE IF EXISTS mpp21090_xchange_pttab_dropcol_dml_decimal;
-CREATE TABLE mpp21090_xchange_pttab_dropcol_dml_decimal
-(
-    col1 decimal,
-    col2 decimal,
-    col3 char,
-    col4 int,
-    col5 decimal
-) 
-DISTRIBUTED by (col1)
-PARTITION BY RANGE(col2)(partition partone start(1.00) end(10.00)  WITH (APPENDONLY=true, COMPRESSLEVEL=5, ORIENTATION=column),partition parttwo start(10.00) end(20.00) WITH (APPENDONLY=true, COMPRESSLEVEL=5, ORIENTATION=row),partition partthree start(20.00) end(30.00));
-
-INSERT INTO mpp21090_xchange_pttab_dropcol_dml_decimal VALUES(2.00,2.00,'a',0, 2.00);
-ANALYZE mpp21090_xchange_pttab_dropcol_dml_decimal;
-SELECT * FROM mpp21090_xchange_pttab_dropcol_dml_decimal ORDER BY 1,2,3,4;
-
-ALTER TABLE mpp21090_xchange_pttab_dropcol_dml_decimal DROP COLUMN col1;
-
--- Create Candidate table for Exchange
-DROP TABLE IF EXISTS mpp21090_xchange_pttab_dropcol_dml_decimal_candidate;
-CREATE TABLE mpp21090_xchange_pttab_dropcol_dml_decimal_candidate( like mpp21090_xchange_pttab_dropcol_dml_decimal including indexes) distributed randomly;
-INSERT INTO mpp21090_xchange_pttab_dropcol_dml_decimal_candidate VALUES(2.00,'z',1,2.00);
-
--- Exchange 
-ALTER TABLE mpp21090_xchange_pttab_dropcol_dml_decimal EXCHANGE PARTITION FOR(5.00) WITH TABLE mpp21090_xchange_pttab_dropcol_dml_decimal_candidate;
-
-SELECT * FROM mpp21090_xchange_pttab_dropcol_dml_decimal ORDER BY 1,2,3;
-SELECT * FROM mpp21090_xchange_pttab_dropcol_dml_decimal_candidate ORDER BY 1,2,3;
-
--- DML on partition table
-INSERT INTO mpp21090_xchange_pttab_dropcol_dml_decimal SELECT  1.00,'b', 1, 1.00;
-SELECT * FROM mpp21090_xchange_pttab_dropcol_dml_decimal ORDER BY 1,2,3;
-
-UPDATE mpp21090_xchange_pttab_dropcol_dml_decimal SET col5 = 35.00 WHERE col2 = 1.00 AND col5 = 1.00;
-SELECT * FROM mpp21090_xchange_pttab_dropcol_dml_decimal ORDER BY 1,2,3;
-
-UPDATE mpp21090_xchange_pttab_dropcol_dml_decimal SET col2 =2.00 WHERE col3='b';
-SELECT * FROM mpp21090_xchange_pttab_dropcol_dml_decimal ORDER BY 1,2,3;
-
-DELETE FROM mpp21090_xchange_pttab_dropcol_dml_decimal WHERE col3='b';
-SELECT * FROM mpp21090_xchange_pttab_dropcol_dml_decimal ORDER BY 1,2,3;
-
--- DML on candidate table
-INSERT INTO mpp21090_xchange_pttab_dropcol_dml_decimal_candidate SELECT 1.00,'b', 1, 1.00;
-SELECT * FROM mpp21090_xchange_pttab_dropcol_dml_decimal_candidate ORDER BY 1,2,3;
-
-UPDATE mpp21090_xchange_pttab_dropcol_dml_decimal_candidate SET col2=2.00 WHERE col3='a';
-SELECT * FROM mpp21090_xchange_pttab_dropcol_dml_decimal_candidate ORDER BY 1,2,3;
-
-DELETE FROM mpp21090_xchange_pttab_dropcol_dml_decimal_candidate WHERE col3='a';
-SELECT * FROM mpp21090_xchange_pttab_dropcol_dml_decimal_candidate ORDER BY 1,2,3;
-
--- TEST
 DROP TABLE IF EXISTS mpp21090_xchange_pttab_dropcol_dml_int4;
 CREATE TABLE mpp21090_xchange_pttab_dropcol_dml_int4
 (
@@ -7921,62 +6761,6 @@ SELECT * FROM mpp21090_xchange_pttab_dropcol_idx_dml_char_candidate ORDER BY 1,2
 
 DELETE FROM mpp21090_xchange_pttab_dropcol_idx_dml_char_candidate WHERE col3='a';
 SELECT * FROM mpp21090_xchange_pttab_dropcol_idx_dml_char_candidate ORDER BY 1,2,3;
-
--- TEST
-DROP TABLE IF EXISTS mpp21090_xchange_pttab_dropcol_idx_dml_decimal;
-CREATE TABLE mpp21090_xchange_pttab_dropcol_idx_dml_decimal
-(
-    col1 decimal,
-    col2 decimal,
-    col3 char,
-    col4 int,
-    col5 decimal
-) 
-DISTRIBUTED by (col1)
-PARTITION BY RANGE(col2)(partition partone start(1.00) end(10.00)  WITH (APPENDONLY=true, COMPRESSLEVEL=5, ORIENTATION=column),partition parttwo start(10.00) end(20.00) WITH (APPENDONLY=true, COMPRESSLEVEL=5, ORIENTATION=row),partition partthree start(20.00) end(30.00));
-
-INSERT INTO mpp21090_xchange_pttab_dropcol_idx_dml_decimal VALUES(2.00,2.00,'a',0, 2.00);
-ANALYZE mpp21090_xchange_pttab_dropcol_idx_dml_decimal;
-SELECT * FROM mpp21090_xchange_pttab_dropcol_idx_dml_decimal ORDER BY 1,2,3,4;
-
-DROP INDEX IF EXISTS mpp21090_xchange_pttab_dropcol_idx_dml_idx_decimal;
-CREATE INDEX mpp21090_xchange_pttab_dropcol_idx_dml_idx_decimal on mpp21090_xchange_pttab_dropcol_idx_dml_decimal(col2);
-
-ALTER TABLE mpp21090_xchange_pttab_dropcol_idx_dml_decimal DROP COLUMN col1;
-
--- Create Candidate table for Exchange
-DROP TABLE IF EXISTS mpp21090_xchange_pttab_dropcol_idx_dml_decimal_candidate;
-CREATE TABLE mpp21090_xchange_pttab_dropcol_idx_dml_decimal_candidate( like mpp21090_xchange_pttab_dropcol_idx_dml_decimal including indexes) distributed randomly;
-INSERT INTO mpp21090_xchange_pttab_dropcol_idx_dml_decimal_candidate VALUES(2.00,'z',1,2.00);
-
--- Exchange 
-ALTER TABLE mpp21090_xchange_pttab_dropcol_idx_dml_decimal EXCHANGE PARTITION FOR(5.00) WITH TABLE mpp21090_xchange_pttab_dropcol_idx_dml_decimal_candidate;
-
-SELECT * FROM mpp21090_xchange_pttab_dropcol_idx_dml_decimal ORDER BY 1,2,3;
-SELECT * FROM mpp21090_xchange_pttab_dropcol_idx_dml_decimal_candidate ORDER BY 1,2,3;
-
--- DML on partition table
-INSERT INTO mpp21090_xchange_pttab_dropcol_idx_dml_decimal SELECT  1.00,'b', 1, 1.00;
-SELECT * FROM mpp21090_xchange_pttab_dropcol_idx_dml_decimal ORDER BY 1,2,3;
-
-UPDATE mpp21090_xchange_pttab_dropcol_idx_dml_decimal SET col5 = 35.00 WHERE col2 = 1.00 AND col5 = 1.00;
-SELECT * FROM mpp21090_xchange_pttab_dropcol_idx_dml_decimal ORDER BY 1,2,3;
-
-UPDATE mpp21090_xchange_pttab_dropcol_idx_dml_decimal SET col2 =2.00 WHERE col3='b';
-SELECT * FROM mpp21090_xchange_pttab_dropcol_idx_dml_decimal ORDER BY 1,2,3;
-
-DELETE FROM mpp21090_xchange_pttab_dropcol_idx_dml_decimal WHERE col3='b';
-SELECT * FROM mpp21090_xchange_pttab_dropcol_idx_dml_decimal ORDER BY 1,2,3;
-
--- DML on candidate table
-INSERT INTO mpp21090_xchange_pttab_dropcol_idx_dml_decimal_candidate SELECT 1.00,'b', 1, 1.00;
-SELECT * FROM mpp21090_xchange_pttab_dropcol_idx_dml_decimal_candidate ORDER BY 1,2,3;
-
-UPDATE mpp21090_xchange_pttab_dropcol_idx_dml_decimal_candidate SET col2=2.00 WHERE col3='a';
-SELECT * FROM mpp21090_xchange_pttab_dropcol_idx_dml_decimal_candidate ORDER BY 1,2,3;
-
-DELETE FROM mpp21090_xchange_pttab_dropcol_idx_dml_decimal_candidate WHERE col3='a';
-SELECT * FROM mpp21090_xchange_pttab_dropcol_idx_dml_decimal_candidate ORDER BY 1,2,3;
 
 -- TEST
 DROP TABLE IF EXISTS mpp21090_xchange_pttab_dropcol_idx_dml_int4;
