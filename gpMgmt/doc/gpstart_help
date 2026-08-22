@@ -102,6 +102,14 @@ OPTIONS
   is 60 seconds.
 
 
+--recovery-wait-timeout <number_of_seconds>
+
+  Specifies a timeout in seconds to wait for the coordinator to finish
+  crash or standby recovery before failing. If not specified, the default
+  timeout is 300 seconds. Increase this for large clusters where
+  recovery may take longer.
+
+
 -v
 
   Displays detailed status, progress and error messages output by the utility.

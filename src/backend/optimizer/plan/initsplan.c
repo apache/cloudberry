@@ -2970,9 +2970,6 @@ distribute_restrictinfo_to_rels(PlannerInfo *root,
 	Relids		relids = restrictinfo->required_relids;
 	RelOptInfo *rel;
 
-	if (contains_outer_params((Node *) restrictinfo->clause, root))
-		restrictinfo->contain_outer_query_references = true;
-
 	switch (bms_membership(relids))
 	{
 		case BMS_SINGLETON:
