@@ -71,8 +71,8 @@ iceberg_volume_fdw_validator(PG_FUNCTION_ARGS)
 	List	   *options = untransformRelOptions(PG_GETARG_DATUM(0));
 	Oid			catalog = PG_GETARG_OID(1);
 	ListCell   *lc;
-	IcebergVolumeServerOptions server_options;
-	IcebergForeignVolumeOptions volume_options;
+	IcebergVolumeServerOptions server_options = {0};
+	IcebergForeignVolumeOptions volume_options = {0};
 	DatalakeLocation location;
 	char	   *parse_detail = NULL;
 	DlErrCode	parse_result;
@@ -130,8 +130,6 @@ iceberg_volume_fdw_validator(PG_FUNCTION_ARGS)
 	 * validator accepted cannot fail to parse afterwards.  path_style_access is
 	 * checked as a side effect: the accessor refuses a non-boolean value.
 	 */
-	memset(&server_options, 0, sizeof(server_options));
-	memset(&volume_options, 0, sizeof(volume_options));
 	parse_iceberg_volume_server_options(&server_options, options);
 	parse_iceberg_foreign_volume_options(&volume_options, options);
 
