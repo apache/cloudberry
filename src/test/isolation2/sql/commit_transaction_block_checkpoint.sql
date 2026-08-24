@@ -10,6 +10,7 @@ select gp_inject_fault_infinite('before_xlog_xact_commit_prepared', 'suspend', 3
 2&: commit;
 
 -- wait for the fault to trigger since following checkpoint could be faster
+-1U: SET debug_disable_distributed_snapshot = on;
 -1U: select gp_wait_until_triggered_fault('before_xlog_xact_commit_prepared', 1, 3);
 
 -- do checkpoint on segment content 1 in utility mode, and it should block

@@ -611,9 +611,9 @@ doNotifyingCommitPrepared(void)
 	 * broadcasted.
 	 */
 	LWLockAcquire(TwophaseCommitLock, LW_SHARED);
-	markDtxCommitInProgress();
 
 	SIMPLE_FAULT_INJECTOR("dtm_broadcast_commit_prepared");
+	markDtxCommitInProgress();
 
 	savedInterruptHoldoffCount = InterruptHoldoffCount;
 

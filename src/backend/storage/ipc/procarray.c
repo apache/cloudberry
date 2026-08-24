@@ -76,6 +76,7 @@
 #include "access/xact.h"		/* setting the shared xid */
 #include "cdb/cdbtm.h"
 #include "cdb/cdbvars.h"
+#include "postmaster/fts.h"
 #include "utils/faultinjector.h"
 #include "utils/sharedsnapshot.h"
 #include "libpq/libpq-be.h"
@@ -3068,10 +3069,15 @@ GetSnapshotData(Snapshot snapshot, DtxContext distributedTransactionContext)
 	 * started is different: wait until its QD cleanup completes before taking
 	 * the snapshot, otherwise some QEs can expose the commit while others do
 	 * not.
+	 *
+	 * FTS only reads coordinator configuration and probes segments through
+	 * libpq.  It must not wait for a user DTX here, because the probe can be
+	 * needed to resolve that DTX.
 	 */
 	if (distributedTransactionContext == DTX_CONTEXT_QD_DISTRIBUTED_CAPABLE &&
 		Gp_role != GP_ROLE_UTILITY &&
-		!Debug_disable_distributed_snapshot && needDistributedSnapshot)
+		!Debug_disable_distributed_snapshot && !am_ftsprobe &&
+		needDistributedSnapshot)
 		WaitForDtxCommit();
 	else
 		LWLockAcquire(ProcArrayLock, LW_SHARED);
@@ -3335,9 +3341,14 @@ GetSnapshotData(Snapshot snapshot, DtxContext distributedTransactionContext)
 	if (!TransactionIdIsValid(MyProc->xmin))
 		MyProc->xmin = TransactionXmin = xmin;
 
-	/* GP: QD takes a distributed snapshot iff QD not in retry phase and the query needs distributed snapshot */
-	if (distributedTransactionContext == DTX_CONTEXT_QD_DISTRIBUTED_CAPABLE && !Debug_disable_distributed_snapshot 
-			&& needDistributedSnapshot)
+	/*
+	 * GP: A QD takes a distributed snapshot iff it is not in retry phase and
+	 * the query needs one.  FTS only reads coordinator configuration while it
+	 * probes segments, so it does not need a distributed snapshot.
+	 */
+	if (distributedTransactionContext == DTX_CONTEXT_QD_DISTRIBUTED_CAPABLE &&
+		!Debug_disable_distributed_snapshot && !am_ftsprobe &&
+		needDistributedSnapshot)
 	{
 		CreateDistributedSnapshot(ds);
 		snapshot->haveDistribSnapshot = true;

@@ -17,6 +17,8 @@ CREATE
 2&: commit;  <waiting ...>
 
 -- wait for the fault to trigger since following checkpoint could be faster
+-1U: SET debug_disable_distributed_snapshot = on;
+SET
 -1U: select gp_wait_until_triggered_fault('before_xlog_xact_commit_prepared', 1, 3);
  gp_wait_until_triggered_fault 
 -------------------------------
