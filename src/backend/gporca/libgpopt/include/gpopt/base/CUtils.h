@@ -973,7 +973,8 @@ public:
 	// return true if given expression contains window aggregate function
 	static BOOL FHasAggWindowFunc(CExpression *pexpr);
 
-	// return true if given expression contains ordered aggregate function
+	// return true if given expression contains an ordered aggregate function
+	// that should be split to an internal gp_percentile aggregate
 	static BOOL FHasOrderedAggToSplit(CExpression *pexpr);
 
 	// return true if the given expression is a cross join
