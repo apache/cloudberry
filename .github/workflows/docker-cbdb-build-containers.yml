@@ -87,7 +87,7 @@ jobs:
     steps:
       # Checkout repository code with full history
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       # Generate version information for image tags
       # - BUILD_DATE: Current date in YYYYMMDD format

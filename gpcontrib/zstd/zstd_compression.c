@@ -10,6 +10,10 @@
 
 #include "postgres.h"
 
+#ifndef USE_ZSTD
+#error "zstd support is not enabled; reconfigure with --with-zstd to build the gp_zstd_compression extension"
+#endif
+
 #include "access/genam.h"
 #include "catalog/pg_compression.h"
 #include "fmgr.h"
