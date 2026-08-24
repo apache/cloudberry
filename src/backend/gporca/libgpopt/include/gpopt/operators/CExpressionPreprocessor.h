@@ -215,6 +215,24 @@ private:
 												 CColRefArray *pdrgpcrOutput,
 												 ColRefToUlongMap *col_mapping);
 
+	// translate a child partition's part-constraint DXL into a CExpression over
+	// the root table's colrefs (NULL if the child has no stored constraint)
+	static CExpression *PexprPartConstraintFromChild(
+		CMemoryPool *mp, const IMDRelation *partrel, CColRefArray *pdrgpcrOutput,
+		ColRefToUlongMap *root_col_mapping);
+
+	// find a "colref = const" equality among the given conjuncts and return its
+	// const subexpression (NULL if none)
+	static CExpression *PexprColumnEqualityConst(
+		CExpressionArray *pdrgpexprConjuncts, const CColRef *colref);
+
+	// static hash-partition pruning: true if the leaf provably cannot contain
+	// any row matching the query's equality predicates on the partition key
+	static BOOL FHashPartitionPruned(CMemoryPool *mp, const IMDRelation *partrel,
+									 CColRefArray *pdrgpcrOutput,
+									 ColRefToUlongMap *root_col_mapping,
+									 CExpressionArray *pdrgpexprConjuncts);
+
 	// swap logical select over logical project
 	static CExpression *PexprTransposeSelectAndProject(CMemoryPool *mp,
 													   CExpression *pexpr);

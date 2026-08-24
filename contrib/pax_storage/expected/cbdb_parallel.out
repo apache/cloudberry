@@ -280,41 +280,49 @@ set local enable_indexscan = on;
 set local enable_bitmapscan = on;
 set local max_parallel_workers_per_gather=1;
 explain(costs off) select y from ao1 where y > 1000000;
+                 QUERY PLAN                 
+--------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Bitmap Heap Scan on ao1
+         Recheck Cond: (y > 1000000)
+         ->  Bitmap Index Scan on ao1_y_idx
+               Index Cond: (y > 1000000)
+ Optimizer: Postgres query optimizer
+(6 rows)
+
+explain(costs off) select y from aocs1 where y > 1000000;
                   QUERY PLAN                  
 ----------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
-   ->  Index Only Scan using ao1_y_idx on ao1
-         Index Cond: (y > 1000000)
+   ->  Bitmap Heap Scan on aocs1
+         Recheck Cond: (y > 1000000)
+         ->  Bitmap Index Scan on aocs1_y_idx
+               Index Cond: (y > 1000000)
  Optimizer: Postgres query optimizer
-(4 rows)
-
-explain(costs off) select y from aocs1 where y > 1000000;
-                    QUERY PLAN                    
---------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)
-   ->  Index Only Scan using aocs1_y_idx on aocs1
-         Index Cond: (y > 1000000)
- Optimizer: Postgres query optimizer
-(4 rows)
+(6 rows)
 
 set local max_parallel_workers_per_gather=0;
 explain(costs off) select y from ao1 where y > 1000000;
+                 QUERY PLAN                 
+--------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Bitmap Heap Scan on ao1
+         Recheck Cond: (y > 1000000)
+         ->  Bitmap Index Scan on ao1_y_idx
+               Index Cond: (y > 1000000)
+ Optimizer: Postgres query optimizer
+(6 rows)
+
+explain(costs off) select y from aocs1 where y > 1000000;
                   QUERY PLAN                  
 ----------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
-   ->  Index Only Scan using ao1_y_idx on ao1
-         Index Cond: (y > 1000000)
+   ->  Bitmap Heap Scan on aocs1
+         Recheck Cond: (y > 1000000)
+         ->  Bitmap Index Scan on aocs1_y_idx
+               Index Cond: (y > 1000000)
  Optimizer: Postgres query optimizer
-(4 rows)
-
-explain(costs off) select y from aocs1 where y > 1000000;
-                    QUERY PLAN                    
---------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)
-   ->  Index Only Scan using aocs1_y_idx on aocs1
-         Index Cond: (y > 1000000)
- Optimizer: Postgres query optimizer
-(4 rows)
+(6 rows)
 
 commit;
 drop table ao1;
@@ -365,18 +373,20 @@ select count(c2) from t1;
 
 set local enable_parallel = off;
 explain(locus, costs off) select count(c2) from t1;
-                       QUERY PLAN                        
----------------------------------------------------------
+                       QUERY PLAN                       
+--------------------------------------------------------
  Finalize Aggregate
    Locus: Entry
    ->  Gather Motion 3:1  (slice1; segments: 3)
          Locus: Entry
          ->  Partial Aggregate
                Locus: Hashed
-               ->  Index Only Scan using t1_c2_idx on t1
+               ->  Bitmap Heap Scan on t1
                      Locus: Hashed
+                     ->  Bitmap Index Scan on t1_c2_idx
+                           Locus: Hashed
  Optimizer: Postgres query optimizer
-(9 rows)
+(11 rows)
 
 select count(c2) from t1;
   count  
@@ -613,6 +623,13 @@ explain(locus, costs off) select * from rt1 join t1 on rt1.a = t1.b join rt2 on 
 select * from rt1 join t1 on rt1.a = t1.b join rt2 on rt2.a = t1.b;
  a  | b  | a  | b  | a  | b  
 ----+----+----+----+----+----
+  5 |  6 |  5 |  5 |  5 |  6
+  6 |  7 |  6 |  6 |  6 |  7
+  9 | 10 |  9 |  9 |  9 | 10
+ 10 | 11 | 10 | 10 | 10 | 11
+  6 |  7 |  5 |  6 |  6 |  7
+  7 |  8 |  6 |  7 |  7 |  8
+ 10 | 11 |  9 | 10 | 10 | 11
   2 |  3 |  2 |  2 |  2 |  3
   3 |  4 |  3 |  3 |  3 |  4
   4 |  5 |  4 |  4 |  4 |  5
@@ -625,13 +642,6 @@ select * from rt1 join t1 on rt1.a = t1.b join rt2 on rt2.a = t1.b;
   9 | 10 |  8 |  9 |  9 | 10
   1 |  2 |  1 |  1 |  1 |  2
   2 |  3 |  1 |  2 |  2 |  3
-  5 |  6 |  5 |  5 |  5 |  6
-  6 |  7 |  6 |  6 |  6 |  7
-  9 | 10 |  9 |  9 |  9 | 10
- 10 | 11 | 10 | 10 | 10 | 11
-  6 |  7 |  5 |  6 |  6 |  7
-  7 |  8 |  6 |  7 |  7 |  8
- 10 | 11 |  9 | 10 | 10 | 11
 (19 rows)
 
 -- parallel hash join
@@ -726,6 +736,13 @@ explain(locus, costs off) select * from rt1 join t1 on rt1.a = t1.b join rt3 on 
 select * from rt1 join t1 on rt1.a = t1.b join rt3 on rt3.a = t1.b;
  a  | b  | a  | b  | a  | b  
 ----+----+----+----+----+----
+  5 |  6 |  5 |  5 |  5 |  6
+  6 |  7 |  6 |  6 |  6 |  7
+  9 | 10 |  9 |  9 |  9 | 10
+ 10 | 11 | 10 | 10 | 10 | 11
+  6 |  7 |  5 |  6 |  6 |  7
+  7 |  8 |  6 |  7 |  7 |  8
+ 10 | 11 |  9 | 10 | 10 | 11
   1 |  2 |  1 |  1 |  1 |  2
   2 |  3 |  1 |  2 |  2 |  3
   2 |  3 |  2 |  2 |  2 |  3
@@ -738,13 +755,6 @@ select * from rt1 join t1 on rt1.a = t1.b join rt3 on rt3.a = t1.b;
   5 |  6 |  4 |  5 |  5 |  6
   8 |  9 |  7 |  8 |  8 |  9
   9 | 10 |  8 |  9 |  9 | 10
-  5 |  6 |  5 |  5 |  5 |  6
-  6 |  7 |  6 |  6 |  6 |  7
-  9 | 10 |  9 |  9 |  9 | 10
- 10 | 11 | 10 | 10 | 10 | 11
-  6 |  7 |  5 |  6 |  6 |  7
-  7 |  8 |  6 |  7 |  7 |  8
- 10 | 11 |  9 | 10 | 10 | 11
 (19 rows)
 
 -- parallel join without parallel hash
@@ -781,8 +791,6 @@ explain(locus, costs off) select * from rt1 join t1 on rt1.a = t1.b join rt3 on 
 select * from rt1 join t1 on rt1.a = t1.b join rt3 on rt3.a = t1.b;
  a  | b  | a  | b  | a  | b  
 ----+----+----+----+----+----
-  1 |  2 |  1 |  1 |  1 |  2
-  2 |  3 |  1 |  2 |  2 |  3
   5 |  6 |  5 |  5 |  5 |  6
   6 |  7 |  6 |  6 |  6 |  7
   9 | 10 |  9 |  9 |  9 | 10
@@ -790,6 +798,8 @@ select * from rt1 join t1 on rt1.a = t1.b join rt3 on rt3.a = t1.b;
   6 |  7 |  5 |  6 |  6 |  7
   7 |  8 |  6 |  7 |  7 |  8
  10 | 11 |  9 | 10 | 10 | 11
+  1 |  2 |  1 |  1 |  1 |  2
+  2 |  3 |  1 |  2 |  2 |  3
   2 |  3 |  2 |  2 |  2 |  3
   3 |  4 |  3 |  3 |  3 |  4
   4 |  5 |  4 |  4 |  4 |  5
@@ -854,15 +864,15 @@ explain(locus, costs off) select * from rt4 join t2 using(b);
 select * from rt4 join t2 using(b);
  b  | a  | a  
 ----+----+----
-  6 |  5 |  5
-  7 |  6 |  6
- 10 |  9 |  9
- 11 | 10 | 10
   3 |  2 |  2
   4 |  3 |  3
   5 |  4 |  4
   8 |  7 |  7
   9 |  8 |  8
+  6 |  5 |  5
+  7 |  6 |  6
+ 10 |  9 |  9
+ 11 | 10 | 10
   2 |  1 |  1
 (10 rows)
 
@@ -949,9 +959,9 @@ select * from t_replica_workers_2 join t_random_workers_0 using(a);
 ---+---+---
  1 | 2 | 2
  2 | 3 | 3
+ 5 | 6 | 6
  4 | 5 | 5
  3 | 4 | 4
- 5 | 6 | 6
 (5 rows)
 
 -- non parallel results
@@ -960,10 +970,10 @@ select * from t_replica_workers_2 join t_random_workers_0 using(a);
  a | b | b 
 ---+---+---
  3 | 4 | 4
- 5 | 6 | 6
- 4 | 5 | 5
  1 | 2 | 2
  2 | 3 | 3
+ 5 | 6 | 6
+ 4 | 5 | 5
 (5 rows)
 
 abort;
@@ -1004,11 +1014,11 @@ explain(locus, costs off) select * from t_replica_workers_2 right join t_random_
 select * from t_replica_workers_2 right join t_random_workers_2 using(a);
  a | b | b 
 ---+---+---
+ 3 | 4 | 4
+ 5 | 6 | 6
+ 4 | 5 | 5
  1 | 2 | 2
  2 | 3 | 3
- 3 | 4 | 4
- 4 | 5 | 5
- 5 | 6 | 6
 (5 rows)
 
 -- non parallel results
@@ -1018,8 +1028,8 @@ select * from t_replica_workers_2 right join t_random_workers_2 using(a);
 ---+---+---
  1 | 2 | 2
  2 | 3 | 3
- 3 | 4 | 4
  4 | 5 | 5
+ 3 | 4 | 4
  5 | 6 | 6
 (5 rows)
 
@@ -1062,10 +1072,10 @@ select * from t_replica_workers_2 join t_random_workers_2 using(a);
  a | b | b 
 ---+---+---
  1 | 2 | 2
- 3 | 4 | 4
- 2 | 3 | 3
- 4 | 5 | 5
  5 | 6 | 6
+ 2 | 3 | 3
+ 3 | 4 | 4
+ 4 | 5 | 5
 (5 rows)
 
 -- non parallel results
@@ -1074,10 +1084,10 @@ select * from t_replica_workers_2 join t_random_workers_2 using(a);
  a | b | b 
 ---+---+---
  1 | 2 | 2
- 3 | 4 | 4
- 2 | 3 | 3
- 4 | 5 | 5
  5 | 6 | 6
+ 2 | 3 | 3
+ 3 | 4 | 4
+ 4 | 5 | 5
 (5 rows)
 
 abort;
@@ -1427,7 +1437,7 @@ explain (locus, costs off) select * from rt1 union all select * from t1;
          ->  Result
                Locus: Strewn
                Parallel Workers: 2
-               One-Time Filter: (gp_execution_segment() = 0)
+               One-Time Filter: (gp_execution_segment() = 2)
                ->  Parallel Seq Scan on rt1
                      Locus: SegmentGeneralWorkers
                      Parallel Workers: 2
@@ -1451,7 +1461,7 @@ explain (locus, costs off) select * from rt1 union all select * from t2;
          ->  Result
                Locus: Strewn
                Parallel Workers: 2
-               One-Time Filter: (gp_execution_segment() = 0)
+               One-Time Filter: (gp_execution_segment() = 2)
                ->  Parallel Seq Scan on rt1
                      Locus: SegmentGeneralWorkers
                      Parallel Workers: 2
@@ -1889,8 +1899,8 @@ explain (locus, costs off)
 select * from
   (select count(id) from t1 where id > 10) ss
   right join (values (1),(2),(3)) v(x) on true;
-                             QUERY PLAN                              
----------------------------------------------------------------------
+                             QUERY PLAN                             
+--------------------------------------------------------------------
  Nested Loop Left Join
    Locus: Entry
    ->  Values Scan on "*VALUES*"
@@ -1903,11 +1913,14 @@ select * from
                      Locus: Entry
                      ->  Partial Aggregate
                            Locus: Hashed
-                           ->  Index Only Scan using t1_id_idx on t1
+                           ->  Bitmap Heap Scan on t1
                                  Locus: Hashed
-                                 Index Cond: (id > 10)
+                                 Recheck Cond: (id > 10)
+                                 ->  Bitmap Index Scan on t1_id_idx
+                                       Locus: Hashed
+                                       Index Cond: (id > 10)
  Optimizer: Postgres query optimizer
-(16 rows)
+(19 rows)
 
 abort;
 begin;
@@ -2287,8 +2300,8 @@ explain (locus, costs off)
 select * from
   (select count(id) from t1 where id > 10) ss
   right join (values (1),(2),(3)) v(x) on true;
-                             QUERY PLAN                              
----------------------------------------------------------------------
+                             QUERY PLAN                             
+--------------------------------------------------------------------
  Nested Loop Left Join
    Locus: Entry
    ->  Values Scan on "*VALUES*"
@@ -2301,11 +2314,14 @@ select * from
                      Locus: Entry
                      ->  Partial Aggregate
                            Locus: Hashed
-                           ->  Index Only Scan using t1_id_idx on t1
+                           ->  Bitmap Heap Scan on t1
                                  Locus: Hashed
-                                 Index Cond: (id > 10)
+                                 Recheck Cond: (id > 10)
+                                 ->  Bitmap Index Scan on t1_id_idx
+                                       Locus: Hashed
+                                       Index Cond: (id > 10)
  Optimizer: Postgres query optimizer
-(16 rows)
+(19 rows)
 
 abort;
 -- Subplan locus, One-time flter locus is null

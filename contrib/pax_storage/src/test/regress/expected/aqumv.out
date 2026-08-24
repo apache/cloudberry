@@ -2787,12 +2787,14 @@ select * from aqumv_ext_r where id = 5;
 ----------------------------------------------------------------------------------------------------------
  Gather Motion 1:1  (slice1; segments: 1)
    Output: id
-   ->  Index Only Scan using aqumv_ext_mv_id_idx on aqumv.aqumv_ext_mv
+   ->  Bitmap Heap Scan on aqumv.aqumv_ext_mv
          Output: id
-         Index Cond: (aqumv_ext_mv.id = 5)
+         Recheck Cond: (aqumv_ext_mv.id = 5)
+         ->  Bitmap Index Scan on aqumv_ext_mv_id_idx
+               Index Cond: (aqumv_ext_mv.id = 5)
  Settings: enable_answer_query_using_materialized_views = 'on', enable_seqscan = 'off', optimizer = 'off'
  Optimizer: Postgres query optimizer
-(7 rows)
+(9 rows)
 
 select * from aqumv_ext_r where id = 5;
  id 

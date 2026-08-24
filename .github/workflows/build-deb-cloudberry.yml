@@ -80,6 +80,11 @@ on:
     types: [opened, synchronize, reopened, edited]
   workflow_dispatch:  # Manual trigger
     inputs:
+      ubuntu_version:
+        description: 'Ubuntu version (default: all)'
+        required: false
+        default: 'all'
+        type: string
       test_selection:
         description: 'Select tests to run (comma-separated). Examples: ic-good-opt-off,ic-contrib'
         required: false
@@ -242,6 +247,7 @@ jobs:
                                "contrib/pgcrypto:installcheck",
                                "contrib/pgstattuple:installcheck",
                                "contrib/tablefunc:installcheck",
+                               "contrib/try_convert:installcheck",
                                "contrib/passwordcheck:installcheck",
                                "contrib/pg_buffercache:installcheck",
                                "contrib/sslinfo:installcheck"]
@@ -279,6 +285,15 @@ jobs:
                 };
                get_defaults * .'
           }
+
+          # Determine ubuntu versions
+          UBUNTU_INPUT="${{ github.event.inputs.ubuntu_version }}"
+          if [[ "$UBUNTU_INPUT" == "all" || -z "$UBUNTU_INPUT" ]]; then
+            UBUNTU_VERSIONS_JSON='["22.04","24.04"]'
+          else
+            UBUNTU_VERSIONS_JSON=$(echo "$UBUNTU_INPUT" | jq -R 'split(",") | map(gsub("\\s+";"")) | map(select(length > 0)) | unique')
+          fi
+          echo "Ubuntu versions: $UBUNTU_VERSIONS_JSON"
 
           # Extract all valid test names from ALL_TESTS
           VALID_TESTS=$(echo "$ALL_TESTS" | jq -r '.include[].test')
@@ -325,14 +340,21 @@ jobs:
           done
           RESULT="${RESULT}]}"
 
+          # Expand by ubuntu versions: cross-join each test with each ubuntu version
+          FINAL_RESULT=$(jq -n \
+            --argjson tests "$RESULT" \
+            --argjson versions "$UBUNTU_VERSIONS_JSON" \
+            '[ $tests.include[] as $t | $versions[] as $v | $t + {ubuntu_version: $v} ] | {include: .}')
+
           # Output the matrix for GitHub Actions
-          echo "Final matrix configuration:"
-          echo "$RESULT" | jq .
+          echo "Final matrix configuration (first 3 entries):"
+          echo "$FINAL_RESULT" | jq '.include[:3]'
+          echo "Total matrix entries: $(echo "$FINAL_RESULT" | jq '.include | length')"
 
           # Fix: Use block redirection
           {
             echo "matrix<<EOF"
-            echo "$RESULT"
+            echo "$FINAL_RESULT"
             echo "EOF"
           } >> "$GITHUB_OUTPUT"
 
@@ -343,7 +365,7 @@ jobs:
   ## ======================================================================
 
   build-deb:
-    name: Build Apache Cloudberry DEB
+    name: ${{ matrix.ubuntu_version == '22.04' && 'Build Apache Cloudberry DEB' || format('Build Apache Cloudberry DEB (Ubuntu {0})', matrix.ubuntu_version) }}
     env:
       JOB_TYPE: build
     needs: [check-skip]
@@ -353,8 +375,13 @@ jobs:
     outputs:
       build_timestamp: ${{ steps.set_timestamp.outputs.timestamp }}
 
+    strategy:
+      fail-fast: false
+      matrix:
+        ubuntu_version: ['22.04', '24.04']
+
     container:
-      image: apache/incubator-cloudberry:cbdb-build-ubuntu22.04-latest
+      image: apache/incubator-cloudberry:cbdb-build-ubuntu${{ matrix.ubuntu_version }}-latest
       options: >-
         --user root
         -h cdw
@@ -399,7 +426,7 @@ jobs:
           echo "BUILD_TIMESTAMP=$timestamp" | tee -a "$GITHUB_ENV" # Also set as environment variable
 
       - name: Checkout Apache Cloudberry
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           fetch-depth: 1
           submodules: true
@@ -542,7 +569,7 @@ jobs:
             echo "=== Artifact Creation Log ==="
             echo "Timestamp: $(date -u)"
 
-            cp -r "${SRC_DIR}"/devops/build/packaging/deb/ubuntu22.04/* debian/
+            cp -r "${SRC_DIR}"/devops/build/packaging/deb/ubuntu${{ matrix.ubuntu_version }}/* debian/
             chown -R "$(whoami)" debian
             chmod -x debian/*install
 
@@ -632,17 +659,17 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload build logs
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
-          name: build-logs-${{ env.BUILD_TIMESTAMP }}
+          name: build-logs-ubuntu${{ matrix.ubuntu_version }}-${{ env.BUILD_TIMESTAMP }}
           path: |
             build-logs/
           retention-days: ${{ env.LOG_RETENTION_DAYS }}
 
       - name: Upload Cloudberry DEB build artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
-          name: apache-cloudberry-db-incubating-deb-build-artifacts
+          name: apache-cloudberry-db-incubating-deb-build-artifacts-ubuntu${{ matrix.ubuntu_version }}
           retention-days: ${{ env.LOG_RETENTION_DAYS }}
           if-no-files-found: error
           path: |
@@ -650,9 +677,9 @@ jobs:
             deb/*.ddeb
 
       - name: Upload Cloudberry deb source build artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
-          name: apache-cloudberry-db-incubating-deb-source-build-artifacts
+          name: apache-cloudberry-db-incubating-deb-source-build-artifacts-ubuntu${{ matrix.ubuntu_version }}
           retention-days: ${{ env.LOG_RETENTION_DAYS }}
           if-no-files-found: error
           path: |
@@ -667,7 +694,7 @@ jobs:
   ## ======================================================================
 
   deb-install-test:
-    name: DEB Install Test Apache Cloudberry
+    name: ${{ matrix.ubuntu_version == '22.04' && 'DEB Install Test Apache Cloudberry' || format('DEB Install Test Apache Cloudberry (Ubuntu {0})', matrix.ubuntu_version) }}
     needs: [check-skip, build-deb]
     if: |
       !cancelled() &&
@@ -676,8 +703,13 @@ jobs:
     runs-on: ubuntu-22.04
     timeout-minutes: 120
 
+    strategy:
+      fail-fast: false
+      matrix:
+        ubuntu_version: ['22.04', '24.04']
+
     container:
-      image: apache/incubator-cloudberry:cbdb-test-ubuntu22.04-latest
+      image: apache/incubator-cloudberry:cbdb-test-ubuntu${{ matrix.ubuntu_version }}-latest
       options: >-
         --user root
         -h cdw
@@ -716,12 +748,13 @@ jobs:
 
       - name: Download Cloudberry DEB build artifacts
         if: needs.check-skip.outputs.should_skip != 'true'
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
-          name: apache-cloudberry-db-incubating-deb-build-artifacts
+          name: apache-cloudberry-db-incubating-deb-build-artifacts-ubuntu${{ matrix.ubuntu_version }}
           path: ${{ github.workspace }}/deb_build_artifacts
-          run-id: ${{ github.event.inputs.reuse_artifacts_from_run_id || github.run_id }}
           merge-multiple: false
+          run-id: ${{ github.event.inputs.reuse_artifacts_from_run_id || github.run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Cloudberry Environment Initialization
         if: needs.check-skip.outputs.should_skip != 'true'
@@ -848,9 +881,9 @@ jobs:
           } 2>&1 | tee -a install-logs/details/deb-installation.log
 
       - name: Upload install logs
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
-          name: install-logs-${{ matrix.name }}-${{ needs.build-deb.outputs.build_timestamp }}
+          name: install-logs-ubuntu${{ matrix.ubuntu_version }}-${{ needs.build-deb.outputs.build_timestamp }}
           path: |
             install-logs/
           retention-days: ${{ env.LOG_RETENTION_DAYS }}
@@ -872,7 +905,7 @@ jobs:
   ## ======================================================================
 
   test-deb:
-    name: ${{ matrix.test }}
+    name: ${{ matrix.ubuntu_version == '22.04' && matrix.test || format('{0} (Ubuntu {1})', matrix.test, matrix.ubuntu_version) }}
     needs: [check-skip, build-deb, prepare-test-matrix-deb]
     if: |
       !cancelled() &&
@@ -885,7 +918,7 @@ jobs:
       matrix: ${{ fromJson(needs.prepare-test-matrix-deb.outputs.test-matrix) }}
 
     container:
-      image: apache/incubator-cloudberry:cbdb-build-ubuntu22.04-latest
+      image: apache/incubator-cloudberry:cbdb-build-ubuntu${{ matrix.ubuntu_version }}-latest
       options: >-
         --privileged
         --user root
@@ -1127,9 +1160,9 @@ jobs:
 
       - name: Download Cloudberry DEB build artifacts
         if: needs.check-skip.outputs.should_skip != 'true'
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
-          name: apache-cloudberry-db-incubating-deb-build-artifacts
+          name: apache-cloudberry-db-incubating-deb-build-artifacts-ubuntu${{ matrix.ubuntu_version }}
           path: ${{ github.workspace }}/deb_build_artifacts
           merge-multiple: false
           run-id: ${{ github.event.inputs.reuse_artifacts_from_run_id || github.run_id }}
@@ -1137,9 +1170,9 @@ jobs:
 
       - name: Download Cloudberry Source build artifacts
         if: needs.check-skip.outputs.should_skip != 'true'
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
-          name: apache-cloudberry-db-incubating-deb-source-build-artifacts
+          name: apache-cloudberry-db-incubating-deb-source-build-artifacts-ubuntu${{ matrix.ubuntu_version }}
           path: ${{ github.workspace }}/source_build_artifacts
           merge-multiple: false
           run-id: ${{ github.event.inputs.reuse_artifacts_from_run_id || github.run_id }}
@@ -1786,26 +1819,26 @@ jobs:
 
       - name: Upload test logs
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
-          name: test-logs-${{ matrix.test }}-${{ needs.build-deb.outputs.build_timestamp }}
+          name: test-logs-${{ matrix.test }}-ubuntu${{ matrix.ubuntu_version }}-${{ needs.build-deb.outputs.build_timestamp }}
           path: |
             build-logs/
           retention-days: ${{ env.LOG_RETENTION_DAYS }}
 
       - name: Upload Test Metadata
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
-          name: test-metadata-${{ matrix.test }}
+          name: test-metadata-${{ matrix.test }}-ubuntu${{ matrix.ubuntu_version }}
           path: |
             test_results*.txt
           retention-days: ${{ env.LOG_RETENTION_DAYS }}
 
       - name: Upload test results files
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
-          name: results-${{ matrix.test }}-${{ needs.build-deb.outputs.build_timestamp }}
+          name: results-${{ matrix.test }}-ubuntu${{ matrix.ubuntu_version }}-${{ needs.build-deb.outputs.build_timestamp }}
           path: |
             **/regression.out
             **/regression.diffs
@@ -1814,9 +1847,9 @@ jobs:
 
       - name: Upload test regression logs
         if: failure() || cancelled()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
-          name: regression-logs-${{ matrix.test }}-${{ needs.build-deb.outputs.build_timestamp }}
+          name: regression-logs-${{ matrix.test }}-ubuntu${{ matrix.ubuntu_version }}-${{ needs.build-deb.outputs.build_timestamp }}
           path: |
             **/regression.out
             **/regression.diffs

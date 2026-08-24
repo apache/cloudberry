@@ -105,36 +105,42 @@ set enable_mergejoin = off;
 --
 explain (costs off)
   select * from ec0 where ff = f1 and f1 = '42'::int8;
-                QUERY PLAN                
-------------------------------------------
+                  QUERY PLAN                   
+-----------------------------------------------
  Gather Motion 1:1  (slice1; segments: 1)
-   ->  Index Scan using ec0_pkey on ec0
-         Index Cond: (ff = '42'::bigint)
+   ->  Bitmap Heap Scan on ec0
+         Recheck Cond: (ff = '42'::bigint)
          Filter: (f1 = '42'::bigint)
+         ->  Bitmap Index Scan on ec0_pkey
+               Index Cond: (ff = '42'::bigint)
  Optimizer: Postgres query optimizer
-(5 rows)
+(7 rows)
 
 explain (costs off)
   select * from ec0 where ff = f1 and f1 = '42'::int8alias1;
-                 QUERY PLAN                  
----------------------------------------------
+                    QUERY PLAN                     
+---------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
-   ->  Index Scan using ec0_pkey on ec0
-         Index Cond: (ff = '42'::int8alias1)
+   ->  Bitmap Heap Scan on ec0
+         Recheck Cond: (ff = '42'::int8alias1)
          Filter: (f1 = '42'::int8alias1)
+         ->  Bitmap Index Scan on ec0_pkey
+               Index Cond: (ff = '42'::int8alias1)
  Optimizer: Postgres query optimizer
-(5 rows)
+(7 rows)
 
 explain (costs off)
   select * from ec1 where ff = f1 and f1 = '42'::int8alias1;
-                 QUERY PLAN                  
----------------------------------------------
+                    QUERY PLAN                     
+---------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
-   ->  Index Scan using ec1_pkey on ec1
-         Index Cond: (ff = '42'::int8alias1)
+   ->  Bitmap Heap Scan on ec1
+         Recheck Cond: (ff = '42'::int8alias1)
          Filter: (f1 = '42'::int8alias1)
+         ->  Bitmap Index Scan on ec1_pkey
+               Index Cond: (ff = '42'::int8alias1)
  Optimizer: Postgres query optimizer
-(5 rows)
+(7 rows)
 
 explain (costs off)
   select * from ec1 where ff = f1 and f1 = '42'::int8alias2;
@@ -148,60 +154,68 @@ explain (costs off)
 
 explain (costs off)
   select * from ec1, ec2 where ff = x1 and ff = '42'::int8;
-                                  QUERY PLAN                                   
--------------------------------------------------------------------------------
+                                     QUERY PLAN                                      
+-------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Nested Loop
          Join Filter: (ec1.ff = ec2.x1)
          ->  Broadcast Motion 1:3  (slice2; segments: 1)
-               ->  Index Scan using ec1_pkey on ec1
-                     Index Cond: ((ff = '42'::bigint) AND (ff = '42'::bigint))
+               ->  Bitmap Heap Scan on ec1
+                     Recheck Cond: ((ff = '42'::bigint) AND (ff = '42'::bigint))
+                     ->  Bitmap Index Scan on ec1_pkey
+                           Index Cond: ((ff = '42'::bigint) AND (ff = '42'::bigint))
          ->  Seq Scan on ec2
  Optimizer: Postgres query optimizer
-(8 rows)
+(10 rows)
 
 explain (costs off)
   select * from ec1, ec2 where ff = x1 and ff = '42'::int8alias1;
-                       QUERY PLAN                        
----------------------------------------------------------
+                          QUERY PLAN                           
+---------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Nested Loop
          ->  Broadcast Motion 3:3  (slice2; segments: 3)
-               ->  Index Scan using ec1_pkey on ec1
-                     Index Cond: (ff = '42'::int8alias1)
+               ->  Bitmap Heap Scan on ec1
+                     Recheck Cond: (ff = '42'::int8alias1)
+                     ->  Bitmap Index Scan on ec1_pkey
+                           Index Cond: (ff = '42'::int8alias1)
          ->  Seq Scan on ec2
                Filter: (x1 = '42'::int8alias1)
  Optimizer: Postgres query optimizer
-(8 rows)
+(10 rows)
 
 explain (costs off)
   select * from ec1, ec2 where ff = x1 and '42'::int8 = x1;
-                       QUERY PLAN                        
----------------------------------------------------------
+                        QUERY PLAN                         
+-----------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Nested Loop
          Join Filter: (ec1.ff = ec2.x1)
          ->  Broadcast Motion 1:3  (slice2; segments: 1)
-               ->  Index Scan using ec1_pkey on ec1
-                     Index Cond: (ff = '42'::bigint)
+               ->  Bitmap Heap Scan on ec1
+                     Recheck Cond: (ff = '42'::bigint)
+                     ->  Bitmap Index Scan on ec1_pkey
+                           Index Cond: (ff = '42'::bigint)
          ->  Seq Scan on ec2
                Filter: ('42'::bigint = x1)
  Optimizer: Postgres query optimizer
-(9 rows)
+(11 rows)
 
 explain (costs off)
   select * from ec1, ec2 where ff = x1 and x1 = '42'::int8alias1;
-                       QUERY PLAN                        
----------------------------------------------------------
+                          QUERY PLAN                           
+---------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Nested Loop
          ->  Broadcast Motion 3:3  (slice2; segments: 3)
-               ->  Index Scan using ec1_pkey on ec1
-                     Index Cond: (ff = '42'::int8alias1)
+               ->  Bitmap Heap Scan on ec1
+                     Recheck Cond: (ff = '42'::int8alias1)
+                     ->  Bitmap Index Scan on ec1_pkey
+                           Index Cond: (ff = '42'::int8alias1)
          ->  Seq Scan on ec2
                Filter: (x1 = '42'::int8alias1)
  Optimizer: Postgres query optimizer
-(8 rows)
+(10 rows)
 
 explain (costs off)
   select * from ec1, ec2 where ff = x1 and x1 = '42'::int8alias2;
@@ -212,10 +226,12 @@ explain (costs off)
          ->  Broadcast Motion 3:3  (slice2; segments: 3)
                ->  Seq Scan on ec2
                      Filter: (x1 = '42'::int8alias2)
-         ->  Index Scan using ec1_pkey on ec1
-               Index Cond: (ff = ec2.x1)
+         ->  Bitmap Heap Scan on ec1
+               Recheck Cond: (ff = ec2.x1)
+               ->  Bitmap Index Scan on ec1_pkey
+                     Index Cond: (ff = ec2.x1)
  Optimizer: Postgres query optimizer
-(8 rows)
+(10 rows)
 
 create index ec1_expr1 on ec1((ff + 1));
 create index ec1_expr2 on ec1((ff + 2 + 1));
@@ -235,8 +251,10 @@ explain (costs off)
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Nested Loop
          ->  Broadcast Motion 1:3  (slice2; segments: 1)
-               ->  Index Scan using ec1_pkey on ec1
-                     Index Cond: (ff = '42'::bigint)
+               ->  Bitmap Heap Scan on ec1
+                     Recheck Cond: (ff = '42'::bigint)
+                     ->  Bitmap Index Scan on ec1_pkey
+                           Index Cond: (ff = '42'::bigint)
          ->  Append
                ->  Bitmap Heap Scan on ec1 ec1_1
                      Recheck Cond: (((ff + 2) + 1) = ec1.f1)
@@ -251,7 +269,7 @@ explain (costs off)
                      ->  Bitmap Index Scan on ec1_expr4
                            Index Cond: ((ff + 4) = ec1.f1)
  Optimizer: Postgres query optimizer
-(19 rows)
+(21 rows)
 
 explain (costs off)
   select * from ec1,
@@ -262,23 +280,31 @@ explain (costs off)
      union all
      select ff + 4 as x from ec1) as ss1
   where ss1.x = ec1.f1 and ec1.ff = 42::int8 and ec1.ff = ec1.f1;
-                                           QUERY PLAN                                            
--------------------------------------------------------------------------------------------------
+                                              QUERY PLAN                                               
+-------------------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Nested Loop
          ->  Broadcast Motion 1:3  (slice2; segments: 1)
-               ->  Index Scan using ec1_pkey on ec1
-                     Index Cond: ((ff = '42'::bigint) AND (ff = '42'::bigint))
+               ->  Bitmap Heap Scan on ec1
+                     Recheck Cond: ((ff = '42'::bigint) AND (ff = '42'::bigint))
                      Filter: (ff = f1)
+                     ->  Bitmap Index Scan on ec1_pkey
+                           Index Cond: ((ff = '42'::bigint) AND (ff = '42'::bigint))
          ->  Append
-               ->  Index Scan using ec1_expr2 on ec1 ec1_1
-                     Index Cond: ((((ff + 2) + 1) = ec1.f1) AND (((ff + 2) + 1) = '42'::bigint))
-               ->  Index Scan using ec1_expr3 on ec1 ec1_2
-                     Index Cond: ((((ff + 3) + 1) = ec1.f1) AND (((ff + 3) + 1) = '42'::bigint))
-               ->  Index Scan using ec1_expr4 on ec1 ec1_3
-                     Index Cond: (((ff + 4) = ec1.f1) AND ((ff + 4) = '42'::bigint))
+               ->  Bitmap Heap Scan on ec1 ec1_1
+                     Recheck Cond: ((((ff + 2) + 1) = ec1.f1) AND (((ff + 2) + 1) = '42'::bigint))
+                     ->  Bitmap Index Scan on ec1_expr2
+                           Index Cond: ((((ff + 2) + 1) = ec1.f1) AND (((ff + 2) + 1) = '42'::bigint))
+               ->  Bitmap Heap Scan on ec1 ec1_2
+                     Recheck Cond: ((((ff + 3) + 1) = ec1.f1) AND (((ff + 3) + 1) = '42'::bigint))
+                     ->  Bitmap Index Scan on ec1_expr3
+                           Index Cond: ((((ff + 3) + 1) = ec1.f1) AND (((ff + 3) + 1) = '42'::bigint))
+               ->  Bitmap Heap Scan on ec1 ec1_3
+                     Recheck Cond: (((ff + 4) = ec1.f1) AND ((ff + 4) = '42'::bigint))
+                     ->  Bitmap Index Scan on ec1_expr4
+                           Index Cond: (((ff + 4) = ec1.f1) AND ((ff + 4) = '42'::bigint))
  Optimizer: Postgres query optimizer
-(14 rows)
+(22 rows)
 
 explain (costs off)
   select * from ec1,
@@ -295,15 +321,17 @@ explain (costs off)
      union all
      select ff + 4 as x from ec1) as ss2
   where ss1.x = ec1.f1 and ss1.x = ss2.x and ec1.ff = 42::int8;
-                                 QUERY PLAN                                  
------------------------------------------------------------------------------
+                                   QUERY PLAN                                    
+---------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Nested Loop
          ->  Broadcast Motion 3:3  (slice2; segments: 3)
                ->  Nested Loop
                      ->  Broadcast Motion 1:3  (slice3; segments: 1)
-                           ->  Index Scan using ec1_pkey on ec1
-                                 Index Cond: (ff = '42'::bigint)
+                           ->  Bitmap Heap Scan on ec1
+                                 Recheck Cond: (ff = '42'::bigint)
+                                 ->  Bitmap Index Scan on ec1_pkey
+                                       Index Cond: (ff = '42'::bigint)
                      ->  Append
                            ->  Bitmap Heap Scan on ec1 ec1_1
                                  Recheck Cond: (((ff + 2) + 1) = ec1.f1)
@@ -318,14 +346,20 @@ explain (costs off)
                                  ->  Bitmap Index Scan on ec1_expr4
                                        Index Cond: ((ff + 4) = ec1.f1)
          ->  Append
-               ->  Index Scan using ec1_expr2 on ec1 ec1_4
-                     Index Cond: (((ff + 2) + 1) = (((ec1_1.ff + 2) + 1)))
-               ->  Index Scan using ec1_expr3 on ec1 ec1_5
-                     Index Cond: (((ff + 3) + 1) = (((ec1_1.ff + 2) + 1)))
-               ->  Index Scan using ec1_expr4 on ec1 ec1_6
-                     Index Cond: ((ff + 4) = (((ec1_1.ff + 2) + 1)))
+               ->  Bitmap Heap Scan on ec1 ec1_4
+                     Recheck Cond: (((ff + 2) + 1) = (((ec1_1.ff + 2) + 1)))
+                     ->  Bitmap Index Scan on ec1_expr2
+                           Index Cond: (((ff + 2) + 1) = (((ec1_1.ff + 2) + 1)))
+               ->  Bitmap Heap Scan on ec1 ec1_5
+                     Recheck Cond: (((ff + 3) + 1) = (((ec1_1.ff + 2) + 1)))
+                     ->  Bitmap Index Scan on ec1_expr3
+                           Index Cond: (((ff + 3) + 1) = (((ec1_1.ff + 2) + 1)))
+               ->  Bitmap Heap Scan on ec1 ec1_6
+                     Recheck Cond: ((ff + 4) = (((ec1_1.ff + 2) + 1)))
+                     ->  Bitmap Index Scan on ec1_expr4
+                           Index Cond: ((ff + 4) = (((ec1_1.ff + 2) + 1)))
  Optimizer: Postgres query optimizer
-(28 rows)
+(36 rows)
 
 -- let's try that as a mergejoin
 set enable_mergejoin = on;
@@ -348,28 +382,38 @@ explain (costs off)
                                     QUERY PLAN                                     
 -----------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
-   ->  Nested Loop
-         Join Filter: ((((ec1_1.ff + 2) + 1)) = ec1.f1)
-         ->  Broadcast Motion 1:3  (slice2; segments: 1)
-               ->  Index Scan using ec1_pkey on ec1
-                     Index Cond: (ff = '42'::bigint)
-         ->  Materialize
-               ->  Merge Join
-                     Merge Cond: ((((ec1_1.ff + 2) + 1)) = (((ec1_4.ff + 2) + 1)))
-                     ->  Merge Append
-                           Sort Key: (((ec1_1.ff + 2) + 1))
-                           ->  Index Scan using ec1_expr2 on ec1 ec1_1
-                           ->  Index Scan using ec1_expr3 on ec1 ec1_2
-                           ->  Index Scan using ec1_expr4 on ec1 ec1_3
-                     ->  Sort
-                           Sort Key: (((ec1_4.ff + 2) + 1))
-                           ->  Broadcast Motion 3:3  (slice3; segments: 3)
-                                 ->  Append
-                                       ->  Seq Scan on ec1 ec1_4
-                                       ->  Seq Scan on ec1 ec1_5
-                                       ->  Seq Scan on ec1 ec1_6
+   ->  Merge Join
+         Merge Cond: ((((ec1_1.ff + 2) + 1)) = (((ec1_4.ff + 2) + 1)))
+         ->  Sort
+               Sort Key: ec1.f1 USING <
+               ->  Broadcast Motion 3:3  (slice2; segments: 3)
+                     ->  Nested Loop
+                           ->  Broadcast Motion 1:3  (slice3; segments: 1)
+                                 ->  Bitmap Heap Scan on ec1
+                                       Recheck Cond: (ff = '42'::bigint)
+                                       ->  Bitmap Index Scan on ec1_pkey
+                                             Index Cond: (ff = '42'::bigint)
+                           ->  Append
+                                 ->  Bitmap Heap Scan on ec1 ec1_1
+                                       Recheck Cond: (((ff + 2) + 1) = ec1.f1)
+                                       ->  Bitmap Index Scan on ec1_expr2
+                                             Index Cond: (((ff + 2) + 1) = ec1.f1)
+                                 ->  Bitmap Heap Scan on ec1 ec1_2
+                                       Recheck Cond: (((ff + 3) + 1) = ec1.f1)
+                                       ->  Bitmap Index Scan on ec1_expr3
+                                             Index Cond: (((ff + 3) + 1) = ec1.f1)
+                                 ->  Bitmap Heap Scan on ec1 ec1_3
+                                       Recheck Cond: ((ff + 4) = ec1.f1)
+                                       ->  Bitmap Index Scan on ec1_expr4
+                                             Index Cond: ((ff + 4) = ec1.f1)
+         ->  Sort
+               Sort Key: (((ec1_4.ff + 2) + 1))
+               ->  Append
+                     ->  Seq Scan on ec1 ec1_4
+                     ->  Seq Scan on ec1 ec1_5
+                     ->  Seq Scan on ec1 ec1_6
  Optimizer: Postgres query optimizer
-(22 rows)
+(32 rows)
 
 -- check partially indexed scan
 set enable_nestloop = on;
@@ -389,8 +433,10 @@ explain (costs off)
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Nested Loop
          ->  Broadcast Motion 1:3  (slice2; segments: 1)
-               ->  Index Scan using ec1_pkey on ec1
-                     Index Cond: (ff = '42'::bigint)
+               ->  Bitmap Heap Scan on ec1
+                     Recheck Cond: (ff = '42'::bigint)
+                     ->  Bitmap Index Scan on ec1_pkey
+                           Index Cond: (ff = '42'::bigint)
          ->  Append
                ->  Bitmap Heap Scan on ec1 ec1_1
                      Recheck Cond: (((ff + 2) + 1) = ec1.f1)
@@ -403,7 +449,7 @@ explain (costs off)
                      ->  Bitmap Index Scan on ec1_expr4
                            Index Cond: ((ff + 4) = ec1.f1)
  Optimizer: Postgres query optimizer
-(17 rows)
+(19 rows)
 
 -- let's try that as a mergejoin
 set enable_mergejoin = on;
@@ -422,8 +468,10 @@ explain (costs off)
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Nested Loop
          ->  Broadcast Motion 1:3  (slice2; segments: 1)
-               ->  Index Scan using ec1_pkey on ec1
-                     Index Cond: (ff = '42'::bigint)
+               ->  Bitmap Heap Scan on ec1
+                     Recheck Cond: (ff = '42'::bigint)
+                     ->  Bitmap Index Scan on ec1_pkey
+                           Index Cond: (ff = '42'::bigint)
          ->  Append
                ->  Bitmap Heap Scan on ec1 ec1_1
                      Recheck Cond: (((ff + 2) + 1) = ec1.f1)
@@ -436,7 +484,7 @@ explain (costs off)
                      ->  Bitmap Index Scan on ec1_expr4
                            Index Cond: ((ff + 4) = ec1.f1)
  Optimizer: Postgres query optimizer
-(17 rows)
+(19 rows)
 
 -- check effects of row-level security
 set enable_nestloop = on;
@@ -444,24 +492,29 @@ set enable_mergejoin = off;
 alter table ec1 enable row level security;
 create policy p1 on ec1 using (f1 < '5'::int8alias1);
 create user regress_user_ectest;
+NOTICE:  resource queue required -- using default resource queue "pg_default"
 grant select on ec0 to regress_user_ectest;
 grant select on ec1 to regress_user_ectest;
 -- without any RLS, we'll treat {a.ff, b.ff, 43} as an EquivalenceClass
 explain (costs off)
   select * from ec0 a, ec1 b
   where a.ff = b.ff and a.ff = 43::bigint::int8alias1;
-                          QUERY PLAN                           
----------------------------------------------------------------
+                             QUERY PLAN                              
+---------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Nested Loop
-         ->  Index Scan using ec0_pkey on ec0 a
-               Index Cond: (ff = '43'::int8alias1)
+         ->  Bitmap Heap Scan on ec0 a
+               Recheck Cond: (ff = '43'::int8alias1)
+               ->  Bitmap Index Scan on ec0_pkey
+                     Index Cond: (ff = '43'::int8alias1)
          ->  Materialize
                ->  Broadcast Motion 3:3  (slice2; segments: 3)
-                     ->  Index Scan using ec1_pkey on ec1 b
-                           Index Cond: (ff = '43'::int8alias1)
+                     ->  Bitmap Heap Scan on ec1 b
+                           Recheck Cond: (ff = '43'::int8alias1)
+                           ->  Bitmap Index Scan on ec1_pkey
+                                 Index Cond: (ff = '43'::int8alias1)
  Optimizer: Postgres query optimizer
-(9 rows)
+(13 rows)
 
 set session authorization regress_user_ectest;
 -- with RLS active, the non-leakproof a.ff = 43 clause is not treated
@@ -474,13 +527,17 @@ explain (costs off)
 ----------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Nested Loop
-         ->  Index Scan using ec0_pkey on ec0 a
-               Index Cond: (ff = '43'::int8alias1)
-         ->  Index Scan using ec1_pkey on ec1 b
-               Index Cond: (ff = a.ff)
+         ->  Bitmap Heap Scan on ec0 a
+               Recheck Cond: (ff = '43'::int8alias1)
+               ->  Bitmap Index Scan on ec0_pkey
+                     Index Cond: (ff = '43'::int8alias1)
+         ->  Bitmap Heap Scan on ec1 b
+               Recheck Cond: (a.ff = ff)
                Filter: ((f1 < '5'::int8alias1) AND (ff = '43'::int8alias1))
+               ->  Bitmap Index Scan on ec1_pkey
+                     Index Cond: (ff = a.ff)
  Optimizer: Postgres query optimizer
-(8 rows)
+(12 rows)
 
 reset session authorization;
 revoke select on ec0 from regress_user_ectest;
@@ -510,6 +567,8 @@ explain (costs off)
 
 -- check that we recognize equivalence with dummy domains in the way
 create temp table undername (f1 name, f2 int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create temp view overview as
   select f1::information_schema.sql_identifier as sqli, f2 from undername;
 explain (costs off)  -- this should not require a sort

@@ -76,16 +76,16 @@ select (select id1 from (select * from choose_seqscan_t2) foo where id2=choose_s
 (50 rows)
 
 explain select (select id1 from (select * from choose_seqscan_t2) foo where id2=choose_seqscan_t1.id2) from choose_seqscan_t1;
-                                               QUERY PLAN                                                
----------------------------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice2; segments: 3)  (cost=0.00..184.75 rows=50 width=4)
-   ->  Seq Scan on choose_seqscan_t1  (cost=0.00..184.75 rows=17 width=4)
+                                                QUERY PLAN                                                
+----------------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..115.56 rows=50 width=4)
+   ->  Seq Scan on choose_seqscan_t1  (cost=0.00..114.89 rows=17 width=4)
          SubPlan 1
-           ->  Result  (cost=0.00..3.63 rows=1 width=4)
+           ->  Result  (cost=0.00..6.58 rows=50 width=4)
                  Filter: (choose_seqscan_t2.id2 = choose_seqscan_t1.id2)
-                 ->  Materialize  (cost=0.00..3.63 rows=1 width=4)
-                       ->  Broadcast Motion 3:3  (slice1; segments: 3)  (cost=0.00..3.62 rows=1 width=4)
-                             ->  Seq Scan on choose_seqscan_t2  (cost=0.00..3.62 rows=1 width=4)
+                 ->  Materialize  (cost=0.00..6.08 rows=50 width=8)
+                       ->  Broadcast Motion 3:3  (slice2; segments: 3)  (cost=0.00..5.83 rows=50 width=8)
+                             ->  Seq Scan on choose_seqscan_t2  (cost=0.00..5.17 rows=17 width=8)
  Optimizer: Postgres query optimizer
 (9 rows)
 
@@ -94,32 +94,34 @@ explain select (select id1 from (select * from choose_seqscan_t2) foo where id2=
 select t1.id1, (select count(*) from choose_seqscan_t2 t2 where t2.id1 = t1.id1 and t2.id2 = 1) from choose_seqscan_t1 t1 where t1.id1 < 10;
  id1 | count 
 -----+-------
-   5 |     0
-   6 |     0
-   9 |     0
    2 |     1
    3 |     0
    4 |     0
    7 |     0
    8 |     0
+   5 |     0
+   6 |     0
+   9 |     0
 (8 rows)
 
 explain select t1.id1, (select count(*) from choose_seqscan_t2 t2 where t2.id1 = t1.id1 and t2.id2 = 1) from choose_seqscan_t1 t1 where t1.id1 < 10;
-                                                       QUERY PLAN                                                       
-------------------------------------------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..21.62 rows=9 width=12)
-   ->  Seq Scan on choose_seqscan_t1 t1  (cost=0.00..21.62 rows=3 width=12)
+                                                    QUERY PLAN                                                    
+------------------------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..10.58 rows=7 width=12)
+   ->  Seq Scan on choose_seqscan_t1 t1  (cost=0.00..10.48 rows=2 width=12)
          Filter: (id1 < 10)
          SubPlan 1
-           ->  Aggregate  (cost=2.19..2.20 rows=1 width=8)
-                 ->  Result  (cost=0.14..2.19 rows=1 width=0)
+           ->  Aggregate  (cost=2.20..2.21 rows=1 width=8)
+                 ->  Result  (cost=1.15..2.20 rows=1 width=0)
                        Filter: (t2.id1 = t1.id1)
-                       ->  Materialize  (cost=0.14..2.18 rows=1 width=4)
-                             ->  Broadcast Motion 3:3  (slice2; segments: 3)  (cost=0.14..2.18 rows=1 width=4)
-                                   ->  Index Scan using bidx2 on choose_seqscan_t2 t2  (cost=0.14..2.16 rows=1 width=4)
-                                         Index Cond: (id2 = 1)
+                       ->  Materialize  (cost=1.15..2.19 rows=1 width=4)
+                             ->  Broadcast Motion 3:3  (slice2; segments: 3)  (cost=1.15..2.18 rows=1 width=4)
+                                   ->  Bitmap Heap Scan on choose_seqscan_t2 t2  (cost=1.15..2.16 rows=1 width=4)
+                                         Recheck Cond: (id2 = 1)
+                                         ->  Bitmap Index Scan on bidx2  (cost=0.00..1.15 rows=1 width=0)
+                                               Index Cond: (id2 = 1)
  Optimizer: Postgres query optimizer
-(12 rows)
+(14 rows)
 
 -- Test using a join within the subplan. It could perhaps use an Nested Loop Join +
 -- Index Scan to do the join, but at the moment, the planner doesn't consider distributing
@@ -140,20 +142,20 @@ select t1.id1, (select count(*) from generate_series(1,5) g, choose_seqscan_t2 t
 explain select t1.id1, (select count(*) from generate_series(1,5) g, choose_seqscan_t2 t2 where t1.id1 = t2.id1 and t2.id2 = g) from choose_seqscan_t1 t1 where t1.id1 < 10;
                                                       QUERY PLAN                                                      
 ----------------------------------------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..43.72 rows=8 width=12)
-   ->  Seq Scan on choose_seqscan_t1 t1  (cost=0.00..43.57 rows=3 width=12)
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..21.80 rows=7 width=12)
+   ->  Seq Scan on choose_seqscan_t1 t1  (cost=0.00..21.71 rows=2 width=12)
          Filter: (id1 < 10)
          SubPlan 1
-           ->  Aggregate  (cost=5.57..5.58 rows=1 width=8)
-                 ->  Hash Join  (cost=0.12..5.55 rows=2 width=0)
+           ->  Aggregate  (cost=6.90..6.91 rows=1 width=8)
+                 ->  Hash Join  (cost=0.12..6.89 rows=6 width=0)
                        Hash Cond: (t2.id2 = g.g)
-                       ->  Result  (cost=0.00..5.25 rows=17 width=8)
+                       ->  Result  (cost=0.00..6.58 rows=50 width=8)
                              Filter: (t1.id1 = t2.id1)
-                             ->  Materialize  (cost=0.00..4.75 rows=17 width=8)
-                                   ->  Broadcast Motion 3:3  (slice2; segments: 3)  (cost=0.00..4.50 rows=17 width=8)
-                                         ->  Seq Scan on choose_seqscan_t2 t2  (cost=0.00..3.50 rows=17 width=8)
-                       ->  Hash  (cost=0.05..0.05 rows=2 width=4)
-                             ->  Function Scan on generate_series g  (cost=0.00..0.05 rows=2 width=4)
+                             ->  Materialize  (cost=0.00..6.08 rows=50 width=8)
+                                   ->  Broadcast Motion 3:3  (slice2; segments: 3)  (cost=0.00..5.83 rows=50 width=8)
+                                         ->  Seq Scan on choose_seqscan_t2 t2  (cost=0.00..5.17 rows=17 width=8)
+                       ->  Hash  (cost=0.05..0.05 rows=5 width=4)
+                             ->  Function Scan on generate_series g  (cost=0.00..0.05 rows=5 width=4)
  Optimizer: Postgres query optimizer
 (15 rows)
 
@@ -169,36 +171,36 @@ analyze choose_seqscan_t3;
 select t1.id1, (select count(*) from choose_seqscan_t3 t3, choose_seqscan_t2 t2 where t1.id1 = t2.id1 and t3.id1 = t2.id1) from choose_seqscan_t1 t1 where t1.id1 < 10;
  id1 | count 
 -----+-------
-   5 |     1
-   6 |     1
-   9 |     1
    2 |     1
    3 |     1
    4 |     1
    7 |     1
    8 |     1
+   5 |     1
+   6 |     1
+   9 |     1
 (8 rows)
 
 explain select t1.id1, (select count(*) from choose_seqscan_t3 t3, choose_seqscan_t2 t2 where t1.id1 = t2.id1 and t3.id1 = t2.id1) from choose_seqscan_t1 t1 where t1.id1 < 10;
                                                          QUERY PLAN                                                         
 ----------------------------------------------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..81632653449.62 rows=9 width=8)
-   ->  Seq Scan on choose_seqscan_t1 t1  (cost=0.00..81632653449.62 rows=3 width=8)
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..23877551147.01 rows=7 width=12)
+   ->  Seq Scan on choose_seqscan_t1 t1  (cost=0.00..23877551146.92 rows=2 width=12)
          Filter: (id1 < 10)
          SubPlan 1
-           ->  Aggregate  (cost=10000000047.12..10000000047.14 rows=1 width=8)
-                 ->  Nested Loop  (cost=10000000000.00..10000000040.88 rows=2500 width=0)
-                       ->  Result  (cost=0.00..4.75 rows=50 width=4)
+           ->  Aggregate  (cost=10000000050.79..10000000050.80 rows=1 width=8)
+                 ->  Nested Loop  (cost=10000000000.00..10000000044.54 rows=2500 width=0)
+                       ->  Result  (cost=0.00..6.58 rows=50 width=4)
                              Filter: (t3.id1 = t1.id1)
-                             ->  Materialize  (cost=0.00..4.75 rows=50 width=4)
-                                   ->  Broadcast Motion 3:3  (slice2; segments: 3)  (cost=0.00..4.50 rows=17 width=4)
-                                         ->  Seq Scan on choose_seqscan_t3 t3  (cost=0.00..3.50 rows=17 width=4)
-                       ->  Materialize  (cost=0.00..5.00 rows=50 width=4)
-                             ->  Result  (cost=0.00..4.75 rows=50 width=4)
+                             ->  Materialize  (cost=0.00..6.08 rows=50 width=4)
+                                   ->  Broadcast Motion 3:3  (slice2; segments: 3)  (cost=0.00..5.83 rows=50 width=4)
+                                         ->  Seq Scan on choose_seqscan_t3 t3  (cost=0.00..5.17 rows=17 width=4)
+                       ->  Materialize  (cost=0.00..6.83 rows=50 width=4)
+                             ->  Result  (cost=0.00..6.58 rows=50 width=4)
                                    Filter: (t2.id1 = t1.id1)
-                                   ->  Materialize  (cost=0.00..4.75 rows=50 width=4)
-                                         ->  Broadcast Motion 3:3  (slice3; segments: 3)  (cost=0.00..4.50 rows=17 width=4)
-                                               ->  Seq Scan on choose_seqscan_t2 t2  (cost=0.00..3.50 rows=17 width=4)
+                                   ->  Materialize  (cost=0.00..6.08 rows=50 width=4)
+                                         ->  Broadcast Motion 3:3  (slice3; segments: 3)  (cost=0.00..5.83 rows=50 width=4)
+                                               ->  Seq Scan on choose_seqscan_t2 t2  (cost=0.00..5.17 rows=17 width=4)
  Optimizer: Postgres query optimizer
 (18 rows)
 
@@ -247,22 +249,17 @@ select (select id1 from (select * from choose_indexscan_t2) foo where id2=choose
   21
 (20 rows)
 
--- start_ignore
--- GPDB_96_MERGE_FIXME: we no longer choose an index scan here, because the planner cannot
--- easily determine that it's safe. See https://github.com/greenplum-db/gpdb/issues/8648.
--- I hope we can get that back with the 9.6 upper planner pathification.
--- end_ignore
 explain select (select id1 from (select * from choose_indexscan_t2) foo where id2=choose_indexscan_t1.id2) from choose_indexscan_t1;
                                                 QUERY PLAN                                                 
 -----------------------------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..93.20 rows=20 width=4)
-   ->  Seq Scan on choose_indexscan_t1  (cost=0.00..93.20 rows=7 width=4)
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..68.67 rows=20 width=4)
+   ->  Seq Scan on choose_indexscan_t1  (cost=0.00..68.40 rows=7 width=4)
          SubPlan 1
-           ->  Result  (cost=0.00..4.50 rows=100 width=8)
+           ->  Result  (cost=0.00..9.50 rows=100 width=4)
                  Filter: (choose_indexscan_t2.id2 = choose_indexscan_t1.id2)
-                 ->  Materialize  (cost=0.00..4.50 rows=100 width=8)
-                       ->  Broadcast Motion 1:3  (slice2; segments: 1)  (cost=0.00..4.00 rows=100 width=8)
-                             ->  Seq Scan on choose_indexscan_t2  (cost=0.00..2.00 rows=100 width=8)
+                 ->  Materialize  (cost=0.00..8.50 rows=100 width=8)
+                       ->  Broadcast Motion 1:3  (slice2; segments: 1)  (cost=0.00..8.00 rows=100 width=8)
+                             ->  Seq Scan on choose_indexscan_t2  (cost=0.00..6.00 rows=100 width=8)
  Optimizer: Postgres query optimizer
 (9 rows)
 
@@ -285,16 +282,16 @@ select c.relname, (select explanation from mytables mt where mt.tablename=c.reln
 
 set enable_seqscan=off;
 explain select c.relname, (select explanation from mytables mt where mt.tablename=c.relname ) from pg_class c where relname = 'pg_class';
-                                                     QUERY PLAN                                                      
----------------------------------------------------------------------------------------------------------------------
- Index Only Scan using pg_class_relname_nsp_index on pg_class c  (cost=0.15..10000000002.20 rows=1 width=64)
+                                                       QUERY PLAN                                                        
+-------------------------------------------------------------------------------------------------------------------------
+ Index Only Scan using pg_class_relname_nsp_index on pg_class c  (cost=0.28..10000002067.30 rows=1 width=96)
    Index Cond: (relname = 'pg_class'::name)
    SubPlan 1
-     ->  Result  (cost=10000000000.00..10000000001.03 rows=1 width=32)
-           Filter: (mt.tablename = (c.relname)::text)
-           ->  Materialize  (cost=10000000000.00..10000000001.03 rows=1 width=32)
-                 ->  Gather Motion 1:1  (slice1; segments: 1)  (cost=10000000000.00..10000000001.03 rows=1 width=32)
-                       ->  Seq Scan on mytables mt  (cost=10000000000.00..10000000001.01 rows=1 width=32)
+     ->  Result  (cost=10000000000.00..10000002066.00 rows=34800 width=32)
+           Filter: (mt.tablename = c.relname)
+           ->  Materialize  (cost=10000000000.00..10000001718.00 rows=34800 width=64)
+                 ->  Gather Motion 1:1  (slice1; segments: 1)  (cost=10000000000.00..10000001544.00 rows=34800 width=64)
+                       ->  Seq Scan on mytables mt  (cost=10000000000.00..10000000848.00 rows=34800 width=64)
  Optimizer: Postgres query optimizer
 (9 rows)
 
@@ -306,6 +303,7 @@ select c.relname, (select explanation from mytables mt where mt.tablename=c.reln
 
 reset enable_seqscan;
 -- start_ignore
+drop table if exists mytables;
 drop table if exists choose_indexscan_t1;
 drop table if exists choose_indexscan_t2;
 -- end_ignore

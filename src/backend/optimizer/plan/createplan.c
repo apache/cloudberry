@@ -9321,6 +9321,11 @@ contain_motion(PlannerInfo *root, Node *node)
 }
 
 static bool
+contain_motion_walk(Node *node, contain_motion_walk_context *ctx);
+static bool
+contain_motion_walk_adapter(Node *node, void *ctx);
+
+static bool
 contain_motion_walk(Node *node, contain_motion_walk_context *ctx)
 {
 	PlannerInfo *root = (PlannerInfo *) ctx->base.node;
@@ -9344,7 +9349,7 @@ contain_motion_walk(Node *node, contain_motion_walk_context *ctx)
 				return false;
 
 			Plan *plan = list_nth(root->glob->subplans, plan_id - 1);
-			return plan_tree_walker((Node *) plan, contain_motion_walk, ctx, true);
+			return plan_tree_walker((Node *) plan, contain_motion_walk_adapter, ctx, true);
 		}
 	}
 
@@ -9354,7 +9359,13 @@ contain_motion_walk(Node *node, contain_motion_walk_context *ctx)
 		return true;
 	}
 
-	return plan_tree_walker((Node *) node, contain_motion_walk, ctx, true);
+	return plan_tree_walker((Node *) node, contain_motion_walk_adapter, ctx, true);
+}
+
+static bool
+contain_motion_walk_adapter(Node *node, void *ctx)
+{
+	return contain_motion_walk(node, (contain_motion_walk_context *) ctx);
 }
 
 /*

@@ -572,6 +572,9 @@ typedef struct ViewOptions
  * can't distinguish the PAX and renamed heap(heap_psql) in test `psql`.
  */
 #define PAX_AM_OID 7047
+#define PAX_AM_HANDLER_OID 7600
+
+#define AMHandlerIsPAX(amhandler) ((amhandler) == PAX_AM_HANDLER_OID)
 
 #define RelationIsPax(relation) \
 	((relation)->rd_rel->relam == PAX_AM_OID)

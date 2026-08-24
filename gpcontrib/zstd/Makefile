@@ -13,7 +13,14 @@ ifdef USE_PGXS
 else
   top_builddir = ../..
   include $(top_builddir)/src/Makefile.global
+
+  ifneq "$(with_zstd)" "yes"
+  all install:
+	@echo "ERROR: gp_zstd_compression requires --with-zstd (with_zstd=$(with_zstd)); this build was configured without zstd support." >&2
+	@false
+  else
   include $(top_srcdir)/contrib/contrib-global.mk
+  endif
 endif
 
 
@@ -23,7 +30,9 @@ endif
 install-data:
 	$(INSTALL_DATA) zstd_compression.sql '$(DESTDIR)$(datadir)/cdb_init.d/zstd_compression.sql'
 
+ifeq "$(with_zstd)" "yes"
 install: install-data
+endif
 
 .PHONY: uninstall-data
 

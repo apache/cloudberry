@@ -167,7 +167,7 @@ AllocateGang(CdbDispatcherState *ds, GangType type, List *segments)
 bool
 segment_failure_due_to_recovery(const char *error_message)
 {
-	char	   *fatal = NULL,
+	const char	   *fatal = NULL,
 			   *ptr = NULL;
 	int			fatal_len = 0;
 
@@ -210,7 +210,7 @@ segment_failure_due_to_recovery(const char *error_message)
 bool
 segment_failure_due_to_missing_writer(const char *error_message)
 {
-	char	   *fatal = NULL,
+	const char	   *fatal = NULL,
 			   *ptr = NULL;
 	int			fatal_len = 0;
 
@@ -232,7 +232,7 @@ segment_failure_due_to_missing_writer(const char *error_message)
 bool
 segment_failure_due_to_fault_injector(const char *error_message)
 {
-	char	   *fatal = NULL,
+	const char	   *fatal = NULL,
 			   *ptr = NULL;
 	int			fatal_len = 0;
 

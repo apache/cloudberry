@@ -72,8 +72,8 @@ select explain_filter('explain (analyze) select * from int8_tbl i8');
  Gather Motion N:N  (slice1; segments: N)  (cost=N.N..N.N rows=N width=N) (actual time=N.N..N.N rows=N loops=N)
    ->  Seq Scan on int8_tbl i8  (cost=N.N..N.N rows=N width=N) (actual time=N.N..N.N rows=N loops=N)
  Planning Time: N.N ms
-   (slice0)    Executor memory: 111K bytes.
-   (slice1)    Executor memory: 112K bytes avg x 3x(N) workers, 112K bytes max (seg0).
+   (slice0)    Executor memory: 13K bytes.
+   (slice1)    Executor memory: 113K bytes avg x 3x(N) workers, 113K bytes max (seg0).
  Memory used:  NkB
  Optimizer: GPORCA
  Execution Time: N.N ms
@@ -86,9 +86,9 @@ select explain_filter('explain (analyze, verbose) select * from int8_tbl i8');
    Output: q1, q2
    ->  Seq Scan on public.int8_tbl i8  (cost=N.N..N.N rows=N width=N) (actual time=N.N..N.N rows=N loops=N)
          Output: q1, q2
- Settings: enable_parallel = 'off', optimizer = 'on'
+ Settings: enable_parallel = 'off'
  Planning Time: N.N ms
-   (slice0)    Executor memory: 111K bytes.
+   (slice0)    Executor memory: 13K bytes.
    (slice1)    Executor memory: 112K bytes avg x 3x(N) workers, 112K bytes max (seg0).
  Memory used:  NkB
  Optimizer: GPORCA
@@ -101,7 +101,7 @@ select explain_filter('explain (analyze, buffers, format text) select * from int
  Gather Motion N:N  (slice1; segments: N)  (cost=N.N..N.N rows=N width=N) (actual time=N.N..N.N rows=N loops=N)
    ->  Seq Scan on int8_tbl i8  (cost=N.N..N.N rows=N width=N) (actual time=N.N..N.N rows=N loops=N)
  Planning Time: N.N ms
-   (slice0)    Executor memory: 111K bytes.
+   (slice0)    Executor memory: 13K bytes.
    (slice1)    Executor memory: 112K bytes avg x 3x(N) workers, 112K bytes max (seg0).
  Memory used:  NkB
  Optimizer: GPORCA
@@ -808,7 +808,8 @@ select explain_filter('explain (verbose) select * from int8_tbl i8');
    Output: q1, q2
    ->  Seq Scan on public.int8_tbl i8  (cost=N.N..N.N rows=N width=N)
          Output: q1, q2
- Settings: enable_parallel = 'off', optimizer = 'on'
+ Settings: enable_parallel = 'off'
+ Query Identifier: N
  Optimizer: GPORCA
-(6 rows)
+(7 rows)
 

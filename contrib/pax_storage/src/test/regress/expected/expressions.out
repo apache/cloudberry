@@ -188,11 +188,13 @@ explain (verbose, costs off) select * from bpchar_view
 ------------------------------------------------------------------------------------------------------------------------------------------------------
  Gather Motion 1:1  (slice1; segments: 1)
    Output: bpchar_tbl.f1, ((bpchar_tbl.f1)::character(14)), ((bpchar_tbl.f1)::bpchar), bpchar_tbl.f2, ((bpchar_tbl.f2)::character(14)), bpchar_tbl.f2
-   ->  Index Scan using bpchar_tbl_f1_key on public.bpchar_tbl
+   ->  Bitmap Heap Scan on public.bpchar_tbl
          Output: bpchar_tbl.f1, (bpchar_tbl.f1)::character(14), (bpchar_tbl.f1)::bpchar, bpchar_tbl.f2, (bpchar_tbl.f2)::character(14), bpchar_tbl.f2
-         Index Cond: ((bpchar_tbl.f1)::bpchar = 'foo'::bpchar)
+         Recheck Cond: ((bpchar_tbl.f1)::bpchar = 'foo'::bpchar)
+         ->  Bitmap Index Scan on bpchar_tbl_f1_key
+               Index Cond: ((bpchar_tbl.f1)::bpchar = 'foo'::bpchar)
  Optimizer: Postgres query optimizer
-(6 rows)
+(8 rows)
 
 rollback;
 --
@@ -230,6 +232,8 @@ HINT:  No operator matches the given name and argument types. You might need to 
 --
 begin;
 create table numeric_tbl (f1 numeric(18,3), f2 numeric);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create view numeric_view as
   select
     f1, f1::numeric(16,4) as f1164, f1::numeric as f1n,
@@ -261,8 +265,9 @@ explain (verbose, costs off) select * from numeric_view;
    Output: numeric_tbl.f1, ((numeric_tbl.f1)::numeric(16,4)), ((numeric_tbl.f1)::numeric), numeric_tbl.f2, ((numeric_tbl.f2)::numeric(16,4)), numeric_tbl.f2
    ->  Seq Scan on public.numeric_tbl
          Output: numeric_tbl.f1, (numeric_tbl.f1)::numeric(16,4), (numeric_tbl.f1)::numeric, numeric_tbl.f2, (numeric_tbl.f2)::numeric(16,4), numeric_tbl.f2
+ Settings: optimizer = 'off'
  Optimizer: Postgres query optimizer
-(5 rows)
+(6 rows)
 
 -- bpchar, lacking planner support for its length coercion function,
 -- could behave differently
@@ -297,11 +302,14 @@ explain (verbose, costs off) select * from bpchar_view
 ------------------------------------------------------------------------------------------------------------------------------------------------------
  Gather Motion 1:1  (slice1; segments: 1)
    Output: bpchar_tbl.f1, ((bpchar_tbl.f1)::character(14)), ((bpchar_tbl.f1)::bpchar), bpchar_tbl.f2, ((bpchar_tbl.f2)::character(14)), bpchar_tbl.f2
-   ->  Index Scan using bpchar_tbl_f1_key on public.bpchar_tbl
+   ->  Bitmap Heap Scan on public.bpchar_tbl
          Output: bpchar_tbl.f1, (bpchar_tbl.f1)::character(14), (bpchar_tbl.f1)::bpchar, bpchar_tbl.f2, (bpchar_tbl.f2)::character(14), bpchar_tbl.f2
-         Index Cond: ((bpchar_tbl.f1)::bpchar = 'foo'::bpchar)
+         Recheck Cond: ((bpchar_tbl.f1)::bpchar = 'foo'::bpchar)
+         ->  Bitmap Index Scan on bpchar_tbl_f1_key
+               Index Cond: ((bpchar_tbl.f1)::bpchar = 'foo'::bpchar)
+ Settings: optimizer = 'off'
  Optimizer: Postgres query optimizer
-(6 rows)
+(9 rows)
 
 rollback;
 --
@@ -314,7 +322,9 @@ select random() IN (1, 4, 8.0);
 ------------------------------------------------------------
  Result
    Output: (random() = ANY ('{1,4,8}'::double precision[]))
-(2 rows)
+ Settings: optimizer = 'off'
+ Optimizer: Postgres query optimizer
+(4 rows)
 
 explain (verbose, costs off)
 select random()::int IN (1, 4, 8.0);
@@ -322,7 +332,9 @@ select random()::int IN (1, 4, 8.0);
 ---------------------------------------------------------------------------
  Result
    Output: (((random())::integer)::numeric = ANY ('{1,4,8.0}'::numeric[]))
-(2 rows)
+ Settings: optimizer = 'off'
+ Optimizer: Postgres query optimizer
+(4 rows)
 
 -- However, if there's not a common supertype for the IN elements,
 -- we should instead try to produce "x = v1 OR x = v2 OR ...".
@@ -497,6 +509,8 @@ default for type myint using hash as
   operator    1   =  (myint, myint),
   function    1   myinthash(myint);
 create table inttest (a myint);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into inttest values(1::myint),(null);
 -- try an array with enough elements to cause hashing
 select * from inttest where a in (1::myint,2::myint,3::myint,4::myint,5::myint,6::myint,7::myint,8::myint,9::myint, null);

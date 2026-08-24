@@ -113,11 +113,11 @@ SELECT ''::text AS five, unique1, unique2, stringu1
 select * from int8_tbl limit (case when random() < 0.5 then null::bigint end);
         q1        |        q2         
 ------------------+-------------------
-              123 |               456
-              123 |  4567890123456789
  4567890123456789 |               123
  4567890123456789 |  4567890123456789
  4567890123456789 | -4567890123456789
+              123 |               456
+              123 |  4567890123456789
 (5 rows)
 
 select * from int8_tbl offset (case when random() < 0.5 then null::bigint end);
@@ -135,212 +135,49 @@ select * from int8_tbl offset (case when random() < 0.5 then null::bigint end);
 --start_ignore
 /*
  * begin;
+ * 
  * declare c1 cursor for select * from int8_tbl limit 10;
  * fetch all in c1;
- *         q1        |        q2         
- * ------------------+-------------------
- *               123 |               456
- *               123 |  4567890123456789
- *  4567890123456789 |               123
- *  4567890123456789 |  4567890123456789
- *  4567890123456789 | -4567890123456789
- * (5 rows)
- * 
  * fetch 1 in c1;
- *  q1 | q2 
- * ----+----
- * (0 rows)
- * 
  * fetch backward 1 in c1;
- *         q1        |        q2         
- * ------------------+-------------------
- *  4567890123456789 | -4567890123456789
- * (1 row)
- * 
  * fetch backward all in c1;
- *         q1        |        q2        
- * ------------------+------------------
- *  4567890123456789 | 4567890123456789
- *  4567890123456789 |              123
- *               123 | 4567890123456789
- *               123 |              456
- * (4 rows)
- * 
  * fetch backward 1 in c1;
- *  q1 | q2 
- * ----+----
- * (0 rows)
- * 
  * fetch all in c1;
- *         q1        |        q2         
- * ------------------+-------------------
- *               123 |               456
- *               123 |  4567890123456789
- *  4567890123456789 |               123
- *  4567890123456789 |  4567890123456789
- *  4567890123456789 | -4567890123456789
- * (5 rows)
  * 
  * declare c2 cursor for select * from int8_tbl limit 3;
  * fetch all in c2;
- *         q1        |        q2        
- * ------------------+------------------
- *               123 |              456
- *               123 | 4567890123456789
- *  4567890123456789 |              123
- * (3 rows)
- * 
  * fetch 1 in c2;
- *  q1 | q2 
- * ----+----
- * (0 rows)
- * 
  * fetch backward 1 in c2;
- *         q1        | q2  
- * ------------------+-----
- *  4567890123456789 | 123
- * (1 row)
- * 
  * fetch backward all in c2;
- *  q1  |        q2        
- * -----+------------------
- *  123 | 4567890123456789
- *  123 |              456
- * (2 rows)
- * 
  * fetch backward 1 in c2;
- *  q1 | q2 
- * ----+----
- * (0 rows)
- * 
  * fetch all in c2;
- *         q1        |        q2        
- * ------------------+------------------
- *               123 |              456
- *               123 | 4567890123456789
- *  4567890123456789 |              123
- * (3 rows)
  * 
  * declare c3 cursor for select * from int8_tbl offset 3;
  * fetch all in c3;
- *         q1        |        q2         
- * ------------------+-------------------
- *  4567890123456789 |  4567890123456789
- *  4567890123456789 | -4567890123456789
- * (2 rows)
- * 
  * fetch 1 in c3;
- *  q1 | q2 
- * ----+----
- * (0 rows)
- * 
  * fetch backward 1 in c3;
- *         q1        |        q2         
- * ------------------+-------------------
- *  4567890123456789 | -4567890123456789
- * (1 row)
- * 
  * fetch backward all in c3;
- *         q1        |        q2        
- * ------------------+------------------
- *  4567890123456789 | 4567890123456789
- * (1 row)
- * 
  * fetch backward 1 in c3;
- *  q1 | q2 
- * ----+----
- * (0 rows)
- * 
  * fetch all in c3;
- *         q1        |        q2         
- * ------------------+-------------------
- *  4567890123456789 |  4567890123456789
- *  4567890123456789 | -4567890123456789
- * (2 rows)
  * 
  * declare c4 cursor for select * from int8_tbl offset 10;
  * fetch all in c4;
- *  q1 | q2 
- * ----+----
- * (0 rows)
- * 
  * fetch 1 in c4;
- *  q1 | q2 
- * ----+----
- * (0 rows)
- * 
  * fetch backward 1 in c4;
- *  q1 | q2 
- * ----+----
- * (0 rows)
- * 
  * fetch backward all in c4;
- *  q1 | q2 
- * ----+----
- * (0 rows)
- * 
  * fetch backward 1 in c4;
- *  q1 | q2 
- * ----+----
- * (0 rows)
- * 
  * fetch all in c4;
- *  q1 | q2 
- * ----+----
- * (0 rows)
  * 
  * declare c5 cursor for select * from int8_tbl order by q1 fetch first 2 rows with ties;
  * fetch all in c5;
- *  q1  |        q2        
- * -----+------------------
- *  123 |              456
- *  123 | 4567890123456789
- * (2 rows)
- * 
  * fetch 1 in c5;
- *  q1 | q2 
- * ----+----
- * (0 rows)
- * 
  * fetch backward 1 in c5;
- *  q1  |        q2        
- * -----+------------------
- *  123 | 4567890123456789
- * (1 row)
- * 
  * fetch backward 1 in c5;
- *  q1  | q2  
- * -----+-----
- *  123 | 456
- * (1 row)
- * 
  * fetch all in c5;
- *  q1  |        q2        
- * -----+------------------
- *  123 | 4567890123456789
- * (1 row)
- * 
  * fetch backward all in c5;
- *  q1  |        q2        
- * -----+------------------
- *  123 | 4567890123456789
- *  123 |              456
- * (2 rows)
- * 
  * fetch all in c5;
- *  q1  |        q2        
- * -----+------------------
- *  123 |              456
- *  123 | 4567890123456789
- * (2 rows)
- * 
  * fetch backward all in c5;
- *  q1  |        q2        
- * -----+------------------
- *  123 | 4567890123456789
- *  123 |              456
- * (2 rows)
- * 
+ *
  * rollback;
  */
 --end_ignore
@@ -382,10 +219,16 @@ select unique1, unique2, nextval('testseq')
          Merge Key: unique2
          ->  Limit
                Output: unique1, unique2, (nextval('testseq'::regclass))
-               ->  Index Scan using tenk1_unique2 on public.tenk1
+               ->  Result
                      Output: unique1, unique2, nextval('testseq'::regclass)
+                     ->  Sort
+                           Output: unique1, unique2
+                           Sort Key: tenk1.unique2
+                           ->  Seq Scan on public.tenk1
+                                 Output: unique1, unique2
+ Settings: optimizer = 'off'
  Optimizer: Postgres query optimizer
-(10 rows)
+(16 rows)
 
 -- In gpdb, our sequence can only promise monotonicity due to MPP structure
 -- The follow case does not make sence for us.
@@ -418,11 +261,14 @@ select unique1, unique2, generate_series(1,10)
                Output: unique1, unique2, (generate_series(1, 10))
                ->  ProjectSet
                      Output: unique1, unique2, generate_series(1, 10)
-                     ->  Index Scan using tenk1_unique2 on public.tenk1
+                     ->  Sort
                            Output: unique1, unique2
+                           Sort Key: tenk1.unique2
+                           ->  Seq Scan on public.tenk1
+                                 Output: unique1, unique2
+ Settings: optimizer = 'off'
  Optimizer: Postgres query optimizer
- Settings: optimizer=off
-(13 rows)
+(16 rows)
 
 select unique1, unique2, generate_series(1,10)
   from tenk1 order by unique2 limit 7;
@@ -456,8 +302,8 @@ select unique1, unique2, generate_series(1,10)
                            Sort Key: tenk1.tenthous
                            ->  Seq Scan on public.tenk1
                                  Output: unique1, unique2, tenthous
+ Settings: optimizer = 'off'
  Optimizer: Postgres query optimizer
- Settings: optimizer=off
 (16 rows)
 
 select unique1, unique2, generate_series(1,10)
@@ -481,7 +327,9 @@ select generate_series(0,2) as s1, generate_series((random()*.1)::int,2) as s2;
  ProjectSet
    Output: generate_series(0, 2), generate_series(((random() * '0.1'::double precision))::integer, 2)
    ->  Result
-(3 rows)
+ Settings: optimizer = 'off'
+ Optimizer: Postgres query optimizer
+(5 rows)
 
 select generate_series(0,2) as s1, generate_series((random()*.1)::int,2) as s2;
  s1 | s2 
@@ -502,7 +350,9 @@ order by s2 desc;
    ->  ProjectSet
          Output: generate_series(0, 2), generate_series(((random() * '0.1'::double precision))::integer, 2)
          ->  Result
-(6 rows)
+ Settings: optimizer = 'off'
+ Optimizer: Postgres query optimizer
+(8 rows)
 
 select generate_series(0,2) as s1, generate_series((random()*.1)::int,2) as s2
 order by s2 desc;
@@ -517,23 +367,34 @@ order by s2 desc;
 explain (verbose, costs off)
 select sum(tenthous) as s1, sum(tenthous) + random()*0 as s2
   from tenk1 group by thousand order by thousand limit 3;
-                                                    QUERY PLAN                                                     
--------------------------------------------------------------------------------------------------------------------
+                                                            QUERY PLAN                                                             
+-----------------------------------------------------------------------------------------------------------------------------------
  Limit
-   Output: (sum(tenthous)), (((sum(tenthous))::double precision + (random() * '0'::double precision))), thousand
-   ->  Finalize GroupAggregate
-         Output: sum(tenthous), ((sum(tenthous))::double precision + (random() * '0'::double precision)), thousand
-         Group Key: tenk1.thousand
-         ->  Gather Motion 3:1  (slice1; segments: 3)
-               Output: thousand, (PARTIAL sum(tenthous))
-               Merge Key: thousand
-               ->  Partial GroupAggregate
-                     Output: thousand, PARTIAL sum(tenthous)
-                     Group Key: tenk1.thousand
-                     ->  Index Only Scan using tenk1_thous_tenthous on public.tenk1
-                           Output: thousand, tenthous
+   Output: (sum(tenthous)), ((((sum(tenthous)))::double precision + (random() * '0'::double precision))), thousand
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         Output: (sum(tenthous)), ((((sum(tenthous)))::double precision + (random() * '0'::double precision))), thousand
+         Merge Key: thousand
+         ->  Limit
+               Output: (sum(tenthous)), ((((sum(tenthous)))::double precision + (random() * '0'::double precision))), thousand
+               ->  Result
+                     Output: (sum(tenthous)), (((sum(tenthous)))::double precision + (random() * '0'::double precision)), thousand
+                     ->  Sort
+                           Output: (sum(tenthous)), thousand
+                           Sort Key: tenk1.thousand
+                           ->  Finalize HashAggregate
+                                 Output: sum(tenthous), thousand
+                                 Group Key: tenk1.thousand
+                                 ->  Redistribute Motion 3:3  (slice2; segments: 3)
+                                       Output: thousand, (PARTIAL sum(tenthous))
+                                       Hash Key: thousand
+                                       ->  Streaming Partial HashAggregate
+                                             Output: thousand, PARTIAL sum(tenthous)
+                                             Group Key: tenk1.thousand
+                                             ->  Seq Scan on public.tenk1
+                                                   Output: thousand, tenthous
+ Settings: optimizer = 'off'
  Optimizer: Postgres query optimizer
-(14 rows)
+(25 rows)
 
 select sum(tenthous) as s1, sum(tenthous) + random()*0 as s2
   from tenk1 group by thousand order by thousand limit 3;
