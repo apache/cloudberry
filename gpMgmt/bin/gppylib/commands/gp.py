@@ -1310,9 +1310,14 @@ class _GpExpandStatus(object):
 
         try:
             dburl = dbconn.DbURL(dbname=self.dbname)
-            with closing(dbconn.connect(dburl, encoding='UTF8')) as conn:
+            # This catalog-only existence check must remain available while a
+            # distributed transaction is completing.  The status table itself
+            # is distributed, so read it through the normal dispatcher below.
+            with closing(dbconn.connect(dburl, utility=True, encoding='UTF8')) as conn:
                 if not dbconn.querySingleton(conn, status_table_exists_sql):
                     return False
+
+            with closing(dbconn.connect(dburl, encoding='UTF8')) as conn:
                 status = dbconn.querySingleton(conn, sql)
         except Exception:
             # schema table not found
