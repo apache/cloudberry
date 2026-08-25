@@ -1243,22 +1243,23 @@ with cte(c) as materialized (select row(1, 2)),
 select * from cte2 as t
 where (select * from (select c as c1) s
        where (select (c1).f1 > 0)) is not null;
-                 QUERY PLAN                 
---------------------------------------------
- CTE Scan on cte
-   Output: cte.c
-   Filter: ((SubPlan 3) IS NOT NULL)
-   CTE cte
+                 QUERY PLAN                
+------------------------------------------
+ Subquery Scan on t
+   Output: t.c
+   Filter: ((SubPlan 2) IS NOT NULL)
+   ->  Shared Scan (share slice:id 0:0)
+         Output: share0_ref1."row"
+         ->  Result
+               Output: ROW(1, 2)
+   SubPlan 2
      ->  Result
-           Output: '(1,2)'::record
-   SubPlan 3
-     ->  Result
-           Output: cte.c
-           One-Time Filter: $2
-           InitPlan 2 (returns $2)
+           Output: t.c
+           One-Time Filter: $1
+           InitPlan 1 (returns $1)
              ->  Result
-                   Output: ((cte.c).f1 > 0)
-(13 rows)
+                   Output: ((t.c).f1 > 0)
+GP_IGNORE:(16 rows)
 
 with cte(c) as materialized (select row(1, 2)),
      cte2(c) as (select * from cte)
