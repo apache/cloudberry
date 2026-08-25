@@ -177,7 +177,7 @@ ao_truncate_replay(XLogReaderState *record)
 		return;
 	}
 
-	if (FileTruncate(file, xlrec->target.offset, WAIT_EVENT_DATA_FILE_TRUNCATE) != 0)
+	if (smgr->smgr_ao->smgr_FileTruncate(file, xlrec->target.offset, WAIT_EVENT_DATA_FILE_TRUNCATE) != 0)
 	{
 		ereport(WARNING,
 				(errcode_for_file_access(),
@@ -185,7 +185,7 @@ ao_truncate_replay(XLogReaderState *record)
 						path, xlrec->target.offset)));
 	}
 
-	FileClose(file);
+	smgr->smgr_ao->smgr_FileClose(file);
 
 	/*
 	 * Cancel any pending fsync requests for this AO segment file.
