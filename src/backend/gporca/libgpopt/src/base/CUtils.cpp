@@ -4834,18 +4834,32 @@ CUtils::FHasAggWindowFunc(CExpression *pexpr)
 }
 
 
-// returns true if expression contains ordered aggregate function
+// returns true if expression contains an ordered aggregate function that
+// should be split to an internal gp_percentile aggregate
 BOOL
 CUtils::FHasOrderedAggToSplit(CExpression *pexpr)
 {
 	GPOS_ASSERT(nullptr != pexpr);
 
 	CScalarAggFunc *popScAggFunc = CScalarAggFunc::PopConvert(pexpr->Pop());
-	return popScAggFunc->AggKind() == EaggfunckindOrderedSet &&
-		   (!FScalarConst((*(*pexpr)[1])[0]) ||
-			!FIsConstArray((*(*pexpr)[1])[0])) &&
-		   (FScalarIdent((*(*pexpr)[0])[0]) ||
-			CScalarIdent::FCastedScId((*(*pexpr)[0])[0]));
+	if (popScAggFunc->AggKind() != EaggfunckindOrderedSet)
+	{
+		return false;
+	}
+
+	if (pexpr->Arity() <= EaggfuncIndexOrder ||
+		(*pexpr)[EaggfuncIndexArgs]->Arity() == 0 ||
+		(*pexpr)[EaggfuncIndexDirectArgs]->Arity() == 0 ||
+		(*pexpr)[EaggfuncIndexOrder]->Arity() == 0)
+	{
+		return false;
+	}
+
+	CExpression *pexprArg = (*(*pexpr)[EaggfuncIndexArgs])[0];
+	CExpression *pexprDirectArg = (*(*pexpr)[EaggfuncIndexDirectArgs])[0];
+
+	return (!FScalarConst(pexprDirectArg) || !FIsConstArray(pexprDirectArg)) &&
+		   (FScalarIdent(pexprArg) || CScalarIdent::FCastedScId(pexprArg));
 }
 
 BOOL
