@@ -27,4 +27,11 @@ extern JoinExpr *convert_IN_to_antijoin(PlannerInfo *root, SubLink *sublink, Rel
 extern void cdbsubselect_drop_orderby(Query *subselect);
 extern void cdbsubselect_drop_distinct(Query *subselect);
 
+extern bool get_agg_empty_input_const(Oid aggfnoid, Oid aggtype, Oid aggcollid,
+									  Oid inputcollid, List *argtypes, List *directargs,
+									  Const **result);
+
+extern bool agg_empty_input_is_null(Oid aggfnoid);
+extern bool agg_empty_input_is_safe(Oid aggfnoid);
+
 #endif   /* CDBSUBSELECT_H */
