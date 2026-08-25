@@ -1281,6 +1281,10 @@ code or new licensing patterns.
             <exclude>gpcontrib/gp_relsizes_stats/gp_relsizes_stats.control</exclude>
             <exclude>gpcontrib/gp_relsizes_stats/test/postgresql.conf.add</exclude>
 
+            <exclude>gpcontrib/gp_relaccess_stats/Makefile</exclude>
+            <exclude>gpcontrib/gp_relaccess_stats/src/gp_relaccess_stats.c</exclude>
+            <exclude>gpcontrib/gp_relaccess_stats/gp_relaccess_stats.control</exclude>
+
             <exclude>gpcontrib/reject_partition_fullscan/Makefile</exclude>
             <exclude>gpcontrib/reject_partition_fullscan/reject_partition_fullscan.control</exclude>
 
