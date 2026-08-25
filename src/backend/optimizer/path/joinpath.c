@@ -367,6 +367,7 @@ add_paths_to_join_relation(PlannerInfo *root,
 		hash_inner_and_outer(root, joinrel, outerrel, innerrel,
 							 jointype, &extra);
 
+#ifdef NOT_USED
 	/*
 	 * createplan.c does not currently support handling of pseudoconstant
 	 * clauses assigned to joins pushed down by extensions; check if the
@@ -378,6 +379,8 @@ add_paths_to_join_relation(PlannerInfo *root,
 		set_join_pathlist_hook)
 		consider_join_pushdown = !has_pseudoconstant_clauses(root,
 															 restrictlist);
+
+#endif
 
 	/*
 	 * 5. If inner and outer relations are foreign tables (or joins) belonging

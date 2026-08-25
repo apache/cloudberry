@@ -1561,40 +1561,6 @@ check_for_removed_data_type_usage(ClusterInfo *cluster, const char *version,
 		check_ok();
 }
 
-/*
- * check_for_removed_data_type_usage
- *
- *	Check for in-core data types that have been removed.  Callers know
- *	the exact list.
- */
-static void
-check_for_removed_data_type_usage(ClusterInfo *cluster, const char *version,
-								  const char *datatype)
-{
-	char		output_path[MAXPGPATH];
-	char		typename[NAMEDATALEN];
-
-	prep_status("Checking for removed \"%s\" data type in user tables",
-				datatype);
-
-	snprintf(output_path, sizeof(output_path), "tables_using_%s.txt",
-			 datatype);
-	snprintf(typename, sizeof(typename), "pg_catalog.%s", datatype);
-
-	if (check_for_data_type_usage(cluster, typename, output_path))
-	{
-		pg_log(PG_REPORT, "fatal\n");
-		pg_fatal("Your installation contains the \"%s\" data type in user tables.\n"
-				 "The \"%s\" type has been removed in PostgreSQL version %s,\n"
-				 "so this cluster cannot currently be upgraded.  You can drop the\n"
-				 "problem columns, or change them to another data type, and restart\n"
-				 "the upgrade.  A list of the problem columns is in the file:\n"
-				 "    %s\n\n", datatype, datatype, version, output_path);
-	}
-	else
-		check_ok();
-}
-
 
 /*
  * check_for_jsonb_9_4_usage()
