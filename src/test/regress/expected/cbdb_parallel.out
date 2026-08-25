@@ -626,7 +626,7 @@ begin;
 create table t1(c1 int, c2 int) with(parallel_workers=2) distributed by (c1);
 set local enable_parallel = on;
 create index on t1(c2);
-insert into t1 select i, i from generate_series(1, 10000000) i;
+insert into t1 select i, i from generate_series(1, 1000000) i;
 analyze t1;
 set local debug_parallel_query=regress;
 set local enable_seqscan = off;
@@ -659,9 +659,9 @@ explain(locus, costs off) select count(c2) from t1;
 (11 rows)
 
 select count(c2) from t1;
-  count   
-----------
- 10000000
+  count  
+---------
+ 1000000
 (1 row)
 
 set local enable_parallel = off;
@@ -680,9 +680,9 @@ explain(locus, costs off) select count(c2) from t1;
 (9 rows)
 
 select count(c2) from t1;
-  count   
-----------
- 10000000
+  count  
+---------
+ 1000000
 (1 row)
 
 abort;
@@ -1032,15 +1032,6 @@ explain(locus, costs off) select * from rt1 join t1 on rt1.a = t1.b join rt2 on 
 select * from rt1 join t1 on rt1.a = t1.b join rt2 on rt2.a = t1.b;
  a  | b  | a  | b  | a  | b  
 ----+----+----+----+----+----
-  1 |  2 |  1 |  1 |  1 |  2
-  2 |  3 |  1 |  2 |  2 |  3
-  5 |  6 |  5 |  5 |  5 |  6
-  6 |  7 |  6 |  6 |  6 |  7
-  9 | 10 |  9 |  9 |  9 | 10
- 10 | 11 | 10 | 10 | 10 | 11
-  6 |  7 |  5 |  6 |  6 |  7
-  7 |  8 |  6 |  7 |  7 |  8
- 10 | 11 |  9 | 10 | 10 | 11
   2 |  3 |  2 |  2 |  2 |  3
   3 |  4 |  3 |  3 |  3 |  4
   4 |  5 |  4 |  4 |  4 |  5
@@ -1051,6 +1042,15 @@ select * from rt1 join t1 on rt1.a = t1.b join rt2 on rt2.a = t1.b;
   5 |  6 |  4 |  5 |  5 |  6
   8 |  9 |  7 |  8 |  8 |  9
   9 | 10 |  8 |  9 |  9 | 10
+  5 |  6 |  5 |  5 |  5 |  6
+  6 |  7 |  6 |  6 |  6 |  7
+  9 | 10 |  9 |  9 |  9 | 10
+ 10 | 11 | 10 | 10 | 10 | 11
+  6 |  7 |  5 |  6 |  6 |  7
+  7 |  8 |  6 |  7 |  7 |  8
+ 10 | 11 |  9 | 10 | 10 | 11
+  1 |  2 |  1 |  1 |  1 |  2
+  2 |  3 |  1 |  2 |  2 |  3
 (19 rows)
 
 -- parallel hash join
@@ -1093,8 +1093,13 @@ explain(locus, costs off) select * from rt1 join t1 on rt1.a = t1.b join rt2 on 
 select * from rt1 join t1 on rt1.a = t1.b join rt2 on rt2.a = t1.b;
  a  | b  | a  | b  | a  | b  
 ----+----+----+----+----+----
-  1 |  2 |  1 |  1 |  1 |  2
-  2 |  3 |  1 |  2 |  2 |  3
+  5 |  6 |  5 |  5 |  5 |  6
+  6 |  7 |  5 |  6 |  6 |  7
+  6 |  7 |  6 |  6 |  6 |  7
+  7 |  8 |  6 |  7 |  7 |  8
+  9 | 10 |  9 |  9 |  9 | 10
+ 10 | 11 |  9 | 10 | 10 | 11
+ 10 | 11 | 10 | 10 | 10 | 11
   2 |  3 |  2 |  2 |  2 |  3
   3 |  4 |  2 |  3 |  3 |  4
   3 |  4 |  3 |  3 |  3 |  4
@@ -1105,13 +1110,8 @@ select * from rt1 join t1 on rt1.a = t1.b join rt2 on rt2.a = t1.b;
   8 |  9 |  7 |  8 |  8 |  9
   8 |  9 |  8 |  8 |  8 |  9
   9 | 10 |  8 |  9 |  9 | 10
-  5 |  6 |  5 |  5 |  5 |  6
-  6 |  7 |  5 |  6 |  6 |  7
-  6 |  7 |  6 |  6 |  6 |  7
-  7 |  8 |  6 |  7 |  7 |  8
-  9 | 10 |  9 |  9 |  9 | 10
- 10 | 11 |  9 | 10 | 10 | 11
- 10 | 11 | 10 | 10 | 10 | 11
+  1 |  2 |  1 |  1 |  1 |  2
+  2 |  3 |  1 |  2 |  2 |  3
 (19 rows)
 
 --
@@ -1145,8 +1145,13 @@ explain(locus, costs off) select * from rt1 join t1 on rt1.a = t1.b join rt3 on 
 select * from rt1 join t1 on rt1.a = t1.b join rt3 on rt3.a = t1.b;
  a  | b  | a  | b  | a  | b  
 ----+----+----+----+----+----
-  1 |  2 |  1 |  1 |  1 |  2
-  2 |  3 |  1 |  2 |  2 |  3
+  5 |  6 |  5 |  5 |  5 |  6
+  6 |  7 |  6 |  6 |  6 |  7
+  9 | 10 |  9 |  9 |  9 | 10
+ 10 | 11 | 10 | 10 | 10 | 11
+  6 |  7 |  5 |  6 |  6 |  7
+  7 |  8 |  6 |  7 |  7 |  8
+ 10 | 11 |  9 | 10 | 10 | 11
   2 |  3 |  2 |  2 |  2 |  3
   3 |  4 |  3 |  3 |  3 |  4
   4 |  5 |  4 |  4 |  4 |  5
@@ -1157,13 +1162,8 @@ select * from rt1 join t1 on rt1.a = t1.b join rt3 on rt3.a = t1.b;
   5 |  6 |  4 |  5 |  5 |  6
   8 |  9 |  7 |  8 |  8 |  9
   9 | 10 |  8 |  9 |  9 | 10
-  5 |  6 |  5 |  5 |  5 |  6
-  6 |  7 |  6 |  6 |  6 |  7
-  9 | 10 |  9 |  9 |  9 | 10
- 10 | 11 | 10 | 10 | 10 | 11
-  6 |  7 |  5 |  6 |  6 |  7
-  7 |  8 |  6 |  7 |  7 |  8
- 10 | 11 |  9 | 10 | 10 | 11
+  1 |  2 |  1 |  1 |  1 |  2
+  2 |  3 |  1 |  2 |  2 |  3
 (19 rows)
 
 -- parallel join without parallel hash
@@ -1201,11 +1201,6 @@ select * from rt1 join t1 on rt1.a = t1.b join rt3 on rt3.a = t1.b;
  a  | b  | a  | b  | a  | b  
 ----+----+----+----+----+----
   1 |  2 |  1 |  1 |  1 |  2
-  5 |  6 |  5 |  5 |  5 |  6
-  6 |  7 |  6 |  6 |  6 |  7
-  9 | 10 |  9 |  9 |  9 | 10
- 10 | 11 | 10 | 10 | 10 | 11
-  2 |  3 |  1 |  2 |  2 |  3
   2 |  3 |  2 |  2 |  2 |  3
   3 |  4 |  3 |  3 |  3 |  4
   4 |  5 |  4 |  4 |  4 |  5
@@ -1216,6 +1211,11 @@ select * from rt1 join t1 on rt1.a = t1.b join rt3 on rt3.a = t1.b;
   5 |  6 |  4 |  5 |  5 |  6
   8 |  9 |  7 |  8 |  8 |  9
   9 | 10 |  8 |  9 |  9 | 10
+  2 |  3 |  1 |  2 |  2 |  3
+  5 |  6 |  5 |  5 |  5 |  6
+  6 |  7 |  6 |  6 |  6 |  7
+  9 | 10 |  9 |  9 |  9 | 10
+ 10 | 11 | 10 | 10 | 10 | 11
   6 |  7 |  5 |  6 |  6 |  7
   7 |  8 |  6 |  7 |  7 |  8
  10 | 11 |  9 | 10 | 10 | 11
@@ -1231,11 +1231,11 @@ set local enable_parallel = off;
 select * from rt4 join t2 using(b);
  b  | a  | a  
 ----+----+----
-  2 |  1 |  1
   6 |  5 |  5
   7 |  6 |  6
  10 |  9 |  9
  11 | 10 | 10
+  2 |  1 |  1
   3 |  2 |  2
   4 |  3 |  3
   5 |  4 |  4
@@ -1271,16 +1271,16 @@ explain(locus, costs off) select * from rt4 join t2 using(b);
 select * from rt4 join t2 using(b);
  b  | a  | a  
 ----+----+----
-  3 |  2 |  2
-  4 |  3 |  3
-  5 |  4 |  4
-  8 |  7 |  7
-  9 |  8 |  8
   2 |  1 |  1
   6 |  5 |  5
   7 |  6 |  6
  10 |  9 |  9
  11 | 10 | 10
+  3 |  2 |  2
+  4 |  3 |  3
+  5 |  4 |  4
+  8 |  7 |  7
+  9 |  8 |  8
 (10 rows)
 
 create table t3(a int, b int) with(parallel_workers=2);
@@ -1363,10 +1363,10 @@ select * from t_replica_workers_2 join t_random_workers_0 using(a);
  a | b | b 
 ---+---+---
  1 | 2 | 2
- 3 | 4 | 4
- 2 | 3 | 3
  4 | 5 | 5
  5 | 6 | 6
+ 2 | 3 | 3
+ 3 | 4 | 4
 (5 rows)
 
 -- non parallel results
@@ -1375,10 +1375,10 @@ select * from t_replica_workers_2 join t_random_workers_0 using(a);
  a | b | b 
 ---+---+---
  1 | 2 | 2
- 3 | 4 | 4
- 2 | 3 | 3
  4 | 5 | 5
  5 | 6 | 6
+ 2 | 3 | 3
+ 3 | 4 | 4
 (5 rows)
 
 abort;
@@ -1419,9 +1419,9 @@ explain(locus, costs off) select * from t_replica_workers_2 right join t_random_
 select * from t_replica_workers_2 right join t_random_workers_2 using(a);
  a | b | b 
 ---+---+---
- 2 | 3 | 3
  5 | 6 | 6
  1 | 2 | 2
+ 2 | 3 | 3
  3 | 4 | 4
  4 | 5 | 5
 (5 rows)
@@ -1433,9 +1433,9 @@ select * from t_replica_workers_2 right join t_random_workers_2 using(a);
 ---+---+---
  5 | 6 | 6
  1 | 2 | 2
+ 2 | 3 | 3
  3 | 4 | 4
  4 | 5 | 5
- 2 | 3 | 3
 (5 rows)
 
 abort;
@@ -1476,9 +1476,9 @@ explain(locus, costs off) select * from t_replica_workers_2 join t_random_worker
 select * from t_replica_workers_2 join t_random_workers_2 using(a);
  a | b | b 
 ---+---+---
- 1 | 2 | 2
  2 | 3 | 3
  3 | 4 | 4
+ 1 | 2 | 2
  4 | 5 | 5
  5 | 6 | 6
 (5 rows)
@@ -1489,10 +1489,10 @@ select * from t_replica_workers_2 join t_random_workers_2 using(a);
  a | b | b 
 ---+---+---
  3 | 4 | 4
+ 2 | 3 | 3
+ 1 | 2 | 2
  4 | 5 | 5
  5 | 6 | 6
- 1 | 2 | 2
- 2 | 3 | 3
 (5 rows)
 
 abort;
@@ -1560,8 +1560,8 @@ set local max_parallel_workers_per_gather = 4;
 create table t1(a int, b int) with(parallel_workers=4);
 create table t2(a int, b int) with(parallel_workers=4);
 create table rt1(a int, b int) with(parallel_workers=4) distributed replicated;
-insert into t1 select i, i from generate_series(1, 10000000) i;
-insert into t2 select i, i from generate_series(1, 10000000) i;
+insert into t1 select i, i from generate_series(1, 2000000) i;
+insert into t2 select i, i from generate_series(1, 2000000) i;
 insert into rt1 select i, i+1 from generate_series(1, 10000) i;
 analyze t1;
 analyze t2;
@@ -1975,7 +1975,7 @@ explain (locus, costs off) select * from rt1 union all select * from t1;
          ->  Result
                Locus: Strewn
                Parallel Workers: 3
-               One-Time Filter: (gp_execution_segment() = 1)
+               One-Time Filter: (gp_execution_segment() = 2)
                ->  Parallel Seq Scan on rt1
                      Locus: SegmentGeneralWorkers
                      Parallel Workers: 3
@@ -1999,7 +1999,7 @@ explain (locus, costs off) select * from rt1 union all select * from t2;
          ->  Result
                Locus: Strewn
                Parallel Workers: 3
-               One-Time Filter: (gp_execution_segment() = 1)
+               One-Time Filter: (gp_execution_segment() = 2)
                ->  Parallel Seq Scan on rt1
                      Locus: SegmentGeneralWorkers
                      Parallel Workers: 3
@@ -2213,7 +2213,7 @@ set local gp_appendonly_insert_files = 2;
 set local gp_appendonly_insert_files_tuples_range = 100;
 set local max_parallel_workers_per_gather = 2;
 set local enable_parallel_hash = off;
-insert into t1 select i, i from generate_series(1, 5000000) i;
+insert into t1 select i, i from generate_series(1, 1000000) i;
 insert into t2 select i+1, i from generate_series(1, 1200) i;
 insert into t3_null select i+1, i from generate_series(1, 1200) i;
 insert into t3_null values(NULL, NULL);
@@ -2236,9 +2236,9 @@ explain(costs off) select sum(t1.c1) from t1 where c1 not in (select c1 from t2)
 (10 rows)
 
 select sum(t1.c1) from t1 where c1 not in (select c1 from t2);
-      sum       
-----------------
- 12500001778200
+     sum      
+--------------
+ 499999778200
 (1 row)
 
 explain(costs off) select * from t1 where c1 not in (select c1 from t3_null);
@@ -2262,9 +2262,9 @@ select * from t1 where c1 not in (select c1 from t3_null);
 -- non-parallel results.
 set local enable_parallel = off;
 select sum(t1.c1) from t1 where c1 not in (select c1 from t2);
-      sum       
-----------------
- 12500001778200
+     sum      
+--------------
+ 499999778200
 (1 row)
 
 select * from t1 where c1 not in (select c1 from t3_null);
@@ -2576,7 +2576,7 @@ declare
  results1 RECORD;
 begin
   create table t_p(c1 int, c2 int) with(parallel_workers=8) distributed by(c1);
-  insert into t_p select i, i+1 from generate_series(1, 10000000)i;
+  insert into t_p select i, i+1 from generate_series(1, 2000000)i;
   analyze t_p;
   if ao_row then
     create materialized view matv using ao_row as select sum(a.c2) as c2, avg(b.c1) as c1 from t_p a join t_p b on a.c1 = b.c1 with no data distributed by(c2);
@@ -2642,7 +2642,7 @@ end;
 --
 begin;
 create table t_p2(c1 int, c2 int) with(parallel_workers=2) distributed by(c1);
-insert into t_p2 select i, i+1 from generate_series(1, 10000000)i;
+insert into t_p2 select i, i+1 from generate_series(1, 2000000)i;
 analyze t_p2;
 set local enable_parallel = off;
 explain(costs off) create table ctas_ao using ao_row as select sum(a.c2) as c2, avg(b.c1) as c1 from t_p2 a join t_p2 b on a.c1 = b.c1 distributed by(c2);
@@ -2975,7 +2975,7 @@ create table t2_anti(a int, b int) with(parallel_workers=2) distributed by (b);
 insert into t2_anti values(generate_series(5, 10));
 explain(costs off, verbose)
 select t1_anti.a, t1_anti.b from t1_anti left join t2_anti on t1_anti.a = t2_anti.a where t2_anti.a is null;
-                            QUERY PLAN
+                            QUERY PLAN                            
 ------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    Output: t1_anti.a, t1_anti.b
@@ -3025,7 +3025,7 @@ select t1_anti.a, t1_anti.b from t1_anti left join t2_anti on t1_anti.a = t2_ant
                      Hash Module: 3
                      ->  Parallel Seq Scan on test_parallel.t2_anti
                            Output: t2_anti.a
- Settings: enable_parallel = 'on', min_parallel_table_scan_size = '0', optimizer = 'off'
+ Settings: optimizer = 'off', enable_parallel = 'on', min_parallel_table_scan_size = '0'
  Optimizer: Postgres query optimizer
 (17 rows)
 
@@ -3062,7 +3062,7 @@ select t1_anti.a, t1_anti.b from t1_anti left join t2_anti on t1_anti.a = t2_ant
                      Hash Module: 3
                      ->  Seq Scan on test_parallel.t2_anti
                            Output: t2_anti.a
- Settings: enable_parallel = 'on', enable_parallel_hash = 'off', min_parallel_table_scan_size = '0', optimizer = 'off'
+ Settings: optimizer = 'off', enable_parallel = 'on', min_parallel_table_scan_size = '0', enable_parallel_hash = 'off'
  Optimizer: Postgres query optimizer
 (21 rows)
 
@@ -3095,13 +3095,10 @@ insert into t_distinct_0 select * from t_distinct_0;
 insert into t_distinct_0 select * from t_distinct_0;
 insert into t_distinct_0 select * from t_distinct_0;
 insert into t_distinct_0 select * from t_distinct_0;
-insert into t_distinct_0 select * from t_distinct_0;
-insert into t_distinct_0 select * from t_distinct_0;
-insert into t_distinct_0 select * from t_distinct_0;
 analyze t_distinct_0;
 explain(costs off)
 select distinct a from t_distinct_0;
-                         QUERY PLAN
+                         QUERY PLAN                         
 ------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  HashAggregate
@@ -3448,14 +3445,14 @@ WHERE e.salary > (
     WHERE department_id = e.department_id);
                                                          QUERY PLAN                                                         
 ----------------------------------------------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)  (cost=163.42..307.76 rows=3767 width=218)
-   ->  Hash Join  (cost=163.42..257.54 rows=1256 width=218)
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=161.20..305.54 rows=3767 width=218)
+   ->  Hash Join  (cost=161.20..255.32 rows=1256 width=218)
          Hash Cond: (e.department_id = "Expr_SUBQUERY".csq_c0)
          Join Filter: (e.salary > "Expr_SUBQUERY".csq_c1)
          ->  Seq Scan on employees e  (cost=0.00..71.67 rows=3767 width=254)
-         ->  Hash  (cost=150.92..150.92 rows=1000 width=36)
-               ->  Broadcast Motion 3:3  (slice2; segments: 3)  (cost=130.09..150.92 rows=1000 width=36)
-                     ->  Subquery Scan on "Expr_SUBQUERY"  (cost=130.09..137.59 rows=333 width=36)
+         ->  Hash  (cost=148.70..148.70 rows=1000 width=36)
+               ->  Broadcast Motion 3:3  (slice2; segments: 3)  (cost=130.09..148.70 rows=1000 width=36)
+                     ->  Subquery Scan on "Expr_SUBQUERY"  (cost=130.09..135.37 rows=333 width=36)
                            ->  Finalize HashAggregate  (cost=130.09..134.26 rows=333 width=36)
                                  Group Key: employees.department_id
                                  ->  Redistribute Motion 3:3  (slice3; segments: 3)  (cost=90.50..122.67 rows=990 width=36)
@@ -3488,14 +3485,14 @@ WHERE e.salary > (
     WHERE department_id = e.department_id);
                                                         QUERY PLAN                                                         
 ---------------------------------------------------------------------------------------------------------------------------
- Gather Motion 6:1  (slice1; segments: 6)  (cost=116.58..230.86 rows=3767 width=218)
-   ->  Parallel Hash Join  (cost=116.58..186.92 rows=628 width=218)
+ Gather Motion 6:1  (slice1; segments: 6)  (cost=115.19..229.48 rows=3767 width=218)
+   ->  Parallel Hash Join  (cost=115.19..185.53 rows=628 width=218)
          Hash Cond: (e.department_id = "Expr_SUBQUERY".csq_c0)
          Join Filter: (e.salary > "Expr_SUBQUERY".csq_c1)
          ->  Parallel Seq Scan on employees e  (cost=0.00..52.83 rows=1883 width=254)
-         ->  Parallel Hash  (cost=110.33..110.33 rows=500 width=36)
-               ->  Broadcast Workers Motion 6:6  (slice2; segments: 6)  (cost=99.92..110.33 rows=500 width=36)
-                     ->  Subquery Scan on "Expr_SUBQUERY"  (cost=99.92..103.67 rows=167 width=36)
+         ->  Parallel Hash  (cost=108.94..108.94 rows=500 width=36)
+               ->  Broadcast Workers Motion 6:6  (slice2; segments: 6)  (cost=99.92..108.94 rows=500 width=36)
+                     ->  Subquery Scan on "Expr_SUBQUERY"  (cost=99.92..102.28 rows=167 width=36)
                            ->  HashAggregate  (cost=99.92..102.00 rows=167 width=36)
                                  Group Key: employees.department_id
                                  ->  Redistribute Motion 6:6  (slice3; segments: 6)  (cost=0.00..90.50 rows=1883 width=36)
