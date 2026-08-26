@@ -216,6 +216,20 @@ from  mpp_22413
 where d2 ='55'
 group by d1, d2;
 
+--
+-- gp_percentile_cont()/gp_percentile_disc() are the split ordered-set
+-- aggregates that ORCA rewrites percentile_cont()/percentile_disc()/median()
+-- into.  Their transition functions carry the running state on top of the
+-- four aggregate arguments, so they read five arguments, while pg_proc.dat
+-- describes four.  That is left alone here so as not to force an initdb on a
+-- stable branch; instead a direct call, which would read past the end of the
+-- argument array, is rejected.
+--
+select gp_percentile_cont_float8_transition(NULL::float8, 1, 1, 1);
+select gp_percentile_cont_interval_transition(NULL::interval, 1, 1, 1);
+select gp_percentile_cont_timestamp_transition(NULL::timestamp, 1, 1, 1);
+select gp_percentile_cont_timestamptz_transition(NULL::timestamptz, 1, 1, 1);
+select gp_percentile_disc_transition(NULL::numeric, 1, 1, 1);
 drop view percv2;
 drop view percv;
 drop table perct;
