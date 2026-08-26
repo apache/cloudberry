@@ -1515,3 +1515,36 @@ reset optimizer;
 drop table outer_foo;
 drop table inner_bar;
 drop table t;
+
+--
+-- "COUNT bug": decorrelating a scalar GROUP BY () with a count() aggregate
+-- is not semantics-preserving, because count() over an empty group returns
+-- 0 while the decorrelated form produces no row at all (i.e. NULL).
+--
+create table countbug_foo(a int, b int) distributed by (a);
+create table countbug_bar(a int, b int) distributed by (a);
+insert into countbug_foo values (0,1),(1,2),(2,3);
+insert into countbug_bar values (1,2),(1,2);
+analyze countbug_foo;
+analyze countbug_bar;
+
+-- the row (0,1) has no match in countbug_bar, so count(*) is 0 and it qualifies
+select * from countbug_foo
+ where countbug_foo.a in
+       (select count(*) from countbug_bar where countbug_bar.b = countbug_foo.b)
+ order by 1;
+
+select * from countbug_foo
+ where countbug_foo.a in
+       (select count(countbug_bar.a) from countbug_bar
+         where countbug_bar.b = countbug_foo.b)
+ order by 1;
+
+-- a count-free aggregate can still be decorrelated
+select * from countbug_foo
+ where countbug_foo.a in
+       (select sum(1) from countbug_bar where countbug_bar.b = countbug_foo.b)
+ order by 1;
+
+drop table countbug_foo;
+drop table countbug_bar;

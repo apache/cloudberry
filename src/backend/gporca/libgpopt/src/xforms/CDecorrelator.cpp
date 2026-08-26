@@ -426,6 +426,17 @@ CDecorrelator::FProcessGbAgg(CMemoryPool *mp, CExpression *pexpr,
 		return false;
 	}
 
+	// fail if agg has no grouping columns and a count() aggregate
+	// this is a temporary fix for the "count bug".
+	if (0 == popAggOriginal->Pdrgpcr()->Size())
+	{
+		CColRef *pcrCount = nullptr;
+		if (CUtils::FHasCountAgg((*pexpr)[1], &pcrCount))
+		{
+			return false;
+		}
+	}
+
 	// TODO: 12/20/2012 - ; check for strictness of agg function
 
 	// decorrelate relational child, allow only equality predicates, see below for the reason
@@ -456,17 +467,19 @@ CDecorrelator::FProcessGbAgg(CMemoryPool *mp, CExpression *pexpr,
 	//   with the original subquery and group by expression.
 	// - Given that all the rows (and only the rows) in the surviving groups satisfy the
 	//   correlation predicate(s), the aggregate functions will have the correct values.
+	// - Note: this doesn't work for count(*)/count(Any) without grouping columns since
+	//   adding a GROUP BY clause changes behavior when count is 0. See "count bug".
 	// Example:
 	//
 	//   select *
 	//   from foo
-	//   where foo.a in (select count(*) from bar where bar.b=foo.b)
+	//   where foo.a in (select sum(1) from bar where bar.b=foo.b)
 	//
 	// gets transformed into
 	//
 	//   select *
-	//   from foo semijoin (select bar.b, count(*) from bar group by bar.b) subq(b, cnt)
-	//        on foo.a = subq.cnt and foo.b = subq.b
+	//   from foo semijoin (select bar.b, sum(1) from bar group by bar.b) subq(b, s)
+	//        on foo.a = subq.s and foo.b = subq.b
 	//
 	pcrs->Intersection(pcrsOutput);
 	pexprTemp->Release();
