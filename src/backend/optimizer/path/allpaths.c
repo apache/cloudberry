@@ -3673,7 +3673,14 @@ set_cte_pathlist(PlannerInfo *root, RelOptInfo *rel, RangeTblEntry *rte)
 			sub_final_rel->pathlist = list_make1(sub_final_rel->cheapest_total_path);
 
 			cteplaninfo->subroot = subroot;
-			cteplaninfo->push_quals_possible = true;
+
+			/*
+			 * Pushing quals into the producer changes how many times the
+			 * subquery's volatile expressions are evaluated, so leave a CTE
+			 * containing volatile functions alone.  This is the same rule the
+			 * non-shared path above applies before calling push_down_restrict().
+			 */
+			cteplaninfo->push_quals_possible = !contain_volatile_function;
 		}
 		else
 			subroot = cteplaninfo->subroot;

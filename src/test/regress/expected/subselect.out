@@ -1947,7 +1947,7 @@ with x as (select * from (select f1, random() from subselect_tbl) ss)
 select * from x where f1 = 1;
                         QUERY PLAN                        
 ----------------------------------------------------------
- Gather Motion 1:1  (slice1; segments: 1)
+ Gather Motion 3:1  (slice1; segments: 3)
    Output: x.f1, x.random
    ->  Subquery Scan on x
          Output: x.f1, x.random
@@ -1956,10 +1956,8 @@ select * from x where f1 = 1;
                Output: share0_ref1.f1, share0_ref1.random
                ->  Seq Scan on public.subselect_tbl
                      Output: subselect_tbl.f1, random()
-                     Filter: (subselect_tbl.f1 = 1)
- Settings: optimizer = 'off'
  Optimizer: Postgres query optimizer
-(12 rows)
+(10 rows)
 
 create temporary sequence ts;
 create table vol_test(a int, b int);
@@ -1970,7 +1968,7 @@ with x as (select * from (select a, nextval('ts') from vol_test) ss)
 select * from x where a = 1;
                            QUERY PLAN                            
 -----------------------------------------------------------------
- Gather Motion 1:1  (slice1; segments: 1)
+ Gather Motion 3:1  (slice1; segments: 3)
    Output: x.a, x.nextval
    ->  Subquery Scan on x
          Output: x.a, x.nextval
@@ -1979,10 +1977,8 @@ select * from x where a = 1;
                Output: share0_ref1.a, share0_ref1.nextval
                ->  Seq Scan on public.vol_test
                      Output: vol_test.a, nextval('ts'::regclass)
-                     Filter: (vol_test.a = 1)
- Settings: optimizer = 'off'
  Optimizer: Postgres query optimizer
-(12 rows)
+(10 rows)
 
 drop sequence ts;
 drop table vol_test;
