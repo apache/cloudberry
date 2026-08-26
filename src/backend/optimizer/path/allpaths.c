@@ -3673,27 +3673,35 @@ set_cte_pathlist(PlannerInfo *root, RelOptInfo *rel, RangeTblEntry *rte)
 			sub_final_rel->pathlist = list_make1(sub_final_rel->cheapest_total_path);
 
 			cteplaninfo->subroot = subroot;
+			cteplaninfo->push_quals_possible = true;
 		}
 		else
 			subroot = cteplaninfo->subroot;
 
-
-		/* Also replace Vars with subquery's targetlist */
-		List *quals = collect_cte_quals(root, rel, rte, rel->relid, subquery);
-		cteplaninfo->rels = lappend(cteplaninfo->rels, rel);
-		cteplaninfo->relids = bms_add_member(cteplaninfo->relids, rel->relid);
-
-		// TODO: if quals is NIL, it means a cte ref need all the data from cte
-		if (quals != NIL)
+		if (cteplaninfo->push_quals_possible)
 		{
-			// Expr *and_clause;
-			//and_clause = (list_length(quals) == 1) ? linitial(quals) : make_andclause(quals);
-			cteplaninfo->list_quals = lappend(cteplaninfo->list_quals, make_andclause(quals));
+			/* Also replace Vars with subquery's targetlist */
+			List *quals = collect_cte_quals(root, rel, rte, rel->relid, subquery);
+			cteplaninfo->rels = lappend(cteplaninfo->rels, rel);
+			cteplaninfo->relids = bms_add_member(cteplaninfo->relids, rel->relid);
+
+			if (quals != NIL)
+				cteplaninfo->list_quals = lappend(cteplaninfo->list_quals, make_andclause(quals));
+			else
+			{
+				/*
+				 * This reference has no qual that can be pushed down, i.e. it
+				 * needs every row of the CTE.  Pushing the other references'
+				 * quals into the producer would drop rows this one still
+				 * needs, so give up on the pushdown for this CTE entirely.
+				 */
+				cteplaninfo->push_quals_possible = false;
+				cteplaninfo->list_quals = NIL;
+			}
 		}
 
-		int num_rels = list_length(cteplaninfo->rels);
-
-		if (num_rels == cte->cterefcount)
+		if (cteplaninfo->push_quals_possible &&
+			list_length(cteplaninfo->rels) == cte->cterefcount)
 		{
 			/* Do a second plan for shared cte. */
 

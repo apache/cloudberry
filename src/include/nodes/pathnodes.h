@@ -694,6 +694,13 @@ typedef struct CtePlanInfo
 
 	/* the relations refered to shared cte. */
 	List *rels;
+
+	/*
+	 * True while it is still possible to push the OR of the consumers'
+	 * quals down into the shared CTE subquery.  Reset as soon as one
+	 * consumer turns out to need all the rows of the CTE.
+	 */
+	bool push_quals_possible;
 	
 	List *list_quals;
 
