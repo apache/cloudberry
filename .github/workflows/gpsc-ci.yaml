@@ -1,0 +1,316 @@
+# --------------------------------------------------------------------
+#
+# Licensed to the Apache Software Foundation (ASF) under one or more
+# contributor license agreements. See the NOTICE file distributed
+# with this work for additional information regarding copyright
+# ownership. The ASF licenses this file to You under the Apache
+# License, Version 2.0 (the "License"); you may not use this file
+# except in compliance with the License. You may obtain a copy of the
+# License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
+# implied. See the License for the specific language governing
+# permissions and limitations under the License.
+#
+# --------------------------------------------------------------------
+# gp_stats_collector CI Workflow
+#
+# Builds Cloudberry with --with-gp-stats-collector (the default in
+# configure-cloudberry.sh), stands up a demo cluster with the extension
+# preloaded, and runs the gp_stats_collector regression suites.
+#
+# Scoped to changes that can affect the extension or the core patches it
+# depends on, so it does not run on every unrelated push.
+# --------------------------------------------------------------------
+name: GPSC CI Pipeline
+
+on:
+  push:
+    branches:
+      - 'pgqs-**'
+  pull_request:
+    paths:
+      - 'gpcontrib/gp_stats_collector/**'
+      - '.github/workflows/gpsc-ci.yaml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+
+  test-gpsc:
+    name: Build and Test gp_stats_collector (${{ matrix.os }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu22.04
+            image: apache/incubator-cloudberry:cbdb-build-ubuntu22.04-latest
+          - os: rocky8
+            image: apache/incubator-cloudberry:cbdb-build-rocky8-latest
+          - os: rocky9
+            image: apache/incubator-cloudberry:cbdb-build-rocky9-latest
+    container:
+      image: ${{ matrix.image }}
+      options: >-
+        --user root
+        -h cdw
+
+    steps:
+      - name: Checkout Cloudberry source
+        uses: actions/checkout@v4
+        with:
+          # Init/build scripts hardcode a "cloudberry" source dir name
+          # (e.g. create-cloudberry-demo-cluster.sh uses ${SRC_DIR}/../cloudberry),
+          # so the checkout path must be "cloudberry", not the repo name.
+          path: cloudberry
+          submodules: recursive
+
+      - name: Cloudberry Environment Initialization
+        shell: bash
+        env:
+          SRC_DIR: ${{ github.workspace }}/cloudberry
+        run: |
+          set -eo pipefail
+          if ! su - gpadmin -c "/tmp/init_system.sh"; then
+            echo "::error::Container initialization failed"
+            exit 1
+          fi
+          mkdir -p "${SRC_DIR}/build-logs"
+          chown -R gpadmin:gpadmin .
+          chmod -R 755 .
+
+      - name: Configure
+        shell: bash
+        env:
+          SRC_DIR: ${{ github.workspace }}/cloudberry
+        run: |
+          set -eo pipefail
+          chmod +x "${SRC_DIR}"/devops/build/automation/cloudberry/scripts/configure-cloudberry.sh
+          if ! time su - gpadmin -c "cd ${SRC_DIR} && SRC_DIR=${SRC_DIR} ${SRC_DIR}/devops/build/automation/cloudberry/scripts/configure-cloudberry.sh"; then
+            echo "::error::Configure failed"
+            exit 1
+          fi
+
+      - name: Build
+        shell: bash
+        env:
+          SRC_DIR: ${{ github.workspace }}/cloudberry
+        run: |
+          set -eo pipefail
+          chmod +x "${SRC_DIR}"/devops/build/automation/cloudberry/scripts/build-cloudberry.sh
+          if ! time su - gpadmin -c "cd ${SRC_DIR} && SRC_DIR=${SRC_DIR} ${SRC_DIR}/devops/build/automation/cloudberry/scripts/build-cloudberry.sh"; then
+            echo "::error::Build failed"
+            exit 1
+          fi
+
+      - name: Create demo cluster (gp_stats_collector preloaded)
+        shell: bash
+        env:
+          SRC_DIR: ${{ github.workspace }}/cloudberry
+        run: |
+          set -eo pipefail
+          chmod +x "${SRC_DIR}"/devops/build/automation/cloudberry/scripts/create-cloudberry-demo-cluster.sh
+          if ! time su - gpadmin -c "cd ${SRC_DIR} && SRC_DIR=${SRC_DIR} ${SRC_DIR}/devops/build/automation/cloudberry/scripts/create-cloudberry-demo-cluster.sh"; then
+            echo "::error::Demo cluster creation failed"
+            exit 1
+          fi
+          # pg_query_state requires the module in shared_preload_libraries.
+          su - gpadmin -c "cd ${SRC_DIR} && \
+            source /usr/local/cloudberry-db/cloudberry-env.sh && \
+            source gpAux/gpdemo/gpdemo-env.sh && \
+            gpconfig -c shared_preload_libraries -v 'gp_stats_collector' && \
+            gpstop -ra"
+
+      - name: Run gp_stats_collector regression suite
+        shell: bash
+        env:
+          SRC_DIR: ${{ github.workspace }}/cloudberry
+        run: |
+          set -eo pipefail
+          chmod +x "${SRC_DIR}"/devops/build/automation/cloudberry/scripts/test-cloudberry.sh
+          # Capture make output to an artifact file: the raw job log gets
+          # truncated by the huge Build step, so tail it here on failure.
+          if ! time su - gpadmin -c "cd ${SRC_DIR} && \
+            source /usr/local/cloudberry-db/cloudberry-env.sh && \
+            source gpAux/gpdemo/gpdemo-env.sh && \
+            SRC_DIR=${SRC_DIR} \
+            PGOPTIONS='' \
+            MAKE_NAME='GPSC Regress' \
+            MAKE_TARGET=installcheck \
+            MAKE_DIRECTORY=--directory=${SRC_DIR}/gpcontrib/gp_stats_collector \
+            ${SRC_DIR}/devops/build/automation/cloudberry/scripts/test-cloudberry.sh \
+              > ${SRC_DIR}/build-logs/gpsc-regress-make.log 2>&1"; then
+            echo "::error::gp_stats_collector installcheck failed"
+            echo "===== gpsc-regress-make.log (tail) ====="
+            tail -120 ${SRC_DIR}/build-logs/gpsc-regress-make.log 2>/dev/null || true
+            echo "===== regression.diffs ====="
+            cat ${SRC_DIR}/gpcontrib/gp_stats_collector/regression.diffs 2>/dev/null || true
+            exit 1
+          fi
+
+      - name: Run pg_query_state suite
+        shell: bash
+        env:
+          SRC_DIR: ${{ github.workspace }}/cloudberry
+        run: |
+          set -eo pipefail
+          if ! time su - gpadmin -c "cd ${SRC_DIR} && \
+            source /usr/local/cloudberry-db/cloudberry-env.sh && \
+            source gpAux/gpdemo/gpdemo-env.sh && \
+            SRC_DIR=${SRC_DIR} \
+            PGOPTIONS='' \
+            MAKE_NAME='GPSC pg_query_state' \
+            MAKE_TARGET=installcheck \
+            MAKE_DIRECTORY=--directory=${SRC_DIR}/gpcontrib/gp_stats_collector/test \
+            ${SRC_DIR}/devops/build/automation/cloudberry/scripts/test-cloudberry.sh \
+              > ${SRC_DIR}/build-logs/gpsc-pqs-make.log 2>&1"; then
+            echo "::error::pg_query_state suite failed"
+            echo "===== gpsc-pqs-make.log (tail) ====="
+            tail -120 ${SRC_DIR}/build-logs/gpsc-pqs-make.log 2>/dev/null || true
+            echo "===== test/regression.diffs ====="
+            cat ${SRC_DIR}/gpcontrib/gp_stats_collector/test/regression.diffs 2>/dev/null || true
+            exit 1
+          fi
+
+      - name: Upload regression artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gpsc-results-${{ matrix.os }}
+          path: |
+            cloudberry/gpcontrib/gp_stats_collector/regression.out
+            cloudberry/gpcontrib/gp_stats_collector/regression.diffs
+            cloudberry/gpcontrib/gp_stats_collector/results/
+            cloudberry/gpcontrib/gp_stats_collector/test/results/
+            cloudberry/gpcontrib/gp_stats_collector/test/regression.diffs
+            cloudberry/build-logs/
+          retention-days: 7
+
+  # Runs the pg_query_state isolation2 suite (multi-session / happy-path checks
+  # that plain pg_regress cannot express).  The fault injector (gp_inject_fault)
+  # is enabled by default (--enable-faultinjector=yes), so no debug build is
+  # needed.
+  test-gpsc-isolation2:
+    name: pg_query_state multi-session (gp_stats_collector)
+    runs-on: ubuntu-latest
+    container:
+      image: apache/incubator-cloudberry:cbdb-build-ubuntu22.04-latest
+      options: >-
+        --user root
+        -h cdw
+
+    steps:
+      - name: Checkout Cloudberry source
+        uses: actions/checkout@v4
+        with:
+          path: cloudberry
+          submodules: recursive
+
+      - name: Cloudberry Environment Initialization
+        shell: bash
+        env:
+          SRC_DIR: ${{ github.workspace }}/cloudberry
+        run: |
+          set -eo pipefail
+          if ! su - gpadmin -c "/tmp/init_system.sh"; then
+            echo "::error::Container initialization failed"
+            exit 1
+          fi
+          mkdir -p "${SRC_DIR}/build-logs"
+          chown -R gpadmin:gpadmin .
+          chmod -R 755 .
+
+      - name: Configure
+        shell: bash
+        env:
+          SRC_DIR: ${{ github.workspace }}/cloudberry
+        run: |
+          set -eo pipefail
+          chmod +x "${SRC_DIR}"/devops/build/automation/cloudberry/scripts/configure-cloudberry.sh
+          if ! time su - gpadmin -c "cd ${SRC_DIR} && SRC_DIR=${SRC_DIR} ${SRC_DIR}/devops/build/automation/cloudberry/scripts/configure-cloudberry.sh"; then
+            echo "::error::Configure failed"
+            exit 1
+          fi
+
+      - name: Build
+        shell: bash
+        env:
+          SRC_DIR: ${{ github.workspace }}/cloudberry
+        run: |
+          set -eo pipefail
+          chmod +x "${SRC_DIR}"/devops/build/automation/cloudberry/scripts/build-cloudberry.sh
+          if ! time su - gpadmin -c "cd ${SRC_DIR} && SRC_DIR=${SRC_DIR} ${SRC_DIR}/devops/build/automation/cloudberry/scripts/build-cloudberry.sh"; then
+            echo "::error::Build failed"
+            exit 1
+          fi
+
+      - name: Build isolation2 harness
+        shell: bash
+        env:
+          SRC_DIR: ${{ github.workspace }}/cloudberry
+        run: |
+          set -eo pipefail
+          if ! time su - gpadmin -c "cd ${SRC_DIR} && \
+            source /usr/local/cloudberry-db/cloudberry-env.sh && \
+            make -C src/test/isolation2 install"; then
+            echo "::error::isolation2 harness build failed"
+            exit 1
+          fi
+
+      - name: Create demo cluster (gp_stats_collector preloaded)
+        shell: bash
+        env:
+          SRC_DIR: ${{ github.workspace }}/cloudberry
+        run: |
+          set -eo pipefail
+          chmod +x "${SRC_DIR}"/devops/build/automation/cloudberry/scripts/create-cloudberry-demo-cluster.sh
+          if ! time su - gpadmin -c "cd ${SRC_DIR} && SRC_DIR=${SRC_DIR} ${SRC_DIR}/devops/build/automation/cloudberry/scripts/create-cloudberry-demo-cluster.sh"; then
+            echo "::error::Demo cluster creation failed"
+            exit 1
+          fi
+          su - gpadmin -c "cd ${SRC_DIR} && \
+            source /usr/local/cloudberry-db/cloudberry-env.sh && \
+            source gpAux/gpdemo/gpdemo-env.sh && \
+            gpconfig -c shared_preload_libraries -v 'gp_stats_collector' && \
+            gpstop -ra"
+
+      - name: Run pg_query_state isolation2 suite
+        shell: bash
+        env:
+          SRC_DIR: ${{ github.workspace }}/cloudberry
+        run: |
+          set -eo pipefail
+          if ! su - gpadmin -c "cd ${SRC_DIR} && \
+            source /usr/local/cloudberry-db/cloudberry-env.sh && \
+            source gpAux/gpdemo/gpdemo-env.sh && \
+            make -C gpcontrib/gp_stats_collector/test/isolation2 installcheck \
+              > ${SRC_DIR}/build-logs/gpsc-iso2.log 2>&1"; then
+            echo "::error::pg_query_state isolation2 suite failed"
+            echo "===== gpsc-iso2.log (tail) ====="
+            tail -100 ${SRC_DIR}/build-logs/gpsc-iso2.log 2>/dev/null || true
+            echo "===== isolation2 regression.diffs ====="
+            cat ${SRC_DIR}/gpcontrib/gp_stats_collector/test/isolation2/regression.diffs 2>/dev/null || true
+            exit 1
+          fi
+
+      - name: Upload isolation2 artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gpsc-iso2-results
+          path: |
+            cloudberry/gpcontrib/gp_stats_collector/test/isolation2/results/
+            cloudberry/gpcontrib/gp_stats_collector/test/isolation2/regression.diffs
+            cloudberry/build-logs/
+          retention-days: 7

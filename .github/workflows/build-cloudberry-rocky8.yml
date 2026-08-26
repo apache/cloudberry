@@ -321,6 +321,11 @@ jobs:
                                "gpcontrib/gp_sparse_vector:installcheck",
                                "gpcontrib/gp_toolkit:installcheck"]
               },
+              {"test":"gpcontrib-gp-relaccess-stats",
+               "make_configs":["gpcontrib/gp_relaccess_stats:installcheck"],
+               "extension":"gp_relaccess_stats",
+               "shared_preload_libraries":"gp_relaccess_stats"
+              },
               {"test":"gpcontrib-gp-stats-collector",
                "make_configs":["gpcontrib/gp_stats_collector:installcheck"],
                "extension":"gp_stats_collector"
@@ -1443,6 +1448,20 @@ jobs:
                     psql postgres"
                 then
                     echo "Error creating gp_stats_collector extension"
+                    exit 1
+                fi
+                ;;
+              gp_relaccess_stats)
+                if ! su - gpadmin -c "source ${BUILD_DESTINATION}/cloudberry-env.sh && \
+                  source ${SRC_DIR}/gpAux/gpdemo/gpdemo-env.sh && \
+                  gpconfig -c shared_preload_libraries -v 'gp_relaccess_stats' && \
+                  gpstop -ra && \
+                  echo 'CREATE EXTENSION IF NOT EXISTS gp_relaccess_stats; \
+                        SHOW shared_preload_libraries; \
+                        TABLE pg_extension;' | \
+                    psql postgres"
+                then
+                    echo "Error creating gp_relaccess_stats extension"
                     exit 1
                 fi
                 ;;
