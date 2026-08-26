@@ -553,8 +553,8 @@ create trigger some_tab_stmt_trig
 ERROR:  Triggers for statements are not yet supported
 explain (costs off)
 update some_tab set f3 = 11 where f1 = 12 and f2 = 13;
-QUERY PLAN
-___________
+                                     QUERY PLAN                                     
+------------------------------------------------------------------------------------
  Update on some_tab
    Update on some_tab_child some_tab_1
    ->  Result

@@ -1959,8 +1959,8 @@ explain (costs off) select * from hp where a = 1 and b = 'abcde' and
   (c = 2 or c = 3);
         QUERY PLAN        
 --------------------------
-  Result
-    One-Time Filter: false
+ Result
+   One-Time Filter: false
 GP_IGNORE:(3 rows)
 
 --
@@ -2107,8 +2107,8 @@ create table hp3 partition of hp for values with (modulus 4, remainder 3);
 prepare hp_q1 (text) as
 select * from hp where a is null and b = $1;
 explain (costs off) execute hp_q1('xxx');
-QUERY PLAN
-___________
+                     QUERY PLAN                    
+--------------------------------------------------
  Gather Motion XXX
    ->  Append
          Subplans Removed: 3
@@ -4224,8 +4224,7 @@ explain (costs off) select * from rp_prefix_test3 where a >= 1 and b >= 1 and b 
 -------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Seq Scan on rp_prefix_test3_p2 rp_prefix_test3
-         Filter: ((a >= 1) AND (b >= 1) AND (d >= 0) AND (c >= 1) AND (b = 2) AND (c = 2))
-  Optimizer: Postgres query optimizer
+          Filter: ((a >= 1) AND (b >= 1) AND (d >= 0) AND (c >= 1) AND (b = 2) AND (c = 2))
 (4 rows)
 
 drop table rp_prefix_test1;
