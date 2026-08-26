@@ -1904,7 +1904,7 @@ with x as materialized (select * from (select f1 from subselect_tbl) ss)
 select * from x where f1 = 1;
                      QUERY PLAN                     
 ----------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)
+ Gather Motion 1:1  (slice1; segments: 1)
    Output: x.f1
    ->  Subquery Scan on x
          Output: x.f1
@@ -1913,9 +1913,10 @@ select * from x where f1 = 1;
                Output: share0_ref1.f1
                ->  Seq Scan on public.subselect_tbl
                      Output: subselect_tbl.f1
+                     Filter: (subselect_tbl.f1 = 1)
  Optimizer: Postgres query optimizer
  Settings: gp_cte_sharing=on
-(11 rows)
+(12 rows)
 
 -- Stable functions are safe to inline
 explain (verbose, costs off)
