@@ -1275,6 +1275,9 @@ code or new licensing patterns.
             <exclude>gpcontrib/gp_stats_collector/gp_stats_collector.control</exclude>
             <exclude>gpcontrib/gp_stats_collector/.clang-format</exclude>
             <exclude>gpcontrib/gp_stats_collector/Makefile</exclude>
+            <exclude>gpcontrib/gp_stats_collector/test/Makefile</exclude>
+            <exclude>gpcontrib/gp_stats_collector/test/isolation2/Makefile</exclude>
+            <exclude>gpcontrib/gp_stats_collector/test/isolation2/isolation2_schedule</exclude>
 
             <!-- The following files are from yezzey extension,
                  introduced by Cloudberry.
