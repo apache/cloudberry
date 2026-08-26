@@ -1569,6 +1569,17 @@ gp_percentile_cont_transition(FunctionCallInfo fcinfo,
 	{
 		return_state = lerpfunc(prev_state, val, proportion);
 	}
+	else if (PG_ARGISNULL(0))
+	{
+		/*
+		 * Neither of the rows we are after landed in this peer group, so we
+		 * hand the previous state back unchanged.  When that state is NULL
+		 * the isnull flag has to travel with it: returning a bare Datum(0)
+		 * as non-NULL gives wrong answers for by-value types and a NULL
+		 * pointer dereference for by-reference ones.
+		 */
+		fcinfo->isnull = true;
+	}
 	*cnt = *cnt + peer_count;
 
 	if(*cnt > total_rows)
@@ -1641,7 +1652,6 @@ gp_percentile_disc_transition(PG_FUNCTION_ARGS)
 				 errmsg("percentile value %g is not between 0 and 1",
 						percentile)));
 	Datum prev_state = PG_GETARG_DATUM(0);
-	bool prev_state_isnull = PG_ARGISNULL(0);
 	Datum val = PG_GETARG_DATUM(1);
 	Datum return_state = prev_state;
 	int64 total_rows = PG_GETARG_INT64(3);
@@ -1666,6 +1676,11 @@ gp_percentile_disc_transition(PG_FUNCTION_ARGS)
 	{
 		return_state = val;
 	}
+	else if (PG_ARGISNULL(0))
+	{
+		/* see gp_percentile_cont_transition() */
+		fcinfo->isnull = true;
+	}
 
 	*cnt = *cnt + peer_count;
 
@@ -1674,10 +1689,6 @@ gp_percentile_disc_transition(PG_FUNCTION_ARGS)
 		/* Clean up, so the next group can see NULL for fn_extra */
 		pfree(cnt);
 		fcinfo->flinfo->fn_extra = NULL;
-	}
-
-	if (return_state == prev_state) {
-		fcinfo->isnull = prev_state_isnull;
 	}
 
 	PG_RETURN_DATUM(return_state);
