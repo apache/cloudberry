@@ -3744,29 +3744,26 @@ set_cte_pathlist(PlannerInfo *root, RelOptInfo *rel, RangeTblEntry *rte)
 			Path *best_path = sub_final_rel->cheapest_total_path;
 			CdbPathLocus locus;
 			double		sub_total_rows;
+			double		numsegments;
 
-			if (!IS_DUMMY_REL(sub_final_rel))
+			if (IS_DUMMY_REL(sub_final_rel))
 			{
-				double		numsegments;
-
-				if (CdbPathLocus_IsPartitioned(sub_final_rel->cheapest_total_path->locus))
-					numsegments = CdbPathLocus_NumSegments(sub_final_rel->cheapest_total_path->locus);
-				else
-					numsegments = 1;
-				sub_total_rows = sub_final_rel->cheapest_total_path->rows * numsegments;
-
+				foreach (lc, cteplaninfo->rels)
+					set_dummy_rel_pathlist(root, (RelOptInfo *) lfirst(lc));
+				return;
 			}
+
+			if (CdbPathLocus_IsPartitioned(best_path->locus))
+				numsegments = CdbPathLocus_NumSegments(best_path->locus);
+			else
+				numsegments = 1;
+			sub_total_rows = best_path->rows * numsegments;
 
 			foreach (lc, cteplaninfo->rels)
 			{
 				RelOptInfo *cte_rel = (RelOptInfo*) lfirst(lc);
 				Relids required_outer = cte_rel->lateral_relids;
 
-				if (IS_DUMMY_REL(sub_final_rel))
-				{
-					set_dummy_rel_pathlist(root, cte_rel);
-					continue;
-				}
 				/* Mark rel with estimated output rows, width, etc */
 				set_cte_size_estimates(root, cte_rel, sub_total_rows);
 
