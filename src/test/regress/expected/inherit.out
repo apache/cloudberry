@@ -550,6 +550,7 @@ $$begin raise notice 'updating some_tab'; return NULL; end;$$
 language plpgsql;
 create trigger some_tab_stmt_trig
   before update on some_tab execute function some_tab_stmt_trig_func();
+ERROR:  Triggers for statements are not yet supported
 explain (costs off)
 update some_tab set f3 = 11 where f1 = 12 and f2 = 13;
                                      QUERY PLAN                                     
@@ -559,10 +560,9 @@ update some_tab set f3 = 11 where f1 = 12 and f2 = 13;
    ->  Result
          ->  Index Scan using some_tab_child_f1_f2_idx on some_tab_child some_tab_1
                Index Cond: ((f1 = 12) AND (f2 = 13))
-(5 rows)
+GP_IGNORE:(6 rows)
 
 update some_tab set f3 = 11 where f1 = 12 and f2 = 13;
-NOTICE:  updating some_tab
 drop table some_tab cascade;
 NOTICE:  drop cascades to table some_tab_child
 drop function some_tab_stmt_trig_func();
