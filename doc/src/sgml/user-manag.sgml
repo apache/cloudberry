@@ -693,6 +693,16 @@ DROP ROLE doomed_role;
        database to issue
        <link linkend="sql-createsubscription"><command>CREATE SUBSCRIPTION</command></link>.</entry>
       </row>
+      <row>
+       <entry>pg_manage_resource_groups</entry>
+       <entry>Allow
+       <link linkend="sql-createresourcegroup"><command>CREATE</command></link>,
+       <link linkend="sql-alterresourcegroup"><command>ALTER</command></link> and
+       <link linkend="sql-dropresourcegroup"><command>DROP RESOURCE GROUP</command></link>,
+       and execution of <function>pg_resgroup_move_query()</function>, normally
+       restricted to superusers. The system <literal>admin_group</literal> can
+       still only be altered or dropped by a superuser.</entry>
+      </row>
      </tbody>
     </tgroup>
    </table>
@@ -725,6 +735,17 @@ DROP ROLE doomed_role;
   canceling a query on another backend or terminating its session. A user
   granted this role cannot however send signals to a backend owned by a
   superuser.  See <xref linkend="functions-admin-signal"/>.
+  </para>
+
+  <para>
+  The <literal>pg_manage_resource_groups</literal> role is intended to allow
+  trusted, non-superuser administrators (for example, the database owner in
+  managed deployments) to define and tune resource groups without holding
+  full superuser privileges. Members of this role can create, alter and drop
+  resource groups, and move running queries between groups with
+  <function>pg_resgroup_move_query()</function>. The system
+  <literal>admin_group</literal> is reserved for the cluster's control plane
+  and can only be altered or dropped by a real superuser.
   </para>
 
   <para>

@@ -9,6 +9,7 @@ test: unlogged_appendonly_tables
 test: udf_exception_blocks_panic_scenarios
 test: ao_same_trans_truncate_crash
 test: frozen_insert_crash
+test: dropdb_crash_hazards
 
 test: prevent_ao_wal
 

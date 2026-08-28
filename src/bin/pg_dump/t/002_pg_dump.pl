@@ -1969,6 +1969,9 @@ my %tests = (
 
 		# invalid databases should never be dumped
 		like => {},
+		not_like => {
+			pg_dumpall_dbprivs => 1,
+		},
 	},
 
 	'CREATE ACCESS METHOD gist2' => {
