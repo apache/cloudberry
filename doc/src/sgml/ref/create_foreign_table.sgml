@@ -423,7 +423,7 @@ int totalNumberOfSegments = getgpsegmentCount();
     an <command>UPDATE</command> that changes the partition key value can
     cause a row to be moved from a local partition to a foreign-table
     partition, provided the foreign data wrapper supports tuple routing.
-    However it is not currently possible to move a row from a
+    However, it is not currently possible to move a row from a
     foreign-table partition to another partition.
     An <command>UPDATE</command> that would require doing that will fail
     due to the partitioning constraint, assuming that that is properly

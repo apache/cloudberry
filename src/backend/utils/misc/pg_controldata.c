@@ -24,6 +24,7 @@
 #include "common/controldata_utils.h"
 #include "funcapi.h"
 #include "miscadmin.h"
+#include "storage/lwlock.h"
 #include "utils/builtins.h"
 #include "utils/pg_lsn.h"
 #include "utils/timestamp.h"
@@ -56,7 +57,9 @@ pg_control_system(PG_FUNCTION_ARGS)
 	tupdesc = BlessTupleDesc(tupdesc);
 
 	/* read the control file */
+	LWLockAcquire(ControlFileLock, LW_SHARED);
 	ControlFile = get_controlfile(DataDir, &crc_ok);
+	LWLockRelease(ControlFileLock);
 	if (!crc_ok)
 		ereport(ERROR,
 				(errmsg("calculated CRC checksum does not match value stored in file")));
@@ -134,7 +137,9 @@ pg_control_checkpoint(PG_FUNCTION_ARGS)
 	tupdesc = BlessTupleDesc(tupdesc);
 
 	/* Read the control file. */
+	LWLockAcquire(ControlFileLock, LW_SHARED);
 	ControlFile = get_controlfile(DataDir, &crc_ok);
+	LWLockRelease(ControlFileLock);
 	if (!crc_ok)
 		ereport(ERROR,
 				(errmsg("calculated CRC checksum does not match value stored in file")));
@@ -237,7 +242,9 @@ pg_control_recovery(PG_FUNCTION_ARGS)
 	tupdesc = BlessTupleDesc(tupdesc);
 
 	/* read the control file */
+	LWLockAcquire(ControlFileLock, LW_SHARED);
 	ControlFile = get_controlfile(DataDir, &crc_ok);
+	LWLockRelease(ControlFileLock);
 	if (!crc_ok)
 		ereport(ERROR,
 				(errmsg("calculated CRC checksum does not match value stored in file")));
@@ -304,7 +311,9 @@ pg_control_init(PG_FUNCTION_ARGS)
 	tupdesc = BlessTupleDesc(tupdesc);
 
 	/* read the control file */
+	LWLockAcquire(ControlFileLock, LW_SHARED);
 	ControlFile = get_controlfile(DataDir, &crc_ok);
+	LWLockRelease(ControlFileLock);
 	if (!crc_ok)
 		ereport(ERROR,
 				(errmsg("calculated CRC checksum does not match value stored in file")));
