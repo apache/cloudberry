@@ -1,12 +1,9 @@
 # contrib/postgres_fdw/Makefile
 
 MODULE_big = postgres_fdw
-OBJS_FRONTEND = \
-	link-canary.o
 
 OBJS = \
 	$(WIN32RES) \
-	$(OBJS_FRONTEND) \
 	connection.o \
 	deparse.o \
 	option.o \
@@ -16,7 +13,7 @@ OBJS = \
 PGFILEDESC = "postgres_fdw - foreign data wrapper for PostgreSQL"
 
 PG_CPPFLAGS = -I$(libpq_srcdir)
-SHLIB_LINK_INTERNAL = -Wl,-Bsymbolic -Wl,-Bstatic -Wl,-Bstatic $(libpq) -Wl,-Bdynamic
+SHLIB_LINK_INTERNAL = $(libpq)
 
 EXTENSION = postgres_fdw
 DATA = postgres_fdw--1.0.sql postgres_fdw--1.0--1.1.sql
@@ -35,17 +32,6 @@ top_builddir = ../..
 include $(top_builddir)/src/Makefile.global
 include $(top_srcdir)/contrib/contrib-global.mk
 endif
-
-link-canary.c : % : $(top_srcdir)/src/common/%
-	rm -f $@ && $(LN_S) $< .
-
-link-canary.o: link-canary.c
-	$(CC) $(CFLAGS) -DFRONTEND $(CPPFLAGS) -c $< -o $@
-
-clean: clean-symlinks
-
-clean-symlinks:
-	rm -f link-canary.c
 
 # For postgres_fdw test
 export PG_PORT=5432
