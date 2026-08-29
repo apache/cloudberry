@@ -15,4 +15,6 @@ backend_sources += files(
   'restrictinfo.c',
   'tlist.c',
   'var.c',
+  'predtest_valueset.c',
+  'walkers.c',
 )

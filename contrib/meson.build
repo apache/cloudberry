@@ -7,7 +7,7 @@ contrib_data_args = {
   'install_dir': contrib_data_dir,
 }
 
-subdir('adminpack')
+# subdir('adminpack') -- not built, as contrib/Makefile says (adminpack: in core)
 subdir('amcheck')
 subdir('auth_delay')
 subdir('auto_explain')
@@ -18,11 +18,11 @@ subdir('bool_plperl')
 subdir('btree_gin')
 subdir('btree_gist')
 subdir('citext')
-subdir('cube')
+# subdir('cube') -- not built, as contrib/Makefile says (cube: CUBE is a keyword)
 subdir('dblink')
 subdir('dict_int')
 subdir('dict_xsyn')
-subdir('earthdistance')
+# subdir('earthdistance') -- not built, as contrib/Makefile says (earthdistance: needs cube)
 subdir('file_fdw')
 subdir('fuzzystrmatch')
 subdir('hstore')
@@ -33,7 +33,7 @@ subdir('intarray')
 subdir('isn')
 subdir('jsonb_plperl')
 subdir('jsonb_plpython')
-subdir('lo')
+# subdir('lo') -- not built, as contrib/Makefile says (lo: no large objects)
 subdir('ltree')
 subdir('ltree_plpython')
 subdir('oid2name')
@@ -54,6 +54,26 @@ subdir('pg_walinspect')
 subdir('postgres_fdw')
 subdir('seg')
 subdir('sepgsql')
+# --enable-pax; requires protobuf >= 3.5, zstd >= 1.4 and the shared backend
+if get_option('pax').enabled()
+  subdir('pax_storage')
+endif
+subdir('interconnect')
+
+# Cloudberry modules the top-level GNUmakefile builds and installs by default,
+# alongside the upstream ones it picks out of contrib.
+subdir('extprotocol')
+subdir('formatter')
+subdir('formatter_fixedwidth')
+subdir('indexscan')
+subdir('try_convert')
+
+# --enable-ic-udp2 builds contrib/udp2 with its own CMake project. The meson
+# build does not build that yet, so turning the option on would define
+# ENABLE_IC_UDP2 for a server that has no udp2 module to load. Refuse instead.
+if get_option('ic_udp2')
+  error('ic_udp2: contrib/udp2 is a CMake project the meson build does not build yet')
+endif
 subdir('spi')
 subdir('sslinfo')
 # start-scripts doesn't contain build products

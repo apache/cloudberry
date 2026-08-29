@@ -106,6 +106,13 @@ backend_sources += files(
   'xid.c',
   'xid8funcs.c',
   'xml.c',
+  'complex_type.c',
+  'gp_dump_oids.c',
+  'gp_optimizer_functions.c',
+  'interpolate.c',
+  'matrix.c',
+  'mdb.c',
+  'pivot.c',
 )
 
 
