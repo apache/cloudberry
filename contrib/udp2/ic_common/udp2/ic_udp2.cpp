@@ -3055,7 +3055,7 @@ putIntoUnackQueueRing(UnackQueueRing *uqr, ICBuffer *buf, uint64 expTime, uint64
 	else
 	{
 		if (uqr->currentTime == 0)
-		uqr->currentTime = now - (now % TIMER_SPAN_LOSS);
+		uqr->currentTime = now - (now % TIMER_SPAN);
 
 		diff = now + expTime - uqr->currentTime;
 		if (diff >= UNACK_QUEUE_RING_LENGTH)
