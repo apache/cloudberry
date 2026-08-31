@@ -2141,9 +2141,13 @@ explain (costs off) select * from t4 group by a, b, c;
                 QUERY PLAN                
 ------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
-   ->  Seq Scan on t4
+   ->  GroupAggregate
+         Group Key: a, b, c
+         ->  Sort
+               Sort Key: a, b, c
+               ->  Seq Scan on t4
  Optimizer: GPORCA
-(3 rows)
+(7 rows)
 
 explain (costs off) select * from t5 group by a, b, c;
                 QUERY PLAN                

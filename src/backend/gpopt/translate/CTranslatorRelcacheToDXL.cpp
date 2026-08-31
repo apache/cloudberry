@@ -2758,7 +2758,8 @@ CTranslatorRelcacheToDXL::ConstructAttnoMapping(CMemoryPool *mp,
 //	@doc:
 //		Get key sets for relation
 //		For a relation, 'key sets' contains all 'Unique keys'
-//		defined as unique constraints in the catalog table.
+//		defined as unique constraints in the catalog table, except
+//		those on nullable columns.
 //		Conditionally, a combination of {segid, ctid} is also added.
 //
 //---------------------------------------------------------------------------
@@ -2770,15 +2771,33 @@ CTranslatorRelcacheToDXL::RetrieveRelKeysets(
 	ULongPtr2dArray *key_sets = GPOS_NEW(mp) ULongPtr2dArray(mp);
 
 	List *rel_keys = gpdb::GetRelationKeys(oid);
+	gpdb::RelationWrapper rel = gpdb::GetRelation(oid);
 
 	ListCell *lc_key = nullptr;
 	ForEach(lc_key, rel_keys)
 	{
 		List *key_elem_list = (List *) lfirst(lc_key);
 
+		// A UNIQUE constraint on a nullable column allows several NULL rows,
+		// so it doesn't make the rows distinct and isn't a key.
+		BOOL is_nullable = false;
+		ListCell *lc_key_elem = nullptr;
+		ForEach(lc_key_elem, key_elem_list)
+		{
+			INT key_idx = lfirst_int(lc_key_elem);
+			if (!TupleDescAttr(rel->rd_att, key_idx - 1)->attnotnull)
+			{
+				is_nullable = true;
+				break;
+			}
+		}
+		if (is_nullable)
+		{
+			continue;
+		}
+
 		ULongPtrArray *key_set = GPOS_NEW(mp) ULongPtrArray(mp);
 
-		ListCell *lc_key_elem = nullptr;
 		ForEach(lc_key_elem, key_elem_list)
 		{
 			INT key_idx = lfirst_int(lc_key_elem);
