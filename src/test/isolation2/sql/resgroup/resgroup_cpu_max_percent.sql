@@ -38,12 +38,11 @@ $$ LANGUAGE plpython3u;
 CREATE OR REPLACE FUNCTION verify_cpu_usage(groupname TEXT, expect_cpu_usage INT, err_rate INT)
 RETURNS BOOL AS $$
     import json
-    import functools
 
     all_info = plpy.execute('''
         SELECT sample::json->'{name}' AS cpu FROM cpu_usage_samples
     '''.format(name=groupname))
-    usage = float(all_info[0]['cpu'])
+    usage = sum(float(row['cpu']) for row in all_info) / len(all_info)
 
     return abs(usage - expect_cpu_usage) <= err_rate
 $$ LANGUAGE plpython3u;
@@ -142,7 +141,11 @@ SELECT fetch_sample();
 SELECT pg_sleep(1.7);
 -- end_ignore
 
-SELECT verify_cpu_usage('rg1_cpu_test', 90, 10);
+-- rg1_cpu_test is uncapped (cpu_max_percent=-1) and it is the only busy
+-- group, so it takes essentially every core: gp_resgroup_status reports
+-- ~100, not 90.  Expecting 90 put the real value on the upper edge of the
+-- +/- err_rate window, so any upward sampling jitter failed the test.
+SELECT verify_cpu_usage('rg1_cpu_test', 100, 10);
 
 -- start_ignore
 SELECT * FROM cancel_all;
@@ -170,10 +173,11 @@ SELECT * FROM cancel_all;
 -- when there are multiple groups with parallel queries,
 -- they should share the cpu usage by their cpu_weight settings,
 --
+-- The suite CPU limit is 100%, and both groups are uncapped.
 -- rg1_cpu_test:rg2_cpu_test is 100:200 => 1:2, so:
 --
--- - rg1_cpu_test gets 90% * 1/3 => 30%;
--- - rg2_cpu_test gets 90% * 2/3 => 60%;
+-- - rg1_cpu_test gets 100% * 1/3 => approximately 33%;
+-- - rg2_cpu_test gets 100% * 2/3 => approximately 67%;
 --
 
 10&: SELECT * FROM gp_dist_random('gp_id') WHERE busy() IS NULL;
@@ -213,8 +217,10 @@ SELECT fetch_sample();
 SELECT pg_sleep(1.7);
 -- end_ignore
 
-SELECT verify_cpu_usage('rg1_cpu_test', 30, 10);
-SELECT verify_cpu_usage('rg2_cpu_test', 60, 10);
+-- Both groups are uncapped, so they share the whole machine in proportion
+-- to cpu_weight (100 and 200): ~33 and ~67, not ~30 and ~60.
+SELECT verify_cpu_usage('rg1_cpu_test', 33, 10);
+SELECT verify_cpu_usage('rg2_cpu_test', 67, 10);
 
 -- start_ignore
 SELECT * FROM cancel_all;
