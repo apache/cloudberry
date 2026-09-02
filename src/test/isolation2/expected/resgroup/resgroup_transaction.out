@@ -237,3 +237,16 @@ DROP
 -- cleanup
 DROP VIEW rg_test_monitor;
 DROP
+
+-- ----------------------------------------------------------------------
+-- Test: "CREATE INDEX CONCURRENTLY" when compiled with enable-cassert
+-- ----------------------------------------------------------------------
+
+CREATE TABLE t(a text, b text);
+CREATE
+CREATE INDEX CONCURRENTLY t_idx ON t(a, b);
+CREATE
+DROP INDEX CONCURRENTLY t_idx;
+DROP
+DROP TABLE t;
+DROP
