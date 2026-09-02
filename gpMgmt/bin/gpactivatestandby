@@ -17,15 +17,16 @@ import os
 import sys
 import signal
 import glob
+import math
 import time
 import shutil
-import tempfile
 from datetime import datetime, timedelta
 
 # import GPDB modules
 try:
     import pg as pygresql
     from gppylib.commands import unix, gp, pg
+    from gppylib.commands.base import ExecutionError
     from gppylib.db import dbconn
     from gppylib.gpparseopts import OptParser, OptChecker, OptionGroup, SUPPRESS_HELP
     from gppylib.gplog import get_default_logger, setup_tool_logging, enable_verbose_logging
@@ -39,6 +40,7 @@ EXECNAME = os.path.split(__file__)[-1]
 
 # Threshold values
 LOG_TIME_THRESHOLD_MINS = 120
+STANDBY_ACTIVATION_TIMEOUT = 600
 
 STANDBY_SIGNAL_FILE = "standby.signal"
 POSTGRESQL_AUTO_CONF_FILE = "postgresql.auto.conf"
@@ -255,7 +257,24 @@ def check_standby_running(options):
 
 
 #-------------------------------------------------------------------------
-def check_or_start_standby(options):
+def get_remaining_time(deadline, stage):
+    remaining_time = deadline - time.monotonic()
+    if remaining_time <= 0:
+        raise GpActivateStandbyException('Timed out waiting for %s.' % stage)
+    return remaining_time
+
+
+#-------------------------------------------------------------------------
+def wait_for_postmaster(options, deadline):
+    logger.info('Waiting for standby postmaster to start...')
+
+    while gp.get_postmaster_pid_locally(options.coordinator_data_dir) <= 0:
+        remaining_time = get_remaining_time(deadline, 'standby postmaster to start')
+        time.sleep(min(1, remaining_time))
+
+
+#-------------------------------------------------------------------------
+def check_or_start_standby(options, deadline):
     """
     Check if standby postmaster is running.  We need the process
     to activate it, but there could be some cases where user wants
@@ -276,33 +295,19 @@ def check_or_start_standby(options):
         logger.error('Use -f option to bring the system anyway')
         raise GpActivateStandbyException('postmaster is not running')
     else:
-        # XXX: We don't have enough knowledge to bring up the standby
-        # but there could be a situation where user needs to activate
-        # it anyway.  We'll restart with the full options after
-        # promoting the standby.  This is nothing but a bailout and
-        # this could lose some of the latest changes from the primary.
-        fd, trigger_file = tempfile.mkstemp(dir=options.coordinator_data_dir)
-
-        cmd = gp.GpConfigHelper("add promote trigger file",
-                                options.coordinator_data_dir,
-                                'promote_trigger_file',
-                                value="'" + trigger_file + "'")
-        cmd.run(validateAfter=True)
-
-        with open(trigger_file, 'w') as f:
-            f.write('');
-        f.close();
-
-        start_coordinator(options)
+        start_coordinator(options, deadline)
 
         return False
 
 #-------------------------------------------------------------------------
-def start_coordinator(options):
-    """Starts the coordinator."""
+def start_coordinator(options, deadline):
+    """Starts the standby coordinator without accessing the catalog."""
 
-    logger.info('Starting standby coordinator database in utility mode...')
-    gp.NewGpStart.local('Start CBDB', coordinatorOnly=True, coordinatorDirectory=options.coordinator_data_dir)
+    logger.info('Starting standby coordinator database...')
+    gp.GpStandbyStart.local('Start standby coordinator',
+                            options.coordinator_data_dir,
+                            int(os.getenv('PGPORT')))
+    wait_for_postmaster(options, deadline)
 
 #-------------------------------------------------------------------------
 def stop_coordinator():
@@ -312,15 +317,20 @@ def stop_coordinator():
     gp.GpStop.local('Stop CBDB', coordinatorOnly=True, fast=True)
  
 #-------------------------------------------------------------------------
-def promote_standby(coordinator_data_dir):
+def promote_standby(coordinator_data_dir, deadline):
     """Promote standby"""
 
     logger.info('Promoting standby...')
-    # Keeping the timeout here consistent with
-    # MIRROR_PROMOTION_TIMEOUT which is defined as 10 mins
+    promotion_timeout = int(math.ceil(
+        get_remaining_time(deadline, 'standby promotion')))
     cmd = gp.Command('pg_ctl promote',
-                     'pg_ctl promote -D %s -t 600' % coordinator_data_dir)
-    cmd.run(validateAfter=True)
+                     'pg_ctl promote -D %s -t %s' % (coordinator_data_dir, promotion_timeout))
+    try:
+        cmd.run(validateAfter=True)
+    except ExecutionError:
+        # Replace pg_ctl's generic timeout error with an activation-stage error.
+        get_remaining_time(deadline, 'standby promotion')
+        raise
     logger.info('Standby coordinator is promoted')
 
     # After promotion run CHECKPOINT to force the new TimeLineID to be
@@ -332,77 +342,71 @@ def promote_standby(coordinator_data_dir):
     # promoted coordinator's control file but the coordinator's
     # postmaster will actually not be ready yet to accept database
     # connections for a small period of time. Use the same
-    # MIRROR_PROMOTION_TIMEOUT of 10 minutes here as well.
+    # standby activation deadline here as well.
     logger.debug('forcing CHECKPOINT to reflect new TimeLineID...')
-    for i in range(600):
+    while True:
+        conn = None
         try:
-            dburl = dbconn.DbURL()
+            remaining_time = get_remaining_time(
+                deadline, 'promoted coordinator to accept database connections')
+            connection_timeout = max(1, min(2, int(math.ceil(remaining_time))))
+            dburl = dbconn.DbURL(timeout=connection_timeout, retries=1)
             conn = dbconn.connect(dburl, utility=True, logConn=False)
             dbconn.execSQL(conn, 'CHECKPOINT')
-            conn.close()
-            return True
-        except pygresql.InternalError as e:
+            return
+        except (pygresql.InternalError, dbconn.ConnectionError):
             pass
-        time.sleep(1)
+        finally:
+            if conn is not None:
+                conn.close()
 
-    return False
+        remaining_time = get_remaining_time(
+            deadline, 'promoted coordinator to accept database connections')
+        time.sleep(min(1, remaining_time))
 
 #-------------------------------------------------------------------------
 # Main
 #-------------------------------------------------------------------------
 
-# setup logging
 logger = get_default_logger()
-setup_tool_logging(EXECNAME, unix.getLocalHostname(), unix.getUserName())
-
-# parse args and options
-(options_, args_) = parseargs()
-
-# if we got a new log dir, we can now set it up.
-if options_.logfile:
-    setup_tool_logging(EXECNAME, unix.getLocalHostname(), unix.getUserName(), logdir=options_.logfile)
-
-try:
-    warnings_generated_ = print_summary(options_)
 
 
-    # disable keyboard interrupt to prevent users from canceling
-    # out of the process at a very bad time.  If there is a partial
-    # update to the gp_configuration catalog and the user cancels
-    # you get stuck where you can't go forward and you can't go
-    # backwards.
-    signal.signal(signal.SIGINT, signal.SIG_IGN)
+def main():
+    setup_tool_logging(EXECNAME, unix.getLocalHostname(), unix.getUserName())
 
-    requires_restart = not check_or_start_standby(options_)
+    options, _ = parseargs()
 
-    # promote standby, only if the standby is running in recovery
-    if not requires_restart:
-        res = promote_standby(options_.coordinator_data_dir)
-        if not res:
-            raise GpActivateStandbyException('Timed out waiting for promoted coordinator to accept database connections.')
+    if options.logfile:
+        setup_tool_logging(EXECNAME, unix.getLocalHostname(), unix.getUserName(), logdir=options.logfile)
 
-    # now we can access the catalog.  promote action has already updated
-    # catalog, so array.coordinator is the old (promoted) standby at this point.
-    array_ = get_config()
+    try:
+        warnings_generated = print_summary(options)
 
-    # If we forced to start utility coordinator, this is the time to restart
-    # cluster so that the new coordinator becomes dispatch mode.
-    if requires_restart:
-        cmd = gp.GpStop.local('CBDB restart', restart=True, datadir=options_.coordinator_data_dir)
+        # Disable keyboard interrupt to prevent users from canceling out of
+        # the process while the activation and catalog update are in progress.
+        signal.signal(signal.SIGINT, signal.SIG_IGN)
 
-    # At this point, cancel isn't all that bad so re-enable 
-    # keyboard interrupt.
-    signal.signal(signal.SIGINT, signal.default_int_handler)
-    
-    print_results(array_, unix.getLocalHostname(), options_)
-    
-    if warnings_generated_:
-        sys.exit(1)
-    else:
-        sys.exit(0)
-    
-except Exception as e:
-    logger.fatal('Error activating standby coordinator: %s' % str(e))
-    sys.exit(2)
+        deadline = time.monotonic() + STANDBY_ACTIVATION_TIMEOUT
+        requires_restart = not check_or_start_standby(options, deadline)
 
-sys.exit(0)
+        promote_standby(options.coordinator_data_dir, deadline)
+
+        # Promotion has updated the catalog, so array.coordinator is the
+        # former standby, which is now the coordinator.
+        array = get_config()
+
+        if requires_restart:
+            gp.GpStop.local('CBDB restart', restart=True,
+                            datadir=options.coordinator_data_dir)
+
+        signal.signal(signal.SIGINT, signal.default_int_handler)
+
+        print_results(array, unix.getLocalHostname(), options)
+        return 1 if warnings_generated else 0
+    except Exception as e:
+        logger.fatal('Error activating standby coordinator: %s' % str(e))
+        return 2
+
+
+if __name__ == '__main__':
+    sys.exit(main())
