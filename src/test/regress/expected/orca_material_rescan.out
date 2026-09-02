@@ -1,0 +1,101 @@
+--
+-- Test rescan of Materialize in ORCA-translated correlated SubPlans.
+--
+-- A Materialize sitting above a subtree that consumes a param of an
+-- enclosing SubPlan (here: a ProjectSet computing UNNEST over an outer
+-- column) must discard its tuplestore and rebuild whenever the param
+-- changes.  The executor propagates chgParam to a child only if the
+-- child's allParam bitmapset contains the changed param, so this hangs
+-- on the ORCA translator producing correct param bitmaps for every
+-- node, and on the Materialize not shielding a Motion-free child from
+-- rescans.  When either is broken, the Materialize replays the first
+-- outer row's result for every subsequent row.  GPDB 7.5.x shipped
+-- exactly this class of wrong-results regression.
+--
+-- The tables deliberately have no stats: with default cardinalities
+-- ORCA puts the ProjectSet on the nestloop inner side underneath a
+-- Materialize, which is the vulnerable plan shape.  Keep them
+-- unanalyzed.
+--
+CREATE SCHEMA orca_material_rescan;
+SET search_path TO orca_material_rescan;
+CREATE TABLE ae_event (
+    seq_nvl        numeric(10)   NOT NULL,
+    ae_rule_id_ctn varchar(200)  NULL,
+    ae_occr_dtm    timestamp     NULL
+) USING ao_row DISTRIBUTED RANDOMLY;
+CREATE TABLE ae_rule (
+    ae_rule_id varchar(50)  NOT NULL,
+    ae_rule_nm varchar(200) NULL
+) USING ao_row DISTRIBUTED RANDOMLY;
+INSERT INTO ae_rule VALUES
+    ('R_01', 'Overheating'),
+    ('R_02',  NULL),
+    ('R_03', 'Calibration Error'),
+    ('R_04', 'Sensor Offline');
+-- Edge cases: rule id lists with a duplicate, an id with no match in
+-- ae_rule, and empty lists.  Every row must get its own aggregate, not
+-- a replay of the first row's.
+INSERT INTO ae_event VALUES
+    (1, 'R_01,R_02', '2026-06-10 08:59:49'),
+    (2, 'R_03',      '2026-06-10 08:59:50'),
+    (3, '',          '2026-06-10 08:59:51'),
+    (4, 'R_04,R_99', '2026-06-10 08:59:52'),
+    (5, 'R_01,R_01', '2026-06-10 08:59:53'),
+    (6, '',          '2026-06-10 08:59:54');
+SELECT $query$
+SELECT seq_nvl, ae_rule_id_ctn
+    , ( SELECT string_agg(rul_nm, ',' ORDER BY ae_rule_id)
+        FROM ( SELECT coalesce(ae_rule_nm, ae_rule_id) AS rul_nm, ae_rule_id
+               FROM ae_rule t1
+               JOIN ( SELECT unnest(string_to_array(sh.ae_rule_id_ctn, ',')) ) t2(column2)
+                 ON t1.ae_rule_id = t2.column2 ) t
+      ) AS rule_ctrl
+FROM ae_event sh
+WHERE sh.ae_occr_dtm >= '2026-06-10 06:00:00'
+  AND sh.ae_occr_dtm < '2026-06-11 06:00:00'
+ORDER BY seq_nvl
+$query$ AS qry \gset
+SET optimizer TO on;
+-- The shape under test: the SubPlan's nestloop inner side must be a
+-- Materialize over a Motion-free ProjectSet consuming the outer param.
+EXPLAIN (COSTS OFF)
+:qry ;
+                                                                                     QUERY PLAN                                                                                     
+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Sort
+   Sort Key: sh.seq_nvl
+   ->  Result
+         ->  Gather Motion 3:1  (slice1; segments: 3)
+               ->  Seq Scan on ae_event sh
+                     Filter: ((ae_occr_dtm >= 'Wed Jun 10 06:00:00 2026'::timestamp without time zone) AND (ae_occr_dtm < 'Thu Jun 11 06:00:00 2026'::timestamp without time zone))
+         SubPlan 1
+           ->  Aggregate
+                 ->  Nested Loop
+                       Join Filter: ((t1.ae_rule_id)::text = (unnest(string_to_array((sh.ae_rule_id_ctn)::text, ','::text))))
+                       ->  Materialize
+                             ->  Gather Motion 3:1  (slice2; segments: 3)
+                                   ->  Seq Scan on ae_rule t1
+                       ->  Materialize
+                             ->  ProjectSet
+                                   ->  Result
+ Optimizer: GPORCA
+(17 rows)
+
+:qry ;
+ seq_nvl | ae_rule_id_ctn |        rule_ctrl        
+---------+----------------+-------------------------
+       1 | R_01,R_02      | Overheating,R_02
+       2 | R_03           | Calibration Error
+       3 |                | 
+       4 | R_04,R_99      | Sensor Offline
+       5 | R_01,R_01      | Overheating,Overheating
+       6 |                | 
+(6 rows)
+
+RESET optimizer;
+RESET search_path;
+DROP SCHEMA orca_material_rescan CASCADE;
+NOTICE:  drop cascades to 2 other objects
+DETAIL:  drop cascades to table orca_material_rescan.ae_event
+drop cascades to table orca_material_rescan.ae_rule
