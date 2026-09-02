@@ -15,12 +15,14 @@
 #include "funcapi.h"
 #include "libpq-fe.h"
 #include "miscadmin.h"
+#include "catalog/pg_authid.h"
 #include "catalog/pg_resgroup.h"
 #include "cdb/cdbdisp_query.h"
 #include "cdb/cdbdispatchresult.h"
 #include "cdb/cdbvars.h"
 #include "commands/resgroupcmds.h"
 #include "storage/procarray.h"
+#include "utils/acl.h"
 #include "utils/builtins.h"
 #include "utils/datetime.h"
 #include "utils/resgroup.h"
@@ -464,10 +466,15 @@ pg_resgroup_move_query(PG_FUNCTION_ARGS)
 				(errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
 						(errmsg("resource group is not enabled"))));
 
-	if (!superuser())
+	/*
+	 * Superusers and members of the predefined role
+	 * pg_manage_resource_groups can move a query between resource groups.
+	 */
+	if (!has_privs_of_role(GetUserId(), ROLE_PG_MANAGE_RESOURCE_GROUPS))
 		ereport(ERROR,
 				(errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
-						(errmsg("must be superuser to move query"))));
+				 errmsg("permission denied to move query between resource groups"),
+				 errhint("Must be superuser or have privileges of the pg_manage_resource_groups role.")));
 
 	if (Gp_role == GP_ROLE_DISPATCH)
 	{

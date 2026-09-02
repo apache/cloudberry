@@ -909,7 +909,7 @@ struct ICGlobalControlInfo
  */
 #define UNACK_QUEUE_RING_SLOTS_NUM (2000)
 #define TIMER_SPAN (session_param.Gp_interconnect_timer_period * 1000ULL)	/* default: 5ms */
-#define TIMER_SPAN_LOSS (session_param.Gp_interconnect_timer_period * 500ULL)     /* default: 5ms */
+#define TIMER_SPAN_LOSS (session_param.Gp_interconnect_timer_period * 500ULL)     /* default: 2.5ms */
 #define TIMER_CHECKING_PERIOD (session_param.Gp_interconnect_timer_checking_period)	/* default: 20ms */
 #define UNACK_QUEUE_RING_LENGTH (UNACK_QUEUE_RING_SLOTS_NUM * TIMER_SPAN)
 #define UNACK_QUEUE_RING_LENGTH_LOSS (UNACK_QUEUE_RING_SLOTS_NUM * TIMER_SPAN_LOSS)

@@ -287,8 +287,6 @@ insert into analyze_@amname@_2 select * from analyze_@amname@_2;
 insert into analyze_@amname@_2 select * from analyze_@amname@_2;
 insert into analyze_@amname@_2 select * from analyze_@amname@_2;
 insert into analyze_@amname@_2 select * from analyze_@amname@_2;
-insert into analyze_@amname@_2 select * from analyze_@amname@_2;
-insert into analyze_@amname@_2 select * from analyze_@amname@_2;
 
 1: begin;
 1: insert into analyze_@amname@_2 select * from analyze_@amname@_2;
