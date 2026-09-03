@@ -438,7 +438,7 @@ smgrrelease(SMgrRelation reln)
 {
 	for (ForkNumber forknum = 0; forknum <= MAX_FORKNUM; forknum++)
 	{
-		smgrsw[reln->smgr_which].smgr_close(reln, forknum);
+		(*reln->smgr).smgr_close(reln, forknum);
 		reln->smgr_cached_nblocks[forknum] = InvalidBlockNumber;
 	}
 	reln->smgr_targblock = InvalidBlockNumber;
@@ -696,8 +696,8 @@ void
 smgrzeroextend(SMgrRelation reln, ForkNumber forknum, BlockNumber blocknum,
 			   int nblocks, bool skipFsync)
 {
-	smgrsw[reln->smgr_which].smgr_zeroextend(reln, forknum, blocknum,
-											 nblocks, skipFsync);
+	(*reln->smgr).smgr_zeroextend(reln, forknum, blocknum,
+								  nblocks, skipFsync);
 
 	/*
 	 * Normally we expect this to increase the fork size by nblocks, but if
