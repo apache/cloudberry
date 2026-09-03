@@ -582,7 +582,7 @@ static ICGlobalControlInfo ic_control_info;
  */
 #define UNACK_QUEUE_RING_SLOTS_NUM (2000)
 #define TIMER_SPAN (Gp_interconnect_timer_period * 1000ULL)	/* default: 5ms */
-#define TIMER_SPAN_LOSS (Gp_interconnect_timer_period * 500ULL)     /* default: 5ms */
+#define TIMER_SPAN_LOSS (Gp_interconnect_timer_period * 500ULL)     /* default: 2.5ms */
 #define TIMER_CHECKING_PERIOD Gp_interconnect_timer_checking_period	/* default: 20ms */
 #define UNACK_QUEUE_RING_LENGTH (UNACK_QUEUE_RING_SLOTS_NUM * TIMER_SPAN)
 #define UNACK_QUEUE_RING_LENGTH_LOSS (UNACK_QUEUE_RING_SLOTS_NUM * TIMER_SPAN_LOSS)
@@ -7033,7 +7033,7 @@ putIntoUnackQueueRing(UnackQueueRing *uqr, ICBuffer *buf, uint64 expTime, uint64
 	else
 	{
 		if (uqr->currentTime == 0)
-		uqr->currentTime = now - (now % TIMER_SPAN_LOSS);
+		uqr->currentTime = now - (now % TIMER_SPAN);
 
 		diff = now + expTime - uqr->currentTime;
 		if (diff >= UNACK_QUEUE_RING_LENGTH)

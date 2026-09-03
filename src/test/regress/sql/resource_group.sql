@@ -4,19 +4,31 @@
 -- this test creates resource group objects and roles associated with
 -- resource groups so pg_dumpall/pg_upgrade can dump those objects at
 -- the end of ICW.
--- 
+--
 -- NOTE: please always put this test in the end of this file and do not
--- drop them.
+-- drop the rg_dump_test* objects.
 
 -- start_ignore
 DROP ROLE IF EXISTS role_dump_test1;
 DROP ROLE IF EXISTS role_dump_test2;
 DROP ROLE IF EXISTS role_dump_test3;
+DROP ROLE IF EXISTS rg_admin_test;
+DROP ROLE IF EXISTS rg_noadmin_test;
 
 DROP RESOURCE GROUP rg_dump_test1;
 DROP RESOURCE GROUP rg_dump_test2;
 DROP RESOURCE GROUP rg_dump_test3;
+DROP RESOURCE GROUP rg_admin_test1;
+DROP RESOURCE GROUP rg_admin_test2;
 -- end_ignore
+
+-- The predefined role must be present after initdb.
+SELECT 1 AS role_exists
+  FROM pg_roles
+ WHERE rolname = 'pg_manage_resource_groups';
+
+-- The predefined role is pinned and cannot be dropped, even by a superuser.
+DROP ROLE pg_manage_resource_groups;
 
 CREATE RESOURCE GROUP rg_dump_test1 WITH (concurrency=2, cpu_max_percent=5);
 CREATE RESOURCE GROUP rg_dump_test2 WITH (concurrency=2, cpu_max_percent=5);
@@ -25,3 +37,55 @@ CREATE RESOURCE GROUP rg_dump_test3 WITH (concurrency=2, cpu_max_percent=5);
 CREATE ROLE role_dump_test1 RESOURCE GROUP rg_dump_test1;
 CREATE ROLE role_dump_test2 RESOURCE GROUP rg_dump_test2;
 CREATE ROLE role_dump_test3 RESOURCE GROUP rg_dump_test3;
+
+-- Test that members of the predefined role pg_manage_resource_groups
+-- can manage resource groups without superuser, but cannot touch
+-- the system admin_group.
+CREATE ROLE rg_admin_test RESOURCE GROUP rg_dump_test1;
+CREATE ROLE rg_noadmin_test RESOURCE GROUP rg_dump_test1;
+GRANT pg_manage_resource_groups TO rg_admin_test;
+
+SET ROLE rg_admin_test;
+
+CREATE RESOURCE GROUP rg_admin_test1 WITH (concurrency=2, cpu_max_percent=5, memory_quota=5);
+CREATE RESOURCE GROUP rg_admin_test2 WITH (concurrency=2, cpu_max_percent=5, memory_quota=5);
+ALTER RESOURCE GROUP rg_admin_test1 SET cpu_max_percent 2;
+DROP RESOURCE GROUP rg_admin_test1;
+ALTER RESOURCE GROUP admin_group SET cpu_max_percent 2;
+DROP RESOURCE GROUP admin_group;
+
+-- But a real superuser can still ALTER a system resource group (restored after).
+RESET ROLE;
+ALTER RESOURCE GROUP admin_group SET cpu_max_percent 9;
+ALTER RESOURCE GROUP admin_group SET cpu_max_percent 10;
+
+SET ROLE rg_noadmin_test;
+
+CREATE RESOURCE GROUP rg_admin_test1 WITH (concurrency=2, cpu_max_percent=5, memory_quota=5);
+ALTER RESOURCE GROUP rg_admin_test2 SET cpu_max_percent 2;
+DROP RESOURCE GROUP rg_admin_test2;
+DROP RESOURCE GROUP admin_group;
+
+-- After REVOKE the role loses its privileges immediately.
+RESET ROLE;
+REVOKE pg_manage_resource_groups FROM rg_admin_test;
+SET ROLE rg_admin_test;
+CREATE RESOURCE GROUP rg_admin_test3 WITH (concurrency=2, cpu_max_percent=5, memory_quota=5);
+ALTER RESOURCE GROUP rg_admin_test2 SET cpu_max_percent 3;
+DROP RESOURCE GROUP rg_admin_test2;
+
+-- Transitive membership through an intermediate role must also work.
+RESET ROLE;
+CREATE ROLE rg_admin_grp;
+GRANT pg_manage_resource_groups TO rg_admin_grp;
+GRANT rg_admin_grp TO rg_admin_test;
+SET ROLE rg_admin_test;
+ALTER RESOURCE GROUP rg_admin_test2 SET cpu_max_percent 4;
+DROP RESOURCE GROUP rg_admin_test2;
+
+RESET ROLE;
+REVOKE rg_admin_grp FROM rg_admin_test;
+REVOKE pg_manage_resource_groups FROM rg_admin_grp;
+DROP ROLE rg_admin_grp;
+DROP ROLE rg_admin_test;
+DROP ROLE rg_noadmin_test;
