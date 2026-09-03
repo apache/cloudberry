@@ -195,8 +195,6 @@ typedef struct RefreshClause
  */
 typedef struct Expr
 {
-	pg_node_attr(abstract)
-
 	NodeTag		type;
 } Expr;
 
@@ -520,7 +518,7 @@ typedef struct Aggref
 
 } Aggref;
 
-typedef struct
+typedef struct DQAExpr
 {
 	Expr		xpr;
 
@@ -577,7 +575,7 @@ typedef struct GroupId
 typedef struct GroupingSetId
 {
 	Expr		xpr;
-	int			location;		/* token location */
+	int			location pg_node_attr(query_jumble_location);		/* token location */
 } GroupingSetId;
 
 /*

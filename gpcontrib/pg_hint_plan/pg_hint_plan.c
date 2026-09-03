@@ -2963,7 +2963,7 @@ get_current_hint_string(ParseState *pstate, Query *query)
 
 		if (jumblequery)
 		{
-			jstate = JumbleQueryDirect(query, query_str);
+			jstate = JumbleQuery(query);
 
 			/*
 			 * Normalize the query string by replacing constants with '?'

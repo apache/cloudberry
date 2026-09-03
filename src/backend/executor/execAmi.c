@@ -226,7 +226,6 @@ ExecReScan(PlanState *node)
 			break;
 
 		case T_DynamicIndexScanState:
-		case T_DynamicIndexOnlyScanState:
 			ExecReScanDynamicIndex((DynamicIndexScanState *) node);
 			break;
 
@@ -821,7 +820,6 @@ ExecSquelchNode(PlanState *node, bool force)
 		case T_IndexScanState:
 		case T_DynamicSeqScanState:
 		case T_DynamicIndexScanState:
-		case T_DynamicIndexOnlyScanState:
 		case T_IndexOnlyScanState:
 		case T_DynamicBitmapIndexScanState:
 		case T_BitmapIndexScanState:
