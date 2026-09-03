@@ -33,6 +33,7 @@
 #include "access/table.h"
 #include "access/tableam.h"
 #include "am_iceberg/pg_iceberg_ddl.h"
+#include "common/dl_resource.h"
 #include "am_iceberg/pg_iceberg_guc.h"
 #include "am_iceberg/pg_iceberg_options.h"
 #include "am_iceberg/pg_iceberg_reject.h"
@@ -951,6 +952,7 @@ _PG_init(void)
 				 errmsg("datalake_fdw must be loaded via shared_preload_libraries"),
 				 errhint("Add \"datalake_fdw\" to shared_preload_libraries and restart the server.")));
 
+	dl_resource_init();
 	pg_iceberg_define_gucs();
 	pg_iceberg_register_reloptions();
 	DatalakeRegisterMetaEngines();

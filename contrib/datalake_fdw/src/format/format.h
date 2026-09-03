@@ -64,10 +64,44 @@ struct ArrowArray {
 };
 #endif						/* ARROW_C_DATA_INTERFACE */
 
-typedef struct Fragment Fragment;                 /* opaque in skeleton */
-typedef struct ProjectionSet ProjectionSet;
+/*
+ * One unit of read work.  A fragment is a range of row groups rather than a
+ * whole file, because that is the granularity a scan can be divided at: several
+ * segments can then read one large file at once, which file-at-a-time
+ * assignment cannot express.
+ */
+typedef struct Fragment
+{
+	const char *path;
+	int			first_row_group;	/* 0-based */
+	int			n_row_groups;		/* 0 == to the end of the file */
+} Fragment;
+
+/*
+ * The columns to materialise, as 0-based indexes into the file schema.  A NULL
+ * set, or one with no columns, means every column: "read nothing" is not a
+ * projection anyone asks for, so it is not worth a second way to say "all".
+ */
+typedef struct ProjectionSet
+{
+	const int  *columns;
+	int			ncolumns;
+} ProjectionSet;
+
+/*
+ * A writer holds a whole row group before it can write one, so this is a bound
+ * on memory as much as on the file's shape.  It is Parquet's own default
+ * maximum, which is what makes it a sane ceiling for any format.
+ */
+#define DL_MAX_ROW_GROUP_ROWS (1024 * 1024)
+
+typedef struct WriterOptions
+{
+	const char *compression;	/* format-defined name; NULL for the default */
+	int64_t		row_group_size; /* rows per row group; 0 for the default */
+} WriterOptions;
+
 typedef struct RowGroupFilterSet RowGroupFilterSet;
-typedef struct WriterOptions WriterOptions;
 typedef struct FileMeta FileMeta;
 typedef struct DeleteFileSet DeleteFileSet;
 
@@ -75,27 +109,48 @@ typedef struct DeleteFileSet DeleteFileSet;
  * No global slots or trampolines, ever. */
 typedef struct FormatReader FormatReader;
 typedef struct FormatReaderOps {
-	/* Each batch yields ArrowArray+ArrowSchema; last column is a hidden int64 file-row
-	 * ordinal (for MoR positional deletes). */
+	/* Each batch yields ArrowArray+ArrowSchema.  A hidden trailing int64 column
+	 * carrying the file-row ordinal is what merge-on-read positional deletes
+	 * will match against; it arrives with them, so a batch is the projected
+	 * columns and nothing else for now. */
 	DlErrCode (*next_batch)(FormatReader *, struct ArrowArray *out,
 							struct ArrowSchema *schema, bool *eof);
-	void      (*close)(FormatReader *);   /* void cleanup ABI: noexcept, idempotent, never ereport */
+	/* void cleanup ABI: noexcept, never ereport.  Takes the caller's handle so
+	 * that it can clear it -- these run on the resource-owner path during
+	 * abort, where the same cleanup can be reached twice, and a second call
+	 * has to find nothing left rather than a freed reader. */
+	void      (*close)(FormatReader **);
 } FormatReaderOps;
 struct FormatReader { const FormatReaderOps *ops; void *impl; };
 
 typedef struct FormatWriter FormatWriter;
 typedef struct FormatWriterOps {
-	DlErrCode (*write_batch)(FormatWriter *, struct ArrowArray *batch); /* success == consumed */
+	/*
+	 * The batch is consumed whether or not the write succeeds: an
+	 * implementation hands it to a library that takes ownership at the call,
+	 * and there is no point at which it could hand it back.  The caller is
+	 * left with a released ArrowArray either way.
+	 */
+	DlErrCode (*write_batch)(FormatWriter *, struct ArrowArray *batch);
 	/* Rolling support: actual bytes encoded into the sink so far. Valid to query after a
 	 * successful write_batch; on failure returns an error code and *out is invalid.
 	 * The write.c orchestration layer rolls files (finish -> new open_writer) when this
-	 * reaches the soft target; overshoot of at most one batch is allowed. */
+	 * reaches the soft target.  A format writes in units it cannot split -- a Parquet
+	 * row group is one -- and what has not been written is not counted, so the target
+	 * is overshot by at most one such unit. */
 	DlErrCode (*bytes_written)(FormatWriter *, int64_t *out);
-	DlErrCode (*finish)(FormatWriter *, FileMeta **meta);  /* reportable close-time errors
-																		* surface ONLY here */
-	void      (*abort)(FormatWriter *);   /* void cleanup ABI: noexcept, idempotent, never ereport */
+	/* Reportable close-time errors surface ONLY here.  The writer is consumed
+	 * and the caller's handle cleared whether or not it succeeds: a file whose
+	 * footer could not be written is not one anything can retry against. */
+	DlErrCode (*finish)(FormatWriter **, FileMeta **meta);
+	/* void cleanup ABI, as for close() above: discards the file being written
+	 * and clears the caller's handle. */
+	void      (*abort)(FormatWriter **);
 } FormatWriterOps;
 struct FormatWriter { const FormatWriterOps *ops; void *impl; };
+
+/* Bumped when an existing field changes meaning; appending does not need it. */
+#define DL_FORMAT_ABI_VERSION 1
 
 typedef struct FormatRoutine {
 	uint32_t abi_version, struct_size;    /* same prefix-compat semantics as meta engine */

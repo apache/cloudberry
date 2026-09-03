@@ -33,6 +33,7 @@
 
 char	   *iceberg_default_catalog;
 char	   *iceberg_default_volume;
+int			iceberg_batch_rows;
 
 void
 pg_iceberg_define_gucs(void)
@@ -64,4 +65,27 @@ pg_iceberg_define_gucs(void)
 							   NULL,
 							   NULL,
 							   NULL);
+
+	/*
+	 * How many rows travel between the executor and a data file at a time.
+	 * Every per-batch cost is paid once per this many rows, and the batch and
+	 * its Arrow copy are held while it is built, so the right value trades
+	 * memory for that -- which depends on how wide the table is, and is why
+	 * this is a setting rather than a constant.
+	 *
+	 * The ceiling is Parquet's default row group length: a batch bigger than
+	 * the unit a file is written in buys nothing.
+	 */
+	DefineCustomIntVariable("iceberg.batch_rows",
+							"Rows per batch exchanged with a lake table's data files.",
+							NULL,
+							&iceberg_batch_rows,
+							16384,
+							1,
+							1024 * 1024,
+							PGC_USERSET,
+							0,
+							NULL,
+							NULL,
+							NULL);
 }

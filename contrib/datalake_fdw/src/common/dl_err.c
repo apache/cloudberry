@@ -160,9 +160,19 @@ dl_err_message(DlErrCode code)
 void
 dl_error_report(int elevel, DlErrCode code, const char *prefix)
 {
-	const DlErrorDetail *detail = dl_error_get();
+	/*
+	 * A copy, because reporting consumes the record: what is left otherwise is
+	 * a description of a failure that has already been reported, waiting for
+	 * the next failure with the same code to adopt it -- and the check below
+	 * cannot tell those two apart.  The reset has to happen before the ereport,
+	 * which at ERROR does not come back.
+	 */
+	DlErrorDetail detail_copy = *dl_error_get();
+	const DlErrorDetail *detail = &detail_copy;
 	StringInfoData detail_buf;
 	bool		has_detail;
+
+	dl_error_reset();
 
 	/*
 	 * Detail recorded against a different code belongs to some other failure --
