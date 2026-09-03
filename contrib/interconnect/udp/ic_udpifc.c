@@ -1666,7 +1666,6 @@ setupUDPListeningSocket(int *listenerSocketFd, int32 *listenerPort, int *txFamil
 	 */
 
 #ifndef __darwin__
-#ifdef HAVE_IPV6
 	if (addrs->ai_family == AF_INET && addrs->ai_next != NULL && addrs->ai_next->ai_family == AF_INET6)
 	{
 		/*
@@ -1685,7 +1684,6 @@ setupUDPListeningSocket(int *listenerSocketFd, int32 *listenerPort, int *txFamil
 		addrs = temp;			/* start the list with the old second node */
 		elog(DEBUG1, "Have both IPv6 and IPv4 choices");
 	}
-#endif
 #endif
 
 	for (rp = addrs; rp != NULL; rp = rp->ai_next)

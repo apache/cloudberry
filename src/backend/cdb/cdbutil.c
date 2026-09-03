@@ -1369,8 +1369,6 @@ getDnsCachedAddress(char *name, int port, int elevel, bool use_cache)
 			}
 		}
 
-#ifdef HAVE_IPV6
-
 		/*
 		 * IPv6 probably would work fine, we'd just need to make sure all the
 		 * data structures are big enough for the IPv6 address.  And on some
@@ -1397,7 +1395,6 @@ getDnsCachedAddress(char *name, int port, int elevel, bool use_cache)
 				memcpy(e->hostinfo, hostinfo, sizeof(hostinfo));
 			}
 		}
-#endif
 
 		if (use_cache)
 			MemoryContextSwitchTo(oldContext);
@@ -1407,7 +1404,7 @@ getDnsCachedAddress(char *name, int port, int elevel, bool use_cache)
 
 	/* return a pointer to our cache. */
 	if (use_cache)
-		return e->hostinfo;
+		return e ? e->hostinfo : NULL;
 
 	return pstrdup(hostinfo);
 }
@@ -3752,8 +3749,6 @@ getDnsCachedAddress(char *name, int port, int elevel, bool use_cache)
 			}
 		}
 
-#ifdef HAVE_IPV6
-
 		/*
 		 * IPv6 probably would work fine, we'd just need to make sure all the
 		 * data structures are big enough for the IPv6 address.  And on some
@@ -3780,7 +3775,6 @@ getDnsCachedAddress(char *name, int port, int elevel, bool use_cache)
 				memcpy(e->hostinfo, hostinfo, sizeof(hostinfo));
 			}
 		}
-#endif
 
 		if (use_cache)
 			MemoryContextSwitchTo(oldContext);
@@ -3790,7 +3784,7 @@ getDnsCachedAddress(char *name, int port, int elevel, bool use_cache)
 
 	/* return a pointer to our cache. */
 	if (use_cache)
-		return e->hostinfo;
+		return e ? e->hostinfo : NULL;
 
 	return pstrdup(hostinfo);
 }
