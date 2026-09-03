@@ -31,6 +31,7 @@
 #include "utils/builtins.h"
 
 #include "hook_wrappers.h"
+#include "pg_query_state/pg_query_state.h"
 
 PG_MODULE_MAGIC;
 
@@ -50,6 +51,14 @@ _PG_init(void)
 {
 	if (Gp_role == GP_ROLE_DISPATCH || Gp_role == GP_ROLE_EXECUTE)
 		hooks_init();
+
+	/*
+	 * pg_query_state registers its own shared memory, ProcSignal handlers and
+	 * executor hooks.  It goes last on purpose: hooks are chained head-first,
+	 * so registering after hooks_init() puts it outside of the collector's
+	 * executor wrappers, which is what it needs to see an untouched QueryDesc.
+	 */
+	pg_qs_init();
 }
 
 void

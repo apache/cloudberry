@@ -1,0 +1,21 @@
+-- pg_query_state_backends against an *idle* backend returns an empty set.
+--
+-- Deterministic multi-session check with no async race: session 1 tags itself
+-- and sits idle; session 2 looks up its pid and polls it.  An idle backend is
+-- "not running a query", so GetRemoteBackendInfo returns QUERY_NOT_RUNNING and
+-- the function yields an empty set (not an error).
+--
+-- Extensions are created by setup.sql.
+
+-- Session 1: tag connection so session 2 can find its pid, then go idle.
+1: SET application_name TO 'qs_idle_target';
+1: SELECT 1;
+
+-- Session 2: idle target -> zero participating backends.
+2: SELECT count(*) AS n_backends FROM gpsc.pg_query_state_backends(
+     (SELECT pid FROM pg_stat_activity
+      WHERE application_name = 'qs_idle_target' AND pid <> pg_backend_pid()
+      ORDER BY backend_start LIMIT 1));
+
+1q:
+2q:
