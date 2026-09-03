@@ -81,6 +81,7 @@
 
 -- Scenario 3: Commit-Prepare received on primary but not acknowledged to master
 -- NOTICE: Don't use session 2 again because it's cached gang is invalid
+4: SET debug_disable_distributed_snapshot = on;
 1:SELECT gp_inject_fault_infinite('finish_prepared_start_of_function', 'infinite_loop', dbid)
   FROM gp_segment_configuration WHERE content = 2 AND role = 'p';
 1&:DROP TABLE tolerance_test_table;
