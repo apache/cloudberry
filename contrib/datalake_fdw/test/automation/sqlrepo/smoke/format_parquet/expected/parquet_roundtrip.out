@@ -1,0 +1,250 @@
+-- Parquet: every type a lake table can store, written to a file and read back,
+-- and the row group range that a scan will one day be divided at.
+SET client_min_messages = warning;
+DROP VIEW IF EXISTS dlparq_roundtrip, dlparq_split;
+DROP TABLE IF EXISTS dlparq_src, dlparq_pairs, dlparq_unsupported CASCADE;
+CREATE EXTENSION IF NOT EXISTS datalake_fdw;
+CREATE EXTENSION IF NOT EXISTS datalake_fdw_test;
+RESET client_min_messages;
+-- A timestamptz is printed in the session's zone, so without this the output
+-- would depend on where the test ran rather than on what the file holds.
+SET TimeZone = 'UTC';
+-- Fixed file names rather than a unique one per run: the writer truncates, so a
+-- run reuses what the last one left instead of adding to it.  Nothing reachable
+-- from SQL can remove a file, so unique names would accumulate forever.
+\set roundtrip_file '/tmp/datalake_fdw_regress_roundtrip.parquet'
+\set split_file '/tmp/datalake_fdw_regress_split.parquet'
+\set empty_file '/tmp/datalake_fdw_regress_empty.parquet'
+\set batch_file '/tmp/datalake_fdw_regress_batch.parquet'
+\set missing_file '/tmp/datalake_fdw_regress_does_not_exist.parquet'
+CREATE TABLE dlparq_src (
+	c_bool		boolean,
+	c_int2		smallint,
+	c_int4		integer,
+	c_int8		bigint,
+	c_float4	real,
+	c_float8	double precision,
+	c_text		text,
+	c_varchar	varchar(16),
+	c_bpchar	char(5),
+	c_bytea		bytea,
+	c_date		date,
+	c_ts		timestamp,
+	c_tstz		timestamptz
+) DISTRIBUTED RANDOMLY;
+-- The dates and timestamps are chosen around both epochs: PostgreSQL counts
+-- from 2000-01-01 and Arrow from 1970-01-01, and a value on either side of
+-- 1970 is what tells a wrong shift from a right one.  A row of nulls is here
+-- because a validity bitmap that is never exercised is a bitmap that has not
+-- been tested.
+INSERT INTO dlparq_src VALUES
+	(true, 1, 100, 1000, 1.5, 2.5,
+	 'hello', 'varchar', 'abc', '\x0102'::bytea,
+	 '1970-01-01', '1970-01-01 00:00:00', '1970-01-01 00:00:00+00'),
+	(false, -2, -200, -2000, -1.5, -2.5,
+	 'a longer string with 中文', 'x', '', '\x'::bytea,
+	 '2000-01-01', '2000-01-01 12:34:56.789012', '2000-01-01 12:34:56.789012+00'),
+	(true, 32767, 2147483647, 9223372036854775807, 3.25, 1e300,
+	 '', 'z', 'zzzzz', '\xdeadbeef'::bytea,
+	 '1969-12-31', '1969-12-31 23:59:59.999999', '1969-12-31 23:59:59.999999+00'),
+	(NULL, NULL, NULL, NULL, NULL, NULL,
+	 NULL, NULL, NULL, NULL, NULL, NULL, NULL);
+SELECT datalake_parquet_write(:'roundtrip_file',
+							  'SELECT * FROM dlparq_src') AS rows_written;
+ rows_written 
+--------------
+            4
+(1 row)
+
+-- The column definition list is what the caller claims the file holds; it is
+-- checked against the file's own schema, not assumed.  A view so that the list
+-- is written once.
+CREATE VIEW dlparq_roundtrip AS
+	SELECT * FROM datalake_parquet_read(:'roundtrip_file') AS t (
+		c_bool		boolean,
+		c_int2		smallint,
+		c_int4		integer,
+		c_int8		bigint,
+		c_float4	real,
+		c_float8	double precision,
+		c_text		text,
+		c_varchar	varchar(16),
+		c_bpchar	char(5),
+		c_bytea		bytea,
+		c_date		date,
+		c_ts		timestamp,
+		c_tstz		timestamptz);
+SELECT * FROM dlparq_roundtrip ORDER BY c_int4;
+ c_bool | c_int2 |   c_int4   |       c_int8        | c_float4 | c_float8 |          c_text           | c_varchar | c_bpchar |  c_bytea   |   c_date   |              c_ts               |               c_tstz                
+--------+--------+------------+---------------------+----------+----------+---------------------------+-----------+----------+------------+------------+---------------------------------+-------------------------------------
+ f      |     -2 |       -200 |               -2000 |     -1.5 |     -2.5 | a longer string with 中文 | x         |          | \x         | 01-01-2000 | Sat Jan 01 12:34:56.789012 2000 | Sat Jan 01 12:34:56.789012 2000 UTC
+ t      |      1 |        100 |                1000 |      1.5 |      2.5 | hello                     | varchar   | abc      | \x0102     | 01-01-1970 | Thu Jan 01 00:00:00 1970        | Thu Jan 01 00:00:00 1970 UTC
+ t      |  32767 | 2147483647 | 9223372036854775807 |     3.25 |   1e+300 |                           | z         | zzzzz    | \xdeadbeef | 12-31-1969 | Wed Dec 31 23:59:59.999999 1969 | Wed Dec 31 23:59:59.999999 1969 UTC
+        |        |            |                     |          |          |                           |           |          |            |            |                                 | 
+(4 rows)
+
+-- Both directions: one way only says what the file lost, and a file with a row
+-- nobody wrote is just as wrong as one missing a row somebody did.
+SELECT count(*) AS differences
+FROM ((TABLE dlparq_src EXCEPT ALL TABLE dlparq_roundtrip)
+	  UNION ALL
+	  (TABLE dlparq_roundtrip EXCEPT ALL TABLE dlparq_src)) d;
+ differences 
+-------------
+           0
+(1 row)
+
+-- The comparison above cannot see the padding of a char(n): bpchar equality
+-- ignores trailing spaces, so a value that came back three characters long
+-- would still have compared equal to the five it went in as.
+SELECT octet_length(c_bpchar) AS bpchar_bytes,
+	   octet_length(c_text) AS text_bytes,
+	   octet_length(c_bytea) AS bytea_bytes
+FROM dlparq_roundtrip ORDER BY 1, 2, 3;
+ bpchar_bytes | text_bytes | bytea_bytes 
+--------------+------------+-------------
+            5 |          0 |           4
+            5 |          5 |           2
+            5 |         27 |           0
+              |            |            
+(4 rows)
+
+-- Row groups are the unit a scan is divided at, so reading the parts has to add
+-- up to reading the whole -- no row seen twice, none missed.
+CREATE TABLE dlparq_pairs AS
+	SELECT i AS k, 'v' || i AS v FROM generate_series(1, 6) i
+	DISTRIBUTED RANDOMLY;
+SELECT datalake_parquet_write(:'split_file',
+							  'SELECT k, v FROM dlparq_pairs ORDER BY k',
+							  2) AS rows_written;
+ rows_written 
+--------------
+            6
+(1 row)
+
+CREATE VIEW dlparq_split AS
+	SELECT * FROM datalake_parquet_read(:'split_file') AS t (k int, v text);
+SELECT * FROM dlparq_split ORDER BY k;
+ k | v  
+---+----
+ 1 | v1
+ 2 | v2
+ 3 | v3
+ 4 | v4
+ 5 | v5
+ 6 | v6
+(6 rows)
+
+SELECT 0 AS first_row_group, * FROM datalake_parquet_read(:'split_file', 0, 1)
+	AS t (k int, v text)
+UNION ALL
+SELECT 1, * FROM datalake_parquet_read(:'split_file', 1, 1) AS t (k int, v text)
+UNION ALL
+SELECT 2, * FROM datalake_parquet_read(:'split_file', 2, 1) AS t (k int, v text)
+ORDER BY 1, 2;
+ first_row_group | k | v  
+-----------------+---+----
+               0 | 1 | v1
+               0 | 2 | v2
+               1 | 3 | v3
+               1 | 4 | v4
+               2 | 5 | v5
+               2 | 6 | v6
+(6 rows)
+
+-- Reading from a row group on is the same as reading each of them.
+SELECT count(*) AS rows_from_the_second_on
+FROM datalake_parquet_read(:'split_file', 1) AS t (k int, v text);
+ rows_from_the_second_on 
+-------------------------
+                       4
+(1 row)
+
+-- A query that returns nothing still produces a file: an empty file is a fact
+-- about the query, a missing one would be a fact about the writer.
+SELECT datalake_parquet_write(:'empty_file',
+							  'SELECT k, v FROM dlparq_pairs WHERE false') AS rows_written;
+ rows_written 
+--------------
+            0
+(1 row)
+
+SELECT count(*) AS rows_read
+FROM datalake_parquet_read(:'empty_file') AS t (k int, v text);
+ rows_read 
+-----------
+         0
+(1 row)
+
+-- iceberg.batch_rows is how many rows cross the boundary at a time, and both
+-- halves read it.  Everything above fits in one batch, which leaves the loops
+-- on both sides running exactly once; at two rows a batch the reader iterates
+-- and the writer accumulates several batches into the one row group.
+SET iceberg.batch_rows = 2;
+SELECT count(*) AS rows_in_batches_of_two FROM dlparq_split;
+ rows_in_batches_of_two 
+------------------------
+                      6
+(1 row)
+
+SELECT datalake_parquet_write(:'batch_file',
+							  'SELECT k, v FROM dlparq_pairs ORDER BY k') AS rows_written;
+ rows_written 
+--------------
+            6
+(1 row)
+
+SELECT * FROM datalake_parquet_read(:'batch_file') AS t (k int, v text) ORDER BY k;
+ k | v  
+---+----
+ 1 | v1
+ 2 | v2
+ 3 | v3
+ 4 | v4
+ 5 | v5
+ 6 | v6
+(6 rows)
+
+RESET iceberg.batch_rows;
+-- Refusals.  Each of these would otherwise be a wrong answer rather than an
+-- error: a column silently dropped, a value reinterpreted, a short read.
+CREATE TABLE dlparq_unsupported (k int, n numeric) DISTRIBUTED RANDOMLY;
+SELECT datalake_parquet_write(:'roundtrip_file',
+							  'SELECT * FROM dlparq_unsupported');
+ERROR:  iceberg: open_writer failed
+DETAIL:  arrow schema: column "n" has a type that lake tables cannot store yet
+SELECT * FROM datalake_parquet_read(:'split_file') AS t (k bigint, v text);
+ERROR:  iceberg: check_column failed
+DETAIL:  decode an Arrow column: a column stored as Arrow type "i" cannot be read as bigint
+SELECT * FROM datalake_parquet_read(:'split_file') AS t (k int);
+ERROR:  the file does not have the number of columns the query expects
+DETAIL:  The file has 2, the query expects 1.
+SELECT * FROM datalake_parquet_read(:'split_file', 9, 1) AS t (k int, v text);
+ERROR:  iceberg: open_reader failed
+DETAIL:  open a Parquet file: row groups 9..9 were asked for from a file that has 3
+-- A row group range that only overflowed arithmetic would let through: the
+-- count is rejected rather than turned into a two-billion-entry list.
+SELECT * FROM datalake_parquet_read(:'split_file', 1, 2147483647) AS t (k int, v text);
+ERROR:  iceberg: open_reader failed
+DETAIL:  open a Parquet file: row groups 1..2147483647 were asked for from a file that has 3
+SELECT datalake_parquet_write(:'split_file', 'SELECT 1', -1);
+ERROR:  row group size must be between 0 and 1048576
+SELECT datalake_parquet_write(:'split_file', 'SELECT 1', 2000000000);
+ERROR:  row group size must be between 0 and 1048576
+-- PostgreSQL's timestamp range runs about 34 years past the last instant Arrow
+-- can hold as microseconds from 1970.  Writing one of those has to be refused,
+-- because the shift would wrap and the value would land 292000 years before the
+-- epoch with the write reporting success.
+SELECT datalake_parquet_write(:'batch_file',
+							  $$SELECT '294250-01-01 00:00:00'::timestamp$$);
+ERROR:  iceberg: append_row failed
+DETAIL:  append a value to an Arrow array: timestamp is too far in the future to be written to a data file (Invalid)
+-- Arrow words this one, and its wording is not ours to depend on.
+\set VERBOSITY terse
+SELECT * FROM datalake_parquet_read(:'missing_file') AS t (k int, v text);
+ERROR:  iceberg: open_reader failed
+\set VERBOSITY default
+SET client_min_messages = warning;
+DROP VIEW dlparq_roundtrip, dlparq_split;
+DROP TABLE dlparq_src, dlparq_pairs, dlparq_unsupported;
+RESET client_min_messages;

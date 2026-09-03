@@ -1463,6 +1463,34 @@ jobs:
             exit 0
           fi
 
+          # datalake_fdw needs the Arrow and Parquet C++ libraries, which the
+          # build image does not carry -- nothing in the RPM uses them, so they
+          # would be weight every other job paid for.
+          if [[ "${PGXS_EXTENSION}" == "contrib/datalake_fdw" ]]; then
+            . /etc/os-release
+            if [[ "${VERSION_ID%%.*}" == "8" ]]; then
+              # EPEL 8 has them, but its libarrow-devel needs a utf8proc-devel
+              # that modular filtering keeps out of PowerTools, so it cannot be
+              # installed.  The Arrow project's own repository can.  Pinned to
+              # the version EPEL 10 carries, both because that is one version
+              # fewer to have working and because the newest wants C++20, which
+              # Rocky 8's gcc 8 does not have.
+              # EPEL as well, and not only for Arrow itself: arrow-devel needs
+              # re2-devel and parquet-devel needs thrift-devel, and on EL8 both
+              # of those live in EPEL.
+              dnf install -y \
+                https://apache.jfrog.io/artifactory/arrow/almalinux/8/apache-arrow-release-latest.rpm
+              dnf install -y --enablerepo=epel --enablerepo=powertools \
+                arrow-devel-17.0.0-1.el8 parquet-devel-17.0.0-1.el8
+            else
+              # From EPEL, which the image has enrolled but left disabled,
+              # exactly as it does for its own EPEL packages; CRB carries what
+              # they depend on.
+              dnf install -y --enablerepo=epel --enablerepo=crb \
+                libarrow-devel parquet-libs-devel
+            fi
+          fi
+
           # The RPM installs as root; the build runs as gpadmin, as everywhere
           # else in this job.  -H follows the command-line symlink.
           chown -RH gpadmin:gpadmin "${BUILD_DESTINATION}/"

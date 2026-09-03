@@ -26,15 +26,35 @@
  *-------------------------------------------------------------------------
  */
 
+#include <stdio.h>
 #include <stddef.h>
+#include <string.h>
 
+#include "common/dl_err.h"
 #include "format/format.h"
+#include "format/parquet/parquet_format.h"
 
-/* No formats in the skeleton; parquet lands in PR-3/4.  Callers must treat
- * NULL as not-supported. */
+/*
+ * Parquet is the only format so far.  A name that reaches here came from a
+ * table option, so an unknown one is an ordinary mistake and the caller has to
+ * be able to say which name it was -- returning a bare NULL would leave every
+ * caller to write that message again, and get it wrong differently.  The name
+ * goes into the error detail, so a caller that reports DL_ERR_NOT_SUPPORTED
+ * gets it without knowing this function exists.
+ */
 const FormatRoutine *
 GetFormatRoutine(const char *format)
 {
+	char		message[128];
+
+	if (format != NULL && strcmp(format, "parquet") == 0)
+		return GetParquetFormatRoutine();
+
+	snprintf(message, sizeof(message),
+			 "\"%s\" is not a data file format this build can read or write",
+			 format == NULL ? "" : format);
+	dl_error_set(DL_ERR_NOT_SUPPORTED, "get_format", NULL, message);
+
 	return NULL;
 }
 

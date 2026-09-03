@@ -15,25 +15,10 @@
 # specific language governing permissions and limitations
 # under the License.
 #
-# contrib/datalake_fdw/exports.txt
-#
-# Single source of truth for exported symbols; the linker script for each
-# platform is generated from it at build time.  Adding a line here is an API
-# decision, so it is one a reviewer has to see.  Comment lines are stripped
-# when the script is generated.
+# contrib/datalake_fdw/datalake_fdw_test.control
 
-_PG_init
-Pg_magic_func
-pg_finfo_iceberg_am_handler
-iceberg_am_handler
-pg_finfo_iceberg_catalog_fdw_validator
-iceberg_catalog_fdw_validator
-pg_finfo_iceberg_volume_fdw_validator
-iceberg_volume_fdw_validator
-
-# datalake_fdw_test: not part of what this module offers, but a SQL-callable
-# function has to be found by name in the library like any other.
-pg_finfo_datalake_parquet_write
-datalake_parquet_write
-pg_finfo_datalake_parquet_read
-datalake_parquet_read
+comment = 'entry points into datalake_fdw internals, for testing'
+default_version = '1.0'
+module_pathname = '$libdir/datalake_fdw'
+relocatable = false
+requires = 'datalake_fdw'

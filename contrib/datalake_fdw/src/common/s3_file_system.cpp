@@ -122,7 +122,7 @@ s3_fs_open(const DatalakeLocation *location, const DlKeyValue *credentials,
 				*fs_out = handle.release();
 		}
 	}
-	DL_ABI_GUARD_END(rc);
+	DL_ABI_GUARD_END(rc, "s3_fs_open");
 
 	return rc;
 }
@@ -153,7 +153,7 @@ s3_fs_list(DatalakeFileSystem fs, const char *prefix, char ***names_out,
 		else
 			rc = handle->impl->List(prefix, names_out, nnames_out);
 	}
-	DL_ABI_GUARD_END(rc);
+	DL_ABI_GUARD_END(rc, "s3_fs_list");
 
 	return rc;
 }
@@ -173,7 +173,7 @@ s3_file_open(DatalakeFileSystem fs, const char *path, DatalakeFileMode mode,
 		else
 			rc = handle->impl->OpenFile(path, mode, file_out);
 	}
-	DL_ABI_GUARD_END(rc);
+	DL_ABI_GUARD_END(rc, "s3_file_open");
 
 	return rc;
 }
@@ -194,7 +194,7 @@ s3_file_read(DatalakeFile file, void *buffer, int64_t length, int64_t *nread)
 
 		rc = DL_ERR_NOT_SUPPORTED;
 	}
-	DL_ABI_GUARD_END(rc);
+	DL_ABI_GUARD_END(rc, "s3_file_read");
 
 	return rc;
 }
@@ -212,7 +212,7 @@ s3_file_write(DatalakeFile file, const void *buffer, int64_t length)
 
 		rc = DL_ERR_NOT_SUPPORTED;
 	}
-	DL_ABI_GUARD_END(rc);
+	DL_ABI_GUARD_END(rc, "s3_file_write");
 
 	return rc;
 }
@@ -228,7 +228,7 @@ s3_file_close(DatalakeFile file)
 
 		rc = DL_ERR_NOT_SUPPORTED;
 	}
-	DL_ABI_GUARD_END(rc);
+	DL_ABI_GUARD_END(rc, "s3_file_close");
 
 	return rc;
 }
