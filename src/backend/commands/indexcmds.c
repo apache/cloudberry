@@ -5445,6 +5445,17 @@ static inline void
 set_indexsafe_procflags(void)
 {
 	/*
+	 * A catalog snapshot taken earlier in this transaction (for example, by
+	 * resource-group slot assignment during StartTransaction) leaves a valid
+	 * xmin advertised in MyProc.  Drop it here so the assertion below holds;
+	 * CREATE INDEX CONCURRENTLY phases must not hold any snapshot at this
+	 * point anyway.
+	 */
+	if (MyProc->xid != InvalidTransactionId ||
+		MyProc->xmin != InvalidTransactionId)
+		InvalidateCatalogSnapshot();
+
+	/*
 	 * This should only be called before installing xid or xmin in MyProc;
 	 * otherwise, concurrent processes could see an Xmin that moves backwards.
 	 */

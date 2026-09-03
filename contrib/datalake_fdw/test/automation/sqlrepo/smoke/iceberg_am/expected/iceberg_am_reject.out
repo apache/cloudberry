@@ -1,0 +1,457 @@
+-- Unsupported data paths, CREATE/ALTER guards, and binding validators.
+-- Errors raised on a segment carry its address and pid, which vary per run.
+-- start_matchsubs
+-- m/  \(seg[0-9]+[^)]* pid=[0-9]+\)/
+-- s/  \(seg[0-9]+[^)]* pid=[0-9]+\)//
+-- end_matchsubs
+SET client_min_messages = warning;
+DROP MATERIALIZED VIEW IF EXISTS dlskel_mv CASCADE;
+DROP TABLE IF EXISTS
+  dlskel_r, dlskel_r2, dlskel_bad, dlskel_bad_dist,
+  dlskel_bad_part, dlskel_bad_inherits, dlskel_bad_typed,
+  dlskel_bad_temp, dlskel_bad_unlogged, dlskel_bad_oncommit,
+  dlskel_bad_tablespace, dlskel_bad_missing_server,
+  dlskel_bad_wrong_catalog, dlskel_bad_no_catalog,
+  dlskel_bad_reloption, dlskel_bad_engine, dlskel_r_new, dlskel_heap,
+  dlskel_bad_repl, dlskel_bad_purge
+  CASCADE;
+DROP SERVER IF EXISTS dlskel_cat CASCADE;
+DROP SERVER IF EXISTS dlskel_cat2 CASCADE;
+DROP SERVER IF EXISTS dlskel_vol CASCADE;
+DROP SERVER IF EXISTS dlskel_free CASCADE;
+DROP SERVER IF EXISTS dlskel_free2 CASCADE;
+DROP SERVER IF EXISTS dlskel_bad_server CASCADE;
+DROP SERVER IF EXISTS dlskel_bad_secret CASCADE;
+DROP SERVER IF EXISTS dlskel_bad_cat_secret CASCADE;
+DROP SERVER IF EXISTS dlskel_bad_cat_token CASCADE;
+DROP SERVER IF EXISTS dlskel_bad_cat_user CASCADE;
+DROP SERVER IF EXISTS dlskel_bad_cat_keytab CASCADE;
+DROP SERVER IF EXISTS dlskel_bad_cat_clientid CASCADE;
+DROP SERVER IF EXISTS dlskel_bad_vol_keyid CASCADE;
+DROP SERVER IF EXISTS dlskel_bad_vol_secret CASCADE;
+DROP SERVER IF EXISTS dlskel_bad_vol_token CASCADE;
+DROP SERVER IF EXISTS dlskel_bad_cat_case CASCADE;
+DROP SERVER IF EXISTS dlskel_bad_cat_type CASCADE;
+DROP SERVER IF EXISTS dlskel_bad_cat_hadoop CASCADE;
+DROP SERVER IF EXISTS dlskel_bad_cat_builtin CASCADE;
+DROP SERVER IF EXISTS dlskel_bad_cat_nourl CASCADE;
+DROP SERVER IF EXISTS dlskel_bad_cat_realm CASCADE;
+DROP SERVER IF EXISTS dlskel_bad_cat_empty CASCADE;
+DROP SERVER IF EXISTS dlskel_bad_vol_bool CASCADE;
+DROP SERVER IF EXISTS dlskel_bad_nopath CASCADE;
+DROP SERVER IF EXISTS dlskel_bad_scheme CASCADE;
+DROP SERVER IF EXISTS dlskel_bad_authority CASCADE;
+DROP SERVER IF EXISTS dlskel_bad_query CASCADE;
+DROP SERVER IF EXISTS dlskel_bad_userinfo CASCADE;
+DROP SERVER IF EXISTS dlskel_bad_bucket CASCADE;
+DROP SCHEMA IF EXISTS dlskel_sch CASCADE;
+DROP SCHEMA IF EXISTS dlskel_sch2 CASCADE;
+DROP SCHEMA IF EXISTS dlskel_plain CASCADE;
+DROP SCHEMA IF EXISTS dlskel_plain2 CASCADE;
+DROP TYPE IF EXISTS dlskel_type CASCADE;
+DROP ROLE IF EXISTS dlskel_role;
+RESET client_min_messages;
+-- Quiet, so that the output does not depend on whether another test in the
+-- same database created the extension first.
+SET client_min_messages = warning;
+CREATE EXTENSION IF NOT EXISTS datalake_fdw;
+RESET client_min_messages;
+CREATE SERVER dlskel_cat
+  FOREIGN DATA WRAPPER iceberg_catalog_fdw
+  OPTIONS (type 'hive', uri 'thrift://fake:9083');
+CREATE SERVER dlskel_vol
+  FOREIGN DATA WRAPPER iceberg_volume_fdw
+  OPTIONS (base_path 's3://dlskel-bucket/reject',
+           endpoint 'http://fake:9000');
+CREATE SERVER dlskel_free
+  FOREIGN DATA WRAPPER iceberg_catalog_fdw
+  OPTIONS (type 'hive', uri 'thrift://free:9083');
+-- Which NOTICE CREATE ROLE emits depends on gp_resource_manager, and neither
+-- is what this case is about.
+SET client_min_messages = warning;
+CREATE ROLE dlskel_role;
+RESET client_min_messages;
+CREATE TYPE dlskel_type AS (a int);
+CREATE TABLE dlskel_r (a int, b text)
+  USING iceberg
+  WITH (catalog = 'dlskel_cat', volume = 'dlskel_vol');
+NOTICE:  stub engine: created iceberg table "public.dlskel_r" in catalog "dlskel_cat"
+SELECT * FROM dlskel_r;
+ERROR:  iceberg: SELECT is not supported yet  (seg0 slice1 172.17.0.2:40000 pid=92001)
+INSERT INTO dlskel_r VALUES (1, 'x');
+ERROR:  iceberg: INSERT is not supported yet  (seg1 172.17.0.2:40001 pid=92002)
+UPDATE dlskel_r SET a = 1;
+ERROR:  iceberg: SELECT is not supported yet  (seg0 172.17.0.2:40000 pid=92001)
+DELETE FROM dlskel_r;
+ERROR:  iceberg: SELECT is not supported yet  (seg0 172.17.0.2:40000 pid=92001)
+COPY dlskel_r FROM stdin;
+ERROR:  iceberg: INSERT is not supported yet
+CONTEXT:  COPY dlskel_r, line 1
+COPY dlskel_r TO stdout;
+ERROR:  iceberg: SELECT is not supported yet
+CREATE INDEX ON dlskel_r (a);
+ERROR:  iceberg: CREATE INDEX is not supported yet
+SELECT * FROM dlskel_r TABLESAMPLE BERNOULLI (10);
+ERROR:  iceberg: SELECT is not supported yet  (seg0 slice1 172.17.0.2:40000 pid=92001)
+-- A table from an earlier transaction takes the new-filelocator path rather
+-- than the access method's truncate callback, so this is the case that would
+-- silently report success if only the callback rejected it.
+TRUNCATE dlskel_r;
+ERROR:  iceberg: TRUNCATE is not supported yet
+-- Same for a table created in this transaction, which does reach the callback.
+BEGIN;
+CREATE TABLE dlskel_r_new (a int, b text)
+  USING iceberg
+  WITH (catalog = 'dlskel_cat', volume = 'dlskel_vol');
+NOTICE:  stub engine: created iceberg table "public.dlskel_r_new" in catalog "dlskel_cat"
+TRUNCATE dlskel_r_new;
+ERROR:  iceberg: TRUNCATE is not supported yet
+ROLLBACK;
+-- A multi-table TRUNCATE must refuse before truncating the heap beside it, so
+-- the row below has to survive the attempt.
+CREATE TABLE dlskel_heap (a int) DISTRIBUTED BY (a);
+INSERT INTO dlskel_heap VALUES (1);
+TRUNCATE dlskel_heap, dlskel_r;
+ERROR:  iceberg: TRUNCATE is not supported yet
+SELECT count(*) AS heap_rows_kept FROM dlskel_heap;
+ heap_rows_kept 
+----------------
+              1
+(1 row)
+
+VACUUM FULL dlskel_r;
+ERROR:  iceberg: VACUUM FULL on iceberg tables is not supported yet
+SELECT * FROM dlskel_r FOR UPDATE;
+ERROR:  iceberg: SELECT is not supported yet  (seg0 slice1 172.17.0.2:40000 pid=92001)
+CREATE TABLE dlskel_bad_dist (a int)
+  USING iceberg
+  WITH (catalog = 'dlskel_cat', volume = 'dlskel_vol')
+  DISTRIBUTED BY (a);
+ERROR:  iceberg: DISTRIBUTED BY is not supported yet
+CREATE TABLE dlskel_bad_part (a int)
+  PARTITION BY RANGE (a)
+  USING iceberg
+  WITH (catalog = 'dlskel_cat', volume = 'dlskel_vol');
+ERROR:  iceberg: partitioned tables is not supported yet
+CREATE TABLE dlskel_bad_inherits (b text)
+  INHERITS (dlskel_r)
+  USING iceberg
+  WITH (catalog = 'dlskel_cat', volume = 'dlskel_vol');
+ERROR:  iceberg: INHERITS is not supported yet
+CREATE TABLE dlskel_bad_typed OF dlskel_type
+  USING iceberg
+  WITH (catalog = 'dlskel_cat', volume = 'dlskel_vol');
+ERROR:  iceberg: typed tables (OF type) is not supported yet
+CREATE TEMP TABLE dlskel_bad_temp (a int)
+  USING iceberg
+  WITH (catalog = 'dlskel_cat', volume = 'dlskel_vol');
+ERROR:  iceberg: TEMP tables is not supported yet
+CREATE UNLOGGED TABLE dlskel_bad_unlogged (a int)
+  USING iceberg
+  WITH (catalog = 'dlskel_cat', volume = 'dlskel_vol');
+ERROR:  iceberg: UNLOGGED tables is not supported yet
+BEGIN;
+CREATE TABLE dlskel_bad_oncommit (a int)
+  USING iceberg
+  WITH (catalog = 'dlskel_cat', volume = 'dlskel_vol')
+  ON COMMIT DROP;
+ERROR:  iceberg: ON COMMIT is not supported yet
+ROLLBACK;
+CREATE TABLE dlskel_bad_tablespace (a int)
+  USING iceberg
+  WITH (catalog = 'dlskel_cat', volume = 'dlskel_vol')
+  TABLESPACE pg_default;
+ERROR:  iceberg: TABLESPACE is not supported yet
+CREATE TABLE dlskel_bad USING iceberg AS SELECT 1;
+ERROR:  iceberg: CREATE TABLE AS / CREATE MATERIALIZED VIEW is not supported yet
+CREATE MATERIALIZED VIEW dlskel_mv USING iceberg AS SELECT 1;
+ERROR:  iceberg: CREATE TABLE AS / CREATE MATERIALIZED VIEW is not supported yet
+-- Converting a heap into a lake table has to be refused too: the relation is
+-- still a heap when the statement arrives, so the guard above does not see it.
+ALTER TABLE dlskel_heap SET ACCESS METHOD iceberg;
+ERROR:  iceberg: ALTER TABLE ... SET ACCESS METHOD iceberg is not supported yet
+SET iceberg.default_catalog = 'dlskel_cat';
+SET iceberg.default_volume = 'dlskel_vol';
+ALTER TABLE dlskel_heap SET ACCESS METHOD iceberg;
+ERROR:  iceberg: ALTER TABLE ... SET ACCESS METHOD iceberg is not supported yet
+RESET iceberg.default_catalog;
+RESET iceberg.default_volume;
+-- A column-bearing clause still cannot be honoured, and neither can a
+-- replicated policy.
+CREATE TABLE dlskel_bad_repl (a int)
+  USING iceberg
+  WITH (catalog = 'dlskel_cat', volume = 'dlskel_vol')
+  DISTRIBUTED REPLICATED;
+ERROR:  iceberg: DISTRIBUTED REPLICATED is not supported yet
+-- Renaming a schema would repoint its lake tables at a different external
+-- namespace, so a schema holding one is refused -- and, just as importantly, a
+-- schema holding none is not: the guard has to be no wider than the problem.
+CREATE SCHEMA dlskel_sch;
+CREATE TABLE dlskel_sch.t (a int)
+  USING iceberg
+  WITH (catalog = 'dlskel_cat', volume = 'dlskel_vol');
+NOTICE:  stub engine: created iceberg table "dlskel_sch.t" in catalog "dlskel_cat"
+BEGIN;
+ALTER SCHEMA dlskel_sch RENAME TO dlskel_sch2;
+ERROR:  iceberg: RENAME on schemas containing iceberg tables is not supported yet
+ROLLBACK;
+CREATE SCHEMA dlskel_plain;
+ALTER SCHEMA dlskel_plain RENAME TO dlskel_plain2;
+DROP SCHEMA dlskel_plain2;
+-- Renaming a wrapper breaks every mapping lookup at once, including the one
+-- DROP needs, so it is refused whether or not a table exists yet.
+-- Each attempt is rolled back: if the guard ever regresses, an accepted rename
+-- would leave the extension's own wrapper under a different name, which nothing
+-- in the cleanup below can undo and which breaks every later run.
+BEGIN;
+ALTER FOREIGN DATA WRAPPER iceberg_catalog_fdw RENAME TO dlskel_other_fdw;
+ERROR:  iceberg: RENAME on the iceberg foreign-data wrappers is not supported yet
+ROLLBACK;
+BEGIN;
+ALTER FOREIGN DATA WRAPPER iceberg_volume_fdw RENAME TO dlskel_other_fdw;
+ERROR:  iceberg: RENAME on the iceberg foreign-data wrappers is not supported yet
+ROLLBACK;
+ALTER TABLE dlskel_r ADD COLUMN c int;
+ERROR:  iceberg: ALTER TABLE on iceberg tables is not supported yet
+ALTER TABLE dlskel_r SET (fillfactor = 90);
+ERROR:  iceberg: ALTER TABLE on iceberg tables is not supported yet
+ALTER TABLE dlskel_r SET ACCESS METHOD heap;
+ERROR:  iceberg: ALTER TABLE on iceberg tables is not supported yet
+ALTER TABLE dlskel_r SET DISTRIBUTED BY (a);
+ERROR:  iceberg: ALTER TABLE on iceberg tables is not supported yet
+ALTER TABLE dlskel_r RENAME TO dlskel_r2;
+ERROR:  iceberg: RENAME on iceberg tables is not supported yet
+ALTER TABLE dlskel_r RENAME COLUMN a TO aa;
+ERROR:  iceberg: RENAME on iceberg tables is not supported yet
+ALTER TABLE dlskel_r SET SCHEMA public;
+ERROR:  iceberg: SET SCHEMA on iceberg tables is not supported yet
+-- OWNER TO is the one ALTER TABLE form that goes through: pg_dump writes it for
+-- every table, and ownership cannot reach the external table.  Put it back
+-- afterwards so the rest of the file still owns what it created.
+ALTER TABLE dlskel_r OWNER TO dlskel_role;
+SELECT relname, pg_get_userbyid(relowner) AS owner
+FROM pg_class WHERE relname = 'dlskel_r';
+ relname  |    owner    
+----------+-------------
+ dlskel_r | dlskel_role
+(1 row)
+
+ALTER TABLE dlskel_r OWNER TO CURRENT_USER;
+ALTER SERVER dlskel_cat
+  OPTIONS (SET uri 'thrift://other:9083');
+ERROR:  iceberg: ALTER SERVER on servers referenced by iceberg tables is not supported yet
+ALTER SERVER dlskel_cat VERSION '2';
+ERROR:  iceberg: ALTER SERVER on servers referenced by iceberg tables is not supported yet
+ALTER SERVER dlskel_cat RENAME TO dlskel_cat2;
+ERROR:  iceberg: RENAME on servers referenced by iceberg tables is not supported yet
+ALTER SERVER dlskel_cat OWNER TO dlskel_role;
+ERROR:  iceberg: ALTER OWNER on servers referenced by iceberg tables is not supported yet
+ALTER SERVER dlskel_free
+  OPTIONS (SET uri 'thrift://other:9083');
+ALTER SERVER dlskel_free VERSION '2';
+ALTER SERVER dlskel_free OWNER TO dlskel_role;
+ALTER SERVER dlskel_free RENAME TO dlskel_free2;
+RESET iceberg.default_catalog;
+RESET iceberg.default_volume;
+CREATE TABLE dlskel_bad_missing_server (a int)
+  USING iceberg
+  WITH (catalog = 'dlskel_missing', volume = 'dlskel_vol');
+ERROR:  server "dlskel_missing" does not exist
+CREATE TABLE dlskel_bad_wrong_catalog (a int)
+  USING iceberg
+  WITH (catalog = 'dlskel_vol', volume = 'dlskel_vol');
+ERROR:  server "dlskel_vol" is not an iceberg catalog server
+CREATE TABLE dlskel_bad_no_catalog (a int)
+  USING iceberg
+  WITH (volume = 'dlskel_vol');
+ERROR:  no catalog specified
+HINT:  Specify WITH (catalog = '...') or SET iceberg.default_catalog.
+CREATE TABLE dlskel_bad_purge (a int)
+  USING iceberg
+  WITH (catalog = 'dlskel_cat', volume = 'dlskel_vol',
+        purge_on_drop = 'perhaps');
+ERROR:  invalid value for boolean option "purge_on_drop": perhaps
+CREATE TABLE dlskel_bad_reloption (a int)
+  USING iceberg
+  WITH (catalog = 'dlskel_cat', volume = 'dlskel_vol', nonsense = 'x');
+ERROR:  unrecognized parameter "nonsense"
+CREATE SERVER dlskel_bad_server
+  FOREIGN DATA WRAPPER iceberg_catalog_fdw
+  OPTIONS (type 'hive', uri 'thrift://fake:9083', nonsense 'x');
+ERROR:  invalid iceberg catalog server option "nonsense"
+HINT:  Allowed options are "type", "uri", "catalog_name", "warehouse" and "polaris_server_realm".
+CREATE SERVER dlskel_bad_secret
+  FOREIGN DATA WRAPPER iceberg_volume_fdw
+  OPTIONS (secret_key 'x');
+ERROR:  credential option "secret_key" is not allowed on an iceberg volume server
+HINT:  credentials belong in CREATE USER MAPPING ... OPTIONS (...)
+-- The catalog wrapper has its own allowlist, and its own credential keys.
+CREATE SERVER dlskel_bad_cat_secret
+  FOREIGN DATA WRAPPER iceberg_catalog_fdw
+  OPTIONS (type 'hive', uri 'thrift://fake:9083', password 'x');
+ERROR:  credential option "password" is not allowed on an iceberg catalog server
+HINT:  credentials belong in CREATE USER MAPPING ... OPTIONS (...)
+CREATE SERVER dlskel_bad_cat_token
+  FOREIGN DATA WRAPPER iceberg_catalog_fdw
+  OPTIONS (type 'polaris', uri 'https://fake:443', client_secret 'x');
+ERROR:  credential option "client_secret" is not allowed on an iceberg catalog server
+HINT:  credentials belong in CREATE USER MAPPING ... OPTIONS (...)
+-- Every key the credential list mirrors from an option module, so that a key
+-- renamed in one place and not the other fails here instead of silently
+-- ceasing to be caught.
+CREATE SERVER dlskel_bad_cat_user
+  FOREIGN DATA WRAPPER iceberg_catalog_fdw
+  OPTIONS (type 'hive', uri 'thrift://fake:9083', username 'u');
+ERROR:  credential option "username" is not allowed on an iceberg catalog server
+HINT:  credentials belong in CREATE USER MAPPING ... OPTIONS (...)
+CREATE SERVER dlskel_bad_cat_keytab
+  FOREIGN DATA WRAPPER iceberg_catalog_fdw
+  OPTIONS (type 'hive', uri 'thrift://fake:9083', krb_client_keytab '/k');
+ERROR:  credential option "krb_client_keytab" is not allowed on an iceberg catalog server
+HINT:  credentials belong in CREATE USER MAPPING ... OPTIONS (...)
+CREATE SERVER dlskel_bad_cat_clientid
+  FOREIGN DATA WRAPPER iceberg_catalog_fdw
+  OPTIONS (type 'rest', uri 'https://fake:443', client_id 'i');
+ERROR:  credential option "client_id" is not allowed on an iceberg catalog server
+HINT:  credentials belong in CREATE USER MAPPING ... OPTIONS (...)
+CREATE SERVER dlskel_bad_vol_token
+  FOREIGN DATA WRAPPER iceberg_volume_fdw
+  OPTIONS (base_path 's3://dlskel-bucket/p', session_token 't');
+ERROR:  credential option "session_token" is not allowed on an iceberg volume server
+HINT:  credentials belong in CREATE USER MAPPING ... OPTIONS (...)
+CREATE SERVER dlskel_bad_vol_keyid
+  FOREIGN DATA WRAPPER iceberg_volume_fdw
+  OPTIONS (base_path 's3://dlskel-bucket/p', access_key_id 'k');
+ERROR:  credential option "access_key_id" is not allowed on an iceberg volume server
+HINT:  credentials belong in CREATE USER MAPPING ... OPTIONS (...)
+CREATE SERVER dlskel_bad_vol_secret
+  FOREIGN DATA WRAPPER iceberg_volume_fdw
+  OPTIONS (base_path 's3://dlskel-bucket/p', secret_access_key 's');
+ERROR:  credential option "secret_access_key" is not allowed on an iceberg volume server
+HINT:  credentials belong in CREATE USER MAPPING ... OPTIONS (...)
+-- Option names are matched exactly, as the server itself matches them; a quoted
+-- variant is a different, unknown option rather than a second spelling.
+CREATE SERVER dlskel_bad_cat_case
+  FOREIGN DATA WRAPPER iceberg_catalog_fdw
+  OPTIONS ("TYPE" 'hive', uri 'thrift://fake:9083');
+ERROR:  invalid iceberg catalog server option "TYPE"
+HINT:  Allowed options are "type", "uri", "catalog_name", "warehouse" and "polaris_server_realm".
+-- A catalog type outside the vocabulary, and one that is in it but has no
+-- implementation behind it yet.
+CREATE SERVER dlskel_bad_cat_type
+  FOREIGN DATA WRAPPER iceberg_catalog_fdw
+  OPTIONS (type 'nosuchcatalog', uri 'thrift://fake:9083');
+ERROR:  invalid iceberg catalog type "nosuchcatalog"
+HINT:  Allowed types are "hive", "rest" and "builtin"; "polaris" is accepted as an alias of "rest".
+CREATE SERVER dlskel_bad_cat_hadoop
+  FOREIGN DATA WRAPPER iceberg_catalog_fdw
+  OPTIONS (type 'hadoop', uri 'hdfs://fake:8020');
+ERROR:  iceberg: catalog type "hadoop" is not supported yet
+-- builtin needs no url; supplying one means the two disagree.
+CREATE SERVER dlskel_bad_cat_builtin
+  FOREIGN DATA WRAPPER iceberg_catalog_fdw
+  OPTIONS (type 'builtin', uri 'thrift://fake:9083');
+ERROR:  iceberg catalog type "builtin" forbids server option "uri"
+-- hive does need one.
+CREATE SERVER dlskel_bad_cat_nourl
+  FOREIGN DATA WRAPPER iceberg_catalog_fdw
+  OPTIONS (type 'hive');
+ERROR:  iceberg catalog type "hive" requires server option "uri"
+-- The realm applies to one catalog type only.
+CREATE SERVER dlskel_bad_cat_realm
+  FOREIGN DATA WRAPPER iceberg_catalog_fdw
+  OPTIONS (type 'hive', uri 'thrift://fake:9083',
+           polaris_server_realm 'OTHER');
+ERROR:  iceberg catalog server option "polaris_server_realm" applies only to catalog type "rest"
+-- An empty value is refused where it is written, not where it is first read.
+CREATE SERVER dlskel_bad_cat_empty
+  FOREIGN DATA WRAPPER iceberg_catalog_fdw
+  OPTIONS (type 'hive', uri '');
+ERROR:  iceberg catalog server option "uri" cannot be empty
+-- Not a boolean.
+CREATE SERVER dlskel_bad_vol_bool
+  FOREIGN DATA WRAPPER iceberg_volume_fdw
+  OPTIONS (base_path 's3://dlskel-bucket/p', path_style_access 'perhaps');
+ERROR:  invalid boolean value "perhaps" for option "path_style_access"
+CREATE SERVER dlskel_bad_nopath
+  FOREIGN DATA WRAPPER iceberg_volume_fdw
+  OPTIONS (endpoint 'http://fake:9000');
+ERROR:  iceberg volume server option "base_path" is required
+CREATE SERVER dlskel_bad_scheme
+  FOREIGN DATA WRAPPER iceberg_volume_fdw
+  OPTIONS (base_path 'ftp://x/y');
+ERROR:  invalid iceberg volume base_path "ftp://x/y"
+DETAIL:  location URI "ftp://x/y" has unsupported scheme; expected s3 or hdfs
+CREATE SERVER dlskel_bad_authority
+  FOREIGN DATA WRAPPER iceberg_volume_fdw
+  OPTIONS (base_path 's3://');
+ERROR:  invalid iceberg volume base_path "s3://"
+DETAIL:  location URI "s3://" has an empty authority
+CREATE SERVER dlskel_bad_query
+  FOREIGN DATA WRAPPER iceberg_volume_fdw
+  OPTIONS (base_path 's3://b/p?versionId=3');
+ERROR:  invalid iceberg volume base_path "s3://b/p?versionId=3"
+DETAIL:  location URI "s3://b/p?versionId=3" must not contain a query
+CREATE SERVER dlskel_bad_userinfo
+  FOREIGN DATA WRAPPER iceberg_volume_fdw
+  OPTIONS (base_path 's3://user@b/p');
+ERROR:  invalid iceberg volume base_path "s3://user@b/p"
+DETAIL:  location URI "s3://user@b/p" must not contain userinfo
+CREATE SERVER dlskel_bad_bucket
+  FOREIGN DATA WRAPPER iceberg_volume_fdw
+  OPTIONS (base_path 's3://UPPER_case/p');
+ERROR:  invalid iceberg volume base_path "s3://UPPER_case/p"
+DETAIL:  s3 bucket in location URI "s3://UPPER_case/p" must start and end with a lowercase letter or digit
+-- The metadata engine is not selectable, so naming one is an unknown option.
+CREATE TABLE dlskel_bad_engine (a int)
+  USING iceberg
+  WITH (catalog = 'dlskel_cat', volume = 'dlskel_vol',
+        engine = 'agent');
+ERROR:  unrecognized parameter "engine"
+SET client_min_messages = warning;
+DROP MATERIALIZED VIEW IF EXISTS dlskel_mv CASCADE;
+DROP TABLE IF EXISTS
+  dlskel_r, dlskel_r2, dlskel_bad, dlskel_bad_dist,
+  dlskel_bad_part, dlskel_bad_inherits, dlskel_bad_typed,
+  dlskel_bad_temp, dlskel_bad_unlogged, dlskel_bad_oncommit,
+  dlskel_bad_tablespace, dlskel_bad_missing_server,
+  dlskel_bad_wrong_catalog, dlskel_bad_no_catalog,
+  dlskel_bad_reloption, dlskel_bad_engine, dlskel_r_new, dlskel_heap,
+  dlskel_bad_repl, dlskel_bad_purge
+  CASCADE;
+DROP SERVER IF EXISTS dlskel_cat CASCADE;
+DROP SERVER IF EXISTS dlskel_cat2 CASCADE;
+DROP SERVER IF EXISTS dlskel_vol CASCADE;
+DROP SERVER IF EXISTS dlskel_free CASCADE;
+DROP SERVER IF EXISTS dlskel_free2 CASCADE;
+DROP SERVER IF EXISTS dlskel_bad_server CASCADE;
+DROP SERVER IF EXISTS dlskel_bad_secret CASCADE;
+DROP SERVER IF EXISTS dlskel_bad_cat_secret CASCADE;
+DROP SERVER IF EXISTS dlskel_bad_cat_token CASCADE;
+DROP SERVER IF EXISTS dlskel_bad_cat_user CASCADE;
+DROP SERVER IF EXISTS dlskel_bad_cat_keytab CASCADE;
+DROP SERVER IF EXISTS dlskel_bad_cat_clientid CASCADE;
+DROP SERVER IF EXISTS dlskel_bad_vol_keyid CASCADE;
+DROP SERVER IF EXISTS dlskel_bad_vol_secret CASCADE;
+DROP SERVER IF EXISTS dlskel_bad_vol_token CASCADE;
+DROP SERVER IF EXISTS dlskel_bad_cat_case CASCADE;
+DROP SERVER IF EXISTS dlskel_bad_cat_type CASCADE;
+DROP SERVER IF EXISTS dlskel_bad_cat_hadoop CASCADE;
+DROP SERVER IF EXISTS dlskel_bad_cat_builtin CASCADE;
+DROP SERVER IF EXISTS dlskel_bad_cat_nourl CASCADE;
+DROP SERVER IF EXISTS dlskel_bad_cat_realm CASCADE;
+DROP SERVER IF EXISTS dlskel_bad_cat_empty CASCADE;
+DROP SERVER IF EXISTS dlskel_bad_vol_bool CASCADE;
+DROP SERVER IF EXISTS dlskel_bad_nopath CASCADE;
+DROP SERVER IF EXISTS dlskel_bad_scheme CASCADE;
+DROP SERVER IF EXISTS dlskel_bad_authority CASCADE;
+DROP SERVER IF EXISTS dlskel_bad_query CASCADE;
+DROP SERVER IF EXISTS dlskel_bad_userinfo CASCADE;
+DROP SERVER IF EXISTS dlskel_bad_bucket CASCADE;
+DROP SCHEMA IF EXISTS dlskel_sch CASCADE;
+DROP SCHEMA IF EXISTS dlskel_sch2 CASCADE;
+DROP SCHEMA IF EXISTS dlskel_plain CASCADE;
+DROP SCHEMA IF EXISTS dlskel_plain2 CASCADE;
+DROP TYPE IF EXISTS dlskel_type CASCADE;
+DROP ROLE IF EXISTS dlskel_role;
+RESET client_min_messages;
