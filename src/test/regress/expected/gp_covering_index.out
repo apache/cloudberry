@@ -837,5 +837,103 @@ SELECT b FROM test_combined_index_scan WHERE a < 42 OR b < 42;
  Optimizer: Postgres query optimizer
 (6 rows)
 
+-- Test predicates on INCLUDE-only columns (https://github.com/apache/cloudberry/issues/1948)
+--
+-- A predicate that only references INCLUDE ("payload") columns must never be
+-- turned into an index condition: the executor rejects index quals on non-key
+-- attributes ("bogus index qualification"). Boolean column references and
+-- IS [NOT] NULL tests used to slip through ORCA's index predicate extraction,
+-- so cover them explicitly.
+CREATE TABLE test_include_col_pred(c0 boolean, c1 boolean, c2 int) DISTRIBUTED BY (c2);
+CREATE INDEX i_test_include_col_pred ON test_include_col_pred(c0) INCLUDE (c1);
+INSERT INTO test_include_col_pred VALUES (true, true, 1), (false, true, 2), (true, false, 3), (true, NULL, 4);
+VACUUM ANALYZE test_include_col_pred;
+-- KEYS: [c0]    INCLUDED: [c1]
+EXPLAIN (COSTS OFF)
+SELECT * FROM test_include_col_pred WHERE c1;
+                QUERY PLAN                
+------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Seq Scan on test_include_col_pred
+         Filter: c1
+ Optimizer: Postgres query optimizer
+(4 rows)
+
+SELECT * FROM test_include_col_pred WHERE c1 ORDER BY c2;
+ c0 | c1 | c2 
+----+----+----
+ t  | t  |  1
+ f  | t  |  2
+(2 rows)
+
+EXPLAIN (COSTS OFF)
+SELECT * FROM test_include_col_pred WHERE NOT c1;
+                QUERY PLAN                
+------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Seq Scan on test_include_col_pred
+         Filter: (NOT c1)
+ Optimizer: Postgres query optimizer
+(4 rows)
+
+SELECT * FROM test_include_col_pred WHERE NOT c1 ORDER BY c2;
+ c0 | c1 | c2 
+----+----+----
+ t  | f  |  3
+(1 row)
+
+EXPLAIN (COSTS OFF)
+SELECT * FROM test_include_col_pred WHERE c1 IS NULL;
+                QUERY PLAN                
+------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Seq Scan on test_include_col_pred
+         Filter: (c1 IS NULL)
+ Optimizer: Postgres query optimizer
+(4 rows)
+
+SELECT * FROM test_include_col_pred WHERE c1 IS NULL ORDER BY c2;
+ c0 | c1 | c2 
+----+----+----
+ t  |    |  4
+(1 row)
+
+EXPLAIN (COSTS OFF)
+SELECT c1 FROM test_include_col_pred WHERE c1 IS NOT NULL;
+                                  QUERY PLAN                                  
+------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Index Only Scan using i_test_include_col_pred on test_include_col_pred
+         Filter: (c1 IS NOT NULL)
+ Optimizer: Postgres query optimizer
+(4 rows)
+
+SELECT c1 FROM test_include_col_pred WHERE c1 IS NOT NULL ORDER BY 1;
+ c1 
+----
+ f
+ t
+ t
+(3 rows)
+
+-- key predicate combined with an INCLUDE-column predicate: only the key
+-- predicate may become an index condition, the rest must stay a filter
+EXPLAIN (COSTS OFF)
+SELECT * FROM test_include_col_pred WHERE c0 AND c1;
+                               QUERY PLAN                                
+-------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Index Scan using i_test_include_col_pred on test_include_col_pred
+         Index Cond: (c0 = true)
+         Filter: c1
+ Optimizer: Postgres query optimizer
+(5 rows)
+
+SELECT * FROM test_include_col_pred WHERE c0 AND c1 ORDER BY c2;
+ c0 | c1 | c2 
+----+----+----
+ t  | t  |  1
+(1 row)
+
 reset optimizer_trace_fallback;
 reset enable_seqscan;
