@@ -33,17 +33,6 @@ Features include:
 ### Supported versions and platforms
 For now it is being tested only for GP6 and Linux. Though, there are no apparent reasons why it should not be working on newer GP versions (or even PG with slight code modification) or other OSes.
 
-### Installation
-Install from source:
-```bash
-# get the source code somewhere
-git clone git@github.com:Smyatkin-Maxim/gp_relaccess_stats.git
-cd gp_relaccess_stats
-# Build it. Building would require GP installed nearby and sourcing greenplum_path.sh
-source <path_to_gp>/greenplum_path.sh
-make && make install
-```
-
 ### Configuration
 As this extension does extensive usage of hooks and shared memory, you need to load gp_relaccess_stats.so on start-up:
 ```
