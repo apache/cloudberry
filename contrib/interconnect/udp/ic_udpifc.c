@@ -46,6 +46,7 @@
 #include "nodes/pg_list.h"
 #include "nodes/print.h"
 #include "miscadmin.h"
+#include "storage/proc.h"
 #include "libpq/libpq-be.h"
 #include "port/atomics.h"
 #include "port/pg_crc32c.h"
@@ -353,11 +354,18 @@ struct ReceiveControlInfo
 	CursorICHistoryTable cursorHistoryTable;
 
 	/*
-	 * Last distributed transaction id when SetupUDPInterconnect is called.
-	 * Coupled with cursorHistoryTable, it is used to handle multiple
-	 * concurrent cursor cases.
+	 * Local (virtual) transaction id of the top-level transaction the last
+	 * time SetupUDPInterconnect was called.  Coupled with cursorHistoryTable,
+	 * it is used to handle multiple concurrent cursor cases: entries may only
+	 * be pruned once we are in a different transaction.
+	 *
+	 * We deliberately use MyProc->lxid rather than the distributed xid: a
+	 * distributed xid is only assigned lazily to transactions that write (or
+	 * are dispatched two-phase), so for autocommit read-only statements it is
+	 * always InvalidDistributedTransactionId and the "different transaction"
+	 * test would never fire, letting the history table grow without bound.
 	 */
-	DistributedTransactionId lastDXatId;
+	LocalTransactionId lastLxid;
 };
 
 /*
@@ -1894,7 +1902,7 @@ InitMotionUDPIFC(int *listenerSocketFd, int32 *listenerPort)
 
 	/* allocate a buffer for sending disorder messages */
 	rx_control_info.disorderBuffer = palloc0(MIN_PACKET_SIZE);
-	rx_control_info.lastDXatId = InvalidTransactionId;
+	rx_control_info.lastLxid = InvalidLocalTransactionId;
 	rx_control_info.lastTornIcId = 0;
 	initCursorICHistoryTable(&rx_control_info.cursorHistoryTable);
 
@@ -3573,19 +3581,13 @@ SetupUDPIFCInterconnect_Internal(SliceTable *sliceTable)
 
 	if (Gp_role == GP_ROLE_DISPATCH)
 	{
-		DistributedTransactionId distTransId = 0;
-		TransactionId localTransId = 0;
-		TransactionId subtransId = 0;
-
-		GetAllTransactionXids(&(distTransId),
-							  &(localTransId),
-							  &(subtransId));
+		LocalTransactionId curLxid = MyProc->lxid;
 
 		/*
-		 * Prune only when we are not in the save transaction and there is a
+		 * Prune only when we are not in the same transaction and there is a
 		 * large number of entries in the table
 		 */
-		if (distTransId != rx_control_info.lastDXatId && rx_control_info.cursorHistoryTable.count > (2 * CURSOR_IC_TABLE_SIZE))
+		if (curLxid != rx_control_info.lastLxid && rx_control_info.cursorHistoryTable.count > (2 * CURSOR_IC_TABLE_SIZE))
 		{
 			if (gp_log_interconnect >= GPVARS_VERBOSITY_DEBUG)
 				elog(DEBUG1, "prune cursor history table (count %d), icid %d", rx_control_info.cursorHistoryTable.count, sliceTable->ic_instance_id);
@@ -3595,7 +3597,7 @@ SetupUDPIFCInterconnect_Internal(SliceTable *sliceTable)
 		addCursorIcEntry(&rx_control_info.cursorHistoryTable, sliceTable->ic_instance_id, gp_command_count);
 
 		/* save the latest transaction id. */
-		rx_control_info.lastDXatId = distTransId;
+		rx_control_info.lastLxid = curLxid;
 	}
 
 	/* now we'll do some setup for each of our Receiving Motion Nodes. */
