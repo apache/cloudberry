@@ -375,7 +375,16 @@ CFilterStatsProcessor::MakeHistHashMapConjFilter(
 		if (CStatsPred::EsptDisj != child_pred_stats->GetPredStatsType())
 		{
 			GPOS_ASSERT(gpos::ulong_max != colid);
-			hist_before = result_histograms->Find(&colid)->CopyHistogram();
+			const CHistogram *base_histogram = result_histograms->Find(&colid);
+			if (nullptr == base_histogram)
+			{
+				// no histogram for the filter column; estimate the clause
+				// with the default selectivity instead of dereferencing null
+				scale_factors->Append(GPOS_NEW(mp) CDouble(
+					1 / CHistogram::DefaultSelectivity.Get()));
+				continue;
+			}
+			hist_before = base_histogram->CopyHistogram();
 			GPOS_ASSERT(nullptr != hist_before);
 
 			CHistogram *result_histogram = nullptr;
