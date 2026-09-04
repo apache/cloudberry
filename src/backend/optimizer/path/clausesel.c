@@ -336,9 +336,17 @@ clauselist_selectivity_ext(PlannerInfo *root,
 			{
 				s2 = rqlist->hibound + rqlist->lobound - 1.0;
 
-				/* Adjust for double-exclusion of NULLs */
+				/*
+				 * Adjust for double-exclusion of NULLs.
+				 *
+				 * We want the column's actual null fraction here, not the
+				 * selectivity of an "IS NULL" test at this join level.  GPDB's
+				 * nulltestsel() special-cases IS NULL under an outer join to
+				 * return 0.5 (see GPDB_84_MERGE_NOTE there), which would push
+				 * s2 above 1.0.  So always ask as if for an inner join.
+				 */
 				s2 += nulltestsel(root, IS_NULL, rqlist->var,
-								  varRelid, jointype, sjinfo);
+								  varRelid, JOIN_INNER, NULL);
 
 				/*
 				 * A zero or slightly negative s2 should be converted into a
