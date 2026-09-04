@@ -1516,6 +1516,17 @@ gp_percentile_cont_transition(FunctionCallInfo fcinfo,
 	int64        first_row;
 	int64        second_row;
 
+	/*
+	 * Note: 'proargtypes' for this function in pg_proc.dat has 4 arguments.
+	 * There are actually 5 arguments coming in here - the result of the
+	 * previous call and 4 main arguments.
+	 */
+	if (PG_NARGS() != 5)
+		ereport(ERROR,
+				(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+				 errmsg("wrong number of arguments to gp_percentile_cont_transition()"),
+				 errhint("expected 5, got %d", PG_NARGS())));
+
 	/* Return state for NULL inputs of val*/
 	if (PG_ARGISNULL(1) && !PG_ARGISNULL(0))
 		PG_RETURN_DATUM(PG_GETARG_DATUM(0));
@@ -1561,6 +1572,17 @@ gp_percentile_cont_transition(FunctionCallInfo fcinfo,
 	else if(*cnt <= second_row && second_row < *cnt + peer_count)
 	{
 		return_state = lerpfunc(prev_state, val, proportion);
+	}
+	else if (PG_ARGISNULL(0))
+	{
+		/*
+		 * Neither of the rows we are after landed in this peer group, so we
+		 * hand the previous state back unchanged.  When that state is NULL
+		 * the isnull flag has to travel with it: returning a bare Datum(0)
+		 * as non-NULL gives wrong answers for by-value types and a NULL
+		 * pointer dereference for by-reference ones.
+		 */
+		fcinfo->isnull = true;
 	}
 	*cnt = *cnt + peer_count;
 
@@ -1619,6 +1641,17 @@ gp_percentile_disc_transition(PG_FUNCTION_ARGS)
 {
 	int64        rownum;
 
+	/*
+	 * Note: 'proargtypes' for this function in pg_proc.dat has 4 arguments.
+	 * There are actually 5 arguments coming in here - the result of the
+	 * previous call and 4 main arguments.
+	 */
+	if (PG_NARGS() != 5)
+		ereport(ERROR,
+				(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+				 errmsg("wrong number of arguments to gp_percentile_disc_transition()"),
+				 errhint("expected 5, got %d", PG_NARGS())));
+
 	/* Return state for NULL inputs of val*/
 	if (PG_ARGISNULL(1) && !PG_ARGISNULL(0))
 		PG_RETURN_DATUM(PG_GETARG_DATUM(0));
@@ -1634,7 +1667,6 @@ gp_percentile_disc_transition(PG_FUNCTION_ARGS)
 				 errmsg("percentile value %g is not between 0 and 1",
 						percentile)));
 	Datum prev_state = PG_GETARG_DATUM(0);
-	bool prev_state_isnull = PG_ARGISNULL(0);
 	Datum val = PG_GETARG_DATUM(1);
 	Datum return_state = prev_state;
 	int64 total_rows = PG_GETARG_INT64(3);
@@ -1659,6 +1691,11 @@ gp_percentile_disc_transition(PG_FUNCTION_ARGS)
 	{
 		return_state = val;
 	}
+	else if (PG_ARGISNULL(0))
+	{
+		/* see gp_percentile_cont_transition() */
+		fcinfo->isnull = true;
+	}
 
 	*cnt = *cnt + peer_count;
 
@@ -1667,10 +1704,6 @@ gp_percentile_disc_transition(PG_FUNCTION_ARGS)
 		/* Clean up, so the next group can see NULL for fn_extra */
 		pfree(cnt);
 		fcinfo->flinfo->fn_extra = NULL;
-	}
-
-	if (return_state == prev_state) {
-		fcinfo->isnull = prev_state_isnull;
 	}
 
 	PG_RETURN_DATUM(return_state);

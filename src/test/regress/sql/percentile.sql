@@ -216,6 +216,40 @@ from  mpp_22413
 where d2 ='55'
 group by d1, d2;
 
+--
+-- gp_percentile_cont()/gp_percentile_disc() are the split ordered-set
+-- aggregates that ORCA rewrites percentile_cont()/percentile_disc()/median()
+-- into.  Their transition functions carry the running state on top of the
+-- four aggregate arguments, so they read five arguments, while pg_proc.dat
+-- describes four.  That is left alone here so as not to force an initdb on a
+-- stable branch; instead a direct call, which would read past the end of the
+-- argument array, is rejected.
+--
+select gp_percentile_cont_float8_transition(NULL::float8, 1, 1, 1);
+select gp_percentile_cont_interval_transition(NULL::interval, 1, 1, 1);
+select gp_percentile_cont_timestamp_transition(NULL::timestamp, 1, 1, 1);
+select gp_percentile_cont_timestamptz_transition(NULL::timestamptz, 1, 1, 1);
+select gp_percentile_disc_transition(NULL::numeric, 1, 1, 1);
+-- On an empty input set the transition state stays NULL.  The transition
+-- functions hand that state back untouched and have to keep its isnull flag
+-- with it: a bare Datum(0) escaping here reads as a bogus value for by-value
+-- types and dereferences a NULL pointer for by-reference ones.
+select gp_percentile_cont(0::float8, 0, 0, 0);
+select gp_percentile_cont('0 hour'::interval, 0, 0, 0);
+select gp_percentile_cont('2006-01-01 13:10:13'::timestamp, 0, 0, 0);
+select gp_percentile_cont('2006-01-01 13:10:13+00'::timestamptz, 0, 0, 0);
+select gp_percentile_disc(0::numeric, 0, 0, 0);
+-- A value that really was picked has to come back, even when its Datum
+-- representation happens to be 0.
+select gp_percentile_disc(0::float8, 0, 1, 1);
+select gp_percentile_disc(0::int, 0, 1, 1);
+select gp_percentile_cont(0::float8, 0, 1, 1);
+-- The same, end to end: the smallest value of b is 0.
+create table perczero (a int, b float8) distributed by (a);
+insert into perczero select i, (i - 1)::float8 from generate_series(1, 10) i;
+select percentile_disc(0) within group (order by b) from perczero;
+select percentile_cont(0) within group (order by b) from perczero;
+drop table perczero;
 drop view percv2;
 drop view percv;
 drop table perct;
