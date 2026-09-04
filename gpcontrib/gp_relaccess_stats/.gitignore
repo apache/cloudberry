@@ -1,0 +1,5 @@
+*.o
+*.so
+.vscode
+compile_commands.json
+results
