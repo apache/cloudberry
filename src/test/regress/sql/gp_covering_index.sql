@@ -443,5 +443,41 @@ EXPLAIN (ANALYZE, COSTS OFF, TIMING OFF, SUMMARY OFF)
 SELECT b FROM test_combined_index_scan WHERE a < 42 OR b < 42;
 
 
+-- Test predicates on INCLUDE-only columns (https://github.com/apache/cloudberry/issues/1948)
+--
+-- A predicate that only references INCLUDE ("payload") columns must never be
+-- turned into an index condition: the executor rejects index quals on non-key
+-- attributes ("bogus index qualification"). Boolean column references and
+-- IS [NOT] NULL tests used to slip through ORCA's index predicate extraction,
+-- so cover them explicitly.
+CREATE TABLE test_include_col_pred(c0 boolean, c1 boolean, c2 int) DISTRIBUTED BY (c2);
+CREATE INDEX i_test_include_col_pred ON test_include_col_pred(c0) INCLUDE (c1);
+INSERT INTO test_include_col_pred VALUES (true, true, 1), (false, true, 2), (true, false, 3), (true, NULL, 4);
+VACUUM ANALYZE test_include_col_pred;
+
+-- KEYS: [c0]    INCLUDED: [c1]
+EXPLAIN (COSTS OFF)
+SELECT * FROM test_include_col_pred WHERE c1;
+SELECT * FROM test_include_col_pred WHERE c1 ORDER BY c2;
+
+EXPLAIN (COSTS OFF)
+SELECT * FROM test_include_col_pred WHERE NOT c1;
+SELECT * FROM test_include_col_pred WHERE NOT c1 ORDER BY c2;
+
+EXPLAIN (COSTS OFF)
+SELECT * FROM test_include_col_pred WHERE c1 IS NULL;
+SELECT * FROM test_include_col_pred WHERE c1 IS NULL ORDER BY c2;
+
+EXPLAIN (COSTS OFF)
+SELECT c1 FROM test_include_col_pred WHERE c1 IS NOT NULL;
+SELECT c1 FROM test_include_col_pred WHERE c1 IS NOT NULL ORDER BY 1;
+
+-- key predicate combined with an INCLUDE-column predicate: only the key
+-- predicate may become an index condition, the rest must stay a filter
+EXPLAIN (COSTS OFF)
+SELECT * FROM test_include_col_pred WHERE c0 AND c1;
+SELECT * FROM test_include_col_pred WHERE c0 AND c1 ORDER BY c2;
+
+
 reset optimizer_trace_fallback;
 reset enable_seqscan;
