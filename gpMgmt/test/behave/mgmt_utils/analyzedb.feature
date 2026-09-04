@@ -1779,8 +1779,17 @@ Feature: Incrementally analyze the database
         Given database "special_encoding_db" is dropped and recreated
         And the user connects to "special_encoding_db" with named connection "default"
         And the user executes "CREATE TEMP TABLE spiegelungssätze (c1 int) DISTRIBUTED BY (c1)" with named connection "default"
+        And the user executes "CREATE TABLE öffentlich (c1 int) DISTRIBUTED BY (c1)" with named connection "default"
+        And the user executes "CREATE SCHEMA schöma" with named connection "default"
+        And the user executes "CREATE TABLE schöma.таблица (c1 int) DISTRIBUTED BY (c1)" with named connection "default"
         When the user runs "analyzedb -a -d special_encoding_db"
         Then analyzedb should return a return code of 0
+        And analyzedb should print "öffentlich" to stdout
+        And analyzedb should print "таблица" to stdout
+        When the user runs "analyzedb -a -d special_encoding_db -s schöma"
+        Then analyzedb should return a return code of 0
+        And analyzedb should print "таблица" to stdout
+        And the user drops the named connection "default"
 
     Scenario: analyzedb finds materialized views
         Given  a materialized view "public.mv_test_view" exists on table "pg_class"
