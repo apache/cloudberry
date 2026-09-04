@@ -20,3 +20,11 @@ subdir('pgbench')
 subdir('pgevent')
 subdir('psql')
 subdir('scripts')
+
+# Cloudberry additions
+if get_option('gpfdist').enabled()
+  subdir('gpfdist')
+endif
+subdir('gpfts')
+subdir('gpnetbench')
+subdir('pg_alterckey')

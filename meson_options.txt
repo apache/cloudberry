@@ -115,8 +115,11 @@ option('llvm', type: 'feature', value: 'disabled',
 option('lz4', type: 'feature', value: 'auto',
   description: 'LZ4 support')
 
-option('nls', type: 'feature', value: 'auto',
-  description: 'Native language support')
+# Cloudberry does not support NLS. See the comment in configure.ac and the
+# error raised in meson.build; upstream's default here is 'auto', which would
+# silently enable NLS whenever gettext happens to be installed.
+option('nls', type: 'feature', value: 'disabled',
+  description: 'Native language support (not supported by Cloudberry)')
 
 option('pam', type: 'feature', value: 'auto',
   description: 'PAM support')
@@ -209,3 +212,84 @@ option('ZSTD', type: 'string', value: 'zstd',
 
 option('ZIC', type: 'string', value: 'zic',
   description: 'Path to zic binary, when cross-compiling')
+
+# +-----------------------------------------------------------------------+
+# | Apache Cloudberry options                                             |
+# +-----------------------------------------------------------------------+
+# Defaults mirror configure.ac exactly; changing one here silently breaks
+# equivalence with the autoconf build.
+
+option('orca', type: 'feature', value: 'enabled',
+  description: 'ORCA query optimizer (requires xerces-c)')
+
+option('gpfdist', type: 'feature', value: 'enabled',
+  description: 'gpfdist external table server (requires apr, libevent)')
+
+option('pxf', type: 'feature', value: 'enabled',
+  description: 'PXF foreign data wrapper (requires libcurl)')
+
+option('gpcloud', type: 'feature', value: 'disabled',
+  description: 'S3 external table protocol (requires libcurl, libxml2)')
+
+option('mapreduce', type: 'feature', value: 'disabled',
+  description: 'gpmapreduce (requires libyaml, perl)')
+
+option('orafce', type: 'feature', value: 'disabled',
+  description: 'Oracle compatibility extension')
+
+option('ic_proxy', type: 'feature', value: 'disabled',
+  description: 'interconnect proxy mode (requires libuv)')
+
+option('pax', type: 'feature', value: 'disabled',
+  description: 'PAX storage engine (requires protobuf >= 3.5, zstd >= 1.4)')
+
+option('diskquota', type: 'feature', value: 'disabled',
+  description: 'diskquota extension')
+
+option('gp_stats_collector', type: 'feature', value: 'disabled',
+  description: 'stats collector extension (requires protobuf)')
+
+option('libbz2', type: 'feature', value: 'enabled',
+  description: 'bzip2 support')
+
+option('libcurl', type: 'feature', value: 'enabled',
+  description: 'libcurl support (required by pxf and gpcloud)')
+
+option('libseccomp', type: 'feature', value: 'disabled',
+  description: 'libseccomp support')
+
+option('mdblocales', type: 'feature', value: 'disabled',
+  description: 'mdblocales support')
+
+option('debug_extensions', type: 'boolean', value: true,
+  description: 'build debug-only extensions in gpcontrib')
+
+option('faultinjector', type: 'boolean', value: true,
+  description: 'fault injection support for testing')
+
+option('catalog_ext', type: 'boolean', value: false,
+  description: 'catalog extension support (requires protobuf)')
+
+option('serverless', type: 'boolean', value: false,
+  description: 'serverless mode')
+
+option('external_fts', type: 'boolean', value: false,
+  description: 'use external fault tolerance service instead of the internal one')
+
+option('ic_udp2', type: 'boolean', value: false,
+  description: 'UDP interconnect v2')
+
+option('preload_ic_module', type: 'boolean', value: true,
+  description: 'preload the interconnect module')
+
+option('openssl_redirect', type: 'boolean', value: false,
+  description: 'allow OpenSSL redirect')
+
+option('shared_postgres_backend', type: 'boolean', value: true,
+  description: 'build the backend as libpostgres.so shared between postmaster and postgres')
+
+option('link_postgres_with_shared', type: 'boolean', value: false,
+  description: 'link the postgres binary against libpostgres.so')
+
+option('apr_config', type: 'string', value: 'apr-1-config',
+  description: 'path to the apr-1-config utility (--with-apr-config)')

@@ -16,6 +16,16 @@ backend_sources += files(
   'superuser.c',
   'timeout.c',
   'tzparser.c',
+  'backend_cancel.c',
+  'bitmap_compression.c',
+  'bitstream.c',
+  'faultinjector.c',
+  'faultinjector_warnings.c',
+  'gpexpand.c',
+  'guc_gp.c',
+  'queryjumble.c',
+  'string_utils.c',
+  'uriparser.c',
 )
 
 guc_scan = custom_target('guc_scan',
@@ -35,3 +45,5 @@ backend_link_with += static_library('guc-file',
 install_data('postgresql.conf.sample',
   install_dir: dir_data,
 )
+
+subdir('fstream')

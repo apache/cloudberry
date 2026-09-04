@@ -87,27 +87,30 @@ PYGRESQL_VERSION=5.2
 PSUTIL_VERSION=5.7.0
 PYYAML_VERSION=5.4.1
 
+# curl needs -f here: without it an HTTP error is written to the output
+# file and reported as success, and the -s guard below then treats that
+# file as a finished download on every later run.
 download-python-deps:
 	@echo "--- Downloading Python dependencies for gpMgmt modules"
 	@mkdir -p $(PYLIB_SRC_EXT)
 	# Download psutil using curl (only if not exists)
-	@if [ ! -f $(PYLIB_SRC_EXT)/psutil-$(PSUTIL_VERSION).tar.gz ]; then \
+	@if [ ! -s $(PYLIB_SRC_EXT)/psutil-$(PSUTIL_VERSION).tar.gz ]; then \
 		echo "Downloading psutil-$(PSUTIL_VERSION).tar.gz..."; \
-		curl -sSL https://files.pythonhosted.org/packages/source/p/psutil/psutil-$(PSUTIL_VERSION).tar.gz -o $(PYLIB_SRC_EXT)/psutil-$(PSUTIL_VERSION).tar.gz; \
+		curl -sSLf --retry 3 https://files.pythonhosted.org/packages/source/p/psutil/psutil-$(PSUTIL_VERSION).tar.gz -o $(PYLIB_SRC_EXT)/psutil-$(PSUTIL_VERSION).tar.gz; \
 	else \
 		echo "psutil-$(PSUTIL_VERSION).tar.gz already exists, skipping download"; \
 	fi
 	# Download PyYAML using curl (only if not exists)
-	@if [ ! -f $(PYLIB_SRC_EXT)/PyYAML-$(PYYAML_VERSION).tar.gz ]; then \
+	@if [ ! -s $(PYLIB_SRC_EXT)/PyYAML-$(PYYAML_VERSION).tar.gz ]; then \
 		echo "Downloading PyYAML-$(PYYAML_VERSION).tar.gz..."; \
-		curl -sSL https://files.pythonhosted.org/packages/source/P/PyYAML/PyYAML-$(PYYAML_VERSION).tar.gz -o $(PYLIB_SRC_EXT)/PyYAML-$(PYYAML_VERSION).tar.gz; \
+		curl -sSLf --retry 3 https://files.pythonhosted.org/packages/source/P/PyYAML/PyYAML-$(PYYAML_VERSION).tar.gz -o $(PYLIB_SRC_EXT)/PyYAML-$(PYYAML_VERSION).tar.gz; \
 	else \
 		echo "PyYAML-$(PYYAML_VERSION).tar.gz already exists, skipping download"; \
 	fi
 	# Download PyGreSQL using curl (only if not exists)
-	@if [ ! -f $(PYLIB_SRC_EXT)/PyGreSQL-$(PYGRESQL_VERSION).tar.gz ]; then \
+	@if [ ! -s $(PYLIB_SRC_EXT)/PyGreSQL-$(PYGRESQL_VERSION).tar.gz ]; then \
 		echo "Downloading PyGreSQL-$(PYGRESQL_VERSION).tar.gz..."; \
-		curl -sSL https://files.pythonhosted.org/packages/source/P/PyGreSQL/PyGreSQL-$(PYGRESQL_VERSION).tar.gz -o $(PYLIB_SRC_EXT)/PyGreSQL-$(PYGRESQL_VERSION).tar.gz; \
+		curl -sSLf --retry 3 https://files.pythonhosted.org/packages/source/P/PyGreSQL/PyGreSQL-$(PYGRESQL_VERSION).tar.gz -o $(PYLIB_SRC_EXT)/PyGreSQL-$(PYGRESQL_VERSION).tar.gz; \
 	else \
 		echo "PyGreSQL-$(PYGRESQL_VERSION).tar.gz already exists, skipping download"; \
 	fi
@@ -176,9 +179,9 @@ $(MOCK_BIN):
        pip3 install mock;\
     else\
        mkdir -p $(PYLIB_SRC_EXT) && \
-       if [ ! -f $(PYLIB_SRC_EXT)/mock-$(MOCK_VERSION).zip ]; then \
+       if [ ! -s $(PYLIB_SRC_EXT)/mock-$(MOCK_VERSION).zip ]; then \
            echo "Downloading mock-$(MOCK_VERSION).zip..."; \
-           curl -sSL https://files.pythonhosted.org/packages/source/m/mock/mock-$(MOCK_VERSION).zip -o $(PYLIB_SRC_EXT)/mock-$(MOCK_VERSION).zip; \
+           curl -sSLf --retry 3 https://files.pythonhosted.org/packages/source/m/mock/mock-$(MOCK_VERSION).zip -o $(PYLIB_SRC_EXT)/mock-$(MOCK_VERSION).zip; \
        else \
            echo "mock-$(MOCK_VERSION).zip already exists, skipping download"; \
        fi && \
