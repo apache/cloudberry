@@ -714,9 +714,12 @@ ao_segfile_get_physical_size(Relation aorel, int segno, FileNumber filenum)
 		   filenum,
 		   segno,
 		   fileSegNo);
-	fd = PathNameOpenFile(filenamepath, O_RDONLY | PG_BINARY);
+	fd = aorel->rd_smgr->smgr_ao->smgr_AORelOpenSegFile(RelationGetRelid(aorel), filenamepath, O_RDONLY | PG_BINARY);
 	if (fd >= 0)
-		physical_size = FileDiskSize(fd);
+	{
+		physical_size = aorel->rd_smgr->smgr_ao->smgr_FileDiskSize(fd);
+		aorel->rd_smgr->smgr_ao->smgr_FileClose(fd);
+	}
 	else
 		elogif(Debug_appendonly_print_compaction, LOG,
 			   "No gp_relation_node entry for append-optimized relation \"%s\", relation id %u, relfilenode %u filenum #%d, logical segment #%d (physical segment file #%d)",
@@ -726,5 +729,6 @@ ao_segfile_get_physical_size(Relation aorel, int segno, FileNumber filenum)
 			   filenum,
 			   segno,
 			   fileSegNo);
+
 	return physical_size;
 }
