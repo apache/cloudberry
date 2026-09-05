@@ -116,6 +116,12 @@ static void	cdbdisp_waitDispatchFinish_async(struct CdbDispatcherState *ds);
 static bool	cdbdisp_checkForCancel_async(struct CdbDispatcherState *ds);
 static int *cdbdisp_getWaitSocketFds_async(struct CdbDispatcherState *ds, int *nsocks);
 
+/*
+ * Lets an extension handle its own NOTIFY channels arriving from QEs; see the
+ * declaration in cdbdisp.h for the contract.
+ */
+cdbdisp_notify_hook_type cdbdisp_notify_hook = NULL;
+
 DispatcherInternalFuncs DispatcherAsyncFuncs =
 {
 	cdbdisp_checkForCancel_async,
@@ -1207,6 +1213,11 @@ processResults(CdbDispatchResult *dispatchResult)
 
 			/* Don't free the notify here since it in queue now */
 			qnotifies = NULL;
+		}
+		else if (cdbdisp_notify_hook != NULL &&
+				 cdbdisp_notify_hook(dispatchResult, qnotifies))
+		{
+			/* Consumed by an extension; nothing further to do here. */
 		}
 		else
 		{

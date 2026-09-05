@@ -1284,6 +1284,9 @@ code or new licensing patterns.
             <exclude>gpcontrib/reject_partition_fullscan/Makefile</exclude>
             <exclude>gpcontrib/reject_partition_fullscan/reject_partition_fullscan.control</exclude>
 
+            <exclude>gpcontrib/anser/anser.control</exclude>
+            <exclude>gpcontrib/anser/anser_test.control</exclude>
+
             <!-- The following files are used by PAX as the
                  submodules or created originally by Cloudberry.
             -->

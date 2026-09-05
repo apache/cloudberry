@@ -243,6 +243,11 @@ jobs:
                "make_configs":["src/test/regress:installcheck-good"],
                "pg_settings":{"optimizer":"on"}
               },
+              {"test":"ic-anser",
+               "make_configs":["gpcontrib/anser:installcheck-with-install"],
+               "shared_preload_libraries":"anser",
+               "postgres_conf_addons":"anser.enable=on"
+              },
               {"test":"pax-ic-good-opt-off",
                "make_configs":[
                 "contrib/pax_storage/:pax-test",
@@ -1498,6 +1503,15 @@ jobs:
             if [[ -n "${{ matrix.shared_preload_libraries }}" ]]; then
               EXTRA_CONF="shared_preload_libraries='${{ matrix.shared_preload_libraries }}'"
               echo "Adding shared_preload_libraries: ${{ matrix.shared_preload_libraries }}"
+            fi
+
+            # Append extra postgresql.conf settings requested by the matrix
+            # entry (e.g. postmaster-context GUCs a test module requires).
+            # BLDWRAP_POSTGRES_CONF_ADDONS is a pipe-separated list of
+            # key=value pairs (see gpAux/gpdemo/demo_cluster.sh).
+            if [[ -n "${{ matrix.postgres_conf_addons }}" ]]; then
+              EXTRA_CONF="${EXTRA_CONF}${EXTRA_CONF:+|}${{ matrix.postgres_conf_addons }}"
+              echo "Adding postgres_conf_addons: ${{ matrix.postgres_conf_addons }}"
             fi
 
             if ! time su - gpadmin -c "cd ${SRC_DIR} && NUM_PRIMARY_MIRROR_PAIRS='${{ matrix.num_primary_mirror_pairs }}' BLDWRAP_POSTGRES_CONF_ADDONS=\"${EXTRA_CONF}\" SRC_DIR=${SRC_DIR} ${SRC_DIR}/devops/build/automation/cloudberry/scripts/create-cloudberry-demo-cluster.sh"; then

@@ -293,6 +293,47 @@ mod_m(uint32 val, uint64 m)
 	return val & (m - 1);
 }
 
+Size
+bloom_bitset_bytes(const bloom_filter *filter)
+{
+	return filter != NULL ? (Size) (filter->m / BITS_PER_BYTE) : 0;
+}
+
+const unsigned char *
+bloom_bitset_data(const bloom_filter *filter)
+{
+	return filter != NULL ? filter->bitset : NULL;
+}
+
+/*
+ * Create a filter sized exactly as bloom_create(total_elems, work_mem, seed) and
+ * initialize its bitset from the supplied bytes in one step.  Returns NULL if the
+ * supplied length is not the filter's bitset size, so a wrongly-sized bitset is
+ * rejected rather than partially loaded.  This is the only supported way to
+ * populate a filter from serialized bytes; afterwards a filter is only ever grown
+ * by bloom_add_element (or a raw bitwise OR of two equal-sized serialized parts,
+ * as Anser's coordinator fold does).
+ */
+bloom_filter *
+bloom_create_from_bitset(int64 total_elems, int bloom_work_mem, uint64 seed,
+						 const unsigned char *bitset, Size bitset_len)
+{
+	bloom_filter *filter;
+
+	if (bitset == NULL)
+		return NULL;
+
+	filter = bloom_create(total_elems, bloom_work_mem, seed);
+	if (bitset_len != (Size) (filter->m / BITS_PER_BYTE))
+	{
+		bloom_free(filter);
+		return NULL;
+	}
+
+	memcpy(filter->bitset, bitset, bitset_len);
+	return filter;
+}
+
 double
 bloom_false_positive_rate(bloom_filter *filter)
 {
