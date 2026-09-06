@@ -134,3 +134,12 @@ DROP FUNCTION rg_drop_func();
 
 -- cleanup
 DROP VIEW rg_test_monitor;
+
+-- ----------------------------------------------------------------------
+-- Test: "CREATE INDEX CONCURRENTLY" when compiled with enable-cassert
+-- ----------------------------------------------------------------------
+
+CREATE TABLE t(a text, b text);
+CREATE INDEX CONCURRENTLY t_idx ON t(a, b);
+DROP INDEX CONCURRENTLY t_idx;
+DROP TABLE t;
