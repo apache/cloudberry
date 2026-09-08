@@ -1,0 +1,51 @@
+<!--
+  Licensed to the Apache Software Foundation (ASF) under one
+  or more contributor license agreements.  See the NOTICE file
+  distributed with this work for additional information
+  regarding copyright ownership.  The ASF licenses this file
+  to you under the Apache License, Version 2.0 (the
+  "License"); you may not use this file except in compliance
+  with the License.  You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing,
+  software distributed under the License is distributed on an
+  "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+  KIND, either express or implied.  See the License for the
+  specific language governing permissions and limitations
+  under the License.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 712 166" width="100%" style="height:auto;display:block;min-width:600px" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="11">
+        <defs>
+          <marker id="bmp" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#8a7aa8"/></marker>
+          <marker id="bmn" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#c79a3a"/></marker>
+        </defs>
+        <rect x="8" y="54" width="132" height="58" rx="5" fill="#f5edff" stroke="#b79ad6" stroke-width="1.5"/>
+        <text x="74" y="74" text-anchor="middle" font-weight="700" fill="#5e4b86">Block 0</text>
+        <text x="74" y="88" text-anchor="middle" font-size="9">BMMetaPageData</text>
+        <text x="74" y="101" text-anchor="middle" font-size="8.5" fill="#444">bm_lov_heapId / indexId</text>
+        <path d="M140 83 H154" fill="none" stroke="#8a7aa8" stroke-width="1.6" marker-end="url(#bmp)"/>
+        <rect x="156" y="54" width="140" height="58" rx="5" fill="#eafaf0" stroke="#cfead9" stroke-width="1.5"/>
+        <text x="226" y="74" text-anchor="middle" font-weight="700">aux B-tree</text>
+        <text x="226" y="88" text-anchor="middle" font-size="9" fill="#444">key = region</text>
+        <text x="226" y="101" text-anchor="middle" font-size="8.5" fill="#444">payload = (blk, off)</text>
+        <path d="M296 83 H354" fill="none" stroke="#8a7aa8" stroke-width="1.6" marker-end="url(#bmp)"/>
+        <text x="325" y="77" text-anchor="middle" font-size="8" fill="#8a7aa8">'EU'→(blk,off)</text>
+        <rect x="356" y="54" width="140" height="58" rx="5" fill="#fff4d6" stroke="#e0b365" stroke-width="1.5"/>
+        <text x="426" y="74" text-anchor="middle" font-weight="700" fill="#8a6d1a">LOV page</text>
+        <text x="426" y="88" text-anchor="middle" font-size="9" fill="#8a6d1a">BMLOVItemData</text>
+        <text x="426" y="101" text-anchor="middle" font-size="8.5" fill="#8a6d1a">bm_lov_head → tail</text>
+        <path d="M496 83 H556" fill="none" stroke="#c79a3a" stroke-width="1.8" marker-end="url(#bmn)"/>
+        <text x="526" y="77" text-anchor="middle" font-size="8" fill="#8a6d1a">bm_lov_head</text>
+        <rect x="558" y="48" width="70" height="70" rx="5" fill="#faf6ff" stroke="#b79ad6" stroke-width="1.5"/>
+        <text x="593" y="70" text-anchor="middle" font-size="9.5" font-weight="700" fill="#5e4b86">bitmap</text>
+        <text x="593" y="83" text-anchor="middle" font-size="9" fill="#444">hwords</text>
+        <text x="593" y="96" text-anchor="middle" font-size="9" fill="#444">cwords</text>
+        <path d="M628 83 H648" fill="none" stroke="#c79a3a" stroke-width="1.8" marker-end="url(#bmn)"/>
+        <rect x="650" y="48" width="58" height="70" rx="5" fill="#faf6ff" stroke="#b79ad6" stroke-width="1.5"/>
+        <text x="679" y="79" text-anchor="middle" font-size="9.5" font-weight="700" fill="#5e4b86">bitmap</text>
+        <text x="679" y="92" text-anchor="middle" font-size="8.5" fill="#444">page …</text>
+        <text x="637" y="138" text-anchor="middle" font-size="8" fill="#8a6d1a">bm_bitmap_next (page chain)</text>
+        <text x="300" y="30" text-anchor="middle" font-size="10" fill="#8a7aa8">a value probe is one btree search, then a pointer-chase into that value's compressed bit-vector</text>
+      </svg>

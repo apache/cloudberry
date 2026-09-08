@@ -1,0 +1,27 @@
+<!--
+  Licensed to the Apache Software Foundation (ASF) under one
+  or more contributor license agreements.  See the NOTICE file
+  distributed with this work for additional information
+  regarding copyright ownership.  The ASF licenses this file
+  to you under the Apache License, Version 2.0 (the
+  "License"); you may not use this file except in compliance
+  with the License.  You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing,
+  software distributed under the License is distributed on an
+  "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+  KIND, either express or implied.  See the License for the
+  specific language governing permissions and limitations
+  under the License.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 150" width="100%" style="height:auto;display:block;min-width:600px" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="11">
+      <defs><marker id="ax" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#8a7aa8"/></marker></defs>
+      <rect x="270" y="15" width="180" height="34" rx="6" fill="#fff4d6" stroke="#e0b365" stroke-width="1.5"/><text x="360" y="30" text-anchor="middle" fill="#8a6d1a">LOCK object</text><text x="360" y="44" text-anchor="middle" fill="#8a6d1a">relation lk_demo</text>
+      <rect x="60" y="95" width="240" height="40" rx="6" fill="#eafaf0" stroke="#cfead9" stroke-width="1.5"/><text x="180" y="112" text-anchor="middle" fill="#1f2328">GRANTED group</text><text x="180" y="127" text-anchor="middle" fill="#1f2328">A: AccessExclusiveLock (granted=t)</text>
+      <rect x="420" y="95" width="240" height="40" rx="6" fill="#f5edff" stroke="#b79ad6" stroke-width="1.5"/><text x="540" y="112" text-anchor="middle" fill="#1f2328">WAIT queue</text><text x="540" y="127" text-anchor="middle" fill="#1f2328">B: AccessShareLock (granted=f)</text>
+      <line x1="300" y1="49" x2="200" y2="93" stroke="#8a7aa8" marker-end="url(#ax)"/>
+      <line x1="420" y1="49" x2="520" y2="93" stroke="#8a7aa8" stroke-dasharray="4 3" marker-end="url(#ax)"/>
+      <text x="600" y="70" text-anchor="middle" fill="#8a7aa8">conflict &#8658; wait</text>
+      </svg>

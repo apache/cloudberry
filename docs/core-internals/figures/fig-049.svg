@@ -1,0 +1,91 @@
+<!--
+  Licensed to the Apache Software Foundation (ASF) under one
+  or more contributor license agreements.  See the NOTICE file
+  distributed with this work for additional information
+  regarding copyright ownership.  The ASF licenses this file
+  to you under the Apache License, Version 2.0 (the
+  "License"); you may not use this file except in compliance
+  with the License.  You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing,
+  software distributed under the License is distributed on an
+  "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+  KIND, either express or implied.  See the License for the
+  specific language governing permissions and limitations
+  under the License.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 980 356" width="100%" style="max-width:980px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace">
+  <defs>
+    <marker id="a176s" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#5b4a7a"/></marker>
+    <marker id="a176x" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#b04a4a"/></marker>
+  </defs>
+
+  <text x="83"  y="20" font-size="10" fill="#8a7aa0" text-anchor="middle" letter-spacing="1">SQL SESSION</text>
+  <text x="261" y="20" font-size="10" fill="#8a7aa0" text-anchor="middle" letter-spacing="1">C GUC GLOBAL</text>
+  <text x="448" y="20" font-size="10" fill="#8a7aa0" text-anchor="middle" letter-spacing="1">THE BRIDGE</text>
+  <text x="655" y="20" font-size="10" fill="#8a7aa0" text-anchor="middle" letter-spacing="1">TRACEFLAG BITSET</text>
+  <text x="875" y="20" font-size="10" fill="#8a7aa0" text-anchor="middle" letter-spacing="1">ENGINE BEHAVIOUR</text>
+
+  <rect x="8" y="92" width="150" height="56" rx="6" fill="#fff4d6" stroke="#8a6d1a" stroke-width="1.2"/>
+  <text x="18" y="111" font-size="11" fill="#3a3348">SET optimizer_</text>
+  <text x="18" y="126" font-size="11" fill="#3a3348">enable_hashjoin</text>
+  <text x="18" y="141" font-size="11" fill="#8a6d1a">= off</text>
+
+  <rect x="186" y="92" width="150" height="56" rx="6" fill="#f5edff" stroke="#cdb4db" stroke-width="1.2"/>
+  <text x="196" y="111" font-size="11" fill="#3a3348">bool optimizer_</text>
+  <text x="196" y="126" font-size="11" fill="#3a3348">enable_hashjoin</text>
+  <text x="196" y="141" font-size="9.5" fill="#7a6a92">guc_gp.c:2347</text>
+
+  <rect x="364" y="80" width="168" height="80" rx="6" fill="#f5edff" stroke="#cdb4db" stroke-width="1.2"/>
+  <text x="374" y="102" font-size="11" fill="#3a3348">PackConfigParam</text>
+  <text x="374" y="117" font-size="11" fill="#3a3348">InBitset()</text>
+  <text x="374" y="135" font-size="9.5" fill="#7a6a92">CConfigParamMapping</text>
+  <text x="374" y="148" font-size="9.5" fill="#7a6a92">.cpp:351</text>
+
+  <rect x="560" y="42" width="190" height="60" rx="6" fill="#eafaf0" stroke="#cfead9" stroke-width="1.2"/>
+  <text x="570" y="62" font-size="11" fill="#3a3348">⟦one bit: 103045⟧</text>
+  <text x="570" y="77" font-size="10.5" fill="#3a3348">EopttraceDisable</text>
+  <text x="570" y="91" font-size="10.5" fill="#3a3348">InnerHashJoin</text>
+
+  <rect x="560" y="126" width="190" height="60" rx="6" fill="#eafaf0" stroke="#cfead9" stroke-width="1.2"/>
+  <text x="570" y="146" font-size="10.5" fill="#3a3348">102000 + xform id</text>
+  <text x="570" y="161" font-size="10.5" fill="#3a3348">7 bits, one per</text>
+  <text x="570" y="176" font-size="10.5" fill="#3a3348">hash-join xform</text>
+
+  <rect x="778" y="42" width="194" height="60" rx="6" fill="#fff4d6" stroke="#8a6d1a" stroke-width="1.2"/>
+  <text x="788" y="62" font-size="11" fill="#3a3348">hash alternative</text>
+  <text x="788" y="77" font-size="11" fill="#3a3348">never generated</text>
+  <text x="788" y="92" font-size="9" fill="#8a6d1a">CXformImplementInnerJoin.cpp:83</text>
+
+  <rect x="778" y="126" width="194" height="60" rx="6" fill="#fff4d6" stroke="#8a6d1a" stroke-width="1.2"/>
+  <text x="788" y="146" font-size="11" fill="#3a3348">xform returns before</text>
+  <text x="788" y="161" font-size="11" fill="#3a3348">it ever fires</text>
+  <text x="788" y="176" font-size="9" fill="#8a6d1a">CGroupExpression.cpp:781</text>
+
+  <path d="M158,120 L180,120" stroke="#5b4a7a" stroke-width="1.5" fill="none" marker-end="url(#a176s)"/>
+  <path d="M336,120 L358,120" stroke="#5b4a7a" stroke-width="1.5" fill="none" marker-end="url(#a176s)"/>
+  <path d="M532,104 L556,78"  stroke="#5b4a7a" stroke-width="1.5" fill="none" marker-end="url(#a176s)"/>
+  <path d="M532,136 L556,152" stroke="#5b4a7a" stroke-width="1.5" fill="none" marker-end="url(#a176s)"/>
+  <path d="M750,72 L772,72"   stroke="#5b4a7a" stroke-width="1.5" fill="none" marker-end="url(#a176s)"/>
+  <path d="M750,156 L772,156" stroke="#5b4a7a" stroke-width="1.5" fill="none" marker-end="url(#a176s)"/>
+
+  <rect x="8" y="246" width="150" height="58" rx="6" fill="#fff4d6" stroke="#8a6d1a" stroke-width="1.2"/>
+  <text x="18" y="266" font-size="11" fill="#3a3348">SET enable_</text>
+  <text x="18" y="281" font-size="11" fill="#3a3348">hashjoin = off</text>
+  <text x="18" y="296" font-size="9.5" fill="#8a6d1a">the Ch15 knob</text>
+
+  <rect x="186" y="246" width="150" height="58" rx="6" fill="#f5edff" stroke="#cdb4db" stroke-width="1.2"/>
+  <text x="196" y="271" font-size="11" fill="#3a3348">bool enable_hashjoin</text>
+  <text x="196" y="290" font-size="9.5" fill="#7a6a92">guc_tables.c</text>
+
+  <rect x="364" y="246" width="390" height="58" rx="6" fill="#fdecec" stroke="#d9a2a2" stroke-width="1.2"/>
+  <text x="376" y="269" font-size="10.5" fill="#3a3348">absent from m_elements[] and from the imperative tail:</text>
+  <text x="376" y="288" font-size="10.5" fill="#3a3348">ORCA never reads it, and the GPORCA plan is unchanged.</text>
+
+  <path d="M158,275 L180,275" stroke="#5b4a7a" stroke-width="1.5" fill="none" marker-end="url(#a176s)"/>
+  <path d="M336,275 L358,275" stroke="#b04a4a" stroke-width="1.5" stroke-dasharray="5 4" fill="none" marker-end="url(#a176x)"/>
+
+  <text x="8" y="334" font-size="10" fill="#7a6a92">ResetTraceflags() puts every bit back to its previous value when OptimizeTask() unwinds — COptTasks.cpp:1041 / 1061.</text>
+</svg>

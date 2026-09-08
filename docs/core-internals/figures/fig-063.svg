@@ -1,0 +1,77 @@
+<!--
+  Licensed to the Apache Software Foundation (ASF) under one
+  or more contributor license agreements.  See the NOTICE file
+  distributed with this work for additional information
+  regarding copyright ownership.  The ASF licenses this file
+  to you under the Apache License, Version 2.0 (the
+  "License"); you may not use this file except in compliance
+  with the License.  You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing,
+  software distributed under the License is distributed on an
+  "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+  KIND, either express or implied.  See the License for the
+  specific language governing permissions and limitations
+  under the License.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 425" width="100%" style="max-width:900px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace">
+  <defs>
+    <marker id="m196a" markerWidth="9" markerHeight="9" refX="7" refY="3.5" orient="auto"><path d="M0,0 L7,3.5 L0,7 z" fill="#6b4fa1"/></marker>
+    <marker id="m196b" markerWidth="9" markerHeight="9" refX="7" refY="3.5" orient="auto"><path d="M0,0 L7,3.5 L0,7 z" fill="#8a6d1a"/></marker>
+  </defs>
+  <line x1="455" y1="14" x2="455" y2="418" stroke="#e6dff2" stroke-width="1.5" stroke-dasharray="4 4"/>
+
+  <text x="225" y="24" text-anchor="middle" font-size="12" fill="#4a3a63">every other query in this book</text>
+  <text x="225" y="42" text-anchor="middle" font-size="10" fill="#8a7ca8">Gather Motion 3:1, then one client socket</text>
+  <rect x="165" y="114" width="120" height="40" rx="6" fill="#eafaf0" stroke="#cfead9" stroke-width="1.5"/>
+  <text x="225" y="139" text-anchor="middle" font-size="11" fill="#2f5d43">client</text>
+  <line x1="225" y1="200" x2="225" y2="160" stroke="#8a6d1a" stroke-width="3" marker-end="url(#m196b)"/>
+  <text x="238" y="184" font-size="10" fill="#8a6d1a">one socket</text>
+  <rect x="145" y="200" width="160" height="44" rx="6" fill="#f5edff" stroke="#cdb4db" stroke-width="1.5"/>
+  <text x="225" y="227" text-anchor="middle" font-size="11" fill="#3b2d55">QD  coordinator</text>
+  <line x1="90" y1="300" x2="185" y2="248" stroke="#6b4fa1" stroke-width="1.5" marker-end="url(#m196a)"/>
+  <line x1="205" y1="300" x2="225" y2="248" stroke="#6b4fa1" stroke-width="1.5" marker-end="url(#m196a)"/>
+  <line x1="320" y1="300" x2="265" y2="248" stroke="#6b4fa1" stroke-width="1.5" marker-end="url(#m196a)"/>
+  <text x="432" y="272" text-anchor="end" font-size="10" fill="#6b4fa1">Gather Motion 3:1</text>
+  <rect x="40" y="300" width="100" height="44" rx="6" fill="#f5edff" stroke="#cdb4db" stroke-width="1.5"/>
+  <rect x="155" y="300" width="100" height="44" rx="6" fill="#f5edff" stroke="#cdb4db" stroke-width="1.5"/>
+  <rect x="270" y="300" width="100" height="44" rx="6" fill="#f5edff" stroke="#cdb4db" stroke-width="1.5"/>
+  <text x="90" y="327" text-anchor="middle" font-size="11" fill="#3b2d55">QE seg 0</text>
+  <text x="205" y="327" text-anchor="middle" font-size="11" fill="#3b2d55">QE seg 1</text>
+  <text x="320" y="327" text-anchor="middle" font-size="11" fill="#3b2d55">QE seg 2</text>
+
+  <text x="680" y="24" text-anchor="middle" font-size="12" fill="#4a3a63">PARALLEL RETRIEVE CURSOR</text>
+  <text x="680" y="42" text-anchor="middle" font-size="10" fill="#8a7ca8">no Motion and no gang above the top slice</text>
+  <rect x="490" y="114" width="90" height="40" rx="6" fill="#eafaf0" stroke="#cfead9" stroke-width="1.5"/>
+  <rect x="620" y="114" width="90" height="40" rx="6" fill="#eafaf0" stroke="#cfead9" stroke-width="1.5"/>
+  <rect x="750" y="114" width="90" height="40" rx="6" fill="#eafaf0" stroke="#cfead9" stroke-width="1.5"/>
+  <text x="535" y="139" text-anchor="middle" font-size="11" fill="#2f5d43">client 1</text>
+  <text x="665" y="139" text-anchor="middle" font-size="11" fill="#2f5d43">client 2</text>
+  <text x="795" y="139" text-anchor="middle" font-size="11" fill="#2f5d43">client 3</text>
+  <line x1="535" y1="254" x2="535" y2="160" stroke="#8a6d1a" stroke-width="3" marker-end="url(#m196b)"/>
+  <line x1="665" y1="254" x2="665" y2="160" stroke="#8a6d1a" stroke-width="3" marker-end="url(#m196b)"/>
+  <line x1="795" y1="254" x2="795" y2="160" stroke="#8a6d1a" stroke-width="3" marker-end="url(#m196b)"/>
+  <text x="545" y="200" font-size="10" fill="#8a6d1a">RETRIEVE ALL</text>
+  <rect x="495" y="254" width="80" height="28" rx="4" fill="#fff4d6" stroke="#8a6d1a" stroke-width="1.5"/>
+  <rect x="625" y="254" width="80" height="28" rx="4" fill="#fff4d6" stroke="#8a6d1a" stroke-width="1.5"/>
+  <rect x="755" y="254" width="80" height="28" rx="4" fill="#fff4d6" stroke="#8a6d1a" stroke-width="1.5"/>
+  <text x="535" y="273" text-anchor="middle" font-size="10" fill="#7a5f14">endpoint</text>
+  <text x="665" y="273" text-anchor="middle" font-size="10" fill="#7a5f14">endpoint</text>
+  <text x="795" y="273" text-anchor="middle" font-size="10" fill="#7a5f14">endpoint</text>
+  <line x1="535" y1="300" x2="535" y2="288" stroke="#8a6d1a" stroke-width="1.5" marker-end="url(#m196b)"/>
+  <line x1="665" y1="300" x2="665" y2="288" stroke="#8a6d1a" stroke-width="1.5" marker-end="url(#m196b)"/>
+  <line x1="795" y1="300" x2="795" y2="288" stroke="#8a6d1a" stroke-width="1.5" marker-end="url(#m196b)"/>
+  <rect x="480" y="300" width="110" height="44" rx="6" fill="#f5edff" stroke="#cdb4db" stroke-width="1.5"/>
+  <rect x="610" y="300" width="110" height="44" rx="6" fill="#f5edff" stroke="#cdb4db" stroke-width="1.5"/>
+  <rect x="740" y="300" width="110" height="44" rx="6" fill="#f5edff" stroke="#cdb4db" stroke-width="1.5"/>
+  <text x="535" y="327" text-anchor="middle" font-size="11" fill="#3b2d55">QE seg 0</text>
+  <text x="665" y="327" text-anchor="middle" font-size="11" fill="#3b2d55">QE seg 1</text>
+  <text x="795" y="327" text-anchor="middle" font-size="11" fill="#3b2d55">QE seg 2</text>
+  <line x1="600" y1="372" x2="537" y2="348" stroke="#6b4fa1" stroke-width="1.2" stroke-dasharray="3 3" marker-end="url(#m196a)"/>
+  <line x1="685" y1="372" x2="665" y2="348" stroke="#6b4fa1" stroke-width="1.2" stroke-dasharray="3 3" marker-end="url(#m196a)"/>
+  <line x1="770" y1="372" x2="793" y2="348" stroke="#6b4fa1" stroke-width="1.2" stroke-dasharray="3 3" marker-end="url(#m196a)"/>
+  <rect x="560" y="372" width="250" height="40" rx="6" fill="none" stroke="#cdb4db" stroke-width="1.5" stroke-dasharray="5 4"/>
+  <text x="685" y="397" text-anchor="middle" font-size="10" fill="#6b4fa1">QD: DECLARE, CHECK and CLOSE only</text>
+</svg>
