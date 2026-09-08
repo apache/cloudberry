@@ -1,0 +1,42 @@
+<!--
+  Licensed to the Apache Software Foundation (ASF) under one
+  or more contributor license agreements.  See the NOTICE file
+  distributed with this work for additional information
+  regarding copyright ownership.  The ASF licenses this file
+  to you under the Apache License, Version 2.0 (the
+  "License"); you may not use this file except in compliance
+  with the License.  You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing,
+  software distributed under the License is distributed on an
+  "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+  KIND, either express or implied.  See the License for the
+  specific language governing permissions and limitations
+  under the License.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 300" font-family="ui-monospace,monospace" font-size="12" width="720">
+  <defs><marker id="ah154" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#8a6d1a"/></marker></defs>
+  <text x="20" y="24" font-size="13" fill="#5a3fa0" font-weight="bold">Winning Path (candidate, costed)</text>
+  <text x="470" y="24" font-size="13" fill="#1f7a44" font-weight="bold">Plan (executable node)</text>
+  <text x="300" y="24" font-size="12" fill="#8a6d1a" font-weight="bold">create_plan()</text>
+  <rect x="20" y="40" width="215" height="42" rx="6" fill="#f5edff" stroke="#cdb4db" stroke-width="1.5"/>
+  <text x="30" y="58">GatherMotionPath</text><text x="30" y="74" fill="#8a6d1a">total_cost=8.05 rows=99</text>
+  <rect x="470" y="40" width="230" height="42" rx="6" fill="#eafaf0" stroke="#cfead9" stroke-width="1.5"/>
+  <text x="480" y="58">Gather Motion 3:1</text><text x="480" y="74" fill="#8a6d1a">plan_rows=99 width=11</text>
+  <line x1="235" y1="61" x2="468" y2="61" stroke="#8a6d1a" stroke-width="1.5" marker-end="url(#ah154)"/>
+  <rect x="20" y="102" width="215" height="42" rx="6" fill="#f5edff" stroke="#cdb4db" stroke-width="1.5"/>
+  <text x="30" y="120">HashPath</text><text x="30" y="136" fill="#8a6d1a">total_cost=6.73 rows=33</text>
+  <rect x="470" y="102" width="230" height="42" rx="6" fill="#eafaf0" stroke="#cfead9" stroke-width="1.5"/>
+  <text x="480" y="120">Hash Join + Hash</text><text x="480" y="136" fill="#8a6d1a">plan_rows=33 width=11</text>
+  <line x1="235" y1="123" x2="468" y2="123" stroke="#8a6d1a" stroke-width="1.5" marker-end="url(#ah154)"/>
+  <rect x="20" y="164" width="215" height="42" rx="6" fill="#f5edff" stroke="#cdb4db" stroke-width="1.5"/>
+  <text x="30" y="182">SeqScanPath (p154_t)</text><text x="30" y="198" fill="#8a6d1a">total_cost=5.17 rows=33</text>
+  <rect x="470" y="164" width="230" height="42" rx="6" fill="#eafaf0" stroke="#cfead9" stroke-width="1.5"/>
+  <text x="480" y="182">Seq Scan on p154_t</text><text x="480" y="198" fill="#8a6d1a">plan_rows=33 width=12</text>
+  <line x1="235" y1="185" x2="468" y2="185" stroke="#8a6d1a" stroke-width="1.5" marker-end="url(#ah154)"/>
+  <rect x="20" y="238" width="680" height="46" rx="6" fill="#fff4d6" stroke="#8a6d1a" stroke-width="1.5"/>
+  <text x="34" y="258" fill="#8a6d1a" font-weight="bold">copy_generic_path_info()</text>
+  <text x="34" y="276" fill="#3a2f10">plan_rows = path-&gt;rows ; plan_width = path-&gt;pathtarget-&gt;width ; startup_cost, total_cost copied verbatim</text>
+  </svg>

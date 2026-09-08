@@ -1,0 +1,112 @@
+<!--
+  Licensed to the Apache Software Foundation (ASF) under one
+  or more contributor license agreements.  See the NOTICE file
+  distributed with this work for additional information
+  regarding copyright ownership.  The ASF licenses this file
+  to you under the Apache License, Version 2.0 (the
+  "License"); you may not use this file except in compliance
+  with the License.  You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing,
+  software distributed under the License is distributed on an
+  "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+  KIND, either express or implied.  See the License for the
+  specific language governing permissions and limitations
+  under the License.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 580" width="100%" style="height:auto;display:block;min-width:600px" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="11">
+  <defs>
+    <marker id="ahc" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#6b8a76"/></marker>
+    <marker id="ahx" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#8a6d1a"/></marker>
+    <marker id="ahi" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#3a6ea5"/></marker>
+  </defs>
+
+  <text x="20" y="20" font-size="11" font-weight="700" fill="#6b5b95">BEFORE — a HOT chain on page 0</text>
+  <rect x="20" y="34" width="150" height="34" rx="5" fill="#fff" stroke="#3a6ea5" stroke-width="1.5"/>
+  <text x="95" y="49" text-anchor="middle" fill="#3a6ea5" font-weight="700">index on indexed_col</text>
+  <text x="95" y="62" text-anchor="middle" fill="#3a6ea5" font-size="9.5">entry &#8594; (block 0, slot 1)</text>
+  <path d="M95 68 V86 H160" fill="none" stroke="#3a6ea5" stroke-width="1.5" marker-end="url(#ahi)"/>
+
+  <rect x="20" y="86" width="720" height="184" rx="7" fill="none" stroke="#b79ad6" stroke-width="2"/>
+  <rect x="20" y="86" width="720" height="22" fill="#efe3fb"/>
+  <text x="380" y="101" text-anchor="middle" fill="#5e4b86" font-weight="700">heap page &#183; block 0</text>
+
+  <rect x="160" y="112" width="120" height="40" fill="#f5edff" stroke="#cdb4db"/>
+  <rect x="290" y="112" width="120" height="40" fill="#f5edff" stroke="#cdb4db"/>
+  <rect x="420" y="112" width="120" height="40" fill="#f5edff" stroke="#cdb4db"/>
+  <rect x="550" y="112" width="120" height="40" fill="#f5edff" stroke="#cdb4db"/>
+  <text x="220" y="128" text-anchor="middle" font-weight="700">slot 1</text>
+  <text x="220" y="143" text-anchor="middle" font-size="9" fill="#6b5b95">LP_NORMAL &#183; root</text>
+  <text x="350" y="128" text-anchor="middle" font-weight="700">slot 2</text>
+  <text x="350" y="143" text-anchor="middle" font-size="9" fill="#777">LP_NORMAL</text>
+  <text x="480" y="128" text-anchor="middle" font-weight="700">slot 3</text>
+  <text x="480" y="143" text-anchor="middle" font-size="9" fill="#777">LP_NORMAL</text>
+  <text x="610" y="128" text-anchor="middle" font-weight="700">slot 4</text>
+  <text x="610" y="143" text-anchor="middle" font-size="9" fill="#777">LP_NORMAL</text>
+  <text x="676" y="135" font-size="9" fill="#8a7aa8">ItemId array</text>
+
+  <rect x="160" y="200" width="120" height="50" fill="#eafaf0" stroke="#cfead9"/>
+  <rect x="290" y="200" width="120" height="50" fill="#eafaf0" stroke="#cfead9"/>
+  <rect x="420" y="200" width="120" height="50" fill="#eafaf0" stroke="#cfead9"/>
+  <rect x="550" y="200" width="120" height="50" fill="#eafaf0" stroke="#cfead9"/>
+  <text x="220" y="216" text-anchor="middle" font-weight="700">tuple v1</text>
+  <text x="220" y="229" text-anchor="middle" font-size="9" fill="#444">ctid (0,2) &#183; hex2 4003</text>
+  <text x="220" y="242" text-anchor="middle" font-size="9" fill="#6b8a76">HOT_UPDATED</text>
+  <text x="350" y="216" text-anchor="middle" font-weight="700">tuple v2</text>
+  <text x="350" y="229" text-anchor="middle" font-size="9" fill="#444">ctid (0,3) &#183; hex2 c003</text>
+  <text x="350" y="242" text-anchor="middle" font-size="9" fill="#6b8a76">HOT_UPD + ONLY</text>
+  <text x="480" y="216" text-anchor="middle" font-weight="700">tuple v3</text>
+  <text x="480" y="229" text-anchor="middle" font-size="9" fill="#444">ctid (0,4) &#183; hex2 c003</text>
+  <text x="480" y="242" text-anchor="middle" font-size="9" fill="#6b8a76">HOT_UPD + ONLY</text>
+  <text x="610" y="216" text-anchor="middle" font-weight="700">tuple v4 &#183; live</text>
+  <text x="610" y="229" text-anchor="middle" font-size="9" fill="#444">ctid (0,4)=self &#183; 8003</text>
+  <text x="610" y="242" text-anchor="middle" font-size="9" fill="#6b8a76">HEAP_ONLY</text>
+
+  <path d="M220 152 V200" stroke="#cdb4db" stroke-width="1" fill="none"/>
+  <path d="M350 152 V200" stroke="#cdb4db" stroke-width="1" fill="none"/>
+  <path d="M480 152 V200" stroke="#cdb4db" stroke-width="1" fill="none"/>
+  <path d="M610 152 V200" stroke="#cdb4db" stroke-width="1" fill="none"/>
+
+  <path d="M280 224 H290" fill="none" stroke="#6b8a76" stroke-width="1.8" marker-end="url(#ahc)"/>
+  <path d="M410 224 H420" fill="none" stroke="#6b8a76" stroke-width="1.8" marker-end="url(#ahc)"/>
+  <path d="M540 224 H550" fill="none" stroke="#6b8a76" stroke-width="1.8" marker-end="url(#ahc)"/>
+  <text x="415" y="264" text-anchor="middle" font-size="9" fill="#6b8a76">t_ctid chain: slot 1 &#8594; 2 &#8594; 3 &#8594; 4 &#160;(only slot 1 is index-reachable)</text>
+
+  <text x="380" y="300" text-anchor="middle" font-size="11" fill="#8a7aa8">&#9660; VACUUM, or opportunistic prune on access &#8212; heap_page_prune</text>
+
+  <text x="20" y="324" font-size="11" font-weight="700" fill="#6b5b95">AFTER — chain collapsed in place (index entry unchanged)</text>
+  <rect x="20" y="338" width="150" height="34" rx="5" fill="#fff" stroke="#3a6ea5" stroke-width="1.5"/>
+  <text x="95" y="353" text-anchor="middle" fill="#3a6ea5" font-weight="700">index on indexed_col</text>
+  <text x="95" y="366" text-anchor="middle" fill="#3a6ea5" font-size="9.5">entry &#8594; (block 0, slot 1)</text>
+  <path d="M95 372 V408 H160" fill="none" stroke="#3a6ea5" stroke-width="1.5" marker-end="url(#ahi)"/>
+
+  <path d="M220 434 C220 392, 610 392, 610 434" fill="none" stroke="#8a6d1a" stroke-width="2" marker-end="url(#ahx)"/>
+  <text x="415" y="388" text-anchor="middle" font-size="9.5" fill="#8a6d1a" font-weight="600">redirect: one hop, slot 1 &#8594; slot 4</text>
+
+  <rect x="20" y="408" width="720" height="156" rx="7" fill="none" stroke="#b79ad6" stroke-width="2"/>
+  <rect x="20" y="408" width="720" height="22" fill="#efe3fb"/>
+  <text x="380" y="423" text-anchor="middle" fill="#5e4b86" font-weight="700">heap page &#183; block 0</text>
+
+  <rect x="160" y="434" width="120" height="40" fill="#fff4d6" stroke="#cdb4db"/>
+  <rect x="290" y="434" width="120" height="40" fill="#eef0f2" stroke="#cdb4db"/>
+  <rect x="420" y="434" width="120" height="40" fill="#eef0f2" stroke="#cdb4db"/>
+  <rect x="550" y="434" width="120" height="40" fill="#f5edff" stroke="#cdb4db"/>
+  <text x="220" y="450" text-anchor="middle" font-weight="700" fill="#8a6d1a">slot 1</text>
+  <text x="220" y="464" text-anchor="middle" font-size="9" fill="#8a6d1a">LP_REDIRECT &#8594; 4</text>
+  <text x="350" y="450" text-anchor="middle" font-weight="700" fill="#8a939c">slot 2</text>
+  <text x="350" y="464" text-anchor="middle" font-size="9" fill="#8a939c">LP_UNUSED</text>
+  <text x="480" y="450" text-anchor="middle" font-weight="700" fill="#8a939c">slot 3</text>
+  <text x="480" y="464" text-anchor="middle" font-size="9" fill="#8a939c">LP_UNUSED</text>
+  <text x="610" y="450" text-anchor="middle" font-weight="700">slot 4</text>
+  <text x="610" y="464" text-anchor="middle" font-size="9" fill="#777">LP_NORMAL</text>
+  <text x="676" y="457" font-size="9" fill="#8a7aa8">ItemId array</text>
+
+  <rect x="160" y="498" width="380" height="50" fill="#fcfaff" stroke="#cdb4db" stroke-dasharray="4 3"/>
+  <text x="350" y="527" text-anchor="middle" font-size="10" fill="#9a8ab0">reclaimed free space &#8212; bytes of v1, v2, v3 returned</text>
+  <rect x="550" y="498" width="120" height="50" fill="#eafaf0" stroke="#cfead9"/>
+  <text x="610" y="519" text-anchor="middle" font-weight="700">tuple v4 &#183; live</text>
+  <text x="610" y="533" text-anchor="middle" font-size="9" fill="#6b8a76">ctid (0,4) &#183; HEAP_ONLY</text>
+  <path d="M610 474 V498" stroke="#cdb4db" stroke-width="1" fill="none"/>
+</svg>

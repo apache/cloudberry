@@ -1,0 +1,68 @@
+<!--
+  Licensed to the Apache Software Foundation (ASF) under one
+  or more contributor license agreements.  See the NOTICE file
+  distributed with this work for additional information
+  regarding copyright ownership.  The ASF licenses this file
+  to you under the Apache License, Version 2.0 (the
+  "License"); you may not use this file except in compliance
+  with the License.  You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing,
+  software distributed under the License is distributed on an
+  "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+  KIND, either express or implied.  See the License for the
+  specific language governing permissions and limitations
+  under the License.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 372" width="100%" style="height:auto;display:block;min-width:580px" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="11">
+  <defs>
+    <marker id="vc" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#6b8a76"/></marker>
+    <marker id="vcg" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#aab2bb"/></marker>
+  </defs>
+
+  <text x="20" y="16" font-size="11" font-weight="700" fill="#6b5b95">INSERT (xid 1063) — heap_insert writes v1 and stamps t_xmin</text>
+  <rect x="20" y="24" width="680" height="66" rx="6" fill="none" stroke="#b79ad6" stroke-width="2"/>
+  <rect x="20" y="24" width="680" height="18" fill="#efe3fb"/>
+  <text x="360" y="37" text-anchor="middle" fill="#5e4b86" font-weight="700" font-size="10">heap page · block 0</text>
+  <rect x="40" y="48" width="320" height="34" fill="#eafaf0" stroke="#cfead9"/>
+  <text x="200" y="62" text-anchor="middle" font-weight="700">v1 @ (0,1) · live</text>
+  <text x="200" y="76" text-anchor="middle" font-size="9" fill="#444">xmin <tspan fill="#8a6d1a" font-weight="700">1063</tspan> · xmax 0 · t_ctid (0,1) self</text>
+  <text x="384" y="68" font-size="10" fill="#8a7aa8">one live version, pointing at itself</text>
+
+  <text x="360" y="106" text-anchor="middle" font-size="10.5" fill="#8a7aa8">▼ UPDATE — delete old + insert new (heap_update)</text>
+
+  <text x="20" y="128" font-size="11" font-weight="700" fill="#6b5b95">after UPDATE (xid 1064)</text>
+  <rect x="20" y="136" width="680" height="74" rx="6" fill="none" stroke="#b79ad6" stroke-width="2"/>
+  <rect x="20" y="136" width="680" height="18" fill="#efe3fb"/>
+  <text x="360" y="149" text-anchor="middle" fill="#5e4b86" font-weight="700" font-size="10">heap page · block 0</text>
+  <rect x="40" y="160" width="285" height="44" fill="#eef0f2" stroke="#cdb4db"/>
+  <text x="182" y="174" text-anchor="middle" font-weight="700" fill="#8a939c">v1 @ (0,1) · dead</text>
+  <text x="182" y="187" text-anchor="middle" font-size="9" fill="#8a939c">xmin 1063 · xmax <tspan fill="#8a6d1a" font-weight="700">1064</tspan></text>
+  <text x="182" y="199" text-anchor="middle" font-size="9" fill="#8a939c">t_ctid <tspan fill="#8a6d1a" font-weight="700">(0,2)</tspan> — forward</text>
+  <rect x="415" y="160" width="265" height="44" fill="#eafaf0" stroke="#cfead9"/>
+  <text x="547" y="174" text-anchor="middle" font-weight="700">v2 @ (0,2) · live</text>
+  <text x="547" y="187" text-anchor="middle" font-size="9" fill="#444">xmin <tspan fill="#8a6d1a" font-weight="700">1064</tspan> · xmax 0</text>
+  <text x="547" y="199" text-anchor="middle" font-size="9" fill="#444">t_ctid (0,2) self</text>
+  <path d="M325 182 H415" fill="none" stroke="#6b8a76" stroke-width="2" marker-end="url(#vc)"/>
+  <text x="370" y="176" text-anchor="middle" font-size="9" fill="#6b8a76" font-weight="600">t_ctid</text>
+
+  <text x="360" y="226" text-anchor="middle" font-size="10.5" fill="#8a7aa8">▼ DELETE — stamp t_xmax only (heap_delete)</text>
+
+  <text x="20" y="248" font-size="11" font-weight="700" fill="#6b5b95">after DELETE (xid 1065)</text>
+  <rect x="20" y="256" width="680" height="74" rx="6" fill="none" stroke="#b79ad6" stroke-width="2"/>
+  <rect x="20" y="256" width="680" height="18" fill="#efe3fb"/>
+  <text x="360" y="269" text-anchor="middle" fill="#5e4b86" font-weight="700" font-size="10">heap page · block 0</text>
+  <rect x="40" y="280" width="285" height="44" fill="#eef0f2" stroke="#cdb4db"/>
+  <text x="182" y="294" text-anchor="middle" font-weight="700" fill="#8a939c">v1 @ (0,1) · dead</text>
+  <text x="182" y="307" text-anchor="middle" font-size="9" fill="#8a939c">xmin 1063 · xmax 1064</text>
+  <text x="182" y="319" text-anchor="middle" font-size="9" fill="#8a939c">t_ctid (0,2) — forward</text>
+  <rect x="415" y="280" width="265" height="44" fill="#eef0f2" stroke="#cdb4db"/>
+  <text x="547" y="294" text-anchor="middle" font-weight="700" fill="#8a939c">v2 @ (0,2) · dead</text>
+  <text x="547" y="307" text-anchor="middle" font-size="9" fill="#8a939c">xmin 1064 · xmax <tspan fill="#8a6d1a" font-weight="700">1065</tspan></text>
+  <text x="547" y="319" text-anchor="middle" font-size="9" fill="#8a939c">t_ctid (0,2) self</text>
+  <path d="M325 302 H415" fill="none" stroke="#aab2bb" stroke-width="1.5" marker-end="url(#vcg)"/>
+
+  <text x="360" y="350" text-anchor="middle" font-size="10" fill="#8a7aa8">both versions remain physically on the page — the row is only logically gone (MVCC §10)</text>
+</svg>

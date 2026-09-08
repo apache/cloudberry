@@ -1,0 +1,77 @@
+<!--
+  Licensed to the Apache Software Foundation (ASF) under one
+  or more contributor license agreements.  See the NOTICE file
+  distributed with this work for additional information
+  regarding copyright ownership.  The ASF licenses this file
+  to you under the Apache License, Version 2.0 (the
+  "License"); you may not use this file except in compliance
+  with the License.  You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing,
+  software distributed under the License is distributed on an
+  "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+  KIND, either express or implied.  See the License for the
+  specific language governing permissions and limitations
+  under the License.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 780 350" width="100%" style="max-width:780px" role="img">
+<defs>
+<marker id="m173solid" markerWidth="9" markerHeight="7" refX="8" refY="3.5" orient="auto"><path d="M0,0 L9,3.5 L0,7 z" fill="#5b4b8a"/></marker>
+<marker id="m173dash" markerWidth="9" markerHeight="7" refX="8" refY="3.5" orient="auto"><path d="M0,0 L9,3.5 L0,7 z" fill="#8a6d1a"/></marker>
+</defs>
+
+<text x="14" y="18" font-size="11" font-weight="600" fill="#4a3a6a">the rule: CXformInnerJoinCommutativity</text>
+<rect x="14" y="26" width="234" height="146" rx="6" fill="#f5edff" stroke="#cdb4db"/>
+<text x="26" y="44" font-size="10.5" fill="#5b4b8a">PexprPattern()</text>
+<rect x="34" y="52" width="196" height="22" rx="3" fill="#ffffff" stroke="#cdb4db"/>
+<text x="42" y="67" font-size="11" fill="#333">CLogicalInnerJoin</text>
+<line x1="44" y1="74" x2="44" y2="152" stroke="#cdb4db" stroke-width="1.2"/>
+<line x1="44" y1="94" x2="66" y2="94" stroke="#cdb4db" stroke-width="1.2"/>
+<line x1="44" y1="122" x2="66" y2="122" stroke="#cdb4db" stroke-width="1.2"/>
+<line x1="44" y1="152" x2="66" y2="152" stroke="#cdb4db" stroke-width="1.2"/>
+<rect x="66" y="83" width="164" height="22" rx="3" fill="#ffffff" stroke="#cdb4db"/>
+<text x="74" y="98" font-size="11" fill="#333">CPatternLeaf  outer</text>
+<rect x="66" y="111" width="164" height="22" rx="3" fill="#ffffff" stroke="#cdb4db"/>
+<text x="74" y="126" font-size="11" fill="#333">CPatternLeaf  inner</text>
+<rect x="66" y="141" width="164" height="22" rx="3" fill="#ffffff" stroke="#cdb4db"/>
+<text x="74" y="156" font-size="11" fill="#333">CPatternLeaf  pred</text>
+
+<text x="292" y="18" font-size="11" font-weight="600" fill="#2f6b4a">the memo: one group</text>
+<rect x="292" y="26" width="248" height="172" rx="6" fill="#eafaf0" stroke="#cfead9"/>
+<rect x="304" y="36" width="224" height="24" rx="3" fill="#ffffff" stroke="#cfead9"/>
+<text x="312" y="52" font-size="10.5" fill="#333">0: CLogicalNAryJoin [ 0 1 4 ]</text>
+<rect x="304" y="68" width="224" height="24" rx="3" fill="#fff4d6" stroke="#8a6d1a"/>
+<text x="312" y="84" font-size="10.5" fill="#5c4708">1: CLogicalInnerJoin [ 0 1 4 ]</text>
+<rect x="304" y="100" width="224" height="24" rx="3" fill="#ffffff" stroke="#cfead9"/>
+<text x="312" y="116" font-size="10.5" fill="#333">2: CLogicalInnerJoin [ 1 0 4 ]</text>
+<rect x="304" y="132" width="224" height="24" rx="3" fill="#ffffff" stroke="#cfead9"/>
+<text x="312" y="148" font-size="10.5" fill="#333">3: CPhysicalInnerHashJoin</text>
+<text x="312" y="176" font-size="10.5" fill="#7a8a80">group expressions share one logical identity</text>
+
+<text x="252" y="52" font-size="9.5" fill="#8a6d1a">binds</text>
+<path d="M248,66 C268,66 282,76 300,80" fill="none" stroke="#8a6d1a" stroke-width="1.4" stroke-dasharray="4 3" marker-end="url(#m173dash)"/>
+
+<text x="580" y="18" font-size="11" font-weight="600" fill="#4a3a6a">the rule fires</text>
+<rect x="580" y="26" width="188" height="60" rx="6" fill="#f5edff" stroke="#cdb4db"/>
+<text x="590" y="44" font-size="10.5" fill="#333">Transform(pxfctxt,</text>
+<text x="590" y="58" font-size="10.5" fill="#333">          pxfres, pexpr)</text>
+<text x="590" y="76" font-size="10.5" fill="#5b4b8a">swap outer and inner</text>
+<path d="M532,80 C552,80 562,62 576,56" fill="none" stroke="#5b4b8a" stroke-width="1.4" marker-end="url(#m173solid)"/>
+<text x="536" y="104" font-size="9.5" fill="#5b4b8a">one binding</text>
+
+<rect x="580" y="112" width="188" height="66" rx="6" fill="#fff4d6" stroke="#8a6d1a"/>
+<text x="590" y="130" font-size="10.5" fill="#5c4708">CXformResult</text>
+<text x="590" y="146" font-size="10.5" fill="#333">0: CLogicalInnerJoin</text>
+<text x="590" y="162" font-size="10.5" fill="#333">     [ 1 0 4 ]</text>
+<line x1="674" y1="86" x2="674" y2="110" stroke="#5b4b8a" stroke-width="1.4" marker-end="url(#m173solid)"/>
+
+<path d="M578,168 C520,232 468,238 420,206" fill="none" stroke="#8a6d1a" stroke-width="1.4" stroke-dasharray="4 3" marker-end="url(#m173dash)"/>
+<text x="452" y="248" font-size="10" fill="#8a6d1a">CEngine::InsertXformResult — a duplicate is merged, not added</text>
+
+<line x1="292" y1="298" x2="330" y2="298" stroke="#8a6d1a" stroke-width="1.4" stroke-dasharray="4 3"/>
+<text x="338" y="302" font-size="10" fill="#666">pattern match and memo insertion</text>
+<line x1="292" y1="320" x2="330" y2="320" stroke="#5b4b8a" stroke-width="1.4"/>
+<text x="338" y="324" font-size="10" fill="#666">the bound expression and the alternatives it produces</text>
+</svg>

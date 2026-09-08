@@ -1,0 +1,42 @@
+<!--
+  Licensed to the Apache Software Foundation (ASF) under one
+  or more contributor license agreements.  See the NOTICE file
+  distributed with this work for additional information
+  regarding copyright ownership.  The ASF licenses this file
+  to you under the Apache License, Version 2.0 (the
+  "License"); you may not use this file except in compliance
+  with the License.  You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing,
+  software distributed under the License is distributed on an
+  "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+  KIND, either express or implied.  See the License for the
+  specific language governing permissions and limitations
+  under the License.
+-->
+<svg viewBox="0 0 660 250" xmlns="http://www.w3.org/2000/svg" font-family="ui-monospace,monospace" font-size="12.5">
+  <text x="20" y="20" font-size="11" fill="#8a6d1a">BEFORE — nested</text>
+  <rect x="20" y="30" width="120" height="26" rx="4" fill="#f5edff" stroke="#cdb4db"/>
+  <text x="34" y="47">FromExpr (JOIN)</text>
+  <rect x="20" y="90" width="130" height="42" rx="4" fill="#fff4d6" stroke="#8a6d1a"/>
+  <text x="30" y="107">Subquery s</text><text x="30" y="123" font-size="10.5" fill="#8a6d1a">opaque subplan</text>
+  <rect x="20" y="165" width="110" height="26" rx="4" fill="#eafaf0" stroke="#cfead9"/>
+  <text x="34" y="182">Seq Scan t</text>
+  <rect x="175" y="90" width="90" height="26" rx="4" fill="#eafaf0" stroke="#cfead9"/>
+  <text x="190" y="107">Scan q</text>
+  <line x1="80" y1="56" x2="80" y2="90" stroke="#8a6d1a" stroke-width="1.5"/>
+  <line x1="140" y1="43" x2="220" y2="90" stroke="#8a6d1a" stroke-width="1.5"/>
+  <line x1="85" y1="132" x2="80" y2="165" stroke="#8a6d1a" stroke-width="1.5"/>
+  <text x="380" y="20" font-size="11" fill="#8a6d1a">AFTER — flattened</text>
+  <rect x="380" y="30" width="200" height="26" rx="4" fill="#f5edff" stroke="#cdb4db"/>
+  <text x="394" y="47">FromExpr — t, q</text>
+  <rect x="380" y="110" width="90" height="26" rx="4" fill="#eafaf0" stroke="#cfead9"/>
+  <text x="398" y="127">Scan t</text>
+  <rect x="500" y="110" width="90" height="26" rx="4" fill="#eafaf0" stroke="#cfead9"/>
+  <text x="518" y="127">Scan q</text>
+  <line x1="440" y1="56" x2="420" y2="110" stroke="#4a7" stroke-width="1.5"/>
+  <line x1="520" y1="56" x2="545" y2="110" stroke="#4a7" stroke-width="1.5"/>
+  <text x="392" y="175" font-size="10.5" fill="#4a7">both tables now join freely</text>
+</svg>

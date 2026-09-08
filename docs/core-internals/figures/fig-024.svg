@@ -1,0 +1,60 @@
+<!--
+  Licensed to the Apache Software Foundation (ASF) under one
+  or more contributor license agreements.  See the NOTICE file
+  distributed with this work for additional information
+  regarding copyright ownership.  The ASF licenses this file
+  to you under the Apache License, Version 2.0 (the
+  "License"); you may not use this file except in compliance
+  with the License.  You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing,
+  software distributed under the License is distributed on an
+  "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+  KIND, either express or implied.  See the License for the
+  specific language governing permissions and limitations
+  under the License.
+-->
+<svg viewBox="0 0 1230 170" style="width:100%;min-width:820px;font-family:ui-monospace,monospace" xmlns="http://www.w3.org/2000/svg">
+  <defs><marker id="c131ah" markerWidth="9" markerHeight="9" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="#6b5b8a"/></marker></defs>
+  <g font-size="13">
+    <rect x="10" y="66" width="168" height="58" rx="8" fill="#eafaf0" stroke="#cfead9" stroke-width="1.5"/>
+    <text x="94" y="92" text-anchor="middle" font-weight="700">SQL text</text>
+    <text x="94" y="110" text-anchor="middle" font-size="11" fill="#4a6b57">the 'Q' message</text>
+    <rect x="228" y="66" width="168" height="58" rx="8" fill="#f5edff" stroke="#cdb4db" stroke-width="1.5"/>
+    <text x="312" y="92" text-anchor="middle" font-weight="700">RawStmt</text>
+    <text x="312" y="110" text-anchor="middle" font-size="11" fill="#6b5b8a">raw parse tree</text>
+    <rect x="446" y="66" width="168" height="58" rx="8" fill="#fff4d6" stroke="#8a6d1a" stroke-width="1.5"/>
+    <text x="530" y="92" text-anchor="middle" font-weight="700">Query</text>
+    <text x="530" y="110" text-anchor="middle" font-size="11" fill="#8a6d1a">semantic tree</text>
+    <rect x="664" y="66" width="168" height="58" rx="8" fill="#f5edff" stroke="#cdb4db" stroke-width="1.5"/>
+    <text x="748" y="92" text-anchor="middle" font-weight="700">PlannedStmt</text>
+    <text x="748" y="110" text-anchor="middle" font-size="11" fill="#6b5b8a">plan tree + slices</text>
+    <rect x="882" y="66" width="158" height="58" rx="8" fill="#f5edff" stroke="#cdb4db" stroke-width="1.5"/>
+    <text x="961" y="92" text-anchor="middle" font-weight="700">QueryDesc</text>
+    <text x="961" y="110" text-anchor="middle" font-size="11" fill="#6b5b8a">executor state</text>
+    <rect x="1090" y="66" width="130" height="58" rx="8" fill="#eafaf0" stroke="#cfead9" stroke-width="1.5"/>
+    <text x="1155" y="92" text-anchor="middle" font-weight="700">result rows</text>
+    <text x="1155" y="110" text-anchor="middle" font-size="11" fill="#4a6b57">to the client</text>
+  </g>
+  <g stroke="#6b5b8a" stroke-width="1.6">
+    <line x1="180" y1="95" x2="224" y2="95" marker-end="url(#c131ah)"/>
+    <line x1="398" y1="95" x2="442" y2="95" marker-end="url(#c131ah)"/>
+    <line x1="616" y1="95" x2="660" y2="95" marker-end="url(#c131ah)"/>
+    <line x1="834" y1="95" x2="878" y2="95" marker-end="url(#c131ah)"/>
+    <line x1="1042" y1="95" x2="1086" y2="95" marker-end="url(#c131ah)"/>
+  </g>
+  <g font-size="11" fill="#3a3350" text-anchor="middle">
+    <rect x="130" y="30" width="128" height="20" rx="10" fill="#f5edff" stroke="#cdb4db" stroke-width="1"/>
+    <text x="194" y="44">pg_parse_query</text>
+    <rect x="345" y="30" width="140" height="20" rx="10" fill="#f5edff" stroke="#cdb4db" stroke-width="1"/>
+    <text x="415" y="44">parse_analyze + rewrite</text>
+    <rect x="588" y="30" width="90" height="20" rx="10" fill="#f5edff" stroke="#cdb4db" stroke-width="1"/>
+    <text x="633" y="44">planner</text>
+    <rect x="800" y="30" width="94" height="20" rx="10" fill="#f5edff" stroke="#cdb4db" stroke-width="1"/>
+    <text x="847" y="44">PortalStart</text>
+    <rect x="1000" y="30" width="106" height="20" rx="10" fill="#f5edff" stroke="#cdb4db" stroke-width="1"/>
+    <text x="1053" y="44">ExecutorRun</text>
+  </g>
+</svg>

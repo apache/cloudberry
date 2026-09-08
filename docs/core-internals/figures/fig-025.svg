@@ -1,0 +1,40 @@
+<!--
+  Licensed to the Apache Software Foundation (ASF) under one
+  or more contributor license agreements.  See the NOTICE file
+  distributed with this work for additional information
+  regarding copyright ownership.  The ASF licenses this file
+  to you under the Apache License, Version 2.0 (the
+  "License"); you may not use this file except in compliance
+  with the License.  You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing,
+  software distributed under the License is distributed on an
+  "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+  KIND, either express or implied.  See the License for the
+  specific language governing permissions and limitations
+  under the License.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" width="770" height="190" viewBox="0 0 770 190" font-family="ui-monospace,monospace" font-size="12">
+  <defs><marker id="ar132a" markerWidth="9" markerHeight="9" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="#8a6d1a"/></marker></defs>
+  <rect x="18" y="45" width="200" height="80" rx="8" fill="#f5edff" stroke="#cdb4db" stroke-width="1.5"/>
+  <text x="118" y="70" text-anchor="middle" font-weight="bold">prepared stmt</text>
+  <text x="118" y="90" text-anchor="middle">CachedPlanSource</text>
+  <text x="118" y="108" text-anchor="middle">SQL + $ types + plan cache</text>
+  <rect x="290" y="45" width="200" height="80" rx="8" fill="#fff4d6" stroke="#8a6d1a" stroke-width="1.5"/>
+  <text x="390" y="70" text-anchor="middle" font-weight="bold">⟦ Portal ⟧</text>
+  <text x="390" y="90" text-anchor="middle">bound params + CachedPlan</text>
+  <text x="390" y="108" text-anchor="middle">execution state (resumable)</text>
+  <rect x="562" y="45" width="192" height="80" rx="8" fill="#eafaf0" stroke="#cfead9" stroke-width="1.5"/>
+  <text x="658" y="70" text-anchor="middle" font-weight="bold">results</text>
+  <text x="658" y="90" text-anchor="middle">DataRow ... CommandComplete</text>
+  <text x="658" y="108" text-anchor="middle">max_rows at a time</text>
+  <line x1="218" y1="85" x2="286" y2="85" stroke="#8a6d1a" stroke-width="1.6" marker-end="url(#ar132a)"/>
+  <text x="252" y="76" text-anchor="middle" font-size="11">Bind</text>
+  <line x1="490" y1="85" x2="558" y2="85" stroke="#8a6d1a" stroke-width="1.6" marker-end="url(#ar132a)"/>
+  <text x="524" y="76" text-anchor="middle" font-size="11">Execute</text>
+  <text x="118" y="150" text-anchor="middle" font-size="10.5" fill="#666">exec_parse_message</text>
+  <text x="390" y="150" text-anchor="middle" font-size="10.5" fill="#666">exec_bind_message → CreatePortal</text>
+  <text x="658" y="150" text-anchor="middle" font-size="10.5" fill="#666">exec_execute_message → PortalRun</text>
+</svg>
