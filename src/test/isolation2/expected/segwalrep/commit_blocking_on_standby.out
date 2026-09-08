@@ -22,6 +22,10 @@ select gp_inject_fault_infinite('walrecv_skip_flush', 'skip', dbid) from gp_segm
  Success:                 
 (1 row)
 
+-- This session monitors and releases deliberately blocked synchronous commits.
+SET debug_disable_distributed_snapshot = on;
+SET
+
 begin;
 BEGIN
 create or replace function wait_for_pg_stat_activity(timeout_secs int) returns void as $$ declare c int; /* in func */ i int; /* in func */ begin c := 0; /* in func */ i := 0; /* in func */ while c < 1 and i < timeout_secs*2 loop select count(*) into c from pg_stat_activity where wait_event = 'SyncRep'; /* in func */ perform pg_sleep(0.5); /* in func */ perform pg_stat_clear_snapshot(); /* in func */ i := i + 1; /* in func */ end loop; /* in func */ if c < 1 then raise exception 'timeout waiting for command to get blocked'; /* in func */ end if; /* in func */ end; /* in func */ $$ language plpgsql;

@@ -1,5 +1,7 @@
 -- TEST 1: block checkpoint on segments
 
+SET debug_disable_distributed_snapshot = on;
+
 -- pause the 2PC after setting inCommit flag
 select gp_inject_fault_infinite('before_xlog_xact_commit_prepared', 'suspend', 3);
 

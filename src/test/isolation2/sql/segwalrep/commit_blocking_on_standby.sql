@@ -15,6 +15,9 @@ select application_name, state from pg_stat_replication;
 select gp_inject_fault_infinite('walrecv_skip_flush', 'skip', dbid)
 from gp_segment_configuration where content=-1 and role='m';
 
+-- This session monitors and releases deliberately blocked synchronous commits.
+SET debug_disable_distributed_snapshot = on;
+
 begin;
 create or replace function wait_for_pg_stat_activity(timeout_secs int)
 returns void as $$

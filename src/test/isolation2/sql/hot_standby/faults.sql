@@ -92,6 +92,9 @@ select wait_until_all_segments_synchronized();
 
 1: create table tt_hs_dtx(a int);
 
+-- Session 2 coordinates a suspended commit rather than testing snapshots.
+2: SET debug_disable_distributed_snapshot = on;
+
 -- inject fault to repeatedly fail the COMMIT PREPARE phase of 2PC, which ensures that the dtx cannot finish even by the dtx recovery process. 
 select gp_inject_fault_infinite('finish_commit_prepared', 'error', dbid) from gp_segment_configuration where content=1 and role='p';
 
@@ -123,4 +126,3 @@ select gp_inject_fault_infinite('finish_commit_prepared', 'error', dbid) from gp
 -1S: select wait_until_all_segments_synchronized();
 1: select gp_inject_fault('before_read_command', 'reset', dbid) from gp_segment_configuration where content=-1 and role='p';
 1: select gp_inject_fault('fts_probe', 'reset', dbid) from gp_segment_configuration where role='p' and content=-1;
-

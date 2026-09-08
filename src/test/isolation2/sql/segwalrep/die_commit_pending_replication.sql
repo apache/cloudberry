@@ -11,6 +11,8 @@ create table store_session_id(a int, sess_id int);
 
 -- Suspend to hit commit-prepared point on segment (as we are
 -- interested in testing Commit here and not really Prepare)
+-- The following waits are test coordination, not snapshot coverage.
+SET debug_disable_distributed_snapshot = on;
 select gp_inject_fault_infinite('finish_prepared_start_of_function', 'suspend', dbid) from gp_segment_configuration where role='p' and content = 0;
 1&: insert into die_commit_pending_replication values(2),(1);
 select gp_wait_until_triggered_fault('finish_prepared_start_of_function', 1, dbid) from gp_segment_configuration where role='p' and content = 0;
