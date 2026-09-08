@@ -2826,6 +2826,7 @@ select mvname, datastatus from gp_matview_aux where mvname = 'mv_par_normal_oid'
  mv_par_normal_oid | i
 (1 row)
 
+--
 -- Test https://github.com/apache/cloudberry/issues/726: gp_matview_aux.mvname
 -- is not schema-qualified, so two materialized views with the same bare name
 -- in different schemas are indistinguishable through it. gp_matviews (added
@@ -2891,7 +2892,6 @@ drop schema mv_schema_test_s2 cascade;
 NOTICE:  drop cascades to 2 other objects
 DETAIL:  drop cascades to table mv_schema_test_s2.t0
 drop cascades to materialized view mv_schema_test_s2.mv0
-
 --start_ignore
 drop schema matview_data_schema cascade;
 NOTICE:  drop cascades to 13 other objects
