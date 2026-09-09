@@ -207,6 +207,7 @@ typedef struct LVRelState
 	BlockNumber removed_pages;	/* # pages removed by relation truncation */
 	BlockNumber frozen_pages;	/* # pages with newly frozen tuples */
 	BlockNumber lpdead_item_pages;	/* # pages with LP_DEAD items */
+	BlockNumber dead_pages;		/* # pages with not-yet-removable tuples */
 	BlockNumber missed_dead_pages;	/* # pages with missed dead tuples */
 	BlockNumber nonempty_pages; /* actually, last nonempty page + 1 */
 
@@ -611,6 +612,7 @@ heap_vacuum_rel(Relation rel, VacuumParams *params,
 
 		stats.tuples_deleted = vacrel->tuples_deleted;
 		stats.dead_tuples = vacrel->recently_dead_tuples + vacrel->missed_dead_tuples;
+		stats.dead_pages = vacrel->dead_pages;
 		stats.recently_dead_tuples = vacrel->recently_dead_tuples;
 		stats.missed_dead_tuples = vacrel->missed_dead_tuples;
 		stats.pages_scanned = vacrel->scanned_pages;
@@ -1969,6 +1971,8 @@ retry:
 	vacrel->lpdead_items += lpdead_items;
 	vacrel->live_tuples += live_tuples;
 	vacrel->recently_dead_tuples += recently_dead_tuples;
+	if (recently_dead_tuples > 0)
+		vacrel->dead_pages++;
 }
 
 /*
@@ -2203,6 +2207,8 @@ lazy_scan_noprune(LVRelState *vacrel,
 	 */
 	vacrel->live_tuples += live_tuples;
 	vacrel->recently_dead_tuples += recently_dead_tuples;
+	if (recently_dead_tuples > 0)
+		vacrel->dead_pages++;
 	vacrel->missed_dead_tuples += missed_dead_tuples;
 	if (missed_dead_tuples > 0)
 		vacrel->missed_dead_pages++;

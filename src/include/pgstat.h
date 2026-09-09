@@ -97,6 +97,7 @@ typedef struct PgStat_VacuumStats
 	PgStat_Counter	tuples_deleted;
 	PgStat_Counter	dead_tuples;
 	PgStat_Counter	pages_deleted;
+	PgStat_Counter	dead_pages;
 	PgStat_Counter	recently_dead_tuples;
 	PgStat_Counter	missed_dead_tuples;
 	PgStat_Counter	pages_scanned;
