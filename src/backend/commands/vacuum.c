@@ -3931,4 +3931,6 @@ vacuum_measure_index_stats(Relation indrel, const IndexBulkDeleteResult *istat,
 		istat->pages_newly_deleted >= prev_pages_newly_deleted ?
 		istat->pages_newly_deleted - prev_pages_newly_deleted :
 		istat->pages_newly_deleted;
+	if (cleanup && istat->pages_deleted > istat->pages_free)
+		stats.dead_pages = istat->pages_deleted - istat->pages_free;
 }
