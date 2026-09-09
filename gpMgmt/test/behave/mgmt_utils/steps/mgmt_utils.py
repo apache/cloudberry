@@ -680,7 +680,7 @@ def impl(context, process_name):
 def impl(context):
     # We keep trying to find the gpcreateseg process using ps,grep
     # and when we find it, we want to kill it only after the trap for ERROR_EXIT is setup (hence the sleep 1)
-    command = """timeout 10m
+    command = r"""timeout 10m
     bash -c "while sleep 0.1;
     do if ps ux | grep [g]pcreateseg ;
     then sleep 1 && ps ux | grep [g]pcreateseg |awk '{print \$2}' | xargs kill ;
@@ -905,7 +905,7 @@ def impl(context, command, num):
     matches = lines_matching_both(context.stdout_message, workerPool_out, command)
 
     for matched_line in matches:
-        iw_re = re.search('initialized with (\d+) workers', matched_line)
+        iw_re = re.search(r'initialized with (\d+) workers', matched_line)
         init_workers = int(iw_re.group(1))
         if init_workers > int(num):
             raise Exception("Expected Workerpool for %s to be initialized with %d workers. Found %d. \n %s"
@@ -2004,7 +2004,7 @@ def impl(context, filename, some, output):
         valuesShouldExist = False
     else:
         raise Exception("only 'some' and 'no' are valid inputs")
-    regexStr = "%s%s" % ("^[\s]*", output)
+    regexStr = "%s%s" % (r"^[\s]*", output)
     pat = re.compile(regexStr)
     file_path = os.path.join(coordinator_data_dir, filename)
     with open(file_path) as fr:
@@ -2220,7 +2220,7 @@ def imp(context):
 
 @then('validate and run gpcheckcat repair')
 def impl(context):
-    context.execute_steps('''
+    context.execute_steps(r'''
         Then gpcheckcat should print "repair script\(s\) generated in dir gpcheckcat.repair.*" to stdout
         Then the path "gpcheckcat.repair.*" is found in cwd "1" times
         Then run all the repair scripts in the dir "gpcheckcat.repair.*"
@@ -3343,12 +3343,12 @@ def step_impl(context, options):
     elif '-Q' in options:
         for stdout_line in context.stdout_message.split('\n'):
             if 'up segments, from configuration table' in stdout_line:
-                segments_up = int(re.match(".*of up segments, from configuration table\s+=\s+([0-9]+)", stdout_line).group(1))
+                segments_up = int(re.match(r".*of up segments, from configuration table\s+=\s+([0-9]+)", stdout_line).group(1))
                 if segments_up <= 1:
                     raise Exception("gpstate -Q output does not match expectations of more than one segment up")
 
             if 'down segments, from configuration table' in stdout_line:
-                segments_down = int(re.match(".*of down segments, from configuration table\s+=\s+([0-9]+)", stdout_line).group(1))
+                segments_down = int(re.match(r".*of down segments, from configuration table\s+=\s+([0-9]+)", stdout_line).group(1))
                 if segments_down != 0:
                     raise Exception("gpstate -Q output does not match expectations of all segments up")
                 break ## down segments comes after up segments, so we can break here
@@ -3846,7 +3846,7 @@ def check_locales(database_locales, locale_names, expected):
             raise Exception("Expected %s to be %s, but it was %s" % (name, expected, locale))
 
 def get_en_utf_locale():
-    cmd = Command(name='Get installed US UTF locale', cmdStr='locale -a | grep -i "en[_-]..\.utf.*8" | head -1')
+    cmd = Command(name='Get installed US UTF locale', cmdStr=r'locale -a | grep -i "en[_-]..\.utf.*8" | head -1')
     cmd.run(validateAfter=True)
     locale = cmd.get_stdout()
     if locale == "":
@@ -3977,7 +3977,7 @@ def impl(context):
 
      # Update hostfile location
      cmd = Command(name='update master hostname in config file',
-                   cmdStr= "sed 's/MACHINE_LIST_FILE=.*/MACHINE_LIST_FILE=\/tmp\/hostfile--1/g' -i /tmp/clusterConfigFile-1")
+                   cmdStr= r"sed 's/MACHINE_LIST_FILE=.*/MACHINE_LIST_FILE=\/tmp\/hostfile--1/g' -i /tmp/clusterConfigFile-1")
      cmd.run(validateAfter=True)
 
 

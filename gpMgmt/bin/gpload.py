@@ -717,7 +717,7 @@ def quote_unident(val):
 
 def match_notice_obj(notice):
     # match the formatting errors in notice
-    r = re.compile("^NOTICE:  found (\d+) data formatting errors.*")
+    r = re.compile(r"^NOTICE:  found (\d+) data formatting errors.*")
     m = r.match(notice)
     if m:
         return int(m.group(1))
@@ -2527,7 +2527,7 @@ WHERE relname = 'staging_gpload_reusable_%s';""" % (encoding_conditions)
         # should not explicitly specify the DISTRIBUTED BY clause.
         # Only the DISTRIBUTED BY clause can take effect if all selected fields 
         # exist in the CREATE TABLE statement.
-        dist_column_list = re.match(".*\((.*)\).*", distcols).group(1).split(",")
+        dist_column_list = re.match(r".*\((.*)\).*", distcols).group(1).split(",")
         target_column_set = set(element[0] for element in target_columns)
         if set(dist_column_list) <= target_column_set:
             quoted_dist_column = convertListToDelimited(dist_column_list)
@@ -2672,7 +2672,7 @@ WHERE relname = 'staging_gpload_reusable_%s';""" % (encoding_conditions)
             #
             update_condition = ' ' + update_condition + ' '
             for name, colType, mapto, seq in self.into_columns:
-                regexp = '(?<=[^\w])%s(?=[^\w])' % name
+                regexp = r'(?<=[^\w])%s(?=[^\w])' % name
                 self.log(self.DEBUG, 'update_condition re: ' + regexp)
                 temp_update_condition = update_condition
                 updateConditionList = splitIntoLiteralsAndNonLiterals(update_condition)
@@ -2686,7 +2686,7 @@ WHERE relname = 'staging_gpload_reusable_%s';""" % (encoding_conditions)
                 if update_condition == temp_update_condition:
                    # see if column can be undelimited, and try again.
                    if len(name) > 2 and name[1:-1] == name[1:-1].lower():
-                      regexp = '(?<=[^\w])%s(?=[^\w])' % name[1:-1]
+                      regexp = r'(?<=[^\w])%s(?=[^\w])' % name[1:-1]
                       self.log(self.DEBUG, 'update_condition undelimited re: ' + regexp)
                       update_condition = re.sub( regexp
                                                , self.fix_update_cond

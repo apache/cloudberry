@@ -76,7 +76,7 @@ def impl(context, recovery_types, contents):
     for index, seg_to_display in enumerate(segments_to_display):
         hostname = seg_to_display.getSegmentHostName()
         port = seg_to_display.getSegmentPort()
-        expected_msg = "{}[ \t]+{}[ \t]+{}[ \t]+[0-9]+[ \t]+[0-9]+[ \t]+[0-9]+\%".format(hostname, port,
+        expected_msg = "{}[ \t]+{}[ \t]+{}[ \t]+[0-9]+[ \t]+[0-9]+[ \t]+[0-9]+\\%".format(hostname, port,
                                                                                          recovery_types[index])
         check_stdout_msg(context, expected_msg)
 
