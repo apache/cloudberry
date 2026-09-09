@@ -435,6 +435,13 @@ typedef struct PgStat_VacuumStats
 	PgStat_Counter pages_frozen;	/* pages where vacuum froze tuples */
 	PgStat_Counter pages_all_visible;	/* pages marked all-visible by vacuum */
 
+	/*
+	 * Number of heap vacuum runs made aggressive by the XID or MultiXact
+	 * freeze table age.  This includes VACUUM FREEZE, which sets those
+	 * age thresholds to zero, but not DISABLE_PAGE_SKIPPING alone.
+	 */
+	PgStat_Counter freeze_age_vacuum_count;
+
 } PgStat_VacuumStats;
 
 /* ----------
