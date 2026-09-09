@@ -836,6 +836,8 @@ parallel_vacuum_process_one_index(ParallelVacuumState *pvs, Relation indrel,
 	IndexBulkDeleteResult *istat = NULL;
 	IndexBulkDeleteResult *istat_res;
 	IndexVacuumInfo ivinfo;
+	double		prev_tuples_removed = 0;
+	BlockNumber prev_pages_newly_deleted = 0;
 
 	/*
 	 * Update the pointer to the corresponding bulk-deletion result if someone
@@ -844,6 +846,15 @@ parallel_vacuum_process_one_index(ParallelVacuumState *pvs, Relation indrel,
 	if (indstats->istat_updated)
 		istat = &(indstats->istat);
 
+	/*
+	 * Snapshot the running bulkdelete totals: an index may be processed
+	 * several times per vacuum, and the report below covers this pass only.
+	 */
+	if (istat != NULL)
+	{
+		prev_tuples_removed = istat->tuples_removed;
+		prev_pages_newly_deleted = istat->pages_newly_deleted;
+	}
 	ivinfo.index = indrel;
 	ivinfo.heaprel = pvs->heaprel;
 	ivinfo.analyze_only = false;
@@ -870,6 +881,10 @@ parallel_vacuum_process_one_index(ParallelVacuumState *pvs, Relation indrel,
 				 indstats->status,
 				 RelationGetRelationName(indrel));
 	}
+
+	vacuum_measure_index_stats(indrel, istat_res, prev_tuples_removed,
+							  prev_pages_newly_deleted,
+							  indstats->status == PARALLEL_INDVAC_STATUS_NEED_CLEANUP);
 
 	/*
 	 * Copy the index bulk-deletion result returned from ambulkdelete and
