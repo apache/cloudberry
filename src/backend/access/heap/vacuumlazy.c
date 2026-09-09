@@ -166,6 +166,7 @@ typedef struct LVRelState
 
 	/* Aggressive VACUUM? (must set relfrozenxid >= FreezeLimit) */
 	bool		aggressive;
+	bool		freeze_age_vacuum; /* aggressive before DISABLE_PAGE_SKIPPING */
 	/* Use visibility map to skip? (disabled by DISABLE_PAGE_SKIPPING) */
 	bool		skipwithvm;
 	/* Consider index vacuuming bypass optimization? */
@@ -481,6 +482,8 @@ heap_vacuum_rel(Relation rel, VacuumParams *params,
 	 * time to time, to increase the number of dead tuples it can prune away.)
 	 */
 	vacrel->aggressive = vacuum_get_cutoffs(rel, params, &vacrel->cutoffs);
+	/* DISABLE_PAGE_SKIPPING alone must not count as a freeze-age run. */
+	vacrel->freeze_age_vacuum = vacrel->aggressive;
 	vacrel->rel_pages = orig_rel_pages = RelationGetNumberOfBlocks(rel);
 	vacrel->vistest = GlobalVisTestFor(rel);
 	/* Initialize state used to track oldest extant XID/MXID */
@@ -617,6 +620,7 @@ heap_vacuum_rel(Relation rel, VacuumParams *params,
 		stats.dead_pages = vacrel->dead_pages;
 		stats.pages_frozen = vacrel->frozen_pages;
 		stats.pages_all_visible = vacrel->all_visible_pages;
+		stats.freeze_age_vacuum_count = vacrel->freeze_age_vacuum ? 1 : 0;
 		stats.tuples_frozen = vacrel->tuples_frozen;
 		stats.recently_dead_tuples = vacrel->recently_dead_tuples;
 		stats.missed_dead_tuples = vacrel->missed_dead_tuples;
