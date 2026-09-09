@@ -516,6 +516,7 @@ heap_vacuum_rel(Relation rel, VacuumParams *params,
 				write_rate;
 	bool		aggressive;		/* should we scan all unfrozen pages? */
 	bool		scanned_all_unfrozen;	/* actually scanned all such pages? */
+	bool		freeze_age_vacuum; /* aggressive due to freeze age? */
 	char	  **indnames = NULL;
 	TransactionId xidFullScanLimit;
 	MultiXactId mxactFullScanLimit;
@@ -578,6 +579,14 @@ heap_vacuum_rel(Relation rel, VacuumParams *params,
 											   xidFullScanLimit);
 	aggressive |= MultiXactIdPrecedesOrEquals(rel->rd_rel->relminmxid,
 											  mxactFullScanLimit);
+
+	/*
+	 * Remember whether the freeze table age made this run aggressive.
+	 * DISABLE_PAGE_SKIPPING can also force an aggressive scan, but does
+	 * not by itself contribute to freeze_age_vacuum_count.
+	 */
+	freeze_age_vacuum = aggressive;
+
 	if (params->options & VACOPT_DISABLE_PAGE_SKIPPING)
 		aggressive = true;
 
@@ -769,8 +778,12 @@ heap_vacuum_rel(Relation rel, VacuumParams *params,
 		vacstats.dead_pages = (PgStat_Counter) vacrel->dead_pages;
 		vacstats.pages_frozen = (PgStat_Counter) vacrel->pages_frozen;
 		vacstats.pages_all_visible = (PgStat_Counter) vacrel->pages_all_visible;
+		vacstats.freeze_age_vacuum_count = freeze_age_vacuum ? 1 : 0;
 
-
+		ereport(elevel,
+				(errmsg("table \"%s\": vacuum statistics", vacrel->relname),
+				 errdetail("aggressive scan required by freeze age: %s",
+						   freeze_age_vacuum ? _("yes") : _("no"))));
 
 	}
 
@@ -845,6 +858,8 @@ heap_vacuum_rel(Relation rel, VacuumParams *params,
 							 vacrel->pages_frozen);
 			appendStringInfo(&buf, _("pages marked all-visible: %u\n"),
 							 vacrel->pages_all_visible);
+			appendStringInfo(&buf, _("aggressive scan required by freeze age: %s\n"),
+							 freeze_age_vacuum ? _("yes") : _("no"));
 			appendStringInfo(&buf,
 							 _("tuples: %lld removed, %lld remain, %lld are dead but not yet removable, oldest xmin: %u\n"),
 							 (long long) vacrel->tuples_deleted,
