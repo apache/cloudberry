@@ -126,6 +126,7 @@
  * ----------
  */
 bool		pgstat_track_counts = false;
+bool		pgstat_track_vacuum_statistics = false;
 int			pgstat_track_functions = TRACK_FUNC_OFF;
 
 bool		pgstat_collect_queuelevel = false;
@@ -376,6 +377,7 @@ static void pgstat_recv_resetslrucounter(PgStat_MsgResetslrucounter *msg, int le
 static void pgstat_recv_resetreplslotcounter(PgStat_MsgResetreplslotcounter *msg, int len);
 static void pgstat_recv_autovac(PgStat_MsgAutovacStart *msg, int len);
 static void pgstat_recv_vacuum(PgStat_MsgVacuum *msg, int len);
+static void pgstat_recv_vacstats(PgStat_MsgVacstats *msg, int len);
 static void pgstat_recv_analyze(PgStat_MsgAnalyze *msg, int len);
 static void pgstat_recv_archiver(PgStat_MsgArchiver *msg, int len);
 static void pgstat_recv_queuestat(PgStat_MsgQueuestat *msg, int len); /* GPDB */
@@ -1662,6 +1664,32 @@ pgstat_report_index_vacuum_time(Relation rel, PgStat_Counter elapsedtime,
 	pgstat_send(&msg, sizeof(msg));
 }
 
+/* ---------
+ * pgstat_report_vacstats() -
+ *
+ *	Tell the collector about the counters accumulated while vacuuming a
+ *	relation (a table or an index).  isindex tells which one, since only
+ *	the tables count towards the per-database totals.
+ * ---------
+ */
+void
+pgstat_report_vacstats(Oid tableoid, bool shared, bool isindex,
+					   const PgStat_VacuumStats *stats)
+{
+	PgStat_MsgVacstats msg;
+
+	if (pgStatSock == PGINVALID_SOCKET || !pgstat_track_counts ||
+		!pgstat_track_vacuum_statistics)
+		return;
+
+	pgstat_setheader(&msg.m_hdr, PGSTAT_MTYPE_VACSTATS);
+	msg.m_databaseid = shared ? InvalidOid : MyDatabaseId;
+	msg.m_tableoid = tableoid;
+	msg.m_isindex = isindex;
+	msg.m_stats = *stats;
+	pgstat_send(&msg, sizeof(msg));
+}
+
 /* --------
  * pgstat_report_analyze() -
  *
@@ -2863,6 +2891,25 @@ pgstat_fetch_stat_tabentry(Oid relid)
 
 
 /* ----------
+ * pgstat_fetch_stat_vacuum_stats() -
+ *
+ *	Return the vacuum counters available for a relation, or NULL.
+ * ----------
+ */
+PgStat_VacuumStats *
+pgstat_fetch_stat_vacuum_stats(Oid relid)
+{
+	PgStat_StatTabEntry *tabentry;
+
+	if (!pgstat_track_vacuum_statistics)
+		return NULL;
+
+	tabentry = pgstat_fetch_stat_tabentry(relid);
+	return tabentry ? &tabentry->vacuum_stats : NULL;
+}
+
+
+/* ----------
  * pgstat_fetch_stat_funcentry() -
  *
  *	Support function for the SQL-callable pgstat* functions. Returns
@@ -3734,6 +3781,10 @@ PgstatCollectorMain(int argc, char *argv[])
 					pgstat_recv_vacuum(&msg.msg_vacuum, len);
 					break;
 
+				case PGSTAT_MTYPE_VACSTATS:
+					pgstat_recv_vacstats(&msg.msg_vacstats, len);
+					break;
+
 				case PGSTAT_MTYPE_ANALYZE:
 					pgstat_recv_analyze(&msg.msg_analyze, len);
 					break;
@@ -3886,13 +3937,14 @@ reset_dbentry_counters(PgStat_StatDBEntry *dbentry)
 
 	dbentry->n_frozen_page_marks_cleared = 0;
 	dbentry->n_visible_page_marks_cleared = 0;
-
+	if (pgstat_track_vacuum_statistics)
+		MemSet(&dbentry->n_vacuum_stats, 0, sizeof(dbentry->n_vacuum_stats));
 
 	dbentry->stat_reset_timestamp = GetCurrentTimestamp();
 	dbentry->stats_timestamp = 0;
 
 	hash_ctl.keysize = sizeof(Oid);
-	hash_ctl.entrysize = sizeof(PgStat_StatTabEntry);
+	hash_ctl.entrysize = PGSTAT_TAB_ENTRY_SIZE;
 	dbentry->tables = hash_create("Per-database table",
 								  PGSTAT_TAB_HASH_SIZE,
 								  &hash_ctl,
@@ -3990,6 +4042,8 @@ pgstat_get_tab_entry(PgStat_StatDBEntry *dbentry, Oid tableoid, bool create)
 		result->vacuum_failsafe_count = 0;
 		result->frozen_page_marks_cleared = 0;
 		result->visible_page_marks_cleared = 0;
+		if (pgstat_track_vacuum_statistics)
+			MemSet(&result->vacuum_stats, 0, sizeof(result->vacuum_stats));
 	}
 
 	return result;
@@ -4096,9 +4150,14 @@ pgstat_write_statsfiles(bool permanent, bool allDbs)
 		 * Write out the DB entry. We don't write the tables or functions
 		 * pointers, since they're of no use to any other process.
 		 */
-		fputc('D', fpout);
+		fputc(pgstat_track_vacuum_statistics ? 'd' : 'D', fpout);
 		rc = fwrite(dbentry, offsetof(PgStat_StatDBEntry, tables), 1, fpout);
 		(void) rc;				/* we'll check for error with ferror */
+		if (pgstat_track_vacuum_statistics)
+		{
+			rc = fwrite(&dbentry->n_vacuum_stats, sizeof(PgStat_VacuumStats), 1, fpout);
+			(void) rc;
+		}
 	}
 
 	/*
@@ -4245,8 +4304,8 @@ pgstat_write_db_statsfile(PgStat_StatDBEntry *dbentry, bool permanent)
 	hash_seq_init(&tstat, dbentry->tables);
 	while ((tabentry = (PgStat_StatTabEntry *) hash_seq_search(&tstat)) != NULL)
 	{
-		fputc('T', fpout);
-		rc = fwrite(tabentry, sizeof(PgStat_StatTabEntry), 1, fpout);
+		fputc(pgstat_track_vacuum_statistics ? 't' : 'T', fpout);
+		rc = fwrite(tabentry, PGSTAT_TAB_ENTRY_SIZE, 1, fpout);
 		(void) rc;				/* we'll check for error with ferror */
 	}
 
@@ -4332,6 +4391,7 @@ pgstat_read_statsfiles(Oid onlydb, bool permanent, bool deep)
 	HTAB	   *dbhash;
 	FILE	   *fpin;
 	int32		format_id;
+	int			record_type;
 	bool		found;
 	const char *statfile = permanent ? PGSTAT_STAT_PERMANENT_FILENAME : pgstat_stat_filename;
 	int			i;
@@ -4349,7 +4409,7 @@ pgstat_read_statsfiles(Oid onlydb, bool permanent, bool deep)
 	 * Create the DB hashtable
 	 */
 	hash_ctl.keysize = sizeof(Oid);
-	hash_ctl.entrysize = sizeof(PgStat_StatDBEntry);
+	hash_ctl.entrysize = PGSTAT_DB_ENTRY_SIZE;
 	hash_ctl.hcxt = pgStatLocalContext;
 	dbhash = hash_create("Databases hash", PGSTAT_DB_HASH_SIZE, &hash_ctl,
 						 HASH_ELEM | HASH_BLOBS | HASH_CONTEXT);
@@ -4479,19 +4539,30 @@ pgstat_read_statsfiles(Oid onlydb, bool permanent, bool deep)
 	 */
 	for (;;)
 	{
-		switch (fgetc(fpin))
+		switch (record_type = fgetc(fpin))
 		{
 				/*
-				 * 'D'	A PgStat_StatDBEntry struct describing a database
-				 * follows.
+				 * 'D'	Ordinary database counters follow.
+				 * 'd'	The same, followed by a PgStat_VacuumStats block.
 				 */
 			case 'D':
+			case 'd':
+				MemSet(&dbbuf, 0, sizeof(dbbuf));
 				if (fread(&dbbuf, 1, offsetof(PgStat_StatDBEntry, tables),
 						  fpin) != offsetof(PgStat_StatDBEntry, tables))
 				{
 					ereport(pgStatRunningInCollector ? LOG : WARNING,
 							(errmsg("corrupted statistics file \"%s\"",
 									statfile)));
+					goto done;
+				}
+
+				if (record_type == 'd' &&
+					fread(&dbbuf.n_vacuum_stats, 1, sizeof(PgStat_VacuumStats),
+						  fpin) != sizeof(PgStat_VacuumStats))
+				{
+					ereport(pgStatRunningInCollector ? LOG : WARNING,
+							(errmsg("corrupted statistics file \"%s\"", statfile)));
 					goto done;
 				}
 
@@ -4510,7 +4581,7 @@ pgstat_read_statsfiles(Oid onlydb, bool permanent, bool deep)
 					goto done;
 				}
 
-				memcpy(dbentry, &dbbuf, sizeof(PgStat_StatDBEntry));
+				memcpy(dbentry, &dbbuf, PGSTAT_DB_ENTRY_SIZE);
 				dbentry->tables = NULL;
 				dbentry->functions = NULL;
 
@@ -4535,7 +4606,7 @@ pgstat_read_statsfiles(Oid onlydb, bool permanent, bool deep)
 				}
 
 				hash_ctl.keysize = sizeof(Oid);
-				hash_ctl.entrysize = sizeof(PgStat_StatTabEntry);
+				hash_ctl.entrysize = PGSTAT_TAB_ENTRY_SIZE;
 				hash_ctl.hcxt = pgStatLocalContext;
 				dbentry->tables = hash_create("Per-database table",
 											  PGSTAT_TAB_HASH_SIZE,
@@ -4684,6 +4755,8 @@ pgstat_read_db_statsfile(Oid databaseid, HTAB *tabhash, HTAB *funchash,
 	PgStat_StatFuncEntry *funcentry;
 	FILE	   *fpin;
 	int32		format_id;
+	int			record_type;
+	size_t		tabsize;
 	bool		found;
 	char		statfile[MAXPGPATH];
 
@@ -4725,14 +4798,18 @@ pgstat_read_db_statsfile(Oid databaseid, HTAB *tabhash, HTAB *funchash,
 	 */
 	for (;;)
 	{
-		switch (fgetc(fpin))
+		switch (record_type = fgetc(fpin))
 		{
 				/*
-				 * 'T'	A PgStat_StatTabEntry follows.
+				 * 'T'	An ordinary table entry follows.
+				 * 't'	The entry also includes its vacuum counters.
 				 */
 			case 'T':
-				if (fread(&tabbuf, 1, sizeof(PgStat_StatTabEntry),
-						  fpin) != sizeof(PgStat_StatTabEntry))
+			case 't':
+				tabsize = record_type == 't' ? sizeof(PgStat_StatTabEntry) :
+					offsetof(PgStat_StatTabEntry, vacuum_stats);
+				MemSet(&tabbuf, 0, sizeof(tabbuf));
+				if (fread(&tabbuf, 1, tabsize, fpin) != tabsize)
 				{
 					ereport(pgStatRunningInCollector ? LOG : WARNING,
 							(errmsg("corrupted statistics file \"%s\"",
@@ -4758,7 +4835,7 @@ pgstat_read_db_statsfile(Oid databaseid, HTAB *tabhash, HTAB *funchash,
 					goto done;
 				}
 
-				memcpy(tabentry, &tabbuf, sizeof(tabbuf));
+				memcpy(tabentry, &tabbuf, PGSTAT_TAB_ENTRY_SIZE);
 				break;
 
 				/*
@@ -4850,6 +4927,7 @@ pgstat_read_db_statsfile_timestamp(Oid databaseid, bool permanent,
 	PgStat_StatReplSlotEntry myReplSlotStats;
 	FILE	   *fpin;
 	int32		format_id;
+	int			record_type;
 	const char *statfile = permanent ? PGSTAT_STAT_PERMANENT_FILENAME : pgstat_stat_filename;
 
 	/*
@@ -4933,19 +5011,31 @@ pgstat_read_db_statsfile_timestamp(Oid databaseid, bool permanent,
 	 */
 	for (;;)
 	{
-		switch (fgetc(fpin))
+		switch (record_type = fgetc(fpin))
 		{
 				/*
-				 * 'D'	A PgStat_StatDBEntry struct describing a database
-				 * follows.
+				 * 'D'	Ordinary database counters follow.
+				 * 'd'	The same, followed by a PgStat_VacuumStats block.
 				 */
 			case 'D':
+			case 'd':
+				MemSet(&dbentry, 0, sizeof(dbentry));
 				if (fread(&dbentry, 1, offsetof(PgStat_StatDBEntry, tables),
 						  fpin) != offsetof(PgStat_StatDBEntry, tables))
 				{
 					ereport(pgStatRunningInCollector ? LOG : WARNING,
 							(errmsg("corrupted statistics file \"%s\"",
 									statfile)));
+					FreeFile(fpin);
+					return false;
+				}
+
+				if (record_type == 'd' &&
+					fread(&dbentry.n_vacuum_stats, 1, sizeof(PgStat_VacuumStats),
+						  fpin) != sizeof(PgStat_VacuumStats))
+				{
+					ereport(pgStatRunningInCollector ? LOG : WARNING,
+							(errmsg("corrupted statistics file \"%s\"", statfile)));
 					FreeFile(fpin);
 					return false;
 				}
@@ -5361,6 +5451,8 @@ pgstat_recv_tabstat(PgStat_MsgTabstat *msg, int len)
 			tabentry->vacuum_failsafe_count = 0;
 			tabentry->frozen_page_marks_cleared = 0;
 			tabentry->visible_page_marks_cleared = 0;
+			if (pgstat_track_vacuum_statistics)
+				MemSet(&tabentry->vacuum_stats, 0, sizeof(tabentry->vacuum_stats));
 		}
 		else
 		{
@@ -5756,6 +5848,53 @@ pgstat_recv_vacuum(PgStat_MsgVacuum *msg, int len)
 		tabentry->vacuum_timestamp = msg->m_vacuumtime;
 		tabentry->vacuum_count++;
 	}
+}
+
+/* ----------
+ * pgstat_recv_vacstats() -
+ *
+ *	Process a VACSTATS message: accumulate the vacuum counters into the
+ *	relation's entry and, for a table, into the per-database totals.
+ * ----------
+ */
+static void
+pgstat_recv_vacstats(PgStat_MsgVacstats *msg, int len)
+{
+	PgStat_StatDBEntry *dbentry;
+	PgStat_VacuumStats *vacstats;
+
+	if (!pgstat_track_vacuum_statistics)
+		return;
+
+	dbentry = pgstat_get_db_entry(msg->m_databaseid, true);
+	vacstats = &pgstat_get_tab_entry(dbentry, msg->m_tableoid, true)->vacuum_stats;
+
+	vacstats->tuples_deleted += msg->m_stats.tuples_deleted;
+	vacstats->dead_tuples += msg->m_stats.dead_tuples;
+	vacstats->pages_deleted += msg->m_stats.pages_deleted;
+	vacstats->dead_pages += msg->m_stats.dead_pages;
+	vacstats->pages_frozen += msg->m_stats.pages_frozen;
+	vacstats->pages_all_visible += msg->m_stats.pages_all_visible;
+	vacstats->freeze_age_vacuum_count +=
+		msg->m_stats.freeze_age_vacuum_count;
+
+	/*
+	 * The per-database totals describe what vacuum did to the tables.  An
+	 * index is vacuumed as a part of its table, and the time it took is
+	 * already accounted for in the table's own report, so adding the index
+	 * counters here would count that work twice.
+	 */
+	if (msg->m_isindex)
+		return;
+
+	dbentry->n_vacuum_stats.tuples_deleted += msg->m_stats.tuples_deleted;
+	dbentry->n_vacuum_stats.dead_tuples += msg->m_stats.dead_tuples;
+	dbentry->n_vacuum_stats.pages_deleted += msg->m_stats.pages_deleted;
+	dbentry->n_vacuum_stats.dead_pages += msg->m_stats.dead_pages;
+	dbentry->n_vacuum_stats.pages_frozen += msg->m_stats.pages_frozen;
+	dbentry->n_vacuum_stats.pages_all_visible += msg->m_stats.pages_all_visible;
+	dbentry->n_vacuum_stats.freeze_age_vacuum_count +=
+		msg->m_stats.freeze_age_vacuum_count;
 }
 
 /* ----------
