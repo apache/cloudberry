@@ -613,6 +613,7 @@ spgvacuumpage(spgBulkDeleteState *bds, BlockNumber blkno)
 	Relation	index = bds->info->index;
 	Buffer		buffer;
 	Page		page;
+	bool		was_empty;
 
 	/* call vacuum_delay_point while not holding any buffer lock */
 	vacuum_delay_point(false);
@@ -621,6 +622,7 @@ spgvacuumpage(spgBulkDeleteState *bds, BlockNumber blkno)
 								RBM_NORMAL, bds->info->strategy);
 	LockBuffer(buffer, BUFFER_LOCK_EXCLUSIVE);
 	page = (Page) BufferGetPage(buffer);
+	was_empty = PageIsNew(page) || PageIsEmpty(page);
 
 	if (PageIsNew(page))
 	{
@@ -664,6 +666,8 @@ spgvacuumpage(spgBulkDeleteState *bds, BlockNumber blkno)
 		{
 			RecordFreeIndexPage(index, blkno);
 			bds->stats->pages_deleted++;
+			if (!was_empty)
+				bds->stats->pages_newly_deleted++;
 		}
 		else
 		{
@@ -891,7 +895,6 @@ spgvacuumscan(spgBulkDeleteState *bds)
 
 	/* Report final stats */
 	bds->stats->num_pages = num_pages;
-	bds->stats->pages_newly_deleted = bds->stats->pages_deleted;
 	bds->stats->pages_free = bds->stats->pages_deleted;
 }
 

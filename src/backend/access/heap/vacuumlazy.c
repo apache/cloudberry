@@ -753,6 +753,20 @@ heap_vacuum_rel(Relation rel, VacuumParams *params,
 						 rel->rd_rel->relisshared,
 						 Max(new_live_tuples, 0),
 						 vacrel->new_dead_tuples);
+
+	/* assemble the per-vacuum measurements for subsequent reporting */
+	{
+		PgStat_VacuumStats vacstats;
+
+		MemSet(&vacstats, 0, sizeof(vacstats));
+		vacstats.tuples_deleted = (PgStat_Counter) vacrel->tuples_deleted;
+		vacstats.dead_tuples = (PgStat_Counter) vacrel->new_dead_tuples;
+		vacstats.pages_deleted = (PgStat_Counter) vacrel->pages_removed;
+
+
+
+	}
+
 	pgstat_progress_end_command();
 
 	/* and log the action if appropriate */
@@ -3045,6 +3059,60 @@ lazy_cleanup_all_indexes(LVRelState *vacrel)
 }
 
 /*
+ * lazy_index_vacstats_start() -- remember where an index vacuum call starts,
+ * for lazy_index_vacstats_finish().
+ *
+ * The counters in istat accumulate over all the calls made for the index
+ * during one vacuum, so we report what each call added to them.  That keeps
+ * the work of the bulk deletion passes accounted for even when the cleanup
+ * is skipped, and keeps it from being counted twice when it is not.
+ */
+static IndexBulkDeleteResult
+lazy_index_vacstats_start(IndexBulkDeleteResult *istat)
+{
+	IndexBulkDeleteResult before;
+
+	if (istat)
+		before = *istat;
+	else
+		MemSet(&before, 0, sizeof(before));
+
+	return before;
+}
+
+/*
+ * lazy_index_vacstats_finish() -- finish measuring one index vacuum call.
+ *
+ * pages_deleted and pages_free describe the whole index as the call left it,
+ * not what it did, so they are only looked at after the cleanup, which comes
+ * last: the deleted pages that are not reusable yet are the index's dead
+ * pages.
+ */
+static void
+lazy_index_vacstats_finish(Relation indrel, IndexBulkDeleteResult *istat,
+						   IndexBulkDeleteResult *before, bool cleanup)
+{
+	PgStat_VacuumStats vacstats;
+
+	MemSet(&vacstats, 0, sizeof(vacstats));
+	if (istat)
+	{
+		vacstats.tuples_deleted =
+			(PgStat_Counter) (istat->tuples_removed - before->tuples_removed);
+		/*
+		 * Access methods accumulate pages_newly_deleted over the calls,
+		 * so report only the work performed by this call.
+		 */
+		if (istat->pages_newly_deleted >= before->pages_newly_deleted)
+			vacstats.pages_deleted = (PgStat_Counter)
+				(istat->pages_newly_deleted - before->pages_newly_deleted);
+		else
+			vacstats.pages_deleted = (PgStat_Counter) istat->pages_newly_deleted;
+	}
+
+}
+
+/*
  *	lazy_vacuum_one_index() -- vacuum index relation.
  *
  *		Delete all the index entries pointing to tuples listed in
@@ -3062,6 +3130,7 @@ lazy_vacuum_one_index(Relation indrel, IndexBulkDeleteResult *istat,
 	IndexVacuumInfo ivinfo;
 	PGRUsage	ru0;
 	LVSavedErrInfo saved_err_info;
+	IndexBulkDeleteResult istat_before;
 
 	pg_rusage_init(&ru0);
 
@@ -3086,8 +3155,10 @@ lazy_vacuum_one_index(Relation indrel, IndexBulkDeleteResult *istat,
 							 InvalidBlockNumber, InvalidOffsetNumber);
 
 	/* Do bulk deletion */
+	istat_before = lazy_index_vacstats_start(istat);
 	istat = index_bulk_delete(&ivinfo, istat, lazy_tid_reaped,
 							  (void *) vacrel->dead_tuples);
+	lazy_index_vacstats_finish(indrel, istat, &istat_before, false);
 
 	ereport(elevel,
 			(errmsg("scanned index \"%s\" to remove %d row versions",
@@ -3118,6 +3189,7 @@ lazy_cleanup_one_index(Relation indrel, IndexBulkDeleteResult *istat,
 	IndexVacuumInfo ivinfo;
 	PGRUsage	ru0;
 	LVSavedErrInfo saved_err_info;
+	IndexBulkDeleteResult istat_before;
 
 	pg_rusage_init(&ru0);
 
@@ -3142,7 +3214,9 @@ lazy_cleanup_one_index(Relation indrel, IndexBulkDeleteResult *istat,
 							 VACUUM_ERRCB_PHASE_INDEX_CLEANUP,
 							 InvalidBlockNumber, InvalidOffsetNumber);
 
+	istat_before = lazy_index_vacstats_start(istat);
 	istat = index_vacuum_cleanup(&ivinfo, istat);
+	lazy_index_vacstats_finish(indrel, istat, &istat_before, true);
 
 	if (istat)
 	{
