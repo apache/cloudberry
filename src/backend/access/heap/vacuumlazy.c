@@ -370,6 +370,8 @@ typedef struct LVRelState
 	BlockNumber pages_removed;	/* pages remove by truncation */
 	BlockNumber lpdead_item_pages;	/* # pages with LP_DEAD items */
 	BlockNumber nonempty_pages; /* actually, last nonempty page + 1 */
+	/* Counters reported as the relation's vacuum statistics */
+	BlockNumber dead_pages;		/* pages left with unremovable dead tuples */
 
 	/* Statistics output by us, for table */
 	double		new_rel_tuples; /* new estimated total # of tuples */
@@ -762,6 +764,7 @@ heap_vacuum_rel(Relation rel, VacuumParams *params,
 		vacstats.tuples_deleted = (PgStat_Counter) vacrel->tuples_deleted;
 		vacstats.dead_tuples = (PgStat_Counter) vacrel->new_dead_tuples;
 		vacstats.pages_deleted = (PgStat_Counter) vacrel->pages_removed;
+		vacstats.dead_pages = (PgStat_Counter) vacrel->dead_pages;
 
 
 
@@ -832,6 +835,8 @@ heap_vacuum_rel(Relation rel, VacuumParams *params,
 							 vacrel->rel_pages,
 							 vacrel->pinskipped_pages,
 							 vacrel->frozenskipped_pages);
+			appendStringInfo(&buf, _("pages with dead tuples not yet removable: %u\n"),
+							 vacrel->dead_pages);
 			appendStringInfo(&buf,
 							 _("tuples: %lld removed, %lld remain, %lld are dead but not yet removable, oldest xmin: %u\n"),
 							 (long long) vacrel->tuples_deleted,
@@ -1699,6 +1704,8 @@ lazy_scan_heap(LVRelState *vacrel, VacuumParams *params, bool aggressive)
 	appendStringInfo(&buf,
 					 _("%lld dead row versions cannot be removed yet, oldest xmin: %u\n"),
 					 (long long) vacrel->new_dead_tuples, vacrel->OldestXmin);
+	appendStringInfo(&buf, _("pages with dead tuples not yet removable: %u\n"),
+					 vacrel->dead_pages);
 	appendStringInfo(&buf, ngettext("Skipped %u page due to buffer pins, ",
 									"Skipped %u pages due to buffer pins, ",
 									vacrel->pinskipped_pages),
@@ -2105,6 +2112,10 @@ retry:
 		pgstat_progress_update_param(PROGRESS_VACUUM_NUM_DEAD_TUPLES,
 									 dead_tuples->num_tuples);
 	}
+
+	/* Remember pages that keep dead tuples we could not remove yet */
+	if (new_dead_tuples > 0)
+		vacrel->dead_pages++;
 
 	/* Finally, add page-local counts to whole-VACUUM counts */
 	vacrel->tuples_deleted += tuples_deleted;
@@ -3108,6 +3119,9 @@ lazy_index_vacstats_finish(Relation indrel, IndexBulkDeleteResult *istat,
 				(istat->pages_newly_deleted - before->pages_newly_deleted);
 		else
 			vacstats.pages_deleted = (PgStat_Counter) istat->pages_newly_deleted;
+		if (cleanup && istat->pages_deleted > istat->pages_free)
+			vacstats.dead_pages =
+				(PgStat_Counter) (istat->pages_deleted - istat->pages_free);
 	}
 
 }
