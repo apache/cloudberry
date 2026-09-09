@@ -603,6 +603,7 @@
 		"track_counts",
 		"track_functions",
 		"track_io_timing",
+		"track_vacuum_statistics",
 		"transaction_deferrable",
 		"transaction_isolation",
 		"transaction_read_only",

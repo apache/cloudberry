@@ -777,7 +777,7 @@ heap_vacuum_rel(Relation rel, VacuumParams *params,
 						 vacrel->new_dead_tuples, starttime,
 						 VacuumDelayTime - startdelaytime, vacrel->failsafe_active);
 
-	/* assemble the per-vacuum measurements for subsequent reporting */
+	/* report the per-vacuum counters as well */
 	{
 		PgStat_VacuumStats vacstats;
 		PgStat_Counter elapsedtime;
@@ -803,6 +803,10 @@ heap_vacuum_rel(Relation rel, VacuumParams *params,
 						   (VacuumDelayTime - startdelaytime) / 1000.0,
 						   freeze_age_vacuum ? _("yes") : _("no"))));
 
+		pgstat_report_vacstats(RelationGetRelid(rel),
+							   rel->rd_rel->relisshared,
+							   false,
+							   &vacstats);
 	}
 
 	pgstat_progress_end_command();
@@ -3194,6 +3198,10 @@ lazy_index_vacstats_finish(Relation indrel, IndexBulkDeleteResult *istat,
 									   VacuumDelayTime - startdelaytime,
 									   IsAutoVacuumWorkerProcess());
 
+	pgstat_report_vacstats(RelationGetRelid(indrel),
+						   indrel->rd_rel->relisshared,
+						   true,
+						   &vacstats);
 }
 
 /*
