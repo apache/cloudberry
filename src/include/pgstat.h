@@ -433,6 +433,7 @@ typedef struct PgStat_VacuumStats
 	PgStat_Counter pages_deleted;	/* pages removed/deleted by vacuum */
 	PgStat_Counter dead_pages;	/* pages with unremoved dead tuples */
 	PgStat_Counter pages_frozen;	/* pages where vacuum froze tuples */
+	PgStat_Counter pages_all_visible;	/* pages marked all-visible by vacuum */
 
 } PgStat_VacuumStats;
 
