@@ -3820,6 +3820,8 @@ reset_dbentry_counters(PgStat_StatDBEntry *dbentry)
 	dbentry->n_sessions_abandoned = 0;
 	dbentry->n_sessions_fatal = 0;
 	dbentry->n_sessions_killed = 0;
+	dbentry->n_frozen_page_marks_cleared = 0;
+	dbentry->n_visible_page_marks_cleared = 0;
 
 	dbentry->stat_reset_timestamp = GetCurrentTimestamp();
 	dbentry->stats_timestamp = 0;
@@ -3914,6 +3916,8 @@ pgstat_get_tab_entry(PgStat_StatDBEntry *dbentry, Oid tableoid, bool create)
 		result->analyze_count = 0;
 		result->autovac_analyze_timestamp = 0;
 		result->autovac_analyze_count = 0;
+		result->frozen_page_marks_cleared = 0;
+		result->visible_page_marks_cleared = 0;
 	}
 
 	return result;
@@ -5275,6 +5279,8 @@ pgstat_recv_tabstat(PgStat_MsgTabstat *msg, int len)
 			tabentry->analyze_count = 0;
 			tabentry->autovac_analyze_timestamp = 0;
 			tabentry->autovac_analyze_count = 0;
+			tabentry->frozen_page_marks_cleared = 0;
+			tabentry->visible_page_marks_cleared = 0;
 		}
 		else
 		{
@@ -5318,6 +5324,14 @@ pgstat_recv_tabstat(PgStat_MsgTabstat *msg, int len)
 		dbentry->n_tuples_deleted += tabmsg->t_counts.t_tuples_deleted;
 		dbentry->n_blocks_fetched += tabmsg->t_counts.t_blocks_fetched;
 		dbentry->n_blocks_hit += tabmsg->t_counts.t_blocks_hit;
+		tabentry->frozen_page_marks_cleared +=
+			tabmsg->t_counts.t_frozen_page_marks_cleared;
+		tabentry->visible_page_marks_cleared +=
+			tabmsg->t_counts.t_visible_page_marks_cleared;
+		dbentry->n_frozen_page_marks_cleared +=
+			tabmsg->t_counts.t_frozen_page_marks_cleared;
+		dbentry->n_visible_page_marks_cleared +=
+			tabmsg->t_counts.t_visible_page_marks_cleared;
 	}
 }
 
