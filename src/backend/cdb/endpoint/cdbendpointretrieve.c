@@ -30,6 +30,8 @@
  */
 
 #include "postgres.h"
+#include "tcop/pquery.h"
+#include "utils/privacy_output.h"
 
 #include "access/session.h"
 #include "access/xact.h"
@@ -82,6 +84,7 @@ typedef struct RetrieveExecEntry
 	shm_mq_handle *mqHandle;
 	/* tuple slot used for retrieve data */
 	TupleTableSlot *retrieveTs;
+	PlannedStmt *privacyPlan;
 	/* TupleQueueReader to read tuple from message queue */
 	TupleQueueReader *tqReader;
 	/* Track retrieve state */
@@ -201,6 +204,15 @@ ExecRetrieveStmt(const RetrieveStmt *stmt, DestReceiver *dest)
 							   retrieveCount)));
 
 	Assert(dest->mydest == DestTuplestore);
+	if (RetrieveCtl.current_entry->privacyPlan)
+	{
+		MemoryContext oldcontext;
+		if (!cloudberry_privacy_output_hook)
+			ereport(ERROR, (errmsg("privacy output handler unavailable; RETRIEVE refused")));
+		oldcontext = MemoryContextSwitchTo(ActivePortal->portalContext);
+		ActivePortal->privacyEndpointPlan = copyObject(RetrieveCtl.current_entry->privacyPlan);
+		MemoryContextSwitchTo(oldcontext);
+	}
 	Assert(RetrieveCtl.current_entry->retrieveState > RETRIEVE_STATE_INIT);
 
 	if (RetrieveCtl.current_entry->retrieveState < RETRIEVE_STATE_FINISHED)
@@ -234,6 +246,7 @@ init_retrieve_exec_entry(RetrieveExecEntry * entry)
 	entry->endpoint = NULL;
 	entry->mqHandle = NULL;
 	entry->retrieveTs = NULL;
+	entry->privacyPlan = NULL;
 	entry->retrieveState = RETRIEVE_STATE_INIT;
 }
 
@@ -477,6 +490,10 @@ attach_receiver_mq(dsm_handle dsmHandle)
 	lookup_space = shm_toc_lookup(toc, ENDPOINT_KEY_TUPLE_DESC, false);
 	tupdescnode = (TupleDescNode *) deserializeNode(lookup_space, td_len);
 	td = tupdescnode->tuple;
+	lookup_space = shm_toc_lookup(toc, ENDPOINT_KEY_PRIVACY_LEN, false);
+	td_len = *(int *) lookup_space;
+	lookup_space = shm_toc_lookup(toc, ENDPOINT_KEY_PRIVACY_PLAN, false);
+	entry->privacyPlan = (PlannedStmt *) deserializeNode(lookup_space, td_len);
 	if (entry->retrieveTs != NULL)
 		ExecClearTuple(entry->retrieveTs);
 	else

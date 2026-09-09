@@ -1007,6 +1007,7 @@ standard_ExecutorRun(QueryDesc *queryDesc,
 				SetupEndpointExecState(queryDesc->tupDesc,
 									   queryDesc->ddesc->parallelCursorName,
 									   operation,
+									   queryDesc->plannedstmt,
 									   &endpointDest);
 				endpointCreated = true;
 

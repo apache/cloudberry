@@ -1599,6 +1599,16 @@ _outCommentStmt(StringInfo str, const CommentStmt *node)
 }
 
 static void
+_outSecLabelStmt(StringInfo str, const SecLabelStmt *node)
+{
+	WRITE_NODE_TYPE("SECLABELSTMT");
+	WRITE_ENUM_FIELD(objtype, ObjectType);
+	WRITE_NODE_FIELD(object);
+	WRITE_STRING_FIELD(provider);
+	WRITE_STRING_FIELD(label);
+}
+
+static void
 _outTableValueExpr(StringInfo str, const TableValueExpr *node)
 {
 	WRITE_NODE_TYPE("TABLEVALUEEXPR");

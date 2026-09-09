@@ -141,7 +141,7 @@ extern void enable_parallel_retrieve_cursor_check_timeout(void);
 /*
  * Below functions should run on Endpoints(QE/Entry DB).
  */
-extern void SetupEndpointExecState(TupleDesc tupleDesc, const char *cursorName, CmdType operation, DestReceiver **endpointDest);
+extern void SetupEndpointExecState(TupleDesc tupleDesc, const char *cursorName, CmdType operation, PlannedStmt *plan, DestReceiver **endpointDest);
 extern void DestroyEndpointExecState(void);
 extern void EndpointNotifyQD(const char *message);
 
