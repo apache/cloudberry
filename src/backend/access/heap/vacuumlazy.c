@@ -373,6 +373,7 @@ typedef struct LVRelState
 	/* Counters reported as the relation's vacuum statistics */
 	BlockNumber dead_pages;		/* pages left with unremovable dead tuples */
 	BlockNumber pages_frozen;	/* pages where we froze tuples */
+	BlockNumber pages_all_visible;	/* pages we marked all-visible */
 
 	/* Statistics output by us, for table */
 	double		new_rel_tuples; /* new estimated total # of tuples */
@@ -767,6 +768,7 @@ heap_vacuum_rel(Relation rel, VacuumParams *params,
 		vacstats.pages_deleted = (PgStat_Counter) vacrel->pages_removed;
 		vacstats.dead_pages = (PgStat_Counter) vacrel->dead_pages;
 		vacstats.pages_frozen = (PgStat_Counter) vacrel->pages_frozen;
+		vacstats.pages_all_visible = (PgStat_Counter) vacrel->pages_all_visible;
 
 
 
@@ -841,6 +843,8 @@ heap_vacuum_rel(Relation rel, VacuumParams *params,
 							 vacrel->dead_pages);
 			appendStringInfo(&buf, _("pages with tuples frozen: %u\n"),
 							 vacrel->pages_frozen);
+			appendStringInfo(&buf, _("pages marked all-visible: %u\n"),
+							 vacrel->pages_all_visible);
 			appendStringInfo(&buf,
 							 _("tuples: %lld removed, %lld remain, %lld are dead but not yet removable, oldest xmin: %u\n"),
 							 (long long) vacrel->tuples_deleted,
@@ -1414,6 +1418,7 @@ lazy_scan_heap(LVRelState *vacrel, VacuumParams *params, bool aggressive)
 				visibilitymap_set(vacrel->rel, blkno, buf, InvalidXLogRecPtr,
 								  vmbuffer, InvalidTransactionId,
 								  VISIBILITYMAP_ALL_VISIBLE | VISIBILITYMAP_ALL_FROZEN);
+				vacrel->pages_all_visible++;
 				END_CRIT_SECTION();
 			}
 
@@ -1525,6 +1530,7 @@ lazy_scan_heap(LVRelState *vacrel, VacuumParams *params, bool aggressive)
 			visibilitymap_set(vacrel->rel, blkno, buf, InvalidXLogRecPtr,
 							  vmbuffer, prunestate.visibility_cutoff_xid,
 							  flags);
+			vacrel->pages_all_visible++;
 		}
 
 		/*
@@ -1712,6 +1718,8 @@ lazy_scan_heap(LVRelState *vacrel, VacuumParams *params, bool aggressive)
 					 vacrel->dead_pages);
 	appendStringInfo(&buf, _("pages with tuples frozen: %u\n"),
 					 vacrel->pages_frozen);
+	appendStringInfo(&buf, _("pages marked all-visible: %u\n"),
+					 vacrel->pages_all_visible);
 	appendStringInfo(&buf, ngettext("Skipped %u page due to buffer pins, ",
 									"Skipped %u pages due to buffer pins, ",
 									vacrel->pinskipped_pages),
@@ -2577,8 +2585,12 @@ lazy_vacuum_heap_page(LVRelState *vacrel, BlockNumber blkno, Buffer buffer,
 
 		Assert(BufferIsValid(*vmbuffer));
 		if (flags != 0)
+		{
 			visibilitymap_set(vacrel->rel, blkno, buffer, InvalidXLogRecPtr,
 							  *vmbuffer, visibility_cutoff_xid, flags);
+			if (flags & VISIBILITYMAP_ALL_VISIBLE)
+				vacrel->pages_all_visible++;
+		}
 	}
 
 	/* Revert to the previous phase information for error traceback */
