@@ -133,6 +133,9 @@ typedef struct PgStat_TableCounts
 
 	PgStat_Counter t_blocks_fetched;
 	PgStat_Counter t_blocks_hit;
+
+	PgStat_Counter t_frozen_page_marks_cleared;
+	PgStat_Counter t_visible_page_marks_cleared;
 } PgStat_TableCounts;
 
 /* Possible targets for resetting cluster-wide shared values */
@@ -730,7 +733,7 @@ typedef union PgStat_Msg
  * ------------------------------------------------------------
  */
 
-#define PGSTAT_FILE_FORMAT_ID	0x01A5BCA2
+#define PGSTAT_FILE_FORMAT_ID	0x01A5BCA3
 
 /* ----------
  * PgStat_StatDBEntry			The collector's data per database
@@ -768,6 +771,10 @@ typedef struct PgStat_StatDBEntry
 	PgStat_Counter n_sessions_abandoned;
 	PgStat_Counter n_sessions_fatal;
 	PgStat_Counter n_sessions_killed;
+
+	/* VM revisions are fed by ordinary relation statistics. */
+	PgStat_Counter n_frozen_page_marks_cleared;
+	PgStat_Counter n_visible_page_marks_cleared;
 
 	TimestampTz stat_reset_timestamp;
 	TimestampTz stats_timestamp;	/* time of db stats file update */
@@ -816,6 +823,10 @@ typedef struct PgStat_StatTabEntry
 	PgStat_Counter analyze_count;
 	TimestampTz autovac_analyze_timestamp;	/* autovacuum initiated */
 	PgStat_Counter autovac_analyze_count;
+
+	/* VM revisions are fed by ordinary relation statistics. */
+	PgStat_Counter frozen_page_marks_cleared;
+	PgStat_Counter visible_page_marks_cleared;
 } PgStat_StatTabEntry;
 
 
@@ -1060,6 +1071,19 @@ extern void pgstat_report_connect(Oid dboid);
 extern void pgstat_report_autovac(Oid dboid);
 extern void pgstat_report_vacuum(Oid tableoid, bool shared,
 								 PgStat_Counter livetuples, PgStat_Counter deadtuples);
+
+/* count a page whose all-visible bit is being cleared */
+#define pgstat_count_visible_page_marks_cleared(rel)						\
+	do {																	\
+		if ((rel)->pgstat_info != NULL)										\
+			(rel)->pgstat_info->t_counts.t_visible_page_marks_cleared++;	\
+	} while (0)
+/* count a page whose all-frozen bit is being cleared */
+#define pgstat_count_frozen_page_marks_cleared(rel)							\
+	do {																	\
+		if ((rel)->pgstat_info != NULL)										\
+			(rel)->pgstat_info->t_counts.t_frozen_page_marks_cleared++;		\
+	} while (0)
 extern void pgstat_report_analyze(Relation rel,
 								  PgStat_Counter livetuples, PgStat_Counter deadtuples,
 								  bool resetcounter);
