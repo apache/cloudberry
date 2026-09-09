@@ -85,6 +85,7 @@ typedef enum StatMsgType
 	PGSTAT_MTYPE_REPLSLOT,
 	PGSTAT_MTYPE_CONNECT,
 	PGSTAT_MTYPE_DISCONNECT,
+	PGSTAT_MTYPE_VACSTATS,
 } StatMsgType;
 
 /* ----------
@@ -429,6 +430,43 @@ typedef struct PgStat_MsgVacuum
 
 
 /* ----------
+ * PgStat_VacuumStats        Vacuum statistics reported for a relation.
+ * ----------
+ */
+typedef struct PgStat_VacuumStats
+{
+	PgStat_Counter tuples_deleted;	/* tuples removed by vacuum */
+	PgStat_Counter dead_tuples; /* dead tuples left unremoved */
+	PgStat_Counter pages_deleted;	/* pages removed/deleted by vacuum */
+	PgStat_Counter dead_pages;	/* pages with unremoved dead tuples */
+	PgStat_Counter pages_frozen;	/* pages where vacuum froze tuples */
+	PgStat_Counter pages_all_visible;	/* pages marked all-visible by vacuum */
+
+	/*
+	 * Number of heap vacuum runs made aggressive by the XID or MultiXact
+	 * freeze table age.  This includes VACUUM FREEZE, which sets those
+	 * age thresholds to zero, but not DISABLE_PAGE_SKIPPING alone.
+	 */
+	PgStat_Counter freeze_age_vacuum_count;
+} PgStat_VacuumStats;
+
+/* ----------
+ * PgStat_MsgVacstats			Sent by the backend or autovacuum daemon
+ *								after vacuuming a heap relation or an index
+ *								to report per-relation vacuum counters.
+ * ----------
+ */
+typedef struct PgStat_MsgVacstats
+{
+	PgStat_MsgHdr m_hdr;
+	Oid			m_databaseid;
+	Oid			m_tableoid;
+	bool		m_isindex;		/* counted apart from the database totals */
+	PgStat_VacuumStats m_stats;
+} PgStat_MsgVacstats;
+
+
+/* ----------
  * PgStat_MsgAnalyze			Sent by the backend or autovacuum daemon
  *								after ANALYZE
  * ----------
@@ -714,6 +752,7 @@ typedef union PgStat_Msg
 	PgStat_MsgResetreplslotcounter msg_resetreplslotcounter;
 	PgStat_MsgAutovacStart msg_autovacuum_start;
 	PgStat_MsgVacuum msg_vacuum;
+	PgStat_MsgVacstats msg_vacstats;
 	PgStat_MsgAnalyze msg_analyze;
 	PgStat_MsgArchiver msg_archiver;
 	PgStat_MsgQueuestat msg_queuestat;  /* GPDB */
@@ -740,7 +779,7 @@ typedef union PgStat_Msg
  * ------------------------------------------------------------
  */
 
-#define PGSTAT_FILE_FORMAT_ID	0x01A5BCA7
+#define PGSTAT_FILE_FORMAT_ID	0x01A5BCAA
 
 /* ----------
  * PgStat_StatDBEntry			The collector's data per database
@@ -797,11 +836,14 @@ typedef struct PgStat_StatDBEntry
 	TimestampTz stats_timestamp;	/* time of db stats file update */
 
 	/*
-	 * tables and functions must be last in the struct, because we don't write
-	 * the pointers out to the stats file.
+	 * Only the prefix before these pointers is written as ordinary database
+	 * statistics. The optional vacuum counters are serialized separately.
 	 */
 	HTAB	   *tables;
 	HTAB	   *functions;
+
+	/* Must be last: storage is omitted when tracking is disabled at startup. */
+	PgStat_VacuumStats n_vacuum_stats;
 } PgStat_StatDBEntry;
 
 
@@ -853,7 +895,18 @@ typedef struct PgStat_StatTabEntry
 	/* VM revisions are fed by ordinary relation statistics. */
 	PgStat_Counter frozen_page_marks_cleared;
 	PgStat_Counter visible_page_marks_cleared;
+
+	/* Must be last: storage is omitted when tracking is disabled at startup. */
+	PgStat_VacuumStats vacuum_stats;
 } PgStat_StatTabEntry;
+
+/* The postmaster setting fixes hash entry sizes for the process lifetime. */
+#define PGSTAT_DB_ENTRY_SIZE \
+	(pgstat_track_vacuum_statistics ? sizeof(PgStat_StatDBEntry) : \
+	 offsetof(PgStat_StatDBEntry, n_vacuum_stats))
+#define PGSTAT_TAB_ENTRY_SIZE \
+	(pgstat_track_vacuum_statistics ? sizeof(PgStat_StatTabEntry) : \
+	 offsetof(PgStat_StatTabEntry, vacuum_stats))
 
 
 /* ----------
@@ -1023,6 +1076,7 @@ typedef struct PgStat_FunctionCallUsage
  * ----------
  */
 extern PGDLLIMPORT bool pgstat_track_counts;
+extern PGDLLIMPORT bool pgstat_track_vacuum_statistics;
 extern PGDLLIMPORT int pgstat_track_functions;
 extern char *pgstat_stat_directory;
 extern char *pgstat_stat_tmpname;
@@ -1103,6 +1157,8 @@ extern void pgstat_report_vacuum_time(Relation rel,
 									  PgStat_Counter elapsedtime,
 									  PgStat_Counter delaytime, bool is_autovacuum,
 									  bool is_index);
+extern void pgstat_report_vacstats(Oid tableoid, bool shared, bool isindex,
+								   const PgStat_VacuumStats *stats);
 
 /* count a page whose all-visible bit is being cleared */
 #define pgstat_count_visible_page_marks_cleared(rel)						\
@@ -1326,6 +1382,7 @@ extern void pgstat_combine_from_qe(struct CdbDispatchResults *results,	/* GPDB *
  */
 extern PgStat_StatDBEntry *pgstat_fetch_stat_dbentry(Oid dbid);
 extern PgStat_StatTabEntry *pgstat_fetch_stat_tabentry(Oid relid);
+extern PgStat_VacuumStats *pgstat_fetch_stat_vacuum_stats(Oid relid);
 
 extern PgStat_StatQueueEntry *pgstat_fetch_stat_queueentry(Oid queueid);  /* GPDB */
 extern PgBackendStatus *pgstat_fetch_stat_beentry(int beid);
