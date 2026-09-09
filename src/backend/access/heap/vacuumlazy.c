@@ -779,6 +779,7 @@ heap_vacuum_rel(Relation rel, VacuumParams *params,
 		stats.tuples_deleted = vacrel->tuples_deleted;
 		stats.dead_tuples = vacrel->recently_dead_tuples + vacrel->missed_dead_tuples;
 		stats.dead_pages = vacrel->dead_pages;
+		stats.tuples_frozen = vacrel->tuples_frozen;
 		stats.recently_dead_tuples = vacrel->recently_dead_tuples;
 		stats.missed_dead_tuples = vacrel->missed_dead_tuples;
 		stats.pages_scanned = vacrel->scanned_pages;
