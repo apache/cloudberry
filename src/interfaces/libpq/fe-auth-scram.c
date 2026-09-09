@@ -26,6 +26,13 @@
 #include "common/saslprep.h"
 #include "common/scram-common.h"
 #include "fe-auth.h"
+/* Cloudberry */
+#include "common/link-canary.h"
+#ifndef FRONTEND
+#include "utils/palloc.h"
+#endif
+/* Cloudberry end */
+
 
 
 /* The exported SCRAM callback mechanism. */
@@ -146,6 +153,21 @@ scram_init(PGconn *conn,
 		}
 	}
 	state->password = prep_password;
+
+	/* Cloudberry */
+	/* After additional linkage frontend code into backend, this function
+	 * may be called on the server side. `pg_saslprep` is compiled for
+	 * backend with palloc memory allocation, but original `scram_free` releases
+	 * the memory with `free` and it leads to abort of running process.
+	 * Reallocation of password right after incorrect allocation seems less
+	 * confusing than usage `free`/`pfree` based on build macro at scram_free
+	 * only for password field.
+	 */
+#ifndef FRONTEND
+	state->password = strdup(prep_password);
+	pfree(prep_password);
+#endif
+	/* Cloudberry end */
 
 	return state;
 }
@@ -908,6 +930,14 @@ pg_fe_scram_build_secret(const char *password, int iterations, const char **errs
 	pg_saslprep_rc rc;
 	char		saltbuf[SCRAM_DEFAULT_SALT_LEN];
 	char	   *result;
+
+	/* Cloudberry */
+	/* Сallers of this function is a frontend applications.
+	 * It's unexpected to call this function at the server code,
+	 * its use will lead to incorrect free of palloc'd memory
+	 */
+	Assert(pg_link_canary_is_frontend());
+	/* Cloudberry end */
 
 	/*
 	 * Normalize the password with SASLprep.  If that doesn't work, because
