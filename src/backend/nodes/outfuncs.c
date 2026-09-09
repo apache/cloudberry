@@ -5532,6 +5532,9 @@ outNode(StringInfo str, const void *obj)
 			case T_CommentStmt:
 				_outCommentStmt(str, obj);
 				break;
+			case T_SecLabelStmt:
+				_outSecLabelStmt(str, obj);
+				break;
 
 			case T_TableValueExpr:
 				_outTableValueExpr(str, obj);

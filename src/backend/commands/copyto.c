@@ -51,6 +51,7 @@
 #include "utils/partcache.h"
 #include "utils/rel.h"
 #include "utils/snapmgr.h"
+#include "utils/privacy_output.h"
 
 #include "cdb/cdbdisp_query.h"
 #include "cdb/cdbvars.h"
@@ -567,6 +568,15 @@ CopyOneRowTo(CopyToState cstate, TupleTableSlot *slot)
 		int			attnum = lfirst_int(cur);
 		Datum		value = slot->tts_values[attnum - 1];
 		bool		isnull = slot->tts_isnull[attnum - 1];
+		if (cloudberry_privacy_output_hook)
+		{
+			PlannedStmt *plan = cstate->queryDesc ? cstate->queryDesc->plannedstmt : NULL;
+			value = cloudberry_privacy_output_hook(plan,
+				plan ? plan->planTree->targetlist : NIL,
+				cstate->rel ? RelationGetRelid(cstate->rel) : InvalidOid,
+				attnum, TupleDescAttr(slot->tts_tupleDescriptor, attnum - 1)->atttypid,
+				value, isnull, cstate->copy_dest == COPY_CALLBACK ? PRIVACY_EXTERNAL : PRIVACY_COPY);
+		}
 
 		if (!cstate->opts.binary)
 		{

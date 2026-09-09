@@ -22,6 +22,11 @@
 #include "utils/lsyscache.h"
 #include "utils/memdebug.h"
 #include "utils/memutils.h"
+#include "utils/privacy_output.h"
+
+int cloudberry_privacy_output_abi = 2;
+privacy_output_hook_type cloudberry_privacy_output_hook = NULL;
+privacy_endpoint_hook_type cloudberry_privacy_endpoint_hook = NULL;
 
 
 static void printtup_startup(DestReceiver *self, int operation,
@@ -333,6 +338,37 @@ printtup(TupleTableSlot *slot, DestReceiver *self)
 		bool 		isnull;
 		Datum		attr = slot_getattr(slot, i+1, &isnull);
 		Form_pg_attribute fatt = TupleDescAttr(typeinfo, i);
+		if (cloudberry_privacy_output_hook)
+		{
+			PlannedStmt *plan = myState->portal->queryDesc
+				? myState->portal->queryDesc->plannedstmt : NULL;
+			List *targets = FetchPortalTargetList(myState->portal);
+			bool retrieving = myState->portal->privacyEndpointPlan != NULL;
+			if (!plan && myState->portal->commandTag == CMDTAG_FETCH)
+			{
+				PlannedStmt *statement = PortalGetPrimaryStmt(myState->portal);
+				if (statement && IsA(statement->utilityStmt, FetchStmt))
+				{
+					FetchStmt *fetch = (FetchStmt *) statement->utilityStmt;
+					Portal cursor = GetPortalByName(fetch->portalname);
+					if (PortalIsValid(cursor) && cursor->queryDesc)
+						plan = cursor->queryDesc->plannedstmt;
+				}
+			}
+			if (retrieving)
+			{
+				plan = myState->portal->privacyEndpointPlan;
+				targets = plan->planTree->targetlist;
+			}
+			attr = cloudberry_privacy_output_hook(plan,
+				targets, InvalidOid,
+				i + 1, fatt->atttypid, attr, isnull,
+				retrieving ? PRIVACY_RETRIEVE :
+				(myState->portal->commandTag == CMDTAG_INSERT ||
+				 myState->portal->commandTag == CMDTAG_UPDATE ||
+				 myState->portal->commandTag == CMDTAG_DELETE)
+				? PRIVACY_RETURNING : PRIVACY_SELECT);
+		}
 		
 		if (isnull)
 		{

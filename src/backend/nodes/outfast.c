@@ -1756,6 +1756,9 @@ _outNode(StringInfo str, void *obj)
 				_outAlterResourceGroupStmt(str, obj);
 				break;
 
+			case T_SecLabelStmt:
+				_outSecLabelStmt(str, obj);
+				break;
             case T_CommentStmt:
                 _outCommentStmt(str, obj);
                 break;

@@ -170,6 +170,8 @@ typedef struct PortalData
 
 	/* If not NULL, Executor is active; call ExecutorEnd eventually: */
 	QueryDesc  *queryDesc;		/* info needed for executor invocation */
+	/* Metadata-only output plan copied from a parallel RETRIEVE endpoint. */
+	PlannedStmt *privacyEndpointPlan;
 
 	QueryDispatchDesc *ddesc;	/* extra info dispatched from QD to QEs */
 

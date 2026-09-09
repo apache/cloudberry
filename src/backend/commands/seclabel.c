@@ -19,6 +19,8 @@
 #include "catalog/pg_seclabel.h"
 #include "catalog/pg_shseclabel.h"
 #include "commands/seclabel.h"
+#include "cdb/cdbdisp_query.h"
+#include "cdb/cdbvars.h"
 #include "miscadmin.h"
 #include "utils/builtins.h"
 #include "utils/fmgroids.h"
@@ -210,6 +212,12 @@ ExecSecLabelStmt(SecLabelStmt *stmt)
 
 	/* Provider gets control here, may throw ERROR to veto new label. */
 	provider->hook(&address, stmt->label);
+
+	/* Privacy output policies must be atomically installed on every QE. */
+	if (Gp_role == GP_ROLE_DISPATCH &&
+		strcmp(provider->provider_name, "cloudberry_privacy") == 0)
+		CdbDispatchUtilityStatement((Node *) stmt,
+			DF_CANCEL_ON_ERROR | DF_WITH_SNAPSHOT | DF_NEED_TWO_PHASE, NIL, NULL);
 
 	/* Apply new label. */
 	SetSecurityLabel(&address, provider->provider_name, stmt->label);

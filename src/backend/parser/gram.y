@@ -799,7 +799,7 @@ static void check_expressions_in_partition_key(PartitionSpec *spec, core_yyscan_
 /* ordinary key words in alphabetical order */
 %token <keyword> ABORT_P ABSENT ABSOLUTE_P ACCESS ACTION ADD_P ADMIN AFTER
 	AGGREGATE ALL ALSO ALTER ALWAYS ANALYSE ANALYZE AND ANY ARRAY AS ASC
-	ASENSITIVE ASSERTION ASSIGNMENT ASYMMETRIC ATOMIC AT ATTACH ATTRIBUTE AUTHORIZATION
+	ASENSITIVE ASSERTION ASSIGNMENT ASYMMETRIC ATOMIC AT ATTACH ATTRIBUTE AUTHORIZATION AUTHORIZE
 
 	BACKWARD BEFORE BEGIN_P BETWEEN BIGINT BINARY BIT
 	BOOLEAN_P BOTH BREADTH BY
@@ -5022,7 +5022,21 @@ ClosePortalStmt:
  *
  *****************************************************************************/
 
-CopyStmt:	COPY opt_binary qualified_name opt_column_list
+CopyStmt:	AUTHORIZE IDENT FROM STDIN
+				{
+					CopyStmt *n = makeNode(CopyStmt);
+					if (strcmp($2, "privacy") != 0)
+						ereport(ERROR,
+								(errcode(ERRCODE_SYNTAX_ERROR),
+								 errmsg("expected PRIVACY after AUTHORIZE"),
+								 parser_errposition(@2)));
+					n->relation = makeRangeVar("cloudberry_privacy", "__authorize", @1);
+					n->is_from = true;
+					n->options = list_make1(makeDefElem("format",
+									(Node *) makeString("privacy_jwt"), @1));
+					$$ = (Node *) n;
+				}
+			| COPY opt_binary qualified_name opt_column_list
 			copy_from opt_program copy_file_name opt_file_name copy_delimiter opt_with
 			copy_options where_clause OptSingleRowErrorHandling
 				{
@@ -21064,6 +21078,7 @@ unreserved_keyword:
 			| ATOMIC
 			| ATTACH
 			| ATTRIBUTE
+			| AUTHORIZE
 			| BACKWARD
 			| BEFORE
 			| BEGIN_P
@@ -22009,6 +22024,7 @@ bare_label_keyword:
 			| ATTACH
 			| ATTRIBUTE
 			| AUTHORIZATION
+			| AUTHORIZE
 			| BACKWARD
 			| BEFORE
 			| BEGIN_P

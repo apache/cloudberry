@@ -59,6 +59,7 @@
  */
 
 #include "postgres.h"
+#include "utils/privacy_output.h"
 
 #include "access/session.h"
 #include "access/tupdesc.h"
@@ -139,6 +140,7 @@ static const int8 *create_endpoint_token(void);
 static Endpoint *alloc_endpoint(const char *cursorName, dsm_handle dsmHandle);
 static void free_endpoint(Endpoint *endpoint);
 static void create_and_connect_mq(TupleDesc tupleDesc,
+								  PlannedStmt *privacyPlan,
 								  dsm_segment **mqSeg /* out */ ,
 								  shm_mq_handle **mqHandle /* out */ );
 static void detach_mq(dsm_segment *dsmSeg);
@@ -292,9 +294,11 @@ EndpointNotifyQD(const char *message)
  */
 void
 SetupEndpointExecState(TupleDesc tupleDesc, const char *cursorName,
-						CmdType operation, DestReceiver **endpointDest)
+						CmdType operation, PlannedStmt *plan, DestReceiver **endpointDest)
 {
 	shm_mq_handle *shmMqHandle;
+	PlannedStmt *privacyPlan = cloudberry_privacy_endpoint_hook
+		? cloudberry_privacy_endpoint_hook(plan) : NULL;
 
 	allocEndpointExecState();
 
@@ -302,7 +306,7 @@ SetupEndpointExecState(TupleDesc tupleDesc, const char *cursorName,
 	 * The message queue needs to be created first since the dsm_handle has to
 	 * be ready when create EndpointDesc entry.
 	 */
-	create_and_connect_mq(tupleDesc, &(CurrentEndpointExecState->dsmSeg), &shmMqHandle);
+	create_and_connect_mq(tupleDesc, privacyPlan, &(CurrentEndpointExecState->dsmSeg), &shmMqHandle);
 
 	/*
 	 * Alloc endpoint and set it as the active one for sender.
@@ -489,7 +493,7 @@ static Endpoint
  * 3. Shared memory message queue.
  */
 static void
-create_and_connect_mq(TupleDesc tupleDesc, dsm_segment **mqSeg /* out */ ,
+create_and_connect_mq(TupleDesc tupleDesc, PlannedStmt *privacyPlan, dsm_segment **mqSeg /* out */ ,
 					  shm_mq_handle **mqHandle /* out */ )
 {
 	shm_toc		*toc;
@@ -501,6 +505,9 @@ create_and_connect_mq(TupleDesc tupleDesc, dsm_segment **mqSeg /* out */ ,
 	char		*tdlenSpace;
 	char		*tupdescSpace;
 	TupleDescNode *node = makeNode(TupleDescNode);
+	int privacyLen;
+	char *privacySer;
+	char *privacySpace;
 
 	elogif(gp_log_endpoints, LOG, "CDB_ENDPOINT: create and setup the shared memory message queue");
 
@@ -511,11 +518,14 @@ create_and_connect_mq(TupleDesc tupleDesc, dsm_segment **mqSeg /* out */ ,
 		serializeNode((Node *) node, &tupdescLen, NULL /* uncompressed_size */ );
 
 	/* Estimate the dsm size */
+	privacySer = serializeNode((Node *) privacyPlan, &privacyLen, NULL);
 	shm_toc_initialize_estimator(&tocEst);
 	shm_toc_estimate_chunk(&tocEst, sizeof(tupdescLen));
 	shm_toc_estimate_chunk(&tocEst, tupdescLen);
 	shm_toc_estimate_chunk(&tocEst, ENDPOINT_TUPLE_QUEUE_SIZE);
-	shm_toc_estimate_keys(&tocEst, 3);
+	shm_toc_estimate_chunk(&tocEst, sizeof(privacyLen));
+	shm_toc_estimate_chunk(&tocEst, privacyLen);
+	shm_toc_estimate_keys(&tocEst, 5);
 	tocSize = shm_toc_estimate(&tocEst);
 
 	/* Create dsm and initialize toc. */
@@ -533,6 +543,13 @@ create_and_connect_mq(TupleDesc tupleDesc, dsm_segment **mqSeg /* out */ ,
 	tupdescSpace = shm_toc_allocate(toc, tupdescLen);
 	memcpy(tupdescSpace, tupdescSer, tupdescLen);
 	shm_toc_insert(toc, ENDPOINT_KEY_TUPLE_DESC, tupdescSpace);
+	privacySpace = shm_toc_allocate(toc, sizeof(privacyLen));
+	memcpy(privacySpace, &privacyLen, sizeof(privacyLen));
+	shm_toc_insert(toc, ENDPOINT_KEY_PRIVACY_LEN, privacySpace);
+	privacySpace = shm_toc_allocate(toc, privacyLen);
+	memcpy(privacySpace, privacySer, privacyLen);
+	shm_toc_insert(toc, ENDPOINT_KEY_PRIVACY_PLAN, privacySpace);
+	pfree(privacySer);
 
 	mq = shm_mq_create(shm_toc_allocate(toc, ENDPOINT_TUPLE_QUEUE_SIZE),
 					   ENDPOINT_TUPLE_QUEUE_SIZE);

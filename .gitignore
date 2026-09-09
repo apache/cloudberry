@@ -78,4 +78,11 @@ lib*.pc
 /tmp_install/
 /.cache/
 /install/
-/portlock/
+/portlock
+# Developing superfluous documentation
+.agents/
+.specify/
+contrib/pax_storage/.cache/
+doc/reflections/
+specs/
+

@@ -1421,6 +1421,17 @@ _readCommentStmt(void)
 	READ_DONE();
 }
 
+static SecLabelStmt *
+_readSecLabelStmt(void)
+{
+	READ_LOCALS(SecLabelStmt);
+	READ_ENUM_FIELD(objtype, ObjectType);
+	READ_NODE_FIELD(object);
+	READ_STRING_FIELD(provider);
+	READ_STRING_FIELD(label);
+	READ_DONE();
+}
+
 static TupleDescNode *
 _readTupleDescNode(void)
 {
@@ -2817,6 +2828,9 @@ readNodeBinary(void)
 
 			case T_CommentStmt:
 				return_value = _readCommentStmt();
+				break;
+			case T_SecLabelStmt:
+				return_value = _readSecLabelStmt();
 				break;
 			case T_DenyLoginInterval:
 				return_value = _readDenyLoginInterval();
