@@ -111,6 +111,12 @@ else
 ALWAYS_SUBDIRS += pax_storage
 endif
 
+ifeq ($(enable_datalake_fdw),yes)
+SUBDIRS += datalake_fdw
+else
+ALWAYS_SUBDIRS += datalake_fdw
+endif
+
 ifeq ($(enable_ic_udp2),yes)
 SUBDIRS += udp2
 else

@@ -1,0 +1,8 @@
+# Generated subdirectories
+/log/
+/results/
+/tmp_check/
+
+# Generated from exports.txt at build time
+/exports.map
+/exports_darwin.list

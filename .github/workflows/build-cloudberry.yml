@@ -279,6 +279,11 @@ jobs:
                 },
                 "enable_core_check":false
               },
+              {"test":"gpcontrib-gp-relaccess-stats",
+               "make_configs":["gpcontrib/gp_relaccess_stats:installcheck"],
+               "extension":"gp_relaccess_stats",
+               "shared_preload_libraries":"gp_relaccess_stats"
+              },
               {"test":"gpcontrib-gp-stats-collector",
                "make_configs":["gpcontrib/gp_stats_collector:installcheck"],
                "extension":"gp_stats_collector"
@@ -325,6 +330,11 @@ jobs:
                                "contrib/passwordcheck:installcheck",
                                "contrib/pg_buffercache:installcheck",
                                "contrib/sslinfo:installcheck"]
+              },
+              {"test":"ic-datalake-fdw",
+               "make_configs":["contrib/datalake_fdw:installcheck"],
+               "pgxs_extension":"contrib/datalake_fdw",
+               "shared_preload_libraries":"datalake_fdw"
               },
               {"test":"ic-gpcontrib",
                "make_configs":["gpcontrib/orafce:installcheck",
@@ -1430,6 +1440,54 @@ jobs:
           echo "Exact KB:"
           df -k /
 
+      # Modules that ship as extensions are not built into the RPM.  Build them
+      # here the way a user would: against the server that was just installed,
+      # through PGXS, with no configured source tree involved.  This has to run
+      # before the demo cluster is created, because a module named in
+      # shared_preload_libraries has to exist for the cluster to start.
+      #
+      # The regression below still runs through the ordinary make_configs
+      # entry.  Note that those entries cannot carry make variables: the runner
+      # joins the list and re-splits it on spaces, so "dir:target VAR=1" would
+      # be read as two configurations and the second one would fail.
+      - name: Build extension against the installed server
+        if: success() && needs.check-skip.outputs.should_skip != 'true'
+        env:
+          SRC_DIR: ${{ github.workspace }}
+          BUILD_DESTINATION: /usr/local/cloudberry-db
+          PGXS_EXTENSION: ${{ matrix.pgxs_extension }}
+        run: |
+          set -eo pipefail
+
+          # Matched inside the step rather than in "if:", the way
+          # shared_preload_libraries is handled below: most matrix entries do
+          # not set this key at all, and an unset key is easier to reason about
+          # in bash than in an expression.
+          if [[ -z "${PGXS_EXTENSION}" ]]; then
+            echo "No PGXS extension requested for this test; nothing to build."
+            exit 0
+          fi
+
+          # The RPM installs as root; the build runs as gpadmin, as everywhere
+          # else in this job.  -H follows the command-line symlink.
+          chown -RH gpadmin:gpadmin "${BUILD_DESTINATION}/"
+
+          {
+            echo "=== Building ${PGXS_EXTENSION} with PGXS ==="
+            if ! time su - gpadmin -c "source ${BUILD_DESTINATION}/cloudberry-env.sh && \
+                 cd ${SRC_DIR}/${PGXS_EXTENSION} && \
+                 make USE_PGXS=1 && \
+                 make USE_PGXS=1 install"; then
+              echo "::error::Building ${PGXS_EXTENSION} with PGXS failed"
+              exit 1
+            fi
+
+            echo "=== Installed files ==="
+            su - gpadmin -c "source ${BUILD_DESTINATION}/cloudberry-env.sh && \
+              ls -l \"\$(pg_config --pkglibdir)\" | grep '$(basename "${PGXS_EXTENSION}")' && \
+              ls -l \"\$(pg_config --sharedir)/extension\" | grep '$(basename "${PGXS_EXTENSION}")'"
+          } 2>&1 | tee -a build-logs/details/build-pgxs-extension.log
+
       - name: Create Apache Cloudberry demo cluster
         if: success() && needs.check-skip.outputs.should_skip != 'true'
         env:
@@ -1520,6 +1578,20 @@ jobs:
                     psql postgres"
                 then
                     echo "Error creating gp_relsizes_stats extension"
+                    exit 1
+                fi
+                ;;
+              gp_relaccess_stats)
+                if ! su - gpadmin -c "source ${BUILD_DESTINATION}/cloudberry-env.sh && \
+                  source ${SRC_DIR}/gpAux/gpdemo/gpdemo-env.sh && \
+                  gpconfig -c shared_preload_libraries -v 'gp_relaccess_stats' && \
+                  gpstop -ra && \
+                  echo 'CREATE EXTENSION IF NOT EXISTS gp_relaccess_stats; \
+                        SHOW shared_preload_libraries; \
+                        TABLE pg_extension;' | \
+                    psql postgres"
+                then
+                    echo "Error creating gp_relaccess_stats extension"
                     exit 1
                 fi
                 ;;
