@@ -206,6 +206,7 @@ typedef struct LVRelState
 	BlockNumber scanned_pages;	/* # pages examined (not skipped via VM) */
 	BlockNumber removed_pages;	/* # pages removed by relation truncation */
 	BlockNumber frozen_pages;	/* # pages with newly frozen tuples */
+	BlockNumber all_visible_pages; /* # pages newly marked all-visible in VM */
 	BlockNumber lpdead_item_pages;	/* # pages with LP_DEAD items */
 	BlockNumber dead_pages;		/* # pages with not-yet-removable tuples */
 	BlockNumber missed_dead_pages;	/* # pages with missed dead tuples */
@@ -443,6 +444,7 @@ heap_vacuum_rel(Relation rel, VacuumParams *params,
 	vacrel->scanned_pages = 0;
 	vacrel->removed_pages = 0;
 	vacrel->frozen_pages = 0;
+	vacrel->all_visible_pages = 0;
 	vacrel->lpdead_item_pages = 0;
 	vacrel->missed_dead_pages = 0;
 	vacrel->nonempty_pages = 0;
@@ -614,6 +616,7 @@ heap_vacuum_rel(Relation rel, VacuumParams *params,
 		stats.dead_tuples = vacrel->recently_dead_tuples + vacrel->missed_dead_tuples;
 		stats.dead_pages = vacrel->dead_pages;
 		stats.pages_frozen = vacrel->frozen_pages;
+		stats.pages_all_visible = vacrel->all_visible_pages;
 		stats.tuples_frozen = vacrel->tuples_frozen;
 		stats.recently_dead_tuples = vacrel->recently_dead_tuples;
 		stats.missed_dead_tuples = vacrel->missed_dead_tuples;
@@ -1152,6 +1155,12 @@ lazy_scan_heap(LVRelState *vacrel)
 			 */
 			PageSetAllVisible(page);
 			MarkBufferDirty(buf);
+			/*
+			 * Count only new VM marks, using the current bit under the heap
+			 * lock rather than the possibly stale lazy_scan_skip() result.
+			 */
+			if (!VM_ALL_VISIBLE(vacrel->rel, blkno, &vmbuffer))
+				vacrel->all_visible_pages++;
 			visibilitymap_set(vacrel->rel, blkno, buf, InvalidXLogRecPtr,
 							  vmbuffer, prunestate.visibility_cutoff_xid,
 							  flags);
@@ -1225,6 +1234,8 @@ lazy_scan_heap(LVRelState *vacrel)
 			 * safe for REDO was logged when the page's tuples were frozen.
 			 */
 			Assert(!TransactionIdIsValid(prunestate.visibility_cutoff_xid));
+			if (!VM_ALL_VISIBLE(vacrel->rel, blkno, &vmbuffer))
+				vacrel->all_visible_pages++;
 			visibilitymap_set(vacrel->rel, blkno, buf, InvalidXLogRecPtr,
 							  vmbuffer, InvalidTransactionId,
 							  VISIBILITYMAP_ALL_VISIBLE |
@@ -1533,6 +1544,8 @@ lazy_scan_new_or_empty(LVRelState *vacrel, Buffer buf, BlockNumber blkno,
 				log_newpage_buffer(buf, true);
 
 			PageSetAllVisible(page);
+			if (!VM_ALL_VISIBLE(vacrel->rel, blkno, &vmbuffer))
+				vacrel->all_visible_pages++;
 			visibilitymap_set(vacrel->rel, blkno, buf, InvalidXLogRecPtr,
 							  vmbuffer, InvalidTransactionId,
 							  VISIBILITYMAP_ALL_VISIBLE | VISIBILITYMAP_ALL_FROZEN);
@@ -2637,6 +2650,8 @@ lazy_vacuum_heap_page(LVRelState *vacrel, BlockNumber blkno, Buffer buffer,
 		}
 
 		PageSetAllVisible(page);
+		if (!VM_ALL_VISIBLE(vacrel->rel, blkno, &vmbuffer))
+			vacrel->all_visible_pages++;
 		visibilitymap_set(vacrel->rel, blkno, buffer, InvalidXLogRecPtr,
 						  vmbuffer, visibility_cutoff_xid, flags);
 	}
