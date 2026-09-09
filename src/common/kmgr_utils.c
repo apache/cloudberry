@@ -34,12 +34,19 @@
 #include "crypto/kmgr.h"
 #include "lib/stringinfo.h"
 #include "storage/fd.h"
-#include "postgres.h"
-#include "utils/builtins.h"
 
 #ifndef FRONTEND
 #include "pgstat.h"
 #include "storage/fd.h"
+/*
+ * GPDB: backend-only, and unguarded until now. postgres.h must not be reached
+ * from a FRONTEND translation unit at all, and utils/builtins.h pulls in the
+ * generated utils/fmgrprotos.h, which nothing builds before src/common in a
+ * frontend build -- the same latent ordering bug that broke percentrepl.c
+ * under ninja. Nothing in this file uses either.
+ */
+#include "postgres.h"
+#include "utils/builtins.h"
 #endif
 
 #define KMGR_PROMPT_MSG "Enter authentication needed to generate the cluster key: "

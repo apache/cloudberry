@@ -4,6 +4,7 @@ backend_sources += files(
   'dfmgr.c',
   'fmgr.c',
   'funcapi.c',
+  'deprecated.c',
 )
 
 # fmgrtab.c

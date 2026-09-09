@@ -1343,6 +1343,8 @@ libpq_binddomain(void)
 #endif
 
 		/* No relocatable lookup here because the binary could be anywhere */
+		const char *ldir;
+
 		ldir = getenv("PGLOCALEDIR");
 		if (!ldir)
 			ldir = LOCALEDIR;

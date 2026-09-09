@@ -23,6 +23,13 @@ project('postgresql',
     # works even on windows, where it's a drive-relative path (i.e. when on
     # d:/somepath it'll install to d:/usr/local/pgsql)
     'prefix=/usr/local/pgsql',
+
+    # meson derives libdir from the platform, which is lib64 on RHEL and its
+    # derivatives. autoconf uses plain lib, and Cloudberry depends on that:
+    # cloudberry-env.sh hardcodes PYTHONPATH=$GPHOME/lib/python and
+    # LD_LIBRARY_PATH=$GPHOME/lib, so gppylib and libpostgres.so have to land
+    # in lib. Pin it for the same compatibility reason as the prefix above.
+    'libdir=lib',
   ]
 )
 
@@ -787,6 +794,54 @@ else
 endif
 
 
+
+###############################################################
+# Language: C++ (ORCA, and the LLVM JIT below)
+###############################################################
+
+# Cloudberry's ORCA optimizer is C++, so the C++ compiler has to be available
+# whenever ORCA is built. Upstream only enables C++ for the LLVM JIT, which is
+# why this has to happen before the LLVM block. add_languages() is idempotent,
+# so LLVM's own call below still works.
+# ORCA is the biggest C++ consumer, but gp_stats_collector, gpcloud and PAX
+# are C++ too, so any of them being enabled requires the compiler.
+orcaopt = get_option('orca')
+cpp_needed = not orcaopt.disabled() \
+  or get_option('gp_stats_collector').enabled() \
+  or get_option('gpcloud').enabled() \
+  or get_option('pax').enabled()
+have_cpp = add_languages('cpp', required: cpp_needed, native: false)
+
+# Xerces-C, ORCA's only external dependency.
+#
+# configure.ac only does AC_CHECK_LIB(xerces-c, strnicmp) -- a C-mode link
+# probe with no include path, no version floor and no check for the Cloudberry
+# patch that cmake/FindXerces.cmake says is required. Probe properly here, and
+# scope the dependency to the ORCA targets instead of leaking -lxerces-c into
+# the global LIBS the way configure does.
+xerces = not_found_dep
+if not orcaopt.disabled()
+  if not have_cpp
+    if orcaopt.enabled()
+      error('ORCA requires a C++ compiler')
+    endif
+  else
+    cpp = meson.get_compiler('cpp')
+    # Honour --with-libraries / --with-includes equivalents so xerces can live
+    # outside the default search path (as it does in the CI image).
+    xerces_probe_args = []
+    foreach d : get_option('extra_include_dirs')
+      xerces_probe_args += '-I' + d
+    endforeach
+    xerces_lib = cpp.find_library('xerces-c', dirs: postgres_lib_d, required: orcaopt)
+    if xerces_lib.found() and cpp.has_header('xercesc/sax2/DefaultHandler.hpp',
+        dependencies: xerces_lib, args: xerces_probe_args)
+      xerces = xerces_lib
+    elif orcaopt.enabled()
+      error('ORCA requires xerces-c (library and headers)')
+    endif
+  endif
+endif
 
 ###############################################################
 # Library: LLVM
@@ -1973,13 +2028,16 @@ if llvm.found()
   cxxflags_warn += cpp.get_supported_arguments(common_warning_flags)
 endif
 
-# A few places with imported code get a pass on -Wdeclaration-after-statement, remember
-# the result for them
+# Upstream enables -Wdeclaration-after-statement here. Cloudberry does not:
+# configure.ac keeps that check commented out because, in its own words, "GPDB
+# code is full of declarations after statement". Enabling it produces a couple
+# of thousand warnings and no signal.
+#
+# Because the positive flag is never added, configure.ac also leaves
+# PERMIT_DECLARATION_AFTER_STATEMENT empty, so the places that would opt out
+# of the warning (src/common's ryu code) need nothing either. Keep the variable
+# defined so those call sites stay unchanged.
 cflags_no_decl_after_statement = []
-if cc.has_argument('-Wdeclaration-after-statement')
-  cflags_warn += '-Wdeclaration-after-statement'
-  cflags_no_decl_after_statement += '-Wno-declaration-after-statement'
-endif
 
 
 # The following tests want to suppress various unhelpful warnings by adding
@@ -2001,6 +2059,11 @@ negative_warning_flags = [
 
   # Suppress clang 16's strict warnings about function casts
   'cast-function-type-strict',
+
+  # Variables that are set but otherwise unused. configure.ac disables this
+  # too: the warnings were all fixed upstream, but Cloudberry-added code still
+  # emits them. Its TODO to fix that code and drop this applies here as well.
+  'unused-but-set-variable',
 
   # To make warning_level=2 / -Wextra work, we'd need at least the following
   # 'clobbered',
@@ -2672,13 +2735,9 @@ cdata.set('MEMSET_LOOP_LIMIT', memset_loop_limit)
 cdata.set_quoted('DLSUFFIX', dlsuffix)
 
 
-# built later than the rest of the version metadata, we need SIZEOF_VOID_P
-cdata.set_quoted('PG_VERSION_STR',
-  'PostgreSQL @0@ on @1@-@2@, compiled by @3@-@4@, @5@-bit'.format(
-    pg_version, host_machine.cpu_family(), host_system,
-    cc.get_id(), cc.version(), cdata.get('SIZEOF_VOID_P') * 8,
-  )
-)
+# PG_VERSION_STR is set further down, in the Cloudberry configuration section:
+# it needs SIZEOF_VOID_P, which is why upstream builds it here, but it also
+# needs the Cloudberry version, which is computed later still.
 
 
 
@@ -2697,6 +2756,24 @@ cdata.set('ENABLE_THREAD_SAFETY', 1)
 ###############################################################
 
 nlsopt = get_option('nls')
+
+# Cloudberry does not support NLS, and has not since Greenplum removed it in
+# 2015 (commit 7afc98bca0c, "Remove support for NLS."): there are no
+# translations for Greenplum- or Cloudberry-specific strings, and all .po
+# files were deleted at the time. configure.ac keeps the whole NLS block
+# commented out, so --enable-nls is not even an option there.
+#
+# The PG16 merge reintroduced some upstream .po files and the po/LINGUAS files
+# that PG16 added, but the two do not agree: LINGUAS came in whole from
+# upstream while the .po set did not, so several LINGUAS entries name catalogs
+# that are not in the tree. Building with NLS would fail on those, and would
+# in any case produce catalogs covering only upstream messages.
+#
+# Fail loudly rather than half-translate; see configure.ac for the conditions
+# under which NLS could be supported properly.
+if nlsopt.enabled()
+  error('NLS is not supported by Cloudberry; see the NLS comment in configure.ac')
+endif
 libintl = not_found_dep
 
 if not nlsopt.disabled()
@@ -2934,6 +3011,194 @@ generated_sources_ac = {}
 # within. That makes it easy to add the necessary dependencies for the
 # subsequent build steps.
 
+
+###############################################################
+# Apache Cloudberry configuration
+###############################################################
+
+# Version.
+#
+# configure.ac runs `bash ./getversion` and then writes the result into a
+# VERSION file *in the source tree*. meson must never write into srcdir, so we
+# compute the value here and keep it in memory instead. getversion pushd's to
+# its own directory, so it is safe to invoke from any working directory.
+bash = find_program('bash', native: true)
+
+# Three of Cloudberry's Makefiles install a symlink. meson.add_install_script
+# with this helper is the 0.54-compatible way to do that; see its header for
+# why the alternative -- install_symlink, and the floor it needs -- costs more
+# than it saves.
+#
+# A plain path, not files(): add_install_script only learned to take a File in
+# 0.55. meson.source_root() is how upstream spells this at the same floor --
+# project_source_root() would itself be too new.
+gp_install_symlink = meson.source_root() / 'src' / 'tools' / 'install_symlink.py'
+
+gp_version_long = run_command('bash', meson.current_source_dir() / 'getversion',
+  check: true).stdout().strip()
+gp_version_short = run_command('bash', meson.current_source_dir() / 'getversion',
+  '--short', check: true).stdout().strip()
+
+# GP_MAJORVERSION is the leading run of digits, matching configure.ac's
+#   expr "$GP_VERSION" : '\([0-9][0-9]*\)'
+gp_majorversion = gp_version_short.split('.')[0]
+
+# GP_VERSION_NUM packs major/minor/patch as %d%02d%02d, matching configure.ac.
+# Strip the '+dev.N.gHASH' and '-devel' suffixes first.
+gp_version_parts = gp_version_short.split('+')[0].split('-')[0].split('.')
+gp_version_num = gp_version_parts[0].to_int() * 10000
+if gp_version_parts.length() > 1
+  gp_version_num += gp_version_parts[1].to_int() * 100
+endif
+if gp_version_parts.length() > 2
+  gp_version_num += gp_version_parts[2].to_int()
+endif
+
+cdata.set_quoted('GP_VERSION', gp_version_long)
+cdata.set_quoted('GP_MAJORVERSION', gp_majorversion)
+cdata.set('GP_VERSION_NUM', gp_version_num)
+
+# This is what `select version()` returns, and gpMgmt parses it: gpversion.py
+# looks for "(Apache Cloudberry <version> build <build>)" and refuses to run
+# against anything else, so dropping the parenthesised part -- as the upstream
+# string does -- makes gpstart, gpstop and gpstate fail on a cluster that is
+# otherwise perfectly healthy. Keep it byte-compatible with configure.ac:
+#
+#   PostgreSQL $PG_VERSION (Apache Cloudberry $GP_VERSION) on $host, \
+#     compiled by $cc_string, N-bit
+#
+# The host and compiler spellings still differ from autoconf's, because meson
+# has no config.guess triplet and reports the compiler as id-version. Nothing
+# parses those.
+cdata.set_quoted('PG_VERSION_STR',
+  'PostgreSQL @0@ (Apache Cloudberry @1@) on @2@-@3@, compiled by @4@-@5@, @6@-bit'.format(
+    pg_version, gp_version_long, host_machine.cpu_family(), host_system,
+    cc.get_id(), cc.version(), cdata.get('SIZEOF_VOID_P') * 8,
+  )
+)
+
+# ORCA optimizer (orcaopt / xerces are resolved near the top of this file,
+# because enabling C++ has to happen before any C++ target is defined)
+if xerces.found()
+  cdata.set('USE_ORCA', 1)
+  # GPOS_DEBUG is ABI-affecting: it is tested by ~475 files under
+  # src/backend/gporca and changes class layouts. It must be a single value
+  # shared by the whole build, exactly as configure.ac ties it to cassert.
+  if get_option('cassert')
+    cdata.set('GPOS_DEBUG', 1)
+  endif
+endif
+if host_machine.system() == 'darwin'
+  cdata.set('GPOS_Darwin', 1)
+endif
+
+# Fault tolerance service: internal unless an external FTS is requested.
+if not get_option('external_fts')
+  cdata.set('USE_INTERNAL_FTS', 1)
+endif
+
+# Simple boolean-driven defines.
+cdata.set('FAULT_INJECTOR', get_option('faultinjector') ? 1 : false)
+cdata.set('SERVERLESS', get_option('serverless') ? 1 : false)
+cdata.set('USE_CATALOG_EXT', get_option('catalog_ext') ? 1 : false)
+cdata.set('ENABLE_IC_UDP2', get_option('ic_udp2') ? 1 : false)
+cdata.set('ENABLE_PRELOAD_IC_MODULE', get_option('preload_ic_module') ? 1 : false)
+cdata.set('OPENSSL_ALLOW_REDIRECT', get_option('openssl_redirect') ? 1 : false)
+cdata.set('USE_SHARED_POSTGRES_BACKEND', get_option('shared_postgres_backend') ? 1 : false)
+cdata.set('USE_LINK_POSTGRES_WITH_SHARED', get_option('link_postgres_with_shared') ? 1 : false)
+
+# Feature-driven defines.
+# interconnect proxy mode requires libuv (configure.ac: AC_CHECK_LIB(uv, ...))
+icproxyopt = get_option('ic_proxy')
+if icproxyopt.enabled()
+  libuv = dependency('libuv', required: icproxyopt)
+  cdata.set('ENABLE_IC_PROXY', libuv.found() ? 1 : false)
+  cdata.set('HAVE_LIBUV', libuv.found() ? 1 : false)
+else
+  libuv = not_found_dep
+  cdata.set('ENABLE_IC_PROXY', false)
+endif
+cdata.set('USE_PAX_STORAGE', get_option('pax').enabled() ? 1 : false)
+cdata.set('USE_GPCLOUD', get_option('gpcloud').enabled() ? 1 : false)
+cdata.set('USE_MAPREDUCE', get_option('mapreduce').enabled() ? 1 : false)
+# libcurl: used by external tables (url_curl.c), PXF and gpcloud.
+# configure.ac: AC_CHECK_CURL([7.19.0]) then LIBS += $CURL_LIBS
+libcurlopt = get_option('libcurl')
+if not libcurlopt.disabled()
+  libcurl = dependency('libcurl', version: '>= 7.19.0', required: libcurlopt)
+  cdata.set('USE_CURL', libcurl.found() ? 1 : false)
+else
+  libcurl = not_found_dep
+  cdata.set('USE_CURL', false)
+endif
+
+# gpfdist dependencies: apr-1 and libevent are required, libyaml is optional
+# and only gates the transform support (-DGPFXDIST).
+# configure.ac: PKG_CHECK_MODULES([EVENT], [libevent >= 2.0.0]) and
+#               AC_SEARCH_LIBS(yaml_parser_initialize, [yaml])
+gpfdistopt = get_option('gpfdist')
+apr = not_found_dep
+apr_link_ld_libs = ''
+libevent = not_found_dep
+if not gpfdistopt.disabled()
+  # configure.ac locates apr through apr-1-config (--with-apr-config), not
+  # pkg-config -- on some platforms the system apr-1.pc points at an include
+  # directory that does not exist. Follow the same route, falling back to
+  # pkg-config only if the config tool is unavailable.
+  apr_config = find_program(get_option('apr_config'), required: false, native: true)
+  if apr_config.found()
+    apr_inc_args = run_command(apr_config, '--includes', check: true).stdout().split()
+    apr_link_ld_libs = run_command(apr_config, '--link-ld', check: true).stdout().strip()
+    apr = declare_dependency(
+      compile_args: apr_inc_args,
+      link_args: apr_link_ld_libs.split(),
+    )
+  else
+    apr = dependency('apr-1', required: gpfdistopt)
+  endif
+  libevent = dependency('libevent', version: '>= 2.0.0', required: gpfdistopt)
+endif
+
+# libyaml is optional for gpfdist but required for gpmapreduce.
+mapreduceopt = get_option('mapreduce')
+libyaml = not_found_dep
+if not gpfdistopt.disabled() or mapreduceopt.enabled()
+  libyaml = dependency('yaml-0.1', required: mapreduceopt.enabled())
+endif
+
+# protobuf: required by gp_stats_collector (>= 3.0.0) and by PAX (>= 3.5.0).
+# configure.ac uses PKG_CHECK_MODULES([PROTOBUF], ...) plus the protoc binary.
+gpscopt = get_option('gp_stats_collector')
+protobuf = not_found_dep
+protoc = disabler()
+if gpscopt.enabled() or get_option('pax').enabled()
+  protobuf_min = get_option('pax').enabled() ? '>= 3.5.0' : '>= 3.0.0'
+  protobuf = dependency('protobuf', version: protobuf_min, required: true)
+  protoc = find_program('protoc', required: true, native: true)
+endif
+
+# bzip2: configure.ac does AC_CHECK_LIB(bz2, BZ2_bzDecompress) into global LIBS
+libbz2opt = get_option('libbz2')
+if not libbz2opt.disabled()
+  libbz2 = cc.find_library('bz2', has_headers: ['bzlib.h'], required: libbz2opt)
+  cdata.set('HAVE_LIBBZ2', libbz2.found() ? 1 : false)
+else
+  libbz2 = not_found_dep
+  cdata.set('HAVE_LIBBZ2', false)
+endif
+cdata.set('USE_MDBLOCALES', get_option('mdblocales').enabled() ? 1 : false)
+
+# --enable-link-postgres-with-shared requires --enable-shared-postgres-backend
+if get_option('link_postgres_with_shared') and not get_option('shared_postgres_backend')
+  error('link_postgres_with_shared requires shared_postgres_backend')
+endif
+
+# PAX requires the shared backend
+if get_option('pax').enabled() and not get_option('shared_postgres_backend')
+  error('pax requires shared_postgres_backend')
+endif
+
+
 subdir('src/include')
 
 subdir('config')
@@ -2959,7 +3224,7 @@ frontend_common_code = declare_dependency(
   compile_args: ['-DFRONTEND'],
   include_directories: [postgres_inc],
   sources: generated_headers,
-  dependencies: [os_deps, zlib, zstd],
+  dependencies: [os_deps, zlib, zstd, ssl],
 )
 
 backend_common_code = declare_dependency(
@@ -2981,7 +3246,7 @@ frontend_stlib_code = declare_dependency(
   include_directories: [postgres_inc],
   link_with: [common_static, pgport_static],
   sources: generated_headers,
-  dependencies: [os_deps, libintl],
+  dependencies: [os_deps, libintl, ssl],
 )
 
 # all shared libraries not part of the backend should depend on this
@@ -3021,10 +3286,12 @@ frontend_code = declare_dependency(
   include_directories: [postgres_inc],
   link_with: [fe_utils, common_static, pgport_static],
   sources: generated_headers,
-  dependencies: [os_deps, libintl],
+  dependencies: [os_deps, libintl, ssl],
 )
 
 backend_both_deps += [
+  libcurl,
+  libbz2,
   thread_dep,
   bsd_auth,
   gssapi,
@@ -3043,9 +3310,13 @@ backend_both_deps += [
 
 backend_mod_deps = backend_both_deps + os_deps
 
+# Cloudberry's backend uses libpq directly for QD<->QE communication: 21
+# directories under src/backend add -I$(libpq_srcdir) in their Makefiles
+# (upstream needs it only for libpqwalreceiver). Since meson compiles the
+# backend as one target, the include path is added globally here.
 backend_code = declare_dependency(
   compile_args: ['-DBUILDING_DLL'],
-  include_directories: [postgres_inc],
+  include_directories: [postgres_inc, libpq_inc],
   link_args: ldflags_be,
   link_with: [],
   sources: generated_headers + generated_backend_headers,
@@ -3067,9 +3338,11 @@ test_install_libs = []
 subdir('src')
 
 subdir('contrib')
+subdir('gpcontrib')
+subdir('gpMgmt')
 
 subdir('src/test')
-subdir('src/interfaces/ecpg/test')
+# ecpg is not built by Cloudberry; see src/interfaces/meson.build
 
 subdir('doc/src/sgml')
 
