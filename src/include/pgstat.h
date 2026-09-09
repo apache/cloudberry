@@ -423,6 +423,18 @@ typedef struct PgStat_MsgVacuum
 
 
 /* ----------
+ * PgStat_VacuumStats        Vacuum statistics reported for a relation.
+ * ----------
+ */
+typedef struct PgStat_VacuumStats
+{
+	PgStat_Counter tuples_deleted;	/* tuples removed by vacuum */
+	PgStat_Counter dead_tuples; /* dead tuples left unremoved */
+	PgStat_Counter pages_deleted;	/* pages removed/deleted by vacuum */
+
+} PgStat_VacuumStats;
+
+/* ----------
  * PgStat_MsgAnalyze			Sent by the backend or autovacuum daemon
  *								after ANALYZE
  * ----------
