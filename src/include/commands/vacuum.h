@@ -491,6 +491,11 @@ extern Size vac_max_items_to_alloc_size(int max_items);
 /* In postmaster/autovacuum.c */
 extern void AutoVacuumUpdateCostLimit(void);
 extern void VacuumUpdateCosts(void);
+extern void vacuum_measure_index_stats(Relation indrel,
+									  const IndexBulkDeleteResult *istat,
+									  double prev_tuples_removed,
+									  BlockNumber prev_pages_newly_deleted, bool cleanup);
+
 /* in commands/vacuumparallel.c */
 extern ParallelVacuumState *parallel_vacuum_init(Relation rel, Relation *indrels,
 												 int nindexes, int nrequested_workers,

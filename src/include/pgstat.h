@@ -91,6 +91,20 @@ typedef enum SessionEndType
  */
 typedef int64 PgStat_Counter;
 
+/* Backend-local work measurements for one VACUUM operation. */
+typedef struct PgStat_VacuumStats
+{
+	PgStat_Counter	tuples_deleted;
+	PgStat_Counter	dead_tuples;
+	PgStat_Counter	pages_deleted;
+	PgStat_Counter	recently_dead_tuples;
+	PgStat_Counter	missed_dead_tuples;
+	PgStat_Counter	pages_scanned;
+	PgStat_Counter	pages_removed;
+	PgStat_Counter	missed_dead_pages;
+} PgStat_VacuumStats;
+
+
 
 /* ------------------------------------------------------------
  * Structures kept in backend local memory while accumulating counts
