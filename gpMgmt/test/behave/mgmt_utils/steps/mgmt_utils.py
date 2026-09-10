@@ -1208,6 +1208,67 @@ def impl(context, options):
     coordinator_hostname, standby_hostname = get_standby_variables_and_set_on_context(context)
     init_standby(context, coordinator_hostname, options, standby_hostname)
 
+
+def _get_remote_config_value(hostname, data_dir, parameter):
+    cmd = gp.GpConfigHelper('Get %s' % parameter, data_dir, parameter,
+                            getParameter=True, ctxt=REMOTE, remoteHost=hostname)
+    cmd.run(validateAfter=True)
+    return cmd.get_value()
+
+
+def _set_remote_config_value(hostname, data_dir, parameter, value):
+    cmd = gp.GpConfigHelper('Set %s' % parameter, data_dir, parameter,
+                            value=value, ctxt=REMOTE, remoteHost=hostname)
+    cmd.run(validateAfter=True)
+
+
+def _restore_remote_config_value(hostname, data_dir, parameter, original_value):
+    config_file = os.path.join(data_dir, 'postgresql.conf')
+    if not CheckRemoteFile(config_file, hostname).run():
+        return
+
+    current_value = _get_remote_config_value(hostname, data_dir, parameter)
+    if current_value == original_value:
+        return
+
+    cmd = gp.GpConfigHelper('Remove %s' % parameter, data_dir, parameter,
+                            removeParameter=True, ctxt=REMOTE, remoteHost=hostname)
+    cmd.run(validateAfter=True)
+
+    if original_value is not None:
+        _set_remote_config_value(hostname, data_dir, parameter, original_value)
+
+
+def _restore_gpactivatestandby_recovery_end_command(context):
+    parameter = 'recovery_end_command'
+    for hostname, data_dir, original_value in context.gpactivatestandby_recovery_end_command_settings:
+        _restore_remote_config_value(hostname, data_dir, parameter, original_value)
+
+
+@given('the standby recovery end command is set to "{command}"')
+@when('the standby recovery end command is set to "{command}"')
+def impl(context, command):
+    parameter = 'recovery_end_command'
+    settings = [
+        (context.coordinator_hostname, coordinator_data_dir),
+        (context.standby_hostname, context.standby_data_dir),
+    ]
+
+    context.gpactivatestandby_recovery_end_command_settings = [
+        (hostname, data_dir, _get_remote_config_value(hostname, data_dir, parameter))
+        for hostname, data_dir in settings
+    ]
+    context.add_cleanup(_restore_gpactivatestandby_recovery_end_command, context)
+
+    _set_remote_config_value(context.standby_hostname, context.standby_data_dir,
+                             parameter, "'%s'" % command)
+
+
+@then('the standby recovery end command is restored')
+def impl(context):
+    _restore_gpactivatestandby_recovery_end_command(context)
+
+
 def _handle_sigpipe():
     signal.signal(signal.SIGPIPE, signal.SIG_DFL)
 
