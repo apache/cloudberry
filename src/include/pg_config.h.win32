@@ -762,6 +762,9 @@
 /* Define to 1 to build with LDAP support. (--with-ldap) */
 /* #undef USE_LDAP */
 
+/* Define to 1 to build with COPY TO/FROM PROGRAM support. (--with-copy-program) */
+#define USE_COPY_PROGRAM 1
+
 /* Define to 1 to build with LLVM based JIT support. (--with-llvm) */
 /* #undef USE_LLVM */
 
