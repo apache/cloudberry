@@ -12,7 +12,7 @@ copy ..\..\..\..\..\gpMgmt\bin\gppylib\gpversion.py %GPDB_INSTALL_PATH%\bin\gppy
 perl -pi.bak -e "s,\$Revision\$,%VERSION%," %GPDB_INSTALL_PATH%\bin\gpload.py
 copy ..\..\..\..\..\gpMgmt\bin\gpload.bat %GPDB_INSTALL_PATH%\bin
 REM Install PyYAML using pip instead of extracting from tarball
-pip3 install --target=%GPDB_INSTALL_PATH%\lib\python PyYAML==5.4.1
+pip3 install --target=%GPDB_INSTALL_PATH%\lib\python PyYAML==6.0.1
 perl -p -e "s,__VERSION_PLACEHOLDER__,%VERSION%," greenplum-clients.wxs > greenplum-clients-%VERSION%.wxs
 candle.exe -nologo greenplum-clients-%VERSION%.wxs -out greenplum-clients-%VERSION%.wixobj -dSRCDIR=%GPDB_INSTALL_PATH% -dVERSION=%VERSION%
 light.exe -nologo -sval greenplum-clients-%VERSION%.wixobj -out greenplum-clients-x86_64.msi

@@ -83,9 +83,9 @@ endif
 # This replaces the previously bundled tar.gz files to comply with Apache Release policy
 #
 MOCK_VERSION=1.0.1
-PYGRESQL_VERSION=5.2
-PSUTIL_VERSION=5.7.0
-PYYAML_VERSION=5.4.1
+PYGRESQL_VERSION=5.2.5
+PSUTIL_VERSION=7.2.2
+PYYAML_VERSION=6.0.1
 
 download-python-deps:
 	@echo "--- Downloading Python dependencies for gpMgmt modules"
