@@ -468,6 +468,23 @@ drop table t2_issue_593;
 drop table t3_issue_593;
 drop table t4_issue_593;
 
+--
+-- test https://github.com/apache/cloudberry/issues/1950
+-- A pushed-down OR of an outer-side IS NOT NULL and a range condition on the
+-- nullable side yielded a join selectivity slightly above 1.0 and tripped an
+-- assertion in adjust_selectivity_for_nulltest().
+--
+CREATE TABLE t1_issue_1950(c0 inet) DISTRIBUTED BY (c0);
+CREATE TABLE t2_issue_1950(c0 inet) DISTRIBUTED BY (c0);
+INSERT INTO t2_issue_1950 VALUES ('88.147.138.141'), ('76.163.212.11'), ('214.10.65.144');
+ANALYZE t1_issue_1950, t2_issue_1950;
+SELECT COUNT(*) FROM ONLY t1_issue_1950 LEFT OUTER JOIN t2_issue_1950 ON true
+WHERE (t1_issue_1950.c0 IS NOT NULL)
+   OR (t2_issue_1950.c0 BETWEEN SYMMETRIC '75.175.243.19' AND '230.9.216.68');
+
+drop table t1_issue_1950;
+drop table t2_issue_1950;
+
 -- start_ignore
 drop table if exists bfv_planner_x;
 drop table if exists testbadsql;
