@@ -46,7 +46,7 @@
  * 8 KB buys them all away.  A linear search over a two-row table would be just
  * as fast in practice; what it would not be is impossible to get wrong.
  */
-static const AnserPayloadOps AnserPayloadTable[UCHAR_MAX + 1] =
+static const AnserPayloadOps AnserPayloadTable[PG_UINT8_MAX + 1] =
 {
 	/*
 	 * A subscription: header and key only.  It has no body to fold or to

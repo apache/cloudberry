@@ -372,7 +372,7 @@ anser_test_rf_size(PG_FUNCTION_ARGS)
 	int64		max_payload = 0;
 	int64		planned_bytes = 0;
 	bool		injected;
-	Datum		values[4];
+	Datum		values[4] = {0, 0, 0, 0};
 	bool		nulls[4] = {false, false, false, false};
 	TupleDesc	tupdesc;
 
@@ -407,7 +407,7 @@ anser_test_bloom_shape(PG_FUNCTION_ARGS)
 	int64		total_elems = PG_GETARG_INT64(0);
 	int64		cap = PG_GETARG_INT64(1);
 	bloom_filter *filter;
-	Datum		values[4];
+	Datum		values[4] = {0, 0, 0, 0};
 	bool		nulls[4] = {false, false, false, false};
 	TupleDesc	tupdesc;
 
@@ -647,10 +647,11 @@ anser_test_wire_roundtrip(PG_FUNCTION_ARGS)
 						  raw_len > 0 ? raw_body : NULL, (Size) raw_len);
 	msg_len = strlen(msg);
 
-	/* One byte, or one length, altered -- see the case table in the test. */
-	if (strcmp(tamper, "") == 0)
-		 /* no damage */ ;
-	else if (strcmp(tamper, "truncate") == 0)
+	/*
+	 * One byte, or one length, altered -- see the case table in the test.  An
+	 * empty 'tamper' falls through every branch and leaves the message intact.
+	 */
+	if (strcmp(tamper, "truncate") == 0)
 		msg[msg_len - 1] = '\0';
 	else if (strcmp(tamper, "append") == 0)
 	{
@@ -693,7 +694,7 @@ anser_test_wire_roundtrip(PG_FUNCTION_ARGS)
 
 		*first = (*first == 'A') ? 'B' : 'A';
 	}
-	else
+	else if (strcmp(tamper, "") != 0)
 		elog(ERROR, "anser_test_wire_roundtrip: unknown tamper \"%s\"", tamper);
 
 	if (!AnserWireParse(msg, &parsed))
