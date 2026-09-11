@@ -35,6 +35,7 @@
 #include "postgres.h"
 
 #include "anser.h"
+#include "anserfilter.h"
 #include "anserplan.h"
 #include "cdb/cdbvars.h"
 #include "catalog/pg_type.h"
@@ -60,8 +61,6 @@ typedef struct AnserInjectCtx
 } AnserInjectCtx;
 
 static int	anser_max_plan_node_id(Plan *plan);
-static bool anser_rf_size(double est_rows, int64 *total_elems,
-						  int64 *max_payload, int64 *planned_bytes);
 static bool anser_hashjoin_keys(HashJoin *hj, AttrNumber *inner_attno,
 								AttrNumber *outer_attno);
 static bool anser_resolve_build_scan(Plan *hash, AttrNumber inner_attno,
@@ -153,9 +152,9 @@ anser_max_plan_node_id(Plan *plan)
  * equals the realized bitset: target ~2 bytes/element, floor at 1 MB, cap at the
  * server payload budget, round DOWN to a power of two.
  */
-static bool
-anser_rf_size(double est_rows, int64 *total_elems, int64 *max_payload,
-			  int64 *planned_bytes)
+bool
+AnserRuntimeFilterSize(double est_rows, int64 *total_elems, int64 *max_payload,
+					   int64 *planned_bytes)
 {
 	int64		cap_bytes;
 	int64		elems;
@@ -169,19 +168,44 @@ anser_rf_size(double est_rows, int64 *total_elems, int64 *max_payload,
 		return false;			/* cap too small to hold even a floor-sized filter */
 
 	/*
-	 * Clamp the element estimate so 2*elems never exceeds the cap; this also keeps
-	 * total_elems within int range for custom_private (cap/2 <= 32M elements).
+	 * The element count stays the honest estimate; only the *size* is clamped.
+	 *
+	 * It is tempting to clamp elems instead -- it is the number that drives the
+	 * size, so bounding it bounds the bitset in one step.  That is a trap.
+	 * total_elems is also what optimal_k() sizes the hash count from, so
+	 * understating it understates k: a 128M-row build side reported as 33.5M
+	 * gets k=10, when the optimum for 128M keys in a 512 Mbit filter is k=3.
+	 * Since the producer inserts all 128M keys regardless of what we wrote
+	 * down, the result is a filter with a 38% false positive rate where 15% was
+	 * available.  Lowering the declared count never makes a filter fit; it only
+	 * relabels it, and then misconfigures it.
+	 *
+	 * INT32 is the real bound on elems: custom_private carries it as an Integer
+	 * node.  The density check below refuses anything remotely near that.
 	 */
 	elems = (est_rows > 0.0) ? (int64) est_rows : 1;
-	if (elems > cap_bytes / 2)
-		elems = cap_bytes / 2;
 	if (elems < 1)
 		elems = 1;
+	if (elems > PG_INT32_MAX)
+		elems = PG_INT32_MAX;
 
-	target_bytes = Max((int64) ANSER_RF_MIN_BYTES, elems * 2);
+	target_bytes = Min(cap_bytes, Max((int64) ANSER_RF_MIN_BYTES, elems * 2));
 	realized = ANSER_RF_MIN_BYTES;
 	while ((realized << 1) <= target_bytes)
 		realized <<= 1;
+
+	/*
+	 * Refuse a join whose build side cannot be usefully summarized within the
+	 * payload cap.
+	 *
+	 * Refusing here is the cheapest possible outcome: no producer, no consumer,
+	 * no channel, and nothing for a consumer to wait on and time out against.
+	 * The runtime checks in anserfilter.c exist for when this estimate turns
+	 * out to be wrong, not instead of this one.
+	 */
+	if (realized * (double) BITS_PER_BYTE / (double) elems
+		< ANSER_BLOOM_MIN_BITS_PER_KEY)
+		return false;
 
 	*total_elems = elems;
 	*max_payload = cap_bytes + ANSER_RF_HEADER_ROOM;
@@ -339,18 +363,19 @@ anser_try_inject(HashJoin *hj, AnserInjectCtx *ctx)
 	if (!anser_resolve_build_scan(hash, inner_attno, &build_parent, &build_scan,
 								  &build_attno))
 		return;
-	if (!anser_rf_size(hash->plan_rows, &total_elems, &max_payload, &planned_bytes))
+	if (!AnserRuntimeFilterSize(hash->plan_rows, &total_elems, &max_payload, &planned_bytes))
 		return;
 
 	condition_id = ctx->next_condition_id++;
 	snprintf(condition_key, sizeof(condition_key), "anser_rf_%u", condition_id);
 
 	/*
-	 * One consumer per channel.  The consumer wait table budgets exactly
-	 * anser.max_consumers_per_channel slots per channel, sized for one
-	 * consumer instance per segment (nseg).  A second consumer plan node on the
-	 * same channel would need 2*nseg slots and could exhaust that budget, so we
-	 * never inject one -- skip the whole join and fail open instead.
+	 * One consumer per channel.  Two consumer nodes sharing a channel would
+	 * both be served -- the coordinator pushes to every subscriber -- but they
+	 * would also both count toward nothing: the channel's part count comes from
+	 * the producers, so a second consumer only multiplies deliveries.  More to
+	 * the point, the two would be indistinguishable in the debug trace and in
+	 * any future per-channel accounting, so keep the invariant.
 	 *
 	 * Minting a unique condition_id per injection makes this hold by
 	 * construction, so the check never fires.  It stays as a guard against

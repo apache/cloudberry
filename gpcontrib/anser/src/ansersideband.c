@@ -48,6 +48,8 @@
 #include "libpq/pqformat.h"
 #include "miscadmin.h"
 #include "nodes/pg_list.h"
+#include "port/pg_bswap.h"
+#include "port/pg_crc32c.h"
 #include "storage/latch.h"
 #include "tcop/dest.h"
 #include "tcop/tcopprot.h"
@@ -70,6 +72,7 @@
 typedef struct AnserInboxEntry
 {
 	AnserChannelKey key;
+	char		payload_type;
 	char	   *payload;		/* NULL when cancelled */
 	Size		payload_len;
 	bool		cancelled;
@@ -78,12 +81,8 @@ typedef struct AnserInboxEntry
 static List *AnserInbox = NIL;
 
 static bool anser_sideband_send(const char *payload);
-static char *anser_sideband_format(const AnserChannelKey *channel_key, char kind,
-								   uint32 part_index, uint32 total_parts,
-								   int flags, const void *payload,
-								   Size payload_len);
-static bool anser_inbox_take(const AnserChannelKey *key, void **payload,
-							 Size *payload_len, bool *cancelled);
+static bool anser_inbox_take(const AnserChannelKey *key, char payload_type,
+							 void **payload, Size *payload_len, bool *cancelled);
 static bool anser_sideband_read_one(long timeout_ms);
 
 /*
@@ -91,7 +90,7 @@ static bool anser_sideband_read_one(long timeout_ms);
  * because nothing on this side needs to wait for it.
  */
 bool
-AnserSidebandPublish(const AnserChannelKey *channel_key,
+AnserSidebandPublish(const AnserChannelKey *channel_key, char payload_type,
 					 uint32 part_index, uint32 total_parts,
 					 const void *payload, Size payload_len, bool cancelled)
 {
@@ -110,14 +109,14 @@ AnserSidebandPublish(const AnserChannelKey *channel_key,
 		payload_len = 0;
 	}
 
-	msg = anser_sideband_format(channel_key, ANSER_WIRE_KIND_PART,
-								part_index, total_parts, flags,
-								(flags & ANSER_WIRE_F_CANCELLED) ? NULL : payload,
-								(flags & ANSER_WIRE_F_CANCELLED) ? 0 : payload_len);
+	msg = AnserWireFormat(channel_key, ANSER_WIRE_KIND_PART, payload_type,
+						  part_index, total_parts, flags,
+						  (flags & ANSER_WIRE_F_CANCELLED) ? NULL : payload,
+						  (flags & ANSER_WIRE_F_CANCELLED) ? 0 : payload_len);
 	ok = anser_sideband_send(msg);
-	ANSER_DEBUG("anser: seg%d published cond=%u part=%u/%u bytes=%zu cancelled=%d sent=%d",
-				GpIdentity.segindex, channel_key->condition_id, part_index,
-				total_parts, payload_len,
+	ANSER_DEBUG("anser: seg%d published cond=%u type=%c part=%u/%u bytes=%zu cancelled=%d sent=%d",
+				GpIdentity.segindex, channel_key->condition_id, payload_type,
+				part_index, total_parts, payload_len,
 				(flags & ANSER_WIRE_F_CANCELLED) ? 1 : 0, ok ? 1 : 0);
 	pfree(msg);
 
@@ -134,7 +133,7 @@ AnserSidebandPublish(const AnserChannelKey *channel_key,
  * wait could outlive the reason for it.
  */
 bool
-AnserSidebandConsumeWait(const AnserChannelKey *channel_key,
+AnserSidebandConsumeWait(const AnserChannelKey *channel_key, char payload_type,
 						 void **payload, Size *payload_len,
 						 bool *cancelled, long timeout_ms)
 {
@@ -154,11 +153,15 @@ AnserSidebandConsumeWait(const AnserChannelKey *channel_key,
 		return false;
 
 	/* It may already be here: the coordinator pushes as soon as it can. */
-	if (anser_inbox_take(channel_key, payload, payload_len, cancelled))
+	if (anser_inbox_take(channel_key, payload_type, payload, payload_len, cancelled))
 		return payload != NULL && *payload != NULL;
 
-	msg = anser_sideband_format(channel_key, ANSER_WIRE_KIND_SUBSCRIBE,
-								0, 0, 0, NULL, 0);
+	/*
+	 * A subscription carries nothing, so its payload type is NONE -- what this
+	 * consumer expects to receive is checked on delivery, not announced here.
+	 */
+	msg = AnserWireFormat(channel_key, ANSER_WIRE_KIND_SUBSCRIBE,
+						  ANSER_PAYLOAD_NONE, 0, 0, 0, NULL, 0);
 	if (!anser_sideband_send(msg))
 	{
 		pfree(msg);
@@ -173,7 +176,8 @@ AnserSidebandConsumeWait(const AnserChannelKey *channel_key,
 	{
 		CHECK_FOR_INTERRUPTS();
 
-		if (anser_inbox_take(channel_key, payload, payload_len, cancelled))
+		if (anser_inbox_take(channel_key, payload_type, payload, payload_len,
+							 cancelled))
 			return payload != NULL && *payload != NULL;
 
 		if (timeout_ms >= 0 &&
@@ -216,6 +220,8 @@ anser_sideband_read_one(long timeout_ms)
 	StringInfoData buf;
 	AnserInboxEntry *entry;
 	MemoryContext oldcxt;
+	char		paytype;
+	uint32		crc;
 	int			condid;
 	int			flags;
 	int			keylen;
@@ -273,6 +279,8 @@ anser_sideband_read_one(long timeout_ms)
 		return false;
 	}
 
+	paytype = (char) pq_getmsgint(&buf, 4);
+	crc = (uint32) pq_getmsgint(&buf, 4);
 	condid = pq_getmsgint(&buf, 4);
 	flags = pq_getmsgint(&buf, 4);
 	keylen = pq_getmsgint(&buf, 4);
@@ -292,6 +300,21 @@ anser_sideband_read_one(long timeout_ms)
 	}
 	payptr = paylen > 0 ? pq_getmsgbytes(&buf, paylen) : NULL;
 
+	if (crc != (uint32) AnserWirePushCrc(paytype, (uint32) condid,
+											 (uint32) flags, keyptr, keylen,
+											 payptr, paylen))
+	{
+		/*
+		 * Drop it and keep waiting: the deadline will expire and this consumer
+		 * will run unfiltered.  Using the filter anyway is the one thing we must
+		 * not do -- a bit corrupted 1 -> 0 silently drops joinable rows.
+		 */
+		pfree(buf.data);
+		elog(LOG, "anser: checksum mismatch on filter for condition %u; discarding",
+			 (uint32) condid);
+		return true;
+	}
+
 	/*
 	 * The inbox outlives this call and the memory context it was reached in,
 	 * so anchor it somewhere stable; AnserSidebandResetAll drops it.
@@ -303,6 +326,7 @@ anser_sideband_read_one(long timeout_ms)
 	entry->key.condition_id = (uint32) condid;
 	memcpy(entry->key.condition_key, keyptr, keylen);
 	entry->key.condition_key[keylen] = '\0';
+	entry->payload_type = paytype;
 	entry->cancelled = (flags & ANSER_WIRE_F_CANCELLED) != 0;
 	if (!entry->cancelled && paylen > 0)
 	{
@@ -312,9 +336,9 @@ anser_sideband_read_one(long timeout_ms)
 	}
 	AnserInbox = lappend(AnserInbox, entry);
 	MemoryContextSwitchTo(oldcxt);
-	ANSER_DEBUG("anser: seg%d received cond=%u bytes=%zu cancelled=%d",
-				GpIdentity.segindex, (uint32) condid, entry->payload_len,
-				entry->cancelled ? 1 : 0);
+	ANSER_DEBUG("anser: seg%d received cond=%u type=%c bytes=%zu cancelled=%d",
+				GpIdentity.segindex, (uint32) condid, paytype,
+				entry->payload_len, entry->cancelled ? 1 : 0);
 
 	pfree(buf.data);
 	return true;
@@ -322,7 +346,7 @@ anser_sideband_read_one(long timeout_ms)
 
 /* Claim a delivery for this channel, if one has arrived. */
 static bool
-anser_inbox_take(const AnserChannelKey *key, void **payload,
+anser_inbox_take(const AnserChannelKey *key, char payload_type, void **payload,
 				 Size *payload_len, bool *cancelled)
 {
 	ListCell   *lc;
@@ -335,6 +359,22 @@ anser_inbox_take(const AnserChannelKey *key, void **payload,
 			strncmp(entry->key.condition_key, key->condition_key,
 					ANSER_CONDITION_KEY_SIZE) != 0)
 			continue;
+
+		/*
+		 * Right channel, wrong kind of information.  The coordinator stamps
+		 * the type from the parts it folded, so this means a producer and a
+		 * consumer disagree about what the channel carries -- claim the entry
+		 * to stop waiting on it, and treat it as a cancellation so this
+		 * consumer runs unfiltered.  An empty delivery carries no type to
+		 * check.
+		 */
+		if (!entry->cancelled && entry->payload != NULL &&
+			entry->payload_type != payload_type)
+		{
+			elog(WARNING, "anser: condition %u delivered payload type '%c', expected '%c'",
+				 key->condition_id, entry->payload_type, payload_type);
+			entry->cancelled = true;
+		}
 
 		if (cancelled != NULL)
 			*cancelled = entry->cancelled;
@@ -384,38 +424,108 @@ AnserSidebandResetAll(void)
 	AnserDispatchReset();
 }
 
-/* Build a QE -> QD payload; see anser_disp_parse() for the layout. */
-static char *
-anser_sideband_format(const AnserChannelKey *channel_key, char kind,
-					  uint32 part_index, uint32 total_parts, int flags,
-					  const void *payload, Size payload_len)
+/*
+ * Build a QE -> QD payload: fixed-width header, then the key, then the base64
+ * body.  See ansersideband.h for the layout and AnserWireParse() for the
+ * reader.
+ */
+char *
+AnserWireFormat(const AnserChannelKey *channel_key, char kind,
+				char payload_type, uint32 part_index, uint32 total_parts,
+				int flags, const void *payload, Size payload_len)
 {
 	StringInfoData buf;
+	char		hdr[ANSER_WIRE_HDR_LEN + 1];
+	int			hdrlen;
 	int			keylen = (int) strlen(channel_key->condition_key);
 	int			bodylen = 0;
 	char	   *body = NULL;
+	pg_crc32c	crc;
 
-	if (payload != NULL && payload_len > 0)
+	/*
+	 * What the checksum covers has to be exactly what goes on the wire, so the
+	 * bytes it will cover are recorded here, as the body is encoded, rather
+	 * than re-derived from the arguments afterwards.  Deriving them again would
+	 * mean covering a payload that was suppressed -- a cancelled message
+	 * carries no body however it was called -- and the reader, seeing no body,
+	 * would compute a different checksum and discard a perfectly good message.
+	 */
+	const void *crc_body = NULL;
+	Size		crc_body_len = 0;
+
+	if (!(flags & ANSER_WIRE_F_CANCELLED) && payload != NULL && payload_len > 0)
 	{
 		int			maxlen = pg_b64_enc_len((int) payload_len);
 
-		body = palloc(maxlen + 1);
-		bodylen = pg_b64_encode((const char *) payload, (int) payload_len,
-								body, maxlen);
-		if (bodylen < 0)
+		if (maxlen > ANSER_WIRE_MAX_BODYLEN)
 		{
-			pfree(body);
-			body = NULL;
+			/*
+			 * No header can describe a body this large.  gp_anser_max_info_size
+			 * keeps us far away from this, so it is a belt-and-braces check on
+			 * the field width rather than a reachable path.
+			 */
 			bodylen = 0;
 			flags |= ANSER_WIRE_F_CANCELLED;
 		}
+		else
+		{
+			body = palloc(maxlen + 1);
+			bodylen = pg_b64_encode((const char *) payload, (int) payload_len,
+									body, maxlen);
+			if (bodylen < 0)
+			{
+				pfree(body);
+				body = NULL;
+				bodylen = 0;
+				flags |= ANSER_WIRE_F_CANCELLED;
+			}
+			else
+			{
+				crc_body = payload;
+				crc_body_len = payload_len;
+			}
+		}
 	}
 
+	Assert(keylen <= ANSER_WIRE_MAX_KEYLEN);
+
+	/*
+	 * Format the header with a zero CRC, checksum it together with the key and
+	 * the raw body, then overwrite the CRC field in place -- it sits at a fixed
+	 * offset, so one pass suffices and the checksum still covers every header
+	 * field.  Checksumming the body before base64 rather than after means a
+	 * mangled encoding is caught too, and whether the body is covered at all is
+	 * the payload type's call (anserpayload.h).
+	 */
+	hdrlen = snprintf(hdr, sizeof(hdr), ANSER_WIRE_HDR_FORMAT,
+					  kind, payload_type,
+					  (uint32) channel_key->gp_session_id,
+					  (uint32) channel_key->gp_command_count,
+					  channel_key->condition_id,
+					  part_index, total_parts,
+					  (uint32) flags, (uint32) keylen, (uint32) bodylen, 0U);
+	if (hdrlen != ANSER_WIRE_HDR_LEN)
+	{
+		/*
+		 * Cannot happen -- every field is width-limited -- but complain rather
+		 * than throw: this is reached from producer teardown, and the
+		 * coordinator's length cross-check will reject the message anyway,
+		 * which costs the filter and not the query.
+		 */
+		elog(WARNING, "anser: formatted a %d byte header, expected %d",
+			 hdrlen, ANSER_WIRE_HDR_LEN);
+	}
+
+	INIT_CRC32C(crc);
+	COMP_CRC32C(crc, hdr, ANSER_WIRE_CRC_OFFSET);
+	COMP_CRC32C(crc, channel_key->condition_key, keylen);
+	if (crc_body != NULL && AnserPayloadChecksumsBody(payload_type))
+		COMP_CRC32C(crc, crc_body, crc_body_len);
+	FIN_CRC32C(crc);
+	snprintf(hdr + ANSER_WIRE_CRC_OFFSET, 9, "%08x", (uint32) crc);
+
 	initStringInfo(&buf);
-	appendStringInfo(&buf, ANSER_WIRE_TAG " %c %d %d %u %u %u %d %d %d\n",
-					 kind, channel_key->gp_session_id,
-					 channel_key->gp_command_count, channel_key->condition_id,
-					 part_index, total_parts, flags, keylen, bodylen);
+	appendBinaryStringInfo(&buf, hdr, ANSER_WIRE_HDR_LEN);
 	appendBinaryStringInfo(&buf, channel_key->condition_key, keylen);
 	if (bodylen > 0)
 		appendBinaryStringInfo(&buf, body, bodylen);
@@ -424,6 +534,39 @@ anser_sideband_format(const AnserChannelKey *channel_key, char kind,
 		pfree(body);
 
 	return buf.data;
+}
+
+/*
+ * Checksum of a QD -> QE push.  Lives here, on the reading side, but is called
+ * from anserdispatch.c too: one definition means the writer and the reader
+ * cannot disagree about what is covered -- including whether the body is, which
+ * follows from the payload type.  Integers go in network byte order so the
+ * value does not depend on the host.
+ */
+pg_crc32c
+AnserWirePushCrc(char payload_type, uint32 condition_id, uint32 flags,
+				 const char *key, int keylen, const void *body, int bodylen)
+{
+	pg_crc32c	crc;
+	uint32		fields[4];
+	uint32		belen;
+
+	fields[0] = pg_hton32((uint32) (unsigned char) payload_type);
+	fields[1] = pg_hton32(condition_id);
+	fields[2] = pg_hton32(flags);
+	fields[3] = pg_hton32((uint32) keylen);
+
+	INIT_CRC32C(crc);
+	COMP_CRC32C(crc, fields, sizeof(fields));
+	if (keylen > 0)
+		COMP_CRC32C(crc, key, keylen);
+	belen = pg_hton32((uint32) bodylen);
+	COMP_CRC32C(crc, &belen, sizeof(belen));
+	if (bodylen > 0 && AnserPayloadChecksumsBody(payload_type))
+		COMP_CRC32C(crc, body, bodylen);
+	FIN_CRC32C(crc);
+
+	return crc;
 }
 
 /*

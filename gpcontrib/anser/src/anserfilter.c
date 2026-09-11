@@ -27,6 +27,7 @@
  */
 #include "postgres.h"
 
+#include "anser.h"
 #include "anserfilter.h"
 #include "common/hashfn.h"
 #include "port/pg_bitutils.h"
@@ -66,18 +67,108 @@ AnserBloomSeed(const char *condition_key)
  * is why the serialized part header does not need to carry the bitset parameters:
  * the reconstructing side already knows them.
  *
- * We defer sizing to the standard bloom_create, which targets ~2 bytes per
- * element, rounds the bitset down to a power of two, and floors it at 1 MB.
- * max_payload_bytes bounds the bitset from above (minus header room), expressed
- * as bloom_create's work_mem budget in KB.
+ * Sizing is bloom_create's, but the decision to keep the result is ours.  Two
+ * ways it can come back unusable:
+ *
+ *   - Too large to send.  bloom_create ends with Max(1 MB, bitset), a floor
+ *     that overrides the work_mem cap, so a payload cap below 1 MB yields a
+ *     bitset that cannot be shipped.
+ *   - Too thin to help.  bloom_create has no minimum density (unlike
+ *     bloom_create_aggresive, which refuses below 1.6 bits/key), so a large
+ *     enough total_elems against a fixed cap gets you a filter that matches
+ *     almost everything.
+ *
+ * Both are judged from the filter's own accessors rather than by re-deriving
+ * bloom_create's arithmetic here: my_bloom_power() and the floor are private to
+ * lib/bloomfilter.c, and a copy of them would go quietly out of date on a
+ * kernel rebase.  The cost of learning the answer this way is one palloc0 that
+ * is immediately freed -- against a build-side scan, which is what returning
+ * NULL here avoids, that is nothing.
  */
 bloom_filter *
 AnserBloomCreate(int64 total_elems, Size max_payload_bytes, uint64 seed)
 {
-	/* Internal callers always size the payload to hold a header + bitset. */
-	Assert(max_payload_bytes > sizeof(AnserBloomPartHeader));
+	bloom_filter *filter;
+	Size		serialized;
+	double		bits_per_key;
 
-	return bloom_create(total_elems, AnserBloomWorkMemKb(max_payload_bytes), seed);
+	/*
+	 * These were an Assert on the grounds that internal callers always pass a
+	 * payload cap with room for a header.  They are checks because the caller
+	 * is a plan node, and its parameters arrived from the coordinator in
+	 * custom_private -- not somewhere an assertion belongs.  The cap also
+	 * cannot merely be >= the header: AnserBloomWorkMemKb subtracts the header
+	 * from a Size, so a smaller cap would underflow to an enormous work_mem.
+	 */
+	if (total_elems <= 0 || max_payload_bytes <= sizeof(AnserBloomPartHeader))
+		return NULL;
+
+	filter = bloom_create(total_elems, AnserBloomWorkMemKb(max_payload_bytes),
+						  seed);
+	serialized = AnserBloomSerializedSize(filter);
+	bits_per_key = (double) bloom_total_bits(filter) / (double) total_elems;
+
+	if (serialized > max_payload_bytes)
+	{
+		ANSER_DEBUG("anser: not building a filter: smallest bitset serializes to %zu bytes, cap is %zu",
+					serialized, max_payload_bytes);
+		bloom_free(filter);
+		return NULL;
+	}
+
+	if (bits_per_key < ANSER_BLOOM_MIN_BITS_PER_KEY)
+	{
+		ANSER_DEBUG("anser: not building a filter for %ld key(s) in %zu bytes: %.2f bits/key, below the %.1f floor",
+					(long) total_elems, max_payload_bytes, bits_per_key,
+					ANSER_BLOOM_MIN_BITS_PER_KEY);
+		bloom_free(filter);
+		return NULL;
+	}
+
+	return filter;
+}
+
+/*
+ * Is this serialized payload still selective enough to be worth delivering?
+ *
+ * Counts the set bits in the wire form, so the coordinator can ask it of a
+ * merged accumulator without rebuilding a filter -- which is the point, because
+ * the union of N parts is denser than any one of them.  Three parts at 60% fill
+ * OR together to as much as 94%, so the producers' own checks do not protect
+ * consumers from the merged result; this is the check that does.
+ *
+ * Fill, not false positive rate: the serialized part carries no hash count, so
+ * fill is all there is to go on here.  ANSER_BLOOM_MERGED_MAX_FILL is set
+ * accordingly -- high enough that it cannot reject a filter that is still good
+ * at a large k, which makes it a backstop rather than a tuning knob.
+ */
+bool
+AnserBloomPartWorthSending(const void *payload, Size payload_len)
+{
+	const char *bits;
+	Size		bitset_bytes;
+	uint64		bits_set;
+	double		fill;
+
+	if (!AnserBloomLooksLikePart(payload, payload_len))
+		return false;
+
+	bitset_bytes = payload_len - sizeof(AnserBloomPartHeader);
+	if (bitset_bytes == 0)
+		return false;
+
+	bits = (const char *) payload + sizeof(AnserBloomPartHeader);
+	bits_set = pg_popcount(bits, (int) bitset_bytes);
+	fill = (double) bits_set / (double) (bitset_bytes * BITS_PER_BYTE);
+
+	if (fill > ANSER_BLOOM_MERGED_MAX_FILL)
+	{
+		ANSER_DEBUG("anser: merged filter is %.1f%% full, above the %.0f%% limit; not worth delivering",
+					fill * 100.0, ANSER_BLOOM_MERGED_MAX_FILL * 100.0);
+		return false;
+	}
+
+	return true;
 }
 
 Size

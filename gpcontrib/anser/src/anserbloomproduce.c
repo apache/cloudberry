@@ -30,6 +30,7 @@
 #include "anser.h"
 #include "anserbloom.h"
 #include "anserfilter.h"
+#include "anserpayload.h"
 #include "ansersideband.h"
 #include "cdb/cdbvars.h"
 
@@ -61,13 +62,13 @@ AnserProducePublishPart(AnserBloomFilterProduceState *state,
 						const void *payload, Size payload_len, bool cancelled)
 {
 	if (Gp_role == GP_ROLE_EXECUTE)
-		return AnserSidebandPublish(&state->channel_key, state->part_index,
-									state->total_parts, payload, payload_len,
-									cancelled);
+		return AnserSidebandPublish(&state->channel_key, ANSER_PAYLOAD_BLOOM,
+									state->part_index, state->total_parts,
+									payload, payload_len, cancelled);
 
-	return AnserDispatchLocalPublish(&state->channel_key, state->part_index,
-									 state->total_parts, payload, payload_len,
-									 cancelled);
+	return AnserDispatchLocalPublish(&state->channel_key, ANSER_PAYLOAD_BLOOM,
+									 state->part_index, state->total_parts,
+									 payload, payload_len, cancelled);
 }
 
 AnserBloomFilterProduceState *
@@ -97,10 +98,22 @@ void
 ExecAnserBloomFilterProduceAddDatum(AnserBloomFilterProduceState *state,
 									Datum value, bool isnull)
 {
-	if (state == NULL || state->published || isnull)
+	/*
+	 * A NULL filter means AnserBloomCreate declined to build one -- too many
+	 * keys for the payload cap.  There is nothing to add to, and the node has
+	 * already published the cancel.
+	 */
+	if (state == NULL || state->filter == NULL || state->published || isnull)
 		return;
 
 	bloom_add_element(state->filter, (unsigned char *) &value, sizeof(Datum));
+}
+
+/* Does this producer have a filter to fill?  False means "already hopeless". */
+bool
+ExecAnserBloomFilterProduceHasFilter(AnserBloomFilterProduceState *state)
+{
+	return state != NULL && state->filter != NULL;
 }
 
 bool
@@ -125,6 +138,29 @@ ExecAnserBloomFilterProducePublish(AnserBloomFilterProduceState *state)
 		state->published = true;
 		return AnserProducePublishPart(state, NULL, 0, true);
 	}
+
+	/*
+	 * Too saturated to be worth anything?  Cancel rather than send.
+	 *
+	 * This is the check the planner cannot make: it decided the filter was
+	 * worth building from a row estimate, and estimates are wrong.  A filter
+	 * whose bits are nearly all set matches nearly every probe row, so shipping
+	 * it would buy the consumers a hash and k probes per row in exchange for
+	 * almost no rows eliminated -- pure overhead on both sides.
+	 */
+	if (bloom_false_positive_rate(state->filter) > ANSER_BLOOM_MAX_FPR)
+	{
+		ANSER_DEBUG("anser: publishing a cancel: filter is %.1f%% full, est. FPR %.1f%% above the %.0f%% limit",
+					bloom_prop_bits_set(state->filter) * 100.0,
+					bloom_false_positive_rate(state->filter) * 100.0,
+					ANSER_BLOOM_MAX_FPR * 100.0);
+		state->published = true;
+		return AnserProducePublishPart(state, NULL, 0, true);
+	}
+
+	ANSER_DEBUG("anser: filter is %.1f%% full, est. FPR %.2f%%",
+				bloom_prop_bits_set(state->filter) * 100.0,
+				bloom_false_positive_rate(state->filter) * 100.0);
 
 	/*
 	 * Serialize as a self-contained single part (index 0 of 1).  The coordinator

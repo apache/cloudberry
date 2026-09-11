@@ -52,7 +52,57 @@ typedef struct AnserBloomPartHeader
 	uint32		total_parts;
 } AnserBloomPartHeader;
 
+/*
+ * When a bloom filter stops being worth building, or sending once built.
+ * Three checks, at the three points where new information arrives.
+ *
+ * ANSER_BLOOM_MIN_BITS_PER_KEY -- a floor on the *planned* density: bitset bits
+ * divided by the number of distinct keys we expect.  Below it no amount of care
+ * in building the filter helps, so the filter is not built and, at plan time,
+ * the nodes are not even injected.  At 4 bits/key the optimal hash count is 3
+ * and the false positive rate is already ~15%; below that it collapses (2
+ * bits/key is ~40%).
+ *
+ * ANSER_BLOOM_MAX_FPR -- the check on the *realized* filter, at publish time.
+ * It catches what a row estimate cannot: the estimate was too low, so the
+ * filter saturated anyway.  This one is expressed as a false positive rate
+ * rather than a fill fraction on purpose.  FPR is fill^k, so a single fill
+ * limit is not a single quality bar: 80% full is a 51% FPR at k=3 but only
+ * 10.7% at k=10, and a rule that cancelled the latter would be throwing away a
+ * filter that eliminates nine probe rows in ten.  The producer has the filter
+ * and therefore its k, so it can just ask.
+ *
+ * ANSER_BLOOM_MERGED_MAX_FILL -- the same question asked by the coordinator of
+ * the merged payload, which is the only place it can be asked about what
+ * consumers will actually receive.  It has to fall back on fill, because k is
+ * derived from plan parameters and is not carried in the serialized part.  It
+ * is therefore set where even k=10 is past saving (0.95^10 = 60% FPR), so that
+ * it only ever rejects the hopeless.  Putting k in AnserBloomPartHeader would
+ * let this use the FPR too.
+ *
+ * All three numbers are first cuts.  Calibrating them is the "stop building
+ * filters that add nothing" part of the bloom-performance work; the debug trace
+ * logs fill and FPR at every decision point so that study has data.
+ */
+#define ANSER_BLOOM_MIN_BITS_PER_KEY	4.0
+#define ANSER_BLOOM_MAX_FPR				0.50
+#define ANSER_BLOOM_MERGED_MAX_FILL		0.95
+
+/*
+ * Is a serialized part (or a merged accumulator of them) still worth
+ * delivering?  False when too many of its bits are set for it to reject
+ * anything useful.  Works on the wire form, so the coordinator can ask this of
+ * a merged payload without rebuilding a filter.
+ */
+extern bool AnserBloomPartWorthSending(const void *payload, Size payload_len);
+
 extern uint64 AnserBloomSeed(const char *condition_key);
+
+/*
+ * Build an empty filter, or return NULL when AnserBloomShapeFor says it is not
+ * worth building.  A NULL return is not an error: the producer turns it into an
+ * immediate cancel, so consumers stop waiting instead of timing out.
+ */
 extern bloom_filter *AnserBloomCreate(int64 total_elems,
 								  Size max_payload_bytes,
 								  uint64 seed);

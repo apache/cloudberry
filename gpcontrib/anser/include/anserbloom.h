@@ -55,6 +55,7 @@ extern AnserBloomFilterProduceState *ExecInitAnserBloomFilterProduce(
 										uint32 total_parts);
 extern void ExecAnserBloomFilterProduceAddDatum(AnserBloomFilterProduceState *state,
 										 Datum value, bool isnull);
+extern bool ExecAnserBloomFilterProduceHasFilter(AnserBloomFilterProduceState *state);
 extern bool ExecAnserBloomFilterProducePublish(AnserBloomFilterProduceState *state);
 extern bool ExecAnserBloomFilterProduceCancel(AnserBloomFilterProduceState *state);
 extern void ExecEndAnserBloomFilterProduce(AnserBloomFilterProduceState *state);

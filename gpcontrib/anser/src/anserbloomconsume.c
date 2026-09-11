@@ -30,6 +30,7 @@
 #include "anser.h"
 #include "anserbloom.h"
 #include "anserfilter.h"
+#include "anserpayload.h"
 #include "ansersideband.h"
 #include "cdb/cdbvars.h"
 
@@ -106,11 +107,12 @@ ExecAnserBloomFilterConsumeSideband(AnserBloomFilterConsumeState *state,
 	bool		got;
 
 	if (Gp_role == GP_ROLE_EXECUTE)
-		got = AnserSidebandConsumeWait(&state->channel_key, &payload,
-									   &payload_len, &cancelled, timeout_ms);
+		got = AnserSidebandConsumeWait(&state->channel_key, ANSER_PAYLOAD_BLOOM,
+									   &payload, &payload_len, &cancelled,
+									   timeout_ms);
 	else
-		got = AnserDispatchLocalConsume(&state->channel_key, &payload,
-										&payload_len, &cancelled);
+		got = AnserDispatchLocalConsume(&state->channel_key, ANSER_PAYLOAD_BLOOM,
+										&payload, &payload_len, &cancelled);
 
 	if (!got || cancelled)
 	{

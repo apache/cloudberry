@@ -27,12 +27,17 @@
  */
 #include "postgres.h"
 
+#include "access/htup_details.h"
 #include "anser.h"
 #include "anserbloom.h"
 #include "anserfilter.h"
+#include "anserpayload.h"
+#include "anserplan.h"
 #include "ansersideband.h"
 #include "cdb/cdbvars.h"
+#include "common/base64.h"
 #include "fmgr.h"
+#include "funcapi.h"
 #include "lib/bloomfilter.h"
 #include "miscadmin.h"
 #include "utils/builtins.h"
@@ -45,7 +50,14 @@
  * parameters in the node rather than on the wire).
  */
 #define ANSER_TEST_ELEMS		32
-#define ANSER_TEST_MAX_PAYLOAD	(1024 * 1024)
+
+/*
+ * bloom_create floors every bitset at 1 MB, so a payload cap must be 1 MB
+ * *plus* room for the serialized-part header -- the same allowance the planner
+ * makes (ANSER_RF_HEADER_ROOM).  Passing a flat 1 MB asks AnserBloomCreate for
+ * a filter that cannot fit the cap it was given, and it now declines.
+ */
+#define ANSER_TEST_MAX_PAYLOAD	(1024 * 1024 + 64)
 
 PG_FUNCTION_INFO_V1(anser_test_bloom_roundtrip);
 PG_FUNCTION_INFO_V1(anser_test_bloom_fold_inplace);
@@ -69,7 +81,7 @@ anser_test_bloom_roundtrip(PG_FUNCTION_ARGS)
 	uint32		total_parts = 0;
 	bool		lacks;
 
-	filter = AnserBloomCreate(32, 1024 * 1024, seed);
+	filter = AnserBloomCreate(ANSER_TEST_ELEMS, ANSER_TEST_MAX_PAYLOAD, seed);
 	if (filter == NULL)
 		PG_RETURN_BOOL(false);
 
@@ -127,8 +139,8 @@ anser_test_bloom_fold_inplace(PG_FUNCTION_ARGS)
 	bool		mismatch_rejected;
 
 	/* Two same-parameter parts: acc is the running merged part, part folds in. */
-	left = AnserBloomCreate(32, 1024 * 1024, seed);
-	right = AnserBloomCreate(32, 1024 * 1024, seed);
+	left = AnserBloomCreate(ANSER_TEST_ELEMS, ANSER_TEST_MAX_PAYLOAD, seed);
+	right = AnserBloomCreate(ANSER_TEST_ELEMS, ANSER_TEST_MAX_PAYLOAD, seed);
 	if (left == NULL || right == NULL)
 		PG_RETURN_BOOL(false);
 	bloom_add_element(left, (unsigned char *) &left_value, sizeof(Datum));
@@ -329,4 +341,424 @@ anser_test_node_roundtrip(PG_FUNCTION_ARGS)
 	PG_END_TRY();
 
 	PG_RETURN_BOOL(ok);
+}
+
+/*
+ * ---------------------------------------------------------------------------
+ * Sizing and give-up decisions.
+ *
+ * These four take their inputs as arguments and return what Anser decided, so
+ * the case tables live in sql/anser_test.sql where they are readable and the
+ * expected output records real sizes rather than a bare "ok".  Between them
+ * they cover each of the four points where Anser can decide not to bother:
+ * the planner, filter construction, publication, and the merged result.
+ * ---------------------------------------------------------------------------
+ */
+
+PG_FUNCTION_INFO_V1(anser_test_rf_size);
+PG_FUNCTION_INFO_V1(anser_test_bloom_shape);
+PG_FUNCTION_INFO_V1(anser_test_worth_delivering);
+PG_FUNCTION_INFO_V1(anser_test_producer_decision);
+
+/*
+ * The planner gate: what AnserRuntimeFilterSize decides for an estimated build
+ * cardinality.  NULL means no filter would be injected at all.
+ */
+Datum
+anser_test_rf_size(PG_FUNCTION_ARGS)
+{
+	double		est_rows = PG_GETARG_FLOAT8(0);
+	int64		total_elems = 0;
+	int64		max_payload = 0;
+	int64		planned_bytes = 0;
+	bool		injected;
+	Datum		values[4];
+	bool		nulls[4] = {false, false, false, false};
+	TupleDesc	tupdesc;
+
+	if (get_call_result_type(fcinfo, NULL, &tupdesc) != TYPEFUNC_COMPOSITE)
+		elog(ERROR, "anser_test_rf_size: expected a composite return type");
+	tupdesc = BlessTupleDesc(tupdesc);
+
+	injected = AnserRuntimeFilterSize(est_rows, &total_elems, &max_payload,
+									  &planned_bytes);
+
+	values[0] = BoolGetDatum(injected);
+	values[1] = Int64GetDatum(total_elems);
+	values[2] = Int64GetDatum(max_payload);
+	values[3] = Int64GetDatum(planned_bytes);
+	nulls[1] = nulls[2] = nulls[3] = !injected;
+
+	PG_RETURN_DATUM(HeapTupleGetDatum(heap_form_tuple(tupdesc, values, nulls)));
+}
+
+/*
+ * Filter construction: what AnserBloomCreate makes of (total_elems, cap).
+ * NULL means it declined -- either the smallest possible filter does not fit
+ * the cap, or there are too many keys for it to be worth building.
+ *
+ * Returns the realized sizes so the expected output pins down bloom_create's
+ * actual behaviour (its 1 MB floor, its power-of-two rounding) and not merely
+ * our verdict on it.
+ */
+Datum
+anser_test_bloom_shape(PG_FUNCTION_ARGS)
+{
+	int64		total_elems = PG_GETARG_INT64(0);
+	int64		cap = PG_GETARG_INT64(1);
+	bloom_filter *filter;
+	Datum		values[4];
+	bool		nulls[4] = {false, false, false, false};
+	TupleDesc	tupdesc;
+
+	if (get_call_result_type(fcinfo, NULL, &tupdesc) != TYPEFUNC_COMPOSITE)
+		elog(ERROR, "anser_test_bloom_shape: expected a composite return type");
+	tupdesc = BlessTupleDesc(tupdesc);
+
+	/* A negative cap would be a Size wraparound; the SQL side never sends one. */
+	if (cap < 0)
+		elog(ERROR, "anser_test_bloom_shape: negative cap");
+
+	filter = AnserBloomCreate(total_elems, (Size) cap, AnserBloomSeed("shape"));
+
+	values[0] = BoolGetDatum(filter != NULL);
+	nulls[1] = nulls[2] = nulls[3] = (filter == NULL);
+	if (filter != NULL)
+	{
+		values[1] = Int64GetDatum((int64) bloom_total_bits(filter));
+		values[2] = Int64GetDatum((int64) AnserBloomSerializedSize(filter));
+		values[3] = Float8GetDatum((double) bloom_total_bits(filter) /
+								   (double) total_elems);
+		bloom_free(filter);
+	}
+
+	PG_RETURN_DATUM(HeapTupleGetDatum(heap_form_tuple(tupdesc, values, nulls)));
+}
+
+/*
+ * The coordinator's gate, on a synthetic part.
+ *
+ * Builds a part whose bitset has 'bytes_set' of its 'bitset_bytes' bytes fully
+ * set, which pins the fill fraction exactly -- reaching a given fill by
+ * inserting keys would be both slow and only statistically precise.  'damage'
+ * corrupts the framing instead: 'magic', 'version', 'parts' or 'null'.
+ */
+Datum
+anser_test_worth_delivering(PG_FUNCTION_ARGS)
+{
+	int32		bitset_bytes = PG_GETARG_INT32(0);
+	int32		bytes_set = PG_GETARG_INT32(1);
+	const char *damage = text_to_cstring(PG_GETARG_TEXT_PP(2));
+	AnserBloomPartHeader *header;
+	char	   *payload;
+	Size		payload_len;
+
+	if (strcmp(damage, "null") == 0)
+		PG_RETURN_BOOL(AnserBloomPartWorthSending(NULL, 1024));
+
+	if (bitset_bytes < 0 || bytes_set < 0 || bytes_set > bitset_bytes)
+		elog(ERROR, "anser_test_worth_delivering: bad bitset arguments");
+
+	payload_len = sizeof(AnserBloomPartHeader) + (Size) bitset_bytes;
+	payload = palloc0(payload_len);
+	header = (AnserBloomPartHeader *) payload;
+	header->magic = ANSER_BLOOM_PART_MAGIC;
+	header->version = ANSER_BLOOM_PART_VERSION;
+	header->part_index = 0;
+	header->total_parts = 1;
+
+	if (strcmp(damage, "magic") == 0)
+		header->magic = ANSER_BLOOM_PART_MAGIC + 1;
+	else if (strcmp(damage, "version") == 0)
+		header->version = ANSER_BLOOM_PART_VERSION + 1;
+	else if (strcmp(damage, "parts") == 0)
+		header->total_parts = 0;
+	else if (damage[0] != '\0')
+		elog(ERROR, "anser_test_worth_delivering: unknown damage \"%s\"", damage);
+
+	if (bytes_set > 0)
+		memset(payload + sizeof(AnserBloomPartHeader), 0xff, (Size) bytes_set);
+
+	PG_RETURN_BOOL(AnserBloomPartWorthSending(payload, payload_len));
+}
+
+/*
+ * Producer end to end, on the coordinator-local path: build a filter for
+ * (total_elems, cap), insert 'n_keys' distinct keys, publish, then consume.
+ *
+ * Returns "<construction>:<delivery>", where construction is built/no-filter
+ * and delivery is delivered/cancelled/missing.  Every combination that can
+ * occur says something different:
+ *
+ *   built:delivered      the normal case
+ *   built:cancelled      the filter saturated, so publication became a cancel
+ *   no-filter:cancelled  construction declined, cancelled before any scan
+ *
+ * Each call takes a fresh condition_id, since several rows of one query share a
+ * session and command counter and would otherwise collide on one channel.
+ */
+Datum
+anser_test_producer_decision(PG_FUNCTION_ARGS)
+{
+	static uint32 next_condition_id = 1000;
+
+	int64		total_elems = PG_GETARG_INT64(0);
+	int64		cap = PG_GETARG_INT64(1);
+	int32		n_keys = PG_GETARG_INT32(2);
+	AnserChannelKey key;
+	AnserBloomFilterProduceState *producer;
+	const char *construction;
+	const char *delivery;
+	void	   *payload = NULL;
+	Size		payload_len = 0;
+	bool		cancelled = false;
+	int32		i;
+
+	MemSet(&key, 0, sizeof(key));
+	key.gp_session_id = gp_session_id;
+	key.gp_command_count = gp_command_count;
+	key.condition_id = next_condition_id++;
+	snprintf(key.condition_key, ANSER_CONDITION_KEY_SIZE, "anser_rf_%u",
+			 key.condition_id);
+
+	producer = ExecInitAnserBloomFilterProduce(&key, total_elems, (Size) cap,
+											   0, 1);
+	if (producer == NULL)
+		PG_RETURN_TEXT_P(cstring_to_text("no-producer:missing"));
+
+	construction = ExecAnserBloomFilterProduceHasFilter(producer)
+		? "built" : "no-filter";
+
+	for (i = 0; i < n_keys; i++)
+	{
+		Datum		value = Int32GetDatum(i);
+
+		ExecAnserBloomFilterProduceAddDatum(producer, value, false);
+	}
+
+	(void) ExecAnserBloomFilterProducePublish(producer);
+	ExecEndAnserBloomFilterProduce(producer);
+
+	if (!AnserDispatchLocalConsume(&key, ANSER_PAYLOAD_BLOOM, &payload,
+								   &payload_len, &cancelled))
+		delivery = cancelled ? "cancelled" : "missing";
+	else
+		delivery = "delivered";
+
+	if (payload != NULL)
+		pfree(payload);
+
+	PG_RETURN_TEXT_P(cstring_to_text(psprintf("%s:%s", construction, delivery)));
+}
+
+/*
+ * ---------------------------------------------------------------------------
+ * The wire protocol.
+ *
+ * Not exhaustive -- a fuzzer would be the right tool for that, and pg_regress
+ * is not one.  What these cover is the part of the format that is easy to get
+ * wrong and expensive to get wrong: that the header is a fixed width with the
+ * fields where they are documented, that a payload cannot be mistaken for
+ * framing (the reason the newline-delimited format was replaced), that the
+ * length cross-check rejects a message that does not add up, and that the
+ * checksum rejects a single altered byte anywhere it is supposed to cover --
+ * and does not reject one where it deliberately does not.
+ * ---------------------------------------------------------------------------
+ */
+
+PG_FUNCTION_INFO_V1(anser_test_wire_format);
+PG_FUNCTION_INFO_V1(anser_test_wire_roundtrip);
+PG_FUNCTION_INFO_V1(anser_test_push_crc);
+
+/* Fixed channel coordinates, so the golden headers below are stable. */
+#define ANSER_TEST_WIRE_SESSION		42
+#define ANSER_TEST_WIRE_COMMAND		7
+#define ANSER_TEST_WIRE_CONDITION	3
+#define ANSER_TEST_WIRE_PART		1
+#define ANSER_TEST_WIRE_TOTAL		3
+
+static void
+anser_test_wire_key(AnserChannelKey *key, const char *condition_key)
+{
+	MemSet(key, 0, sizeof(*key));
+	key->gp_session_id = ANSER_TEST_WIRE_SESSION;
+	key->gp_command_count = ANSER_TEST_WIRE_COMMAND;
+	key->condition_id = ANSER_TEST_WIRE_CONDITION;
+	strlcpy(key->condition_key, condition_key, ANSER_CONDITION_KEY_SIZE);
+}
+
+/*
+ * The formatted message, verbatim.
+ *
+ * Returning it as text is itself a check: a NOTIFY payload travels through
+ * pq_sendstring and so must be free of NUL bytes, and a text Datum cannot
+ * carry one -- which is why the body is base64 even though the header is not.
+ * Pass a body containing NULs and the length in the expected output proves it.
+ */
+Datum
+anser_test_wire_format(PG_FUNCTION_ARGS)
+{
+	char		kind = PG_GETARG_CHAR(0);
+	char		payload_type = PG_GETARG_CHAR(1);
+	int32		flags = PG_GETARG_INT32(2);
+	char	   *condition_key = text_to_cstring(PG_GETARG_TEXT_PP(3));
+	bytea	   *body = PG_GETARG_BYTEA_PP(4);
+	AnserChannelKey key;
+	char	   *msg;
+
+	anser_test_wire_key(&key, condition_key);
+	msg = AnserWireFormat(&key, kind, payload_type, ANSER_TEST_WIRE_PART,
+						  ANSER_TEST_WIRE_TOTAL, flags,
+						  VARDATA_ANY(body), VARSIZE_ANY_EXHDR(body));
+
+	PG_RETURN_TEXT_P(cstring_to_text(msg));
+}
+
+/*
+ * Format a message, optionally alter one byte of it, then parse it back and
+ * report what the reader made of it.
+ *
+ * The offsets touched are derived from the format macros, never hardcoded, so
+ * this keeps working if a field is added.  Outcomes mirror what the notify
+ * handler does with each: "malformed" is rejected by framing before anything
+ * is allocated, "unknown-type" has no registry entry, "checksum-mismatch" is
+ * well-framed but altered, and "ok" means every field and the decoded body
+ * came back exactly as they went in.
+ */
+Datum
+anser_test_wire_roundtrip(PG_FUNCTION_ARGS)
+{
+	char	   *condition_key = text_to_cstring(PG_GETARG_TEXT_PP(0));
+	bytea	   *body = PG_GETARG_BYTEA_PP(1);
+	char	   *tamper = text_to_cstring(PG_GETARG_TEXT_PP(2));
+	char		payload_type = PG_GETARG_CHAR(3);
+	AnserChannelKey key;
+	AnserWireMsg parsed;
+	char	   *msg;
+	Size		msg_len;
+	const char *raw_body = VARDATA_ANY(body);
+	int			raw_len = VARSIZE_ANY_EXHDR(body);
+	char	   *decoded = NULL;
+	int			decoded_len = 0;
+
+	anser_test_wire_key(&key, condition_key);
+	msg = AnserWireFormat(&key, ANSER_WIRE_KIND_PART, payload_type,
+						  ANSER_TEST_WIRE_PART, ANSER_TEST_WIRE_TOTAL, 0,
+						  raw_len > 0 ? raw_body : NULL, (Size) raw_len);
+	msg_len = strlen(msg);
+
+	/* One byte, or one length, altered -- see the case table in the test. */
+	if (strcmp(tamper, "") == 0)
+		 /* no damage */ ;
+	else if (strcmp(tamper, "truncate") == 0)
+		msg[msg_len - 1] = '\0';
+	else if (strcmp(tamper, "append") == 0)
+	{
+		char	   *longer = palloc(msg_len + 2);
+
+		memcpy(longer, msg, msg_len);
+		longer[msg_len] = 'x';
+		longer[msg_len + 1] = '\0';
+		msg = longer;
+	}
+	else if (strcmp(tamper, "bodylen") == 0)
+	{
+		/* Last digit of the bodylen field: it ends one space before the CRC. */
+		char	   *digit = msg + ANSER_WIRE_CRC_OFFSET - 2;
+
+		*digit = (*digit == '9') ? '8' : (char) (*digit + 1);
+	}
+	else if (strcmp(tamper, "tag") == 0)
+		msg[0] = 'x';
+	else if (strcmp(tamper, "kind") == 0)
+		msg[sizeof(ANSER_WIRE_TAG)] = ANSER_WIRE_KIND_SUBSCRIBE;
+	else if (strcmp(tamper, "type") == 0)
+		msg[sizeof(ANSER_WIRE_TAG) + 2] = 'Z';
+	else if (strcmp(tamper, "crc") == 0)
+	{
+		char	   *digit = msg + ANSER_WIRE_HDR_LEN - 1;
+
+		*digit = (*digit == '0') ? '1' : '0';
+	}
+	else if (strcmp(tamper, "key") == 0)
+	{
+		char	   *first = msg + ANSER_WIRE_HDR_LEN;
+
+		*first = (*first == 'a') ? 'b' : 'a';
+	}
+	else if (strcmp(tamper, "body") == 0)
+	{
+		/* Stay inside the base64 alphabet so this tests the CRC, not decoding. */
+		char	   *first = msg + ANSER_WIRE_HDR_LEN + strlen(condition_key);
+
+		*first = (*first == 'A') ? 'B' : 'A';
+	}
+	else
+		elog(ERROR, "anser_test_wire_roundtrip: unknown tamper \"%s\"", tamper);
+
+	if (!AnserWireParse(msg, &parsed))
+		PG_RETURN_TEXT_P(cstring_to_text("malformed"));
+
+	if (AnserPayloadLookup(parsed.payload_type) == NULL)
+		PG_RETURN_TEXT_P(cstring_to_text("unknown-type"));
+
+	if (parsed.body_len > 0)
+	{
+		int			maxlen = pg_b64_dec_len(parsed.body_len);
+
+		decoded = palloc(maxlen);
+		decoded_len = pg_b64_decode(parsed.body, parsed.body_len, decoded,
+									maxlen);
+		if (decoded_len < 0)
+			PG_RETURN_TEXT_P(cstring_to_text("undecodable"));
+	}
+
+	if (!AnserWireCheckCrc(&parsed, decoded, (Size) decoded_len))
+		PG_RETURN_TEXT_P(cstring_to_text("checksum-mismatch"));
+
+	/* Framed and vouched for: now every field must have survived the trip. */
+	if (parsed.kind != ANSER_WIRE_KIND_PART)
+		PG_RETURN_TEXT_P(cstring_to_text("mismatch: kind"));
+	if (parsed.payload_type != payload_type)
+		PG_RETURN_TEXT_P(cstring_to_text("mismatch: payload_type"));
+	if (parsed.key.gp_session_id != ANSER_TEST_WIRE_SESSION ||
+		parsed.key.gp_command_count != ANSER_TEST_WIRE_COMMAND ||
+		parsed.key.condition_id != ANSER_TEST_WIRE_CONDITION)
+		PG_RETURN_TEXT_P(cstring_to_text("mismatch: channel"));
+	if (parsed.part_index != ANSER_TEST_WIRE_PART ||
+		parsed.total_parts != ANSER_TEST_WIRE_TOTAL)
+		PG_RETURN_TEXT_P(cstring_to_text("mismatch: part"));
+	if (parsed.flags != 0)
+		PG_RETURN_TEXT_P(cstring_to_text("mismatch: flags"));
+	if (strcmp(parsed.key.condition_key, condition_key) != 0)
+		PG_RETURN_TEXT_P(cstring_to_text("mismatch: condition_key"));
+	if (decoded_len != raw_len ||
+		(raw_len > 0 && memcmp(decoded, raw_body, raw_len) != 0))
+		PG_RETURN_TEXT_P(cstring_to_text("mismatch: body"));
+
+	PG_RETURN_TEXT_P(cstring_to_text("ok"));
+}
+
+/*
+ * The QD -> QE checksum, as an integer so the test can compare two of them.
+ *
+ * What matters is not the value but which inputs change it: every routing field
+ * and the key always, and the body only for a payload type that asks for its
+ * body to be covered.
+ */
+Datum
+anser_test_push_crc(PG_FUNCTION_ARGS)
+{
+	char		payload_type = PG_GETARG_CHAR(0);
+	int32		condition_id = PG_GETARG_INT32(1);
+	int32		flags = PG_GETARG_INT32(2);
+	char	   *condition_key = text_to_cstring(PG_GETARG_TEXT_PP(3));
+	bytea	   *body = PG_GETARG_BYTEA_PP(4);
+
+	PG_RETURN_INT64((int64) (uint32)
+					AnserWirePushCrc(payload_type, (uint32) condition_id,
+									 (uint32) flags, condition_key,
+									 (int) strlen(condition_key),
+									 VARDATA_ANY(body),
+									 (int) VARSIZE_ANY_EXHDR(body)));
 }

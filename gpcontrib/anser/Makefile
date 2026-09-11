@@ -32,6 +32,7 @@ OBJS = \
 	src/anserdispatch.o \
 	src/anserfilter.o \
 	src/anserinit.o \
+	src/anserpayload.o \
 	src/anserplan.o \
 	src/anserplanexec.o \
 	src/ansersideband.o \

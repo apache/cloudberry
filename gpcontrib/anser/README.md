@@ -51,15 +51,72 @@ AnserChannelKey = { gp_session_id, gp_command_count, condition_id, condition_key
 - `gp_session_id` + `gp_command_count` scope the channel to one query execution,
   so keys never collide across sessions or across statements in a session.
 - `condition_id` distinguishes multiple filters within the same query.
-- `condition_key` is an opaque string describing the filtered condition (today a
-  synthetic `rf:<build>.<attno>=<probe>.<attno>` string). Both sides derive it
-  independently and must agree — it is what makes a producer and a consumer meet
-  on the same channel.
+- `condition_key` is an opaque string describing the filtered condition — today
+  just `anser_rf_<condition_id>`, since the planner stamps the same key into
+  both plan nodes at injection time. It exists for the case where the key has to
+  be derived from the build's semantic identity instead (so that producer and
+  consumer can find each other without having been planned together), which is
+  why the wire format treats it as arbitrary bytes rather than as an identifier.
 
 Channels live in a hash in the coordinator backend, created on first use and
 dropped at `ExecutorEnd` (or on transaction abort). Since the merge and the
 delivery both happen in that one process, the accumulator is an ordinary
 `palloc`'d buffer.
+
+### Giving up early
+
+A bloom filter that is too small for its key count matches almost everything: it
+costs a hash and `k` probes per probe row and eliminates nothing. Anser checks
+for that at the three points where new information becomes available, and always
+fails open — giving up means the query runs unfiltered, never that it runs wrong.
+
+| Where | Knows | Check | Cost of giving up |
+| --- | --- | --- | --- |
+| Planner (`anserplan.c`) | the row estimate | bitset bits / estimated keys ≥ 4 | nothing — the nodes are never injected |
+| Producer init (`anserfilter.c`) | the plan parameters | the filter fits the payload cap, and still ≥ 4 bits/key | one `palloc0`, freed immediately; cancel published on the first tuple, before the build side is scanned |
+| Producer publish (`anserbloomproduce.c`) | the filter, fully built | estimated FPR (`fill^k`) ≤ 50% | the build scan, already spent; saves the network and every consumer's probing |
+| Coordinator merge (`anserdispatch.c`) | the merged payload | fill ≤ 95% | the merge, already spent; saves delivery and probing |
+
+The planner gate is the one that matters, because it is the only one that costs
+nothing. The rest exist because a row estimate can be wrong, and the last one
+exists because **folding changes the answer**: OR-ing three parts that are each
+60% full gives a merged filter that is 94% full, so no producer can tell whether
+the result will be useful.
+
+One subtlety worth knowing if you touch the sizing: do **not** clamp the element
+estimate to make a filter fit. `total_elems` is also what `optimal_k()` derives
+the hash count from, so understating it misconfigures the filter — a 128M-row
+build side declared as 33.5M gets `k=10` where the optimum is `k=3`, turning a
+13% false positive rate into 38%. The keys all go in regardless of what was
+written down. Clamp the *size*; keep the count honest.
+
+### Payload types
+
+A channel carries one **payload type**, declared on the wire and registered in
+`anserpayload.c`. The transport itself moves opaque bytes and never branches on
+what they mean; everything type-specific lives in one descriptor
+(`AnserPayloadOps`):
+
+| | `fold()` | `checksum_body` |
+| --- | --- | --- |
+| `B` — bloom filter | bitwise OR of equal-sized bitsets | yes |
+| `-` — none (a subscription) | n/a | n/a |
+
+`fold()` is how the coordinator reduces one part per producer to a single
+payload; there is no generic answer, which is why each type supplies it. A row
+count, for instance, would fold by summing.
+
+`checksum_body` is about consequence, not size. A bloom filter fails
+asymmetrically — a bit flipped 1 → 0 removes a key, so a joinable row is
+rejected and the query silently returns too few rows — whereas a row count only
+feeds a planning decision, where corruption costs a worse plan and never a wrong
+answer. Types of the second kind opt out and pay nothing. (The header and
+condition key are checksummed either way; that is ~100 ns and it is what
+protects the routing fields.)
+
+Adding a type is three steps, none of which touch the framing: define a code,
+add a row to `AnserPayloadTable`, and pass the code from the producer and
+consumer nodes. `anserpayload.h` has the details.
 
 ### How it attaches to the server
 
@@ -91,18 +148,35 @@ applies to the SQL-level `NOTIFY`, which must fit a queue page — but it delive
 through `pq_sendstring`, so the payload must be a NUL-free string:
 
 ```
-anser1 <kind> <ssid> <ccnt> <condid> <part> <total> <flags> <keylen> <bodylen>\n
-<condition_key><base64 body>
+anser3 K T SSSSSSSSSS CCCCCCCCCC DDDDDDDDDD PPPPPPPPPP TTTTTTTTTT FFFF KKKK BBBBBBBBBB XXXXXXXX
+^tag   ^ ^  session    command    condition  part       total      flags  keylen bodylen  crc
+       |  \ payload type
+        \ kind
+<condition_key bytes><base64 body>
 ```
 
-`kind` is `P` (a producer's part) or `S` (a consumer subscribing). The header
-holds only numbers and one character, so it cannot contain the newline that ends
-it; key and body are taken by length, so neither needs escaping.
+`kind` is `P` (a producer's part) or `S` (a consumer subscribing) — what the
+message *does*, as opposed to the payload type, which is what it *carries*. The
+header is **95 bytes of fixed-width ASCII**, so the key and the body begin at
+offsets that nothing in their own contents can shift, and the two lengths must
+account for the message exactly — a short, long or misaligned message is rejected
+before any of it is used. There is deliberately no delimiter anywhere in the
+format: the earlier version ended its header with a newline and found it with
+`strchr()`, which was correct only while the key could not itself contain a
+newline, an invariant nothing enforced.
 
 **Coordinator → segment** is a `GP_SIDEBAND_MESSAGE`, written with `pqPutnchar`,
 which performs no conversion — so the merged filter travels as **raw binary**,
 with no base64 tax. That is the direction that matters most, since the merged
 payload is sent once *per consumer* while each part is sent once.
+
+Both directions carry a **CRC32C**, and both discard a message that fails it.
+The transport is TCP, not the UDP interconnect, so this is not about a lossy
+link — TCP's 16-bit checksum is simply thin cover for a megabyte, and hardware
+CRC32C costs about 0.05 ms/MB. The header and key are always covered; whether
+the body is covered too is the payload type's decision, for the reasons in
+[Payload types](#payload-types) above. Where it applies, the segment →
+coordinator CRC covers the pre-base64 bytes, so it validates the decode as well.
 
 The coordinator services these while it is blocked receiving tuples: the
 interconnect adds every dispatch socket to its wait set
@@ -195,7 +269,8 @@ Step by step:
    open.
 
 3. **Deliver (coordinator → every consumer).** Once every expected part is
-   folded, the merged bitset is pushed to each subscriber. Delivery is per
+   folded, the merged payload is judged once (see [Giving up
+   early](#giving-up-early)) and then pushed to each subscriber. Delivery is per
    consumer: a failed write costs that one segment its filter and leaves the
    others alone. A consumer that subscribes *after* the channel completed — which
    happens routinely, since producers on other segments may finish first — is
@@ -228,3 +303,16 @@ never in an error raised into the query:
 - query cancellation → the consumer's wait is a `CHECK_FOR_INTERRUPTS` loop, and
   a delivery that arrives after nobody is waiting is discarded by the QE command
   loop (`GP_SIDEBAND_MESSAGE` is accepted and ignored there).
+
+## Tests
+
+`make installcheck` runs two suites:
+
+- `anser_test` — the payload protocol (serialize, fold, reject a mismatched
+  part) and the four give-up decisions, each walked along its boundary: the
+  estimate either side of 4 bits/key, the payload cap either side of "1 MB plus
+  a header", fill either side of the 95% limit, and a producer whose filter
+  saturates. The case tables live in the `.sql` file, so the expected output
+  records real sizes rather than a bare `t`.
+- `anser_runtime_filter` — plan-tree integration end to end: the nodes are
+  injected, and query results are identical with the feature on and off.

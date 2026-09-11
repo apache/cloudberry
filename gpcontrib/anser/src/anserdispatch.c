@@ -33,6 +33,11 @@
  * parts are folded in place as they arrive, so only the final fold is on the
  * critical path.
  *
+ * Nothing here knows what a part contains.  Merging is delegated to the payload
+ * type's fold() (anserpayload.h), and the only other thing this file asks about
+ * a type is whether its body is covered by the message checksum -- which is why
+ * it does not include anserfilter.h at all.
+ *
  * A note on libpq linkage.  The connections we write to were created by the
  * copy of libpq that is statically linked into the postgres binary, and every
  * symbol listed in libpq's exports.txt is deliberately made *local* in that
@@ -55,7 +60,7 @@
 #include "libpq-int.h"
 
 #include "anser.h"
-#include "anserfilter.h"
+#include "anserpayload.h"
 #include "ansersideband.h"
 #include "cdb/cdbconn.h"
 #include "cdb/cdbdisp.h"
@@ -74,6 +79,7 @@
 typedef struct AnserDispChannel
 {
 	AnserChannelKey key;
+	const AnserPayloadOps *ops;	/* what this carries; NULL until a part says */
 	char	   *payload;		/* merged part, or NULL before the first one */
 	Size		payload_len;
 	int			parts_received;
@@ -83,25 +89,14 @@ typedef struct AnserDispChannel
 	List	   *subscribers;	/* PGconn * of QEs awaiting delivery */
 } AnserDispChannel;
 
-/* Parsed QE -> QD message. */
-typedef struct AnserWireMsg
-{
-	char		kind;
-	AnserChannelKey key;
-	int			part_index;
-	int			total_parts;
-	int			flags;
-	const char *body;			/* base64, not NUL-terminated */
-	int			body_len;
-} AnserWireMsg;
-
 static HTAB *AnserDispChannels = NULL;
 static MemoryContext AnserDispContext = NULL;
 
 static AnserDispChannel *anser_disp_lookup(const AnserChannelKey *key, bool create);
-static bool anser_disp_parse(const char *msg, AnserWireMsg *out);
-static void anser_disp_apply_part(AnserDispChannel *chan, const void *payload,
-								  Size payload_len, int total_parts, bool cancelled);
+static void anser_disp_apply_part(AnserDispChannel *chan,
+								  const AnserPayloadOps *ops,
+								  const void *payload, Size payload_len,
+								  int total_parts, bool cancelled);
 static void anser_disp_deliver(AnserDispChannel *chan);
 static bool anser_disp_push(PGconn *conn, AnserDispChannel *chan);
 
@@ -181,6 +176,7 @@ anser_disp_lookup(const AnserChannelKey *key, bool create)
 	if (create && !found)
 	{
 		/* hash_search only fills the key; initialize the rest. */
+		chan->ops = NULL;
 		chan->payload = NULL;
 		chan->payload_len = 0;
 		chan->parts_received = 0;
@@ -210,6 +206,7 @@ AnserDispatchNotifyHandler(struct CdbDispatchResult *dispatchResult,
 	int			sender = (dr != NULL && dr->segdbDesc != NULL)
 		? dr->segdbDesc->segindex : -99;
 	AnserWireMsg msg;
+	const AnserPayloadOps *ops;
 	AnserDispChannel *chan;
 	MemoryContext oldcxt;
 
@@ -217,10 +214,36 @@ AnserDispatchNotifyHandler(struct CdbDispatchResult *dispatchResult,
 		strcmp(n->relname, ANSER_NOTIFY_CHANNEL) != 0)
 		return false;
 
-	if (n->extra == NULL || !anser_disp_parse(n->extra, &msg))
+	if (n->extra == NULL || !AnserWireParse(n->extra, &msg))
 	{
 		elog(LOG, "anser: ignoring malformed message from a segment (len=%zu)",
 			 n->extra != NULL ? strlen(n->extra) : (size_t) 0);
+		return true;
+	}
+
+	/*
+	 * Resolve what the message carries before doing anything with it.  An
+	 * unregistered type means a producer was taught to send something this
+	 * coordinator does not know how to merge -- almost certainly a payload type
+	 * added to anserpayload.h but not to AnserPayloadTable.
+	 */
+	ops = AnserPayloadLookup(msg.payload_type);
+	if (ops == NULL)
+	{
+		elog(LOG, "anser: unknown payload type '%c' from seg%d (cond=%u); ignoring",
+			 msg.payload_type, sender, msg.key.condition_id);
+		return true;
+	}
+
+	/*
+	 * A message with no body can be checked here, before anything is
+	 * allocated; one with a body is checked in the PART branch below, once it
+	 * has been decoded.
+	 */
+	if (msg.body_len == 0 && !AnserWireCheckCrc(&msg, NULL, 0))
+	{
+		elog(LOG, "anser: ignoring corrupted message from seg%d (cond=%u kind=%c)",
+			 sender, msg.key.condition_id, msg.kind);
 		return true;
 	}
 
@@ -262,9 +285,19 @@ AnserDispatchNotifyHandler(struct CdbDispatchResult *dispatchResult,
 
 			raw = palloc(maxlen);
 			raw_len = pg_b64_decode(msg.body, msg.body_len, raw, maxlen);
-			if (raw_len < 0 || raw_len > gp_anser_max_info_size)
+
+			/*
+			 * Undecodable, oversized or corrupted: cancel the channel rather
+			 * than guess.  Consumers then run unfiltered, which is slower but
+			 * correct -- folding in a part we cannot vouch for risks clearing a
+			 * bit that should be set, and a filter missing a key silently drops
+			 * joinable rows.
+			 */
+			if (raw_len < 0 || raw_len > gp_anser_max_info_size ||
+				!AnserWireCheckCrc(&msg, raw, (Size) raw_len))
 			{
-				/* Undecodable or oversized: cancel rather than guess. */
+				elog(LOG, "anser: unusable part for condition %u from seg%d; cancelling channel",
+					 msg.key.condition_id, sender);
 				pfree(raw);
 				raw = NULL;
 				raw_len = 0;
@@ -272,10 +305,10 @@ AnserDispatchNotifyHandler(struct CdbDispatchResult *dispatchResult,
 			}
 		}
 
-		anser_disp_apply_part(chan, raw, (Size) raw_len, msg.total_parts,
+		anser_disp_apply_part(chan, ops, raw, (Size) raw_len, msg.total_parts,
 							  (msg.flags & ANSER_WIRE_F_CANCELLED) != 0);
-		ANSER_DEBUG("anser: QD part cond=%u from seg%d (says part %d of %d) %d/%d bytes=%d -> %s",
-					msg.key.condition_id, sender, msg.part_index,
+		ANSER_DEBUG("anser: QD %s part cond=%u from seg%d (says part %d of %d) %d/%d bytes=%d -> %s",
+					ops->name, msg.key.condition_id, sender, msg.part_index,
 					msg.total_parts, chan->parts_received,
 					chan->expected_parts, raw_len,
 					chan->cancelled ? "cancelled" :
@@ -295,15 +328,36 @@ AnserDispatchNotifyHandler(struct CdbDispatchResult *dispatchResult,
  * Fold one part into the channel's accumulator.
  *
  * The first part is kept verbatim and becomes the accumulator; later parts are
- * OR'd into it in place (AnserBloomFoldPartInPlace), so no part is ever copied
- * twice and the accumulator is never reallocated.
+ * merged into it in place by the payload type's fold(), so no part is ever
+ * copied twice and the accumulator is never reallocated.  Nothing here knows
+ * what the bytes are -- for a bloom filter the fold is a bitwise OR, for a row
+ * count it would be a sum, and this function reads the same either way.
  */
 static void
-anser_disp_apply_part(AnserDispChannel *chan, const void *payload,
-					  Size payload_len, int total_parts, bool cancelled)
+anser_disp_apply_part(AnserDispChannel *chan, const AnserPayloadOps *ops,
+					  const void *payload, Size payload_len, int total_parts,
+					  bool cancelled)
 {
 	if (chan->cancelled)
 		return;					/* already dead; nothing to do */
+
+	if (chan->ops == NULL)
+		chan->ops = ops;
+	else if (chan->ops != ops)
+	{
+		/*
+		 * Two producers disagree about what this channel carries.  Merging
+		 * across types is meaningless, so give up on the channel: consumers run
+		 * unfiltered, which is always correct.
+		 */
+		elog(LOG, "anser: cond=%u carries both '%s' and '%s'; cancelling channel",
+			 chan->key.condition_id, chan->ops->name, ops->name);
+		chan->cancelled = true;
+		chan->complete = true;
+		chan->payload = NULL;
+		chan->payload_len = 0;
+		return;
+	}
 
 	if (total_parts > chan->expected_parts)
 	{
@@ -341,21 +395,22 @@ anser_disp_apply_part(AnserDispChannel *chan, const void *payload,
 		chan->payload_len = payload_len;
 		chan->parts_received++;
 	}
-	else if (AnserBloomFoldPartInPlace(chan->payload, chan->payload_len,
-									   payload, payload_len))
+	else if (ops->fold != NULL &&
+			 ops->fold(chan->payload, chan->payload_len, payload, payload_len))
 	{
 		chan->parts_received++;
 	}
 	else
 	{
 		/*
-		 * Sizes or parameters disagree, so the parts cannot be unioned.  That
-		 * should not happen (every part on a channel is built from the same
-		 * plan parameters), but if it does the only safe answer is to give up
-		 * on the channel.
+		 * The parts cannot be merged -- for a bloom filter, sizes or filter
+		 * parameters disagree.  That should not happen (every part on a channel
+		 * is built from the same plan parameters), but if it does the only safe
+		 * answer is to give up on the channel.  A type with no fold() reaches
+		 * here too, which is right: it should never have carried a body.
 		 */
-		elog(LOG, "anser: incompatible part for condition %u; cancelling channel",
-			 chan->key.condition_id);
+		elog(LOG, "anser: incompatible '%s' part for condition %u; cancelling channel",
+			 ops->name, chan->key.condition_id);
 		chan->cancelled = true;
 		chan->complete = true;
 		chan->payload = NULL;
@@ -364,7 +419,24 @@ anser_disp_apply_part(AnserDispChannel *chan, const void *payload,
 	}
 
 	if (chan->expected_parts > 0 && chan->parts_received >= chan->expected_parts)
+	{
 		chan->complete = true;
+
+		/*
+		 * Every part is in, so this is the first and last chance to judge the
+		 * merged result.  A type that declines it here saves each consumer both
+		 * the delivery and the per-row probing it would have paid for.
+		 */
+		if (chan->payload != NULL && ops->worth_delivering != NULL &&
+			!ops->worth_delivering(chan->payload, chan->payload_len))
+		{
+			elog(LOG, "anser: merged '%s' payload for condition %u is not worth delivering; cancelling channel",
+				 ops->name, chan->key.condition_id);
+			chan->cancelled = true;
+			chan->payload = NULL;
+			chan->payload_len = 0;
+		}
+	}
 }
 
 /* Push the finished channel to everyone waiting, then forget them. */
@@ -396,15 +468,30 @@ anser_disp_push(PGconn *conn, AnserDispChannel *chan)
 	int			flags = chan->cancelled ? ANSER_WIRE_F_CANCELLED : 0;
 	int			keylen = (int) strlen(chan->key.condition_key);
 	int			paylen = chan->cancelled ? 0 : (int) chan->payload_len;
+	pg_crc32c	crc;
+	char		paytype;
 
 	if (!anser_conn_ok(conn))
 		return false;
+
+	/*
+	 * A channel that was cancelled before any part arrived has no type.  That
+	 * is fine: the delivery carries no body, and a consumer only checks the
+	 * type of a body it actually received.
+	 */
+	paytype = chan->ops != NULL ? chan->ops->code : ANSER_PAYLOAD_NONE;
+
+	crc = AnserWirePushCrc(paytype, chan->key.condition_id, (uint32) flags,
+							   chan->key.condition_key, keylen,
+							   chan->payload, paylen);
 
 	/*
 	 * Raw binary: pqPutnchar performs no encoding conversion, so unlike the
 	 * QE -> QD direction this needs no base64.
 	 */
 	if (pqPutMsgStart(GP_SIDEBAND_MESSAGE, conn) < 0 ||
+		pqPutInt((int) paytype, 4, conn) < 0 ||
+		pqPutInt((int) crc, 4, conn) < 0 ||
 		pqPutInt((int) chan->key.condition_id, 4, conn) < 0 ||
 		pqPutInt(flags, 4, conn) < 0 ||
 		pqPutInt(keylen, 4, conn) < 0 ||
@@ -419,71 +506,104 @@ anser_disp_push(PGconn *conn, AnserDispChannel *chan)
 		return false;
 	}
 
-	ANSER_DEBUG("anser: QD pushed cond=%u bytes=%d cancelled=%d",
-				chan->key.condition_id, paylen, chan->cancelled ? 1 : 0);
+	ANSER_DEBUG("anser: QD pushed cond=%u type=%c bytes=%d cancelled=%d",
+				chan->key.condition_id, paytype, paylen,
+				chan->cancelled ? 1 : 0);
 	return true;
 }
 
 /*
- * Parse a QE -> QD payload.
+ * Parse a QE -> QD payload: fixed-width header, then the condition key, then
+ * the base64 body.  ansersideband.h documents the layout and the reasoning; the
+ * checks here are what make it trustworthy:
  *
- * Layout: a single-line text header, then the condition key, then the body.
+ *   - the tag must match, so a message from a different format is not
+ *     misinterpreted as this one;
+ *   - the header is a constant length, so the key and the body start at offsets
+ *     that no payload byte can influence;
+ *   - the two lengths must account for the message exactly, which catches a
+ *     truncated or over-long message before any of it is used;
+ *   - the CRC is verified once the body has been decoded, in the caller.
  *
- *   anser1 <kind> <ssid> <ccnt> <condid> <part> <total> <flags> <keylen> <bodylen>\n
- *   <condition_key><body>
- *
- * The header holds only numbers and one character, so it cannot contain the
- * newline that terminates it; key and body are taken by length, so neither
- * needs escaping or a delimiter of its own.
+ * The payload type is carried through as the raw byte; resolving it against the
+ * registry is the caller's job, so that an unregistered type is reported as
+ * exactly that rather than as a framing error.
  */
-static bool
-anser_disp_parse(const char *msg, AnserWireMsg *out)
+bool
+AnserWireParse(const char *msg, AnserWireMsg *out)
 {
-	const char *nl;
-	const char *rest;
+	Size		msglen = strlen(msg);
 	char		kind;
-	int			ssid,
+	char		paytype;
+	uint32		ssid,
 				ccnt,
 				condid,
 				part,
 				total,
 				flags,
 				keylen,
-				bodylen;
+				bodylen,
+				crc;
 
-	nl = strchr(msg, '\n');
-	if (nl == NULL)
+	if (msglen < ANSER_WIRE_HDR_LEN)
+		return false;
+	if (strncmp(msg, ANSER_WIRE_TAG " ", sizeof(ANSER_WIRE_TAG)) != 0)
 		return false;
 
-	if (sscanf(msg, ANSER_WIRE_TAG " %c %d %d %d %d %d %d %d %d",
-			   &kind, &ssid, &ccnt, &condid, &part, &total, &flags,
-			   &keylen, &bodylen) != 9)
+	if (sscanf(msg, ANSER_WIRE_HDR_SCANF,
+			   &kind, &paytype, &ssid, &ccnt, &condid, &part, &total, &flags,
+			   &keylen, &bodylen, &crc) != 11)
 		return false;
 
 	if (kind != ANSER_WIRE_KIND_PART && kind != ANSER_WIRE_KIND_SUBSCRIBE)
 		return false;
-	if (condid < 0 || keylen < 0 || bodylen < 0 ||
-		keylen >= ANSER_CONDITION_KEY_SIZE)
+	if (keylen >= ANSER_CONDITION_KEY_SIZE)
 		return false;
-
-	rest = nl + 1;
-	if ((int) strlen(rest) != keylen + bodylen)
+	if (msglen != ANSER_WIRE_HDR_LEN + (Size) keylen + (Size) bodylen)
 		return false;
 
 	MemSet(out, 0, sizeof(*out));
+	out->wire = msg;
 	out->kind = kind;
-	out->key.gp_session_id = ssid;
-	out->key.gp_command_count = ccnt;
-	out->key.condition_id = (uint32) condid;
-	memcpy(out->key.condition_key, rest, keylen);
+	out->payload_type = paytype;
+	out->key.gp_session_id = (int) ssid;
+	out->key.gp_command_count = (int) ccnt;
+	out->key.condition_id = condid;
+	memcpy(out->key.condition_key, msg + ANSER_WIRE_HDR_LEN, keylen);
 	out->key.condition_key[keylen] = '\0';
-	out->part_index = part;
-	out->total_parts = total;
-	out->flags = flags;
-	out->body = rest + keylen;
-	out->body_len = bodylen;
+	out->key_len = (int) keylen;
+	out->part_index = (int) part;
+	out->total_parts = (int) total;
+	out->flags = (int) flags;
+	out->body = msg + ANSER_WIRE_HDR_LEN + keylen;
+	out->body_len = (int) bodylen;
+	out->crc = crc;
 
 	return true;
+}
+
+/*
+ * Verify a parsed message against its checksum.
+ *
+ * 'body' is the decoded body, which is what the producer checksummed -- so
+ * where it is covered this validates the base64 round trip as well.  Pass
+ * NULL/0 for a message that has no body, and note that a type which opts out of
+ * checksumming its body still has its header and key checked.
+ */
+bool
+AnserWireCheckCrc(const AnserWireMsg *msg, const void *body, Size body_len)
+{
+	pg_crc32c	crc;
+
+	INIT_CRC32C(crc);
+	COMP_CRC32C(crc, msg->wire, ANSER_WIRE_CRC_OFFSET);
+	COMP_CRC32C(crc, msg->key.condition_key, msg->key_len);
+	if (body != NULL && body_len > 0 &&
+		AnserPayloadChecksumsBody(msg->payload_type))
+		COMP_CRC32C(crc, body, body_len);
+	FIN_CRC32C(crc);
+
+	return (uint32) crc == msg->crc;
 }
 
 /*
@@ -493,11 +613,12 @@ anser_disp_parse(const char *msg, AnserWireMsg *out)
  * folds straight into the same channel table the hook uses.
  */
 bool
-AnserDispatchLocalPublish(const AnserChannelKey *channel_key,
+AnserDispatchLocalPublish(const AnserChannelKey *channel_key, char payload_type,
 						  uint32 part_index, uint32 total_parts,
 						  const void *payload, Size payload_len,
 						  bool cancelled)
 {
+	const AnserPayloadOps *ops;
 	AnserDispChannel *chan;
 	MemoryContext oldcxt;
 
@@ -506,16 +627,24 @@ AnserDispatchLocalPublish(const AnserChannelKey *channel_key,
 	if (!cancelled && payload_len > (Size) gp_anser_max_info_size)
 		cancelled = true;
 
+	ops = AnserPayloadLookup(payload_type);
+	if (ops == NULL)
+	{
+		elog(LOG, "anser: unknown payload type '%c' for condition %u; ignoring",
+			 payload_type, channel_key->condition_id);
+		return false;
+	}
+
 	anser_disp_init();
 	oldcxt = MemoryContextSwitchTo(AnserDispContext);
 
 	chan = anser_disp_lookup(channel_key, true);
 	if (chan != NULL)
 	{
-		anser_disp_apply_part(chan, payload, payload_len, (int) total_parts,
-							  cancelled);
-		ANSER_DEBUG("anser: QD local part cond=%u (part %u of %u) %d/%d bytes=%zu -> %s",
-					channel_key->condition_id, part_index, total_parts,
+		anser_disp_apply_part(chan, ops, payload, payload_len,
+							  (int) total_parts, cancelled);
+		ANSER_DEBUG("anser: QD local %s part cond=%u (part %u of %u) %d/%d bytes=%zu -> %s",
+					ops->name, channel_key->condition_id, part_index, total_parts,
 					chan->parts_received, chan->expected_parts, payload_len,
 					chan->cancelled ? "cancelled" :
 					chan->complete ? "complete" : "collecting");
@@ -535,7 +664,7 @@ AnserDispatchLocalPublish(const AnserChannelKey *channel_key,
  * complete or it never will be (a squelched producer, say) and we fail open.
  */
 bool
-AnserDispatchLocalConsume(const AnserChannelKey *channel_key,
+AnserDispatchLocalConsume(const AnserChannelKey *channel_key, char payload_type,
 						  void **payload, Size *payload_len, bool *cancelled)
 {
 	AnserDispChannel *chan;
@@ -556,6 +685,17 @@ AnserDispatchLocalConsume(const AnserChannelKey *channel_key,
 
 	if (chan->cancelled || chan->payload == NULL)
 	{
+		if (cancelled != NULL)
+			*cancelled = true;
+		return false;
+	}
+
+	/* Same check the segment path makes on delivery; see anser_inbox_take. */
+	if (chan->ops == NULL || chan->ops->code != payload_type)
+	{
+		elog(WARNING, "anser: condition %u holds payload type '%c', expected '%c'",
+			 channel_key->condition_id,
+			 chan->ops != NULL ? chan->ops->code : '?', payload_type);
 		if (cancelled != NULL)
 			*cancelled = true;
 		return false;

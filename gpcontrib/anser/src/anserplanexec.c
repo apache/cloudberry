@@ -363,7 +363,28 @@ anser_produce_next(CustomScanState *node)
 	 * Every process that deserializes the plan builds this node, but only the
 	 * ones running its slice ever execute it; the rest must stay silent.
 	 */
-	st->started = true;
+	if (!st->started)
+	{
+		st->started = true;
+
+		/*
+		 * No filter means the estimate that justified this node was wrong by
+		 * enough that one cannot usefully be built.  Say so now, on the first
+		 * tuple, rather than after scanning the whole build side: the consumers
+		 * are sitting on their timeout, and every millisecond of it is wasted.
+		 *
+		 * This is also the earliest point at which cancelling is safe.  Doing
+		 * it at ExecInit time would cancel channels from the coordinator, which
+		 * builds this node for every slice but executes none of them.
+		 */
+		if (st->produce != NULL && !st->published &&
+			!ExecAnserBloomFilterProduceHasFilter(st->produce))
+		{
+			ANSER_DEBUG("anser: producer has no usable filter; cancelling before the scan");
+			(void) ExecAnserBloomFilterProduceCancel(st->produce);
+			st->published = true;
+		}
+	}
 
 	slot = ExecProcNode(child);
 

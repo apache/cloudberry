@@ -67,4 +67,15 @@ extern CustomScan *AnserBuildBloomConsumerScan(Plan *child, AttrNumber key_attno
 											   Size max_payload_bytes,
 											   int64 planned_bytes);
 
+/*
+ * Bloom sizing for one join, from its estimated build cardinality.  False means
+ * no filter is worth injecting -- see the density rule in anserfilter.h.
+ *
+ * Exposed rather than static because it is the cheapest of Anser's give-up
+ * decisions and therefore the one most worth testing directly at its boundary
+ * (anser_test.c); nothing but the injection pass and the tests should call it.
+ */
+extern bool AnserRuntimeFilterSize(double est_rows, int64 *total_elems,
+								   int64 *max_payload, int64 *planned_bytes);
+
 #endif							/* ANSERPLAN_H */
