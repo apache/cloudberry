@@ -505,7 +505,12 @@ def escapeDoubleQuoteInSQLString(string, forceDoubleQuote=True):
 
 
 def Escape(query_str):
-    return pgdb.escape_string(query_str)
+    # pgdb.escape_string() is a thin wrapper around libpq's PQescapeString,
+    # and the str overload encodes with the ASCII codec, so any non-ASCII
+    # identifier or value raises UnicodeEncodeError.  Hand it UTF-8 bytes
+    # instead: libpq escapes those byte-for-byte and the result decodes back
+    # to the original text.
+    return pgdb.escape_string(query_str.encode('utf-8')).decode('utf-8')
 
 
 def escapeArrayElement(query_str):
