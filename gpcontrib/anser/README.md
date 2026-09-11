@@ -120,6 +120,34 @@ by up to that long.
 | `anser.runtime_filter` | `off` | USERSET | Enables the post-planning pass that injects bloom-filter producer/consumer nodes into a matching plan. Requires `anser.enable`. |
 | `anser.max_info_size` | `65 MB` | POSTMASTER | Maximum serialized payload (merged bloom filter + part header) a channel may hold; caps the effective bloom-filter size. The default is `64 MB + 1 MB` so a full 64 MB power-of-two bitset fits with its header; `bloom_create` also floors every bitset at 1 MB. |
 | `anser.timeout_ms` | `1000` | USERSET | How long a consumer waits for its filter before running unfiltered. The deadline matters because a producer that gets squelched never publishes at all: `ExecSquelchNode` only marks a `CustomScanState`, it does not call the node back. |
+| `anser.debug` | `off` | USERSET | Traces the exchange — publish, merge, delivery, receive — in the log of the process each step happens in. See below. |
+
+### Tracing an exchange
+
+Until a filter is either used or timed out, none of the handoff is visible in
+`EXPLAIN`: a consumer that waited and got nothing looks exactly like one whose
+producers never published. `anser.debug` makes each step log where it happened,
+which is normally the fastest way to find where an exchange broke:
+
+```
+seg0  producer init cond=0 part=0/3 elems=3334 payload=67108928 state=ok
+seg0  producer child exhausted, publishing (state=ok)
+seg0  published cond=0 part=0/3 bytes=1048592 cancelled=0 sent=1
+QD    part cond=0 from seg0 (says part 0 of 3) 1/3 bytes=1048592 -> collecting
+QD    part cond=0 from seg1 (says part 1 of 3) 2/3 bytes=1048592 -> collecting
+QD    part cond=0 from seg2 (says part 2 of 3) 3/3 bytes=1048592 -> complete
+QD    delivering cond=0 to 3 subscriber(s)
+QD    pushed cond=0 bytes=1048592 cancelled=0
+seg0  received cond=0 bytes=1048592 cancelled=0
+```
+
+Set it in `postgresql.conf` (`gpconfig -c anser.debug -v on`) rather than with
+`SET` if you need to see the producer gang: a session-level `SET` does not
+reliably reach every gang, and the producers are the half you usually want.
+
+A consumer that gives up reports what it saw — `read 0 message(s), 0
+unclaimed` means nothing arrived at all, whereas unclaimed messages mean
+something arrived for a channel it was not waiting on.
 
 ## Data flow: producer → merge (bitwise union) → consumer
 
