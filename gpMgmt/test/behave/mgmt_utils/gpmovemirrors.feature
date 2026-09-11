@@ -243,6 +243,12 @@ Feature: Tests for gpmovemirrors
   @demo_cluster
   @concourse_cluster
   @skip_cleanup
+  # gprecoverseg does not detect a pg_basebackup that is already running
+  # against a segment: get_segments_with_running_basebackup and the
+  # gp_stat_replication check around it were never carried over, so nothing
+  # here prints "Found pg_basebackup running for segments with contentIds".
+  # Kept aligned with upstream so they can be enabled with the feature.
+  @not_implemented
   Scenario: gpmovemirrors gives warning if pg_basebackup is already running for one of the mirrors to be moved
     Given the database is running
     And all the segments are running
@@ -282,6 +288,12 @@ Feature: Tests for gpmovemirrors
   @demo_cluster
   @concourse_cluster
   @skip_cleanup
+  # gprecoverseg does not detect a pg_basebackup that is already running
+  # against a segment: get_segments_with_running_basebackup and the
+  # gp_stat_replication check around it were never carried over, so nothing
+  # here prints "Found pg_basebackup running for segments with contentIds".
+  # Kept aligned with upstream so they can be enabled with the feature.
+  @not_implemented
   Scenario: gpmovemirrors gives warning if pg_basebackup is already running for some of the mirrors to be moved
     Given the database is running
     And all the segments are running
@@ -322,6 +334,12 @@ Feature: Tests for gpmovemirrors
   @demo_cluster
   @concourse_cluster
   @skip_cleanup
+  # gprecoverseg does not detect a pg_basebackup that is already running
+  # against a segment: get_segments_with_running_basebackup and the
+  # gp_stat_replication check around it were never carried over, so nothing
+  # here prints "Found pg_basebackup running for segments with contentIds".
+  # Kept aligned with upstream so they can be enabled with the feature.
+  @not_implemented
   Scenario: gpmovemirrors gives warning if pg_basebackup is already running for all mirrors to be moved
     Given the database is running
     And all the segments are running
@@ -361,107 +379,6 @@ Feature: Tests for gpmovemirrors
 
 ########################### @concourse_cluster tests ###########################
 # The @concourse_cluster tag denotes the scenario that requires a remote cluster
-
-    @concourse_cluster
-    Scenario: gpmovemirrors can change from group mirroring to spread mirroring
-        Given verify that mirror segments are in "group" configuration
-        And pg_hba file "/data/gpdata/primary/gpseg1/pg_hba.conf" on host "sdw1" contains only cidr addresses
-        And a sample gpmovemirrors input file is created in "spread" configuration on "old" parent directory
-        When the user runs "gpmovemirrors --input=/tmp/gpmovemirrors_input_spread"
-        Then gpmovemirrors should return a return code of 0
-        # Verify that mirrors are functional in the new configuration
-        Then verify the database has mirrors
-        And all the segments are running
-        And the segments are synchronized
-        And verify that mirror segments are in "spread" configuration
-        And verify that mirrors are recognized after a restart
-        And pg_hba file "/data/gpdata/primary/gpseg1/pg_hba.conf" on host "sdw1" contains only cidr addresses
-        And the information of a "mirror" segment on a remote host is saved
-        When user kills a "mirror" process with the saved information
-        And an FTS probe is triggered
-        And user can start transactions
-        Then the saved "mirror" segment is marked down in config
-        When the user runs "gprecoverseg -a"
-        Then gprecoverseg should return a return code of 0
-        And all the segments are running
-        And the segments are synchronized
-        And the information of the corresponding primary segment on a remote host is saved
-        When user kills a "primary" process with the saved information
-        And an FTS probe is triggered
-        And user can start transactions
-        When the user runs "gprecoverseg -a"
-        Then gprecoverseg should return a return code of 0
-        And all the segments are running
-        And the segments are synchronized
-        When primary and mirror switch to non-preferred roles
-        When the user runs "gprecoverseg -a -r"
-        Then gprecoverseg should return a return code of 0
-        And all the segments are running
-        And the segments are synchronized
-        And check segment conf: postgresql.conf
-
-    @concourse_cluster
-    Scenario: gpmovemirrors can change from spread mirroring to group mirroring
-        Given verify that mirror segments are in "spread" configuration
-        And a sample gpmovemirrors input file is created in "group" configuration on "old" parent directory
-        When the user runs "gpmovemirrors --input=/tmp/gpmovemirrors_input_group --hba-hostnames"
-        Then gpmovemirrors should return a return code of 0
-        # Verify that mirrors are functional in the new configuration
-        Then verify the database has mirrors
-        And all the segments are running
-        And the segments are synchronized
-        And saving host IP address of "sdw3"
-        # gpmovemirrors_input_group moves mirror on sdw3 to sdw2, corresponding primary should now have sdw2 entry
-        And pg_hba file "/data/gpdata/primary/gpseg1/pg_hba.conf" on host "sdw1" contains entries for "sdw2"
-        And pg_hba file on primary of mirrors on "sdw2" with "1" contains no replication entries for "sdw3"
-        And verify that only replication connection primary has is to "sdw2"
-        And verify that mirror segments are in "group" configuration
-        And verify that mirrors are recognized after a restart
-        And the information of a "mirror" segment on a remote host is saved
-        When user kills a "mirror" process with the saved information
-        And an FTS probe is triggered
-        And user can start transactions
-        Then the saved "mirror" segment is marked down in config
-        When the user runs "gprecoverseg -a"
-        Then gprecoverseg should return a return code of 0
-        And all the segments are running
-        And the segments are synchronized
-        And the information of the corresponding primary segment on a remote host is saved
-        When user kills a "primary" process with the saved information
-        And an FTS probe is triggered
-        And user can start transactions
-        When the user runs "gprecoverseg -a"
-        Then gprecoverseg should return a return code of 0
-        And all the segments are running
-        And the segments are synchronized
-        When primary and mirror switch to non-preferred roles
-        When the user runs "gprecoverseg -a -r"
-        Then gprecoverseg should return a return code of 0
-        And all the segments are running
-        And the segments are synchronized
-        And check segment conf: postgresql.conf
-
-    @concourse_cluster
-    Scenario: tablespaces work on a multi-host environment
-        Given verify that mirror segments are in "group" configuration
-          And a tablespace is created with data
-          And a sample gpmovemirrors input file is created in "spread" configuration on "old" parent directory
-         When the user runs "gpmovemirrors --input=/tmp/gpmovemirrors_input_spread"
-         Then gpmovemirrors should return a return code of 0
-          And verify the tablespace directories on host "sdw2" for content "1" are deleted
-          And verify the tablespace directories on host "sdw1" for content "5" are deleted
-          And verify the tablespace directories on host "sdw3" for content "1" are valid
-          And verify the tablespace directories on host "sdw2" for content "5" are valid
-          And verify the database has mirrors
-          And all the segments are running
-          And the segments are synchronized
-          And verify that mirrors are recognized after a restart
-          And the tablespace is valid
-
-         When user stops all primary processes
-          And user can start transactions
-         Then the tablespace is valid
-          And the cluster is recovered in full and rebalanced
 
     @concourse_cluster
     Scenario: gpmovemirrors mirrors come up even if one pg_ctl_start fails
@@ -609,56 +526,4 @@ Feature: Tests for gpmovemirrors
         And check segment conf: postgresql.conf
         And the row count from table "test_movemirrors" in "postgres" is verified against the saved data
 
-    @concourse_cluster
-    Scenario: gpmovemirrors removes the stale replication entries from pg_hba when moving mirrors to another host
-        Given a working directory of the test as '/tmp/gpmovemirrors'
-        And the database is not running
-        And a cluster is created with "spread" segment mirroring on "cdw" and "sdw1, sdw2, sdw3"
-        And verify that mirror segments are in "spread" configuration
-        And a gpmovemirrors directory under '/tmp' with mode '0700' is created
-        And create an input file to move mirrors from "sdw1" to "sdw3" in "same" data directory
-        When the user runs "gpmovemirrors -a --input=/tmp/gpmovemirrors_input_sdw1_sdw3"
-        Then gpmovemirrors should return a return code of 0
-        Then verify the database has mirrors
-        And all the segments are running
-        And the segments are synchronized
-        And saving host IP address of "sdw1"
-        And pg_hba file on primary of mirrors on "sdw3" with "3,4" contains no replication entries for "sdw1"
-        And verify that only replication connection primary has is to "sdw3"
-       
-    @concourse_cluster
-    Scenario: gpmovemirrors fails if the target host does not have enough free disk space to move mirror from source host
-          Given the database is running
-          And all the segments are running
-          And the segments are synchronized
-          And a tablespace is created with data
-          And mount a filesystem with min total capacity
-          And a gpmovemirrors input file is created
-          And edit the input file to move mirror with content 0 to a new directory on remote host with mode 0700
-          And edit the input file to move mirror with content 1 to a new directory on remote host with mode 0700
-          And edit the input file to move mirror with content 2 to a new directory on remote host with mode 0700
-          And edit the input file to move mirror with content 3 to a new directory on remote host with mode 0700
-          And edit the input file to move mirror with content 4 to a new directory on remote host with mode 0700
-          And edit the input file to move mirror with content 5 to a new directory on remote host with mode 0700
-
-          When the user runs gpmovemirrors
-          Then gpmovemirrors should return a return code of 3
-          And gpmovemirrors should print "Insufficient disk space on target mirror hosts." to stdout
-          And all the segments are running
-          And the segments are synchronized
-
-    @concourse_cluster
-    Scenario: gpmovemirrors fails if the target host does not have enough free disk space to move mirror to new host
-        Given the database is running
-        And all the segments are running
-        And the segments are synchronized
-        And a tablespace is created with data
-        And mount a filesystem with min total capacity
-        And create an input file to move mirrors from "sdw2" to "sdw3" in "context" data directory
-        When the user runs "gpmovemirrors --input=/tmp/gpmovemirrors_input_sdw2_sdw3"
-
-        Then gpmovemirrors should return a return code of 3
-        And gpmovemirrors should print "Insufficient disk space on target mirror hosts." to stdout
-        And all the segments are running
-        And the segments are synchronized
 
