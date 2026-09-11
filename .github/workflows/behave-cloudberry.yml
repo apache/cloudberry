@@ -186,7 +186,7 @@ jobs:
               },
               {"test":"ic-behave-gprecoverseg",
                "behave_features":["test/behave/mgmt_utils/gprecoverseg.feature"],
-               "behave_args":"--tags ~@concourse_cluster --tags ~@extended"
+               "behave_args":"--tags ~@concourse_cluster --tags ~@extended --tags ~@differential"
               },
               {"test":"ic-behave-gpreload","behave_features":["test/behave/mgmt_utils/gpreload.feature"]},
               {"test":"ic-behave-gpstart",

@@ -23,6 +23,7 @@ from contextlib import closing
 from gppylib.gparray import GpArray, ROLE_PRIMARY, ROLE_MIRROR
 from gppylib.commands.gp import SegmentStart, GpStandbyStart, CoordinatorStop
 from gppylib.commands import gp
+from gppylib.commands import unix
 from gppylib.commands.pg import PgBaseBackup
 from gppylib.operations.startSegments import MIRROR_MODE_MIRRORLESS
 from gppylib.operations.buildMirrorSegments import get_recovery_progress_pattern
@@ -489,14 +490,6 @@ def impl(context):
     else:
         return
 
-@then( 'verify if the gprecoverseg.lock directory is present in coordinator_data_directory')
-def impl(context):
-    gprecoverseg_lock_file = "%s/gprecoverseg.lock" % gp.get_coordinatordatadir()
-    if not os.path.exists(gprecoverseg_lock_file):
-        raise Exception('gprecoverseg.lock directory does not exist')
-    else:
-        return
-
 
 @then('verify that lines from recovery_progress.file are present in segment progress files in {logdir}')
 def impl(context, logdir):
@@ -671,11 +664,6 @@ def impl(context, process_name, signal_name):
     command = "ps ux | grep bin/{0} | awk '{{print $2}}' | xargs kill -{1}".format(process_name, sig.value)
     run_async_command(context, command)
 
-@when('the user asynchronously sets up to end {process_name} process with SIGHUP')
-def impl(context, process_name):
-    command = "ps ux | grep bin/%s | awk '{print $2}' | xargs kill -9" % (process_name)
-    run_async_command(context, command)
-
 @when('the user asynchronously sets up to end gpcreateseg process when it starts')
 def impl(context):
     # We keep trying to find the gpcreateseg process using ps,grep
@@ -826,6 +814,7 @@ def impl(context, command, out_msg):
 @when('{command} should print "{out_msg}" to stdout')
 @then('{command} should print "{out_msg}" to stdout')
 @then('{command} should print a "{out_msg}" warning')
+@when('{command} should print a "{out_msg}" warning')
 def impl(context, command, out_msg):
     check_stdout_msg(context, out_msg)
 
@@ -1570,6 +1559,8 @@ def impl(context):
     return
 
 
+@given('verify that mirror on content {content_ids} is {expected_status}')
+@when('verify that mirror on content {content_ids} is {expected_status}')
 @then('verify that mirror on content {content_ids} is {expected_status}')
 def impl(context, content_ids, expected_status):
     if content_ids == 'None':
@@ -1587,6 +1578,8 @@ def impl(context, content_ids, expected_status):
 
 
 @given('the cluster configuration has no segments where "{filter}"')
+@when('the cluster configuration has no segments where "{filter}"')
+@then('the cluster configuration has no segments where "{filter}"')
 def impl(context, filter):
     SLEEP_PERIOD = 5
     MAX_DURATION = 300
@@ -1620,7 +1613,9 @@ def impl(context, when):
     context.saved_array[when] = GpArray.initFromCatalog(dbconn.DbURL())
 
 
+@given('we run a sample background script to generate a pid on "{seg}" segment')
 @when('we run a sample background script to generate a pid on "{seg}" segment')
+@then('we run a sample background script to generate a pid on "{seg}" segment')
 def impl(context, seg):
     if seg == "primary":
         if not hasattr(context, 'pseg_hostname'):
@@ -1826,15 +1821,27 @@ def impl(context):
 @then('verify the standby coordinator entries in catalog')
 def impl(context):
     check_segment_config_query = "SELECT * FROM gp_segment_configuration WHERE content = -1 AND role = 'm'"
+    # Do not filter on application_name here: a standby coordinator's
+    # walreceiver connects as cluster_name, or "walreceiver" when that is
+    # unset. Only segment mirrors identify themselves as gp_walreceiver, by
+    # spelling it out in primary_conninfo.
     check_stat_replication_query = "SELECT * FROM pg_stat_replication"
     with closing(dbconn.connect(dbconn.DbURL(dbname='postgres'), unsetSearchPath=False)) as conn:
         segconfig = dbconn.query(conn, check_segment_config_query).fetchall()
-        statrep = dbconn.query(conn, check_stat_replication_query).fetchall()
 
     if len(segconfig) != 1:
         raise Exception("gp_segment_configuration did not have standby coordinator")
 
-    if len(statrep) != 1:
+    # In PG16 the WAL sender may take longer to appear in
+    # pg_stat_replication after gpinitstandby returns, especially
+    # when standby is re-created after removal on a single-host cluster.
+    for _ in range(60):
+        with closing(dbconn.connect(dbconn.DbURL(dbname='postgres'), unsetSearchPath=False)) as conn:
+            statrep = dbconn.query(conn, check_stat_replication_query).fetchall()
+        if len(statrep) >= 1:
+            break
+        time.sleep(1)
+    else:
         raise Exception("pg_stat_replication did not have standby coordinator")
 
     context.standby_dbid = segconfig[0][0]
@@ -2770,6 +2777,18 @@ def impl(context, filepath):
 def impl(context, command, target):
     log_dir = _get_gpAdminLogs_directory()
     filename = glob.glob('%s/%s_*.log' % (log_dir, command))[0]
+    contents = ''
+    with open(filename) as fr:
+        for line in fr:
+            contents += line
+    if target not in contents:
+        raise Exception("cannot find %s in %s" % (target, filename))
+
+@then('{command} should print "{target}" to logfile with latest timestamp')
+def impl(context, command, target):
+    log_dir = _get_gpAdminLogs_directory()
+    filenames = glob.glob('%s/%s_*.log' % (log_dir, command))
+    filename = max(filenames, key=os.path.getctime)
     contents = ''
     with open(filename) as fr:
         for line in fr:
@@ -3771,6 +3790,7 @@ def impl(context):
 
 
 @when('the user runs {command} and selects {input}')
+@then('the user runs {command} and selects {input}')
 def impl(context, command, input):
     p = Popen(command.split(), stdout=PIPE, stdin=PIPE, stderr=PIPE)
     stdout, stderr = p.communicate(input=input.encode())
@@ -3835,6 +3855,17 @@ def impl(context):
     with closing(dbconn.connect(dbconn.DbURL())) as conn:
         rows = dbconn.query(conn, "SELECT name, setting FROM pg_settings WHERE name LIKE 'lc_%'").fetchall()
         context.database_locales = {row.name: row.setting for row in rows}
+
+        # Starting with PostgreSQL 15, lc_collate and lc_ctype are no longer
+        # exposed as server GUCs (they are per-database properties).  Fetch
+        # them from pg_database so the locale checks keep working on the
+        # PostgreSQL 16 based kernel.
+        db_rows = dbconn.query(conn,
+                               "SELECT datcollate, datctype FROM pg_database "
+                               "WHERE datname = current_database()").fetchall()
+        if db_rows:
+            context.database_locales['lc_collate'] = db_rows[0].datcollate
+            context.database_locales['lc_ctype'] = db_rows[0].datctype
 
 def check_locales(database_locales, locale_names, expected):
     locale_names = locale_names.split(',')
@@ -3950,6 +3981,19 @@ def impl(context):
                                                         %(hostname, hostname, hostname))
      cmd.run(validateAfter=True)
 
+@given('update /etc/hosts file with address for the localhost')
+def impl(context):
+    hostname = context.hostname
+    # Backup current /etc/hosts file
+    cmd = Command(name='backup the hosts file', cmdStr='sudo cp /etc/hosts /tmp/hosts_orig')
+    cmd.run(validateAfter=True)
+    # Update the address
+    cmdStr = "echo \"127.0.0.1 {}\" | sudo tee -a /etc/hosts".format(hostname)
+    cmd = Command(name="update /etc/hosts file with hostname entry", cmdStr=cmdStr)
+    cmd.run(validateAfter=True)
+
+
+@when('restore /etc/hosts file and cleanup hostlist file')
 @then('restore /etc/hosts file and cleanup hostlist file')
 def impl(context):
     cmd = "sudo mv -f /tmp/hosts_orig /etc/hosts; rm -f /tmp/clusterConfigFile-1; rm -f /tmp/hostfile--1"
@@ -4067,31 +4111,33 @@ def impl(context):
 @when('running postgres processes are saved in context')
 @then('running postgres processes are saved in context')
 def impl(context):
-
-    # Store the pids in a dictionary where key will be the hostname and the
-    # value will be the pids of all the postgres processes running on that host
-    host_to_pid_map = dict()
+    # Store segment postmaster identities by datadir. Checking old PIDs is
+    # brittle because PID reuse or already-orphaned children can make a stopped
+    # segment look alive.
+    host_to_datadir_map = dict()
     segs = GpArray.initFromCatalog(dbconn.DbURL()).getDbList()
     for seg in segs:
-        pids = gp.get_postgres_segment_processes(seg.datadir, seg.hostname)
-        if seg.hostname not in host_to_pid_map:
-            host_to_pid_map[seg.hostname] = pids
-        else:
-            host_to_pid_map[seg.hostname].extend(pids)
+        host_to_datadir_map.setdefault(seg.hostname, set()).add(seg.datadir)
 
-    context.host_to_pid_map = host_to_pid_map
+    context.host_to_datadir_map = host_to_datadir_map
 
 
 @given('verify no postgres process is running on all hosts')
 @when('verify no postgres process is running on all hosts')
 @then('verify no postgres process is running on all hosts')
 def impl(context):
-    host_to_pid_map = context.host_to_pid_map
+    host_to_datadir_map = context.host_to_datadir_map
 
-    for host in host_to_pid_map:
-        for pid in host_to_pid_map[host]:
-            if unix.check_pid_on_remotehost(pid, host):
-                raise Exception("Postgres process {0} not killed on {1}.".format(pid, host))
+    for host in host_to_datadir_map:
+        for datadir in host_to_datadir_map[host]:
+            # gpstop can return while postmasters are still exiting.
+            for _ in range(60):
+                if gp.getPostmasterPID(host, datadir) == -1:
+                    break
+                time.sleep(1)
+            else:
+                raise Exception(
+                    "Postgres postmaster for {0} not stopped on {1}.".format(datadir, host))
 
 
 @then('the database segments are in execute mode')
