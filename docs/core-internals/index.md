@@ -26,44 +26,44 @@ sidebar_position: 0
 
 # Apache Cloudberry — Core Internals
 
-全书 21 章 / 104 节。
+21 chapters, 104 sections.
 
 ## Introduction
 
-- [1. Introduction: The Big Picture](./part-1-introduction/ch01.md) — 5 节
+- [1. Introduction: The Big Picture](./part-1-introduction/ch01.md) — 5 sections
 
 ## Part I · Storage & Data Layout
 
-- [2. Data Files & the Storage Manager](./part-2-storage-data-layout/ch02.md) — 3 节
-- [3. Buffer Cache](./part-2-storage-data-layout/ch03.md) — 6 节
-- [4. Heap: The Row Store](./part-2-storage-data-layout/ch04.md) — 6 节
-- [5. Append-Optimized Tables (AO & AOCS)](./part-2-storage-data-layout/ch05.md) — 6 节
-- [6. PAX: The Native Columnar Engine](./part-2-storage-data-layout/ch06.md) — 5 节
-- [7. Indexes](./part-2-storage-data-layout/ch07.md) — 6 节
-- [8. The System Catalog](./part-2-storage-data-layout/ch08.md) — 5 节
+- [2. Data Files & the Storage Manager](./part-2-storage-data-layout/ch02.md) — 3 sections
+- [3. Buffer Cache](./part-2-storage-data-layout/ch03.md) — 6 sections
+- [4. Heap: The Row Store](./part-2-storage-data-layout/ch04.md) — 6 sections
+- [5. Append-Optimized Tables (AO & AOCS)](./part-2-storage-data-layout/ch05.md) — 6 sections
+- [6. PAX: The Native Columnar Engine](./part-2-storage-data-layout/ch06.md) — 5 sections
+- [7. Indexes](./part-2-storage-data-layout/ch07.md) — 6 sections
+- [8. The System Catalog](./part-2-storage-data-layout/ch08.md) — 5 sections
 
 ## Part II · Transactions, MVCC & Concurrency
 
-- [9. Transactions & Isolation](./part-3-transactions-mvcc-concurrency/ch09.md) — 5 节
-- [10. MVCC, Snapshots & Vacuum](./part-3-transactions-mvcc-concurrency/ch10.md) — 6 节
-- [11. Locks & the Global Deadlock Detector](./part-3-transactions-mvcc-concurrency/ch11.md) — 5 节
-- [12. Distributed Transactions & 2PC](./part-3-transactions-mvcc-concurrency/ch12.md) — 4 节
+- [9. Transactions & Isolation](./part-3-transactions-mvcc-concurrency/ch09.md) — 5 sections
+- [10. MVCC, Snapshots & Vacuum](./part-3-transactions-mvcc-concurrency/ch10.md) — 6 sections
+- [11. Locks & the Global Deadlock Detector](./part-3-transactions-mvcc-concurrency/ch11.md) — 5 sections
+- [12. Distributed Transactions & 2PC](./part-3-transactions-mvcc-concurrency/ch12.md) — 4 sections
 
 ## Part III · Query Processing
 
-- [13. Query Processing Stages](./part-4-query-processing/ch13.md) — 3 节
-- [14. Statistics & Selectivity](./part-4-query-processing/ch14.md) — 3 节
-- [15. The Postgres Planner](./part-4-query-processing/ch15.md) — 4 节
-- [16. Distributed Planning](./part-4-query-processing/ch16.md) — 4 节
-- [17. ORCA: The Cascades Optimizer](./part-4-query-processing/ch17.md) — 6 节
-- [18. The Executor](./part-4-query-processing/ch18.md) — 7 节
-- [19. Motion & the Interconnect](./part-4-query-processing/ch19.md) — 6 节
+- [13. Query Processing Stages](./part-4-query-processing/ch13.md) — 3 sections
+- [14. Statistics & Selectivity](./part-4-query-processing/ch14.md) — 3 sections
+- [15. The Postgres Planner](./part-4-query-processing/ch15.md) — 4 sections
+- [16. Distributed Planning](./part-4-query-processing/ch16.md) — 4 sections
+- [17. ORCA: The Cascades Optimizer](./part-4-query-processing/ch17.md) — 6 sections
+- [18. The Executor](./part-4-query-processing/ch18.md) — 7 sections
+- [19. Motion & the Interconnect](./part-4-query-processing/ch19.md) — 6 sections
 
 ## Part IV · High Availability & Recovery
 
-- [20. High Availability & Recovery](./part-5-high-availability-recovery/ch20.md) — 7 节
+- [20. High Availability & Recovery](./part-5-high-availability-recovery/ch20.md) — 7 sections
 
 ## Part V · Resource Management
 
-- [21. Resource Management](./part-6-resource-management/ch21.md) — 2 节
+- [21. Resource Management](./part-6-resource-management/ch21.md) — 2 sections
 
