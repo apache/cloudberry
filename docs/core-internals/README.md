@@ -38,6 +38,7 @@ part-4-query-processing/              ch13 .. ch19
 part-5-high-availability-recovery/    ch20
 part-6-resource-management/           ch21
 figures/                              64 SVG figures
+_components/                          the one MDX component + its CSS
 ```
 
 Each part directory carries a `_category_.json` so the sidebar can be
@@ -53,15 +54,22 @@ site-level configuration except one small MDX component (see below), so it
 can also be rendered by any other Docusaurus site or read directly on
 GitHub.
 
-Two things a consuming site needs:
+This directory is self-contained: a Docusaurus site can point a docs plugin
+at it and build, with no site-level registration of components and no
+additions to the site's stylesheet. Verified by building it against a site
+whose `customCss` is empty and which registers nothing.
 
-- **Mermaid.** 113 diagrams are `mermaid` fenced blocks. A site that has
-  `@docusaurus/theme-mermaid` enabled renders them as diagrams; without it
-  they degrade to code blocks. GitHub renders them natively.
-- **`RawFigure`.** 37 figures are CSS-laid-out HTML rather than SVG. They are
-  passed to a small component as a string so that MDX does not try to parse
-  them as JSX. A consuming site needs to register that component and the
-  accompanying CSS; both are a few lines.
+- **`_components/`** holds the one MDX component these pages need, together
+  with its stylesheet. 37 figures are laid out with HTML and CSS rather than
+  drawn as SVG; their markup carries inline style attributes, void tags and,
+  in two cases, unbalanced tags, none of which MDX accepts as JSX. Each page
+  that uses such a figure imports the component itself, so nothing has to be
+  wired up on the site side. The leading underscore keeps the directory out
+  of the docs plugin's page routing.
+- **Mermaid** is the one optional extra. 113 diagrams are `mermaid` fenced
+  blocks: a site with `@docusaurus/theme-mermaid` enabled draws them, and
+  without it they degrade to readable code blocks. GitHub renders them
+  natively.
 
 ## Conventions
 
