@@ -3049,8 +3049,14 @@ putIntoUnackQueueRing(UnackQueueRing *uqr, ICBuffer *buf, uint64 expTime, uint64
 		}
 		else if (diff < TIMER_SPAN_LOSS)
 		{
-			diff = diff < TIMER_SPAN_LOSS ? TIMER_SPAN_LOSS : diff;
+			diff = TIMER_SPAN_LOSS;
 		}
+
+		idx = (uqr->idx + diff / TIMER_SPAN_LOSS) % UNACK_QUEUE_RING_SLOTS_NUM;
+
+#ifdef AMS_VERBOSE_LOGGING
+		LOG(INFO, "PUTTW: curtime %lu now %lu (diff %lu) expTime %lu previdx %d, nowidx %d, nextidx %d", uqr->currentTime, now, diff, expTime, buf->unackQueueRingSlot, uqr->idx, idx);
+#endif
 	}
 	else
 	{
@@ -3076,12 +3082,6 @@ putIntoUnackQueueRing(UnackQueueRing *uqr, ICBuffer *buf, uint64 expTime, uint64
 		LOG(INFO, "PUTTW: curtime " UINT64_FORMAT " now " UINT64_FORMAT " (diff " UINT64_FORMAT ") expTime " UINT64_FORMAT " previdx %d, nowidx %d, nextidx %d", uqr->currentTime, now, diff, expTime, buf->unackQueueRingSlot, uqr->idx, idx);
 #endif
 	}
-
-	idx = (uqr->idx + diff / TIMER_SPAN) % UNACK_QUEUE_RING_SLOTS_NUM;
-
-#ifdef AMS_VERBOSE_LOGGING
-	LOG(INFO, "PUTTW: curtime %lu now %lu (diff %lu) expTime %lu previdx %d, nowidx %d, nextidx %d", uqr->currentTime, now, diff, expTime, buf->unackQueueRingSlot, uqr->idx, idx);
-#endif
 
 	buf->unackQueueRingSlot = idx;
 	unack_queue_ring.slots[idx].append(buf);
