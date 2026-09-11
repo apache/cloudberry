@@ -387,6 +387,17 @@ def impl(context, content_ids):
         cmd.run(validateAfter=True)
 
 
+@given('fts probing is disabled')
+@when('fts probing is disabled')
+@then('fts probing is disabled')
+def impl(context):
+    create_fault_query = "CREATE EXTENSION IF NOT EXISTS gp_inject_fault;"
+    execute_sql('postgres', create_fault_query)
+
+    inject_fault_query = "SELECT gp_inject_fault_infinite('fts_probe', 'skip', dbid) FROM gp_segment_configuration WHERE role='p' AND content=-1;"
+    execute_sql('postgres', inject_fault_query)
+    return
+
 @given('the user {action} the walsender on the {segment} on content {content_ids}')
 @when('the user {action} the walsender on the {segment} on content {content_ids}')
 @then('the user {action} the walsender on the {segment} on content {content_ids}')
@@ -1625,6 +1636,8 @@ def impl(context, seg):
         if not hasattr(context, 'standby_host'):
             raise Exception("Standby host is not saved in the context")
         hostname = context.standby_host
+    elif seg == "coordinator":
+        hostname = get_coordinator_hostname()[0][0]
 
     filename = os.path.join(os.getcwd(), './test/behave/mgmt_utils/steps/data/pid_background_script.py')
 
@@ -1640,7 +1653,7 @@ def impl(context, seg):
     cmd.run(validateAfter=True)
 
     cmd = Command(name="get Bg process PID",
-                  cmdStr='until [ -f /tmp/bgpid ]; do sleep 1; done; cat /tmp/bgpid', remoteHost=hostname, ctxt=REMOTE)
+                  cmdStr='sleep 1; until [ -f /tmp/bgpid ]; do sleep 1; done; cat /tmp/bgpid', remoteHost=hostname, ctxt=REMOTE)
     cmd.run(validateAfter=True)
 
 
@@ -1661,8 +1674,13 @@ def impl(context, seg):
         if not hasattr(context, 'standby_host'):
             raise Exception("Standby host is not saved in the context")
         hostname = context.standby_host
+    elif seg == "coordinator":
+        hostname = get_coordinator_hostname()[0][0]
 
     cmd = Command(name="killbg pid", cmdStr='kill -9 %s' % context.bg_pid, remoteHost=hostname, ctxt=REMOTE)
+    cmd.run(validateAfter=True)
+
+    cmd = Command(name="remove pid", cmdStr='rm -rf /tmp/bgpid', remoteHost=hostname, ctxt=REMOTE)
     cmd.run(validateAfter=True)
 
 
@@ -3423,16 +3441,25 @@ def step_impl(context):
             datadir = segment[3]
 
             ## check postgresql.conf
+            # Name the local copy after the dbid, not the host. Every segment
+            # of a single-host demo cluster answers to the same hostname, so a
+            # per-host name means all of them rsync onto one file -- and
+            # rsync's quick check skips the transfer when size and mtime match,
+            # which they do for segments whose postgresql.conf was written by
+            # the same gpinitsystem run and whose ports are the same number of
+            # digits. The check then reads another segment's file and reports a
+            # port mismatch that does not exist.
             remote_postgresql_conf = "%s/%s" % (datadir, 'postgresql.conf')
-            local_conf_copy = os.path.join(gp.get_coordinatordatadir(), "%s.%s" % ('postgresql.conf', hostname))
+            local_conf_copy = os.path.join(gp.get_coordinatordatadir(),
+                                           "postgresql.conf.%s.dbid%s" % (hostname, segment[0]))
             cmd = Command(name="Copy remote conf to local to diff",
                         cmdStr='rsync %s:%s %s' % (hostname, remote_postgresql_conf, local_conf_copy))
             cmd.run(validateAfter=True)
 
             dic = pgconf.readfile(filename=local_conf_copy)
             if str(dic['port']) != port:
-                raise Exception("port value in postgresql.conf of %s is incorrect. Expected:%s, given:%s" %
-                                (hostname, port, dic['port']))
+                raise Exception("port value in postgresql.conf of %s dbid %s is incorrect. Expected:%s, given:%s" %
+                                (hostname, segment[0], port, dic['port']))
     finally:
         if conn:
             conn.close()
@@ -3536,7 +3563,11 @@ def impl(context, table1, table2, dbname):
 
 def _get_row_count_per_segment(table, dbname):
     with closing(dbconn.connect(dbconn.DbURL(dbname=dbname), unsetSearchPath=False)) as conn:
-        query = "SELECT gp_segment_id,COUNT(i) FROM %s GROUP BY gp_segment_id ORDER BY gp_segment_id;" % table
+        # COUNT(*), not COUNT(i): the scenarios that use this step build their
+        # table with "generate_series(...) AS a" as often as "AS i", and naming
+        # a column here makes the step fail on half of them with
+        # 'column "i" does not exist'. Upstream counts rows, not a column.
+        query = "SELECT gp_segment_id,COUNT(*) FROM %s GROUP BY gp_segment_id ORDER BY gp_segment_id;" % table
         cursor = dbconn.query(conn, query)
         rows = cursor.fetchall()
     return [row[1] for row in rows] # indices are the gp segment id's, so no need to store them explicitly
@@ -3984,8 +4015,18 @@ def impl(context):
 @given('update /etc/hosts file with address for the localhost')
 def impl(context):
     hostname = context.hostname
-    # Backup current /etc/hosts file
-    cmd = Command(name='backup the hosts file', cmdStr='sudo cp /etc/hosts /tmp/hosts_orig')
+    # Backup current /etc/hosts file.
+    #
+    # Only if there is no backup already. A scenario that fails between here
+    # and the restore below leaves both the appended line and the backup
+    # behind; overwriting the backup on the next run would make that polluted
+    # file the new "original", and the real entry for this host would be lost
+    # for good. Keeping the first backup means the next restore puts the true
+    # file back. Without this, 127.0.0.1 entries accumulate, the host stops
+    # resolving to its real address, and every later scenario that connects to
+    # a segment by hostname fails for reasons that have nothing to do with it.
+    cmd = Command(name='backup the hosts file',
+                  cmdStr='[ -f /tmp/hosts_orig ] || sudo cp /etc/hosts /tmp/hosts_orig')
     cmd.run(validateAfter=True)
     # Update the address
     cmdStr = "echo \"127.0.0.1 {}\" | sudo tee -a /etc/hosts".format(hostname)

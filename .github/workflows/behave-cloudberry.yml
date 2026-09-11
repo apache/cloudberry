@@ -650,7 +650,7 @@ jobs:
           fi
 
           behave_rc=0
-          if ! time su - gpadmin -c "cd ${SRC_DIR}/gpMgmt && source /usr/local/cloudberry-db/cloudberry-env.sh && source ${SRC_DIR}/gpAux/gpdemo/gpdemo-env.sh && PYTHONPATH=${SRC_DIR}/gpMgmt:\$PYTHONPATH behave $behave_args $behave_targets" \
+          if ! time su - gpadmin -c "cd ${SRC_DIR}/gpMgmt && source /usr/local/cloudberry-db/cloudberry-env.sh && source ${SRC_DIR}/gpAux/gpdemo/gpdemo-env.sh && SRC_DIR=${SRC_DIR} PYTHONPATH=${SRC_DIR}/gpMgmt:\$PYTHONPATH behave $behave_args $behave_targets" \
                2>&1 | tee -a "$config_log"; then
             echo "::warning::Behave execution reported failures"
             behave_rc=1

@@ -108,6 +108,12 @@ def add_mirrors(context, options):
     context.mirror_config = _generate_input_config()
     cmd = Command('gpaddmirrors ', 'gpaddmirrors -a -i %s %s' % (context.mirror_config, options))
     cmd.run(validateAfter=True)
+    # Without these the scenarios that go on to assert on what gpaddmirrors
+    # printed fail in the step itself -- "'Context' object has no attribute
+    # 'stdout_message'" -- rather than on what the utility did.
+    context.ret_code = cmd.get_results().rc
+    context.stdout_message = cmd.get_results().stdout
+    context.error_message = cmd.get_results().stderr
 
 
 def make_data_directory_called(data_directory_name):

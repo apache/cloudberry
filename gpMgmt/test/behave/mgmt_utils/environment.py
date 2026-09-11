@@ -1,5 +1,7 @@
 import os
+import re
 import shutil
+from contextlib import closing
 
 import behave
 
@@ -131,11 +133,57 @@ def before_scenario(context, scenario):
     if 'gp_bash_functions.sh' in context.feature.tags or 'backup_restore_bashrc' in scenario.effective_tags:
         backup_bashrc()
 
+def preserve_logs_for_failed_scenario(scenario):
+    """
+    Snapshot gpAdminLogs and every segment's postgresql.conf while they still
+    describe the failure. Scenarios routinely start by emptying gpAdminLogs, so
+    by the end of a feature the logs of the scenario that failed are long gone
+    and the CI artifact is useless for diagnosis.
+    """
+    # Behave runs from gpMgmt/; build-logs/ lives at the top of the source tree,
+    # which is what the CI job uploads.
+    src_dir = os.environ.get('SRC_DIR') or os.path.dirname(os.getcwd())
+    dest_root = os.path.join(src_dir, 'build-logs', 'failed-scenarios')
+    name = re.sub(r'[^A-Za-z0-9._-]+', '_', scenario.name)[:80]
+    dest = os.path.join(dest_root, '%s.%s' % (scenario.line, name))
+    try:
+        os.makedirs(dest, exist_ok=True)
+        admin_logs = os.path.join(os.path.expanduser('~'), 'gpAdminLogs')
+        if os.path.isdir(admin_logs):
+            log_dest = os.path.join(dest, 'gpAdminLogs')
+            os.makedirs(log_dest, exist_ok=True)
+            for entry in os.listdir(admin_logs):
+                path = os.path.join(admin_logs, entry)
+                if not os.path.isfile(path):
+                    continue
+                # Some of these are named gpsegstop.py_cdw:gpadmin_<date>.log,
+                # and upload-artifact refuses any path containing a colon.
+                shutil.copyfile(path, os.path.join(log_dest, entry.replace(':', '_')))
+        with closing(dbconn.connect(dbconn.DbURL(dbname='postgres'), unsetSearchPath=False)) as conn:
+            rows = dbconn.query(conn, "SELECT dbid, content, role, port, datadir "
+                                      "FROM gp_segment_configuration ORDER BY dbid").fetchall()
+        with open(os.path.join(dest, 'segment_configuration.txt'), 'w') as fh:
+            for row in rows:
+                fh.write('|'.join(str(c) for c in row) + '\n')
+        for dbid, _content, _role, _port, datadir in rows:
+            conf = os.path.join(datadir, 'postgresql.conf')
+            if os.path.isfile(conf):
+                shutil.copyfile(conf, os.path.join(dest, 'postgresql.conf.dbid%s' % dbid))
+    except Exception as e:
+        # Never let diagnostics turn a failure into a different failure.
+        print('could not preserve logs for %s: %s' % (scenario.name, e))
+
+
 def after_scenario(context, scenario):
     #TODO: you'd think that the scenario.skip() in before_scenario() would
     #  cause this to not be needed
     if "skip" in scenario.effective_tags:
         return
+
+    # behave hands back a Status enum here; compare on its name so this works
+    # whatever behave version is installed, and never let it raise.
+    if str(getattr(scenario, 'status', '')).split('.')[-1] == 'failed':
+        preserve_logs_for_failed_scenario(scenario)
 
     if 'tablespaces' in context:
         for tablespace in list(context.tablespaces.values()):

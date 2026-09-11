@@ -28,7 +28,7 @@ def create_cluster(context, with_mirrors=True):
     cd ../gpAux/gpdemo; \
         export DEMO_PORT_BASE={port_base} && \
         export NUM_PRIMARY_MIRROR_PAIRS={num_primary_mirror_pairs} && \
-        export WITH_MIRRORS={with_mirrors} && \\A
+        export WITH_MIRRORS={with_mirrors} && \
         ./demo_cluster.sh -d && ./demo_cluster.sh -c && \
         ./demo_cluster.sh
     """.format(port_base=os.getenv('PORT_BASE', 15432),
@@ -138,6 +138,7 @@ def step_impl(context):
 @given('a preferred primary has failed')
 def step_impl(context):
     stop_primary(context, 0)
+    wait_for_unblocked_transactions(context)
 
 
 @when('primary and mirror switch to non-preferred roles')

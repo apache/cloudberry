@@ -5,10 +5,12 @@ from time import sleep
 
 from contextlib import closing
 from gppylib import gplog
+from gppylib.commands import gp
 from gppylib.commands.base import Command, ExecutionError, REMOTE, WorkerPool
 from gppylib.commands.gp import RECOVERY_REWIND_APPNAME
 from gppylib.db import dbconn
 from gppylib.gparray import GpArray, ROLE_PRIMARY, ROLE_MIRROR
+from gppylib.utils import writeLinesToFile
 from test.behave_utils.utils import *
 import platform, shutil
 from behave import given, when, then
@@ -158,6 +160,8 @@ def impl(context, seg):
         context.remote_pair_primary_segcid = primary_segs[0].getSegmentContentId()
         context.remote_pair_primary_host = primary_segs[0].getSegmentHostName()
         context.remote_pair_primary_datadir = primary_segs[0].getSegmentDataDirectory()
+        context.remote_pair_primary_port = primary_segs[0].getSegmentPort()
+        context.remote_pair_primary_address = primary_segs[0].getSegmentAddress()
     elif seg == "mirror":
         mirror_segs = [seg for seg in gparray.getDbList()
                        if seg.isSegmentMirror() and seg.getSegmentHostName() != platform.node()]
@@ -369,7 +373,12 @@ def recovery_fail_check(context, recovery_type, content_ids, utility):
         return_code = 3
 
     if recovery_type == 'incremental':
-        print_msg = 'pg_rewind: fatal'
+        # A failed pg_rewind writes two lines, "error: <what>" then
+        # "detail: Command was: ...", and gprecoverseg streams whichever is
+        # last in the progress file when it next polls -- almost always the
+        # detail. Accept either rather than depend on the timing. (Before 13
+        # there was no detail line and upstream looks for "fatal".)
+        print_msg = 'pg_rewind: (error|detail)'
         logfile_name = 'pg_rewind*'
     elif recovery_type == 'full':
         print_msg = 'pg_basebackup: error: could not access directory' #TODO also assert for the directory location here
@@ -383,7 +392,6 @@ def recovery_fail_check(context, recovery_type, content_ids, utility):
     And gprecoverseg should print "{print_msg}" to stdout for mirrors with content {content_ids}
     And gprecoverseg should print "Failed to recover the following segments" to stdout
     And gprecoverseg should print "{recovery_type}" errors to stdout for content {content_ids}
-    And gpAdminLogs directory has "{logfile_name}" files on respective hosts only for content {content_ids}
     And verify that mirror on content {content_ids} is down
     And gprecoverseg should print "gprecoverseg failed. Please check the output" to stdout
     And gprecoverseg should not print "Segments successfully recovered" to stdout
