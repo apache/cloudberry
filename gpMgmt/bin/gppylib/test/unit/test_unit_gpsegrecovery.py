@@ -18,11 +18,13 @@ class IncrementalRecoveryTestCase(GpTestCase):
         self.mock_logger = Mock()
         self.apply_patches([
             patch('gpsegrecovery.start_segment', return_value=Mock()),
+            patch('gpsegrecovery.ModifyConfSetting', return_value=Mock()),
             patch('gppylib.commands.pg.PgRewind.__init__', return_value=None),
             patch('gppylib.commands.pg.PgRewind.run')
         ])
         self.mock_pgrewind_run = self.get_mock_from_apply_patch('run')
         self.mock_pgrewind_init = self.get_mock_from_apply_patch('__init__')
+        self.mock_modify_conf = self.get_mock_from_apply_patch('ModifyConfSetting')
 
         p = Segment.initFromString("1|0|p|p|s|u|sdw1|sdw1|40000|/data/primary0")
         m = Segment.initFromString("2|0|m|m|s|u|sdw2|sdw2|50000|/data/mirror0")
@@ -56,8 +58,13 @@ class IncrementalRecoveryTestCase(GpTestCase):
         self.assertEqual(1, self.mock_pgrewind_run.call_count)
         self.assertEqual(call(validateAfter=True), self.mock_pgrewind_run.call_args)
         logger_call_args = [call('Running pg_rewind with progress output temporarily in /tmp/test_progress_file'),
-                            call('Successfully ran pg_rewind for dbid: 2')]
+                            call('Successfully ran pg_rewind for dbid: 2'),
+                            call('Updating /data/mirror0/postgresql.conf')]
         self.assertEqual(logger_call_args, self.mock_logger.info.call_args_list)
+        self.mock_modify_conf.assert_called_once_with('Updating /data/mirror0/postgresql.conf',
+                                                      '/data/mirror0/postgresql.conf', 'port', 50000,
+                                                      optType='number')
+        self.mock_modify_conf.return_value.run.assert_called_once_with(validateAfter=True)
         gpsegrecovery.start_segment.assert_called_once_with(self.seg_recovery_info, self.mock_logger, self.era)
 
     def test_incremental_run_exception(self):
@@ -71,6 +78,7 @@ class IncrementalRecoveryTestCase(GpTestCase):
         self.assertEqual(call(validateAfter=True), self.mock_pgrewind_run.call_args)
         self.assertEqual([call('Running pg_rewind with progress output temporarily in /tmp/test_progress_file')],
                          self.mock_logger.info.call_args_list)
+        self.assertEqual(0, self.mock_modify_conf.call_count)
         self.assertEqual(0, gpsegrecovery.start_segment.call_count)
         self._assert_cmd_failed('{"error_type": "incremental", "error_msg": "pg_rewind failed", "dbid": 2, ' \
                                 '"datadir": "/data/mirror0", "port": 50000, "progress_file": "/tmp/test_progress_file"}')
@@ -92,7 +100,8 @@ class IncrementalRecoveryTestCase(GpTestCase):
         self.assertEqual(1, self.mock_pgrewind_init.call_count)
         self.assertEqual(1, self.mock_pgrewind_run.call_count)
         logger_call_args = [call('Running pg_rewind with progress output temporarily in /tmp/test_progress_file'),
-                            call('Successfully ran pg_rewind for dbid: 2')]
+                            call('Successfully ran pg_rewind for dbid: 2'),
+                            call('Updating /data/mirror0/postgresql.conf')]
         self.assertEqual(logger_call_args, self.mock_logger.info.call_args_list)
         gpsegrecovery.start_segment.assert_called_once_with(self.seg_recovery_info, self.mock_logger, self.era)
         self._assert_cmd_failed('{"error_type": "start", "error_msg": "pg_ctl start failed", "dbid": 2, ' \
@@ -107,11 +116,13 @@ class FullRecoveryTestCase(GpTestCase):
         self.mock_logger = Mock(spec=['log', 'info', 'debug', 'error', 'warn', 'exception'])
         self.apply_patches([
             patch('gpsegrecovery.start_segment', return_value=Mock()),
+            patch('gpsegrecovery.ModifyConfSetting', return_value=Mock()),
             patch('gpsegrecovery.PgBaseBackup.__init__', return_value=None),
             patch('gpsegrecovery.PgBaseBackup.run')
         ])
         self.mock_pgbasebackup_run = self.get_mock_from_apply_patch('run')
         self.mock_pgbasebackup_init = self.get_mock_from_apply_patch('__init__')
+        self.mock_modify_conf = self.get_mock_from_apply_patch('ModifyConfSetting')
 
         p = Segment.initFromString("1|0|p|p|s|u|sdw1|sdw1|40000|/data/primary0")
         m = Segment.initFromString("2|0|m|m|s|u|sdw2|sdw2|50000|/data/mirror0")
@@ -135,8 +146,13 @@ class FullRecoveryTestCase(GpTestCase):
         self.assertEqual(1, self.mock_pgbasebackup_run.call_count)
         self.assertEqual(call(validateAfter=True), self.mock_pgbasebackup_run.call_args)
         expected_logger_info_args = [call('Running pg_basebackup with progress output temporarily in /tmp/test_progress_file'),
-                                     call("Successfully ran pg_basebackup for dbid: 2")]
+                                     call("Successfully ran pg_basebackup for dbid: 2"),
+                                     call('Updating /data/mirror0/postgresql.conf')]
         self.assertEqual(expected_logger_info_args, self.mock_logger.info.call_args_list)
+        self.mock_modify_conf.assert_called_once_with('Updating /data/mirror0/postgresql.conf',
+                                                      '/data/mirror0/postgresql.conf', 'port', 50000,
+                                                      optType='number')
+        self.mock_modify_conf.return_value.run.assert_called_once_with(validateAfter=True)
         gpsegrecovery.start_segment.assert_called_once_with(self.seg_recovery_info, self.mock_logger, self.era)
 
     def _assert_cmd_passed(self):
@@ -277,6 +293,7 @@ class SegRecoveryTestCase(GpTestCase):
         self.apply_patches([
             patch('gpsegrecovery.SegmentStart.__init__', return_value=None),
             patch('gpsegrecovery.SegmentStart.run'),
+            patch('gpsegrecovery.ModifyConfSetting', return_value=Mock()),
         ])
         self.mock_segment_start_init = self.get_mock_from_apply_patch('__init__')
 
