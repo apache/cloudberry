@@ -720,6 +720,8 @@ PROTOC
 with_gp_stats_collector
 with_diskquota
 with_zstd
+LZO_LIBS
+with_lzo
 with_libbz2
 LZ4_LIBS
 LZ4_CFLAGS
@@ -945,6 +947,7 @@ with_system_tzdata
 with_zlib
 with_lz4
 with_libbz2
+with_lzo
 with_zstd
 with_diskquota
 with_gp_stats_collector
@@ -1698,6 +1701,8 @@ Optional Packages:
   --without-zlib          do not use Zlib
   --with-lz4              build with LZ4 support
   --without-libbz2        do not use bzip2
+  --with-zstd             do not build with Zstandard
+  --with-lzo              build with LZO support
   --without-zstd          do not build with Zstandard
   --with-diskquota        build with diskquota extension
   --with-gp-stats-collector
@@ -11469,6 +11474,115 @@ fi
 
 { $as_echo "$as_me:${as_lineno-$LINENO}: result: $with_zstd" >&5
 $as_echo "$with_zstd" >&6; }
+
+
+#
+# LZO
+#
+{ $as_echo "$as_me:${as_lineno-$LINENO}: checking whether to build with LZO support" >&5
+$as_echo_n "checking whether to build with LZO support... " >&6; }
+
+
+
+# Check whether --with-lzo was given.
+if test "${with_lzo+set}" = set; then :
+  withval=$with_lzo;
+  case $withval in
+    yes)
+
+$as_echo "#define USE_LZO 1" >>confdefs.h
+
+      ;;
+    no)
+      :
+      ;;
+    *)
+      as_fn_error $? "no argument expected for --with-lzo option" "$LINENO" 5
+      ;;
+  esac
+
+else
+  with_lzo=no
+
+fi
+
+
+{ $as_echo "$as_me:${as_lineno-$LINENO}: result: $with_lzo" >&5
+$as_echo "$with_lzo" >&6; }
+
+
+if test "$with_lzo" = yes; then
+  { $as_echo "$as_me:${as_lineno-$LINENO}: checking lzo/lzo1x.h usability" >&5
+$as_echo_n "checking lzo/lzo1x.h usability... " >&6; }
+if ${ac_cv_header_lzo_lzo1x_h+:} false; then :
+  $as_echo_n "(cached) " >&6
+else
+  cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+/* end confdefs.h.  */
+$ac_includes_default
+#include <lzo/lzo1x.h>
+_ACEOF
+if ac_fn_c_try_compile "$LINENO"; then :
+  ac_cv_header_lzo_lzo1x_h=yes
+else
+  ac_cv_header_lzo_lzo1x_h=no
+fi
+rm -f core conftest.err conftest.$ac_objext conftest.$ac_ext
+fi
+{ $as_echo "$as_me:${as_lineno-$LINENO}: result: $ac_cv_header_lzo_lzo1x_h" >&5
+$as_echo "$ac_cv_header_lzo_lzo1x_h" >&6; }
+
+
+if test "x$ac_cv_header_lzo_lzo1x_h" = x""yes; then :
+  :
+else
+  as_fn_error $? "lzo/lzo1x.h header not found. Please install liblzo2-dev." "$LINENO" 5
+fi
+
+  { $as_echo "$as_me:${as_lineno-$LINENO}: checking for lzo1x_decompress_safe in -llzo2" >&5
+$as_echo_n "checking for lzo1x_decompress_safe in -llzo2... " >&6; }
+if ${ac_cv_lib_lzo2_lzo1x_decompress_safe+:} false; then :
+  $as_echo_n "(cached) " >&6
+else
+  ac_check_lib_save_LIBS=$LIBS
+LIBS="-llzo2  $LIBS"
+cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+/* end confdefs.h.  */
+
+/* Override any GCC internal prototype to avoid an error.
+   Suppress warnings for systems that declare it in a header. */
+#ifdef __cplusplus
+extern "C"
+#endif
+/* We use char because int might match the return type of a GCC
+   builtin and then its argument prototype would still apply.  */
+char lzo1x_decompress_safe ();
+int
+main ()
+{
+return lzo1x_decompress_safe ();
+  ;
+  return 0;
+}
+_ACEOF
+if ac_fn_c_try_link "$LINENO"; then :
+  ac_cv_lib_lzo2_lzo1x_decompress_safe=yes
+else
+  ac_cv_lib_lzo2_lzo1x_decompress_safe=no
+fi
+rm -f core conftest.err conftest.$ac_objext \
+    conftest$ac_exeext conftest.$ac_ext
+LIBS=$ac_check_lib_save_LIBS
+fi
+{ $as_echo "$as_me:${as_lineno-$LINENO}: result: $ac_cv_lib_lzo2_lzo1x_decompress_safe" >&5
+$as_echo "$ac_cv_lib_lzo2_lzo1x_decompress_safe" >&6; }
+if test "x$ac_cv_lib_lzo2_lzo1x_decompress_safe" = x""yes; then :
+  LZO_LIBS="-llzo2"
+else
+  as_fn_error $? "liblzo2 library not found. Please install liblzo2-dev." "$LINENO" 5
+fi
+
+fi
 
 
 #

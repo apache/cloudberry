@@ -1,0 +1,184 @@
+--
+-- GPFDIST test cases set 2 - LZO compression support (read-only external tables)
+-- This test suite verifies that gpfdist can read LZO-compressed files created by lzop tool
+-- Note: Writable external tables with LZO compression are NOT yet implemented
+--
+drop table if exists REG_REGION;
+set optimizer_print_missing_stats = off;
+CREATE TABLE REG_REGION (R_REGIONKEY INT, R_NAME CHAR(25), R_COMMENT VARCHAR(152)) DISTRIBUTED BY (R_REGIONKEY);
+-- start_ignore
+-- end_ignore
+-- --------------------------------------
+-- gpfdist protocol with LZO compression
+-- --------------------------------------
+DROP EXTERNAL WEB TABLE IF EXISTS gpfdist2_start;
+DROP EXTERNAL WEB TABLE IF EXISTS gpfdist2_stop;
+CREATE EXTERNAL WEB TABLE gpfdist2_start (x text)
+execute E'((@bindir@/gpfdist -p 7070 -d @abs_srcdir@/data </dev/null >/dev/null 2>&1 &); for i in `seq 1 30`; do curl 127.0.0.1:7070 >/dev/null 2>&1 && break; sleep 1; done; echo "starting...") '
+on SEGMENT 0
+FORMAT 'text' (delimiter '|');
+
+CREATE EXTERNAL WEB TABLE gpfdist2_stop (x text)
+execute E'(ps -A -o pid,comm |grep [g]pfdist |grep -v postgres: |awk \'{print $1;}\' |xargs kill) > /dev/null 2>&1; echo "stopping..."'
+on SEGMENT 0
+FORMAT 'text' (delimiter '|');
+
+-- start_ignore
+select * from gpfdist2_stop;
+select * from gpfdist2_start;
+-- end_ignore
+
+-- test 1: using a small LZO-compressed file (created by lzop tool)
+
+CREATE EXTERNAL TABLE ext_lineitem_lzo (
+                L_ORDERKEY INT8,
+                L_PARTKEY INTEGER,
+                L_SUPPKEY INTEGER,
+                L_LINENUMBER integer,
+                L_QUANTITY decimal,
+                L_EXTENDEDPRICE decimal,
+                L_DISCOUNT decimal,
+                L_TAX decimal,
+                L_RETURNFLAG CHAR(1),
+                L_LINESTATUS CHAR(1),
+                L_SHIPDATE date,
+                L_COMMITDATE date,
+                L_RECEIPTDATE date,
+                L_SHIPINSTRUCT CHAR(25),
+                L_SHIPMODE CHAR(10),
+                L_COMMENT VARCHAR(44)
+                )
+LOCATION
+(
+      'gpfdist://@hostname@:7070/gpfdist2/lineitem.tbl.lzo'
+)
+FORMAT 'text'
+(
+        DELIMITER AS '|'
+)
+;
+CREATE TABLE lineitem_lzo_read (like ext_lineitem_lzo);
+SELECT count(*) FROM ext_lineitem_lzo;
+INSERT INTO lineitem_lzo_read SELECT * FROM ext_lineitem_lzo;
+DROP EXTERNAL TABLE ext_lineitem_lzo;
+DROP TABLE lineitem_lzo_read;
+
+-- test 2: use a bigger LZO-compressed file
+
+CREATE EXTERNAL TABLE ext_lineitem_lzo_big (
+                L_ORDERKEY INT8,
+                L_PARTKEY INTEGER,
+                L_SUPPKEY INTEGER,
+                L_LINENUMBER integer,
+                L_QUANTITY decimal,
+                L_EXTENDEDPRICE decimal,
+                L_DISCOUNT decimal,
+                L_TAX decimal,
+                L_RETURNFLAG CHAR(1),
+                L_LINESTATUS CHAR(1),
+                L_SHIPDATE date,
+                L_COMMITDATE date,
+                L_RECEIPTDATE date,
+                L_SHIPINSTRUCT CHAR(25),
+                L_SHIPMODE CHAR(10),
+                L_COMMENT VARCHAR(44)
+                )
+LOCATION
+(
+        'gpfdist://@hostname@:7070/gpfdist2/lineitem.tbl.long.lzo'
+)
+FORMAT 'text'
+(
+        DELIMITER AS '|'
+)
+;
+CREATE TABLE lineitem_lzo_big_read (like ext_lineitem_lzo_big);
+SELECT count(*) FROM ext_lineitem_lzo_big;
+INSERT INTO lineitem_lzo_big_read SELECT * FROM ext_lineitem_lzo_big;
+DROP EXTERNAL TABLE ext_lineitem_lzo_big;
+DROP TABLE lineitem_lzo_big_read;
+
+-- test 3: verify data integrity - compare counts between original and LZO-compressed files
+
+CREATE EXTERNAL TABLE ext_lineitem_orig (
+                L_ORDERKEY INT8,
+                L_PARTKEY INTEGER,
+                L_SUPPKEY INTEGER,
+                L_LINENUMBER integer,
+                L_QUANTITY decimal,
+                L_EXTENDEDPRICE decimal,
+                L_DISCOUNT decimal,
+                L_TAX decimal,
+                L_RETURNFLAG CHAR(1),
+                L_LINESTATUS CHAR(1),
+                L_SHIPDATE date,
+                L_COMMITDATE date,
+                L_RECEIPTDATE date,
+                L_SHIPINSTRUCT CHAR(25),
+                L_SHIPMODE CHAR(10),
+                L_COMMENT VARCHAR(44)
+                )
+LOCATION
+(
+      'gpfdist://@hostname@:7070/gpfdist2/lineitem.tbl'
+)
+FORMAT 'text'
+(
+        DELIMITER AS '|'
+)
+;
+SELECT count(*) FROM ext_lineitem_orig;
+DROP EXTERNAL TABLE ext_lineitem_orig;
+
+-- start_ignore
+select * from gpfdist2_stop;
+-- end_ignore
+
+-- test 4: test reading LZO file with larger buffer size (1.2MB)
+DROP EXTERNAL WEB TABLE IF EXISTS gpfdist2_start;
+
+CREATE EXTERNAL WEB TABLE gpfdist2_start (x text)
+execute E'((@bindir@/gpfdist -p 7070 -d @abs_srcdir@/data -m 1200000 </dev/null >/dev/null 2>&1 &); for i in `seq 1 30`; do curl 127.0.0.1:7070 >/dev/null 2>&1 && break; sleep 1; done; echo "starting...") '
+on SEGMENT 0
+FORMAT 'text' (delimiter '|');
+
+-- start_ignore
+select * from gpfdist2_start;
+-- end_ignore
+
+CREATE EXTERNAL TABLE ext_lineitem_lzo_big2 (
+                L_ORDERKEY INT8,
+                L_PARTKEY INTEGER,
+                L_SUPPKEY INTEGER,
+                L_LINENUMBER integer,
+                L_QUANTITY decimal,
+                L_EXTENDEDPRICE decimal,
+                L_DISCOUNT decimal,
+                L_TAX decimal,
+                L_RETURNFLAG CHAR(1),
+                L_LINESTATUS CHAR(1),
+                L_SHIPDATE date,
+                L_COMMITDATE date,
+                L_RECEIPTDATE date,
+                L_SHIPINSTRUCT CHAR(25),
+                L_SHIPMODE CHAR(10),
+                L_COMMENT VARCHAR(44)
+                )
+LOCATION
+(
+        'gpfdist://@hostname@:7070/gpfdist2/lineitem.tbl.long.lzo'
+)
+FORMAT 'text'
+(
+        DELIMITER AS '|'
+)
+;
+CREATE TABLE lineitem_lzo_big_read2 (like ext_lineitem_lzo_big2);
+SELECT count(*) FROM ext_lineitem_lzo_big2;
+INSERT INTO lineitem_lzo_big_read2 SELECT * FROM ext_lineitem_lzo_big2;
+DROP EXTERNAL TABLE ext_lineitem_lzo_big2;
+DROP TABLE lineitem_lzo_big_read2;
+
+-- start_ignore
+select * from gpfdist2_stop;
+-- end_ignore
