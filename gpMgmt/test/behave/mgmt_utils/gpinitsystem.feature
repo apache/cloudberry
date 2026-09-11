@@ -63,6 +63,14 @@ Feature: gpinitsystem tests
         Given the user runs "gpstate"
          Then gpstate should return a return code of 2
 
+    Scenario: gpinitsystem exits with status 1 when the user provides invalid option
+        Given create demo cluster config
+         When the user runs command "gpinitsystem -a -c ../gpAux/gpdemo/clusterConfigFile --ignore-warnings" eok
+         Then gpinitsystem should return a return code of 1
+          And gpinitsystem should print "Unknown option --ignore-warnings" to stdout
+        Given the user runs "gpstate"
+         Then gpstate should return a return code of 2
+
     Scenario: gpinitsystem creates a cluster when the user confirms the dialog
         Given create demo cluster config
          When the user runs command "echo y | gpinitsystem -c ../gpAux/gpdemo/clusterConfigFile"
@@ -320,7 +328,7 @@ Feature: gpinitsystem tests
 
     Scenario: gpinitsystem should pass the default value of trusted_shell properly to gpcreateseg
         Given create demo cluster config
-        When the user runs command "gpinitsystem -a -c ../gpAux/gpdemo/clusterConfigFile -h ../gpAux/gpdemo/hostfile --ignore-warnings"
+        When the user runs command "gpinitsystem -a -c ../gpAux/gpdemo/clusterConfigFile -h ../gpAux/gpdemo/hostfile"
         Then gpinitsystem should return a return code of 0
         When the user runs command "grep -q '.*gpcreateseg\.sh.*Completed .*lalshell.*' ~/gpAdminLogs/gpinitsystem*log"
         Then grep should return a return code of 0

@@ -313,7 +313,7 @@ CHK_PARAMS () {
 		fi
 
 		if [ x"$ETCD_HOST_CONFIG" = x"" ] || [ x"$CLUSTER_BOOT_MODE" = x"DEMO" ]; then
-			LOG_MSG "[WARN]:-No ETCD cluster host config provided, use default configuration."
+			LOG_MSG "[INFO]:-No ETCD cluster host config provided, use default configuration."
 		else
 			ETCD_HOST_MACHINE_LIST=(`$CAT $ETCD_HOST_CONFIG`)
 			ETCD_HOST_CONFIG_NUM=${#ETCD_HOST_MACHINE_LIST[@]}
@@ -323,7 +323,7 @@ CHK_PARAMS () {
 		fi
 
 		if [ x"$FTS_HOST_CONFIG" = x"" ] || [ x"$CLUSTER_BOOT_MODE" = x"DEMO" ]; then
-			LOG_MSG "[WARN]:-No FTS cluster host config provided, use default configuration."
+			LOG_MSG "[INFO]:-No FTS cluster host config provided, use default configuration."
 		else
 			FTS_HOST_MACHINE_LIST=(`$CAT $FTS_HOST_CONFIG`)
 			FTS_HOST_CONFIG_NUM=${#FTS_HOST_MACHINE_LIST[@]}
@@ -1531,11 +1531,18 @@ CREATE_STANDBY_QD () {
 		if [ $HBA_HOSTNAMES -eq 1 ]; then
 		    INIT_STANDBY_ARGS+=" --hba-hostnames"
 		fi
-		if [ x"$CLUSTER_BOOT_MODE" = x"PRODUCTION" ]; then
-		    export COORDINATOR_DATA_DIRECTORY=${COORDINATOR_DIRECTORY}/${SEG_PREFIX}-1;$INIT_STANDBY_PROG -s $STANDBY_HOSTNAME $INIT_STANDBY_ARGS -a -f $FTS_HOST_STRING_LIST
-		else
-		    export COORDINATOR_DATA_DIRECTORY=${COORDINATOR_DIRECTORY}/${SEG_PREFIX}-1;$INIT_STANDBY_PROG -s $STANDBY_HOSTNAME $INIT_STANDBY_ARGS -a
+		# -f takes the list of external FTS hosts, and only exists when the
+		# cluster was given one. Guard it the same way as the arguments above:
+		# CLUSTER_BOOT_MODE is PRODUCTION for every cluster whose coordinator
+		# and segments are on different hosts -- which is every real one --
+		# but FTS_HOST_STRING_LIST is empty unless -f/-F was passed to
+		# gpinitsystem, and "-f" with nothing after it makes gpinitstandby
+		# exit 2 on "-f option requires 1 argument" before it writes a line of
+		# its own log.
+		if [ x"" != x"$FTS_HOST_STRING_LIST" ]; then
+		    INIT_STANDBY_ARGS+=" -f $FTS_HOST_STRING_LIST"
 		fi
+		export COORDINATOR_DATA_DIRECTORY=${COORDINATOR_DIRECTORY}/${SEG_PREFIX}-1;$INIT_STANDBY_PROG -s $STANDBY_HOSTNAME $INIT_STANDBY_ARGS -a
 		STANDBY_RET_CODE=$?
 		if [ $STANDBY_RET_CODE -eq 0 ]; then
 			LOG_MSG "[INFO]:-Successfully completed standby coordinator initialization" 1
@@ -1641,6 +1648,12 @@ FORCE_FTS_PROBE () {
         if [ x"$RESULT" == x"f" ]; then
         	break
         fi
+
+        # Ask FTS to probe now rather than waiting out gp_fts_probe_interval;
+        # without this the loop just re-reads an unchanged
+        # gp_segment_configuration sixty times in a couple of seconds and gives
+        # up before FTS has looked at the segments even once.
+        $PSQL -p $GP_PORT -d "$DEFAULTDB" -c "select gp_request_fts_probe_scan()" >> ${LOG_FILE} 2>&1
     done
     LOG_MSG "[INFO]:-End Function $FUNCNAME"
 }
@@ -1994,7 +2007,7 @@ CBDB_PRECHECK() {
                 if [ $? -eq 0 ];then
                         ERROR_EXIT "[FATAL]: FTS HOST $fts has alived fts process, please cleanup the environment first."
                 fi
-                if [ -z FTS_HOST_STRING_LIST ];then
+                if [ -z "$FTS_HOST_STRING_LIST" ];then
                          FTS_HOST_STRING_LIST="$fts"
                 else
                          FTS_HOST_STRING_LIST="$FTS_HOST_STRING_LIST,$fts"
