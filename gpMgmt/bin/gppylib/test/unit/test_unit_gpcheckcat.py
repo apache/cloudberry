@@ -411,6 +411,177 @@ class GpCheckCatTestCase(GpTestCase):
                 self.num_batches += 1
                 self.num_joins = 0
                 self.num_starts = 0
+
+    # gpcheckcat talks to the database through PyGreSQL: connect2() returns a
+    # pg connection, conn.query() runs the statement and getresult() fetches
+    # the rows.  Greenplum's versions of these tests mock a psycopg2 cursor,
+    # which this gpcheckcat never opens.
+    @patch('gpcheckcat.connect2')
+    def test_checkMixDistPolicy_with_error_on_execution(self, mock_connect2):
+        mock_connect2.return_value.query.side_effect = Exception("Simulated error during execution")
+
+        self.subject.checkMixDistPolicy()
+
+        self.assertEqual(mock_connect2.return_value.query.call_count, 1)
+        self.subject.setError.assert_any_call(self.subject.ERROR_NOREPAIR)
+        self.assertFalse(self.subject.GV.checkStatus)
+
+    @patch('gpcheckcat.connect2')
+    def test_checkMixDistPolicy_exception_on_connect(self, mock_connect2):
+        mock_connect2.side_effect = Exception("Simulated error during connection")
+
+        self.subject.checkMixDistPolicy()
+
+        self.assertEqual(mock_connect2.call_count, 1)
+        self.subject.setError.assert_any_call(self.subject.ERROR_NOREPAIR)
+        self.assertFalse(self.subject.GV.checkStatus)
+
+    @patch('gpcheckcat.connect2')
+    def test_checkMixDistPolicy_exception_on_getresult(self, mock_connect2):
+        mock_connect2.return_value.query.return_value.getresult.side_effect = Exception("Simulated error fetching rows")
+
+        self.subject.checkMixDistPolicy()
+
+        self.assertEqual(mock_connect2.return_value.query.call_count, 1)
+        self.subject.setError.assert_any_call(self.subject.ERROR_NOREPAIR)
+        self.assertFalse(self.subject.GV.checkStatus)
+
+    @patch('gpcheckcat.generateDistPolicyQueryFile')
+    @patch('gpcheckcat.connect2')
+    def test_checkMixDistPolicy_reports_mixed_policy(self, mock_connect2, mock_generate):
+        # 1 legacy distribution opclass out of 3 in use
+        mock_connect2.return_value.query.return_value.getresult.return_value = [(1, 3)]
+
+        self.subject.checkMixDistPolicy()
+
+        mock_generate.assert_called_once_with()
+        self.assertFalse(self.subject.GV.checkStatus)
+
+    @patch('gpcheckcat.fetch_guc_value', return_value='off')
+    @patch('gpcheckcat.connect2')
+    def test_checkMixDistPolicy_passes_without_legacy_policy(self, mock_connect2, mock_fetch):
+        mock_connect2.return_value.query.return_value.getresult.return_value = [(0, 3)]
+
+        self.subject.checkMixDistPolicy()
+
+        mock_fetch.assert_called_once_with('gp_use_legacy_hashops')
+        self.assertTrue(self.subject.GV.checkStatus)
+
+    @patch('gpcheckcat.connect2')
+    def test_fetch_guc_value_returns_value(self, mock_connect2):
+        mock_connect2.return_value.query.return_value.getresult.return_value = [('on',)]
+
+        self.assertEqual(self.subject.fetch_guc_value("gp_use_legacy_hashops"), 'on')
+        self.assertIn('show gp_use_legacy_hashops', mock_connect2.return_value.query.call_args[0][0])
+        self.assertTrue(self.subject.GV.checkStatus)
+
+    @patch('gpcheckcat.connect2')
+    def test_fetch_guc_value_with_error_on_execution(self, mock_connect2):
+        mock_connect2.return_value.query.side_effect = Exception("Simulated error during execution")
+
+        self.assertIsNone(self.subject.fetch_guc_value("gp_use_legacy_hashops"))
+
+        self.assertEqual(mock_connect2.return_value.query.call_count, 1)
+        self.subject.setError.assert_any_call(self.subject.ERROR_NOREPAIR)
+        self.assertFalse(self.subject.GV.checkStatus)
+
+    @patch('gpcheckcat.connect2')
+    def test_fetch_guc_value_exception_on_connect(self, mock_connect2):
+        mock_connect2.side_effect = Exception("Simulated error during connection")
+
+        self.assertIsNone(self.subject.fetch_guc_value("gp_use_legacy_hashops"))
+
+        self.assertEqual(mock_connect2.call_count, 1)
+        self.subject.setError.assert_any_call(self.subject.ERROR_NOREPAIR)
+        self.assertFalse(self.subject.GV.checkStatus)
+
+    @patch('gpcheckcat.connect2')
+    def test_fetch_guc_value_exception_on_getresult(self, mock_connect2):
+        mock_connect2.return_value.query.return_value.getresult.side_effect = Exception("Simulated error fetching rows")
+
+        self.assertIsNone(self.subject.fetch_guc_value("gp_use_legacy_hashops"))
+
+        self.assertEqual(mock_connect2.return_value.query.call_count, 1)
+        self.subject.setError.assert_any_call(self.subject.ERROR_NOREPAIR)
+        self.assertFalse(self.subject.GV.checkStatus)
+
+    def test_generateDistPolicyQueryFile(self):
+        self.subject.generateDistPolicyQueryFile()
+
+        self.assertTrue(os.path.exists('gpcheckcat.distpolicy.sql'))
+        with open('gpcheckcat.distpolicy.sql', 'r') as fp:
+            generated_query = fp.read()
+
+        self.assertIn('as "Legacy Policy"', generated_query)
+        self.assertIn('as "Non Legacy Policy"', generated_query)
+        self.assertEqual(generated_query.count(self.subject.LEGACY_OPCLASS_OIDS_CTE), 2)
+
+    # Most of Cloudberry's legacy cdbhash functions have OIDs other than
+    # Greenplum's, cdblegacyhash_date (7187) and cdblegacyhash_bool (7194)
+    # among them, so the functions are found by name.
+    @patch('gpcheckcat.connect2')
+    def test_checkMixDistPolicy_finds_legacy_functions_by_name(self, mock_connect2):
+        mock_connect2.return_value.query.return_value.getresult.return_value = [(0, 0)]
+        with patch('gpcheckcat.fetch_guc_value', return_value='off'):
+            self.subject.checkMixDistPolicy()
+
+        qry = mock_connect2.return_value.query.call_args[0][0]
+        self.assertIn(self.subject.LEGACY_OPCLASS_OIDS_CTE, qry)
+        self.assertIn("starts_with(proname, 'cdblegacyhash_')", qry)
+        self.assertNotIn('6140', qry)
+
+    @patch('gpcheckcat.generateDistPolicyQueryFile')
+    @patch('gpcheckcat.connect2')
+    def test_checkMixDistPolicy_mixed_policy_sets_error(self, mock_connect2, mock_generate):
+        mock_connect2.return_value.query.return_value.getresult.return_value = [(1, 3)]
+
+        self.subject.checkMixDistPolicy()
+
+        self.subject.setError.assert_called_once_with(self.subject.ERROR_NOREPAIR)
+
+    # When the gp_use_legacy_hashops lookup fails, the check must stay failed.
+    @patch('gpcheckcat.connect2')
+    def test_checkMixDistPolicy_guc_lookup_fails(self, mock_connect2):
+        def query(qry):
+            if 'show gp_use_legacy_hashops' in qry:
+                raise Exception('lookup failed')
+            result = Mock()
+            result.getresult.return_value = [(0, 3)]
+            return result
+        mock_connect2.return_value.query.side_effect = query
+
+        self.subject.checkMixDistPolicy()
+
+        self.subject.setError.assert_called_once_with(self.subject.ERROR_NOREPAIR)
+        self.assertFalse(self.subject.GV.checkStatus)
+
+    # Both GUC mismatches point the user at gpcheckcat.distpolicy.sql, and
+    # must make gpcheckcat exit with an error.
+    @patch('gpcheckcat.generateDistPolicyQueryFile')
+    def test_printDistPolicyMsg_guc_mismatch(self, mock_generate):
+        for guc, n_legacy, n_total in (('on', 0, 3), ('off', 3, 3)):
+            with self.subTest(guc=guc):
+                self.subject.setError.reset_mock()
+                mock_generate.reset_mock()
+
+                self.subject.printDistPolicyMsg(guc, n_legacy, n_total)
+
+                self.subject.setError.assert_called_once_with(self.subject.ERROR_NOREPAIR)
+                mock_generate.assert_called_once_with()
+                self.assertFalse(self.subject.GV.checkStatus)
+
+    @patch('gpcheckcat.generateDistPolicyQueryFile')
+    def test_printDistPolicyMsg_consistent_guc(self, mock_generate):
+        for guc, n_legacy, n_total in (('on', 3, 3), ('off', 0, 3)):
+            with self.subTest(guc=guc):
+                self.subject.setError.reset_mock()
+
+                self.subject.printDistPolicyMsg(guc, n_legacy, n_total)
+
+                self.subject.setError.assert_not_called()
+                mock_generate.assert_not_called()
+                self.assertTrue(self.subject.GV.checkStatus)
+
 class Global():
     def __init__(self):
         self.opt = {}
