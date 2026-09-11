@@ -55,16 +55,34 @@ def check_pid_on_remotehost(pid, host):
 
 
 def check_pid(pid):
-    """ Check For the existence of a unix pid. """
+    """Return whether the PID exists, excluding zombies when /proc is available.
+
+    os.kill(pid, 0) still succeeds for a zombie, and in a container without an
+    init nothing reaps one. Every caller asks whether something is still
+    working, and a zombie is not.
+    """
+
+    try:
+        pid = int(pid)
+    except (TypeError, ValueError):
+        # An empty or malformed PID cannot identify a process.
+        return False
 
     if pid == 0:
         return False
 
     try:
-        os.kill(int(pid), signal.SIG_DFL)
+        os.kill(pid, signal.SIG_DFL)
     except OSError:
         return False
-    else:
+
+    try:
+        with open('/proc/%d/stat' % pid) as statfile:
+            # The comm field is parenthesised and may itself contain spaces and
+            # parentheses, so state is the first field after the last ')'.
+            return statfile.read().rpartition(')')[2].split()[0] != 'Z'
+    except (OSError, IndexError, ValueError):
+        # No /proc to consult; the kill() above is the best answer available.
         return True
 
 
