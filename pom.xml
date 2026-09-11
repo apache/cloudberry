@@ -1941,6 +1941,14 @@ code or new licensing patterns.
             <exclude>contrib/pax_storage/src/cpp/cpp-stub/src/addr_pri.h</exclude>
             <exclude>contrib/pax_storage/src/cpp/cpp-stub/src/stub.h</exclude>
 
+            <!--
+                Verbatim third-party license texts referenced from the root
+                LICENSE file.  These are license grants, not source files, so
+                they carry no license header of their own.
+            -->
+            <exclude>licenses/LICENSE-boost.txt</exclude>
+            <exclude>licenses/LICENSE-termcolor.txt</exclude>
+
             <exclude>contrib/pax_storage/src/cpp/contrib/tabulate/tabulateConfig.cmake.in</exclude>
             <exclude>contrib/pax_storage/src/cpp/contrib/tabulate/tabulate.pri</exclude>
             <exclude>contrib/pax_storage/src/cpp/contrib/tabulate/clang-format.bash</exclude>

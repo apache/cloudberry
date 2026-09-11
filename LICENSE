@@ -281,8 +281,25 @@ The PostgreSQL software includes:
 ----------------------------
    PostgreSQL-style License
 
-      src/port/gettimeofday.c 
+      src/port/gettimeofday.c
       see licenses/LICENSE-gettimeofday.txt
+
+----------------------------
+   Boost Software License - Version 1.0
+
+      Ryu float-to-string conversion (https://github.com/ulfjack/ryu),
+      copyright 2018 Ulf Adams.  Upstream Ryu is dual-licensed under the
+      Apache License 2.0 or the Boost Software License 1.0; PostgreSQL
+      took it under the terms of the Boost license, and so does this
+      distribution.
+
+      src/common/d2s.c
+      src/common/d2s_full_table.h
+      src/common/d2s_intrinsics.h
+      src/common/f2s.c
+      src/common/ryu_common.h
+      src/include/common/shortest_dec.h
+      see licenses/LICENSE-boost.txt
 
 ================================================================================
 This product contains significant parts that were originally based on software
@@ -353,17 +370,54 @@ Apache Cloudberry includes codes from
 ----------------------------
    MIT LICENSE
 
-      dependencies/yyjson
+      dependency/yyjson
       see licenses/LICENSE-yyjson.txt
 
       contrib/pax_storage/src/cpp/cpp-stub
       see licenses/LICENSE-cpp-stub.txt
 
       contrib/pax_storage/src/cpp/contrib/tabulate
+      (excluding the bundled third-party components listed below)
       see licenses/LICENSE-tabulate.txt
 
- ----------------------------
-   BSD 3 Clause License 
+----------------------------
+   Boost Software License - Version 1.0
+
+      The bundled tabulate library embeds the following third-party
+      header-only libraries by Martin Moene, which are distributed under
+      the Boost Software License, Version 1.0, rather than under
+      tabulate's own MIT license.  The amalgamated single-header build of
+      tabulate also contains copies of all three.
+
+      optional-lite (https://github.com/martinmoene/optional-lite)
+         contrib/pax_storage/src/cpp/contrib/tabulate/include/tabulate/optional_lite.hpp
+
+      variant-lite (https://github.com/martinmoene/variant-lite)
+         contrib/pax_storage/src/cpp/contrib/tabulate/include/tabulate/variant_lite.hpp
+
+      string-view-lite (https://github.com/martinmoene/string-view-lite)
+         contrib/pax_storage/src/cpp/contrib/tabulate/include/tabulate/string_view_lite.hpp
+
+      amalgamated copy of all of the above
+         contrib/pax_storage/src/cpp/contrib/tabulate/single_include/tabulate/tabulate.hpp
+
+      see licenses/LICENSE-boost.txt
+      (also shipped in-tree as
+       contrib/pax_storage/src/cpp/contrib/tabulate/LICENSE.optional-lite and
+       contrib/pax_storage/src/cpp/contrib/tabulate/LICENSE.variant-lite)
+
+----------------------------
+   BSD 3 Clause License
 
       contrib/pax_storage/src/cpp/contrib/googletest
       see licenses/LICENSE-googletest.txt
+
+      termcolor (https://github.com/ikalnytskyi/termcolor), bundled by
+      tabulate and also embedded in tabulate's amalgamated single header:
+
+         contrib/pax_storage/src/cpp/contrib/tabulate/include/tabulate/termcolor.hpp
+         contrib/pax_storage/src/cpp/contrib/tabulate/single_include/tabulate/tabulate.hpp
+
+      see licenses/LICENSE-termcolor.txt
+      (also shipped in-tree as
+       contrib/pax_storage/src/cpp/contrib/tabulate/LICENSE.termcolor)
