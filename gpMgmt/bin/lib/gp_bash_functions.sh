@@ -783,6 +783,11 @@ BUILD_COORDINATOR_PG_HBA_FILE () {
         else
             $ECHO "host     all         $USER_NAME         localhost    trust" >> ${GP_DIR}/$PG_HBA
             $ECHO "host     all         $USER_NAME         $COORDINATOR_HOSTNAME       trust" >> ${GP_DIR}/$PG_HBA
+            # Also add explicit IPv4 and IPv6 loopback entries so that
+            # connections via 127.0.0.1 and ::1 are always accepted
+            # regardless of hostname resolution order.
+            $ECHO "host     all         $USER_NAME         127.0.0.1/32    trust" >> ${GP_DIR}/$PG_HBA
+            $ECHO "host     all         $USER_NAME         ::1/128         trust" >> ${GP_DIR}/$PG_HBA
         fi
 
 

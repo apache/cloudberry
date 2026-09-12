@@ -1705,36 +1705,24 @@ get_tablespace_mapping(const char *dir)
 }
 
 static void
-add_to_exclude_list(PQExpBufferData *buf, const char *exclude)
+add_to_exclude_list(PQExpBuffer buf, bool use_new_option_syntax,
+					const char *exclude)
 {
-	char		quoted[MAXPGPATH];
-	int			error;
-	size_t		len;
-
-	error = 1;
-	len = PQescapeStringConn(conn, quoted, exclude, MAXPGPATH, &error);
-	if (len == 0 || error != 0)
-	{
-		pg_log_error("could not process exclude \"%s\": %s",
-					 exclude, PQerrorMessage(conn));
-		exit(1);
-	}
-	appendPQExpBuffer(buf, " EXCLUDE '%s'", quoted);
+	/*
+	 * EXCLUDE may be given more than once; the server collects every
+	 * occurrence into one hash table.
+	 */
+	AppendStringCommandOption(buf, use_new_option_syntax, "EXCLUDE",
+							  unconstify(char *, exclude));
 }
 
-static char *
-build_exclude_list(void)
+static void
+append_exclude_options(PQExpBuffer buf, bool use_new_option_syntax)
 {
-	PQExpBufferData	buf;
 	int				i;
 
-	if (num_exclude == 0 && num_exclude_from == 0)
-		return "";
-
-	initPQExpBuffer(&buf);
-
 	for (i = 0; i < num_exclude; i++)
-		add_to_exclude_list(&buf, excludes[i]);
+		add_to_exclude_list(buf, use_new_option_syntax, excludes[i]);
 
 	for (i = 0; i < num_exclude_from; i++)
 	{
@@ -1763,19 +1751,11 @@ build_exclude_list(void)
 				 len--)
 				str[len - 1] = '\0';
 
-			add_to_exclude_list(&buf, str);
+			add_to_exclude_list(buf, use_new_option_syntax, str);
 		}
 
 		fclose(file);
 	}
-
-	if (PQExpBufferDataBroken(buf))
-	{
-		pg_log_error("out of memory");
-		exit(1);
-	}
-
-	return buf.data;
 }
 
 /*
@@ -1850,7 +1830,6 @@ BaseBackup(char *compression_algorithm, char *compression_detail,
 	char		xlogend[64] = {0};
 	int			minServerMajor,
 				maxServerMajor;
-	char 	   *exclude_list;
 	int			serverVersion,
 				serverMajor;
 	int			writing_to_stdout;
@@ -1994,7 +1973,7 @@ BaseBackup(char *compression_algorithm, char *compression_detail,
 									  "COMPRESSION_DETAIL",
 									  compression_detail);
 	}
-	exclude_list = build_exclude_list();
+	append_exclude_options(&buf, use_new_option_syntax);
 
 	if (verbose)
 		pg_log_info("initiating base backup, waiting for checkpoint to complete");
@@ -2007,9 +1986,6 @@ BaseBackup(char *compression_algorithm, char *compression_detail,
 		else
 			fprintf(stderr, "\n");
 	}
-
-	if (exclude_list[0] != '\0')
-		free(exclude_list);
 
 	if (use_new_option_syntax && buf.len > 0)
 		basebkp = psprintf("BASE_BACKUP (%s)", buf.data);

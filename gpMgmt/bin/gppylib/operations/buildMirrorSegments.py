@@ -240,6 +240,9 @@ class GpMirrorListToBuild:
 
         recovery_info_by_host = recoveryinfo.build_recovery_info(self.__mirrorsToBuild)
 
+        # Remove any existing progress files for segments to be recovered
+        self.remove_existing_progress_files(recovery_info_by_host)
+
         self._run_setup_recovery(actionName, recovery_info_by_host)
 
         backout_map = self._update_config(recovery_info_by_host, gpArray)
@@ -292,13 +295,17 @@ class GpMirrorListToBuild:
             signal.signal(signal.SIGINT, old_handler)
             return backout_map
 
-    def _remove_progress_files(self, recovery_info_by_host, recovery_results):
+    # Remove any existing progress file of segments that will be recovered by
+    # current gprecoverseg execution. The files written by this run are left in
+    # place: gpstate reads them to report progress, and they are what an
+    # operator looks at after a recovery that went wrong.
+    def remove_existing_progress_files(self, recovery_info_by_host):
         remove_progress_file_cmds = []
         for hostName, recovery_info_list in recovery_info_by_host.items():
             for ri in recovery_info_list:
-                if recovery_results.was_bb_rewind_successful(ri.target_segment_dbid):
-                    remove_progress_file_cmds.append(self._get_remove_cmd(ri.progress_file, hostName))
-        self.__runWaitAndCheckWorkerPoolForErrorsAndClear(remove_progress_file_cmds, suppressErrorCheck=False)
+                remove_progress_file_cmds.append(self._get_remove_cmd("*dbid{}.out".format(ri.target_segment_dbid),
+                                                                      hostName))
+        self.__runWaitAndCheckWorkerPoolForErrorsAndClear(remove_progress_file_cmds, suppressErrorCheck=True)
 
     def _revert_config_update(self, recovery_results, backout_map):
         if len(backout_map) == 0:
@@ -485,7 +492,6 @@ class GpMirrorListToBuild:
         recovery_results = RecoveryResult(action_name, completed_recovery_results, self.__logger)
         recovery_results.print_bb_rewind_and_start_errors()
 
-        self._remove_progress_files(recovery_info_by_host, recovery_results)
         return recovery_results
 
     def _do_recovery(self, recovery_info_by_host, gpEnv):

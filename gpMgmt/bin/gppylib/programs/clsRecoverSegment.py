@@ -262,6 +262,15 @@ class GpRecoverSegmentProgram:
         if optionCnt > 1:
             raise ProgramArgumentValidationException("Only one of -i, -p, and -r may be specified")
 
+        # A full resynchronisation rebuilds the mirror from its primary, which
+        # is neither what -r (rebalance back to preferred roles) nor -p
+        # (recover onto a different host) asks for.
+        if self.__options.forceFullResynchronization:
+            if self.__options.rebalanceSegments:
+                raise ProgramArgumentValidationException("-F option is not supported with -r option")
+            if self.__options.newRecoverHosts is not None:
+                raise ProgramArgumentValidationException("-F option is not supported with -p option")
+
         faultProberInterface.getFaultProber().initializeProber(gpEnv.getCoordinatorPort())
 
         confProvider = configInterface.getConfigurationProvider().initializeProvider(gpEnv.getCoordinatorPort())
@@ -378,11 +387,15 @@ class GpRecoverSegmentProgram:
             if not mirrorBuilder.recover_mirrors(gpEnv, gpArray):
                 if self.termination_requested:
                     self.logger.error("gprecoverseg process was interrupted by the user.")
+                self.logger.error("gprecoverseg failed. Please check the output for more details.")
                 sys.exit(1)
 
             if self.termination_requested:
                 self.logger.info("Not able to terminate the recovery process since it has been completed successfully.")
 
+            self.logger.info("********************************")
+            self.logger.info("Future gprecoverseg executions might remove the currently created pg_basebackup/pg_rewind/rsync "
+                             "progress files, please save these files if needed.")
             self.logger.info("********************************")
             self.logger.info("Segments successfully recovered.")
             self.logger.info("********************************")
