@@ -251,6 +251,7 @@ struct truncate_ao_callback_ctx
 void
 mdunlink_ao(RelFileLocatorBackend rnode, ForkNumber forkNumber, bool isRedo)
 {
+	int ret;
 	const char *path = relpath(rnode, forkNumber);
 
 	/*
@@ -291,6 +292,19 @@ mdunlink_ao(RelFileLocatorBackend rnode, ForkNumber forkNumber, bool isRedo)
 		ao_foreach_extent_file(mdunlink_ao_perFile, &unlinkFiles);
 
 		pfree(segPath);
+	}
+
+	/*
+	 * Delete or truncate the first segment. See mdunlinkfork also.
+	 */
+	if (RelFileNodeBackendIsTemp(rnode))
+	{
+		/* Next unlink the file, unless it was already found to be missing */
+		ret = unlink(path);
+		if (ret < 0 && errno != ENOENT)
+			ereport(WARNING,
+					(errcode_for_file_access(),
+						errmsg("could not remove file \"%s\": %m", path)));
 	}
 
 	pfree((void *) path);
