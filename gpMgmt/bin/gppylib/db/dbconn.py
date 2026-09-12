@@ -274,6 +274,18 @@ def connect(dburl, utility=False, verbose=False,
 
     return Connection(connection)
 
+def escapeString(conn, value):
+    """
+    Escape a string so that it can be embedded in a single quoted SQL literal.
+
+    Always use this instead of the module level pg.escape_string() or
+    pgdb.escape_string(): those are not bound to a connection, so they have no
+    client encoding to work with and assume ASCII, which makes them raise
+    UnicodeEncodeError on any non-ASCII input. Escaping through the connection
+    uses its actual client encoding instead.
+    """
+    return conn._cnx.escape_string(value)
+
 def execSQL(conn, sql, autocommit=True):
     """
     Execute a sql command that is NOT expected to return any rows and expects to commit
