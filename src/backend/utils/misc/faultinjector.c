@@ -22,6 +22,7 @@
 #include "postgres.h"
 
 #include <signal.h>
+#include <sys/time.h>
 
 #include "access/xact.h"
 #include "catalog/pg_type.h"
@@ -402,14 +403,41 @@ FaultInjector_InjectFaultIfSet_out_of_line(
 			break;
 
 		case FaultInjectorTypeSleep:
-			ereport(LOG,
-					(errcode(ERRCODE_FAULT_INJECT),
-					 errmsg("fault triggered, fault name:'%s' fault type:'%s' ",
-							entryLocal->faultName,
-							FaultInjectorTypeEnumToString[entryLocal->faultInjectorType])));	
-			
-			pg_usleep(entryLocal->extraArg * 1000000L);
-			break;
+			{
+				struct timeval start;
+				int64		total_us = (int64) entryLocal->extraArg * 1000000L;
+				int64		elapsed_us = 0;
+
+				ereport(LOG,
+						(errcode(ERRCODE_FAULT_INJECT),
+						 errmsg("fault triggered, fault name:'%s' fault type:'%s' ",
+								entryLocal->faultName,
+								FaultInjectorTypeEnumToString[entryLocal->faultInjectorType])));
+
+				/*
+				 * pg_usleep() is a single select() and returns early on any
+				 * signal (e.g. SIGALRM from a registered timeout such as
+				 * GP_PARALLEL_RETRIEVE_CURSOR_CHECK_TIMEOUT). A bare call
+				 * therefore can't guarantee the requested duration, which
+				 * defeats the purpose of fault-injection 'sleep' (tests
+				 * rely on it as a deterministic blocking window). Loop on
+				 * the wallclock until the requested time has fully elapsed.
+				 * A genuine cancel (SIGINT) or termination still aborts the
+				 * sleep via CHECK_FOR_INTERRUPTS.
+				 */
+				gettimeofday(&start, NULL);
+				while (elapsed_us < total_us)
+				{
+					struct timeval now;
+
+					pg_usleep(total_us - elapsed_us);
+					CHECK_FOR_INTERRUPTS();
+					gettimeofday(&now, NULL);
+					elapsed_us = (int64) (now.tv_sec - start.tv_sec) * 1000000L
+						+ (now.tv_usec - start.tv_usec);
+				}
+				break;
+			}
 
 		case FaultInjectorTypeFatal:
 			/*
