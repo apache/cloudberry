@@ -805,6 +805,19 @@ extern const char * lookup_autostats_mode_by_value(GpAutoStatsModeValue val);
  */
 #define CDB_NOTIFY_ENDPOINT_ACK "ack_notify"
 
+/*
+ * Message type for QD -> QE sideband data sent on the dispatch connection
+ * outside the normal query protocol, in the same spirit as the '?' sequence
+ * response.  The QE reads it explicitly where it expects it; a message that
+ * arrives unexpectedly (typically because the QE was cancelled while waiting
+ * for one) is accepted and discarded by the command loop, so it cannot break
+ * message-boundary sync.
+ *
+ * Unlike '?', a sideband message may be large: it is read with
+ * PQ_LARGE_MESSAGE_LIMIT.
+ */
+#define GP_SIDEBAND_MESSAGE '!'
+
 typedef enum WarehouseStatus
 {
 	WAREHOUSE_STATUS_CREATING,

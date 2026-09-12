@@ -116,6 +116,12 @@ static void	cdbdisp_waitDispatchFinish_async(struct CdbDispatcherState *ds);
 static bool	cdbdisp_checkForCancel_async(struct CdbDispatcherState *ds);
 static int *cdbdisp_getWaitSocketFds_async(struct CdbDispatcherState *ds, int *nsocks);
 
+/*
+ * Lets an extension handle its own NOTIFY channels arriving from QEs; see the
+ * declaration in cdbdisp.h for the contract.
+ */
+cdbdisp_notify_hook_type cdbdisp_notify_hook = NULL;
+
 DispatcherInternalFuncs DispatcherAsyncFuncs =
 {
 	cdbdisp_checkForCancel_async,
@@ -135,6 +141,8 @@ static void dispatchCommand(CdbDispatchResult *dispatchResult,
 static void checkDispatchResult(CdbDispatcherState *ds, int timeout_sec);
 
 static bool processResults(CdbDispatchResult *dispatchResult);
+
+static void processNotifies(CdbDispatchResult *dispatchResult);
 
 static void
 			signalQEs(CdbDispatchCmdAsync *pParms);
@@ -989,6 +997,96 @@ send_sequence_response(PGconn *conn, Oid oid, int64 last, int64 cached, int64 in
 }
 
 /*
+ * Hand over any notifications this QE has sent us.
+ *
+ * Kept separate from processResults() because it must run on every path that
+ * consumed input, not only the one where the QE still has work to do.  A
+ * notification that arrives in the same read as the QE's command completion is
+ * already parsed out of the socket and queued on the connection, but that
+ * connection is about to be dropped from the poll set (stillRunning goes
+ * false), so nothing would ever wake us for it again -- the notification would
+ * be silently lost.  nextval() never hit this because its QE blocks for a
+ * reply, leaving the command incomplete; a fire-and-forget sender does hit it.
+ */
+static void
+processNotifies(CdbDispatchResult *dispatchResult)
+{
+	SegmentDatabaseDescriptor *segdbDesc = dispatchResult->segdbDesc;
+
+	PGnotify   *qnotifies = PQnotifies(segdbDesc->conn);
+	while(qnotifies && elog_geterrcode() == 0)
+	{
+		if (strcmp(qnotifies->relname, CDB_NOTIFY_NEXTVAL) == 0)
+		{
+			/*
+			 * If there was nextval request then respond back on this libpq
+			 * connection with the next value. Check and process nextval
+			 * message only if QD has not already hit the error. Since QD could
+			 * have hit the error while processing the previous nextval_qd()
+			 * request itself and since full error handling is not complete yet
+			 * (ex: releasing all the locks, etc.), shouldn't attempt to call
+			 * nextval_qd() again.
+			 */
+
+			CHECK_FOR_INTERRUPTS();
+
+			int64 last;
+			int64 cached;
+			int64 increment;
+			bool overflow;
+			Oid dbid;
+			Oid seq_oid;
+
+			if (sscanf(qnotifies->extra, "%u:%u", &dbid, &seq_oid) != 2)
+				elog(ERROR, "invalid nextval message");
+
+			if (dbid != MyDatabaseId)
+				elog(ERROR, "nextval message database id:%u doesn't match my database id:%u",
+					 dbid, MyDatabaseId);
+
+			PG_TRY();
+			{
+				nextval_qd(seq_oid, &last, &cached, &increment, &overflow);
+			}
+			PG_CATCH();
+			{
+				send_sequence_response(segdbDesc->conn, seq_oid, last, cached, increment, overflow, true /* error */);
+				PG_RE_THROW();
+			}
+			PG_END_TRY();
+			/* respond back on this libpq connection with the next value */
+			send_sequence_response(segdbDesc->conn, seq_oid, last, cached, increment, overflow, false /* error */);
+		}
+		else if (strcmp(qnotifies->relname, CDB_NOTIFY_ENDPOINT_ACK) == 0)
+		{
+			qnotifies->next = (struct pgNotify *) dispatchResult->ackPGNotifies;
+			dispatchResult->ackPGNotifies = qnotifies;
+
+			/* Don't free the notify here since it in queue now */
+			qnotifies = NULL;
+		}
+		else if (cdbdisp_notify_hook != NULL &&
+				 cdbdisp_notify_hook(dispatchResult, qnotifies))
+		{
+			/* Consumed by an extension; nothing further to do here. */
+		}
+		else
+		{
+			/* Got an unknown PGnotify, just record it in log */
+			if (qnotifies->relname)
+				elog(LOG, "got an unknown notify message : %s", qnotifies->relname);
+		}
+
+		if (qnotifies)
+			PQfreemem(qnotifies);
+		qnotifies = PQnotifies(segdbDesc->conn);
+	}
+
+	forwardQENotices();
+
+}
+
+/*
  * Receive and process input from one QE.
  *
  * Return true if all input are consumed or the connection went wrong.
@@ -1058,7 +1156,12 @@ processResults(CdbDispatchResult *dispatchResult)
 		if (!pRes)
 		{
 			ELOG_DISPATCHER_DEBUG("%s -> idle", segdbDesc->whoami);
-			/* this is normal end of command */
+			/*
+			 * Normal end of command.  Take any notifications with us: this
+			 * connection is about to leave the poll set, so this is the last
+			 * chance to see them.
+			 */
+			processNotifies(dispatchResult);
 			return true;
 		}
 
@@ -1155,72 +1258,7 @@ processResults(CdbDispatchResult *dispatchResult)
 	}
 
 	forwardQENotices();
-
-	PGnotify *qnotifies = PQnotifies(segdbDesc->conn);
-	while(qnotifies && elog_geterrcode() == 0)
-	{
-		if (strcmp(qnotifies->relname, CDB_NOTIFY_NEXTVAL) == 0)
-		{
-			/*
-			 * If there was nextval request then respond back on this libpq
-			 * connection with the next value. Check and process nextval
-			 * message only if QD has not already hit the error. Since QD could
-			 * have hit the error while processing the previous nextval_qd()
-			 * request itself and since full error handling is not complete yet
-			 * (ex: releasing all the locks, etc.), shouldn't attempt to call
-			 * nextval_qd() again.
-			 */
-
-			CHECK_FOR_INTERRUPTS();
-
-			int64 last;
-			int64 cached;
-			int64 increment;
-			bool overflow;
-			Oid dbid;
-			Oid seq_oid;
-
-			if (sscanf(qnotifies->extra, "%u:%u", &dbid, &seq_oid) != 2)
-				elog(ERROR, "invalid nextval message");
-
-			if (dbid != MyDatabaseId)
-				elog(ERROR, "nextval message database id:%u doesn't match my database id:%u",
-					 dbid, MyDatabaseId);
-
-			PG_TRY();
-			{
-				nextval_qd(seq_oid, &last, &cached, &increment, &overflow);
-			}
-			PG_CATCH();
-			{
-				send_sequence_response(segdbDesc->conn, seq_oid, last, cached, increment, overflow, true /* error */);
-				PG_RE_THROW();
-			}
-			PG_END_TRY();
-			/* respond back on this libpq connection with the next value */
-			send_sequence_response(segdbDesc->conn, seq_oid, last, cached, increment, overflow, false /* error */);
-		}
-		else if (strcmp(qnotifies->relname, CDB_NOTIFY_ENDPOINT_ACK) == 0)
-		{
-			qnotifies->next = (struct pgNotify *) dispatchResult->ackPGNotifies;
-			dispatchResult->ackPGNotifies = qnotifies;
-
-			/* Don't free the notify here since it in queue now */
-			qnotifies = NULL;
-		}
-		else
-		{
-			/* Got an unknown PGnotify, just record it in log */
-			if (qnotifies->relname)
-				elog(LOG, "got an unknown notify message : %s", qnotifies->relname);
-		}
-
-		if (qnotifies)
-			PQfreemem(qnotifies);
-		qnotifies = PQnotifies(segdbDesc->conn);
-	}
-
-	forwardQENotices();
+	processNotifies(dispatchResult);
 
 	return false;				/* we must keep on monitoring this socket */
 }
