@@ -9,7 +9,9 @@ subdir = src/backend/utils/misc/fstream
 top_builddir = ../../../../..
 include $(top_builddir)/src/Makefile.global
 
-override CPPFLAGS := -I$(srcdir) $(CPPFLAGS)
+LDFLAGS += -lssh2
+
+override CPPFLAGS := -I$(srcdir) $(CPPFLAGS) $(CPPFLAGS)
 
 OBJS = fstream.o gfile.o
 
