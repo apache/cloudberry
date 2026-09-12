@@ -1177,6 +1177,41 @@ select mvname, datastatus from gp_matview_aux where mvname = 'mv_par_normal_oid'
 insert into par_normal_oid values(1, 2);
 select mvname, datastatus from gp_matview_aux where mvname = 'mv_par_normal_oid';
 
+--
+-- Test https://github.com/apache/cloudberry/issues/726: gp_matview_aux.mvname
+-- is not schema-qualified, so two materialized views with the same bare name
+-- in different schemas are indistinguishable through it. gp_matviews (added
+-- above) resolves the name live from pg_class/pg_namespace instead, so it
+-- distinguishes them correctly; mvname itself is unchanged (kept, deprecated,
+-- for backward compatibility -- see the COMMENT ON in system_views.sql).
+--
+create schema mv_schema_test_s1;
+create schema mv_schema_test_s2;
+create table mv_schema_test_s1.t0(a int);
+create table mv_schema_test_s2.t0(a int);
+insert into mv_schema_test_s1.t0 values (1), (2);
+insert into mv_schema_test_s2.t0 values (10), (20), (30);
+create materialized view mv_schema_test_s1.mv0 as select * from mv_schema_test_s1.t0;
+create materialized view mv_schema_test_s2.mv0 as select * from mv_schema_test_s2.t0;
+-- gp_matview_aux.mvname alone cannot tell these two mv0's apart (both rows
+-- show mvname = 'mv0' with no schema information) -- this is the deprecated,
+-- pre-existing behavior, kept for backward compatibility, not the fix.
+select mvname, datastatus from gp_matview_aux where mvname = 'mv0' order by mvoid;
+-- gp_matviews distinguishes them via mvschema.
+select mvschema, mvname, has_foreign, datastatus from gp_matviews
+  where mvschema in ('mv_schema_test_s1', 'mv_schema_test_s2') and mvname = 'mv0'
+  order by mvschema;
+-- rename in one schema; the other schema's mv0 must be unaffected and
+-- gp_matviews must reflect the new name immediately (it's resolved live,
+-- not synced).
+alter materialized view mv_schema_test_s1.mv0 rename to mv0_renamed;
+select mvschema, mvname, has_foreign, datastatus from gp_matviews
+  where mvschema in ('mv_schema_test_s1', 'mv_schema_test_s2')
+    and mvname in ('mv0', 'mv0_renamed')
+  order by mvschema;
+drop schema mv_schema_test_s1 cascade;
+drop schema mv_schema_test_s2 cascade;
+
 --start_ignore
 drop schema matview_data_schema cascade;
 --end_ignore

@@ -165,6 +165,21 @@ CREATE VIEW pg_matviews AS
          LEFT JOIN pg_tablespace T ON (T.oid = C.reltablespace)
     WHERE C.relkind = 'm';
 
+CREATE VIEW gp_matviews AS
+    SELECT
+        A.mvoid,
+        N.nspname AS mvschema,
+        C.relname AS mvname,
+        A.has_foreign,
+        A.datastatus
+    FROM gp_matview_aux A
+         JOIN pg_class C ON (C.oid = A.mvoid)
+         LEFT JOIN pg_namespace N ON (N.oid = C.relnamespace);
+
+COMMENT ON VIEW gp_matviews IS 'Schema-qualified view of gp_matview_aux, resolving mvname live from pg_class/pg_namespace instead of a stored copy. Prefer this over gp_matview_aux.mvname, which is not schema-qualified (see https://github.com/apache/cloudberry/issues/726).';
+
+COMMENT ON COLUMN gp_matview_aux.mvname IS 'Deprecated: bare, non-schema-qualified materialized view name, retained for backward compatibility only. Two materialized views with the same name in different schemas are indistinguishable via this column. Use gp_matviews.mvname (with gp_matviews.mvschema) instead. See https://github.com/apache/cloudberry/issues/726.';
+
 CREATE VIEW pg_dynamic_tables AS
     SELECT
         N.nspname AS schemaname,
