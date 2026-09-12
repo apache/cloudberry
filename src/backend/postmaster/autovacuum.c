@@ -2957,6 +2957,16 @@ extract_autovac_opts(HeapTuple tup, TupleDesc pg_class_desc)
 		relam != AO_COLUMN_TABLE_AM_OID)
 		return NULL;
 
+	/*
+	 * AO reloptions use RELOPT_KIND_APPENDOPTIMIZED which does not include
+	 * autovacuum reloptions, so the embedded AutoVacOpts is zero-filled.
+	 * Returning it would make TOAST inherit freeze_max_age=0, triggering
+	 * spurious aggressive wraparound vacuums.  AO auxiliary and TOAST
+	 * relations use the heap AM, so they are unaffected by this guard.
+	 */
+	if (IsAccessMethodAO(relam))
+		return NULL;
+
 	relopts = extractRelOptions(tup, pg_class_desc, tam->amoptions);
 	if (relopts == NULL)
 		return NULL;
