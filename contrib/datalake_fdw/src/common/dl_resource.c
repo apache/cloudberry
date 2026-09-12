@@ -30,6 +30,7 @@
 
 #include <stdlib.h>
 
+#include "lib/ilist.h"
 #include "storage/ipc.h"
 #include "utils/resowner.h"
 
@@ -37,7 +38,7 @@
 
 typedef struct DlResourceEntry
 {
-	struct DlResourceEntry *next;
+	dlist_node	node;
 	ResourceOwner owner;
 	DlResourceRelease release;
 	void	   *arg;
@@ -45,9 +46,10 @@ typedef struct DlResourceEntry
 
 /*
  * There are a handful of these at a time -- one per open data file -- so a list
- * walked linearly is the whole structure needed.
+ * walked linearly is the whole structure needed.  The server's own intrusive
+ * list, as PAX uses it for the same job.
  */
-static DlResourceEntry *dl_resources;
+static dlist_head dl_resources = DLIST_STATIC_INIT(dl_resources);
 
 /*
  * malloc rather than palloc: this outlives the memory context that was current
@@ -58,7 +60,7 @@ static void
 dl_resource_release_callback(ResourceReleasePhase phase, bool isCommit,
 							 bool isTopLevel, void *arg)
 {
-	DlResourceEntry **link;
+	dlist_mutable_iter iter;
 
 	/*
 	 * After locks, so that anything the release path might touch is still
@@ -69,16 +71,12 @@ dl_resource_release_callback(ResourceReleasePhase phase, bool isCommit,
 	if (phase != RESOURCE_RELEASE_AFTER_LOCKS || proc_exit_inprogress)
 		return;
 
-	link = &dl_resources;
-	while (*link != NULL)
+	dlist_foreach_modify(iter, &dl_resources)
 	{
-		DlResourceEntry *entry = *link;
+		DlResourceEntry *entry = dlist_container(DlResourceEntry, node, iter.cur);
 
 		if (entry->owner != CurrentResourceOwner)
-		{
-			link = &entry->next;
 			continue;
-		}
 
 		/*
 		 * Reaching here on a commit means the owner released nothing: the
@@ -89,7 +87,7 @@ dl_resource_release_callback(ResourceReleasePhase phase, bool isCommit,
 		if (isCommit)
 			elog(WARNING, "datalake_fdw leaked a resource: %p", entry->arg);
 
-		*link = entry->next;
+		dlist_delete(&entry->node);
 		entry->release(entry->arg);
 		free(entry);
 	}
@@ -112,8 +110,7 @@ dl_resource_remember(DlResourceRelease release, void *arg)
 	entry->owner = CurrentResourceOwner;
 	entry->release = release;
 	entry->arg = arg;
-	entry->next = dl_resources;
-	dl_resources = entry;
+	dlist_push_tail(&dl_resources, &entry->node);
 
 	return true;
 }
@@ -121,19 +118,17 @@ dl_resource_remember(DlResourceRelease release, void *arg)
 void
 dl_resource_forget(DlResourceRelease release, void *arg)
 {
-	DlResourceEntry **link = &dl_resources;
+	dlist_mutable_iter iter;
 
-	while (*link != NULL)
+	dlist_foreach_modify(iter, &dl_resources)
 	{
-		DlResourceEntry *entry = *link;
+		DlResourceEntry *entry = dlist_container(DlResourceEntry, node, iter.cur);
 
 		if (entry->release == release && entry->arg == arg)
 		{
-			*link = entry->next;
+			dlist_delete(&entry->node);
 			free(entry);
 			return;
 		}
-
-		link = &entry->next;
 	}
 }

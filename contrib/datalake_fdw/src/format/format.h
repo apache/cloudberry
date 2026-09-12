@@ -78,14 +78,23 @@ typedef struct Fragment
 } Fragment;
 
 /*
- * The columns to materialise, as 0-based indexes into the file schema.  A NULL
- * set, or one with no columns, means every column: "read nothing" is not a
- * projection anyone asks for, so it is not worth a second way to say "all".
+ * The columns to materialise, named by Iceberg field id, in the order the batch
+ * is to present them.  A file's columns are matched by the field id each of
+ * them carries -- never by position and never by name: an older file lacks the
+ * columns added since, a renamed column keeps its id, and a file written by
+ * something else may order its columns as it likes.  A field id the file does
+ * not have comes back as a column of Arrow's null type, every value NULL,
+ * which is what the Iceberg spec says a column added after the file was written
+ * holds.  A column of the file that carries no field id can never be matched.
+ *
+ * A NULL set means every column the file has, in the file's order.  That is
+ * for reading a file on its own terms -- the test functions do -- and not for
+ * reading a table, whose columns the file may not agree with.
  */
 typedef struct ProjectionSet
 {
-	const int  *columns;
-	int			ncolumns;
+	const int32_t *field_ids;
+	int			nfields;
 } ProjectionSet;
 
 /*
@@ -99,6 +108,15 @@ typedef struct WriterOptions
 {
 	const char *compression;	/* format-defined name; NULL for the default */
 	int64_t		row_group_size; /* rows per row group; 0 for the default */
+
+	/*
+	 * The Iceberg field id of each attribute of the descriptor the writer is
+	 * opened with, dropped attributes included (and ignored), so that the
+	 * array is indexed the way the descriptor is.  NULL numbers the live
+	 * columns 1..n in order, which is what a new table's ids are; a table that
+	 * has evolved has to say what its ids are.
+	 */
+	const int32_t *field_ids;
 } WriterOptions;
 
 typedef struct RowGroupFilterSet RowGroupFilterSet;
@@ -149,8 +167,11 @@ typedef struct FormatWriterOps {
 } FormatWriterOps;
 struct FormatWriter { const FormatWriterOps *ops; void *impl; };
 
-/* Bumped when an existing field changes meaning; appending does not need it. */
-#define DL_FORMAT_ABI_VERSION 1
+/*
+ * Bumped when an existing field changes meaning; appending does not need it.
+ * 2: ProjectionSet names field ids rather than positions in the file.
+ */
+#define DL_FORMAT_ABI_VERSION 2
 
 typedef struct FormatRoutine {
 	uint32_t abi_version, struct_size;    /* same prefix-compat semantics as meta engine */

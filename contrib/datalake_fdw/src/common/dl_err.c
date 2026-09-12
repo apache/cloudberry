@@ -70,6 +70,8 @@ dl_error_sqlstate(DlErrCode code)
 			return ERRCODE_DUPLICATE_TABLE;
 		case DL_ERR_IO:
 			return ERRCODE_IO_ERROR;
+		case DL_ERR_OUT_OF_MEMORY:
+			return ERRCODE_OUT_OF_MEMORY;
 	}
 
 	return ERRCODE_INTERNAL_ERROR;
@@ -152,6 +154,8 @@ dl_err_message(DlErrCode code)
 			return "I/O error";
 		case DL_ERR_INTERNAL:
 			return "internal error";
+		case DL_ERR_OUT_OF_MEMORY:
+			return "out of memory";
 	}
 
 	return "unknown error";

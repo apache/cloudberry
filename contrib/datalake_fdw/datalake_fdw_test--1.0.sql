@@ -38,14 +38,18 @@
  */
 CREATE FUNCTION datalake_parquet_write(path text,
 									   query text,
-									   row_group_size int DEFAULT 0)
+									   row_group_size int DEFAULT 0,
+									   compression text DEFAULT '')
 RETURNS bigint AS 'MODULE_PATHNAME' LANGUAGE C STRICT VOLATILE;
 
-REVOKE EXECUTE ON FUNCTION datalake_parquet_write(text, text, int) FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION datalake_parquet_write(text, text, int, text) FROM PUBLIC;
 
+-- field_ids names, for each column of the definition list, the Iceberg field
+-- id it is read from; empty reads the file as it is, column for column.
 CREATE FUNCTION datalake_parquet_read(path text,
 									  first_row_group int DEFAULT 0,
-									  n_row_groups int DEFAULT 0)
+									  n_row_groups int DEFAULT 0,
+									  field_ids int[] DEFAULT '{}')
 RETURNS SETOF record AS 'MODULE_PATHNAME' LANGUAGE C STRICT EXECUTE ON COORDINATOR;
 
-REVOKE EXECUTE ON FUNCTION datalake_parquet_read(text, int, int) FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION datalake_parquet_read(text, int, int, int[]) FROM PUBLIC;

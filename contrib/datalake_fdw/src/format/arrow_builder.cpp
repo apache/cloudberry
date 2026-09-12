@@ -37,12 +37,14 @@
 #include "common/dl_resource.h"
 #include "common/dl_wrappers.h"
 #include "format/arrow_builder.h"
+#include "format/arrow_memory_pool.h"
 
 extern "C"
 {
 #include "catalog/pg_type.h"
 #include "utils/date.h"
 #include "utils/timestamp.h"
+#include "utils/uuid.h"
 #include "varatt.h"
 }
 
@@ -58,6 +60,15 @@ extern "C"
 struct DlArrowBuilderData
 {
 	std::shared_ptr<arrow::Schema> schema;
+	int			natts;			/* of the descriptor, dropped ones included */
+
+	/*
+	 * One entry per field of the schema, which is one per live attribute: the
+	 * attribute's position in the descriptor, its type, and its builder.  The
+	 * descriptor and the schema disagree about positions as soon as a column
+	 * has been dropped, and this is where that is reconciled.
+	 */
+	std::vector<int> attnos;
 	std::vector<Oid> types;
 	std::vector<std::unique_ptr<arrow::ArrayBuilder>> builders;
 	int64_t		nrows;
@@ -94,7 +105,6 @@ dl_append_datum(arrow::ArrayBuilder *builder, Oid atttypid, Datum value)
 
 		case TEXTOID:
 		case VARCHAROID:
-		case BPCHAROID:
 			{
 				struct varlena *v = (struct varlena *) DatumGetPointer(value);
 
@@ -127,6 +137,11 @@ dl_append_datum(arrow::ArrayBuilder *builder, Oid atttypid, Datum value)
 					->Append(date + DL_EPOCH_DELTA_DAYS);
 			}
 
+			/* Microseconds since midnight on both sides; nothing to shift. */
+		case TIMEOID:
+			return static_cast<arrow::Time64Builder *>(builder)
+				->Append(DatumGetTimeADT(value));
+
 		case TIMESTAMPOID:
 		case TIMESTAMPTZOID:
 			{
@@ -154,6 +169,10 @@ dl_append_datum(arrow::ArrayBuilder *builder, Oid atttypid, Datum value)
 				return static_cast<arrow::TimestampBuilder *>(builder)
 					->Append(ts + DL_EPOCH_DELTA_USECS);
 			}
+
+		case UUIDOID:
+			return static_cast<arrow::FixedSizeBinaryBuilder *>(builder)
+				->Append(DatumGetUUIDP(value)->data);
 
 		default:
 
@@ -196,25 +215,40 @@ dl_arrow_builder_open(void *tupdesc_arg, DlArrowBuilder *out)
 		TupleDesc	tupdesc = (TupleDesc) tupdesc_arg;
 		std::unique_ptr<DlArrowBuilderData> builder(new DlArrowBuilderData());
 
-		builder->schema = DlArrowSchemaFromTupleDesc(tupdesc);
+		/*
+		 * The field ids do not matter to a batch -- they travel with the
+		 * writer's schema, which was built from the same descriptor -- so the
+		 * default numbering is fine here.
+		 */
+		builder->schema = DlArrowSchemaFromTupleDesc(tupdesc, nullptr);
 		if (builder->schema == nullptr)
 			return DL_ERR_NOT_SUPPORTED;	/* detail already recorded */
 
+		builder->natts = tupdesc->natts;
 		builder->nrows = 0;
+		builder->attnos.reserve(tupdesc->natts);
 		builder->types.reserve(tupdesc->natts);
 		builder->builders.reserve(tupdesc->natts);
 
-		for (int i = 0; i < tupdesc->natts; i++)
+		for (int attno = 0; attno < tupdesc->natts; attno++)
 		{
+			Form_pg_attribute attr = TupleDescAttr(tupdesc, attno);
 			std::unique_ptr<arrow::ArrayBuilder> column;
-			arrow::Status status = arrow::MakeBuilder(arrow::default_memory_pool(),
-													  builder->schema->field(i)->type(),
-													  &column);
+			arrow::Status status;
 
+			/* The schema skipped it; see DlArrowSchemaFromTupleDesc(). */
+			if (attr->attisdropped)
+				continue;
+
+			status = arrow::MakeBuilder(DlArrowMemoryPool(),
+										builder->schema->field(
+											(int) builder->builders.size())->type(),
+										&column);
 			if (!status.ok())
 				return DlArrowStatus(status, "create an Arrow array builder");
 
-			builder->types.push_back(TupleDescAttr(tupdesc, i)->atttypid);
+			builder->attnos.push_back(attno);
+			builder->types.push_back(attr->atttypid);
 			builder->builders.push_back(std::move(column));
 		}
 
@@ -245,7 +279,8 @@ dl_arrow_builder_append(DlArrowBuilder builder, const Datum *values,
 	if (builder == NULL || values == NULL || nulls == NULL)
 		return DL_ARG_ERROR("append_row");
 
-	if (nvalues != (int) builder->builders.size())
+	/* A row is as wide as the descriptor, dropped attributes included. */
+	if (nvalues != builder->natts)
 	{
 		dl_error_set(DL_ERR_INTERNAL, "append an Arrow row", NULL,
 					 "the row has a different number of columns than the batch");
@@ -254,12 +289,13 @@ dl_arrow_builder_append(DlArrowBuilder builder, const Datum *values,
 
 	DL_ABI_GUARD_BEGIN
 	{
-		for (int i = 0; i < nvalues; i++)
+		for (size_t i = 0; i < builder->builders.size(); i++)
 		{
-			arrow::Status status = nulls[i]
+			int			attno = builder->attnos[i];
+			arrow::Status status = nulls[attno]
 				? builder->builders[i]->AppendNull()
 				: dl_append_datum(builder->builders[i].get(), builder->types[i],
-								  values[i]);
+								  values[attno]);
 
 			if (!status.ok())
 				return DlArrowStatus(status, "append a value to an Arrow array");

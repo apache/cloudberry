@@ -55,6 +55,9 @@ typedef enum DlErrCode {
 	DL_ERR_ALREADY_EXISTS,
 	DL_ERR_IO,
 	DL_ERR_INTERNAL,
+	DL_ERR_OUT_OF_MEMORY,		/* the memory limit, not the machine: Arrow's
+								 * allocations are reserved with the vmem
+								 * tracker, and this is what it refused */
 } DlErrCode;
 
 #define DL_ERR_FIELD_LEN	128

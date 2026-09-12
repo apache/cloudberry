@@ -26,9 +26,7 @@
  *-------------------------------------------------------------------------
  */
 
-#include <stdio.h>
-#include <stddef.h>
-#include <string.h>
+#include "postgres.h"
 
 #include "common/dl_err.h"
 #include "format/format.h"
@@ -36,8 +34,10 @@
 
 /*
  * Parquet is the only format so far.  A name that reaches here came from a
- * table option, so an unknown one is an ordinary mistake and the caller has to
- * be able to say which name it was -- returning a bare NULL would leave every
+ * table option, and is compared the way the other option values of this module
+ * are -- without regard to case, so that 'Parquet' is not a second, unknown
+ * format.  An unknown one is an ordinary mistake and the caller has to be able
+ * to say which name it was -- returning a bare NULL would leave every
  * caller to write that message again, and get it wrong differently.  The name
  * goes into the error detail, so a caller that reports DL_ERR_NOT_SUPPORTED
  * gets it without knowing this function exists.
@@ -47,7 +47,7 @@ GetFormatRoutine(const char *format)
 {
 	char		message[128];
 
-	if (format != NULL && strcmp(format, "parquet") == 0)
+	if (format != NULL && pg_strcasecmp(format, "parquet") == 0)
 		return GetParquetFormatRoutine();
 
 	snprintf(message, sizeof(message),

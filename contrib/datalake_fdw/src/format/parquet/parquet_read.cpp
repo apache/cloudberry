@@ -26,20 +26,25 @@
  *-------------------------------------------------------------------------
  */
 
+#include <algorithm>
 #include <cstdio>
+#include <map>
 #include <memory>
+#include <string>
 #include <vector>
 
 #include <arrow/api.h>
 #include <arrow/c/bridge.h>
 #include <arrow/io/file.h>
 #include <parquet/arrow/reader.h>
+#include <parquet/properties.h>
 
 #include "format/arrow_support.h"
 
 #include "am_iceberg/pg_iceberg_guc.h"
 #include "common/dl_resource.h"
 #include "common/dl_wrappers.h"
+#include "format/arrow_memory_pool.h"
 #include "format/parquet/parquet_internal.h"
 
 struct ParquetReader
@@ -48,6 +53,15 @@ struct ParquetReader
 	std::shared_ptr<arrow::io::RandomAccessFile> file;
 	std::unique_ptr<parquet::arrow::FileReader> reader;
 	std::shared_ptr<arrow::RecordBatchReader> batches;
+
+	/*
+	 * How a batch the file yields becomes the batch the caller asked for: one
+	 * entry per requested field, holding that field's position among the
+	 * columns read, or -1 for a field the file does not have.  Empty when the
+	 * caller asked for the file as it is, and batches pass straight through.
+	 */
+	std::vector<int> output_columns;
+	std::shared_ptr<arrow::Schema> output_schema;
 };
 
 static DlErrCode
@@ -76,7 +90,43 @@ parquet_reader_next_batch(FormatReader *reader, struct ArrowArray *out,
 			return DL_OK;
 		}
 
-		return DlArrowStatus(arrow::ExportRecordBatch(*batch, out, schema),
+		if (impl->output_columns.empty())
+			return DlArrowStatus(arrow::ExportRecordBatch(*batch, out, schema),
+								 "export a Parquet batch");
+
+		std::vector<std::shared_ptr<arrow::Array>> columns;
+
+		columns.reserve(impl->output_columns.size());
+
+		for (int source : impl->output_columns)
+		{
+			if (source >= 0)
+			{
+				columns.push_back(batch->column(source));
+				continue;
+			}
+
+			/*
+			 * A field the file does not have: NULL in every row, which is what
+			 * the Iceberg spec says a column added after the file was written
+			 * holds.  The null type carries no buffers, so this costs nothing
+			 * per row.
+			 */
+			arrow::Result<std::shared_ptr<arrow::Array>> nulls =
+				arrow::MakeArrayOfNull(arrow::null(), batch->num_rows(),
+									   DlArrowMemoryPool());
+
+			if (!nulls.ok())
+				return DlArrowStatus(nulls.status(), "read a Parquet batch");
+
+			columns.push_back(*nulls);
+		}
+
+		std::shared_ptr<arrow::RecordBatch> projected =
+			arrow::RecordBatch::Make(impl->output_schema, batch->num_rows(),
+									 std::move(columns));
+
+		return DlArrowStatus(arrow::ExportRecordBatch(*projected, out, schema),
 							 "export a Parquet batch");
 	}
 	DL_ABI_GUARD_END(result, "next_batch");
@@ -161,6 +211,82 @@ parquet_row_groups(const Fragment *fragment, int total,
 	return DL_OK;
 }
 
+/*
+ * Which of the file's columns to read, and how to lay them out for the caller.
+ *
+ * Matching is by field id -- see ProjectionSet -- and never by position or by
+ * name.  The columns are read in file order whatever order they were asked for
+ * in, because file order is the order Parquet's reader hands them back in;
+ * output_columns is what then puts them in the caller's order, and supplies
+ * the fields the file does not have.
+ */
+static DlErrCode
+parquet_project(ParquetReader *impl, const arrow::Schema &file_schema,
+				const ProjectionSet *projection, std::vector<int> *columns)
+{
+	std::map<int32_t, int> file_column_by_id;
+	std::vector<std::shared_ptr<arrow::Field>> fields;
+	char		message[160];
+
+	for (int i = 0; i < file_schema.num_fields(); i++)
+	{
+		int32_t		field_id = DlArrowFieldId(*file_schema.field(i));
+
+		/* A column that carries no id can never be matched to anything. */
+		if (field_id < 0)
+			continue;
+
+		/*
+		 * Two columns with one id is a file nothing can read by id.  Taking
+		 * either would be guessing about data.
+		 */
+		if (!file_column_by_id.emplace(field_id, i).second)
+		{
+			snprintf(message, sizeof(message),
+					 "the file has two columns with field id %d", (int) field_id);
+			dl_error_set(DL_ERR_INVALID_OPTION, "open a Parquet file", NULL, message);
+			return DL_ERR_INVALID_OPTION;
+		}
+	}
+
+	/* The file columns to read: ascending, each once. */
+	for (int k = 0; k < projection->nfields; k++)
+	{
+		auto		found = file_column_by_id.find(projection->field_ids[k]);
+
+		if (found != file_column_by_id.end())
+			columns->push_back(found->second);
+	}
+	std::sort(columns->begin(), columns->end());
+	columns->erase(std::unique(columns->begin(), columns->end()), columns->end());
+
+	fields.reserve(projection->nfields);
+	impl->output_columns.reserve(projection->nfields);
+
+	for (int k = 0; k < projection->nfields; k++)
+	{
+		int32_t		field_id = projection->field_ids[k];
+		auto		found = file_column_by_id.find(field_id);
+
+		if (found == file_column_by_id.end())
+		{
+			impl->output_columns.push_back(-1);
+			fields.push_back(arrow::field("field_id_" + std::to_string(field_id),
+										  arrow::null()));
+			continue;
+		}
+
+		impl->output_columns.push_back(
+			(int) (std::lower_bound(columns->begin(), columns->end(),
+									found->second) - columns->begin()));
+		fields.push_back(file_schema.field(found->second));
+	}
+
+	impl->output_schema = arrow::schema(fields);
+
+	return DL_OK;
+}
+
 DlErrCode
 parquet_open_reader(const Fragment *fragment, const ProjectionSet *projection,
 					const RowGroupFilterSet *filters, FormatReader **out)
@@ -190,7 +316,8 @@ parquet_open_reader(const Fragment *fragment, const ProjectionSet *projection,
 	DL_ABI_GUARD_BEGIN
 	{
 		std::unique_ptr<ParquetReader> impl(new ParquetReader());
-		arrow::MemoryPool *pool = arrow::default_memory_pool();
+		arrow::MemoryPool *pool = DlArrowMemoryPool();
+		std::shared_ptr<arrow::Schema> file_schema;
 		std::vector<int> row_groups;
 		std::vector<int> columns;
 		DlErrCode	rc;
@@ -205,7 +332,13 @@ parquet_open_reader(const Fragment *fragment, const ProjectionSet *projection,
 			return DlArrowStatus(file.status(), "open a Parquet file");
 		impl->file = *file;
 
-		arrow::Status status = builder.Open(impl->file);
+		/*
+		 * The properties are passed so that the pool is: left to its default
+		 * argument, Open() would decode Parquet pages out of Arrow's own pool,
+		 * unseen by the memory accounting the module's pool exists for.
+		 */
+		arrow::Status status = builder.Open(impl->file,
+											parquet::ReaderProperties(pool));
 
 		if (!status.ok())
 			return DlArrowStatus(status, "open a Parquet file");
@@ -217,9 +350,31 @@ parquet_open_reader(const Fragment *fragment, const ProjectionSet *projection,
 		 * A backend is not a thread pool.  Arrow will read column chunks in
 		 * parallel if asked, and a worker thread that hits an error has no way
 		 * to report it through PostgreSQL's error handling, so this reads on
-		 * the thread it was called on.
+		 * the thread it was called on.  Pre-buffering is the other way Arrow
+		 * moves work onto its I/O threads -- and from Arrow 13 it is on by
+		 * default -- so it is switched off by name rather than left to a
+		 * default that changes between the versions this builds against.
 		 */
 		properties.set_use_threads(false);
+		properties.set_pre_buffer(false);
+
+		/*
+		 * Spark, Hive and Impala wrote timestamps as INT96 for years, and
+		 * Arrow surfaces those as nanoseconds unless told otherwise.  A
+		 * PostgreSQL timestamp is microseconds, so that is what they are read
+		 * as: INT96 has no unit of its own to lose, and nanoseconds would
+		 * confine the values to 1677..2262 -- the "end of time" dates a
+		 * warehouse keeps as sentinels lie outside that, and Arrow wraps them
+		 * silently rather than refusing.
+		 *
+		 * One caveat, Arrow's rather than ours: INT96 is a day number plus the
+		 * nanoseconds into that day, and Arrow's microsecond conversion takes
+		 * the second part as non-negative, which is what the writers above
+		 * store.  pyarrow's deprecated INT96 writer stores a negative one for
+		 * instants before 1970, and those come back wrong -- from pyarrow
+		 * itself with the same setting, as from here.
+		 */
+		properties.set_coerce_int96_timestamp_unit(arrow::TimeUnit::MICRO);
 
 		status = builder.memory_pool(pool)->properties(properties)
 			->Build(&impl->reader);
@@ -232,18 +387,19 @@ parquet_open_reader(const Fragment *fragment, const ProjectionSet *projection,
 		if (rc != DL_OK)
 			return rc;
 
-		if (projection != NULL && projection->ncolumns > 0)
-			columns.assign(projection->columns,
-						   projection->columns + projection->ncolumns);
+		status = impl->reader->GetSchema(&file_schema);
+		if (!status.ok())
+			return DlArrowStatus(status, "read a Parquet schema");
+
+		if (projection != NULL && projection->nfields > 0)
+		{
+			rc = parquet_project(impl.get(), *file_schema, projection, &columns);
+			if (rc != DL_OK)
+				return rc;
+		}
 		else
 		{
-			std::shared_ptr<arrow::Schema> schema;
-
-			status = impl->reader->GetSchema(&schema);
-			if (!status.ok())
-				return DlArrowStatus(status, "read a Parquet schema");
-
-			for (int i = 0; i < schema->num_fields(); i++)
+			for (int i = 0; i < file_schema->num_fields(); i++)
 				columns.push_back(i);
 		}
 

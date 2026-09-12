@@ -20,12 +20,6 @@
  * arrow_decode.h
  *	  PostgreSQL values out of an Arrow batch.
  *
- * The read half of the boundary the format layer is built on, and the mirror of
- * arrow_builder.h.  This side is C: turning a column into Datums means
- * allocating text and bytea, an allocation can fail, and a failure in
- * PostgreSQL unwinds with longjmp -- which is safe here and would not be if it
- * had to pass through C++ frames on the way out.
- *
  * It reads the buffers of the Arrow C data interface directly rather than
  * handing them back to Arrow, which keeps the read path free of C++ and makes
  * it a real check on what our own writer exports.
@@ -49,27 +43,31 @@
  * Called once per column per batch: the answer depends only on the schema, and
  * checking it per value would be the same answer several million times.
  *
+ * What is accepted is what the type can hold without loss: its own Arrow type,
+ * the narrower ones Iceberg lets a column be promoted from -- an int column
+ * read as bigint, a float as double precision -- and Arrow's null type, which
+ * is what a column the file does not have comes back as.  The modifier is
+ * judged by the same rule CREATE TABLE applies, so a varchar(n) is refused
+ * here for the same reason it could not have been created.
+ *
  * `field` is one child of the batch's schema.
  */
 extern DlErrCode dl_arrow_decode_check(const struct ArrowSchema *field,
-									   Oid atttypid);
+									   Oid atttypid, int32 atttypmod);
 
 /*
  * One value.  Only valid for a column dl_arrow_decode_check() accepted, which
- * is what lets this trust the buffer layout instead of re-deriving it.
+ * is what lets this trust the buffer layout instead of re-deriving it -- and
+ * `field` is how it knows which of the accepted layouts this column has.
  *
- * Values that point at memory -- text, bytea -- are copied into the current
- * memory context, because the batch is released long before the tuples built
- * from it are done with.
- *
- * `atttypmod` is the modifier the column was declared with, or -1.  A file this
- * module did not write has no idea what it was, so a char(n) in it need not be
- * padded to n and a varchar(n) need not be within n; without applying it, a
- * value that breaks the type's own rules would reach the executor.
+ * Values that point at memory -- text, bytea, uuid -- are copied into the
+ * current memory context, because the batch is released long before the
+ * tuples built from it are done with.  A string is verified to be what the
+ * file claims, UTF-8, before it becomes a text: the file is not ours.
  */
-extern DlErrCode dl_arrow_decode_value(const struct ArrowArray *column,
+extern DlErrCode dl_arrow_decode_value(const struct ArrowSchema *field,
+									   const struct ArrowArray *column,
 									   int64_t row, Oid atttypid,
-									   int32 atttypmod,
 									   Datum *value, bool *isnull);
 
 #endif							/* DL_ARROW_DECODE_H */

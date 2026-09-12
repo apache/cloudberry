@@ -26,22 +26,35 @@
  *-------------------------------------------------------------------------
  */
 
+#include <cctype>
+#include <cerrno>
 #include <cstdio>
+#include <cstring>
 #include <memory>
 #include <string>
-#include <unistd.h>
 #include <vector>
+
+#include <fcntl.h>
+#include <unistd.h>
 
 #include <arrow/api.h>
 #include <arrow/c/bridge.h>
 #include <arrow/io/file.h>
+#include <arrow/util/compression.h>
 #include <parquet/arrow/writer.h>
 #include <parquet/properties.h>
+#include <parquet/types.h>
 
 #include "format/arrow_support.h"
 
+extern "C"
+{
+#include "common/file_perm.h"
+}
+
 #include "common/dl_resource.h"
 #include "common/dl_wrappers.h"
+#include "format/arrow_memory_pool.h"
 #include "format/parquet/parquet_internal.h"
 
 struct ParquetWriter
@@ -91,6 +104,9 @@ private:
  * complete, valid, truncated file appearing at the path if the unlink does not
  * take.  What it leaves then has no footer, so nothing can read it, and that is
  * why the unlink's result is not worth reporting.
+ *
+ * The file is ours to delete: parquet_open_writer() created it with O_EXCL, so
+ * nothing was at the path before, and nothing this removes was anyone else's.
  */
 static void
 parquet_discard(ParquetWriter *impl)
@@ -318,28 +334,55 @@ static const FormatWriterOps parquet_writer_ops = {
 	parquet_writer_abort
 };
 
+/*
+ * The name arrives as a user typed it into a table option, so case is not
+ * meaning.  Arrow is asked about it rather than a list kept here, because two
+ * of the three answers depend on things this file cannot know: Parquet's
+ * specification admits a subset of the codecs Arrow names, and the Arrow this
+ * module is linked against was built with a subset of those.  Asked in that
+ * order, so that the message says which of the three it was.
+ */
 static DlErrCode
 parquet_compression(const char *name, arrow::Compression::type *out)
 {
-	std::string	requested(name);
-	char		message[128];
+	std::string requested(name);
+	char		message[160];
 
-	if (requested == "none" || requested == "uncompressed")
-		*out = arrow::Compression::UNCOMPRESSED;
-	else if (requested == "snappy")
-		*out = arrow::Compression::SNAPPY;
-	else if (requested == "gzip")
-		*out = arrow::Compression::GZIP;
-	else if (requested == "zstd")
-		*out = arrow::Compression::ZSTD;
-	else
+	for (char &c : requested)
+		c = (char) tolower((unsigned char) c);
+
+	/* PostgreSQL's word for it; Arrow's is the long one. */
+	if (requested == "none")
+		requested = "uncompressed";
+
+	arrow::Result<arrow::Compression::type> codec =
+		arrow::util::Codec::GetCompressionType(requested);
+
+	if (!codec.ok())
 	{
 		snprintf(message, sizeof(message),
-				 "\"%s\" is not a compression this build can write", name);
+				 "\"%s\" is not a compression Arrow knows", name);
 		dl_error_set(DL_ERR_INVALID_OPTION, "open a Parquet file", NULL, message);
 		return DL_ERR_INVALID_OPTION;
 	}
 
+	if (!parquet::IsCodecSupported(*codec))
+	{
+		snprintf(message, sizeof(message),
+				 "\"%s\" is not a compression a Parquet file can use", name);
+		dl_error_set(DL_ERR_INVALID_OPTION, "open a Parquet file", NULL, message);
+		return DL_ERR_INVALID_OPTION;
+	}
+
+	if (!arrow::util::Codec::IsAvailable(*codec))
+	{
+		snprintf(message, sizeof(message),
+				 "\"%s\" is not a compression this build of Arrow can write", name);
+		dl_error_set(DL_ERR_INVALID_OPTION, "open a Parquet file", NULL, message);
+		return DL_ERR_INVALID_OPTION;
+	}
+
+	*out = *codec;
 	return DL_OK;
 }
 
@@ -359,13 +402,15 @@ parquet_open_writer(const char *path, void *tupdesc_arg,
 	DL_ABI_GUARD_BEGIN
 	{
 		std::unique_ptr<ParquetWriter> impl(new ParquetWriter());
-		arrow::MemoryPool *pool = arrow::default_memory_pool();
+		arrow::MemoryPool *pool = DlArrowMemoryPool();
 		parquet::WriterProperties::Builder properties;
 		arrow::Compression::type compression = arrow::Compression::SNAPPY;
 		DlErrCode	rc;
+		int			fd;
 
 		impl->path = path;
-		impl->schema = DlArrowSchemaFromTupleDesc((TupleDesc) tupdesc_arg);
+		impl->schema = DlArrowSchemaFromTupleDesc((TupleDesc) tupdesc_arg,
+												  options != NULL ? options->field_ids : nullptr);
 		if (impl->schema == nullptr)
 			return DL_ERR_NOT_SUPPORTED;	/* detail already recorded */
 
@@ -377,6 +422,9 @@ parquet_open_writer(const char *path, void *tupdesc_arg,
 		}
 		properties.compression(compression);
 
+		/* Left alone, the builder would take Arrow's default pool, silently. */
+		properties.memory_pool(pool);
+
 		if (options != NULL && options->row_group_size > 0)
 			properties.max_row_group_length(options->row_group_size);
 
@@ -386,11 +434,45 @@ parquet_open_writer(const char *path, void *tupdesc_arg,
 		impl->row_group_size = built->max_row_group_length();
 		impl->pending_rows = 0;
 
+		/*
+		 * Created here rather than by Arrow.  Arrow's path form opens with
+		 * O_TRUNC, which would empty a file that was already there -- and this
+		 * writer deletes the file it holds whenever it cannot finish it, so a
+		 * truncated file would then be a deleted one.  With O_EXCL the kernel
+		 * answers "did I create this", and the writer only ever deletes what
+		 * it created.  A lake's data file names are unique by construction, so
+		 * a path that exists is a mistake, and refusing it is right anyway.
+		 */
+		fd = open(path, O_WRONLY | O_CREAT | O_EXCL, pg_file_create_mode);
+		if (fd < 0)
+		{
+			int			saved_errno = errno;
+			std::string message;
+
+			if (saved_errno == EEXIST)
+			{
+				message = std::string("\"") + path + "\" already exists";
+				dl_error_set(DL_ERR_ALREADY_EXISTS, "create a Parquet file", NULL,
+							 message.c_str());
+				return DL_ERR_ALREADY_EXISTS;
+			}
+
+			message = std::string("could not create \"") + path + "\": " +
+				strerror(saved_errno);
+			dl_error_set(DL_ERR_IO, "create a Parquet file", NULL, message.c_str());
+			return DL_ERR_IO;
+		}
+
+		/* From here the file exists and is ours, so every failure discards it. */
 		arrow::Result<std::shared_ptr<arrow::io::FileOutputStream>> sink =
-			arrow::io::FileOutputStream::Open(path);
+			arrow::io::FileOutputStream::Open(fd);
 
 		if (!sink.ok())
+		{
+			(void) close(fd);	/* Arrow took nothing */
+			parquet_discard(impl.get());
 			return DlArrowStatus(sink.status(), "create a Parquet file");
+		}
 		impl->sink = *sink;
 
 		/*
@@ -398,7 +480,9 @@ parquet_open_writer(const char *path, void *tupdesc_arg,
 		 * With it, reading back would restore the types from our own note
 		 * rather than from Parquet's, and a round trip would agree with itself
 		 * no matter what it had written; without it, what comes back is what
-		 * any other reader of the file sees.
+		 * any other reader of the file sees.  The field ids are not part of
+		 * that note: Parquet's bridge writes them into the Parquet schema
+		 * itself, where every reader finds them.
 		 */
 		/*
 		 * Arrow 11 deprecated the form that returns its writer through an out
@@ -426,8 +510,7 @@ parquet_open_writer(const char *path, void *tupdesc_arg,
 
 		if (!status.ok())
 		{
-			(void) impl->sink->Close();
-			unlink(path);
+			parquet_discard(impl.get());
 			return DlArrowStatus(status, "create a Parquet file");
 		}
 

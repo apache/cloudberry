@@ -37,8 +37,10 @@
 
 #include "postgres.h"
 
+#include "catalog/pg_type.h"
 #include "executor/spi.h"
 #include "funcapi.h"
+#include "utils/array.h"
 #include "utils/builtins.h"
 #include "utils/memutils.h"
 #include "utils/tuplestore.h"
@@ -51,6 +53,24 @@
 
 PG_FUNCTION_INFO_V1(datalake_parquet_write);
 PG_FUNCTION_INFO_V1(datalake_parquet_read);
+
+/*
+ * The SQL declaration and the C function have to agree on the argument list,
+ * and nothing checks that they do: a database where the extension was created
+ * from an older datalake_fdw_test--1.0.sql hands over fewer arguments than the
+ * function reads, and reading one that is not there is a crash.  This turns
+ * that into an error naming the fix.
+ */
+static void
+check_nargs(FunctionCallInfo fcinfo, int expected)
+{
+	if (PG_NARGS() != expected)
+		ereport(ERROR,
+				(errcode(ERRCODE_INTERNAL_ERROR),
+				 errmsg("datalake_fdw_test is out of date: the function was declared with %d arguments and expects %d",
+						PG_NARGS(), expected),
+				 errhint("DROP EXTENSION datalake_fdw_test and CREATE it again.")));
+}
 
 static const FormatRoutine *
 parquet_routine(void)
@@ -88,27 +108,38 @@ write_one_batch(FormatWriter *writer, DlArrowBuilder builder)
 }
 
 /*
- * datalake_parquet_write(path, query, row_group_size) -> rows written
+ * datalake_parquet_write(path, query, row_group_size, compression) -> rows written
  *
  * The rows the query returns are written to `path` as Parquet.  A row group
  * size of zero leaves the format's own default in place; anything else also
  * becomes the number of rows per batch, because a row group is closed at a
  * batch boundary and the option would otherwise be rounded away by a batch size
- * that does not divide by it.
+ * that does not divide by it.  An empty compression name means the format's
+ * default: the function is STRICT, so NULL cannot be the way to say that.
+ *
+ * The columns are given field ids 1..n, which is what a new table's would be.
  */
 Datum
 datalake_parquet_write(PG_FUNCTION_ARGS)
 {
-	char	   *path = text_to_cstring(PG_GETARG_TEXT_PP(0));
-	char	   *query = text_to_cstring(PG_GETARG_TEXT_PP(1));
-	int32		row_group_size = PG_GETARG_INT32(2);
-	const FormatRoutine *routine = parquet_routine();
+	char	   *path;
+	char	   *query;
+	int32		row_group_size;
+	char	   *compression;
+	const FormatRoutine *routine;
 	WriterOptions options = {0};
 	FormatWriter *volatile open_writer = NULL;
 	DlArrowBuilder volatile open_builder = NULL;
 	long		batch_rows = iceberg_batch_rows;
 	int64		written = 0;
 	MemoryContext row_context;
+
+	check_nargs(fcinfo, 4);
+	path = text_to_cstring(PG_GETARG_TEXT_PP(0));
+	query = text_to_cstring(PG_GETARG_TEXT_PP(1));
+	row_group_size = PG_GETARG_INT32(2);
+	compression = text_to_cstring(PG_GETARG_TEXT_PP(3));
+	routine = parquet_routine();
 
 	/*
 	 * Bounded above as well as below, and by the same number as
@@ -122,6 +153,8 @@ datalake_parquet_write(PG_FUNCTION_ARGS)
 						DL_MAX_ROW_GROUP_ROWS)));
 
 	options.row_group_size = row_group_size;
+	options.compression = compression[0] != '\0' ? compression : NULL;
+	options.field_ids = NULL;
 	if (row_group_size > 0 && row_group_size < batch_rows)
 		batch_rows = row_group_size;
 
@@ -272,12 +305,19 @@ datalake_parquet_write(PG_FUNCTION_ARGS)
 }
 
 /*
- * datalake_parquet_read(path, first_row_group, n_row_groups) -> setof record
+ * datalake_parquet_read(path, first_row_group, n_row_groups, field_ids)
+ *	  -> setof record
  *
  * The column definition list says what the caller expects the file to hold, and
  * is checked against the file's own schema rather than assumed: reading an
  * Arrow column as the wrong PostgreSQL type would produce values, just not the
  * ones in the file.
+ *
+ * With an empty field id list the file is read as it is, every column in the
+ * file's order, and the definition list has to match it column for column.
+ * With one, each entry names the Iceberg field id the corresponding column of
+ * the definition list is to be read from, in the way a table's columns are
+ * matched to a data file's; an id the file does not have reads as NULL.
  *
  * The row group arguments are the unit a scan is divided at.  Reading 0..0 and
  * then 1..1 has to produce exactly what reading the whole file does, which is
@@ -286,13 +326,19 @@ datalake_parquet_write(PG_FUNCTION_ARGS)
 Datum
 datalake_parquet_read(PG_FUNCTION_ARGS)
 {
-	char	   *path = text_to_cstring(PG_GETARG_TEXT_PP(0));
+	char	   *path;
+	ArrayType  *field_id_array;
 	ReturnSetInfo *rsinfo = (ReturnSetInfo *) fcinfo->resultinfo;
-	const FormatRoutine *routine = parquet_routine();
+	const FormatRoutine *routine;
 	FormatReader *volatile open_reader = NULL;
 	struct ArrowArray *batch = palloc0(sizeof(struct ArrowArray));
 	struct ArrowSchema *schema = palloc0(sizeof(struct ArrowSchema));
 	Fragment	fragment = {0};
+	ProjectionSet projection = {0};
+	const ProjectionSet *projection_arg = NULL;
+	Datum	   *field_id_datums;
+	bool	   *field_id_nulls;
+	int			nfield_ids;
 	TupleDesc	tupdesc;
 	Tuplestorestate *tupstore;
 	Datum	   *values;
@@ -300,6 +346,11 @@ datalake_parquet_read(PG_FUNCTION_ARGS)
 	FormatReader *reader = NULL;
 	MemoryContext row_context;
 	DlErrCode	rc;
+
+	check_nargs(fcinfo, 4);
+	path = text_to_cstring(PG_GETARG_TEXT_PP(0));
+	field_id_array = PG_GETARG_ARRAYTYPE_P(3);
+	routine = parquet_routine();
 
 	fragment.path = path;
 	fragment.first_row_group = PG_GETARG_INT32(1);
@@ -312,6 +363,33 @@ datalake_parquet_read(PG_FUNCTION_ARGS)
 	values = palloc(tupdesc->natts * sizeof(Datum));
 	nulls = palloc(tupdesc->natts * sizeof(bool));
 
+	deconstruct_array(field_id_array, INT4OID, sizeof(int32), true, TYPALIGN_INT,
+					  &field_id_datums, &field_id_nulls, &nfield_ids);
+	if (nfield_ids > 0)
+	{
+		int32	   *field_ids = palloc(nfield_ids * sizeof(int32));
+		int			i;
+
+		if (nfield_ids != tupdesc->natts)
+			ereport(ERROR,
+					(errcode(ERRCODE_DATATYPE_MISMATCH),
+					 errmsg("the field id list names %d columns, the column definition list has %d",
+							nfield_ids, tupdesc->natts)));
+
+		for (i = 0; i < nfield_ids; i++)
+		{
+			if (field_id_nulls[i])
+				ereport(ERROR,
+						(errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED),
+						 errmsg("a field id cannot be null")));
+			field_ids[i] = DatumGetInt32(field_id_datums[i]);
+		}
+
+		projection.field_ids = field_ids;
+		projection.nfields = nfield_ids;
+		projection_arg = &projection;
+	}
+
 	/*
 	 * Every text and bytea decoded out of a batch is a copy, and tuplestore
 	 * copies it again.  A materialize-mode function is called once, so the
@@ -323,7 +401,7 @@ datalake_parquet_read(PG_FUNCTION_ARGS)
 										"datalake_parquet_read",
 										ALLOCSET_DEFAULT_SIZES);
 
-	rc = routine->open_reader(&fragment, NULL, NULL, &reader);
+	rc = routine->open_reader(&fragment, projection_arg, NULL, &reader);
 	if (rc != DL_OK)
 		dl_error_report(ERROR, rc, "open_reader");
 	open_reader = reader;
@@ -356,7 +434,8 @@ datalake_parquet_read(PG_FUNCTION_ARGS)
 			for (attno = 0; attno < tupdesc->natts; attno++)
 			{
 				rc = dl_arrow_decode_check(schema->children[attno],
-										   TupleDescAttr(tupdesc, attno)->atttypid);
+										   TupleDescAttr(tupdesc, attno)->atttypid,
+										   TupleDescAttr(tupdesc, attno)->atttypmod);
 				if (rc != DL_OK)
 					dl_error_report(ERROR, rc, "check_column");
 			}
@@ -369,9 +448,9 @@ datalake_parquet_read(PG_FUNCTION_ARGS)
 
 				for (attno = 0; attno < tupdesc->natts; attno++)
 				{
-					rc = dl_arrow_decode_value(batch->children[attno], row,
+					rc = dl_arrow_decode_value(schema->children[attno],
+											   batch->children[attno], row,
 											   TupleDescAttr(tupdesc, attno)->atttypid,
-											   TupleDescAttr(tupdesc, attno)->atttypmod,
 											   &values[attno], &nulls[attno]);
 					if (rc != DL_OK)
 						dl_error_report(ERROR, rc, "decode_value");

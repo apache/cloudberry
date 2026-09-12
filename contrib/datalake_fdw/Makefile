@@ -40,6 +40,7 @@ OBJS = \
 	src/meta/engine_stub/stub_engine.o \
 	src/format/format_registry.o \
 	src/format/arrow_support.o \
+	src/format/arrow_memory_pool.o \
 	src/format/arrow_builder.o \
 	src/format/arrow_decode.o \
 	src/format/parquet/parquet_format.o \
