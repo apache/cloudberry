@@ -55,7 +55,7 @@ git submodule update --init --recursive
 ```
 
 The following submodules will be downloaded for building and tesing PAX:
-- yyjson (`dependency/yyjson`)
+- yyjson (`contrib/pax_storage/src/cpp/contrib/yyjson`)
 - cpp-stub (`contrib/pax_storage/src/cpp/cotnrib`)
 - googlebench (`contrib/pax_storage/src/cpp/cotnrib`)
 - googletest (`contrib/pax_storage/src/cpp/cotnrib`)
