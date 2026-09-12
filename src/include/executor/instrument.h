@@ -81,6 +81,9 @@ typedef struct Instrumentation
 	bool		prf_work;		/* true if pushdown runtime filters really work */
 	/* Info about current plan cycle: */
 	bool		running;		/* true if we've completed first tuple */
+	bool		eof;			/* true if the last fetch returned no tuple
+								 * (node exhausted for this cycle); safe to read
+								 * mid-run, unlike nloops/ntuples */
 	instr_time	starttime;		/* Start time of current iteration of node */
 	instr_time	counter;		/* Accumulated runtime for this node */
 	double		firsttuple;		/* Time for first tuple of this cycle */

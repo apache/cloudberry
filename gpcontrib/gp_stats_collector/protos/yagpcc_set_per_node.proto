@@ -1,0 +1,93 @@
+/**
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+syntax = "proto3";
+
+import "google/protobuf/timestamp.proto";
+
+import "protos/yagpcc_metrics.proto";
+import "protos/yagpcc_plan.proto";
+
+package yagpcc;
+
+/*
+ * SetPerNodeBatchReq -- one whole plan-tree snapshot from a single backend.
+ *
+ * Sent once per walker pass (SendQueryState signal or pg_qs_executor_end),
+ * carrying every observed plan node in one message.  A backend opens one UDS
+ * connection and sends this batch instead of connect+send+close per node.  The
+ * shared query_key, segment_key and datetime are hoisted out of every node.
+ *
+ * Wire transport: UDSConnector::report_per_node_batch() with the 8-byte
+ * extended protocol header (payload_size | 0x80000000, request_type=1,
+ * reserved=0).
+ *
+ * trace_id keys the whole collection: 16 raw bytes minted once on the
+ * coordinator per pg_query_state() call and stamped into every backend's batch,
+ * so yagpcc can group the snapshots of one poll and tell them apart from an
+ * overlapping poll of the same pid.
+ *
+ * This message MUST stay byte-identical to the yagpcc-side definition in
+ * api/proto/agent_segment/yagpcc_set_service.proto.
+ */
+message SetPerNodeBatchReq {
+    google.protobuf.Timestamp datetime    = 1;
+    SegmentKey                segment_key = 2;
+    repeated BatchNode        nodes       = 3;
+    bytes                     trace_id    = 4;   /* 16-byte per-collection key (see above) */
+}
+
+/*
+ * BatchNode -- one plan node inside a SetPerNodeBatchReq.
+ *
+ * Deliberately flat (no NodeMetrics wrapper) so the two repos can keep the
+ * message trivially wire-identical without sharing a metrics wrapper type.
+ * Fields mirror GpscNodeSample minus the hoisted identity keys.
+ */
+message BatchNode {
+    int32          plan_node_id        = 1;
+    int32          parent_plan_node_id = 2;
+    int32          node_type           = 3;   /* raw NodeTag value */
+    int32          slice_id            = 4;
+    double         plan_rows           = 5;   /* planner estimate */
+    int32          relation_oid        = 6;   /* scan relation OID, 0 otherwise */
+    double         ntuples             = 7;
+    double         tuplecount          = 8;
+    double         nloops              = 9;
+    double         startup             = 10;
+    double         total               = 11;
+    double         firsttuple          = 12;
+    uint64         shared_blks_hit     = 13;
+    uint64         shared_blks_read    = 14;
+    PlanNodeStatus node_status         = 15;
+    bool           eof                 = 16;
+    google.protobuf.Timestamp executed_at = 17;
+    bool           workfile_created    = 18;
+    int64          workmem_used        = 19;   /* bytes of work_mem actually used */
+    int64          workmem_wanted      = 20;   /* bytes needed to avoid spill; >0 == spilled */
+    double         ntuples_delta       = 21;   /* tuples produced since the previous sample */
+    double         tuples_per_sec      = 22;   /* ntuples_delta over the sample interval */
+    double         time_since_init_sec = 23;   /* seconds since the node's first sample */
+    bool           stalled             = 24;   /* executing, no new tuples, not at eof */
+    int32          pid                 = 25;
+    reserved                             26;
+    reserved      "segindex";
+    string         relation_name       = 27;
+    int32          ccnt                = 28;
+}
+
