@@ -314,8 +314,13 @@ cat >> $CLUSTER_CONFIG <<-EOF
 	
 	COORDINATOR_PORT=${COORDINATOR_DEMO_PORT}
 	
-	# Shell to use to execute commands on all hosts
-	TRUSTED_SHELL="$(dirname "$0")/lalshell"
+	# Shell to use to execute commands on all hosts. gpinitsystem sources this
+	# file from whatever directory it runs in, so the path has to be absolute;
+	# \$(dirname \$0) on its own is relative whenever this script was invoked by
+	# a relative path. Resolve the directory holding lalshell -- the one this
+	# script lives in -- and quote it so a path containing whitespace survives
+	# being sourced.
+	TRUSTED_SHELL="$(cd "$(dirname "$0")" && pwd)/lalshell"
 	
 	ENCODING=UNICODE
 EOF
