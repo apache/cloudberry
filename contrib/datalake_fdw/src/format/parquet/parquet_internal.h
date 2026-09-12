@@ -17,22 +17,31 @@
  * specific language governing permissions and limitations
  * under the License.
  *
- * pg_iceberg_guc.h
- *	  Configuration variables for Iceberg table creation.
+ * parquet_internal.h
+ *	  What the halves of the Parquet format say to each other.
+ *
+ * Reading and writing a Parquet file have nothing in common but the name of
+ * the format, so they are separate translation units; this is the only thing
+ * they share, and parquet_format.cpp is the only other file that needs it.
  *
  * IDENTIFICATION
- *	  contrib/datalake_fdw/src/am_iceberg/pg_iceberg_guc.h
+ *	  contrib/datalake_fdw/src/format/parquet/parquet_internal.h
  *
  *-------------------------------------------------------------------------
  */
 
-#ifndef PG_ICEBERG_GUC_H
-#define PG_ICEBERG_GUC_H
+#ifndef DL_PARQUET_INTERNAL_H
+#define DL_PARQUET_INTERNAL_H
 
-extern char *iceberg_default_catalog;
-extern char *iceberg_default_volume;
-extern int	iceberg_batch_rows;
+#include "format/format.h"
 
-extern void pg_iceberg_define_gucs(void);
+extern DlErrCode parquet_open_reader(const Fragment *fragment,
+									 const ProjectionSet *projection,
+									 const RowGroupFilterSet *filters,
+									 FormatReader **out);
 
-#endif							/* PG_ICEBERG_GUC_H */
+extern DlErrCode parquet_open_writer(const char *path, void *tupdesc,
+									 const WriterOptions *options,
+									 FormatWriter **out);
+
+#endif							/* DL_PARQUET_INTERNAL_H */
