@@ -278,12 +278,16 @@ class CsvFlatten(object):
         item = next(self.source)
         #we need to make a minor format change to the log level field so that
         # our single regex will match both.
-        item[16] = item[16] + ": "
+        # Check if item has enough columns before accessing index 16
+        if isinstance(item, list) and len(item) > 16:
+            item[16] = item[16] + ": "
 
         self.buffer.truncate(0)
+        self.buffer.seek(0)
         self.writer.writerow(item)
 
         return self.buffer.getvalue()
+
 
 #------------------------------- Spying --------------------------------
 
