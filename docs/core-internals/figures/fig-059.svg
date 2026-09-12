@@ -1,0 +1,119 @@
+<!--
+  Licensed to the Apache Software Foundation (ASF) under one
+  or more contributor license agreements.  See the NOTICE file
+  distributed with this work for additional information
+  regarding copyright ownership.  The ASF licenses this file
+  to you under the Apache License, Version 2.0 (the
+  "License"); you may not use this file except in compliance
+  with the License.  You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing,
+  software distributed under the License is distributed on an
+  "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+  KIND, either express or implied.  See the License for the
+  specific language governing permissions and limitations
+  under the License.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 446" width="100%" style="max-width:880px;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" role="img" aria-label="PlanSlice array on the left, ExecSlice array in the middle, gangs and QE processes on the right, with binding arrows">
+  <defs>
+    <marker id="sl193arrowP" markerWidth="9" markerHeight="8" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 z" fill="#6b4c93"/></marker>
+    <marker id="sl193arrowA" markerWidth="9" markerHeight="8" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 z" fill="#8a6d1a"/></marker>
+  </defs>
+
+  <text x="133" y="20" text-anchor="middle" font-size="12" font-weight="700" fill="#4b2d6b">PlannedStmt.slices[ ]</text>
+  <text x="133" y="36" text-anchor="middle" font-size="9.5" fill="#6b4c93">planner output — serialized, identical on every QE</text>
+  <text x="463" y="20" text-anchor="middle" font-size="12" font-weight="700" fill="#1f6b45">EState.es_sliceTable</text>
+  <text x="463" y="36" text-anchor="middle" font-size="9.5" fill="#2c7a55">executor state — one copy per process</text>
+  <text x="770" y="20" text-anchor="middle" font-size="12" font-weight="700" fill="#7a5c10">gangs and QE processes</text>
+  <text x="770" y="36" text-anchor="middle" font-size="9.5" fill="#8a6d1a">CdbProcess: host, listener port, pid</text>
+
+  <rect x="8" y="48" width="250" height="358" rx="7" fill="#f5edff" stroke="#cdb4db" stroke-width="1.2"/>
+  <rect x="320" y="48" width="286" height="358" rx="7" fill="#eafaf0" stroke="#cfead9" stroke-width="1.2"/>
+  <rect x="668" y="48" width="204" height="358" rx="7" fill="#fff4d6" stroke="#e0c070" stroke-width="1.2"/>
+
+  <rect x="18" y="58" width="230" height="104" rx="5" fill="#ffffff" stroke="#cdb4db" stroke-width="1"/>
+  <text x="28" y="76" font-size="10.5" font-weight="700" fill="#4b2d6b">PlanSlice[0]</text>
+  <text x="28" y="94" font-size="10" fill="#3d3a44">sliceIndex 0</text>
+  <text x="28" y="110" font-size="10" fill="#3d3a44">parentIndex −1</text>
+  <text x="28" y="126" font-size="10" fill="#3d3a44">gangType UNALLOCATED</text>
+  <text x="28" y="142" font-size="10" fill="#3d3a44">numsegments 1</text>
+  <text x="28" y="156" font-size="9" fill="#8a6d1a">no gang — the QD itself</text>
+
+  <rect x="18" y="172" width="230" height="104" rx="5" fill="#ffffff" stroke="#cdb4db" stroke-width="1"/>
+  <text x="28" y="190" font-size="10.5" font-weight="700" fill="#4b2d6b">PlanSlice[1]</text>
+  <text x="28" y="208" font-size="10" fill="#3d3a44">sliceIndex 1</text>
+  <text x="28" y="224" font-size="10" fill="#3d3a44">parentIndex 0</text>
+  <text x="28" y="240" font-size="10" fill="#3d3a44">gangType PRIMARY_READER</text>
+  <text x="28" y="256" font-size="10" fill="#3d3a44">numsegments 3 · workers 0</text>
+  <text x="28" y="270" font-size="9" fill="#8a6d1a">directDispatch off</text>
+
+  <rect x="18" y="286" width="230" height="104" rx="5" fill="#ffffff" stroke="#cdb4db" stroke-width="1"/>
+  <text x="28" y="304" font-size="10.5" font-weight="700" fill="#4b2d6b">PlanSlice[2]</text>
+  <text x="28" y="322" font-size="10" fill="#3d3a44">sliceIndex 2</text>
+  <text x="28" y="338" font-size="10" fill="#3d3a44">parentIndex 1</text>
+  <text x="28" y="354" font-size="10" fill="#3d3a44">gangType PRIMARY_READER</text>
+  <text x="28" y="370" font-size="10" fill="#3d3a44">numsegments 3 · workers 0</text>
+  <text x="28" y="384" font-size="9" fill="#8a6d1a">no rootIndex, no children</text>
+
+  <rect x="330" y="58" width="266" height="104" rx="5" fill="#ffffff" stroke="#cfead9" stroke-width="1"/>
+  <text x="340" y="76" font-size="10.5" font-weight="700" fill="#1f6b45">ExecSlice[0]</text>
+  <text x="340" y="94" font-size="10" fill="#3d3a44">rootIndex 0 · parentIndex −1</text>
+  <text x="340" y="110" font-size="10" fill="#3d3a44">children ⟦1⟧</text>
+  <text x="340" y="126" font-size="10" fill="#3d3a44">planNumSegments 1 · segments —</text>
+  <text x="340" y="142" font-size="10" fill="#3d3a44">primaryProcesses: the QD, pid 10559</text>
+  <text x="340" y="156" font-size="9" fill="#8a6d1a">processesMap empty · never dispatched</text>
+
+  <rect x="330" y="172" width="266" height="104" rx="5" fill="#ffffff" stroke="#cfead9" stroke-width="1"/>
+  <text x="340" y="190" font-size="10.5" font-weight="700" fill="#1f6b45">ExecSlice[1]</text>
+  <text x="340" y="208" font-size="10" fill="#3d3a44">rootIndex 0 · parentIndex 0</text>
+  <text x="340" y="224" font-size="10" fill="#3d3a44">children ⟦2⟧</text>
+  <text x="340" y="240" font-size="10" fill="#3d3a44">planNumSegments 3 · segments 0 1 2</text>
+  <text x="340" y="256" font-size="10" fill="#3d3a44">primaryProcesses: 3 CdbProcess</text>
+  <text x="340" y="270" font-size="9.5" font-weight="700" fill="#7a5c10">processesMap ⟦b 0 1 2⟧</text>
+
+  <rect x="330" y="286" width="266" height="104" rx="5" fill="#ffffff" stroke="#cfead9" stroke-width="1"/>
+  <text x="340" y="304" font-size="10.5" font-weight="700" fill="#1f6b45">ExecSlice[2]</text>
+  <text x="340" y="322" font-size="10" fill="#3d3a44">rootIndex 0 · parentIndex 1</text>
+  <text x="340" y="338" font-size="10" fill="#3d3a44">children —</text>
+  <text x="340" y="354" font-size="10" fill="#3d3a44">planNumSegments 3 · segments 0 1 2</text>
+  <text x="340" y="370" font-size="10" fill="#3d3a44">primaryProcesses: 3 CdbProcess</text>
+  <text x="340" y="384" font-size="9.5" font-weight="700" fill="#7a5c10">processesMap ⟦b 3 4 5⟧</text>
+
+  <rect x="678" y="58" width="184" height="104" rx="5" fill="#fffdf5" stroke="#e0c070" stroke-width="1"/>
+  <text x="688" y="80" font-size="10" fill="#7a5c10">slice 0 has no gang.</text>
+  <text x="688" y="96" font-size="10" fill="#7a5c10">It runs in the coordinator</text>
+  <text x="688" y="112" font-size="10" fill="#7a5c10">backend and is the only</text>
+  <text x="688" y="128" font-size="10" fill="#7a5c10">slice that is not shipped</text>
+  <text x="688" y="144" font-size="10" fill="#7a5c10">anywhere.</text>
+
+  <rect x="678" y="172" width="184" height="104" rx="5" fill="#ffffff" stroke="#e0c070" stroke-width="1"/>
+  <text x="688" y="190" font-size="10.5" font-weight="700" fill="#7a5c10">writer gang</text>
+  <text x="688" y="210" font-size="10" fill="#3d3a44">id 0 · seg0 · pid 10561</text>
+  <text x="688" y="228" font-size="10" fill="#3d3a44">id 1 · seg1 · pid 10562</text>
+  <text x="688" y="246" font-size="10" fill="#3d3a44">id 2 · seg2 · pid 10563</text>
+  <text x="688" y="266" font-size="9" fill="#8a6d1a">ids are qe_identifier values</text>
+
+  <rect x="678" y="286" width="184" height="104" rx="5" fill="#ffffff" stroke="#e0c070" stroke-width="1"/>
+  <text x="688" y="304" font-size="10.5" font-weight="700" fill="#7a5c10">reader gang</text>
+  <text x="688" y="324" font-size="10" fill="#3d3a44">id 3 · seg0 · pid 10567</text>
+  <text x="688" y="342" font-size="10" fill="#3d3a44">id 4 · seg1 · pid 10568</text>
+  <text x="688" y="360" font-size="10" fill="#3d3a44">id 5 · seg2 · pid 10569</text>
+  <text x="688" y="380" font-size="9" fill="#8a6d1a">the bitmap is the address</text>
+
+  <line x1="250" y1="110" x2="326" y2="110" stroke="#6b4c93" stroke-width="1.4" marker-end="url(#sl193arrowP)"/>
+  <line x1="250" y1="224" x2="326" y2="224" stroke="#6b4c93" stroke-width="1.4" marker-end="url(#sl193arrowP)"/>
+  <line x1="250" y1="338" x2="326" y2="338" stroke="#6b4c93" stroke-width="1.4" marker-end="url(#sl193arrowP)"/>
+  <text transform="translate(292,300) rotate(-90)" font-size="9.5" font-weight="700" fill="#6b4c93">InitSliceTable</text>
+  <text transform="translate(304,300) rotate(-90)" font-size="8.5" fill="#6b4c93">execUtils.c:1747</text>
+
+  <line x1="598" y1="224" x2="674" y2="224" stroke="#8a6d1a" stroke-width="1.4" marker-end="url(#sl193arrowA)"/>
+  <line x1="598" y1="338" x2="674" y2="338" stroke="#8a6d1a" stroke-width="1.4" marker-end="url(#sl193arrowA)"/>
+  <text transform="translate(640,300) rotate(-90)" font-size="9.5" font-weight="700" fill="#8a6d1a">AssignGangs</text>
+  <text transform="translate(652,300) rotate(-90)" font-size="8.5" fill="#8a6d1a">setupCdbProcessList</text>
+
+  <text x="8" y="426" font-size="9.5" fill="#6b4c93">planner: no processes, no tree links</text>
+  <text x="330" y="426" font-size="9.5" fill="#2c7a55">executor: tree links, then processes</text>
+  <text x="668" y="426" font-size="9.5" fill="#8a6d1a">dispatcher: identity by bitmap</text>
+</svg>

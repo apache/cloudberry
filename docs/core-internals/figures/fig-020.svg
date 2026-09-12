@@ -1,0 +1,44 @@
+<!--
+  Licensed to the Apache Software Foundation (ASF) under one
+  or more contributor license agreements.  See the NOTICE file
+  distributed with this work for additional information
+  regarding copyright ownership.  The ASF licenses this file
+  to you under the Apache License, Version 2.0 (the
+  "License"); you may not use this file except in compliance
+  with the License.  You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing,
+  software distributed under the License is distributed on an
+  "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+  KIND, either express or implied.  See the License for the
+  specific language governing permissions and limitations
+  under the License.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 300" width="100%" style="height:auto;display:block;min-width:600px" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="11">
+      <defs>
+      <marker id="ax" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#8a7aa8"/></marker>
+      </defs>
+      <rect x="20" y="30" width="320" height="240" rx="8" fill="#faf6ff" stroke="#cdb4db" stroke-width="1.5"/>
+      <text x="180" y="52" text-anchor="middle" fill="#6b5b95" font-size="12">seg0  (local detector sees 1 edge)</text>
+      <rect x="380" y="30" width="320" height="240" rx="8" fill="#faf6ff" stroke="#cdb4db" stroke-width="1.5"/>
+      <text x="540" y="52" text-anchor="middle" fill="#6b5b95" font-size="12">seg1  (local detector sees 1 edge)</text>
+      <rect x="55" y="95" width="110" height="46" rx="6" fill="#fff4d6" stroke="#e0b365" stroke-width="1.5"/>
+      <text x="110" y="114" text-anchor="middle" fill="#8a6d1a">A  dtx361</text>
+      <text x="110" y="130" text-anchor="middle" fill="#8a6d1a" font-size="10">holds row id=2</text>
+      <rect x="195" y="180" width="110" height="46" rx="6" fill="#f5edff" stroke="#b79ad6" stroke-width="1.5"/>
+      <text x="250" y="199" text-anchor="middle">B  dtx362</text>
+      <text x="250" y="215" text-anchor="middle" font-size="10">wants row id=2</text>
+      <rect x="415" y="95" width="110" height="46" rx="6" fill="#f5edff" stroke="#b79ad6" stroke-width="1.5"/>
+      <text x="470" y="114" text-anchor="middle">A  dtx361</text>
+      <text x="470" y="130" text-anchor="middle" font-size="10">wants row id=1</text>
+      <rect x="555" y="180" width="110" height="46" rx="6" fill="#fff4d6" stroke="#e0b365" stroke-width="1.5"/>
+      <text x="610" y="199" text-anchor="middle" fill="#8a6d1a">B  dtx362</text>
+      <text x="610" y="215" text-anchor="middle" fill="#8a6d1a" font-size="10">holds row id=1</text>
+      <path d="M250 180 L120 141" fill="none" stroke="#8a7aa8" stroke-width="1.6" marker-end="url(#ax)"/>
+      <text x="150" y="172" fill="#6b5b95" font-size="10">B waits for A</text>
+      <path d="M470 141 L600 180" fill="none" stroke="#8a7aa8" stroke-width="1.6" marker-end="url(#ax)"/>
+      <text x="500" y="172" fill="#6b5b95" font-size="10">A waits for B</text>
+      <text x="360" y="292" text-anchor="middle" fill="#8a7aa8" font-size="11">GDD unions both edges: dtx361 &gt; dtx362 &gt; dtx361 is a cycle no single segment can see</text>
+      </svg>

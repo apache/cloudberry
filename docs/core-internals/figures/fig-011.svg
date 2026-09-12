@@ -1,0 +1,19 @@
+<!--
+  Licensed to the Apache Software Foundation (ASF) under one
+  or more contributor license agreements.  See the NOTICE file
+  distributed with this work for additional information
+  regarding copyright ownership.  The ASF licenses this file
+  to you under the Apache License, Version 2.0 (the
+  "License"); you may not use this file except in compliance
+  with the License.  You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing,
+  software distributed under the License is distributed on an
+  "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+  KIND, either express or implied.  See the License for the
+  specific language governing permissions and limitations
+  under the License.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 130" width="100%" style="height:auto;display:block;min-width:600px" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="11"><defs><marker id="sx" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#6b8a76"/></marker></defs><rect x="20" y="45" width="150" height="44" rx="6" fill="#f5edff" stroke="#b79ad6" stroke-width="1.5"/><text x="95" y="63" text-anchor="middle">CLOG[1105] = 11</text><text x="95" y="79" text-anchor="middle" fill="#6b5b95">SUB_COMMITTED?</text><line x1="170" y1="67" x2="215" y2="67" stroke="#6b8a76" stroke-width="1.5" marker-end="url(#sx)"/><rect x="215" y="45" width="180" height="44" rx="6" fill="#f5edff" stroke="#b79ad6" stroke-width="1.5"/><text x="305" y="63" text-anchor="middle" fill="#6b5b95" font-weight="700">SubTransGetParent(1105)</text><text x="305" y="79" text-anchor="middle">parent = 1100</text><line x1="395" y1="67" x2="440" y2="67" stroke="#6b8a76" stroke-width="1.5" marker-end="url(#sx)"/><rect x="440" y="45" width="160" height="44" rx="6" fill="#f5edff" stroke="#b79ad6" stroke-width="1.5"/><text x="520" y="63" text-anchor="middle">CLOG[1100] = 01</text><text x="520" y="79" text-anchor="middle" fill="#6b5b95">top parent committed</text><line x1="600" y1="67" x2="645" y2="67" stroke="#6b8a76" stroke-width="1.5" marker-end="url(#sx)"/><rect x="620" y="45" width="90" height="44" rx="6" fill="#eafaf0" stroke="#cfead9" stroke-width="1.5"/><text x="665" y="70" text-anchor="middle" fill="#2f6f4f" font-weight="700">visible</text><text x="360" y="24" text-anchor="middle" fill="#8a7aa8">TransactionIdDidCommit recurses child &rarr; parent &rarr; answer (transam.c:153)</text></svg>

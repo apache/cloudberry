@@ -1,0 +1,62 @@
+<!--
+  Licensed to the Apache Software Foundation (ASF) under one
+  or more contributor license agreements.  See the NOTICE file
+  distributed with this work for additional information
+  regarding copyright ownership.  The ASF licenses this file
+  to you under the Apache License, Version 2.0 (the
+  "License"); you may not use this file except in compliance
+  with the License.  You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing,
+  software distributed under the License is distributed on an
+  "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+  KIND, either express or implied.  See the License for the
+  specific language governing permissions and limitations
+  under the License.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 320" width="100%" style="max-width:760px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px">
+  <defs>
+    <marker id="m183arw" markerWidth="9" markerHeight="9" refX="8" refY="3" orient="auto">
+      <path d="M0,0 L8,3 L0,6 z" fill="#8a6d1a"/>
+    </marker>
+  </defs>
+  <text x="20" y="18" font-size="12" font-weight="600" fill="#4a3b6b">sortcontext</text>
+  <text x="20" y="34" fill="#6b5b8a">memtuples : SortTuple[65536]</text>
+  <rect x="20" y="44" width="250" height="34" fill="#f5edff" stroke="#cdb4db"/>
+  <text x="30" y="59">tuple &#9656;</text><text x="120" y="59" fill="#6b5b8a">datum1</text><text x="205" y="59" fill="#6b5b8a">srctape</text>
+  <text x="30" y="73" fill="#8a6d1a">24 B</text>
+  <rect x="20" y="82" width="250" height="34" fill="#f5edff" stroke="#cdb4db"/>
+  <text x="30" y="97">tuple &#9656;</text><text x="120" y="97" fill="#6b5b8a">datum1</text><text x="205" y="97" fill="#6b5b8a">srctape</text>
+  <rect x="20" y="120" width="250" height="34" fill="#f5edff" stroke="#cdb4db"/>
+  <text x="30" y="135">tuple &#9656;</text><text x="120" y="135" fill="#6b5b8a">datum1</text><text x="205" y="135" fill="#6b5b8a">srctape</text>
+  <rect x="20" y="158" width="250" height="26" fill="#faf6ff" stroke="#cdb4db" stroke-dasharray="3 3"/>
+  <text x="105" y="175" fill="#6b5b8a">&#8942;  65533 more slots</text>
+  <rect x="20" y="196" width="250" height="30" fill="#fff4d6" stroke="#8a6d1a"/>
+  <text x="30" y="215" fill="#8a6d1a">&#10214;65536 &#215; 24 B = 1536 kB&#10215;</text>
+  <text x="460" y="18" font-size="12" font-weight="600" fill="#4a3b6b">tuplecontext</text>
+  <text x="460" y="34" fill="#6b5b8a">Caller tuples : GenerationContext</text>
+  <rect x="460" y="44" width="280" height="34" fill="#eafaf0" stroke="#cfead9"/>
+  <rect x="460" y="44" width="72" height="34" fill="#fff4d6" stroke="#8a6d1a"/>
+  <text x="468" y="65" fill="#8a6d1a">hdr 16 B</text>
+  <text x="542" y="59">MinimalTuple t_len 33</text><text x="542" y="73" fill="#6b5b8a">MAXALIGN of 34 is 40 B</text>
+  <rect x="460" y="82" width="280" height="34" fill="#eafaf0" stroke="#cfead9"/>
+  <rect x="460" y="82" width="72" height="34" fill="#fff4d6" stroke="#8a6d1a"/>
+  <text x="468" y="103" fill="#8a6d1a">hdr 16 B</text>
+  <text x="542" y="103">MinimalTuple t_len 33</text>
+  <rect x="460" y="120" width="280" height="34" fill="#eafaf0" stroke="#cfead9"/>
+  <rect x="460" y="120" width="72" height="34" fill="#fff4d6" stroke="#8a6d1a"/>
+  <text x="468" y="141" fill="#8a6d1a">hdr 16 B</text>
+  <text x="542" y="141">MinimalTuple t_len 33</text>
+  <rect x="460" y="158" width="280" height="26" fill="#f4fbf7" stroke="#cfead9" stroke-dasharray="3 3"/>
+  <text x="545" y="175" fill="#6b5b8a">&#8942;  33459 more tuples</text>
+  <rect x="460" y="196" width="280" height="30" fill="#fff4d6" stroke="#8a6d1a"/>
+  <text x="470" y="215" fill="#8a6d1a">&#10214;33462 &#215; 56 B = 1830 kB&#10215;</text>
+  <path d="M272,60 C360,60 380,60 456,60" stroke="#8a6d1a" fill="none" stroke-width="1.5" marker-end="url(#m183arw)"/>
+  <path d="M272,98 C360,98 380,98 456,98" stroke="#8a6d1a" fill="none" stroke-width="1.5" marker-end="url(#m183arw)"/>
+  <path d="M272,136 C360,136 380,136 456,136" stroke="#8a6d1a" fill="none" stroke-width="1.5" marker-end="url(#m183arw)"/>
+  <line x1="20" y1="252" x2="740" y2="252" stroke="#cdb4db"/>
+  <text x="20" y="274" font-size="12" fill="#4a3b6b">1536 kB + 1830 kB = 3366 kB per segment</text>
+  <text x="20" y="294" fill="#6b5b8a">reported as: Sort Method: quicksort  Memory: 10078kB  /  Max Memory: &#10214;3366kB&#10215; (3 segments)</text>
+</svg>
