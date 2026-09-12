@@ -1515,3 +1515,18 @@ reset optimizer;
 drop table outer_foo;
 drop table inner_bar;
 drop table t;
+
+-- A window function in a correlated aggregate subquery: the pull-up must
+-- bail out, because no join row carries the value a no-match row would see
+-- and a WindowFunc cannot be evaluated outside the subquery. The sublink
+-- runs as a SubPlan.
+create table t_csq_win_out(a int, b int) distributed by (a);
+create table t_csq_win_in(a int) distributed by (a);
+insert into t_csq_win_out values (1, 5);
+set optimizer=off;
+-- count()=0 over empty input, then count() over () = 1 over the single
+-- aggregate row: "1 > 0 + 1" is false and no row may be returned
+select * from t_csq_win_out
+where a > (select count(*) + count(*) over () from t_csq_win_in where t_csq_win_in.a = t_csq_win_out.b);
+reset optimizer;
+drop table t_csq_win_out, t_csq_win_in;
