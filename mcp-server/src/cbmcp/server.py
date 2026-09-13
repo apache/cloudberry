@@ -31,6 +31,7 @@ from pydantic import Field
 
 from .config import DatabaseConfig, ServerConfig
 from .database import DatabaseManager
+from .search import SearchFilter, SearchMetric, TextMatchMode, TextQueryMode
 from .prompt import (
     ANALYZE_QUERY_PERFORMANCE_PROMPT,
     SUGGEST_INDEXES_PROMPT,
@@ -128,7 +129,7 @@ class CloudberryMCPServer:
         @self.mcp.tool()
         async def execute_query(
             query: Annotated[str, Field(description="The SQL query to execute")],
-            params: Annotated[Optional[Dict[str, Any]], Field(description="The parameters for the query")] = None,
+            params: Annotated[Optional[List[Any]], Field(description="Values bound to $1, $2, ... in the query, in order")] = None,
             readonly: Annotated[bool, Field(description="Whether the query is read-only")] = True
         ) -> Dict[str, Any]:
             """
@@ -143,7 +144,7 @@ class CloudberryMCPServer:
         @self.mcp.tool()
         async def explain_query(
             query: Annotated[str, Field(description="The SQL query to explain")],
-            params: Annotated[Optional[Dict[str, Any]], Field(description="The parameters for the query")] = None
+            params: Annotated[Optional[List[Any]], Field(description="Values bound to $1, $2, ... in the query, in order")] = None
         ) -> str:
             """
             Get the execution plan for a query
@@ -393,7 +394,157 @@ class CloudberryMCPServer:
                 return await self.db_manager.list_active_connections()
             except Exception as e:
                 return f"Error listing active connections: {str(e)}"
-    
+
+        # --------------------------------------------------------------
+        # Retrieval tools: what an agent needs to search, not just query
+        # --------------------------------------------------------------
+
+        @self.mcp.tool()
+        async def list_searchable_columns(
+            schema: Annotated[Optional[str], Field(description="Restrict the result to one schema")] = None,
+            table: Annotated[Optional[str], Field(description="Restrict the result to one table")] = None,
+            include_unindexed_text: Annotated[bool, Field(description="Also report text columns that have no full-text index")] = False
+        ) -> List[Dict[str, Any]]:
+            """Discover which columns can be searched, and how.
+
+            Reports embedding columns with their dimension, tsvector columns,
+            and text columns carrying a full-text index, each with the indexes
+            defined on it. Call this before vector_search, fulltext_search or
+            hybrid_search to choose a target instead of guessing from names.
+            """
+            logger.info(f"Listing searchable columns in schema: {schema}, table: {table}")
+            try:
+                return await self.db_manager.list_searchable_columns(
+                    schema, table, include_unindexed_text
+                )
+            except Exception as e:
+                return f"Error listing searchable columns: {str(e)}"
+
+        @self.mcp.tool()
+        async def vector_search(
+            schema: Annotated[str, Field(description="The schema name")],
+            table: Annotated[str, Field(description="The table name")],
+            vector_column: Annotated[str, Field(description="The embedding column to rank by")],
+            query_vector: Annotated[List[float], Field(description="The query embedding; its length must match the column's declared dimension")],
+            limit: Annotated[int, Field(description="How many rows to return")] = 10,
+            select_columns: Annotated[Optional[List[str]], Field(description="Columns to return; defaults to every non-embedding column")] = None,
+            filters: Annotated[Optional[List[SearchFilter]], Field(description="Conditions applied before ranking, pushed into the index scan")] = None,
+            metric: Annotated[SearchMetric, Field(description="Distance metric; all four order ascending, so smaller is always better")] = SearchMetric.L2,
+            probes: Annotated[Optional[int], Field(description="ivfflat lists to probe. The default of 1 can miss the true nearest neighbour; raise it to trade latency for recall")] = None,
+            ef_search: Annotated[Optional[int], Field(description="HNSW candidate list size; the same recall-for-latency trade on an HNSW index")] = None
+        ) -> Dict[str, Any]:
+            """Find the rows whose embedding is nearest to a query vector.
+
+            Filters are applied inside the same scan that walks the vector
+            index, so this is a pre-filtered nearest neighbour search, not a
+            filter over an already truncated result. The generated SQL is
+            returned alongside the rows.
+            """
+            logger.info(f"Vector search on {schema}.{table}.{vector_column}, limit: {limit}")
+            try:
+                return await self.db_manager.vector_search(
+                    schema=schema,
+                    table=table,
+                    vector_column=vector_column,
+                    query_vector=query_vector,
+                    limit=limit,
+                    select_columns=select_columns,
+                    filters=filters,
+                    metric=metric,
+                    probes=probes,
+                    ef_search=ef_search,
+                )
+            except Exception as e:
+                return {"error": f"Error running vector search: {str(e)}"}
+
+        @self.mcp.tool()
+        async def fulltext_search(
+            schema: Annotated[str, Field(description="The schema name")],
+            table: Annotated[str, Field(description="The table name")],
+            text_column: Annotated[str, Field(description="The text or tsvector column to search")],
+            query: Annotated[str, Field(description="The search string")],
+            limit: Annotated[int, Field(description="How many rows to return")] = 10,
+            select_columns: Annotated[Optional[List[str]], Field(description="Columns to return; defaults to every non-embedding column")] = None,
+            filters: Annotated[Optional[List[SearchFilter]], Field(description="Conditions applied before ranking")] = None,
+            language: Annotated[str, Field(description="Text search configuration used to parse both document and query")] = "english",
+            query_mode: Annotated[TextQueryMode, Field(description="How the search string is parsed: websearch accepts quotes and OR, plain treats it as words, phrase requires the exact sequence")] = TextQueryMode.WEBSEARCH,
+            match_mode: Annotated[TextMatchMode, Field(description="Whether every term must appear. all_then_any requires all terms and widens to any of them only when that matched nothing, so a natural sentence does not come back empty; the result reports which was used")] = TextMatchMode.ALL_THEN_ANY
+        ) -> Dict[str, Any]:
+            """Rank rows by full-text relevance over one text column.
+
+            A tsvector column is searched as stored; a text column is parsed on
+            the fly, which matches an expression index built over to_tsvector().
+            Results are ordered by ts_rank.
+            """
+            logger.info(f"Full-text search on {schema}.{table}.{text_column}, limit: {limit}")
+            try:
+                return await self.db_manager.fulltext_search(
+                    schema=schema,
+                    table=table,
+                    text_column=text_column,
+                    query=query,
+                    limit=limit,
+                    select_columns=select_columns,
+                    filters=filters,
+                    language=language,
+                    query_mode=query_mode,
+                    match_mode=match_mode,
+                )
+            except Exception as e:
+                return {"error": f"Error running full-text search: {str(e)}"}
+
+        @self.mcp.tool()
+        async def hybrid_search(
+            schema: Annotated[str, Field(description="The schema name")],
+            table: Annotated[str, Field(description="The table name")],
+            vector_column: Annotated[str, Field(description="The embedding column to rank by")],
+            text_column: Annotated[str, Field(description="The text or tsvector column to search")],
+            query_vector: Annotated[List[float], Field(description="The query embedding; its length must match the column's declared dimension")],
+            query: Annotated[str, Field(description="The search string")],
+            limit: Annotated[int, Field(description="How many rows to return")] = 10,
+            select_columns: Annotated[Optional[List[str]], Field(description="Columns to return; defaults to every non-embedding column")] = None,
+            filters: Annotated[Optional[List[SearchFilter]], Field(description="Conditions applied before ranking, to both arms")] = None,
+            metric: Annotated[SearchMetric, Field(description="Distance metric for the vector arm")] = SearchMetric.L2,
+            language: Annotated[str, Field(description="Text search configuration for the full-text arm")] = "english",
+            query_mode: Annotated[TextQueryMode, Field(description="How the search string is parsed")] = TextQueryMode.WEBSEARCH,
+            match_mode: Annotated[TextMatchMode, Field(description="Whether every term must appear. all_then_any requires all terms and widens to any of them only when that matched nothing, so a natural sentence does not come back empty; the result reports which was used")] = TextMatchMode.ALL_THEN_ANY,
+            rrf_k: Annotated[int, Field(description="Reciprocal rank fusion constant; larger flattens the weight given to top ranks")] = 60,
+            candidates: Annotated[Optional[int], Field(description="Rows each arm contributes before fusion; defaults to five times limit, at least 50")] = None,
+            probes: Annotated[Optional[int], Field(description="ivfflat lists to probe in the vector arm")] = None,
+            ef_search: Annotated[Optional[int], Field(description="HNSW candidate list size for the vector arm")] = None
+        ) -> Dict[str, Any]:
+            """Search by meaning and by keyword at once, then fuse the rankings.
+
+            Each arm returns its own ranked candidates and a row scores
+            1 / (rrf_k + rank) from each arm it appears in. Fusing ranks rather
+            than raw scores is what makes the two comparable: a distance and a
+            ts_rank share no scale, but their orderings do. Rows found by only
+            one arm still place, which is the point of running both.
+            """
+            logger.info(f"Hybrid search on {schema}.{table}, limit: {limit}")
+            try:
+                return await self.db_manager.hybrid_search(
+                    schema=schema,
+                    table=table,
+                    vector_column=vector_column,
+                    text_column=text_column,
+                    query_vector=query_vector,
+                    query=query,
+                    limit=limit,
+                    select_columns=select_columns,
+                    filters=filters,
+                    metric=metric,
+                    language=language,
+                    query_mode=query_mode,
+                    match_mode=match_mode,
+                    rrf_k=rrf_k,
+                    candidates=candidates,
+                    probes=probes,
+                    ef_search=ef_search,
+                )
+            except Exception as e:
+                return {"error": f"Error running hybrid search: {str(e)}"}
+
     def _setup_prompts(self):
         """Setup MCP prompts for common database tasks"""
         
