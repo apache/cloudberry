@@ -580,9 +580,7 @@ internal_client_authentication(Port *port)
 		 * a free pass.
 		 */
 		if (port->raddr.addr.ss_family == AF_INET
-#ifdef HAVE_IPV6
 			|| port->raddr.addr.ss_family == AF_INET6
-#endif   /* HAVE_IPV6 */
 		   )
 		{
 			if (check_same_host_or_net(&port->raddr, ipCmpSameHost))

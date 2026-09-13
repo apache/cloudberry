@@ -55,6 +55,8 @@
 
 typedef struct AlteredTableInfo
 {
+	pg_node_attr(no_equal, custom_copy_equal, custom_read_write)
+	
 	NodeTag		type;
 
 	/* Information saved before any work commences: */
@@ -129,6 +131,8 @@ typedef struct ExprState ExprState;
 /* Note: new NOT NULL constraints are handled elsewhere */
 typedef struct NewConstraint
 {
+	pg_node_attr(no_equal, no_copy, custom_read_write)
+	
 	NodeTag		type;
 
 	char	   *name;			/* Constraint name, or NULL if none */
@@ -150,11 +154,12 @@ typedef struct NewConstraint
  */
 typedef struct NewColumnValue
 {
+	pg_node_attr(no_equal, no_copy)
 	NodeTag		type;
 
 	AttrNumber	attnum;			/* which column */
 	Expr	   *expr;			/* expression to compute */
-	ExprState  *exprstate;		/* execution state */
+	ExprState  *exprstate pg_node_attr(read_as(NULL), read_write_ignore);		/* execution state */
 	bool		is_generated;	/* is it a GENERATED expression? */
 } NewColumnValue;
 

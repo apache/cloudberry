@@ -35,9 +35,19 @@
 #undef Min
 #undef Max
 #undef IsPowerOf2
+
+// GCC 14 emits false -Warray-bounds warnings in protobuf 3.19 headers.
+#if defined(__GNUC__) && !defined(__clang__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Warray-bounds"
+#endif
 #include "storage/proto/micro_partition_stats.pb.h"
 #include "storage/proto/orc_proto.pb.h"
 #include "storage/proto/pax.pb.h"
+#if defined(__GNUC__) && !defined(__clang__)
+#pragma GCC diagnostic pop
+#endif
+
 #define FATAL 22
 #define Min(x, y) ((x) < (y) ? (x) : (y))
 #define Max(x, y) ((x) > (y) ? (x) : (y))
