@@ -214,13 +214,6 @@ The PostgreSQL software includes:
       copyright (c) Oliver Elphick <olly@lfix.co.uk>, 2001
 
 ----------------------------
-   BSD-4-Clause (University of California-Specific)
-      
-      src/include/port/win32_msvc/glob.h
-      src/port/glob.c
-      see licenses/LICENSE-glob.txt
-
-----------------------------
    BSD 3 Clause License
       
       src/port/inet_aton.c
