@@ -117,6 +117,9 @@ InstrStopNodeSync(Instrumentation *instr, uint64 nTuples)
 	/* count the returned tuples */
 	instr->tuplecount += nTuples;
 
+	/* A zero-tuple stop means the node is exhausted for this cycle. */
+	instr->eof = (nTuples == 0);
+
 	/* let's update the time only if the timer was requested */
 	if (instr->need_timer)
 	{
@@ -207,6 +210,7 @@ InstrEndLoop(Instrumentation *instr)
 
 	/* Reset for next cycle (if any) */
 	instr->running = false;
+	instr->eof = false;
 	INSTR_TIME_SET_ZERO(instr->starttime);
 	INSTR_TIME_SET_ZERO(instr->counter);
 	instr->firsttuple = 0;

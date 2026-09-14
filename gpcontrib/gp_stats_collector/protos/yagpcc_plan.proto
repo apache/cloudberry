@@ -1,0 +1,67 @@
+/**
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+syntax = "proto3";
+
+import "google/protobuf/timestamp.proto";
+
+import "protos/yagpcc_metrics.proto";
+
+package yagpcc;
+
+message SetQueryPlanReq {
+    google.protobuf.Timestamp    datetime  = 1;
+    QueryKey                     query_key = 2;
+    string                       plan_doc  = 3;   /* ExplainPrintPlan output */
+    int32                        format    = 4;   /* ExplainFormat: 0=text 1=xml 2=json 3=yaml */
+}
+
+/*
+ * Execution status of a single plan node.
+ *
+ * Mirrors QsNodeStatus from qs_types.h:
+ *   INITIALIZED -- node was set up but has not yet started execution
+ *   EXECUTING   -- node is currently inside a tuple-fetch call
+ *   FINISHED    -- node has completed at least one full execution loop
+ */
+enum PlanNodeStatus {
+    PLAN_NODE_STATUS_UNSPECIFIED  = 0;
+    PLAN_NODE_STATUS_INITIALIZED  = 1;
+    PLAN_NODE_STATUS_EXECUTING    = 2;
+    PLAN_NODE_STATUS_FINISHED     = 3;
+}
+
+/*
+ * Identifying information for a single plan node within a query plan tree.
+ *
+ * Fields:
+ *   plan_node_id        -- unique node id within the plan (Plan.plan_node_id)
+ *   parent_plan_node_id -- plan_node_id of the logical parent node, or 0
+ *   node_type           -- PostgreSQL NodeTag value (nodeTag(plan))
+ *   slice_id            -- CDB slice index (currentSliceId)
+ *   plan_rows           -- optimizer row-count estimate (Plan.plan_rows)
+ *   relation_oid        -- OID of the scanned relation for scan nodes, or 0
+ */
+message PlanNode {
+    int32  plan_node_id         = 1;
+    int32  parent_plan_node_id  = 2;
+    int32  node_type            = 3;
+    int32  slice_id             = 4;
+    double plan_rows            = 5;
+    int32  relation_oid         = 6;
+}

@@ -371,6 +371,15 @@ Apache Cloudberry includes codes from
       see licenses/LICENSE-citusdata.txt
 
 ----------------------------
+   PostgreSQL License
+
+      gpcontrib/yezzey/*
+      see licenses/LICENSE-yezzey.txt
+
+      gpcontrib/gp_stats_collector/src/pg_query_state/*
+      see licenses/LICENSE-pg_query_state.txt
+
+----------------------------
    Apache License - Version 2.0
 
       contrib/pax_storage/src/cpp/contrib/googlebench
