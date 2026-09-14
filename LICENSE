@@ -251,7 +251,7 @@ The PostgreSQL software includes:
 ----------------------------
    Perl Artistic License 2.0 (exception)
       
-      src/pl/plperl/ppport.h: 
+      src/pl/plperl/ppport.h
 
       Pursuant to https://issues.apache.org/jira/browse/LEGAL-79 and
       PL/Perl's use of a generated header file, we declare this file to
@@ -333,6 +333,27 @@ The Greenplum Database software includes:
 
       gpcontrib/gpcloud/test/googletest
       see licenses/LICENSE-googletest.txt
+
+      gpcontrib/pg_hint_plan/*
+      see licenses/LICENSE-pg-hint-plan.txt
+
+----------------------------
+   Internet Systems Consortium/Internet Software Consortium (ISC) LICENSE
+
+      gpMgmt/bin/lib/pexpect/__init__.py
+      gpMgmt/bin/lib/pexpect/pxssh.py
+      see licenses/LICENSE-pexpect.txt
+
+----------------------------
+   MIT LICENSE
+
+      gpcontrib/gpcloud/lib/http_parser.cpp
+      gpcontrib/gpcloud/lib/http_parser.h
+      see licenses/LICENSE-http-parser.txt
+
+      gpcontrib/gpcloud/lib/ini.cpp
+      gpcontrib/gpcloud/lib/ini.h
+      see licenses/LICENSE-ini.txt
 
 ----------------------------
    PostgreSQL License
