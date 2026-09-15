@@ -228,7 +228,8 @@ The PostgreSQL software includes:
       src/backend/utils/mb/wstrncmp.c
       see licenses/LICENSE-bsd3-wstrncmp.txt
       
-      src/backend/libpq/sha2.h
+      src/common/sha2.c
+      src/common/sha2_int.h
       see licenses/LICENSE-bsd3-sha2.txt
 
 ----------------------------
