@@ -554,13 +554,7 @@ code or new licensing patterns.
             <exclude>gpAux/extensions/pljava/src/java/Makefile.global</exclude>
             <exclude>gpAux/releng/set_bld_arch.sh</exclude>
             <exclude>gpAux/releng/gppkg.mk</exclude>
-            <exclude>gpAux/client/install/src/windows/Makefile</exclude>
-            <exclude>gpAux/client/install/src/windows/greenplum-clients.wxs</exclude>
-            <exclude>gpAux/client/install/src/windows/CreatePackage.bat</exclude>
-            <exclude>gpAux/client/install/src/windows/CopyDependencies.bat</exclude>
-            <exclude>gpAux/client/install/src/windows/license.rtf</exclude>
             <exclude>gpAux/client/scripts/cloudberry_clients_path.sh</exclude>
-            <exclude>gpAux/client/scripts/cloudberry_clients_path.bat</exclude>
 
             <exclude>doc/**</exclude>
 
@@ -1254,7 +1248,6 @@ code or new licensing patterns.
             <exclude>**/*.json</exclude>
             <exclude>**/*.sql</exclude>
             <exclude>**/*.out</exclude>
-            <exclude>**/Thumbs.db</exclude>
             <exclude>.github/full_color_black.svg</exclude>
             <exclude>.github/full_color_white.svg</exclude>
             <exclude>sonar-project.properties</exclude>
