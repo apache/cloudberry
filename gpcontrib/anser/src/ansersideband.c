@@ -150,7 +150,24 @@ AnserSidebandConsumeWait(const AnserChannelKey *channel_key, char payload_type,
 
 	if (channel_key == NULL || MyProcPort == NULL ||
 		MyProcPort->sock == PGINVALID_SOCKET)
+	{
+		/*
+		 * No way to reach the coordinator from here, so this consumer will run
+		 * unfiltered without ever having asked for anything.  Which of the
+		 * three reasons it was matters: a process with no Port is one the
+		 * sideband was never designed for, while a bad socket on a process
+		 * that has one is a different problem entirely.
+		 */
+		ANSER_DEBUG("anser: seg%d cannot consume cond=%u: key=%s port=%s sock=%d role=%d writer=%d dest=%d",
+					GpIdentity.segindex,
+					channel_key != NULL ? channel_key->condition_id : 0,
+					channel_key != NULL ? "ok" : "NULL",
+					MyProcPort != NULL ? "ok" : "NULL",
+					MyProcPort != NULL ? (int) MyProcPort->sock : -1,
+					(int) Gp_role, Gp_is_writer ? 1 : 0,
+					(int) whereToSendOutput);
 		return false;
+	}
 
 	/* It may already be here: the coordinator pushes as soon as it can. */
 	if (anser_inbox_take(channel_key, payload_type, payload, payload_len, cancelled))
@@ -164,6 +181,10 @@ AnserSidebandConsumeWait(const AnserChannelKey *channel_key, char payload_type,
 						  ANSER_PAYLOAD_NONE, 0, 0, 0, NULL, 0);
 	if (!anser_sideband_send(msg))
 	{
+		ANSER_DEBUG("anser: seg%d could not subscribe to cond=%u (role=%d writer=%d dest=%d)",
+					GpIdentity.segindex, channel_key->condition_id,
+					(int) Gp_role, Gp_is_writer ? 1 : 0,
+					(int) whereToSendOutput);
 		pfree(msg);
 		return false;
 	}
@@ -599,7 +620,20 @@ static bool
 anser_sideband_send(const char *payload)
 {
 	if (whereToSendOutput != DestRemote)
+	{
+		/*
+		 * Reached by any process that runs the plan without a frontend to
+		 * answer to.  Both directions of the protocol come through here, so
+		 * this is the single place that says "this process is not on the
+		 * sideband at all" -- for a publisher as much as for a subscriber.
+		 */
+		ANSER_DEBUG("anser: seg%d has no frontend to send on (role=%d writer=%d dest=%d port=%s sock=%d)",
+					GpIdentity.segindex, (int) Gp_role, Gp_is_writer ? 1 : 0,
+					(int) whereToSendOutput,
+					MyProcPort != NULL ? "ok" : "NULL",
+					MyProcPort != NULL ? (int) MyProcPort->sock : -1);
 		return false;
+	}
 
 	NotifyMyFrontEnd(ANSER_NOTIFY_CHANNEL, payload, gp_session_id);
 	pq_flush();

@@ -33,6 +33,8 @@
 #include "anserpayload.h"
 #include "ansersideband.h"
 #include "cdb/cdbvars.h"
+#include "miscadmin.h"
+#include "tcop/dest.h"
 
 /*
  * State for one Bloom filter consumer.  Consumes the merged payload for a
@@ -105,6 +107,22 @@ ExecAnserBloomFilterConsumeSideband(AnserBloomFilterConsumeState *state,
 	Size		payload_len = 0;
 	bool		cancelled = false;
 	bool		got;
+
+	/*
+	 * Which of the two paths a process takes is decided by Gp_role alone, and
+	 * a process that takes the wrong one fails open without ever reaching the
+	 * coordinator: the local path finds no channel on a segment, and the
+	 * sideband path finds no frontend on the coordinator.  Logged with the
+	 * facts the choice rests on, because a consumer that reports no filter
+	 * cannot otherwise be told apart from one that asked and was refused.
+	 */
+	ANSER_DEBUG("anser: seg%d consumer cond=%u taking the %s path (role=%d writer=%d port=%s dest=%d expected_parts=%u timeout=%ld)",
+				GpIdentity.segindex, state->channel_key.condition_id,
+				Gp_role == GP_ROLE_EXECUTE ? "sideband" : "local",
+				(int) Gp_role, Gp_is_writer ? 1 : 0,
+				MyProcPort != NULL ? "ok" : "NULL",
+				(int) whereToSendOutput,
+				state->expected_parts, timeout_ms);
 
 	if (Gp_role == GP_ROLE_EXECUTE)
 		got = AnserSidebandConsumeWait(&state->channel_key, ANSER_PAYLOAD_BLOOM,
