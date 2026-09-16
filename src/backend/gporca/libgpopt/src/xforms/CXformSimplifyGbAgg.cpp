@@ -101,6 +101,10 @@ CXformSimplifyGbAgg::FDropGbAgg(CMemoryPool *mp, CExpression *pexpr,
 		return false;
 	}
 
+	// A UNIQUE key permits multiple NULLs (NULL is never "equal" for uniqueness
+	// checks), but DISTINCT/GROUP BY must still collapse them into one row.
+	// Only drop the GbAgg when every key column is also provably NOT NULL.
+	CColRefSet *pcrsNotNull = pexprRelational->DeriveNotNullColumns();
 	const ULONG ulKeys = pkc->Keys();
 	BOOL fDrop = false;
 	for (ULONG ul = 0; !fDrop && ul < ulKeys; ul++)
@@ -111,7 +115,8 @@ CXformSimplifyGbAgg::FDropGbAgg(CMemoryPool *mp, CExpression *pexpr,
 
 		CColRefSet *pcrsGrpCols = GPOS_NEW(mp) CColRefSet(mp);
 		pcrsGrpCols->Include(popAgg->Pdrgpcr());
-		BOOL fGrpColsHasKey = pcrsGrpCols->ContainsAll(pcrs);
+		BOOL fGrpColsHasKey =
+			pcrsGrpCols->ContainsAll(pcrs) && pcrsNotNull->ContainsAll(pcrs);
 
 		pcrs->Release();
 		pcrsGrpCols->Release();
