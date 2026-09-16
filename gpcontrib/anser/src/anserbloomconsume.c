@@ -35,6 +35,7 @@
 #include "cdb/cdbvars.h"
 #include "miscadmin.h"
 #include "tcop/dest.h"
+#include "tcop/tcopprot.h"
 
 /*
  * State for one Bloom filter consumer.  Consumes the merged payload for a
