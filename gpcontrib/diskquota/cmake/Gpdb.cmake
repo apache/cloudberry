@@ -27,17 +27,31 @@ if(PG_CONFIG)
 else()
     message(FATAL_ERROR "Unable to find 'pg_config'")
 endif()
-exec_program(${PG_CONFIG} ARGS --includedir OUTPUT_VARIABLE PG_INCLUDE_DIR)
-exec_program(${PG_CONFIG} ARGS --includedir-server OUTPUT_VARIABLE PG_INCLUDE_DIR_SERVER)
-exec_program(${PG_CONFIG} ARGS --pkglibdir OUTPUT_VARIABLE PG_PKG_LIB_DIR)
-exec_program(${PG_CONFIG} ARGS --sharedir OUTPUT_VARIABLE PG_SHARE_DIR)
-exec_program(${PG_CONFIG} ARGS --bindir OUTPUT_VARIABLE PG_BIN_DIR)
-exec_program(${PG_CONFIG} ARGS --cppflags OUTPUT_VARIABLE PG_CPP_FLAGS)
-exec_program(${PG_CONFIG} ARGS --cflags OUTPUT_VARIABLE PG_C_FLAGS)
-exec_program(${PG_CONFIG} ARGS --ldflags OUTPUT_VARIABLE PG_LD_FLAGS)
-exec_program(${PG_CONFIG} ARGS --libs OUTPUT_VARIABLE PG_LIBS)
-exec_program(${PG_CONFIG} ARGS --libdir OUTPUT_VARIABLE PG_LIB_DIR)
-exec_program(${PG_CONFIG} ARGS --pgxs OUTPUT_VARIABLE PG_PGXS)
+# Query one pg_config value into 'var'.
+#
+# exec_program() used to do this, but it is deprecated and CMake 3.30 and
+# newer warn about every call (CMP0153). execute_process() is the
+# replacement; it differs in that it keeps the trailing newline, so
+# OUTPUT_STRIP_TRAILING_WHITESPACE is required -- without it every path
+# below would carry a newline into include_directories() and friends.
+macro(pg_config_var var)
+    execute_process(
+        COMMAND ${PG_CONFIG} ${ARGN}
+        OUTPUT_VARIABLE ${var}
+        OUTPUT_STRIP_TRAILING_WHITESPACE)
+endmacro()
+
+pg_config_var(PG_INCLUDE_DIR        --includedir)
+pg_config_var(PG_INCLUDE_DIR_SERVER --includedir-server)
+pg_config_var(PG_PKG_LIB_DIR        --pkglibdir)
+pg_config_var(PG_SHARE_DIR          --sharedir)
+pg_config_var(PG_BIN_DIR            --bindir)
+pg_config_var(PG_CPP_FLAGS          --cppflags)
+pg_config_var(PG_C_FLAGS            --cflags)
+pg_config_var(PG_LD_FLAGS           --ldflags)
+pg_config_var(PG_LIBS               --libs)
+pg_config_var(PG_LIB_DIR            --libdir)
+pg_config_var(PG_PGXS               --pgxs)
 get_filename_component(PG_HOME "${PG_BIN_DIR}/.." ABSOLUTE)
 
 # If PG_SRC_DIR is provided (in-tree build), use source tree paths
