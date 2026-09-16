@@ -8,6 +8,12 @@
 -- Deterministic plan shape: force a hash join.
 SET enable_nestloop = off;
 SET enable_mergejoin = off;
+-- A regress test must not inherit the production deadline.  anser.timeout_ms
+-- defaults to 100 s because delivery is serial and a wide slice needs that
+-- long to be served; a test that waits it out has turned a delivery failure
+-- into a slow pass.  Pinned short here, so a filter that never arrives fails
+-- the run instead of hiding in the clock.
+SET anser.timeout_ms = 5000;
 -- build is the smaller (hashed / preserved) side, distributed so the join key
 -- must be redistributed; probe is the larger side distributed by the join key.
 CREATE TABLE anser_rf_build (id int, name text) DISTRIBUTED BY (name);
@@ -138,6 +144,36 @@ SELECT count(*) AS only_off_push
 (1 row)
 
 RESET gp_enable_runtime_filter_pushdown;
+-- Everything above checks that the nodes were injected and that the results did
+-- not change.  Both of those also hold when the filter never arrives and every
+-- consumer fails open -- which is how a broken exchange passes a green test.
+-- This is the assertion that the filter was used: the probe side holds 2000
+-- rows of which 200 join, so a filter that arrived removes the rest.  Only the
+-- Postgres planner is asserted, because its plan shape here is fixed; ORCA
+-- chooses and the count would not be a stable thing to require.
+CREATE FUNCTION anser_rf_pruned(q text) RETURNS bigint
+LANGUAGE plpgsql AS $$
+DECLARE
+    line    text;
+    removed bigint := 0;
+BEGIN
+    FOR line IN EXECUTE 'EXPLAIN (ANALYZE, TIMING OFF, COSTS OFF) ' || q LOOP
+        IF line ~ 'Rows Removed by (Bloom Filter|Pushdown Runtime Filter): ' THEN
+            removed := removed + coalesce(substring(line from ': *([0-9]+)')::bigint, 0);
+        END IF;
+    END LOOP;
+    RETURN removed;
+END;
+$$;
+SET optimizer = off;
+SET anser.runtime_filter = on;
+SELECT 'the filter pruned nothing: it never arrived, or it arrived empty' AS problem
+ WHERE anser_rf_pruned('SELECT b.name, p.payload FROM anser_rf_build b LEFT JOIN anser_rf_probe p ON b.id = p.id') = 0;
+ problem 
+---------
+(0 rows)
+
+DROP FUNCTION anser_rf_pruned(text);
 DROP TABLE anser_rf_r_push;
 DROP TABLE anser_rf_r_on, anser_rf_r_off, anser_rf_r_orca;
 DROP TABLE anser_rf_build, anser_rf_probe;

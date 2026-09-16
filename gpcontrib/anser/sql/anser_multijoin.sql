@@ -27,6 +27,13 @@
 SET enable_nestloop = off;
 SET enable_mergejoin = off;
 
+-- A regress test must not inherit the production deadline.  anser.timeout_ms
+-- defaults to 100 s because delivery is serial and a wide slice needs that
+-- long to be served; a test that waits it out has turned a delivery failure
+-- into a slow pass.  Pinned short here, so a filter that never arrives fails
+-- the run instead of hiding in the clock.
+SET anser.timeout_ms = 5000;
+
 -- own is what the previous table joins to, nxt is what this table joins to the
 -- next one with.  They hold the same value, which keeps the chain 1:1 and the
 -- answer predictable -- 1000 rows summing to 500500, whatever the join count --
@@ -185,6 +192,30 @@ SELECT count(*) AS empty_rows
   JOIN anser_mj_t2 b ON a.nxt = b.own
   JOIN anser_mj_t3 c ON b.nxt = c.own
  WHERE a.own < 0;
+
+-- The chains above assert that the filter changes no answer.  That also holds
+-- when the filter never arrives and every consumer fails open, which is how a
+-- broken exchange passes a green test.  This asserts the other half: a chain
+-- whose third table is three times the size of the first has rows to prune, so
+-- a filter that arrived removes some.
+CREATE FUNCTION anser_mj_pruned(q text) RETURNS bigint
+LANGUAGE plpgsql AS $$
+DECLARE
+    line    text;
+    removed bigint := 0;
+BEGIN
+    FOR line IN EXECUTE 'EXPLAIN (ANALYZE, TIMING OFF, COSTS OFF) ' || q LOOP
+        IF line ~ 'Rows Removed by (Bloom Filter|Pushdown Runtime Filter): ' THEN
+            removed := removed + coalesce(substring(line from ': *([0-9]+)')::bigint, 0);
+        END IF;
+    END LOOP;
+    RETURN removed;
+END;
+$$;
+SET anser.runtime_filter = on;
+SELECT 'the chain pruned nothing: no filter arrived, or none was injected' AS problem
+ WHERE anser_mj_pruned('SELECT count(*) FROM anser_mj_t1 a JOIN anser_mj_t2 b ON a.nxt = b.own JOIN anser_mj_t3 c ON b.nxt = c.own') = 0;
+DROP FUNCTION anser_mj_pruned(text);
 
 DROP FUNCTION anser_mj_check(int);
 DROP TABLE anser_mj_t1, anser_mj_t2, anser_mj_t3, anser_mj_t4, anser_mj_t5,
