@@ -105,6 +105,96 @@ planner computes that while injecting and stamps it into the plan node
 go through the same path, and a join whose slice cannot be identified is not
 injected into.
 
+### Delivery cost
+
+Fan-in is parallel and fan-out is not. Every producer uploads its part at the
+same time while the coordinator reads as it goes, but `anser_disp_deliver()`
+then walks its subscribers and writes the merged filter to each in turn,
+blocking until that peer has taken it. Delivery latency is therefore the *sum*
+of the writes, not the slowest one, and it grows with the width of the slice.
+
+Measured on 4 segments, 5000 build rows, a 1 MB filter (`bloom_create` floors
+every bitset at 1 MB, whatever the cardinality):
+
+| Slice width | Subscribers | Fan-in | Fan-out | Consumer stalls |
+| --- | --- | --- | --- | --- |
+| 4 | 4 | ~40 ms | ~520 ms | 549 ms |
+| 16 | 16 | ~100 ms | ~1140 ms | 1005 ms, then gave up |
+
+The second row is why the default deadline is 100 s rather than 1 s: at 16
+subscribers the fan-out outlived a 1 s deadline, so every consumer ran
+unfiltered. Raising it makes the filter arrive, but the wait is not free — the
+first subscriber is served in under a millisecond and the last over a second
+later, and none of them can tell where in the queue they are.
+
+**A filter can cost more than it saves.** In the 16-wide plan the consumer waits
+160 ms to skip a probe scan that takes 40 ms. Anser is worth enabling when the
+build side is selective *and* the probe side is large enough that the scan
+dominates the exchange — not on small joins, and not, today, on wide slices.
+
+Each part is a whole bitset, because a union is a bitwise OR: N producers send
+N × the full payload, and the coordinator returns the full payload to each of N
+consumers. Nothing amortises with cluster size. For a 64 MB filter — the
+ceiling `anser.max_info_size` allows — on 128 segments:
+
+| `parallel_workers` | Producers = consumers | Fan-in (base64, ×4/3) | Fan-out (raw) | Through the coordinator |
+| --- | --- | --- | --- | --- |
+| 1 | 128 | 10.7 GiB | 8.0 GiB | **18.7 GiB** |
+| 4 | 512 | 42.7 GiB | 32.0 GiB | **74.7 GiB** |
+| 8 | 1024 | 85.3 GiB | 64.0 GiB | **149.3 GiB** |
+
+Per join, over one coordinator NIC, with a CRC and a base64 decode per part on
+one process. A star topology through a single coordinator is the wrong shape for
+a reduction that is associative, commutative and idempotent;
+`docs/local-fold.md` describes folding a segment's workers together before they
+reach the coordinator, which is the first step away from it.
+
+### Plan shapes: the two optimizers
+
+Both optimizers reach the same exchange through the same code, but they choose
+different slice widths for the same query, and the width is what governs
+delivery cost. Same query, same cluster (4 segments):
+
+GPORCA, `max_parallel_workers_per_gather = 8` — a **parallel** build slice:
+
+```
+ Gather Motion 16:1  (slice1; segments: 16)
+   ->  Hash Join
+         ->  Custom Scan (Anser Bloom Consumer)
+               ->  Parallel Seq Scan on p_probe p
+         ->  Hash
+               ->  Broadcast Motion 16:16  (slice2; segments: 16)
+                     ->  Custom Scan (Anser Bloom Producer)
+                           ->  Parallel Seq Scan on p_build b
+```
+
+PostgreSQL planner (`optimizer = off`) — a **serial** build slice:
+
+```
+ Gather Motion 8:1  (slice1; segments: 8)
+   ->  Hash Join
+         ->  Custom Scan (Anser Bloom Consumer)
+               ->  Parallel Seq Scan on p_probe p
+         ->  Hash
+               ->  Broadcast Motion 2:8  (slice2; segments: 2)
+                     ->  Custom Scan (Anser Bloom Producer)
+                           ->  Seq Scan on p_build b
+```
+
+The difference is `Broadcast Motion 16:16` against `2:8`: ORCA parallelises the
+build scan, the PG planner does not. So ORCA produces 16 producers and 16
+consumers where the PG planner produces 2 and 8 — eight times the parts to fold
+and four times the deliveries, for the same filter. The PG plan finished the
+whole query in 123 ms; the ORCA plan needed 282 ms with the filter delivered,
+and 1293 ms when the fan-out overran the old 1 s deadline.
+
+Read `Gather Motion N:1` as the process count, not the segment count:
+`FillSliceGangInfo()` fills a slice's segment list with `numsegments ×
+parallel_workers` entries, so `16:1` on 4 segments means 4 workers each. The
+`x(0) workers` in the per-slice memory footer is a PostgreSQL `Gather`'s
+`nworkers_launched`, which is always 0 here — an MPP slice has no `Gather` node —
+and says nothing about MPP parallelism.
+
 ### Payload types
 
 A channel carries one **payload type**, declared on the wire and registered in
@@ -208,7 +298,7 @@ by up to that long.
 | `anser.enable` | `off` | SIGHUP | Master switch. With it off the plan pass never injects anything and no filters are exchanged. |
 | `anser.runtime_filter` | `off` | USERSET | Enables the post-planning pass that injects bloom-filter producer/consumer nodes into a matching plan. Requires `anser.enable`. |
 | `anser.max_info_size` | `65 MB` | POSTMASTER | Maximum serialized payload (merged bloom filter + part header) a channel may hold; caps the effective bloom-filter size. The default is `64 MB + 1 MB` so a full 64 MB power-of-two bitset fits with its header; `bloom_create` also floors every bitset at 1 MB. |
-| `anser.timeout_ms` | `1000` | USERSET | How long a consumer waits for its filter before running unfiltered. The deadline matters because a producer that gets squelched never publishes at all: `ExecSquelchNode` only marks a `CustomScanState`, it does not call the node back. |
+| `anser.timeout_ms` | `100 s` | USERSET | How long a consumer waits for its filter before running unfiltered. The deadline matters because a producer that gets squelched never publishes at all: `ExecSquelchNode` only marks a `CustomScanState`, it does not call the node back. The default is generous because delivery is serial — see [Delivery cost](#delivery-cost). |
 | `anser.debug` | `off` | USERSET | Traces the exchange — publish, merge, delivery, receive — in the log of the process each step happens in. See below. |
 
 ### Tracing an exchange

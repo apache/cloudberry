@@ -57,7 +57,7 @@ bool		gp_anser_enable = false;
 bool		gp_anser_runtime_filter = false;
 bool		gp_anser_debug = false;
 int			gp_anser_max_info_size = 64 * 1024 * 1024 + 1024 * 1024;
-int			gp_anser_timeout_ms = 1000;
+int			gp_anser_timeout_ms = 100000;
 
 static void anser_define_gucs(void);
 static PlannedStmt *anser_planner(Query *parse, const char *query_string,
@@ -155,9 +155,9 @@ anser_define_gucs(void)
 
 	DefineCustomIntVariable("anser.timeout_ms",
 							"Sets how long an Anser consumer waits for its filter.",
-							"On expiry the consumer runs unfiltered.  The deadline matters because a producer that gets squelched never publishes at all.",
+							"On expiry the consumer runs unfiltered.  The deadline matters because a producer that gets squelched never publishes at all.  The default is generous because delivery is serial: the coordinator writes the merged filter to one subscriber at a time, so the last of a wide slice waits for all the writes before it.",
 							&gp_anser_timeout_ms,
-							1000, 0, INT_MAX,
+							100000, 0, INT_MAX,
 							PGC_USERSET,
 							GUC_UNIT_MS,
 							NULL, NULL, NULL);
