@@ -283,13 +283,31 @@ anser_hashjoin_keys(HashJoin *hj, AttrNumber *inner_attno, AttrNumber *outer_att
 }
 
 /*
- * Follow the build side down from the Hash to the base SeqScan, mapping the key
- * attno through each passthrough targetlist.  Wrapping the base scan (rather than
- * an intermediate Motion) keeps the injected CustomScan's custom_scan_tlist made
- * of base-relation Vars, which (a) deparses cleanly in EXPLAIN and (b) is the
- * proven-safe "leaf child" case for MPP slice/gang setup.  Only plain single-
- * child passthroughs (Hash, Motion) with Var targetlist entries are supported.
- * On success *parent_out is the node whose outerPlan is the base scan.
+ * Follow the build side down from the Hash to the base SeqScan the key column
+ * comes from, mapping the key attno through each targetlist on the way.
+ *
+ * Wrapping the base scan (rather than an intermediate node) keeps the injected
+ * CustomScan's custom_scan_tlist made of base-relation Vars, which (a) deparses
+ * cleanly in EXPLAIN and (b) is the proven-safe "leaf child" case for MPP
+ * slice/gang setup.  (a) is not a preference: after set_plan_references an
+ * intermediate node's targetlist holds OUTER_VAR/INNER_VAR Vars, and a
+ * CustomScan keeps its child in custom_plans rather than in lefttree, so
+ * copying such a targetlist into custom_scan_tlist leaves EXPLAIN resolving an
+ * OUTER_VAR against a node with no outer plan -- get_variable() raises "bogus
+ * varno" (ruleutils.c) and the plan cannot be printed at all.
+ *
+ * The descent goes through HashJoins as well as the single-child passthroughs
+ * (Hash, Motion), which is what lets a chain of joins be filtered: the build
+ * side of the third join is the result of the first two, and the key column
+ * still traces back to one base relation through it.  The filter then holds
+ * that relation's whole key column rather than the subset the earlier joins
+ * would have left -- a superset, so no row that could join is ever rejected,
+ * but less selective than filtering on the intermediate result itself.  See
+ * docs/local-fold.md for what the exact version would need.
+ *
+ * On success *parent_out is the node whose outerPlan is the base scan.  A
+ * SeqScan is only ever accepted there: the inner child of a HashJoin is a Hash,
+ * so the scan is always reached through an outer link.
  */
 static bool
 anser_resolve_build_scan(Plan *hash, AttrNumber inner_attno, int slice_index,
@@ -304,6 +322,7 @@ anser_resolve_build_scan(Plan *hash, AttrNumber inner_attno, int slice_index,
 		TargetEntry *tle;
 		Var		   *var;
 		Plan	   *child;
+		bool		via_outer;
 
 		if (node == NULL ||
 			attno < 1 || attno > list_length(node->targetlist))
@@ -313,14 +332,30 @@ anser_resolve_build_scan(Plan *hash, AttrNumber inner_attno, int slice_index,
 		if (tle == NULL || !IsA(tle->expr, Var))
 			return false;
 		var = (Var *) tle->expr;
-		if (var->varno != OUTER_VAR)	/* single-child passthrough only */
+
+		/*
+		 * Which child supplies this column.  A join is the only node here with
+		 * two of them, and only a HashJoin is descended through -- an Append or
+		 * a SetOp would make the column come from several relations at once,
+		 * and then no single scan holds the keys the filter would claim.
+		 */
+		if (var->varno == OUTER_VAR)
+		{
+			child = outerPlan(node);
+			via_outer = true;
+		}
+		else if (var->varno == INNER_VAR && IsA(node, HashJoin))
+		{
+			child = innerPlan(node);
+			via_outer = false;
+		}
+		else
 			return false;
 
-		child = outerPlan(node);
 		if (child == NULL)
 			return false;
 
-		if (IsA(child, SeqScan))
+		if (via_outer && IsA(child, SeqScan))
 		{
 			*parent_out = node;
 			*scan_out = child;
@@ -328,7 +363,7 @@ anser_resolve_build_scan(Plan *hash, AttrNumber inner_attno, int slice_index,
 			*slice_out = slice_index;
 			return true;
 		}
-		if (!IsA(child, Hash) && !IsA(child, Motion))
+		if (!IsA(child, Hash) && !IsA(child, Motion) && !IsA(child, HashJoin))
 			return false;
 
 		/*
@@ -392,7 +427,15 @@ anser_try_inject(HashJoin *hj, AnserInjectCtx *ctx)
 	n_producers = anser_slice_producers(ctx, build_slice);
 	if (n_producers <= 0)
 		return;
-	if (!AnserRuntimeFilterSize(hash->plan_rows, &total_elems, &max_payload, &planned_bytes))
+	/*
+	 * Sized from the scan the producer wraps, not from the Hash: those are the
+	 * rows whose keys actually go into the filter.  They are the same thing
+	 * when the build side is one scan under a Hash, and they are not when the
+	 * descent came through a join -- there the Hash holds the joined result and
+	 * the scan holds the whole key column, which is what gets inserted.
+	 */
+	if (!AnserRuntimeFilterSize(build_scan->plan_rows, &total_elems, &max_payload,
+								&planned_bytes))
 		return;
 
 	condition_id = ctx->next_condition_id++;

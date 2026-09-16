@@ -47,7 +47,7 @@ PGFILEDESC = "anser - adaptive information sharing runtime filters"
 EXTENSION = anser_test
 DATA = anser_test--1.0.sql
 
-REGRESS = anser_test anser_runtime_filter
+REGRESS = anser_test anser_runtime_filter anser_multijoin
 
 # src/anserdispatch.c writes sideband messages onto the dispatcher's own libpq
 # connections, so it needs libpq's internal headers (as the dispatcher itself

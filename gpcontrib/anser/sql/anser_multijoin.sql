@@ -1,0 +1,179 @@
+-- Anser runtime bloom filter: chains of 2..10 joins.
+--
+-- A chain is where the feature has to hold up: the build side of the third join
+-- is the result of the first two, so the key column reaches its base relation
+-- through a join rather than straight through a Hash.
+--
+-- What these cases assert is not that a filter was injected -- that is the
+-- planner's choice and it differs between the two optimizers and with the
+-- cluster width -- but that the answer is the same either way.  A bloom filter
+-- fails asymmetrically: a bit that should be set and is not silently removes
+-- joinable rows, so "same rows with the filter on as with it off" is the
+-- property worth asserting.  Plan shapes are deliberately not asserted; an
+-- expected file full of them would break on a three-segment cluster and pass on
+-- a one-segment one without saying anything about correctness.
+--
+-- Every query below reports its violations, so the expected output is empty
+-- rows and zeros.  A failure names the chain that broke rather than dumping a
+-- table of numbers to be compared by eye.
+
+SET enable_nestloop = off;
+SET enable_mergejoin = off;
+
+-- t1 is the smallest and every later table contains it, so a chain joined on
+-- one key returns t1 whatever the join count and whatever order the planner
+-- picks: 1000 rows summing to 500500.  The widening sizes give the planner a
+-- reason to hash the joined result rather than the next table, which is the
+-- shape that exercises the descent through a join.
+CREATE TABLE anser_mj_t1  (id int, payload text) DISTRIBUTED BY (id);
+CREATE TABLE anser_mj_t2  (id int, payload text) DISTRIBUTED BY (payload);
+CREATE TABLE anser_mj_t3  (id int, payload text) DISTRIBUTED BY (id);
+CREATE TABLE anser_mj_t4  (id int, payload text) DISTRIBUTED BY (id);
+CREATE TABLE anser_mj_t5  (id int, payload text) DISTRIBUTED BY (payload);
+CREATE TABLE anser_mj_t6  (id int, payload text) DISTRIBUTED BY (id);
+CREATE TABLE anser_mj_t7  (id int, payload text) DISTRIBUTED BY (id);
+CREATE TABLE anser_mj_t8  (id int, payload text) DISTRIBUTED BY (payload);
+CREATE TABLE anser_mj_t9  (id int, payload text) DISTRIBUTED BY (id);
+CREATE TABLE anser_mj_t10 (id int, payload text) DISTRIBUTED BY (id);
+CREATE TABLE anser_mj_t11 (id int, payload text) DISTRIBUTED BY (id);
+
+INSERT INTO anser_mj_t1  SELECT g, 't1_'  || g FROM generate_series(1,  1000) g;
+INSERT INTO anser_mj_t2  SELECT g, 't2_'  || g FROM generate_series(1,  2000) g;
+INSERT INTO anser_mj_t3  SELECT g, 't3_'  || g FROM generate_series(1,  3000) g;
+INSERT INTO anser_mj_t4  SELECT g, 't4_'  || g FROM generate_series(1,  4000) g;
+INSERT INTO anser_mj_t5  SELECT g, 't5_'  || g FROM generate_series(1,  5000) g;
+INSERT INTO anser_mj_t6  SELECT g, 't6_'  || g FROM generate_series(1,  6000) g;
+INSERT INTO anser_mj_t7  SELECT g, 't7_'  || g FROM generate_series(1,  7000) g;
+INSERT INTO anser_mj_t8  SELECT g, 't8_'  || g FROM generate_series(1,  8000) g;
+INSERT INTO anser_mj_t9  SELECT g, 't9_'  || g FROM generate_series(1,  9000) g;
+INSERT INTO anser_mj_t10 SELECT g, 't10_' || g FROM generate_series(1, 10000) g;
+INSERT INTO anser_mj_t11 SELECT g, 't11_' || g FROM generate_series(1, 11000) g;
+
+ANALYZE anser_mj_t1;
+ANALYZE anser_mj_t2;
+ANALYZE anser_mj_t3;
+ANALYZE anser_mj_t4;
+ANALYZE anser_mj_t5;
+ANALYZE anser_mj_t6;
+ANALYZE anser_mj_t7;
+ANALYZE anser_mj_t8;
+ANALYZE anser_mj_t9;
+ANALYZE anser_mj_t10;
+ANALYZE anser_mj_t11;
+
+-- Runs one chain twice, with the filter on and off, and reports whether the two
+-- agree.  The checksum is what makes the comparison mean something: equal row
+-- counts would also come out of two different sets of rows, and a filter that
+-- wrongly rejects is exactly the failure that changes which rows come back.
+CREATE FUNCTION anser_mj_check(njoins int)
+RETURNS TABLE (joins int, nrows bigint, id_sum bigint, agrees boolean)
+LANGUAGE plpgsql AS $$
+DECLARE
+    sql      text;
+    i        int;
+    on_rows  bigint;
+    on_sum   bigint;
+    off_rows bigint;
+    off_sum  bigint;
+BEGIN
+    sql := 'SELECT count(*), coalesce(sum(anser_mj_t1.id), 0) FROM anser_mj_t1';
+    FOR i IN 2 .. njoins + 1 LOOP
+        sql := sql || format(' JOIN anser_mj_t%s ON anser_mj_t1.id = anser_mj_t%s.id',
+                             i, i);
+    END LOOP;
+    PERFORM set_config('anser.runtime_filter', 'on', false);
+    EXECUTE sql INTO on_rows, on_sum;
+    PERFORM set_config('anser.runtime_filter', 'off', false);
+    EXECUTE sql INTO off_rows, off_sum;
+    RETURN QUERY SELECT njoins, on_rows, on_sum,
+                        (on_rows = off_rows AND on_sum = off_sum);
+END;
+$$;
+
+-- 2 through 10 joins, Postgres planner.  Expected: no rows.
+SET optimizer = off;
+SELECT joins, nrows, id_sum, agrees
+  FROM generate_series(2, 10) g, anser_mj_check(g)
+ WHERE NOT agrees OR nrows <> 1000 OR id_sum <> 500500
+ ORDER BY joins;
+
+-- The same under ORCA, which picks different join orders and slice widths.
+SET optimizer = on;
+SELECT joins, nrows, id_sum, agrees
+  FROM generate_series(2, 10) g, anser_mj_check(g)
+ WHERE NOT agrees OR nrows <> 1000 OR id_sum <> 500500
+ ORDER BY joins;
+
+SET optimizer = off;
+
+-- A chain whose middle join is an outer join.  The descent may pass through it
+-- with the key column coming from the nullable side, where the joined result
+-- holds NULLs the base relation does not.
+SET anser.runtime_filter = on;
+CREATE TEMP TABLE anser_mj_lj_on AS
+  SELECT a.id AS aid, c.id AS cid
+    FROM anser_mj_t1 a
+    JOIN anser_mj_t2 b ON a.id = b.id
+    LEFT JOIN anser_mj_t3 c ON b.id = c.id
+    JOIN anser_mj_t4 d ON a.id = d.id
+  DISTRIBUTED BY (aid);
+SET anser.runtime_filter = off;
+CREATE TEMP TABLE anser_mj_lj_off AS
+  SELECT a.id AS aid, c.id AS cid
+    FROM anser_mj_t1 a
+    JOIN anser_mj_t2 b ON a.id = b.id
+    LEFT JOIN anser_mj_t3 c ON b.id = c.id
+    JOIN anser_mj_t4 d ON a.id = d.id
+  DISTRIBUTED BY (aid);
+
+SELECT count(*) AS lj_rows FROM anser_mj_lj_on;
+SELECT count(*) AS lj_only_on
+  FROM (SELECT * FROM anser_mj_lj_on EXCEPT ALL SELECT * FROM anser_mj_lj_off) d;
+SELECT count(*) AS lj_only_off
+  FROM (SELECT * FROM anser_mj_lj_off EXCEPT ALL SELECT * FROM anser_mj_lj_on) d;
+
+-- A chain where the joins do not all share one key, so the descent maps the key
+-- attno through targetlists that reorder it.
+SET anser.runtime_filter = on;
+CREATE TEMP TABLE anser_mj_mk_on AS
+  SELECT a.id AS aid, e.payload AS epayload
+    FROM anser_mj_t1 a
+    JOIN anser_mj_t2 b ON a.id = b.id
+    JOIN anser_mj_t3 c ON b.id = c.id
+    JOIN anser_mj_t4 d ON c.id = d.id
+    JOIN anser_mj_t5 e ON d.id = e.id
+  DISTRIBUTED BY (aid);
+SET anser.runtime_filter = off;
+CREATE TEMP TABLE anser_mj_mk_off AS
+  SELECT a.id AS aid, e.payload AS epayload
+    FROM anser_mj_t1 a
+    JOIN anser_mj_t2 b ON a.id = b.id
+    JOIN anser_mj_t3 c ON b.id = c.id
+    JOIN anser_mj_t4 d ON c.id = d.id
+    JOIN anser_mj_t5 e ON d.id = e.id
+  DISTRIBUTED BY (aid);
+
+SELECT count(*) AS mk_rows FROM anser_mj_mk_on;
+SELECT count(*) AS mk_only_on
+  FROM (SELECT * FROM anser_mj_mk_on EXCEPT ALL SELECT * FROM anser_mj_mk_off) d;
+SELECT count(*) AS mk_only_off
+  FROM (SELECT * FROM anser_mj_mk_off EXCEPT ALL SELECT * FROM anser_mj_mk_on) d;
+
+-- A chain that returns nothing.  A filter that wrongly accepts is only slow,
+-- never wrong, so this is the one direction an empty result can still check.
+SET anser.runtime_filter = on;
+SELECT count(*) AS empty_rows
+  FROM anser_mj_t1 a
+  JOIN anser_mj_t2 b ON a.id = b.id
+  JOIN anser_mj_t3 c ON b.id = c.id
+ WHERE a.id < 0;
+
+DROP FUNCTION anser_mj_check(int);
+DROP TABLE anser_mj_t1, anser_mj_t2, anser_mj_t3, anser_mj_t4, anser_mj_t5,
+           anser_mj_t6, anser_mj_t7, anser_mj_t8, anser_mj_t9, anser_mj_t10,
+           anser_mj_t11;
+
+RESET anser.runtime_filter;
+RESET optimizer;
+RESET enable_nestloop;
+RESET enable_mergejoin;
