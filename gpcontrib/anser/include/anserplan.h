@@ -56,6 +56,13 @@ extern void AnserRegisterRuntimeFilterMethods(void);
  * part -- the width of the build scan's slice, which under parallel execution
  * is numsegments * parallel_workers rather than the segment count.
  */
+/*
+ * True for the producer and consumer nodes this module injects.  The injection
+ * pass meets them where it expects a scan, because two joins can want to filter
+ * the same base relation; coordinator-only, see the implementation.
+ */
+extern bool AnserIsRuntimeFilterScan(const Plan *plan);
+
 extern CustomScan *AnserBuildBloomProducerScan(Plan *child, AttrNumber key_attno,
 											   uint32 condition_id,
 											   const char *condition_key,

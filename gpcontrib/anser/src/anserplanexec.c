@@ -246,6 +246,29 @@ anser_build_rf_scan(const CustomScanMethods *methods, Plan *child,
 	return cs;
 }
 
+/*
+ * Is this one of our own nodes?
+ *
+ * The injection pass has to recognise them because it can meet one where it
+ * expects a scan: two joins whose keys trace to the same base relation both
+ * want to filter it, and the second arrives to find the first already there.
+ * Compared by method table rather than by name, and only sound on the
+ * coordinator -- a QE resolves these pointers by name when it deserializes the
+ * plan, which is long after the only pass that asks.
+ */
+bool
+AnserIsRuntimeFilterScan(const Plan *plan)
+{
+	const CustomScan *cscan;
+
+	if (plan == NULL || !IsA(plan, CustomScan))
+		return false;
+
+	cscan = (const CustomScan *) plan;
+	return cscan->methods == &anser_produce_scan_methods ||
+		cscan->methods == &anser_consume_scan_methods;
+}
+
 CustomScan *
 AnserBuildBloomProducerScan(Plan *child, AttrNumber key_attno,
 							uint32 condition_id, const char *condition_key,

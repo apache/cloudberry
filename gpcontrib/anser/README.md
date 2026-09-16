@@ -63,6 +63,37 @@ dropped at `ExecutorEnd` (or on transaction abort). Since the merge and the
 delivery both happen in that one process, the accumulator is an ordinary
 `palloc`'d buffer.
 
+### Where the nodes go
+
+Both nodes wrap a **base scan**, never an intermediate node. The producer goes
+above the scan the join's build key comes from, the consumer above the scan its
+probe key comes from; either may be several joins away, and `anser_resolve_key_scan()`
+follows the key column down through Hash, Motion, HashJoin and our own nodes to
+find it.
+
+Wrapping a base scan is not a preference. After `set_plan_references` an
+intermediate node's targetlist holds `OUTER_VAR`/`INNER_VAR` Vars, and a
+`CustomScan` keeps its child in `custom_plans` rather than in `lefttree`, so
+copying such a targetlist into `custom_scan_tlist` leaves EXPLAIN resolving an
+`OUTER_VAR` against a node with no outer plan — `get_variable()` raises
+"bogus varno" and the plan cannot be printed at all.
+
+Two consequences:
+
+- A filter built from a base scan holds that relation's **whole** key column,
+  not the subset the joins below it would have left. A superset never rejects a
+  row that could join, so it is correct; it is just less selective than a filter
+  built on the joined result would be.
+- When two joins reach the same relation, the second **stacks** its consumer
+  under the first rather than replacing it, so the scan is filtered by both.
+
+The direction is fixed: a filter can only flow **build → probe**. A hash join
+builds its hash table from the inner side before reading the outer, so a
+consumer on the inner side would wait for a producer whose rows the join is not
+yet reading — and that producer only publishes once its subtree is drained,
+which it cannot be. That is a deadlock, not a slow path, and it is why the
+intermediate result cannot filter the table it is being joined to.
+
 ### Giving up early
 
 A bloom filter that is too small for its key count matches almost everything: it

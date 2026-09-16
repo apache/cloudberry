@@ -23,9 +23,11 @@
  *
  * The pass runs once from planner() (after both the Postgres planner and ORCA,
  * and after set_plan_references / the cdbllize slice passes), recognizes one
- * supported join shape, and inserts a producer on the hash build side and a
- * consumer above the probe scan.  See anserplan.h for the
- * rationale.
+ * supported join shape, and inserts a producer above the base scan the join's
+ * build key comes from and a consumer above the base scan its probe key comes
+ * from.  Either side may be reached through the joins before it, so a chain of
+ * joins gets a filter per join, and two joins reaching the same relation stack
+ * their filters on it.  See anserplan.h for the rationale.
  *
  * IDENTIFICATION
  *	  gpcontrib/anser/src/anserplan.c
@@ -66,10 +68,10 @@ static int	anser_max_plan_node_id(Plan *plan);
 static int	anser_slice_producers(AnserInjectCtx *ctx, int slice_index);
 static bool anser_hashjoin_keys(HashJoin *hj, AttrNumber *inner_attno,
 								AttrNumber *outer_attno);
-static bool anser_resolve_build_scan(Plan *hash, AttrNumber inner_attno,
-									 int slice_index, Plan **parent_out,
-									 Plan **scan_out, AttrNumber *attno_out,
-									 int *slice_out);
+static bool anser_resolve_key_scan(Plan *top, AttrNumber key_attno,
+								   int slice_index, Plan **parent_out,
+								   Plan **scan_out, AttrNumber *attno_out,
+								   int *slice_out);
 static void anser_try_inject(HashJoin *hj, AnserInjectCtx *ctx);
 static void anser_inject_walk(Plan *plan, AnserInjectCtx *ctx);
 
@@ -283,8 +285,10 @@ anser_hashjoin_keys(HashJoin *hj, AttrNumber *inner_attno, AttrNumber *outer_att
 }
 
 /*
- * Follow the build side down from the Hash to the base SeqScan the key column
- * comes from, mapping the key attno through each targetlist on the way.
+ * Follow one side of a join down to the base SeqScan its key column comes
+ * from, mapping the key attno through each targetlist on the way.  Used for
+ * both sides: the producer goes above the scan the build key comes from, the
+ * consumer above the scan the probe key comes from.
  *
  * Wrapping the base scan (rather than an intermediate node) keeps the injected
  * CustomScan's custom_scan_tlist made of base-relation Vars, which (a) deparses
@@ -297,25 +301,29 @@ anser_hashjoin_keys(HashJoin *hj, AttrNumber *inner_attno, AttrNumber *outer_att
  * varno" (ruleutils.c) and the plan cannot be printed at all.
  *
  * The descent goes through HashJoins as well as the single-child passthroughs
- * (Hash, Motion), which is what lets a chain of joins be filtered: the build
- * side of the third join is the result of the first two, and the key column
- * still traces back to one base relation through it.  The filter then holds
- * that relation's whole key column rather than the subset the earlier joins
- * would have left -- a superset, so no row that could join is ever rejected,
- * but less selective than filtering on the intermediate result itself.  See
- * docs/local-fold.md for what the exact version would need.
+ * (Hash, Motion), which is what lets a chain of joins be filtered: by the third
+ * join one side is the result of the first two, and the key column still traces
+ * back to one base relation through it.  A filter built that way holds the
+ * relation's whole key column rather than the subset the earlier joins would
+ * have left -- a superset, so no row that could join is ever rejected, but less
+ * selective than filtering on the intermediate result itself.  Filtering on the
+ * intermediate would mean wrapping it, which (a) above rules out.
  *
- * On success *parent_out is the node whose outerPlan is the base scan.  A
- * SeqScan is only ever accepted there: the inner child of a HashJoin is a Hash,
- * so the scan is always reached through an outer link.
+ * It also goes through our own nodes, so the second join to reach a relation
+ * stacks its filter under the first one's rather than replacing it.
+ *
+ * On success *parent_out is the node holding the base scan -- pass it to
+ * anser_relink_child(), which knows that ours hold it in custom_plans and
+ * everything else in the outer link.  A SeqScan is only accepted through one of
+ * those two: the inner child of a HashJoin is always a Hash.
  */
 static bool
-anser_resolve_build_scan(Plan *hash, AttrNumber inner_attno, int slice_index,
-						 Plan **parent_out, Plan **scan_out,
-						 AttrNumber *attno_out, int *slice_out)
+anser_resolve_key_scan(Plan *top, AttrNumber key_attno, int slice_index,
+					   Plan **parent_out, Plan **scan_out,
+					   AttrNumber *attno_out, int *slice_out)
 {
-	Plan	   *node = hash;
-	AttrNumber	attno = inner_attno;
+	Plan	   *node = top;
+	AttrNumber	attno = key_attno;
 
 	for (;;)
 	{
@@ -338,6 +346,11 @@ anser_resolve_build_scan(Plan *hash, AttrNumber inner_attno, int slice_index,
 		 * two of them, and only a HashJoin is descended through -- an Append or
 		 * a SetOp would make the column come from several relations at once,
 		 * and then no single scan holds the keys the filter would claim.
+		 *
+		 * One of our own nodes is a passthrough with an identity targetlist, so
+		 * its columns are its child's columns in the same order and the attno
+		 * carries over unchanged.  Descending through it is what lets a second
+		 * join filter a relation a first join already filters.
 		 */
 		if (var->varno == OUTER_VAR)
 		{
@@ -348,6 +361,11 @@ anser_resolve_build_scan(Plan *hash, AttrNumber inner_attno, int slice_index,
 		{
 			child = innerPlan(node);
 			via_outer = false;
+		}
+		else if (var->varno == INDEX_VAR && AnserIsRuntimeFilterScan(node))
+		{
+			child = (Plan *) linitial(((CustomScan *) node)->custom_plans);
+			via_outer = true;
 		}
 		else
 			return false;
@@ -363,7 +381,8 @@ anser_resolve_build_scan(Plan *hash, AttrNumber inner_attno, int slice_index,
 			*slice_out = slice_index;
 			return true;
 		}
-		if (!IsA(child, Hash) && !IsA(child, Motion) && !IsA(child, HashJoin))
+		if (!IsA(child, Hash) && !IsA(child, Motion) && !IsA(child, HashJoin) &&
+			!AnserIsRuntimeFilterScan(child))
 			return false;
 
 		/*
@@ -380,8 +399,25 @@ anser_resolve_build_scan(Plan *hash, AttrNumber inner_attno, int slice_index,
 }
 
 /*
- * If this HashJoin is the supported shape, inject a producer above the build
- * base scan and a consumer above the probe scan.
+ * Put `child` where the scan the descent ended on used to be.  The link is the
+ * outer one for every node the descent walks except one of ours, which holds
+ * its child in custom_plans -- that is the case where a second join filters a
+ * relation a first join already filters, and the new node goes below the old
+ * one so that both see every row.
+ */
+static void
+anser_relink_child(Plan *parent, Plan *child)
+{
+	if (AnserIsRuntimeFilterScan(parent))
+		linitial(((CustomScan *) parent)->custom_plans) = child;
+	else
+		outerPlan(parent) = child;
+}
+
+/*
+ * If this HashJoin is the supported shape, inject a producer above the base
+ * scan its build key comes from and a consumer above the base scan its probe
+ * key comes from.
  */
 static void
 anser_try_inject(HashJoin *hj, AnserInjectCtx *ctx)
@@ -390,10 +426,14 @@ anser_try_inject(HashJoin *hj, AnserInjectCtx *ctx)
 	Plan	   *probe = outerPlan(hj);	/* probe side */
 	Plan	   *build_parent;
 	Plan	   *build_scan;
+	Plan	   *probe_parent;
+	Plan	   *probe_scan;
 	AttrNumber	inner_attno;
 	AttrNumber	outer_attno;
 	AttrNumber	build_attno;
+	AttrNumber	probe_attno;
 	int			build_slice;
+	int			probe_slice;
 	int			n_producers;
 	int64		total_elems;
 	int64		max_payload;
@@ -408,14 +448,45 @@ anser_try_inject(HashJoin *hj, AnserInjectCtx *ctx)
 		return;
 	if (hash == NULL || !IsA(hash, Hash))
 		return;
-	if (probe == NULL || !IsA(probe, SeqScan))
+	if (probe == NULL)
 		return;
 
 	if (!anser_hashjoin_keys(hj, &inner_attno, &outer_attno))
 		return;
-	if (!anser_resolve_build_scan(hash, inner_attno, ctx->slice_index,
-								  &build_parent, &build_scan, &build_attno,
-								  &build_slice))
+	if (!anser_resolve_key_scan(hash, inner_attno, ctx->slice_index,
+								&build_parent, &build_scan, &build_attno,
+								&build_slice))
+		return;
+
+	/*
+	 * Where the filter is applied.  A probe side that is already a scan is the
+	 * simple case; anything else -- a Motion over the result of the joins
+	 * before this one -- is descended the same way the build side is, and the
+	 * consumer lands on the base scan the probe key comes from.
+	 *
+	 * Filtering that scan is right for the same reason filtering the probe
+	 * side is: every row the probe subtree produces carries that relation's
+	 * key column unchanged, so a row of it whose key the build side does not
+	 * have cannot reach the join's output through any path.  A row dropped
+	 * under an outer join inside the subtree comes back NULL-extended instead,
+	 * and a NULL key joins nothing either.
+	 */
+	if (IsA(probe, SeqScan))
+	{
+		probe_parent = (Plan *) hj;
+		probe_scan = probe;
+		probe_attno = outer_attno;
+	}
+	else if (!anser_resolve_key_scan(probe, outer_attno, ctx->slice_index,
+									 &probe_parent, &probe_scan, &probe_attno,
+									 &probe_slice))
+		return;
+
+	/*
+	 * Nothing to gain from filtering a relation with its own keys, and the
+	 * producer would have to finish before the consumer under it could start.
+	 */
+	if (probe_scan == build_scan)
 		return;
 
 	/*
@@ -466,14 +537,14 @@ anser_try_inject(HashJoin *hj, AnserInjectCtx *ctx)
 										   condition_key, total_elems, max_payload,
 										   planned_bytes, n_producers);
 	producer->scan.plan.plan_node_id = ctx->next_plan_node_id++;
-	outerPlan(build_parent) = (Plan *) producer;
+	anser_relink_child(build_parent, (Plan *) producer);
 
-	/* Consumer wraps the probe scan; keyed by the outer (probe) attno. */
-	consumer = AnserBuildBloomConsumerScan(probe, outer_attno, condition_id,
+	/* Consumer wraps the probe base scan; keyed by the mapped probe attno. */
+	consumer = AnserBuildBloomConsumerScan(probe_scan, probe_attno, condition_id,
 										   condition_key, total_elems, max_payload,
 										   planned_bytes, n_producers);
 	consumer->scan.plan.plan_node_id = ctx->next_plan_node_id++;
-	outerPlan(hj) = (Plan *) consumer;
+	anser_relink_child(probe_parent, (Plan *) consumer);
 
 	/* Record the channel so no later join can add a second consumer on it. */
 	ctx->consumer_keys = lappend(ctx->consumer_keys, pstrdup(condition_key));
