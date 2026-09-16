@@ -466,6 +466,7 @@ checkDispatchResult(CdbDispatcherState *ds, int timeout_sec)
 	int			timeout = 0;
 	bool		sentSignal = false;
 	struct pollfd *fds;
+	bool	   *buffered;
 	struct timeval start_ts, now;
 #ifdef USE_INTERNAL_FTS
 	uint8 ftsVersion = 0;
@@ -474,6 +475,12 @@ checkDispatchResult(CdbDispatcherState *ds, int timeout_sec)
 
 	db_count = pParms->dispatchCount;
 	fds = (struct pollfd *) palloc(db_count * sizeof(struct pollfd));
+
+	/*
+	 * Parallel to fds[]: whether that connection already holds a complete
+	 * message in libpq's buffer rather than in its socket.  See the loop below.
+	 */
+	buffered = (bool *) palloc(db_count * sizeof(bool));
 
 	/*
 	 * OK, we are finished submitting the command to the segdbs. Now, we have
@@ -486,6 +493,7 @@ checkDispatchResult(CdbDispatcherState *ds, int timeout_sec)
 		int			n;
 		int			nfds = 0;
 		int			ack_count = 0;
+		bool		anyBuffered = false;
 		PGconn		*conn;
 
 		/*
@@ -563,6 +571,33 @@ checkDispatchResult(CdbDispatcherState *ds, int timeout_sec)
 			Assert(sock >= 0);
 			fds[nfds].fd = sock;
 			fds[nfds].events = POLLIN;
+
+			/*
+			 * poll() reports what is in the socket, which is only the same
+			 * thing as "what is left to read" while we are the only thing
+			 * moving bytes off this connection.  Anything else that writes to
+			 * it through libpq breaks that: when a write cannot complete in one
+			 * go, pqSendSome() calls pqReadData() to absorb whatever the peer
+			 * has already sent (fe-misc.c), deliberately, so that a large write
+			 * cannot deadlock against a peer that is writing back at us.  The
+			 * bytes then sit in conn->inBuffer, the socket goes quiet, and a QE
+			 * that has finished and gone idle will never make it readable
+			 * again -- so the results are in our own memory and we sleep
+			 * forever waiting to be told about them.
+			 *
+			 * PQisBusy() runs libpq's parser over the buffer it already has and
+			 * never touches the socket, so asking is free.  A false answer means
+			 * a complete message is ready now; take it in this round instead of
+			 * polling, exactly as libpq's own async protocol prescribes (call
+			 * poll() only once PQisBusy() says there is nothing to parse).
+			 *
+			 * This is the same class of lost wakeup as the outbound flush just
+			 * above, and the same reason for handling it here.
+			 */
+			buffered[nfds] = !PQisBusy(conn);
+			if (buffered[nfds])
+				anyBuffered = true;
+
 			nfds++;
 		}
 
@@ -589,6 +624,14 @@ checkDispatchResult(CdbDispatcherState *ds, int timeout_sec)
 			timeout = DISPATCH_WAIT_TIMEOUT_MSEC;
 		else
 			timeout = DISPATCH_WAIT_CANCEL_TIMEOUT_MSEC;
+
+		/*
+		 * Something is already parseable, so there is nothing to wait for.
+		 * Still poll, with no timeout, to pick up whatever else has arrived in
+		 * the same round.
+		 */
+		if (anyBuffered)
+			timeout = 0;
 
 		n = poll(fds, nfds, timeout);
 
@@ -628,6 +671,25 @@ checkDispatchResult(CdbDispatcherState *ds, int timeout_sec)
 			if (timeout_sec >= 0 && diff_us >= timeout_sec * 1000000L)
 				break;
 		}
+		/*
+		 * Buffered input counts as readable.  poll() cleared revents and
+		 * reported only the sockets, so put the buffered ones back before
+		 * handing the array on -- handlePollSuccess() walks the same
+		 * connections in the same order and reads revents to decide which to
+		 * process.  Checked ahead of the n == 0 arm: a round that found
+		 * something to parse is not an expired wait, and treating it as one
+		 * would signal the QEs and then loop back to the same state forever.
+		 */
+		else if (anyBuffered)
+		{
+			for (i = 0; i < nfds; i++)
+			{
+				if (buffered[i])
+					fds[i].revents |= POLLIN;
+			}
+
+			handlePollSuccess(pParms, fds);
+		}
 		/* If the time limit expires, poll() returns 0 */
 		else if (n == 0)
 		{
@@ -665,6 +727,7 @@ checkDispatchResult(CdbDispatcherState *ds, int timeout_sec)
 			handlePollSuccess(pParms, fds);
 	}
 
+	pfree(buffered);
 	pfree(fds);
 }
 
