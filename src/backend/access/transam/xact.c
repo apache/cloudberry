@@ -3952,8 +3952,8 @@ CommitTransactionCommand(void)
 		elog(DEBUG1,"CommitTransactionCommand: called as segment Reader in state %s",
 		     BlockStateAsString(s->blockState));
 
-	if (s->chain)
-		SaveTransactionCharacteristics();
+	/* Must save in case we need to restore below */
+	SaveTransactionCharacteristics();
 
 	switch (s->blockState)
 	{

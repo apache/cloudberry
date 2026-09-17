@@ -82,9 +82,6 @@
 
 /*
  * We must skip "overhead" operations that involve database access when the
- * cached plan's subject statement is a transaction control command.
- * For the convenience of postgres.c, treat empty statements as control
- * commands too.
  * cached plan's subject statement is a transaction control command or one
  * that requires a snapshot not to be set yet (such as SET or LOCK).  More
  * generally, statements that do not require parse analysis/rewrite/plan
@@ -95,9 +92,6 @@
 	((plansource)->raw_parse_tree != NULL && \
 	 stmt_requires_parse_analysis((plansource)->raw_parse_tree))
 
-#define IsTransactionStmtPlan(plansource)  \
-	((plansource)->raw_parse_tree == NULL || \
-	 IsA((plansource)->raw_parse_tree->stmt, TransactionStmt))
 /*
  * This is the head of the backend's list of "saved" CachedPlanSources (i.e.,
  * those that are in long-lived storage and are examined for sinval events).
