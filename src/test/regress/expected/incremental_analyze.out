@@ -2046,3 +2046,49 @@ INFO:  analyzing "public.foo_1_prt_20210201"
 INFO:  Executing SQL: select pg_catalog.gp_acquire_sample_rows(65903, 400, 'f');
 INFO:  analyzing "public.foo" inheritance tree
 rollback;
+-- ndistinct-by-segments of the root is merged from the leaves.  For a column
+-- whose values repeat in every partition it must not grow with the number of
+-- partitions, otherwise ORCA overestimates the output of a local aggregate
+-- and gives up the multi-stage plan.
+set default_statistics_target = 100;
+drop table if exists ndvbs_part;
+NOTICE:  table "ndvbs_part" does not exist, skipping
+create table ndvbs_part (id int, pk int, a int, c int) distributed by (id)
+  partition by range (pk) (start (1) end (9) every (1));
+insert into ndvbs_part select g, (g % 8) + 1, g % 53, g % 3 from generate_series(1, 24000) g;
+analyze ndvbs_part;
+select c.relname, a.attname,
+       case 8 when s.stakind1 then s.stavalues1::text when s.stakind2 then s.stavalues2::text
+              when s.stakind3 then s.stavalues3::text when s.stakind4 then s.stavalues4::text
+              when s.stakind5 then s.stavalues5::text end as ndv_by_segments
+  from pg_statistic s
+  join pg_class c on c.oid = s.starelid
+  join pg_attribute a on a.attrelid = s.starelid and a.attnum = s.staattnum
+ where c.relname in ('ndvbs_part', 'ndvbs_part_1_prt_1') and a.attname in ('a', 'c')
+ order by 1, 2;
+      relname       | attname | ndv_by_segments 
+--------------------+---------+-----------------
+ ndvbs_part         | a       | {159}
+ ndvbs_part         | c       | {9}
+ ndvbs_part_1_prt_1 | a       | {159}
+ ndvbs_part_1_prt_1 | c       | {9}
+(4 rows)
+
+set optimizer = on;
+explain (costs off) select a, c, count(*) from ndvbs_part group by a, c;
+                              QUERY PLAN                              
+----------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Finalize HashAggregate
+         Group Key: a, c
+         ->  Redistribute Motion 3:3  (slice2; segments: 3)
+               Hash Key: a, c
+               ->  Streaming Partial HashAggregate
+                     Group Key: a, c
+                     ->  Dynamic Seq Scan on ndvbs_part
+                           Number of partitions to scan: 8 (out of 8)
+ Optimizer: GPORCA
+(10 rows)
+
+reset optimizer;
+reset default_statistics_target;
