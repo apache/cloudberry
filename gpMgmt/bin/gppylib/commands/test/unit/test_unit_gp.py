@@ -4,9 +4,9 @@
 #
 
 from gppylib.commands.base import CommandResult
-from mock import patch
+from mock import patch, mock_open
 
-from gppylib.commands.gp import is_pid_postmaster, get_postmaster_pid_locally
+from gppylib.commands.gp import is_pid_postmaster, get_postmaster_pid_locally, is_gprecoverseg_running
 from test.unit.gp_unittest import GpTestCase, run_tests
 
 
@@ -157,6 +157,22 @@ class GpCommandTestCase(GpTestCase):
     @patch('gppylib.commands.gp.Command.run', return_value=CommandResult(0, b"", b"", True, False))
     def test_get_postmaster_pid_locally_empty(self, mock1):
         self.assertEqual(get_postmaster_pid_locally('/tmp'), -1)
+
+    @patch('gppylib.commands.gp.check_pid', return_value=True)
+    @patch('gppylib.commands.gp.get_coordinatordatadir')
+    @patch("builtins.open", new_callable=mock_open, read_data="123")
+    def test_is_gprecoverseg_running_succeeds(self, mock_file, mock1, mock2):
+        result = is_gprecoverseg_running()
+        mock2.assert_called_once_with('123')
+        self.assertTrue(result)
+
+    @patch('gppylib.commands.gp.check_pid')
+    @patch('gppylib.commands.gp.get_coordinatordatadir', return_value='/invalid/path/')
+    def test_is_gprecoverseg_running_when_pidfile_does_not_exists(self, mock1, mock2):
+        result = is_gprecoverseg_running()
+        self.assertFalse(result)
+        self.assertFalse(mock2.called)
+
 
 if __name__ == '__main__':
     run_tests()

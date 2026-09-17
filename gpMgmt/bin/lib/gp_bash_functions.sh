@@ -231,6 +231,9 @@ LOG_MSG () {
 		*FATAL*)
 			EXIT_STATUS=1
 			;;
+		*ERROR*)
+			EXIT_STATUS=1
+			;;
 		esac
 
 		if [ x"" == x"$DEBUG_LEVEL" ];then
@@ -389,9 +392,9 @@ SED_PG_CONF () {
 				fi
 			else
 				if [ $KEEP_PREV -eq 0 ];then
-					$SED -i'.bak1' -e "s/${SEARCH_TXT}/${SUB_TXT} #${SEARCH_TXT}/" $FILENAME
+					$SED -i'.bak1' -e "s/^[ ]*${SEARCH_TXT}[ ]*=/${SUB_TXT} #${SEARCH_TXT}/" $FILENAME
 				else
-					$SED -i'.bak1' -e "s/${SEARCH_TXT}.*/${SUB_TXT}/" $FILENAME
+					$SED -i'.bak1' -e "s/^[ ]*${SEARCH_TXT}[ ]*=.*/${SUB_TXT}/" $FILENAME
 				fi
 				RETVAL=$?
 				if [ $RETVAL -ne 0 ]; then
@@ -400,7 +403,7 @@ SED_PG_CONF () {
 					LOG_MSG "[INFO]:-Replaced line in $FILENAME"
 					$RM -f ${FILENAME}.bak1
 				fi
-				$SED -i'.bak2' -e "s/^#${SEARCH_TXT}/${SEARCH_TXT}/" $FILENAME
+				$SED -i'.bak2' -e "s/^[ ]*#${SEARCH_TXT}[ ]*=/${SEARCH_TXT}/" $FILENAME
 				RETVAL=$?
 				if [ $RETVAL -ne 0 ]; then
 					ERROR_EXIT "[FATAL]:-Failed to replace #$SEARCH_TXT in $FILENAME"
@@ -431,9 +434,9 @@ SED_PG_CONF () {
 			fi
 		else
 			if [ $KEEP_PREV -eq 0 ];then
-				SED_COMMAND="s/${SEARCH_TXT}/${SUB_TXT} #${SEARCH_TXT}/"
+				SED_COMMAND="s/^[ ]*${SEARCH_TXT}[ ]*=/${SUB_TXT} #${SEARCH_TXT}/"
 			else
-				SED_COMMAND="s/${SEARCH_TXT}.*/${SUB_TXT}/"
+				SED_COMMAND="s/^[ ]*${SEARCH_TXT}[ ]*=.*/${SUB_TXT}/"
 			fi
 			$TRUSTED_SHELL $SED_HOST sed -i'.bak1' -f /dev/stdin "$FILENAME" <<< "$SED_COMMAND" > /dev/null 2>&1
 			if [ $RETVAL -ne 0 ]; then
@@ -443,7 +446,7 @@ SED_PG_CONF () {
 				$TRUSTED_SHELL $SED_HOST "$RM -f ${FILENAME}.bak1" > /dev/null 2>&1
 			fi
 
-			SED_COMMAND="s/^#${SEARCH_TXT}/${SEARCH_TXT}/"
+			SED_COMMAND="s/^[ ]*#${SEARCH_TXT}[ ]*=/${SEARCH_TXT}/"
 			$TRUSTED_SHELL $SED_HOST sed -i'.bak2' -f /dev/stdin "$FILENAME" <<< "$SED_COMMAND" > /dev/null 2>&1
 			if [ $RETVAL -ne 0 ]; then
 				ERROR_EXIT "[FATAL]:-Failed to substitute #${SEARCH_TXT} in $FILENAME on $SED_HOST"
@@ -783,6 +786,11 @@ BUILD_COORDINATOR_PG_HBA_FILE () {
         else
             $ECHO "host     all         $USER_NAME         localhost    trust" >> ${GP_DIR}/$PG_HBA
             $ECHO "host     all         $USER_NAME         $COORDINATOR_HOSTNAME       trust" >> ${GP_DIR}/$PG_HBA
+            # Also add explicit IPv4 and IPv6 loopback entries so that
+            # connections via 127.0.0.1 and ::1 are always accepted
+            # regardless of hostname resolution order.
+            $ECHO "host     all         $USER_NAME         127.0.0.1/32    trust" >> ${GP_DIR}/$PG_HBA
+            $ECHO "host     all         $USER_NAME         ::1/128         trust" >> ${GP_DIR}/$PG_HBA
         fi
 
 
@@ -1231,7 +1239,7 @@ PRECHECK_CBDB_CONFIG_FILE() {
 
 CLEANUP_ETCD() {
     if [ "$#" -ne 1 ];then
-        LOG_MSG "[ERROR]: RETRIVE_ETCD_CONFIG_VAL invalid params..."
+        LOG_MSG "[ERROR]: CLEANUP_ETCD invalid params..."
     fi
     local etcd_account_id=`RETRIVE_ETCD_CONFIG_VAL $ETCD_ACCOUNT_ID`
     local etcd_cluster_id=`RETRIVE_ETCD_CONFIG_VAL $ETCD_CLUSTER_ID`
@@ -1315,7 +1323,7 @@ SETUP_FTS() {
 
 CHECK_FTS () {
     ret=1
-    if [ "$#" -ne 2 ];then
+    if [ "$#" -ne 1 ];then
         LOG_MSG "[ERROR]: CHECK_FTS invalid params..."
     fi
     FTS_HOST=$1

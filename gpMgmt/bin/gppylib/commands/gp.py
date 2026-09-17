@@ -1671,6 +1671,16 @@ def createTempDirectoryName(coordinatorDataDirectory, tempDirPrefix):
                                 datetime.datetime.now().strftime('%m%d%Y'),
                                 os.getpid())
 
+def is_gprecoverseg_running():
+    gprecoverseg_pidfile = os.path.join(get_coordinatordatadir(), 'gprecoverseg.lock', 'PID')
+    try:
+        with open(gprecoverseg_pidfile) as pidfile:
+            gprecoverseg_pid = pidfile.read()
+    except Exception:
+        return False
+
+    return check_pid(gprecoverseg_pid)
+
 #-------------------------------------------------------------------------
 class GpRecoverSeg(Command):
    """

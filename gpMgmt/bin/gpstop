@@ -983,5 +983,14 @@ class GpStop:
                       etcd_hosts=options.etcd_hosts,
                       is_external_fts=external_fts)
 
+    @staticmethod
+    def mainOptions():
+        """
+        This method returns a dictionary instructing simple_main to check for
+        a gpstop.lock file under COORDINATOR_DATA_DIRECTORY in order to prevent
+        more than one gpstop running against the same cluster at a time.
+        """
+        return {'pidlockpath': 'gpstop.lock', 'parentpidvar': 'GPSTOPPID'}
+
 if __name__ == '__main__':
-    simple_main(GpStop.createParser, GpStop.createProgram)
+    simple_main(GpStop.createParser, GpStop.createProgram, GpStop.mainOptions())

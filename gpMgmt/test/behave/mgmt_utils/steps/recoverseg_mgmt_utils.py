@@ -4,14 +4,16 @@ import tempfile
 from time import sleep
 
 from contextlib import closing
+from gppylib import gplog
 from gppylib.commands.base import Command, ExecutionError, REMOTE, WorkerPool
+from gppylib.commands.gp import RECOVERY_REWIND_APPNAME
 from gppylib.db import dbconn
 from gppylib.gparray import GpArray, ROLE_PRIMARY, ROLE_MIRROR
-from gppylib.programs.clsRecoverSegment_triples import get_segments_with_running_basebackup, is_pg_rewind_running
-from gppylib.operations.get_segments_in_recovery import is_seg_in_backup_mode
 from test.behave_utils.utils import *
 import platform, shutil
 from behave import given, when, then
+
+logger = gplog.get_default_logger()
 
 #TODO remove duplication of these functions
 def _get_gpAdminLogs_directory():
@@ -21,6 +23,76 @@ def _get_gpAdminLogs_directory():
 def lines_matching_both(in_str, str_1, str_2):
     lines = [x.strip() for x in in_str.split('\n')]
     return [line for line in lines if line.count(str_1) and line.count(str_2)]
+
+
+def get_segments_with_running_basebackup():
+    """
+    Returns a set of content ids whose source segments currently have
+    a running pg_basebackup.
+    """
+    sql = "select gp_segment_id from gp_stat_replication where application_name = 'pg_basebackup'"
+
+    try:
+        with closing(dbconn.connect(dbconn.DbURL())) as conn:
+            rows = dbconn.query(conn, sql).fetchall()
+    except Exception as e:
+        raise Exception("Failed to query gp_stat_replication: %s" % str(e))
+
+    segments_with_running_basebackup = {row[0] for row in rows}
+
+    if len(segments_with_running_basebackup) == 0:
+        logger.debug("No basebackup running")
+
+    return segments_with_running_basebackup
+
+
+def is_pg_rewind_running(hostname, port):
+    """
+    Returns true if a pg_rewind process is running for the given segment.
+    """
+    sql = "SELECT count(*) FROM pg_stat_activity WHERE application_name = '{}'".format(
+        RECOVERY_REWIND_APPNAME
+    )
+
+    try:
+        url = dbconn.DbURL(hostname=hostname, port=port, dbname='template1')
+        with closing(dbconn.connect(url, utility=True)) as conn:
+            return dbconn.querySingleton(conn, sql) > 0
+    except Exception as e:
+        raise Exception(
+            "Failed to query pg_stat_activity for segment hostname: {}, port: {}, error: {}".format(
+                hostname, str(port), str(e)
+            )
+        )
+
+
+def is_seg_in_backup_mode(hostname, port):
+    """
+    Returns true if the source segment is already in backup mode.
+
+    Differential recovery uses pg_start_backup() on the source segment, so
+    a source that is already in backup mode indicates differential recovery
+    may already be in progress.
+    """
+    logger.debug(
+        "Checking if backup is already in progress for the source server with host {} and port {}".format(
+            hostname, port
+        )
+    )
+
+    sql = "SELECT pg_is_in_backup()"
+    try:
+        url = dbconn.DbURL(hostname=hostname, port=port, dbname='template1')
+        with closing(dbconn.connect(url, utility=True)) as conn:
+            res = dbconn.querySingleton(conn, sql)
+    except Exception as e:
+        raise Exception(
+            "Failed to query pg_is_in_backup() for segment with hostname {}, port {}, error: {}".format(
+                hostname, str(port), str(e)
+            )
+        )
+
+    return res
 
 
 @given('the information of contents {contents} is saved')
@@ -86,6 +158,8 @@ def impl(context, seg):
         context.remote_pair_primary_segcid = primary_segs[0].getSegmentContentId()
         context.remote_pair_primary_host = primary_segs[0].getSegmentHostName()
         context.remote_pair_primary_datadir = primary_segs[0].getSegmentDataDirectory()
+        context.remote_pair_primary_port = primary_segs[0].getSegmentPort()
+        context.remote_pair_primary_address = primary_segs[0].getSegmentAddress()
     elif seg == "mirror":
         mirror_segs = [seg for seg in gparray.getDbList()
                        if seg.isSegmentMirror() and seg.getSegmentHostName() != platform.node()]
@@ -297,7 +371,12 @@ def recovery_fail_check(context, recovery_type, content_ids, utility):
         return_code = 3
 
     if recovery_type == 'incremental':
-        print_msg = 'pg_rewind: fatal'
+        # A failed pg_rewind writes two lines, "error: <what>" then
+        # "detail: Command was: ...", and gprecoverseg streams whichever is
+        # last in the progress file when it next polls -- almost always the
+        # detail. Accept either rather than depend on the timing. (Before 13
+        # there was no detail line and upstream looks for "fatal".)
+        print_msg = 'pg_rewind: (error|detail)'
         logfile_name = 'pg_rewind*'
     elif recovery_type == 'full':
         print_msg = 'pg_basebackup: error: could not access directory' #TODO also assert for the directory location here
@@ -311,7 +390,6 @@ def recovery_fail_check(context, recovery_type, content_ids, utility):
     And gprecoverseg should print "{print_msg}" to stdout for mirrors with content {content_ids}
     And gprecoverseg should print "Failed to recover the following segments" to stdout
     And gprecoverseg should print "{recovery_type}" errors to stdout for content {content_ids}
-    And gpAdminLogs directory has "{logfile_name}" files on respective hosts only for content {content_ids}
     And verify that mirror on content {content_ids} is down
     And gprecoverseg should print "gprecoverseg failed. Please check the output" to stdout
     And gprecoverseg should not print "Segments successfully recovered" to stdout
@@ -582,6 +660,8 @@ def impl(context):
     if len(dirs) > 0:
         raise Exception("One or more backout directories exist: %s" % dirs)
 
+@given('the gprecoverseg lock directory is removed')
+@when('the gprecoverseg lock directory is removed')
 @then('the gprecoverseg lock directory is removed')
 def impl(context):
     lock_dir = "%s/gprecoverseg.lock" % os.environ["COORDINATOR_DATA_DIRECTORY"]
