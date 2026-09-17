@@ -69,10 +69,23 @@ ERROR:  User task_cron does not have CONNECT privilege on task_dbno
 alter task vacuum_db user hopedoesnotexist;
 ERROR:  role "hopedoesnotexist" does not exist
 -- valid interval tasks
+--
+-- These four only exercise the schedule parser, they are never meant to run.
+-- Deactivate each one as soon as it exists: while a second-based task stays
+-- active the scheduler keeps firing it, and every run draws a run id from the
+-- cluster-wide Oid counter (NextRunId -> GetNewOidWithIndex).  A task still
+-- firing later in the same regression run shifts the counter that
+-- oid_wraparound hardcodes, and DROP TASK, which also deletes the task's
+-- pg_task_run_history rows, fails with "tuple concurrently updated" when it
+-- races the run the scheduler is in the middle of recording.
 create task valid_task_1 schedule '1 second' as 'select 1';
+alter task valid_task_1 not active;
 create task valid_task_2 schedule ' 30 sEcOnDs ' as 'select 1';
+alter task valid_task_2 not active;
 create task valid_task_3 schedule '59 seconds' as 'select 1';
+alter task valid_task_3 not active;
 create task valid_task_4 schedule '17  seconds ' as 'select 1';
+alter task valid_task_4 not active;
 -- task in function
 DO $$
 BEGIN
