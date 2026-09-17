@@ -883,3 +883,27 @@ truncate foo_1_prt_20210201;
 insert into foo select a, '20210101'::date+a from (select generate_series(31,40) a) t1;
 analyze verbose foo_1_prt_20210201;
 rollback;
+
+-- ndistinct-by-segments of the root is merged from the leaves.  For a column
+-- whose values repeat in every partition it must not grow with the number of
+-- partitions, otherwise ORCA overestimates the output of a local aggregate
+-- and gives up the multi-stage plan.
+set default_statistics_target = 100;
+drop table if exists ndvbs_part;
+create table ndvbs_part (id int, pk int, a int, c int) distributed by (id)
+  partition by range (pk) (start (1) end (9) every (1));
+insert into ndvbs_part select g, (g % 8) + 1, g % 53, g % 3 from generate_series(1, 24000) g;
+analyze ndvbs_part;
+select c.relname, a.attname,
+       case 8 when s.stakind1 then s.stavalues1::text when s.stakind2 then s.stavalues2::text
+              when s.stakind3 then s.stavalues3::text when s.stakind4 then s.stavalues4::text
+              when s.stakind5 then s.stavalues5::text end as ndv_by_segments
+  from pg_statistic s
+  join pg_class c on c.oid = s.starelid
+  join pg_attribute a on a.attrelid = s.starelid and a.attnum = s.staattnum
+ where c.relname in ('ndvbs_part', 'ndvbs_part_1_prt_1') and a.attname in ('a', 'c')
+ order by 1, 2;
+set optimizer = on;
+explain (costs off) select a, c, count(*) from ndvbs_part group by a, c;
+reset optimizer;
+reset default_statistics_target;

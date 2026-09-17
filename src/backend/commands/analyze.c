@@ -120,6 +120,7 @@
 #include "utils/timestamp.h"
 
 #include "access/appendonlywriter.h"
+#include "catalog/gp_distribution_policy.h"
 #include "catalog/heap.h"
 #include "catalog/pg_am.h"
 #include "cdb/cdbappendonlyam.h"
@@ -4977,6 +4978,28 @@ merge_leaf_stats(VacAttrStatsP stats,
 
 		if (valid)
 		{
+			/*
+			 * The leaves' values are summed, which is only right when leaves hold
+			 * disjoint values, e.g. for the partitioning key.  A value repeated in
+			 * every partition is counted once per partition, so the sum grows
+			 * with the number of partitions and ORCA overestimates the output of
+			 * a local aggregate.  A segment cannot have more distinct values than
+			 * the whole table, so clamp to the root's ndistinct times the number
+			 * of segments.
+			 */
+			double		root_ndistinct = stats->stadistinct < 0 ?
+				-stats->stadistinct * totalTuples : stats->stadistinct;
+
+			if (root_ndistinct > 0)
+			{
+				GpPolicy   *policy = GpPolicyFetch(stats->attr->attrelid);
+				int			numsegments = (policy && policy->numsegments > 0) ?
+					policy->numsegments : getgpsegmentCount();
+
+				ndinstinct_by_segs = Min(ndinstinct_by_segs,
+										 root_ndistinct * numsegments);
+			}
+
 			ndvbs = (Datum *) palloc(sizeof(Datum));
 			ndvbs[0] = Float8GetDatum(ndinstinct_by_segs);
 
