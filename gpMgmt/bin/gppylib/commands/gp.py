@@ -1681,6 +1681,22 @@ def createTempDirectoryName(coordinatorDataDirectory, tempDirPrefix):
                                 datetime.datetime.now().strftime('%m%d%Y'),
                                 os.getpid())
 
+# Cherry-picked from Greenplum Database (greenplum-db/gpdb-archive @ 482967c1b4),
+# gpMgmt/bin/gppylib/commands/gp.py.
+def is_gprecoverseg_running():
+    gprecoverseg_pidfile = os.path.join(get_coordinatordatadir(), 'gprecoverseg.lock', 'PID')
+    try:
+        with open(gprecoverseg_pidfile) as pidfile:
+            # The file can still be empty while the lock owner writes its PID.
+            gprecoverseg_pid = int(pidfile.read())
+    except (OSError, ValueError):
+        return False
+
+    if gprecoverseg_pid <= 0:
+        return False
+
+    return check_pid(gprecoverseg_pid)
+
 #-------------------------------------------------------------------------
 class GpRecoverSeg(Command):
    """
