@@ -227,8 +227,9 @@ send_msg_by_parts(shm_mq_handle *mqh, Size nbytes, const void *data)
  *
  * Visits every node in the tree rooted at `planstate`, calling `executor`
  * on each node before recursing.  Handles all node types that have child
- * plan states (Append, MergeAppend, BitmapAnd/Or, SubqueryScan, CustomScan,
- * init-plans, and sub-plans).
+ * plan states (Append, MergeAppend, Sequence, BitmapAnd/Or, SubqueryScan,
+ * CustomScan, init-plans, and sub-plans) -- keep the switch below in step with
+ * the "special child plans" switch in ExplainNode().
  *
  * Parameters:
  *   planstate     -- root of the subtree to walk (NULL is a no-op)
@@ -303,6 +304,14 @@ qs_planstate_walker(PlanState *planstate,
 			MergeAppendState *ms = (MergeAppendState *) planstate;
 			for (int i = 0; i < ms->ms_nplans; i++)
 				qs_planstate_walker(ms->mergeplans[i], executor,
+									qs_walker_ctx, depth + 1);
+			break;
+		}
+		case T_Sequence:
+		{
+			SequenceState *ss = (SequenceState *) planstate;
+			for (int i = 0; i < ss->numSubplans; i++)
+				qs_planstate_walker(ss->subplans[i], executor,
 									qs_walker_ctx, depth + 1);
 			break;
 		}
@@ -534,8 +543,9 @@ qs_debug_node_sample(GpscNodeSample *s)
 		 "plan_rows=%.0f "
 		 "ntuples=%.0f tuplecount=%.0f nloops=%.0f "
 		 "startup=%f total=%f firsttuple=%f "
-		 "shared_blks_hit=%lu shared_blks_read=%lu "
-		 "workfile_created=%d workmem_used=%ld workmem_wanted=%ld "
+		 "shared_blks_hit=" UINT64_FORMAT " shared_blks_read=" UINT64_FORMAT " "
+		 "workfile_created=%d workmem_used=" INT64_FORMAT
+		 " workmem_wanted=" INT64_FORMAT " "
 		 "node_status=%d",
 		 s->plan_node_id, s->parent_plan_node_id, s->node_tag,
 		 s->slice_id, s->segindex,
@@ -543,8 +553,8 @@ qs_debug_node_sample(GpscNodeSample *s)
 		 s->plan_rows,
 		 s->ntuples, s->tuplecount, s->nloops,
 		 s->startup, s->total, s->firsttuple,
-		 s->shared_blks_hit, s->shared_blks_read,
-		 (int) s->workfile_created, (long) s->workmem_used, (long) s->workmem_wanted,
+		 (uint64) s->shared_blks_hit, (uint64) s->shared_blks_read,
+		 (int) s->workfile_created, (int64) s->workmem_used, (int64) s->workmem_wanted,
 		 (int) s->node_status);
 }
 
@@ -639,16 +649,18 @@ emit_node_batch(List *per_node_stats, const char *trace_id)
  * fragment no parser accepts.  The framing lives here, outside
  * ExplainPrintPlan, so that function is left untouched.
  *
- * Returns a palloc'd string in the current context, or NULL when queryDesc is
- * NULL.  Intended for the coordinator (QD) only: on a QE the plan subtree can
- * reach child PlanStates from other slices that are not instantiated here.
+ * Returns a palloc'd string in the current context, or NULL when there is
+ * nothing to render.  The coordinator (QD) restriction is enforced here rather
+ * than left to the caller: a QE only instantiates the PlanStates of its own
+ * slice, so the document it produced would be a partial tree that the collection
+ * has no use for -- the QD's copy is the whole plan.
  */
 static char *
 build_plan_doc(QueryDesc *queryDesc, ExplainFormat format)
 {
 	ExplainState   *es;
 
-	if (queryDesc == NULL)
+	if (queryDesc == NULL || Gp_role != GP_ROLE_DISPATCH)
 		return NULL;
 
 	HOLD_INTERRUPTS();

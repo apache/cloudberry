@@ -240,6 +240,14 @@ InstrAggNode(Instrumentation *dst, Instrumentation *add)
 	dst->nfiltered1 += add->nfiltered1;
 	dst->nfiltered2 += add->nfiltered2;
 
+	/*
+	 * dst->eof is deliberately not aggregated.  It describes the state of one
+	 * backend's current plan cycle, and every caller of this function has
+	 * already run InstrEndLoop() on *add (which clears eof), so there is
+	 * nothing meaningful to merge.  Readers of eof -- pg_query_state's
+	 * plan-tree walker -- sample it per backend while that backend runs.
+	 */
+
 	/* Add delta of buffer usage since entry to node's totals */
 	if (dst->need_bufusage)
 		BufferUsageAdd(&dst->bufusage, &add->bufusage);

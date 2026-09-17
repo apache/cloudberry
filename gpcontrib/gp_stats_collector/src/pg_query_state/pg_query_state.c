@@ -513,7 +513,7 @@ get_toppest_query(void)
  * filter_query -- decide whether to instrument a given QueryDesc.
  *
  * Returns false for cursor queries with non-default cursor options, and for
- * utility statements.  Returns true for SELECT, INSERT, UPDATE, DELETE.
+ * utility statements.  Returns true for SELECT, INSERT, UPDATE, DELETE, MERGE.
  */
 static bool
 filter_query(QueryDesc *queryDesc)
@@ -533,7 +533,8 @@ filter_query(QueryDesc *queryDesc)
 	return (queryDesc->operation == CMD_SELECT  ||
 			queryDesc->operation == CMD_DELETE  ||
 			queryDesc->operation == CMD_INSERT  ||
-			queryDesc->operation == CMD_UPDATE);
+			queryDesc->operation == CMD_UPDATE  ||
+			queryDesc->operation == CMD_MERGE);
 }
 
 /*

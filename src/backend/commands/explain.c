@@ -1594,7 +1594,7 @@ ExplainNode(PlanState *planstate, List *ancestors,
 			const char *relationship, const char *plan_name,
 			ExplainState *es)
 {
-	Plan	   *plan = planstate->plan;
+	Plan	   *plan;
 	PlanState  *parentplanstate;
 	ExecSlice  *save_currentSlice = es->currentSlice;    /* save */
 	const char *pname;			/* node type name for text output */
@@ -1611,6 +1611,17 @@ ExplainNode(PlanState *planstate, List *ancestors,
 	int			motion_recv;
 	int			motion_snd;
 	ExecSlice  *parentSlice = NULL;
+
+	/*
+	 * Guard against the case where a subtree lives in another slice and is not
+	 * instantiated in this one.  With alien elimination on (execute_pruned_plan),
+	 * a QE leaves the child of a receiving Motion -- and any subplan unreachable
+	 * from its local slice -- uninitialized, so outerPlanState() and
+	 * SubPlanState.planstate can be NULL while the corresponding Plan is not.
+	 */
+	if (planstate == NULL)
+		return;
+	plan = planstate->plan;
 
 	/* Remember who called us. */
 	parentplanstate = es->parentPlanState;
@@ -3008,8 +3019,15 @@ ExplainNode(PlanState *planstate, List *ancestors,
 	if (es->wal && planstate->instrument)
 		show_wal_usage(es, &planstate->instrument->walusage);
 
-	/* Show worker detail after query execution */
-	if (es->analyze && es->verbose && planstate->worker_instrument
+	/*
+	 * Prepare per-worker buffer/WAL usage, after query execution.
+	 *
+	 * es->workers_state is NULL when per-worker detail is hidden (see
+	 * es->hide_workers), and ExplainOpenWorker() below requires it, so testing
+	 * it is what keeps this safe -- planstate->worker_instrument alone is not
+	 * enough.
+	 */
+	if (es->workers_state && (es->buffers || es->wal) && es->verbose
 		&& !es->runtime)
 	{
 		WorkerInstrumentation *w = planstate->worker_instrument;
@@ -3087,8 +3105,11 @@ ExplainNode(PlanState *planstate, List *ancestors,
 	/* lefttree */
 	if (outerPlan(plan) && !skip_outer)
 	{
-		ExplainNode(outerPlanState(planstate), ancestors,
-					"Outer", NULL, es);
+		if (outerPlanState(planstate))
+		{
+			ExplainNode(outerPlanState(planstate), ancestors,
+						"Outer", NULL, es);
+		}
 	}
     else if (skip_outer)
     {
@@ -4542,16 +4563,27 @@ show_instrumentation_count(const char *qlabel, int which,
 
 	if (!es->analyze || !planstate->instrument)
 		return;
-	nloops = planstate->instrument->nloops;
+
 	if (which == 2)
-		nfiltered = ((nloops > 0) ? planstate->instrument->nfiltered2 / nloops : 0);
+		nfiltered = planstate->instrument->nfiltered2;
 	else
-		nfiltered = ((nloops > 0) ? planstate->instrument->nfiltered1 / nloops : 0);
+		nfiltered = planstate->instrument->nfiltered1;
 	nloops = planstate->instrument->nloops;
 
-	/* In text mode, suppress zero counts; they're not interesting enough */
+	/*
+	 * In text mode, suppress zero counts; they're not interesting enough.
+	 *
+	 * The nloops == 0 case is what runtime mode hits for the whole of the first
+	 * loop, so the counters cannot be averaged there; report 0 rather than
+	 * dividing by zero.
+	 */
 	if (nfiltered > 0 || es->format != EXPLAIN_FORMAT_TEXT)
-		ExplainPropertyFloat(qlabel, NULL, nfiltered, 0, es);
+	{
+		if (nloops > 0)
+			ExplainPropertyFloat(qlabel, NULL, nfiltered / nloops, 0, es);
+		else
+			ExplainPropertyFloat(qlabel, NULL, 0.0, 0, es);
+	}
 }
 
 /*
@@ -5270,17 +5302,33 @@ show_modifytable_info(ModifyTableState *mtstate, List *ancestors,
 			double		insert_path;
 			double		update_path;
 			double		delete_path;
-			double		skipped_path;
+			double		skipped_path = 0;
 
-			InstrEndLoop(outerPlanState(mtstate)->instrument);
-
-			/* count the number of source rows */
-			total = outerPlanState(mtstate)->instrument->ntuples;
 			insert_path = mtstate->mt_merge_inserted;
 			update_path = mtstate->mt_merge_updated;
 			delete_path = mtstate->mt_merge_deleted;
-			skipped_path = total - insert_path - update_path - delete_path;
-			Assert(skipped_path >= 0);
+
+			/*
+			 * The source row count only lines up with the action counters once
+			 * the subplan has been wound up: a row is counted by the subplan
+			 * before the MERGE action consuming it runs, and in runtime mode
+			 * instrument->ntuples additionally excludes the loop still in
+			 * progress.  So derive "skipped" as usual outside runtime mode;
+			 * inside it report only the action counters, which are exact at any
+			 * instant, and leave the inconsistent (possibly negative) derived
+			 * value out.
+			 */
+			if (!es->runtime)
+			{
+				InstrEndLoop(outerPlanState(mtstate)->instrument);
+
+				/* count the number of source rows */
+				total = outerPlanState(mtstate)->instrument->ntuples;
+				skipped_path = total - insert_path - update_path - delete_path;
+				Assert(skipped_path >= 0);
+			}
+			else
+				total = insert_path + update_path + delete_path;
 
 			if (es->format == EXPLAIN_FORMAT_TEXT)
 			{
@@ -5304,7 +5352,8 @@ show_modifytable_info(ModifyTableState *mtstate, List *ancestors,
 				ExplainPropertyFloat("Tuples Inserted", NULL, insert_path, 0, es);
 				ExplainPropertyFloat("Tuples Updated", NULL, update_path, 0, es);
 				ExplainPropertyFloat("Tuples Deleted", NULL, delete_path, 0, es);
-				ExplainPropertyFloat("Tuples Skipped", NULL, skipped_path, 0, es);
+				if (!es->runtime)
+					ExplainPropertyFloat("Tuples Skipped", NULL, skipped_path, 0, es);
 			}
 		}
 	}

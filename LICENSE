@@ -373,9 +373,6 @@ Apache Cloudberry includes codes from
 ----------------------------
    PostgreSQL License
 
-      gpcontrib/yezzey/*
-      see licenses/LICENSE-yezzey.txt
-
       gpcontrib/gp_stats_collector/src/pg_query_state/*
       see licenses/LICENSE-pg_query_state.txt
 

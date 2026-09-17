@@ -84,6 +84,13 @@ typedef struct GpscNodeSample
 	double  firsttuple;              /* Instrumentation.firsttuple (seconds) */
 	uint64_t shared_blks_hit;
 	uint64_t shared_blks_read;
+	/*
+	 * TODO: PG15 added BufferUsage.temp_blk_read_time / temp_blk_write_time,
+	 * which is the spill-I/O timing this tool most wants.  Surfacing it needs
+	 * matching BatchNode fields (29/30) on the yagpcc side first: that message
+	 * must stay wire-identical to its counterpart in
+	 * api/proto/agent_segment/yagpcc_set_service.proto.
+	 */
 	QsNodeStatus node_status;
 	bool eof;						 /* Instrumentation.eof: node exhausted for
 									  * the current cycle (last fetch returned no

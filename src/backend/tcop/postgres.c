@@ -4843,7 +4843,7 @@ process_postgres_switches(int argc, char *argv[], GucContext ctx,
 	 * postmaster/postmaster.c (the option sets should not conflict) and with
 	 * the common help() function in main/main.c.
 	 */
-	while ((flag = getopt(argc, argv, "B:bc:C:D:d:EeFf:h:ijk:lMm:N:nOPp:r:R:S:sTt:v:W:Z:-:")) != -1)
+	while ((flag = getopt(argc, argv, "B:bc:C:D:d:EeFf:h:ijk:lMm:N:nOPp:r:R:S:sTt:v:W:-:")) != -1)
 	{
 		switch (flag)
 		{
@@ -5035,10 +5035,6 @@ process_postgres_switches(int argc, char *argv[], GucContext ctx,
 
 			case 'W':
 				SetConfigOption("post_auth_delay", optarg, ctx, gucsource);
-				break;
-
-			case 'Z':
-				/* ignored for consistency with the postmaster */
 				break;
 
 			default:
