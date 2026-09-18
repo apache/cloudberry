@@ -21,6 +21,7 @@
 test: autovacuum
 test: autovacuum-segment
 test: autovacuum-template0-segment
+test: ao_relopts_autovacuum
 
 # check profile feature
 test: profile
