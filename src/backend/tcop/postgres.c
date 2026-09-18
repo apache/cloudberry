@@ -595,6 +595,11 @@ SocketBackend(StringInfo inBuf)
 			doing_extended_query_message = false;
 			break;
 
+		case GP_SIDEBAND_MESSAGE:	/* Cloudberry QD -> QE sideband data */
+			maxmsglen = PQ_LARGE_MESSAGE_LIMIT;
+			doing_extended_query_message = false;
+			break;
+
 		default:
 
 			/*
@@ -6414,6 +6419,18 @@ PostgresMain(const char *dbname, const char *username)
 				 * unfinished QEs, if the QE receives cancel before '?' message,
 				 * the message will stay in the socket, next time when we ReadCommand
 				 * we should ignore it.
+				 */
+				break;
+
+			case GP_SIDEBAND_MESSAGE:	/* Cloudberry QD -> QE sideband data */
+				/*
+				 * Accept but ignore this message.  A QE reads sideband data
+				 * explicitly at the point it expects it; reaching the command
+				 * loop means nobody is waiting for it any more -- typically
+				 * the waiter was interrupted (query cancel) after the QD had
+				 * already written the message.  Same reasoning as '?' above,
+				 * but a wider window, since a sideband waiter may block for
+				 * the lifetime of a query.
 				 */
 				break;
 
