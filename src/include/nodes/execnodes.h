@@ -2649,6 +2649,8 @@ typedef struct IncrementalSortGroupInfo
 	int64		totalDiskSpaceUsed;
 	int64		maxMemorySpaceUsed;
 	int64		totalMemorySpaceUsed;
+	int64		maxWorkmemUsed;		/* CDB: work_mem actually used */
+	int64		maxWorkmemWanted;	/* CDB: work_mem to avoid scratch i/o */
 	bits32		sortMethods;	/* bitmask of TuplesortMethod */
 } IncrementalSortGroupInfo;
 
