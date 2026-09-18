@@ -2826,6 +2826,72 @@ select mvname, datastatus from gp_matview_aux where mvname = 'mv_par_normal_oid'
  mv_par_normal_oid | i
 (1 row)
 
+--
+-- Test https://github.com/apache/cloudberry/issues/726: gp_matview_aux.mvname
+-- is not schema-qualified, so two materialized views with the same bare name
+-- in different schemas are indistinguishable through it. gp_matviews (added
+-- above) resolves the name live from pg_class/pg_namespace instead, so it
+-- distinguishes them correctly; mvname itself is unchanged (kept, deprecated,
+-- for backward compatibility -- see the COMMENT ON in system_views.sql).
+--
+create schema mv_schema_test_s1;
+create schema mv_schema_test_s2;
+create table mv_schema_test_s1.t0(a int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+create table mv_schema_test_s2.t0(a int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+insert into mv_schema_test_s1.t0 values (1), (2);
+insert into mv_schema_test_s2.t0 values (10), (20), (30);
+create materialized view mv_schema_test_s1.mv0 as select * from mv_schema_test_s1.t0;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'a' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+create materialized view mv_schema_test_s2.mv0 as select * from mv_schema_test_s2.t0;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'a' as the Apache Cloudberry data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+-- gp_matview_aux.mvname alone cannot tell these two mv0's apart (both rows
+-- show mvname = 'mv0' with no schema information) -- this is the deprecated,
+-- pre-existing behavior, kept for backward compatibility, not the fix.
+select mvname, datastatus from gp_matview_aux where mvname = 'mv0' order by mvoid;
+ mvname | datastatus 
+--------+------------
+ mv0    | u
+ mv0    | u
+(2 rows)
+
+-- gp_matviews distinguishes them via mvschema.
+select mvschema, mvname, has_foreign, datastatus from gp_matviews
+  where mvschema in ('mv_schema_test_s1', 'mv_schema_test_s2') and mvname = 'mv0'
+  order by mvschema;
+     mvschema      | mvname | has_foreign | datastatus 
+-------------------+--------+-------------+------------
+ mv_schema_test_s1 | mv0    | f           | u
+ mv_schema_test_s2 | mv0    | f           | u
+(2 rows)
+
+-- rename in one schema; the other schema's mv0 must be unaffected and
+-- gp_matviews must reflect the new name immediately (it's resolved live,
+-- not synced).
+alter materialized view mv_schema_test_s1.mv0 rename to mv0_renamed;
+select mvschema, mvname, has_foreign, datastatus from gp_matviews
+  where mvschema in ('mv_schema_test_s1', 'mv_schema_test_s2')
+    and mvname in ('mv0', 'mv0_renamed')
+  order by mvschema;
+     mvschema      |   mvname    | has_foreign | datastatus 
+-------------------+-------------+-------------+------------
+ mv_schema_test_s1 | mv0_renamed | f           | u
+ mv_schema_test_s2 | mv0         | f           | u
+(2 rows)
+
+drop schema mv_schema_test_s1 cascade;
+NOTICE:  drop cascades to 2 other objects
+DETAIL:  drop cascades to table mv_schema_test_s1.t0
+drop cascades to materialized view mv_schema_test_s1.mv0_renamed
+drop schema mv_schema_test_s2 cascade;
+NOTICE:  drop cascades to 2 other objects
+DETAIL:  drop cascades to table mv_schema_test_s2.t0
+drop cascades to materialized view mv_schema_test_s2.mv0
 --start_ignore
 drop schema matview_data_schema cascade;
 NOTICE:  drop cascades to 13 other objects
