@@ -576,4 +576,23 @@ ExecSortRetrieveInstrumentation(SortState *node)
 	si = palloc(size);
 	memcpy(si, node->shared_info, size);
 	node->shared_info = si;
+
+	/*
+	 * GPDB: the workers sorted their own share of the rows, so let
+	 * "Memory wanted" account for them too, not just for the leader's sort.
+	 */
+	if (node->ss.ps.instrument)
+	{
+		int			n;
+
+		for (n = 0; n < si->num_workers; n++)
+		{
+			if (si->sinstrument[n].sortMethod == SORT_TYPE_STILL_IN_PROGRESS)
+				continue;
+
+			node->ss.ps.instrument->workmemwanted =
+				Max(node->ss.ps.instrument->workmemwanted,
+					si->sinstrument[n].workmemwanted);
+		}
+	}
 }
