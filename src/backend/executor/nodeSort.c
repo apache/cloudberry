@@ -122,13 +122,10 @@ ExecSort(PlanState *pstate)
 		/* CDB */
 
 		/* If EXPLAIN ANALYZE, share our Instrumentation object with sort. */
-		/* GPDB_12_MERGE_FIXME: broken */
-#if 0
 		if (node->ss.ps.instrument && node->ss.ps.instrument->need_cdb)
 			tuplesort_set_instrument(tuplesortstate,
 									 node->ss.ps.instrument,
 									 node->ss.ps.cdbexplainbuf);
-#endif
 		/*
 		 * Scan the subplan and feed all the tuples to tuplesort.
 		 */
@@ -444,8 +441,8 @@ ExecSortExplainEnd(PlanState *planstate, struct StringInfoData *buf)
 
 	if (sortstate->tuplesortstate)
 	{
-		tuplesort_get_stats(sortstate->tuplesortstate,
-							&sortstate->sortstats);
+		tuplesort_finalize_stats(sortstate->tuplesortstate,
+								 &sortstate->sortstats);
 
 		if (planstate->instrument)
 		{
@@ -470,8 +467,8 @@ ExecEagerFreeSort(SortState *node)
 		 * Save stats like in ExecSortExplainEnd, so that we can display
 		 * them later in EXPLAIN ANALYZE.
 		 */
-		tuplesort_get_stats(node->tuplesortstate,
-							&node->sortstats);
+		tuplesort_finalize_stats(node->tuplesortstate,
+								 &node->sortstats);
 		if (node->ss.ps.instrument)
 		{
 			node->ss.ps.instrument->workfileCreated = (node->sortstats.spaceType == SORT_SPACE_TYPE_DISK);
@@ -579,4 +576,23 @@ ExecSortRetrieveInstrumentation(SortState *node)
 	si = palloc(size);
 	memcpy(si, node->shared_info, size);
 	node->shared_info = si;
+
+	/*
+	 * GPDB: the workers sorted their own share of the rows, so let
+	 * "Memory wanted" account for them too, not just for the leader's sort.
+	 */
+	if (node->ss.ps.instrument)
+	{
+		int			n;
+
+		for (n = 0; n < si->num_workers; n++)
+		{
+			if (si->sinstrument[n].sortMethod == SORT_TYPE_STILL_IN_PROGRESS)
+				continue;
+
+			node->ss.ps.instrument->workmemwanted =
+				Max(node->ss.ps.instrument->workmemwanted,
+					si->sinstrument[n].workmemwanted);
+		}
+	}
 }
